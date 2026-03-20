@@ -3,16 +3,13 @@
 import * as React from "react"
 import Link from "next/link"
 import { usePathname } from "next/navigation"
-import { Button } from "@/components/ui/button"
 import { DemoModal } from "./DemoModal"
 import { cn } from "@/lib/utils"
-import { trackEvent } from "@/lib/analytics"
 
 const navItems = [
     { name: "제품 소개", href: "/product" },
     { name: "요금제", href: "/pricing" },
     { name: "블로그", href: "/blog" },
-    { name: "도입문의", href: "#", action: "demo" },
     { name: "행사", href: "/events" },
 ]
 
@@ -53,34 +50,18 @@ export function Header() {
 
                 <nav className="hidden md:flex items-center gap-8">
                     {navItems.map((item) => {
-                        const isDemo = item.action === "demo" || item.name === "도입문의";
-                        const isActive = item.href === "/product" ? pathname.startsWith("/product") : pathname === item.href && !isDemo;
-                        
-                        const className = cn(
-                            "text-sm font-medium transition-colors",
-                            isActive
-                                ? (isLightModeHeader ? "text-primary font-bold" : "text-white font-bold")
-                                : (isLightModeHeader ? "text-slate-800 hover:text-primary" : "text-slate-300 hover:text-white")
-                        );
-
-                        if (isDemo) {
-                            return (
-                                <DemoModal key={item.name}>
-                                    <button 
-                                        onClick={() => trackEvent('click_cta', { button: 'nav_demo' })}
-                                        className={className}
-                                    >
-                                        {item.name}
-                                    </button>
-                                </DemoModal>
-                            );
-                        }
+                        const isActive = item.href === "/product" ? pathname.startsWith("/product") : pathname === item.href;
 
                         return (
                             <Link
                                 key={item.name}
                                 href={item.href}
-                                className={className}
+                                className={cn(
+                                    "text-sm font-medium transition-colors",
+                                    isActive
+                                        ? (isLightModeHeader ? "text-primary font-bold" : "text-white font-bold")
+                                        : (isLightModeHeader ? "text-slate-800 hover:text-primary" : "text-slate-300 hover:text-white")
+                                )}
                             >
                                 {item.name}
                             </Link>
@@ -89,24 +70,24 @@ export function Header() {
                 </nav>
 
                 <div className="flex items-center gap-3 md:gap-4">
-                    <Button variant="ghost" size="sm" onClick={() => trackEvent('download_materials')} className={cn("hidden md:flex font-medium transition-colors hover:bg-transparent",
-                         isLightModeHeader ? "text-slate-600 hover:text-primary" : "text-white/80 hover:text-white"
-                    )}>
-                        자료 받아보기
-                    </Button>
-                    <DemoModal>
-                        <button
-                            onClick={() => trackEvent('click_cta', { button: 'header_demo' })}
-                            className={cn(
-                                "inline-flex items-center justify-center whitespace-nowrap rounded-md px-4 py-2 text-sm font-semibold shadow-lg transition-all cursor-pointer",
-                                isLightModeHeader
-                                    ? "bg-accent text-primary hover:bg-accent/85"
-                                    : "bg-accent text-primary hover:bg-accent/85"
-                            )}
-                        >
-                            도입 문의
+                    <DemoModal trackingButton="header_materials">
+                        <button type="button" className={cn("hidden md:flex font-medium transition-colors text-sm cursor-pointer bg-transparent border-none p-0",
+                             isLightModeHeader ? "text-slate-600 hover:text-primary" : "text-white/80 hover:text-white"
+                        )}>
+                            자료 받아보기
                         </button>
                     </DemoModal>
+                    <Link
+                        href="/contact"
+                        className={cn(
+                            "inline-flex items-center justify-center whitespace-nowrap rounded-md px-4 py-2 text-sm font-semibold shadow-lg transition-all",
+                            isLightModeHeader
+                                ? "bg-primary text-white hover:bg-primary/90"
+                                : "bg-white text-slate-950 hover:bg-white/90"
+                        )}
+                    >
+                        도입 문의
+                    </Link>
                 </div>
             </div>
         </header>
