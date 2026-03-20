@@ -1,6 +1,6 @@
 "use client"
 
-import { useState, useEffect } from "react"
+import React, { useState } from "react"
 import { Dialog, DialogContent, DialogDescription, DialogHeader, DialogTitle, DialogTrigger } from "@/components/ui/dialog"
 import { Input } from "@/components/ui/input"
 import { Label } from "@/components/ui/label"
@@ -9,15 +9,18 @@ import { CheckCircle2, Loader2 } from "lucide-react"
 import { submitLead } from "@/lib/submitLead"
 import { trackEvent } from "@/lib/analytics"
 
-export function DemoModal({ children }: { children: React.ReactNode }) {
-    const [mounted, setMounted] = useState(false)
+export function DemoModal({ children, trackingButton }: { children: React.ReactNode; trackingButton?: string }) {
+    const [open, setOpen] = useState(false)
     const [submitted, setSubmitted] = useState(false)
     const [loading, setLoading] = useState(false)
     const [error, setError] = useState("")
 
-    // SSR hydration mismatch is handled by modern Radix natively when setup correctly,
-    // avoiding conditional rendering prevents the 'trigger not working' bug.
-    useEffect(() => { setMounted(true) }, [])
+    const handleOpenChange = (nextOpen: boolean) => {
+        if (nextOpen && trackingButton) {
+            trackEvent('click_cta', { button: trackingButton })
+        }
+        setOpen(nextOpen)
+    }
 
     const handleSubmit = async (e: React.FormEvent<HTMLFormElement>) => {
         e.preventDefault()
@@ -47,7 +50,7 @@ export function DemoModal({ children }: { children: React.ReactNode }) {
     }
 
     return (
-        <Dialog>
+        <Dialog open={open} onOpenChange={handleOpenChange}>
             <DialogTrigger asChild>
                 {children}
             </DialogTrigger>
@@ -64,7 +67,7 @@ export function DemoModal({ children }: { children: React.ReactNode }) {
                         </Button>
                     </div>
                 ) : (
-                    <>
+                    <React.Fragment>
                         <DialogHeader>
                             <DialogTitle className="text-white">맞춤형 데모 예약하기</DialogTitle>
                             <DialogDescription className="text-slate-300">
@@ -103,13 +106,13 @@ export function DemoModal({ children }: { children: React.ReactNode }) {
                             )}
                             <Button type="submit" disabled={loading} className="w-full mt-2 bg-primary hover:bg-primary/90 text-white">
                                 {loading ? (
-                                    <><Loader2 className="mr-2 h-4 w-4 animate-spin" />제출 중...</>
+                                    <span className="flex items-center"><Loader2 className="mr-2 h-4 w-4 animate-spin" />제출 중...</span>
                                 ) : (
                                     "데모 신청하기"
                                 )}
                             </Button>
                         </form>
-                    </>
+                    </React.Fragment>
                 )}
             </DialogContent>
         </Dialog>

@@ -41,7 +41,9 @@ export function AnalyticsProviders() {
       <Script src="//t1.daumcdn.net/adfit/static/kp.js" strategy="lazyOnload" />
       <Script id="kakao-pixel" strategy="lazyOnload">
         {`
-          kakaoPixel('${KAKAO_ID}').pageView();
+          if(typeof kakaoPixel !== 'undefined') {
+            kakaoPixel('${KAKAO_ID}').pageView();
+          }
         `}
       </Script>
     </>
