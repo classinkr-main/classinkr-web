@@ -1,0 +1,534 @@
+<!DOCTYPE html>
+<html lang="ko">
+<head>
+  <meta charset="UTF-8">
+  <meta name="viewport" content="width=device-width, initial-scale=1.0">
+  <title>ClassIn 요금제 최적화 계산기</title>
+  <style>
+    @import url("https://cdn.jsdelivr.net/gh/orioncactus/pretendard@v3.2.1/dist/web/static/pretendard.css");
+
+    :root {
+      --primary: #4f46e5;
+      --primary-hover: #4338ca;
+      --secondary: #ec4899;
+      --surface: #ffffff;
+      --background: #f8fafc;
+      --text-dark: #0f172a;
+      --text-gray: #64748b;
+      --border: #e2e8f0;
+      --ring: rgba(79, 70, 229, 0.2);
+    }
+
+    * {
+      box-sizing: border-box;
+      font-family: 'Pretendard', -apple-system, sans-serif;
+    }
+
+    body {
+      margin: 0;
+      padding: 0;
+      background-color: var(--background);
+      color: var(--text-dark);
+      -webkit-font-smoothing: antialiased;
+    }
+
+    .calculator-wrapper {
+      max-width: 1080px;
+      margin: 0 auto;
+      padding: 40px 20px;
+    }
+
+    .header-section {
+      text-align: center;
+      margin-bottom: 40px;
+    }
+
+    .header-section h1 {
+      font-size: 2.25rem;
+      font-weight: 800;
+      margin-bottom: 12px;
+      background: linear-gradient(135deg, #1e293b 0%, var(--primary) 100%);
+      -webkit-background-clip: text;
+      -webkit-text-fill-color: transparent;
+    }
+
+    .header-section p {
+      color: var(--text-gray);
+      font-size: 1.1rem;
+      margin: 0;
+    }
+
+    .grid-container {
+      display: grid;
+      grid-template-columns: 1fr 1fr;
+      gap: 32px;
+    }
+
+    @media (max-width: 860px) {
+      .grid-container { grid-template-columns: 1fr; }
+    }
+
+    .panel {
+      background: var(--surface);
+      border-radius: 24px;
+      padding: 32px;
+      box-shadow: 0 4px 6px -1px rgba(0, 0, 0, 0.05), 0 2px 4px -1px rgba(0, 0, 0, 0.03);
+      border: 1px solid var(--border);
+    }
+
+    .panel-title {
+      font-size: 1.25rem;
+      font-weight: 700;
+      margin-top: 0;
+      margin-bottom: 24px;
+      color: var(--text-dark);
+    }
+
+    .input-group {
+      margin-bottom: 20px;
+    }
+
+    .input-group label {
+      display: block;
+      font-size: 0.95rem;
+      font-weight: 600;
+      margin-bottom: 8px;
+    }
+
+    .input-wrapper {
+      position: relative;
+    }
+
+    .input-wrapper input, .input-wrapper select {
+      width: 100%;
+      padding: 14px 16px;
+      border: 1px solid var(--border);
+      border-radius: 12px;
+      font-size: 1rem;
+      transition: all 0.2s ease;
+      background: var(--background);
+      color: var(--text-dark);
+    }
+
+    .input-wrapper select {
+      appearance: none;
+      background-image: url("data:image/svg+xml,%3Csvg xmlns='http://www.w3.org/2000/svg' fill='none' viewBox='0 0 24 24' stroke='%2364748b'%3E%3Cpath stroke-linecap='round' stroke-linejoin='round' stroke-width='2' d='M19 9l-7 7-7-7'%3E%3C/path%3E%3C/svg%3E");
+      background-repeat: no-repeat;
+      background-position: right 16px center;
+      background-size: 20px;
+      padding-right: 48px;
+    }
+
+    .input-wrapper input:focus, .input-wrapper select:focus {
+      outline: none;
+      border-color: var(--primary);
+      box-shadow: 0 0 0 4px var(--ring);
+      background: var(--surface);
+    }
+
+    .input-wrapper .suffix {
+      position: absolute;
+      right: 16px;
+      top: 50%;
+      transform: translateY(-50%);
+      color: var(--text-gray);
+      pointer-events: none;
+      font-size: 0.95rem;
+    }
+
+    .checkbox-section {
+      margin-top: 24px;
+      padding-top: 24px;
+      border-top: 1px solid var(--border);
+    }
+
+    .checkbox-list {
+      display: flex;
+      flex-direction: column;
+      gap: 14px;
+    }
+
+    .checkbox-item {
+      display: flex;
+      align-items: center;
+      gap: 10px;
+      font-size: 0.95rem;
+      font-weight: 500;
+      cursor: pointer;
+    }
+
+    .checkbox-item input {
+      width: 20px;
+      height: 20px;
+      accent-color: var(--primary);
+    }
+
+    .price-card {
+      border: 2px solid var(--border);
+      border-radius: 20px;
+      padding: 24px;
+      margin-bottom: 20px;
+      position: relative;
+      transition: all 0.3s ease;
+      background: var(--surface);
+    }
+
+    .price-card.recommended {
+      border-color: var(--primary);
+      background: linear-gradient(to bottom right, #ffffff, #f5f7ff);
+      box-shadow: 0 20px 25px -5px rgba(79, 70, 229, 0.1), 0 8px 10px -6px rgba(79, 70, 229, 0.05);
+    }
+
+    .price-card:last-child {
+      margin-bottom: 0;
+    }
+
+    .price-header {
+      display: flex;
+      justify-content: space-between;
+      align-items: center;
+      margin-bottom: 12px;
+    }
+
+    .price-title {
+      font-size: 1.25rem;
+      font-weight: 700;
+      margin: 0;
+    }
+
+    .badge-recommend {
+      display: none;
+      background: linear-gradient(135deg, var(--primary), var(--secondary));
+      color: white;
+      padding: 6px 14px;
+      border-radius: 20px;
+      font-size: 0.85rem;
+      font-weight: 700;
+      letter-spacing: 0.02em;
+    }
+
+    .recommended .badge-recommend {
+      display: inline-block;
+    }
+
+    .price-amount {
+      font-size: 2.25rem;
+      font-weight: 800;
+      color: var(--primary);
+      margin: 16px 0;
+      word-break: keep-all;
+    }
+
+    .price-amount span {
+      font-size: 1.25rem;
+      font-weight: 600;
+      color: var(--text-gray);
+    }
+
+    .price-desc {
+      color: var(--text-gray);
+      font-size: 0.95rem;
+      line-height: 1.5;
+      margin: 0;
+      min-height: 42px;
+    }
+    
+    .recommended .price-desc {
+      color: var(--text-dark);
+      font-weight: 500;
+    }
+
+    .alert-box {
+      margin-top: 16px;
+      padding: 12px;
+      background: #fffbeb;
+      color: #b45309;
+      border-radius: 12px;
+      font-size: 0.85rem;
+      font-weight: 600;
+      display: none;
+    }
+    
+    .plan-detail {
+        font-size: 0.85rem;
+        color: #64748b;
+        margin-top: 12px;
+        font-weight: 500;
+    }
+
+  </style>
+</head>
+<body>
+
+  <div class="calculator-wrapper">
+    <div class="header-section">
+      <h1>ClassIn 요금제 최적화 계산기</h1>
+      <p>우리 학원/학교 사용 패턴에 딱 맞는 요금제를 확인해보세요.</p>
+    </div>
+
+    <div class="grid-container">
+      <!-- 왼쪽: 입력 폼 -->
+      <div class="panel">
+        <h2 class="panel-title">이용 정보 입력</h2>
+        
+        <div class="input-group">
+          <label>필요한 강사 수 (계정 수)</label>
+          <div class="input-wrapper">
+            <input type="number" id="teacherCount" value="5" min="1">
+            <span class="suffix">명</span>
+          </div>
+        </div>
+
+        <div class="input-group">
+          <label>수업당 평균 학생 수</label>
+          <div class="input-wrapper">
+            <input type="number" id="studentCount" value="10" min="0">
+            <span class="suffix">명</span>
+          </div>
+        </div>
+
+        <div class="input-group">
+          <label>기관 전체 월 평균 수업 횟수</label>
+          <div class="input-wrapper">
+            <input type="number" id="classCount" value="100" min="1">
+            <span class="suffix">회</span>
+          </div>
+        </div>
+
+        <div class="input-group">
+          <label>1회 평균 수업 시간</label>
+          <div class="input-wrapper">
+            <input type="number" id="classDuration" value="1" min="0.5" step="0.5">
+            <span class="suffix">시간</span>
+          </div>
+        </div>
+
+        <div class="input-group">
+          <label>필요 화질</label>
+          <div class="input-wrapper">
+            <select id="videoQuality">
+              <option value="SD">SD (기본)</option>
+              <option value="HD">HD (고화질)</option>
+              <option value="FHD">FHD (초고화질)</option>
+            </select>
+          </div>
+        </div>
+
+        <div class="checkbox-section">
+          <label style="display:block; font-size:0.95rem; font-weight:600; margin-bottom:14px;">부가 기능</label>
+          <div class="checkbox-list">
+            <label class="checkbox-item">
+              <input type="checkbox" id="featureRecord"> 클라우드 수업 녹화 (단일 녹화 기준)
+            </label>
+            <label class="checkbox-item">
+              <input type="checkbox" id="featureAssistant"> 조교 계정 동석 필요
+            </label>
+            <label class="checkbox-item">
+              <input type="checkbox" id="featureWebLive"> 웹 라이브(Web Live) 스트리밍 송출
+            </label>
+          </div>
+        </div>
+      </div>
+
+      <!-- 오른쪽: 결과 출력 -->
+      <div class="panel" style="background: transparent; border: none; padding: 0; box-shadow: none;">
+        
+        <!-- 충전형 결과 -->
+        <div class="price-card" id="cardBusiness">
+          <div class="price-header">
+            <h3 class="price-title">📌 충전형 (Business)</h3>
+            <span class="badge-recommend">✨ AI 추천</span>
+          </div>
+          <div class="price-amount" id="priceBusiness">0 <span>원 / 월</span></div>
+          <p class="price-desc" id="descBusiness">사용한 만큼 정직하게 과금됩니다.</p>
+          <div class="plan-detail" id="detailBusiness">예상 차감 캐시: 0 cash (최소 충전 요건: 월 10,000 cash)</div>
+          <div class="alert-box" id="alertBusiness">
+            월 예상 사용량이 최소 충전 금액(10,000 cash)에 미달하여 기본 요금이 청구됩니다.
+          </div>
+        </div>
+
+        <!-- 구독형 결과 -->
+        <div class="price-card" id="cardSubscription">
+          <div class="price-header">
+            <h3 class="price-title">💼 구독형 (<span id="planName">Learning Space</span>)</h3>
+            <span class="badge-recommend">✨ AI 추천</span>
+          </div>
+          <div class="price-amount" id="priceSubscription">0 <span>원 / 월</span></div>
+          <p class="price-desc" id="descSubscription">월정액으로 인원/시간 제한 없이 무제한 수업이 가능합니다.</p>
+          <div class="plan-detail" id="detailSubscription">요구사항에 맞춰 자동 선택된 요금제입니다.</div>
+        </div>
+
+      </div>
+    </div>
+  </div>
+
+  <script>
+    // --- 1. 기본 설정 및 환율 ---
+    const EXCHANGE_RATE_CASH = 200;  // 1 cash = 200 원
+    const EXCHANGE_RATE_USD = 1440; // 1 USD = 1,440 원
+    const MIN_BUSINESS_CASH = 10000; // 월 최소 10,000 cash 충전 필요
+
+    // --- 2. 폼 요소 가져오기 ---
+    const inputs = ['teacherCount', 'studentCount', 'classCount', 'classDuration', 'videoQuality', 'featureRecord', 'featureAssistant', 'featureWebLive'];
+    const elements = {};
+    inputs.forEach(id => {
+      elements[id] = document.getElementById(id);
+      elements[id].addEventListener('input', calculate);
+    });
+
+    // --- 3. 계산 로직 ---
+    function formatCurrency(amount) {
+      return Math.round(amount).toLocaleString('ko-KR');
+    }
+
+    function calculate() {
+      const teachers = parseInt(elements.teacherCount.value) || 0;
+      const students = parseInt(elements.studentCount.value) || 0;
+      const totalClasses = parseInt(elements.classCount.value) || 0;
+      // ClassIn 수업 과금은 최소 30분(0.5) 단위로 올림하여 과금
+      const durationHours = parseFloat(elements.classDuration.value) || 0;
+      const billedHoursPerClass = Math.ceil(durationHours / 0.5) * 0.5;
+      const totalBilledHours = totalClasses * billedHoursPerClass;
+
+      const quality = elements.videoQuality.value; // SD, HD, FHD
+      const hasRecord = elements.featureRecord.checked;
+      const hasAssistant = elements.featureAssistant.checked;
+      const hasWebLive = elements.featureWebLive.checked;
+
+      // ---------------------------------------------------------
+      // [A] 충전형(Business) 과금 계산
+      // ---------------------------------------------------------
+      let perUserCost = 0; // 1명/1시간당 cash
+
+      if (students === 0) {
+        // 1v0 (선생님만)
+        perUserCost = 1;
+      } else if (students === 1) {
+        // 1v1
+        if (quality === 'SD') perUserCost = 2;
+        else if (quality === 'HD') perUserCost = 4;
+        else if (quality === 'FHD') perUserCost = 8;
+      } else {
+        // 1vN (1v2 ~ 1v12 이상) -> 1v6 모델로 평균 산정
+        if (quality === 'SD') perUserCost = 4;
+        else if (quality === 'HD') perUserCost = 12; // 1v6 HD는 12cash
+        else if (quality === 'FHD') perUserCost = 20; // 1v6 FHD는 20cash
+      }
+
+      // 인원 수: 선생님 + 학생 (학생은 최대 200명까지만 과금)
+      const billedStudents = Math.min(students, 200);
+      const totalBilledUsers = billedStudents + 1; // 강사 1명 포함 (다대다 강사 추가 시 복잡하므로 1명 기준으로 단순화, 총 수업시간에 강사수/수업수 반영)
+      
+      let classCashCost = perUserCost * totalBilledUsers * totalBilledHours;
+
+      // 조교 과금 (시간당/1명당)
+      let assistantCashCost = 0;
+      if (hasAssistant) {
+        let astCost = 6;
+        if (quality === 'HD') astCost = 10;
+        else if (quality === 'FHD') astCost = 20;
+        assistantCashCost = astCost * totalBilledHours; // 조교 1명 가정
+      }
+
+      // 녹화 과금 (시간당)
+      let recordCashCost = 0;
+      if (hasRecord) {
+        recordCashCost = 2 * totalBilledHours; // 단일 녹화 기준
+      }
+
+      let totalMonthlyCash = classCashCost + assistantCashCost + recordCashCost;
+      let finalBusinessCash = totalMonthlyCash;
+      
+      if(finalBusinessCash < MIN_BUSINESS_CASH) {
+        finalBusinessCash = MIN_BUSINESS_CASH; // 최소 비용 보장
+        document.getElementById('alertBusiness').style.display = 'block';
+      } else {
+        document.getElementById('alertBusiness').style.display = 'none';
+      }
+
+      const totalBusinessKRW = finalBusinessCash * EXCHANGE_RATE_CASH;
+
+      // ---------------------------------------------------------
+      // [B] 구독형(Learning Space) 과금 계산
+      // ---------------------------------------------------------
+      // 티어 판별 로직
+      let tier = 'Standard'; // Standard 99, Plus 199, Enterprise 299
+      let reasonSubscription = [];
+
+      // 제약 조건 검사 및 업그레이드
+      if (students > 50 || durationHours > 4 || quality === 'HD' || students > 6) { 
+        // 1v6 초과 시 Plus 이상 필요
+        if(tier === 'Standard') {
+            tier = 'Plus';
+            if(students > 50) reasonSubscription.push("학생 50명 초과");
+            if(durationHours > 4) reasonSubscription.push("4시간 초과 수업");
+            if(quality === 'HD') reasonSubscription.push("HD 화질");
+            if(students > 6) reasonSubscription.push("1v6 인원 초과");
+        }
+      }
+      
+      if (students > 1000 || durationHours > 12 || quality === 'FHD' || hasWebLive) {
+        tier = 'Enterprise';
+        reasonSubscription.length = 0; // 이전 이유 초기화 (최상위 티어 이유로 덮어쓰기)
+        if(students > 1000) reasonSubscription.push("학생 1000명 초과");
+        if(durationHours > 12) reasonSubscription.push("12시간 초과 수업");
+        if(quality === 'FHD') reasonSubscription.push("FHD 화질");
+        if(hasWebLive) reasonSubscription.push("웹라이브 송출");
+      }
+
+      let usdPricePerTeacher = 0;
+      if (tier === 'Standard') usdPricePerTeacher = 99;
+      else if (tier === 'Plus') usdPricePerTeacher = 199;
+      else if (tier === 'Enterprise') usdPricePerTeacher = 299;
+
+      const totalSubscriptionUSD = usdPricePerTeacher * teachers;
+      const totalSubscriptionKRW = totalSubscriptionUSD * EXCHANGE_RATE_USD;
+
+      // ---------------------------------------------------------
+      // [C] UI 업데이트 및 비교
+      // ---------------------------------------------------------
+      
+      document.getElementById('priceBusiness').innerHTML = `${formatCurrency(totalBusinessKRW)} <span>원 / 월</span>`;
+      document.getElementById('detailBusiness').innerText = `예상 사용: ${formatCurrency(totalMonthlyCash)} cash / 부과: ${formatCurrency(finalBusinessCash)} cash`;
+
+      document.getElementById('planName').innerText = tier;
+      document.getElementById('priceSubscription').innerHTML = `${formatCurrency(totalSubscriptionKRW)} <span>원 / 월</span>`;
+      document.getElementById('detailSubscription').innerText = `계정당 $${usdPricePerTeacher} × 강사 ${teachers}명 = $${totalSubscriptionUSD}`;
+      
+      const subDesc = document.getElementById('descSubscription');
+      if (reasonSubscription.length > 0) {
+        subDesc.innerText = `💡 요구사항(${reasonSubscription.join(', ')})으로 인해 [${tier}] 요금제가 매칭되었습니다.`;
+      } else {
+        subDesc.innerText = "사용량에 구애받지 않고 마음껏 수업을 진행할 수 있습니다.";
+      }
+
+      // 추천 배지 업데이트
+      const cardBus = document.getElementById('cardBusiness');
+      const cardSub = document.getElementById('cardSubscription');
+      const descBus = document.getElementById('descBusiness');
+
+      cardBus.classList.remove('recommended');
+      cardSub.classList.remove('recommended');
+
+      if (totalBusinessKRW <= totalSubscriptionKRW) {
+        cardBus.classList.add('recommended');
+        descBus.innerText = "✨ 사용량이 적어 쓴 만큼만 내는 충전형이 확실히 유리합니다!";
+        if (reasonSubscription.length === 0) {
+            subDesc.innerText = "예상 사용량이 적어 고정 비용이 나가는 구독형보다 충전형을 권장합니다.";
+        }
+      } else {
+        cardSub.classList.add('recommended');
+        descBus.innerText = "사용량이 많을수록 비용이 기하급수적으로 늘어납니다.";
+        if (reasonSubscription.length === 0) {
+            subDesc.innerText = "✨ 수업량이 많아 무제한으로 사용할 수 있는 구독형이 압도적으로 저렴합니다!";
+        } else {
+            subDesc.innerText = `✨ ${reasonSubscription.join(', ')} 등의 이유로 [${tier}] 플랜 무제한 요금을 추천합니다!`;
+        }
+      }
+    }
+
+    // 초기 계산 실행
+    calculate();
+  </script>
+</body>
+</html>
