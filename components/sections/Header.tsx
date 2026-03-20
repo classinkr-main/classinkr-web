@@ -100,8 +100,8 @@ export function Header() {
                             className={cn(
                                 "inline-flex items-center justify-center whitespace-nowrap rounded-md px-4 py-2 text-sm font-semibold shadow-lg transition-all cursor-pointer",
                                 isLightModeHeader
-                                    ? "bg-primary text-white hover:bg-primary/90"
-                                    : "bg-white text-slate-950 hover:bg-white/90"
+                                    ? "bg-accent text-primary hover:bg-accent/85"
+                                    : "bg-accent text-primary hover:bg-accent/85"
                             )}
                         >
                             도입 문의
