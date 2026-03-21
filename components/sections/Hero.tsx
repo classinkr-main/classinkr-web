@@ -77,14 +77,16 @@ export function Hero() {
                         transition={{ duration: 0.7, delay: 0.3, ease: "easeOut" }}
                         className="flex flex-col sm:flex-row items-center gap-4 sm:gap-5 justify-center w-full px-4 sm:px-0 flex-wrap"
                     >
-                        <DemoModal>
-                            <Button size="lg" onClick={() => trackEvent('click_cta', { button: 'hero_demo' })} className="h-[3.5rem] px-8 text-[1.05rem] font-bold bg-slate-900 hover:bg-slate-800 text-white rounded-2xl shadow-lg hover:shadow-xl w-full sm:w-auto transition-all duration-300 hover:scale-[1.03] active:scale-95">
+                        <DemoModal trackingButton="hero_demo">
+                            <Button size="lg" className="h-[3.5rem] px-8 text-[1.05rem] font-bold bg-slate-900 hover:bg-slate-800 text-white rounded-2xl shadow-lg hover:shadow-xl w-full sm:w-auto transition-all duration-300 hover:scale-[1.03] active:scale-95">
                                 <span className="relative z-10">제품 도입 문의</span>
                             </Button>
                         </DemoModal>
-                        <Button variant="outline" size="lg" onClick={() => trackEvent('download_materials')} className="h-[3.5rem] px-8 text-[1.05rem] font-bold bg-emerald-600 hover:bg-emerald-700 text-white border-emerald-600 hover:border-emerald-700 rounded-2xl shadow-lg hover:shadow-xl w-full sm:w-auto transition-all duration-300 hover:scale-[1.03] active:scale-95">
-                            <span className="relative z-10">자료 받아보기</span>
-                        </Button>
+                        <DemoModal trackingButton="hero_materials">
+                            <Button variant="outline" size="lg" className="h-[3.5rem] px-8 text-[1.05rem] font-bold bg-emerald-600 hover:bg-emerald-700 text-white border-emerald-600 hover:border-emerald-700 rounded-2xl shadow-lg hover:shadow-xl w-full sm:w-auto transition-all duration-300 hover:scale-[1.03] active:scale-95">
+                                <span className="relative z-10">자료 받아보기</span>
+                            </Button>
+                        </DemoModal>
                         <Button variant="outline" size="lg" onClick={() => trackEvent('view_demo_video')} className="h-[3.5rem] px-8 text-[1.05rem] font-bold bg-white hover:bg-slate-50 text-slate-700 border border-slate-200 hover:border-slate-300 rounded-2xl shadow-sm hover:shadow-md w-full sm:w-auto transition-all duration-300 hover:scale-[1.03] active:scale-95">
                             <span className="relative z-10">3분 투어 영상</span>
                         </Button>
@@ -96,7 +98,7 @@ export function Hero() {
                         transition={{ duration: 1, delay: 0.6 }}
                         className="mt-16 sm:mt-20 flex w-full justify-center px-4"
                     >
-                        <h2 className="text-2xl md:text-4xl lg:text-5xl xl:text-6xl font-black tracking-[0.2em] uppercase text-center select-none text-slate-100">
+                        <h2 className="text-2xl md:text-4xl lg:text-5xl xl:text-6xl font-black tracking-[0.2em] uppercase text-center select-none text-slate-300">
                             Empowering Education Online
                         </h2>
                     </motion.div>
