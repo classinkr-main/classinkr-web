@@ -10,6 +10,8 @@ export interface BlogPost {
   readTime: string
   imageUrl: string
   featured?: boolean
+  published?: boolean   // undefined treated as true (backwards-compat)
+  deletedAt?: string    // soft-delete timestamp
 }
 
 export const CATEGORIES = [

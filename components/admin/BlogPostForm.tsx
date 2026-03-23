@@ -28,6 +28,7 @@ export default function BlogPostForm({ post, onSave, onCancel, loading }: BlogPo
         readTime: post?.readTime ?? "",
         imageUrl: post?.imageUrl ?? "",
         featured: post?.featured ?? false,
+        published: post?.published ?? true,
     })
 
     const handleSubmit = (e: React.FormEvent) => {
@@ -145,15 +146,27 @@ export default function BlogPostForm({ post, onSave, onCancel, loading }: BlogPo
                 />
             </div>
 
-            <div className="flex items-center gap-2">
-                <input
-                    type="checkbox"
-                    id="featured"
-                    checked={form.featured}
-                    onChange={(e) => update("featured", e.target.checked)}
-                    className="rounded border-input"
-                />
-                <Label htmlFor="featured" className="cursor-pointer">주요 글 (갤러리 표시)</Label>
+            <div className="flex items-center gap-6">
+                <div className="flex items-center gap-2">
+                    <input
+                        type="checkbox"
+                        id="featured"
+                        checked={form.featured}
+                        onChange={(e) => update("featured", e.target.checked)}
+                        className="rounded border-input"
+                    />
+                    <Label htmlFor="featured" className="cursor-pointer">주요 글 (갤러리 표시)</Label>
+                </div>
+                <div className="flex items-center gap-2">
+                    <input
+                        type="checkbox"
+                        id="published"
+                        checked={form.published}
+                        onChange={(e) => update("published", e.target.checked)}
+                        className="rounded border-input"
+                    />
+                    <Label htmlFor="published" className="cursor-pointer">공개</Label>
+                </div>
             </div>
 
             <div className="flex justify-end gap-2 pt-2">

@@ -14,6 +14,7 @@ export function DemoModal({ children, trackingButton }: { children: React.ReactN
     const [submitted, setSubmitted] = useState(false)
     const [loading, setLoading] = useState(false)
     const [error, setError] = useState("")
+    const [marketingConsent, setMarketingConsent] = useState(false)
 
     const handleOpenChange = (nextOpen: boolean) => {
         if (nextOpen && trackingButton) {
@@ -39,6 +40,7 @@ export function DemoModal({ children, trackingButton }: { children: React.ReactN
                 size: formData.get("size") as string,
                 email: formData.get("email") as string,
                 phone: formData.get("phone") as string,
+                marketingConsent,
             })
             trackEvent("submit_demo_request", { source: "demo_modal" })
             setSubmitted(true)
@@ -101,6 +103,31 @@ export function DemoModal({ children, trackingButton }: { children: React.ReactN
                                 <Label htmlFor="phone" className="text-slate-200">전화번호</Label>
                                 <Input id="phone" name="phone" type="tel" placeholder="010-1234-5678" required className="bg-white/5 border-white/10 text-white placeholder:text-slate-500" />
                             </div>
+                            <label className="flex items-start gap-2.5 cursor-pointer group">
+                                <div className="relative mt-0.5 shrink-0">
+                                    <input
+                                        type="checkbox"
+                                        checked={marketingConsent}
+                                        onChange={(e) => setMarketingConsent(e.target.checked)}
+                                        className="sr-only"
+                                    />
+                                    <div className={`w-4 h-4 rounded border transition-all ${
+                                        marketingConsent
+                                            ? "bg-blue-500 border-blue-500"
+                                            : "bg-white/10 border-white/20 group-hover:border-white/40"
+                                    }`}>
+                                        {marketingConsent && (
+                                            <svg className="w-4 h-4 text-white p-0.5" fill="none" viewBox="0 0 24 24" stroke="currentColor" strokeWidth={3}>
+                                                <path strokeLinecap="round" strokeLinejoin="round" d="M5 13l4 4L19 7" />
+                                            </svg>
+                                        )}
+                                    </div>
+                                </div>
+                                <span className="text-[12px] text-slate-400 leading-relaxed">
+                                    클래스인의 제품 소식 및 마케팅 이메일 수신에 동의합니다.{" "}
+                                    <span className="text-slate-500">(선택)</span>
+                                </span>
+                            </label>
                             {error && (
                                 <p className="text-red-400 text-sm text-center">{error}</p>
                             )}

@@ -214,3 +214,31 @@
   from { opacity: 0.7; }
   to   { opacity: 0; }
 }
+
+/* ── Final CTA section keyframes ──────────────────────────────────── */
+@keyframes digit-glow-light {
+  0%, 100% { text-shadow: 0 0 20px rgba(224, 80, 36, 0); }
+  50% { text-shadow: 0 0 30px rgba(224, 80, 36, 0.15); }
+}
+
+@keyframes shimmer-sweep {
+  0% { transform: translateX(-100%); }
+  100% { transform: translateX(400%); }
+}
+
+@keyframes glow-pulse-light {
+  0%, 100% { box-shadow: 0 8px 30px rgba(224, 80, 36, 0.2); }
+  50% { box-shadow: 0 12px 45px rgba(224, 80, 36, 0.35); }
+}
+
+.animate-digit-glow {
+  animation: digit-glow-light 4s ease-in-out infinite;
+}
+
+.animate-shimmer-sweep {
+  animation: shimmer-sweep 0.8s ease-in-out forwards;
+}
+
+.animate-glow-pulse {
+  animation: glow-pulse-light 2s ease-in-out infinite;
+}

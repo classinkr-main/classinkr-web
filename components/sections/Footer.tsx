@@ -1,3 +1,10 @@
+/**
+ * [NOTE-25] Footer에 뉴스레터 구독 섹션 추가
+ * 페이지 최하단에서 이메일 구독을 유도.
+ * NewsletterSubscribe 컴포넌트의 dark variant 사용.
+ */
+import { NewsletterSubscribe } from "./NewsletterSubscribe"
+
 export function Footer() {
     return (
         <footer className="bg-slate-950 py-12 text-slate-400 text-sm">
@@ -6,6 +13,11 @@ export function Footer() {
                     <div>
                         <img src="/images/logo.png" alt="Classin Logo" className="h-7 w-auto mb-4 object-contain" />
                         <p className="mb-4">다음 세대를 위한 교육 품질 표준화.</p>
+                        {/* [NOTE-25] 뉴스레터 구독 영역 */}
+                        <div className="mt-4">
+                            <p className="text-white font-semibold text-xs mb-2">교육 인사이트 뉴스레터</p>
+                            <NewsletterSubscribe variant="dark" />
+                        </div>
                     </div>
                     <div>
                         <h4 className="font-semibold text-white mb-4">제품</h4>

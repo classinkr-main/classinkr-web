@@ -43,7 +43,7 @@ const stats = [
 
 export function BridgeMoment() {
     return (
-        <section className="relative py-20 md:py-28 bg-gradient-to-b from-emerald-50/60 via-white to-emerald-50/40 overflow-hidden">
+        <section className="relative py-16 md:py-28 bg-gradient-to-b from-emerald-50/60 via-white to-emerald-50/40 overflow-hidden">
             {/* Radial glow */}
             <div className="absolute top-1/2 left-1/2 -translate-x-1/2 -translate-y-1/2 w-[800px] h-[600px] bg-emerald-100/40 rounded-full blur-[150px]" />
 
@@ -86,7 +86,7 @@ export function BridgeMoment() {
                                         whileInView={{ opacity: 1, y: 0 }}
                                         viewport={{ once: true }}
                                         transition={{ delay: 0.3, duration: 0.7 }}
-                                        className="text-3xl md:text-4xl lg:text-[2.75rem] font-black text-slate-900 leading-[1.3] tracking-tight"
+                                        className="text-3xl md:text-4xl lg:text-[2.75rem] font-black text-slate-900 leading-[1.3] tracking-tight break-keep"
                                     >
                                         <span className="text-emerald-600">10개 지점</span> 관리가<br />
                                         <span className="text-emerald-600">1개 지점</span>처럼 느껴진다면?
@@ -110,9 +110,9 @@ export function BridgeMoment() {
                                         whileInView={{ opacity: 1, y: 0 }}
                                         viewport={{ once: true }}
                                         transition={{ delay: 0.4 }}
-                                        className="text-slate-600 text-lg md:text-xl leading-relaxed"
+                                        className="text-slate-600 text-lg md:text-xl leading-relaxed break-keep"
                                     >
-                                        하나의 플랫폼, 하나의 기준으로<br className="hidden md:block" />
+                                        하나의 플랫폼, 하나의 기준으로 <br className="hidden md:block" />
                                         모든 지점이 최고 효율로 운영됩니다.
                                     </motion.p>
                                 </div>
@@ -136,12 +136,12 @@ export function BridgeMoment() {
                                         whileInView={{ opacity: 1, y: 0 }}
                                         viewport={{ once: true }}
                                         transition={{ delay: 0.6 + i * 0.15 }}
-                                        className="relative p-5 md:p-6 rounded-2xl bg-emerald-50/60 border border-emerald-100 hover:bg-emerald-50 transition-colors duration-300 text-center"
+                                        className="relative p-3 md:p-6 rounded-2xl bg-emerald-50/60 border border-emerald-100 hover:bg-emerald-50 transition-colors duration-300 text-center"
                                     >
-                                        <div className="text-3xl md:text-5xl font-black text-emerald-600 mb-2">
+                                        <div className="text-2xl sm:text-3xl md:text-5xl font-black text-emerald-600 mb-2">
                                             <CountUp target={stat.value} prefix={stat.prefix} suffix={stat.suffix} decimals={stat.decimals} />
                                         </div>
-                                        <div className="text-slate-500 text-xs md:text-sm font-medium tracking-wider">{stat.label}</div>
+                                        <div className="text-slate-500 text-[11px] sm:text-xs md:text-sm font-medium tracking-wider break-keep">{stat.label}</div>
                                     </motion.div>
                                 ))}
                             </motion.div>
