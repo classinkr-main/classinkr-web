@@ -2,7 +2,10 @@ import { NextRequest, NextResponse } from "next/server"
 import { getAllPosts, createPost } from "@/lib/blog-data"
 import { verifyAdmin } from "@/lib/admin-auth"
 
-export async function GET() {
+export async function GET(req: NextRequest) {
+  const authError = verifyAdmin(req)
+  if (authError) return authError
+
   try {
     const posts = await getAllPosts()
     return NextResponse.json({ posts })
