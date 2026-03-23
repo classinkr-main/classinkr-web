@@ -13,7 +13,7 @@ import {
 import BlogPostTable from "@/components/admin/BlogPostTable"
 import BlogPostForm from "@/components/admin/BlogPostForm"
 import DeleteConfirmDialog from "@/components/admin/DeleteConfirmDialog"
-import type { BlogPost } from "@/lib/blog-types"
+import type { BlogPost, BlogPostInput } from "@/lib/blog-types"
 
 type Tab = "all" | "private" | "trash"
 
@@ -85,7 +85,7 @@ export default function AdminBlogPage() {
         setIsFormOpen(true)
     }
 
-    const handleSave = async (data: Omit<BlogPost, "id">) => {
+    const handleSave = async (data: Partial<BlogPostInput>) => {
         setFormLoading(true)
         try {
             if (editingPost) {
