@@ -1,6 +1,7 @@
 "use client"
 
 import { useState, useEffect, useCallback } from "react"
+import { useRouter } from "next/navigation"
 import { Plus, RefreshCw } from "lucide-react"
 import { Button } from "@/components/ui/button"
 import {
@@ -9,7 +10,6 @@ import {
     DialogHeader,
     DialogTitle,
 } from "@/components/ui/dialog"
-import AdminAuthGate from "@/components/admin/AdminAuthGate"
 import BlogPostTable from "@/components/admin/BlogPostTable"
 import BlogPostForm from "@/components/admin/BlogPostForm"
 import DeleteConfirmDialog from "@/components/admin/DeleteConfirmDialog"
@@ -31,12 +31,11 @@ function adminFetch(url: string, options?: RequestInit) {
 }
 
 export default function AdminBlogPage() {
-    const [isAuthed, setIsAuthed] = useState(false)
+    const router = useRouter()
     const [posts, setPosts] = useState<BlogPost[]>([])
     const [loading, setLoading] = useState(false)
     const [formLoading, setFormLoading] = useState(false)
 
-    // Dialog states
     const [isFormOpen, setIsFormOpen] = useState(false)
     const [editingPost, setEditingPost] = useState<BlogPost | undefined>(undefined)
     const [deleteTarget, setDeleteTarget] = useState<BlogPost | null>(null)
@@ -57,17 +56,11 @@ export default function AdminBlogPage() {
     }, [])
 
     useEffect(() => {
-        if (typeof window !== "undefined" && sessionStorage.getItem("admin_password")) {
-            setIsAuthed(true)
-        }
-    }, [])
+        fetchPosts()
+    }, [fetchPosts])
 
-    useEffect(() => {
-        if (isAuthed) fetchPosts()
-    }, [isAuthed, fetchPosts])
-
-    const handleAuth = () => {
-        setIsAuthed(true)
+    const handleUnauthorized = () => {
+        router.replace("/admin/login")
     }
 
     const handleCreate = () => {
@@ -88,21 +81,13 @@ export default function AdminBlogPage() {
                     method: "PUT",
                     body: JSON.stringify(data),
                 })
-                if (res.status === 401) {
-                    sessionStorage.removeItem("admin_password")
-                    setIsAuthed(false)
-                    return
-                }
+                if (res.status === 401) { handleUnauthorized(); return }
             } else {
                 const res = await adminFetch("/api/admin/blog", {
                     method: "POST",
                     body: JSON.stringify(data),
                 })
-                if (res.status === 401) {
-                    sessionStorage.removeItem("admin_password")
-                    setIsAuthed(false)
-                    return
-                }
+                if (res.status === 401) { handleUnauthorized(); return }
             }
             setIsFormOpen(false)
             await fetchPosts()
@@ -120,11 +105,7 @@ export default function AdminBlogPage() {
             const res = await adminFetch(`/api/admin/blog/${deleteTarget.id}`, {
                 method: "DELETE",
             })
-            if (res.status === 401) {
-                sessionStorage.removeItem("admin_password")
-                setIsAuthed(false)
-                return
-            }
+            if (res.status === 401) { handleUnauthorized(); return }
             setDeleteTarget(null)
             await fetchPosts()
         } catch {
@@ -142,48 +123,44 @@ export default function AdminBlogPage() {
         await fetchPosts()
     }
 
-    if (!isAuthed) {
-        return <AdminAuthGate onAuth={handleAuth} />
-    }
-
     return (
-        <div className="min-h-screen bg-[#FAFAF8]">
-            <div className="max-w-[1100px] mx-auto px-6 pt-32 pb-20">
-                {/* Header */}
-                <div className="flex items-center justify-between mb-8">
-                    <div>
-                        <p className="text-[12px] font-medium text-[#1a1a1a]/30 uppercase tracking-wide mb-1">Admin</p>
-                        <h1 className="text-2xl font-bold text-[#111110] tracking-[-0.02em]">블로그 관리</h1>
+        <div className="px-8 pt-12 pb-20">
+            <div className="flex items-center justify-between mb-8">
+                <div>
+                    <div className="flex items-center gap-3 mb-1">
+                        <p className="text-[11px] font-medium text-[#1a1a1a]/30 uppercase tracking-widest">Admin</p>
+                        {/* [NOTE-21] 블로그 ↔ 마케팅 관리 네비게이션 */}
+                        <a href="/admin/marketing" className="text-[11px] text-[#084734] hover:underline">
+                            마케팅 관리 →
+                        </a>
                     </div>
-                    <div className="flex items-center gap-2">
-                        <Button variant="outline" size="sm" onClick={fetchPosts} disabled={loading}>
-                            <RefreshCw className={`w-4 h-4 mr-1.5 ${loading ? "animate-spin" : ""}`} />
-                            새로고침
-                        </Button>
-                        <Button size="sm" onClick={handleCreate}>
-                            <Plus className="w-4 h-4 mr-1.5" />
-                            새 글 작성
-                        </Button>
-                    </div>
+                    <h1 className="text-2xl font-bold text-[#111110] tracking-[-0.02em]">콘텐츠 관리</h1>
                 </div>
-
-                {/* Post count */}
-                <div className="text-[13px] text-[#1a1a1a]/40 mb-4">
-                    총 {posts.length}개의 글
-                </div>
-
-                {/* Table */}
-                <div className="bg-white rounded-xl border border-[#e8e8e4] overflow-hidden">
-                    <BlogPostTable
-                        posts={posts}
-                        onEdit={handleEdit}
-                        onDelete={setDeleteTarget}
-                        onToggleFeatured={handleToggleFeatured}
-                    />
+                <div className="flex items-center gap-2">
+                    <Button variant="outline" size="sm" onClick={fetchPosts} disabled={loading}>
+                        <RefreshCw className={`w-4 h-4 mr-1.5 ${loading ? "animate-spin" : ""}`} />
+                        새로고침
+                    </Button>
+                    <Button size="sm" onClick={handleCreate}>
+                        <Plus className="w-4 h-4 mr-1.5" />
+                        새 글 작성
+                    </Button>
                 </div>
             </div>
 
-            {/* Create/Edit Dialog */}
+            <div className="text-[13px] text-[#1a1a1a]/40 mb-4">
+                총 {posts.length}개의 글
+            </div>
+
+            <div className="bg-white rounded-xl border border-[#e8e8e4] overflow-hidden">
+                <BlogPostTable
+                    posts={posts}
+                    onEdit={handleEdit}
+                    onDelete={setDeleteTarget}
+                    onToggleFeatured={handleToggleFeatured}
+                />
+            </div>
+
             <Dialog open={isFormOpen} onOpenChange={(v) => !v && setIsFormOpen(false)}>
                 <DialogContent className="sm:max-w-lg bg-white">
                     <DialogHeader>
@@ -198,7 +175,6 @@ export default function AdminBlogPage() {
                 </DialogContent>
             </Dialog>
 
-            {/* Delete Confirm */}
             <DeleteConfirmDialog
                 post={deleteTarget}
                 open={!!deleteTarget}

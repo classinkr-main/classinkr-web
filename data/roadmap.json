@@ -1,0 +1,46 @@
+[
+  {
+    "id": "v2.0",
+    "version": "v2.0",
+    "title": "Admin Dashboard v2",
+    "status": "in-progress",
+    "startDate": "2025-03-01",
+    "targetDate": "2025-04-30",
+    "features": [
+      { "id": "f1", "title": "Multi-role 인증 (admin/branch)", "status": "done", "assignee": "팀" },
+      { "id": "f2", "title": "CRM 리드 관리", "status": "done", "assignee": "팀" },
+      { "id": "f3", "title": "Analytics 대시보드", "status": "done", "assignee": "팀" },
+      { "id": "f4", "title": "지사 관리", "status": "done", "assignee": "팀" },
+      { "id": "f5", "title": "사이트 설정 토글", "status": "done", "assignee": "팀" },
+      { "id": "f6", "title": "Dev Mode", "status": "in-progress", "assignee": "팀" },
+      { "id": "f7", "title": "Supabase 마이그레이션", "status": "planned", "assignee": "팀" }
+    ]
+  },
+  {
+    "id": "v2.1",
+    "version": "v2.1",
+    "title": "Supabase 연동 + 실시간 데이터",
+    "status": "planned",
+    "startDate": "2025-05-01",
+    "targetDate": "2025-06-30",
+    "features": [
+      { "id": "f8", "title": "Supabase Auth 연동", "status": "planned", "assignee": "TBD" },
+      { "id": "f9", "title": "PostgreSQL 리드 DB 마이그레이션", "status": "planned", "assignee": "TBD" },
+      { "id": "f10", "title": "실시간 알림 (Realtime)", "status": "planned", "assignee": "TBD" },
+      { "id": "f11", "title": "RLS 권한 제어", "status": "planned", "assignee": "TBD" }
+    ]
+  },
+  {
+    "id": "v3.0",
+    "version": "v3.0",
+    "title": "마케팅 자동화 + AI",
+    "status": "planned",
+    "startDate": "2025-07-01",
+    "targetDate": "2025-09-30",
+    "features": [
+      { "id": "f12", "title": "이메일 캠페인 자동화", "status": "planned", "assignee": "TBD" },
+      { "id": "f13", "title": "리드 스코어링 AI", "status": "planned", "assignee": "TBD" },
+      { "id": "f14", "title": "A/B 테스트 프레임워크", "status": "planned", "assignee": "TBD" }
+    ]
+  }
+]

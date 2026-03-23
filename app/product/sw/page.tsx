@@ -1,31 +1,28 @@
 "use client"
 
 import { Button } from "@/components/ui/button"
-import { motion, useInView, useMotionValue, useTransform, animate } from "framer-motion"
-import { Play, Mail, MessageSquare, Database, FileText, Clock, ArrowRight, Sparkles } from "lucide-react"
-import { useRef, useEffect, useState } from "react"
+import { motion, useInView, useMotionValue, useTransform, useScroll, useMotionValueEvent, animate } from "framer-motion"
+import { Play, Mail, MessageSquare, Database, FileText, Clock, ArrowRight, Sparkles, Monitor, Layers, MousePointerClick } from "lucide-react"
+import { useRef, useEffect, useState, useMemo, useCallback } from "react"
 
-function SlotDigit({ digit, delay }: { digit: string; delay: number }) {
-    const ref = useRef<HTMLDivElement>(null)
-    const isInView = useInView(ref, { once: true })
+function SlotDigit({ digit, delay, trigger, onDone }: { digit: string; delay: number; trigger: boolean; onDone?: () => void }) {
     const num = parseInt(digit)
+    const [done, setDone] = useState(false)
 
     return (
-        <div
-            ref={ref}
-            className="w-12 sm:w-18 md:w-24 h-16 sm:h-24 md:h-32 bg-white/[0.04] border border-white/[0.08] backdrop-blur-sm rounded-xl md:rounded-2xl flex items-center justify-center relative overflow-hidden"
-        >
-            <div className="absolute inset-0 bg-gradient-to-b from-white/[0.03] to-transparent h-1/2"></div>
+        <div className="w-14 sm:w-20 md:w-28 h-[4.5rem] sm:h-28 md:h-36 bg-white border border-slate-200/80 shadow-[0_2px_20px_rgba(0,0,0,0.04)] rounded-xl md:rounded-2xl flex items-center justify-center relative overflow-hidden">
+            <div className="absolute inset-0 bg-gradient-to-b from-slate-50/80 to-transparent h-1/2"></div>
             <motion.div
                 className="flex flex-col items-center"
                 initial={{ y: 0 }}
-                animate={isInView ? { y: -(num * 100) + "%" } : {}}
+                animate={trigger ? { y: -(num * 10) + "%" } : {}}
                 transition={{ duration: 1.2, delay, ease: [0.25, 0.46, 0.45, 0.94] }}
+                onAnimationComplete={() => { if (trigger) { setDone(true); onDone?.() } }}
             >
                 {[0, 1, 2, 3, 4, 5, 6, 7, 8, 9].map((n) => (
                     <span
                         key={n}
-                        className="h-16 sm:h-24 md:h-32 flex items-center justify-center text-4xl sm:text-6xl md:text-8xl font-serif text-white font-light"
+                        className={`h-[4.5rem] sm:h-28 md:h-36 flex items-center justify-center text-4xl sm:text-6xl md:text-8xl font-serif text-[#E05024] font-light ${done ? "animate-digit-glow" : ""}`}
                     >
                         {n}
                     </span>
@@ -35,14 +32,12 @@ function SlotDigit({ digit, delay }: { digit: string; delay: number }) {
     )
 }
 
-function CountUpStat({ value, suffix, label, delay }: { value: number; suffix: string; label: string; delay: number }) {
-    const ref = useRef<HTMLDivElement>(null)
-    const isInView = useInView(ref, { once: true })
+function StatCard({ value, suffix, label, icon, delay, trigger }: { value: number; suffix: string; label: string; icon: React.ReactNode; delay: number; trigger: boolean }) {
     const [display, setDisplay] = useState("0")
+    const mv = useMotionValue(0)
 
     useEffect(() => {
-        if (!isInView) return
-        const mv = useMotionValue(0)
+        if (!trigger) return
         const unsub = mv.on("change", (v) => {
             if (value >= 100) {
                 setDisplay(Math.round(v).toLocaleString())
@@ -52,15 +47,277 @@ function CountUpStat({ value, suffix, label, delay }: { value: number; suffix: s
         })
         animate(mv, value, { duration: 2, delay, ease: "easeOut" })
         return unsub
-    }, [isInView, value, delay])
+    }, [trigger, value, delay, mv])
 
     return (
-        <div ref={ref} className="text-center">
-            <div className="text-2xl sm:text-3xl font-bold text-white/90 mb-1 font-serif">
+        <motion.div
+            className="bg-white rounded-2xl border border-slate-200/80 shadow-[0_2px_20px_rgba(0,0,0,0.04)] p-5 sm:p-6 text-center flex-1 min-w-[140px]"
+            initial={{ opacity: 0, y: 25, rotateX: 8 }}
+            animate={trigger ? { opacity: 1, y: 0, rotateX: 0 } : {}}
+            transition={{ type: "spring", stiffness: 200, damping: 25, delay }}
+            style={{ perspective: 800 }}
+        >
+            <div className="flex justify-center mb-3 text-[#E05024]/70">{icon}</div>
+            <div className="text-2xl sm:text-3xl font-bold text-slate-900 mb-1 font-serif">
                 {display}{suffix}
             </div>
-            <div className="text-xs sm:text-sm text-white/30 font-medium tracking-wide">{label}</div>
-        </div>
+            <div className="text-xs sm:text-sm text-slate-400 font-medium leading-snug whitespace-pre-line">{label}</div>
+        </motion.div>
+    )
+}
+
+/* ── Ambient particle for Final CTA section ──────────────────────── */
+function AmbientParticle({ x, size, duration, delayStart }: { x: number; size: number; duration: number; delayStart: number }) {
+    return (
+        <motion.div
+            className="absolute rounded-full bg-orange-300/15 pointer-events-none"
+            style={{ left: `${x}%`, bottom: "-10%", width: size, height: size }}
+            animate={{ y: [0, -600, -1200], opacity: [0, 0.5, 0] }}
+            transition={{ duration, delay: delayStart, repeat: Infinity, ease: "easeInOut" }}
+        />
+    )
+}
+
+/* ── Final CTA Section (Bright) ──────────────────────────────────── */
+function FinalCTASection() {
+    const sectionRef = useRef<HTMLElement>(null)
+    const { scrollYProgress } = useScroll({ target: sectionRef, offset: ["start end", "end start"] })
+
+    const [phase, setPhase] = useState(0)
+    const [slotsDone, setSlotsDone] = useState(false)
+    const [liveCount, setLiveCount] = useState(0)
+
+    useMotionValueEvent(scrollYProgress, "change", (v) => {
+        if (v >= 0.55 && phase < 3) setPhase(3)
+        else if (v >= 0.35 && phase < 2) setPhase(2)
+        else if (v >= 0.15 && phase < 1) setPhase(1)
+    })
+
+    const glowOpacity = useTransform(scrollYProgress, [0.1, 0.4], [0, 1])
+
+    useEffect(() => {
+        if (!slotsDone) return
+        let interval: ReturnType<typeof setInterval>
+        const timeout = setTimeout(() => {
+            interval = setInterval(() => {
+                setLiveCount((prev) => prev + 1)
+            }, 3000 + Math.random() * 2000)
+        }, 3000)
+        return () => { clearTimeout(timeout); clearInterval(interval) }
+    }, [slotsDone])
+
+    const particles = useMemo(() => {
+        const count = typeof window !== "undefined" && window.innerWidth < 640 ? 8 : 15
+        return Array.from({ length: count }, (_, i) => ({
+            x: Math.random() * 100,
+            size: 3 + Math.random() * 5,
+            duration: 8 + Math.random() * 10,
+            delayStart: Math.random() * 6,
+            key: i,
+        }))
+    }, [])
+
+    const handleLastSlotDone = useCallback(() => setSlotsDone(true), [])
+
+    const displayDigits = useMemo(() => {
+        const num = 1341483 + liveCount
+        return num.toString().split("")
+    }, [liveCount])
+
+    return (
+        <section ref={sectionRef} className="relative py-32 md:py-44 overflow-hidden" style={{ minHeight: "100vh" }}>
+            {/* Warm bright background */}
+            <div className="absolute inset-0 bg-gradient-to-b from-[#FFF9F5] via-[#FFFAF7] to-[#FDFCF8]"></div>
+
+            {/* Soft radial glow — fades in with scroll */}
+            <motion.div className="absolute inset-0 pointer-events-none" style={{ opacity: glowOpacity }}>
+                <motion.div
+                    className="absolute top-1/2 left-1/2 -translate-x-1/2 -translate-y-1/2 w-[900px] h-[700px] bg-gradient-radial from-orange-200/30 via-orange-100/10 to-transparent rounded-full blur-3xl"
+                    animate={{ x: [0, 30, -20, 0], y: [0, -20, 15, 0] }}
+                    transition={{ duration: 20, repeat: Infinity, ease: "easeInOut" }}
+                />
+            </motion.div>
+
+            {/* Top/bottom subtle edges */}
+            <div className="absolute top-0 left-0 w-full h-px bg-gradient-to-r from-transparent via-orange-300/20 to-transparent"></div>
+            <div className="absolute bottom-0 left-0 w-full h-px bg-gradient-to-r from-transparent via-slate-200/50 to-transparent"></div>
+
+            {/* Ambient particles — visible from phase 1 */}
+            <motion.div
+                className="absolute inset-0 pointer-events-none"
+                initial={{ opacity: 0 }}
+                animate={phase >= 1 ? { opacity: 1 } : {}}
+                transition={{ duration: 1 }}
+            >
+                {particles.map((p) => (
+                    <AmbientParticle key={p.key} x={p.x} size={p.size} duration={p.duration} delayStart={p.delayStart} />
+                ))}
+            </motion.div>
+
+            <div className="container mx-auto px-4 text-center max-w-5xl relative z-10">
+
+                {/* ── Act 1: 공감 + 질문 ── */}
+                <motion.div
+                    initial={{ opacity: 0, y: 20 }}
+                    animate={phase >= 1 ? { opacity: 1, y: 0 } : {}}
+                    transition={{ duration: 0.7 }}
+                    className="mb-3"
+                >
+                    <p className="text-xl sm:text-2xl md:text-3xl text-slate-500 font-medium font-serif leading-relaxed">
+                        줌 열고, 녹화 누르고, 숙제 올리고—
+                    </p>
+                </motion.div>
+                <motion.div
+                    initial={{ opacity: 0, y: 20 }}
+                    animate={phase >= 1 ? { opacity: 1, y: 0 } : {}}
+                    transition={{ duration: 0.7, delay: 0.35 }}
+                    className="mb-8"
+                >
+                    <p className="text-xl sm:text-2xl md:text-3xl text-slate-700 font-semibold font-serif">
+                        수업 하나에 도구만 네 개.
+                    </p>
+                </motion.div>
+
+                {/* 전환 질문 */}
+                <motion.div
+                    initial={{ opacity: 0, filter: "blur(4px)" }}
+                    animate={phase >= 1 ? { opacity: 1, filter: "blur(0px)" } : {}}
+                    transition={{ duration: 0.8, delay: 0.7 }}
+                    className="mb-10"
+                >
+                    <p className="text-lg sm:text-xl md:text-2xl text-[#E05024] font-medium font-serif italic">
+                        가르치는 일에만 집중할 수 있다면?
+                    </p>
+                </motion.div>
+
+                {/* Badge */}
+                <motion.div
+                    initial={{ opacity: 0, y: 10 }}
+                    animate={phase >= 1 ? { opacity: 1, y: 0 } : {}}
+                    transition={{ duration: 0.5, delay: 1.0 }}
+                    className="flex items-center justify-center gap-2 mb-14"
+                >
+                    <div className="inline-flex items-center gap-2 px-4 py-1.5 rounded-full bg-orange-50 border border-orange-200/60 text-sm font-medium text-[#E05024]">
+                        <Clock className="w-3.5 h-3.5" />
+                        되찾은 수업 시간
+                    </div>
+                </motion.div>
+
+                {/* ── Act 2: 스케일 공개 ── */}
+
+                {/* Bridge copy */}
+                <motion.p
+                    initial={{ opacity: 0, y: 10 }}
+                    animate={phase >= 2 ? { opacity: 1, y: 0 } : {}}
+                    transition={{ duration: 0.5 }}
+                    className="text-base sm:text-lg text-slate-400 font-medium mb-8 max-w-xl mx-auto leading-relaxed"
+                >
+                    하나의 플랫폼으로 수업한 전국 2,400개 학원이 되찾은 시간
+                </motion.p>
+
+                <div className="relative">
+                    {/* Light burst behind counter */}
+                    <motion.div
+                        className="absolute top-1/2 left-1/2 -translate-x-1/2 -translate-y-1/2 w-[500px] h-[300px] bg-gradient-radial from-orange-300/25 via-orange-200/10 to-transparent rounded-full pointer-events-none"
+                        initial={{ scale: 0, opacity: 0 }}
+                        animate={phase >= 2 ? { scale: [0, 1.2, 1], opacity: [0, 0.7, 0] } : {}}
+                        transition={{ duration: 1.5, ease: "easeOut" }}
+                    />
+
+                    {/* Counter container with blur pre-reveal */}
+                    <motion.div
+                        className="flex justify-center mb-5"
+                        initial={{ scale: 0.9, opacity: 0.3, filter: "blur(8px)" }}
+                        animate={phase >= 2 ? { scale: 1, opacity: 1, filter: "blur(0px)" } : {}}
+                        transition={{ type: "spring", stiffness: 120, damping: 20 }}
+                    >
+                        <div className="flex items-center gap-1.5 sm:gap-2.5 select-none relative">
+                            <SlotDigit digit={displayDigits[0]} delay={0.2} trigger={phase >= 2} />
+                            <span className="text-4xl sm:text-6xl md:text-8xl font-serif text-slate-300 font-light select-none">,</span>
+                            <SlotDigit digit={displayDigits[1]} delay={0.35} trigger={phase >= 2} />
+                            <SlotDigit digit={displayDigits[2]} delay={0.45} trigger={phase >= 2} />
+                            <SlotDigit digit={displayDigits[3]} delay={0.55} trigger={phase >= 2} />
+                            <span className="text-4xl sm:text-6xl md:text-8xl font-serif text-slate-300 font-light select-none">,</span>
+                            <SlotDigit digit={displayDigits[4]} delay={0.65} trigger={phase >= 2} />
+                            <SlotDigit digit={displayDigits[5]} delay={0.75} trigger={phase >= 2} />
+                            <SlotDigit digit={displayDigits[6]} delay={0.85} trigger={phase >= 2} onDone={handleLastSlotDone} />
+
+                            {/* Shimmer sweep overlay */}
+                            {slotsDone && (
+                                <div className="absolute inset-0 overflow-hidden pointer-events-none rounded-2xl">
+                                    <div className="absolute inset-0 animate-shimmer-sweep bg-gradient-to-r from-transparent via-orange-400/15 to-transparent w-1/3 h-full" />
+                                </div>
+                            )}
+                        </div>
+                    </motion.div>
+                </div>
+
+                {/* Unit */}
+                <motion.p
+                    initial={{ opacity: 0 }}
+                    animate={phase >= 2 ? { opacity: 1 } : {}}
+                    transition={{ delay: 0.5, duration: 0.5 }}
+                    className="text-3xl sm:text-4xl md:text-5xl font-serif text-slate-800 font-light tracking-tight mb-3"
+                >
+                    시간
+                </motion.p>
+
+                {/* Live indicator */}
+                <motion.p
+                    initial={{ opacity: 0, y: 10 }}
+                    animate={phase >= 2 ? { opacity: 1, y: 0 } : {}}
+                    transition={{ delay: 0.7, duration: 0.5 }}
+                    className="text-sm sm:text-base text-slate-400 font-medium mb-6"
+                >
+                    지금 이 순간에도 수업이 진행되고 있습니다
+                </motion.p>
+
+                {/* ── Act 3: 증거 카드 + CTA ── */}
+
+                {/* Divider */}
+                <motion.div
+                    className="w-full max-w-sm mx-auto h-px bg-gradient-to-r from-transparent via-orange-300/30 to-transparent mb-14 mt-14"
+                    initial={{ scaleX: 0 }}
+                    animate={phase >= 3 ? { scaleX: 1 } : {}}
+                    transition={{ duration: 0.6, ease: "easeOut" }}
+                    style={{ originX: 0.5 }}
+                />
+
+                {/* 4-card stats grid */}
+                <div className="grid grid-cols-2 lg:grid-cols-4 gap-3 sm:gap-4 mb-14 max-w-3xl mx-auto">
+                    <StatCard value={2400} suffix="+" label="줌 대신 선택한 학원" icon={<Monitor className="w-5 h-5" />} delay={0} trigger={phase >= 3} />
+                    <StatCard value={30} suffix="+" label="인터랙티브 수업 도구" icon={<MousePointerClick className="w-5 h-5" />} delay={0.1} trigger={phase >= 3} />
+                    <StatCard value={1} suffix="곳" label={"수업부터 알림까지\n올인원"} icon={<Layers className="w-5 h-5" />} delay={0.2} trigger={phase >= 3} />
+                    <StatCard value={98} suffix="%" label={`"과거로 못 돌아간다"\n응답률`} icon={<Sparkles className="w-5 h-5" />} delay={0.3} trigger={phase >= 3} />
+                </div>
+
+                {/* Pivot copy */}
+                <motion.p
+                    initial={{ opacity: 0, letterSpacing: "0.3em" }}
+                    animate={phase >= 3 ? { opacity: 1, letterSpacing: "0.05em" } : {}}
+                    transition={{ delay: 0.5, duration: 0.8, ease: "easeOut" }}
+                    className="text-lg sm:text-xl font-serif text-slate-600 font-medium mb-10"
+                >
+                    수업만을 위해 만든 플랫폼, 다음은 당신의 교실입니다
+                </motion.p>
+
+                {/* CTA */}
+                <motion.div
+                    initial={{ opacity: 0, y: 20 }}
+                    animate={phase >= 3 ? { opacity: 1, y: 0 } : {}}
+                    transition={{ delay: 0.7, type: "spring", stiffness: 200, damping: 25 }}
+                    className="flex flex-col items-center gap-4"
+                >
+                    <Button className="bg-[#E05024] hover:bg-[#C9431A] text-white rounded-full px-10 h-14 text-base font-bold animate-glow-pulse transition-all hover:scale-105 group">
+                        지금 무료로 시작하기
+                        <ArrowRight className="w-4 h-4 ml-2 group-hover:translate-x-1 transition-transform" />
+                    </Button>
+                    <p className="text-xs sm:text-sm text-slate-400 font-medium">
+                        설치 없이 바로 체험 · 카드 등록 불필요
+                    </p>
+                </motion.div>
+            </div>
+        </section>
     )
 }
 
@@ -564,100 +821,7 @@ export default function ProductPage() {
             </section>
 
             {/* Counter / Final CTA */}
-            <section className="relative py-32 md:py-40 overflow-hidden">
-                {/* Deep gradient background */}
-                <div className="absolute inset-0 bg-gradient-to-b from-[#0f0f0e] via-[#1a1a19] to-[#0f0f0e]"></div>
-
-                {/* Subtle radial glow */}
-                <div className="absolute inset-0">
-                    <div className="absolute top-1/2 left-1/2 -translate-x-1/2 -translate-y-1/2 w-[800px] h-[600px] bg-gradient-radial from-orange-500/[0.07] via-transparent to-transparent rounded-full blur-3xl"></div>
-                    <div className="absolute top-0 left-0 w-full h-px bg-gradient-to-r from-transparent via-orange-500/20 to-transparent"></div>
-                    <div className="absolute bottom-0 left-0 w-full h-px bg-gradient-to-r from-transparent via-white/5 to-transparent"></div>
-                </div>
-
-                <div className="container mx-auto px-4 text-center max-w-5xl relative z-10">
-                    {/* Top label */}
-                    <motion.div
-                        initial={{ opacity: 0, y: 10 }}
-                        whileInView={{ opacity: 1, y: 0 }}
-                        viewport={{ once: true }}
-                        className="flex items-center justify-center gap-2 mb-12"
-                    >
-                        <div className="inline-flex items-center gap-2 px-4 py-1.5 rounded-full bg-white/[0.06] border border-white/10 text-sm font-medium text-orange-300/90">
-                            <Clock className="w-3.5 h-3.5" />
-                            절약된 시간
-                        </div>
-                    </motion.div>
-
-                    {/* Large counter - slot machine effect */}
-                    <div className="flex justify-center mb-6">
-                        <div className="flex items-center gap-1.5 sm:gap-2.5 select-none">
-                            <SlotDigit digit="1" delay={0.2} />
-                            <span className="text-4xl sm:text-6xl md:text-8xl font-serif text-white/30 font-light select-none">,</span>
-                            <SlotDigit digit="3" delay={0.35} />
-                            <SlotDigit digit="4" delay={0.45} />
-                            <SlotDigit digit="1" delay={0.55} />
-                            <span className="text-4xl sm:text-6xl md:text-8xl font-serif text-white/30 font-light select-none">,</span>
-                            <SlotDigit digit="4" delay={0.65} />
-                            <SlotDigit digit="8" delay={0.75} />
-                            <SlotDigit digit="3" delay={0.85} />
-                        </div>
-                    </div>
-
-                    {/* Unit */}
-                    <motion.p
-                        initial={{ opacity: 0 }}
-                        whileInView={{ opacity: 1 }}
-                        viewport={{ once: true }}
-                        transition={{ delay: 0.5 }}
-                        className="text-3xl sm:text-4xl md:text-5xl font-serif text-white/90 font-light tracking-tight mb-4"
-                    >
-                        시간
-                    </motion.p>
-
-                    {/* Description */}
-                    <motion.p
-                        initial={{ opacity: 0, y: 10 }}
-                        whileInView={{ opacity: 1, y: 0 }}
-                        viewport={{ once: true }}
-                        transition={{ delay: 0.6 }}
-                        className="text-base sm:text-lg text-white/40 font-medium mb-6 max-w-lg mx-auto leading-relaxed"
-                    >
-                        전국 학원들이 Classin과 함께 절약한 누적 시간입니다.
-                    </motion.p>
-
-                    {/* Stats row - count up */}
-                    <motion.div
-                        initial={{ opacity: 0, y: 15 }}
-                        whileInView={{ opacity: 1, y: 0 }}
-                        viewport={{ once: true }}
-                        transition={{ delay: 0.7 }}
-                        className="flex flex-wrap justify-center gap-8 sm:gap-14 mb-16 mt-12"
-                    >
-                        <CountUpStat value={2400} suffix="+" label="도입 학원 수" delay={0.3} />
-                        <CountUpStat value={15} suffix="h" label="주당 절약 시간" delay={0.5} />
-                        <CountUpStat value={98} suffix="%" label="사용자 만족도" delay={0.7} />
-                    </motion.div>
-
-                    {/* CTA */}
-                    <motion.div
-                        initial={{ opacity: 0, y: 20 }}
-                        whileInView={{ opacity: 1, y: 0 }}
-                        viewport={{ once: true }}
-                        transition={{ delay: 0.8 }}
-                        className="flex flex-col sm:flex-row items-center justify-center gap-4"
-                    >
-                        <Button className="bg-[#E05024] hover:bg-[#C9431A] text-white rounded-full px-10 h-14 text-base font-bold shadow-[0_10px_40px_rgba(224,80,36,0.35)] hover:shadow-[0_15px_50px_rgba(224,80,36,0.45)] transition-all hover:scale-105 group">
-                            지금 무료로 시작하기
-                            <ArrowRight className="w-4 h-4 ml-2 group-hover:translate-x-1 transition-transform" />
-                        </Button>
-                        <button className="flex items-center gap-2 text-white/40 hover:text-white/70 text-sm font-medium transition-colors">
-                            <Sparkles className="w-3.5 h-3.5" />
-                            설치 없이 바로 체험
-                        </button>
-                    </motion.div>
-                </div>
-            </section>
+            <FinalCTASection />
 
         </div>
     )

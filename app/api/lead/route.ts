@@ -1,4 +1,15 @@
+/**
+ * ─────────────────────────────────────────────────────────────
+ * /api/lead  —  리드 수집 API (기존 + 마케팅 구독자 자동 등록)
+ * ─────────────────────────────────────────────────────────────
+ *
+ * [NOTE-24] 리드 → 구독자 자동 연동
+ *   데모 신청 또는 문의 시 이메일이 포함되어 있으면
+ *   자동으로 구독자 DB에도 등록 (옵트인 처리).
+ */
 import { NextRequest, NextResponse } from "next/server"
+import { saveLead } from "@/lib/db"
+import { upsertSubscriber } from "@/lib/marketing-data"
 
 export interface LeadPayload {
   source: "demo_modal" | "contact_page" | "newsletter"
@@ -10,6 +21,8 @@ export interface LeadPayload {
   phone?: string
   message?: string
   timestamp: string
+  /** [NOTE-24] 마케팅 이메일 수신 동의 여부 */
+  marketingConsent?: boolean
 }
 
 export async function POST(req: NextRequest) {
@@ -17,10 +30,20 @@ export async function POST(req: NextRequest) {
     const body: LeadPayload = await req.json()
     body.timestamp = new Date().toISOString()
 
+    try {
+      saveLead({ ...body })
+    } catch {
+      // DB 저장 실패해도 외부 연동은 계속
+    }
+
     const results = await Promise.allSettled([
       sendToGoogleSheet(body),
       sendToWebhook(body),
       sendToChannelTalk(body),
+      /** [NOTE-24] 이메일 있고 수신 동의 시 구독자 DB 자동 등록 */
+      body.email && body.marketingConsent !== false
+        ? syncToSubscriberDB(body)
+        : Promise.resolve(),
     ])
 
     const errors = results
@@ -86,4 +109,28 @@ async function sendToChannelTalk(data: LeadPayload) {
   })
 
   if (!res.ok) throw new Error(`ChannelTalk: ${res.status}`)
+}
+
+/**
+ * [NOTE-24] 리드 → 구독자 DB 자동 동기화
+ * 데모 신청자 / 문의자의 이메일을 구독자 목록에 등록.
+ * 유입 경로(source)를 그대로 전달하여 추적 가능.
+ */
+async function syncToSubscriberDB(data: LeadPayload) {
+  if (!data.email) return
+
+  try {
+    await upsertSubscriber({
+      name: data.name || data.email.split("@")[0],
+      email: data.email,
+      org: data.org,
+      role: data.role,
+      size: data.size,
+      phone: data.phone,
+      tags: data.source === "demo_modal" ? ["데모신청"] : [],
+      source: data.source,
+    })
+  } catch (err) {
+    console.error("[syncToSubscriberDB] 구독자 자동 등록 실패:", err)
+  }
 }
