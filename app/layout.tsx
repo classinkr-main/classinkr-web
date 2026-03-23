@@ -2,6 +2,7 @@ import type { Metadata } from "next";
 import "./globals.css";
 import { Header } from "@/components/sections/Header";
 import { FloatingChatbot } from "@/components/ui/FloatingChatbot";
+import { MobileFloatingCTA } from "@/components/ui/MobileFloatingCTA";
 import { AnalyticsProviders } from "@/components/AnalyticsProviders";
 
 
@@ -34,6 +35,7 @@ export default function RootLayout({
           {children}
         </main>
         <FloatingChatbot />
+        <MobileFloatingCTA />
         <AnalyticsProviders />
       </body>
     </html>
