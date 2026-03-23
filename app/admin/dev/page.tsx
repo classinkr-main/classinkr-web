@@ -1,6 +1,7 @@
 "use client"
 
-import { useEffect, useState } from "react"
+import React, { useEffect, useState } from "react"
+import type { PatchNote, PatchChange, ChangeType, NoteStatus } from "@/lib/patch-notes-data"
 import { useRouter } from "next/navigation"
 
 // ─── Types ───────────────────────────────────────────────
@@ -48,6 +49,7 @@ interface GitCommit {
 const TABS = [
   { id: "roadmap", label: "로드맵" },
   { id: "bugs", label: "버그 리포트" },
+  { id: "patchnotes", label: "패치노트" },
   { id: "architecture", label: "시스템 구조" },
   { id: "gitlog", label: "배포 이력" },
 ] as const
@@ -442,6 +444,403 @@ function BugsTab({ token, userName }: { token: string; userName: string }) {
   )
 }
 
+// ─── Patch Notes Tab ──────────────────────────────────────
+const CHANGE_CONFIG: Record<ChangeType, { label: string; bg: string; dot: string }> = {
+  feat:     { label: "신기능",  bg: "bg-blue-50 text-blue-700 border-blue-200",    dot: "bg-blue-500" },
+  fix:      { label: "버그수정", bg: "bg-red-50 text-red-700 border-red-200",      dot: "bg-red-500" },
+  improve:  { label: "개선",    bg: "bg-green-50 text-green-700 border-green-200", dot: "bg-green-500" },
+  breaking: { label: "주의",    bg: "bg-orange-50 text-orange-700 border-orange-200", dot: "bg-orange-500" },
+}
+
+const STATUS_CONFIG: Record<NoteStatus, { label: string; bg: string }> = {
+  draft:     { label: "초안",   bg: "bg-gray-100 text-gray-500" },
+  published: { label: "발행됨", bg: "bg-green-100 text-green-700" },
+}
+
+function uid() {
+  return `c_${Date.now()}_${Math.random().toString(36).slice(2, 5)}`
+}
+
+const EMPTY_FORM = {
+  version: "",
+  title: "",
+  date: new Date().toISOString().slice(0, 10),
+  status: "draft" as NoteStatus,
+  changes: [] as PatchChange[],
+}
+
+function PatchNotesTab({ token }: { token: string }) {
+  const [notes, setNotes] = React.useState<PatchNote[]>([])
+  const [loading, setLoading] = React.useState(true)
+  const [showForm, setShowForm] = React.useState(false)
+  const [editId, setEditId] = React.useState<string | null>(null)
+  const [form, setForm] = React.useState({ ...EMPTY_FORM })
+  const [submitting, setSubmitting] = React.useState(false)
+  const [expandedIds, setExpandedIds] = React.useState<Set<string>>(new Set())
+
+  const headers = { "Content-Type": "application/json", Authorization: `Bearer ${token}` }
+
+  const load = React.useCallback(() => {
+    fetch("/api/admin/patch-notes", { headers: { Authorization: `Bearer ${token}` } })
+      .then((r) => r.json())
+      .then((data) => setNotes(Array.isArray(data) ? data : []))
+      .finally(() => setLoading(false))
+  }, [token])
+
+  React.useEffect(() => { load() }, [load])
+
+  const toggleExpand = (id: string) =>
+    setExpandedIds((prev) => {
+      const next = new Set(prev)
+      next.has(id) ? next.delete(id) : next.add(id)
+      return next
+    })
+
+  const openCreate = () => {
+    setEditId(null)
+    setForm({ ...EMPTY_FORM, date: new Date().toISOString().slice(0, 10) })
+    setShowForm(true)
+  }
+
+  const openEdit = (note: PatchNote) => {
+    setEditId(note.id)
+    setForm({
+      version: note.version,
+      title: note.title,
+      date: note.date.slice(0, 10),
+      status: note.status,
+      changes: note.changes.map((c) => ({ ...c })),
+    })
+    setShowForm(true)
+  }
+
+  const closeForm = () => { setShowForm(false); setEditId(null) }
+
+  const addChange = () =>
+    setForm((f) => ({
+      ...f,
+      changes: [...f.changes, { id: uid(), type: "feat" as ChangeType, text: "" }],
+    }))
+
+  const updateChange = (id: string, patch: Partial<PatchChange>) =>
+    setForm((f) => ({
+      ...f,
+      changes: f.changes.map((c) => (c.id === id ? { ...c, ...patch } : c)),
+    }))
+
+  const removeChange = (id: string) =>
+    setForm((f) => ({ ...f, changes: f.changes.filter((c) => c.id !== id) }))
+
+  const handleSubmit = async (e: React.FormEvent) => {
+    e.preventDefault()
+    setSubmitting(true)
+    if (editId) {
+      await fetch(`/api/admin/patch-notes/${editId}`, {
+        method: "PATCH", headers, body: JSON.stringify(form),
+      })
+    } else {
+      await fetch("/api/admin/patch-notes", {
+        method: "POST", headers, body: JSON.stringify(form),
+      })
+    }
+    setSubmitting(false)
+    closeForm()
+    load()
+  }
+
+  const toggleStatus = async (note: PatchNote) => {
+    const next: NoteStatus = note.status === "draft" ? "published" : "draft"
+    await fetch(`/api/admin/patch-notes/${note.id}`, {
+      method: "PATCH", headers, body: JSON.stringify({ status: next }),
+    })
+    setNotes((prev) => prev.map((n) => n.id === note.id ? { ...n, status: next } : n))
+  }
+
+  const handleDelete = async (id: string) => {
+    if (!confirm("패치노트를 삭제할까요?")) return
+    await fetch(`/api/admin/patch-notes/${id}`, { method: "DELETE", headers: { Authorization: `Bearer ${token}` } })
+    setNotes((prev) => prev.filter((n) => n.id !== id))
+  }
+
+  if (loading) return <div className="text-center py-12 text-gray-400">로딩 중...</div>
+
+  return (
+    <div className="space-y-4">
+      {/* 헤더 */}
+      <div className="flex items-center justify-between">
+        <div>
+          <p className="text-sm text-gray-500">릴리즈별 변경사항을 기록하고 관리합니다.</p>
+        </div>
+        <button
+          onClick={openCreate}
+          className="flex items-center gap-2 px-4 py-2 bg-[#111110] text-white rounded-xl text-sm font-medium hover:bg-[#1a1a1a] transition-colors"
+        >
+          <span>+ 새 패치노트</span>
+        </button>
+      </div>
+
+      {/* 작성/수정 폼 */}
+      {showForm && (
+        <form
+          onSubmit={handleSubmit}
+          className="bg-white rounded-2xl border border-[#e8e8e4] p-6 space-y-5 shadow-sm"
+        >
+          <div className="flex items-center justify-between">
+            <h3 className="text-[14px] font-semibold text-[#111110]">
+              {editId ? "패치노트 수정" : "새 패치노트"}
+            </h3>
+            <button type="button" onClick={closeForm} className="text-[#1a1a1a]/30 hover:text-[#1a1a1a]/60 transition-colors">
+              <svg className="w-4 h-4" fill="none" viewBox="0 0 24 24" stroke="currentColor" strokeWidth={2}>
+                <path strokeLinecap="round" strokeLinejoin="round" d="M6 18L18 6M6 6l12 12" />
+              </svg>
+            </button>
+          </div>
+
+          {/* 기본 정보 */}
+          <div className="grid grid-cols-3 gap-3">
+            <div>
+              <label className="block text-[11px] font-medium text-[#1a1a1a]/40 mb-1.5 uppercase tracking-wide">버전</label>
+              <input
+                value={form.version}
+                onChange={(e) => setForm((f) => ({ ...f, version: e.target.value }))}
+                placeholder="v1.2.0"
+                required
+                className="w-full border border-[#e8e8e4] rounded-xl px-3 py-2 text-[13px] font-mono focus:outline-none focus:border-[#c8c8c4] bg-[#fafaf8]"
+              />
+            </div>
+            <div>
+              <label className="block text-[11px] font-medium text-[#1a1a1a]/40 mb-1.5 uppercase tracking-wide">릴리즈 날짜</label>
+              <input
+                type="date"
+                value={form.date}
+                onChange={(e) => setForm((f) => ({ ...f, date: e.target.value }))}
+                required
+                className="w-full border border-[#e8e8e4] rounded-xl px-3 py-2 text-[13px] focus:outline-none focus:border-[#c8c8c4] bg-[#fafaf8]"
+              />
+            </div>
+            <div>
+              <label className="block text-[11px] font-medium text-[#1a1a1a]/40 mb-1.5 uppercase tracking-wide">상태</label>
+              <select
+                value={form.status}
+                onChange={(e) => setForm((f) => ({ ...f, status: e.target.value as NoteStatus }))}
+                className="w-full border border-[#e8e8e4] rounded-xl px-3 py-2 text-[13px] focus:outline-none focus:border-[#c8c8c4] bg-[#fafaf8]"
+              >
+                <option value="draft">초안</option>
+                <option value="published">발행</option>
+              </select>
+            </div>
+          </div>
+          <div>
+            <label className="block text-[11px] font-medium text-[#1a1a1a]/40 mb-1.5 uppercase tracking-wide">타이틀</label>
+            <input
+              value={form.title}
+              onChange={(e) => setForm((f) => ({ ...f, title: e.target.value }))}
+              placeholder="예: 어드민 대시보드 고도화 업데이트"
+              required
+              className="w-full border border-[#e8e8e4] rounded-xl px-3 py-2 text-[13px] focus:outline-none focus:border-[#c8c8c4] bg-[#fafaf8]"
+            />
+          </div>
+
+          {/* 변경사항 */}
+          <div>
+            <div className="flex items-center justify-between mb-2">
+              <label className="text-[11px] font-medium text-[#1a1a1a]/40 uppercase tracking-wide">변경사항</label>
+              <button
+                type="button"
+                onClick={addChange}
+                className="text-[12px] text-[#1a1a1a]/40 hover:text-[#111110] flex items-center gap-1 transition-colors"
+              >
+                + 항목 추가
+              </button>
+            </div>
+            <div className="space-y-2">
+              {form.changes.length === 0 && (
+                <p className="text-[12px] text-[#1a1a1a]/30 text-center py-3 border border-dashed border-[#e8e8e4] rounded-xl">
+                  변경사항을 추가해보세요
+                </p>
+              )}
+              {form.changes.map((c) => (
+                <div key={c.id} className="flex items-center gap-2">
+                  <select
+                    value={c.type}
+                    onChange={(e) => updateChange(c.id, { type: e.target.value as ChangeType })}
+                    className="border border-[#e8e8e4] rounded-lg px-2 py-1.5 text-[12px] focus:outline-none bg-[#fafaf8] shrink-0"
+                  >
+                    <option value="feat">신기능</option>
+                    <option value="fix">버그수정</option>
+                    <option value="improve">개선</option>
+                    <option value="breaking">주의</option>
+                  </select>
+                  <input
+                    value={c.text}
+                    onChange={(e) => updateChange(c.id, { text: e.target.value })}
+                    placeholder="변경 내용을 입력하세요"
+                    className="flex-1 border border-[#e8e8e4] rounded-lg px-3 py-1.5 text-[13px] focus:outline-none focus:border-[#c8c8c4] bg-[#fafaf8]"
+                  />
+                  <button
+                    type="button"
+                    onClick={() => removeChange(c.id)}
+                    className="text-[#1a1a1a]/20 hover:text-red-400 transition-colors p-1 shrink-0"
+                  >
+                    <svg className="w-3.5 h-3.5" fill="none" viewBox="0 0 24 24" stroke="currentColor" strokeWidth={2}>
+                      <path strokeLinecap="round" strokeLinejoin="round" d="M6 18L18 6M6 6l12 12" />
+                    </svg>
+                  </button>
+                </div>
+              ))}
+            </div>
+          </div>
+
+          {/* 액션 버튼 */}
+          <div className="flex justify-end gap-2 pt-1">
+            <button
+              type="button"
+              onClick={closeForm}
+              className="px-4 py-2 text-[13px] border border-[#e8e8e4] rounded-xl hover:bg-[#fafaf8] transition-colors"
+            >
+              취소
+            </button>
+            <button
+              type="submit"
+              disabled={submitting}
+              className="px-4 py-2 text-[13px] bg-[#111110] text-white rounded-xl hover:bg-[#1a1a1a] disabled:opacity-40 transition-colors"
+            >
+              {submitting ? "저장 중..." : editId ? "수정 완료" : "등록"}
+            </button>
+          </div>
+        </form>
+      )}
+
+      {/* 빈 상태 */}
+      {notes.length === 0 && !showForm && (
+        <div className="text-center py-16 bg-white rounded-2xl border border-[#e8e8e4]">
+          <div className="text-4xl mb-3">📋</div>
+          <p className="text-[13px] text-[#1a1a1a]/40 mb-4">아직 패치노트가 없습니다.</p>
+          <button onClick={openCreate} className="text-[12px] text-[#111110] font-medium underline underline-offset-2">
+            첫 패치노트 작성하기
+          </button>
+        </div>
+      )}
+
+      {/* 패치노트 카드 목록 */}
+      {notes.map((note) => {
+        const isExpanded = expandedIds.has(note.id)
+        const sc = STATUS_CONFIG[note.status]
+        const feats    = note.changes.filter((c) => c.type === "feat")
+        const fixes    = note.changes.filter((c) => c.type === "fix")
+        const improves = note.changes.filter((c) => c.type === "improve")
+        const breakings = note.changes.filter((c) => c.type === "breaking")
+
+        return (
+          <div key={note.id} className="bg-white rounded-2xl border border-[#e8e8e4] overflow-hidden">
+            {/* 카드 헤더 */}
+            <div
+              className="flex items-center gap-4 px-6 py-4 cursor-pointer hover:bg-[#fafaf8] transition-colors"
+              onClick={() => toggleExpand(note.id)}
+            >
+              {/* 버전 배지 */}
+              <span className="font-mono text-[13px] font-bold text-[#111110] bg-[#f0f0ec] px-2.5 py-1 rounded-lg shrink-0">
+                {note.version}
+              </span>
+              <div className="flex-1 min-w-0">
+                <p className="text-[14px] font-semibold text-[#111110] truncate">{note.title}</p>
+                <p className="text-[11px] text-[#1a1a1a]/40 mt-0.5">
+                  {new Date(note.date).toLocaleDateString("ko-KR", { year: "numeric", month: "long", day: "numeric" })}
+                  {" · "}{note.changes.length}개 변경사항
+                </p>
+              </div>
+              {/* 변경 타입 요약 뱃지 */}
+              <div className="flex items-center gap-1.5 shrink-0">
+                {feats.length > 0 && (
+                  <span className="text-[11px] px-2 py-0.5 rounded-full bg-blue-50 text-blue-600 font-medium">
+                    feat {feats.length}
+                  </span>
+                )}
+                {fixes.length > 0 && (
+                  <span className="text-[11px] px-2 py-0.5 rounded-full bg-red-50 text-red-600 font-medium">
+                    fix {fixes.length}
+                  </span>
+                )}
+                {improves.length > 0 && (
+                  <span className="text-[11px] px-2 py-0.5 rounded-full bg-green-50 text-green-600 font-medium">
+                    개선 {improves.length}
+                  </span>
+                )}
+                {breakings.length > 0 && (
+                  <span className="text-[11px] px-2 py-0.5 rounded-full bg-orange-50 text-orange-600 font-medium">
+                    ⚠ {breakings.length}
+                  </span>
+                )}
+              </div>
+              {/* 상태 + 액션 */}
+              <div className="flex items-center gap-2 shrink-0" onClick={(e) => e.stopPropagation()}>
+                <button
+                  onClick={() => toggleStatus(note)}
+                  className={`text-[11px] px-2.5 py-1 rounded-full font-medium transition-all hover:opacity-80 ${sc.bg}`}
+                >
+                  {sc.label}
+                </button>
+                <button
+                  onClick={() => openEdit(note)}
+                  className="text-[11px] px-2.5 py-1 rounded-full border border-[#e8e8e4] text-[#1a1a1a]/50 hover:border-[#c8c8c4] hover:text-[#111110] transition-all"
+                >
+                  수정
+                </button>
+                <button
+                  onClick={() => handleDelete(note.id)}
+                  className="text-[#1a1a1a]/20 hover:text-red-400 transition-colors p-1"
+                >
+                  <svg className="w-3.5 h-3.5" fill="none" viewBox="0 0 24 24" stroke="currentColor" strokeWidth={2}>
+                    <path strokeLinecap="round" strokeLinejoin="round" d="M19 7l-.867 12.142A2 2 0 0116.138 21H7.862a2 2 0 01-1.995-1.858L5 7m5 4v6m4-6v6m1-10V4a1 1 0 00-1-1h-4a1 1 0 00-1 1v3M4 7h16" />
+                  </svg>
+                </button>
+              </div>
+              {/* 토글 화살표 */}
+              <svg className={`w-4 h-4 text-[#1a1a1a]/30 transition-transform shrink-0 ${isExpanded ? "rotate-180" : ""}`}
+                fill="none" viewBox="0 0 24 24" stroke="currentColor">
+                <path strokeLinecap="round" strokeLinejoin="round" strokeWidth={2} d="M19 9l-7 7-7-7" />
+              </svg>
+            </div>
+
+            {/* 변경사항 상세 */}
+            {isExpanded && note.changes.length > 0 && (
+              <div className="border-t border-[#e8e8e4] px-6 py-4">
+                {(["breaking", "feat", "improve", "fix"] as ChangeType[]).map((type) => {
+                  const items = note.changes.filter((c) => c.type === type)
+                  if (items.length === 0) return null
+                  const cc = CHANGE_CONFIG[type]
+                  return (
+                    <div key={type} className="mb-4 last:mb-0">
+                      <div className="flex items-center gap-2 mb-2">
+                        <span className={`text-[11px] font-medium px-2 py-0.5 rounded-full border ${cc.bg}`}>
+                          {cc.label}
+                        </span>
+                      </div>
+                      <ul className="space-y-1.5">
+                        {items.map((c) => (
+                          <li key={c.id} className="flex items-start gap-2.5 text-[13px] text-[#1a1a1a]/70">
+                            <span className={`w-1.5 h-1.5 rounded-full mt-1.5 shrink-0 ${cc.dot}`} />
+                            {c.text}
+                          </li>
+                        ))}
+                      </ul>
+                    </div>
+                  )
+                })}
+              </div>
+            )}
+            {isExpanded && note.changes.length === 0 && (
+              <div className="border-t border-[#e8e8e4] px-6 py-4 text-[12px] text-[#1a1a1a]/30">
+                변경사항이 없습니다.
+              </div>
+            )}
+          </div>
+        )
+      })}
+    </div>
+  )
+}
+
 // ─── Architecture Tab ─────────────────────────────────────
 function ArchitectureTab() {
   const sections = [
@@ -685,6 +1084,7 @@ export default function DevPage() {
       {/* Tab Content */}
       {tab === "roadmap" && <RoadmapTab token={token} />}
       {tab === "bugs" && <BugsTab token={token} userName={userName} />}
+      {tab === "patchnotes" && <PatchNotesTab token={token} />}
       {tab === "architecture" && <ArchitectureTab />}
       {tab === "gitlog" && <GitLogTab token={token} />}
     </div>

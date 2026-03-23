@@ -3,6 +3,7 @@
 import { useState } from "react"
 import { useRouter } from "next/navigation"
 import { Lock } from "lucide-react"
+import { getAdminAuthErrorMessage } from "@/lib/admin-auth-errors"
 import { Button } from "@/components/ui/button"
 import { Input } from "@/components/ui/input"
 
@@ -24,15 +25,20 @@ export default function AdminLoginPage() {
         body: JSON.stringify({ password }),
       })
 
+      const data = await res.json().catch(() => null)
+
       if (res.ok) {
-        const data = await res.json()
         sessionStorage.setItem("admin_password", password)
-        sessionStorage.setItem("admin_role", data.role ?? "admin")
-        sessionStorage.setItem("admin_name", data.name ?? "Admin")
-        if (data.branch) sessionStorage.setItem("admin_branch", data.branch)
+        sessionStorage.setItem("admin_token", password)
+        sessionStorage.setItem("admin_role", data?.role ?? "admin")
+        sessionStorage.setItem("admin_name", data?.name ?? "Admin")
+
+        if (data?.branch) sessionStorage.setItem("admin_branch", data.branch)
+        else sessionStorage.removeItem("admin_branch")
+
         router.replace("/admin/overview")
       } else {
-        setError("비밀번호가 올바르지 않습니다.")
+        setError(getAdminAuthErrorMessage(data?.code))
       }
     } catch {
       setError("서버 연결에 실패했습니다.")
@@ -44,15 +50,15 @@ export default function AdminLoginPage() {
   return (
     <div className="min-h-screen flex items-center justify-center bg-[#FAFAF8] px-4">
       <div className="w-full max-w-sm">
-        <div className="bg-white rounded-2xl border border-[#e8e8e4] p-8 shadow-sm">
-          <div className="flex items-center justify-center w-12 h-12 bg-[#f0f0ec] rounded-xl mx-auto mb-6">
-            <Lock className="w-5 h-5 text-[#1a1a1a]/40" />
+        <div className="rounded-2xl border border-[#e8e8e4] bg-white p-8 shadow-sm">
+          <div className="mx-auto mb-6 flex h-12 w-12 items-center justify-center rounded-xl bg-[#f0f0ec]">
+            <Lock className="h-5 w-5 text-[#1a1a1a]/40" />
           </div>
-          <h1 className="text-lg font-semibold text-[#111110] text-center mb-1">
+          <h1 className="mb-1 text-center text-lg font-semibold text-[#111110]">
             Classin Admin
           </h1>
-          <p className="text-[13px] text-[#1a1a1a]/40 text-center mb-6">
-            팀원 전용 관리자 페이지입니다.
+          <p className="mb-6 text-center text-[13px] text-[#1a1a1a]/40">
+            관리자 전용 페이지입니다.
           </p>
 
           <form onSubmit={handleSubmit} className="space-y-4">
@@ -63,9 +69,7 @@ export default function AdminLoginPage() {
               onChange={(e) => setPassword(e.target.value)}
               autoFocus
             />
-            {error && (
-              <p className="text-[13px] text-red-500">{error}</p>
-            )}
+            {error ? <p className="text-[13px] text-red-500">{error}</p> : null}
             <Button type="submit" className="w-full" disabled={loading || !password}>
               {loading ? "확인 중..." : "로그인"}
             </Button>
