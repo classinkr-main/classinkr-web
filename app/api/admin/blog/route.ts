@@ -1,10 +1,11 @@
 import { NextRequest, NextResponse } from "next/server"
-import { getAllPosts, createPost } from "@/lib/blog-data"
+import { getAllPosts, createPost, getTrashedPosts } from "@/lib/blog-data"
 import { verifyAdmin } from "@/lib/admin-auth"
 
-export async function GET() {
+export async function GET(req: NextRequest) {
   try {
-    const posts = await getAllPosts()
+    const trash = req.nextUrl.searchParams.get("trash") === "1"
+    const posts = trash ? await getTrashedPosts() : await getAllPosts()
     return NextResponse.json({ posts })
   } catch {
     return NextResponse.json({ error: "Failed to read posts" }, { status: 500 })

@@ -1,5 +1,5 @@
 import { NextRequest, NextResponse } from "next/server"
-import { updatePost, deletePost } from "@/lib/blog-data"
+import { updatePost, trashPost, permanentDeletePost, restorePost } from "@/lib/blog-data"
 import { verifyAdmin } from "@/lib/admin-auth"
 
 export async function PUT(
@@ -17,12 +17,16 @@ export async function PUT(
     }
 
     const body = await req.json()
-    const post = await updatePost(numId, body)
 
-    if (!post) {
-      return NextResponse.json({ error: "Post not found" }, { status: 404 })
+    // Restore from trash
+    if (body.restore === true) {
+      const post = await restorePost(numId)
+      if (!post) return NextResponse.json({ error: "Post not found" }, { status: 404 })
+      return NextResponse.json({ post })
     }
 
+    const post = await updatePost(numId, body)
+    if (!post) return NextResponse.json({ error: "Post not found" }, { status: 404 })
     return NextResponse.json({ post })
   } catch {
     return NextResponse.json({ error: "Failed to update post" }, { status: 500 })
@@ -43,12 +47,10 @@ export async function DELETE(
       return NextResponse.json({ error: "Invalid id" }, { status: 400 })
     }
 
-    const deleted = await deletePost(numId)
+    const permanent = req.nextUrl.searchParams.get("permanent") === "true"
+    const ok = permanent ? await permanentDeletePost(numId) : await trashPost(numId)
 
-    if (!deleted) {
-      return NextResponse.json({ error: "Post not found" }, { status: 404 })
-    }
-
+    if (!ok) return NextResponse.json({ error: "Post not found" }, { status: 404 })
     return NextResponse.json({ ok: true })
   } catch {
     return NextResponse.json({ error: "Failed to delete post" }, { status: 500 })
