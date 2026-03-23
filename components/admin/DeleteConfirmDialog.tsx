@@ -24,9 +24,9 @@ export default function DeleteConfirmDialog({ post, open, onClose, onConfirm, lo
         <Dialog open={open} onOpenChange={(v) => !v && onClose()}>
             <DialogContent className="sm:max-w-md bg-white">
                 <DialogHeader>
-                    <DialogTitle>글 삭제</DialogTitle>
+                    <DialogTitle>휴지통으로 이동</DialogTitle>
                     <DialogDescription>
-                        &ldquo;{post?.title}&rdquo;을(를) 삭제하시겠습니까? 이 작업은 되돌릴 수 없습니다.
+                        &ldquo;{post?.title}&rdquo;을(를) 휴지통으로 이동합니다. 휴지통에서 복원하거나 완전히 삭제할 수 있습니다.
                     </DialogDescription>
                 </DialogHeader>
                 <DialogFooter>
@@ -34,7 +34,7 @@ export default function DeleteConfirmDialog({ post, open, onClose, onConfirm, lo
                         취소
                     </Button>
                     <Button variant="destructive" onClick={onConfirm} disabled={loading}>
-                        {loading ? "삭제 중..." : "삭제"}
+                        {loading ? "이동 중..." : "휴지통으로 이동"}
                     </Button>
                 </DialogFooter>
             </DialogContent>

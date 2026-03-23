@@ -27,13 +27,13 @@ const faqs = [
 
 export function FAQ() {
     return (
-        <section id="faq" className="py-24 bg-white relative">
+        <section id="faq" className="py-16 md:py-24 bg-white relative">
             <div className="container mx-auto px-6 md:px-12 grid grid-cols-1 md:grid-cols-12 gap-12 lg:gap-8 items-start">
                 <div className="md:col-span-5 lg:col-span-4 sticky top-32">
-                    <h2 className="text-4xl lg:text-5xl font-black tracking-tight text-slate-900 leading-[1.2]">
+                    <h2 className="text-4xl lg:text-5xl font-black tracking-tight text-slate-900 leading-[1.2] break-keep">
                         자주 묻는 <br className="hidden md:block" />질문
                     </h2>
-                    <p className="mt-6 text-lg text-slate-500 font-medium">
+                    <p className="mt-6 text-lg text-slate-500 font-medium break-keep">
                         가장 많이 여쭤보시는 질문에 <br className="hidden lg:block" />답변해 드립니다. <br /><br />추가 문의사항이 있으시다면 언제든 솔루션 문의를 남겨주세요.
                     </p>
                 </div>
@@ -42,10 +42,10 @@ export function FAQ() {
                     <Accordion type="single" collapsible className="w-full">
                         {faqs.map((faq, index) => (
                             <AccordionItem key={index} value={`item-${index}`} className="border-b border-slate-200">
-                                <AccordionTrigger className="text-left text-xl lg:text-2xl font-bold text-slate-900 hover:text-emerald-600 hover:no-underline py-8 transition-colors">
+                                <AccordionTrigger className="text-left text-xl lg:text-2xl font-bold text-slate-900 hover:text-emerald-600 hover:no-underline py-8 transition-colors break-keep">
                                     {faq.question}
                                 </AccordionTrigger>
-                                <AccordionContent className="text-slate-600 text-lg leading-relaxed pb-8">
+                                <AccordionContent className="text-slate-600 text-lg leading-relaxed pb-8 break-keep">
                                     {faq.answer}
                                 </AccordionContent>
                             </AccordionItem>

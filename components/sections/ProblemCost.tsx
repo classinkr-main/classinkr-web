@@ -60,7 +60,7 @@ const pains = [
 
 export function ProblemCost() {
     return (
-        <section className="relative py-24 md:py-32 bg-slate-950 overflow-hidden">
+        <section className="relative py-16 md:py-32 bg-slate-950 overflow-hidden">
             {/* Grid pattern */}
             <div className="absolute inset-0 opacity-[0.03]"
                 style={{ backgroundImage: 'linear-gradient(rgba(255,255,255,0.1) 1px, transparent 1px), linear-gradient(90deg, rgba(255,255,255,0.1) 1px, transparent 1px)', backgroundSize: '60px 60px' }} />
@@ -85,11 +85,11 @@ export function ProblemCost() {
                         <span className="w-2 h-2 rounded-full bg-red-400 animate-pulse" />
                         주의가 필요합니다
                     </span>
-                    <h2 className="text-4xl font-black tracking-tight text-white sm:text-5xl md:text-[3.5rem] mb-6 leading-tight">
+                    <h2 className="text-4xl font-black tracking-tight text-white sm:text-5xl md:text-[3.5rem] mb-6 leading-tight break-keep">
                         전통적인 학원 운영의 <br className="md:hidden" />
-                        <span className="text-transparent bg-clip-text bg-gradient-to-r from-red-400 to-orange-400">숨겨진 비용</span>
+                        <span className="text-transparent bg-clip-text bg-gradient-to-r from-red-400 to-orange-400 break-keep">숨겨진 비용</span>
                     </h2>
-                    <p className="text-lg text-slate-400">
+                    <p className="text-lg text-slate-400 break-keep">
                         표준화된 시스템 없이는 규모가 커질수록 수익이 아닌 혼란만 늘어납니다.
                     </p>
                 </motion.div>
@@ -118,8 +118,8 @@ export function ProblemCost() {
                                         </div>
                                     </div>
 
-                                    <h3 className="text-2xl font-extrabold mb-4 text-white tracking-tight">{pain.title}</h3>
-                                    <p className="text-slate-400 mb-8 flex-grow text-lg leading-relaxed">{pain.desc}</p>
+                                    <h3 className="text-2xl font-extrabold mb-4 text-white tracking-tight break-keep">{pain.title}</h3>
+                                    <p className="text-slate-400 mb-8 flex-grow text-lg leading-relaxed break-keep">{pain.desc}</p>
 
                                     {/* Cost footer with counter */}
                                     <div className="w-full pt-6 border-t border-slate-800 mt-auto">

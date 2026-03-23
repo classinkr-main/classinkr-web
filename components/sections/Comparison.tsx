@@ -40,16 +40,16 @@ const rows = [
 
 export function Comparison() {
     return (
-        <section className="py-24 bg-white">
+        <section className="py-16 md:py-24 bg-white">
             <div className="container mx-auto px-4 md:px-6">
                 <div className="text-center max-w-3xl mx-auto mb-14">
                     <span className="inline-block py-1 px-3 rounded-full bg-slate-200 text-slate-600 text-sm font-semibold mb-4">
                         왜 전환해야 할까요?
                     </span>
-                    <h2 className="text-3xl font-bold tracking-tight text-slate-900 sm:text-4xl mb-4">
+                    <h2 className="text-3xl font-bold tracking-tight text-slate-900 sm:text-4xl mb-4 break-keep">
                         Classin vs. 기존 방식
                     </h2>
-                    <p className="text-lg text-muted-foreground">
+                    <p className="text-lg text-muted-foreground break-keep">
                         수동 운영에서 스마트 운영으로, 무엇이 달라지는지 확인하세요.
                     </p>
                 </div>
@@ -84,14 +84,14 @@ export function Comparison() {
                             viewport={{ once: true }}
                             className={`grid grid-cols-3 text-sm border-t border-slate-100 ${index % 2 === 0 ? "bg-white" : "bg-slate-50/60"}`}
                         >
-                            <div className="py-4 px-6 font-semibold text-slate-700 flex items-center">
+                            <div className="py-4 px-6 font-semibold text-slate-700 flex items-center break-keep">
                                 {row.feature}
                             </div>
-                            <div className="py-4 px-6 border-l border-slate-100 text-slate-500 flex items-start gap-2">
+                            <div className="py-4 px-6 border-l border-slate-100 text-slate-500 flex items-start gap-2 break-keep">
                                 <X className="w-3.5 h-3.5 text-red-400 mt-0.5 shrink-0" />
                                 {row.traditional}
                             </div>
-                            <div className="py-4 px-6 border-l border-slate-100 text-slate-800 font-medium flex items-start gap-2">
+                            <div className="py-4 px-6 border-l border-slate-100 text-slate-800 font-medium flex items-start gap-2 break-keep">
                                 <Check className="w-3.5 h-3.5 text-green-500 mt-0.5 shrink-0" />
                                 {row.eduscale}
                             </div>

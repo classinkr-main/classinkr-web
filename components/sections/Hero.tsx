@@ -56,7 +56,7 @@ export function Hero() {
                         initial={{ opacity: 0, y: 30 }}
                         animate={{ opacity: 1, y: 0 }}
                         transition={{ duration: 0.7, delay: 0.1, ease: [0.21, 0.47, 0.32, 0.98] }}
-                        className="text-5xl md:text-7xl lg:text-[5.5rem] font-extrabold tracking-tight text-slate-900 mb-8 leading-[1.1]"
+                        className="text-5xl md:text-7xl lg:text-[5.5rem] font-extrabold tracking-tight text-slate-900 mb-8 leading-[1.1] break-keep"
                     >
                         티칭 퀄리티 <span className="font-black animate-text-gradient inline-block pb-2">상향 표준화</span>, 확실한 학습 성과 보장.
                     </motion.h1>
@@ -65,7 +65,7 @@ export function Hero() {
                         initial={{ opacity: 0, y: 20 }}
                         animate={{ opacity: 1, y: 0 }}
                         transition={{ duration: 0.7, delay: 0.2, ease: "easeOut" }}
-                        className="text-lg md:text-xl lg:text-2xl text-slate-500 mb-12 max-w-3xl mx-auto leading-relaxed font-light"
+                        className="text-lg md:text-xl lg:text-2xl text-slate-500 mb-12 max-w-3xl mx-auto leading-relaxed font-light break-keep"
                     >
                         다지점 학원을 위한 프리미엄 올인원 운영 시스템. <br className="hidden md:block" />
                         수업부터 자동 채점, 성과 분석까지 하나의 플랫폼으로 완성하세요.

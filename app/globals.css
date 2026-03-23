@@ -242,3 +242,41 @@
 .animate-glow-pulse {
   animation: glow-pulse-light 2s ease-in-out infinite;
 }
+
+/* ── SW Product page animations ──────────────────────────────────── */
+@keyframes draw-line {
+  from { stroke-dashoffset: 1; }
+  to { stroke-dashoffset: 0; }
+}
+
+@keyframes cursor-blink {
+  0%, 100% { opacity: 1; }
+  50% { opacity: 0.3; }
+}
+
+@keyframes float-tag {
+  0%, 100% { transform: translateY(0); }
+  50% { transform: translateY(-6px); }
+}
+
+@keyframes dot-pulse {
+  0%, 100% { opacity: 0.15; transform: scale(1); }
+  50% { opacity: 0.6; transform: scale(1.8); }
+}
+
+@keyframes marquee {
+  0% { transform: translateX(0); }
+  100% { transform: translateX(-50%); }
+}
+
+@keyframes progress-fill {
+  from { stroke-dashoffset: 251; }
+  to { stroke-dashoffset: var(--progress-target, 63); }
+}
+
+.animate-draw-line { animation: draw-line 1.5s ease-out forwards; }
+.animate-cursor-blink { animation: cursor-blink 1.2s ease-in-out infinite; }
+.animate-float-tag { animation: float-tag 3s ease-in-out infinite; }
+.animate-dot-pulse { animation: dot-pulse 3s ease-in-out infinite; }
+.animate-marquee { animation: marquee 30s linear infinite; }
+.animate-progress-fill { animation: progress-fill 1.5s ease-out forwards; }

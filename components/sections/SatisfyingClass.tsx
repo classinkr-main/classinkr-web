@@ -4,7 +4,7 @@ import { motion } from "framer-motion"
 
 export function SatisfyingClass() {
     return (
-        <section className="py-24 md:py-32 bg-[#F9F8F4] overflow-hidden">
+        <section className="py-16 md:py-32 bg-[#F9F8F4] overflow-hidden">
             <div className="container mx-auto px-6 max-w-7xl relative">
                 <div className="flex flex-col lg:flex-row items-center justify-between gap-16">
                     {/* Left text area */}
@@ -13,7 +13,7 @@ export function SatisfyingClass() {
                             initial={{ opacity: 0, x: -20 }}
                             whileInView={{ opacity: 1, x: 0 }}
                             viewport={{ once: true }}
-                            className="text-5xl md:text-6xl font-black tracking-tighter text-slate-900 mb-6 leading-[1.1]"
+                            className="text-5xl md:text-6xl font-black tracking-tighter text-slate-900 mb-6 leading-[1.1] break-keep"
                         >
                             더 수월하게, <br />
                             더 만족감 있는 수업
@@ -24,7 +24,7 @@ export function SatisfyingClass() {
                             whileInView={{ opacity: 1, x: 0 }}
                             viewport={{ once: true }}
                             transition={{ delay: 0.1 }}
-                            className="text-lg text-slate-700 font-medium leading-relaxed mb-6"
+                            className="text-lg text-slate-700 font-medium leading-relaxed mb-6 break-keep"
                         >
                             Classin은 강사들의 에너지를 서류나 채점에 낭비하지 않도록 돕습니다. 자동화된 AI 보조 교사가 학생별 수준을 분석하고, 수업에 필요한 모든 인터랙티브 자료를 한 번의 클릭으로 세팅합니다.
                         </motion.p>
@@ -36,8 +36,8 @@ export function SatisfyingClass() {
                             transition={{ delay: 0.2 }}
                             className="flex flex-col gap-1"
                         >
-                            <span className="font-extrabold text-slate-900">핵심 목표:</span>
-                            <span className="text-slate-600 font-semibold tracking-tight">강사의 행정 시간 70% 단축, 온전한 티칭 몰입.</span>
+                            <span className="font-extrabold text-slate-900 break-keep">핵심 목표:</span>
+                            <span className="text-slate-600 font-semibold tracking-tight break-keep">강사의 행정 시간 70% 단축, 온전한 티칭 몰입.</span>
                         </motion.div>
                     </div>
 

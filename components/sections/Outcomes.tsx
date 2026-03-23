@@ -28,15 +28,15 @@ const comparisons = [
 
 export function Outcomes() {
     return (
-        <section id="outcomes" className="py-24 bg-white">
+        <section id="outcomes" className="py-16 md:py-24 bg-white">
             <div className="container mx-auto">
                 <div className="flex flex-col md:flex-row gap-12 items-center">
                     <div className="w-full md:w-1/3">
-                        <h2 className="text-3xl font-extrabold tracking-tight mb-6 text-slate-900">
+                        <h2 className="text-3xl lg:text-4xl font-extrabold tracking-tight mb-6 text-slate-900 break-keep">
                             단순한 관리 도구가 아닙니다.<br />
                             <span className="text-emerald-600">성장 엔진입니다.</span>
                         </h2>
-                        <p className="text-slate-500 text-lg mb-8">
+                        <p className="text-slate-500 text-lg mb-8 break-keep">
                             주먹구구식 운영에서 벗어나, 데이터 기반의 확장 가능한 교육 기업으로 성장하세요.
                         </p>
                         <div className="p-6 bg-emerald-50 rounded-xl border border-emerald-100 inline-block">
@@ -80,7 +80,7 @@ export function Outcomes() {
                                             <span className="font-bold text-lg text-slate-400 tracking-tight">Before</span>
                                         </div>
                                         <span className="text-slate-400 font-bold text-sm mb-3 uppercase tracking-wider">{item.role}</span>
-                                        <p className="text-slate-600 text-lg leading-relaxed">{item.before}</p>
+                                        <p className="text-slate-600 text-lg leading-relaxed break-keep">{item.before}</p>
                                     </div>
 
                                     {/* After Card */}
@@ -91,7 +91,7 @@ export function Outcomes() {
                                             <span className="font-bold text-lg text-emerald-600 tracking-tight">After</span>
                                         </div>
                                         <span className="text-emerald-600 font-bold text-sm mb-3 uppercase tracking-wider">{item.role}</span>
-                                        <p className="text-slate-800 text-lg font-medium leading-relaxed">{item.after}</p>
+                                        <p className="text-slate-800 text-lg font-medium leading-relaxed break-keep">{item.after}</p>
                                     </div>
                                 </motion.div>
                             ))}
