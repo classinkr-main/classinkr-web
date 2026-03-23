@@ -1,6 +1,6 @@
 import type { Metadata } from "next";
 import "./globals.css";
-import { Header } from "@/components/sections/Header";
+import { ConditionalHeader } from "@/components/sections/ConditionalHeader";
 import { FloatingChatbot } from "@/components/ui/FloatingChatbot";
 import { AnalyticsProviders } from "@/components/AnalyticsProviders";
 
@@ -29,7 +29,7 @@ export default function RootLayout({
         />
       </head>
       <body>
-        <Header />
+        <ConditionalHeader />
         <main className="min-h-screen bg-background font-sans antialiased selection:bg-primary/20 selection:text-primary">
           {children}
         </main>

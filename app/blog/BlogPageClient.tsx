@@ -83,7 +83,7 @@ export default function BlogPageClient({ posts }: BlogPageClientProps) {
                         >
                             {/* Main featured card */}
                             {galleryFinal[0] && (
-                                <Link href={`/blog/${galleryFinal[0].id}`} className="group block">
+                                <Link href={`/blog/${galleryFinal[0].slug}`} className="group block">
                                     <article className="relative h-[320px] md:h-[420px] rounded-2xl overflow-hidden bg-[#f0f0ec]">
                                         <Image
                                             src={galleryFinal[0].imageUrl}
@@ -120,7 +120,7 @@ export default function BlogPageClient({ posts }: BlogPageClientProps) {
                             {/* Right stack: 2 smaller cards */}
                             <div className="grid grid-cols-1 gap-4">
                                 {galleryFinal.slice(1, 3).map((post) => (
-                                    <Link key={post.id} href={`/blog/${post.id}`} className="group block">
+                                    <Link key={post.id} href={`/blog/${post.slug}`} className="group block">
                                         <article className="relative h-[200px] md:h-[202px] rounded-2xl overflow-hidden bg-[#f0f0ec]">
                                             <Image
                                                 src={post.imageUrl}
@@ -224,7 +224,7 @@ export default function BlogPageClient({ posts }: BlogPageClientProps) {
                                 transition={{ duration: 0.4, delay: index * 0.04, ease: [0.25, 0.46, 0.45, 0.94] }}
                             >
                                 <Link
-                                    href={`/blog/${post.id}`}
+                                    href={`/blog/${post.slug}`}
                                     className="group block"
                                     onMouseEnter={() => setHoveredListId(post.id)}
                                     onMouseLeave={() => setHoveredListId(null)}
