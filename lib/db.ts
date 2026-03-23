@@ -71,6 +71,11 @@ export interface SiteSettings {
   blogSectionEnabled: boolean
   noticeBannerEnabled: boolean
   noticeBannerText: string
+  /** 외부 연동 URL — Supabase 전환 시 admin_settings 테이블로 이동 */
+  googleSheetWebhookUrl?: string
+  leadWebhookUrl?: string
+  channelTalkWebhookUrl?: string
+  emailWebhookUrl?: string
 }
 
 const DEFAULT_SETTINGS: SiteSettings = {

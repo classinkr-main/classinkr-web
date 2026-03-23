@@ -13,6 +13,7 @@ import {
   UserCog,
   LogOut,
   ChevronRight,
+  CalendarDays,
 } from "lucide-react"
 import type { AdminRole } from "@/lib/admin-auth"
 
@@ -29,6 +30,7 @@ const NAV: NavItem[] = [
   { href: "/admin/crm",       label: "CRM / 리드",  icon: <Users className="w-4 h-4" />,          roles: ["admin", "branch"] },
   { href: "/admin/branch",    label: "지사 관리",   icon: <Building2 className="w-4 h-4" />,      roles: ["admin", "branch"] },
   { href: "/admin/analytics", label: "Analytics",  icon: <BarChart2 className="w-4 h-4" />,      roles: ["admin", "branch"] },
+  { href: "/admin/calendar",  label: "캘린더",      icon: <CalendarDays className="w-4 h-4" />,   roles: ["admin", "branch"] },
   { href: "/admin/blog",      label: "콘텐츠",      icon: <FileText className="w-4 h-4" />,       roles: ["admin"] },
   { href: "/admin/users",     label: "회원 관리",   icon: <UserCog className="w-4 h-4" />,        roles: ["admin"] },
   { href: "/admin/settings",  label: "Settings",   icon: <Settings className="w-4 h-4" />,       roles: ["admin"] },

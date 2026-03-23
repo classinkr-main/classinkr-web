@@ -221,7 +221,11 @@ export function createEmptyPost(): BlogPostInput {
 }
 
 export async function getAllPosts(): Promise<BlogPost[]> {
-  return readPosts()
+  return readPosts().filter((p) => !p.deletedAt)
+}
+
+export async function getTrashedPosts(): Promise<BlogPost[]> {
+  return readPosts().filter((p) => !!p.deletedAt)
 }
 
 export async function getPublishedPosts(): Promise<BlogPost[]> {
@@ -293,10 +297,38 @@ export async function updatePost(id: number, data: Partial<BlogPostInput>): Prom
   return posts[index]
 }
 
-export async function deletePost(id: number): Promise<boolean> {
+/** Soft delete — moves post to trash */
+export async function trashPost(id: number): Promise<boolean> {
+  const posts = readPosts()
+  const idx = posts.findIndex((p) => p.id === id)
+  if (idx === -1) return false
+  posts[idx] = { ...posts[idx], deletedAt: new Date().toISOString() }
+  writePosts(posts)
+  return true
+}
+
+/** Restore from trash */
+export async function restorePost(id: number): Promise<BlogPost | null> {
+  const posts = readPosts()
+  const idx = posts.findIndex((p) => p.id === id)
+  if (idx === -1) return null
+  // eslint-disable-next-line @typescript-eslint/no-unused-vars
+  const { deletedAt: _removed, ...rest } = posts[idx]
+  posts[idx] = rest as BlogPost
+  writePosts(posts)
+  return posts[idx]
+}
+
+/** Permanent delete — irreversible */
+export async function permanentDeletePost(id: number): Promise<boolean> {
   const posts = readPosts()
   const filtered = posts.filter((post) => post.id !== id)
   if (filtered.length === posts.length) return false
   writePosts(filtered)
   return true
+}
+
+/** @deprecated use trashPost for soft delete */
+export async function deletePost(id: number): Promise<boolean> {
+  return permanentDeletePost(id)
 }

@@ -1,4 +1,5 @@
 import { NextRequest, NextResponse } from "next/server"
+import { ADMIN_AUTH_ERROR_CODE, type AdminAuthErrorCode } from "@/lib/admin-auth-errors"
 
 export type AdminRole = "admin" | "branch"
 
@@ -15,23 +16,75 @@ interface UserRecord {
   branch?: string
 }
 
-function getAllUsers(): UserRecord[] {
-  try {
-    const raw = process.env.ADMIN_USERS
-    if (raw) return JSON.parse(raw) as UserRecord[]
-  } catch {
-    // 파싱 실패 시 무시
-  }
-  const legacy = process.env.ADMIN_PASSWORD
-  if (legacy) return [{ name: "Admin", password: legacy, role: "admin" }]
-  return []
+interface AdminUsersResult {
+  users: UserRecord[]
+  code?: AdminAuthErrorCode
 }
 
-export function authenticateUser(password: string): AdminSession | null {
-  const users = getAllUsers()
-  const user = users.find((u) => u.password === password)
-  if (!user) return null
-  return { name: user.name, role: user.role, branch: user.branch }
+interface AuthResult {
+  session: AdminSession | null
+  code?: AdminAuthErrorCode
+}
+
+function isAdminRole(value: unknown): value is AdminRole {
+  return value === "admin" || value === "branch"
+}
+
+function getAllUsers(): AdminUsersResult {
+  const raw = process.env.ADMIN_USERS?.trim()
+
+  if (raw) {
+    try {
+      const parsed = JSON.parse(raw)
+      if (!Array.isArray(parsed) || parsed.length === 0) {
+        return { users: [], code: ADMIN_AUTH_ERROR_CODE.INVALID_CONFIG }
+      }
+
+      const users = parsed.map((entry) => {
+        if (!entry || typeof entry !== "object") return null
+
+        const { name, password, role, branch } = entry as Partial<UserRecord>
+        if (typeof name !== "string" || !name.trim()) return null
+        if (typeof password !== "string" || !password.trim()) return null
+        if (!isAdminRole(role)) return null
+        if (branch != null && typeof branch !== "string") return null
+
+        return {
+          name: name.trim(),
+          password,
+          role,
+          branch: branch?.trim() || undefined,
+        }
+      })
+
+      if (users.some((user) => user == null)) {
+        return { users: [], code: ADMIN_AUTH_ERROR_CODE.INVALID_CONFIG }
+      }
+
+      return { users: users as UserRecord[] }
+    } catch {
+      return { users: [], code: ADMIN_AUTH_ERROR_CODE.INVALID_CONFIG }
+    }
+  }
+
+  const legacy = process.env.ADMIN_PASSWORD?.trim()
+  if (legacy) {
+    return { users: [{ name: "Admin", password: legacy, role: "admin" }] }
+  }
+
+  return { users: [], code: ADMIN_AUTH_ERROR_CODE.NOT_CONFIGURED }
+}
+
+export function authenticateUser(password: string): AuthResult {
+  const { users, code } = getAllUsers()
+  if (code) return { session: null, code }
+
+  const user = users.find((candidate) => candidate.password === password)
+  if (!user) {
+    return { session: null, code: ADMIN_AUTH_ERROR_CODE.INVALID_CREDENTIALS }
+  }
+
+  return { session: { name: user.name, role: user.role, branch: user.branch } }
 }
 
 export function encodeSession(session: AdminSession): string {
