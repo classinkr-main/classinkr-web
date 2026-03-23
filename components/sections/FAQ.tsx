@@ -29,7 +29,7 @@ export function FAQ() {
     return (
         <section id="faq" className="py-24 bg-white relative">
             <div className="container mx-auto px-6 md:px-12 grid grid-cols-1 md:grid-cols-12 gap-12 lg:gap-8 items-start">
-                <div className="md:col-span-5 lg:col-span-4 sticky top-32">
+                <div className="md:col-span-5 lg:col-span-4 static md:sticky md:top-32">
                     <h2 className="text-4xl lg:text-5xl font-black tracking-tight text-slate-900 leading-[1.2]">
                         자주 묻는 <br className="hidden md:block" />질문
                     </h2>
