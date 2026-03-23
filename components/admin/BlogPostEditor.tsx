@@ -791,9 +791,9 @@ export default function BlogPostEditor({
                   onChange={(event) => updateForm("status", event.target.value as BlogPostStatus)}
                   className="h-10 rounded-xl border border-[#e8e8e4] bg-white px-3 text-sm outline-none focus:border-[#084734]"
                 >
-                  {BLOG_STATUS_OPTIONS.map((status) => (
-                    <option key={status} value={status}>
-                      {status}
+                  {BLOG_STATUS_OPTIONS.map((opt) => (
+                    <option key={opt.value} value={opt.value}>
+                      {opt.label}
                     </option>
                   ))}
                 </select>
