@@ -3,12 +3,13 @@
 import { useState } from "react"
 import { useRouter } from "next/navigation"
 import { Lock } from "lucide-react"
-import { getAdminAuthErrorMessage } from "@/lib/admin-auth-errors"
+import { createSupabaseBrowserClient } from "@/lib/supabase/browser"
 import { Button } from "@/components/ui/button"
 import { Input } from "@/components/ui/input"
 
 export default function AdminLoginPage() {
   const router = useRouter()
+  const [email, setEmail] = useState("")
   const [password, setPassword] = useState("")
   const [error, setError] = useState("")
   const [loading, setLoading] = useState(false)
@@ -19,27 +20,19 @@ export default function AdminLoginPage() {
     setLoading(true)
 
     try {
-      const res = await fetch("/api/admin/auth", {
-        method: "POST",
-        headers: { "Content-Type": "application/json" },
-        body: JSON.stringify({ password }),
+      const supabase = createSupabaseBrowserClient()
+      const { error: signInError } = await supabase.auth.signInWithPassword({
+        email,
+        password,
       })
 
-      const data = await res.json().catch(() => null)
-
-      if (res.ok) {
-        sessionStorage.setItem("admin_password", password)
-        sessionStorage.setItem("admin_token", password)
-        sessionStorage.setItem("admin_role", data?.role ?? "admin")
-        sessionStorage.setItem("admin_name", data?.name ?? "Admin")
-
-        if (data?.branch) sessionStorage.setItem("admin_branch", data.branch)
-        else sessionStorage.removeItem("admin_branch")
-
-        router.replace("/admin/overview")
-      } else {
-        setError(getAdminAuthErrorMessage(data?.code))
+      if (signInError) {
+        setError("이메일 또는 비밀번호가 올바르지 않습니다.")
+        return
       }
+
+      router.replace("/admin/overview")
+      router.refresh()
     } catch {
       setError("서버 연결에 실패했습니다.")
     } finally {
@@ -61,17 +54,29 @@ export default function AdminLoginPage() {
             관리자 전용 페이지입니다.
           </p>
 
-          <form onSubmit={handleSubmit} className="space-y-4">
+          <form onSubmit={handleSubmit} className="space-y-3">
+            <Input
+              type="email"
+              placeholder="이메일"
+              value={email}
+              onChange={(e) => setEmail(e.target.value)}
+              autoFocus
+              autoComplete="email"
+            />
             <Input
               type="password"
               placeholder="비밀번호"
               value={password}
               onChange={(e) => setPassword(e.target.value)}
-              autoFocus
+              autoComplete="current-password"
             />
             {error ? <p className="text-[13px] text-red-500">{error}</p> : null}
-            <Button type="submit" className="w-full" disabled={loading || !password}>
-              {loading ? "확인 중..." : "로그인"}
+            <Button
+              type="submit"
+              className="w-full"
+              disabled={loading || !email || !password}
+            >
+              {loading ? "로그인 중..." : "로그인"}
             </Button>
           </form>
         </div>

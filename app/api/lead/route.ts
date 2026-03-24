@@ -8,7 +8,7 @@
  *   자동으로 구독자 DB에도 등록 (옵트인 처리).
  */
 import { NextRequest, NextResponse } from "next/server"
-import { saveLead } from "@/lib/db"
+import { saveLead } from "@/lib/repositories/leads"
 import { upsertSubscriber } from "@/lib/marketing-data"
 
 export interface LeadPayload {
@@ -31,8 +31,9 @@ export async function POST(req: NextRequest) {
     body.timestamp = new Date().toISOString()
 
     try {
-      saveLead({ ...body })
-    } catch {
+      await saveLead({ ...body })
+    } catch (e) {
+      console.error("[POST /api/lead] saveLead error:", e)
       // DB 저장 실패해도 외부 연동은 계속
     }
 

@@ -6,7 +6,7 @@ import BlogMarkdownRenderer from "@/components/blog/BlogMarkdownRenderer"
 import {
   getPublishedPostBySlug,
   getRelatedPosts,
-} from "@/lib/blog-data"
+} from "@/lib/repositories/blog"
 import { extractMarkdownHeadings } from "@/lib/blog-markdown"
 
 interface BlogDetailPageProps {

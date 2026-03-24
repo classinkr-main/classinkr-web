@@ -1,5 +1,5 @@
 import { NextRequest, NextResponse } from "next/server"
-import { updatePost, trashPost, permanentDeletePost, restorePost } from "@/lib/blog-data"
+import { updatePost, trashPost, permanentDeletePost, restorePost } from "@/lib/repositories/blog"
 import { verifyAdmin } from "@/lib/admin-auth"
 
 export async function PUT(

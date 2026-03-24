@@ -1,30 +1,57 @@
 "use client"
 
 import { useEffect, useState } from "react"
-import { usePathname } from "next/navigation"
+import { usePathname, useRouter } from "next/navigation"
 import AdminSidebar from "@/components/admin/AdminSidebar"
-import type { AdminRole } from "@/lib/admin-auth"
+import { createSupabaseBrowserClient } from "@/lib/supabase/browser"
 
 interface SessionInfo {
-  role: AdminRole
+  role: string
   name: string
-  branch?: string
+  email: string
 }
 
 export default function AdminLayout({ children }: { children: React.ReactNode }) {
   const pathname = usePathname()
+  const router = useRouter()
   const isLoginPage = pathname === "/admin/login"
 
   const [session, setSession] = useState<SessionInfo | null>(null)
 
   useEffect(() => {
     if (isLoginPage) return
-    const role = sessionStorage.getItem("admin_role") as AdminRole | null
-    const name = sessionStorage.getItem("admin_name")
-    const branch = sessionStorage.getItem("admin_branch") ?? undefined
-    if (role && name) setSession({ role, name, branch })
-    else setSession({ role: "admin", name: "Admin" })
-  }, [isLoginPage, pathname])
+
+    const load = async () => {
+      const supabase = createSupabaseBrowserClient()
+      const { data: { user } } = await supabase.auth.getUser()
+
+      if (!user) {
+        router.replace("/admin/login")
+        return
+      }
+
+      // admin_profiles에서 역할/이름 조회
+      const { data: profile } = await supabase
+        .from("admin_profiles")
+        .select("display_name, role, status")
+        .eq("user_id", user.id)
+        .single()
+
+      if (!profile || profile.status !== "ACTIVE") {
+        await supabase.auth.signOut()
+        router.replace("/admin/login")
+        return
+      }
+
+      setSession({
+        role: profile.role,
+        name: profile.display_name,
+        email: user.email ?? "",
+      })
+    }
+
+    load()
+  }, [isLoginPage, pathname, router])
 
   if (isLoginPage) return <>{children}</>
 
@@ -34,7 +61,7 @@ export default function AdminLayout({ children }: { children: React.ReactNode })
         <AdminSidebar
           role={session.role}
           name={session.name}
-          branch={session.branch}
+          email={session.email}
         />
       )}
       <main className="flex-1 min-w-0">

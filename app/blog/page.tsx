@@ -1,4 +1,4 @@
-import { getPublishedPosts } from "@/lib/blog-data"
+import { getPublishedPosts } from "@/lib/repositories/blog"
 import BlogPageClient from "./BlogPageClient"
 
 export default async function BlogPage() {

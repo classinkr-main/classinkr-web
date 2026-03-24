@@ -1,5 +1,5 @@
 import { NextRequest, NextResponse } from "next/server"
-import { getAllPosts, createPost, getTrashedPosts } from "@/lib/blog-data"
+import { getAllPosts, createPost, getTrashedPosts } from "@/lib/repositories/blog"
 import { verifyAdmin } from "@/lib/admin-auth"
 
 export async function GET(req: NextRequest) {
