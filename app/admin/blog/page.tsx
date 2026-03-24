@@ -81,8 +81,7 @@ export default function AdminBlogPage() {
     }
 
     const handleEdit = (post: BlogPost) => {
-        setEditingPost(post)
-        setIsFormOpen(true)
+        router.push(`/admin/blog/${post.id}/edit`)
     }
 
     const handleSave = async (data: Omit<BlogPost, "id">) => {
