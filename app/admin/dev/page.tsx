@@ -1029,7 +1029,7 @@ export default function DevPage() {
   const [role, setRole] = useState("")
 
   useEffect(() => {
-    const t = sessionStorage.getItem("admin_token") || ""
+    const t = sessionStorage.getItem("admin_password") || ""
     const n = sessionStorage.getItem("admin_name") || "팀원"
     const r = sessionStorage.getItem("admin_role") || ""
     setToken(t)

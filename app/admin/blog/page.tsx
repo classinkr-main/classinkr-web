@@ -17,6 +17,8 @@ import type { BlogPost, BlogPostInput } from "@/lib/blog-types"
 
 type Tab = "all" | "private" | "trash"
 
+type Tab = "all" | "private" | "trash"
+
 function getToken() {
     return sessionStorage.getItem("admin_password") ?? ""
 }
@@ -81,8 +83,7 @@ export default function AdminBlogPage() {
     }
 
     const handleEdit = (post: BlogPost) => {
-        setEditingPost(post)
-        setIsFormOpen(true)
+        router.push(`/admin/blog/${post.id}/edit`)
     }
 
     const handleSave = async (data: Partial<BlogPostInput>) => {

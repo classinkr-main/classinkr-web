@@ -7,13 +7,13 @@ import { motion } from "framer-motion"
 
 export function KeyUseCases() {
     return (
-        <section id="use-cases" className="py-24 bg-slate-50">
+        <section id="use-cases" className="py-16 md:py-24 bg-slate-50">
             <div className="container mx-auto">
                 <div className="text-center max-w-3xl mx-auto mb-16 px-4">
-                    <h2 className="text-4xl md:text-5xl font-black tracking-tight text-slate-900 mb-6">
+                    <h2 className="text-4xl md:text-5xl font-black tracking-tight text-slate-900 mb-6 break-keep">
                         모든 구성원을 위한 맞춤 설계
                     </h2>
-                    <p className="text-xl text-slate-500 font-medium">
+                    <p className="text-xl text-slate-500 font-medium break-keep">
                         강사, 관리자, 학생 모두에게 최적화된 경험을 제공합니다.
                     </p>
                 </div>
@@ -126,8 +126,8 @@ function UseCaseCard({ title, desc, points, imageColor, imageSrc, imageAlt }: { 
                         </motion.div>
                     </div>
                     <div className="p-8 md:p-14 flex flex-col justify-center bg-white">
-                        <h3 className="text-3xl font-extrabold mb-5 text-slate-900 tracking-tight leading-tight">{title}</h3>
-                        <p className="text-slate-500 mb-8 text-lg leading-relaxed font-medium">
+                        <h3 className="text-3xl font-extrabold mb-5 text-slate-900 tracking-tight leading-tight break-keep">{title}</h3>
+                        <p className="text-slate-500 mb-8 text-lg leading-relaxed font-medium break-keep">
                             {desc}
                         </p>
                         <ul className="space-y-4">
@@ -136,7 +136,7 @@ function UseCaseCard({ title, desc, points, imageColor, imageSrc, imageAlt }: { 
                                     <div className="flex-shrink-0 h-8 w-8 rounded-full bg-emerald-50 group-hover:bg-emerald-500 flex items-center justify-center text-emerald-600 group-hover:text-white transition-colors duration-300">
                                         <Check className="w-5 h-5" strokeWidth={3} />
                                     </div>
-                                    <span className="text-slate-700 font-bold text-lg group-hover:text-slate-900 transition-colors">{point}</span>
+                                    <span className="text-slate-700 font-bold text-lg group-hover:text-slate-900 transition-colors break-keep">{point}</span>
                                 </li>
                             ))}
                         </ul>

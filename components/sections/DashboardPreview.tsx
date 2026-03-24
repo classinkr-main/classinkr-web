@@ -25,15 +25,15 @@ const homeworkData = [
 
 export function DashboardPreview() {
     return (
-        <section id="dashboard" className="py-24 bg-white">
+        <section id="dashboard" className="py-16 md:py-24 bg-white">
             <div className="container mx-auto">
                 <div className="mb-12 flex flex-col md:flex-row items-end justify-between gap-6">
                     <div className="max-w-2xl">
-                        <h2 className="text-3xl font-extrabold tracking-tight text-slate-900 sm:text-4xl mb-4">
+                        <h2 className="text-3xl font-extrabold tracking-tight text-slate-900 sm:text-4xl mb-4 break-keep">
                             데이터 기반 의사결정, 즉시 확인하세요
                         </h2>
-                        <p className="text-lg text-muted-foreground">
-                            추측은 그만. 실시간 분석으로 반, 강사, 학생의 성과를 정확히 파악하세요.
+                        <p className="text-lg text-muted-foreground break-keep">
+                            추측은 그만. 실시간 분석으로 반, 강사, 학생의 성과 파악하세요.
                         </p>
                     </div>
                     <div className="flex gap-4">

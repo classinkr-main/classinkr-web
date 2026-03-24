@@ -39,20 +39,9 @@ export interface BlogPost {
   authorAvatarUrl?: string
   readTime: string
   imageUrl: string
-  thumbnailAlt: string
-  heroImageUrl: string
-  heroImageAlt: string
-  featured: boolean
-  benefitItems: string[]
-  targetReader: string
-  contentMarkdown: string
-  seoTitle: string
-  seoDescription: string
-  relatedPostIds: number[]
-  cta: BlogPostCTA
-  status: BlogPostStatus
-  published?: boolean
-  deletedAt?: string
+  featured?: boolean
+  published?: boolean   // undefined treated as true (backwards-compat)
+  deletedAt?: string    // soft-delete timestamp
 }
 
 export type BlogPostInput = Omit<BlogPost, "id">

@@ -42,13 +42,13 @@ export function SolutionOverview() {
     const [activeStep, setActiveStep] = useState(0)
 
     return (
-        <section id="solution" className="py-24 bg-white">
+        <section id="solution" className="py-16 md:py-24 bg-white">
             <div className="container mx-auto">
-                <div className="text-center max-w-3xl mx-auto mb-20">
-                    <h2 className="text-3xl font-extrabold tracking-tight text-slate-900 sm:text-4xl mb-4">
+                <div className="text-center max-w-3xl mx-auto mb-20 px-4">
+                    <h2 className="text-3xl font-extrabold tracking-tight text-slate-900 sm:text-4xl mb-4 break-keep">
                         모든 학원 업무를 하나의 흐름으로
                     </h2>
-                    <p className="text-lg text-muted-foreground">
+                    <p className="text-lg text-muted-foreground break-keep">
                         수업 준비부터 학부모 리포트까지, 전체 라이프사이클을 효율화합니다.
                     </p>
                 </div>
@@ -90,7 +90,7 @@ export function SolutionOverview() {
                     </div>
 
                     {/* Active Step Showcase */}
-                    <div className="w-full lg:w-1/2 aspect-video relative rounded-2xl border bg-slate-900 overflow-hidden shadow-2xl p-8 flex items-center justify-center">
+                    <div className="w-full lg:w-1/2 aspect-video relative rounded-2xl border bg-slate-900 overflow-hidden shadow-2xl p-6 md:p-8 flex items-center justify-center">
                         <AnimatePresence mode="wait">
                             <motion.div
                                 key={activeStep}
@@ -106,8 +106,8 @@ export function SolutionOverview() {
                                         return <Icon className="w-10 h-10" />
                                     })()}
                                 </div>
-                                <h3 className="text-2xl font-bold text-white mb-4">{steps[activeStep].title}</h3>
-                                <p className="text-slate-300 text-lg leading-relaxed max-w-md mx-auto">
+                                <h3 className="text-2xl font-bold text-white mb-4 break-keep">{steps[activeStep].title}</h3>
+                                <p className="text-slate-300 text-lg leading-relaxed max-w-md mx-auto break-keep">
                                     {steps[activeStep].desc}
                                 </p>
                             </motion.div>

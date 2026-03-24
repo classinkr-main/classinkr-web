@@ -6,7 +6,7 @@ import { ArrowRight, FileText } from "lucide-react"
 
 export function FinalCTA() {
     return (
-        <section className="py-32 relative overflow-hidden bg-slate-950">
+        <section className="py-16 md:py-32 relative overflow-hidden bg-slate-950">
             {/* Background Effects */}
             <div className="absolute inset-0 bg-gradient-to-br from-[#084734] to-slate-950 opacity-90" />
             <div className="absolute inset-0 bg-[url('/images/noise-texture.svg')] opacity-20 mix-blend-overlay pointer-events-none" />
@@ -17,11 +17,11 @@ export function FinalCTA() {
                     무료 컨설팅 제공
                 </span>
 
-                <h2 className="text-4xl md:text-5xl lg:text-6xl font-extrabold tracking-tight text-white mb-6">
+                <h2 className="text-4xl md:text-5xl lg:text-6xl font-extrabold tracking-tight text-white mb-6 break-keep">
                     성공 방정식을 표준화할 준비가 되셨나요?
                 </h2>
 
-                <p className="text-xl md:text-2xl text-slate-300 max-w-3xl mx-auto mb-12 font-light leading-relaxed">
+                <p className="text-xl md:text-2xl text-slate-300 max-w-3xl mx-auto mb-12 font-light leading-relaxed break-keep">
                     15분 만에 맞춤형 도입 플랜을 받아보세요. <br className="hidden md:block" />
                     1등 학원들이 Classin을 선택하는 이유를 직접 확인하세요.
                 </p>
@@ -40,7 +40,7 @@ export function FinalCTA() {
                     </Button>
                 </div>
 
-                <p className="mt-10 text-sm text-slate-400 font-medium tracking-wide">
+                <p className="mt-10 text-sm text-slate-400 font-medium tracking-wide break-keep">
                     카드 등록 불필요 ∙ 전담 매니저 배정 ∙ 무료 로드맵 상담 포함
                 </p>
             </div>
