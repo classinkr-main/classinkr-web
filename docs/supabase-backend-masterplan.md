@@ -1,8 +1,56 @@
 # Classin Home — Supabase 백엔드 마스터플랜
 
-기준 시점: 2026-03-24 (rev.2)
+기준 시점: 2026-03-24 (rev.3)
 브랜치: `claude/supa`
 목적: 현재 JSON 파일 기반 → Supabase 전환 전략 + 중장기 가치 성장 로드맵
+
+---
+
+## 🗂 세션 재개 방법
+
+```
+Claude에게:
+"claude/supa 브랜치, Supabase 마이그레이션 이어서 작업하자.
+docs/supabase-backend-masterplan.md 읽고 현재 상태 파악해줘"
+```
+
+---
+
+## ✅ 현재 완료 상태 (2026-03-24 기준)
+
+### 완료
+- [x] Supabase 프로젝트 연결 (키 3개 `.env.local` 세팅 완료)
+- [x] 테이블 4개 생성: `admin_profiles`, `blog_posts`, `leads`, `audit_logs`
+- [x] RLS 정책 적용 (전 테이블)
+- [x] `is_active_admin()` 헬퍼 함수, `update_updated_at()` 트리거
+- [x] `lib/supabase/database.types.ts` — DB 타입 수동 정의
+- [x] `lib/auth/guards.ts` — `requireSession`, `requireRole`, `requirePermission`
+- [x] `lib/auth/audit.ts` — `logAudit()` 감사 로그 유틸
+- [x] `lib/repositories/leads.ts` — JSON ↔ Supabase 듀얼 모드
+- [x] `lib/repositories/blog.ts` — JSON ↔ Supabase 듀얼 모드
+- [x] `SUPER_ADMIN` 계정 1개 생성 (Supabase Auth + admin_profiles)
+- [x] 어드민 로그인 → Supabase `signInWithPassword()` 전환
+- [x] 미들웨어 → Supabase 세션 검증으로 전환
+- [x] `AdminLayout` / `AdminSidebar` → `admin_profiles` 기반 역할 표시
+- [x] `scripts/001-create-tables.sql` — 재실행 가능한 SQL 스크립트
+
+### 다음 작업 (Phase 1 마무리)
+- [ ] `.env.local`에 `USE_SUPABASE_LEADS=true`, `USE_SUPABASE_BLOG=true` 추가
+- [ ] `scripts/seed-leads.ts` — `data/leads.json` → Supabase 이관
+- [ ] `scripts/seed-blog-posts.ts` — `data/blog-posts.json` → Supabase 이관
+- [ ] `/api/lead/route.ts` → `lib/repositories/leads.ts` 사용하도록 교체
+- [ ] `app/blog/page.tsx`, `app/blog/[slug]/page.tsx` → repository 사용
+- [ ] 어드민 CRM/블로그 API Route → repository 사용
+
+### Phase 2 이후 (중장기)
+- [ ] `subscribers`, `email_campaigns` 테이블 + 마케팅 연동
+- [ ] Neo CRM API 연동 (리드 → Neo CRM 푸시)
+- [ ] Supabase Storage (이미지 업로드)
+- [ ] 운영자 초대 플로우
+- [ ] `data/` 폴더 완전 제거
+- [ ] Vercel 배포 + 환경변수 세팅
+
+---
 
 ---
 
@@ -763,25 +811,27 @@ email_campaigns ──→ subscribers (태그 기반 타겟팅)
 
 ## 7. 구현 로드맵
 
-### Phase 1: 기반 구축 (1~2주)
+### Phase 1: 기반 구축 ✅ 진행 중
 
 **목표:** Supabase DB 연결 + 인증 전환 + 첫 번째 테이블(blog_posts) 라이브
 
-| # | 작업 | 파일/위치 | 우선순위 |
-|---|------|-----------|----------|
-| 1.1 | Supabase SQL 에디터에서 테이블 생성 (admin_profiles, blog_posts, audit_logs) | Supabase Dashboard | P0 |
-| 1.2 | RLS 정책 적용 | Supabase Dashboard | P0 |
-| 1.3 | `npx supabase gen types typescript` 로 타입 생성 | `lib/supabase/database.types.ts` | P0 |
-| 1.4 | Admin 로그인을 Supabase Auth로 전환 | `app/admin/login/page.tsx` | P0 |
-| 1.5 | `admin_profiles` 기반 역할/권한 가드 구현 | `lib/auth/guards.ts` | P0 |
-| 1.6 | blog_posts Repository 생성 (듀얼 모드) | `lib/blog/repository.ts` | P0 |
-| 1.7 | 기존 JSON 데이터 시드 스크립트 작성 | `scripts/seed-blog-posts.ts` | P1 |
-| 1.8 | SUPER_ADMIN 1명 수동 생성 | Supabase Auth Dashboard | P0 |
+| # | 작업 | 상태 |
+|---|------|------|
+| 1.1 | 테이블 4개 생성 + RLS | ✅ 완료 |
+| 1.2 | DB 타입 정의 | ✅ 완료 |
+| 1.3 | Admin 로그인 → Supabase Auth | ✅ 완료 |
+| 1.4 | `admin_profiles` 기반 역할/권한 가드 | ✅ 완료 |
+| 1.5 | leads/blog Repository (듀얼 모드) | ✅ 완료 |
+| 1.6 | SUPER_ADMIN 1명 생성 | ✅ 완료 |
+| 1.7 | `USE_SUPABASE_*=true` 스위치 켜기 | ⬜ 다음 작업 |
+| 1.8 | 시드 스크립트 실행 (JSON → Supabase) | ⬜ 다음 작업 |
+| 1.9 | API Route → Repository 교체 | ⬜ 다음 작업 |
+| 1.10 | 공개 /blog → Supabase 연결 | ⬜ 다음 작업 |
 
 **완료 기준:**
-- Supabase Auth로 어드민 로그인 가능
-- blog_posts 테이블에서 CRUD 동작
-- 공개 `/blog` 페이지가 Supabase에서 PUBLISHED 글만 조회
+- Supabase Auth로 어드민 로그인 가능 ✅
+- blog_posts 테이블에서 CRUD 동작 ⬜
+- 공개 `/blog` 페이지가 Supabase에서 PUBLISHED 글만 조회 ⬜
 
 ---
 
