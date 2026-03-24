@@ -4,14 +4,14 @@ import { useState } from "react"
 import { Button } from "@/components/ui/button"
 import { Input } from "@/components/ui/input"
 import { Label } from "@/components/ui/label"
-import type { BlogPost } from "@/lib/blog-types"
+import type { BlogPost, BlogPostInput } from "@/lib/blog-types"
 import { CATEGORIES } from "@/lib/blog-types"
 
 const EDITABLE_CATEGORIES = CATEGORIES.filter((c) => c !== "전체")
 
 interface BlogPostFormProps {
     post?: BlogPost
-    onSave: (data: Omit<BlogPost, "id">) => void
+    onSave: (data: Partial<BlogPostInput>) => void
     onCancel: () => void
     loading?: boolean
 }

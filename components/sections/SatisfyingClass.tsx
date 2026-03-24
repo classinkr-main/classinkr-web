@@ -50,7 +50,7 @@ export function SatisfyingClass() {
                             whileInView={{ opacity: 1, scale: 1, x: 0, rotate: 6 }}
                             viewport={{ once: true }}
                             transition={{ duration: 0.8, delay: 0.1, type: "spring", bounce: 0.4 }}
-                            className="absolute right-[5%] top-[5%] md:top-0 w-60 md:w-72 bg-white rounded-3xl shadow-[0_20px_50px_rgba(0,0,0,0.1)] p-6 border border-slate-100 z-10"
+                            className="absolute right-[5%] top-[5%] md:top-0 w-60 md:w-72 bg-white rounded-3xl shadow-[0_20px_50px_rgba(0,0,0,0.1)] p-6 border border-slate-100 z-10 hidden md:block"
                         >
                             <div className="flex justify-between items-center mb-6">
                                 <span className="font-bold text-slate-800 text-lg">AI 채점 요약</span>
@@ -75,7 +75,7 @@ export function SatisfyingClass() {
                             whileInView={{ opacity: 1, y: 0, rotate: -12 }}
                             viewport={{ once: true }}
                             transition={{ duration: 0.8, delay: 0.2, type: "spring", bounce: 0.4 }}
-                            className="absolute left-[5%] top-1/4 w-56 md:w-64 bg-amber-400 rounded-3xl shadow-[0_20px_40px_rgba(251,191,36,0.3)] p-6 border border-amber-300 z-20 text-yellow-950"
+                            className="absolute left-[5%] top-1/4 w-56 md:w-64 bg-amber-400 rounded-3xl shadow-[0_20px_40px_rgba(251,191,36,0.3)] p-6 border border-amber-300 z-20 text-yellow-950 hidden md:block"
                         >
                             <div className="font-black text-xl mb-4">학습 성취도 분석</div>
                             <div className="flex items-end gap-2 h-24 mt-4">

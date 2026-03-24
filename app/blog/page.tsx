@@ -1,7 +1,7 @@
-import { getAllPosts } from "@/lib/blog-data"
+import { getPublishedPosts } from "@/lib/blog-data"
 import BlogPageClient from "./BlogPageClient"
 
 export default async function BlogPage() {
-    const posts = await getAllPosts()
+    const posts = await getPublishedPosts()
     return <BlogPageClient posts={posts} />
 }
