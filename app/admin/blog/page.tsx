@@ -17,8 +17,6 @@ import type { BlogPost, BlogPostInput } from "@/lib/blog-types"
 
 type Tab = "all" | "private" | "trash"
 
-type Tab = "all" | "private" | "trash"
-
 function getToken() {
     return sessionStorage.getItem("admin_password") ?? ""
 }
