@@ -228,6 +228,10 @@ export async function getTrashedPosts(): Promise<BlogPost[]> {
   return readPosts().filter((p) => !!p.deletedAt)
 }
 
+export async function getPublishedPosts(): Promise<BlogPost[]> {
+  return readPosts().filter((post) => post.status === "published")
+}
+
 export async function getPostById(id: number): Promise<BlogPost | undefined> {
   return readPosts().find((post) => post.id === id)
 }
@@ -305,18 +309,6 @@ export async function trashPost(id: number): Promise<boolean> {
 
 /** Restore from trash */
 export async function restorePost(id: number): Promise<BlogPost | null> {
-  const posts = readPosts()
-  const idx = posts.findIndex((p) => p.id === id)
-  if (idx === -1) return null
-  // eslint-disable-next-line @typescript-eslint/no-unused-vars
-  const { deletedAt: _removed, ...rest } = posts[idx]
-  posts[idx] = rest as BlogPost
-  writePosts(posts)
-  return posts[idx]
-}
-
-/** Permanent delete — irreversible */
-export async function permanentDeletePost(id: number): Promise<boolean> {
   const posts = readPosts()
   const idx = posts.findIndex((p) => p.id === id)
   if (idx === -1) return null
