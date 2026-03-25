@@ -87,8 +87,14 @@ export function Header() {
                 <div className="hidden md:flex items-center gap-4">
                     <NewsletterModal
                         source="gnb_materials"
+                        badge="무료 구독"
                         title="교육 인사이트 받아보기"
                         description="Classin의 최신 교육 트렌드, 제품 업데이트, 행사 정보를 이메일로 받아보세요."
+                        benefits={[
+                            "월 1~2회 학원 운영 인사이트 레터",
+                            "신기능 · 업데이트 소식 우선 공지",
+                            "Classin 주최 행사 · 웨비나 초대",
+                        ]}
                     >
                         <button type="button" className={cn("hidden md:flex font-medium transition-colors text-sm cursor-pointer bg-transparent border-none p-0",
                              isLightModeHeader ? "text-slate-600 hover:text-primary" : "text-white/80 hover:text-white"
