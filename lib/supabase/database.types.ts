@@ -88,6 +88,21 @@ export interface Lead {
   updated_at: string;
 }
 
+export type NewsletterStatus = "active" | "unsubscribed";
+
+export interface NewsletterSubscriber {
+  id: string;
+  email: string;
+  name: string | null;
+  tags: string[];
+  source: string;
+  status: NewsletterStatus;
+  opt_in_at: string;
+  unsubscribed_at: string | null;
+  created_at: string;
+  updated_at: string;
+}
+
 export interface AuditLog {
   id: string;
   actor_user_id: string | null;
@@ -139,6 +154,19 @@ export type BlogPostUpdate = Partial<
 >;
 export type LeadUpdate = Partial<Omit<Lead, "id" | "created_at">>;
 
+export type NewsletterSubscriberInsert = Omit<
+  NewsletterSubscriber,
+  "id" | "created_at" | "updated_at"
+> & {
+  id?: string;
+  created_at?: string;
+  updated_at?: string;
+};
+
+export type NewsletterSubscriberUpdate = Partial<
+  Omit<NewsletterSubscriber, "id" | "created_at">
+>;
+
 /* ─── Database Schema (Supabase 클라이언트 제네릭용) ─── */
 
 export interface Database {
@@ -163,6 +191,11 @@ export interface Database {
         Row: AuditLog;
         Insert: AuditLogInsert;
         Update: never;
+      };
+      newsletter_subscribers: {
+        Row: NewsletterSubscriber;
+        Insert: NewsletterSubscriberInsert;
+        Update: NewsletterSubscriberUpdate;
       };
     };
   };

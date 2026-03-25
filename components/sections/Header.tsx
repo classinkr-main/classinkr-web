@@ -3,7 +3,7 @@
 import * as React from "react"
 import Link from "next/link"
 import { usePathname } from "next/navigation"
-import { DemoModal } from "./DemoModal"
+import { NewsletterModal } from "./NewsletterModal"
 import { cn } from "@/lib/utils"
 import { Menu, X } from "lucide-react"
 
@@ -85,13 +85,17 @@ export function Header() {
                 </nav>
 
                 <div className="hidden md:flex items-center gap-4">
-                    <DemoModal trackingButton="header_materials">
+                    <NewsletterModal
+                        source="gnb_materials"
+                        title="교육 인사이트 받아보기"
+                        description="Classin의 최신 교육 트렌드, 제품 업데이트, 행사 정보를 이메일로 받아보세요."
+                    >
                         <button type="button" className={cn("hidden md:flex font-medium transition-colors text-sm cursor-pointer bg-transparent border-none p-0",
                              isLightModeHeader ? "text-slate-600 hover:text-primary" : "text-white/80 hover:text-white"
                         )}>
                             자료 받아보기
                         </button>
-                    </DemoModal>
+                    </NewsletterModal>
                     <Link
                         href="/contact"
                         className={cn(

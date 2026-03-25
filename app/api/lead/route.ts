@@ -9,7 +9,7 @@
  */
 import { NextRequest, NextResponse } from "next/server"
 import { saveLead } from "@/lib/repositories/leads"
-import { upsertSubscriber } from "@/lib/marketing-data"
+import { upsertSubscriber } from "@/lib/repositories/marketing"
 
 export interface LeadPayload {
   source: "demo_modal" | "contact_page" | "newsletter"
