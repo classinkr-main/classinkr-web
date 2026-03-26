@@ -1,6 +1,6 @@
 import { NextRequest, NextResponse } from "next/server"
 import { verifyAdmin } from "@/lib/admin-auth"
-import { getAllEvents, getEventsByMonth, createEvent } from "@/lib/calendar-data"
+import { getAllEvents, getEventsByMonth, createEvent } from "@/lib/repositories/calendar"
 
 export async function GET(req: NextRequest) {
   const err = verifyAdmin(req)
@@ -11,9 +11,9 @@ export async function GET(req: NextRequest) {
   const month = searchParams.get("month")
 
   if (year && month) {
-    return NextResponse.json(getEventsByMonth(parseInt(year), parseInt(month)))
+    return NextResponse.json(await getEventsByMonth(parseInt(year), parseInt(month)))
   }
-  return NextResponse.json(getAllEvents())
+  return NextResponse.json(await getAllEvents())
 }
 
 export async function POST(req: NextRequest) {
@@ -25,7 +25,7 @@ export async function POST(req: NextRequest) {
     return NextResponse.json({ error: "title, date, type은 필수입니다." }, { status: 400 })
   }
 
-  const event = createEvent({
+  const event = await createEvent({
     title: body.title,
     date: body.date,
     endDate: body.endDate,

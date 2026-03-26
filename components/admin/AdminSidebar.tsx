@@ -15,45 +15,58 @@ import {
   ChevronRight,
   CalendarDays,
 } from "lucide-react"
-import type { AdminRole } from "@/lib/admin-auth"
+import { createSupabaseBrowserClient } from "@/lib/supabase/browser"
+
+// Supabase 역할 → 메뉴 접근 매핑
+type SidebarRole = string
 
 interface NavItem {
   href: string
   label: string
   icon: React.ReactNode
-  roles: AdminRole[]
+  roles: SidebarRole[]
   badge?: string
 }
 
 const NAV: NavItem[] = [
-  { href: "/admin/overview",  label: "Overview",   icon: <LayoutDashboard className="w-4 h-4" />, roles: ["admin", "branch"] },
-  { href: "/admin/crm",       label: "CRM / 리드",  icon: <Users className="w-4 h-4" />,          roles: ["admin", "branch"] },
-  { href: "/admin/branch",    label: "지사 관리",   icon: <Building2 className="w-4 h-4" />,      roles: ["admin", "branch"] },
-  { href: "/admin/analytics", label: "Analytics",  icon: <BarChart2 className="w-4 h-4" />,      roles: ["admin", "branch"] },
-  { href: "/admin/calendar",  label: "캘린더",      icon: <CalendarDays className="w-4 h-4" />,   roles: ["admin", "branch"] },
-  { href: "/admin/blog",      label: "콘텐츠",      icon: <FileText className="w-4 h-4" />,       roles: ["admin"] },
-  { href: "/admin/users",     label: "회원 관리",   icon: <UserCog className="w-4 h-4" />,        roles: ["admin"] },
-  { href: "/admin/settings",  label: "Settings",   icon: <Settings className="w-4 h-4" />,       roles: ["admin"] },
-  { href: "/admin/dev",       label: "Dev Mode",   icon: <Code2 className="w-4 h-4" />,          roles: ["admin"], badge: "Beta" },
+  { href: "/admin/overview",  label: "Overview",   icon: <LayoutDashboard className="w-4 h-4" />, roles: ["SUPER_ADMIN","ADMIN","EDITOR","VIEWER"] },
+  { href: "/admin/crm",       label: "CRM / 리드",  icon: <Users className="w-4 h-4" />,          roles: ["SUPER_ADMIN","ADMIN","EDITOR","VIEWER"] },
+  { href: "/admin/branch",    label: "지사 관리",   icon: <Building2 className="w-4 h-4" />,      roles: ["SUPER_ADMIN","ADMIN"] },
+  { href: "/admin/analytics", label: "Analytics",  icon: <BarChart2 className="w-4 h-4" />,      roles: ["SUPER_ADMIN","ADMIN","EDITOR","VIEWER"] },
+  { href: "/admin/calendar",  label: "캘린더",      icon: <CalendarDays className="w-4 h-4" />,   roles: ["SUPER_ADMIN","ADMIN","EDITOR","VIEWER"] },
+  { href: "/admin/blog",      label: "콘텐츠",      icon: <FileText className="w-4 h-4" />,       roles: ["SUPER_ADMIN","ADMIN","EDITOR"] },
+  { href: "/admin/marketing", label: "마케팅",      icon: <Users className="w-4 h-4" />,          roles: ["SUPER_ADMIN","ADMIN"] },
+  { href: "/admin/users",     label: "회원 관리",   icon: <UserCog className="w-4 h-4" />,        roles: ["SUPER_ADMIN","ADMIN"] },
+  { href: "/admin/settings",  label: "Settings",   icon: <Settings className="w-4 h-4" />,       roles: ["SUPER_ADMIN","ADMIN"] },
+  { href: "/admin/dev",       label: "Dev Mode",   icon: <Code2 className="w-4 h-4" />,          roles: ["SUPER_ADMIN", "ADMIN"], badge: "Beta" },
 ]
 
-interface Props {
-  role: AdminRole
-  name: string
-  branch?: string
+const ROLE_LABEL: Record<string, string> = {
+  SUPER_ADMIN: "최고 관리자",
+  ADMIN: "관리자",
+  EDITOR: "에디터",
+  VIEWER: "뷰어",
 }
 
-export default function AdminSidebar({ role, name, branch }: Props) {
+interface Props {
+  role: string
+  name: string
+  email: string
+}
+
+export default function AdminSidebar({ role, name, email }: Props) {
   const pathname = usePathname()
   const router = useRouter()
 
   const handleLogout = async () => {
-    await fetch("/api/admin/auth", { method: "DELETE" })
-    sessionStorage.clear()
+    const supabase = createSupabaseBrowserClient()
+    await supabase.auth.signOut()
     router.replace("/admin/login")
   }
 
-  const visibleNav = NAV.filter((item) => item.roles.includes(role))
+  const visibleNav = NAV.filter((item) =>
+    item.roles.some((r) => r.toLowerCase() === role.toLowerCase())
+  )
 
   return (
     <aside className="w-56 shrink-0 min-h-screen bg-white border-r border-[#e8e8e4] flex flex-col">
@@ -65,7 +78,7 @@ export default function AdminSidebar({ role, name, branch }: Props) {
       <div className="px-5 py-3 border-b border-[#e8e8e4]">
         <p className="text-[12px] font-medium text-[#111110]">{name}</p>
         <p className="text-[11px] text-[#1a1a1a]/40">
-          {role === "admin" ? "관리자" : `지사장 · ${branch}`}
+          {ROLE_LABEL[role] ?? role} · {email}
         </p>
       </div>
 

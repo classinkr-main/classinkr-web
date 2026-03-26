@@ -12,7 +12,7 @@
  */
 
 import { NextRequest, NextResponse } from "next/server"
-import { unsubscribe } from "@/lib/marketing-data"
+import { unsubscribe } from "@/lib/repositories/marketing"
 
 /** GET: 이메일 링크에서 직접 수신거부 (원클릭) */
 export async function GET(req: NextRequest) {

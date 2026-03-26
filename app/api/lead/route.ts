@@ -8,8 +8,9 @@
  *   자동으로 구독자 DB에도 등록 (옵트인 처리).
  */
 import { NextRequest, NextResponse } from "next/server"
-import { saveLead } from "@/lib/db"
-import { upsertSubscriber } from "@/lib/marketing-data"
+import { saveLead } from "@/lib/repositories/leads"
+import { upsertSubscriber } from "@/lib/repositories/marketing"
+import { triggerOnSubmitRules } from "@/lib/automation-engine"
 
 export interface LeadPayload {
   source: "demo_modal" | "contact_page" | "newsletter"
@@ -31,8 +32,9 @@ export async function POST(req: NextRequest) {
     body.timestamp = new Date().toISOString()
 
     try {
-      saveLead({ ...body })
-    } catch {
+      await saveLead({ ...body })
+    } catch (e) {
+      console.error("[POST /api/lead] saveLead error:", e)
       // DB 저장 실패해도 외부 연동은 계속
     }
 
@@ -43,6 +45,16 @@ export async function POST(req: NextRequest) {
       /** [NOTE-24] 이메일 있고 수신 동의 시 구독자 DB 자동 등록 */
       body.email && body.marketingConsent !== false
         ? syncToSubscriberDB(body)
+        : Promise.resolve(),
+      /** on_submit 자동화 규칙 트리거 */
+      body.email
+        ? triggerOnSubmitRules({
+            email: body.email,
+            name: body.name,
+            org: body.org,
+            role: body.role,
+            source: body.source,
+          })
         : Promise.resolve(),
     ])
 

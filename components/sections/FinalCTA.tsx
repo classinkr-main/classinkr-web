@@ -2,7 +2,11 @@
 
 import { Button } from "@/components/ui/button"
 import { DemoModal } from "./DemoModal"
+import { NewsletterModal } from "./NewsletterModal"
 import { ArrowRight, FileText } from "lucide-react"
+
+const BROCHURE_URL =
+  "https://remarkable-marquess-225.notion.site/AI-ClassIn-25a9585602f980049915fe608aec56f7?pvs=74"
 
 export function FinalCTA() {
     return (
@@ -34,10 +38,27 @@ export function FinalCTA() {
                         </Button>
                     </DemoModal>
 
-                    <Button variant="outline" className="h-16 px-10 text-lg bg-white/5 text-white border-white/20 hover:bg-white/10 hover:text-white transition-all hover:scale-105 active:scale-95 shadow-xl w-full sm:w-auto rounded-full backdrop-blur-md">
-                        <FileText className="mr-2 w-5 h-5" />
-                        서비스 소개서 다운로드
-                    </Button>
+                    <NewsletterModal
+                        source="finalcta_download"
+                        variant="dark"
+                        badge="무료 자료"
+                        title="서비스 소개서 받아보기"
+                        description="이메일을 남겨주시면 Classin 소개서를 바로 열람하실 수 있습니다."
+                        benefits={[
+                            "Classin 주요 기능 한눈에 정리",
+                            "도입 사례 및 성과 데이터 포함",
+                            "요금제 · 도입 프로세스 안내",
+                        ]}
+                        successCta={{
+                            label: "소개서 지금 바로 열기",
+                            href: BROCHURE_URL,
+                        }}
+                    >
+                        <Button variant="outline" className="h-16 px-10 text-lg bg-white/5 text-white border-white/20 hover:bg-white/10 hover:text-white transition-all hover:scale-105 active:scale-95 shadow-xl w-full sm:w-auto rounded-full backdrop-blur-md">
+                            <FileText className="mr-2 w-5 h-5" />
+                            서비스 소개서 다운로드
+                        </Button>
+                    </NewsletterModal>
                 </div>
 
                 <p className="mt-10 text-sm text-slate-400 font-medium tracking-wide break-keep">

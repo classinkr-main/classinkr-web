@@ -6,8 +6,16 @@ import BlogMarkdownRenderer from "@/components/blog/BlogMarkdownRenderer"
 import {
   getPublishedPostBySlug,
   getRelatedPosts,
-} from "@/lib/blog-data"
+  getPublishedPosts,
+} from "@/lib/repositories/blog"
 import { extractMarkdownHeadings } from "@/lib/blog-markdown"
+
+export const revalidate = 3600 // 1시간마다 재생성
+
+export async function generateStaticParams() {
+  const posts = await getPublishedPosts()
+  return posts.map((post) => ({ slug: post.slug }))
+}
 
 interface BlogDetailPageProps {
   params: Promise<{ slug: string }>
