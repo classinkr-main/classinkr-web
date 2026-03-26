@@ -1,5 +1,6 @@
 import { NextRequest, NextResponse } from "next/server"
 import { upsertSubscriber, getSubscriberByEmail } from "@/lib/repositories/marketing"
+import { triggerOnSubmitRules } from "@/lib/automation-engine"
 import type { NewsletterSubscribeRequest } from "@/lib/marketing-types"
 
 export async function POST(req: NextRequest) {
@@ -47,6 +48,13 @@ export async function POST(req: NextRequest) {
         }),
       }).catch(() => {})
     }
+
+    // on_submit 자동화 규칙 트리거 (비동기, 실패해도 구독 응답에 영향 없음)
+    triggerOnSubmitRules({
+      email: body.email,
+      name: body.name,
+      source: "newsletter",
+    }).catch(() => {})
 
     return NextResponse.json({ ok: true, message: "구독이 완료되었습니다." })
   } catch {

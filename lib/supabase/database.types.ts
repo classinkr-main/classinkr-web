@@ -103,6 +103,43 @@ export interface NewsletterSubscriber {
   updated_at: string;
 }
 
+export interface EmailTemplate {
+  id: string;
+  name: string;
+  subject: string;
+  body: string;
+  variables: string[];
+  created_at: string;
+  updated_at: string;
+}
+
+export type AutomationStatus = "draft" | "active" | "paused";
+export type TriggerType = "on_submit" | "scheduled" | "delay";
+export type AutomationLogStatus = "pending" | "sent" | "failed";
+
+export interface AutomationRule {
+  id: string;
+  name: string;
+  status: AutomationStatus;
+  trigger_type: TriggerType;
+  trigger_config: Record<string, unknown>;
+  segment_config: Record<string, unknown>;
+  template_id: string | null;
+  created_at: string;
+  updated_at: string;
+}
+
+export interface AutomationLog {
+  id: string;
+  rule_id: string | null;
+  triggered_at: string;
+  recipient_count: number;
+  status: AutomationLogStatus;
+  error_message: string | null;
+  recipient_emails: string[];
+  created_at: string;
+}
+
 export interface AuditLog {
   id: string;
   actor_user_id: string | null;
@@ -196,6 +233,21 @@ export interface Database {
         Row: NewsletterSubscriber;
         Insert: NewsletterSubscriberInsert;
         Update: NewsletterSubscriberUpdate;
+      };
+      email_templates: {
+        Row: EmailTemplate;
+        Insert: Omit<EmailTemplate, "id" | "created_at" | "updated_at"> & { id?: string; created_at?: string; updated_at?: string };
+        Update: Partial<Omit<EmailTemplate, "id" | "created_at">>;
+      };
+      automation_rules: {
+        Row: AutomationRule;
+        Insert: Omit<AutomationRule, "id" | "created_at" | "updated_at"> & { id?: string; created_at?: string; updated_at?: string };
+        Update: Partial<Omit<AutomationRule, "id" | "created_at">>;
+      };
+      automation_logs: {
+        Row: AutomationLog;
+        Insert: Omit<AutomationLog, "id" | "created_at"> & { id?: string; created_at?: string };
+        Update: Partial<Omit<AutomationLog, "id" | "created_at">>;
       };
     };
   };

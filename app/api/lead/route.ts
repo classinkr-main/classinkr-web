@@ -10,6 +10,7 @@
 import { NextRequest, NextResponse } from "next/server"
 import { saveLead } from "@/lib/repositories/leads"
 import { upsertSubscriber } from "@/lib/repositories/marketing"
+import { triggerOnSubmitRules } from "@/lib/automation-engine"
 
 export interface LeadPayload {
   source: "demo_modal" | "contact_page" | "newsletter"
@@ -44,6 +45,16 @@ export async function POST(req: NextRequest) {
       /** [NOTE-24] 이메일 있고 수신 동의 시 구독자 DB 자동 등록 */
       body.email && body.marketingConsent !== false
         ? syncToSubscriberDB(body)
+        : Promise.resolve(),
+      /** on_submit 자동화 규칙 트리거 */
+      body.email
+        ? triggerOnSubmitRules({
+            email: body.email,
+            name: body.name,
+            org: body.org,
+            role: body.role,
+            source: body.source,
+          })
         : Promise.resolve(),
     ])
 
