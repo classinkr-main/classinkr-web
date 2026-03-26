@@ -156,7 +156,7 @@ async function callAiBlock(
   try {
     const { GoogleGenerativeAI } = await import("@google/generative-ai")
     const genAI = new GoogleGenerativeAI(apiKey)
-    const model = genAI.getGenerativeModel({ model: "gemini-2.0-flash" })
+    const model = genAI.getGenerativeModel({ model: "gemini-2.5-pro" })
 
     const systemPrompt = `
 당신은 학원 관리 소프트웨어 클래스인의 마케팅 담당자입니다.

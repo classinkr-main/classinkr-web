@@ -102,7 +102,7 @@ export async function POST(req: NextRequest) {
     : buildEmailPrompt(body.brief!, body.recipient)
 
   const genAI = new GoogleGenerativeAI(process.env.GEMINI_API_KEY)
-  const model = genAI.getGenerativeModel({ model: "gemini-2.0-flash" })
+  const model = genAI.getGenerativeModel({ model: "gemini-2.5-pro" })
 
   try {
     const result = await model.generateContent(prompt)
