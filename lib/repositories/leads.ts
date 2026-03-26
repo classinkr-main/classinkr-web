@@ -33,6 +33,8 @@ export interface LeadRecord {
   status: "new" | "contacted" | "converted" | "closed";
   branch?: string;
   notes?: string;
+  follow_up_at?: string;
+  assigned_to?: string;
 }
 
 function supabaseToLegacy(row: Lead): LeadRecord {
@@ -50,6 +52,8 @@ function supabaseToLegacy(row: Lead): LeadRecord {
     status: row.status,
     branch: row.branch ?? undefined,
     notes: row.notes ?? undefined,
+    follow_up_at: row.follow_up_at ?? undefined,
+    assigned_to: row.assigned_to ?? undefined,
   };
 }
 
@@ -113,6 +117,8 @@ export async function saveLead(
     branch: lead.branch ?? null,
     status: "new",
     notes: null,
+    follow_up_at: null,
+    assigned_to: null,
     utm_source: null,
     utm_medium: null,
     utm_campaign: null,
@@ -149,6 +155,8 @@ export async function updateLead(
   if (patch.email !== undefined) update.email = patch.email;
   if (patch.phone !== undefined) update.phone = patch.phone;
   if (patch.org !== undefined) update.org = patch.org;
+  if (patch.follow_up_at !== undefined) update.follow_up_at = patch.follow_up_at;
+  if (patch.assigned_to !== undefined) update.assigned_to = patch.assigned_to;
 
   const { data, error } = await supabase
     .from("leads")

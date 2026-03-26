@@ -12,6 +12,7 @@ const navItems = [
     { name: "요금제", href: "/pricing" },
     { name: "블로그", href: "/blog" },
     { name: "행사", href: "/events" },
+    { name: "업데이트", href: "/updates" },
 ]
 
 export function Header() {

@@ -38,7 +38,7 @@ const NAV: NavItem[] = [
   { href: "/admin/marketing", label: "마케팅",      icon: <Users className="w-4 h-4" />,          roles: ["SUPER_ADMIN","ADMIN"] },
   { href: "/admin/users",     label: "회원 관리",   icon: <UserCog className="w-4 h-4" />,        roles: ["SUPER_ADMIN","ADMIN"] },
   { href: "/admin/settings",  label: "Settings",   icon: <Settings className="w-4 h-4" />,       roles: ["SUPER_ADMIN","ADMIN"] },
-  { href: "/admin/dev",       label: "Dev Mode",   icon: <Code2 className="w-4 h-4" />,          roles: ["SUPER_ADMIN"], badge: "Beta" },
+  { href: "/admin/dev",       label: "Dev Mode",   icon: <Code2 className="w-4 h-4" />,          roles: ["SUPER_ADMIN", "ADMIN"], badge: "Beta" },
 ]
 
 const ROLE_LABEL: Record<string, string> = {
@@ -64,7 +64,9 @@ export default function AdminSidebar({ role, name, email }: Props) {
     router.replace("/admin/login")
   }
 
-  const visibleNav = NAV.filter((item) => item.roles.includes(role))
+  const visibleNav = NAV.filter((item) =>
+    item.roles.some((r) => r.toLowerCase() === role.toLowerCase())
+  )
 
   return (
     <aside className="w-56 shrink-0 min-h-screen bg-white border-r border-[#e8e8e4] flex flex-col">

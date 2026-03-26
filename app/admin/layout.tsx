@@ -17,7 +17,14 @@ export default function AdminLayout({ children }: { children: React.ReactNode })
   const router = useRouter()
   const isLoginPage = pathname === "/admin/login"
 
-  const [session, setSession] = useState<SessionInfo | null>(null)
+  const [session, setSession] = useState<SessionInfo | null>(() => {
+    if (typeof window === "undefined") return null
+    const role = sessionStorage.getItem("admin_role")
+    const name = sessionStorage.getItem("admin_name")
+    const email = sessionStorage.getItem("admin_email") ?? ""
+    if (role && name) return { role, name, email }
+    return null
+  })
 
   useEffect(() => {
     if (isLoginPage) return
@@ -28,6 +35,7 @@ export default function AdminLayout({ children }: { children: React.ReactNode })
       sessionStorage.setItem("admin_token", "dev-skip")
       sessionStorage.setItem("admin_role", "admin")
       sessionStorage.setItem("admin_name", "Dev")
+      sessionStorage.setItem("admin_email", "dev@local")
       setSession({ role: "admin", name: "Dev", email: "dev@local" })
       return
     }
@@ -72,6 +80,7 @@ export default function AdminLayout({ children }: { children: React.ReactNode })
       sessionStorage.setItem("admin_password", "supabase-authed")
       sessionStorage.setItem("admin_role", profile.role)
       sessionStorage.setItem("admin_name", profile.display_name)
+      sessionStorage.setItem("admin_email", user.email ?? "")
 
       setSession({
         role: profile.role,

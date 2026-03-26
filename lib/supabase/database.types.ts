@@ -81,11 +81,26 @@ export interface Lead {
   branch: string | null;
   status: LeadStatus;
   notes: string | null;
+  follow_up_at: string | null;
+  assigned_to: string | null;
   utm_source: string | null;
   utm_medium: string | null;
   utm_campaign: string | null;
   created_at: string;
   updated_at: string;
+}
+
+export type ContactLogType = "call" | "sms" | "kakao" | "email";
+export type ContactLogResult = "answered" | "no_answer" | "callback" | "meeting_set";
+
+export interface LeadContactLog {
+  id: string;
+  lead_id: string;
+  type: ContactLogType;
+  result: ContactLogResult | null;
+  notes: string | null;
+  contacted_at: string;
+  contacted_by: string | null;
 }
 
 export type NewsletterStatus = "active" | "unsubscribed";
@@ -191,6 +206,9 @@ export type BlogPostUpdate = Partial<
 >;
 export type LeadUpdate = Partial<Omit<Lead, "id" | "created_at">>;
 
+export type LeadContactLogInsert = Omit<LeadContactLog, "id"> & { id?: string };
+export type LeadContactLogUpdate = Partial<Omit<LeadContactLog, "id">>;
+
 export type NewsletterSubscriberInsert = Omit<
   NewsletterSubscriber,
   "id" | "created_at" | "updated_at"
@@ -248,6 +266,11 @@ export interface Database {
         Row: AutomationLog;
         Insert: Omit<AutomationLog, "id" | "created_at"> & { id?: string; created_at?: string };
         Update: Partial<Omit<AutomationLog, "id" | "created_at">>;
+      };
+      lead_contact_logs: {
+        Row: LeadContactLog;
+        Insert: LeadContactLogInsert;
+        Update: LeadContactLogUpdate;
       };
     };
   };
