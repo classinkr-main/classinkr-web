@@ -1216,6 +1216,12 @@ export default function DevPage() {
   const [openBugCount, setOpenBugCount] = useState(0)
 
   useEffect(() => {
+    // dev 환경 자동 스킵
+    if (process.env.NEXT_PUBLIC_SKIP_ADMIN_AUTH === "true") {
+      sessionStorage.setItem("admin_password", "dev-skip")
+      sessionStorage.setItem("admin_role", "admin")
+      sessionStorage.setItem("admin_name", "Dev")
+    }
     const t = sessionStorage.getItem("admin_password") || ""
     const n = sessionStorage.getItem("admin_name") || "팀원"
     const r = sessionStorage.getItem("admin_role") || ""

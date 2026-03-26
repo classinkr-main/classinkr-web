@@ -120,6 +120,9 @@ export function decodeSession(cookie: string): AdminSession | null {
 }
 
 export function verifyAdmin(req: NextRequest): NextResponse | null {
+  // dev 환경 자동 스킵 (NEXT_PUBLIC_SKIP_ADMIN_AUTH=true in .env.local)
+  if (process.env.NEXT_PUBLIC_SKIP_ADMIN_AUTH === "true") return null
+
   const cookie = req.cookies.get("admin_session")?.value
   if (cookie) {
     const session = decodeSession(cookie)

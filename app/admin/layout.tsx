@@ -22,6 +22,16 @@ export default function AdminLayout({ children }: { children: React.ReactNode })
   useEffect(() => {
     if (isLoginPage) return
 
+    // dev 환경 자동 스킵
+    if (process.env.NEXT_PUBLIC_SKIP_ADMIN_AUTH === "true") {
+      sessionStorage.setItem("admin_password", "dev-skip")
+      sessionStorage.setItem("admin_token", "dev-skip")
+      sessionStorage.setItem("admin_role", "admin")
+      sessionStorage.setItem("admin_name", "Dev")
+      setSession({ role: "admin", name: "Dev", email: "dev@local" })
+      return
+    }
+
     const load = async () => {
       // Supabase 미설정 시 레거시 쿠키 방식으로 fallback
       if (!hasSupabaseBrowserEnv()) {
@@ -57,6 +67,11 @@ export default function AdminLayout({ children }: { children: React.ReactNode })
         router.replace("/admin/login")
         return
       }
+
+      // Supabase 인증 성공 시 sessionStorage 동기화 (페이지별 auth gate 통과용)
+      sessionStorage.setItem("admin_password", "supabase-authed")
+      sessionStorage.setItem("admin_role", profile.role)
+      sessionStorage.setItem("admin_name", profile.display_name)
 
       setSession({
         role: profile.role,
