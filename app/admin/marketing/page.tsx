@@ -141,7 +141,8 @@ export default function AdminMarketingPage() {
   }, [fetchSubscribers, fetchCampaigns, fetchTemplates, fetchRules, fetchLogs])
 
   useEffect(() => {
-    if (typeof window !== "undefined" && sessionStorage.getItem("admin_password")) setIsAuthed(true)
+    // 미들웨어에서 admin_session 쿠키로 이미 인증된 상태 — 별도 비밀번호 불필요
+    setIsAuthed(true)
   }, [])
 
   useEffect(() => { if (isAuthed) fetchAll() }, [isAuthed, fetchAll])

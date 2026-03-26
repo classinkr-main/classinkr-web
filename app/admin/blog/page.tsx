@@ -76,8 +76,7 @@ export default function AdminBlogPage() {
     }
 
     const handleCreate = () => {
-        setEditingPost(undefined)
-        setIsFormOpen(true)
+        router.push("/admin/blog/new")
     }
 
     const handleEdit = (post: BlogPost) => {
