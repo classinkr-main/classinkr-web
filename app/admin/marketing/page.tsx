@@ -37,7 +37,7 @@ import type { EmailTemplate, AutomationRule, AutomationLog } from "@/lib/automat
 import type { LeadRecord } from "@/lib/repositories/leads"
 
 // ─── 인증 헬퍼 ────────────────────────────────────────────────
-function getToken() { return sessionStorage.getItem("admin_password") ?? "" }
+function getToken() { return (typeof window !== "undefined" ? sessionStorage.getItem("admin_password") : null) ?? "" }
 
 function adminFetch(url: string, options?: RequestInit) {
   return fetch(url, {

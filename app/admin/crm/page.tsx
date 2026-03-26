@@ -69,7 +69,7 @@ function ScoreBadge({ score }: { score: number }) {
 
 // ─── 인증 헬퍼 ─────────────────────────────────────────────────
 function adminFetch(url: string, options?: RequestInit) {
-  const token = sessionStorage.getItem("admin_password") ?? ""
+  const token = (typeof window !== "undefined" ? sessionStorage.getItem("admin_password") : null) ?? ""
   return fetch(url, {
     ...options,
     headers: { "Content-Type": "application/json", Authorization: `Bearer ${token}`, ...options?.headers },

@@ -18,7 +18,7 @@ import type { BlogPost, BlogPostInput } from "@/lib/blog-types"
 type Tab = "all" | "private" | "trash"
 
 function getToken() {
-    return sessionStorage.getItem("admin_password") ?? ""
+    return (typeof window !== "undefined" ? sessionStorage.getItem("admin_password") : null) ?? ""
 }
 
 function adminFetch(url: string, options?: RequestInit) {

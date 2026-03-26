@@ -8,7 +8,7 @@ import {
 import type { LeadRecord } from "@/lib/db"
 
 function adminFetch(url: string) {
-  const token = sessionStorage.getItem("admin_password") ?? ""
+  const token = (typeof window !== "undefined" ? sessionStorage.getItem("admin_password") : null) ?? ""
   return fetch(url, { headers: { Authorization: `Bearer ${token}` } })
 }
 
