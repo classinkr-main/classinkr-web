@@ -18,7 +18,6 @@ import { Plus, RefreshCw, Users, Send, History, ArrowLeft, FileText, Zap, Mail, 
 import { Button } from "@/components/ui/button"
 import { Dialog, DialogContent, DialogHeader, DialogTitle } from "@/components/ui/dialog"
 
-import AdminAuthGate           from "@/components/admin/AdminAuthGate"
 import LeadSegmentView         from "@/components/admin/marketing/LeadSegmentView"
 import SubscriberTable         from "@/components/admin/marketing/SubscriberTable"
 import SubscriberForm          from "@/components/admin/marketing/SubscriberForm"
@@ -61,7 +60,6 @@ function Toast({ msg, type }: { msg: string; type: "success" | "error" }) {
 type Tab = "subscribers" | "compose" | "ai" | "history" | "templates" | "automation" | "sms"
 
 export default function AdminMarketingPage() {
-  const [isAuthed, setIsAuthed] = useState(false)
   const [activeTab, setActiveTab] = useState<Tab>("subscribers")
   const [toast, setToast] = useState<{ msg: string; type: "success" | "error" } | null>(null)
 
@@ -158,12 +156,7 @@ export default function AdminMarketingPage() {
     fetchSubscribers(); fetchCampaigns(); fetchTemplates(); fetchRules(); fetchLogs(); fetchLeads()
   }, [fetchSubscribers, fetchCampaigns, fetchTemplates, fetchRules, fetchLogs, fetchLeads])
 
-  useEffect(() => {
-    // 미들웨어에서 admin_session 쿠키로 이미 인증된 상태 — 별도 비밀번호 불필요
-    setIsAuthed(true)
-  }, [])
-
-  useEffect(() => { if (isAuthed) fetchAll() }, [isAuthed, fetchAll])
+  useEffect(() => { fetchAll() }, [fetchAll])
 
   // ─── 리드 세그먼트 → 이메일 발송 ────────────────────────────
   const handleSendToSegment = (tags: string[]) => {
@@ -329,9 +322,6 @@ export default function AdminMarketingPage() {
       await fetchLogs()
     } catch { showToast("실행 중 오류", "error") } finally { setTriggeringId(undefined) }
   }
-
-  // ─── 인증 전 ───────────────────────────────────────────────
-  if (!isAuthed) return <AdminAuthGate onAuth={() => setIsAuthed(true)} />
 
   const activeCount   = subscribers.filter((s) => s.status === "active").length
   const activeRules   = rules.filter((r) => r.status === "active").length
