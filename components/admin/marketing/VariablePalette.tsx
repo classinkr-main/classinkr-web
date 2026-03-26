@@ -51,22 +51,37 @@ for (const g of VARIABLE_GROUPS) {
   }
 }
 
-/** 미리보기: {var} → 샘플 값으로 치환 */
+/** 미리보기: {var} → 샘플 값으로 치환, {ai:...} → 자주색 플레이스홀더 */
 export function applyPreview(text: string): string {
-  let r = text
+  // AI 블록: 플레이스홀더로 표시
+  let r = text.replace(
+    /\{ai:\s*([^}]*)\}/g,
+    (_, content) =>
+      `<span style="background:#f3e8ff;color:#7c3aed;border-radius:3px;padding:0 4px;font-style:italic;font-size:0.9em">✦ AI: ${content.trim().slice(0, 28)}${content.trim().length > 28 ? "…" : ""}</span>`
+  )
+  // 일반 변수 치환
   for (const v of ALL_VARIABLES) {
     r = r.replace(new RegExp(`\\{${v.key}\\}`, "g"), SAMPLE_VALUES[v.key])
   }
   return r
 }
 
-/** 하이라이팅: {var} 패턴을 <mark> 로 감쌈 (overlay용) */
+/** 하이라이팅: {ai:...} + {var} 패턴을 <mark> 로 감쌈 (overlay용) */
 export function highlightVariables(text: string): string {
   const esc = text
     .replace(/&/g, "&amp;")
     .replace(/</g, "&lt;")
     .replace(/>/g, "&gt;")
-  return esc.replace(/\{([a-zA-Z_]+)\}/g, (match, key) => {
+
+  // AI 블록 먼저 처리 (일반 {var} 패턴보다 먼저)
+  const withAi = esc.replace(
+    /\{ai:\s*([^}]*)\}/g,
+    (_, content) =>
+      `<mark style="background:#f3e8ff;color:#7c3aed;border-radius:3px;font-style:normal;padding:0 3px"><span style="font-size:0.75em;opacity:0.7">✦ AI:</span> ${content.trim()}</mark>`
+  )
+
+  // 일반 변수
+  return withAi.replace(/\{([a-zA-Z_]+)\}/g, (match, key) => {
     const hl = HL_MAP[key]
     if (hl) {
       return `<mark style="background:${hl.bg};color:${hl.color};border-radius:3px;font-style:normal">${match}</mark>`
@@ -81,9 +96,15 @@ interface PaletteProps {
   onInsert: (key: string) => void
   usedVars?: string[]
   compact?: boolean
+  showAiBlock?: boolean
 }
 
-export default function VariablePalette({ onInsert, usedVars = [], compact = false }: PaletteProps) {
+export default function VariablePalette({
+  onInsert,
+  usedVars = [],
+  compact = false,
+  showAiBlock = true,
+}: PaletteProps) {
   return (
     <div className="flex items-start gap-x-4 gap-y-2 flex-wrap">
       {VARIABLE_GROUPS.map((group) => (
@@ -118,6 +139,27 @@ export default function VariablePalette({ onInsert, usedVars = [], compact = fal
           </div>
         </div>
       ))}
+
+      {/* AI 블록 삽입 버튼 */}
+      {showAiBlock && (
+        <div className="flex items-center gap-1.5 pl-3 border-l border-[#e8e8e4]">
+          {!compact && (
+            <span className="text-[10px] font-semibold text-violet-400 uppercase tracking-wider shrink-0 select-none">
+              AI 블록
+            </span>
+          )}
+          <button
+            type="button"
+            onClick={() => onInsert("ai: ")}
+            title="AI가 수신자별 맞춤 내용을 생성합니다 — 클릭하여 삽입"
+            className="flex items-center gap-1 px-2 py-0.5 rounded-md border border-violet-200 bg-violet-50 text-violet-700 hover:bg-violet-100 text-[11px] font-medium transition-all opacity-80 hover:opacity-100"
+          >
+            <span className="text-[10px]">✦</span>
+            <span className="font-mono">{"{ai: 프롬프트}"}</span>
+            {!compact && <span className="opacity-60 text-[10px]">AI 생성</span>}
+          </button>
+        </div>
+      )}
     </div>
   )
 }

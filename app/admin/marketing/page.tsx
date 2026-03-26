@@ -13,8 +13,8 @@
 
 "use client"
 
-import { useState, useEffect, useCallback } from "react"
-import { Plus, RefreshCw, Users, Send, History, ArrowLeft, FileText, Zap, Mail } from "lucide-react"
+import React, { useState, useEffect, useCallback } from "react"
+import { Plus, RefreshCw, Users, Send, History, ArrowLeft, FileText, Zap, Mail, Sparkles, MessageSquare } from "lucide-react"
 import { Button } from "@/components/ui/button"
 import { Dialog, DialogContent, DialogHeader, DialogTitle } from "@/components/ui/dialog"
 
@@ -30,6 +30,8 @@ import AutomationRuleList      from "@/components/admin/marketing/AutomationRule
 import AutomationRuleDetail    from "@/components/admin/marketing/AutomationRuleDetail"
 import AutomationRuleSlideOver from "@/components/admin/marketing/AutomationRuleSlideOver"
 import AutomationLogTable      from "@/components/admin/marketing/AutomationLogTable"
+import AiCampaignComposer     from "@/components/admin/marketing/AiCampaignComposer"
+import SmsComposer            from "@/components/admin/marketing/SmsComposer"
 
 import type { Subscriber, EmailCampaign } from "@/lib/marketing-types"
 import type { EmailTemplate, AutomationRule, AutomationLog } from "@/lib/automation-types"
@@ -56,7 +58,7 @@ function Toast({ msg, type }: { msg: string; type: "success" | "error" }) {
   )
 }
 
-type Tab = "subscribers" | "compose" | "history" | "templates" | "automation"
+type Tab = "subscribers" | "compose" | "ai" | "history" | "templates" | "automation" | "sms"
 
 export default function AdminMarketingPage() {
   const [isAuthed, setIsAuthed] = useState(false)
@@ -198,6 +200,55 @@ export default function AdminMarketingPage() {
       if (result.ok) { showToast(`${result.recipientCount}명에게 발송 완료`); await fetchCampaigns(); setActiveTab("history") }
       else showToast(result.error || "발송 실패", "error")
     } catch { showToast("발송 중 오류", "error") } finally { setSendLoading(false) }
+  }
+
+  // ─── AI 발송 핸들러 ───────────────────────────────────────
+  const handleAiSend = async (data: { brief: string; targetTags: string[]; recipientCount: number }) => {
+    setSendLoading(true)
+    try {
+      // 수신자 목록 구성 (태그 필터)
+      const matched = data.targetTags.length === 0
+        ? subscribers.filter((s) => s.status === "active")
+        : subscribers.filter((s) => s.status === "active" && data.targetTags.some((t) => s.tags.includes(t)))
+
+      // 각 수신자에 대해 AI 생성 + 발송
+      const token = getToken()
+      const personalized = await Promise.all(
+        matched.map(async (s) => {
+          try {
+            const res = await fetch("/api/admin/marketing/ai", {
+              method: "POST",
+              headers: { "Content-Type": "application/json", Authorization: `Bearer ${token}` },
+              body: JSON.stringify({
+                brief: data.brief,
+                recipient: { name: s.name, org: s.org, role: s.role, phone: s.phone, size: s.size, source: s.source, tags: s.tags },
+              }),
+            })
+            const json = await res.json()
+            return { email: s.email, name: s.name, subject: json.subject ?? "클래스인 안내", personalizedBody: json.body ?? "" }
+          } catch {
+            return null
+          }
+        })
+      )
+
+      const valid = personalized.filter(Boolean) as { email: string; name: string; subject: string; personalizedBody: string }[]
+      if (valid.length === 0) { showToast("발송 대상이 없습니다.", "error"); return }
+
+      // 이메일 웹훅 호출
+      const res = await adminFetch("/api/admin/email/send", {
+        method: "POST",
+        body: JSON.stringify({ subject: data.brief.slice(0, 50), body: "(AI 개인화)", targetTags: data.targetTags, aiPersonalized: valid }),
+      })
+      const result = await res.json()
+      if (result.ok || result.recipientCount >= 0) {
+        showToast(`${valid.length}명에게 AI 개인화 발송 완료`)
+        await fetchCampaigns()
+        setActiveTab("history")
+      } else {
+        showToast(result.error || "발송 실패", "error")
+      }
+    } catch { showToast("AI 발송 중 오류", "error") } finally { setSendLoading(false) }
   }
 
   // ─── 템플릿 핸들러 ────────────────────────────────────────
@@ -356,10 +407,12 @@ export default function AdminMarketingPage() {
           {([
             { key: "subscribers" as Tab, label: "구독자 관리", icon: Users },
             { key: "compose"     as Tab, label: "이메일 발송", icon: Send },
+            { key: "ai"          as Tab, label: "AI 발송",     icon: Sparkles, badge: "NEW" },
             { key: "history"     as Tab, label: "발송 이력",   icon: History },
             { key: "templates"   as Tab, label: "템플릿",      icon: FileText },
             { key: "automation"  as Tab, label: "자동화",      icon: Zap },
-          ]).map(({ key, label, icon: Icon }) => (
+            { key: "sms"         as Tab, label: "SMS",         icon: MessageSquare },
+          ] as { key: Tab; label: string; icon: React.ElementType; badge?: string }[]).map(({ key, label, icon: Icon, badge }) => (
             <button
               key={key}
               onClick={() => setActiveTab(key)}
@@ -368,6 +421,11 @@ export default function AdminMarketingPage() {
               }`}
             >
               <Icon className="w-3.5 h-3.5" />{label}
+              {badge && activeTab !== key && (
+                <span className="text-[9px] px-1 rounded-full font-bold ml-0.5 bg-violet-100 text-violet-600">
+                  {badge}
+                </span>
+              )}
               {key === "automation" && activeRules > 0 && (
                 <span className={`text-[9px] px-1 rounded-full font-bold ml-0.5 ${
                   activeTab === key ? "bg-white/20 text-white" : "bg-green-100 text-green-600"
@@ -428,12 +486,24 @@ export default function AdminMarketingPage() {
           />
         )}
 
+        {/* AI 발송 */}
+        {activeTab === "ai" && (
+          <AiCampaignComposer
+            subscribers={subscribers}
+            onSend={handleAiSend}
+            loading={sendLoading}
+          />
+        )}
+
         {/* 발송 이력 */}
         {activeTab === "history" && (
           <div className="bg-white rounded-xl border border-[#e8e8e4] overflow-hidden">
             <CampaignHistory campaigns={campaigns} />
           </div>
         )}
+
+        {/* SMS */}
+        {activeTab === "sms" && <SmsComposer />}
 
         {/* ── 템플릿 탭 — 카드 그리드 ── */}
         {activeTab === "templates" && (

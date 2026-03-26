@@ -143,6 +143,74 @@ export function matchesSegment(
 }
 
 /* ─────────────────────────────────────────────────────────────
+   AI 블록 확장 — {ai: 프롬프트} → 수신자별 AI 생성 텍스트
+   ───────────────────────────────────────────────────────────── */
+
+async function callAiBlock(
+  prompt: string,
+  recipient: AutomationRecipient
+): Promise<string> {
+  const apiKey = process.env.GEMINI_API_KEY
+  if (!apiKey) return `[AI 블록 오류: GEMINI_API_KEY 없음]`
+
+  try {
+    const { GoogleGenerativeAI } = await import("@google/generative-ai")
+    const genAI = new GoogleGenerativeAI(apiKey)
+    const model = genAI.getGenerativeModel({ model: "gemini-2.0-flash" })
+
+    const systemPrompt = `
+당신은 학원 관리 소프트웨어 클래스인의 마케팅 담당자입니다.
+아래 수신자 정보를 바탕으로 요청된 내용을 작성해주세요.
+
+수신자 정보:
+- 이름: ${recipient.name || "알 수 없음"}
+- 학원명: ${recipient.org || "알 수 없음"}
+- 직책: ${recipient.role || "알 수 없음"}
+- 학원 규모: ${recipient.size || "알 수 없음"}
+
+요청: ${prompt}
+
+규칙:
+- 한국어로 작성
+- 수신자의 상황을 자연스럽게 반영
+- 1~3문장으로 간결하게
+- HTML 태그 없이 순수 텍스트
+`.trim()
+
+    const result = await model.generateContent(systemPrompt)
+    return result.response.text().trim()
+  } catch (err) {
+    const msg = err instanceof Error ? err.message : "AI 오류"
+    return `[AI 블록 오류: ${msg}]`
+  }
+}
+
+/** 템플릿 텍스트에서 {ai: 프롬프트} 블록을 수신자별로 AI 생성 텍스트로 교체 */
+async function expandAiBlocks(
+  text: string,
+  recipient: AutomationRecipient
+): Promise<string> {
+  const regex = /\{ai:\s*([^}]+)\}/g
+  const matches = [...text.matchAll(regex)]
+  if (matches.length === 0) return text
+
+  const results = await Promise.allSettled(
+    matches.map(async (match) => ({
+      original: match[0],
+      expanded: await callAiBlock(match[1].trim(), recipient),
+    }))
+  )
+
+  let result = text
+  for (const r of results) {
+    if (r.status === "fulfilled") {
+      result = result.replace(r.value.original, r.value.expanded)
+    }
+  }
+  return result
+}
+
+/* ─────────────────────────────────────────────────────────────
    변수 치환
    ───────────────────────────────────────────────────────────── */
 
@@ -199,18 +267,23 @@ export async function executeRule(ruleId: string): Promise<{
     const baseUrl = process.env.NEXT_PUBLIC_SITE_URL
     const sendDate = new Date().toLocaleDateString("ko-KR", { year: "numeric", month: "long", day: "numeric" })
 
-    const personalizedRecipients = recipients.map((r) => {
-      const unsubscribeUrl = baseUrl
-        ? `${baseUrl}/api/newsletter/unsubscribe?email=${encodeURIComponent(r.email)}`
-        : ""
-      const opts: PersonalizeOpts = { sendDate, unsubscribeUrl }
-      return {
-        email: r.email,
-        name: r.name ?? "고객",
-        personalizedSubject: personalizeBody(rule.template!.subject, r, opts),
-        personalizedBody: personalizeBody(rule.template!.body, r, opts),
-      }
-    })
+    const personalizedRecipients = await Promise.all(
+      recipients.map(async (r) => {
+        const unsubscribeUrl = baseUrl
+          ? `${baseUrl}/api/newsletter/unsubscribe?email=${encodeURIComponent(r.email)}`
+          : ""
+        const opts: PersonalizeOpts = { sendDate, unsubscribeUrl }
+        // AI 블록 먼저 확장, 그 다음 변수 치환
+        const expandedBody    = await expandAiBlocks(rule.template!.body, r)
+        const expandedSubject = await expandAiBlocks(rule.template!.subject, r)
+        return {
+          email: r.email,
+          name: r.name ?? "고객",
+          personalizedSubject: personalizeBody(expandedSubject, r, opts),
+          personalizedBody:    personalizeBody(expandedBody, r, opts),
+        }
+      })
+    )
 
     const res = await fetch(emailWebhookUrl, {
       method: "POST",
@@ -291,8 +364,10 @@ export async function triggerOnSubmitRules(payload: OnSubmitPayload): Promise<vo
             : ""
           const sendDate = new Date().toLocaleDateString("ko-KR", { year: "numeric", month: "long", day: "numeric" })
           const opts: PersonalizeOpts = { sendDate, unsubscribeUrl }
-          const personalizedBody = personalizeBody(rule.template.body, recipient, opts)
-          const personalizedSubject = personalizeBody(rule.template.subject, recipient, opts)
+          const expandedBody    = await expandAiBlocks(rule.template.body, recipient)
+          const expandedSubject = await expandAiBlocks(rule.template.subject, recipient)
+          const personalizedBody    = personalizeBody(expandedBody, recipient, opts)
+          const personalizedSubject = personalizeBody(expandedSubject, recipient, opts)
 
           const res = await fetch(emailWebhookUrl, {
             method: "POST",
