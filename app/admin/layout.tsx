@@ -4,6 +4,7 @@ import { useEffect, useState } from "react"
 import { usePathname, useRouter } from "next/navigation"
 import AdminSidebar from "@/components/admin/AdminSidebar"
 import { createSupabaseBrowserClient } from "@/lib/supabase/browser"
+import { hasSupabaseBrowserEnv } from "@/lib/supabase/public-env"
 
 interface SessionInfo {
   role: string
@@ -22,6 +23,20 @@ export default function AdminLayout({ children }: { children: React.ReactNode })
     if (isLoginPage) return
 
     const load = async () => {
+      // Supabase 미설정 시 레거시 쿠키 방식으로 fallback
+      if (!hasSupabaseBrowserEnv()) {
+        const cookie = document.cookie
+          .split("; ")
+          .find((c) => c.startsWith("admin_session="))
+          ?.split("=")[1]
+        if (!cookie) {
+          router.replace("/admin/login")
+          return
+        }
+        setSession({ role: "admin", name: "Admin", email: "" })
+        return
+      }
+
       const supabase = createSupabaseBrowserClient()
       const { data: { user } } = await supabase.auth.getUser()
 

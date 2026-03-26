@@ -1,18 +1,13 @@
-function readEnv(name: string) {
-  const value = process.env[name]?.trim()
-  return value && value.length > 0 ? value : null
-}
-
 export function hasSupabaseBrowserEnv() {
   return Boolean(
-    readEnv("NEXT_PUBLIC_SUPABASE_URL") &&
-      readEnv("NEXT_PUBLIC_SUPABASE_PUBLISHABLE_KEY")
+    process.env.NEXT_PUBLIC_SUPABASE_URL?.trim() &&
+    process.env.NEXT_PUBLIC_SUPABASE_PUBLISHABLE_KEY?.trim()
   )
 }
 
 export function getSupabaseBrowserEnv() {
-  const url = readEnv("NEXT_PUBLIC_SUPABASE_URL")
-  const publishableKey = readEnv("NEXT_PUBLIC_SUPABASE_PUBLISHABLE_KEY")
+  const url = process.env.NEXT_PUBLIC_SUPABASE_URL?.trim()
+  const publishableKey = process.env.NEXT_PUBLIC_SUPABASE_PUBLISHABLE_KEY?.trim()
 
   if (!url || !publishableKey) {
     throw new Error(

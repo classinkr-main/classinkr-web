@@ -33,8 +33,9 @@ export default function AdminLoginPage() {
 
       router.replace("/admin/overview")
       router.refresh()
-    } catch {
-      setError("서버 연결에 실패했습니다.")
+    } catch (err) {
+      console.error("[AdminLogin] 오류:", err)
+      setError("이메일 또는 비밀번호가 올바르지 않습니다.")
     } finally {
       setLoading(false)
     }
