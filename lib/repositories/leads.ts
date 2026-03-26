@@ -178,18 +178,41 @@ export async function deleteLead(id: string): Promise<boolean> {
 /* ─── 집계 ─── */
 
 export async function getLeadStats() {
-  const leads = await getLeads();
+  if (!USE_SUPABASE) {
+    const leads = await getLeads();
+    const total = leads.length;
+    const byStatus = {
+      new: leads.filter((l) => l.status === "new").length,
+      contacted: leads.filter((l) => l.status === "contacted").length,
+      converted: leads.filter((l) => l.status === "converted").length,
+      closed: leads.filter((l) => l.status === "closed").length,
+    };
+    const today = new Date().toISOString().slice(0, 10);
+    const todayCount = leads.filter((l) => l.timestamp.startsWith(today)).length;
+    return { total, byStatus, todayCount };
+  }
 
-  const total = leads.length;
-  const byStatus = {
-    new: leads.filter((l) => l.status === "new").length,
-    contacted: leads.filter((l) => l.status === "contacted").length,
-    converted: leads.filter((l) => l.status === "converted").length,
-    closed: leads.filter((l) => l.status === "closed").length,
-  };
-
+  const supabase = await createSupabaseServerClient();
   const today = new Date().toISOString().slice(0, 10);
-  const todayCount = leads.filter((l) => l.timestamp.startsWith(today)).length;
 
-  return { total, byStatus, todayCount };
+  const [totalRes, newRes, contactedRes, convertedRes, closedRes, todayRes] =
+    await Promise.all([
+      supabase.from("leads").select("*", { count: "exact", head: true }),
+      supabase.from("leads").select("*", { count: "exact", head: true }).eq("status", "new"),
+      supabase.from("leads").select("*", { count: "exact", head: true }).eq("status", "contacted"),
+      supabase.from("leads").select("*", { count: "exact", head: true }).eq("status", "converted"),
+      supabase.from("leads").select("*", { count: "exact", head: true }).eq("status", "closed"),
+      supabase.from("leads").select("*", { count: "exact", head: true }).gte("created_at", `${today}T00:00:00Z`),
+    ]);
+
+  return {
+    total: totalRes.count ?? 0,
+    byStatus: {
+      new: newRes.count ?? 0,
+      contacted: contactedRes.count ?? 0,
+      converted: convertedRes.count ?? 0,
+      closed: closedRes.count ?? 0,
+    },
+    todayCount: todayRes.count ?? 0,
+  };
 }
