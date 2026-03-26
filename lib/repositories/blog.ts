@@ -96,6 +96,16 @@ function legacyToSupabaseInsert(data: Partial<BlogPostInput>): BlogPostInsert {
 
 /* ─── READ ─── */
 
+// 목록 조회 시 필요한 컬럼만 (content_markdown 등 무거운 필드 제외)
+const LIST_COLUMNS = [
+  "id", "slug", "title", "excerpt", "category", "tags",
+  "author_name", "author_role", "author_bio", "author_avatar_url",
+  "read_time", "image_url", "hero_image_url", "featured", "status",
+  "seo_title", "seo_description", "benefit_items", "target_reader",
+  "cta_text", "cta_url", "published_at", "updated_at", "created_at",
+  "deleted_at",
+].join(",")
+
 export async function getAllPosts(): Promise<BlogPost[]> {
   if (!USE_SUPABASE) {
     const mod = await import("@/lib/blog-data");
@@ -105,12 +115,12 @@ export async function getAllPosts(): Promise<BlogPost[]> {
   const supabase = await createSupabaseServerClient();
   const { data, error } = await supabase
     .from("blog_posts")
-    .select("*")
+    .select(LIST_COLUMNS)
     .is("deleted_at", null)
     .order("created_at", { ascending: false });
 
   if (error) throw new Error(`[blog] 조회 실패: ${error.message}`);
-  return (data as SupaBlogPost[]).map(supabaseToLegacy);
+  return (data as unknown as SupaBlogPost[]).map(supabaseToLegacy);
 }
 
 export async function getPublishedPosts(): Promise<BlogPost[]> {
@@ -122,13 +132,13 @@ export async function getPublishedPosts(): Promise<BlogPost[]> {
   const supabase = await createSupabaseServerClient();
   const { data, error } = await supabase
     .from("blog_posts")
-    .select("*")
+    .select(LIST_COLUMNS)
     .eq("status", "PUBLISHED")
     .is("deleted_at", null)
     .order("published_at", { ascending: false });
 
   if (error) throw new Error(`[blog] 공개 글 조회 실패: ${error.message}`);
-  return (data as SupaBlogPost[]).map(supabaseToLegacy);
+  return (data as unknown as SupaBlogPost[]).map(supabaseToLegacy);
 }
 
 export async function getPostBySlug(slug: string): Promise<BlogPost | null> {
@@ -300,12 +310,12 @@ export async function getTrashedPosts(): Promise<BlogPost[]> {
   const supabase = await createSupabaseServerClient();
   const { data, error } = await supabase
     .from("blog_posts")
-    .select("*")
+    .select(LIST_COLUMNS)
     .not("deleted_at", "is", null)
     .order("deleted_at", { ascending: false });
 
   if (error) throw new Error(`[blog] 휴지통 조회 실패: ${error.message}`);
-  return (data as SupaBlogPost[]).map(supabaseToLegacy);
+  return (data as unknown as SupaBlogPost[]).map(supabaseToLegacy);
 }
 
 export async function permanentDeletePost(id: number, uuid?: string): Promise<boolean> {

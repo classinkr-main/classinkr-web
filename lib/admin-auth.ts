@@ -1,5 +1,14 @@
 import { NextRequest, NextResponse } from "next/server"
+import { createHmac } from "crypto"
 import { ADMIN_AUTH_ERROR_CODE, type AdminAuthErrorCode } from "@/lib/admin-auth-errors"
+
+function getSessionSecret(): string {
+  return process.env.SESSION_SECRET ?? process.env.ADMIN_PASSWORD ?? "fallback-dev-secret"
+}
+
+function signPayload(payload: string): string {
+  return createHmac("sha256", getSessionSecret()).update(payload).digest("hex")
+}
 
 export type AdminRole = "admin" | "branch"
 
@@ -88,12 +97,23 @@ export function authenticateUser(password: string): AuthResult {
 }
 
 export function encodeSession(session: AdminSession): string {
-  return Buffer.from(JSON.stringify(session)).toString("base64")
+  const payload = Buffer.from(JSON.stringify(session)).toString("base64url")
+  const sig = signPayload(payload)
+  return `${payload}.${sig}`
 }
 
 export function decodeSession(cookie: string): AdminSession | null {
   try {
-    return JSON.parse(Buffer.from(cookie, "base64").toString("utf8")) as AdminSession
+    const dotIdx = cookie.lastIndexOf(".")
+    if (dotIdx === -1) {
+      // 레거시 서명 없는 쿠키 — 거부
+      return null
+    }
+    const payload = cookie.slice(0, dotIdx)
+    const sig = cookie.slice(dotIdx + 1)
+    // 서명 검증
+    if (sig !== signPayload(payload)) return null
+    return JSON.parse(Buffer.from(payload, "base64url").toString("utf8")) as AdminSession
   } catch {
     return null
   }
