@@ -51,7 +51,7 @@ export async function resolveSegmentRecipients(
   if (targetTable === "subscribers" || targetTable === "both") {
     let query = sb()
       .from("newsletter_subscribers")
-      .select("email, name, org, role, source, tags, created_at")
+      .select("email, name, org, role, phone, size, source, tags, created_at")
       .eq("status", "active")
       .not("email", "is", null)
 
@@ -78,6 +78,8 @@ export async function resolveSegmentRecipients(
         name: row.name ?? undefined,
         org: (row as Record<string, unknown>).org as string | undefined,
         role: row.role ?? undefined,
+        phone: (row as Record<string, unknown>).phone as string | undefined,
+        size: (row as Record<string, unknown>).size as string | undefined,
         source: row.source,
       })
     }
@@ -144,15 +146,27 @@ export function matchesSegment(
    변수 치환
    ───────────────────────────────────────────────────────────── */
 
+interface PersonalizeOpts {
+  sendDate?: string
+  unsubscribeUrl?: string
+}
+
 function personalizeBody(
   body: string,
-  recipient: AutomationRecipient
+  recipient: AutomationRecipient,
+  opts: PersonalizeOpts = {}
 ): string {
+  const today = opts.sendDate ??
+    new Date().toLocaleDateString("ko-KR", { year: "numeric", month: "long", day: "numeric" })
   return body
     .replace(/\{name\}/g, recipient.name ?? "고객")
     .replace(/\{org\}/g, recipient.org ?? "")
     .replace(/\{role\}/g, recipient.role ?? "")
     .replace(/\{email\}/g, recipient.email)
+    .replace(/\{phone\}/g, recipient.phone ?? "")
+    .replace(/\{academy_size\}/g, recipient.size ?? "")
+    .replace(/\{date\}/g, today)
+    .replace(/\{unsubscribe_url\}/g, opts.unsubscribeUrl ?? "")
 }
 
 /* ─────────────────────────────────────────────────────────────
@@ -182,11 +196,21 @@ export async function executeRule(ruleId: string): Promise<{
     const emailWebhookUrl = process.env.EMAIL_WEBHOOK_URL
     if (!emailWebhookUrl) throw new Error("EMAIL_WEBHOOK_URL 환경변수 없음")
 
-    const personalizedRecipients = recipients.map((r) => ({
-      email: r.email,
-      name: r.name ?? "고객",
-      personalizedBody: personalizeBody(rule.template!.body, r),
-    }))
+    const baseUrl = process.env.NEXT_PUBLIC_SITE_URL
+    const sendDate = new Date().toLocaleDateString("ko-KR", { year: "numeric", month: "long", day: "numeric" })
+
+    const personalizedRecipients = recipients.map((r) => {
+      const unsubscribeUrl = baseUrl
+        ? `${baseUrl}/api/newsletter/unsubscribe?email=${encodeURIComponent(r.email)}`
+        : ""
+      const opts: PersonalizeOpts = { sendDate, unsubscribeUrl }
+      return {
+        email: r.email,
+        name: r.name ?? "고객",
+        personalizedSubject: personalizeBody(rule.template!.subject, r, opts),
+        personalizedBody: personalizeBody(rule.template!.body, r, opts),
+      }
+    })
 
     const res = await fetch(emailWebhookUrl, {
       method: "POST",
@@ -194,8 +218,8 @@ export async function executeRule(ruleId: string): Promise<{
       body: JSON.stringify({
         subject: rule.template.subject,
         personalizedRecipients,
-        unsubscribeBaseUrl: process.env.NEXT_PUBLIC_SITE_URL
-          ? `${process.env.NEXT_PUBLIC_SITE_URL}/api/newsletter/unsubscribe`
+        unsubscribeBaseUrl: baseUrl
+          ? `${baseUrl}/api/newsletter/unsubscribe`
           : undefined,
         automationRuleId: ruleId,
         automationRuleName: rule.name,
@@ -261,15 +285,22 @@ export async function triggerOnSubmitRules(payload: OnSubmitPayload): Promise<vo
         const log = await createLog({ ruleId: rule.id, status: "pending" })
 
         try {
-          const personalizedBody = personalizeBody(rule.template.body, recipient)
+          const baseUrl = process.env.NEXT_PUBLIC_SITE_URL
+          const unsubscribeUrl = baseUrl
+            ? `${baseUrl}/api/newsletter/unsubscribe?email=${encodeURIComponent(recipient.email)}`
+            : ""
+          const sendDate = new Date().toLocaleDateString("ko-KR", { year: "numeric", month: "long", day: "numeric" })
+          const opts: PersonalizeOpts = { sendDate, unsubscribeUrl }
+          const personalizedBody = personalizeBody(rule.template.body, recipient, opts)
+          const personalizedSubject = personalizeBody(rule.template.subject, recipient, opts)
 
           const res = await fetch(emailWebhookUrl, {
             method: "POST",
             headers: { "Content-Type": "application/json" },
             body: JSON.stringify({
-              subject: rule.template.subject,
+              subject: personalizedSubject,
               personalizedRecipients: [
-                { email: recipient.email, name: recipient.name ?? "고객", personalizedBody },
+                { email: recipient.email, name: recipient.name ?? "고객", personalizedSubject, personalizedBody },
               ],
               unsubscribeBaseUrl: process.env.NEXT_PUBLIC_SITE_URL
                 ? `${process.env.NEXT_PUBLIC_SITE_URL}/api/newsletter/unsubscribe`

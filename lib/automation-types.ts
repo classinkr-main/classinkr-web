@@ -111,6 +111,8 @@ export interface AutomationRecipient {
   name?: string
   org?: string
   role?: string
+  phone?: string
+  size?: string   // academy_size (학원 규모)
   source: string
 }
 
