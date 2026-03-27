@@ -1,12 +1,12 @@
 /**
- * ClassIn Board HW 제품 페이지 — Gemini 이미지 생성 스크립트
+ * ClassIn Board HW 제품 페이지 — Gemini 3.1 Flash 이미지 생성 스크립트
  *
  * 사용법:
  *   GEMINI_API_KEY=your_key npx tsx scripts/generate-hw-images.ts
  *   GEMINI_API_KEY=your_key npx tsx scripts/generate-hw-images.ts --only hero
- *   GEMINI_API_KEY=your_key npx tsx scripts/generate-hw-images.ts --only hero,writing
+ *   GEMINI_API_KEY=your_key npx tsx scripts/generate-hw-images.ts --priority=0
  *
- * Gemini Imagen 3 API를 사용하여 이미지를 생성합니다.
+ * Gemini 3.1 Flash Image (Nano Banana 2)
  */
 
 import fs from "fs"
@@ -15,11 +15,28 @@ import path from "path"
 const API_KEY = process.env.GEMINI_API_KEY
 if (!API_KEY) {
     console.error("❌ GEMINI_API_KEY 환경변수를 설정해주세요.")
-    console.error("   GEMINI_API_KEY=your_key npx tsx scripts/generate-hw-images.ts")
     process.exit(1)
 }
 
 const BASE_DIR = path.join(process.cwd(), "public/images/product/hw")
+const MODEL = "gemini-3.1-flash-image-preview"
+
+/* ── 실제 제품 정확 묘사 공통 프리픽스 ──────────────────────── */
+const PRODUCT_DESC = `The product is a ClassIn Smart Board — an 86-inch 4K interactive whiteboard.
+
+CRITICAL PRODUCT DETAILS (must match exactly):
+- BEZELS: WHITE MATTE finish (NOT silver, NOT metallic, NOT brushed aluminum — pure matte white plastic/painted aluminum)
+- STAND: A-frame / easel-style stand with TWO pairs of angled legs that splay OUTWARD in a V-shape from each side, with small caster wheels at the tip of each leg. The stand legs are WHITE. It does NOT have a central column or pedestal — the legs angle outward like a traditional easel/flip chart stand.
+- PEN TRAY: A small ORANGE/BROWN pen holder/tray is attached at the BOTTOM CENTER of the bezel frame.
+- CAMERA: A small camera module sits at the TOP CENTER of the board frame.
+- BRANDING: "Classin" text is printed at the bottom center of the white bezel frame.
+- CORNERS: Gently rounded corners with moderate radius.
+- DEPTH: Ultra-slim 95.5mm profile.
+- DISPLAY: Large 16:9 aspect ratio screen with thin black border between white bezel and display panel.`
+
+const CINEMATIC = `Cinematic advertising photography style. Dramatic studio lighting with rim light and subtle volumetric haze. Ultra-sharp details, 8K quality.`
+
+const KOREAN_PEOPLE = `All people shown must be KOREAN/EAST ASIAN. Korean school environment with Korean-style uniforms or casual Korean fashion. Modern Korean classroom or academy setting.`
 
 /* ── 이미지 생성 프롬프트 정의 ──────────────────────────────────── */
 
@@ -27,7 +44,6 @@ interface ImageTask {
     folder: string
     filename: string
     prompt: string
-    aspect?: "1:1" | "16:9" | "4:3" | "3:4" | "9:16"
     priority: 0 | 1 | 2
 }
 
@@ -36,211 +52,142 @@ const tasks: ImageTask[] = [
     {
         folder: "hero",
         filename: "hero-board-front.png",
-        prompt: `Professional product photo of a modern interactive smart board (digital whiteboard) for classrooms.
-The board has ultra-thin bezels, sleek minimalist design, matte black frame, and a large 86-inch 4K display.
-The screen shows colorful math equations and diagrams being drawn.
-Clean white studio background with soft gradient lighting.
-Product photography style, high-end, Apple-like aesthetic. No people. No text overlays.`,
-        aspect: "16:9",
+        prompt: `${CINEMATIC} ${PRODUCT_DESC}
+Full front view of the smart board on its WHITE A-frame easel stand with angled splayed legs and caster wheels.
+Screen is powered off (deep black). The WHITE MATTE bezels are clearly visible. Orange pen tray at bottom center.
+Dark charcoal studio background with dramatic top-down spotlight creating a pool of light on the floor.
+The white frame contrasts beautifully against the dark background. Floor reflection visible.
+Product hero shot — centered, powerful. No people, no text overlays.`,
         priority: 0,
     },
     {
         folder: "hero",
         filename: "hero-board-angle.png",
-        prompt: `Professional 3/4 angle product photo of a large interactive smart board (digital whiteboard).
-Emphasize the slim profile and thin bezels. Premium matte finish.
-Screen displays a clean educational interface with colorful icons.
-Clean white background, studio lighting with subtle shadow.
-Product photography, premium tech aesthetic. No people.`,
-        aspect: "16:9",
-        priority: 1,
-    },
-    {
-        folder: "hero",
-        filename: "hero-bg-classroom.jpg",
-        prompt: `Modern bright classroom interior, no people. Clean wooden desks arranged in rows.
-Large windows with natural light streaming in. White walls, warm wood floor.
-A large interactive display/smart board mounted on the front wall, turned off.
-Minimalist Scandinavian-inspired educational space. Architectural photography style.
-Bright, airy, aspirational atmosphere. No text.`,
-        aspect: "16:9",
+        prompt: `${CINEMATIC} ${PRODUCT_DESC}
+3/4 angle view of the smart board on its WHITE A-frame easel stand. Screen displays a vibrant cosmic nebula.
+Dark studio background. Dramatic side lighting emphasizing the slim 95.5mm profile.
+WHITE MATTE bezels clearly visible. Orange pen tray at bottom center. Camera module at top center.
+Slight low angle for an impressive grand feel. No people, no text.`,
         priority: 1,
     },
 
     // ── BOARD DETAIL ────────────────────────────────────────────
     {
         folder: "board",
-        filename: "board-front.png",
-        prompt: `Clean front-view product photo of a large flat-panel interactive smart board / digital whiteboard.
-Ultra-thin bezels, premium matte black aluminum frame, elegant minimalist design.
-Screen shows a subtle gradient background (no text, no UI).
-Isolated on pure white background. Professional product photography.`,
-        aspect: "4:3",
-        priority: 1,
-    },
-    {
-        folder: "board",
-        filename: "board-side.png",
-        prompt: `Side profile view of a slim interactive smart board showing its thin depth (about 11cm).
-Emphasize the sleek thinness. Premium matte finish, visible ports on the side.
-Clean white background, studio product photography.
-Show the slim profile from a dramatic angle. No people. No text.`,
-        aspect: "4:3",
-        priority: 1,
-    },
-    {
-        folder: "board",
         filename: "board-bezel-detail.png",
-        prompt: `Extreme close-up detail shot of an interactive smart board's edge/bezel.
-Show the premium build quality — thin aluminum bezel meets the display panel.
-Macro product photography, shallow depth of field.
-Clean, technical, Apple-like product detail shot. No text.`,
-        aspect: "1:1",
-        priority: 2,
+        prompt: `${CINEMATIC} ${PRODUCT_DESC}
+Extreme close-up macro shot of the smart board's top-left corner.
+The bezel is WHITE MATTE finish — smooth, non-reflective white surface. NOT metallic, NOT silver, NOT brushed metal.
+Gently rounded corner with moderate radius. A visible seam/gap between the white bezel frame and the black display panel.
+Shallow depth of field. Light gray/white wall background.
+Macro product detail photography. No text, no people.`,
+        priority: 0,
+    },
+    {
+        folder: "board",
+        filename: "board-side-profile.png",
+        prompt: `${CINEMATIC} ${PRODUCT_DESC}
+Side profile view showing the slim 95.5mm depth of the smart board, wall-mounted.
+The WHITE MATTE bezel frame is visible from the side as a thin white line.
+Clean light wall background. Show how thin and elegant the board is.
+Product photography emphasizing thinness. No people, no text.`,
+        priority: 1,
     },
 
     // ── WRITING EXPERIENCE ──────────────────────────────────────
     {
         folder: "writing",
         filename: "writing-teacher.jpg",
-        prompt: `A teacher writing mathematical equations on a large interactive smart board in a modern classroom.
-Natural writing posture, using a digital stylus pen. The board displays handwritten equations in white on dark background.
-Bright classroom with students visible in soft background blur.
-Warm lighting, candid educational photography. Professional, editorial style.`,
-        aspect: "4:3",
+        prompt: `Cinematic editorial photography. ${KOREAN_PEOPLE}
+A KOREAN female teacher in her 30s writing mathematical equations with a digital stylus on a large 86-inch ClassIn smart board with WHITE MATTE bezels in a modern Korean classroom.
+The board displays handwritten equations in white and orange on dark background.
+The board has WHITE bezels, orange pen tray at bottom, and is on a WHITE A-frame easel stand.
+Natural writing posture, mid-stroke. Dramatic window light from side. Shallow depth of field.
+Korean students visible in soft background blur. Warm color grading. Professional editorial style.`,
         priority: 0,
     },
     {
         folder: "writing",
         filename: "writing-closeup.jpg",
-        prompt: `Extreme close-up of a hand writing on an interactive touch screen / smart board surface.
-A stylus pen tip touching the screen with digital ink appearing immediately beneath it.
-Show the precision and zero-latency feel. The surface has a subtle matte anti-glare texture.
-Macro photography, shallow depth of field, warm lighting. No text overlay.`,
-        aspect: "1:1",
+        prompt: `Extreme close-up of a Korean person's hand holding a digital stylus writing on an interactive smart board surface.
+The stylus tip touches the screen with digital ink appearing immediately — zero latency.
+The WHITE MATTE bezel edge is partially visible at the border of the frame.
+Matte anti-glare surface texture visible. Shallow depth of field.
+Dramatic warm side lighting. Macro photography style.`,
         priority: 1,
     },
     {
         folder: "writing",
         filename: "writing-multitouch.jpg",
-        prompt: `Multiple hands (3-4 students and a teacher) simultaneously drawing and writing on a large interactive smart board.
-Collaborative learning scene. The board shows colorful mind maps and diagrams drawn by different people.
-Shot from slight angle showing both the board and the engaged participants.
-Bright, energetic educational atmosphere. Editorial photography style.`,
-        aspect: "4:3",
+        prompt: `${KOREAN_PEOPLE}
+Bird's eye view looking down at a large ClassIn smart board with WHITE MATTE bezels.
+Multiple hands (4-5 Korean students) simultaneously drawing colorful mind maps and diagrams.
+Each person's strokes in different colors — orange, blue, green, purple.
+The board has WHITE bezels visible at the edges. Bright, energetic atmosphere.
+Creative overhead photography. Modern Korean academy/hagwon setting.`,
         priority: 1,
     },
 
     // ── DISPLAY QUALITY ─────────────────────────────────────────
     {
         folder: "display",
-        filename: "display-viewing-angle.png",
-        prompt: `Technical diagram illustration showing a 178-degree viewing angle of a display panel.
-Clean infographic style with a top-down view of a screen and angle lines spreading out to 178 degrees.
-Minimalist design, use blue and white color scheme. Professional tech diagram.
-No photo, illustration/vector style. Clean background.`,
-        aspect: "16:9",
-        priority: 1,
-    },
-    {
-        folder: "display",
-        filename: "display-lamination-compare.png",
-        prompt: `Side-by-side comparison diagram: regular display vs full-lamination display.
-Left: "Air gap" between glass and LCD panel, showing light reflection and distortion.
-Right: "Full lamination" with glass bonded directly to LCD, showing clear crisp image.
-Clean technical illustration style, labeled cross-section diagram. Blue and orange accent colors.`,
-        aspect: "16:9",
-        priority: 1,
-    },
-
-    // ── SHARING ─────────────────────────────────────────────────
-    {
-        folder: "sharing",
-        filename: "sharing-student-tablet.jpg",
-        prompt: `A student in a modern classroom looking at a tablet that displays the same content as the large smart board in the background.
-The tablet shows handwritten notes and diagrams mirrored from the board.
-Real-time sync concept. Clean, bright classroom. Student appears focused and engaged.
-Editorial education photography. Warm natural lighting.`,
-        aspect: "4:3",
-        priority: 1,
-    },
-    {
-        folder: "sharing",
-        filename: "sharing-sync-flow.png",
-        prompt: `Clean infographic illustration showing data flow from a smart board to multiple devices.
-Center: large display/board icon. Arrows flowing outward to: tablet, laptop, smartphone icons.
-Each device shows the same content. Wireless/cloud sync symbols.
-Flat design style, orange and slate color scheme. White background. Professional tech infographic.`,
-        aspect: "16:9",
-        priority: 2,
+        filename: "display-wall-cinematic.jpg",
+        prompt: `${CINEMATIC} ${PRODUCT_DESC}
+The smart board is wall-mounted, displaying a stunning 4K cosmic scene — a swirling orange-gold black hole with blue energy jets.
+WHITE MATTE bezels frame the display. Orange pen tray visible at bottom center. "Classin" branding at bottom.
+Dark room, the display is the sole light source, illuminating the wall with colored light.
+The white bezels glow subtly in the display's light. 178-degree viewing angle implied by slight off-axis position.
+Dramatic, cinematic composition. No people, no text overlay.`,
+        priority: 0,
     },
 
     // ── CAMERA & HYBRID ─────────────────────────────────────────
     {
         folder: "camera",
-        filename: "camera-ai-unit.png",
-        prompt: `Product photo of a sleek AI-powered 4K camera designed for classrooms.
-Compact cylindrical or bar-shaped design, matte black finish, subtle LED indicator.
-Camera is mounted on a magnetic base. Modern, premium design.
-Clean white background, studio product photography. No text.`,
-        aspect: "4:3",
-        priority: 1,
-    },
-    {
-        folder: "camera",
         filename: "camera-hybrid-class.jpg",
-        prompt: `A modern hybrid classroom scene. A teacher stands at a large interactive smart board teaching.
-On the smart board screen, remote students are visible in video tiles alongside the lesson content.
-In the physical classroom, students sit at desks engaged in the lesson.
-The concept is "same class, different locations." Bright, professional educational photography.`,
-        aspect: "4:3",
+        prompt: `Cinematic wide shot of a modern Korean hybrid classroom. ${KOREAN_PEOPLE}
+A Korean female teacher in her 30s-40s stands at a large ClassIn smart board with WHITE MATTE bezels on a WHITE A-frame easel stand.
+On the board screen: lesson content on the left 2/3, remote Korean students in video tiles on the right.
+In the physical classroom: 15-20 Korean students at desks, engaged. Modern Korean school/academy interior.
+Dramatic natural light from windows. Warm color grading. The board's WHITE bezels and orange pen tray are clearly visible.
+Professional editorial photography.`,
         priority: 0,
     },
     {
         folder: "camera",
-        filename: "camera-tracking.jpg",
-        prompt: `A classroom scene where an AI camera is tracking the teacher with a subtle highlight/glow effect.
-The teacher is presenting at a smart board. A semi-transparent bounding box or tracking indicator
-follows the teacher. Shot from the back of the classroom showing the full scene.
-Modern tech-enhanced classroom. Clean, editorial photography with subtle VFX overlay.`,
-        aspect: "16:9",
-        priority: 2,
+        filename: "camera-ai-unit.png",
+        prompt: `${CINEMATIC}
+Product shot of a sleek AI-powered 4K classroom camera designed for ClassIn smart boards.
+Compact bar-shaped design, matte black finish with subtle blue LED indicator.
+Dark studio background with dramatic rim lighting. Premium product photography.
+No people, no text.`,
+        priority: 1,
     },
 
     // ── ECOSYSTEM ───────────────────────────────────────────────
     {
         folder: "ecosystem",
         filename: "ecosystem-board-ui.png",
-        prompt: `A large interactive smart board displaying an educational software interface.
-The UI shows: attendance list on left sidebar, main whiteboard canvas in center with handwritten notes,
-toolbar at bottom with drawing tools, timer, and quiz icons. Modern, clean UI design.
-Shot straight-on showing the full board. Classroom environment slightly visible.
-Clean, professional product screenshot style.`,
-        aspect: "16:9",
-        priority: 0,
-    },
-    {
-        folder: "ecosystem",
-        filename: "ecosystem-flow-diagram.png",
-        prompt: `A horizontal flow diagram showing an integrated education workflow:
-Attendance → Class → Assignment → Grading → Parent Notification.
-Each step is a rounded rectangle with a simple icon inside, connected by arrows.
-Clean flat design, orange (#E05024) accent color on white background.
-Minimal, modern infographic style. Professional and clean.`,
-        aspect: "16:9",
-        priority: 2,
+        prompt: `${CINEMATIC} ${PRODUCT_DESC}
+The smart board on its WHITE A-frame easel stand displays the ClassIn educational software interface.
+UI layout: attendance list sidebar on left (dark theme), main whiteboard canvas with handwritten Korean math notes,
+bottom toolbar with drawing tools, timer widget. Round dial control interface on right side of screen.
+WHITE MATTE bezels. Orange pen tray at bottom center. "Classin" text on bottom bezel.
+Dimly lit Korean classroom, screen glowing. Shot straight-on. No people visible.`,
+        priority: 1,
     },
 
     // ── LINEUP ──────────────────────────────────────────────────
     {
         folder: "lineup",
         filename: "lineup-all-sizes.png",
-        prompt: `Product comparison photo showing 4 interactive smart boards of different sizes side by side.
-From left to right: 65 inch, 75 inch, 86 inch, and 110 inch.
-All have identical design but different sizes, clearly showing the scale difference.
-A small human silhouette for scale reference. Clean white background.
-Professional product lineup photography. No text labels.`,
-        aspect: "16:9",
+        prompt: `${CINEMATIC} ${PRODUCT_DESC}
+Four ClassIn smart boards of different sizes in a dark studio, each on its own WHITE A-frame easel stand.
+From left to right: 65-inch, 75-inch, 86-inch, 110-inch.
+ALL have identical design: WHITE MATTE bezels, orange pen tray, A-frame stands with angled splayed white legs.
+A subtle human silhouette (175cm Korean male) for scale near the 86-inch model.
+Each screen shows its size number subtly. Dark studio floor with reflections.
+Clean product lineup photography. No text overlay.`,
         priority: 1,
     },
 
@@ -248,56 +195,54 @@ Professional product lineup photography. No text labels.`,
     {
         folder: "spaces",
         filename: "space-classroom.jpg",
-        prompt: `A modern school classroom with an 86-inch interactive smart board mounted on the front wall.
-20-30 student desks arranged in rows, bright natural lighting from windows.
-The smart board displays a colorful lesson. Clean, bright, aspirational educational space.
-Warm wood tones, white walls. Professional architectural/interior photography.`,
-        aspect: "4:3",
-        priority: 0,
+        prompt: `${KOREAN_PEOPLE}
+Modern Korean school classroom with an 86-inch ClassIn smart board with WHITE MATTE bezels wall-mounted on the front wall.
+The board displays a colorful science lesson in Korean. Orange pen tray visible.
+20-25 Korean students in school uniforms seated at modern desks.
+Bright natural lighting, white walls, clean modern Korean classroom interior.
+Green chalkboard visible on side walls. Professional architectural photography. Bright, inviting.`,
+        priority: 1,
     },
     {
         folder: "spaces",
         filename: "space-lecture-hall.jpg",
-        prompt: `A large university lecture hall or auditorium with a massive 110-inch interactive smart board at front.
-Tiered seating, modern architecture, sleek design. The board shows presentation content.
-50+ seats visible. Clean, professional, modern educational facility.
-Wide angle architectural photography. Bright lighting.`,
-        aspect: "4:3",
+        prompt: `${KOREAN_PEOPLE}
+Large Korean university lecture hall with a 110-inch ClassIn smart board with WHITE MATTE bezels at the front wall.
+Tiered seating, modern Korean university architecture. 50+ seats visible.
+The board displays presentation content in Korean. WHITE bezels clearly visible.
+Professional architectural photography. Modern Korean educational facility.`,
         priority: 2,
     },
+
+    // ── SHARING ─────────────────────────────────────────────────
     {
-        folder: "spaces",
-        filename: "space-seminar.jpg",
-        prompt: `A modern seminar room or corporate meeting room with a 75-inch interactive smart board on the wall.
-8-12 person conference table, ergonomic chairs, clean minimalist interior design.
-The board shows a brainstorming mind map. Glass walls, modern office aesthetic.
-Professional interior photography. Bright, clean, premium feeling.`,
-        aspect: "4:3",
-        priority: 2,
-    },
-    {
-        folder: "spaces",
-        filename: "space-study-room.jpg",
-        prompt: `A small cozy study room or tutoring room with a 65-inch interactive smart board on the wall.
-4-6 students at a round table, intimate learning environment.
-The board shows detailed study content. Warm, focused atmosphere.
-Modern education center interior. Professional photography, warm lighting.`,
-        aspect: "4:3",
+        folder: "sharing",
+        filename: "sharing-student-tablet.jpg",
+        prompt: `${KOREAN_PEOPLE}
+A Korean high school student holding a tablet in a modern Korean classroom.
+The tablet mirrors handwritten notes visible on the large ClassIn smart board in background (soft focus).
+The board in background has WHITE MATTE bezels on a WHITE A-frame stand.
+Real-time sync — same handwriting on both screens.
+Warm natural lighting, shallow depth of field. Korean school environment.`,
         priority: 2,
     },
 ]
 
-/* ── Gemini API 호출 ─────────────────────────────────────────── */
+/* ── Gemini 3.1 Flash Image API ───────────────────────────── */
 
 async function generateImage(task: ImageTask): Promise<Buffer | null> {
-    const url = `https://generativelanguage.googleapis.com/v1beta/models/imagen-3.0-generate-002:predict?key=${API_KEY}`
+    const url = `https://generativelanguage.googleapis.com/v1beta/models/${MODEL}:generateContent?key=${API_KEY}`
 
     const body = {
-        instances: [{ prompt: task.prompt }],
-        parameters: {
-            sampleCount: 1,
-            aspectRatio: task.aspect ?? "4:3",
-            safetyFilterLevel: "BLOCK_MEDIUM_AND_ABOVE",
+        contents: [
+            {
+                parts: [
+                    { text: `Generate this image: ${task.prompt}` }
+                ]
+            }
+        ],
+        generationConfig: {
+            responseModalities: ["IMAGE", "TEXT"],
         },
     }
 
@@ -309,18 +254,24 @@ async function generateImage(task: ImageTask): Promise<Buffer | null> {
 
     if (!res.ok) {
         const errText = await res.text()
-        console.error(`  ❌ API 에러 (${res.status}): ${errText.slice(0, 200)}`)
+        console.error(`  ❌ API 에러 (${res.status}): ${errText.slice(0, 300)}`)
         return null
     }
 
     const data = await res.json()
-    const b64 = data.predictions?.[0]?.bytesBase64Encoded
-    if (!b64) {
-        console.error(`  ❌ 이미지 데이터 없음`)
+    const parts = data.candidates?.[0]?.content?.parts
+    if (!parts) {
+        console.error(`  ❌ 응답에 parts 없음`)
         return null
     }
 
-    return Buffer.from(b64, "base64")
+    const imagePart = parts.find((p: any) => p.inlineData?.mimeType?.startsWith("image/"))
+    if (!imagePart) {
+        console.error(`  ❌ 이미지 파트 없음`)
+        return null
+    }
+
+    return Buffer.from(imagePart.inlineData.data, "base64")
 }
 
 /* ── 메인 실행 ───────────────────────────────────────────────── */
@@ -339,9 +290,12 @@ async function main() {
         filtered = filtered.filter((t) => onlyFolders.includes(t.folder))
     }
 
-    console.log(`\n🎨 ClassIn Board 이미지 생성`)
+    console.log(`\n🎨 ClassIn Board 이미지 생성 v2 — 실제 제품 정확 반영`)
+    console.log(`   모델: ${MODEL}`)
     console.log(`   총 ${filtered.length}장 (P0~P${maxPriority})`)
     if (onlyFolders) console.log(`   폴더 필터: ${onlyFolders.join(", ")}`)
+    console.log(`   ✅ 화이트 무광 베젤 / A-frame 스탠드 / 오렌지 펜트레이`)
+    console.log(`   ✅ 한국/동양인 인물`)
     console.log(`${"─".repeat(50)}\n`)
 
     let success = 0
@@ -351,7 +305,6 @@ async function main() {
         const outDir = path.join(BASE_DIR, task.folder)
         const outPath = path.join(outDir, task.filename)
 
-        // 이미 존재하면 스킵
         if (fs.existsSync(outPath)) {
             console.log(`  ⏭️  [${task.folder}] ${task.filename} — 이미 존재, 스킵`)
             continue
@@ -369,8 +322,7 @@ async function main() {
             fail++
         }
 
-        // rate limit 방지
-        await new Promise((r) => setTimeout(r, 2000))
+        await new Promise((r) => setTimeout(r, 3000))
     }
 
     console.log(`\n${"─".repeat(50)}`)
