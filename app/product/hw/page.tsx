@@ -9,7 +9,7 @@ import {
     GraduationCap, Building2, Mic, Camera
 } from "lucide-react"
 import Image from "next/image"
-import { useRef } from "react"
+import { useRef, useState } from "react"
 
 /* ── Animation helpers ───────────────────────────────────────────── */
 const fadeUp = {
@@ -154,7 +154,7 @@ function FeatureSection({
                                         {f.icon}
                                     </div>
                                     <div>
-                                        <h4 className="font-bold text-slate-900 mb-1">{f.label}</h4>
+                                        <h4 className="font-sans font-bold tabular-nums text-slate-900 mb-1">{f.label}</h4>
                                         <p className="text-sm text-slate-500 leading-relaxed">{f.detail}</p>
                                     </div>
                                 </motion.div>
@@ -172,6 +172,206 @@ function FeatureSection({
                                 <Monitor className="w-20 h-20 text-slate-300" />
                             </motion.div>
                         )}
+                    </div>
+                </div>
+            </div>
+        </section>
+    )
+}
+
+/* ── Feature Tab data ────────────────────────────────────────────── */
+const featureTabs = [
+    {
+        label: "판서",
+        image: "/images/product/hw/writing/writing-multitouch.jpg",
+        badge: "0.03s 초저지연",
+        title: "분필보다 자연스러운 판서",
+        points: [
+            "0.03초 초저지연 — 생각의 속도로 판서",
+            "50포인트 멀티터치, 교사+학생 동시 판서 협업",
+            "무한 캔버스, 최대 50페이지 수업 파일 저장",
+        ],
+    },
+    {
+        label: "디스플레이",
+        image: "/images/product/hw/display/display-wall-cinematic.jpg",
+        badge: "178° 광시야각",
+        title: "어디서 봐도 선명한 화면",
+        points: [
+            "178° 광시야각 — 교실 어느 자리서든 동일 화면",
+            "풀 라미네이션 + AG·AF 코팅으로 조명 반사 차단",
+            "블루라이트 차단 설계로 눈 건강 보호",
+        ],
+    },
+    {
+        label: "판서 공유",
+        image: "/images/product/hw/writing/writing-closeup.jpg",
+        badge: "실시간 동기화",
+        title: "쓰는 순간, 모든 기기에 전달",
+        points: [
+            "실시간 판서 동기화 → 태블릿·노트북 즉시 반영",
+            "수업 종료 후 자동 PDF 저장·배포",
+            "결석 학생도 판서 기록으로 완벽 복습",
+        ],
+    },
+    {
+        label: "AI 카메라",
+        image: "/images/product/hw/camera/camera-hybrid-class.jpg",
+        badge: "4K + 8배열 마이크",
+        title: "교실과 원격을 하나로",
+        points: [
+            "신체 추적 알고리즘으로 교사 자동 트래킹",
+            "8배열 마이크 + AI 노이즈캔슬링",
+            "교실+원격 학생 동시 판서, 진짜 하이브리드 수업",
+        ],
+    },
+    {
+        label: "SW 생태계",
+        image: "/images/product/hw/ecosystem/ecosystem-board-ui.png",
+        badge: "20+ 강의 도구",
+        title: "ClassIn SW 완전 내장",
+        points: [
+            "NFC 원터치 로그인 — 내 수업 환경 즉시 로드",
+            "출결·과제·성적·알림 LMS 완전 통합",
+            "투표·퀴즈·타이머 등 강의 도구 20종+",
+        ],
+    },
+]
+
+/* ── Section: Feature Tab ────────────────────────────────────────── */
+function FeatureTabSection() {
+    const [active, setActive] = useState(0)
+    const tab = featureTabs[active]
+
+    return (
+        <section className="py-24 md:py-32 bg-white">
+            <div className="container mx-auto px-4 lg:px-8">
+                <motion.div className="text-center mb-12" {...fadeUp}>
+                    <p className="text-sm font-semibold text-[#22A366] tracking-wider uppercase mb-3">FEATURES</p>
+                    <h2 className="text-3xl md:text-4xl font-serif text-[#1a1a19] leading-tight">
+                        하나의 보드, <span className="text-[#22A366]">다섯 가지 경험</span>
+                    </h2>
+                    <p className="text-lg text-slate-500 mt-4 max-w-xl mx-auto">
+                        탭을 눌러 각 기능을 빠르게 확인하세요.
+                    </p>
+                </motion.div>
+
+                {/* Tab buttons */}
+                <div className="flex flex-wrap justify-center gap-2 mb-12">
+                    {featureTabs.map((t, i) => (
+                        <button
+                            key={i}
+                            onClick={() => setActive(i)}
+                            className={`px-5 py-2.5 rounded-full text-sm font-semibold transition-all ${
+                                active === i
+                                    ? "bg-[#22A366] text-white shadow-md"
+                                    : "bg-slate-100 text-slate-600 hover:bg-slate-200"
+                            }`}
+                        >
+                            {t.label}
+                        </button>
+                    ))}
+                </div>
+
+                {/* Tab content */}
+                <motion.div
+                    key={active}
+                    initial={{ opacity: 0, y: 16 }}
+                    animate={{ opacity: 1, y: 0 }}
+                    transition={{ duration: 0.3 }}
+                    className="max-w-5xl mx-auto grid lg:grid-cols-2 gap-10 items-center"
+                >
+                    {/* Image */}
+                    <div className="rounded-3xl overflow-hidden shadow-2xl">
+                        <Image
+                            src={tab.image}
+                            alt={tab.title}
+                            width={800}
+                            height={600}
+                            sizes="(max-width: 768px) 100vw, 50vw"
+                            className="w-full h-auto"
+                        />
+                    </div>
+
+                    {/* Content */}
+                    <div>
+                        <div className="inline-flex items-center gap-2 px-3 py-1.5 rounded-full bg-[#22A366]/10 text-[#22A366] text-xs font-bold mb-5 border border-[#22A366]/15">
+                            {tab.badge}
+                        </div>
+                        <h3 className="text-2xl md:text-3xl font-serif text-[#1a1a19] mb-8 leading-snug">
+                            {tab.title}
+                        </h3>
+                        <ul className="space-y-4">
+                            {tab.points.map((p, i) => (
+                                <li key={i} className="flex items-start gap-3">
+                                    <div className="w-5 h-5 rounded-full bg-[#22A366]/10 flex items-center justify-center shrink-0 mt-0.5">
+                                        <svg className="w-3 h-3 text-[#22A366]" fill="none" viewBox="0 0 24 24" stroke="currentColor" strokeWidth={3}>
+                                            <path strokeLinecap="round" strokeLinejoin="round" d="M5 13l4 4L19 7" />
+                                        </svg>
+                                    </div>
+                                    <span className="text-slate-600 leading-relaxed">{p}</span>
+                                </li>
+                            ))}
+                        </ul>
+                    </div>
+                </motion.div>
+            </div>
+        </section>
+    )
+}
+
+/* ── Section: Product Anatomy ────────────────────────────────────── */
+function ProductAnatomySection() {
+    const physicalSpecs = [
+        { label: "두께", value: "단 110mm", sub: "초슬림 알루미늄 바디" },
+        { label: "베젤", value: "22mm 슬림베젤", sub: "화면 집중도 극대화" },
+        { label: "제스처바", value: "양측 탑재", sub: "S110·S86 좌우 모두 지원" },
+        { label: "OPS 슬롯", value: "기본 내장", sub: "외장 PC 없이 독립 구동" },
+        { label: "NFC", value: "원터치 로그인", sub: "교사 카드 태그 즉시 인증" },
+        { label: "펜 트레이", value: "시그니처 오렌지", sub: "자석 부착, 스타일러스 2개 포함" },
+    ]
+
+    return (
+        <section className="py-24 md:py-32 bg-[#FDFCF8]">
+            <div className="container mx-auto px-4 lg:px-8">
+                <motion.div className="text-center mb-16" {...fadeUp}>
+                    <p className="text-sm font-semibold text-[#22A366] tracking-wider uppercase mb-3">PRODUCT DESIGN</p>
+                    <h2 className="text-3xl md:text-4xl lg:text-5xl font-serif text-[#1a1a19] leading-tight">
+                        디테일에서 시작하는
+                        <br />
+                        <span className="text-[#22A366]">교육 경험</span>
+                    </h2>
+                    <p className="text-lg text-slate-500 mt-4 max-w-xl mx-auto">
+                        110mm 슬림 프로파일부터 시그니처 오렌지 펜 트레이까지 — 교실을 위해 설계된 하드웨어.
+                    </p>
+                </motion.div>
+
+                <div className="max-w-6xl mx-auto grid lg:grid-cols-2 gap-14 items-center">
+                    {/* Side profile image */}
+                    <motion.div {...fadeUp} className="rounded-3xl overflow-hidden shadow-xl bg-slate-50">
+                        <Image
+                            src="/images/product/hw/board/board-side-profile.png"
+                            alt="ClassIn Board 측면 슬림 프로파일 — 110mm"
+                            width={800}
+                            height={600}
+                            sizes="(max-width: 768px) 100vw, 50vw"
+                            className="w-full h-auto"
+                        />
+                    </motion.div>
+
+                    {/* Spec callout grid */}
+                    <div className="grid sm:grid-cols-2 gap-4">
+                        {physicalSpecs.map((s, i) => (
+                            <motion.div
+                                key={i}
+                                {...stagger(i)}
+                                className="bg-white rounded-2xl border border-slate-100 shadow-sm p-5 hover:shadow-md hover:border-[#22A366]/20 transition-all"
+                            >
+                                <div className="text-[10px] font-bold text-slate-400 uppercase tracking-widest mb-2">{s.label}</div>
+                                <div className="text-base font-sans font-bold tabular-nums tracking-tight text-[#1a1a19] mb-0.5">{s.value}</div>
+                                <div className="text-xs text-slate-400 leading-relaxed">{s.sub}</div>
+                            </motion.div>
+                        ))}
                     </div>
                 </div>
             </div>
@@ -231,7 +431,7 @@ export default function ProductHWPage() {
                                 { value: "4K", label: "AI 카메라" },
                             ].map((m, i) => (
                                 <div key={i} className="text-center">
-                                    <div className="text-2xl md:text-3xl font-serif font-bold text-[#22A366]">{m.value}</div>
+                                    <div className="text-2xl md:text-3xl font-sans font-bold tabular-nums tracking-tight text-[#22A366]">{m.value}</div>
                                     <div className="text-xs md:text-sm text-slate-400 mt-1 font-medium">{m.label}</div>
                                 </div>
                             ))}
@@ -262,6 +462,16 @@ export default function ProductHWPage() {
                 ACT 1 — COMPARISON: 왜 ClassIn Board인가
             ================================================================ */}
             <ComparisonSection />
+
+            {/* ================================================================
+                FEATURE TABS — 5가지 핵심 기능 인터랙티브 개요
+            ================================================================ */}
+            <FeatureTabSection />
+
+            {/* ================================================================
+                PRODUCT ANATOMY — 실물 HW 디자인 & 물리 스펙
+            ================================================================ */}
+            <ProductAnatomySection />
 
             {/* ================================================================
                 ACT 2 — 필기: 디지털인데, 아날로그 같은
@@ -581,8 +791,8 @@ export default function ProductHWPage() {
                                         {card.badge}
                                     </div>
                                 )}
-                                <div className="text-5xl font-serif font-bold mb-1">{card.model}</div>
-                                <div className="text-2xl font-mono font-bold mb-4 opacity-70">{card.size}</div>
+                                <div className="text-5xl font-sans font-bold tabular-nums tracking-tight mb-1">{card.model}</div>
+                                <div className="text-2xl font-sans font-bold tabular-nums mb-4 opacity-70">{card.size}</div>
                                 <p className={`text-sm ${card.textColor === "text-white" ? "text-white/70" : "text-slate-500"}`}>
                                     {card.rec}
                                 </p>
