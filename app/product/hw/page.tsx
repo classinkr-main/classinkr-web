@@ -6,7 +6,7 @@ import {
     ArrowRight, PenTool, Eye, Share2, Video,
     Monitor, Fingerprint, Users, Layers, Wifi,
     Shield, Maximize, ChevronRight, Zap, Hand,
-    GraduationCap, Building2, Mic, Camera
+    GraduationCap, Building2, Mic, Camera, Star,
 } from "lucide-react"
 import Image from "next/image"
 import { useRef, useState } from "react"
@@ -379,6 +379,428 @@ function ProductAnatomySection() {
     )
 }
 
+/* ── Section: Impact Numbers (Full-width dark) ───────────────────── */
+function ImpactNumbersSection() {
+    const ref = useRef(null)
+    const inView = useInView(ref, { once: true, margin: "-50px" })
+
+    const stats = [
+        { value: "1,200+", label: "도입 학교·기관", sub: "국내외 교육 현장" },
+        { value: "35,000+", label: "활성 교사", sub: "매일 수업에 활용 중" },
+        { value: "12개국", label: "글로벌 교육 시장", sub: "아시아·유럽·미주" },
+    ]
+
+    return (
+        <section ref={ref} className="bg-[#0d1a12] relative overflow-hidden">
+            <div className="absolute inset-0 bg-[radial-gradient(ellipse_80%_60%_at_50%_50%,_rgba(34,163,102,0.13)_0%,_transparent_100%)]" />
+            <div className="container mx-auto px-4 lg:px-8 py-20 md:py-28 relative">
+                <div className="grid md:grid-cols-3 divide-y md:divide-y-0 md:divide-x divide-white/8">
+                    {stats.map((s, i) => (
+                        <motion.div
+                            key={i}
+                            initial={{ opacity: 0, y: 24 }}
+                            animate={inView ? { opacity: 1, y: 0 } : {}}
+                            transition={{ duration: 0.6, delay: i * 0.15 }}
+                            className="py-12 md:py-0 md:px-16 text-center"
+                        >
+                            <div className="text-5xl md:text-6xl lg:text-7xl font-sans font-bold tabular-nums tracking-tight text-white leading-none mb-3">
+                                {s.value}
+                            </div>
+                            <div className="text-xs font-bold text-[#22A366] uppercase tracking-[0.2em] mb-2">{s.label}</div>
+                            <div className="text-sm text-white/35">{s.sub}</div>
+                        </motion.div>
+                    ))}
+                </div>
+            </div>
+        </section>
+    )
+}
+
+/* ── Section: Pain Points ────────────────────────────────────────── */
+const painItems = [
+    {
+        icon: <PenTool className="w-5 h-5" />,
+        pain: "수업이 끝나면 판서도 사라집니다",
+        fix: "판서 내용이 자동 저장되어 학생 전원에게 즉시 PDF로 배포됩니다",
+    },
+    {
+        icon: <Eye className="w-5 h-5" />,
+        pain: "맨 뒷자리에선 칠판이 잘 안 보입니다",
+        fix: "178° 광시야각과 풀 라미네이션으로 교실 어느 자리서든 선명합니다",
+    },
+    {
+        icon: <Wifi className="w-5 h-5" />,
+        pain: "원격 학생은 항상 소외됩니다",
+        fix: "AI 카메라가 교사를 추적하고 판서가 원격 기기에 실시간 동기화됩니다",
+    },
+    {
+        icon: <Users className="w-5 h-5" />,
+        pain: "학생 참여는 교사 혼자 감당이 안 됩니다",
+        fix: "50포인트 멀티터치로 여러 학생이 칠판 위에 동시에 직접 참여합니다",
+    },
+]
+
+function PainPointSection() {
+    return (
+        <section className="py-24 md:py-32 bg-white">
+            <div className="container mx-auto px-4 lg:px-8">
+                <motion.div className="text-center mb-14" {...fadeUp}>
+                    <p className="text-sm font-semibold text-slate-400 tracking-wider uppercase mb-3">PAIN POINTS</p>
+                    <h2 className="text-3xl md:text-4xl lg:text-5xl font-serif text-[#1a1a19] leading-tight">
+                        선생님, 이런 적
+                        <br />
+                        <span className="text-[#22A366]">없으셨나요?</span>
+                    </h2>
+                </motion.div>
+
+                <div className="grid sm:grid-cols-2 gap-5 max-w-4xl mx-auto">
+                    {painItems.map((item, i) => (
+                        <motion.div
+                            key={i}
+                            {...stagger(i)}
+                            className="group rounded-2xl border border-slate-100 bg-slate-50 p-7 hover:border-[#22A366]/30 hover:bg-[#f0fff8] transition-all duration-300"
+                        >
+                            <div className="flex items-start gap-4">
+                                <div className="w-9 h-9 rounded-xl bg-slate-200/70 group-hover:bg-[#22A366]/15 flex items-center justify-center shrink-0 text-slate-400 group-hover:text-[#22A366] transition-all">
+                                    {item.icon}
+                                </div>
+                                <div>
+                                    <p className="font-semibold text-slate-400 text-sm mb-2.5 line-through decoration-slate-300 decoration-2">{item.pain}</p>
+                                    <p className="font-medium text-slate-700 leading-relaxed text-sm">{item.fix}</p>
+                                </div>
+                            </div>
+                        </motion.div>
+                    ))}
+                </div>
+            </div>
+        </section>
+    )
+}
+
+/* ── Section: Full-Width Point (reusable) ────────────────────────── */
+function FullWidthPointSection({
+    eyebrow, statement, sub, dark = false, image,
+}: {
+    eyebrow: string; statement: React.ReactNode; sub?: string; dark?: boolean; image?: string
+}) {
+    return (
+        <section className={`relative min-h-[65vh] flex items-center justify-center overflow-hidden ${dark ? "bg-[#0d1a12]" : "bg-[#22A366]"}`}>
+            {image && (
+                <Image src={image} alt="" fill className="object-cover" sizes="100vw" />
+            )}
+            <div className={`absolute inset-0 ${dark ? "bg-[#0d1a12]/75" : "bg-[#0d1a12]/65"}`} />
+            <div className="relative container mx-auto px-4 lg:px-8 py-28 md:py-40 text-center text-white">
+                <motion.div {...fadeUp}>
+                    <p className="text-xs font-bold tracking-[0.35em] uppercase mb-7 text-white/50">{eyebrow}</p>
+                    <h2 className="text-4xl sm:text-5xl lg:text-6xl xl:text-[5rem] font-serif leading-[1.1] tracking-tight mb-8 max-w-4xl mx-auto">
+                        {statement}
+                    </h2>
+                    {sub && (
+                        <p className="text-lg md:text-xl text-white/60 max-w-2xl mx-auto leading-relaxed">{sub}</p>
+                    )}
+                </motion.div>
+            </div>
+        </section>
+    )
+}
+
+/* ── Section: Lesson Timeline ────────────────────────────────────── */
+const timelineSteps = [
+    {
+        time: "08:55",
+        icon: <Fingerprint className="w-4 h-4" />,
+        title: "NFC 원터치 로그인",
+        desc: "카드 태그 한 번으로 어제 수업 환경이 그대로 로드됩니다. 비밀번호, 별도 설정 없이 바로 시작.",
+    },
+    {
+        time: "09:00",
+        icon: <PenTool className="w-4 h-4" />,
+        title: "판서 시작, 전원 동시 연결",
+        desc: "칠판에 쓰는 순간 학생 기기에 실시간 반영. 교실 학생과 원격 학생이 같은 캔버스를 공유합니다.",
+    },
+    {
+        time: "09:15",
+        icon: <Users className="w-4 h-4" />,
+        title: "학생 협업 판서",
+        desc: "50포인트 멀티터치로 여러 학생이 동시에 참여. 그룹 활동이 별도 도구 없이 칠판 하나로 해결됩니다.",
+    },
+    {
+        time: "09:40",
+        icon: <Share2 className="w-4 h-4" />,
+        title: "원클릭 저장 · 배포",
+        desc: "수업 종료 후 판서 내용이 PDF로 자동 변환되어 학생 전원에게 즉시 전송됩니다.",
+    },
+    {
+        time: "퇴근 후",
+        icon: <Monitor className="w-4 h-4" />,
+        title: "데이터로 복기하는 수업",
+        desc: "출결 현황, 과제 제출률, 학부모 알림까지. 앱 하나로 오늘 수업 전체를 확인합니다.",
+    },
+]
+
+function LessonTimelineSection() {
+    return (
+        <section className="py-24 md:py-32 bg-[#FDFCF8]">
+            <div className="container mx-auto px-4 lg:px-8">
+                <motion.div className="text-center mb-16" {...fadeUp}>
+                    <p className="text-sm font-semibold text-[#22A366] tracking-wider uppercase mb-3">A DAY WITH CLASSIN BOARD</p>
+                    <h2 className="text-3xl md:text-4xl lg:text-5xl font-serif text-[#1a1a19] leading-tight">
+                        교사의 하루가
+                        <br />
+                        <span className="text-[#22A366]">이렇게 달라집니다</span>
+                    </h2>
+                </motion.div>
+
+                <div className="max-w-2xl mx-auto relative">
+                    <div className="absolute left-[5.25rem] top-5 bottom-5 w-px bg-gradient-to-b from-[#22A366]/40 via-[#22A366]/20 to-transparent hidden sm:block" />
+
+                    <div className="space-y-10">
+                        {timelineSteps.map((step, i) => (
+                            <motion.div key={i} {...stagger(i)} className="flex items-start gap-5">
+                                <div className="shrink-0 w-16 text-right pt-2.5">
+                                    <span className="text-[11px] font-bold tabular-nums text-slate-400 leading-none">{step.time}</span>
+                                </div>
+                                <div className="relative shrink-0 z-10">
+                                    <div className="w-9 h-9 rounded-full bg-[#22A366]/10 border border-[#22A366]/25 flex items-center justify-center text-[#22A366]">
+                                        {step.icon}
+                                    </div>
+                                </div>
+                                <div className="pt-1.5 pb-2">
+                                    <h3 className="font-bold text-slate-900 mb-1.5 text-sm">{step.title}</h3>
+                                    <p className="text-sm text-slate-500 leading-relaxed">{step.desc}</p>
+                                </div>
+                            </motion.div>
+                        ))}
+                    </div>
+                </div>
+            </div>
+        </section>
+    )
+}
+
+/* ── Section: Testimonials ───────────────────────────────────────── */
+const testimonials = [
+    {
+        quote: "판서가 학생 태블릿에 바로 떠요. 맨 뒷자리 학생들 표정이 달라졌습니다. 수업 집중도가 눈에 보인다고 처음 느꼈어요.",
+        name: "김지수 선생님",
+        school: "서울 ○○중학교 수학",
+        model: "S86 도입",
+        rating: 5,
+    },
+    {
+        quote: "원격 수업 때 AI 카메라가 저를 따라다니니까 따로 누가 카메라를 잡아줄 필요가 없어요. 혼자서도 완전한 하이브리드 수업이 됩니다.",
+        name: "박현수 선생님",
+        school: "경기 ○○고등학교 과학",
+        model: "S110 도입",
+        rating: 5,
+    },
+    {
+        quote: "NFC로 로그인하고 바로 수업에 들어가는 게 처음엔 신기했는데, 이제 없으면 불편할 것 같아요. 아이들도 칠판 앞에 나와서 직접 씁니다.",
+        name: "이민정 선생님",
+        school: "부산 ○○초등학교",
+        model: "S75 도입",
+        rating: 5,
+    },
+]
+
+function TestimonialSection() {
+    return (
+        <section className="py-24 md:py-32 bg-white">
+            <div className="container mx-auto px-4 lg:px-8">
+                <motion.div className="text-center mb-14" {...fadeUp}>
+                    <p className="text-sm font-semibold text-[#22A366] tracking-wider uppercase mb-3">VOICES FROM CLASSROOMS</p>
+                    <h2 className="text-3xl md:text-4xl font-serif text-[#1a1a19] leading-tight">
+                        이미 수업에서 경험한
+                        <br />
+                        <span className="text-[#22A366]">선생님들이 말합니다</span>
+                    </h2>
+                </motion.div>
+
+                <div className="grid md:grid-cols-3 gap-6 max-w-5xl mx-auto">
+                    {testimonials.map((t, i) => (
+                        <motion.div
+                            key={i}
+                            {...stagger(i)}
+                            className="bg-[#FDFCF8] rounded-2xl border border-slate-100 shadow-sm p-7 flex flex-col"
+                        >
+                            <div className="flex gap-0.5 mb-5">
+                                {Array.from({ length: t.rating }).map((_, j) => (
+                                    <Star key={j} className="w-4 h-4 fill-[#22A366] text-[#22A366]" />
+                                ))}
+                            </div>
+                            <p className="text-slate-600 leading-relaxed text-sm flex-1 mb-6">
+                                "{t.quote}"
+                            </p>
+                            <div className="border-t border-slate-100 pt-5">
+                                <div className="font-bold text-slate-900 text-sm">{t.name}</div>
+                                <div className="text-xs text-slate-400 mt-0.5">{t.school}</div>
+                                <div className="inline-flex mt-2.5 px-2.5 py-1 rounded-full bg-[#22A366]/8 text-[#22A366] text-[10px] font-bold border border-[#22A366]/15">
+                                    {t.model}
+                                </div>
+                            </div>
+                        </motion.div>
+                    ))}
+                </div>
+            </div>
+        </section>
+    )
+}
+
+/* ── Section: Space Scenarios ────────────────────────────────────── */
+const spaceScenarios = [
+    {
+        model: "S110", size: '110"', badge: "FLAGSHIP",
+        tag: "강당 · 대형 강의실",
+        story: "300명이 앉은 강당에서도 맨 뒷자리가 선명합니다. 110인치 화면이 공간을 압도하며, 교사 한 명의 판서가 전석에 전달됩니다. 대규모 강의, 특강, 입시 설명회에 최적.",
+        image: "/images/product/hw/spaces/space-classroom-real.png",
+    },
+    {
+        model: "S86", size: '86"', badge: "BEST",
+        tag: "일반 교실 · 회의실",
+        story: "30명 담임반의 하루 6교시를 완주하는 기준 모델. 가장 많은 교실 환경에 최적화된 사이즈. 8배열 마이크가 교실 소음 속에서도 교사 음성을 또렷이 전달합니다.",
+        image: "/images/product/hw/spaces/space-classroom.jpg",
+    },
+    {
+        model: "S75", size: '75"', badge: "",
+        tag: "세미나 · 중형 회의실",
+        story: "20명 내외의 세미나실과 중형 회의실에 딱 맞는 사이즈. 임원 PT, 팀 회의, 교사 연수에서 화이트보드를 완전히 대체합니다.",
+        image: "/images/product/hw/spaces/space-classroom.jpg",
+    },
+    {
+        model: "S65", size: '65"', badge: "",
+        tag: "스터디룸 · 소규모",
+        story: "소수 심화반, 과외, 스터디그룹에 최적. 좁은 공간에서도 학생이 직접 칠판 앞에 나와 판서하며 참여하는 수업이 가능합니다.",
+        image: "/images/product/hw/spaces/space-classroom.jpg",
+    },
+]
+
+function SpaceScenarioSection() {
+    const [active, setActive] = useState(0)
+    const scenario = spaceScenarios[active]
+
+    return (
+        <section className="py-24 md:py-32 bg-[#FDFCF8]">
+            <div className="container mx-auto px-4 lg:px-8">
+                <motion.div className="text-center mb-12" {...fadeUp}>
+                    <p className="text-sm font-semibold text-[#22A366] tracking-wider uppercase mb-3">LINEUP × SPACE</p>
+                    <h2 className="text-3xl md:text-4xl lg:text-5xl font-serif text-[#1a1a19] leading-tight">
+                        공간이 달라지면,
+                        <br />
+                        <span className="text-[#22A366]">모델도 달라집니다</span>
+                    </h2>
+                    <p className="text-lg text-slate-500 mt-4 max-w-xl mx-auto">
+                        설치 공간을 선택하면 최적 모델과 사용 시나리오를 확인할 수 있습니다.
+                    </p>
+                </motion.div>
+
+                <div className="flex flex-wrap justify-center gap-3 mb-12">
+                    {spaceScenarios.map((s, i) => (
+                        <button
+                            key={i}
+                            onClick={() => setActive(i)}
+                            className={`px-6 py-2.5 rounded-full text-sm font-bold transition-all ${
+                                active === i
+                                    ? "bg-[#22A366] text-white shadow-md"
+                                    : "bg-white border border-slate-200 text-slate-600 hover:border-slate-300"
+                            }`}
+                        >
+                            {s.model}
+                            <span className={`ml-1.5 font-normal text-xs ${active === i ? "text-white/70" : "text-slate-400"}`}>{s.size}</span>
+                        </button>
+                    ))}
+                </div>
+
+                <motion.div
+                    key={active}
+                    initial={{ opacity: 0, y: 14 }}
+                    animate={{ opacity: 1, y: 0 }}
+                    transition={{ duration: 0.3 }}
+                    className="max-w-5xl mx-auto grid lg:grid-cols-2 gap-10 items-center"
+                >
+                    <div className="rounded-3xl overflow-hidden shadow-2xl aspect-[4/3] relative">
+                        <Image
+                            src={scenario.image}
+                            alt={scenario.tag}
+                            fill
+                            className="object-cover"
+                            sizes="(max-width: 768px) 100vw, 50vw"
+                        />
+                        <div className="absolute inset-0 bg-gradient-to-t from-black/65 via-black/10 to-transparent" />
+                        {scenario.badge && (
+                            <div className="absolute top-4 left-4 text-[10px] font-bold tracking-wider bg-[#22A366] text-white px-3 py-1 rounded-full">
+                                {scenario.badge}
+                            </div>
+                        )}
+                        <div className="absolute bottom-5 left-5 text-white">
+                            <div className="text-4xl font-sans font-bold tabular-nums tracking-tight">{scenario.model}</div>
+                            <div className="text-sm opacity-60 mt-0.5">{scenario.size}</div>
+                        </div>
+                    </div>
+
+                    <div>
+                        <div className="inline-flex items-center px-3 py-1 rounded-full bg-slate-100 text-slate-500 text-xs font-semibold mb-6">
+                            {scenario.tag}
+                        </div>
+                        <h3 className="text-2xl md:text-3xl font-serif text-[#1a1a19] mb-5 leading-snug">
+                            {scenario.model} <span className="text-slate-400 font-normal">{scenario.size}</span>
+                            <br />어떤 공간에 어울릴까요?
+                        </h3>
+                        <p className="text-slate-600 leading-relaxed mb-8">{scenario.story}</p>
+                        <Button className="bg-[#22A366] hover:bg-[#1B8A55] text-white rounded-full px-8 h-12 text-sm font-bold shadow-md hover:shadow-lg transition-all group">
+                            이 모델로 문의하기
+                            <ArrowRight className="w-4 h-4 ml-2 group-hover:translate-x-1 transition-transform" />
+                        </Button>
+                    </div>
+                </motion.div>
+            </div>
+        </section>
+    )
+}
+
+/* ── Section: Onboarding Process ─────────────────────────────────── */
+const processSteps = [
+    { num: "01", title: "문의 · 상담", desc: "공간 규모와 목적을 알려주시면 최적 모델과 구성을 제안합니다" },
+    { num: "02", title: "현장 실측 · 견적", desc: "전문 설치팀이 방문하여 공간 실측 후 정확한 맞춤 견적을 드립니다" },
+    { num: "03", title: "설치 (1일 완료)", desc: "하루 안에 설치 완료. 수업 중단을 최소화하고 즉시 사용할 수 있습니다" },
+    { num: "04", title: "교사 교육 (2시간)", desc: "현장 교육 2시간으로 모든 기능을 즉시 활용할 수 있도록 안내합니다" },
+    { num: "05", title: "전담 지원 · A/S", desc: "도입 이후에도 전담 CS팀이 운영, 유지보수를 함께 책임집니다" },
+]
+
+function OnboardingProcessSection() {
+    return (
+        <section className="py-24 md:py-32 bg-[#FDFCF8]">
+            <div className="container mx-auto px-4 lg:px-8">
+                <motion.div className="text-center mb-16" {...fadeUp}>
+                    <p className="text-sm font-semibold text-[#22A366] tracking-wider uppercase mb-3">HOW TO START</p>
+                    <h2 className="text-3xl md:text-4xl lg:text-5xl font-serif text-[#1a1a19] leading-tight">
+                        도입은 생각보다
+                        <br />
+                        <span className="text-[#22A366]">훨씬 간단합니다</span>
+                    </h2>
+                    <p className="text-lg text-slate-500 mt-4 max-w-xl mx-auto">
+                        문의부터 첫 수업까지, 평균 1주일이면 충분합니다.
+                    </p>
+                </motion.div>
+
+                <div className="max-w-5xl mx-auto relative">
+                    <div className="absolute top-7 left-[12%] right-[12%] h-px bg-gradient-to-r from-transparent via-[#22A366]/25 to-transparent hidden lg:block" />
+                    <div className="grid sm:grid-cols-3 lg:grid-cols-5 gap-8">
+                        {processSteps.map((step, i) => (
+                            <motion.div key={i} {...stagger(i)} className="flex flex-col items-center text-center">
+                                <div className="w-14 h-14 rounded-full bg-[#22A366]/10 border border-[#22A366]/20 flex items-center justify-center mb-5 relative z-10 shrink-0">
+                                    <span className="text-sm font-bold tabular-nums text-[#22A366]">{step.num}</span>
+                                </div>
+                                <h3 className="font-bold text-slate-900 text-sm mb-2 leading-snug">{step.title}</h3>
+                                <p className="text-xs text-slate-400 leading-relaxed">{step.desc}</p>
+                            </motion.div>
+                        ))}
+                    </div>
+                </div>
+            </div>
+        </section>
+    )
+}
+
 /* ── Main Page Component ─────────────────────────────────────────── */
 export default function ProductHWPage() {
     return (
@@ -459,14 +881,39 @@ export default function ProductHWPage() {
             </section>
 
             {/* ================================================================
+                IMPACT NUMBERS — 숫자로 보는 ClassIn Board
+            ================================================================ */}
+            <ImpactNumbersSection />
+
+            {/* ================================================================
+                PAIN POINTS — 선생님의 고민
+            ================================================================ */}
+            <PainPointSection />
+
+            {/* ================================================================
                 ACT 1 — COMPARISON: 왜 ClassIn Board인가
             ================================================================ */}
             <ComparisonSection />
 
             {/* ================================================================
+                FULL-WIDTH POINT — 교사의 하루를 다시 설계합니다
+            ================================================================ */}
+            <FullWidthPointSection
+                eyebrow="ClassIn Board의 약속"
+                statement={<>교사의 하루를<br />다시 설계합니다</>}
+                sub="분필의 흔적이 디지털 자산이 되는 교실. ClassIn Board가 만드는 새로운 수업의 표준."
+                dark
+            />
+
+            {/* ================================================================
                 FEATURE TABS — 5가지 핵심 기능 인터랙티브 개요
             ================================================================ */}
             <FeatureTabSection />
+
+            {/* ================================================================
+                LESSON TIMELINE — 수업 하루 타임라인
+            ================================================================ */}
+            <LessonTimelineSection />
 
             {/* ================================================================
                 PRODUCT ANATOMY — 실물 HW 디자인 & 물리 스펙
@@ -650,6 +1097,17 @@ export default function ProductHWPage() {
             </div>
 
             {/* ================================================================
+                FULL-WIDTH POINT — 여기서도, 저기서도 같은 수업
+            ================================================================ */}
+            <FullWidthPointSection
+                eyebrow="교실의 경계를 넘어서"
+                statement={<>여기서도, 저기서도<br />같은 수업입니다</>}
+                sub="AI 카메라와 실시간 판서 동기화가 교실과 원격의 경계를 지웁니다."
+                image="/images/product/hw/spaces/space-classroom-real.png"
+                dark
+            />
+
+            {/* ================================================================
                 ACT 3 — 시공간을 넘어서: 교실이 있는 곳이 학교
             ================================================================ */}
             <FeatureSection
@@ -763,7 +1221,17 @@ export default function ProductHWPage() {
             </section>
 
             {/* ================================================================
-                ACT 5 — 라인업: 모든 공간에 맞는 사이즈
+                TESTIMONIALS — 도입 현장 후기
+            ================================================================ */}
+            <TestimonialSection />
+
+            {/* ================================================================
+                SPACE SCENARIOS — 공간별 모델 시나리오
+            ================================================================ */}
+            <SpaceScenarioSection />
+
+            {/* ================================================================
+                ACT 5 — 라인업: 스펙 비교표
             ================================================================ */}
             <section className="py-24 md:py-32">
                 <div className="container mx-auto px-4 lg:px-8">
@@ -831,6 +1299,11 @@ export default function ProductHWPage() {
                     </motion.div>
                 </div>
             </section>
+
+            {/* ================================================================
+                ONBOARDING PROCESS — 도입 절차
+            ================================================================ */}
+            <OnboardingProcessSection />
 
             {/* ================================================================
                 ACT 5 — CTA: 직접 체험해보세요
