@@ -6,15 +6,14 @@ import BlogMarkdownRenderer from "@/components/blog/BlogMarkdownRenderer"
 import {
   getPublishedPostBySlug,
   getRelatedPosts,
-  getPublishedPosts,
+  getPublishedSlugsForStaticParams,
 } from "@/lib/repositories/blog"
 import { extractMarkdownHeadings } from "@/lib/blog-markdown"
 
 export const revalidate = 3600 // 1시간마다 재생성
 
 export async function generateStaticParams() {
-  const posts = await getPublishedPosts()
-  return posts.map((post) => ({ slug: post.slug }))
+  return getPublishedSlugsForStaticParams()
 }
 
 interface BlogDetailPageProps {

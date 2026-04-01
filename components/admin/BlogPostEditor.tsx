@@ -41,6 +41,7 @@ import { Input } from "@/components/ui/input"
 import { Label } from "@/components/ui/label"
 import { Tabs, TabsContent, TabsList, TabsTrigger } from "@/components/ui/tabs"
 import BlogMarkdownRenderer from "@/components/blog/BlogMarkdownRenderer"
+import RichMarkdownEditor, { type RichMarkdownEditorHandle } from "@/components/admin/RichMarkdownEditor"
 import {
   BLOG_STATUS_OPTIONS,
   CATEGORIES,
@@ -184,7 +185,7 @@ export default function BlogPostEditor({
   allPosts,
 }: BlogPostEditorProps) {
   const router = useRouter()
-  const textareaRef = useRef<HTMLTextAreaElement | null>(null)
+  const editorRef = useRef<RichMarkdownEditorHandle | null>(null)
   const initialForm = initialPost ? { ...initialPost } : createEmptyDraft()
 
   const [form, setForm] = useState<BlogPostInput>(initialForm)
@@ -339,6 +340,8 @@ export default function BlogPostEditor({
   useEffect(() => {
     const handleKeyDown = (event: KeyboardEvent) => {
       if (!(event.metaKey || event.ctrlKey) || event.key.toLowerCase() !== "z") return
+      // Tiptap 에디터(contenteditable)에 포커스가 있을 때는 Tiptap이 자체 처리
+      if ((event.target as HTMLElement).isContentEditable) return
       event.preventDefault()
       if (event.shiftKey) { handleRedo(); return }
       handleUndo()
@@ -395,45 +398,6 @@ export default function BlogPostEditor({
       ...snapshot,
       form: { ...snapshot.form, cta: { ...snapshot.form.cta, [key]: value } },
     }))
-  }
-
-  const replaceSelection = (
-    nextTextFactory: (selected: string) => { text: string; selectionStart: number; selectionEnd: number }
-  ) => {
-    const textarea = textareaRef.current
-    if (!textarea) return
-    const start = textarea.selectionStart
-    const end = textarea.selectionEnd
-    const selected = form.contentMarkdown.slice(start, end)
-    const { text, selectionStart, selectionEnd } = nextTextFactory(selected)
-    const nextMarkdown = form.contentMarkdown.slice(0, start) + text + form.contentMarkdown.slice(end)
-    updateEditor((snapshot) => ({ ...snapshot, form: { ...snapshot.form, contentMarkdown: nextMarkdown } }))
-    requestAnimationFrame(() => {
-      textarea.focus()
-      textarea.selectionStart = start + selectionStart
-      textarea.selectionEnd = start + selectionEnd
-    })
-  }
-
-  const wrapSelection = (prefix: string, suffix = prefix, fallback = "텍스트") => {
-    replaceSelection((selected) => {
-      const target = selected || fallback
-      const text = `${prefix}${target}${suffix}`
-      return { text, selectionStart: prefix.length, selectionEnd: prefix.length + target.length }
-    })
-  }
-
-  const insertBlock = (template: string, fallback = "") => {
-    replaceSelection((selected) => {
-      const target = selected || fallback
-      const text = template.replace("__TEXT__", target)
-      const selectionIndex = text.indexOf(target)
-      return {
-        text,
-        selectionStart: selectionIndex >= 0 ? selectionIndex : text.length,
-        selectionEnd: selectionIndex >= 0 ? selectionIndex + target.length : text.length,
-      }
-    })
   }
 
   const toggleRelatedPost = (postId: number) => {
@@ -834,18 +798,18 @@ export default function BlogPostEditor({
                 </p>
               </div>
               <div className="flex flex-wrap gap-1.5">
-                <ToolbarButton onClick={() => insertBlock("## __TEXT__\n", "소제목")}>H2</ToolbarButton>
-                <ToolbarButton onClick={() => insertBlock("### __TEXT__\n", "세부 제목")}>H3</ToolbarButton>
-                <ToolbarButton onClick={() => wrapSelection("**", "**", "강조 텍스트")} icon={<Type className="h-3 w-3" />}>굵게</ToolbarButton>
-                <ToolbarButton onClick={() => wrapSelection("*", "*", "기울임 텍스트")} icon={<Italic className="h-3 w-3" />}>기울이기</ToolbarButton>
-                <ToolbarButton onClick={() => insertBlock("> __TEXT__", "인용할 문장")} icon={<Quote className="h-3 w-3" />}>인용</ToolbarButton>
-                <ToolbarButton onClick={() => insertBlock("- __TEXT__", "포인트")} icon={<List className="h-3 w-3" />}>리스트</ToolbarButton>
-                <ToolbarButton onClick={() => insertBlock("1. __TEXT__", "순서 설명")} icon={<ListOrdered className="h-3 w-3" />}>번호</ToolbarButton>
-                <ToolbarButton onClick={() => wrapSelection("==", "==", "하이라이트")} icon={<Highlighter className="h-3 w-3" />}>강조색</ToolbarButton>
-                <ToolbarButton onClick={() => wrapSelection("{{green:", "}}", "브랜드 컬러 텍스트")} icon={<Sparkles className="h-3 w-3" />}>브랜드색</ToolbarButton>
-                <ToolbarButton onClick={() => insertBlock("[__TEXT__](https://example.com)", "링크 텍스트")} icon={<Link2 className="h-3 w-3" />}>링크</ToolbarButton>
-                <ToolbarButton onClick={() => insertBlock("![이미지 설명](https://example.com/image.jpg)\n", "")} icon={<ImageIcon className="h-3 w-3" />}>이미지</ToolbarButton>
-                <ToolbarButton onClick={() => insertBlock("---\n", "")} icon={<Minus className="h-3 w-3" />}>구분선</ToolbarButton>
+                <ToolbarButton onClick={() => editorRef.current?.setHeading(2)}>H2</ToolbarButton>
+                <ToolbarButton onClick={() => editorRef.current?.setHeading(3)}>H3</ToolbarButton>
+                <ToolbarButton onClick={() => editorRef.current?.toggleBold()} icon={<Type className="h-3 w-3" />}>굵게</ToolbarButton>
+                <ToolbarButton onClick={() => editorRef.current?.toggleItalic()} icon={<Italic className="h-3 w-3" />}>기울이기</ToolbarButton>
+                <ToolbarButton onClick={() => editorRef.current?.toggleBlockquote()} icon={<Quote className="h-3 w-3" />}>인용</ToolbarButton>
+                <ToolbarButton onClick={() => editorRef.current?.toggleBulletList()} icon={<List className="h-3 w-3" />}>리스트</ToolbarButton>
+                <ToolbarButton onClick={() => editorRef.current?.toggleOrderedList()} icon={<ListOrdered className="h-3 w-3" />}>번호</ToolbarButton>
+                <ToolbarButton onClick={() => editorRef.current?.toggleHighlight()} icon={<Highlighter className="h-3 w-3" />}>강조색</ToolbarButton>
+                <ToolbarButton onClick={() => editorRef.current?.wrapBrandColor()} icon={<Sparkles className="h-3 w-3" />}>브랜드색</ToolbarButton>
+                <ToolbarButton onClick={() => editorRef.current?.insertLink()} icon={<Link2 className="h-3 w-3" />}>링크</ToolbarButton>
+                <ToolbarButton onClick={() => editorRef.current?.insertImage()} icon={<ImageIcon className="h-3 w-3" />}>이미지</ToolbarButton>
+                <ToolbarButton onClick={() => editorRef.current?.insertDivider()} icon={<Minus className="h-3 w-3" />}>구분선</ToolbarButton>
               </div>
             </div>
 
@@ -860,13 +824,11 @@ export default function BlogPostEditor({
 
               <TabsContent value="write" className="mt-0">
                 <div className="grid gap-4 lg:grid-cols-[minmax(0,1fr)_220px]">
-                  <textarea
-                    ref={textareaRef}
+                  <RichMarkdownEditor
+                    ref={editorRef}
                     value={form.contentMarkdown}
-                    onChange={(event) => updateForm("contentMarkdown", event.target.value)}
-                    className="min-h-[600px] resize-y rounded-2xl border border-[#e8e8e4] bg-[#fcfcfb] px-5 py-4 font-mono text-[14px] leading-7 text-[#111110] outline-none transition-colors focus:border-[#084734]"
+                    onChange={(markdown) => updateForm("contentMarkdown", markdown)}
                     placeholder="본문을 작성해주세요"
-                    spellCheck={false}
                   />
                   <div className="space-y-4 rounded-2xl border border-[#e8e8e4] bg-[#fcfcfb] p-4">
                     <div>

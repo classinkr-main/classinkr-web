@@ -1,4 +1,5 @@
 import { NextRequest, NextResponse } from "next/server"
+import { revalidatePath } from "next/cache"
 import { updatePost, trashPost, permanentDeletePost, restorePost } from "@/lib/repositories/blog"
 import { verifyAdmin } from "@/lib/admin-auth"
 
@@ -29,11 +30,15 @@ export async function PUT(
     if (body.restore === true) {
       const post = await restorePost(numId ?? 0, uuid)
       if (!post) return NextResponse.json({ error: "Post not found" }, { status: 404 })
+      revalidatePath("/blog")
       return NextResponse.json({ post })
     }
 
     const post = await updatePost(numId ?? 0, body, uuid)
     if (!post) return NextResponse.json({ error: "Post not found" }, { status: 404 })
+    // 발행/비공개 전환 또는 콘텐츠 변경 시 블로그 캐시 무효화
+    revalidatePath("/blog")
+    revalidatePath(`/blog/${post.slug}`)
     return NextResponse.json({ post })
   } catch {
     return NextResponse.json({ error: "Failed to update post" }, { status: 500 })
@@ -60,6 +65,7 @@ export async function DELETE(
       : await trashPost(numId ?? 0, uuid)
 
     if (!ok) return NextResponse.json({ error: "Post not found" }, { status: 404 })
+    revalidatePath("/blog")
     return NextResponse.json({ ok: true })
   } catch {
     return NextResponse.json({ error: "Failed to delete post" }, { status: 500 })

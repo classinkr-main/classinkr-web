@@ -162,21 +162,22 @@ export default function AdminBlogPage() {
     }
 
     const handleTogglePublished = async (post: BlogPost) => {
+        const nextStatus = post.status === "published" ? "draft" : "published"
         await adminFetch(`/api/admin/blog/${post._uuid ?? post.id}`, {
             method: "PUT",
-            body: JSON.stringify({ published: post.published === false }),
+            body: JSON.stringify({ status: nextStatus }),
         })
         await fetchPosts()
     }
 
     const displayedPosts =
         tab === "trash" ? trashedPosts :
-        tab === "private" ? posts.filter((p) => p.published === false) :
+        tab === "private" ? posts.filter((p) => p.status !== "published") :
         posts
 
     const TABS: { key: Tab; label: string; count: number }[] = [
         { key: "all", label: "전체", count: posts.length },
-        { key: "private", label: "비공개", count: posts.filter((p) => p.published === false).length },
+        { key: "private", label: "비공개", count: posts.filter((p) => p.status !== "published").length },
         { key: "trash", label: "휴지통", count: trashedPosts.length },
     ]
 
