@@ -49,6 +49,7 @@ function supabaseToLegacy(row: SupaBlogPost): BlogPost & { _uuid: string } {
     seoTitle: row.seo_title ?? "",
     seoDescription: row.seo_description ?? "",
     relatedPostIds: [],
+    pageLayout: (row.page_layout ?? "standard") as "standard" | "minimal",
     status: row.status.toLowerCase() as BlogPost["status"],
     deletedAt: row.deleted_at ?? undefined,
     cta: {
@@ -88,6 +89,7 @@ function legacyToSupabaseInsert(data: Partial<BlogPostInput>): BlogPostInsert {
     cta_url: data.cta?.buttonHref ?? null,
     cta_style: "primary",
     related_post_ids: [],
+    page_layout: data.pageLayout ?? "standard",
     published_at: data.status === "published" ? new Date().toISOString() : null,
     published_by: null,
     deleted_at: null,
@@ -102,7 +104,7 @@ const LIST_COLUMNS = [
   "author_name", "author_role", "author_bio", "author_avatar_url",
   "read_time", "image_url", "hero_image_url", "featured", "status",
   "seo_title", "seo_description", "benefit_items", "target_reader",
-  "cta_text", "cta_url", "published_at", "updated_at", "created_at",
+  "cta_text", "cta_url", "page_layout", "published_at", "updated_at", "created_at",
   "deleted_at",
 ].join(",")
 

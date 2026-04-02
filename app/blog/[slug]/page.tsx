@@ -138,29 +138,35 @@ export default async function BlogDetailPage({
       )}
 
       <section className="px-6 pb-20 pt-10">
-        <div className="mx-auto grid max-w-[1200px] gap-12 lg:grid-cols-[220px_minmax(0,1fr)]">
-          <aside className="hidden lg:block">
-            <div className="sticky top-28 rounded-[28px] border border-[#e8e8e4] bg-white p-5 shadow-sm">
-              <p className="text-[12px] font-medium uppercase tracking-[0.24em] text-[#084734]/45">
-                On This Page
-              </p>
-              <div className="mt-4 space-y-3">
-                {headings.map((heading) => (
-                  <a
-                    key={heading.id}
-                    href={`#${heading.id}`}
-                    className={`block text-sm leading-6 text-[#1a1a1a]/45 transition-colors hover:text-[#084734] ${
-                      heading.level === 3 ? "pl-4" : ""
-                    }`}
-                  >
-                    {heading.text}
-                  </a>
-                ))}
+        <div className={`mx-auto max-w-[1200px] gap-12 ${
+          post.pageLayout === "minimal"
+            ? "flex flex-col"
+            : "grid lg:grid-cols-[220px_minmax(0,1fr)]"
+        }`}>
+          {post.pageLayout !== "minimal" && (
+            <aside className="hidden lg:block">
+              <div className="sticky top-28 rounded-[28px] border border-[#e8e8e4] bg-white p-5 shadow-sm">
+                <p className="text-[12px] font-medium uppercase tracking-[0.24em] text-[#084734]/45">
+                  On This Page
+                </p>
+                <div className="mt-4 space-y-3">
+                  {headings.map((heading) => (
+                    <a
+                      key={heading.id}
+                      href={`#${heading.id}`}
+                      className={`block text-sm leading-6 text-[#1a1a1a]/45 transition-colors hover:text-[#084734] ${
+                        heading.level === 3 ? "pl-4" : ""
+                      }`}
+                    >
+                      {heading.text}
+                    </a>
+                  ))}
+                </div>
               </div>
-            </div>
-          </aside>
+            </aside>
+          )}
 
-          <div className="min-w-0">
+          <div className={post.pageLayout === "minimal" ? "mx-auto w-full max-w-3xl" : "min-w-0"}>
             <div className="rounded-[36px] border border-[#e8e8e4] bg-white px-6 py-8 shadow-sm md:px-10 md:py-12">
               <BlogMarkdownRenderer markdown={post.contentMarkdown} />
             </div>

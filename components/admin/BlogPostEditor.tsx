@@ -1,5 +1,6 @@
 "use client"
 
+import Image from "next/image"
 import Link from "next/link"
 import {
   startTransition,
@@ -63,8 +64,8 @@ interface BlogPostEditorProps {
 }
 
 type DraftState = "saved" | "saving" | "dirty"
-type AiAction = "card-news" | "reels" | "optimize"
-type AiState = { action: AiAction; status: "loading" | "streaming" | "done" | "error"; result: string }
+type AiAction = "card-news" | "reels" | "optimize" | "draft"
+type AiState = { action: AiAction; status: "loading" | "streaming" | "done" | "error"; result: string; topic?: string; tone?: string; length?: string }
 type EditorSnapshot = {
   form: BlogPostInput
   tagsInput: string
@@ -131,6 +132,7 @@ function createEmptyDraft(): BlogPostInput {
     seoTitle: "",
     seoDescription: "",
     relatedPostIds: [],
+    pageLayout: "standard",
     cta: { ...DEFAULT_BLOG_CTA },
     status: "draft",
   }
@@ -194,6 +196,8 @@ export default function BlogPostEditor({
   const [isSubmitting, setIsSubmitting] = useState(false)
   const [notice, setNotice] = useState("")
   const [aiState, setAiState] = useState<AiState | null>(null)
+  const [draftInput, setDraftInput] = useState({ topic: "", tone: "전문적", length: "medium" })
+  const [showPreview, setShowPreview] = useState(false)
   const [slugEdited, setSlugEdited] = useState(Boolean(initialPost?.slug))
   const formRef = useRef(form)
   const tagsInputRef = useRef(tagsInput)
@@ -478,17 +482,16 @@ export default function BlogPostEditor({
     }
   }
 
-  const handleAiAction = async (action: AiAction) => {
-    setAiState({ action, status: "loading", result: "" })
+  const handleAiAction = async (action: AiAction, params?: { topic: string; tone: string; length: string }) => {
+    setAiState({ action, status: "loading", result: "", ...(params ?? {}) })
     try {
       const res = await adminFetch("/api/admin/blog/ai", {
         method: "POST",
-        body: JSON.stringify({
-          action,
-          title: form.title,
-          content: form.contentMarkdown,
-          category: form.category,
-        }),
+        body: JSON.stringify(
+          action === "draft" && params
+            ? { action, category: form.category, topic: params.topic, tone: params.tone, length: params.length }
+            : { action, title: form.title, content: form.contentMarkdown, category: form.category }
+        ),
       })
       if (!res.ok || !res.body) {
         const err = await res.json().catch(() => ({ error: "AI 처리 중 오류가 발생했습니다." })) as { error?: string }
@@ -514,6 +517,7 @@ export default function BlogPostEditor({
     "card-news": "카드뉴스 생성",
     "reels": "릴스 스크립트",
     "optimize": "블로그 최적화",
+    "draft": "초안 생성",
   }
 
   return (
@@ -528,11 +532,13 @@ export default function BlogPostEditor({
               <div className="flex items-center gap-3">
                 <div className={`flex h-8 w-8 items-center justify-center rounded-xl ${
                   aiState.action === "card-news" ? "bg-blue-50" :
-                  aiState.action === "reels" ? "bg-purple-50" : "bg-emerald-50"
+                  aiState.action === "reels" ? "bg-purple-50" :
+                  aiState.action === "draft" ? "bg-amber-50" : "bg-emerald-50"
                 }`}>
                   {aiState.action === "card-news" && <LayoutTemplate className="h-4 w-4 text-blue-500" />}
                   {aiState.action === "reels" && <Video className="h-4 w-4 text-purple-500" />}
                   {aiState.action === "optimize" && <Wand2 className="h-4 w-4 text-emerald-600" />}
+                  {aiState.action === "draft" && <Sparkles className="h-4 w-4 text-amber-500" />}
                 </div>
                 <div>
                   <p className="text-sm font-semibold text-[#111110]">{AI_LABELS[aiState.action]}</p>
@@ -593,11 +599,38 @@ export default function BlogPostEditor({
             {aiState.status === "done" && (
               <div className="border-t border-[#e8e8e4] px-6 py-4">
                 <div className="flex items-center justify-between">
-                  <p className="text-[12px] text-[#1a1a1a]/40">결과를 복사해서 활용해보세요.</p>
+                  {aiState.action === "draft" ? (
+                    <Button
+                      size="sm"
+                      onClick={() => {
+                        const lines = aiState.result.split("\n")
+                        const titleLine = lines.find((l) => l.startsWith("# "))
+                        const extractedTitle = titleLine ? titleLine.replace(/^#\s+/, "").trim() : ""
+                        const body = lines
+                          .filter((l) => !l.startsWith("# ") || l !== titleLine)
+                          .join("\n")
+                          .trimStart()
+                        updateForm("contentMarkdown", body)
+                        if (extractedTitle) updateForm("title", extractedTitle)
+                        setAiState(null)
+                      }}
+                      className="bg-[#084734] text-white hover:bg-[#084734]/90"
+                    >
+                      <Check className="mr-1.5 h-3.5 w-3.5" />
+                      에디터에 적용
+                    </Button>
+                  ) : (
+                    <p className="text-[12px] text-[#1a1a1a]/40">결과를 복사해서 활용해보세요.</p>
+                  )}
                   <Button
                     variant="ghost"
                     size="sm"
-                    onClick={() => handleAiAction(aiState.action)}
+                    onClick={() => handleAiAction(
+                      aiState.action,
+                      aiState.action === "draft" && aiState.topic
+                        ? { topic: aiState.topic, tone: aiState.tone ?? "전문적", length: aiState.length ?? "medium" }
+                        : undefined
+                    )}
                     className="text-[#1a1a1a]/50"
                   >
                     <Sparkles className="mr-1.5 h-3.5 w-3.5" />
@@ -606,6 +639,171 @@ export default function BlogPostEditor({
                 </div>
               </div>
             )}
+          </div>
+        </div>
+      )}
+
+      {/* ── Page Preview Modal ── */}
+      {showPreview && (
+        <div className="fixed inset-0 z-50 flex flex-col bg-[#FAFAF8] overflow-hidden">
+          {/* Preview header */}
+          <div className="flex shrink-0 items-center justify-between border-b border-[#e8e8e4] bg-white px-6 py-3">
+            <div className="flex items-center gap-3">
+              <Eye className="h-4 w-4 text-[#084734]" />
+              <span className="text-sm font-semibold text-[#111110]">페이지 미리보기</span>
+              <span className="rounded-full border border-[#e8e8e4] px-2.5 py-0.5 text-[11px] text-[#1a1a1a]/40">
+                {form.pageLayout === "minimal" ? "미니멀" : "기본"} 레이아웃
+              </span>
+            </div>
+            <button
+              type="button"
+              onClick={() => setShowPreview(false)}
+              className="flex h-8 w-8 items-center justify-center rounded-xl border border-[#e8e8e4] text-[#1a1a1a]/40 hover:text-[#111110] transition-colors"
+            >
+              <X className="h-4 w-4" />
+            </button>
+          </div>
+
+          {/* Preview content */}
+          <div className="min-h-0 flex-1 overflow-y-auto text-[#111110]">
+            {/* Hero */}
+            <section className="px-6 pb-10 pt-16">
+              <div className="mx-auto max-w-[1200px]">
+                <div className="grid gap-10 lg:grid-cols-[minmax(0,1fr)_420px] lg:items-end">
+                  <div>
+                    <div className="mb-4 flex flex-wrap items-center gap-2 text-[12px]">
+                      {form.category && (
+                        <span className="rounded-full bg-[#111110] px-3 py-1 font-medium text-white">
+                          {form.category}
+                        </span>
+                      )}
+                      {form.tags.slice(0, 2).filter(Boolean).map((tag) => (
+                        <span key={tag} className="rounded-full border border-[#dfe3d4] bg-white px-3 py-1 text-[#084734]">
+                          {tag}
+                        </span>
+                      ))}
+                    </div>
+                    <h1 className="max-w-4xl text-[2.4rem] font-bold leading-[1.05] tracking-[-0.05em] text-[#111110] md:text-[4.2rem]">
+                      {form.title || "제목이 여기에 표시됩니다"}
+                    </h1>
+                    <p className="mt-6 max-w-3xl text-[18px] leading-8 text-[#1a1a1a]/55">
+                      {form.excerpt || "요약문이 여기에 표시됩니다."}
+                    </p>
+                    <div className="mt-8 flex flex-wrap items-center gap-4 text-sm text-[#1a1a1a]/40">
+                      <span>{form.date}</span>
+                      <span>•</span>
+                      <span>{computedReadTime}</span>
+                      {form.author && <><span>•</span><span>{form.author}{form.authorRole && ` · ${form.authorRole}`}</span></>}
+                    </div>
+                  </div>
+
+                  {(form.heroImageUrl || form.imageUrl) && (
+                    <div className="overflow-hidden rounded-[32px] border border-[#e8e8e4] bg-white shadow-sm">
+                      <div className="relative aspect-[16/10] overflow-hidden">
+                        <Image
+                          src={form.heroImageUrl || form.imageUrl}
+                          alt={form.heroImageAlt || form.title || ""}
+                          fill
+                          className="object-cover"
+                          unoptimized
+                        />
+                      </div>
+                    </div>
+                  )}
+                </div>
+              </div>
+            </section>
+
+            {/* Benefits */}
+            {form.benefitItems.some(Boolean) && (
+              <section className="px-6 pb-8">
+                <div className="mx-auto max-w-[1200px] rounded-[32px] border border-[#dcebd9] bg-white p-6 shadow-sm md:p-8">
+                  <div className="grid gap-6 md:grid-cols-[220px_minmax(0,1fr)] md:items-start">
+                    <div>
+                      <p className="text-[12px] font-medium uppercase tracking-[0.24em] text-[#084734]/55">Why Read This</p>
+                      <h2 className="mt-3 text-2xl font-semibold tracking-[-0.03em] text-[#111110]">이 글을 읽으면 좋은 점</h2>
+                      {form.targetReader && (
+                        <p className="mt-3 text-sm leading-6 text-[#1a1a1a]/45">추천 대상: {form.targetReader}</p>
+                      )}
+                    </div>
+                    <div className="grid gap-4 md:grid-cols-3">
+                      {form.benefitItems.filter(Boolean).map((benefit, i) => (
+                        <div key={i} className="rounded-[24px] border border-[#e8e8e4] bg-[#fcfcfb] p-5">
+                          <p className="text-[12px] font-medium uppercase tracking-[0.24em] text-[#084734]/45">Point {i + 1}</p>
+                          <p className="mt-3 text-[15px] leading-7 text-[#1a1a1a]/75">{benefit}</p>
+                        </div>
+                      ))}
+                    </div>
+                  </div>
+                </div>
+              </section>
+            )}
+
+            {/* Content */}
+            <section className="px-6 pb-20 pt-10">
+              <div className={`mx-auto max-w-[1200px] gap-12 ${
+                form.pageLayout === "minimal"
+                  ? "flex flex-col"
+                  : "grid lg:grid-cols-[220px_minmax(0,1fr)]"
+              }`}>
+                {form.pageLayout !== "minimal" && headings.length > 0 && (
+                  <aside className="hidden lg:block">
+                    <div className="sticky top-8 rounded-[28px] border border-[#e8e8e4] bg-white p-5 shadow-sm">
+                      <p className="text-[12px] font-medium uppercase tracking-[0.24em] text-[#084734]/45">On This Page</p>
+                      <div className="mt-4 space-y-3">
+                        {headings.map((h) => (
+                          <p key={h.id} className={`text-sm leading-6 text-[#1a1a1a]/45 ${h.level === 3 ? "pl-4" : ""}`}>{h.text}</p>
+                        ))}
+                      </div>
+                    </div>
+                  </aside>
+                )}
+                <div className={form.pageLayout === "minimal" ? "mx-auto w-full max-w-3xl" : "min-w-0"}>
+                  <div className="rounded-[36px] border border-[#e8e8e4] bg-white px-6 py-8 shadow-sm md:px-10 md:py-12">
+                    {form.contentMarkdown
+                      ? <BlogMarkdownRenderer markdown={form.contentMarkdown} />
+                      : <p className="text-[#1a1a1a]/30">본문이 여기에 표시됩니다.</p>
+                    }
+                  </div>
+
+                  {/* Author */}
+                  {form.author && (
+                    <div className="mt-10 rounded-[32px] border border-[#e8e8e4] bg-white p-6 shadow-sm md:p-8">
+                      <div className="flex flex-col gap-6 md:flex-row md:items-center">
+                        <div className="relative h-16 w-16 shrink-0 overflow-hidden rounded-full bg-[#f0f0ec]">
+                          {form.authorAvatarUrl ? (
+                            <Image src={form.authorAvatarUrl} alt={form.author} fill className="object-cover" unoptimized />
+                          ) : (
+                            <div className="flex h-full items-center justify-center text-lg font-semibold text-[#084734]">
+                              {form.author.slice(0, 1)}
+                            </div>
+                          )}
+                        </div>
+                        <div>
+                          <p className="text-lg font-semibold text-[#111110]">{form.author}</p>
+                          <p className="text-sm text-[#1a1a1a]/45">{form.authorRole}</p>
+                          {form.authorBio && <p className="mt-3 text-[15px] leading-7 text-[#1a1a1a]/65">{form.authorBio}</p>}
+                        </div>
+                      </div>
+                    </div>
+                  )}
+
+                  {/* CTA */}
+                  <div className="mt-12 overflow-hidden rounded-[36px] bg-[#111110] p-8 text-white shadow-sm md:p-10">
+                    <p className="text-[12px] font-medium uppercase tracking-[0.24em] text-white/35">{form.cta.eyebrow}</p>
+                    <div className="mt-4 max-w-2xl">
+                      <h2 className="text-[2rem] font-semibold tracking-[-0.04em] text-white md:text-[2.4rem]">{form.cta.title}</h2>
+                      <p className="mt-4 text-[15px] leading-7 text-white/60">{form.cta.description}</p>
+                    </div>
+                    <div className="mt-8">
+                      <span className="inline-flex items-center gap-2 rounded-full bg-white px-5 py-3 text-sm font-semibold text-[#111110]">
+                        {form.cta.buttonLabel}
+                      </span>
+                    </div>
+                  </div>
+                </div>
+              </div>
+            </section>
           </div>
         </div>
       )}
@@ -658,6 +856,10 @@ export default function BlogPostEditor({
               <Redo2 className="h-4 w-4" />
             </Button>
             <div className="mx-1.5 h-4 w-px bg-[#e8e8e4]" />
+            <Button variant="ghost" size="sm" onClick={() => setShowPreview(true)}>
+              <Eye className="mr-1.5 h-3.5 w-3.5" />
+              미리보기
+            </Button>
             <Button variant="outline" size="sm" onClick={() => handleSubmit()} disabled={isSubmitting}>
               <Save className="mr-1.5 h-3.5 w-3.5" />
               저장
@@ -905,6 +1107,70 @@ export default function BlogPostEditor({
 
               {/* ── Settings Tab ── */}
               <TabsContent value="settings" className="mt-0 space-y-4">
+
+                {/* 페이지 레이아웃 템플릿 */}
+                <div className="rounded-[20px] border border-[#e8e8e4] bg-white p-5 shadow-sm">
+                  <div className="mb-3.5 flex items-center justify-between">
+                    <p className="text-sm font-semibold text-[#111110]">페이지 레이아웃</p>
+                    <button
+                      type="button"
+                      onClick={() => setShowPreview(true)}
+                      className="flex items-center gap-1 text-[12px] text-[#084734] hover:text-[#084734]/70 transition-colors"
+                    >
+                      <Eye className="h-3.5 w-3.5" />
+                      미리보기
+                    </button>
+                  </div>
+                  <div className="grid grid-cols-2 gap-2">
+                    {(
+                      [
+                        {
+                          value: "standard" as const,
+                          label: "기본",
+                          desc: "사이드 목차 + 콘텐츠",
+                          preview: (
+                            <div className="mb-2.5 flex gap-1">
+                              <div className="h-10 w-[28%] rounded-md bg-[#f0f0ec]" />
+                              <div className="flex h-10 flex-1 flex-col gap-1 rounded-md bg-[#f0f0ec] p-1.5">
+                                <div className="h-1.5 w-3/4 rounded bg-[#d8d8d2]" />
+                                <div className="h-1.5 w-full rounded bg-[#d8d8d2]" />
+                                <div className="h-1.5 w-2/3 rounded bg-[#d8d8d2]" />
+                              </div>
+                            </div>
+                          ),
+                        },
+                        {
+                          value: "minimal" as const,
+                          label: "미니멀",
+                          desc: "중앙 정렬 단일 컬럼",
+                          preview: (
+                            <div className="mb-2.5 mx-auto w-3/4 rounded-md bg-[#f0f0ec] p-1.5 flex flex-col gap-1">
+                              <div className="h-1.5 w-3/4 rounded bg-[#d8d8d2]" />
+                              <div className="h-1.5 w-full rounded bg-[#d8d8d2]" />
+                              <div className="h-1.5 w-5/6 rounded bg-[#d8d8d2]" />
+                              <div className="h-1.5 w-2/3 rounded bg-[#d8d8d2]" />
+                            </div>
+                          ),
+                        },
+                      ] as const
+                    ).map(({ value, label, desc, preview }) => (
+                      <button
+                        key={value}
+                        type="button"
+                        onClick={() => updateForm("pageLayout", value)}
+                        className={`rounded-2xl border p-3 text-left transition-colors ${
+                          form.pageLayout === value
+                            ? "border-[#084734] bg-[#f0f7f4]"
+                            : "border-[#e8e8e4] bg-white hover:border-[#084734]/30"
+                        }`}
+                      >
+                        {preview}
+                        <p className={`text-[13px] font-semibold ${form.pageLayout === value ? "text-[#084734]" : "text-[#111110]"}`}>{label}</p>
+                        <p className="text-[11px] text-[#1a1a1a]/45">{desc}</p>
+                      </button>
+                    ))}
+                  </div>
+                </div>
 
                 {/* 발행 설정 */}
                 <div className="rounded-[20px] border border-[#e8e8e4] bg-white p-5 shadow-sm">
@@ -1259,6 +1525,67 @@ export default function BlogPostEditor({
 
               {/* ── AI Tab ── */}
               <TabsContent value="ai" className="mt-0 space-y-4">
+
+                {/* 초안 빠른 생성 */}
+                <div className="rounded-[20px] border border-[#e8e8e4] bg-white p-5 shadow-sm">
+                  <p className="text-sm font-semibold text-[#111110]">초안 빠른 생성</p>
+                  <p className="mt-1 text-[12px] text-[#1a1a1a]/45">
+                    주제와 스타일을 입력하면 블로그 초안을 처음부터 작성해드립니다.
+                  </p>
+                  <div className="mt-4 space-y-3">
+                    <div>
+                      <label className="text-[12px] font-medium text-[#1a1a1a]/60">주제</label>
+                      <input
+                        type="text"
+                        placeholder="예: 학원 운영 효율화 방법, 학부모 소통 노하우…"
+                        value={draftInput.topic}
+                        onChange={(e) => setDraftInput((prev) => ({ ...prev, topic: e.target.value }))}
+                        className="mt-1.5 w-full rounded-xl border border-[#e8e8e4] bg-white px-3 py-2 text-sm outline-none transition-colors focus:border-[#084734] placeholder:text-[#1a1a1a]/25"
+                      />
+                    </div>
+                    <div className="grid grid-cols-2 gap-2.5">
+                      <div>
+                        <label className="text-[12px] font-medium text-[#1a1a1a]/60">톤</label>
+                        <select
+                          value={draftInput.tone}
+                          onChange={(e) => setDraftInput((prev) => ({ ...prev, tone: e.target.value }))}
+                          className="mt-1.5 w-full rounded-xl border border-[#e8e8e4] bg-white px-3 py-2 text-sm outline-none transition-colors focus:border-[#084734] appearance-none"
+                        >
+                          <option value="전문적">전문적</option>
+                          <option value="친근한">친근한</option>
+                          <option value="스토리텔링">스토리텔링</option>
+                          <option value="설득형">설득형</option>
+                          <option value="정보형">정보형</option>
+                        </select>
+                      </div>
+                      <div>
+                        <label className="text-[12px] font-medium text-[#1a1a1a]/60">분량</label>
+                        <select
+                          value={draftInput.length}
+                          onChange={(e) => setDraftInput((prev) => ({ ...prev, length: e.target.value }))}
+                          className="mt-1.5 w-full rounded-xl border border-[#e8e8e4] bg-white px-3 py-2 text-sm outline-none transition-colors focus:border-[#084734] appearance-none"
+                        >
+                          <option value="short">짧게 (~500자)</option>
+                          <option value="medium">보통 (~1200자)</option>
+                          <option value="long">길게 (~2500자)</option>
+                        </select>
+                      </div>
+                    </div>
+                    <button
+                      type="button"
+                      disabled={!draftInput.topic.trim() || (aiState?.action === "draft" && aiState.status !== "done" && aiState.status !== "error")}
+                      onClick={() => handleAiAction("draft", { topic: draftInput.topic, tone: draftInput.tone, length: draftInput.length })}
+                      className="group mt-1 flex w-full items-center justify-center gap-2 rounded-xl bg-[#084734] px-4 py-2.5 text-sm font-medium text-white transition-colors hover:bg-[#084734]/90 disabled:cursor-not-allowed disabled:opacity-50"
+                    >
+                      {aiState?.action === "draft" && aiState.status !== "done" && aiState.status !== "error"
+                        ? <Loader2 className="h-4 w-4 animate-spin" />
+                        : <Sparkles className="h-4 w-4" />
+                      }
+                      초안 생성
+                    </button>
+                  </div>
+                </div>
+
                 <div className="rounded-[20px] border border-[#e8e8e4] bg-white p-5 shadow-sm">
                   <p className="text-sm font-semibold text-[#111110]">AI 콘텐츠 변환</p>
                   <p className="mt-1 text-[12px] text-[#1a1a1a]/45">

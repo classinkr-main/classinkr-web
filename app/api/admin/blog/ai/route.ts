@@ -4,9 +4,28 @@ import { verifyAdmin } from "@/lib/admin-auth"
 
 export const runtime = "nodejs"
 
-type AiAction = "card-news" | "reels" | "optimize"
+type AiAction = "card-news" | "reels" | "optimize" | "draft"
 
-const PROMPTS: Record<AiAction, (title: string, content: string, category: string) => string> = {
+type DraftParams = { topic?: string; tone?: string; length?: string }
+
+const TONE_GUIDE: Record<string, string> = {
+  "전문적": "전문적이고 신뢰감 있는 어조. 데이터와 근거를 중시하며, 격식 있는 문어체로 작성.",
+  "친근한": "독자와 대화하듯 편안하고 따뜻한 어조. 쉬운 단어와 구어체 표현을 활용.",
+  "스토리텔링": "실제 경험이나 사례를 중심으로 이야기 흐름으로 전개. 독자가 공감할 수 있는 구체적 장면 묘사 포함.",
+  "설득형": "독자의 행동 변화를 목표로 논리적 근거와 감성 소구를 결합. 문제 제기 → 해결책 → CTA 구조.",
+  "정보형": "핵심 정보를 체계적으로 정리. 리스트, 소제목, 수치를 적극 활용해 빠르게 스캔 가능하게.",
+}
+
+const LENGTH_GUIDE: Record<string, { words: string; sections: string }> = {
+  short: { words: "500자 내외", sections: "서론 + 본론 2개 소제목 + 결론" },
+  medium: { words: "1200자 내외", sections: "서론 + 본론 4~5개 소제목 + 결론" },
+  long: { words: "2500자 내외", sections: "서론 + 본론 7~8개 소제목 + 결론 + 핵심 요약" },
+}
+
+const PROMPTS: Record<
+  "card-news" | "reels" | "optimize",
+  (title: string, content: string, category: string) => string
+> & { draft: (title: string, content: string, category: string, extra: DraftParams) => string } = {
   "card-news": (title, content, category) => `
 당신은 SNS 카드뉴스 전문 에디터입니다.
 아래 블로그 글을 카드뉴스 슬라이드 구성안으로 변환해주세요.
@@ -91,6 +110,29 @@ ${content}
 모든 자막은 한 줄에 15자 이내로, 말하듯 자연스럽게 작성해주세요.
 `.trim(),
 
+  "draft": (_title, _content, category, { topic = "", tone = "전문적", length = "medium" }) => {
+    const toneGuide = TONE_GUIDE[tone] ?? TONE_GUIDE["전문적"]
+    const lengthGuide = LENGTH_GUIDE[length] ?? LENGTH_GUIDE["medium"]
+    return `당신은 한국어 블로그 전문 작가입니다. 아래 조건에 맞는 블로그 초안을 처음부터 작성해주세요.
+
+주제: ${topic}
+카테고리: ${category || "인사이트"}
+분량: ${lengthGuide.words} (${lengthGuide.sections})
+어조: ${toneGuide}
+
+다음 형식을 반드시 지켜주세요:
+
+1. 첫 줄은 반드시 마크다운 H1 제목으로 시작 (예: # 제목)
+2. 소제목은 H2(##) 사용
+3. 필요한 경우 H3(###) 하위 항목 사용
+4. 강조 문구는 **볼드** 처리
+5. 리스트가 필요하면 마크다운 리스트 활용
+6. 모든 내용은 한국어로 작성
+7. 서론에서 독자의 공감을 얻고, 본론에서 실질적 가치를 제공, 결론에서 핵심 메시지로 마무리
+
+글의 톤과 어조를 일관되게 유지하고, 클래스인(학원 관리 솔루션) 브랜드의 블로그에 어울리는 내용으로 작성해주세요.`.trim()
+  },
+
   "optimize": (title, content, category) => `
 당신은 한국 SEO 전문가이자 콘텐츠 에디터입니다.
 아래 블로그 글을 분석하고 구체적인 개선안을 제안해주세요.
@@ -147,7 +189,15 @@ export async function POST(req: NextRequest) {
     )
   }
 
-  let body: { action: AiAction; title: string; content: string; category: string }
+  let body: {
+    action: AiAction
+    title: string
+    content: string
+    category: string
+    topic?: string
+    tone?: string
+    length?: string
+  }
   try {
     body = await req.json()
   } catch {
@@ -157,16 +207,20 @@ export async function POST(req: NextRequest) {
     })
   }
 
-  const { action, title, content, category } = body
+  const { action, title, content, category, topic, tone, length } = body
 
-  if (!action || !PROMPTS[action]) {
+  const validActions: AiAction[] = ["card-news", "reels", "optimize", "draft"]
+  if (!action || !validActions.includes(action)) {
     return new Response(JSON.stringify({ error: "Invalid action" }), {
       status: 400,
       headers: { "Content-Type": "application/json" },
     })
   }
 
-  const prompt = PROMPTS[action](title || "제목 없음", content || "", category || "인사이트")
+  const prompt =
+    action === "draft"
+      ? PROMPTS.draft(title || "", content || "", category || "인사이트", { topic, tone, length })
+      : PROMPTS[action](title || "제목 없음", content || "", category || "인사이트")
 
   const genAI = new GoogleGenerativeAI(process.env.GEMINI_API_KEY)
   const model = genAI.getGenerativeModel({ model: "gemini-2.0-flash" })

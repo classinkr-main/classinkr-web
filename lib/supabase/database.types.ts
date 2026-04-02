@@ -61,6 +61,7 @@ export interface BlogPost {
   cta_url: string | null;
   cta_style: string;
   related_post_ids: string[];
+  page_layout: "standard" | "minimal";
   published_at: string | null;
   published_by: string | null;
   deleted_at: string | null;
