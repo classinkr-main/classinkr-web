@@ -69,6 +69,7 @@ const RichMarkdownEditor = forwardRef<RichMarkdownEditorHandle, RichMarkdownEdit
     const skipNextUpdate = useRef(false)
 
     const editor = useEditor({
+      immediatelyRender: false,
       extensions: [
         StarterKit,
         Highlight.configure({ multicolor: false }),
