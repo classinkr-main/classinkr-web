@@ -43,6 +43,7 @@ interface GitCommit {
   date: string
   message: string
   refs: string
+  stats?: { files: number; added: number; deleted: number }
 }
 
 // ─── Helpers ─────────────────────────────────────────────
@@ -147,7 +148,11 @@ function RoadmapTab({ token }: { token: string }) {
       .finally(() => setLoading(false))
   }, [token])
 
-  useEffect(() => { load() }, [load])
+  useEffect(() => {
+    load()
+    const timer = setInterval(load, 120_000)
+    return () => clearInterval(timer)
+  }, [load])
 
   const toggleExpand = (id: string) =>
     setExpanded((prev) => { const n = new Set(prev); n.has(id) ? n.delete(id) : n.add(id); return n })
@@ -403,7 +408,11 @@ function BugsTab({ token, userName, onCountChange }: { token: string; userName: 
       .finally(() => setLoading(false))
   }, [token, onCountChange])
 
-  useEffect(() => { load() }, [load])
+  useEffect(() => {
+    load()
+    const timer = setInterval(load, 120_000)
+    return () => clearInterval(timer)
+  }, [load])
 
   const handleSubmit = async (e: React.FormEvent) => {
     e.preventDefault()
@@ -615,7 +624,11 @@ function PatchNotesTab({ token }: { token: string }) {
       .finally(() => setLoading(false))
   }, [token])
 
-  React.useEffect(() => { load() }, [load])
+  React.useEffect(() => {
+    load()
+    const timer = setInterval(load, 120_000)
+    return () => clearInterval(timer)
+  }, [load])
 
   const toggleExpand = (id: string) =>
     setExpandedIds((prev) => {
@@ -1094,23 +1107,40 @@ function ArchitectureTab() {
 }
 
 // ─── Git Log Tab ──────────────────────────────────────────
+const GIT_LOG_POLL_INTERVAL = 60_000 // 60초
+
 function GitLogTab({ token }: { token: string }) {
   const [commits, setCommits] = useState<GitCommit[]>([])
   const [loading, setLoading] = useState(true)
+  const [refreshing, setRefreshing] = useState(false)
   const [error, setError] = useState("")
+  const [lastUpdated, setLastUpdated] = useState<Date | null>(null)
+  const [expandedCommits, setExpandedCommits] = useState<Set<string>>(new Set())
 
-  useEffect(() => {
-    fetch("/api/admin/git-log", { headers: { Authorization: `Bearer ${token}` } })
-      .then((r) => r.json())
-      .then((data) => {
-        if (data.error) setError(data.error)
-        else setCommits(Array.isArray(data) ? data : [])
-      })
-      .catch(() => setError("git log를 가져올 수 없습니다"))
-      .finally(() => setLoading(false))
+  const fetchCommits = useCallback(async (isManual = false) => {
+    if (isManual) setRefreshing(true)
+    try {
+      const r = await fetch("/api/admin/git-log", { headers: { Authorization: `Bearer ${token}` } })
+      const data = await r.json()
+      if (data.error) setError(data.error)
+      else {
+        setCommits(Array.isArray(data) ? data : [])
+        setLastUpdated(new Date())
+        setError("")
+      }
+    } catch {
+      setError("git log를 가져올 수 없습니다")
+    } finally {
+      setLoading(false)
+      setRefreshing(false)
+    }
   }, [token])
 
-  const [expandedCommits, setExpandedCommits] = useState<Set<string>>(new Set())
+  useEffect(() => {
+    fetchCommits()
+    const timer = setInterval(() => fetchCommits(), GIT_LOG_POLL_INTERVAL)
+    return () => clearInterval(timer)
+  }, [fetchCommits])
 
   if (loading) return <div className="text-center py-12 text-[#1a1a1a]/40 text-[13px]">git log 로딩중...</div>
   if (error) return (
@@ -1143,7 +1173,30 @@ function GitLogTab({ token }: { token: string }) {
 
   return (
     <div>
-      <p className="text-[12px] text-[#1a1a1a]/40 mb-5">최근 {commits.length}개 커밋</p>
+      <div className="flex items-center justify-between mb-5">
+        <p className="text-[12px] text-[#1a1a1a]/40">최근 {commits.length}개 커밋</p>
+        <div className="flex items-center gap-3">
+          {lastUpdated && (
+            <span className="text-[11px] text-[#1a1a1a]/30">
+              {lastUpdated.toLocaleTimeString("ko-KR", { hour: "2-digit", minute: "2-digit", second: "2-digit" })} 갱신
+            </span>
+          )}
+          <button
+            onClick={() => fetchCommits(true)}
+            disabled={refreshing}
+            className="flex items-center gap-1.5 text-[11px] text-[#1a1a1a]/50 hover:text-[#1a1a1a]/80 bg-[#f5f5f2] hover:bg-[#ededea] px-2.5 py-1 rounded-lg transition-colors disabled:opacity-40"
+          >
+            <svg
+              className={`w-3 h-3 ${refreshing ? "animate-spin" : ""}`}
+              fill="none" stroke="currentColor" viewBox="0 0 24 24"
+            >
+              <path strokeLinecap="round" strokeLinejoin="round" strokeWidth={2}
+                d="M4 4v5h.582m15.356 2A8.001 8.001 0 004.582 9m0 0H9m11 11v-5h-.581m0 0a8.003 8.003 0 01-15.357-2m15.357 2H15" />
+            </svg>
+            {refreshing ? "갱신중" : "새로고침"}
+          </button>
+        </div>
+      </div>
       <div className="relative">
         {grouped.map((group, gIdx) => (
           <div key={group.date}>
@@ -1193,6 +1246,14 @@ function GitLogTab({ token }: { token: string }) {
                         <span>{date.toLocaleTimeString("ko-KR", { hour: "2-digit", minute: "2-digit" })}</span>
                         <span>·</span>
                         <span>{relativeTime(commit.date)}</span>
+                        {commit.stats && commit.stats.files > 0 && (
+                          <>
+                            <span>·</span>
+                            <span className="text-[#1a1a1a]/30">{commit.stats.files}파일</span>
+                            {commit.stats.added > 0 && <span className="text-green-600/70">+{commit.stats.added}</span>}
+                            {commit.stats.deleted > 0 && <span className="text-red-500/60">-{commit.stats.deleted}</span>}
+                          </>
+                        )}
                       </div>
                     </div>
                   </div>
