@@ -95,6 +95,10 @@ export async function upsertSubscriber(
   const existing = await getSubscriberByEmail(data.email);
 
   if (existing) {
+    // 기존 태그와 병합 (중복 제거)
+    const mergedTags = Array.from(
+      new Set([...(existing.tags ?? []), ...(data.tags ?? [])])
+    );
     const { data: row, error } = await sb()
       .from("newsletter_subscribers")
       .update({
@@ -103,7 +107,7 @@ export async function upsertSubscriber(
         role: data.role ?? null,
         size: data.size ?? null,
         phone: data.phone ?? null,
-        tags: data.tags ?? [],
+        tags: mergedTags,
         status: data.status ?? "active",
         unsubscribed_at: data.status === "active" ? null : undefined,
       })
