@@ -227,14 +227,24 @@ export async function POST(req: NextRequest) {
       : PROMPTS[action](title || "제목 없음", content || "", category || "인사이트")
 
   const genAI = new GoogleGenerativeAI(process.env.GEMINI_API_KEY)
-  const model = genAI.getGenerativeModel({ model: "gemini-3-pro-preview" })
+  const model = genAI.getGenerativeModel({ model: "gemini-2.5-pro" })
+
+  let streamResult: Awaited<ReturnType<typeof model.generateContentStream>>
+  try {
+    streamResult = await model.generateContentStream(prompt)
+  } catch (err) {
+    const msg = err instanceof Error ? err.message : "AI 처리 중 오류가 발생했습니다."
+    return new Response(JSON.stringify({ error: msg }), {
+      status: 500,
+      headers: { "Content-Type": "application/json" },
+    })
+  }
 
   const stream = new ReadableStream({
     async start(controller) {
       const encoder = new TextEncoder()
       try {
-        const result = await model.generateContentStream(prompt)
-        for await (const chunk of result.stream) {
+        for await (const chunk of streamResult.stream) {
           const text = chunk.text()
           if (text) controller.enqueue(encoder.encode(text))
         }
