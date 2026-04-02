@@ -78,6 +78,38 @@ function trimRef(ref: string): string {
     .trim()
 }
 
+// ─── Dev Cache ───────────────────────────────────────────
+const CACHE_TTL = 5 * 60 * 1000 // 5분
+
+function getCached<T>(key: string): T | null {
+  try {
+    const raw = sessionStorage.getItem(key)
+    if (!raw) return null
+    const { data, ts } = JSON.parse(raw)
+    if (Date.now() - ts > CACHE_TTL) return null
+    return data as T
+  } catch { return null }
+}
+
+function setCache<T>(key: string, data: T) {
+  try { sessionStorage.setItem(key, JSON.stringify({ data, ts: Date.now() })) } catch {}
+}
+
+function RefreshBtn({ onClick, refreshing }: { onClick: () => void; refreshing: boolean }) {
+  return (
+    <button
+      onClick={onClick}
+      disabled={refreshing}
+      className="flex items-center gap-1.5 text-[11px] text-[#1a1a1a]/50 hover:text-[#1a1a1a]/80 bg-[#f5f5f2] hover:bg-[#ededea] px-2.5 py-1 rounded-lg transition-colors disabled:opacity-40"
+    >
+      <svg className={`w-3 h-3 ${refreshing ? "animate-spin" : ""}`} fill="none" stroke="currentColor" viewBox="0 0 24 24">
+        <path strokeLinecap="round" strokeLinejoin="round" strokeWidth={2} d="M4 4v5h.582m15.356 2A8.001 8.001 0 004.582 9m0 0H9m11 11v-5h-.581m0 0a8.003 8.003 0 01-15.357-2m15.357 2H15" />
+      </svg>
+      {refreshing ? "갱신중" : "새로고침"}
+    </button>
+  )
+}
+
 // ─── Constants ───────────────────────────────────────────
 const TABS = [
   { id: "roadmap", label: "로드맵" },
@@ -127,6 +159,7 @@ const EMPTY_VER_FORM = {
 function RoadmapTab({ token }: { token: string }) {
   const [versions, setVersions] = useState<RoadmapVersion[]>([])
   const [loading, setLoading] = useState(true)
+  const [refreshing, setRefreshing] = useState(false)
   const [expanded, setExpanded] = useState<Set<string>>(new Set())
   const [showForm, setShowForm] = useState(false)
   const [editId, setEditId] = useState<string | null>(null)
@@ -137,22 +170,28 @@ function RoadmapTab({ token }: { token: string }) {
 
   const headers = { "Content-Type": "application/json", Authorization: `Bearer ${token}` }
 
-  const load = useCallback(() => {
-    fetch("/api/admin/roadmap", { headers: { Authorization: `Bearer ${token}` } })
-      .then((r) => r.json())
-      .then((data) => {
-        setVersions(Array.isArray(data) ? data : [])
-        const inProgress = data.filter((v: RoadmapVersion) => v.status === "in-progress").map((v: RoadmapVersion) => v.id)
-        setExpanded(new Set(inProgress))
-      })
-      .finally(() => setLoading(false))
+  const load = useCallback(async (force = false) => {
+    if (!force) {
+      const cached = getCached<RoadmapVersion[]>("dev_cache_roadmap")
+      if (cached) {
+        setVersions(cached)
+        setExpanded(new Set(cached.filter((v) => v.status === "in-progress").map((v) => v.id)))
+        setLoading(false)
+        return
+      }
+    }
+    if (force) setRefreshing(true)
+    const data = await fetch("/api/admin/roadmap", { headers: { Authorization: `Bearer ${token}` } })
+      .then((r) => r.json()).catch(() => [])
+    const list = Array.isArray(data) ? data : []
+    setVersions(list)
+    setExpanded(new Set(list.filter((v: RoadmapVersion) => v.status === "in-progress").map((v: RoadmapVersion) => v.id)))
+    setCache("dev_cache_roadmap", list)
+    setLoading(false)
+    setRefreshing(false)
   }, [token])
 
-  useEffect(() => {
-    load()
-    const timer = setInterval(load, 120_000)
-    return () => clearInterval(timer)
-  }, [load])
+  useEffect(() => { load() }, [load])
 
   const toggleExpand = (id: string) =>
     setExpanded((prev) => { const n = new Set(prev); n.has(id) ? n.delete(id) : n.add(id); return n })
@@ -216,9 +255,12 @@ function RoadmapTab({ token }: { token: string }) {
           </div>
         </div>
         <span className="text-2xl font-bold text-[#111110] shrink-0">{progress}%</span>
-        <button onClick={openCreate} className="shrink-0 px-3 py-1.5 bg-[#111110] text-white text-[12px] font-medium rounded-xl hover:bg-[#1a1a1a] transition-colors">
-          + 버전 추가
-        </button>
+        <div className="flex items-center gap-2 shrink-0">
+          <RefreshBtn onClick={() => load(true)} refreshing={refreshing} />
+          <button onClick={openCreate} className="px-3 py-1.5 bg-[#111110] text-white text-[12px] font-medium rounded-xl hover:bg-[#1a1a1a] transition-colors">
+            + 버전 추가
+          </button>
+        </div>
       </div>
 
       {/* Create/Edit Form */}
@@ -397,22 +439,30 @@ function BugsTab({ token, userName, onCountChange }: { token: string; userName: 
     environment: "", tags: "", assignee: "",
   })
 
-  const load = useCallback(() => {
-    fetch("/api/admin/bugs", { headers: { Authorization: `Bearer ${token}` } })
-      .then((r) => r.json())
-      .then((data) => {
-        const list = Array.isArray(data) ? data : []
-        setBugs(list)
-        onCountChange?.(list.filter((b: BugReport) => b.status === "open").length)
-      })
-      .finally(() => setLoading(false))
+  const [refreshing, setRefreshing] = useState(false)
+
+  const load = useCallback(async (force = false) => {
+    if (!force) {
+      const cached = getCached<BugReport[]>("dev_cache_bugs")
+      if (cached) {
+        setBugs(cached)
+        onCountChange?.(cached.filter((b) => b.status === "open").length)
+        setLoading(false)
+        return
+      }
+    }
+    if (force) setRefreshing(true)
+    const data = await fetch("/api/admin/bugs", { headers: { Authorization: `Bearer ${token}` } })
+      .then((r) => r.json()).catch(() => [])
+    const list = Array.isArray(data) ? data : []
+    setBugs(list)
+    onCountChange?.(list.filter((b: BugReport) => b.status === "open").length)
+    setCache("dev_cache_bugs", list)
+    setLoading(false)
+    setRefreshing(false)
   }, [token, onCountChange])
 
-  useEffect(() => {
-    load()
-    const timer = setInterval(load, 120_000)
-    return () => clearInterval(timer)
-  }, [load])
+  useEffect(() => { load() }, [load])
 
   const handleSubmit = async (e: React.FormEvent) => {
     e.preventDefault()
@@ -470,9 +520,12 @@ function BugsTab({ token, userName, onCountChange }: { token: string; userName: 
             ))}
           </div>
         </div>
-        <button onClick={() => setShowForm(!showForm)} className="shrink-0 px-4 py-2 bg-[#111110] text-white text-[12px] font-medium rounded-xl hover:bg-[#1a1a1a] transition-colors">
-          + 버그 등록
-        </button>
+        <div className="flex items-center gap-2 shrink-0">
+          <RefreshBtn onClick={() => load(true)} refreshing={refreshing} />
+          <button onClick={() => setShowForm(!showForm)} className="px-4 py-2 bg-[#111110] text-white text-[12px] font-medium rounded-xl hover:bg-[#1a1a1a] transition-colors">
+            + 버그 등록
+          </button>
+        </div>
       </div>
 
       {/* Form */}
@@ -617,18 +670,24 @@ function PatchNotesTab({ token }: { token: string }) {
 
   const headers = { "Content-Type": "application/json", Authorization: `Bearer ${token}` }
 
-  const load = React.useCallback(() => {
-    fetch("/api/admin/patch-notes", { headers: { Authorization: `Bearer ${token}` } })
-      .then((r) => r.json())
-      .then((data) => setNotes(Array.isArray(data) ? data : []))
-      .finally(() => setLoading(false))
+  const [refreshing, setRefreshing] = React.useState(false)
+
+  const load = React.useCallback(async (force = false) => {
+    if (!force) {
+      const cached = getCached<PatchNote[]>("dev_cache_patchnotes")
+      if (cached) { setNotes(cached); setLoading(false); return }
+    }
+    if (force) setRefreshing(true)
+    const data = await fetch("/api/admin/patch-notes", { headers: { Authorization: `Bearer ${token}` } })
+      .then((r) => r.json()).catch(() => [])
+    const list = Array.isArray(data) ? data : []
+    setNotes(list)
+    setCache("dev_cache_patchnotes", list)
+    setLoading(false)
+    setRefreshing(false)
   }, [token])
 
-  React.useEffect(() => {
-    load()
-    const timer = setInterval(load, 120_000)
-    return () => clearInterval(timer)
-  }, [load])
+  React.useEffect(() => { load() }, [load])
 
   const toggleExpand = (id: string) =>
     setExpandedIds((prev) => {
@@ -712,12 +771,15 @@ function PatchNotesTab({ token }: { token: string }) {
         <div>
           <p className="text-sm text-gray-500">릴리즈별 변경사항을 기록하고 관리합니다.</p>
         </div>
-        <button
-          onClick={openCreate}
-          className="flex items-center gap-2 px-4 py-2 bg-[#111110] text-white rounded-xl text-sm font-medium hover:bg-[#1a1a1a] transition-colors"
-        >
-          <span>+ 새 패치노트</span>
-        </button>
+        <div className="flex items-center gap-2">
+          <RefreshBtn onClick={() => load(true)} refreshing={refreshing} />
+          <button
+            onClick={openCreate}
+            className="flex items-center gap-2 px-4 py-2 bg-[#111110] text-white rounded-xl text-sm font-medium hover:bg-[#1a1a1a] transition-colors"
+          >
+            <span>+ 새 패치노트</span>
+          </button>
+        </div>
       </div>
 
       {/* 작성/수정 폼 */}
@@ -1107,8 +1169,6 @@ function ArchitectureTab() {
 }
 
 // ─── Git Log Tab ──────────────────────────────────────────
-const GIT_LOG_POLL_INTERVAL = 60_000 // 60초
-
 function GitLogTab({ token }: { token: string }) {
   const [commits, setCommits] = useState<GitCommit[]>([])
   const [loading, setLoading] = useState(true)
@@ -1117,14 +1177,20 @@ function GitLogTab({ token }: { token: string }) {
   const [lastUpdated, setLastUpdated] = useState<Date | null>(null)
   const [expandedCommits, setExpandedCommits] = useState<Set<string>>(new Set())
 
-  const fetchCommits = useCallback(async (isManual = false) => {
-    if (isManual) setRefreshing(true)
+  const fetchCommits = useCallback(async (force = false) => {
+    if (!force) {
+      const cached = getCached<GitCommit[]>("dev_cache_gitlog")
+      if (cached) { setCommits(cached); setLoading(false); return }
+    }
+    if (force) setRefreshing(true)
     try {
       const r = await fetch("/api/admin/git-log", { headers: { Authorization: `Bearer ${token}` } })
       const data = await r.json()
       if (data.error) setError(data.error)
       else {
-        setCommits(Array.isArray(data) ? data : [])
+        const list = Array.isArray(data) ? data : []
+        setCommits(list)
+        setCache("dev_cache_gitlog", list)
         setLastUpdated(new Date())
         setError("")
       }
@@ -1136,11 +1202,7 @@ function GitLogTab({ token }: { token: string }) {
     }
   }, [token])
 
-  useEffect(() => {
-    fetchCommits()
-    const timer = setInterval(() => fetchCommits(), GIT_LOG_POLL_INTERVAL)
-    return () => clearInterval(timer)
-  }, [fetchCommits])
+  useEffect(() => { fetchCommits() }, [fetchCommits])
 
   if (loading) return <div className="text-center py-12 text-[#1a1a1a]/40 text-[13px]">git log 로딩중...</div>
   if (error) return (
@@ -1181,20 +1243,7 @@ function GitLogTab({ token }: { token: string }) {
               {lastUpdated.toLocaleTimeString("ko-KR", { hour: "2-digit", minute: "2-digit", second: "2-digit" })} 갱신
             </span>
           )}
-          <button
-            onClick={() => fetchCommits(true)}
-            disabled={refreshing}
-            className="flex items-center gap-1.5 text-[11px] text-[#1a1a1a]/50 hover:text-[#1a1a1a]/80 bg-[#f5f5f2] hover:bg-[#ededea] px-2.5 py-1 rounded-lg transition-colors disabled:opacity-40"
-          >
-            <svg
-              className={`w-3 h-3 ${refreshing ? "animate-spin" : ""}`}
-              fill="none" stroke="currentColor" viewBox="0 0 24 24"
-            >
-              <path strokeLinecap="round" strokeLinejoin="round" strokeWidth={2}
-                d="M4 4v5h.582m15.356 2A8.001 8.001 0 004.582 9m0 0H9m11 11v-5h-.581m0 0a8.003 8.003 0 01-15.357-2m15.357 2H15" />
-            </svg>
-            {refreshing ? "갱신중" : "새로고침"}
-          </button>
+          <RefreshBtn onClick={() => fetchCommits(true)} refreshing={refreshing} />
         </div>
       </div>
       <div className="relative">
