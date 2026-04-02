@@ -61,7 +61,7 @@ export interface BlogPost {
   cta_url: string | null;
   cta_style: string;
   related_post_ids: string[];
-  page_layout?: "standard" | "minimal"; // 마이그레이션(20260402_blog_page_layout.sql) 적용 후 required로 변경
+  page_layout: "standard" | "minimal";
   published_at: string | null;
   published_by: string | null;
   deleted_at: string | null;

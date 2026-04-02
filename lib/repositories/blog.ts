@@ -89,7 +89,7 @@ function legacyToSupabaseInsert(data: Partial<BlogPostInput>): BlogPostInsert {
     cta_url: data.cta?.buttonHref ?? null,
     cta_style: "primary",
     related_post_ids: [],
-    // page_layout: data.pageLayout ?? "standard", // 마이그레이션(20260402_blog_page_layout.sql) 적용 후 활성화
+    page_layout: data.pageLayout ?? "standard",
     published_at: data.status === "published" ? new Date().toISOString() : null,
     published_by: null,
     deleted_at: null,
@@ -104,7 +104,7 @@ const LIST_COLUMNS = [
   "author_name", "author_role", "author_bio", "author_avatar_url",
   "read_time", "image_url", "hero_image_url", "featured", "status",
   "seo_title", "seo_description", "benefit_items", "target_reader",
-  "cta_text", "cta_url", "published_at", "updated_at", "created_at",
+  "cta_text", "cta_url", "page_layout", "published_at", "updated_at", "created_at",
   "deleted_at",
 ].join(",")
 
@@ -253,8 +253,7 @@ export async function updatePost(
     update.cta_text = data.cta.buttonLabel ?? null;
     update.cta_url = data.cta.buttonHref ?? null;
   }
-  // page_layout 컬럼은 마이그레이션(20260402_blog_page_layout.sql) 적용 후 활성화
-  // if (data.pageLayout !== undefined) update.page_layout = data.pageLayout;
+  if (data.pageLayout !== undefined) update.page_layout = data.pageLayout;
   if (data.status !== undefined) {
     update.status = data.status.toUpperCase() as SupaBlogPost["status"];
     if (data.status === "published" && !update.published_at) {
