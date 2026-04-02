@@ -14,8 +14,11 @@ import {
   LogOut,
   ChevronRight,
   CalendarDays,
+  PanelLeftClose,
+  PanelLeftOpen,
 } from "lucide-react"
 import { createSupabaseBrowserClient } from "@/lib/supabase/browser"
+import { useEffect, useState } from "react"
 
 // Supabase 역할 → 메뉴 접근 매핑
 type SidebarRole = string
@@ -57,6 +60,19 @@ interface Props {
 export default function AdminSidebar({ role, name, email }: Props) {
   const pathname = usePathname()
   const router = useRouter()
+  const [collapsed, setCollapsed] = useState(false)
+
+  useEffect(() => {
+    const saved = localStorage.getItem("admin_sidebar_collapsed")
+    if (saved === "true") setCollapsed(true)
+  }, [])
+
+  const toggle = () => {
+    setCollapsed((prev) => {
+      localStorage.setItem("admin_sidebar_collapsed", String(!prev))
+      return !prev
+    })
+  }
 
   const handleLogout = async () => {
     const supabase = createSupabaseBrowserClient()
@@ -69,54 +85,85 @@ export default function AdminSidebar({ role, name, email }: Props) {
   )
 
   return (
-    <aside className="w-56 shrink-0 min-h-screen bg-white border-r border-[#e8e8e4] flex flex-col">
-      <div className="px-5 pt-6 pb-4 border-b border-[#e8e8e4]">
-        <p className="text-[11px] font-medium text-[#1a1a1a]/30 uppercase tracking-widest mb-0.5">Classin</p>
-        <p className="text-[15px] font-semibold text-[#111110]">Admin</p>
+    <aside
+      className={`shrink-0 min-h-screen bg-white border-r border-[#e8e8e4] flex flex-col transition-all duration-200 ${
+        collapsed ? "w-14" : "w-56"
+      }`}
+    >
+      {/* 헤더 */}
+      <div className={`flex items-center border-b border-[#e8e8e4] ${collapsed ? "justify-center px-2 py-4" : "px-5 pt-6 pb-4"}`}>
+        {!collapsed && (
+          <div className="flex-1">
+            <p className="text-[11px] font-medium text-[#1a1a1a]/30 uppercase tracking-widest mb-0.5">Classin</p>
+            <p className="text-[15px] font-semibold text-[#111110]">Admin</p>
+          </div>
+        )}
+        <button
+          onClick={toggle}
+          className="p-1 rounded-md text-[#1a1a1a]/30 hover:text-[#111110] hover:bg-[#f5f5f2] transition-colors"
+          title={collapsed ? "사이드바 열기" : "사이드바 닫기"}
+        >
+          {collapsed ? <PanelLeftOpen className="w-4 h-4" /> : <PanelLeftClose className="w-4 h-4" />}
+        </button>
       </div>
 
-      <div className="px-5 py-3 border-b border-[#e8e8e4]">
-        <p className="text-[12px] font-medium text-[#111110]">{name}</p>
-        <p className="text-[11px] text-[#1a1a1a]/40">
-          {ROLE_LABEL[role] ?? role} · {email}
-        </p>
-      </div>
+      {/* 유저 정보 */}
+      {!collapsed && (
+        <div className="px-5 py-3 border-b border-[#e8e8e4]">
+          <p className="text-[12px] font-medium text-[#111110]">{name}</p>
+          <p className="text-[11px] text-[#1a1a1a]/40">
+            {ROLE_LABEL[role] ?? role} · {email}
+          </p>
+        </div>
+      )}
 
-      <nav className="flex-1 px-3 py-4 space-y-0.5">
+      {/* 네비게이션 */}
+      <nav className={`flex-1 py-4 space-y-0.5 ${collapsed ? "px-1.5" : "px-3"}`}>
         {visibleNav.map((item) => {
           const isActive = pathname === item.href || pathname.startsWith(item.href + "/")
           return (
             <Link
               key={item.href}
               href={item.href}
-              className={`flex items-center gap-2.5 px-3 py-2 rounded-lg text-[13px] font-medium transition-colors group ${
+              title={collapsed ? item.label : undefined}
+              className={`flex items-center gap-2.5 rounded-lg text-[13px] font-medium transition-colors group ${
+                collapsed ? "justify-center px-2 py-2.5" : "px-3 py-2"
+              } ${
                 isActive
                   ? "bg-[#111110] text-white"
                   : "text-[#1a1a1a]/60 hover:bg-[#f5f5f2] hover:text-[#111110]"
               }`}
             >
-              <span className={isActive ? "text-white" : "text-[#1a1a1a]/40 group-hover:text-[#111110]"}>
+              <span className={`shrink-0 ${isActive ? "text-white" : "text-[#1a1a1a]/40 group-hover:text-[#111110]"}`}>
                 {item.icon}
               </span>
-              <span className="flex-1">{item.label}</span>
-              {item.badge && (
-                <span className="text-[10px] px-1.5 py-0.5 rounded bg-[#e8e8e4] text-[#1a1a1a]/50 font-normal">
-                  {item.badge}
-                </span>
+              {!collapsed && (
+                <>
+                  <span className="flex-1">{item.label}</span>
+                  {item.badge && (
+                    <span className="text-[10px] px-1.5 py-0.5 rounded bg-[#e8e8e4] text-[#1a1a1a]/50 font-normal">
+                      {item.badge}
+                    </span>
+                  )}
+                  {isActive && <ChevronRight className="w-3 h-3 opacity-60" />}
+                </>
               )}
-              {isActive && <ChevronRight className="w-3 h-3 opacity-60" />}
             </Link>
           )
         })}
       </nav>
 
-      <div className="px-3 pb-5">
+      {/* 로그아웃 */}
+      <div className={`pb-5 ${collapsed ? "px-1.5" : "px-3"}`}>
         <button
           onClick={handleLogout}
-          className="w-full flex items-center gap-2.5 px-3 py-2 rounded-lg text-[13px] text-[#1a1a1a]/40 hover:text-red-500 hover:bg-red-50 transition-colors"
+          title={collapsed ? "로그아웃" : undefined}
+          className={`w-full flex items-center gap-2.5 rounded-lg text-[13px] text-[#1a1a1a]/40 hover:text-red-500 hover:bg-red-50 transition-colors ${
+            collapsed ? "justify-center px-2 py-2.5" : "px-3 py-2"
+          }`}
         >
-          <LogOut className="w-4 h-4" />
-          로그아웃
+          <LogOut className="w-4 h-4 shrink-0" />
+          {!collapsed && "로그아웃"}
         </button>
       </div>
     </aside>
