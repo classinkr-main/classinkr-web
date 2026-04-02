@@ -159,6 +159,7 @@ function normalizePost(raw: RawBlogPost, usedSlugs: Set<string>): BlogPost {
       buttonLabel: raw.cta?.buttonLabel?.trim() || DEFAULT_BLOG_CTA.buttonLabel,
       buttonHref: raw.cta?.buttonHref?.trim() || DEFAULT_BLOG_CTA.buttonHref,
     },
+    pageLayout: (raw.pageLayout ?? "standard") as "standard" | "minimal",
     status: raw.status || "published",
   }
 }
@@ -215,6 +216,7 @@ export function createEmptyPost(): BlogPostInput {
     seoTitle: "",
     seoDescription: "",
     relatedPostIds: [],
+    pageLayout: "standard",
     cta: { ...DEFAULT_BLOG_CTA },
     status: "draft",
   }

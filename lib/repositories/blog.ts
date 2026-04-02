@@ -49,6 +49,7 @@ function supabaseToLegacy(row: SupaBlogPost): BlogPost & { _uuid: string } {
     seoTitle: row.seo_title ?? "",
     seoDescription: row.seo_description ?? "",
     relatedPostIds: [],
+    pageLayout: (row.page_layout ?? "standard") as "standard" | "minimal",
     status: row.status.toLowerCase() as BlogPost["status"],
     deletedAt: row.deleted_at ?? undefined,
     cta: {
@@ -88,6 +89,7 @@ function legacyToSupabaseInsert(data: Partial<BlogPostInput>): BlogPostInsert {
     cta_url: data.cta?.buttonHref ?? null,
     cta_style: "primary",
     related_post_ids: [],
+    page_layout: data.pageLayout ?? "standard",
     published_at: data.status === "published" ? new Date().toISOString() : null,
     published_by: null,
     deleted_at: null,
@@ -102,7 +104,7 @@ const LIST_COLUMNS = [
   "author_name", "author_role", "author_bio", "author_avatar_url",
   "read_time", "image_url", "hero_image_url", "featured", "status",
   "seo_title", "seo_description", "benefit_items", "target_reader",
-  "cta_text", "cta_url", "published_at", "updated_at", "created_at",
+  "cta_text", "cta_url", "page_layout", "published_at", "updated_at", "created_at",
   "deleted_at",
 ].join(",")
 
@@ -237,11 +239,20 @@ export async function updatePost(
   if (data.tags !== undefined) update.tags = data.tags;
   if (data.author !== undefined) update.author_name = data.author;
   if (data.authorRole !== undefined) update.author_role = data.authorRole;
+  if (data.authorBio !== undefined) update.author_bio = data.authorBio;
+  if (data.authorAvatarUrl !== undefined) update.author_avatar_url = data.authorAvatarUrl;
   if (data.featured !== undefined) update.featured = data.featured;
   if (data.imageUrl !== undefined) update.image_url = data.imageUrl;
   if (data.heroImageUrl !== undefined) update.hero_image_url = data.heroImageUrl;
+  if (data.readTime !== undefined) update.read_time = data.readTime;
   if (data.seoTitle !== undefined) update.seo_title = data.seoTitle;
   if (data.seoDescription !== undefined) update.seo_description = data.seoDescription;
+  if (data.benefitItems !== undefined) update.benefit_items = data.benefitItems;
+  if (data.targetReader !== undefined) update.target_reader = data.targetReader;
+  if (data.cta !== undefined) {
+    update.cta_text = data.cta.buttonLabel ?? null;
+    update.cta_url = data.cta.buttonHref ?? null;
+  }
   if (data.status !== undefined) {
     update.status = data.status.toUpperCase() as SupaBlogPost["status"];
     if (data.status === "published" && !update.published_at) {
@@ -334,6 +345,30 @@ export async function permanentDeletePost(id: number, uuid?: string): Promise<bo
     .eq("id", targetUuid);
 
   return !error;
+}
+
+/**
+ * generateStaticParams 전용: cookies() 없이 admin client로 published slug 목록 반환
+ * 일반 서버 컴포넌트는 getPublishedPosts() 사용
+ */
+export async function getPublishedSlugsForStaticParams(): Promise<{ slug: string }[]> {
+  if (!USE_SUPABASE) {
+    const mod = await import("@/lib/blog-data");
+    const posts = await mod.getPublishedPosts();
+    return posts.map((p) => ({ slug: p.slug }));
+  }
+  try {
+    const { createSupabaseAdminClient } = await import("@/lib/supabase/admin");
+    const supabase = createSupabaseAdminClient();
+    const { data } = await supabase
+      .from("blog_posts")
+      .select("slug")
+      .eq("status", "PUBLISHED")
+      .is("deleted_at", null);
+    return (data ?? []).map((row) => ({ slug: row.slug as string }));
+  } catch {
+    return [];
+  }
 }
 
 export async function getRelatedPosts(post: BlogPost, limit = 3): Promise<BlogPost[]> {

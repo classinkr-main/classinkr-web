@@ -50,6 +50,7 @@ export interface BlogPost {
   seoTitle: string
   seoDescription: string
   relatedPostIds: number[]
+  pageLayout: "standard" | "minimal"
   cta: BlogPostCTA
   status: BlogPostStatus
   published?: boolean

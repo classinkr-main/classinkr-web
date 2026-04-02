@@ -1,4 +1,5 @@
 import { NextRequest, NextResponse } from "next/server"
+import { revalidatePath } from "next/cache"
 import { getAllPosts, createPost, getTrashedPosts } from "@/lib/repositories/blog"
 import { verifyAdmin } from "@/lib/admin-auth"
 
@@ -27,6 +28,10 @@ export async function POST(req: NextRequest) {
     }
 
     const post = await createPost(body)
+    // 발행 상태면 블로그 페이지 캐시 즉시 무효화
+    if (post.status === "published") {
+      revalidatePath("/blog")
+    }
     return NextResponse.json({ post }, { status: 201 })
   } catch {
     return NextResponse.json({ error: "Failed to create post" }, { status: 500 })
