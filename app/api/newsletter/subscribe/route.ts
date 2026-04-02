@@ -1,62 +1,62 @@
 import { NextRequest, NextResponse } from "next/server"
-import { upsertSubscriber, getSubscriberByEmail } from "@/lib/repositories/marketing"
+import { subscribeSubscriber } from "@/lib/repositories/marketing"
+import { getResolvedSettings } from "@/lib/repositories/settings"
 import { triggerOnSubmitRules } from "@/lib/automation-engine"
 import type { NewsletterSubscribeRequest } from "@/lib/marketing-types"
+import { postJson } from "@/lib/server/post-json"
 
 export async function POST(req: NextRequest) {
   try {
     const body: NewsletterSubscribeRequest = await req.json()
+    const source = body.source?.trim() || "newsletter"
+    const email = body.email?.trim().toLowerCase()
 
-    if (!body.email) {
+    if (!email) {
       return NextResponse.json({ error: "이메일은 필수입니다." }, { status: 400 })
     }
 
     const emailRegex = /^[^\s@]+@[^\s@]+\.[^\s@]+$/
-    if (!emailRegex.test(body.email)) {
+    if (!emailRegex.test(email)) {
       return NextResponse.json(
         { error: "올바른 이메일 형식이 아닙니다." },
         { status: 400 }
       )
     }
 
-    const existing = await getSubscriberByEmail(body.email)
-    if (existing && existing.status === "active") {
-      return NextResponse.json({
-        ok: true,
-        message: "이미 구독 중입니다.",
-        alreadySubscribed: true,
-      })
-    }
-
-    await upsertSubscriber({
-      name: body.name || body.email.split("@")[0],
-      email: body.email,
-      tags: body.tags ?? [],
-      source: "newsletter",
+    const { created } = await subscribeSubscriber({
+      name: body.name || email.split("@")[0],
+      email,
+      source,
     })
 
-    const googleSheetUrl = process.env.GOOGLE_SHEET_WEBHOOK_URL
-    if (googleSheetUrl) {
-      fetch(googleSheetUrl, {
-        method: "POST",
-        headers: { "Content-Type": "application/json" },
-        body: JSON.stringify({
-          source: "newsletter",
-          email: body.email,
-          name: body.name || "",
-          timestamp: new Date().toISOString(),
-        }),
+    if (created) {
+      const settings = await getResolvedSettings()
+      const googleSheetUrl = settings.googleSheetWebhookUrl
+      if (googleSheetUrl) {
+        postJson(
+          googleSheetUrl,
+          {
+            source,
+            email,
+            name: body.name || "",
+            timestamp: new Date().toISOString(),
+          },
+          { timeoutMs: 8000 }
+        ).catch(() => {})
+      }
+
+      // Only fire onboarding automation for newly created subscriptions.
+      triggerOnSubmitRules({
+        email,
+        name: body.name,
+        source: "newsletter",
       }).catch(() => {})
     }
 
-    // on_submit 자동화 규칙 트리거 (비동기, 실패해도 구독 응답에 영향 없음)
-    triggerOnSubmitRules({
-      email: body.email,
-      name: body.name,
-      source: "newsletter",
-    }).catch(() => {})
-
-    return NextResponse.json({ ok: true, message: "구독이 완료되었습니다." })
+    return NextResponse.json({
+      ok: true,
+      message: "구독 요청을 접수했습니다.",
+    })
   } catch {
     return NextResponse.json({ error: "잘못된 요청입니다." }, { status: 400 })
   }

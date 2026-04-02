@@ -1,16 +1,12 @@
 "use client"
 
 import { useState, useEffect } from "react"
+import { adminFetchJson } from "@/lib/admin-client"
 import {
   BarChart, Bar, LineChart, Line, PieChart, Pie, Cell,
   XAxis, YAxis, Tooltip, ResponsiveContainer, CartesianGrid,
 } from "recharts"
 import type { LeadRecord } from "@/lib/db"
-
-function adminFetch(url: string) {
-  const token = (typeof window !== "undefined" ? sessionStorage.getItem("admin_password") : null) ?? ""
-  return fetch(url, { headers: { Authorization: `Bearer ${token}` } })
-}
 
 const SOURCE_LABEL: Record<string, string> = {
   demo_modal: "데모 신청",
@@ -27,11 +23,18 @@ const STATUS_LABEL: Record<string, string> = {
 
 const COLORS = ["#111110", "#4b8cf7", "#22c55e", "#f59e0b", "#e11d48"]
 
+function toLocalDateKey(value: string | Date) {
+  const date = value instanceof Date ? value : new Date(value)
+  return new Date(date.getTime() - date.getTimezoneOffset() * 60_000)
+    .toISOString()
+    .slice(0, 10)
+}
+
 function lastNDays(n: number) {
   return Array.from({ length: n }, (_, i) => {
     const d = new Date()
     d.setDate(d.getDate() - (n - 1 - i))
-    return d.toISOString().slice(0, 10)
+    return toLocalDateKey(d)
   })
 }
 
@@ -39,18 +42,28 @@ export default function AnalyticsPage() {
   const [leads, setLeads] = useState<LeadRecord[]>([])
   const [loading, setLoading] = useState(true)
   const [range, setRange] = useState<7 | 14 | 30>(30)
+  const [error, setError] = useState("")
 
   useEffect(() => {
-    adminFetch("/api/admin/leads")
-      .then((r) => r.json())
-      .then((d) => setLeads(d.leads ?? []))
-      .finally(() => setLoading(false))
+    const load = async () => {
+      try {
+        const data = await adminFetchJson<{ leads: LeadRecord[] }>("/api/admin/leads")
+        setLeads(data.leads ?? [])
+        setError("")
+      } catch (err) {
+        setError(err instanceof Error ? err.message : "리드 데이터를 불러오지 못했습니다.")
+      } finally {
+        setLoading(false)
+      }
+    }
+
+    void load()
   }, [])
 
   const days = lastNDays(range)
   const byDay = days.map((date) => ({
     date: date.slice(5),
-    count: leads.filter((l) => l.timestamp.slice(0, 10) === date).length,
+    count: leads.filter((lead) => toLocalDateKey(lead.timestamp) === date).length,
   }))
 
   const bySource = Object.entries(
@@ -97,6 +110,12 @@ export default function AnalyticsPage() {
           ))}
         </div>
       </div>
+
+      {error && (
+        <div className="mb-6 rounded-xl border border-red-100 bg-red-50 px-4 py-3 text-[13px] font-medium text-red-600">
+          {error}
+        </div>
+      )}
 
       {total === 0 ? (
         <div className="bg-white rounded-xl border border-[#e8e8e4] border-dashed py-24 text-center text-[13px] text-[#1a1a1a]/30">

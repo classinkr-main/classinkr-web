@@ -118,8 +118,13 @@ function WebhookRow({
                 <Zap className="w-3.5 h-3.5" />
               )}
               {status === "testing" ? "테스트 중..." : status === "success" ? "성공" : status === "error" ? "실패" : "테스트"}
-            </button>
+              </button>
           </div>
+          {!value && status === "idle" && (
+            <p className="text-[11px] mt-1.5 text-[#1a1a1a]/35">
+              현재 값은 보안상 표시되지 않습니다. 새 URL을 입력하면 기존 값이 교체됩니다.
+            </p>
+          )}
           {statusMsg && (
             <p className={`text-[11px] mt-1.5 ${status === "success" ? "text-green-600" : "text-red-400"}`}>
               {statusMsg}
@@ -154,6 +159,7 @@ function Section({ title, description, children }: { title: string; description?
 export default function SettingsPage() {
   const [settings, setSettings] = useState<SiteSettings | null>(null)
   const [saving, setSaving] = useState(false)
+  const [loadError, setLoadError] = useState("")
   const [toast, setToast] = useState<{ msg: string; type: "success" | "error" } | null>(null)
 
   const showToast = (msg: string, type: "success" | "error" = "success") => {
@@ -162,17 +168,43 @@ export default function SettingsPage() {
   }
 
   useEffect(() => {
-    adminFetch("/api/admin/settings").then((r) => r.json()).then(setSettings)
+    let active = true
+
+    adminFetch("/api/admin/settings")
+      .then(async (response) => {
+        const data = await response.json().catch(() => null)
+        if (!response.ok) {
+          throw new Error(data?.error || "설정을 불러오지 못했습니다.")
+        }
+        return data as SiteSettings
+      })
+      .then((data) => {
+        if (!active) return
+        setSettings(data)
+        setLoadError("")
+      })
+      .catch((error) => {
+        if (!active) return
+        setLoadError(error instanceof Error ? error.message : "설정을 불러오지 못했습니다.")
+      })
+
+    return () => {
+      active = false
+    }
   }, [])
 
   const handleSave = async () => {
     if (!settings) return
     setSaving(true)
     try {
-      await adminFetch("/api/admin/settings", { method: "PATCH", body: JSON.stringify(settings) })
+      const response = await adminFetch("/api/admin/settings", { method: "PATCH", body: JSON.stringify(settings) })
+      const data = await response.json().catch(() => null)
+      if (!response.ok) {
+        throw new Error(data?.error || "저장에 실패했습니다.")
+      }
       showToast("설정이 저장되었습니다.")
-    } catch {
-      showToast("저장에 실패했습니다.", "error")
+    } catch (error) {
+      showToast(error instanceof Error ? error.message : "저장에 실패했습니다.", "error")
     } finally {
       setSaving(false)
     }
@@ -181,7 +213,11 @@ export default function SettingsPage() {
   const set = (patch: Partial<SiteSettings>) => setSettings((prev) => prev ? { ...prev, ...patch } : prev)
 
   if (!settings) {
-    return <div className="px-8 pt-12 text-[13px] text-[#1a1a1a]/30">불러오는 중...</div>
+    return (
+      <div className="px-8 pt-12 text-[13px] text-[#1a1a1a]/30">
+        {loadError || "불러오는 중..."}
+      </div>
+    )
   }
 
   return (

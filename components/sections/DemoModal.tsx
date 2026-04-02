@@ -1,6 +1,6 @@
 "use client"
 
-import React, { useState } from "react"
+import React, { useEffect, useRef, useState } from "react"
 import { Dialog, DialogContent, DialogDescription, DialogHeader, DialogTitle, DialogTrigger } from "@/components/ui/dialog"
 import { Input } from "@/components/ui/input"
 import { Label } from "@/components/ui/label"
@@ -14,11 +14,41 @@ export function DemoModal({ children, trackingButton }: { children: React.ReactN
     const [submitted, setSubmitted] = useState(false)
     const [loading, setLoading] = useState(false)
     const [error, setError] = useState("")
+    const [warning, setWarning] = useState("")
     const [marketingConsent, setMarketingConsent] = useState(false)
+    const formRef = useRef<HTMLFormElement>(null)
+    const resetTimerRef = useRef<ReturnType<typeof setTimeout> | null>(null)
+
+    const resetFormState = () => {
+        setSubmitted(false)
+        setLoading(false)
+        setError("")
+        setWarning("")
+        setMarketingConsent(false)
+        formRef.current?.reset()
+    }
+
+    useEffect(() => {
+        return () => {
+            if (resetTimerRef.current) {
+                clearTimeout(resetTimerRef.current)
+            }
+        }
+    }, [])
 
     const handleOpenChange = (nextOpen: boolean) => {
+        if (resetTimerRef.current) {
+            clearTimeout(resetTimerRef.current)
+            resetTimerRef.current = null
+        }
         if (nextOpen && trackingButton) {
             trackEvent('click_cta', { button: trackingButton })
+        }
+        if (!nextOpen) {
+            resetTimerRef.current = setTimeout(() => {
+                resetFormState()
+                resetTimerRef.current = null
+            }, 250)
         }
         setOpen(nextOpen)
     }
@@ -32,7 +62,7 @@ export function DemoModal({ children, trackingButton }: { children: React.ReactN
         const formData = new FormData(form)
 
         try {
-            await submitLead({
+            const data = await submitLead({
                 source: "demo_modal",
                 name: formData.get("name") as string,
                 org: formData.get("org") as string,
@@ -42,10 +72,13 @@ export function DemoModal({ children, trackingButton }: { children: React.ReactN
                 phone: formData.get("phone") as string,
                 marketingConsent,
             })
+            setWarning(Array.isArray(data.warnings) && data.warnings.length > 0
+                ? "리드는 접수되었지만 일부 외부 연동은 지연되었습니다. 내부 시스템에는 정상 등록되었습니다."
+                : "")
             trackEvent("submit_demo_request", { source: "demo_modal" })
             setSubmitted(true)
-        } catch {
-            setError("제출에 실패했습니다. 다시 시도해주세요.")
+        } catch (err) {
+            setError(err instanceof Error ? err.message : "제출에 실패했습니다. 다시 시도해주세요.")
         } finally {
             setLoading(false)
         }
@@ -60,23 +93,23 @@ export function DemoModal({ children, trackingButton }: { children: React.ReactN
                 {submitted ? (
                     <div className="flex flex-col items-center justify-center space-y-4 py-8 text-center bg-transparent rounded-lg">
                         <CheckCircle2 className="h-12 w-12 text-green-400" />
-                        <h3 className="text-xl font-semibold text-white">신청이 접수되었습니다!</h3>
+                        <h3 className="text-xl font-semibold text-white">데모 신청이 접수되었습니다!</h3>
                         <p className="text-slate-300">
-                            15분 내로 맞춤형 도입 플랜과 함께 연락드리겠습니다.
+                            {warning || "15분 내로 맞춤형 도입 플랜과 함께 연락드리겠습니다."}
                         </p>
-                        <Button onClick={() => setSubmitted(false)} variant="outline" className="text-slate-950">
+                        <Button onClick={() => handleOpenChange(false)} variant="outline" className="text-slate-950">
                             닫기
                         </Button>
                     </div>
                 ) : (
                     <React.Fragment>
                         <DialogHeader>
-                            <DialogTitle className="text-white">맞춤형 데모 예약하기</DialogTitle>
+                            <DialogTitle className="text-white">맞춤형 데모 신청하기</DialogTitle>
                             <DialogDescription className="text-slate-300">
                                 LMS와 분석 플랫폼을 직접 경험해보세요. 운영 품질을 표준화하는 방법을 안내해 드립니다.
                             </DialogDescription>
                         </DialogHeader>
-                        <form onSubmit={handleSubmit} className="grid gap-4 py-4">
+                        <form ref={formRef} onSubmit={handleSubmit} className="grid gap-4 py-4">
                             <div className="grid gap-2">
                                 <Label htmlFor="name" className="text-slate-200">이름</Label>
                                 <Input id="name" name="name" placeholder="홍길동" required className="bg-white/5 border-white/10 text-white placeholder:text-slate-500" />

@@ -1,4 +1,4 @@
-import { NextRequest, NextResponse } from "next/server"
+﻿import { NextRequest, NextResponse } from "next/server"
 import { verifyAdmin } from "@/lib/admin-auth"
 import { exec } from "child_process"
 import { promisify } from "util"
@@ -8,11 +8,11 @@ const execAsync = promisify(exec)
 const SEP = "XCOMMITX"
 
 export async function GET(req: NextRequest) {
-  const err = verifyAdmin(req)
+  const err = await verifyAdmin(req)
   if (err) return err
 
   try {
-    // 커밋 메타 + numstat(파일별 추가/삭제 라인 수)
+    // 而ㅻ컠 硫뷀? + numstat(?뚯씪蹂?異붽?/??젣 ?쇱씤 ??
     const { stdout } = await execAsync(
       `git log --pretty=format:"${SEP}|%h|%H|%an|%ai|%s|%D" --numstat -50`,
       { cwd: process.cwd() }
@@ -54,6 +54,6 @@ export async function GET(req: NextRequest) {
 
     return NextResponse.json(commits)
   } catch {
-    return NextResponse.json({ error: "git log 실패" }, { status: 500 })
+    return NextResponse.json({ error: "git log ?ㅽ뙣" }, { status: 500 })
   }
 }

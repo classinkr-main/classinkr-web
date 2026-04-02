@@ -1,9 +1,9 @@
-import { NextRequest, NextResponse } from "next/server"
+﻿import { NextRequest, NextResponse } from "next/server"
 import { verifyAdmin } from "@/lib/admin-auth"
 import { getAllEvents, getEventsByMonth, createEvent } from "@/lib/repositories/calendar"
 
 export async function GET(req: NextRequest) {
-  const err = verifyAdmin(req)
+  const err = await verifyAdmin(req)
   if (err) return err
 
   const { searchParams } = req.nextUrl
@@ -17,12 +17,12 @@ export async function GET(req: NextRequest) {
 }
 
 export async function POST(req: NextRequest) {
-  const err = verifyAdmin(req)
+  const err = await verifyAdmin(req)
   if (err) return err
 
   const body = await req.json()
   if (!body.title || !body.date || !body.type) {
-    return NextResponse.json({ error: "title, date, type은 필수입니다." }, { status: 400 })
+    return NextResponse.json({ error: "title, date, type? ?꾩닔?낅땲??" }, { status: 400 })
   }
 
   const event = await createEvent({

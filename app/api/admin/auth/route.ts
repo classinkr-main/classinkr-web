@@ -1,5 +1,6 @@
 import { NextResponse } from "next/server"
 import { createSupabaseServerClient } from "@/lib/supabase/server"
+import { hasSupabaseBrowserEnv } from "@/lib/supabase/public-env"
 
 // POST — 레거시 호환용 (기존 코드에서 /api/admin/auth 호출하는 경우)
 export async function POST() {
@@ -11,8 +12,10 @@ export async function POST() {
 
 // DELETE — 로그아웃
 export async function DELETE() {
-  const supabase = await createSupabaseServerClient()
-  await supabase.auth.signOut()
+  if (hasSupabaseBrowserEnv()) {
+    const supabase = await createSupabaseServerClient()
+    await supabase.auth.signOut()
+  }
 
   const res = NextResponse.json({ ok: true })
   // 레거시 쿠키도 함께 제거

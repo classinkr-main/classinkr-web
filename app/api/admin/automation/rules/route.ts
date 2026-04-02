@@ -1,9 +1,9 @@
-import { NextRequest, NextResponse } from "next/server"
+﻿import { NextRequest, NextResponse } from "next/server"
 import { verifyAdmin } from "@/lib/admin-auth"
 import { getAllRules, createRule } from "@/lib/repositories/automation"
 
 export async function GET(req: NextRequest) {
-  const authError = verifyAdmin(req)
+  const authError = await verifyAdmin(req)
   if (authError) return authError
 
   try {
@@ -15,7 +15,7 @@ export async function GET(req: NextRequest) {
 }
 
 export async function POST(req: NextRequest) {
-  const authError = verifyAdmin(req)
+  const authError = await verifyAdmin(req)
   if (authError) return authError
 
   try {
@@ -24,7 +24,7 @@ export async function POST(req: NextRequest) {
 
     if (!name || !triggerType || !triggerConfig || !segmentConfig || !templateId) {
       return NextResponse.json(
-        { error: "name, triggerType, triggerConfig, segmentConfig, templateId 필수" },
+        { error: "name, triggerType, triggerConfig, segmentConfig, templateId ?꾩닔" },
         { status: 400 }
       )
     }

@@ -1,7 +1,10 @@
 "use client"
 
 import { Button } from "@/components/ui/button"
+import { BROCHURE_URL } from "@/lib/marketing-links"
+import Link from "next/link"
 import { DemoModal } from "./DemoModal"
+import { NewsletterModal } from "./NewsletterModal"
 import { motion } from "framer-motion"
 import { trackEvent } from "@/lib/analytics"
 import Image from "next/image"
@@ -82,13 +85,29 @@ export function Hero() {
                                 <span className="relative z-10">제품 도입 문의</span>
                             </Button>
                         </DemoModal>
-                        <DemoModal trackingButton="hero_materials">
-                            <Button variant="outline" size="lg" className="h-[3.5rem] px-8 text-[1.05rem] font-bold bg-emerald-600 hover:bg-emerald-700 text-white border-emerald-600 hover:border-emerald-700 rounded-2xl shadow-lg hover:shadow-xl w-full sm:w-auto transition-all duration-300 hover:scale-[1.03] active:scale-95">
+                        <NewsletterModal
+                            source="hero_materials"
+                            badge="무료 자료"
+                            title="서비스 소개서 받아보기"
+                            description="이메일을 남겨주시면 Classin 소개서와 도입 포인트를 바로 확인하실 수 있습니다."
+                            benefits={[
+                                "Classin 주요 기능 한눈에 정리",
+                                "도입 사례 및 성과 데이터 포함",
+                                "요금제 · 도입 프로세스 안내",
+                            ]}
+                            successCta={{
+                                label: "소개서 지금 바로 열기",
+                                href: BROCHURE_URL,
+                            }}
+                        >
+                            <Button variant="outline" size="lg" onClick={() => trackEvent("download_materials")} className="h-[3.5rem] px-8 text-[1.05rem] font-bold bg-emerald-600 hover:bg-emerald-700 text-white border-emerald-600 hover:border-emerald-700 rounded-2xl shadow-lg hover:shadow-xl w-full sm:w-auto transition-all duration-300 hover:scale-[1.03] active:scale-95">
                                 <span className="relative z-10">자료 받아보기</span>
                             </Button>
-                        </DemoModal>
-                        <Button variant="outline" size="lg" onClick={() => trackEvent('view_demo_video')} className="h-[3.5rem] px-8 text-[1.05rem] font-bold bg-white hover:bg-slate-50 text-slate-700 border border-slate-200 hover:border-slate-300 rounded-2xl shadow-sm hover:shadow-md w-full sm:w-auto transition-all duration-300 hover:scale-[1.03] active:scale-95">
-                            <span className="relative z-10">3분 투어 영상</span>
+                        </NewsletterModal>
+                        <Button asChild variant="outline" size="lg" className="h-[3.5rem] px-8 text-[1.05rem] font-bold bg-white hover:bg-slate-50 text-slate-700 border border-slate-200 hover:border-slate-300 rounded-2xl shadow-sm hover:shadow-md w-full sm:w-auto transition-all duration-300 hover:scale-[1.03] active:scale-95">
+                            <Link href="/product/sw" onClick={() => trackEvent("click_cta", { button: "hero_product_tour" })}>
+                                <span className="relative z-10">제품 둘러보기</span>
+                            </Link>
                         </Button>
                     </motion.div>
 

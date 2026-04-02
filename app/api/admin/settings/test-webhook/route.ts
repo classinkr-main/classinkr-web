@@ -1,11 +1,13 @@
-import { NextRequest, NextResponse } from "next/server"
+﻿import { NextRequest, NextResponse } from "next/server"
+import * as dns from "dns/promises"
+import * as net from "net"
 import { verifyAdmin } from "@/lib/admin-auth"
 
 const DUMMY_PAYLOAD = {
   source: "demo_modal",
-  name: "테스트 사용자",
-  org: "테스트 학원",
-  role: "원장",
+  name: "test user",
+  org: "test org",
+  role: "admin",
   size: "100",
   email: "test@classin.kr",
   phone: "010-0000-0000",
@@ -13,28 +15,109 @@ const DUMMY_PAYLOAD = {
   _test: true,
 }
 
+function isPrivateIpv4(address: string) {
+  const parts = address.split(".").map((part) => Number(part))
+  if (
+    parts.length !== 4 ||
+    parts.some((part) => !Number.isInteger(part) || part < 0 || part > 255)
+  ) {
+    return true
+  }
+
+  const [a, b] = parts
+  return (
+    a === 0 ||
+    a === 10 ||
+    a === 127 ||
+    (a === 169 && b === 254) ||
+    (a === 172 && b >= 16 && b <= 31) ||
+    (a === 192 && b === 168) ||
+    (a === 100 && b >= 64 && b <= 127) ||
+    a >= 224
+  )
+}
+
+function isPrivateIpv6(address: string) {
+  const normalized = address.toLowerCase()
+  return (
+    normalized === "::1" ||
+    normalized === "::" ||
+    normalized.startsWith("fc") ||
+    normalized.startsWith("fd") ||
+    normalized.startsWith("fe8") ||
+    normalized.startsWith("fe9") ||
+    normalized.startsWith("fea") ||
+    normalized.startsWith("feb") ||
+    normalized.startsWith("ff")
+  )
+}
+
+function isPrivateAddress(address: string) {
+  const version = net.isIP(address)
+  if (version === 4) return isPrivateIpv4(address)
+  if (version === 6) return isPrivateIpv6(address)
+  return true
+}
+
+async function validateWebhookTarget(rawUrl: string) {
+  const parsed = new URL(rawUrl)
+
+  if (parsed.protocol !== "https:") {
+    return "Webhook tests only allow HTTPS URLs."
+  }
+
+  if (parsed.username || parsed.password) {
+    return "URLs containing credentials are not allowed."
+  }
+
+  const hostname = parsed.hostname.toLowerCase()
+  if (
+    hostname === "localhost" ||
+    hostname.endsWith(".localhost") ||
+    hostname.endsWith(".local")
+  ) {
+    return "Localhost targets are not allowed."
+  }
+
+  if (net.isIP(hostname) && isPrivateAddress(hostname)) {
+    return "Private IP targets are not allowed."
+  }
+
+  const lookups = await dns.lookup(hostname, { all: true })
+  if (lookups.some((entry) => isPrivateAddress(entry.address))) {
+    return "Hosts that resolve to private networks are not allowed."
+  }
+
+  return null
+}
+
 export async function POST(req: NextRequest) {
-  const err = verifyAdmin(req)
+  const err = await verifyAdmin(req)
   if (err) return err
 
   const { type, url } = await req.json()
 
   if (!url) {
-    return NextResponse.json({ ok: false, message: "URL이 설정되지 않았습니다." })
+    return NextResponse.json({ ok: false, message: "No URL configured." })
   }
 
   try {
+    const validationError = await validateWebhookTarget(url)
+    if (validationError) {
+      return NextResponse.json({ ok: false, message: validationError }, { status: 400 })
+    }
+
     let body: Record<string, unknown> = DUMMY_PAYLOAD
 
     if (type === "channelTalk") {
       body = {
         event: "new_lead",
         source: "demo_modal",
-        name: "테스트 사용자",
-        org: "테스트 학원",
+        name: "test user",
+        org: "test org",
         phone: "010-0000-0000",
         email: "test@classin.kr",
-        message: "원장 / 원생 100명",
+        message: "admin / 100 users",
         timestamp: new Date().toISOString(),
         _test: true,
       }
@@ -45,15 +128,24 @@ export async function POST(req: NextRequest) {
       headers: { "Content-Type": "application/json" },
       body: JSON.stringify(body),
       signal: AbortSignal.timeout(8000),
+      redirect: "manual",
     })
 
     if (res.ok) {
-      return NextResponse.json({ ok: true, status: res.status, message: `연결 성공 (HTTP ${res.status})` })
-    } else {
-      return NextResponse.json({ ok: false, status: res.status, message: `서버 응답 오류 (HTTP ${res.status})` })
+      return NextResponse.json({
+        ok: true,
+        status: res.status,
+        message: `Connection successful (HTTP ${res.status})`,
+      })
     }
+
+    return NextResponse.json({
+      ok: false,
+      status: res.status,
+      message: `Upstream response error (HTTP ${res.status})`,
+    })
   } catch (e) {
-    const msg = e instanceof Error ? e.message : "알 수 없는 오류"
-    return NextResponse.json({ ok: false, message: `연결 실패: ${msg}` })
+    const msg = e instanceof Error ? e.message : "Unknown error"
+    return NextResponse.json({ ok: false, message: `Connection failed: ${msg}` })
   }
 }

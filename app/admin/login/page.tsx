@@ -3,9 +3,16 @@
 import { useState } from "react"
 import { useRouter } from "next/navigation"
 import { Lock } from "lucide-react"
-import { createSupabaseBrowserClient } from "@/lib/supabase/browser"
+
+import { clearAdminSessionStorage } from "@/lib/admin-client"
 import { Button } from "@/components/ui/button"
 import { Input } from "@/components/ui/input"
+import { createSupabaseBrowserClient } from "@/lib/supabase/browser"
+
+const INVALID_CREDENTIALS_MESSAGE =
+  "이메일 또는 비밀번호가 올바르지 않습니다."
+const UNAUTHORIZED_MESSAGE =
+  "관리자 권한이 있는 계정만 로그인할 수 있습니다."
 
 export default function AdminLoginPage() {
   const router = useRouter()
@@ -20,6 +27,8 @@ export default function AdminLoginPage() {
     setLoading(true)
 
     try {
+      clearAdminSessionStorage()
+
       const supabase = createSupabaseBrowserClient()
       const { error: signInError } = await supabase.auth.signInWithPassword({
         email,
@@ -27,15 +36,37 @@ export default function AdminLoginPage() {
       })
 
       if (signInError) {
-        setError("이메일 또는 비밀번호가 올바르지 않습니다.")
+        setError(INVALID_CREDENTIALS_MESSAGE)
+        return
+      }
+
+      const {
+        data: { user },
+      } = await supabase.auth.getUser()
+      if (!user) {
+        setError(INVALID_CREDENTIALS_MESSAGE)
+        return
+      }
+
+      const { data: profile } = await supabase
+        .from("admin_profiles")
+        .select("status")
+        .eq("user_id", user.id)
+        .single()
+
+      if (!profile || profile.status !== "ACTIVE") {
+        await supabase.auth.signOut()
+        clearAdminSessionStorage()
+        setError(UNAUTHORIZED_MESSAGE)
         return
       }
 
       router.replace("/admin/overview")
       router.refresh()
     } catch (err) {
-      console.error("[AdminLogin] 오류:", err)
-      setError("이메일 또는 비밀번호가 올바르지 않습니다.")
+      console.error("[AdminLogin] error:", err)
+      clearAdminSessionStorage()
+      setError(INVALID_CREDENTIALS_MESSAGE)
     } finally {
       setLoading(false)
     }

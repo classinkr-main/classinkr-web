@@ -1,6 +1,7 @@
 "use client"
 
 import { useState, useEffect } from "react"
+import { adminFetchJson } from "@/lib/admin-client"
 import {
   Users, TrendingUp, CheckCircle2, Mail,
   FileText, AlertCircle, ArrowUpRight, ArrowDownRight, Minus,
@@ -10,11 +11,6 @@ import {
   XAxis, YAxis, Tooltip, ResponsiveContainer, CartesianGrid,
 } from "recharts"
 import type { LeadRecord } from "@/lib/db"
-
-function adminFetch(url: string) {
-  const token = (typeof window !== "undefined" ? sessionStorage.getItem("admin_password") : null) ?? ""
-  return fetch(url, { headers: { Authorization: `Bearer ${token}` } })
-}
 
 // ─── 스켈레톤 ────────────────────────────────────────────────────
 function Skeleton({ className = "" }: { className?: string }) {
@@ -112,17 +108,29 @@ export default function OverviewPage() {
   const [subscriberCount, setSubscriberCount] = useState(0)
   const [blogCount, setBlogCount] = useState(0)
   const [loading, setLoading] = useState(true)
+  const [error, setError] = useState("")
 
   useEffect(() => {
-    Promise.all([
-      adminFetch("/api/admin/leads").then((r) => r.json()),
-      adminFetch("/api/admin/subscribers").then((r) => r.json()),
-      fetch("/api/admin/blog").then((r) => r.json()),
-    ]).then(([leadsData, subData, blogData]) => {
-      setLeads(leadsData.leads ?? [])
-      setSubscriberCount(subData.total ?? 0)
-      setBlogCount((blogData.posts ?? []).length)
-    }).finally(() => setLoading(false))
+    const load = async () => {
+      try {
+        const [leadsData, subData, blogData] = await Promise.all([
+          adminFetchJson<{ leads: LeadRecord[] }>("/api/admin/leads"),
+          adminFetchJson<{ total: number }>("/api/admin/subscribers"),
+          fetch("/api/admin/blog").then((response) => response.json()),
+        ])
+
+        setLeads(leadsData.leads ?? [])
+        setSubscriberCount(subData.total ?? 0)
+        setBlogCount((blogData.posts ?? []).length)
+        setError("")
+      } catch (err) {
+        setError(err instanceof Error ? err.message : "대시보드 데이터를 불러오지 못했습니다.")
+      } finally {
+        setLoading(false)
+      }
+    }
+
+    void load()
   }, [])
 
   // ─── KPI 계산 ──────────────────────────────────────────────────
@@ -167,6 +175,12 @@ export default function OverviewPage() {
         <p className="text-[11px] font-medium text-[#1a1a1a]/30 uppercase tracking-widest mb-1">Admin</p>
         <h1 className="text-2xl font-bold text-[#111110] tracking-[-0.02em]">Overview</h1>
       </div>
+
+      {error && !loading && (
+        <div className="mb-6 rounded-xl border border-red-100 bg-red-50 px-4 py-3 text-[13px] font-medium text-red-600">
+          {error}
+        </div>
+      )}
 
       {/* ── 미처리 알림 배너 */}
       {!loading && newLeads > 0 && (

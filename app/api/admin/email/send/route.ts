@@ -1,65 +1,84 @@
-import { NextRequest, NextResponse } from "next/server"
+﻿import { NextRequest, NextResponse } from "next/server"
 import { verifyAdmin } from "@/lib/admin-auth"
 import { getActiveSubscribersByTags, createCampaign } from "@/lib/repositories/marketing"
+import { getResolvedSettings } from "@/lib/repositories/settings"
+import { postJson } from "@/lib/server/post-json"
 import type { SendEmailRequest } from "@/lib/marketing-types"
 
 export async function POST(req: NextRequest) {
-  const authError = verifyAdmin(req)
+  const authError = await verifyAdmin(req)
   if (authError) return authError
 
   try {
     const body: SendEmailRequest = await req.json()
+    const aiPersonalized = body.aiPersonalized?.filter(
+      (recipient) => recipient.email && recipient.personalizedBody
+    ) ?? []
 
     if (!body.subject || !body.body) {
       return NextResponse.json(
-        { error: "제목과 본문은 필수입니다." },
+        { error: "?쒕ぉ怨?蹂몃Ц? ?꾩닔?낅땲??" },
         { status: 400 }
       )
     }
 
-    const recipients = await getActiveSubscribersByTags(body.targetTags ?? [])
+    const recipients =
+      aiPersonalized.length > 0
+        ? []
+        : await getActiveSubscribersByTags(body.targetTags ?? [])
 
-    if (recipients.length === 0) {
+    if (recipients.length === 0 && aiPersonalized.length === 0) {
       return NextResponse.json(
-        { error: "발송 대상이 없습니다. 태그 조건을 확인해주세요." },
+        { error: "諛쒖넚 ??곸씠 ?놁뒿?덈떎. ?쒓렇 議곌굔???뺤씤?댁＜?몄슂." },
         { status: 400 }
       )
     }
 
-    const emailWebhookUrl = process.env.EMAIL_WEBHOOK_URL
-
-    const personalizedRecipients = recipients.map((r) => ({
-      email: r.email,
-      name: r.name,
-      org: r.org ?? "",
-      personalizedBody: body.body
-        .replace(/\{name\}/g, r.name)
-        .replace(/\{org\}/g, r.org ?? "")
-        .replace(/\{role\}/g, r.role ?? ""),
-    }))
+    const personalizedRecipients =
+      aiPersonalized.length > 0
+        ? aiPersonalized.map((recipient) => ({
+            email: recipient.email,
+            name: recipient.name,
+            personalizedSubject: recipient.subject ?? body.subject,
+            personalizedBody: recipient.personalizedBody,
+          }))
+        : recipients.map((recipient) => ({
+            email: recipient.email,
+            name: recipient.name,
+            org: recipient.org ?? "",
+            personalizedSubject: body.subject,
+            personalizedBody: body.body
+              .replace(/\{name\}/g, recipient.name)
+              .replace(/\{org\}/g, recipient.org ?? "")
+              .replace(/\{role\}/g, recipient.role ?? ""),
+          }))
 
     let sendStatus: "sent" | "failed" = "sent"
+    const recipientCount = personalizedRecipients.length
+    const settings = await getResolvedSettings()
+    const emailWebhookUrl = settings.emailWebhookUrl
 
     if (emailWebhookUrl) {
       try {
-        const res = await fetch(emailWebhookUrl, {
-          method: "POST",
-          headers: { "Content-Type": "application/json" },
-          body: JSON.stringify({
+        const res = await postJson(
+          emailWebhookUrl,
+          {
             subject: body.subject,
+            personalizedRecipients,
             recipients: personalizedRecipients,
             unsubscribeBaseUrl: `${req.nextUrl.origin}/api/newsletter/unsubscribe`,
-          }),
-        })
+          },
+          { timeoutMs: 10_000 }
+        )
         if (!res.ok) sendStatus = "failed"
       } catch {
         sendStatus = "failed"
       }
     } else {
-      console.log("[EMAIL-DEV] 웹훅 URL 미설정. 발송 시뮬레이션:")
-      console.log(`  제목: ${body.subject}`)
-      console.log(`  대상: ${recipients.length}명`)
-      console.log(`  태그: ${body.targetTags.join(", ") || "전체"}`)
+      console.log("[EMAIL-DEV] ?뱁썒 URL 誘몄꽕?? 諛쒖넚 ?쒕??덉씠??")
+      console.log(`  ?쒕ぉ: ${body.subject}`)
+      console.log(`  ??? ${recipientCount}紐?`)
+      console.log(`  ?쒓렇: ${body.targetTags?.join(", ") || "?꾩껜"}`)
     }
 
     const campaign = await createCampaign({
@@ -68,16 +87,20 @@ export async function POST(req: NextRequest) {
       targetTags: body.targetTags ?? [],
       status: sendStatus,
       sentAt: sendStatus === "sent" ? new Date().toISOString() : undefined,
-      recipientCount: recipients.length,
+      recipientCount,
     })
 
     return NextResponse.json({
-      ok: true,
+      ok: sendStatus === "sent",
       campaign,
-      recipientCount: recipients.length,
+      recipientCount,
       status: sendStatus,
+      error:
+        sendStatus === "failed"
+          ? "?대찓???뱁썒 諛쒖넚???ㅽ뙣?덉뒿?덈떎. ?ㅼ젙 ?먮뒗 ?몃? ?곕룞 ?곹깭瑜??뺤씤?댁＜?몄슂."
+          : undefined,
     })
   } catch {
-    return NextResponse.json({ error: "잘못된 요청입니다." }, { status: 400 })
+    return NextResponse.json({ error: "?섎せ???붿껌?낅땲??" }, { status: 400 })
   }
 }

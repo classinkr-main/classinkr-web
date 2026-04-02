@@ -19,6 +19,13 @@
  *   외부 서비스의 캠페인 ID를 맵핑한다.
  */
 
+export type SubscriberSource =
+  | "demo_modal"
+  | "contact_page"
+  | "newsletter"
+  | "manual"
+  | (string & {})
+
 // ─── 구독자 모델 ─────────────────────────────────────────────
 export interface Subscriber {
   id: number
@@ -38,7 +45,7 @@ export interface Subscriber {
   unsubscribedAt?: string         // ISO 8601 - 수신 거부 일시
 
   /** 유입 경로: 데모 신청, 문의 페이지, 뉴스레터 직접 구독 */
-  source: "demo_modal" | "contact_page" | "newsletter" | "manual"
+  source: SubscriberSource
 
   createdAt: string               // ISO 8601
   updatedAt: string               // ISO 8601
@@ -67,6 +74,7 @@ export interface NewsletterSubscribeRequest {
   email: string
   name?: string
   tags?: string[]
+  source?: SubscriberSource
 }
 
 /** 뉴스레터 수신거부 요청 (프론트엔드 → /api/newsletter/unsubscribe) */
@@ -79,6 +87,12 @@ export interface SendEmailRequest {
   subject: string
   body: string
   targetTags: string[]  // 빈 배열 = 전체 active 구독자
+  aiPersonalized?: Array<{
+    email: string
+    name: string
+    subject?: string
+    personalizedBody: string
+  }>
 }
 
 /** 구독자 수동 추가/수정 요청 (관리자 → /api/admin/subscribers) */

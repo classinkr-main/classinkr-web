@@ -78,7 +78,6 @@ async function main() {
   console.log(`📋 총 ${subscribers.length}명 구독자 마이그레이션 시작...\n`)
 
   let success = 0
-  let skipped = 0
   let failed = 0
 
   for (const sub of subscribers) {
@@ -112,6 +111,8 @@ async function main() {
       failed++
     }
   }
+
+  const skipped = subscribers.length - success - failed
 
   console.log("\n─── 결과 ───────────────────────────────────")
   console.log(`  성공:   ${success}건`)

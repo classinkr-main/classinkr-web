@@ -5,8 +5,9 @@ import {
   RefreshCw, X, Copy, Check, Trash2,
   Phone, Mail, Building2, Users, Calendar,
   MessageSquare, Tag, Save, Loader2, Plus,
-  PhoneCall, MessageCircle, ChevronDown, Bell,
+  PhoneCall, Bell,
 } from "lucide-react"
+import { clearAdminSessionStorage } from "@/lib/admin-client"
 import { Button } from "@/components/ui/button"
 import type { LeadRecord, LeadStatus } from "@/lib/repositories/leads"
 import type { ContactLogRecord, ContactLogType, ContactLogResult } from "@/lib/repositories/contact-logs"
@@ -68,12 +69,43 @@ function ScoreBadge({ score }: { score: number }) {
 }
 
 // ─── 인증 헬퍼 ─────────────────────────────────────────────────
-function adminFetch(url: string, options?: RequestInit) {
-  const token = (typeof window !== "undefined" ? sessionStorage.getItem("admin_password") : null) ?? ""
-  return fetch(url, {
+async function adminFetch(url: string, options?: RequestInit) {
+  const token = (
+    typeof window !== "undefined"
+      ? sessionStorage.getItem("admin_token") ?? sessionStorage.getItem("admin_password")
+      : null
+  ) ?? ""
+
+  const response = await fetch(url, {
     ...options,
     headers: { "Content-Type": "application/json", Authorization: `Bearer ${token}`, ...options?.headers },
   })
+
+  if (response.status === 401 && typeof window !== "undefined") {
+    clearAdminSessionStorage()
+    window.location.href = "/admin/login"
+  }
+
+  return response
+}
+
+async function readAdminResponse<T>(response: Response, fallbackMessage: string): Promise<T> {
+  const data = await response.json().catch(() => null)
+  if (!response.ok) {
+    throw new Error(data?.error || fallbackMessage)
+  }
+  return data as T
+}
+
+function toLocalDateKey(value: string | Date) {
+  const date = value instanceof Date ? value : new Date(value)
+  return new Date(date.getTime() - date.getTimezoneOffset() * 60_000)
+    .toISOString()
+    .slice(0, 10)
+}
+
+function toFollowUpTimestamp(date: string) {
+  return `${date}T12:00:00.000Z`
 }
 
 // ─── 복사 버튼 ─────────────────────────────────────────────────
@@ -511,7 +543,10 @@ export default function CrmPage() {
     setLoading(true)
     try {
       const res = await adminFetch("/api/admin/leads")
-      if (res.ok) setLeads((await res.json()).leads)
+      const data = await readAdminResponse<{ leads: LeadRecord[] }>(res, "리드를 불러오지 못했습니다.")
+      setLeads(data.leads)
+    } catch (err) {
+      showToast(err instanceof Error ? err.message : "리드를 불러오지 못했습니다.", "error")
     } finally { setLoading(false) }
   }, [])
 
@@ -519,7 +554,11 @@ export default function CrmPage() {
     setLogsLoading(true)
     try {
       const res = await adminFetch(`/api/admin/leads/${leadId}/logs`)
-      if (res.ok) setLogs((await res.json()).logs)
+      const data = await readAdminResponse<{ logs: ContactLogRecord[] }>(res, "연락 기록을 불러오지 못했습니다.")
+      setLogs(data.logs)
+    } catch (err) {
+      setLogs([])
+      showToast(err instanceof Error ? err.message : "연락 기록을 불러오지 못했습니다.", "error")
     } finally { setLogsLoading(false) }
   }, [])
 
@@ -542,65 +581,99 @@ export default function CrmPage() {
   }, [selected?.id]) // eslint-disable-line react-hooks/exhaustive-deps
 
   const handleStatus = async (id: string, status: LeadStatus) => {
-    await adminFetch(`/api/admin/leads/${id}`, { method: "PATCH", body: JSON.stringify({ status }) })
-    setLeads((prev) => prev.map((l) => l.id === id ? { ...l, status } : l))
+    try {
+      const res = await adminFetch(`/api/admin/leads/${id}`, { method: "PATCH", body: JSON.stringify({ status }) })
+      await readAdminResponse(res, "상태를 변경하지 못했습니다.")
+      setLeads((prev) => prev.map((l) => l.id === id ? { ...l, status } : l))
+    } catch (err) {
+      showToast(err instanceof Error ? err.message : "상태를 변경하지 못했습니다.", "error")
+    }
   }
 
   const handleNotes = async (id: string, notes: string) => {
-    await adminFetch(`/api/admin/leads/${id}`, { method: "PATCH", body: JSON.stringify({ notes }) })
-    setLeads((prev) => prev.map((l) => l.id === id ? { ...l, notes } : l))
+    try {
+      const res = await adminFetch(`/api/admin/leads/${id}`, { method: "PATCH", body: JSON.stringify({ notes }) })
+      await readAdminResponse(res, "메모를 저장하지 못했습니다.")
+      setLeads((prev) => prev.map((l) => l.id === id ? { ...l, notes } : l))
+    } catch (err) {
+      showToast(err instanceof Error ? err.message : "메모를 저장하지 못했습니다.", "error")
+    }
   }
 
   const handleFollowUp = async (id: string, date: string) => {
-    const follow_up_at = date ? new Date(date).toISOString() : null
-    await adminFetch(`/api/admin/leads/${id}`, { method: "PATCH", body: JSON.stringify({ follow_up_at }) })
-    setLeads((prev) => prev.map((l) => l.id === id ? { ...l, follow_up_at: follow_up_at ?? undefined } : l))
+    const follow_up_at = date ? toFollowUpTimestamp(date) : null
+    try {
+      const res = await adminFetch(`/api/admin/leads/${id}`, { method: "PATCH", body: JSON.stringify({ follow_up_at }) })
+      await readAdminResponse(res, "팔로업 일정을 저장하지 못했습니다.")
+      setLeads((prev) => prev.map((l) => l.id === id ? { ...l, follow_up_at: follow_up_at ?? undefined } : l))
+    } catch (err) {
+      showToast(err instanceof Error ? err.message : "팔로업 일정을 저장하지 못했습니다.", "error")
+    }
   }
 
   const handleAssignedTo = async (id: string, name: string) => {
-    await adminFetch(`/api/admin/leads/${id}`, { method: "PATCH", body: JSON.stringify({ assigned_to: name || null }) })
-    setLeads((prev) => prev.map((l) => l.id === id ? { ...l, assigned_to: name || undefined } : l))
+    try {
+      const res = await adminFetch(`/api/admin/leads/${id}`, { method: "PATCH", body: JSON.stringify({ assigned_to: name || null }) })
+      await readAdminResponse(res, "담당자를 저장하지 못했습니다.")
+      setLeads((prev) => prev.map((l) => l.id === id ? { ...l, assigned_to: name || undefined } : l))
+    } catch (err) {
+      showToast(err instanceof Error ? err.message : "담당자를 저장하지 못했습니다.", "error")
+    }
   }
 
   const handleAddLog = async (entry: { type: ContactLogType; result?: ContactLogResult; notes?: string; contacted_by?: string }) => {
     if (!selected) return
-    const res = await adminFetch(`/api/admin/leads/${selected.id}/logs`, {
-      method: "POST",
-      body: JSON.stringify(entry),
-    })
-    if (res.ok) {
+    try {
+      const res = await adminFetch(`/api/admin/leads/${selected.id}/logs`, {
+        method: "POST",
+        body: JSON.stringify(entry),
+      })
+      await readAdminResponse(res, "연락 기록을 저장하지 못했습니다.")
       await fetchLogs(selected.id)
-      // 상태가 신규면 자동으로 연락중으로
-      if (selected.status === "new") handleStatus(selected.id, "contacted")
+      if (selected.status === "new") {
+        await handleStatus(selected.id, "contacted")
+      }
       showToast("연락 기록이 저장되었습니다.")
+    } catch (err) {
+      showToast(err instanceof Error ? err.message : "연락 기록을 저장하지 못했습니다.", "error")
     }
   }
 
   const handleDeleteLog = async (logId: string) => {
     if (!selected) return
-    await adminFetch(`/api/admin/leads/${selected.id}/logs?logId=${logId}`, { method: "DELETE" })
-    setLogs((prev) => prev.filter((l) => l.id !== logId))
+    try {
+      const res = await adminFetch(`/api/admin/leads/${selected.id}/logs?logId=${logId}`, { method: "DELETE" })
+      await readAdminResponse(res, "연락 기록을 삭제하지 못했습니다.")
+      setLogs((prev) => prev.filter((l) => l.id !== logId))
+    } catch (err) {
+      showToast(err instanceof Error ? err.message : "연락 기록을 삭제하지 못했습니다.", "error")
+    }
   }
 
   const handleDelete = async (id: string) => {
     if (!confirm("이 리드를 삭제하시겠습니까?")) return
-    await adminFetch(`/api/admin/leads/${id}`, { method: "DELETE" })
-    setLeads((prev) => prev.filter((l) => l.id !== id))
-    setSelected(null)
-    showToast("리드가 삭제되었습니다.")
+    try {
+      const res = await adminFetch(`/api/admin/leads/${id}`, { method: "DELETE" })
+      await readAdminResponse(res, "리드를 삭제하지 못했습니다.")
+      setLeads((prev) => prev.filter((l) => l.id !== id))
+      setSelected(null)
+      showToast("리드가 삭제되었습니다.")
+    } catch (err) {
+      showToast(err instanceof Error ? err.message : "리드를 삭제하지 못했습니다.", "error")
+    }
   }
 
-  const today = new Date().toISOString().slice(0, 10)
+  const today = toLocalDateKey(new Date())
   const filtered = filter === "all" ? leads : leads.filter((l) => l.status === filter)
   const counts = leads.reduce((acc, l) => { acc[l.status] = (acc[l.status] ?? 0) + 1; return acc }, {} as Record<string, number>)
 
   // 오늘 팔로업 리드
   const todayFollowUps = leads.filter((l) =>
-    l.follow_up_at && l.follow_up_at.startsWith(today) && l.status !== "converted" && l.status !== "closed"
+    l.follow_up_at && toLocalDateKey(l.follow_up_at) === today && l.status !== "converted" && l.status !== "closed"
   )
   // 팔로업 기한 초과
   const overdueFollowUps = leads.filter((l) =>
-    l.follow_up_at && l.follow_up_at < today + "T" && l.status !== "converted" && l.status !== "closed"
+    l.follow_up_at && toLocalDateKey(l.follow_up_at) < today && l.status !== "converted" && l.status !== "closed"
   )
 
   return (
@@ -679,8 +752,9 @@ export default function CrmPage() {
             </thead>
             <tbody>
               {filtered.map((lead) => {
-                const isOverdue = lead.follow_up_at && lead.follow_up_at < today + "T" && lead.status !== "converted" && lead.status !== "closed"
-                const isTodayFollowUp = lead.follow_up_at?.startsWith(today)
+                const followUpDateKey = lead.follow_up_at ? toLocalDateKey(lead.follow_up_at) : null
+                const isOverdue = Boolean(followUpDateKey && followUpDateKey < today && lead.status !== "converted" && lead.status !== "closed")
+                const isTodayFollowUp = followUpDateKey === today
                 return (
                   <tr
                     key={lead.id}

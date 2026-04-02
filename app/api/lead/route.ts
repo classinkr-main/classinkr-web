@@ -4,12 +4,14 @@
  * ─────────────────────────────────────────────────────────────
  *
  * [NOTE-24] 리드 → 구독자 자동 연동
- *   데모 신청 또는 문의 시 이메일이 포함되어 있으면
- *   자동으로 구독자 DB에도 등록 (옵트인 처리).
+ *   데모 신청 또는 문의 시 명시적 수신 동의를 받은 이메일만
+ *   구독자 DB에도 등록 (옵트인 처리).
  */
 import { NextRequest, NextResponse } from "next/server"
 import { saveLead } from "@/lib/repositories/leads"
 import { upsertSubscriber } from "@/lib/repositories/marketing"
+import { getResolvedSettings } from "@/lib/repositories/settings"
+import { postJson } from "@/lib/server/post-json"
 import { triggerOnSubmitRules } from "@/lib/automation-engine"
 
 export interface LeadPayload {
@@ -26,98 +28,203 @@ export interface LeadPayload {
   marketingConsent?: boolean
 }
 
+const VALID_SOURCES = new Set<LeadPayload["source"]>([
+  "demo_modal",
+  "contact_page",
+  "newsletter",
+])
+
+const EMAIL_REGEX = /^[^\s@]+@[^\s@]+\.[^\s@]+$/
+
+function normalizeString(value: unknown) {
+  if (typeof value !== "string") return undefined
+  const trimmed = value.trim()
+  return trimmed || undefined
+}
+
+function normalizeEmail(value: unknown) {
+  const email = normalizeString(value)?.toLowerCase()
+  if (!email) return undefined
+  return EMAIL_REGEX.test(email) ? email : null
+}
+
+function hasRequiredFields(
+  payload: LeadPayload,
+  fields: Array<keyof Pick<LeadPayload, "name" | "org" | "role" | "size" | "email" | "phone" | "message">>
+) {
+  return fields.every((field) => Boolean(payload[field]))
+}
+
+function buildPayload(raw: unknown): LeadPayload {
+  if (!raw || typeof raw !== "object") {
+    throw new Error("리드 요청 값이 올바르지 않습니다.")
+  }
+
+  const body = raw as Record<string, unknown>
+  const source =
+    typeof body.source === "string" && VALID_SOURCES.has(body.source as LeadPayload["source"])
+      ? (body.source as LeadPayload["source"])
+      : null
+  const email = normalizeEmail(body.email)
+
+  if (!source) {
+    throw new Error("유입 경로가 올바르지 않습니다.")
+  }
+
+  if (email === null) {
+    throw new Error("올바른 이메일 형식을 입력해주세요.")
+  }
+
+  const payload: LeadPayload = {
+    source,
+    name: normalizeString(body.name),
+    org: normalizeString(body.org),
+    role: normalizeString(body.role),
+    size: normalizeString(body.size),
+    email: email ?? undefined,
+    phone: normalizeString(body.phone),
+    message: normalizeString(body.message),
+    timestamp: new Date().toISOString(),
+    marketingConsent: body.marketingConsent === true,
+  }
+
+  if (
+    payload.source === "demo_modal" &&
+    !hasRequiredFields(payload, ["name", "org", "role", "size", "email", "phone"])
+  ) {
+    throw new Error("데모 신청 필수 항목이 누락되었습니다.")
+  }
+
+  if (
+    payload.source === "contact_page" &&
+    !hasRequiredFields(payload, ["org", "name", "phone", "message"])
+  ) {
+    throw new Error("문의 필수 항목이 누락되었습니다.")
+  }
+
+  if (payload.source === "newsletter" && !payload.email) {
+    throw new Error("이메일은 필수입니다.")
+  }
+
+  return payload
+}
+
 export async function POST(req: NextRequest) {
   try {
-    const body: LeadPayload = await req.json()
-    body.timestamp = new Date().toISOString()
+    const body = buildPayload(await req.json())
+    const settings = await getResolvedSettings()
+    let stored = false
+    let storageError: string | undefined
 
     try {
       await saveLead({ ...body })
+      stored = true
     } catch (e) {
       console.error("[POST /api/lead] saveLead error:", e)
-      // DB 저장 실패해도 외부 연동은 계속
+      storageError = "리드 저장소 동기화에 실패했습니다."
     }
 
-    const results = await Promise.allSettled([
-      sendToGoogleSheet(body),
-      sendToWebhook(body),
-      sendToChannelTalk(body),
-      /** [NOTE-24] 이메일 있고 수신 동의 시 구독자 DB 자동 등록 */
-      body.email && body.marketingConsent !== false
-        ? syncToSubscriberDB(body)
-        : Promise.resolve(),
-      /** on_submit 자동화 규칙 트리거 */
-      body.email
-        ? triggerOnSubmitRules({
-            email: body.email,
-            name: body.name,
-            org: body.org,
-            role: body.role,
-            source: body.source,
-          })
-        : Promise.resolve(),
-    ])
+    const deliveryTasks: Promise<void>[] = []
+
+    if (settings.googleSheetWebhookUrl) {
+      deliveryTasks.push(sendToGoogleSheet(body, settings.googleSheetWebhookUrl))
+    }
+
+    if (settings.leadWebhookUrl) {
+      deliveryTasks.push(sendToWebhook(body, settings.leadWebhookUrl))
+    }
+
+    if (settings.channelTalkWebhookUrl) {
+      deliveryTasks.push(sendToChannelTalk(body, settings.channelTalkWebhookUrl))
+    }
+
+    if (body.email && body.marketingConsent === true) {
+      deliveryTasks.push(syncToSubscriberDB(body))
+    }
+
+    const results = await Promise.allSettled(deliveryTasks)
 
     const errors = results
-      .filter((r) => r.status === "rejected")
-      .map((r) => (r as PromiseRejectedResult).reason?.message)
+      .filter((result) => result.status === "rejected")
+      .map((result) => (result as PromiseRejectedResult).reason?.message)
+      .filter(Boolean)
 
-    if (errors.length === results.length) {
+    if (body.email) {
+      void triggerOnSubmitRules({
+        email: body.email,
+        name: body.name,
+        org: body.org,
+        role: body.role,
+        source: body.source,
+      }).catch((error) => {
+        console.error("[POST /api/lead] triggerOnSubmitRules error:", error)
+      })
+    }
+
+    const deliveryCount = results.filter((result) => result.status === "fulfilled").length
+
+    if (!stored && deliveryCount === 0) {
       return NextResponse.json(
-        { ok: false, error: "All integrations failed", details: errors },
+        {
+          ok: false,
+          error: "리드 저장과 외부 전달에 모두 실패했습니다.",
+          details: storageError ? [storageError, ...errors] : errors,
+        },
         { status: 502 }
       )
     }
 
-    return NextResponse.json({ ok: true, errors: errors.length > 0 ? errors : undefined })
-  } catch {
-    return NextResponse.json({ ok: false, error: "Invalid request" }, { status: 400 })
+    return NextResponse.json({
+      ok: true,
+      stored,
+      warnings: [
+        ...(storageError ? [storageError] : []),
+        ...errors,
+      ],
+    })
+  } catch (error) {
+    return NextResponse.json(
+      {
+        ok: false,
+        error: error instanceof Error ? error.message : "잘못된 요청입니다.",
+      },
+      { status: 400 }
+    )
   }
 }
 
-async function sendToGoogleSheet(data: LeadPayload) {
-  const url = process.env.GOOGLE_SHEET_WEBHOOK_URL
+async function sendToGoogleSheet(data: LeadPayload, url?: string) {
   if (!url) return
 
-  const res = await fetch(url, {
-    method: "POST",
-    headers: { "Content-Type": "application/json" },
-    body: JSON.stringify(data),
-  })
-
+  const res = await postJson(url, data)
   if (!res.ok) throw new Error(`Google Sheet: ${res.status}`)
 }
 
-async function sendToWebhook(data: LeadPayload) {
-  const url = process.env.LEAD_WEBHOOK_URL
+async function sendToWebhook(data: LeadPayload, url?: string) {
   if (!url) return
 
-  const res = await fetch(url, {
-    method: "POST",
-    headers: { "Content-Type": "application/json" },
-    body: JSON.stringify(data),
-  })
-
+  const res = await postJson(url, data)
   if (!res.ok) throw new Error(`Webhook: ${res.status}`)
 }
 
-async function sendToChannelTalk(data: LeadPayload) {
-  const url = process.env.CHANNEL_TALK_WEBHOOK_URL
+async function sendToChannelTalk(data: LeadPayload, url?: string) {
   if (!url) return
 
-  const res = await fetch(url, {
-    method: "POST",
-    headers: { "Content-Type": "application/json" },
-    body: JSON.stringify({
-      event: "new_lead",
-      source: data.source,
-      name: data.name || data.email,
-      org: data.org,
-      phone: data.phone,
-      email: data.email,
-      message: data.message || `${data.role} / 원생 ${data.size}`,
-      timestamp: data.timestamp,
-    }),
+  const messageParts = [
+    data.role,
+    data.size ? `원생 ${data.size}` : undefined,
+    data.message,
+  ].filter(Boolean)
+
+  const res = await postJson(url, {
+    event: "new_lead",
+    source: data.source,
+    name: data.name || data.email,
+    org: data.org,
+    phone: data.phone,
+    email: data.email,
+    message: messageParts.join(" / "),
+    timestamp: data.timestamp,
   })
 
   if (!res.ok) throw new Error(`ChannelTalk: ${res.status}`)
@@ -144,5 +251,6 @@ async function syncToSubscriberDB(data: LeadPayload) {
     })
   } catch (err) {
     console.error("[syncToSubscriberDB] 구독자 자동 등록 실패:", err)
+    throw err
   }
 }

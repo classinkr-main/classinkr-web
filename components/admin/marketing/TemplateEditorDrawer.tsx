@@ -59,10 +59,17 @@ export default function TemplateEditorDrawer({ open, initial, onSave, onClose, l
   // ── init on open ───────────────────────────────────────────────────────────
   useEffect(() => {
     if (open) {
-      setName(initial?.name    ?? "")
-      setSubject(initial?.subject ?? "")
-      setBody(initial?.body    ?? "")
-      setSlashState(null)
+      let active = true
+      queueMicrotask(() => {
+        if (!active) return
+        setName(initial?.name    ?? "")
+        setSubject(initial?.subject ?? "")
+        setBody(initial?.body    ?? "")
+        setSlashState(null)
+      })
+      return () => {
+        active = false
+      }
     }
   }, [open, initial])
 

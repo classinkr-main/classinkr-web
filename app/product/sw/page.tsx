@@ -1,6 +1,7 @@
 "use client"
 
 import { Button } from "@/components/ui/button"
+import { BROCHURE_URL } from "@/lib/marketing-links"
 import { motion, useInView, useMotionValue, useTransform, useScroll, useMotionValueEvent, animate } from "framer-motion"
 import {
     Play, ArrowRight, Sparkles, Monitor, Layers, MousePointerClick,
@@ -9,6 +10,7 @@ import {
     MessageSquare, GraduationCap, CheckCircle2, Zap, Shield,
     Star, X
 } from "lucide-react"
+import Link from "next/link"
 import { useRef, useEffect, useState, useMemo, useCallback } from "react"
 
 /* ── Animation helpers ───────────────────────────────────────────── */
@@ -23,6 +25,21 @@ const stagger = (i: number) => ({
     ...fadeUp,
     transition: { duration: 0.5, delay: i * 0.12 },
 })
+
+function seededFraction(seed: number) {
+    const value = Math.sin(seed * 9999) * 10000
+    return value - Math.floor(value)
+}
+
+function createParticles(count: number) {
+    return Array.from({ length: count }, (_, i) => ({
+        x: seededFraction(i + 1) * 100,
+        size: 3 + seededFraction(i + 101) * 5,
+        duration: 8 + seededFraction(i + 201) * 10,
+        delayStart: seededFraction(i + 301) * 6,
+        key: i,
+    }))
+}
 
 /* ── Wave Divider ────────────────────────────────────────────────── */
 function WaveDivider({ flip = false, color = "#ffffff" }: { flip?: boolean; color?: string }) {
@@ -150,6 +167,9 @@ function FinalCTASection() {
     const [phase, setPhase] = useState(0)
     const [slotsDone, setSlotsDone] = useState(false)
     const [liveCount, setLiveCount] = useState(0)
+    const [particleCount] = useState(() =>
+        typeof window !== "undefined" && window.innerWidth < 640 ? 8 : 15
+    )
 
     useMotionValueEvent(scrollYProgress, "change", (v) => {
         if (v >= 0.55 && phase < 3) setPhase(3)
@@ -163,18 +183,12 @@ function FinalCTASection() {
         if (!slotsDone) return
         let interval: ReturnType<typeof setInterval>
         const timeout = setTimeout(() => {
-            interval = setInterval(() => setLiveCount((p) => p + 1), 3000 + Math.random() * 2000)
+            interval = setInterval(() => setLiveCount((p) => p + 1), 4200)
         }, 3000)
         return () => { clearTimeout(timeout); clearInterval(interval) }
     }, [slotsDone])
 
-    const particles = useMemo(() => {
-        const count = typeof window !== "undefined" && window.innerWidth < 640 ? 8 : 15
-        return Array.from({ length: count }, (_, i) => ({
-            x: Math.random() * 100, size: 3 + Math.random() * 5,
-            duration: 8 + Math.random() * 10, delayStart: Math.random() * 6, key: i,
-        }))
-    }, [])
+    const particles = useMemo(() => createParticles(particleCount), [particleCount])
 
     const handleLastSlotDone = useCallback(() => setSlotsDone(true), [])
     const displayDigits = useMemo(() => (1341483 + liveCount).toString().split(""), [liveCount])
@@ -228,7 +242,9 @@ function FinalCTASection() {
                 </div>
                 <motion.p initial={{ opacity: 0, letterSpacing: "0.3em" }} animate={phase >= 3 ? { opacity: 1, letterSpacing: "0.05em" } : {}} transition={{ delay: 0.5, duration: 0.8 }} className="text-lg sm:text-xl font-serif text-slate-600 font-medium mb-10">수업만을 위해 만든 플랫폼, 다음은 당신의 교실입니다</motion.p>
                 <motion.div initial={{ opacity: 0, y: 20 }} animate={phase >= 3 ? { opacity: 1, y: 0 } : {}} transition={{ delay: 0.7, type: "spring", stiffness: 200, damping: 25 }} className="flex flex-col items-center gap-4">
-                    <Button className="bg-[#E05024] hover:bg-[#C9431A] text-white rounded-full px-10 h-14 text-base font-bold animate-glow-pulse transition-all hover:scale-105 group">지금 무료로 시작하기<ArrowRight className="w-4 h-4 ml-2 group-hover:translate-x-1 transition-transform" /></Button>
+                    <Button asChild className="bg-[#E05024] hover:bg-[#C9431A] text-white rounded-full px-10 h-14 text-base font-bold animate-glow-pulse transition-all hover:scale-105 group">
+                        <Link href="/contact#contact-form">지금 무료로 시작하기<ArrowRight className="w-4 h-4 ml-2 group-hover:translate-x-1 transition-transform" /></Link>
+                    </Button>
                     <p className="text-xs sm:text-sm text-slate-400 font-medium">설치 없이 바로 체험 · 카드 등록 불필요</p>
                 </motion.div>
             </div>
@@ -304,13 +320,17 @@ export default function ProductPage() {
                             </div>
 
                             <div className="flex flex-wrap items-center justify-center gap-4">
-                                <Button className="bg-[#E05024] hover:bg-[#C9431A] text-white rounded-full px-8 h-14 text-base font-bold shadow-[0_8px_20px_rgba(224,80,36,0.3)] hover:shadow-[0_12px_25px_rgba(224,80,36,0.4)] transition-all hover:scale-105 group">
+                                <Button asChild className="bg-[#E05024] hover:bg-[#C9431A] text-white rounded-full px-8 h-14 text-base font-bold shadow-[0_8px_20px_rgba(224,80,36,0.3)] hover:shadow-[0_12px_25px_rgba(224,80,36,0.4)] transition-all hover:scale-105 group">
+                                    <Link href="/contact#contact-form">
                                     무료로 시작하기
                                     <ArrowRight className="w-4 h-4 ml-2 group-hover:translate-x-1 transition-transform" />
+                                    </Link>
                                 </Button>
-                                <Button variant="outline" className="rounded-full px-8 h-14 text-base font-bold border-slate-300 text-slate-700 hover:bg-slate-50 hover:border-slate-400 transition-all hover:scale-105">
+                                <Button asChild variant="outline" className="rounded-full px-8 h-14 text-base font-bold border-slate-300 text-slate-700 hover:bg-slate-50 hover:border-slate-400 transition-all hover:scale-105">
+                                    <a href={BROCHURE_URL} target="_blank" rel="noopener noreferrer">
                                     <Play className="w-4 h-4 mr-2" />
-                                    3분 데모 영상
+                                    서비스 소개서 보기
+                                    </a>
                                 </Button>
                             </div>
                         </motion.div>

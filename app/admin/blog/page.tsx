@@ -41,17 +41,25 @@ export default function AdminBlogPage() {
     const [formLoading, setFormLoading] = useState(false)
 
     const [isFormOpen, setIsFormOpen] = useState(false)
-    const [editingPost, setEditingPost] = useState<BlogPost | undefined>(undefined)
+    const [editingPost] = useState<BlogPost | undefined>(undefined)
     const [deleteTarget, setDeleteTarget] = useState<BlogPost | null>(null)
     const [permanentTarget, setPermanentTarget] = useState<BlogPost | null>(null)
+
+    const handleUnauthorized = useCallback(() => {
+        router.replace("/admin/login")
+    }, [router])
 
     const fetchPosts = useCallback(async () => {
         setLoading(true)
         try {
             const [res, trashRes] = await Promise.all([
-                fetch("/api/admin/blog"),
-                fetch("/api/admin/blog?trash=1"),
+                adminFetch("/api/admin/blog"),
+                adminFetch("/api/admin/blog?trash=1"),
             ])
+            if (res.status === 401 || trashRes.status === 401) {
+                handleUnauthorized()
+                return
+            }
             if (res.ok) {
                 const data = await res.json()
                 setPosts(data.posts)
@@ -65,15 +73,11 @@ export default function AdminBlogPage() {
         } finally {
             setLoading(false)
         }
-    }, [])
+    }, [handleUnauthorized])
 
     useEffect(() => {
         fetchPosts()
     }, [fetchPosts])
-
-    const handleUnauthorized = () => {
-        router.replace("/admin/login")
-    }
 
     const handleCreate = () => {
         router.push("/admin/blog/new")

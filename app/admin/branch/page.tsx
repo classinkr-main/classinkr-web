@@ -54,6 +54,7 @@ function computeStats(leads: LeadRecord[]): BranchStat[] {
 export default function BranchPage() {
   const [leads, setLeads] = useState<LeadRecord[]>([])
   const [loading, setLoading] = useState(true)
+  const [error, setError] = useState("")
   const [role, setRole] = useState<string>("admin")
   const [myBranch, setMyBranch] = useState<string | null>(null)
   const [selected, setSelected] = useState<string | null>(null)
@@ -61,15 +62,29 @@ export default function BranchPage() {
   useEffect(() => {
     const r = sessionStorage.getItem("admin_role") ?? "admin"
     const b = sessionStorage.getItem("admin_branch")
-    setRole(r)
-    setMyBranch(b)
-    if (r === "branch" && b) setSelected(b)
+    queueMicrotask(() => {
+      setRole(r)
+      setMyBranch(b)
+      if (r === "branch" && b) setSelected(b)
+    })
   }, [])
 
   useEffect(() => {
     adminFetch("/api/admin/leads")
-      .then((res) => res.json())
-      .then((d) => setLeads(d.leads ?? []))
+      .then(async (res) => {
+        const data = await res.json().catch(() => null)
+        if (!res.ok) {
+          throw new Error(data?.error || "지사 데이터를 불러오지 못했습니다.")
+        }
+        return data
+      })
+      .then((d) => {
+        setLeads(d.leads ?? [])
+        setError("")
+      })
+      .catch((err) => {
+        setError(err instanceof Error ? err.message : "지사 데이터를 불러오지 못했습니다.")
+      })
       .finally(() => setLoading(false))
   }, [])
 
@@ -90,6 +105,10 @@ export default function BranchPage() {
 
       {loading ? (
         <p className="text-[13px] text-[#1a1a1a]/30">불러오는 중...</p>
+      ) : error ? (
+        <div className="bg-white rounded-xl border border-red-100 py-10 text-center text-[13px] text-red-500">
+          {error}
+        </div>
       ) : stats.length === 0 ? (
         <div className="bg-white rounded-xl border border-[#e8e8e4] border-dashed py-24 text-center text-[13px] text-[#1a1a1a]/30">
           지사 데이터가 없습니다.

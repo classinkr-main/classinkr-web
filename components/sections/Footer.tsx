@@ -3,6 +3,7 @@
  * 페이지 최하단에서 이메일 구독을 유도.
  * NewsletterSubscribe 컴포넌트의 dark variant 사용.
  */
+import Image from "next/image"
 import { NewsletterSubscribe } from "./NewsletterSubscribe"
 
 export function Footer() {
@@ -11,7 +12,13 @@ export function Footer() {
             <div className="container mx-auto">
                 <div className="grid grid-cols-2 md:grid-cols-4 gap-8 mb-12">
                     <div>
-                        <img src="/images/logo.png" alt="Classin Logo" className="h-7 w-auto mb-4 object-contain" />
+                        <Image
+                            src="/images/logo.png"
+                            alt="Classin Logo"
+                            width={120}
+                            height={28}
+                            className="h-7 w-auto mb-4 object-contain"
+                        />
                         <p className="mb-4">다음 세대를 위한 교육 품질 표준화.</p>
                         {/* [NOTE-25] 뉴스레터 구독 영역 */}
                         <div className="mt-4">

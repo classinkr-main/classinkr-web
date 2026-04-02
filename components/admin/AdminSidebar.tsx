@@ -17,8 +17,10 @@ import {
   SquareChevronLeft,
   SquareChevronRight,
 } from "lucide-react"
-import { createSupabaseBrowserClient } from "@/lib/supabase/browser"
 import { useEffect, useState } from "react"
+import { clearAdminSessionStorage } from "@/lib/admin-client"
+import { createSupabaseBrowserClient } from "@/lib/supabase/browser"
+import { hasSupabaseBrowserEnv } from "@/lib/supabase/public-env"
 
 // Supabase 역할 → 메뉴 접근 매핑
 type SidebarRole = string
@@ -64,7 +66,9 @@ export default function AdminSidebar({ role, name, email }: Props) {
 
   useEffect(() => {
     const saved = localStorage.getItem("admin_sidebar_collapsed")
-    if (saved === "true") setCollapsed(true)
+    if (saved === "true") {
+      queueMicrotask(() => setCollapsed(true))
+    }
   }, [])
 
   const toggle = () => {
@@ -75,8 +79,14 @@ export default function AdminSidebar({ role, name, email }: Props) {
   }
 
   const handleLogout = async () => {
-    const supabase = createSupabaseBrowserClient()
-    await supabase.auth.signOut()
+    clearAdminSessionStorage()
+
+    if (hasSupabaseBrowserEnv()) {
+      const supabase = createSupabaseBrowserClient()
+      await supabase.auth.signOut()
+    }
+
+    await fetch("/api/admin/auth", { method: "DELETE" }).catch(() => null)
     router.replace("/admin/login")
   }
 

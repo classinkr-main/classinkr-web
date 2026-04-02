@@ -1,9 +1,9 @@
-import { NextRequest, NextResponse } from "next/server"
+﻿import { NextRequest, NextResponse } from "next/server"
 import { revalidatePath } from "next/cache"
 import { updatePost, trashPost, permanentDeletePost, restorePost } from "@/lib/repositories/blog"
 import { verifyAdmin } from "@/lib/admin-auth"
 
-// id 파라미터는 UUID 또는 레거시 numericId 모두 허용
+// id ?뚮씪誘명꽣??UUID ?먮뒗 ?덇굅??numericId 紐⑤몢 ?덉슜
 function parsePostId(id: string): { uuid?: string; numId?: number } {
   if (id.includes("-")) return { uuid: id }
   const n = parseInt(id, 10)
@@ -14,7 +14,7 @@ export async function PUT(
   req: NextRequest,
   { params }: { params: Promise<{ id: string }> }
 ) {
-  const authError = verifyAdmin(req)
+  const authError = await verifyAdmin(req)
   if (authError) return authError
 
   try {
@@ -36,7 +36,7 @@ export async function PUT(
 
     const post = await updatePost(numId ?? 0, body, uuid)
     if (!post) return NextResponse.json({ error: "Post not found" }, { status: 404 })
-    // 발행/비공개 전환 또는 콘텐츠 변경 시 블로그 캐시 무효화
+    // 諛쒗뻾/鍮꾧났媛??꾪솚 ?먮뒗 肄섑뀗痢?蹂寃???釉붾줈洹?罹먯떆 臾댄슚??
     revalidatePath("/blog")
     revalidatePath(`/blog/${post.slug}`)
     return NextResponse.json({ post })
@@ -49,7 +49,7 @@ export async function DELETE(
   req: NextRequest,
   { params }: { params: Promise<{ id: string }> }
 ) {
-  const authError = verifyAdmin(req)
+  const authError = await verifyAdmin(req)
   if (authError) return authError
 
   try {

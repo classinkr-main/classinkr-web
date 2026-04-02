@@ -234,7 +234,7 @@ export default function AdminMarketingPage() {
         body: JSON.stringify({ subject: data.brief.slice(0, 50), body: "(AI 개인화)", targetTags: data.targetTags, aiPersonalized: valid }),
       })
       const result = await res.json()
-      if (result.ok || result.recipientCount >= 0) {
+      if (result.ok) {
         showToast(`${valid.length}명에게 AI 개인화 발송 완료`)
         await fetchCampaigns()
         setActiveTab("history")
