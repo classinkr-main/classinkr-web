@@ -17,17 +17,18 @@ export default function AdminLayout({ children }: { children: React.ReactNode })
   const router = useRouter()
   const isLoginPage = pathname === "/admin/login"
 
-  const [session, setSession] = useState<SessionInfo | null>(() => {
-    if (typeof window === "undefined") return null
-    const role = sessionStorage.getItem("admin_role")
-    const name = sessionStorage.getItem("admin_name")
-    const email = sessionStorage.getItem("admin_email") ?? ""
-    if (role && name) return { role, name, email }
-    return null
-  })
+  const [session, setSession] = useState<SessionInfo | null>(null)
 
   useEffect(() => {
     if (isLoginPage) return
+
+    // 기존 세션 즉시 복원 (사이드바 flash 방지)
+    const cachedRole = sessionStorage.getItem("admin_role")
+    const cachedName = sessionStorage.getItem("admin_name")
+    const cachedEmail = sessionStorage.getItem("admin_email") ?? ""
+    if (cachedRole && cachedName) {
+      setSession({ role: cachedRole, name: cachedName, email: cachedEmail })
+    }
 
     // dev 환경 자동 스킵
     if (process.env.NEXT_PUBLIC_SKIP_ADMIN_AUTH === "true") {

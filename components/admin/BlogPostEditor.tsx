@@ -65,7 +65,7 @@ interface BlogPostEditorProps {
 
 type DraftState = "saved" | "saving" | "dirty"
 type AiAction = "card-news" | "reels" | "optimize" | "draft"
-type AiState = { action: AiAction; status: "loading" | "streaming" | "done" | "error"; result: string; topic?: string; tone?: string; length?: string }
+type AiState = { action: AiAction; status: "loading" | "streaming" | "done" | "error"; result: string; topic?: string; tone?: string; length?: string; reference?: string }
 type EditorSnapshot = {
   form: BlogPostInput
   tagsInput: string
@@ -196,7 +196,7 @@ export default function BlogPostEditor({
   const [isSubmitting, setIsSubmitting] = useState(false)
   const [notice, setNotice] = useState("")
   const [aiState, setAiState] = useState<AiState | null>(null)
-  const [draftInput, setDraftInput] = useState({ topic: "", tone: "전문적", length: "medium" })
+  const [draftInput, setDraftInput] = useState({ topic: "", tone: "전문적", length: "medium", reference: "" })
   const [showPreview, setShowPreview] = useState(false)
   const [slugEdited, setSlugEdited] = useState(Boolean(initialPost?.slug))
   const formRef = useRef(form)
@@ -482,14 +482,14 @@ export default function BlogPostEditor({
     }
   }
 
-  const handleAiAction = async (action: AiAction, params?: { topic: string; tone: string; length: string }) => {
+  const handleAiAction = async (action: AiAction, params?: { topic: string; tone: string; length: string; reference?: string }) => {
     setAiState({ action, status: "loading", result: "", ...(params ?? {}) })
     try {
       const res = await adminFetch("/api/admin/blog/ai", {
         method: "POST",
         body: JSON.stringify(
           action === "draft" && params
-            ? { action, category: form.category, topic: params.topic, tone: params.tone, length: params.length }
+            ? { action, category: form.category, topic: params.topic, tone: params.tone, length: params.length, reference: params.reference ?? "" }
             : { action, title: form.title, content: form.contentMarkdown, category: form.category }
         ),
       })
@@ -628,7 +628,7 @@ export default function BlogPostEditor({
                     onClick={() => handleAiAction(
                       aiState.action,
                       aiState.action === "draft" && aiState.topic
-                        ? { topic: aiState.topic, tone: aiState.tone ?? "전문적", length: aiState.length ?? "medium" }
+                        ? { topic: aiState.topic, tone: aiState.tone ?? "전문적", length: aiState.length ?? "medium", reference: aiState.reference ?? "" }
                         : undefined
                     )}
                     className="text-[#1a1a1a]/50"
@@ -1571,10 +1571,23 @@ export default function BlogPostEditor({
                         </select>
                       </div>
                     </div>
+                    <div>
+                      <label className="text-[12px] font-medium text-[#1a1a1a]/60">
+                        참고 자료
+                        <span className="ml-1 font-normal text-[#1a1a1a]/35">(선택)</span>
+                      </label>
+                      <textarea
+                        rows={4}
+                        placeholder={"세부 내용, 통계, 링크, 핵심 포인트 등을 자유롭게 붙여넣으세요.\n예) 클래스인 사용 학원 85%가 출석 관리 시간 50% 단축\nhttps://example.com/article"}
+                        value={draftInput.reference}
+                        onChange={(e) => setDraftInput((prev) => ({ ...prev, reference: e.target.value }))}
+                        className="mt-1.5 w-full resize-none rounded-xl border border-[#e8e8e4] bg-white px-3 py-2 text-sm outline-none transition-colors focus:border-[#084734] placeholder:text-[#1a1a1a]/25 leading-relaxed"
+                      />
+                    </div>
                     <button
                       type="button"
                       disabled={!draftInput.topic.trim() || (aiState?.action === "draft" && aiState.status !== "done" && aiState.status !== "error")}
-                      onClick={() => handleAiAction("draft", { topic: draftInput.topic, tone: draftInput.tone, length: draftInput.length })}
+                      onClick={() => handleAiAction("draft", { topic: draftInput.topic, tone: draftInput.tone, length: draftInput.length, reference: draftInput.reference })}
                       className="group mt-1 flex w-full items-center justify-center gap-2 rounded-xl bg-[#084734] px-4 py-2.5 text-sm font-medium text-white transition-colors hover:bg-[#084734]/90 disabled:cursor-not-allowed disabled:opacity-50"
                     >
                       {aiState?.action === "draft" && aiState.status !== "done" && aiState.status !== "error"

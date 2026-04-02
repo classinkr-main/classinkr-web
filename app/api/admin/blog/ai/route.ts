@@ -6,7 +6,7 @@ export const runtime = "nodejs"
 
 type AiAction = "card-news" | "reels" | "optimize" | "draft"
 
-type DraftParams = { topic?: string; tone?: string; length?: string }
+type DraftParams = { topic?: string; tone?: string; length?: string; reference?: string }
 
 const TONE_GUIDE: Record<string, string> = {
   "전문적": "전문적이고 신뢰감 있는 어조. 데이터와 근거를 중시하며, 격식 있는 문어체로 작성.",
@@ -110,16 +110,19 @@ ${content}
 모든 자막은 한 줄에 15자 이내로, 말하듯 자연스럽게 작성해주세요.
 `.trim(),
 
-  "draft": (_title, _content, category, { topic = "", tone = "전문적", length = "medium" }) => {
+  "draft": (_title, _content, category, { topic = "", tone = "전문적", length = "medium", reference = "" }) => {
     const toneGuide = TONE_GUIDE[tone] ?? TONE_GUIDE["전문적"]
     const lengthGuide = LENGTH_GUIDE[length] ?? LENGTH_GUIDE["medium"]
+    const refSection = reference.trim()
+      ? `\n참고 자료 (아래 내용을 반드시 글에 반영하거나 인용하세요):\n---\n${reference.trim()}\n---\n`
+      : ""
     return `당신은 한국어 블로그 전문 작가입니다. 아래 조건에 맞는 블로그 초안을 처음부터 작성해주세요.
 
 주제: ${topic}
 카테고리: ${category || "인사이트"}
 분량: ${lengthGuide.words} (${lengthGuide.sections})
 어조: ${toneGuide}
-
+${refSection}
 다음 형식을 반드시 지켜주세요:
 
 1. 첫 줄은 반드시 마크다운 H1 제목으로 시작 (예: # 제목)
@@ -197,6 +200,7 @@ export async function POST(req: NextRequest) {
     topic?: string
     tone?: string
     length?: string
+    reference?: string
   }
   try {
     body = await req.json()
@@ -207,7 +211,7 @@ export async function POST(req: NextRequest) {
     })
   }
 
-  const { action, title, content, category, topic, tone, length } = body
+  const { action, title, content, category, topic, tone, length, reference } = body
 
   const validActions: AiAction[] = ["card-news", "reels", "optimize", "draft"]
   if (!action || !validActions.includes(action)) {
@@ -219,11 +223,11 @@ export async function POST(req: NextRequest) {
 
   const prompt =
     action === "draft"
-      ? PROMPTS.draft(title || "", content || "", category || "인사이트", { topic, tone, length })
+      ? PROMPTS.draft(title || "", content || "", category || "인사이트", { topic, tone, length, reference })
       : PROMPTS[action](title || "제목 없음", content || "", category || "인사이트")
 
   const genAI = new GoogleGenerativeAI(process.env.GEMINI_API_KEY)
-  const model = genAI.getGenerativeModel({ model: "gemini-2.0-flash" })
+  const model = genAI.getGenerativeModel({ model: "gemini-3-pro-preview" })
 
   const stream = new ReadableStream({
     async start(controller) {

@@ -253,6 +253,7 @@ export async function updatePost(
     update.cta_text = data.cta.buttonLabel ?? null;
     update.cta_url = data.cta.buttonHref ?? null;
   }
+  if (data.pageLayout !== undefined) update.page_layout = data.pageLayout;
   if (data.status !== undefined) {
     update.status = data.status.toUpperCase() as SupaBlogPost["status"];
     if (data.status === "published" && !update.published_at) {
