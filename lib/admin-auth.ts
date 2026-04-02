@@ -135,8 +135,9 @@ export function verifyAdmin(req: NextRequest): NextResponse | null {
   // Supabase 인증 경로: 클라이언트가 "supabase-authed" 토큰을 보내면
   // Supabase 세션 쿠키(sb-*-auth-token)가 함께 존재하는지 확인
   if (token === "supabase-authed") {
+    // @supabase/ssr v0.3+ 에서 토큰이 청크 분할됨 → 쿠키명이 sb-*-auth-token.0 형태도 포함
     const hasSupabaseSession = [...req.cookies.getAll()].some(
-      (c) => c.name.startsWith("sb-") && c.name.endsWith("-auth-token")
+      (c) => c.name.startsWith("sb-") && c.name.includes("-auth-token")
     )
     if (hasSupabaseSession) return null
   }
