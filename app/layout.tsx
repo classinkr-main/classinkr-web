@@ -1,7 +1,7 @@
 import type { Metadata } from "next";
 import "./globals.css";
 import { ConditionalHeader } from "@/components/sections/ConditionalHeader";
-import { Footer } from "@/components/sections/Footer";
+import { ConditionalFooter } from "@/components/sections/ConditionalFooter";
 import { FloatingChatbot } from "@/components/ui/FloatingChatbot";
 import { MobileFloatingCTA } from "@/components/ui/MobileFloatingCTA";
 import { AnalyticsProviders } from "@/components/AnalyticsProviders";
@@ -35,7 +35,7 @@ export default function RootLayout({
         <main className="min-h-screen bg-background font-sans antialiased selection:bg-primary/20 selection:text-primary">
           {children}
         </main>
-        <Footer />
+        <ConditionalFooter />
         <FloatingChatbot />
         <MobileFloatingCTA />
         <AnalyticsProviders />
