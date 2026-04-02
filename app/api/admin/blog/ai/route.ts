@@ -227,7 +227,7 @@ export async function POST(req: NextRequest) {
       : PROMPTS[action](title || "제목 없음", content || "", category || "인사이트")
 
   const genAI = new GoogleGenerativeAI(process.env.GEMINI_API_KEY)
-  const model = genAI.getGenerativeModel({ model: "gemini-2.5-flash" })
+  const model = genAI.getGenerativeModel({ model: "gemini-3-pro-preview" })
 
   const stream = new ReadableStream({
     async start(controller) {
