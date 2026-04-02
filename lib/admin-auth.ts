@@ -132,5 +132,14 @@ export function verifyAdmin(req: NextRequest): NextResponse | null {
   const token = req.headers.get("authorization")?.replace("Bearer ", "")
   if (token && token === process.env.ADMIN_PASSWORD) return null
 
+  // Supabase 인증 경로: 클라이언트가 "supabase-authed" 토큰을 보내면
+  // Supabase 세션 쿠키(sb-*-auth-token)가 함께 존재하는지 확인
+  if (token === "supabase-authed") {
+    const hasSupabaseSession = [...req.cookies.getAll()].some(
+      (c) => c.name.startsWith("sb-") && c.name.endsWith("-auth-token")
+    )
+    if (hasSupabaseSession) return null
+  }
+
   return NextResponse.json({ error: "Unauthorized" }, { status: 401 })
 }
