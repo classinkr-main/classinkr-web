@@ -495,7 +495,7 @@ export default function BlogPostEditor({
       })
       if (!res.ok || !res.body) {
         const err = await res.json().catch(() => ({ error: "AI 처리 중 오류가 발생했습니다." })) as { error?: string }
-        setAiState({ action, status: "error", result: err.error ?? "AI 처리 중 오류가 발생했습니다." })
+        setAiState({ action, status: "error", result: "AI 응답 중 오류가 발생했습니다. 잠시 후 다시 시도해주세요." })
         return
       }
       setAiState({ action, status: "streaming", result: "" })
@@ -509,7 +509,7 @@ export default function BlogPostEditor({
       }
       setAiState((prev) => prev ? { ...prev, status: "done" } : null)
     } catch {
-      setAiState({ action, status: "error", result: "네트워크 오류가 발생했습니다." })
+      setAiState({ action, status: "error", result: "AI 응답 중 오류가 발생했습니다. 잠시 후 다시 시도해주세요." })
     }
   }
 
@@ -589,8 +589,14 @@ export default function BlogPostEditor({
                 </div>
               )}
               {aiState.status === "error" && (
-                <div className="rounded-2xl border border-red-100 bg-red-50 p-5 text-sm text-red-700">
-                  {aiState.result}
+                <div className="flex flex-col items-center gap-4 py-10 text-center">
+                  <div className="flex h-12 w-12 items-center justify-center rounded-full bg-red-50">
+                    <X className="h-5 w-5 text-red-400" />
+                  </div>
+                  <div>
+                    <p className="text-sm font-medium text-[#111110]">오류가 발생했습니다</p>
+                    <p className="mt-1 text-[13px] text-[#1a1a1a]/45">잠시 후 다시 시도해주세요.</p>
+                  </div>
                 </div>
               )}
             </div>
