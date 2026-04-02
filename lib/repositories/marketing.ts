@@ -99,14 +99,16 @@ export async function upsertSubscriber(
     const mergedTags = Array.from(
       new Set([...(existing.tags ?? []), ...(data.tags ?? [])])
     );
+    // TODO: 테이블 확장 후 org, role, size, phone 컬럼 추가되면 아래 주석 해제
+    // https://supabase.com/dashboard → newsletter_subscribers 테이블에 컬럼 추가 필요
     const { data: row, error } = await sb()
       .from("newsletter_subscribers")
       .update({
         name: data.name,
-        org: data.org ?? null,
-        role: data.role ?? null,
-        size: data.size ?? null,
-        phone: data.phone ?? null,
+        // org: data.org ?? null,
+        // role: data.role ?? null,
+        // size: data.size ?? null,
+        // phone: data.phone ?? null,
         tags: mergedTags,
         status: data.status ?? "active",
         unsubscribed_at: data.status === "active" ? null : undefined,
@@ -123,10 +125,10 @@ export async function upsertSubscriber(
     .insert({
       name: data.name,
       email: data.email,
-      org: data.org ?? null,
-      role: data.role ?? null,
-      size: data.size ?? null,
-      phone: data.phone ?? null,
+      // org: data.org ?? null,       // TODO: 컬럼 추가 후 활성화
+      // role: data.role ?? null,     // TODO: 컬럼 추가 후 활성화
+      // size: data.size ?? null,     // TODO: 컬럼 추가 후 활성화
+      // phone: data.phone ?? null,   // TODO: 컬럼 추가 후 활성화
       tags: data.tags ?? [],
       status: "active",
       source: data.source,
