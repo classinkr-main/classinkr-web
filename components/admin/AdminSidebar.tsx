@@ -14,8 +14,8 @@ import {
   LogOut,
   ChevronRight,
   CalendarDays,
-  PanelLeftClose,
-  PanelLeftOpen,
+  SquareChevronLeft,
+  SquareChevronRight,
 } from "lucide-react"
 import { createSupabaseBrowserClient } from "@/lib/supabase/browser"
 import { useEffect, useState } from "react"
@@ -103,7 +103,7 @@ export default function AdminSidebar({ role, name, email }: Props) {
           className="p-1 rounded-md text-[#1a1a1a]/30 hover:text-[#111110] hover:bg-[#f5f5f2] transition-colors"
           title={collapsed ? "사이드바 열기" : "사이드바 닫기"}
         >
-          {collapsed ? <PanelLeftOpen className="w-4 h-4" /> : <PanelLeftClose className="w-4 h-4" />}
+          {collapsed ? <SquareChevronRight className="w-4 h-4" /> : <SquareChevronLeft className="w-4 h-4" />}
         </button>
       </div>
 
