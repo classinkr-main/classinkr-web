@@ -1,5 +1,6 @@
 "use client"
 
+import Link from "next/link"
 import { useState, useEffect, useCallback } from "react"
 import {
   ChevronLeft, ChevronRight, Plus, X, Clock, Users,
@@ -8,7 +9,7 @@ import {
 import { Button } from "@/components/ui/button"
 import { Input } from "@/components/ui/input"
 import { Label } from "@/components/ui/label"
-import type { CalendarEvent, EventType } from "@/lib/calendar-data"
+import type { CalendarEvent, EventSource, EventType } from "@/lib/calendar-data"
 
 // ─── 상수 ─────────────────────────────────────────────────────────────────────
 
@@ -23,8 +24,22 @@ const EVENT_TYPES: { value: EventType; label: string; color: string; bg: string;
   { value: "other",    label: "기타",     color: "text-gray-600",  bg: "bg-gray-50 border-gray-200",   dot: "bg-gray-400" },
 ]
 
+const SOURCE_FILTERS: { value: "all" | EventSource; label: string }[] = [
+  { value: "all", label: "전체" },
+  { value: "calendar", label: "팀 일정" },
+  { value: "partner", label: "파트너 일정" },
+]
+
 function getTypeStyle(type: EventType) {
   return EVENT_TYPES.find((t) => t.value === type) ?? EVENT_TYPES[EVENT_TYPES.length - 1]
+}
+
+function getEventSource(event: CalendarEvent): EventSource {
+  return event.source ?? "calendar"
+}
+
+function getEventSourceLabel(event: CalendarEvent) {
+  return event.sourceLabel ?? (getEventSource(event) === "partner" ? "파트너" : "팀")
 }
 
 function toDateStr(y: number, m: number, d: number) {
@@ -34,6 +49,24 @@ function toDateStr(y: number, m: number, d: number) {
 function formatDate(dateStr: string) {
   const d = new Date(dateStr + "T00:00:00")
   return d.toLocaleDateString("ko-KR", { month: "long", day: "numeric", weekday: "short" })
+}
+
+function enumerateEventDates(event: CalendarEvent) {
+  const start = new Date(`${event.date}T00:00:00`)
+  const end = new Date(`${(event.endDate ?? event.date)}T00:00:00`)
+  const dates: string[] = []
+
+  if (Number.isNaN(start.getTime()) || Number.isNaN(end.getTime()) || start.getTime() > end.getTime()) {
+    return [event.date]
+  }
+
+  const cursor = new Date(start)
+  while (cursor.getTime() <= end.getTime()) {
+    dates.push(toDateStr(cursor.getFullYear(), cursor.getMonth() + 1, cursor.getDate()))
+    cursor.setDate(cursor.getDate() + 1)
+  }
+
+  return dates
 }
 
 // ─── 인증 헬퍼 ────────────────────────────────────────────────────────────────
@@ -194,6 +227,7 @@ export default function AdminCalendarPage() {
   const [year, setYear] = useState(today.getFullYear())
   const [month, setMonth] = useState(today.getMonth() + 1)
   const [events, setEvents] = useState<CalendarEvent[]>([])
+  const [sourceFilter, setSourceFilter] = useState<"all" | EventSource>("all")
   const [loading, setLoading] = useState(false)
   const [formLoading, setFormLoading] = useState(false)
 
@@ -217,12 +251,14 @@ export default function AdminCalendarPage() {
   const firstDay = new Date(year, month - 1, 1).getDay()
   const daysInMonth = new Date(year, month, 0).getDate()
   const todayStr = toDateStr(today.getFullYear(), today.getMonth() + 1, today.getDate())
+  const visibleEvents = events.filter((event) => sourceFilter === "all" || getEventSource(event) === sourceFilter)
 
   // map date → events
-  const eventsByDate = events.reduce<Record<string, CalendarEvent[]>>((acc, ev) => {
-    const key = ev.date
-    if (!acc[key]) acc[key] = []
-    acc[key].push(ev)
+  const eventsByDate = visibleEvents.reduce<Record<string, CalendarEvent[]>>((acc, ev) => {
+    enumerateEventDates(ev).forEach((key) => {
+      if (!acc[key]) acc[key] = []
+      acc[key].push(ev)
+    })
     return acc
   }, {})
 
@@ -266,6 +302,7 @@ export default function AdminCalendarPage() {
   }
 
   const handleDelete = async (ev: CalendarEvent) => {
+    if (ev.readonly) return
     setFormLoading(true)
     try {
       await adminFetch(`/api/admin/calendar/${ev.id}`, { method: "DELETE" })
@@ -285,6 +322,7 @@ export default function AdminCalendarPage() {
   }
 
   const openEdit = (ev: CalendarEvent) => {
+    if (ev.readonly) return
     setEditingEvent(ev)
     setShowForm(true)
   }
@@ -311,12 +349,14 @@ export default function AdminCalendarPage() {
   const selectedEvents = selectedDate ? (eventsByDate[selectedDate] ?? []) : []
 
   // ─── Upcoming (next 7 days) ────────────────────────────────────
-  const upcomingEvents = events
-    .filter((e) => e.date >= todayStr)
+  const upcomingEvents = visibleEvents
+    .filter((e) => (e.endDate ?? e.date) >= todayStr)
     .slice(0, 8)
 
   const monthLabel = `${year}년 ${month}월`
-  const totalThisMonth = events.length
+  const totalThisMonth = visibleEvents.length
+  const totalPartnerEvents = events.filter((event) => getEventSource(event) === "partner").length
+  const totalTeamEvents = events.filter((event) => getEventSource(event) === "calendar").length
 
   return (
     <div className="px-8 pt-12 pb-20">
@@ -324,7 +364,10 @@ export default function AdminCalendarPage() {
       <div className="flex items-center justify-between mb-8">
         <div>
           <p className="text-[11px] font-medium text-[#1a1a1a]/30 uppercase tracking-widest mb-1">Admin</p>
-          <h1 className="text-2xl font-bold text-[#111110] tracking-[-0.02em]">팀 캘린더</h1>
+          <h1 className="text-2xl font-bold text-[#111110] tracking-[-0.02em]">운영 캘린더</h1>
+          <p className="mt-2 text-[13px] leading-6 text-[#1a1a1a]/50">
+            팀 일정과 파트너 운영 일정을 함께 보되, 파트너 일정은 읽기 전용으로 표시되고 수정은 파트너 워크스페이스에서 진행합니다.
+          </p>
         </div>
         <Button size="sm" onClick={() => openCreate()}>
           <Plus className="w-4 h-4 mr-1.5" />
@@ -333,12 +376,18 @@ export default function AdminCalendarPage() {
       </div>
 
       {/* Stats strip */}
-      <div className="flex items-center gap-6 mb-6 text-[13px]">
+      <div className="flex flex-wrap items-center gap-4 mb-6 text-[13px]">
         <span className="text-[#1a1a1a]/40">
           이번달 <span className="font-semibold text-[#111110]">{totalThisMonth}개</span>
         </span>
+        <span className="text-[#1a1a1a]/40">
+          팀 일정 <span className="font-semibold text-[#111110]">{totalTeamEvents}개</span>
+        </span>
+        <span className="text-[#1a1a1a]/40">
+          파트너 일정 <span className="font-semibold text-[#111110]">{totalPartnerEvents}개</span>
+        </span>
         {EVENT_TYPES.slice(0, 4).map((t) => {
-          const cnt = events.filter(e => e.type === t.value).length
+          const cnt = visibleEvents.filter(e => e.type === t.value).length
           if (cnt === 0) return null
           return (
             <span key={t.value} className="flex items-center gap-1.5 text-[#1a1a1a]/50">
@@ -347,6 +396,22 @@ export default function AdminCalendarPage() {
             </span>
           )
         })}
+        <div className="ml-auto inline-flex rounded-xl border border-[#e8e8e4] bg-white p-1">
+          {SOURCE_FILTERS.map((filter) => (
+            <button
+              key={filter.value}
+              type="button"
+              onClick={() => setSourceFilter(filter.value)}
+              className={`rounded-lg px-3 py-1.5 text-[12px] font-medium transition-colors ${
+                sourceFilter === filter.value
+                  ? "bg-[#111110] text-white"
+                  : "text-[#1a1a1a]/45 hover:bg-[#f5f5f2] hover:text-[#111110]"
+              }`}
+            >
+              {filter.label}
+            </button>
+          ))}
+        </div>
       </div>
 
       {/* Main grid */}
@@ -440,12 +505,18 @@ export default function AdminCalendarPage() {
                   <div className="space-y-0.5 overflow-hidden">
                     {dayEvents.slice(0, 3).map((ev) => {
                       const style = getTypeStyle(ev.type)
+                      const isPartnerEvent = getEventSource(ev) === "partner"
                       return (
                         <div
                           key={ev.id}
                           className={`flex items-center gap-1 px-1.5 py-0.5 rounded text-[10px] font-medium truncate border ${style.bg} ${style.color}`}
                         >
                           <span className={`w-1.5 h-1.5 rounded-full shrink-0 ${style.dot}`} />
+                          {isPartnerEvent && (
+                            <span className="rounded bg-white/80 px-1 py-0 text-[9px] font-semibold text-[#111110]/70">
+                              P
+                            </span>
+                          )}
                           <span className="truncate">{ev.title}</span>
                         </div>
                       )
@@ -488,26 +559,53 @@ export default function AdminCalendarPage() {
                 <div className="divide-y divide-[#f0f0ec]">
                   {selectedEvents.map((ev) => {
                     const style = getTypeStyle(ev.type)
+                    const isPartnerEvent = getEventSource(ev) === "partner"
                     return (
                       <div key={ev.id} className="px-4 py-3">
                         <div className="flex items-start justify-between gap-2 mb-1.5">
-                          <div className="flex items-center gap-1.5 min-w-0">
-                            <span className={`w-2 h-2 rounded-full shrink-0 ${style.dot}`} />
-                            <p className="text-[13px] font-medium text-[#111110] truncate">{ev.title}</p>
+                          <div className="min-w-0">
+                            <div className="flex items-center gap-1.5 min-w-0">
+                              <span className={`w-2 h-2 rounded-full shrink-0 ${style.dot}`} />
+                              <p className="text-[13px] font-medium text-[#111110] truncate">{ev.title}</p>
+                            </div>
+                            <div className="mt-1 flex flex-wrap items-center gap-1.5">
+                              <span className="rounded-full bg-[#f0f0ec] px-2 py-0.5 text-[10px] font-medium text-[#1a1a1a]/55">
+                                {getEventSourceLabel(ev)}
+                              </span>
+                              <span className={`rounded-full px-2 py-0.5 text-[10px] font-medium ${style.bg} ${style.color}`}>
+                                {getTypeStyle(ev.type).label}
+                              </span>
+                              {ev.partnerName && (
+                                <span className="rounded-full border border-[#e8e8e4] px-2 py-0.5 text-[10px] text-[#1a1a1a]/45">
+                                  {ev.partnerName}
+                                </span>
+                              )}
+                            </div>
                           </div>
-                          <div className="flex items-center gap-0.5 shrink-0">
-                            <button
-                              onClick={() => openEdit(ev)}
-                              className="w-6 h-6 flex items-center justify-center rounded hover:bg-[#f0f0ec] text-[#1a1a1a]/30 hover:text-[#111110] transition-colors"
-                            >
-                              <Pencil className="w-3 h-3" />
-                            </button>
-                            <button
-                              onClick={() => setDeleteTarget(ev)}
-                              className="w-6 h-6 flex items-center justify-center rounded hover:bg-red-50 text-[#1a1a1a]/30 hover:text-red-500 transition-colors"
-                            >
-                              <Trash2 className="w-3 h-3" />
-                            </button>
+                          <div className="flex items-center gap-1 shrink-0">
+                            {isPartnerEvent && ev.href ? (
+                              <Link
+                                href={ev.href}
+                                className="rounded-lg border border-[#e8e8e4] px-2.5 py-1 text-[11px] font-medium text-[#1a1a1a]/55 transition-colors hover:border-[#111110]/20 hover:text-[#111110]"
+                              >
+                                파트너 열기
+                              </Link>
+                            ) : (
+                              <>
+                                <button
+                                  onClick={() => openEdit(ev)}
+                                  className="w-6 h-6 flex items-center justify-center rounded hover:bg-[#f0f0ec] text-[#1a1a1a]/30 hover:text-[#111110] transition-colors"
+                                >
+                                  <Pencil className="w-3 h-3" />
+                                </button>
+                                <button
+                                  onClick={() => setDeleteTarget(ev)}
+                                  className="w-6 h-6 flex items-center justify-center rounded hover:bg-red-50 text-[#1a1a1a]/30 hover:text-red-500 transition-colors"
+                                >
+                                  <Trash2 className="w-3 h-3" />
+                                </button>
+                              </>
+                            )}
                           </div>
                         </div>
                         <div className="space-y-1 text-[11px] text-[#1a1a1a]/50">
@@ -523,10 +621,21 @@ export default function AdminCalendarPage() {
                               {ev.assignees.join(", ")}
                             </div>
                           )}
+                          {ev.dealTitle && (
+                            <div className="flex items-start gap-1.5">
+                              <span className="mt-[2px] h-3 w-3 shrink-0 rounded-full bg-[#111110]/8" />
+                              <span>연결 거래: {ev.dealTitle}</span>
+                            </div>
+                          )}
                           {ev.description && (
                             <div className="flex items-start gap-1.5">
                               <AlignLeft className="w-3 h-3 mt-0.5 shrink-0" />
                               <span className="line-clamp-2">{ev.description}</span>
+                            </div>
+                          )}
+                          {isPartnerEvent && (
+                            <div className="rounded-lg bg-[#fafaf8] px-2.5 py-2 text-[11px] text-[#1a1a1a]/45">
+                              파트너 일정은 파트너 운영 상세에서 수정합니다.
                             </div>
                           )}
                         </div>
@@ -556,6 +665,7 @@ export default function AdminCalendarPage() {
                     (new Date(ev.date + "T00:00:00").getTime() - new Date(todayStr + "T00:00:00").getTime())
                     / 86400000
                   )
+                  const isPartnerEvent = getEventSource(ev) === "partner"
                   return (
                     <div
                       key={ev.id}
@@ -571,9 +681,19 @@ export default function AdminCalendarPage() {
                           {daysLeft === 0 ? "오늘" : `D-${daysLeft}`}
                         </span>
                       </div>
-                      <p className="text-[11px] text-[#1a1a1a]/40 ml-4 mt-0.5">
-                        {formatDate(ev.date)}{ev.time ? ` · ${ev.time}` : ""}
-                      </p>
+                      <div className="ml-4 mt-0.5 flex flex-wrap items-center gap-1.5">
+                        <p className="text-[11px] text-[#1a1a1a]/40">
+                          {formatDate(ev.date)}{ev.time ? ` · ${ev.time}` : ""}
+                        </p>
+                        <span className="rounded-full bg-[#f0f0ec] px-2 py-0.5 text-[10px] font-medium text-[#1a1a1a]/50">
+                          {getEventSourceLabel(ev)}
+                        </span>
+                        {isPartnerEvent && ev.partnerName && (
+                          <span className="rounded-full border border-[#e8e8e4] px-2 py-0.5 text-[10px] text-[#1a1a1a]/45">
+                            {ev.partnerName}
+                          </span>
+                        )}
+                      </div>
                     </div>
                   )
                 })}
