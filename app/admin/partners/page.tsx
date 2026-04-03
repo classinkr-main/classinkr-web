@@ -62,7 +62,7 @@ const CONTRACT_STATUS_COLOR: Record<ContractStatus, string> = {
 }
 const PAYMENT_LABEL: Record<PaymentMethod, string> = { bank_transfer: "계좌이체", card: "카드", cash: "현금" }
 
-type PanelTab = "timeline" | "docs" | "install" | "info"
+type PanelTab = "timeline" | "docs" | "install" | "info" | "delivery"
 
 // ── 더미 데이터 ───────────────────────────────────────────────
 
@@ -106,6 +106,93 @@ const DUMMY_RECEIPTS: Record<string, ReceiptType[]> = {
   p5: [{ id: "r1", receipt_number: "R-2026-001", contract_id: "c5", partner_id: "p5", amount: 16363636, tax_amount: 1636364, total_amount: 18000000, payment_method: "bank_transfer", cash_receipt_requested: false, paid_at: "2026-03-10T00:00:00Z", cash_receipt_type: null, cash_receipt_number: null, pdf_url: null, emailed_at: null, notes: null, created_by: null, created_at: "2026-03-10T00:00:00Z", updated_at: "2026-03-10T00:00:00Z" }],
   p6: [],
 }
+
+// ── HW 납품 데이터 ────────────────────────────────────────────
+
+type HwSaleStatus = "pending" | "shipped" | "delivered" | "cancelled"
+interface HwSale {
+  id: string; sale_number: string; partner_id: string; contract_id: string | null
+  status: HwSaleStatus; delivery_date: string | null; delivered_at: string | null
+  installer: string | null; delivery_address: string | null; notes: string | null
+  items: HwSaleItem[]; created_at: string; updated_at: string
+}
+interface HwSaleItem {
+  id: string; sale_id: string; sku: string; product_name: string
+  quantity: number; unit_price: number; serial_notes: string | null; sort_order: number
+}
+
+const HW_SALE_STATUS_LABEL: Record<HwSaleStatus, string> = {
+  pending: "대기", shipped: "출고", delivered: "납품완료", cancelled: "취소",
+}
+const HW_SALE_STATUS_COLOR: Record<HwSaleStatus, string> = {
+  pending: "bg-[#f0f0ec] text-[#1a1a1a]/50",
+  shipped: "bg-blue-50 text-blue-600",
+  delivered: "bg-emerald-50 text-emerald-700",
+  cancelled: "bg-red-50 text-red-400",
+}
+
+const DUMMY_HW_SALES: Record<string, HwSale[]> = {
+  p1: [{
+    id: "hs1", sale_number: "HS-2026-001", partner_id: "p1", contract_id: "c1",
+    status: "shipped", delivery_date: "2026-04-20", delivered_at: null,
+    installer: "박설치", delivery_address: "서울시 강남구 역삼로 123 (2~4층)",
+    notes: "설치 예정일 4/20 확정",
+    items: [
+      { id: "hsi1", sale_id: "hs1", sku: "CB-86", product_name: "전자칠판 86인치", quantity: 4, unit_price: 5800000, serial_notes: null, sort_order: 0 },
+      { id: "hsi2", sale_id: "hs1", sku: "STAND", product_name: "전용 스탠드",     quantity: 4, unit_price: 300000,  serial_notes: null, sort_order: 1 },
+      { id: "hsi3", sale_id: "hs1", sku: "CAM-T1", product_name: "AI카메라 T1",   quantity: 2, unit_price: 1200000, serial_notes: null, sort_order: 2 },
+    ],
+    created_at: "2026-03-15T00:00:00Z", updated_at: "2026-03-15T00:00:00Z",
+  }],
+  p4: [{
+    id: "hs2", sale_number: "HS-2026-002", partner_id: "p4", contract_id: "c4",
+    status: "delivered", delivery_date: "2026-04-10", delivered_at: "2026-04-10T14:00:00Z",
+    installer: "이설치", delivery_address: "경기도 성남시 분당구 황새울로 200 (3층)",
+    notes: null,
+    items: [
+      { id: "hsi4", sale_id: "hs2", sku: "CB-86", product_name: "전자칠판 86인치", quantity: 3, unit_price: 5800000, serial_notes: "SN-001, SN-002, SN-003", sort_order: 0 },
+      { id: "hsi5", sale_id: "hs2", sku: "CB-75", product_name: "전자칠판 75인치", quantity: 1, unit_price: 4900000, serial_notes: "SN-004", sort_order: 1 },
+      { id: "hsi6", sale_id: "hs2", sku: "STAND", product_name: "전용 스탠드",     quantity: 4, unit_price: 300000,  serial_notes: null, sort_order: 2 },
+      { id: "hsi7", sale_id: "hs2", sku: "CAM-T1", product_name: "AI카메라 T1",   quantity: 2, unit_price: 1200000, serial_notes: null, sort_order: 3 },
+    ],
+    created_at: "2026-02-20T00:00:00Z", updated_at: "2026-04-10T00:00:00Z",
+  }],
+  p2: [], p3: [], p5: [], p6: [],
+}
+
+// ── 계약서 템플릿 ─────────────────────────────────────────────
+
+interface ContractTemplate {
+  id: string; name: string; category: string
+  content_html: string
+}
+const DUMMY_TEMPLATES: ContractTemplate[] = [
+  { id: "tpl1", name: "HW 구매계약서 (표준)", category: "sales",
+    content_html: `<h2 style="text-align:center;margin-bottom:24px;">전자칠판 납품 계약서</h2>
+<p><strong>공급자(을)</strong>: 주식회사 ClassIn Korea</p>
+<p><strong>수요자(갑)</strong>: {{partner_name}}</p>
+<hr/>
+<p>본 계약은 아래와 같이 전자칠판 납품에 관하여 체결합니다.</p>
+<h3>제1조 (계약금액)</h3>
+<p>총 계약금액: <strong>{{total_amount}}원</strong> (부가세 포함)</p>
+<h3>제2조 (납품 일정)</h3>
+<p>납품 예정일: {{valid_from}} ~ {{valid_until}}</p>
+<h3>제3조 (품질 보증)</h3>
+<p>제품 보증기간은 납품일로부터 1년으로 합니다.</p>
+<br/><br/>
+<p style="text-align:center;">{{valid_from}}</p>` },
+  { id: "tpl2", name: "유지보수 계약서", category: "maintenance",
+    content_html: `<h2 style="text-align:center;margin-bottom:24px;">전자칠판 유지보수 계약서</h2>
+<p><strong>위탁자(갑)</strong>: {{partner_name}}</p>
+<p><strong>수탁자(을)</strong>: 주식회사 ClassIn Korea</p>
+<hr/>
+<h3>제1조 (유지보수 범위)</h3>
+<p>정기점검, 소프트웨어 업데이트, 장애 대응을 포함합니다.</p>
+<h3>제2조 (유지보수 기간)</h3>
+<p>{{valid_from}} 부터 {{valid_until}} 까지</p>
+<h3>제3조 (요금)</h3>
+<p>연간 유지보수 비용: <strong>{{total_amount}}원</strong></p>` },
+]
 
 // ── 제품 카탈로그 ─────────────────────────────────────────────
 
@@ -208,9 +295,20 @@ function TimelineTab({ partner, quotes, contracts, receipts }: { partner: Partne
 
 // ── 문서 탭 ──────────────────────────────────────────────────
 
+function fillTemplate(tpl: ContractTemplate, partner: Partner, totalAmount: number): string {
+  const today = new Date().toISOString().split("T")[0]
+  return tpl.content_html
+    .replace(/{{partner_name}}/g, partner.name)
+    .replace(/{{total_amount}}/g, totalAmount.toLocaleString())
+    .replace(/{{valid_from}}/g, today)
+    .replace(/{{valid_until}}/g, new Date(Date.now() + 365*24*60*60*1000).toISOString().split("T")[0])
+}
+
 function DocsTab({ partner, quotes, contracts, receipts, onRefresh }: { partner: Partner; quotes: Quote[]; contracts: Contract[]; receipts: ReceiptType[]; onRefresh: () => void }) {
   const [converting, setConverting] = useState<string | null>(null)
   const [copied, setCopied] = useState<string | null>(null)
+  const [showNewContract, setShowNewContract] = useState(false)
+  const [selectedTpl, setSelectedTpl] = useState<ContractTemplate | null>(null)
 
   async function handleConvert(id: string) {
     if (DUMMY_MODE) { alert("더미 모드: 계약 전환 시뮬레이션"); return }
@@ -228,8 +326,63 @@ function DocsTab({ partner, quotes, contracts, receipts, onRefresh }: { partner:
     setCopied(contract.id); setTimeout(() => setCopied(null), 2000)
   }
 
+  const latestQuoteTotal = quotes.length > 0 ? quotes[quotes.length - 1].total_amount : 0
+
   return (
     <div className="space-y-5">
+      {/* 새 계약서 작성 */}
+      <div>
+        <div className="flex items-center justify-between mb-2">
+          <p className="text-xs font-semibold text-[#1a1a1a]/30 uppercase tracking-wider">계약서 템플릿</p>
+          <button
+            onClick={() => { setShowNewContract(v => !v); setSelectedTpl(null) }}
+            className="inline-flex items-center gap-1 h-6 px-2 text-xs text-[#1a1a1a]/50 hover:text-[#1a1a1a] rounded hover:bg-[#f0f0ec]">
+            <FileSignature className="w-3 h-3" />{showNewContract ? "닫기" : "새 계약서 작성"}
+          </button>
+        </div>
+        {showNewContract && (
+          <div className="border border-[#e8e8e4] rounded-xl overflow-hidden bg-white">
+            <div className="p-4 space-y-3">
+              {/* 템플릿 선택 카드 */}
+              <div className="grid grid-cols-1 gap-2">
+                {DUMMY_TEMPLATES.map(tpl => (
+                  <button key={tpl.id} type="button"
+                    onClick={() => setSelectedTpl(prev => prev?.id === tpl.id ? null : tpl)}
+                    className={`text-left px-3 py-2.5 rounded-xl border transition-colors ${selectedTpl?.id === tpl.id ? "border-[#1a1a1a] bg-[#f7f7f5]" : "border-[#e8e8e4] hover:border-[#ccc]"}`}>
+                    <div className="flex items-center gap-2">
+                      <ScrollText className="w-3.5 h-3.5 text-[#1a1a1a]/40 shrink-0" />
+                      <span className="text-sm font-medium text-[#1a1a1a]">{tpl.name}</span>
+                      <span className="ml-auto text-xs px-2 py-0.5 rounded-full bg-[#f0f0ec] text-[#1a1a1a]/50">{tpl.category}</span>
+                    </div>
+                  </button>
+                ))}
+              </div>
+
+              {/* 미리보기 */}
+              {selectedTpl && (
+                <div className="border border-[#e8e8e4] rounded-xl overflow-hidden">
+                  <p className="text-xs font-semibold text-[#1a1a1a]/30 uppercase tracking-wider px-3 py-2 border-b border-[#f0f0ec] bg-[#f7f7f5]">미리보기</p>
+                  <div
+                    className="px-4 py-3 max-h-56 overflow-y-auto text-sm text-[#1a1a1a] prose prose-sm"
+                    dangerouslySetInnerHTML={{ __html: fillTemplate(selectedTpl, partner, latestQuoteTotal) }}
+                  />
+                </div>
+              )}
+
+              {/* 생성 버튼 */}
+              <div className="flex justify-end">
+                <Button size="sm" disabled={!selectedTpl}
+                  onClick={() => {
+                    if (DUMMY_MODE) { alert("더미 모드: 계약서 생성") }
+                  }}>
+                  <FileSignature className="w-3.5 h-3.5 mr-1" />계약서 생성
+                </Button>
+              </div>
+            </div>
+          </div>
+        )}
+      </div>
+
       {/* 견적서 */}
       {quotes.length > 0 && (
         <div>
@@ -403,6 +556,61 @@ function InstallTab({ partner, onUpdated }: { partner: Partner; onUpdated: () =>
         <Button type="submit" size="sm" disabled={saving}>{saving ? "저장 중..." : "저장"}</Button>
       </div>
     </form>
+  )
+}
+
+// ── 납품 탭 ──────────────────────────────────────────────────
+
+function DeliveryTab({ partner, hwSales, onRefresh }: { partner: Partner; hwSales: HwSale[]; onRefresh: () => void }) {
+  if (hwSales.length === 0) return (
+    <div className="py-12 text-center text-sm text-[#1a1a1a]/40">납품 이력이 없습니다</div>
+  )
+  return (
+    <div className="space-y-4">
+      {hwSales.map(sale => {
+        const totalQty = sale.items.reduce((s, i) => s + i.quantity, 0)
+        const totalAmt = sale.items.reduce((s, i) => s + i.quantity * i.unit_price, 0)
+        return (
+          <div key={sale.id} className="border border-[#e8e8e4] rounded-xl overflow-hidden bg-white">
+            {/* 헤더 */}
+            <div className="flex items-center justify-between px-4 py-3 border-b border-[#f0f0ec]">
+              <div className="flex items-center gap-2">
+                <span className="font-mono text-xs text-[#1a1a1a]/40">{sale.sale_number}</span>
+                <span className={`text-xs px-2 py-0.5 rounded-full font-medium ${HW_SALE_STATUS_COLOR[sale.status]}`}>
+                  {HW_SALE_STATUS_LABEL[sale.status]}
+                </span>
+              </div>
+              <div className="text-right">
+                <p className="text-sm font-bold text-[#1a1a1a]">{totalAmt.toLocaleString()}원</p>
+                <p className="text-xs text-[#1a1a1a]/40">총 {totalQty}대</p>
+              </div>
+            </div>
+            {/* 품목 */}
+            <div className="divide-y divide-[#f0f0ec]">
+              {sale.items.map(item => (
+                <div key={item.id} className="flex items-center justify-between px-4 py-2.5">
+                  <div>
+                    <span className="text-xs font-mono text-[#1a1a1a]/30 mr-2">{item.sku}</span>
+                    <span className="text-sm text-[#1a1a1a]">{item.product_name}</span>
+                    {item.serial_notes && <p className="text-xs text-[#1a1a1a]/40 mt-0.5">S/N: {item.serial_notes}</p>}
+                  </div>
+                  <div className="text-right shrink-0">
+                    <p className="text-sm font-medium text-[#1a1a1a]">{item.quantity}대</p>
+                    <p className="text-xs text-[#1a1a1a]/40">{item.unit_price.toLocaleString()}원/대</p>
+                  </div>
+                </div>
+              ))}
+            </div>
+            {/* 메타 */}
+            <div className="px-4 py-2.5 bg-[#f9f9f7] border-t border-[#f0f0ec] flex flex-wrap gap-3 text-xs text-[#1a1a1a]/50">
+              {sale.delivery_date && <span>📦 납품 예정: {sale.delivery_date}</span>}
+              {sale.delivered_at && <span>✓ 납품 완료: {new Date(sale.delivered_at).toLocaleDateString("ko")}</span>}
+              {sale.installer && <span>👷 {sale.installer}</span>}
+            </div>
+          </div>
+        )
+      })}
+    </div>
   )
 }
 
@@ -772,6 +980,7 @@ function DetailPanel({ partner, onClose, onRefresh }: { partner: Partner; onClos
   const [quotes, setQuotes] = useState<Quote[]>([])
   const [contracts, setContracts] = useState<Contract[]>([])
   const [receipts, setReceipts] = useState<ReceiptType[]>([])
+  const [hwSales, setHwSales] = useState<HwSale[]>([])
   const [showNewQuote, setShowNewQuote] = useState(false)
   const [advancing, setAdvancing] = useState(false)
 
@@ -780,6 +989,7 @@ function DetailPanel({ partner, onClose, onRefresh }: { partner: Partner; onClos
       setQuotes(DUMMY_QUOTES[partner.id] ?? [])
       setContracts(DUMMY_CONTRACTS[partner.id] ?? [])
       setReceipts(DUMMY_RECEIPTS[partner.id] ?? [])
+      setHwSales(DUMMY_HW_SALES[partner.id] ?? [])
       return
     }
     const [qRes, cRes, rRes] = await Promise.all([
@@ -811,6 +1021,7 @@ function DetailPanel({ partner, onClose, onRefresh }: { partner: Partner; onClos
     { id: "timeline", label: "타임라인" },
     { id: "docs", label: "문서" },
     { id: "install", label: "설치" },
+    { id: "delivery", label: "납품" },
     { id: "info", label: "기본정보" },
   ]
 
@@ -858,6 +1069,7 @@ function DetailPanel({ partner, onClose, onRefresh }: { partner: Partner; onClos
         {tab === "timeline" && <TimelineTab partner={partner} quotes={quotes} contracts={contracts} receipts={receipts} />}
         {tab === "docs" && <DocsTab partner={partner} quotes={quotes} contracts={contracts} receipts={receipts} onRefresh={load} />}
         {tab === "install" && <InstallTab key={partner.id} partner={partner} onUpdated={onRefresh} />}
+        {tab === "delivery" && <DeliveryTab partner={partner} hwSales={hwSales} onRefresh={load} />}
         {tab === "info" && <InfoTab key={partner.id} partner={partner} onUpdated={onRefresh} />}
       </div>
 

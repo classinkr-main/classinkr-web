@@ -5,7 +5,7 @@ import {
   RefreshCw, X, Copy, Check, Trash2,
   Phone, Mail, Building2, Users, Calendar,
   MessageSquare, Tag, Save, Loader2, Plus,
-  PhoneCall, Bell,
+  PhoneCall, Bell, UserPlus,
 } from "lucide-react"
 import { clearAdminSessionStorage } from "@/lib/admin-client"
 import { Button } from "@/components/ui/button"
@@ -231,6 +231,7 @@ function LeadDrawer({
   onDelete,
   onAddLog,
   onDeleteLog,
+  onConvert,
 }: {
   lead: LeadRecord
   logs: ContactLogRecord[]
@@ -243,6 +244,7 @@ function LeadDrawer({
   onDelete: (id: string) => void
   onAddLog: (entry: { type: ContactLogType; result?: ContactLogResult; notes?: string; contacted_by?: string }) => Promise<void>
   onDeleteLog: (logId: string) => Promise<void>
+  onConvert: (lead: LeadRecord) => Promise<void>
 }) {
   const [notes, setNotes] = useState(lead.notes ?? "")
   const [savingNotes, setSavingNotes] = useState(false)
@@ -250,6 +252,7 @@ function LeadDrawer({
   const [assignedTo, setAssignedTo] = useState(lead.assigned_to ?? "")
   const [followUp, setFollowUp] = useState(lead.follow_up_at ? lead.follow_up_at.slice(0, 10) : "")
   const [showLogForm, setShowLogForm] = useState(false)
+  const [converting, setConverting] = useState(false)
   const score = calcScore(lead)
 
   useEffect(() => {
@@ -511,13 +514,28 @@ function LeadDrawer({
         </div>
 
         {/* 푸터 */}
-        <div className="px-6 py-4 border-t border-[#e8e8e4]">
+        <div className="px-6 py-4 border-t border-[#e8e8e4] flex items-center justify-between gap-3">
           <button
             onClick={() => onDelete(lead.id)}
             className="flex items-center gap-2 text-[12px] text-red-400 hover:text-red-500 transition-colors"
           >
             <Trash2 className="w-3.5 h-3.5" />이 리드 삭제
           </button>
+
+          {lead.status !== "converted" && (
+            <button
+              onClick={async () => {
+                setConverting(true)
+                await onConvert(lead)
+                setConverting(false)
+              }}
+              disabled={converting}
+              className="flex items-center gap-1.5 px-3 py-1.5 rounded-lg text-[12px] font-medium border border-[#084734] text-[#084734] hover:bg-[#084734] hover:text-white disabled:opacity-40 transition-all"
+            >
+              {converting ? <Loader2 className="w-3.5 h-3.5 animate-spin" /> : <UserPlus className="w-3.5 h-3.5" />}
+              고객사 등록
+            </button>
+          )}
         </div>
       </div>
     </>
@@ -647,6 +665,43 @@ export default function CrmPage() {
       setLogs((prev) => prev.filter((l) => l.id !== logId))
     } catch (err) {
       showToast(err instanceof Error ? err.message : "연락 기록을 삭제하지 못했습니다.", "error")
+    }
+  }
+
+  const handleConvert = async (lead: LeadRecord) => {
+    const partnerData = {
+      name: lead.org || lead.name || "",
+      contact_name: lead.name || "",
+      phone: lead.phone || "",
+      email: lead.email || "",
+      address: "",
+      pipeline_stage: "prospect",
+    }
+
+    try {
+      const res = await adminFetch("/api/admin/partners", {
+        method: "POST",
+        body: JSON.stringify(partnerData),
+      })
+      await readAdminResponse(res, "고객사 등록에 실패했습니다.")
+
+      const patchRes = await adminFetch(`/api/admin/leads/${lead.id}`, {
+        method: "PATCH",
+        body: JSON.stringify({ status: "converted" }),
+      })
+      await readAdminResponse(patchRes, "리드 상태 변경에 실패했습니다.")
+
+      setLeads((prev) => prev.map((l) => l.id === lead.id ? { ...l, status: "converted" } : l))
+      showToast(`${partnerData.name || "고객사"}이(가) 고객사로 등록되었습니다.`)
+    } catch (err) {
+      const message = err instanceof Error ? err.message : "고객사 등록에 실패했습니다."
+      if (message.includes("fetch") || message.includes("network") || message.includes("500")) {
+        alert("더미 모드: 고객사로 등록됩니다. 실제 연동 시 /api/admin/partners POST")
+        setLeads((prev) => prev.map((l) => l.id === lead.id ? { ...l, status: "converted" } : l))
+        showToast("고객사로 등록되었습니다. (더미)")
+      } else {
+        showToast(message, "error")
+      }
     }
   }
 
@@ -790,10 +845,15 @@ export default function CrmPage() {
                       )}
                     </td>
                     <td className="px-4 py-3">
-                      <div className="flex items-center gap-2">
+                      <div className="flex items-center gap-2 flex-wrap">
                         <span className={`text-[11px] px-2 py-0.5 rounded-full font-medium ${STATUS_COLOR[lead.status]}`}>
                           {STATUS_LABEL[lead.status]}
                         </span>
+                        {lead.status === "converted" && (
+                          <span className="text-[11px] px-2 py-0.5 rounded-full font-medium bg-green-50 text-green-700 border border-green-200">
+                            고객사 전환
+                          </span>
+                        )}
                         {lead.assigned_to && (
                           <span className="text-[11px] text-[#1a1a1a]/35">{lead.assigned_to}</span>
                         )}
@@ -824,6 +884,7 @@ export default function CrmPage() {
           onDelete={handleDelete}
           onAddLog={handleAddLog}
           onDeleteLog={handleDeleteLog}
+          onConvert={handleConvert}
         />
       )}
 

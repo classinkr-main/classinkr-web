@@ -5,6 +5,7 @@ import { adminFetchJson } from "@/lib/admin-client"
 import {
   Users, TrendingUp, CheckCircle2, Mail,
   FileText, AlertCircle, ArrowUpRight, ArrowDownRight, Minus,
+  ScrollText, PenLine, Receipt, Package,
 } from "lucide-react"
 import {
   LineChart, Line, PieChart, Pie, Cell,
@@ -101,6 +102,29 @@ function getLast7DayLabels() {
     return d.toLocaleDateString("ko-KR", { month: "numeric", day: "numeric" })
       .replace(" ", "").replace("월 ", "/").replace("일", "")
   })
+}
+
+// ─── [DUMMY_MODE] 파트너 포털 현황 — DB 연결 전 하드코딩 더미 데이터 ──────────
+const PARTNER_STATS = {
+  monthlyContractAmount: 53200000,   // 이번 달 계약 금액 합계
+  pendingSignatures: 1,              // 미서명 계약 건수
+  monthlyReceiptAmount: 18000000,    // 이번 달 수납 합계
+  skuSales: [                        // SKU별 누적 판매 대수
+    { sku: "CB-86",  label: "86인치",    count: 7 },
+    { sku: "CB-75",  label: "75인치",    count: 4 },
+    { sku: "STAND",  label: "스탠드",    count: 8 },
+    { sku: "CAM-T1", label: "T1 카메라", count: 5 },
+  ],
+}
+
+// ─── SKU 미니 바 (파트너 포털 HW 카드용) ────────────────────────────────────
+function SkuBar({ count, max }: { count: number; max: number }) {
+  const pct = max > 0 ? Math.round((count / max) * 100) : 0
+  return (
+    <div className="flex-1 h-1.5 bg-[#e8e8e4] rounded-full overflow-hidden">
+      <div className="h-full bg-blue-400 rounded-full" style={{ width: `${pct}%` }} />
+    </div>
+  )
 }
 
 export default function OverviewPage() {
@@ -265,6 +289,78 @@ export default function OverviewPage() {
               </div>
             </>
           )}
+        </div>
+      </div>
+
+      {/* ── 파트너 포털 현황 [DUMMY_MODE] ───────────────────────────────────── */}
+      <div className="mb-6">
+        <p className="text-[11px] font-medium text-[#1a1a1a]/30 uppercase tracking-widest mb-1">Partner Portal</p>
+        <h2 className="text-[18px] font-bold text-[#111110] tracking-[-0.02em] mb-4">파트너 포털 현황</h2>
+        <div className="grid grid-cols-2 md:grid-cols-4 gap-4">
+          {/* Card 1 — 이번 달 계약 */}
+          <div className="bg-white rounded-2xl border border-[#e8e8e4] p-5 hover:border-[#c8c8c4] hover:shadow-sm transition-all">
+            <div className="flex items-start justify-between mb-3">
+              <div className="inline-flex p-2 rounded-xl bg-purple-50">
+                <ScrollText className="w-4 h-4 text-purple-500" />
+              </div>
+            </div>
+            <p className="text-[11px] font-medium text-[#1a1a1a]/40 mb-1 uppercase tracking-wide">이번 달 계약 금액</p>
+            <p className="text-[28px] font-bold text-[#111110] tracking-[-0.03em] leading-none">5,320만원</p>
+            <p className="text-[11px] text-[#1a1a1a]/40 mt-1.5">2건 계약 완료</p>
+          </div>
+
+          {/* Card 2 — 미서명 계약 (경고: 대기 건수 > 0) */}
+          <div className="bg-white rounded-2xl border border-[#e8e8e4] p-5 hover:border-[#c8c8c4] hover:shadow-sm transition-all">
+            <div className="flex items-start justify-between mb-3">
+              <div className={`inline-flex p-2 rounded-xl ${PARTNER_STATS.pendingSignatures > 0 ? "bg-amber-50" : "bg-[#f0f0ec]"}`}>
+                <PenLine className={`w-4 h-4 ${PARTNER_STATS.pendingSignatures > 0 ? "text-amber-500" : "text-[#1a1a1a]/50"}`} />
+              </div>
+              {PARTNER_STATS.pendingSignatures > 0 && (
+                <span className="flex items-center gap-0.5 text-[11px] font-medium px-1.5 py-0.5 rounded-full text-amber-600 bg-amber-50">
+                  대기
+                </span>
+              )}
+            </div>
+            <p className="text-[11px] font-medium text-[#1a1a1a]/40 mb-1 uppercase tracking-wide">미서명 계약</p>
+            <p className={`text-[28px] font-bold tracking-[-0.03em] leading-none ${PARTNER_STATS.pendingSignatures > 0 ? "text-amber-500" : "text-[#111110]"}`}>
+              {PARTNER_STATS.pendingSignatures}건
+            </p>
+            <p className="text-[11px] text-[#1a1a1a]/40 mt-1.5">파트너 서명 대기 중</p>
+          </div>
+
+          {/* Card 3 — 이번 달 수납 */}
+          <div className="bg-white rounded-2xl border border-[#e8e8e4] p-5 hover:border-[#c8c8c4] hover:shadow-sm transition-all">
+            <div className="flex items-start justify-between mb-3">
+              <div className="inline-flex p-2 rounded-xl bg-green-50">
+                <Receipt className="w-4 h-4 text-green-500" />
+              </div>
+            </div>
+            <p className="text-[11px] font-medium text-[#1a1a1a]/40 mb-1 uppercase tracking-wide">이번 달 수납</p>
+            <p className="text-[28px] font-bold text-[#111110] tracking-[-0.03em] leading-none">1,800만원</p>
+            <p className="text-[11px] text-[#1a1a1a]/40 mt-1.5">1건 결제 완료</p>
+          </div>
+
+          {/* Card 4 — HW 판매 현황 */}
+          <div className="bg-white rounded-2xl border border-[#e8e8e4] p-5 hover:border-[#c8c8c4] hover:shadow-sm transition-all">
+            <div className="flex items-start justify-between mb-3">
+              <div className="inline-flex p-2 rounded-xl bg-blue-50">
+                <Package className="w-4 h-4 text-blue-500" />
+              </div>
+            </div>
+            <p className="text-[11px] font-medium text-[#1a1a1a]/40 mb-1 uppercase tracking-wide">누적 납품 현황</p>
+            <div className="mt-2 space-y-2">
+              {(() => {
+                const maxCount = Math.max(...PARTNER_STATS.skuSales.map((s) => s.count))
+                return PARTNER_STATS.skuSales.map((s) => (
+                  <div key={s.sku} className="flex items-center gap-2">
+                    <span className="text-[11px] font-mono text-[#1a1a1a]/50 w-14 shrink-0">{s.sku}</span>
+                    <SkuBar count={s.count} max={maxCount} />
+                    <span className="text-[11px] font-medium text-[#111110] w-8 text-right shrink-0">{s.count}대</span>
+                  </div>
+                ))
+              })()}
+            </div>
+          </div>
         </div>
       </div>
 

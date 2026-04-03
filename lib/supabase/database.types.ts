@@ -220,6 +220,7 @@ export interface Quote {
   id: string;
   quote_number: string;
   partner_id: string;
+  lead_id: string | null;
   title: string;
   status: QuoteStatus;
   valid_until: string | null;
@@ -313,6 +314,42 @@ export interface Receipt {
   created_at: string;
   updated_at: string;
 }
+
+/* ─── HW Sales Types ─── */
+
+export type HwSaleStatus = "pending" | "shipped" | "delivered" | "cancelled";
+
+export interface HwSale {
+  id: string;
+  sale_number: string;
+  contract_id: string | null;
+  partner_id: string;
+  status: HwSaleStatus;
+  delivery_date: string | null;
+  delivered_at: string | null;
+  installer: string | null;
+  delivery_address: string | null;
+  notes: string | null;
+  created_by: string | null;
+  created_at: string;
+  updated_at: string;
+}
+
+export interface HwSaleItem {
+  id: string;
+  sale_id: string;
+  sku: string;
+  product_name: string;
+  quantity: number;
+  unit_price: number;
+  serial_notes: string | null;
+  sort_order: number;
+}
+
+export type HwSaleInsert = Omit<HwSale, "id" | "created_at" | "updated_at"> & { id?: string; created_at?: string; updated_at?: string };
+export type HwSaleUpdate = Partial<Omit<HwSale, "id" | "created_at">>;
+export type HwSaleItemInsert = Omit<HwSaleItem, "id"> & { id?: string };
+export type HwSaleItemUpdate = Partial<Omit<HwSaleItem, "id">>;
 
 /* ─── Insert Types (id, created_at 등 자동 생성 필드 제외) ─── */
 
@@ -467,11 +504,67 @@ export interface Database {
         Insert: ReceiptInsert;
         Update: ReceiptUpdate;
       };
+      hw_sales: {
+        Row: HwSale;
+        Insert: HwSaleInsert;
+        Update: HwSaleUpdate;
+      };
+      hw_sale_items: {
+        Row: HwSaleItem;
+        Insert: HwSaleItemInsert;
+        Update: HwSaleItemUpdate;
+      };
       partner_users: {
         Row: PartnerUser;
         Insert: PartnerUserInsert;
         Update: PartnerUserUpdate;
       };
+      teams: {
+        Row: Team;
+        Insert: TeamInsert;
+        Update: TeamUpdate;
+      };
+      install_schedules: {
+        Row: InstallSchedule;
+        Insert: InstallScheduleInsert;
+        Update: InstallScheduleUpdate;
+      };
     };
   };
 }
+
+/* ─── Install Schedule Types ─── */
+
+export interface Team {
+  id: string;
+  name: string;
+  description: string | null;
+  is_active: boolean;
+  created_at: string;
+  updated_at: string;
+}
+
+export type TeamInsert = Omit<Team, "id" | "created_at" | "updated_at"> & { id?: string; created_at?: string; updated_at?: string };
+export type TeamUpdate = Partial<Omit<Team, "id" | "created_at">>;
+
+export type InstallStatus = "requested" | "confirmed" | "completed" | "cancelled";
+export type RequestedBy = "admin" | "partner";
+
+export interface InstallSchedule {
+  id: string;
+  contract_id: string;
+  quote_item_id: string | null;
+  partner_id: string;
+  manager_id: string | null;
+  team_id: string | null;
+  scheduled_date: string;
+  location: string | null;
+  status: InstallStatus;
+  requested_by: RequestedBy;
+  notes: string | null;
+  created_at: string;
+  updated_at: string;
+}
+
+export type InstallScheduleInsert = Omit<InstallSchedule, "id" | "created_at" | "updated_at"> & { id?: string; created_at?: string; updated_at?: string };
+export type InstallScheduleUpdate = Partial<Omit<InstallSchedule, "id" | "created_at">>;
