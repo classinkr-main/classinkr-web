@@ -2,12 +2,14 @@
 
 import React, { useState, useEffect, useCallback, useRef } from "react"
 import Link from "next/link"
+import Papa from "papaparse"
+import * as XLSX from "xlsx"
 import {
   Plus, Mail, Phone, RefreshCw, Trash2, X, UserPlus,
   Building2, PenLine, Copy, Check, Send, FileSignature,
   ExternalLink, ChevronRight, Calendar, MapPin, User,
   ClipboardList, ScrollText, Receipt, StickyNote, ArrowRight,
-  CheckCircle2, Package,
+  CheckCircle2, Package, Upload, Download, AlertCircle,
 } from "lucide-react"
 import { Button } from "@/components/ui/button"
 import type {
@@ -64,34 +66,55 @@ type PanelTab = "timeline" | "docs" | "install" | "info"
 
 // ── 더미 데이터 ───────────────────────────────────────────────
 
-const DUMMY_MODE = false
+const DUMMY_MODE = true
 
 const DUMMY_PARTNERS: Partner[] = [
-  { id: "p1", name: "삼성초등학교", contact_name: "김민준", email: "minjun@samsung-es.kr", phone: "010-1234-5678", address: "서울시 강남구 테헤란로 123", business_number: null, status: "active", pipeline_stage: "contracted", deal_amount: 25000000, installation_date: "2026-04-15", installation_address: "서울시 강남구 테헤란로 123 (교실 1-3층)", installer_name: "박설치", notes: "1~3층 각 교실 1대씩, 도서관 2대", created_by: null, created_at: "2026-03-01T00:00:00Z", updated_at: "2026-03-12T00:00:00Z" },
-  { id: "p2", name: "판교중학교", contact_name: "이서연", email: "seoyeon@pankyo-ms.kr", phone: "031-123-4567", address: "경기도 성남시 분당구 판교로 45", business_number: null, status: "active", pipeline_stage: "quoting", deal_amount: 50000000, installation_date: null, installation_address: null, installer_name: null, notes: null, created_by: null, created_at: "2026-03-18T00:00:00Z", updated_at: "2026-03-20T00:00:00Z" },
-  { id: "p3", name: "해운대여자고등학교", contact_name: "박지훈", email: "jihoon@haeundae.hs.kr", phone: "051-555-1234", address: "부산시 해운대구 센텀중앙로 55", business_number: null, status: "active", pipeline_stage: "installing", deal_amount: 12000000, installation_date: "2026-04-08", installation_address: "부산시 해운대구 센텀중앙로 55 (전 교실)", installer_name: "이설치", notes: "설치 중, 2교실 남음", created_by: null, created_at: "2026-02-10T00:00:00Z", updated_at: "2026-04-01T00:00:00Z" },
-  { id: "p4", name: "서초과학기술원", contact_name: "최현우", email: "hw@seochotech.kr", phone: "02-9999-1234", address: "서울시 서초구 방배로 100", business_number: null, status: "active", pipeline_stage: "completed", deal_amount: 18000000, installation_date: "2026-02-20", installation_address: "서울시 서초구 방배로 100", installer_name: "박설치", notes: null, created_by: null, created_at: "2026-01-15T00:00:00Z", updated_at: "2026-03-01T00:00:00Z" },
-  { id: "p5", name: "강동초등학교", contact_name: "정수진", email: null, phone: "02-111-2222", address: "서울시 강동구 천호대로 200", business_number: null, status: "active", pipeline_stage: "prospect", deal_amount: null, installation_date: null, installation_address: null, installer_name: null, notes: "CRM 문의 전환", created_by: null, created_at: "2026-04-02T00:00:00Z", updated_at: "2026-04-02T00:00:00Z" },
+  { id: "p1", name: "강남메가수학학원",  contact_name: "이준호", email: "junho@megamath.kr",      phone: "02-1234-5678",  address: "서울시 강남구 역삼로 123",           business_number: "123-45-67890", status: "active", pipeline_stage: "contracted", deal_amount: 29000000, installation_date: "2026-04-20", installation_address: "서울시 강남구 역삼로 123 (2~4층 강의실)", installer_name: "박설치", notes: "CB-86 4대, 스탠드 4대, T1 카메라 2대",  created_by: null, created_at: "2026-02-20T00:00:00Z", updated_at: "2026-03-15T00:00:00Z" },
+  { id: "p2", name: "씨앤씨영어학원",    contact_name: "박지은", email: "jieun@cncenglish.kr",    phone: "02-2345-6789",  address: "서울시 서초구 사평대로 45",           business_number: null,           status: "active", pipeline_stage: "quoting",    deal_amount: 14500000, installation_date: null,         installation_address: null,                                      installer_name: null,   notes: "CB-75 2대 + T1 1대 견적 검토 중",  created_by: null, created_at: "2026-03-18T00:00:00Z", updated_at: "2026-03-20T00:00:00Z" },
+  { id: "p3", name: "대치탑과학학원",    contact_name: "김승우", email: null,                     phone: "02-3456-7890",  address: "서울시 강남구 대치동 은마로 200",     business_number: null,           status: "active", pipeline_stage: "quoting",    deal_amount: 29000000, installation_date: null,         installation_address: null,                                      installer_name: null,   notes: "CB-86 5대 견적 초안 작성 중",      created_by: null, created_at: "2026-03-25T00:00:00Z", updated_at: "2026-03-28T00:00:00Z" },
+  { id: "p4", name: "리더스입시학원",    contact_name: "최민서", email: "minseo@leaders.kr",      phone: "031-123-4567",  address: "경기도 성남시 분당구 황새울로 200",   business_number: "234-56-78901", status: "active", pipeline_stage: "installing", deal_amount: 24200000, installation_date: "2026-04-10", installation_address: "경기도 성남시 분당구 황새울로 200 (3층 전체)", installer_name: "이설치", notes: "설치 진행중, 2교실 잔여",         created_by: null, created_at: "2026-02-10T00:00:00Z", updated_at: "2026-04-01T00:00:00Z" },
+  { id: "p5", name: "에듀플렉스 분당점", contact_name: "윤서현", email: "seohyun@eduplex.kr",     phone: "031-234-5678",  address: "경기도 성남시 분당구 서현로 45",     business_number: "345-67-89012", status: "active", pipeline_stage: "completed",  deal_amount: 18000000, installation_date: "2026-03-05", installation_address: "경기도 성남시 분당구 서현로 45",              installer_name: "박설치", notes: null,                              created_by: null, created_at: "2026-01-15T00:00:00Z", updated_at: "2026-03-10T00:00:00Z" },
+  { id: "p6", name: "위너스어학원",      contact_name: "정현아", email: null,                     phone: "02-456-7890",   address: "서울시 마포구 서교동 100",           business_number: null,           status: "active", pipeline_stage: "prospect",   deal_amount: null,     installation_date: null,         installation_address: null,                                      installer_name: null,   notes: "인스타 DM 문의 전환 — 상담 예정",  created_by: null, created_at: "2026-04-02T00:00:00Z", updated_at: "2026-04-02T00:00:00Z" },
 ]
 
 const DUMMY_QUOTES: Record<string, Quote[]> = {
-  p1: [{ id: "q1", quote_number: "Q-2026-001", partner_id: "p1", title: "ClassIn Board 86인치 5대 납품", status: "converted", valid_until: "2026-04-30", subtotal: 22727272, discount_amount: 0, tax_amount: 2272728, total_amount: 25000000, notes: "설치비 포함", created_by: null, sent_at: "2026-03-01T00:00:00Z", accepted_at: "2026-03-05T00:00:00Z", converted_to_contract_id: "c1", created_at: "2026-03-01T00:00:00Z", updated_at: "2026-03-05T00:00:00Z" }],
-  p2: [{ id: "q3", quote_number: "Q-2026-002", partner_id: "p2", title: "ClassIn Board 10대 공급", status: "sent", valid_until: "2026-04-20", subtotal: 45454545, discount_amount: 0, tax_amount: 4545455, total_amount: 50000000, notes: null, created_by: null, sent_at: "2026-03-20T00:00:00Z", accepted_at: null, converted_to_contract_id: null, created_at: "2026-03-18T00:00:00Z", updated_at: "2026-03-20T00:00:00Z" }],
-  p3: [{ id: "q4", quote_number: "Q-2026-003", partner_id: "p3", title: "CB-75 3대 납품", status: "converted", valid_until: null, subtotal: 10909090, discount_amount: 0, tax_amount: 1090910, total_amount: 12000000, notes: null, created_by: null, sent_at: "2026-02-15T00:00:00Z", accepted_at: "2026-02-18T00:00:00Z", converted_to_contract_id: "c3", created_at: "2026-02-12T00:00:00Z", updated_at: "2026-02-18T00:00:00Z" }],
-  p4: [], p5: [],
+  p1: [
+    { id: "q1", quote_number: "Q-2026-001", partner_id: "p1", title: "ClassIn Board CB-86 4대 + 스탠드 4대 + T1 카메라 2대", status: "converted", valid_until: "2026-03-31", subtotal: 26363636, discount_amount: 0, tax_amount: 2636364, total_amount: 29000000, notes: "설치비 포함", created_by: null, sent_at: "2026-02-25T00:00:00Z", accepted_at: "2026-02-28T00:00:00Z", converted_to_contract_id: "c1", created_at: "2026-02-22T00:00:00Z", updated_at: "2026-02-28T00:00:00Z" },
+  ],
+  p2: [
+    { id: "q2", quote_number: "Q-2026-002", partner_id: "p2", title: "전자칠판 CB-75 2대 + AI카메라 T1 1대", status: "sent", valid_until: "2026-04-20", subtotal: 13181818, discount_amount: 0, tax_amount: 1318182, total_amount: 14500000, notes: null, created_by: null, sent_at: "2026-03-20T00:00:00Z", accepted_at: null, converted_to_contract_id: null, created_at: "2026-03-18T00:00:00Z", updated_at: "2026-03-20T00:00:00Z" },
+  ],
+  p3: [
+    { id: "q3", quote_number: "Q-2026-003", partner_id: "p3", title: "전자칠판 CB-86 5대 납품 견적", status: "draft", valid_until: "2026-04-30", subtotal: 26363636, discount_amount: 0, tax_amount: 2636364, total_amount: 29000000, notes: null, created_by: null, sent_at: null, accepted_at: null, converted_to_contract_id: null, created_at: "2026-03-27T00:00:00Z", updated_at: "2026-03-27T00:00:00Z" },
+  ],
+  p4: [
+    { id: "q4", quote_number: "Q-2026-004", partner_id: "p4", title: "CB-86 3대 + CB-75 1대 + 스탠드 4대 + T1 2대", status: "converted", valid_until: null, subtotal: 22000000, discount_amount: 0, tax_amount: 2200000, total_amount: 24200000, notes: null, created_by: null, sent_at: "2026-02-15T00:00:00Z", accepted_at: "2026-02-18T00:00:00Z", converted_to_contract_id: "c4", created_at: "2026-02-12T00:00:00Z", updated_at: "2026-02-18T00:00:00Z" },
+  ],
+  p5: [], p6: [],
 }
 
 const DUMMY_CONTRACTS: Record<string, Contract[]> = {
-  p1: [{ id: "c1", contract_number: "C-2026-001", quote_id: "q1", partner_id: "p1", title: "ClassIn Board 납품 계약", status: "partner_signed", total_amount: 25000000, content_html: "<p>ClassIn Board 86인치 5대 납품 계약서입니다.</p>", notes: null, valid_from: "2026-03-10", valid_until: "2026-12-31", sign_token: "tok_demo_abc123", partner_signed_at: "2026-03-12T14:30:00Z", partner_signature_url: null, partner_signed_ip: "1.2.3.4", admin_signed_at: null, admin_signature_url: null, admin_signed_by: null, created_by: null, created_at: "2026-03-10T00:00:00Z", updated_at: "2026-03-12T00:00:00Z" }],
-  p2: [], p3: [{ id: "c3", contract_number: "C-2026-003", quote_id: "q4", partner_id: "p3", title: "CB-75 납품 및 설치 계약", status: "completed", total_amount: 12000000, content_html: "<p>납품계약</p>", notes: null, valid_from: "2026-02-20", valid_until: "2026-12-31", sign_token: "tok_demo_ghi789", partner_signed_at: "2026-02-22T10:00:00Z", partner_signature_url: null, partner_signed_ip: "5.6.7.8", admin_signed_at: "2026-02-23T09:00:00Z", admin_signature_url: null, admin_signed_by: null, created_by: null, created_at: "2026-02-20T00:00:00Z", updated_at: "2026-02-23T00:00:00Z" }],
-  p4: [], p5: [],
+  p1: [{ id: "c1", contract_number: "C-2026-001", quote_id: "q1", partner_id: "p1", title: "ClassIn Board 납품 계약 (강남메가수학)", status: "partner_signed", total_amount: 29000000, content_html: "<p>ClassIn Board CB-86 4대 납품 계약서입니다.</p>", notes: null, valid_from: "2026-03-01", valid_until: "2026-12-31", sign_token: "tok_demo_abc123", partner_signed_at: "2026-03-05T14:30:00Z", partner_signature_url: null, partner_signed_ip: "1.2.3.4", admin_signed_at: null,               admin_signature_url: null, admin_signed_by: null, created_by: null, created_at: "2026-03-01T00:00:00Z", updated_at: "2026-03-05T00:00:00Z" }],
+  p2: [],
+  p3: [],
+  p4: [{ id: "c4", contract_number: "C-2026-002", quote_id: "q4", partner_id: "p4", title: "ClassIn Board 납품 계약 (리더스입시)", status: "completed",      total_amount: 24200000, content_html: "<p>납품 계약서</p>",                                                                                      notes: null, valid_from: "2026-02-20", valid_until: "2026-12-31", sign_token: "tok_demo_ghi789", partner_signed_at: "2026-02-22T10:00:00Z", partner_signature_url: null, partner_signed_ip: "5.6.7.8",  admin_signed_at: "2026-02-23T09:00:00Z", admin_signature_url: null, admin_signed_by: null, created_by: null, created_at: "2026-02-20T00:00:00Z", updated_at: "2026-02-23T00:00:00Z" }],
+  p5: [], p6: [],
 }
 
 const DUMMY_RECEIPTS: Record<string, ReceiptType[]> = {
-  p1: [], p2: [], p3: [],
-  p4: [{ id: "r1", receipt_number: "R-2026-001", contract_id: null, partner_id: "p4", amount: 16363636, tax_amount: 1636364, total_amount: 18000000, payment_method: "bank_transfer", paid_at: "2026-02-25T00:00:00Z", cash_receipt_type: null, cash_receipt_id: null, notes: null, created_by: null, created_at: "2026-02-25T00:00:00Z", updated_at: "2026-02-25T00:00:00Z" }],
-  p5: [],
+  p1: [], p2: [], p3: [], p4: [],
+  p5: [{ id: "r1", receipt_number: "R-2026-001", contract_id: "c5", partner_id: "p5", amount: 16363636, tax_amount: 1636364, total_amount: 18000000, payment_method: "bank_transfer", cash_receipt_requested: false, paid_at: "2026-03-10T00:00:00Z", cash_receipt_type: null, cash_receipt_number: null, pdf_url: null, emailed_at: null, notes: null, created_by: null, created_at: "2026-03-10T00:00:00Z", updated_at: "2026-03-10T00:00:00Z" }],
+  p6: [],
 }
+
+// ── 제품 카탈로그 ─────────────────────────────────────────────
+
+const PRODUCT_CATALOG = [
+  { sku: "CB-86",  product_name: "전자칠판 86인치", description: 'ClassIn Board 86"', unit_price: 5800000 },
+  { sku: "CB-75",  product_name: "전자칠판 75인치", description: 'ClassIn Board 75"', unit_price: 4900000 },
+  { sku: "STAND",  product_name: "전용 스탠드",     description: "",                  unit_price: 300000  },
+  { sku: "CAM-T1", product_name: "AI카메라 T1",    description: "",                  unit_price: 1200000 },
+] as const
 
 // ── API helper ───────────────────────────────────────────────
 
@@ -448,7 +471,7 @@ const emptyItem = (): QuoteItemDraft => ({ product_name: "", description: "", qu
 function calcItem(item: QuoteItemDraft) { return Math.round(item.quantity * item.unit_price * (1 - item.discount_rate / 100)) }
 
 function NewQuoteModal({ partner, onClose, onSaved }: { partner: Partner; onClose: () => void; onSaved: () => void }) {
-  const [items, setItems] = useState<QuoteItemDraft[]>([emptyItem()])
+  const [items, setItems] = useState<QuoteItemDraft[]>([])
   const [form, setForm] = useState({ title: "", valid_until: "", notes: "" })
   const [saving, setSaving] = useState(false)
 
@@ -458,6 +481,17 @@ function NewQuoteModal({ partner, onClose, onSaved }: { partner: Partner; onClos
       next[idx].amount = calcItem(next[idx]); return next
     })
   }
+
+  function addPreset(preset: typeof PRODUCT_CATALOG[number]) {
+    const existing = items.findIndex(i => i.product_name === preset.product_name)
+    if (existing >= 0) {
+      updateItem(existing, "quantity", items[existing].quantity + 1)
+    } else {
+      const item: QuoteItemDraft = { product_name: preset.product_name, description: preset.description, quantity: 1, unit_price: preset.unit_price, discount_rate: 0, amount: preset.unit_price }
+      setItems(prev => [...prev, item])
+    }
+  }
+
   const subtotal = items.reduce((s: number, i: QuoteItemDraft) => s + i.amount, 0)
   const taxAmount = Math.round(subtotal * 0.1)
   const totalAmount = subtotal + taxAmount
@@ -495,11 +529,22 @@ function NewQuoteModal({ partner, onClose, onSaved }: { partner: Partner; onClos
             </div>
           </div>
           <div>
-            <div className="flex items-center justify-between mb-2">
-              <label className="text-xs font-medium text-[#1a1a1a]/60">품목</label>
-              <button type="button" onClick={() => setItems([...items, emptyItem()])} className="text-xs text-blue-600 hover:underline flex items-center gap-0.5">
-                <Plus className="w-3 h-3" />추가
-              </button>
+            <div className="mb-2">
+              <label className="text-xs font-medium text-[#1a1a1a]/60 block mb-2">품목 빠른 추가</label>
+              <div className="flex gap-1.5 flex-wrap">
+                {PRODUCT_CATALOG.map(p => (
+                  <button key={p.sku} type="button" onClick={() => addPreset(p)}
+                    className="inline-flex items-center gap-1 text-xs px-3 py-1.5 rounded-lg border border-[#e8e8e4] bg-white hover:border-[#1a1a1a] hover:bg-[#f5f5f2] transition-colors">
+                    <Plus className="w-3 h-3 text-[#1a1a1a]/40" />
+                    <span>{p.product_name}</span>
+                    <span className="text-[#1a1a1a]/40">{(p.unit_price / 10000).toFixed(0)}만</span>
+                  </button>
+                ))}
+                <button type="button" onClick={() => setItems([...items, emptyItem()])}
+                  className="inline-flex items-center gap-1 text-xs px-3 py-1.5 rounded-lg border border-dashed border-[#e8e8e4] text-[#1a1a1a]/40 hover:border-[#1a1a1a]/40 hover:text-[#1a1a1a] transition-colors">
+                  <Plus className="w-3 h-3" />기타 품목
+                </button>
+              </div>
             </div>
             <div className="border border-[#e8e8e4] rounded-lg overflow-hidden">
               <table className="w-full text-xs">
@@ -532,6 +577,189 @@ function NewQuoteModal({ partner, onClose, onSaved }: { partner: Partner; onClos
             <Button type="submit" disabled={saving}>{saving ? "저장 중..." : "견적서 저장"}</Button>
           </div>
         </form>
+      </div>
+    </div>
+  )
+}
+
+// ── CSV/Excel 가져오기 모달 ──────────────────────────────────
+
+type ImportRow = { name: string; contact_name: string; phone: string; email: string; address: string; notes: string; deal_amount: string; error?: string }
+
+const CSV_TEMPLATE_HEADERS = ["학원명*", "담당자", "전화번호", "이메일", "주소", "메모", "예상금액(원)"]
+
+function downloadTemplate() {
+  const ws = XLSX.utils.aoa_to_sheet([CSV_TEMPLATE_HEADERS, ["강남○○학원", "홍길동", "02-1234-5678", "hong@example.com", "서울시 강남구", "", "5800000"]])
+  const wb = XLSX.utils.book_new()
+  XLSX.utils.book_append_sheet(wb, ws, "고객사")
+  XLSX.writeFile(wb, "고객사_등록_템플릿.xlsx")
+}
+
+function ImportModal({ onClose, onImported }: { onClose: () => void; onImported: (rows: Partner[]) => void }) {
+  const [rows, setRows] = useState<ImportRow[]>([])
+  const [step, setStep] = useState<"upload" | "preview">("upload")
+  const fileRef = useRef<HTMLInputElement>(null)
+
+  function parseRows(raw: string[][]): ImportRow[] {
+    const dataRows = raw.filter(r => r.some(c => c.trim()))
+    // 헤더 행 제거 (첫 번째 셀이 "학원명" 등 헤더 단어면 스킵)
+    const start = dataRows[0]?.[0]?.includes("학원명") || dataRows[0]?.[0]?.includes("기관") ? 1 : 0
+    return dataRows.slice(start).map(r => ({
+      name: r[0]?.trim() ?? "",
+      contact_name: r[1]?.trim() ?? "",
+      phone: r[2]?.trim() ?? "",
+      email: r[3]?.trim() ?? "",
+      address: r[4]?.trim() ?? "",
+      notes: r[5]?.trim() ?? "",
+      deal_amount: r[6]?.trim() ?? "",
+      error: !r[0]?.trim() ? "학원명 필수" : undefined,
+    }))
+  }
+
+  function handleFile(file: File) {
+    const ext = file.name.split(".").pop()?.toLowerCase()
+    if (ext === "csv") {
+      Papa.parse<string[]>(file, {
+        complete: (result) => { setRows(parseRows(result.data)); setStep("preview") },
+        skipEmptyLines: true,
+      })
+    } else {
+      const reader = new FileReader()
+      reader.onload = (e) => {
+        const wb = XLSX.read(e.target?.result, { type: "binary" })
+        const ws = wb.Sheets[wb.SheetNames[0]]
+        const data = XLSX.utils.sheet_to_json<string[]>(ws, { header: 1 }) as string[][]
+        setRows(parseRows(data))
+        setStep("preview")
+      }
+      reader.readAsBinaryString(file)
+    }
+  }
+
+  function handleDrop(e: React.DragEvent) {
+    e.preventDefault()
+    const file = e.dataTransfer.files[0]
+    if (file) handleFile(file)
+  }
+
+  function handleConfirm() {
+    const validRows = rows.filter(r => !r.error)
+    const now = new Date().toISOString()
+    const partners: Partner[] = validRows.map((r, i) => ({
+      id: `import-${Date.now()}-${i}`,
+      name: r.name,
+      contact_name: r.contact_name || null,
+      phone: r.phone || null,
+      email: r.email || null,
+      address: r.address || null,
+      business_number: null,
+      status: "active",
+      pipeline_stage: "prospect",
+      deal_amount: r.deal_amount ? Number(r.deal_amount.replace(/[^0-9]/g, "")) || null : null,
+      installation_date: null,
+      installation_address: null,
+      installer_name: null,
+      notes: r.notes || null,
+      created_by: null,
+      created_at: now,
+      updated_at: now,
+    }))
+    onImported(partners)
+    onClose()
+  }
+
+  const validCount = rows.filter(r => !r.error).length
+  const errorCount = rows.filter(r => r.error).length
+
+  return (
+    <div className="fixed inset-0 bg-black/30 z-50 flex items-center justify-center p-4">
+      <div className="bg-white rounded-2xl shadow-xl w-full max-w-2xl">
+        <div className="flex items-center justify-between px-6 py-4 border-b border-[#e8e8e4]">
+          <div>
+            <h2 className="text-base font-semibold">고객사 일괄 가져오기</h2>
+            <p className="text-xs text-[#1a1a1a]/50 mt-0.5">CSV 또는 Excel(.xlsx) 파일을 업로드하세요</p>
+          </div>
+          <button onClick={onClose} className="text-[#1a1a1a]/40 hover:text-[#1a1a1a]"><X className="w-5 h-5" /></button>
+        </div>
+
+        <div className="p-6 space-y-4">
+          {step === "upload" && (
+            <>
+              {/* 드롭존 */}
+              <div
+                onDrop={handleDrop}
+                onDragOver={e => e.preventDefault()}
+                onClick={() => fileRef.current?.click()}
+                className="border-2 border-dashed border-[#e8e8e4] rounded-xl py-12 flex flex-col items-center gap-3 cursor-pointer hover:border-[#1a1a1a]/30 hover:bg-[#fafafa] transition-colors">
+                <Upload className="w-8 h-8 text-[#1a1a1a]/20" />
+                <div className="text-center">
+                  <p className="text-sm font-medium text-[#1a1a1a]/70">파일을 드래그하거나 클릭해서 선택</p>
+                  <p className="text-xs text-[#1a1a1a]/40 mt-1">.csv, .xlsx, .xls 지원</p>
+                </div>
+                <input ref={fileRef} type="file" accept=".csv,.xlsx,.xls" className="hidden"
+                  onChange={e => { const f = e.target.files?.[0]; if (f) handleFile(f) }} />
+              </div>
+
+              {/* 컬럼 안내 + 템플릿 다운로드 */}
+              <div className="bg-[#f7f7f5] rounded-xl p-4 space-y-2">
+                <div className="flex items-center justify-between">
+                  <p className="text-xs font-semibold text-[#1a1a1a]/50 uppercase tracking-wide">파일 컬럼 형식</p>
+                  <button type="button" onClick={downloadTemplate}
+                    className="inline-flex items-center gap-1 text-xs text-blue-600 hover:underline">
+                    <Download className="w-3 h-3" />템플릿 다운로드
+                  </button>
+                </div>
+                <div className="flex flex-wrap gap-1.5">
+                  {CSV_TEMPLATE_HEADERS.map(h => (
+                    <span key={h} className={`text-xs px-2 py-0.5 rounded ${h.endsWith("*") ? "bg-[#1a1a1a] text-white" : "bg-white border border-[#e8e8e4] text-[#1a1a1a]/60"}`}>{h}</span>
+                  ))}
+                </div>
+              </div>
+            </>
+          )}
+
+          {step === "preview" && (
+            <>
+              <div className="flex items-center gap-3">
+                <span className="text-sm font-medium text-[#1a1a1a]">{rows.length}행 감지</span>
+                <span className="text-xs px-2 py-0.5 rounded-full bg-green-50 text-green-700">{validCount}개 등록 가능</span>
+                {errorCount > 0 && <span className="text-xs px-2 py-0.5 rounded-full bg-red-50 text-red-500">{errorCount}개 오류</span>}
+                <button type="button" onClick={() => { setRows([]); setStep("upload") }}
+                  className="ml-auto text-xs text-[#1a1a1a]/40 hover:text-[#1a1a1a]">다시 선택</button>
+              </div>
+
+              <div className="border border-[#e8e8e4] rounded-xl overflow-hidden max-h-64 overflow-y-auto">
+                <table className="w-full text-xs">
+                  <thead className="bg-[#f7f7f5] sticky top-0">
+                    <tr>{["학원명","담당자","전화번호","이메일","예상금액",""].map(h => <th key={h} className="px-3 py-2 text-left font-medium text-[#1a1a1a]/50">{h}</th>)}</tr>
+                  </thead>
+                  <tbody>
+                    {rows.map((r, i) => (
+                      <tr key={i} className={`border-t border-[#f0f0ec] ${r.error ? "bg-red-50" : ""}`}>
+                        <td className="px-3 py-2 font-medium text-[#1a1a1a]">{r.name || <span className="text-red-400">—</span>}</td>
+                        <td className="px-3 py-2 text-[#1a1a1a]/60">{r.contact_name || "—"}</td>
+                        <td className="px-3 py-2 text-[#1a1a1a]/60">{r.phone || "—"}</td>
+                        <td className="px-3 py-2 text-[#1a1a1a]/60">{r.email || "—"}</td>
+                        <td className="px-3 py-2 text-[#1a1a1a]/60">{r.deal_amount ? Number(r.deal_amount.replace(/[^0-9]/g,"")).toLocaleString()+"원" : "—"}</td>
+                        <td className="px-3 py-2">{r.error && <span className="flex items-center gap-1 text-red-400"><AlertCircle className="w-3 h-3" />{r.error}</span>}</td>
+                      </tr>
+                    ))}
+                  </tbody>
+                </table>
+              </div>
+            </>
+          )}
+        </div>
+
+        <div className="px-6 py-4 border-t border-[#e8e8e4] flex justify-end gap-2">
+          <button type="button" onClick={onClose} className="px-4 py-2 text-sm rounded-lg border border-[#e8e8e4] hover:bg-[#f5f5f2] transition-colors">취소</button>
+          {step === "preview" && validCount > 0 && (
+            <button type="button" onClick={handleConfirm}
+              className="px-4 py-2 text-sm rounded-lg bg-[#1a1a1a] text-white hover:bg-[#111] transition-colors">
+              {validCount}개 고객사 등록
+            </button>
+          )}
+        </div>
       </div>
     </div>
   )
@@ -666,6 +894,7 @@ export default function PartnersPage() {
   const [stageFilter, setStageFilter] = useState<PipelineStage | "all">("all")
   const [selected, setSelected] = useState<Partner | null>(null)
   const [showForm, setShowForm] = useState(false)
+  const [showImport, setShowImport] = useState(false)
   const [form, setForm] = useState(EMPTY_FORM)
   const [saving, setSaving] = useState(false)
 
@@ -725,6 +954,9 @@ export default function PartnersPage() {
             <div className="flex gap-2">
               <Button variant="outline" size="sm" onClick={load} disabled={loading}>
                 <RefreshCw className={`w-4 h-4 ${loading ? "animate-spin" : ""}`} />
+              </Button>
+              <Button variant="outline" size="sm" onClick={() => setShowImport(true)}>
+                <Upload className="w-4 h-4 mr-1" />Excel 가져오기
               </Button>
               <Button size="sm" onClick={() => setShowForm(true)}>
                 <Plus className="w-4 h-4 mr-1" />고객사 추가
@@ -801,6 +1033,23 @@ export default function PartnersPage() {
           partner={selected}
           onClose={() => setSelected(null)}
           onRefresh={load}
+        />
+      )}
+
+      {/* Excel 가져오기 모달 */}
+      {showImport && (
+        <ImportModal
+          onClose={() => setShowImport(false)}
+          onImported={(newPartners) => {
+            if (DUMMY_MODE) {
+              setPartners(prev => [...prev, ...newPartners])
+            } else {
+              // 실모드: 순차 API 호출
+              Promise.all(newPartners.map(p =>
+                adminFetch("/api/admin/partners", { method: "POST", body: JSON.stringify(p) })
+              )).then(() => load())
+            }
+          }}
         />
       )}
 
