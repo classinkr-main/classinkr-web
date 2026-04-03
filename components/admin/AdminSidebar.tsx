@@ -16,6 +16,10 @@ import {
   CalendarDays,
   SquareChevronLeft,
   SquareChevronRight,
+  Handshake,
+  ClipboardList,
+  ScrollText,
+  Receipt,
 } from "lucide-react"
 import { useEffect, useState } from "react"
 import { clearAdminSessionStorage } from "@/lib/admin-client"
@@ -31,6 +35,7 @@ interface NavItem {
   icon: React.ReactNode
   roles: SidebarRole[]
   badge?: string
+  section?: string  // 섹션 제목 (첫 번째 아이템에만 표시)
 }
 
 const NAV: NavItem[] = [
@@ -44,6 +49,11 @@ const NAV: NavItem[] = [
   { href: "/admin/users",     label: "회원 관리",   icon: <UserCog className="w-4 h-4" />,        roles: ["SUPER_ADMIN","ADMIN"] },
   { href: "/admin/settings",  label: "Settings",   icon: <Settings className="w-4 h-4" />,       roles: ["SUPER_ADMIN","ADMIN"] },
   { href: "/admin/dev",       label: "Dev Mode",   icon: <Code2 className="w-4 h-4" />,          roles: ["SUPER_ADMIN", "ADMIN"], badge: "Beta" },
+  // ── 파트너 포털 ──
+  { href: "/admin/partners",  label: "파트너사",    icon: <Handshake className="w-4 h-4" />,      roles: ["SUPER_ADMIN","ADMIN"],         section: "파트너 포털" },
+  { href: "/admin/quotes",    label: "견적서",      icon: <ClipboardList className="w-4 h-4" />, roles: ["SUPER_ADMIN","ADMIN","EDITOR"] },
+  { href: "/admin/contracts", label: "계약서",      icon: <ScrollText className="w-4 h-4" />,    roles: ["SUPER_ADMIN","ADMIN"] },
+  { href: "/admin/receipts",  label: "영수증",      icon: <Receipt className="w-4 h-4" />,       roles: ["SUPER_ADMIN","ADMIN"] },
 ]
 
 const ROLE_LABEL: Record<string, string> = {
@@ -132,33 +142,42 @@ export default function AdminSidebar({ role, name, email }: Props) {
         {visibleNav.map((item) => {
           const isActive = pathname === item.href || pathname.startsWith(item.href + "/")
           return (
-            <Link
-              key={item.href}
-              href={item.href}
-              title={collapsed ? item.label : undefined}
-              className={`flex items-center gap-2.5 rounded-lg text-[13px] font-medium transition-colors group ${
-                collapsed ? "justify-center px-2 py-2.5" : "px-3 py-2"
-              } ${
-                isActive
-                  ? "bg-[#111110] text-white"
-                  : "text-[#1a1a1a]/60 hover:bg-[#f5f5f2] hover:text-[#111110]"
-              }`}
-            >
-              <span className={`shrink-0 ${isActive ? "text-white" : "text-[#1a1a1a]/40 group-hover:text-[#111110]"}`}>
-                {item.icon}
-              </span>
-              {!collapsed && (
-                <>
-                  <span className="flex-1">{item.label}</span>
-                  {item.badge && (
-                    <span className="text-[10px] px-1.5 py-0.5 rounded bg-[#e8e8e4] text-[#1a1a1a]/50 font-normal">
-                      {item.badge}
-                    </span>
-                  )}
-                  {isActive && <ChevronRight className="w-3 h-3 opacity-60" />}
-                </>
+            <div key={item.href}>
+              {item.section && !collapsed && (
+                <p className="text-[10px] font-semibold text-[#1a1a1a]/25 uppercase tracking-widest px-3 pt-4 pb-1">
+                  {item.section}
+                </p>
               )}
-            </Link>
+              {item.section && collapsed && (
+                <div className="my-2 border-t border-[#e8e8e4]" />
+              )}
+              <Link
+                href={item.href}
+                title={collapsed ? item.label : undefined}
+                className={`flex items-center gap-2.5 rounded-lg text-[13px] font-medium transition-colors group ${
+                  collapsed ? "justify-center px-2 py-2.5" : "px-3 py-2"
+                } ${
+                  isActive
+                    ? "bg-[#111110] text-white"
+                    : "text-[#1a1a1a]/60 hover:bg-[#f5f5f2] hover:text-[#111110]"
+                }`}
+              >
+                <span className={`shrink-0 ${isActive ? "text-white" : "text-[#1a1a1a]/40 group-hover:text-[#111110]"}`}>
+                  {item.icon}
+                </span>
+                {!collapsed && (
+                  <>
+                    <span className="flex-1">{item.label}</span>
+                    {item.badge && (
+                      <span className="text-[10px] px-1.5 py-0.5 rounded bg-[#e8e8e4] text-[#1a1a1a]/50 font-normal">
+                        {item.badge}
+                      </span>
+                    )}
+                    {isActive && <ChevronRight className="w-3 h-3 opacity-60" />}
+                  </>
+                )}
+              </Link>
+            </div>
           )
         })}
       </nav>
