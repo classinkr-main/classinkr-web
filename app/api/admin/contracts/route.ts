@@ -3,7 +3,7 @@ import { verifyAdmin } from "@/lib/admin-auth";
 import { listContracts, createContract, generateContractNumber } from "@/lib/repositories/contracts";
 
 export async function GET(req: NextRequest) {
-  const err = verifyAdmin(req);
+  const err = await verifyAdmin(req);
   if (err) return err;
   try {
     const partnerId = req.nextUrl.searchParams.get("partner_id") ?? undefined;
@@ -16,7 +16,7 @@ export async function GET(req: NextRequest) {
 }
 
 export async function POST(req: NextRequest) {
-  const err = verifyAdmin(req);
+  const err = await verifyAdmin(req);
   if (err) return err;
   try {
     const body = await req.json();

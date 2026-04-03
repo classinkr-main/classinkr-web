@@ -8,7 +8,7 @@ import { createSupabaseAdminClient } from "@/lib/supabase/admin";
  * 어드민 서명 적용 — base64 서명 이미지를 Storage에 업로드 후 계약서 완료 처리
  */
 export async function POST(req: NextRequest, { params }: { params: Promise<{ id: string }> }) {
-  const err = verifyAdmin(req);
+  const err = await verifyAdmin(req);
   if (err) return err;
   const { id } = await params;
 

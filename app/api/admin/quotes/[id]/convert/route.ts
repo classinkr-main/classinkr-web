@@ -8,7 +8,7 @@ import { createContract, generateContractNumber } from "@/lib/repositories/contr
  * 견적서 → 계약서 원클릭 전환
  */
 export async function POST(req: NextRequest, { params }: { params: Promise<{ id: string }> }) {
-  const err = verifyAdmin(req);
+  const err = await verifyAdmin(req);
   if (err) return err;
   const { id } = await params;
 

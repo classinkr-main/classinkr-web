@@ -3,7 +3,7 @@ import { verifyAdmin } from "@/lib/admin-auth";
 import { getReceipt, updateReceipt, deleteReceipt } from "@/lib/repositories/receipts";
 
 export async function GET(req: NextRequest, { params }: { params: Promise<{ id: string }> }) {
-  const err = verifyAdmin(req);
+  const err = await verifyAdmin(req);
   if (err) return err;
   const { id } = await params;
   const receipt = await getReceipt(id);
@@ -12,7 +12,7 @@ export async function GET(req: NextRequest, { params }: { params: Promise<{ id: 
 }
 
 export async function PUT(req: NextRequest, { params }: { params: Promise<{ id: string }> }) {
-  const err = verifyAdmin(req);
+  const err = await verifyAdmin(req);
   if (err) return err;
   const { id } = await params;
   try {
@@ -26,7 +26,7 @@ export async function PUT(req: NextRequest, { params }: { params: Promise<{ id: 
 }
 
 export async function DELETE(req: NextRequest, { params }: { params: Promise<{ id: string }> }) {
-  const err = verifyAdmin(req);
+  const err = await verifyAdmin(req);
   if (err) return err;
   const { id } = await params;
   try {

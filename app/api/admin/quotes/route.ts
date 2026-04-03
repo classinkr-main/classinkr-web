@@ -3,7 +3,7 @@ import { verifyAdmin } from "@/lib/admin-auth";
 import { listQuotes, createQuote, generateQuoteNumber } from "@/lib/repositories/quotes";
 
 export async function GET(req: NextRequest) {
-  const err = verifyAdmin(req);
+  const err = await verifyAdmin(req);
   if (err) return err;
   try {
     const partnerId = req.nextUrl.searchParams.get("partner_id") ?? undefined;
@@ -16,7 +16,7 @@ export async function GET(req: NextRequest) {
 }
 
 export async function POST(req: NextRequest) {
-  const err = verifyAdmin(req);
+  const err = await verifyAdmin(req);
   if (err) return err;
   try {
     const { items = [], ...body } = await req.json();

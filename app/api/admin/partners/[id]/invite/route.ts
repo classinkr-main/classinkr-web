@@ -7,7 +7,7 @@ import { invitePartnerUser } from "@/lib/partner-auth";
  * 파트너사에 사용자 초대 — Supabase Auth 초대 이메일 발송 + partner_users 레코드 생성
  */
 export async function POST(req: NextRequest, { params }: { params: Promise<{ id: string }> }) {
-  const err = verifyAdmin(req);
+  const err = await verifyAdmin(req);
   if (err) return err;
   const { id: partnerId } = await params;
 
