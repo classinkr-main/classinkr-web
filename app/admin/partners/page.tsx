@@ -64,7 +64,7 @@ type PanelTab = "timeline" | "docs" | "install" | "info"
 
 // ── 더미 데이터 ───────────────────────────────────────────────
 
-const DUMMY_MODE = true
+const DUMMY_MODE = false
 
 const DUMMY_PARTNERS: Partner[] = [
   { id: "p1", name: "삼성초등학교", contact_name: "김민준", email: "minjun@samsung-es.kr", phone: "010-1234-5678", address: "서울시 강남구 테헤란로 123", business_number: null, status: "active", pipeline_stage: "contracted", deal_amount: 25000000, installation_date: "2026-04-15", installation_address: "서울시 강남구 테헤란로 123 (교실 1-3층)", installer_name: "박설치", notes: "1~3층 각 교실 1대씩, 도서관 2대", created_by: null, created_at: "2026-03-01T00:00:00Z", updated_at: "2026-03-12T00:00:00Z" },

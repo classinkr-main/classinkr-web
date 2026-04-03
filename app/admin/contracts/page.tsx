@@ -5,7 +5,7 @@ import { RefreshCw, Trash2, X, PenLine, Copy, Check, Send, History } from "lucid
 import { Button } from "@/components/ui/button"
 import type { Contract, ContractStatus, Partner } from "@/lib/supabase/database.types"
 
-const DUMMY_MODE = true
+const DUMMY_MODE = false
 
 const DUMMY_PARTNERS_MAP: Record<string, string> = {
   p1: "삼성초등학교", p2: "판교중학교", p3: "해운대여자고등학교", p4: "서초과학기술원", p5: "강동초등학교",
