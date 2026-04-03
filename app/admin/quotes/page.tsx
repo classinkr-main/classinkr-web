@@ -5,6 +5,18 @@ import { Plus, RefreshCw, Trash2, X, FileSignature, ChevronRight, Calculator } f
 import { Button } from "@/components/ui/button"
 import type { Quote, QuoteStatus, Partner } from "@/lib/supabase/database.types"
 
+const DUMMY_MODE = true
+
+const DUMMY_PARTNERS_MAP: Record<string, string> = {
+  p1: "삼성초등학교", p2: "판교중학교", p3: "해운대여자고등학교", p4: "서초과학기술원", p5: "강동초등학교",
+}
+const DUMMY_QUOTES_LIST: Quote[] = [
+  { id: "q1", quote_number: "Q-2026-001", partner_id: "p1", title: "ClassIn Board 86인치 5대 납품", status: "converted",    valid_until: "2026-04-30", subtotal: 22727272, discount_amount: 0, tax_amount: 2272728, total_amount: 25000000, notes: "설치비 포함",     created_by: null, sent_at: "2026-03-01T00:00:00Z", accepted_at: "2026-03-05T00:00:00Z", converted_to_contract_id: "c1", created_at: "2026-03-01T00:00:00Z", updated_at: "2026-03-05T00:00:00Z" },
+  { id: "q2", quote_number: "Q-2026-002", partner_id: "p2", title: "ClassIn Board CB-86 10대 공급", status: "sent",         valid_until: "2026-04-20", subtotal: 45454545, discount_amount: 0, tax_amount: 4545455, total_amount: 50000000, notes: null,               created_by: null, sent_at: "2026-03-20T00:00:00Z", accepted_at: null,                 converted_to_contract_id: null, created_at: "2026-03-18T00:00:00Z", updated_at: "2026-03-20T00:00:00Z" },
+  { id: "q3", quote_number: "Q-2026-003", partner_id: "p3", title: "CB-75 3대 납품 및 설치",        status: "converted",    valid_until: null,          subtotal: 10909090, discount_amount: 0, tax_amount: 1090910, total_amount: 12000000, notes: null,               created_by: null, sent_at: "2026-02-15T00:00:00Z", accepted_at: "2026-02-18T00:00:00Z", converted_to_contract_id: "c3", created_at: "2026-02-12T00:00:00Z", updated_at: "2026-02-18T00:00:00Z" },
+  { id: "q4", quote_number: "Q-2026-004", partner_id: "p5", title: "ClassIn Board 초기 견적 (미확정)", status: "draft",     valid_until: "2026-05-15", subtotal: 0,         discount_amount: 0, tax_amount: 0,       total_amount: 0,         notes: "수량 미확정", created_by: null, sent_at: null,                 accepted_at: null,                 converted_to_contract_id: null, created_at: "2026-04-02T00:00:00Z", updated_at: "2026-04-02T00:00:00Z" },
+]
+
 const STATUS_LABEL: Record<QuoteStatus, string> = {
   draft: "초안", sent: "발송됨", accepted: "수락", rejected: "거절", expired: "만료", converted: "계약전환",
 }
@@ -43,6 +55,11 @@ export default function QuotesPage() {
   const [saving, setSaving] = useState(false)
 
   const load = useCallback(async () => {
+    if (DUMMY_MODE) {
+      setQuotes(DUMMY_QUOTES_LIST)
+      setLoading(false)
+      return
+    }
     setLoading(true)
     const [qRes, pRes] = await Promise.all([
       adminFetch("/api/admin/quotes"),
@@ -112,7 +129,7 @@ export default function QuotesPage() {
     setConverting(null)
   }
 
-  const partnerName = (id: string) => partners.find((p) => p.id === id)?.name ?? id
+  const partnerName = (id: string) => DUMMY_MODE ? (DUMMY_PARTNERS_MAP[id] ?? id) : (partners.find((p) => p.id === id)?.name ?? id)
 
   return (
     <div className="p-6 max-w-6xl mx-auto space-y-6">

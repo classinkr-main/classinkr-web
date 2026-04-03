@@ -5,6 +5,16 @@ import { Plus, RefreshCw, Trash2, X, Download } from "lucide-react"
 import { Button } from "@/components/ui/button"
 import type { Receipt, Partner, PaymentMethod } from "@/lib/supabase/database.types"
 
+const DUMMY_MODE = true
+
+const DUMMY_PARTNERS_MAP: Record<string, string> = {
+  p1: "삼성초등학교", p2: "판교중학교", p3: "해운대여자고등학교", p4: "서초과학기술원", p5: "강동초등학교",
+}
+const DUMMY_RECEIPTS_LIST: Receipt[] = [
+  { id: "r1", receipt_number: "R-2026-001", contract_id: "c2",  partner_id: "p4", amount: 16363636, tax_amount: 1636364, total_amount: 18000000, payment_method: "bank_transfer", cash_receipt_requested: false, cash_receipt_type: null, cash_receipt_number: null, pdf_url: null, emailed_at: null, paid_at: "2026-02-25T00:00:00Z", notes: null, created_by: null, created_at: "2026-02-25T00:00:00Z", updated_at: "2026-02-25T00:00:00Z" },
+  { id: "r2", receipt_number: "R-2026-002", contract_id: "c3",  partner_id: "p3", amount: 10909090, tax_amount: 1090910, total_amount: 12000000, payment_method: "bank_transfer", cash_receipt_requested: false, cash_receipt_type: null, cash_receipt_number: null, pdf_url: null, emailed_at: null, paid_at: "2026-03-02T00:00:00Z", notes: null, created_by: null, created_at: "2026-03-02T00:00:00Z", updated_at: "2026-03-02T00:00:00Z" },
+]
+
 const METHOD_LABEL: Record<PaymentMethod, string> = {
   bank_transfer: "계좌이체", card: "카드", cash: "현금",
 }
@@ -33,6 +43,11 @@ export default function ReceiptsPage() {
   const [saving, setSaving] = useState(false)
 
   const load = useCallback(async () => {
+    if (DUMMY_MODE) {
+      setReceipts(DUMMY_RECEIPTS_LIST)
+      setLoading(false)
+      return
+    }
     setLoading(true)
     const [rRes, pRes] = await Promise.all([
       adminFetch("/api/admin/receipts"),
@@ -75,7 +90,7 @@ export default function ReceiptsPage() {
     load()
   }
 
-  const partnerName = (id: string) => partners.find((p) => p.id === id)?.name ?? id
+  const partnerName = (id: string) => DUMMY_MODE ? (DUMMY_PARTNERS_MAP[id] ?? id) : (partners.find((p) => p.id === id)?.name ?? id)
 
   return (
     <div className="p-6 max-w-5xl mx-auto space-y-6">
