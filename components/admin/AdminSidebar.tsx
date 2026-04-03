@@ -38,22 +38,28 @@ interface NavItem {
   section?: string  // 섹션 제목 (첫 번째 아이템에만 표시)
 }
 
+const PARTNER_ONLY = ["PARTNER"]
+const ALL_STAFF    = ["SUPER_ADMIN","ADMIN","EDITOR","VIEWER"]
+const STAFF_ADMIN  = ["SUPER_ADMIN","ADMIN"]
+const STAFF_EDITOR = ["SUPER_ADMIN","ADMIN","EDITOR"]
+
 const NAV: NavItem[] = [
-  { href: "/admin/overview",  label: "Overview",   icon: <LayoutDashboard className="w-4 h-4" />, roles: ["SUPER_ADMIN","ADMIN","EDITOR","VIEWER"] },
-  { href: "/admin/crm",       label: "CRM / 리드",  icon: <Users className="w-4 h-4" />,          roles: ["SUPER_ADMIN","ADMIN","EDITOR","VIEWER"] },
-  { href: "/admin/branch",    label: "지사 관리",   icon: <Building2 className="w-4 h-4" />,      roles: ["SUPER_ADMIN","ADMIN"] },
-  { href: "/admin/analytics", label: "Analytics",  icon: <BarChart2 className="w-4 h-4" />,      roles: ["SUPER_ADMIN","ADMIN","EDITOR","VIEWER"] },
-  { href: "/admin/calendar",  label: "캘린더",      icon: <CalendarDays className="w-4 h-4" />,   roles: ["SUPER_ADMIN","ADMIN","EDITOR","VIEWER"] },
-  { href: "/admin/blog",      label: "콘텐츠",      icon: <FileText className="w-4 h-4" />,       roles: ["SUPER_ADMIN","ADMIN","EDITOR"] },
-  { href: "/admin/marketing", label: "마케팅",      icon: <Users className="w-4 h-4" />,          roles: ["SUPER_ADMIN","ADMIN"] },
-  { href: "/admin/users",     label: "회원 관리",   icon: <UserCog className="w-4 h-4" />,        roles: ["SUPER_ADMIN","ADMIN"] },
-  { href: "/admin/settings",  label: "Settings",   icon: <Settings className="w-4 h-4" />,       roles: ["SUPER_ADMIN","ADMIN"] },
-  { href: "/admin/dev",       label: "Dev Mode",   icon: <Code2 className="w-4 h-4" />,          roles: ["SUPER_ADMIN", "ADMIN"], badge: "Beta" },
-  // ── 파트너 포털 ──
-  { href: "/admin/partners",  label: "파트너사",    icon: <Handshake className="w-4 h-4" />,      roles: ["SUPER_ADMIN","ADMIN"],         section: "파트너 포털" },
-  { href: "/admin/quotes",    label: "견적서",      icon: <ClipboardList className="w-4 h-4" />, roles: ["SUPER_ADMIN","ADMIN","EDITOR"] },
-  { href: "/admin/contracts", label: "계약서",      icon: <ScrollText className="w-4 h-4" />,    roles: ["SUPER_ADMIN","ADMIN"] },
-  { href: "/admin/receipts",  label: "영수증",      icon: <Receipt className="w-4 h-4" />,       roles: ["SUPER_ADMIN","ADMIN"] },
+  // ── 일반 스태프 메뉴 (PARTNER는 보이지 않음) ──
+  { href: "/admin/overview",  label: "Overview",   icon: <LayoutDashboard className="w-4 h-4" />, roles: ALL_STAFF },
+  { href: "/admin/crm",       label: "CRM / 리드",  icon: <Users className="w-4 h-4" />,          roles: ALL_STAFF },
+  { href: "/admin/branch",    label: "지사 관리",   icon: <Building2 className="w-4 h-4" />,      roles: STAFF_ADMIN },
+  { href: "/admin/analytics", label: "Analytics",  icon: <BarChart2 className="w-4 h-4" />,      roles: ALL_STAFF },
+  { href: "/admin/calendar",  label: "캘린더",      icon: <CalendarDays className="w-4 h-4" />,   roles: ALL_STAFF },
+  { href: "/admin/blog",      label: "콘텐츠",      icon: <FileText className="w-4 h-4" />,       roles: STAFF_EDITOR },
+  { href: "/admin/marketing", label: "마케팅",      icon: <Users className="w-4 h-4" />,          roles: STAFF_ADMIN },
+  { href: "/admin/users",     label: "회원 관리",   icon: <UserCog className="w-4 h-4" />,        roles: STAFF_ADMIN },
+  { href: "/admin/settings",  label: "Settings",   icon: <Settings className="w-4 h-4" />,       roles: STAFF_ADMIN },
+  { href: "/admin/dev",       label: "Dev Mode",   icon: <Code2 className="w-4 h-4" />,          roles: STAFF_ADMIN, badge: "Beta" },
+  // ── 파트너 포털 (PARTNER 포함) ──
+  { href: "/admin/partners",  label: "고객사",      icon: <Handshake className="w-4 h-4" />,      roles: [...STAFF_ADMIN, ...PARTNER_ONLY], section: "파트너 포털" },
+  { href: "/admin/quotes",    label: "견적서",      icon: <ClipboardList className="w-4 h-4" />, roles: [...STAFF_EDITOR, ...PARTNER_ONLY] },
+  { href: "/admin/contracts", label: "계약서",      icon: <ScrollText className="w-4 h-4" />,    roles: [...STAFF_ADMIN, ...PARTNER_ONLY] },
+  { href: "/admin/receipts",  label: "영수증",      icon: <Receipt className="w-4 h-4" />,       roles: [...STAFF_ADMIN, ...PARTNER_ONLY] },
 ]
 
 const ROLE_LABEL: Record<string, string> = {
@@ -61,6 +67,7 @@ const ROLE_LABEL: Record<string, string> = {
   ADMIN: "관리자",
   EDITOR: "에디터",
   VIEWER: "뷰어",
+  PARTNER: "파트너",
 }
 
 interface Props {
@@ -69,10 +76,20 @@ interface Props {
   email: string
 }
 
+const PARTNER_ALLOWED_PATHS = ["/admin/partners", "/admin/quotes", "/admin/contracts", "/admin/receipts"]
+
 export default function AdminSidebar({ role, name, email }: Props) {
   const pathname = usePathname()
   const router = useRouter()
   const [collapsed, setCollapsed] = useState(false)
+
+  // PARTNER 역할은 파트너 포털 외 접근 차단
+  useEffect(() => {
+    if (role.toUpperCase() === "PARTNER") {
+      const allowed = PARTNER_ALLOWED_PATHS.some((p) => pathname === p || pathname.startsWith(p + "/"))
+      if (!allowed) router.replace("/admin/partners")
+    }
+  }, [pathname, role, router])
 
   useEffect(() => {
     const saved = localStorage.getItem("admin_sidebar_collapsed")

@@ -101,6 +101,39 @@ function SignatureCanvas({ onSave }: { onSave: (dataUrl: string) => void }) {
   )
 }
 
+// ── 더미 데이터 ─────────────────────────────────────────────
+const DUMMY_CONTRACTS: Record<string, Partial<Contract>> = {
+  "tok_demo_abc123": {
+    id: "c1", contract_number: "C-2026-001", title: "ClassIn Board 86인치 5대 납품계약",
+    status: "sent", total_amount: 25000000,
+    content_html: `
+      <h3 style="font-size:1rem;font-weight:600;margin-bottom:0.75rem">제1조 (목적)</h3>
+      <p style="margin-bottom:1rem">본 계약은 이이오클래스인코리아 유한회사(이하 "공급사")와 한국교육솔루션(주)(이하 "구매사") 사이에 ClassIn Board 전자칠판 납품에 관한 제반 사항을 규정함을 목적으로 합니다.</p>
+      <h3 style="font-size:1rem;font-weight:600;margin-bottom:0.75rem">제2조 (납품 품목)</h3>
+      <table style="width:100%;border-collapse:collapse;margin-bottom:1rem;font-size:0.875rem">
+        <thead><tr style="background:#f7f7f5"><th style="padding:8px;border:1px solid #e8e8e4;text-align:left">품목</th><th style="padding:8px;border:1px solid #e8e8e4;text-align:center">수량</th><th style="padding:8px;border:1px solid #e8e8e4;text-align:right">단가</th><th style="padding:8px;border:1px solid #e8e8e4;text-align:right">금액</th></tr></thead>
+        <tbody>
+          <tr><td style="padding:8px;border:1px solid #e8e8e4">ClassIn Board 86인치 (CB-86)</td><td style="padding:8px;border:1px solid #e8e8e4;text-align:center">5</td><td style="padding:8px;border:1px solid #e8e8e4;text-align:right">4,545,454원</td><td style="padding:8px;border:1px solid #e8e8e4;text-align:right">22,727,270원</td></tr>
+          <tr><td style="padding:8px;border:1px solid #e8e8e4">설치 및 교육</td><td style="padding:8px;border:1px solid #e8e8e4;text-align:center">1식</td><td style="padding:8px;border:1px solid #e8e8e4;text-align:right">—</td><td style="padding:8px;border:1px solid #e8e8e4;text-align:right">포함</td></tr>
+        </tbody>
+      </table>
+      <h3 style="font-size:1rem;font-weight:600;margin-bottom:0.75rem">제3조 (납품 일정)</h3>
+      <p style="margin-bottom:1rem">계약 체결일로부터 30일 이내 납품을 완료하며, 설치 일정은 별도 협의합니다.</p>
+      <h3 style="font-size:1rem;font-weight:600;margin-bottom:0.75rem">제4조 (대금 지급)</h3>
+      <p>계약금 50%는 계약 체결 후 7일 이내, 잔금 50%는 납품 완료 후 14일 이내 지급합니다.</p>
+    `,
+    valid_from: "2026-03-10", valid_until: "2026-12-31",
+    partner_signed_at: null, admin_signed_at: null,
+  },
+  "tok_demo_def456": {
+    id: "c2", contract_number: "C-2026-002", title: "유지보수 서비스 계약 (연간)",
+    status: "completed", total_amount: 3600000,
+    content_html: `<h3 style="font-size:1rem;font-weight:600;margin-bottom:0.75rem">유지보수 서비스 계약서</h3><p>ClassIn Board 제품에 대한 연간 유지보수 서비스 계약입니다.</p>`,
+    valid_from: "2026-01-01", valid_until: "2026-12-31",
+    partner_signed_at: "2026-01-05T10:00:00Z", admin_signed_at: "2026-01-06T09:00:00Z",
+  },
+}
+
 export default function PartnerSignPage() {
   const { token } = useParams<{ token: string }>()
   const [contract, setContract] = useState<Partial<Contract> | null>(null)
@@ -111,6 +144,11 @@ export default function PartnerSignPage() {
   const [agreed, setAgreed] = useState(false)
 
   useEffect(() => {
+    if (token?.startsWith("tok_demo_")) {
+      const dummy = DUMMY_CONTRACTS[token]
+      if (dummy) { setContract(dummy); setLoading(false); return }
+      setError("데모 계약서를 찾을 수 없습니다"); setLoading(false); return
+    }
     fetch(`/api/partner/sign?token=${token}`)
       .then(async (res) => {
         if (!res.ok) throw new Error((await res.json()).error ?? "계약서를 찾을 수 없습니다")

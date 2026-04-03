@@ -9,7 +9,7 @@
 
 /* ─── Enum Types ─── */
 
-export type AdminRole = "SUPER_ADMIN" | "ADMIN" | "EDITOR" | "VIEWER";
+export type AdminRole = "SUPER_ADMIN" | "ADMIN" | "EDITOR" | "VIEWER" | "PARTNER";
 export type AdminStatus = "INVITED" | "ACTIVE" | "SUSPENDED";
 
 export type BlogPostStatus = "DRAFT" | "IN_REVIEW" | "PUBLISHED" | "ARCHIVED";
@@ -170,6 +170,7 @@ export interface AuditLog {
 /* ─── Partner Portal Types ─── */
 
 export type PartnerStatus = "active" | "inactive" | "pending";
+export type PipelineStage = "prospect" | "quoting" | "contracted" | "installing" | "completed" | "cancelled";
 
 export interface PartnerUser {
   id: string;
@@ -196,6 +197,11 @@ export interface Partner {
   address: string | null;
   business_number: string | null;
   status: PartnerStatus;
+  pipeline_stage: PipelineStage;
+  deal_amount: number | null;
+  installation_date: string | null;
+  installation_address: string | null;
+  installer_name: string | null;
   notes: string | null;
   created_by: string | null;
   created_at: string;

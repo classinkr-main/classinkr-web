@@ -6,6 +6,10 @@
 -- ─── ENUM Types ───────────────────────────────────────────
 
 CREATE TYPE partner_status AS ENUM ('active', 'inactive', 'pending');
+CREATE TYPE pipeline_stage AS ENUM ('prospect', 'quoting', 'contracted', 'installing', 'completed', 'cancelled');
+
+-- admin_role에 PARTNER 추가 (기존 테이블이 있을 경우)
+-- ALTER TYPE admin_role ADD VALUE IF NOT EXISTS 'PARTNER';
 CREATE TYPE quote_status AS ENUM ('draft', 'sent', 'accepted', 'rejected', 'expired', 'converted');
 CREATE TYPE contract_status AS ENUM ('draft', 'sent', 'partner_signed', 'admin_signed', 'completed', 'cancelled');
 CREATE TYPE payment_method AS ENUM ('bank_transfer', 'card', 'cash');
@@ -14,18 +18,23 @@ CREATE TYPE cash_receipt_type AS ENUM ('personal', 'business');
 -- ─── partners ─────────────────────────────────────────────
 
 CREATE TABLE partners (
-  id              UUID PRIMARY KEY DEFAULT gen_random_uuid(),
-  name            TEXT NOT NULL,
-  contact_name    TEXT,
-  email           TEXT,
-  phone           TEXT,
-  address         TEXT,
-  business_number TEXT,
-  status          partner_status NOT NULL DEFAULT 'active',
-  notes           TEXT,
-  created_by      UUID REFERENCES auth.users(id) ON DELETE SET NULL,
-  created_at      TIMESTAMPTZ NOT NULL DEFAULT now(),
-  updated_at      TIMESTAMPTZ NOT NULL DEFAULT now()
+  id                   UUID PRIMARY KEY DEFAULT gen_random_uuid(),
+  name                 TEXT NOT NULL,
+  contact_name         TEXT,
+  email                TEXT,
+  phone                TEXT,
+  address              TEXT,
+  business_number      TEXT,
+  status               partner_status NOT NULL DEFAULT 'active',
+  pipeline_stage       pipeline_stage NOT NULL DEFAULT 'prospect',
+  deal_amount          NUMERIC,
+  installation_date    DATE,
+  installation_address TEXT,
+  installer_name       TEXT,
+  notes                TEXT,
+  created_by           UUID REFERENCES auth.users(id) ON DELETE SET NULL,
+  created_at           TIMESTAMPTZ NOT NULL DEFAULT now(),
+  updated_at           TIMESTAMPTZ NOT NULL DEFAULT now()
 );
 
 -- ─── quotes ───────────────────────────────────────────────
