@@ -5,10 +5,10 @@ import { useRouter } from "next/navigation"
 import {
   FileText, ClipboardList, Receipt, LogOut,
   CheckCircle2, Clock, XCircle, AlertCircle,
-  ChevronRight, ExternalLink,
+  ChevronRight, ExternalLink, Download,
 } from "lucide-react"
 import type { Quote, Contract, Receipt as ReceiptType, Partner } from "@/lib/supabase/database.types"
-import { createBrowserClient } from "@/lib/supabase/browser"
+import { createSupabaseBrowserClient } from "@/lib/supabase/browser"
 
 // ─── 상태 레이블/색상 ──────────────────────────────────────
 
@@ -25,7 +25,7 @@ const QUOTE_STATUS_COLOR: Record<string, string> = {
 }
 
 const CONTRACT_STATUS_LABEL: Record<string, string> = {
-  draft: "초안", sent: "서명 대기", partner_signed: "파트너 서명 완료",
+  draft: "초안", sent: "서명 대기", partner_signed: "대표 서명 완료",
   admin_signed: "관리자 서명 완료", completed: "완료", cancelled: "취소",
 }
 const CONTRACT_STATUS_COLOR: Record<string, string> = {
@@ -63,6 +63,7 @@ interface DashboardData {
   quotes: Quote[]
   contracts: (Contract & { sign_token?: string | null })[]
   receipts: ReceiptType[]
+  userRole: "admin" | "member"
 }
 
 export default function PartnerDashboardPage() {
@@ -85,7 +86,7 @@ export default function PartnerDashboardPage() {
   }, [router])
 
   async function handleLogout() {
-    const supabase = createBrowserClient()
+    const supabase = createSupabaseBrowserClient()
     await supabase.auth.signOut()
     router.replace("/partner/login")
   }
@@ -111,7 +112,16 @@ export default function PartnerDashboardPage() {
     )
   }
 
-  const { partner, quotes, contracts, receipts } = data
+  const { partner, quotes, contracts, receipts, userRole } = data
+  const isAdmin = userRole === "admin"
+
+  // 견적서 버전 계산: quote_number 기준으로 최대 version 파악
+  const maxVersionByQuoteNumber: Record<string, number> = {}
+  for (const q of quotes) {
+    const cur = maxVersionByQuoteNumber[q.quote_number] ?? 0
+    if (q.version > cur) maxVersionByQuoteNumber[q.quote_number] = q.version
+  }
+
   const pendingContracts = contracts.filter((c) => c.status === "sent" && !c.partner_signed_at)
 
   return (
@@ -121,7 +131,12 @@ export default function PartnerDashboardPage() {
         <div className="max-w-3xl mx-auto px-4 py-3 flex items-center justify-between">
           <div>
             <p className="text-[10px] text-[#1a1a1a]/40 uppercase tracking-widest">ClassIn 파트너 포털</p>
-            <h1 className="text-sm font-semibold text-[#1a1a1a]">{partner.name}</h1>
+            <h1 className="text-sm font-semibold text-[#1a1a1a]">
+              {partner.name}
+              {isAdmin && (
+                <span className="ml-2 text-[10px] font-normal text-[#1a1a1a]/40">대표</span>
+              )}
+            </h1>
           </div>
           <button onClick={handleLogout}
             className="flex items-center gap-1.5 text-xs text-[#1a1a1a]/40 hover:text-[#1a1a1a] transition-colors">
@@ -131,16 +146,29 @@ export default function PartnerDashboardPage() {
       </header>
 
       <main className="max-w-3xl mx-auto px-4 py-6 space-y-5">
-        {/* 서명 대기 알림 */}
-        {pendingContracts.length > 0 && (
+        {/* 서명 대기 알림 — admin만 표시 */}
+        {isAdmin && pendingContracts.length > 0 && (
           <div className="bg-yellow-50 border border-yellow-200 rounded-2xl p-4 flex items-start gap-3">
             <Clock className="w-4 h-4 text-yellow-500 shrink-0 mt-0.5" />
             <div className="flex-1 min-w-0">
               <p className="text-sm font-medium text-yellow-800">서명이 필요한 계약서가 있습니다</p>
-              <p className="text-xs text-yellow-600 mt-0.5">{pendingContracts.length}건의 계약서에 서명을 기다리고 있습니다.</p>
+              <p className="text-xs text-yellow-600 mt-0.5">{pendingContracts.length}건의 계약서에 대표 서명을 기다리고 있습니다.</p>
             </div>
             <button onClick={() => setTab("contracts")}
               className="text-xs text-yellow-700 underline shrink-0">확인하기</button>
+          </div>
+        )}
+
+        {/* member: 서명 대기 안내 */}
+        {!isAdmin && pendingContracts.length > 0 && (
+          <div className="bg-[#f0f0ec] border border-[#e8e8e4] rounded-2xl p-4 flex items-start gap-3">
+            <AlertCircle className="w-4 h-4 text-[#1a1a1a]/40 shrink-0 mt-0.5" />
+            <div className="flex-1 min-w-0">
+              <p className="text-sm font-medium text-[#1a1a1a]/70">서명 대기 중인 계약서가 있습니다</p>
+              <p className="text-xs text-[#1a1a1a]/40 mt-0.5">계약 서명은 대표 계정으로만 가능합니다.</p>
+            </div>
+            <button onClick={() => setTab("contracts")}
+              className="text-xs text-[#1a1a1a]/50 underline shrink-0">확인하기</button>
           </div>
         )}
 
@@ -186,20 +214,32 @@ export default function PartnerDashboardPage() {
                 <EmptyState icon={ClipboardList} text="발송된 견적서가 없습니다" />
               ) : (
                 <ul className="divide-y divide-[#e8e8e4]">
-                  {quotes.map((q) => (
-                    <li key={q.id} className="px-5 py-4 flex items-start justify-between gap-3">
-                      <div className="min-w-0">
-                        <div className="flex items-center gap-2 mb-1">
-                          <StatusBadge label={QUOTE_STATUS_LABEL[q.status] ?? q.status} color={QUOTE_STATUS_COLOR[q.status] ?? ""} />
-                          <span className="text-[10px] text-[#1a1a1a]/30">{q.quote_number}</span>
+                  {quotes.map((q) => {
+                    const isLatest = q.version === maxVersionByQuoteNumber[q.quote_number]
+                    return (
+                      <li key={q.id} className={`px-5 py-4 flex items-start justify-between gap-3 ${!isLatest ? "opacity-50" : ""}`}>
+                        <div className="min-w-0">
+                          <div className="flex items-center gap-2 mb-1">
+                            <StatusBadge label={QUOTE_STATUS_LABEL[q.status] ?? q.status} color={QUOTE_STATUS_COLOR[q.status] ?? ""} />
+                            <span className="text-[10px] text-[#1a1a1a]/30">{q.quote_number}</span>
+                            {/* 버전 뱃지 */}
+                            <span className={`inline-flex items-center px-1.5 py-0.5 rounded text-[10px] font-medium ${
+                              isLatest
+                                ? "bg-[#1a1a1a]/8 text-[#1a1a1a]/60"
+                                : "bg-[#f0f0ec] text-[#1a1a1a]/30"
+                            }`}>
+                              v{q.version}
+                              {!isLatest && <span className="ml-1">· 이전 버전</span>}
+                            </span>
+                          </div>
+                          <p className="text-sm font-medium text-[#1a1a1a] truncate">{q.title}</p>
+                          <p className="text-xs text-[#1a1a1a]/40 mt-0.5">
+                            {fmt(q.total_amount)} · 유효기간 {fmtDate(q.valid_until)}
+                          </p>
                         </div>
-                        <p className="text-sm font-medium text-[#1a1a1a] truncate">{q.title}</p>
-                        <p className="text-xs text-[#1a1a1a]/40 mt-0.5">
-                          {fmt(q.total_amount)} · 유효기간 {fmtDate(q.valid_until)}
-                        </p>
-                      </div>
-                    </li>
-                  ))}
+                      </li>
+                    )
+                  })}
                 </ul>
               )}
             </div>
@@ -231,7 +271,8 @@ export default function PartnerDashboardPage() {
                               {c.valid_until ? ` · 만료 ${fmtDate(c.valid_until)}` : ""}
                             </p>
                           </div>
-                          {needsSign && c.sign_token && (
+                          {/* 서명 버튼: admin만 활성화 */}
+                          {needsSign && c.sign_token && isAdmin && (
                             <a
                               href={`/partner/sign/${c.sign_token}`}
                               className="shrink-0 flex items-center gap-1 bg-[#1a1a1a] text-white text-xs font-medium px-3 py-1.5 rounded-lg hover:bg-[#333] transition-colors"
@@ -239,10 +280,16 @@ export default function PartnerDashboardPage() {
                               서명하기 <ChevronRight className="w-3 h-3" />
                             </a>
                           )}
+                          {/* member: 서명 불가 안내 */}
+                          {needsSign && !isAdmin && (
+                            <span className="shrink-0 text-[10px] text-[#1a1a1a]/30 text-right leading-tight">
+                              대표 계정으로<br />서명 가능
+                            </span>
+                          )}
                           {c.partner_signed_at && (
                             <div className="shrink-0 flex items-center gap-1 text-green-600 text-xs">
                               <CheckCircle2 className="w-3.5 h-3.5" />
-                              서명 완료
+                              대표 서명 완료
                             </div>
                           )}
                           {c.status === "cancelled" && (
@@ -284,11 +331,23 @@ export default function PartnerDashboardPage() {
                           {r.paid_at ? ` · ${fmtDate(r.paid_at)}` : " · 결제 대기"}
                         </p>
                       </div>
-                      {r.pdf_url && (
-                        <a href={r.pdf_url} target="_blank" rel="noopener noreferrer"
-                          className="shrink-0 flex items-center gap-1 text-xs text-[#1a1a1a]/50 hover:text-[#1a1a1a] border border-[#e8e8e4] rounded-lg px-3 py-1.5 transition-colors">
-                          PDF <ExternalLink className="w-3 h-3" />
+                      {/* PDF 다운로드 버튼 */}
+                      {r.pdf_url ? (
+                        <a
+                          href={r.pdf_url}
+                          target="_blank"
+                          rel="noopener noreferrer"
+                          className="shrink-0 flex items-center gap-1 text-xs text-[#1a1a1a]/50 hover:text-[#1a1a1a] border border-[#e8e8e4] rounded-lg px-3 py-1.5 transition-colors"
+                        >
+                          PDF 다운로드 <ExternalLink className="w-3 h-3" />
                         </a>
+                      ) : (
+                        <button
+                          onClick={() => alert("PDF 다운로드 준비 중")}
+                          className="shrink-0 flex items-center gap-1 text-xs text-[#1a1a1a]/30 hover:text-[#1a1a1a]/50 border border-[#e8e8e4] rounded-lg px-3 py-1.5 transition-colors"
+                        >
+                          PDF <Download className="w-3 h-3" />
+                        </button>
                       )}
                     </li>
                   ))}

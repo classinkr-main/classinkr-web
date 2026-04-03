@@ -6,10 +6,15 @@ import type { Database } from "@/lib/supabase/database.types"
 
 /**
  * GET /api/partner/data — 파트너 대시보드 데이터
- * 응답: { partner, quotes, contracts, receipts }
+ * 응답: { partner, quotes, contracts, receipts, userRole }
  */
 
-async function resolvePartnerId(req: NextRequest): Promise<string | null> {
+interface ResolvedPartnerInfo {
+  partnerId: string
+  userRole: "admin" | "member"
+}
+
+async function resolvePartnerInfo(req: NextRequest): Promise<ResolvedPartnerInfo | null> {
   if (!hasSupabaseBrowserEnv()) return null
   const { url, publishableKey } = getSupabaseBrowserEnv()
   const supabase = createServerClient<Database>(url, publishableKey, {
@@ -24,16 +29,18 @@ async function resolvePartnerId(req: NextRequest): Promise<string | null> {
   const admin = createSupabaseAdminClient()
   const { data } = await admin
     .from("partner_users")
-    .select("partner_id")
+    .select("partner_id, role")
     .eq("user_id", user.id)
     .eq("status", "active")
     .single()
-  return data?.partner_id ?? null
+  if (!data?.partner_id) return null
+  return { partnerId: data.partner_id, userRole: data.role as "admin" | "member" }
 }
 
 export async function GET(req: NextRequest) {
-  const partnerId = await resolvePartnerId(req)
-  if (!partnerId) return NextResponse.json({ error: "Unauthorized" }, { status: 401 })
+  const partnerInfo = await resolvePartnerInfo(req)
+  if (!partnerInfo) return NextResponse.json({ error: "Unauthorized" }, { status: 401 })
+  const { partnerId, userRole } = partnerInfo
 
   const admin = createSupabaseAdminClient()
 
@@ -49,5 +56,5 @@ export async function GET(req: NextRequest) {
     admin.from("receipts").select("*").eq("partner_id", partnerId).order("created_at", { ascending: false }),
   ])
 
-  return NextResponse.json({ partner, quotes: quotes ?? [], contracts: contracts ?? [], receipts: receipts ?? [] })
+  return NextResponse.json({ partner, quotes: quotes ?? [], contracts: contracts ?? [], receipts: receipts ?? [], userRole })
 }

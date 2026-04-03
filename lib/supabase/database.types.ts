@@ -177,7 +177,7 @@ export interface PartnerUser {
   user_id: string;        // Supabase auth.users.id
   partner_id: string;     // FK → partners.id
   display_name: string | null;
-  role: "admin" | "member"; // 파트너사 내 역할
+  role: "admin" | "member"; // admin = 파트너(대표, 서명권 보유) / member = 고객(매니저 등, 조회·변경요청만)
   status: "invited" | "active" | "suspended";
   invited_by: string | null; // admin user_id
   last_login_at: string | null;
@@ -200,6 +200,7 @@ export interface Partner {
   pipeline_stage: PipelineStage;
   deal_amount: number | null;
   installation_date: string | null;
+  installation_sub_dates: string[] | null; // 교실별 설치일이 다를 경우 보조 날짜 목록
   installation_address: string | null;
   installer_name: string | null;
   notes: string | null;
@@ -219,6 +220,7 @@ export type QuoteStatus =
 export interface Quote {
   id: string;
   quote_number: string;
+  version: number; // 수정 버전. quote_number는 동일하게 유지되고 version만 증가 (v1→v2→v3)
   partner_id: string;
   lead_id: string | null;
   title: string;
@@ -240,6 +242,7 @@ export interface Quote {
 export interface QuoteItem {
   id: string;
   quote_id: string;
+  sku: string | null;
   product_name: string;
   description: string | null;
   quantity: number;
@@ -260,6 +263,7 @@ export type ContractStatus =
 export interface Contract {
   id: string;
   contract_number: string;
+  version: number; // 수정 재발행 버전. 재서명 필요 시 버전 증가
   quote_id: string | null;
   partner_id: string;
   title: string;
@@ -568,3 +572,28 @@ export interface InstallSchedule {
 
 export type InstallScheduleInsert = Omit<InstallSchedule, "id" | "created_at" | "updated_at"> & { id?: string; created_at?: string; updated_at?: string };
 export type InstallScheduleUpdate = Partial<Omit<InstallSchedule, "id" | "created_at">>;
+
+/* ─── Product Catalog Types ─── */
+
+export type MountType = "stand" | "wall" | "embed";
+
+export interface ProductCatalogItem {
+  sku: string;
+  product_name: string;
+  description: string;
+  unit_price: number;
+  category: "board" | "camera" | "mount";
+}
+
+/* ─── Audit Log for Partner Changes ─── */
+
+export interface PartnerChangeLog {
+  id: string;
+  partner_id: string;
+  actor_user_id: string | null;
+  actor_role: "admin" | "member" | "classin_admin";
+  action_type: string;        // e.g. "quote_item_update", "delivery_request"
+  before_json: Record<string, unknown> | null;
+  after_json: Record<string, unknown> | null;
+  created_at: string;
+}
