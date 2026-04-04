@@ -128,6 +128,13 @@ export interface Deal {
   updated_at: string;
 }
 
+export interface DealListItem extends Deal {
+  customer_name: string | null;
+  customer_contact_name: string | null;
+  customer_region_label: string | null;
+  customer_campus_name: string | null;
+}
+
 export interface DealLineItem {
   id: string;
   deal_id: string;
@@ -152,6 +159,11 @@ export interface QuoteDocument {
   created_by: string | null;
   created_at: string;
   updated_at: string;
+}
+
+export interface QuoteDocumentBundle extends QuoteDocument {
+  versions: QuoteDocumentVersion[];
+  shares: QuoteDocumentShare[];
 }
 
 export interface QuoteDocumentVersion {
@@ -189,6 +201,11 @@ export interface ContractDocument {
   created_by: string | null;
   created_at: string;
   updated_at: string;
+}
+
+export interface ContractDocumentBundle extends ContractDocument {
+  versions: ContractDocumentVersion[];
+  shares: ContractDocumentShare[];
 }
 
 export interface ContractDocumentVersion {
@@ -337,6 +354,11 @@ export interface CustomerDealHistoryItem {
   last_paid_at: string | null;
 }
 
+export interface CustomerListItem {
+  customer: Customer;
+  summary: CustomerDealSummary | null;
+}
+
 export interface CustomerDetailPayload {
   customer: Customer;
   summary: CustomerDealSummary;
@@ -349,10 +371,11 @@ export interface DealDetailPayload {
   deal: Deal;
   customer: Customer;
   line_items: DealLineItem[];
-  quote_documents: QuoteDocument[];
-  contract_documents: ContractDocument[];
+  quote_documents: QuoteDocumentBundle[];
+  contract_documents: ContractDocumentBundle[];
   installations: InstallationEvent[];
   payments: PaymentRecord[];
   receipts: ReceiptRecord[];
   activity_logs: ActivityLog[];
+  calendar_events: CalendarEvent[];
 }

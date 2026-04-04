@@ -10,6 +10,7 @@
 - [partner-portal-guidelines.md](C:/Projects/PUBLIC_Classin/Classin_Home_bae_v1/docs/active/partner-portal-guidelines.md)
 - [partner-portal-product-plan.md](C:/Projects/PUBLIC_Classin/Classin_Home_bae_v1/docs/active/partner-portal-product-plan.md)
 - [partner-portal-screen-layout.md](C:/Projects/PUBLIC_Classin/Classin_Home_bae_v1/docs/active/partner-portal-screen-layout.md)
+- [partner-portal-front-back-contract.md](C:/Projects/PUBLIC_Classin/Classin_Home_bae_v1/docs/active/partner-portal-front-back-contract.md)
 - [partner-portal-implementation-roadmap.md](C:/Projects/PUBLIC_Classin/Classin_Home_bae_v1/docs/active/partner-portal-implementation-roadmap.md)
 - [partner-portal-worklog.md](C:/Projects/PUBLIC_Classin/Classin_Home_bae_v1/docs/active/partner-portal-worklog.md)
 
@@ -17,7 +18,7 @@
 
 1. 이 문서
 2. 운영 규칙은 `partner-portal-guidelines.md`
-3. 화면/UX는 `partner-portal-product-plan.md`, `partner-portal-screen-layout.md`
+3. 화면/UX는 `partner-portal-product-plan.md`, `partner-portal-screen-layout.md`, `partner-portal-front-back-contract.md`
 4. 개발 순서는 `partner-portal-implementation-roadmap.md`
 
 ## 1. 제품 한 줄 정의

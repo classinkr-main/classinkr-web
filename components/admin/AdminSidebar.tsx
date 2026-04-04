@@ -38,7 +38,6 @@ interface NavItem {
   section?: string  // 섹션 제목 (첫 번째 아이템에만 표시)
 }
 
-const PARTNER_ONLY = ["PARTNER"]
 const ALL_STAFF    = ["SUPER_ADMIN","ADMIN","EDITOR","VIEWER"]
 const STAFF_ADMIN  = ["SUPER_ADMIN","ADMIN"]
 const STAFF_EDITOR = ["SUPER_ADMIN","ADMIN","EDITOR"]
@@ -56,10 +55,11 @@ const NAV: NavItem[] = [
   { href: "/admin/settings",  label: "Settings",   icon: <Settings className="w-4 h-4" />,       roles: STAFF_ADMIN },
   { href: "/admin/dev",       label: "Dev Mode",   icon: <Code2 className="w-4 h-4" />,          roles: STAFF_ADMIN, badge: "Beta" },
   // ── 파트너 포털 (PARTNER 포함) ──
-  { href: "/admin/partners",  label: "고객사",      icon: <Handshake className="w-4 h-4" />,      roles: [...STAFF_ADMIN, ...PARTNER_ONLY], section: "파트너 포털" },
-  { href: "/admin/quotes",    label: "견적서",      icon: <ClipboardList className="w-4 h-4" />, roles: [...STAFF_EDITOR, ...PARTNER_ONLY] },
-  { href: "/admin/contracts", label: "계약서",      icon: <ScrollText className="w-4 h-4" />,    roles: [...STAFF_ADMIN, ...PARTNER_ONLY] },
-  { href: "/admin/receipts",  label: "영수증",      icon: <Receipt className="w-4 h-4" />,       roles: [...STAFF_ADMIN, ...PARTNER_ONLY] },
+  { href: "/admin/commercial",label: "대시보드",    icon: <LayoutDashboard className="w-4 h-4" />, roles: STAFF_ADMIN, section: "파트너 포털" },
+  { href: "/admin/partners",  label: "고객",        icon: <Handshake className="w-4 h-4" />,       roles: STAFF_ADMIN },
+  { href: "/admin/quotes",    label: "견적서",      icon: <ClipboardList className="w-4 h-4" />, roles: STAFF_EDITOR },
+  { href: "/admin/contracts", label: "계약서",      icon: <ScrollText className="w-4 h-4" />,    roles: STAFF_ADMIN },
+  { href: "/admin/receipts",  label: "영수증",      icon: <Receipt className="w-4 h-4" />,       roles: STAFF_ADMIN },
 ]
 
 const ROLE_LABEL: Record<string, string> = {
@@ -76,18 +76,15 @@ interface Props {
   email: string
 }
 
-const PARTNER_ALLOWED_PATHS = ["/admin/partners", "/admin/quotes", "/admin/contracts", "/admin/receipts"]
-
 export default function AdminSidebar({ role, name, email }: Props) {
   const pathname = usePathname()
   const router = useRouter()
   const [collapsed, setCollapsed] = useState(false)
 
-  // PARTNER 역할은 파트너 포털 외 접근 차단
+  // PARTNER 역할은 이제 별도 포털로 보냄
   useEffect(() => {
     if (role.toUpperCase() === "PARTNER") {
-      const allowed = PARTNER_ALLOWED_PATHS.some((p) => pathname === p || pathname.startsWith(p + "/"))
-      if (!allowed) router.replace("/admin/partners")
+      router.replace("/partner/workspace")
     }
   }, [pathname, role, router])
 

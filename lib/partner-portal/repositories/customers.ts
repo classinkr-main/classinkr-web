@@ -8,6 +8,7 @@ import type {
   CustomerDealHistoryItem,
   CustomerDealSummary,
   CustomerDetailPayload,
+  CustomerListItem,
 } from "@/lib/partner-portal/types";
 
 export async function listCustomers(partnerAccountId?: string): Promise<Customer[]> {
@@ -26,6 +27,40 @@ export async function listCustomers(partnerAccountId?: string): Promise<Customer
   if (error) throw error;
 
   return (data ?? []) as Customer[];
+}
+
+export async function listCustomerListItems(
+  partnerAccountId: string
+): Promise<CustomerListItem[]> {
+  const [customers, summaries] = await Promise.all([
+    listCustomers(partnerAccountId),
+    listCustomerDealSummaries(partnerAccountId),
+  ]);
+
+  const summaryMap = new Map(
+    summaries.map((summary) => [summary.customer_id, summary])
+  );
+
+  return customers.map((customer) => ({
+    customer,
+    summary: summaryMap.get(customer.id) ?? null,
+  }));
+}
+
+export async function listAllCustomerListItems(): Promise<CustomerListItem[]> {
+  const [customers, summaries] = await Promise.all([
+    listCustomers(),
+    listCustomerDealSummaries(),
+  ]);
+
+  const summaryMap = new Map(
+    summaries.map((summary) => [summary.customer_id, summary])
+  );
+
+  return customers.map((customer) => ({
+    customer,
+    summary: summaryMap.get(customer.id) ?? null,
+  }));
 }
 
 export async function getCustomer(customerId: string): Promise<Customer | null> {
@@ -54,6 +89,26 @@ export async function getCustomerDealSummary(
 
   if (error) return null;
   return data as CustomerDealSummary;
+}
+
+export async function listCustomerDealSummaries(
+  partnerAccountId?: string
+): Promise<CustomerDealSummary[]> {
+  const supabase = createSupabaseAdminClient();
+
+  let query = supabase
+    .from("customer_deal_summary")
+    .select("*")
+    .order("last_deal_updated_at", { ascending: false, nullsFirst: false });
+
+  if (partnerAccountId) {
+    query = query.eq("partner_account_id", partnerAccountId);
+  }
+
+  const { data, error } = await query;
+
+  if (error) throw error;
+  return (data ?? []) as CustomerDealSummary[];
 }
 
 export async function listCustomerDealHistory(
@@ -128,4 +183,14 @@ export async function getCustomerDetail(
     recent_activity: recentActivity,
     recent_calendar_events: recentCalendarEvents,
   };
+}
+
+export async function getCustomerDetailForPartnerAccount(
+  customerId: string,
+  partnerAccountId: string
+): Promise<CustomerDetailPayload | null> {
+  const detail = await getCustomerDetail(customerId);
+  if (!detail) return null;
+  if (detail.customer.partner_account_id !== partnerAccountId) return null;
+  return detail;
 }

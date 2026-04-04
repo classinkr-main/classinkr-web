@@ -2,7 +2,7 @@
 
 import { useState } from "react"
 import { useRouter } from "next/navigation"
-import { createBrowserClient } from "@/lib/supabase/browser"
+import { createSupabaseBrowserClient } from "@/lib/supabase/browser"
 
 export default function PartnerLoginPage() {
   const router = useRouter()
@@ -18,12 +18,12 @@ export default function PartnerLoginPage() {
     setLoading(true)
     setError(null)
 
-    const supabase = createBrowserClient()
+    const supabase = createSupabaseBrowserClient()
 
     if (mode === "magic") {
       const { error } = await supabase.auth.signInWithOtp({
         email,
-        options: { emailRedirectTo: `${window.location.origin}/partner/dashboard` },
+        options: { emailRedirectTo: `${window.location.origin}/partner/workspace` },
       })
       if (error) setError(error.message)
       else setMagicSent(true)
@@ -34,7 +34,7 @@ export default function PartnerLoginPage() {
       } else if (data.user) {
         // status → active, last_login_at 갱신은 서버에서
         await fetch("/api/partner/session", { method: "POST" })
-        router.push("/partner/dashboard")
+        router.push("/partner/workspace")
       }
     }
     setLoading(false)
