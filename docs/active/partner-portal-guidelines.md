@@ -5,6 +5,13 @@
 이 문서는 `plan_1.md`의 초기 구상을 보완한 최신 기준 문서다.
 `plan_1.md`는 참고용으로 남기되, 파트너 운영과 파트너 포털의 제품 판단은 이 문서를 우선한다.
 
+현재 문서 체계:
+
+- 단일 진입 문서: [partner-portal-master-spec.md](C:/Projects/PUBLIC_Classin/Classin_Home_bae_v1/docs/active/partner-portal-master-spec.md)
+- 운영 규칙: 이 문서
+- 화면/UX: [partner-portal-product-plan.md](C:/Projects/PUBLIC_Classin/Classin_Home_bae_v1/docs/active/partner-portal-product-plan.md), [partner-portal-screen-layout.md](C:/Projects/PUBLIC_Classin/Classin_Home_bae_v1/docs/active/partner-portal-screen-layout.md)
+- 구현 순서: [partner-portal-implementation-roadmap.md](C:/Projects/PUBLIC_Classin/Classin_Home_bae_v1/docs/active/partner-portal-implementation-roadmap.md)
+
 ## 1. 제품 정의
 
 - 파트너 포털은 `파트너사 대표 1인`과 `ClassIn 팀`을 위한 상업 운영 도구다.
