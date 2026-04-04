@@ -20,9 +20,9 @@ import { Card, CardContent, CardHeader, CardTitle } from "@/components/ui/card"
 import { Tabs, TabsList, TabsTrigger } from "@/components/ui/tabs"
 import type {
   ContractDocumentBundle,
-  CustomerListItem,
   DealDetailPayload,
-  DealListItem,
+  PartnerDocumentListItem,
+  PartnerDocumentSummary,
   QuoteDocumentBundle,
   ReceiptRecord,
 } from "@/lib/partner-portal/types"
@@ -30,6 +30,13 @@ import type { PartnerReadMode } from "@/lib/partner-portal/repositories/partner-
 
 type HubSection = "all" | "quote" | "contract" | "receipt"
 type HubDocumentKind = "quote" | "contract" | "receipt"
+type DocumentsApiPayload = {
+  mode: PartnerReadMode
+  summary: PartnerDocumentSummary
+  documents: PartnerDocumentListItem[]
+  deals: Array<{ id: string }>
+  customers: Array<{ id: string }>
+}
 
 type HubDocument = {
   id: string
@@ -118,6 +125,19 @@ const DEMO_DOCUMENTS: HubDocument[] = [
     pdfUrl: "/demo/receipt.pdf",
   },
 ]
+
+const DEMO_PAYLOAD: DocumentsApiPayload = {
+  mode: "demo",
+  summary: {
+    all: DEMO_DOCUMENTS.length,
+    quote: DEMO_DOCUMENTS.filter((item) => item.kind === "quote").length,
+    contract: DEMO_DOCUMENTS.filter((item) => item.kind === "contract").length,
+    receipt: DEMO_DOCUMENTS.filter((item) => item.kind === "receipt").length,
+  },
+  documents: [],
+  deals: [],
+  customers: [],
+}
 
 function readJson<T>(url: string) {
   return fetch(url, { cache: "no-store" }).then(async (response) => {
@@ -258,6 +278,103 @@ function buildDocuments(details: DealDetailPayload[]) {
   return documents.sort((left, right) => new Date(right.updatedAt).getTime() - new Date(left.updatedAt).getTime())
 }
 
+function buildDocumentFromListItem(item: PartnerDocumentListItem): HubDocument {
+  const fallbackTitle =
+    item.kind === "quote"
+      ? "견적서"
+      : item.kind === "contract"
+        ? "계약서"
+        : "영수증"
+
+  return {
+    id: item.id,
+    kind: item.kind,
+    number: item.document_number,
+    title: fallbackTitle,
+    status: item.status,
+    updatedAt: item.updated_at,
+    customerName: item.customer_name ?? "기관 미지정",
+    customerId: item.customer_id,
+    dealId: item.deal_id,
+    dealTitle: item.deal_title,
+    dealCode: item.deal_id,
+    versionCount: item.version_count,
+    currentVersionLabel:
+      item.latest_version_number != null
+        ? `v${item.latest_version_number}`
+        : item.kind === "receipt"
+          ? formatMoney(item.total_amount)
+          : `${item.version_count}개 버전`,
+    totalAmount: item.total_amount ?? 0,
+    versions: [],
+    shares: [],
+    pdfUrl: item.pdf_url,
+  }
+}
+
+function hydrateDocumentFromDetail(
+  document: HubDocument,
+  detail: DealDetailPayload
+): HubDocument {
+  if (document.kind === "quote") {
+    const quote = detail.quote_documents.find((item) => item.id === document.id)
+    if (!quote) return document
+
+    const currentVersion =
+      quote.versions.find((version) => version.id === quote.current_version_id) ??
+      quote.versions[0]
+
+    return {
+      ...document,
+      title: currentVersion?.title ?? document.title,
+      status: quote.status,
+      updatedAt: quote.updated_at,
+      versionCount: quote.versions.length,
+      currentVersionLabel: latestVersionLabel("quote", quote.versions),
+      totalAmount: currentVersion?.total_amount ?? document.totalAmount,
+      versions: quote.versions,
+      shares: quote.shares,
+    }
+  }
+
+  if (document.kind === "contract") {
+    const contract = detail.contract_documents.find((item) => item.id === document.id)
+    if (!contract) return document
+
+    const currentVersion =
+      contract.versions.find(
+        (version) => version.id === contract.current_version_id
+      ) ?? contract.versions[0]
+
+    return {
+      ...document,
+      title: currentVersion?.title ?? document.title,
+      status: contract.status,
+      updatedAt: contract.updated_at,
+      versionCount: contract.versions.length,
+      currentVersionLabel: latestVersionLabel("contract", contract.versions),
+      totalAmount: currentVersion?.total_amount ?? document.totalAmount,
+      versions: contract.versions,
+      shares: contract.shares,
+    }
+  }
+
+  const receipt = detail.receipts.find((item) => item.id === document.id)
+  if (!receipt) return document
+
+  return {
+    ...document,
+    title: "영수증",
+    status: receipt.pdf_url ? "issued" : "draft",
+    updatedAt: receipt.updated_at,
+    versionCount: 1,
+    currentVersionLabel: formatMoney(receipt.total_amount),
+    totalAmount: receipt.total_amount,
+    pdfUrl: receipt.pdf_url,
+    receipt,
+  }
+}
+
 function getCopyableLink(document: HubDocument) {
   if (typeof window === "undefined") return ""
 
@@ -355,9 +472,11 @@ export default function PartnerDocumentsPage() {
   const router = useRouter()
   const [mode, setMode] = useState<PartnerReadMode>("demo")
   const [documents, setDocuments] = useState<HubDocument[]>(DEMO_DOCUMENTS)
+  const [summary, setSummary] = useState<PartnerDocumentSummary>(DEMO_PAYLOAD.summary)
   const [sourceDealCount, setSourceDealCount] = useState(0)
   const [section, setSection] = useState<HubSection>("all")
   const [selectedDocumentId, setSelectedDocumentId] = useState<string>(DEMO_DOCUMENTS[0].id)
+  const [hydratedDealIds, setHydratedDealIds] = useState<Record<string, true>>({})
   const [loading, setLoading] = useState(true)
   const [error, setError] = useState<string | null>(null)
 
@@ -369,8 +488,31 @@ export default function PartnerDocumentsPage() {
       setError(null)
 
       try {
-        const payload = await readJson<{ mode: PartnerReadMode; customers: CustomerListItem[]; deals: DealListItem[] }>("/api/partner/overview")
+        const payload = await readJson<DocumentsApiPayload>("/api/partner/documents")
         if (!alive) return
+
+        const hubDocuments =
+          payload.documents.length > 0
+            ? payload.documents.map(buildDocumentFromListItem)
+            : DEMO_DOCUMENTS
+        const nextDealCount = new Set(
+          hubDocuments.map((document) => document.dealId)
+        ).size
+
+        setMode(payload.mode ?? "demo")
+        setSummary(
+          payload.documents.length > 0 ? payload.summary : DEMO_PAYLOAD.summary
+        )
+        setSourceDealCount(nextDealCount)
+        setHydratedDealIds({})
+        setDocuments(hubDocuments)
+        setSelectedDocumentId(hubDocuments[0]?.id ?? "")
+
+        if (payload.documents.length === 0) {
+          setError("등록된 문서가 없어 demo 문서를 보여주고 있습니다.")
+        }
+
+        return
 
         setMode(payload.mode ?? "demo")
         setSourceDealCount(payload.deals.length)
@@ -389,10 +531,10 @@ export default function PartnerDocumentsPage() {
           .filter((result): result is PromiseFulfilledResult<DealDetailPayload> => result.status === "fulfilled")
           .map((result) => result.value)
 
-        const hubDocuments = buildDocuments(loadedDetails)
-        if (hubDocuments.length > 0) {
-          setDocuments(hubDocuments)
-          setSelectedDocumentId(hubDocuments[0].id)
+        const legacyHubDocuments = buildDocuments(loadedDetails)
+        if (legacyHubDocuments.length > 0) {
+          setDocuments(legacyHubDocuments)
+          setSelectedDocumentId(legacyHubDocuments[0].id)
         } else {
           setDocuments(DEMO_DOCUMENTS)
           setSelectedDocumentId(DEMO_DOCUMENTS[0].id)
@@ -402,7 +544,11 @@ export default function PartnerDocumentsPage() {
         if (!alive) return
 
         setMode("demo")
-        setSourceDealCount(0)
+        setSummary(DEMO_PAYLOAD.summary)
+        setSourceDealCount(
+          new Set(DEMO_DOCUMENTS.map((document) => document.dealId)).size
+        )
+        setHydratedDealIds({})
         setDocuments(DEMO_DOCUMENTS)
         setSelectedDocumentId(DEMO_DOCUMENTS[0].id)
         setError("문서 전용 API가 아직 없어 데모 문서로 전환했습니다.")
@@ -411,11 +557,57 @@ export default function PartnerDocumentsPage() {
       }
     }
 
-    void load()
+    const timer = setTimeout(() => {
+      void load()
+    }, 0)
+
+    return () => {
+      alive = false
+      clearTimeout(timer)
+    }
+  }, [])
+
+  useEffect(() => {
+    const selectedDocument =
+      documents.find((document) => document.id === selectedDocumentId) ?? null
+
+    if (!selectedDocument) return
+    const targetDealId = selectedDocument.dealId
+    if (hydratedDealIds[targetDealId]) return
+
+    let alive = true
+
+    async function hydrateSelectedDeal() {
+      try {
+        const response = await readJson<{ deal: DealDetailPayload }>(
+          `/api/partner/deals/${targetDealId}`
+        )
+        if (!alive) return
+
+        setDocuments((current) =>
+          current.map((document) =>
+            document.dealId === targetDealId
+              ? hydrateDocumentFromDetail(document, response.deal)
+              : document
+          )
+        )
+        setHydratedDealIds((current) => ({
+          ...current,
+          [targetDealId]: true,
+        }))
+      } catch (fetchError) {
+        if (alive) {
+          console.error("[partner/documents] hydrate deal", fetchError)
+        }
+      }
+    }
+
+    void hydrateSelectedDeal()
+
     return () => {
       alive = false
     }
-  }, [])
+  }, [documents, hydratedDealIds, selectedDocumentId])
 
   const visibleDocuments =
     section === "all"
@@ -426,6 +618,7 @@ export default function PartnerDocumentsPage() {
   const quoteCount = documents.filter((document) => document.kind === "quote").length
   const contractCount = documents.filter((document) => document.kind === "contract").length
   const receiptCount = documents.filter((document) => document.kind === "receipt").length
+  void summary
 
   return (
     <div className="min-h-screen bg-[#f5f5f2] text-[#1a1a1a]">
