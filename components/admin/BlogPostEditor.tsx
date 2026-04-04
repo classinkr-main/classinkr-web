@@ -217,7 +217,10 @@ export default function BlogPostEditor({
   const [templates, setTemplates] = useState<BlogTemplate[]>([])
   const [templateTab, setTemplateTab] = useState<"load" | "save">("load")
   const [templateName, setTemplateName] = useState("")
+  const [expandedTemplateId, setExpandedTemplateId] = useState<string | null>(null)
+  const [confirmDeleteTemplateId, setConfirmDeleteTemplateId] = useState<string | null>(null)
   const [slugEdited, setSlugEdited] = useState(Boolean(initialPost?.slug))
+  const [lastSavedAt, setLastSavedAt] = useState<Date | null>(null)
   const formRef = useRef(form)
   const tagsInputRef = useRef(tagsInput)
   const slugEditedRef = useRef(slugEdited)
@@ -362,7 +365,13 @@ export default function BlogPostEditor({
 
   useEffect(() => {
     const handleKeyDown = (event: KeyboardEvent) => {
-      if (!(event.metaKey || event.ctrlKey) || event.key.toLowerCase() !== "z") return
+      if (!(event.metaKey || event.ctrlKey)) return
+      if (event.key.toLowerCase() === "s") {
+        event.preventDefault()
+        handleSubmit()
+        return
+      }
+      if (event.key.toLowerCase() !== "z") return
       // Tiptap 에디터(contenteditable)에 포커스가 있을 때는 Tiptap이 자체 처리
       if ((event.target as HTMLElement).isContentEditable) return
       event.preventDefault()
@@ -371,7 +380,7 @@ export default function BlogPostEditor({
     }
     window.addEventListener("keydown", handleKeyDown)
     return () => window.removeEventListener("keydown", handleKeyDown)
-  }, [handleRedo, handleUndo])
+  }, [handleRedo, handleUndo]) // eslint-disable-line react-hooks/exhaustive-deps
 
   useEffect(() => {
     const rawDraft = localStorage.getItem(draftStorageKey)
@@ -397,6 +406,7 @@ export default function BlogPostEditor({
       setDraftState("saving")
       localStorage.setItem(draftStorageKey, JSON.stringify(form))
       setDraftState("saved")
+      setLastSavedAt(new Date())
     }, 700)
     return () => window.clearTimeout(timer)
   }, [draftStorageKey, form])
@@ -563,7 +573,7 @@ export default function BlogPostEditor({
               </div>
               <button
                 type="button"
-                onClick={() => { setShowTemplateModal(false); setTemplateName("") }}
+                onClick={() => { setShowTemplateModal(false); setTemplateName(""); setExpandedTemplateId(null); setConfirmDeleteTemplateId(null) }}
                 className="flex h-8 w-8 items-center justify-center rounded-xl border border-[#e8e8e4] text-[#1a1a1a]/40 hover:text-[#111110] transition-colors"
               >
                 <X className="h-4 w-4" />
@@ -648,61 +658,99 @@ export default function BlogPostEditor({
                   </div>
                 ) : (
                   <div className="space-y-2.5">
-                    {templates.map((t) => (
-                      <div
-                        key={t.id}
-                        className="rounded-2xl border border-[#e8e8e4] bg-[#fcfcfb] p-4"
-                      >
-                        <div className="flex items-start justify-between gap-3">
-                          <div className="min-w-0 flex-1">
-                            <p className="font-semibold text-[13px] text-[#111110]">{t.name}</p>
-                            <p className="mt-0.5 text-[11px] text-[#1a1a1a]/40">
-                              {new Date(t.savedAt).toLocaleDateString("ko-KR")}
-                              {t.data.category && ` · ${t.data.category}`}
-                            </p>
-                            {t.data.contentMarkdown && (
-                              <p className="mt-1.5 text-xs text-[#1a1a1a]/40 line-clamp-2">
-                                {t.data.contentMarkdown.slice(0, 60)}…
+                    {templates.map((t) => {
+                      const isExpanded = expandedTemplateId === t.id
+                      const isPendingDelete = confirmDeleteTemplateId === t.id
+                      return (
+                        <div
+                          key={t.id}
+                          className="rounded-2xl border border-[#e8e8e4] bg-[#fcfcfb] p-4 transition-colors"
+                        >
+                          <div className="flex items-start justify-between gap-3">
+                            <button
+                              type="button"
+                              onClick={() => setExpandedTemplateId(isExpanded ? null : t.id)}
+                              className="min-w-0 flex-1 text-left"
+                            >
+                              <p className="font-semibold text-[13px] text-[#111110]">{t.name}</p>
+                              <p className="mt-0.5 text-[11px] text-[#1a1a1a]/40">
+                                {new Date(t.savedAt).toLocaleDateString("ko-KR")}
+                                {t.data.category && ` · ${t.data.category}`}
                               </p>
-                            )}
-                          </div>
-                          <div className="flex items-center gap-1.5 shrink-0">
-                            <button
-                              type="button"
-                              onClick={() => {
-                                updateEditor((snapshot) => ({
-                                  ...snapshot,
-                                  form: {
-                                    ...snapshot.form,
-                                    contentMarkdown: t.data.contentMarkdown,
-                                    benefitItems: t.data.benefitItems,
-                                    targetReader: t.data.targetReader,
-                                    category: t.data.category,
-                                    cta: { ...t.data.cta },
-                                  },
-                                }))
-                                setShowTemplateModal(false)
-                                setNotice("템플릿을 불러왔습니다.")
-                              }}
-                              className="text-[12px] font-medium text-[#084734] hover:text-[#084734]/70 transition-colors"
-                            >
-                              불러오기
+                              {!isExpanded && t.data.contentMarkdown && (
+                                <p className="mt-1.5 text-xs text-[#1a1a1a]/40 line-clamp-1">
+                                  {t.data.contentMarkdown.replace(/#{1,6}\s|[*_`>-]/g, "").slice(0, 80)}…
+                                </p>
+                              )}
                             </button>
-                            <button
-                              type="button"
-                              onClick={() => {
-                                const next = templates.filter((item) => item.id !== t.id)
-                                setTemplates(next)
-                                localStorage.setItem(TEMPLATE_STORAGE_KEY, JSON.stringify(next))
-                              }}
-                              className="text-[#1a1a1a]/25 hover:text-red-500 transition-colors"
-                            >
-                              <X className="h-3.5 w-3.5" />
-                            </button>
+                            <div className="flex items-center gap-1.5 shrink-0">
+                              <button
+                                type="button"
+                                onClick={() => {
+                                  updateEditor((snapshot) => ({
+                                    ...snapshot,
+                                    form: {
+                                      ...snapshot.form,
+                                      contentMarkdown: t.data.contentMarkdown,
+                                      benefitItems: t.data.benefitItems,
+                                      targetReader: t.data.targetReader,
+                                      category: t.data.category,
+                                      cta: { ...t.data.cta },
+                                    },
+                                  }))
+                                  setShowTemplateModal(false)
+                                  setConfirmDeleteTemplateId(null)
+                                  setExpandedTemplateId(null)
+                                  setNotice("템플릿을 불러왔습니다.")
+                                }}
+                                className="text-[12px] font-medium text-[#084734] hover:text-[#084734]/70 transition-colors"
+                              >
+                                불러오기
+                              </button>
+                              {isPendingDelete ? (
+                                <div className="flex items-center gap-1">
+                                  <button
+                                    type="button"
+                                    onClick={() => {
+                                      const next = templates.filter((item) => item.id !== t.id)
+                                      setTemplates(next)
+                                      localStorage.setItem(TEMPLATE_STORAGE_KEY, JSON.stringify(next))
+                                      setConfirmDeleteTemplateId(null)
+                                    }}
+                                    className="text-[11px] font-medium text-red-500 hover:text-red-700 transition-colors"
+                                  >
+                                    삭제 확인
+                                  </button>
+                                  <button
+                                    type="button"
+                                    onClick={() => setConfirmDeleteTemplateId(null)}
+                                    className="text-[#1a1a1a]/30 hover:text-[#1a1a1a]/60 transition-colors"
+                                  >
+                                    <X className="h-3 w-3" />
+                                  </button>
+                                </div>
+                              ) : (
+                                <button
+                                  type="button"
+                                  onClick={() => setConfirmDeleteTemplateId(t.id)}
+                                  className="text-[#1a1a1a]/25 hover:text-red-400 transition-colors"
+                                >
+                                  <X className="h-3.5 w-3.5" />
+                                </button>
+                              )}
+                            </div>
                           </div>
+                          {isExpanded && t.data.contentMarkdown && (
+                            <div className="mt-3 rounded-xl border border-[#e8e8e4] bg-white px-4 py-3">
+                              <p className="text-[11px] font-medium uppercase tracking-wider text-[#1a1a1a]/30 mb-2">본문 미리보기</p>
+                              <pre className="whitespace-pre-wrap font-sans text-[12px] leading-6 text-[#1a1a1a]/55 line-clamp-6">
+                                {t.data.contentMarkdown.slice(0, 400)}{t.data.contentMarkdown.length > 400 ? "…" : ""}
+                              </pre>
+                            </div>
+                          )}
                         </div>
-                      </div>
-                    ))}
+                      )
+                    })}
                   </div>
                 )
               )}
@@ -1026,7 +1074,11 @@ export default function BlogPostEditor({
                 draftState === "saving" ? "border-[#e8e8e4] bg-white text-[#1a1a1a]/40" :
                 "border-emerald-100 bg-emerald-50 text-emerald-600"
               }`}>
-                {draftState === "dirty" ? "수정됨" : draftState === "saving" ? "저장 중…" : "자동저장됨"}
+                {draftState === "dirty" ? "수정됨" :
+                 draftState === "saving" ? "저장 중…" :
+                 lastSavedAt
+                   ? `${lastSavedAt.getHours().toString().padStart(2, "0")}:${lastSavedAt.getMinutes().toString().padStart(2, "0")} 저장됨`
+                   : "자동저장됨"}
               </span>
               <span className="rounded-full border border-[#e8e8e4] bg-white px-2.5 py-1 text-[11px] text-[#1a1a1a]/40">
                 {computedReadTime}
@@ -1053,21 +1105,26 @@ export default function BlogPostEditor({
             >
               <Redo2 className="h-4 w-4" />
             </Button>
-            <Button variant="ghost" size="sm" onClick={() => setShowTemplateModal(true)} title="템플릿" className="h-8 w-8 p-0">
+            <Button variant="ghost" size="sm" onClick={() => setShowTemplateModal(true)} title="템플릿" className="relative h-8 w-8 p-0">
               <LayoutTemplate className="h-3.5 w-3.5" />
+              {templates.length > 0 && (
+                <span className="absolute -right-0.5 -top-0.5 flex h-3.5 w-3.5 items-center justify-center rounded-full bg-[#084734] text-[9px] font-bold text-white leading-none">
+                  {templates.length}
+                </span>
+              )}
             </Button>
             <div className="mx-1.5 h-4 w-px bg-[#e8e8e4]" />
             <Button variant="ghost" size="sm" onClick={() => setShowPreview(true)}>
               <Eye className="mr-1.5 h-3.5 w-3.5" />
               미리보기
             </Button>
-            <Button variant="outline" size="sm" onClick={() => handleSubmit()} disabled={isSubmitting}>
-              <Save className="mr-1.5 h-3.5 w-3.5" />
+            <Button variant="outline" size="sm" onClick={() => handleSubmit()} disabled={isSubmitting} title="저장 (Ctrl/Cmd + S)">
+              {isSubmitting ? <Loader2 className="mr-1.5 h-3.5 w-3.5 animate-spin" /> : <Save className="mr-1.5 h-3.5 w-3.5" />}
               저장
             </Button>
             <Button size="sm" onClick={() => handleSubmit("published")} disabled={isSubmitting}
               className="bg-[#084734] hover:bg-[#084734]/90 text-white active:scale-[0.97] transition-all duration-75">
-              <Sparkles className="mr-1.5 h-3.5 w-3.5" />
+              {isSubmitting ? <Loader2 className="mr-1.5 h-3.5 w-3.5 animate-spin" /> : <Sparkles className="mr-1.5 h-3.5 w-3.5" />}
               발행
             </Button>
           </div>
@@ -1204,16 +1261,23 @@ export default function BlogPostEditor({
                   Markdown 기반 · 상세 페이지에 동일하게 렌더링됩니다
                 </p>
               </div>
-              <div className="flex flex-wrap gap-1.5">
+              <div className="flex flex-wrap items-center gap-1.5">
+                {/* 헤딩 */}
                 <ToolbarButton onClick={() => editorRef.current?.setHeading(2)}>H2</ToolbarButton>
                 <ToolbarButton onClick={() => editorRef.current?.setHeading(3)}>H3</ToolbarButton>
+                <span className="h-4 w-px bg-[#e8e8e4] mx-0.5" aria-hidden="true" />
+                {/* 인라인 서식 */}
                 <ToolbarButton onClick={() => editorRef.current?.toggleBold()} icon={<Type className="h-3 w-3" />}>굵게</ToolbarButton>
                 <ToolbarButton onClick={() => editorRef.current?.toggleItalic()} icon={<Italic className="h-3 w-3" />}>기울이기</ToolbarButton>
+                <ToolbarButton onClick={() => editorRef.current?.toggleHighlight()} icon={<Highlighter className="h-3 w-3" />}>강조색</ToolbarButton>
+                <ToolbarButton onClick={() => editorRef.current?.wrapBrandColor()} icon={<Sparkles className="h-3 w-3" />}>브랜드색</ToolbarButton>
+                <span className="h-4 w-px bg-[#e8e8e4] mx-0.5" aria-hidden="true" />
+                {/* 블록 */}
                 <ToolbarButton onClick={() => editorRef.current?.toggleBlockquote()} icon={<Quote className="h-3 w-3" />}>인용</ToolbarButton>
                 <ToolbarButton onClick={() => editorRef.current?.toggleBulletList()} icon={<List className="h-3 w-3" />}>리스트</ToolbarButton>
                 <ToolbarButton onClick={() => editorRef.current?.toggleOrderedList()} icon={<ListOrdered className="h-3 w-3" />}>번호</ToolbarButton>
-                <ToolbarButton onClick={() => editorRef.current?.toggleHighlight()} icon={<Highlighter className="h-3 w-3" />}>강조색</ToolbarButton>
-                <ToolbarButton onClick={() => editorRef.current?.wrapBrandColor()} icon={<Sparkles className="h-3 w-3" />}>브랜드색</ToolbarButton>
+                <span className="h-4 w-px bg-[#e8e8e4] mx-0.5" aria-hidden="true" />
+                {/* 삽입 */}
                 <ToolbarButton onClick={() => editorRef.current?.insertLink()} icon={<Link2 className="h-3 w-3" />}>링크</ToolbarButton>
                 <ToolbarButton onClick={() => editorRef.current?.insertImage()} icon={<ImageIcon className="h-3 w-3" />}>이미지</ToolbarButton>
                 <ToolbarButton onClick={() => editorRef.current?.insertDivider()} icon={<Minus className="h-3 w-3" />}>구분선</ToolbarButton>
