@@ -1,6 +1,6 @@
 "use client"
 
-import { startTransition, useEffect, useState } from "react"
+import React, { startTransition, useEffect, useState } from "react"
 import { useRouter } from "next/navigation"
 import {
   Activity,
@@ -19,6 +19,7 @@ import {
 import { Badge } from "@/components/ui/badge"
 import { Card, CardContent, CardHeader, CardTitle } from "@/components/ui/card"
 import { Tabs, TabsContent, TabsList, TabsTrigger } from "@/components/ui/tabs"
+import { PortalNav } from "@/components/partner-portal/PortalNav"
 import type {
   CalendarEvent,
   CustomerListItem,
@@ -27,6 +28,8 @@ import type {
 } from "@/lib/partner-portal/types"
 import type { PartnerReadMode } from "@/lib/partner-portal/repositories/partner-read"
 
+// ─── Types ───────────────────────────────────────────────────────────────────
+
 type WorkspaceOverview = {
   mode: PartnerReadMode
   metrics: { customer_count: number; active_deal_count: number; outstanding_amount: number }
@@ -34,6 +37,8 @@ type WorkspaceOverview = {
   deals: DealListItem[]
   recent_calendar_events: CalendarEvent[]
 }
+
+// ─── Demo Data ────────────────────────────────────────────────────────────────
 
 const DEMO_OVERVIEW: WorkspaceOverview = {
   mode: "demo",
@@ -235,6 +240,23 @@ const DEMO_DETAIL: DealDetailPayload = {
   calendar_events: DEMO_OVERVIEW.recent_calendar_events,
 }
 
+// ─── Design System ────────────────────────────────────────────────────────────
+
+const STAGE_COLORS: Record<string, { color: string; dot: string; ring: string }> = {
+  contact:      { color: "bg-slate-100 text-slate-600",    dot: "bg-slate-400",   ring: "ring-slate-200"   },
+  quote:        { color: "bg-blue-50 text-blue-600",       dot: "bg-blue-500",    ring: "ring-blue-200"    },
+  contract:     { color: "bg-violet-50 text-violet-600",   dot: "bg-violet-500",  ring: "ring-violet-200"  },
+  confirmed:    { color: "bg-violet-50 text-violet-600",   dot: "bg-violet-500",  ring: "ring-violet-200"  },
+  installation: { color: "bg-amber-50 text-amber-700",     dot: "bg-amber-500",   ring: "ring-amber-200"   },
+  payment:      { color: "bg-emerald-50 text-emerald-700", dot: "bg-emerald-500", ring: "ring-emerald-200" },
+  closed:       { color: "bg-emerald-50 text-emerald-700", dot: "bg-emerald-500", ring: "ring-emerald-200" },
+  cancelled:    { color: "bg-red-50 text-red-400",         dot: "bg-red-300",     ring: "ring-red-100"     },
+}
+
+const STAGE_ORDER_PORTAL = ["contact", "quote", "contract", "confirmed", "installation", "payment"] as const
+
+// ─── Utility Functions ────────────────────────────────────────────────────────
+
 function formatMoney(value: number | null | undefined) {
   if (value == null) return "-"
   return `${value.toLocaleString("ko-KR")}원`
@@ -262,12 +284,184 @@ function stageLabel(stage: DealListItem["current_stage"]) {
   }[stage]
 }
 
+function fmtM(n: number | null | undefined): string {
+  if (n == null) return "-"
+  if (n >= 100_000_000) return `${(n / 100_000_000).toFixed(1)}억`
+  if (n >= 10_000) return `${Math.round(n / 10_000)}만`
+  return n.toLocaleString()
+}
+
+function getDday(dateStr: string | null | undefined): string | null {
+  if (!dateStr) return null
+  const target = new Date(dateStr)
+  const today = new Date()
+  today.setHours(0, 0, 0, 0)
+  target.setHours(0, 0, 0, 0)
+  const diff = Math.round((target.getTime() - today.getTime()) / (1000 * 60 * 60 * 24))
+  if (diff === 0) return "D-day"
+  if (diff > 0) return `D-${diff}`
+  return `D+${Math.abs(diff)}`
+}
+
 async function readJson<T>(url: string): Promise<T> {
   const response = await fetch(url)
   const payload = (await response.json()) as T & { error?: string }
   if (!response.ok) throw new Error(payload.error ?? "Failed to fetch")
   return payload
 }
+
+// ─── Sub-Components ───────────────────────────────────────────────────────────
+
+function StageRoadmapBar({ stage }: { stage: string }) {
+  if (stage === "cancelled") return (
+    <div className="flex items-center gap-2">
+      <span className="w-2 h-2 rounded-full bg-red-300" />
+      <span className="text-xs text-red-400">취소됨</span>
+    </div>
+  )
+  const activeIdx = STAGE_ORDER_PORTAL.indexOf(stage as typeof STAGE_ORDER_PORTAL[number])
+  return (
+    <div className="flex items-center gap-0">
+      {STAGE_ORDER_PORTAL.map((s, i) => {
+        const stg = STAGE_COLORS[s]
+        const isPast   = i < activeIdx
+        const isActive = i === activeIdx
+        const isFuture = i > activeIdx
+        return (
+          <React.Fragment key={s}>
+            <div className="flex flex-col items-center gap-1">
+              <div className={[
+                "rounded-full transition-colors duration-200",
+                isActive ? `w-3.5 h-3.5 ${stg.dot} ring-2 ${stg.ring}` : "",
+                isPast   ? `w-2.5 h-2.5 ${stg.dot}` : "",
+                isFuture ? "w-2.5 h-2.5 bg-white border-2 border-[#d8d8d4]" : "",
+              ].filter(Boolean).join(" ")} />
+              <span className={`text-[9px] leading-none whitespace-nowrap ${isActive ? "font-semibold text-[#1a1a1a]" : isPast ? "text-[#1a1a1a]/40" : "text-[#1a1a1a]/25"}`}>
+                {stageLabel(s)}
+              </span>
+            </div>
+            {i < STAGE_ORDER_PORTAL.length - 1 && (
+              <div className={`h-px flex-1 min-w-[10px] mb-3.5 transition-colors duration-200 ${i < activeIdx ? stg.dot : "bg-[#e0e0dc]"}`} />
+            )}
+          </React.Fragment>
+        )
+      })}
+    </div>
+  )
+}
+
+function FinancialSummary({
+  contracted,
+  paid,
+  outstanding,
+}: {
+  contracted?: number | null
+  paid?: number | null
+  outstanding?: number | null
+}) {
+  if (!contracted) return null
+  const hasOutstanding = (outstanding ?? 0) > 0
+  return (
+    <div className="grid grid-cols-3 gap-2">
+      <div className="bg-[#f7f7f5] rounded-xl px-3 py-2.5">
+        <p className="text-[10px] text-[#1a1a1a]/40 uppercase tracking-wider mb-0.5">계약</p>
+        <p className="text-sm font-bold text-[#1a1a1a]">{fmtM(contracted)}원</p>
+      </div>
+      <div className="bg-emerald-50 rounded-xl px-3 py-2.5">
+        <p className="text-[10px] text-emerald-600/70 uppercase tracking-wider mb-0.5">납입</p>
+        <p className="text-sm font-bold text-emerald-700">{fmtM(paid)}원</p>
+      </div>
+      <div className={`rounded-xl px-3 py-2.5 ${hasOutstanding ? "bg-red-50" : "bg-emerald-50"}`}>
+        <p className={`text-[10px] uppercase tracking-wider mb-0.5 ${hasOutstanding ? "text-red-500/70" : "text-emerald-600/70"}`}>미수금</p>
+        <p className={`text-sm font-bold ${hasOutstanding ? "text-red-600" : "text-emerald-700"}`}>{fmtM(outstanding)}원</p>
+      </div>
+    </div>
+  )
+}
+
+function Chip({ icon, label }: { icon: React.ReactNode; label: string }) {
+  return (
+    <span className="inline-flex items-center gap-1.5 rounded-full border border-[#e8e8e4] bg-[#f7f7f5] px-3 py-1">
+      {icon}
+      {label}
+    </span>
+  )
+}
+
+function MiniStat({ label, value, danger }: { label: string; value: string; danger?: boolean }) {
+  return (
+    <div className={`rounded-xl px-3 py-2 ${danger ? "bg-red-50" : "bg-[#f7f7f5]"}`}>
+      <p className={`text-[11px] ${danger ? "text-red-400" : "text-[#1a1a1a]/35"}`}>{label}</p>
+      <p className={`mt-1 text-xs font-semibold ${danger ? "text-red-600" : "text-[#1a1a1a]"}`}>{value}</p>
+    </div>
+  )
+}
+
+function InfoCard({ icon, label, value }: { icon: React.ReactNode; label: string; value: string }) {
+  return (
+    <div className="rounded-xl border border-[#e8e8e4] bg-[#f7f7f5] p-4">
+      <div className="flex items-center gap-2 text-[#1a1a1a]/45">
+        {icon}
+        <span className="text-xs font-medium">{label}</span>
+      </div>
+      <p className="mt-2 text-lg font-semibold text-[#1a1a1a]">{value}</p>
+    </div>
+  )
+}
+
+function SectionBox({
+  icon,
+  title,
+  children,
+}: {
+  icon: React.ReactNode
+  title: string
+  children: React.ReactNode
+}) {
+  return (
+    <div className="rounded-xl border border-[#e8e8e4] bg-white p-4">
+      <div className="flex items-center gap-2 text-sm font-semibold text-[#1a1a1a]">
+        {icon}
+        {title}
+      </div>
+      <div className="mt-3 space-y-3">{children}</div>
+    </div>
+  )
+}
+
+function ActionLine({ text }: { text: string }) {
+  return (
+    <div className="flex items-center gap-2 rounded-xl bg-[#f7f7f5] px-3 py-2 text-sm text-[#1a1a1a]/65">
+      <Sparkles className="h-4 w-4 text-[#1a1a1a]/30" />
+      {text}
+    </div>
+  )
+}
+
+function DocRow({ label, meta, detail }: { label: string; meta: string; detail: string }) {
+  return (
+    <div className="rounded-xl border border-[#e8e8e4] bg-white p-4">
+      <div className="flex items-start justify-between gap-3">
+        <div>
+          <p className="text-sm font-semibold text-[#1a1a1a]">{label}</p>
+          <p className="mt-1 text-xs text-[#1a1a1a]/50">{meta}</p>
+        </div>
+        <ArrowRight className="h-4 w-4 text-[#1a1a1a]/25" />
+      </div>
+      <p className="mt-3 text-sm text-[#1a1a1a]/65">{detail}</p>
+    </div>
+  )
+}
+
+function EmptyText({ text }: { text: string }) {
+  return (
+    <p className="rounded-xl border border-dashed border-[#e0e0dc] bg-white px-4 py-8 text-center text-sm text-[#1a1a1a]/45">
+      {text}
+    </p>
+  )
+}
+
+// ─── Page ─────────────────────────────────────────────────────────────────────
 
 export default function PartnerWorkspacePage() {
   const router = useRouter()
@@ -345,77 +539,84 @@ export default function PartnerWorkspacePage() {
 
   if (loading) {
     return (
-      <div className="min-h-screen bg-[#f5f2ea] px-6 py-10">
-        <div className="mx-auto max-w-5xl rounded-3xl border border-[#e6e0d4] bg-white/80 p-8 shadow-[0_18px_40px_rgba(31,24,15,0.06)]">
-          <p className="text-sm text-[#1a1a1a]/60">파트너 워크스페이스를 불러오는 중입니다.</p>
+      <div className="min-h-screen bg-[#f5f5f2] px-6 py-10">
+        <div className="mx-auto max-w-5xl rounded-xl border border-[#e8e8e4] bg-white p-8">
+          <div className="space-y-2">
+            <div className="h-16 rounded-xl bg-[#f0f0ec] animate-pulse" />
+            <div className="h-16 rounded-xl bg-[#f0f0ec] animate-pulse" />
+            <div className="h-16 rounded-xl bg-[#f0f0ec] animate-pulse" />
+          </div>
         </div>
       </div>
     )
   }
 
   return (
-    <div className="min-h-screen bg-[#f5f2ea] text-[#111110]">
-      <div className="absolute inset-0 -z-10 overflow-hidden">
-        <div className="absolute -left-24 top-0 h-72 w-72 rounded-full bg-[#d8e8df]/60 blur-3xl" />
-        <div className="absolute right-0 top-24 h-96 w-96 rounded-full bg-[#efe1c8]/60 blur-3xl" />
-      </div>
-
+    <div className="min-h-screen bg-[#f5f5f2] text-[#1a1a1a]">
       <div className="mx-auto max-w-[1600px] px-5 py-6 lg:px-8">
-        <Card className="border-[#e6e0d4] bg-white/85 shadow-[0_18px_40px_rgba(31,24,15,0.08)] backdrop-blur">
+        {/* Header Card */}
+        <Card className="border-[#e8e8e4] bg-white shadow-none">
           <CardContent className="flex flex-col gap-4 p-5 lg:flex-row lg:items-end lg:justify-between">
             <div className="max-w-3xl">
               <div className="flex flex-wrap items-center gap-2">
-                <Badge variant="outline" className="border-[#111110]/15 bg-[#111110] text-white">
+                <Badge variant="outline" className="border-[#1a1a1a]/15 bg-[#1a1a1a] text-white">
                   {mode === "demo" ? "DEMO" : "LIVE"}
                 </Badge>
-                <Badge variant="outline" className="border-[#111110]/10 bg-white text-[#111110]/70">
+                <Badge variant="outline" className="border-[#e8e8e4] bg-white text-[#1a1a1a]/50">
                   Partner Workspace
                 </Badge>
               </div>
-              <h1 className="mt-3 text-3xl font-semibold tracking-tight lg:text-4xl">
+              <h1 className="mt-3 text-3xl font-semibold tracking-tight lg:text-4xl text-[#1a1a1a]">
                 거래 중심 파트너 워크스페이스
               </h1>
-              <p className="mt-2 max-w-2xl text-sm leading-6 text-[#1a1a1a]/60">
+              <p className="mt-2 max-w-2xl text-sm leading-6 text-[#1a1a1a]/50">
                 기관 목록, 거래 상세, 문서, 설치, 수납, 활동을 하나의 셸에서 묶어 보는 진입점입니다.
               </p>
-              <div className="mt-4 flex flex-wrap gap-2 text-xs text-[#1a1a1a]/55">
+              <div className="mt-4 flex flex-wrap gap-2 text-xs text-[#1a1a1a]/50">
                 <Chip icon={<Users className="h-3.5 w-3.5" />} label={`기관 ${overview.metrics.customer_count}개`} />
                 <Chip icon={<Layers3 className="h-3.5 w-3.5" />} label={`진행 거래 ${overview.metrics.active_deal_count}건`} />
                 <Chip icon={<CircleDollarSign className="h-3.5 w-3.5" />} label={`미수금 ${formatMoney(overview.metrics.outstanding_amount)}`} />
               </div>
             </div>
-            <div className="flex flex-wrap gap-2">
-              <div className="inline-flex items-center gap-2 rounded-full border border-[#111110] bg-[#111110] px-4 py-2 text-sm font-medium text-white">
-                새 워크스페이스 기본 진입
-                <ArrowRight className="h-4 w-4" />
+            <div className="space-y-3">
+              <PortalNav />
+              <div className="flex flex-wrap justify-end gap-2">
+                <div className="inline-flex items-center gap-2 rounded-xl border border-[#e8e8e4] bg-[#f7f7f5] px-4 py-2.5 text-sm text-[#1a1a1a]/60">
+                  <ArrowRight className="h-4 w-4" />
+                  관리자와 같은 일정 원본으로 연결됩니다
+                </div>
+                <button
+                  type="button"
+                  onClick={() => router.refresh()}
+                  className="inline-flex items-center gap-2 rounded-xl border border-[#e8e8e4] bg-white px-4 py-2.5 text-sm font-medium text-[#1a1a1a] hover:bg-[#f7f7f5] active:scale-[0.98] transition-transform duration-75"
+                >
+                  새로고침
+                  <RefreshCw className="h-4 w-4" />
+                </button>
               </div>
-              <button
-                type="button"
-                onClick={() => router.refresh()}
-                className="inline-flex items-center gap-2 rounded-full border border-[#e7e7e2] bg-white px-4 py-2 text-sm font-medium text-[#111110] transition-colors hover:border-[#111110]/30"
-              >
-                새로고침
-                <RefreshCw className="h-4 w-4" />
-              </button>
             </div>
           </CardContent>
         </Card>
 
         {error && (
-          <div className="mt-4 rounded-2xl border border-amber-200 bg-amber-50 px-4 py-3 text-sm text-amber-800">
+          <div className="mt-4 rounded-xl border border-amber-200 bg-amber-50 px-4 py-3 text-sm text-amber-800">
             {error}
           </div>
         )}
 
+        {/* 3-Column Layout */}
         <div className="mt-6 grid gap-6 xl:grid-cols-[360px_minmax(0,1fr)_320px]">
-          <Card className="border-[#e6e0d4] bg-white/90 shadow-[0_18px_40px_rgba(31,24,15,0.06)]">
+
+          {/* ── Left: Customer List ── */}
+          <Card className="border-[#e8e8e4] bg-white shadow-none">
             <CardHeader className="pb-3">
-              <CardTitle className="text-base">기관 / 거래 목록</CardTitle>
+              <CardTitle className="text-[10px] uppercase tracking-wider text-[#1a1a1a]/40 font-semibold">기관 / 거래 목록</CardTitle>
             </CardHeader>
             <CardContent className="space-y-3">
               {overview.customers.map((item) => {
                 const isSelected = item.customer.id === selectedCustomer?.customer.id
                 const customerDeals = overview.deals.filter((deal) => deal.customer_id === item.customer.id)
+                const hasOutstanding = (item.summary?.outstanding_amount ?? 0) > 0
                 return (
                   <button
                     key={item.customer.id}
@@ -426,35 +627,85 @@ export default function PartnerWorkspacePage() {
                         setSelectedDealId(customerDeals[0]?.id ?? overview.deals[0]?.id ?? "")
                       })
                     }
-                    className={`w-full rounded-2xl border px-4 py-4 text-left transition-colors ${
+                    className={`w-full rounded-xl border px-4 py-4 text-left transition-colors duration-150 ${
                       isSelected
-                        ? "border-[#111110] bg-[#111110] text-white"
-                        : "border-[#ece8dc] bg-[#fbf9f3] hover:border-[#111110]/20"
+                        ? "border-[#1a1a1a] bg-[#fafafa] ring-1 ring-[#1a1a1a]/10"
+                        : "border-[#e8e8e4] bg-white hover:bg-[#fafaf8] hover:border-[#cccccc]"
                     }`}
                   >
                     <div className="flex items-start justify-between gap-3">
-                      <div className="min-w-0">
-                        <p className="truncate text-sm font-semibold">{item.customer.name}</p>
-                        <p className={`mt-1 text-xs ${isSelected ? "text-white/65" : "text-[#1a1a1a]/50"}`}>
+                      <div className="min-w-0 flex-1">
+                        <p className="truncate text-sm font-semibold text-[#1a1a1a]">{item.customer.name}</p>
+                        <p className="mt-1 text-xs text-[#1a1a1a]/50">
                           {item.customer.region_label ?? "지역 미지정"}
                           {item.customer.campus_name ? ` · ${item.customer.campus_name}` : ""}
                         </p>
                       </div>
-                      <ArrowRight className={`h-4 w-4 ${isSelected ? "text-white/80" : "text-[#1a1a1a]/25"}`} />
+                      <div className="flex items-center gap-1.5 shrink-0">
+                        {hasOutstanding && (
+                          <span className="w-1.5 h-1.5 rounded-full bg-red-400" />
+                        )}
+                        <ArrowRight className="h-4 w-4 text-[#1a1a1a]/25" />
+                      </div>
                     </div>
-                    <div className="mt-4 grid grid-cols-2 gap-2">
-                      <MiniStat label="거래" value={`${customerDeals.length}건`} inverted={isSelected} />
-                      <MiniStat label="미수금" value={formatMoney(item.summary?.outstanding_amount ?? 0)} inverted={isSelected} />
+                    <div className="mt-3 grid grid-cols-2 gap-2">
+                      <MiniStat label="거래" value={`${customerDeals.length}건`} />
+                      <MiniStat label="미수금" value={formatMoney(item.summary?.outstanding_amount ?? 0)} danger={(item.summary?.outstanding_amount ?? 0) > 0} />
                     </div>
+                    {/* Deal list under customer */}
+                    {isSelected && customerDeals.length > 0 && (
+                      <div className="mt-3 space-y-1.5">
+                        {customerDeals.map((deal) => {
+                          const stg = STAGE_COLORS[deal.current_stage] ?? STAGE_COLORS.contact
+                          const isActiveDeal = deal.id === selectedDealId
+                          const showDday = (deal.current_stage === "installation" || deal.current_stage === "confirmed") && deal.starts_at
+                          const dday = showDday ? getDday(deal.starts_at) : null
+                          return (
+                            <button
+                              key={deal.id}
+                              type="button"
+                              onClick={(e) => {
+                                e.stopPropagation()
+                                startTransition(() => setSelectedDealId(deal.id))
+                              }}
+                              className={`w-full rounded-lg border px-3 py-2.5 text-left transition-colors duration-150 ${
+                                isActiveDeal
+                                  ? "border-[#1a1a1a] bg-white ring-2 ring-[#1a1a1a] ring-offset-1"
+                                  : "border-[#ededea] bg-[#f7f7f5] hover:border-[#cccccc] hover:bg-white"
+                              }`}
+                            >
+                              <div className="flex items-center justify-between gap-2">
+                                <div className="flex items-center gap-2 min-w-0">
+                                  <span className={`w-2 h-2 rounded-full shrink-0 ${stg.dot}`} />
+                                  <span className="text-xs font-medium text-[#1a1a1a] truncate">{deal.title}</span>
+                                </div>
+                                <div className="flex items-center gap-1.5 shrink-0">
+                                  {dday && (
+                                    <span className="text-[10px] text-amber-600 font-semibold">{dday}</span>
+                                  )}
+                                  <span className={`text-[10px] rounded-full px-1.5 py-0.5 transition-colors duration-200 ${stg.color}`}>
+                                    {stageLabel(deal.current_stage)}
+                                  </span>
+                                </div>
+                              </div>
+                              {deal.contracted_amount != null && (
+                                <p className="mt-1 text-[11px] text-[#1a1a1a]/40 pl-4">{fmtM(deal.contracted_amount)}원</p>
+                              )}
+                            </button>
+                          )
+                        })}
+                      </div>
+                    )}
                   </button>
                 )
               })}
             </CardContent>
           </Card>
 
-          <Card className="border-[#e6e0d4] bg-white/90 shadow-[0_18px_40px_rgba(31,24,15,0.06)]">
+          {/* ── Center: Deal Workspace ── */}
+          <Card className="border-[#e8e8e4] bg-white shadow-none">
             <CardHeader className="pb-3">
-              <CardTitle className="text-base">거래 워크스페이스</CardTitle>
+              <CardTitle className="text-[10px] uppercase tracking-wider text-[#1a1a1a]/40 font-semibold">거래 워크스페이스</CardTitle>
             </CardHeader>
             <CardContent>
               {!selectedDeal ? (
@@ -462,36 +713,36 @@ export default function PartnerWorkspacePage() {
               ) : (
                 <Tabs defaultValue="overview" className="space-y-5">
                   <div className="flex flex-wrap items-center justify-between gap-3">
-                    <TabsList className="h-auto bg-[#f4f1ea] p-1">
-                      <TabsTrigger value="overview">개요</TabsTrigger>
-                      <TabsTrigger value="documents">문서</TabsTrigger>
-                      <TabsTrigger value="install">설치</TabsTrigger>
-                      <TabsTrigger value="payments">수납</TabsTrigger>
-                      <TabsTrigger value="activity">활동</TabsTrigger>
+                    <TabsList className="h-auto rounded-full bg-[#f0f0ec] p-1 gap-0.5">
+                      <TabsTrigger value="overview" className="rounded-full text-xs px-3 py-1.5">개요</TabsTrigger>
+                      <TabsTrigger value="documents" className="rounded-full text-xs px-3 py-1.5">문서</TabsTrigger>
+                      <TabsTrigger value="install" className="rounded-full text-xs px-3 py-1.5">설치</TabsTrigger>
+                      <TabsTrigger value="payments" className="rounded-full text-xs px-3 py-1.5">수납</TabsTrigger>
+                      <TabsTrigger value="activity" className="rounded-full text-xs px-3 py-1.5">활동</TabsTrigger>
                     </TabsList>
-                    <Badge variant="outline" className="border-[#111110]/10 bg-white text-[#111110]/70">
-                      {selectedDeal.payment_status}
-                    </Badge>
+                    <span className={`text-[10px] rounded-full px-2.5 py-1 font-medium transition-colors duration-200 ${STAGE_COLORS[selectedDeal.current_stage]?.color ?? "bg-slate-100 text-slate-600"}`}>
+                      {stageLabel(selectedDeal.current_stage)}
+                    </span>
                   </div>
 
-                  <TabsContent value="overview" className="mt-0 space-y-4">
-                    <div className="rounded-3xl border border-[#ece8dc] bg-[#fbf9f3] p-5">
-                      <div className="flex flex-wrap items-start justify-between gap-4">
-                        <div>
-                          <p className="text-xs font-semibold uppercase tracking-[0.22em] text-[#1a1a1a]/35">
-                            {stageLabel(selectedDeal.current_stage)}
-                          </p>
-                          <h3 className="mt-2 text-2xl font-semibold tracking-tight">{selectedDeal.title}</h3>
-                          <p className="mt-2 text-sm text-[#1a1a1a]/55">
-                            {selectedDeal.customer_name ?? selectedCustomer?.customer.name ?? "-"} · {selectedDeal.deal_code}
-                          </p>
-                        </div>
-                        <div className="grid grid-cols-2 gap-3">
-                          <InfoChip label="계약" value={formatMoney(selectedDeal.contracted_amount)} />
-                          <InfoChip label="미수금" value={formatMoney(selectedDeal.outstanding_amount)} />
-                          <InfoChip label="설치 완료" value={formatMoney(selectedDeal.installed_amount)} />
-                          <InfoChip label="실수납" value={formatMoney(selectedDeal.paid_amount)} />
-                        </div>
+                  <TabsContent value="overview" className="mt-0 space-y-4 transition-opacity duration-150">
+                    {/* Stage Roadmap */}
+                    <div className="rounded-xl border border-[#e8e8e4] bg-[#f7f7f5] px-5 py-4">
+                      <StageRoadmapBar stage={selectedDeal.current_stage} />
+                    </div>
+
+                    {/* Deal Header */}
+                    <div className="rounded-xl border border-[#e8e8e4] bg-white p-5">
+                      <p className="text-[10px] font-semibold uppercase tracking-wider text-[#1a1a1a]/40">
+                        {selectedDeal.customer_name ?? selectedCustomer?.customer.name ?? "-"} · {selectedDeal.deal_code}
+                      </p>
+                      <h3 className="mt-2 text-xl font-semibold tracking-tight text-[#1a1a1a]">{selectedDeal.title}</h3>
+                      <div className="mt-4">
+                        <FinancialSummary
+                          contracted={selectedDeal.contracted_amount}
+                          paid={selectedDeal.paid_amount}
+                          outstanding={selectedDeal.outstanding_amount}
+                        />
                       </div>
                     </div>
 
@@ -503,7 +754,7 @@ export default function PartnerWorkspacePage() {
                     </SectionBox>
                   </TabsContent>
 
-                  <TabsContent value="documents" className="mt-0 space-y-4">
+                  <TabsContent value="documents" className="mt-0 space-y-4 transition-opacity duration-150">
                     <SectionBox icon={<FileText className="h-4 w-4" />} title="문서">
                       {detail.quote_documents.length === 0 ? (
                         <p className="text-sm text-[#1a1a1a]/45">견적 문서가 없습니다.</p>
@@ -540,14 +791,14 @@ export default function PartnerWorkspacePage() {
                     </SectionBox>
                   </TabsContent>
 
-                  <TabsContent value="install" className="mt-0 space-y-4">
+                  <TabsContent value="install" className="mt-0 space-y-4 transition-opacity duration-150">
                     <SectionBox icon={<CalendarDays className="h-4 w-4" />} title="설치 일정">
                       {detail.installations.length === 0 ? (
                         <p className="text-sm text-[#1a1a1a]/45">설치 일정이 없습니다.</p>
                       ) : (
                         detail.installations.map((event) => (
-                          <div key={event.id} className="rounded-2xl border border-[#ece8dc] bg-[#faf8f2] p-4">
-                            <p className="text-sm font-semibold">{event.location ?? "설치 위치 미지정"}</p>
+                          <div key={event.id} className="rounded-xl border border-[#e8e8e4] bg-[#f7f7f5] p-4">
+                            <p className="text-sm font-semibold text-[#1a1a1a]">{event.location ?? "설치 위치 미지정"}</p>
                             <p className="mt-1 text-xs text-[#1a1a1a]/50">
                               {formatDate(event.scheduled_start_at)} - {formatDate(event.scheduled_end_at)}
                             </p>
@@ -557,8 +808,8 @@ export default function PartnerWorkspacePage() {
                     </SectionBox>
                   </TabsContent>
 
-                  <TabsContent value="payments" className="mt-0 space-y-4">
-                    <div className="grid gap-4 md:grid-cols-3">
+                  <TabsContent value="payments" className="mt-0 space-y-4 transition-opacity duration-150">
+                    <div className="grid gap-3 md:grid-cols-3">
                       <InfoCard icon={<CircleDollarSign className="h-4 w-4" />} label="실수납" value={formatMoney(selectedDeal.paid_amount)} />
                       <InfoCard icon={<ReceiptText className="h-4 w-4" />} label="영수증" value={`${detail.receipts.length}건`} />
                       <InfoCard icon={<Layers3 className="h-4 w-4" />} label="미수금" value={formatMoney(selectedDeal.outstanding_amount)} />
@@ -568,8 +819,8 @@ export default function PartnerWorkspacePage() {
                     ) : (
                       <div className="space-y-3">
                         {detail.payments.map((payment) => (
-                          <div key={payment.id} className="rounded-2xl border border-[#ece8dc] bg-[#faf8f2] p-4">
-                            <p className="text-sm font-semibold">{formatMoney(payment.amount)}</p>
+                          <div key={payment.id} className="rounded-xl border border-[#e8e8e4] bg-[#f7f7f5] p-4">
+                            <p className="text-sm font-semibold text-[#1a1a1a]">{formatMoney(payment.amount)}</p>
                             <p className="mt-1 text-xs text-[#1a1a1a]/50">
                               {payment.payment_method} · {formatDate(payment.paid_at)}
                             </p>
@@ -579,14 +830,14 @@ export default function PartnerWorkspacePage() {
                     )}
                   </TabsContent>
 
-                  <TabsContent value="activity" className="mt-0 space-y-4">
+                  <TabsContent value="activity" className="mt-0 space-y-4 transition-opacity duration-150">
                     <SectionBox icon={<Activity className="h-4 w-4" />} title="활동 로그">
                       {detail.activity_logs.length === 0 ? (
                         <p className="text-sm text-[#1a1a1a]/45">활동 로그가 없습니다.</p>
                       ) : (
                         detail.activity_logs.map((log) => (
-                          <div key={log.id} className="rounded-2xl border border-[#ece8dc] bg-[#faf8f2] p-4">
-                            <p className="text-sm font-semibold">{log.summary}</p>
+                          <div key={log.id} className="rounded-xl border border-[#e8e8e4] bg-[#f7f7f5] p-4">
+                            <p className="text-sm font-semibold text-[#1a1a1a]">{log.summary}</p>
                             <p className="mt-1 text-xs text-[#1a1a1a]/50">
                               {log.action_type} · {formatDate(log.created_at)}
                             </p>
@@ -596,12 +847,28 @@ export default function PartnerWorkspacePage() {
                     </SectionBox>
 
                     <SectionBox icon={<MapPinned className="h-4 w-4" />} title="캘린더">
+                      <div className="flex items-center justify-between gap-3 rounded-xl border border-dashed border-[#e0e0dc] bg-white px-4 py-3">
+                        <div>
+                          <p className="text-sm font-medium text-[#1a1a1a]">전체 캘린더에서 일정 흐름 보기</p>
+                          <p className="mt-1 text-xs text-[#1a1a1a]/45">
+                            설치, 미팅, 문서 기한을 하나의 일정 화면에서 확인합니다.
+                          </p>
+                        </div>
+                        <button
+                          type="button"
+                          onClick={() => router.push("/partner/calendar")}
+                          className="inline-flex items-center gap-2 rounded-xl border border-[#e8e8e4] bg-[#f7f7f5] px-3 py-2 text-sm font-medium text-[#1a1a1a] hover:bg-white"
+                        >
+                          전체 보기
+                          <ArrowRight className="h-4 w-4" />
+                        </button>
+                      </div>
                       {detail.calendar_events.length === 0 ? (
                         <p className="text-sm text-[#1a1a1a]/45">캘린더 이벤트가 없습니다.</p>
                       ) : (
                         detail.calendar_events.map((event) => (
-                          <div key={event.id} className="rounded-2xl border border-[#ece8dc] bg-[#faf8f2] p-4">
-                            <p className="text-sm font-semibold">{event.title}</p>
+                          <div key={event.id} className="rounded-xl border border-[#e8e8e4] bg-[#f7f7f5] p-4">
+                            <p className="text-sm font-semibold text-[#1a1a1a]">{event.title}</p>
                             <p className="mt-1 text-xs text-[#1a1a1a]/50">
                               {formatDate(event.starts_at)} - {formatDate(event.ends_at)}
                             </p>
@@ -615,17 +882,26 @@ export default function PartnerWorkspacePage() {
             </CardContent>
           </Card>
 
-          <Card className="border-[#e6e0d4] bg-white/90 shadow-[0_18px_40px_rgba(31,24,15,0.06)]">
+          {/* ── Right: Operations Notes ── */}
+          <Card className="border-[#e8e8e4] bg-white shadow-none">
             <CardHeader className="pb-3">
-              <CardTitle className="text-base">운영 노트</CardTitle>
+              <CardTitle className="text-[10px] uppercase tracking-wider text-[#1a1a1a]/40 font-semibold">운영 노트</CardTitle>
             </CardHeader>
             <CardContent className="space-y-4">
-              <div className="rounded-2xl border border-[#ece8dc] bg-[#fbf9f3] p-4">
-                <p className="text-xs font-semibold uppercase tracking-[0.2em] text-[#1a1a1a]/35">현재 선택</p>
-                <p className="mt-2 text-sm font-semibold">{selectedCustomer.customer.name}</p>
-                <p className="mt-1 text-sm text-[#1a1a1a]/55">{selectedDeal.title}</p>
+              <div className="rounded-xl border border-[#e8e8e4] bg-[#f7f7f5] p-4">
+                <p className="text-[10px] font-semibold uppercase tracking-wider text-[#1a1a1a]/40">현재 선택</p>
+                <p className="mt-2 text-sm font-semibold text-[#1a1a1a]">{selectedCustomer.customer.name}</p>
+                {selectedDeal && (
+                  <p className="mt-1 text-sm text-[#1a1a1a]/50">{selectedDeal.title}</p>
+                )}
               </div>
-              <div className="rounded-2xl border border-dashed border-[#d9d3c5] bg-[#faf8f2] p-4 text-sm text-[#1a1a1a]/55">
+              {selectedDeal && (
+                <div className="rounded-xl border border-[#e8e8e4] bg-[#f7f7f5] p-4">
+                  <p className="text-[10px] font-semibold uppercase tracking-wider text-[#1a1a1a]/40 mb-3">진행 현황</p>
+                  <StageRoadmapBar stage={selectedDeal.current_stage} />
+                </div>
+              )}
+              <div className="rounded-xl border border-dashed border-[#e0e0dc] p-4 text-sm text-[#1a1a1a]/50">
                 {mode === "demo"
                   ? "데모 셸입니다. 로그인하면 실데이터가 연결됩니다."
                   : "실데이터가 연결된 상태입니다. 카드와 탭으로 거래 흐름을 바로 확인할 수 있습니다."}
@@ -636,91 +912,4 @@ export default function PartnerWorkspacePage() {
       </div>
     </div>
   )
-}
-
-function Chip({ icon, label }: { icon: React.ReactNode; label: string }) {
-  return (
-    <span className="inline-flex items-center gap-1.5 rounded-full border border-[#e7e7e2] bg-[#fafaf8] px-3 py-1">
-      {icon}
-      {label}
-    </span>
-  )
-}
-
-function MiniStat({ label, value, inverted = false }: { label: string; value: string; inverted?: boolean }) {
-  return (
-    <div className={`rounded-xl px-3 py-2 ${inverted ? "bg-white/10" : "bg-white"}`}>
-      <p className={`text-[11px] ${inverted ? "text-white/60" : "text-[#1a1a1a]/35"}`}>{label}</p>
-      <p className={`mt-1 text-xs font-semibold ${inverted ? "text-white" : "text-[#111110]"}`}>{value}</p>
-    </div>
-  )
-}
-
-function InfoChip({ label, value }: { label: string; value: string }) {
-  return (
-    <div className="rounded-2xl border border-[#e7e2d5] bg-white px-3 py-2.5">
-      <p className="text-[11px] text-[#1a1a1a]/40">{label}</p>
-      <p className="mt-1 text-sm font-semibold">{value}</p>
-    </div>
-  )
-}
-
-function InfoCard({ icon, label, value }: { icon: React.ReactNode; label: string; value: string }) {
-  return (
-    <div className="rounded-2xl border border-[#ece8dc] bg-[#fbf9f3] p-4">
-      <div className="flex items-center gap-2 text-[#1a1a1a]/45">
-        {icon}
-        <span className="text-xs font-medium">{label}</span>
-      </div>
-      <p className="mt-2 text-lg font-semibold">{value}</p>
-    </div>
-  )
-}
-
-function SectionBox({
-  icon,
-  title,
-  children,
-}: {
-  icon: React.ReactNode
-  title: string
-  children: React.ReactNode
-}) {
-  return (
-    <div className="rounded-3xl border border-[#ece8dc] bg-[#fbf9f3] p-4">
-      <div className="flex items-center gap-2 text-sm font-semibold">
-        {icon}
-        {title}
-      </div>
-      <div className="mt-3 space-y-3">{children}</div>
-    </div>
-  )
-}
-
-function ActionLine({ text }: { text: string }) {
-  return (
-    <div className="flex items-center gap-2 rounded-xl bg-[#faf8f2] px-3 py-2 text-sm text-[#1a1a1a]/65">
-      <Sparkles className="h-4 w-4 text-[#111110]/45" />
-      {text}
-    </div>
-  )
-}
-
-function DocRow({ label, meta, detail }: { label: string; meta: string; detail: string }) {
-  return (
-    <div className="rounded-2xl border border-[#ece8dc] bg-white p-4">
-      <div className="flex items-start justify-between gap-3">
-        <div>
-          <p className="text-sm font-semibold">{label}</p>
-          <p className="mt-1 text-xs text-[#1a1a1a]/50">{meta}</p>
-        </div>
-        <ArrowRight className="h-4 w-4 text-[#1a1a1a]/25" />
-      </div>
-      <p className="mt-3 text-sm text-[#1a1a1a]/65">{detail}</p>
-    </div>
-  )
-}
-
-function EmptyText({ text }: { text: string }) {
-  return <p className="rounded-2xl border border-dashed border-[#d9d3c5] bg-white/70 px-4 py-8 text-center text-sm text-[#1a1a1a]/45">{text}</p>
 }
