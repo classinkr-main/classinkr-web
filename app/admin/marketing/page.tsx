@@ -377,23 +377,23 @@ export default function AdminMarketingPage() {
           </div>
         </div>
 
-        {/* ── 통합 요약 스탯바 (항상 표시) ── */}
-        <div className="grid grid-cols-4 gap-4 mb-6">
+        {/* ── KPI 벤토 그리드 (Dashboard Analytics) ── */}
+        <div className="grid grid-cols-1 sm:grid-cols-2 md:grid-cols-4 gap-4 mb-8">
           {[
-            { label: "오늘 신규 리드",  value: todayLeads,         color: "text-[#084734]" },
-            { label: "전체 구독자",     value: subscribers.length, color: "text-[#111110]" },
-            { label: "활성 구독자",     value: activeCount,        color: "text-green-600" },
-            { label: "마지막 발송",     value: lastSentDaysAgo === null ? "–" : lastSentDaysAgo === 0 ? "오늘" : `${lastSentDaysAgo}일 전`, color: "text-[#111110]" },
-          ].map(({ label, value, color }) => (
-            <div key={label} className="bg-white rounded-xl border border-[#e8e8e4] p-4 text-center">
-              <p className={`text-2xl font-bold ${color}`}>{value}</p>
-              <p className="text-[11px] text-[#1a1a1a]/40 mt-1">{label}</p>
+            { label: "오늘 신규 리드",  value: todayLeads,         color: "text-[#084734]", bg: "bg-gradient-to-br from-[#e0f2e9] to-[#c1e8d5]", colSpan: "md:col-span-1" },
+            { label: "전체 구독자",     value: subscribers.length.toLocaleString(), color: "text-[#111110]", bg: "bg-white", colSpan: "md:col-span-1" },
+            { label: "활성 구독자",     value: activeCount.toLocaleString(),        color: "text-green-600", bg: "bg-white", colSpan: "md:col-span-1" },
+            { label: "마지막 발송",     value: lastSentDaysAgo === null ? "–" : lastSentDaysAgo === 0 ? "오늘" : `${lastSentDaysAgo}일 전`, color: "text-[#111110]", bg: "bg-white", colSpan: "md:col-span-1" },
+          ].map(({ label, value, color, bg, colSpan }) => (
+            <div key={label} className={`rounded-2xl border border-[#e8e8e4] p-6 shadow-[0_2px_8px_rgba(0,0,0,0.02)] transition-all duration-300 hover:shadow-[0_8px_16px_rgba(0,0,0,0.06)] hover:-translate-y-0.5 flex flex-col justify-center items-center cursor-default ${bg} ${colSpan}`}>
+              <p className={`text-4xl font-black tracking-tight ${color}`}>{value}</p>
+              <p className="text-[12px] font-bold text-[#1a1a1a]/50 mt-1.5 uppercase tracking-wider">{label}</p>
             </div>
           ))}
         </div>
 
-        {/* ── 탭 네비게이션 ── */}
-        <div className="flex gap-1 mb-6 bg-white rounded-lg border border-[#e8e8e4] p-1 w-fit">
+        {/* ── 탭 네비게이션 (Floating Pills) ── */}
+        <div className="flex gap-2 mb-8 overflow-x-auto pb-2 scrollbar-none w-full border-b border-[#e8e8e4]/50">
           {([
             { key: "subscribers" as Tab, label: "구독자 관리", icon: Users },
             { key: "compose"     as Tab, label: "이메일 발송", icon: Send },
@@ -406,19 +406,22 @@ export default function AdminMarketingPage() {
             <button
               key={key}
               onClick={() => setActiveTab(key)}
-              className={`flex items-center gap-1.5 px-4 py-2 rounded-md text-[13px] font-medium transition-colors ${
-                activeTab === key ? "bg-[#084734] text-white" : "text-[#1a1a1a]/50 hover:text-[#1a1a1a]/80 hover:bg-[#FAFAF8]"
+              className={`group flex items-center gap-2 px-5 py-2.5 rounded-full text-[13px] font-semibold transition-all duration-300 whitespace-nowrap border ${
+                activeTab === key
+                  ? "bg-[#111110] text-white border-[#111110] shadow-md transform scale-[1.02]"
+                  : "bg-white text-[#1a1a1a]/60 border-[#e8e8e4] hover:border-[#111110]/30 hover:text-[#111110] hover:bg-gray-50 hover:shadow-sm"
               }`}
             >
-              <Icon className="w-3.5 h-3.5" />{label}
+              <Icon className={`w-4 h-4 transition-transform duration-300 ${activeTab !== key && "group-hover:scale-110"}`} />
+              {label}
               {badge && activeTab !== key && (
-                <span className="text-[9px] px-1 rounded-full font-bold ml-0.5 bg-violet-100 text-violet-600">
+                <span className="text-[9px] px-1.5 py-0.5 rounded-full font-bold ml-1 bg-violet-100 text-violet-600 transition-colors group-hover:bg-violet-200">
                   {badge}
                 </span>
               )}
               {key === "automation" && activeRules > 0 && (
-                <span className={`text-[9px] px-1 rounded-full font-bold ml-0.5 ${
-                  activeTab === key ? "bg-white/20 text-white" : "bg-green-100 text-green-600"
+                <span className={`text-[10px] px-2 py-0.5 rounded-full font-bold ml-1 transition-all ${
+                  activeTab === key ? "bg-white/20 text-white" : "bg-[#084734]/10 text-[#084734]"
                 }`}>{activeRules}</span>
               )}
             </button>
@@ -430,8 +433,8 @@ export default function AdminMarketingPage() {
         {/* 구독자 */}
         {activeTab === "subscribers" && (
           <>
-            {/* 서브탭 */}
-            <div className="flex gap-1 mb-4 bg-white rounded-lg border border-[#e8e8e4] p-1 w-fit">
+            {/* 서브탭 (Pills mini) */}
+            <div className="flex gap-2 mb-4 w-fit">
               {([
                 { key: "subscribers" as const, label: "구독자" },
                 { key: "leads"       as const, label: `리드${leads.length > 0 ? ` (${leads.length})` : ""}` },
@@ -439,8 +442,10 @@ export default function AdminMarketingPage() {
                 <button
                   key={key}
                   onClick={() => setSubscriberSubTab(key)}
-                  className={`px-4 py-1.5 rounded-md text-[12px] font-medium transition-colors ${
-                    subscriberSubTab === key ? "bg-[#084734] text-white" : "text-[#1a1a1a]/50 hover:text-[#1a1a1a]/80"
+                  className={`px-4 py-1.5 rounded-full text-[12px] font-bold transition-all duration-200 border ${
+                    subscriberSubTab === key 
+                    ? "bg-[#f4f4f0] text-[#111110] border-[#d8d8d4] shadow-sm" 
+                    : "bg-transparent text-[#1a1a1a]/40 border-transparent hover:text-[#1a1a1a]/80 hover:bg-[#f0f0ec]"
                   }`}
                 >
                   {label}
@@ -537,23 +542,23 @@ export default function AdminMarketingPage() {
         {/* ── 자동화 탭 — Master-Detail 2패널 ── */}
         {activeTab === "automation" && (
           <>
-            {/* 자동화 전용 스탯 */}
-            <div className="grid grid-cols-3 gap-4 mb-4">
+            {/* 자동화 전용 벤토 스탯 */}
+            <div className="grid grid-cols-1 sm:grid-cols-3 gap-4 mb-8">
               {[
-                { label: "활성 자동화 규칙", value: `${activeRules}개`, sub: `전체 ${rules.length}개`, color: "text-[#084734]" },
-                { label: "오늘 자동 발송",   value: `${todaySent}명`,  sub: "수신자 합계",            color: "text-[#111110]" },
-                { label: "발송 성공률",      value: `${successRate}%`, sub: `전체 ${logs.length}건`,   color: successRate >= 90 ? "text-green-600" : "text-yellow-600" },
-              ].map(({ label, value, sub, color }) => (
-                <div key={label} className="bg-white rounded-xl border border-[#e8e8e4] p-4 text-center">
-                  <p className={`text-2xl font-bold ${color}`}>{value}</p>
-                  <p className="text-[11px] text-[#1a1a1a]/40 mt-0.5">{label}</p>
-                  <p className="text-[10px] text-[#1a1a1a]/25 mt-0.5">{sub}</p>
+                { label: "활성 자동화 규칙", value: activeRules, sub: `전체 ${rules.length}개 운영 중`, color: "text-[#084734]", bg: "bg-gradient-to-br from-[#e0f2e9] to-[#d1ebe0]" },
+                { label: "오늘 자동 발송",   value: todaySent.toLocaleString(),  sub: "수신자 누적 합계", color: "text-[#111110]", bg: "bg-white" },
+                { label: "발송 성공률",      value: `${successRate}%`, sub: `전체 ${logs.length}건 실행`, color: successRate >= 90 ? "text-green-600" : "text-amber-600", bg: "bg-white" },
+              ].map(({ label, value, sub, color, bg }) => (
+                <div key={label} className={`rounded-2xl border border-[#e8e8e4] p-6 shadow-[0_2px_8px_rgba(0,0,0,0.02)] transition-all duration-300 hover:shadow-[0_8px_16px_rgba(0,0,0,0.06)] hover:-translate-y-0.5 cursor-default flex flex-col justify-center items-center ${bg}`}>
+                  <p className={`text-4xl font-black tracking-tight mb-1 ${color}`}>{value}</p>
+                  <p className="text-[14px] font-bold text-[#1a1a1a]/80">{label}</p>
+                  <p className="text-[12px] font-medium text-[#1a1a1a]/40 mt-0.5">{sub}</p>
                 </div>
               ))}
             </div>
 
-            {/* 서브탭 */}
-            <div className="flex gap-1 mb-4 bg-white rounded-lg border border-[#e8e8e4] p-1 w-fit">
+            {/* 서브탭 (Pills mini) */}
+            <div className="flex gap-2 mb-6 w-fit">
               {([
                 { key: "rules" as const, label: "규칙 목록" },
                 { key: "logs"  as const, label: `실행 이력 ${logs.length > 0 ? `(${logs.length})` : ""}` },
@@ -561,8 +566,10 @@ export default function AdminMarketingPage() {
                 <button
                   key={key}
                   onClick={() => setAutomationSubTab(key)}
-                  className={`px-4 py-1.5 rounded-md text-[12px] font-medium transition-colors ${
-                    automationSubTab === key ? "bg-[#084734] text-white" : "text-[#1a1a1a]/50 hover:text-[#1a1a1a]/80"
+                  className={`px-4 py-1.5 rounded-full text-[12px] font-bold transition-all duration-200 border ${
+                    automationSubTab === key
+                    ? "bg-[#f4f4f0] text-[#111110] border-[#d8d8d4] shadow-sm" 
+                    : "bg-transparent text-[#1a1a1a]/40 border-transparent hover:text-[#1a1a1a]/80 hover:bg-[#f0f0ec]"
                   }`}
                 >
                   {label}

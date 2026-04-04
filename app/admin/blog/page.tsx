@@ -2,7 +2,7 @@
 
 import { useState, useEffect, useCallback } from "react"
 import { useRouter } from "next/navigation"
-import { Plus, RefreshCw, Trash2, RotateCcw, AlertTriangle } from "lucide-react"
+import { Plus, RefreshCw, Trash2, RotateCcw, AlertTriangle, FileText } from "lucide-react"
 import { Button } from "@/components/ui/button"
 import {
     Dialog,
@@ -186,34 +186,50 @@ export default function AdminBlogPage() {
     ]
 
     return (
-        <div className="px-8 pt-12 pb-20">
+        <div className="px-8 pt-10 pb-20">
             {/* Header */}
             <div className="flex items-center justify-between mb-8">
                 <div>
                     <div className="flex items-center gap-3 mb-1">
                         <p className="text-[11px] font-medium text-[#1a1a1a]/30 uppercase tracking-widest">Admin</p>
-                        <a href="/admin/marketing" className="text-[11px] text-[#084734] hover:underline">
-                            마케팅 관리 →
-                        </a>
                     </div>
                     <h1 className="text-2xl font-bold text-[#111110] tracking-[-0.02em]">콘텐츠 관리</h1>
                 </div>
                 <div className="flex items-center gap-2">
-                    <Button variant="outline" size="sm" onClick={fetchPosts} disabled={loading}>
-                        <RefreshCw className={`w-4 h-4 mr-1.5 ${loading ? "animate-spin" : ""}`} />
+                    <button
+                        onClick={fetchPosts}
+                        disabled={loading}
+                        className="border border-[#e8e8e4] bg-white hover:bg-[#f7f7f5] text-[#1a1a1a]/60 hover:text-[#1a1a1a] text-[13px] rounded-xl px-3 py-1.5 flex items-center gap-1.5 transition-colors disabled:opacity-50"
+                    >
+                        <RefreshCw className={`w-4 h-4 ${loading ? "animate-spin" : ""}`} />
                         새로고침
-                    </Button>
+                    </button>
                     {tab !== "trash" && (
-                        <Button size="sm" onClick={handleCreate}>
-                            <Plus className="w-4 h-4 mr-1.5" />
+                        <button
+                            onClick={handleCreate}
+                            className="bg-[#111110] hover:bg-[#2a2a2a] text-white text-[13px] rounded-xl px-3 py-1.5 flex items-center gap-1.5 transition-colors active:scale-[0.98] duration-75"
+                        >
+                            <Plus className="w-4 h-4" />
                             새 글 작성
-                        </Button>
+                        </button>
                     )}
                 </div>
             </div>
 
+            {/* 통계 스트립 */}
+            {!loading && (
+                <div className="flex items-center gap-3 mb-5">
+                    <StatChip label="발행" value={posts.filter(p => p.status === "published").length} color="emerald" />
+                    <StatChip label="비공개" value={posts.filter(p => p.status !== "published").length} color="neutral" />
+                    <StatChip label="피처" value={posts.filter(p => p.featured).length} color="blue" />
+                    {trashedPosts.length > 0 && (
+                        <StatChip label="휴지통" value={trashedPosts.length} color="red" />
+                    )}
+                </div>
+            )}
+
             {/* Tabs */}
-            <div className="flex items-center gap-1 mb-4">
+            <div className="flex items-center gap-1 mb-4 bg-[#f7f7f5] rounded-xl p-1 w-fit">
                 {TABS.map(({ key, label, count }) => (
                     <button
                         key={key}
@@ -267,6 +283,21 @@ export default function AdminBlogPage() {
                     />
                 )}
             </div>
+
+            {/* 빈 상태 */}
+            {!loading && displayedPosts.length === 0 && tab !== "trash" && (
+                <div className="bg-white rounded-xl border border-[#e8e8e4] py-16 text-center mt-2">
+                    <div className="w-12 h-12 rounded-2xl bg-[#f0f0ec] flex items-center justify-center mx-auto mb-4">
+                        <FileText className="w-5 h-5 text-[#1a1a1a]/30" />
+                    </div>
+                    <p className="text-[14px] font-medium text-[#1a1a1a]/50 mb-1">
+                        {tab === "private" ? "비공개 글이 없습니다" : "아직 작성된 글이 없습니다"}
+                    </p>
+                    <p className="text-[12px] text-[#1a1a1a]/30">
+                        {tab === "all" ? "새 글 작성 버튼으로 첫 번째 글을 작성해보세요" : ""}
+                    </p>
+                </div>
+            )}
 
             {/* Edit Dialog */}
             <Dialog open={isFormOpen} onOpenChange={(v) => !v && setIsFormOpen(false)}>
@@ -328,6 +359,22 @@ export default function AdminBlogPage() {
                     </div>
                 </div>
             )}
+        </div>
+    )
+}
+
+// ─── Stat Chip ────────────────────────────────────────────────────────────────
+function StatChip({ label, value, color }: { label: string; value: number; color: "emerald" | "blue" | "neutral" | "red" }) {
+    const styles = {
+        emerald: "bg-emerald-50 text-emerald-700 border-emerald-100",
+        blue: "bg-blue-50 text-blue-700 border-blue-100",
+        neutral: "bg-[#f7f7f5] text-[#1a1a1a]/60 border-[#e8e8e4]",
+        red: "bg-red-50 text-red-600 border-red-100",
+    }
+    return (
+        <div className={`flex items-center gap-1.5 rounded-full border px-3 py-1 text-[12px] font-medium ${styles[color]}`}>
+            <span className="font-bold">{value}</span>
+            <span className="opacity-70">{label}</span>
         </div>
     )
 }

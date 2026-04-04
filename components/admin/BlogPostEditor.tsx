@@ -65,6 +65,21 @@ interface BlogPostEditorProps {
 
 type DraftState = "saved" | "saving" | "dirty"
 type AiAction = "card-news" | "reels" | "optimize" | "draft"
+
+const TEMPLATE_STORAGE_KEY = "admin-blog-templates"
+
+type BlogTemplate = {
+  id: string
+  name: string
+  savedAt: string
+  data: {
+    contentMarkdown: string
+    benefitItems: string[]
+    targetReader: string
+    category: string
+    cta: BlogPostInput["cta"]
+  }
+}
 type AiState = { action: AiAction; status: "loading" | "streaming" | "done" | "error"; result: string; topic?: string; tone?: string; length?: string; reference?: string }
 type EditorSnapshot = {
   form: BlogPostInput
@@ -173,7 +188,7 @@ function ToolbarButton({
     <button
       type="button"
       onClick={onClick}
-      className="inline-flex items-center gap-1 rounded-lg border border-[#e8e8e4] bg-white px-2 py-1.5 text-xs font-medium text-[#1a1a1a]/60 transition-colors hover:border-[#111110]/20 hover:text-[#111110]"
+      className="inline-flex items-center gap-1 rounded-lg border border-[#e8e8e4] bg-white px-2 py-1.5 text-xs font-medium text-[#1a1a1a]/60 transition-colors hover:border-[#1a1a1a]/20 hover:text-[#111110] active:scale-[0.96] active:bg-[#f7f7f5] duration-75"
     >
       {icon}
       <span>{children}</span>
@@ -198,6 +213,10 @@ export default function BlogPostEditor({
   const [aiState, setAiState] = useState<AiState | null>(null)
   const [draftInput, setDraftInput] = useState({ topic: "", tone: "전문적", length: "medium", reference: "" })
   const [showPreview, setShowPreview] = useState(false)
+  const [showTemplateModal, setShowTemplateModal] = useState(false)
+  const [templates, setTemplates] = useState<BlogTemplate[]>([])
+  const [templateTab, setTemplateTab] = useState<"load" | "save">("load")
+  const [templateName, setTemplateName] = useState("")
   const [slugEdited, setSlugEdited] = useState(Boolean(initialPost?.slug))
   const formRef = useRef(form)
   const tagsInputRef = useRef(tagsInput)
@@ -382,6 +401,15 @@ export default function BlogPostEditor({
     return () => window.clearTimeout(timer)
   }, [draftStorageKey, form])
 
+  useEffect(() => {
+    try {
+      const raw = localStorage.getItem(TEMPLATE_STORAGE_KEY)
+      if (raw) setTemplates(JSON.parse(raw) as BlogTemplate[])
+    } catch {
+      // Ignore malformed template data.
+    }
+  }, [])
+
   const updateForm = <K extends keyof BlogPostInput>(key: K, value: BlogPostInput[K]) => {
     updateEditor((snapshot) => ({
       ...snapshot,
@@ -522,6 +550,166 @@ export default function BlogPostEditor({
 
   return (
     <div className="min-h-screen bg-[#FAFAF8]">
+
+      {/* ── Template Modal ── */}
+      {showTemplateModal && (
+        <div className="fixed inset-0 z-50 flex items-center justify-center bg-black/40 backdrop-blur-sm p-4">
+          <div className="bg-white rounded-[24px] border border-[#e8e8e4] shadow-2xl w-full max-w-xl flex flex-col" style={{ maxHeight: "85vh" }}>
+            {/* Header */}
+            <div className="flex items-center justify-between border-b border-[#e8e8e4] px-5 py-4">
+              <div className="flex items-center gap-2.5">
+                <LayoutTemplate className="h-4 w-4 text-[#084734]" />
+                <p className="text-sm font-semibold text-[#111110]">템플릿</p>
+              </div>
+              <button
+                type="button"
+                onClick={() => { setShowTemplateModal(false); setTemplateName("") }}
+                className="flex h-8 w-8 items-center justify-center rounded-xl border border-[#e8e8e4] text-[#1a1a1a]/40 hover:text-[#111110] transition-colors"
+              >
+                <X className="h-4 w-4" />
+              </button>
+            </div>
+
+            {/* Tabs */}
+            <div className="px-5 pt-4 shrink-0">
+              <div className="bg-[#f7f7f5] rounded-xl p-1 w-fit flex gap-0.5">
+                <button
+                  type="button"
+                  onClick={() => setTemplateTab("load")}
+                  className={`px-4 py-1.5 rounded-lg text-[13px] font-medium transition-colors ${
+                    templateTab === "load"
+                      ? "bg-white text-[#111110] shadow-sm"
+                      : "text-[#1a1a1a]/50 hover:text-[#111110]"
+                  }`}
+                >
+                  불러오기
+                </button>
+                <button
+                  type="button"
+                  onClick={() => setTemplateTab("save")}
+                  className={`px-4 py-1.5 rounded-lg text-[13px] font-medium transition-colors ${
+                    templateTab === "save"
+                      ? "bg-white text-[#111110] shadow-sm"
+                      : "text-[#1a1a1a]/50 hover:text-[#111110]"
+                  }`}
+                >
+                  현재 내용 저장
+                </button>
+              </div>
+            </div>
+
+            {/* Body */}
+            <div className="min-h-0 flex-1 overflow-y-auto px-5 py-4">
+              {templateTab === "save" && (
+                <div className="space-y-3">
+                  <p className="text-[13px] text-[#1a1a1a]/50">
+                    본문, 혜택 포인트, 독자 대상, 카테고리, CTA를 템플릿으로 저장합니다.
+                  </p>
+                  <input
+                    type="text"
+                    value={templateName}
+                    onChange={(e) => setTemplateName(e.target.value)}
+                    placeholder="예) 제품 소개 기본형"
+                    className="w-full rounded-xl border border-[#e8e8e4] bg-white px-4 py-2.5 text-sm outline-none transition-colors focus:border-[#084734]"
+                  />
+                  <button
+                    type="button"
+                    disabled={!templateName.trim()}
+                    onClick={() => {
+                      const newTemplate: BlogTemplate = {
+                        id: crypto.randomUUID(),
+                        name: templateName.trim(),
+                        savedAt: new Date().toISOString(),
+                        data: {
+                          contentMarkdown: form.contentMarkdown,
+                          benefitItems: form.benefitItems,
+                          targetReader: form.targetReader,
+                          category: form.category,
+                          cta: { ...form.cta },
+                        },
+                      }
+                      const next = [newTemplate, ...templates].slice(0, 10)
+                      setTemplates(next)
+                      localStorage.setItem(TEMPLATE_STORAGE_KEY, JSON.stringify(next))
+                      setTemplateName("")
+                      setTemplateTab("load")
+                    }}
+                    className="w-full rounded-xl bg-[#084734] px-4 py-2.5 text-[13px] font-medium text-white transition-opacity disabled:opacity-40 hover:opacity-90"
+                  >
+                    저장
+                  </button>
+                </div>
+              )}
+
+              {templateTab === "load" && (
+                templates.length === 0 ? (
+                  <div className="py-12 text-center text-[13px] text-[#1a1a1a]/30">
+                    저장된 템플릿이 없습니다
+                  </div>
+                ) : (
+                  <div className="space-y-2.5">
+                    {templates.map((t) => (
+                      <div
+                        key={t.id}
+                        className="rounded-2xl border border-[#e8e8e4] bg-[#fcfcfb] p-4"
+                      >
+                        <div className="flex items-start justify-between gap-3">
+                          <div className="min-w-0 flex-1">
+                            <p className="font-semibold text-[13px] text-[#111110]">{t.name}</p>
+                            <p className="mt-0.5 text-[11px] text-[#1a1a1a]/40">
+                              {new Date(t.savedAt).toLocaleDateString("ko-KR")}
+                              {t.data.category && ` · ${t.data.category}`}
+                            </p>
+                            {t.data.contentMarkdown && (
+                              <p className="mt-1.5 text-xs text-[#1a1a1a]/40 line-clamp-2">
+                                {t.data.contentMarkdown.slice(0, 60)}…
+                              </p>
+                            )}
+                          </div>
+                          <div className="flex items-center gap-1.5 shrink-0">
+                            <button
+                              type="button"
+                              onClick={() => {
+                                updateEditor((snapshot) => ({
+                                  ...snapshot,
+                                  form: {
+                                    ...snapshot.form,
+                                    contentMarkdown: t.data.contentMarkdown,
+                                    benefitItems: t.data.benefitItems,
+                                    targetReader: t.data.targetReader,
+                                    category: t.data.category,
+                                    cta: { ...t.data.cta },
+                                  },
+                                }))
+                                setShowTemplateModal(false)
+                                setNotice("템플릿을 불러왔습니다.")
+                              }}
+                              className="text-[12px] font-medium text-[#084734] hover:text-[#084734]/70 transition-colors"
+                            >
+                              불러오기
+                            </button>
+                            <button
+                              type="button"
+                              onClick={() => {
+                                const next = templates.filter((item) => item.id !== t.id)
+                                setTemplates(next)
+                                localStorage.setItem(TEMPLATE_STORAGE_KEY, JSON.stringify(next))
+                              }}
+                              className="text-[#1a1a1a]/25 hover:text-red-500 transition-colors"
+                            >
+                              <X className="h-3.5 w-3.5" />
+                            </button>
+                          </div>
+                        </div>
+                      </div>
+                    ))}
+                  </div>
+                )
+              )}
+            </div>
+          </div>
+        </div>
+      )}
 
       {/* ── AI Result Modal ── */}
       {aiState && (
@@ -833,7 +1021,11 @@ export default function BlogPostEditor({
               </h1>
             </div>
             <div className="hidden items-center gap-2 sm:flex">
-              <span className="rounded-full border border-[#e8e8e4] bg-white px-2.5 py-1 text-[11px] text-[#1a1a1a]/40">
+              <span className={`rounded-full border px-2.5 py-1 text-[11px] transition-colors ${
+                draftState === "dirty" ? "border-amber-100 bg-amber-50 text-amber-600" :
+                draftState === "saving" ? "border-[#e8e8e4] bg-white text-[#1a1a1a]/40" :
+                "border-emerald-100 bg-emerald-50 text-emerald-600"
+              }`}>
                 {draftState === "dirty" ? "수정됨" : draftState === "saving" ? "저장 중…" : "자동저장됨"}
               </span>
               <span className="rounded-full border border-[#e8e8e4] bg-white px-2.5 py-1 text-[11px] text-[#1a1a1a]/40">
@@ -861,6 +1053,9 @@ export default function BlogPostEditor({
             >
               <Redo2 className="h-4 w-4" />
             </Button>
+            <Button variant="ghost" size="sm" onClick={() => setShowTemplateModal(true)} title="템플릿" className="h-8 w-8 p-0">
+              <LayoutTemplate className="h-3.5 w-3.5" />
+            </Button>
             <div className="mx-1.5 h-4 w-px bg-[#e8e8e4]" />
             <Button variant="ghost" size="sm" onClick={() => setShowPreview(true)}>
               <Eye className="mr-1.5 h-3.5 w-3.5" />
@@ -870,21 +1065,25 @@ export default function BlogPostEditor({
               <Save className="mr-1.5 h-3.5 w-3.5" />
               저장
             </Button>
-            <Button size="sm" onClick={() => handleSubmit("published")} disabled={isSubmitting}>
+            <Button size="sm" onClick={() => handleSubmit("published")} disabled={isSubmitting}
+              className="bg-[#084734] hover:bg-[#084734]/90 text-white active:scale-[0.97] transition-all duration-75">
               <Sparkles className="mr-1.5 h-3.5 w-3.5" />
               발행
             </Button>
           </div>
         </div>
 
-        {notice && (
-          <div className="flex items-center justify-between border-t border-emerald-100 bg-emerald-50 px-6 py-2">
-            <span className="text-[13px] text-emerald-800">{notice}</span>
-            <button type="button" onClick={() => setNotice("")} className="text-emerald-500 hover:text-emerald-800">
-              <X className="h-3.5 w-3.5" />
-            </button>
-          </div>
-        )}
+        {notice && (() => {
+          const isError = /문제|오류|필수|입력/.test(notice)
+          return (
+            <div className={`flex items-center justify-between border-t px-6 py-2 ${isError ? "border-red-100 bg-red-50" : "border-emerald-100 bg-emerald-50"}`}>
+              <span className={`text-[13px] ${isError ? "text-red-700" : "text-emerald-800"}`}>{notice}</span>
+              <button type="button" onClick={() => setNotice("")} className={`${isError ? "text-red-400 hover:text-red-700" : "text-emerald-500 hover:text-emerald-800"}`}>
+                <X className="h-3.5 w-3.5" />
+              </button>
+            </div>
+          )
+        })()}
       </header>
 
       {/* ── Main layout ── */}
@@ -1392,7 +1591,7 @@ export default function BlogPostEditor({
                 >
                   <div className="flex items-center gap-4">
                     <div
-                      className="flex h-16 w-16 shrink-0 items-center justify-center rounded-full border-[3px] text-2xl font-bold tabular-nums"
+                      className="flex h-16 w-16 shrink-0 items-center justify-center rounded-full border-[3px] text-xl font-bold tracking-[-0.02em] tabular-nums"
                       style={{ borderColor: seoAnalysis.scoreColor, color: seoAnalysis.scoreColor }}
                     >
                       {seoAnalysis.score}
@@ -1465,7 +1664,7 @@ export default function BlogPostEditor({
                   <p className="mb-3.5 text-sm font-semibold text-[#111110]">SEO 체크리스트</p>
                   <div className="space-y-3">
                     {seoAnalysis.checks.map((check) => (
-                      <div key={check.id} className="flex items-start gap-3">
+                      <div key={check.id} className="flex items-start gap-3 transition-colors duration-100">
                         <div className={`mt-0.5 flex h-5 w-5 shrink-0 items-center justify-center rounded-full ${
                           check.ok ? "bg-emerald-100" : "bg-red-50"
                         }`}>
@@ -1645,7 +1844,7 @@ export default function BlogPostEditor({
                           type="button"
                           onClick={() => handleAiAction(action)}
                           disabled={isRunning || noContent}
-                          className="group w-full rounded-2xl border border-[#e8e8e4] bg-white p-4 text-left transition-colors hover:border-[#084734]/25 hover:bg-[#f9faf8] disabled:cursor-not-allowed disabled:opacity-60"
+                          className="group w-full rounded-2xl border border-[#e8e8e4] bg-white p-4 text-left transition-colors hover:border-[#084734]/25 hover:bg-[#f9faf8] active:scale-[0.97] duration-75 disabled:cursor-not-allowed disabled:opacity-60"
                         >
                           <div className="flex items-center gap-3">
                             <div className={`flex h-10 w-10 shrink-0 items-center justify-center rounded-xl ${bg}`}>
