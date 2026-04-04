@@ -69,6 +69,16 @@ export interface SalesSummary {
   installed_qty: number;
 }
 
+type RelatedQuoteStatus = { status: string };
+type RelatedQuoteItem = { product_name: string; quantity: number };
+
+function firstRelation<T>(value: T | T[] | null | undefined): T | null {
+  if (Array.isArray(value)) {
+    return value[0] ?? null;
+  }
+  return value ?? null;
+}
+
 export async function getSalesSummary(): Promise<SalesSummary[]> {
   const supabase = createSupabaseAdminClient();
   const { data: quoteItems } = await supabase
@@ -84,7 +94,7 @@ export async function getSalesSummary(): Promise<SalesSummary[]> {
     return map.get(name)!;
   };
   for (const item of quoteItems ?? []) {
-    const quote = item.quote as { status: string } | null;
+    const quote = firstRelation(item.quote) as RelatedQuoteStatus | null;
     if (!quote) continue;
     const s = ensure(item.product_name);
     const qty = item.quantity ?? 0;
@@ -92,7 +102,7 @@ export async function getSalesSummary(): Promise<SalesSummary[]> {
     if (quote.status === "converted") s.contracted_qty += qty;
   }
   for (const sch of schedules ?? []) {
-    const qi = sch.quote_item as { product_name: string; quantity: number } | null;
+    const qi = firstRelation(sch.quote_item) as RelatedQuoteItem | null;
     if (!qi) continue;
     const s = ensure(qi.product_name);
     if (sch.status === "confirmed") s.scheduled_qty += qi.quantity;

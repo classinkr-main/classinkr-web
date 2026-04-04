@@ -2,13 +2,18 @@
 
 import Link from "next/link"
 import { usePathname } from "next/navigation"
-import { CalendarDays, LayoutDashboard } from "lucide-react"
+import { CalendarDays, FileText, House } from "lucide-react"
 
 const ITEMS = [
   {
-    href: "/partner/workspace",
+    href: "/partner",
     label: "홈",
-    icon: LayoutDashboard,
+    icon: House,
+  },
+  {
+    href: "/partner/documents",
+    label: "문서",
+    icon: FileText,
   },
   {
     href: "/partner/calendar",
@@ -24,7 +29,10 @@ export function PortalNav() {
     <nav className="inline-flex items-center gap-1 rounded-2xl border border-[#e8e8e4] bg-[#f7f7f5] p-1">
       {ITEMS.map((item) => {
         const Icon = item.icon
-        const isActive = pathname === item.href || pathname.startsWith(`${item.href}/`)
+        const isActive =
+          item.href === "/partner"
+            ? pathname === "/partner" || pathname.startsWith("/partner/workspace")
+            : pathname === item.href || pathname.startsWith(`${item.href}/`)
 
         return (
           <Link

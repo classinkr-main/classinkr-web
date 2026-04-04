@@ -1,5 +1,5 @@
-import { redirect } from "next/navigation"
+import { PartnerPortalHome } from "@/components/partner-portal/home/PartnerPortalHome"
 
 export default function PartnerPortalIndexPage() {
-  redirect("/partner/workspace")
+  return <PartnerPortalHome />
 }

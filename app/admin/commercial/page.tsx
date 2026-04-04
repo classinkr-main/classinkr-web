@@ -1,9 +1,8 @@
 "use client";
 
-import { startTransition, useEffect, useMemo, useState } from "react";
+import React, { startTransition, useDeferredValue, useEffect, useMemo, useState } from "react";
 import {
   AlertTriangle,
-  ArrowRight,
   Building2,
   CalendarDays,
   CheckCircle2,
@@ -11,14 +10,17 @@ import {
   CircleDollarSign,
   Clock3,
   FileText,
-  Loader2,
   Package,
   Receipt,
+  Search,
   UserRound,
 } from "lucide-react";
 
 import { Card, CardContent, CardHeader, CardTitle } from "@/components/ui/card";
-import type { CommercialOverviewPayload } from "@/lib/partner-portal/overview-types";
+import type {
+  CommercialOverviewPayload,
+  CommercialOverviewRange,
+} from "@/lib/partner-portal/overview-types";
 import type {
   ContractDocumentBundle,
   CustomerDetailPayload,
@@ -48,6 +50,26 @@ const DEAL_TABS: Array<{ id: DealTab; label: string }> = [
   { id: "payments", label: "수납" },
   { id: "activity", label: "활동" },
 ];
+
+const OVERVIEW_RANGE_OPTIONS: Array<{ id: CommercialOverviewRange; label: string }> = [
+  { id: "today", label: "오늘" },
+  { id: "week", label: "일주일" },
+  { id: "month", label: "한달" },
+  { id: "quarter", label: "분기" },
+];
+
+const DEAL_STAGE_META: Record<DealStage, { color: string; dot: string; ring: string }> = {
+  contact:      { color: "bg-slate-100 text-slate-600",    dot: "bg-slate-400",   ring: "ring-slate-200"   },
+  quote:        { color: "bg-blue-50 text-blue-600",       dot: "bg-blue-500",    ring: "ring-blue-200"    },
+  contract:     { color: "bg-violet-50 text-violet-600",   dot: "bg-violet-500",  ring: "ring-violet-200"  },
+  confirmed:    { color: "bg-violet-50 text-violet-600",   dot: "bg-violet-500",  ring: "ring-violet-200"  },
+  installation: { color: "bg-amber-50 text-amber-700",     dot: "bg-amber-500",   ring: "ring-amber-200"   },
+  payment:      { color: "bg-emerald-50 text-emerald-700", dot: "bg-emerald-500", ring: "ring-emerald-200" },
+  closed:       { color: "bg-emerald-50 text-emerald-700", dot: "bg-emerald-500", ring: "ring-emerald-200" },
+  cancelled:    { color: "bg-red-50 text-red-400",         dot: "bg-red-300",     ring: "ring-red-100"     },
+};
+
+const STAGE_FLOW: DealStage[] = ["contact", "quote", "contract", "confirmed", "installation", "payment"];
 
 function adminFetch(url: string, options?: RequestInit) {
   const token =
@@ -99,6 +121,23 @@ async function readJson<T>(url: string): Promise<T> {
   }
 
   return payload;
+}
+
+function fmtM(n?: number | null): string {
+  if (n == null) return "-";
+  if (n >= 100_000_000) return `${(n / 100_000_000).toFixed(1)}억`;
+  if (n >= 10_000) return `${Math.round(n / 10_000)}만`;
+  return n.toLocaleString();
+}
+
+function getDday(dateStr?: string | null): string | null {
+  if (!dateStr) return null;
+  const today = new Date(); today.setHours(0, 0, 0, 0);
+  const target = new Date(dateStr); target.setHours(0, 0, 0, 0);
+  const diff = Math.round((target.getTime() - today.getTime()) / (1000 * 60 * 60 * 24));
+  if (diff === 0) return "D-Day";
+  if (diff > 0) return `D-${diff}`;
+  return `D+${Math.abs(diff)}`;
 }
 
 function getStageActions(detail: DealDetailPayload) {
@@ -215,18 +254,19 @@ function getStageActions(detail: DealDetailPayload) {
 export default function AdminCommercialPage() {
   const [overview, setOverview] = useState<CommercialOverviewPayload | null>(null);
   const [customers, setCustomers] = useState<CustomerListItem[]>([]);
+  const [overviewRange, setOverviewRange] = useState<CommercialOverviewRange>("today");
+  const [customerQuery, setCustomerQuery] = useState("");
   const [selectedCustomerId, setSelectedCustomerId] = useState<string | null>(null);
   const [selectedDealId, setSelectedDealId] = useState<string | null>(null);
   const [activeDealTab, setActiveDealTab] = useState<DealTab>("overview");
-  const [customerDetail, setCustomerDetail] = useState<CustomerDetailPayload | null>(
-    null
-  );
+  const [customerDetail, setCustomerDetail] = useState<CustomerDetailPayload | null>(null);
   const [dealDetail, setDealDetail] = useState<DealDetailPayload | null>(null);
   const [loadingOverview, setLoadingOverview] = useState(true);
   const [loadingCustomers, setLoadingCustomers] = useState(true);
   const [loadingCustomerDetail, setLoadingCustomerDetail] = useState(false);
   const [loadingDealDetail, setLoadingDealDetail] = useState(false);
   const [error, setError] = useState<string | null>(null);
+  const deferredCustomerQuery = useDeferredValue(customerQuery);
 
   useEffect(() => {
     let alive = true;
@@ -236,7 +276,7 @@ export default function AdminCommercialPage() {
 
       try {
         const payload = await readJson<{ overview: CommercialOverviewPayload }>(
-          "/api/admin/commercial/overview"
+          `/api/admin/commercial/overview?range=${overviewRange}`
         );
         if (!alive) return;
         setOverview(payload.overview);
@@ -251,6 +291,16 @@ export default function AdminCommercialPage() {
         if (alive) setLoadingOverview(false);
       }
     }
+
+    void loadOverview();
+
+    return () => {
+      alive = false;
+    };
+  }, [overviewRange]);
+
+  useEffect(() => {
+    let alive = true;
 
     async function loadCustomers() {
       setLoadingCustomers(true);
@@ -279,7 +329,7 @@ export default function AdminCommercialPage() {
       }
     }
 
-    void Promise.all([loadOverview(), loadCustomers()]);
+    void loadCustomers();
 
     return () => {
       alive = false;
@@ -363,6 +413,38 @@ export default function AdminCommercialPage() {
     };
   }, [selectedDealId]);
 
+  const filteredCustomers = useMemo(() => {
+    const query = deferredCustomerQuery.trim().toLowerCase();
+    if (!query) return customers;
+
+    return customers.filter((item) =>
+      [
+        item.customer.name,
+        item.customer.contact_name,
+        item.customer.region_label,
+        item.customer.campus_name,
+        item.customer.phone,
+        item.customer.business_number,
+      ]
+        .filter((value): value is string => Boolean(value))
+        .some((value) => value.toLowerCase().includes(query))
+    );
+  }, [customers, deferredCustomerQuery]);
+
+  useEffect(() => {
+    if (filteredCustomers.length === 0) {
+      setSelectedCustomerId(null);
+      setSelectedDealId(null);
+      setCustomerDetail(null);
+      setDealDetail(null);
+      return;
+    }
+
+    if (!selectedCustomerId || !filteredCustomers.some((item) => item.customer.id === selectedCustomerId)) {
+      setSelectedCustomerId(filteredCustomers[0].customer.id);
+    }
+  }, [filteredCustomers, selectedCustomerId]);
+
   const totals = useMemo(() => {
     return customers.reduce(
       (acc, item) => {
@@ -391,38 +473,61 @@ export default function AdminCommercialPage() {
   const alerts = overview?.alerts ?? [];
   const agenda = overview?.agenda ?? [];
   const nextActions = dealDetail ? getStageActions(dealDetail) : [];
+  const overviewRangeLabel =
+    OVERVIEW_RANGE_OPTIONS.find((option) => option.id === overviewRange)?.label ?? "오늘";
 
   return (
-    <div className="min-h-screen bg-[#f6f6f3] px-6 py-8">
+    <div className="min-h-screen bg-[#f5f5f2] px-6 py-8">
       <div className="mx-auto max-w-[1600px] space-y-6">
+        {/* 페이지 헤더 */}
         <div className="flex flex-wrap items-end justify-between gap-4">
           <div>
             <p className="text-xs font-semibold uppercase tracking-[0.24em] text-[#1a1a1a]/35">
               Partner Dashboard
             </p>
-            <h1 className="mt-2 text-3xl font-semibold tracking-tight text-[#111110]">
+            <h1 className="mt-2 text-xl font-bold text-[#1a1a1a]">
               파트너 포털 운영 대시보드
             </h1>
-            <p className="mt-2 max-w-4xl text-sm text-[#1a1a1a]/55">
+            <p className="mt-1.5 max-w-4xl text-sm text-[#1a1a1a]/50">
               오늘의 병목, 단계 분포, 설치 일정, 미수 리스크를 먼저 보고 필요한 거래 상세로 바로 들어가는 운영판입니다.
             </p>
           </div>
-          <div className="rounded-2xl border border-[#e7e7e2] bg-white px-4 py-3 shadow-sm">
-            <p className="text-xs uppercase tracking-[0.18em] text-[#1a1a1a]/35">
-              Updated
-            </p>
-            <p className="mt-1 text-sm font-semibold text-[#111110]">
-              {formatDateTime(overview?.updated_at)}
-            </p>
+          <div className="flex flex-col items-stretch gap-3">
+            <div className="flex flex-wrap justify-end gap-2">
+              {OVERVIEW_RANGE_OPTIONS.map((option) => (
+                <button
+                  key={option.id}
+                  type="button"
+                  onClick={() => setOverviewRange(option.id)}
+                  className={[
+                    "rounded-full px-3 py-1.5 text-xs font-medium transition-colors duration-150",
+                    overviewRange === option.id
+                      ? "bg-[#1a1a1a] text-white"
+                      : "bg-white text-[#1a1a1a]/60 border border-[#e8e8e4] hover:bg-[#f7f7f5]",
+                  ].join(" ")}
+                >
+                  {option.label}
+                </button>
+              ))}
+            </div>
+            <div className="rounded-xl border border-[#e8e8e4] bg-white px-4 py-3">
+              <p className="text-xs uppercase tracking-[0.18em] text-[#1a1a1a]/35">
+                Updated · {overviewRangeLabel}
+              </p>
+              <p className="mt-1 text-sm font-semibold text-[#1a1a1a]">
+                {formatDateTime(overview?.updated_at)}
+              </p>
+            </div>
           </div>
         </div>
 
         {error && (
-          <div className="rounded-2xl border border-red-200 bg-red-50 px-4 py-3 text-sm text-red-700">
+          <div className="rounded-xl border border-red-200 bg-red-50 px-4 py-3 text-sm text-red-700">
             {error}
           </div>
         )}
 
+        {/* KPI 칩 */}
         <div className="grid gap-3 md:grid-cols-2 xl:grid-cols-6">
           <SummaryChip label="기관 수" value={String(metrics.customer_count)} icon={<Building2 className="h-4 w-4" />} />
           <SummaryChip label="진행 거래" value={String(metrics.active_deal_count)} icon={<Package className="h-4 w-4" />} />
@@ -433,17 +538,19 @@ export default function AdminCommercialPage() {
             label="미수금"
             value={formatMoney(metrics.outstanding_amount)}
             icon={<CircleDollarSign className="h-4 w-4" />}
+            danger={metrics.outstanding_amount > 0}
           />
         </div>
 
+        {/* 단계 보드 + 일정/주의 */}
         <div className="grid gap-6 xl:grid-cols-[minmax(0,1.2fr)_420px]">
-          <Card className="border-[#e7e7e2] bg-white shadow-sm">
+          <Card className="border-[#e8e8e4] bg-white shadow-none">
             <CardHeader className="pb-3">
               <CardTitle className="text-base">단계 보드 요약</CardTitle>
             </CardHeader>
             <CardContent className="space-y-4">
               {loadingOverview ? (
-                <LoadingBlock label="운영 보드를 불러오는 중" />
+                <LoadingBlock />
               ) : (
                 <>
                   <div className="grid gap-3 md:grid-cols-4">
@@ -455,12 +562,12 @@ export default function AdminCommercialPage() {
                       />
                     ))}
                   </div>
-                  <div className="rounded-2xl border border-[#ecece7] bg-[#fafaf8] p-4">
+                  <div className="rounded-xl border border-[#e8e8e4] bg-[#f7f7f5] p-4">
                     <div className="flex flex-wrap gap-2">
                       {stageCounts.map((stage) => (
                         <span
                           key={`${stage.stage}-chip`}
-                          className="rounded-full bg-white px-3 py-1.5 text-xs font-medium text-[#111110]/70"
+                          className="rounded-full bg-white px-3 py-1.5 text-xs font-medium text-[#1a1a1a]/70"
                         >
                           {stage.label} {stage.count}
                         </span>
@@ -475,7 +582,7 @@ export default function AdminCommercialPage() {
             </CardContent>
           </Card>
 
-          <Card className="border-[#e7e7e2] bg-white shadow-sm">
+          <Card className="border-[#e8e8e4] bg-white shadow-none">
             <CardHeader className="pb-3">
               <CardTitle className="text-base">오늘 일정 · 주의 신호</CardTitle>
             </CardHeader>
@@ -483,7 +590,7 @@ export default function AdminCommercialPage() {
               <div className="space-y-3">
                 <SectionTitle icon={<AlertTriangle className="h-4 w-4" />} label="주의 필요" />
                 {loadingOverview ? (
-                  <LoadingBlock label="경고 정보를 정리하는 중" />
+                  <LoadingBlock />
                 ) : alerts.length === 0 ? (
                   <EmptyText label="현재 강한 경고 항목은 없습니다." />
                 ) : (
@@ -493,7 +600,7 @@ export default function AdminCommercialPage() {
               <div className="space-y-3">
                 <SectionTitle icon={<Clock3 className="h-4 w-4" />} label="다가오는 일정" />
                 {loadingOverview ? (
-                  <LoadingBlock label="일정 정보를 정리하는 중" />
+                  <LoadingBlock />
                 ) : agenda.length === 0 ? (
                   <EmptyText label="등록된 일정이 없습니다." />
                 ) : (
@@ -504,19 +611,48 @@ export default function AdminCommercialPage() {
           </Card>
         </div>
 
+        {/* 3컬럼 메인 레이아웃 */}
         <div className="grid gap-6 xl:grid-cols-[320px_minmax(0,1fr)_420px]">
-          <Card className="border-[#e7e7e2] bg-white shadow-sm">
-            <CardHeader className="pb-4">
+          {/* 고객 목록 */}
+          <Card className="border-[#e8e8e4] bg-white shadow-none">
+            <CardHeader className="space-y-3 pb-4">
               <CardTitle className="text-base">고객 / 거래 탐색</CardTitle>
+              <div className="flex items-center justify-between gap-3 text-xs text-[#1a1a1a]/40">
+                <span>검색 결과</span>
+                <span>{filteredCustomers.length}/{customers.length}</span>
+              </div>
+              <label className="relative block">
+                <Search className="pointer-events-none absolute left-3 top-1/2 h-4 w-4 -translate-y-1/2 text-[#1a1a1a]/30" />
+                <input
+                  type="search"
+                  value={customerQuery}
+                  onChange={(event) => setCustomerQuery(event.target.value)}
+                  placeholder="기관명, 담당자, 지역으로 검색"
+                  className="w-full rounded-xl border border-[#e8e8e4] bg-[#fafaf8] py-2.5 pl-9 pr-3 text-sm text-[#1a1a1a] outline-none transition-colors focus:border-[#1a1a1a]"
+                />
+              </label>
             </CardHeader>
             <CardContent className="space-y-3">
+              <div className="relative">
+                <Search className="pointer-events-none absolute left-3 top-1/2 h-4 w-4 -translate-y-1/2 text-[#1a1a1a]/30" />
+                <input
+                  type="search"
+                  value={customerQuery}
+                  onChange={(event) => setCustomerQuery(event.target.value)}
+                  placeholder="湲곌?紐?, ?대떦??, 吏??쑝濡?寃??"
+                  className="h-10 w-full rounded-xl border border-[#e8e8e4] bg-[#f7f7f5] pl-9 pr-3 text-sm text-[#1a1a1a] outline-none transition-colors duration-150 placeholder:text-[#1a1a1a]/35 focus:border-[#1a1a1a]/25 focus:bg-white"
+                />
+              </div>
               {loadingCustomers ? (
-                <LoadingBlock label="기관 목록 불러오는 중" />
+                <LoadingBlock />
               ) : customers.length === 0 ? (
                 <EmptyBlock label="V2 고객 데이터가 아직 없습니다." />
+              ) : filteredCustomers.length === 0 ? (
+                <EmptyBlock label="검색 조건에 맞는 기관이 없습니다." />
               ) : (
-                customers.map((item) => {
+                filteredCustomers.map((item) => {
                   const isSelected = item.customer.id === selectedCustomerId;
+                  const hasOutstanding = (item.summary?.outstanding_amount ?? 0) > 0;
                   return (
                     <button
                       key={item.customer.id}
@@ -526,44 +662,51 @@ export default function AdminCommercialPage() {
                           setSelectedCustomerId(item.customer.id);
                         })
                       }
-                      className={`w-full rounded-2xl border px-4 py-3 text-left transition-colors ${
+                      className={[
+                        "relative w-full rounded-xl border px-4 py-3 text-left transition-colors duration-150",
                         isSelected
-                          ? "border-[#111110] bg-[#111110] text-white"
-                          : "border-[#ecece7] bg-[#fafaf8] text-[#111110] hover:border-[#cfcfc8]"
-                      }`}
+                          ? "border-[#1a1a1a] bg-[#fafafa]"
+                          : "border-[#e8e8e4] bg-white hover:bg-[#f7f7f5] hover:border-[#ccc]",
+                      ].join(" ")}
                     >
+                      {hasOutstanding && (
+                        <span className="absolute right-3 top-3 w-1.5 h-1.5 rounded-full bg-red-400" />
+                      )}
                       <div className="flex items-center justify-between gap-3">
-                        <div className="min-w-0">
-                          <p className="truncate text-sm font-semibold">
+                        <div className="min-w-0 pr-4">
+                          <p className="truncate text-sm font-semibold text-[#1a1a1a]">
                             {item.customer.name}
                           </p>
-                          <p
-                            className={`mt-1 text-xs ${
-                              isSelected ? "text-white/70" : "text-[#1a1a1a]/45"
-                            }`}
-                          >
+                          <p className="mt-1 text-xs text-[#1a1a1a]/45">
                             {item.customer.region_label ?? "지역 미지정"}
                             {item.customer.campus_name
                               ? ` · ${item.customer.campus_name}`
                               : ""}
                           </p>
                         </div>
-                        <ArrowRight
-                          className={`h-4 w-4 shrink-0 ${
-                            isSelected ? "text-white/80" : "text-[#1a1a1a]/25"
-                          }`}
-                        />
                       </div>
-                      <div className="mt-3 grid grid-cols-2 gap-2 text-xs">
+                      <div className="mt-3 flex flex-wrap gap-2 text-[11px]">
+                        <span className="rounded-full bg-[#f7f7f5] px-2.5 py-1 text-[#1a1a1a]/60">
+                          嫄곕옒 {item.summary?.total_deals ?? 0}嫄?
+                        </span>
+                        <span className="rounded-full bg-[#f7f7f5] px-2.5 py-1 text-[#1a1a1a]/60">
+                          吏꾪뻾 {item.summary?.active_deals ?? 0}嫄?
+                        </span>
+                        {hasOutstanding && (
+                          <span className="rounded-full bg-red-50 px-2.5 py-1 text-red-600">
+                            誘몄닔 {formatMoney(item.summary?.outstanding_amount ?? 0)}
+                          </span>
+                        )}
+                      </div>
+                      <div className="hidden mt-3 flex flex-wrap gap-2 text-xs">
                         <MiniStat
                           label="진행 거래"
                           value={String(item.summary?.active_deals ?? 0)}
-                          inverted={isSelected}
                         />
                         <MiniStat
                           label="미수금"
                           value={formatMoney(item.summary?.outstanding_amount ?? 0)}
-                          inverted={isSelected}
+                          danger={(item.summary?.outstanding_amount ?? 0) > 0}
                         />
                       </div>
                     </button>
@@ -573,21 +716,22 @@ export default function AdminCommercialPage() {
             </CardContent>
           </Card>
 
+          {/* 기관 상세 */}
           <div className="space-y-6">
-            <Card className="border-[#e7e7e2] bg-white shadow-sm">
+            <Card className="border-[#e8e8e4] bg-white shadow-none">
               <CardHeader className="pb-4">
                 <CardTitle className="text-base">기관 상세</CardTitle>
               </CardHeader>
               <CardContent className="space-y-5">
                 {loadingCustomerDetail ? (
-                  <LoadingBlock label="기관 상세 불러오는 중" />
+                  <LoadingBlock />
                 ) : !customerDetail ? (
                   <EmptyBlock label="선택된 기관이 없습니다." />
                 ) : (
                   <>
                     <div className="flex flex-wrap items-start justify-between gap-4">
                       <div>
-                        <h2 className="text-2xl font-semibold text-[#111110]">
+                        <h2 className="text-2xl font-semibold text-[#1a1a1a]">
                           {customerDetail.customer.name}
                         </h2>
                         <div className="mt-2 flex flex-wrap gap-3 text-sm text-[#1a1a1a]/55">
@@ -610,7 +754,7 @@ export default function AdminCommercialPage() {
                     </div>
 
                     <div className="grid gap-4 lg:grid-cols-2">
-                      <div className="space-y-3 rounded-2xl border border-[#ecece7] bg-[#fafaf8] p-4">
+                      <div className="space-y-3 rounded-xl border border-[#e8e8e4] bg-[#f7f7f5] p-4">
                         <SectionTitle icon={<Clock3 className="h-4 w-4" />} label="최근 활동" />
                         {customerDetail.recent_activity.length === 0 ? (
                           <EmptyText label="최근 활동 로그가 없습니다." />
@@ -624,7 +768,7 @@ export default function AdminCommercialPage() {
                           ))
                         )}
                       </div>
-                      <div className="space-y-3 rounded-2xl border border-[#ecece7] bg-[#fafaf8] p-4">
+                      <div className="space-y-3 rounded-xl border border-[#e8e8e4] bg-[#f7f7f5] p-4">
                         <SectionTitle icon={<CalendarDays className="h-4 w-4" />} label="다가오는 일정" />
                         {customerDetail.recent_calendar_events.length === 0 ? (
                           <EmptyText label="등록된 일정이 없습니다." />
@@ -642,7 +786,7 @@ export default function AdminCommercialPage() {
 
                     <div className="space-y-3">
                       <div className="flex items-center justify-between">
-                        <h3 className="text-sm font-semibold text-[#111110]">
+                        <h3 className="text-sm font-semibold text-[#1a1a1a]">
                           거래 이력
                         </h3>
                         <span className="text-xs text-[#1a1a1a]/40">
@@ -652,6 +796,10 @@ export default function AdminCommercialPage() {
                       <div className="space-y-3">
                         {customerDetail.deals.map((deal) => {
                           const isSelected = deal.deal_id === selectedDealId;
+                          const stageMeta = DEAL_STAGE_META[deal.current_stage];
+                          const dday = (deal.current_stage === "installation" || deal.current_stage === "confirmed")
+                            ? getDday((deal as { scheduled_start_at?: string | null }).scheduled_start_at)
+                            : null;
                           return (
                             <button
                               key={deal.deal_id}
@@ -661,30 +809,44 @@ export default function AdminCommercialPage() {
                                   setSelectedDealId(deal.deal_id);
                                 })
                               }
-                              className={`w-full rounded-2xl border px-4 py-4 text-left transition-colors ${
+                              className={[
+                                "w-full rounded-2xl border px-4 py-4 text-left transition-colors duration-150",
                                 isSelected
-                                  ? "border-[#111110] bg-[#f4f4f1]"
-                                  : "border-[#ecece7] hover:border-[#d2d2cb]"
-                              }`}
+                                  ? "ring-2 ring-[#1a1a1a] ring-offset-1 border-[#1a1a1a]"
+                                  : "border-[#e8e8e4] hover:border-[#d2d2cb]",
+                              ].join(" ")}
                             >
                               <div className="flex flex-wrap items-start justify-between gap-3">
-                                <div>
-                                  <p className="text-sm font-semibold text-[#111110]">
+                                <div className="min-w-0">
+                                  <p className="text-sm font-semibold text-[#1a1a1a]">
                                     {deal.deal_title}
                                   </p>
-                                  <p className="mt-1 text-xs text-[#1a1a1a]/45">
-                                    {deal.deal_code} · 단계 {deal.current_stage}
+                                  <p className="mt-0.5 font-mono text-[10px] text-[#1a1a1a]/40">
+                                    {deal.deal_code}
                                   </p>
                                 </div>
-                                <span className="rounded-full bg-white px-2.5 py-1 text-xs font-medium text-[#111110]/70">
-                                  {deal.payment_status}
-                                </span>
+                                <div className="flex items-center gap-2 shrink-0">
+                                  <span className={`inline-flex items-center gap-1.5 rounded-full px-2.5 py-0.5 text-[10px] font-medium transition-colors duration-200 ${stageMeta.color}`}>
+                                    <span className={`w-1.5 h-1.5 rounded-full ${stageMeta.dot}`} />
+                                    {DEAL_STAGE_LABEL[deal.current_stage]}
+                                  </span>
+                                  {dday && (
+                                    <span className="text-[10px] font-medium text-amber-600">
+                                      {dday}
+                                    </span>
+                                  )}
+                                  {deal.contracted_amount != null && (
+                                    <span className="text-xs font-semibold text-[#1a1a1a]">
+                                      {fmtM(deal.contracted_amount)}
+                                    </span>
+                                  )}
+                                </div>
                               </div>
-                              <div className="mt-4 grid gap-2 md:grid-cols-4">
-                                <InlineMetric label="계약" value={formatMoney(deal.contracted_amount)} />
-                                <InlineMetric label="설치 완료" value={formatMoney(deal.installed_amount)} />
-                                <InlineMetric label="실수납" value={formatMoney(deal.paid_amount)} />
-                                <InlineMetric label="미수금" value={formatMoney(deal.outstanding_amount)} />
+                              <div className="mt-4 grid gap-2 grid-cols-4">
+                                <InlineMetric label="계약" value={fmtM(deal.contracted_amount)} />
+                                <InlineMetric label="설치완료" value={fmtM(deal.installed_amount)} />
+                                <InlineMetric label="실수납" value={fmtM(deal.paid_amount)} />
+                                <InlineMetric label="미수금" value={fmtM(deal.outstanding_amount)} danger={(deal.outstanding_amount ?? 0) > 0} />
                               </div>
                             </button>
                           );
@@ -697,40 +859,48 @@ export default function AdminCommercialPage() {
             </Card>
           </div>
 
-          <Card className="border-[#e7e7e2] bg-white shadow-sm">
+          {/* 거래 상세 패널 */}
+          <Card className="border-[#e8e8e4] bg-white shadow-none">
             <CardHeader className="pb-4">
               <CardTitle className="text-base">거래 상세</CardTitle>
             </CardHeader>
             <CardContent className="space-y-5">
               {loadingDealDetail ? (
-                <LoadingBlock label="거래 상세 불러오는 중" />
+                <LoadingBlock />
               ) : !dealDetail ? (
                 <EmptyBlock label="선택된 거래가 없습니다." />
               ) : (
-                <>
-                  <div className="rounded-2xl border border-[#ecece7] bg-[#fafaf8] p-4">
+                <div key={dealDetail.deal.id} className="transition-opacity duration-200 ease-out space-y-5">
+                  <div className="rounded-xl border border-[#e8e8e4] bg-[#f7f7f5] p-4">
                     <p className="text-xs font-semibold uppercase tracking-[0.18em] text-[#1a1a1a]/35">
                       {DEAL_STAGE_LABEL[dealDetail.deal.current_stage]}
                     </p>
-                    <h3 className="mt-2 text-lg font-semibold text-[#111110]">
+                    <h3 className="mt-2 text-lg font-semibold text-[#1a1a1a]">
                       {dealDetail.deal.title}
                     </h3>
                     <p className="mt-1 text-sm text-[#1a1a1a]/50">
                       {dealDetail.customer.name} · 최근 수정 {formatDateTime(dealDetail.deal.updated_at)}
                     </p>
                     <div className="mt-4 flex flex-wrap gap-2">
-                      <span className="rounded-full bg-white px-2.5 py-1 text-xs font-medium text-[#111110]/70">
+                      <span className="rounded-full bg-white border border-[#e8e8e4] px-2.5 py-1 text-[10px] font-medium text-[#1a1a1a]/70">
                         {dealDetail.deal.payment_status}
                       </span>
-                      <span className="rounded-full bg-white px-2.5 py-1 text-xs font-medium text-[#111110]/70">
-                        {formatMoney(dealDetail.deal.outstanding_amount)} 미수
-                      </span>
+                      {(dealDetail.deal.outstanding_amount ?? 0) > 0 ? (
+                        <span className="rounded-full bg-red-50 border border-red-200 px-2.5 py-1 text-[10px] font-semibold text-red-600 flex items-center gap-1">
+                          <span className="w-1.5 h-1.5 rounded-full bg-red-400 shrink-0" />
+                          {fmtM(dealDetail.deal.outstanding_amount)} 미수
+                        </span>
+                      ) : (
+                        <span className="rounded-full bg-white border border-[#e8e8e4] px-2.5 py-1 text-[10px] font-medium text-[#1a1a1a]/70">
+                          미수 없음
+                        </span>
+                      )}
                     </div>
                   </div>
 
                   <StageRoadmap currentStage={dealDetail.deal.current_stage} />
 
-                  <div className="space-y-3 rounded-2xl border border-[#ecece7] bg-[#fafaf8] p-4">
+                  <div className="space-y-3 rounded-xl border border-[#e8e8e4] bg-[#f7f7f5] p-4">
                     <div className="flex items-center justify-between">
                       <SectionTitle icon={<ChevronRight className="h-4 w-4" />} label="다음 액션" />
                       <span className="text-xs text-[#1a1a1a]/35">단계 전환 전 체크</span>
@@ -747,25 +917,28 @@ export default function AdminCommercialPage() {
                     </div>
                   </div>
 
+                  {/* 탭 버튼 */}
                   <div className="flex flex-wrap gap-2">
                     {DEAL_TABS.map((tab) => (
                       <button
                         key={tab.id}
                         type="button"
                         onClick={() => setActiveDealTab(tab.id)}
-                        className={`rounded-full px-3 py-1.5 text-xs font-medium transition-colors ${
+                        className={[
+                          "rounded-full px-3 py-1.5 text-xs font-medium transition-colors duration-150",
                           activeDealTab === tab.id
-                            ? "bg-[#111110] text-white"
-                            : "bg-[#f0f0ec] text-[#1a1a1a]/55 hover:text-[#111110]"
-                        }`}
+                            ? "bg-[#1a1a1a] text-white"
+                            : "bg-[#f0f0ec] text-[#1a1a1a]/55 hover:text-[#1a1a1a]",
+                        ].join(" ")}
                       >
                         {tab.label}
                       </button>
                     ))}
                   </div>
 
+                  {/* 탭 콘텐츠 */}
                   {activeDealTab === "overview" && (
-                    <div className="space-y-4">
+                    <div className="space-y-4 transition-opacity duration-150">
                       <div className="grid grid-cols-2 gap-3">
                         <MetricCard label="계약 금액" value={formatMoney(dealDetail.deal.contracted_amount)} />
                         <MetricCard label="설치 완료 금액" value={formatMoney(dealDetail.deal.installed_amount)} />
@@ -790,7 +963,7 @@ export default function AdminCommercialPage() {
                   )}
 
                   {activeDealTab === "documents" && (
-                    <div className="space-y-4">
+                    <div className="space-y-4 transition-opacity duration-150">
                       <div className="space-y-3">
                         <SectionTitle icon={<FileText className="h-4 w-4" />} label="견적서" />
                         {dealDetail.quote_documents.length === 0 ? (
@@ -823,7 +996,7 @@ export default function AdminCommercialPage() {
                   )}
 
                   {activeDealTab === "installations" && (
-                    <div className="space-y-3">
+                    <div className="space-y-3 transition-opacity duration-150">
                       <SectionTitle icon={<CalendarDays className="h-4 w-4" />} label="설치 일정" />
                       {dealDetail.installations.length === 0 ? (
                         <EmptyText label="설치 일정이 없습니다." />
@@ -836,7 +1009,7 @@ export default function AdminCommercialPage() {
                   )}
 
                   {activeDealTab === "payments" && (
-                    <div className="space-y-4">
+                    <div className="space-y-4 transition-opacity duration-150">
                       <div className="grid grid-cols-2 gap-3">
                         <MetricCard label="실수납 누계" value={formatMoney(dealDetail.deal.paid_amount)} />
                         <MetricCard label="미수금" value={formatMoney(dealDetail.deal.outstanding_amount)} />
@@ -873,7 +1046,7 @@ export default function AdminCommercialPage() {
                   )}
 
                   {activeDealTab === "activity" && (
-                    <div className="space-y-4">
+                    <div className="space-y-4 transition-opacity duration-150">
                       <div className="space-y-3">
                         <SectionTitle icon={<Clock3 className="h-4 w-4" />} label="활동 로그" />
                         {dealDetail.activity_logs.length === 0 ? (
@@ -904,7 +1077,7 @@ export default function AdminCommercialPage() {
                       </div>
                     </div>
                   )}
-                </>
+                </div>
               )}
             </CardContent>
           </Card>
@@ -914,29 +1087,35 @@ export default function AdminCommercialPage() {
   );
 }
 
+// ─── 서브 컴포넌트 ───────────────────────────────────────────────────────────
+
 function SummaryChip({
   label,
   value,
   icon,
+  danger,
 }: {
   label: string;
   value: string;
   icon: React.ReactNode;
+  danger?: boolean;
 }) {
   return (
-    <div className="rounded-2xl border border-[#e7e7e2] bg-white px-4 py-3 shadow-sm">
-      <div className="flex items-center gap-2 text-[#1a1a1a]/45">{icon}</div>
-      <p className="mt-2 text-xs text-[#1a1a1a]/45">{label}</p>
-      <p className="mt-1 text-sm font-semibold text-[#111110]">{value}</p>
+    <div className={`rounded-xl border px-4 py-3 ${danger ? "border-red-100 bg-red-50" : "border-[#e8e8e4] bg-white"}`}>
+      <div className={`shrink-0 w-7 h-7 rounded-lg flex items-center justify-center ${danger ? "bg-red-100 text-red-400" : "bg-[#f7f7f5] text-[#1a1a1a]/40"}`}>
+        {icon}
+      </div>
+      <p className={`text-[10px] uppercase tracking-wider mt-2 ${danger ? "text-red-400" : "text-[#1a1a1a]/40"}`}>{label}</p>
+      <p className={`text-base font-bold mt-0.5 ${danger ? "text-red-600" : "text-[#1a1a1a]"}`}>{value}</p>
     </div>
   );
 }
 
 function MetricCard({ label, value }: { label: string; value: string }) {
   return (
-    <div className="rounded-2xl border border-[#ecece7] bg-[#fafaf8] px-4 py-3">
-      <p className="text-xs text-[#1a1a1a]/40">{label}</p>
-      <p className="mt-1 text-sm font-semibold text-[#111110]">{value}</p>
+    <div className="rounded-xl border border-[#e8e8e4] bg-[#f7f7f5] px-3 py-2.5">
+      <p className="text-[10px] uppercase tracking-wider text-[#1a1a1a]/40">{label}</p>
+      <p className="mt-1 text-sm font-bold text-[#1a1a1a]">{value}</p>
     </div>
   );
 }
@@ -944,29 +1123,30 @@ function MetricCard({ label, value }: { label: string; value: string }) {
 function MiniStat({
   label,
   value,
-  inverted = false,
+  danger,
 }: {
   label: string;
   value: string;
-  inverted?: boolean;
+  danger?: boolean;
 }) {
   return (
-    <div className={`rounded-xl px-2.5 py-2 ${inverted ? "bg-white/10" : "bg-white"}`}>
-      <p className={`text-[11px] ${inverted ? "text-white/60" : "text-[#1a1a1a]/35"}`}>
-        {label}
-      </p>
-      <p className={`mt-1 text-xs font-semibold ${inverted ? "text-white" : "text-[#111110]"}`}>
-        {value}
-      </p>
+    <div
+      className={[
+        "inline-flex items-center gap-2 rounded-full px-2.5 py-1.5",
+        danger ? "bg-red-50" : "bg-[#f7f7f5]",
+      ].join(" ")}
+    >
+      <p className={`text-[10px] ${danger ? "text-red-400" : "text-[#1a1a1a]/40"}`}>{label}</p>
+      <p className={`text-xs font-semibold ${danger ? "text-red-600" : "text-[#1a1a1a]"}`}>{value}</p>
     </div>
   );
 }
 
-function InlineMetric({ label, value }: { label: string; value: string }) {
+function InlineMetric({ label, value, danger }: { label: string; value: string; danger?: boolean }) {
   return (
-    <div className="rounded-xl bg-[#fafaf8] px-3 py-2">
-      <p className="text-[11px] text-[#1a1a1a]/35">{label}</p>
-      <p className="mt-1 text-xs font-semibold text-[#111110]">{value}</p>
+    <div className={`rounded-xl px-3 py-2 ${danger ? "bg-red-50" : "bg-[#f7f7f5]"}`}>
+      <p className={`text-[10px] ${danger ? "text-red-400" : "text-[#1a1a1a]/40"}`}>{label}</p>
+      <p className={`mt-1 text-xs font-semibold ${danger ? "text-red-600" : "text-[#1a1a1a]"}`}>{value}</p>
     </div>
   );
 }
@@ -979,7 +1159,7 @@ function SectionTitle({
   label: string;
 }) {
   return (
-    <div className="flex items-center gap-2 text-sm font-semibold text-[#111110]">
+    <div className="flex items-center gap-2 text-sm font-semibold text-[#1a1a1a]">
       {icon}
       <span>{label}</span>
     </div>
@@ -988,9 +1168,9 @@ function SectionTitle({
 
 function CompactRow({ label, value }: { label: string; value: string }) {
   return (
-    <div className="flex items-center justify-between gap-3 rounded-xl border border-[#ecece7] px-3 py-2.5">
+    <div className="flex items-center justify-between gap-3 rounded-xl border border-[#e8e8e4] px-3 py-2.5">
       <span className="text-sm text-[#1a1a1a]/60">{label}</span>
-      <span className="text-sm font-medium text-[#111110]">{value}</span>
+      <span className="text-sm font-medium text-[#1a1a1a]">{value}</span>
     </div>
   );
 }
@@ -1002,15 +1182,15 @@ function AlertRow({
 }) {
   const toneClass =
     alert.tone === "warning"
-      ? "border-amber-200 bg-amber-50"
+      ? "bg-amber-50 border-amber-200 text-amber-800"
       : alert.tone === "accent"
-        ? "border-blue-200 bg-blue-50"
-        : "border-[#ecece7] bg-[#fafaf8]";
+        ? "bg-blue-50 border-blue-200 text-blue-700"
+        : "bg-[#f7f7f5] border-[#e8e8e4] text-[#1a1a1a]";
 
   return (
-    <div className={`rounded-2xl border px-3 py-3 ${toneClass}`}>
-      <p className="text-sm font-semibold text-[#111110]">{alert.title}</p>
-      <p className="mt-1 text-xs text-[#1a1a1a]/55">{alert.description}</p>
+    <div className={`rounded-xl border px-3 py-3 ${toneClass}`}>
+      <p className="text-sm font-semibold">{alert.title}</p>
+      <p className="mt-1 text-xs opacity-70">{alert.description}</p>
     </div>
   );
 }
@@ -1021,10 +1201,10 @@ function AgendaRow({
   item: CommercialOverviewPayload["agenda"][number];
 }) {
   return (
-    <div className="rounded-2xl border border-[#ecece7] bg-[#fafaf8] px-3 py-3">
+    <div className="bg-white border-[#e8e8e4] rounded-xl border px-3 py-3">
       <div className="flex items-center justify-between gap-3">
-        <p className="text-sm font-semibold text-[#111110]">{item.title}</p>
-        <span className="rounded-full bg-white px-2.5 py-1 text-[11px] font-medium text-[#111110]/70">
+        <p className="text-sm font-semibold text-[#1a1a1a]">{item.title}</p>
+        <span className="text-[10px] px-2 py-0.5 rounded-full bg-[#f0f0ec] text-[#1a1a1a]/60 font-medium">
           {item.status}
         </span>
       </div>
@@ -1040,28 +1220,38 @@ function AgendaRow({
 }
 
 function StageRoadmap({ currentStage }: { currentStage: DealStage }) {
-  const stages = Object.keys(DEAL_STAGE_LABEL) as DealStage[];
-  const currentIndex = stages.indexOf(currentStage);
+  if (currentStage === "cancelled") return (
+    <div className="flex items-center gap-2">
+      <span className="w-2 h-2 rounded-full bg-red-300" />
+      <span className="text-xs text-red-400">취소됨</span>
+    </div>
+  );
 
+  const activeIdx = STAGE_FLOW.indexOf(currentStage);
   return (
-    <div className="grid grid-cols-4 gap-2">
-      {stages.map((stage, index) => {
-        const isCurrent = stage === currentStage;
-        const isDone = index < currentIndex && currentStage !== "cancelled";
-
+    <div className="flex items-center gap-0">
+      {STAGE_FLOW.map((s, i) => {
+        const meta = DEAL_STAGE_META[s];
+        const isPast   = i < activeIdx;
+        const isActive = i === activeIdx;
+        const isFuture = i > activeIdx;
         return (
-          <div
-            key={stage}
-            className={`rounded-2xl border px-3 py-2 text-center ${
-              isCurrent
-                ? "border-[#111110] bg-[#111110] text-white"
-                : isDone
-                  ? "border-[#d8e9d8] bg-[#eef8ee] text-[#245b2f]"
-                  : "border-[#ecece7] bg-[#fafaf8] text-[#1a1a1a]/55"
-            }`}
-          >
-            <p className="text-[11px] font-semibold">{DEAL_STAGE_LABEL[stage]}</p>
-          </div>
+          <React.Fragment key={s}>
+            <div className="flex flex-col items-center gap-1">
+              <div className={[
+                "rounded-full transition-colors duration-200",
+                isActive ? `w-3.5 h-3.5 ${meta.dot} ring-2 ${meta.ring}` : "",
+                isPast   ? `w-2.5 h-2.5 ${meta.dot}` : "",
+                isFuture ? "w-2.5 h-2.5 bg-white border-2 border-[#d8d8d4]" : "",
+              ].filter(Boolean).join(" ")} />
+              <span className={`text-[9px] leading-none whitespace-nowrap ${isActive ? "font-semibold text-[#1a1a1a]" : isPast ? "text-[#1a1a1a]/40" : "text-[#1a1a1a]/25"}`}>
+                {DEAL_STAGE_LABEL[s]}
+              </span>
+            </div>
+            {i < STAGE_FLOW.length - 1 && (
+              <div className={`h-px flex-1 min-w-[10px] mb-3.5 transition-colors duration-200 ${i < activeIdx ? meta.dot : "bg-[#e0e0dc]"}`} />
+            )}
+          </React.Fragment>
         );
       })}
     </div>
@@ -1079,14 +1269,14 @@ function ActionCard({
 }) {
   const toneClass =
     tone === "warning"
-      ? "border-amber-200 bg-amber-50"
+      ? "bg-amber-50 border-amber-200"
       : tone === "accent"
-        ? "border-blue-200 bg-blue-50"
-        : "border-[#ecece7] bg-white";
+        ? "bg-blue-50 border-blue-200"
+        : "bg-[#f7f7f5] border-[#e8e8e4]";
 
   return (
-    <div className={`rounded-2xl border px-3 py-3 ${toneClass}`}>
-      <p className="text-sm font-semibold text-[#111110]">{title}</p>
+    <div className={`rounded-xl border px-3 py-3 active:scale-[0.98] transition-transform duration-75 ${toneClass}`}>
+      <p className="text-sm font-semibold text-[#1a1a1a]">{title}</p>
       <p className="mt-1 text-xs text-[#1a1a1a]/55">{description}</p>
     </div>
   );
@@ -1108,10 +1298,10 @@ function DocumentBundleCard({
   amount: number;
 }) {
   return (
-    <div className="rounded-2xl border border-[#ecece7] bg-[#fafaf8] p-4">
+    <div className="rounded-xl border border-[#e8e8e4] bg-[#f7f7f5] p-4">
       <div className="flex items-center justify-between gap-3">
-        <p className="text-sm font-semibold text-[#111110]">{title}</p>
-        <span className="rounded-full bg-white px-2.5 py-1 text-[11px] font-medium text-[#111110]/70">
+        <p className="text-sm font-semibold text-[#1a1a1a]">{title}</p>
+        <span className="text-[10px] px-2 py-0.5 rounded-full bg-white border border-[#e8e8e4] font-medium text-[#1a1a1a]/70">
           {status}
         </span>
       </div>
@@ -1146,12 +1336,12 @@ function ContractBundleCard({
 
 function InstallationCard({ event }: { event: InstallationEvent }) {
   return (
-    <div className="rounded-2xl border border-[#ecece7] bg-[#fafaf8] p-4">
+    <div className="rounded-xl border border-[#e8e8e4] bg-[#f7f7f5] p-4">
       <div className="flex items-center justify-between gap-3">
-        <p className="text-sm font-semibold text-[#111110]">
+        <p className="text-sm font-semibold text-[#1a1a1a]">
           {formatDateTime(event.scheduled_start_at)}
         </p>
-        <span className="rounded-full bg-white px-2.5 py-1 text-[11px] font-medium text-[#111110]/70">
+        <span className="text-[10px] px-2 py-0.5 rounded-full bg-white border border-[#e8e8e4] font-medium text-[#1a1a1a]/70">
           {event.status}
         </span>
       </div>
@@ -1169,30 +1359,41 @@ function InstallationCard({ event }: { event: InstallationEvent }) {
 function SimpleTimelineRow({
   title,
   subtitle,
+  isLast = false,
 }: {
   title: string;
   subtitle: string;
+  isLast?: boolean;
 }) {
   return (
-    <div className="rounded-xl border border-[#ecece7] bg-white px-3 py-2.5">
-      <p className="text-sm font-medium text-[#111110]">{title}</p>
-      <p className="mt-1 text-xs text-[#1a1a1a]/40">{subtitle}</p>
+    <div className={`relative flex gap-3 ${isLast ? "" : "pb-4"}`}>
+      {!isLast && (
+        <span className="absolute left-3 top-6 bottom-0 w-px bg-[#e8e8e4]" />
+      )}
+      <div className="shrink-0 w-6 h-6 rounded-full bg-[#f0f0ec] flex items-center justify-center z-10">
+        <span className="w-1.5 h-1.5 rounded-full bg-[#1a1a1a]/25" />
+      </div>
+      <div className="min-w-0 pt-0.5">
+        <p className="text-sm font-medium text-[#1a1a1a]">{title}</p>
+        <p className="mt-0.5 text-xs text-[#1a1a1a]/40">{subtitle}</p>
+      </div>
     </div>
   );
 }
 
-function LoadingBlock({ label }: { label: string }) {
+function LoadingBlock() {
   return (
-    <div className="flex items-center gap-2 rounded-2xl border border-[#ecece7] bg-[#fafaf8] px-4 py-6 text-sm text-[#1a1a1a]/55">
-      <Loader2 className="h-4 w-4 animate-spin" />
-      <span>{label}</span>
+    <div className="space-y-2">
+      <div className="h-14 rounded-xl bg-[#f0f0ec] animate-pulse" />
+      <div className="h-14 rounded-xl bg-[#f0f0ec] animate-pulse" />
+      <div className="h-14 rounded-xl bg-[#f0f0ec] animate-pulse" />
     </div>
   );
 }
 
 function EmptyBlock({ label }: { label: string }) {
   return (
-    <div className="rounded-2xl border border-dashed border-[#d9d9d2] bg-[#fafaf8] px-4 py-8 text-center text-sm text-[#1a1a1a]/45">
+    <div className="rounded-xl border border-dashed border-[#e0e0dc] bg-[#fafaf8] px-4 py-8 text-center text-sm text-[#1a1a1a]/40">
       {label}
     </div>
   );

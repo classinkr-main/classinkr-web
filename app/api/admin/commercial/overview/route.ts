@@ -1,29 +1,39 @@
 import { NextRequest, NextResponse } from "next/server";
 
 import { verifyAdmin } from "@/lib/admin-auth";
+import type { CommercialOverviewRange } from "@/lib/partner-portal/overview-types";
 import {
   getCommercialOverview,
   getDemoCommercialOverview,
   getLegacyCommercialOverview,
 } from "@/lib/partner-portal/repositories/overview";
 
+function parseRange(value: string | null): CommercialOverviewRange {
+  if (value === "week" || value === "month" || value === "quarter") {
+    return value;
+  }
+
+  return "today";
+}
+
 export async function GET(req: NextRequest) {
   const err = await verifyAdmin(req);
   if (err) return err;
+  const range = parseRange(req.nextUrl.searchParams.get("range"));
 
   try {
-    const overview = await getCommercialOverview();
+    const overview = await getCommercialOverview(range);
     return NextResponse.json({ overview, mode: "v2" });
   } catch (error) {
     console.warn("[GET /api/admin/commercial/overview] falling back", error);
 
     try {
-      const legacyOverview = await getLegacyCommercialOverview();
+      const legacyOverview = await getLegacyCommercialOverview(range);
       return NextResponse.json({ overview: legacyOverview, mode: "legacy" });
     } catch (legacyError) {
       console.warn("[GET /api/admin/commercial/overview] demo fallback", legacyError);
       return NextResponse.json({
-        overview: await getDemoCommercialOverview(),
+        overview: await getDemoCommercialOverview(range),
         mode: "demo",
       });
     }

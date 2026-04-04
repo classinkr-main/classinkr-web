@@ -8,12 +8,17 @@ import type { PartnerAccountContext } from "@/lib/partner-portal/context";
 import type {
   ActivityLog,
   CalendarEvent,
+  ContractDocumentBundle,
   CustomerDetailPayload,
   CustomerListItem,
   DealDetailPayload,
   DealListItem,
   InstallationEvent,
+  PartnerDocumentListItem,
+  PartnerDocumentSummary,
   PaymentRecord,
+  QuoteDocumentBundle,
+  ReceiptRecord,
 } from "@/lib/partner-portal/types";
 
 export type PartnerReadMode = "v2" | "legacy" | "demo";
@@ -42,6 +47,16 @@ export interface PartnerOverviewPayload {
 
 function isTruthy<T>(value: T | null | undefined): value is T {
   return value !== null && value !== undefined;
+}
+
+function dedupeById<T extends { id: string }>(items: T[]) {
+  const seen = new Set<string>();
+
+  return items.filter((item) => {
+    if (seen.has(item.id)) return false;
+    seen.add(item.id);
+    return true;
+  });
 }
 
 function sortByDateDesc<T>(items: T[], getDate: (item: T) => string | null | undefined) {
@@ -95,6 +110,77 @@ function flattenDetails(details: DealDetailPayload[]) {
     payments: sortByDateDesc(payments, (item) => item.paid_at),
     calendarEvents: sortByDateDesc(calendarEvents, (item) => item.starts_at),
   };
+}
+
+function mapQuoteDocuments(detail: DealDetailPayload): PartnerDocumentListItem[] {
+  return detail.quote_documents.map((document: QuoteDocumentBundle) => {
+    const currentVersion =
+      document.versions.find((version) => version.id === document.current_version_id) ??
+      document.versions[0] ??
+      null;
+
+    return {
+      id: document.id,
+      kind: "quote",
+      deal_id: detail.deal.id,
+      customer_id: detail.customer.id,
+      customer_name: detail.customer.name,
+      deal_title: detail.deal.title,
+      document_number: document.quote_number,
+      status: document.status,
+      version_count: document.versions.length,
+      total_amount: currentVersion?.total_amount ?? null,
+      updated_at: document.updated_at,
+      latest_version_number: currentVersion?.version_number ?? null,
+      share_count: document.shares.length,
+      pdf_url: null,
+    };
+  });
+}
+
+function mapContractDocuments(detail: DealDetailPayload): PartnerDocumentListItem[] {
+  return detail.contract_documents.map((document: ContractDocumentBundle) => {
+    const currentVersion =
+      document.versions.find((version) => version.id === document.current_version_id) ??
+      document.versions[0] ??
+      null;
+
+    return {
+      id: document.id,
+      kind: "contract",
+      deal_id: detail.deal.id,
+      customer_id: detail.customer.id,
+      customer_name: detail.customer.name,
+      deal_title: detail.deal.title,
+      document_number: document.contract_number,
+      status: document.status,
+      version_count: document.versions.length,
+      total_amount: currentVersion?.total_amount ?? null,
+      updated_at: document.updated_at,
+      latest_version_number: currentVersion?.version_number ?? null,
+      share_count: document.shares.length,
+      pdf_url: null,
+    };
+  });
+}
+
+function mapReceipts(detail: DealDetailPayload): PartnerDocumentListItem[] {
+  return detail.receipts.map((receipt: ReceiptRecord) => ({
+    id: receipt.id,
+    kind: "receipt",
+    deal_id: detail.deal.id,
+    customer_id: detail.customer.id,
+    customer_name: detail.customer.name,
+    deal_title: detail.deal.title,
+    document_number: receipt.receipt_number,
+    status: "issued",
+    version_count: 1,
+    total_amount: receipt.total_amount,
+    updated_at: receipt.updated_at,
+    latest_version_number: 1,
+    share_count: 0,
+    pdf_url: receipt.pdf_url,
+  }));
 }
 
 async function loadV2Customers(
@@ -315,6 +401,38 @@ export async function loadPartnerOverview(
 export async function loadPartnerCalendar(
   context: PartnerAccountContext
 ): Promise<{ mode: PartnerReadMode; events: CalendarEvent[] }> {
+  const { mode, deals } = await loadPartnerDeals(context);
+
+  if (deals.length === 0) {
+    const overview = await loadPartnerOverview(context);
+    return { mode: overview.mode, events: overview.recent_calendar_events };
+  }
+
+  const detailPayloads = await Promise.all(
+    deals.map(async (deal) => {
+      try {
+        const payload = await loadPartnerDealDetail(context, deal.id);
+        return payload.deal;
+      } catch (error) {
+        console.warn("[partner-read] calendar detail fallback", error);
+        return null;
+      }
+    })
+  );
+
+  const events = sortByDateDesc(
+    dedupeById(
+      detailPayloads
+        .filter(isTruthy)
+        .flatMap((detail) => detail.calendar_events)
+    ),
+    (item) => item.starts_at
+  );
+
+  if (events.length > 0) {
+    return { mode, events };
+  }
+
   const overview = await loadPartnerOverview(context);
   return { mode: overview.mode, events: overview.recent_calendar_events };
 }
@@ -324,4 +442,54 @@ export async function loadPartnerPayments(
 ): Promise<{ mode: PartnerReadMode; payments: PaymentRecord[] }> {
   const overview = await loadPartnerOverview(context);
   return { mode: overview.mode, payments: overview.recent_payments };
+}
+
+export async function loadPartnerDocuments(
+  context: PartnerAccountContext
+): Promise<{ mode: PartnerReadMode; summary: PartnerDocumentSummary; documents: PartnerDocumentListItem[] }> {
+  const { mode, deals } = await loadPartnerDeals(context);
+
+  if (deals.length === 0) {
+    return {
+      mode,
+      summary: { all: 0, quote: 0, contract: 0, receipt: 0 },
+      documents: [],
+    };
+  }
+
+  const detailPayloads = await Promise.all(
+    deals.map(async (deal) => {
+      try {
+        const payload = await loadPartnerDealDetail(context, deal.id);
+        return payload.deal;
+      } catch (error) {
+        console.warn("[partner-read] documents detail fallback", error);
+        return null;
+      }
+    })
+  );
+
+  const documents = sortByDateDesc(
+    dedupeById(
+      detailPayloads
+        .filter(isTruthy)
+        .flatMap((detail) => [
+          ...mapQuoteDocuments(detail),
+          ...mapContractDocuments(detail),
+          ...mapReceipts(detail),
+        ])
+    ),
+    (item) => item.updated_at
+  );
+
+  const summary = documents.reduce<PartnerDocumentSummary>(
+    (acc, item) => {
+      acc.all += 1;
+      acc[item.kind] += 1;
+      return acc;
+    },
+    { all: 0, quote: 0, contract: 0, receipt: 0 }
+  );
+
+  return { mode, summary, documents };
 }

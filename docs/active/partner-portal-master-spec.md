@@ -13,6 +13,7 @@
 - [partner-portal-front-back-contract.md](C:/Projects/PUBLIC_Classin/Classin_Home_bae_v1/docs/active/partner-portal-front-back-contract.md)
 - [partner-portal-implementation-roadmap.md](C:/Projects/PUBLIC_Classin/Classin_Home_bae_v1/docs/active/partner-portal-implementation-roadmap.md)
 - [partner-portal-worklog.md](C:/Projects/PUBLIC_Classin/Classin_Home_bae_v1/docs/active/partner-portal-worklog.md)
+- [partner-portal-future-features.md](C:/Projects/PUBLIC_Classin/Classin_Home_bae_v1/docs/active/partner-portal-future-features.md) — 실험성 기능 목록 (낮은 우선순위)
 
 문서 우선순위:
 

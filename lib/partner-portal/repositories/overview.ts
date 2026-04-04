@@ -9,6 +9,7 @@ import type {
   InstallationEvent,
 } from "@/lib/partner-portal/types";
 import type {
+  CommercialOverviewRange,
   CommercialOverviewAgendaItem,
   CommercialOverviewAlert,
   CommercialOverviewPayload,
@@ -47,6 +48,13 @@ const STAGE_LABEL: Record<DealStage, string> = {
   cancelled: "취소",
 };
 
+const RANGE_DAY_COUNT: Record<CommercialOverviewRange, number> = {
+  today: 1,
+  week: 7,
+  month: 30,
+  quarter: 90,
+};
+
 function buildStageCounts(stages: DealStage[]): CommercialOverviewStageCount[] {
   const counts = new Map<DealStage, number>();
 
@@ -75,6 +83,45 @@ function sortByDateAsc<T>(items: T[], getValue: (item: T) => string | null | und
     const rightValue = getValue(right);
     return new Date(leftValue ?? 0).getTime() - new Date(rightValue ?? 0).getTime();
   });
+}
+
+function getRangeBounds(range: CommercialOverviewRange, now = new Date()) {
+  const end = new Date(now);
+  end.setHours(23, 59, 59, 999);
+
+  const start = new Date(now);
+  start.setHours(0, 0, 0, 0);
+  start.setDate(start.getDate() - (RANGE_DAY_COUNT[range] - 1));
+
+  return { start, end };
+}
+
+function isWithinRange(
+  value: string | null | undefined,
+  range: CommercialOverviewRange,
+  now = new Date()
+) {
+  if (!value) return false;
+
+  const target = new Date(value);
+  if (Number.isNaN(target.getTime())) return false;
+
+  const { start, end } = getRangeBounds(range, now);
+  return target >= start && target <= end;
+}
+
+function filterCustomersByRange(
+  customers: CustomerListItem[],
+  range: CommercialOverviewRange,
+  now = new Date()
+) {
+  return customers.filter((item) =>
+    isWithinRange(
+      item.summary?.last_deal_updated_at ?? item.customer.updated_at,
+      range,
+      now
+    )
+  );
 }
 
 function buildAgendaFromInstallations(
@@ -173,8 +220,17 @@ function buildAlertsFromDeals(
 function buildOverviewFromCustomerItemsAndDealHistory(
   customers: CustomerListItem[],
   dealHistory: CustomerDealHistoryItem[],
-  calendarEvents: CalendarEvent[]
+  calendarEvents: CalendarEvent[],
+  range: CommercialOverviewRange = "today"
 ): CommercialOverviewPayload {
+  const now = new Date();
+  const filteredCustomers = filterCustomersByRange(customers, range, now);
+  const filteredDealHistory = dealHistory.filter((deal) =>
+    isWithinRange(deal.deal_updated_at, range, now)
+  );
+  const filteredCalendarEvents = calendarEvents.filter((event) =>
+    isWithinRange(event.starts_at, range, now)
+  );
   const customerNameById = new Map(
     customers.map((item) => [item.customer.id, item.customer.name])
   );
@@ -183,25 +239,25 @@ function buildOverviewFromCustomerItemsAndDealHistory(
   );
 
   const metrics = {
-    customer_count: customers.length,
-    active_deal_count: dealHistory.filter((deal) => deal.deal_status === "active").length,
-    quote_count: dealHistory.filter((deal) => deal.current_stage === "quote").length,
-    contract_count: dealHistory.filter((deal) => deal.current_stage === "contract").length,
-    confirmed_count: dealHistory.filter((deal) => deal.current_stage === "confirmed").length,
-    scheduled_installation_count: calendarEvents.filter(
+    customer_count: filteredCustomers.length,
+    active_deal_count: filteredDealHistory.filter((deal) => deal.deal_status === "active").length,
+    quote_count: filteredDealHistory.filter((deal) => deal.current_stage === "quote").length,
+    contract_count: filteredDealHistory.filter((deal) => deal.current_stage === "contract").length,
+    confirmed_count: filteredDealHistory.filter((deal) => deal.current_stage === "confirmed").length,
+    scheduled_installation_count: filteredCalendarEvents.filter(
       (event) => event.status !== "cancelled"
     ).length,
-    outstanding_amount: customers.reduce(
+    outstanding_amount: filteredCustomers.reduce(
       (sum, item) => sum + (item.summary?.outstanding_amount ?? 0),
       0
     ),
-    outstanding_customer_count: customers.filter(
+    outstanding_customer_count: filteredCustomers.filter(
       (item) => (item.summary?.outstanding_amount ?? 0) > 0
     ).length,
   };
 
   const alerts = buildAlertsFromDeals(
-    dealHistory.map((deal) => ({
+    filteredDealHistory.map((deal) => ({
       id: deal.deal_id,
       customer_id: deal.customer_id,
       title: deal.deal_title,
@@ -213,7 +269,7 @@ function buildOverviewFromCustomerItemsAndDealHistory(
     new Map<string, InstallationEvent[]>()
   );
 
-  const agenda = sortByDateAsc(calendarEvents, (item) => item.starts_at)
+  const agenda = sortByDateAsc(filteredCalendarEvents, (item) => item.starts_at)
     .slice(0, 6)
     .map((item) => ({
       id: item.id,
@@ -231,14 +287,16 @@ function buildOverviewFromCustomerItemsAndDealHistory(
 
   return {
     metrics,
-    stage_counts: buildStageCounts(dealHistory.map((deal) => deal.current_stage)),
+    stage_counts: buildStageCounts(filteredDealHistory.map((deal) => deal.current_stage)),
     alerts,
     agenda,
     updated_at: new Date().toISOString(),
   };
 }
 
-export async function getCommercialOverview(): Promise<CommercialOverviewPayload> {
+export async function getCommercialOverview(
+  range: CommercialOverviewRange = "today"
+): Promise<CommercialOverviewPayload> {
   const supabase = createSupabaseAdminClient();
   const [customers, deals, installations] = await Promise.all([
     listAllCustomerListItems(),
@@ -255,6 +313,12 @@ export async function getCommercialOverview(): Promise<CommercialOverviewPayload
   }
 
   const installationRows = (installations.data ?? []) as InstallationEvent[];
+  const now = new Date();
+  const filteredCustomers = filterCustomersByRange(customers, range, now);
+  const filteredDeals = deals.filter((deal) => isWithinRange(deal.updated_at, range, now));
+  const filteredInstallationRows = installationRows.filter((item) =>
+    isWithinRange(item.scheduled_start_at, range, now)
+  );
   const customerNameById = new Map(
     customers.map((item) => [item.customer.id, item.customer.name])
   );
@@ -268,25 +332,25 @@ export async function getCommercialOverview(): Promise<CommercialOverviewPayload
 
   return {
     metrics: {
-      customer_count: customers.length,
-      active_deal_count: deals.filter((deal) => deal.status === "active").length,
-      quote_count: deals.filter((deal) => deal.current_stage === "quote").length,
-      contract_count: deals.filter((deal) => deal.current_stage === "contract").length,
-      confirmed_count: deals.filter((deal) => deal.current_stage === "confirmed").length,
-      scheduled_installation_count: installationRows.filter(
+      customer_count: filteredCustomers.length,
+      active_deal_count: filteredDeals.filter((deal) => deal.status === "active").length,
+      quote_count: filteredDeals.filter((deal) => deal.current_stage === "quote").length,
+      contract_count: filteredDeals.filter((deal) => deal.current_stage === "contract").length,
+      confirmed_count: filteredDeals.filter((deal) => deal.current_stage === "confirmed").length,
+      scheduled_installation_count: filteredInstallationRows.filter(
         (item) => item.status !== "cancelled" && item.status !== "completed"
       ).length,
-      outstanding_amount: customers.reduce(
+      outstanding_amount: filteredCustomers.reduce(
         (sum, item) => sum + (item.summary?.outstanding_amount ?? 0),
         0
       ),
-      outstanding_customer_count: customers.filter(
+      outstanding_customer_count: filteredCustomers.filter(
         (item) => (item.summary?.outstanding_amount ?? 0) > 0
       ).length,
     },
-    stage_counts: buildStageCounts(deals.map((deal) => deal.current_stage)),
+    stage_counts: buildStageCounts(filteredDeals.map((deal) => deal.current_stage)),
     alerts: buildAlertsFromDeals(
-      deals.map((deal) => ({
+      filteredDeals.map((deal) => ({
         id: deal.id,
         customer_id: deal.customer_id,
         title: deal.title,
@@ -298,7 +362,7 @@ export async function getCommercialOverview(): Promise<CommercialOverviewPayload
       installationsByDealId
     ),
     agenda: buildAgendaFromInstallations(
-      installationRows,
+      filteredInstallationRows,
       customerNameById,
       dealTitleById
     ),
@@ -306,7 +370,9 @@ export async function getCommercialOverview(): Promise<CommercialOverviewPayload
   };
 }
 
-export async function getLegacyCommercialOverview(): Promise<CommercialOverviewPayload> {
+export async function getLegacyCommercialOverview(
+  range: CommercialOverviewRange = "today"
+): Promise<CommercialOverviewPayload> {
   const customers = await listLegacyCustomerListItems();
   const details = (
     await Promise.all(customers.map((item) => getLegacyCustomerDetail(item.customer.id)))
@@ -318,11 +384,14 @@ export async function getLegacyCommercialOverview(): Promise<CommercialOverviewP
     sortByDateDesc(
       details.flatMap((item) => item.recent_calendar_events),
       (item) => item.starts_at
-    )
+    ),
+    range
   );
 }
 
-export async function getDemoCommercialOverview(): Promise<CommercialOverviewPayload> {
+export async function getDemoCommercialOverview(
+  range: CommercialOverviewRange = "today"
+): Promise<CommercialOverviewPayload> {
   const customers = await listDemoCustomerListItems();
   const details = (
     await Promise.all(customers.map((item) => getDemoCustomerDetail(item.customer.id)))
@@ -334,6 +403,7 @@ export async function getDemoCommercialOverview(): Promise<CommercialOverviewPay
     sortByDateDesc(
       details.flatMap((item) => item.recent_calendar_events),
       (item) => item.starts_at
-    )
+    ),
+    range
   );
 }

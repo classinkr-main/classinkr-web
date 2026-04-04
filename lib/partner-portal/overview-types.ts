@@ -1,5 +1,7 @@
 import type { DealStage } from "@/lib/partner-portal/types";
 
+export type CommercialOverviewRange = "today" | "week" | "month" | "quarter";
+
 export interface CommercialOverviewMetrics {
   customer_count: number;
   active_deal_count: number;

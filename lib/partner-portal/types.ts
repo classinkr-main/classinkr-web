@@ -49,6 +49,8 @@ export type CalendarSourceType =
   | "document_due"
   | "internal";
 
+export type PartnerDocumentKind = "quote" | "contract" | "receipt";
+
 export interface PartnerAccount {
   id: string;
   name: string;
@@ -378,4 +380,28 @@ export interface DealDetailPayload {
   receipts: ReceiptRecord[];
   activity_logs: ActivityLog[];
   calendar_events: CalendarEvent[];
+}
+
+export interface PartnerDocumentListItem {
+  id: string;
+  kind: PartnerDocumentKind;
+  deal_id: string;
+  customer_id: string;
+  customer_name: string | null;
+  deal_title: string;
+  document_number: string;
+  status: string;
+  version_count: number;
+  total_amount: number | null;
+  updated_at: string;
+  latest_version_number: number | null;
+  share_count: number;
+  pdf_url: string | null;
+}
+
+export interface PartnerDocumentSummary {
+  all: number;
+  quote: number;
+  contract: number;
+  receipt: number;
 }

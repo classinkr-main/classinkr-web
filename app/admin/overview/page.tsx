@@ -5,7 +5,7 @@ import { adminFetchJson } from "@/lib/admin-client"
 import {
   Users, TrendingUp, CheckCircle2, Mail,
   FileText, AlertCircle, ArrowUpRight, ArrowDownRight, Minus,
-  ScrollText, PenLine, Receipt, Package,
+  ScrollText, PenLine, Receipt, Package, CalendarDays,
 } from "lucide-react"
 import {
   LineChart, Line, PieChart, Pie, Cell,
@@ -106,15 +106,34 @@ function getLast7DayLabels() {
 
 // ─── [DUMMY_MODE] 파트너 포털 현황 — DB 연결 전 하드코딩 더미 데이터 ──────────
 const PARTNER_STATS = {
-  monthlyContractAmount: 53200000,   // 이번 달 계약 금액 합계
-  pendingSignatures: 1,              // 미서명 계약 건수
-  monthlyReceiptAmount: 18000000,    // 이번 달 수납 합계
-  skuSales: [                        // SKU별 누적 판매 대수
-    { sku: "CB-86",  label: "86인치",    count: 7 },
-    { sku: "CB-75",  label: "75인치",    count: 4 },
-    { sku: "STAND",  label: "스탠드",    count: 8 },
-    { sku: "CAM-T1", label: "T1 카메라", count: 5 },
+  // 거래 현황
+  activeDeals: 8,            // 진행 중 거래
+  quotingDeals: 3,           // 견적 진행 중
+  contractingDeals: 2,       // 계약 진행 중
+  confirmedDeals: 1,         // 확정 (설치 대기)
+  // 설치
+  upcomingInstalls: 2,       // 2주 이내 설치 예정
+  installingDeals: 1,        // 설치 진행 중
+  // 재무
+  monthlyContractAmount: 53200000,
+  monthlyReceiptAmount: 18000000,
+  outstandingAmount: 7800000,  // 미수금 총액
+  outstandingCustomers: 2,     // 미수 기관 수
+  // 문서
+  pendingSignatures: 1,
+  // SKU
+  skuSales: [
+    { sku: "CB-86",  label: "전자칠판 86",  count: 7 },
+    { sku: "CB-75",  label: "전자칠판 75",  count: 4 },
+    { sku: "CAM-T1", label: "AI 카메라 T1", count: 5 },
+    { sku: "STAND",  label: "스탠드",        count: 8 },
   ],
+}
+
+function formatMoney(n: number) {
+  if (n >= 100000000) return `${(n / 100000000).toFixed(1).replace(/\.0$/, "")}억`
+  if (n >= 10000) return `${Math.round(n / 10000)}만원`
+  return `${n.toLocaleString()}원`
 }
 
 // ─── SKU 미니 바 (파트너 포털 HW 카드용) ────────────────────────────────────
@@ -208,7 +227,7 @@ export default function OverviewPage() {
 
       {/* ── 미처리 알림 배너 */}
       {!loading && newLeads > 0 && (
-        <div className="flex items-center gap-3 bg-blue-50 border border-blue-100 rounded-xl px-4 py-3 mb-6">
+        <div className="flex items-center gap-3 bg-blue-50 border border-blue-100 rounded-xl px-4 py-3 mb-2">
           <AlertCircle className="w-4 h-4 text-blue-500 shrink-0" />
           <p className="text-[13px] text-blue-700 font-medium">
             미처리 신규 리드 <span className="font-bold">{newLeads}건</span>이 대기 중입니다.
@@ -216,6 +235,48 @@ export default function OverviewPage() {
           <a href="/admin/crm" className="ml-auto text-[12px] text-blue-500 hover:text-blue-700 font-medium flex items-center gap-1 shrink-0 transition-colors">
             CRM 바로가기 <ArrowUpRight className="w-3 h-3" />
           </a>
+        </div>
+      )}
+
+      {/* ── 파트너 포털 주의 알림 그룹 */}
+      {(PARTNER_STATS.outstandingAmount > 0 || PARTNER_STATS.pendingSignatures > 0 || PARTNER_STATS.upcomingInstalls > 0) && (
+        <div className="space-y-2 mb-6">
+          {/* 미수금 */}
+          {PARTNER_STATS.outstandingAmount > 0 && (
+            <div className="flex items-center gap-3 bg-red-50 border border-red-100 rounded-xl px-4 py-3">
+              <span className="w-1.5 h-1.5 rounded-full bg-red-400 shrink-0" />
+              <p className="text-[13px] text-red-700 font-medium">
+                미수금 <span className="font-bold">{formatMoney(PARTNER_STATS.outstandingAmount)}</span> — {PARTNER_STATS.outstandingCustomers}개 기관 미납
+              </p>
+              <a href="/admin/commercial" className="ml-auto text-[12px] text-red-500 hover:text-red-700 font-medium flex items-center gap-1 shrink-0 transition-colors duration-150">
+                확인 <ArrowUpRight className="w-3 h-3" />
+              </a>
+            </div>
+          )}
+          {/* 미서명 계약 */}
+          {PARTNER_STATS.pendingSignatures > 0 && (
+            <div className="flex items-center gap-3 bg-amber-50 border border-amber-100 rounded-xl px-4 py-3">
+              <PenLine className="w-4 h-4 text-amber-500 shrink-0" />
+              <p className="text-[13px] text-amber-700 font-medium">
+                미서명 계약 <span className="font-bold">{PARTNER_STATS.pendingSignatures}건</span> 대기 중
+              </p>
+              <a href="/admin/contracts" className="ml-auto text-[12px] text-amber-600 hover:text-amber-800 font-medium flex items-center gap-1 shrink-0 transition-colors duration-150">
+                확인 <ArrowUpRight className="w-3 h-3" />
+              </a>
+            </div>
+          )}
+          {/* 설치 임박 */}
+          {PARTNER_STATS.upcomingInstalls > 0 && (
+            <div className="flex items-center gap-3 bg-[#f7f7f5] border border-[#e8e8e4] rounded-xl px-4 py-3">
+              <CalendarDays className="w-4 h-4 text-[#1a1a1a]/50 shrink-0" />
+              <p className="text-[13px] text-[#1a1a1a]/70 font-medium">
+                2주 이내 설치 예정 <span className="font-bold text-[#1a1a1a]">{PARTNER_STATS.upcomingInstalls}건</span>
+              </p>
+              <a href="/admin/commercial" className="ml-auto text-[12px] text-[#1a1a1a]/40 hover:text-[#111110] font-medium flex items-center gap-1 shrink-0 transition-colors duration-150">
+                일정 보기 <ArrowUpRight className="w-3 h-3" />
+              </a>
+            </div>
+          )}
         </div>
       )}
 
@@ -294,66 +355,105 @@ export default function OverviewPage() {
 
       {/* ── 파트너 포털 현황 [DUMMY_MODE] ───────────────────────────────────── */}
       <div className="mb-6">
-        <p className="text-[11px] font-medium text-[#1a1a1a]/30 uppercase tracking-widest mb-1">Partner Portal</p>
-        <h2 className="text-[18px] font-bold text-[#111110] tracking-[-0.02em] mb-4">파트너 포털 현황</h2>
-        <div className="grid grid-cols-2 md:grid-cols-4 gap-4">
-          {/* Card 1 — 이번 달 계약 */}
-          <div className="bg-white rounded-2xl border border-[#e8e8e4] p-5 hover:border-[#c8c8c4] hover:shadow-sm transition-all">
-            <div className="flex items-start justify-between mb-3">
-              <div className="inline-flex p-2 rounded-xl bg-purple-50">
-                <ScrollText className="w-4 h-4 text-purple-500" />
-              </div>
+        {/* 섹션 헤더 */}
+        <div className="flex items-center justify-between mb-4">
+          <div>
+            <p className="text-[10px] font-semibold text-[#1a1a1a]/30 uppercase tracking-widest mb-0.5">Partner Portal</p>
+            <h2 className="text-[16px] font-bold text-[#111110] tracking-[-0.02em]">파트너 포털 현황</h2>
+          </div>
+          <a href="/admin/commercial" className="text-[12px] text-[#1a1a1a]/40 hover:text-[#111110] transition-colors duration-150 flex items-center gap-1">
+            상세 보기 <ArrowUpRight className="w-3 h-3" />
+          </a>
+        </div>
+
+        {/* 1행 — 핵심 운영 KPI 5칸 */}
+        <div className="grid grid-cols-2 md:grid-cols-3 lg:grid-cols-5 gap-3 mb-3">
+          {/* 진행 거래 */}
+          <div className="rounded-xl border border-[#e8e8e4] bg-white px-4 py-3">
+            <div className="flex items-center justify-between mb-2">
+              <p className="text-[10px] uppercase tracking-wider font-medium text-[#1a1a1a]/40">진행 거래</p>
             </div>
-            <p className="text-[11px] font-medium text-[#1a1a1a]/40 mb-1 uppercase tracking-wide">이번 달 계약 금액</p>
-            <p className="text-[28px] font-bold text-[#111110] tracking-[-0.03em] leading-none">5,320만원</p>
-            <p className="text-[11px] text-[#1a1a1a]/40 mt-1.5">2건 계약 완료</p>
+            <p className="text-xl font-bold tracking-[-0.02em] text-[#111110]">{PARTNER_STATS.activeDeals}건</p>
+            <p className="text-[11px] mt-1 text-[#1a1a1a]/40">확정 {PARTNER_STATS.confirmedDeals}건 포함</p>
           </div>
 
-          {/* Card 2 — 미서명 계약 (경고: 대기 건수 > 0) */}
-          <div className="bg-white rounded-2xl border border-[#e8e8e4] p-5 hover:border-[#c8c8c4] hover:shadow-sm transition-all">
-            <div className="flex items-start justify-between mb-3">
-              <div className={`inline-flex p-2 rounded-xl ${PARTNER_STATS.pendingSignatures > 0 ? "bg-amber-50" : "bg-[#f0f0ec]"}`}>
-                <PenLine className={`w-4 h-4 ${PARTNER_STATS.pendingSignatures > 0 ? "text-amber-500" : "text-[#1a1a1a]/50"}`} />
-              </div>
-              {PARTNER_STATS.pendingSignatures > 0 && (
-                <span className="flex items-center gap-0.5 text-[11px] font-medium px-1.5 py-0.5 rounded-full text-amber-600 bg-amber-50">
-                  대기
-                </span>
-              )}
+          {/* 설치 예정 */}
+          <div className="rounded-xl border border-[#e8e8e4] bg-white px-4 py-3">
+            <div className="flex items-center justify-between mb-2">
+              <p className="text-[10px] uppercase tracking-wider font-medium text-[#1a1a1a]/40">설치 예정</p>
             </div>
-            <p className="text-[11px] font-medium text-[#1a1a1a]/40 mb-1 uppercase tracking-wide">미서명 계약</p>
-            <p className={`text-[28px] font-bold tracking-[-0.03em] leading-none ${PARTNER_STATS.pendingSignatures > 0 ? "text-amber-500" : "text-[#111110]"}`}>
-              {PARTNER_STATS.pendingSignatures}건
-            </p>
-            <p className="text-[11px] text-[#1a1a1a]/40 mt-1.5">파트너 서명 대기 중</p>
+            <p className="text-xl font-bold tracking-[-0.02em] text-[#111110]">{PARTNER_STATS.upcomingInstalls}건</p>
+            <p className="text-[11px] mt-1 text-[#1a1a1a]/40">2주 이내 · 진행 {PARTNER_STATS.installingDeals}건</p>
           </div>
 
-          {/* Card 3 — 이번 달 수납 */}
-          <div className="bg-white rounded-2xl border border-[#e8e8e4] p-5 hover:border-[#c8c8c4] hover:shadow-sm transition-all">
-            <div className="flex items-start justify-between mb-3">
-              <div className="inline-flex p-2 rounded-xl bg-green-50">
-                <Receipt className="w-4 h-4 text-green-500" />
-              </div>
+          {/* 이번 달 계약 */}
+          <div className="rounded-xl border border-[#e8e8e4] bg-white px-4 py-3">
+            <div className="flex items-center justify-between mb-2">
+              <p className="text-[10px] uppercase tracking-wider font-medium text-[#1a1a1a]/40">이번 달 계약</p>
             </div>
-            <p className="text-[11px] font-medium text-[#1a1a1a]/40 mb-1 uppercase tracking-wide">이번 달 수납</p>
-            <p className="text-[28px] font-bold text-[#111110] tracking-[-0.03em] leading-none">1,800만원</p>
-            <p className="text-[11px] text-[#1a1a1a]/40 mt-1.5">1건 결제 완료</p>
+            <p className="text-xl font-bold tracking-[-0.02em] text-[#111110]">{formatMoney(PARTNER_STATS.monthlyContractAmount)}</p>
+            <p className="text-[11px] mt-1 text-[#1a1a1a]/40">계약 {PARTNER_STATS.contractingDeals}건 진행 중</p>
           </div>
 
-          {/* Card 4 — HW 판매 현황 */}
-          <div className="bg-white rounded-2xl border border-[#e8e8e4] p-5 hover:border-[#c8c8c4] hover:shadow-sm transition-all">
-            <div className="flex items-start justify-between mb-3">
-              <div className="inline-flex p-2 rounded-xl bg-blue-50">
-                <Package className="w-4 h-4 text-blue-500" />
+          {/* 이번 달 수납 */}
+          <div className="rounded-xl border border-[#e8e8e4] bg-emerald-50 px-4 py-3">
+            <div className="flex items-center justify-between mb-2">
+              <p className="text-[10px] uppercase tracking-wider font-medium text-emerald-600/60">이번 달 수납</p>
+            </div>
+            <p className="text-xl font-bold tracking-[-0.02em] text-emerald-700">{formatMoney(PARTNER_STATS.monthlyReceiptAmount)}</p>
+            <p className="text-[11px] mt-1 text-emerald-600/50">결제 완료</p>
+          </div>
+
+          {/* 미수금 */}
+          <div className="rounded-xl border border-red-100 bg-red-50 px-4 py-3">
+            <div className="flex items-center justify-between mb-2">
+              <p className="text-[10px] uppercase tracking-wider font-medium text-red-400">미수금</p>
+              <span className="w-1.5 h-1.5 rounded-full bg-red-400" />
+            </div>
+            <p className="text-xl font-bold tracking-[-0.02em] text-red-600">{formatMoney(PARTNER_STATS.outstandingAmount)}</p>
+            <p className="text-[11px] mt-1 text-red-400">{PARTNER_STATS.outstandingCustomers}개 기관 미납</p>
+          </div>
+        </div>
+
+        {/* 2행 — 문서 현황 + HW 누적 판매 */}
+        <div className="grid grid-cols-1 md:grid-cols-2 gap-3">
+          {/* 문서 현황 */}
+          <div className="rounded-xl border border-[#e8e8e4] bg-white px-4 py-3">
+            <p className="text-[10px] uppercase tracking-wider font-medium text-[#1a1a1a]/40 mb-3">문서 현황</p>
+            <div className="flex items-center gap-6">
+              <div>
+                <p className="text-[11px] text-[#1a1a1a]/40 mb-0.5">견적 진행</p>
+                <p className="text-[18px] font-bold text-[#111110] tracking-[-0.02em]">{PARTNER_STATS.quotingDeals}건</p>
+              </div>
+              <div className="w-px h-8 bg-[#e8e8e4]" />
+              <div>
+                <p className="text-[11px] text-[#1a1a1a]/40 mb-0.5">계약 진행</p>
+                <p className="text-[18px] font-bold text-[#111110] tracking-[-0.02em]">{PARTNER_STATS.contractingDeals}건</p>
+              </div>
+              <div className="w-px h-8 bg-[#e8e8e4]" />
+              <div className="flex items-center gap-2">
+                <div>
+                  <p className="text-[11px] text-[#1a1a1a]/40 mb-0.5">미서명</p>
+                  <p className={`text-[18px] font-bold tracking-[-0.02em] ${PARTNER_STATS.pendingSignatures > 0 ? "text-amber-500" : "text-[#111110]"}`}>
+                    {PARTNER_STATS.pendingSignatures}건
+                  </p>
+                </div>
+                {PARTNER_STATS.pendingSignatures > 0 && (
+                  <span className="w-1.5 h-1.5 rounded-full bg-amber-400 shrink-0 mt-1" />
+                )}
               </div>
             </div>
-            <p className="text-[11px] font-medium text-[#1a1a1a]/40 mb-1 uppercase tracking-wide">누적 납품 현황</p>
-            <div className="mt-2 space-y-2">
+          </div>
+
+          {/* HW 누적 판매 */}
+          <div className="rounded-xl border border-[#e8e8e4] bg-white px-4 py-3">
+            <p className="text-[10px] uppercase tracking-wider font-medium text-[#1a1a1a]/40 mb-3">HW 누적 판매</p>
+            <div className="space-y-2">
               {(() => {
                 const maxCount = Math.max(...PARTNER_STATS.skuSales.map((s) => s.count))
                 return PARTNER_STATS.skuSales.map((s) => (
                   <div key={s.sku} className="flex items-center gap-2">
-                    <span className="text-[11px] font-mono text-[#1a1a1a]/50 w-14 shrink-0">{s.sku}</span>
+                    <span className="text-[11px] text-[#1a1a1a]/50 w-24 shrink-0">{s.label}</span>
                     <SkuBar count={s.count} max={maxCount} />
                     <span className="text-[11px] font-medium text-[#111110] w-8 text-right shrink-0">{s.count}대</span>
                   </div>

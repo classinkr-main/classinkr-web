@@ -8,6 +8,26 @@ import type {
 
 export type QuoteWithItems = Quote & { items: QuoteItem[] };
 
+function normalizeQuoteItemInput(
+  item: Omit<QuoteItemInsert, "quote_id">,
+  quoteId: string,
+  index: number
+): QuoteItemInsert {
+  const quantity = Number(item.quantity ?? 0);
+  const unitPrice = Number(item.unit_price ?? 0);
+  const discountRate = Number(item.discount_rate ?? 0);
+
+  return {
+    ...item,
+    quote_id: quoteId,
+    sort_order: index,
+    quantity,
+    unit_price: unitPrice,
+    discount_rate: discountRate,
+    amount: Math.round(quantity * unitPrice * (1 - discountRate / 100)),
+  };
+}
+
 /* ─── 채번 ─────────────────────────────────────────────── */
 
 export async function generateQuoteNumber(): Promise<string> {
@@ -62,7 +82,9 @@ export async function createQuote(
     .single();
   if (error) throw error;
 
-  const itemRows = items.map((item, idx) => ({ ...item, quote_id: quote.id, sort_order: idx }));
+  const itemRows = items.map((item, idx) =>
+    normalizeQuoteItemInput(item, quote.id, idx)
+  );
   const { data: savedItems, error: iErr } = await supabase
     .from("quote_items")
     .insert(itemRows)
@@ -88,7 +110,9 @@ export async function updateQuote(
 
   if (items !== undefined) {
     await supabase.from("quote_items").delete().eq("quote_id", id);
-    const itemRows = items.map((item, idx) => ({ ...item, quote_id: id, sort_order: idx }));
+    const itemRows = items.map((item, idx) =>
+      normalizeQuoteItemInput(item, id, idx)
+    );
     await supabase.from("quote_items").insert(itemRows);
   }
 

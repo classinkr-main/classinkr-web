@@ -54,6 +54,7 @@ ${body.additional_terms ? `<h3>특약사항</h3><p>${body.additional_terms}</p>`
 
     const contract = await createContract({
       contract_number: contractNumber,
+      version: 1,
       quote_id: quote.id,
       partner_id: quote.partner_id,
       title: body.title ?? quote.title,
@@ -62,6 +63,13 @@ ${body.additional_terms ? `<h3>특약사항</h3><p>${body.additional_terms}</p>`
       content_html: contentHtml,
       valid_from: body.valid_from ?? null,
       valid_until: body.valid_until ?? null,
+      sign_token: null,
+      partner_signed_at: null,
+      partner_signature_url: null,
+      partner_signed_ip: null,
+      admin_signed_at: null,
+      admin_signature_url: null,
+      admin_signed_by: null,
       notes: body.notes ?? null,
       created_by: null,
     });
