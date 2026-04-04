@@ -1,9 +1,34 @@
 # Partner Portal Implementation Roadmap
 
-기준 시점: 2026-04-04
+기준 시점: 2026-04-04  
+최종 갱신: 2026-04-04
 
 이 문서는 파트너 포털 구현에 바로 들어가기 위한 실전 로드맵이다.
 기획 문서가 아니라 `무엇을 먼저 바꾸고, 어떤 구조로 갈지`를 결정하기 위한 개발 기준 문서다.
+
+## 현재 진행 상황
+
+### ✅ 완료
+
+- **Phase 1 — 모델 교정**
+  - `supabase/migrations/20260404_partner_portal_v2_domain.sql` — V2 도메인 전체 migration (17개 테이블, RLS, 뷰, 트리거, 인덱스)
+  - `lib/partner-portal/types.ts` — 포털 도메인 타입 (API/컴포넌트 공용)
+  - `lib/supabase/database.types.v2.ts` — Supabase DB row 타입 + Insert/Update helpers
+  - `app/admin/partners/page.tsx` — 어드민 파트너 워크스페이스 UI 개선 (검색, 스테이지 시각화, 탭 패널)
+  - `components/partner-portal/home/PartnerPortalHome.tsx` — 파트너 홈 전면 재설계 (파이프라인 보드, 액션 큐, KPI, 일정)
+
+### 🔜 다음 작업 (Phase 2 — API 연결)
+
+우선순위 순:
+
+1. `app/api/partner/overview/route.ts` — 홈 KPI + 파이프라인 데이터 (현재 데모 데이터)
+2. `app/api/partner/deals/route.ts` — 거래건 목록 + 필터
+3. `app/api/partner/customers/route.ts` — 고객 목록
+4. `app/api/partner/activity/route.ts` — 활동 로그
+5. `app/api/partner/calendar/route.ts` — 일정 (설치 + 미팅)
+
+> API 없이는 홈/워크스페이스가 전부 데모 데이터로 동작한다.
+> Phase 2가 완료돼야 Phase 3 (워크스페이스 재구성), Phase 4 (어드민 CRUD)로 이어질 수 있다.
 
 관련 문서:
 
