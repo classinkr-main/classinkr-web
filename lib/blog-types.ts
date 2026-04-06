@@ -24,6 +24,7 @@ export const BLOG_STATUS_OPTIONS: { label: string; value: BlogPostStatus }[] = [
 
 export interface BlogPost {
   id: number
+  _uuid?: string
   slug: string
   title: string
   excerpt: string
@@ -49,6 +50,7 @@ export interface BlogPost {
   seoTitle: string
   seoDescription: string
   relatedPostIds: number[]
+  pageLayout: "standard" | "minimal"
   cta: BlogPostCTA
   status: BlogPostStatus
   published?: boolean

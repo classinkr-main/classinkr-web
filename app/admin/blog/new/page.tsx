@@ -1,5 +1,5 @@
 import BlogPostEditor from "@/components/admin/BlogPostEditor"
-import { getAllPosts } from "@/lib/blog-data"
+import { getAllPosts } from "@/lib/repositories/blog"
 
 export default async function AdminBlogNewPage() {
   const posts = await getAllPosts()

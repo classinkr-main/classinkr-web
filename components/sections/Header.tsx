@@ -3,15 +3,20 @@
 import * as React from "react"
 import Link from "next/link"
 import { usePathname } from "next/navigation"
-import { DemoModal } from "./DemoModal"
+import { NewsletterModal } from "./NewsletterModal"
 import { cn } from "@/lib/utils"
-import { Menu, X } from "lucide-react"
+import { Menu, X, Monitor, Cpu } from "lucide-react"
 
 const navItems = [
     { name: "제품 소개", href: "/product" },
     { name: "요금제", href: "/pricing" },
     { name: "블로그", href: "/blog" },
     { name: "행사", href: "/events" },
+]
+
+const productTabs = [
+    { name: "소프트웨어", href: "/product/sw", icon: Monitor },
+    { name: "하드웨어", href: "/product/hw", icon: Cpu },
 ]
 
 export function Header() {
@@ -59,14 +64,55 @@ export function Header() {
 
                 <nav className={cn(
                     "items-center gap-8",
-                    isMobileMenuOpen 
-                        ? "absolute top-full left-0 w-full bg-white border-b border-slate-200 flex flex-col items-center py-8 gap-6 shadow-xl" 
+                    isMobileMenuOpen
+                        ? "absolute top-full left-0 w-full bg-white border-b border-slate-200 flex flex-col items-center py-8 gap-6 shadow-xl"
                         : "hidden md:flex"
                 )}>
                     {navItems.map((item) => {
                         const isActive = item.href === "/product" ? pathname.startsWith("/product") : pathname === item.href;
+                        const isProduct = item.href === "/product"
+                        const isOnProduct = pathname.startsWith("/product")
 
-                        return (
+                        return isProduct ? (
+                            <div key={item.name} className="relative">
+                                <Link
+                                    href={item.href}
+                                    onClick={() => setIsMobileMenuOpen(false)}
+                                    className={cn(
+                                        "text-sm font-medium transition-colors",
+                                        isActive
+                                            ? (isLightModeHeader ? "text-primary font-bold" : "text-white font-bold")
+                                            : (isLightModeHeader ? "text-slate-800 hover:text-primary" : "text-slate-300 hover:text-white")
+                                    )}
+                                >
+                                    {item.name}
+                                </Link>
+                                {isOnProduct && (
+                                    <div className="absolute top-full left-1/2 -translate-x-1/2 pt-3">
+                                        <div className="flex gap-1 bg-white rounded-full shadow-md border border-slate-200 px-1.5 py-1">
+                                            {productTabs.map((tab) => {
+                                                const isTabActive = pathname === tab.href
+                                                return (
+                                                    <Link
+                                                        key={tab.href}
+                                                        href={tab.href}
+                                                        className={cn(
+                                                            "inline-flex items-center gap-1.5 px-4 py-1.5 rounded-full text-xs font-semibold transition-all whitespace-nowrap",
+                                                            isTabActive
+                                                                ? "bg-[#E8F5EE] text-primary shadow-sm"
+                                                                : "text-slate-500 hover:text-slate-800 hover:bg-slate-100"
+                                                        )}
+                                                    >
+                                                        <tab.icon className="w-3.5 h-3.5" />
+                                                        {tab.name}
+                                                    </Link>
+                                                )
+                                            })}
+                                        </div>
+                                    </div>
+                                )}
+                            </div>
+                        ) : (
                             <Link
                                 key={item.name}
                                 href={item.href}
@@ -85,13 +131,23 @@ export function Header() {
                 </nav>
 
                 <div className="hidden md:flex items-center gap-4">
-                    <DemoModal trackingButton="header_materials">
+                    <NewsletterModal
+                        source="gnb_materials"
+                        badge="무료 구독"
+                        title="교육 인사이트 받아보기"
+                        description="Classin의 최신 교육 트렌드, 제품 업데이트, 행사 정보를 이메일로 받아보세요."
+                        benefits={[
+                            "월 1~2회 학원 운영 인사이트 레터",
+                            "신기능 · 업데이트 소식 우선 공지",
+                            "Classin 주최 행사 · 웨비나 초대",
+                        ]}
+                    >
                         <button type="button" className={cn("hidden md:flex font-medium transition-colors text-sm cursor-pointer bg-transparent border-none p-0",
                              isLightModeHeader ? "text-slate-600 hover:text-primary" : "text-white/80 hover:text-white"
                         )}>
                             자료 받아보기
                         </button>
-                    </DemoModal>
+                    </NewsletterModal>
                     <Link
                         href="/contact"
                         className={cn(

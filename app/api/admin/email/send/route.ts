@@ -1,34 +1,30 @@
-/**
- * ─────────────────────────────────────────────────────────────
- * /api/admin/email/send  —  이메일 캠페인 발송 API
- * ─────────────────────────────────────────────────────────────
- *
- * [NOTE-11] 이메일 발송 전략
- *   현재: 웹훅 기반 발송 (Google Apps Script / Make / n8n 등)
- *   향후: Resend SDK 또는 Brevo API 직접 연동 권장.
- *
- *   웹훅 방식의 흐름:
- *   1. 관리자가 제목 + 본문 + 대상 태그 지정
- *   2. 서버에서 대상 구독자 필터링
- *   3. EMAIL_WEBHOOK_URL로 수신자 목록 + 본문 전송
- *   4. 외부 서비스(Make/n8n)에서 실제 이메일 발송 처리
- *
- * [NOTE-12] {name} 치환 (개인화)
- *   본문 내 {name} 패턴을 각 구독자의 이름으로 치환.
- *   예) "안녕하세요 {name}님" → "안녕하세요 김원장님"
- *   향후 {org}, {role} 등 추가 변수도 확장 가능.
- */
-
 import { NextRequest, NextResponse } from "next/server"
 import { verifyAdmin } from "@/lib/admin-auth"
-import { getActiveSubscribersByTags } from "@/lib/marketing-data"
-import { createCampaign } from "@/lib/marketing-data"
+import { createCampaign, getActiveSubscribersByTags } from "@/lib/repositories/marketing"
 import type { SendEmailRequest } from "@/lib/marketing-types"
 
 const EMAIL_REGEX = /^[^\s@]+@[^\s@]+\.[^\s@]+$/
 
 function isValidEmail(value?: string) {
   return !!value && EMAIL_REGEX.test(value.trim())
+}
+
+function replacePlaceholders(
+  template: string,
+  values: { name: string; org?: string; role?: string }
+) {
+  return template
+    .replace(/\{name\}/g, values.name)
+    .replace(/\{org\}/g, values.org ?? "")
+    .replace(/\{role\}/g, values.role ?? "")
+}
+
+type PersonalizedRecipient = {
+  email: string
+  name: string
+  org: string
+  personalizedBody: string
+  personalizedSubject?: string
 }
 
 export async function POST(req: NextRequest) {
@@ -47,12 +43,7 @@ export async function POST(req: NextRequest) {
     }
 
     const emailWebhookUrl = process.env.EMAIL_WEBHOOK_URL
-    let recipients: Array<{
-      email: string
-      name: string
-      org: string
-      personalizedBody: string
-    }> = []
+    let recipients: PersonalizedRecipient[] = []
 
     if (sendMode === "test") {
       if (!isValidEmail(body.testEmail)) {
@@ -67,24 +58,54 @@ export async function POST(req: NextRequest) {
           email: body.testEmail!.trim(),
           name: "테스트",
           org: "",
-          personalizedBody: body.body
-            .replace(/\{name\}/g, "테스트")
-            .replace(/\{org\}/g, "")
-            .replace(/\{role\}/g, "관리자"),
+          personalizedSubject: replacePlaceholders(body.subject, {
+            name: "테스트",
+            role: "관리자",
+          }),
+          personalizedBody: replacePlaceholders(body.body, {
+            name: "테스트",
+            role: "관리자",
+          }),
         },
       ]
+    } else if (Array.isArray(body.aiPersonalized) && body.aiPersonalized.length > 0) {
+      recipients = body.aiPersonalized
+        .filter(
+          (recipient) =>
+            isValidEmail(recipient.email) &&
+            typeof recipient.personalizedBody === "string" &&
+            recipient.personalizedBody.trim().length > 0
+        )
+        .map((recipient) => ({
+          email: recipient.email.trim(),
+          name: recipient.name?.trim() || "고객",
+          org: "",
+          personalizedSubject: recipient.personalizedSubject ?? recipient.subject ?? body.subject,
+          personalizedBody: recipient.personalizedBody,
+        }))
+
+      if (recipients.length === 0) {
+        return NextResponse.json(
+          { error: "AI 개인화 발송 대상이 올바르지 않습니다." },
+          { status: 400 }
+        )
+      }
     } else {
-      // ① 대상 구독자 필터링 [NOTE-8]
       const activeRecipients = await getActiveSubscribersByTags(body.targetTags ?? [])
-      recipients = activeRecipients.map((r) => ({
-        email: r.email,
-        name: r.name,
-        org: r.org ?? "",
-        /** [NOTE-12] {name}, {org} 등 본문 내 변수 치환 */
-        personalizedBody: body.body
-          .replace(/\{name\}/g, r.name)
-          .replace(/\{org\}/g, r.org ?? "")
-          .replace(/\{role\}/g, r.role ?? ""),
+      recipients = activeRecipients.map((recipient) => ({
+        email: recipient.email,
+        name: recipient.name,
+        org: recipient.org ?? "",
+        personalizedSubject: replacePlaceholders(body.subject, {
+          name: recipient.name,
+          org: recipient.org ?? "",
+          role: recipient.role ?? "",
+        }),
+        personalizedBody: replacePlaceholders(body.body, {
+          name: recipient.name,
+          org: recipient.org ?? "",
+          role: recipient.role ?? "",
+        }),
       }))
 
       if (recipients.length === 0) {
@@ -95,16 +116,14 @@ export async function POST(req: NextRequest) {
       }
     }
 
-    /**
-     * ② 이메일 발송 처리
-     *
-     * [NOTE-11] 웹훅 기반 발송
-     * EMAIL_WEBHOOK_URL이 설정되어 있으면 외부 자동화 서비스로 전달.
-     * 각 수신자별로 {name} 치환된 개인화 데이터를 포함.
-     *
-     * [NOTE-12] 개인화 변수 치환
-     * recipients 배열에 각 수신자의 personalizedBody를 포함하여 전달.
-     */
+    const webhookRecipients = recipients.map((recipient) => ({
+      email: recipient.email,
+      name: recipient.name,
+      org: recipient.org,
+      personalizedSubject: recipient.personalizedSubject,
+      personalizedBody: recipient.personalizedBody,
+    }))
+
     let sendStatus: "sent" | "failed" = "sent"
 
     if (emailWebhookUrl) {
@@ -114,28 +133,26 @@ export async function POST(req: NextRequest) {
           headers: { "Content-Type": "application/json" },
           body: JSON.stringify({
             subject: body.subject,
-            recipients,
+            recipients: webhookRecipients,
+            personalizedRecipients: webhookRecipients,
             mode: sendMode,
-            /** 수신거부 링크용 baseUrl (프론트엔드에서 구성) */
             unsubscribeBaseUrl: `${req.nextUrl.origin}/api/newsletter/unsubscribe`,
           }),
         })
+
         if (!res.ok) sendStatus = "failed"
       } catch {
         sendStatus = "failed"
       }
     } else {
-      /**
-       * [NOTE-13] EMAIL_WEBHOOK_URL 미설정 시
-       * 실제 발송 없이 캠페인 기록만 저장 (테스트/개발 모드).
-       * 콘솔에 로그를 남겨 디버깅 가능하도록 한다.
-       */
       console.log("[EMAIL-DEV] 웹훅 URL 미설정. 발송 시뮬레이션:")
       console.log(`  제목: ${body.subject}`)
       console.log(`  대상: ${recipients.length}명`)
-      console.log(`  태그: ${body.targetTags.join(", ") || "전체"}`)
+      console.log(`  태그: ${(body.targetTags ?? []).join(", ") || "전체"}`)
       if (sendMode === "test") {
         console.log(`  테스트 이메일: ${body.testEmail?.trim()}`)
+      } else if (body.aiPersonalized?.length) {
+        console.log("  모드: AI 개인화 발송")
       }
     }
 
@@ -148,7 +165,6 @@ export async function POST(req: NextRequest) {
       })
     }
 
-    // ③ 캠페인 이력 저장
     const campaign = await createCampaign({
       subject: body.subject,
       body: body.body,
@@ -165,9 +181,6 @@ export async function POST(req: NextRequest) {
       status: sendStatus,
     })
   } catch {
-    return NextResponse.json(
-      { error: "잘못된 요청입니다." },
-      { status: 400 }
-    )
+    return NextResponse.json({ error: "잘못된 요청입니다." }, { status: 400 })
   }
 }

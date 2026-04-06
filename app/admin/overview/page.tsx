@@ -37,7 +37,7 @@ import type { BugReport } from "@/lib/bugs-data"
 import type { PatchNote } from "@/lib/patch-notes-data"
 
 function adminFetch(url: string) {
-  const token = sessionStorage.getItem("admin_password") ?? ""
+  const token = (typeof window !== "undefined" ? sessionStorage.getItem("admin_password") : null) ?? ""
   return fetch(url, { headers: { Authorization: `Bearer ${token}` } })
 }
 

@@ -2,6 +2,7 @@
 
 import { useCallback, useEffect, useMemo, useRef, useState } from "react"
 import type { ReactNode } from "react"
+import { useRouter } from "next/navigation"
 import {
   AlertCircle,
   ArrowLeft,
@@ -27,7 +28,6 @@ import {
   DialogHeader,
   DialogTitle,
 } from "@/components/ui/dialog"
-import AdminAuthGate from "@/components/admin/AdminAuthGate"
 import SubscriberTable from "@/components/admin/marketing/SubscriberTable"
 import SubscriberForm from "@/components/admin/marketing/SubscriberForm"
 import EmailComposer from "@/components/admin/marketing/EmailComposer"
@@ -299,7 +299,7 @@ function MiniBadge({ children, tone = "neutral" }: { children: ReactNode; tone?:
 }
 
 export default function AdminMarketingPage() {
-  const [isAuthed, setIsAuthed] = useState(false)
+  const router = useRouter()
   const [activeTab, setActiveTab] = useState<Tab>("subscribers")
   const [subscribers, setSubscribers] = useState<Subscriber[]>([])
   const [campaigns, setCampaigns] = useState<EmailCampaign[]>([])
@@ -317,6 +317,15 @@ export default function AdminMarketingPage() {
   const composerSnapshotRef = useRef<ComposerSnapshot>({ subject: "", body: "", targetTags: [] })
   const [composerSnapshot, setComposerSnapshot] = useState<ComposerSnapshot>(composerSnapshotRef.current)
 
+  const handleUnauthorized = useCallback(() => {
+    sessionStorage.removeItem("admin_password")
+    sessionStorage.removeItem("admin_token")
+    sessionStorage.removeItem("admin_role")
+    sessionStorage.removeItem("admin_name")
+    sessionStorage.removeItem("admin_email")
+    router.replace("/admin/login")
+  }, [router])
+
   const showToast = useCallback((kind: "success" | "error", message: string) => {
     setToast({ kind, message })
     window.setTimeout(() => setToast(null), 2600)
@@ -326,6 +335,10 @@ export default function AdminMarketingPage() {
     setLoading(true)
     try {
       const res = await adminFetch("/api/admin/subscribers")
+      if (res.status === 401) {
+        handleUnauthorized()
+        return
+      }
       if (res.ok) {
         const data = await res.json()
         setSubscribers(data.subscribers ?? [])
@@ -333,11 +346,15 @@ export default function AdminMarketingPage() {
     } finally {
       setLoading(false)
     }
-  }, [])
+  }, [handleUnauthorized])
 
   const fetchCampaigns = useCallback(async () => {
     try {
       const res = await adminFetch("/api/admin/email")
+      if (res.status === 401) {
+        handleUnauthorized()
+        return
+      }
       if (res.ok) {
         const data = await res.json()
         setCampaigns(data.campaigns ?? [])
@@ -345,20 +362,12 @@ export default function AdminMarketingPage() {
     } catch {
       // silent
     }
-  }, [])
+  }, [handleUnauthorized])
 
   useEffect(() => {
-    if (typeof window !== "undefined" && sessionStorage.getItem("admin_password")) {
-      setIsAuthed(true)
-    }
-  }, [])
-
-  useEffect(() => {
-    if (isAuthed) {
-      fetchSubscribers()
-      fetchCampaigns()
-    }
-  }, [isAuthed, fetchSubscribers, fetchCampaigns])
+    void fetchSubscribers()
+    void fetchCampaigns()
+  }, [fetchSubscribers, fetchCampaigns])
 
   const activeCount = subscribers.filter((s) => s.status === "active").length
   const unsubscribedCount = subscribers.length - activeCount
@@ -608,8 +617,7 @@ export default function AdminMarketingPage() {
         body: JSON.stringify(data),
       })
       if (res.status === 401) {
-        sessionStorage.removeItem("admin_password")
-        setIsAuthed(false)
+        handleUnauthorized()
         return
       }
       if (!res.ok) {
@@ -632,8 +640,7 @@ export default function AdminMarketingPage() {
     try {
       const res = await adminFetch(`/api/admin/subscribers?id=${deleteTarget.id}`, { method: "DELETE" })
       if (res.status === 401) {
-        sessionStorage.removeItem("admin_password")
-        setIsAuthed(false)
+        handleUnauthorized()
         return
       }
       if (!res.ok) {
@@ -680,8 +687,7 @@ export default function AdminMarketingPage() {
         body: JSON.stringify(data),
       })
       if (res.status === 401) {
-        sessionStorage.removeItem("admin_password")
-        setIsAuthed(false)
+        handleUnauthorized()
         return
       }
       const result = await res.json()
@@ -701,10 +707,6 @@ export default function AdminMarketingPage() {
     } finally {
       setSendLoading(false)
     }
-  }
-
-  if (!isAuthed) {
-    return <AdminAuthGate onAuth={() => setIsAuthed(true)} />
   }
 
   const workflowSteps: Array<{ step: string; title: string; desc: string; tab: Tab }> = [

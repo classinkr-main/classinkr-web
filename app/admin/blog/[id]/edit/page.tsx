@@ -1,6 +1,6 @@
 import { notFound } from "next/navigation"
 import BlogPostEditor from "@/components/admin/BlogPostEditor"
-import { getAllPosts, getPostById } from "@/lib/blog-data"
+import { getAllPosts, getPostById } from "@/lib/repositories/blog"
 
 interface AdminBlogEditPageProps {
   params: Promise<{ id: string }>

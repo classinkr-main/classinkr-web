@@ -18,7 +18,7 @@ import type { BlogPost, BlogPostInput } from "@/lib/blog-types"
 type Tab = "all" | "private" | "trash"
 
 function getToken() {
-    return sessionStorage.getItem("admin_password") ?? ""
+    return (typeof window !== "undefined" ? sessionStorage.getItem("admin_password") : null) ?? ""
 }
 
 function adminFetch(url: string, options?: RequestInit) {
@@ -88,7 +88,7 @@ export default function AdminBlogPage() {
         setFormLoading(true)
         try {
             if (editingPost) {
-                const res = await adminFetch(`/api/admin/blog/${editingPost.id}`, {
+                const res = await adminFetch(`/api/admin/blog/${editingPost._uuid ?? editingPost.id}`, {
                     method: "PUT",
                     body: JSON.stringify(data),
                 })
@@ -114,7 +114,7 @@ export default function AdminBlogPage() {
         if (!deleteTarget) return
         setFormLoading(true)
         try {
-            const res = await adminFetch(`/api/admin/blog/${deleteTarget.id}`, {
+            const res = await adminFetch(`/api/admin/blog/${deleteTarget._uuid ?? deleteTarget.id}`, {
                 method: "DELETE",
             })
             if (res.status === 401) { handleUnauthorized(); return }
@@ -132,7 +132,7 @@ export default function AdminBlogPage() {
         if (!permanentTarget) return
         setFormLoading(true)
         try {
-            const res = await adminFetch(`/api/admin/blog/${permanentTarget.id}?permanent=true`, {
+            const res = await adminFetch(`/api/admin/blog/${permanentTarget._uuid ?? permanentTarget.id}?permanent=true`, {
                 method: "DELETE",
             })
             if (res.status === 401) { handleUnauthorized(); return }
@@ -147,7 +147,7 @@ export default function AdminBlogPage() {
 
     // Restore from trash
     const handleRestore = async (post: BlogPost) => {
-        await adminFetch(`/api/admin/blog/${post.id}`, {
+        await adminFetch(`/api/admin/blog/${post._uuid ?? post.id}`, {
             method: "PUT",
             body: JSON.stringify({ restore: true }),
         })
@@ -155,7 +155,7 @@ export default function AdminBlogPage() {
     }
 
     const handleToggleFeatured = async (post: BlogPost) => {
-        await adminFetch(`/api/admin/blog/${post.id}`, {
+        await adminFetch(`/api/admin/blog/${post._uuid ?? post.id}`, {
             method: "PUT",
             body: JSON.stringify({ featured: !post.featured }),
         })
@@ -163,21 +163,22 @@ export default function AdminBlogPage() {
     }
 
     const handleTogglePublished = async (post: BlogPost) => {
-        await adminFetch(`/api/admin/blog/${post.id}`, {
+        const nextStatus = post.status === "published" ? "draft" : "published"
+        await adminFetch(`/api/admin/blog/${post._uuid ?? post.id}`, {
             method: "PUT",
-            body: JSON.stringify({ published: post.published === false }),
+            body: JSON.stringify({ status: nextStatus }),
         })
         await fetchPosts()
     }
 
     const displayedPosts =
         tab === "trash" ? trashedPosts :
-        tab === "private" ? posts.filter((p) => p.published === false) :
+        tab === "private" ? posts.filter((p) => p.status !== "published") :
         posts
 
     const TABS: { key: Tab; label: string; count: number }[] = [
         { key: "all", label: "전체", count: posts.length },
-        { key: "private", label: "비공개", count: posts.filter((p) => p.published === false).length },
+        { key: "private", label: "비공개", count: posts.filter((p) => p.status !== "published").length },
         { key: "trash", label: "휴지통", count: trashedPosts.length },
     ]
 

@@ -1,6 +1,6 @@
 "use client"
 
-import { useState } from "react"
+import { useState, useEffect } from "react"
 import { Lock } from "lucide-react"
 import { getAdminAuthErrorMessage } from "@/lib/admin-auth-errors"
 import { Button } from "@/components/ui/button"
@@ -14,6 +14,17 @@ export default function AdminAuthGate({ onAuth }: AdminAuthGateProps) {
   const [password, setPassword] = useState("")
   const [error, setError] = useState("")
   const [loading, setLoading] = useState(false)
+
+  // dev 환경 자동 스킵
+  useEffect(() => {
+    if (process.env.NEXT_PUBLIC_SKIP_ADMIN_AUTH === "true") {
+      sessionStorage.setItem("admin_password", "dev-skip")
+      sessionStorage.setItem("admin_token", "dev-skip")
+      sessionStorage.setItem("admin_role", "admin")
+      sessionStorage.setItem("admin_name", "Dev")
+      onAuth()
+    }
+  }, [onAuth])
 
   const handleSubmit = async (e: React.FormEvent) => {
     e.preventDefault()
