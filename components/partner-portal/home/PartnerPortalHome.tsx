@@ -1,6 +1,6 @@
 "use client"
 
-import { useEffect, useMemo, useState } from "react"
+import { useCallback, useEffect, useMemo, useState } from "react"
 import {
   ArrowRight,
   CheckCircle2,
@@ -8,7 +8,11 @@ import {
   ChevronRight,
   Loader2,
 } from "lucide-react"
+import { CustomerDialog } from "@/components/partner-portal/crud/CustomerDialog"
+import { DealQuickCreateDialog } from "@/components/partner-portal/crud/DealQuickCreateDialog"
+import { ScheduleDialog } from "@/components/partner-portal/crud/ScheduleDialog"
 import { PortalNav } from "@/components/partner-portal/PortalNav"
+import { Button } from "@/components/ui/button"
 
 /* ─── Types ──────────────────────────────────────────────────── */
 
@@ -275,6 +279,12 @@ export function PartnerPortalHome() {
   const [loading, setLoading]   = useState(true)
   const [error, setError]       = useState<string | null>(null)
   const [expandedCustomers, setExpandedCustomers] = useState<Set<string>>(new Set(["c1"]))
+  const [isCustomerDialogOpen, setIsCustomerDialogOpen] = useState(false)
+  const [isDealDialogOpen, setIsDealDialogOpen] = useState(false)
+  const [isScheduleDialogOpen, setIsScheduleDialogOpen] = useState(false)
+  const refreshPortal = useCallback(() => {
+    window.location.reload()
+  }, [])
 
   useEffect(() => {
     let alive = true
@@ -372,6 +382,7 @@ export function PartnerPortalHome() {
   const { contracted_amount, installed_amount, paid_amount, outstanding_amount } = overview.metrics
   const installPct = contracted_amount > 0 ? Math.round((installed_amount / contracted_amount) * 100) : 0
   const paidPct    = contracted_amount > 0 ? Math.round((paid_amount    / contracted_amount) * 100) : 0
+  const canCreateInPortal = overview.mode === "v2"
 
   const todayStr = new Date().toLocaleDateString("ko-KR", {
     year: "numeric", month: "long", day: "numeric", weekday: "short",
@@ -390,7 +401,31 @@ export function PartnerPortalHome() {
               <p className="mt-0.5 text-sm text-[#1a1a1a]/50">{todayStr}</p>
             </div>
           </div>
-          <PortalNav />
+          <div className="flex flex-col items-end gap-3">
+            <PortalNav />
+            <div className="flex flex-wrap justify-end gap-2">
+              <QuickActionButton
+                label="새 고객"
+                disabled={!canCreateInPortal}
+                onClick={() => setIsCustomerDialogOpen(true)}
+              />
+              <QuickActionButton
+                label="신규 컨택"
+                disabled={!canCreateInPortal || overview.customers.length === 0}
+                onClick={() => setIsDealDialogOpen(true)}
+              />
+              <QuickActionButton
+                label="일정 추가"
+                disabled={!canCreateInPortal || overview.deals.length === 0}
+                onClick={() => setIsScheduleDialogOpen(true)}
+              />
+            </div>
+            {!canCreateInPortal && (
+              <p className="text-xs text-[#1a1a1a]/40">
+                생성 기능은 V2 계정 연결 상태에서만 사용할 수 있습니다.
+              </p>
+            )}
+          </div>
         </div>
       </div>
 
@@ -804,6 +839,24 @@ export function PartnerPortalHome() {
           </div>
         </div>
       </div>
+
+      <CustomerDialog
+        open={isCustomerDialogOpen}
+        onOpenChange={setIsCustomerDialogOpen}
+        onSaved={refreshPortal}
+      />
+      <DealQuickCreateDialog
+        open={isDealDialogOpen}
+        onOpenChange={setIsDealDialogOpen}
+        customers={overview.customers.map(item => item.customer)}
+        onSaved={refreshPortal}
+      />
+      <ScheduleDialog
+        open={isScheduleDialogOpen}
+        onOpenChange={setIsScheduleDialogOpen}
+        deals={overview.deals}
+        onSaved={refreshPortal}
+      />
     </div>
   )
 }
@@ -816,6 +869,29 @@ function SectionHeader({ title, sub }: { title: string; sub?: string }) {
       <h2 className="text-sm font-semibold text-[#111110]">{title}</h2>
       {sub && <span className="text-xs text-[#1a1a1a]/40">{sub}</span>}
     </div>
+  )
+}
+
+function QuickActionButton({
+  label,
+  onClick,
+  disabled = false,
+}: {
+  label: string
+  onClick: () => void
+  disabled?: boolean
+}) {
+  return (
+    <Button
+      type="button"
+      size="sm"
+      variant={disabled ? "outline" : "default"}
+      disabled={disabled}
+      onClick={onClick}
+      className={disabled ? "border-[#d9cfbf] text-[#1a1a1a]/35" : ""}
+    >
+      {label}
+    </Button>
   )
 }
 
