@@ -25,12 +25,19 @@ import { getActiveSubscribersByTags } from "@/lib/marketing-data"
 import { createCampaign } from "@/lib/marketing-data"
 import type { SendEmailRequest } from "@/lib/marketing-types"
 
+const EMAIL_REGEX = /^[^\s@]+@[^\s@]+\.[^\s@]+$/
+
+function isValidEmail(value?: string) {
+  return !!value && EMAIL_REGEX.test(value.trim())
+}
+
 export async function POST(req: NextRequest) {
   const authError = verifyAdmin(req)
   if (authError) return authError
 
   try {
     const body: SendEmailRequest = await req.json()
+    const sendMode = body.mode ?? "campaign"
 
     if (!body.subject || !body.body) {
       return NextResponse.json(
@@ -39,14 +46,53 @@ export async function POST(req: NextRequest) {
       )
     }
 
-    // ① 대상 구독자 필터링 [NOTE-8]
-    const recipients = await getActiveSubscribersByTags(body.targetTags ?? [])
+    const emailWebhookUrl = process.env.EMAIL_WEBHOOK_URL
+    let recipients: Array<{
+      email: string
+      name: string
+      org: string
+      personalizedBody: string
+    }> = []
 
-    if (recipients.length === 0) {
-      return NextResponse.json(
-        { error: "발송 대상이 없습니다. 태그 조건을 확인해주세요." },
-        { status: 400 }
-      )
+    if (sendMode === "test") {
+      if (!isValidEmail(body.testEmail)) {
+        return NextResponse.json(
+          { error: "테스트 발송용 이메일 주소를 입력해주세요." },
+          { status: 400 }
+        )
+      }
+
+      recipients = [
+        {
+          email: body.testEmail!.trim(),
+          name: "테스트",
+          org: "",
+          personalizedBody: body.body
+            .replace(/\{name\}/g, "테스트")
+            .replace(/\{org\}/g, "")
+            .replace(/\{role\}/g, "관리자"),
+        },
+      ]
+    } else {
+      // ① 대상 구독자 필터링 [NOTE-8]
+      const activeRecipients = await getActiveSubscribersByTags(body.targetTags ?? [])
+      recipients = activeRecipients.map((r) => ({
+        email: r.email,
+        name: r.name,
+        org: r.org ?? "",
+        /** [NOTE-12] {name}, {org} 등 본문 내 변수 치환 */
+        personalizedBody: body.body
+          .replace(/\{name\}/g, r.name)
+          .replace(/\{org\}/g, r.org ?? "")
+          .replace(/\{role\}/g, r.role ?? ""),
+      }))
+
+      if (recipients.length === 0) {
+        return NextResponse.json(
+          { error: "발송 대상이 없습니다. 태그 조건을 확인해주세요." },
+          { status: 400 }
+        )
+      }
     }
 
     /**
@@ -59,19 +105,6 @@ export async function POST(req: NextRequest) {
      * [NOTE-12] 개인화 변수 치환
      * recipients 배열에 각 수신자의 personalizedBody를 포함하여 전달.
      */
-    const emailWebhookUrl = process.env.EMAIL_WEBHOOK_URL
-
-    const personalizedRecipients = recipients.map((r) => ({
-      email: r.email,
-      name: r.name,
-      org: r.org ?? "",
-      /** [NOTE-12] {name}, {org} 등 본문 내 변수 치환 */
-      personalizedBody: body.body
-        .replace(/\{name\}/g, r.name)
-        .replace(/\{org\}/g, r.org ?? "")
-        .replace(/\{role\}/g, r.role ?? ""),
-    }))
-
     let sendStatus: "sent" | "failed" = "sent"
 
     if (emailWebhookUrl) {
@@ -81,7 +114,8 @@ export async function POST(req: NextRequest) {
           headers: { "Content-Type": "application/json" },
           body: JSON.stringify({
             subject: body.subject,
-            recipients: personalizedRecipients,
+            recipients,
+            mode: sendMode,
             /** 수신거부 링크용 baseUrl (프론트엔드에서 구성) */
             unsubscribeBaseUrl: `${req.nextUrl.origin}/api/newsletter/unsubscribe`,
           }),
@@ -100,6 +134,18 @@ export async function POST(req: NextRequest) {
       console.log(`  제목: ${body.subject}`)
       console.log(`  대상: ${recipients.length}명`)
       console.log(`  태그: ${body.targetTags.join(", ") || "전체"}`)
+      if (sendMode === "test") {
+        console.log(`  테스트 이메일: ${body.testEmail?.trim()}`)
+      }
+    }
+
+    if (sendMode === "test") {
+      return NextResponse.json({
+        ok: true,
+        test: true,
+        recipientCount: recipients.length,
+        status: sendStatus,
+      })
     }
 
     // ③ 캠페인 이력 저장

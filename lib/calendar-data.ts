@@ -5,6 +5,9 @@
 import fs from "fs"
 import path from "path"
 
+import { createSupabaseAdminClient } from "@/lib/supabase/admin"
+import { hasSupabaseBrowserEnv } from "@/lib/supabase/public-env"
+
 const FILE = path.join(process.cwd(), "data", "calendar-events.json")
 
 export type EventType = "team" | "deadline" | "meeting" | "launch" | "holiday" | "other"
@@ -29,6 +32,7 @@ export interface CalendarEvent {
   dealId?: string
   dealTitle?: string
   href?: string
+  syncToAdminCalendar?: boolean
   createdAt: string
   updatedAt: string
 }
@@ -46,7 +50,48 @@ type StoredCalendarEventInput = Omit<
   | "dealId"
   | "dealTitle"
   | "href"
+  | "syncToAdminCalendar"
 >
+
+interface PartnerScheduleCalendarRow {
+  id: string
+  partner_id: string
+  deal_id: string | null
+  kind: string
+  status: string
+  title: string
+  starts_at: string
+  ends_at: string | null
+  owner_name: string | null
+  sync_to_admin_calendar: boolean | null
+}
+
+interface PartnerNameRow {
+  id: string
+  name: string
+}
+
+interface DealTitleRow {
+  id: string
+  title: string
+}
+
+interface PartnerCalendarQueryOptions {
+  year?: number
+  month?: number
+}
+
+function readEnv(name: string) {
+  const value = process.env[name]?.trim()
+  return value && value.length > 0 ? value : null
+}
+
+function hasPartnerCalendarSupabaseConfig() {
+  return Boolean(
+    hasSupabaseBrowserEnv() &&
+      (readEnv("SUPABASE_SECRET_KEY") ?? readEnv("SUPABASE_SERVICE_ROLE_KEY"))
+  )
+}
 
 function read(): CalendarEvent[] {
   if (!fs.existsSync(FILE)) return []
@@ -86,6 +131,15 @@ function getMonthPrefix(year: number, month: number) {
   return `${year}-${String(month).padStart(2, "0")}`
 }
 
+function getMonthRange(year: number, month: number) {
+  const start = new Date(Date.UTC(year, month - 1, 1, 0, 0, 0))
+  const end = new Date(Date.UTC(year, month, 1, 0, 0, 0))
+  return {
+    startIso: start.toISOString(),
+    endIso: end.toISOString(),
+  }
+}
+
 function isEventVisibleInMonth(event: CalendarEvent, year: number, month: number) {
   const prefix = getMonthPrefix(year, month)
   const monthStart = `${prefix}-01`
@@ -121,51 +175,185 @@ function mapPartnerScheduleType(kind: string): EventType {
   }
 }
 
-async function getPartnerCalendarEvents(): Promise<CalendarEvent[]> {
+function createPartnerCalendarEvent(input: {
+  id: string
+  partnerId: string
+  partnerName: string
+  dealId?: string
+  dealTitle?: string
+  kind: string
+  title: string
+  startsAt: string
+  endsAt?: string
+  owner?: string
+  fallbackAssignee?: string
+  syncToAdminCalendar?: boolean
+}): CalendarEvent | null {
+  const startsDate = parseDatePart(input.startsAt)
+  if (!startsDate) return null
+
+  const endsDate = parseDatePart(input.endsAt)
+  const startsTime = parseTimePart(input.startsAt)
+  const endsTime = parseTimePart(input.endsAt)
+  const descriptionParts = [
+    `파트너 ${input.partnerName}`,
+    input.dealTitle ? `거래 ${input.dealTitle}` : undefined,
+    input.owner ? `담당 ${input.owner}` : undefined,
+  ].filter(Boolean)
+  const now = new Date().toISOString()
+
+  return {
+    id: `partner_schedule_${input.id}`,
+    title: `${input.partnerName} · ${input.title}`,
+    date: startsDate,
+    endDate: endsDate && endsDate !== startsDate ? endsDate : undefined,
+    time: startsTime,
+    endTime: endsTime,
+    type: mapPartnerScheduleType(input.kind),
+    description: descriptionParts.join(" · "),
+    assignees: input.owner
+      ? [input.owner]
+      : input.fallbackAssignee
+        ? [input.fallbackAssignee]
+        : [],
+    allDay: !startsTime && !endsTime,
+    source: "partner",
+    sourceLabel: "파트너 일정",
+    readonly: true,
+    partnerId: input.partnerId,
+    partnerName: input.partnerName,
+    dealId: input.dealId,
+    dealTitle: input.dealTitle,
+    href: `/admin/partners/${input.partnerId}`,
+    syncToAdminCalendar: input.syncToAdminCalendar ?? true,
+    createdAt: now,
+    updatedAt: now,
+  }
+}
+
+function filterPartnerEventByMonth(
+  event: CalendarEvent,
+  options?: PartnerCalendarQueryOptions
+) {
+  if (!options?.year || !options?.month) return true
+  return isEventVisibleInMonth(event, options.year, options.month)
+}
+
+async function getLocalPartnerCalendarEvents(
+  options?: PartnerCalendarQueryOptions
+): Promise<CalendarEvent[]> {
   const { listPartnerWorkspacesData } = await import("./partners-data")
   const { workspaces } = await listPartnerWorkspacesData()
 
   return workspaces.flatMap((workspace) =>
     workspace.schedule
       .filter((item) => item.status === "planned")
-      .map((item) => {
-      const relatedDeal = workspace.deals.find((deal) => deal.id === item.dealId)
-      const startsDate = parseDatePart(item.startsAt)
-      const endsDate = parseDatePart(item.endsAt)
-      const startsTime = parseTimePart(item.startsAt)
-      const endsTime = parseTimePart(item.endsAt)
-      const descriptionParts = [
-        `파트너 ${workspace.partner.name}`,
-        relatedDeal ? `거래 ${relatedDeal.title}` : undefined,
-        item.owner ? `담당 ${item.owner}` : undefined,
-      ].filter(Boolean)
-      const now = new Date().toISOString()
+      .map((item) =>
+        createPartnerCalendarEvent({
+          id: item.id,
+          partnerId: workspace.partner.id,
+          partnerName: workspace.partner.name,
+          dealId: item.dealId,
+          dealTitle: workspace.deals.find((deal) => deal.id === item.dealId)?.title,
+          kind: item.kind,
+          title: item.title,
+          startsAt: item.startsAt,
+          endsAt: item.endsAt,
+          owner: item.owner,
+          fallbackAssignee: workspace.partner.accountManager,
+          syncToAdminCalendar:
+            typeof (item as { syncToAdminCalendar?: boolean }).syncToAdminCalendar === "boolean"
+              ? (item as { syncToAdminCalendar?: boolean }).syncToAdminCalendar
+              : true,
+        })
+      )
+      .filter((event): event is CalendarEvent => Boolean(event))
+      .filter((event) => event.syncToAdminCalendar !== false)
+      .filter((event) => filterPartnerEventByMonth(event, options))
+  )
+}
 
-      const event: CalendarEvent = {
-        id: `partner_schedule_${item.id}`,
-        title: `${workspace.partner.name} · ${item.title}`,
-        date: startsDate ?? "",
-        endDate: endsDate && endsDate !== startsDate ? endsDate : undefined,
-        time: startsTime,
-        endTime: endsTime,
-        type: mapPartnerScheduleType(item.kind),
-        description: descriptionParts.join(" · "),
-        assignees: item.owner ? [item.owner] : workspace.partner.accountManager ? [workspace.partner.accountManager] : [],
-        allDay: !startsTime && !endsTime,
-        source: "partner",
-        sourceLabel: "파트너 일정",
-        readonly: true,
-        partnerId: workspace.partner.id,
-        partnerName: workspace.partner.name,
-        dealId: relatedDeal?.id,
-        dealTitle: relatedDeal?.title,
-        href: `/admin/partners/${workspace.partner.id}`,
-        createdAt: now,
-        updatedAt: now,
-      }
-      return event
+async function querySupabasePartnerCalendarEventsByMonth(
+  year: number,
+  month: number
+): Promise<CalendarEvent[]> {
+  const supabase = createSupabaseAdminClient()
+  const { startIso, endIso } = getMonthRange(year, month)
+
+  const createBaseQuery = () =>
+    supabase
+      .from("partner_schedule_items")
+      .select("id, partner_id, deal_id, kind, status, title, starts_at, ends_at, owner_name, sync_to_admin_calendar")
+      .eq("status", "planned")
+      .eq("sync_to_admin_calendar", true)
+      .order("starts_at", { ascending: true })
+
+  const [inMonthResult, spanningResult] = await Promise.all([
+    createBaseQuery().gte("starts_at", startIso).lt("starts_at", endIso),
+    createBaseQuery().lt("starts_at", startIso).gte("ends_at", startIso),
+  ])
+
+  const firstError = inMonthResult.error ?? spanningResult.error
+  if (firstError) throw new Error(firstError.message)
+
+  const scheduleRows = [...(inMonthResult.data ?? []), ...(spanningResult.data ?? [])] as PartnerScheduleCalendarRow[]
+  const uniqueRows = Array.from(new Map(scheduleRows.map((item) => [item.id, item])).values())
+
+  if (uniqueRows.length === 0) return []
+
+  const partnerIds = Array.from(new Set(uniqueRows.map((item) => item.partner_id).filter(Boolean)))
+  const dealIds = Array.from(new Set(uniqueRows.map((item) => item.deal_id).filter(Boolean))) as string[]
+
+  const [partnersResult, dealsResult] = await Promise.all([
+    partnerIds.length > 0
+      ? supabase.from("partners").select("id, name").in("id", partnerIds)
+      : Promise.resolve({ data: [], error: null }),
+    dealIds.length > 0
+      ? supabase.from("partner_deals").select("id, title").in("id", dealIds)
+      : Promise.resolve({ data: [], error: null }),
+  ])
+
+  const relationError = partnersResult.error ?? dealsResult.error
+  if (relationError) throw new Error(relationError.message)
+
+  const partnerNameById = new Map(
+    ((partnersResult.data ?? []) as PartnerNameRow[]).map((item) => [item.id, item.name])
+  )
+  const dealTitleById = new Map(
+    ((dealsResult.data ?? []) as DealTitleRow[]).map((item) => [item.id, item.title])
+  )
+
+  return uniqueRows
+    .map((item) =>
+      createPartnerCalendarEvent({
+        id: item.id,
+        partnerId: item.partner_id,
+        partnerName: partnerNameById.get(item.partner_id) ?? "파트너",
+        dealId: item.deal_id ?? undefined,
+        dealTitle: item.deal_id ? dealTitleById.get(item.deal_id) : undefined,
+        kind: item.kind,
+        title: item.title,
+        startsAt: item.starts_at,
+        endsAt: item.ends_at ?? undefined,
+        owner: item.owner_name ?? undefined,
+        syncToAdminCalendar: item.sync_to_admin_calendar ?? true,
       })
-  ).filter((event) => Boolean(event.date))
+    )
+    .filter((event): event is CalendarEvent => Boolean(event))
+}
+
+async function getPartnerCalendarEvents(
+  options?: PartnerCalendarQueryOptions
+): Promise<CalendarEvent[]> {
+  if (options?.year && options?.month && hasPartnerCalendarSupabaseConfig()) {
+    try {
+      return await querySupabasePartnerCalendarEventsByMonth(options.year, options.month)
+    } catch {
+      return getLocalPartnerCalendarEvents(options)
+    }
+  }
+
+  return getLocalPartnerCalendarEvents(options)
 }
 
 export async function getAllEvents(): Promise<CalendarEvent[]> {
@@ -174,7 +362,7 @@ export async function getAllEvents(): Promise<CalendarEvent[]> {
 }
 
 export async function getEventsByMonth(year: number, month: number): Promise<CalendarEvent[]> {
-  const [partnerEvents] = await Promise.all([getPartnerCalendarEvents()])
+  const [partnerEvents] = await Promise.all([getPartnerCalendarEvents({ year, month })])
   const prefix = `${year}-${String(month).padStart(2, "0")}`
   return [...getStoredEvents(), ...partnerEvents]
     .filter((event) => isEventVisibleInMonth(event, year, month) || event.date.startsWith(prefix))

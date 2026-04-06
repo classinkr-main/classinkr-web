@@ -143,7 +143,7 @@ function PartnerFormDialogInner({
 
   return (
     <Dialog open={open} onOpenChange={(nextOpen) => !nextOpen && onClose()}>
-      <DialogContent className="max-w-2xl bg-white">
+      <DialogContent className="bg-white sm:max-w-2xl">
         <DialogHeader>
           <DialogTitle>{initialPartner ? "파트너 정보 수정" : "새 파트너 등록"}</DialogTitle>
           <DialogDescription>
@@ -169,7 +169,7 @@ function PartnerFormDialogInner({
             />
           </div>
 
-          <div className="grid grid-cols-2 gap-4">
+          <div className="grid gap-4 md:grid-cols-2">
             <div className="grid gap-2">
               <Label htmlFor="partner-status">상태</Label>
               <select
@@ -200,7 +200,7 @@ function PartnerFormDialogInner({
             </div>
           </div>
 
-          <div className="grid grid-cols-2 gap-4">
+          <div className="grid gap-4 md:grid-cols-2">
             <div className="grid gap-2">
               <Label htmlFor="partner-region">지역</Label>
               <Input
@@ -221,7 +221,7 @@ function PartnerFormDialogInner({
             </div>
           </div>
 
-          <div className="grid grid-cols-2 gap-4">
+          <div className="grid gap-4 md:grid-cols-2">
             <div className="grid gap-2">
               <Label htmlFor="partner-owner-name">대표 연락처명 *</Label>
               <Input

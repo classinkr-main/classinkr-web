@@ -13,7 +13,11 @@ import {
   toErrorResponse,
 } from "@/app/api/admin/partners/_validation"
 import { verifyAdmin } from "@/lib/admin-auth"
-import { getPartnerWorkspaceData, updatePartnerSummary } from "@/lib/partners-data"
+import {
+  getPartnerWorkspaceData,
+  getPartnerWorkspaceShellData,
+  updatePartnerSummary,
+} from "@/lib/partners-data"
 
 export async function GET(
   req: NextRequest,
@@ -24,6 +28,16 @@ export async function GET(
 
   try {
     const { id } = await params
+    const view = req.nextUrl.searchParams.get("view")
+
+    if (view === "shell") {
+      const { shell, source, warning } = await getPartnerWorkspaceShellData(id)
+      if (!shell) {
+        return NextResponse.json({ error: "Not found" }, { status: 404 })
+      }
+      return NextResponse.json({ shell, source, warning })
+    }
+
     const { workspace, source, warning } = await getPartnerWorkspaceData(id)
 
     if (!workspace) {

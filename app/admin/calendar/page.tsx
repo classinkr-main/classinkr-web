@@ -3,10 +3,18 @@
 import Link from "next/link"
 import { useState, useEffect, useCallback } from "react"
 import {
-  ChevronLeft, ChevronRight, Plus, X, Clock, Users,
+  ChevronLeft, ChevronRight, Plus, Clock, Users,
   AlignLeft, Trash2, Pencil, CalendarDays,
 } from "lucide-react"
 import { Button } from "@/components/ui/button"
+import {
+  Dialog,
+  DialogContent,
+  DialogDescription,
+  DialogFooter,
+  DialogHeader,
+  DialogTitle,
+} from "@/components/ui/dialog"
 import { Input } from "@/components/ui/input"
 import { Label } from "@/components/ui/label"
 import type { CalendarEvent, EventSource, EventType } from "@/lib/calendar-data"
@@ -84,6 +92,20 @@ function adminFetch(url: string, options?: RequestInit) {
       ...options?.headers,
     },
   })
+}
+
+async function readJsonOrThrow<T>(response: Response): Promise<T> {
+  const data = await response.json().catch(() => null)
+
+  if (!response.ok) {
+    throw new Error(
+      (data && typeof data === "object" && "error" in data && typeof data.error === "string"
+        ? data.error
+        : "일정 요청에 실패했습니다.")
+    )
+  }
+
+  return data as T
 }
 
 // ─── 이벤트 폼 ────────────────────────────────────────────────────────────────
@@ -230,6 +252,7 @@ export default function AdminCalendarPage() {
   const [sourceFilter, setSourceFilter] = useState<"all" | EventSource>("all")
   const [loading, setLoading] = useState(false)
   const [formLoading, setFormLoading] = useState(false)
+  const [errorMessage, setErrorMessage] = useState<string | null>(null)
 
   const [selectedDate, setSelectedDate] = useState<string | null>(null)
   const [showForm, setShowForm] = useState(false)
@@ -240,8 +263,12 @@ export default function AdminCalendarPage() {
     setLoading(true)
     try {
       const res = await adminFetch(`/api/admin/calendar?year=${year}&month=${month}`)
-      if (res.ok) setEvents(await res.json())
-    } catch { /* silent */ }
+      const data = await readJsonOrThrow<CalendarEvent[]>(res)
+      setEvents(data)
+      setErrorMessage(null)
+    } catch (error) {
+      setErrorMessage(error instanceof Error ? error.message : "캘린더 데이터를 불러오지 못했습니다.")
+    }
     finally { setLoading(false) }
   }, [year, month])
 
@@ -286,18 +313,23 @@ export default function AdminCalendarPage() {
         description: data.description || undefined,
       }
       if (editingEvent) {
-        await adminFetch(`/api/admin/calendar/${editingEvent.id}`, {
+        const response = await adminFetch(`/api/admin/calendar/${editingEvent.id}`, {
           method: "PATCH", body: JSON.stringify(payload),
         })
+        await readJsonOrThrow(response)
       } else {
-        await adminFetch("/api/admin/calendar", {
+        const response = await adminFetch("/api/admin/calendar", {
           method: "POST", body: JSON.stringify(payload),
         })
+        await readJsonOrThrow(response)
       }
       setShowForm(false)
       setEditingEvent(null)
+      setErrorMessage(null)
       await fetchEvents()
-    } catch { /* silent */ }
+    } catch (error) {
+      setErrorMessage(error instanceof Error ? error.message : "일정 저장에 실패했습니다.")
+    }
     finally { setFormLoading(false) }
   }
 
@@ -305,13 +337,17 @@ export default function AdminCalendarPage() {
     if (ev.readonly) return
     setFormLoading(true)
     try {
-      await adminFetch(`/api/admin/calendar/${ev.id}`, { method: "DELETE" })
+      const response = await adminFetch(`/api/admin/calendar/${ev.id}`, { method: "DELETE" })
+      await readJsonOrThrow(response)
       setDeleteTarget(null)
       if (selectedDate === ev.date && eventsByDate[ev.date]?.length === 1) {
         setSelectedDate(null)
       }
+      setErrorMessage(null)
       await fetchEvents()
-    } catch { /* silent */ }
+    } catch (error) {
+      setErrorMessage(error instanceof Error ? error.message : "일정 삭제에 실패했습니다.")
+    }
     finally { setFormLoading(false) }
   }
 
@@ -374,6 +410,13 @@ export default function AdminCalendarPage() {
           일정 추가
         </Button>
       </div>
+
+      {errorMessage && (
+        <div className="mb-6 rounded-2xl border border-red-200 bg-red-50 px-5 py-4 text-[12px] leading-5 text-red-700">
+          <strong className="mr-2">캘린더 오류:</strong>
+          <span>{errorMessage}</span>
+        </div>
+      )}
 
       {/* Stats strip */}
       <div className="flex flex-wrap items-center gap-4 mb-6 text-[13px]">
@@ -473,6 +516,15 @@ export default function AdminCalendarPage() {
                 <div
                   key={day}
                   onClick={() => setSelectedDate(isSelected ? null : dateStr)}
+                  onKeyDown={(event) => {
+                    if (event.key === "Enter" || event.key === " ") {
+                      event.preventDefault()
+                      setSelectedDate(isSelected ? null : dateStr)
+                    }
+                  }}
+                  role="button"
+                  tabIndex={0}
+                  aria-label={`${monthLabel} ${day}일 일정 보기`}
                   className={`h-24 border-b border-r border-[#f0f0ec] p-1.5 cursor-pointer transition-colors relative group ${
                     isSelected
                       ? "bg-[#111110]/5"
@@ -495,7 +547,8 @@ export default function AdminCalendarPage() {
                     {/* Quick add on hover */}
                     <button
                       onClick={(e) => { e.stopPropagation(); openCreate(dateStr) }}
-                      className="opacity-0 group-hover:opacity-100 w-5 h-5 flex items-center justify-center rounded text-[#1a1a1a]/30 hover:text-[#111110] hover:bg-[#e8e8e4] transition-all"
+                      aria-label={`${monthLabel} ${day}일에 일정 추가`}
+                      className="w-5 h-5 flex items-center justify-center rounded text-[#1a1a1a]/30 hover:text-[#111110] hover:bg-[#e8e8e4] transition-all opacity-100 sm:opacity-0 sm:group-hover:opacity-100"
                     >
                       <Plus className="w-3 h-3" />
                     </button>
@@ -545,6 +598,7 @@ export default function AdminCalendarPage() {
                 </div>
                 <button
                   onClick={() => openCreate(selectedDate)}
+                  aria-label={`${formatDate(selectedDate)}에 일정 추가`}
                   className="w-7 h-7 flex items-center justify-center rounded-lg bg-[#111110] text-white hover:bg-[#111110]/80 transition-colors"
                 >
                   <Plus className="w-3.5 h-3.5" />
@@ -594,12 +648,14 @@ export default function AdminCalendarPage() {
                               <>
                                 <button
                                   onClick={() => openEdit(ev)}
+                                  aria-label={`${ev.title} 일정 수정`}
                                   className="w-6 h-6 flex items-center justify-center rounded hover:bg-[#f0f0ec] text-[#1a1a1a]/30 hover:text-[#111110] transition-colors"
                                 >
                                   <Pencil className="w-3 h-3" />
                                 </button>
                                 <button
                                   onClick={() => setDeleteTarget(ev)}
+                                  aria-label={`${ev.title} 일정 삭제`}
                                   className="w-6 h-6 flex items-center justify-center rounded hover:bg-red-50 text-[#1a1a1a]/30 hover:text-red-500 transition-colors"
                                 >
                                   <Trash2 className="w-3 h-3" />
@@ -671,6 +727,15 @@ export default function AdminCalendarPage() {
                       key={ev.id}
                       className="px-4 py-2.5 cursor-pointer hover:bg-[#fafaf8] transition-colors"
                       onClick={() => setSelectedDate(ev.date)}
+                      onKeyDown={(event) => {
+                        if (event.key === "Enter" || event.key === " ") {
+                          event.preventDefault()
+                          setSelectedDate(ev.date)
+                        }
+                      }}
+                      role="button"
+                      tabIndex={0}
+                      aria-label={`${ev.title} 일정 보기`}
                     >
                       <div className="flex items-center justify-between gap-2">
                         <div className="flex items-center gap-2 min-w-0">
@@ -704,56 +769,56 @@ export default function AdminCalendarPage() {
       </div>
 
       {/* Add / Edit Modal */}
-      {showForm && (
-        <div className="fixed inset-0 z-50 flex items-center justify-center bg-black/40 backdrop-blur-sm p-4">
-          <div className="bg-white rounded-2xl shadow-xl w-full max-w-md max-h-[90vh] overflow-y-auto">
-            <div className="flex items-center justify-between px-6 pt-6 pb-4 border-b border-[#e8e8e4]">
-              <h3 className="text-[15px] font-semibold text-[#111110]">
-                {editingEvent ? "일정 수정" : "일정 추가"}
-              </h3>
-              <button
-                onClick={() => { setShowForm(false); setEditingEvent(null) }}
-                className="w-7 h-7 flex items-center justify-center rounded-lg hover:bg-[#f0f0ec] text-[#1a1a1a]/40 transition-colors"
-              >
-                <X className="w-4 h-4" />
-              </button>
-            </div>
-            <div className="px-6 py-4">
-              <EventForm
-                initial={editForm}
-                onSave={handleSave}
-                onCancel={() => { setShowForm(false); setEditingEvent(null) }}
-                loading={formLoading}
-                isEdit={!!editingEvent}
-              />
-            </div>
-          </div>
-        </div>
-      )}
+      <Dialog open={showForm} onOpenChange={(open) => {
+        if (!open && !formLoading) {
+          setShowForm(false)
+          setEditingEvent(null)
+        }
+      }}>
+        <DialogContent className="max-w-md bg-white max-h-[90vh] overflow-y-auto">
+          <DialogHeader>
+            <DialogTitle>{editingEvent ? "일정 수정" : "일정 추가"}</DialogTitle>
+            <DialogDescription>
+              팀 일정은 여기서 수정하고, 파트너 일정은 파트너 운영 상세에서 수정합니다.
+            </DialogDescription>
+          </DialogHeader>
+          <EventForm
+            initial={editForm}
+            onSave={handleSave}
+            onCancel={() => { setShowForm(false); setEditingEvent(null) }}
+            loading={formLoading}
+            isEdit={!!editingEvent}
+          />
+        </DialogContent>
+      </Dialog>
 
       {/* Delete confirm */}
-      {deleteTarget && (
-        <div className="fixed inset-0 z-50 flex items-center justify-center bg-black/40 backdrop-blur-sm">
-          <div className="bg-white rounded-2xl p-6 w-full max-w-sm shadow-xl">
-            <p className="font-semibold text-[#111110] mb-1">일정 삭제</p>
-            <p className="text-[13px] text-[#1a1a1a]/60 mb-5">
-              <span className="font-medium text-[#111110]">&ldquo;{deleteTarget.title}&rdquo;</span>을 삭제하시겠습니까?
-            </p>
-            <div className="flex gap-2">
-              <Button variant="outline" className="flex-1" onClick={() => setDeleteTarget(null)} disabled={formLoading}>
-                취소
-              </Button>
-              <Button
-                className="flex-1 bg-red-500 hover:bg-red-600 text-white"
-                onClick={() => handleDelete(deleteTarget)}
-                disabled={formLoading}
-              >
-                {formLoading ? "삭제 중..." : "삭제"}
-              </Button>
-            </div>
-          </div>
-        </div>
-      )}
+      <Dialog open={Boolean(deleteTarget)} onOpenChange={(open) => {
+        if (!open && !formLoading) setDeleteTarget(null)
+      }}>
+        <DialogContent className="max-w-sm bg-white">
+          <DialogHeader>
+            <DialogTitle>일정 삭제</DialogTitle>
+            <DialogDescription>
+              {deleteTarget
+                ? <><span className="font-medium text-[#111110]">&ldquo;{deleteTarget.title}&rdquo;</span>을 삭제하시겠습니까?</>
+                : "선택한 일정을 삭제하시겠습니까?"}
+            </DialogDescription>
+          </DialogHeader>
+          <DialogFooter>
+            <Button variant="outline" onClick={() => setDeleteTarget(null)} disabled={formLoading}>
+              취소
+            </Button>
+            <Button
+              className="bg-red-500 text-white hover:bg-red-600"
+              onClick={() => deleteTarget && handleDelete(deleteTarget)}
+              disabled={formLoading || !deleteTarget}
+            >
+              {formLoading ? "삭제 중..." : "삭제"}
+            </Button>
+          </DialogFooter>
+        </DialogContent>
+      </Dialog>
     </div>
   )
 }

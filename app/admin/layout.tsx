@@ -18,18 +18,25 @@ export default function AdminLayout({ children }: { children: React.ReactNode })
   const [session, setSession] = useState<SessionInfo | null>(null)
 
   useEffect(() => {
-    if (isLoginPage) return
-    const role = sessionStorage.getItem("admin_role") as AdminRole | null
-    const name = sessionStorage.getItem("admin_name")
-    const branch = sessionStorage.getItem("admin_branch") ?? undefined
-    if (role && name) setSession({ role, name, branch })
-    else setSession({ role: "admin", name: "Admin" })
+    const nextSession = (() => {
+      if (typeof window === "undefined" || isLoginPage) return null
+      const role = sessionStorage.getItem("admin_role") as AdminRole | null
+      const name = sessionStorage.getItem("admin_name")
+      const branch = sessionStorage.getItem("admin_branch") ?? undefined
+      return role && name ? { role, name, branch } : { role: "admin" as AdminRole, name: "Admin" }
+    })()
+
+    const frame = window.requestAnimationFrame(() => {
+      setSession(nextSession)
+    })
+
+    return () => window.cancelAnimationFrame(frame)
   }, [isLoginPage, pathname])
 
   if (isLoginPage) return <>{children}</>
 
   return (
-    <div className="flex min-h-screen bg-[#FAFAF8]">
+    <div className="flex min-h-[100dvh] flex-col bg-[#FAFAF8] lg:flex-row">
       {session && (
         <AdminSidebar
           role={session.role}
@@ -37,7 +44,7 @@ export default function AdminLayout({ children }: { children: React.ReactNode })
           branch={session.branch}
         />
       )}
-      <main className="flex-1 min-w-0">
+      <main className="flex-1 min-w-0 overflow-x-hidden">
         {children}
       </main>
     </div>

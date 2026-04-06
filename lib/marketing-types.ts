@@ -79,6 +79,8 @@ export interface SendEmailRequest {
   subject: string
   body: string
   targetTags: string[]  // 빈 배열 = 전체 active 구독자
+  mode?: "campaign" | "test"
+  testEmail?: string
 }
 
 /** 구독자 수동 추가/수정 요청 (관리자 → /api/admin/subscribers) */

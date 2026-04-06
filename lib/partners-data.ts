@@ -11,18 +11,27 @@ import {
   listPartnerWorkspaces as listDemoPartnerWorkspaces,
 } from "./partners-demo-data"
 import type {
+  PartnerActivityLog,
+  PartnerActivityLogInput,
   PartnerDataSource,
   PartnerAutomation,
+  PartnerChecklistInput,
+  PartnerContact,
   PartnerDeal,
   PartnerDealInput,
   PartnerDocument,
   PartnerDocumentInput,
+  PartnerIssueInput,
+  PartnerOpsChecklistItem,
+  PartnerOpsIssue,
+  PartnerQueueSummary,
   PartnerSalesInput,
   PartnerSalesRecord,
   PartnerScheduleInput,
   PartnerScheduleItem,
   PartnerSummary,
   PartnerSummaryInput,
+  PartnerWorkspaceShell,
   PartnerWorkspace,
 } from "./partners-types"
 
@@ -35,6 +44,19 @@ const DOCUMENT_STATUSES = ["draft", "sent", "signed", "paid", "overdue", "archiv
 const SCHEDULE_KINDS = ["meeting", "follow_up", "deadline", "renewal"] as const
 const SCHEDULE_STATUSES = ["planned", "completed", "canceled"] as const
 const AUTOMATION_STATUSES = ["active", "paused"] as const
+const TODO_STATUSES = ["open", "waiting_partner", "waiting_internal", "blocked", "done", "canceled"] as const
+const INSTALL_STATUSES = ["planned", "ordered", "delivered", "installed", "verified", "issue"] as const
+const ISSUE_STATUSES = ["open", "waiting", "blocked", "resolved"] as const
+const ISSUE_SEVERITIES = ["low", "medium", "high", "critical"] as const
+const ACTIVITY_LOG_STATUSES = [
+  "recorded",
+  "follow_up_needed",
+  "waiting_partner",
+  "waiting_internal",
+  "blocked",
+  "resolved",
+  "canceled",
+] as const
 
 interface PartnerListResult {
   workspaces: PartnerWorkspace[]
@@ -42,8 +64,20 @@ interface PartnerListResult {
   warning?: string
 }
 
+interface PartnerSummaryListResult {
+  summaries: PartnerQueueSummary[]
+  source: PartnerDataSource
+  warning?: string
+}
+
 interface PartnerDetailResult {
   workspace: PartnerWorkspace | null
+  source: PartnerDataSource
+  warning?: string
+}
+
+interface PartnerShellResult {
+  shell: PartnerWorkspaceShell | null
   source: PartnerDataSource
   warning?: string
 }
@@ -65,6 +99,16 @@ interface PartnerRow {
   account_manager_name: string | null
   tags: string[] | null
   notes: string | null
+}
+
+interface PartnerContactRow {
+  id: string
+  partner_id: string
+  name: string
+  role: string | null
+  email: string | null
+  phone: string | null
+  is_primary: boolean | null
 }
 
 interface PartnerDealRow {
@@ -127,6 +171,68 @@ interface PartnerAutomationRow {
   destination: string | null
   last_run_at: string | null
   next_run_at: string | null
+}
+
+interface PartnerChecklistRow {
+  id: string
+  partner_id: string
+  deal_id: string | null
+  parent_item_id: string | null
+  checklist_group: string
+  title: string
+  item_category: string | null
+  item_code: string | null
+  item_name: string | null
+  planned_quantity: number | null
+  confirmed_quantity: number | null
+  todo_status: PartnerOpsChecklistItem["todoStatus"]
+  install_status: PartnerOpsChecklistItem["installStatus"]
+  owner_name: string | null
+  due_at: string | null
+  completed_at: string | null
+  notes: string | null
+}
+
+interface PartnerIssueRow {
+  id: string
+  partner_id: string
+  deal_id: string | null
+  related_document_id: string | null
+  related_checklist_item_id: string | null
+  title: string
+  category: string
+  severity: PartnerOpsIssue["severity"]
+  status: PartnerOpsIssue["status"]
+  facts: string | null
+  unresolved_points: string | null
+  current_assumption: string | null
+  verify_with: string | null
+  owner_name: string | null
+  next_check_at: string | null
+  due_at: string | null
+  resolved_at: string | null
+  resolution_summary: string | null
+}
+
+interface PartnerActivityLogRow {
+  id: string
+  partner_id: string
+  deal_id: string | null
+  document_id: string | null
+  schedule_item_id: string | null
+  checklist_item_id: string | null
+  issue_id: string | null
+  subject_type: string
+  subject_id: string | null
+  log_category: string
+  status: PartnerActivityLog["status"]
+  actor_name: string | null
+  action: string
+  summary: string
+  details: string | null
+  next_action: string | null
+  due_at: string | null
+  occurred_at: string
 }
 
 function readEnv(name: string) {
@@ -312,13 +418,97 @@ function normalizeAutomation(partnerId: string, automation: Partial<PartnerAutom
   }
 }
 
+function normalizeContact(partnerId: string, contact: Partial<PartnerContact> | null | undefined): PartnerContact {
+  return {
+    id: toString(contact?.id) || makeId("contact"),
+    partnerId: toString(contact?.partnerId) || partnerId,
+    name: toString(contact?.name) || "미지정 연락처",
+    role: toOptionalString(contact?.role),
+    email: toOptionalString(contact?.email),
+    phone: toOptionalString(contact?.phone),
+    isPrimary: Boolean(contact?.isPrimary),
+  }
+}
+
+function normalizeChecklist(partnerId: string, item: Partial<PartnerOpsChecklistItem> | null | undefined): PartnerOpsChecklistItem {
+  return {
+    id: toString(item?.id) || makeId("checklist"),
+    partnerId: toString(item?.partnerId) || partnerId,
+    dealId: toOptionalString(item?.dealId),
+    parentItemId: toOptionalString(item?.parentItemId),
+    checklistGroup: toString(item?.checklistGroup) || "기본",
+    title: toString(item?.title) || "새 체크리스트",
+    itemCategory: toOptionalString(item?.itemCategory),
+    itemCode: toOptionalString(item?.itemCode),
+    itemName: toOptionalString(item?.itemName),
+    plannedQuantity: item?.plannedQuantity == null ? undefined : toNumber(item.plannedQuantity),
+    confirmedQuantity: item?.confirmedQuantity == null ? undefined : toNumber(item.confirmedQuantity),
+    todoStatus: isEnumValue(TODO_STATUSES, item?.todoStatus) ? item.todoStatus : "open",
+    installStatus: isEnumValue(INSTALL_STATUSES, item?.installStatus) ? item.installStatus : "planned",
+    owner: toOptionalString(item?.owner) ?? "미지정",
+    dueAt: formatDateTime(item?.dueAt),
+    completedAt: formatDateTime(item?.completedAt),
+    notes: toOptionalString(item?.notes),
+  }
+}
+
+function normalizeIssue(partnerId: string, issue: Partial<PartnerOpsIssue> | null | undefined): PartnerOpsIssue {
+  return {
+    id: toString(issue?.id) || makeId("issue"),
+    partnerId: toString(issue?.partnerId) || partnerId,
+    dealId: toOptionalString(issue?.dealId),
+    relatedDocumentId: toOptionalString(issue?.relatedDocumentId),
+    relatedChecklistItemId: toOptionalString(issue?.relatedChecklistItemId),
+    title: toString(issue?.title) || "새 이슈",
+    category: toString(issue?.category) || "general",
+    severity: isEnumValue(ISSUE_SEVERITIES, issue?.severity) ? issue.severity : "medium",
+    status: isEnumValue(ISSUE_STATUSES, issue?.status) ? issue.status : "open",
+    facts: toOptionalString(issue?.facts),
+    unresolvedPoints: toOptionalString(issue?.unresolvedPoints),
+    currentAssumption: toOptionalString(issue?.currentAssumption),
+    verifyWith: toOptionalString(issue?.verifyWith),
+    owner: toOptionalString(issue?.owner) ?? "미지정",
+    nextCheckAt: formatDateTime(issue?.nextCheckAt),
+    dueAt: formatDateTime(issue?.dueAt),
+    resolvedAt: formatDateTime(issue?.resolvedAt),
+    resolutionSummary: toOptionalString(issue?.resolutionSummary),
+  }
+}
+
+function normalizeActivityLog(partnerId: string, log: Partial<PartnerActivityLog> | null | undefined): PartnerActivityLog {
+  return {
+    id: toString(log?.id) || makeId("activity"),
+    partnerId: toString(log?.partnerId) || partnerId,
+    dealId: toOptionalString(log?.dealId),
+    documentId: toOptionalString(log?.documentId),
+    scheduleItemId: toOptionalString(log?.scheduleItemId),
+    checklistItemId: toOptionalString(log?.checklistItemId),
+    issueId: toOptionalString(log?.issueId),
+    subjectType: toString(log?.subjectType) || "partner",
+    subjectId: toOptionalString(log?.subjectId),
+    logCategory: toString(log?.logCategory) || "operations_internal",
+    status: isEnumValue(ACTIVITY_LOG_STATUSES, log?.status) ? log.status : "recorded",
+    actor: toOptionalString(log?.actor) ?? "미지정",
+    action: toString(log?.action) || "recorded",
+    summary: toString(log?.summary) || "활동 기록",
+    details: toOptionalString(log?.details),
+    nextAction: toOptionalString(log?.nextAction),
+    dueAt: formatDateTime(log?.dueAt),
+    occurredAt: formatDateTime(log?.occurredAt) ?? formatDateTime(new Date().toISOString()) ?? "",
+  }
+}
+
 function normalizeWorkspace(workspace: PartnerWorkspace | Partial<PartnerWorkspace> | null | undefined): PartnerWorkspace {
   const partner = normalizePartner(workspace?.partner)
+  const contacts = asArray(workspace?.contacts).map((contact) => normalizeContact(partner.id, contact))
   const deals = asArray(workspace?.deals).map((deal) => normalizeDeal(partner.id, deal))
   const documents = asArray(workspace?.documents).map((document) => normalizeDocument(partner.id, document))
   const schedule = sortSchedule(asArray(workspace?.schedule).map((item) => normalizeScheduleItem(partner.id, item)))
   const sales = asArray(workspace?.sales).map((record) => normalizeSalesRecord(partner.id, record))
   const automations = asArray(workspace?.automations).map((automation) => normalizeAutomation(partner.id, automation))
+  const checklists = asArray(workspace?.checklists).map((item) => normalizeChecklist(partner.id, item))
+  const issues = asArray(workspace?.issues).map((issue) => normalizeIssue(partner.id, issue))
+  const activityLogs = asArray(workspace?.activityLogs).map((log) => normalizeActivityLog(partner.id, log))
   const nextActionAt = schedule.find((item) => item.status === "planned")?.startsAt
 
   return {
@@ -326,11 +516,15 @@ function normalizeWorkspace(workspace: PartnerWorkspace | Partial<PartnerWorkspa
       ...partner,
       nextActionAt,
     },
+    contacts,
     deals,
     documents,
     schedule,
     sales,
     automations,
+    checklists,
+    issues,
+    activityLogs,
   }
 }
 
@@ -378,6 +572,11 @@ async function querySupabasePartnerWorkspaces(partnerId?: string) {
     .order("name", { ascending: true })
 
   const filteredPartnersQuery = partnerId ? partnersQuery.eq("id", partnerId) : partnersQuery
+  const contactsQuery = supabase
+    .from("partner_contacts")
+    .select("id, partner_id, name, role, email, phone, is_primary")
+    .order("is_primary", { ascending: false })
+    .order("name", { ascending: true })
   const dealsQuery = supabase
     .from("partner_deals")
     .select("id, partner_id, title, stage, quote_amount, expected_close_at, contract_start_at, contract_end_at, sales_units, owner_name")
@@ -399,33 +598,78 @@ async function querySupabasePartnerWorkspaces(partnerId?: string) {
     .from("partner_automations")
     .select("id, partner_id, deal_id, name, status, trigger_type, action_type, destination, last_run_at, next_run_at")
     .order("created_at", { ascending: false })
+  const checklistQuery = supabase
+    .from("partner_ops_checklist_items")
+    .select("id, partner_id, deal_id, parent_item_id, checklist_group, title, item_category, item_code, item_name, planned_quantity, confirmed_quantity, todo_status, install_status, owner_name, due_at, completed_at, notes")
+    .order("sort_order", { ascending: true })
+    .order("created_at", { ascending: true })
+  const issuesQuery = supabase
+    .from("partner_ops_issues")
+    .select("id, partner_id, deal_id, related_document_id, related_checklist_item_id, title, category, severity, status, facts, unresolved_points, current_assumption, verify_with, owner_name, next_check_at, due_at, resolved_at, resolution_summary")
+    .order("updated_at", { ascending: false })
+  const activityLogsQuery = supabase
+    .from("partner_activity_logs")
+    .select("id, partner_id, deal_id, document_id, schedule_item_id, checklist_item_id, issue_id, subject_type, subject_id, log_category, status, actor_name, action, summary, details, next_action, due_at, occurred_at")
+    .order("occurred_at", { ascending: false })
 
+  const filteredContactsQuery = partnerId ? contactsQuery.eq("partner_id", partnerId) : contactsQuery
   const filteredDealsQuery = partnerId ? dealsQuery.eq("partner_id", partnerId) : dealsQuery
   const filteredDocumentsQuery = partnerId ? documentsQuery.eq("partner_id", partnerId) : documentsQuery
   const filteredScheduleQuery = partnerId ? scheduleQuery.eq("partner_id", partnerId) : scheduleQuery
   const filteredSalesQuery = partnerId ? salesQuery.eq("partner_id", partnerId) : salesQuery
   const filteredAutomationsQuery = partnerId ? automationsQuery.eq("partner_id", partnerId) : automationsQuery
+  const filteredChecklistQuery = partnerId ? checklistQuery.eq("partner_id", partnerId) : checklistQuery
+  const filteredIssuesQuery = partnerId ? issuesQuery.eq("partner_id", partnerId) : issuesQuery
+  const filteredActivityLogsQuery = partnerId ? activityLogsQuery.eq("partner_id", partnerId) : activityLogsQuery
 
   const [
     { data: partners, error: partnersError },
+    { data: contacts, error: contactsError },
     { data: deals, error: dealsError },
     { data: documents, error: documentsError },
     { data: schedule, error: scheduleError },
     { data: sales, error: salesError },
     { data: automations, error: automationsError },
+    { data: checklists, error: checklistsError },
+    { data: issues, error: issuesError },
+    { data: activityLogs, error: activityLogsError },
   ] = await Promise.all([
     filteredPartnersQuery,
+    filteredContactsQuery,
     filteredDealsQuery,
     filteredDocumentsQuery,
     filteredScheduleQuery,
     filteredSalesQuery,
     filteredAutomationsQuery,
+    filteredChecklistQuery,
+    filteredIssuesQuery,
+    filteredActivityLogsQuery,
   ])
 
-  const firstError = partnersError ?? dealsError ?? documentsError ?? scheduleError ?? salesError ?? automationsError
+  const firstError =
+    partnersError ??
+    contactsError ??
+    dealsError ??
+    documentsError ??
+    scheduleError ??
+    salesError ??
+    automationsError ??
+    checklistsError ??
+    issuesError ??
+    activityLogsError
   if (firstError) {
     throw new Error(firstError.message)
   }
+
+  const normalizedContacts: PartnerContact[] = ((contacts ?? []) as PartnerContactRow[]).map((contact) => ({
+    id: contact.id,
+    partnerId: contact.partner_id,
+    name: contact.name,
+    role: contact.role ?? undefined,
+    email: contact.email ?? undefined,
+    phone: contact.phone ?? undefined,
+    isPrimary: Boolean(contact.is_primary),
+  }))
 
   const normalizedDeals: PartnerDeal[] = ((deals ?? []) as PartnerDealRow[]).map((deal) => ({
     id: deal.id,
@@ -478,6 +722,7 @@ async function querySupabasePartnerWorkspaces(partnerId?: string) {
   const normalizedAutomations: PartnerAutomation[] = ((automations ?? []) as PartnerAutomationRow[]).map((automation) => ({
     id: automation.id,
     partnerId: automation.partner_id,
+    dealId: automation.deal_id ?? undefined,
     name: automation.name,
     status: automation.status,
     trigger: automation.trigger_type,
@@ -487,11 +732,77 @@ async function querySupabasePartnerWorkspaces(partnerId?: string) {
     nextRunAt: formatDateTime(automation.next_run_at),
   }))
 
+  const normalizedChecklists: PartnerOpsChecklistItem[] = ((checklists ?? []) as PartnerChecklistRow[]).map((item) => ({
+    id: item.id,
+    partnerId: item.partner_id,
+    dealId: item.deal_id ?? undefined,
+    parentItemId: item.parent_item_id ?? undefined,
+    checklistGroup: item.checklist_group,
+    title: item.title,
+    itemCategory: item.item_category ?? undefined,
+    itemCode: item.item_code ?? undefined,
+    itemName: item.item_name ?? undefined,
+    plannedQuantity: item.planned_quantity == null ? undefined : toNumber(item.planned_quantity),
+    confirmedQuantity: item.confirmed_quantity == null ? undefined : toNumber(item.confirmed_quantity),
+    todoStatus: item.todo_status,
+    installStatus: item.install_status,
+    owner: item.owner_name ?? "미지정",
+    dueAt: formatDateTime(item.due_at),
+    completedAt: formatDateTime(item.completed_at),
+    notes: item.notes ?? undefined,
+  }))
+
+  const normalizedIssues: PartnerOpsIssue[] = ((issues ?? []) as PartnerIssueRow[]).map((issue) => ({
+    id: issue.id,
+    partnerId: issue.partner_id,
+    dealId: issue.deal_id ?? undefined,
+    relatedDocumentId: issue.related_document_id ?? undefined,
+    relatedChecklistItemId: issue.related_checklist_item_id ?? undefined,
+    title: issue.title,
+    category: issue.category,
+    severity: issue.severity,
+    status: issue.status,
+    facts: issue.facts ?? undefined,
+    unresolvedPoints: issue.unresolved_points ?? undefined,
+    currentAssumption: issue.current_assumption ?? undefined,
+    verifyWith: issue.verify_with ?? undefined,
+    owner: issue.owner_name ?? "미지정",
+    nextCheckAt: formatDateTime(issue.next_check_at),
+    dueAt: formatDateTime(issue.due_at),
+    resolvedAt: formatDateTime(issue.resolved_at),
+    resolutionSummary: issue.resolution_summary ?? undefined,
+  }))
+
+  const normalizedActivityLogs: PartnerActivityLog[] = ((activityLogs ?? []) as PartnerActivityLogRow[]).map((log) => ({
+    id: log.id,
+    partnerId: log.partner_id,
+    dealId: log.deal_id ?? undefined,
+    documentId: log.document_id ?? undefined,
+    scheduleItemId: log.schedule_item_id ?? undefined,
+    checklistItemId: log.checklist_item_id ?? undefined,
+    issueId: log.issue_id ?? undefined,
+    subjectType: log.subject_type,
+    subjectId: log.subject_id ?? undefined,
+    logCategory: log.log_category,
+    status: log.status,
+    actor: log.actor_name ?? "미지정",
+    action: log.action,
+    summary: log.summary,
+    details: log.details ?? undefined,
+    nextAction: log.next_action ?? undefined,
+    dueAt: formatDateTime(log.due_at),
+    occurredAt: formatDateTime(log.occurred_at) ?? log.occurred_at,
+  }))
+
+  const contactsByPartner = groupByPartner(normalizedContacts)
   const dealsByPartner = groupByPartner(normalizedDeals)
   const documentsByPartner = groupByPartner(normalizedDocuments)
   const scheduleByPartner = groupByPartner(normalizedSchedule)
   const salesByPartner = groupByPartner(normalizedSales)
   const automationsByPartner = groupByPartner(normalizedAutomations)
+  const checklistsByPartner = groupByPartner(normalizedChecklists)
+  const issuesByPartner = groupByPartner(normalizedIssues)
+  const activityLogsByPartner = groupByPartner(normalizedActivityLogs)
 
   return ((partners ?? []) as PartnerRow[]).map((partner) =>
     normalizeWorkspace({
@@ -508,11 +819,15 @@ async function querySupabasePartnerWorkspaces(partnerId?: string) {
         tags: partner.tags ?? [],
         notes: partner.notes ?? undefined,
       },
+      contacts: contactsByPartner[partner.id] ?? [],
       deals: dealsByPartner[partner.id] ?? [],
       documents: documentsByPartner[partner.id] ?? [],
       schedule: scheduleByPartner[partner.id] ?? [],
       sales: salesByPartner[partner.id] ?? [],
       automations: automationsByPartner[partner.id] ?? [],
+      checklists: checklistsByPartner[partner.id] ?? [],
+      issues: issuesByPartner[partner.id] ?? [],
+      activityLogs: activityLogsByPartner[partner.id] ?? [],
     })
   )
 }
@@ -548,6 +863,10 @@ async function createLocalPartner(summary: PartnerSummaryInput) {
     schedule: [],
     sales: [],
     automations: [],
+    contacts: [],
+    checklists: [],
+    issues: [],
+    activityLogs: [],
   })
   workspaces.unshift(workspace)
   await writeLocalWorkspaces(workspaces)
@@ -680,6 +999,195 @@ async function upsertLocalSales(partnerId: string, input: PartnerSalesInput) {
   return normalizeWorkspace(workspace)
 }
 
+function ensureWorkspaceDealOwnership(workspace: PartnerWorkspace, dealId?: string) {
+  if (!dealId) return
+  const exists = workspace.deals.some((deal) => deal.id === dealId)
+  if (!exists) {
+    throw new Error("해당 거래는 현재 파트너에 속하지 않습니다.")
+  }
+}
+
+async function ensureSupabaseDealOwnership(partnerId: string, dealId?: string) {
+  if (!dealId) return
+  const supabase = createSupabaseAdminClient()
+  const { data, error } = await supabase
+    .from("partner_deals")
+    .select("id")
+    .eq("id", dealId)
+    .eq("partner_id", partnerId)
+    .maybeSingle()
+
+  if (error) throw new Error(error.message)
+  if (!data) {
+    throw new Error("해당 거래는 현재 파트너에 속하지 않습니다.")
+  }
+}
+
+async function upsertLocalChecklist(partnerId: string, input: PartnerChecklistInput) {
+  const workspaces = await readLocalWorkspaces()
+  const workspace = workspaces.find((item) => item.partner.id === partnerId)
+  if (!workspace) return null
+  ensureWorkspaceDealOwnership(workspace, input.dealId)
+
+  const nextItem: PartnerOpsChecklistItem = {
+    id: input.id ?? makeId("checklist"),
+    partnerId,
+    dealId: input.dealId,
+    parentItemId: input.parentItemId,
+    checklistGroup: input.checklistGroup,
+    title: input.title,
+    itemCategory: input.itemCategory,
+    itemCode: input.itemCode,
+    itemName: input.itemName,
+    plannedQuantity: input.plannedQuantity,
+    confirmedQuantity: input.confirmedQuantity,
+    todoStatus: input.todoStatus,
+    installStatus: input.installStatus,
+    owner: input.owner,
+    dueAt: toStorageDateTime(input.dueAt),
+    completedAt: toStorageDateTime(input.completedAt),
+    notes: input.notes,
+  }
+
+  const index = workspace.checklists.findIndex((item) => item.id === nextItem.id)
+  if (index >= 0) workspace.checklists[index] = nextItem
+  else workspace.checklists.unshift(nextItem)
+
+  await writeLocalWorkspaces(workspaces)
+  return normalizeWorkspace(workspace)
+}
+
+async function upsertLocalIssue(partnerId: string, input: PartnerIssueInput) {
+  const workspaces = await readLocalWorkspaces()
+  const workspace = workspaces.find((item) => item.partner.id === partnerId)
+  if (!workspace) return null
+  ensureWorkspaceDealOwnership(workspace, input.dealId)
+
+  const nextIssue: PartnerOpsIssue = {
+    id: input.id ?? makeId("issue"),
+    partnerId,
+    dealId: input.dealId,
+    relatedDocumentId: input.relatedDocumentId,
+    relatedChecklistItemId: input.relatedChecklistItemId,
+    title: input.title,
+    category: input.category,
+    severity: input.severity,
+    status: input.status,
+    facts: input.facts,
+    unresolvedPoints: input.unresolvedPoints,
+    currentAssumption: input.currentAssumption,
+    verifyWith: input.verifyWith,
+    owner: input.owner,
+    nextCheckAt: toStorageDateTime(input.nextCheckAt),
+    dueAt: toStorageDateTime(input.dueAt),
+    resolvedAt: toStorageDateTime(input.resolvedAt),
+    resolutionSummary: input.resolutionSummary,
+  }
+
+  const index = workspace.issues.findIndex((item) => item.id === nextIssue.id)
+  if (index >= 0) workspace.issues[index] = nextIssue
+  else workspace.issues.unshift(nextIssue)
+
+  await writeLocalWorkspaces(workspaces)
+  return normalizeWorkspace(workspace)
+}
+
+async function upsertLocalActivityLog(partnerId: string, input: PartnerActivityLogInput) {
+  const workspaces = await readLocalWorkspaces()
+  const workspace = workspaces.find((item) => item.partner.id === partnerId)
+  if (!workspace) return null
+  ensureWorkspaceDealOwnership(workspace, input.dealId)
+
+  const nextLog: PartnerActivityLog = {
+    id: input.id ?? makeId("activity"),
+    partnerId,
+    dealId: input.dealId,
+    documentId: input.documentId,
+    scheduleItemId: input.scheduleItemId,
+    checklistItemId: input.checklistItemId,
+    issueId: input.issueId,
+    subjectType: input.subjectType ?? "partner",
+    subjectId: input.subjectId,
+    logCategory: input.logCategory,
+    status: input.status,
+    actor: input.actor,
+    action: input.action,
+    summary: input.summary,
+    details: input.details,
+    nextAction: input.nextAction,
+    dueAt: toStorageDateTime(input.dueAt),
+    occurredAt: toStorageDateTime(input.occurredAt) ?? input.occurredAt,
+  }
+
+  const index = workspace.activityLogs.findIndex((item) => item.id === nextLog.id)
+  if (index >= 0) workspace.activityLogs[index] = nextLog
+  else workspace.activityLogs.unshift(nextLog)
+
+  await writeLocalWorkspaces(workspaces)
+  return normalizeWorkspace(workspace)
+}
+
+function buildPartnerWorkspaceShell(workspace: PartnerWorkspace): PartnerWorkspaceShell {
+  const currentMonth = new Date().toISOString().slice(0, 7)
+  const pendingDocumentCount = workspace.documents.filter((document) => ["draft", "sent", "overdue"].includes(document.status)).length
+  const openIssueCount = workspace.issues.filter((issue) => issue.status !== "resolved").length
+  const today = new Date().toISOString().slice(0, 10)
+  const todayTodoCount =
+    workspace.schedule.filter((item) => item.status === "planned" && item.startsAt.startsWith(today)).length +
+    workspace.checklists.filter((item) => item.todoStatus !== "done" && item.todoStatus !== "canceled").length
+  const currentMonthSales = workspace.sales.filter((sale) => sale.salesMonth.startsWith(currentMonth))
+  const checklistItems = workspace.checklists.filter((item) => item.todoStatus !== "canceled")
+  const completedChecklistItems = checklistItems.filter((item) => item.todoStatus === "done")
+  const fulfillmentProgress =
+    checklistItems.length === 0 ? 0 : Math.round((completedChecklistItems.length / checklistItems.length) * 100)
+  const lastMeetingAt = workspace.activityLogs.find((log) => log.logCategory === "meeting" || log.action.includes("meeting"))?.occurredAt
+
+  return {
+    partner: workspace.partner,
+    mainDeal: workspace.deals.find((deal) => ["active", "contract_sent", "quoted"].includes(deal.stage)) ?? workspace.deals[0],
+    nextActionAt: workspace.partner.nextActionAt,
+    todayTodoCount,
+    openIssueCount,
+    pendingDocumentCount,
+    currentMonthSalesUnits: currentMonthSales.reduce((sum, sale) => sum + sale.unitsSold, 0),
+    currentMonthNetAmount: currentMonthSales.reduce((sum, sale) => sum + sale.netAmount, 0),
+    lastMeetingAt,
+    fulfillmentProgress,
+  }
+}
+
+function buildPartnerQueueSummary(workspace: PartnerWorkspace): PartnerQueueSummary {
+  const latestActivity = workspace.activityLogs[0]
+  const overdueDocumentCount = workspace.documents.filter((document) => document.status === "overdue").length
+  const pendingSettlementCount = workspace.documents.filter((document) =>
+    document.kind === "receipt" && ["draft", "sent", "overdue"].includes(document.status)
+  ).length
+  const openIssueCount = workspace.issues.filter((issue) => issue.status !== "resolved").length
+  const openChecklistCount = workspace.checklists.filter((item) => item.todoStatus !== "done" && item.todoStatus !== "canceled").length
+  const mainDeal = workspace.deals.find((deal) => ["active", "contract_sent", "quoted"].includes(deal.stage)) ?? workspace.deals[0]
+  const riskScore = [overdueDocumentCount > 0, openIssueCount > 0, workspace.partner.status === "churn_risk"].filter(Boolean).length
+
+  return {
+    partnerId: workspace.partner.id,
+    partnerName: workspace.partner.name,
+    status: workspace.partner.status,
+    channel: workspace.partner.channel,
+    region: workspace.partner.region,
+    accountManager: workspace.partner.accountManager,
+    ownerName: workspace.partner.ownerName,
+    mainDealStage: mainDeal?.stage,
+    mainDealTitle: mainDeal?.title,
+    nextActionAt: workspace.partner.nextActionAt,
+    openChecklistCount,
+    openIssueCount,
+    overdueDocumentCount,
+    pendingSettlementCount,
+    latestActivitySummary: latestActivity?.summary,
+    latestActivityAt: latestActivity?.occurredAt,
+    riskLevel: riskScore >= 2 ? "high" : riskScore === 1 ? "medium" : "low",
+  }
+}
+
 async function createSupabasePartner(summary: PartnerSummaryInput) {
   const supabase = createSupabaseAdminClient()
   const { data, error } = await supabase
@@ -747,6 +1255,7 @@ async function upsertSupabaseDeal(partnerId: string, input: PartnerDealInput) {
 
 async function upsertSupabaseDocument(partnerId: string, input: PartnerDocumentInput) {
   const supabase = createSupabaseAdminClient()
+  await ensureSupabaseDealOwnership(partnerId, input.dealId)
   const payload = {
     partner_id: partnerId,
     deal_id: input.dealId ?? null,
@@ -771,6 +1280,7 @@ async function upsertSupabaseDocument(partnerId: string, input: PartnerDocumentI
 
 async function upsertSupabaseSchedule(partnerId: string, input: PartnerScheduleInput) {
   const supabase = createSupabaseAdminClient()
+  await ensureSupabaseDealOwnership(partnerId, input.dealId)
   const payload = {
     partner_id: partnerId,
     deal_id: input.dealId ?? null,
@@ -793,6 +1303,7 @@ async function upsertSupabaseSchedule(partnerId: string, input: PartnerScheduleI
 
 async function upsertSupabaseSales(partnerId: string, input: PartnerSalesInput) {
   const supabase = createSupabaseAdminClient()
+  await ensureSupabaseDealOwnership(partnerId, input.dealId)
   const payload = {
     partner_id: partnerId,
     deal_id: input.dealId ?? null,
@@ -809,6 +1320,119 @@ async function upsertSupabaseSales(partnerId: string, input: PartnerSalesInput) 
   const { error } = await query
   if (error) throw new Error(error.message)
   return getPartnerWorkspaceData(partnerId)
+}
+
+async function upsertSupabaseChecklist(partnerId: string, input: PartnerChecklistInput) {
+  const supabase = createSupabaseAdminClient()
+  await ensureSupabaseDealOwnership(partnerId, input.dealId)
+  const payload = {
+    partner_id: partnerId,
+    deal_id: input.dealId ?? null,
+    parent_item_id: input.parentItemId ?? null,
+    checklist_group: input.checklistGroup,
+    title: input.title,
+    item_category: input.itemCategory ?? null,
+    item_code: input.itemCode ?? null,
+    item_name: input.itemName ?? null,
+    planned_quantity: input.plannedQuantity ?? null,
+    confirmed_quantity: input.confirmedQuantity ?? null,
+    todo_status: input.todoStatus,
+    install_status: input.installStatus,
+    owner_name: input.owner ?? null,
+    due_at: toStorageDateTime(input.dueAt) ?? null,
+    completed_at: toStorageDateTime(input.completedAt) ?? null,
+    notes: input.notes ?? null,
+  }
+
+  const query = input.id
+    ? supabase.from("partner_ops_checklist_items").update(payload).eq("id", input.id).eq("partner_id", partnerId)
+    : supabase.from("partner_ops_checklist_items").insert(payload)
+
+  const { error } = await query
+  if (error) throw new Error(error.message)
+  return getPartnerWorkspaceData(partnerId)
+}
+
+async function upsertSupabaseIssue(partnerId: string, input: PartnerIssueInput) {
+  const supabase = createSupabaseAdminClient()
+  await ensureSupabaseDealOwnership(partnerId, input.dealId)
+  const payload = {
+    partner_id: partnerId,
+    deal_id: input.dealId ?? null,
+    related_document_id: input.relatedDocumentId ?? null,
+    related_checklist_item_id: input.relatedChecklistItemId ?? null,
+    title: input.title,
+    category: input.category,
+    severity: input.severity,
+    status: input.status,
+    facts: input.facts ?? null,
+    unresolved_points: input.unresolvedPoints ?? null,
+    current_assumption: input.currentAssumption ?? null,
+    verify_with: input.verifyWith ?? null,
+    owner_name: input.owner ?? null,
+    next_check_at: toStorageDateTime(input.nextCheckAt) ?? null,
+    due_at: toStorageDateTime(input.dueAt) ?? null,
+    resolved_at: toStorageDateTime(input.resolvedAt) ?? null,
+    resolution_summary: input.resolutionSummary ?? null,
+  }
+
+  const query = input.id
+    ? supabase.from("partner_ops_issues").update(payload).eq("id", input.id).eq("partner_id", partnerId)
+    : supabase.from("partner_ops_issues").insert(payload)
+
+  const { error } = await query
+  if (error) throw new Error(error.message)
+  return getPartnerWorkspaceData(partnerId)
+}
+
+async function upsertSupabaseActivityLog(partnerId: string, input: PartnerActivityLogInput) {
+  const supabase = createSupabaseAdminClient()
+  await ensureSupabaseDealOwnership(partnerId, input.dealId)
+  const payload = {
+    partner_id: partnerId,
+    deal_id: input.dealId ?? null,
+    document_id: input.documentId ?? null,
+    schedule_item_id: input.scheduleItemId ?? null,
+    checklist_item_id: input.checklistItemId ?? null,
+    issue_id: input.issueId ?? null,
+    subject_type: input.subjectType ?? "partner",
+    subject_id: input.subjectId ?? null,
+    log_category: input.logCategory,
+    status: input.status,
+    actor_name: input.actor ?? null,
+    action: input.action,
+    summary: input.summary,
+    details: input.details ?? null,
+    next_action: input.nextAction ?? null,
+    due_at: toStorageDateTime(input.dueAt) ?? null,
+    occurred_at: toStorageDateTime(input.occurredAt) ?? input.occurredAt,
+  }
+
+  const query = input.id
+    ? supabase.from("partner_activity_logs").update(payload).eq("id", input.id).eq("partner_id", partnerId)
+    : supabase.from("partner_activity_logs").insert(payload)
+
+  const { error } = await query
+  if (error) throw new Error(error.message)
+  return getPartnerWorkspaceData(partnerId)
+}
+
+export async function listPartnerWorkspaceSummariesData(): Promise<PartnerSummaryListResult> {
+  const result = await listPartnerWorkspacesData()
+  return {
+    summaries: result.workspaces.map(buildPartnerQueueSummary),
+    source: result.source,
+    warning: result.warning,
+  }
+}
+
+export async function getPartnerWorkspaceShellData(id: string): Promise<PartnerShellResult> {
+  const result = await getPartnerWorkspaceData(id)
+  return {
+    shell: result.workspace ? buildPartnerWorkspaceShell(result.workspace) : null,
+    source: result.source,
+    warning: result.warning,
+  }
 }
 
 export async function listPartnerWorkspacesData(): Promise<PartnerListResult> {
@@ -869,21 +1493,11 @@ export async function createPartnerWorkspace(summary: PartnerSummaryInput): Prom
     }
   }
 
-  try {
-    const result = await createSupabasePartner(summary)
-    return {
-      workspace: result.workspace,
-      source: result.source,
-      warning: result.warning,
-    }
-  } catch (error) {
-    return {
-      workspace: await createLocalPartner(summary),
-      source: "local",
-      warning: error instanceof Error
-        ? `Supabase 저장 실패로 로컬 저장소에 생성했습니다: ${error.message}`
-        : "Supabase 저장 실패로 로컬 저장소에 생성했습니다.",
-    }
+  const result = await createSupabasePartner(summary)
+  return {
+    workspace: result.workspace,
+    source: result.source,
+    warning: result.warning,
   }
 }
 
@@ -896,21 +1510,11 @@ export async function updatePartnerSummary(id: string, summary: Partial<PartnerS
     }
   }
 
-  try {
-    const result = await updateSupabasePartner(id, summary)
-    return {
-      workspace: result.workspace,
-      source: result.source,
-      warning: result.warning,
-    }
-  } catch (error) {
-    return {
-      workspace: await updateLocalPartner(id, summary),
-      source: "local",
-      warning: error instanceof Error
-        ? `Supabase 저장 실패로 로컬 저장소에 반영했습니다: ${error.message}`
-        : "Supabase 저장 실패로 로컬 저장소에 반영했습니다.",
-    }
+  const result = await updateSupabasePartner(id, summary)
+  return {
+    workspace: result.workspace,
+    source: result.source,
+    warning: result.warning,
   }
 }
 
@@ -923,21 +1527,11 @@ export async function upsertPartnerDeal(partnerId: string, input: PartnerDealInp
     }
   }
 
-  try {
-    const result = await upsertSupabaseDeal(partnerId, input)
-    return {
-      workspace: result.workspace,
-      source: result.source,
-      warning: result.warning,
-    }
-  } catch (error) {
-    return {
-      workspace: await upsertLocalDeal(partnerId, input),
-      source: "local",
-      warning: error instanceof Error
-        ? `Supabase 저장 실패로 로컬 저장소에 거래를 반영했습니다: ${error.message}`
-        : "Supabase 저장 실패로 로컬 저장소에 거래를 반영했습니다.",
-    }
+  const result = await upsertSupabaseDeal(partnerId, input)
+  return {
+    workspace: result.workspace,
+    source: result.source,
+    warning: result.warning,
   }
 }
 
@@ -950,21 +1544,11 @@ export async function upsertPartnerDocument(partnerId: string, input: PartnerDoc
     }
   }
 
-  try {
-    const result = await upsertSupabaseDocument(partnerId, input)
-    return {
-      workspace: result.workspace,
-      source: result.source,
-      warning: result.warning,
-    }
-  } catch (error) {
-    return {
-      workspace: await upsertLocalDocument(partnerId, input),
-      source: "local",
-      warning: error instanceof Error
-        ? `Supabase 저장 실패로 로컬 저장소에 문서를 반영했습니다: ${error.message}`
-        : "Supabase 저장 실패로 로컬 저장소에 문서를 반영했습니다.",
-    }
+  const result = await upsertSupabaseDocument(partnerId, input)
+  return {
+    workspace: result.workspace,
+    source: result.source,
+    warning: result.warning,
   }
 }
 
@@ -977,21 +1561,11 @@ export async function upsertPartnerSchedule(partnerId: string, input: PartnerSch
     }
   }
 
-  try {
-    const result = await upsertSupabaseSchedule(partnerId, input)
-    return {
-      workspace: result.workspace,
-      source: result.source,
-      warning: result.warning,
-    }
-  } catch (error) {
-    return {
-      workspace: await upsertLocalSchedule(partnerId, input),
-      source: "local",
-      warning: error instanceof Error
-        ? `Supabase 저장 실패로 로컬 저장소에 일정을 반영했습니다: ${error.message}`
-        : "Supabase 저장 실패로 로컬 저장소에 일정을 반영했습니다.",
-    }
+  const result = await upsertSupabaseSchedule(partnerId, input)
+  return {
+    workspace: result.workspace,
+    source: result.source,
+    warning: result.warning,
   }
 }
 
@@ -1004,20 +1578,61 @@ export async function upsertPartnerSales(partnerId: string, input: PartnerSalesI
     }
   }
 
-  try {
-    const result = await upsertSupabaseSales(partnerId, input)
+  const result = await upsertSupabaseSales(partnerId, input)
+  return {
+    workspace: result.workspace,
+    source: result.source,
+    warning: result.warning,
+  }
+}
+
+export async function upsertPartnerChecklist(partnerId: string, input: PartnerChecklistInput): Promise<PartnerMutationResult> {
+  if (!hasPartnersSupabaseConfig()) {
     return {
-      workspace: result.workspace,
-      source: result.source,
-      warning: result.warning,
-    }
-  } catch (error) {
-    return {
-      workspace: await upsertLocalSales(partnerId, input),
+      workspace: await upsertLocalChecklist(partnerId, input),
       source: "local",
-      warning: error instanceof Error
-        ? `Supabase 저장 실패로 로컬 저장소에 판매 기록을 반영했습니다: ${error.message}`
-        : "Supabase 저장 실패로 로컬 저장소에 판매 기록을 반영했습니다.",
+      warning: "로컬 저장소에 체크리스트를 저장했습니다.",
     }
+  }
+
+  const result = await upsertSupabaseChecklist(partnerId, input)
+  return {
+    workspace: result.workspace,
+    source: result.source,
+    warning: result.warning,
+  }
+}
+
+export async function upsertPartnerIssue(partnerId: string, input: PartnerIssueInput): Promise<PartnerMutationResult> {
+  if (!hasPartnersSupabaseConfig()) {
+    return {
+      workspace: await upsertLocalIssue(partnerId, input),
+      source: "local",
+      warning: "로컬 저장소에 이슈를 저장했습니다.",
+    }
+  }
+
+  const result = await upsertSupabaseIssue(partnerId, input)
+  return {
+    workspace: result.workspace,
+    source: result.source,
+    warning: result.warning,
+  }
+}
+
+export async function upsertPartnerActivityLog(partnerId: string, input: PartnerActivityLogInput): Promise<PartnerMutationResult> {
+  if (!hasPartnersSupabaseConfig()) {
+    return {
+      workspace: await upsertLocalActivityLog(partnerId, input),
+      source: "local",
+      warning: "로컬 저장소에 활동 로그를 저장했습니다.",
+    }
+  }
+
+  const result = await upsertSupabaseActivityLog(partnerId, input)
+  return {
+    workspace: result.workspace,
+    source: result.source,
+    warning: result.warning,
   }
 }

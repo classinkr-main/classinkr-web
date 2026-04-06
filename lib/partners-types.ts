@@ -13,6 +13,28 @@ export type DocumentStatus = "draft" | "sent" | "signed" | "paid" | "overdue" | 
 export type ScheduleKind = "meeting" | "follow_up" | "deadline" | "renewal"
 export type ScheduleStatus = "planned" | "completed" | "canceled"
 export type AutomationStatus = "active" | "paused"
+export type PartnerTodoStatus = "open" | "waiting_partner" | "waiting_internal" | "blocked" | "done" | "canceled"
+export type PartnerInstallStatus = "planned" | "ordered" | "delivered" | "installed" | "verified" | "issue"
+export type PartnerIssueStatus = "open" | "waiting" | "blocked" | "resolved"
+export type PartnerIssueSeverity = "low" | "medium" | "high" | "critical"
+export type PartnerActivityLogStatus =
+  | "recorded"
+  | "follow_up_needed"
+  | "waiting_partner"
+  | "waiting_internal"
+  | "blocked"
+  | "resolved"
+  | "canceled"
+
+export interface PartnerContact {
+  id: string
+  partnerId: string
+  name: string
+  role?: string
+  email?: string
+  phone?: string
+  isPrimary: boolean
+}
 
 export interface PartnerSummary {
   id: string
@@ -89,13 +111,112 @@ export interface PartnerAutomation {
   nextRunAt?: string
 }
 
+export interface PartnerOpsChecklistItem {
+  id: string
+  partnerId: string
+  dealId?: string
+  parentItemId?: string
+  checklistGroup: string
+  title: string
+  itemCategory?: string
+  itemCode?: string
+  itemName?: string
+  plannedQuantity?: number
+  confirmedQuantity?: number
+  todoStatus: PartnerTodoStatus
+  installStatus: PartnerInstallStatus
+  owner?: string
+  dueAt?: string
+  completedAt?: string
+  notes?: string
+}
+
+export interface PartnerOpsIssue {
+  id: string
+  partnerId: string
+  dealId?: string
+  relatedDocumentId?: string
+  relatedChecklistItemId?: string
+  title: string
+  category: string
+  severity: PartnerIssueSeverity
+  status: PartnerIssueStatus
+  facts?: string
+  unresolvedPoints?: string
+  currentAssumption?: string
+  verifyWith?: string
+  owner?: string
+  nextCheckAt?: string
+  dueAt?: string
+  resolvedAt?: string
+  resolutionSummary?: string
+}
+
+export interface PartnerActivityLog {
+  id: string
+  partnerId: string
+  dealId?: string
+  documentId?: string
+  scheduleItemId?: string
+  checklistItemId?: string
+  issueId?: string
+  subjectType: string
+  subjectId?: string
+  logCategory: string
+  status: PartnerActivityLogStatus
+  actor?: string
+  action: string
+  summary: string
+  details?: string
+  nextAction?: string
+  dueAt?: string
+  occurredAt: string
+}
+
 export interface PartnerWorkspace {
   partner: PartnerSummary
+  contacts: PartnerContact[]
   deals: PartnerDeal[]
   documents: PartnerDocument[]
   schedule: PartnerScheduleItem[]
   sales: PartnerSalesRecord[]
   automations: PartnerAutomation[]
+  checklists: PartnerOpsChecklistItem[]
+  issues: PartnerOpsIssue[]
+  activityLogs: PartnerActivityLog[]
+}
+
+export interface PartnerQueueSummary {
+  partnerId: string
+  partnerName: string
+  status: PartnerStatus
+  channel: PartnerChannel
+  region: string
+  accountManager: string
+  ownerName: string
+  mainDealStage?: DealStage
+  mainDealTitle?: string
+  nextActionAt?: string
+  openChecklistCount: number
+  openIssueCount: number
+  overdueDocumentCount: number
+  pendingSettlementCount: number
+  latestActivitySummary?: string
+  latestActivityAt?: string
+  riskLevel: "low" | "medium" | "high"
+}
+
+export interface PartnerWorkspaceShell {
+  partner: PartnerSummary
+  mainDeal?: PartnerDeal
+  nextActionAt?: string
+  todayTodoCount: number
+  openIssueCount: number
+  pendingDocumentCount: number
+  currentMonthSalesUnits: number
+  currentMonthNetAmount: number
+  lastMeetingAt?: string
+  fulfillmentProgress: number
 }
 
 export interface PartnerSummaryInput {
@@ -152,4 +273,72 @@ export interface PartnerSalesInput {
   unitsSold: number
   grossAmount: number
   netAmount: number
+}
+
+export interface PartnerContactInput {
+  id?: string
+  name: string
+  role?: string
+  email?: string
+  phone?: string
+  isPrimary?: boolean
+}
+
+export interface PartnerChecklistInput {
+  id?: string
+  dealId?: string
+  parentItemId?: string
+  checklistGroup: string
+  title: string
+  itemCategory?: string
+  itemCode?: string
+  itemName?: string
+  plannedQuantity?: number
+  confirmedQuantity?: number
+  todoStatus: PartnerTodoStatus
+  installStatus: PartnerInstallStatus
+  owner?: string
+  dueAt?: string
+  completedAt?: string
+  notes?: string
+}
+
+export interface PartnerIssueInput {
+  id?: string
+  dealId?: string
+  relatedDocumentId?: string
+  relatedChecklistItemId?: string
+  title: string
+  category: string
+  severity: PartnerIssueSeverity
+  status: PartnerIssueStatus
+  facts?: string
+  unresolvedPoints?: string
+  currentAssumption?: string
+  verifyWith?: string
+  owner?: string
+  nextCheckAt?: string
+  dueAt?: string
+  resolvedAt?: string
+  resolutionSummary?: string
+}
+
+export interface PartnerActivityLogInput {
+  id?: string
+  dealId?: string
+  documentId?: string
+  scheduleItemId?: string
+  checklistItemId?: string
+  issueId?: string
+  subjectType?: string
+  subjectId?: string
+  logCategory: string
+  status: PartnerActivityLogStatus
+  actor?: string
+  action: string
+  summary: string
+  details?: string
+  nextAction?: string
+  dueAt?: string
+  occurredAt: string
 }

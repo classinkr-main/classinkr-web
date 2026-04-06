@@ -1,13 +1,18 @@
 import { NextRequest, NextResponse } from "next/server"
 
 import type {
+  PartnerActivityLogStatus,
   DealStage,
   DocumentKind,
   DocumentStatus,
   PartnerChannel,
+  PartnerInstallStatus,
+  PartnerIssueSeverity,
+  PartnerIssueStatus,
   PartnerStatus,
   ScheduleKind,
   ScheduleStatus,
+  PartnerTodoStatus,
 } from "@/lib/partners-types"
 
 type JsonObject = Record<string, unknown>
@@ -33,6 +38,33 @@ export const DOCUMENT_STATUS_VALUES = [
 ] as const satisfies readonly DocumentStatus[]
 export const SCHEDULE_KIND_VALUES = ["meeting", "follow_up", "deadline", "renewal"] as const satisfies readonly ScheduleKind[]
 export const SCHEDULE_STATUS_VALUES = ["planned", "completed", "canceled"] as const satisfies readonly ScheduleStatus[]
+export const TODO_STATUS_VALUES = [
+  "open",
+  "waiting_partner",
+  "waiting_internal",
+  "blocked",
+  "done",
+  "canceled",
+] as const satisfies readonly PartnerTodoStatus[]
+export const INSTALL_STATUS_VALUES = [
+  "planned",
+  "ordered",
+  "delivered",
+  "installed",
+  "verified",
+  "issue",
+] as const satisfies readonly PartnerInstallStatus[]
+export const ISSUE_STATUS_VALUES = ["open", "waiting", "blocked", "resolved"] as const satisfies readonly PartnerIssueStatus[]
+export const ISSUE_SEVERITY_VALUES = ["low", "medium", "high", "critical"] as const satisfies readonly PartnerIssueSeverity[]
+export const ACTIVITY_LOG_STATUS_VALUES = [
+  "recorded",
+  "follow_up_needed",
+  "waiting_partner",
+  "waiting_internal",
+  "blocked",
+  "resolved",
+  "canceled",
+] as const satisfies readonly PartnerActivityLogStatus[]
 
 const EMAIL_REGEX = /^[^\s@]+@[^\s@]+\.[^\s@]+$/
 const DATE_REGEX = /^\d{4}-\d{2}-\d{2}$/

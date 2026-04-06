@@ -5,6 +5,9 @@ import { startTransition, type ReactNode, useCallback, useEffect, useMemo, useRe
 import { useRouter } from "next/navigation"
 import {
   ArrowLeft,
+  CheckCircle2,
+  Clock3,
+  FileText,
   Eye,
   Highlighter,
   Image as ImageIcon,
@@ -19,6 +22,7 @@ import {
   Sparkles,
   Type,
   Undo2,
+  Trash2,
 } from "lucide-react"
 import { Button } from "@/components/ui/button"
 import { Input } from "@/components/ui/input"
@@ -51,8 +55,157 @@ type EditorSnapshot = {
   tagsInput: string
   slugEdited: boolean
 }
+type PersistedDraft = {
+  version: 2
+  snapshot: EditorSnapshot
+  updatedAt: string
+}
+type DraftIndexEntry = {
+  key: string
+  href: string
+  mode: "create" | "edit"
+  title: string
+  excerpt: string
+  category: string
+  updatedAt: string
+}
+type BlogAiTemplateKey = "insight" | "product" | "case" | "event" | "faq"
+type BlogAiTool = "refine" | "template" | "title" | "excerpt" | "cta" | "seo"
+type BlogAiDraft =
+  | {
+      tool: "refine"
+      title: string
+      subtitle: string
+      note: string
+      before: string
+      after: string
+      applyLabel: string
+      selectionStart: number
+      selectionEnd: number
+    }
+  | {
+      tool: "template"
+      title: string
+      subtitle: string
+      note: string
+      before: string
+      after: string
+      applyLabel: string
+      templateKey: BlogAiTemplateKey
+    }
+  | {
+      tool: "title"
+      title: string
+      subtitle: string
+      note: string
+      suggestions: string[]
+      applyLabel: string
+    }
+  | {
+      tool: "excerpt"
+      title: string
+      subtitle: string
+      note: string
+      suggestions: string[]
+      applyLabel: string
+    }
+  | {
+      tool: "cta"
+      title: string
+      subtitle: string
+      note: string
+      before: string
+      after: string
+      checklist: string[]
+      applyLabel: string
+      cta: BlogPostInput["cta"]
+    }
+  | {
+      tool: "seo"
+      title: string
+      subtitle: string
+      note: string
+      before: string
+      after: string
+      checklist: { label: string; ok: boolean }[]
+      applyLabel: string
+      seo: {
+        seoTitle: string
+        seoDescription: string
+        thumbnailAlt: string
+        heroImageAlt: string
+      }
+    }
 
 const HISTORY_LIMIT = 50
+const DRAFT_INDEX_KEY = "admin-blog-editor-drafts-v2"
+
+const BLOG_AI_TEMPLATE_META: Record<
+  BlogAiTemplateKey,
+  { label: string; description: string; summary: string }
+> = {
+  insight: {
+    label: "인사이트형",
+    description: "문제 -> 핵심 포인트 -> 다음 액션",
+    summary: "운영 팁, 분석, 체크리스트를 빠르게 정리할 때 좋습니다.",
+  },
+  product: {
+    label: "제품 업데이트형",
+    description: "배경 -> 바뀐 점 -> 영향",
+    summary: "기능 변경, 릴리즈 노트, 운영 정책 공지에 맞습니다.",
+  },
+  case: {
+    label: "성공 사례형",
+    description: "상황 -> 적용 전 -> 적용 후",
+    summary: "사례와 전후 비교를 설득력 있게 쌓는 구조입니다.",
+  },
+  event: {
+    label: "이벤트형",
+    description: "행사 개요 -> 누구에게 -> 참여 방법",
+    summary: "세미나, 웨비나, 오프라인 이벤트 안내용입니다.",
+  },
+  faq: {
+    label: "FAQ형",
+    description: "질문 -> 답변 -> 정리",
+    summary: "반복 문의, 가이드, 운영 Q&A를 묶을 때 적합합니다.",
+  },
+}
+
+const BLOG_AI_TOOL_META: Record<
+  BlogAiTool,
+  { label: string; description: string; tone: string }
+> = {
+  refine: {
+    label: "다듬기",
+    description: "선택한 문장을 더 읽기 좋게 정리",
+    tone: "border-[#d5e7dd] bg-[#f4fbf7] text-[#084734]",
+  },
+  template: {
+    label: "템플릿",
+    description: "초안 구조를 빠르게 만든 뒤 시작",
+    tone: "border-[#dbe5f7] bg-[#f5f8ff] text-[#1f4ea3]",
+  },
+  title: {
+    label: "제목",
+    description: "현재 글의 클릭 가능한 제목 3안",
+    tone: "border-[#ece0d2] bg-[#fff8f0] text-[#9c5a11]",
+  },
+  excerpt: {
+    label: "요약",
+    description: "한 줄 요약과 검색 노출 문구 보강",
+    tone: "border-[#e0e0ea] bg-[#faf9ff] text-[#5a45a8]",
+  },
+  cta: {
+    label: "CTA",
+    description: "하단 행동 유도 문구와 버튼 정리",
+    tone: "border-[#dce9e6] bg-[#f5fbfa] text-[#11635b]",
+  },
+  seo: {
+    label: "SEO",
+    description: "검색/대표 이미지/설명 누락 확인",
+    tone: "border-[#e6e8d9] bg-[#fbfcf2] text-[#6b7a24]",
+  },
+}
 
 function cloneSnapshot(snapshot: EditorSnapshot): EditorSnapshot {
   return {
@@ -60,6 +213,330 @@ function cloneSnapshot(snapshot: EditorSnapshot): EditorSnapshot {
     tagsInput: snapshot.tagsInput,
     slugEdited: snapshot.slugEdited,
   }
+}
+
+function isMeaningfulSnapshot(snapshot: EditorSnapshot) {
+  const form = snapshot.form
+  return Boolean(
+    form.title.trim() ||
+      form.excerpt.trim() ||
+      form.contentMarkdown.trim() ||
+      form.slug.trim() ||
+      form.tags.some(Boolean) ||
+      form.imageUrl.trim() ||
+      form.heroImageUrl.trim() ||
+      form.cta.title.trim() ||
+      form.cta.description.trim()
+  )
+}
+
+function formatRelativeTime(value: string) {
+  const diff = Date.now() - new Date(value).getTime()
+  if (Number.isNaN(diff)) return "방금 전"
+  if (diff < 60_000) return "방금 전"
+  if (diff < 3_600_000) return `${Math.max(1, Math.round(diff / 60_000))}분 전`
+  if (diff < 86_400_000) return `${Math.max(1, Math.round(diff / 3_600_000))}시간 전`
+
+  return new Intl.DateTimeFormat("ko-KR", {
+    month: "short",
+    day: "numeric",
+  }).format(new Date(value))
+}
+
+function formatDraftStamp(value: string) {
+  return new Intl.DateTimeFormat("ko-KR", {
+    month: "short",
+    day: "numeric",
+    hour: "numeric",
+    minute: "2-digit",
+  }).format(new Date(value))
+}
+
+function readDraftIndex(): DraftIndexEntry[] {
+  if (typeof window === "undefined") return []
+
+  try {
+    const raw = localStorage.getItem(DRAFT_INDEX_KEY)
+    if (!raw) return []
+
+    const parsed = JSON.parse(raw) as unknown
+    if (!Array.isArray(parsed)) return []
+
+    return parsed
+      .filter((entry): entry is DraftIndexEntry => {
+        if (!entry || typeof entry !== "object") return false
+        const candidate = entry as DraftIndexEntry
+        return (
+          typeof candidate.key === "string" &&
+          typeof candidate.href === "string" &&
+          typeof candidate.mode === "string" &&
+          typeof candidate.title === "string" &&
+          typeof candidate.excerpt === "string" &&
+          typeof candidate.category === "string" &&
+          typeof candidate.updatedAt === "string"
+        )
+      })
+      .sort((a, b) => new Date(b.updatedAt).getTime() - new Date(a.updatedAt).getTime())
+  } catch {
+    return []
+  }
+}
+
+function writeDraftIndex(entries: DraftIndexEntry[]) {
+  if (typeof window === "undefined") return
+
+  localStorage.setItem(
+    DRAFT_INDEX_KEY,
+    JSON.stringify(
+      [...entries].sort(
+        (a, b) => new Date(b.updatedAt).getTime() - new Date(a.updatedAt).getTime()
+      )
+    )
+  )
+}
+
+function upsertDraftIndex(entry: DraftIndexEntry) {
+  const currentEntries = readDraftIndex()
+  const nextEntries = [entry, ...currentEntries.filter((draft) => draft.key !== entry.key)]
+  writeDraftIndex(nextEntries)
+  return nextEntries
+}
+
+function removeDraftIndexEntry(key: string) {
+  const currentEntries = readDraftIndex()
+  const nextEntries = currentEntries.filter((draft) => draft.key !== key)
+  writeDraftIndex(nextEntries)
+  return nextEntries
+}
+
+function getStoredDraft(key: string) {
+  if (typeof window === "undefined") return null
+
+  const rawDraft = localStorage.getItem(key)
+  if (!rawDraft) return null
+
+  try {
+    const parsed = JSON.parse(rawDraft) as unknown
+
+    if (
+      parsed &&
+      typeof parsed === "object" &&
+      "version" in parsed &&
+      (parsed as PersistedDraft).version === 2 &&
+      "snapshot" in parsed
+    ) {
+      const payload = parsed as PersistedDraft
+      return {
+        snapshot: cloneSnapshot(payload.snapshot),
+        updatedAt: payload.updatedAt,
+      }
+    }
+
+    if (
+      parsed &&
+      typeof parsed === "object" &&
+      "form" in parsed &&
+      "tagsInput" in parsed &&
+      "slugEdited" in parsed
+    ) {
+      const legacy = parsed as EditorSnapshot
+      return {
+        snapshot: cloneSnapshot(legacy),
+        updatedAt: new Date().toISOString(),
+      }
+    }
+
+    if (parsed && typeof parsed === "object" && "title" in parsed) {
+      const form = parsed as BlogPostInput
+      return {
+        snapshot: {
+          form: cloneSnapshot({
+            form,
+            tagsInput: form.tags.join(", "),
+            slugEdited: Boolean(form.slug),
+          }).form,
+          tagsInput: form.tags.join(", "),
+          slugEdited: Boolean(form.slug),
+        },
+        updatedAt: new Date().toISOString(),
+      }
+    }
+
+    return null
+  } catch {
+    return null
+  }
+}
+
+function normalizeMarkdownBlock(value: string) {
+  return value
+    .split("\n")
+    .map((line) => line.replace(/[ \t]+$/g, ""))
+    .join("\n")
+    .replace(/\n{3,}/g, "\n\n")
+    .replace(/(^|\n)(#{1,6})([^\s#])/g, "$1$2 $3")
+    .replace(/(^|\n)([-*+])(?=\S)/g, "$1$2 ")
+    .trim()
+}
+
+function buildAiTemplateMarkdown(
+  key: BlogAiTemplateKey,
+  form: BlogPostInput
+) {
+  const title = form.title.trim() || BLOG_AI_TEMPLATE_META[key].label
+  const audience = form.targetReader.trim() || "독자"
+  const category = form.category.trim() || "인사이트"
+  const ctaTitle = form.cta.title.trim() || DEFAULT_BLOG_CTA.title
+  const ctaLabel = form.cta.buttonLabel.trim() || DEFAULT_BLOG_CTA.buttonLabel
+
+  const templates: Record<BlogAiTemplateKey, string[]> = {
+    insight: [
+      "## 문제",
+      "",
+      `${audience}이 바로 겪는 문제를 먼저 정리합니다.`,
+      "",
+      "## 핵심 포인트",
+      "",
+      "- 지금 확인할 포인트 1",
+      "- 지금 확인할 포인트 2",
+      "- 지금 확인할 포인트 3",
+      "",
+      "## 다음 액션",
+      "",
+      `${category} 관점에서 바로 실행할 체크리스트를 남깁니다.`,
+    ],
+    product: [
+      "## 업데이트 배경",
+      "",
+      `${title}가 왜 지금 필요한지 설명합니다.`,
+      "",
+      "## 무엇이 달라졌나",
+      "",
+      "- 변경된 점 1",
+      "- 변경된 점 2",
+      "- 변경으로 생기는 운영 효과",
+      "",
+      "## 적용 방법",
+      "",
+      `${audience}이 실제로 적용할 순서를 안내합니다.`,
+    ],
+    case: [
+      "## 상황",
+      "",
+      "도입 전 어떤 문제가 있었는지 먼저 보여줍니다.",
+      "",
+      "## 적용 전",
+      "",
+      "- 기존 흐름의 병목",
+      "- 해결되지 않던 지점",
+      "",
+      "## 적용 후",
+      "",
+      "- 개선된 결과",
+      "- 운영에서 달라진 점",
+    ],
+    event: [
+      "## 행사 개요",
+      "",
+      `${title}의 핵심 정보를 한눈에 볼 수 있게 정리합니다.`,
+      "",
+      "## 누구에게 추천하나",
+      "",
+      `- ${audience}`,
+      "- 관련 실무자",
+      "",
+      "## 참여 방법",
+      "",
+      `참여 링크와 함께 ${ctaLabel} CTA를 연결합니다.`,
+    ],
+    faq: [
+      "## 자주 묻는 질문",
+      "",
+      "### 질문 1",
+      "",
+      "실무에서 가장 많이 묻는 질문을 적습니다.",
+      "",
+      "### 질문 2",
+      "",
+      "운영 전에 꼭 확인할 내용을 적습니다.",
+      "",
+      "## 정리",
+      "",
+      `${ctaTitle}로 이어지는 마지막 문장을 남깁니다.`,
+    ],
+  }
+
+  return templates[key].join("\n")
+}
+
+function buildAiTitleSuggestions(form: BlogPostInput) {
+  const baseTitle = form.title.trim() || form.category.trim() || "블로그"
+  const audience = form.targetReader.trim() || "독자"
+  const category = form.category.trim() || "인사이트"
+
+  return [
+    `${audience}가 먼저 챙겨야 할 ${baseTitle}`,
+    `${category} 관점에서 다시 본 ${baseTitle}`,
+    `${baseTitle}, 지금 바로 적용할 3가지 포인트`,
+  ]
+}
+
+function buildAiExcerptSuggestions(form: BlogPostInput) {
+  const title = form.title.trim() || form.category.trim() || "이번 글"
+  const audience = form.targetReader.trim() || "실무자"
+  const category = form.category.trim() || "인사이트"
+
+  return [
+    `${title}의 핵심을 ${audience}이 바로 이해할 수 있도록 ${category} 기준으로 정리했습니다.`,
+    `${title}를 읽고 나면 다음 액션이 바로 보이도록, 실행 포인트 중심으로 구성했습니다.`,
+    `${audience}에게 필요한 정보만 남기고, 현장 적용에 필요한 맥락을 빠르게 담았습니다.`,
+  ]
+}
+
+function buildAiCtaSuggestion(form: BlogPostInput) {
+  const audience = form.targetReader.trim() || "운영팀"
+  const category = form.category.trim() || "인사이트"
+  const title = form.title.trim() || "우리 팀에 맞는 다음 단계"
+
+  return {
+    cta: {
+      eyebrow: `${category} 다음 단계`,
+      title: `${title}를 ${audience} 상황에 맞게 적용해보세요`,
+      description:
+        "이 글에서 정리한 핵심을 실제 운영으로 옮길 수 있도록, 가장 부담 없는 다음 액션을 제안합니다.",
+      buttonLabel: "상담/문의하기",
+      buttonHref: "#demo",
+    },
+    checklist: [
+      "CTA 상단 문구가 본문 주제와 이어집니다.",
+      "버튼 문구가 실제 행동으로 연결됩니다.",
+      "링크가 실제 상담/문의 흐름과 맞습니다.",
+    ],
+  }
+}
+
+function buildAiSeoSuggestion(form: BlogPostInput) {
+  const title = form.title.trim() || form.category.trim() || "블로그 글"
+  const excerpt = form.excerpt.trim() || "한 줄 요약을 입력하면 SEO 설명도 더 자연스럽게 맞출 수 있습니다."
+
+  return {
+    seo: {
+      seoTitle: form.seoTitle.trim() || title,
+      seoDescription: form.seoDescription.trim() || excerpt,
+      thumbnailAlt: form.thumbnailAlt.trim() || `${title} 썸네일`,
+      heroImageAlt: form.heroImageAlt.trim() || `${title} 배너 이미지`,
+    },
+    checklist: [
+      { label: "제목이 검색 결과에 맞게 정리되어 있습니다.", ok: Boolean(title) },
+      { label: "설명이 한 줄 요약과 연결됩니다.", ok: Boolean(excerpt) },
+      { label: "대표 이미지 alt가 비어 있지 않습니다.", ok: Boolean(form.thumbnailAlt.trim() || form.heroImageAlt.trim()) },
+      { label: "CTA와 본문 톤이 어긋나지 않습니다.", ok: Boolean(form.cta.title.trim() && form.cta.buttonLabel.trim()) },
+    ],
+  }
+}
+
+function refineMarkdownSelection(value: string) {
+  return normalizeMarkdownBlock(value)
 }
 
 function createEmptyDraft(): BlogPostInput {
@@ -152,7 +629,7 @@ function ToolbarButton({
     <button
       type="button"
       onClick={onClick}
-      className="inline-flex items-center gap-1.5 rounded-lg border border-[#e8e8e4] bg-white px-2.5 py-2 text-xs font-medium text-[#1a1a1a]/65 transition-colors hover:border-[#111110]/15 hover:text-[#111110]"
+      className="inline-flex shrink-0 items-center gap-1.5 whitespace-nowrap rounded-lg border border-[#e8e8e4] bg-white px-2.5 py-2 text-xs font-medium text-[#1a1a1a]/65 transition-colors hover:border-[#111110]/15 hover:text-[#111110]"
     >
       {icon}
       <span>{children}</span>
@@ -167,23 +644,73 @@ export default function BlogPostEditor({
 }: BlogPostEditorProps) {
   const router = useRouter()
   const textareaRef = useRef<HTMLTextAreaElement | null>(null)
-  const initialForm = initialPost ? { ...initialPost } : createEmptyDraft()
+  const initialSnapshot = useMemo<EditorSnapshot>(() => {
+    const form = initialPost ? { ...initialPost } : createEmptyDraft()
+    return {
+      form,
+      tagsInput: form.tags.join(", "),
+      slugEdited: Boolean(initialPost?.slug),
+    }
+  }, [initialPost])
 
-  const [form, setForm] = useState<BlogPostInput>(initialForm)
-  const [tagsInput, setTagsInput] = useState(initialForm.tags.join(", "))
+  const [form, setForm] = useState<BlogPostInput>(() => cloneSnapshot(initialSnapshot).form)
+  const [tagsInput, setTagsInput] = useState(initialSnapshot.tagsInput)
   const [draftState, setDraftState] = useState<DraftState>("saved")
   const [isSubmitting, setIsSubmitting] = useState(false)
   const [notice, setNotice] = useState("")
-  const [slugEdited, setSlugEdited] = useState(Boolean(initialPost?.slug))
+  const [slugEdited, setSlugEdited] = useState(initialSnapshot.slugEdited)
+  const [draftEntries, setDraftEntries] = useState<DraftIndexEntry[]>([])
+  const [lastSavedAt, setLastSavedAt] = useState<string | null>(null)
+  const [aiDraft, setAiDraft] = useState<BlogAiDraft | null>(null)
+  const [aiTemplateKey, setAiTemplateKey] = useState<BlogAiTemplateKey>("insight")
   const formRef = useRef(form)
   const tagsInputRef = useRef(tagsInput)
   const slugEditedRef = useRef(slugEdited)
+  const hydrationRef = useRef(false)
   const undoStackRef = useRef<EditorSnapshot[]>([])
   const redoStackRef = useRef<EditorSnapshot[]>([])
 
   const draftStorageKey = `admin-blog-editor-${initialPost?.id ?? "new"}`
+  const draftHref = initialPost ? `/admin/blog/${initialPost.id}/edit` : "/admin/blog/new"
+  const currentDraftEntry = draftEntries.find((entry) => entry.key === draftStorageKey)
+  const otherDraftEntries = draftEntries
+    .filter((entry) => entry.key !== draftStorageKey)
+    .slice(0, 3)
   const filteredPosts = allPosts.filter((post) => post.id !== initialPost?.id)
   const computedReadTime = estimateReadTime(form.contentMarkdown)
+  const aiSeoPreview = buildAiSeoSuggestion(form)
+  const aiReadinessChecks = [
+    {
+      label: "제목",
+      hint: form.title.trim() ? "초안 제목이 있습니다." : "제목 보조를 눌러 시작하세요.",
+      ok: Boolean(form.title.trim()),
+    },
+    {
+      label: "요약",
+      hint: form.excerpt.trim() ? "한 줄 요약이 있습니다." : "요약 보조로 톤을 맞출 수 있습니다.",
+      ok: Boolean(form.excerpt.trim()),
+    },
+    {
+      label: "본문",
+      hint: form.contentMarkdown.trim() ? "본문을 바로 다듬을 수 있습니다." : "템플릿으로 시작하면 편합니다.",
+      ok: Boolean(form.contentMarkdown.trim()),
+    },
+    {
+      label: "CTA",
+      hint: form.cta.title.trim() && form.cta.buttonLabel.trim() ? "하단 CTA가 채워져 있습니다." : "CTA 점검으로 보강할 수 있습니다.",
+      ok: Boolean(form.cta.title.trim() && form.cta.buttonLabel.trim()),
+    },
+    {
+      label: "SEO",
+      hint: aiSeoPreview.seo.seoTitle.trim() && aiSeoPreview.seo.seoDescription.trim() ? "검색 노출 문구가 채워져 있습니다." : "SEO 점검이 아직 필요합니다.",
+      ok: Boolean(form.seoTitle.trim() && form.seoDescription.trim()),
+    },
+  ]
+  const aiReadiness = Math.round(
+    (aiReadinessChecks.filter((check) => check.ok).length /
+      aiReadinessChecks.length) *
+      100
+  )
   const headings = useMemo(
     () => extractMarkdownHeadings(form.contentMarkdown),
     [form.contentMarkdown]
@@ -218,6 +745,55 @@ export default function BlogPostEditor({
     setTagsInput(nextSnapshot.tagsInput)
     setSlugEdited(nextSnapshot.slugEdited)
   }, [])
+
+  const refreshDraftEntries = useCallback(() => {
+    setDraftEntries(readDraftIndex())
+  }, [])
+
+  const persistDraft = useCallback(
+    (snapshot: EditorSnapshot) => {
+      if (typeof window === "undefined") return
+
+      const updatedAt = new Date().toISOString()
+      const payload: PersistedDraft = {
+        version: 2,
+        snapshot: cloneSnapshot(snapshot),
+        updatedAt,
+      }
+
+      localStorage.setItem(draftStorageKey, JSON.stringify(payload))
+      setDraftEntries(
+        upsertDraftIndex({
+          key: draftStorageKey,
+          href: draftHref,
+          mode,
+          title: snapshot.form.title.trim() || "제목 없는 초안",
+          excerpt:
+            snapshot.form.excerpt.trim() ||
+            "요약을 추가하면 목록에서 더 쉽게 찾을 수 있습니다.",
+          category: snapshot.form.category,
+          updatedAt,
+        })
+      )
+      setLastSavedAt(updatedAt)
+    },
+    [draftHref, draftStorageKey, mode]
+  )
+
+  const discardDraft = useCallback(
+    (key: string) => {
+      if (typeof window === "undefined") return
+
+      localStorage.removeItem(key)
+      setDraftEntries(removeDraftIndexEntry(key))
+
+      if (key === draftStorageKey) {
+        setDraftState("saved")
+        setLastSavedAt(null)
+      }
+    },
+    [draftStorageKey]
+  )
 
   const updateEditor = useCallback(
     (updater: (snapshot: EditorSnapshot) => EditorSnapshot) => {
@@ -259,6 +835,225 @@ export default function BlogPostEditor({
     setNotice("다시 실행했습니다.")
   }, [applySnapshot, createSnapshot])
 
+  const replaceContentRange = useCallback(
+    (start: number, end: number, nextMarkdown: string) => {
+      updateEditor((snapshot) => ({
+        ...snapshot,
+        form: {
+          ...snapshot.form,
+          contentMarkdown:
+            snapshot.form.contentMarkdown.slice(0, start) +
+            nextMarkdown +
+            snapshot.form.contentMarkdown.slice(end),
+        },
+      }))
+
+      window.requestAnimationFrame(() => {
+        const textarea = textareaRef.current
+        if (!textarea) return
+        textarea.focus()
+        textarea.selectionStart = start
+        textarea.selectionEnd = start + nextMarkdown.length
+      })
+    },
+    [updateEditor]
+  )
+
+  const getSelectionRange = () => {
+    const textarea = textareaRef.current
+    if (!textarea) return null
+
+    const start = textarea.selectionStart
+    const end = textarea.selectionEnd
+    if (start === end) return null
+
+    return {
+      start,
+      end,
+      text: form.contentMarkdown.slice(start, end),
+    }
+  }
+
+  const openAiDraft = (draft: BlogAiDraft) => {
+    setAiDraft(draft)
+    setNotice(`AI 제안: ${draft.title}`)
+  }
+
+  const openRefineDraft = () => {
+    const selection = getSelectionRange()
+    if (!selection) {
+      setNotice("다듬을 문장을 먼저 선택한 뒤 다시 눌러주세요.")
+      textareaRef.current?.focus()
+      return
+    }
+
+    const after = refineMarkdownSelection(selection.text)
+    openAiDraft({
+      tool: "refine",
+      title: "선택 영역 다듬기",
+      subtitle: "줄바꿈, 헤딩, 리스트 규칙만 정리해 읽기 좋게 만듭니다.",
+      note: "현재 선택한 부분만 바꾸는 안전한 정리 제안입니다.",
+      before: selection.text,
+      after,
+      applyLabel: "선택 영역에 반영",
+      selectionStart: selection.start,
+      selectionEnd: selection.end,
+    })
+  }
+
+  const openTemplateDraft = (nextKey = aiTemplateKey) => {
+    const after = buildAiTemplateMarkdown(nextKey, form)
+    setAiTemplateKey(nextKey)
+    openAiDraft({
+      tool: "template",
+      title: `${BLOG_AI_TEMPLATE_META[nextKey].label}로 시작`,
+      subtitle: BLOG_AI_TEMPLATE_META[nextKey].description,
+      note: BLOG_AI_TEMPLATE_META[nextKey].summary,
+      before: form.contentMarkdown.trim() || "현재 본문이 비어 있습니다.",
+      after,
+      applyLabel: form.contentMarkdown.trim() ? "본문 아래에 추가" : "이 템플릿으로 시작",
+      templateKey: nextKey,
+    })
+  }
+
+  const openTitleDraft = () => {
+    const suggestions = buildAiTitleSuggestions(form)
+    openAiDraft({
+      tool: "title",
+      title: "제목 보조",
+      subtitle: "클릭을 부르는 제목 3안을 빠르게 제안합니다.",
+      note: "제목은 SEO 제목에도 같이 반영할 수 있습니다.",
+      suggestions,
+      applyLabel: "제목 사용",
+    })
+  }
+
+  const openExcerptDraft = () => {
+    const suggestions = buildAiExcerptSuggestions(form)
+    openAiDraft({
+      tool: "excerpt",
+      title: "요약 보조",
+      subtitle: "한 줄 요약을 더 읽기 쉽게 정리합니다.",
+      note: "발행 전 미리보기와 검색 설명에 같이 쓰기 좋습니다.",
+      suggestions,
+      applyLabel: "요약 사용",
+    })
+  }
+
+  const openCtaDraft = () => {
+    const suggestion = buildAiCtaSuggestion(form)
+    openAiDraft({
+      tool: "cta",
+      title: "CTA 점검",
+      subtitle: "하단 행동 유도 문구를 현재 글 톤에 맞게 보정합니다.",
+      note: "CTA는 클릭 다음 행동까지 읽히도록 맞추는 게 핵심입니다.",
+      before: `${form.cta.eyebrow} / ${form.cta.title}`,
+      after: `${suggestion.cta.eyebrow} / ${suggestion.cta.title}`,
+      checklist: suggestion.checklist,
+      applyLabel: "CTA 반영",
+      cta: suggestion.cta,
+    })
+  }
+
+  const openSeoDraft = () => {
+    const suggestion = buildAiSeoSuggestion(form)
+    openAiDraft({
+      tool: "seo",
+      title: "SEO 점검",
+      subtitle: "검색용 제목, 설명, 이미지 alt를 빠짐없이 채웁니다.",
+      note: "발행 전 최소한의 노출 품질을 확인하는 단계입니다.",
+      before: [form.seoTitle, form.seoDescription, form.thumbnailAlt, form.heroImageAlt]
+        .filter(Boolean)
+        .join(" · ") || "아직 SEO 값이 비어 있습니다.",
+      after: [suggestion.seo.seoTitle, suggestion.seo.seoDescription, suggestion.seo.thumbnailAlt, suggestion.seo.heroImageAlt]
+        .join(" · "),
+      checklist: suggestion.checklist,
+      applyLabel: "SEO 자동 채움",
+      seo: suggestion.seo,
+    })
+  }
+
+  const applyAiDraft = () => {
+    if (!aiDraft) return
+
+    switch (aiDraft.tool) {
+      case "refine":
+        replaceContentRange(aiDraft.selectionStart, aiDraft.selectionEnd, aiDraft.after)
+        setNotice("선택 영역을 다듬었습니다.")
+        break
+      case "template": {
+        const nextContent = form.contentMarkdown.trim()
+          ? `${form.contentMarkdown.trim()}\n\n---\n\n${aiDraft.after}`
+          : aiDraft.after
+        updateForm("contentMarkdown", nextContent)
+        setNotice("템플릿을 본문에 반영했습니다.")
+        break
+      }
+      case "title":
+        updateEditor((snapshot) => ({
+          ...snapshot,
+          form: {
+            ...snapshot.form,
+            title: aiDraft.suggestions[0] || snapshot.form.title,
+            seoTitle: snapshot.form.seoTitle || aiDraft.suggestions[0] || snapshot.form.title,
+          },
+        }))
+        setNotice("제목 제안을 반영했습니다.")
+        break
+      case "excerpt":
+        updateForm("excerpt", aiDraft.suggestions[0] || form.excerpt)
+        setNotice("요약 제안을 반영했습니다.")
+        break
+      case "cta":
+        updateEditor((snapshot) => ({
+          ...snapshot,
+          form: {
+            ...snapshot.form,
+            cta: {
+              ...snapshot.form.cta,
+              ...aiDraft.cta,
+            },
+          },
+        }))
+        setNotice("CTA 제안을 반영했습니다.")
+        break
+      case "seo":
+        updateEditor((snapshot) => ({
+          ...snapshot,
+          form: {
+            ...snapshot.form,
+            seoTitle: aiDraft.seo.seoTitle,
+            seoDescription: aiDraft.seo.seoDescription,
+            thumbnailAlt: aiDraft.seo.thumbnailAlt,
+            heroImageAlt: aiDraft.seo.heroImageAlt,
+          },
+        }))
+        setNotice("SEO 항목을 자동으로 채웠습니다.")
+        break
+    }
+
+    setAiDraft(null)
+  }
+
+  const applyTitleSuggestion = (nextTitle: string) => {
+    updateEditor((snapshot) => ({
+      ...snapshot,
+      form: {
+        ...snapshot.form,
+        title: nextTitle,
+        seoTitle: snapshot.form.seoTitle || nextTitle,
+      },
+    }))
+    setAiDraft(null)
+    setNotice("제목 제안을 반영했습니다.")
+  }
+
+  const applyExcerptSuggestion = (nextExcerpt: string) => {
+    updateForm("excerpt", nextExcerpt)
+    setAiDraft(null)
+    setNotice("요약 제안을 반영했습니다.")
+  }
+
   useEffect(() => {
     const handleKeyDown = (event: KeyboardEvent) => {
       if (!(event.metaKey || event.ctrlKey) || event.key.toLowerCase() !== "z") {
@@ -280,35 +1075,56 @@ export default function BlogPostEditor({
   }, [handleRedo, handleUndo])
 
   useEffect(() => {
-    const rawDraft = localStorage.getItem(draftStorageKey)
-    if (!rawDraft) return
+    hydrationRef.current = true
+    refreshDraftEntries()
 
-    try {
-      const savedDraft = JSON.parse(rawDraft) as BlogPostInput
-      applySnapshot({
-        form: savedDraft,
-        tagsInput: savedDraft.tags.join(", "),
-        slugEdited: Boolean(savedDraft.slug),
-      })
-      undoStackRef.current = []
-      redoStackRef.current = []
-      setDraftState("saved")
-    } catch {
-      // Ignore malformed local drafts.
+    const loadedDraft = getStoredDraft(draftStorageKey)
+    if (!loadedDraft) {
+      setLastSavedAt(null)
+      return
     }
-  }, [applySnapshot, draftStorageKey])
+
+    if (
+      !isMeaningfulSnapshot(loadedDraft.snapshot) ||
+      JSON.stringify(loadedDraft.snapshot) === JSON.stringify(initialSnapshot)
+    ) {
+      discardDraft(draftStorageKey)
+      return
+    }
+
+    applySnapshot(loadedDraft.snapshot)
+    undoStackRef.current = []
+    redoStackRef.current = []
+    setDraftState("saved")
+    setLastSavedAt(loadedDraft.updatedAt)
+    setNotice("로컬 임시저장을 불러왔습니다.")
+  }, [applySnapshot, discardDraft, draftStorageKey, initialSnapshot, refreshDraftEntries])
 
   useEffect(() => {
+    if (!hydrationRef.current) return
+
+    const currentSnapshot = createSnapshot()
+    const isPristine =
+      JSON.stringify(currentSnapshot) === JSON.stringify(initialSnapshot)
+
+    if (isPristine || !isMeaningfulSnapshot(currentSnapshot)) {
+      if (localStorage.getItem(draftStorageKey)) {
+        discardDraft(draftStorageKey)
+      }
+      setDraftState("saved")
+      return
+    }
+
     setDraftState("dirty")
 
     const timer = window.setTimeout(() => {
       setDraftState("saving")
-      localStorage.setItem(draftStorageKey, JSON.stringify(form))
+      persistDraft(currentSnapshot)
       setDraftState("saved")
     }, 700)
 
     return () => window.clearTimeout(timer)
-  }, [draftStorageKey, form])
+  }, [createSnapshot, discardDraft, draftStorageKey, initialSnapshot, persistDraft])
 
   const updateForm = <K extends keyof BlogPostInput>(
     key: K,
@@ -488,7 +1304,7 @@ export default function BlogPostEditor({
       }
 
       const data = (await response.json()) as { post: BlogPost }
-      localStorage.removeItem(draftStorageKey)
+      discardDraft(draftStorageKey)
       setDraftState("saved")
       setNotice(nextStatus === "published" ? "발행까지 완료했습니다." : "저장했습니다.")
       startTransition(() => {
@@ -505,7 +1321,7 @@ export default function BlogPostEditor({
   return (
     <div className="min-h-screen bg-[#FAFAF8]">
       <div className="sticky top-0 z-20 border-b border-[#e8e8e4] bg-[#FAFAF8]/90 backdrop-blur">
-        <div className="flex flex-wrap items-center justify-between gap-3 px-8 py-4">
+        <div className="flex flex-col gap-3 px-4 py-4 sm:px-6 lg:flex-row lg:items-center lg:justify-between lg:px-8">
           <div className="flex items-center gap-3">
             <Button variant="ghost" size="sm" asChild>
               <Link href="/admin/blog">
@@ -523,12 +1339,13 @@ export default function BlogPostEditor({
             </div>
           </div>
 
-          <div className="flex flex-wrap items-center gap-2">
+          <div className="flex flex-col gap-2 sm:flex-row sm:flex-wrap sm:items-center sm:justify-end">
             <span className="rounded-full border border-[#e8e8e4] bg-white px-3 py-1 text-[12px] text-[#1a1a1a]/45">
-              로컬 자동저장: {draftState === "dirty" ? "수정됨" : draftState === "saving" ? "저장 중" : "저장됨"}
+              임시저장: {draftState === "dirty" ? "수정됨" : draftState === "saving" ? "저장 중" : "저장됨"}
             </span>
             <span className="rounded-full border border-[#e8e8e4] bg-white px-3 py-1 text-[12px] text-[#1a1a1a]/45">
               예상 읽기 시간 {computedReadTime}
+              {lastSavedAt ? ` · ${formatRelativeTime(lastSavedAt)}` : ""}
             </span>
             <Button
               variant="outline"
@@ -571,7 +1388,7 @@ export default function BlogPostEditor({
         </div>
       </div>
 
-      <div className="grid gap-8 px-8 py-8 lg:grid-cols-[minmax(0,1fr)_340px]">
+      <div className="grid gap-6 px-4 py-6 sm:px-6 lg:grid-cols-[minmax(0,1fr)_360px] lg:px-8 lg:py-8">
         <section className="min-w-0 space-y-6">
           <div className="rounded-[28px] border border-[#e8e8e4] bg-white p-6 shadow-sm">
             <div className="grid gap-5">
@@ -634,6 +1451,328 @@ export default function BlogPostEditor({
                 </div>
               </div>
             </div>
+          </div>
+
+          <div className="rounded-[28px] border border-[#e8e8e4] bg-white p-6 shadow-sm">
+            <div className="flex flex-col gap-3 border-b border-[#e8e8e4] pb-4 sm:flex-row sm:items-start sm:justify-between">
+              <div>
+                <p className="text-sm font-semibold text-[#111110]">Blog AI</p>
+                <p className="mt-1 text-[13px] leading-5 text-[#1a1a1a]/40">
+                  로컬 제안으로 먼저 시작하고, 적용은 한 번 더 확인한 뒤 반영합니다.
+                </p>
+              </div>
+              <div className="flex flex-wrap gap-2">
+                <span className="rounded-full border border-[#e8e8e4] bg-[#fafaf8] px-3 py-1 text-[11px] text-[#1a1a1a]/55">
+                  AI 서버 연결 전
+                </span>
+                <span className="rounded-full border border-[#e8e8e4] bg-[#fafaf8] px-3 py-1 text-[11px] text-[#1a1a1a]/55">
+                  선택 후 적용
+                </span>
+              </div>
+            </div>
+
+            <div className="grid gap-5 pt-5 lg:grid-cols-[minmax(0,1.05fr)_minmax(0,0.95fr)]">
+              <div className="space-y-4">
+                <div className="grid gap-2 sm:grid-cols-2">
+                  <Button variant="outline" className="justify-start gap-2 border-[#d5e7dd] bg-[#f4fbf7]" onClick={openRefineDraft}>
+                    <Sparkles className="h-4 w-4 text-[#084734]" />
+                    다듬기
+                  </Button>
+                  <Button variant="outline" className="justify-start gap-2 border-[#dbe5f7] bg-[#f5f8ff]" onClick={() => openTemplateDraft()}>
+                    <FileText className="h-4 w-4 text-[#1f4ea3]" />
+                    템플릿으로 시작
+                  </Button>
+                  <Button variant="outline" className="justify-start gap-2 border-[#ece0d2] bg-[#fff8f0]" onClick={openTitleDraft}>
+                    <Type className="h-4 w-4 text-[#9c5a11]" />
+                    제목 보조
+                  </Button>
+                  <Button variant="outline" className="justify-start gap-2 border-[#e0e0ea] bg-[#faf9ff]" onClick={openExcerptDraft}>
+                    <Minus className="h-4 w-4 text-[#5a45a8]" />
+                    요약 보조
+                  </Button>
+                  <Button variant="outline" className="justify-start gap-2 border-[#dce9e6] bg-[#f5fbfa]" onClick={openCtaDraft}>
+                    <CheckCircle2 className="h-4 w-4 text-[#11635b]" />
+                    CTA 점검
+                  </Button>
+                  <Button variant="outline" className="justify-start gap-2 border-[#e6e8d9] bg-[#fbfcf2]" onClick={openSeoDraft}>
+                    <Highlighter className="h-4 w-4 text-[#6b7a24]" />
+                    SEO 점검
+                  </Button>
+                </div>
+
+                <div className="rounded-2xl border border-[#e8e8e4] bg-[#fcfcfb] p-4">
+                  <div className="flex flex-col gap-2 sm:flex-row sm:items-start sm:justify-between">
+                    <div>
+                      <p className="text-[13px] font-semibold text-[#111110]">템플릿 선택</p>
+                      <p className="mt-1 text-[12px] leading-5 text-[#1a1a1a]/40">
+                        빈 초안을 빠르게 채우고 싶다면, 구조부터 먼저 잡아주세요.
+                      </p>
+                    </div>
+                    <span className="rounded-full bg-white px-2.5 py-1 text-[11px] text-[#1a1a1a]/45">
+                      현재 {BLOG_AI_TEMPLATE_META[aiTemplateKey].label}
+                    </span>
+                  </div>
+                  <div className="mt-3 grid gap-2 sm:grid-cols-2 xl:grid-cols-3">
+                    {(Object.entries(BLOG_AI_TEMPLATE_META) as Array<[BlogAiTemplateKey, (typeof BLOG_AI_TEMPLATE_META)[BlogAiTemplateKey]]>).map(
+                      ([key, meta]) => (
+                        <button
+                          key={key}
+                          type="button"
+                          onClick={() => openTemplateDraft(key)}
+                          className={`rounded-xl border px-3 py-3 text-left transition-colors ${
+                            aiTemplateKey === key
+                              ? "border-[#111110] bg-white shadow-sm"
+                              : "border-[#e8e8e4] bg-white/80 hover:border-[#c8c8c4]"
+                          }`}
+                        >
+                          <p className="text-[13px] font-medium text-[#111110]">{meta.label}</p>
+                          <p className="mt-1 text-[12px] leading-5 text-[#1a1a1a]/40">{meta.description}</p>
+                        </button>
+                      )
+                    )}
+                  </div>
+                </div>
+
+                <div className="rounded-2xl border border-[#e8e8e4] bg-[#fcfcfb] p-4">
+                  <p className="text-[13px] font-semibold text-[#111110]">사용 팁</p>
+                  <div className="mt-2 space-y-2 text-[12px] leading-5 text-[#1a1a1a]/45">
+                    <p>제목과 요약은 제안 버튼을 누른 뒤 바로 교체할 수 있습니다.</p>
+                    <p>다듬기는 본문에서 선택한 영역만 안전하게 손봅니다.</p>
+                    <p>CTA와 SEO는 발행 직전 마지막 점검용으로 쓰면 좋습니다.</p>
+                  </div>
+                </div>
+              </div>
+
+              <div className="space-y-4">
+                <div className="rounded-2xl border border-[#e8e8e4] bg-[#fafaf8] p-4">
+                  <div className="flex items-center justify-between gap-3">
+                    <div>
+                      <p className="text-[13px] font-semibold text-[#111110]">초안 점검</p>
+                      <p className="mt-1 text-[12px] text-[#1a1a1a]/40">현재 글의 채움 상태를 한눈에 봅니다.</p>
+                    </div>
+                    <span className={`rounded-full px-2.5 py-1 text-[11px] ${aiReadiness >= 80 ? "bg-green-50 text-green-700" : aiReadiness >= 60 ? "bg-blue-50 text-blue-700" : "bg-amber-50 text-amber-700"}`}>
+                      {aiReadiness}%
+                    </span>
+                  </div>
+                  <div className="mt-3 space-y-2">
+                    {aiReadinessChecks.map((check) => (
+                      <div key={check.label} className="flex items-start gap-3 rounded-xl border border-[#e8e8e4] bg-white px-3 py-2.5">
+                        <span className={`mt-0.5 inline-flex h-5 w-5 shrink-0 items-center justify-center rounded-full ${check.ok ? "bg-green-50 text-green-600" : "bg-[#f0f0ec] text-[#1a1a1a]/35"}`}>
+                          <CheckCircle2 className="h-3.5 w-3.5" />
+                        </span>
+                        <div className="min-w-0">
+                          <p className="text-[12px] font-medium text-[#111110]">{check.label}</p>
+                          <p className="mt-0.5 text-[11px] leading-4 text-[#1a1a1a]/40">{check.hint}</p>
+                        </div>
+                      </div>
+                    ))}
+                  </div>
+                </div>
+
+                <div className="rounded-2xl border border-[#e8e8e4] bg-[#fcfcfb] p-4">
+                  <p className="text-[13px] font-semibold text-[#111110]">지금 AI가 볼 포인트</p>
+                  <div className="mt-3 grid grid-cols-2 gap-2 text-[11px] text-[#1a1a1a]/45 sm:grid-cols-3">
+                    <span className="rounded-full border border-[#e8e8e4] bg-white px-2.5 py-1">선택 영역 {form.contentMarkdown.trim() ? "가능" : "비어 있음"}</span>
+                    <span className="rounded-full border border-[#e8e8e4] bg-white px-2.5 py-1">CTA {form.cta.title.trim() ? "완료" : "점검 필요"}</span>
+                    <span className="rounded-full border border-[#e8e8e4] bg-white px-2.5 py-1">SEO {form.seoTitle.trim() ? "채움" : "미입력"}</span>
+                    <span className="rounded-full border border-[#e8e8e4] bg-white px-2.5 py-1">템플릿 {BLOG_AI_TEMPLATE_META[aiTemplateKey].label}</span>
+                    <span className="rounded-full border border-[#e8e8e4] bg-white px-2.5 py-1">자동저장 {draftState === "saved" ? "안정" : "진행중"}</span>
+                    <span className="rounded-full border border-[#e8e8e4] bg-white px-2.5 py-1">후속 적용 가능</span>
+                  </div>
+                </div>
+              </div>
+            </div>
+
+            {aiDraft && (
+              <div className="mt-6 border-t border-[#e8e8e4] pt-5">
+                <div className="flex flex-col gap-3 lg:flex-row lg:items-start lg:justify-between">
+                  <div>
+                    <p className="text-sm font-semibold text-[#111110]">{aiDraft.title}</p>
+                    <p className="mt-1 text-[13px] leading-5 text-[#1a1a1a]/40">{aiDraft.subtitle}</p>
+                  </div>
+                  <div className="flex flex-wrap items-center gap-2">
+                    <span className={`rounded-full px-3 py-1 text-[11px] font-medium ${BLOG_AI_TOOL_META[aiDraft.tool].tone}`}>
+                      {BLOG_AI_TOOL_META[aiDraft.tool].label}
+                    </span>
+                    <Button variant="outline" size="sm" onClick={() => setAiDraft(null)}>
+                      닫기
+                    </Button>
+                  </div>
+                </div>
+                <p className="mt-3 text-[12px] leading-5 text-[#1a1a1a]/45">{aiDraft.note}</p>
+
+                {aiDraft.tool === "refine" && (
+                  <div className="mt-4 grid gap-4 lg:grid-cols-2">
+                    <div className="rounded-2xl border border-[#e8e8e4] bg-[#fafaf8] p-4">
+                      <p className="text-[12px] font-medium text-[#111110]">Before</p>
+                      <pre className="mt-2 max-h-56 overflow-auto whitespace-pre-wrap rounded-xl bg-white p-3 text-[12px] leading-6 text-[#1a1a1a]/70">
+                        {aiDraft.before}
+                      </pre>
+                    </div>
+                    <div className="rounded-2xl border border-[#e8e8e4] bg-[#f4fbf7] p-4">
+                      <p className="text-[12px] font-medium text-[#084734]">After</p>
+                      <pre className="mt-2 max-h-56 overflow-auto whitespace-pre-wrap rounded-xl bg-white p-3 text-[12px] leading-6 text-[#084734]">
+                        {aiDraft.after}
+                      </pre>
+                    </div>
+                    <div className="lg:col-span-2 flex flex-wrap gap-2">
+                      <Button onClick={applyAiDraft}>
+                        {aiDraft.applyLabel}
+                      </Button>
+                      <Button variant="outline" onClick={() => setAiDraft(null)}>
+                        나중에 적용
+                      </Button>
+                    </div>
+                  </div>
+                )}
+
+                {aiDraft.tool === "template" && (
+                  <div className="mt-4 space-y-4">
+                    <div className="grid gap-3 sm:grid-cols-2 xl:grid-cols-3">
+                      {(Object.entries(BLOG_AI_TEMPLATE_META) as Array<[BlogAiTemplateKey, (typeof BLOG_AI_TEMPLATE_META)[BlogAiTemplateKey]]>).map(
+                        ([key, meta]) => (
+                          <button
+                            key={key}
+                            type="button"
+                            onClick={() => openTemplateDraft(key)}
+                            className={`rounded-xl border px-3 py-3 text-left transition-colors ${
+                              aiTemplateKey === key
+                                ? "border-[#111110] bg-white shadow-sm"
+                                : "border-[#e8e8e4] bg-white/80 hover:border-[#c8c8c4]"
+                            }`}
+                          >
+                            <p className="text-[13px] font-medium text-[#111110]">{meta.label}</p>
+                            <p className="mt-1 text-[12px] leading-5 text-[#1a1a1a]/40">{meta.summary}</p>
+                          </button>
+                        )
+                      )}
+                    </div>
+                    <div className="grid gap-4 lg:grid-cols-2">
+                      <div className="rounded-2xl border border-[#e8e8e4] bg-[#fafaf8] p-4">
+                        <p className="text-[12px] font-medium text-[#111110]">현재 본문</p>
+                        <pre className="mt-2 max-h-56 overflow-auto whitespace-pre-wrap rounded-xl bg-white p-3 text-[12px] leading-6 text-[#1a1a1a]/70">
+                          {aiDraft.before}
+                        </pre>
+                      </div>
+                      <div className="rounded-2xl border border-[#dbe5f7] bg-[#f5f8ff] p-4">
+                        <p className="text-[12px] font-medium text-[#1f4ea3]">삽입될 템플릿</p>
+                        <pre className="mt-2 max-h-56 overflow-auto whitespace-pre-wrap rounded-xl bg-white p-3 text-[12px] leading-6 text-[#1f4ea3]">
+                          {aiDraft.after}
+                        </pre>
+                      </div>
+                    </div>
+                    <div className="flex flex-wrap gap-2">
+                      <Button onClick={applyAiDraft}>{aiDraft.applyLabel}</Button>
+                      <Button variant="outline" onClick={() => setAiDraft(null)}>
+                        닫기
+                      </Button>
+                    </div>
+                  </div>
+                )}
+
+                {aiDraft.tool === "title" && (
+                  <div className="mt-4 grid gap-3 lg:grid-cols-3">
+                    {aiDraft.suggestions.map((suggestion) => (
+                      <button
+                        key={suggestion}
+                        type="button"
+                        onClick={() => applyTitleSuggestion(suggestion)}
+                        className="rounded-2xl border border-[#e8e8e4] bg-[#fafaf8] px-4 py-4 text-left transition-colors hover:border-[#c8c8c4] hover:bg-white"
+                      >
+                        <p className="text-[11px] font-medium uppercase tracking-[0.2em] text-[#1a1a1a]/30">추천 제목</p>
+                        <p className="mt-2 text-[13px] font-medium leading-6 text-[#111110]">{suggestion}</p>
+                        <p className="mt-3 text-[12px] text-[#084734]">눌러서 바로 제목에 반영</p>
+                      </button>
+                    ))}
+                  </div>
+                )}
+
+                {aiDraft.tool === "excerpt" && (
+                  <div className="mt-4 grid gap-3 lg:grid-cols-3">
+                    {aiDraft.suggestions.map((suggestion) => (
+                      <button
+                        key={suggestion}
+                        type="button"
+                        onClick={() => applyExcerptSuggestion(suggestion)}
+                        className="rounded-2xl border border-[#e8e8e4] bg-[#fafaf8] px-4 py-4 text-left transition-colors hover:border-[#c8c8c4] hover:bg-white"
+                      >
+                        <p className="text-[11px] font-medium uppercase tracking-[0.2em] text-[#1a1a1a]/30">추천 요약</p>
+                        <p className="mt-2 text-[13px] leading-6 text-[#111110]">{suggestion}</p>
+                        <p className="mt-3 text-[12px] text-[#5a45a8]">눌러서 바로 요약에 반영</p>
+                      </button>
+                    ))}
+                  </div>
+                )}
+
+                {aiDraft.tool === "cta" && (
+                  <div className="mt-4 grid gap-4 lg:grid-cols-2">
+                    <div className="rounded-2xl border border-[#e8e8e4] bg-[#fafaf8] p-4">
+                      <p className="text-[12px] font-medium text-[#111110]">Before</p>
+                      <pre className="mt-2 whitespace-pre-wrap rounded-xl bg-white p-3 text-[12px] leading-6 text-[#1a1a1a]/70">
+                        {aiDraft.before}
+                      </pre>
+                    </div>
+                    <div className="rounded-2xl border border-[#dce9e6] bg-[#f5fbfa] p-4">
+                      <p className="text-[12px] font-medium text-[#11635b]">After</p>
+                      <pre className="mt-2 whitespace-pre-wrap rounded-xl bg-white p-3 text-[12px] leading-6 text-[#11635b]">
+                        {aiDraft.after}
+                      </pre>
+                    </div>
+                    <div className="lg:col-span-2 rounded-2xl border border-[#e8e8e4] bg-[#fcfcfb] p-4">
+                      <p className="text-[12px] font-medium text-[#111110]">체크리스트</p>
+                      <div className="mt-3 space-y-2">
+                        {aiDraft.checklist.map((item) => (
+                          <div key={item} className="flex items-start gap-2 rounded-xl border border-[#e8e8e4] bg-white px-3 py-2 text-[12px] text-[#1a1a1a]/55">
+                            <CheckCircle2 className="mt-0.5 h-4 w-4 text-[#11635b]" />
+                            <span>{item}</span>
+                          </div>
+                        ))}
+                      </div>
+                    </div>
+                    <div className="lg:col-span-2 flex flex-wrap gap-2">
+                      <Button onClick={applyAiDraft}>{aiDraft.applyLabel}</Button>
+                      <Button variant="outline" onClick={() => setAiDraft(null)}>
+                        닫기
+                      </Button>
+                    </div>
+                  </div>
+                )}
+
+                {aiDraft.tool === "seo" && (
+                  <div className="mt-4 grid gap-4 lg:grid-cols-2">
+                    <div className="rounded-2xl border border-[#e8e8e4] bg-[#fafaf8] p-4">
+                      <p className="text-[12px] font-medium text-[#111110]">Before</p>
+                      <pre className="mt-2 whitespace-pre-wrap rounded-xl bg-white p-3 text-[12px] leading-6 text-[#1a1a1a]/70">
+                        {aiDraft.before}
+                      </pre>
+                    </div>
+                    <div className="rounded-2xl border border-[#e6e8d9] bg-[#fbfcf2] p-4">
+                      <p className="text-[12px] font-medium text-[#6b7a24]">After</p>
+                      <pre className="mt-2 whitespace-pre-wrap rounded-xl bg-white p-3 text-[12px] leading-6 text-[#6b7a24]">
+                        {aiDraft.after}
+                      </pre>
+                    </div>
+                    <div className="lg:col-span-2 rounded-2xl border border-[#e8e8e4] bg-[#fcfcfb] p-4">
+                      <p className="text-[12px] font-medium text-[#111110]">점검 결과</p>
+                      <div className="mt-3 space-y-2">
+                        {aiDraft.checklist.map((item) => (
+                          <div key={item.label} className="flex items-start gap-2 rounded-xl border border-[#e8e8e4] bg-white px-3 py-2 text-[12px] text-[#1a1a1a]/55">
+                            <CheckCircle2 className={`mt-0.5 h-4 w-4 ${item.ok ? "text-[#6b7a24]" : "text-[#1a1a1a]/25"}`} />
+                            <span>{item.label}</span>
+                          </div>
+                        ))}
+                      </div>
+                    </div>
+                    <div className="lg:col-span-2 flex flex-wrap gap-2">
+                      <Button onClick={applyAiDraft}>{aiDraft.applyLabel}</Button>
+                      <Button variant="outline" onClick={() => setAiDraft(null)}>
+                        닫기
+                      </Button>
+                    </div>
+                  </div>
+                )}
+              </div>
+            )}
           </div>
 
           <div className="rounded-[28px] border border-[#e8e8e4] bg-white p-6 shadow-sm">
@@ -780,6 +1919,143 @@ export default function BlogPostEditor({
         </section>
 
         <aside className="space-y-5">
+          <div className="rounded-[28px] border border-[#e8e8e4] bg-white p-5 shadow-sm">
+            <div className="flex items-start justify-between gap-3">
+              <div>
+                <p className="text-sm font-semibold text-[#111110]">임시저장</p>
+                <p className="mt-1 text-[13px] leading-5 text-[#1a1a1a]/40">
+                  최근 초안을 다시 열고, 필요 없는 초안은 바로 정리할 수 있습니다.
+                </p>
+              </div>
+              <span className="rounded-full bg-[#f5f5f2] px-3 py-1 text-[12px] text-[#084734]">
+                {draftEntries.length}개
+              </span>
+            </div>
+
+            <div className="mt-4 space-y-3">
+              {currentDraftEntry ? (
+                <div className="rounded-2xl border border-[#e8e8e4] bg-[#fcfcfb] p-4">
+                  <div className="flex items-start justify-between gap-2">
+                    <div className="min-w-0">
+                      <p className="truncate text-sm font-medium text-[#111110]">
+                        {currentDraftEntry.title}
+                      </p>
+                      <p className="mt-1 line-clamp-2 text-[12px] leading-5 text-[#1a1a1a]/42">
+                        {currentDraftEntry.excerpt}
+                      </p>
+                    </div>
+                    <span className="rounded-full bg-[#eaf4ef] px-2.5 py-1 text-[11px] text-[#084734]">
+                      현재 글
+                    </span>
+                  </div>
+
+                  <div className="mt-3 flex flex-wrap items-center gap-2 text-[12px] text-[#1a1a1a]/40">
+                    <span className="inline-flex items-center gap-1.5 rounded-full bg-white px-2.5 py-1">
+                      <Clock3 className="h-3.5 w-3.5" />
+                      {formatRelativeTime(currentDraftEntry.updatedAt)}
+                    </span>
+                    <span className="rounded-full bg-white px-2.5 py-1">
+                      {currentDraftEntry.category}
+                    </span>
+                  </div>
+
+                  <div className="mt-4 flex flex-wrap gap-2">
+                    <Button
+                      type="button"
+                      size="sm"
+                      variant="outline"
+                      onClick={() => {
+                        const storedDraft = getStoredDraft(draftStorageKey)
+                        if (!storedDraft) return
+                        applySnapshot(storedDraft.snapshot)
+                        undoStackRef.current = []
+                        redoStackRef.current = []
+                        setDraftState("saved")
+                        setLastSavedAt(storedDraft.updatedAt)
+                        setNotice("임시저장을 다시 불러왔습니다.")
+                      }}
+                    >
+                      다시 불러오기
+                    </Button>
+                    <Button
+                      type="button"
+                      size="sm"
+                      variant="ghost"
+                      onClick={() => {
+                        const baseline = cloneSnapshot(initialSnapshot)
+                        applySnapshot(baseline)
+                        undoStackRef.current = []
+                        redoStackRef.current = []
+                        setDraftState("saved")
+                        setLastSavedAt(null)
+                        discardDraft(draftStorageKey)
+                        setNotice("초안을 초기 상태로 되돌렸습니다.")
+                      }}
+                    >
+                      초안 비우기
+                    </Button>
+                  </div>
+                </div>
+              ) : (
+                <div className="rounded-2xl border border-dashed border-[#dfe2db] bg-[#fcfcfb] p-4">
+                  <p className="text-sm font-medium text-[#111110]">현재 임시저장 없음</p>
+                  <p className="mt-1 text-[12px] leading-5 text-[#1a1a1a]/40">
+                    조금만 작성하면 자동으로 이어쓸 수 있는 초안이 만들어집니다.
+                  </p>
+                </div>
+              )}
+
+              {otherDraftEntries.length > 0 && (
+                <div className="space-y-2 pt-1">
+                  <p className="text-[12px] font-medium uppercase tracking-[0.18em] text-[#1a1a1a]/30">
+                    최근 다른 초안
+                  </p>
+                  {otherDraftEntries.map((entry) => (
+                    <div
+                      key={entry.key}
+                      className="rounded-2xl border border-[#f0f0ec] bg-[#fcfcfb] p-3"
+                    >
+                      <div className="flex items-start justify-between gap-2">
+                        <div className="min-w-0">
+                          <p className="truncate text-sm font-medium text-[#111110]">
+                            {entry.title}
+                          </p>
+                          <p className="mt-1 line-clamp-2 text-[12px] leading-5 text-[#1a1a1a]/40">
+                            {entry.excerpt}
+                          </p>
+                        </div>
+                        <span className="rounded-full bg-white px-2.5 py-1 text-[11px] text-[#1a1a1a]/45">
+                          {entry.mode === "create" ? "새 글" : "수정"}
+                        </span>
+                      </div>
+
+                      <div className="mt-3 flex items-center justify-between gap-2">
+                        <div className="text-[12px] text-[#1a1a1a]/35">
+                          {entry.category} · {formatDraftStamp(entry.updatedAt)}
+                        </div>
+                        <div className="flex items-center gap-1.5">
+                          <Button type="button" size="sm" variant="outline" asChild>
+                            <Link href={entry.href}>이어쓰기</Link>
+                          </Button>
+                          <Button
+                            type="button"
+                            size="icon"
+                            variant="ghost"
+                            className="h-8 w-8"
+                            onClick={() => discardDraft(entry.key)}
+                            aria-label="초안 삭제"
+                          >
+                            <Trash2 className="h-4 w-4" />
+                          </Button>
+                        </div>
+                      </div>
+                    </div>
+                  ))}
+                </div>
+              )}
+            </div>
+          </div>
+
           <div className="rounded-[28px] border border-[#e8e8e4] bg-white p-5 shadow-sm">
             <p className="text-sm font-semibold text-[#111110]">발행 설정</p>
             <div className="mt-4 grid gap-3">

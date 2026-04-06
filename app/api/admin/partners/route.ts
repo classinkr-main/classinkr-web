@@ -12,13 +12,23 @@ import {
   toErrorResponse,
 } from "@/app/api/admin/partners/_validation"
 import { verifyAdmin } from "@/lib/admin-auth"
-import { createPartnerWorkspace, listPartnerWorkspacesData } from "@/lib/partners-data"
+import {
+  createPartnerWorkspace,
+  listPartnerWorkspaceSummariesData,
+  listPartnerWorkspacesData,
+} from "@/lib/partners-data"
 
 export async function GET(req: NextRequest) {
   const err = verifyAdmin(req)
   if (err) return err
 
   try {
+    const view = req.nextUrl.searchParams.get("view")
+    if (view === "summary") {
+      const { summaries, source, warning } = await listPartnerWorkspaceSummariesData()
+      return NextResponse.json({ summaries, source, warning })
+    }
+
     const { workspaces, source, warning } = await listPartnerWorkspacesData()
     return NextResponse.json({ workspaces, source, warning })
   } catch {

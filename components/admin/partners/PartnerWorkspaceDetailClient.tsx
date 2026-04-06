@@ -1,22 +1,11 @@
 "use client"
 
-import Link from "next/link"
+import { usePathname, useRouter, useSearchParams } from "next/navigation"
 import { useState } from "react"
 import type { FormEvent, ReactNode } from "react"
-import {
-  ArrowLeft,
-  CalendarDays,
-  FileText,
-  Handshake,
-  Pencil,
-  Plus,
-  Receipt,
-  TrendingUp,
-  Zap,
-} from "lucide-react"
 
 import PartnerFormDialog from "@/components/admin/partners/PartnerFormDialog"
-import { Badge } from "@/components/ui/badge"
+import PartnerWorkspaceShell, { type PartnerWorkspaceTab } from "@/components/admin/partners/PartnerWorkspaceShell"
 import { Button } from "@/components/ui/button"
 import {
   Dialog,
@@ -28,13 +17,18 @@ import {
 } from "@/components/ui/dialog"
 import { Input } from "@/components/ui/input"
 import { Label } from "@/components/ui/label"
-import { Tabs, TabsContent, TabsList, TabsTrigger } from "@/components/ui/tabs"
 import type {
+  PartnerActivityLog,
+  PartnerActivityLogInput,
   PartnerDataSource,
   PartnerDeal,
   PartnerDealInput,
+  PartnerChecklistInput,
   PartnerDocument,
   PartnerDocumentInput,
+  PartnerIssueInput,
+  PartnerOpsChecklistItem,
+  PartnerOpsIssue,
   PartnerSalesInput,
   PartnerSalesRecord,
   PartnerScheduleInput,
@@ -51,48 +45,8 @@ interface PartnerWorkspaceDetailClientProps {
 
 const SELECT_CLASSNAME =
   "flex h-10 w-full rounded-md border border-input bg-background px-3 py-2 text-sm ring-offset-background focus-visible:outline-none focus-visible:ring-2 focus-visible:ring-ring focus-visible:ring-offset-2"
-
-const DEAL_STAGE_LABEL = {
-  discovery: "발굴",
-  quoted: "견적 발송 전",
-  contract_sent: "계약 발송",
-  active: "진행중",
-  closed_won: "성사",
-  closed_lost: "종료",
-} as const
-
-const DOCUMENT_KIND_LABEL = {
-  quote: "견적서",
-  contract: "계약서",
-  receipt: "영수증",
-} as const
-
-const DOCUMENT_STATUS_LABEL = {
-  draft: "초안",
-  sent: "발송됨",
-  signed: "서명완료",
-  paid: "정산완료",
-  overdue: "연체",
-  archived: "보관",
-} as const
-
-const SCHEDULE_KIND_LABEL = {
-  meeting: "미팅",
-  follow_up: "후속",
-  deadline: "마감",
-  renewal: "갱신",
-} as const
-
-const SCHEDULE_STATUS_LABEL = {
-  planned: "예정",
-  completed: "완료",
-  canceled: "취소",
-} as const
-
-const AUTOMATION_STATUS_LABEL = {
-  active: "Active",
-  paused: "Paused",
-} as const
+const TEXTAREA_CLASSNAME =
+  "flex min-h-[112px] w-full rounded-md border border-input bg-background px-3 py-2 text-sm ring-offset-background focus-visible:outline-none focus-visible:ring-2 focus-visible:ring-ring focus-visible:ring-offset-2"
 
 function getToken() {
   return sessionStorage.getItem("admin_password") ?? ""
@@ -116,14 +70,6 @@ async function adminFetch(url: string, options?: RequestInit) {
   return data
 }
 
-function formatCurrency(value: number) {
-  return new Intl.NumberFormat("ko-KR", {
-    style: "currency",
-    currency: "KRW",
-    maximumFractionDigits: 0,
-  }).format(value)
-}
-
 function toDateTimeInputValue(value?: string) {
   if (!value) return ""
   const normalized = value.trim().replace(" ", "T")
@@ -141,16 +87,6 @@ function toDateTimeInputValue(value?: string) {
   return `${year}-${month}-${day}T${hours}:${minutes}`
 }
 
-function formatDateTimeDisplay(value?: string) {
-  if (!value) return "미정"
-
-  const normalized = value.trim().replace("T", " ")
-  const match = normalized.match(/^(\d{4}-\d{2}-\d{2}) (\d{2}:\d{2})/)
-  if (match) return `${match[1]} ${match[2]}`
-
-  return normalized
-}
-
 function toSalesMonthInputValue(value?: string) {
   if (!value) return ""
   return value.slice(0, 7)
@@ -159,6 +95,19 @@ function toSalesMonthInputValue(value?: string) {
 function toSalesMonthStorageValue(value: string) {
   if (!value) return value
   return value.length === 7 ? `${value}-01` : value
+}
+
+const WORKSPACE_TABS: readonly PartnerWorkspaceTab[] = [
+  "overview",
+  "deal-flow",
+  "fulfillment",
+  "documents",
+  "logs-issues",
+  "automations",
+]
+
+function isWorkspaceTab(value: string | null): value is PartnerWorkspaceTab {
+  return Boolean(value && WORKSPACE_TABS.includes(value as PartnerWorkspaceTab))
 }
 
 function createDealFormState(initialDeal?: PartnerDeal | null): PartnerDealInput {
@@ -261,24 +210,139 @@ function createSalesFormState(initialSales: PartnerSalesRecord | null | undefine
   }
 }
 
-function SectionHeader({
-  title,
-  description,
-  action,
-}: {
-  title: string
-  description?: string
-  action?: ReactNode
-}) {
-  return (
-    <div className="mb-4 flex items-start justify-between gap-4">
-      <div>
-        <h2 className="text-[14px] font-semibold text-[#111110]">{title}</h2>
-        {description && <p className="mt-1 text-[12px] text-[#1a1a1a]/45">{description}</p>}
-      </div>
-      {action}
-    </div>
-  )
+function createChecklistFormState(
+  initialChecklist: PartnerOpsChecklistItem | null | undefined,
+  deals: PartnerDeal[]
+): PartnerChecklistInput {
+  if (!initialChecklist) {
+    return {
+      checklistGroup: "fulfillment",
+      title: "",
+      dealId: deals[0]?.id ?? "",
+      itemCategory: "",
+      itemCode: "",
+      itemName: "",
+      plannedQuantity: 0,
+      confirmedQuantity: 0,
+      todoStatus: "open",
+      installStatus: "planned",
+      owner: "",
+      dueAt: "",
+      completedAt: "",
+      notes: "",
+    }
+  }
+
+  return {
+    id: initialChecklist.id,
+    dealId: initialChecklist.dealId ?? "",
+    parentItemId: initialChecklist.parentItemId,
+    checklistGroup: initialChecklist.checklistGroup,
+    title: initialChecklist.title,
+    itemCategory: initialChecklist.itemCategory ?? "",
+    itemCode: initialChecklist.itemCode ?? "",
+    itemName: initialChecklist.itemName ?? "",
+    plannedQuantity: initialChecklist.plannedQuantity ?? 0,
+    confirmedQuantity: initialChecklist.confirmedQuantity ?? 0,
+    todoStatus: initialChecklist.todoStatus,
+    installStatus: initialChecklist.installStatus,
+    owner: initialChecklist.owner ?? "",
+    dueAt: toDateTimeInputValue(initialChecklist.dueAt),
+    completedAt: toDateTimeInputValue(initialChecklist.completedAt),
+    notes: initialChecklist.notes ?? "",
+  }
+}
+
+function createIssueFormState(
+  initialIssue: PartnerOpsIssue | null | undefined,
+  deals: PartnerDeal[]
+): PartnerIssueInput {
+  if (!initialIssue) {
+    return {
+      title: "",
+      category: "운영",
+      dealId: deals[0]?.id ?? "",
+      severity: "medium",
+      status: "open",
+      owner: "",
+      verifyWith: "",
+      nextCheckAt: "",
+      dueAt: "",
+      resolvedAt: "",
+      relatedDocumentId: "",
+      relatedChecklistItemId: "",
+      facts: "",
+      unresolvedPoints: "",
+      currentAssumption: "",
+      resolutionSummary: "",
+    }
+  }
+
+  return {
+    id: initialIssue.id,
+    dealId: initialIssue.dealId ?? "",
+    relatedDocumentId: initialIssue.relatedDocumentId ?? "",
+    relatedChecklistItemId: initialIssue.relatedChecklistItemId ?? "",
+    title: initialIssue.title,
+    category: initialIssue.category,
+    severity: initialIssue.severity,
+    status: initialIssue.status,
+    facts: initialIssue.facts ?? "",
+    unresolvedPoints: initialIssue.unresolvedPoints ?? "",
+    currentAssumption: initialIssue.currentAssumption ?? "",
+    verifyWith: initialIssue.verifyWith ?? "",
+    owner: initialIssue.owner ?? "",
+    nextCheckAt: toDateTimeInputValue(initialIssue.nextCheckAt),
+    dueAt: toDateTimeInputValue(initialIssue.dueAt),
+    resolvedAt: toDateTimeInputValue(initialIssue.resolvedAt),
+    resolutionSummary: initialIssue.resolutionSummary ?? "",
+  }
+}
+
+function createActivityLogFormState(
+  initialLog: PartnerActivityLog | null | undefined,
+  deals: PartnerDeal[]
+): PartnerActivityLogInput {
+  if (!initialLog) {
+    return {
+      summary: "",
+      action: "",
+      logCategory: "general",
+      dealId: deals[0]?.id ?? "",
+      status: "recorded",
+      actor: "",
+      documentId: "",
+      scheduleItemId: "",
+      checklistItemId: "",
+      issueId: "",
+      subjectType: "partner",
+      subjectId: "",
+      nextAction: "",
+      details: "",
+      dueAt: "",
+      occurredAt: "",
+    }
+  }
+
+  return {
+    id: initialLog.id,
+    dealId: initialLog.dealId ?? "",
+    documentId: initialLog.documentId ?? "",
+    scheduleItemId: initialLog.scheduleItemId ?? "",
+    checklistItemId: initialLog.checklistItemId ?? "",
+    issueId: initialLog.issueId ?? "",
+    subjectType: initialLog.subjectType,
+    subjectId: initialLog.subjectId ?? "",
+    logCategory: initialLog.logCategory,
+    status: initialLog.status,
+    actor: initialLog.actor ?? "",
+    action: initialLog.action,
+    summary: initialLog.summary,
+    details: initialLog.details ?? "",
+    nextAction: initialLog.nextAction ?? "",
+    dueAt: toDateTimeInputValue(initialLog.dueAt),
+    occurredAt: toDateTimeInputValue(initialLog.occurredAt),
+  }
 }
 
 function ResourceDialogShell({
@@ -296,7 +360,7 @@ function ResourceDialogShell({
 }) {
   return (
     <Dialog open={open} onOpenChange={(nextOpen) => !nextOpen && onClose()}>
-      <DialogContent className="max-w-2xl bg-white">
+      <DialogContent className="bg-white sm:max-w-2xl">
         <DialogHeader>
           <DialogTitle>{title}</DialogTitle>
           <DialogDescription>{description}</DialogDescription>
@@ -352,7 +416,7 @@ function DealFormDialog({
           <Label htmlFor="deal-title">거래명 *</Label>
           <Input id="deal-title" value={form.title} onChange={(event) => set("title", event.target.value)} required />
         </div>
-        <div className="grid grid-cols-2 gap-4">
+        <div className="grid gap-4 md:grid-cols-2">
           <div className="grid gap-2">
             <Label htmlFor="deal-stage">단계</Label>
             <select
@@ -374,7 +438,7 @@ function DealFormDialog({
             <Input id="deal-manager" value={form.manager} onChange={(event) => set("manager", event.target.value)} />
           </div>
         </div>
-        <div className="grid grid-cols-2 gap-4">
+        <div className="grid gap-4 md:grid-cols-2">
           <div className="grid gap-2">
             <Label htmlFor="deal-amount">견적 금액</Label>
             <Input id="deal-amount" type="number" value={form.quoteAmount} onChange={(event) => set("quoteAmount", Number(event.target.value || 0))} />
@@ -384,7 +448,7 @@ function DealFormDialog({
             <Input id="deal-sales-units" type="number" value={form.salesUnits} onChange={(event) => set("salesUnits", Number(event.target.value || 0))} />
           </div>
         </div>
-        <div className="grid grid-cols-3 gap-4">
+        <div className="grid gap-4 md:grid-cols-3">
           <div className="grid gap-2">
             <Label htmlFor="deal-expected-close">예상 마감</Label>
             <Input id="deal-expected-close" type="date" value={form.expectedCloseAt} onChange={(event) => set("expectedCloseAt", event.target.value)} />
@@ -453,7 +517,7 @@ function DocumentFormDialog({
           <Label htmlFor="doc-title">문서 제목 *</Label>
           <Input id="doc-title" value={form.title} onChange={(event) => set("title", event.target.value)} required />
         </div>
-        <div className="grid grid-cols-3 gap-4">
+        <div className="grid gap-4 md:grid-cols-3">
           <div className="grid gap-2">
             <Label htmlFor="doc-kind">문서 종류</Label>
             <select id="doc-kind" value={form.kind} onChange={(event) => set("kind", event.target.value as PartnerDocumentInput["kind"])} className={SELECT_CLASSNAME}>
@@ -483,7 +547,7 @@ function DocumentFormDialog({
             </select>
           </div>
         </div>
-        <div className="grid grid-cols-3 gap-4">
+        <div className="grid gap-4 md:grid-cols-3">
           <div className="grid gap-2">
             <Label htmlFor="doc-amount">금액</Label>
             <Input id="doc-amount" type="number" value={form.amount ?? 0} onChange={(event) => set("amount", Number(event.target.value || 0))} />
@@ -555,7 +619,7 @@ function ScheduleFormDialog({
           <Label htmlFor="schedule-title">일정 제목 *</Label>
           <Input id="schedule-title" value={form.title} onChange={(event) => set("title", event.target.value)} required />
         </div>
-        <div className="grid grid-cols-3 gap-4">
+        <div className="grid gap-4 md:grid-cols-3">
           <div className="grid gap-2">
             <Label htmlFor="schedule-kind">유형</Label>
             <select id="schedule-kind" value={form.kind} onChange={(event) => set("kind", event.target.value as PartnerScheduleInput["kind"])} className={SELECT_CLASSNAME}>
@@ -583,7 +647,7 @@ function ScheduleFormDialog({
             </select>
           </div>
         </div>
-        <div className="grid grid-cols-2 gap-4">
+        <div className="grid gap-4 md:grid-cols-2">
           <div className="grid gap-2">
             <Label htmlFor="schedule-starts-at">시작일시 *</Label>
             <Input id="schedule-starts-at" type="datetime-local" value={form.startsAt} onChange={(event) => set("startsAt", event.target.value)} required />
@@ -647,7 +711,7 @@ function SalesFormDialog({
       description="월별 판매 댓수와 금액을 집계해 실적 탭과 리포트의 기준값으로 사용합니다."
     >
       <form onSubmit={handleSubmit} className="grid gap-4">
-        <div className="grid grid-cols-2 gap-4">
+        <div className="grid gap-4 md:grid-cols-2">
           <div className="grid gap-2">
             <Label htmlFor="sales-month">집계 월 *</Label>
             <Input id="sales-month" type="month" value={form.salesMonth} onChange={(event) => set("salesMonth", event.target.value)} required />
@@ -662,7 +726,7 @@ function SalesFormDialog({
             </select>
           </div>
         </div>
-        <div className="grid grid-cols-3 gap-4">
+        <div className="grid gap-4 md:grid-cols-3">
           <div className="grid gap-2">
             <Label htmlFor="sales-units">판매 댓수</Label>
             <Input id="sales-units" type="number" value={form.unitsSold} onChange={(event) => set("unitsSold", Number(event.target.value || 0))} />
@@ -685,11 +749,487 @@ function SalesFormDialog({
   )
 }
 
+function ChecklistFormDialog({
+  open,
+  loading,
+  deals,
+  initialChecklist,
+  onClose,
+  onSave,
+}: {
+  open: boolean
+  loading?: boolean
+  deals: PartnerDeal[]
+  initialChecklist?: PartnerOpsChecklistItem | null
+  onClose: () => void
+  onSave: (payload: PartnerChecklistInput) => Promise<void> | void
+}) {
+  const [form, setForm] = useState<PartnerChecklistInput>(() => createChecklistFormState(initialChecklist, deals))
+
+  const set = <K extends keyof PartnerChecklistInput>(key: K, value: PartnerChecklistInput[K]) => {
+    setForm((prev) => ({ ...prev, [key]: value }))
+  }
+
+  const handleSubmit = async (event: FormEvent<HTMLFormElement>) => {
+    event.preventDefault()
+    await onSave({
+      ...form,
+      title: form.title.trim(),
+      checklistGroup: form.checklistGroup.trim(),
+      dealId: form.dealId || undefined,
+      itemCategory: form.itemCategory?.trim() || undefined,
+      itemCode: form.itemCode?.trim() || undefined,
+      itemName: form.itemName?.trim() || undefined,
+      plannedQuantity: form.plannedQuantity == null ? undefined : Number(form.plannedQuantity),
+      confirmedQuantity: form.confirmedQuantity == null ? undefined : Number(form.confirmedQuantity),
+      owner: form.owner?.trim() || undefined,
+      dueAt: form.dueAt || undefined,
+      completedAt: form.completedAt || undefined,
+      notes: form.notes?.trim() || undefined,
+    })
+  }
+
+  return (
+    <ResourceDialogShell
+      open={open}
+      onClose={onClose}
+      title={initialChecklist ? "이행 체크 수정" : "이행 체크 추가"}
+      description="설치 준비, 수량 확인, 후속 작업을 체크리스트로 쪼개서 관리합니다."
+    >
+      <form onSubmit={handleSubmit} className="grid gap-4">
+        <div className="grid gap-2">
+          <Label htmlFor="checklist-title">체크 제목 *</Label>
+          <Input id="checklist-title" value={form.title} onChange={(event) => set("title", event.target.value)} required />
+        </div>
+        <div className="grid gap-4 md:grid-cols-2">
+          <div className="grid gap-2">
+            <Label htmlFor="checklist-group">그룹 *</Label>
+            <Input id="checklist-group" value={form.checklistGroup} onChange={(event) => set("checklistGroup", event.target.value)} required />
+          </div>
+          <div className="grid gap-2">
+            <Label htmlFor="checklist-deal">거래 연결</Label>
+            <select id="checklist-deal" value={form.dealId} onChange={(event) => set("dealId", event.target.value)} className={SELECT_CLASSNAME}>
+              <option value="">미연결</option>
+              {deals.map((deal) => (
+                <option key={deal.id} value={deal.id}>{deal.title}</option>
+              ))}
+            </select>
+          </div>
+        </div>
+        <div className="grid gap-4 md:grid-cols-3">
+          <div className="grid gap-2">
+            <Label htmlFor="checklist-item-category">품목 분류</Label>
+            <Input id="checklist-item-category" value={form.itemCategory ?? ""} onChange={(event) => set("itemCategory", event.target.value)} />
+          </div>
+          <div className="grid gap-2">
+            <Label htmlFor="checklist-item-code">품목 코드</Label>
+            <Input id="checklist-item-code" value={form.itemCode ?? ""} onChange={(event) => set("itemCode", event.target.value)} />
+          </div>
+          <div className="grid gap-2">
+            <Label htmlFor="checklist-item-name">품목명</Label>
+            <Input id="checklist-item-name" value={form.itemName ?? ""} onChange={(event) => set("itemName", event.target.value)} />
+          </div>
+        </div>
+        <div className="grid gap-4 md:grid-cols-3">
+          <div className="grid gap-2">
+            <Label htmlFor="checklist-planned-quantity">계획 수량</Label>
+            <Input id="checklist-planned-quantity" type="number" min="0" value={form.plannedQuantity ?? 0} onChange={(event) => set("plannedQuantity", Number(event.target.value || 0))} />
+          </div>
+          <div className="grid gap-2">
+            <Label htmlFor="checklist-confirmed-quantity">확정 수량</Label>
+            <Input id="checklist-confirmed-quantity" type="number" min="0" value={form.confirmedQuantity ?? 0} onChange={(event) => set("confirmedQuantity", Number(event.target.value || 0))} />
+          </div>
+          <div className="grid gap-2">
+            <Label htmlFor="checklist-owner">담당자</Label>
+            <Input id="checklist-owner" value={form.owner ?? ""} onChange={(event) => set("owner", event.target.value)} />
+          </div>
+        </div>
+        <div className="grid gap-4 md:grid-cols-2">
+          <div className="grid gap-2">
+            <Label htmlFor="checklist-todo-status">TODO 상태</Label>
+            <select id="checklist-todo-status" value={form.todoStatus} onChange={(event) => set("todoStatus", event.target.value as PartnerChecklistInput["todoStatus"])} className={SELECT_CLASSNAME}>
+              <option value="open">Open</option>
+              <option value="waiting_partner">Waiting partner</option>
+              <option value="waiting_internal">Waiting internal</option>
+              <option value="blocked">Blocked</option>
+              <option value="done">Done</option>
+              <option value="canceled">Canceled</option>
+            </select>
+          </div>
+          <div className="grid gap-2">
+            <Label htmlFor="checklist-install-status">이행 상태</Label>
+            <select id="checklist-install-status" value={form.installStatus} onChange={(event) => set("installStatus", event.target.value as PartnerChecklistInput["installStatus"])} className={SELECT_CLASSNAME}>
+              <option value="planned">Planned</option>
+              <option value="ordered">Ordered</option>
+              <option value="delivered">Delivered</option>
+              <option value="installed">Installed</option>
+              <option value="verified">Verified</option>
+              <option value="issue">Issue</option>
+            </select>
+          </div>
+        </div>
+        <div className="grid gap-4 md:grid-cols-2">
+          <div className="grid gap-2">
+            <Label htmlFor="checklist-due-at">마감 일시</Label>
+            <Input id="checklist-due-at" type="datetime-local" value={form.dueAt ?? ""} onChange={(event) => set("dueAt", event.target.value)} />
+          </div>
+          <div className="grid gap-2">
+            <Label htmlFor="checklist-completed-at">완료 일시</Label>
+            <Input id="checklist-completed-at" type="datetime-local" value={form.completedAt ?? ""} onChange={(event) => set("completedAt", event.target.value)} />
+          </div>
+        </div>
+        <div className="grid gap-2">
+          <Label htmlFor="checklist-notes">메모</Label>
+          <textarea id="checklist-notes" className={TEXTAREA_CLASSNAME} value={form.notes ?? ""} onChange={(event) => set("notes", event.target.value)} />
+        </div>
+        <DialogFooter>
+          <Button type="button" variant="outline" onClick={onClose} disabled={loading}>취소</Button>
+          <Button type="submit" disabled={loading}>{loading ? "저장 중..." : initialChecklist ? "체크 수정" : "체크 추가"}</Button>
+        </DialogFooter>
+      </form>
+    </ResourceDialogShell>
+  )
+}
+
+function IssueFormDialog({
+  open,
+  loading,
+  deals,
+  documents,
+  checklists,
+  initialIssue,
+  onClose,
+  onSave,
+}: {
+  open: boolean
+  loading?: boolean
+  deals: PartnerDeal[]
+  documents: PartnerDocument[]
+  checklists: PartnerOpsChecklistItem[]
+  initialIssue?: PartnerOpsIssue | null
+  onClose: () => void
+  onSave: (payload: PartnerIssueInput) => Promise<void> | void
+}) {
+  const [form, setForm] = useState<PartnerIssueInput>(() => createIssueFormState(initialIssue, deals))
+
+  const set = <K extends keyof PartnerIssueInput>(key: K, value: PartnerIssueInput[K]) => {
+    setForm((prev) => ({ ...prev, [key]: value }))
+  }
+
+  const handleSubmit = async (event: FormEvent<HTMLFormElement>) => {
+    event.preventDefault()
+    await onSave({
+      ...form,
+      title: form.title.trim(),
+      category: form.category.trim(),
+      dealId: form.dealId || undefined,
+      relatedDocumentId: form.relatedDocumentId || undefined,
+      relatedChecklistItemId: form.relatedChecklistItemId || undefined,
+      facts: form.facts?.trim() || undefined,
+      unresolvedPoints: form.unresolvedPoints?.trim() || undefined,
+      currentAssumption: form.currentAssumption?.trim() || undefined,
+      verifyWith: form.verifyWith?.trim() || undefined,
+      owner: form.owner?.trim() || undefined,
+      nextCheckAt: form.nextCheckAt || undefined,
+      dueAt: form.dueAt || undefined,
+      resolvedAt: form.resolvedAt || undefined,
+      resolutionSummary: form.resolutionSummary?.trim() || undefined,
+    })
+  }
+
+  return (
+    <ResourceDialogShell
+      open={open}
+      onClose={onClose}
+      title={initialIssue ? "이슈 수정" : "이슈 추가"}
+      description="계약, 설치, 정산 과정에서 판단이 필요한 이슈를 notes 밖으로 분리해 관리합니다."
+    >
+      <form onSubmit={handleSubmit} className="grid gap-4">
+        <div className="grid gap-2">
+          <Label htmlFor="issue-title">이슈 제목 *</Label>
+          <Input id="issue-title" value={form.title} onChange={(event) => set("title", event.target.value)} required />
+        </div>
+        <div className="grid gap-4 md:grid-cols-2">
+          <div className="grid gap-2">
+            <Label htmlFor="issue-category">분류 *</Label>
+            <Input id="issue-category" value={form.category} onChange={(event) => set("category", event.target.value)} required />
+          </div>
+          <div className="grid gap-2">
+            <Label htmlFor="issue-deal">거래 연결</Label>
+            <select id="issue-deal" value={form.dealId} onChange={(event) => set("dealId", event.target.value)} className={SELECT_CLASSNAME}>
+              <option value="">미연결</option>
+              {deals.map((deal) => (
+                <option key={deal.id} value={deal.id}>{deal.title}</option>
+              ))}
+            </select>
+          </div>
+        </div>
+        <div className="grid gap-4 md:grid-cols-3">
+          <div className="grid gap-2">
+            <Label htmlFor="issue-severity">심각도</Label>
+            <select id="issue-severity" value={form.severity} onChange={(event) => set("severity", event.target.value as PartnerIssueInput["severity"])} className={SELECT_CLASSNAME}>
+              <option value="low">Low</option>
+              <option value="medium">Medium</option>
+              <option value="high">High</option>
+              <option value="critical">Critical</option>
+            </select>
+          </div>
+          <div className="grid gap-2">
+            <Label htmlFor="issue-status">상태</Label>
+            <select id="issue-status" value={form.status} onChange={(event) => set("status", event.target.value as PartnerIssueInput["status"])} className={SELECT_CLASSNAME}>
+              <option value="open">Open</option>
+              <option value="waiting">Waiting</option>
+              <option value="blocked">Blocked</option>
+              <option value="resolved">Resolved</option>
+            </select>
+          </div>
+          <div className="grid gap-2">
+            <Label htmlFor="issue-owner">담당자</Label>
+            <Input id="issue-owner" value={form.owner ?? ""} onChange={(event) => set("owner", event.target.value)} />
+          </div>
+        </div>
+        <div className="grid gap-4 md:grid-cols-2">
+          <div className="grid gap-2">
+            <Label htmlFor="issue-document">연결 문서</Label>
+            <select id="issue-document" value={form.relatedDocumentId ?? ""} onChange={(event) => set("relatedDocumentId", event.target.value)} className={SELECT_CLASSNAME}>
+              <option value="">미연결</option>
+              {documents.map((document) => (
+                <option key={document.id} value={document.id}>{document.title}</option>
+              ))}
+            </select>
+          </div>
+          <div className="grid gap-2">
+            <Label htmlFor="issue-checklist">연결 체크</Label>
+            <select id="issue-checklist" value={form.relatedChecklistItemId ?? ""} onChange={(event) => set("relatedChecklistItemId", event.target.value)} className={SELECT_CLASSNAME}>
+              <option value="">미연결</option>
+              {checklists.map((item) => (
+                <option key={item.id} value={item.id}>{item.title}</option>
+              ))}
+            </select>
+          </div>
+        </div>
+        <div className="grid gap-4 md:grid-cols-3">
+          <div className="grid gap-2">
+            <Label htmlFor="issue-verify-with">확인 대상</Label>
+            <Input id="issue-verify-with" value={form.verifyWith ?? ""} onChange={(event) => set("verifyWith", event.target.value)} />
+          </div>
+          <div className="grid gap-2">
+            <Label htmlFor="issue-next-check-at">다음 확인 일시</Label>
+            <Input id="issue-next-check-at" type="datetime-local" value={form.nextCheckAt ?? ""} onChange={(event) => set("nextCheckAt", event.target.value)} />
+          </div>
+          <div className="grid gap-2">
+            <Label htmlFor="issue-due-at">마감 일시</Label>
+            <Input id="issue-due-at" type="datetime-local" value={form.dueAt ?? ""} onChange={(event) => set("dueAt", event.target.value)} />
+          </div>
+        </div>
+        <div className="grid gap-4 md:grid-cols-2">
+          <div className="grid gap-2">
+            <Label htmlFor="issue-facts">사실 관계</Label>
+            <textarea id="issue-facts" className={TEXTAREA_CLASSNAME} value={form.facts ?? ""} onChange={(event) => set("facts", event.target.value)} />
+          </div>
+          <div className="grid gap-2">
+            <Label htmlFor="issue-unresolved">미해결 포인트</Label>
+            <textarea id="issue-unresolved" className={TEXTAREA_CLASSNAME} value={form.unresolvedPoints ?? ""} onChange={(event) => set("unresolvedPoints", event.target.value)} />
+          </div>
+        </div>
+        <div className="grid gap-4 md:grid-cols-2">
+          <div className="grid gap-2">
+            <Label htmlFor="issue-assumption">현재 가정</Label>
+            <textarea id="issue-assumption" className={TEXTAREA_CLASSNAME} value={form.currentAssumption ?? ""} onChange={(event) => set("currentAssumption", event.target.value)} />
+          </div>
+          <div className="grid gap-2">
+            <Label htmlFor="issue-resolution-summary">해결 요약</Label>
+            <textarea id="issue-resolution-summary" className={TEXTAREA_CLASSNAME} value={form.resolutionSummary ?? ""} onChange={(event) => set("resolutionSummary", event.target.value)} />
+          </div>
+        </div>
+        <div className="grid gap-2 md:max-w-sm">
+          <Label htmlFor="issue-resolved-at">해결 일시</Label>
+          <Input id="issue-resolved-at" type="datetime-local" value={form.resolvedAt ?? ""} onChange={(event) => set("resolvedAt", event.target.value)} />
+        </div>
+        <DialogFooter>
+          <Button type="button" variant="outline" onClick={onClose} disabled={loading}>취소</Button>
+          <Button type="submit" disabled={loading}>{loading ? "저장 중..." : initialIssue ? "이슈 수정" : "이슈 추가"}</Button>
+        </DialogFooter>
+      </form>
+    </ResourceDialogShell>
+  )
+}
+
+function ActivityLogFormDialog({
+  open,
+  loading,
+  deals,
+  documents,
+  schedule,
+  checklists,
+  issues,
+  initialLog,
+  onClose,
+  onSave,
+}: {
+  open: boolean
+  loading?: boolean
+  deals: PartnerDeal[]
+  documents: PartnerDocument[]
+  schedule: PartnerScheduleItem[]
+  checklists: PartnerOpsChecklistItem[]
+  issues: PartnerOpsIssue[]
+  initialLog?: PartnerActivityLog | null
+  onClose: () => void
+  onSave: (payload: PartnerActivityLogInput) => Promise<void> | void
+}) {
+  const [form, setForm] = useState<PartnerActivityLogInput>(() => createActivityLogFormState(initialLog, deals))
+
+  const set = <K extends keyof PartnerActivityLogInput>(key: K, value: PartnerActivityLogInput[K]) => {
+    setForm((prev) => ({ ...prev, [key]: value }))
+  }
+
+  const handleSubmit = async (event: FormEvent<HTMLFormElement>) => {
+    event.preventDefault()
+    await onSave({
+      ...form,
+      summary: form.summary.trim(),
+      action: form.action.trim(),
+      logCategory: form.logCategory.trim(),
+      dealId: form.dealId || undefined,
+      documentId: form.documentId || undefined,
+      scheduleItemId: form.scheduleItemId || undefined,
+      checklistItemId: form.checklistItemId || undefined,
+      issueId: form.issueId || undefined,
+      subjectType: form.subjectType?.trim() || "partner",
+      subjectId: form.subjectId?.trim() || undefined,
+      actor: form.actor?.trim() || undefined,
+      details: form.details?.trim() || undefined,
+      nextAction: form.nextAction?.trim() || undefined,
+      dueAt: form.dueAt || undefined,
+      occurredAt: form.occurredAt,
+    })
+  }
+
+  return (
+    <ResourceDialogShell
+      open={open}
+      onClose={onClose}
+      title={initialLog ? "운영 로그 수정" : "운영 로그 추가"}
+      description="미팅, 후속, 내부 액션을 타임라인으로 남기고 다음 액션까지 이어 붙입니다."
+    >
+      <form onSubmit={handleSubmit} className="grid gap-4">
+        <div className="grid gap-2">
+          <Label htmlFor="log-summary">요약 *</Label>
+          <Input id="log-summary" value={form.summary} onChange={(event) => set("summary", event.target.value)} required />
+        </div>
+        <div className="grid gap-4 md:grid-cols-2">
+          <div className="grid gap-2">
+            <Label htmlFor="log-action">액션 *</Label>
+            <Input id="log-action" value={form.action} onChange={(event) => set("action", event.target.value)} required />
+          </div>
+          <div className="grid gap-2">
+            <Label htmlFor="log-category">로그 분류 *</Label>
+            <Input id="log-category" value={form.logCategory} onChange={(event) => set("logCategory", event.target.value)} required />
+          </div>
+        </div>
+        <div className="grid gap-4 md:grid-cols-3">
+          <div className="grid gap-2">
+            <Label htmlFor="log-deal">거래 연결</Label>
+            <select id="log-deal" value={form.dealId ?? ""} onChange={(event) => set("dealId", event.target.value)} className={SELECT_CLASSNAME}>
+              <option value="">미연결</option>
+              {deals.map((deal) => (
+                <option key={deal.id} value={deal.id}>{deal.title}</option>
+              ))}
+            </select>
+          </div>
+          <div className="grid gap-2">
+            <Label htmlFor="log-status">상태</Label>
+            <select id="log-status" value={form.status} onChange={(event) => set("status", event.target.value as PartnerActivityLogInput["status"])} className={SELECT_CLASSNAME}>
+              <option value="recorded">Recorded</option>
+              <option value="follow_up_needed">Follow up needed</option>
+              <option value="waiting_partner">Waiting partner</option>
+              <option value="waiting_internal">Waiting internal</option>
+              <option value="blocked">Blocked</option>
+              <option value="resolved">Resolved</option>
+              <option value="canceled">Canceled</option>
+            </select>
+          </div>
+          <div className="grid gap-2">
+            <Label htmlFor="log-actor">작성자</Label>
+            <Input id="log-actor" value={form.actor ?? ""} onChange={(event) => set("actor", event.target.value)} />
+          </div>
+        </div>
+        <div className="grid gap-4 md:grid-cols-2">
+          <div className="grid gap-2">
+            <Label htmlFor="log-occurred-at">발생 일시 *</Label>
+            <Input id="log-occurred-at" type="datetime-local" value={form.occurredAt} onChange={(event) => set("occurredAt", event.target.value)} required />
+          </div>
+          <div className="grid gap-2">
+            <Label htmlFor="log-due-at">마감 일시</Label>
+            <Input id="log-due-at" type="datetime-local" value={form.dueAt ?? ""} onChange={(event) => set("dueAt", event.target.value)} />
+          </div>
+        </div>
+        <div className="grid gap-4 md:grid-cols-2">
+          <div className="grid gap-2">
+            <Label htmlFor="log-document">연결 문서</Label>
+            <select id="log-document" value={form.documentId ?? ""} onChange={(event) => set("documentId", event.target.value)} className={SELECT_CLASSNAME}>
+              <option value="">미연결</option>
+              {documents.map((document) => (
+                <option key={document.id} value={document.id}>{document.title}</option>
+              ))}
+            </select>
+          </div>
+          <div className="grid gap-2">
+            <Label htmlFor="log-schedule">연결 일정</Label>
+            <select id="log-schedule" value={form.scheduleItemId ?? ""} onChange={(event) => set("scheduleItemId", event.target.value)} className={SELECT_CLASSNAME}>
+              <option value="">미연결</option>
+              {schedule.map((item) => (
+                <option key={item.id} value={item.id}>{item.title}</option>
+              ))}
+            </select>
+          </div>
+        </div>
+        <div className="grid gap-4 md:grid-cols-2">
+          <div className="grid gap-2">
+            <Label htmlFor="log-checklist">연결 체크</Label>
+            <select id="log-checklist" value={form.checklistItemId ?? ""} onChange={(event) => set("checklistItemId", event.target.value)} className={SELECT_CLASSNAME}>
+              <option value="">미연결</option>
+              {checklists.map((item) => (
+                <option key={item.id} value={item.id}>{item.title}</option>
+              ))}
+            </select>
+          </div>
+          <div className="grid gap-2">
+            <Label htmlFor="log-issue">연결 이슈</Label>
+            <select id="log-issue" value={form.issueId ?? ""} onChange={(event) => set("issueId", event.target.value)} className={SELECT_CLASSNAME}>
+              <option value="">미연결</option>
+              {issues.map((issue) => (
+                <option key={issue.id} value={issue.id}>{issue.title}</option>
+              ))}
+            </select>
+          </div>
+        </div>
+        <div className="grid gap-2">
+          <Label htmlFor="log-next-action">다음 액션</Label>
+          <Input id="log-next-action" value={form.nextAction ?? ""} onChange={(event) => set("nextAction", event.target.value)} />
+        </div>
+        <div className="grid gap-2">
+          <Label htmlFor="log-details">상세 메모</Label>
+          <textarea id="log-details" className={TEXTAREA_CLASSNAME} value={form.details ?? ""} onChange={(event) => set("details", event.target.value)} />
+        </div>
+        <DialogFooter>
+          <Button type="button" variant="outline" onClick={onClose} disabled={loading}>취소</Button>
+          <Button type="submit" disabled={loading}>{loading ? "저장 중..." : initialLog ? "로그 수정" : "로그 추가"}</Button>
+        </DialogFooter>
+      </form>
+    </ResourceDialogShell>
+  )
+}
+
 export default function PartnerWorkspaceDetailClient({
   initialWorkspace,
   initialSource,
   initialWarning,
 }: PartnerWorkspaceDetailClientProps) {
+  const router = useRouter()
+  const pathname = usePathname()
+  const searchParams = useSearchParams()
   const [workspace, setWorkspace] = useState(initialWorkspace)
   const [source, setSource] = useState(initialSource)
   const [warning, setWarning] = useState(initialWarning)
@@ -701,23 +1241,34 @@ export default function PartnerWorkspaceDetailClient({
   const [documentDialogOpen, setDocumentDialogOpen] = useState(false)
   const [scheduleDialogOpen, setScheduleDialogOpen] = useState(false)
   const [salesDialogOpen, setSalesDialogOpen] = useState(false)
+  const [checklistDialogOpen, setChecklistDialogOpen] = useState(false)
+  const [issueDialogOpen, setIssueDialogOpen] = useState(false)
+  const [activityLogDialogOpen, setActivityLogDialogOpen] = useState(false)
 
   const [editingDeal, setEditingDeal] = useState<PartnerDeal | null>(null)
   const [editingDocument, setEditingDocument] = useState<PartnerDocument | null>(null)
   const [editingSchedule, setEditingSchedule] = useState<PartnerScheduleItem | null>(null)
   const [editingSales, setEditingSales] = useState<PartnerSalesRecord | null>(null)
+  const [editingChecklist, setEditingChecklist] = useState<PartnerOpsChecklistItem | null>(null)
+  const [editingIssue, setEditingIssue] = useState<PartnerOpsIssue | null>(null)
+  const [editingActivityLog, setEditingActivityLog] = useState<PartnerActivityLog | null>(null)
 
-  const totalNetSales = workspace.sales.reduce((sum, sale) => sum + sale.netAmount, 0)
-  const totalUnits = workspace.sales.reduce((sum, sale) => sum + sale.unitsSold, 0)
-  const pendingDocuments = workspace.documents.filter((document) =>
-    ["draft", "sent", "overdue"].includes(document.status)
-  )
+  const requestedTab = searchParams.get("tab")
+  const activeTab: PartnerWorkspaceTab = isWorkspaceTab(requestedTab) ? requestedTab : "overview"
 
   const applyResult = (data: { workspace: PartnerWorkspace; source: PartnerDataSource; warning?: string }) => {
     setWorkspace(data.workspace)
     setSource(data.source)
     setWarning(data.warning)
     setErrorMessage(null)
+  }
+
+  const handleTabChange = (tab: PartnerWorkspaceTab) => {
+    const nextParams = new URLSearchParams(searchParams.toString())
+    if (tab === "overview") nextParams.delete("tab")
+    else nextParams.set("tab", tab)
+    const query = nextParams.toString()
+    router.replace(query ? `${pathname}?${query}` : pathname, { scroll: false })
   }
 
   const savePartner = async (payload: PartnerSummaryInput) => {
@@ -809,474 +1360,127 @@ export default function PartnerWorkspaceDetailClient({
     }
   }
 
+  const saveChecklist = async (payload: PartnerChecklistInput) => {
+    setSavingKind("checklist")
+    setErrorMessage(null)
+    try {
+      const data = await adminFetch(`/api/admin/partners/${workspace.partner.id}/checklists`, {
+        method: "POST",
+        body: JSON.stringify(payload),
+      })
+      if (data?.workspace) applyResult(data)
+      setChecklistDialogOpen(false)
+      setEditingChecklist(null)
+    } catch (error) {
+      setErrorMessage(error instanceof Error ? error.message : "이행 체크 저장에 실패했습니다.")
+    } finally {
+      setSavingKind(null)
+    }
+  }
+
+  const saveIssue = async (payload: PartnerIssueInput) => {
+    setSavingKind("issue")
+    setErrorMessage(null)
+    try {
+      const data = await adminFetch(`/api/admin/partners/${workspace.partner.id}/issues`, {
+        method: "POST",
+        body: JSON.stringify(payload),
+      })
+      if (data?.workspace) applyResult(data)
+      setIssueDialogOpen(false)
+      setEditingIssue(null)
+    } catch (error) {
+      setErrorMessage(error instanceof Error ? error.message : "이슈 저장에 실패했습니다.")
+    } finally {
+      setSavingKind(null)
+    }
+  }
+
+  const saveActivityLog = async (payload: PartnerActivityLogInput) => {
+    setSavingKind("activity-log")
+    setErrorMessage(null)
+    try {
+      const data = await adminFetch(`/api/admin/partners/${workspace.partner.id}/activity-logs`, {
+        method: "POST",
+        body: JSON.stringify(payload),
+      })
+      if (data?.workspace) applyResult(data)
+      setActivityLogDialogOpen(false)
+      setEditingActivityLog(null)
+    } catch (error) {
+      setErrorMessage(error instanceof Error ? error.message : "운영 로그 저장에 실패했습니다.")
+    } finally {
+      setSavingKind(null)
+    }
+  }
+
   return (
-    <div className="px-8 pt-10 pb-20">
-      <div className="mb-8">
-        <Link
-          href="/admin/partners"
-          className="mb-4 inline-flex items-center gap-1.5 text-[12px] font-medium text-[#1a1a1a]/45 transition-colors hover:text-[#111110]"
-        >
-          <ArrowLeft className="h-3.5 w-3.5" />
-          파트너 운영으로 돌아가기
-        </Link>
-
-        <div className="flex flex-wrap items-start justify-between gap-4">
-          <div>
-            <p className="text-[11px] font-medium text-[#1a1a1a]/30 uppercase tracking-widest mb-1">Partner Workspace</p>
-            <div className="flex flex-wrap items-center gap-2">
-              <h1 className="text-2xl font-bold tracking-[-0.02em] text-[#111110]">{workspace.partner.name}</h1>
-              <Badge variant="outline" className="border-[#e8e8e4] bg-white text-[#1a1a1a]/60">
-                {workspace.partner.region}
-              </Badge>
-              <Badge variant="outline" className="border-[#e8e8e4] bg-white text-[#1a1a1a]/60">
-                {workspace.partner.channel}
-              </Badge>
-            </div>
-            <p className="mt-2 max-w-3xl text-[13px] leading-6 text-[#1a1a1a]/55">
-              담당 {workspace.partner.accountManager} · 대표 연락처 {workspace.partner.ownerName} ({workspace.partner.ownerEmail}) · 다음 액션{" "}
-              {formatDateTimeDisplay(workspace.partner.nextActionAt)}
-            </p>
-          </div>
-
-          <div className="flex flex-col items-end gap-3">
-            <div className="rounded-2xl border border-[#e8e8e4] bg-white px-4 py-3 text-[12px] text-[#1a1a1a]/55">
-              <strong className="block text-[#111110]">운영 메모</strong>
-              <span className="mt-1 block">{workspace.partner.notes ?? "메모 없음"}</span>
-            </div>
-            <Button variant="outline" size="sm" className="gap-1.5" onClick={() => setPartnerDialogOpen(true)}>
-              <Pencil className="h-3.5 w-3.5" />
-              파트너 정보 수정
-            </Button>
-          </div>
-        </div>
-      </div>
-
-      {warning && (
-        <div className="mb-6 rounded-2xl border border-[#f1dfb1] bg-[#fff9eb] px-5 py-4 text-[12px] leading-5 text-[#7b5b14]">
-          <strong className="mr-2">데이터 소스:</strong>
-          {source === "supabase" ? "Supabase" : "Local"}
-          <span className="ml-2">{warning}</span>
-        </div>
-      )}
-
-      {errorMessage && (
-        <div className="mb-6 rounded-2xl border border-red-200 bg-red-50 px-5 py-4 text-[12px] leading-5 text-red-700">
-          <strong className="mr-2">저장 오류:</strong>
-          <span>{errorMessage}</span>
-        </div>
-      )}
-
-      <div className="mb-8 grid grid-cols-2 gap-4 md:grid-cols-4">
-        {[
-          {
-            label: "진행 거래",
-            value: workspace.deals.length,
-            sub: workspace.deals[0]?.title ?? "거래 없음",
-            icon: <Handshake className="h-4 w-4 text-blue-600" />,
-            accent: "bg-blue-50",
-          },
-          {
-            label: "확인 문서",
-            value: pendingDocuments.length,
-            sub: "견적/계약/영수증",
-            icon: <Receipt className="h-4 w-4 text-amber-600" />,
-            accent: "bg-amber-50",
-          },
-          {
-            label: "누적 판매 댓수",
-            value: totalUnits,
-            sub: "집계 기준 판매 실적",
-            icon: <TrendingUp className="h-4 w-4 text-emerald-600" />,
-            accent: "bg-emerald-50",
-          },
-          {
-            label: "누적 순매출",
-            value: formatCurrency(totalNetSales),
-            sub: "샘플 집계",
-            icon: <FileText className="h-4 w-4 text-[#111110]" />,
-            accent: "bg-[#f0f0ec]",
-          },
-        ].map((card) => (
-          <div key={card.label} className="rounded-2xl border border-[#e8e8e4] bg-white p-5">
-            <div className={`mb-3 inline-flex rounded-xl p-2 ${card.accent}`}>{card.icon}</div>
-            <p className="text-[11px] font-medium uppercase tracking-wide text-[#1a1a1a]/35">{card.label}</p>
-            <p className="mt-1 text-[24px] font-bold leading-none tracking-[-0.03em] text-[#111110]">{card.value}</p>
-            <p className="mt-1.5 text-[11px] text-[#1a1a1a]/35">{card.sub}</p>
-          </div>
-        ))}
-      </div>
-
-      <Tabs defaultValue="overview">
-        <TabsList className="mb-6 h-auto w-full flex-wrap justify-start rounded-2xl border border-[#e8e8e4] bg-white p-1">
-          <TabsTrigger value="overview" className="rounded-xl px-4 py-2 text-[13px]">개요</TabsTrigger>
-          <TabsTrigger value="deals" className="rounded-xl px-4 py-2 text-[13px]">거래</TabsTrigger>
-          <TabsTrigger value="schedule" className="rounded-xl px-4 py-2 text-[13px]">일정</TabsTrigger>
-          <TabsTrigger value="documents" className="rounded-xl px-4 py-2 text-[13px]">정산/문서</TabsTrigger>
-          <TabsTrigger value="sales" className="rounded-xl px-4 py-2 text-[13px]">실적</TabsTrigger>
-          <TabsTrigger value="automations" className="rounded-xl px-4 py-2 text-[13px]">자동화</TabsTrigger>
-        </TabsList>
-
-        <TabsContent value="overview">
-          <div className="grid gap-6 lg:grid-cols-[1.15fr_0.85fr]">
-            <div className="rounded-2xl border border-[#e8e8e4] bg-white p-6">
-              <h2 className="text-[14px] font-semibold text-[#111110]">운영 상태 요약</h2>
-              <div className="mt-4 grid gap-3 md:grid-cols-2">
-                <div className="rounded-2xl bg-[#fafaf8] p-4">
-                  <p className="text-[12px] font-medium text-[#111110]">거래 흐름</p>
-                  <p className="mt-1 text-[12px] leading-5 text-[#1a1a1a]/50">
-                    견적과 계약은 거래 단위로 묶고, 판매 댓수와 정산 문서를 각 거래에 연결합니다.
-                  </p>
-                </div>
-                <div className="rounded-2xl bg-[#fafaf8] p-4">
-                  <p className="text-[12px] font-medium text-[#111110]">일정 흐름</p>
-                  <p className="mt-1 text-[12px] leading-5 text-[#1a1a1a]/50">
-                    후속 연락과 마감은 파트너 상세에서 관리하고, 필요하면 전역 캘린더로 동기화합니다.
-                  </p>
-                </div>
-                <div className="rounded-2xl bg-[#fafaf8] p-4">
-                  <p className="text-[12px] font-medium text-[#111110]">정산 흐름</p>
-                  <p className="mt-1 text-[12px] leading-5 text-[#1a1a1a]/50">
-                    영수증은 계약과 분리된 정산 상태로 두어 연체와 누락을 별도로 추적합니다.
-                  </p>
-                </div>
-                <div className="rounded-2xl bg-[#fafaf8] p-4">
-                  <p className="text-[12px] font-medium text-[#111110]">자동화 흐름</p>
-                  <p className="mt-1 text-[12px] leading-5 text-[#1a1a1a]/50">
-                    견적 만료, 영수증 연체, 월말 판매 집계를 이벤트 기반으로 자동화합니다.
-                  </p>
-                </div>
-              </div>
-            </div>
-
-            <div className="rounded-2xl border border-[#e8e8e4] bg-white p-6">
-              <h2 className="text-[14px] font-semibold text-[#111110]">즉시 확인할 항목</h2>
-              <ul className="mt-4 space-y-3 text-[12px] leading-5 text-[#1a1a1a]/55">
-                {workspace.schedule.slice(0, 3).map((item) => (
-                  <li key={item.id} className="rounded-2xl bg-[#fafaf8] px-4 py-3">
-                    <strong className="block text-[#111110]">{item.title}</strong>
-                    <span>{formatDateTimeDisplay(item.startsAt)} · {item.owner}</span>
-                  </li>
-                ))}
-                {pendingDocuments.slice(0, 2).map((document) => (
-                  <li key={document.id} className="rounded-2xl bg-[#fafaf8] px-4 py-3">
-                    <strong className="block text-[#111110]">{document.title}</strong>
-                    <span>{DOCUMENT_KIND_LABEL[document.kind]} · {DOCUMENT_STATUS_LABEL[document.status]}</span>
-                  </li>
-                ))}
-                {workspace.schedule.length === 0 && pendingDocuments.length === 0 && (
-                  <li className="rounded-2xl bg-[#fafaf8] px-4 py-6 text-center text-[#1a1a1a]/45">
-                    아직 바로 확인할 일정이나 문서 이슈가 없습니다.
-                  </li>
-                )}
-              </ul>
-            </div>
-          </div>
-        </TabsContent>
-
-        <TabsContent value="deals">
-          <SectionHeader
-            title="거래 관리"
-            description="견적, 계약, 판매 댓수의 기준이 되는 거래를 등록하고 수정합니다."
-            action={
-              <Button
-                size="sm"
-                className="gap-1.5"
-                onClick={() => {
-                  setEditingDeal(null)
-                  setDealDialogOpen(true)
-                }}
-              >
-                <Plus className="h-3.5 w-3.5" />
-                거래 추가
-              </Button>
-            }
-          />
-          <div className="space-y-4">
-            {workspace.deals.length === 0 ? (
-              <div className="rounded-2xl border border-dashed border-[#d9d9d3] bg-white px-6 py-12 text-center">
-                <p className="text-[14px] font-semibold text-[#111110]">등록된 거래가 없습니다.</p>
-                <p className="mt-2 text-[12px] leading-5 text-[#1a1a1a]/45">
-                  견적이나 계약이 시작되면 거래부터 만들어두는 편이 가장 관리하기 쉽습니다.
-                </p>
-              </div>
-            ) : (
-              workspace.deals.map((deal) => (
-                <div key={deal.id} className="rounded-2xl border border-[#e8e8e4] bg-white p-6">
-                  <div className="flex flex-wrap items-start justify-between gap-3">
-                    <div>
-                      <div className="flex items-center gap-2">
-                        <h2 className="text-[15px] font-semibold text-[#111110]">{deal.title}</h2>
-                        <Badge variant="outline" className="border-[#e8e8e4] bg-[#fafaf8] text-[#1a1a1a]/55">
-                          {DEAL_STAGE_LABEL[deal.stage]}
-                        </Badge>
-                      </div>
-                      <p className="mt-2 text-[12px] text-[#1a1a1a]/50">
-                        담당 {deal.manager} · 예상 마감 {deal.expectedCloseAt ?? "미정"} · 판매 댓수 {deal.salesUnits}대
-                      </p>
-                    </div>
-                    <div className="flex items-center gap-2">
-                      <div className="rounded-2xl bg-[#fafaf8] px-4 py-3 text-right">
-                        <span className="block text-[11px] text-[#1a1a1a]/35">거래 금액</span>
-                        <strong className="text-[16px] text-[#111110]">{formatCurrency(deal.quoteAmount)}</strong>
-                      </div>
-                      <Button
-                        variant="outline"
-                        size="sm"
-                        className="gap-1.5"
-                        onClick={() => {
-                          setEditingDeal(deal)
-                          setDealDialogOpen(true)
-                        }}
-                      >
-                        <Pencil className="h-3.5 w-3.5" />
-                        수정
-                      </Button>
-                    </div>
-                  </div>
-                </div>
-              ))
-            )}
-          </div>
-        </TabsContent>
-
-        <TabsContent value="schedule">
-          <SectionHeader
-            title="일정 관리"
-            description="후속 연락, 마감, 미팅을 파트너 문맥으로 등록합니다."
-            action={
-              <Button
-                size="sm"
-                className="gap-1.5"
-                onClick={() => {
-                  setEditingSchedule(null)
-                  setScheduleDialogOpen(true)
-                }}
-              >
-                <Plus className="h-3.5 w-3.5" />
-                일정 추가
-              </Button>
-            }
-          />
-          <div className="overflow-hidden rounded-2xl border border-[#e8e8e4] bg-white">
-            <div className="flex items-center gap-2 border-b border-[#e8e8e4] px-6 py-4">
-              <CalendarDays className="h-4 w-4 text-[#1a1a1a]/40" />
-              <h2 className="text-[14px] font-semibold text-[#111110]">파트너 일정 타임라인</h2>
-            </div>
-            <div className="divide-y divide-[#e8e8e4]">
-              {workspace.schedule.length === 0 ? (
-                <div className="px-6 py-10 text-center text-[13px] text-[#1a1a1a]/35">
-                  등록된 일정이 없습니다. 후속 연락이나 마감 일정을 먼저 넣어두면 운영 흐름이 훨씬 안정적입니다.
-                </div>
-              ) : (
-                workspace.schedule.map((item) => (
-                  <div key={item.id} className="flex items-start justify-between gap-3 px-6 py-4">
-                    <div>
-                      <div className="flex flex-wrap items-center gap-2">
-                        <Badge variant="outline" className="border-[#e8e8e4] bg-[#fafaf8] text-[#1a1a1a]/55">
-                          {SCHEDULE_KIND_LABEL[item.kind]}
-                        </Badge>
-                        <h3 className="text-[13px] font-semibold text-[#111110]">{item.title}</h3>
-                      </div>
-                      <p className="mt-1 text-[12px] text-[#1a1a1a]/50">
-                        {formatDateTimeDisplay(item.startsAt)}
-                        {item.endsAt ? ` - ${formatDateTimeDisplay(item.endsAt)}` : ""} · 담당 {item.owner} · 상태 {SCHEDULE_STATUS_LABEL[item.status]}
-                      </p>
-                    </div>
-                    <Button
-                      variant="outline"
-                      size="sm"
-                      className="gap-1.5"
-                      onClick={() => {
-                        setEditingSchedule(item)
-                        setScheduleDialogOpen(true)
-                      }}
-                    >
-                      <Pencil className="h-3.5 w-3.5" />
-                      수정
-                    </Button>
-                  </div>
-                ))
-              )}
-            </div>
-          </div>
-        </TabsContent>
-
-        <TabsContent value="documents">
-          <SectionHeader
-            title="정산/문서 관리"
-            description="견적서, 계약서, 영수증을 거래와 연결해 관리합니다."
-            action={
-              <Button
-                size="sm"
-                className="gap-1.5"
-                onClick={() => {
-                  setEditingDocument(null)
-                  setDocumentDialogOpen(true)
-                }}
-              >
-                <Plus className="h-3.5 w-3.5" />
-                문서 추가
-              </Button>
-            }
-          />
-          <div className="space-y-4">
-            {workspace.documents.length === 0 ? (
-              <div className="rounded-2xl border border-dashed border-[#d9d9d3] bg-white px-6 py-12 text-center">
-                <p className="text-[14px] font-semibold text-[#111110]">등록된 문서가 없습니다.</p>
-                <p className="mt-2 text-[12px] leading-5 text-[#1a1a1a]/45">
-                  견적서, 계약서, 영수증을 거래와 연결해두면 정산 누락을 줄일 수 있습니다.
-                </p>
-              </div>
-            ) : (
-              workspace.documents.map((document) => (
-                <div key={document.id} className="rounded-2xl border border-[#e8e8e4] bg-white p-6">
-                  <div className="flex flex-wrap items-start justify-between gap-3">
-                    <div>
-                      <div className="flex items-center gap-2">
-                        <h2 className="text-[14px] font-semibold text-[#111110]">{document.title}</h2>
-                        <Badge variant="outline" className="border-[#e8e8e4] bg-[#fafaf8] text-[#1a1a1a]/55">
-                          {DOCUMENT_KIND_LABEL[document.kind]}
-                        </Badge>
-                        <Badge variant="outline" className="border-[#e8e8e4] bg-[#fafaf8] text-[#1a1a1a]/55">
-                          {DOCUMENT_STATUS_LABEL[document.status]}
-                        </Badge>
-                      </div>
-                      <p className="mt-2 text-[12px] text-[#1a1a1a]/50">
-                        발행 {document.issuedAt ?? "미정"} · 마감 {document.dueAt ?? "미정"} · 파일 {document.fileLabel}
-                      </p>
-                    </div>
-                    <div className="flex items-center gap-2">
-                      {document.amount != null && (
-                        <div className="rounded-2xl bg-[#fafaf8] px-4 py-3 text-right text-[12px]">
-                          <span className="block text-[#1a1a1a]/35">금액</span>
-                          <strong className="text-[15px] text-[#111110]">{formatCurrency(document.amount)}</strong>
-                        </div>
-                      )}
-                      <Button
-                        variant="outline"
-                        size="sm"
-                        className="gap-1.5"
-                        onClick={() => {
-                          setEditingDocument(document)
-                          setDocumentDialogOpen(true)
-                        }}
-                      >
-                        <Pencil className="h-3.5 w-3.5" />
-                        수정
-                      </Button>
-                    </div>
-                  </div>
-                </div>
-              ))
-            )}
-          </div>
-        </TabsContent>
-
-        <TabsContent value="sales">
-          <SectionHeader
-            title="판매 실적"
-            description="월별 판매 댓수와 금액을 기록합니다."
-            action={
-              <Button
-                size="sm"
-                className="gap-1.5"
-                onClick={() => {
-                  setEditingSales(null)
-                  setSalesDialogOpen(true)
-                }}
-              >
-                <Plus className="h-3.5 w-3.5" />
-                실적 추가
-              </Button>
-            }
-          />
-          <div className="overflow-hidden rounded-2xl border border-[#e8e8e4] bg-white">
-            <div className="flex items-center gap-2 border-b border-[#e8e8e4] px-6 py-4">
-              <TrendingUp className="h-4 w-4 text-[#1a1a1a]/40" />
-              <h2 className="text-[14px] font-semibold text-[#111110]">월별 판매 집계</h2>
-            </div>
-            <div className="divide-y divide-[#e8e8e4]">
-              {workspace.sales.length === 0 ? (
-                <div className="px-6 py-10 text-center text-[13px] text-[#1a1a1a]/35">
-                  아직 누적된 판매 기록이 없습니다.
-                </div>
-              ) : (
-                workspace.sales.map((sale) => (
-                  <div key={sale.id} className="grid grid-cols-[1fr_auto] gap-4 px-6 py-4">
-                    <div className="grid grid-cols-2 gap-3 text-[12px] md:grid-cols-4">
-                      <div>
-                        <span className="block text-[#1a1a1a]/35">월</span>
-                        <strong className="text-[#111110]">{sale.salesMonth.slice(0, 7)}</strong>
-                      </div>
-                      <div>
-                        <span className="block text-[#1a1a1a]/35">판매 댓수</span>
-                        <strong className="text-[#111110]">{sale.unitsSold}대</strong>
-                      </div>
-                      <div>
-                        <span className="block text-[#1a1a1a]/35">총액</span>
-                        <strong className="text-[#111110]">{formatCurrency(sale.grossAmount)}</strong>
-                      </div>
-                      <div>
-                        <span className="block text-[#1a1a1a]/35">순매출</span>
-                        <strong className="text-[#111110]">{formatCurrency(sale.netAmount)}</strong>
-                      </div>
-                    </div>
-                    <Button
-                      variant="outline"
-                      size="sm"
-                      className="gap-1.5 self-start"
-                      onClick={() => {
-                        setEditingSales(sale)
-                        setSalesDialogOpen(true)
-                      }}
-                    >
-                      <Pencil className="h-3.5 w-3.5" />
-                      수정
-                    </Button>
-                  </div>
-                ))
-              )}
-            </div>
-          </div>
-        </TabsContent>
-
-        <TabsContent value="automations">
-          <div className="space-y-4">
-            {workspace.automations.length === 0 ? (
-              <div className="rounded-2xl border border-dashed border-[#d9d9d3] bg-white px-6 py-12 text-center">
-                <p className="text-[14px] font-semibold text-[#111110]">설정된 자동화가 없습니다.</p>
-                <p className="mt-2 text-[12px] leading-5 text-[#1a1a1a]/45">
-                  견적 만료, 연체 영수증, 월말 판매 집계부터 자동화하면 운영 부담을 크게 줄일 수 있습니다.
-                </p>
-              </div>
-            ) : (
-              workspace.automations.map((automation) => (
-                <div key={automation.id} className="rounded-2xl border border-[#e8e8e4] bg-white p-6">
-                  <div className="flex flex-wrap items-start justify-between gap-3">
-                    <div>
-                      <div className="flex items-center gap-2">
-                        <Zap className="h-4 w-4 text-[#111110]/55" />
-                        <h2 className="text-[14px] font-semibold text-[#111110]">{automation.name}</h2>
-                      </div>
-                      <p className="mt-2 text-[12px] text-[#1a1a1a]/50">
-                        Trigger: {automation.trigger} · Action: {automation.action}
-                      </p>
-                      <p className="mt-1 text-[12px] text-[#1a1a1a]/50">
-                        Destination: {automation.destination}
-                      </p>
-                    </div>
-                    <div className="rounded-2xl bg-[#fafaf8] px-4 py-3 text-[12px] text-[#1a1a1a]/55">
-                      <strong className="block text-[#111110]">{AUTOMATION_STATUS_LABEL[automation.status]}</strong>
-                      <span className="mt-1 block">최근 실행 {automation.lastRunAt ? formatDateTimeDisplay(automation.lastRunAt) : "없음"}</span>
-                      <span className="block">다음 실행 {formatDateTimeDisplay(automation.nextRunAt)}</span>
-                    </div>
-                  </div>
-                </div>
-              ))
-            )}
-          </div>
-        </TabsContent>
-      </Tabs>
+    <>
+      <PartnerWorkspaceShell
+        workspace={workspace}
+        source={source}
+        warning={warning}
+        errorMessage={errorMessage}
+        activeTab={activeTab}
+        onTabChange={handleTabChange}
+        onEditPartner={() => setPartnerDialogOpen(true)}
+        onCreateDeal={() => {
+          setEditingDeal(null)
+          setDealDialogOpen(true)
+        }}
+        onEditDeal={(deal) => {
+          setEditingDeal(deal)
+          setDealDialogOpen(true)
+        }}
+        onCreateSchedule={() => {
+          setEditingSchedule(null)
+          setScheduleDialogOpen(true)
+        }}
+        onEditSchedule={(item) => {
+          setEditingSchedule(item)
+          setScheduleDialogOpen(true)
+        }}
+        onCreateChecklist={() => {
+          setEditingChecklist(null)
+          setChecklistDialogOpen(true)
+        }}
+        onEditChecklist={(item) => {
+          setEditingChecklist(item)
+          setChecklistDialogOpen(true)
+        }}
+        onCreateDocument={() => {
+          setEditingDocument(null)
+          setDocumentDialogOpen(true)
+        }}
+        onEditDocument={(document) => {
+          setEditingDocument(document)
+          setDocumentDialogOpen(true)
+        }}
+        onCreateSales={() => {
+          setEditingSales(null)
+          setSalesDialogOpen(true)
+        }}
+        onEditSales={(sale) => {
+          setEditingSales(sale)
+          setSalesDialogOpen(true)
+        }}
+        onCreateIssue={() => {
+          setEditingIssue(null)
+          setIssueDialogOpen(true)
+        }}
+        onEditIssue={(issue) => {
+          setEditingIssue(issue)
+          setIssueDialogOpen(true)
+        }}
+        onCreateActivityLog={() => {
+          setEditingActivityLog(null)
+          setActivityLogDialogOpen(true)
+        }}
+        onEditActivityLog={(log) => {
+          setEditingActivityLog(log)
+          setActivityLogDialogOpen(true)
+        }}
+      />
 
       <PartnerFormDialog
         key={`${partnerDialogOpen ? "open" : "closed"}-${workspace.partner.id}`}
@@ -1345,6 +1549,57 @@ export default function PartnerWorkspaceDetailClient({
         }}
         onSave={saveSales}
       />
-    </div>
+
+      <ChecklistFormDialog
+        key={`${checklistDialogOpen ? "open" : "closed"}-${editingChecklist?.id ?? "new"}`}
+        open={checklistDialogOpen}
+        deals={workspace.deals}
+        initialChecklist={editingChecklist}
+        loading={savingKind === "checklist"}
+        onClose={() => {
+          if (!savingKind) {
+            setChecklistDialogOpen(false)
+            setEditingChecklist(null)
+          }
+        }}
+        onSave={saveChecklist}
+      />
+
+      <IssueFormDialog
+        key={`${issueDialogOpen ? "open" : "closed"}-${editingIssue?.id ?? "new"}`}
+        open={issueDialogOpen}
+        deals={workspace.deals}
+        documents={workspace.documents}
+        checklists={workspace.checklists}
+        initialIssue={editingIssue}
+        loading={savingKind === "issue"}
+        onClose={() => {
+          if (!savingKind) {
+            setIssueDialogOpen(false)
+            setEditingIssue(null)
+          }
+        }}
+        onSave={saveIssue}
+      />
+
+      <ActivityLogFormDialog
+        key={`${activityLogDialogOpen ? "open" : "closed"}-${editingActivityLog?.id ?? "new"}`}
+        open={activityLogDialogOpen}
+        deals={workspace.deals}
+        documents={workspace.documents}
+        schedule={workspace.schedule}
+        checklists={workspace.checklists}
+        issues={workspace.issues}
+        initialLog={editingActivityLog}
+        loading={savingKind === "activity-log"}
+        onClose={() => {
+          if (!savingKind) {
+            setActivityLogDialogOpen(false)
+            setEditingActivityLog(null)
+          }
+        }}
+        onSave={saveActivityLog}
+      />
+    </>
   )
 }

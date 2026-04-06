@@ -77,7 +77,7 @@ export default function AdminBlogPage() {
 
     const handleCreate = () => {
         setEditingPost(undefined)
-        setIsFormOpen(true)
+        router.push("/admin/blog/new")
     }
 
     const handleEdit = (post: BlogPost) => {
@@ -182,25 +182,28 @@ export default function AdminBlogPage() {
     ]
 
     return (
-        <div className="px-8 pt-12 pb-20">
+        <div className="px-4 pt-8 pb-16 sm:px-6 sm:pt-10 sm:pb-20 lg:px-8">
             {/* Header */}
-            <div className="flex items-center justify-between mb-8">
+            <div className="mb-6 flex flex-col gap-4 lg:mb-8 lg:flex-row lg:items-start lg:justify-between">
                 <div>
-                    <div className="flex items-center gap-3 mb-1">
+                    <div className="mb-1 flex flex-wrap items-center gap-3">
                         <p className="text-[11px] font-medium text-[#1a1a1a]/30 uppercase tracking-widest">Admin</p>
-                        <a href="/admin/marketing" className="text-[11px] text-[#084734] hover:underline">
+                        <a href="/admin/campaigns" className="text-[11px] text-[#084734] hover:underline">
                             마케팅 관리 →
                         </a>
                     </div>
                     <h1 className="text-2xl font-bold text-[#111110] tracking-[-0.02em]">콘텐츠 관리</h1>
+                    <p className="mt-2 max-w-2xl text-[13px] leading-relaxed text-[#1a1a1a]/45">
+                        새 글 작성은 전체 에디터로 연결되며, 에디터 안에서 임시저장 자동 복원과 이어쓰기 기능을 사용할 수 있습니다.
+                    </p>
                 </div>
-                <div className="flex items-center gap-2">
-                    <Button variant="outline" size="sm" onClick={fetchPosts} disabled={loading}>
+                <div className="flex flex-col gap-2 sm:flex-row sm:flex-wrap sm:items-center">
+                    <Button variant="outline" size="sm" onClick={fetchPosts} disabled={loading} className="w-full sm:w-auto">
                         <RefreshCw className={`w-4 h-4 mr-1.5 ${loading ? "animate-spin" : ""}`} />
                         새로고침
                     </Button>
                     {tab !== "trash" && (
-                        <Button size="sm" onClick={handleCreate}>
+                        <Button size="sm" onClick={handleCreate} className="w-full sm:w-auto">
                             <Plus className="w-4 h-4 mr-1.5" />
                             새 글 작성
                         </Button>
@@ -208,13 +211,27 @@ export default function AdminBlogPage() {
                 </div>
             </div>
 
+            <div className="mb-4 rounded-2xl border border-[#e8e8e4] bg-white px-4 py-4">
+                <div className="flex flex-col gap-3 md:flex-row md:items-center md:justify-between">
+                    <div>
+                        <p className="text-[12px] font-semibold text-[#111110]">에디터 사용 흐름</p>
+                        <p className="mt-1 text-[12px] leading-relaxed text-[#1a1a1a]/42">
+                            목록에서는 상태를 보고, 실제 작성과 임시저장 복원은 전용 에디터에서 이어갑니다.
+                        </p>
+                    </div>
+                    <Button size="sm" variant="outline" onClick={() => router.push("/admin/blog/new")} className="w-full md:w-auto">
+                        에디터 바로 열기
+                    </Button>
+                </div>
+            </div>
+
             {/* Tabs */}
-            <div className="flex items-center gap-1 mb-4">
+            <div className="-mx-1 mb-4 flex flex-nowrap items-center gap-1.5 overflow-x-auto px-1 pb-1">
                 {TABS.map(({ key, label, count }) => (
                     <button
                         key={key}
                         onClick={() => setTab(key)}
-                        className={`px-3 py-1.5 rounded-lg text-[13px] font-medium transition-colors flex items-center gap-1.5 ${
+                        className={`shrink-0 px-3 py-1.5 rounded-lg text-[13px] font-medium transition-colors flex items-center gap-1.5 whitespace-nowrap ${
                             tab === key
                                 ? "bg-[#111110] text-white"
                                 : "text-[#1a1a1a]/50 hover:text-[#1a1a1a] hover:bg-[#f0f0ec]"
@@ -239,7 +256,7 @@ export default function AdminBlogPage() {
 
             {/* Trash warning banner */}
             {tab === "trash" && trashedPosts.length > 0 && (
-                <div className="flex items-center gap-2 mb-4 px-3 py-2 bg-red-50 border border-red-100 rounded-lg text-[13px] text-red-600">
+                <div className="mb-4 flex items-start gap-2 rounded-lg border border-red-100 bg-red-50 px-3 py-2 text-[13px] text-red-600">
                     <AlertTriangle className="w-4 h-4 shrink-0" />
                     휴지통의 글은 복원하거나 완전히 삭제할 수 있습니다. 완전 삭제는 되돌릴 수 없습니다.
                 </div>
@@ -291,7 +308,7 @@ export default function AdminBlogPage() {
             {/* Permanent delete confirm */}
             {permanentTarget && (
                 <div className="fixed inset-0 z-50 flex items-center justify-center bg-black/40 backdrop-blur-sm">
-                    <div className="bg-white rounded-2xl p-6 w-full max-w-sm shadow-xl">
+                    <div className="mx-4 w-full max-w-sm rounded-2xl bg-white p-6 shadow-xl">
                         <div className="flex items-center gap-3 mb-3">
                             <div className="w-10 h-10 rounded-full bg-red-100 flex items-center justify-center">
                                 <AlertTriangle className="w-5 h-5 text-red-500" />
