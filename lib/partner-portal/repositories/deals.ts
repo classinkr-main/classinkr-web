@@ -2,6 +2,12 @@
 
 import { createSupabaseAdminClient } from "@/lib/supabase/admin";
 import type {
+  InsertDeal,
+  UpdateDeal,
+  InsertDealLineItem,
+  UpdateDealLineItem,
+} from "@/lib/supabase/database.types.v2";
+import type {
   ActivityLog,
   CalendarEvent,
   ContractDocument,
@@ -357,4 +363,97 @@ export async function getDealDetailForPartnerAccount(
   if (!detail) return null;
   if (detail.deal.partner_account_id !== partnerAccountId) return null;
   return detail;
+}
+
+/* ─── Write Operations ──────────────────────────────────── */
+
+/** deal_code 자동 생성: D-YYYY-NNN */
+async function generateDealCode(): Promise<string> {
+  const supabase = createSupabaseAdminClient();
+  const year = new Date().getFullYear();
+  const prefix = `D-${year}-`;
+
+  const { count } = await supabase
+    .from("deals")
+    .select("*", { count: "exact", head: true })
+    .like("deal_code", `${prefix}%`);
+
+  const seq = String((count ?? 0) + 1).padStart(3, "0");
+  return `${prefix}${seq}`;
+}
+
+export async function createDeal(
+  input: Omit<InsertDeal, "deal_code">
+): Promise<Deal> {
+  const supabase = createSupabaseAdminClient();
+  const dealCode = await generateDealCode();
+
+  const { data, error } = await supabase
+    .from("deals")
+    .insert({ ...input, deal_code: dealCode })
+    .select()
+    .single();
+
+  if (error) throw error;
+  return data as Deal;
+}
+
+export async function updateDeal(
+  dealId: string,
+  input: UpdateDeal
+): Promise<Deal> {
+  const supabase = createSupabaseAdminClient();
+
+  const { data, error } = await supabase
+    .from("deals")
+    .update(input)
+    .eq("id", dealId)
+    .select()
+    .single();
+
+  if (error) throw error;
+  return data as Deal;
+}
+
+export async function createDealLineItem(
+  input: InsertDealLineItem
+): Promise<DealLineItem> {
+  const supabase = createSupabaseAdminClient();
+
+  const { data, error } = await supabase
+    .from("deal_line_items")
+    .insert(input)
+    .select()
+    .single();
+
+  if (error) throw error;
+  return data as DealLineItem;
+}
+
+export async function updateDealLineItem(
+  id: string,
+  input: UpdateDealLineItem
+): Promise<DealLineItem> {
+  const supabase = createSupabaseAdminClient();
+
+  const { data, error } = await supabase
+    .from("deal_line_items")
+    .update(input)
+    .eq("id", id)
+    .select()
+    .single();
+
+  if (error) throw error;
+  return data as DealLineItem;
+}
+
+export async function deleteDealLineItem(id: string): Promise<void> {
+  const supabase = createSupabaseAdminClient();
+
+  const { error } = await supabase
+    .from("deal_line_items")
+    .delete()
+    .eq("id", id);
+
+  if (error) throw error;
 }

@@ -1,6 +1,7 @@
 "server-only";
 
 import { createSupabaseAdminClient } from "@/lib/supabase/admin";
+import type { InsertCustomer, UpdateCustomer } from "@/lib/supabase/database.types.v2";
 import type {
   ActivityLog,
   CalendarEvent,
@@ -193,4 +194,49 @@ export async function getCustomerDetailForPartnerAccount(
   if (!detail) return null;
   if (detail.customer.partner_account_id !== partnerAccountId) return null;
   return detail;
+}
+
+/* ─── Write Operations ──────────────────────────────────── */
+
+export async function createCustomer(
+  input: InsertCustomer
+): Promise<Customer> {
+  const supabase = createSupabaseAdminClient();
+
+  const { data, error } = await supabase
+    .from("customers")
+    .insert(input)
+    .select()
+    .single();
+
+  if (error) throw error;
+  return data as Customer;
+}
+
+export async function updateCustomer(
+  customerId: string,
+  input: UpdateCustomer
+): Promise<Customer> {
+  const supabase = createSupabaseAdminClient();
+
+  const { data, error } = await supabase
+    .from("customers")
+    .update(input)
+    .eq("id", customerId)
+    .select()
+    .single();
+
+  if (error) throw error;
+  return data as Customer;
+}
+
+export async function deleteCustomer(customerId: string): Promise<void> {
+  const supabase = createSupabaseAdminClient();
+
+  const { error } = await supabase
+    .from("customers")
+    .delete()
+    .eq("id", customerId);
+
+  if (error) throw error;
 }
