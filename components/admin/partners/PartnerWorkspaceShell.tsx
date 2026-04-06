@@ -20,6 +20,7 @@ import { Button } from "@/components/ui/button"
 import { Tabs, TabsContent, TabsList, TabsTrigger } from "@/components/ui/tabs"
 import type {
   PartnerActivityLog,
+  PartnerContact,
   PartnerDataSource,
   PartnerDeal,
   PartnerDocument,
@@ -85,6 +86,8 @@ interface PartnerWorkspaceShellProps {
   activeTab: PartnerWorkspaceTab
   onTabChange: (tab: PartnerWorkspaceTab) => void
   onEditPartner: () => void
+  onCreateContact?: () => void
+  onEditContact?: (contact: PartnerContact) => void
   onCreateDeal: () => void
   onEditDeal: (deal: PartnerDeal) => void
   onCreateSchedule: () => void
@@ -123,6 +126,22 @@ const DOCUMENT_STATUS_LABEL = {
   paid: "정산완료",
   overdue: "연체",
   archived: "보관",
+} as const
+
+const DOCUMENT_DELIVERY_CHANNEL_LABEL = {
+  pdf: "PDF",
+  kakao: "카카오",
+  link: "링크",
+} as const
+
+const DOCUMENT_DELIVERY_STATUS_LABEL = {
+  draft: "초안",
+  ready: "준비 완료",
+  sent: "전달됨",
+  opened: "열람됨",
+  expired: "만료",
+  revoked: "회수됨",
+  failed: "실패",
 } as const
 
 const SCHEDULE_KIND_LABEL = {
@@ -204,6 +223,8 @@ export default function PartnerWorkspaceShell({
   activeTab,
   onTabChange,
   onEditPartner,
+  onCreateContact,
+  onEditContact,
   onCreateDeal,
   onEditDeal,
   onCreateSchedule,
@@ -225,12 +246,39 @@ export default function PartnerWorkspaceShell({
   const activityLogs = workspace.activityLogs ?? []
   const totalNetSales = workspace.sales.reduce((sum, sale) => sum + sale.netAmount, 0)
   const totalUnits = workspace.sales.reduce((sum, sale) => sum + sale.unitsSold, 0)
+  const dealTitleById = new Map(workspace.deals.map((deal) => [deal.id, deal.title]))
   const pendingDocuments = workspace.documents.filter((document) =>
     ["draft", "sent", "overdue"].includes(document.status)
   )
+  const documentPriority = {
+    overdue: 0,
+    sent: 1,
+    draft: 2,
+    signed: 3,
+    paid: 4,
+    archived: 5,
+  } as const
+  const prioritizedDocuments = [...workspace.documents].sort((left, right) => {
+    const priorityDelta = documentPriority[left.status] - documentPriority[right.status]
+    if (priorityDelta !== 0) return priorityDelta
+    return (left.dueAt ?? left.issuedAt ?? left.title).localeCompare(right.dueAt ?? right.issuedAt ?? right.title, "ko")
+  })
+  const primaryContact = workspace.contacts.find((contact) => contact.isPrimary) ?? workspace.contacts[0]
+  const secondaryContacts = workspace.contacts.filter((contact) => contact.id !== primaryContact?.id)
+  const overdueDocuments = workspace.documents.filter((document) => document.status === "overdue")
+  const signedDocuments = workspace.documents.filter((document) => ["signed", "paid"].includes(document.status))
   const openIssues = issues.filter((issue) => issue.status !== "resolved")
   const openChecklistItems = checklists.filter((item) => item.todoStatus !== "done" && item.todoStatus !== "canceled")
   const upcomingSchedule = workspace.schedule.filter((item) => item.status === "planned")
+  const handleCreateContact = onCreateContact ?? onEditPartner
+  const handleEditContact = (contact: PartnerContact) => {
+    if (onEditContact) {
+      onEditContact(contact)
+      return
+    }
+
+    onEditPartner()
+  }
 
   return (
     <div className="px-4 pb-20 pt-8 sm:px-6 lg:px-8 lg:pt-10">
@@ -355,9 +403,10 @@ export default function PartnerWorkspaceShell({
 
         <TabsContent value="overview">
           <div className="grid gap-6 xl:grid-cols-[1.15fr_0.85fr]">
-            <SurfaceSection title="오늘의 실행 큐" description="가장 먼저 처리할 일정, 문서, 이슈를 한 곳에 모아 둡니다.">
-              <div className="grid gap-3 md:grid-cols-2">
-                {upcomingSchedule.slice(0, 2).map((item) => (
+            <div className="space-y-6">
+              <SurfaceSection title="오늘의 실행 큐" description="가장 먼저 처리할 일정, 문서, 이슈를 한 곳에 모아 둡니다.">
+                <div className="grid gap-3 md:grid-cols-2">
+                  {upcomingSchedule.slice(0, 2).map((item) => (
                   <div key={item.id} className="rounded-2xl bg-[#fafaf8] p-4">
                     <p className="text-[12px] font-medium text-[#111110]">{item.title}</p>
                     <p className="mt-1 text-[12px] leading-5 text-[#1a1a1a]/50">
@@ -387,7 +436,81 @@ export default function PartnerWorkspaceShell({
                   </div>
                 )}
               </div>
-            </SurfaceSection>
+              </SurfaceSection>
+
+              <SurfaceSection
+                title="연락처 관리"
+                description="대표 연락처와 현장 담당자를 같은 화면에서 확인합니다."
+                action={
+                  <div className="flex flex-wrap gap-2">
+                    <Button size="sm" className="gap-1.5" onClick={handleCreateContact}>
+                      <Plus className="h-3.5 w-3.5" />
+                      연락처 추가
+                    </Button>
+                    <Button variant="outline" size="sm" className="gap-1.5" onClick={onEditPartner}>
+                      <Pencil className="h-3.5 w-3.5" />
+                      기본 정보 수정
+                    </Button>
+                  </div>
+                }
+              >
+                <div className="space-y-3">
+                  {primaryContact ? (
+                    <div className="rounded-2xl border border-[#e8e8e4] bg-[#fafaf8] p-4">
+                      <div className="flex flex-col gap-3 lg:flex-row lg:items-start lg:justify-between">
+                        <div>
+                          <div className="flex flex-wrap items-center gap-2">
+                            <strong className="text-[14px] text-[#111110]">{primaryContact.name}</strong>
+                            <Badge variant="outline" className="border-[#e8e8e4] bg-white text-[#1a1a1a]/55">
+                              대표
+                            </Badge>
+                          </div>
+                          <p className="mt-1 text-[12px] leading-5 text-[#1a1a1a]/50">
+                            {primaryContact.role ?? "직책 미정"} · {primaryContact.email ?? "이메일 미정"} · {primaryContact.phone ?? "연락처 미정"}
+                          </p>
+                        </div>
+                        <Button variant="outline" size="sm" className="gap-1.5 self-start" onClick={() => handleEditContact(primaryContact)}>
+                          <Pencil className="h-3.5 w-3.5" />
+                          수정
+                        </Button>
+                      </div>
+                    </div>
+                  ) : (
+                    <EmptyPanel
+                      title="연락처가 없습니다."
+                      description="대표 연락처를 추가하면 파트너 카드와 문서 운영에서 바로 참조할 수 있습니다."
+                    />
+                  )}
+
+                  {secondaryContacts.length > 0 ? (
+                    <div className="grid gap-3 md:grid-cols-2">
+                      {secondaryContacts.map((contact) => (
+                        <div key={contact.id} className="rounded-2xl bg-[#fafaf8] p-4">
+                          <div className="flex flex-col gap-3 lg:flex-row lg:items-start lg:justify-between">
+                            <div>
+                              <strong className="block text-[13px] text-[#111110]">{contact.name}</strong>
+                              <p className="mt-1 text-[12px] leading-5 text-[#1a1a1a]/50">
+                                {contact.role ?? "직책 미정"} · {contact.email ?? "이메일 미정"}
+                              </p>
+                            </div>
+                            <Button variant="outline" size="sm" className="gap-1.5 self-start" onClick={() => handleEditContact(contact)}>
+                              <Pencil className="h-3.5 w-3.5" />
+                              수정
+                            </Button>
+                          </div>
+                        </div>
+                      ))}
+                    </div>
+                  ) : (
+                    primaryContact && (
+                      <div className="rounded-2xl border border-dashed border-[#d9d9d3] bg-white px-5 py-6 text-center text-[12px] text-[#1a1a1a]/45">
+                        추가 연락처가 없어서 대표 연락처만 보여줍니다.
+                      </div>
+                    )
+                  )}
+                </div>
+              </SurfaceSection>
+            </div>
 
             <SurfaceSection title="최근 맥락" description="왜 지금 이 상태인지 설명해주는 최근 이벤트를 빠르게 봅니다.">
               <ul className="space-y-3 text-[12px] leading-5 text-[#1a1a1a]/55">
@@ -593,7 +716,7 @@ export default function PartnerWorkspaceShell({
         <TabsContent value="documents">
           <SurfaceSection
             title="문서 운영"
-            description="문서 원본과 전달 상태를 한 문맥에서 보도록 구조를 준비합니다."
+            description="문서 원본, 만료 상태, 정산 단계를 한 문맥에서 빠르게 훑습니다."
             action={
               <Button size="sm" className="gap-1.5" onClick={onCreateDocument}>
                 <Plus className="h-3.5 w-3.5" />
@@ -601,46 +724,118 @@ export default function PartnerWorkspaceShell({
               </Button>
             }
           >
-            <div className="space-y-4">
-              {workspace.documents.length === 0 ? (
-                <EmptyPanel title="등록된 문서가 없습니다." description="견적서, 계약서, 영수증을 거래와 연결해두면 정산 누락을 줄일 수 있습니다." />
-              ) : (
-                workspace.documents.map((document) => (
-                  <div key={document.id} className="rounded-2xl border border-[#e8e8e4] bg-[#fafaf8] p-5">
-                    <div className="flex flex-col gap-3 lg:flex-row lg:items-start lg:justify-between">
-                      <div>
-                        <div className="flex flex-wrap items-center gap-2">
-                          <h3 className="text-[14px] font-semibold text-[#111110]">{document.title}</h3>
-                          <Badge variant="outline" className="border-[#e8e8e4] bg-white text-[#1a1a1a]/55">
-                            {DOCUMENT_KIND_LABEL[document.kind]}
-                          </Badge>
-                          <Badge variant="outline" className="border-[#e8e8e4] bg-white text-[#1a1a1a]/55">
-                            {DOCUMENT_STATUS_LABEL[document.status]}
-                          </Badge>
-                        </div>
-                        <p className="mt-2 text-[12px] leading-5 text-[#1a1a1a]/50">
-                          발행 {document.issuedAt ?? "미정"} · 마감 {document.dueAt ?? "미정"} · 파일 {document.fileLabel}
-                        </p>
-                        <p className="mt-1 text-[11px] text-[#1a1a1a]/40">
-                          Phase 1에서는 전달 상태 요약과 만료/열람 정보가 데이터 연결 시 이곳에 함께 표시됩니다.
-                        </p>
-                      </div>
-                      <div className="flex items-center gap-2">
-                        {document.amount != null && (
-                          <div className="rounded-2xl bg-white px-4 py-3 text-right text-[12px]">
-                            <span className="block text-[#1a1a1a]/35">금액</span>
-                            <strong className="text-[15px] text-[#111110]">{formatCurrency(document.amount)}</strong>
+            <div className="mb-4 grid gap-3 md:grid-cols-4">
+              <div className="rounded-2xl bg-[#fafaf8] p-4">
+                <p className="text-[11px] font-medium uppercase tracking-wide text-[#1a1a1a]/35">전체 문서</p>
+                <p className="mt-1 text-[20px] font-bold tracking-[-0.03em] text-[#111110]">{workspace.documents.length}</p>
+              </div>
+              <div className="rounded-2xl bg-amber-50 p-4">
+                <p className="text-[11px] font-medium uppercase tracking-wide text-amber-800/55">처리 대기</p>
+                <p className="mt-1 text-[20px] font-bold tracking-[-0.03em] text-amber-900">{pendingDocuments.length}</p>
+              </div>
+              <div className="rounded-2xl bg-rose-50 p-4">
+                <p className="text-[11px] font-medium uppercase tracking-wide text-rose-800/55">연체</p>
+                <p className="mt-1 text-[20px] font-bold tracking-[-0.03em] text-rose-900">{overdueDocuments.length}</p>
+              </div>
+              <div className="rounded-2xl bg-emerald-50 p-4">
+                <p className="text-[11px] font-medium uppercase tracking-wide text-emerald-800/55">완료</p>
+                <p className="mt-1 text-[20px] font-bold tracking-[-0.03em] text-emerald-900">{signedDocuments.length}</p>
+              </div>
+            </div>
+
+            <div className="grid gap-4 lg:grid-cols-[1.15fr_0.85fr]">
+              <div className="space-y-4">
+                {workspace.documents.length === 0 ? (
+                  <EmptyPanel title="등록된 문서가 없습니다." description="견적서, 계약서, 영수증을 거래와 연결해두면 정산 누락을 줄일 수 있습니다." />
+                ) : (
+                  prioritizedDocuments.map((document) => {
+                    const linkedDeal = document.dealId ? dealTitleById.get(document.dealId) : undefined
+                    const latestDelivery = document.deliveries[0]
+                    return (
+                      <div key={document.id} className="rounded-2xl border border-[#e8e8e4] bg-[#fafaf8] p-5">
+                        <div className="flex flex-col gap-3 lg:flex-row lg:items-start lg:justify-between">
+                          <div className="min-w-0">
+                            <div className="flex flex-wrap items-center gap-2">
+                              <h3 className="text-[14px] font-semibold text-[#111110]">{document.title}</h3>
+                              <Badge variant="outline" className="border-[#e8e8e4] bg-white text-[#1a1a1a]/55">
+                                {DOCUMENT_KIND_LABEL[document.kind]}
+                              </Badge>
+                              <Badge variant="outline" className="border-[#e8e8e4] bg-white text-[#1a1a1a]/55">
+                                {DOCUMENT_STATUS_LABEL[document.status]}
+                              </Badge>
+                            </div>
+                            <p className="mt-2 text-[12px] leading-5 text-[#1a1a1a]/50">
+                              발행 {document.issuedAt ?? "미정"} · 마감 {document.dueAt ?? "미정"} · 파일 {document.fileLabel}
+                            </p>
+                            <p className="mt-1 text-[12px] leading-5 text-[#1a1a1a]/45">
+                              전달{" "}
+                              {latestDelivery
+                                ? `${DOCUMENT_DELIVERY_CHANNEL_LABEL[latestDelivery.deliveryChannel]} · ${DOCUMENT_DELIVERY_STATUS_LABEL[latestDelivery.status]}`
+                                : "이력 없음"}
+                              {latestDelivery?.lastViewedAt ? ` · 최근 열람 ${formatDateTimeDisplay(latestDelivery.lastViewedAt)}` : ""}
+                              {latestDelivery && latestDelivery.viewCount > 0 ? ` · 열람 ${latestDelivery.viewCount}회` : ""}
+                            </p>
+                            <div className="mt-3 flex flex-wrap gap-2 text-[11px] text-[#1a1a1a]/55">
+                              <span className="rounded-full bg-white px-2.5 py-1">거래 {linkedDeal ?? "미연결"}</span>
+                              <span className="rounded-full bg-white px-2.5 py-1">
+                                다음 작업{" "}
+                                {document.status === "overdue"
+                                  ? "즉시 확인"
+                                  : document.status === "sent"
+                                    ? latestDelivery
+                                      ? "열람/회신 추적"
+                                      : "전달본 생성"
+                                    : document.status === "draft"
+                                      ? "전달 준비"
+                                      : "정산 상태 점검"}
+                              </span>
+                            </div>
                           </div>
-                        )}
-                        <Button variant="outline" size="sm" className="gap-1.5" onClick={() => onEditDocument(document)}>
-                          <Pencil className="h-3.5 w-3.5" />
-                          수정
-                        </Button>
+                          <div className="flex items-center gap-2">
+                            {document.amount != null && (
+                              <div className="rounded-2xl bg-white px-4 py-3 text-right text-[12px]">
+                                <span className="block text-[#1a1a1a]/35">금액</span>
+                                <strong className="text-[15px] text-[#111110]">{formatCurrency(document.amount)}</strong>
+                              </div>
+                            )}
+                            <Button variant="outline" size="sm" className="gap-1.5" onClick={() => onEditDocument(document)}>
+                              <Pencil className="h-3.5 w-3.5" />
+                              수정
+                            </Button>
+                          </div>
+                        </div>
                       </div>
-                    </div>
+                    )
+                  })
+                )}
+              </div>
+
+              <div className="space-y-4">
+                <SurfaceSection
+                  title="문서 우선순위"
+                  description="연체와 발송 대기 문서를 먼저 처리합니다."
+                >
+                  <div className="space-y-3 text-[12px] leading-5 text-[#1a1a1a]/55">
+                    {overdueDocuments.slice(0, 3).map((document) => (
+                      <div key={document.id} className="rounded-2xl bg-rose-50 px-4 py-3">
+                        <strong className="block text-[#111110]">{document.title}</strong>
+                        <span className="mt-1 block">연체 · {document.fileLabel}</span>
+                      </div>
+                    ))}
+                    {pendingDocuments.length > 0 && (
+                      <div className="rounded-2xl bg-amber-50 px-4 py-3">
+                        <strong className="block text-[#111110]">처리 대기 {pendingDocuments.length}건</strong>
+                        <span className="mt-1 block">발송/초안/연체 문서를 우선 정리하세요.</span>
+                      </div>
+                    )}
+                    {overdueDocuments.length === 0 && pendingDocuments.length === 0 && (
+                      <div className="rounded-2xl bg-[#fafaf8] px-4 py-6 text-center text-[#1a1a1a]/45">
+                        바로 처리할 문서는 없습니다.
+                      </div>
+                    )}
                   </div>
-                ))
-              )}
+                </SurfaceSection>
+              </div>
             </div>
           </SurfaceSection>
         </TabsContent>

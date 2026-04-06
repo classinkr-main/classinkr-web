@@ -19,11 +19,14 @@ import { Input } from "@/components/ui/input"
 import { Label } from "@/components/ui/label"
 import { Button } from "@/components/ui/button"
 import { Badge } from "@/components/ui/badge"
-import { Send, Eye, EyeOff, Loader2, MailCheck } from "lucide-react"
+import { RotateCcw, Send, Eye, EyeOff, Loader2, MailCheck } from "lucide-react"
+import type { EmailDraft } from "@/lib/marketing-types"
 import { PRESET_TAGS } from "@/lib/marketing-types"
 
 interface Props {
-  onSend: (data: { subject: string; body: string; targetTags: string[] }) => Promise<void>
+  value: EmailDraft
+  onChange: (value: EmailDraft) => void
+  onSend: (data: EmailDraft) => Promise<void>
   loading?: boolean
   subscriberCount: number
 }
@@ -43,31 +46,40 @@ function adminFetch(url: string, options?: RequestInit) {
   })
 }
 
-export default function EmailComposer({ onSend, loading, subscriberCount }: Props) {
-  const [subject, setSubject] = useState("")
-  const [body, setBody] = useState("")
-  const [targetTags, setTargetTags] = useState<string[]>([])
+export default function EmailComposer({
+  value,
+  onChange,
+  onSend,
+  loading,
+  subscriberCount,
+}: Props) {
   const [showPreview, setShowPreview] = useState(false)
   const [testEmail, setTestEmail] = useState("")
   const [testLoading, setTestLoading] = useState(false)
   const [testNotice, setTestNotice] = useState<string | null>(null)
 
+  const updateDraft = (next: Partial<EmailDraft>) => {
+    onChange({
+      ...value,
+      ...next,
+    })
+  }
+
   const toggleTag = (tag: string) => {
-    setTargetTags((prev) =>
-      prev.includes(tag) ? prev.filter((t) => t !== tag) : [...prev, tag]
-    )
+    const nextTags = value.targetTags.includes(tag)
+      ? value.targetTags.filter((t) => t !== tag)
+      : [...value.targetTags, tag]
+
+    updateDraft({ targetTags: nextTags })
   }
 
   const handleSubmit = async () => {
-    if (!subject.trim() || !body.trim()) return
-    await onSend({ subject, body, targetTags })
-    setSubject("")
-    setBody("")
-    setTargetTags([])
+    if (!value.subject.trim() || !value.body.trim()) return
+    await onSend(value)
   }
 
   const handleTestSend = async () => {
-    if (!subject.trim() || !body.trim() || !testEmail.trim()) return
+    if (!value.subject.trim() || !value.body.trim() || !testEmail.trim()) return
 
     setTestLoading(true)
     setTestNotice(null)
@@ -76,9 +88,9 @@ export default function EmailComposer({ onSend, loading, subscriberCount }: Prop
       const res = await adminFetch("/api/admin/email/send", {
         method: "POST",
         body: JSON.stringify({
-          subject,
-          body,
-          targetTags,
+          subject: value.subject,
+          body: value.body,
+          targetTags: value.targetTags,
           mode: "test",
           testEmail: testEmail.trim(),
         }),
@@ -104,7 +116,7 @@ export default function EmailComposer({ onSend, loading, subscriberCount }: Prop
   }
 
   // [NOTE-12] 미리보기용 {name} 치환 예시
-  const previewBody = body
+  const previewBody = value.body
     .replace(/\{name\}/g, "김원장")
     .replace(/\{org\}/g, "클래스인 아카데미")
     .replace(/\{role\}/g, "원장")
@@ -122,8 +134,8 @@ export default function EmailComposer({ onSend, loading, subscriberCount }: Prop
           <Label htmlFor="email-subject">제목</Label>
           <Input
             id="email-subject"
-            value={subject}
-            onChange={(e) => setSubject(e.target.value)}
+            value={value.subject}
+            onChange={(e) => updateDraft({ subject: e.target.value })}
             placeholder="예) {name}님, Classin 3월 교육 혁신 세미나에 초대합니다!"
           />
         </div>
@@ -152,8 +164,8 @@ export default function EmailComposer({ onSend, loading, subscriberCount }: Prop
           ) : (
             <textarea
               id="email-body"
-              value={body}
-              onChange={(e) => setBody(e.target.value)}
+              value={value.body}
+              onChange={(e) => updateDraft({ body: e.target.value })}
               rows={8}
               placeholder={`안녕하세요 {name}님,\n\nClassin에서 준비한 특별한 소식을 전해드립니다.\n\n{org} 관계자 여러분을 위한...\n\n감사합니다.\nClassin 팀`}
               className="w-full p-3 border rounded-lg text-sm resize-y focus:outline-none focus:ring-2 focus:ring-[#084734]/20 min-h-[200px]"
@@ -170,14 +182,27 @@ export default function EmailComposer({ onSend, loading, subscriberCount }: Prop
 
         {/* 대상 태그 필터 */}
         <div className="grid gap-2">
-          <Label>발송 대상 (태그 선택, 미선택 시 전체 발송)</Label>
+          <div className="flex flex-col gap-2 sm:flex-row sm:items-center sm:justify-between">
+            <Label>발송 대상 (태그 선택, 미선택 시 전체 발송)</Label>
+            <Button
+              type="button"
+              variant="ghost"
+              size="sm"
+              className="h-8 justify-start px-0 text-[11px] text-[#1a1a1a]/45 hover:bg-transparent hover:text-[#111110] sm:h-7 sm:px-2"
+              onClick={() => updateDraft({ targetTags: [] })}
+              disabled={value.targetTags.length === 0}
+            >
+              <RotateCcw className="mr-1.5 h-3.5 w-3.5" />
+              대상 초기화
+            </Button>
+          </div>
           <div className="flex flex-wrap gap-1.5 p-3 border rounded-lg bg-[#FAFAF8]">
             {PRESET_TAGS.map((tag) => (
               <Badge
                 key={tag}
                 variant="secondary"
                 className={`cursor-pointer text-[11px] px-2 py-0.5 transition-colors ${
-                  targetTags.includes(tag)
+                  value.targetTags.includes(tag)
                     ? "bg-[#084734] text-white hover:bg-[#084734]/90"
                     : "bg-white text-[#1a1a1a]/60 hover:bg-[#084734]/10 border border-[#e8e8e4]"
                 }`}
@@ -188,8 +213,8 @@ export default function EmailComposer({ onSend, loading, subscriberCount }: Prop
             ))}
           </div>
           <p className="text-[11px] text-[#1a1a1a]/40">
-            {targetTags.length > 0
-              ? `선택된 태그: ${targetTags.join(", ")}`
+            {value.targetTags.length > 0
+              ? `선택된 태그: ${value.targetTags.join(", ")}`
               : `전체 active 구독자 ${subscriberCount}명에게 발송됩니다.`}
           </p>
         </div>
@@ -207,7 +232,7 @@ export default function EmailComposer({ onSend, loading, subscriberCount }: Prop
               variant="outline"
               size="sm"
               onClick={handleTestSend}
-              disabled={loading || testLoading || !subject.trim() || !body.trim() || !testEmail.trim()}
+              disabled={loading || testLoading || !value.subject.trim() || !value.body.trim() || !testEmail.trim()}
               className="w-full sm:w-auto"
             >
               {testLoading ? (
@@ -244,7 +269,7 @@ export default function EmailComposer({ onSend, loading, subscriberCount }: Prop
         <div className="flex flex-col gap-2 sm:flex-row sm:justify-end">
           <Button
             onClick={handleSubmit}
-            disabled={loading || !subject.trim() || !body.trim()}
+            disabled={loading || !value.subject.trim() || !value.body.trim()}
             className="w-full bg-[#084734] text-white hover:bg-[#084734]/90 sm:w-auto"
           >
             {loading ? (

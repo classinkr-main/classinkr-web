@@ -1,6 +1,6 @@
 "use client"
 
-import { useCallback, useEffect, useMemo, useRef, useState } from "react"
+import { useCallback, useEffect, useMemo, useState } from "react"
 import type { ReactNode } from "react"
 import { useRouter } from "next/navigation"
 import {
@@ -32,23 +32,26 @@ import SubscriberTable from "@/components/admin/marketing/SubscriberTable"
 import SubscriberForm from "@/components/admin/marketing/SubscriberForm"
 import EmailComposer from "@/components/admin/marketing/EmailComposer"
 import CampaignHistory from "@/components/admin/marketing/CampaignHistory"
-import type { Subscriber, EmailCampaign } from "@/lib/marketing-types"
+import type { EmailCampaign, EmailDraft, SavedEmailSegment, Subscriber } from "@/lib/marketing-types"
 
 type Tab = "subscribers" | "compose" | "history"
 type SubscriberStatusFilter = "all" | Subscriber["status"]
 type SubscriberSourceFilter = "all" | Subscriber["source"]
 type PreSendCheckStatus = "ok" | "warning" | "error" | "info"
-type ComposerSnapshot = {
-  subject: string
-  body: string
-  targetTags: string[]
-}
 type PreSendCheck = {
   key: string
   label: string
   detail: string
   status: PreSendCheckStatus
 }
+
+const EMPTY_DRAFT: EmailDraft = {
+  subject: "",
+  body: "",
+  targetTags: [],
+}
+
+const SAVED_SEGMENTS_KEY = "classinkr.admin.email.savedSegments.v1"
 
 function getToken() {
   return sessionStorage.getItem("admin_password") ?? ""
@@ -124,6 +127,53 @@ function checkLabel(status: PreSendCheckStatus) {
       : status === "error"
         ? "미완료"
         : "정보"
+}
+
+function areTagsEqual(left: string[], right: string[]) {
+  if (left.length !== right.length) return false
+  const normalizedLeft = [...left].sort()
+  const normalizedRight = [...right].sort()
+  return normalizedLeft.every((tag, index) => tag === normalizedRight[index])
+}
+
+function readSavedSegmentsStorage() {
+  if (typeof window === "undefined") return [] as SavedEmailSegment[]
+
+  try {
+    const raw = window.localStorage.getItem(SAVED_SEGMENTS_KEY)
+    if (!raw) return []
+
+    const parsed = JSON.parse(raw)
+    if (!Array.isArray(parsed)) return []
+
+    return parsed
+      .filter((item): item is SavedEmailSegment => {
+        return (
+          item &&
+          typeof item.id === "string" &&
+          typeof item.name === "string" &&
+          Array.isArray(item.targetTags) &&
+          typeof item.createdAt === "string" &&
+          typeof item.updatedAt === "string"
+        )
+      })
+      .map((item) => ({
+        ...item,
+        targetTags: item.targetTags.filter((tag): tag is string => typeof tag === "string"),
+      }))
+      .sort((a, b) => safeTime(b.updatedAt) - safeTime(a.updatedAt))
+  } catch {
+    return []
+  }
+}
+
+function persistSavedSegmentsStorage(segments: SavedEmailSegment[]) {
+  if (typeof window === "undefined") return
+  window.localStorage.setItem(SAVED_SEGMENTS_KEY, JSON.stringify(segments))
+}
+
+function createSavedSegmentId() {
+  return `segment-${Date.now()}-${Math.random().toString(36).slice(2, 8)}`
 }
 
 function Panel({
@@ -303,19 +353,20 @@ export default function AdminMarketingPage() {
   const [activeTab, setActiveTab] = useState<Tab>("subscribers")
   const [subscribers, setSubscribers] = useState<Subscriber[]>([])
   const [campaigns, setCampaigns] = useState<EmailCampaign[]>([])
+  const [composerDraft, setComposerDraft] = useState<EmailDraft>(EMPTY_DRAFT)
+  const [savedSegments, setSavedSegments] = useState<SavedEmailSegment[]>(() => readSavedSegmentsStorage())
   const [loading, setLoading] = useState(false)
   const [formLoading, setFormLoading] = useState(false)
   const [sendLoading, setSendLoading] = useState(false)
   const [isFormOpen, setIsFormOpen] = useState(false)
   const [deleteTarget, setDeleteTarget] = useState<Subscriber | null>(null)
   const [toast, setToast] = useState<{ kind: "success" | "error"; message: string } | null>(null)
+  const [draftNotice, setDraftNotice] = useState<string | null>(null)
+  const [segmentName, setSegmentName] = useState("")
   const [query, setQuery] = useState("")
   const [statusFilter, setStatusFilter] = useState<SubscriberStatusFilter>("all")
   const [sourceFilter, setSourceFilter] = useState<SubscriberSourceFilter>("all")
   const [campaignStatusFilter, setCampaignStatusFilter] = useState<"all" | EmailCampaign["status"]>("all")
-  const composerRootRef = useRef<HTMLDivElement | null>(null)
-  const composerSnapshotRef = useRef<ComposerSnapshot>({ subject: "", body: "", targetTags: [] })
-  const [composerSnapshot, setComposerSnapshot] = useState<ComposerSnapshot>(composerSnapshotRef.current)
 
   const handleUnauthorized = useCallback(() => {
     sessionStorage.removeItem("admin_password")
@@ -403,50 +454,34 @@ export default function AdminMarketingPage() {
   })
 
   const filteredCampaigns = campaigns.filter((campaign) => campaignStatusFilter === "all" || campaign.status === campaignStatusFilter)
+  const activeSegment = useMemo(
+    () => savedSegments.find((segment) => areTagsEqual(segment.targetTags, composerDraft.targetTags)) ?? null,
+    [composerDraft.targetTags, savedSegments]
+  )
 
-  const readComposerSnapshot = useCallback((): ComposerSnapshot => {
-    const root = composerRootRef.current
-    if (!root) return composerSnapshotRef.current
-
-    const subjectInput = root.querySelector<HTMLInputElement>("#email-subject")
-    const bodyInput = root.querySelector<HTMLTextAreaElement>("#email-body")
-    const selectedTagNodes = Array.from(root.querySelectorAll<HTMLElement>('div[class*="cursor-pointer"]'))
-      .filter((node) => node.className.includes("bg-[#084734]") && node.className.includes("text-white"))
-      .map((node) => node.textContent?.trim() ?? "")
-      .filter(Boolean)
-    const current = composerSnapshotRef.current
-
-    const nextSnapshot: ComposerSnapshot = {
-      subject: subjectInput?.value ?? current.subject,
-      body: bodyInput?.value ?? current.body,
-      targetTags: selectedTagNodes,
-    }
-
-    const sameTags =
-      current.targetTags.length === nextSnapshot.targetTags.length &&
-      current.targetTags.every((tag, index) => tag === nextSnapshot.targetTags[index])
-
-    if (current.subject === nextSnapshot.subject && current.body === nextSnapshot.body && sameTags) {
-      return current
-    }
-
-    composerSnapshotRef.current = nextSnapshot
-    setComposerSnapshot(nextSnapshot)
-    return nextSnapshot
+  const updateSavedSegments = useCallback((segments: SavedEmailSegment[]) => {
+    const sorted = [...segments].sort((a, b) => safeTime(b.updatedAt) - safeTime(a.updatedAt))
+    setSavedSegments(sorted)
+    persistSavedSegmentsStorage(sorted)
   }, [])
 
+  const countSelectedAudience = useCallback(
+    (targetTags: string[]) => {
+      if (targetTags.length === 0) return activeCount
+      return subscribers.filter(
+        (subscriber) =>
+          subscriber.status === "active" &&
+          subscriber.tags.some((tag) => targetTags.includes(tag))
+      ).length
+    },
+    [activeCount, subscribers]
+  )
+
   const evaluateDraft = useCallback(
-    (draft: ComposerSnapshot) => {
+    (draft: EmailDraft) => {
       const normalizedSubject = normalizeSubject(draft.subject)
       const length = bodyLength(draft.body)
-      const selectedAudience =
-        draft.targetTags.length === 0
-          ? activeCount
-          : subscribers.filter(
-              (subscriber) =>
-                subscriber.status === "active" &&
-                subscriber.tags.some((tag) => draft.targetTags.includes(tag))
-            ).length
+      const selectedAudience = countSelectedAudience(draft.targetTags)
 
       const recentDuplicateCampaign = [...campaigns]
         .sort((a, b) => safeTime(b.sentAt ?? b.createdAt) - safeTime(a.sentAt ?? a.createdAt))
@@ -557,50 +592,16 @@ export default function AdminMarketingPage() {
         bodyLength: length,
       }
     },
-    [activeCount, campaigns, subscribers, unsubscribedCount]
+    [activeCount, campaigns, countSelectedAudience, unsubscribedCount]
   )
 
-  const composerReview = useMemo(() => evaluateDraft(composerSnapshot), [composerSnapshot, evaluateDraft])
+  const composerReview = useMemo(() => evaluateDraft(composerDraft), [composerDraft, evaluateDraft])
 
   useEffect(() => {
     if (!toast) return
     const t = window.setTimeout(() => setToast(null), 2600)
     return () => window.clearTimeout(t)
   }, [toast])
-
-  useEffect(() => {
-    if (activeTab !== "compose") return
-
-    const root = composerRootRef.current
-    if (!root) return
-
-    const subjectInput = root.querySelector<HTMLInputElement>("#email-subject")
-    const bodyInput = root.querySelector<HTMLTextAreaElement>("#email-body")
-    if (!subjectInput || !bodyInput) return
-
-    const sync = () => {
-      readComposerSnapshot()
-    }
-
-    sync()
-    subjectInput.addEventListener("input", sync)
-    bodyInput.addEventListener("input", sync)
-
-    const observer = new MutationObserver(sync)
-    observer.observe(root, {
-      subtree: true,
-      childList: true,
-      attributes: true,
-      characterData: true,
-      attributeFilter: ["class"],
-    })
-
-    return () => {
-      subjectInput.removeEventListener("input", sync)
-      bodyInput.removeEventListener("input", sync)
-      observer.disconnect()
-    }
-  }, [activeTab, readComposerSnapshot])
 
   const handleAddSubscriber = async (data: {
     name: string
@@ -657,7 +658,103 @@ export default function AdminMarketingPage() {
     }
   }
 
-  const handleSendEmail = async (data: { subject: string; body: string; targetTags: string[] }) => {
+  const clearComposerDraft = useCallback(() => {
+    const hasDraft =
+      composerDraft.subject.trim() ||
+      composerDraft.body.trim() ||
+      composerDraft.targetTags.length > 0
+
+    if (!hasDraft || window.confirm("현재 작성 중인 내용을 비우고 새로 시작할까요?")) {
+      setComposerDraft({ ...EMPTY_DRAFT })
+      setDraftNotice(null)
+    }
+  }, [composerDraft])
+
+  const handleSaveSegment = useCallback(() => {
+    const trimmedName = segmentName.trim()
+    if (!trimmedName) {
+      showToast("error", "세그먼트 이름을 입력해주세요.")
+      return
+    }
+
+    if (composerDraft.targetTags.length === 0) {
+      showToast("error", "저장할 태그를 하나 이상 선택해주세요.")
+      return
+    }
+
+    const now = new Date().toISOString()
+    const existing = savedSegments.find(
+      (segment) => normalizeSubject(segment.name) === normalizeSubject(trimmedName)
+    )
+
+    const nextSegment: SavedEmailSegment = existing
+      ? {
+          ...existing,
+          name: trimmedName,
+          targetTags: [...composerDraft.targetTags],
+          updatedAt: now,
+        }
+      : {
+          id: createSavedSegmentId(),
+          name: trimmedName,
+          targetTags: [...composerDraft.targetTags],
+          createdAt: now,
+          updatedAt: now,
+        }
+
+    updateSavedSegments(
+      existing
+        ? savedSegments.map((segment) => (segment.id === existing.id ? nextSegment : segment))
+        : [nextSegment, ...savedSegments]
+    )
+    setSegmentName(trimmedName)
+    showToast("success", existing ? "저장 세그먼트를 업데이트했습니다." : "저장 세그먼트를 만들었습니다.")
+  }, [composerDraft.targetTags, savedSegments, segmentName, showToast, updateSavedSegments])
+
+  const handleApplySegment = useCallback((segment: SavedEmailSegment) => {
+    setComposerDraft((current) => ({
+      ...current,
+      targetTags: [...segment.targetTags],
+    }))
+    updateSavedSegments(
+      savedSegments.map((item) =>
+        item.id === segment.id
+          ? {
+              ...item,
+              updatedAt: new Date().toISOString(),
+            }
+          : item
+      )
+    )
+    setSegmentName(segment.name)
+    setDraftNotice(`저장 세그먼트 '${segment.name}'를 적용했습니다.`)
+    setActiveTab("compose")
+    showToast("success", `"${segment.name}" 세그먼트를 적용했습니다.`)
+  }, [savedSegments, showToast, updateSavedSegments])
+
+  const handleDeleteSegment = useCallback((segment: SavedEmailSegment) => {
+    if (!window.confirm(`"${segment.name}" 세그먼트를 삭제할까요?`)) return
+    updateSavedSegments(savedSegments.filter((item) => item.id !== segment.id))
+    if (segmentName === segment.name) {
+      setSegmentName("")
+    }
+    showToast("success", "세그먼트를 삭제했습니다.")
+  }, [savedSegments, segmentName, showToast, updateSavedSegments])
+
+  const handleDuplicateCampaign = useCallback((campaign: EmailCampaign) => {
+    setComposerDraft({
+      subject: campaign.subject,
+      body: campaign.body,
+      targetTags: [...campaign.targetTags],
+    })
+    const linkedSegment = savedSegments.find((segment) => areTagsEqual(segment.targetTags, campaign.targetTags))
+    setSegmentName(linkedSegment?.name ?? "")
+    setDraftNotice(`'${campaign.subject}' 캠페인을 복제해 새 초안으로 불러왔습니다.`)
+    setActiveTab("compose")
+    showToast("success", `"${campaign.subject}" 캠페인을 작성기로 가져왔습니다.`)
+  }, [savedSegments, showToast])
+
+  const handleSendEmail = async (data: EmailDraft) => {
     const evaluated = evaluateDraft(data)
     const blockingErrors = evaluated.checks.filter((check) => check.status === "error")
     const warningChecks = evaluated.checks.filter((check) => check.status === "warning")
@@ -693,6 +790,8 @@ export default function AdminMarketingPage() {
       const result = await res.json()
       if (result.ok && result.status !== "failed") {
         await fetchCampaigns()
+        setComposerDraft({ ...EMPTY_DRAFT })
+        setDraftNotice(null)
         setActiveTab("history")
         showToast("success", `${result.recipientCount}명에게 발송되었습니다.`)
       } else if (result.status === "failed") {
@@ -720,6 +819,16 @@ export default function AdminMarketingPage() {
     { key: "compose", label: "이메일 작성", icon: <Send className="h-4 w-4" /> },
     { key: "history", label: "이력 확인", icon: <History className="h-4 w-4" /> },
   ]
+
+  const hasComposerDraft =
+    composerDraft.subject.trim() ||
+    composerDraft.body.trim() ||
+    composerDraft.targetTags.length > 0
+
+  const savedSegmentViews = savedSegments.slice(0, 6).map((segment) => ({
+    ...segment,
+    recipientCount: countSelectedAudience(segment.targetTags),
+  }))
 
   return (
     <div className="min-h-screen bg-[#FAFAF8]">
@@ -981,10 +1090,15 @@ export default function AdminMarketingPage() {
                 title="이메일 발송"
                 description="제목, 본문, 대상 태그를 구성하고 발송 전 결과를 확인합니다."
                 action={
-                  <Button variant="outline" size="sm" onClick={() => setActiveTab("subscribers")}>
-                    <Users className="mr-1.5 h-4 w-4" />
-                    구독자 보기
-                  </Button>
+                  <div className="flex flex-col gap-2 sm:flex-row">
+                    <Button variant="outline" size="sm" onClick={() => setActiveTab("subscribers")}>
+                      <Users className="mr-1.5 h-4 w-4" />
+                      구독자 보기
+                    </Button>
+                    <Button variant="outline" size="sm" onClick={clearComposerDraft} disabled={!hasComposerDraft}>
+                      초안 비우기
+                    </Button>
+                  </div>
                 }
               >
                 {activeCount === 0 && (
@@ -992,9 +1106,37 @@ export default function AdminMarketingPage() {
                     활성 구독자가 없습니다. 발송 대상이 비어 있을 수 있으니 먼저 구독자를 확인하세요.
                   </div>
                 )}
-                <div ref={composerRootRef}>
-                  <EmailComposer onSend={handleSendEmail} loading={sendLoading} subscriberCount={activeCount} />
-                </div>
+                {(activeSegment || hasComposerDraft) && (
+                  <div className="mb-5 flex flex-col gap-3 rounded-2xl border border-[#e8e8e4] bg-[#fafaf8] p-4">
+                    <div className="flex flex-col gap-2 sm:flex-row sm:items-center sm:justify-between">
+                      <div>
+                        <p className="text-[12px] font-medium text-[#111110]">현재 초안 상태</p>
+                        <p className="mt-1 text-[12px] leading-relaxed text-[#1a1a1a]/45">
+                          {draftNotice
+                            ? draftNotice
+                            : activeSegment
+                              ? `"${activeSegment.name}" 세그먼트 기준으로 작성 중입니다.`
+                              : "이 초안은 탭을 이동해도 유지됩니다."}
+                        </p>
+                      </div>
+                      <div className="flex flex-wrap items-center gap-1.5">
+                        {composerDraft.targetTags.length > 0 ? (
+                          composerDraft.targetTags.map((tag) => <MiniBadge key={tag}>#{tag}</MiniBadge>)
+                        ) : (
+                          <MiniBadge>전체 active 구독자</MiniBadge>
+                        )}
+                      </div>
+                    </div>
+                  </div>
+                )}
+
+                <EmailComposer
+                  value={composerDraft}
+                  onChange={setComposerDraft}
+                  onSend={handleSendEmail}
+                  loading={sendLoading}
+                  subscriberCount={activeCount}
+                />
               </Panel>
             </div>
 
@@ -1020,9 +1162,9 @@ export default function AdminMarketingPage() {
                     <p className="text-[11px] font-medium uppercase tracking-[0.2em] text-[#1a1a1a]/35">예상 대상</p>
                     <p className="mt-2 text-[28px] font-bold tracking-[-0.03em] text-[#111110]">{composerReview.selectedAudience}명</p>
                     <p className="mt-1 text-[12px] leading-relaxed text-[#1a1a1a]/45">
-                      {composerSnapshot.targetTags.length === 0
+                      {composerDraft.targetTags.length === 0
                         ? `전체 active 구독자 ${activeCount}명 기준입니다.`
-                        : `선택 태그 ${composerSnapshot.targetTags.join(", ")} 기준입니다.`}
+                        : `선택 태그 ${composerDraft.targetTags.join(", ")} 기준입니다.`}
                     </p>
                   </div>
                   <div className="rounded-2xl border border-[#e8e8e4] bg-[#fafaf8] p-4">
@@ -1053,6 +1195,85 @@ export default function AdminMarketingPage() {
                 </div>
               </Panel>
 
+              <Panel
+                title="저장 세그먼트"
+                description="자주 쓰는 발송 대상을 이름으로 저장해 다음 캠페인에서 바로 불러옵니다."
+                action={activeSegment ? <MiniBadge tone="success">적용 중</MiniBadge> : undefined}
+              >
+                <div className="space-y-4">
+                  <div className="rounded-2xl border border-[#e8e8e4] bg-[#fafaf8] p-4">
+                    <p className="text-[12px] font-medium text-[#111110]">현재 선택 대상</p>
+                    <div className="mt-3 flex flex-wrap gap-1.5">
+                      {composerDraft.targetTags.length > 0 ? (
+                        composerDraft.targetTags.map((tag) => <MiniBadge key={tag}>#{tag}</MiniBadge>)
+                      ) : (
+                        <MiniBadge>전체 active 구독자</MiniBadge>
+                      )}
+                    </div>
+                    <p className="mt-3 text-[12px] leading-relaxed text-[#1a1a1a]/45">
+                      예상 발송 인원 {composerReview.selectedAudience}명
+                    </p>
+                  </div>
+
+                  <div className="grid gap-2 sm:grid-cols-[1fr_auto]">
+                    <Input
+                      value={segmentName}
+                      onChange={(event) => setSegmentName(event.target.value)}
+                      placeholder="예) 원장 + VIP"
+                    />
+                    <Button
+                      type="button"
+                      onClick={handleSaveSegment}
+                      className="bg-[#084734] hover:bg-[#084734]/90"
+                      disabled={composerDraft.targetTags.length === 0}
+                    >
+                      세그먼트 저장
+                    </Button>
+                  </div>
+                  <p className="text-[11px] leading-relaxed text-[#1a1a1a]/40">
+                    현재는 태그 조합만 저장합니다. 전체 발송은 저장하지 않고 바로 사용하도록 두었습니다.
+                  </p>
+
+                  {savedSegmentViews.length === 0 ? (
+                    <EmptyInline message="저장된 세그먼트가 없습니다. 태그를 고른 뒤 이름을 붙여 저장해보세요." />
+                  ) : (
+                    <div className="space-y-3">
+                      {savedSegmentViews.map((segment) => {
+                        const isActive = activeSegment?.id === segment.id
+                        return (
+                          <div key={segment.id} className="rounded-2xl border border-[#e8e8e4] bg-white p-4">
+                            <div className="flex flex-col gap-3 sm:flex-row sm:items-start sm:justify-between">
+                              <div className="min-w-0">
+                                <div className="flex items-center gap-2">
+                                  <p className="truncate text-[13px] font-semibold text-[#111110]">{segment.name}</p>
+                                  {isActive && <MiniBadge tone="success">적용됨</MiniBadge>}
+                                </div>
+                                <p className="mt-1 text-[12px] text-[#1a1a1a]/40">
+                                  예상 발송 {segment.recipientCount}명 · {formatDateTime(segment.updatedAt)}
+                                </p>
+                                <div className="mt-3 flex flex-wrap gap-1.5">
+                                  {segment.targetTags.map((tag) => (
+                                    <MiniBadge key={tag}>#{tag}</MiniBadge>
+                                  ))}
+                                </div>
+                              </div>
+                              <div className="flex gap-2 sm:shrink-0">
+                                <Button variant="outline" size="sm" onClick={() => handleApplySegment(segment)}>
+                                  적용
+                                </Button>
+                                <Button variant="outline" size="sm" onClick={() => handleDeleteSegment(segment)}>
+                                  삭제
+                                </Button>
+                              </div>
+                            </div>
+                          </div>
+                        )
+                      })}
+                    </div>
+                  )}
+                </div>
+              </Panel>
+
               <Panel title="바로 가는 링크" description="작성 후 자주 이동하는 화면입니다.">
                 <div className="space-y-2">
                   <Button variant="outline" className="w-full justify-between" onClick={() => setActiveTab("subscribers")}>
@@ -1078,7 +1299,7 @@ export default function AdminMarketingPage() {
             <div className="space-y-6">
               <Panel
                 title="발송 이력"
-                description="최근 캠페인 결과를 상태 중심으로 확인합니다."
+                description="최근 캠페인 결과를 상태 중심으로 확인하고, 바로 복제해서 새 초안으로 이어갑니다."
                 action={
                   <div className="flex items-center gap-2">
                     <Button variant="outline" size="sm" onClick={() => setCampaignStatusFilter("all")}>
@@ -1134,7 +1355,7 @@ export default function AdminMarketingPage() {
                   />
                 ) : (
                   <div className="overflow-hidden rounded-2xl border border-[#e8e8e4]">
-                    <CampaignHistory campaigns={filteredCampaigns} />
+                    <CampaignHistory campaigns={filteredCampaigns} onDuplicate={handleDuplicateCampaign} />
                   </div>
                 )}
               </Panel>
@@ -1168,13 +1389,18 @@ export default function AdminMarketingPage() {
                           </MiniBadge>
                         </div>
                         <div className="mt-3 flex flex-wrap gap-1.5">
-                          {campaign.targetTags.length > 0 ? (
-                            campaign.targetTags.map((tag) => (
-                              <MiniBadge key={tag}>#{tag}</MiniBadge>
-                            ))
-                          ) : (
-                            <MiniBadge>전체 발송</MiniBadge>
-                          )}
+                            {campaign.targetTags.length > 0 ? (
+                              campaign.targetTags.map((tag) => (
+                                <MiniBadge key={tag}>#{tag}</MiniBadge>
+                              ))
+                            ) : (
+                              <MiniBadge>전체 발송</MiniBadge>
+                            )}
+                        </div>
+                        <div className="mt-3 flex justify-end">
+                          <Button variant="outline" size="sm" onClick={() => handleDuplicateCampaign(campaign)}>
+                            복제해서 작성
+                          </Button>
                         </div>
                       </div>
                     ))}

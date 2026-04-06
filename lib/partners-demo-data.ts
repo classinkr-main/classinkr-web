@@ -48,6 +48,15 @@ export const partnerWorkspaces: PartnerWorkspace[] = [
         phone: "010-3412-8891",
         isPrimary: true,
       },
+      {
+        id: "contact_mirae_ops",
+        partnerId: "mirae-academy",
+        name: "한예린",
+        role: "운영 매니저",
+        email: "ops@mirae-academy.kr",
+        phone: "010-9982-1440",
+        isPrimary: false,
+      },
     ],
     deals: [
       {
@@ -86,6 +95,22 @@ export const partnerWorkspaces: PartnerWorkspace[] = [
         issuedAt: "2026-04-02",
         dueAt: "2026-04-09",
         fileLabel: "견적서 v2.pdf",
+        deliveries: [
+          {
+            id: "delivery_mirae_quote_1",
+            partnerDocumentId: "doc_mirae_quote_1",
+            deliveryChannel: "pdf",
+            status: "sent",
+            recipientName: "김지훈",
+            recipientEmail: "jhkim@mirae-academy.kr",
+            sentAt: "2026-04-02 16:20",
+            lastViewedAt: "2026-04-03 09:15",
+            passwordEnabled: false,
+            allowDownload: true,
+            allowPrint: true,
+            viewCount: 2,
+          },
+        ],
       },
       {
         id: "doc_mirae_contract_1",
@@ -96,6 +121,7 @@ export const partnerWorkspaces: PartnerWorkspace[] = [
         title: "2026 상반기 공급 계약서",
         issuedAt: "2026-04-03",
         fileLabel: "계약서 초안.docx",
+        deliveries: [],
       },
       {
         id: "doc_mirae_receipt_1",
@@ -107,6 +133,23 @@ export const partnerWorkspaces: PartnerWorkspace[] = [
         amount: 350000,
         issuedAt: "2026-03-31",
         fileLabel: "3월 영수증.pdf",
+        deliveries: [
+          {
+            id: "delivery_mirae_receipt_1",
+            partnerDocumentId: "doc_mirae_receipt_1",
+            deliveryChannel: "link",
+            status: "opened",
+            recipientName: "한예린",
+            recipientEmail: "ops@mirae-academy.kr",
+            expiresAt: "2026-04-14 23:59",
+            sentAt: "2026-03-31 18:10",
+            lastViewedAt: "2026-04-01 10:02",
+            passwordEnabled: true,
+            allowDownload: true,
+            allowPrint: false,
+            viewCount: 4,
+          },
+        ],
       },
     ],
     schedule: [
@@ -259,6 +302,15 @@ export const partnerWorkspaces: PartnerWorkspace[] = [
         phone: "010-5128-4492",
         isPrimary: true,
       },
+      {
+        id: "contact_alpha_finance",
+        partnerId: "alpha-branch",
+        name: "최수빈",
+        role: "정산 담당",
+        email: "finance@alpha-branch.kr",
+        phone: "010-2014-5571",
+        isPrimary: false,
+      },
     ],
     deals: [
       {
@@ -293,6 +345,22 @@ export const partnerWorkspaces: PartnerWorkspace[] = [
         title: "2025-2026 지사 공급 계약서",
         issuedAt: "2025-08-20",
         fileLabel: "alpha-branch-contract.pdf",
+        deliveries: [
+          {
+            id: "delivery_alpha_contract_1",
+            partnerDocumentId: "doc_alpha_contract_1",
+            deliveryChannel: "link",
+            status: "opened",
+            recipientName: "박현우",
+            recipientEmail: "hwpark@alpha-branch.kr",
+            sentAt: "2025-08-20 09:00",
+            lastViewedAt: "2025-08-21 08:45",
+            passwordEnabled: false,
+            allowDownload: true,
+            allowPrint: true,
+            viewCount: 3,
+          },
+        ],
       },
       {
         id: "doc_alpha_receipt_1",
@@ -305,6 +373,22 @@ export const partnerWorkspaces: PartnerWorkspace[] = [
         issuedAt: "2026-03-05",
         dueAt: "2026-03-12",
         fileLabel: "2026-02-receipt.pdf",
+        deliveries: [
+          {
+            id: "delivery_alpha_receipt_1",
+            partnerDocumentId: "doc_alpha_receipt_1",
+            deliveryChannel: "kakao",
+            status: "expired",
+            recipientName: "최수빈",
+            recipientPhone: "010-2014-5571",
+            expiresAt: "2026-03-19 23:59",
+            sentAt: "2026-03-05 11:05",
+            passwordEnabled: false,
+            allowDownload: true,
+            allowPrint: true,
+            viewCount: 1,
+          },
+        ],
       },
       {
         id: "doc_alpha_quote_1",
@@ -316,6 +400,7 @@ export const partnerWorkspaces: PartnerWorkspace[] = [
         amount: 5600000,
         issuedAt: "2026-04-01",
         fileLabel: "summer-program-quote.xlsx",
+        deliveries: [],
       },
     ],
     schedule: [
@@ -447,6 +532,15 @@ export const partnerWorkspaces: PartnerWorkspace[] = [
         phone: "010-8843-9910",
         isPrimary: true,
       },
+      {
+        id: "contact_jeju_teacher",
+        partnerId: "jeju-edu",
+        name: "오다은",
+        role: "교무실",
+        email: "office@jeju-edu.kr",
+        phone: "010-6621-4820",
+        isPrimary: false,
+      },
     ],
     deals: [
       {
@@ -469,6 +563,7 @@ export const partnerWorkspaces: PartnerWorkspace[] = [
         status: documentStatus("draft"),
         title: "체험 종료 후 본견적 예정",
         fileLabel: "견적 준비중",
+        deliveries: [],
       },
     ],
     schedule: [

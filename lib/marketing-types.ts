@@ -81,7 +81,6 @@ export interface PersonalizedEmailRecipient {
   personalizedSubject?: string
   personalizedBody: string
 }
-
 export type EmailDraft = EmailComposerDraft
 export type SavedEmailSegment = SavedAudienceSegment
 

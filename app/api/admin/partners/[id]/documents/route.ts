@@ -13,7 +13,28 @@ import {
   toErrorResponse,
 } from "@/app/api/admin/partners/_validation"
 import { verifyAdmin } from "@/lib/admin-auth"
-import { upsertPartnerDocument } from "@/lib/partners-data"
+import { getPartnerWorkspaceData, upsertPartnerDocument } from "@/lib/partners-data"
+
+export async function GET(
+  req: NextRequest,
+  { params }: { params: Promise<{ id: string }> }
+) {
+  const err = verifyAdmin(req)
+  if (err) return err
+
+  try {
+    const { id } = await params
+    const { workspace, source, warning } = await getPartnerWorkspaceData(id)
+
+    if (!workspace) {
+      return NextResponse.json({ error: "Not found" }, { status: 404 })
+    }
+
+    return NextResponse.json({ items: workspace.documents, source, warning })
+  } catch {
+    return NextResponse.json({ error: "Failed to read documents" }, { status: 500 })
+  }
+}
 
 export async function POST(
   req: NextRequest,

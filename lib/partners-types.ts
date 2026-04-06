@@ -10,6 +10,8 @@ export type DealStage =
   | "closed_lost"
 export type DocumentKind = "quote" | "contract" | "receipt"
 export type DocumentStatus = "draft" | "sent" | "signed" | "paid" | "overdue" | "archived"
+export type DocumentDeliveryChannel = "pdf" | "kakao" | "link"
+export type DocumentDeliveryStatus = "draft" | "ready" | "sent" | "opened" | "expired" | "revoked" | "failed"
 export type ScheduleKind = "meeting" | "follow_up" | "deadline" | "renewal"
 export type ScheduleStatus = "planned" | "completed" | "canceled"
 export type AutomationStatus = "active" | "paused"
@@ -74,6 +76,25 @@ export interface PartnerDocument {
   issuedAt?: string
   dueAt?: string
   fileLabel: string
+  externalUrl?: string
+  deliveries: PartnerDocumentDeliverySummary[]
+}
+
+export interface PartnerDocumentDeliverySummary {
+  id: string
+  partnerDocumentId: string
+  deliveryChannel: DocumentDeliveryChannel
+  status: DocumentDeliveryStatus
+  recipientName?: string
+  recipientEmail?: string
+  recipientPhone?: string
+  expiresAt?: string
+  passwordEnabled: boolean
+  allowDownload: boolean
+  allowPrint: boolean
+  sentAt?: string
+  lastViewedAt?: string
+  viewCount: number
 }
 
 export interface PartnerScheduleItem {
@@ -253,6 +274,7 @@ export interface PartnerDocumentInput {
   issuedAt?: string
   dueAt?: string
   fileLabel: string
+  externalUrl?: string
 }
 
 export interface PartnerScheduleInput {

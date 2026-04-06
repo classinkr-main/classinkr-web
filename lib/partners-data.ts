@@ -13,6 +13,7 @@ import {
 import type {
   PartnerActivityLog,
   PartnerActivityLogInput,
+  PartnerContactInput,
   PartnerDataSource,
   PartnerAutomation,
   PartnerChecklistInput,
@@ -20,6 +21,7 @@ import type {
   PartnerDeal,
   PartnerDealInput,
   PartnerDocument,
+  PartnerDocumentDeliverySummary,
   PartnerDocumentInput,
   PartnerIssueInput,
   PartnerOpsChecklistItem,
@@ -41,6 +43,8 @@ const PARTNER_CHANNELS = ["reseller", "referral", "branch", "direct"] as const
 const DEAL_STAGES = ["discovery", "quoted", "contract_sent", "active", "closed_won", "closed_lost"] as const
 const DOCUMENT_KINDS = ["quote", "contract", "receipt"] as const
 const DOCUMENT_STATUSES = ["draft", "sent", "signed", "paid", "overdue", "archived"] as const
+const DOCUMENT_DELIVERY_CHANNELS = ["pdf", "kakao", "link"] as const
+const DOCUMENT_DELIVERY_STATUSES = ["draft", "ready", "sent", "opened", "expired", "revoked", "failed"] as const
 const SCHEDULE_KINDS = ["meeting", "follow_up", "deadline", "renewal"] as const
 const SCHEDULE_STATUSES = ["planned", "completed", "canceled"] as const
 const AUTOMATION_STATUSES = ["active", "paused"] as const
@@ -136,6 +140,24 @@ interface PartnerDocumentRow {
   due_at: string | null
   file_path: string | null
   external_url: string | null
+}
+
+interface PartnerDocumentDeliveryRow {
+  id: string
+  partner_document_id: string
+  partner_id: string
+  delivery_channel: PartnerDocumentDeliverySummary["deliveryChannel"]
+  status: PartnerDocumentDeliverySummary["status"]
+  recipient_name: string | null
+  recipient_email: string | null
+  recipient_phone: string | null
+  expires_at: string | null
+  password_enabled: boolean | null
+  allow_download: boolean | null
+  allow_print: boolean | null
+  sent_at: string | null
+  last_viewed_at: string | null
+  view_count: number | null
 }
 
 interface PartnerScheduleRow {
@@ -364,8 +386,9 @@ function normalizeDeal(partnerId: string, deal: Partial<PartnerDeal> | null | un
 }
 
 function normalizeDocument(partnerId: string, document: Partial<PartnerDocument> | null | undefined): PartnerDocument {
+  const documentId = toString(document?.id) || makeId("doc")
   return {
-    id: toString(document?.id) || makeId("doc"),
+    id: documentId,
     partnerId: toString(document?.partnerId) || partnerId,
     dealId: toOptionalString(document?.dealId),
     kind: isEnumValue(DOCUMENT_KINDS, document?.kind) ? document.kind : "quote",
@@ -375,6 +398,32 @@ function normalizeDocument(partnerId: string, document: Partial<PartnerDocument>
     issuedAt: formatDate(document?.issuedAt),
     dueAt: formatDate(document?.dueAt),
     fileLabel: toOptionalString(document?.fileLabel) ?? "첨부 문서",
+    externalUrl: toOptionalString(document?.externalUrl),
+    deliveries: Array.isArray(document?.deliveries)
+      ? document.deliveries.map((delivery) => normalizeDocumentDelivery(documentId, delivery))
+      : [],
+  }
+}
+
+function normalizeDocumentDelivery(
+  partnerDocumentId: string,
+  delivery: Partial<PartnerDocumentDeliverySummary> | null | undefined
+): PartnerDocumentDeliverySummary {
+  return {
+    id: toString(delivery?.id) || makeId("delivery"),
+    partnerDocumentId: toString(delivery?.partnerDocumentId) || partnerDocumentId,
+    deliveryChannel: isEnumValue(DOCUMENT_DELIVERY_CHANNELS, delivery?.deliveryChannel) ? delivery.deliveryChannel : "link",
+    status: isEnumValue(DOCUMENT_DELIVERY_STATUSES, delivery?.status) ? delivery.status : "draft",
+    recipientName: toOptionalString(delivery?.recipientName),
+    recipientEmail: toOptionalString(delivery?.recipientEmail),
+    recipientPhone: toOptionalString(delivery?.recipientPhone),
+    expiresAt: formatDateTime(delivery?.expiresAt),
+    passwordEnabled: Boolean(delivery?.passwordEnabled),
+    allowDownload: delivery?.allowDownload !== false,
+    allowPrint: delivery?.allowPrint !== false,
+    sentAt: formatDateTime(delivery?.sentAt),
+    lastViewedAt: formatDateTime(delivery?.lastViewedAt),
+    viewCount: delivery?.viewCount == null ? 0 : toNumber(delivery.viewCount),
   }
 }
 
@@ -427,6 +476,16 @@ function normalizeContact(partnerId: string, contact: Partial<PartnerContact> | 
     email: toOptionalString(contact?.email),
     phone: toOptionalString(contact?.phone),
     isPrimary: Boolean(contact?.isPrimary),
+  }
+}
+
+function syncPartnerSummaryFromPrimaryContact(workspace: PartnerWorkspace) {
+  const primaryContact = workspace.contacts.find((contact) => contact.isPrimary) ?? workspace.contacts[0]
+  if (!primaryContact) return
+
+  workspace.partner.ownerName = primaryContact.name
+  if (primaryContact.email) {
+    workspace.partner.ownerEmail = primaryContact.email
   }
 }
 
@@ -586,6 +645,10 @@ async function querySupabasePartnerWorkspaces(partnerId?: string) {
     .select("id, partner_id, deal_id, kind, status, title, amount, issued_at, due_at, file_path, external_url")
     .is("archived_at", null)
     .order("issued_at", { ascending: false })
+  const documentDeliveriesQuery = supabase
+    .from("partner_document_deliveries")
+    .select("id, partner_document_id, partner_id, delivery_channel, status, recipient_name, recipient_email, recipient_phone, expires_at, password_enabled, allow_download, allow_print, sent_at, last_viewed_at, view_count")
+    .order("created_at", { ascending: false })
   const scheduleQuery = supabase
     .from("partner_schedule_items")
     .select("id, partner_id, deal_id, kind, status, title, starts_at, ends_at, owner_name")
@@ -615,6 +678,9 @@ async function querySupabasePartnerWorkspaces(partnerId?: string) {
   const filteredContactsQuery = partnerId ? contactsQuery.eq("partner_id", partnerId) : contactsQuery
   const filteredDealsQuery = partnerId ? dealsQuery.eq("partner_id", partnerId) : dealsQuery
   const filteredDocumentsQuery = partnerId ? documentsQuery.eq("partner_id", partnerId) : documentsQuery
+  const filteredDocumentDeliveriesQuery = partnerId
+    ? documentDeliveriesQuery.eq("partner_id", partnerId)
+    : documentDeliveriesQuery
   const filteredScheduleQuery = partnerId ? scheduleQuery.eq("partner_id", partnerId) : scheduleQuery
   const filteredSalesQuery = partnerId ? salesQuery.eq("partner_id", partnerId) : salesQuery
   const filteredAutomationsQuery = partnerId ? automationsQuery.eq("partner_id", partnerId) : automationsQuery
@@ -627,6 +693,7 @@ async function querySupabasePartnerWorkspaces(partnerId?: string) {
     { data: contacts, error: contactsError },
     { data: deals, error: dealsError },
     { data: documents, error: documentsError },
+    { data: documentDeliveries, error: documentDeliveriesError },
     { data: schedule, error: scheduleError },
     { data: sales, error: salesError },
     { data: automations, error: automationsError },
@@ -638,6 +705,7 @@ async function querySupabasePartnerWorkspaces(partnerId?: string) {
     filteredContactsQuery,
     filteredDealsQuery,
     filteredDocumentsQuery,
+    filteredDocumentDeliveriesQuery,
     filteredScheduleQuery,
     filteredSalesQuery,
     filteredAutomationsQuery,
@@ -651,6 +719,7 @@ async function querySupabasePartnerWorkspaces(partnerId?: string) {
     contactsError ??
     dealsError ??
     documentsError ??
+    documentDeliveriesError ??
     scheduleError ??
     salesError ??
     automationsError ??
@@ -684,6 +753,32 @@ async function querySupabasePartnerWorkspaces(partnerId?: string) {
     manager: deal.owner_name ?? "미지정",
   }))
 
+  const normalizedDocumentDeliveries: PartnerDocumentDeliverySummary[] = (
+    (documentDeliveries ?? []) as PartnerDocumentDeliveryRow[]
+  ).map((delivery) => ({
+    id: delivery.id,
+    partnerDocumentId: delivery.partner_document_id,
+    deliveryChannel: delivery.delivery_channel,
+    status: delivery.status,
+    recipientName: delivery.recipient_name ?? undefined,
+    recipientEmail: delivery.recipient_email ?? undefined,
+    recipientPhone: delivery.recipient_phone ?? undefined,
+    expiresAt: formatDateTime(delivery.expires_at),
+    passwordEnabled: Boolean(delivery.password_enabled),
+    allowDownload: delivery.allow_download !== false,
+    allowPrint: delivery.allow_print !== false,
+    sentAt: formatDateTime(delivery.sent_at),
+    lastViewedAt: formatDateTime(delivery.last_viewed_at),
+    viewCount: delivery.view_count == null ? 0 : toNumber(delivery.view_count),
+  }))
+
+  const deliveriesByDocument = normalizedDocumentDeliveries.reduce<Record<string, PartnerDocumentDeliverySummary[]>>((acc, delivery) => {
+    const key = delivery.partnerDocumentId
+    if (!acc[key]) acc[key] = []
+    acc[key].push(delivery)
+    return acc
+  }, {})
+
   const normalizedDocuments: PartnerDocument[] = ((documents ?? []) as PartnerDocumentRow[]).map((document) => ({
     id: document.id,
     partnerId: document.partner_id,
@@ -695,6 +790,8 @@ async function querySupabasePartnerWorkspaces(partnerId?: string) {
     issuedAt: formatDate(document.issued_at),
     dueAt: formatDate(document.due_at),
     fileLabel: document.file_path ?? document.external_url ?? "첨부 문서",
+    externalUrl: document.external_url ?? undefined,
+    deliveries: deliveriesByDocument[document.id] ?? [],
   }))
 
   const normalizedSchedule: PartnerScheduleItem[] = ((schedule ?? []) as PartnerScheduleRow[]).map((item) => ({
@@ -929,6 +1026,10 @@ async function upsertLocalDocument(partnerId: string, input: PartnerDocumentInpu
   const workspaces = await readLocalWorkspaces()
   const workspace = workspaces.find((item) => item.partner.id === partnerId)
   if (!workspace) return null
+  ensureWorkspaceDealOwnership(workspace, input.dealId)
+  const currentDocument = input.id
+    ? workspace.documents.find((document) => document.id === input.id)
+    : undefined
 
   const nextDocument: PartnerDocument = {
     id: input.id ?? makeId("doc"),
@@ -941,6 +1042,8 @@ async function upsertLocalDocument(partnerId: string, input: PartnerDocumentInpu
     issuedAt: input.issuedAt,
     dueAt: input.dueAt,
     fileLabel: input.fileLabel,
+    externalUrl: input.externalUrl ?? currentDocument?.externalUrl,
+    deliveries: currentDocument?.deliveries ?? [],
   }
 
   const index = workspace.documents.findIndex((document) => document.id === nextDocument.id)
@@ -955,6 +1058,7 @@ async function upsertLocalSchedule(partnerId: string, input: PartnerScheduleInpu
   const workspaces = await readLocalWorkspaces()
   const workspace = workspaces.find((item) => item.partner.id === partnerId)
   if (!workspace) return null
+  ensureWorkspaceDealOwnership(workspace, input.dealId)
 
   const nextItem: PartnerScheduleItem = {
     id: input.id ?? makeId("schedule"),
@@ -980,6 +1084,7 @@ async function upsertLocalSales(partnerId: string, input: PartnerSalesInput) {
   const workspaces = await readLocalWorkspaces()
   const workspace = workspaces.find((item) => item.partner.id === partnerId)
   if (!workspace) return null
+  ensureWorkspaceDealOwnership(workspace, input.dealId)
 
   const nextRecord: PartnerSalesRecord = {
     id: input.id ?? makeId("sales"),
@@ -995,6 +1100,40 @@ async function upsertLocalSales(partnerId: string, input: PartnerSalesInput) {
   if (index >= 0) workspace.sales[index] = nextRecord
   else workspace.sales.unshift(nextRecord)
 
+  await writeLocalWorkspaces(workspaces)
+  return normalizeWorkspace(workspace)
+}
+
+async function upsertLocalContact(partnerId: string, input: PartnerContactInput) {
+  const workspaces = await readLocalWorkspaces()
+  const workspace = workspaces.find((item) => item.partner.id === partnerId)
+  if (!workspace) return null
+
+  const existing = input.id ? workspace.contacts.find((contact) => contact.id === input.id) : undefined
+  const isPrimary =
+    input.isPrimary ??
+    existing?.isPrimary ??
+    workspace.contacts.length === 0
+
+  const nextContact: PartnerContact = {
+    id: input.id ?? makeId("contact"),
+    partnerId,
+    name: input.name,
+    role: input.role,
+    email: input.email,
+    phone: input.phone,
+    isPrimary,
+  }
+
+  if (nextContact.isPrimary) {
+    workspace.contacts = workspace.contacts.map((contact) => ({ ...contact, isPrimary: false }))
+  }
+
+  const index = workspace.contacts.findIndex((contact) => contact.id === nextContact.id)
+  if (index >= 0) workspace.contacts[index] = nextContact
+  else workspace.contacts.unshift(nextContact)
+
+  syncPartnerSummaryFromPrimaryContact(workspace)
   await writeLocalWorkspaces(workspaces)
   return normalizeWorkspace(workspace)
 }
@@ -1230,6 +1369,55 @@ async function updateSupabasePartner(id: string, summary: Partial<PartnerSummary
   return getPartnerWorkspaceData(id)
 }
 
+async function upsertSupabaseContact(partnerId: string, input: PartnerContactInput) {
+  const supabase = createSupabaseAdminClient()
+
+  if (input.isPrimary) {
+    const { error: resetError } = await supabase
+      .from("partner_contacts")
+      .update({ is_primary: false })
+      .eq("partner_id", partnerId)
+    if (resetError) throw new Error(resetError.message)
+  }
+
+  const payload = {
+    partner_id: partnerId,
+    name: input.name,
+    role: input.role ?? null,
+    email: input.email ?? null,
+    phone: input.phone ?? null,
+    is_primary: input.isPrimary ?? false,
+  }
+
+  const query = input.id
+    ? supabase
+        .from("partner_contacts")
+        .update(payload)
+        .eq("id", input.id)
+        .eq("partner_id", partnerId)
+        .select("id")
+        .single()
+    : supabase.from("partner_contacts").insert(payload).select("id").single()
+
+  const { error } = await query
+  if (error) throw new Error(error.message)
+
+  if (input.isPrimary) {
+    const partnerPayload: Record<string, unknown> = {
+      owner_name: input.name,
+    }
+
+    if (input.email) {
+      partnerPayload.owner_email = input.email
+    }
+
+    const { error: partnerError } = await supabase.from("partners").update(partnerPayload).eq("id", partnerId)
+    if (partnerError) throw new Error(partnerError.message)
+  }
+
+  return getPartnerWorkspaceData(partnerId)
+}
+
 async function upsertSupabaseDeal(partnerId: string, input: PartnerDealInput) {
   const supabase = createSupabaseAdminClient()
   const payload = {
@@ -1266,7 +1454,7 @@ async function upsertSupabaseDocument(partnerId: string, input: PartnerDocumentI
     issued_at: input.issuedAt ?? null,
     due_at: input.dueAt ?? null,
     file_path: input.fileLabel,
-    external_url: null,
+    external_url: input.externalUrl ?? null,
   }
 
   const query = input.id
@@ -1528,6 +1716,23 @@ export async function upsertPartnerDeal(partnerId: string, input: PartnerDealInp
   }
 
   const result = await upsertSupabaseDeal(partnerId, input)
+  return {
+    workspace: result.workspace,
+    source: result.source,
+    warning: result.warning,
+  }
+}
+
+export async function upsertPartnerContact(partnerId: string, input: PartnerContactInput): Promise<PartnerMutationResult> {
+  if (!hasPartnersSupabaseConfig()) {
+    return {
+      workspace: await upsertLocalContact(partnerId, input),
+      source: "local",
+      warning: "로컬 저장소에 연락처를 저장했습니다.",
+    }
+  }
+
+  const result = await upsertSupabaseContact(partnerId, input)
   return {
     workspace: result.workspace,
     source: result.source,

@@ -20,6 +20,8 @@ import { Label } from "@/components/ui/label"
 import type {
   PartnerActivityLog,
   PartnerActivityLogInput,
+  PartnerContact,
+  PartnerContactInput,
   PartnerDataSource,
   PartnerDeal,
   PartnerDealInput,
@@ -207,6 +209,30 @@ function createSalesFormState(initialSales: PartnerSalesRecord | null | undefine
     unitsSold: initialSales.unitsSold,
     grossAmount: initialSales.grossAmount,
     netAmount: initialSales.netAmount,
+  }
+}
+
+function createContactFormState(
+  initialContact: PartnerContact | null | undefined,
+  partner: PartnerWorkspace["partner"]
+): PartnerContactInput {
+  if (!initialContact) {
+    return {
+      name: partner.ownerName,
+      role: partner.accountManager || "",
+      email: partner.ownerEmail,
+      phone: "",
+      isPrimary: true,
+    }
+  }
+
+  return {
+    id: initialContact.id,
+    name: initialContact.name,
+    role: initialContact.role ?? "",
+    email: initialContact.email ?? "",
+    phone: initialContact.phone ?? "",
+    isPrimary: initialContact.isPrimary,
   }
 }
 
@@ -1222,6 +1248,85 @@ function ActivityLogFormDialog({
   )
 }
 
+function ContactFormDialog({
+  open,
+  loading,
+  initialContact,
+  partner,
+  onClose,
+  onSave,
+}: {
+  open: boolean
+  loading?: boolean
+  initialContact?: PartnerContact | null
+  partner: PartnerWorkspace["partner"]
+  onClose: () => void
+  onSave: (payload: PartnerContactInput) => Promise<void> | void
+}) {
+  const [form, setForm] = useState<PartnerContactInput>(() => createContactFormState(initialContact, partner))
+
+  const set = <K extends keyof PartnerContactInput>(key: K, value: PartnerContactInput[K]) => {
+    setForm((prev) => ({ ...prev, [key]: value }))
+  }
+
+  const handleSubmit = async (event: FormEvent<HTMLFormElement>) => {
+    event.preventDefault()
+    await onSave({
+      ...form,
+      name: form.name.trim(),
+      role: form.role?.trim() || undefined,
+      email: form.email?.trim() || undefined,
+      phone: form.phone?.trim() || undefined,
+    })
+  }
+
+  return (
+    <ResourceDialogShell
+      open={open}
+      onClose={onClose}
+      title={initialContact ? "연락처 수정" : "연락처 추가"}
+      description="대표 연락처와 실무 연락처를 같은 워크스페이스 안에서 관리합니다."
+    >
+      <form onSubmit={handleSubmit} className="grid gap-4">
+        <div className="grid gap-2">
+          <Label htmlFor="contact-name">이름 *</Label>
+          <Input id="contact-name" value={form.name} onChange={(event) => set("name", event.target.value)} required />
+        </div>
+        <div className="grid gap-4 md:grid-cols-2">
+          <div className="grid gap-2">
+            <Label htmlFor="contact-role">직책/역할</Label>
+            <Input id="contact-role" value={form.role ?? ""} onChange={(event) => set("role", event.target.value)} />
+          </div>
+          <div className="grid gap-2">
+            <Label htmlFor="contact-phone">전화번호</Label>
+            <Input id="contact-phone" value={form.phone ?? ""} onChange={(event) => set("phone", event.target.value)} />
+          </div>
+        </div>
+        <div className="grid gap-2">
+          <Label htmlFor="contact-email">이메일</Label>
+          <Input id="contact-email" type="email" value={form.email ?? ""} onChange={(event) => set("email", event.target.value)} />
+        </div>
+        <div className="flex items-center gap-2 rounded-2xl border border-[#e8e8e4] bg-[#fafaf8] px-4 py-3 text-[13px] text-[#1a1a1a]/70">
+          <input
+            id="contact-primary"
+            type="checkbox"
+            checked={form.isPrimary ?? true}
+            onChange={(event) => set("isPrimary", event.target.checked)}
+            className="h-4 w-4 rounded border border-input"
+          />
+          <Label htmlFor="contact-primary" className="cursor-pointer text-[13px] font-medium">
+            대표 연락처로 사용
+          </Label>
+        </div>
+        <DialogFooter>
+          <Button type="button" variant="outline" onClick={onClose} disabled={loading}>취소</Button>
+          <Button type="submit" disabled={loading}>{loading ? "저장 중..." : initialContact ? "연락처 수정" : "연락처 추가"}</Button>
+        </DialogFooter>
+      </form>
+    </ResourceDialogShell>
+  )
+}
+
 export default function PartnerWorkspaceDetailClient({
   initialWorkspace,
   initialSource,
@@ -1237,6 +1342,7 @@ export default function PartnerWorkspaceDetailClient({
   const [savingKind, setSavingKind] = useState<string | null>(null)
 
   const [partnerDialogOpen, setPartnerDialogOpen] = useState(false)
+  const [contactDialogOpen, setContactDialogOpen] = useState(false)
   const [dealDialogOpen, setDealDialogOpen] = useState(false)
   const [documentDialogOpen, setDocumentDialogOpen] = useState(false)
   const [scheduleDialogOpen, setScheduleDialogOpen] = useState(false)
@@ -1246,6 +1352,7 @@ export default function PartnerWorkspaceDetailClient({
   const [activityLogDialogOpen, setActivityLogDialogOpen] = useState(false)
 
   const [editingDeal, setEditingDeal] = useState<PartnerDeal | null>(null)
+  const [editingContact, setEditingContact] = useState<PartnerContact | null>(null)
   const [editingDocument, setEditingDocument] = useState<PartnerDocument | null>(null)
   const [editingSchedule, setEditingSchedule] = useState<PartnerScheduleItem | null>(null)
   const [editingSales, setEditingSales] = useState<PartnerSalesRecord | null>(null)
@@ -1283,6 +1390,24 @@ export default function PartnerWorkspaceDetailClient({
       setPartnerDialogOpen(false)
     } catch (error) {
       setErrorMessage(error instanceof Error ? error.message : "저장에 실패했습니다.")
+    } finally {
+      setSavingKind(null)
+    }
+  }
+
+  const saveContact = async (payload: PartnerContactInput) => {
+    setSavingKind("contact")
+    setErrorMessage(null)
+    try {
+      const data = await adminFetch(`/api/admin/partners/${workspace.partner.id}/contacts`, {
+        method: "POST",
+        body: JSON.stringify(payload),
+      })
+      if (data?.workspace) applyResult(data)
+      setContactDialogOpen(false)
+      setEditingContact(null)
+    } catch (error) {
+      setErrorMessage(error instanceof Error ? error.message : "연락처 저장에 실패했습니다.")
     } finally {
       setSavingKind(null)
     }
@@ -1424,6 +1549,14 @@ export default function PartnerWorkspaceDetailClient({
         activeTab={activeTab}
         onTabChange={handleTabChange}
         onEditPartner={() => setPartnerDialogOpen(true)}
+        onCreateContact={() => {
+          setEditingContact(null)
+          setContactDialogOpen(true)
+        }}
+        onEditContact={(contact) => {
+          setEditingContact(contact)
+          setContactDialogOpen(true)
+        }}
         onCreateDeal={() => {
           setEditingDeal(null)
           setDealDialogOpen(true)
@@ -1489,6 +1622,21 @@ export default function PartnerWorkspaceDetailClient({
         loading={savingKind === "partner"}
         onClose={() => !savingKind && setPartnerDialogOpen(false)}
         onSave={savePartner}
+      />
+
+      <ContactFormDialog
+        key={`${contactDialogOpen ? "open" : "closed"}-${editingContact?.id ?? "new"}`}
+        open={contactDialogOpen}
+        partner={workspace.partner}
+        initialContact={editingContact}
+        loading={savingKind === "contact"}
+        onClose={() => {
+          if (!savingKind) {
+            setContactDialogOpen(false)
+            setEditingContact(null)
+          }
+        }}
+        onSave={saveContact}
       />
 
       <DealFormDialog
