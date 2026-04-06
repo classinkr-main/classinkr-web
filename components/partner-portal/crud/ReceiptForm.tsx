@@ -1,13 +1,14 @@
 "use client"
 
 import { useState, useEffect, useCallback } from "react"
-import { Plus, RefreshCw, Trash2, X, Download } from "lucide-react"
+import { Plus, RefreshCw, X, Download } from "lucide-react"
 import { Button } from "@/components/ui/button"
 import { portalFetch } from "@/lib/partner-portal/portal-fetch"
 import type { ReceiptRecord } from "@/lib/partner-portal/types"
 
 type PaymentMethod = "bank_transfer" | "card" | "cash"
 
+// eslint-disable-next-line @typescript-eslint/no-unused-vars
 const METHOD_LABEL: Record<PaymentMethod, string> = {
   bank_transfer: "계좌이체",
   card: "카드",
@@ -39,9 +40,9 @@ export function ReceiptForm({ dealId, partnerAccountId, customerId }: Props) {
   const [form, setForm] = useState(EMPTY_FORM)
   const [saving, setSaving] = useState(false)
 
-  const load = useCallback(async () => {
+  const load = useCallback(async (showSpinner = true) => {
     if (!dealId) return
-    setLoading(true)
+    if (showSpinner) setLoading(true)
     const res = await portalFetch(`/api/portal/deals/${dealId}`)
     if (res.ok) {
       const data = await res.json()
@@ -50,7 +51,30 @@ export function ReceiptForm({ dealId, partnerAccountId, customerId }: Props) {
     setLoading(false)
   }, [dealId])
 
-  useEffect(() => { load() }, [load])
+  useEffect(() => {
+    let active = true
+
+    async function initialLoad() {
+      if (!dealId) {
+        setLoading(false)
+        return
+      }
+
+      const res = await portalFetch(`/api/portal/deals/${dealId}`)
+      if (!active) return
+      if (res.ok) {
+        const data = await res.json()
+        if (!active) return
+        setReceipts(data.receipts ?? [])
+      }
+      setLoading(false)
+    }
+
+    void initialLoad()
+    return () => {
+      active = false
+    }
+  }, [dealId])
 
   function handleAmountChange(v: number) {
     const tax = Math.round(v * 0.1)
@@ -98,7 +122,7 @@ export function ReceiptForm({ dealId, partnerAccountId, customerId }: Props) {
     if (res.ok) {
       setShowForm(false)
       setForm(EMPTY_FORM)
-      load()
+      void load()
     }
     setSaving(false)
   }
@@ -108,7 +132,7 @@ export function ReceiptForm({ dealId, partnerAccountId, customerId }: Props) {
       <div className="flex items-center justify-between">
         <h2 className="text-lg font-semibold text-[#1a1a1a]">영수증</h2>
         <div className="flex gap-2">
-          <Button variant="outline" size="sm" onClick={load} disabled={loading}>
+          <Button variant="outline" size="sm" onClick={() => { void load() }} disabled={loading}>
             <RefreshCw className={`w-4 h-4 ${loading ? "animate-spin" : ""}`} />
           </Button>
           <Button size="sm" onClick={() => setShowForm(true)}>

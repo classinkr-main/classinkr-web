@@ -1,7 +1,7 @@
 "use client"
 
 import { useState, useEffect, useCallback } from "react"
-import { RefreshCw, Trash2, X, PenLine, Copy, Check, Send } from "lucide-react"
+import { RefreshCw, X, PenLine, Send } from "lucide-react"
 import { Button } from "@/components/ui/button"
 import { portalFetch } from "@/lib/partner-portal/portal-fetch"
 import { SignatureCanvas } from "./SignatureCanvas"
@@ -35,11 +35,9 @@ export function ContractList({ dealId }: Props) {
   const [selected, setSelected] = useState<ContractDocumentBundle | null>(null)
   const [showSign, setShowSign] = useState(false)
   const [signing, setSigning] = useState(false)
-  const [copied, setCopied] = useState<string | null>(null)
-
-  const load = useCallback(async () => {
+  const load = useCallback(async (showSpinner = true) => {
     if (!dealId) return
-    setLoading(true)
+    if (showSpinner) setLoading(true)
     const res = await portalFetch(`/api/portal/deals/${dealId}`)
     if (res.ok) {
       const data = await res.json()
@@ -48,7 +46,30 @@ export function ContractList({ dealId }: Props) {
     setLoading(false)
   }, [dealId])
 
-  useEffect(() => { load() }, [load])
+  useEffect(() => {
+    let active = true
+
+    async function initialLoad() {
+      if (!dealId) {
+        setLoading(false)
+        return
+      }
+
+      const res = await portalFetch(`/api/portal/deals/${dealId}`)
+      if (!active) return
+      if (res.ok) {
+        const data = await res.json()
+        if (!active) return
+        setContracts(data.contract_documents ?? [])
+      }
+      setLoading(false)
+    }
+
+    void initialLoad()
+    return () => {
+      active = false
+    }
+  }, [dealId])
 
   async function handleCreate() {
     if (!dealId) return
@@ -56,7 +77,7 @@ export function ContractList({ dealId }: Props) {
       method: "POST",
       body: JSON.stringify({ deal_id: dealId }),
     })
-    if (res.ok) load()
+    if (res.ok) void load()
   }
 
   async function handleSign(dataUrl: string) {
@@ -69,7 +90,7 @@ export function ContractList({ dealId }: Props) {
     if (res.ok) {
       setShowSign(false)
       setSelected(null)
-      load()
+      void load()
     } else {
       const err = await res.json()
       alert(err.error ?? "서명 실패")
@@ -82,7 +103,7 @@ export function ContractList({ dealId }: Props) {
       method: "PUT",
       body: JSON.stringify({ status }),
     })
-    if (res.ok) load()
+    if (res.ok) void load()
   }
 
   return (
@@ -90,7 +111,7 @@ export function ContractList({ dealId }: Props) {
       <div className="flex items-center justify-between">
         <h2 className="text-lg font-semibold text-[#1a1a1a]">계약서</h2>
         <div className="flex gap-2">
-          <Button variant="outline" size="sm" onClick={load} disabled={loading}>
+          <Button variant="outline" size="sm" onClick={() => { void load() }} disabled={loading}>
             <RefreshCw className={`w-4 h-4 ${loading ? "animate-spin" : ""}`} />
           </Button>
           <Button size="sm" onClick={handleCreate}>계약서 생성</Button>

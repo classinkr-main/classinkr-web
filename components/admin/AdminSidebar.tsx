@@ -18,8 +18,6 @@ import {
   SquareChevronRight,
   Handshake,
   ClipboardList,
-  ScrollText,
-  Receipt,
 } from "lucide-react"
 import { useEffect, useState } from "react"
 import { clearAdminSessionStorage } from "@/lib/admin-client"

@@ -14,8 +14,8 @@ export default function CustomersPage() {
   const [showForm, setShowForm] = useState(false)
   const [editing, setEditing] = useState<Customer | null>(null)
 
-  const load = useCallback(async () => {
-    setLoading(true)
+  const load = useCallback(async (showSpinner = true) => {
+    if (showSpinner) setLoading(true)
     const res = await portalFetch("/api/portal/customers")
     if (res.ok) {
       const data = await res.json()
@@ -24,7 +24,25 @@ export default function CustomersPage() {
     setLoading(false)
   }, [])
 
-  useEffect(() => { load() }, [load])
+  useEffect(() => {
+    let active = true
+
+    async function initialLoad() {
+      const res = await portalFetch("/api/portal/customers")
+      if (!active) return
+      if (res.ok) {
+        const data = await res.json()
+        if (!active) return
+        setCustomers(data.customers ?? [])
+      }
+      setLoading(false)
+    }
+
+    void initialLoad()
+    return () => {
+      active = false
+    }
+  }, [])
 
   const filtered = search
     ? customers.filter((c) =>
@@ -42,7 +60,7 @@ export default function CustomersPage() {
           <p className="text-sm text-[#1a1a1a]/50 mt-0.5">{customers.length}개 기관</p>
         </div>
         <div className="flex gap-2">
-          <Button variant="outline" size="sm" onClick={load} disabled={loading}>
+          <Button variant="outline" size="sm" onClick={() => { void load() }} disabled={loading}>
             <RefreshCw className={`w-4 h-4 ${loading ? "animate-spin" : ""}`} />
           </Button>
           <Button size="sm" onClick={() => { setEditing(null); setShowForm(true) }}>

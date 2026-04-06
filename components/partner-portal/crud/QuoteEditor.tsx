@@ -1,6 +1,6 @@
 "use client"
 
-import React, { useEffect, useMemo, useState } from "react"
+import React, { useCallback, useEffect, useMemo, useState } from "react"
 import {
   Calculator,
   FileSignature,
@@ -103,18 +103,41 @@ export function QuoteEditor({ dealId }: Props) {
   const [formValidUntil, setFormValidUntil] = useState("")
   const [items, setItems] = useState<QuoteItem[]>(createTemplateItems("board_bundle"))
 
-  async function load() {
+  const load = useCallback(async (showSpinner = true) => {
     if (!dealId) return
-    setLoading(true)
+    if (showSpinner) setLoading(true)
     const res = await portalFetch(`/api/portal/deals/${dealId}`)
     if (res.ok) {
       const data = await res.json()
       setQuotes(data.quote_documents ?? [])
     }
     setLoading(false)
-  }
+  }, [dealId])
 
-  useEffect(() => { load() }, [dealId])
+  useEffect(() => {
+    let active = true
+
+    async function initialLoad() {
+      if (!dealId) {
+        setLoading(false)
+        return
+      }
+
+      const res = await portalFetch(`/api/portal/deals/${dealId}`)
+      if (!active) return
+      if (res.ok) {
+        const data = await res.json()
+        if (!active) return
+        setQuotes(data.quote_documents ?? [])
+      }
+      setLoading(false)
+    }
+
+    void initialLoad()
+    return () => {
+      active = false
+    }
+  }, [dealId])
 
   const subtotal = useMemo(() => items.reduce((s, i) => s + calcLineAmount(i), 0), [items])
   const vatAmount = vatSurcharge ? Math.round(subtotal * 0.1) : 0
@@ -193,14 +216,14 @@ export function QuoteEditor({ dealId }: Props) {
 
     setShowForm(false)
     setSaving(false)
-    load()
+    void load()
   }
 
   async function handleConvert(quoteId: string) {
     setConverting(quoteId)
     const res = await portalFetch(`/api/portal/quotes/${quoteId}/convert`, { method: "POST" })
     if (res.ok) {
-      load()
+      void load()
     } else {
       const err = await res.json().catch(() => null)
       alert(err?.error ?? "전환 실패")
@@ -213,7 +236,7 @@ export function QuoteEditor({ dealId }: Props) {
       <div className="flex items-center justify-between">
         <h2 className="text-lg font-semibold text-[#1a1a1a]">견적서</h2>
         <div className="flex gap-2">
-          <Button variant="outline" size="sm" onClick={load} disabled={loading}>
+          <Button variant="outline" size="sm" onClick={() => { void load() }} disabled={loading}>
             <RefreshCw className={`w-4 h-4 ${loading ? "animate-spin" : ""}`} />
           </Button>
           <Button size="sm" onClick={openForm}>

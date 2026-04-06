@@ -1,6 +1,6 @@
 "use client"
 
-import { useState, useEffect, useCallback } from "react"
+import { useState, useEffect } from "react"
 import { portalFetch } from "@/lib/partner-portal/portal-fetch"
 import { QuoteEditor } from "@/components/partner-portal/crud/QuoteEditor"
 import type { DealListItem } from "@/lib/partner-portal/types"
@@ -10,20 +10,31 @@ export default function QuotesPage() {
   const [selectedDealId, setSelectedDealId] = useState<string | null>(null)
   const [loading, setLoading] = useState(true)
 
-  const load = useCallback(async () => {
-    setLoading(true)
-    const res = await portalFetch("/api/portal/deals")
-    if (res.ok) {
-      const data = await res.json()
-      setDeals(data.deals ?? [])
-      if (!selectedDealId && data.deals?.length > 0) {
-        setSelectedDealId(data.deals[0].id)
-      }
-    }
-    setLoading(false)
-  }, [])
+  useEffect(() => {
+    let active = true
 
-  useEffect(() => { load() }, [load])
+    async function initialLoad() {
+      const res = await portalFetch("/api/portal/deals")
+      if (!active) return
+      if (res.ok) {
+        const data = await res.json()
+        if (!active) return
+        setDeals(data.deals ?? [])
+        setSelectedDealId((current) => {
+          if (current && data.deals?.some((deal: DealListItem) => deal.id === current)) {
+            return current
+          }
+          return data.deals?.[0]?.id ?? null
+        })
+      }
+      setLoading(false)
+    }
+
+    void initialLoad()
+    return () => {
+      active = false
+    }
+  }, [])
 
   if (loading) {
     return <div className="py-16 text-center text-sm text-[#1a1a1a]/40">불러오는 중...</div>
