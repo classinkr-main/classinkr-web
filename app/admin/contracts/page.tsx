@@ -1,7 +1,7 @@
 "use client"
 
 import { useState, useEffect, useCallback, useRef } from "react"
-import { RefreshCw, Trash2, X, PenLine, Copy, Check, Send, History } from "lucide-react"
+import { RefreshCw, Trash2, X, PenLine, Copy, Check, Send } from "lucide-react"
 import { Button } from "@/components/ui/button"
 import type { Contract, ContractStatus, Partner } from "@/lib/supabase/database.types"
 
@@ -134,7 +134,33 @@ export default function ContractsPage() {
     setLoading(false)
   }, [])
 
-  useEffect(() => { load() }, [load])
+  useEffect(() => {
+    let alive = true
+
+    const initialize = async () => {
+      if (DUMMY_MODE) {
+        setContracts(DUMMY_CONTRACTS_LIST.map((contract) => ({ ...contract, version: 1 })))
+        setLoading(false)
+        return
+      }
+
+      setLoading(true)
+      const [cRes, pRes] = await Promise.all([
+        adminFetch("/api/admin/contracts"),
+        adminFetch("/api/admin/partners"),
+      ])
+      if (!alive) return
+      if (cRes.ok) setContracts((await cRes.json()).contracts ?? [])
+      if (pRes.ok) setPartners((await pRes.json()).partners ?? [])
+      if (alive) setLoading(false)
+    }
+
+    void initialize()
+
+    return () => {
+      alive = false
+    }
+  }, [])
 
   const partnerName = (id: string) => DUMMY_MODE ? (DUMMY_PARTNERS_MAP[id] ?? id) : (partners.find((p) => p.id === id)?.name ?? id)
 

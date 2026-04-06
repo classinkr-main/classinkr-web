@@ -34,7 +34,7 @@ export async function GET(req: NextRequest) {
       to: p.get("to") ?? undefined,
     });
     return NextResponse.json({ schedules });
-  } catch (e) {
+  } catch {
     return NextResponse.json({ error: "Failed to fetch schedules" }, { status: 500 });
   }
 }
@@ -46,7 +46,7 @@ export async function POST(req: NextRequest) {
     const body = await req.json();
     const schedule = await createInstallSchedule({ ...body, partner_id: partnerId, requested_by: "partner" });
     return NextResponse.json({ schedule }, { status: 201 });
-  } catch (e) {
+  } catch {
     return NextResponse.json({ error: "Failed to create schedule" }, { status: 500 });
   }
 }
@@ -59,7 +59,7 @@ export async function PUT(req: NextRequest) {
     if (!id) return NextResponse.json({ error: "id required" }, { status: 400 });
     const schedule = await updateInstallSchedule(id, body);
     return NextResponse.json({ schedule });
-  } catch (e) {
+  } catch {
     return NextResponse.json({ error: "Failed to update schedule" }, { status: 500 });
   }
 }

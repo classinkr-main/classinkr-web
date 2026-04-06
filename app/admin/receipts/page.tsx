@@ -58,7 +58,34 @@ export default function ReceiptsPage() {
     setLoading(false)
   }, [])
 
-  useEffect(() => { load() }, [load])
+  useEffect(() => {
+    let alive = true
+
+    const initialize = async () => {
+      if (DUMMY_MODE) {
+        setReceipts(DUMMY_RECEIPTS_LIST)
+        setLoading(false)
+        return
+      }
+
+      setLoading(true)
+      const [rRes, pRes] = await Promise.all([
+        adminFetch("/api/admin/receipts"),
+        adminFetch("/api/admin/partners"),
+      ])
+
+      if (!alive) return
+      if (rRes.ok) setReceipts((await rRes.json()).receipts ?? [])
+      if (pRes.ok) setPartners((await pRes.json()).partners ?? [])
+      if (alive) setLoading(false)
+    }
+
+    void initialize()
+
+    return () => {
+      alive = false
+    }
+  }, [])
 
   // 공급가액 입력 시 부가세 자동 계산
   function handleAmountChange(v: number) {

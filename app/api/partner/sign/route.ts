@@ -2,6 +2,13 @@ import { NextRequest, NextResponse } from "next/server";
 import { getContractByToken, applyPartnerSignature } from "@/lib/repositories/contracts";
 import { createSupabaseAdminClient } from "@/lib/supabase/admin";
 
+function sanitizeContract<T extends { sign_token: unknown; partner_signed_ip: unknown }>(contract: T) {
+  const { sign_token, partner_signed_ip, ...safe } = contract;
+  void sign_token;
+  void partner_signed_ip;
+  return safe;
+}
+
 /**
  * GET  /api/partner/sign?token=xxx  — 계약서 공개 조회 (토큰 기반)
  * POST /api/partner/sign            — 파트너 서명 제출
@@ -15,8 +22,7 @@ export async function GET(req: NextRequest) {
   if (!contract) return NextResponse.json({ error: "Invalid token" }, { status: 404 });
 
   // 서명용 응답 — 민감 필드 제외
-  const { sign_token: _, partner_signed_ip: __, ...safe } = contract;
-  return NextResponse.json({ contract: safe });
+  return NextResponse.json({ contract: sanitizeContract(contract) });
 }
 
 export async function POST(req: NextRequest) {
@@ -55,10 +61,9 @@ export async function POST(req: NextRequest) {
       "unknown";
 
     const updated = await applyPartnerSignature(contract.id, urlData.publicUrl, ip);
-    const { sign_token: _, partner_signed_ip: __, ...safe } = updated;
-    return NextResponse.json({ contract: safe });
-  } catch (e) {
-    console.error("[POST /api/partner/sign]", e);
+    return NextResponse.json({ contract: sanitizeContract(updated) });
+  } catch (error) {
+    console.error("[POST /api/partner/sign]", error);
     return NextResponse.json({ error: "서명 처리 중 오류가 발생했습니다" }, { status: 500 });
   }
 }

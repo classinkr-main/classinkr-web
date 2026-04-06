@@ -166,7 +166,8 @@ function normalizePost(raw: RawBlogPost, usedSlugs: Set<string>): BlogPost {
 
 function normalizeInput(data: Partial<BlogPostInput>, existingId?: number): BlogPostInput {
   const normalized = normalizePost({ id: existingId ?? 0, ...data }, new Set())
-  const { id: _id, ...post } = normalized
+  const post = { ...normalized }
+  delete (post as { id?: number }).id
   return post
 }
 

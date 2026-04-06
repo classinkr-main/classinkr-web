@@ -5,7 +5,7 @@ import { adminFetchJson } from "@/lib/admin-client"
 import {
   Users, TrendingUp, CheckCircle2, Mail,
   FileText, AlertCircle, ArrowUpRight, ArrowDownRight, Minus,
-  ScrollText, PenLine, Receipt, Package, CalendarDays,
+  PenLine, CalendarDays,
 } from "lucide-react"
 import {
   LineChart, Line, PieChart, Pie, Cell,

@@ -6,9 +6,7 @@ import {
   CheckCircle2,
   ChevronDown,
   ChevronRight,
-  CircleDollarSign,
   Loader2,
-  Wrench,
 } from "lucide-react"
 import { PortalNav } from "@/components/partner-portal/PortalNav"
 
@@ -96,13 +94,15 @@ type PartnerOverviewPayload = {
   recent_calendar_events: CalendarEvent[]
 }
 
+type PartnerOverviewResponse = Partial<PartnerOverviewPayload> & {
+  error?: string
+}
+
 /* ─── Constants ──────────────────────────────────────────────── */
 
 const STAGE_PIPELINE = [
   "contact", "quote", "contract", "confirmed", "installation", "payment",
 ] as const
-
-type PipelineStage = typeof STAGE_PIPELINE[number]
 
 const STAGE_CFG: Record<string, {
   label: string
@@ -242,6 +242,34 @@ function dealPaymentBadge(deal: DealItem): { label: string; cls: string } {
 
 /* ─── Main Component ──────────────────────────────────────────── */
 
+function isPartnerReadMode(value: unknown): value is PartnerReadMode {
+  return value === "v2" || value === "legacy" || value === "demo"
+}
+
+function normalizeOverviewPayload(payload: PartnerOverviewResponse): PartnerOverviewPayload {
+  const metrics = payload.metrics
+
+  return {
+    mode: isPartnerReadMode(payload.mode) ? payload.mode : DEMO.mode,
+    metrics: {
+      customer_count: metrics?.customer_count ?? 0,
+      active_deal_count: metrics?.active_deal_count ?? 0,
+      installation_deal_count: metrics?.installation_deal_count ?? 0,
+      unpaid_deal_count: metrics?.unpaid_deal_count ?? 0,
+      contracted_amount: metrics?.contracted_amount ?? 0,
+      installed_amount: metrics?.installed_amount ?? 0,
+      paid_amount: metrics?.paid_amount ?? 0,
+      outstanding_amount: metrics?.outstanding_amount ?? 0,
+    },
+    customers: Array.isArray(payload.customers) ? payload.customers : [],
+    deals: Array.isArray(payload.deals) ? payload.deals : [],
+    recent_activity: Array.isArray(payload.recent_activity) ? payload.recent_activity : [],
+    upcoming_installations: Array.isArray(payload.upcoming_installations) ? payload.upcoming_installations : [],
+    recent_payments: Array.isArray(payload.recent_payments) ? payload.recent_payments : [],
+    recent_calendar_events: Array.isArray(payload.recent_calendar_events) ? payload.recent_calendar_events : [],
+  }
+}
+
 export function PartnerPortalHome() {
   const [overview, setOverview] = useState<PartnerOverviewPayload>(DEMO)
   const [loading, setLoading]   = useState(true)
@@ -251,7 +279,11 @@ export function PartnerPortalHome() {
   useEffect(() => {
     let alive = true
     fetch("/api/partner/overview", { cache: "no-store" })
-      .then(r => r.json() as Promise<PartnerOverviewPayload>)
+      .then(async r => {
+        const payload = await r.json() as PartnerOverviewResponse
+        if (!r.ok) throw new Error(payload.error ?? "Failed to fetch overview")
+        return normalizeOverviewPayload(payload)
+      })
       .then(payload => { if (alive) { setOverview(payload); setLoading(false) } })
       .catch(() => { if (alive) { setOverview(DEMO); setLoading(false); setError("연결된 계정이 없어 데모 홈으로 표시 중입니다.") } })
     return () => { alive = false }
@@ -516,7 +548,11 @@ export function PartnerPortalHome() {
                         type="button"
                         onClick={() => setExpandedCustomers(prev => {
                           const next = new Set(prev)
-                          next.has(cs.customer.id) ? next.delete(cs.customer.id) : next.add(cs.customer.id)
+                          if (next.has(cs.customer.id)) {
+                            next.delete(cs.customer.id)
+                          } else {
+                            next.add(cs.customer.id)
+                          }
                           return next
                         })}
                         className="flex w-full items-center justify-between gap-3 px-5 py-4 text-left transition-colors hover:bg-[#faf6ef]"
