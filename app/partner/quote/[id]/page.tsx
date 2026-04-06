@@ -1,4 +1,4 @@
-"use client"
+﻿"use client"
 
 import { useState, useEffect } from "react"
 import { useParams } from "next/navigation"
@@ -102,18 +102,34 @@ export default function QuotePreviewPage() {
   const [error, setError] = useState<string | null>(null)
 
   useEffect(() => {
-    // 더미 모드: 알려진 id면 더미 반환
-    if (id && DUMMY_QUOTES[id]) {
-      setQuote(DUMMY_QUOTES[id]); setLoading(false); return
-    }
-    fetch(`/api/admin/quotes/${id}`)
-      .then(async (res) => {
+    let alive = true
+
+    const loadQuote = async () => {
+      // 더미 모드: 알려진 id면 더미 반환
+      if (id && DUMMY_QUOTES[id]) {
+        setQuote(DUMMY_QUOTES[id])
+        setLoading(false)
+        return
+      }
+
+      try {
+        const res = await fetch(`/api/admin/quotes/${id}`)
         if (!res.ok) throw new Error("견적서를 찾을 수 없습니다")
-        return res.json()
-      })
-      .then((data) => setQuote(data.quote))
-      .catch((e) => setError(e.message))
-      .finally(() => setLoading(false))
+        const data = await res.json()
+        if (!alive) return
+        setQuote(data.quote)
+      } catch (e) {
+        if (alive) setError(e instanceof Error ? e.message : "견적서를 찾을 수 없습니다")
+      } finally {
+        if (alive) setLoading(false)
+      }
+    }
+
+    void loadQuote()
+
+    return () => {
+      alive = false
+    }
   }, [id])
 
   if (loading) return (
@@ -274,9 +290,9 @@ export default function QuotePreviewPage() {
         </div>
 
         {/* 안내 문구 — 화면에서만 표시 */}
-        <p className="text-center text-xs text-[#1a1a1a]/30 pb-6 print:hidden">
-          인쇄 시 배경색을 포함하려면 브라우저 인쇄 옵션에서 "배경 그래픽"을 활성화하세요.
-        </p>
+          <p className="text-center text-xs text-[#1a1a1a]/30 pb-6 print:hidden">
+            인쇄 시 배경색을 포함하려면 브라우저 인쇄 옵션에서 &quot;배경 그래픽&quot;을 활성화하세요.
+          </p>
       </div>
     </div>
   )

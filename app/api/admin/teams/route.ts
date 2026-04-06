@@ -8,7 +8,7 @@ export async function GET(req: NextRequest) {
   try {
     const teams = await listTeams(req.nextUrl.searchParams.get("active") === "true");
     return NextResponse.json({ teams });
-  } catch (e) {
+  } catch {
     return NextResponse.json({ error: "Failed to fetch teams" }, { status: 500 });
   }
 }
@@ -18,7 +18,7 @@ export async function POST(req: NextRequest) {
   try {
     const team = await createTeam(await req.json());
     return NextResponse.json({ team }, { status: 201 });
-  } catch (e) {
+  } catch {
     return NextResponse.json({ error: "Failed to create team" }, { status: 500 });
   }
 }

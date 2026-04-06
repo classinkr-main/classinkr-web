@@ -44,7 +44,28 @@ export default function PartnerSchedulePage() {
     setLoading(false)
   }, [filter, router])
 
-  useEffect(() => { load() }, [load])
+  useEffect(() => {
+    let alive = true
+
+    const initialize = async () => {
+      setLoading(true)
+      const params = filter !== "all" ? `?status=${filter}` : ""
+      const res = await fetch(`/api/partner/schedules${params}`)
+      if (res.status === 401) {
+        router.replace("/partner/login")
+        return
+      }
+      if (!alive) return
+      if (res.ok) setSchedules((await res.json()).schedules ?? [])
+      if (alive) setLoading(false)
+    }
+
+    void initialize()
+
+    return () => {
+      alive = false
+    }
+  }, [filter, router])
 
   async function handleStatusChange(id: string, status: InstallStatus) {
     setUpdating(id)

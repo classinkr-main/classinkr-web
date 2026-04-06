@@ -9,18 +9,16 @@ import {
   ChevronDown,
   CircleDollarSign,
   Clock3,
-  FileText,
   Loader2,
   MapPinned,
   Package,
   Phone,
-  Receipt,
   Search,
   UserRound,
   Wrench,
 } from "lucide-react";
 
-import { Card, CardContent, CardHeader, CardTitle } from "@/components/ui/card";
+import { Card, CardContent } from "@/components/ui/card";
 import type {
   CustomerDetailPayload,
   CustomerListItem,
@@ -105,6 +103,41 @@ const STAGE_COLOR: Record<DealStage, string> = {
   cancelled: "bg-red-100 text-red-500",
 };
 
+const STAGE_ROADMAP_ACCENT: Record<DealStage, { glow: string; label: string }> = {
+  contact: {
+    glow: "bg-stone-200/70",
+    label: "bg-white/92 text-[#111110] ring-1 ring-[#ded8ce]",
+  },
+  quote: {
+    glow: "bg-blue-200/70",
+    label: "bg-blue-50/92 text-blue-700 ring-1 ring-blue-200/80",
+  },
+  contract: {
+    glow: "bg-violet-200/70",
+    label: "bg-violet-50/92 text-violet-700 ring-1 ring-violet-200/80",
+  },
+  confirmed: {
+    glow: "bg-indigo-200/75",
+    label: "bg-indigo-50/92 text-indigo-700 ring-1 ring-indigo-200/80",
+  },
+  installation: {
+    glow: "bg-orange-200/80",
+    label: "bg-orange-50/92 text-orange-700 ring-1 ring-orange-200/90",
+  },
+  payment: {
+    glow: "bg-emerald-200/80",
+    label: "bg-emerald-50/92 text-emerald-700 ring-1 ring-emerald-200/80",
+  },
+  closed: {
+    glow: "bg-stone-200/70",
+    label: "bg-white/92 text-[#111110] ring-1 ring-[#ded8ce]",
+  },
+  cancelled: {
+    glow: "bg-red-200/75",
+    label: "bg-red-50/92 text-red-600 ring-1 ring-red-200/80",
+  },
+};
+
 const INSTALL_STATUS_COLOR: Record<InstallationStatus, string> = {
   planned: "bg-blue-50 text-blue-600 border-blue-200",
   confirmed: "bg-indigo-50 text-indigo-600 border-indigo-200",
@@ -149,19 +182,23 @@ export default function AdminCustomersPage() {
   /* fetch customers */
   useEffect(() => {
     let alive = true;
-    setLoadingCustomers(true);
-    setError(null);
+    const loadCustomers = async () => {
+      setLoadingCustomers(true);
+      setError(null);
 
-    readJson<{ customers: CustomerListItem[] }>("/api/admin/customers")
-      .then((payload) => {
+      try {
+        const payload = await readJson<{ customers: CustomerListItem[] }>("/api/admin/customers");
         if (!alive) return;
         setCustomers(payload.customers ?? []);
         setSelectedCustomerId((c) => c ?? payload.customers?.[0]?.customer.id ?? null);
-      })
-      .catch((e) => {
+      } catch (e) {
         if (alive) setError(e instanceof Error ? e.message : "고객 목록을 불러오지 못했습니다.");
-      })
-      .finally(() => { if (alive) setLoadingCustomers(false); });
+      } finally {
+        if (alive) setLoadingCustomers(false);
+      }
+    };
+
+    void loadCustomers();
 
     return () => { alive = false; };
   }, []);
@@ -170,11 +207,12 @@ export default function AdminCustomersPage() {
   useEffect(() => {
     if (!selectedCustomerId) return;
     let alive = true;
-    setLoadingCustomerDetail(true);
-    setDealDetail(null);
+    const loadCustomerDetail = async () => {
+      setLoadingCustomerDetail(true);
+      setDealDetail(null);
 
-    readJson<{ customer: CustomerDetailPayload }>(`/api/admin/customers/${selectedCustomerId}`)
-      .then((payload) => {
+      try {
+        const payload = await readJson<{ customer: CustomerDetailPayload }>(`/api/admin/customers/${selectedCustomerId}`);
         if (!alive) return;
         setCustomerDetail(payload.customer);
         const firstDealId = payload.customer.deals[0]?.deal_id ?? null;
@@ -182,9 +220,14 @@ export default function AdminCustomersPage() {
           if (c && payload.customer.deals.some((d) => d.deal_id === c)) return c;
           return firstDealId;
         });
-      })
-      .catch((e) => { if (alive) setError(e instanceof Error ? e.message : "기관 상세 오류"); })
-      .finally(() => { if (alive) setLoadingCustomerDetail(false); });
+      } catch (e) {
+        if (alive) setError(e instanceof Error ? e.message : "기관 상세 오류");
+      } finally {
+        if (alive) setLoadingCustomerDetail(false);
+      }
+    };
+
+    void loadCustomerDetail();
 
     return () => { alive = false; };
   }, [selectedCustomerId]);
@@ -193,13 +236,21 @@ export default function AdminCustomersPage() {
   useEffect(() => {
     if (!selectedDealId) return;
     let alive = true;
-    setLoadingDealDetail(true);
-    setDealTab("overview");
+    const loadDealDetail = async () => {
+      setLoadingDealDetail(true);
+      setDealTab("overview");
 
-    readJson<{ deal: DealDetailPayload }>(`/api/admin/deals/${selectedDealId}`)
-      .then((payload) => { if (alive) setDealDetail(payload.deal); })
-      .catch((e) => { if (alive) setError(e instanceof Error ? e.message : "거래 상세 오류"); })
-      .finally(() => { if (alive) setLoadingDealDetail(false); });
+      try {
+        const payload = await readJson<{ deal: DealDetailPayload }>(`/api/admin/deals/${selectedDealId}`);
+        if (alive) setDealDetail(payload.deal);
+      } catch (e) {
+        if (alive) setError(e instanceof Error ? e.message : "거래 상세 오류");
+      } finally {
+        if (alive) setLoadingDealDetail(false);
+      }
+    };
+
+    void loadDealDetail();
 
     return () => { alive = false; };
   }, [selectedDealId]);
@@ -574,31 +625,53 @@ export default function AdminCustomersPage() {
                     </div>
 
                     {/* stage roadmap (large) */}
-                    <div className="mt-4 flex items-center gap-1 overflow-x-auto pb-1">
-                      {STAGE_ORDER.map((s, i) => {
-                        const stageIdx = STAGE_ORDER.indexOf(dealDetail.deal.current_stage);
-                        const filled = i <= stageIdx;
-                        const isCurrent = i === stageIdx;
-                        return (
-                          <div key={s} className="flex items-center gap-1">
-                            <div className="flex flex-col items-center gap-1">
-                              <div className={`h-2.5 w-2.5 rounded-full ${
-                                isCurrent
-                                  ? "ring-2 ring-offset-1 ring-[#111110] bg-[#111110]"
-                                  : filled ? "bg-[#111110]" : "bg-[#d9cfbf]"
-                              }`} />
-                              <span className={`text-[10px] whitespace-nowrap ${
-                                isCurrent ? "font-semibold text-[#111110]" : "text-[#1a1a1a]/35"
-                              }`}>
+                    <div className="mt-4 overflow-x-auto px-1 pt-1 pb-2">
+                      <div className="flex min-w-[24rem] items-start">
+                        {STAGE_ORDER.map((s, i) => {
+                          const stageIdx = STAGE_ORDER.indexOf(dealDetail.deal.current_stage);
+                          const filled = i <= stageIdx;
+                          const isCurrent = i === stageIdx;
+                          const accent = STAGE_ROADMAP_ACCENT[s];
+                          return (
+                            <div key={s} className="relative inline-flex min-w-[3.5rem] flex-1 flex-col items-center px-1">
+                              {i < STAGE_ORDER.length - 1 && (
+                                <div
+                                  className={`pointer-events-none absolute left-1/2 right-[-50%] top-[0.9rem] h-px ${
+                                    filled && i < stageIdx ? "bg-[#111110]" : "bg-[#d9cfbf]"
+                                  }`}
+                                />
+                              )}
+                              {isCurrent && (
+                                <span
+                                  className={`pointer-events-none absolute top-0 h-9 w-9 rounded-full ${accent.glow} blur-[14px] opacity-90`}
+                                />
+                              )}
+                              <div className="relative flex h-7 w-7 items-center justify-center">
+                                <div
+                                  className={`relative rounded-full transition-all duration-200 ${
+                                    isCurrent
+                                      ? "h-3.5 w-3.5 bg-[#111110] ring-2 ring-white shadow-[0_0_0_1px_rgba(17,17,16,0.08)]"
+                                      : filled
+                                      ? "h-2.5 w-2.5 bg-[#111110]"
+                                      : "h-2.5 w-2.5 bg-[#d9cfbf]"
+                                  }`}
+                                />
+                              </div>
+                              <span
+                                className={`relative z-10 mt-1 min-h-[1.6rem] whitespace-nowrap text-center text-[10px] leading-[1.35] transition-all duration-200 ${
+                                  isCurrent
+                                    ? `rounded-full px-2.5 py-1 font-semibold shadow-[0_10px_24px_rgba(31,24,15,0.08)] backdrop-blur-sm ${accent.label}`
+                                    : filled
+                                    ? "text-[#1a1a1a]/55"
+                                    : "text-[#1a1a1a]/35"
+                                }`}
+                              >
                                 {STAGE_LABEL[s]}
                               </span>
                             </div>
-                            {i < STAGE_ORDER.length - 1 && (
-                              <div className={`mb-3.5 h-px w-6 ${filled && i < stageIdx ? "bg-[#111110]" : "bg-[#d9cfbf]"}`} />
-                            )}
-                          </div>
-                        );
-                      })}
+                          );
+                        })}
+                      </div>
                     </div>
                   </div>
 

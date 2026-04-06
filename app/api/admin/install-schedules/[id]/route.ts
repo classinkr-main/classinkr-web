@@ -8,7 +8,7 @@ export async function PUT(req: NextRequest, { params }: { params: Promise<{ id: 
   const { id } = await params;
   try {
     return NextResponse.json({ schedule: await updateInstallSchedule(id, await req.json()) });
-  } catch (e) {
+  } catch {
     return NextResponse.json({ error: "Failed to update schedule" }, { status: 500 });
   }
 }
@@ -19,7 +19,7 @@ export async function DELETE(req: NextRequest, { params }: { params: Promise<{ i
   try {
     await deleteInstallSchedule(id);
     return NextResponse.json({ ok: true });
-  } catch (e) {
+  } catch {
     return NextResponse.json({ error: "Failed to delete schedule" }, { status: 500 });
   }
 }

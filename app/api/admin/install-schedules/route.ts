@@ -16,7 +16,7 @@ export async function GET(req: NextRequest) {
       from: p.get("from") ?? undefined,
       to: p.get("to") ?? undefined,
     })});
-  } catch (e) {
+  } catch {
     return NextResponse.json({ error: "Failed to fetch schedules" }, { status: 500 });
   }
 }
@@ -26,7 +26,7 @@ export async function POST(req: NextRequest) {
   try {
     const body = await req.json();
     return NextResponse.json({ schedule: await createInstallSchedule({ ...body, requested_by: "admin" }) }, { status: 201 });
-  } catch (e) {
+  } catch {
     return NextResponse.json({ error: "Failed to create schedule" }, { status: 500 });
   }
 }

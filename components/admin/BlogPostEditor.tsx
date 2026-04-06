@@ -1,4 +1,4 @@
-"use client"
+﻿"use client"
 
 import Image from "next/image"
 import Link from "next/link"
@@ -532,7 +532,7 @@ export default function BlogPostEditor({
         ),
       })
       if (!res.ok || !res.body) {
-        const err = await res.json().catch(() => ({ error: "AI 처리 중 오류가 발생했습니다." })) as { error?: string }
+        await res.json().catch(() => ({ error: "AI 처리 중 오류가 발생했습니다." })) as { error?: string }
         setAiState({ action, status: "error", result: "AI 응답 중 오류가 발생했습니다. 잠시 후 다시 시도해주세요." })
         return
       }

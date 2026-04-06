@@ -30,7 +30,27 @@ export default function PartnerProductsPage() {
     setLoading(false)
   }
 
-  useEffect(() => { load() }, [])
+  useEffect(() => {
+    let alive = true
+
+    const initialize = async () => {
+      setLoading(true)
+      const res = await fetch("/api/partner/schedules?summary=true")
+      if (res.status === 401) {
+        router.replace("/partner/login")
+        return
+      }
+      if (!alive) return
+      if (res.ok) setSummary((await res.json()).summary ?? [])
+      if (alive) setLoading(false)
+    }
+
+    void initialize()
+
+    return () => {
+      alive = false
+    }
+  }, [router])
 
   const totals = summary.reduce(
     (acc, s) => ({ quoted: acc.quoted + s.quoted_qty, contracted: acc.contracted + s.contracted_qty, scheduled: acc.scheduled + s.scheduled_qty, installed: acc.installed + s.installed_qty }),
