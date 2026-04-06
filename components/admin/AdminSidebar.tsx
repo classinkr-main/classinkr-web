@@ -54,12 +54,11 @@ const NAV: NavItem[] = [
   { href: "/admin/users",     label: "회원 관리",   icon: <UserCog className="w-4 h-4" />,        roles: STAFF_ADMIN },
   { href: "/admin/settings",  label: "Settings",   icon: <Settings className="w-4 h-4" />,       roles: STAFF_ADMIN },
   { href: "/admin/dev",       label: "Dev Mode",   icon: <Code2 className="w-4 h-4" />,          roles: STAFF_ADMIN, badge: "Beta" },
-  // ── 파트너 포털 (PARTNER 포함) ──
-  { href: "/admin/commercial",label: "대시보드",    icon: <LayoutDashboard className="w-4 h-4" />, roles: STAFF_ADMIN, section: "파트너 포털" },
-  { href: "/admin/partners",  label: "고객",        icon: <Handshake className="w-4 h-4" />,       roles: STAFF_ADMIN },
-  { href: "/admin/quotes",    label: "견적서",      icon: <ClipboardList className="w-4 h-4" />, roles: STAFF_EDITOR },
-  { href: "/admin/contracts", label: "계약서",      icon: <ScrollText className="w-4 h-4" />,    roles: STAFF_ADMIN },
-  { href: "/admin/receipts",  label: "영수증",      icon: <Receipt className="w-4 h-4" />,       roles: STAFF_ADMIN },
+  // ── 파트너 포털 (통합 페이지로 이동) ──
+  { href: "/partner",         label: "파트너 포털", icon: <Handshake className="w-4 h-4" />,       roles: STAFF_ADMIN, section: "파트너 포털" },
+  // legacy admin 페이지 (향후 제거 예정)
+  { href: "/admin/commercial",label: "대시보드 (기존)",    icon: <LayoutDashboard className="w-4 h-4" />, roles: STAFF_ADMIN },
+  { href: "/admin/partners",  label: "고객 (기존)",        icon: <ClipboardList className="w-4 h-4" />,   roles: STAFF_ADMIN },
 ]
 
 const ROLE_LABEL: Record<string, string> = {

@@ -1,0 +1,214 @@
+"use client"
+
+import { useState, useEffect, useCallback } from "react"
+import { Plus, RefreshCw, Trash2, X, Download } from "lucide-react"
+import { Button } from "@/components/ui/button"
+import { portalFetch } from "@/lib/partner-portal/portal-fetch"
+import type { ReceiptRecord } from "@/lib/partner-portal/types"
+
+type PaymentMethod = "bank_transfer" | "card" | "cash"
+
+const METHOD_LABEL: Record<PaymentMethod, string> = {
+  bank_transfer: "계좌이체",
+  card: "카드",
+  cash: "현금",
+}
+
+const EMPTY_FORM = {
+  partner_account_id: "",
+  customer_id: "",
+  deal_id: "",
+  amount: 0,
+  tax_amount: 0,
+  total_amount: 0,
+  payment_method: "bank_transfer" as PaymentMethod,
+  paid_at: "",
+  notes: "",
+}
+
+interface Props {
+  dealId?: string
+  partnerAccountId?: string
+  customerId?: string
+}
+
+export function ReceiptForm({ dealId, partnerAccountId, customerId }: Props) {
+  const [receipts, setReceipts] = useState<ReceiptRecord[]>([])
+  const [loading, setLoading] = useState(true)
+  const [showForm, setShowForm] = useState(false)
+  const [form, setForm] = useState(EMPTY_FORM)
+  const [saving, setSaving] = useState(false)
+
+  const load = useCallback(async () => {
+    if (!dealId) return
+    setLoading(true)
+    const res = await portalFetch(`/api/portal/deals/${dealId}`)
+    if (res.ok) {
+      const data = await res.json()
+      setReceipts(data.receipts ?? [])
+    }
+    setLoading(false)
+  }, [dealId])
+
+  useEffect(() => { load() }, [load])
+
+  function handleAmountChange(v: number) {
+    const tax = Math.round(v * 0.1)
+    setForm({ ...form, amount: v, tax_amount: tax, total_amount: v + tax })
+  }
+
+  async function handleCreate(e: React.FormEvent) {
+    e.preventDefault()
+    setSaving(true)
+
+    // 먼저 결제 등록
+    const paymentRes = await portalFetch("/api/portal/payments", {
+      method: "POST",
+      body: JSON.stringify({
+        partner_account_id: partnerAccountId,
+        customer_id: customerId,
+        deal_id: dealId,
+        amount: form.total_amount,
+        paid_at: form.paid_at ? new Date(form.paid_at).toISOString() : new Date().toISOString(),
+        payment_method: form.payment_method,
+        memo: form.notes || null,
+      }),
+    })
+
+    if (!paymentRes.ok) {
+      alert("결제 등록 실패")
+      setSaving(false)
+      return
+    }
+    const { payment } = await paymentRes.json()
+
+    // 영수증 발행
+    const res = await portalFetch("/api/portal/receipts", {
+      method: "POST",
+      body: JSON.stringify({
+        partner_account_id: partnerAccountId,
+        customer_id: customerId,
+        deal_id: dealId,
+        payment_id: payment.id,
+        total_amount: form.total_amount,
+        notes: form.notes || null,
+      }),
+    })
+
+    if (res.ok) {
+      setShowForm(false)
+      setForm(EMPTY_FORM)
+      load()
+    }
+    setSaving(false)
+  }
+
+  return (
+    <div className="space-y-4">
+      <div className="flex items-center justify-between">
+        <h2 className="text-lg font-semibold text-[#1a1a1a]">영수증</h2>
+        <div className="flex gap-2">
+          <Button variant="outline" size="sm" onClick={load} disabled={loading}>
+            <RefreshCw className={`w-4 h-4 ${loading ? "animate-spin" : ""}`} />
+          </Button>
+          <Button size="sm" onClick={() => setShowForm(true)}>
+            <Plus className="w-4 h-4 mr-1" />영수증 발행
+          </Button>
+        </div>
+      </div>
+
+      {loading ? (
+        <div className="py-12 text-center text-sm text-[#1a1a1a]/40">불러오는 중...</div>
+      ) : receipts.length === 0 ? (
+        <div className="py-12 text-center text-sm text-[#1a1a1a]/40 border border-[#e8e8e4] rounded-xl bg-white">
+          발행된 영수증이 없습니다
+        </div>
+      ) : (
+        <div className="border border-[#e8e8e4] rounded-xl overflow-hidden bg-white">
+          <table className="w-full text-sm">
+            <thead className="bg-[#f7f7f5] border-b border-[#e8e8e4]">
+              <tr>
+                {["번호", "총액", "결제일", ""].map((h) => (
+                  <th key={h} className="px-4 py-3 text-left font-medium text-[#1a1a1a]/60 text-xs">{h}</th>
+                ))}
+              </tr>
+            </thead>
+            <tbody>
+              {receipts.map((r) => (
+                <tr key={r.id} className="border-b border-[#f0f0ec] hover:bg-[#fafafa] transition-colors">
+                  <td className="px-4 py-3 font-mono text-xs text-[#1a1a1a]/60">{r.receipt_number}</td>
+                  <td className="px-4 py-3 font-medium">{r.total_amount.toLocaleString()}원</td>
+                  <td className="px-4 py-3 text-xs text-[#1a1a1a]/50">
+                    {r.created_at ? new Date(r.created_at).toLocaleDateString("ko") : "—"}
+                  </td>
+                  <td className="px-4 py-3">
+                    {r.pdf_url && (
+                      <a href={r.pdf_url} target="_blank" rel="noreferrer">
+                        <Button variant="ghost" size="sm" className="h-7 px-2 text-xs">
+                          <Download className="w-3.5 h-3.5 mr-1" />PDF
+                        </Button>
+                      </a>
+                    )}
+                  </td>
+                </tr>
+              ))}
+            </tbody>
+          </table>
+        </div>
+      )}
+
+      {showForm && (
+        <div className="fixed inset-0 bg-black/30 z-50 flex items-center justify-center p-4">
+          <div className="bg-white rounded-2xl shadow-xl w-full max-w-lg">
+            <div className="flex items-center justify-between px-6 py-4 border-b border-[#e8e8e4]">
+              <h2 className="text-base font-semibold">영수증 발행</h2>
+              <button onClick={() => setShowForm(false)} className="text-[#1a1a1a]/40 hover:text-[#1a1a1a]">
+                <X className="w-5 h-5" />
+              </button>
+            </div>
+            <form onSubmit={handleCreate} className="p-6 space-y-4">
+              <div className="grid grid-cols-2 gap-4">
+                <div>
+                  <label className="text-xs font-medium text-[#1a1a1a]/60 mb-1 block">결제방법</label>
+                  <select value={form.payment_method}
+                    onChange={(e) => setForm({ ...form, payment_method: e.target.value as PaymentMethod })}
+                    className="w-full border border-[#e8e8e4] rounded-lg px-3 py-2 text-sm focus:outline-none focus:border-[#1a1a1a]">
+                    <option value="bank_transfer">계좌이체</option>
+                    <option value="card">카드</option>
+                    <option value="cash">현금</option>
+                  </select>
+                </div>
+                <div>
+                  <label className="text-xs font-medium text-[#1a1a1a]/60 mb-1 block">결제일</label>
+                  <input type="date" value={form.paid_at}
+                    onChange={(e) => setForm({ ...form, paid_at: e.target.value })}
+                    className="w-full border border-[#e8e8e4] rounded-lg px-3 py-2 text-sm focus:outline-none focus:border-[#1a1a1a]" />
+                </div>
+                <div>
+                  <label className="text-xs font-medium text-[#1a1a1a]/60 mb-1 block">공급가액 *</label>
+                  <input type="number" required min={0} value={form.amount || ""}
+                    onChange={(e) => handleAmountChange(+e.target.value)}
+                    className="w-full border border-[#e8e8e4] rounded-lg px-3 py-2 text-sm focus:outline-none focus:border-[#1a1a1a]" />
+                </div>
+                <div>
+                  <label className="text-xs font-medium text-[#1a1a1a]/60 mb-1 block">합계 (VAT 포함)</label>
+                  <input readOnly value={form.total_amount.toLocaleString() + "원"}
+                    className="w-full border border-[#e8e8e4] rounded-lg px-3 py-2 text-sm bg-[#f7f7f5] text-[#1a1a1a]/60" />
+                </div>
+                <div className="col-span-2">
+                  <label className="text-xs font-medium text-[#1a1a1a]/60 mb-1 block">메모</label>
+                  <textarea value={form.notes} onChange={(e) => setForm({ ...form, notes: e.target.value })}
+                    rows={2} className="w-full border border-[#e8e8e4] rounded-lg px-3 py-2 text-sm focus:outline-none focus:border-[#1a1a1a] resize-none" />
+                </div>
+              </div>
+              <div className="flex justify-end gap-2 pt-2">
+                <Button type="button" variant="outline" onClick={() => setShowForm(false)}>취소</Button>
+                <Button type="submit" disabled={saving}>{saving ? "처리 중..." : "발행"}</Button>
+              </div>
+            </form>
+          </div>
+        </div>
+      )}
+    </div>
+  )
+}

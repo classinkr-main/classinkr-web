@@ -2,24 +2,24 @@
 
 import Link from "next/link"
 import { usePathname } from "next/navigation"
-import { CalendarDays, FileText, House } from "lucide-react"
+import {
+  CalendarDays,
+  Calculator,
+  FileSignature,
+  FileText,
+  House,
+  Receipt,
+  Users,
+} from "lucide-react"
 
 const ITEMS = [
-  {
-    href: "/partner",
-    label: "홈",
-    icon: House,
-  },
-  {
-    href: "/partner/documents",
-    label: "문서",
-    icon: FileText,
-  },
-  {
-    href: "/partner/calendar",
-    label: "캘린더",
-    icon: CalendarDays,
-  },
+  { href: "/partner", label: "홈", icon: House },
+  { href: "/partner/customers", label: "고객", icon: Users },
+  { href: "/partner/quotes", label: "견적서", icon: Calculator },
+  { href: "/partner/contracts", label: "계약서", icon: FileSignature },
+  { href: "/partner/receipts", label: "영수증", icon: Receipt },
+  { href: "/partner/documents", label: "문서", icon: FileText },
+  { href: "/partner/calendar", label: "캘린더", icon: CalendarDays },
 ] as const
 
 export function PortalNav() {
