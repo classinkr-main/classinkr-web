@@ -117,14 +117,32 @@ export default function AdminLayout({ children }: { children: React.ReactNode })
 
   return (
     <div className="flex min-h-[100dvh] flex-col bg-[#FAFAF8] lg:flex-row">
-      {session && (
+      {session ? (
         <AdminSidebar
           role={session.role}
           name={session.name}
           email={session.email}
         />
+      ) : (
+        <aside
+          aria-hidden="true"
+          className="hidden border-b border-[#e8e8e4] bg-white lg:flex lg:min-h-screen lg:w-60 lg:shrink-0 lg:flex-col lg:border-r lg:border-b-0"
+        >
+          <div className="border-b border-[#e8e8e4] px-5 py-6">
+            <div className="h-3 w-12 rounded-full bg-[#f0f0ec] animate-pulse" />
+            <div className="mt-2 h-4 w-20 rounded-full bg-[#f0f0ec] animate-pulse" />
+          </div>
+          <div className="flex-1 px-4 py-5">
+            <div className="h-32 rounded-2xl border border-dashed border-[#ecece8] bg-[#fafaf8]" />
+          </div>
+          <div className="px-4 pb-5">
+            <div className="h-10 rounded-lg bg-[#f5f5f2] animate-pulse" />
+          </div>
+        </aside>
       )}
-      <main className="min-w-0 flex-1 overflow-x-hidden">{children}</main>
+      <main className="min-w-0 flex-1 overflow-x-hidden">
+        <div className="mx-auto w-full max-w-[1320px]">{children}</div>
+      </main>
     </div>
   )
 }

@@ -1,11 +1,17 @@
 "use client"
 
 import { useState } from "react"
+import { usePathname } from "next/navigation"
 import { MessageCircle, X } from "lucide-react"
 import { motion, AnimatePresence } from "framer-motion"
 
 export function FloatingChatbot() {
+    const pathname = usePathname()
     const [isOpen, setIsOpen] = useState(false)
+
+    if (pathname.startsWith("/admin")) {
+        return null
+    }
 
     return (
         <div className="fixed bottom-6 right-6 z-50 flex flex-col items-end">

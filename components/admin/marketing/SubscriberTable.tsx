@@ -11,19 +11,51 @@
 
 import { Badge } from "@/components/ui/badge"
 import { Button } from "@/components/ui/button"
-import { Trash2, Mail } from "lucide-react"
+import { Mail, Send, Trash2 } from "lucide-react"
 import type { Subscriber } from "@/lib/marketing-types"
 
 interface Props {
   subscribers: Subscriber[]
   onDelete: (subscriber: Subscriber) => void
+  onCompose?: (subscriber: Subscriber) => void
+  onAddSubscriber?: () => void
+  onComposeCampaign?: () => void
 }
 
-export default function SubscriberTable({ subscribers, onDelete }: Props) {
+export default function SubscriberTable({
+  subscribers,
+  onDelete,
+  onCompose,
+  onAddSubscriber,
+  onComposeCampaign,
+}: Props) {
   if (subscribers.length === 0) {
     return (
-      <div className="text-center py-16 text-[#1a1a1a]/40 text-sm">
-        구독자가 없습니다. 뉴스레터 구독 또는 수동 추가를 통해 구독자를 등록하세요.
+      <div className="rounded-2xl border border-dashed border-[#e0e0dc] bg-[#fafaf8] px-5 py-12 text-center">
+        <p className="text-[14px] font-medium text-[#111110]">구독자가 없습니다.</p>
+        <p className="mx-auto mt-1 max-w-md text-[12px] leading-relaxed text-[#1a1a1a]/40">
+          뉴스레터 구독, 데모 신청, 문의 유입이 들어오면 이 테이블에서 바로 정리할 수 있습니다.
+        </p>
+        <div className="mt-4 flex flex-wrap justify-center gap-2">
+          <Button
+            type="button"
+            size="sm"
+            className="bg-[#084734] hover:bg-[#084734]/90"
+            onClick={onAddSubscriber}
+            disabled={!onAddSubscriber}
+          >
+            구독자 추가
+          </Button>
+          <Button
+            type="button"
+            variant="outline"
+            size="sm"
+            onClick={onComposeCampaign}
+            disabled={!onComposeCampaign}
+          >
+            이메일 작성
+          </Button>
+        </div>
       </div>
     )
   }
@@ -87,14 +119,27 @@ export default function SubscriberTable({ subscribers, onDelete }: Props) {
                 {new Date(s.optInAt).toLocaleDateString("ko-KR")}
               </td>
               <td className="px-4 py-3 text-right">
-                <Button
-                  variant="ghost"
-                  size="sm"
-                  className="h-7 w-7 p-0 text-red-400 hover:text-red-600"
-                  onClick={() => onDelete(s)}
-                >
-                  <Trash2 className="w-3.5 h-3.5" />
-                </Button>
+                <div className="flex items-center justify-end gap-1.5">
+                  {onCompose && (
+                    <Button
+                      variant="outline"
+                      size="sm"
+                      className="h-7 gap-1.5 border-[#e8e8e4] bg-white px-2.5 text-[11px] text-[#084734] hover:bg-[#084734]/5 hover:text-[#063523]"
+                      onClick={() => onCompose(s)}
+                    >
+                      <Send className="h-3.5 w-3.5" />
+                      <span className="hidden sm:inline">작성</span>
+                    </Button>
+                  )}
+                  <Button
+                    variant="ghost"
+                    size="sm"
+                    className="h-7 w-7 p-0 text-red-400 hover:text-red-600"
+                    onClick={() => onDelete(s)}
+                  >
+                    <Trash2 className="w-3.5 h-3.5" />
+                  </Button>
+                </div>
               </td>
             </tr>
           ))}

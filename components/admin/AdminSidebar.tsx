@@ -3,7 +3,7 @@
 import Link from "next/link"
 import { usePathname, useRouter } from "next/navigation"
 import type { ReactNode } from "react"
-import { useState } from "react"
+import { useEffect, useState } from "react"
 import {
   BarChart2,
   Building2,
@@ -88,6 +88,19 @@ export default function AdminSidebar({ role, name, email }: Props) {
     if (typeof window === "undefined") return false
     return localStorage.getItem("admin_sidebar_collapsed") === "true"
   })
+  const [isDesktop, setIsDesktop] = useState(false)
+
+  useEffect(() => {
+    const media = window.matchMedia("(min-width: 1024px)")
+    const update = () => setIsDesktop(media.matches)
+
+    update()
+    media.addEventListener("change", update)
+
+    return () => media.removeEventListener("change", update)
+  }, [])
+
+  const effectiveCollapsed = isDesktop && collapsed
 
   const toggle = () => {
     setCollapsed((prev) => {
@@ -123,12 +136,12 @@ export default function AdminSidebar({ role, name, email }: Props) {
 
   return (
     <aside
-      className={`flex w-full shrink-0 flex-col border-b border-[#e8e8e4] bg-white lg:min-h-screen lg:border-r lg:border-b-0 ${
-        collapsed ? "lg:w-16" : "lg:w-60"
+      className={`flex w-full shrink-0 flex-col border-b border-[#e8e8e4] bg-white lg:sticky lg:top-0 lg:min-h-screen lg:border-r lg:border-b-0 ${
+        effectiveCollapsed ? "lg:w-16" : "lg:w-60"
       }`}
     >
       <div className="flex items-center border-b border-[#e8e8e4] px-4 py-4 sm:px-5 lg:pt-6 lg:pb-4">
-        {!collapsed && (
+        {!effectiveCollapsed && (
           <div className="flex-1">
             <p className="mb-0.5 text-[11px] font-medium uppercase tracking-widest text-[#1a1a1a]/30">Classin</p>
             <p className="text-[15px] font-semibold text-[#111110]">Admin</p>
@@ -137,15 +150,15 @@ export default function AdminSidebar({ role, name, email }: Props) {
         <button
           onClick={toggle}
           className={`rounded-md p-1 text-[#1a1a1a]/30 transition-colors hover:bg-[#f5f5f2] hover:text-[#111110] ${
-            collapsed ? "ml-0 lg:mx-auto" : "ml-auto"
+            effectiveCollapsed ? "ml-0 lg:mx-auto" : "ml-auto"
           }`}
-          title={collapsed ? "사이드바 열기" : "사이드바 닫기"}
+          title={effectiveCollapsed ? "사이드바 열기" : "사이드바 닫기"}
         >
-          {collapsed ? <SquareChevronRight className="h-4 w-4" /> : <SquareChevronLeft className="h-4 w-4" />}
+          {effectiveCollapsed ? <SquareChevronRight className="h-4 w-4" /> : <SquareChevronLeft className="h-4 w-4" />}
         </button>
       </div>
 
-      {!collapsed && (
+      {!effectiveCollapsed && (
         <div className="border-b border-[#e8e8e4] px-4 py-3 sm:px-5">
           <p className="text-[12px] font-medium text-[#111110]">{name}</p>
           <p className="text-[11px] text-[#1a1a1a]/40">
@@ -154,10 +167,10 @@ export default function AdminSidebar({ role, name, email }: Props) {
         </div>
       )}
 
-      <nav className={`flex-1 px-3 py-4 lg:overflow-y-auto ${collapsed ? "lg:px-2" : ""}`}>
+      <nav className={`flex-1 px-3 py-4 lg:overflow-y-auto ${effectiveCollapsed ? "lg:px-2" : ""}`}>
         {groupedNav.map(({ section, items }, groupIndex) => (
           <div key={section} className={groupIndex === 0 ? "" : "mt-5 border-t border-[#f0f0ec] pt-4"}>
-            {!collapsed && (
+            {!effectiveCollapsed && (
               <div className="px-3 pb-2">
                 <p className="text-[10px] font-semibold uppercase tracking-[0.16em] text-[#1a1a1a]/28">
                   {SECTION_META[section].label}
@@ -175,9 +188,9 @@ export default function AdminSidebar({ role, name, email }: Props) {
                   <Link
                     key={item.href}
                     href={item.href}
-                    title={collapsed ? item.label : undefined}
+                    title={effectiveCollapsed ? item.label : undefined}
                     className={`group flex items-center gap-2.5 rounded-lg text-[13px] font-medium transition-colors ${
-                      collapsed ? "justify-center px-2 py-2.5" : "px-3 py-2"
+                      effectiveCollapsed ? "justify-center px-2 py-2.5" : "px-3 py-2"
                     } ${
                       isActive
                         ? "bg-[#111110] text-white"
@@ -187,7 +200,7 @@ export default function AdminSidebar({ role, name, email }: Props) {
                     <span className={isActive ? "text-white" : "text-[#1a1a1a]/40 group-hover:text-[#111110]"}>
                       {item.icon}
                     </span>
-                    {!collapsed && (
+                    {!effectiveCollapsed && (
                       <>
                         <span className="flex-1">{item.label}</span>
                         {item.badge && (
@@ -208,7 +221,7 @@ export default function AdminSidebar({ role, name, email }: Props) {
         ))}
       </nav>
 
-      {!collapsed && (
+      {!effectiveCollapsed && (
         <div className="px-3 pb-3">
           <div className="mb-3 rounded-xl border border-[#e8e8e4] bg-[#fafaf8] px-3 py-3">
             <p className="text-[11px] font-medium text-[#111110]">오늘 빠른 이동</p>
@@ -227,16 +240,16 @@ export default function AdminSidebar({ role, name, email }: Props) {
         </div>
       )}
 
-      <div className={`pb-5 ${collapsed ? "px-2 lg:px-2" : "px-3"}`}>
+      <div className={`pb-5 ${effectiveCollapsed ? "px-2 lg:px-2" : "px-3"}`}>
         <button
           onClick={handleLogout}
-          title={collapsed ? "로그아웃" : undefined}
+          title={effectiveCollapsed ? "로그아웃" : undefined}
           className={`flex w-full items-center gap-2.5 rounded-lg text-[13px] text-[#1a1a1a]/40 transition-colors hover:bg-red-50 hover:text-red-500 ${
-            collapsed ? "justify-center px-2 py-2.5" : "px-3 py-2"
+            effectiveCollapsed ? "justify-center px-2 py-2.5" : "px-3 py-2"
           }`}
         >
           <LogOut className="h-4 w-4 shrink-0" />
-          {!collapsed && "로그아웃"}
+          {!effectiveCollapsed && "로그아웃"}
         </button>
       </div>
     </aside>

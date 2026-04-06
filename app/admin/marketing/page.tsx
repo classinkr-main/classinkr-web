@@ -428,6 +428,19 @@ export default function AdminMarketingPage() {
 
   const latestCampaign = [...campaigns].sort((a, b) => safeTime(b.sentAt ?? b.createdAt) - safeTime(a.sentAt ?? a.createdAt))[0]
   const latestSubscriber = [...subscribers].sort((a, b) => safeTime(b.createdAt) - safeTime(a.createdAt))[0]
+  const recentWindowStart = Date.now() - 30 * 24 * 60 * 60 * 1000
+  const recentCampaignWindow = campaigns.filter((campaign) => safeTime(campaign.sentAt ?? campaign.createdAt) >= recentWindowStart)
+  const recentSentCampaigns = recentCampaignWindow.filter((campaign) => campaign.status === "sent")
+  const recentFailedCampaigns = recentCampaignWindow.filter((campaign) => campaign.status === "failed")
+  const recentDraftCampaigns = recentCampaignWindow.filter((campaign) => campaign.status === "draft")
+  const recentSuccessRate =
+    recentSentCampaigns.length + recentFailedCampaigns.length > 0
+      ? Math.round((recentSentCampaigns.length / (recentSentCampaigns.length + recentFailedCampaigns.length)) * 100)
+      : null
+  const recentAudienceAverage =
+    recentSentCampaigns.length > 0
+      ? Math.round(recentSentCampaigns.reduce((sum, campaign) => sum + campaign.recipientCount, 0) / recentSentCampaigns.length)
+      : 0
 
   const sourceCounts = countBy(subscribers.map((s) => s.source))
   const sourceOrder = ["demo_modal", "contact_page", "newsletter", "manual"] as const
@@ -438,6 +451,7 @@ export default function AdminMarketingPage() {
     }))
     .filter((row) => row.count > 0)
     .sort((a, b) => b.count - a.count)
+  const topSource = sourceRows[0]
 
   const recentCampaigns = [...campaigns].sort((a, b) => safeTime(b.sentAt ?? b.createdAt) - safeTime(a.sentAt ?? a.createdAt)).slice(0, 4)
 
@@ -754,6 +768,16 @@ export default function AdminMarketingPage() {
     showToast("success", `"${campaign.subject}" 캠페인을 작성기로 가져왔습니다.`)
   }, [savedSegments, showToast])
 
+  const handleComposeFromSubscriber = useCallback((subscriber: Subscriber) => {
+    setComposerDraft((current) => ({
+      ...current,
+      targetTags: [...subscriber.tags],
+    }))
+    setDraftNotice(`${subscriber.name} 구독자를 기준으로 초안을 열었습니다.`)
+    setActiveTab("compose")
+    showToast("success", `${subscriber.name} 기준으로 발송 초안을 열었습니다.`)
+  }, [showToast])
+
   const handleSendEmail = async (data: EmailDraft) => {
     const evaluated = evaluateDraft(data)
     const blockingErrors = evaluated.checks.filter((check) => check.status === "error")
@@ -878,6 +902,71 @@ export default function AdminMarketingPage() {
             <StatCard icon={<Send className="h-4 w-4" />} label="발송 캠페인" value={campaigns.length} hint={`발송 ${sentCount} · 초안 ${draftCount}`} />
             <StatCard icon={<AlertCircle className="h-4 w-4" />} label="실패 캠페인" value={failedCount} hint="즉시 확인 필요" tone="danger" />
           </div>
+
+          <Panel
+            title="운영 요약"
+            description="최근 30일 발송 결과와 현재 초안 상태를 한 번에 봅니다."
+            action={
+              <div className="flex flex-wrap gap-2">
+                <Button variant="outline" size="sm" onClick={() => setActiveTab("compose")}>
+                  <Send className="mr-1.5 h-4 w-4" />
+                  이메일 작성
+                </Button>
+                <Button variant="outline" size="sm" onClick={() => setActiveTab("history")}>
+                  <History className="mr-1.5 h-4 w-4" />
+                  발송 이력
+                </Button>
+              </div>
+            }
+          >
+            <div className="grid gap-3 md:grid-cols-2 xl:grid-cols-4">
+              <div className="rounded-2xl border border-[#e8e8e4] bg-[#fafaf8] p-4">
+                <p className="text-[11px] font-medium uppercase tracking-[0.2em] text-[#1a1a1a]/35">최근 30일 발송</p>
+                <p className="mt-2 text-[28px] font-bold tracking-[-0.03em] text-[#111110]">{recentSentCampaigns.length}건</p>
+                <p className="mt-1 text-[12px] leading-relaxed text-[#1a1a1a]/45">
+                  {recentCampaignWindow.length > 0
+                    ? `실패 ${recentFailedCampaigns.length}건 · 초안 ${recentDraftCampaigns.length}건`
+                    : "아직 최근 발송 기록이 없습니다."}
+                </p>
+              </div>
+              <div className="rounded-2xl border border-[#e8e8e4] bg-[#fafaf8] p-4">
+                <p className="text-[11px] font-medium uppercase tracking-[0.2em] text-[#1a1a1a]/35">발송 성공률</p>
+                <p className="mt-2 text-[28px] font-bold tracking-[-0.03em] text-[#111110]">
+                  {recentSuccessRate === null ? "—" : `${recentSuccessRate}%`}
+                </p>
+                <p className="mt-1 text-[12px] leading-relaxed text-[#1a1a1a]/45">
+                  {recentSuccessRate === null
+                    ? "발송과 실패가 쌓이면 자동으로 보입니다."
+                    : "최근 발송 기준으로 성공/실패를 단순화해 봅니다."}
+                </p>
+              </div>
+              <div className="rounded-2xl border border-[#e8e8e4] bg-[#fafaf8] p-4">
+                <p className="text-[11px] font-medium uppercase tracking-[0.2em] text-[#1a1a1a]/35">평균 대상 규모</p>
+                <p className="mt-2 text-[28px] font-bold tracking-[-0.03em] text-[#111110]">
+                  {recentSentCampaigns.length > 0 ? `${recentAudienceAverage}명` : "대기"}
+                </p>
+                <p className="mt-1 text-[12px] leading-relaxed text-[#1a1a1a]/45">
+                  {recentSentCampaigns.length > 0
+                    ? "최근 발송의 예상 도달 규모입니다."
+                    : "세그먼트가 잡히면 평균 대상이 표시됩니다."}
+                </p>
+              </div>
+              <div className="rounded-2xl border border-[#e8e8e4] bg-[#fafaf8] p-4">
+                <p className="text-[11px] font-medium uppercase tracking-[0.2em] text-[#1a1a1a]/35">현재 초안</p>
+                <p className="mt-2 text-[28px] font-bold tracking-[-0.03em] text-[#111110]">{composerReview.readiness.label}</p>
+                <p className="mt-1 text-[12px] leading-relaxed text-[#1a1a1a]/45">
+                  {composerReview.selectedAudience}명 대상 · {composerReview.readiness.detail}
+                </p>
+              </div>
+            </div>
+            <div className="mt-4 flex flex-wrap items-center gap-2 text-[12px] text-[#1a1a1a]/45">
+              <MiniBadge tone={failedCount > 0 ? "warning" : "success"}>
+                {failedCount > 0 ? `확인 필요 ${failedCount}건` : "운영 안정"}
+              </MiniBadge>
+              <span>{latestCampaign ? `최근 발송: ${latestCampaign.subject}` : "최근 발송 없음"}</span>
+              {topSource && <span>주요 유입: {topSource.source === "demo_modal" ? "데모 신청" : topSource.source === "contact_page" ? "문의" : topSource.source === "newsletter" ? "뉴스레터" : "수동 추가"}</span>}
+            </div>
+          </Panel>
 
           <div className="grid gap-3 lg:grid-cols-3">
             {workflowSteps.map((step) => (
@@ -1006,21 +1095,36 @@ export default function AdminMarketingPage() {
                     title="조건에 맞는 구독자가 없습니다."
                     description="검색어나 상태 필터를 조금 넓혀보세요. 태그와 유입 경로를 함께 보면 더 빨리 찾을 수 있습니다."
                     action={
-                      <Button
-                        variant="outline"
-                        size="sm"
-                        onClick={() => {
-                          setQuery("")
-                          setStatusFilter("all")
-                          setSourceFilter("all")
-                        }}
-                      >
-                        필터 초기화
-                      </Button>
+                      <div className="flex flex-wrap items-center justify-center gap-2">
+                        <Button
+                          variant="outline"
+                          size="sm"
+                          onClick={() => {
+                            setQuery("")
+                            setStatusFilter("all")
+                            setSourceFilter("all")
+                          }}
+                        >
+                          필터 초기화
+                        </Button>
+                        <Button size="sm" onClick={() => setIsFormOpen(true)} className="bg-[#084734] hover:bg-[#084734]/90">
+                          <Plus className="mr-1.5 h-4 w-4" />
+                          구독자 추가
+                        </Button>
+                        <Button variant="outline" size="sm" onClick={() => setActiveTab("compose")}>
+                          이메일 작성
+                        </Button>
+                      </div>
                     }
                   />
                 ) : (
-                  <SubscriberTable subscribers={filteredSubscribers} onDelete={setDeleteTarget} />
+                  <SubscriberTable
+                    subscribers={filteredSubscribers}
+                    onDelete={setDeleteTarget}
+                    onCompose={handleComposeFromSubscriber}
+                    onAddSubscriber={() => setIsFormOpen(true)}
+                    onComposeCampaign={() => setActiveTab("compose")}
+                  />
                 )}
               </Panel>
             </div>
@@ -1348,14 +1452,28 @@ export default function AdminMarketingPage() {
                     title="필터에 맞는 캠페인이 없습니다."
                     description="상태 필터를 조금 넓혀보세요. 초안, 발송됨, 실패를 각각 따로 볼 수 있습니다."
                     action={
-                      <Button variant="outline" size="sm" onClick={() => setCampaignStatusFilter("all")}>
-                        필터 초기화
-                      </Button>
+                      <div className="flex flex-wrap items-center justify-center gap-2">
+                        <Button variant="outline" size="sm" onClick={() => setCampaignStatusFilter("all")}>
+                          필터 초기화
+                        </Button>
+                        <Button size="sm" onClick={() => setActiveTab("compose")} className="bg-[#084734] hover:bg-[#084734]/90">
+                          <Send className="mr-1.5 h-4 w-4" />
+                          발송 만들기
+                        </Button>
+                        <Button variant="outline" size="sm" onClick={() => setActiveTab("subscribers")}>
+                          구독자 보기
+                        </Button>
+                      </div>
                     }
                   />
                 ) : (
                   <div className="overflow-hidden rounded-2xl border border-[#e8e8e4]">
-                    <CampaignHistory campaigns={filteredCampaigns} onDuplicate={handleDuplicateCampaign} />
+                    <CampaignHistory
+                      campaigns={filteredCampaigns}
+                      onDuplicate={handleDuplicateCampaign}
+                      onCreateCampaign={() => setActiveTab("compose")}
+                      onViewSubscribers={() => setActiveTab("subscribers")}
+                    />
                   </div>
                 )}
               </Panel>

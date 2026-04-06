@@ -153,6 +153,8 @@ function WebhookRow({
 
 type SettingsTab = "general" | "lead" | "cta" | "integrations" | "history"
 
+type SettingsKey = keyof SiteSettings
+
 const NAV_ITEMS: Array<{
   key: SettingsTab
   label: string
@@ -190,6 +192,35 @@ const NAV_ITEMS: Array<{
     icon: <History className="w-4 h-4" />,
   },
 ]
+
+const SECTION_FIELDS: Record<SettingsTab, SettingsKey[]> = {
+  general: [
+    "demoFormEnabled",
+    "demoBannerEnabled",
+    "demoBannerText",
+    "blogSectionEnabled",
+    "noticeBannerEnabled",
+    "noticeBannerText",
+  ],
+  lead: ["demoFormEnabled", "blogSectionEnabled"],
+  cta: [],
+  integrations: ["googleSheetWebhookUrl", "leadWebhookUrl", "channelTalkWebhookUrl", "emailWebhookUrl"],
+  history: [],
+}
+
+function isSettingsDirty(current: SiteSettings, baseline: SiteSettings) {
+  return Object.keys(SECTION_FIELDS).some((section) => sectionDirtyCount(current, baseline, section as SettingsTab) > 0)
+}
+
+function sectionDirtyCount(current: SiteSettings, baseline: SiteSettings, section: SettingsTab) {
+  return SECTION_FIELDS[section].reduce((count, key) => {
+    return count + (current[key] === baseline[key] ? 0 : 1)
+  }, 0)
+}
+
+function formatTime(value: Date) {
+  return value.toLocaleTimeString("ko-KR", { hour: "2-digit", minute: "2-digit" })
+}
 
 function PanelCard({
   title,
@@ -245,36 +276,98 @@ function EmptyHint({
 
 export default function SettingsPage() {
   const [settings, setSettings] = useState<SiteSettings | null>(null)
+  const [initialSettings, setInitialSettings] = useState<SiteSettings | null>(null)
+  const [loading, setLoading] = useState(true)
+  const [loadError, setLoadError] = useState<string | null>(null)
   const [saving, setSaving] = useState(false)
   const [toast, setToast] = useState<{ msg: string; type: "success" | "error" } | null>(null)
   const [activeTab, setActiveTab] = useState<SettingsTab>("general")
+  const [lastSavedAt, setLastSavedAt] = useState<Date | null>(null)
 
   const showToast = (msg: string, type: "success" | "error" = "success") => {
     setToast({ msg, type })
     setTimeout(() => setToast(null), 3000)
   }
 
-  useEffect(() => {
-    adminFetch("/api/admin/settings").then((r) => r.json()).then(setSettings)
+  const loadSettings = useCallback(async () => {
+    setLoading(true)
+    setLoadError(null)
+
+    try {
+      const response = await adminFetch("/api/admin/settings")
+      if (!response.ok) {
+        throw new Error("설정을 불러오지 못했습니다.")
+      }
+
+      const data = (await response.json()) as SiteSettings
+      setSettings(data)
+      setInitialSettings(data)
+      setLastSavedAt(null)
+    } catch {
+      setLoadError("설정을 불러오지 못했습니다. 다시 시도해 주세요.")
+    } finally {
+      setLoading(false)
+    }
   }, [])
 
+  useEffect(() => {
+    void loadSettings()
+  }, [loadSettings])
+
+  const sectionDirtyTotals =
+    settings && initialSettings
+      ? (Object.keys(SECTION_FIELDS) as SettingsTab[]).reduce((acc, section) => {
+          acc[section] = sectionDirtyCount(settings, initialSettings, section)
+          return acc
+        }, {} as Record<SettingsTab, number>)
+      : null
+  const dirtyCount = sectionDirtyTotals ? Object.values(sectionDirtyTotals).reduce((sum, value) => sum + value, 0) : 0
+  const hasDirtyChanges = Boolean(settings && initialSettings && isSettingsDirty(settings, initialSettings))
+
   const handleSave = async () => {
-    if (!settings) return
+    if (!settings || !initialSettings || !hasDirtyChanges) return
+    const payload = settings
     setSaving(true)
     try {
-      await adminFetch("/api/admin/settings", { method: "PATCH", body: JSON.stringify(settings) })
-      showToast("설정이 저장되었습니다.")
-    } catch {
-      showToast("저장에 실패했습니다.", "error")
+      const response = await adminFetch("/api/admin/settings", { method: "PATCH", body: JSON.stringify(payload) })
+      const data = await response.json().catch(() => null)
+      if (!response.ok) {
+        throw new Error(data?.message ?? "설정 저장에 실패했습니다.")
+      }
+      showToast(data?.message ?? "설정이 저장되었습니다.")
+      setInitialSettings(payload)
+      setLastSavedAt(new Date())
+    } catch (error) {
+      showToast(error instanceof Error ? error.message : "저장에 실패했습니다.", "error")
     } finally {
       setSaving(false)
     }
   }
 
-  const set = (patch: Partial<SiteSettings>) => setSettings((prev) => prev ? { ...prev, ...patch } : prev)
+  const handleReset = () => {
+    if (!initialSettings || !hasDirtyChanges) return
+    setSettings(initialSettings)
+    showToast("저장 전 변경사항을 되돌렸습니다.")
+  }
 
-  if (!settings) {
+  const set = (patch: Partial<SiteSettings>) => setSettings((prev) => (prev ? { ...prev, ...patch } : prev))
+
+  if (loading) {
     return <div className="px-4 pt-8 text-[13px] text-[#1a1a1a]/30 sm:px-6 sm:pt-10 lg:px-8">불러오는 중...</div>
+  }
+
+  if (loadError || !settings || !initialSettings) {
+    return (
+      <div className="max-w-[1320px] px-4 pt-8 sm:px-6 sm:pt-10 lg:px-8">
+        <div className="rounded-2xl border border-red-200 bg-red-50 px-5 py-4 text-[13px] text-red-700">
+          <p className="font-medium">설정 로드 실패</p>
+          <p className="mt-1 text-[12px] leading-5 text-red-600/80">{loadError ?? "설정을 불러오지 못했습니다."}</p>
+          <Button className="mt-4 gap-1.5" variant="outline" onClick={() => void loadSettings()}>
+            다시 시도
+          </Button>
+        </div>
+      </div>
+    )
   }
 
   return (
@@ -287,15 +380,76 @@ export default function SettingsPage() {
             배포 없이 바꾸는 운영 제어판입니다. 일반 설정은 즉시 반영하고, CTA와 변경 이력은 준비중 상태로 구조만 먼저 잡아둡니다.
           </p>
         </div>
-        <div className="flex flex-col gap-2 sm:flex-row sm:items-center">
-          <Button size="sm" variant="outline" className="w-full gap-1.5 bg-white sm:w-auto">
-            <Sparkles className="w-4 h-4" />
-            미리보기
-          </Button>
-          <Button size="sm" onClick={handleSave} disabled={saving} className="w-full gap-1.5 sm:w-auto">
-            {saving ? <Loader2 className="w-4 h-4 animate-spin" /> : <Save className="w-4 h-4" />}
-            {saving ? "저장 중..." : "저장"}
-          </Button>
+        <div className="flex flex-col gap-3 sm:min-w-[280px]">
+          <div className={`rounded-2xl border px-4 py-3 ${hasDirtyChanges ? "border-amber-200 bg-amber-50" : "border-[#e8e8e4] bg-white"}`}>
+            <div className="flex items-start justify-between gap-3">
+              <div>
+                <p className="text-[13px] font-medium text-[#111110]">
+                  {hasDirtyChanges ? `미저장 변경 ${dirtyCount}개` : "변경사항 없음"}
+                </p>
+                <p className="text-[12px] text-[#1a1a1a]/45 mt-1">
+                  {hasDirtyChanges
+                    ? "저장 전에 되돌릴 수 있습니다."
+                    : lastSavedAt
+                      ? `최근 저장 · ${formatTime(lastSavedAt)}`
+                      : "아직 저장한 기록이 없습니다."}
+                </p>
+              </div>
+              <span
+                className={`inline-flex items-center rounded-full px-2.5 py-1 text-[11px] font-medium ${
+                  hasDirtyChanges ? "bg-amber-100 text-amber-800" : "bg-[#f0f0ec] text-[#1a1a1a]/55"
+                }`}
+              >
+                {saving ? "저장 중" : hasDirtyChanges ? "검토 필요" : "안정"}
+              </span>
+            </div>
+          </div>
+          <div className="flex flex-col gap-2 sm:flex-row sm:items-center">
+            <Button size="sm" variant="outline" className="w-full gap-1.5 bg-white sm:w-auto">
+              <Sparkles className="w-4 h-4" />
+              미리보기
+            </Button>
+            <Button
+              size="sm"
+              variant="outline"
+              onClick={handleReset}
+              disabled={!hasDirtyChanges || saving}
+              className="w-full gap-1.5 bg-white sm:w-auto"
+            >
+              되돌리기
+            </Button>
+            <Button size="sm" onClick={handleSave} disabled={!hasDirtyChanges || saving} className="w-full gap-1.5 sm:w-auto">
+              {saving ? <Loader2 className="w-4 h-4 animate-spin" /> : <Save className="w-4 h-4" />}
+              {saving ? "저장 중..." : hasDirtyChanges ? `저장 (${dirtyCount})` : "저장"}
+            </Button>
+          </div>
+        </div>
+      </div>
+
+      <div className={`mb-6 rounded-2xl border px-4 py-4 sm:px-5 ${hasDirtyChanges ? "border-amber-200 bg-amber-50/60" : "border-[#e8e8e4] bg-white"}`}>
+        <div className="flex flex-col gap-3 sm:flex-row sm:items-center sm:justify-between">
+          <div className="min-w-0">
+            <p className="text-[13px] font-medium text-[#111110]">
+              {hasDirtyChanges ? "저장 전 변경사항이 남아 있습니다." : "설정이 현재 저장본과 일치합니다."}
+            </p>
+            <p className="text-[12px] text-[#1a1a1a]/45 mt-1">
+              {hasDirtyChanges
+                ? "섹션별 변경 수를 확인하고, 필요하면 되돌린 뒤 저장하세요."
+                : lastSavedAt
+                  ? `최근 저장 시각 · ${formatTime(lastSavedAt)}`
+                  : "새로 불러온 상태입니다. 저장하면 기준점이 만들어집니다."}
+            </p>
+          </div>
+          <div className="flex flex-wrap items-center gap-2">
+            <span className={`rounded-full px-3 py-1 text-[11px] font-medium ${hasDirtyChanges ? "bg-amber-100 text-amber-800" : "bg-[#f0f0ec] text-[#1a1a1a]/55"}`}>
+              {hasDirtyChanges ? `미저장 ${dirtyCount}` : "미변경"}
+            </span>
+            {lastSavedAt && (
+              <span className="rounded-full bg-[#f0f0ec] px-3 py-1 text-[11px] font-medium text-[#1a1a1a]/55">
+                저장 · {formatTime(lastSavedAt)}
+              </span>
+            )}
+          </div>
         </div>
       </div>
 
@@ -308,6 +462,7 @@ export default function SettingsPage() {
           <nav className="flex gap-2 overflow-x-auto pb-1 [-ms-overflow-style:none] [scrollbar-width:none] xl:block xl:space-y-1 xl:overflow-visible xl:pb-0">
             {NAV_ITEMS.map((item) => {
               const active = activeTab === item.key
+              const sectionDirty = sectionDirtyTotals?.[item.key] ?? 0
               return (
                 <button
                   key={item.key}
@@ -325,6 +480,23 @@ export default function SettingsPage() {
                       {item.desc}
                     </span>
                   </span>
+                  {sectionDirty > 0 ? (
+                    <span
+                      className={`inline-flex shrink-0 items-center rounded-full px-2 py-1 text-[11px] font-medium ${
+                        active ? "bg-white/15 text-white" : "bg-amber-50 text-amber-700"
+                      }`}
+                    >
+                      {sectionDirty}
+                    </span>
+                  ) : item.key === "cta" || item.key === "history" ? (
+                    <span
+                      className={`inline-flex shrink-0 items-center rounded-full px-2 py-1 text-[11px] font-medium ${
+                        active ? "bg-white/15 text-white" : "bg-[#f0f0ec] text-[#1a1a1a]/45"
+                      }`}
+                    >
+                      {item.key === "cta" ? "연결 예정" : "준비중"}
+                    </span>
+                  ) : null}
                 </button>
               )
             })}

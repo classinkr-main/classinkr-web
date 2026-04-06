@@ -11,19 +11,51 @@
 
 import { Badge } from "@/components/ui/badge"
 import { Button } from "@/components/ui/button"
-import { Copy } from "lucide-react"
+import { Copy, Send, Users } from "lucide-react"
 import type { EmailCampaign } from "@/lib/marketing-types"
 
 interface Props {
   campaigns: EmailCampaign[]
   onDuplicate?: (campaign: EmailCampaign) => void
+  onCreateCampaign?: () => void
+  onViewSubscribers?: () => void
 }
 
-export default function CampaignHistory({ campaigns, onDuplicate }: Props) {
+export default function CampaignHistory({
+  campaigns,
+  onDuplicate,
+  onCreateCampaign,
+  onViewSubscribers,
+}: Props) {
   if (campaigns.length === 0) {
     return (
-      <div className="text-center py-12 text-[#1a1a1a]/40 text-sm">
-        아직 발송된 캠페인이 없습니다.
+      <div className="rounded-2xl border border-dashed border-[#e0e0dc] bg-[#fafaf8] px-5 py-12 text-center">
+        <p className="text-[14px] font-medium text-[#111110]">아직 발송된 캠페인이 없습니다.</p>
+        <p className="mx-auto mt-1 max-w-md text-[12px] leading-relaxed text-[#1a1a1a]/40">
+          첫 발송을 만들면 이력과 성과 요약이 함께 쌓입니다. 구독자와 초안을 먼저 연결해보세요.
+        </p>
+        <div className="mt-4 flex flex-wrap justify-center gap-2">
+          <Button
+            type="button"
+            size="sm"
+            className="bg-[#084734] hover:bg-[#084734]/90"
+            onClick={onCreateCampaign}
+            disabled={!onCreateCampaign}
+          >
+            <Send className="mr-1.5 h-4 w-4" />
+            발송 만들기
+          </Button>
+          <Button
+            type="button"
+            variant="outline"
+            size="sm"
+            onClick={onViewSubscribers}
+            disabled={!onViewSubscribers}
+          >
+            <Users className="mr-1.5 h-4 w-4" />
+            구독자 보기
+          </Button>
+        </div>
       </div>
     )
   }

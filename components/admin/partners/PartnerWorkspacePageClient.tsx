@@ -93,6 +93,14 @@ const QUEUE_OPTIONS: QueueView[] = [
   "caution",
 ]
 
+const QUEUE_DETAIL_TABS: Record<Exclude<QueueView, "all">, string> = {
+  contract_waiting: "deal-flow",
+  fulfillment_active: "fulfillment",
+  settlement_delayed: "documents",
+  issue_needed: "logs-issues",
+  caution: "overview",
+}
+
 function getToken() {
   return sessionStorage.getItem("admin_password") ?? ""
 }
@@ -126,6 +134,10 @@ function formatCurrency(value: number) {
 function formatDateLabel(value?: string) {
   if (!value) return "미정"
   return value.slice(0, 16).replace("T", " ")
+}
+
+function makeQueueDetailHref(workspace: PartnerWorkspace, queueView: Exclude<QueueView, "all">) {
+  return `/admin/partners/${workspace.partner.id}?tab=${QUEUE_DETAIL_TABS[queueView]}`
 }
 
 function buildInsight(workspace: PartnerWorkspace): WorkspaceInsight {
@@ -258,6 +270,57 @@ export default function PartnerWorkspacePageClient({
   const totalFulfillmentActive = insights.filter((insight) => insight.activeFulfillmentItems > 0).length
   const totalSettlementDelayed = insights.filter((insight) => insight.overdueReceipts > 0).length
   const totalIssueNeeded = insights.filter((insight) => insight.riskLevel === "high").length
+  const contractCandidate = insights.find((insight) => insight.pendingContracts > 0)?.workspace
+  const fulfillmentCandidate = insights.find((insight) => insight.activeFulfillmentItems > 0)?.workspace
+  const settlementCandidate = insights.find((insight) => insight.overdueReceipts > 0)?.workspace
+  const issueCandidate = insights.find((insight) => insight.riskLevel === "high")?.workspace
+  const activeFilterCount = Number(normalizedQuery.length > 0) + Number(queueView !== "all") + Number(statusFilter !== "all") + Number(managerFilter !== "all")
+
+  const clearFilters = () => {
+    setSearchQuery("")
+    setQueueView("all")
+    setStatusFilter("all")
+    setManagerFilter("all")
+  }
+
+  const priorityQueueCards = [
+    {
+      key: "contract_waiting",
+      label: "계약 대기",
+      count: totalContractWaiting,
+      candidate: contractCandidate,
+      href: contractCandidate ? makeQueueDetailHref(contractCandidate, "contract_waiting") : undefined,
+      description: "견적 발송과 계약 검토를 바로 이어야 합니다.",
+      tabLabel: "Deal Flow",
+    },
+    {
+      key: "fulfillment_active",
+      label: "설치 진행",
+      count: totalFulfillmentActive,
+      candidate: fulfillmentCandidate,
+      href: fulfillmentCandidate ? makeQueueDetailHref(fulfillmentCandidate, "fulfillment_active") : undefined,
+      description: "후속 연락과 설치 체크를 이어서 봅니다.",
+      tabLabel: "Fulfillment",
+    },
+    {
+      key: "settlement_delayed",
+      label: "정산 지연",
+      count: totalSettlementDelayed,
+      candidate: settlementCandidate,
+      href: settlementCandidate ? makeQueueDetailHref(settlementCandidate, "settlement_delayed") : undefined,
+      description: "연체 문서를 우선 확인하고 정리합니다.",
+      tabLabel: "Documents",
+    },
+    {
+      key: "issue_needed",
+      label: "이슈 필요",
+      count: totalIssueNeeded,
+      candidate: issueCandidate,
+      href: issueCandidate ? makeQueueDetailHref(issueCandidate, "issue_needed") : undefined,
+      description: "판단이 필요한 이슈를 먼저 엽니다.",
+      tabLabel: "Logs & Issues",
+    },
+  ] as const
 
   const applyResult = (payload: { workspace: PartnerWorkspace; source: PartnerDataSource; warning?: string }) => {
     setWorkspaces((prev) => {
@@ -319,7 +382,7 @@ export default function PartnerWorkspacePageClient({
   }
 
   return (
-    <div className="px-4 pb-20 pt-8 sm:px-6 lg:px-8 lg:pt-10">
+    <div className="mx-auto w-full max-w-[1320px] px-4 pb-20 pt-8 sm:px-6 lg:px-8 lg:pt-10">
       <div className="mb-8 flex flex-col gap-4 lg:flex-row lg:items-start lg:justify-between">
         <div className="max-w-4xl">
           <p className="mb-1 text-[11px] font-medium uppercase tracking-widest text-[#1a1a1a]/30">Admin</p>
@@ -419,6 +482,21 @@ export default function PartnerWorkspacePageClient({
         ))}
       </div>
 
+      {activeFilterCount > 0 && (
+        <div className="mb-6 flex flex-wrap items-center gap-2 rounded-2xl border border-[#e8e8e4] bg-white px-4 py-3 text-[12px] text-[#1a1a1a]/55">
+          <span className="rounded-full bg-[#f0f0ec] px-2.5 py-1 font-medium text-[#111110]">
+            {activeFilterCount}개 필터 적용
+          </span>
+          {queueView !== "all" && <span>큐: {QUEUE_LABEL[queueView]}</span>}
+          {statusFilter !== "all" && <span>상태: {STATUS_LABEL[statusFilter]}</span>}
+          {managerFilter !== "all" && <span>담당자: {managerFilter}</span>}
+          {normalizedQuery.length > 0 && <span>검색: {searchQuery || deferredSearch}</span>}
+          <Button variant="outline" size="sm" className="ml-auto h-8 gap-1.5" onClick={clearFilters}>
+            필터 초기화
+          </Button>
+        </div>
+      )}
+
       <div className="mb-8 rounded-2xl border border-[#e8e8e4] bg-white p-5">
         <div className="mb-4 flex flex-col gap-2 lg:flex-row lg:items-end lg:justify-between">
           <div>
@@ -466,7 +544,7 @@ export default function PartnerWorkspacePageClient({
         </div>
       </div>
 
-      <div className="grid gap-6 xl:grid-cols-[minmax(0,1.55fr)_minmax(280px,0.75fr)]">
+      <div className="grid gap-6 xl:grid-cols-[minmax(0,1.6fr)_minmax(320px,0.72fr)]">
         <div className="space-y-4">
           {filteredInsights.length === 0 && (
             <div className="rounded-2xl border border-dashed border-[#d9d9d3] bg-white px-6 py-12 text-center">
@@ -476,12 +554,19 @@ export default function PartnerWorkspacePageClient({
               <p className="mt-2 text-[12px] leading-5 text-[#1a1a1a]/45">
                 {workspaces.length === 0
                   ? "첫 파트너를 등록하면 계약, 실행, 정산 흐름을 같은 운영 큐에서 추적할 수 있습니다."
-                  : "큐 필터나 검색어를 조정해 보거나 새 파트너를 추가해보세요."}
+                  : "필터를 줄이거나 초기화하면 다시 운영 우선순위 큐를 볼 수 있습니다."}
               </p>
-              <Button onClick={openCreateDialog} className="mt-5 gap-1.5" disabled={saving}>
-                <Plus className="h-4 w-4" />
-                첫 파트너 추가
-              </Button>
+              <div className="mt-5 flex flex-wrap justify-center gap-2">
+                {hasActiveFilters && (
+                  <Button variant="outline" onClick={clearFilters} className="gap-1.5" disabled={saving}>
+                    필터 초기화
+                  </Button>
+                )}
+                <Button onClick={openCreateDialog} className="gap-1.5" disabled={saving}>
+                  <Plus className="h-4 w-4" />
+                  {workspaces.length === 0 ? "첫 파트너 추가" : "파트너 추가"}
+                </Button>
+              </div>
             </div>
           )}
 
@@ -585,21 +670,38 @@ export default function PartnerWorkspacePageClient({
 
         <div className="space-y-6">
           <div className="rounded-2xl border border-[#e8e8e4] bg-white p-6">
-            <h2 className="text-[14px] font-semibold text-[#111110]">큐 해석 가이드</h2>
-            <ul className="mt-4 space-y-3 text-[12px] leading-5 text-[#1a1a1a]/55">
-              <li className="rounded-xl bg-[#fafaf8] px-4 py-3">
-                <strong className="block text-[#111110]">계약 대기</strong>
-                견적 발송 또는 계약 검토가 남아 있는 거래가 있는 파트너
-              </li>
-              <li className="rounded-xl bg-[#fafaf8] px-4 py-3">
-                <strong className="block text-[#111110]">설치 진행</strong>
-                예정된 후속/설치 일정이 남아 있어 실행 추적이 필요한 파트너
-              </li>
-              <li className="rounded-xl bg-[#fafaf8] px-4 py-3">
-                <strong className="block text-[#111110]">정산 지연</strong>
-                연체 영수증이 있어 우선 확인이 필요한 파트너
-              </li>
-            </ul>
+            <h2 className="text-[14px] font-semibold text-[#111110]">우선 처리</h2>
+            <p className="mt-1 text-[12px] leading-5 text-[#1a1a1a]/45">
+              지금 열어야 할 큐를 바로 건너갑니다. 검색보다 먼저 보고, 카드보다 먼저 움직입니다.
+            </p>
+            <div className="mt-4 space-y-3">
+              {priorityQueueCards.map((item) => (
+                <div key={item.key} className="rounded-xl bg-[#fafaf8] px-4 py-3">
+                  <div className="flex items-start justify-between gap-3">
+                    <div className="min-w-0">
+                      <strong className="block text-[#111110]">{item.label}</strong>
+                      <p className="mt-1 text-[12px] leading-5 text-[#1a1a1a]/55">{item.description}</p>
+                    </div>
+                    <span className="rounded-full bg-white px-2.5 py-1 text-[11px] font-medium text-[#111110]">
+                      {item.count}건
+                    </span>
+                  </div>
+                  {item.candidate ? (
+                    <Link
+                      href={item.href!}
+                      className="mt-3 inline-flex items-center gap-1 rounded-full bg-[#111110] px-3 py-2 text-[11px] font-medium text-white transition-colors hover:bg-[#111110]/90"
+                    >
+                      {item.candidate.partner.name} 열기
+                      <ArrowRight className="h-3.5 w-3.5" />
+                    </Link>
+                  ) : (
+                    <span className="mt-3 inline-flex h-8 items-center rounded-full border border-[#e8e8e4] px-3 text-[11px] text-[#1a1a1a]/35">
+                      {item.tabLabel} 큐 비어 있음
+                    </span>
+                  )}
+                </div>
+              ))}
+            </div>
           </div>
 
           <div className="rounded-2xl border border-[#e8e8e4] bg-white p-6">
@@ -607,15 +709,55 @@ export default function PartnerWorkspacePageClient({
             <div className="mt-4 space-y-3 text-[12px] leading-5 text-[#1a1a1a]/55">
               <div className="rounded-xl bg-[#fafaf8] px-4 py-3">
                 <strong className="block text-[#111110]">새 파트너 등록</strong>
-                리드 또는 신규 협력사를 즉시 큐에 올립니다.
+                <p className="mt-1">리드 또는 신규 협력사를 즉시 큐에 올립니다.</p>
+                <Button onClick={openCreateDialog} className="mt-3 h-8 gap-1.5 px-3 text-[11px]" disabled={saving}>
+                  <Plus className="h-3.5 w-3.5" />
+                  파트너 추가
+                </Button>
               </div>
               <div className="rounded-xl bg-[#fafaf8] px-4 py-3">
                 <strong className="block text-[#111110]">거래 시작</strong>
-                상세 워크스페이스에서 견적/계약 흐름을 바로 시작합니다.
+                <p className="mt-1">계약 대기 파트너부터 열어 견적/계약 흐름을 바로 이어갑니다.</p>
+                {contractCandidate ? (
+                  <Link
+                    href={`/admin/partners/${contractCandidate.partner.id}?tab=deal-flow`}
+                    className="mt-3 inline-flex h-8 items-center gap-1 rounded-full bg-[#111110] px-3 text-[11px] font-medium text-white transition-colors hover:bg-[#111110]/90"
+                  >
+                    {contractCandidate.partner.name} 열기
+                    <ArrowRight className="h-3.5 w-3.5" />
+                  </Link>
+                ) : (
+                  <span className="mt-3 inline-flex h-8 items-center rounded-full border border-[#e8e8e4] px-3 text-[11px] text-[#1a1a1a]/35">
+                    대기 파트너 없음
+                  </span>
+                )}
               </div>
               <div className="rounded-xl bg-[#fafaf8] px-4 py-3">
                 <strong className="block text-[#111110]">실행 항목 정리</strong>
-                상세의 Fulfillment 탭에서 후속/설치 흐름을 관리합니다.
+                <p className="mt-1">설치 진행 또는 정산 지연 파트너를 열어 후속 작업을 바로 처리합니다.</p>
+                <div className="mt-3 flex flex-wrap gap-2">
+                  {fulfillmentCandidate ? (
+                    <Link
+                      href={`/admin/partners/${fulfillmentCandidate.partner.id}?tab=fulfillment`}
+                      className="inline-flex h-8 items-center gap-1 rounded-full border border-[#e8e8e4] bg-white px-3 text-[11px] font-medium text-[#111110] transition-colors hover:border-[#c8c8c4]"
+                    >
+                      설치 진행
+                    </Link>
+                  ) : null}
+                  {settlementCandidate ? (
+                    <Link
+                      href={`/admin/partners/${settlementCandidate.partner.id}?tab=documents`}
+                      className="inline-flex h-8 items-center gap-1 rounded-full border border-[#e8e8e4] bg-white px-3 text-[11px] font-medium text-[#111110] transition-colors hover:border-[#c8c8c4]"
+                    >
+                      정산 지연
+                    </Link>
+                  ) : null}
+                  {!fulfillmentCandidate && !settlementCandidate && (
+                    <span className="inline-flex h-8 items-center rounded-full border border-[#e8e8e4] px-3 text-[11px] text-[#1a1a1a]/35">
+                      바로 열 작업 없음
+                    </span>
+                  )}
+                </div>
               </div>
             </div>
           </div>

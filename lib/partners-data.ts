@@ -26,6 +26,8 @@ import type {
   PartnerIssueInput,
   PartnerOpsChecklistItem,
   PartnerOpsIssue,
+  PartnerQuoteDetails,
+  PartnerQuoteLineItem,
   PartnerQueueSummary,
   PartnerSalesInput,
   PartnerSalesRecord,
@@ -38,6 +40,7 @@ import type {
 } from "./partners-types"
 
 const LOCAL_FILE = path.join(process.cwd(), "data", "partners-workspaces.json")
+const BUSINESS_TIME_ZONE = "Asia/Seoul"
 const PARTNER_STATUSES = ["lead", "active", "paused", "churn_risk"] as const
 const PARTNER_CHANNELS = ["reseller", "referral", "branch", "direct"] as const
 const DEAL_STAGES = ["discovery", "quoted", "contract_sent", "active", "closed_won", "closed_lost"] as const
@@ -45,6 +48,21 @@ const DOCUMENT_KINDS = ["quote", "contract", "receipt"] as const
 const DOCUMENT_STATUSES = ["draft", "sent", "signed", "paid", "overdue", "archived"] as const
 const DOCUMENT_DELIVERY_CHANNELS = ["pdf", "kakao", "link"] as const
 const DOCUMENT_DELIVERY_STATUSES = ["draft", "ready", "sent", "opened", "expired", "revoked", "failed"] as const
+const QUOTE_WORKFLOW_STATUSES = [
+  "draft",
+  "ready",
+  "sent",
+  "viewed",
+  "revised",
+  "accepted",
+  "rejected",
+  "expired",
+  "converted",
+  "archived",
+] as const
+const QUOTE_LINE_ITEM_TYPES = ["hardware", "installation", "shipping", "service", "discount", "note_only"] as const
+const QUOTE_LINE_ITEM_STATUSES = ["priced", "pending_price", "separate_billing", "informational"] as const
+const QUOTE_BILLING_MODES = ["included_in_quote", "separate_invoice", "tbd"] as const
 const SCHEDULE_KINDS = ["meeting", "follow_up", "deadline", "renewal"] as const
 const SCHEDULE_STATUSES = ["planned", "completed", "canceled"] as const
 const AUTOMATION_STATUSES = ["active", "paused"] as const
@@ -135,11 +153,14 @@ interface PartnerDocumentRow {
   kind: PartnerDocument["kind"]
   status: PartnerDocument["status"]
   title: string
+  document_number: string | null
+  source_file_name: string | null
   amount: number | string | null
   issued_at: string | null
   due_at: string | null
   file_path: string | null
   external_url: string | null
+  metadata: Record<string, unknown> | null
 }
 
 interface PartnerDocumentDeliveryRow {
@@ -290,6 +311,11 @@ function toStringArray(value: unknown) {
   return value.map((item) => toString(item)).filter(Boolean)
 }
 
+function toObject(value: unknown) {
+  if (!value || typeof value !== "object" || Array.isArray(value)) return undefined
+  return value as Record<string, unknown>
+}
+
 function toNumber(value: unknown) {
   if (typeof value === "number") return value
   if (typeof value === "string" && value.trim()) {
@@ -297,6 +323,10 @@ function toNumber(value: unknown) {
     return Number.isFinite(parsed) ? parsed : 0
   }
   return 0
+}
+
+function toOptionalBoolean(value: unknown) {
+  return typeof value === "boolean" ? value : undefined
 }
 
 function formatDateTime(value: string | null | undefined) {
@@ -316,6 +346,82 @@ function formatDate(value: string | null | undefined) {
 
   const match = text.match(/^(\d{4}-\d{2}-\d{2})/)
   return match?.[1] ?? text
+}
+
+function normalizeQuoteLineItem(value: unknown, index: number): PartnerQuoteLineItem {
+  const item = toObject(value)
+
+  return {
+    id: toString(item?.id) || makeId("quote_item"),
+    documentId: toOptionalString(item?.documentId),
+    sortOrder: item?.sortOrder == null ? index + 1 : Math.max(1, toNumber(item.sortOrder)),
+    lineNumber: item?.lineNumber == null ? index + 1 : Math.max(1, toNumber(item.lineNumber)),
+    itemType: isEnumValue(QUOTE_LINE_ITEM_TYPES, item?.itemType) ? item.itemType : "hardware",
+    itemCode: toOptionalString(item?.itemCode),
+    itemName: toString(item?.itemName) || "새 견적 품목",
+    itemDescription: toOptionalString(item?.itemDescription),
+    unitPrice: item?.unitPrice == null ? undefined : toNumber(item.unitPrice),
+    quantity: item?.quantity == null ? undefined : toNumber(item.quantity),
+    quantityUnit: toOptionalString(item?.quantityUnit),
+    lineSupplyAmount: item?.lineSupplyAmount == null ? undefined : toNumber(item.lineSupplyAmount),
+    vatIncluded: item?.vatIncluded == null ? true : Boolean(item.vatIncluded),
+    lineStatus: isEnumValue(QUOTE_LINE_ITEM_STATUSES, item?.lineStatus) ? item.lineStatus : undefined,
+    billingMode: isEnumValue(QUOTE_BILLING_MODES, item?.billingMode) ? item.billingMode : undefined,
+    remark: toOptionalString(item?.remark),
+    linkedQuantityRowId: toOptionalString(item?.linkedQuantityRowId),
+    linkedChecklistTemplateId: toOptionalString(item?.linkedChecklistTemplateId),
+  }
+}
+
+function normalizeQuoteDetails(
+  value: unknown,
+  defaults?: { issuedAt?: string; validUntil?: string; grandTotalAmount?: number }
+): PartnerQuoteDetails | undefined {
+  const quote = toObject(value)
+  if (!quote) return undefined
+
+  const lineItems = Array.isArray(quote.lineItems) ? quote.lineItems.map((item, index) => normalizeQuoteLineItem(item, index)) : []
+
+  return {
+    estimateNumber: toOptionalString(quote.estimateNumber),
+    workflowStatus: isEnumValue(QUOTE_WORKFLOW_STATUSES, quote.workflowStatus) ? quote.workflowStatus : undefined,
+    issuedAt: formatDate(toOptionalString(quote.issuedAt) ?? defaults?.issuedAt),
+    validUntil: formatDate(toOptionalString(quote.validUntil) ?? defaults?.validUntil),
+    subjectText: toOptionalString(quote.subjectText),
+    recipientCompanyName: toOptionalString(quote.recipientCompanyName),
+    recipientContactName: toOptionalString(quote.recipientContactName),
+    recipientPhone: toOptionalString(quote.recipientPhone),
+    recipientEmail: toOptionalString(quote.recipientEmail),
+    referenceName: toOptionalString(quote.referenceName),
+    supplierBusinessName: toOptionalString(quote.supplierBusinessName),
+    supplierBusinessRegistrationNumber: toOptionalString(quote.supplierBusinessRegistrationNumber),
+    supplierRepresentativeName: toOptionalString(quote.supplierRepresentativeName),
+    supplierAddress: toOptionalString(quote.supplierAddress),
+    supplierContactName: toOptionalString(quote.supplierContactName),
+    supplierContactPhone: toOptionalString(quote.supplierContactPhone),
+    supplierContactEmail: toOptionalString(quote.supplierContactEmail),
+    currencyUnitLabel: toOptionalString(quote.currencyUnitLabel),
+    vatIncluded: toOptionalBoolean(quote.vatIncluded),
+    vatPolicyLabel: toOptionalString(quote.vatPolicyLabel),
+    deliveryLocationNote: toOptionalString(quote.deliveryLocationNote),
+    paymentTerms: toOptionalString(quote.paymentTerms),
+    installationPolicy: toOptionalString(quote.installationPolicy),
+    warrantyNote: toOptionalString(quote.warrantyNote),
+    generalNotes: toOptionalString(quote.generalNotes),
+    specialTerms: toOptionalString(quote.specialTerms),
+    footerContactText: toOptionalString(quote.footerContactText),
+    internalMemo: toOptionalString(quote.internalMemo),
+    subtotalAmount: quote.subtotalAmount == null ? undefined : toNumber(quote.subtotalAmount),
+    vatAmount: quote.vatAmount == null ? undefined : toNumber(quote.vatAmount),
+    discountAmount: quote.discountAmount == null ? undefined : toNumber(quote.discountAmount),
+    grandTotalAmount:
+      quote.grandTotalAmount == null
+        ? defaults?.grandTotalAmount
+        : toNumber(quote.grandTotalAmount),
+    hasPendingAmounts: toOptionalBoolean(quote.hasPendingAmounts),
+    pendingAmountNote: toOptionalString(quote.pendingAmountNote),
+    lineItems,
+  }
 }
 
 function toStorageDateTime(value?: string) {
@@ -342,6 +448,15 @@ function makePartnerCode(name: string) {
   return `${base || "partner"}-${Date.now().toString().slice(-6)}`
 }
 
+const MAIN_DEAL_STAGE_PRIORITY: Record<PartnerDeal["stage"], number> = {
+  active: 0,
+  contract_sent: 1,
+  quoted: 2,
+  discovery: 3,
+  closed_won: 4,
+  closed_lost: 5,
+}
+
 function cloneDemoSeed() {
   return JSON.parse(JSON.stringify(listDemoPartnerWorkspaces())) as PartnerWorkspace[]
 }
@@ -352,6 +467,35 @@ function asArray<T>(value: T[] | null | undefined) {
 
 function sortSchedule(items: PartnerScheduleItem[]) {
   return [...items].sort((a, b) => (a.startsAt || "").localeCompare(b.startsAt || ""))
+}
+
+function getBusinessDateParts(date = new Date()) {
+  const parts = new Intl.DateTimeFormat("en-CA", {
+    timeZone: BUSINESS_TIME_ZONE,
+    year: "numeric",
+    month: "2-digit",
+    day: "2-digit",
+  }).formatToParts(date)
+  const year = parts.find((part) => part.type === "year")?.value ?? "0000"
+  const month = parts.find((part) => part.type === "month")?.value ?? "01"
+  const day = parts.find((part) => part.type === "day")?.value ?? "01"
+
+  return {
+    date: `${year}-${month}-${day}`,
+    month: `${year}-${month}`,
+  }
+}
+
+function getMainDeal(deals: PartnerDeal[]) {
+  return [...deals].sort((left, right) => {
+    const priorityDelta = MAIN_DEAL_STAGE_PRIORITY[left.stage] - MAIN_DEAL_STAGE_PRIORITY[right.stage]
+    if (priorityDelta !== 0) return priorityDelta
+
+    return (right.expectedCloseAt ?? right.contractStartAt ?? right.title).localeCompare(
+      left.expectedCloseAt ?? left.contractStartAt ?? left.title,
+      "ko"
+    )
+  })[0]
 }
 
 function normalizePartner(partner: Partial<PartnerSummary> | null | undefined): PartnerSummary {
@@ -385,8 +529,20 @@ function normalizeDeal(partnerId: string, deal: Partial<PartnerDeal> | null | un
   }
 }
 
-function normalizeDocument(partnerId: string, document: Partial<PartnerDocument> | null | undefined): PartnerDocument {
+function normalizeDocument(
+  partnerId: string,
+  document: (Omit<Partial<PartnerDocument>, "quoteDetails"> & { quoteDetails?: unknown }) | null | undefined
+): PartnerDocument {
   const documentId = toString(document?.id) || makeId("doc")
+  const issuedAt = formatDate(document?.issuedAt)
+  const dueAt = formatDate(document?.dueAt)
+  const amount = document?.amount == null ? undefined : toNumber(document.amount)
+  const quoteDetails = normalizeQuoteDetails(document?.quoteDetails, {
+    issuedAt,
+    validUntil: dueAt,
+    grandTotalAmount: amount,
+  })
+
   return {
     id: documentId,
     partnerId: toString(document?.partnerId) || partnerId,
@@ -394,11 +550,13 @@ function normalizeDocument(partnerId: string, document: Partial<PartnerDocument>
     kind: isEnumValue(DOCUMENT_KINDS, document?.kind) ? document.kind : "quote",
     status: isEnumValue(DOCUMENT_STATUSES, document?.status) ? document.status : "draft",
     title: toString(document?.title) || "새 문서",
-    amount: document?.amount == null ? undefined : toNumber(document.amount),
-    issuedAt: formatDate(document?.issuedAt),
-    dueAt: formatDate(document?.dueAt),
+    amount: amount ?? quoteDetails?.grandTotalAmount,
+    issuedAt: issuedAt ?? quoteDetails?.issuedAt,
+    dueAt: dueAt ?? quoteDetails?.validUntil,
     fileLabel: toOptionalString(document?.fileLabel) ?? "첨부 문서",
     externalUrl: toOptionalString(document?.externalUrl),
+    lineItemCount: document?.lineItemCount ?? quoteDetails?.lineItems.length,
+    quoteDetails,
     deliveries: Array.isArray(document?.deliveries)
       ? document.deliveries.map((delivery) => normalizeDocumentDelivery(documentId, delivery))
       : [],
@@ -484,9 +642,27 @@ function syncPartnerSummaryFromPrimaryContact(workspace: PartnerWorkspace) {
   if (!primaryContact) return
 
   workspace.partner.ownerName = primaryContact.name
-  if (primaryContact.email) {
-    workspace.partner.ownerEmail = primaryContact.email
+  workspace.partner.ownerEmail = primaryContact.email ?? ""
+}
+
+function syncPrimaryContactFromPartnerSummary(workspace: PartnerWorkspace) {
+  const primaryContact = workspace.contacts.find((contact) => contact.isPrimary)
+
+  if (primaryContact) {
+    primaryContact.name = workspace.partner.ownerName
+    primaryContact.email = workspace.partner.ownerEmail || undefined
+    return
   }
+
+  workspace.contacts.unshift({
+    id: makeId("contact"),
+    partnerId: workspace.partner.id,
+    name: workspace.partner.ownerName,
+    role: undefined,
+    email: workspace.partner.ownerEmail || undefined,
+    phone: undefined,
+    isPrimary: true,
+  })
 }
 
 function normalizeChecklist(partnerId: string, item: Partial<PartnerOpsChecklistItem> | null | undefined): PartnerOpsChecklistItem {
@@ -568,7 +744,7 @@ function normalizeWorkspace(workspace: PartnerWorkspace | Partial<PartnerWorkspa
   const checklists = asArray(workspace?.checklists).map((item) => normalizeChecklist(partner.id, item))
   const issues = asArray(workspace?.issues).map((issue) => normalizeIssue(partner.id, issue))
   const activityLogs = asArray(workspace?.activityLogs).map((log) => normalizeActivityLog(partner.id, log))
-  const nextActionAt = schedule.find((item) => item.status === "planned")?.startsAt
+  const nextActionAt = partner.nextActionAt ?? schedule.find((item) => item.status === "planned")?.startsAt
 
   return {
     partner: {
@@ -642,7 +818,7 @@ async function querySupabasePartnerWorkspaces(partnerId?: string) {
     .order("created_at", { ascending: false })
   const documentsQuery = supabase
     .from("partner_documents")
-    .select("id, partner_id, deal_id, kind, status, title, amount, issued_at, due_at, file_path, external_url")
+    .select("id, partner_id, deal_id, kind, status, title, document_number, source_file_name, amount, issued_at, due_at, file_path, external_url, metadata")
     .is("archived_at", null)
     .order("issued_at", { ascending: false })
   const documentDeliveriesQuery = supabase
@@ -780,18 +956,26 @@ async function querySupabasePartnerWorkspaces(partnerId?: string) {
   }, {})
 
   const normalizedDocuments: PartnerDocument[] = ((documents ?? []) as PartnerDocumentRow[]).map((document) => ({
-    id: document.id,
-    partnerId: document.partner_id,
-    dealId: document.deal_id ?? undefined,
-    kind: document.kind,
-    status: document.status,
-    title: document.title,
-    amount: document.amount == null ? undefined : toNumber(document.amount),
-    issuedAt: formatDate(document.issued_at),
-    dueAt: formatDate(document.due_at),
-    fileLabel: document.file_path ?? document.external_url ?? "첨부 문서",
-    externalUrl: document.external_url ?? undefined,
-    deliveries: deliveriesByDocument[document.id] ?? [],
+    ...normalizeDocument(document.partner_id, {
+      id: document.id,
+      partnerId: document.partner_id,
+      dealId: document.deal_id ?? undefined,
+      kind: document.kind,
+      status: document.status,
+      title: document.title,
+      amount: document.amount == null ? undefined : toNumber(document.amount),
+      issuedAt: formatDate(document.issued_at),
+      dueAt: formatDate(document.due_at),
+      fileLabel: document.source_file_name ?? document.file_path ?? document.external_url ?? "첨부 문서",
+      externalUrl: document.external_url ?? undefined,
+      quoteDetails: {
+        ...(toObject(document.metadata)?.quoteDetails as Record<string, unknown> | undefined),
+        estimateNumber:
+          toOptionalString((toObject(document.metadata)?.quoteDetails as Record<string, unknown> | undefined)?.estimateNumber) ??
+          (document.document_number ?? undefined),
+      },
+      deliveries: deliveriesByDocument[document.id] ?? [],
+    }),
   }))
 
   const normalizedSchedule: PartnerScheduleItem[] = ((schedule ?? []) as PartnerScheduleRow[]).map((item) => ({
@@ -965,9 +1149,11 @@ async function createLocalPartner(summary: PartnerSummaryInput) {
     issues: [],
     activityLogs: [],
   })
-  workspaces.unshift(workspace)
+  syncPrimaryContactFromPartnerSummary(workspace)
+  const normalizedWorkspace = normalizeWorkspace(workspace)
+  workspaces.unshift(normalizedWorkspace)
   await writeLocalWorkspaces(workspaces)
-  return workspace
+  return normalizedWorkspace
 }
 
 async function updateLocalPartner(id: string, summary: Partial<PartnerSummaryInput>) {
@@ -976,7 +1162,7 @@ async function updateLocalPartner(id: string, summary: Partial<PartnerSummaryInp
   if (index < 0) return null
 
   const current = workspaces[index]
-  workspaces[index] = normalizeWorkspace({
+  const nextWorkspace = normalizeWorkspace({
     ...current,
     partner: {
       ...current.partner,
@@ -991,6 +1177,8 @@ async function updateLocalPartner(id: string, summary: Partial<PartnerSummaryInp
       notes: summary.notes ?? current.partner.notes,
     },
   })
+  syncPrimaryContactFromPartnerSummary(nextWorkspace)
+  workspaces[index] = normalizeWorkspace(nextWorkspace)
 
   await writeLocalWorkspaces(workspaces)
   return workspaces[index]
@@ -1043,6 +1231,13 @@ async function upsertLocalDocument(partnerId: string, input: PartnerDocumentInpu
     dueAt: input.dueAt,
     fileLabel: input.fileLabel,
     externalUrl: input.externalUrl ?? currentDocument?.externalUrl,
+    lineItemCount: input.quoteDetails?.lineItems?.length ?? currentDocument?.lineItemCount,
+    quoteDetails:
+      normalizeQuoteDetails(input.quoteDetails, {
+        issuedAt: input.issuedAt,
+        validUntil: input.dueAt,
+        grandTotalAmount: input.amount,
+      }) ?? currentDocument?.quoteDetails,
     deliveries: currentDocument?.deliveries ?? [],
   }
 
@@ -1146,6 +1341,34 @@ function ensureWorkspaceDealOwnership(workspace: PartnerWorkspace, dealId?: stri
   }
 }
 
+function ensureWorkspaceEntityOwnership(
+  items: Array<{ id: string }>,
+  entityId: string | undefined,
+  label: string
+) {
+  if (!entityId) return
+  const exists = items.some((item) => item.id === entityId)
+  if (!exists) {
+    throw new Error(`해당 ${label}는 현재 파트너에 속하지 않습니다.`)
+  }
+}
+
+function ensureWorkspaceDocumentOwnership(workspace: PartnerWorkspace, documentId?: string) {
+  ensureWorkspaceEntityOwnership(workspace.documents, documentId, "문서")
+}
+
+function ensureWorkspaceChecklistOwnership(workspace: PartnerWorkspace, checklistItemId?: string) {
+  ensureWorkspaceEntityOwnership(workspace.checklists, checklistItemId, "체크리스트")
+}
+
+function ensureWorkspaceScheduleOwnership(workspace: PartnerWorkspace, scheduleItemId?: string) {
+  ensureWorkspaceEntityOwnership(workspace.schedule, scheduleItemId, "일정")
+}
+
+function ensureWorkspaceIssueOwnership(workspace: PartnerWorkspace, issueId?: string) {
+  ensureWorkspaceEntityOwnership(workspace.issues, issueId, "이슈")
+}
+
 async function ensureSupabaseDealOwnership(partnerId: string, dealId?: string) {
   if (!dealId) return
   const supabase = createSupabaseAdminClient()
@@ -1162,11 +1385,50 @@ async function ensureSupabaseDealOwnership(partnerId: string, dealId?: string) {
   }
 }
 
+async function ensureSupabaseEntityOwnership(
+  partnerId: string,
+  table: string,
+  entityId: string | undefined,
+  label: string
+) {
+  if (!entityId) return
+
+  const supabase = createSupabaseAdminClient()
+  const { data, error } = await supabase
+    .from(table)
+    .select("id")
+    .eq("id", entityId)
+    .eq("partner_id", partnerId)
+    .maybeSingle()
+
+  if (error) throw new Error(error.message)
+  if (!data) {
+    throw new Error(`해당 ${label}는 현재 파트너에 속하지 않습니다.`)
+  }
+}
+
+async function ensureSupabaseDocumentOwnership(partnerId: string, documentId?: string) {
+  return ensureSupabaseEntityOwnership(partnerId, "partner_documents", documentId, "문서")
+}
+
+async function ensureSupabaseChecklistOwnership(partnerId: string, checklistItemId?: string) {
+  return ensureSupabaseEntityOwnership(partnerId, "partner_ops_checklist_items", checklistItemId, "체크리스트")
+}
+
+async function ensureSupabaseScheduleOwnership(partnerId: string, scheduleItemId?: string) {
+  return ensureSupabaseEntityOwnership(partnerId, "partner_schedule_items", scheduleItemId, "일정")
+}
+
+async function ensureSupabaseIssueOwnership(partnerId: string, issueId?: string) {
+  return ensureSupabaseEntityOwnership(partnerId, "partner_ops_issues", issueId, "이슈")
+}
+
 async function upsertLocalChecklist(partnerId: string, input: PartnerChecklistInput) {
   const workspaces = await readLocalWorkspaces()
   const workspace = workspaces.find((item) => item.partner.id === partnerId)
   if (!workspace) return null
   ensureWorkspaceDealOwnership(workspace, input.dealId)
+  ensureWorkspaceChecklistOwnership(workspace, input.parentItemId)
 
   const nextItem: PartnerOpsChecklistItem = {
     id: input.id ?? makeId("checklist"),
@@ -1201,6 +1463,8 @@ async function upsertLocalIssue(partnerId: string, input: PartnerIssueInput) {
   const workspace = workspaces.find((item) => item.partner.id === partnerId)
   if (!workspace) return null
   ensureWorkspaceDealOwnership(workspace, input.dealId)
+  ensureWorkspaceDocumentOwnership(workspace, input.relatedDocumentId)
+  ensureWorkspaceChecklistOwnership(workspace, input.relatedChecklistItemId)
 
   const nextIssue: PartnerOpsIssue = {
     id: input.id ?? makeId("issue"),
@@ -1236,6 +1500,10 @@ async function upsertLocalActivityLog(partnerId: string, input: PartnerActivityL
   const workspace = workspaces.find((item) => item.partner.id === partnerId)
   if (!workspace) return null
   ensureWorkspaceDealOwnership(workspace, input.dealId)
+  ensureWorkspaceDocumentOwnership(workspace, input.documentId)
+  ensureWorkspaceScheduleOwnership(workspace, input.scheduleItemId)
+  ensureWorkspaceChecklistOwnership(workspace, input.checklistItemId)
+  ensureWorkspaceIssueOwnership(workspace, input.issueId)
 
   const nextLog: PartnerActivityLog = {
     id: input.id ?? makeId("activity"),
@@ -1267,10 +1535,9 @@ async function upsertLocalActivityLog(partnerId: string, input: PartnerActivityL
 }
 
 function buildPartnerWorkspaceShell(workspace: PartnerWorkspace): PartnerWorkspaceShell {
-  const currentMonth = new Date().toISOString().slice(0, 7)
+  const { date: today, month: currentMonth } = getBusinessDateParts()
   const pendingDocumentCount = workspace.documents.filter((document) => ["draft", "sent", "overdue"].includes(document.status)).length
   const openIssueCount = workspace.issues.filter((issue) => issue.status !== "resolved").length
-  const today = new Date().toISOString().slice(0, 10)
   const todayTodoCount =
     workspace.schedule.filter((item) => item.status === "planned" && item.startsAt.startsWith(today)).length +
     workspace.checklists.filter((item) => item.todoStatus !== "done" && item.todoStatus !== "canceled").length
@@ -1283,7 +1550,7 @@ function buildPartnerWorkspaceShell(workspace: PartnerWorkspace): PartnerWorkspa
 
   return {
     partner: workspace.partner,
-    mainDeal: workspace.deals.find((deal) => ["active", "contract_sent", "quoted"].includes(deal.stage)) ?? workspace.deals[0],
+    mainDeal: getMainDeal(workspace.deals),
     nextActionAt: workspace.partner.nextActionAt,
     todayTodoCount,
     openIssueCount,
@@ -1303,7 +1570,7 @@ function buildPartnerQueueSummary(workspace: PartnerWorkspace): PartnerQueueSumm
   ).length
   const openIssueCount = workspace.issues.filter((issue) => issue.status !== "resolved").length
   const openChecklistCount = workspace.checklists.filter((item) => item.todoStatus !== "done" && item.todoStatus !== "canceled").length
-  const mainDeal = workspace.deals.find((deal) => ["active", "contract_sent", "quoted"].includes(deal.stage)) ?? workspace.deals[0]
+  const mainDeal = getMainDeal(workspace.deals)
   const riskScore = [overdueDocumentCount > 0, openIssueCount > 0, workspace.partner.status === "churn_risk"].filter(Boolean).length
 
   return {
@@ -1347,7 +1614,18 @@ async function createSupabasePartner(summary: PartnerSummaryInput) {
     .single()
 
   if (error) throw new Error(error.message)
-  return getPartnerWorkspaceData(data.id)
+
+  const { error: contactError } = await supabase.from("partner_contacts").insert({
+    partner_id: data.id,
+    name: summary.ownerName,
+    role: null,
+    email: summary.ownerEmail || null,
+    phone: null,
+    is_primary: true,
+  })
+  if (contactError) throw new Error(contactError.message)
+
+  return readUpdatedSupabaseWorkspace(data.id)
 }
 
 async function updateSupabasePartner(id: string, summary: Partial<PartnerSummaryInput>) {
@@ -1366,7 +1644,8 @@ async function updateSupabasePartner(id: string, summary: Partial<PartnerSummary
 
   const { error } = await supabase.from("partners").update(payload).eq("id", id)
   if (error) throw new Error(error.message)
-  return getPartnerWorkspaceData(id)
+  await syncSupabasePrimaryContactFromPartnerSummary(id, summary, supabase)
+  return readUpdatedSupabaseWorkspace(id)
 }
 
 async function upsertSupabaseContact(partnerId: string, input: PartnerContactInput) {
@@ -1405,17 +1684,14 @@ async function upsertSupabaseContact(partnerId: string, input: PartnerContactInp
   if (input.isPrimary) {
     const partnerPayload: Record<string, unknown> = {
       owner_name: input.name,
-    }
-
-    if (input.email) {
-      partnerPayload.owner_email = input.email
+      owner_email: input.email ?? null,
     }
 
     const { error: partnerError } = await supabase.from("partners").update(partnerPayload).eq("id", partnerId)
     if (partnerError) throw new Error(partnerError.message)
   }
 
-  return getPartnerWorkspaceData(partnerId)
+  return readUpdatedSupabaseWorkspace(partnerId)
 }
 
 async function upsertSupabaseDeal(partnerId: string, input: PartnerDealInput) {
@@ -1438,23 +1714,67 @@ async function upsertSupabaseDeal(partnerId: string, input: PartnerDealInput) {
 
   const { error } = await query
   if (error) throw new Error(error.message)
-  return getPartnerWorkspaceData(partnerId)
+  return readUpdatedSupabaseWorkspace(partnerId)
 }
 
 async function upsertSupabaseDocument(partnerId: string, input: PartnerDocumentInput) {
   const supabase = createSupabaseAdminClient()
   await ensureSupabaseDealOwnership(partnerId, input.dealId)
+  let existingMetadata: Record<string, unknown> = {}
+  let existingDocumentNumber: string | null = null
+
+  if (input.id) {
+    const { data: currentDocument, error: currentDocumentError } = await supabase
+      .from("partner_documents")
+      .select("metadata, document_number")
+      .eq("id", input.id)
+      .eq("partner_id", partnerId)
+      .maybeSingle()
+
+    if (currentDocumentError) {
+      throw new Error(currentDocumentError.message)
+    }
+
+    existingMetadata = toObject(currentDocument?.metadata) ?? {}
+    existingDocumentNumber = currentDocument?.document_number ?? null
+  }
+
+  const nextQuoteDetails = input.quoteDetails
+    ? normalizeQuoteDetails(input.quoteDetails, {
+        issuedAt: input.issuedAt,
+        validUntil: input.dueAt,
+        grandTotalAmount: input.amount,
+      })
+    : normalizeQuoteDetails(existingMetadata.quoteDetails, {
+        issuedAt: input.issuedAt,
+        validUntil: input.dueAt,
+        grandTotalAmount: input.amount,
+      })
+
+  const metadata: Record<string, unknown> = {
+    ...existingMetadata,
+  }
+
+  if (nextQuoteDetails) {
+    metadata.quoteDetails = nextQuoteDetails
+  } else {
+    delete metadata.quoteDetails
+  }
+
   const payload = {
     partner_id: partnerId,
     deal_id: input.dealId ?? null,
     kind: input.kind,
     status: input.status,
     title: input.title,
+    document_number: nextQuoteDetails?.estimateNumber ?? existingDocumentNumber,
+    source_file_name: input.fileLabel,
     amount: input.amount ?? null,
     issued_at: input.issuedAt ?? null,
     due_at: input.dueAt ?? null,
     file_path: input.fileLabel,
     external_url: input.externalUrl ?? null,
+    metadata,
   }
 
   const query = input.id
@@ -1463,7 +1783,7 @@ async function upsertSupabaseDocument(partnerId: string, input: PartnerDocumentI
 
   const { error } = await query
   if (error) throw new Error(error.message)
-  return getPartnerWorkspaceData(partnerId)
+  return readUpdatedSupabaseWorkspace(partnerId)
 }
 
 async function upsertSupabaseSchedule(partnerId: string, input: PartnerScheduleInput) {
@@ -1486,7 +1806,7 @@ async function upsertSupabaseSchedule(partnerId: string, input: PartnerScheduleI
 
   const { error } = await query
   if (error) throw new Error(error.message)
-  return getPartnerWorkspaceData(partnerId)
+  return readUpdatedSupabaseWorkspace(partnerId)
 }
 
 async function upsertSupabaseSales(partnerId: string, input: PartnerSalesInput) {
@@ -1507,12 +1827,13 @@ async function upsertSupabaseSales(partnerId: string, input: PartnerSalesInput) 
 
   const { error } = await query
   if (error) throw new Error(error.message)
-  return getPartnerWorkspaceData(partnerId)
+  return readUpdatedSupabaseWorkspace(partnerId)
 }
 
 async function upsertSupabaseChecklist(partnerId: string, input: PartnerChecklistInput) {
   const supabase = createSupabaseAdminClient()
   await ensureSupabaseDealOwnership(partnerId, input.dealId)
+  await ensureSupabaseChecklistOwnership(partnerId, input.parentItemId)
   const payload = {
     partner_id: partnerId,
     deal_id: input.dealId ?? null,
@@ -1538,12 +1859,16 @@ async function upsertSupabaseChecklist(partnerId: string, input: PartnerChecklis
 
   const { error } = await query
   if (error) throw new Error(error.message)
-  return getPartnerWorkspaceData(partnerId)
+  return readUpdatedSupabaseWorkspace(partnerId)
 }
 
 async function upsertSupabaseIssue(partnerId: string, input: PartnerIssueInput) {
   const supabase = createSupabaseAdminClient()
   await ensureSupabaseDealOwnership(partnerId, input.dealId)
+  await Promise.all([
+    ensureSupabaseDocumentOwnership(partnerId, input.relatedDocumentId),
+    ensureSupabaseChecklistOwnership(partnerId, input.relatedChecklistItemId),
+  ])
   const payload = {
     partner_id: partnerId,
     deal_id: input.dealId ?? null,
@@ -1570,12 +1895,18 @@ async function upsertSupabaseIssue(partnerId: string, input: PartnerIssueInput) 
 
   const { error } = await query
   if (error) throw new Error(error.message)
-  return getPartnerWorkspaceData(partnerId)
+  return readUpdatedSupabaseWorkspace(partnerId)
 }
 
 async function upsertSupabaseActivityLog(partnerId: string, input: PartnerActivityLogInput) {
   const supabase = createSupabaseAdminClient()
   await ensureSupabaseDealOwnership(partnerId, input.dealId)
+  await Promise.all([
+    ensureSupabaseDocumentOwnership(partnerId, input.documentId),
+    ensureSupabaseScheduleOwnership(partnerId, input.scheduleItemId),
+    ensureSupabaseChecklistOwnership(partnerId, input.checklistItemId),
+    ensureSupabaseIssueOwnership(partnerId, input.issueId),
+  ])
   const payload = {
     partner_id: partnerId,
     deal_id: input.dealId ?? null,
@@ -1602,7 +1933,72 @@ async function upsertSupabaseActivityLog(partnerId: string, input: PartnerActivi
 
   const { error } = await query
   if (error) throw new Error(error.message)
-  return getPartnerWorkspaceData(partnerId)
+  return readUpdatedSupabaseWorkspace(partnerId)
+}
+
+async function readUpdatedSupabaseWorkspace(partnerId: string): Promise<PartnerDetailResult> {
+  const workspaces = await querySupabasePartnerWorkspaces(partnerId)
+  const workspace = workspaces[0] ?? null
+
+  if (!workspace) {
+    throw new Error("저장 후 파트너 워크스페이스를 다시 불러오지 못했습니다.")
+  }
+
+  return {
+    workspace,
+    source: "supabase",
+  }
+}
+
+async function syncSupabasePrimaryContactFromPartnerSummary(
+  partnerId: string,
+  summary: Partial<PartnerSummaryInput>,
+  supabase = createSupabaseAdminClient()
+) {
+  if (summary.ownerName == null && summary.ownerEmail == null) return
+
+  const { data: primaryContacts, error: primaryContactsError } = await supabase
+    .from("partner_contacts")
+    .select("id")
+    .eq("partner_id", partnerId)
+    .eq("is_primary", true)
+    .order("created_at", { ascending: true })
+    .limit(1)
+  if (primaryContactsError) throw new Error(primaryContactsError.message)
+
+  const primaryContact = primaryContacts?.[0]
+  if (primaryContact) {
+    const contactPayload: Record<string, unknown> = {}
+    if (summary.ownerName != null) contactPayload.name = summary.ownerName
+    if (summary.ownerEmail != null) contactPayload.email = summary.ownerEmail || null
+
+    if (Object.keys(contactPayload).length > 0) {
+      const { error: contactUpdateError } = await supabase
+        .from("partner_contacts")
+        .update(contactPayload)
+        .eq("id", primaryContact.id)
+        .eq("partner_id", partnerId)
+      if (contactUpdateError) throw new Error(contactUpdateError.message)
+    }
+    return
+  }
+
+  const { data: partner, error: partnerError } = await supabase
+    .from("partners")
+    .select("owner_name, owner_email")
+    .eq("id", partnerId)
+    .maybeSingle()
+  if (partnerError) throw new Error(partnerError.message)
+
+  const { error: contactInsertError } = await supabase.from("partner_contacts").insert({
+    partner_id: partnerId,
+    name: summary.ownerName ?? partner?.owner_name ?? "미지정 연락처",
+    role: null,
+    email: summary.ownerEmail != null ? summary.ownerEmail || null : partner?.owner_email ?? null,
+    phone: null,
+    is_primary: true,
+  })
+  if (contactInsertError) throw new Error(contactInsertError.message)
 }
 
 export async function listPartnerWorkspaceSummariesData(): Promise<PartnerSummaryListResult> {

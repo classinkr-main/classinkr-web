@@ -45,6 +45,12 @@ interface PartnerWorkspaceDetailClientProps {
   initialWarning?: string
 }
 
+interface PartnerActionContext {
+  deal?: PartnerDeal
+  dealId?: string
+  tab?: PartnerWorkspaceTab
+}
+
 const SELECT_CLASSNAME =
   "flex h-10 w-full rounded-md border border-input bg-background px-3 py-2 text-sm ring-offset-background focus-visible:outline-none focus-visible:ring-2 focus-visible:ring-ring focus-visible:ring-offset-2"
 const TEXTAREA_CLASSNAME =
@@ -96,7 +102,15 @@ function toSalesMonthInputValue(value?: string) {
 
 function toSalesMonthStorageValue(value: string) {
   if (!value) return value
-  return value.length === 7 ? `${value}-01` : value
+  return value.slice(0, 7)
+}
+
+function getDefaultDealId(deals: PartnerDeal[]) {
+  return (
+    deals.find((deal) => ["active", "contract_sent", "quoted", "discovery"].includes(deal.stage))?.id ??
+    deals[0]?.id ??
+    ""
+  )
 }
 
 const WORKSPACE_TABS: readonly PartnerWorkspaceTab[] = [
@@ -139,13 +153,17 @@ function createDealFormState(initialDeal?: PartnerDeal | null): PartnerDealInput
   }
 }
 
-function createDocumentFormState(initialDocument: PartnerDocument | null | undefined, deals: PartnerDeal[]): PartnerDocumentInput {
+function createDocumentFormState(
+  initialDocument: PartnerDocument | null | undefined,
+  deals: PartnerDeal[],
+  defaultDealId?: string
+): PartnerDocumentInput {
   if (!initialDocument) {
     return {
       kind: "quote",
       status: "draft",
       title: "",
-      dealId: deals[0]?.id ?? "",
+      dealId: defaultDealId || getDefaultDealId(deals),
       amount: 0,
       issuedAt: "",
       dueAt: "",
@@ -166,13 +184,17 @@ function createDocumentFormState(initialDocument: PartnerDocument | null | undef
   }
 }
 
-function createScheduleFormState(initialSchedule: PartnerScheduleItem | null | undefined, deals: PartnerDeal[]): PartnerScheduleInput {
+function createScheduleFormState(
+  initialSchedule: PartnerScheduleItem | null | undefined,
+  deals: PartnerDeal[],
+  defaultDealId?: string
+): PartnerScheduleInput {
   if (!initialSchedule) {
     return {
       kind: "meeting",
       status: "planned",
       title: "",
-      dealId: deals[0]?.id ?? "",
+      dealId: defaultDealId || getDefaultDealId(deals),
       startsAt: "",
       endsAt: "",
       owner: "",
@@ -191,11 +213,15 @@ function createScheduleFormState(initialSchedule: PartnerScheduleItem | null | u
   }
 }
 
-function createSalesFormState(initialSales: PartnerSalesRecord | null | undefined, deals: PartnerDeal[]): PartnerSalesInput {
+function createSalesFormState(
+  initialSales: PartnerSalesRecord | null | undefined,
+  deals: PartnerDeal[],
+  defaultDealId?: string
+): PartnerSalesInput {
   if (!initialSales) {
     return {
       salesMonth: "",
-      dealId: deals[0]?.id ?? "",
+      dealId: defaultDealId || getDefaultDealId(deals),
       unitsSold: 0,
       grossAmount: 0,
       netAmount: 0,
@@ -238,13 +264,14 @@ function createContactFormState(
 
 function createChecklistFormState(
   initialChecklist: PartnerOpsChecklistItem | null | undefined,
-  deals: PartnerDeal[]
+  deals: PartnerDeal[],
+  defaultDealId?: string
 ): PartnerChecklistInput {
   if (!initialChecklist) {
     return {
       checklistGroup: "fulfillment",
       title: "",
-      dealId: deals[0]?.id ?? "",
+      dealId: defaultDealId || getDefaultDealId(deals),
       itemCategory: "",
       itemCode: "",
       itemName: "",
@@ -281,13 +308,14 @@ function createChecklistFormState(
 
 function createIssueFormState(
   initialIssue: PartnerOpsIssue | null | undefined,
-  deals: PartnerDeal[]
+  deals: PartnerDeal[],
+  defaultDealId?: string
 ): PartnerIssueInput {
   if (!initialIssue) {
     return {
       title: "",
       category: "운영",
-      dealId: deals[0]?.id ?? "",
+      dealId: defaultDealId || getDefaultDealId(deals),
       severity: "medium",
       status: "open",
       owner: "",
@@ -327,14 +355,15 @@ function createIssueFormState(
 
 function createActivityLogFormState(
   initialLog: PartnerActivityLog | null | undefined,
-  deals: PartnerDeal[]
+  deals: PartnerDeal[],
+  defaultDealId?: string
 ): PartnerActivityLogInput {
   if (!initialLog) {
     return {
       summary: "",
       action: "",
       logCategory: "general",
-      dealId: deals[0]?.id ?? "",
+      dealId: defaultDealId || getDefaultDealId(deals),
       status: "recorded",
       actor: "",
       documentId: "",
@@ -502,6 +531,7 @@ function DocumentFormDialog({
   loading,
   deals,
   initialDocument,
+  defaultDealId,
   onClose,
   onSave,
 }: {
@@ -509,10 +539,13 @@ function DocumentFormDialog({
   loading?: boolean
   deals: PartnerDeal[]
   initialDocument?: PartnerDocument | null
+  defaultDealId?: string
   onClose: () => void
   onSave: (payload: PartnerDocumentInput) => Promise<void> | void
 }) {
-  const [form, setForm] = useState<PartnerDocumentInput>(() => createDocumentFormState(initialDocument, deals))
+  const [form, setForm] = useState<PartnerDocumentInput>(() =>
+    createDocumentFormState(initialDocument, deals, defaultDealId)
+  )
 
   const set = <K extends keyof PartnerDocumentInput>(key: K, value: PartnerDocumentInput[K]) => {
     setForm((prev) => ({ ...prev, [key]: value }))
@@ -605,6 +638,7 @@ function ScheduleFormDialog({
   loading,
   deals,
   initialSchedule,
+  defaultDealId,
   onClose,
   onSave,
 }: {
@@ -612,10 +646,13 @@ function ScheduleFormDialog({
   loading?: boolean
   deals: PartnerDeal[]
   initialSchedule?: PartnerScheduleItem | null
+  defaultDealId?: string
   onClose: () => void
   onSave: (payload: PartnerScheduleInput) => Promise<void> | void
 }) {
-  const [form, setForm] = useState<PartnerScheduleInput>(() => createScheduleFormState(initialSchedule, deals))
+  const [form, setForm] = useState<PartnerScheduleInput>(() =>
+    createScheduleFormState(initialSchedule, deals, defaultDealId)
+  )
 
   const set = <K extends keyof PartnerScheduleInput>(key: K, value: PartnerScheduleInput[K]) => {
     setForm((prev) => ({ ...prev, [key]: value }))
@@ -701,6 +738,7 @@ function SalesFormDialog({
   loading,
   deals,
   initialSales,
+  defaultDealId,
   onClose,
   onSave,
 }: {
@@ -708,10 +746,13 @@ function SalesFormDialog({
   loading?: boolean
   deals: PartnerDeal[]
   initialSales?: PartnerSalesRecord | null
+  defaultDealId?: string
   onClose: () => void
   onSave: (payload: PartnerSalesInput) => Promise<void> | void
 }) {
-  const [form, setForm] = useState<PartnerSalesInput>(() => createSalesFormState(initialSales, deals))
+  const [form, setForm] = useState<PartnerSalesInput>(() =>
+    createSalesFormState(initialSales, deals, defaultDealId)
+  )
 
   const set = <K extends keyof PartnerSalesInput>(key: K, value: PartnerSalesInput[K]) => {
     setForm((prev) => ({ ...prev, [key]: value }))
@@ -780,6 +821,7 @@ function ChecklistFormDialog({
   loading,
   deals,
   initialChecklist,
+  defaultDealId,
   onClose,
   onSave,
 }: {
@@ -787,10 +829,13 @@ function ChecklistFormDialog({
   loading?: boolean
   deals: PartnerDeal[]
   initialChecklist?: PartnerOpsChecklistItem | null
+  defaultDealId?: string
   onClose: () => void
   onSave: (payload: PartnerChecklistInput) => Promise<void> | void
 }) {
-  const [form, setForm] = useState<PartnerChecklistInput>(() => createChecklistFormState(initialChecklist, deals))
+  const [form, setForm] = useState<PartnerChecklistInput>(() =>
+    createChecklistFormState(initialChecklist, deals, defaultDealId)
+  )
 
   const set = <K extends keyof PartnerChecklistInput>(key: K, value: PartnerChecklistInput[K]) => {
     setForm((prev) => ({ ...prev, [key]: value }))
@@ -924,6 +969,7 @@ function IssueFormDialog({
   documents,
   checklists,
   initialIssue,
+  defaultDealId,
   onClose,
   onSave,
 }: {
@@ -933,10 +979,13 @@ function IssueFormDialog({
   documents: PartnerDocument[]
   checklists: PartnerOpsChecklistItem[]
   initialIssue?: PartnerOpsIssue | null
+  defaultDealId?: string
   onClose: () => void
   onSave: (payload: PartnerIssueInput) => Promise<void> | void
 }) {
-  const [form, setForm] = useState<PartnerIssueInput>(() => createIssueFormState(initialIssue, deals))
+  const [form, setForm] = useState<PartnerIssueInput>(() =>
+    createIssueFormState(initialIssue, deals, defaultDealId)
+  )
 
   const set = <K extends keyof PartnerIssueInput>(key: K, value: PartnerIssueInput[K]) => {
     setForm((prev) => ({ ...prev, [key]: value }))
@@ -1090,6 +1139,7 @@ function ActivityLogFormDialog({
   checklists,
   issues,
   initialLog,
+  defaultDealId,
   onClose,
   onSave,
 }: {
@@ -1101,10 +1151,13 @@ function ActivityLogFormDialog({
   checklists: PartnerOpsChecklistItem[]
   issues: PartnerOpsIssue[]
   initialLog?: PartnerActivityLog | null
+  defaultDealId?: string
   onClose: () => void
   onSave: (payload: PartnerActivityLogInput) => Promise<void> | void
 }) {
-  const [form, setForm] = useState<PartnerActivityLogInput>(() => createActivityLogFormState(initialLog, deals))
+  const [form, setForm] = useState<PartnerActivityLogInput>(() =>
+    createActivityLogFormState(initialLog, deals, defaultDealId)
+  )
 
   const set = <K extends keyof PartnerActivityLogInput>(key: K, value: PartnerActivityLogInput[K]) => {
     setForm((prev) => ({ ...prev, [key]: value }))
@@ -1359,6 +1412,7 @@ export default function PartnerWorkspaceDetailClient({
   const [editingChecklist, setEditingChecklist] = useState<PartnerOpsChecklistItem | null>(null)
   const [editingIssue, setEditingIssue] = useState<PartnerOpsIssue | null>(null)
   const [editingActivityLog, setEditingActivityLog] = useState<PartnerActivityLog | null>(null)
+  const [creationContext, setCreationContext] = useState<PartnerActionContext | null>(null)
 
   const requestedTab = searchParams.get("tab")
   const activeTab: PartnerWorkspaceTab = isWorkspaceTab(requestedTab) ? requestedTab : "overview"
@@ -1376,6 +1430,23 @@ export default function PartnerWorkspaceDetailClient({
     else nextParams.set("tab", tab)
     const query = nextParams.toString()
     router.replace(query ? `${pathname}?${query}` : pathname, { scroll: false })
+  }
+
+  const openCreateFlow = (
+    context: PartnerActionContext | undefined,
+    setOpen: (open: boolean) => void
+  ) => {
+    const normalizedContext = context
+      ? {
+          ...context,
+          dealId: context.dealId ?? context.deal?.id,
+        }
+      : null
+    if (context?.tab) {
+      handleTabChange(context.tab)
+    }
+    setCreationContext(normalizedContext)
+    setOpen(true)
   }
 
   const savePartner = async (payload: PartnerSummaryInput) => {
@@ -1551,66 +1622,75 @@ export default function PartnerWorkspaceDetailClient({
         onEditPartner={() => setPartnerDialogOpen(true)}
         onCreateContact={() => {
           setEditingContact(null)
+          setCreationContext(null)
           setContactDialogOpen(true)
         }}
         onEditContact={(contact) => {
           setEditingContact(contact)
+          setCreationContext(null)
           setContactDialogOpen(true)
         }}
-        onCreateDeal={() => {
+        onCreateDeal={(context) => {
           setEditingDeal(null)
-          setDealDialogOpen(true)
+          openCreateFlow(context, setDealDialogOpen)
         }}
         onEditDeal={(deal) => {
           setEditingDeal(deal)
+          setCreationContext(null)
           setDealDialogOpen(true)
         }}
-        onCreateSchedule={() => {
+        onCreateSchedule={(context) => {
           setEditingSchedule(null)
-          setScheduleDialogOpen(true)
+          openCreateFlow(context, setScheduleDialogOpen)
         }}
         onEditSchedule={(item) => {
           setEditingSchedule(item)
+          setCreationContext(null)
           setScheduleDialogOpen(true)
         }}
-        onCreateChecklist={() => {
+        onCreateChecklist={(context) => {
           setEditingChecklist(null)
-          setChecklistDialogOpen(true)
+          openCreateFlow(context, setChecklistDialogOpen)
         }}
         onEditChecklist={(item) => {
           setEditingChecklist(item)
+          setCreationContext(null)
           setChecklistDialogOpen(true)
         }}
-        onCreateDocument={() => {
+        onCreateDocument={(context) => {
           setEditingDocument(null)
-          setDocumentDialogOpen(true)
+          openCreateFlow(context, setDocumentDialogOpen)
         }}
         onEditDocument={(document) => {
           setEditingDocument(document)
+          setCreationContext(null)
           setDocumentDialogOpen(true)
         }}
-        onCreateSales={() => {
+        onCreateSales={(context) => {
           setEditingSales(null)
-          setSalesDialogOpen(true)
+          openCreateFlow(context, setSalesDialogOpen)
         }}
         onEditSales={(sale) => {
           setEditingSales(sale)
+          setCreationContext(null)
           setSalesDialogOpen(true)
         }}
-        onCreateIssue={() => {
+        onCreateIssue={(context) => {
           setEditingIssue(null)
-          setIssueDialogOpen(true)
+          openCreateFlow(context, setIssueDialogOpen)
         }}
         onEditIssue={(issue) => {
           setEditingIssue(issue)
+          setCreationContext(null)
           setIssueDialogOpen(true)
         }}
-        onCreateActivityLog={() => {
+        onCreateActivityLog={(context) => {
           setEditingActivityLog(null)
-          setActivityLogDialogOpen(true)
+          openCreateFlow(context, setActivityLogDialogOpen)
         }}
         onEditActivityLog={(log) => {
           setEditingActivityLog(log)
+          setCreationContext(null)
           setActivityLogDialogOpen(true)
         }}
       />
@@ -1634,13 +1714,14 @@ export default function PartnerWorkspaceDetailClient({
           if (!savingKind) {
             setContactDialogOpen(false)
             setEditingContact(null)
+            setCreationContext(null)
           }
         }}
         onSave={saveContact}
       />
 
       <DealFormDialog
-        key={`${dealDialogOpen ? "open" : "closed"}-${editingDeal?.id ?? "new"}`}
+        key={`${dealDialogOpen ? "open" : "closed"}-${editingDeal?.id ?? creationContext?.dealId ?? "new"}`}
         open={dealDialogOpen}
         initialDeal={editingDeal}
         loading={savingKind === "deal"}
@@ -1648,90 +1729,101 @@ export default function PartnerWorkspaceDetailClient({
           if (!savingKind) {
             setDealDialogOpen(false)
             setEditingDeal(null)
+            setCreationContext(null)
           }
         }}
         onSave={saveDeal}
       />
 
       <DocumentFormDialog
-        key={`${documentDialogOpen ? "open" : "closed"}-${editingDocument?.id ?? "new"}`}
+        key={`${documentDialogOpen ? "open" : "closed"}-${editingDocument?.id ?? creationContext?.dealId ?? "new"}`}
         open={documentDialogOpen}
         deals={workspace.deals}
         initialDocument={editingDocument}
+        defaultDealId={creationContext?.dealId}
         loading={savingKind === "document"}
         onClose={() => {
           if (!savingKind) {
             setDocumentDialogOpen(false)
             setEditingDocument(null)
+            setCreationContext(null)
           }
         }}
         onSave={saveDocument}
       />
 
       <ScheduleFormDialog
-        key={`${scheduleDialogOpen ? "open" : "closed"}-${editingSchedule?.id ?? "new"}`}
+        key={`${scheduleDialogOpen ? "open" : "closed"}-${editingSchedule?.id ?? creationContext?.dealId ?? "new"}`}
         open={scheduleDialogOpen}
         deals={workspace.deals}
         initialSchedule={editingSchedule}
+        defaultDealId={creationContext?.dealId}
         loading={savingKind === "schedule"}
         onClose={() => {
           if (!savingKind) {
             setScheduleDialogOpen(false)
             setEditingSchedule(null)
+            setCreationContext(null)
           }
         }}
         onSave={saveSchedule}
       />
 
       <SalesFormDialog
-        key={`${salesDialogOpen ? "open" : "closed"}-${editingSales?.id ?? "new"}`}
+        key={`${salesDialogOpen ? "open" : "closed"}-${editingSales?.id ?? creationContext?.dealId ?? "new"}`}
         open={salesDialogOpen}
         deals={workspace.deals}
         initialSales={editingSales}
+        defaultDealId={creationContext?.dealId}
         loading={savingKind === "sales"}
         onClose={() => {
           if (!savingKind) {
             setSalesDialogOpen(false)
             setEditingSales(null)
+            setCreationContext(null)
           }
         }}
         onSave={saveSales}
       />
 
       <ChecklistFormDialog
-        key={`${checklistDialogOpen ? "open" : "closed"}-${editingChecklist?.id ?? "new"}`}
+        key={`${checklistDialogOpen ? "open" : "closed"}-${editingChecklist?.id ?? creationContext?.dealId ?? "new"}`}
         open={checklistDialogOpen}
         deals={workspace.deals}
         initialChecklist={editingChecklist}
+        defaultDealId={creationContext?.dealId}
         loading={savingKind === "checklist"}
         onClose={() => {
           if (!savingKind) {
             setChecklistDialogOpen(false)
             setEditingChecklist(null)
+            setCreationContext(null)
           }
         }}
         onSave={saveChecklist}
       />
 
       <IssueFormDialog
-        key={`${issueDialogOpen ? "open" : "closed"}-${editingIssue?.id ?? "new"}`}
+        key={`${issueDialogOpen ? "open" : "closed"}-${editingIssue?.id ?? creationContext?.dealId ?? "new"}`}
         open={issueDialogOpen}
         deals={workspace.deals}
         documents={workspace.documents}
         checklists={workspace.checklists}
         initialIssue={editingIssue}
+        defaultDealId={creationContext?.dealId}
         loading={savingKind === "issue"}
         onClose={() => {
           if (!savingKind) {
             setIssueDialogOpen(false)
             setEditingIssue(null)
+            setCreationContext(null)
           }
         }}
         onSave={saveIssue}
       />
 
       <ActivityLogFormDialog
-        key={`${activityLogDialogOpen ? "open" : "closed"}-${editingActivityLog?.id ?? "new"}`}
+        key={`${activityLogDialogOpen ? "open" : "closed"}-${editingActivityLog?.id ?? creationContext?.dealId ?? "new"}`}
         open={activityLogDialogOpen}
         deals={workspace.deals}
         documents={workspace.documents}
@@ -1739,11 +1831,13 @@ export default function PartnerWorkspaceDetailClient({
         checklists={workspace.checklists}
         issues={workspace.issues}
         initialLog={editingActivityLog}
+        defaultDealId={creationContext?.dealId}
         loading={savingKind === "activity-log"}
         onClose={() => {
           if (!savingKind) {
             setActivityLogDialogOpen(false)
             setEditingActivityLog(null)
+            setCreationContext(null)
           }
         }}
         onSave={saveActivityLog}

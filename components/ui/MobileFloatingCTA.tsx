@@ -1,11 +1,13 @@
 "use client"
 
 import { useState, useEffect } from "react"
+import { usePathname } from "next/navigation"
 import { motion, AnimatePresence } from "framer-motion"
 import Link from "next/link"
 import { MessageSquare, X } from "lucide-react"
 
 export function MobileFloatingCTA() {
+    const pathname = usePathname()
     const [visible, setVisible] = useState(false)
     const [dismissed, setDismissed] = useState(false)
 
@@ -21,6 +23,10 @@ export function MobileFloatingCTA() {
         window.addEventListener("scroll", handleScroll, { passive: true })
         return () => window.removeEventListener("scroll", handleScroll)
     }, [dismissed])
+
+    if (pathname.startsWith("/admin")) {
+        return null
+    }
 
     return (
         // md 이상에서는 숨김 — 모바일 전용

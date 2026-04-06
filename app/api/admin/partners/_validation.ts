@@ -9,7 +9,11 @@ import type {
   PartnerInstallStatus,
   PartnerIssueSeverity,
   PartnerIssueStatus,
+  PartnerQuoteWorkflowStatus,
   PartnerStatus,
+  QuoteBillingMode,
+  QuoteLineItemStatus,
+  QuoteLineItemType,
   ScheduleKind,
   ScheduleStatus,
   PartnerTodoStatus,
@@ -36,6 +40,37 @@ export const DOCUMENT_STATUS_VALUES = [
   "overdue",
   "archived",
 ] as const satisfies readonly DocumentStatus[]
+export const QUOTE_WORKFLOW_STATUS_VALUES = [
+  "draft",
+  "ready",
+  "sent",
+  "viewed",
+  "revised",
+  "accepted",
+  "rejected",
+  "expired",
+  "converted",
+  "archived",
+] as const satisfies readonly PartnerQuoteWorkflowStatus[]
+export const QUOTE_LINE_ITEM_TYPE_VALUES = [
+  "hardware",
+  "installation",
+  "shipping",
+  "service",
+  "discount",
+  "note_only",
+] as const satisfies readonly QuoteLineItemType[]
+export const QUOTE_LINE_ITEM_STATUS_VALUES = [
+  "priced",
+  "pending_price",
+  "separate_billing",
+  "informational",
+] as const satisfies readonly QuoteLineItemStatus[]
+export const QUOTE_BILLING_MODE_VALUES = [
+  "included_in_quote",
+  "separate_invoice",
+  "tbd",
+] as const satisfies readonly QuoteBillingMode[]
 export const SCHEDULE_KIND_VALUES = ["meeting", "follow_up", "deadline", "renewal"] as const satisfies readonly ScheduleKind[]
 export const SCHEDULE_STATUS_VALUES = ["planned", "completed", "canceled"] as const satisfies readonly ScheduleStatus[]
 export const TODO_STATUS_VALUES = [
@@ -264,6 +299,9 @@ export function readOptionalDateTime(body: JsonObject, key: string, label: strin
 export function readRequiredMonth(body: JsonObject, key: string, label: string) {
   const value = readRequiredString(body, key, label)
   if (!MONTH_REGEX.test(value)) {
+    if (DATE_REGEX.test(value)) {
+      return value.slice(0, 7)
+    }
     throw new PartnerApiValidationError(`${label} 형식은 YYYY-MM이어야 합니다.`)
   }
   return value
