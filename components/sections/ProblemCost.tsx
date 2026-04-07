@@ -85,7 +85,7 @@ export function ProblemCost() {
                         <span className="w-2 h-2 rounded-full bg-red-400 animate-pulse" />
                         주의가 필요합니다
                     </span>
-                    <h2 className="text-4xl font-black tracking-tight text-white sm:text-5xl md:text-[3.5rem] mb-6 leading-tight break-keep">
+                    <h2 className="text-4xl font-black text-white sm:text-5xl md:text-[3.5rem] mb-6 leading-tight break-keep" style={{ letterSpacing: '-1.5px' }}>
                         전통적인 학원 운영의 <br className="md:hidden" />
                         <span className="text-transparent bg-clip-text bg-gradient-to-r from-red-400 to-orange-400 break-keep">숨겨진 비용</span>
                     </h2>
@@ -105,7 +105,7 @@ export function ProblemCost() {
                             viewport={{ once: true }}
                             className="h-full"
                         >
-                            <div className="relative h-full md:min-h-[440px] rounded-3xl overflow-hidden group bg-slate-900/60 backdrop-blur-xl border border-slate-800/60 hover:border-red-500/30 transition-all duration-500 shadow-[0_0_0_1px_rgba(255,255,255,0.03)] hover:shadow-[0_0_40px_rgba(239,68,68,0.1)]">
+                            <div className="relative h-full md:min-h-[440px] rounded-3xl overflow-hidden group bg-slate-900/60 backdrop-blur-xl border border-[rgba(255,255,255,0.08)] hover:border-red-500/30 transition-all duration-500 shadow-[0_0_0_1px_rgba(255,255,255,0.03)] hover:shadow-[0_0_40px_rgba(239,68,68,0.1)]">
                                 {/* Top accent line */}
                                 <div className="absolute top-0 inset-x-0 h-px bg-gradient-to-r from-transparent via-red-500/50 to-transparent group-hover:via-red-400 group-hover:h-0.5 transition-all duration-500" />
 
@@ -118,11 +118,11 @@ export function ProblemCost() {
                                         </div>
                                     </div>
 
-                                    <h3 className="text-2xl font-extrabold mb-4 text-white tracking-tight break-keep">{pain.title}</h3>
+                                    <h3 className="text-2xl font-extrabold mb-4 text-white break-keep">{pain.title}</h3>
                                     <p className="text-slate-400 mb-8 flex-grow text-lg leading-relaxed break-keep">{pain.desc}</p>
 
                                     {/* Cost footer with counter */}
-                                    <div className="w-full pt-6 border-t border-slate-800 mt-auto">
+                                    <div className="w-full pt-6 border-t border-[rgba(255,255,255,0.08)] mt-auto">
                                         <p className="text-xs font-bold text-red-400/70 uppercase tracking-[0.2em] mb-2">예상 손실</p>
                                         <p className="text-2xl font-black text-transparent bg-clip-text bg-gradient-to-r from-red-400 to-orange-400">
                                             <CountUp target={pain.countTarget} suffix={pain.countSuffix} /> {pain.countLabel}
@@ -142,7 +142,7 @@ export function ProblemCost() {
                     transition={{ delay: 0.5, duration: 0.7 }}
                     className="mt-20 mx-auto max-w-4xl"
                 >
-                    <div className="bg-slate-900/80 backdrop-blur-xl p-8 md:p-10 rounded-3xl border border-slate-800/60 shadow-[0_0_80px_rgba(239,68,68,0.06)]">
+                    <div className="bg-slate-900/80 backdrop-blur-xl p-8 md:p-10 rounded-3xl border border-[rgba(255,255,255,0.08)] shadow-[0_0_80px_rgba(239,68,68,0.06)]">
                         {/* Header */}
                         <div className="flex flex-col sm:flex-row items-start sm:items-center justify-between gap-4 mb-8">
                             <div>
@@ -168,7 +168,7 @@ export function ProblemCost() {
                                     whileInView={{ opacity: 1, scale: 1 }}
                                     viewport={{ once: true }}
                                     transition={{ delay: 0.6 + i * 0.15 }}
-                                    className="relative p-5 rounded-2xl bg-slate-800/50 border border-slate-700/50 group hover:border-slate-600/50 transition-all duration-300"
+                                    className="relative p-5 rounded-2xl bg-slate-800/50 border border-[rgba(255,255,255,0.08)] group hover:border-[rgba(255,255,255,0.15)] transition-all duration-300"
                                 >
                                     <div className="flex items-center justify-between mb-3">
                                         <span className="text-slate-400 text-sm font-medium">{metric.label}</span>
@@ -210,7 +210,7 @@ export function ProblemCost() {
                         </div>
 
                         {/* Overall Risk Bar */}
-                        <div className="p-5 rounded-2xl bg-slate-800/30 border border-slate-700/30">
+                        <div className="p-5 rounded-2xl bg-slate-800/30 border border-[rgba(255,255,255,0.08)]">
                             <div className="flex items-center justify-between mb-3">
                                 <span className="text-slate-300 font-semibold text-sm">종합 운영 비효율 지수</span>
                                 <span className="text-red-400 font-black text-lg"><CountUp target={85} suffix="%" /></span>

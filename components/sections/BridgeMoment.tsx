@@ -43,9 +43,9 @@ const stats = [
 
 export function BridgeMoment() {
     return (
-        <section className="relative py-16 md:py-28 bg-gradient-to-b from-emerald-50/60 via-white to-emerald-50/40 overflow-hidden">
+        <section className="relative py-16 md:py-28 bg-[#F6F5F4] overflow-hidden">
             {/* Radial glow */}
-            <div className="absolute top-1/2 left-1/2 -translate-x-1/2 -translate-y-1/2 w-[800px] h-[600px] bg-emerald-100/40 rounded-full blur-[150px]" />
+            <div className="absolute top-1/2 left-1/2 -translate-x-1/2 -translate-y-1/2 w-[800px] h-[600px] bg-[#ECFDF5]/40 rounded-full blur-[150px]" />
 
             {/* Dot pattern */}
             <div className="absolute inset-0 opacity-[0.06]"
@@ -62,7 +62,7 @@ export function BridgeMoment() {
                     {/* Outer glow ring */}
                     <div className="absolute -inset-px rounded-3xl bg-gradient-to-r from-emerald-200/50 via-emerald-300/30 to-emerald-200/50 blur-sm" />
 
-                    <div className="relative rounded-3xl overflow-hidden bg-white/80 backdrop-blur-2xl border border-emerald-100 shadow-[0_8px_60px_rgba(16,185,129,0.08)]">
+                    <div className="relative rounded-3xl overflow-hidden bg-white/80 backdrop-blur-2xl border border-[rgba(8,71,52,0.12)]" style={{ boxShadow: 'rgba(0,0,0,0.04) 0px 4px 18px, rgba(0,0,0,0.027) 0px 2px 7.8px, rgba(0,0,0,0.02) 0px 0.8px 2.9px' }}>
                         {/* Inner glow at top */}
                         <div className="absolute top-0 inset-x-0 h-px bg-gradient-to-r from-transparent via-emerald-400/40 to-transparent" />
 
@@ -76,7 +76,7 @@ export function BridgeMoment() {
                                         whileInView={{ opacity: 1, y: 0 }}
                                         viewport={{ once: true }}
                                         transition={{ delay: 0.2 }}
-                                        className="text-emerald-600/70 text-sm font-semibold uppercase tracking-[0.25em] mb-4"
+                                        className="text-[#084734]/70 text-sm font-semibold uppercase tracking-[0.25em] mb-4"
                                     >
                                         상상해 보세요
                                     </motion.p>
@@ -86,10 +86,11 @@ export function BridgeMoment() {
                                         whileInView={{ opacity: 1, y: 0 }}
                                         viewport={{ once: true }}
                                         transition={{ delay: 0.3, duration: 0.7 }}
-                                        className="text-3xl md:text-4xl lg:text-[2.75rem] font-black text-slate-900 leading-[1.3] tracking-tight break-keep"
+                                        className="text-3xl md:text-4xl lg:text-[2.75rem] font-black text-[#111110] leading-[1.3] break-keep"
+                                        style={{ letterSpacing: '-1px' }}
                                     >
-                                        <span className="text-emerald-600">10개 지점</span> 관리가<br />
-                                        <span className="text-emerald-600">1개 지점</span>처럼 느껴진다면?
+                                        <span className="text-[#084734]">10개 지점</span> 관리가<br />
+                                        <span className="text-[#084734]">1개 지점</span>처럼 느껴진다면?
                                     </motion.h2>
                                 </div>
 
@@ -99,7 +100,7 @@ export function BridgeMoment() {
                                         animate={{ x: [0, 8, 0] }}
                                         transition={{ duration: 2, repeat: Infinity, ease: "easeInOut" }}
                                     >
-                                        <ArrowRight className="w-10 h-10 text-emerald-300" />
+                                        <ArrowRight className="w-10 h-10 text-[#084734]/40" />
                                     </motion.div>
                                 </div>
 
@@ -110,7 +111,7 @@ export function BridgeMoment() {
                                         whileInView={{ opacity: 1, y: 0 }}
                                         viewport={{ once: true }}
                                         transition={{ delay: 0.4 }}
-                                        className="text-slate-600 text-lg md:text-xl leading-relaxed break-keep"
+                                        className="text-[#615D59] text-lg md:text-xl leading-relaxed break-keep"
                                     >
                                         하나의 플랫폼, 하나의 기준으로 <br className="hidden md:block" />
                                         모든 지점이 최고 효율로 운영됩니다.
@@ -136,12 +137,12 @@ export function BridgeMoment() {
                                         whileInView={{ opacity: 1, y: 0 }}
                                         viewport={{ once: true }}
                                         transition={{ delay: 0.6 + i * 0.15 }}
-                                        className="relative p-3 md:p-6 rounded-2xl bg-emerald-50/60 border border-emerald-100 hover:bg-emerald-50 transition-colors duration-300 text-center"
+                                        className="relative p-3 md:p-6 rounded-2xl bg-[#ECFDF5]/60 border border-[rgba(8,71,52,0.12)] hover:bg-[#ECFDF5] transition-colors duration-300 text-center"
                                     >
-                                        <div className="text-2xl sm:text-3xl md:text-5xl font-black text-emerald-600 mb-2">
+                                        <div className="text-2xl sm:text-3xl md:text-5xl font-black text-[#084734] mb-2">
                                             <CountUp target={stat.value} prefix={stat.prefix} suffix={stat.suffix} decimals={stat.decimals} />
                                         </div>
-                                        <div className="text-slate-500 text-[11px] sm:text-xs md:text-sm font-medium tracking-wider break-keep">{stat.label}</div>
+                                        <div className="text-[#A39E98] text-[11px] sm:text-xs md:text-sm font-medium tracking-wider break-keep">{stat.label}</div>
                                     </motion.div>
                                 ))}
                             </motion.div>

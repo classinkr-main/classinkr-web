@@ -45,7 +45,7 @@ export function SolutionOverview() {
         <section id="solution" className="py-16 md:py-24 bg-white">
             <div className="container mx-auto">
                 <div className="text-center max-w-3xl mx-auto mb-20 px-4">
-                    <h2 className="text-3xl font-extrabold tracking-tight text-slate-900 sm:text-4xl mb-4 break-keep">
+                    <h2 className="text-3xl font-extrabold text-[#111110] sm:text-4xl mb-4 break-keep" style={{ letterSpacing: '-1px' }}>
                         모든 학원 업무를 하나의 흐름으로
                     </h2>
                     <p className="text-lg text-muted-foreground break-keep">
@@ -56,8 +56,8 @@ export function SolutionOverview() {
                 <div className="flex flex-col lg:flex-row gap-12 items-center justify-center">
                     {/* Steps Pipeline */}
                     <div className="flex flex-col md:flex-row lg:flex-col gap-4 relative w-full lg:w-1/3">
-                        <div className="absolute left-8 top-8 bottom-8 w-0.5 bg-slate-100 hidden lg:block" />
-                        <div className="absolute top-8 left-8 right-8 h-0.5 bg-slate-100 hidden md:block lg:hidden" />
+                        <div className="absolute left-8 top-8 bottom-8 w-0.5 bg-[#F6F5F4] hidden lg:block" />
+                        <div className="absolute top-8 left-8 right-8 h-0.5 bg-[#F6F5F4] hidden md:block lg:hidden" />
 
                         {steps.map((step, index) => (
                             <button
@@ -66,8 +66,8 @@ export function SolutionOverview() {
                                 className={cn(
                                     "relative flex items-center gap-4 p-4 rounded-xl text-left transition-all duration-300 border-2",
                                     activeStep === index
-                                        ? "bg-white border-primary shadow-lg scale-105 z-10"
-                                        : "bg-transparent border-transparent hover:bg-slate-50 opacity-70 hover:opacity-100"
+                                        ? "bg-white border-primary scale-105 z-10"
+                                        : "bg-transparent border-transparent hover:bg-[#F6F5F4] opacity-70 hover:opacity-100"
                                 )}
                             >
                                 <div
@@ -75,13 +75,13 @@ export function SolutionOverview() {
                                         "w-12 h-12 rounded-full flex items-center justify-center shrink-0 transition-colors",
                                         activeStep === index
                                             ? "bg-primary text-primary-foreground"
-                                            : "bg-slate-100 text-slate-500"
+                                            : "bg-[#F6F5F4] text-[#A39E98]"
                                     )}
                                 >
                                     <step.icon className="w-5 h-5" />
                                 </div>
                                 <div>
-                                    <h3 className={cn("font-bold text-lg", activeStep === index ? "text-primary" : "text-slate-700")}>
+                                    <h3 className={cn("font-bold text-lg", activeStep === index ? "text-primary" : "text-[#615D59]")}>
                                         {step.title}
                                     </h3>
                                 </div>
@@ -90,7 +90,7 @@ export function SolutionOverview() {
                     </div>
 
                     {/* Active Step Showcase */}
-                    <div className="w-full lg:w-1/2 aspect-video relative rounded-2xl border bg-slate-900 overflow-hidden shadow-2xl p-6 md:p-8 flex items-center justify-center">
+                    <div className="w-full lg:w-1/2 aspect-video relative rounded-2xl border border-[rgba(0,0,0,0.08)] bg-[#111110] overflow-hidden p-6 md:p-8 flex items-center justify-center" style={{ boxShadow: 'rgba(0,0,0,0.04) 0px 4px 18px, rgba(0,0,0,0.027) 0px 2px 7.8px, rgba(0,0,0,0.02) 0px 0.8px 2.9px' }}>
                         <AnimatePresence mode="wait">
                             <motion.div
                                 key={activeStep}
@@ -100,21 +100,21 @@ export function SolutionOverview() {
                                 transition={{ duration: 0.3 }}
                                 className="text-center"
                             >
-                                <div className="w-20 h-20 mx-auto bg-slate-800 rounded-full flex items-center justify-center mb-6 text-[#CEF17B]">
+                                <div className="w-20 h-20 mx-auto bg-[#ECFDF5] rounded-full flex items-center justify-center mb-6 text-[#084734]">
                                     {(() => {
                                         const Icon = steps[activeStep].icon
                                         return <Icon className="w-10 h-10" />
                                     })()}
                                 </div>
                                 <h3 className="text-2xl font-bold text-white mb-4 break-keep">{steps[activeStep].title}</h3>
-                                <p className="text-slate-300 text-lg leading-relaxed max-w-md mx-auto break-keep">
+                                <p className="text-[#A39E98]/60 text-lg leading-relaxed max-w-md mx-auto break-keep">
                                     {steps[activeStep].desc}
                                 </p>
                             </motion.div>
                         </AnimatePresence>
 
                         {/* Background Effects */}
-                        <div className="absolute inset-0 bg-gradient-to-br from-blue-500/10 via-transparent to-transparent pointer-events-none" />
+                        <div className="absolute inset-0 bg-gradient-to-br from-[#084734]/5 via-[#084734]/10 to-[#084734]/5 pointer-events-none" />
                     </div>
                 </div>
             </div>

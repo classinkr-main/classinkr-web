@@ -7,24 +7,24 @@ import { motion } from "framer-motion"
 
 export function KeyUseCases() {
     return (
-        <section id="use-cases" className="py-16 md:py-24 bg-slate-50">
+        <section id="use-cases" className="py-16 md:py-24 bg-[#F6F5F4]">
             <div className="container mx-auto">
                 <div className="text-center max-w-3xl mx-auto mb-16 px-4">
-                    <h2 className="text-4xl md:text-5xl font-black tracking-tight text-slate-900 mb-6 break-keep">
+                    <h2 className="text-4xl md:text-5xl font-black text-[#111110] mb-6 break-keep" style={{ letterSpacing: '-1.5px' }}>
                         모든 구성원을 위한 맞춤 설계
                     </h2>
-                    <p className="text-xl text-slate-500 font-medium break-keep">
+                    <p className="text-xl text-[#A39E98] font-medium break-keep">
                         강사, 관리자, 학생 모두에게 최적화된 경험을 제공합니다.
                     </p>
                 </div>
 
                 <Tabs defaultValue="classes" className="w-full max-w-5xl mx-auto">
                     <div className="flex justify-center mb-12 px-4">
-                        <TabsList className="grid w-full max-w-3xl grid-cols-2 md:grid-cols-4 h-auto p-1.5 bg-slate-200/50 rounded-2xl gap-1">
-                            <TabsTrigger value="classes" className="py-3 text-base md:text-lg font-bold rounded-xl data-[state=active]:bg-white data-[state=active]:shadow-sm data-[state=active]:text-slate-900 text-slate-500 transition-all">인터랙티브 수업</TabsTrigger>
-                            <TabsTrigger value="homework" className="py-3 text-base md:text-lg font-bold rounded-xl data-[state=active]:bg-white data-[state=active]:shadow-sm data-[state=active]:text-slate-900 text-slate-500 transition-all">과제 및 테스트</TabsTrigger>
-                            <TabsTrigger value="admin" className="py-3 text-base md:text-lg font-bold rounded-xl data-[state=active]:bg-white data-[state=active]:shadow-sm data-[state=active]:text-slate-900 text-slate-500 transition-all">관리자 대시보드</TabsTrigger>
-                            <TabsTrigger value="comms" className="py-3 text-base md:text-lg font-bold rounded-xl data-[state=active]:bg-white data-[state=active]:shadow-sm data-[state=active]:text-slate-900 text-slate-500 transition-all">소통 및 알림</TabsTrigger>
+                        <TabsList className="grid w-full max-w-3xl grid-cols-2 md:grid-cols-4 h-auto p-1.5 bg-[rgba(0,0,0,0.06)] rounded-2xl gap-1">
+                            <TabsTrigger value="classes" className="py-3 text-base md:text-lg font-bold rounded-xl data-[state=active]:bg-white data-[state=active]:shadow-sm data-[state=active]:text-[#111110] text-[#A39E98] transition-all">인터랙티브 수업</TabsTrigger>
+                            <TabsTrigger value="homework" className="py-3 text-base md:text-lg font-bold rounded-xl data-[state=active]:bg-white data-[state=active]:shadow-sm data-[state=active]:text-[#111110] text-[#A39E98] transition-all">과제 및 테스트</TabsTrigger>
+                            <TabsTrigger value="admin" className="py-3 text-base md:text-lg font-bold rounded-xl data-[state=active]:bg-white data-[state=active]:shadow-sm data-[state=active]:text-[#111110] text-[#A39E98] transition-all">관리자 대시보드</TabsTrigger>
+                            <TabsTrigger value="comms" className="py-3 text-base md:text-lg font-bold rounded-xl data-[state=active]:bg-white data-[state=active]:shadow-sm data-[state=active]:text-[#111110] text-[#A39E98] transition-all">소통 및 알림</TabsTrigger>
                         </TabsList>
                     </div>
 
@@ -38,7 +38,7 @@ export function KeyUseCases() {
                                     "수업 중 퀴즈 및 투표",
                                     "자동 출석 체크",
                                 ]}
-                                imageColor="bg-green-100"
+                                imageColor="bg-[#ECFDF5]"
                                 imageSrc="/images/use-cases/interactive.png"
                                 imageAlt="Interactive 3D Elements"
                             />
@@ -52,7 +52,7 @@ export function KeyUseCases() {
                                     "서술형 AI 자동 채점",
                                     "학생 즉각 피드백",
                                 ]}
-                                imageColor="bg-blue-100"
+                                imageColor="bg-[#ECFDF5]"
                                 imageSrc="/images/use-cases/homework.png"
                                 imageAlt="Homework 3D Elements"
                             />
@@ -66,7 +66,7 @@ export function KeyUseCases() {
                                     "강사 성과 분석",
                                     "이탈 위험 학생 알림",
                                 ]}
-                                imageColor="bg-purple-100"
+                                imageColor="bg-[#ECFDF5]"
                                 imageSrc="/images/use-cases/admin.png"
                                 imageAlt="Admin 3D Elements"
                             />
@@ -80,7 +80,7 @@ export function KeyUseCases() {
                                     "실시간 소통 채널",
                                     "일정 및 결제 알림",
                                 ]}
-                                imageColor="bg-orange-100"
+                                imageColor="bg-[#ECFDF5]"
                                 imageSrc="/images/use-cases/comms.png"
                                 imageAlt="Communication 3D Elements"
                             />
@@ -99,7 +99,7 @@ function UseCaseCard({ title, desc, points, imageColor, imageSrc, imageAlt }: { 
             animate={{ opacity: 1, y: 0 }}
             transition={{ duration: 0.4, type: "spring", bounce: 0.2 }}
         >
-            <Card className="overflow-hidden border border-slate-200/60 shadow-xl bg-white rounded-[2rem]">
+            <Card className="overflow-hidden border border-[rgba(0,0,0,0.08)] bg-white rounded-[2rem]" style={{ boxShadow: 'rgba(0,0,0,0.04) 0px 4px 18px, rgba(0,0,0,0.027) 0px 2px 7.8px, rgba(0,0,0,0.02) 0px 0.8px 2.9px' }}>
                 <div className="grid md:grid-cols-2 gap-0">
                     <div className={`h-72 md:h-auto ${imageColor} flex items-center justify-center p-8 md:p-12 relative overflow-hidden`}>
                         <div className="absolute inset-0 bg-gradient-to-br from-white/40 to-transparent z-0" />
@@ -120,23 +120,23 @@ function UseCaseCard({ title, desc, points, imageColor, imageSrc, imageAlt }: { 
                             transition={{ type: "spring", bounce: 0.4 }}
                             className="w-full max-w-sm bg-white/90 backdrop-blur-md rounded-2xl shadow-2xl p-6 space-y-4 z-10 border border-white/50 relative"
                         >
-                            <div className="h-3 w-1/3 bg-slate-200/80 rounded-full" />
-                            <div className="h-3 w-2/3 bg-slate-200/80 rounded-full" />
-                            <div className="h-40 bg-slate-100/80 rounded-xl mt-6 border border-slate-50" />
+                            <div className="h-3 w-1/3 bg-[rgba(0,0,0,0.08)] rounded-full" />
+                            <div className="h-3 w-2/3 bg-[rgba(0,0,0,0.08)] rounded-full" />
+                            <div className="h-40 bg-[#F6F5F4] rounded-xl mt-6 border border-[rgba(0,0,0,0.06)]" />
                         </motion.div>
                     </div>
                     <div className="p-8 md:p-14 flex flex-col justify-center bg-white">
-                        <h3 className="text-3xl font-extrabold mb-5 text-slate-900 tracking-tight leading-tight break-keep">{title}</h3>
-                        <p className="text-slate-500 mb-8 text-lg leading-relaxed font-medium break-keep">
+                        <h3 className="text-3xl font-extrabold mb-5 text-[#111110] leading-tight break-keep" style={{ letterSpacing: '-1px' }}>{title}</h3>
+                        <p className="text-[#A39E98] mb-8 text-lg leading-relaxed font-medium break-keep">
                             {desc}
                         </p>
                         <ul className="space-y-4">
                             {points.map((point, i) => (
                                 <li key={i} className="flex items-center gap-4 group">
-                                    <div className="flex-shrink-0 h-8 w-8 rounded-full bg-emerald-50 group-hover:bg-emerald-500 flex items-center justify-center text-emerald-600 group-hover:text-white transition-colors duration-300">
+                                    <div className="flex-shrink-0 h-8 w-8 rounded-full bg-[#ECFDF5] group-hover:bg-[#084734] flex items-center justify-center text-[#084734] group-hover:text-white transition-colors duration-300">
                                         <Check className="w-5 h-5" strokeWidth={3} />
                                     </div>
-                                    <span className="text-slate-700 font-bold text-lg group-hover:text-slate-900 transition-colors break-keep">{point}</span>
+                                    <span className="text-[#615D59] font-bold text-lg group-hover:text-[#111110] transition-colors break-keep">{point}</span>
                                 </li>
                             ))}
                         </ul>

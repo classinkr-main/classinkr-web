@@ -19,7 +19,6 @@ import {
 import { Badge } from "@/components/ui/badge"
 import { Card, CardContent, CardHeader, CardTitle } from "@/components/ui/card"
 import { Tabs, TabsContent, TabsList, TabsTrigger } from "@/components/ui/tabs"
-import { PortalNav } from "@/components/partner-portal/PortalNav"
 import type {
   CalendarEvent,
   CustomerListItem,
@@ -230,7 +229,50 @@ const DEMO_DETAIL: DealDetailPayload = {
     updated_at: "2026-04-03T00:00:00Z",
   },
   customer: DEMO_OVERVIEW.customers[0].customer as DealDetailPayload["customer"],
-  line_items: [],
+  line_items: [
+    {
+      id: "demo-li-1",
+      deal_id: "demo-deal-1",
+      sku: "CB-86",
+      category: "board" as const,
+      product_name: "ClassIn CB-86 전자칠판",
+      quantity: 4,
+      unit_price: 5500000,
+      amount: 22000000,
+      sort_order: 1,
+      notes: null,
+      created_at: "2026-02-22T00:00:00Z",
+      updated_at: "2026-02-22T00:00:00Z",
+    },
+    {
+      id: "demo-li-2",
+      deal_id: "demo-deal-1",
+      sku: "STAND-86",
+      category: "mount" as const,
+      product_name: "이동식 스탠드",
+      quantity: 4,
+      unit_price: 550000,
+      amount: 2200000,
+      sort_order: 2,
+      notes: null,
+      created_at: "2026-02-22T00:00:00Z",
+      updated_at: "2026-02-22T00:00:00Z",
+    },
+    {
+      id: "demo-li-3",
+      deal_id: "demo-deal-1",
+      sku: "CAM-T1",
+      category: "camera" as const,
+      product_name: "T1 카메라",
+      quantity: 2,
+      unit_price: 1900000,
+      amount: 3800000,
+      sort_order: 3,
+      notes: null,
+      created_at: "2026-02-22T00:00:00Z",
+      updated_at: "2026-02-22T00:00:00Z",
+    },
+  ],
   quote_documents: [],
   contract_documents: [],
   installations: [],
@@ -578,22 +620,19 @@ export default function PartnerWorkspacePage() {
                 <Chip icon={<CircleDollarSign className="h-3.5 w-3.5" />} label={`미수금 ${formatMoney(overview.metrics.outstanding_amount)}`} />
               </div>
             </div>
-            <div className="space-y-3">
-              <PortalNav />
-              <div className="flex flex-wrap justify-end gap-2">
-                <div className="inline-flex items-center gap-2 rounded-xl border border-[#e8e8e4] bg-[#f7f7f5] px-4 py-2.5 text-sm text-[#1a1a1a]/60">
-                  <ArrowRight className="h-4 w-4" />
-                  관리자와 같은 일정 원본으로 연결됩니다
-                </div>
-                <button
-                  type="button"
-                  onClick={() => router.refresh()}
-                  className="inline-flex items-center gap-2 rounded-xl border border-[#e8e8e4] bg-white px-4 py-2.5 text-sm font-medium text-[#1a1a1a] hover:bg-[#f7f7f5] active:scale-[0.98] transition-transform duration-75"
-                >
-                  새로고침
-                  <RefreshCw className="h-4 w-4" />
-                </button>
+            <div className="flex flex-wrap justify-end gap-2">
+              <div className="inline-flex items-center gap-2 rounded-xl border border-[#e8e8e4] bg-[#f7f7f5] px-4 py-2.5 text-sm text-[#1a1a1a]/60">
+                <ArrowRight className="h-4 w-4" />
+                관리자와 같은 일정 원본으로 연결됩니다
               </div>
+              <button
+                type="button"
+                onClick={() => router.refresh()}
+                className="inline-flex items-center gap-2 rounded-xl border border-[#e8e8e4] bg-white px-4 py-2.5 text-sm font-medium text-[#1a1a1a] hover:bg-[#f7f7f5] active:scale-[0.98] transition-transform duration-75"
+              >
+                새로고침
+                <RefreshCw className="h-4 w-4" />
+              </button>
             </div>
           </CardContent>
         </Card>
@@ -746,6 +785,31 @@ export default function PartnerWorkspacePage() {
                       </div>
                     </div>
 
+                    {/* 판매 품목 요약 */}
+                    {detail.line_items.length > 0 && (
+                      <div className="rounded-xl border border-[#e8e8e4] bg-white p-4">
+                        <p className="text-[10px] font-semibold uppercase tracking-widest text-[#1a1a1a]/30 mb-3">판매 품목</p>
+                        <div className="space-y-2">
+                          {detail.line_items.map((item) => (
+                            <div key={item.id} className="flex items-center justify-between gap-3 text-sm">
+                              <div className="flex items-center gap-2 min-w-0">
+                                <span className="shrink-0 rounded-md bg-[#f0f0ec] px-1.5 py-0.5 text-[10px] font-mono text-[#1a1a1a]/50">{item.sku}</span>
+                                <span className="truncate text-[#1a1a1a]">{item.product_name}</span>
+                                <span className="shrink-0 text-xs text-[#1a1a1a]/40">×{item.quantity}</span>
+                              </div>
+                              <span className="shrink-0 text-sm text-[#1a1a1a]/60">{item.amount.toLocaleString("ko-KR")}원</span>
+                            </div>
+                          ))}
+                        </div>
+                        <div className="mt-3 flex items-center justify-between border-t border-[#f0f0ec] pt-3 text-sm font-semibold">
+                          <span className="text-[#1a1a1a]/50">합계</span>
+                          <span className="text-[#1a1a1a]">
+                            {detail.line_items.reduce((sum, i) => sum + i.amount, 0).toLocaleString("ko-KR")}원
+                          </span>
+                        </div>
+                      </div>
+                    )}
+
                     <SectionBox icon={<FileText className="h-4 w-4" />} title="다음 액션">
                       <ActionLine text={`현재 단계: ${stageLabel(selectedDeal.current_stage)}`} />
                       <ActionLine text="문서 버전 링크 확인" />
@@ -882,29 +946,131 @@ export default function PartnerWorkspacePage() {
             </CardContent>
           </Card>
 
-          {/* ── Right: Operations Notes ── */}
+          {/* ── Right: Context Panel ── */}
           <Card className="border-[#e8e8e4] bg-white shadow-none">
             <CardHeader className="pb-3">
-              <CardTitle className="text-[10px] uppercase tracking-wider text-[#1a1a1a]/40 font-semibold">운영 노트</CardTitle>
+              <CardTitle className="text-[10px] uppercase tracking-wider text-[#1a1a1a]/40 font-semibold">거래 컨텍스트</CardTitle>
             </CardHeader>
             <CardContent className="space-y-4">
+
+              {/* 현재 선택 */}
               <div className="rounded-xl border border-[#e8e8e4] bg-[#f7f7f5] p-4">
                 <p className="text-[10px] font-semibold uppercase tracking-wider text-[#1a1a1a]/40">현재 선택</p>
                 <p className="mt-2 text-sm font-semibold text-[#1a1a1a]">{selectedCustomer.customer.name}</p>
+                {selectedCustomer.customer.region_label && (
+                  <p className="mt-0.5 text-xs text-[#1a1a1a]/45">
+                    {selectedCustomer.customer.region_label}
+                    {selectedCustomer.customer.campus_name ? ` · ${selectedCustomer.customer.campus_name}` : ""}
+                    {selectedCustomer.customer.contact_name ? ` · ${selectedCustomer.customer.contact_name}` : ""}
+                  </p>
+                )}
                 {selectedDeal && (
-                  <p className="mt-1 text-sm text-[#1a1a1a]/50">{selectedDeal.title}</p>
+                  <div className="mt-2 rounded-lg border border-[#e0e0dc] bg-white px-3 py-2">
+                    <p className="text-xs font-medium text-[#1a1a1a]">{selectedDeal.title}</p>
+                    <p className="mt-0.5 text-[10px] text-[#1a1a1a]/40">{selectedDeal.deal_code}</p>
+                  </div>
                 )}
               </div>
+
+              {/* 단계 로드맵 */}
               {selectedDeal && (
-                <div className="rounded-xl border border-[#e8e8e4] bg-[#f7f7f5] p-4">
-                  <p className="text-[10px] font-semibold uppercase tracking-wider text-[#1a1a1a]/40 mb-3">진행 현황</p>
+                <div className="rounded-xl border border-[#e8e8e4] bg-[#f7f7f5] px-4 py-4">
+                  <p className="text-[10px] font-semibold uppercase tracking-wider text-[#1a1a1a]/40 mb-3">단계 로드맵</p>
                   <StageRoadmapBar stage={selectedDeal.current_stage} />
                 </div>
               )}
-              <div className="rounded-xl border border-dashed border-[#e0e0dc] p-4 text-sm text-[#1a1a1a]/50">
+
+              {/* 제품 구성 요약 */}
+              {detail.line_items.length > 0 && (() => {
+                const CAT_KO: Record<string, string> = { board: "전자칠판", camera: "카메라", mount: "거치대/스탠드", install_fee: "설치비" }
+                const byCategory = detail.line_items.reduce<Record<string, { qty: number; amount: number }>>((acc, item) => {
+                  const cat = CAT_KO[item.category] ?? item.category ?? "기타"
+                  if (!acc[cat]) acc[cat] = { qty: 0, amount: 0 }
+                  acc[cat].qty += item.quantity
+                  acc[cat].amount += item.amount
+                  return acc
+                }, {})
+                return (
+                  <div className="rounded-xl border border-[#e8e8e4] bg-white p-4">
+                    <p className="text-[10px] font-semibold uppercase tracking-wider text-[#1a1a1a]/40 mb-3">제품 구성</p>
+                    <div className="space-y-2">
+                      {Object.entries(byCategory).map(([cat, stat]) => (
+                        <div key={cat} className="flex items-center justify-between text-xs">
+                          <span className="text-[#1a1a1a]/60">{cat}</span>
+                          <div className="flex items-center gap-2">
+                            <span className="rounded-full bg-[#f0f0ec] px-2 py-0.5 text-[10px] font-semibold text-[#1a1a1a]">{stat.qty}대</span>
+                            <span className="text-[#1a1a1a]/40">{fmtM(stat.amount)}원</span>
+                          </div>
+                        </div>
+                      ))}
+                    </div>
+                    <div className="mt-2 pt-2 border-t border-[#f0f0ec] flex justify-between text-[10px] text-[#1a1a1a]/40">
+                      <span>총 {detail.line_items.reduce((s, i) => s + i.quantity, 0)}대</span>
+                      <span>{fmtM(detail.line_items.reduce((s, i) => s + i.amount, 0))}원</span>
+                    </div>
+                  </div>
+                )
+              })()}
+
+              {/* 다음 액션 추천 */}
+              {selectedDeal && (
+                <div className="rounded-xl border border-[#e8e8e4] bg-white p-4">
+                  <p className="text-[10px] font-semibold uppercase tracking-wider text-[#1a1a1a]/40 mb-3">다음 액션</p>
+                  <div className="space-y-2">
+                    {selectedDeal.current_stage === "contact" && (
+                      <>
+                        <ActionLine text="견적서 초안 작성" />
+                        <ActionLine text="고객 연락처 확인" />
+                      </>
+                    )}
+                    {selectedDeal.current_stage === "quote" && (
+                      <>
+                        <ActionLine text="견적서 버전 발송 확인" />
+                        <ActionLine text="계약 협의 일정 잡기" />
+                      </>
+                    )}
+                    {selectedDeal.current_stage === "contract" && (
+                      <>
+                        <ActionLine text="계약서 서명 완료 확인" />
+                        <ActionLine text="설치 수량 최종 확정" />
+                      </>
+                    )}
+                    {selectedDeal.current_stage === "confirmed" && (
+                      <>
+                        <ActionLine text="설치 일정 협의 및 등록" />
+                        <ActionLine text="장비 준비 체크" />
+                      </>
+                    )}
+                    {selectedDeal.current_stage === "installation" && (
+                      <>
+                        <ActionLine text="설치 진행 현황 확인" />
+                        <ActionLine text="수납 청구서 발행 준비" />
+                      </>
+                    )}
+                    {selectedDeal.current_stage === "payment" && (
+                      <>
+                        <ActionLine text="미수금 입금 확인" />
+                        <ActionLine text="영수증 발행" />
+                      </>
+                    )}
+                    {(selectedDeal.current_stage === "closed" || selectedDeal.current_stage === "cancelled") && (
+                      <ActionLine text="거래 완료 상태입니다." />
+                    )}
+                    {(selectedDeal.outstanding_amount ?? 0) > 0 && selectedDeal.current_stage !== "contact" && (
+                      <div className="flex items-center gap-2 rounded-xl bg-red-50 px-3 py-2 text-sm text-red-600">
+                        <span className="h-1.5 w-1.5 rounded-full bg-red-400" />
+                        미수금 {fmtM(selectedDeal.outstanding_amount)}원 미해결
+                      </div>
+                    )}
+                  </div>
+                </div>
+              )}
+
+              {/* 연결 상태 */}
+              <div className="rounded-xl border border-dashed border-[#e0e0dc] p-3 text-xs text-[#1a1a1a]/45">
                 {mode === "demo"
                   ? "데모 셸입니다. 로그인하면 실데이터가 연결됩니다."
-                  : "실데이터가 연결된 상태입니다. 카드와 탭으로 거래 흐름을 바로 확인할 수 있습니다."}
+                  : "실데이터 연결됨."}
               </div>
             </CardContent>
           </Card>
