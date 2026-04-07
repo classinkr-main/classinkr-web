@@ -121,6 +121,29 @@ export async function POST(req: NextRequest) {
         timestamp: new Date().toISOString(),
         _test: true,
       }
+    } else if (type === "wecom") {
+      body = {
+        msgtype: "text",
+        text: {
+          content: `[TEST] Classin notification channel connected\nType: ${type}\nTime: ${new Date().toISOString()}`,
+        },
+      }
+    } else if (type === "kakaoAlimtalk") {
+      body = {
+        eventType: "notification.test",
+        title: "[TEST] Classin notification template",
+        message: "Kakao notification channel connection check",
+        sentAt: new Date().toISOString(),
+        _test: true,
+      }
+    } else if (type === "email") {
+      body = {
+        kind: "notification_test",
+        subject: "[TEST] Classin email notification channel",
+        message: "Email webhook connection check",
+        sentAt: new Date().toISOString(),
+        _test: true,
+      }
     }
 
     const res = await fetch(url, {

@@ -19,5 +19,8 @@ export async function PATCH(req: NextRequest) {
     leadWebhookUrl: "",
     channelTalkWebhookUrl: "",
     emailWebhookUrl: "",
+    wecomOpsWebhookUrl: "",
+    wecomCriticalWebhookUrl: "",
+    kakaoAlimtalkWebhookUrl: "",
   })
 }
