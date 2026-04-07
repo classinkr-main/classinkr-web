@@ -1,6 +1,7 @@
 import { NextRequest, NextResponse } from "next/server";
 
 import { resolvePartnerAccountContext } from "@/lib/partner-portal/context";
+import { createDealForPartnerAccount } from "@/lib/partner-portal/repositories/deals-write";
 import { loadPartnerDeals } from "@/lib/partner-portal/repositories/partner-read";
 import type { DealStage, DealStatus } from "@/lib/partner-portal/types";
 
@@ -28,5 +29,41 @@ export async function GET(req: NextRequest) {
   } catch (error) {
     console.error("[GET /api/partner/deals]", error);
     return NextResponse.json({ error: "Failed to fetch deals" }, { status: 500 });
+  }
+}
+
+export async function POST(req: NextRequest) {
+  const context = await resolvePartnerAccountContext(req);
+  if (!context?.partnerAccountId) {
+    return NextResponse.json(
+      { error: "Partner V2 account is required" },
+      { status: 409 }
+    );
+  }
+
+  try {
+    const body = (await req.json()) as {
+      customer_id?: string;
+      title?: string;
+      expected_amount?: number | string | null;
+      notes?: string | null;
+      starts_at?: string | null;
+    };
+
+    if (!body.customer_id || !body.title) {
+      return NextResponse.json(
+        { error: "customer_id and title are required" },
+        { status: 400 }
+      );
+    }
+
+    const created = await createDealForPartnerAccount(context, body);
+    return NextResponse.json(created, { status: 201 });
+  } catch (error) {
+    console.error("[POST /api/partner/deals]", error);
+    return NextResponse.json(
+      { error: error instanceof Error ? error.message : "Failed to create deal" },
+      { status: 500 }
+    );
   }
 }
