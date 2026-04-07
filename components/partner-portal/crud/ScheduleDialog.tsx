@@ -15,7 +15,7 @@ import { Input } from "@/components/ui/input";
 import { Label } from "@/components/ui/label";
 import { portalFetch } from "@/lib/partner-portal/portal-fetch";
 
-type ScheduleType = "meeting" | "installation";
+export type ScheduleType = "meeting" | "installation";
 
 export type PartnerDealOption = {
   id: string;
@@ -29,6 +29,9 @@ interface ScheduleDialogProps {
   onOpenChange: (open: boolean) => void;
   deals: PartnerDealOption[];
   defaultDealId?: string | null;
+  defaultStartsAt?: string | null;
+  defaultEndsAt?: string | null;
+  defaultScheduleType?: ScheduleType;
   onSaved?: () => Promise<void> | void;
 }
 
@@ -50,16 +53,39 @@ function toLocalDateTimeValue(date: Date) {
   return `${date.getFullYear()}-${pad(date.getMonth() + 1)}-${pad(date.getDate())}T${pad(date.getHours())}:${pad(date.getMinutes())}`;
 }
 
-function createDefaultForm(defaultDealId?: string | null): ScheduleFormState {
-  const start = new Date();
-  start.setMinutes(0, 0, 0);
-  start.setHours(start.getHours() + 1);
+function createDefaultForm({
+  defaultDealId,
+  defaultStartsAt,
+  defaultEndsAt,
+  defaultScheduleType,
+}: {
+  defaultDealId?: string | null;
+  defaultStartsAt?: string | null;
+  defaultEndsAt?: string | null;
+  defaultScheduleType?: ScheduleType;
+} = {}): ScheduleFormState {
+  const scheduleType = defaultScheduleType ?? "meeting";
+  const start = defaultStartsAt ? new Date(defaultStartsAt) : new Date();
+  if (Number.isNaN(start.getTime())) {
+    start.setTime(Date.now());
+  }
 
-  const end = new Date(start);
-  end.setHours(end.getHours() + 1);
+  if (!defaultStartsAt) {
+    start.setMinutes(0, 0, 0);
+    start.setHours(start.getHours() + 1);
+  }
+
+  const end = defaultEndsAt ? new Date(defaultEndsAt) : new Date(start);
+  if (Number.isNaN(end.getTime())) {
+    end.setTime(start.getTime());
+  }
+
+  if (!defaultEndsAt) {
+    end.setHours(end.getHours() + (scheduleType === "installation" ? 8 : 1));
+  }
 
   return {
-    scheduleType: "meeting",
+    scheduleType,
     deal_id: defaultDealId ?? "",
     title: "",
     starts_at: toLocalDateTimeValue(start),
@@ -76,10 +102,18 @@ export function ScheduleDialog({
   onOpenChange,
   deals,
   defaultDealId,
+  defaultStartsAt,
+  defaultEndsAt,
+  defaultScheduleType,
   onSaved,
 }: ScheduleDialogProps) {
   const [form, setForm] = useState<ScheduleFormState>(() =>
-    createDefaultForm(defaultDealId)
+    createDefaultForm({
+      defaultDealId,
+      defaultStartsAt,
+      defaultEndsAt,
+      defaultScheduleType,
+    })
   );
   const [saving, setSaving] = useState(false);
   const [error, setError] = useState<string | null>(null);
@@ -102,12 +136,19 @@ export function ScheduleDialog({
   );
 
   useEffect(() => {
-    if (!open) {
-      setForm(createDefaultForm(defaultDealId));
-      setSaving(false);
-      setError(null);
-    }
-  }, [defaultDealId, open]);
+    if (!open) return;
+
+    setForm(
+      createDefaultForm({
+        defaultDealId,
+        defaultStartsAt,
+        defaultEndsAt,
+        defaultScheduleType,
+      })
+    );
+    setSaving(false);
+    setError(null);
+  }, [defaultDealId, defaultEndsAt, defaultScheduleType, defaultStartsAt, open]);
 
   useEffect(() => {
     if (!open || !form.deal_id) return;
@@ -207,7 +248,7 @@ export function ScheduleDialog({
 
   return (
     <Dialog open={open} onOpenChange={onOpenChange}>
-      <DialogContent className="max-w-2xl border-[#e7e0d6] bg-[#fffdf8]">
+      <DialogContent className="max-h-[90vh] max-w-[calc(100%-1rem)] overflow-y-auto border-[#e7e0d6] bg-[#fffdf8] p-4 sm:max-w-2xl sm:p-6">
         <DialogHeader>
           <DialogTitle>일정 추가</DialogTitle>
           <DialogDescription>

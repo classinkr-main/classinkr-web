@@ -119,7 +119,7 @@ export function DealQuickCreateDialog({
 
   return (
     <Dialog open={open} onOpenChange={onOpenChange}>
-      <DialogContent className="max-w-xl border-[#e7e0d6] bg-[#fffdf8]">
+      <DialogContent className="max-h-[90vh] max-w-[calc(100%-1rem)] overflow-y-auto border-[#e7e0d6] bg-[#fffdf8] p-4 sm:max-w-xl sm:p-6">
         <DialogHeader>
           <DialogTitle>신규 컨택</DialogTitle>
           <DialogDescription>

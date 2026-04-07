@@ -49,15 +49,22 @@ export async function POST(req: NextRequest) {
       notes?: string | null;
       starts_at?: string | null;
     };
+    const { customer_id, title, expected_amount, notes, starts_at } = body;
 
-    if (!body.customer_id || !body.title) {
+    if (!customer_id || !title) {
       return NextResponse.json(
         { error: "customer_id and title are required" },
         { status: 400 }
       );
     }
 
-    const created = await createDealForPartnerAccount(context, body);
+    const created = await createDealForPartnerAccount(context, {
+      customer_id,
+      title,
+      expected_amount,
+      notes,
+      starts_at,
+    });
     return NextResponse.json(created, { status: 201 });
   } catch (error) {
     console.error("[POST /api/partner/deals]", error);

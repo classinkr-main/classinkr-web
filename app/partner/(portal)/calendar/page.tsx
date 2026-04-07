@@ -1,17 +1,20 @@
 "use client"
 
-import { useEffect, useState } from "react"
+import { useCallback, useEffect, useState } from "react"
 import { useRouter } from "next/navigation"
 import { CalendarDays, ChevronLeft, ChevronRight, MapPinned, RefreshCw, Users, Wrench } from "lucide-react"
 
+import { MobileActionLauncher } from "@/components/partner-portal/mobile/MobileActionLauncher"
 import { PortalNav } from "@/components/partner-portal/PortalNav"
 import { Badge } from "@/components/ui/badge"
 import { Card, CardContent, CardHeader, CardTitle } from "@/components/ui/card"
 import type { PartnerReadMode } from "@/lib/partner-portal/repositories/partner-read"
-import type { CalendarEvent, CalendarSourceType } from "@/lib/partner-portal/types"
+import type { CalendarEvent, CalendarSourceType, CustomerListItem, DealListItem } from "@/lib/partner-portal/types"
 
 type CalendarFilter = "all" | CalendarSourceType
 type PartnerCalendarPayload = { mode: PartnerReadMode; events: CalendarEvent[] }
+type PartnerDealPayload = { deals: DealListItem[] }
+type PartnerCustomerPayload = { customers: CustomerListItem[] }
 
 const WEEKDAYS = ["일", "월", "화", "수", "목", "금", "토"]
 const FILTERS: { value: CalendarFilter; label: string }[] = [
@@ -98,31 +101,52 @@ export default function PartnerCalendarPage() {
   const todayKey = localDateKey(today)
   const [mode, setMode] = useState<PartnerReadMode>("demo")
   const [events, setEvents] = useState<CalendarEvent[]>(DEMO_EVENTS)
+  const [actionDeals, setActionDeals] = useState<DealListItem[]>([])
+  const [actionCustomers, setActionCustomers] = useState<CustomerListItem["customer"][]>([])
   const [filter, setFilter] = useState<CalendarFilter>("all")
   const [loading, setLoading] = useState(true)
   const [error, setError] = useState<string | null>(null)
   const [viewDate, setViewDate] = useState(() => new Date(today.getFullYear(), today.getMonth(), 1))
   const [selectedDate, setSelectedDate] = useState(todayKey)
+  const [selectedEventId, setSelectedEventId] = useState<string | null>(null)
+  const refreshPortal = useCallback(() => {
+    window.location.reload()
+  }, [])
 
   useEffect(() => {
     let alive = true
     async function load() {
       setLoading(true)
       setError(null)
-      try {
-        const payload = await readJson<PartnerCalendarPayload>("/api/partner/calendar")
-        if (!alive) return
-        const nextEvents = payload.events.length > 0 ? payload.events : DEMO_EVENTS
-        setMode(payload.mode ?? "demo")
+      const [calendarResult, dealsResult, customersResult] = await Promise.allSettled([
+        readJson<PartnerCalendarPayload>("/api/partner/calendar"),
+        readJson<PartnerDealPayload>("/api/partner/deals"),
+        readJson<PartnerCustomerPayload>("/api/partner/customers"),
+      ])
+
+      if (!alive) return
+
+      if (calendarResult.status === "fulfilled") {
+        const nextEvents =
+          calendarResult.value.events.length > 0 ? calendarResult.value.events : DEMO_EVENTS
+        setMode(calendarResult.value.mode ?? "demo")
         setEvents(nextEvents)
-      } catch {
+      } else {
         if (!alive) return
         setMode("demo")
         setEvents(DEMO_EVENTS)
         setError("연결된 계정이 없어 데모 일정으로 전환했습니다.")
-      } finally {
-        if (alive) setLoading(false)
       }
+
+      setActionDeals(
+        dealsResult.status === "fulfilled" ? dealsResult.value.deals : []
+      )
+      setActionCustomers(
+        customersResult.status === "fulfilled"
+          ? customersResult.value.customers.map((item) => item.customer)
+          : []
+      )
+      setLoading(false)
     }
     void load()
     return () => {
@@ -137,6 +161,10 @@ export default function PartnerCalendarPage() {
   const selectedDayEvents = dateMap.get(selectedDate) ?? []
   const installationCount = events.filter((event) => event.source_type === "installation").length
   const upcomingCount = visibleEvents.filter((event) => localDateKey(event.ends_at) >= todayKey).length
+  const canCreateInPortal = mode === "v2"
+  const selectedEvent =
+    selectedDayEvents.find((event) => event.id === selectedEventId) ?? selectedDayEvents[0] ?? null
+  const selectedDealId = selectedEvent?.deal_id ?? selectedDayEvents.find((event) => event.deal_id)?.deal_id ?? null
 
   const cells: (string | null)[] = []
   for (let index = 0; index < firstDay; index += 1) cells.push(null)
@@ -209,7 +237,15 @@ export default function PartnerCalendarPage() {
                   const isToday = cell === todayKey
                   const isSelected = cell === selectedDate
                   return (
-                    <button key={cell} type="button" onClick={() => setSelectedDate(cell)} className={`min-h-[116px] bg-white p-2 text-left transition-colors ${isSelected ? "bg-[#f6f6f3]" : "hover:bg-[#fbfbf9]"}`}>
+                    <button
+                      key={cell}
+                      type="button"
+                      onClick={() => {
+                        setSelectedDate(cell)
+                        setSelectedEventId(dateMap.get(cell)?.[0]?.id ?? null)
+                      }}
+                      className={`min-h-[116px] bg-white p-2 text-left transition-colors ${isSelected ? "bg-[#f6f6f3]" : "hover:bg-[#fbfbf9]"}`}
+                    >
                       <div className="flex items-center justify-between gap-2">
                         <span className={`inline-flex h-7 w-7 items-center justify-center rounded-full text-xs font-semibold ${isToday ? "bg-[#1a1a1a] text-white" : "text-[#1a1a1a]/70"}`}>{Number(cell.slice(-2))}</span>
                         {cellEvents.length > 0 && <span className="text-[10px] text-[#1a1a1a]/35">{cellEvents.length}건</span>}
@@ -241,7 +277,16 @@ export default function PartnerCalendarPage() {
                 {selectedDayEvents.length === 0 ? (
                   <div className="rounded-xl border border-dashed border-[#e0e0dc] bg-[#fafaf8] px-4 py-8 text-center text-sm text-[#1a1a1a]/45">선택한 날짜에 표시할 일정이 없습니다.</div>
                 ) : selectedDayEvents.map((event) => (
-                  <div key={`${selectedDate}-${event.id}`} className="rounded-xl border border-[#e8e8e4] bg-[#fcfcfb] p-4">
+                  <button
+                    key={`${selectedDate}-${event.id}`}
+                    type="button"
+                    onClick={() => setSelectedEventId(event.id)}
+                    className={`w-full rounded-xl border p-4 text-left transition-colors ${
+                      selectedEvent?.id === event.id
+                        ? "border-[#1a1a1a] bg-[#f6f6f3]"
+                        : "border-[#e8e8e4] bg-[#fcfcfb] hover:bg-white"
+                    }`}
+                  >
                     <div className="flex flex-wrap items-center gap-2">
                       <span className={`rounded-full border px-2 py-1 text-xs font-medium ${sourceTone(event.source_type)}`}>{sourceLabel(event.source_type)}</span>
                       <span className="text-xs text-[#1a1a1a]/45">{new Date(event.starts_at).toLocaleTimeString("ko-KR", { hour: "2-digit", minute: "2-digit" })} - {new Date(event.ends_at).toLocaleTimeString("ko-KR", { hour: "2-digit", minute: "2-digit" })}</span>
@@ -249,7 +294,7 @@ export default function PartnerCalendarPage() {
                     <p className="mt-3 text-sm font-semibold">{event.title}</p>
                     <p className="mt-1 text-sm text-[#1a1a1a]/55">{event.description ?? "세부 메모가 아직 없습니다."}</p>
                     <div className="mt-3 flex items-center gap-2 text-xs text-[#1a1a1a]/45"><MapPinned className="h-3.5 w-3.5" />{event.timezone}</div>
-                  </div>
+                  </button>
                 ))}
               </CardContent>
             </Card>
@@ -299,6 +344,17 @@ export default function PartnerCalendarPage() {
           </Card>
         </div>
       </div>
+
+      <MobileActionLauncher
+        screen="calendar"
+        customers={actionCustomers}
+        deals={actionDeals}
+        canCreate={canCreateInPortal}
+        defaultDealId={selectedDealId}
+        selectedDate={selectedDate}
+        selectedEvent={selectedEvent}
+        onSaved={refreshPortal}
+      />
     </div>
   )
 }

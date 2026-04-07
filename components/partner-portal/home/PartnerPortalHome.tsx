@@ -11,6 +11,7 @@ import {
 import { CustomerDialog } from "@/components/partner-portal/crud/CustomerDialog"
 import { DealQuickCreateDialog } from "@/components/partner-portal/crud/DealQuickCreateDialog"
 import { ScheduleDialog } from "@/components/partner-portal/crud/ScheduleDialog"
+import { MobileActionLauncher } from "@/components/partner-portal/mobile/MobileActionLauncher"
 import { PortalNav } from "@/components/partner-portal/PortalNav"
 import { Button } from "@/components/ui/button"
 
@@ -403,7 +404,7 @@ export function PartnerPortalHome() {
           </div>
           <div className="flex flex-col items-end gap-3">
             <PortalNav />
-            <div className="flex flex-wrap justify-end gap-2">
+            <div className="hidden flex-wrap justify-end gap-2 md:flex">
               <QuickActionButton
                 label="새 고객"
                 disabled={!canCreateInPortal}
@@ -839,6 +840,14 @@ export function PartnerPortalHome() {
           </div>
         </div>
       </div>
+
+      <MobileActionLauncher
+        screen="home"
+        customers={overview.customers.map(item => item.customer)}
+        deals={overview.deals}
+        canCreate={canCreateInPortal}
+        onSaved={refreshPortal}
+      />
 
       <CustomerDialog
         open={isCustomerDialogOpen}

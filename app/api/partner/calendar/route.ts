@@ -38,15 +38,32 @@ export async function POST(req: NextRequest) {
       location?: string | null;
       description?: string | null;
     };
+    const {
+      deal_id,
+      title,
+      starts_at,
+      ends_at,
+      timezone,
+      location,
+      description,
+    } = body;
 
-    if (!body.deal_id || !body.title || !body.starts_at || !body.ends_at) {
+    if (!deal_id || !title || !starts_at || !ends_at) {
       return NextResponse.json(
         { error: "deal_id, title, starts_at, ends_at are required" },
         { status: 400 }
       );
     }
 
-    const event = await createMeetingEventForPartnerAccount(context, body);
+    const event = await createMeetingEventForPartnerAccount(context, {
+      deal_id,
+      title,
+      starts_at,
+      ends_at,
+      timezone,
+      location,
+      description,
+    });
     return NextResponse.json({ event }, { status: 201 });
   } catch (error) {
     console.error("[POST /api/partner/calendar]", error);

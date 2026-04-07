@@ -23,8 +23,18 @@ export async function POST(req: NextRequest) {
       assigned_team?: string | null;
       notes?: string | null;
     };
+    const {
+      deal_id,
+      title,
+      scheduled_start_at,
+      scheduled_end_at,
+      timezone,
+      location,
+      assigned_team,
+      notes,
+    } = body;
 
-    if (!body.deal_id || !body.scheduled_start_at || !body.scheduled_end_at) {
+    if (!deal_id || !scheduled_start_at || !scheduled_end_at) {
       return NextResponse.json(
         { error: "deal_id, scheduled_start_at, scheduled_end_at are required" },
         { status: 400 }
@@ -32,14 +42,14 @@ export async function POST(req: NextRequest) {
     }
 
     const created = await createInstallationForPartnerAccount(context, {
-      deal_id: body.deal_id,
-      title: body.title,
-      scheduled_start_at: body.scheduled_start_at,
-      scheduled_end_at: body.scheduled_end_at,
-      timezone: body.timezone,
-      location: body.location,
-      assigned_team: body.assigned_team,
-      notes: body.notes,
+      deal_id,
+      title,
+      scheduled_start_at,
+      scheduled_end_at,
+      timezone,
+      location,
+      assigned_team,
+      notes,
     });
 
     return NextResponse.json(created, { status: 201 });
