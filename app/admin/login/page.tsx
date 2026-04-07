@@ -3,11 +3,15 @@
 import { useState } from "react"
 import { useRouter } from "next/navigation"
 import { Lock } from "lucide-react"
+import { clearAdminSessionStorage } from "@/lib/admin-client"
 import { getAdminAuthErrorMessage } from "@/lib/admin-auth-errors"
 import { createSupabaseBrowserClient } from "@/lib/supabase/browser"
 import { hasSupabaseBrowserEnv } from "@/lib/supabase/public-env"
 import { Button } from "@/components/ui/button"
 import { Input } from "@/components/ui/input"
+
+const INVALID_CREDENTIALS_MESSAGE = "이메일 또는 비밀번호가 올바르지 않습니다."
+const UNAUTHORIZED_MESSAGE = "관리자 권한이 있는 계정만 로그인할 수 있습니다."
 
 export default function AdminLoginPage() {
   const router = useRouter()
@@ -23,6 +27,8 @@ export default function AdminLoginPage() {
     setLoading(true)
 
     try {
+      clearAdminSessionStorage()
+
       if (!useSupabaseAuth) {
         const response = await fetch("/api/admin/auth", {
           method: "POST",
@@ -61,7 +67,7 @@ export default function AdminLoginPage() {
       })
 
       if (signInError || !signInData.user) {
-        setError("이메일 또는 비밀번호가 올바르지 않습니다.")
+        setError(INVALID_CREDENTIALS_MESSAGE)
         return
       }
 
@@ -82,7 +88,7 @@ export default function AdminLoginPage() {
         setError(
           profile.status === "INVITED"
             ? "초대를 수락한 후 접근할 수 있습니다."
-            : "관리자 계정이 비활성화되어 있습니다."
+            : UNAUTHORIZED_MESSAGE
         )
         return
       }
@@ -98,11 +104,8 @@ export default function AdminLoginPage() {
       router.refresh()
     } catch (err) {
       console.error("[AdminLogin] 오류:", err)
-      setError(
-        useSupabaseAuth
-          ? "이메일 또는 비밀번호가 올바르지 않습니다."
-          : "서버 연결에 실패했습니다."
-      )
+      clearAdminSessionStorage()
+      setError(useSupabaseAuth ? INVALID_CREDENTIALS_MESSAGE : "서버 연결에 실패했습니다.")
     } finally {
       setLoading(false)
     }

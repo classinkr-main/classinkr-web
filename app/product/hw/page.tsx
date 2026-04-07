@@ -1,14 +1,16 @@
 "use client"
 
 import { Button } from "@/components/ui/button"
+import { BROCHURE_URL } from "@/lib/marketing-links"
 import { motion, useInView } from "framer-motion"
 import {
-    ArrowRight, PenTool, Eye, Share2, Video,
+    ArrowRight, PenTool, Eye, Share2,
     Monitor, Fingerprint, Users, Layers, Wifi,
     Shield, Maximize, ChevronRight, Zap, Hand,
-    GraduationCap, Building2, Mic, Camera, Star,
+    GraduationCap, Mic, Camera, Star,
 } from "lucide-react"
 import Image from "next/image"
+import Link from "next/link"
 import { useRef, useState } from "react"
 
 /* ── Animation helpers ───────────────────────────────────────────── */
@@ -629,7 +631,7 @@ function TestimonialSection() {
                                 ))}
                             </div>
                             <p className="text-slate-600 leading-relaxed text-sm flex-1 mb-6">
-                                "{t.quote}"
+                                &ldquo;{t.quote}&rdquo;
                             </p>
                             <div className="border-t border-slate-100 pt-5">
                                 <div className="font-bold text-slate-900 text-sm">{t.name}</div>
@@ -746,9 +748,11 @@ function SpaceScenarioSection() {
                             <br />어떤 공간에 어울릴까요?
                         </h3>
                         <p className="text-slate-600 leading-relaxed mb-8">{scenario.story}</p>
-                        <Button className="bg-[#22A366] hover:bg-[#1B8A55] text-white rounded-full px-8 h-12 text-sm font-bold shadow-md hover:shadow-lg transition-all group">
+                        <Button asChild className="bg-[#22A366] hover:bg-[#1B8A55] text-white rounded-full px-8 h-12 text-sm font-bold shadow-md hover:shadow-lg transition-all group">
+                            <Link href="/contact#contact-form">
                             이 모델로 문의하기
                             <ArrowRight className="w-4 h-4 ml-2 group-hover:translate-x-1 transition-transform" />
+                            </Link>
                         </Button>
                     </div>
                 </motion.div>
@@ -1324,12 +1328,16 @@ export default function ProductHWPage() {
                         </p>
 
                         <div className="flex flex-col sm:flex-row gap-4 justify-center">
-                            <Button className="bg-[#22A366] hover:bg-[#1B8A55] text-white rounded-full px-10 h-14 text-base font-bold shadow-[0_8px_20px_rgba(34,163,102,0.3)] hover:shadow-[0_12px_25px_rgba(34,163,102,0.4)] transition-all hover:scale-105 group">
+                            <Button asChild className="bg-[#22A366] hover:bg-[#1B8A55] text-white rounded-full px-10 h-14 text-base font-bold shadow-[0_8px_20px_rgba(34,163,102,0.3)] hover:shadow-[0_12px_25px_rgba(34,163,102,0.4)] transition-all hover:scale-105 group">
+                                <Link href="/contact#contact-form">
                                 도입 문의하기
                                 <ArrowRight className="w-4 h-4 ml-2 group-hover:translate-x-1 transition-transform" />
+                                </Link>
                             </Button>
-                            <Button variant="outline" className="rounded-full px-10 h-14 text-base font-bold border-slate-300 hover:border-slate-400 text-slate-700 hover:bg-slate-50 transition-all">
-                                데모 체험 신청
+                            <Button asChild variant="outline" className="rounded-full px-10 h-14 text-base font-bold border-slate-300 hover:border-slate-400 text-slate-700 hover:bg-slate-50 transition-all">
+                                <a href={BROCHURE_URL} target="_blank" rel="noopener noreferrer">
+                                서비스 소개서 보기
+                                </a>
                             </Button>
                         </div>
                     </motion.div>

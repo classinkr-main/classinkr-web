@@ -48,7 +48,7 @@ interface GitCommit {
 
 // ─── Helpers ─────────────────────────────────────────────
 function relativeTime(iso: string): string {
-  const diff = Date.now() - new Date(iso).getTime()
+  const diff = new Date().getTime() - new Date(iso).getTime()
   const min = Math.floor(diff / 60000)
   if (min < 1) return "방금 전"
   if (min < 60) return `${min}분 전`
@@ -86,13 +86,13 @@ function getCached<T>(key: string): T | null {
     const raw = sessionStorage.getItem(key)
     if (!raw) return null
     const { data, ts } = JSON.parse(raw)
-    if (Date.now() - ts > CACHE_TTL) return null
+    if (new Date().getTime() - ts > CACHE_TTL) return null
     return data as T
   } catch { return null }
 }
 
 function setCache<T>(key: string, data: T) {
-  try { sessionStorage.setItem(key, JSON.stringify({ data, ts: Date.now() })) } catch {}
+  try { sessionStorage.setItem(key, JSON.stringify({ data, ts: new Date().getTime() })) } catch {}
 }
 
 function RefreshBtn({ onClick, refreshing }: { onClick: () => void; refreshing: boolean }) {
@@ -191,10 +191,19 @@ function RoadmapTab({ token }: { token: string }) {
     setRefreshing(false)
   }, [token])
 
-  useEffect(() => { load() }, [load])
+  useEffect(() => {
+    queueMicrotask(() => {
+      void load()
+    })
+  }, [load])
 
   const toggleExpand = (id: string) =>
-    setExpanded((prev) => { const n = new Set(prev); n.has(id) ? n.delete(id) : n.add(id); return n })
+    setExpanded((prev) => {
+      const next = new Set(prev)
+      if (next.has(id)) next.delete(id)
+      else next.add(id)
+      return next
+    })
 
   const openCreate = () => { setEditId(null); setForm({ ...EMPTY_VER_FORM }); setShowForm(true) }
   const openEdit = (ver: RoadmapVersion) => {
@@ -228,7 +237,7 @@ function RoadmapTab({ token }: { token: string }) {
 
   const addFeat = async (ver: RoadmapVersion) => {
     if (!featForm.title.trim()) return
-    const newFeat: RoadmapFeature = { id: `f_${Date.now()}`, title: featForm.title.trim(), status: featForm.status, assignee: featForm.assignee.trim() }
+    const newFeat: RoadmapFeature = { id: uid("f"), title: featForm.title.trim(), status: featForm.status, assignee: featForm.assignee.trim() }
     const updated = [...ver.features, newFeat]
     setVersions((prev) => prev.map((v) => v.id === ver.id ? { ...v, features: updated } : v))
     setAddingFeat(null); setFeatForm({ title: "", status: "planned", assignee: "" })
@@ -462,7 +471,11 @@ function BugsTab({ token, userName, onCountChange }: { token: string; userName: 
     setRefreshing(false)
   }, [token, onCountChange])
 
-  useEffect(() => { load() }, [load])
+  useEffect(() => {
+    queueMicrotask(() => {
+      void load()
+    })
+  }, [load])
 
   const handleSubmit = async (e: React.FormEvent) => {
     e.preventDefault()
@@ -647,8 +660,8 @@ const STATUS_CONFIG: Record<NoteStatus, { label: string; bg: string }> = {
   published: { label: "발행됨", bg: "bg-green-100 text-green-700" },
 }
 
-function uid() {
-  return `c_${Date.now()}_${Math.random().toString(36).slice(2, 5)}`
+function uid(prefix = "c") {
+  return `${prefix}_${crypto.randomUUID().slice(0, 8)}`
 }
 
 const EMPTY_FORM = {
@@ -687,12 +700,17 @@ function PatchNotesTab({ token }: { token: string }) {
     setRefreshing(false)
   }, [token])
 
-  React.useEffect(() => { load() }, [load])
+  React.useEffect(() => {
+    queueMicrotask(() => {
+      void load()
+    })
+  }, [load])
 
   const toggleExpand = (id: string) =>
     setExpandedIds((prev) => {
       const next = new Set(prev)
-      next.has(id) ? next.delete(id) : next.add(id)
+      if (next.has(id)) next.delete(id)
+      else next.add(id)
       return next
     })
 
@@ -1231,7 +1249,12 @@ function GitLogTab({ token }: { token: string }) {
   }, [])
 
   const toggleCommit = (hash: string) =>
-    setExpandedCommits((prev) => { const n = new Set(prev); n.has(hash) ? n.delete(hash) : n.add(hash); return n })
+    setExpandedCommits((prev) => {
+      const next = new Set(prev)
+      if (next.has(hash)) next.delete(hash)
+      else next.add(hash)
+      return next
+    })
 
   return (
     <div>
@@ -1335,9 +1358,11 @@ export default function DevPage() {
     const t = sessionStorage.getItem("admin_password") || ""
     const n = sessionStorage.getItem("admin_name") || "팀원"
     const r = sessionStorage.getItem("admin_role") || ""
-    setToken(t)
-    setUserName(n)
-    setRole(r)
+    queueMicrotask(() => {
+      setToken(t)
+      setUserName(n)
+      setRole(r)
+    })
     if (!t) router.replace("/admin/login")
   }, [router])
 

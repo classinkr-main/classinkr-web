@@ -9,6 +9,7 @@ import {
   Building2,
   CalendarDays,
   ChevronRight,
+  ClipboardList,
   Code2,
   FileText,
   Handshake,
@@ -21,9 +22,11 @@ import {
   UserCog,
   Users,
 } from "lucide-react"
+import { clearAdminSessionStorage } from "@/lib/admin-client"
 import { createSupabaseBrowserClient } from "@/lib/supabase/browser"
+import { hasSupabaseBrowserEnv } from "@/lib/supabase/public-env"
 
-type SidebarRole = "SUPER_ADMIN" | "ADMIN" | "EDITOR" | "VIEWER" | "BRANCH"
+type SidebarRole = "SUPER_ADMIN" | "ADMIN" | "EDITOR" | "VIEWER" | "BRANCH" | "PARTNER"
 type SidebarSection = "workspace" | "performance" | "system"
 
 interface NavItem {
@@ -35,18 +38,24 @@ interface NavItem {
   badge?: string
 }
 
+const ALL_STAFF: SidebarRole[]    = ["SUPER_ADMIN", "ADMIN", "EDITOR", "VIEWER"]
+const STAFF_ADMIN: SidebarRole[]  = ["SUPER_ADMIN", "ADMIN"]
+const STAFF_EDITOR: SidebarRole[] = ["SUPER_ADMIN", "ADMIN", "EDITOR"]
+
 const NAV: NavItem[] = [
-  { href: "/admin/overview", label: "Overview", icon: <LayoutDashboard className="h-4 w-4" />, roles: ["SUPER_ADMIN", "ADMIN", "EDITOR", "VIEWER", "BRANCH"], section: "workspace" },
-  { href: "/admin/crm", label: "CRM / 리드", icon: <Users className="h-4 w-4" />, roles: ["SUPER_ADMIN", "ADMIN", "EDITOR", "VIEWER", "BRANCH"], section: "workspace" },
-  { href: "/admin/campaigns", label: "캠페인", icon: <Megaphone className="h-4 w-4" />, roles: ["SUPER_ADMIN", "ADMIN"], section: "workspace" },
-  { href: "/admin/partners", label: "파트너 운영", icon: <Handshake className="h-4 w-4" />, roles: ["SUPER_ADMIN", "ADMIN"], section: "workspace" },
-  { href: "/admin/calendar", label: "캘린더", icon: <CalendarDays className="h-4 w-4" />, roles: ["SUPER_ADMIN", "ADMIN", "EDITOR", "VIEWER", "BRANCH"], section: "workspace" },
-  { href: "/admin/blog", label: "콘텐츠", icon: <FileText className="h-4 w-4" />, roles: ["SUPER_ADMIN", "ADMIN", "EDITOR"], section: "workspace" },
-  { href: "/admin/branch", label: "지사 관리", icon: <Building2 className="h-4 w-4" />, roles: ["SUPER_ADMIN", "ADMIN", "BRANCH"], section: "performance" },
-  { href: "/admin/analytics", label: "Analytics", icon: <BarChart2 className="h-4 w-4" />, roles: ["SUPER_ADMIN", "ADMIN", "EDITOR", "VIEWER", "BRANCH"], section: "performance" },
-  { href: "/admin/users", label: "회원 관리", icon: <UserCog className="h-4 w-4" />, roles: ["SUPER_ADMIN", "ADMIN"], section: "system" },
-  { href: "/admin/settings", label: "Settings", icon: <Settings className="h-4 w-4" />, roles: ["SUPER_ADMIN", "ADMIN"], section: "system" },
-  { href: "/admin/dev", label: "Dev Mode", icon: <Code2 className="h-4 w-4" />, roles: ["SUPER_ADMIN", "ADMIN"], section: "system", badge: "Beta" },
+  { href: "/admin/overview", label: "Overview", icon: <LayoutDashboard className="h-4 w-4" />, roles: [...ALL_STAFF, "BRANCH"], section: "workspace" },
+  { href: "/admin/crm", label: "CRM / 리드", icon: <Users className="h-4 w-4" />, roles: [...ALL_STAFF, "BRANCH"], section: "workspace" },
+  { href: "/admin/campaigns", label: "캠페인", icon: <Megaphone className="h-4 w-4" />, roles: STAFF_ADMIN, section: "workspace" },
+  { href: "/admin/partners", label: "파트너 운영", icon: <Handshake className="h-4 w-4" />, roles: STAFF_ADMIN, section: "workspace" },
+  { href: "/admin/calendar", label: "캘린더", icon: <CalendarDays className="h-4 w-4" />, roles: [...ALL_STAFF, "BRANCH"], section: "workspace" },
+  { href: "/admin/blog", label: "콘텐츠", icon: <FileText className="h-4 w-4" />, roles: STAFF_EDITOR, section: "workspace" },
+  { href: "/admin/branch", label: "지사 관리", icon: <Building2 className="h-4 w-4" />, roles: [...STAFF_ADMIN, "BRANCH"], section: "performance" },
+  { href: "/admin/analytics", label: "Analytics", icon: <BarChart2 className="h-4 w-4" />, roles: [...ALL_STAFF, "BRANCH"], section: "performance" },
+  { href: "/admin/users", label: "회원 관리", icon: <UserCog className="h-4 w-4" />, roles: STAFF_ADMIN, section: "system" },
+  { href: "/admin/settings", label: "Settings", icon: <Settings className="h-4 w-4" />, roles: STAFF_ADMIN, section: "system" },
+  { href: "/admin/dev", label: "Dev Mode", icon: <Code2 className="h-4 w-4" />, roles: STAFF_ADMIN, section: "system", badge: "Beta" },
+  // 파트너 포털 (외부)
+  { href: "/partner", label: "파트너 포털", icon: <ClipboardList className="h-4 w-4" />, roles: STAFF_ADMIN, section: "system" },
 ]
 
 const SECTION_META: Record<SidebarSection, { label: string; description: string }> = {
@@ -61,6 +70,7 @@ const ROLE_LABEL: Record<SidebarRole, string> = {
   EDITOR: "에디터",
   VIEWER: "뷰어",
   BRANCH: "지사장",
+  PARTNER: "파트너",
 }
 
 interface Props {
@@ -74,6 +84,7 @@ function normalizeRole(role: string): SidebarRole {
 
   if (normalized === "admin" || normalized === "ADMIN") return "ADMIN"
   if (normalized === "branch" || normalized === "BRANCH") return "BRANCH"
+  if (normalized === "partner" || normalized === "PARTNER") return "PARTNER"
   if (normalized === "SUPER_ADMIN") return "SUPER_ADMIN"
   if (normalized === "EDITOR") return "EDITOR"
   if (normalized === "VIEWER") return "VIEWER"
@@ -89,6 +100,13 @@ export default function AdminSidebar({ role, name, email }: Props) {
     return localStorage.getItem("admin_sidebar_collapsed") === "true"
   })
   const [isDesktop, setIsDesktop] = useState(false)
+
+  // PARTNER 역할은 별도 포털로 이동
+  useEffect(() => {
+    if (role.toUpperCase() === "PARTNER") {
+      router.replace("/partner/workspace")
+    }
+  }, [pathname, role, router])
 
   useEffect(() => {
     const media = window.matchMedia("(min-width: 1024px)")
@@ -110,23 +128,14 @@ export default function AdminSidebar({ role, name, email }: Props) {
   }
 
   const handleLogout = async () => {
-    sessionStorage.removeItem("admin_password")
-    sessionStorage.removeItem("admin_token")
-    sessionStorage.removeItem("admin_role")
-    sessionStorage.removeItem("admin_name")
-    sessionStorage.removeItem("admin_email")
-    sessionStorage.removeItem("admin_branch")
+    clearAdminSessionStorage()
 
-    try {
-      await fetch("/api/admin/auth", { method: "DELETE" })
-    } catch {
-      try {
-        const supabase = createSupabaseBrowserClient()
-        await supabase.auth.signOut()
-      } catch {
-        // legacy auth users may not have a Supabase session
-      }
+    if (hasSupabaseBrowserEnv()) {
+      const supabase = createSupabaseBrowserClient()
+      await supabase.auth.signOut()
     }
+
+    await fetch("/api/admin/auth", { method: "DELETE" }).catch(() => null)
 
     router.replace("/admin/login")
     router.refresh()

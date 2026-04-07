@@ -1,4 +1,4 @@
-import { NextRequest, NextResponse } from "next/server"
+﻿import { NextRequest, NextResponse } from "next/server"
 import { verifyAdmin } from "@/lib/admin-auth"
 import { executeRule } from "@/lib/automation-engine"
 
@@ -6,7 +6,7 @@ export async function POST(
   req: NextRequest,
   { params }: { params: Promise<{ id: string }> }
 ) {
-  const authError = verifyAdmin(req)
+  const authError = await verifyAdmin(req)
   if (authError) return authError
 
   const { id } = await params

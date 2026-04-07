@@ -1,15 +1,15 @@
-import { NextRequest, NextResponse } from "next/server"
+﻿import { NextRequest, NextResponse } from "next/server"
 import { verifyAdmin } from "@/lib/admin-auth"
 import { resolveSegmentRecipients } from "@/lib/automation-engine"
 import type { SegmentConfig } from "@/lib/automation-types"
 
 /**
  * POST /api/admin/automation/segment/preview
- * 세그먼트 조건에 해당하는 수신자 수를 미리보기로 반환.
- * 규칙 생성 폼 Step2에서 실시간 카운트 표시용.
+ * ?멸렇癒쇳듃 議곌굔???대떦?섎뒗 ?섏떊???섎? 誘몃━蹂닿린濡?諛섑솚.
+ * 洹쒖튃 ?앹꽦 ??Step2?먯꽌 ?ㅼ떆媛?移댁슫???쒖떆??
  */
 export async function POST(req: NextRequest) {
-  const authError = verifyAdmin(req)
+  const authError = await verifyAdmin(req)
   if (authError) return authError
 
   try {
@@ -18,7 +18,7 @@ export async function POST(req: NextRequest) {
 
     const allRecipients = await resolveSegmentRecipients(segmentConfig)
 
-    // 테이블별 분류
+    // ?뚯씠釉붾퀎 遺꾨쪟
     const leadSources = new Set(["demo_modal", "contact_page", "manual"])
     let leads = 0
     let subscribers = 0

@@ -2,7 +2,10 @@
 
 import { useEffect, useState } from "react"
 import { usePathname, useRouter } from "next/navigation"
+
 import AdminSidebar from "@/components/admin/AdminSidebar"
+import { clearAdminSessionStorage } from "@/lib/admin-client"
+import { isAdminAuthBypassEnabled } from "@/lib/admin-env"
 import { createSupabaseBrowserClient } from "@/lib/supabase/browser"
 import { hasSupabaseBrowserEnv } from "@/lib/supabase/public-env"
 
@@ -40,12 +43,19 @@ export default function AdminLayout({ children }: { children: React.ReactNode })
 
     const cachedSession = readCachedSession() ?? session
 
-    if (process.env.NEXT_PUBLIC_SKIP_ADMIN_AUTH === "true") {
-      sessionStorage.setItem("admin_password", "dev-skip")
-      sessionStorage.setItem("admin_token", "dev-skip")
-      sessionStorage.setItem("admin_role", "admin")
-      sessionStorage.setItem("admin_name", "Dev")
-      sessionStorage.setItem("admin_email", "dev@local")
+    if (cachedSession && !session) {
+      queueMicrotask(() => setSession(cachedSession))
+    }
+
+    if (isAdminAuthBypassEnabled()) {
+      queueMicrotask(() => {
+        sessionStorage.setItem("admin_password", "dev-skip")
+        sessionStorage.setItem("admin_token", "dev-skip")
+        sessionStorage.setItem("admin_role", "admin")
+        sessionStorage.setItem("admin_name", "Dev")
+        sessionStorage.setItem("admin_email", "dev@local")
+        setSession({ role: "admin", name: "Dev", email: "dev@local" })
+      })
       return
     }
 
@@ -54,9 +64,7 @@ export default function AdminLayout({ children }: { children: React.ReactNode })
     const load = async () => {
       if (!hasSupabaseBrowserEnv()) {
         if (cachedSession) {
-          if (!cancelled) {
-            setSession(cachedSession)
-          }
+          if (!cancelled) setSession(cachedSession)
           return
         }
 
@@ -65,6 +73,7 @@ export default function AdminLayout({ children }: { children: React.ReactNode })
           const data = await response.json().catch(() => null)
 
           if (!response.ok || !data) {
+            clearAdminSessionStorage()
             router.replace("/admin/login")
             return
           }
@@ -86,6 +95,7 @@ export default function AdminLayout({ children }: { children: React.ReactNode })
             })
           }
         } catch {
+          clearAdminSessionStorage()
           router.replace("/admin/login")
         }
 
@@ -98,7 +108,8 @@ export default function AdminLayout({ children }: { children: React.ReactNode })
       } = await supabase.auth.getUser()
 
       if (!user) {
-        if (!cachedSession) router.replace("/admin/login")
+        clearAdminSessionStorage()
+        router.replace("/admin/login")
         return
       }
 
@@ -109,19 +120,20 @@ export default function AdminLayout({ children }: { children: React.ReactNode })
         .single()
 
       if (!profile || profile.status !== "ACTIVE") {
+        clearAdminSessionStorage()
         await supabase.auth.signOut()
         router.replace("/admin/login")
         return
       }
 
-      sessionStorage.setItem("admin_password", "supabase-authed")
-      sessionStorage.setItem("admin_token", "supabase-authed")
-      sessionStorage.setItem("admin_role", profile.role)
-      sessionStorage.setItem("admin_name", profile.display_name)
-      sessionStorage.setItem("admin_email", user.email ?? "")
-      sessionStorage.removeItem("admin_branch")
-
       if (!cancelled) {
+        sessionStorage.setItem("admin_password", "supabase-authed")
+        sessionStorage.setItem("admin_token", "supabase-authed")
+        sessionStorage.setItem("admin_role", profile.role)
+        sessionStorage.setItem("admin_name", profile.display_name)
+        sessionStorage.setItem("admin_email", user.email ?? "")
+        sessionStorage.removeItem("admin_branch")
+
         setSession({
           role: profile.role,
           name: profile.display_name,

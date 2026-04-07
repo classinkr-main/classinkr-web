@@ -1,109 +1,112 @@
-/**
- * ─────────────────────────────────────────────────────────────
- * /api/newsletter/unsubscribe  —  뉴스레터 수신거부 (공개 API)
- * ─────────────────────────────────────────────────────────────
- *
- * [NOTE-16] 수신거부 링크 처리
- *   모든 마케팅 이메일 하단에 수신거부 링크를 포함해야 함 (법적 의무).
- *   링크 형식: https://도메인/api/newsletter/unsubscribe?email=xxx
- *
- *   GET  → 이메일 파라미터로 즉시 수신거부 (이메일 내 원클릭)
- *   POST → JSON body로 수신거부 (프론트엔드 폼)
- */
-
 import { NextRequest, NextResponse } from "next/server"
 import { unsubscribe } from "@/lib/repositories/marketing"
 
-/** GET: 이메일 링크에서 직접 수신거부 (원클릭) */
 export async function GET(req: NextRequest) {
-  const email = new URL(req.url).searchParams.get("email")
+  const email = new URL(req.url).searchParams.get("email") ?? ""
 
-  if (!email) {
-    return new NextResponse(
-      renderUnsubscribePage("이메일 파라미터가 없습니다.", false),
-      { headers: { "Content-Type": "text/html; charset=utf-8" } }
-    )
-  }
-
-  const success = await unsubscribe(email)
-
-  return new NextResponse(
-    renderUnsubscribePage(
-      success
-        ? "수신거부가 완료되었습니다. 더 이상 마케팅 이메일이 발송되지 않습니다."
-        : "해당 이메일을 찾을 수 없습니다.",
-      success
-    ),
-    { headers: { "Content-Type": "text/html; charset=utf-8" } }
-  )
+  return new NextResponse(renderUnsubscribePage(email), {
+    headers: { "Content-Type": "text/html; charset=utf-8" },
+  })
 }
 
-/** POST: 프론트엔드 폼에서 수신거부 */
 export async function POST(req: NextRequest) {
   try {
-    const { email } = await req.json()
+    const contentType = req.headers.get("content-type") ?? ""
+    let email = ""
 
-    if (!email) {
-      return NextResponse.json(
-        { error: "이메일은 필수입니다." },
-        { status: 400 }
-      )
+    if (contentType.includes("application/json")) {
+      const body = await req.json()
+      email = typeof body?.email === "string" ? body.email.trim() : ""
+    } else {
+      const form = await req.formData()
+      const value = form.get("email")
+      email = typeof value === "string" ? value.trim() : ""
     }
 
-    const success = await unsubscribe(email)
+    if (!email) {
+      return NextResponse.json({ error: "Invalid request." }, { status: 400 })
+    }
+
+    await unsubscribe(email)
 
     return NextResponse.json({
-      ok: success,
-      message: success
-        ? "수신거부가 완료되었습니다."
-        : "해당 이메일을 찾을 수 없습니다.",
+      ok: true,
+      message: "Completed.",
     })
   } catch {
-    return NextResponse.json(
-      { error: "잘못된 요청입니다." },
-      { status: 400 }
-    )
+    return NextResponse.json({ error: "Invalid request." }, { status: 400 })
   }
 }
 
-/**
- * [NOTE-16] 수신거부 확인 HTML 페이지
- * 이메일 내 수신거부 링크 클릭 시 보여주는 결과 페이지.
- * 별도의 프론트엔드 페이지 없이 API에서 직접 HTML 반환.
- */
-function renderUnsubscribePage(message: string, success: boolean): string {
+function renderUnsubscribePage(email: string): string {
+  const safeEmail = escapeHtml(email)
+
   return `<!DOCTYPE html>
-<html lang="ko">
+<html lang="en">
 <head>
   <meta charset="UTF-8" />
   <meta name="viewport" content="width=device-width, initial-scale=1.0" />
-  <title>수신거부 - Classin</title>
+  <title>Unsubscribe - Classin</title>
   <style>
     body {
       font-family: -apple-system, BlinkMacSystemFont, 'Segoe UI', sans-serif;
-      display: flex; justify-content: center; align-items: center;
-      min-height: 100vh; margin: 0;
-      background: #FAFAF8; color: #111110;
+      display: flex;
+      justify-content: center;
+      align-items: center;
+      min-height: 100vh;
+      margin: 0;
+      background: #FAFAF8;
+      color: #111110;
     }
     .card {
-      text-align: center; padding: 48px 32px;
-      background: white; border-radius: 16px;
+      text-align: center;
+      padding: 48px 32px;
+      background: white;
+      border-radius: 16px;
       border: 1px solid #e8e8e4;
-      max-width: 420px; width: 90%;
+      max-width: 420px;
+      width: 90%;
     }
     .icon { font-size: 48px; margin-bottom: 16px; }
     h1 { font-size: 20px; margin-bottom: 12px; }
     p { color: #666; line-height: 1.6; }
-    a { color: #084734; text-decoration: none; font-weight: 600; }
+    .email { font-family: ui-monospace, SFMono-Regular, Menlo, monospace; font-size: 12px; color: #084734; word-break: break-all; }
+    button {
+      appearance: none;
+      border: 0;
+      border-radius: 10px;
+      padding: 12px 18px;
+      background: #084734;
+      color: white;
+      font-weight: 600;
+      cursor: pointer;
+      margin-top: 16px;
+    }
+    button:hover { opacity: 0.92; }
+    .note { margin-top: 16px; font-size: 12px; color: #888; }
   </style>
 </head>
 <body>
   <div class="card">
-    <div class="icon">${success ? "✅" : "⚠️"}</div>
-    <h1>${success ? "수신거부 완료" : "처리 실패"}</h1>
-    <p>${message}</p>
-    <p style="margin-top: 24px;"><a href="/">Classin 홈으로 돌아가기</a></p>
+    <div class="icon">&#9993;</div>
+    <h1>Unsubscribe confirmation</h1>
+    <p>Click the button below to unsubscribe this address.</p>
+    <p class="email">${safeEmail || "No email provided."}</p>
+    <form method="POST" action="/api/newsletter/unsubscribe">
+      <input type="hidden" name="email" value="${safeEmail}" />
+      <button type="submit">Unsubscribe</button>
+    </form>
+    <p class="note">The request is handled the same way regardless of whether the address exists.</p>
   </div>
 </body>
 </html>`
+}
+
+function escapeHtml(value: string) {
+  return value
+    .replaceAll("&", "&amp;")
+    .replaceAll("<", "&lt;")
+    .replaceAll(">", "&gt;")
+    .replaceAll('"', "&quot;")
+    .replaceAll("'", "&#39;")
 }

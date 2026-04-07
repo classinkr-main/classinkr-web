@@ -1,15 +1,15 @@
-import { NextRequest, NextResponse } from "next/server"
+﻿import { NextRequest, NextResponse } from "next/server"
 import { verifyAdmin } from "@/lib/admin-auth"
 import { createRoadmapItem, getRoadmapItems, updateRoadmapItem } from "@/lib/repositories/roadmap"
 
 export async function GET(req: NextRequest) {
-  const err = verifyAdmin(req)
+  const err = await verifyAdmin(req)
   if (err) return err
   return NextResponse.json(await getRoadmapItems())
 }
 
 export async function PATCH(req: NextRequest) {
-  const err = verifyAdmin(req)
+  const err = await verifyAdmin(req)
   if (err) return err
   const body = await req.json()
   const updated = await updateRoadmapItem(body.id, body)
@@ -18,7 +18,7 @@ export async function PATCH(req: NextRequest) {
 }
 
 export async function POST(req: NextRequest) {
-  const err = verifyAdmin(req)
+  const err = await verifyAdmin(req)
   if (err) return err
   const body = await req.json()
   const created = await createRoadmapItem(body)

@@ -1,11 +1,11 @@
-import { NextRequest, NextResponse } from "next/server"
+﻿import { NextRequest, NextResponse } from "next/server"
 import { verifyAdmin } from "@/lib/admin-auth"
 import { getContactLogs, addContactLog, deleteContactLog } from "@/lib/repositories/contact-logs"
 
 type Params = { params: Promise<{ id: string }> }
 
 export async function GET(req: NextRequest, { params }: Params) {
-  const err = verifyAdmin(req)
+  const err = await verifyAdmin(req)
   if (err) return err
 
   const { id } = await params
@@ -19,7 +19,7 @@ export async function GET(req: NextRequest, { params }: Params) {
 }
 
 export async function POST(req: NextRequest, { params }: Params) {
-  const err = verifyAdmin(req)
+  const err = await verifyAdmin(req)
   if (err) return err
 
   const { id } = await params
@@ -35,7 +35,7 @@ export async function POST(req: NextRequest, { params }: Params) {
 }
 
 export async function DELETE(req: NextRequest) {
-  const err = verifyAdmin(req)
+  const err = await verifyAdmin(req)
   if (err) return err
 
   const { searchParams } = new URL(req.url)

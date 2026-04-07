@@ -1,9 +1,9 @@
-import { NextRequest, NextResponse } from "next/server"
+﻿import { NextRequest, NextResponse } from "next/server"
 import { verifyAdmin } from "@/lib/admin-auth"
 import { getAllTemplates, createTemplate } from "@/lib/repositories/automation"
 
 export async function GET(req: NextRequest) {
-  const authError = verifyAdmin(req)
+  const authError = await verifyAdmin(req)
   if (authError) return authError
 
   try {
@@ -15,7 +15,7 @@ export async function GET(req: NextRequest) {
 }
 
 export async function POST(req: NextRequest) {
-  const authError = verifyAdmin(req)
+  const authError = await verifyAdmin(req)
   if (authError) return authError
 
   try {
@@ -23,7 +23,7 @@ export async function POST(req: NextRequest) {
     const { name, subject, body: htmlBody, variables } = body
 
     if (!name || !subject || !htmlBody) {
-      return NextResponse.json({ error: "name, subject, body 필수" }, { status: 400 })
+      return NextResponse.json({ error: "name, subject, body ?꾩닔" }, { status: 400 })
     }
 
     const template = await createTemplate({ name, subject, body: htmlBody, variables })

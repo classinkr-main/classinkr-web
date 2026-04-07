@@ -76,7 +76,7 @@ export function ScienceBased() {
                             </div>
 
                             <blockquote className="border-l-4 border-emerald-500/50 pl-6 py-2 text-xl text-slate-300 italic font-medium leading-relaxed bg-gradient-to-r from-emerald-500/5 to-transparent break-keep">
-                                "학습 후 20분이 지나면 기억의 42%가 사라지고, 하루가 지나면 67%를 잊어버린다."
+                                &ldquo;학습 후 20분이 지나면 기억의 42%가 사라지고, 하루가 지나면 67%를 잊어버린다.&rdquo;
                             </blockquote>
 
                             <div className="space-y-4">
@@ -84,7 +84,7 @@ export function ScienceBased() {
                                     Classin의 솔루션: <span className="text-emerald-400">골든타임 복습</span>
                                 </h4>
                                 <p className="text-slate-400 leading-relaxed text-lg break-keep">
-                                    우리는 학습 직후 가장 중요한 '골든타임'을 놓치지 않습니다. 수업 종료 즉시 AI가 생성한 핵심 요약 퀴즈가 학생의 스마트폰으로 전송됩니다. 망각이 시작되기 전에 기억을 장기 저장소로 옮기는 연결 고리를 만듭니다.
+                                    우리는 학습 직후 가장 중요한 &apos;골든타임&apos;을 놓치지 않습니다. 수업 종료 즉시 AI가 생성한 핵심 요약 퀴즈가 학생의 스마트폰으로 전송됩니다. 망각이 시작되기 전에 기억을 장기 저장소로 옮기는 연결 고리를 만듭니다.
                                 </p>
                             </div>
 
@@ -141,7 +141,7 @@ export function ScienceBased() {
                             </div>
 
                             <blockquote className="border-l-4 border-blue-500/50 pl-6 py-2 text-xl text-slate-300 italic font-medium leading-relaxed bg-gradient-to-r from-blue-500/5 to-transparent break-keep">
-                                "전통적인 강의식 수업보다 능동적 학습(Active Learning)에 참여한 학생들의 성취도가 1.5배 더 높으며, 낙제율은 55% 감소한다."
+                                &ldquo;전통적인 강의식 수업보다 능동적 학습(Active Learning)에 참여한 학생들의 성취도가 1.5배 더 높으며, 낙제율은 55% 감소한다.&rdquo;
                             </blockquote>
 
                             <div className="space-y-4">
@@ -149,7 +149,7 @@ export function ScienceBased() {
                                     Classin의 솔루션: <span className="text-blue-400">참여형 인터랙티브 클래스</span>
                                 </h4>
                                 <p className="text-slate-400 leading-relaxed text-lg break-keep">
-                                    듣기만 하는 수업은 끝났습니다. Classin의 '랜덤 발표', '실시간 투표', '화이트보드 공유' 기능은 모든 학생이 매 순간 수업에 참여하게 만듭니다. 고구조화된 수업 설계로 누구도 소외되지 않는 교실을 만듭니다.
+                                    듣기만 하는 수업은 끝났습니다. Classin의 &apos;랜덤 발표&apos;, &apos;실시간 투표&apos;, &apos;화이트보드 공유&apos; 기능은 모든 학생이 매 순간 수업에 참여하게 만듭니다. 고구조화된 수업 설계로 누구도 소외되지 않는 교실을 만듭니다.
                                 </p>
                             </div>
 

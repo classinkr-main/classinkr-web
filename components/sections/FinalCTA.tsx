@@ -1,12 +1,10 @@
 "use client"
 
 import { Button } from "@/components/ui/button"
+import { BROCHURE_URL } from "@/lib/marketing-links"
 import { DemoModal } from "./DemoModal"
 import { NewsletterModal } from "./NewsletterModal"
 import { ArrowRight, FileText } from "lucide-react"
-
-const BROCHURE_URL =
-  "https://remarkable-marquess-225.notion.site/AI-ClassIn-25a9585602f980049915fe608aec56f7?pvs=74"
 
 export function FinalCTA() {
     return (

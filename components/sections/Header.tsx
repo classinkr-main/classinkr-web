@@ -1,6 +1,7 @@
 "use client"
 
 import * as React from "react"
+import Image from "next/image"
 import Link from "next/link"
 import { usePathname } from "next/navigation"
 import { NewsletterModal } from "./NewsletterModal"
@@ -23,7 +24,6 @@ export function Header() {
     const [isScrolled, setIsScrolled] = React.useState(false)
     const [isMobileMenuOpen, setIsMobileMenuOpen] = React.useState(false)
     const pathname = usePathname()
-    const isHome = pathname === "/"
 
     React.useEffect(() => {
         let ticking = false
@@ -52,7 +52,14 @@ export function Header() {
         >
             <div className="container mx-auto flex items-center justify-between">
                 <Link href="/" className="flex items-center gap-2">
-                    <img src="/images/logo.png" alt="Classin Logo" className="h-7 md:h-8 w-auto object-contain" />
+                    <Image
+                        src="/images/logo.png"
+                        alt="Classin Logo"
+                        width={120}
+                        height={32}
+                        className="h-7 md:h-8 w-auto object-contain"
+                        priority
+                    />
                 </Link>
 
                 <button

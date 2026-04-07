@@ -124,7 +124,7 @@ export interface CreateTemplateRequest {
   variables?: string[]
 }
 
-export interface UpdateTemplateRequest extends Partial<CreateTemplateRequest> {}
+export type UpdateTemplateRequest = Partial<CreateTemplateRequest>
 
 export interface CreateRuleRequest {
   name: string
@@ -135,7 +135,7 @@ export interface CreateRuleRequest {
   status?: AutomationStatus
 }
 
-export interface UpdateRuleRequest extends Partial<CreateRuleRequest> {}
+export type UpdateRuleRequest = Partial<CreateRuleRequest>
 
 export interface TriggerRuleResponse {
   ok: boolean

@@ -9,7 +9,7 @@
 
 /* ─── Enum Types ─── */
 
-export type AdminRole = "SUPER_ADMIN" | "ADMIN" | "EDITOR" | "VIEWER";
+export type AdminRole = "SUPER_ADMIN" | "ADMIN" | "EDITOR" | "VIEWER" | "PARTNER";
 export type AdminStatus = "INVITED" | "ACTIVE" | "SUSPENDED";
 
 export type BlogPostStatus = "DRAFT" | "IN_REVIEW" | "PUBLISHED" | "ARCHIVED";
@@ -167,6 +167,194 @@ export interface AuditLog {
   created_at: string;
 }
 
+/* ─── Partner Portal Types ─── */
+
+export type PartnerStatus = "active" | "inactive" | "pending";
+export type PipelineStage = "prospect" | "quoting" | "contracted" | "installing" | "completed" | "cancelled";
+
+export interface PartnerUser {
+  id: string;
+  user_id: string;        // Supabase auth.users.id
+  partner_id: string;     // FK → partners.id
+  display_name: string | null;
+  role: "admin" | "member"; // admin = 파트너(대표, 서명권 보유) / member = 고객(매니저 등, 조회·변경요청만)
+  status: "invited" | "active" | "suspended";
+  invited_by: string | null; // admin user_id
+  last_login_at: string | null;
+  created_at: string;
+  updated_at: string;
+}
+
+export type PartnerUserInsert = Omit<PartnerUser, "id" | "created_at" | "updated_at"> & { id?: string; created_at?: string; updated_at?: string };
+export type PartnerUserUpdate = Partial<Omit<PartnerUser, "id" | "created_at">>;
+
+export interface Partner {
+  id: string;
+  name: string;
+  contact_name: string | null;
+  email: string | null;
+  phone: string | null;
+  address: string | null;
+  business_number: string | null;
+  status: PartnerStatus;
+  pipeline_stage: PipelineStage;
+  deal_amount: number | null;
+  installation_date: string | null;
+  installation_sub_dates: string[] | null; // 교실별 설치일이 다를 경우 보조 날짜 목록
+  installation_address: string | null;
+  installer_name: string | null;
+  notes: string | null;
+  created_by: string | null;
+  created_at: string;
+  updated_at: string;
+}
+
+export type QuoteStatus =
+  | "draft"
+  | "sent"
+  | "accepted"
+  | "rejected"
+  | "expired"
+  | "converted";
+
+export interface Quote {
+  id: string;
+  quote_number: string;
+  version: number; // 수정 버전. quote_number는 동일하게 유지되고 version만 증가 (v1→v2→v3)
+  partner_id: string;
+  lead_id: string | null;
+  title: string;
+  status: QuoteStatus;
+  valid_until: string | null;
+  subtotal: number;
+  discount_amount: number;
+  tax_amount: number;
+  total_amount: number;
+  notes: string | null;
+  created_by: string | null;
+  sent_at: string | null;
+  accepted_at: string | null;
+  converted_to_contract_id: string | null;
+  created_at: string;
+  updated_at: string;
+}
+
+export interface QuoteItem {
+  id: string;
+  quote_id: string;
+  sku: string | null;
+  product_name: string;
+  description: string | null;
+  quantity: number;
+  unit_price: number;
+  discount_rate: number;
+  amount: number;
+  sort_order: number;
+}
+
+export type ContractStatus =
+  | "draft"
+  | "sent"
+  | "partner_signed"
+  | "admin_signed"
+  | "completed"
+  | "cancelled";
+
+export interface Contract {
+  id: string;
+  contract_number: string;
+  version: number; // 수정 재발행 버전. 재서명 필요 시 버전 증가
+  quote_id: string | null;
+  partner_id: string;
+  title: string;
+  status: ContractStatus;
+  total_amount: number;
+  content_html: string | null;
+  notes: string | null;
+  valid_from: string | null;
+  valid_until: string | null;
+  sign_token: string | null;
+  partner_signed_at: string | null;
+  partner_signature_url: string | null;
+  partner_signed_ip: string | null;
+  admin_signed_at: string | null;
+  admin_signature_url: string | null;
+  admin_signed_by: string | null;
+  created_by: string | null;
+  created_at: string;
+  updated_at: string;
+}
+
+export interface ContractVersion {
+  id: string;
+  contract_id: string;
+  version_number: number;
+  content_html: string;
+  changed_by: string | null;
+  change_reason: string | null;
+  created_at: string;
+}
+
+export type PaymentMethod = "bank_transfer" | "card" | "cash";
+export type CashReceiptType = "personal" | "business";
+
+export interface Receipt {
+  id: string;
+  receipt_number: string;
+  contract_id: string;
+  partner_id: string;
+  amount: number;
+  tax_amount: number;
+  total_amount: number;
+  payment_method: PaymentMethod;
+  cash_receipt_requested: boolean;
+  cash_receipt_type: CashReceiptType | null;
+  cash_receipt_number: string | null;
+  pdf_url: string | null;
+  emailed_at: string | null;
+  paid_at: string | null;
+  notes: string | null;
+  created_by: string | null;
+  created_at: string;
+  updated_at: string;
+}
+
+/* ─── HW Sales Types ─── */
+
+export type HwSaleStatus = "pending" | "shipped" | "delivered" | "cancelled";
+
+export interface HwSale {
+  id: string;
+  sale_number: string;
+  contract_id: string | null;
+  partner_id: string;
+  status: HwSaleStatus;
+  delivery_date: string | null;
+  delivered_at: string | null;
+  installer: string | null;
+  delivery_address: string | null;
+  notes: string | null;
+  created_by: string | null;
+  created_at: string;
+  updated_at: string;
+}
+
+export interface HwSaleItem {
+  id: string;
+  sale_id: string;
+  sku: string;
+  product_name: string;
+  quantity: number;
+  unit_price: number;
+  serial_notes: string | null;
+  sort_order: number;
+}
+
+export type HwSaleInsert = Omit<HwSale, "id" | "created_at" | "updated_at"> & { id?: string; created_at?: string; updated_at?: string };
+export type HwSaleUpdate = Partial<Omit<HwSale, "id" | "created_at">>;
+export type HwSaleItemInsert = Omit<HwSaleItem, "id"> & { id?: string };
+export type HwSaleItemUpdate = Partial<Omit<HwSaleItem, "id">>;
+
 /* ─── Insert Types (id, created_at 등 자동 생성 필드 제외) ─── */
 
 export type AdminProfileInsert = Omit<
@@ -209,6 +397,23 @@ export type LeadUpdate = Partial<Omit<Lead, "id" | "created_at">>;
 
 export type LeadContactLogInsert = Omit<LeadContactLog, "id"> & { id?: string };
 export type LeadContactLogUpdate = Partial<Omit<LeadContactLog, "id">>;
+
+export type PartnerInsert = Omit<Partner, "id" | "created_at" | "updated_at"> & { id?: string; created_at?: string; updated_at?: string };
+export type PartnerUpdate = Partial<Omit<Partner, "id" | "created_at">>;
+
+export type QuoteInsert = Omit<Quote, "id" | "created_at" | "updated_at"> & { id?: string; created_at?: string; updated_at?: string };
+export type QuoteUpdate = Partial<Omit<Quote, "id" | "created_at">>;
+
+export type QuoteItemInsert = Omit<QuoteItem, "id"> & { id?: string };
+export type QuoteItemUpdate = Partial<Omit<QuoteItem, "id">>;
+
+export type ContractInsert = Omit<Contract, "id" | "created_at" | "updated_at"> & { id?: string; created_at?: string; updated_at?: string };
+export type ContractUpdate = Partial<Omit<Contract, "id" | "created_at">>;
+
+export type ContractVersionInsert = Omit<ContractVersion, "id" | "created_at"> & { id?: string; created_at?: string };
+
+export type ReceiptInsert = Omit<Receipt, "id" | "created_at" | "updated_at"> & { id?: string; created_at?: string; updated_at?: string };
+export type ReceiptUpdate = Partial<Omit<Receipt, "id" | "created_at">>;
 
 export type NewsletterSubscriberInsert = Omit<
   NewsletterSubscriber,
@@ -273,6 +478,122 @@ export interface Database {
         Insert: LeadContactLogInsert;
         Update: LeadContactLogUpdate;
       };
+      partners: {
+        Row: Partner;
+        Insert: PartnerInsert;
+        Update: PartnerUpdate;
+      };
+      quotes: {
+        Row: Quote;
+        Insert: QuoteInsert;
+        Update: QuoteUpdate;
+      };
+      quote_items: {
+        Row: QuoteItem;
+        Insert: QuoteItemInsert;
+        Update: QuoteItemUpdate;
+      };
+      contracts: {
+        Row: Contract;
+        Insert: ContractInsert;
+        Update: ContractUpdate;
+      };
+      contract_versions: {
+        Row: ContractVersion;
+        Insert: ContractVersionInsert;
+        Update: never;
+      };
+      receipts: {
+        Row: Receipt;
+        Insert: ReceiptInsert;
+        Update: ReceiptUpdate;
+      };
+      hw_sales: {
+        Row: HwSale;
+        Insert: HwSaleInsert;
+        Update: HwSaleUpdate;
+      };
+      hw_sale_items: {
+        Row: HwSaleItem;
+        Insert: HwSaleItemInsert;
+        Update: HwSaleItemUpdate;
+      };
+      partner_users: {
+        Row: PartnerUser;
+        Insert: PartnerUserInsert;
+        Update: PartnerUserUpdate;
+      };
+      teams: {
+        Row: Team;
+        Insert: TeamInsert;
+        Update: TeamUpdate;
+      };
+      install_schedules: {
+        Row: InstallSchedule;
+        Insert: InstallScheduleInsert;
+        Update: InstallScheduleUpdate;
+      };
     };
   };
+}
+
+/* ─── Install Schedule Types ─── */
+
+export interface Team {
+  id: string;
+  name: string;
+  description: string | null;
+  is_active: boolean;
+  created_at: string;
+  updated_at: string;
+}
+
+export type TeamInsert = Omit<Team, "id" | "created_at" | "updated_at"> & { id?: string; created_at?: string; updated_at?: string };
+export type TeamUpdate = Partial<Omit<Team, "id" | "created_at">>;
+
+export type InstallStatus = "requested" | "confirmed" | "completed" | "cancelled";
+export type RequestedBy = "admin" | "partner";
+
+export interface InstallSchedule {
+  id: string;
+  contract_id: string;
+  quote_item_id: string | null;
+  partner_id: string;
+  manager_id: string | null;
+  team_id: string | null;
+  scheduled_date: string;
+  location: string | null;
+  status: InstallStatus;
+  requested_by: RequestedBy;
+  notes: string | null;
+  created_at: string;
+  updated_at: string;
+}
+
+export type InstallScheduleInsert = Omit<InstallSchedule, "id" | "created_at" | "updated_at"> & { id?: string; created_at?: string; updated_at?: string };
+export type InstallScheduleUpdate = Partial<Omit<InstallSchedule, "id" | "created_at">>;
+
+/* ─── Product Catalog Types ─── */
+
+export type MountType = "stand" | "wall" | "embed";
+
+export interface ProductCatalogItem {
+  sku: string;
+  product_name: string;
+  description: string;
+  unit_price: number;
+  category: "board" | "camera" | "mount";
+}
+
+/* ─── Audit Log for Partner Changes ─── */
+
+export interface PartnerChangeLog {
+  id: string;
+  partner_id: string;
+  actor_user_id: string | null;
+  actor_role: "admin" | "member" | "classin_admin";
+  action_type: string;        // e.g. "quote_item_update", "delivery_request"
+  before_json: Record<string, unknown> | null;
+  after_json: Record<string, unknown> | null;
+  created_at: string;
 }

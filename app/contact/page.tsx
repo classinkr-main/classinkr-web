@@ -1,42 +1,59 @@
 "use client"
 
-import { useState } from "react"
+import { useRef, useState } from "react"
 import { Button } from "@/components/ui/button"
 import { Input } from "@/components/ui/input"
 import { Label } from "@/components/ui/label"
 import { Card, CardContent, CardDescription, CardHeader, CardTitle } from "@/components/ui/card"
-import { Mail, MapPin, Phone, Send, ArrowRight, MessageSquare, CheckCircle2, Loader2 } from "lucide-react"
+import { Mail, MapPin, Phone, ArrowRight, MessageSquare, CheckCircle2, Loader2 } from "lucide-react"
 import Image from "next/image"
 import { motion } from "framer-motion"
 import { submitLead } from "@/lib/submitLead"
 import { trackEvent } from "@/lib/analytics"
 
 export default function ContactPage() {
+    const kakaoChannelUrl = process.env.NEXT_PUBLIC_CONTACT_KAKAO_URL?.trim()
+    const fastTrackHref = kakaoChannelUrl || "#contact-form"
     const [loading, setLoading] = useState(false)
     const [submitted, setSubmitted] = useState(false)
     const [error, setError] = useState("")
+    const [notice, setNotice] = useState("")
+    const formRef = useRef<HTMLFormElement>(null)
+
+    const resetForm = () => {
+        setSubmitted(false)
+        setError("")
+        setNotice("")
+        formRef.current?.reset()
+    }
 
     const handleSubmit = async (e: React.FormEvent<HTMLFormElement>) => {
         e.preventDefault()
         setLoading(true)
         setError("")
+        setNotice("")
 
         const form = e.currentTarget
         const formData = new FormData(form)
 
         try {
-            await submitLead({
+            const data = await submitLead({
                 source: "contact_page",
                 org: formData.get("org-name") as string,
                 name: formData.get("name") as string,
                 phone: formData.get("phone") as string,
                 email: (formData.get("email") as string) || undefined,
                 message: formData.get("message") as string,
+                marketingConsent: formData.get("marketing-consent") === "on",
             })
+
+            if (Array.isArray(data.warnings) && data.warnings.length > 0) {
+                setNotice("문의는 접수되었지만 일부 외부 연동이 지연되었습니다. 내부 시스템에는 정상 등록되었습니다.")
+            }
             trackEvent("submit_demo_request", { source: "contact_page" })
             setSubmitted(true)
-        } catch {
-            setError("제출에 실패했습니다. 다시 시도해주세요.")
+        } catch (err) {
+            setError(err instanceof Error ? err.message : "제출에 실패했습니다. 다시 시도해주세요.")
         } finally {
             setLoading(false)
         }
@@ -103,13 +120,21 @@ export default function ContactPage() {
                                     가장 빠른 상담 채널
                                 </h3>
                                 <p className="text-slate-500 text-lg font-medium max-w-md">
-                                    복잡한 양식 작성 없이, 클래스인 카카오톡 채널로 즉시 매니저와 연결됩니다. 우측 QR코드를 스캔해주세요.
+                                    {kakaoChannelUrl
+                                        ? "복잡한 양식 작성 없이, 클래스인 카카오톡 채널로 즉시 매니저와 연결됩니다. 우측 QR코드를 스캔해주세요."
+                                        : "우측 QR 코드를 확인하시거나, 아래 문의 폼으로 바로 도입 상담을 남겨보세요."}
                                 </p>
                                 <div className="pt-4">
-                                    <button className="inline-flex items-center gap-2 text-[#E05024] font-bold hover:text-[#C9431A] transition-colors group">
-                                        모바일로 바로 열기 
+                                    <a
+                                        href={fastTrackHref}
+                                        target={kakaoChannelUrl ? "_blank" : undefined}
+                                        rel={kakaoChannelUrl ? "noopener noreferrer" : undefined}
+                                        onClick={() => trackEvent("click_cta", { button: kakaoChannelUrl ? "contact_kakao_fast_track" : "contact_form_fast_track" })}
+                                        className="inline-flex items-center gap-2 text-[#E05024] font-bold hover:text-[#C9431A] transition-colors group"
+                                    >
+                                        {kakaoChannelUrl ? "모바일로 바로 열기" : "문의 폼 바로가기"}
                                         <ArrowRight className="w-4 h-4 group-hover:translate-x-1 transition-transform" />
-                                    </button>
+                                    </a>
                                 </div>
                             </div>
                             
@@ -137,6 +162,7 @@ export default function ContactPage() {
                         animate={{ opacity: 1, x: 0 }}
                         transition={{ duration: 0.6, delay: 0.4 }}
                         className="lg:col-span-3"
+                        id="contact-form"
                     >
                         <Card className="bg-white border flex flex-col items-center w-full border-slate-100 shadow-[0_10px_40px_rgba(0,0,0,0.03)] rounded-[2rem] overflow-hidden">
                             <CardHeader className="pb-8 pt-10 px-8 w-full border-b border-slate-50 bg-slate-50/50">
@@ -151,12 +177,13 @@ export default function ContactPage() {
                                         <CheckCircle2 className="h-14 w-14 text-green-500" />
                                         <h3 className="text-2xl font-bold text-slate-900">문의가 접수되었습니다!</h3>
                                         <p className="text-slate-500 text-lg">담당 매니저가 빠르게 연락드리겠습니다.</p>
-                                        <Button onClick={() => setSubmitted(false)} variant="outline" className="mt-4">
+                                        {notice && <p className="text-sm text-slate-400 max-w-md">{notice}</p>}
+                                        <Button onClick={resetForm} variant="outline" className="mt-4">
                                             추가 문의하기
                                         </Button>
                                     </div>
                                 ) : (
-                                <form onSubmit={handleSubmit} className="w-full space-y-8">
+                                <form ref={formRef} onSubmit={handleSubmit} className="w-full space-y-8">
                                 <div className="w-full grid grid-cols-1 md:grid-cols-2 gap-8">
                                     <div className="space-y-3 w-full">
                                         <Label htmlFor="org-name" className="text-slate-700 font-bold ml-1">학원명 / 기관명 <span className="text-[#E05024]">*</span></Label>
@@ -187,6 +214,18 @@ export default function ContactPage() {
                                         required
                                     />
                                 </div>
+                                <label className="flex items-start gap-3 rounded-2xl border border-slate-200 bg-slate-50/70 px-4 py-3 text-sm text-slate-600">
+                                    <input
+                                        id="marketing-consent"
+                                        name="marketing-consent"
+                                        type="checkbox"
+                                        className="mt-0.5 h-4 w-4 rounded border-slate-300 text-[#E05024] focus:ring-[#E05024]"
+                                    />
+                                    <span>
+                                        제품 업데이트와 이벤트 소식을 이메일로 받아보겠습니다.
+                                        <span className="ml-1 text-slate-400">(선택)</span>
+                                    </span>
+                                </label>
                                 {error && (
                                     <p className="text-red-500 text-sm text-center">{error}</p>
                                 )}
