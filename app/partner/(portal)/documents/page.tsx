@@ -14,7 +14,6 @@ import {
   Signature,
 } from "lucide-react"
 
-import { PortalNav } from "@/components/partner-portal/PortalNav"
 import { Badge } from "@/components/ui/badge"
 import { Card, CardContent, CardHeader, CardTitle } from "@/components/ui/card"
 import { Tabs, TabsList, TabsTrigger } from "@/components/ui/tabs"
@@ -621,8 +620,7 @@ export default function PartnerDocumentsPage() {
   void summary
 
   return (
-    <div className="min-h-screen bg-[#f5f5f2] text-[#1a1a1a]">
-      <div className="mx-auto max-w-[1600px] px-5 py-6 lg:px-8">
+    <div className="mx-auto max-w-[1600px] px-5 py-6 lg:px-8">
         <Card className="border-[#e8e8e4] bg-white shadow-none">
           <CardContent className="flex flex-col gap-4 p-5 lg:flex-row lg:items-end lg:justify-between">
             <div className="max-w-3xl">
@@ -652,9 +650,7 @@ export default function PartnerDocumentsPage() {
                 />
               </div>
             </div>
-            <div className="space-y-3">
-              <PortalNav />
-              <div className="flex flex-wrap justify-end gap-2">
+            <div className="flex flex-wrap justify-end gap-2 self-end">
                 <div className="inline-flex items-center gap-2 rounded-xl border border-[#e8e8e4] bg-[#f7f7f5] px-4 py-2.5 text-sm text-[#1a1a1a]/60">
                   <BadgeCheck className="h-4 w-4" />
                   버전 고정 링크와 PDF는 현재 {sourceDealCount > 0 ? `${sourceDealCount}개 거래` : "demo"} 기준으로 노출합니다
@@ -667,7 +663,6 @@ export default function PartnerDocumentsPage() {
                   새로고침
                   <RefreshCw className="h-4 w-4" />
                 </button>
-              </div>
             </div>
           </CardContent>
         </Card>
@@ -897,6 +892,5 @@ export default function PartnerDocumentsPage() {
           </Card>
         </div>
       </div>
-    </div>
   )
 }

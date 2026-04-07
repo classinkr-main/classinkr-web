@@ -11,7 +11,6 @@ import {
 import { CustomerDialog } from "@/components/partner-portal/crud/CustomerDialog"
 import { DealQuickCreateDialog } from "@/components/partner-portal/crud/DealQuickCreateDialog"
 import { ScheduleDialog } from "@/components/partner-portal/crud/ScheduleDialog"
-import { PortalNav } from "@/components/partner-portal/PortalNav"
 import { Button } from "@/components/ui/button"
 
 /* ─── Types ──────────────────────────────────────────────────── */
@@ -391,18 +390,14 @@ export function PartnerPortalHome() {
   return (
     <div className="min-h-screen bg-[#f6f3ed] text-[#1a1a1a]">
 
-      {/* ── Header ────────────────────────────────────────────── */}
-      <div className="sticky top-0 z-10 border-b border-[#e7e0d6] bg-white/95 backdrop-blur-sm px-6 py-4">
+      {/* ── Action Bar ──────────────────────────────────────────── */}
+      <div className="border-b border-[#e7e0d6] bg-white px-6 py-3">
         <div className="mx-auto flex max-w-[1680px] items-center justify-between gap-4">
-          <div className="flex items-center gap-4">
+          <div className="flex items-center gap-3">
             {loading && <Loader2 className="h-4 w-4 animate-spin text-[#1a1a1a]/40" />}
-            <div>
-              <p className="text-xs font-semibold uppercase tracking-[0.2em] text-[#1a1a1a]/30">Partner Portal</p>
-              <p className="mt-0.5 text-sm text-[#1a1a1a]/50">{todayStr}</p>
-            </div>
+            <p className="text-sm text-[#1a1a1a]/50">{todayStr}</p>
           </div>
-          <div className="flex flex-col items-end gap-3">
-            <PortalNav />
+          <div className="flex flex-col items-end gap-1.5">
             <div className="flex flex-wrap justify-end gap-2">
               <QuickActionButton
                 label="새 고객"

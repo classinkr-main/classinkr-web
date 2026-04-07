@@ -2,13 +2,14 @@
 
 import { useEffect, useState } from "react"
 import { useRouter } from "next/navigation"
-import { CalendarDays, ChevronLeft, ChevronRight, MapPinned, RefreshCw, Users, Wrench } from "lucide-react"
+import { CalendarDays, ChevronLeft, ChevronRight, MapPinned, Plus, RefreshCw, Users, Wrench } from "lucide-react"
 
-import { PortalNav } from "@/components/partner-portal/PortalNav"
 import { Badge } from "@/components/ui/badge"
 import { Card, CardContent, CardHeader, CardTitle } from "@/components/ui/card"
+import { ScheduleDialog } from "@/components/partner-portal/crud/ScheduleDialog"
+import { portalFetch } from "@/lib/partner-portal/portal-fetch"
 import type { PartnerReadMode } from "@/lib/partner-portal/repositories/partner-read"
-import type { CalendarEvent, CalendarSourceType } from "@/lib/partner-portal/types"
+import type { CalendarEvent, CalendarSourceType, DealListItem } from "@/lib/partner-portal/types"
 
 type CalendarFilter = "all" | CalendarSourceType
 type PartnerCalendarPayload = { mode: PartnerReadMode; events: CalendarEvent[] }
@@ -103,6 +104,8 @@ export default function PartnerCalendarPage() {
   const [error, setError] = useState<string | null>(null)
   const [viewDate, setViewDate] = useState(() => new Date(today.getFullYear(), today.getMonth(), 1))
   const [selectedDate, setSelectedDate] = useState(todayKey)
+  const [deals, setDeals] = useState<DealListItem[]>([])
+  const [scheduleOpen, setScheduleOpen] = useState(false)
 
   useEffect(() => {
     let alive = true
@@ -130,6 +133,13 @@ export default function PartnerCalendarPage() {
     }
   }, [])
 
+  useEffect(() => {
+    void portalFetch("/api/portal/deals")
+      .then((r) => r.json())
+      .then((data) => setDeals(data.deals ?? []))
+      .catch(() => {})
+  }, [])
+
   const visibleEvents = sortEvents(filter === "all" ? events : events.filter((event) => event.source_type === filter))
   const dateMap = buildDateMap(visibleEvents)
   const firstDay = new Date(viewDate.getFullYear(), viewDate.getMonth(), 1).getDay()
@@ -150,8 +160,7 @@ export default function PartnerCalendarPage() {
   }
 
   return (
-    <div className="min-h-screen bg-[#f5f5f2] text-[#1a1a1a]">
-      <div className="mx-auto max-w-[1600px] px-5 py-6 lg:px-8">
+    <div className="mx-auto max-w-[1600px] px-5 py-6 lg:px-8">
         <Card className="border-[#e8e8e4] bg-white shadow-none">
           <CardContent className="flex flex-col gap-4 p-5 lg:flex-row lg:items-end lg:justify-between">
             <div className="max-w-3xl">
@@ -162,14 +171,21 @@ export default function PartnerCalendarPage() {
               <h1 className="mt-3 text-3xl font-semibold tracking-tight lg:text-4xl">파트너 포털 캘린더</h1>
               <p className="mt-2 max-w-2xl text-sm leading-6 text-[#1a1a1a]/50">설치, 미팅, 문서 기한을 달력과 리스트 두 방식으로 보고 관리자와 같은 일정 원본을 확인합니다.</p>
             </div>
-            <div className="space-y-3">
-              <PortalNav />
-              <div className="flex flex-wrap justify-end gap-2">
-                <button type="button" onClick={() => router.refresh()} className="inline-flex items-center gap-2 rounded-xl border border-[#e8e8e4] bg-white px-4 py-2.5 text-sm font-medium text-[#1a1a1a] hover:bg-[#f7f7f5]">
-                  새로고침
-                  <RefreshCw className="h-4 w-4" />
+            <div className="flex flex-wrap justify-end gap-2 self-end">
+              {mode !== "demo" && deals.length > 0 && (
+                <button
+                  type="button"
+                  onClick={() => setScheduleOpen(true)}
+                  className="inline-flex items-center gap-2 rounded-xl bg-[#1a1a1a] px-4 py-2.5 text-sm font-medium text-white hover:bg-[#1a1a1a]/85"
+                >
+                  <Plus className="h-4 w-4" />
+                  일정 추가
                 </button>
-              </div>
+              )}
+              <button type="button" onClick={() => router.refresh()} className="inline-flex items-center gap-2 rounded-xl border border-[#e8e8e4] bg-white px-4 py-2.5 text-sm font-medium text-[#1a1a1a] hover:bg-[#f7f7f5]">
+                새로고침
+                <RefreshCw className="h-4 w-4" />
+              </button>
             </div>
           </CardContent>
         </Card>
@@ -298,7 +314,13 @@ export default function PartnerCalendarPage() {
             </CardContent>
           </Card>
         </div>
+
+        <ScheduleDialog
+          open={scheduleOpen}
+          onOpenChange={setScheduleOpen}
+          deals={deals}
+          onSaved={() => { router.refresh() }}
+        />
       </div>
-    </div>
   )
 }
