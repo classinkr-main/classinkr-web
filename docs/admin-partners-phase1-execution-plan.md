@@ -3,6 +3,12 @@
 기준 시점: 2026-04-03  
 관련 문서:
 
+- `docs/hardware-ops/README.md`
+- `docs/hardware-ops/domain-model.md`
+- `docs/hardware-ops/data-contracts.md`
+- `docs/hardware-ops/quote-document-spec.md`
+- `docs/hardware-ops/operation-case-workspace.md`
+- `docs/hardware-ops/state-flow.md`
 - `docs/admin-partners-ops-design.md`
 - `docs/admin-partners-supabase-schema.sql`
 

@@ -12,6 +12,20 @@ export type DocumentKind = "quote" | "contract" | "receipt"
 export type DocumentStatus = "draft" | "sent" | "signed" | "paid" | "overdue" | "archived"
 export type DocumentDeliveryChannel = "pdf" | "kakao" | "link"
 export type DocumentDeliveryStatus = "draft" | "ready" | "sent" | "opened" | "expired" | "revoked" | "failed"
+export type PartnerQuoteWorkflowStatus =
+  | "draft"
+  | "ready"
+  | "sent"
+  | "viewed"
+  | "revised"
+  | "accepted"
+  | "rejected"
+  | "expired"
+  | "converted"
+  | "archived"
+export type QuoteLineItemType = "hardware" | "installation" | "shipping" | "service" | "discount" | "note_only"
+export type QuoteLineItemStatus = "priced" | "pending_price" | "separate_billing" | "informational"
+export type QuoteBillingMode = "included_in_quote" | "separate_invoice" | "tbd"
 export type ScheduleKind = "meeting" | "follow_up" | "deadline" | "renewal"
 export type ScheduleStatus = "planned" | "completed" | "canceled"
 export type AutomationStatus = "active" | "paused"
@@ -77,7 +91,68 @@ export interface PartnerDocument {
   dueAt?: string
   fileLabel: string
   externalUrl?: string
+  lineItemCount?: number
+  quoteDetails?: PartnerQuoteDetails
   deliveries: PartnerDocumentDeliverySummary[]
+}
+
+export interface PartnerQuoteLineItem {
+  id: string
+  documentId?: string
+  sortOrder: number
+  lineNumber: number
+  itemType: QuoteLineItemType
+  itemCode?: string
+  itemName: string
+  itemDescription?: string
+  unitPrice?: number
+  quantity?: number
+  quantityUnit?: string
+  lineSupplyAmount?: number
+  vatIncluded: boolean
+  lineStatus?: QuoteLineItemStatus
+  billingMode?: QuoteBillingMode
+  remark?: string
+  linkedQuantityRowId?: string
+  linkedChecklistTemplateId?: string
+}
+
+export interface PartnerQuoteDetails {
+  estimateNumber?: string
+  workflowStatus?: PartnerQuoteWorkflowStatus
+  issuedAt?: string
+  validUntil?: string
+  subjectText?: string
+  recipientCompanyName?: string
+  recipientContactName?: string
+  recipientPhone?: string
+  recipientEmail?: string
+  referenceName?: string
+  supplierBusinessName?: string
+  supplierBusinessRegistrationNumber?: string
+  supplierRepresentativeName?: string
+  supplierAddress?: string
+  supplierContactName?: string
+  supplierContactPhone?: string
+  supplierContactEmail?: string
+  currencyUnitLabel?: string
+  vatIncluded?: boolean
+  vatPolicyLabel?: string
+  deliveryLocationNote?: string
+  paymentTerms?: string
+  installationPolicy?: string
+  warrantyNote?: string
+  generalNotes?: string
+  specialTerms?: string
+  footerContactText?: string
+  internalMemo?: string
+  subtotalAmount?: number
+  vatAmount?: number
+  discountAmount?: number
+  grandTotalAmount?: number
+  hasPendingAmounts?: boolean
+  pendingAmountNote?: string
+  lineItems: PartnerQuoteLineItem[]
 }
 
 export interface PartnerDocumentDeliverySummary {
@@ -275,6 +350,65 @@ export interface PartnerDocumentInput {
   dueAt?: string
   fileLabel: string
   externalUrl?: string
+  quoteDetails?: PartnerQuoteDetailsInput
+}
+
+export interface PartnerQuoteLineItemInput {
+  id?: string
+  sortOrder: number
+  lineNumber: number
+  itemType: QuoteLineItemType
+  itemCode?: string
+  itemName: string
+  itemDescription?: string
+  unitPrice?: number
+  quantity?: number
+  quantityUnit?: string
+  lineSupplyAmount?: number
+  vatIncluded?: boolean
+  lineStatus?: QuoteLineItemStatus
+  billingMode?: QuoteBillingMode
+  remark?: string
+  linkedQuantityRowId?: string
+  linkedChecklistTemplateId?: string
+}
+
+export interface PartnerQuoteDetailsInput {
+  estimateNumber?: string
+  workflowStatus?: PartnerQuoteWorkflowStatus
+  issuedAt?: string
+  validUntil?: string
+  subjectText?: string
+  recipientCompanyName?: string
+  recipientContactName?: string
+  recipientPhone?: string
+  recipientEmail?: string
+  referenceName?: string
+  supplierBusinessName?: string
+  supplierBusinessRegistrationNumber?: string
+  supplierRepresentativeName?: string
+  supplierAddress?: string
+  supplierContactName?: string
+  supplierContactPhone?: string
+  supplierContactEmail?: string
+  currencyUnitLabel?: string
+  vatIncluded?: boolean
+  vatPolicyLabel?: string
+  deliveryLocationNote?: string
+  paymentTerms?: string
+  installationPolicy?: string
+  warrantyNote?: string
+  generalNotes?: string
+  specialTerms?: string
+  footerContactText?: string
+  internalMemo?: string
+  subtotalAmount?: number
+  vatAmount?: number
+  discountAmount?: number
+  grandTotalAmount?: number
+  hasPendingAmounts?: boolean
+  pendingAmountNote?: string
+  lineItems?: PartnerQuoteLineItemInput[]
 }
 
 export interface PartnerScheduleInput {

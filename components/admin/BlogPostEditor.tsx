@@ -493,9 +493,24 @@ export default function BlogPostEditor({
             : { action, title: form.title, content: form.contentMarkdown, category: form.category }
         ),
       })
+      if (res.status === 401) {
+        setAiState({
+          action,
+          status: "error",
+          result: "인증이 만료되었습니다. 다시 로그인해 주세요.",
+          ...(params ?? {}),
+        })
+        startTransition(() => router.replace("/admin/login"))
+        return
+      }
       if (!res.ok || !res.body) {
         const err = await res.json().catch(() => ({ error: "AI 처리 중 오류가 발생했습니다." })) as { error?: string }
-        setAiState({ action, status: "error", result: "AI 응답 중 오류가 발생했습니다. 잠시 후 다시 시도해주세요." })
+        setAiState({
+          action,
+          status: "error",
+          result: err.error || "AI 응답 중 오류가 발생했습니다. 잠시 후 다시 시도해주세요.",
+          ...(params ?? {}),
+        })
         return
       }
       setAiState({ action, status: "streaming", result: "" })
@@ -509,7 +524,12 @@ export default function BlogPostEditor({
       }
       setAiState((prev) => prev ? { ...prev, status: "done" } : null)
     } catch {
-      setAiState({ action, status: "error", result: "AI 응답 중 오류가 발생했습니다. 잠시 후 다시 시도해주세요." })
+      setAiState({
+        action,
+        status: "error",
+        result: "AI 응답 중 오류가 발생했습니다. 잠시 후 다시 시도해주세요.",
+        ...(params ?? {}),
+      })
     }
   }
 

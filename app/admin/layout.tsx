@@ -53,18 +53,40 @@ export default function AdminLayout({ children }: { children: React.ReactNode })
 
     const load = async () => {
       if (!hasSupabaseBrowserEnv()) {
-        const cookie = document.cookie
-          .split("; ")
-          .find((entry) => entry.startsWith("admin_session="))
-          ?.split("=")[1]
-
-        if (!cookie) {
-          if (!cachedSession) router.replace("/admin/login")
+        if (cachedSession) {
+          if (!cancelled) {
+            setSession(cachedSession)
+          }
           return
         }
 
-        if (!cancelled && !cachedSession) {
-          setSession({ role: "admin", name: "Admin", email: "" })
+        try {
+          const response = await fetch("/api/admin/auth")
+          const data = await response.json().catch(() => null)
+
+          if (!response.ok || !data) {
+            router.replace("/admin/login")
+            return
+          }
+
+          sessionStorage.setItem("admin_password", "legacy-session")
+          sessionStorage.setItem("admin_token", "legacy-session")
+          sessionStorage.setItem("admin_role", data.role ?? "admin")
+          sessionStorage.setItem("admin_name", data.name ?? "Admin")
+          sessionStorage.setItem("admin_email", "")
+
+          if (data.branch) sessionStorage.setItem("admin_branch", data.branch)
+          else sessionStorage.removeItem("admin_branch")
+
+          if (!cancelled) {
+            setSession({
+              role: data.role ?? "admin",
+              name: data.name ?? "Admin",
+              email: "",
+            })
+          }
+        } catch {
+          router.replace("/admin/login")
         }
 
         return
@@ -93,9 +115,11 @@ export default function AdminLayout({ children }: { children: React.ReactNode })
       }
 
       sessionStorage.setItem("admin_password", "supabase-authed")
+      sessionStorage.setItem("admin_token", "supabase-authed")
       sessionStorage.setItem("admin_role", profile.role)
       sessionStorage.setItem("admin_name", profile.display_name)
       sessionStorage.setItem("admin_email", user.email ?? "")
+      sessionStorage.removeItem("admin_branch")
 
       if (!cancelled) {
         setSession({

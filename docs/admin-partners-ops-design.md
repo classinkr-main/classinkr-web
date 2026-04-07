@@ -3,6 +3,21 @@
 기준 시점: 2026-04-03  
 문서 목적: `/admin/partners`를 총판/어드민 담당업무용 운영 허브로 재정의하고, 상위 IA와 탭/섹션/엔티티 구조를 합의한다.
 
+관련 문서:
+
+- [hardware-ops/README.md](./hardware-ops/README.md)
+- [hardware-ops/identity.md](./hardware-ops/identity.md)
+- [hardware-ops/domain-model.md](./hardware-ops/domain-model.md)
+- [hardware-ops/data-contracts.md](./hardware-ops/data-contracts.md)
+- [hardware-ops/quote-document-spec.md](./hardware-ops/quote-document-spec.md)
+- [hardware-ops/operation-case-workspace.md](./hardware-ops/operation-case-workspace.md)
+- [hardware-ops/state-flow.md](./hardware-ops/state-flow.md)
+
+메모:
+
+- 현재 구현 라우트는 `/admin/partners`를 유지한다.
+- 다만 제품 정체성은 `파트너 목록 관리`보다 `하드웨어 운영 허브`에 가깝다는 판단을 병행해서 반영한다.
+
 ## 1. 한 줄 정의
 
 `/admin/partners`는 파트너 목록이 아니라  
@@ -15,6 +30,7 @@
 - `견적 -> 계약 -> 설치/납품 -> 매출 -> 정산`은 따로 노는 메뉴가 아니라 자연스럽게 이어지는 하나의 흐름이어야 한다.
 - `설치 품목/수량 체크`, `고객 미팅 로그`, `계약 로그`, `애매한 이슈`는 흩어진 메모가 아니라 한곳에서 모아 봐야 한다.
 - 계약서는 단순 파일이 아니라 `PDF / 카카오톡 / 링크` 전달 방식과 `만료 / 비밀번호 / 접근 제한` 같은 공개 설정을 가져야 한다.
+- 견적서는 단순 금액 필드가 아니라 `발행자/수신자 정보 + 품목 표 + VAT/합계 + 기타사항/특약사항 + 버전/공유 설정`까지 구조화돼야 한다.
 
 ## 3. 상위 구조 결정
 
@@ -161,6 +177,7 @@
   - 종료
 - 거래 상세 섹션
   - 견적 금액/조건
+  - 견적서 line items
   - 계약 기간
   - 판매 댓수
   - 결제/정산 조건

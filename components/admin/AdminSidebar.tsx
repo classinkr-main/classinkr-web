@@ -118,13 +118,18 @@ export default function AdminSidebar({ role, name, email }: Props) {
     sessionStorage.removeItem("admin_branch")
 
     try {
-      const supabase = createSupabaseBrowserClient()
-      await supabase.auth.signOut()
+      await fetch("/api/admin/auth", { method: "DELETE" })
     } catch {
-      // legacy auth users may not have a Supabase session
+      try {
+        const supabase = createSupabaseBrowserClient()
+        await supabase.auth.signOut()
+      } catch {
+        // legacy auth users may not have a Supabase session
+      }
     }
 
     router.replace("/admin/login")
+    router.refresh()
   }
 
   const normalizedRole = normalizeRole(role)
