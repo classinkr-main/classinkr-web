@@ -15,6 +15,10 @@ const METHOD_LABEL: Record<PaymentMethod, string> = {
   cash: "현금",
 }
 
+function todayStr() {
+  return new Date().toISOString().split("T")[0]
+}
+
 const EMPTY_FORM = {
   partner_account_id: "",
   customer_id: "",
@@ -23,7 +27,7 @@ const EMPTY_FORM = {
   tax_amount: 0,
   total_amount: 0,
   payment_method: "bank_transfer" as PaymentMethod,
-  paid_at: "",
+  paid_at: todayStr(),
   notes: "",
 }
 
@@ -36,9 +40,12 @@ interface Props {
 export function ReceiptForm({ dealId, partnerAccountId, customerId }: Props) {
   const [receipts, setReceipts] = useState<ReceiptRecord[]>([])
   const [loading, setLoading] = useState(true)
+  const [loadError, setLoadError] = useState(false)
   const [showForm, setShowForm] = useState(false)
   const [form, setForm] = useState(EMPTY_FORM)
   const [saving, setSaving] = useState(false)
+  const [saveError, setSaveError] = useState<string | null>(null)
+  const [successMsg, setSuccessMsg] = useState<string | null>(null)
 
   const load = useCallback(async (showSpinner = true) => {
     if (!dealId) return
@@ -66,6 +73,8 @@ export function ReceiptForm({ dealId, partnerAccountId, customerId }: Props) {
         const data = await res.json()
         if (!active) return
         setReceipts(data.receipts ?? [])
+      } else {
+        if (active) setLoadError(true)
       }
       setLoading(false)
     }
@@ -100,7 +109,8 @@ export function ReceiptForm({ dealId, partnerAccountId, customerId }: Props) {
     })
 
     if (!paymentRes.ok) {
-      alert("결제 등록 실패")
+      const err = await paymentRes.json().catch(() => null)
+      setSaveError(err?.error ?? "결제 등록에 실패했습니다. 다시 시도해주세요.")
       setSaving(false)
       return
     }
@@ -121,8 +131,14 @@ export function ReceiptForm({ dealId, partnerAccountId, customerId }: Props) {
 
     if (res.ok) {
       setShowForm(false)
-      setForm(EMPTY_FORM)
+      setForm({ ...EMPTY_FORM, paid_at: todayStr() })
+      setSaveError(null)
+      setSuccessMsg(`${form.total_amount.toLocaleString("ko-KR")}원 영수증이 발행되었습니다.`)
+      setTimeout(() => setSuccessMsg(null), 4000)
       void load()
+    } else {
+      const err = await res.json().catch(() => null)
+      setSaveError(err?.error ?? "영수증 발행에 실패했습니다.")
     }
     setSaving(false)
   }
@@ -141,11 +157,24 @@ export function ReceiptForm({ dealId, partnerAccountId, customerId }: Props) {
         </div>
       </div>
 
+      {successMsg && (
+        <div className="flex items-center gap-2 rounded-xl border border-emerald-200 bg-emerald-50 px-4 py-3 text-sm text-emerald-700">
+          <span>✓</span> {successMsg}
+        </div>
+      )}
+
       {loading ? (
         <div className="py-12 text-center text-sm text-[#1a1a1a]/40">불러오는 중...</div>
+      ) : loadError ? (
+        <div className="py-12 text-center border border-[#e8e8e4] rounded-xl bg-white">
+          <p className="text-sm text-[#1a1a1a]/50">영수증 목록을 불러오지 못했습니다.</p>
+          <button onClick={() => { setLoadError(false); void load() }} className="mt-2 text-xs text-[#084734] hover:underline">
+            다시 시도
+          </button>
+        </div>
       ) : receipts.length === 0 ? (
-        <div className="py-12 text-center text-sm text-[#1a1a1a]/40 border border-[#e8e8e4] rounded-xl bg-white">
-          발행된 영수증이 없습니다
+        <div className="py-12 text-center text-sm text-[#1a1a1a]/40 border border-dashed border-[#e0e0dc] rounded-xl bg-white">
+          발행된 영수증이 없습니다. 위 버튼으로 첫 영수증을 발행하세요.
         </div>
       ) : (
         <div className="border border-[#e8e8e4] rounded-xl overflow-hidden bg-white">
@@ -209,15 +238,25 @@ export function ReceiptForm({ dealId, partnerAccountId, customerId }: Props) {
                     className="w-full border border-[#e8e8e4] rounded-lg px-3 py-2 text-sm focus:outline-none focus:border-[#1a1a1a]" />
                 </div>
                 <div>
-                  <label className="text-xs font-medium text-[#1a1a1a]/60 mb-1 block">공급가액 *</label>
-                  <input type="number" required min={0} value={form.amount || ""}
+                  <label className="text-xs font-medium text-[#1a1a1a]/60 mb-1 block">
+                    공급가액 <span className="text-red-400">*</span>
+                    <span className="ml-1 font-normal text-[#1a1a1a]/35">(VAT 제외 금액)</span>
+                  </label>
+                  <input type="number" required min={1} value={form.amount || ""}
                     onChange={(e) => handleAmountChange(+e.target.value)}
                     className="w-full border border-[#e8e8e4] rounded-lg px-3 py-2 text-sm focus:outline-none focus:border-[#1a1a1a]" />
                 </div>
                 <div>
-                  <label className="text-xs font-medium text-[#1a1a1a]/60 mb-1 block">합계 (VAT 포함)</label>
-                  <input readOnly value={form.total_amount.toLocaleString() + "원"}
-                    className="w-full border border-[#e8e8e4] rounded-lg px-3 py-2 text-sm bg-[#f7f7f5] text-[#1a1a1a]/60" />
+                  <label className="text-xs font-medium text-[#1a1a1a]/60 mb-1 block">
+                    청구 합계
+                    {form.amount > 0 && (
+                      <span className="ml-1 font-normal text-[#1a1a1a]/35">
+                        ({form.amount.toLocaleString()} + VAT {form.tax_amount.toLocaleString()})
+                      </span>
+                    )}
+                  </label>
+                  <input readOnly value={form.total_amount > 0 ? form.total_amount.toLocaleString("ko-KR") + "원" : "—"}
+                    className="w-full border border-[#e8e8e4] rounded-lg px-3 py-2 text-sm bg-[#f7f7f5] text-[#1a1a1a]/60 font-medium" />
                 </div>
                 <div className="col-span-2">
                   <label className="text-xs font-medium text-[#1a1a1a]/60 mb-1 block">메모</label>
@@ -225,9 +264,16 @@ export function ReceiptForm({ dealId, partnerAccountId, customerId }: Props) {
                     rows={2} className="w-full border border-[#e8e8e4] rounded-lg px-3 py-2 text-sm focus:outline-none focus:border-[#1a1a1a] resize-none" />
                 </div>
               </div>
+              {saveError && (
+                <div className="rounded-lg border border-red-200 bg-red-50 px-3 py-2 text-sm text-red-600">
+                  {saveError}
+                </div>
+              )}
               <div className="flex justify-end gap-2 pt-2">
-                <Button type="button" variant="outline" onClick={() => setShowForm(false)}>취소</Button>
-                <Button type="submit" disabled={saving}>{saving ? "처리 중..." : "발행"}</Button>
+                <Button type="button" variant="outline" onClick={() => { setShowForm(false); setSaveError(null) }}>취소</Button>
+                <Button type="submit" disabled={saving || form.amount <= 0}>
+                  {saving ? "처리 중..." : "영수증 발행"}
+                </Button>
               </div>
             </form>
           </div>

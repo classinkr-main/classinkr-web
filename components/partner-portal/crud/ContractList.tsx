@@ -32,9 +32,12 @@ interface Props {
 export function ContractList({ dealId }: Props) {
   const [contracts, setContracts] = useState<ContractDocumentBundle[]>([])
   const [loading, setLoading] = useState(true)
+  const [loadError, setLoadError] = useState(false)
   const [selected, setSelected] = useState<ContractDocumentBundle | null>(null)
   const [showSign, setShowSign] = useState(false)
   const [signing, setSigning] = useState(false)
+  const [signError, setSignError] = useState<string | null>(null)
+  const [successMsg, setSuccessMsg] = useState<string | null>(null)
   const load = useCallback(async (showSpinner = true) => {
     if (!dealId) return
     if (showSpinner) setLoading(true)
@@ -42,6 +45,9 @@ export function ContractList({ dealId }: Props) {
     if (res.ok) {
       const data = await res.json()
       setContracts(data.contract_documents ?? [])
+      setLoadError(false)
+    } else {
+      setLoadError(true)
     }
     setLoading(false)
   }, [dealId])
@@ -61,6 +67,8 @@ export function ContractList({ dealId }: Props) {
         const data = await res.json()
         if (!active) return
         setContracts(data.contract_documents ?? [])
+      } else {
+        if (active) setLoadError(true)
       }
       setLoading(false)
     }
@@ -77,12 +85,17 @@ export function ContractList({ dealId }: Props) {
       method: "POST",
       body: JSON.stringify({ deal_id: dealId }),
     })
-    if (res.ok) void load()
+    if (res.ok) {
+      setSuccessMsg("계약서가 생성되었습니다.")
+      setTimeout(() => setSuccessMsg(null), 4000)
+      void load()
+    }
   }
 
   async function handleSign(dataUrl: string) {
     if (!selected) return
     setSigning(true)
+    setSignError(null)
     const res = await portalFetch(`/api/portal/contracts/${selected.id}/sign`, {
       method: "POST",
       body: JSON.stringify({ signature_data: dataUrl }),
@@ -90,10 +103,12 @@ export function ContractList({ dealId }: Props) {
     if (res.ok) {
       setShowSign(false)
       setSelected(null)
+      setSuccessMsg("서명이 완료되었습니다.")
+      setTimeout(() => setSuccessMsg(null), 4000)
       void load()
     } else {
-      const err = await res.json()
-      alert(err.error ?? "서명 실패")
+      const err = await res.json().catch(() => null)
+      setSignError(err?.error ?? "서명 처리에 실패했습니다. 다시 시도해주세요.")
     }
     setSigning(false)
   }
@@ -118,11 +133,24 @@ export function ContractList({ dealId }: Props) {
         </div>
       </div>
 
+      {successMsg && (
+        <div className="flex items-center gap-2 rounded-xl border border-emerald-200 bg-emerald-50 px-4 py-3 text-sm text-emerald-700">
+          <span>✓</span> {successMsg}
+        </div>
+      )}
+
       {loading ? (
         <div className="py-12 text-center text-sm text-[#1a1a1a]/40">불러오는 중...</div>
+      ) : loadError ? (
+        <div className="py-12 text-center border border-[#e8e8e4] rounded-xl bg-white">
+          <p className="text-sm text-[#1a1a1a]/50">계약서 목록을 불러오지 못했습니다.</p>
+          <button onClick={() => { setLoadError(false); void load() }} className="mt-2 text-xs text-[#084734] hover:underline">
+            다시 시도
+          </button>
+        </div>
       ) : contracts.length === 0 ? (
-        <div className="py-12 text-center text-sm text-[#1a1a1a]/40 border border-[#e8e8e4] rounded-xl bg-white">
-          계약서가 없습니다
+        <div className="py-12 text-center text-sm text-[#1a1a1a]/40 border border-dashed border-[#e0e0dc] rounded-xl bg-white">
+          계약서가 없습니다. 위 버튼으로 생성하세요.
         </div>
       ) : (
         <div className="border border-[#e8e8e4] rounded-xl overflow-hidden bg-white">
@@ -192,7 +220,15 @@ export function ContractList({ dealId }: Props) {
                 <X className="w-5 h-5" />
               </button>
             </div>
-            <div className="p-6">
+            <div className="p-6 space-y-4">
+              <div className="rounded-lg border border-[#e8e8e4] bg-[#f7f7f5] px-4 py-3 text-sm text-[#1a1a1a]/60">
+                마우스(PC) 또는 터치펜/손가락(태블릿)으로 서명란에 직접 서명해주세요.
+              </div>
+              {signError && (
+                <div className="rounded-lg border border-red-200 bg-red-50 px-3 py-2 text-sm text-red-600">
+                  {signError}
+                </div>
+              )}
               {signing ? (
                 <div className="py-8 text-center text-sm text-[#1a1a1a]/50">서명 처리 중...</div>
               ) : (

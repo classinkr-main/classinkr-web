@@ -39,6 +39,7 @@ export function CustomerForm({ partnerAccountId, existing, onClose, onSaved }: P
     notes: existing.notes ?? "",
   } : EMPTY)
   const [saving, setSaving] = useState(false)
+  const [saveError, setSaveError] = useState<string | null>(null)
 
   async function handleSubmit(e: React.FormEvent) {
     e.preventDefault()
@@ -60,7 +61,7 @@ export function CustomerForm({ partnerAccountId, existing, onClose, onSaved }: P
       onClose()
     } else {
       const err = await res.json().catch(() => null)
-      alert(err?.error ?? "저장 실패")
+      setSaveError(err?.error ?? "저장에 실패했습니다. 다시 시도해주세요.")
     }
     setSaving(false)
   }
@@ -99,6 +100,11 @@ export function CustomerForm({ partnerAccountId, existing, onClose, onSaved }: P
             <textarea value={form.notes} onChange={(e) => setForm({ ...form, notes: e.target.value })}
               rows={2} className="w-full border border-[#e8e8e4] rounded-lg px-3 py-2 text-sm focus:outline-none focus:border-[#1a1a1a] resize-none" />
           </div>
+          {saveError && (
+            <div className="rounded-lg border border-red-200 bg-red-50 px-3 py-2 text-sm text-red-600">
+              {saveError}
+            </div>
+          )}
           <div className="flex justify-end gap-2 pt-2">
             <Button type="button" variant="outline" onClick={onClose}>취소</Button>
             <Button type="submit" disabled={saving}>{saving ? "저장 중..." : isEdit ? "수정" : "추가"}</Button>

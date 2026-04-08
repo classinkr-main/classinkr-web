@@ -94,9 +94,12 @@ interface Props {
 export function QuoteEditor({ dealId }: Props) {
   const [quotes, setQuotes] = useState<QuoteDocumentBundle[]>([])
   const [loading, setLoading] = useState(true)
+  const [loadError, setLoadError] = useState(false)
   const [showForm, setShowForm] = useState(false)
   const [converting, setConverting] = useState<string | null>(null)
+  const [convertError, setConvertError] = useState<string | null>(null)
   const [saving, setSaving] = useState(false)
+  const [successMsg, setSuccessMsg] = useState<string | null>(null)
   const [templateId, setTemplateId] = useState("board_bundle")
   const [vatSurcharge, setVatSurcharge] = useState(false)
   const [formTitle, setFormTitle] = useState("")
@@ -110,6 +113,9 @@ export function QuoteEditor({ dealId }: Props) {
     if (res.ok) {
       const data = await res.json()
       setQuotes(data.quote_documents ?? [])
+      setLoadError(false)
+    } else {
+      setLoadError(true)
     }
     setLoading(false)
   }, [dealId])
@@ -129,6 +135,8 @@ export function QuoteEditor({ dealId }: Props) {
         const data = await res.json()
         if (!active) return
         setQuotes(data.quote_documents ?? [])
+      } else {
+        if (active) setLoadError(true)
       }
       setLoading(false)
     }
@@ -216,17 +224,22 @@ export function QuoteEditor({ dealId }: Props) {
 
     setShowForm(false)
     setSaving(false)
+    setSuccessMsg("견적서가 생성되었습니다.")
+    setTimeout(() => setSuccessMsg(null), 4000)
     void load()
   }
 
   async function handleConvert(quoteId: string) {
     setConverting(quoteId)
+    setConvertError(null)
     const res = await portalFetch(`/api/portal/quotes/${quoteId}/convert`, { method: "POST" })
     if (res.ok) {
+      setSuccessMsg("계약서로 전환되었습니다. 계약서 탭에서 확인하세요.")
+      setTimeout(() => setSuccessMsg(null), 5000)
       void load()
     } else {
       const err = await res.json().catch(() => null)
-      alert(err?.error ?? "전환 실패")
+      setConvertError(err?.error ?? "계약 전환에 실패했습니다. 다시 시도해주세요.")
     }
     setConverting(null)
   }
@@ -245,12 +258,33 @@ export function QuoteEditor({ dealId }: Props) {
         </div>
       </div>
 
+      {/* 피드백 배너 */}
+      {successMsg && (
+        <div className="flex items-center gap-2 rounded-xl border border-emerald-200 bg-emerald-50 px-4 py-3 text-sm text-emerald-700">
+          <span>✓</span> {successMsg}
+        </div>
+      )}
+      {convertError && (
+        <div className="flex items-center justify-between gap-2 rounded-xl border border-red-200 bg-red-50 px-4 py-3 text-sm text-red-600">
+          <span>{convertError}</span>
+          <button onClick={() => setConvertError(null)} className="text-red-400 hover:text-red-600">✕</button>
+        </div>
+      )}
+
       {/* 견적 목록 */}
       {loading ? (
         <div className="py-12 text-center text-sm text-[#1a1a1a]/40">불러오는 중...</div>
+      ) : loadError ? (
+        <div className="py-12 text-center border border-[#e8e8e4] rounded-xl bg-white">
+          <p className="text-sm text-[#1a1a1a]/50">견적서 목록을 불러오지 못했습니다.</p>
+          <button onClick={() => { setLoadError(false); void load() }} className="mt-2 text-xs text-[#084734] hover:underline">
+            다시 시도
+          </button>
+        </div>
       ) : quotes.length === 0 ? (
-        <div className="py-12 text-center text-sm text-[#1a1a1a]/40 border border-[#e8e8e4] rounded-xl bg-white">
-          견적서가 없습니다
+        <div className="py-12 text-center border border-dashed border-[#e0e0dc] rounded-xl bg-white">
+          <p className="text-sm text-[#1a1a1a]/50">작성된 견적서가 없습니다.</p>
+          <p className="mt-1 text-xs text-[#1a1a1a]/35">위 "견적 작성" 버튼으로 첫 견적을 시작하세요.</p>
         </div>
       ) : (
         <div className="border border-[#e8e8e4] rounded-xl overflow-hidden bg-white">
@@ -308,26 +342,35 @@ export function QuoteEditor({ dealId }: Props) {
             </div>
             <form onSubmit={handleCreate} className="p-6 space-y-5">
               {/* 템플릿 선택 */}
-              <div className="flex gap-2">
-                {QUOTE_TEMPLATES.map((t) => (
-                  <button key={t.id} type="button"
-                    onClick={() => { setTemplateId(t.id); setItems(createTemplateItems(t.id)) }}
-                    className={`px-3 py-2 rounded-lg text-xs font-medium border transition-colors ${
-                      templateId === t.id
-                        ? "border-[#1a1a1a] bg-[#1a1a1a] text-white"
-                        : "border-[#e8e8e4] text-[#1a1a1a]/60 hover:border-[#1a1a1a]/30"
-                    }`}>
-                    {t.label}
-                  </button>
-                ))}
+              <div>
+                <p className="text-xs font-medium text-[#1a1a1a]/50 mb-2">시작 템플릿 선택</p>
+                <div className="flex gap-2 flex-wrap">
+                  {QUOTE_TEMPLATES.map((t) => (
+                    <button key={t.id} type="button"
+                      onClick={() => { setTemplateId(t.id); setItems(createTemplateItems(t.id)) }}
+                      className={`px-3 py-2 rounded-lg text-xs font-medium border transition-colors text-left ${
+                        templateId === t.id
+                          ? "border-[#1a1a1a] bg-[#1a1a1a] text-white"
+                          : "border-[#e8e8e4] text-[#1a1a1a]/60 hover:border-[#1a1a1a]/30"
+                      }`}>
+                      <span className="block">{t.label}</span>
+                      <span className={`block text-[10px] mt-0.5 ${templateId === t.id ? "text-white/50" : "text-[#1a1a1a]/35"}`}>
+                        {t.description}
+                      </span>
+                    </button>
+                  ))}
+                </div>
               </div>
 
               {/* 기본 정보 */}
               <div className="grid grid-cols-2 gap-4">
                 <div>
-                  <label className="text-xs font-medium text-[#1a1a1a]/60 mb-1 block">제목</label>
+                  <label className="text-xs font-medium text-[#1a1a1a]/60 mb-1 block">
+                    제목 <span className="text-red-400">*</span>
+                  </label>
                   <input value={formTitle} onChange={(e) => setFormTitle(e.target.value)}
-                    placeholder="견적서 제목"
+                    placeholder="예: 본관 2층 전자칠판 견적"
+                    required
                     className="w-full border border-[#e8e8e4] rounded-lg px-3 py-2 text-sm focus:outline-none focus:border-[#1a1a1a]" />
                 </div>
                 <div>
@@ -397,7 +440,7 @@ export function QuoteEditor({ dealId }: Props) {
 
               <div className="flex justify-end gap-2 pt-2">
                 <Button type="button" variant="outline" onClick={() => setShowForm(false)}>취소</Button>
-                <Button type="submit" disabled={saving}>
+                <Button type="submit" disabled={saving || !formTitle.trim()}>
                   <Calculator className="w-4 h-4 mr-1" />
                   {saving ? "저장 중..." : "견적 생성"}
                 </Button>
