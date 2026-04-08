@@ -1,6 +1,6 @@
 "use client"
 
-import React, { startTransition, useEffect, useState } from "react"
+import React, { startTransition, useCallback, useEffect, useState } from "react"
 import { useRouter } from "next/navigation"
 import {
   Activity,
@@ -19,6 +19,8 @@ import {
 import { Badge } from "@/components/ui/badge"
 import { Card, CardContent, CardHeader, CardTitle } from "@/components/ui/card"
 import { Tabs, TabsContent, TabsList, TabsTrigger } from "@/components/ui/tabs"
+import { MobileActionLauncher } from "@/components/partner-portal/mobile/MobileActionLauncher"
+import { PortalNav } from "@/components/partner-portal/PortalNav"
 import type {
   CalendarEvent,
   CustomerListItem,
@@ -514,6 +516,9 @@ export default function PartnerWorkspacePage() {
   const [selectedDealId, setSelectedDealId] = useState(DEMO_OVERVIEW.deals[0].id)
   const [loading, setLoading] = useState(true)
   const [error, setError] = useState<string | null>(null)
+  const refreshPortal = useCallback(() => {
+    window.location.reload()
+  }, [])
 
   useEffect(() => {
     let alive = true
@@ -578,6 +583,7 @@ export default function PartnerWorkspacePage() {
     ? overview.deals.filter((deal) => deal.customer_id === selectedCustomer.customer.id)
     : overview.deals
   const selectedDeal = selectedDeals.find((deal) => deal.id === selectedDealId) ?? selectedDeals[0]
+  const canCreateInPortal = mode === "v2"
 
   if (loading) {
     return (
@@ -1076,6 +1082,16 @@ export default function PartnerWorkspacePage() {
           </Card>
         </div>
       </div>
+
+      <MobileActionLauncher
+        screen="workspace"
+        customers={overview.customers.map((item) => item.customer)}
+        deals={overview.deals}
+        canCreate={canCreateInPortal}
+        defaultCustomerId={selectedCustomer?.customer.id}
+        defaultDealId={selectedDeal?.id}
+        onSaved={refreshPortal}
+      />
     </div>
   )
 }

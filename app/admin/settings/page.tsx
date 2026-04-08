@@ -1,6 +1,6 @@
 "use client"
 
-import { useState, useEffect, useCallback } from "react"
+import { useState, useEffect, useCallback, useMemo } from "react"
 import type { ReactNode } from "react"
 import {
   Save,
@@ -17,141 +17,317 @@ import {
   Sparkles,
   CircleAlert,
 } from "lucide-react"
+
+import { NotificationIcon } from "@/components/notifications/NotificationIcon"
+import { adminFetch, adminFetchJson } from "@/lib/admin-client"
+import { resolveNotificationPresentation } from "@/lib/notifications/presentation"
+import {
+  DEFAULT_NOTIFICATION_APPEARANCE,
+  NOTIFICATION_CATEGORY_OPTIONS,
+  NOTIFICATION_ICON_OPTIONS,
+  NOTIFICATION_SEVERITY_OPTIONS,
+  NOTIFICATION_TONE_OPTIONS,
+  NOTIFICATION_TYPE_OPTIONS,
+  type NotificationCategory,
+  type NotificationIconKey,
+  type NotificationSeverity,
+  type NotificationTone,
+  type NotificationType,
+} from "@/lib/notifications/types"
+import { NOTIFICATION_TONE_STYLES } from "@/lib/notifications/ui"
+import type { SiteSettings } from "@/lib/db"
 import { Button } from "@/components/ui/button"
 import { Input } from "@/components/ui/input"
-import type { SiteSettings } from "@/lib/db"
+import { cn } from "@/lib/utils"
 
-function adminFetch(url: string, options?: RequestInit) {
-  const token = (typeof window !== "undefined" ? sessionStorage.getItem("admin_password") : null) ?? ""
-  return fetch(url, {
-    ...options,
-    headers: {
-      "Content-Type": "application/json",
-      Authorization: `Bearer ${token}`,
-      ...options?.headers,
-    },
-  })
+type ToastState = { msg: string; type: "success" | "error" } | null
+type WebhookStatus = "idle" | "testing" | "success" | "error"
+
+function splitEmails(value: string) {
+  return [...new Set(
+    value
+      .split(/[\n,;]/)
+      .map((item) => item.trim())
+      .filter(Boolean)
+  )]
 }
 
-// ─── 토스트 ──────────────────────────────────────────────────────
 function Toast({ msg, type }: { msg: string; type: "success" | "error" }) {
   return (
-    <div className={`fixed bottom-6 right-6 z-50 flex items-center gap-2.5 px-4 py-3 rounded-xl shadow-xl text-[13px] font-medium animate-in slide-in-from-bottom-2 duration-200 ${
-      type === "success" ? "bg-[#111110] text-white" : "bg-red-500 text-white"
-    }`}>
-      {type === "success" ? <CheckCircle2 className="w-4 h-4 shrink-0" /> : <XCircle className="w-4 h-4 shrink-0" />}
+    <div
+      className={cn(
+        "fixed bottom-6 right-6 z-50 flex items-center gap-2.5 rounded-xl px-4 py-3 text-[13px] font-medium shadow-xl animate-in slide-in-from-bottom-2 duration-200",
+        type === "success" ? "bg-[#111110] text-white" : "bg-red-500 text-white"
+      )}
+    >
+      {type === "success" ? (
+        <CheckCircle2 className="h-4 w-4 shrink-0" />
+      ) : (
+        <XCircle className="h-4 w-4 shrink-0" />
+      )}
       {msg}
     </div>
   )
 }
 
-// ─── 토글 행 ─────────────────────────────────────────────────────
-function ToggleRow({ label, description, checked, onChange }: {
-  label: string; description: string; checked: boolean; onChange: (v: boolean) => void
+function Section({
+  title,
+  description,
+  children,
+}: {
+  title: string
+  description?: string
+  children: ReactNode
 }) {
   return (
     <div className="flex flex-col gap-3 py-4 border-b border-[#e8e8e4] last:border-0 sm:flex-row sm:items-center sm:justify-between">
       <div>
+        <p className="text-[14px] font-medium text-[#111110]">{title}</p>
+        {description ? (
+          <p className="mt-0.5 text-[12px] text-[#1a1a1a]/45">{description}</p>
+        ) : null}
+      </div>
+      {children}
+    </div>
+  )
+}
+
+function ToggleRow({
+  label,
+  description,
+  checked,
+  onChange,
+}: {
+  label: string
+  description: string
+  checked: boolean
+  onChange: (value: boolean) => void
+}) {
+  return (
+    <div className="flex items-center justify-between border-b border-[#e8e8e4] py-4 last:border-0">
+      <div>
         <p className="text-[14px] font-medium text-[#111110]">{label}</p>
-        <p className="text-[12px] text-[#1a1a1a]/40 mt-0.5">{description}</p>
+        <p className="mt-0.5 text-[12px] text-[#1a1a1a]/45">{description}</p>
       </div>
       <button
+        type="button"
         onClick={() => onChange(!checked)}
-        className={`relative w-11 h-6 self-start rounded-full transition-colors shrink-0 sm:self-auto ${checked ? "bg-[#111110]" : "bg-[#e8e8e4]"}`}
+        className={cn(
+          "relative h-6 w-11 shrink-0 rounded-full transition-colors",
+          checked ? "bg-[#111110]" : "bg-[#e8e8e4]"
+        )}
       >
-        <span className={`absolute top-1 left-1 w-4 h-4 rounded-full bg-white transition-transform shadow-sm ${checked ? "translate-x-5" : "translate-x-0"}`} />
+        <span
+          className={cn(
+            "absolute left-1 top-1 h-4 w-4 rounded-full bg-white shadow-sm transition-transform",
+            checked ? "translate-x-5" : "translate-x-0"
+          )}
+        />
       </button>
     </div>
   )
 }
 
-// ─── 웹훅 행 ─────────────────────────────────────────────────────
-type WebhookStatus = "idle" | "testing" | "success" | "error"
-
-function WebhookRow({
-  label, description, placeholder, value, onChange, webhookType,
+function SelectField<T extends string>({
+  value,
+  onChange,
+  options,
 }: {
-  label: string; description: string; placeholder: string
-  value: string; onChange: (v: string) => void; webhookType: string
+  value: T
+  onChange: (value: T) => void
+  options: ReadonlyArray<{ value: T; label: string }>
 }) {
-  const [status, setStatus] = useState<WebhookStatus>("idle")
-  const [statusMsg, setStatusMsg] = useState("")
+  return (
+    <select
+      value={value}
+      onChange={(event) => onChange(event.target.value as T)}
+      className="h-10 rounded-xl border border-[#e8e8e4] bg-white px-3 text-[13px] text-[#111110] outline-none transition-colors focus:border-[#111110]"
+    >
+      {options.map((option) => (
+        <option key={option.value} value={option.value}>
+          {option.label}
+        </option>
+      ))}
+    </select>
+  )
+}
 
-  const handleTest = useCallback(async () => {
-    if (!value.trim()) {
-      setStatus("error")
-      setStatusMsg("URL을 먼저 입력해주세요.")
-      setTimeout(() => setStatus("idle"), 3000)
-      return
-    }
-    setStatus("testing")
-    setStatusMsg("")
-    try {
-      const res = await adminFetch("/api/admin/settings/test-webhook", {
-        method: "POST",
-        body: JSON.stringify({ type: webhookType, url: value }),
-      })
-      const data = await res.json()
-      setStatus(data.ok ? "success" : "error")
-      setStatusMsg(data.message ?? "")
-    } catch {
-      setStatus("error")
-      setStatusMsg("요청 실패")
-    }
-    setTimeout(() => setStatus("idle"), 5000)
-  }, [value, webhookType])
+function AppearanceRow({
+  label,
+  description,
+  iconKey,
+  tone,
+  onIconChange,
+  onToneChange,
+}: {
+  label: string
+  description: string
+  iconKey: NotificationIconKey
+  tone: NotificationTone
+  onIconChange: (value: NotificationIconKey) => void
+  onToneChange: (value: NotificationTone) => void
+}) {
+  const toneStyles = NOTIFICATION_TONE_STYLES[tone]
 
   return (
-    <div className="py-5 border-b border-[#e8e8e4] last:border-0">
-      <div className="flex flex-col gap-4 sm:flex-row sm:items-start sm:justify-between">
-        <div className="min-w-0 flex-1">
-          <p className="text-[14px] font-medium text-[#111110]">{label}</p>
-          <p className="text-[12px] text-[#1a1a1a]/40 mt-0.5 mb-3">{description}</p>
-          <div className="flex flex-col gap-2 sm:flex-row">
-            <Input
-              value={value}
-              onChange={(e) => onChange(e.target.value)}
-              placeholder={placeholder}
-              className="flex-1 text-[13px] font-mono"
-            />
-            <button
-              onClick={handleTest}
-              disabled={status === "testing"}
-              className={`inline-flex items-center justify-center gap-1.5 px-3 py-2 rounded-lg text-[12px] font-medium border transition-all whitespace-nowrap sm:shrink-0 ${
-                status === "success" ? "bg-green-50 border-green-200 text-green-600"
-                : status === "error" ? "bg-red-50 border-red-200 text-red-500"
-                : "bg-[#f0f0ec] border-[#e8e8e4] text-[#1a1a1a]/60 hover:bg-[#e8e8e4]"
-              }`}
-            >
-              {status === "testing" ? (
-                <Loader2 className="w-3.5 h-3.5 animate-spin" />
-              ) : status === "success" ? (
-                <CheckCircle2 className="w-3.5 h-3.5" />
-              ) : status === "error" ? (
-                <XCircle className="w-3.5 h-3.5" />
-              ) : (
-                <Zap className="w-3.5 h-3.5" />
-              )}
-              {status === "testing" ? "테스트 중..." : status === "success" ? "성공" : status === "error" ? "실패" : "테스트"}
-            </button>
-          </div>
-          {statusMsg && (
-            <p className={`text-[11px] mt-1.5 ${status === "success" ? "text-green-600" : "text-red-400"}`}>
-              {statusMsg}
-            </p>
+    <div className="grid gap-3 border-b border-[#e8e8e4] py-4 last:border-0 md:grid-cols-[minmax(0,1fr)_160px_140px_72px] md:items-center">
+      <div>
+        <p className="text-[13px] font-medium text-[#111110]">{label}</p>
+        <p className="mt-0.5 text-[12px] text-[#1a1a1a]/45">{description}</p>
+      </div>
+
+      <SelectField
+        value={iconKey}
+        onChange={onIconChange}
+        options={NOTIFICATION_ICON_OPTIONS}
+      />
+
+      <SelectField
+        value={tone}
+        onChange={onToneChange}
+        options={NOTIFICATION_TONE_OPTIONS}
+      />
+
+      <div className="flex items-center justify-center">
+        <div
+          className={cn(
+            "flex h-10 w-10 items-center justify-center rounded-2xl",
+            toneStyles.icon
           )}
+        >
+          <NotificationIcon iconKey={iconKey} />
         </div>
-        {value && (
-          <a href={value} target="_blank" rel="noopener noreferrer" className="self-start text-[#1a1a1a]/30 transition-colors hover:text-[#1a1a1a]/60 sm:mt-6">
-            <ExternalLink className="w-3.5 h-3.5" />
-          </a>
-        )}
       </div>
     </div>
   )
 }
 
-type SettingsTab = "general" | "lead" | "cta" | "integrations" | "history"
+function WebhookRow({
+  label,
+  description,
+  placeholder,
+  value,
+  onChange,
+  webhookType,
+}: {
+  label: string
+  description: string
+  placeholder: string
+  value: string
+  onChange: (value: string) => void
+  webhookType: string
+}) {
+  const [status, setStatus] = useState<WebhookStatus>("idle")
+  const [statusMsg, setStatusMsg] = useState("")
+
+  const handleTest = async () => {
+    if (!value.trim()) {
+      setStatus("error")
+      setStatusMsg("Enter a URL to run a connection test.")
+      window.setTimeout(() => setStatus("idle"), 3000)
+      return
+    }
+
+    setStatus("testing")
+    setStatusMsg("")
+
+    try {
+      const data = await adminFetchJson<{ ok: boolean; message?: string }>(
+        "/api/admin/settings/test-webhook",
+        {
+          method: "POST",
+          body: JSON.stringify({ type: webhookType, url: value }),
+        }
+      )
+      setStatus(data.ok ? "success" : "error")
+      setStatusMsg(data.message ?? "")
+    } catch (error) {
+      setStatus("error")
+      setStatusMsg(error instanceof Error ? error.message : "Request failed")
+    }
+
+    window.setTimeout(() => setStatus("idle"), 5000)
+  }
+
+  return (
+    <div className="border-b border-[#e8e8e4] py-5 last:border-0">
+      <div className="flex items-start justify-between gap-4">
+        <div className="min-w-0 flex-1">
+          <p className="text-[14px] font-medium text-[#111110]">{label}</p>
+          <p className="mb-3 mt-0.5 text-[12px] text-[#1a1a1a]/45">
+            {description}
+          </p>
+          <div className="flex gap-2">
+            <Input
+              value={value}
+              onChange={(event) => onChange(event.target.value)}
+              placeholder={placeholder}
+              className="flex-1 font-mono text-[13px]"
+            />
+            <button
+              type="button"
+              onClick={() => void handleTest()}
+              disabled={status === "testing"}
+              className={cn(
+                "flex items-center gap-1.5 whitespace-nowrap rounded-lg border px-3 py-2 text-[12px] font-medium transition-all",
+                status === "success"
+                  ? "border-green-200 bg-green-50 text-green-600"
+                  : status === "error"
+                    ? "border-red-200 bg-red-50 text-red-500"
+                    : "border-[#e8e8e4] bg-[#f0f0ec] text-[#1a1a1a]/60 hover:bg-[#e8e8e4]"
+              )}
+            >
+              {status === "testing" ? (
+                <Loader2 className="h-3.5 w-3.5 animate-spin" />
+              ) : status === "success" ? (
+                <CheckCircle2 className="h-3.5 w-3.5" />
+              ) : status === "error" ? (
+                <XCircle className="h-3.5 w-3.5" />
+              ) : (
+                <Zap className="h-3.5 w-3.5" />
+              )}
+              {status === "testing"
+                ? "테스트 중..."
+                : status === "success"
+                  ? "성공"
+                  : status === "error"
+                    ? "실패"
+                    : "테스트"}
+            </button>
+          </div>
+          {!value && status === "idle" ? (
+            <p className="mt-1.5 text-[11px] text-[#1a1a1a]/35">
+              Existing secrets stay hidden after reload. Entering a new URL will replace the
+              saved value.
+            </p>
+          ) : null}
+          {statusMsg ? (
+            <p
+              className={cn(
+                "mt-1.5 text-[11px]",
+                status === "success" ? "text-green-600" : "text-red-400"
+              )}
+            >
+              {statusMsg}
+            </p>
+          ) : null}
+        </div>
+        {value ? (
+          <a
+            href={value}
+            target="_blank"
+            rel="noopener noreferrer"
+            className="mt-6 shrink-0 text-[#1a1a1a]/30 transition-colors hover:text-[#1a1a1a]/60"
+          >
+            <ExternalLink className="h-3.5 w-3.5" />
+          </a>
+        ) : null}
+      </div>
+    </div>
+  )
+}
+
+type SettingsTab = "general" | "lead" | "cta" | "integrations" | "notifications" | "history"
 
 type SettingsKey = keyof SiteSettings
 
@@ -186,6 +362,12 @@ const NAV_ITEMS: Array<{
     icon: <LayoutGrid className="w-4 h-4" />,
   },
   {
+    key: "notifications",
+    label: "알림",
+    desc: "알림 외관 및 수신자 설정",
+    icon: <Sparkles className="w-4 h-4" />,
+  },
+  {
     key: "history",
     label: "변경 이력",
     desc: "준비중인 리비전 로그",
@@ -205,6 +387,7 @@ const SECTION_FIELDS: Record<SettingsTab, SettingsKey[]> = {
   lead: ["demoFormEnabled", "blogSectionEnabled"],
   cta: [],
   integrations: ["googleSheetWebhookUrl", "leadWebhookUrl", "channelTalkWebhookUrl", "emailWebhookUrl"],
+  notifications: ["notificationDigestEmailList", "notificationAppearance"],
   history: [],
 }
 
@@ -214,7 +397,7 @@ function isSettingsDirty(current: SiteSettings, baseline: SiteSettings) {
 
 function sectionDirtyCount(current: SiteSettings, baseline: SiteSettings, section: SettingsTab) {
   return SECTION_FIELDS[section].reduce((count, key) => {
-    return count + (current[key] === baseline[key] ? 0 : 1)
+    return count + (JSON.stringify(current[key]) === JSON.stringify(baseline[key]) ? 0 : 1)
   }, 0)
 }
 
@@ -277,16 +460,17 @@ function EmptyHint({
 export default function SettingsPage() {
   const [settings, setSettings] = useState<SiteSettings | null>(null)
   const [initialSettings, setInitialSettings] = useState<SiteSettings | null>(null)
+  const [digestInput, setDigestInput] = useState("")
   const [loading, setLoading] = useState(true)
   const [loadError, setLoadError] = useState<string | null>(null)
   const [saving, setSaving] = useState(false)
-  const [toast, setToast] = useState<{ msg: string; type: "success" | "error" } | null>(null)
+  const [toast, setToast] = useState<ToastState>(null)
   const [activeTab, setActiveTab] = useState<SettingsTab>("general")
   const [lastSavedAt, setLastSavedAt] = useState<Date | null>(null)
 
   const showToast = (msg: string, type: "success" | "error" = "success") => {
     setToast({ msg, type })
-    setTimeout(() => setToast(null), 3000)
+    window.setTimeout(() => setToast(null), 3000)
   }
 
   const loadSettings = useCallback(async () => {
@@ -302,6 +486,7 @@ export default function SettingsPage() {
       const data = (await response.json()) as SiteSettings
       setSettings(data)
       setInitialSettings(data)
+      setDigestInput(data.notificationDigestEmailList?.join("\n") ?? "")
       setLastSavedAt(null)
     } catch {
       setLoadError("설정을 불러오지 못했습니다. 다시 시도해 주세요.")
@@ -313,6 +498,135 @@ export default function SettingsPage() {
   useEffect(() => {
     void loadSettings()
   }, [loadSettings])
+
+  const updateSettingsState = (patch: Partial<SiteSettings>) => {
+    setSettings((current) => (current ? { ...current, ...patch } : current))
+  }
+
+  const updateTypeStyle = (
+    type: NotificationType,
+    patch: Partial<{ iconKey: NotificationIconKey; tone: NotificationTone }>
+  ) => {
+    setSettings((current) => {
+      if (!current) return current
+
+      return {
+        ...current,
+        notificationAppearance: {
+          ...current.notificationAppearance,
+          typeStyles: {
+            ...current.notificationAppearance.typeStyles,
+            [type]: {
+              ...current.notificationAppearance.typeStyles[type],
+              ...patch,
+            },
+          },
+        },
+      }
+    })
+  }
+
+  const updateCategoryStyle = (
+    category: NotificationCategory,
+    patch: Partial<{ iconKey: NotificationIconKey; tone: NotificationTone }>
+  ) => {
+    setSettings((current) => {
+      if (!current) return current
+
+      const fallback =
+        current.notificationAppearance.categoryStyles[category] ??
+        DEFAULT_NOTIFICATION_APPEARANCE.categoryStyles[category] ??
+        DEFAULT_NOTIFICATION_APPEARANCE.typeStyles.status_update
+
+      return {
+        ...current,
+        notificationAppearance: {
+          ...current.notificationAppearance,
+          categoryStyles: {
+            ...current.notificationAppearance.categoryStyles,
+            [category]: {
+              ...fallback,
+              ...patch,
+            },
+          },
+        },
+      }
+    })
+  }
+
+  const updateSeverityOverride = (
+    severity: NotificationSeverity,
+    patch: Partial<{ iconKey: NotificationIconKey; tone: NotificationTone }>
+  ) => {
+    setSettings((current) => {
+      if (!current) return current
+
+      const fallback = {
+        iconKey:
+          current.notificationAppearance.severityOverrides[severity]?.iconKey ??
+          DEFAULT_NOTIFICATION_APPEARANCE.severityOverrides[severity]?.iconKey ??
+          "bell",
+        tone:
+          current.notificationAppearance.severityOverrides[severity]?.tone ??
+          DEFAULT_NOTIFICATION_APPEARANCE.severityOverrides[severity]?.tone ??
+          "slate",
+      }
+
+      return {
+        ...current,
+        notificationAppearance: {
+          ...current.notificationAppearance,
+          severityOverrides: {
+            ...current.notificationAppearance.severityOverrides,
+            [severity]: {
+              ...fallback,
+              ...patch,
+            },
+          },
+        },
+      }
+    })
+  }
+
+  const previewItems = useMemo(() => {
+    if (!settings) return []
+
+    return [
+      {
+        key: "lead",
+        title: "New lead came in",
+        body: "Demo request from a school administrator was submitted.",
+        presentation: resolveNotificationPresentation({
+          notificationType: "action_required",
+          categoryTag: "lead",
+          severity: "info",
+          appearance: settings.notificationAppearance,
+        }),
+      },
+      {
+        key: "schedule",
+        title: "Partner schedule requested",
+        body: "A partner asked to confirm an installation window.",
+        presentation: resolveNotificationPresentation({
+          notificationType: "status_update",
+          categoryTag: "schedule",
+          severity: "warning",
+          appearance: settings.notificationAppearance,
+        }),
+      },
+      {
+        key: "incident",
+        title: "Webhook delivery failed",
+        body: "Critical notification channel failed and needs review.",
+        presentation: resolveNotificationPresentation({
+          notificationType: "incident",
+          categoryTag: "system",
+          severity: "critical",
+          appearance: settings.notificationAppearance,
+        }),
+      },
+    ]
+  }, [settings])
 
   const sectionDirtyTotals =
     settings && initialSettings
@@ -326,19 +640,29 @@ export default function SettingsPage() {
 
   const handleSave = async () => {
     if (!settings || !initialSettings || !hasDirtyChanges) return
-    const payload = settings
     setSaving(true)
+
     try {
-      const response = await adminFetch("/api/admin/settings", { method: "PATCH", body: JSON.stringify(payload) })
+      const response = await adminFetch("/api/admin/settings", {
+        method: "PATCH",
+        body: JSON.stringify({
+          ...settings,
+          notificationDigestEmailList: splitEmails(digestInput),
+        }),
+      })
       const data = await response.json().catch(() => null)
       if (!response.ok) {
         throw new Error(data?.message ?? "설정 저장에 실패했습니다.")
       }
       showToast(data?.message ?? "설정이 저장되었습니다.")
-      setInitialSettings(payload)
+      const savedSettings = { ...settings, notificationDigestEmailList: splitEmails(digestInput) }
+      setInitialSettings(savedSettings as SiteSettings)
       setLastSavedAt(new Date())
     } catch (error) {
-      showToast(error instanceof Error ? error.message : "저장에 실패했습니다.", "error")
+      showToast(
+        error instanceof Error ? error.message : "Failed to save settings.",
+        "error"
+      )
     } finally {
       setSaving(false)
     }
@@ -347,6 +671,7 @@ export default function SettingsPage() {
   const handleReset = () => {
     if (!initialSettings || !hasDirtyChanges) return
     setSettings(initialSettings)
+    setDigestInput(initialSettings.notificationDigestEmailList?.join("\n") ?? "")
     showToast("저장 전 변경사항을 되돌렸습니다.")
   }
 
@@ -457,7 +782,7 @@ export default function SettingsPage() {
         <aside className="space-y-3 xl:sticky xl:top-6">
           <div className="rounded-2xl border border-[#e8e8e4] bg-white px-4 py-4">
             <p className="text-[12px] font-semibold text-[#111110]">설정 카테고리</p>
-            <p className="text-[12px] text-[#1a1a1a]/40 mt-1">현재는 5개 핵심 영역만 열어둡니다.</p>
+            <p className="text-[12px] text-[#1a1a1a]/40 mt-1">현재는 6개 핵심 영역만 열어둡니다.</p>
           </div>
           <nav className="flex gap-2 overflow-x-auto pb-1 [-ms-overflow-style:none] [scrollbar-width:none] xl:block xl:space-y-1 xl:overflow-visible xl:pb-0">
             {NAV_ITEMS.map((item) => {
@@ -699,6 +1024,30 @@ export default function SettingsPage() {
                   webhookType="channelTalk"
                 />
                 <WebhookRow
+                  label="WeCom 운영 Webhook"
+                  description="일반 경고 및 파트너 활동 알림에 사용됩니다."
+                  placeholder="https://qyapi.weixin.qq.com/cgi-bin/webhook/send?key=..."
+                  value={settings.wecomOpsWebhookUrl ?? ""}
+                  onChange={(v) => set({ wecomOpsWebhookUrl: v })}
+                  webhookType="wecom"
+                />
+                <WebhookRow
+                  label="WeCom 긴급 Webhook"
+                  description="인시던트 및 전달 실패 에스컬레이션 채널입니다."
+                  placeholder="https://qyapi.weixin.qq.com/cgi-bin/webhook/send?key=..."
+                  value={settings.wecomCriticalWebhookUrl ?? ""}
+                  onChange={(v) => set({ wecomCriticalWebhookUrl: v })}
+                  webhookType="wecom"
+                />
+                <WebhookRow
+                  label="카카오 알림톡 Webhook"
+                  description="확인서, 리마인더 등 외부 트랜잭션 알림에 사용됩니다."
+                  placeholder="https://provider.example.com/kakao/..."
+                  value={settings.kakaoAlimtalkWebhookUrl ?? ""}
+                  onChange={(v) => set({ kakaoAlimtalkWebhookUrl: v })}
+                  webhookType="kakaoAlimtalk"
+                />
+                <WebhookRow
                   label="이메일 발송 Webhook"
                   description="마케팅 이메일 발송에 사용됩니다. 미설정 시 시뮬레이션 모드로 동작합니다."
                   placeholder="https://api.resend.com/..."
@@ -706,6 +1055,156 @@ export default function SettingsPage() {
                   onChange={(v) => set({ emailWebhookUrl: v })}
                   webhookType="email"
                 />
+              </PanelCard>
+            </>
+          )}
+
+          {activeTab === "notifications" && (
+            <>
+              <PanelCard
+                title="알림 수신자"
+                description="긴급 알림 실패 시 이메일 폴백 수신 주소를 설정합니다."
+                badge="저장 가능"
+              >
+                <div className="space-y-5 py-2">
+                  <div>
+                    <label className="mb-1.5 block text-[12px] font-medium text-[#1a1a1a]/55">
+                      Digest / fallback email recipients
+                    </label>
+                    <textarea
+                      value={digestInput}
+                      onChange={(event) => setDigestInput(event.target.value)}
+                      rows={4}
+                      placeholder={"ops@classin.kr\nowner@classin.kr"}
+                      className="w-full rounded-2xl border border-[#e8e8e4] px-3 py-3 text-[13px] text-[#111110] outline-none transition-colors focus:border-[#111110]"
+                    />
+                    <p className="mt-1.5 text-[11px] text-[#1a1a1a]/38">
+                      줄바꿈, 쉼표, 세미콜론으로 구분합니다. 긴급 알림 전달 실패 시 이메일 폴백으로 사용됩니다.
+                    </p>
+                  </div>
+                </div>
+              </PanelCard>
+
+              <PanelCard
+                title="알림 미리보기"
+                description="아이콘·톤 규칙이 인박스에서 어떻게 표시되는지 확인합니다."
+                badge="미리보기"
+              >
+                <div className="grid gap-3 py-2 md:grid-cols-3">
+                  {previewItems.map((item) => {
+                    const tone = NOTIFICATION_TONE_STYLES[item.presentation.tone]
+
+                    return (
+                      <div
+                        key={item.key}
+                        className="rounded-2xl border border-[#e8e8e4] bg-[#fcfcfa] p-4"
+                      >
+                        <div
+                          className={cn(
+                            "mb-3 flex h-10 w-10 items-center justify-center rounded-2xl",
+                            tone.icon
+                          )}
+                        >
+                          <NotificationIcon iconKey={item.presentation.iconKey} />
+                        </div>
+                        <p className="text-[13px] font-semibold text-[#111110]">{item.title}</p>
+                        <p className="mt-1 text-[12px] leading-5 text-[#1a1a1a]/55">{item.body}</p>
+                        <span
+                          className={cn(
+                            "mt-3 inline-flex rounded-full border px-2 py-0.5 text-[10px] font-medium uppercase tracking-wide",
+                            tone.badge
+                          )}
+                        >
+                          {item.presentation.tone}
+                        </span>
+                      </div>
+                    )
+                  })}
+                </div>
+              </PanelCard>
+
+              <PanelCard
+                title="타입별 스타일"
+                description="알림 타입별 기본 아이콘과 톤을 설정합니다."
+                badge="저장 가능"
+              >
+                {NOTIFICATION_TYPE_OPTIONS.map((option) => {
+                  const style = settings.notificationAppearance.typeStyles[option.value]
+
+                  return (
+                    <AppearanceRow
+                      key={option.value}
+                      label={option.label}
+                      description={`Default rendering token for ${option.label.toLowerCase()}.`}
+                      iconKey={style.iconKey}
+                      tone={style.tone}
+                      onIconChange={(value) => updateTypeStyle(option.value, { iconKey: value })}
+                      onToneChange={(value) => updateTypeStyle(option.value, { tone: value })}
+                    />
+                  )
+                })}
+              </PanelCard>
+
+              <PanelCard
+                title="카테고리별 스타일"
+                description="리드, 일정, 시스템 등 도메인 카테고리별 아이콘·톤 오버라이드입니다."
+                badge="저장 가능"
+              >
+                {NOTIFICATION_CATEGORY_OPTIONS.map((option) => {
+                  const style =
+                    settings.notificationAppearance.categoryStyles[option.value] ??
+                    DEFAULT_NOTIFICATION_APPEARANCE.categoryStyles[option.value] ??
+                    DEFAULT_NOTIFICATION_APPEARANCE.typeStyles.status_update
+
+                  return (
+                    <AppearanceRow
+                      key={option.value}
+                      label={option.label}
+                      description={`Category accent for ${option.label.toLowerCase()}.`}
+                      iconKey={style.iconKey}
+                      tone={style.tone}
+                      onIconChange={(value) =>
+                        updateCategoryStyle(option.value, { iconKey: value })
+                      }
+                      onToneChange={(value) => updateCategoryStyle(option.value, { tone: value })}
+                    />
+                  )
+                })}
+              </PanelCard>
+
+              <PanelCard
+                title="심각도 오버라이드"
+                description="경고·긴급 알림에 적용되는 최종 오버라이드 레이어입니다."
+                badge="저장 가능"
+              >
+                {NOTIFICATION_SEVERITY_OPTIONS.map((option) => {
+                  const style = {
+                    iconKey:
+                      settings.notificationAppearance.severityOverrides[option.value]?.iconKey ??
+                      DEFAULT_NOTIFICATION_APPEARANCE.severityOverrides[option.value]?.iconKey ??
+                      "bell",
+                    tone:
+                      settings.notificationAppearance.severityOverrides[option.value]?.tone ??
+                      DEFAULT_NOTIFICATION_APPEARANCE.severityOverrides[option.value]?.tone ??
+                      "slate",
+                  }
+
+                  return (
+                    <AppearanceRow
+                      key={option.value}
+                      label={option.label}
+                      description={`Final override applied to ${option.label.toLowerCase()} notifications.`}
+                      iconKey={style.iconKey}
+                      tone={style.tone}
+                      onIconChange={(value) =>
+                        updateSeverityOverride(option.value, { iconKey: value })
+                      }
+                      onToneChange={(value) =>
+                        updateSeverityOverride(option.value, { tone: value })
+                      }
+                    />
+                  )
+                })}
               </PanelCard>
             </>
           )}
@@ -771,7 +1270,7 @@ export default function SettingsPage() {
         </main>
       </div>
 
-      {toast && <Toast msg={toast.msg} type={toast.type} />}
+      {toast ? <Toast msg={toast.msg} type={toast.type} /> : null}
     </div>
   )
 }

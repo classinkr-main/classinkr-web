@@ -43,12 +43,33 @@ export async function POST(req: NextRequest) {
       region_label?: string | null;
       notes?: string | null;
     };
+    const {
+      name,
+      contact_name,
+      email,
+      phone,
+      address,
+      business_number,
+      campus_name,
+      region_label,
+      notes,
+    } = body;
 
-    if (!body.name) {
+    if (!name) {
       return NextResponse.json({ error: "name is required" }, { status: 400 });
     }
 
-    const customer = await createCustomerForPartnerAccount(context, body);
+    const customer = await createCustomerForPartnerAccount(context, {
+      name,
+      contact_name,
+      email,
+      phone,
+      address,
+      business_number,
+      campus_name,
+      region_label,
+      notes,
+    });
     return NextResponse.json({ customer }, { status: 201 });
   } catch (error) {
     console.error("[POST /api/partner/customers]", error);

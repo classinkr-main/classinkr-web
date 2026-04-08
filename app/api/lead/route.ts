@@ -1,18 +1,16 @@
 /**
- * ─────────────────────────────────────────────────────────────
- * /api/lead  —  리드 수집 API (기존 + 마케팅 구독자 자동 등록)
- * ─────────────────────────────────────────────────────────────
- *
- * [NOTE-24] 리드 → 구독자 자동 연동
- *   데모 신청 또는 문의 시 명시적 수신 동의를 받은 이메일만
- *   구독자 DB에도 등록 (옵트인 처리).
+ * Public lead capture API used by homepage forms and newsletter signup.
+ * The route stores the lead, forwards it to configured integrations,
+ * syncs newsletter subscribers, and emits internal notification events.
  */
 import { NextRequest, NextResponse } from "next/server"
+
+import { triggerOnSubmitRules } from "@/lib/automation-engine"
+import { emitNotificationEvent } from "@/lib/notifications/emit-event"
 import { saveLead } from "@/lib/repositories/leads"
 import { upsertSubscriber } from "@/lib/repositories/marketing"
 import { getResolvedSettings } from "@/lib/repositories/settings"
 import { postJson } from "@/lib/server/post-json"
-import { triggerOnSubmitRules } from "@/lib/automation-engine"
 
 export interface LeadPayload {
   source: "demo_modal" | "contact_page" | "newsletter"
@@ -24,7 +22,6 @@ export interface LeadPayload {
   phone?: string
   message?: string
   timestamp: string
-  /** [NOTE-24] 마케팅 이메일 수신 동의 여부 */
   marketingConsent?: boolean
 }
 
@@ -50,29 +47,35 @@ function normalizeEmail(value: unknown) {
 
 function hasRequiredFields(
   payload: LeadPayload,
-  fields: Array<keyof Pick<LeadPayload, "name" | "org" | "role" | "size" | "email" | "phone" | "message">>
+  fields: Array<
+    keyof Pick<
+      LeadPayload,
+      "name" | "org" | "role" | "size" | "email" | "phone" | "message"
+    >
+  >
 ) {
   return fields.every((field) => Boolean(payload[field]))
 }
 
 function buildPayload(raw: unknown): LeadPayload {
   if (!raw || typeof raw !== "object") {
-    throw new Error("리드 요청 값이 올바르지 않습니다.")
+    throw new Error("Lead payload is invalid.")
   }
 
   const body = raw as Record<string, unknown>
   const source =
-    typeof body.source === "string" && VALID_SOURCES.has(body.source as LeadPayload["source"])
+    typeof body.source === "string" &&
+    VALID_SOURCES.has(body.source as LeadPayload["source"])
       ? (body.source as LeadPayload["source"])
       : null
   const email = normalizeEmail(body.email)
 
   if (!source) {
-    throw new Error("유입 경로가 올바르지 않습니다.")
+    throw new Error("Lead source is invalid.")
   }
 
   if (email === null) {
-    throw new Error("올바른 이메일 형식을 입력해주세요.")
+    throw new Error("Email format is invalid.")
   }
 
   const payload: LeadPayload = {
@@ -90,23 +93,46 @@ function buildPayload(raw: unknown): LeadPayload {
 
   if (
     payload.source === "demo_modal" &&
-    !hasRequiredFields(payload, ["name", "org", "role", "size", "email", "phone"])
+    !hasRequiredFields(payload, [
+      "name",
+      "org",
+      "role",
+      "size",
+      "email",
+      "phone",
+    ])
   ) {
-    throw new Error("데모 신청 필수 항목이 누락되었습니다.")
+    throw new Error("Demo request is missing required fields.")
   }
 
   if (
     payload.source === "contact_page" &&
     !hasRequiredFields(payload, ["org", "name", "phone", "message"])
   ) {
-    throw new Error("문의 필수 항목이 누락되었습니다.")
+    throw new Error("Contact request is missing required fields.")
   }
 
   if (payload.source === "newsletter" && !payload.email) {
-    throw new Error("이메일은 필수입니다.")
+    throw new Error("Email is required for newsletter signups.")
   }
 
   return payload
+}
+
+function buildLeadNotificationTitle(body: LeadPayload) {
+  if (body.org) return `새 리드: ${body.org}`
+  return `새 리드: ${body.name ?? body.email ?? body.phone ?? "Unknown"}`
+}
+
+function buildLeadNotificationMessage(body: LeadPayload) {
+  return [
+    body.name,
+    body.role,
+    body.size ? `예상 사용자 ${body.size}` : undefined,
+    body.source,
+  ]
+    .filter(Boolean)
+    .join(" / ")
 }
 
 export async function POST(req: NextRequest) {
@@ -114,14 +140,16 @@ export async function POST(req: NextRequest) {
     const body = buildPayload(await req.json())
     const settings = await getResolvedSettings()
     let stored = false
+    let savedLeadId: string | undefined
     let storageError: string | undefined
 
     try {
-      await saveLead({ ...body })
+      const savedLead = await saveLead({ ...body })
+      savedLeadId = savedLead.id
       stored = true
-    } catch (e) {
-      console.error("[POST /api/lead] saveLead error:", e)
-      storageError = "리드 저장소 동기화에 실패했습니다."
+    } catch (error) {
+      console.error("[POST /api/lead] saveLead error:", error)
+      storageError = "Failed to store the lead record."
     }
 
     const deliveryTasks: Promise<void>[] = []
@@ -143,7 +171,6 @@ export async function POST(req: NextRequest) {
     }
 
     const results = await Promise.allSettled(deliveryTasks)
-
     const errors = results
       .filter((result) => result.status === "rejected")
       .map((result) => (result as PromiseRejectedResult).reason?.message)
@@ -161,13 +188,71 @@ export async function POST(req: NextRequest) {
       })
     }
 
-    const deliveryCount = results.filter((result) => result.status === "fulfilled").length
+    const deliveryCount = results.filter(
+      (result) => result.status === "fulfilled"
+    ).length
+
+    if (stored) {
+      void emitNotificationEvent({
+        eventType: "lead.created",
+        notificationType: "action_required",
+        categoryTag: "lead",
+        severity: "info",
+        scopeTag: "org_admin",
+        title: buildLeadNotificationTitle(body),
+        message: buildLeadNotificationMessage(body),
+        routeUrl: "/admin/crm",
+        source: "lead",
+        sourceId: savedLeadId,
+        payload: {
+          leadId: savedLeadId,
+          source: body.source,
+          name: body.name,
+          org: body.org,
+          role: body.role,
+          size: body.size,
+          email: body.email,
+          phone: body.phone,
+        },
+      }).catch((error) => {
+        console.error("[POST /api/lead] notification emit failed:", error)
+      })
+    }
+
+    if (storageError || errors.length > 0) {
+      void emitNotificationEvent({
+        eventType: "integration.webhook_failed",
+        notificationType: "incident",
+        categoryTag: "system",
+        severity: storageError ? "critical" : "warning",
+        scopeTag: "critical_control",
+        title: storageError
+          ? "리드 저장 또는 전달 실패"
+          : "리드 전달 경고가 발생했습니다",
+        message: [storageError, ...errors]
+          .filter(Boolean)
+          .slice(0, 3)
+          .join(" | "),
+        routeUrl: "/admin/settings",
+        source: "lead",
+        sourceId: savedLeadId,
+        payload: {
+          leadId: savedLeadId,
+          source: body.source,
+          errors,
+          storageError,
+        },
+        channels: ["wecom_webhook", "email"],
+      }).catch((error) => {
+        console.error("[POST /api/lead] incident notification emit failed:", error)
+      })
+    }
 
     if (!stored && deliveryCount === 0) {
       return NextResponse.json(
         {
           ok: false,
-          error: "리드 저장과 외부 전달에 모두 실패했습니다.",
+          error: "Lead storage and delivery both failed.",
           details: storageError ? [storageError, ...errors] : errors,
         },
         { status: 502 }
@@ -177,16 +262,13 @@ export async function POST(req: NextRequest) {
     return NextResponse.json({
       ok: true,
       stored,
-      warnings: [
-        ...(storageError ? [storageError] : []),
-        ...errors,
-      ],
+      warnings: [...(storageError ? [storageError] : []), ...errors],
     })
   } catch (error) {
     return NextResponse.json(
       {
         ok: false,
-        error: error instanceof Error ? error.message : "잘못된 요청입니다.",
+        error: error instanceof Error ? error.message : "Invalid request.",
       },
       { status: 400 }
     )
@@ -196,15 +278,15 @@ export async function POST(req: NextRequest) {
 async function sendToGoogleSheet(data: LeadPayload, url?: string) {
   if (!url) return
 
-  const res = await postJson(url, data)
-  if (!res.ok) throw new Error(`Google Sheet: ${res.status}`)
+  const response = await postJson(url, data)
+  if (!response.ok) throw new Error(`Google Sheet: ${response.status}`)
 }
 
 async function sendToWebhook(data: LeadPayload, url?: string) {
   if (!url) return
 
-  const res = await postJson(url, data)
-  if (!res.ok) throw new Error(`Webhook: ${res.status}`)
+  const response = await postJson(url, data)
+  if (!response.ok) throw new Error(`Webhook: ${response.status}`)
 }
 
 async function sendToChannelTalk(data: LeadPayload, url?: string) {
@@ -212,11 +294,11 @@ async function sendToChannelTalk(data: LeadPayload, url?: string) {
 
   const messageParts = [
     data.role,
-    data.size ? `원생 ${data.size}` : undefined,
+    data.size ? `예상 ${data.size}` : undefined,
     data.message,
   ].filter(Boolean)
 
-  const res = await postJson(url, {
+  const response = await postJson(url, {
     event: "new_lead",
     source: data.source,
     name: data.name || data.email,
@@ -227,14 +309,9 @@ async function sendToChannelTalk(data: LeadPayload, url?: string) {
     timestamp: data.timestamp,
   })
 
-  if (!res.ok) throw new Error(`ChannelTalk: ${res.status}`)
+  if (!response.ok) throw new Error(`ChannelTalk: ${response.status}`)
 }
 
-/**
- * [NOTE-24] 리드 → 구독자 DB 자동 동기화
- * 데모 신청자 / 문의자의 이메일을 구독자 목록에 등록.
- * 유입 경로(source)를 그대로 전달하여 추적 가능.
- */
 async function syncToSubscriberDB(data: LeadPayload) {
   if (!data.email) return
 
@@ -246,11 +323,11 @@ async function syncToSubscriberDB(data: LeadPayload) {
       role: data.role,
       size: data.size,
       phone: data.phone,
-      tags: data.source === "demo_modal" ? ["데모신청"] : [],
+      tags: data.source === "demo_modal" ? ["demo_request"] : [],
       source: data.source,
     })
-  } catch (err) {
-    console.error("[syncToSubscriberDB] 구독자 자동 등록 실패:", err)
-    throw err
+  } catch (error) {
+    console.error("[syncToSubscriberDB] subscriber sync failed:", error)
+    throw error
   }
 }

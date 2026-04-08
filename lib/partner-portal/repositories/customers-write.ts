@@ -162,8 +162,8 @@ export async function updateCustomerForPartnerAccount(
     target_type: "customer",
     target_id: customer.id,
     summary: `${customer.name} 고객 정보가 수정됨`,
-    before_json: before,
-    after_json: customer,
+    before_json: before as unknown as Record<string, unknown>,
+    after_json: customer as unknown as Record<string, unknown>,
   });
 
   return customer;
