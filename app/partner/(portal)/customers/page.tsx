@@ -96,30 +96,51 @@ export default function CustomersPage() {
         {loading ? (
           <div className="py-16 text-center text-sm text-[#1a1a1a]/40">불러오는 중...</div>
         ) : filtered.length === 0 ? (
-          <div className="py-16 text-center text-sm text-[#1a1a1a]/40 border border-[#e8e8e4] rounded-xl bg-white">
-            {search ? "검색 결과가 없습니다" : "등록된 고객이 없습니다"}
-          </div>
+          search ? (
+            <div className="py-12 text-center border border-[#e8e8e4] rounded-xl bg-white">
+              <p className="text-sm text-[#1a1a1a]/50">"{search}"에 해당하는 고객이 없습니다</p>
+              <button onClick={() => setSearch("")} className="mt-3 text-xs text-[#084734] hover:underline">
+                검색 초기화
+              </button>
+            </div>
+          ) : (
+            <div className="py-14 text-center border border-dashed border-[#e0e0dc] rounded-xl bg-white">
+              <p className="text-sm font-medium text-[#1a1a1a]/50">아직 등록된 고객이 없습니다</p>
+              <p className="mt-1 text-xs text-[#1a1a1a]/35">첫 고객을 추가하면 거래·문서·일정을 연결해서 관리할 수 있습니다.</p>
+              <button
+                onClick={() => { setEditing(null); setShowForm(true) }}
+                className="mt-4 inline-flex items-center gap-1.5 rounded-lg bg-[#084734] px-4 py-2 text-sm font-medium text-white hover:bg-[#065c41] transition-colors"
+              >
+                <Plus className="w-4 h-4" />
+                첫 고객 추가
+              </button>
+            </div>
+          )
         ) : (
           <div className="grid gap-2 sm:grid-cols-2 lg:grid-cols-3">
             {filtered.map(({ customer, summary }) => (
-              <div
+              <button
                 key={customer.id}
-                className="border border-[#e8e8e4] rounded-xl bg-white p-4 hover:border-[#1a1a1a]/30 hover:shadow-sm transition-all cursor-pointer"
+                type="button"
+                className="text-left border border-[#e8e8e4] rounded-xl bg-white p-4 hover:border-[#1a1a1a]/30 hover:shadow-sm transition-all group"
                 onClick={() => setDetailId(customer.id)}
               >
                 <div className="flex items-start justify-between gap-2">
                   <div className="min-w-0">
-                    <h3 className="font-medium text-[#1a1a1a] truncate">{customer.name}</h3>
+                    <h3 className="font-medium text-[#1a1a1a] truncate group-hover:text-[#084734] transition-colors">{customer.name}</h3>
                     <div className="flex items-center flex-wrap gap-2 mt-1 text-xs text-[#1a1a1a]/50">
                       {customer.contact_name && <span>{customer.contact_name}</span>}
                       {customer.region_label && <span className="text-[#1a1a1a]/35">{customer.region_label}</span>}
                     </div>
                   </div>
-                  {summary && summary.active_deals > 0 && (
-                    <span className={`shrink-0 text-[11px] font-medium px-2 py-0.5 rounded-full ${STAGE_COLOR["contract"]}`}>
-                      진행 {summary.active_deals}건
-                    </span>
-                  )}
+                  <div className="flex items-center gap-2 shrink-0">
+                    {summary && summary.active_deals > 0 && (
+                      <span className={`text-[11px] font-medium px-2 py-0.5 rounded-full ${STAGE_COLOR["contract"]}`}>
+                        진행 {summary.active_deals}건
+                      </span>
+                    )}
+                    <span className="text-[#1a1a1a]/20 group-hover:text-[#1a1a1a]/50 transition-colors text-xs">→</span>
+                  </div>
                 </div>
 
                 {summary && (
@@ -134,7 +155,7 @@ export default function CustomersPage() {
                     )}
                   </div>
                 )}
-              </div>
+              </button>
             ))}
           </div>
         )}

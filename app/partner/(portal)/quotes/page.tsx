@@ -48,8 +48,12 @@ export default function QuotesPage() {
         </div>
 
         {deals.length === 0 ? (
-          <div className="py-16 text-center text-sm text-[#1a1a1a]/40 border border-[#e8e8e4] rounded-xl bg-white">
-            진행 중인 거래가 없습니다. 먼저 고객과 거래를 생성하세요.
+          <div className="py-14 text-center border border-dashed border-[#e0e0dc] rounded-xl bg-white">
+            <p className="text-sm font-medium text-[#1a1a1a]/50">아직 견적서를 작성할 거래가 없습니다</p>
+            <p className="mt-1 text-xs text-[#1a1a1a]/35">먼저 고객과 거래를 생성한 뒤 이 화면으로 돌아오세요.</p>
+            <a href="/partner/customers" className="mt-4 inline-flex items-center gap-1.5 rounded-lg bg-[#084734] px-4 py-2 text-sm font-medium text-white hover:bg-[#065c41] transition-colors">
+              고객 관리로 이동
+            </a>
           </div>
         ) : (
           <>

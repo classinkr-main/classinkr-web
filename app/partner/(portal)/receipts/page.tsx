@@ -50,8 +50,12 @@ export default function ReceiptsPage() {
         </div>
 
         {deals.length === 0 ? (
-          <div className="py-16 text-center text-sm text-[#1a1a1a]/40 border border-[#e8e8e4] rounded-xl bg-white">
-            선택 가능한 거래가 없습니다.
+          <div className="py-14 text-center border border-dashed border-[#e0e0dc] rounded-xl bg-white">
+            <p className="text-sm font-medium text-[#1a1a1a]/50">수납 관리할 거래가 없습니다</p>
+            <p className="mt-1 text-xs text-[#1a1a1a]/35">설치 또는 수납 단계 거래가 있으면 이 화면에서 수납 내역과 영수증을 관리합니다.</p>
+            <a href="/partner/customers" className="mt-4 inline-flex items-center gap-1.5 rounded-lg bg-[#084734] px-4 py-2 text-sm font-medium text-white hover:bg-[#065c41] transition-colors">
+              고객 관리로 이동
+            </a>
           </div>
         ) : (
           <>

@@ -392,6 +392,19 @@ export function PartnerPortalHome() {
   return (
     <div className="min-h-screen bg-[#f6f3ed] text-[#1a1a1a]">
 
+      {/* ── Demo Banner ─────────────────────────────────────────── */}
+      {overview.mode === "demo" && (
+        <div className="border-b border-amber-300/60 bg-amber-50 px-6 py-2.5">
+          <div className="mx-auto flex max-w-[1680px] items-center justify-between gap-4">
+            <div className="flex items-center gap-2 text-sm text-amber-800">
+              <span className="rounded-full bg-amber-200 px-2 py-0.5 text-[11px] font-bold uppercase tracking-wider text-amber-700">DEMO</span>
+              지금 보이는 데이터는 <strong>샘플 데이터</strong>입니다. 실제 계정을 연결하면 실데이터로 전환됩니다.
+            </div>
+            <span className="text-xs text-amber-600/70">실계정 연결 필요</span>
+          </div>
+        </div>
+      )}
+
       {/* ── Action Bar ──────────────────────────────────────────── */}
       <div className="border-b border-[#e7e0d6] bg-white px-6 py-3">
         <div className="mx-auto flex max-w-[1680px] items-center justify-between gap-4">
@@ -399,69 +412,69 @@ export function PartnerPortalHome() {
             {loading && <Loader2 className="h-4 w-4 animate-spin text-[#1a1a1a]/40" />}
             <p className="text-sm text-[#1a1a1a]/50">{todayStr}</p>
           </div>
-          <div className="flex flex-col items-end gap-3">
-            <PortalNav />
-            <div className="hidden flex-wrap justify-end gap-2 md:flex">
-              <QuickActionButton
-                label="새 고객"
-                disabled={!canCreateInPortal}
-                onClick={() => setIsCustomerDialogOpen(true)}
-              />
-              <QuickActionButton
-                label="신규 컨택"
-                disabled={!canCreateInPortal || overview.customers.length === 0}
-                onClick={() => setIsDealDialogOpen(true)}
-              />
-              <QuickActionButton
-                label="일정 추가"
-                disabled={!canCreateInPortal || overview.deals.length === 0}
-                onClick={() => setIsScheduleDialogOpen(true)}
-              />
-            </div>
-            {!canCreateInPortal && (
-              <p className="text-xs text-[#1a1a1a]/40">
-                생성 기능은 V2 계정 연결 상태에서만 사용할 수 있습니다.
-              </p>
+          <div className="flex items-center gap-2">
+            {canCreateInPortal ? (
+              <>
+                <QuickActionButton label="새 고객" onClick={() => setIsCustomerDialogOpen(true)} />
+                <QuickActionButton label="신규 컨택" disabled={overview.customers.length === 0} onClick={() => setIsDealDialogOpen(true)} />
+                <QuickActionButton label="일정 추가" disabled={overview.deals.length === 0} onClick={() => setIsScheduleDialogOpen(true)} />
+              </>
+            ) : (
+              <span className="rounded-full border border-[#e0e0dc] bg-[#f7f7f5] px-3 py-1.5 text-xs text-[#1a1a1a]/40">
+                읽기 전용 모드
+              </span>
             )}
           </div>
         </div>
       </div>
 
-      {/* ── Today Strip ──────────────────────────────────────── */}
-      <div className={`px-6 py-3 ${urgencyChips.length > 0 ? "bg-[#111110]" : "bg-emerald-600"}`}>
-        <div className="mx-auto flex max-w-[1680px] flex-wrap items-center gap-2">
-          {urgencyChips.length === 0 ? (
-            <span className="flex items-center gap-2 text-sm font-medium text-white">
-              <CheckCircle2 className="h-4 w-4" />
-              오늘 처리할 긴급 사항이 없습니다
-            </span>
-          ) : (
-            <>
-              <span className="text-[11px] font-semibold uppercase tracking-widest text-white/35">
-                지금 확인
-              </span>
-              {urgencyChips.map(chip => (
-                <a
-                  key={chip.id}
-                  href={chip.href}
-                  className={`flex items-center gap-1.5 rounded-full px-3 py-1.5 text-xs font-medium transition-colors ${chip.cls}`}
-                >
-                  {chip.label}
-                  <ArrowRight className="h-3 w-3" />
-                </a>
-              ))}
-            </>
-          )}
-        </div>
-      </div>
-
-      {error && (
-        <div className="border-b border-amber-200 bg-amber-50 px-6 py-2.5 text-sm text-amber-700">
-          <div className="mx-auto max-w-[1680px]">{error}</div>
+      {/* ── Urgency Strip ────────────────────────────────────────── */}
+      {urgencyChips.length > 0 && (
+        <div className="bg-[#111110] px-6 py-2.5">
+          <div className="mx-auto flex max-w-[1680px] flex-wrap items-center gap-2">
+            <span className="text-[11px] font-semibold uppercase tracking-widest text-white/35">지금 확인</span>
+            {urgencyChips.map(chip => (
+              <a key={chip.id} href={chip.href}
+                className={`flex items-center gap-1.5 rounded-full px-3 py-1.5 text-xs font-medium transition-colors ${chip.cls}`}
+              >
+                {chip.label}
+                <ArrowRight className="h-3 w-3" />
+              </a>
+            ))}
+          </div>
         </div>
       )}
 
       <div className="mx-auto max-w-[1680px] space-y-6 px-6 py-6">
+
+        {/* ── 지금 할 일 (Action Queue) — PROMOTED ────────────────── */}
+        {actionQueue.length > 0 && (
+          <section className="rounded-2xl border border-[#e7e0d6] bg-white p-5">
+            <div className="mb-4 flex items-center gap-2">
+              <span className="h-2 w-2 animate-pulse rounded-full bg-red-500" />
+              <h2 className="text-sm font-semibold text-[#111110]">지금 할 일</h2>
+              <span className="ml-1 rounded-full bg-[#111110] px-2 py-0.5 text-[10px] font-bold text-white">
+                {actionQueue.length}
+              </span>
+            </div>
+            <div className="grid gap-2 sm:grid-cols-2 lg:grid-cols-3 xl:grid-cols-4">
+              {actionQueue.map(item => (
+                <a key={item.id} href={item.href}
+                  className="group flex items-center gap-3 rounded-xl border border-[#ece4d8] bg-[#faf6ef] px-3 py-3 transition-colors hover:border-[#111110]/20 hover:bg-white"
+                >
+                  <span className={`flex h-6 w-6 shrink-0 items-center justify-center rounded-full text-[11px] font-bold ${item.numCls}`}>
+                    {item.num}
+                  </span>
+                  <div className="min-w-0 flex-1">
+                    <p className="text-sm font-medium leading-snug text-[#111110]">{item.label}</p>
+                    <p className="mt-0.5 truncate text-xs text-[#1a1a1a]/45">{item.sub}</p>
+                  </div>
+                  <ArrowRight className="h-4 w-4 shrink-0 text-[#1a1a1a]/25 transition-transform group-hover:translate-x-0.5" />
+                </a>
+              ))}
+            </div>
+          </section>
+        )}
 
         {/* ── KPI Row ───────────────────────────────────────── */}
         <div className="grid grid-cols-2 gap-3 sm:grid-cols-5">
@@ -692,46 +705,15 @@ export function PartnerPortalHome() {
           {/* ── Right Sidebar ─────────────────────────────────── */}
           <div className="space-y-4">
 
-            {/* Action Queue */}
-            <div className="rounded-2xl border border-[#e7e0d6] bg-white p-5">
-              <div className="mb-4 flex items-center gap-2">
-                <span className="h-2 w-2 rounded-full bg-red-500 animate-pulse" />
-                <h2 className="text-sm font-semibold text-[#111110]">지금 할 일</h2>
-                {actionQueue.length > 0 && (
-                  <span className="ml-auto rounded-full bg-[#111110] px-2 py-0.5 text-[10px] font-bold text-white">
-                    {actionQueue.length}
-                  </span>
-                )}
-              </div>
-
-              {actionQueue.length === 0 ? (
-                <div className="flex items-center gap-2 rounded-xl bg-emerald-50 px-4 py-3 text-sm text-emerald-600">
+            {/* All-clear state (no action items) */}
+            {actionQueue.length === 0 && (
+              <div className="rounded-2xl border border-emerald-200 bg-emerald-50 px-5 py-4">
+                <div className="flex items-center gap-2 text-sm text-emerald-700">
                   <CheckCircle2 className="h-4 w-4" />
-                  할 일이 없습니다
+                  <span className="font-medium">오늘 긴급 처리 사항이 없습니다</span>
                 </div>
-              ) : (
-                <div className="space-y-2">
-                  {actionQueue.map(item => (
-                    <a
-                      key={item.id}
-                      href={item.href}
-                      className="group flex items-center gap-3 rounded-xl border border-[#ece4d8] bg-[#faf6ef] px-3 py-3 transition-colors hover:border-[#111110]/20 hover:bg-white"
-                    >
-                      <span className={`flex h-6 w-6 shrink-0 items-center justify-center rounded-full text-[11px] font-bold ${item.numCls}`}>
-                        {item.num}
-                      </span>
-                      <div className="min-w-0 flex-1">
-                        <p className="text-sm font-medium leading-snug text-[#111110]">
-                          {item.label}
-                        </p>
-                        <p className="mt-0.5 truncate text-xs text-[#1a1a1a]/45">{item.sub}</p>
-                      </div>
-                      <ArrowRight className="h-4 w-4 shrink-0 text-[#1a1a1a]/25 transition-transform group-hover:translate-x-0.5" />
-                    </a>
-                  ))}
-                </div>
-              )}
-            </div>
+              </div>
+            )}
 
             {/* Upcoming Schedule */}
             <div className="rounded-2xl border border-[#e7e0d6] bg-white p-5">

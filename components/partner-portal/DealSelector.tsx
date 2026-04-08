@@ -1,5 +1,6 @@
 "use client"
 
+import Link from "next/link"
 import type { DealListItem, DealStage } from "@/lib/partner-portal/types"
 
 const STAGE_LABEL: Record<DealStage, string> = {
@@ -25,7 +26,20 @@ interface Props {
 }
 
 export function DealSelector({ deals, selectedId, onSelect }: Props) {
-  if (deals.length === 0) return null
+  if (deals.length === 0) {
+    return (
+      <div className="rounded-xl border border-dashed border-[#e0e0dc] bg-white px-5 py-10 text-center">
+        <p className="text-sm font-medium text-[#1a1a1a]/50">진행 중인 거래가 없습니다</p>
+        <p className="mt-1 text-xs text-[#1a1a1a]/35">고객을 추가하고 거래를 시작하세요.</p>
+        <Link
+          href="/partner/customers"
+          className="mt-4 inline-flex items-center gap-1.5 rounded-lg bg-[#084734] px-4 py-2 text-sm font-medium text-white hover:bg-[#065c41] transition-colors"
+        >
+          고객 관리로 이동
+        </Link>
+      </div>
+    )
+  }
 
   return (
     <div className="flex flex-col gap-1.5">

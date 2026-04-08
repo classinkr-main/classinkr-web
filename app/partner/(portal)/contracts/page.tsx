@@ -48,8 +48,12 @@ export default function ContractsPage() {
         </div>
 
         {deals.length === 0 ? (
-          <div className="py-16 text-center text-sm text-[#1a1a1a]/40 border border-[#e8e8e4] rounded-xl bg-white">
-            진행 중인 거래가 없습니다.
+          <div className="py-14 text-center border border-dashed border-[#e0e0dc] rounded-xl bg-white">
+            <p className="text-sm font-medium text-[#1a1a1a]/50">계약서를 연결할 거래가 없습니다</p>
+            <p className="mt-1 text-xs text-[#1a1a1a]/35">견적서가 확정되면 계약서 탭에서 서명 진행이 가능합니다.</p>
+            <a href="/partner/customers" className="mt-4 inline-flex items-center gap-1.5 rounded-lg bg-[#084734] px-4 py-2 text-sm font-medium text-white hover:bg-[#065c41] transition-colors">
+              고객 관리로 이동
+            </a>
           </div>
         ) : (
           <>
