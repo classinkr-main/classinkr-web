@@ -105,6 +105,22 @@ export function Hero() {
                                 <span className="relative z-10">도입 사례 보기</span>
                             </Button>
                         </NewsletterModal>
+                        <Button asChild variant="outline" size="lg" className="h-[3.5rem] px-8 text-[1.05rem] font-bold bg-white hover:bg-[#F6F5F4] text-[#615D59] border border-[rgba(0,0,0,0.08)] hover:border-[rgba(0,0,0,0.14)] rounded-2xl w-full sm:w-auto transition-all duration-300 hover:scale-[1.03] active:scale-[0.97]">
+                            <Link href="/product/sw" onClick={() => trackEvent("click_cta", { button: "hero_product_tour" })}>
+                                <span className="relative z-10">제품 둘러보기</span>
+                            </Link>
+                        </Button>
+                    </motion.div>
+
+                    <motion.div
+                        initial={{ opacity: 0 }}
+                        animate={{ opacity: 1 }}
+                        transition={{ duration: 1, delay: 0.6 }}
+                        className="mt-16 sm:mt-20 flex w-full justify-center px-4"
+                    >
+                        <h2 className="text-2xl md:text-4xl lg:text-5xl xl:text-6xl font-black tracking-[0.2em] uppercase text-center select-none text-[#A39E98]/60">
+                            Empowering Education Online
+                        </h2>
                     </motion.div>
                 </div>
 
