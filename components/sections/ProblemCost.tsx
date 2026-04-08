@@ -34,27 +34,27 @@ function CountUp({ target, suffix = "", prefix = "" }: { target: number; suffix?
 const pains = [
     {
         icon: TrendingDown,
-        title: "일관성 없는 수업 품질",
-        desc: "강사가 바뀌거나 지점이 늘어날 때마다 수업 품질이 떨어지나요?",
+        title: "에이스 강사가 퇴사했습니다.",
+        desc: "그 반 학생 20명은요? 커리큘럼은요? 다음 강사가 같은 수준으로 가르칠 수 있을까요?",
         countTarget: 20,
         countSuffix: "%",
-        countLabel: "재등록률 하락",
+        countLabel: "강사 이탈 후 재등록률 하락",
     },
     {
         icon: Clock,
-        title: "과도한 행정 업무",
-        desc: "강사들이 수업보다 채점과 리포트 작성에 더 많은 시간을 쓰고 있나요?",
+        title: "같은 교재, 같은 시간.",
+        desc: "근데 반마다 성적이 다릅니다. 원장님은 어떤 반이 문제인지, 왜 그런지 알고 계신가요?",
         countTarget: 1200,
         countSuffix: "만원",
-        countLabel: "강사 1인당 연간 낭비",
+        countLabel: "수업 품질 편차로 인한 연간 손실",
     },
     {
         icon: AlertTriangle,
-        title: "느린 강사 적응 속도",
-        desc: "신규 강사가 커리큘럼에 적응하는 데 몇 달이 걸리나요?",
+        title: "학부모 상담마다 같은 질문.",
+        desc: "\"복습은 어떻게 하나요?\" — 이 질문에 매번 직접 답하는 대신, 데이터로 보여줄 수 있다면요?",
         countTarget: 3,
         countSuffix: "개월",
-        countLabel: "적응 기간 소요",
+        countLabel: "신규 강사 적응 기간",
     },
 ]
 
@@ -83,14 +83,14 @@ export function ProblemCost() {
                 >
                     <span className="inline-flex items-center gap-2 py-1.5 px-4 rounded-full bg-red-500/10 border border-red-500/20 text-red-400 text-sm font-semibold mb-6 backdrop-blur-sm">
                         <span className="w-2 h-2 rounded-full bg-red-400 animate-pulse" />
-                        주의가 필요합니다
+                        원장님, 이 질문들을 받아본 적 있으신가요
                     </span>
-                    <h2 className="text-4xl font-black tracking-tight text-white sm:text-5xl md:text-[3.5rem] mb-6 leading-tight break-keep">
-                        전통적인 학원 운영의 <br className="md:hidden" />
-                        <span className="text-transparent bg-clip-text bg-gradient-to-r from-red-400 to-orange-400 break-keep">숨겨진 비용</span>
+                    <h2 className="text-4xl font-black text-white sm:text-5xl md:text-[3.5rem] mb-6 leading-tight break-keep" style={{ letterSpacing: '-1.5px' }}>
+                        강사에 기대는 학원은<br className="md:hidden" />{" "}
+                        <span className="text-transparent bg-clip-text bg-gradient-to-r from-red-400 to-orange-400 break-keep">흔들릴 수밖에 없습니다</span>
                     </h2>
                     <p className="text-lg text-slate-400 break-keep">
-                        표준화된 시스템 없이는 규모가 커질수록 수익이 아닌 혼란만 늘어납니다.
+                        시스템 없이 사람에만 의존하면, 잘 될 때도 있지만 한 명이 빠지면 학원 전체가 흔들립니다.
                     </p>
                 </motion.div>
 
@@ -105,7 +105,7 @@ export function ProblemCost() {
                             viewport={{ once: true }}
                             className="h-full"
                         >
-                            <div className="relative h-full md:min-h-[440px] rounded-3xl overflow-hidden group bg-slate-900/60 backdrop-blur-xl border border-slate-800/60 hover:border-red-500/30 transition-all duration-500 shadow-[0_0_0_1px_rgba(255,255,255,0.03)] hover:shadow-[0_0_40px_rgba(239,68,68,0.1)]">
+                            <div className="relative h-full md:min-h-[440px] rounded-3xl overflow-hidden group bg-slate-900/60 backdrop-blur-xl border border-[rgba(255,255,255,0.08)] hover:border-red-500/30 transition-all duration-500 shadow-[0_0_0_1px_rgba(255,255,255,0.03)] hover:shadow-[0_0_40px_rgba(239,68,68,0.1)]">
                                 {/* Top accent line */}
                                 <div className="absolute top-0 inset-x-0 h-px bg-gradient-to-r from-transparent via-red-500/50 to-transparent group-hover:via-red-400 group-hover:h-0.5 transition-all duration-500" />
 
@@ -118,11 +118,11 @@ export function ProblemCost() {
                                         </div>
                                     </div>
 
-                                    <h3 className="text-2xl font-extrabold mb-4 text-white tracking-tight break-keep">{pain.title}</h3>
+                                    <h3 className="text-2xl font-extrabold mb-4 text-white break-keep">{pain.title}</h3>
                                     <p className="text-slate-400 mb-8 flex-grow text-lg leading-relaxed break-keep">{pain.desc}</p>
 
                                     {/* Cost footer with counter */}
-                                    <div className="w-full pt-6 border-t border-slate-800 mt-auto">
+                                    <div className="w-full pt-6 border-t border-[rgba(255,255,255,0.08)] mt-auto">
                                         <p className="text-xs font-bold text-red-400/70 uppercase tracking-[0.2em] mb-2">예상 손실</p>
                                         <p className="text-2xl font-black text-transparent bg-clip-text bg-gradient-to-r from-red-400 to-orange-400">
                                             <CountUp target={pain.countTarget} suffix={pain.countSuffix} /> {pain.countLabel}
@@ -142,7 +142,7 @@ export function ProblemCost() {
                     transition={{ delay: 0.5, duration: 0.7 }}
                     className="mt-20 mx-auto max-w-4xl"
                 >
-                    <div className="bg-slate-900/80 backdrop-blur-xl p-8 md:p-10 rounded-3xl border border-slate-800/60 shadow-[0_0_80px_rgba(239,68,68,0.06)]">
+                    <div className="bg-slate-900/80 backdrop-blur-xl p-8 md:p-10 rounded-3xl border border-[rgba(255,255,255,0.08)] shadow-[0_0_80px_rgba(239,68,68,0.06)]">
                         {/* Header */}
                         <div className="flex flex-col sm:flex-row items-start sm:items-center justify-between gap-4 mb-8">
                             <div>
@@ -168,7 +168,7 @@ export function ProblemCost() {
                                     whileInView={{ opacity: 1, scale: 1 }}
                                     viewport={{ once: true }}
                                     transition={{ delay: 0.6 + i * 0.15 }}
-                                    className="relative p-5 rounded-2xl bg-slate-800/50 border border-slate-700/50 group hover:border-slate-600/50 transition-all duration-300"
+                                    className="relative p-5 rounded-2xl bg-slate-800/50 border border-[rgba(255,255,255,0.08)] group hover:border-[rgba(255,255,255,0.15)] transition-all duration-300"
                                 >
                                     <div className="flex items-center justify-between mb-3">
                                         <span className="text-slate-400 text-sm font-medium">{metric.label}</span>
@@ -210,7 +210,7 @@ export function ProblemCost() {
                         </div>
 
                         {/* Overall Risk Bar */}
-                        <div className="p-5 rounded-2xl bg-slate-800/30 border border-slate-700/30">
+                        <div className="p-5 rounded-2xl bg-slate-800/30 border border-[rgba(255,255,255,0.08)]">
                             <div className="flex items-center justify-between mb-3">
                                 <span className="text-slate-300 font-semibold text-sm">종합 운영 비효율 지수</span>
                                 <span className="text-red-400 font-black text-lg"><CountUp target={85} suffix="%" /></span>

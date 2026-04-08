@@ -10,7 +10,7 @@ export function ScienceBased() {
             {/* Background Texture */}
             <div className="absolute inset-0 bg-[url('/images/noise-texture.svg')] opacity-10 mix-blend-overlay pointer-events-none" />
             <div className="absolute top-1/4 left-0 w-96 h-96 bg-emerald-900/20 blur-[100px] rounded-full pointer-events-none" />
-            <div className="absolute bottom-1/4 right-0 w-96 h-96 bg-blue-900/20 blur-[100px] rounded-full pointer-events-none" />
+            <div className="absolute bottom-1/4 right-0 w-96 h-96 bg-[#084734]/20 blur-[100px] rounded-full pointer-events-none" />
 
             <div className="container mx-auto px-6 max-w-6xl relative z-10">
                 <motion.div
@@ -20,11 +20,11 @@ export function ScienceBased() {
                     transition={{ duration: 0.6 }}
                     className="text-center mb-24"
                 >
-                    <h2 className="text-4xl md:text-5xl font-extrabold tracking-tight text-white mb-6 font-sans break-keep">
+                    <h2 className="text-4xl md:text-5xl font-extrabold text-white mb-6 font-sans break-keep" style={{ letterSpacing: '-1.5px' }}>
                         우리의 솔루션은 <br className="md:hidden" />
                         과학적 이론에 기반합니다
                     </h2>
-                    <p className="text-xl text-slate-400 font-medium tracking-tight break-keep">
+                    <p className="text-xl text-slate-400 font-medium break-keep">
                         단순히 편리한 도구가 아닙니다. 학습 효율을 극대화하는 검증된 교육 공학입니다.
                     </p>
                 </motion.div>
@@ -55,7 +55,7 @@ export function ScienceBased() {
                                     transition={{ duration: 0.8, delay: 0.3 }}
                                     className="absolute bottom-6 left-6 z-10"
                                 >
-                                    <div className="font-extrabold text-2xl md:text-3xl text-white tracking-tight drop-shadow-xl">Hermann Ebbinghaus</div>
+                                    <div className="font-extrabold text-2xl md:text-3xl text-white drop-shadow-xl">Hermann Ebbinghaus</div>
                                     <div className="text-sm font-semibold text-emerald-400 tracking-widest mt-1 uppercase drop-shadow-md">Memory & Psychology</div>
                                 </motion.div>
                             </div>
@@ -72,11 +72,11 @@ export function ScienceBased() {
                                 <div className="w-12 h-12 rounded-full bg-emerald-500/10 flex items-center justify-center text-emerald-400 ring-1 ring-emerald-500/30">
                                     <Clock className="w-6 h-6" />
                                 </div>
-                                <h3 className="text-3xl font-bold text-white tracking-tight">에빙하우스의 망각 곡선</h3>
+                                <h3 className="text-3xl font-bold text-white" style={{ letterSpacing: '-1px' }}>에빙하우스의 망각 곡선</h3>
                             </div>
 
                             <blockquote className="border-l-4 border-emerald-500/50 pl-6 py-2 text-xl text-slate-300 italic font-medium leading-relaxed bg-gradient-to-r from-emerald-500/5 to-transparent break-keep">
-                                "학습 후 20분이 지나면 기억의 42%가 사라지고, 하루가 지나면 67%를 잊어버린다."
+                                &ldquo;학습 후 20분이 지나면 기억의 42%가 사라지고, 하루가 지나면 67%를 잊어버린다.&rdquo;
                             </blockquote>
 
                             <div className="space-y-4">
@@ -84,13 +84,13 @@ export function ScienceBased() {
                                     Classin의 솔루션: <span className="text-emerald-400">골든타임 복습</span>
                                 </h4>
                                 <p className="text-slate-400 leading-relaxed text-lg break-keep">
-                                    우리는 학습 직후 가장 중요한 '골든타임'을 놓치지 않습니다. 수업 종료 즉시 AI가 생성한 핵심 요약 퀴즈가 학생의 스마트폰으로 전송됩니다. 망각이 시작되기 전에 기억을 장기 저장소로 옮기는 연결 고리를 만듭니다.
+                                    우리는 학습 직후 가장 중요한 &apos;골든타임&apos;을 놓치지 않습니다. 수업 종료 즉시 AI가 생성한 핵심 요약 퀴즈가 학생의 스마트폰으로 전송됩니다. 망각이 시작되기 전에 기억을 장기 저장소로 옮기는 연결 고리를 만듭니다.
                                 </p>
                             </div>
 
                             <div className="flex gap-3">
-                                <span className="px-4 py-1.5 bg-slate-800 border border-slate-700 text-slate-300 text-sm font-semibold rounded-full shadow-inner">#즉시복습</span>
-                                <span className="px-4 py-1.5 bg-slate-800 border border-slate-700 text-slate-300 text-sm font-semibold rounded-full shadow-inner">#장기기억</span>
+                                <span className="px-4 py-1.5 bg-slate-800 border border-[rgba(255,255,255,0.1)] text-slate-300 text-sm font-semibold rounded-full shadow-inner">#즉시복습</span>
+                                <span className="px-4 py-1.5 bg-slate-800 border border-[rgba(255,255,255,0.1)] text-slate-300 text-sm font-semibold rounded-full shadow-inner">#장기기억</span>
                             </div>
                         </motion.div>
                     </div>
@@ -120,8 +120,8 @@ export function ScienceBased() {
                                     transition={{ duration: 0.8, delay: 0.3 }}
                                     className="absolute bottom-6 right-6 z-10 text-right"
                                 >
-                                    <div className="font-extrabold text-2xl md:text-3xl text-white tracking-tight drop-shadow-xl">Scott Freeman</div>
-                                    <div className="text-sm font-semibold text-blue-400 tracking-widest mt-1 uppercase drop-shadow-md">Biology Education</div>
+                                    <div className="font-extrabold text-2xl md:text-3xl text-white drop-shadow-xl">Scott Freeman</div>
+                                    <div className="text-sm font-semibold text-emerald-400 tracking-widest mt-1 uppercase drop-shadow-md">Biology Education</div>
                                 </motion.div>
                             </div>
                         </motion.div>
@@ -134,28 +134,28 @@ export function ScienceBased() {
                             className="w-full lg:w-1/2 space-y-8"
                         >
                             <div className="flex items-center gap-3">
-                                <div className="w-12 h-12 rounded-full bg-blue-500/10 flex items-center justify-center text-blue-400 ring-1 ring-blue-500/30">
+                                <div className="w-12 h-12 rounded-full bg-[#084734]/10 flex items-center justify-center text-emerald-400 ring-1 ring-[#084734]/30">
                                     <Users className="w-6 h-6" />
                                 </div>
-                                <h3 className="text-3xl font-bold text-white tracking-tight">고구조화된 능동적 학습</h3>
+                                <h3 className="text-3xl font-bold text-white" style={{ letterSpacing: '-1px' }}>고구조화된 능동적 학습</h3>
                             </div>
 
-                            <blockquote className="border-l-4 border-blue-500/50 pl-6 py-2 text-xl text-slate-300 italic font-medium leading-relaxed bg-gradient-to-r from-blue-500/5 to-transparent break-keep">
-                                "전통적인 강의식 수업보다 능동적 학습(Active Learning)에 참여한 학생들의 성취도가 1.5배 더 높으며, 낙제율은 55% 감소한다."
+                            <blockquote className="border-l-4 border-[#084734]/50 pl-6 py-2 text-xl text-slate-300 italic font-medium leading-relaxed bg-gradient-to-r from-[#084734]/5 to-transparent break-keep">
+                                &ldquo;전통적인 강의식 수업보다 능동적 학습(Active Learning)에 참여한 학생들의 성취도가 1.5배 더 높으며, 낙제율은 55% 감소한다.&rdquo;
                             </blockquote>
 
                             <div className="space-y-4">
                                 <h4 className="font-bold text-lg text-white break-keep">
-                                    Classin의 솔루션: <span className="text-blue-400">참여형 인터랙티브 클래스</span>
+                                    Classin의 솔루션: <span className="text-emerald-400">참여형 인터랙티브 클래스</span>
                                 </h4>
                                 <p className="text-slate-400 leading-relaxed text-lg break-keep">
-                                    듣기만 하는 수업은 끝났습니다. Classin의 '랜덤 발표', '실시간 투표', '화이트보드 공유' 기능은 모든 학생이 매 순간 수업에 참여하게 만듭니다. 고구조화된 수업 설계로 누구도 소외되지 않는 교실을 만듭니다.
+                                    듣기만 하는 수업은 끝났습니다. Classin의 &apos;랜덤 발표&apos;, &apos;실시간 투표&apos;, &apos;화이트보드 공유&apos; 기능은 모든 학생이 매 순간 수업에 참여하게 만듭니다. 고구조화된 수업 설계로 누구도 소외되지 않는 교실을 만듭니다.
                                 </p>
                             </div>
 
                             <div className="flex gap-3">
-                                <span className="px-4 py-1.5 bg-slate-800 border border-slate-700 text-slate-300 text-sm font-semibold rounded-full shadow-inner">#ActiveLearning</span>
-                                <span className="px-4 py-1.5 bg-slate-800 border border-slate-700 text-slate-300 text-sm font-semibold rounded-full shadow-inner">#참여수업</span>
+                                <span className="px-4 py-1.5 bg-slate-800 border border-[rgba(255,255,255,0.1)] text-slate-300 text-sm font-semibold rounded-full shadow-inner">#ActiveLearning</span>
+                                <span className="px-4 py-1.5 bg-slate-800 border border-[rgba(255,255,255,0.1)] text-slate-300 text-sm font-semibold rounded-full shadow-inner">#참여수업</span>
                             </div>
                         </motion.div>
                     </div>

@@ -1,9 +1,9 @@
-import { NextRequest, NextResponse } from "next/server"
+﻿import { NextRequest, NextResponse } from "next/server"
 import { verifyAdmin } from "@/lib/admin-auth"
 import { deleteBugReport, updateBugReport } from "@/lib/repositories/bugs"
 
 export async function PATCH(req: NextRequest, { params }: { params: Promise<{ id: string }> }) {
-  const err = verifyAdmin(req)
+  const err = await verifyAdmin(req)
   if (err) return err
   const { id } = await params
   const body = await req.json()
@@ -13,7 +13,7 @@ export async function PATCH(req: NextRequest, { params }: { params: Promise<{ id
 }
 
 export async function DELETE(req: NextRequest, { params }: { params: Promise<{ id: string }> }) {
-  const err = verifyAdmin(req)
+  const err = await verifyAdmin(req)
   if (err) return err
   const { id } = await params
   await deleteBugReport(id)

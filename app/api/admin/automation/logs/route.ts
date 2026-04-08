@@ -1,9 +1,9 @@
-import { NextRequest, NextResponse } from "next/server"
+﻿import { NextRequest, NextResponse } from "next/server"
 import { verifyAdmin } from "@/lib/admin-auth"
 import { getAllLogs } from "@/lib/repositories/automation"
 
 export async function GET(req: NextRequest) {
-  const authError = verifyAdmin(req)
+  const authError = await verifyAdmin(req)
   if (authError) return authError
 
   const { searchParams } = new URL(req.url)

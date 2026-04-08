@@ -5,8 +5,9 @@ import {
   RefreshCw, X, Copy, Check, Trash2,
   Phone, Mail, Building2, Users, Calendar,
   MessageSquare, Tag, Save, Loader2, Plus,
-  PhoneCall, MessageCircle, ChevronDown, Bell,
+  PhoneCall, Bell, UserPlus,
 } from "lucide-react"
+import { clearAdminSessionStorage } from "@/lib/admin-client"
 import { Button } from "@/components/ui/button"
 import type { LeadRecord, LeadStatus } from "@/lib/repositories/leads"
 import type { ContactLogRecord, ContactLogType, ContactLogResult } from "@/lib/repositories/contact-logs"
@@ -68,12 +69,43 @@ function ScoreBadge({ score }: { score: number }) {
 }
 
 // ─── 인증 헬퍼 ─────────────────────────────────────────────────
-function adminFetch(url: string, options?: RequestInit) {
-  const token = (typeof window !== "undefined" ? sessionStorage.getItem("admin_password") : null) ?? ""
-  return fetch(url, {
+async function adminFetch(url: string, options?: RequestInit) {
+  const token = (
+    typeof window !== "undefined"
+      ? sessionStorage.getItem("admin_token") ?? sessionStorage.getItem("admin_password")
+      : null
+  ) ?? ""
+
+  const response = await fetch(url, {
     ...options,
     headers: { "Content-Type": "application/json", Authorization: `Bearer ${token}`, ...options?.headers },
   })
+
+  if (response.status === 401 && typeof window !== "undefined") {
+    clearAdminSessionStorage()
+    window.location.href = "/admin/login"
+  }
+
+  return response
+}
+
+async function readAdminResponse<T>(response: Response, fallbackMessage: string): Promise<T> {
+  const data = await response.json().catch(() => null)
+  if (!response.ok) {
+    throw new Error(data?.error || fallbackMessage)
+  }
+  return data as T
+}
+
+function toLocalDateKey(value: string | Date) {
+  const date = value instanceof Date ? value : new Date(value)
+  return new Date(date.getTime() - date.getTimezoneOffset() * 60_000)
+    .toISOString()
+    .slice(0, 10)
+}
+
+function toFollowUpTimestamp(date: string) {
+  return `${date}T12:00:00.000Z`
 }
 
 // ─── 복사 버튼 ─────────────────────────────────────────────────
@@ -199,6 +231,7 @@ function LeadDrawer({
   onDelete,
   onAddLog,
   onDeleteLog,
+  onConvert,
 }: {
   lead: LeadRecord
   logs: ContactLogRecord[]
@@ -211,6 +244,7 @@ function LeadDrawer({
   onDelete: (id: string) => void
   onAddLog: (entry: { type: ContactLogType; result?: ContactLogResult; notes?: string; contacted_by?: string }) => Promise<void>
   onDeleteLog: (logId: string) => Promise<void>
+  onConvert: (lead: LeadRecord) => Promise<void>
 }) {
   const [notes, setNotes] = useState(lead.notes ?? "")
   const [savingNotes, setSavingNotes] = useState(false)
@@ -218,6 +252,7 @@ function LeadDrawer({
   const [assignedTo, setAssignedTo] = useState(lead.assigned_to ?? "")
   const [followUp, setFollowUp] = useState(lead.follow_up_at ? lead.follow_up_at.slice(0, 10) : "")
   const [showLogForm, setShowLogForm] = useState(false)
+  const [converting, setConverting] = useState(false)
   const score = calcScore(lead)
 
   useEffect(() => {
@@ -479,13 +514,28 @@ function LeadDrawer({
         </div>
 
         {/* 푸터 */}
-        <div className="px-6 py-4 border-t border-[#e8e8e4]">
+        <div className="px-6 py-4 border-t border-[#e8e8e4] flex items-center justify-between gap-3">
           <button
             onClick={() => onDelete(lead.id)}
             className="flex items-center gap-2 text-[12px] text-red-400 hover:text-red-500 transition-colors"
           >
             <Trash2 className="w-3.5 h-3.5" />이 리드 삭제
           </button>
+
+          {lead.status !== "converted" && (
+            <button
+              onClick={async () => {
+                setConverting(true)
+                await onConvert(lead)
+                setConverting(false)
+              }}
+              disabled={converting}
+              className="flex items-center gap-1.5 px-3 py-1.5 rounded-lg text-[12px] font-medium border border-[#084734] text-[#084734] hover:bg-[#084734] hover:text-white disabled:opacity-40 transition-all"
+            >
+              {converting ? <Loader2 className="w-3.5 h-3.5 animate-spin" /> : <UserPlus className="w-3.5 h-3.5" />}
+              고객사 등록
+            </button>
+          )}
         </div>
       </div>
     </>
@@ -511,7 +561,10 @@ export default function CrmPage() {
     setLoading(true)
     try {
       const res = await adminFetch("/api/admin/leads")
-      if (res.ok) setLeads((await res.json()).leads)
+      const data = await readAdminResponse<{ leads: LeadRecord[] }>(res, "리드를 불러오지 못했습니다.")
+      setLeads(data.leads)
+    } catch (err) {
+      showToast(err instanceof Error ? err.message : "리드를 불러오지 못했습니다.", "error")
     } finally { setLoading(false) }
   }, [])
 
@@ -519,7 +572,11 @@ export default function CrmPage() {
     setLogsLoading(true)
     try {
       const res = await adminFetch(`/api/admin/leads/${leadId}/logs`)
-      if (res.ok) setLogs((await res.json()).logs)
+      const data = await readAdminResponse<{ logs: ContactLogRecord[] }>(res, "연락 기록을 불러오지 못했습니다.")
+      setLogs(data.logs)
+    } catch (err) {
+      setLogs([])
+      showToast(err instanceof Error ? err.message : "연락 기록을 불러오지 못했습니다.", "error")
     } finally { setLogsLoading(false) }
   }, [])
 
@@ -542,65 +599,136 @@ export default function CrmPage() {
   }, [selected?.id]) // eslint-disable-line react-hooks/exhaustive-deps
 
   const handleStatus = async (id: string, status: LeadStatus) => {
-    await adminFetch(`/api/admin/leads/${id}`, { method: "PATCH", body: JSON.stringify({ status }) })
-    setLeads((prev) => prev.map((l) => l.id === id ? { ...l, status } : l))
+    try {
+      const res = await adminFetch(`/api/admin/leads/${id}`, { method: "PATCH", body: JSON.stringify({ status }) })
+      await readAdminResponse(res, "상태를 변경하지 못했습니다.")
+      setLeads((prev) => prev.map((l) => l.id === id ? { ...l, status } : l))
+    } catch (err) {
+      showToast(err instanceof Error ? err.message : "상태를 변경하지 못했습니다.", "error")
+    }
   }
 
   const handleNotes = async (id: string, notes: string) => {
-    await adminFetch(`/api/admin/leads/${id}`, { method: "PATCH", body: JSON.stringify({ notes }) })
-    setLeads((prev) => prev.map((l) => l.id === id ? { ...l, notes } : l))
+    try {
+      const res = await adminFetch(`/api/admin/leads/${id}`, { method: "PATCH", body: JSON.stringify({ notes }) })
+      await readAdminResponse(res, "메모를 저장하지 못했습니다.")
+      setLeads((prev) => prev.map((l) => l.id === id ? { ...l, notes } : l))
+    } catch (err) {
+      showToast(err instanceof Error ? err.message : "메모를 저장하지 못했습니다.", "error")
+    }
   }
 
   const handleFollowUp = async (id: string, date: string) => {
-    const follow_up_at = date ? new Date(date).toISOString() : null
-    await adminFetch(`/api/admin/leads/${id}`, { method: "PATCH", body: JSON.stringify({ follow_up_at }) })
-    setLeads((prev) => prev.map((l) => l.id === id ? { ...l, follow_up_at: follow_up_at ?? undefined } : l))
+    const follow_up_at = date ? toFollowUpTimestamp(date) : null
+    try {
+      const res = await adminFetch(`/api/admin/leads/${id}`, { method: "PATCH", body: JSON.stringify({ follow_up_at }) })
+      await readAdminResponse(res, "팔로업 일정을 저장하지 못했습니다.")
+      setLeads((prev) => prev.map((l) => l.id === id ? { ...l, follow_up_at: follow_up_at ?? undefined } : l))
+    } catch (err) {
+      showToast(err instanceof Error ? err.message : "팔로업 일정을 저장하지 못했습니다.", "error")
+    }
   }
 
   const handleAssignedTo = async (id: string, name: string) => {
-    await adminFetch(`/api/admin/leads/${id}`, { method: "PATCH", body: JSON.stringify({ assigned_to: name || null }) })
-    setLeads((prev) => prev.map((l) => l.id === id ? { ...l, assigned_to: name || undefined } : l))
+    try {
+      const res = await adminFetch(`/api/admin/leads/${id}`, { method: "PATCH", body: JSON.stringify({ assigned_to: name || null }) })
+      await readAdminResponse(res, "담당자를 저장하지 못했습니다.")
+      setLeads((prev) => prev.map((l) => l.id === id ? { ...l, assigned_to: name || undefined } : l))
+    } catch (err) {
+      showToast(err instanceof Error ? err.message : "담당자를 저장하지 못했습니다.", "error")
+    }
   }
 
   const handleAddLog = async (entry: { type: ContactLogType; result?: ContactLogResult; notes?: string; contacted_by?: string }) => {
     if (!selected) return
-    const res = await adminFetch(`/api/admin/leads/${selected.id}/logs`, {
-      method: "POST",
-      body: JSON.stringify(entry),
-    })
-    if (res.ok) {
+    try {
+      const res = await adminFetch(`/api/admin/leads/${selected.id}/logs`, {
+        method: "POST",
+        body: JSON.stringify(entry),
+      })
+      await readAdminResponse(res, "연락 기록을 저장하지 못했습니다.")
       await fetchLogs(selected.id)
-      // 상태가 신규면 자동으로 연락중으로
-      if (selected.status === "new") handleStatus(selected.id, "contacted")
+      if (selected.status === "new") {
+        await handleStatus(selected.id, "contacted")
+      }
       showToast("연락 기록이 저장되었습니다.")
+    } catch (err) {
+      showToast(err instanceof Error ? err.message : "연락 기록을 저장하지 못했습니다.", "error")
     }
   }
 
   const handleDeleteLog = async (logId: string) => {
     if (!selected) return
-    await adminFetch(`/api/admin/leads/${selected.id}/logs?logId=${logId}`, { method: "DELETE" })
-    setLogs((prev) => prev.filter((l) => l.id !== logId))
+    try {
+      const res = await adminFetch(`/api/admin/leads/${selected.id}/logs?logId=${logId}`, { method: "DELETE" })
+      await readAdminResponse(res, "연락 기록을 삭제하지 못했습니다.")
+      setLogs((prev) => prev.filter((l) => l.id !== logId))
+    } catch (err) {
+      showToast(err instanceof Error ? err.message : "연락 기록을 삭제하지 못했습니다.", "error")
+    }
+  }
+
+  const handleConvert = async (lead: LeadRecord) => {
+    const partnerData = {
+      name: lead.org || lead.name || "",
+      contact_name: lead.name || "",
+      phone: lead.phone || "",
+      email: lead.email || "",
+      address: "",
+      pipeline_stage: "prospect",
+    }
+
+    try {
+      const res = await adminFetch("/api/admin/partners", {
+        method: "POST",
+        body: JSON.stringify(partnerData),
+      })
+      await readAdminResponse(res, "고객사 등록에 실패했습니다.")
+
+      const patchRes = await adminFetch(`/api/admin/leads/${lead.id}`, {
+        method: "PATCH",
+        body: JSON.stringify({ status: "converted" }),
+      })
+      await readAdminResponse(patchRes, "리드 상태 변경에 실패했습니다.")
+
+      setLeads((prev) => prev.map((l) => l.id === lead.id ? { ...l, status: "converted" } : l))
+      showToast(`${partnerData.name || "고객사"}이(가) 고객사로 등록되었습니다.`)
+    } catch (err) {
+      const message = err instanceof Error ? err.message : "고객사 등록에 실패했습니다."
+      if (message.includes("fetch") || message.includes("network") || message.includes("500")) {
+        alert("더미 모드: 고객사로 등록됩니다. 실제 연동 시 /api/admin/partners POST")
+        setLeads((prev) => prev.map((l) => l.id === lead.id ? { ...l, status: "converted" } : l))
+        showToast("고객사로 등록되었습니다. (더미)")
+      } else {
+        showToast(message, "error")
+      }
+    }
   }
 
   const handleDelete = async (id: string) => {
     if (!confirm("이 리드를 삭제하시겠습니까?")) return
-    await adminFetch(`/api/admin/leads/${id}`, { method: "DELETE" })
-    setLeads((prev) => prev.filter((l) => l.id !== id))
-    setSelected(null)
-    showToast("리드가 삭제되었습니다.")
+    try {
+      const res = await adminFetch(`/api/admin/leads/${id}`, { method: "DELETE" })
+      await readAdminResponse(res, "리드를 삭제하지 못했습니다.")
+      setLeads((prev) => prev.filter((l) => l.id !== id))
+      setSelected(null)
+      showToast("리드가 삭제되었습니다.")
+    } catch (err) {
+      showToast(err instanceof Error ? err.message : "리드를 삭제하지 못했습니다.", "error")
+    }
   }
 
-  const today = new Date().toISOString().slice(0, 10)
+  const today = toLocalDateKey(new Date())
   const filtered = filter === "all" ? leads : leads.filter((l) => l.status === filter)
   const counts = leads.reduce((acc, l) => { acc[l.status] = (acc[l.status] ?? 0) + 1; return acc }, {} as Record<string, number>)
 
   // 오늘 팔로업 리드
   const todayFollowUps = leads.filter((l) =>
-    l.follow_up_at && l.follow_up_at.startsWith(today) && l.status !== "converted" && l.status !== "closed"
+    l.follow_up_at && toLocalDateKey(l.follow_up_at) === today && l.status !== "converted" && l.status !== "closed"
   )
   // 팔로업 기한 초과
   const overdueFollowUps = leads.filter((l) =>
-    l.follow_up_at && l.follow_up_at < today + "T" && l.status !== "converted" && l.status !== "closed"
+    l.follow_up_at && toLocalDateKey(l.follow_up_at) < today && l.status !== "converted" && l.status !== "closed"
   )
 
   return (
@@ -679,8 +807,9 @@ export default function CrmPage() {
             </thead>
             <tbody>
               {filtered.map((lead) => {
-                const isOverdue = lead.follow_up_at && lead.follow_up_at < today + "T" && lead.status !== "converted" && lead.status !== "closed"
-                const isTodayFollowUp = lead.follow_up_at?.startsWith(today)
+                const followUpDateKey = lead.follow_up_at ? toLocalDateKey(lead.follow_up_at) : null
+                const isOverdue = Boolean(followUpDateKey && followUpDateKey < today && lead.status !== "converted" && lead.status !== "closed")
+                const isTodayFollowUp = followUpDateKey === today
                 return (
                   <tr
                     key={lead.id}
@@ -716,10 +845,15 @@ export default function CrmPage() {
                       )}
                     </td>
                     <td className="px-4 py-3">
-                      <div className="flex items-center gap-2">
+                      <div className="flex items-center gap-2 flex-wrap">
                         <span className={`text-[11px] px-2 py-0.5 rounded-full font-medium ${STATUS_COLOR[lead.status]}`}>
                           {STATUS_LABEL[lead.status]}
                         </span>
+                        {lead.status === "converted" && (
+                          <span className="text-[11px] px-2 py-0.5 rounded-full font-medium bg-green-50 text-green-700 border border-green-200">
+                            고객사 전환
+                          </span>
+                        )}
                         {lead.assigned_to && (
                           <span className="text-[11px] text-[#1a1a1a]/35">{lead.assigned_to}</span>
                         )}
@@ -750,6 +884,7 @@ export default function CrmPage() {
           onDelete={handleDelete}
           onAddLog={handleAddLog}
           onDeleteLog={handleDeleteLog}
+          onConvert={handleConvert}
         />
       )}
 

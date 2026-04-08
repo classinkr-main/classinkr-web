@@ -1,13 +1,30 @@
-import { NextRequest, NextResponse } from "next/server"
+import { createServerClient } from "@supabase/ssr"
 import { createHmac } from "crypto"
-import { ADMIN_AUTH_ERROR_CODE, type AdminAuthErrorCode } from "@/lib/admin-auth-errors"
+import { NextRequest, NextResponse } from "next/server"
 
-function getSessionSecret(): string {
-  return process.env.SESSION_SECRET ?? process.env.ADMIN_PASSWORD ?? "fallback-dev-secret"
+import {
+  ADMIN_AUTH_ERROR_CODE,
+  type AdminAuthErrorCode,
+} from "@/lib/admin-auth-errors"
+import { isAdminAuthBypassEnabled } from "@/lib/admin-env"
+import type { AdminProfile, Database } from "@/lib/supabase/database.types"
+import {
+  getSupabaseBrowserEnv,
+  hasSupabaseBrowserEnv,
+} from "@/lib/supabase/public-env"
+
+function getSessionSecret(): string | null {
+  return (
+    process.env.SESSION_SECRET?.trim() ??
+    process.env.ADMIN_PASSWORD?.trim() ??
+    null
+  )
 }
 
-function signPayload(payload: string): string {
-  return createHmac("sha256", getSessionSecret()).update(payload).digest("hex")
+function signPayload(payload: string): string | null {
+  const secret = getSessionSecret()
+  if (!secret) return null
+  return createHmac("sha256", secret).update(payload).digest("hex")
 }
 
 export type AdminRole = "admin" | "branch"
@@ -16,6 +33,14 @@ export interface AdminSession {
   name: string
   role: AdminRole
   branch?: string
+}
+
+export interface VerifiedAdminContext {
+  source: "bypass" | "legacy" | "supabase"
+  role: string
+  name?: string
+  branch?: string
+  userId?: string
 }
 
 interface UserRecord {
@@ -93,54 +118,118 @@ export function authenticateUser(password: string): AuthResult {
     return { session: null, code: ADMIN_AUTH_ERROR_CODE.INVALID_CREDENTIALS }
   }
 
-  return { session: { name: user.name, role: user.role, branch: user.branch } }
+  return {
+    session: { name: user.name, role: user.role, branch: user.branch },
+  }
 }
 
 export function encodeSession(session: AdminSession): string {
   const payload = Buffer.from(JSON.stringify(session)).toString("base64url")
   const sig = signPayload(payload)
+
+  if (!sig) {
+    throw new Error(
+      "Missing session secret. Set SESSION_SECRET or ADMIN_PASSWORD."
+    )
+  }
+
   return `${payload}.${sig}`
 }
 
 export function decodeSession(cookie: string): AdminSession | null {
   try {
     const dotIdx = cookie.lastIndexOf(".")
-    if (dotIdx === -1) {
-      // 레거시 서명 없는 쿠키 — 거부
-      return null
-    }
+    if (dotIdx === -1) return null
+
     const payload = cookie.slice(0, dotIdx)
     const sig = cookie.slice(dotIdx + 1)
-    // 서명 검증
-    if (sig !== signPayload(payload)) return null
-    return JSON.parse(Buffer.from(payload, "base64url").toString("utf8")) as AdminSession
+    const expectedSig = signPayload(payload)
+    if (!expectedSig || sig !== expectedSig) return null
+
+    return JSON.parse(
+      Buffer.from(payload, "base64url").toString("utf8")
+    ) as AdminSession
   } catch {
     return null
   }
 }
 
-export function verifyAdmin(req: NextRequest): NextResponse | null {
-  // dev 환경 자동 스킵 (NEXT_PUBLIC_SKIP_ADMIN_AUTH=true in .env.local)
-  if (process.env.NEXT_PUBLIC_SKIP_ADMIN_AUTH === "true") return null
-
+function getLegacyAdminContext(req: NextRequest): VerifiedAdminContext | null {
   const cookie = req.cookies.get("admin_session")?.value
-  if (cookie) {
-    const session = decodeSession(cookie)
-    if (session?.role === "admin") return null
+  if (!cookie) return null
+
+  const session = decodeSession(cookie)
+  if (session?.role !== "admin") return null
+
+  return {
+    source: "legacy",
+    role: session.role,
+    name: session.name,
+    branch: session.branch,
+  }
+}
+
+async function getSupabaseAdminContext(
+  req: NextRequest
+): Promise<VerifiedAdminContext | null> {
+  if (!hasSupabaseBrowserEnv()) return null
+
+  const { url, publishableKey } = getSupabaseBrowserEnv()
+  const supabase = createServerClient<Database>(url, publishableKey, {
+    cookies: {
+      getAll() {
+        return req.cookies.getAll()
+      },
+      setAll() {},
+    },
+  })
+
+  const {
+    data: { user },
+    error: userError,
+  } = await supabase.auth.getUser()
+  if (userError || !user) return null
+
+  const { data: profile, error: profileError } = await supabase
+    .from("admin_profiles")
+    .select("user_id, display_name, role, status")
+    .eq("user_id", user.id)
+    .single()
+
+  if (profileError || !profile) return null
+
+  const adminProfile = profile as Pick<
+    AdminProfile,
+    "user_id" | "display_name" | "role" | "status"
+  >
+  if (adminProfile.status !== "ACTIVE") return null
+
+  return {
+    source: "supabase",
+    role: adminProfile.role,
+    name: adminProfile.display_name,
+    userId: adminProfile.user_id,
+  }
+}
+
+export async function getVerifiedAdminContext(
+  req: NextRequest
+): Promise<VerifiedAdminContext | null> {
+  if (isAdminAuthBypassEnabled()) {
+    return { source: "bypass", role: "SUPER_ADMIN", name: "Dev" }
   }
 
-  const token = req.headers.get("authorization")?.replace("Bearer ", "")
-  if (token && token === process.env.ADMIN_PASSWORD) return null
+  const legacy = getLegacyAdminContext(req)
+  if (legacy) return legacy
 
-  // Supabase 인증 경로: 클라이언트가 "supabase-authed" 토큰을 보내면
-  // Supabase 세션 쿠키(sb-*-auth-token)가 함께 존재하는지 확인
-  if (token === "supabase-authed") {
-    // @supabase/ssr v0.3+ 에서 토큰이 청크 분할됨 → 쿠키명이 sb-*-auth-token.0 형태도 포함
-    const hasSupabaseSession = [...req.cookies.getAll()].some(
-      (c) => c.name.startsWith("sb-") && c.name.includes("-auth-token")
-    )
-    if (hasSupabaseSession) return null
-  }
+  return getSupabaseAdminContext(req)
+}
+
+export async function verifyAdmin(
+  req: NextRequest
+): Promise<NextResponse | null> {
+  const admin = await getVerifiedAdminContext(req)
+  if (admin) return null
 
   return NextResponse.json({ error: "Unauthorized" }, { status: 401 })
 }

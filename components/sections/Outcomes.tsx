@@ -32,17 +32,17 @@ export function Outcomes() {
             <div className="container mx-auto">
                 <div className="flex flex-col md:flex-row gap-12 items-center">
                     <div className="w-full md:w-1/3">
-                        <h2 className="text-3xl lg:text-4xl font-extrabold tracking-tight mb-6 text-slate-900 break-keep">
+                        <h2 className="text-3xl lg:text-4xl font-extrabold mb-6 text-[#111110] break-keep" style={{ letterSpacing: '-1px' }}>
                             단순한 관리 도구가 아닙니다.<br />
-                            <span className="text-emerald-600">성장 엔진입니다.</span>
+                            <span className="text-[#084734]">성장 엔진입니다.</span>
                         </h2>
-                        <p className="text-slate-500 text-lg mb-8 break-keep">
+                        <p className="text-[#A39E98] text-lg mb-8 break-keep">
                             주먹구구식 운영에서 벗어나, 데이터 기반의 확장 가능한 교육 기업으로 성장하세요.
                         </p>
-                        <div className="p-6 bg-emerald-50 rounded-xl border border-emerald-100 inline-block">
-                            <div className="text-sm text-slate-500 uppercase tracking-wider font-semibold mb-2">평균 절감 시간</div>
-                            <div className="text-5xl font-bold text-emerald-600">15시간</div>
-                            <div className="text-sm text-slate-500 mt-2">강사 1인당 / 주</div>
+                        <div className="p-6 bg-[#ECFDF5] rounded-xl border border-[rgba(8,71,52,0.12)] inline-block">
+                            <div className="text-sm text-[#A39E98] uppercase tracking-wider font-semibold mb-2">평균 절감 시간</div>
+                            <div className="text-5xl font-bold text-[#084734]" style={{ letterSpacing: '-2.125px' }}>15시간</div>
+                            <div className="text-sm text-[#A39E98] mt-2">강사 1인당 / 주</div>
                         </div>
                     </div>
 
@@ -50,16 +50,16 @@ export function Outcomes() {
                         {/* Desktop Table Header */}
                         <div className="hidden md:grid md:grid-cols-2 px-8">
                             <div className="flex items-center gap-3">
-                                <div className="p-2 rounded-full bg-slate-100 border border-slate-200">
+                                <div className="p-2 rounded-full bg-[#F6F5F4] border border-[rgba(0,0,0,0.08)]">
                                     <X className="w-6 h-6 text-red-400" />
                                 </div>
-                                <span className="font-extrabold text-2xl text-slate-400 tracking-tight">Before</span>
+                                <span className="font-extrabold text-2xl text-[#A39E98]" style={{ letterSpacing: '-1px' }}>Before</span>
                             </div>
                             <div className="flex items-center gap-3">
-                                <div className="p-2 rounded-full bg-emerald-50 border border-emerald-200">
-                                    <Check className="w-6 h-6 text-emerald-600" />
+                                <div className="p-2 rounded-full bg-[#ECFDF5] border border-[rgba(8,71,52,0.12)]">
+                                    <Check className="w-6 h-6 text-[#084734]" />
                                 </div>
-                                <span className="font-extrabold text-2xl text-emerald-600 tracking-tight">After</span>
+                                <span className="font-extrabold text-2xl text-[#084734]" style={{ letterSpacing: '-1px' }}>After</span>
                             </div>
                         </div>
 
@@ -71,27 +71,28 @@ export function Outcomes() {
                                     whileInView={{ opacity: 1, y: 0 }}
                                     transition={{ delay: index * 0.1 }}
                                     viewport={{ once: true }}
-                                    className="grid md:grid-cols-2 rounded-2xl overflow-hidden border border-slate-200 bg-white shadow-md"
+                                    className="grid md:grid-cols-2 rounded-2xl overflow-hidden border border-[rgba(0,0,0,0.08)] bg-white"
+                                    style={{ boxShadow: 'rgba(0,0,0,0.04) 0px 4px 18px, rgba(0,0,0,0.027) 0px 2px 7.8px, rgba(0,0,0,0.02) 0px 0.8px 2.9px' }}
                                 >
                                     {/* Before Card */}
-                                    <div className="p-6 md:p-8 flex flex-col justify-center border-b md:border-b-0 md:border-r border-slate-100 hover:bg-slate-50 transition-colors">
+                                    <div className="p-6 md:p-8 flex flex-col justify-center border-b md:border-b-0 md:border-r border-[rgba(0,0,0,0.05)] hover:bg-[#F6F5F4] transition-colors">
                                         <div className="md:hidden flex items-center gap-2 mb-4">
                                             <X className="w-5 h-5 text-red-400" />
-                                            <span className="font-bold text-lg text-slate-400 tracking-tight">Before</span>
+                                            <span className="font-bold text-lg text-[#A39E98]">Before</span>
                                         </div>
-                                        <span className="text-slate-400 font-bold text-sm mb-3 uppercase tracking-wider">{item.role}</span>
-                                        <p className="text-slate-600 text-lg leading-relaxed break-keep">{item.before}</p>
+                                        <span className="text-[#A39E98] font-bold text-sm mb-3 uppercase tracking-wider">{item.role}</span>
+                                        <p className="text-[#615D59] text-lg leading-relaxed break-keep">{item.before}</p>
                                     </div>
 
                                     {/* After Card */}
-                                    <div className="p-6 md:p-8 flex flex-col justify-center relative overflow-hidden bg-gradient-to-br from-emerald-50 to-emerald-50/30 hover:from-emerald-50 hover:to-emerald-100/50 transition-colors">
+                                    <div className="p-6 md:p-8 flex flex-col justify-center relative overflow-hidden bg-gradient-to-br from-[#ECFDF5] to-[#ECFDF5]/30 hover:from-[#ECFDF5] hover:to-[#ECFDF5]/50 transition-colors">
                                         <div className="absolute left-0 top-0 bottom-0 w-1.5 bg-emerald-500" />
                                         <div className="md:hidden flex items-center gap-2 mb-4">
-                                            <Check className="w-5 h-5 text-emerald-600" />
-                                            <span className="font-bold text-lg text-emerald-600 tracking-tight">After</span>
+                                            <Check className="w-5 h-5 text-[#084734]" />
+                                            <span className="font-bold text-lg text-[#084734]">After</span>
                                         </div>
-                                        <span className="text-emerald-600 font-bold text-sm mb-3 uppercase tracking-wider">{item.role}</span>
-                                        <p className="text-slate-800 text-lg font-medium leading-relaxed break-keep">{item.after}</p>
+                                        <span className="text-[#084734] font-bold text-sm mb-3 uppercase tracking-wider">{item.role}</span>
+                                        <p className="text-[#111110] text-lg font-medium leading-relaxed break-keep">{item.after}</p>
                                     </div>
                                 </motion.div>
                             ))}

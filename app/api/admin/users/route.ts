@@ -1,8 +1,8 @@
-import { NextRequest, NextResponse } from "next/server"
+﻿import { NextRequest, NextResponse } from "next/server"
 import { verifyAdmin } from "@/lib/admin-auth"
 
 export async function GET(req: NextRequest) {
-  const err = verifyAdmin(req)
+  const err = await verifyAdmin(req)
   if (err) return err
 
   try {
@@ -14,7 +14,7 @@ export async function GET(req: NextRequest) {
       return NextResponse.json({ users })
     }
   } catch {
-    // 파싱 실패
+    // ?뚯떛 ?ㅽ뙣
   }
 
   return NextResponse.json({

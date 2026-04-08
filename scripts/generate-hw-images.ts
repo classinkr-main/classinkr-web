@@ -265,7 +265,10 @@ async function generateImage(task: ImageTask): Promise<Buffer | null> {
         return null
     }
 
-    const imagePart = parts.find((p: any) => p.inlineData?.mimeType?.startsWith("image/"))
+    const imagePart = parts.find(
+        (p: { inlineData?: { mimeType?: string; data?: string } }) =>
+            p.inlineData?.mimeType?.startsWith("image/")
+    )
     if (!imagePart) {
         console.error(`  ❌ 이미지 파트 없음`)
         return null

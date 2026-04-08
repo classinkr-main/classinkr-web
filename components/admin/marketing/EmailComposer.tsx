@@ -2,200 +2,124 @@
  * ─────────────────────────────────────────────────────────────
  * EmailComposer  —  이메일 캠페인 작성 & 발송 컴포넌트
  * ─────────────────────────────────────────────────────────────
+ *
+ * [NOTE-19] 이메일 작성 플로우
+ *   1. 제목 + 본문 작성 (HTML 지원)
+ *   2. 대상 태그 선택 (빈 = 전체 active 구독자)
+ *   3. 미리보기에서 {name} 치환 확인
+ *   4. 발송 버튼 클릭 → /api/admin/email/send 호출
+ *
+ * [NOTE-12] {name}, {org}, {role} 변수 사용법을 안내.
  */
 
 "use client"
 
-import { useState, useRef, useCallback, useMemo, useEffect } from "react"
+import { useState } from "react"
 import { Input } from "@/components/ui/input"
 import { Label } from "@/components/ui/label"
 import { Button } from "@/components/ui/button"
 import { Badge } from "@/components/ui/badge"
-import { Send, Eye, EyeOff, Loader2, Type, Zap } from "lucide-react"
+import { RotateCcw, Send, Eye, EyeOff, Loader2, MailCheck } from "lucide-react"
+import type { EmailDraft } from "@/lib/marketing-types"
 import { PRESET_TAGS } from "@/lib/marketing-types"
-import VariablePalette, {
-  ALL_VARIABLES,
-  applyPreview,
-  highlightVariables,
-} from "./VariablePalette"
 
 interface Props {
-  onSend: (data: { subject: string; body: string; targetTags: string[] }) => Promise<void>
+  value: EmailDraft
+  onChange: (value: EmailDraft) => void
+  onSend: (data: EmailDraft) => Promise<void>
   loading?: boolean
   subscriberCount: number
-  initialTags?: string[]
-  onClearInitialTags?: () => void
 }
 
-interface SlashState {
-  field: "subject" | "body"
-  query: string
-  activeIndex: number
+function getToken() {
+  return sessionStorage.getItem("admin_password") ?? ""
 }
 
-export default function EmailComposer({ onSend, loading, subscriberCount, initialTags, onClearInitialTags }: Props) {
-  const [subject,     setSubject]     = useState("")
-  const [body,        setBody]        = useState("")
-  const [targetTags,  setTargetTags]  = useState<string[]>(initialTags ?? [])
+function adminFetch(url: string, options?: RequestInit) {
+  return fetch(url, {
+    ...options,
+    headers: {
+      "Content-Type": "application/json",
+      Authorization: `Bearer ${getToken()}`,
+      ...options?.headers,
+    },
+  })
+}
+
+export default function EmailComposer({
+  value,
+  onChange,
+  onSend,
+  loading,
+  subscriberCount,
+}: Props) {
   const [showPreview, setShowPreview] = useState(false)
+  const [testEmail, setTestEmail] = useState("")
+  const [testLoading, setTestLoading] = useState(false)
+  const [testNotice, setTestNotice] = useState<string | null>(null)
 
-  // 리드 세그먼트에서 전달된 태그 동기화
-  useEffect(() => {
-    if (initialTags && initialTags.length > 0) {
-      setTargetTags(initialTags)
-      onClearInitialTags?.()
-    }
-  // eslint-disable-next-line react-hooks/exhaustive-deps
-  }, [initialTags])
-  const [slashState,  setSlashState]  = useState<SlashState | null>(null)
-
-  const bodyRef        = useRef<HTMLTextAreaElement>(null)
-  const subjectRef     = useRef<HTMLInputElement>(null)
-  const overlayRef     = useRef<HTMLDivElement>(null)
-  const lastFocusedRef = useRef<"subject" | "body">("body")
-
-  // ── computed ─────────────────────────────────────────────────────────────
-  const filteredVars = useMemo(() => {
-    if (!slashState) return ALL_VARIABLES.slice()
-    const q = slashState.query.toLowerCase()
-    if (!q) return ALL_VARIABLES.slice()
-    return ALL_VARIABLES.filter((v) => v.key.includes(q) || v.label.includes(q))
-  }, [slashState])
-
-  const usedVars = useMemo(
-    () =>
-      ALL_VARIABLES
-        .filter((v) => body.includes(`{${v.key}}`) || subject.includes(`{${v.key}}`))
-        .map((v) => v.key),
-    [body, subject]
-  )
-
-  // ── slash detection ───────────────────────────────────────────────────────
-  const detectSlash = useCallback(
-    (value: string, cursorPos: number, field: "subject" | "body") => {
-      const before = value.slice(0, cursorPos)
-      const match  = before.match(/\/([a-zA-Z가-힣_]*)$/)
-      if (match) {
-        setSlashState((prev) => ({
-          field,
-          query: match[1],
-          activeIndex: prev?.field === field ? prev.activeIndex : 0,
-        }))
-      } else {
-        setSlashState(null)
-      }
-    },
-    []
-  )
-
-  const selectSlashVar = useCallback(
-    (key: string) => {
-      if (!slashState) return
-      const insert = `{${key}}`
-
-      if (slashState.field === "subject" && subjectRef.current) {
-        const el     = subjectRef.current
-        const pos    = el.selectionStart ?? subject.length
-        const before = subject.slice(0, pos)
-        const idx    = before.search(/\/[a-zA-Z가-힣_]*$/)
-        if (idx === -1) { setSlashState(null); return }
-        const next   = subject.slice(0, idx) + insert + subject.slice(pos)
-        setSubject(next)
-        const newPos = idx + insert.length
-        requestAnimationFrame(() => {
-          el.focus(); el.selectionStart = newPos; el.selectionEnd = newPos
-        })
-      } else if (slashState.field === "body" && bodyRef.current) {
-        const el     = bodyRef.current
-        const pos    = el.selectionStart ?? body.length
-        const before = body.slice(0, pos)
-        const idx    = before.search(/\/[a-zA-Z가-힣_]*$/)
-        if (idx === -1) { setSlashState(null); return }
-        const next   = body.slice(0, idx) + insert + body.slice(pos)
-        setBody(next)
-        const newPos = idx + insert.length
-        requestAnimationFrame(() => {
-          el.focus(); el.selectionStart = newPos; el.selectionEnd = newPos
-        })
-      }
-      setSlashState(null)
-    },
-    [slashState, subject, body]
-  )
-
-  // ── palette insert ────────────────────────────────────────────────────────
-  const handleInsertVariable = useCallback(
-    (key: string) => {
-      const insert = `{${key}}`
-      if (lastFocusedRef.current === "subject" && subjectRef.current) {
-        const el    = subjectRef.current
-        const start = el.selectionStart ?? subject.length
-        const end   = el.selectionEnd   ?? subject.length
-        const next  = subject.slice(0, start) + insert + subject.slice(end)
-        setSubject(next)
-        requestAnimationFrame(() => {
-          el.focus(); el.selectionStart = start + insert.length; el.selectionEnd = start + insert.length
-        })
-      } else if (bodyRef.current) {
-        const el    = bodyRef.current
-        const start = el.selectionStart ?? body.length
-        const end   = el.selectionEnd   ?? body.length
-        const next  = body.slice(0, start) + insert + body.slice(end)
-        setBody(next)
-        requestAnimationFrame(() => {
-          el.focus(); el.selectionStart = start + insert.length; el.selectionEnd = start + insert.length
-        })
-      }
-    },
-    [subject, body]
-  )
-
-  // ── keyboard nav ──────────────────────────────────────────────────────────
-  const handleKeyDown = useCallback(
-    (e: React.KeyboardEvent, field: "subject" | "body") => {
-      if (!slashState || slashState.field !== field || filteredVars.length === 0) return
-      if (e.key === "ArrowDown") {
-        e.preventDefault()
-        setSlashState((s) =>
-          s ? { ...s, activeIndex: (s.activeIndex + 1) % filteredVars.length } : null
-        )
-      } else if (e.key === "ArrowUp") {
-        e.preventDefault()
-        setSlashState((s) =>
-          s ? { ...s, activeIndex: (s.activeIndex - 1 + filteredVars.length) % filteredVars.length } : null
-        )
-      } else if (e.key === "Enter" || e.key === "Tab") {
-        const target = filteredVars[slashState.activeIndex]
-        if (target) { e.preventDefault(); selectSlashVar(target.key) }
-      } else if (e.key === "Escape") {
-        setSlashState(null)
-      }
-    },
-    [slashState, filteredVars, selectSlashVar]
-  )
-
-  // ── scroll sync ───────────────────────────────────────────────────────────
-  const handleBodyScroll = (e: React.UIEvent<HTMLTextAreaElement>) => {
-    if (overlayRef.current) overlayRef.current.scrollTop = e.currentTarget.scrollTop
+  const updateDraft = (next: Partial<EmailDraft>) => {
+    onChange({
+      ...value,
+      ...next,
+    })
   }
 
-  // ── send ──────────────────────────────────────────────────────────────────
+  const toggleTag = (tag: string) => {
+    const nextTags = value.targetTags.includes(tag)
+      ? value.targetTags.filter((t) => t !== tag)
+      : [...value.targetTags, tag]
+
+    updateDraft({ targetTags: nextTags })
+  }
+
   const handleSubmit = async () => {
-    if (!subject.trim() || !body.trim()) return
-    await onSend({ subject, body, targetTags })
-    setSubject("")
-    setBody("")
-    setTargetTags([])
-    setSlashState(null)
+    if (!value.subject.trim() || !value.body.trim()) return
+    await onSend(value)
   }
 
-  const toggleTag = (tag: string) =>
-    setTargetTags((prev) =>
-      prev.includes(tag) ? prev.filter((t) => t !== tag) : [...prev, tag]
-    )
+  const handleTestSend = async () => {
+    if (!value.subject.trim() || !value.body.trim() || !testEmail.trim()) return
 
-  const showSubjectSlash = !!(slashState?.field === "subject" && filteredVars.length > 0)
-  const showBodySlash    = !!(slashState?.field === "body"    && filteredVars.length > 0)
+    setTestLoading(true)
+    setTestNotice(null)
+
+    try {
+      const res = await adminFetch("/api/admin/email/send", {
+        method: "POST",
+        body: JSON.stringify({
+          subject: value.subject,
+          body: value.body,
+          targetTags: value.targetTags,
+          mode: "test",
+          testEmail: testEmail.trim(),
+        }),
+      })
+
+      if (res.status === 401) {
+        setTestNotice("인증이 만료되었습니다. 다시 로그인해 주세요.")
+        return
+      }
+
+      const result = await res.json()
+      if (!res.ok || !result.ok || result.status === "failed") {
+        setTestNotice(result.error || "테스트 발송에 실패했습니다.")
+        return
+      }
+
+      setTestNotice(`${testEmail.trim()} 주소로 테스트 발송했습니다.`)
+    } catch {
+      setTestNotice("테스트 발송에 실패했습니다.")
+    } finally {
+      setTestLoading(false)
+    }
+  }
+
+  // [NOTE-12] 미리보기용 {name} 치환 예시
+  const previewBody = value.body
+    .replace(/\{name\}/g, "김원장")
+    .replace(/\{org\}/g, "클래스인 아카데미")
+    .replace(/\{role\}/g, "원장")
 
   return (
     <div className="bg-white rounded-xl border border-[#e8e8e4] p-6">
@@ -205,54 +129,27 @@ export default function EmailComposer({ onSend, loading, subscriberCount, initia
       </h3>
 
       <div className="grid gap-4">
-
-        {/* Subject */}
-        <div className="grid gap-2 relative">
-          <Label htmlFor="ec-subject">
-            제목{" "}
-            <span className="text-[#1a1a1a]/30 font-normal text-[11px]">
-              — <kbd className="bg-[#f0f0ec] px-1 py-0.5 rounded font-mono text-[9px]">/</kbd> 로 변수 삽입
-            </span>
-          </Label>
+        {/* 제목 */}
+        <div className="grid gap-2">
+          <Label htmlFor="email-subject">제목</Label>
           <Input
-            id="ec-subject"
-            ref={subjectRef}
-            value={subject}
-            onChange={(e) => {
-              setSubject(e.target.value)
-              detectSlash(e.target.value, e.target.selectionStart ?? e.target.value.length, "subject")
-            }}
-            onKeyDown={(e) => handleKeyDown(e, "subject")}
-            onFocus={() => { lastFocusedRef.current = "subject" }}
+            id="email-subject"
+            value={value.subject}
+            onChange={(e) => updateDraft({ subject: e.target.value })}
             placeholder="예) {name}님, Classin 3월 교육 혁신 세미나에 초대합니다!"
           />
-          {showSubjectSlash && (
-            <div className="absolute left-0 right-0 top-full mt-1 z-20 bg-white border border-[#e8e8e4] rounded-xl shadow-xl overflow-hidden">
-              <SlashPopupHeader />
-              {filteredVars.map((v, i) => (
-                <SlashPopupItem
-                  key={v.key}
-                  varKey={v.key}
-                  label={v.label}
-                  example={v.example}
-                  active={i === slashState!.activeIndex}
-                  onSelect={selectSlashVar}
-                />
-              ))}
-            </div>
-          )}
         </div>
 
-        {/* Body */}
+        {/* 본문 */}
         <div className="grid gap-2">
           <div className="flex items-center justify-between">
-            <Label htmlFor="ec-body">본문</Label>
+            <Label htmlFor="email-body">본문</Label>
             <Button
               type="button"
               variant="ghost"
               size="sm"
               className="h-7 text-[11px]"
-              onClick={() => { setShowPreview(!showPreview); setSlashState(null) }}
+              onClick={() => setShowPreview(!showPreview)}
             >
               {showPreview ? <EyeOff className="w-3 h-3 mr-1" /> : <Eye className="w-3 h-3 mr-1" />}
               {showPreview ? "편집" : "미리보기"}
@@ -260,104 +157,52 @@ export default function EmailComposer({ onSend, loading, subscriberCount, initia
           </div>
 
           {showPreview ? (
-            <div className="p-4 border rounded-lg bg-[#FAFAF8] min-h-[200px] text-sm leading-relaxed">
-              {body ? (
-                <div dangerouslySetInnerHTML={{ __html: applyPreview(body) }} />
-              ) : (
-                <span className="text-[#1a1a1a]/30">(본문을 작성해주세요)</span>
-              )}
+            /* [NOTE-19] 미리보기 모드: {name} 등 변수가 치환된 상태 표시 */
+            <div className="p-4 border rounded-lg bg-[#FAFAF8] min-h-[200px] text-sm leading-relaxed whitespace-pre-wrap">
+              {previewBody || "(본문을 작성해주세요)"}
             </div>
           ) : (
-            /* Body with highlight overlay */
-            <div className="relative border rounded-lg overflow-hidden" style={{ minHeight: 200 }}>
-              {/* Overlay */}
-              <div
-                ref={overlayRef}
-                aria-hidden="true"
-                className="absolute inset-0 p-3 text-sm overflow-hidden pointer-events-none"
-                style={{
-                  whiteSpace: "pre-wrap",
-                  wordBreak: "break-word",
-                  overflowWrap: "break-word",
-                  color: "transparent",
-                  lineHeight: "1.5",
-                }}
-                dangerouslySetInnerHTML={{ __html: highlightVariables(body) }}
-              />
-              {/* Textarea */}
-              <textarea
-                id="ec-body"
-                ref={bodyRef}
-                value={body}
-                onChange={(e) => {
-                  setBody(e.target.value)
-                  detectSlash(e.target.value, e.target.selectionStart ?? e.target.value.length, "body")
-                }}
-                onKeyDown={(e) => handleKeyDown(e, "body")}
-                onFocus={() => { lastFocusedRef.current = "body" }}
-                onScroll={handleBodyScroll}
-                rows={8}
-                placeholder={`안녕하세요 {name}님,\n\nClassin에서 준비한 특별한 소식을 전해드립니다.\n\n{org} 관계자 여러분을 위한...\n\n감사합니다.\nClassin 팀`}
-                className="relative w-full p-3 text-sm resize-y focus:outline-none focus:ring-2 focus:ring-[#084734]/20"
-                style={{
-                  background: "transparent",
-                  color: "transparent",
-                  caretColor: "#111110",
-                  WebkitTextFillColor: "transparent",
-                  minHeight: 200,
-                  lineHeight: "1.5",
-                }}
-              />
-              {/* Body slash popup */}
-              {showBodySlash && (
-                <div className="absolute right-2 top-2 z-10 bg-white border border-[#e8e8e4] rounded-xl shadow-xl overflow-hidden w-[256px]">
-                  <SlashPopupHeader />
-                  {filteredVars.map((v, i) => (
-                    <SlashPopupItem
-                      key={v.key}
-                      varKey={v.key}
-                      label={v.label}
-                      example={v.example}
-                      active={i === slashState!.activeIndex}
-                      onSelect={selectSlashVar}
-                    />
-                  ))}
-                </div>
-              )}
-            </div>
+            <textarea
+              id="email-body"
+              value={value.body}
+              onChange={(e) => updateDraft({ body: e.target.value })}
+              rows={8}
+              placeholder={`안녕하세요 {name}님,\n\nClassin에서 준비한 특별한 소식을 전해드립니다.\n\n{org} 관계자 여러분을 위한...\n\n감사합니다.\nClassin 팀`}
+              className="w-full p-3 border rounded-lg text-sm resize-y focus:outline-none focus:ring-2 focus:ring-[#084734]/20 min-h-[200px]"
+            />
           )}
 
-          {/* Variable palette */}
-          <div className="pt-1">
-            <div className="flex items-center gap-1.5 mb-1.5">
-              <Type className="w-3 h-3 text-[#1a1a1a]/30" />
-              <span className="text-[10px] font-medium text-[#1a1a1a]/30">변수 팔레트</span>
-              {usedVars.length > 0 && (
-                <span className="text-[10px] text-[#084734]/60">
-                  · 사용 중: {usedVars.map((k) => `{${k}}`).join(", ")}
-                </span>
-              )}
-            </div>
-            <VariablePalette onInsert={handleInsertVariable} usedVars={usedVars} compact />
-          </div>
+          {/* [NOTE-12] 변수 안내 */}
+          <p className="text-[11px] text-[#1a1a1a]/40">
+            사용 가능한 변수: <code className="bg-[#FAFAF8] px-1 rounded">{"{name}"}</code> 이름,{" "}
+            <code className="bg-[#FAFAF8] px-1 rounded">{"{org}"}</code> 학원명,{" "}
+            <code className="bg-[#FAFAF8] px-1 rounded">{"{role}"}</code> 직책
+          </p>
         </div>
 
-        {/* Target tags */}
+        {/* 대상 태그 필터 */}
         <div className="grid gap-2">
-          {initialTags && initialTags.length > 0 && (
-            <div className="flex items-center gap-2 px-3 py-2 bg-[#084734]/8 rounded-lg text-[11px] text-[#084734]">
-              <Send className="w-3 h-3 shrink-0" />
-              리드 세그먼트에서 전달된 대상: <strong>{initialTags.join(", ")}</strong>
-            </div>
-          )}
-          <Label>발송 대상 (태그 선택, 미선택 시 전체 발송)</Label>
+          <div className="flex flex-col gap-2 sm:flex-row sm:items-center sm:justify-between">
+            <Label>발송 대상 (태그 선택, 미선택 시 전체 발송)</Label>
+            <Button
+              type="button"
+              variant="ghost"
+              size="sm"
+              className="h-8 justify-start px-0 text-[11px] text-[#1a1a1a]/45 hover:bg-transparent hover:text-[#111110] sm:h-7 sm:px-2"
+              onClick={() => updateDraft({ targetTags: [] })}
+              disabled={value.targetTags.length === 0}
+            >
+              <RotateCcw className="mr-1.5 h-3.5 w-3.5" />
+              대상 초기화
+            </Button>
+          </div>
           <div className="flex flex-wrap gap-1.5 p-3 border rounded-lg bg-[#FAFAF8]">
             {PRESET_TAGS.map((tag) => (
               <Badge
                 key={tag}
                 variant="secondary"
                 className={`cursor-pointer text-[11px] px-2 py-0.5 transition-colors ${
-                  targetTags.includes(tag)
+                  value.targetTags.includes(tag)
                     ? "bg-[#084734] text-white hover:bg-[#084734]/90"
                     : "bg-white text-[#1a1a1a]/60 hover:bg-[#084734]/10 border border-[#e8e8e4]"
                 }`}
@@ -368,18 +213,64 @@ export default function EmailComposer({ onSend, loading, subscriberCount, initia
             ))}
           </div>
           <p className="text-[11px] text-[#1a1a1a]/40">
-            {targetTags.length > 0
-              ? `선택된 태그: ${targetTags.join(", ")}`
+            {value.targetTags.length > 0
+              ? `선택된 태그: ${value.targetTags.join(", ")}`
               : `전체 active 구독자 ${subscriberCount}명에게 발송됩니다.`}
           </p>
         </div>
 
-        {/* Send button */}
-        <div className="flex justify-end">
+        <div className="grid gap-2 rounded-xl border border-[#e8e8e4] bg-[#fafaf8] p-4">
+          <div className="flex flex-col gap-1 sm:flex-row sm:items-center sm:justify-between">
+            <div>
+              <Label htmlFor="test-email">테스트 발송</Label>
+              <p className="mt-1 text-[11px] text-[#1a1a1a]/40">
+                실제 구독자에게는 보내지 않고 이 주소로만 확인합니다.
+              </p>
+            </div>
+            <Button
+              type="button"
+              variant="outline"
+              size="sm"
+              onClick={handleTestSend}
+              disabled={loading || testLoading || !value.subject.trim() || !value.body.trim() || !testEmail.trim()}
+              className="w-full sm:w-auto"
+            >
+              {testLoading ? (
+                <span className="flex items-center">
+                  <Loader2 className="mr-1.5 h-3.5 w-3.5 animate-spin" />
+                  테스트 전송 중...
+                </span>
+              ) : (
+                <span className="flex items-center">
+                  <MailCheck className="mr-1.5 h-3.5 w-3.5" />
+                  테스트 발송
+                </span>
+              )}
+            </Button>
+          </div>
+          <Input
+            id="test-email"
+            type="email"
+            value={testEmail}
+            onChange={(e) => setTestEmail(e.target.value)}
+            placeholder="test@example.com"
+          />
+          <p className="text-[11px] text-[#1a1a1a]/40">
+            발송 전 제목, 본문, 변수 치환 결과를 빠르게 확인할 때 사용합니다.
+          </p>
+          {testNotice && (
+            <p className="rounded-lg border border-[#e8e8e4] bg-white px-3 py-2 text-[12px] text-[#111110]">
+              {testNotice}
+            </p>
+          )}
+        </div>
+
+        {/* 발송 버튼 */}
+        <div className="flex flex-col gap-2 sm:flex-row sm:justify-end">
           <Button
             onClick={handleSubmit}
-            disabled={loading || !subject.trim() || !body.trim()}
-            className="bg-[#084734] hover:bg-[#084734]/90 text-white"
+            disabled={loading || !value.subject.trim() || !value.body.trim()}
+            className="w-full bg-[#084734] text-white hover:bg-[#084734]/90 sm:w-auto"
           >
             {loading ? (
               <span className="flex items-center">
@@ -396,52 +287,5 @@ export default function EmailComposer({ onSend, loading, subscriberCount, initia
         </div>
       </div>
     </div>
-  )
-}
-
-// ─── Slash popup subcomponents ────────────────────────────────────────────────
-
-function SlashPopupHeader() {
-  return (
-    <div className="px-3 py-1.5 bg-[#f9f9f7] border-b border-[#e8e8e4] flex items-center gap-2">
-      <Zap className="w-3 h-3 text-[#084734]" />
-      <span className="text-[10px] text-[#1a1a1a]/40 font-medium">
-        변수 선택{" "}
-        <span className="text-[#1a1a1a]/25">↑↓ 이동 · Enter 삽입 · Esc 닫기</span>
-      </span>
-    </div>
-  )
-}
-
-function SlashPopupItem({
-  varKey,
-  label,
-  example,
-  active,
-  onSelect,
-}: {
-  varKey: string
-  label: string
-  example: string
-  active: boolean
-  onSelect: (key: string) => void
-}) {
-  return (
-    <button
-      type="button"
-      className={`w-full flex items-center justify-between px-3 py-1.5 text-left text-[12px] transition-colors ${
-        active ? "bg-[#f0f0ec]" : "hover:bg-[#fafaf8]"
-      }`}
-      onMouseDown={(e) => {
-        e.preventDefault()
-        onSelect(varKey)
-      }}
-    >
-      <span className="font-mono text-[#111110]">{"{" + varKey + "}"}</span>
-      <span className="text-[#1a1a1a]/40 text-[11px] ml-3">
-        {label}
-        <span className="text-[#1a1a1a]/25 ml-1">→ {example}</span>
-      </span>
-    </button>
   )
 }

@@ -1,9 +1,12 @@
-import { NextRequest, NextResponse } from "next/server"
+﻿import { NextRequest, NextResponse } from "next/server"
 import { revalidatePath } from "next/cache"
 import { getAllPosts, createPost, getTrashedPosts } from "@/lib/repositories/blog"
 import { verifyAdmin } from "@/lib/admin-auth"
 
 export async function GET(req: NextRequest) {
+  const authError = await verifyAdmin(req)
+  if (authError) return authError
+
   try {
     const trash = req.nextUrl.searchParams.get("trash") === "1"
     const posts = trash ? await getTrashedPosts() : await getAllPosts()
@@ -14,7 +17,7 @@ export async function GET(req: NextRequest) {
 }
 
 export async function POST(req: NextRequest) {
-  const authError = verifyAdmin(req)
+  const authError = await verifyAdmin(req)
   if (authError) return authError
 
   try {
@@ -28,7 +31,7 @@ export async function POST(req: NextRequest) {
     }
 
     const post = await createPost(body)
-    // 발행 상태면 블로그 페이지 캐시 즉시 무효화
+    // 諛쒗뻾 ?곹깭硫?釉붾줈洹??섏씠吏 罹먯떆 利됱떆 臾댄슚??
     if (post.status === "published") {
       revalidatePath("/blog")
     }

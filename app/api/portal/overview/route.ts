@@ -1,0 +1,44 @@
+import { NextRequest, NextResponse } from "next/server";
+
+import {
+  requirePortalContext,
+  isErrorResponse,
+} from "@/lib/partner-portal/portal-context";
+import { loadPartnerOverview } from "@/lib/partner-portal/repositories/partner-read";
+import { getCommercialOverview } from "@/lib/partner-portal/repositories/overview";
+import type { CommercialOverviewRange } from "@/lib/partner-portal/overview-types";
+
+export async function GET(req: NextRequest) {
+  const result = await requirePortalContext(req);
+  if (isErrorResponse(result)) return result;
+  const ctx = result;
+
+  const { searchParams } = new URL(req.url);
+  const range = (searchParams.get("range") as CommercialOverviewRange) ?? "today";
+
+  try {
+    if (ctx.type === "admin") {
+      // admin: 전체 상업 개요
+      const overview = await getCommercialOverview(range);
+      return NextResponse.json({ type: "commercial", ...overview });
+    }
+
+    // partner: 자기 계정 개요 (V2 → legacy → demo 폴백)
+    const overview = await loadPartnerOverview({
+      userId: ctx.userId,
+      partnerAccountId: ctx.partnerAccountId,
+      legacyPartnerId: ctx.legacyPartnerId,
+      customerId: null,
+      role: ctx.role,
+      source: ctx.legacyPartnerId ? "legacy" : "v2",
+    });
+
+    return NextResponse.json({ type: "partner", ...overview });
+  } catch (err) {
+    console.error("[portal/overview] GET error:", err);
+    return NextResponse.json(
+      { error: "개요 조회 실패" },
+      { status: 500 }
+    );
+  }
+}

@@ -1,14 +1,23 @@
 "use client"
 
+import Link from "next/link"
 import { useState, useEffect, useCallback } from "react"
 import {
-  ChevronLeft, ChevronRight, Plus, X, Clock, Users,
+  ChevronLeft, ChevronRight, Plus, Clock, Users,
   AlignLeft, Trash2, Pencil, CalendarDays,
 } from "lucide-react"
 import { Button } from "@/components/ui/button"
+import {
+  Dialog,
+  DialogContent,
+  DialogDescription,
+  DialogFooter,
+  DialogHeader,
+  DialogTitle,
+} from "@/components/ui/dialog"
 import { Input } from "@/components/ui/input"
 import { Label } from "@/components/ui/label"
-import type { CalendarEvent, EventType } from "@/lib/calendar-data"
+import type { CalendarEvent, EventSource, EventType } from "@/lib/calendar-data"
 
 // ─── 상수 ─────────────────────────────────────────────────────────────────────
 
@@ -23,8 +32,22 @@ const EVENT_TYPES: { value: EventType; label: string; color: string; bg: string;
   { value: "other",    label: "기타",     color: "text-gray-600",  bg: "bg-gray-50 border-gray-200",   dot: "bg-gray-400" },
 ]
 
+const SOURCE_FILTERS: { value: "all" | EventSource; label: string }[] = [
+  { value: "all", label: "전체" },
+  { value: "calendar", label: "팀 일정" },
+  { value: "partner", label: "파트너 일정" },
+]
+
 function getTypeStyle(type: EventType) {
   return EVENT_TYPES.find((t) => t.value === type) ?? EVENT_TYPES[EVENT_TYPES.length - 1]
+}
+
+function getEventSource(event: CalendarEvent): EventSource {
+  return event.source ?? "calendar"
+}
+
+function getEventSourceLabel(event: CalendarEvent) {
+  return event.sourceLabel ?? (getEventSource(event) === "partner" ? "파트너" : "팀")
 }
 
 function toDateStr(y: number, m: number, d: number) {
@@ -34,6 +57,24 @@ function toDateStr(y: number, m: number, d: number) {
 function formatDate(dateStr: string) {
   const d = new Date(dateStr + "T00:00:00")
   return d.toLocaleDateString("ko-KR", { month: "long", day: "numeric", weekday: "short" })
+}
+
+function enumerateEventDates(event: CalendarEvent) {
+  const start = new Date(`${event.date}T00:00:00`)
+  const end = new Date(`${(event.endDate ?? event.date)}T00:00:00`)
+  const dates: string[] = []
+
+  if (Number.isNaN(start.getTime()) || Number.isNaN(end.getTime()) || start.getTime() > end.getTime()) {
+    return [event.date]
+  }
+
+  const cursor = new Date(start)
+  while (cursor.getTime() <= end.getTime()) {
+    dates.push(toDateStr(cursor.getFullYear(), cursor.getMonth() + 1, cursor.getDate()))
+    cursor.setDate(cursor.getDate() + 1)
+  }
+
+  return dates
 }
 
 // ─── 인증 헬퍼 ────────────────────────────────────────────────────────────────
@@ -51,6 +92,20 @@ function adminFetch(url: string, options?: RequestInit) {
       ...options?.headers,
     },
   })
+}
+
+async function readJsonOrThrow<T>(response: Response): Promise<T> {
+  const data = await response.json().catch(() => null)
+
+  if (!response.ok) {
+    throw new Error(
+      (data && typeof data === "object" && "error" in data && typeof data.error === "string"
+        ? data.error
+        : "일정 요청에 실패했습니다.")
+    )
+  }
+
+  return data as T
 }
 
 // ─── 이벤트 폼 ────────────────────────────────────────────────────────────────
@@ -194,8 +249,10 @@ export default function AdminCalendarPage() {
   const [year, setYear] = useState(today.getFullYear())
   const [month, setMonth] = useState(today.getMonth() + 1)
   const [events, setEvents] = useState<CalendarEvent[]>([])
+  const [sourceFilter, setSourceFilter] = useState<"all" | EventSource>("all")
   const [loading, setLoading] = useState(false)
   const [formLoading, setFormLoading] = useState(false)
+  const [errorMessage, setErrorMessage] = useState<string | null>(null)
 
   const [selectedDate, setSelectedDate] = useState<string | null>(null)
   const [showForm, setShowForm] = useState(false)
@@ -206,8 +263,12 @@ export default function AdminCalendarPage() {
     setLoading(true)
     try {
       const res = await adminFetch(`/api/admin/calendar?year=${year}&month=${month}`)
-      if (res.ok) setEvents(await res.json())
-    } catch { /* silent */ }
+      const data = await readJsonOrThrow<CalendarEvent[]>(res)
+      setEvents(data)
+      setErrorMessage(null)
+    } catch (error) {
+      setErrorMessage(error instanceof Error ? error.message : "캘린더 데이터를 불러오지 못했습니다.")
+    }
     finally { setLoading(false) }
   }, [year, month])
 
@@ -217,12 +278,14 @@ export default function AdminCalendarPage() {
   const firstDay = new Date(year, month - 1, 1).getDay()
   const daysInMonth = new Date(year, month, 0).getDate()
   const todayStr = toDateStr(today.getFullYear(), today.getMonth() + 1, today.getDate())
+  const visibleEvents = events.filter((event) => sourceFilter === "all" || getEventSource(event) === sourceFilter)
 
   // map date → events
-  const eventsByDate = events.reduce<Record<string, CalendarEvent[]>>((acc, ev) => {
-    const key = ev.date
-    if (!acc[key]) acc[key] = []
-    acc[key].push(ev)
+  const eventsByDate = visibleEvents.reduce<Record<string, CalendarEvent[]>>((acc, ev) => {
+    enumerateEventDates(ev).forEach((key) => {
+      if (!acc[key]) acc[key] = []
+      acc[key].push(ev)
+    })
     return acc
   }, {})
 
@@ -250,31 +313,41 @@ export default function AdminCalendarPage() {
         description: data.description || undefined,
       }
       if (editingEvent) {
-        await adminFetch(`/api/admin/calendar/${editingEvent.id}`, {
+        const response = await adminFetch(`/api/admin/calendar/${editingEvent.id}`, {
           method: "PATCH", body: JSON.stringify(payload),
         })
+        await readJsonOrThrow(response)
       } else {
-        await adminFetch("/api/admin/calendar", {
+        const response = await adminFetch("/api/admin/calendar", {
           method: "POST", body: JSON.stringify(payload),
         })
+        await readJsonOrThrow(response)
       }
       setShowForm(false)
       setEditingEvent(null)
+      setErrorMessage(null)
       await fetchEvents()
-    } catch { /* silent */ }
+    } catch (error) {
+      setErrorMessage(error instanceof Error ? error.message : "일정 저장에 실패했습니다.")
+    }
     finally { setFormLoading(false) }
   }
 
   const handleDelete = async (ev: CalendarEvent) => {
+    if (ev.readonly) return
     setFormLoading(true)
     try {
-      await adminFetch(`/api/admin/calendar/${ev.id}`, { method: "DELETE" })
+      const response = await adminFetch(`/api/admin/calendar/${ev.id}`, { method: "DELETE" })
+      await readJsonOrThrow(response)
       setDeleteTarget(null)
       if (selectedDate === ev.date && eventsByDate[ev.date]?.length === 1) {
         setSelectedDate(null)
       }
+      setErrorMessage(null)
       await fetchEvents()
-    } catch { /* silent */ }
+    } catch (error) {
+      setErrorMessage(error instanceof Error ? error.message : "일정 삭제에 실패했습니다.")
+    }
     finally { setFormLoading(false) }
   }
 
@@ -285,6 +358,7 @@ export default function AdminCalendarPage() {
   }
 
   const openEdit = (ev: CalendarEvent) => {
+    if (ev.readonly) return
     setEditingEvent(ev)
     setShowForm(true)
   }
@@ -311,12 +385,14 @@ export default function AdminCalendarPage() {
   const selectedEvents = selectedDate ? (eventsByDate[selectedDate] ?? []) : []
 
   // ─── Upcoming (next 7 days) ────────────────────────────────────
-  const upcomingEvents = events
-    .filter((e) => e.date >= todayStr)
+  const upcomingEvents = visibleEvents
+    .filter((e) => (e.endDate ?? e.date) >= todayStr)
     .slice(0, 8)
 
   const monthLabel = `${year}년 ${month}월`
-  const totalThisMonth = events.length
+  const totalThisMonth = visibleEvents.length
+  const totalPartnerEvents = events.filter((event) => getEventSource(event) === "partner").length
+  const totalTeamEvents = events.filter((event) => getEventSource(event) === "calendar").length
 
   return (
     <div className="px-8 pt-12 pb-20">
@@ -324,7 +400,10 @@ export default function AdminCalendarPage() {
       <div className="flex items-center justify-between mb-8">
         <div>
           <p className="text-[11px] font-medium text-[#1a1a1a]/30 uppercase tracking-widest mb-1">Admin</p>
-          <h1 className="text-2xl font-bold text-[#111110] tracking-[-0.02em]">팀 캘린더</h1>
+          <h1 className="text-2xl font-bold text-[#111110] tracking-[-0.02em]">운영 캘린더</h1>
+          <p className="mt-2 text-[13px] leading-6 text-[#1a1a1a]/50">
+            팀 일정과 파트너 운영 일정을 함께 보되, 파트너 일정은 읽기 전용으로 표시되고 수정은 파트너 워크스페이스에서 진행합니다.
+          </p>
         </div>
         <Button size="sm" onClick={() => openCreate()}>
           <Plus className="w-4 h-4 mr-1.5" />
@@ -332,13 +411,26 @@ export default function AdminCalendarPage() {
         </Button>
       </div>
 
+      {errorMessage && (
+        <div className="mb-6 rounded-2xl border border-red-200 bg-red-50 px-5 py-4 text-[12px] leading-5 text-red-700">
+          <strong className="mr-2">캘린더 오류:</strong>
+          <span>{errorMessage}</span>
+        </div>
+      )}
+
       {/* Stats strip */}
-      <div className="flex items-center gap-6 mb-6 text-[13px]">
+      <div className="flex flex-wrap items-center gap-4 mb-6 text-[13px]">
         <span className="text-[#1a1a1a]/40">
           이번달 <span className="font-semibold text-[#111110]">{totalThisMonth}개</span>
         </span>
+        <span className="text-[#1a1a1a]/40">
+          팀 일정 <span className="font-semibold text-[#111110]">{totalTeamEvents}개</span>
+        </span>
+        <span className="text-[#1a1a1a]/40">
+          파트너 일정 <span className="font-semibold text-[#111110]">{totalPartnerEvents}개</span>
+        </span>
         {EVENT_TYPES.slice(0, 4).map((t) => {
-          const cnt = events.filter(e => e.type === t.value).length
+          const cnt = visibleEvents.filter(e => e.type === t.value).length
           if (cnt === 0) return null
           return (
             <span key={t.value} className="flex items-center gap-1.5 text-[#1a1a1a]/50">
@@ -347,6 +439,22 @@ export default function AdminCalendarPage() {
             </span>
           )
         })}
+        <div className="ml-auto inline-flex rounded-xl border border-[#e8e8e4] bg-white p-1">
+          {SOURCE_FILTERS.map((filter) => (
+            <button
+              key={filter.value}
+              type="button"
+              onClick={() => setSourceFilter(filter.value)}
+              className={`rounded-lg px-3 py-1.5 text-[12px] font-medium transition-colors ${
+                sourceFilter === filter.value
+                  ? "bg-[#111110] text-white"
+                  : "text-[#1a1a1a]/45 hover:bg-[#f5f5f2] hover:text-[#111110]"
+              }`}
+            >
+              {filter.label}
+            </button>
+          ))}
+        </div>
       </div>
 
       {/* Main grid */}
@@ -408,6 +516,15 @@ export default function AdminCalendarPage() {
                 <div
                   key={day}
                   onClick={() => setSelectedDate(isSelected ? null : dateStr)}
+                  onKeyDown={(event) => {
+                    if (event.key === "Enter" || event.key === " ") {
+                      event.preventDefault()
+                      setSelectedDate(isSelected ? null : dateStr)
+                    }
+                  }}
+                  role="button"
+                  tabIndex={0}
+                  aria-label={`${monthLabel} ${day}일 일정 보기`}
                   className={`h-24 border-b border-r border-[#f0f0ec] p-1.5 cursor-pointer transition-colors relative group ${
                     isSelected
                       ? "bg-[#111110]/5"
@@ -430,7 +547,8 @@ export default function AdminCalendarPage() {
                     {/* Quick add on hover */}
                     <button
                       onClick={(e) => { e.stopPropagation(); openCreate(dateStr) }}
-                      className="opacity-0 group-hover:opacity-100 w-5 h-5 flex items-center justify-center rounded text-[#1a1a1a]/30 hover:text-[#111110] hover:bg-[#e8e8e4] transition-all"
+                      aria-label={`${monthLabel} ${day}일에 일정 추가`}
+                      className="w-5 h-5 flex items-center justify-center rounded text-[#1a1a1a]/30 hover:text-[#111110] hover:bg-[#e8e8e4] transition-all opacity-100 sm:opacity-0 sm:group-hover:opacity-100"
                     >
                       <Plus className="w-3 h-3" />
                     </button>
@@ -440,12 +558,18 @@ export default function AdminCalendarPage() {
                   <div className="space-y-0.5 overflow-hidden">
                     {dayEvents.slice(0, 3).map((ev) => {
                       const style = getTypeStyle(ev.type)
+                      const isPartnerEvent = getEventSource(ev) === "partner"
                       return (
                         <div
                           key={ev.id}
                           className={`flex items-center gap-1 px-1.5 py-0.5 rounded text-[10px] font-medium truncate border ${style.bg} ${style.color}`}
                         >
                           <span className={`w-1.5 h-1.5 rounded-full shrink-0 ${style.dot}`} />
+                          {isPartnerEvent && (
+                            <span className="rounded bg-white/80 px-1 py-0 text-[9px] font-semibold text-[#111110]/70">
+                              P
+                            </span>
+                          )}
                           <span className="truncate">{ev.title}</span>
                         </div>
                       )
@@ -474,6 +598,7 @@ export default function AdminCalendarPage() {
                 </div>
                 <button
                   onClick={() => openCreate(selectedDate)}
+                  aria-label={`${formatDate(selectedDate)}에 일정 추가`}
                   className="w-7 h-7 flex items-center justify-center rounded-lg bg-[#111110] text-white hover:bg-[#111110]/80 transition-colors"
                 >
                   <Plus className="w-3.5 h-3.5" />
@@ -488,26 +613,55 @@ export default function AdminCalendarPage() {
                 <div className="divide-y divide-[#f0f0ec]">
                   {selectedEvents.map((ev) => {
                     const style = getTypeStyle(ev.type)
+                    const isPartnerEvent = getEventSource(ev) === "partner"
                     return (
                       <div key={ev.id} className="px-4 py-3">
                         <div className="flex items-start justify-between gap-2 mb-1.5">
-                          <div className="flex items-center gap-1.5 min-w-0">
-                            <span className={`w-2 h-2 rounded-full shrink-0 ${style.dot}`} />
-                            <p className="text-[13px] font-medium text-[#111110] truncate">{ev.title}</p>
+                          <div className="min-w-0">
+                            <div className="flex items-center gap-1.5 min-w-0">
+                              <span className={`w-2 h-2 rounded-full shrink-0 ${style.dot}`} />
+                              <p className="text-[13px] font-medium text-[#111110] truncate">{ev.title}</p>
+                            </div>
+                            <div className="mt-1 flex flex-wrap items-center gap-1.5">
+                              <span className="rounded-full bg-[#f0f0ec] px-2 py-0.5 text-[10px] font-medium text-[#1a1a1a]/55">
+                                {getEventSourceLabel(ev)}
+                              </span>
+                              <span className={`rounded-full px-2 py-0.5 text-[10px] font-medium ${style.bg} ${style.color}`}>
+                                {getTypeStyle(ev.type).label}
+                              </span>
+                              {ev.partnerName && (
+                                <span className="rounded-full border border-[#e8e8e4] px-2 py-0.5 text-[10px] text-[#1a1a1a]/45">
+                                  {ev.partnerName}
+                                </span>
+                              )}
+                            </div>
                           </div>
-                          <div className="flex items-center gap-0.5 shrink-0">
-                            <button
-                              onClick={() => openEdit(ev)}
-                              className="w-6 h-6 flex items-center justify-center rounded hover:bg-[#f0f0ec] text-[#1a1a1a]/30 hover:text-[#111110] transition-colors"
-                            >
-                              <Pencil className="w-3 h-3" />
-                            </button>
-                            <button
-                              onClick={() => setDeleteTarget(ev)}
-                              className="w-6 h-6 flex items-center justify-center rounded hover:bg-red-50 text-[#1a1a1a]/30 hover:text-red-500 transition-colors"
-                            >
-                              <Trash2 className="w-3 h-3" />
-                            </button>
+                          <div className="flex items-center gap-1 shrink-0">
+                            {isPartnerEvent && ev.href ? (
+                              <Link
+                                href={ev.href}
+                                className="rounded-lg border border-[#e8e8e4] px-2.5 py-1 text-[11px] font-medium text-[#1a1a1a]/55 transition-colors hover:border-[#111110]/20 hover:text-[#111110]"
+                              >
+                                파트너 열기
+                              </Link>
+                            ) : (
+                              <>
+                                <button
+                                  onClick={() => openEdit(ev)}
+                                  aria-label={`${ev.title} 일정 수정`}
+                                  className="w-6 h-6 flex items-center justify-center rounded hover:bg-[#f0f0ec] text-[#1a1a1a]/30 hover:text-[#111110] transition-colors"
+                                >
+                                  <Pencil className="w-3 h-3" />
+                                </button>
+                                <button
+                                  onClick={() => setDeleteTarget(ev)}
+                                  aria-label={`${ev.title} 일정 삭제`}
+                                  className="w-6 h-6 flex items-center justify-center rounded hover:bg-red-50 text-[#1a1a1a]/30 hover:text-red-500 transition-colors"
+                                >
+                                  <Trash2 className="w-3 h-3" />
+                                </button>
+                              </>
+                            )}
                           </div>
                         </div>
                         <div className="space-y-1 text-[11px] text-[#1a1a1a]/50">
@@ -523,10 +677,21 @@ export default function AdminCalendarPage() {
                               {ev.assignees.join(", ")}
                             </div>
                           )}
+                          {ev.dealTitle && (
+                            <div className="flex items-start gap-1.5">
+                              <span className="mt-[2px] h-3 w-3 shrink-0 rounded-full bg-[#111110]/8" />
+                              <span>연결 거래: {ev.dealTitle}</span>
+                            </div>
+                          )}
                           {ev.description && (
                             <div className="flex items-start gap-1.5">
                               <AlignLeft className="w-3 h-3 mt-0.5 shrink-0" />
                               <span className="line-clamp-2">{ev.description}</span>
+                            </div>
+                          )}
+                          {isPartnerEvent && (
+                            <div className="rounded-lg bg-[#fafaf8] px-2.5 py-2 text-[11px] text-[#1a1a1a]/45">
+                              파트너 일정은 파트너 운영 상세에서 수정합니다.
                             </div>
                           )}
                         </div>
@@ -556,11 +721,21 @@ export default function AdminCalendarPage() {
                     (new Date(ev.date + "T00:00:00").getTime() - new Date(todayStr + "T00:00:00").getTime())
                     / 86400000
                   )
+                  const isPartnerEvent = getEventSource(ev) === "partner"
                   return (
                     <div
                       key={ev.id}
                       className="px-4 py-2.5 cursor-pointer hover:bg-[#fafaf8] transition-colors"
                       onClick={() => setSelectedDate(ev.date)}
+                      onKeyDown={(event) => {
+                        if (event.key === "Enter" || event.key === " ") {
+                          event.preventDefault()
+                          setSelectedDate(ev.date)
+                        }
+                      }}
+                      role="button"
+                      tabIndex={0}
+                      aria-label={`${ev.title} 일정 보기`}
                     >
                       <div className="flex items-center justify-between gap-2">
                         <div className="flex items-center gap-2 min-w-0">
@@ -571,9 +746,19 @@ export default function AdminCalendarPage() {
                           {daysLeft === 0 ? "오늘" : `D-${daysLeft}`}
                         </span>
                       </div>
-                      <p className="text-[11px] text-[#1a1a1a]/40 ml-4 mt-0.5">
-                        {formatDate(ev.date)}{ev.time ? ` · ${ev.time}` : ""}
-                      </p>
+                      <div className="ml-4 mt-0.5 flex flex-wrap items-center gap-1.5">
+                        <p className="text-[11px] text-[#1a1a1a]/40">
+                          {formatDate(ev.date)}{ev.time ? ` · ${ev.time}` : ""}
+                        </p>
+                        <span className="rounded-full bg-[#f0f0ec] px-2 py-0.5 text-[10px] font-medium text-[#1a1a1a]/50">
+                          {getEventSourceLabel(ev)}
+                        </span>
+                        {isPartnerEvent && ev.partnerName && (
+                          <span className="rounded-full border border-[#e8e8e4] px-2 py-0.5 text-[10px] text-[#1a1a1a]/45">
+                            {ev.partnerName}
+                          </span>
+                        )}
+                      </div>
                     </div>
                   )
                 })}
@@ -584,56 +769,56 @@ export default function AdminCalendarPage() {
       </div>
 
       {/* Add / Edit Modal */}
-      {showForm && (
-        <div className="fixed inset-0 z-50 flex items-center justify-center bg-black/40 backdrop-blur-sm p-4">
-          <div className="bg-white rounded-2xl shadow-xl w-full max-w-md max-h-[90vh] overflow-y-auto">
-            <div className="flex items-center justify-between px-6 pt-6 pb-4 border-b border-[#e8e8e4]">
-              <h3 className="text-[15px] font-semibold text-[#111110]">
-                {editingEvent ? "일정 수정" : "일정 추가"}
-              </h3>
-              <button
-                onClick={() => { setShowForm(false); setEditingEvent(null) }}
-                className="w-7 h-7 flex items-center justify-center rounded-lg hover:bg-[#f0f0ec] text-[#1a1a1a]/40 transition-colors"
-              >
-                <X className="w-4 h-4" />
-              </button>
-            </div>
-            <div className="px-6 py-4">
-              <EventForm
-                initial={editForm}
-                onSave={handleSave}
-                onCancel={() => { setShowForm(false); setEditingEvent(null) }}
-                loading={formLoading}
-                isEdit={!!editingEvent}
-              />
-            </div>
-          </div>
-        </div>
-      )}
+      <Dialog open={showForm} onOpenChange={(open) => {
+        if (!open && !formLoading) {
+          setShowForm(false)
+          setEditingEvent(null)
+        }
+      }}>
+        <DialogContent className="max-w-md bg-white max-h-[90vh] overflow-y-auto">
+          <DialogHeader>
+            <DialogTitle>{editingEvent ? "일정 수정" : "일정 추가"}</DialogTitle>
+            <DialogDescription>
+              팀 일정은 여기서 수정하고, 파트너 일정은 파트너 운영 상세에서 수정합니다.
+            </DialogDescription>
+          </DialogHeader>
+          <EventForm
+            initial={editForm}
+            onSave={handleSave}
+            onCancel={() => { setShowForm(false); setEditingEvent(null) }}
+            loading={formLoading}
+            isEdit={!!editingEvent}
+          />
+        </DialogContent>
+      </Dialog>
 
       {/* Delete confirm */}
-      {deleteTarget && (
-        <div className="fixed inset-0 z-50 flex items-center justify-center bg-black/40 backdrop-blur-sm">
-          <div className="bg-white rounded-2xl p-6 w-full max-w-sm shadow-xl">
-            <p className="font-semibold text-[#111110] mb-1">일정 삭제</p>
-            <p className="text-[13px] text-[#1a1a1a]/60 mb-5">
-              <span className="font-medium text-[#111110]">&ldquo;{deleteTarget.title}&rdquo;</span>을 삭제하시겠습니까?
-            </p>
-            <div className="flex gap-2">
-              <Button variant="outline" className="flex-1" onClick={() => setDeleteTarget(null)} disabled={formLoading}>
-                취소
-              </Button>
-              <Button
-                className="flex-1 bg-red-500 hover:bg-red-600 text-white"
-                onClick={() => handleDelete(deleteTarget)}
-                disabled={formLoading}
-              >
-                {formLoading ? "삭제 중..." : "삭제"}
-              </Button>
-            </div>
-          </div>
-        </div>
-      )}
+      <Dialog open={Boolean(deleteTarget)} onOpenChange={(open) => {
+        if (!open && !formLoading) setDeleteTarget(null)
+      }}>
+        <DialogContent className="max-w-sm bg-white">
+          <DialogHeader>
+            <DialogTitle>일정 삭제</DialogTitle>
+            <DialogDescription>
+              {deleteTarget
+                ? <><span className="font-medium text-[#111110]">&ldquo;{deleteTarget.title}&rdquo;</span>을 삭제하시겠습니까?</>
+                : "선택한 일정을 삭제하시겠습니까?"}
+            </DialogDescription>
+          </DialogHeader>
+          <DialogFooter>
+            <Button variant="outline" onClick={() => setDeleteTarget(null)} disabled={formLoading}>
+              취소
+            </Button>
+            <Button
+              className="bg-red-500 text-white hover:bg-red-600"
+              onClick={() => deleteTarget && handleDelete(deleteTarget)}
+              disabled={formLoading || !deleteTarget}
+            >
+              {formLoading ? "삭제 중..." : "삭제"}
+            </Button>
+          </DialogFooter>
+        </DialogContent>
+      </Dialog>
     </div>
   )
 }

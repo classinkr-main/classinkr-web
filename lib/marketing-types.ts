@@ -60,6 +60,30 @@ export interface EmailCampaign {
   createdAt: string
 }
 
+export interface EmailComposerDraft {
+  subject: string
+  body: string
+  targetTags: string[]
+}
+
+export interface SavedAudienceSegment {
+  id: string
+  name: string
+  targetTags: string[]
+  createdAt: string
+  updatedAt: string
+}
+
+export interface PersonalizedEmailRecipient {
+  email: string
+  name: string
+  subject?: string
+  personalizedSubject?: string
+  personalizedBody: string
+}
+export type EmailDraft = EmailComposerDraft
+export type SavedEmailSegment = SavedAudienceSegment
+
 // ─── API 요청/응답 타입 ──────────────────────────────────────
 
 /** 뉴스레터 구독 요청 (프론트엔드 → /api/newsletter/subscribe) */
@@ -75,10 +99,10 @@ export interface NewsletterUnsubscribeRequest {
 }
 
 /** 이메일 발송 요청 (관리자 → /api/admin/email/send) */
-export interface SendEmailRequest {
-  subject: string
-  body: string
-  targetTags: string[]  // 빈 배열 = 전체 active 구독자
+export interface SendEmailRequest extends EmailComposerDraft {
+  mode?: "campaign" | "test"
+  testEmail?: string
+  aiPersonalized?: PersonalizedEmailRecipient[]
 }
 
 /** 구독자 수동 추가/수정 요청 (관리자 → /api/admin/subscribers) */

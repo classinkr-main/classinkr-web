@@ -1,12 +1,18 @@
 import fs from "fs"
 import path from "path"
 
+import {
+  DEFAULT_NOTIFICATION_APPEARANCE,
+  mergeNotificationAppearance,
+  type NotificationAppearanceSettings,
+} from "@/lib/notifications/types"
+
 const DATA_DIR = path.join(process.cwd(), "data")
 
 function readJson<T>(file: string): T {
-  const p = path.join(DATA_DIR, file)
-  if (!fs.existsSync(p)) return (Array.isArray([]) ? [] : {}) as T
-  return JSON.parse(fs.readFileSync(p, "utf8")) as T
+  const target = path.join(DATA_DIR, file)
+  if (!fs.existsSync(target)) return {} as T
+  return JSON.parse(fs.readFileSync(target, "utf8")) as T
 }
 
 function writeJson(file: string, data: unknown) {
@@ -31,8 +37,74 @@ export interface LeadRecord {
   notes?: string
 }
 
+export interface SiteSettings {
+  demoFormEnabled: boolean
+  demoBannerEnabled: boolean
+  demoBannerText: string
+  blogSectionEnabled: boolean
+  noticeBannerEnabled: boolean
+  noticeBannerText: string
+  googleSheetWebhookUrl?: string
+  leadWebhookUrl?: string
+  channelTalkWebhookUrl?: string
+  emailWebhookUrl?: string
+  wecomOpsWebhookUrl?: string
+  wecomCriticalWebhookUrl?: string
+  kakaoAlimtalkWebhookUrl?: string
+  notificationDigestEmailList: string[]
+  notificationAppearance: NotificationAppearanceSettings
+}
+
+export const DEFAULT_SITE_SETTINGS: SiteSettings = {
+  demoFormEnabled: true,
+  demoBannerEnabled: false,
+  demoBannerText: "",
+  blogSectionEnabled: true,
+  noticeBannerEnabled: false,
+  noticeBannerText: "",
+  googleSheetWebhookUrl: undefined,
+  leadWebhookUrl: undefined,
+  channelTalkWebhookUrl: undefined,
+  emailWebhookUrl: undefined,
+  wecomOpsWebhookUrl: undefined,
+  wecomCriticalWebhookUrl: undefined,
+  kakaoAlimtalkWebhookUrl: undefined,
+  notificationDigestEmailList: [],
+  notificationAppearance: DEFAULT_NOTIFICATION_APPEARANCE,
+}
+
+function normalizeStringArray(values: unknown): string[] {
+  if (!Array.isArray(values)) return []
+
+  return [...new Set(
+    values
+      .map((value) => (typeof value === "string" ? value.trim() : ""))
+      .filter(Boolean)
+  )]
+}
+
+function normalizeSettings(raw?: Partial<SiteSettings>): SiteSettings {
+  return {
+    ...DEFAULT_SITE_SETTINGS,
+    ...raw,
+    googleSheetWebhookUrl: raw?.googleSheetWebhookUrl?.trim() || undefined,
+    leadWebhookUrl: raw?.leadWebhookUrl?.trim() || undefined,
+    channelTalkWebhookUrl: raw?.channelTalkWebhookUrl?.trim() || undefined,
+    emailWebhookUrl: raw?.emailWebhookUrl?.trim() || undefined,
+    wecomOpsWebhookUrl: raw?.wecomOpsWebhookUrl?.trim() || undefined,
+    wecomCriticalWebhookUrl: raw?.wecomCriticalWebhookUrl?.trim() || undefined,
+    kakaoAlimtalkWebhookUrl: raw?.kakaoAlimtalkWebhookUrl?.trim() || undefined,
+    notificationDigestEmailList: normalizeStringArray(raw?.notificationDigestEmailList),
+    notificationAppearance: mergeNotificationAppearance(raw?.notificationAppearance),
+  }
+}
+
 export function getLeads(): LeadRecord[] {
-  return readJson<LeadRecord[]>("leads.json")
+  try {
+    return readJson<LeadRecord[]>("leads.json")
+  } catch {
+    return []
+  }
 }
 
 export function saveLead(lead: Omit<LeadRecord, "id" | "status">): LeadRecord {
@@ -49,55 +121,39 @@ export function saveLead(lead: Omit<LeadRecord, "id" | "status">): LeadRecord {
 
 export function updateLead(id: string, patch: Partial<LeadRecord>): LeadRecord | null {
   const leads = getLeads()
-  const idx = leads.findIndex((l) => l.id === id)
-  if (idx === -1) return null
-  leads[idx] = { ...leads[idx], ...patch, id }
+  const index = leads.findIndex((lead) => lead.id === id)
+  if (index === -1) return null
+
+  leads[index] = { ...leads[index], ...patch, id }
   writeJson("leads.json", leads)
-  return leads[idx]
+  return leads[index]
 }
 
 export function deleteLead(id: string): boolean {
   const leads = getLeads()
-  const next = leads.filter((l) => l.id !== id)
+  const next = leads.filter((lead) => lead.id !== id)
   if (next.length === leads.length) return false
+
   writeJson("leads.json", next)
   return true
 }
 
-export interface SiteSettings {
-  demoFormEnabled: boolean
-  demoBannerEnabled: boolean
-  demoBannerText: string
-  blogSectionEnabled: boolean
-  noticeBannerEnabled: boolean
-  noticeBannerText: string
-  /** 외부 연동 URL — Supabase 전환 시 admin_settings 테이블로 이동 */
-  googleSheetWebhookUrl?: string
-  leadWebhookUrl?: string
-  channelTalkWebhookUrl?: string
-  emailWebhookUrl?: string
-}
-
-const DEFAULT_SETTINGS: SiteSettings = {
-  demoFormEnabled: true,
-  demoBannerEnabled: false,
-  demoBannerText: "",
-  blogSectionEnabled: true,
-  noticeBannerEnabled: false,
-  noticeBannerText: "",
-}
-
 export function getSettings(): SiteSettings {
   try {
-    return { ...DEFAULT_SETTINGS, ...readJson<Partial<SiteSettings>>("settings.json") }
+    const raw = readJson<Partial<SiteSettings>>("settings.json")
+    return normalizeSettings(raw)
   } catch {
-    return DEFAULT_SETTINGS
+    return DEFAULT_SITE_SETTINGS
   }
 }
 
 export function updateSettings(patch: Partial<SiteSettings>): SiteSettings {
   const current = getSettings()
-  const next = { ...current, ...patch }
+  const next = normalizeSettings({
+    ...current,
+    ...patch,
+  })
+
   writeJson("settings.json", next)
   return next
 }

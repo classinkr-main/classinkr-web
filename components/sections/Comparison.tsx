@@ -43,14 +43,14 @@ export function Comparison() {
         <section className="py-16 md:py-24 bg-white">
             <div className="container mx-auto px-4 md:px-6">
                 <div className="text-center max-w-3xl mx-auto mb-14">
-                    <span className="inline-block py-1 px-3 rounded-full bg-slate-200 text-slate-600 text-sm font-semibold mb-4">
-                        왜 전환해야 할까요?
+                    <span className="inline-block py-1 px-3 rounded-full bg-[#ECFDF5] text-[#084734] text-sm font-semibold mb-4">
+                        Zoom·구글 클래스룸과 무엇이 다른가요?
                     </span>
-                    <h2 className="text-3xl font-bold tracking-tight text-slate-900 sm:text-4xl mb-4 break-keep">
-                        Classin vs. 기존 방식
+                    <h2 className="text-3xl font-bold text-[#111110] sm:text-4xl mb-4 break-keep" style={{ letterSpacing: '-1px' }}>
+                        회의 도구가 아닌, 수업 전용 플랫폼
                     </h2>
-                    <p className="text-lg text-muted-foreground break-keep">
-                        수동 운영에서 스마트 운영으로, 무엇이 달라지는지 확인하세요.
+                    <p className="text-lg text-[#615D59] break-keep">
+                        Classin은 처음부터 교실 수업을 위해 설계되었습니다. 차이는 명확합니다.
                     </p>
                 </div>
 
@@ -59,16 +59,17 @@ export function Comparison() {
                     whileInView={{ opacity: 1, y: 0 }}
                     transition={{ duration: 0.6 }}
                     viewport={{ once: true }}
-                    className="max-w-4xl mx-auto overflow-hidden rounded-2xl border border-slate-200 shadow-lg bg-white"
+                    className="max-w-4xl mx-auto overflow-hidden rounded-2xl border border-[rgba(0,0,0,0.08)] bg-white"
+                    style={{ boxShadow: 'rgba(0,0,0,0.04) 0px 4px 18px, rgba(0,0,0,0.027) 0px 2px 7.8px, rgba(0,0,0,0.02) 0px 0.8px 2.9px' }}
                 >
                     {/* Table Header */}
-                    <div className="grid grid-cols-3 bg-slate-900 text-white text-sm font-semibold">
-                        <div className="py-4 px-6 text-slate-400 text-xs uppercase tracking-wider">영역</div>
-                        <div className="py-4 px-6 border-l border-slate-700 flex items-center gap-2">
-                            <X className="w-4 h-4 text-red-400" />
+                    <div className="grid grid-cols-3 bg-[#111110] text-white text-sm font-semibold">
+                        <div className="py-4 px-6 text-[#A39E98] text-xs uppercase tracking-wider">영역</div>
+                        <div className="py-4 px-6 border-l border-[rgba(255,255,255,0.1)] flex items-center gap-2">
+                            <X className="w-4 h-4 text-[#A39E98]" />
                             기존 방식
                         </div>
-                        <div className="py-4 px-6 border-l border-slate-700 flex items-center gap-2 text-blue-300">
+                        <div className="py-4 px-6 border-l border-[rgba(255,255,255,0.1)] flex items-center gap-2 text-[#6EE7B7]">
                             <Check className="w-4 h-4 text-green-400" />
                             Classin 도입 후
                         </div>
@@ -82,16 +83,16 @@ export function Comparison() {
                             whileInView={{ opacity: 1, x: 0 }}
                             transition={{ delay: index * 0.07, duration: 0.4 }}
                             viewport={{ once: true }}
-                            className={`grid grid-cols-3 text-sm border-t border-slate-100 ${index % 2 === 0 ? "bg-white" : "bg-slate-50/60"}`}
+                            className={`grid grid-cols-3 text-sm border-t border-[rgba(0,0,0,0.05)] ${index % 2 === 0 ? "bg-white" : "bg-[#F6F5F4]/60"}`}
                         >
-                            <div className="py-4 px-6 font-semibold text-slate-700 flex items-center break-keep">
+                            <div className="py-4 px-6 font-semibold text-[#615D59] flex items-center break-keep">
                                 {row.feature}
                             </div>
-                            <div className="py-4 px-6 border-l border-slate-100 text-slate-500 flex items-start gap-2 break-keep">
-                                <X className="w-3.5 h-3.5 text-red-400 mt-0.5 shrink-0" />
+                            <div className="py-4 px-6 border-l border-[rgba(0,0,0,0.05)] text-[#A39E98] flex items-start gap-2 break-keep">
+                                <X className="w-3.5 h-3.5 text-[#A39E98] mt-0.5 shrink-0" />
                                 {row.traditional}
                             </div>
-                            <div className="py-4 px-6 border-l border-slate-100 text-slate-800 font-medium flex items-start gap-2 break-keep">
+                            <div className="py-4 px-6 border-l border-[rgba(0,0,0,0.05)] text-[#111110] font-medium flex items-start gap-2 break-keep">
                                 <Check className="w-3.5 h-3.5 text-green-500 mt-0.5 shrink-0" />
                                 {row.eduscale}
                             </div>
@@ -101,7 +102,7 @@ export function Comparison() {
 
                 {/* Soft CTA */}
                 <div className="text-center mt-10">
-                    <p className="text-slate-500 mb-4 text-sm">전환할 준비가 되셨나요?</p>
+                    <p className="text-[#A39E98] mb-4 text-sm">전환할 준비가 되셨나요?</p>
                     <DemoModal>
                         <Button size="lg" className="px-8">
                             무료 데모 신청하기

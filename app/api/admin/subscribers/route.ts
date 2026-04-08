@@ -1,4 +1,4 @@
-import { NextRequest, NextResponse } from "next/server"
+﻿import { NextRequest, NextResponse } from "next/server"
 import { verifyAdmin } from "@/lib/admin-auth"
 import {
   getAllSubscribers,
@@ -8,7 +8,7 @@ import {
 import type { UpsertSubscriberRequest } from "@/lib/marketing-types"
 
 export async function GET(req: NextRequest) {
-  const authError = verifyAdmin(req)
+  const authError = await verifyAdmin(req)
   if (authError) return authError
 
   const { searchParams } = new URL(req.url)
@@ -28,7 +28,7 @@ export async function GET(req: NextRequest) {
 }
 
 export async function POST(req: NextRequest) {
-  const authError = verifyAdmin(req)
+  const authError = await verifyAdmin(req)
   if (authError) return authError
 
   try {
@@ -36,7 +36,7 @@ export async function POST(req: NextRequest) {
 
     if (!body.email || !body.name) {
       return NextResponse.json(
-        { error: "이름과 이메일은 필수입니다." },
+        { error: "?대쫫怨??대찓?쇱? ?꾩닔?낅땲??" },
         { status: 400 }
       )
     }
@@ -54,24 +54,24 @@ export async function POST(req: NextRequest) {
 
     return NextResponse.json({ ok: true, subscriber })
   } catch {
-    return NextResponse.json({ error: "잘못된 요청입니다." }, { status: 400 })
+    return NextResponse.json({ error: "?섎せ???붿껌?낅땲??" }, { status: 400 })
   }
 }
 
 export async function DELETE(req: NextRequest) {
-  const authError = verifyAdmin(req)
+  const authError = await verifyAdmin(req)
   if (authError) return authError
 
   const { searchParams } = new URL(req.url)
   const id = searchParams.get("id")
 
   if (!id) {
-    return NextResponse.json({ error: "id 파라미터가 필요합니다." }, { status: 400 })
+    return NextResponse.json({ error: "id ?뚮씪誘명꽣媛 ?꾩슂?⑸땲??" }, { status: 400 })
   }
 
   const deleted = await deleteSubscriber(id)
   if (!deleted) {
-    return NextResponse.json({ error: "구독자를 찾을 수 없습니다." }, { status: 404 })
+    return NextResponse.json({ error: "援щ룆?먮? 李얠쓣 ???놁뒿?덈떎." }, { status: 404 })
   }
 
   return NextResponse.json({ ok: true })

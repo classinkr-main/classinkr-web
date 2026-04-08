@@ -1,4 +1,4 @@
-"use client"
+﻿"use client"
 
 import Image from "next/image"
 import Link from "next/link"
@@ -65,6 +65,21 @@ interface BlogPostEditorProps {
 
 type DraftState = "saved" | "saving" | "dirty"
 type AiAction = "card-news" | "reels" | "optimize" | "draft"
+
+const TEMPLATE_STORAGE_KEY = "admin-blog-templates"
+
+type BlogTemplate = {
+  id: string
+  name: string
+  savedAt: string
+  data: {
+    contentMarkdown: string
+    benefitItems: string[]
+    targetReader: string
+    category: string
+    cta: BlogPostInput["cta"]
+  }
+}
 type AiState = { action: AiAction; status: "loading" | "streaming" | "done" | "error"; result: string; topic?: string; tone?: string; length?: string; reference?: string }
 type EditorSnapshot = {
   form: BlogPostInput
@@ -173,7 +188,7 @@ function ToolbarButton({
     <button
       type="button"
       onClick={onClick}
-      className="inline-flex items-center gap-1 rounded-lg border border-[#e8e8e4] bg-white px-2 py-1.5 text-xs font-medium text-[#1a1a1a]/60 transition-colors hover:border-[#111110]/20 hover:text-[#111110]"
+      className="inline-flex items-center gap-1 rounded-lg border border-[#e8e8e4] bg-white px-2 py-1.5 text-xs font-medium text-[#1a1a1a]/60 transition-colors hover:border-[#1a1a1a]/20 hover:text-[#111110] active:scale-[0.96] active:bg-[#f7f7f5] duration-75"
     >
       {icon}
       <span>{children}</span>
@@ -198,7 +213,14 @@ export default function BlogPostEditor({
   const [aiState, setAiState] = useState<AiState | null>(null)
   const [draftInput, setDraftInput] = useState({ topic: "", tone: "전문적", length: "medium", reference: "" })
   const [showPreview, setShowPreview] = useState(false)
+  const [showTemplateModal, setShowTemplateModal] = useState(false)
+  const [templates, setTemplates] = useState<BlogTemplate[]>([])
+  const [templateTab, setTemplateTab] = useState<"load" | "save">("load")
+  const [templateName, setTemplateName] = useState("")
+  const [expandedTemplateId, setExpandedTemplateId] = useState<string | null>(null)
+  const [confirmDeleteTemplateId, setConfirmDeleteTemplateId] = useState<string | null>(null)
   const [slugEdited, setSlugEdited] = useState(Boolean(initialPost?.slug))
+  const [lastSavedAt, setLastSavedAt] = useState<Date | null>(null)
   const formRef = useRef(form)
   const tagsInputRef = useRef(tagsInput)
   const slugEditedRef = useRef(slugEdited)
@@ -343,7 +365,13 @@ export default function BlogPostEditor({
 
   useEffect(() => {
     const handleKeyDown = (event: KeyboardEvent) => {
-      if (!(event.metaKey || event.ctrlKey) || event.key.toLowerCase() !== "z") return
+      if (!(event.metaKey || event.ctrlKey)) return
+      if (event.key.toLowerCase() === "s") {
+        event.preventDefault()
+        handleSubmit()
+        return
+      }
+      if (event.key.toLowerCase() !== "z") return
       // Tiptap 에디터(contenteditable)에 포커스가 있을 때는 Tiptap이 자체 처리
       if ((event.target as HTMLElement).isContentEditable) return
       event.preventDefault()
@@ -352,7 +380,7 @@ export default function BlogPostEditor({
     }
     window.addEventListener("keydown", handleKeyDown)
     return () => window.removeEventListener("keydown", handleKeyDown)
-  }, [handleRedo, handleUndo])
+  }, [handleRedo, handleUndo]) // eslint-disable-line react-hooks/exhaustive-deps
 
   useEffect(() => {
     const rawDraft = localStorage.getItem(draftStorageKey)
@@ -378,9 +406,19 @@ export default function BlogPostEditor({
       setDraftState("saving")
       localStorage.setItem(draftStorageKey, JSON.stringify(form))
       setDraftState("saved")
+      setLastSavedAt(new Date())
     }, 700)
     return () => window.clearTimeout(timer)
   }, [draftStorageKey, form])
+
+  useEffect(() => {
+    try {
+      const raw = localStorage.getItem(TEMPLATE_STORAGE_KEY)
+      if (raw) setTemplates(JSON.parse(raw) as BlogTemplate[])
+    } catch {
+      // Ignore malformed template data.
+    }
+  }, [])
 
   const updateForm = <K extends keyof BlogPostInput>(key: K, value: BlogPostInput[K]) => {
     updateEditor((snapshot) => ({
@@ -493,9 +531,24 @@ export default function BlogPostEditor({
             : { action, title: form.title, content: form.contentMarkdown, category: form.category }
         ),
       })
+      if (res.status === 401) {
+        setAiState({
+          action,
+          status: "error",
+          result: "인증이 만료되었습니다. 다시 로그인해 주세요.",
+          ...(params ?? {}),
+        })
+        startTransition(() => router.replace("/admin/login"))
+        return
+      }
       if (!res.ok || !res.body) {
         const err = await res.json().catch(() => ({ error: "AI 처리 중 오류가 발생했습니다." })) as { error?: string }
-        setAiState({ action, status: "error", result: "AI 응답 중 오류가 발생했습니다. 잠시 후 다시 시도해주세요." })
+        setAiState({
+          action,
+          status: "error",
+          result: err.error || "AI 응답 중 오류가 발생했습니다. 잠시 후 다시 시도해주세요.",
+          ...(params ?? {}),
+        })
         return
       }
       setAiState({ action, status: "streaming", result: "" })
@@ -509,7 +562,12 @@ export default function BlogPostEditor({
       }
       setAiState((prev) => prev ? { ...prev, status: "done" } : null)
     } catch {
-      setAiState({ action, status: "error", result: "AI 응답 중 오류가 발생했습니다. 잠시 후 다시 시도해주세요." })
+      setAiState({
+        action,
+        status: "error",
+        result: "AI 응답 중 오류가 발생했습니다. 잠시 후 다시 시도해주세요.",
+        ...(params ?? {}),
+      })
     }
   }
 
@@ -522,6 +580,204 @@ export default function BlogPostEditor({
 
   return (
     <div className="min-h-screen bg-[#FAFAF8]">
+
+      {/* ── Template Modal ── */}
+      {showTemplateModal && (
+        <div className="fixed inset-0 z-50 flex items-center justify-center bg-black/40 backdrop-blur-sm p-4">
+          <div className="bg-white rounded-[24px] border border-[#e8e8e4] shadow-2xl w-full max-w-xl flex flex-col" style={{ maxHeight: "85vh" }}>
+            {/* Header */}
+            <div className="flex items-center justify-between border-b border-[#e8e8e4] px-5 py-4">
+              <div className="flex items-center gap-2.5">
+                <LayoutTemplate className="h-4 w-4 text-[#084734]" />
+                <p className="text-sm font-semibold text-[#111110]">템플릿</p>
+              </div>
+              <button
+                type="button"
+                onClick={() => { setShowTemplateModal(false); setTemplateName(""); setExpandedTemplateId(null); setConfirmDeleteTemplateId(null) }}
+                className="flex h-8 w-8 items-center justify-center rounded-xl border border-[#e8e8e4] text-[#1a1a1a]/40 hover:text-[#111110] transition-colors"
+              >
+                <X className="h-4 w-4" />
+              </button>
+            </div>
+
+            {/* Tabs */}
+            <div className="px-5 pt-4 shrink-0">
+              <div className="bg-[#f7f7f5] rounded-xl p-1 w-fit flex gap-0.5">
+                <button
+                  type="button"
+                  onClick={() => setTemplateTab("load")}
+                  className={`px-4 py-1.5 rounded-lg text-[13px] font-medium transition-colors ${
+                    templateTab === "load"
+                      ? "bg-white text-[#111110] shadow-sm"
+                      : "text-[#1a1a1a]/50 hover:text-[#111110]"
+                  }`}
+                >
+                  불러오기
+                </button>
+                <button
+                  type="button"
+                  onClick={() => setTemplateTab("save")}
+                  className={`px-4 py-1.5 rounded-lg text-[13px] font-medium transition-colors ${
+                    templateTab === "save"
+                      ? "bg-white text-[#111110] shadow-sm"
+                      : "text-[#1a1a1a]/50 hover:text-[#111110]"
+                  }`}
+                >
+                  현재 내용 저장
+                </button>
+              </div>
+            </div>
+
+            {/* Body */}
+            <div className="min-h-0 flex-1 overflow-y-auto px-5 py-4">
+              {templateTab === "save" && (
+                <div className="space-y-3">
+                  <p className="text-[13px] text-[#1a1a1a]/50">
+                    본문, 혜택 포인트, 독자 대상, 카테고리, CTA를 템플릿으로 저장합니다.
+                  </p>
+                  <input
+                    type="text"
+                    value={templateName}
+                    onChange={(e) => setTemplateName(e.target.value)}
+                    placeholder="예) 제품 소개 기본형"
+                    className="w-full rounded-xl border border-[#e8e8e4] bg-white px-4 py-2.5 text-sm outline-none transition-colors focus:border-[#084734]"
+                  />
+                  <button
+                    type="button"
+                    disabled={!templateName.trim()}
+                    onClick={() => {
+                      const newTemplate: BlogTemplate = {
+                        id: crypto.randomUUID(),
+                        name: templateName.trim(),
+                        savedAt: new Date().toISOString(),
+                        data: {
+                          contentMarkdown: form.contentMarkdown,
+                          benefitItems: form.benefitItems,
+                          targetReader: form.targetReader,
+                          category: form.category,
+                          cta: { ...form.cta },
+                        },
+                      }
+                      const next = [newTemplate, ...templates].slice(0, 10)
+                      setTemplates(next)
+                      localStorage.setItem(TEMPLATE_STORAGE_KEY, JSON.stringify(next))
+                      setTemplateName("")
+                      setTemplateTab("load")
+                    }}
+                    className="w-full rounded-xl bg-[#084734] px-4 py-2.5 text-[13px] font-medium text-white transition-opacity disabled:opacity-40 hover:opacity-90"
+                  >
+                    저장
+                  </button>
+                </div>
+              )}
+
+              {templateTab === "load" && (
+                templates.length === 0 ? (
+                  <div className="py-12 text-center text-[13px] text-[#1a1a1a]/30">
+                    저장된 템플릿이 없습니다
+                  </div>
+                ) : (
+                  <div className="space-y-2.5">
+                    {templates.map((t) => {
+                      const isExpanded = expandedTemplateId === t.id
+                      const isPendingDelete = confirmDeleteTemplateId === t.id
+                      return (
+                        <div
+                          key={t.id}
+                          className="rounded-2xl border border-[#e8e8e4] bg-[#fcfcfb] p-4 transition-colors"
+                        >
+                          <div className="flex items-start justify-between gap-3">
+                            <button
+                              type="button"
+                              onClick={() => setExpandedTemplateId(isExpanded ? null : t.id)}
+                              className="min-w-0 flex-1 text-left"
+                            >
+                              <p className="font-semibold text-[13px] text-[#111110]">{t.name}</p>
+                              <p className="mt-0.5 text-[11px] text-[#1a1a1a]/40">
+                                {new Date(t.savedAt).toLocaleDateString("ko-KR")}
+                                {t.data.category && ` · ${t.data.category}`}
+                              </p>
+                              {!isExpanded && t.data.contentMarkdown && (
+                                <p className="mt-1.5 text-xs text-[#1a1a1a]/40 line-clamp-1">
+                                  {t.data.contentMarkdown.replace(/#{1,6}\s|[*_`>-]/g, "").slice(0, 80)}…
+                                </p>
+                              )}
+                            </button>
+                            <div className="flex items-center gap-1.5 shrink-0">
+                              <button
+                                type="button"
+                                onClick={() => {
+                                  updateEditor((snapshot) => ({
+                                    ...snapshot,
+                                    form: {
+                                      ...snapshot.form,
+                                      contentMarkdown: t.data.contentMarkdown,
+                                      benefitItems: t.data.benefitItems,
+                                      targetReader: t.data.targetReader,
+                                      category: t.data.category,
+                                      cta: { ...t.data.cta },
+                                    },
+                                  }))
+                                  setShowTemplateModal(false)
+                                  setConfirmDeleteTemplateId(null)
+                                  setExpandedTemplateId(null)
+                                  setNotice("템플릿을 불러왔습니다.")
+                                }}
+                                className="text-[12px] font-medium text-[#084734] hover:text-[#084734]/70 transition-colors"
+                              >
+                                불러오기
+                              </button>
+                              {isPendingDelete ? (
+                                <div className="flex items-center gap-1">
+                                  <button
+                                    type="button"
+                                    onClick={() => {
+                                      const next = templates.filter((item) => item.id !== t.id)
+                                      setTemplates(next)
+                                      localStorage.setItem(TEMPLATE_STORAGE_KEY, JSON.stringify(next))
+                                      setConfirmDeleteTemplateId(null)
+                                    }}
+                                    className="text-[11px] font-medium text-red-500 hover:text-red-700 transition-colors"
+                                  >
+                                    삭제 확인
+                                  </button>
+                                  <button
+                                    type="button"
+                                    onClick={() => setConfirmDeleteTemplateId(null)}
+                                    className="text-[#1a1a1a]/30 hover:text-[#1a1a1a]/60 transition-colors"
+                                  >
+                                    <X className="h-3 w-3" />
+                                  </button>
+                                </div>
+                              ) : (
+                                <button
+                                  type="button"
+                                  onClick={() => setConfirmDeleteTemplateId(t.id)}
+                                  className="text-[#1a1a1a]/25 hover:text-red-400 transition-colors"
+                                >
+                                  <X className="h-3.5 w-3.5" />
+                                </button>
+                              )}
+                            </div>
+                          </div>
+                          {isExpanded && t.data.contentMarkdown && (
+                            <div className="mt-3 rounded-xl border border-[#e8e8e4] bg-white px-4 py-3">
+                              <p className="text-[11px] font-medium uppercase tracking-wider text-[#1a1a1a]/30 mb-2">본문 미리보기</p>
+                              <pre className="whitespace-pre-wrap font-sans text-[12px] leading-6 text-[#1a1a1a]/55 line-clamp-6">
+                                {t.data.contentMarkdown.slice(0, 400)}{t.data.contentMarkdown.length > 400 ? "…" : ""}
+                              </pre>
+                            </div>
+                          )}
+                        </div>
+                      )
+                    })}
+                  </div>
+                )
+              )}
+            </div>
+          </div>
+        </div>
+      )}
 
       {/* ── AI Result Modal ── */}
       {aiState && (
@@ -833,8 +1089,16 @@ export default function BlogPostEditor({
               </h1>
             </div>
             <div className="hidden items-center gap-2 sm:flex">
-              <span className="rounded-full border border-[#e8e8e4] bg-white px-2.5 py-1 text-[11px] text-[#1a1a1a]/40">
-                {draftState === "dirty" ? "수정됨" : draftState === "saving" ? "저장 중…" : "자동저장됨"}
+              <span className={`rounded-full border px-2.5 py-1 text-[11px] transition-colors ${
+                draftState === "dirty" ? "border-amber-100 bg-amber-50 text-amber-600" :
+                draftState === "saving" ? "border-[#e8e8e4] bg-white text-[#1a1a1a]/40" :
+                "border-emerald-100 bg-emerald-50 text-emerald-600"
+              }`}>
+                {draftState === "dirty" ? "수정됨" :
+                 draftState === "saving" ? "저장 중…" :
+                 lastSavedAt
+                   ? `${lastSavedAt.getHours().toString().padStart(2, "0")}:${lastSavedAt.getMinutes().toString().padStart(2, "0")} 저장됨`
+                   : "자동저장됨"}
               </span>
               <span className="rounded-full border border-[#e8e8e4] bg-white px-2.5 py-1 text-[11px] text-[#1a1a1a]/40">
                 {computedReadTime}
@@ -861,30 +1125,42 @@ export default function BlogPostEditor({
             >
               <Redo2 className="h-4 w-4" />
             </Button>
+            <Button variant="ghost" size="sm" onClick={() => setShowTemplateModal(true)} title="템플릿" className="relative h-8 w-8 p-0">
+              <LayoutTemplate className="h-3.5 w-3.5" />
+              {templates.length > 0 && (
+                <span className="absolute -right-0.5 -top-0.5 flex h-3.5 w-3.5 items-center justify-center rounded-full bg-[#084734] text-[9px] font-bold text-white leading-none">
+                  {templates.length}
+                </span>
+              )}
+            </Button>
             <div className="mx-1.5 h-4 w-px bg-[#e8e8e4]" />
             <Button variant="ghost" size="sm" onClick={() => setShowPreview(true)}>
               <Eye className="mr-1.5 h-3.5 w-3.5" />
               미리보기
             </Button>
-            <Button variant="outline" size="sm" onClick={() => handleSubmit()} disabled={isSubmitting}>
-              <Save className="mr-1.5 h-3.5 w-3.5" />
+            <Button variant="outline" size="sm" onClick={() => handleSubmit()} disabled={isSubmitting} title="저장 (Ctrl/Cmd + S)">
+              {isSubmitting ? <Loader2 className="mr-1.5 h-3.5 w-3.5 animate-spin" /> : <Save className="mr-1.5 h-3.5 w-3.5" />}
               저장
             </Button>
-            <Button size="sm" onClick={() => handleSubmit("published")} disabled={isSubmitting}>
-              <Sparkles className="mr-1.5 h-3.5 w-3.5" />
+            <Button size="sm" onClick={() => handleSubmit("published")} disabled={isSubmitting}
+              className="bg-[#084734] hover:bg-[#084734]/90 text-white active:scale-[0.97] transition-all duration-75">
+              {isSubmitting ? <Loader2 className="mr-1.5 h-3.5 w-3.5 animate-spin" /> : <Sparkles className="mr-1.5 h-3.5 w-3.5" />}
               발행
             </Button>
           </div>
         </div>
 
-        {notice && (
-          <div className="flex items-center justify-between border-t border-emerald-100 bg-emerald-50 px-6 py-2">
-            <span className="text-[13px] text-emerald-800">{notice}</span>
-            <button type="button" onClick={() => setNotice("")} className="text-emerald-500 hover:text-emerald-800">
-              <X className="h-3.5 w-3.5" />
-            </button>
-          </div>
-        )}
+        {notice && (() => {
+          const isError = /문제|오류|필수|입력/.test(notice)
+          return (
+            <div className={`flex items-center justify-between border-t px-6 py-2 ${isError ? "border-red-100 bg-red-50" : "border-emerald-100 bg-emerald-50"}`}>
+              <span className={`text-[13px] ${isError ? "text-red-700" : "text-emerald-800"}`}>{notice}</span>
+              <button type="button" onClick={() => setNotice("")} className={`${isError ? "text-red-400 hover:text-red-700" : "text-emerald-500 hover:text-emerald-800"}`}>
+                <X className="h-3.5 w-3.5" />
+              </button>
+            </div>
+          )
+        })()}
       </header>
 
       {/* ── Main layout ── */}
@@ -1005,16 +1281,23 @@ export default function BlogPostEditor({
                   Markdown 기반 · 상세 페이지에 동일하게 렌더링됩니다
                 </p>
               </div>
-              <div className="flex flex-wrap gap-1.5">
+              <div className="flex flex-wrap items-center gap-1.5">
+                {/* 헤딩 */}
                 <ToolbarButton onClick={() => editorRef.current?.setHeading(2)}>H2</ToolbarButton>
                 <ToolbarButton onClick={() => editorRef.current?.setHeading(3)}>H3</ToolbarButton>
+                <span className="h-4 w-px bg-[#e8e8e4] mx-0.5" aria-hidden="true" />
+                {/* 인라인 서식 */}
                 <ToolbarButton onClick={() => editorRef.current?.toggleBold()} icon={<Type className="h-3 w-3" />}>굵게</ToolbarButton>
                 <ToolbarButton onClick={() => editorRef.current?.toggleItalic()} icon={<Italic className="h-3 w-3" />}>기울이기</ToolbarButton>
+                <ToolbarButton onClick={() => editorRef.current?.toggleHighlight()} icon={<Highlighter className="h-3 w-3" />}>강조색</ToolbarButton>
+                <ToolbarButton onClick={() => editorRef.current?.wrapBrandColor()} icon={<Sparkles className="h-3 w-3" />}>브랜드색</ToolbarButton>
+                <span className="h-4 w-px bg-[#e8e8e4] mx-0.5" aria-hidden="true" />
+                {/* 블록 */}
                 <ToolbarButton onClick={() => editorRef.current?.toggleBlockquote()} icon={<Quote className="h-3 w-3" />}>인용</ToolbarButton>
                 <ToolbarButton onClick={() => editorRef.current?.toggleBulletList()} icon={<List className="h-3 w-3" />}>리스트</ToolbarButton>
                 <ToolbarButton onClick={() => editorRef.current?.toggleOrderedList()} icon={<ListOrdered className="h-3 w-3" />}>번호</ToolbarButton>
-                <ToolbarButton onClick={() => editorRef.current?.toggleHighlight()} icon={<Highlighter className="h-3 w-3" />}>강조색</ToolbarButton>
-                <ToolbarButton onClick={() => editorRef.current?.wrapBrandColor()} icon={<Sparkles className="h-3 w-3" />}>브랜드색</ToolbarButton>
+                <span className="h-4 w-px bg-[#e8e8e4] mx-0.5" aria-hidden="true" />
+                {/* 삽입 */}
                 <ToolbarButton onClick={() => editorRef.current?.insertLink()} icon={<Link2 className="h-3 w-3" />}>링크</ToolbarButton>
                 <ToolbarButton onClick={() => editorRef.current?.insertImage()} icon={<ImageIcon className="h-3 w-3" />}>이미지</ToolbarButton>
                 <ToolbarButton onClick={() => editorRef.current?.insertDivider()} icon={<Minus className="h-3 w-3" />}>구분선</ToolbarButton>
@@ -1392,7 +1675,7 @@ export default function BlogPostEditor({
                 >
                   <div className="flex items-center gap-4">
                     <div
-                      className="flex h-16 w-16 shrink-0 items-center justify-center rounded-full border-[3px] text-2xl font-bold tabular-nums"
+                      className="flex h-16 w-16 shrink-0 items-center justify-center rounded-full border-[3px] text-xl font-bold tracking-[-0.02em] tabular-nums"
                       style={{ borderColor: seoAnalysis.scoreColor, color: seoAnalysis.scoreColor }}
                     >
                       {seoAnalysis.score}
@@ -1465,7 +1748,7 @@ export default function BlogPostEditor({
                   <p className="mb-3.5 text-sm font-semibold text-[#111110]">SEO 체크리스트</p>
                   <div className="space-y-3">
                     {seoAnalysis.checks.map((check) => (
-                      <div key={check.id} className="flex items-start gap-3">
+                      <div key={check.id} className="flex items-start gap-3 transition-colors duration-100">
                         <div className={`mt-0.5 flex h-5 w-5 shrink-0 items-center justify-center rounded-full ${
                           check.ok ? "bg-emerald-100" : "bg-red-50"
                         }`}>
@@ -1645,7 +1928,7 @@ export default function BlogPostEditor({
                           type="button"
                           onClick={() => handleAiAction(action)}
                           disabled={isRunning || noContent}
-                          className="group w-full rounded-2xl border border-[#e8e8e4] bg-white p-4 text-left transition-colors hover:border-[#084734]/25 hover:bg-[#f9faf8] disabled:cursor-not-allowed disabled:opacity-60"
+                          className="group w-full rounded-2xl border border-[#e8e8e4] bg-white p-4 text-left transition-colors hover:border-[#084734]/25 hover:bg-[#f9faf8] active:scale-[0.97] duration-75 disabled:cursor-not-allowed disabled:opacity-60"
                         >
                           <div className="flex items-center gap-3">
                             <div className={`flex h-10 w-10 shrink-0 items-center justify-center rounded-xl ${bg}`}>

@@ -22,6 +22,8 @@
 
 import "server-only"
 import { createSupabaseAdminClient } from "@/lib/supabase/admin"
+import { getResolvedSettings } from "@/lib/repositories/settings"
+import { postJson } from "@/lib/server/post-json"
 import {
   getActiveRulesByTrigger,
   getRuleById,
@@ -261,7 +263,8 @@ export async function executeRule(ruleId: string): Promise<{
       return { logId: log.id, recipientCount: 0, status: "sent" }
     }
 
-    const emailWebhookUrl = process.env.EMAIL_WEBHOOK_URL
+    const settings = await getResolvedSettings()
+    const emailWebhookUrl = settings.emailWebhookUrl
     if (!emailWebhookUrl) throw new Error("EMAIL_WEBHOOK_URL 환경변수 없음")
 
     const baseUrl = process.env.NEXT_PUBLIC_SITE_URL
@@ -285,10 +288,9 @@ export async function executeRule(ruleId: string): Promise<{
       })
     )
 
-    const res = await fetch(emailWebhookUrl, {
-      method: "POST",
-      headers: { "Content-Type": "application/json" },
-      body: JSON.stringify({
+    const res = await postJson(
+      emailWebhookUrl,
+      {
         subject: rule.template.subject,
         personalizedRecipients,
         unsubscribeBaseUrl: baseUrl
@@ -296,8 +298,9 @@ export async function executeRule(ruleId: string): Promise<{
           : undefined,
         automationRuleId: ruleId,
         automationRuleName: rule.name,
-      }),
-    })
+      },
+      { timeoutMs: 10_000 }
+    )
 
     if (!res.ok) throw new Error(`이메일 웹훅 응답 오류: ${res.status}`)
 
@@ -348,7 +351,8 @@ export async function triggerOnSubmitRules(payload: OnSubmitPayload): Promise<vo
 
     if (matchingRules.length === 0) return
 
-    const emailWebhookUrl = process.env.EMAIL_WEBHOOK_URL
+    const settings = await getResolvedSettings()
+    const emailWebhookUrl = settings.emailWebhookUrl
     if (!emailWebhookUrl) return
 
     await Promise.allSettled(
@@ -369,10 +373,9 @@ export async function triggerOnSubmitRules(payload: OnSubmitPayload): Promise<vo
           const personalizedBody    = personalizeBody(expandedBody, recipient, opts)
           const personalizedSubject = personalizeBody(expandedSubject, recipient, opts)
 
-          const res = await fetch(emailWebhookUrl, {
-            method: "POST",
-            headers: { "Content-Type": "application/json" },
-            body: JSON.stringify({
+          const res = await postJson(
+            emailWebhookUrl,
+            {
               subject: personalizedSubject,
               personalizedRecipients: [
                 { email: recipient.email, name: recipient.name ?? "고객", personalizedSubject, personalizedBody },
@@ -382,8 +385,9 @@ export async function triggerOnSubmitRules(payload: OnSubmitPayload): Promise<vo
                 : undefined,
               automationRuleId: rule.id,
               automationRuleName: rule.name,
-            }),
-          })
+            },
+            { timeoutMs: 10_000 }
+          )
 
           if (!res.ok) throw new Error(`웹훅 응답 오류: ${res.status}`)
 

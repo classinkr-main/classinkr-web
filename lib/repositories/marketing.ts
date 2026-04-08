@@ -140,6 +140,51 @@ export async function upsertSubscriber(
   return rowToSubscriber(row);
 }
 
+export async function subscribeSubscriber(
+  data: Pick<Subscriber, "name" | "email" | "source"> & { optInAt?: string }
+): Promise<{ subscriber: SubRow; created: boolean }> {
+  if (!USE_SUPABASE) {
+    const existing = await getSubscriberByEmail(data.email)
+    if (existing) {
+      return { subscriber: existing, created: false }
+    }
+
+    const { upsertSubscriber: jsonUpsert } = await import("@/lib/marketing-data")
+    const subscriber = await jsonUpsert({
+      name: data.name,
+      email: data.email,
+      tags: [],
+      source: data.source,
+      status: "active",
+      optInAt: data.optInAt,
+    })
+
+    return { subscriber, created: true }
+  }
+
+  const existing = await getSubscriberByEmail(data.email)
+  if (existing) {
+    return { subscriber: existing, created: false }
+  }
+
+  const now = new Date().toISOString()
+  const { data: row, error } = await sb()
+    .from("newsletter_subscribers")
+    .insert({
+      name: data.name,
+      email: data.email,
+      tags: [],
+      status: "active",
+      source: data.source,
+      opt_in_at: data.optInAt ?? now,
+    })
+    .select()
+    .single()
+
+  if (error) throw new Error(`[marketing] 援щ룆???깅줉 ?ㅽ뙣: ${error.message}`)
+  return { subscriber: rowToSubscriber(row), created: true }
+}
+
 export async function unsubscribe(email: string): Promise<boolean> {
   if (!USE_SUPABASE) {
     const { unsubscribe: jsonUnsub } = await import("@/lib/marketing-data");
