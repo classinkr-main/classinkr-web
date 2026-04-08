@@ -44,13 +44,13 @@ export function Comparison() {
             <div className="container mx-auto px-4 md:px-6">
                 <div className="text-center max-w-3xl mx-auto mb-14">
                     <span className="inline-block py-1 px-3 rounded-full bg-[#ECFDF5] text-[#084734] text-sm font-semibold mb-4">
-                        왜 전환해야 할까요?
+                        Zoom·구글 클래스룸과 무엇이 다른가요?
                     </span>
                     <h2 className="text-3xl font-bold text-[#111110] sm:text-4xl mb-4 break-keep" style={{ letterSpacing: '-1px' }}>
-                        Classin vs. 기존 방식
+                        회의 도구가 아닌, 수업 전용 플랫폼
                     </h2>
-                    <p className="text-lg text-muted-foreground break-keep">
-                        수동 운영에서 스마트 운영으로, 무엇이 달라지는지 확인하세요.
+                    <p className="text-lg text-[#615D59] break-keep">
+                        Classin은 처음부터 교실 수업을 위해 설계되었습니다. 차이는 명확합니다.
                     </p>
                 </div>
 

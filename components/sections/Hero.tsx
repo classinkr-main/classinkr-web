@@ -51,7 +51,7 @@ export function Hero() {
                     >
                         <span className="inline-flex items-center gap-2 py-1.5 px-4 rounded-full bg-[#ECFDF5] border border-[#084734]/20 text-[#084734] text-sm md:text-base font-medium mb-8">
                             <span className="w-2 h-2 rounded-full bg-[#084734] animate-pulse" />
-                            500개 이상의 학원이 선택한 혁신 솔루션
+                            전국 500+ 학원, 지금 이 순간도 수업 중
                         </span>
                     </motion.div>
 
@@ -62,7 +62,7 @@ export function Hero() {
                         className="text-5xl md:text-7xl lg:text-[5.5rem] font-extrabold text-[#111110] mb-8 leading-[1.05] break-keep"
                         style={{ letterSpacing: '-2.125px' }}
                     >
-                        티칭 퀄리티 <span className="font-black animate-text-gradient inline-block pb-2">상향 표준화</span>, 확실한 학습 성과 보장.
+                        에이스 강사 없이도<br className="hidden sm:block" /><span className="font-black animate-text-gradient inline-block pb-2"> 1등 학원</span>이 됩니다.
                     </motion.h1>
 
                     <motion.p
@@ -71,8 +71,8 @@ export function Hero() {
                         transition={{ duration: 0.7, delay: 0.2, ease: "easeOut" }}
                         className="text-lg md:text-xl lg:text-2xl text-[#615D59] mb-12 max-w-3xl mx-auto leading-relaxed font-light break-keep"
                     >
-                        다지점 학원을 위한 프리미엄 올인원 운영 시스템. <br className="hidden md:block" />
-                        수업부터 자동 채점, 성과 분석까지 하나의 플랫폼으로 완성하세요.
+                        수업을 시스템으로 만들면, 강사가 바뀌어도 품질이 유지됩니다. <br className="hidden md:block" />
+                        수업 준비부터 복습 관리까지, 하나의 플랫폼으로 완성하세요.
                     </motion.p>
 
                     <motion.div
@@ -83,7 +83,7 @@ export function Hero() {
                     >
                         <DemoModal trackingButton="hero_demo">
                             <Button size="lg" className="h-[3.5rem] px-8 text-[1.05rem] font-bold bg-[#084734] hover:bg-[#065c41] text-white rounded-2xl w-full sm:w-auto transition-all duration-300 hover:scale-[1.03] active:scale-[0.97]" style={{ boxShadow: 'rgba(8,71,52,0.2) 0px 4px 18px, rgba(8,71,52,0.1) 0px 2px 7px' }}>
-                                <span className="relative z-10">제품 도입 문의</span>
+                                <span className="relative z-10">내 학원 시스템 설계받기 →</span>
                             </Button>
                         </DemoModal>
                         <NewsletterModal
@@ -102,25 +102,9 @@ export function Hero() {
                             }}
                         >
                             <Button variant="outline" size="lg" onClick={() => trackEvent("download_materials")} className="h-[3.5rem] px-8 text-[1.05rem] font-bold bg-[#ECFDF5] hover:bg-[#D1FAE5] text-[#084734] border border-[#084734]/20 hover:border-[#084734]/40 rounded-2xl w-full sm:w-auto transition-all duration-300 hover:scale-[1.03] active:scale-[0.97]">
-                                <span className="relative z-10">자료 받아보기</span>
+                                <span className="relative z-10">도입 사례 보기</span>
                             </Button>
                         </NewsletterModal>
-                        <Button asChild variant="outline" size="lg" className="h-[3.5rem] px-8 text-[1.05rem] font-bold bg-white hover:bg-[#F6F5F4] text-[#615D59] border border-[rgba(0,0,0,0.08)] hover:border-[rgba(0,0,0,0.14)] rounded-2xl w-full sm:w-auto transition-all duration-300 hover:scale-[1.03] active:scale-[0.97]">
-                            <Link href="/product/sw" onClick={() => trackEvent("click_cta", { button: "hero_product_tour" })}>
-                                <span className="relative z-10">제품 둘러보기</span>
-                            </Link>
-                        </Button>
-                    </motion.div>
-
-                    <motion.div
-                        initial={{ opacity: 0 }}
-                        animate={{ opacity: 1 }}
-                        transition={{ duration: 1, delay: 0.6 }}
-                        className="mt-16 sm:mt-20 flex w-full justify-center px-4"
-                    >
-                        <h2 className="text-2xl md:text-4xl lg:text-5xl xl:text-6xl font-black tracking-[0.2em] uppercase text-center select-none text-[#A39E98]/60">
-                            Empowering Education Online
-                        </h2>
                     </motion.div>
                 </div>
 

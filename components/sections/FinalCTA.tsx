@@ -20,12 +20,12 @@ export function FinalCTA() {
                 </span>
 
                 <h2 className="text-4xl md:text-5xl lg:text-6xl font-extrabold text-white mb-6 break-keep" style={{ letterSpacing: '-1.5px' }}>
-                    성공 방정식을 표준화할 준비가 되셨나요?
+                    강사 의존도에서 벗어날<br className="hidden md:block" /> 준비가 됐다면
                 </h2>
 
                 <p className="text-xl md:text-2xl text-white/60 max-w-3xl mx-auto mb-12 font-light leading-relaxed break-keep">
-                    15분 만에 맞춤형 도입 플랜을 받아보세요. <br className="hidden md:block" />
-                    1등 학원들이 Classin을 선택하는 이유를 직접 확인하세요.
+                    15분이면 내 학원에 맞는 시스템 설계를 받을 수 있습니다. <br className="hidden md:block" />
+                    전담 매니저가 직접 도입 플랜을 함께 짜드립니다.
                 </p>
 
                 <div className="flex flex-col sm:flex-row items-center justify-center gap-6">

@@ -34,27 +34,27 @@ function CountUp({ target, suffix = "", prefix = "" }: { target: number; suffix?
 const pains = [
     {
         icon: TrendingDown,
-        title: "일관성 없는 수업 품질",
-        desc: "강사가 바뀌거나 지점이 늘어날 때마다 수업 품질이 떨어지나요?",
+        title: "에이스 강사가 퇴사했습니다.",
+        desc: "그 반 학생 20명은요? 커리큘럼은요? 다음 강사가 같은 수준으로 가르칠 수 있을까요?",
         countTarget: 20,
         countSuffix: "%",
-        countLabel: "재등록률 하락",
+        countLabel: "강사 이탈 후 재등록률 하락",
     },
     {
         icon: Clock,
-        title: "과도한 행정 업무",
-        desc: "강사들이 수업보다 채점과 리포트 작성에 더 많은 시간을 쓰고 있나요?",
+        title: "같은 교재, 같은 시간.",
+        desc: "근데 반마다 성적이 다릅니다. 원장님은 어떤 반이 문제인지, 왜 그런지 알고 계신가요?",
         countTarget: 1200,
         countSuffix: "만원",
-        countLabel: "강사 1인당 연간 낭비",
+        countLabel: "수업 품질 편차로 인한 연간 손실",
     },
     {
         icon: AlertTriangle,
-        title: "느린 강사 적응 속도",
-        desc: "신규 강사가 커리큘럼에 적응하는 데 몇 달이 걸리나요?",
+        title: "학부모 상담마다 같은 질문.",
+        desc: "\"복습은 어떻게 하나요?\" — 이 질문에 매번 직접 답하는 대신, 데이터로 보여줄 수 있다면요?",
         countTarget: 3,
         countSuffix: "개월",
-        countLabel: "적응 기간 소요",
+        countLabel: "신규 강사 적응 기간",
     },
 ]
 
@@ -83,14 +83,14 @@ export function ProblemCost() {
                 >
                     <span className="inline-flex items-center gap-2 py-1.5 px-4 rounded-full bg-red-500/10 border border-red-500/20 text-red-400 text-sm font-semibold mb-6 backdrop-blur-sm">
                         <span className="w-2 h-2 rounded-full bg-red-400 animate-pulse" />
-                        주의가 필요합니다
+                        원장님, 이 질문들을 받아본 적 있으신가요
                     </span>
                     <h2 className="text-4xl font-black text-white sm:text-5xl md:text-[3.5rem] mb-6 leading-tight break-keep" style={{ letterSpacing: '-1.5px' }}>
-                        전통적인 학원 운영의 <br className="md:hidden" />
-                        <span className="text-transparent bg-clip-text bg-gradient-to-r from-red-400 to-orange-400 break-keep">숨겨진 비용</span>
+                        강사에 기대는 학원은<br className="md:hidden" />{" "}
+                        <span className="text-transparent bg-clip-text bg-gradient-to-r from-red-400 to-orange-400 break-keep">흔들릴 수밖에 없습니다</span>
                     </h2>
                     <p className="text-lg text-slate-400 break-keep">
-                        표준화된 시스템 없이는 규모가 커질수록 수익이 아닌 혼란만 늘어납니다.
+                        시스템 없이 사람에만 의존하면, 잘 될 때도 있지만 한 명이 빠지면 학원 전체가 흔들립니다.
                     </p>
                 </motion.div>
 

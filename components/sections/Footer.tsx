@@ -39,6 +39,7 @@ export function Footer() {
                         <ul className="space-y-2">
                             <li><a href="#" className="hover:text-white transition-colors">블로그</a></li>
                             <li><a href="#" className="hover:text-white transition-colors">고객 사례</a></li>
+                            <li><a href="/faq" className="hover:text-white transition-colors">자주 묻는 질문</a></li>
                             <li><a href="#" className="hover:text-white transition-colors">고객 센터</a></li>
                         </ul>
                     </div>
