@@ -332,8 +332,8 @@ export function QuoteEditor({ dealId }: Props) {
 
       {/* 견적 작성 모달 */}
       {showForm && (
-        <div className="fixed inset-0 bg-black/30 z-50 flex items-center justify-center p-4 overflow-y-auto">
-          <div className="bg-white rounded-2xl shadow-xl w-full max-w-2xl my-8">
+        <div className="fixed inset-0 bg-black/30 z-50 flex items-end sm:items-center justify-center p-0 sm:p-4 overflow-y-auto">
+          <div className="bg-white rounded-t-2xl sm:rounded-2xl shadow-xl w-full sm:max-w-2xl max-h-[95vh] overflow-y-auto my-0 sm:my-8">
             <div className="flex items-center justify-between px-6 py-4 border-b border-[#e8e8e4]">
               <h2 className="text-base font-semibold">견적 작성</h2>
               <button onClick={() => setShowForm(false)} className="text-[#1a1a1a]/40 hover:text-[#1a1a1a]">
@@ -397,6 +397,12 @@ export function QuoteEditor({ dealId }: Props) {
                         className="w-full border border-[#e8e8e4] rounded px-2 py-1.5 text-xs">
                         {PRODUCT_OPTIONS.map((o) => <option key={o.key} value={o.key}>{o.label}</option>)}
                       </select>
+                      {(() => {
+                        const matched = PRODUCT_OPTIONS.find((o) => o.key === item.product_key)
+                        return matched ? (
+                          <p className="mt-1 text-[10px] text-[#1a1a1a]/40">{matched.description}</p>
+                        ) : null
+                      })()}
                     </div>
                     <div className="col-span-2">
                       <label className="text-[10px] text-[#1a1a1a]/40 mb-0.5 block">수량</label>

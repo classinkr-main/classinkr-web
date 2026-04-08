@@ -209,8 +209,8 @@ export function ContractList({ dealId }: Props) {
       )}
 
       {showSign && selected && (
-        <div className="fixed inset-0 bg-black/30 z-50 flex items-center justify-center p-4">
-          <div className="bg-white rounded-2xl shadow-xl w-full max-w-lg">
+        <div className="fixed inset-0 bg-black/30 z-50 flex items-end sm:items-center justify-center p-0 sm:p-4">
+          <div className="bg-white rounded-t-2xl sm:rounded-2xl shadow-xl w-full sm:max-w-lg max-h-[92vh] overflow-y-auto">
             <div className="flex items-center justify-between px-6 py-4 border-b border-[#e8e8e4]">
               <div>
                 <h2 className="text-base font-semibold">서명</h2>

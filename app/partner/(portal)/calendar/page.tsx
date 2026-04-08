@@ -237,6 +237,13 @@ export default function PartnerCalendarPage() {
               </div>
             </CardHeader>
             <CardContent className="space-y-4">
+              {loading ? (
+                <div className="space-y-3">
+                  {[...Array(5)].map((_, i) => (
+                    <div key={i} className="h-16 rounded-xl bg-[#f0f0ec] animate-pulse" style={{ opacity: 1 - i * 0.15 }} />
+                  ))}
+                </div>
+              ) : null}
               <div className="flex items-center justify-between rounded-2xl border border-[#e8e8e4] bg-[#f7f7f5] px-4 py-4">
                 <button type="button" onClick={() => shiftMonth(-1)} className="inline-flex h-10 w-10 items-center justify-center rounded-xl border border-[#e8e8e4] bg-white"><ChevronLeft className="h-4 w-4" /></button>
                 <div className="text-center">
@@ -336,7 +343,9 @@ export default function PartnerCalendarPage() {
               {loading ? (
                 Array.from({ length: 4 }).map((_, index) => <div key={index} className="h-24 animate-pulse rounded-2xl bg-[#f0f0ec]" />)
               ) : visibleEvents.length === 0 ? (
-                <div className="rounded-2xl border border-dashed border-[#e0e0dc] bg-[#fafaf8] px-4 py-10 text-center text-sm text-[#1a1a1a]/45">조건에 맞는 일정이 없습니다.</div>
+                <div className="py-16 text-center border border-dashed border-[#e0e0dc] rounded-xl bg-white">
+                  <p className="text-sm text-[#1a1a1a]/50">해당 분류의 일정이 없습니다</p>
+                </div>
               ) : (
                 visibleEvents.map((event) => (
                   <div key={event.id} className="rounded-2xl border border-[#e8e8e4] bg-[#fcfcfb] p-4">

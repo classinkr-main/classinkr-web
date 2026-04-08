@@ -143,12 +143,13 @@ export function DealQuickCreateDialog({
                 sortedCustomers.map((customer) => (
                   <option key={customer.id} value={customer.id}>
                     {customer.name}
+                    {customer.campus_name ? ` (${customer.campus_name})` : ""}
                     {customer.region_label ? ` · ${customer.region_label}` : ""}
-                    {customer.campus_name ? ` · ${customer.campus_name}` : ""}
                   </option>
                 ))
               )}
             </select>
+            <p className="mt-1 text-[10px] text-[#1a1a1a]/40">잘못된 기관이면 먼저 고객 탭에서 수정하세요.</p>
           </Field>
 
           <Field label="컨택 제목" required>

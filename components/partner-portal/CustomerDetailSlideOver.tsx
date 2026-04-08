@@ -218,21 +218,25 @@ function FinancialSection({
   const cards = [
     {
       label: "계약 총액",
+      tooltip: "기관과 계약한 총 금액",
       value: formatKRW(summary.contracted_amount),
       highlight: false,
     },
     {
       label: "실수납",
+      tooltip: "실제로 입금된 누계 금액",
       value: formatKRW(summary.paid_amount),
       highlight: false,
     },
     {
       label: "미수금",
+      tooltip: "아직 받지 못한 금액 (계약 - 수납)",
       value: formatKRW(summary.outstanding_amount),
       highlight: summary.outstanding_amount > 0,
     },
     {
       label: "진행 딜",
+      tooltip: undefined,
       value: `${summary.active_deals}건`,
       highlight: false,
     },
@@ -256,7 +260,13 @@ function FinancialSection({
                 card.highlight ? "text-amber-600/70" : "text-[#1a1a1a]/40"
               }`}
             >
-              {card.label}
+              {card.tooltip ? (
+                <abbr title={card.tooltip} style={{ textDecoration: "underline dotted", textUnderlineOffset: 2, cursor: "help" }}>
+                  {card.label}
+                </abbr>
+              ) : (
+                card.label
+              )}
             </p>
             <p
               className={`text-sm font-semibold ${
@@ -269,6 +279,105 @@ function FinancialSection({
         ))}
       </div>
     </section>
+  );
+}
+
+/* ── StageMiniBar ─────────────────────────────────────────────────── */
+
+const PIPELINE_STAGES: DealStage[] = [
+  "contact",
+  "quote",
+  "contract",
+  "confirmed",
+  "installation",
+  "payment",
+];
+
+const STAGE_DOT_COLOR: Record<string, string> = {
+  contact: "#78716c",      // stone-400
+  quote: "#3b82f6",        // blue-500
+  contract: "#8b5cf6",     // violet-500
+  confirmed: "#6366f1",    // indigo-500
+  installation: "#f97316", // orange-500
+  payment: "#10b981",      // emerald-500
+};
+
+function StageMiniBar({ currentStage }: { currentStage: DealStage }) {
+  const currentIdx = PIPELINE_STAGES.indexOf(currentStage);
+  // If stage is not in the pipeline (e.g. closed/cancelled), fall back to -1 — all shown as muted
+  return (
+    <div className="mt-2.5 flex items-center gap-0" style={{ fontSize: 9 }}>
+      {PIPELINE_STAGES.map((stage, idx) => {
+        const isPast = idx < currentIdx;
+        const isCurrent = idx === currentIdx;
+        const isFuture = idx > currentIdx;
+        const color = STAGE_DOT_COLOR[stage];
+
+        return (
+          <div key={stage} className="flex items-center">
+            {/* Connecting line before each dot (except first) */}
+            {idx > 0 && (
+              <div
+                style={{
+                  width: 16,
+                  height: 1,
+                  backgroundColor: isPast || isCurrent ? color : "rgba(0,0,0,0.12)",
+                  flexShrink: 0,
+                }}
+              />
+            )}
+            <div className="flex flex-col items-center gap-0.5">
+              {/* Dot */}
+              {isCurrent ? (
+                <div
+                  style={{
+                    width: 8,
+                    height: 8,
+                    borderRadius: "50%",
+                    backgroundColor: color,
+                    flexShrink: 0,
+                    boxShadow: `0 0 0 2px ${color}33`,
+                  }}
+                />
+              ) : isPast ? (
+                <div
+                  style={{
+                    width: 6,
+                    height: 6,
+                    borderRadius: "50%",
+                    backgroundColor: color,
+                    opacity: 0.65,
+                    flexShrink: 0,
+                  }}
+                />
+              ) : (
+                <div
+                  style={{
+                    width: 6,
+                    height: 6,
+                    borderRadius: "50%",
+                    border: "1px solid rgba(0,0,0,0.18)",
+                    backgroundColor: "transparent",
+                    flexShrink: 0,
+                  }}
+                />
+              )}
+              {/* Label */}
+              <span
+                style={{
+                  color: isCurrent ? color : isFuture ? "rgba(0,0,0,0.28)" : "rgba(0,0,0,0.45)",
+                  fontWeight: isCurrent ? 700 : 500,
+                  lineHeight: 1,
+                  whiteSpace: "nowrap",
+                }}
+              >
+                {STAGE_LABEL[stage]}
+              </span>
+            </div>
+          </div>
+        );
+      })}
+    </div>
   );
 }
 
@@ -297,7 +406,8 @@ function DealHistorySection({ deals }: { deals: CustomerDealHistoryItem[] }) {
                 {STAGE_LABEL[deal.current_stage]}
               </span>
             </div>
-            <div className="grid grid-cols-3 gap-2 text-xs">
+            <StageMiniBar currentStage={deal.current_stage} />
+            <div className="mt-2.5 grid grid-cols-3 gap-2 text-xs">
               <div>
                 <p className="text-[#1a1a1a]/40">계약금액</p>
                 <p className="font-medium text-[#1a1a1a]">

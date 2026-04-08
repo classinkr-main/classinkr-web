@@ -427,6 +427,13 @@ function DocumentRow({
   active: boolean
   onClick: () => void
 }) {
+  const statusBorderClass =
+    document.status === "draft"
+      ? "border-l-2 border-l-amber-400"
+      : document.status === "accepted" || document.status === "issued"
+        ? "border-l-2 border-l-emerald-400"
+        : ""
+
   return (
     <button
       type="button"
@@ -435,7 +442,7 @@ function DocumentRow({
         active
           ? "border-[#1a1a1a] bg-[#fafafa] ring-1 ring-[#1a1a1a]/10"
           : "border-[#e8e8e4] bg-white hover:border-[#cccccc] hover:bg-[#fafaf8]"
-      }`}
+      } ${statusBorderClass}`}
     >
       <div className="flex items-start justify-between gap-3">
         <div className="min-w-0 flex-1">
@@ -707,8 +714,17 @@ export default function PartnerDocumentsPage() {
                   ))}
                 </div>
               ) : visibleDocuments.length === 0 ? (
-                <div className="rounded-2xl border border-dashed border-[#e0e0dc] bg-[#fafaf8] px-4 py-10 text-center text-sm text-[#1a1a1a]/45">
-                  선택한 섹션의 문서가 없습니다.
+                <div className="rounded-2xl border border-dashed border-[#e0e0dc] bg-[#fafaf8] px-4 py-10 text-center">
+                  <p className="text-sm text-[#1a1a1a]/50">
+                    견적서나 계약서가 생성되면 여기에 표시됩니다. 견적서 탭에서 견적을 작성하고 거래로 연결하세요.
+                  </p>
+                  <a
+                    href="/partner/quotes"
+                    className="mt-4 inline-flex items-center gap-2 rounded-xl border border-[#e8e8e4] bg-white px-4 py-2 text-sm font-medium text-[#084734] hover:bg-[#ECFDF5]"
+                  >
+                    견적서 탭으로 이동
+                    <ArrowRight className="h-4 w-4" />
+                  </a>
                 </div>
               ) : (
                 <div className="space-y-3">
