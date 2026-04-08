@@ -9,19 +9,20 @@
  *   3. 미리보기에서 {name} 치환 확인
  *   4. 발송 버튼 클릭 → /api/admin/email/send 호출
  *
- * [NOTE-12] {name}, {org}, {role} 변수 사용법을 안내.
+ * [NOTE-12] {name}, {org}, {role} 등 변수 클릭 삽입 & 하이라이트.
  */
 
 "use client"
 
-import { useState } from "react"
+import { useRef, useState } from "react"
 import { Input } from "@/components/ui/input"
 import { Label } from "@/components/ui/label"
 import { Button } from "@/components/ui/button"
 import { Badge } from "@/components/ui/badge"
-import { RotateCcw, Send, Eye, EyeOff, Loader2, MailCheck } from "lucide-react"
+import { RotateCcw, Send, Eye, EyeOff, Loader2, MailCheck, Type } from "lucide-react"
 import type { EmailDraft } from "@/lib/marketing-types"
 import { PRESET_TAGS } from "@/lib/marketing-types"
+import VariablePalette, { ALL_VARIABLES, applyPreview } from "./VariablePalette"
 
 interface Props {
   value: EmailDraft
@@ -57,21 +58,40 @@ export default function EmailComposer({
   const [testEmail, setTestEmail] = useState("")
   const [testLoading, setTestLoading] = useState(false)
   const [testNotice, setTestNotice] = useState<string | null>(null)
+  const bodyRef = useRef<HTMLTextAreaElement>(null)
 
   const updateDraft = (next: Partial<EmailDraft>) => {
-    onChange({
-      ...value,
-      ...next,
-    })
+    onChange({ ...value, ...next })
   }
 
   const toggleTag = (tag: string) => {
     const nextTags = value.targetTags.includes(tag)
       ? value.targetTags.filter((t) => t !== tag)
       : [...value.targetTags, tag]
-
     updateDraft({ targetTags: nextTags })
   }
+
+  // 변수 팔레트 — 커서 위치에 {variable} 삽입
+  const handleInsertVariable = (key: string) => {
+    const ta = bodyRef.current
+    const token = `{${key}}`
+    if (!ta) {
+      updateDraft({ body: value.body + token })
+      return
+    }
+    const start = ta.selectionStart ?? value.body.length
+    const end = ta.selectionEnd ?? value.body.length
+    const next = value.body.slice(0, start) + token + value.body.slice(end)
+    updateDraft({ body: next })
+    requestAnimationFrame(() => {
+      ta.focus()
+      ta.setSelectionRange(start + token.length, start + token.length)
+    })
+  }
+
+  const usedVars = ALL_VARIABLES
+    .filter((v) => value.body.includes(`{${v.key}}`))
+    .map((v) => v.key)
 
   const handleSubmit = async () => {
     if (!value.subject.trim() || !value.body.trim()) return
@@ -107,7 +127,7 @@ export default function EmailComposer({
         return
       }
 
-      setTestNotice(`${testEmail.trim()} 주소로 테스트 발송했습니다.`)
+      setTestNotice(`✓ ${testEmail.trim()} 주소로 테스트 발송했습니다.`)
     } catch {
       setTestNotice("테스트 발송에 실패했습니다.")
     } finally {
@@ -115,20 +135,18 @@ export default function EmailComposer({
     }
   }
 
-  // [NOTE-12] 미리보기용 {name} 치환 예시
-  const previewBody = value.body
-    .replace(/\{name\}/g, "김원장")
-    .replace(/\{org\}/g, "클래스인 아카데미")
-    .replace(/\{role\}/g, "원장")
+  // 미리보기용 변수 치환
+  const previewBody = applyPreview(value.body)
+  const bodyLen = value.body.replace(/\s+/g, " ").trim().length
 
   return (
     <div className="bg-white rounded-xl border border-[#e8e8e4] p-6">
-      <h3 className="text-[15px] font-semibold text-[#111110] mb-4 flex items-center gap-2">
+      <h3 className="text-[15px] font-semibold text-[#111110] mb-5 flex items-center gap-2">
         <Send className="w-4 h-4 text-[#084734]" />
         이메일 캠페인 작성
       </h3>
 
-      <div className="grid gap-4">
+      <div className="grid gap-5">
         {/* 제목 */}
         <div className="grid gap-2">
           <Label htmlFor="email-subject">제목</Label>
@@ -144,43 +162,54 @@ export default function EmailComposer({
         <div className="grid gap-2">
           <div className="flex items-center justify-between">
             <Label htmlFor="email-body">본문</Label>
-            <Button
-              type="button"
-              variant="ghost"
-              size="sm"
-              className="h-7 text-[11px]"
-              onClick={() => setShowPreview(!showPreview)}
-            >
-              {showPreview ? <EyeOff className="w-3 h-3 mr-1" /> : <Eye className="w-3 h-3 mr-1" />}
-              {showPreview ? "편집" : "미리보기"}
-            </Button>
+            <div className="flex items-center gap-2">
+              <span className={`text-[11px] tabular-nums ${bodyLen === 0 ? "text-[#1a1a1a]/25" : bodyLen < 200 ? "text-amber-500" : "text-[#084734]"}`}>
+                {bodyLen}자
+              </span>
+              <Button
+                type="button"
+                variant="ghost"
+                size="sm"
+                className="h-7 text-[11px]"
+                onClick={() => setShowPreview(!showPreview)}
+              >
+                {showPreview ? <EyeOff className="w-3 h-3 mr-1" /> : <Eye className="w-3 h-3 mr-1" />}
+                {showPreview ? "편집" : "미리보기"}
+              </Button>
+            </div>
           </div>
 
           {showPreview ? (
-            /* [NOTE-19] 미리보기 모드: {name} 등 변수가 치환된 상태 표시 */
-            <div className="p-4 border rounded-lg bg-[#FAFAF8] min-h-[200px] text-sm leading-relaxed whitespace-pre-wrap">
-              {previewBody || "(본문을 작성해주세요)"}
-            </div>
+            <div
+              className="p-4 border rounded-lg bg-[#FAFAF8] min-h-[200px] text-sm leading-relaxed"
+              dangerouslySetInnerHTML={{ __html: previewBody.replace(/\n/g, "<br>") || "<span style='color:#1a1a1a40'>(본문을 작성해주세요)</span>" }}
+            />
           ) : (
             <textarea
+              ref={bodyRef}
               id="email-body"
               value={value.body}
               onChange={(e) => updateDraft({ body: e.target.value })}
-              rows={8}
+              rows={9}
               placeholder={`안녕하세요 {name}님,\n\nClassin에서 준비한 특별한 소식을 전해드립니다.\n\n{org} 관계자 여러분을 위한...\n\n감사합니다.\nClassin 팀`}
               className="w-full p-3 border rounded-lg text-sm resize-y focus:outline-none focus:ring-2 focus:ring-[#084734]/20 min-h-[200px]"
             />
           )}
 
-          {/* [NOTE-12] 변수 안내 */}
-          <p className="text-[11px] text-[#1a1a1a]/40">
-            사용 가능한 변수: <code className="bg-[#FAFAF8] px-1 rounded">{"{name}"}</code> 이름,{" "}
-            <code className="bg-[#FAFAF8] px-1 rounded">{"{org}"}</code> 학원명,{" "}
-            <code className="bg-[#FAFAF8] px-1 rounded">{"{role}"}</code> 직책
-          </p>
+          {/* 변수 팔레트 */}
+          {!showPreview && (
+            <div className="rounded-lg border border-[#e8e8e4] bg-[#FAFAF8] px-3 py-2.5">
+              <div className="flex items-center gap-2 mb-2">
+                <Type className="w-3.5 h-3.5 text-[#1a1a1a]/30" />
+                <span className="text-[11px] font-medium text-[#1a1a1a]/40">변수 팔레트</span>
+                <span className="text-[10px] text-[#1a1a1a]/25">— 클릭하면 커서 위치에 삽입</span>
+              </div>
+              <VariablePalette onInsert={handleInsertVariable} usedVars={usedVars} />
+            </div>
+          )}
         </div>
 
-        {/* 대상 태그 필터 */}
+        {/* 대상 태그 */}
         <div className="grid gap-2">
           <div className="flex flex-col gap-2 sm:flex-row sm:items-center sm:justify-between">
             <Label>발송 대상 (태그 선택, 미선택 시 전체 발송)</Label>
@@ -219,6 +248,7 @@ export default function EmailComposer({
           </p>
         </div>
 
+        {/* 테스트 발송 */}
         <div className="grid gap-2 rounded-xl border border-[#e8e8e4] bg-[#fafaf8] p-4">
           <div className="flex flex-col gap-1 sm:flex-row sm:items-center sm:justify-between">
             <div>
@@ -238,7 +268,7 @@ export default function EmailComposer({
               {testLoading ? (
                 <span className="flex items-center">
                   <Loader2 className="mr-1.5 h-3.5 w-3.5 animate-spin" />
-                  테스트 전송 중...
+                  전송 중...
                 </span>
               ) : (
                 <span className="flex items-center">
@@ -255,11 +285,8 @@ export default function EmailComposer({
             onChange={(e) => setTestEmail(e.target.value)}
             placeholder="test@example.com"
           />
-          <p className="text-[11px] text-[#1a1a1a]/40">
-            발송 전 제목, 본문, 변수 치환 결과를 빠르게 확인할 때 사용합니다.
-          </p>
           {testNotice && (
-            <p className="rounded-lg border border-[#e8e8e4] bg-white px-3 py-2 text-[12px] text-[#111110]">
+            <p className={`rounded-lg border px-3 py-2 text-[12px] ${testNotice.startsWith("✓") ? "border-green-100 bg-green-50 text-green-700" : "border-[#e8e8e4] bg-white text-[#111110]"}`}>
               {testNotice}
             </p>
           )}

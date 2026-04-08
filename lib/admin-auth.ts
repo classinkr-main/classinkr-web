@@ -227,9 +227,9 @@ export async function getVerifiedAdminContext(
 
 export async function verifyAdmin(
   req: NextRequest
-): Promise<NextResponse | null> {
+): Promise<NextResponse | undefined> {
   const admin = await getVerifiedAdminContext(req)
-  if (admin) return null
+  if (admin) return undefined
 
   return NextResponse.json({ error: "Unauthorized" }, { status: 401 })
 }

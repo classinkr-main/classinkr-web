@@ -8,7 +8,12 @@ import { postJson } from "@/lib/server/post-json"
 export async function POST(req: NextRequest) {
   try {
     const body: NewsletterSubscribeRequest = await req.json()
-    const source = body.source?.trim() || "newsletter"
+    const VALID_SOURCES = ["demo_modal", "contact_page", "newsletter", "manual"] as const
+    type SubscriberSource = typeof VALID_SOURCES[number]
+    const rawSource = body.source?.trim()
+    const source: SubscriberSource = VALID_SOURCES.includes(rawSource as SubscriberSource)
+      ? (rawSource as SubscriberSource)
+      : "newsletter"
     const email = body.email?.trim().toLowerCase()
 
     if (!email) {

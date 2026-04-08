@@ -350,7 +350,11 @@ function MiniBadge({ children, tone = "neutral" }: { children: ReactNode; tone?:
 
 export default function AdminMarketingPage() {
   const router = useRouter()
-  const [activeTab, setActiveTab] = useState<Tab>("subscribers")
+  const [activeTab, setActiveTabRaw] = useState<Tab>("subscribers")
+  const setActiveTab = useCallback((tab: Tab) => {
+    setActiveTabRaw(tab)
+    window.scrollTo({ top: 0, behavior: "smooth" })
+  }, [])
   const [subscribers, setSubscribers] = useState<Subscriber[]>([])
   const [campaigns, setCampaigns] = useState<EmailCampaign[]>([])
   const [composerDraft, setComposerDraft] = useState<EmailDraft>(EMPTY_DRAFT)
@@ -522,17 +526,17 @@ export default function AdminMarketingPage() {
           key: "body",
           label: "본문",
           status:
-            length >= 120
+            length >= 500
               ? "ok"
-              : length >= 60
+              : length >= 200
                 ? "warning"
                 : "error",
           detail:
-            length >= 120
+            length >= 500
               ? `본문 길이가 충분합니다. (${length}자)`
-              : length >= 60
-                ? `본문이 짧은 편입니다. (${length}자, 120자 이상 권장)`
-                : `본문이 너무 짧습니다. (${length}자, 최소 60자 권장)`,
+              : length >= 200
+                ? `본문이 짧은 편입니다. (${length}자, 500자 이상 권장)`
+                : `본문이 너무 짧습니다. (${length}자, 최소 200자 권장)`,
         },
         {
           key: "audience",
@@ -1124,6 +1128,13 @@ export default function AdminMarketingPage() {
                     onCompose={handleComposeFromSubscriber}
                     onAddSubscriber={() => setIsFormOpen(true)}
                     onComposeCampaign={() => setActiveTab("compose")}
+                    onTagFilter={(tag) => {
+                      setQuery("")
+                      setStatusFilter("all")
+                      setSourceFilter("all")
+                      // 태그 검색어로 바로 필터
+                      setQuery(tag)
+                    }}
                   />
                 )}
               </Panel>
@@ -1378,19 +1389,21 @@ export default function AdminMarketingPage() {
                 </div>
               </Panel>
 
-              <Panel title="바로 가는 링크" description="작성 후 자주 이동하는 화면입니다.">
+              <Panel title="빠른 이동" description="발송 후 자주 확인하는 화면입니다.">
                 <div className="space-y-2">
-                  <Button variant="outline" className="w-full justify-between" onClick={() => setActiveTab("subscribers")}>
-                    구독자 관리
-                    <ChevronRight className="h-4 w-4" />
+                  <Button variant="outline" className="w-full justify-between text-[13px]" onClick={() => setActiveTab("subscribers")}>
+                    <span className="flex items-center gap-2">
+                      <Users className="h-3.5 w-3.5 text-[#1a1a1a]/40" />
+                      구독자 관리
+                    </span>
+                    <ChevronRight className="h-4 w-4 opacity-40" />
                   </Button>
-                  <Button variant="outline" className="w-full justify-between" onClick={() => setActiveTab("history")}>
-                    발송 이력
-                    <ChevronRight className="h-4 w-4" />
-                  </Button>
-                  <Button variant="outline" className="w-full justify-between" onClick={() => setActiveTab("subscribers")}>
-                    대상 태그 확인
-                    <ChevronRight className="h-4 w-4" />
+                  <Button variant="outline" className="w-full justify-between text-[13px]" onClick={() => setActiveTab("history")}>
+                    <span className="flex items-center gap-2">
+                      <History className="h-3.5 w-3.5 text-[#1a1a1a]/40" />
+                      발송 이력 확인
+                    </span>
+                    <ChevronRight className="h-4 w-4 opacity-40" />
                   </Button>
                 </div>
               </Panel>
@@ -1480,72 +1493,67 @@ export default function AdminMarketingPage() {
             </div>
 
             <div className="space-y-6">
-              <Panel title="상태 요약" description="최근 발송의 운영 맥락을 바로 보여줍니다.">
-                {recentCampaigns.length === 0 ? (
-                  <EmptyInline message="최근 캠페인 정보가 없습니다." />
-                ) : (
-                  <div className="space-y-3">
-                    {recentCampaigns.map((campaign) => (
-                      <div key={campaign.id} className="rounded-2xl border border-[#e8e8e4] bg-[#fafaf8] p-4">
-                        <div className="flex items-start justify-between gap-3">
-                          <div className="min-w-0">
-                            <p className="truncate text-[13px] font-semibold text-[#111110]">{campaign.subject}</p>
-                            <p className="mt-1 text-[12px] text-[#1a1a1a]/40">
-                              {formatDateTime(campaign.sentAt ?? campaign.createdAt)} · 대상 {campaign.recipientCount}명
-                            </p>
-                          </div>
-                          <MiniBadge
-                            tone={
-                              campaign.status === "sent"
-                                ? "success"
-                                : campaign.status === "failed"
-                                  ? "danger"
-                                  : "warning"
-                            }
-                          >
-                            {campaign.status === "sent" ? "발송됨" : campaign.status === "failed" ? "실패" : "초안"}
-                          </MiniBadge>
-                        </div>
-                        <div className="mt-3 flex flex-wrap gap-1.5">
-                            {campaign.targetTags.length > 0 ? (
-                              campaign.targetTags.map((tag) => (
-                                <MiniBadge key={tag}>#{tag}</MiniBadge>
-                              ))
-                            ) : (
-                              <MiniBadge>전체 발송</MiniBadge>
-                            )}
-                        </div>
-                        <div className="mt-3 flex justify-end">
-                          <Button variant="outline" size="sm" onClick={() => handleDuplicateCampaign(campaign)}>
-                            복제해서 작성
-                          </Button>
-                        </div>
-                      </div>
-                    ))}
+              {/* 30일 발송 통계 */}
+              <Panel title="최근 30일 통계" description="이번 달 캠페인 운영 현황입니다.">
+                <div className="space-y-3">
+                  <div className="grid grid-cols-2 gap-3">
+                    <div className="rounded-2xl border border-[#e8e8e4] bg-[#fafaf8] p-4">
+                      <p className="text-[10px] font-medium uppercase tracking-[0.18em] text-[#1a1a1a]/35">발송</p>
+                      <p className="mt-2 text-[24px] font-bold tracking-[-0.02em] text-[#111110]">{recentSentCampaigns.length}건</p>
+                    </div>
+                    <div className="rounded-2xl border border-[#e8e8e4] bg-[#fafaf8] p-4">
+                      <p className="text-[10px] font-medium uppercase tracking-[0.18em] text-[#1a1a1a]/35">실패</p>
+                      <p className={`mt-2 text-[24px] font-bold tracking-[-0.02em] ${recentFailedCampaigns.length > 0 ? "text-red-500" : "text-[#111110]"}`}>
+                        {recentFailedCampaigns.length}건
+                      </p>
+                    </div>
                   </div>
-                )}
+                  <div className="rounded-2xl border border-[#e8e8e4] bg-[#fafaf8] px-4 py-3">
+                    <p className="text-[10px] font-medium uppercase tracking-[0.18em] text-[#1a1a1a]/35">총 발송 대상</p>
+                    <p className="mt-2 text-[24px] font-bold tracking-[-0.02em] text-[#111110]">
+                      {recentSentCampaigns.reduce((s, c) => s + c.recipientCount, 0).toLocaleString()}명
+                    </p>
+                    <p className="mt-1 text-[11px] text-[#1a1a1a]/40">
+                      평균 {recentAudienceAverage}명 · 성공률 {recentSuccessRate !== null ? `${recentSuccessRate}%` : "—"}
+                    </p>
+                  </div>
+                  {draftCount > 0 && (
+                    <div className="rounded-2xl border border-amber-100 bg-amber-50 px-4 py-3">
+                      <p className="text-[12px] font-medium text-amber-800">미발송 초안 {draftCount}건</p>
+                      <p className="mt-1 text-[11px] text-amber-700/70">초안이 쌓이지 않도록 확인하거나 삭제하세요.</p>
+                      <Button size="sm" variant="outline" className="mt-2 h-7 text-[11px] border-amber-200 bg-white text-amber-800 hover:bg-amber-50" onClick={() => setCampaignStatusFilter("draft")}>
+                        초안 필터 보기
+                      </Button>
+                    </div>
+                  )}
+                  {failedCount > 0 && (
+                    <div className="rounded-2xl border border-red-100 bg-red-50 px-4 py-3">
+                      <p className="text-[12px] font-medium text-red-700">실패 캠페인 {failedCount}건 확인 필요</p>
+                      <p className="mt-1 text-[11px] text-red-600/70">웹훅 설정이나 이메일 설정을 점검하세요.</p>
+                      <Button size="sm" variant="outline" className="mt-2 h-7 text-[11px] border-red-200 bg-white text-red-700 hover:bg-red-50" onClick={() => setCampaignStatusFilter("failed")}>
+                        실패 필터 보기
+                      </Button>
+                    </div>
+                  )}
+                </div>
               </Panel>
 
-              <Panel title="추천 다음 액션" description="이력에서 바로 다음 작업으로 이어집니다.">
-                <div className="space-y-3">
-                  <div className="rounded-2xl bg-[#fafaf8] border border-[#e8e8e4] p-4">
-                    <p className="text-[12px] font-medium text-[#111110]">초안 정리</p>
-                    <p className="mt-1 text-[12px] leading-relaxed text-[#1a1a1a]/45">
-                      발송 초안이 있다면 제목과 대상 태그를 먼저 확정하고 이력 탭으로 넘기세요.
-                    </p>
-                  </div>
-                  <div className="rounded-2xl bg-[#fafaf8] border border-[#e8e8e4] p-4">
-                    <p className="text-[12px] font-medium text-[#111110]">실패 점검</p>
-                    <p className="mt-1 text-[12px] leading-relaxed text-[#1a1a1a]/45">
-                      실패 캠페인은 즉시 확인해서 발송 설정과 웹훅 상태를 먼저 점검하는 게 좋습니다.
-                    </p>
-                  </div>
-                  <div className="rounded-2xl bg-[#fafaf8] border border-[#e8e8e4] p-4">
-                    <p className="text-[12px] font-medium text-[#111110]">구독자 흐름</p>
-                    <p className="mt-1 text-[12px] leading-relaxed text-[#1a1a1a]/45">
-                      캠페인 성과를 올리려면 구독자 수보다 유입 경로와 태그 품질을 함께 봐야 합니다.
-                    </p>
-                  </div>
+              <Panel title="다음 액션" description="이력에서 바로 다음 작업으로 이어집니다.">
+                <div className="space-y-2">
+                  <Button variant="outline" className="w-full justify-between text-[13px]" onClick={() => setActiveTab("compose")}>
+                    <span className="flex items-center gap-2">
+                      <Send className="h-3.5 w-3.5 text-[#1a1a1a]/40" />
+                      새 캠페인 작성
+                    </span>
+                    <ChevronRight className="h-4 w-4 opacity-40" />
+                  </Button>
+                  <Button variant="outline" className="w-full justify-between text-[13px]" onClick={() => setActiveTab("subscribers")}>
+                    <span className="flex items-center gap-2">
+                      <Users className="h-3.5 w-3.5 text-[#1a1a1a]/40" />
+                      구독자 확인
+                    </span>
+                    <ChevronRight className="h-4 w-4 opacity-40" />
+                  </Button>
                 </div>
               </Panel>
             </div>
