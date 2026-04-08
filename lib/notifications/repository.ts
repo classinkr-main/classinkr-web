@@ -269,6 +269,31 @@ export async function markAllNotificationsReadForRecipients(
   return ids.length
 }
 
+export async function deleteNotificationForRecipients(
+  id: string,
+  selectors: NotificationRecipientTarget[]
+): Promise<boolean> {
+  const { data, error } = await sb()
+    .from("notifications")
+    .select("id, recipient_type, recipient_id")
+    .eq("id", id)
+    .single()
+
+  if (error || !data) return false
+  if (!matchRecipient(data, selectors)) return false
+
+  const { error: deleteError } = await sb()
+    .from("notifications")
+    .delete()
+    .eq("id", id)
+
+  if (deleteError) {
+    throw new Error(`[notifications] delete failed: ${deleteError.message}`)
+  }
+
+  return true
+}
+
 export async function markNotificationReadForRecipients(
   id: string,
   selectors: NotificationRecipientTarget[]
