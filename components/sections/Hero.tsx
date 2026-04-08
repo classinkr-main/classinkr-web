@@ -51,7 +51,7 @@ export function Hero() {
                     >
                         <span className="inline-flex items-center gap-2 py-1.5 px-4 rounded-full bg-[#ECFDF5] border border-[#084734]/20 text-[#084734] text-sm md:text-base font-medium mb-8">
                             <span className="w-2 h-2 rounded-full bg-[#084734] animate-pulse" />
-                            전국 500+ 학원, 지금 이 순간도 수업 중
+                            기술 × 교육 — 새로운 시대의 학원 운영
                         </span>
                     </motion.div>
 

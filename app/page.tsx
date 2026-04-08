@@ -1,5 +1,6 @@
 import { Hero } from "@/components/sections/Hero"
 import { LogoBar } from "@/components/sections/LogoBar"
+import { EraVision } from "@/components/sections/EraVision"
 import { ProblemCost } from "@/components/sections/ProblemCost"
 import { Manifesto } from "@/components/sections/Manifesto"
 import dynamic from "next/dynamic"
@@ -21,7 +22,10 @@ export default function LandingPage() {
       <Hero />
       <LogoBar />
 
-      {/* Act 2: 공감 — 원장이 겪는 현실 */}
+      {/* Act 2: 시대 — 기술과 교육의 결합 */}
+      <EraVision />
+
+      {/* Act 3: 공감 — 원장이 겪는 현실 */}
       <ProblemCost />
 
       {/* Act 3: 전환점 — 수업은 개인기가 아니다 */}
