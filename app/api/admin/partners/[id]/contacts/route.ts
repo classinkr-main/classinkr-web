@@ -54,7 +54,7 @@ export async function GET(
   req: NextRequest,
   { params }: { params: Promise<{ id: string }> }
 ) {
-  const err = verifyAdmin(req)
+  const err = await verifyAdmin(req)
   if (err) return err
 
   try {
@@ -101,7 +101,7 @@ export async function POST(
   req: NextRequest,
   { params }: { params: Promise<{ id: string }> }
 ) {
-  const err = verifyAdmin(req)
+  const err = await verifyAdmin(req)
   if (err) return err
 
   try {
@@ -116,7 +116,7 @@ export async function PATCH(
   req: NextRequest,
   { params }: { params: Promise<{ id: string }> }
 ) {
-  const err = verifyAdmin(req)
+  const err = await verifyAdmin(req)
   if (err) return err
 
   try {
