@@ -2,49 +2,67 @@
 
 import { motion } from "framer-motion"
 
-const lines = [
-    { text: "수업은", delay: 0 },
-    { text: "선생님 개인기가", delay: 0.15 },
-    { text: "아닙니다.", delay: 0.3, accent: true },
-]
-
 export function Manifesto() {
     return (
-        <section className="relative py-28 md:py-40 bg-[#111110] overflow-hidden">
-            {/* Subtle green ambient */}
-            <div className="absolute top-1/2 left-1/2 -translate-x-1/2 -translate-y-1/2 w-[600px] h-[600px] bg-[#084734]/8 rounded-full blur-[120px] pointer-events-none" />
+        <section className="relative py-24 md:py-36 bg-[#111110] overflow-hidden">
+            {/* Green ambient glow */}
+            <div className="absolute top-1/2 left-1/2 -translate-x-1/2 -translate-y-1/2 w-[800px] h-[800px] bg-[#084734]/10 rounded-full blur-[140px] pointer-events-none" />
 
-            <div className="container mx-auto relative z-10 px-4 text-center">
-                {/* Big statement */}
-                <div className="mb-16 md:mb-20">
-                    {lines.map((line, i) => (
-                        <motion.div
-                            key={i}
-                            initial={{ opacity: 0, y: 24 }}
-                            whileInView={{ opacity: 1, y: 0 }}
-                            viewport={{ once: true }}
-                            transition={{ duration: 0.8, delay: line.delay, ease: [0.21, 0.47, 0.32, 0.98] }}
-                        >
-                            <span
-                                className={`block text-5xl md:text-7xl lg:text-8xl font-black leading-[1.1] break-keep ${
-                                    line.accent
-                                        ? "text-transparent bg-clip-text bg-gradient-to-r from-[#6EE7B7] to-[#34d399]"
-                                        : "text-white"
-                                }`}
-                                style={{ letterSpacing: '-2.125px' }}
-                            >
-                                {line.text}
-                            </span>
-                        </motion.div>
-                    ))}
-                </div>
+            {/* Full-width — no container constraint */}
+            <div className="relative z-10 px-6 md:px-12 text-center">
+
+                {/* Line 1 */}
+                <motion.div
+                    initial={{ opacity: 0, y: 32 }}
+                    whileInView={{ opacity: 1, y: 0 }}
+                    viewport={{ once: true }}
+                    transition={{ duration: 0.85, ease: [0.21, 0.47, 0.32, 0.98] }}
+                >
+                    <span
+                        className="block font-black text-white leading-[1.05] break-keep"
+                        style={{ fontSize: 'clamp(3rem, 8.5vw, 8.5rem)', letterSpacing: '-0.05em' }}
+                    >
+                        수업은 선생님
+                    </span>
+                </motion.div>
+
+                {/* Line 2 */}
+                <motion.div
+                    initial={{ opacity: 0, y: 32 }}
+                    whileInView={{ opacity: 1, y: 0 }}
+                    viewport={{ once: true }}
+                    transition={{ duration: 0.85, delay: 0.12, ease: [0.21, 0.47, 0.32, 0.98] }}
+                >
+                    <span
+                        className="block font-black text-white leading-[1.05] break-keep"
+                        style={{ fontSize: 'clamp(3rem, 8.5vw, 8.5rem)', letterSpacing: '-0.05em' }}
+                    >
+                        개인기가
+                    </span>
+                </motion.div>
+
+                {/* Line 3 — accent */}
+                <motion.div
+                    initial={{ opacity: 0, y: 32 }}
+                    whileInView={{ opacity: 1, y: 0 }}
+                    viewport={{ once: true }}
+                    transition={{ duration: 0.85, delay: 0.24, ease: [0.21, 0.47, 0.32, 0.98] }}
+                    className="mb-16 md:mb-20"
+                >
+                    <span
+                        className="block font-black leading-[1.05] break-keep text-transparent bg-clip-text bg-gradient-to-r from-[#6EE7B7] to-[#34d399]"
+                        style={{ fontSize: 'clamp(3rem, 8.5vw, 8.5rem)', letterSpacing: '-0.05em' }}
+                    >
+                        아닙니다.
+                    </span>
+                </motion.div>
 
                 {/* Bridge sentence */}
                 <motion.p
                     initial={{ opacity: 0, y: 20 }}
                     whileInView={{ opacity: 1, y: 0 }}
                     viewport={{ once: true }}
-                    transition={{ duration: 0.7, delay: 0.55 }}
+                    transition={{ duration: 0.7, delay: 0.45 }}
                     className="text-xl md:text-2xl text-white/50 max-w-2xl mx-auto leading-relaxed font-light break-keep"
                 >
                     에이스 강사의 수업 방식을 시스템으로 만들어,<br className="hidden md:block" />
@@ -56,14 +74,14 @@ export function Manifesto() {
                     initial={{ opacity: 0 }}
                     whileInView={{ opacity: 1 }}
                     viewport={{ once: true }}
-                    transition={{ duration: 0.6, delay: 0.8 }}
-                    className="flex items-center justify-center gap-3 mt-16"
+                    transition={{ duration: 0.6, delay: 0.7 }}
+                    className="flex items-center justify-center gap-3 mt-14"
                 >
                     {[0, 1, 2].map((i) => (
                         <div
                             key={i}
-                            className="w-1.5 h-1.5 rounded-full bg-[#084734]"
-                            style={{ opacity: 1 - i * 0.25 }}
+                            className="w-1.5 h-1.5 rounded-full bg-[#6EE7B7]"
+                            style={{ opacity: 1 - i * 0.3 }}
                         />
                     ))}
                 </motion.div>
