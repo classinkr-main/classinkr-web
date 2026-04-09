@@ -1,6 +1,6 @@
 import "server-only";
 
-import { createSupabaseServerClient } from "@/lib/supabase/server";
+import { createSupabaseAdminClient } from "@/lib/supabase/admin";
 import type {
   LeadContactLog,
   LeadContactLogInsert,
@@ -33,7 +33,7 @@ function toRecord(row: LeadContactLog): ContactLogRecord {
 }
 
 export async function getContactLogs(leadId: string): Promise<ContactLogRecord[]> {
-  const supabase = await createSupabaseServerClient();
+  const supabase = createSupabaseAdminClient();
   const { data, error } = await supabase
     .from("lead_contact_logs")
     .select("*")
@@ -54,7 +54,7 @@ export async function addContactLog(
     contacted_at?: string;
   }
 ): Promise<ContactLogRecord> {
-  const supabase = await createSupabaseServerClient();
+  const supabase = createSupabaseAdminClient();
 
   const insert: LeadContactLogInsert = {
     lead_id: leadId,
@@ -76,7 +76,7 @@ export async function addContactLog(
 }
 
 export async function deleteContactLog(id: string): Promise<boolean> {
-  const supabase = await createSupabaseServerClient();
+  const supabase = createSupabaseAdminClient();
   const { error } = await supabase.from("lead_contact_logs").delete().eq("id", id);
   return !error;
 }
