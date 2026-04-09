@@ -59,7 +59,7 @@ export default function PainPointsV2() {
             FROM PAIN TO POWER
           </p>
           <h2
-            className="font-serif text-4xl md:text-5xl text-[#111110] mt-4 leading-tight"
+            className="text-4xl md:text-5xl text-[#111110] mt-4 leading-tight"
             style={{ letterSpacing: "-1.5px" }}
           >
             선생님의 고민, 보드 한 대로 끝납니다.

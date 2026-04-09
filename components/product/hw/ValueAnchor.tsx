@@ -86,7 +86,7 @@ export default function ValueAnchor() {
           initial="hidden"
           whileInView="visible"
           viewport={{ once: true, margin: "-80px" }}
-          className="font-serif text-4xl md:text-5xl lg:text-6xl mt-4 leading-tight text-white"
+          className="text-4xl md:text-5xl lg:text-6xl mt-4 leading-tight text-white"
           style={{ letterSpacing: "-1.5px" }}
         >
           한 대 안에,
@@ -117,7 +117,7 @@ export default function ValueAnchor() {
         >
           <p className="text-xs uppercase tracking-wider text-[#6EE7B7]">INCLUDED</p>
           <h3
-            className="font-serif text-2xl md:text-3xl text-white mt-2"
+            className="text-2xl md:text-3xl text-white mt-2"
             style={{ letterSpacing: "-0.5px" }}
           >
             이 한 대에 포함되는 것

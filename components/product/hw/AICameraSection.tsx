@@ -46,7 +46,7 @@ export default function AICameraSection() {
           </p>
 
           <h2
-            className="font-serif text-4xl md:text-5xl lg:text-6xl mt-4 leading-tight"
+            className="text-4xl md:text-5xl lg:text-6xl mt-4 leading-tight"
             style={{ letterSpacing: "-1.5px" }}
           >
             강사가 움직여도,

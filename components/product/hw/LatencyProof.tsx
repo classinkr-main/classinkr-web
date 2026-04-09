@@ -190,7 +190,7 @@ export default function LatencyProof() {
             initial="hidden"
             animate={copyInView ? "visible" : "hidden"}
             transition={{ duration: 0.6, ease: easing, delay: 0.12 }}
-            className="font-serif text-4xl md:text-5xl text-[#111110] mt-4 leading-tight"
+            className="text-4xl md:text-5xl text-[#111110] mt-4 leading-tight"
             style={{ letterSpacing: "-1.5px" }}
           >
             분필보다 빠릅니다.

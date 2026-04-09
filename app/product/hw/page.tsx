@@ -91,7 +91,7 @@ function ComparisonSection() {
             <div className="container mx-auto px-4 lg:px-8">
                 <motion.div className="text-center mb-16" {...fadeUp}>
                     <p className="text-sm font-semibold text-[#22A366] tracking-wider uppercase mb-3">WHY CLASSIN BOARD</p>
-                    <h2 className="text-3xl md:text-4xl lg:text-5xl font-serif text-[#1a1a19] leading-tight">
+                    <h2 className="text-3xl md:text-4xl lg:text-5xl text-[#1a1a19] leading-tight">
                         도구를 바꾸는 게 아니라,
                         <br className="hidden sm:block" />
                         <span className="text-[#22A366]">교육의 방식</span>을 바꿉니다
@@ -152,7 +152,7 @@ function FeatureSection({
                     <div className="flex-1 max-w-xl">
                         <motion.div {...fadeUp}>
                             <p className="text-sm font-semibold tracking-wider uppercase mb-3" style={{ color: accent }}>{tag}</p>
-                            <h2 className="text-3xl md:text-4xl lg:text-[2.75rem] font-serif text-[#1a1a19] leading-tight mb-6">
+                            <h2 className="text-3xl md:text-4xl lg:text-[2.75rem] text-[#1a1a19] leading-tight mb-6">
                                 {title}
                             </h2>
                             <p className="text-lg text-slate-500 leading-relaxed mb-10">{desc}</p>
@@ -260,7 +260,7 @@ function FeatureTabSection() {
             <div className="container mx-auto px-4 lg:px-8">
                 <motion.div className="text-center mb-12" {...fadeUp}>
                     <p className="text-sm font-semibold text-[#22A366] tracking-wider uppercase mb-3">FEATURES</p>
-                    <h2 className="text-3xl md:text-4xl font-serif text-[#1a1a19] leading-tight">
+                    <h2 className="text-3xl md:text-4xl text-[#1a1a19] leading-tight">
                         하나의 보드, <span className="text-[#22A366]">다섯 가지 경험</span>
                     </h2>
                     <p className="text-lg text-slate-500 mt-4 max-w-xl mx-auto">
@@ -310,7 +310,7 @@ function FeatureTabSection() {
                         <div className="inline-flex items-center gap-2 px-3 py-1.5 rounded-full bg-[#22A366]/10 text-[#22A366] text-xs font-bold mb-5 border border-[#22A366]/15">
                             {tab.badge}
                         </div>
-                        <h3 className="text-2xl md:text-3xl font-serif text-[#1a1a19] mb-8 leading-snug">
+                        <h3 className="text-2xl md:text-3xl text-[#1a1a19] mb-8 leading-snug">
                             {tab.title}
                         </h3>
                         <ul className="space-y-4">
@@ -348,7 +348,7 @@ function ProductAnatomySection() {
             <div className="container mx-auto px-4 lg:px-8">
                 <motion.div className="text-center mb-16" {...fadeUp}>
                     <p className="text-sm font-semibold text-[#22A366] tracking-wider uppercase mb-3">PRODUCT DESIGN</p>
-                    <h2 className="text-3xl md:text-4xl lg:text-5xl font-serif text-[#1a1a19] leading-tight">
+                    <h2 className="text-3xl md:text-4xl lg:text-5xl text-[#1a1a19] leading-tight">
                         디테일에서 시작하는
                         <br />
                         <span className="text-[#22A366]">교육 경험</span>
@@ -458,7 +458,7 @@ function PainPointSection() {
             <div className="container mx-auto px-4 lg:px-8">
                 <motion.div className="text-center mb-14" {...fadeUp}>
                     <p className="text-sm font-semibold text-slate-400 tracking-wider uppercase mb-3">PAIN POINTS</p>
-                    <h2 className="text-3xl md:text-4xl lg:text-5xl font-serif text-[#1a1a19] leading-tight">
+                    <h2 className="text-3xl md:text-4xl lg:text-5xl text-[#1a1a19] leading-tight">
                         선생님, 이런 적
                         <br />
                         <span className="text-[#22A366]">없으셨나요?</span>
@@ -504,7 +504,7 @@ function FullWidthPointSection({
             <div className="relative container mx-auto px-4 lg:px-8 py-28 md:py-40 text-center text-white">
                 <motion.div {...fadeUp}>
                     <p className="text-xs font-bold tracking-[0.35em] uppercase mb-7 text-white/50">{eyebrow}</p>
-                    <h2 className="text-4xl sm:text-5xl lg:text-6xl xl:text-[5rem] font-serif leading-[1.1] tracking-tight mb-8 max-w-4xl mx-auto">
+                    <h2 className="text-4xl sm:text-5xl lg:text-6xl xl:text-[5rem] leading-[1.1] tracking-tight mb-8 max-w-4xl mx-auto">
                         {statement}
                     </h2>
                     {sub && (
@@ -556,7 +556,7 @@ function LessonTimelineSection() {
             <div className="container mx-auto px-4 lg:px-8">
                 <motion.div className="text-center mb-16" {...fadeUp}>
                     <p className="text-sm font-semibold text-[#22A366] tracking-wider uppercase mb-3">A DAY WITH CLASSIN BOARD</p>
-                    <h2 className="text-3xl md:text-4xl lg:text-5xl font-serif text-[#1a1a19] leading-tight">
+                    <h2 className="text-3xl md:text-4xl lg:text-5xl text-[#1a1a19] leading-tight">
                         교사의 하루가
                         <br />
                         <span className="text-[#22A366]">이렇게 달라집니다</span>
@@ -621,7 +621,7 @@ function TestimonialSection() {
             <div className="container mx-auto px-4 lg:px-8">
                 <motion.div className="text-center mb-14" {...fadeUp}>
                     <p className="text-sm font-semibold text-[#22A366] tracking-wider uppercase mb-3">VOICES FROM CLASSROOMS</p>
-                    <h2 className="text-3xl md:text-4xl font-serif text-[#1a1a19] leading-tight">
+                    <h2 className="text-3xl md:text-4xl text-[#1a1a19] leading-tight">
                         이미 수업에서 경험한
                         <br />
                         <span className="text-[#22A366]">선생님들이 말합니다</span>
@@ -695,7 +695,7 @@ function SpaceScenarioSection() {
             <div className="container mx-auto px-4 lg:px-8">
                 <motion.div className="text-center mb-12" {...fadeUp}>
                     <p className="text-sm font-semibold text-[#22A366] tracking-wider uppercase mb-3">LINEUP × SPACE</p>
-                    <h2 className="text-3xl md:text-4xl lg:text-5xl font-serif text-[#1a1a19] leading-tight">
+                    <h2 className="text-3xl md:text-4xl lg:text-5xl text-[#1a1a19] leading-tight">
                         공간이 달라지면,
                         <br />
                         <span className="text-[#22A366]">모델도 달라집니다</span>
@@ -753,7 +753,7 @@ function SpaceScenarioSection() {
                         <div className="inline-flex items-center px-3 py-1 rounded-full bg-slate-100 text-slate-500 text-xs font-semibold mb-6">
                             {scenario.tag}
                         </div>
-                        <h3 className="text-2xl md:text-3xl font-serif text-[#1a1a19] mb-5 leading-snug">
+                        <h3 className="text-2xl md:text-3xl text-[#1a1a19] mb-5 leading-snug">
                             {scenario.model} <span className="text-slate-400 font-normal">{scenario.size}</span>
                             <br />어떤 공간에 어울릴까요?
                         </h3>
@@ -786,7 +786,7 @@ function OnboardingProcessSection() {
             <div className="container mx-auto px-4 lg:px-8">
                 <motion.div className="text-center mb-16" {...fadeUp}>
                     <p className="text-sm font-semibold text-[#22A366] tracking-wider uppercase mb-3">HOW TO START</p>
-                    <h2 className="text-3xl md:text-4xl lg:text-5xl font-serif text-[#1a1a19] leading-tight">
+                    <h2 className="text-3xl md:text-4xl lg:text-5xl text-[#1a1a19] leading-tight">
                         도입은 생각보다
                         <br />
                         <span className="text-[#22A366]">훨씬 간단합니다</span>
@@ -828,7 +828,7 @@ export default function ProductHWPage() {
                 <div className="absolute inset-0 bg-gradient-to-b from-[#FDFCF8] via-[#F0FFF7] to-[#FDFCF8] pointer-events-none" />
 
                 <div className="container mx-auto px-4 lg:px-8 pt-12 md:pt-24 pb-20 md:pb-32 relative">
-                    <div className="max-w-4xl mx-auto text-center">
+                    <div className="max-w-6xl mx-auto text-center">
                         <motion.div
                             initial={{ opacity: 0, y: 30 }}
                             animate={{ opacity: 1, y: 0 }}
@@ -839,17 +839,16 @@ export default function ProductHWPage() {
                                 ClassIn Board S Series
                             </div>
 
-                            <h1 className="text-4xl sm:text-5xl lg:text-6xl xl:text-7xl font-serif leading-[1.1] tracking-tight mb-8 text-[#1a1a19]">
-                                칠판 하나로,
-                                <br />
-                                교실의 한계가{" "}
-                                <span className="text-[#22A366]">사라집니다</span>
+                            <h1
+                                className="text-[2.25rem] sm:text-5xl md:text-6xl lg:text-[4.25rem] xl:text-[5rem] font-bold leading-[1.05] mb-10 text-[#1a1a19]"
+                                style={{ letterSpacing: "-0.045em" }}
+                            >
+                                칠판 하나로, 교실의 한계가{" "}
+                                <span className="text-[#084734] whitespace-nowrap">사라집니다.</span>
                             </h1>
 
-                            <p className="text-xl md:text-2xl text-slate-500 leading-relaxed font-medium max-w-2xl mx-auto mb-12">
-                                보드 한 대 안에 PC, 4K 카메라, 소프트웨어가 모두 들어 있습니다.
-                                <br className="hidden md:block" />
-                                책상 위에 둘 게 사라진 교실.
+                            <p className="text-lg md:text-xl lg:text-2xl text-[#615D59] leading-relaxed font-medium max-w-3xl mx-auto mb-12">
+                                보드 한 대 안에 PC, 4K AI 카메라, 소프트웨어까지. 책상 위에 둘 게 사라진 교실.
                             </p>
                         </motion.div>
 
@@ -1197,7 +1196,7 @@ export default function ProductHWPage() {
                 <div className="container mx-auto px-4 lg:px-8 relative">
                     <motion.div className="text-center mb-16" {...fadeUp}>
                         <p className="text-sm font-semibold text-[#22A366] tracking-wider uppercase mb-3">COMPLETE ECOSYSTEM</p>
-                        <h2 className="text-3xl md:text-4xl lg:text-5xl font-serif leading-tight">
+                        <h2 className="text-3xl md:text-4xl lg:text-5xl leading-tight">
                             하드웨어만 팔지 않습니다.
                             <br />
                             <span className="text-[#22A366]">교육 생태계</span>를 완성합니다.
@@ -1275,7 +1274,7 @@ export default function ProductHWPage() {
                 <div className="container mx-auto px-4 lg:px-8">
                     <motion.div className="text-center mb-16" {...fadeUp}>
                         <p className="text-sm font-semibold text-[#22A366] tracking-wider uppercase mb-3">LINEUP</p>
-                        <h2 className="text-3xl md:text-4xl lg:text-5xl font-serif text-[#1a1a19] leading-tight">
+                        <h2 className="text-3xl md:text-4xl lg:text-5xl text-[#1a1a19] leading-tight">
                             모든 공간에 맞는 <span className="text-[#22A366]">사이즈</span>
                         </h2>
                         <p className="text-lg text-slate-500 mt-4 max-w-xl mx-auto">
@@ -1350,7 +1349,7 @@ export default function ProductHWPage() {
                 <div className="container mx-auto px-4 text-center">
                     <motion.div {...fadeUp}>
                         <p className="text-sm font-semibold text-[#22A366] tracking-wider uppercase mb-3">EXPERIENCE</p>
-                        <h2 className="text-3xl md:text-4xl lg:text-5xl font-serif text-[#1a1a19] mb-4 leading-tight">
+                        <h2 className="text-3xl md:text-4xl lg:text-5xl text-[#1a1a19] mb-4 leading-tight">
                             스펙으로 전할 수 없는 건,
                             <br />
                             <span className="text-[#22A366]">직접 써보는 것</span>뿐입니다

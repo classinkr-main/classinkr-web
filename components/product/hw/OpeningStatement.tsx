@@ -28,9 +28,9 @@ export default function OpeningStatement() {
   return (
     <section
       ref={ref}
-      className="min-h-[80vh] bg-[#FAFAF8] flex items-center justify-center px-6 py-20"
+      className="min-h-[80vh] bg-[#FAFAF8] flex items-center justify-center px-6 py-24 md:py-32"
     >
-      <div className="max-w-5xl w-full mx-auto flex flex-col items-center text-center gap-10">
+      <div className="max-w-[88rem] w-full mx-auto flex flex-col items-center text-center gap-12">
         {/* Heading block */}
         <div className="flex flex-col gap-3 sm:gap-4">
           {/* Line 1 */}
@@ -39,8 +39,8 @@ export default function OpeningStatement() {
             initial="hidden"
             animate={inView ? "visible" : "hidden"}
             transition={transition(0)}
-            className="font-serif text-4xl sm:text-5xl md:text-6xl lg:text-7xl font-bold text-[#111110]"
-            style={{ lineHeight: 1.1, letterSpacing: "-2px" }}
+            className="text-[2rem] sm:text-4xl md:text-5xl lg:text-[3.75rem] xl:text-[4.25rem] font-bold tracking-tight text-[#111110]"
+            style={{ lineHeight: 1.1, letterSpacing: "-0.045em" }}
           >
             교실에 두는 건 분필 한 자루입니다.
           </motion.p>
@@ -51,8 +51,8 @@ export default function OpeningStatement() {
             initial="hidden"
             animate={inView ? "visible" : "hidden"}
             transition={transition(0.2)}
-            className="font-serif text-4xl sm:text-5xl md:text-6xl lg:text-7xl font-bold text-[#084734]"
-            style={{ lineHeight: 1.1, letterSpacing: "-2px" }}
+            className="text-[2rem] sm:text-4xl md:text-5xl lg:text-[3.75rem] xl:text-[4.25rem] font-bold tracking-tight text-[#084734]"
+            style={{ lineHeight: 1.1, letterSpacing: "-0.045em" }}
           >
             나머지는 보드 안에 들어 있습니다.
           </motion.p>
@@ -63,8 +63,8 @@ export default function OpeningStatement() {
             initial="hidden"
             animate={inView ? "visible" : "hidden"}
             transition={transition(0.4)}
-            className="font-serif text-4xl sm:text-5xl md:text-6xl lg:text-7xl font-bold text-[#111110]"
-            style={{ lineHeight: 1.1, letterSpacing: "-2px" }}
+            className="text-[2rem] sm:text-4xl md:text-5xl lg:text-[3.75rem] xl:text-[4.25rem] font-bold tracking-tight text-[#111110]"
+            style={{ lineHeight: 1.1, letterSpacing: "-0.045em" }}
           >
             PC, 카메라, 마이크, 그리고 소프트웨어까지.
           </motion.p>

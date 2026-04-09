@@ -46,7 +46,7 @@ export default function SizeChooser() {
           CHOOSE YOUR SIZE
         </p>
         <h2
-          className="font-serif text-4xl md:text-5xl text-[#111110] mt-4 leading-tight"
+          className="text-4xl md:text-5xl text-[#111110] mt-4 leading-tight"
           style={{ letterSpacing: "-1.5px" }}
         >
           교실의 크기에 맞는 한 대.
@@ -78,7 +78,7 @@ export default function SizeChooser() {
               {/* Image area */}
               <div className="aspect-[16/10] bg-gradient-to-br from-[#ECFDF5] to-[#F6F5F4] flex items-center justify-center">
                 <span
-                  className="font-serif text-7xl md:text-8xl text-[#084734]/30 font-bold tabular-nums select-none"
+                  className="text-7xl md:text-8xl text-[#084734]/30 font-bold tabular-nums select-none"
                 >
                   {size.inches}
                 </span>
@@ -87,7 +87,7 @@ export default function SizeChooser() {
               {/* Body */}
               <div className="p-8">
                 <h3
-                  className="font-serif text-3xl text-[#111110]"
+                  className="text-3xl text-[#111110]"
                   style={{ letterSpacing: "-0.5px" }}
                 >
                   {size.heading}

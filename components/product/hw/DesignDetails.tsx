@@ -59,7 +59,7 @@ export default function DesignDetails() {
           initial="hidden"
           animate={inView ? "visible" : "hidden"}
           transition={transition(0.1)}
-          className="font-serif text-4xl md:text-5xl text-[#111110] mt-4 leading-tight"
+          className="text-4xl md:text-5xl text-[#111110] mt-4 leading-tight"
           style={{ letterSpacing: "-1.5px" }}
         >
           디테일이 수업의 질을 바꿉니다.
@@ -98,7 +98,7 @@ export default function DesignDetails() {
               {/* Body */}
               <div className="p-7 flex flex-col">
                 <h3
-                  className="font-serif text-2xl text-[#111110] leading-snug"
+                  className="text-2xl text-[#111110] leading-snug"
                   style={{ letterSpacing: "-0.25px" }}
                 >
                   {heading}

@@ -88,7 +88,7 @@ export default function BigBackdropImage() {
           initial="hidden"
           whileInView="visible"
           viewport={{ once: true, margin: "-80px" }}
-          className="font-serif text-3xl md:text-5xl lg:text-6xl leading-tight text-white mt-4"
+          className="text-3xl md:text-5xl lg:text-6xl leading-tight text-white mt-4"
           style={{ letterSpacing: "-1.5px" }}
         >
           베젤은 얇아지고,

@@ -99,7 +99,7 @@ export default function AllInOneStatement() {
 
           {/* Heading */}
           <h2
-            className="font-serif text-4xl md:text-5xl lg:text-6xl leading-tight font-bold"
+            className="text-4xl md:text-5xl lg:text-6xl leading-tight font-bold"
             style={{ letterSpacing: "-1.5px" }}
           >
             보드 안에 PC가 있습니다.
