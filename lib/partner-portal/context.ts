@@ -1,6 +1,7 @@
 import { createServerClient } from "@supabase/ssr";
 import type { NextRequest } from "next/server";
 
+import { getVerifiedAdminContext } from "@/lib/admin-auth";
 import { createSupabaseAdminClient } from "@/lib/supabase/admin";
 import type { Database } from "@/lib/supabase/database.types";
 import {
@@ -15,6 +16,7 @@ export interface PartnerAccountContext {
   customerId: string | null;
   role: string;
   source: "v2" | "legacy";
+  isSuperAdmin?: boolean;
 }
 
 async function getAuthenticatedUserId(req: NextRequest): Promise<string | null> {
@@ -42,44 +44,100 @@ async function getAuthenticatedUserId(req: NextRequest): Promise<string | null> 
 export async function resolvePartnerAccountContext(
   req: NextRequest
 ): Promise<PartnerAccountContext | null> {
+  // 1. Supabase 세션으로 일반 파트너 인증
   const userId = await getAuthenticatedUserId(req);
-  if (!userId) return null;
+  if (userId) {
+    const admin = createSupabaseAdminClient();
 
-  const admin = createSupabaseAdminClient();
+    const { data: v2User } = await admin
+      .from("partner_account_users")
+      .select("partner_account_id, role, status")
+      .eq("user_id", userId)
+      .eq("status", "active")
+      .single();
 
-  const { data: v2User } = await admin
-    .from("partner_account_users")
-    .select("partner_account_id, role, status")
-    .eq("user_id", userId)
+    if (v2User?.partner_account_id) {
+      return {
+        userId,
+        partnerAccountId: v2User.partner_account_id as string,
+        legacyPartnerId: null,
+        customerId: null,
+        role: (v2User.role as string) ?? "owner",
+        source: "v2",
+      };
+    }
+
+    const { data: legacyUser } = await admin
+      .from("partner_users")
+      .select("partner_id, role, status")
+      .eq("user_id", userId)
+      .eq("status", "active")
+      .single();
+
+    if (legacyUser?.partner_id) {
+      return {
+        userId,
+        partnerAccountId: null,
+        legacyPartnerId: legacyUser.partner_id as string,
+        customerId: legacyUser.partner_id as string,
+        role: (legacyUser.role as string) ?? "admin",
+        source: "legacy",
+      };
+    }
+  }
+
+  // 2. Super admin fallback — admin_session 쿠키가 있으면 첫 번째 파트너 계정으로 진입
+  return resolveSuperAdminAsPartner(req);
+}
+
+async function resolveSuperAdminAsPartner(
+  req: NextRequest
+): Promise<PartnerAccountContext | null> {
+  // legacy 쿠키 / Supabase admin_profiles 둘 다 처리
+  const adminCtx = await getVerifiedAdminContext(req);
+  if (!adminCtx) return null;
+  // branch 어드민은 제외, admin 롤만 파트너 접근 허용
+  if (adminCtx.role !== "admin" && adminCtx.role !== "SUPER_ADMIN") return null;
+
+  const db = createSupabaseAdminClient();
+
+  // v2 파트너 계정 우선 시도
+  const { data: v2Account } = await db
+    .from("partner_accounts")
+    .select("id")
     .eq("status", "active")
-    .single();
+    .limit(1)
+    .maybeSingle();
 
-  if (v2User?.partner_account_id) {
+  if (v2Account?.id) {
     return {
-      userId,
-      partnerAccountId: v2User.partner_account_id as string,
+      userId: "super-admin",
+      partnerAccountId: v2Account.id as string,
       legacyPartnerId: null,
       customerId: null,
-      role: (v2User.role as string) ?? "owner",
+      role: "admin",
       source: "v2",
+      isSuperAdmin: true,
     };
   }
 
-  const { data: legacyUser } = await admin
-    .from("partner_users")
-    .select("partner_id, role, status")
-    .eq("user_id", userId)
+  // legacy 파트너 fallback
+  const { data: legacyPartner } = await db
+    .from("partners")
+    .select("id")
     .eq("status", "active")
-    .single();
+    .limit(1)
+    .maybeSingle();
 
-  if (!legacyUser?.partner_id) return null;
+  if (!legacyPartner?.id) return null;
 
   return {
-    userId,
+    userId: "super-admin",
     partnerAccountId: null,
-    legacyPartnerId: legacyUser.partner_id as string,
-    customerId: legacyUser.partner_id as string,
-    role: (legacyUser.role as string) ?? "admin",
+    legacyPartnerId: legacyPartner.id as string,
+    customerId: legacyPartner.id as string,
+    role: "admin",
     source: "legacy",
+    isSuperAdmin: true,
   };
 }

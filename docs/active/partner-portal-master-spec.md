@@ -8,19 +8,22 @@
 보조 문서:
 
 - [partner-portal-guidelines.md](C:/Projects/PUBLIC_Classin/Classin_Home_bae_v1/docs/active/partner-portal-guidelines.md)
+- [partner-portal-document-hub-guidelines.md](./partner-portal-document-hub-guidelines.md)
 - [partner-portal-product-plan.md](C:/Projects/PUBLIC_Classin/Classin_Home_bae_v1/docs/active/partner-portal-product-plan.md)
 - [partner-portal-screen-layout.md](C:/Projects/PUBLIC_Classin/Classin_Home_bae_v1/docs/active/partner-portal-screen-layout.md)
+- [partner-portal-document-hub-wireframes.md](./partner-portal-document-hub-wireframes.md)
 - [partner-portal-front-back-contract.md](C:/Projects/PUBLIC_Classin/Classin_Home_bae_v1/docs/active/partner-portal-front-back-contract.md)
 - [partner-portal-implementation-roadmap.md](C:/Projects/PUBLIC_Classin/Classin_Home_bae_v1/docs/active/partner-portal-implementation-roadmap.md)
+- [partner-portal-document-hub-execution-plan.md](./partner-portal-document-hub-execution-plan.md)
 - [partner-portal-worklog.md](C:/Projects/PUBLIC_Classin/Classin_Home_bae_v1/docs/active/partner-portal-worklog.md)
 - [partner-portal-future-features.md](C:/Projects/PUBLIC_Classin/Classin_Home_bae_v1/docs/active/partner-portal-future-features.md) — 실험성 기능 목록 (낮은 우선순위)
 
 문서 우선순위:
 
 1. 이 문서
-2. 운영 규칙은 `partner-portal-guidelines.md`
-3. 화면/UX는 `partner-portal-product-plan.md`, `partner-portal-screen-layout.md`, `partner-portal-front-back-contract.md`
-4. 개발 순서는 `partner-portal-implementation-roadmap.md`
+2. 운영 규칙은 `partner-portal-guidelines.md`, 문서 허브 세부 원칙은 `partner-portal-document-hub-guidelines.md`
+3. 화면/UX는 `partner-portal-product-plan.md`, `partner-portal-screen-layout.md`, `partner-portal-document-hub-wireframes.md`, `partner-portal-front-back-contract.md`
+4. 개발 순서는 `partner-portal-implementation-roadmap.md`, 문서 허브 투입 순서는 `partner-portal-document-hub-execution-plan.md`
 
 ## 1. 제품 한 줄 정의
 
@@ -295,31 +298,47 @@ flowchart TD
 
 목적:
 
-- 모든 견적서/계약서를 전역에서 검색, 정렬, 버전 추적
+- 모든 문서를 전역에서 `만들고 / 발송하고 / 확인하고 / 정리`하는 운영 허브
+- 최신 버전과 외부 발송본, 출력용 산출물을 분리해서 관리
 
 구조:
 
-- 상단 필터 바
-- 좌측 문서 리스트
-- 우측 선택 문서 상세
+- 상단 작업 모드 바
+  - `만들기`
+  - `발송하기`
+  - `보기·정리`
+- 상단 필터/검색 바
+- 좌측 문서 큐/리스트
+- 중앙 선택 문서 상세와 버전
+- 우측 상태 요약 / 다음 액션 / 발송 / 출력 정보
 
 보기 전환:
 
 - `전체`
 - `견적서`
 - `계약서`
-- `공유됨`
-- `초안`
+- `영수증`
+- `작성 중`
+- `발송 준비`
+- `열람됨`
+- `만료 임박`
 
 카드 표시 항목:
 
 - 문서 종류
 - 문서 번호
-- 버전
-- 상태
-- 공유 여부
-- 발송일
+- 최신 버전
+- 문서 상태
+- 최근 발송 상태
+- 최근 열람
+- 다음 액션
 - 최종 수정일
+
+문서 허브 상세 기준:
+
+- 운영 원칙은 `partner-portal-document-hub-guidelines.md`
+- 화면 블록은 `partner-portal-document-hub-wireframes.md`
+- 작업 투입은 `partner-portal-document-hub-execution-plan.md`
 
 ### E. 설치 캘린더
 

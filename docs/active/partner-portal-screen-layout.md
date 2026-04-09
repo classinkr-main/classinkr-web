@@ -3,6 +3,8 @@
 기준 문서:
 - `docs/active/partner-portal-guidelines.md`
 - `docs/active/partner-portal-product-plan.md`
+- `docs/active/partner-portal-document-hub-guidelines.md`
+- `docs/active/partner-portal-document-hub-wireframes.md`
 
 기준 시점: 2026-04-04
 

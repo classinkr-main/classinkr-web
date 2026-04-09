@@ -1010,8 +1010,8 @@ export default function AdminMarketingPage() {
                   </div>
                 }
               >
-                <div className="mb-4 grid gap-3 lg:grid-cols-[1.1fr_0.7fr_0.7fr]">
-                  <div className="relative">
+                <div className="mb-4 flex flex-col gap-3 sm:flex-row sm:items-center">
+                  <div className="relative flex-1">
                     <Search className="pointer-events-none absolute left-3 top-1/2 h-4 w-4 -translate-y-1/2 text-[#1a1a1a]/30" />
                     <Input
                       value={query}
@@ -1020,12 +1020,12 @@ export default function AdminMarketingPage() {
                       className="pl-10"
                     />
                   </div>
-                  <div className="flex flex-wrap gap-2">
+                  <div className="flex shrink-0 gap-1.5">
                     {(["all", "active", "unsubscribed"] as const).map((value) => (
                       <button
                         key={value}
                         onClick={() => setStatusFilter(value)}
-                        className={`min-w-[84px] flex-1 rounded-xl border px-3 py-2 text-[12px] font-medium transition-colors sm:flex-none ${
+                        className={`rounded-lg border px-3 py-1.5 text-[12px] font-medium transition-colors whitespace-nowrap ${
                           statusFilter === value
                             ? "border-[#111110] bg-[#111110] text-white"
                             : "border-[#e8e8e4] bg-white text-[#1a1a1a]/55 hover:border-[#c8c8c4] hover:text-[#111110]"
@@ -1035,12 +1035,12 @@ export default function AdminMarketingPage() {
                       </button>
                     ))}
                   </div>
-                  <div className="flex flex-wrap gap-2">
+                  <div className="flex shrink-0 gap-1.5">
                     {(["all", "demo_modal", "contact_page", "newsletter", "manual"] as const).map((value) => (
                       <button
                         key={value}
                         onClick={() => setSourceFilter(value)}
-                        className={`min-w-[84px] flex-1 rounded-xl border px-3 py-2 text-[12px] font-medium transition-colors sm:flex-none ${
+                        className={`rounded-lg border px-3 py-1.5 text-[12px] font-medium transition-colors whitespace-nowrap ${
                           sourceFilter === value
                             ? "border-[#084734] bg-[#084734]/10 text-[#084734]"
                             : "border-[#e8e8e4] bg-white text-[#1a1a1a]/55 hover:border-[#c8c8c4] hover:text-[#111110]"

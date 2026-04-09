@@ -62,12 +62,6 @@ export default function NotFound() {
               lineHeight: "1.33",
               textDecoration: "none",
             }}
-            onMouseOver={(e) => {
-              e.currentTarget.style.backgroundColor = "#065c41"
-            }}
-            onMouseOut={(e) => {
-              e.currentTarget.style.backgroundColor = "#084734"
-            }}
           >
             홈으로 돌아가기
           </Link>

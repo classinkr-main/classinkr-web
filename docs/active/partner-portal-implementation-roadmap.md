@@ -34,6 +34,11 @@
 
 - [partner-portal-guidelines.md](C:/Projects/PUBLIC_Classin/Classin_Home_bae_v1/docs/active/partner-portal-guidelines.md)
 - [partner-portal-product-plan.md](C:/Projects/PUBLIC_Classin/Classin_Home_bae_v1/docs/active/partner-portal-product-plan.md)
+- [partner-portal-document-hub-execution-plan.md](./partner-portal-document-hub-execution-plan.md)
+
+메모:
+
+- 문서 허브를 `만들기 / 발송하기 / 보기·정리` 3축으로 재구성하는 작업은 `partner-portal-document-hub-execution-plan.md`를 우선 기준으로 본다.
 
 ## 1. 가장 먼저 짚어야 할 구조 문제
 

@@ -90,6 +90,7 @@ export type SavedEmailSegment = SavedAudienceSegment
 export interface NewsletterSubscribeRequest {
   email: string
   name?: string
+  source?: string
   tags?: string[]
 }
 
