@@ -6,6 +6,7 @@ import { FloatingChatbot } from "@/components/ui/FloatingChatbot";
 import { MobileFloatingCTA } from "@/components/ui/MobileFloatingCTA";
 import { AnalyticsProviders } from "@/components/AnalyticsProviders";
 import { ToastProvider } from "@/components/ui/toast";
+import { GTMScript } from "@/components/GTMScript";
 
 
 export const metadata: Metadata = {
@@ -43,9 +44,6 @@ export default function RootLayout({
   return (
     <html lang="ko" className="scroll-smooth">
       <head>
-        {/* Google Tag Manager */}
-        <script dangerouslySetInnerHTML={{ __html: `(function(w,d,s,l,i){w[l]=w[l]||[];w[l].push({'gtm.start':new Date().getTime(),event:'gtm.js'});var f=d.getElementsByTagName(s)[0],j=d.createElement(s),dl=l!='dataLayer'?'&l='+l:'';j.async=true;j.src='https://www.googletagmanager.com/gtm.js?id='+i+dl;f.parentNode.insertBefore(j,f);})(window,document,'script','dataLayer','GTM-PJH3SWVL');` }} />
-        {/* End Google Tag Manager */}
         <link
           rel="preload"
           href="https://cdn.jsdelivr.net/gh/orioncactus/pretendard@v1.3.9/dist/web/static/pretendard.min.css"
@@ -57,16 +55,7 @@ export default function RootLayout({
         />
       </head>
       <body>
-        {/* Google Tag Manager (noscript) */}
-        <noscript>
-          <iframe
-            src="https://www.googletagmanager.com/ns.html?id=GTM-PJH3SWVL"
-            height="0"
-            width="0"
-            style={{ display: "none", visibility: "hidden" }}
-          />
-        </noscript>
-        {/* End Google Tag Manager (noscript) */}
+        <GTMScript />
         <ToastProvider>
           <ConditionalHeader />
           <main className="min-h-screen bg-background font-sans antialiased selection:bg-primary/20 selection:text-primary">
