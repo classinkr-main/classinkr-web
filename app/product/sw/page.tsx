@@ -252,6 +252,983 @@ function FinalCTASection() {
     )
 }
 
+/* ── 고객 사례 (시네마틱 스트립) ────────────────────────────── */
+const CINEMATIC_CASES = [
+    {
+        index: "01",
+        tag: "입시학원",
+        name: "부천 정율사관학원",
+        quote: "강사가 바뀌어도 수업 품질이 흔들리지 않게 됐습니다. 수업 콘티를 저장하고 공유하는 것만으로 노하우가 시스템이 됐어요.",
+        person: "원장 김O준",
+        before: { label: "도입 전", items: ["강사 의존도 높음", "타지역 학생 모집 불가", "신규 강사 적응 3주"] },
+        after: { label: "도입 후", items: ["하이브리드로 전국 모집", "피어러닝으로 참여도 상승", "강사 온보딩 3일로 단축"] },
+        accentBg: "bg-[#ECFDF5]",
+        accentText: "text-[#084734]",
+        accentBorder: "border-[#D1FAE5]",
+        num: "50%",
+        numLabel: "강사 온보딩 시간 단축",
+    },
+    {
+        index: "02",
+        tag: "글로벌 튜터링",
+        name: "Acadsoc · 1:1 ESL 플랫폼",
+        quote: "ClassIn 이전에도 여러 화상 툴을 써봤습니다. 하지만 영업 데모를 할 때 학생과 교사 모두 ClassIn에 가장 빠르게 반응했어요.",
+        person: "Acadsoc 서비스 팀",
+        before: { label: "도입 전", items: ["학생 이탈률 높음", "수업 집중도 측정 불가", "다른 플랫폼으로 전전"] },
+        after: { label: "도입 후", items: ["누적 학습자 4,000만+", "영업 데모 1순위 채택", "Series A→C 투자 유치"] },
+        accentBg: "bg-[#F6F5F4]",
+        accentText: "text-[#31302E]",
+        accentBorder: "border-[#e8e8e4]",
+        num: "$63.6M",
+        numLabel: "누적 투자 유치",
+    },
+    {
+        index: "03",
+        tag: "대형 교육기관",
+        name: "북경대학교 글로벌 오픈 코스",
+        quote: "하이브리드 접근 방식은 팬데믹 속 임시 해법이 아닙니다. 이것이 교육의 새로운 표준이 될 것입니다.",
+        person: "왕보(王博) 부총장",
+        before: { label: "도입 전", items: ["단일 캠퍼스 수업 한계", "해외 학생 접근 불가", "협업 대학 연결 어려움"] },
+        after: { label: "도입 후", items: ["한 학기 287개 하이브리드 수업", "Cornell·ANU·와세다 연결", "글로벌 오픈 코스 프로그램"] },
+        accentBg: "bg-[#ECFDF5]",
+        accentText: "text-[#084734]",
+        accentBorder: "border-[#D1FAE5]",
+        num: "287",
+        numLabel: "단 한 학기 하이브리드 수업 수",
+    },
+]
+
+function CinematicCasesSection() {
+    return (
+        <section className="py-24 md:py-32 bg-[#1a1a19] overflow-hidden">
+            <div className="container mx-auto px-4 lg:px-8 max-w-6xl">
+                <motion.div className="mb-16" initial={{ opacity: 0, y: 30 }} whileInView={{ opacity: 1, y: 0 }} viewport={{ once: true }}>
+                    <p className="text-sm font-semibold text-[#6EE7B7]/60 tracking-wider uppercase mb-3">Customer Stories</p>
+                    <h2 className="text-3xl md:text-5xl font-serif text-white leading-tight">
+                        그들은 이미<br /><span className="text-[#6EE7B7]">바꿨습니다</span>
+                    </h2>
+                </motion.div>
+
+                <div className="space-y-6">
+                    {CINEMATIC_CASES.map((c, i) => (
+                        <motion.div
+                            key={c.index}
+                            initial={{ opacity: 0, y: 40 }}
+                            whileInView={{ opacity: 1, y: 0 }}
+                            viewport={{ once: true }}
+                            transition={{ delay: i * 0.1, duration: 0.7 }}
+                            className="grid lg:grid-cols-[1fr_1.6fr_1fr] gap-0 rounded-2xl overflow-hidden border border-white/[0.07]"
+                        >
+                            {/* Left: meta */}
+                            <div className="bg-white/[0.04] p-8 flex flex-col justify-between">
+                                <div>
+                                    <span className="text-[11px] font-bold text-white/30 tracking-widest uppercase block mb-3">{c.index} · {c.tag}</span>
+                                    <h3 className="text-lg font-bold text-white mb-6">{c.name}</h3>
+                                </div>
+                                <div>
+                                    <div className="text-4xl font-serif font-bold text-[#6EE7B7] mb-1">{c.num}</div>
+                                    <div className="text-xs text-white/30 leading-snug">{c.numLabel}</div>
+                                </div>
+                            </div>
+
+                            {/* Center: quote */}
+                            <div className="bg-white/[0.02] p-8 lg:p-10 flex flex-col justify-center border-x border-white/[0.07]">
+                                <div className="text-[#6EE7B7]/30 text-4xl font-serif mb-4 leading-none">&ldquo;</div>
+                                <blockquote className="text-lg font-serif text-white/80 leading-relaxed mb-5">{c.quote}</blockquote>
+                                <cite className="text-sm text-white/30 not-italic">— {c.person}</cite>
+                            </div>
+
+                            {/* Right: before/after */}
+                            <div className="bg-white/[0.04] p-8 grid grid-rows-2 gap-4">
+                                <div>
+                                    <p className="text-[10px] font-bold text-white/20 tracking-widest uppercase mb-2">{c.before.label}</p>
+                                    <ul className="space-y-1">
+                                        {c.before.items.map(item => (
+                                            <li key={item} className="text-xs text-white/30 flex items-center gap-2">
+                                                <span className="text-white/20">✕</span>{item}
+                                            </li>
+                                        ))}
+                                    </ul>
+                                </div>
+                                <div className={`rounded-xl p-4 ${c.accentBg}`}>
+                                    <p className={`text-[10px] font-bold tracking-widest uppercase mb-2 ${c.accentText} opacity-60`}>{c.after.label}</p>
+                                    <ul className="space-y-1">
+                                        {c.after.items.map(item => (
+                                            <li key={item} className={`text-xs font-medium flex items-center gap-2 ${c.accentText}`}>
+                                                <CheckCircle2 className="w-3 h-3 shrink-0" />{item}
+                                            </li>
+                                        ))}
+                                    </ul>
+                                </div>
+                            </div>
+                        </motion.div>
+                    ))}
+                </div>
+            </div>
+        </section>
+    )
+}
+
+/* ── 타이포 후킹 섹션 ────────────────────────────────────────── */
+function TypographyHookSection() {
+    const lines = [
+        { text: "매일 반복되는 수업.", muted: false },
+        { text: "그 안에서 아이들은", muted: false },
+        { text: "정말 배우고 있을까요?", muted: false, accent: true },
+    ]
+    return (
+        <section className="py-36 md:py-48 bg-[#FDFCF8] overflow-hidden">
+            <div className="container mx-auto px-6 max-w-4xl">
+                <div className="space-y-4 md:space-y-6 mb-16">
+                    {lines.map((line, i) => (
+                        <motion.p
+                            key={i}
+                            initial={{ opacity: 0, y: 30 }}
+                            whileInView={{ opacity: 1, y: 0 }}
+                            viewport={{ once: true }}
+                            transition={{ delay: i * 0.18, duration: 0.7, ease: [0.22, 1, 0.36, 1] }}
+                            className={`text-[clamp(2rem,5vw,4rem)] font-serif leading-[1.15] tracking-tight ${
+                                line.accent ? "text-[#E05024]" : "text-[#1a1a19]"
+                            }`}
+                        >
+                            {line.text}
+                        </motion.p>
+                    ))}
+                </div>
+
+                <motion.div
+                    initial={{ opacity: 0, scaleX: 0 }}
+                    whileInView={{ opacity: 1, scaleX: 1 }}
+                    viewport={{ once: true }}
+                    transition={{ delay: 0.6, duration: 0.6, ease: "easeOut" }}
+                    style={{ originX: 0 }}
+                    className="w-16 h-[2px] bg-[#E05024] mb-10"
+                />
+
+                <motion.div
+                    initial={{ opacity: 0, y: 20 }}
+                    whileInView={{ opacity: 1, y: 0 }}
+                    viewport={{ once: true }}
+                    transition={{ delay: 0.8, duration: 0.6 }}
+                    className="max-w-lg"
+                >
+                    <p className="text-xl md:text-2xl font-serif text-slate-600 leading-relaxed mb-2">
+                        교사가 <span className="font-bold text-slate-900">잘 가르칠 수 있을 때</span>,
+                    </p>
+                    <p className="text-xl md:text-2xl font-serif text-slate-600 leading-relaxed">
+                        학생은 <span className="font-bold text-[#E05024]">더 깊이 배웁니다.</span>
+                    </p>
+                </motion.div>
+            </div>
+        </section>
+    )
+}
+
+/* ── 미래 제시 1 섹션 ────────────────────────────────────────── */
+const FUTURE_ITEMS = [
+    { icon: "🌍", title: "국경 없는 교실", desc: "서울의 학생이 핀란드 교사에게 배우고, 부산의 학원이 도쿄와 협업 수업을 합니다." },
+    { icon: "🤖", title: "AI 보조 교사", desc: "AI가 개별 학습 데이터를 분석해 실시간으로 교사에게 학생별 맞춤 피드백을 제안합니다." },
+    { icon: "📡", title: "실시간 학습 진단", desc: "수업 중 학생의 집중도와 이해도를 실시간으로 파악해 교사가 즉각 대응할 수 있습니다." },
+    { icon: "♻️", title: "지식의 재활용", desc: "한 번 만든 수업 콘텐츠가 전 세계 동료 교사들과 공유되고 발전합니다." },
+]
+
+function FutureVision1Section() {
+    return (
+        <section className="py-24 md:py-40 bg-[#084734] relative overflow-hidden">
+            <div className="absolute inset-0 pointer-events-none">
+                <div className="absolute bottom-0 left-0 w-[600px] h-[600px] bg-[#065c41] rounded-full translate-x-[-40%] translate-y-[40%] blur-[100px] opacity-60" />
+                <div className="absolute top-0 right-0 w-[400px] h-[400px] bg-[#6EE7B7]/10 rounded-full translate-x-[30%] translate-y-[-30%] blur-[80px]" />
+            </div>
+            <div className="container mx-auto px-4 lg:px-8 max-w-6xl relative">
+                <div className="grid lg:grid-cols-2 gap-16 items-center">
+                    <motion.div initial={{ opacity: 0, x: -30 }} whileInView={{ opacity: 1, x: 0 }} viewport={{ once: true }} transition={{ duration: 0.8 }}>
+                        <p className="text-[#6EE7B7]/60 text-sm font-semibold tracking-wider uppercase mb-6">The Future of Education</p>
+                        <h2 className="text-4xl md:text-5xl lg:text-6xl font-serif text-white leading-[1.1] tracking-tight mb-6">
+                            2030년의<br />교실은<br /><span className="text-[#6EE7B7]">달라집니다</span>
+                        </h2>
+                        <p className="text-lg text-white/50 leading-relaxed">
+                            학교의 물리적 벽이 사라지고, AI가 개인 맞춤 교육을 제공하며,
+                            세계 어느 곳의 학생도 최고의 교사에게 배울 수 있는 시대.
+                            ClassIn은 그 미래를 지금 만들고 있습니다.
+                        </p>
+                    </motion.div>
+
+                    <div className="grid grid-cols-2 gap-4">
+                        {FUTURE_ITEMS.map((item, i) => (
+                            <motion.div
+                                key={item.title}
+                                initial={{ opacity: 0, y: 25 }}
+                                whileInView={{ opacity: 1, y: 0 }}
+                                viewport={{ once: true }}
+                                transition={{ delay: i * 0.1, duration: 0.6 }}
+                                className="bg-white/[0.06] rounded-2xl p-6 border border-white/[0.08] hover:bg-white/[0.10] transition-colors"
+                            >
+                                <div className="text-2xl mb-3">{item.icon}</div>
+                                <h3 className="text-sm font-bold text-white mb-2">{item.title}</h3>
+                                <p className="text-xs text-white/40 leading-relaxed">{item.desc}</p>
+                            </motion.div>
+                        ))}
+                    </div>
+                </div>
+            </div>
+        </section>
+    )
+}
+
+/* ── 미래 제시 2 (퀄리티 3배, 리소스 1/3) ─────────────────── */
+function FutureVision2Section() {
+    const metricsRef = useRef<HTMLDivElement>(null)
+    const inView = useInView(metricsRef, { once: true, margin: "-80px" })
+
+    const q = useCountUp(3, inView, 1.5)
+    const r = useCountUp(67, inView, 1.5)
+
+    return (
+        <section className="py-24 md:py-40 bg-[#FDFCF8] overflow-hidden">
+            <div className="container mx-auto px-4 lg:px-8 max-w-6xl">
+
+                {/* 헤드라인 */}
+                <motion.div
+                    className="text-center mb-20 md:mb-28"
+                    initial={{ opacity: 0, y: 40 }}
+                    whileInView={{ opacity: 1, y: 0 }}
+                    viewport={{ once: true }}
+                    transition={{ duration: 0.8 }}
+                >
+                    <p className="text-sm font-semibold text-[#E05024] tracking-wider uppercase mb-4">The Real Goal</p>
+                    <h2 className="text-[clamp(2rem,5vw,4.5rem)] font-serif text-[#1a1a19] leading-[1.1] tracking-tight mb-6">
+                        아이들과의<br />
+                        <span className="text-[#E05024]">진정한 교육</span>
+                    </h2>
+                    <p className="text-xl md:text-2xl text-slate-500 font-serif max-w-2xl mx-auto leading-relaxed">
+                        더 많이 가르치면서 더 적게 소진되는 것.
+                        <br className="hidden md:block" />
+                        그것이 ClassIn이 교사에게 드리는 약속입니다.
+                    </p>
+                </motion.div>
+
+                {/* 핵심 수치 */}
+                <div ref={metricsRef} className="grid md:grid-cols-2 gap-6 mb-20 max-w-3xl mx-auto">
+                    <motion.div
+                        initial={{ opacity: 0, scale: 0.9 }}
+                        animate={inView ? { opacity: 1, scale: 1 } : {}}
+                        transition={{ duration: 0.7, type: "spring", stiffness: 150 }}
+                        className="bg-[#1a1a19] rounded-3xl p-10 text-center"
+                    >
+                        <div className="text-[72px] md:text-[88px] font-serif font-bold text-[#6EE7B7] leading-none mb-2">
+                            {q}x
+                        </div>
+                        <div className="text-white/80 text-lg font-semibold mb-1">수업 퀄리티</div>
+                        <div className="text-white/30 text-sm">쌍방향 참여 · AI 지원 · 학습 데이터 기반</div>
+                    </motion.div>
+                    <motion.div
+                        initial={{ opacity: 0, scale: 0.9 }}
+                        animate={inView ? { opacity: 1, scale: 1 } : {}}
+                        transition={{ duration: 0.7, delay: 0.15, type: "spring", stiffness: 150 }}
+                        className="bg-[#E05024] rounded-3xl p-10 text-center"
+                    >
+                        <div className="text-[72px] md:text-[88px] font-serif font-bold text-white leading-none mb-2">
+                            -{r}%
+                        </div>
+                        <div className="text-white/90 text-lg font-semibold mb-1">반복 업무 리소스</div>
+                        <div className="text-white/60 text-sm">채점 · 출결 · 자료 준비 · 보고서 자동화</div>
+                    </motion.div>
+                </div>
+
+                {/* 진정성 텍스트 */}
+                <motion.div
+                    className="max-w-3xl mx-auto text-center"
+                    initial={{ opacity: 0, y: 30 }}
+                    whileInView={{ opacity: 1, y: 0 }}
+                    viewport={{ once: true }}
+                    transition={{ duration: 0.7 }}
+                >
+                    <div className="grid md:grid-cols-3 gap-8 mb-14">
+                        {[
+                            { headline: "교사가 원하는 것", body: "더 잘 가르치는 것. 학생 한 명 한 명의 성장을 직접 느끼는 것." },
+                            { headline: "학생이 필요한 것", body: "일방적으로 듣는 수업이 아닌, 직접 참여하고 표현하는 경험." },
+                            { headline: "학원이 원하는 것", body: "강사에 의존하지 않고 시스템으로 돌아가는 교육의 구조." },
+                        ].map((item) => (
+                            <div key={item.headline} className="text-left">
+                                <div className="w-6 h-[2px] bg-[#E05024] mb-4" />
+                                <h3 className="text-base font-bold text-[#1a1a19] mb-2">{item.headline}</h3>
+                                <p className="text-sm text-slate-500 leading-relaxed">{item.body}</p>
+                            </div>
+                        ))}
+                    </div>
+
+                    <p className="text-xl md:text-2xl font-serif text-slate-600 leading-relaxed">
+                        ClassIn은 도구가 아닙니다.<br />
+                        <span className="text-[#1a1a19] font-bold">교육이 다시 교육다워지는 환경</span>입니다.
+                    </p>
+                </motion.div>
+            </div>
+        </section>
+    )
+}
+
+/* ── [A] 수업 사이클 섹션 (수업 전·중·후) ───────────────────── */
+const CYCLE_PHASES = [
+    {
+        phase: "수업 전",
+        emoji: "📋",
+        color: "bg-[#ECFDF5] border-[#D1FAE5]",
+        accent: "#084734",
+        old: ["교재 따로 인쇄", "판서 자료 USB에 담기", "학생 예습 확인 불가"],
+        now: ["TeacherIn으로 수업 콘티 저장", "클라우드에서 즉시 불러오기", "LMS 사전 퀴즈로 예습 확인"],
+    },
+    {
+        phase: "수업 중",
+        emoji: "🖊️",
+        color: "bg-[#FEF3EE] border-[#F6D5C5]",
+        accent: "#B85C33",
+        old: ["교사 혼자 판서", "학생은 영상만 시청", "출석 수동으로 체크"],
+        now: ["학생이 직접 화면에서 문제 풀기", "30+ 도구로 쌍방향 수업", "자동 출석 체크 + 집중도 측정"],
+    },
+    {
+        phase: "수업 후",
+        emoji: "📊",
+        color: "bg-[#F6F5F4] border-[#e8e8e4]",
+        accent: "#31302E",
+        old: ["녹화 파일 수동 공유", "숙제 카톡으로 받기", "성적 엑셀로 관리"],
+        now: ["클라우드 자동 저장 · 다시보기", "LMS 숙제 제출 · AI 자동 채점", "학습 데이터 리포트 자동 생성"],
+    },
+]
+
+function LearningCycleSection() {
+    return (
+        <section className="py-24 md:py-32 bg-white">
+            <div className="container mx-auto px-4 lg:px-8 max-w-6xl">
+                <motion.div className="text-center mb-14" {...fadeUp}>
+                    <p className="text-sm font-semibold text-[#E05024] tracking-wider uppercase mb-3">LEARNING CYCLE</p>
+                    <h2 className="text-3xl md:text-4xl lg:text-5xl font-serif text-[#1a1a19] leading-tight">
+                        수업의 처음부터 끝까지,<br /><span className="text-[#E05024]">하나로 연결</span>
+                    </h2>
+                    <p className="text-lg text-slate-400 mt-4 max-w-xl mx-auto">
+                        수업 전 준비 → 수업 중 운영 → 수업 후 관리. 세 단계가 끊기지 않고 이어집니다.
+                    </p>
+                </motion.div>
+
+                <div className="grid lg:grid-cols-3 gap-6">
+                    {CYCLE_PHASES.map((p, i) => (
+                        <motion.div
+                            key={p.phase}
+                            initial={{ opacity: 0, y: 30 }}
+                            whileInView={{ opacity: 1, y: 0 }}
+                            viewport={{ once: true }}
+                            transition={{ delay: i * 0.12 }}
+                            className={`rounded-2xl border p-7 ${p.color}`}
+                        >
+                            <div className="flex items-center gap-3 mb-6">
+                                <span className="text-2xl">{p.emoji}</span>
+                                <span className="text-lg font-bold text-slate-900">{p.phase}</span>
+                            </div>
+
+                            <div className="space-y-2 mb-5">
+                                <p className="text-[11px] font-bold text-slate-400 tracking-wider uppercase mb-2">기존 방식</p>
+                                {p.old.map((item) => (
+                                    <div key={item} className="flex items-start gap-2 text-sm text-slate-400">
+                                        <span className="mt-0.5 shrink-0">✕</span>
+                                        <span className="line-through">{item}</span>
+                                    </div>
+                                ))}
+                            </div>
+
+                            <div className="h-px bg-black/[0.06] my-5" />
+
+                            <div className="space-y-2">
+                                <p className="text-[11px] font-bold tracking-wider uppercase mb-2" style={{ color: p.accent }}>ClassIn</p>
+                                {p.now.map((item) => (
+                                    <div key={item} className="flex items-start gap-2 text-sm font-medium text-slate-700">
+                                        <CheckCircle2 className="w-4 h-4 mt-0.5 shrink-0" style={{ color: p.accent }} />
+                                        <span>{item}</span>
+                                    </div>
+                                ))}
+                            </div>
+                        </motion.div>
+                    ))}
+                </div>
+            </div>
+        </section>
+    )
+}
+
+/* ── [B] 하드웨어 티저 섹션 ──────────────────────────────────── */
+function HardwareTeaserSection() {
+    return (
+        <section className="py-24 md:py-32 bg-[#1a1a19] relative overflow-hidden">
+            <div className="absolute inset-0 pointer-events-none opacity-10" style={{
+                backgroundImage: "radial-gradient(circle at 70% 50%, rgba(110,231,183,0.3) 0%, transparent 60%)",
+            }} />
+            <div className="container mx-auto px-4 lg:px-8 max-w-6xl relative">
+                <div className="grid lg:grid-cols-2 gap-14 items-center">
+                    <motion.div initial={{ opacity: 0, x: -30 }} whileInView={{ opacity: 1, x: 0 }} viewport={{ once: true }} transition={{ duration: 0.7 }}>
+                        <span className="inline-flex items-center gap-2 bg-[#6EE7B7]/10 text-[#6EE7B7] text-xs font-bold px-3 py-1.5 rounded-full mb-6">
+                            ClassIn X · 하드웨어
+                        </span>
+                        <h2 className="text-3xl md:text-4xl lg:text-5xl font-serif text-white leading-tight mb-5">
+                            소프트웨어만으로<br />부족하다면
+                        </h2>
+                        <p className="text-lg text-white/50 leading-relaxed mb-8">
+                            AI 전자칠판 + 모션 트래킹 카메라 + AI 노이즈 캔슬링 마이크.
+                            클래스인 소프트웨어와 완벽하게 연동되는 스마트 교실을 구축하세요.
+                        </p>
+                        <div className="space-y-3 mb-10">
+                            {[
+                                { label: "4K@120Hz AI 전자칠판", sub: "20포인트 멀티터치 · 눈부심 방지" },
+                                { label: "모션 트래킹 AI 카메라", sub: "120° 앵글 · 자동 줌·포커스 · 4K 녹화" },
+                                { label: "AI 디노이즈 천장형 마이크", sub: "32개 마이크 내장 · 80㎡ 커버리지" },
+                            ].map((item) => (
+                                <div key={item.label} className="flex items-start gap-3">
+                                    <div className="w-1.5 h-1.5 rounded-full bg-[#6EE7B7] mt-2 shrink-0" />
+                                    <div>
+                                        <span className="text-sm font-semibold text-white/90">{item.label}</span>
+                                        <span className="text-sm text-white/30 ml-2">{item.sub}</span>
+                                    </div>
+                                </div>
+                            ))}
+                        </div>
+                        <Link href="/product/hw" className="inline-flex items-center gap-2 bg-[#6EE7B7] hover:bg-[#4ade80] text-[#084734] font-bold text-sm px-6 py-3 rounded-full transition-all hover:scale-105">
+                            하드웨어 상세 보기 <ArrowRight className="w-4 h-4" />
+                        </Link>
+                    </motion.div>
+
+                    {/* Hardware visual */}
+                    <motion.div initial={{ opacity: 0, x: 30 }} whileInView={{ opacity: 1, x: 0 }} viewport={{ once: true }} transition={{ duration: 0.7, delay: 0.1 }}>
+                        <div className="relative bg-white/5 rounded-2xl border border-white/10 p-8 text-center">
+                            <div className="w-full aspect-[4/3] bg-gradient-to-br from-[#084734]/30 to-[#1a1a19] rounded-xl border border-white/10 flex items-center justify-center mb-6 relative overflow-hidden">
+                                <div className="absolute inset-0 flex items-center justify-center">
+                                    <div className="w-4/5 aspect-video bg-[#0f0f0f] rounded-lg border-4 border-[#6EE7B7]/20 shadow-2xl flex items-center justify-center relative">
+                                        <span className="text-[#6EE7B7]/30 text-xs font-mono">AI Interactive Board</span>
+                                        {/* Camera indicator */}
+                                        <div className="absolute -top-3 left-1/2 -translate-x-1/2 w-6 h-6 bg-[#1a1a19] border border-white/10 rounded-full flex items-center justify-center">
+                                            <div className="w-2 h-2 rounded-full bg-[#6EE7B7]/60" />
+                                        </div>
+                                    </div>
+                                </div>
+                                {/* Mic dots */}
+                                <div className="absolute bottom-3 left-1/2 -translate-x-1/2 flex gap-2">
+                                    {[...Array(5)].map((_, i) => (
+                                        <motion.div key={i} className="w-1.5 h-1.5 rounded-full bg-[#6EE7B7]/40"
+                                            animate={{ opacity: [0.3, 1, 0.3] }}
+                                            transition={{ duration: 1.5, delay: i * 0.2, repeat: Infinity }} />
+                                    ))}
+                                </div>
+                            </div>
+                            <p className="text-white/30 text-xs">ClassIn X · 스마트 교실 구성</p>
+                        </div>
+                    </motion.div>
+                </div>
+            </div>
+        </section>
+    )
+}
+
+/* ── [C] AI 기능 섹션 ────────────────────────────────────────── */
+const AI_FEATURES = [
+    { icon: "✍️", title: "AI 첨삭", desc: "학생 제출 과제를 AI가 즉시 분석·채점. 교사의 채점 시간을 획기적으로 줄입니다." },
+    { icon: "📝", title: "AI 과제 생성", desc: "학습 수준과 목표에 맞는 맞춤형 과제를 자동으로 만들어줍니다." },
+    { icon: "✏️", title: "AI 작문 도우미", desc: "작문 주제와 조건을 입력하면 수준별 예시 답안과 첨삭 가이드를 제공합니다." },
+    { icon: "🔢", title: "AI 수식 풀이", desc: "수학·과학 문제의 정답과 풀이 과정을 AI가 즉시 생성합니다." },
+    { icon: "📄", title: "AI 문서 정리", desc: "수업 자료 자동 요약, 보고서 작성, 학습 노트 정리를 AI가 처리합니다." },
+    { icon: "🎨", title: "AI 이미지 생성", desc: "아이디어를 입력하면 수업에 필요한 시각 자료를 자동으로 생성합니다." },
+    { icon: "📚", title: "AI 교안 자동화", desc: "학습 목표를 입력하면 전체 수업 계획안을 자동으로 작성해줍니다." },
+    { icon: "💬", title: "AI 질의응답", desc: "과목·언어 관계없이 학생 질문에 24시간 즉시 답변. 자기주도 학습을 지원합니다." },
+]
+
+function AIFeaturesSection() {
+    return (
+        <section className="py-24 md:py-32 bg-[#F6F5F4]">
+            <div className="container mx-auto px-4 lg:px-8 max-w-6xl">
+                <motion.div className="text-center mb-14" {...fadeUp}>
+                    <span className="inline-flex items-center gap-1.5 bg-[#084734] text-[#6EE7B7] text-xs font-bold px-3 py-1.5 rounded-full mb-5">
+                        ✦ AI-Powered
+                    </span>
+                    <h2 className="text-3xl md:text-4xl lg:text-5xl font-serif text-[#1a1a19] leading-tight mb-4">
+                        AI가 교사의 시간을<br /><span className="text-[#084734]">돌려드립니다</span>
+                    </h2>
+                    <p className="text-lg text-slate-500 max-w-xl mx-auto">
+                        채점, 교안 작성, 자료 정리 — 반복적인 작업은 AI에게 맡기고
+                        교사는 가르치는 일에만 집중할 수 있습니다.
+                    </p>
+                </motion.div>
+
+                <div className="grid sm:grid-cols-2 lg:grid-cols-4 gap-4">
+                    {AI_FEATURES.map((f, i) => (
+                        <motion.div
+                            key={f.title}
+                            initial={{ opacity: 0, y: 20 }}
+                            whileInView={{ opacity: 1, y: 0 }}
+                            viewport={{ once: true }}
+                            transition={{ delay: i * 0.07 }}
+                            className="bg-white rounded-2xl border border-[rgba(0,0,0,0.06)] p-6 hover:shadow-[0_8px_30px_rgba(0,0,0,0.07)] hover:-translate-y-1 transition-all"
+                        >
+                            <div className="text-3xl mb-3">{f.icon}</div>
+                            <h3 className="text-sm font-bold text-[#111110] mb-2">{f.title}</h3>
+                            <p className="text-xs text-[#615D59] leading-relaxed">{f.desc}</p>
+                        </motion.div>
+                    ))}
+                </div>
+
+                <motion.div
+                    initial={{ opacity: 0 }}
+                    whileInView={{ opacity: 1 }}
+                    viewport={{ once: true }}
+                    transition={{ delay: 0.5 }}
+                    className="mt-10 bg-[#084734] rounded-2xl p-6 flex flex-col sm:flex-row items-center justify-between gap-4 text-white"
+                >
+                    <div>
+                        <p className="font-bold text-base mb-0.5">AI 기능 모두 기본 포함</p>
+                        <p className="text-white/50 text-sm">별도 AI 툴 구독 없이 ClassIn 하나로 사용 가능합니다.</p>
+                    </div>
+                    <Link href="/contact" className="shrink-0 inline-flex items-center gap-2 bg-white text-[#084734] font-bold text-sm px-5 py-2.5 rounded-full hover:bg-white/90 transition-colors">
+                        무료 체험 시작 <ArrowRight className="w-4 h-4" />
+                    </Link>
+                </motion.div>
+            </div>
+        </section>
+    )
+}
+
+/* ── [D] 도입 프로세스 섹션 ──────────────────────────────────── */
+const ONBOARDING_STEPS = [
+    {
+        step: "01",
+        title: "상담 신청",
+        desc: "기관 규모와 수업 방식을 공유해주시면 전담 매니저가 맞춤 플랜을 안내합니다.",
+        duration: "당일 회신",
+    },
+    {
+        step: "02",
+        title: "무료 체험",
+        desc: "실제 수업 환경에서 직접 사용해보세요. 설치 없이 브라우저에서 바로 시작합니다.",
+        duration: "2주 무료",
+    },
+    {
+        step: "03",
+        title: "팀 온보딩",
+        desc: "강사진 교육부터 시스템 설정까지. 전담 온보딩 팀이 처음부터 함께합니다.",
+        duration: "1–3일",
+    },
+    {
+        step: "04",
+        title: "수업 시작",
+        desc: "준비 완료. 학생들과 함께 첫 수업을 시작하세요. 이후에도 전담 지원이 이어집니다.",
+        duration: "바로 시작",
+    },
+]
+
+function OnboardingSection() {
+    return (
+        <section className="py-24 md:py-32 bg-white">
+            <div className="container mx-auto px-4 lg:px-8 max-w-5xl">
+                <motion.div className="text-center mb-16" {...fadeUp}>
+                    <p className="text-sm font-semibold text-[#E05024] tracking-wider uppercase mb-3">GET STARTED</p>
+                    <h2 className="text-3xl md:text-4xl lg:text-5xl font-serif text-[#1a1a19] leading-tight">
+                        도입은 생각보다<br /><span className="text-[#E05024]">쉽습니다</span>
+                    </h2>
+                    <p className="text-lg text-slate-400 mt-4 max-w-md mx-auto">
+                        상담부터 첫 수업까지, 빠르면 하루 안에 시작할 수 있습니다.
+                    </p>
+                </motion.div>
+
+                <div className="relative">
+                    {/* 연결선 */}
+                    <div className="hidden lg:block absolute top-9 left-[calc(12.5%+20px)] right-[calc(12.5%+20px)] h-px bg-gradient-to-r from-[#E05024]/20 via-[#E05024]/40 to-[#E05024]/20" />
+
+                    <div className="grid sm:grid-cols-2 lg:grid-cols-4 gap-6">
+                        {ONBOARDING_STEPS.map((s, i) => (
+                            <motion.div
+                                key={s.step}
+                                initial={{ opacity: 0, y: 25 }}
+                                whileInView={{ opacity: 1, y: 0 }}
+                                viewport={{ once: true }}
+                                transition={{ delay: i * 0.12 }}
+                                className="flex flex-col items-center text-center"
+                            >
+                                <div className="w-[52px] h-[52px] rounded-full bg-[#E05024] text-white font-bold text-lg flex items-center justify-center mb-5 shadow-[0_8px_20px_rgba(224,80,36,0.25)] relative z-10">
+                                    {s.step}
+                                </div>
+                                <span className="inline-block bg-[#E05024]/5 text-[#E05024] text-xs font-bold px-3 py-1 rounded-full mb-3">
+                                    {s.duration}
+                                </span>
+                                <h3 className="text-base font-bold text-slate-900 mb-2">{s.title}</h3>
+                                <p className="text-sm text-slate-500 leading-relaxed">{s.desc}</p>
+                            </motion.div>
+                        ))}
+                    </div>
+                </div>
+            </div>
+        </section>
+    )
+}
+
+/* ── [E] FAQ 섹션 ────────────────────────────────────────────── */
+const FAQS = [
+    {
+        q: "Zoom과 비교해서 실제로 어떻게 다른가요?",
+        a: "Zoom은 비즈니스 회의를 위해 설계됐습니다. 학생이 화면 안에서 직접 참여(판서, 문제 풀기, 퀴즈 대결)하는 기능이 없습니다. ClassIn은 수업 전용으로 설계돼 30가지 교육 도구, LMS, 자동 녹화까지 하나로 통합되어 있습니다.",
+    },
+    {
+        q: "기존 학원 시스템과 연동이 가능한가요?",
+        a: "Google Classroom, Canvas, Moodle 등 주요 LMS와의 연동을 지원합니다. 자체 시스템이 있는 경우 API를 통한 커스텀 연동도 가능하며, 도입 시 전담 팀이 설정을 도와드립니다.",
+    },
+    {
+        q: "학생들이 사용하기 어렵지 않나요?",
+        a: "별도 앱 설치 없이 웹 브라우저에서 접속 가능합니다. 처음 수업 전 5분 안내로 학생 대부분이 바로 사용할 수 있으며, 모바일에서도 동일하게 작동합니다.",
+    },
+    {
+        q: "인터넷 속도가 느린 환경에서도 괜찮나요?",
+        a: "자체 네트워크 최적화 기술로 일반 화상 회의보다 낮은 대역폭에서도 안정적으로 작동합니다. 글로벌 CDN을 통해 전 세계 어디서든 100ms 이하의 지연 시간을 보장합니다.",
+    },
+    {
+        q: "수업 녹화본의 저작권은 누가 갖나요?",
+        a: "수업 녹화본의 저작권은 해당 기관과 강사에게 있습니다. ClassIn은 앱 내 재생만 허용하고 외부 다운로드를 차단하며, 재생 시 워터마크를 제공해 무단 배포를 막습니다.",
+    },
+    {
+        q: "요금제는 어떻게 구성되나요?",
+        a: "학원 규모, 수강생 수, 필요 기능에 따라 맞춤 요금제를 제공합니다. 소규모 학원부터 대형 교육 그룹까지 적합한 플랜이 있으며, 2주 무료 체험 후 결정하실 수 있습니다.",
+    },
+]
+
+function FAQSection() {
+    const [open, setOpen] = useState<number | null>(null)
+    return (
+        <section className="py-24 md:py-32 bg-[#FDFCF8]">
+            <div className="container mx-auto px-4 lg:px-8 max-w-3xl">
+                <motion.div className="text-center mb-14" {...fadeUp}>
+                    <p className="text-sm font-semibold text-[#E05024] tracking-wider uppercase mb-3">FAQ</p>
+                    <h2 className="text-3xl md:text-4xl font-serif text-[#1a1a19] leading-tight">
+                        자주 묻는 질문
+                    </h2>
+                </motion.div>
+
+                <div className="space-y-3">
+                    {FAQS.map((faq, i) => (
+                        <motion.div
+                            key={i}
+                            initial={{ opacity: 0, y: 15 }}
+                            whileInView={{ opacity: 1, y: 0 }}
+                            viewport={{ once: true }}
+                            transition={{ delay: i * 0.06 }}
+                            className="bg-white rounded-xl border border-[rgba(0,0,0,0.07)] overflow-hidden"
+                        >
+                            <button
+                                onClick={() => setOpen(open === i ? null : i)}
+                                className="w-full flex items-center justify-between gap-4 px-6 py-5 text-left"
+                            >
+                                <span className="text-sm font-semibold text-slate-800 leading-snug">{faq.q}</span>
+                                <motion.span
+                                    animate={{ rotate: open === i ? 45 : 0 }}
+                                    transition={{ duration: 0.2 }}
+                                    className="text-[#E05024] text-xl font-light shrink-0 leading-none"
+                                >
+                                    +
+                                </motion.span>
+                            </button>
+                            <motion.div
+                                initial={false}
+                                animate={{ height: open === i ? "auto" : 0, opacity: open === i ? 1 : 0 }}
+                                transition={{ duration: 0.25 }}
+                                className="overflow-hidden"
+                            >
+                                <p className="px-6 pb-5 text-sm text-slate-500 leading-relaxed border-t border-slate-50 pt-4">
+                                    {faq.a}
+                                </p>
+                            </motion.div>
+                        </motion.div>
+                    ))}
+                </div>
+            </div>
+        </section>
+    )
+}
+
+/* ── ① 텍스트 임팩트 섹션 ────────────────────────────────────── */
+function ImpactTextSection() {
+    return (
+        <section className="py-24 md:py-36 bg-[#FDFCF8]">
+            <div className="container mx-auto px-4 max-w-3xl">
+                <motion.div
+                    initial={{ opacity: 0, y: 30 }}
+                    whileInView={{ opacity: 1, y: 0 }}
+                    viewport={{ once: true }}
+                    transition={{ duration: 0.7 }}
+                    className="space-y-6"
+                >
+                    <p className="text-sm font-semibold text-slate-400 tracking-widest uppercase">Before ClassIn</p>
+                    <div className="space-y-4 text-2xl sm:text-3xl md:text-4xl font-serif text-slate-700 leading-snug">
+                        <p>화면을 켜놓고 딴짓하는 학생.</p>
+                        <p>녹화 파일을 공유하느라 허비하는 10분.</p>
+                        <p className="text-slate-400">숙제는 카톡으로, 출결은 엑셀로,</p>
+                        <p className="text-slate-400">성적은 또 다른 스프레드시트로.</p>
+                    </div>
+                    <motion.p
+                        initial={{ opacity: 0 }}
+                        whileInView={{ opacity: 1 }}
+                        viewport={{ once: true }}
+                        transition={{ delay: 0.4, duration: 0.7 }}
+                        className="text-xl sm:text-2xl md:text-3xl font-serif text-slate-900 pt-4 border-t border-slate-100"
+                    >
+                        수업은 했는데,{" "}
+                        <span className="text-[#E05024] font-bold">교육은 안 된 하루.</span>
+                    </motion.p>
+                    <motion.p
+                        initial={{ opacity: 0, y: 10 }}
+                        whileInView={{ opacity: 1, y: 0 }}
+                        viewport={{ once: true }}
+                        transition={{ delay: 0.7, duration: 0.6 }}
+                        className="text-base sm:text-lg text-slate-500 leading-relaxed max-w-xl pt-2"
+                    >
+                        회의용 도구는 회의를 위해 만들어졌습니다.
+                        교육은 그것과 다른 무언가가 필요합니다.
+                        학생이 화면 안에서 <em className="not-italic font-semibold text-slate-700">직접 참여</em>할 수 있어야 합니다.
+                    </motion.p>
+                </motion.div>
+            </div>
+        </section>
+    )
+}
+
+/* ── ② 풀스크린 배경 + 인용구 섹션 ──────────────────────────── */
+function FullscreenQuoteSection() {
+    return (
+        <section className="relative py-32 md:py-48 overflow-hidden bg-[#084734]">
+            {/* Subtle noise texture overlay */}
+            <div className="absolute inset-0 opacity-[0.03]" style={{
+                backgroundImage: "url(\"data:image/svg+xml,%3Csvg viewBox='0 0 200 200' xmlns='http://www.w3.org/2000/svg'%3E%3Cfilter id='n'%3E%3CfeTurbulence type='fractalNoise' baseFrequency='0.9' numOctaves='4' stitchTiles='stitch'/%3E%3C/filter%3E%3Crect width='100%25' height='100%25' filter='url(%23n)'/%3E%3C/svg%3E\")",
+            }} />
+            {/* Radial glow */}
+            <div className="absolute inset-0 pointer-events-none">
+                <div className="absolute top-1/2 left-1/2 -translate-x-1/2 -translate-y-1/2 w-[800px] h-[500px] bg-[#6EE7B7]/10 rounded-full blur-[120px]" />
+            </div>
+
+            <div className="container mx-auto px-4 max-w-4xl relative text-center">
+                <motion.div
+                    initial={{ opacity: 0, y: 40 }}
+                    whileInView={{ opacity: 1, y: 0 }}
+                    viewport={{ once: true }}
+                    transition={{ duration: 0.9 }}
+                >
+                    <div className="text-[#6EE7B7]/60 text-5xl font-serif mb-8 leading-none select-none">&ldquo;</div>
+                    <blockquote className="text-2xl sm:text-3xl md:text-4xl font-serif text-white leading-[1.4] tracking-tight mb-10">
+                        하이브리드 수업은 팬데믹의 임시방편이 아닙니다.
+                        <br className="hidden md:block" />
+                        <span className="text-[#6EE7B7]">교육의 새로운 표준</span>이 될 것입니다.
+                    </blockquote>
+                    <div className="flex flex-col items-center gap-1">
+                        <div className="w-8 h-px bg-[#6EE7B7]/40 mb-3" />
+                        <p className="text-[#6EE7B7]/70 text-sm font-semibold tracking-wider">왕보 (王博)</p>
+                        <p className="text-white/40 text-sm">북경대학교 부총장 · ClassIn 글로벌 파트너</p>
+                    </div>
+                </motion.div>
+
+                <motion.div
+                    initial={{ opacity: 0 }}
+                    whileInView={{ opacity: 1 }}
+                    viewport={{ once: true }}
+                    transition={{ delay: 0.5, duration: 0.7 }}
+                    className="mt-16 grid grid-cols-3 gap-8 max-w-2xl mx-auto border-t border-white/10 pt-12"
+                >
+                    {[
+                        { value: "287개", label: "하이브리드 수업 (2021 가을학기 단 한 학기)" },
+                        { value: "160+", label: "협력 국가" },
+                        { value: "8만+", label: "글로벌 파트너 기관" },
+                    ].map((s) => (
+                        <div key={s.label} className="text-center">
+                            <div className="text-2xl sm:text-3xl font-serif font-bold text-white mb-1">{s.value}</div>
+                            <div className="text-xs text-white/40 leading-relaxed">{s.label}</div>
+                        </div>
+                    ))}
+                </motion.div>
+            </div>
+        </section>
+    )
+}
+
+/* ── ③ 케이스 스터디 섹션 ────────────────────────────────────── */
+const CASES = [
+    {
+        tag: "학원 운영",
+        name: "부천 정율사관학원",
+        headline: "타지역 학생을 온라인으로 끌어들이다",
+        body: "오프라인 수업만 하던 입시학원이 ClassIn의 하이브리드 강의를 도입한 뒤, 부천 외 지역 학생 유치가 가능해졌습니다. 학생이 화면에서 직접 판서하며 풀이하는 방식으로 집중도가 올라갔고, TeacherIn으로 저장한 수업 콘티 덕분에 신규 강사 온보딩 시간도 크게 단축됐습니다.",
+        results: [
+            { label: "타지역 학생 유치", value: "가능" },
+            { label: "학생 참여도", value: "급상승" },
+            { label: "강사 온보딩 시간", value: "50% 단축" },
+        ],
+        color: "bg-[#ECFDF5] border-[#D1FAE5]",
+        accent: "text-[#084734]",
+        badgeBg: "bg-[#D1FAE5] text-[#084734]",
+    },
+    {
+        tag: "글로벌 튜터링",
+        name: "Acadsoc",
+        headline: "1:1 온라인 튜터링으로 4,000만 학습자",
+        body: "필리핀 튜터와 전 세계 학습자를 연결하는 ESL 플랫폼 Acadsoc는 2017년 ClassIn을 도입한 이후 Series A → C까지 투자를 유치했습니다. 현재도 영업팀과 강사진이 고객 데모에 ClassIn을 1순위로 사용할 만큼 수업 경험의 품질이 검증됐습니다.",
+        results: [
+            { label: "누적 학습자", value: "4,000만+" },
+            { label: "고용 튜터", value: "15,000명" },
+            { label: "누적 투자 유치", value: "$63.6M" },
+        ],
+        color: "bg-[#F6F5F4] border-[#e8e8e4]",
+        accent: "text-[#31302E]",
+        badgeBg: "bg-[#e8e8e4] text-[#615D59]",
+    },
+    {
+        tag: "프랜차이즈",
+        name: "전국 30개 지점 교육 그룹",
+        headline: "본사에서 전국 수업 품질을 실시간 관리",
+        body: "과거에는 지점마다 수업 품질이 달랐습니다. ClassIn 도입 후 전국 모든 수업 데이터가 실시간으로 본사에 집계됩니다. 어떤 강사가 어떤 수업을 어떻게 진행했는지 모니터링이 가능해지면서 교육 품질 편차가 현저히 줄었습니다.",
+        results: [
+            { label: "수업 품질 모니터링", value: "실시간" },
+            { label: "지점 간 품질 편차", value: "대폭 감소" },
+            { label: "강사 평가 자동화", value: "가능" },
+        ],
+        color: "bg-white border-[rgba(0,0,0,0.08)]",
+        accent: "text-[#084734]",
+        badgeBg: "bg-[#ECFDF5] text-[#084734]",
+    },
+]
+
+function CaseStudiesSection() {
+    return (
+        <section className="py-24 md:py-32 bg-[#FDFCF8]">
+            <div className="container mx-auto px-4 lg:px-8 max-w-6xl">
+                <motion.div className="text-center mb-16" {...fadeUp}>
+                    <p className="text-sm font-semibold text-[#E05024] tracking-wider uppercase mb-3">CASE STUDY</p>
+                    <h2 className="text-3xl md:text-4xl lg:text-5xl font-serif text-[#1a1a19] leading-tight">
+                        실제 교육 현장의 <span className="text-[#E05024]">변화</span>
+                    </h2>
+                    <p className="text-lg text-slate-400 mt-4 max-w-xl mx-auto">도입 후 실제로 달라진 것들을 현장의 언어로 전달합니다.</p>
+                </motion.div>
+
+                <div className="grid lg:grid-cols-3 gap-6">
+                    {CASES.map((c, i) => (
+                        <motion.div
+                            key={c.name}
+                            initial={{ opacity: 0, y: 30 }}
+                            whileInView={{ opacity: 1, y: 0 }}
+                            viewport={{ once: true }}
+                            transition={{ delay: i * 0.12, duration: 0.6 }}
+                            className={`rounded-2xl border p-7 flex flex-col ${c.color} shadow-[0_4px_18px_rgba(0,0,0,0.04)]`}
+                        >
+                            <span className={`self-start text-xs font-bold px-3 py-1 rounded-full mb-4 ${c.badgeBg}`}>{c.tag}</span>
+                            <h3 className="text-lg font-bold text-slate-900 mb-1">{c.name}</h3>
+                            <p className={`text-base font-semibold mb-3 ${c.accent}`}>{c.headline}</p>
+                            <p className="text-sm text-slate-500 leading-relaxed mb-6 flex-1">{c.body}</p>
+                            <div className="grid grid-cols-3 gap-2 border-t border-black/[0.06] pt-5">
+                                {c.results.map((r) => (
+                                    <div key={r.label} className="text-center">
+                                        <div className={`text-sm font-bold ${c.accent}`}>{r.value}</div>
+                                        <div className="text-[10px] text-slate-400 mt-0.5 leading-tight">{r.label}</div>
+                                    </div>
+                                ))}
+                            </div>
+                        </motion.div>
+                    ))}
+                </div>
+            </div>
+        </section>
+    )
+}
+
+/* ── ④ 가격 가치 제안 섹션 ───────────────────────────────────── */
+const INCLUDED = [
+    "양방향 블랙보드 · 50페이지 판서 공간",
+    "30가지 인터랙티브 수업 도구",
+    "10가지 참여형 수업 활동",
+    "수업 자동 녹화 · 클라우드 저장",
+    "LMS (숙제 · 출결 · 성적 · 평가)",
+    "학습 데이터 리포트 및 분석",
+    "1:1부터 수백 명 대형 강의까지",
+    "12개 언어 지원 · 160개국 서비스",
+    "AI 첨삭 · AI 과제 생성 · AI 교안",
+    "전담 고객 지원 · 전문가 온보딩",
+]
+
+function PricingValueSection() {
+    return (
+        <section className="py-24 md:py-32 bg-white">
+            <div className="container mx-auto px-4 lg:px-8 max-w-5xl">
+                <motion.div className="text-center mb-14" {...fadeUp}>
+                    <p className="text-sm font-semibold text-[#E05024] tracking-wider uppercase mb-3">PRICING VALUE</p>
+                    <h2 className="text-3xl md:text-4xl lg:text-5xl font-serif text-[#1a1a19] leading-tight mb-4">
+                        이 가격에,{" "}
+                        <span className="text-[#E05024]">이 모든 것을</span>
+                    </h2>
+                    <p className="text-lg text-slate-500 max-w-xl mx-auto">
+                        LMS 따로, 화상 도구 따로, 녹화 툴 따로 — 세 가지를 각각 쓰면
+                        월 수십만 원이 넘습니다. ClassIn은 하나로 전부 해결합니다.
+                    </p>
+                </motion.div>
+
+                <div className="grid lg:grid-cols-2 gap-10 items-center">
+                    {/* Included list */}
+                    <motion.div
+                        initial={{ opacity: 0, x: -20 }}
+                        whileInView={{ opacity: 1, x: 0 }}
+                        viewport={{ once: true }}
+                        transition={{ duration: 0.6 }}
+                        className="bg-[#FDFCF8] rounded-2xl border border-slate-100 p-8"
+                    >
+                        <p className="text-xs font-bold text-slate-400 tracking-wider uppercase mb-5">구독 하나로 포함되는 것들</p>
+                        <ul className="space-y-3">
+                            {INCLUDED.map((item, i) => (
+                                <motion.li
+                                    key={item}
+                                    initial={{ opacity: 0, x: -10 }}
+                                    whileInView={{ opacity: 1, x: 0 }}
+                                    viewport={{ once: true }}
+                                    transition={{ delay: i * 0.04 }}
+                                    className="flex items-start gap-3 text-sm text-slate-700"
+                                >
+                                    <CheckCircle2 className="w-4 h-4 text-[#E05024] shrink-0 mt-0.5" />
+                                    {item}
+                                </motion.li>
+                            ))}
+                        </ul>
+                    </motion.div>
+
+                    {/* Value framing */}
+                    <motion.div
+                        initial={{ opacity: 0, x: 20 }}
+                        whileInView={{ opacity: 1, x: 0 }}
+                        viewport={{ once: true }}
+                        transition={{ duration: 0.6, delay: 0.1 }}
+                        className="space-y-5"
+                    >
+                        {[
+                            { label: "일반 화상 도구", note: "Zoom · Teams 등", cost: "~₩20,000/월", line: true },
+                            { label: "+ LMS 별도 구독", note: "Classting · Google Classroom Pro 등", cost: "~₩30,000/월", line: true },
+                            { label: "+ 녹화 · 클라우드 스토리지", note: "별도 저장소 + 관리 비용", cost: "~₩10,000/월", line: true },
+                            { label: "합계", note: "그래도 기능은 분산됨", cost: "₩60,000+/월", line: false, highlight: true },
+                        ].map((row) => (
+                            <div key={row.label} className={`flex items-center justify-between pb-4 ${row.line ? "border-b border-slate-100" : ""} ${row.highlight ? "bg-[#FFF9F7] rounded-xl px-4 py-3 -mx-4" : ""}`}>
+                                <div>
+                                    <p className={`text-sm font-semibold ${row.highlight ? "text-[#E05024]" : "text-slate-700"}`}>{row.label}</p>
+                                    <p className="text-xs text-slate-400">{row.note}</p>
+                                </div>
+                                <p className={`font-bold font-mono text-sm ${row.highlight ? "text-[#E05024]" : "text-slate-500 line-through"}`}>{row.cost}</p>
+                            </div>
+                        ))}
+
+                        <div className="bg-[#1a1a19] text-white rounded-2xl p-6 text-center mt-4">
+                            <p className="text-slate-400 text-sm mb-1">ClassIn 하나로</p>
+                            <p className="text-2xl font-serif font-bold text-white mb-1">위의 모든 것 + AI 기능까지</p>
+                            <p className="text-[#E05024] text-sm font-bold mb-5">기관 규모에 맞춘 맞춤 요금제</p>
+                            <Link href="/pricing" className="inline-flex items-center gap-2 bg-[#E05024] hover:bg-[#C9431A] text-white font-bold text-sm px-6 py-2.5 rounded-full transition-all hover:scale-105">
+                                요금제 확인하기 <ArrowRight className="w-4 h-4" />
+                            </Link>
+                        </div>
+                    </motion.div>
+                </div>
+            </div>
+        </section>
+    )
+}
+
 /* ══════════════════════════════════════════════════════════════════
    MAIN PAGE
 ══════════════════════════════════════════════════════════════════ */
@@ -424,6 +1401,8 @@ export default function ProductPage() {
                 </div>
             </section>
 
+            <ImpactTextSection />
+
             <WaveDivider color="#ffffff" />
 
             {/* ================================================================
@@ -497,6 +1476,8 @@ export default function ProductPage() {
                     </div>
                 </div>
             </section>
+
+            <LearningCycleSection />
 
             <WaveDivider flip color="#FDFCF8" />
 
@@ -759,6 +1740,10 @@ export default function ProductPage() {
                 </div>
             </section>
 
+            <HardwareTeaserSection />
+
+            <FullscreenQuoteSection />
+
             {/* ================================================================
                 안정성 & 네트워크 (world map dots, count-up)
             ================================================================ */}
@@ -892,6 +1877,10 @@ export default function ProductPage() {
                 </div>
             </section>
 
+            <AIFeaturesSection />
+
+            <CaseStudiesSection />
+
             <WaveDivider color="#ffffff" />
 
             {/* ================================================================
@@ -921,6 +1910,17 @@ export default function ProductPage() {
                     </div>
                 </div>
             </section>
+
+            <PricingValueSection />
+
+            <OnboardingSection />
+
+            <FAQSection />
+
+            <CinematicCasesSection />
+            <TypographyHookSection />
+            <FutureVision1Section />
+            <FutureVision2Section />
 
             {/* ================================================================
                 FINAL CTA
