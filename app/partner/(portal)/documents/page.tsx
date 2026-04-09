@@ -678,6 +678,8 @@ export default function PartnerDocumentsPage() {
       documents.find((document) => document.id === selectedDocumentId) ?? null
 
     if (!selectedDocument) return
+    // 데모 모드(비로그인·폴백)에서는 실제 API를 찌르지 않는다 — 401 유발 방지
+    if (mode === "demo") return
     const targetDealId = selectedDocument.dealId
     if (hydratedDealIds[targetDealId]) return
 
@@ -713,7 +715,7 @@ export default function PartnerDocumentsPage() {
     return () => {
       alive = false
     }
-  }, [documents, hydratedDealIds, selectedDocumentId])
+  }, [documents, hydratedDealIds, selectedDocumentId, mode])
 
   async function ensureShareLink(document: HubDocument) {
     if (typeof window === "undefined") return ""
