@@ -5,7 +5,6 @@ import {
   ArrowRight,
   CheckCircle2,
   ChevronDown,
-  ChevronLeft,
   ChevronRight,
   Loader2,
 } from "lucide-react"
@@ -13,6 +12,7 @@ import { CustomerDialog } from "@/components/partner-portal/crud/CustomerDialog"
 import { DealQuickCreateDialog } from "@/components/partner-portal/crud/DealQuickCreateDialog"
 import { ScheduleDialog } from "@/components/partner-portal/crud/ScheduleDialog"
 import { MobileActionLauncher } from "@/components/partner-portal/mobile/MobileActionLauncher"
+import { PortalNav } from "@/components/partner-portal/PortalNav"
 import { Button } from "@/components/ui/button"
 
 /* ─── Types ──────────────────────────────────────────────────── */
@@ -86,7 +86,15 @@ type DealItem = {
   contracted_amount: number
   paid_amount: number
   outstanding_amount: number
-  manager_name?: string | null
+}
+
+type InventorySkuSummary = {
+  sku: string
+  product_name: string
+  pending_qty: number
+  shipped_qty: number
+  delivered_qty: number
+  total_qty: number
 }
 
 type PartnerOverviewPayload = {
@@ -98,10 +106,12 @@ type PartnerOverviewPayload = {
   upcoming_installations: InstallationEvent[]
   recent_payments: PaymentRecord[]
   recent_calendar_events: CalendarEvent[]
+  inventory_summary: InventorySkuSummary[]
 }
 
 type PartnerOverviewResponse = Partial<PartnerOverviewPayload> & {
   error?: string
+  inventory_summary?: InventorySkuSummary[]
 }
 
 /* ─── Constants ──────────────────────────────────────────────── */
@@ -117,21 +127,21 @@ const STAGE_CFG: Record<string, {
   headerCls: string
   borderCls: string
 }> = {
-  contact:      { label: "컨택",  dotCls: "bg-stone-400",   badgeCls: "bg-stone-100 text-stone-600",     headerCls: "text-stone-500",    borderCls: "border-l-stone-300"   },
-  quote:        { label: "견적",  dotCls: "bg-blue-500",    badgeCls: "bg-blue-100 text-blue-700",       headerCls: "text-blue-600",     borderCls: "border-l-blue-400"    },
-  contract:     { label: "계약",  dotCls: "bg-violet-500",  badgeCls: "bg-violet-100 text-violet-700",   headerCls: "text-violet-600",   borderCls: "border-l-violet-400"  },
-  confirmed:    { label: "확정",  dotCls: "bg-indigo-500",  badgeCls: "bg-indigo-100 text-indigo-700",   headerCls: "text-indigo-600",   borderCls: "border-l-indigo-400"  },
-  installation: { label: "설치",  dotCls: "bg-orange-500",  badgeCls: "bg-orange-100 text-orange-700",   headerCls: "text-orange-600",   borderCls: "border-l-orange-400"  },
-  payment:      { label: "수납",  dotCls: "bg-emerald-500", badgeCls: "bg-emerald-100 text-emerald-700", headerCls: "text-emerald-600",  borderCls: "border-l-emerald-400" },
-  closed:       { label: "완료",  dotCls: "bg-gray-400",    badgeCls: "bg-gray-100 text-gray-500",       headerCls: "text-gray-400",     borderCls: "border-l-gray-300"    },
-  cancelled:    { label: "취소",  dotCls: "bg-red-400",     badgeCls: "bg-red-100 text-red-500",         headerCls: "text-red-400",      borderCls: "border-l-red-300"     },
+  contact:      { label: "컨택",  dotCls: "bg-stone-400",   badgeCls: "bg-stone-100 text-stone-600",       headerCls: "text-stone-500",      borderCls: "border-l-stone-300"     },
+  quote:        { label: "견적",  dotCls: "bg-amber-500",   badgeCls: "bg-amber-100 text-amber-700",       headerCls: "text-amber-600",      borderCls: "border-l-amber-400"     },
+  contract:     { label: "계약",  dotCls: "bg-[#084734]",   badgeCls: "bg-[#ECFDF5] text-[#084734]",       headerCls: "text-[#084734]",      borderCls: "border-l-[#084734]"     },
+  confirmed:    { label: "확정",  dotCls: "bg-teal-500",    badgeCls: "bg-teal-100 text-teal-700",         headerCls: "text-teal-600",       borderCls: "border-l-teal-400"      },
+  installation: { label: "설치",  dotCls: "bg-orange-500",  badgeCls: "bg-orange-100 text-orange-700",     headerCls: "text-orange-600",     borderCls: "border-l-orange-400"    },
+  payment:      { label: "수납",  dotCls: "bg-emerald-500", badgeCls: "bg-emerald-100 text-emerald-700",   headerCls: "text-emerald-600",    borderCls: "border-l-emerald-400"   },
+  closed:       { label: "완료",  dotCls: "bg-stone-300",   badgeCls: "bg-stone-100 text-stone-500",       headerCls: "text-stone-400",      borderCls: "border-l-stone-300"     },
+  cancelled:    { label: "취소",  dotCls: "bg-red-400",     badgeCls: "bg-red-100 text-red-500",           headerCls: "text-red-400",        borderCls: "border-l-red-300"       },
 }
 
 const ACTIVITY_TYPE_CFG: Record<string, { cls: string; emoji: string }> = {
-  document: { cls: "bg-blue-100 text-blue-600",       emoji: "📄" },
-  schedule: { cls: "bg-orange-100 text-orange-600",   emoji: "📅" },
-  payment:  { cls: "bg-emerald-100 text-emerald-600", emoji: "💰" },
-  default:  { cls: "bg-stone-100 text-stone-500",     emoji: "·"  },
+  document: { cls: "bg-amber-100 text-amber-700",      emoji: "📄" },
+  schedule: { cls: "bg-orange-100 text-orange-600",    emoji: "📅" },
+  payment:  { cls: "bg-emerald-100 text-emerald-600",  emoji: "💰" },
+  default:  { cls: "bg-stone-100 text-stone-500",      emoji: "·"  },
 }
 
 const CAL_SOURCE_EMOJI: Record<string, string> = {
@@ -176,12 +186,12 @@ const DEMO: PartnerOverviewPayload = {
     },
   ],
   deals: [
-    { id: "d1", title: "본관 전자칠판 4대 설치", deal_code: "D-2026-001", current_stage: "installation", customer_name: "강남메가스터디학원", customer_campus_name: "본관", expected_amount: 29000000, contracted_amount: 29000000, paid_amount: 12000000, outstanding_amount: 17000000, manager_name: "김민준" },
-    { id: "d2", title: "추가 교실 계약", deal_code: "D-2026-011", current_stage: "quote", customer_name: "강남메가스터디학원", customer_campus_name: "본관", expected_amount: 14000000, contracted_amount: 14000000, paid_amount: 0, outstanding_amount: 14000000, manager_name: "이서연" },
-    { id: "d3", title: "3층 전체 교체", deal_code: "D-2026-004", current_stage: "payment", customer_name: "리더스입시학원", customer_campus_name: "3층", expected_amount: 24200000, contracted_amount: 24200000, paid_amount: 24200000, outstanding_amount: 0, manager_name: "박지훈" },
-    { id: "d4", title: "별관 추가 계약", deal_code: "D-2026-015", current_stage: "contract", customer_name: "강남메가스터디학원", customer_campus_name: "별관", expected_amount: 8600000, contracted_amount: 8600000, paid_amount: 0, outstanding_amount: 8600000, manager_name: "김민준" },
-    { id: "d5", title: "2교실 신설 견적", deal_code: "D-2026-018", current_stage: "contact", customer_name: "서초수학교습소", customer_campus_name: null, expected_amount: 12400000, contracted_amount: 0, paid_amount: 0, outstanding_amount: 0, manager_name: "이서연" },
-    { id: "d6", title: "분당지점 추가 설치", deal_code: "D-2026-007", current_stage: "installation", customer_name: "리더스입시학원", customer_campus_name: "3층", expected_amount: 15600000, contracted_amount: 15600000, paid_amount: 0, outstanding_amount: 15600000, manager_name: "박지훈" },
+    { id: "d1", title: "본관 전자칠판 4대 설치", deal_code: "D-2026-001", current_stage: "installation", customer_name: "강남메가스터디학원", customer_campus_name: "본관", expected_amount: 29000000, contracted_amount: 29000000, paid_amount: 12000000, outstanding_amount: 17000000 },
+    { id: "d2", title: "추가 교실 계약", deal_code: "D-2026-011", current_stage: "quote", customer_name: "강남메가스터디학원", customer_campus_name: "본관", expected_amount: 14000000, contracted_amount: 14000000, paid_amount: 0, outstanding_amount: 14000000 },
+    { id: "d3", title: "3층 전체 교체", deal_code: "D-2026-004", current_stage: "payment", customer_name: "리더스입시학원", customer_campus_name: "3층", expected_amount: 24200000, contracted_amount: 24200000, paid_amount: 24200000, outstanding_amount: 0 },
+    { id: "d4", title: "별관 추가 계약", deal_code: "D-2026-015", current_stage: "contract", customer_name: "강남메가스터디학원", customer_campus_name: "별관", expected_amount: 8600000, contracted_amount: 8600000, paid_amount: 0, outstanding_amount: 8600000 },
+    { id: "d5", title: "2교실 신설 견적", deal_code: "D-2026-018", current_stage: "contact", customer_name: "서초수학교습소", customer_campus_name: null, expected_amount: 12400000, contracted_amount: 0, paid_amount: 0, outstanding_amount: 0 },
+    { id: "d6", title: "분당지점 추가 설치", deal_code: "D-2026-007", current_stage: "installation", customer_name: "리더스입시학원", customer_campus_name: "3층", expected_amount: 15600000, contracted_amount: 15600000, paid_amount: 0, outstanding_amount: 15600000 },
   ],
   recent_activity: [
     { id: "a1", summary: "견적서 v3 링크 발송", action_type: "document", created_at: "2026-04-04T02:10:00Z" },
@@ -200,6 +210,14 @@ const DEMO: PartnerOverviewPayload = {
   recent_calendar_events: [
     { id: "ce1", title: "견적 링크 만료 전 확인", starts_at: "2026-04-12T10:00:00+09:00", ends_at: "2026-04-12T11:00:00+09:00", source_type: "document_due" },
     { id: "ce2", title: "추가 계약 조정 미팅", starts_at: "2026-04-16T14:00:00+09:00", ends_at: "2026-04-16T15:00:00+09:00", source_type: "meeting" },
+  ],
+  inventory_summary: [
+    { sku: "IFP-110", product_name: "IFP 110인치", pending_qty: 2, shipped_qty: 1, delivered_qty: 4, total_qty: 7 },
+    { sku: "IFP-86",  product_name: "IFP 86인치",  pending_qty: 4, shipped_qty: 2, delivered_qty: 8, total_qty: 14 },
+    { sku: "IFP-75",  product_name: "IFP 75인치",  pending_qty: 1, shipped_qty: 0, delivered_qty: 5, total_qty: 6 },
+    { sku: "CAM-T1",  product_name: "카메라 T1",    pending_qty: 3, shipped_qty: 1, delivered_qty: 6, total_qty: 10 },
+    { sku: "CAM-S1",  product_name: "카메라 S1",    pending_qty: 1, shipped_qty: 0, delivered_qty: 3, total_qty: 4 },
+    { sku: "STAND",   product_name: "스탠드",        pending_qty: 2, shipped_qty: 2, delivered_qty: 7, total_qty: 11 },
   ],
 }
 
@@ -246,7 +264,7 @@ function dealPaymentBadge(deal: DealItem): { label: string; cls: string } {
   return { label: "미수", cls: "bg-red-100 text-red-600" }
 }
 
-/* ─── Normalize / Type-guard ─────────────────────────────────── */
+/* ─── Main Component ──────────────────────────────────────────── */
 
 function isPartnerReadMode(value: unknown): value is PartnerReadMode {
   return value === "v2" || value === "legacy" || value === "demo"
@@ -254,6 +272,7 @@ function isPartnerReadMode(value: unknown): value is PartnerReadMode {
 
 function normalizeOverviewPayload(payload: PartnerOverviewResponse): PartnerOverviewPayload {
   const metrics = payload.metrics
+
   return {
     mode: isPartnerReadMode(payload.mode) ? payload.mode : DEMO.mode,
     metrics: {
@@ -272,289 +291,18 @@ function normalizeOverviewPayload(payload: PartnerOverviewResponse): PartnerOver
     upcoming_installations: Array.isArray(payload.upcoming_installations) ? payload.upcoming_installations : [],
     recent_payments: Array.isArray(payload.recent_payments) ? payload.recent_payments : [],
     recent_calendar_events: Array.isArray(payload.recent_calendar_events) ? payload.recent_calendar_events : [],
+    inventory_summary: Array.isArray(payload.inventory_summary) ? payload.inventory_summary : [],
   }
 }
-
-/* ─── Mini Calendar ──────────────────────────────────────────── */
-
-type CalDot = { day: number; type: "installation" | "other" }
-
-function MiniCalendar({
-  eventDots,
-}: {
-  eventDots: CalDot[]
-}) {
-  const today = new Date()
-  const [viewYear, setViewYear]   = useState(today.getFullYear())
-  const [viewMonth, setViewMonth] = useState(today.getMonth()) // 0-indexed
-
-  const daysInMonth = new Date(viewYear, viewMonth + 1, 0).getDate()
-  const firstDow    = new Date(viewYear, viewMonth, 1).getDay() // 0=Sun
-
-  const isCurrentMonth =
-    viewYear === today.getFullYear() && viewMonth === today.getMonth()
-
-  const dotsByDay = useMemo(() => {
-    const map: Record<number, CalDot["type"][]> = {}
-    for (const dot of eventDots) {
-      if (!map[dot.day]) map[dot.day] = []
-      map[dot.day].push(dot.type)
-    }
-    return map
-  }, [eventDots])
-
-  function prevMonth() {
-    if (viewMonth === 0) { setViewYear(y => y - 1); setViewMonth(11) }
-    else setViewMonth(m => m - 1)
-  }
-  function nextMonth() {
-    if (viewMonth === 11) { setViewYear(y => y + 1); setViewMonth(0) }
-    else setViewMonth(m => m + 1)
-  }
-
-  const cells: (number | null)[] = [
-    ...Array(firstDow).fill(null),
-    ...Array.from({ length: daysInMonth }, (_, i) => i + 1),
-  ]
-  // pad to full rows
-  while (cells.length % 7 !== 0) cells.push(null)
-
-  const monthLabel = new Date(viewYear, viewMonth, 1).toLocaleDateString("ko-KR", {
-    year: "numeric", month: "long",
-  })
-
-  return (
-    <div className="select-none">
-      {/* header */}
-      <div className="mb-2 flex items-center justify-between">
-        <span className="text-xs font-semibold text-[#111110]">{monthLabel}</span>
-        <div className="flex items-center gap-0.5">
-          <button
-            type="button"
-            onClick={prevMonth}
-            className="flex h-6 w-6 items-center justify-center rounded-md text-[#1a1a1a]/40 transition-colors hover:bg-[#f0ebe2] hover:text-[#111110]"
-          >
-            <ChevronLeft className="h-3.5 w-3.5" />
-          </button>
-          <button
-            type="button"
-            onClick={nextMonth}
-            className="flex h-6 w-6 items-center justify-center rounded-md text-[#1a1a1a]/40 transition-colors hover:bg-[#f0ebe2] hover:text-[#111110]"
-          >
-            <ChevronRight className="h-3.5 w-3.5" />
-          </button>
-        </div>
-      </div>
-
-      {/* weekday header */}
-      <div className="mb-1 grid grid-cols-7 text-center">
-        {["일", "월", "화", "수", "목", "금", "토"].map(d => (
-          <span key={d} className="text-[10px] font-medium text-[#1a1a1a]/35">{d}</span>
-        ))}
-      </div>
-
-      {/* day cells */}
-      <div className="grid grid-cols-7 gap-y-0.5">
-        {cells.map((day, idx) => {
-          if (day === null) {
-            return <div key={`empty-${idx}`} className="h-8" />
-          }
-          const isToday = isCurrentMonth && day === today.getDate()
-          const dots    = dotsByDay[day] ?? []
-          return (
-            <div key={day} className="flex flex-col items-center">
-              <div
-                className={`flex h-7 w-7 items-center justify-center rounded-full text-[12px] font-medium leading-none
-                  ${isToday
-                    ? "bg-[#111110] text-white"
-                    : "text-[#1a1a1a]/70 hover:bg-[#f0ebe2]"
-                  }`}
-              >
-                {day}
-              </div>
-              {/* event dots */}
-              {dots.length > 0 && (
-                <div className="mt-0.5 flex gap-0.5">
-                  {dots.slice(0, 2).map((type, di) => (
-                    <span
-                      key={di}
-                      className={`h-1 w-1 rounded-full ${type === "installation" ? "bg-orange-400" : "bg-blue-400"}`}
-                    />
-                  ))}
-                </div>
-              )}
-            </div>
-          )
-        })}
-      </div>
-    </div>
-  )
-}
-
-/* ─── Left Sidebar ───────────────────────────────────────────── */
-
-function LeftSidebar({
-  upcoming_installations,
-  recent_calendar_events,
-  recent_activity,
-}: {
-  upcoming_installations: InstallationEvent[]
-  recent_calendar_events: CalendarEvent[]
-  recent_activity: ActivityLog[]
-}) {
-  const today = new Date()
-
-  // build event dots for current month
-  const calDots: CalDot[] = useMemo(() => {
-    const dots: CalDot[] = []
-    for (const inst of upcoming_installations) {
-      const d = new Date(inst.scheduled_start_at)
-      if (d.getFullYear() === today.getFullYear() && d.getMonth() === today.getMonth()) {
-        dots.push({ day: d.getDate(), type: "installation" })
-      }
-    }
-    for (const evt of recent_calendar_events) {
-      const d = new Date(evt.starts_at)
-      if (d.getFullYear() === today.getFullYear() && d.getMonth() === today.getMonth()) {
-        dots.push({ day: d.getDate(), type: "other" })
-      }
-    }
-    return dots
-  }, [upcoming_installations, recent_calendar_events])
-
-  // upcoming schedule: merge installations + calendar events, sort by date, max 6
-  const upcomingItems = useMemo(() => {
-    type Item = { id: string; title: string; date: string; type: "installation" | "calendar"; source_type?: string; location?: string | null; days: number }
-    const items: Item[] = [
-      ...upcoming_installations.map(i => ({
-        id: i.id,
-        title: i.title,
-        date: i.scheduled_start_at,
-        type: "installation" as const,
-        location: i.location,
-        days: daysUntil(i.scheduled_start_at),
-      })),
-      ...recent_calendar_events.map(e => ({
-        id: e.id,
-        title: e.title,
-        date: e.starts_at,
-        type: "calendar" as const,
-        source_type: e.source_type,
-        days: daysUntil(e.starts_at),
-      })),
-    ]
-    return items
-      .sort((a, b) => new Date(a.date).getTime() - new Date(b.date).getTime())
-      .slice(0, 6)
-  }, [upcoming_installations, recent_calendar_events])
-
-  return (
-    <aside className="hidden lg:flex lg:flex-col border-r border-[#e7e0d6] bg-white h-[calc(100vh-56px)] sticky top-[56px] overflow-y-auto">
-      <div className="p-4 space-y-6">
-        {/* Mini Calendar */}
-        <div>
-          <MiniCalendar eventDots={calDots} />
-        </div>
-
-        <div className="h-px bg-[#e7e0d6]" />
-
-        {/* Upcoming Schedule */}
-        <div>
-          <div className="mb-3 flex items-center justify-between">
-            <h3 className="text-xs font-semibold text-[#111110]">급한 일정</h3>
-            <a href="/partner/calendar" className="text-[10px] text-[#1a1a1a]/40 hover:text-[#1a1a1a]">
-              전체 →
-            </a>
-          </div>
-          {upcomingItems.length === 0 ? (
-            <p className="text-xs text-[#1a1a1a]/35">예정된 일정이 없습니다.</p>
-          ) : (
-            <div className="space-y-1.5">
-              {upcomingItems.map(item => {
-                const isInstall = item.type === "installation"
-                const emoji = isInstall ? "⚒" : (CAL_SOURCE_EMOJI[item.source_type ?? ""] ?? "📅")
-                return (
-                  <div
-                    key={item.id}
-                    className={`flex items-start gap-2 rounded-lg px-2.5 py-2 ${
-                      isInstall
-                        ? "border border-orange-100 bg-orange-50"
-                        : "border border-[#ece4d8] bg-[#faf6ef]"
-                    }`}
-                  >
-                    <span className="mt-0.5 text-sm leading-none">{emoji}</span>
-                    <div className="min-w-0 flex-1">
-                      <p className={`truncate text-xs font-medium ${isInstall ? "text-orange-900" : "text-[#111110]"}`}>
-                        {item.title}
-                      </p>
-                      <p className={`mt-0.5 text-[10px] ${isInstall ? "text-orange-600/70" : "text-[#1a1a1a]/40"}`}>
-                        {fmtShortDate(item.date)}
-                      </p>
-                    </div>
-                    <span className={`shrink-0 rounded-full px-1.5 py-0.5 text-[10px] font-bold ${
-                      item.days === 0
-                        ? "bg-orange-500 text-white"
-                        : item.days <= 3
-                        ? "bg-orange-100 text-orange-700"
-                        : isInstall
-                        ? "bg-orange-50 text-orange-500"
-                        : "bg-[#ece4d8] text-[#1a1a1a]/50"
-                    }`}>
-                      {item.days === 0 ? "오늘" : `D-${item.days}`}
-                    </span>
-                  </div>
-                )
-              })}
-            </div>
-          )}
-        </div>
-
-        <div className="h-px bg-[#e7e0d6]" />
-
-        {/* Recent Activity */}
-        <div>
-          <h3 className="mb-3 text-xs font-semibold text-[#111110]">최근 활동</h3>
-          {recent_activity.length === 0 ? (
-            <p className="text-xs text-[#1a1a1a]/35">최근 활동이 없습니다.</p>
-          ) : (
-            <div className="space-y-0">
-              {recent_activity.slice(0, 4).map((log, i) => {
-                const isLast = i === Math.min(recent_activity.length, 4) - 1
-                const atCfg  = ACTIVITY_TYPE_CFG[log.action_type] ?? ACTIVITY_TYPE_CFG.default
-                return (
-                  <div key={log.id} className="flex gap-2">
-                    <div className="flex flex-col items-center">
-                      <div className={`flex h-6 w-6 shrink-0 items-center justify-center rounded-full text-[11px] ${atCfg.cls}`}>
-                        {atCfg.emoji}
-                      </div>
-                      {!isLast && <div className="w-px flex-1 bg-[#e7e0d6]" style={{ minHeight: 10 }} />}
-                    </div>
-                    <div className="pb-3 pt-0.5">
-                      <p className="text-xs font-medium text-[#111110] leading-snug">{log.summary}</p>
-                      <p className="mt-0.5 text-[10px] text-[#1a1a1a]/40">{fmtRelative(log.created_at)}</p>
-                    </div>
-                  </div>
-                )
-              })}
-            </div>
-          )}
-        </div>
-      </div>
-    </aside>
-  )
-}
-
-/* ─── Main Component ──────────────────────────────────────────── */
 
 export function PartnerPortalHome() {
   const [overview, setOverview] = useState<PartnerOverviewPayload>(DEMO)
   const [loading, setLoading]   = useState(true)
   const [error, setError]       = useState<string | null>(null)
   const [expandedCustomers, setExpandedCustomers] = useState<Set<string>>(new Set(["c1"]))
-  const [isCustomerDialogOpen, setIsCustomerDialogOpen]   = useState(false)
-  const [isDealDialogOpen, setIsDealDialogOpen]           = useState(false)
-  const [isScheduleDialogOpen, setIsScheduleDialogOpen]   = useState(false)
-
+  const [isCustomerDialogOpen, setIsCustomerDialogOpen] = useState(false)
+  const [isDealDialogOpen, setIsDealDialogOpen] = useState(false)
+  const [isScheduleDialogOpen, setIsScheduleDialogOpen] = useState(false)
   const refreshPortal = useCallback(() => {
     window.location.reload()
   }, [])
@@ -618,6 +366,7 @@ export function PartnerPortalHome() {
     const q: AItem[] = []
     let n = 1
 
+    // P1 — 미수금 (설치/수납 단계 + outstanding > 0)
     overview.deals
       .filter(d => d.outstanding_amount > 0 && (d.current_stage === "installation" || d.current_stage === "payment"))
       .slice(0, 2)
@@ -625,6 +374,7 @@ export function PartnerPortalHome() {
         q.push({ id: `ov-${d.id}`, num: n++, label: `미수금 ${fmt(d.outstanding_amount)} 확인`, sub: `${d.customer_name ?? ""} · ${d.title}`, href: "/partner/workspace", numCls: "bg-red-500 text-white" })
       })
 
+    // P2 — 설치 임박
     overview.upcoming_installations
       .filter(i => daysUntil(i.scheduled_start_at) <= 7)
       .slice(0, 2)
@@ -633,6 +383,7 @@ export function PartnerPortalHome() {
         q.push({ id: `inst-${i.id}`, num: n++, label: d === 0 ? "오늘 설치 확인" : `설치 D-${d} 준비`, sub: `${i.title} · ${i.location ?? "장소 미지정"}`, href: "/partner/calendar", numCls: "bg-orange-500 text-white" })
       })
 
+    // P3 — 계약 서명 검토
     overview.deals
       .filter(d => d.current_stage === "contract")
       .slice(0, 2)
@@ -640,8 +391,9 @@ export function PartnerPortalHome() {
         q.push({ id: `ct-${d.id}`, num: n++, label: "계약 서명 검토", sub: `${d.customer_name ?? ""} · ${d.title}`, href: "/partner/documents", numCls: "bg-violet-500 text-white" })
       })
 
+    // P4 — 캘린더 이벤트
     overview.recent_calendar_events.slice(0, 2).forEach(e => {
-      q.push({ id: `ce-${e.id}`, num: n++, label: e.title, sub: fmtShortDate(e.starts_at), href: "/partner/calendar", numCls: "bg-blue-500 text-white" })
+      q.push({ id: `ce-${e.id}`, num: n++, label: e.title, sub: fmtShortDate(e.starts_at), href: "/partner/calendar", numCls: "bg-teal-500 text-white" })
     })
 
     return q.slice(0, 7)
@@ -673,127 +425,119 @@ export function PartnerPortalHome() {
         </div>
       )}
 
-      {/* ── Body: Sidebar + Main ─────────────────────────────────── */}
-      <div className="grid lg:grid-cols-[272px_1fr]">
-
-        {/* ── Left Sidebar ──────────────────────────────────────── */}
-        <LeftSidebar
-          upcoming_installations={overview.upcoming_installations}
-          recent_calendar_events={overview.recent_calendar_events}
-          recent_activity={overview.recent_activity}
-        />
-
-        {/* ── Main Content ──────────────────────────────────────── */}
-        <main className="min-w-0">
-
-          {/* Action Bar */}
-          <div className="border-b border-[#e7e0d6] bg-white px-6 py-3">
-            <div className="flex items-center justify-between gap-4">
-              <div className="flex items-center gap-3">
-                {loading && <Loader2 className="h-4 w-4 animate-spin text-[#1a1a1a]/40" />}
-                <p className="text-sm text-[#1a1a1a]/50">{todayStr}</p>
-              </div>
-              <div className="flex items-center gap-2">
-                {canCreateInPortal ? (
-                  <>
-                    <QuickActionButton label="새 고객" onClick={() => setIsCustomerDialogOpen(true)} />
-                    <QuickActionButton label="신규 컨택" disabled={overview.customers.length === 0} onClick={() => setIsDealDialogOpen(true)} />
-                    <QuickActionButton label="일정 추가" disabled={overview.deals.length === 0} onClick={() => setIsScheduleDialogOpen(true)} />
-                  </>
-                ) : (
-                  <span className="rounded-full border border-[#e0e0dc] bg-[#f7f7f5] px-3 py-1.5 text-xs text-[#1a1a1a]/40">
-                    읽기 전용 모드
-                  </span>
-                )}
-              </div>
-            </div>
+      {/* ── Action Bar ──────────────────────────────────────────── */}
+      <div className="border-b border-[#e7e0d6] bg-white px-6 py-3">
+        <div className="mx-auto flex max-w-[1680px] items-center justify-between gap-4">
+          <div className="flex items-center gap-3">
+            {loading && <Loader2 className="h-4 w-4 animate-spin text-[#1a1a1a]/40" />}
+            <p className="text-sm text-[#1a1a1a]/50">{todayStr}</p>
           </div>
-
-          {/* Urgency Strip */}
-          {urgencyChips.length > 0 && (
-            <div className="bg-[#111110] px-6 py-2.5">
-              <div className="flex flex-wrap items-center gap-2">
-                <span className="text-[11px] font-semibold uppercase tracking-widest text-white/35">지금 확인</span>
-                {urgencyChips.map(chip => (
-                  <a key={chip.id} href={chip.href}
-                    className={`flex items-center gap-1.5 rounded-full px-3 py-1.5 text-xs font-medium transition-colors ${chip.cls}`}
-                  >
-                    {chip.label}
-                    <ArrowRight className="h-3 w-3" />
-                  </a>
-                ))}
-              </div>
-            </div>
-          )}
-
-          {/* Scrollable content */}
-          <div className="space-y-6 px-6 py-6">
-
-            {/* ── 지금 할 일 (Action Queue) ─────────────────────── */}
-            {actionQueue.length > 0 && (
-              <section className="rounded-2xl border border-[#e7e0d6] bg-white p-5">
-                <div className="mb-4 flex items-center gap-2">
-                  <span className="h-2 w-2 animate-pulse rounded-full bg-red-500" />
-                  <h2 className="text-sm font-semibold text-[#111110]">지금 할 일</h2>
-                  <span className="ml-1 rounded-full bg-[#111110] px-2 py-0.5 text-[10px] font-bold text-white">
-                    {actionQueue.length}
-                  </span>
-                </div>
-                <div className="grid gap-2 sm:grid-cols-2 xl:grid-cols-3">
-                  {actionQueue.map(item => (
-                    <a key={item.id} href={item.href}
-                      className="group flex items-center gap-3 rounded-xl border border-[#ece4d8] bg-[#faf6ef] px-3 py-3 transition-colors hover:border-[#111110]/20 hover:bg-white"
-                    >
-                      <span className={`flex h-6 w-6 shrink-0 items-center justify-center rounded-full text-[11px] font-bold ${item.numCls}`}>
-                        {item.num}
-                      </span>
-                      <div className="min-w-0 flex-1">
-                        <p className="text-sm font-medium leading-snug text-[#111110]">{item.label}</p>
-                        <p className="mt-0.5 truncate text-xs text-[#1a1a1a]/45">{item.sub}</p>
-                      </div>
-                      <ArrowRight className="h-4 w-4 shrink-0 text-[#1a1a1a]/25 transition-transform group-hover:translate-x-0.5" />
-                    </a>
-                  ))}
-                </div>
-              </section>
+          <div className="flex items-center gap-2">
+            {canCreateInPortal ? (
+              <>
+                <QuickActionButton label="새 고객" onClick={() => setIsCustomerDialogOpen(true)} />
+                <QuickActionButton label="신규 컨택" disabled={overview.customers.length === 0} onClick={() => setIsDealDialogOpen(true)} />
+                <QuickActionButton label="일정 추가" disabled={overview.deals.length === 0} onClick={() => setIsScheduleDialogOpen(true)} />
+              </>
+            ) : (
+              <span className="rounded-full border border-[#e0e0dc] bg-[#f7f7f5] px-3 py-1.5 text-xs text-[#1a1a1a]/40">
+                읽기 전용 모드
+              </span>
             )}
+          </div>
+        </div>
+      </div>
 
-            {/* ── KPI Row ───────────────────────────────────────── */}
-            <div className="grid grid-cols-2 gap-3 sm:grid-cols-5">
-              <KpiCard
-                label="기관 수"
-                value={`${overview.metrics.customer_count}개`}
-                sub={`진행 거래 ${overview.metrics.active_deal_count}건`}
-              />
-              <KpiCard
-                label="계약 총액"
-                value={fmt(contracted_amount)}
-                sub={`설치 완료 ${installPct}%`}
-                progress={installPct}
-                progressCls="bg-indigo-400"
-              />
-              <KpiCard
-                label="실수납 누계"
-                value={fmt(paid_amount)}
-                sub={`계약 대비 ${paidPct}%`}
-                progress={paidPct}
-                progressCls="bg-emerald-400"
-              />
-              <KpiCard
-                label="설치 중"
-                value={`${overview.metrics.installation_deal_count}건`}
-                sub="진행 중인 설치"
-                accent="orange"
-              />
-              <KpiCard
-                label="미수금"
-                value={fmt(outstanding_amount)}
-                sub={`미납 ${overview.metrics.unpaid_deal_count}건`}
-                accent={outstanding_amount > 0 ? "red" : undefined}
-              />
+      {/* ── Urgency Strip ────────────────────────────────────────── */}
+      {urgencyChips.length > 0 && (
+        <div className="bg-[#111110] px-6 py-2.5">
+          <div className="mx-auto flex max-w-[1680px] flex-wrap items-center gap-2">
+            <span className="text-[11px] font-semibold uppercase tracking-widest text-white/35">지금 확인</span>
+            {urgencyChips.map(chip => (
+              <a key={chip.id} href={chip.href}
+                className={`flex items-center gap-1.5 rounded-full px-3 py-1.5 text-xs font-medium transition-colors ${chip.cls}`}
+              >
+                {chip.label}
+                <ArrowRight className="h-3 w-3" />
+              </a>
+            ))}
+          </div>
+        </div>
+      )}
+
+      <div className="mx-auto max-w-[1680px] space-y-6 px-6 py-6">
+
+        {/* ── 지금 할 일 (Action Queue) — PROMOTED ────────────────── */}
+        {actionQueue.length > 0 && (
+          <section className="rounded-2xl border border-[#e7e0d6] bg-white p-5">
+            <div className="mb-4 flex items-center gap-2">
+              <span className="h-2 w-2 animate-pulse rounded-full bg-red-500" />
+              <h2 className="text-sm font-semibold text-[#111110]">지금 할 일</h2>
+              <span className="ml-1 rounded-full bg-[#111110] px-2 py-0.5 text-[10px] font-bold text-white">
+                {actionQueue.length}
+              </span>
             </div>
+            <div className="grid gap-2 sm:grid-cols-2 lg:grid-cols-3 xl:grid-cols-4">
+              {actionQueue.map(item => (
+                <a key={item.id} href={item.href}
+                  className="group flex items-center gap-3 rounded-xl border border-[#ece4d8] bg-[#faf6ef] px-3 py-3 transition-colors hover:border-[#111110]/20 hover:bg-white"
+                >
+                  <span className={`flex h-6 w-6 shrink-0 items-center justify-center rounded-full text-[11px] font-bold ${item.numCls}`}>
+                    {item.num}
+                  </span>
+                  <div className="min-w-0 flex-1">
+                    <p className="text-sm font-medium leading-snug text-[#111110]">{item.label}</p>
+                    <p className="mt-0.5 truncate text-xs text-[#1a1a1a]/45">{item.sub}</p>
+                  </div>
+                  <ArrowRight className="h-4 w-4 shrink-0 text-[#1a1a1a]/25 transition-transform group-hover:translate-x-0.5" />
+                </a>
+              ))}
+            </div>
+          </section>
+        )}
 
-            {/* ── Pipeline Board ────────────────────────────────── */}
+        {/* ── KPI Row ───────────────────────────────────────── */}
+        <div className="grid grid-cols-2 gap-3 sm:grid-cols-5">
+          <KpiCard
+            label="기관 수"
+            value={`${overview.metrics.customer_count}개`}
+            sub={`진행 거래 ${overview.metrics.active_deal_count}건`}
+          />
+          <KpiCard
+            label="계약 총액"
+            value={fmt(contracted_amount)}
+            sub={`설치 완료 ${installPct}%`}
+            progress={installPct}
+            progressCls="bg-indigo-400"
+          />
+          <KpiCard
+            label="실수납 누계"
+            value={fmt(paid_amount)}
+            sub={`계약 대비 ${paidPct}%`}
+            progress={paidPct}
+            progressCls="bg-emerald-400"
+          />
+          <KpiCard
+            label="설치 중"
+            value={`${overview.metrics.installation_deal_count}건`}
+            sub="진행 중인 설치"
+            accent="orange"
+          />
+          <KpiCard
+            label="미수금"
+            value={fmt(outstanding_amount)}
+            sub={`미납 ${overview.metrics.unpaid_deal_count}건`}
+            accent={outstanding_amount > 0 ? "red" : undefined}
+          />
+        </div>
+
+        {/* ── Main 2-col ────────────────────────────────────── */}
+        <div className="grid gap-6 xl:grid-cols-[1fr_340px]">
+
+          {/* ── Left ─────────────────────────────────────────── */}
+          <div className="space-y-6">
+
+            {/* Pipeline Board */}
             <section>
               <SectionHeader title="거래 파이프라인" sub={`${overview.deals.length}건`} />
               <div className="mt-3 overflow-x-auto pb-2">
@@ -803,6 +547,7 @@ export function PartnerPortalHome() {
                     const cfg   = STAGE_CFG[stage]
                     return (
                       <div key={stage} className="w-[188px] flex-shrink-0">
+                        {/* column header */}
                         <div className="mb-2 flex items-center justify-between px-0.5">
                           <span className={`text-xs font-semibold ${cfg.headerCls}`}>
                             {cfg.label}
@@ -811,6 +556,7 @@ export function PartnerPortalHome() {
                             {deals.length}
                           </span>
                         </div>
+                        {/* cards */}
                         <div className="space-y-2">
                           {deals.length === 0 ? (
                             <div className="flex h-16 items-center justify-center rounded-xl border border-dashed border-[#d9cfbf] bg-[#faf6ef]">
@@ -831,16 +577,9 @@ export function PartnerPortalHome() {
                                     {deal.customer_name}
                                   </p>
                                   <div className="mt-2.5 flex items-end justify-between gap-1">
-                                    <div className="flex flex-col gap-0.5">
-                                      <p className="text-sm font-bold text-[#111110]">
-                                        {fmt(deal.contracted_amount || deal.expected_amount)}
-                                      </p>
-                                      {deal.manager_name && (
-                                        <p className="text-[10px] text-[#1a1a1a]/40">
-                                          담당: {deal.manager_name}
-                                        </p>
-                                      )}
-                                    </div>
+                                    <p className="text-sm font-bold text-[#111110]">
+                                      {fmt(deal.contracted_amount || deal.expected_amount)}
+                                    </p>
                                     <span className={`rounded-full px-1.5 py-0.5 text-[10px] font-medium ${ps.cls}`}>
                                       {ps.label}
                                     </span>
@@ -857,22 +596,29 @@ export function PartnerPortalHome() {
               </div>
             </section>
 
-            {/* ── Customer Stacks ───────────────────────────────── */}
+            {/* Customer Stacks */}
             <section>
               <SectionHeader title="기관별 거래" sub={`${overview.customers.length}개 기관`} />
               <div className="mt-3 space-y-2">
                 {customerStacks.map(cs => {
-                  const expanded       = expandedCustomers.has(cs.customer.id)
+                  const expanded     = expandedCustomers.has(cs.customer.id)
                   const hasOutstanding = (cs.summary?.outstanding_amount ?? 0) > 0
 
                   return (
-                    <div key={cs.customer.id} className="overflow-hidden rounded-2xl border border-[#e7e0d6] bg-white">
+                    <div
+                      key={cs.customer.id}
+                      className="overflow-hidden rounded-2xl border border-[#e7e0d6] bg-white"
+                    >
+                      {/* row header */}
                       <button
                         type="button"
                         onClick={() => setExpandedCustomers(prev => {
                           const next = new Set(prev)
-                          if (next.has(cs.customer.id)) next.delete(cs.customer.id)
-                          else next.add(cs.customer.id)
+                          if (next.has(cs.customer.id)) {
+                            next.delete(cs.customer.id)
+                          } else {
+                            next.add(cs.customer.id)
+                          }
                           return next
                         })}
                         className="flex w-full items-center justify-between gap-3 px-5 py-4 text-left transition-colors hover:bg-[#faf6ef]"
@@ -905,6 +651,7 @@ export function PartnerPortalHome() {
                         </div>
                       </button>
 
+                      {/* expanded deals */}
                       {expanded && (
                         <div className="border-t border-[#ece4d8] px-5 pb-4 pt-3">
                           {cs.deals.length === 0 ? (
@@ -926,11 +673,6 @@ export function PartnerPortalHome() {
                                       <p className="mt-0.5 text-xs text-[#1a1a1a]/40">{deal.deal_code}</p>
                                     </div>
                                     <div className="flex shrink-0 items-center gap-2">
-                                      {deal.manager_name && (
-                                        <span className="text-xs text-[#1a1a1a]/50">
-                                          담당: {deal.manager_name}
-                                        </span>
-                                      )}
                                       <span className={`rounded-full px-2 py-0.5 text-[11px] font-medium ${cfg.badgeCls}`}>
                                         {cfg.label}
                                       </span>
@@ -954,15 +696,230 @@ export function PartnerPortalHome() {
               </div>
             </section>
 
-            {/* ── Recent Payments ───────────────────────────────── */}
+            {/* Activity Timeline */}
+            <section>
+              <SectionHeader title="최근 활동" sub="업데이트 로그" />
+              <div className="mt-3 space-y-0">
+                {overview.recent_activity.map((log, i) => {
+                  const isLast = i === overview.recent_activity.length - 1
+                  const atCfg  = ACTIVITY_TYPE_CFG[log.action_type] ?? ACTIVITY_TYPE_CFG.default
+                  return (
+                    <div key={log.id} className="flex gap-3">
+                      <div className="flex flex-col items-center">
+                        <div className={`flex h-7 w-7 shrink-0 items-center justify-center rounded-full text-xs ${atCfg.cls}`}>
+                          {atCfg.emoji}
+                        </div>
+                        {!isLast && <div className="w-px flex-1 bg-[#e7e0d6]" style={{ minHeight: 12 }} />}
+                      </div>
+                      <div className="pb-4 pt-0.5">
+                        <p className="text-sm font-medium text-[#111110]">{log.summary}</p>
+                        <p className="mt-0.5 text-xs text-[#1a1a1a]/40">{fmtRelative(log.created_at)}</p>
+                      </div>
+                    </div>
+                  )
+                })}
+              </div>
+            </section>
+          </div>
+
+          {/* ── Right Sidebar ─────────────────────────────────── */}
+          <div className="space-y-5">
+
+            {/* [1] 견적 대기 */}
+            <div className="rounded-2xl border border-[#e7e0d6] bg-white p-5">
+              <div className="mb-3 flex items-center justify-between">
+                <h2 className="text-sm font-semibold text-[#111110]">견적 대기</h2>
+                <div className="flex items-center gap-2">
+                  <span className={`rounded-full px-2 py-0.5 text-[11px] font-bold ${pipeline["quote"].length > 0 ? "bg-amber-100 text-amber-700" : "bg-stone-100 text-stone-400"}`}>
+                    {pipeline["quote"].length}건
+                  </span>
+                  <a href="/partner/documents" className="text-xs text-[#1a1a1a]/40 hover:text-[#1a1a1a]">
+                    문서 →
+                  </a>
+                </div>
+              </div>
+              {pipeline["quote"].length === 0 ? (
+                <p className="rounded-xl bg-[#faf6ef] px-3 py-3 text-xs text-[#1a1a1a]/40">대기 중인 견적이 없습니다</p>
+              ) : (
+                <div className="space-y-2">
+                  <div className="rounded-xl bg-amber-50 px-3 py-2.5">
+                    <p className="text-[11px] text-amber-700/60">합계 금액</p>
+                    <p className="text-base font-bold text-amber-900">
+                      {fmt(pipeline["quote"].reduce((s, d) => s + (d.contracted_amount || d.expected_amount), 0))}
+                    </p>
+                  </div>
+                  {pipeline["quote"].map(deal => (
+                    <div key={deal.id} className="flex items-center justify-between gap-2 rounded-xl border border-[#ece4d8] bg-[#faf6ef] px-3 py-2.5">
+                      <div className="min-w-0">
+                        <p className="truncate text-sm font-medium text-[#111110]">{deal.title}</p>
+                        <p className="mt-0.5 truncate text-xs text-[#1a1a1a]/45">{deal.customer_name}</p>
+                      </div>
+                      <span className="shrink-0 text-sm font-semibold text-[#111110]">
+                        {fmt(deal.contracted_amount || deal.expected_amount)}
+                      </span>
+                    </div>
+                  ))}
+                </div>
+              )}
+            </div>
+
+            {/* [2] 계약 대기 */}
+            <div className="rounded-2xl border border-[#e7e0d6] bg-white p-5">
+              <div className="mb-3 flex items-center justify-between">
+                <h2 className="text-sm font-semibold text-[#111110]">계약 대기</h2>
+                <div className="flex items-center gap-2">
+                  <span className={`rounded-full px-2 py-0.5 text-[11px] font-bold ${pipeline["contract"].length > 0 ? "bg-[#ECFDF5] text-[#084734]" : "bg-stone-100 text-stone-400"}`}>
+                    {pipeline["contract"].length}건
+                  </span>
+                  <a href="/partner/documents" className="text-xs text-[#1a1a1a]/40 hover:text-[#1a1a1a]">
+                    계약서 →
+                  </a>
+                </div>
+              </div>
+              {pipeline["contract"].length === 0 ? (
+                <p className="rounded-xl bg-[#faf6ef] px-3 py-3 text-xs text-[#1a1a1a]/40">서명 대기 계약이 없습니다</p>
+              ) : (
+                <div className="space-y-2">
+                  <div className="rounded-xl bg-[#ECFDF5] px-3 py-2.5">
+                    <p className="text-[11px] text-[#084734]/60">계약 총액</p>
+                    <p className="text-base font-bold text-[#084734]">
+                      {fmt(pipeline["contract"].reduce((s, d) => s + d.contracted_amount, 0))}
+                    </p>
+                  </div>
+                  {pipeline["contract"].map(deal => (
+                    <div key={deal.id} className="flex items-center justify-between gap-2 rounded-xl border border-[#D1FAE5] bg-[#ECFDF5] px-3 py-2.5">
+                      <div className="min-w-0">
+                        <p className="truncate text-sm font-medium text-[#111110]">{deal.title}</p>
+                        <p className="mt-0.5 truncate text-xs text-[#1a1a1a]/45">{deal.customer_name}</p>
+                      </div>
+                      <div className="flex shrink-0 items-center gap-1.5">
+                        <span className="rounded-full bg-[#084734]/10 px-2 py-0.5 text-[10px] font-semibold text-[#084734]">서명 대기</span>
+                        <span className="text-sm font-semibold text-[#111110]">
+                          {fmt(deal.contracted_amount)}
+                        </span>
+                      </div>
+                    </div>
+                  ))}
+                </div>
+              )}
+            </div>
+
+            {/* [3] 물량·재고 */}
+            <div className="rounded-2xl border border-[#e7e0d6] bg-white p-5">
+              <div className="mb-3 flex items-center justify-between">
+                <h2 className="text-sm font-semibold text-[#111110]">물량 · 재고</h2>
+                <span className="text-xs text-[#1a1a1a]/40">출하 현황</span>
+              </div>
+              {overview.inventory_summary.length === 0 ? (
+                <p className="rounded-xl bg-[#faf6ef] px-3 py-3 text-xs text-[#1a1a1a]/40">등록된 출하 내역이 없습니다</p>
+              ) : (
+                <div className="space-y-3">
+                  {overview.inventory_summary.map(item => {
+                    const deliveredPct = item.total_qty > 0
+                      ? Math.round((item.delivered_qty / item.total_qty) * 100)
+                      : 0
+                    return (
+                      <div key={item.sku}>
+                        <div className="mb-1.5 flex items-center justify-between gap-2">
+                          <div className="min-w-0">
+                            <span className="text-sm font-medium text-[#111110]">{item.product_name}</span>
+                            <span className="ml-1.5 text-[11px] text-[#1a1a1a]/35">{item.sku}</span>
+                          </div>
+                          <span className="shrink-0 text-sm font-bold text-[#111110]">
+                            {item.total_qty}<span className="text-xs font-normal text-[#1a1a1a]/40">대</span>
+                          </span>
+                        </div>
+                        {/* 진행 바 */}
+                        <div className="mb-1.5 h-1.5 overflow-hidden rounded-full bg-[#ece4d8]">
+                          <div
+                            className="h-full rounded-full bg-[#084734] transition-all"
+                            style={{ width: `${deliveredPct}%` }}
+                          />
+                        </div>
+                        {/* 상태 칩 */}
+                        <div className="flex gap-1.5">
+                          {item.pending_qty > 0 && (
+                            <span className="rounded-full bg-amber-100 px-2 py-0.5 text-[10px] font-semibold text-amber-700">
+                              대기 {item.pending_qty}
+                            </span>
+                          )}
+                          {item.shipped_qty > 0 && (
+                            <span className="rounded-full bg-teal-100 px-2 py-0.5 text-[10px] font-semibold text-teal-700">
+                              출하 {item.shipped_qty}
+                            </span>
+                          )}
+                          {item.delivered_qty > 0 && (
+                            <span className="rounded-full bg-[#ECFDF5] px-2 py-0.5 text-[10px] font-semibold text-[#084734]">
+                              납품 {item.delivered_qty}
+                            </span>
+                          )}
+                        </div>
+                      </div>
+                    )
+                  })}
+                </div>
+              )}
+            </div>
+
+            {/* [4] 다가오는 일정 */}
+            <div className="rounded-2xl border border-[#e7e0d6] bg-white p-5">
+              <div className="mb-4 flex items-center justify-between">
+                <h2 className="text-sm font-semibold text-[#111110]">다가오는 일정</h2>
+                <a href="/partner/calendar" className="text-xs text-[#1a1a1a]/40 hover:text-[#1a1a1a]">
+                  캘린더 →
+                </a>
+              </div>
+              <div className="space-y-2">
+                {overview.upcoming_installations.slice(0, 2).map(install => {
+                  const days = daysUntil(install.scheduled_start_at)
+                  return (
+                    <div
+                      key={install.id}
+                      className="rounded-xl border border-orange-100 bg-orange-50 px-3 py-3"
+                    >
+                      <div className="flex items-start justify-between gap-2">
+                        <div>
+                          <p className="text-sm font-semibold text-orange-900">{install.title}</p>
+                          <p className="mt-0.5 text-xs text-orange-700/60">
+                            {install.location ?? "장소 미지정"}
+                          </p>
+                        </div>
+                        <span className={`shrink-0 rounded-full px-2 py-0.5 text-[11px] font-bold ${days === 0 ? "bg-orange-500 text-white" : "bg-orange-100 text-orange-700"}`}>
+                          {days === 0 ? "오늘" : `D-${days}`}
+                        </span>
+                      </div>
+                      <p className="mt-1.5 text-xs text-orange-700/50">
+                        {fmtShortDate(install.scheduled_start_at)}
+                      </p>
+                    </div>
+                  )
+                })}
+                {overview.recent_calendar_events.slice(0, 2).map(event => (
+                  <div
+                    key={event.id}
+                    className="flex items-start gap-3 rounded-xl border border-[#ece4d8] bg-[#faf6ef] px-3 py-3"
+                  >
+                    <span className="mt-0.5 text-base leading-none">
+                      {CAL_SOURCE_EMOJI[event.source_type] ?? "📅"}
+                    </span>
+                    <div>
+                      <p className="text-sm font-medium text-[#111110]">{event.title}</p>
+                      <p className="mt-0.5 text-xs text-[#1a1a1a]/45">{fmtShortDate(event.starts_at)}</p>
+                    </div>
+                  </div>
+                ))}
+              </div>
+            </div>
+
+            {/* [5] 최근 수납 */}
             {overview.recent_payments.length > 0 && (
-              <section>
-                <SectionHeader title="최근 수납" />
-                <div className="mt-3 space-y-2">
+              <div className="rounded-2xl border border-[#e7e0d6] bg-white p-5">
+                <h2 className="mb-4 text-sm font-semibold text-[#111110]">최근 수납</h2>
+                <div className="space-y-2">
                   {overview.recent_payments.slice(0, 3).map(p => (
                     <div
                       key={p.id}
-                      className="flex items-center justify-between rounded-xl border border-[#ece4d8] bg-white px-4 py-3"
+                      className="flex items-center justify-between rounded-xl border border-[#ece4d8] bg-[#faf6ef] px-3 py-2.5"
                     >
                       <div>
                         <p className="text-sm font-semibold text-emerald-600">
@@ -978,11 +935,10 @@ export function PartnerPortalHome() {
                     </div>
                   ))}
                 </div>
-              </section>
+              </div>
             )}
-
           </div>
-        </main>
+        </div>
       </div>
 
       <MobileActionLauncher

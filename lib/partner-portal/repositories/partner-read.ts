@@ -4,6 +4,7 @@ import { getDemoCustomerDetail, getDemoDealDetail, listDemoCustomerListItems } f
 import { getLegacyCustomerDetail, getLegacyDealDetail, listLegacyCustomerListItems } from "@/lib/partner-portal/repositories/legacy";
 import { getCustomerDetailForPartnerAccount, listCustomerListItems } from "@/lib/partner-portal/repositories/customers";
 import { getDealDetailForPartnerAccount, listDealListItems } from "@/lib/partner-portal/repositories/deals";
+import { createSupabaseAdminClient } from "@/lib/supabase/admin";
 import type { PartnerAccountContext } from "@/lib/partner-portal/context";
 import type {
   ActivityLog,
@@ -22,6 +23,15 @@ import type {
 } from "@/lib/partner-portal/types";
 
 export type PartnerReadMode = "v2" | "legacy" | "demo";
+
+export interface InventorySkuSummary {
+  sku: string;
+  product_name: string;
+  pending_qty: number;
+  shipped_qty: number;
+  delivered_qty: number;
+  total_qty: number;
+}
 
 export interface PartnerOverviewMetrics {
   customer_count: number;
@@ -43,6 +53,7 @@ export interface PartnerOverviewPayload {
   upcoming_installations: InstallationEvent[];
   recent_payments: PaymentRecord[];
   recent_calendar_events: CalendarEvent[];
+  inventory_summary: InventorySkuSummary[];
 }
 
 function isTruthy<T>(value: T | null | undefined): value is T {
@@ -323,6 +334,55 @@ export async function loadPartnerDealDetail(
   return { mode: "demo", deal };
 }
 
+async function loadInventorySummary(partnerId: string): Promise<InventorySkuSummary[]> {
+  try {
+    const supabase = createSupabaseAdminClient();
+    const { data: sales } = await supabase
+      .from("hw_sales")
+      .select("id, status")
+      .eq("partner_id", partnerId)
+      .neq("status", "cancelled");
+
+    if (!sales?.length) return [];
+
+    const saleIds = sales.map((s) => s.id);
+    const statusMap: Record<string, string> = Object.fromEntries(
+      sales.map((s) => [s.id, s.status])
+    );
+
+    const { data: items } = await supabase
+      .from("hw_sale_items")
+      .select("sku, product_name, quantity, sale_id")
+      .in("sale_id", saleIds);
+
+    if (!items?.length) return [];
+
+    const grouped: Record<string, InventorySkuSummary> = {};
+    for (const item of items) {
+      const status = statusMap[item.sale_id] ?? "pending";
+      if (!grouped[item.sku]) {
+        grouped[item.sku] = {
+          sku: item.sku,
+          product_name: item.product_name,
+          pending_qty: 0,
+          shipped_qty: 0,
+          delivered_qty: 0,
+          total_qty: 0,
+        };
+      }
+      const g = grouped[item.sku];
+      g.total_qty += item.quantity;
+      if (status === "pending") g.pending_qty += item.quantity;
+      else if (status === "shipped") g.shipped_qty += item.quantity;
+      else if (status === "delivered") g.delivered_qty += item.quantity;
+    }
+
+    return Object.values(grouped).sort((a, b) => b.total_qty - a.total_qty);
+  } catch {
+    return [];
+  }
+}
+
 async function loadDetailsForOverview(
   mode: PartnerReadMode,
   items: CustomerListItem[] | DealListItem[],
@@ -386,6 +446,11 @@ export async function loadPartnerOverview(
   const details = await loadDetailsForOverview(mode, detailItems, context);
   const flattened = flattenDetails(details);
 
+  const partnerId = context.legacyPartnerId ?? context.partnerAccountId ?? "";
+  const inventory_summary = partnerId
+    ? await loadInventorySummary(partnerId)
+    : [];
+
   return {
     mode,
     metrics,
@@ -395,6 +460,7 @@ export async function loadPartnerOverview(
     upcoming_installations: flattened.installations.slice(0, 12),
     recent_payments: flattened.payments.slice(0, 12),
     recent_calendar_events: flattened.calendarEvents.slice(0, 12),
+    inventory_summary,
   };
 }
 
