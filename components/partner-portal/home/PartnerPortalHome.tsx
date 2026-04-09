@@ -88,6 +88,15 @@ type DealItem = {
   outstanding_amount: number
 }
 
+type InventorySkuSummary = {
+  sku: string
+  product_name: string
+  pending_qty: number
+  shipped_qty: number
+  delivered_qty: number
+  total_qty: number
+}
+
 type PartnerOverviewPayload = {
   mode: PartnerReadMode
   metrics: OverviewMetrics
@@ -97,10 +106,12 @@ type PartnerOverviewPayload = {
   upcoming_installations: InstallationEvent[]
   recent_payments: PaymentRecord[]
   recent_calendar_events: CalendarEvent[]
+  inventory_summary: InventorySkuSummary[]
 }
 
 type PartnerOverviewResponse = Partial<PartnerOverviewPayload> & {
   error?: string
+  inventory_summary?: InventorySkuSummary[]
 }
 
 /* ─── Constants ──────────────────────────────────────────────── */
@@ -116,21 +127,21 @@ const STAGE_CFG: Record<string, {
   headerCls: string
   borderCls: string
 }> = {
-  contact:      { label: "컨택",  dotCls: "bg-stone-400",   badgeCls: "bg-stone-100 text-stone-600",     headerCls: "text-stone-500",    borderCls: "border-l-stone-300"   },
-  quote:        { label: "견적",  dotCls: "bg-blue-500",    badgeCls: "bg-blue-100 text-blue-700",       headerCls: "text-blue-600",     borderCls: "border-l-blue-400"    },
-  contract:     { label: "계약",  dotCls: "bg-violet-500",  badgeCls: "bg-violet-100 text-violet-700",   headerCls: "text-violet-600",   borderCls: "border-l-violet-400"  },
-  confirmed:    { label: "확정",  dotCls: "bg-indigo-500",  badgeCls: "bg-indigo-100 text-indigo-700",   headerCls: "text-indigo-600",   borderCls: "border-l-indigo-400"  },
-  installation: { label: "설치",  dotCls: "bg-orange-500",  badgeCls: "bg-orange-100 text-orange-700",   headerCls: "text-orange-600",   borderCls: "border-l-orange-400"  },
-  payment:      { label: "수납",  dotCls: "bg-emerald-500", badgeCls: "bg-emerald-100 text-emerald-700", headerCls: "text-emerald-600",  borderCls: "border-l-emerald-400" },
-  closed:       { label: "완료",  dotCls: "bg-gray-400",    badgeCls: "bg-gray-100 text-gray-500",       headerCls: "text-gray-400",     borderCls: "border-l-gray-300"    },
-  cancelled:    { label: "취소",  dotCls: "bg-red-400",     badgeCls: "bg-red-100 text-red-500",         headerCls: "text-red-400",      borderCls: "border-l-red-300"     },
+  contact:      { label: "컨택",  dotCls: "bg-stone-400",   badgeCls: "bg-stone-100 text-stone-600",       headerCls: "text-stone-500",      borderCls: "border-l-stone-300"     },
+  quote:        { label: "견적",  dotCls: "bg-amber-500",   badgeCls: "bg-amber-100 text-amber-700",       headerCls: "text-amber-600",      borderCls: "border-l-amber-400"     },
+  contract:     { label: "계약",  dotCls: "bg-[#084734]",   badgeCls: "bg-[#ECFDF5] text-[#084734]",       headerCls: "text-[#084734]",      borderCls: "border-l-[#084734]"     },
+  confirmed:    { label: "확정",  dotCls: "bg-teal-500",    badgeCls: "bg-teal-100 text-teal-700",         headerCls: "text-teal-600",       borderCls: "border-l-teal-400"      },
+  installation: { label: "설치",  dotCls: "bg-orange-500",  badgeCls: "bg-orange-100 text-orange-700",     headerCls: "text-orange-600",     borderCls: "border-l-orange-400"    },
+  payment:      { label: "수납",  dotCls: "bg-emerald-500", badgeCls: "bg-emerald-100 text-emerald-700",   headerCls: "text-emerald-600",    borderCls: "border-l-emerald-400"   },
+  closed:       { label: "완료",  dotCls: "bg-stone-300",   badgeCls: "bg-stone-100 text-stone-500",       headerCls: "text-stone-400",      borderCls: "border-l-stone-300"     },
+  cancelled:    { label: "취소",  dotCls: "bg-red-400",     badgeCls: "bg-red-100 text-red-500",           headerCls: "text-red-400",        borderCls: "border-l-red-300"       },
 }
 
 const ACTIVITY_TYPE_CFG: Record<string, { cls: string; emoji: string }> = {
-  document: { cls: "bg-blue-100 text-blue-600",    emoji: "📄" },
-  schedule: { cls: "bg-orange-100 text-orange-600", emoji: "📅" },
-  payment:  { cls: "bg-emerald-100 text-emerald-600", emoji: "💰" },
-  default:  { cls: "bg-stone-100 text-stone-500",   emoji: "·"  },
+  document: { cls: "bg-amber-100 text-amber-700",      emoji: "📄" },
+  schedule: { cls: "bg-orange-100 text-orange-600",    emoji: "📅" },
+  payment:  { cls: "bg-emerald-100 text-emerald-600",  emoji: "💰" },
+  default:  { cls: "bg-stone-100 text-stone-500",      emoji: "·"  },
 }
 
 const CAL_SOURCE_EMOJI: Record<string, string> = {
@@ -199,6 +210,14 @@ const DEMO: PartnerOverviewPayload = {
   recent_calendar_events: [
     { id: "ce1", title: "견적 링크 만료 전 확인", starts_at: "2026-04-12T10:00:00+09:00", ends_at: "2026-04-12T11:00:00+09:00", source_type: "document_due" },
     { id: "ce2", title: "추가 계약 조정 미팅", starts_at: "2026-04-16T14:00:00+09:00", ends_at: "2026-04-16T15:00:00+09:00", source_type: "meeting" },
+  ],
+  inventory_summary: [
+    { sku: "IFP-110", product_name: "IFP 110인치", pending_qty: 2, shipped_qty: 1, delivered_qty: 4, total_qty: 7 },
+    { sku: "IFP-86",  product_name: "IFP 86인치",  pending_qty: 4, shipped_qty: 2, delivered_qty: 8, total_qty: 14 },
+    { sku: "IFP-75",  product_name: "IFP 75인치",  pending_qty: 1, shipped_qty: 0, delivered_qty: 5, total_qty: 6 },
+    { sku: "CAM-T1",  product_name: "카메라 T1",    pending_qty: 3, shipped_qty: 1, delivered_qty: 6, total_qty: 10 },
+    { sku: "CAM-S1",  product_name: "카메라 S1",    pending_qty: 1, shipped_qty: 0, delivered_qty: 3, total_qty: 4 },
+    { sku: "STAND",   product_name: "스탠드",        pending_qty: 2, shipped_qty: 2, delivered_qty: 7, total_qty: 11 },
   ],
 }
 
@@ -272,6 +291,7 @@ function normalizeOverviewPayload(payload: PartnerOverviewResponse): PartnerOver
     upcoming_installations: Array.isArray(payload.upcoming_installations) ? payload.upcoming_installations : [],
     recent_payments: Array.isArray(payload.recent_payments) ? payload.recent_payments : [],
     recent_calendar_events: Array.isArray(payload.recent_calendar_events) ? payload.recent_calendar_events : [],
+    inventory_summary: Array.isArray(payload.inventory_summary) ? payload.inventory_summary : [],
   }
 }
 
@@ -373,7 +393,7 @@ export function PartnerPortalHome() {
 
     // P4 — 캘린더 이벤트
     overview.recent_calendar_events.slice(0, 2).forEach(e => {
-      q.push({ id: `ce-${e.id}`, num: n++, label: e.title, sub: fmtShortDate(e.starts_at), href: "/partner/calendar", numCls: "bg-blue-500 text-white" })
+      q.push({ id: `ce-${e.id}`, num: n++, label: e.title, sub: fmtShortDate(e.starts_at), href: "/partner/calendar", numCls: "bg-teal-500 text-white" })
     })
 
     return q.slice(0, 7)
@@ -703,19 +723,145 @@ export function PartnerPortalHome() {
           </div>
 
           {/* ── Right Sidebar ─────────────────────────────────── */}
-          <div className="space-y-4">
+          <div className="space-y-5">
 
-            {/* All-clear state (no action items) */}
-            {actionQueue.length === 0 && (
-              <div className="rounded-2xl border border-emerald-200 bg-emerald-50 px-5 py-4">
-                <div className="flex items-center gap-2 text-sm text-emerald-700">
-                  <CheckCircle2 className="h-4 w-4" />
-                  <span className="font-medium">오늘 긴급 처리 사항이 없습니다</span>
+            {/* [1] 견적 대기 */}
+            <div className="rounded-2xl border border-[#e7e0d6] bg-white p-5">
+              <div className="mb-3 flex items-center justify-between">
+                <h2 className="text-sm font-semibold text-[#111110]">견적 대기</h2>
+                <div className="flex items-center gap-2">
+                  <span className={`rounded-full px-2 py-0.5 text-[11px] font-bold ${pipeline["quote"].length > 0 ? "bg-amber-100 text-amber-700" : "bg-stone-100 text-stone-400"}`}>
+                    {pipeline["quote"].length}건
+                  </span>
+                  <a href="/partner/documents" className="text-xs text-[#1a1a1a]/40 hover:text-[#1a1a1a]">
+                    문서 →
+                  </a>
                 </div>
               </div>
-            )}
+              {pipeline["quote"].length === 0 ? (
+                <p className="rounded-xl bg-[#faf6ef] px-3 py-3 text-xs text-[#1a1a1a]/40">대기 중인 견적이 없습니다</p>
+              ) : (
+                <div className="space-y-2">
+                  <div className="rounded-xl bg-amber-50 px-3 py-2.5">
+                    <p className="text-[11px] text-amber-700/60">합계 금액</p>
+                    <p className="text-base font-bold text-amber-900">
+                      {fmt(pipeline["quote"].reduce((s, d) => s + (d.contracted_amount || d.expected_amount), 0))}
+                    </p>
+                  </div>
+                  {pipeline["quote"].map(deal => (
+                    <div key={deal.id} className="flex items-center justify-between gap-2 rounded-xl border border-[#ece4d8] bg-[#faf6ef] px-3 py-2.5">
+                      <div className="min-w-0">
+                        <p className="truncate text-sm font-medium text-[#111110]">{deal.title}</p>
+                        <p className="mt-0.5 truncate text-xs text-[#1a1a1a]/45">{deal.customer_name}</p>
+                      </div>
+                      <span className="shrink-0 text-sm font-semibold text-[#111110]">
+                        {fmt(deal.contracted_amount || deal.expected_amount)}
+                      </span>
+                    </div>
+                  ))}
+                </div>
+              )}
+            </div>
 
-            {/* Upcoming Schedule */}
+            {/* [2] 계약 대기 */}
+            <div className="rounded-2xl border border-[#e7e0d6] bg-white p-5">
+              <div className="mb-3 flex items-center justify-between">
+                <h2 className="text-sm font-semibold text-[#111110]">계약 대기</h2>
+                <div className="flex items-center gap-2">
+                  <span className={`rounded-full px-2 py-0.5 text-[11px] font-bold ${pipeline["contract"].length > 0 ? "bg-[#ECFDF5] text-[#084734]" : "bg-stone-100 text-stone-400"}`}>
+                    {pipeline["contract"].length}건
+                  </span>
+                  <a href="/partner/documents" className="text-xs text-[#1a1a1a]/40 hover:text-[#1a1a1a]">
+                    계약서 →
+                  </a>
+                </div>
+              </div>
+              {pipeline["contract"].length === 0 ? (
+                <p className="rounded-xl bg-[#faf6ef] px-3 py-3 text-xs text-[#1a1a1a]/40">서명 대기 계약이 없습니다</p>
+              ) : (
+                <div className="space-y-2">
+                  <div className="rounded-xl bg-[#ECFDF5] px-3 py-2.5">
+                    <p className="text-[11px] text-[#084734]/60">계약 총액</p>
+                    <p className="text-base font-bold text-[#084734]">
+                      {fmt(pipeline["contract"].reduce((s, d) => s + d.contracted_amount, 0))}
+                    </p>
+                  </div>
+                  {pipeline["contract"].map(deal => (
+                    <div key={deal.id} className="flex items-center justify-between gap-2 rounded-xl border border-[#D1FAE5] bg-[#ECFDF5] px-3 py-2.5">
+                      <div className="min-w-0">
+                        <p className="truncate text-sm font-medium text-[#111110]">{deal.title}</p>
+                        <p className="mt-0.5 truncate text-xs text-[#1a1a1a]/45">{deal.customer_name}</p>
+                      </div>
+                      <div className="flex shrink-0 items-center gap-1.5">
+                        <span className="rounded-full bg-[#084734]/10 px-2 py-0.5 text-[10px] font-semibold text-[#084734]">서명 대기</span>
+                        <span className="text-sm font-semibold text-[#111110]">
+                          {fmt(deal.contracted_amount)}
+                        </span>
+                      </div>
+                    </div>
+                  ))}
+                </div>
+              )}
+            </div>
+
+            {/* [3] 물량·재고 */}
+            <div className="rounded-2xl border border-[#e7e0d6] bg-white p-5">
+              <div className="mb-3 flex items-center justify-between">
+                <h2 className="text-sm font-semibold text-[#111110]">물량 · 재고</h2>
+                <span className="text-xs text-[#1a1a1a]/40">출하 현황</span>
+              </div>
+              {overview.inventory_summary.length === 0 ? (
+                <p className="rounded-xl bg-[#faf6ef] px-3 py-3 text-xs text-[#1a1a1a]/40">등록된 출하 내역이 없습니다</p>
+              ) : (
+                <div className="space-y-3">
+                  {overview.inventory_summary.map(item => {
+                    const deliveredPct = item.total_qty > 0
+                      ? Math.round((item.delivered_qty / item.total_qty) * 100)
+                      : 0
+                    return (
+                      <div key={item.sku}>
+                        <div className="mb-1.5 flex items-center justify-between gap-2">
+                          <div className="min-w-0">
+                            <span className="text-sm font-medium text-[#111110]">{item.product_name}</span>
+                            <span className="ml-1.5 text-[11px] text-[#1a1a1a]/35">{item.sku}</span>
+                          </div>
+                          <span className="shrink-0 text-sm font-bold text-[#111110]">
+                            {item.total_qty}<span className="text-xs font-normal text-[#1a1a1a]/40">대</span>
+                          </span>
+                        </div>
+                        {/* 진행 바 */}
+                        <div className="mb-1.5 h-1.5 overflow-hidden rounded-full bg-[#ece4d8]">
+                          <div
+                            className="h-full rounded-full bg-[#084734] transition-all"
+                            style={{ width: `${deliveredPct}%` }}
+                          />
+                        </div>
+                        {/* 상태 칩 */}
+                        <div className="flex gap-1.5">
+                          {item.pending_qty > 0 && (
+                            <span className="rounded-full bg-amber-100 px-2 py-0.5 text-[10px] font-semibold text-amber-700">
+                              대기 {item.pending_qty}
+                            </span>
+                          )}
+                          {item.shipped_qty > 0 && (
+                            <span className="rounded-full bg-teal-100 px-2 py-0.5 text-[10px] font-semibold text-teal-700">
+                              출하 {item.shipped_qty}
+                            </span>
+                          )}
+                          {item.delivered_qty > 0 && (
+                            <span className="rounded-full bg-[#ECFDF5] px-2 py-0.5 text-[10px] font-semibold text-[#084734]">
+                              납품 {item.delivered_qty}
+                            </span>
+                          )}
+                        </div>
+                      </div>
+                    )
+                  })}
+                </div>
+              )}
+            </div>
+
+            {/* [4] 다가오는 일정 */}
             <div className="rounded-2xl border border-[#e7e0d6] bg-white p-5">
               <div className="mb-4 flex items-center justify-between">
                 <h2 className="text-sm font-semibold text-[#111110]">다가오는 일정</h2>
@@ -748,7 +894,6 @@ export function PartnerPortalHome() {
                     </div>
                   )
                 })}
-
                 {overview.recent_calendar_events.slice(0, 2).map(event => (
                   <div
                     key={event.id}
@@ -766,7 +911,7 @@ export function PartnerPortalHome() {
               </div>
             </div>
 
-            {/* Recent Payments */}
+            {/* [5] 최근 수납 */}
             {overview.recent_payments.length > 0 && (
               <div className="rounded-2xl border border-[#e7e0d6] bg-white p-5">
                 <h2 className="mb-4 text-sm font-semibold text-[#111110]">최근 수납</h2>
@@ -792,30 +937,6 @@ export function PartnerPortalHome() {
                 </div>
               </div>
             )}
-
-            {/* Quick Nav */}
-            <div className="rounded-2xl border border-[#e7e0d6] bg-white p-5">
-              <h2 className="mb-3 text-sm font-semibold text-[#111110]">바로 가기</h2>
-              <div className="space-y-1.5">
-                {[
-                  { label: "거래 워크스페이스", href: "/partner/workspace", emoji: "📋" },
-                  { label: "문서 (견적·계약)",  href: "/partner/documents",  emoji: "📄" },
-                  { label: "설치 캘린더",        href: "/partner/calendar",   emoji: "📅" },
-                ].map(link => (
-                  <a
-                    key={link.href}
-                    href={link.href}
-                    className="group flex items-center justify-between rounded-xl border border-[#ece4d8] bg-[#faf6ef] px-4 py-3 text-sm text-[#1a1a1a]/60 transition-colors hover:bg-white hover:text-[#111110]"
-                  >
-                    <span className="flex items-center gap-2.5">
-                      <span className="text-base">{link.emoji}</span>
-                      {link.label}
-                    </span>
-                    <ArrowRight className="h-4 w-4 transition-transform group-hover:translate-x-0.5" />
-                  </a>
-                ))}
-              </div>
-            </div>
           </div>
         </div>
       </div>
