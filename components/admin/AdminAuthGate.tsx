@@ -82,7 +82,7 @@ export default function AdminAuthGate({ onAuth }: AdminAuthGateProps) {
               onChange={(e) => setPassword(e.target.value)}
               autoFocus
             />
-            {error ? <p className="text-[13px] text-red-500">{error}</p> : null}
+            {error ? <p className="text-[13px] text-[#B85C33]">{error}</p> : null}
             <Button type="submit" className="w-full" disabled={loading || !password}>
               {loading ? "확인 중..." : "로그인"}
             </Button>

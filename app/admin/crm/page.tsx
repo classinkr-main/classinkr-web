@@ -17,7 +17,7 @@ const STATUS_LABEL: Record<LeadStatus, string> = {
   new: "신규", contacted: "연락중", converted: "전환", closed: "종료",
 }
 const STATUS_COLOR: Record<LeadStatus, string> = {
-  new: "bg-blue-50 text-blue-600",
+  new: "bg-[#ECFDF5] text-[#084734]",
   contacted: "bg-yellow-50 text-yellow-600",
   converted: "bg-green-50 text-green-600",
   closed: "bg-[#f0f0ec] text-[#1a1a1a]/40",
@@ -36,7 +36,7 @@ const LOG_RESULT_COLOR: Record<ContactLogResult, string> = {
   answered: "text-green-600",
   no_answer: "text-[#1a1a1a]/40",
   callback: "text-yellow-600",
-  meeting_set: "text-blue-600",
+  meeting_set: "text-[#084734]",
 }
 
 // ─── 리드 스코어 계산 ───────────────────────────────────────────
@@ -125,7 +125,7 @@ function CopyButton({ value }: { value: string }) {
 function Toast({ msg, type }: { msg: string; type: "success" | "error" }) {
   return (
     <div className={`fixed bottom-6 right-6 z-[60] flex items-center gap-2.5 px-4 py-3 rounded-xl shadow-xl text-[13px] font-medium ${
-      type === "success" ? "bg-[#111110] text-white" : "bg-red-500 text-white"
+      type === "success" ? "bg-[#111110] text-white" : "bg-[#B85C33] text-white"
     }`}>
       {msg}
     </div>
@@ -471,7 +471,7 @@ function LeadDrawer({
                     </div>
                     <button
                       onClick={() => onDeleteLog(log.id)}
-                      className="opacity-0 group-hover:opacity-100 p-1 text-[#1a1a1a]/25 hover:text-red-400 transition-all shrink-0"
+                      className="opacity-0 group-hover:opacity-100 p-1 text-[#1a1a1a]/25 hover:text-[#B85C33] transition-all shrink-0"
                     >
                       <X className="w-3 h-3" />
                     </button>
@@ -517,7 +517,7 @@ function LeadDrawer({
         <div className="px-6 py-4 border-t border-[#e8e8e4] flex items-center justify-between gap-3">
           <button
             onClick={() => onDelete(lead.id)}
-            className="flex items-center gap-2 text-[12px] text-red-400 hover:text-red-500 transition-colors"
+            className="flex items-center gap-2 text-[12px] text-[#B85C33] hover:text-[#9A4A27] transition-colors"
           >
             <Trash2 className="w-3.5 h-3.5" />이 리드 삭제
           </button>
@@ -750,7 +750,7 @@ export default function CrmPage() {
           {todayFollowUps.length > 0 && (
             <button
               onClick={() => setFilter("contacted")}
-              className="flex items-center gap-2 px-4 py-2.5 rounded-xl bg-blue-50 border border-blue-200 text-[13px] text-blue-700 font-medium hover:bg-blue-100 transition-colors"
+              className="flex items-center gap-2 px-4 py-2.5 rounded-xl bg-[#ECFDF5] border border-[#D1FAE5] text-[13px] text-[#084734] font-medium hover:bg-[#D1FAE5] transition-colors"
             >
               <Bell className="w-3.5 h-3.5" />
               오늘 팔로업 {todayFollowUps.length}건
@@ -759,7 +759,7 @@ export default function CrmPage() {
           {overdueFollowUps.length > 0 && (
             <button
               onClick={() => setFilter("contacted")}
-              className="flex items-center gap-2 px-4 py-2.5 rounded-xl bg-red-50 border border-red-200 text-[13px] text-red-600 font-medium hover:bg-red-100 transition-colors"
+              className="flex items-center gap-2 px-4 py-2.5 rounded-xl bg-[#FEF3EE] border border-[#F6D5C5] text-[13px] text-[#B85C33] font-medium hover:bg-[#F6D5C5] transition-colors"
             >
               <Bell className="w-3.5 h-3.5" />
               기한 초과 {overdueFollowUps.length}건
@@ -836,7 +836,7 @@ export default function CrmPage() {
                     <td className="px-4 py-3 text-[#1a1a1a]/60">{lead.phone ?? lead.email ?? "—"}</td>
                     <td className="px-4 py-3 whitespace-nowrap text-[12px]">
                       {lead.follow_up_at ? (
-                        <span className={isOverdue ? "text-red-500 font-medium" : isTodayFollowUp ? "text-blue-600 font-medium" : "text-[#1a1a1a]/40"}>
+                        <span className={isOverdue ? "text-[#B85C33] font-medium" : isTodayFollowUp ? "text-[#084734] font-medium" : "text-[#1a1a1a]/40"}>
                           {isOverdue ? "⚠ " : isTodayFollowUp ? "● " : ""}
                           {new Date(lead.follow_up_at).toLocaleDateString("ko-KR", { month: "2-digit", day: "2-digit" })}
                         </span>

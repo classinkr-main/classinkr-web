@@ -9,14 +9,14 @@ const STAGE_LABEL: Record<DealStage, string> = {
 }
 
 const STAGE_DOT: Record<DealStage, string> = {
-  contact: "bg-stone-400",
-  quote: "bg-blue-500",
-  contract: "bg-violet-500",
-  confirmed: "bg-indigo-500",
+  contact: "bg-[#A39E98]",
+  quote: "bg-[#084734]",
+  contract: "bg-[#065c41]",
+  confirmed: "bg-[#065c41]",
   installation: "bg-orange-500",
   payment: "bg-emerald-500",
-  closed: "bg-gray-400",
-  cancelled: "bg-red-400",
+  closed: "bg-[#A39E98]",
+  cancelled: "bg-[#B85C33]",
 }
 
 interface Props {

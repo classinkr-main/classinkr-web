@@ -22,11 +22,11 @@ const STATUS_LABEL: Record<ContractStatus, string> = {
 }
 const STATUS_COLOR: Record<ContractStatus, string> = {
   draft: "bg-[#f0f0ec] text-[#1a1a1a]/50",
-  sent: "bg-blue-50 text-blue-600",
+  sent: "bg-[#ECFDF5] text-[#084734]",
   partner_signed: "bg-yellow-50 text-yellow-700",
-  admin_signed: "bg-green-50 text-green-700",
-  completed: "bg-green-100 text-green-800 font-semibold",
-  cancelled: "bg-red-50 text-red-400",
+  admin_signed: "bg-[#D1FAE5] text-[#065c41]",
+  completed: "bg-[#D1FAE5] text-[#065c41] font-semibold",
+  cancelled: "bg-[#FEF3EE] text-[#B85C33]",
 }
 
 function adminFetch(url: string, options?: RequestInit) {
@@ -85,7 +85,7 @@ function SignatureCanvas({ onSave }: { onSave: (dataUrl: string) => void }) {
 
   return (
     <div className="space-y-2">
-      <div className="border-2 border-dashed border-[#e8e8e4] rounded-xl overflow-hidden bg-white">
+      <div className="border border-dashed border-[#e8e8e4] rounded-xl overflow-hidden bg-white">
         <canvas
           ref={canvasRef}
           width={480}
@@ -254,7 +254,7 @@ export default function ContractsPage() {
                   <td className="px-4 py-3">
                     <div className="flex items-center justify-end gap-1">
                       {c.status === "draft" && (
-                        <Button variant="ghost" size="sm" className="h-7 px-2 text-xs text-blue-600" onClick={() => handleSend(c)}>
+                        <Button variant="ghost" size="sm" className="h-7 px-2 text-xs text-[#084734]" onClick={() => handleSend(c)}>
                           <Send className="w-3.5 h-3.5 mr-1" />발송
                         </Button>
                       )}
@@ -264,12 +264,12 @@ export default function ContractsPage() {
                         </Button>
                       )}
                       {c.status === "partner_signed" && (
-                        <Button variant="ghost" size="sm" className="h-7 px-2 text-xs text-purple-600"
+                        <Button variant="ghost" size="sm" className="h-7 px-2 text-xs text-[#615D59]"
                           onClick={() => { setSelected(c); setShowSign(true) }}>
                           <PenLine className="w-3.5 h-3.5 mr-1" />서명
                         </Button>
                       )}
-                      <Button variant="ghost" size="sm" className="h-7 px-2 text-xs text-red-400" onClick={() => handleDelete(c.id)}>
+                      <Button variant="ghost" size="sm" className="h-7 px-2 text-xs text-[#B85C33]" onClick={() => handleDelete(c.id)}>
                         <Trash2 className="w-3.5 h-3.5" />
                       </Button>
                     </div>

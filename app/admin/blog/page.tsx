@@ -245,7 +245,7 @@ export default function AdminBlogPage() {
                                 tab === key
                                     ? "bg-white/20 text-white"
                                     : key === "trash"
-                                        ? "bg-red-100 text-red-500"
+                                        ? "bg-[#FEF3EE] text-[#B85C33]"
                                         : "bg-[#e8e8e4] text-[#1a1a1a]/60"
                             }`}>
                                 {count}
@@ -257,7 +257,7 @@ export default function AdminBlogPage() {
 
             {/* Trash warning banner */}
             {tab === "trash" && trashedPosts.length > 0 && (
-                <div className="mb-4 flex items-start gap-2 rounded-lg border border-red-100 bg-red-50 px-3 py-2 text-[13px] text-red-600">
+                <div className="mb-4 flex items-start gap-2 rounded-lg border border-[#F6D5C5] bg-[#FEF3EE] px-3 py-2 text-[13px] text-[#B85C33]">
                     <AlertTriangle className="w-4 h-4 shrink-0" />
                     휴지통의 글은 복원하거나 완전히 삭제할 수 있습니다. 완전 삭제는 되돌릴 수 없습니다.
                 </div>
@@ -311,8 +311,8 @@ export default function AdminBlogPage() {
                 <div className="fixed inset-0 z-50 flex items-center justify-center bg-black/40 backdrop-blur-sm">
                     <div className="mx-4 w-full max-w-sm rounded-2xl bg-white p-6 shadow-xl">
                         <div className="flex items-center gap-3 mb-3">
-                            <div className="w-10 h-10 rounded-full bg-red-100 flex items-center justify-center">
-                                <AlertTriangle className="w-5 h-5 text-red-500" />
+                            <div className="w-10 h-10 rounded-full bg-[#FEF3EE] flex items-center justify-center">
+                                <AlertTriangle className="w-5 h-5 text-[#B85C33]" />
                             </div>
                             <div>
                                 <p className="font-semibold text-[#111110]">완전 삭제</p>
@@ -332,7 +332,7 @@ export default function AdminBlogPage() {
                                 취소
                             </Button>
                             <Button
-                                className="flex-1 bg-red-500 hover:bg-red-600 text-white"
+                                className="flex-1 bg-[#B85C33] hover:bg-[#9A4A27] text-white"
                                 onClick={handlePermanentDelete}
                                 disabled={formLoading}
                             >
@@ -401,7 +401,7 @@ function TrashTable({
                                     <Button
                                         variant="ghost"
                                         size="sm"
-                                        className="h-7 text-[12px] text-red-400 hover:text-red-500 hover:bg-red-50"
+                                        className="h-7 text-[12px] text-[#B85C33] hover:text-[#9A4A27] hover:bg-[#FEF3EE]"
                                         onClick={() => onPermanentDelete(post)}
                                     >
                                         <Trash2 className="w-3.5 h-3.5 mr-1" />

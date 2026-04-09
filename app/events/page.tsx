@@ -163,7 +163,7 @@ const events: EventItem[] = [
 function StatusBadge({ status }: { status: EventItem["status"] }) {
     const styles = {
         "진행 중": "bg-emerald-50 text-emerald-700 border border-emerald-200",
-        "예정": "bg-blue-50 text-blue-700 border border-blue-200",
+        "예정": "bg-[#ECFDF5] text-[#084734] border border-[#D1FAE5]",
         "마감": "bg-[#f0f0ec] text-[#1a1a1a]/40 border border-[#e8e8e4]",
     }
     return (
@@ -245,7 +245,7 @@ export default function EventsPage() {
                                     진행 중 {events.filter(e => e.status === "진행 중").length}건
                                 </span>
                                 <span className="flex items-center gap-2">
-                                    <span className="w-2 h-2 rounded-full bg-blue-400" />
+                                    <span className="w-2 h-2 rounded-full bg-[#084734]" />
                                     예정 {events.filter(e => e.status === "예정").length}건
                                 </span>
                             </motion.div>

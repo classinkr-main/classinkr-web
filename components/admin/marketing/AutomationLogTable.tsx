@@ -11,7 +11,7 @@ interface Props {
 
 const STATUS_CONFIG = {
   sent:    { icon: CheckCircle, color: "text-green-500",  bg: "bg-green-50",  label: "발송 완료" },
-  failed:  { icon: XCircle,    color: "text-red-400",    bg: "bg-red-50",    label: "실패" },
+  failed:  { icon: XCircle,    color: "text-[#B85C33]",  bg: "bg-[#FEF3EE]", label: "실패" },
   pending: { icon: Clock,      color: "text-yellow-500", bg: "bg-yellow-50", label: "진행 중" },
 }
 
@@ -116,11 +116,11 @@ export default function AutomationLogTable({ logs, rules }: Props) {
                 {isExpanded && (
                   <div className="px-4 pb-4 bg-[#FAFAF8] border-t border-[#e8e8e4]/40">
                     {log.status === "failed" && log.errorMessage && (
-                      <div className="flex items-start gap-2 mt-3 p-3 rounded-lg bg-red-50 border border-red-100">
-                        <AlertTriangle className="w-3.5 h-3.5 text-red-400 flex-shrink-0 mt-0.5" />
+                      <div className="flex items-start gap-2 mt-3 p-3 rounded-lg bg-[#FEF3EE] border border-[#F6D5C5]">
+                        <AlertTriangle className="w-3.5 h-3.5 text-[#B85C33] flex-shrink-0 mt-0.5" />
                         <div>
-                          <p className="text-[11px] font-semibold text-red-600 mb-0.5">오류 메시지</p>
-                          <p className="text-[11px] text-red-500 font-mono break-all">{log.errorMessage}</p>
+                          <p className="text-[11px] font-semibold text-[#B85C33] mb-0.5">오류 메시지</p>
+                          <p className="text-[11px] text-[#9A4A27] font-mono break-all">{log.errorMessage}</p>
                         </div>
                       </div>
                     )}

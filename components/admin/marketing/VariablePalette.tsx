@@ -5,9 +5,9 @@
 export const VARIABLE_GROUPS = [
   {
     label: "수신자",
-    chipClass: "bg-blue-50 border-blue-100 text-blue-700 hover:bg-blue-100",
-    hlBg: "#dbeafe",
-    hlColor: "#1e40af",
+    chipClass: "bg-[#ECFDF5] border-[#D1FAE5] text-[#084734] hover:bg-[#D1FAE5]",
+    hlBg: "#D1FAE5",
+    hlColor: "#084734",
     vars: [
       { key: "name",  label: "이름",   example: "홍길동" },
       { key: "email", label: "이메일", example: "sample@abc.kr" },
@@ -27,9 +27,9 @@ export const VARIABLE_GROUPS = [
   },
   {
     label: "시스템",
-    chipClass: "bg-violet-50 border-violet-100 text-violet-700 hover:bg-violet-100",
-    hlBg: "#ede9fe",
-    hlColor: "#5b21b6",
+    chipClass: "bg-[#F6F5F4] border-[#e8e8e4] text-[#615D59] hover:bg-[#e8e8e4]",
+    hlBg: "#F6F5F4",
+    hlColor: "#615D59",
     vars: [
       { key: "date",            label: "발송일",   example: "2026년 3월 26일" },
       { key: "unsubscribe_url", label: "수신거부", example: "(링크 자동생성)" },
@@ -144,7 +144,7 @@ export default function VariablePalette({
       {showAiBlock && (
         <div className="flex items-center gap-1.5 pl-3 border-l border-[#e8e8e4]">
           {!compact && (
-            <span className="text-[10px] font-semibold text-violet-400 uppercase tracking-wider shrink-0 select-none">
+            <span className="text-[10px] font-semibold text-[#6EE7B7] uppercase tracking-wider shrink-0 select-none">
               AI 블록
             </span>
           )}
@@ -152,7 +152,7 @@ export default function VariablePalette({
             type="button"
             onClick={() => onInsert("ai: ")}
             title="AI가 수신자별 맞춤 내용을 생성합니다 — 클릭하여 삽입"
-            className="flex items-center gap-1 px-2 py-0.5 rounded-md border border-violet-200 bg-violet-50 text-violet-700 hover:bg-violet-100 text-[11px] font-medium transition-all opacity-80 hover:opacity-100"
+            className="flex items-center gap-1 px-2 py-0.5 rounded-md border border-[#D1FAE5] bg-[#ECFDF5] text-[#084734] hover:bg-[#D1FAE5] text-[11px] font-medium transition-all opacity-80 hover:opacity-100"
           >
             <span className="text-[10px]">✦</span>
             <span className="font-mono">{"{ai: 프롬프트}"}</span>

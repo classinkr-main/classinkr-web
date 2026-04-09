@@ -10,7 +10,7 @@ const STATUS_LABEL: Record<LeadStatus, string> = {
   new: "신규", contacted: "연락중", converted: "전환", closed: "종료",
 }
 const STATUS_COLOR: Record<LeadStatus, string> = {
-  new:       "bg-blue-50 text-blue-600",
+  new:       "bg-[#ECFDF5] text-[#084734]",
   contacted: "bg-yellow-50 text-yellow-600",
   converted: "bg-green-50 text-green-600",
   closed:    "bg-[#f0f0ec] text-[#1a1a1a]/40",

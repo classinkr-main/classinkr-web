@@ -40,8 +40,8 @@ export default function SmsComposer() {
 
       <div className="bg-white rounded-xl border border-[#e8e8e4] p-6">
         <div className="flex items-center gap-2 mb-5">
-          <div className="w-7 h-7 rounded-lg bg-sky-100 flex items-center justify-center">
-            <MessageSquare className="w-3.5 h-3.5 text-sky-600" />
+          <div className="w-7 h-7 rounded-lg bg-[#ECFDF5] flex items-center justify-center">
+            <MessageSquare className="w-3.5 h-3.5 text-[#084734]" />
           </div>
           <h3 className="text-[15px] font-semibold text-[#111110]">문자(SMS/LMS) 발송</h3>
         </div>
@@ -53,8 +53,8 @@ export default function SmsComposer() {
               onClick={() => setAiMode(!aiMode)}
               className={`flex items-center gap-1.5 px-3 py-1.5 rounded-lg border text-[12px] font-medium transition-colors ${
                 aiMode
-                  ? "bg-violet-600 text-white border-violet-600"
-                  : "bg-white text-[#1a1a1a]/50 border-[#e8e8e4] hover:border-violet-300 hover:text-violet-600"
+                  ? "bg-[#084734] text-white border-[#084734]"
+                  : "bg-white text-[#1a1a1a]/50 border-[#e8e8e4] hover:border-[#D1FAE5] hover:text-[#084734]"
               }`}
             >
               <Sparkles className="w-3.5 h-3.5" />
@@ -76,7 +76,7 @@ export default function SmsComposer() {
                 onChange={(e) => setAiBrief(e.target.value)}
                 rows={2}
                 placeholder="예: 데모 신청 감사 문자. 학원명 포함, 친근한 톤으로 80자 이내."
-                className="w-full px-3 py-2 border border-[#e8e8e4] rounded-lg text-[13px] focus:outline-none focus:ring-2 focus:ring-violet-500/20 resize-none placeholder:text-[#1a1a1a]/25"
+                className="w-full px-3 py-2 border border-[#e8e8e4] rounded-lg text-[13px] focus:outline-none focus:ring-2 focus:ring-[#084734]/20 resize-none placeholder:text-[#1a1a1a]/25"
               />
             </div>
           )}
@@ -89,7 +89,7 @@ export default function SmsComposer() {
                   문자 내용 *
                 </label>
                 <span className={`text-[11px] font-mono ${
-                  overLimit ? "text-red-500" : isLmms ? "text-amber-500" : "text-[#1a1a1a]/40"
+                  overLimit ? "text-[#B85C33]" : isLmms ? "text-amber-500" : "text-[#1a1a1a]/40"
                 }`}>
                   {body.length} / {charLimit}자
                   {isLmms && !overLimit && <span className="ml-1 text-amber-500">(LMS)</span>}
@@ -102,8 +102,8 @@ export default function SmsComposer() {
                 placeholder={`[클래스인]\n안녕하세요 {name}님,\n{org}에 클래스인을 소개드립니다.`}
                 className={`w-full px-3 py-2.5 border rounded-lg text-[13px] focus:outline-none focus:ring-2 resize-none placeholder:text-[#1a1a1a]/25 leading-relaxed ${
                   overLimit
-                    ? "border-red-300 focus:ring-red-500/20"
-                    : "border-[#e8e8e4] focus:ring-sky-500/20"
+                    ? "border-[#F6D5C5] focus:ring-[#B85C33]/20"
+                    : "border-[#e8e8e4] focus:ring-[#084734]/20"
                 }`}
               />
               <div className="flex gap-3 mt-1.5">
@@ -114,7 +114,7 @@ export default function SmsComposer() {
                   <p className="text-[10px] text-amber-500">90자 초과: LMS (장문, 요금 다름)</p>
                 )}
                 {overLimit && (
-                  <p className="text-[10px] text-red-500">2000자 초과: 발송 불가</p>
+                  <p className="text-[10px] text-[#B85C33]">2000자 초과: 발송 불가</p>
                 )}
               </div>
             </div>
@@ -132,8 +132,8 @@ export default function SmsComposer() {
                   variant="secondary"
                   className={`cursor-pointer text-[11px] px-2 py-0.5 transition-colors ${
                     targetTags.includes(tag)
-                      ? "bg-sky-600 text-white hover:bg-sky-700"
-                      : "bg-white text-[#1a1a1a]/60 hover:bg-sky-50 hover:text-sky-700 border border-[#e8e8e4]"
+                      ? "bg-[#084734] text-white hover:bg-[#065c41]"
+                      : "bg-white text-[#1a1a1a]/60 hover:bg-[#ECFDF5] hover:text-[#084734] border border-[#e8e8e4]"
                   }`}
                   onClick={() => toggleTag(tag)}
                 >
@@ -164,7 +164,7 @@ export default function SmsComposer() {
           <div className="flex items-center gap-3">
             <Button
               disabled
-              className="bg-sky-200 text-sky-400 cursor-not-allowed"
+              className="bg-[#f0f0ec] text-[#A39E98] cursor-not-allowed"
             >
               <MessageSquare className="w-3.5 h-3.5 mr-1.5" />
               문자 발송 (연동 준비 중)

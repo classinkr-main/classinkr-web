@@ -115,7 +115,7 @@ function checkToneClass(status: PreSendCheckStatus) {
     : status === "warning"
       ? "border-amber-100 bg-amber-50 text-amber-700"
       : status === "error"
-        ? "border-red-100 bg-red-50 text-red-600"
+        ? "border-[#F6D5C5] bg-[#FEF3EE] text-[#B85C33]"
         : "border-[#e8e8e4] bg-[#f0f0ec] text-[#1a1a1a]/55"
 }
 
@@ -220,7 +220,7 @@ function StatCard({
       : tone === "warning"
         ? "bg-amber-50 text-amber-700"
         : tone === "danger"
-          ? "bg-red-50 text-red-600"
+          ? "bg-[#FEF3EE] text-[#B85C33]"
           : "bg-[#f0f0ec] text-[#1a1a1a]/50"
 
   return (
@@ -343,7 +343,7 @@ function MiniBadge({ children, tone = "neutral" }: { children: ReactNode; tone?:
       : tone === "warning"
         ? "bg-amber-50 text-amber-700"
         : tone === "danger"
-          ? "bg-red-50 text-red-600"
+          ? "bg-[#FEF3EE] text-[#B85C33]"
           : "bg-[#f0f0ec] text-[#1a1a1a]/55"
   return <span className={`inline-flex items-center rounded-full px-2 py-0.5 text-[11px] font-medium ${className}`}>{children}</span>
 }
@@ -1503,7 +1503,7 @@ export default function AdminMarketingPage() {
                     </div>
                     <div className="rounded-2xl border border-[#e8e8e4] bg-[#fafaf8] p-4">
                       <p className="text-[10px] font-medium uppercase tracking-[0.18em] text-[#1a1a1a]/35">실패</p>
-                      <p className={`mt-2 text-[24px] font-bold tracking-[-0.02em] ${recentFailedCampaigns.length > 0 ? "text-red-500" : "text-[#111110]"}`}>
+                      <p className={`mt-2 text-[24px] font-bold tracking-[-0.02em] ${recentFailedCampaigns.length > 0 ? "text-[#B85C33]" : "text-[#111110]"}`}>
                         {recentFailedCampaigns.length}건
                       </p>
                     </div>
@@ -1527,10 +1527,10 @@ export default function AdminMarketingPage() {
                     </div>
                   )}
                   {failedCount > 0 && (
-                    <div className="rounded-2xl border border-red-100 bg-red-50 px-4 py-3">
-                      <p className="text-[12px] font-medium text-red-700">실패 캠페인 {failedCount}건 확인 필요</p>
-                      <p className="mt-1 text-[11px] text-red-600/70">웹훅 설정이나 이메일 설정을 점검하세요.</p>
-                      <Button size="sm" variant="outline" className="mt-2 h-7 text-[11px] border-red-200 bg-white text-red-700 hover:bg-red-50" onClick={() => setCampaignStatusFilter("failed")}>
+                    <div className="rounded-2xl border border-[#F6D5C5] bg-[#FEF3EE] px-4 py-3">
+                      <p className="text-[12px] font-medium text-[#B85C33]">실패 캠페인 {failedCount}건 확인 필요</p>
+                      <p className="mt-1 text-[11px] text-[#9A4A27]/70">웹훅 설정이나 이메일 설정을 점검하세요.</p>
+                      <Button size="sm" variant="outline" className="mt-2 h-7 text-[11px] border-[#F6D5C5] bg-white text-[#B85C33] hover:bg-[#FEF3EE]" onClick={() => setCampaignStatusFilter("failed")}>
                         실패 필터 보기
                       </Button>
                     </div>
@@ -1598,7 +1598,7 @@ export default function AdminMarketingPage() {
       {toast && (
         <div
           className={`fixed bottom-6 right-6 z-50 flex items-center gap-2.5 rounded-xl px-4 py-3 text-[13px] font-medium shadow-xl ${
-            toast.kind === "success" ? "bg-[#111110] text-white" : "bg-red-500 text-white"
+            toast.kind === "success" ? "bg-[#111110] text-white" : "bg-[#B85C33] text-white"
           }`}
         >
           {toast.kind === "success" ? <CheckCircle2 className="h-4 w-4" /> : <XCircle className="h-4 w-4" />}

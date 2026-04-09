@@ -383,6 +383,7 @@ function normalizeQuoteDetails(
   const lineItems = Array.isArray(quote.lineItems) ? quote.lineItems.map((item, index) => normalizeQuoteLineItem(item, index)) : []
 
   return {
+    templateId: toOptionalString(quote.templateId),
     estimateNumber: toOptionalString(quote.estimateNumber),
     workflowStatus: isEnumValue(QUOTE_WORKFLOW_STATUSES, quote.workflowStatus) ? quote.workflowStatus : undefined,
     issuedAt: formatDate(toOptionalString(quote.issuedAt) ?? defaults?.issuedAt),

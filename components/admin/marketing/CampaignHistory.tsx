@@ -24,7 +24,7 @@ interface Props {
 
 const STATUS_STYLE: Record<string, string> = {
   sent: "bg-green-50 text-green-700",
-  failed: "bg-red-50 text-red-500",
+  failed: "bg-[#FEF3EE] text-[#B85C33]",
   draft: "bg-amber-50 text-amber-700",
 }
 const STATUS_LABEL: Record<string, string> = {

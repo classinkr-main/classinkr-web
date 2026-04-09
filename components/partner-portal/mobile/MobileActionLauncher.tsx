@@ -469,7 +469,7 @@ export function MobileActionLauncher({
               </div>
 
               {aiError && (
-                <div className="mt-3 rounded-2xl border border-red-200 bg-red-50 px-4 py-3 text-sm text-red-700">
+                <div className="mt-3 rounded-2xl border border-[#F6D5C5] bg-[#FEF3EE] px-4 py-3 text-sm text-[#B85C33]">
                   {aiError}
                 </div>
               )}

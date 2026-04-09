@@ -418,7 +418,7 @@ export default function ProductPage() {
                             <PenTool className="w-7 h-7 text-[#E05024]" />
                         </motion.div>
                         <motion.div animate={{ y: [0, 12, 0] }} transition={{ repeat: Infinity, duration: 5, delay: 1 }} className="absolute -right-4 lg:-right-10 top-28 lg:top-40 w-12 h-12 bg-white rounded-2xl shadow-xl flex items-center justify-center border border-slate-50 z-20">
-                            <Users className="w-6 h-6 text-blue-500" />
+                            <Users className="w-6 h-6 text-[#084734]" />
                         </motion.div>
                     </motion.div>
                 </div>
@@ -600,22 +600,22 @@ export default function ProductPage() {
                         {[
                             {
                                 category: "판서 & 교구",
-                                color: "border-red-100",
+                                color: "border-[#e8e8e4]",
                                 tools: [
-                                    { icon: <PenTool className="w-5 h-5" />, label: "판서 펜", color: "text-red-500", featured: true },
-                                    { icon: <Layout className="w-5 h-5" />, label: "화이트보드", color: "text-blue-500", featured: true },
+                                    { icon: <PenTool className="w-5 h-5" />, label: "판서 펜", color: "text-[#B85C33]", featured: true },
+                                    { icon: <Layout className="w-5 h-5" />, label: "화이트보드", color: "text-[#084734]", featured: true },
                                     { icon: <Layers className="w-5 h-5" />, label: "레이어", color: "text-teal-500" },
-                                    { icon: <FileText className="w-5 h-5" />, label: "수식 편집기", color: "text-indigo-600" },
-                                    { icon: <Layout className="w-5 h-5" />, label: "도형 도구", color: "text-pink-400" },
-                                    { icon: <MousePointerClick className="w-5 h-5" />, label: "포인터", color: "text-red-500" },
+                                    { icon: <FileText className="w-5 h-5" />, label: "수식 편집기", color: "text-[#084734]" },
+                                    { icon: <Layout className="w-5 h-5" />, label: "도형 도구", color: "text-[#A39E98]" },
+                                    { icon: <MousePointerClick className="w-5 h-5" />, label: "포인터", color: "text-[#B85C33]" },
                                 ],
                             },
                             {
                                 category: "게임 & 참여",
-                                color: "border-violet-100",
+                                color: "border-[#e8e8e4]",
                                 tools: [
-                                    { icon: <Timer className="w-5 h-5" />, label: "타이머", color: "text-violet-500", featured: true },
-                                    { icon: <Dice1 className="w-5 h-5" />, label: "주사위", color: "text-indigo-500" },
+                                    { icon: <Timer className="w-5 h-5" />, label: "타이머", color: "text-[#084734]", featured: true },
+                                    { icon: <Dice1 className="w-5 h-5" />, label: "주사위", color: "text-[#065c41]" },
                                     { icon: <Users className="w-5 h-5" />, label: "랜덤 뽑기", color: "text-green-500" },
                                     { icon: <Sparkles className="w-5 h-5" />, label: "슬롯머신", color: "text-orange-500" },
                                     { icon: <Zap className="w-5 h-5" />, label: "응답기", color: "text-yellow-500" },
@@ -624,15 +624,15 @@ export default function ProductPage() {
                             },
                             {
                                 category: "미디어 & 공유",
-                                color: "border-blue-100",
+                                color: "border-[#e8e8e4]",
                                 tools: [
-                                    { icon: <FileText className="w-5 h-5" />, label: "PDF 뷰어", color: "text-rose-500" },
-                                    { icon: <Cloud className="w-5 h-5" />, label: "클라우드", color: "text-sky-500" },
-                                    { icon: <Video className="w-5 h-5" />, label: "녹화", color: "text-red-400" },
+                                    { icon: <FileText className="w-5 h-5" />, label: "PDF 뷰어", color: "text-[#B85C33]" },
+                                    { icon: <Cloud className="w-5 h-5" />, label: "클라우드", color: "text-[#084734]" },
+                                    { icon: <Video className="w-5 h-5" />, label: "녹화", color: "text-[#B85C33]" },
                                     { icon: <Mic className="w-5 h-5" />, label: "오디오", color: "text-emerald-500" },
-                                    { icon: <Monitor className="w-5 h-5" />, label: "화면 공유", color: "text-cyan-500" },
-                                    { icon: <Play className="w-5 h-5" />, label: "영상 재생", color: "text-violet-400" },
-                                    { icon: <Wifi className="w-5 h-5" />, label: "미러링", color: "text-cyan-600" },
+                                    { icon: <Monitor className="w-5 h-5" />, label: "화면 공유", color: "text-[#065c41]" },
+                                    { icon: <Play className="w-5 h-5" />, label: "영상 재생", color: "text-[#084734]" },
+                                    { icon: <Wifi className="w-5 h-5" />, label: "미러링", color: "text-[#065c41]" },
                                     { icon: <Cloud className="w-5 h-5" />, label: "EDB 교구", color: "text-orange-400" },
                                 ],
                             },
@@ -640,13 +640,13 @@ export default function ProductPage() {
                                 category: "관리 & 소통",
                                 color: "border-green-100",
                                 tools: [
-                                    { icon: <MessageSquare className="w-5 h-5" />, label: "채팅", color: "text-blue-400" },
-                                    { icon: <BarChart3 className="w-5 h-5" />, label: "투표", color: "text-purple-500" },
+                                    { icon: <MessageSquare className="w-5 h-5" />, label: "채팅", color: "text-[#084734]" },
+                                    { icon: <BarChart3 className="w-5 h-5" />, label: "투표", color: "text-[#065c41]" },
                                     { icon: <BookOpen className="w-5 h-5" />, label: "교재 업로드", color: "text-amber-500" },
-                                    { icon: <GraduationCap className="w-5 h-5" />, label: "퀴즈", color: "text-pink-500", featured: true },
+                                    { icon: <GraduationCap className="w-5 h-5" />, label: "퀴즈", color: "text-[#084734]", featured: true },
                                     { icon: <Globe className="w-5 h-5" />, label: "웹 브라우저", color: "text-slate-500" },
                                     { icon: <Shield className="w-5 h-5" />, label: "잠금", color: "text-gray-500" },
-                                    { icon: <Clock className="w-5 h-5" />, label: "스톱워치", color: "text-blue-600" },
+                                    { icon: <Clock className="w-5 h-5" />, label: "스톱워치", color: "text-[#084734]" },
                                     { icon: <CheckCircle2 className="w-5 h-5" />, label: "출석 체크", color: "text-green-600" },
                                     { icon: <BookOpen className="w-5 h-5" />, label: "노트 저장", color: "text-emerald-400" },
                                     { icon: <ArrowRight className="w-5 h-5" />, label: "화면 이동", color: "text-slate-400" },
@@ -683,15 +683,15 @@ export default function ProductPage() {
                         <motion.h3 {...fadeUp} className="text-sm font-bold text-slate-400 tracking-wider uppercase mb-6 text-center">10가지 수업 활동</motion.h3>
                         <div className="grid sm:grid-cols-2 lg:grid-cols-5 gap-4">
                             {[
-                                { label: "그룹 토론", desc: "방 분리 후 동시 토론", icon: <MessageSquare className="w-5 h-5" />, color: "from-blue-50 to-sky-50", border: "border-blue-100", iconColor: "text-blue-500" },
-                                { label: "1:1 퀴즈 대결", desc: "실시간 맞대결 형식", icon: <Zap className="w-5 h-5" />, color: "from-red-50 to-rose-50", border: "border-red-100", iconColor: "text-red-500" },
+                                { label: "그룹 토론", desc: "방 분리 후 동시 토론", icon: <MessageSquare className="w-5 h-5" />, color: "from-[#ECFDF5] to-[#D1FAE5]", border: "border-[#D1FAE5]", iconColor: "text-[#084734]" },
+                                { label: "1:1 퀴즈 대결", desc: "실시간 맞대결 형식", icon: <Zap className="w-5 h-5" />, color: "from-[#FEF3EE] to-[#f0f0ec]", border: "border-[#F6D5C5]", iconColor: "text-[#B85C33]" },
                                 { label: "팀 프로젝트", desc: "공동 판서 협업", icon: <Users className="w-5 h-5" />, color: "from-green-50 to-emerald-50", border: "border-green-100", iconColor: "text-green-500" },
-                                { label: "발표 수업", desc: "학생 화면 공유 발표", icon: <Monitor className="w-5 h-5" />, color: "from-purple-50 to-violet-50", border: "border-purple-100", iconColor: "text-purple-500" },
+                                { label: "발표 수업", desc: "학생 화면 공유 발표", icon: <Monitor className="w-5 h-5" />, color: "from-[#D1FAE5] to-[#ECFDF5]", border: "border-[#D1FAE5]", iconColor: "text-[#065c41]" },
                                 { label: "실시간 투표", desc: "의견 수렴 · 결과 시각화", icon: <BarChart3 className="w-5 h-5" />, color: "from-amber-50 to-yellow-50", border: "border-amber-100", iconColor: "text-amber-500" },
-                                { label: "릴레이 풀이", desc: "순서대로 문제 풀기", icon: <ArrowRight className="w-5 h-5" />, color: "from-cyan-50 to-sky-50", border: "border-cyan-100", iconColor: "text-cyan-600" },
+                                { label: "릴레이 풀이", desc: "순서대로 문제 풀기", icon: <ArrowRight className="w-5 h-5" />, color: "from-[#ECFDF5] to-[#f7f7f5]", border: "border-[#e8e8e4]", iconColor: "text-[#084734]" },
                                 { label: "타임어택", desc: "제한 시간 내 문제 풀기", icon: <Timer className="w-5 h-5" />, color: "from-orange-50 to-amber-50", border: "border-orange-100", iconColor: "text-orange-500" },
-                                { label: "모둠 경쟁", desc: "팀별 점수 대결", icon: <Sparkles className="w-5 h-5" />, color: "from-pink-50 to-rose-50", border: "border-pink-100", iconColor: "text-pink-500" },
-                                { label: "자유 판서", desc: "전체 학생 동시 판서", icon: <PenTool className="w-5 h-5" />, color: "from-indigo-50 to-blue-50", border: "border-indigo-100", iconColor: "text-indigo-500" },
+                                { label: "모둠 경쟁", desc: "팀별 점수 대결", icon: <Sparkles className="w-5 h-5" />, color: "from-[#FEF3EE] to-[#f0f0ec]", border: "border-[#F6D5C5]", iconColor: "text-[#B85C33]" },
+                                { label: "자유 판서", desc: "전체 학생 동시 판서", icon: <PenTool className="w-5 h-5" />, color: "from-[#ECFDF5] to-[#D1FAE5]", border: "border-[#D1FAE5]", iconColor: "text-[#065c41]" },
                                 { label: "피드백 라운드", desc: "상호 평가 · 코멘트", icon: <CheckCircle2 className="w-5 h-5" />, color: "from-teal-50 to-green-50", border: "border-teal-100", iconColor: "text-teal-500" },
                             ].map((act, i) => (
                                 <motion.div key={i} {...stagger(i)} className={`rounded-2xl bg-gradient-to-br ${act.color} border ${act.border} p-5 hover:shadow-lg transition-all cursor-pointer text-center group`}>
@@ -721,9 +721,9 @@ export default function ProductPage() {
 
                     <div className="grid sm:grid-cols-2 lg:grid-cols-4 gap-5 max-w-5xl mx-auto">
                         {[
-                            { icon: <Users className="w-7 h-7" />, title: "1:1 과외", desc: "개인 맞춤 수업에 최적화된 집중 환경", people: 1, color: "bg-blue-50 border-blue-100 text-blue-600", dotColor: "bg-blue-400" },
+                            { icon: <Users className="w-7 h-7" />, title: "1:1 과외", desc: "개인 맞춤 수업에 최적화된 집중 환경", people: 1, color: "bg-[#ECFDF5] border-[#D1FAE5] text-[#084734]", dotColor: "bg-[#084734]" },
                             { icon: <MessageSquare className="w-7 h-7" />, title: "소그룹 토론", desc: "그룹별 방 분리, 동시 판서, 발표 기능", people: 6, color: "bg-green-50 border-green-100 text-green-600", dotColor: "bg-green-400" },
-                            { icon: <Monitor className="w-7 h-7" />, title: "일반 수업", desc: "학원 · 학교의 표준 수업 형태", people: 12, color: "bg-purple-50 border-purple-100 text-purple-600", dotColor: "bg-purple-400" },
+                            { icon: <Monitor className="w-7 h-7" />, title: "일반 수업", desc: "학원 · 학교의 표준 수업 형태", people: 12, color: "bg-[#D1FAE5] border-[#D1FAE5] text-[#065c41]", dotColor: "bg-[#065c41]" },
                             { icon: <GraduationCap className="w-7 h-7" />, title: "대형 강의", desc: "수백 명이 동시 참여하는 라이브 강의", people: 20, color: "bg-orange-50 border-orange-100 text-orange-600", dotColor: "bg-orange-400" },
                         ].map((item, i) => (
                             <motion.div
@@ -813,8 +813,8 @@ export default function ProductPage() {
                     <div className="flex flex-col lg:flex-row items-center gap-16 lg:gap-20 max-w-7xl mx-auto">
                         <div className="flex-1 max-w-xl">
                             <motion.div {...fadeUp}>
-                                <div className="inline-flex items-center gap-2 px-3 py-1 rounded-full bg-blue-600/5 text-blue-600 text-sm font-bold mb-6"><BarChart3 className="w-4 h-4" />데이터 & LMS</div>
-                                <h2 className="text-3xl md:text-5xl font-serif text-[#1a1a19] mb-6 leading-tight">수업이 끝나도<br /><span className="text-[#2563EB]">학습은 계속됩니다</span></h2>
+                                <div className="inline-flex items-center gap-2 px-3 py-1 rounded-full bg-[#084734]/5 text-[#084734] text-sm font-bold mb-6"><BarChart3 className="w-4 h-4" />데이터 & LMS</div>
+                                <h2 className="text-3xl md:text-5xl font-serif text-[#1a1a19] mb-6 leading-tight">수업이 끝나도<br /><span className="text-[#084734]">학습은 계속됩니다</span></h2>
                                 <p className="text-lg text-slate-500 leading-relaxed font-medium mb-10">자동 녹화, 학습 데이터 분석, 숙제·출결·평가까지. 수업 전후의 모든 학사 행정을 하나의 플랫폼에서.</p>
                             </motion.div>
                             <div className="space-y-5">
@@ -824,7 +824,7 @@ export default function ProductPage() {
                                     { icon: <FileText className="w-5 h-5" />, label: "LMS 올인원", detail: "숙제 제출, 평가, 출결 관리 — 별도 LMS 없이 ClassIn 안에서 모두 해결." },
                                 ].map((f, i) => (
                                     <motion.div key={i} {...stagger(i)} className="flex items-start gap-4">
-                                        <div className="w-11 h-11 rounded-xl bg-blue-600/5 text-blue-600 flex items-center justify-center shrink-0">{f.icon}</div>
+                                        <div className="w-11 h-11 rounded-xl bg-[#084734]/5 text-[#084734] flex items-center justify-center shrink-0">{f.icon}</div>
                                         <div><h4 className="font-bold text-slate-900 mb-1">{f.label}</h4><p className="text-sm text-slate-500 leading-relaxed">{f.detail}</p></div>
                                     </motion.div>
                                 ))}
@@ -846,8 +846,8 @@ export default function ProductPage() {
                                     <div className="h-44 flex items-end justify-between gap-3 border-b border-slate-700/50 pb-4 mb-4 relative">
                                         <div className="absolute w-full border-b border-dashed border-slate-700/30 top-1/2 -translate-y-1/2"></div>
                                         {[30, 45, 60, 50, 75, 90, 85].map((h, i) => (
-                                            <motion.div key={i} initial={{ height: 0 }} whileInView={{ height: `${h}%` }} viewport={{ once: true }} transition={{ delay: 0.3 + i * 0.1, duration: 0.8, type: "spring" }} className="w-full bg-gradient-to-t from-blue-500/20 to-blue-400 rounded-t-md relative z-10 group">
-                                                <div className="absolute -top-6 left-1/2 -translate-x-1/2 text-[9px] text-blue-300 font-mono opacity-0 group-hover:opacity-100 transition-opacity">{h}%</div>
+                                            <motion.div key={i} initial={{ height: 0 }} whileInView={{ height: `${h}%` }} viewport={{ once: true }} transition={{ delay: 0.3 + i * 0.1, duration: 0.8, type: "spring" }} className="w-full bg-gradient-to-t from-[#084734]/20 to-[#6EE7B7] rounded-t-md relative z-10 group">
+                                                <div className="absolute -top-6 left-1/2 -translate-x-1/2 text-[9px] text-[#6EE7B7] font-mono opacity-0 group-hover:opacity-100 transition-opacity">{h}%</div>
                                             </motion.div>
                                         ))}
                                     </div>
@@ -859,8 +859,8 @@ export default function ProductPage() {
                                     <div className="grid grid-cols-3 gap-3">
                                         {[
                                             { label: "집중도", value: "87%", color: "text-green-400" },
-                                            { label: "발언", value: "12회", color: "text-blue-400" },
-                                            { label: "참여 시간", value: "48분", color: "text-purple-400" },
+                                            { label: "발언", value: "12회", color: "text-[#6EE7B7]" },
+                                            { label: "참여 시간", value: "48분", color: "text-[#084734]" },
                                         ].map((s, i) => (
                                             <div key={i} className="bg-white/5 rounded-xl p-3 text-center">
                                                 <div className={`text-lg font-bold font-mono ${s.color}`}>{s.value}</div>

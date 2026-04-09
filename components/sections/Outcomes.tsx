@@ -28,7 +28,7 @@ const comparisons = [
 
 export function Outcomes() {
     return (
-        <section id="outcomes" className="py-16 md:py-24 bg-white">
+        <section id="outcomes" className="py-16 md:py-24 bg-[#F6F5F4]">
             <div className="container mx-auto">
                 <div className="flex flex-col md:flex-row gap-12 items-center">
                     <div className="w-full md:w-1/3">
@@ -51,7 +51,7 @@ export function Outcomes() {
                         <div className="hidden md:grid md:grid-cols-2 px-8">
                             <div className="flex items-center gap-3">
                                 <div className="p-2 rounded-full bg-[#F6F5F4] border border-[rgba(0,0,0,0.08)]">
-                                    <X className="w-6 h-6 text-red-400" />
+                                    <X className="w-6 h-6 text-[#B85C33]" />
                                 </div>
                                 <span className="font-extrabold text-2xl text-[#A39E98]" style={{ letterSpacing: '-1px' }}>Before</span>
                             </div>
@@ -71,13 +71,13 @@ export function Outcomes() {
                                     whileInView={{ opacity: 1, y: 0 }}
                                     transition={{ delay: index * 0.1 }}
                                     viewport={{ once: true }}
-                                    className="grid md:grid-cols-2 rounded-2xl overflow-hidden border border-[rgba(0,0,0,0.08)] bg-white"
+                                    className="grid md:grid-cols-2 rounded-2xl overflow-hidden border border-[rgba(0,0,0,0.08)] bg-white transition-all duration-200 hover:shadow-lg hover:-translate-y-0.5"
                                     style={{ boxShadow: 'rgba(0,0,0,0.04) 0px 4px 18px, rgba(0,0,0,0.027) 0px 2px 7.8px, rgba(0,0,0,0.02) 0px 0.8px 2.9px' }}
                                 >
                                     {/* Before Card */}
                                     <div className="p-6 md:p-8 flex flex-col justify-center border-b md:border-b-0 md:border-r border-[rgba(0,0,0,0.05)] hover:bg-[#F6F5F4] transition-colors">
                                         <div className="md:hidden flex items-center gap-2 mb-4">
-                                            <X className="w-5 h-5 text-red-400" />
+                                            <X className="w-5 h-5 text-[#B85C33]" />
                                             <span className="font-bold text-lg text-[#A39E98]">Before</span>
                                         </div>
                                         <span className="text-[#A39E98] font-bold text-sm mb-3 uppercase tracking-wider">{item.role}</span>

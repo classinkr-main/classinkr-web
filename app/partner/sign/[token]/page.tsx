@@ -191,7 +191,7 @@ export default function PartnerSignPage() {
     return (
       <div className="min-h-screen flex items-center justify-center bg-[#f7f7f5] p-4">
         <div className="bg-white rounded-2xl shadow-sm border border-[#e8e8e4] p-8 max-w-md w-full text-center">
-          <AlertCircle className="w-10 h-10 text-red-400 mx-auto mb-3" />
+          <AlertCircle className="w-10 h-10 text-[#B85C33] mx-auto mb-3" />
           <h2 className="text-base font-semibold text-[#1a1a1a] mb-2">계약서를 찾을 수 없습니다</h2>
           <p className="text-sm text-[#1a1a1a]/50">{error ?? "유효하지 않은 링크입니다."}</p>
         </div>

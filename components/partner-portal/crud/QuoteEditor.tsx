@@ -51,10 +51,10 @@ const STATUS_LABEL: Record<QuoteDocumentStatus, string> = {
 }
 const STATUS_COLOR: Record<QuoteDocumentStatus, string> = {
   draft: "bg-[#f0f0ec] text-[#1a1a1a]/50",
-  shared: "bg-blue-50 text-blue-600",
+  shared: "bg-[#ECFDF5] text-[#084734]",
   accepted: "bg-emerald-50 text-emerald-700",
   expired: "bg-[#f0f0ec] text-[#1a1a1a]/40",
-  archived: "bg-violet-50 text-violet-600",
+  archived: "bg-[#D1FAE5] text-[#065c41]",
 }
 
 function calcLineAmount(item: QuoteItem) {
@@ -265,9 +265,9 @@ export function QuoteEditor({ dealId }: Props) {
         </div>
       )}
       {convertError && (
-        <div className="flex items-center justify-between gap-2 rounded-xl border border-red-200 bg-red-50 px-4 py-3 text-sm text-red-600">
+        <div className="flex items-center justify-between gap-2 rounded-xl border border-[#F6D5C5] bg-[#FEF3EE] px-4 py-3 text-sm text-[#B85C33]">
           <span>{convertError}</span>
-          <button onClick={() => setConvertError(null)} className="text-red-400 hover:text-red-600">✕</button>
+          <button onClick={() => setConvertError(null)} className="text-[#B85C33] hover:text-[#9A4A27]">✕</button>
         </div>
       )}
 
@@ -313,7 +313,7 @@ export function QuoteEditor({ dealId }: Props) {
                     <td className="px-4 py-3">
                       <div className="flex items-center justify-end gap-1">
                         {q.status === "draft" && (
-                          <Button variant="ghost" size="sm" className="h-7 px-2 text-xs text-violet-600"
+                          <Button variant="ghost" size="sm" className="h-7 px-2 text-xs text-[#084734]"
                             disabled={converting === q.id}
                             onClick={() => handleConvert(q.id)}>
                             <FileSignature className="w-3.5 h-3.5 mr-1" />
@@ -366,7 +366,7 @@ export function QuoteEditor({ dealId }: Props) {
               <div className="grid grid-cols-2 gap-4">
                 <div>
                   <label className="text-xs font-medium text-[#1a1a1a]/60 mb-1 block">
-                    제목 <span className="text-red-400">*</span>
+                    제목 <span className="text-[#B85C33]">*</span>
                   </label>
                   <input value={formTitle} onChange={(e) => setFormTitle(e.target.value)}
                     placeholder="예: 본관 2층 전자칠판 견적"
@@ -422,7 +422,7 @@ export function QuoteEditor({ dealId }: Props) {
                     </div>
                     <div className="col-span-1 flex justify-end pt-4">
                       <button type="button" onClick={() => setItems(items.filter((_, i) => i !== idx))}
-                        className="text-red-400 hover:text-red-600">
+                        className="text-[#B85C33] hover:text-[#9A4A27]">
                         <Trash2 className="w-3.5 h-3.5" />
                       </button>
                     </div>
@@ -434,7 +434,7 @@ export function QuoteEditor({ dealId }: Props) {
               <div className="flex items-center justify-between border-t border-[#e8e8e4] pt-4">
                 <button type="button" className="inline-flex items-center gap-2 text-xs text-[#1a1a1a]/60"
                   onClick={() => setVatSurcharge(!vatSurcharge)}>
-                  {vatSurcharge ? <ToggleRight className="w-5 h-5 text-blue-500" /> : <ToggleLeft className="w-5 h-5" />}
+                  {vatSurcharge ? <ToggleRight className="w-5 h-5 text-[#084734]" /> : <ToggleLeft className="w-5 h-5" />}
                   VAT 별도 (10%)
                 </button>
                 <div className="text-right space-y-1">

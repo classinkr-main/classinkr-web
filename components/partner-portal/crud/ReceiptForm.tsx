@@ -239,7 +239,7 @@ export function ReceiptForm({ dealId, partnerAccountId, customerId }: Props) {
                 </div>
                 <div>
                   <label className="text-xs font-medium text-[#1a1a1a]/60 mb-1 block">
-                    공급가액 <span className="text-red-400">*</span>
+                    공급가액 <span className="text-[#B85C33]">*</span>
                     <span className="ml-1 font-normal text-[#1a1a1a]/35">(VAT 제외 금액)</span>
                   </label>
                   <input type="number" required min={1} value={form.amount || ""}
@@ -265,7 +265,7 @@ export function ReceiptForm({ dealId, partnerAccountId, customerId }: Props) {
                 </div>
               </div>
               {saveError && (
-                <div className="rounded-lg border border-red-200 bg-red-50 px-3 py-2 text-sm text-red-600">
+                <div className="rounded-lg border border-[#F6D5C5] bg-[#FEF3EE] px-3 py-2 text-sm text-[#B85C33]">
                   {saveError}
                 </div>
               )}

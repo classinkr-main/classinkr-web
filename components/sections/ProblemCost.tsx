@@ -66,7 +66,7 @@ export function ProblemCost() {
                 style={{ backgroundImage: 'linear-gradient(rgba(255,255,255,0.1) 1px, transparent 1px), linear-gradient(90deg, rgba(255,255,255,0.1) 1px, transparent 1px)', backgroundSize: '60px 60px' }} />
 
             {/* Red/Orange ambient glow blobs */}
-            <div className="absolute top-1/4 left-1/4 w-[500px] h-[500px] bg-red-500/[0.08] rounded-full blur-[60px] animate-blob1" />
+            <div className="absolute top-1/4 left-1/4 w-[500px] h-[500px] bg-[#B85C33]/[0.08] rounded-full blur-[60px] animate-blob1" />
             <div className="absolute bottom-1/4 right-1/4 w-[400px] h-[400px] bg-orange-500/[0.06] rounded-full blur-[60px] animate-blob2" />
 
             {/* Noise texture */}
@@ -81,13 +81,13 @@ export function ProblemCost() {
                     transition={{ duration: 0.7 }}
                     className="text-center max-w-3xl mx-auto mb-20 px-4"
                 >
-                    <span className="inline-flex items-center gap-2 py-1.5 px-4 rounded-full bg-red-500/10 border border-red-500/20 text-red-400 text-sm font-semibold mb-6 backdrop-blur-sm">
-                        <span className="w-2 h-2 rounded-full bg-red-400 animate-pulse" />
+                    <span className="inline-flex items-center gap-2 py-1.5 px-4 rounded-full bg-[#B85C33]/10 border border-[#B85C33]/20 text-[#F6D5C5] text-sm font-semibold mb-6 backdrop-blur-sm">
+                        <span className="w-2 h-2 rounded-full bg-[#F6D5C5] animate-pulse" />
                         원장님, 이 질문들을 받아본 적 있으신가요
                     </span>
                     <h2 className="text-4xl font-black text-white sm:text-5xl md:text-[3.5rem] mb-6 leading-tight break-keep" style={{ letterSpacing: '-1.5px' }}>
                         강사에 기대는 학원은<br className="md:hidden" />{" "}
-                        <span className="text-transparent bg-clip-text bg-gradient-to-r from-red-400 to-orange-400 break-keep">흔들릴 수밖에 없습니다</span>
+                        <span className="text-transparent bg-clip-text bg-gradient-to-r from-[#B85C33] to-[#F6D5C5] break-keep">흔들릴 수밖에 없습니다</span>
                     </h2>
                     <p className="text-lg text-slate-400 break-keep">
                         시스템 없이 사람에만 의존하면, 잘 될 때도 있지만 한 명이 빠지면 학원 전체가 흔들립니다.
@@ -105,26 +105,26 @@ export function ProblemCost() {
                             viewport={{ once: true }}
                             className="h-full"
                         >
-                            <div className="relative h-full md:min-h-[440px] rounded-3xl overflow-hidden group bg-slate-900/60 backdrop-blur-xl border border-[rgba(255,255,255,0.08)] hover:border-red-500/30 transition-all duration-500 shadow-[0_0_0_1px_rgba(255,255,255,0.03)] hover:shadow-[0_0_40px_rgba(239,68,68,0.1)]">
+                            <div className="relative h-full md:min-h-[440px] rounded-3xl overflow-hidden group bg-slate-900/60 backdrop-blur-xl border border-[rgba(255,255,255,0.08)] hover:border-[#B85C33]/30 transition-all duration-500 shadow-[0_0_0_1px_rgba(255,255,255,0.03)] hover:shadow-[0_0_40px_rgba(184,92,51,0.1)]">
                                 {/* Top accent line */}
-                                <div className="absolute top-0 inset-x-0 h-px bg-gradient-to-r from-transparent via-red-500/50 to-transparent group-hover:via-red-400 group-hover:h-0.5 transition-all duration-500" />
+                                <div className="absolute top-0 inset-x-0 h-px bg-gradient-to-r from-transparent via-[#B85C33]/50 to-transparent group-hover:via-[#B85C33] group-hover:h-0.5 transition-all duration-500" />
 
                                 <div className="pt-10 p-8 flex flex-col items-center text-center h-full">
                                     {/* Icon */}
                                     <div className="relative mb-8">
-                                        <div className="absolute inset-0 rounded-full bg-red-500/20 blur-xl opacity-0 group-hover:opacity-100 transition-opacity duration-500" />
-                                        <div className="relative p-5 rounded-2xl bg-gradient-to-br from-red-500/15 to-orange-500/10 border border-red-500/20 text-red-400 group-hover:from-red-500/25 group-hover:to-orange-500/20 group-hover:text-red-300 group-hover:scale-110 transition-all duration-500">
+                                        <div className="absolute inset-0 rounded-full bg-[#B85C33]/20 blur-xl opacity-0 group-hover:opacity-100 transition-opacity duration-500" />
+                                        <div className="relative p-5 rounded-2xl bg-gradient-to-br from-[#B85C33]/15 to-[#9A4A27]/10 border border-[#B85C33]/20 text-[#F6D5C5] group-hover:from-[#B85C33]/25 group-hover:to-[#9A4A27]/20 group-hover:text-white group-hover:scale-110 transition-all duration-500">
                                             <pain.icon className="w-10 h-10" strokeWidth={1.5} />
                                         </div>
                                     </div>
 
-                                    <h3 className="text-2xl font-extrabold mb-4 text-white break-keep">{pain.title}</h3>
+                                    <h3 className="text-2xl font-extrabold mb-4 text-white break-keep" style={{ letterSpacing: '-0.25px' }}>{pain.title}</h3>
                                     <p className="text-slate-400 mb-8 flex-grow text-lg leading-relaxed break-keep">{pain.desc}</p>
 
                                     {/* Cost footer with counter */}
                                     <div className="w-full pt-6 border-t border-[rgba(255,255,255,0.08)] mt-auto">
-                                        <p className="text-xs font-bold text-red-400/70 uppercase tracking-[0.2em] mb-2">예상 손실</p>
-                                        <p className="text-2xl font-black text-transparent bg-clip-text bg-gradient-to-r from-red-400 to-orange-400">
+                                        <p className="text-xs font-bold text-[#F6D5C5]/70 uppercase tracking-[0.2em] mb-2">예상 손실</p>
+                                        <p className="text-2xl font-black text-transparent bg-clip-text bg-gradient-to-r from-[#B85C33] to-[#F6D5C5]">
                                             <CountUp target={pain.countTarget} suffix={pain.countSuffix} /> {pain.countLabel}
                                         </p>
                                     </div>
@@ -142,16 +142,16 @@ export function ProblemCost() {
                     transition={{ delay: 0.5, duration: 0.7 }}
                     className="mt-20 mx-auto max-w-4xl"
                 >
-                    <div className="bg-slate-900/80 backdrop-blur-xl p-8 md:p-10 rounded-3xl border border-[rgba(255,255,255,0.08)] shadow-[0_0_80px_rgba(239,68,68,0.06)]">
+                    <div className="bg-slate-900/80 backdrop-blur-xl p-8 md:p-10 rounded-3xl border border-[rgba(255,255,255,0.08)] shadow-[0_0_80px_rgba(184,92,51,0.06)]">
                         {/* Header */}
                         <div className="flex flex-col sm:flex-row items-start sm:items-center justify-between gap-4 mb-8">
                             <div>
                                 <h3 className="font-bold text-white text-xl mb-1">운영 리스크 대시보드</h3>
                                 <p className="text-slate-500 text-sm">시스템 미도입 학원 평균 데이터</p>
                             </div>
-                            <span className="inline-flex items-center gap-2 px-4 py-2 rounded-full bg-red-500/15 border border-red-500/30">
-                                <span className="w-2 h-2 rounded-full bg-red-500 animate-pulse" />
-                                <span className="font-bold text-red-400 text-sm">즉시 개선 필요</span>
+                            <span className="inline-flex items-center gap-2 px-4 py-2 rounded-full bg-[#B85C33]/15 border border-[#B85C33]/30">
+                                <span className="w-2 h-2 rounded-full bg-[#B85C33] animate-pulse" />
+                                <span className="font-bold text-[#F6D5C5] text-sm">즉시 개선 필요</span>
                             </span>
                         </div>
 
@@ -173,7 +173,7 @@ export function ProblemCost() {
                                     <div className="flex items-center justify-between mb-3">
                                         <span className="text-slate-400 text-sm font-medium">{metric.label}</span>
                                         <span className={`text-xs font-bold px-2 py-0.5 rounded-full ${
-                                            metric.color === "red" ? "bg-red-500/15 text-red-400" :
+                                            metric.color === "red" ? "bg-[#B85C33]/15 text-[#F6D5C5]" :
                                             metric.color === "orange" ? "bg-orange-500/15 text-orange-400" :
                                             "bg-yellow-500/15 text-yellow-400"
                                         }`}>
@@ -182,7 +182,7 @@ export function ProblemCost() {
                                     </div>
                                     <div className="flex items-end gap-1 mb-3">
                                         <span className={`text-4xl font-black ${
-                                            metric.color === "red" ? "text-red-400" :
+                                            metric.color === "red" ? "text-[#F6D5C5]" :
                                             metric.color === "orange" ? "text-orange-400" :
                                             "text-yellow-400"
                                         }`}>
@@ -198,7 +198,7 @@ export function ProblemCost() {
                                             viewport={{ once: true }}
                                             transition={{ duration: 1.5, delay: 0.8 + i * 0.2, ease: [0.16, 1, 0.3, 1] }}
                                             className={`h-full rounded-full ${
-                                                metric.color === "red" ? "bg-gradient-to-r from-red-500 to-red-400" :
+                                                metric.color === "red" ? "bg-gradient-to-r from-[#B85C33] to-[#F6D5C5]" :
                                                 metric.color === "orange" ? "bg-gradient-to-r from-orange-500 to-orange-400" :
                                                 "bg-gradient-to-r from-yellow-500 to-yellow-400"
                                             }`}
@@ -213,7 +213,7 @@ export function ProblemCost() {
                         <div className="p-5 rounded-2xl bg-slate-800/30 border border-[rgba(255,255,255,0.08)]">
                             <div className="flex items-center justify-between mb-3">
                                 <span className="text-slate-300 font-semibold text-sm">종합 운영 비효율 지수</span>
-                                <span className="text-red-400 font-black text-lg"><CountUp target={85} suffix="%" /></span>
+                                <span className="text-[#F6D5C5] font-black text-lg"><CountUp target={85} suffix="%" /></span>
                             </div>
                             <div className="relative h-3 bg-slate-800 rounded-full overflow-hidden">
                                 <motion.div
@@ -221,7 +221,7 @@ export function ProblemCost() {
                                     whileInView={{ width: "85%" }}
                                     transition={{ duration: 2, ease: [0.16, 1, 0.3, 1] }}
                                     viewport={{ once: true }}
-                                    className="h-full bg-gradient-to-r from-yellow-500 via-orange-500 to-red-500 rounded-full relative"
+                                    className="h-full bg-gradient-to-r from-yellow-500 via-orange-500 to-[#B85C33] rounded-full relative"
                                 >
                                     <div className="absolute inset-0 bg-gradient-to-r from-transparent via-white/20 to-transparent animate-shimmer bg-[length:200%_100%]" />
                                 </motion.div>

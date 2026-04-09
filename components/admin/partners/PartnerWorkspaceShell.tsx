@@ -216,13 +216,13 @@ function formatDateDisplay(value?: string) {
 function getToneClass(tone: "neutral" | "blue" | "emerald" | "amber" | "rose" | "slate") {
   switch (tone) {
     case "blue":
-      return "border-blue-200 bg-blue-50 text-blue-700"
+      return "border-[#D1FAE5] bg-[#ECFDF5] text-[#084734]"
     case "emerald":
       return "border-emerald-200 bg-emerald-50 text-emerald-700"
     case "amber":
       return "border-amber-200 bg-amber-50 text-amber-700"
     case "rose":
-      return "border-rose-200 bg-rose-50 text-rose-700"
+      return "border-[#F6D5C5] bg-[#FEF3EE] text-[#B85C33]"
     case "slate":
       return "border-slate-200 bg-slate-50 text-slate-700"
     default:
@@ -700,7 +700,7 @@ export default function PartnerWorkspaceShell({
       )}
 
       {errorMessage && (
-        <div className="mb-6 rounded-2xl border border-red-200 bg-red-50 px-5 py-4 text-[12px] leading-5 text-red-700">
+        <div className="mb-6 rounded-2xl border border-[#F6D5C5] bg-[#FEF3EE] px-5 py-4 text-[12px] leading-5 text-[#B85C33]">
           <strong className="mr-2">저장 오류:</strong>
           <span>{errorMessage}</span>
         </div>
@@ -712,8 +712,8 @@ export default function PartnerWorkspaceShell({
             label: "메인 거래",
             value: mainDeal ? DEAL_STAGE_LABEL[mainDeal.stage] : "없음",
             sub: mainDeal?.title ?? "거래 없음",
-            icon: <Handshake className="h-4 w-4 text-blue-600" />,
-            accent: "bg-blue-50",
+            icon: <Handshake className="h-4 w-4 text-[#084734]" />,
+            accent: "bg-[#ECFDF5]",
           },
           {
             label: "오늘 처리",
@@ -726,8 +726,8 @@ export default function PartnerWorkspaceShell({
             label: "판단 필요",
             value: openIssues.length,
             sub: "오픈 이슈",
-            icon: <AlertTriangle className="h-4 w-4 text-rose-600" />,
-            accent: "bg-rose-50",
+            icon: <AlertTriangle className="h-4 w-4 text-amber-600" />,
+            accent: "bg-amber-50",
           },
           {
             label: "확인 문서",
@@ -747,8 +747,8 @@ export default function PartnerWorkspaceShell({
             label: "누적 순매출",
             value: formatCurrency(totalNetSales),
             sub: "실적 합계",
-            icon: <FileText className="h-4 w-4 text-violet-600" />,
-            accent: "bg-violet-50",
+            icon: <FileText className="h-4 w-4 text-[#615D59]" />,
+            accent: "bg-[#F6F5F4]",
           },
         ].map((card) => (
           <div key={card.label} className="rounded-2xl border border-[#e8e8e4] bg-white p-5">
@@ -885,7 +885,7 @@ export default function PartnerWorkspaceShell({
             >
               <div className="space-y-3">
                 {judgmentNeededIssues.slice(0, 4).map((issue) => (
-                  <div key={issue.id} className="rounded-2xl bg-rose-50 p-4">
+                  <div key={issue.id} className="rounded-2xl bg-[#FEF3EE] p-4">
                     <p className="text-[12px] font-medium text-[#111110]">{issue.title}</p>
                     <p className="mt-1 text-[12px] leading-5 text-[#7f1d1d]">
                       {issue.severity ?? "medium"} · {issue.status ?? "open"} · {issue.owner ?? "담당 미정"}
@@ -1142,13 +1142,13 @@ export default function PartnerWorkspaceShell({
                     <p className="text-[11px] font-medium uppercase tracking-wide text-amber-800/55">체크 대기</p>
                     <p className="mt-1 text-[20px] font-bold tracking-[-0.03em] text-amber-900">{openChecklistItems.length}</p>
                   </div>
-                  <div className="rounded-2xl bg-blue-50 p-4">
-                    <p className="text-[11px] font-medium uppercase tracking-wide text-blue-800/55">예정 일정</p>
-                    <p className="mt-1 text-[20px] font-bold tracking-[-0.03em] text-blue-900">{upcomingSchedule.length}</p>
+                  <div className="rounded-2xl bg-[#ECFDF5] p-4">
+                    <p className="text-[11px] font-medium uppercase tracking-wide text-[#084734]/55">예정 일정</p>
+                    <p className="mt-1 text-[20px] font-bold tracking-[-0.03em] text-[#084734]">{upcomingSchedule.length}</p>
                   </div>
-                  <div className="rounded-2xl bg-rose-50 p-4">
-                    <p className="text-[11px] font-medium uppercase tracking-wide text-rose-800/55">수량 불일치</p>
-                    <p className="mt-1 text-[20px] font-bold tracking-[-0.03em] text-rose-900">{quantityMismatchCount}</p>
+                  <div className="rounded-2xl bg-[#FEF3EE] p-4">
+                    <p className="text-[11px] font-medium uppercase tracking-wide text-[#B85C33]/55">수량 불일치</p>
+                    <p className="mt-1 text-[20px] font-bold tracking-[-0.03em] text-[#B85C33]">{quantityMismatchCount}</p>
                   </div>
                   <div className="rounded-2xl bg-emerald-50 p-4">
                     <p className="text-[11px] font-medium uppercase tracking-wide text-emerald-800/55">완료</p>
@@ -1350,9 +1350,9 @@ export default function PartnerWorkspaceShell({
                     <p className="text-[11px] font-medium uppercase tracking-wide text-amber-800/55">전달 대기</p>
                     <p className="mt-1 text-[20px] font-bold tracking-[-0.03em] text-amber-900">{pendingDocuments.length}</p>
                   </div>
-                  <div className="rounded-2xl bg-rose-50 p-4">
-                    <p className="text-[11px] font-medium uppercase tracking-wide text-rose-800/55">연체/만료</p>
-                    <p className="mt-1 text-[20px] font-bold tracking-[-0.03em] text-rose-900">
+                  <div className="rounded-2xl bg-[#FEF3EE] p-4">
+                    <p className="text-[11px] font-medium uppercase tracking-wide text-[#B85C33]/55">연체/만료</p>
+                    <p className="mt-1 text-[20px] font-bold tracking-[-0.03em] text-[#9A4A27]">
                       {overdueDocuments.length + docsRequiringAttention.filter((document) => {
                         const latestDelivery = getDocumentLatestDelivery(document)
                         return latestDelivery?.status === "expired"
@@ -1589,11 +1589,11 @@ export default function PartnerWorkspaceShell({
               <div className="space-y-3">
                 {issues.length > 0 ? (
                   issues.map((issue) => (
-                    <div key={issue.id} className="rounded-2xl bg-rose-50 px-4 py-3">
+                    <div key={issue.id} className="rounded-2xl bg-[#FEF3EE] px-4 py-3">
                       <div className="flex flex-col gap-3 lg:flex-row lg:items-start lg:justify-between">
                         <div>
                           <strong className="block text-[13px] text-[#111110]">{issue.title}</strong>
-                          <p className="mt-1 text-[12px] leading-5 text-[#7f1d1d]">
+                          <p className="mt-1 text-[12px] leading-5 text-[#9A4A27]">
                             {issue.category ?? "issue"} · {issue.severity ?? "medium"} · {issue.status ?? "open"}
                           </p>
                           {(issue.owner || issue.dueAt) && (

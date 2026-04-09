@@ -6,6 +6,7 @@ import type { FormEvent, ReactNode } from "react"
 
 import PartnerFormDialog from "@/components/admin/partners/PartnerFormDialog"
 import PartnerWorkspaceShell, { type PartnerWorkspaceTab } from "@/components/admin/partners/PartnerWorkspaceShell"
+import StandardQuoteTemplateEditor from "@/components/admin/partners/StandardQuoteTemplateEditor"
 import { Button } from "@/components/ui/button"
 import {
   Dialog,
@@ -17,6 +18,11 @@ import {
 } from "@/components/ui/dialog"
 import { Input } from "@/components/ui/input"
 import { Label } from "@/components/ui/label"
+import {
+  buildStandardQuoteDetails,
+  buildStandardQuoteFileLabel,
+  buildStandardQuoteTitle,
+} from "@/lib/standard-quote-template"
 import type {
   PartnerActivityLog,
   PartnerActivityLogInput,
@@ -105,6 +111,15 @@ function toSalesMonthStorageValue(value: string) {
   return value.slice(0, 7)
 }
 
+function getTodayDateValue() {
+  return new Intl.DateTimeFormat("en-CA", {
+    timeZone: "Asia/Seoul",
+    year: "numeric",
+    month: "2-digit",
+    day: "2-digit",
+  }).format(new Date())
+}
+
 function getDefaultDealId(deals: PartnerDeal[]) {
   return (
     deals.find((deal) => ["active", "contract_sent", "quoted", "discovery"].includes(deal.stage))?.id ??
@@ -159,15 +174,17 @@ function createDocumentFormState(
   defaultDealId?: string
 ): PartnerDocumentInput {
   if (!initialDocument) {
+    const issuedAt = getTodayDateValue()
     return {
       kind: "quote",
       status: "draft",
       title: "",
       dealId: defaultDealId || getDefaultDealId(deals),
       amount: 0,
-      issuedAt: "",
+      issuedAt,
       dueAt: "",
       fileLabel: "",
+      quoteDetails: buildStandardQuoteDetails({ issuedAt }),
     }
   }
 
@@ -181,6 +198,13 @@ function createDocumentFormState(
     issuedAt: initialDocument.issuedAt ?? "",
     dueAt: initialDocument.dueAt ?? "",
     fileLabel: initialDocument.fileLabel,
+    quoteDetails: initialDocument.quoteDetails
+      ? buildStandardQuoteDetails({
+          ...initialDocument.quoteDetails,
+          issuedAt: initialDocument.quoteDetails.issuedAt ?? initialDocument.issuedAt ?? "",
+          validUntil: initialDocument.quoteDetails.validUntil ?? initialDocument.dueAt ?? "",
+        })
+      : undefined,
   }
 }
 
@@ -405,17 +429,19 @@ function ResourceDialogShell({
   onClose,
   title,
   description,
+  contentClassName,
   children,
 }: {
   open: boolean
   onClose: () => void
   title: string
   description: string
+  contentClassName?: string
   children: ReactNode
 }) {
   return (
     <Dialog open={open} onOpenChange={(nextOpen) => !nextOpen && onClose()}>
-      <DialogContent className="bg-white sm:max-w-2xl">
+      <DialogContent className={`bg-white ${contentClassName ?? "sm:max-w-2xl"}`}>
         <DialogHeader>
           <DialogTitle>{title}</DialogTitle>
           <DialogDescription>{description}</DialogDescription>
@@ -553,6 +579,27 @@ function DocumentFormDialog({
 
   const handleSubmit = async (event: FormEvent<HTMLFormElement>) => {
     event.preventDefault()
+
+    if (form.kind === "quote") {
+      const quoteDetails = buildStandardQuoteDetails({
+        ...form.quoteDetails,
+        issuedAt: form.issuedAt || form.quoteDetails?.issuedAt,
+        validUntil: form.dueAt || form.quoteDetails?.validUntil,
+      })
+
+      await onSave({
+        ...form,
+        title: buildStandardQuoteTitle(quoteDetails),
+        fileLabel: buildStandardQuoteFileLabel(quoteDetails),
+        dealId: form.dealId || undefined,
+        amount: quoteDetails.grandTotalAmount ?? undefined,
+        issuedAt: quoteDetails.issuedAt || undefined,
+        dueAt: quoteDetails.validUntil || undefined,
+        quoteDetails,
+      })
+      return
+    }
+
     await onSave({
       ...form,
       title: form.title.trim(),
@@ -561,6 +608,7 @@ function DocumentFormDialog({
       amount: form.amount ? Number(form.amount) : undefined,
       issuedAt: form.issuedAt || undefined,
       dueAt: form.dueAt || undefined,
+      quoteDetails: undefined,
     })
   }
 
@@ -570,16 +618,32 @@ function DocumentFormDialog({
       onClose={onClose}
       title={initialDocument ? "문서 수정" : "문서 추가"}
       description="견적서, 계약서, 영수증을 거래 흐름과 연결해 관리합니다."
+      contentClassName={form.kind === "quote" ? "sm:max-w-[1180px]" : "sm:max-w-2xl"}
     >
       <form onSubmit={handleSubmit} className="grid gap-4">
-        <div className="grid gap-2">
-          <Label htmlFor="doc-title">문서 제목 *</Label>
-          <Input id="doc-title" value={form.title} onChange={(event) => set("title", event.target.value)} required />
-        </div>
         <div className="grid gap-4 md:grid-cols-3">
           <div className="grid gap-2">
             <Label htmlFor="doc-kind">문서 종류</Label>
-            <select id="doc-kind" value={form.kind} onChange={(event) => set("kind", event.target.value as PartnerDocumentInput["kind"])} className={SELECT_CLASSNAME}>
+            <select
+              id="doc-kind"
+              value={form.kind}
+              onChange={(event) => {
+                const nextKind = event.target.value as PartnerDocumentInput["kind"]
+                setForm((prev) => ({
+                  ...prev,
+                  kind: nextKind,
+                  quoteDetails:
+                    nextKind === "quote"
+                      ? buildStandardQuoteDetails({
+                          ...prev.quoteDetails,
+                          issuedAt: prev.issuedAt || prev.quoteDetails?.issuedAt || getTodayDateValue(),
+                          validUntil: prev.dueAt || prev.quoteDetails?.validUntil,
+                        })
+                      : prev.quoteDetails,
+                }))
+              }}
+              className={SELECT_CLASSNAME}
+            >
               <option value="quote">견적서</option>
               <option value="contract">계약서</option>
               <option value="receipt">영수증</option>
@@ -606,24 +670,41 @@ function DocumentFormDialog({
             </select>
           </div>
         </div>
-        <div className="grid gap-4 md:grid-cols-3">
-          <div className="grid gap-2">
-            <Label htmlFor="doc-amount">금액</Label>
-            <Input id="doc-amount" type="number" value={form.amount ?? 0} onChange={(event) => set("amount", Number(event.target.value || 0))} />
-          </div>
-          <div className="grid gap-2">
-            <Label htmlFor="doc-issued-at">발행일</Label>
-            <Input id="doc-issued-at" type="date" value={form.issuedAt ?? ""} onChange={(event) => set("issuedAt", event.target.value)} />
-          </div>
-          <div className="grid gap-2">
-            <Label htmlFor="doc-due-at">마감일</Label>
-            <Input id="doc-due-at" type="date" value={form.dueAt ?? ""} onChange={(event) => set("dueAt", event.target.value)} />
-          </div>
-        </div>
-        <div className="grid gap-2">
-          <Label htmlFor="doc-file-label">파일명 / 링크 라벨</Label>
-          <Input id="doc-file-label" value={form.fileLabel} onChange={(event) => set("fileLabel", event.target.value)} placeholder="예: 계약서_v3.pdf" />
-        </div>
+        {form.kind === "quote" ? (
+          <StandardQuoteTemplateEditor
+            value={form.quoteDetails}
+            issuedAt={form.issuedAt ?? ""}
+            validUntil={form.dueAt ?? ""}
+            onIssuedAtChange={(value) => set("issuedAt", value)}
+            onValidUntilChange={(value) => set("dueAt", value)}
+            onChange={(quoteDetails) => set("quoteDetails", quoteDetails)}
+          />
+        ) : (
+          <>
+            <div className="grid gap-2">
+              <Label htmlFor="doc-title">문서 제목 *</Label>
+              <Input id="doc-title" value={form.title} onChange={(event) => set("title", event.target.value)} required />
+            </div>
+            <div className="grid gap-4 md:grid-cols-3">
+              <div className="grid gap-2">
+                <Label htmlFor="doc-amount">금액</Label>
+                <Input id="doc-amount" type="number" value={form.amount ?? 0} onChange={(event) => set("amount", Number(event.target.value || 0))} />
+              </div>
+              <div className="grid gap-2">
+                <Label htmlFor="doc-issued-at">발행일</Label>
+                <Input id="doc-issued-at" type="date" value={form.issuedAt ?? ""} onChange={(event) => set("issuedAt", event.target.value)} />
+              </div>
+              <div className="grid gap-2">
+                <Label htmlFor="doc-due-at">마감일</Label>
+                <Input id="doc-due-at" type="date" value={form.dueAt ?? ""} onChange={(event) => set("dueAt", event.target.value)} />
+              </div>
+            </div>
+            <div className="grid gap-2">
+              <Label htmlFor="doc-file-label">파일명 / 링크 라벨</Label>
+              <Input id="doc-file-label" value={form.fileLabel} onChange={(event) => set("fileLabel", event.target.value)} placeholder="예: 계약서_v3.pdf" />
+            </div>
+          </>
+        )}
         <DialogFooter>
           <Button type="button" variant="outline" onClick={onClose} disabled={loading}>취소</Button>
           <Button type="submit" disabled={loading}>{loading ? "저장 중..." : initialDocument ? "문서 수정" : "문서 추가"}</Button>

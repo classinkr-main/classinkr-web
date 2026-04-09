@@ -11,7 +11,7 @@ type InstallStatus = "requested" | "confirmed" | "completed" | "cancelled"
 const STATUS_LABEL: Record<InstallStatus, string> = { requested: "요청됨", confirmed: "확정", completed: "완료", cancelled: "취소" }
 const STATUS_COLOR: Record<InstallStatus, string> = {
   requested: "bg-yellow-50 text-yellow-600",
-  confirmed: "bg-blue-50 text-blue-600",
+  confirmed: "bg-[#ECFDF5] text-[#084734]",
   completed: "bg-green-50 text-green-600",
   cancelled: "bg-[#f0f0ec] text-[#1a1a1a]/40",
 }
@@ -172,7 +172,7 @@ export default function PartnerSchedulePage() {
                             <span className={`inline-flex items-center px-2 py-0.5 rounded-full text-[11px] font-medium ${STATUS_COLOR[s.status as InstallStatus]}`}>
                               {STATUS_LABEL[s.status as InstallStatus]}
                             </span>
-                            <span className="text-xs font-semibold text-blue-400">{dday(s.scheduled_date)}</span>
+                            <span className="text-xs font-semibold text-[#084734]">{dday(s.scheduled_date)}</span>
                           </div>
                           <p className="text-sm font-medium text-[#1a1a1a]">{fmtDate(s.scheduled_date)}</p>
                           {s.location && <p className="text-xs text-[#1a1a1a]/50 mt-0.5">{s.location}</p>}

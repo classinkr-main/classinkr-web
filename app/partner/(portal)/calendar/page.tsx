@@ -71,9 +71,9 @@ function sourceTone(source: CalendarSourceType) {
   return (
     {
       installation: "bg-amber-50 text-amber-700 border-amber-200",
-      meeting: "bg-blue-50 text-blue-700 border-blue-200",
-      document_due: "bg-violet-50 text-violet-700 border-violet-200",
-      internal: "bg-slate-100 text-slate-700 border-slate-200",
+      meeting: "bg-[#ECFDF5] text-[#084734] border-[#D1FAE5]",
+      document_due: "bg-[#f0f0ec] text-[#615D59] border-[#e8e8e4]",
+      internal: "bg-[#f0f0ec] text-[#615D59] border-[#e8e8e4]",
     }[source] ?? "bg-white text-[#1a1a1a]/60 border-[#e8e8e4]"
   )
 }
@@ -278,7 +278,7 @@ export default function PartnerCalendarPage() {
                         {cellEvents.slice(0, 2).map((event) => (
                           <div key={`${cell}-${event.id}`} className="rounded-lg border border-[#ecece8] bg-[#fafaf8] px-2 py-1">
                             <div className="flex items-center gap-1.5">
-                              <span className={`h-1.5 w-1.5 rounded-full ${sourceTone(event.source_type).includes("amber") ? "bg-amber-500" : sourceTone(event.source_type).includes("blue") ? "bg-blue-500" : sourceTone(event.source_type).includes("violet") ? "bg-violet-500" : "bg-slate-500"}`} />
+                              <span className={`h-1.5 w-1.5 rounded-full ${event.source_type === "installation" ? "bg-amber-500" : event.source_type === "meeting" ? "bg-[#084734]" : "bg-[#A39E98]"}`} />
                               <p className="truncate text-[11px] font-medium text-[#1a1a1a]">{event.title}</p>
                             </div>
                           </div>
@@ -327,7 +327,7 @@ export default function PartnerCalendarPage() {
               <CardHeader className="pb-3"><CardTitle className="text-sm font-semibold">빠른 보기</CardTitle></CardHeader>
               <CardContent className="space-y-3">
                 <div className="flex items-center justify-between rounded-xl border border-[#e8e8e4] bg-[#f7f7f5] px-4 py-3"><div className="flex items-center gap-2 text-sm text-[#1a1a1a]/60"><Wrench className="h-4 w-4 text-amber-600" />설치 일정</div><span className="text-sm font-semibold">{installationCount}건</span></div>
-                <div className="flex items-center justify-between rounded-xl border border-[#e8e8e4] bg-[#f7f7f5] px-4 py-3"><div className="flex items-center gap-2 text-sm text-[#1a1a1a]/60"><Users className="h-4 w-4 text-blue-600" />오늘 이후 일정</div><span className="text-sm font-semibold">{upcomingCount}건</span></div>
+                <div className="flex items-center justify-between rounded-xl border border-[#e8e8e4] bg-[#f7f7f5] px-4 py-3"><div className="flex items-center gap-2 text-sm text-[#1a1a1a]/60"><Users className="h-4 w-4 text-[#084734]" />오늘 이후 일정</div><span className="text-sm font-semibold">{upcomingCount}건</span></div>
                 <div className="flex items-center justify-between rounded-xl border border-[#e8e8e4] bg-[#f7f7f5] px-4 py-3"><div className="flex items-center gap-2 text-sm text-[#1a1a1a]/60"><CalendarDays className="h-4 w-4" />현재 필터</div><span className="text-sm font-semibold">{visibleEvents.length}건</span></div>
               </CardContent>
             </Card>

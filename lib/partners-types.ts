@@ -118,6 +118,7 @@ export interface PartnerQuoteLineItem {
 }
 
 export interface PartnerQuoteDetails {
+  templateId?: string
   estimateNumber?: string
   workflowStatus?: PartnerQuoteWorkflowStatus
   issuedAt?: string
@@ -374,6 +375,7 @@ export interface PartnerQuoteLineItemInput {
 }
 
 export interface PartnerQuoteDetailsInput {
+  templateId?: string
   estimateNumber?: string
   workflowStatus?: PartnerQuoteWorkflowStatus
   issuedAt?: string

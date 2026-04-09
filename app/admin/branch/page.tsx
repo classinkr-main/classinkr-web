@@ -14,7 +14,7 @@ const STATUS_LABEL: Record<string, string> = {
 }
 
 const STATUS_COLOR: Record<string, string> = {
-  new: "bg-blue-50 text-blue-600",
+  new: "bg-[#ECFDF5] text-[#084734]",
   contacted: "bg-yellow-50 text-yellow-600",
   converted: "bg-green-50 text-green-600",
   closed: "bg-[#f0f0ec] text-[#1a1a1a]/40",
@@ -106,7 +106,7 @@ export default function BranchPage() {
       {loading ? (
         <p className="text-[13px] text-[#1a1a1a]/30">불러오는 중...</p>
       ) : error ? (
-        <div className="bg-white rounded-xl border border-red-100 py-10 text-center text-[13px] text-red-500">
+        <div className="bg-white rounded-xl border border-[#F6D5C5] py-10 text-center text-[13px] text-[#B85C33]">
           {error}
         </div>
       ) : stats.length === 0 ? (
@@ -149,7 +149,7 @@ export default function BranchPage() {
                       <tr key={s.branch} onClick={() => setSelected(s.branch)} className="border-b border-[#e8e8e4] last:border-0 hover:bg-[#fafaf8] cursor-pointer transition-colors">
                         <td className="px-4 py-3 font-medium text-[#111110]">{s.branch}</td>
                         <td className="px-4 py-3 font-semibold">{s.total}</td>
-                        <td className="px-4 py-3 text-blue-600">{s.new}</td>
+                        <td className="px-4 py-3 text-[#084734]">{s.new}</td>
                         <td className="px-4 py-3 text-yellow-600">{s.contacted}</td>
                         <td className="px-4 py-3 text-green-600">{s.converted}</td>
                         <td className="px-4 py-3 text-[#1a1a1a]/40">{s.closed}</td>
@@ -164,7 +164,7 @@ export default function BranchPage() {
                 <div className="grid grid-cols-3 gap-4">
                   {[
                     { icon: <Users className="w-4 h-4 text-[#1a1a1a]/40" />, label: "전체 리드", value: selectedStat?.total ?? 0, accent: "" },
-                    { icon: <TrendingUp className="w-4 h-4 text-blue-500" />, label: "신규", value: selectedStat?.new ?? 0, accent: "bg-blue-50" },
+                    { icon: <TrendingUp className="w-4 h-4 text-[#084734]" />, label: "신규", value: selectedStat?.new ?? 0, accent: "bg-[#ECFDF5]" },
                     { icon: <CheckCircle2 className="w-4 h-4 text-green-500" />, label: "전환율", value: selectedStat?.convRate ?? "0%", accent: "bg-green-50" },
                   ].map((card) => (
                     <div key={card.label} className="bg-white rounded-xl border border-[#e8e8e4] p-5">

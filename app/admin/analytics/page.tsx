@@ -114,7 +114,7 @@ function getTrend(current: number, previous: number) {
 
 function trendTone(value: number) {
   if (value > 0) return "text-green-600 bg-green-50"
-  if (value < 0) return "text-red-500 bg-red-50"
+  if (value < 0) return "text-[#B85C33] bg-[#FEF3EE]"
   return "text-[#1a1a1a]/40 bg-[#f0f0ec]"
 }
 
@@ -193,8 +193,8 @@ function InsightCard({
     neutral: "bg-[#fafaf8] border-[#e8e8e4]",
     success: "bg-green-50/70 border-green-100",
     warning: "bg-amber-50/70 border-amber-100",
-    danger: "bg-red-50/70 border-red-100",
-    info: "bg-blue-50/70 border-blue-100",
+    danger: "bg-[#FEF3EE]/70 border-[#F6D5C5]",
+    info: "bg-[#ECFDF5]/70 border-[#D1FAE5]",
   }
 
   return (
@@ -285,11 +285,11 @@ const CAMPAIGN_STATUS_LABEL: Record<EmailCampaign["status"], string> = {
 
 const CAMPAIGN_STATUS_COLOR: Record<EmailCampaign["status"], string> = {
   draft: "bg-amber-50 text-amber-700",
-  sent: "bg-green-50 text-green-700",
-  failed: "bg-red-50 text-red-600",
+  sent: "bg-[#ECFDF5] text-[#084734]",
+  failed: "bg-[#FEF3EE] text-[#B85C33]",
 }
 
-const CHART_COLORS = ["#111110", "#4b8cf7", "#22c55e", "#f59e0b", "#ef4444"]
+const CHART_COLORS = ["#111110", "#084734", "#065c41", "#f59e0b", "#B85C33"]
 
 export default function AnalyticsPage() {
   const [activeTab, setActiveTab] = useState<AnalyticsTab>("leads")
@@ -461,7 +461,7 @@ export default function AnalyticsPage() {
     {
       title: "CTA 클릭",
       status: "부분 연결",
-      tone: "bg-blue-50 text-blue-700 border-blue-100",
+      tone: "bg-[#ECFDF5] text-[#084734] border-[#D1FAE5]",
       description: "데모 모달 진입 버튼에서 click_cta 이벤트가 전송됩니다.",
       next: "Hero, Footer, 블로그 CTA까지 확장 연결 권장",
       icon: <Link2 className="w-4 h-4" />,
@@ -485,7 +485,7 @@ export default function AnalyticsPage() {
     {
       title: "페이지 체류 시간",
       status: "미연결",
-      tone: "bg-red-50 text-red-600 border-red-100",
+      tone: "bg-[#FEF3EE] text-[#B85C33] border-[#F6D5C5]",
       description: "현재 관리자에서 직접 읽을 수 있는 체류 데이터 소스가 없습니다.",
       next: "page_view와 time_on_page 수집 설계 필요",
       icon: <Clock3 className="w-4 h-4" />,
@@ -501,7 +501,7 @@ export default function AnalyticsPage() {
     {
       title: "영상 조회",
       status: "부분 연결",
-      tone: "bg-blue-50 text-blue-700 border-blue-100",
+      tone: "bg-[#ECFDF5] text-[#084734] border-[#D1FAE5]",
       description: "Hero의 데모 영상 보기 버튼은 view_demo_video 이벤트를 전송합니다.",
       next: "CTA 클릭과 함께 캠페인/페이지 정보 파라미터 추가 필요",
       icon: <Send className="w-4 h-4" />,

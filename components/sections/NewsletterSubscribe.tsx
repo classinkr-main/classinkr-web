@@ -110,7 +110,7 @@ export function NewsletterSubscribe({ variant = "dark" }: Props) {
       </form>
 
       {error && (
-        <p className={`text-sm mt-2 ${isDark ? "text-red-400" : "text-red-500"}`}>
+        <p className={`text-sm mt-2 ${isDark ? "text-[#F6D5C5]" : "text-[#B85C33]"}`}>
           {error}
         </p>
       )}

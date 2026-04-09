@@ -329,11 +329,11 @@ export function PricingCalculator() {
                     <div className={`relative rounded-[1.6rem] transition-all duration-500 w-full ${isBusinessRecom ? 'scale-[1.03] z-20' : 'opacity-85 z-10'}`}>
                         {/* Glow Gradient Layer (Only active when recommended) */}
                         {isBusinessRecom && (
-                            <div className="absolute -inset-[4px] bg-gradient-to-r from-blue-400 via-indigo-500 to-purple-500 rounded-[1.8rem] blur-[12px] opacity-40 animate-pulse"></div>
+                            <div className="absolute -inset-[4px] bg-gradient-to-r from-[#084734] via-[#6EE7B7] to-[#065c41] rounded-[1.8rem] blur-[12px] opacity-40 animate-pulse"></div>
                         )}
                         <div className={`relative w-full h-full p-8 rounded-[1.5rem] bg-white border border-slate-200 transition-all duration-300 ${isBusinessRecom ? '!border-transparent shadow-xl' : 'shadow-sm'}`}>
                             {isBusinessRecom && (
-                                <div className="absolute -top-3.5 right-6 bg-gradient-to-r from-indigo-500 to-purple-600 text-white text-[11.5px] uppercase tracking-wider font-extrabold px-4 py-1.5 rounded-full shadow-lg flex items-center gap-1.5">
+                                <div className="absolute -top-3.5 right-6 bg-gradient-to-r from-[#084734] to-[#065c41] text-white text-[11.5px] uppercase tracking-wider font-extrabold px-4 py-1.5 rounded-full shadow-lg flex items-center gap-1.5">
                                     <Sparkles className="w-3.5 h-3.5" /> BEST VALUE
                                 </div>
                             )}
@@ -349,7 +349,7 @@ export function PricingCalculator() {
                                 </div>
                             )}
 
-                            <p className={`text-[13.5px] leading-relaxed mt-2 ${isBusinessRecom ? 'text-indigo-900 font-bold' : 'text-slate-500 font-medium'}`}>
+                            <p className={`text-[13.5px] leading-relaxed mt-2 ${isBusinessRecom ? 'text-[#111110] font-bold' : 'text-slate-500 font-medium'}`}>
                                 {isBusinessRecom
                                     ? "✨ 소규모 수업부터 단기로 사용하여 쓰신 만큼만 정확히 과금되는 가장 매력적인 합리적 선택입니다!"
                                     : "비교적 넉넉한 수업 환경을 구성할 경우 전체 예산 관리를 위해 다소 부담이 될 수 있으므로 정액형을 권합니다."}
@@ -365,11 +365,11 @@ export function PricingCalculator() {
                     <div className={`relative rounded-[1.6rem] transition-all duration-500 w-full ${!isBusinessRecom ? 'scale-[1.03] z-20' : 'opacity-85 z-10'}`}>
                         {/* Glow Gradient Layer (Only active when recommended) */}
                         {!isBusinessRecom && (
-                            <div className="absolute -inset-[4px] bg-gradient-to-r from-blue-400 via-indigo-500 to-purple-500 rounded-[1.8rem] blur-[12px] opacity-40 animate-pulse"></div>
+                            <div className="absolute -inset-[4px] bg-gradient-to-r from-[#084734] via-[#6EE7B7] to-[#065c41] rounded-[1.8rem] blur-[12px] opacity-40 animate-pulse"></div>
                         )}
                         <div className={`relative w-full h-full p-8 rounded-[1.5rem] bg-white border border-slate-200 transition-all duration-300 ${!isBusinessRecom ? '!border-transparent shadow-xl' : 'shadow-sm'}`}>
                             {!isBusinessRecom && (
-                                <div className="absolute -top-3.5 right-6 bg-gradient-to-r from-indigo-500 to-purple-600 text-white text-[11.5px] uppercase tracking-wider font-extrabold px-4 py-1.5 rounded-full shadow-lg flex items-center gap-1.5">
+                                <div className="absolute -top-3.5 right-6 bg-gradient-to-r from-[#084734] to-[#065c41] text-white text-[11.5px] uppercase tracking-wider font-extrabold px-4 py-1.5 rounded-full shadow-lg flex items-center gap-1.5">
                                     <Sparkles className="w-3.5 h-3.5" /> BEST VALUE
                                 </div>
                             )}
@@ -380,7 +380,7 @@ export function PricingCalculator() {
                                 {formatCurrency(totalSubscriptionKRW)}<span className="text-xl font-semibold text-slate-400 ml-1.5 font-sans">원 / 월</span>
                             </div>
 
-                            <p className={`text-[13.5px] leading-relaxed mt-4 pt-1 ${!isBusinessRecom ? 'text-indigo-900 font-bold' : 'text-slate-500 font-medium'}`}>
+                            <p className={`text-[13.5px] leading-relaxed mt-4 pt-1 ${!isBusinessRecom ? 'text-[#111110] font-bold' : 'text-slate-500 font-medium'}`}>
                                 {!isBusinessRecom
                                     ? (subReasons.length > 0 ? `✨ 고급형 기능( ${subReasons.join(', ')} )이 자동 포함되어있으며, 추가 옵션 비용 걱정 없이 대규모 수업을 이어갈 수 있어 압도적으로 유리합니다!` : "✨ 마음 편하게 제약 없이 마음껏 수업을 개설할 수 있어, 장기적으로 무제한 정액제를 쓰시는 쪽이 압도적인 가성비를 자랑합니다!")
                                     : "소규모, 안정기 이전의 경우 현재 쓰임새 대비 구독 고정비가 비교적 클 수 있으므로 효율적인 기본 충전형(Business)을 고려해 보세요."}

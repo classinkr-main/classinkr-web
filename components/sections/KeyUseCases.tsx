@@ -20,7 +20,7 @@ export function KeyUseCases() {
 
                 <Tabs defaultValue="classes" className="w-full max-w-5xl mx-auto">
                     <div className="flex justify-center mb-12 px-4">
-                        <TabsList className="grid w-full max-w-3xl grid-cols-2 md:grid-cols-4 h-auto p-1.5 bg-[rgba(0,0,0,0.06)] rounded-2xl gap-1">
+                        <TabsList className="grid w-full max-w-3xl grid-cols-2 sm:grid-cols-2 md:grid-cols-4 h-auto p-1.5 bg-[rgba(0,0,0,0.06)] rounded-2xl gap-1">
                             <TabsTrigger value="classes" className="py-3 text-base md:text-lg font-bold rounded-xl data-[state=active]:bg-white data-[state=active]:shadow-sm data-[state=active]:text-[#111110] text-[#A39E98] transition-all">인터랙티브 수업</TabsTrigger>
                             <TabsTrigger value="homework" className="py-3 text-base md:text-lg font-bold rounded-xl data-[state=active]:bg-white data-[state=active]:shadow-sm data-[state=active]:text-[#111110] text-[#A39E98] transition-all">과제 및 테스트</TabsTrigger>
                             <TabsTrigger value="admin" className="py-3 text-base md:text-lg font-bold rounded-xl data-[state=active]:bg-white data-[state=active]:shadow-sm data-[state=active]:text-[#111110] text-[#A39E98] transition-all">관리자 대시보드</TabsTrigger>
@@ -39,7 +39,7 @@ export function KeyUseCases() {
                                     "자동 출석 체크",
                                 ]}
                                 imageColor="bg-[#ECFDF5]"
-                                imageSrc="/images/use-cases/interactive.png"
+                                imageSrc="/images/use-cases/interactive-cutout.png"
                                 imageAlt="Interactive 3D Elements"
                             />
                         </TabsContent>
@@ -108,7 +108,7 @@ function UseCaseCard({ title, desc, points, imageColor, imageSrc, imageAlt }: { 
                             <motion.img 
                                 src={imageSrc} 
                                 alt={imageAlt || title}
-                                className="absolute -bottom-8 -right-8 w-64 md:w-80 h-auto z-20 drop-shadow-2xl"
+                                className="absolute -bottom-8 -right-8 w-64 md:w-80 h-auto z-20 drop-shadow-[0_20px_28px_rgba(8,71,52,0.16)]"
                                 animate={{ y: [0, -12, 0] }}
                                 transition={{ repeat: Infinity, duration: 4, ease: "easeInOut" }}
                             />

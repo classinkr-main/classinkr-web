@@ -304,7 +304,7 @@ export function CalendarEventQuickAdjustDialog({
           )}
 
           {error && (
-            <p className="rounded-md border border-red-200 bg-red-50 px-3 py-2 text-sm text-red-600">
+            <p className="rounded-md border border-[#F6D5C5] bg-[#FEF3EE] px-3 py-2 text-sm text-[#B85C33]">
               {error}
             </p>
           )}
@@ -315,7 +315,7 @@ export function CalendarEventQuickAdjustDialog({
               variant="outline"
               onClick={handleCancelEvent}
               disabled={!canMutate || saving || cancelling}
-              className="border-red-200 text-red-700 hover:bg-red-50 hover:text-red-800"
+              className="border-[#F6D5C5] text-[#B85C33] hover:bg-[#FEF3EE] hover:text-[#9A4A27]"
             >
               {cancelling ? "취소 처리 중..." : "일정 취소"}
             </Button>

@@ -24,12 +24,12 @@ import type { CalendarEvent, EventSource, EventType } from "@/lib/calendar-data"
 const WEEKDAYS = ["일", "월", "화", "수", "목", "금", "토"]
 
 const EVENT_TYPES: { value: EventType; label: string; color: string; bg: string; dot: string }[] = [
-  { value: "team",     label: "팀 일정",  color: "text-blue-700",  bg: "bg-blue-50 border-blue-200",   dot: "bg-blue-500" },
-  { value: "meeting",  label: "회의",     color: "text-violet-700", bg: "bg-violet-50 border-violet-200", dot: "bg-violet-500" },
-  { value: "deadline", label: "마감",     color: "text-red-700",   bg: "bg-red-50 border-red-200",     dot: "bg-red-500" },
+  { value: "team",     label: "팀 일정",  color: "text-[#084734]",  bg: "bg-[#ECFDF5] border-[#D1FAE5]",   dot: "bg-[#084734]" },
+  { value: "meeting",  label: "회의",     color: "text-[#065c41]",  bg: "bg-[#D1FAE5] border-[#A7F3D0]",   dot: "bg-[#065c41]" },
+  { value: "deadline", label: "마감",     color: "text-[#B85C33]",  bg: "bg-[#FEF3EE] border-[#F6D5C5]",   dot: "bg-[#B85C33]" },
   { value: "launch",   label: "런칭",     color: "text-emerald-700", bg: "bg-emerald-50 border-emerald-200", dot: "bg-emerald-500" },
-  { value: "holiday",  label: "휴일",     color: "text-orange-700", bg: "bg-orange-50 border-orange-200", dot: "bg-orange-400" },
-  { value: "other",    label: "기타",     color: "text-gray-600",  bg: "bg-gray-50 border-gray-200",   dot: "bg-gray-400" },
+  { value: "holiday",  label: "휴일",     color: "text-amber-700",  bg: "bg-amber-50 border-amber-200",    dot: "bg-amber-400" },
+  { value: "other",    label: "기타",     color: "text-[#615D59]",  bg: "bg-[#f0f0ec] border-[#e8e8e4]",   dot: "bg-[#A39E98]" },
 ]
 
 const SOURCE_FILTERS: { value: "all" | EventSource; label: string }[] = [
@@ -412,7 +412,7 @@ export default function AdminCalendarPage() {
       </div>
 
       {errorMessage && (
-        <div className="mb-6 rounded-2xl border border-red-200 bg-red-50 px-5 py-4 text-[12px] leading-5 text-red-700">
+        <div className="mb-6 rounded-2xl border border-[#F6D5C5] bg-[#FEF3EE] px-5 py-4 text-[12px] leading-5 text-[#B85C33]">
           <strong className="mr-2">캘린더 오류:</strong>
           <span>{errorMessage}</span>
         </div>
@@ -487,7 +487,7 @@ export default function AdminCalendarPage() {
               <div
                 key={d}
                 className={`py-2.5 text-center text-[11px] font-medium ${
-                  i === 0 ? "text-red-400" : i === 6 ? "text-blue-400" : "text-[#1a1a1a]/40"
+                  i === 0 ? "text-[#B85C33]" : i === 6 ? "text-[#615D59]" : "text-[#1a1a1a]/40"
                 }`}
               >
                 {d}
@@ -537,9 +537,9 @@ export default function AdminCalendarPage() {
                       isToday
                         ? "bg-[#111110] text-white"
                         : isSun
-                          ? "text-red-400"
+                          ? "text-[#B85C33]"
                           : isWeekend
-                            ? "text-blue-400"
+                            ? "text-[#615D59]"
                             : "text-[#1a1a1a]/70"
                     }`}>
                       {day}
@@ -656,7 +656,7 @@ export default function AdminCalendarPage() {
                                 <button
                                   onClick={() => setDeleteTarget(ev)}
                                   aria-label={`${ev.title} 일정 삭제`}
-                                  className="w-6 h-6 flex items-center justify-center rounded hover:bg-red-50 text-[#1a1a1a]/30 hover:text-red-500 transition-colors"
+                                  className="w-6 h-6 flex items-center justify-center rounded hover:bg-[#FEF3EE] text-[#1a1a1a]/30 hover:text-[#B85C33] transition-colors"
                                 >
                                   <Trash2 className="w-3 h-3" />
                                 </button>
@@ -742,7 +742,7 @@ export default function AdminCalendarPage() {
                           <span className={`w-2 h-2 rounded-full shrink-0 ${style.dot}`} />
                           <span className="text-[13px] font-medium text-[#111110] truncate">{ev.title}</span>
                         </div>
-                        <span className={`text-[11px] shrink-0 ${daysLeft === 0 ? "text-red-500 font-semibold" : "text-[#1a1a1a]/35"}`}>
+                        <span className={`text-[11px] shrink-0 ${daysLeft === 0 ? "text-[#B85C33] font-semibold" : "text-[#1a1a1a]/35"}`}>
                           {daysLeft === 0 ? "오늘" : `D-${daysLeft}`}
                         </span>
                       </div>
@@ -810,7 +810,7 @@ export default function AdminCalendarPage() {
               취소
             </Button>
             <Button
-              className="bg-red-500 text-white hover:bg-red-600"
+              className="bg-[#B85C33] text-white hover:bg-[#9A4A27]"
               onClick={() => deleteTarget && handleDelete(deleteTarget)}
               disabled={formLoading || !deleteTarget}
             >

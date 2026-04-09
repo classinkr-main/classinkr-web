@@ -737,7 +737,7 @@ export default function BlogPostEditor({
                                       localStorage.setItem(TEMPLATE_STORAGE_KEY, JSON.stringify(next))
                                       setConfirmDeleteTemplateId(null)
                                     }}
-                                    className="text-[11px] font-medium text-red-500 hover:text-red-700 transition-colors"
+                                    className="text-[11px] font-medium text-[#B85C33] hover:text-[#9A4A27] transition-colors"
                                   >
                                     삭제 확인
                                   </button>
@@ -753,7 +753,7 @@ export default function BlogPostEditor({
                                 <button
                                   type="button"
                                   onClick={() => setConfirmDeleteTemplateId(t.id)}
-                                  className="text-[#1a1a1a]/25 hover:text-red-400 transition-colors"
+                                  className="text-[#1a1a1a]/25 hover:text-[#B85C33] transition-colors"
                                 >
                                   <X className="h-3.5 w-3.5" />
                                 </button>
@@ -787,12 +787,12 @@ export default function BlogPostEditor({
             <div className="flex items-center justify-between border-b border-[#e8e8e4] px-6 py-4">
               <div className="flex items-center gap-3">
                 <div className={`flex h-8 w-8 items-center justify-center rounded-xl ${
-                  aiState.action === "card-news" ? "bg-blue-50" :
-                  aiState.action === "reels" ? "bg-purple-50" :
+                  aiState.action === "card-news" ? "bg-[#ECFDF5]" :
+                  aiState.action === "reels" ? "bg-[#F6F5F4]" :
                   aiState.action === "draft" ? "bg-amber-50" : "bg-emerald-50"
                 }`}>
-                  {aiState.action === "card-news" && <LayoutTemplate className="h-4 w-4 text-blue-500" />}
-                  {aiState.action === "reels" && <Video className="h-4 w-4 text-purple-500" />}
+                  {aiState.action === "card-news" && <LayoutTemplate className="h-4 w-4 text-[#084734]" />}
+                  {aiState.action === "reels" && <Video className="h-4 w-4 text-[#615D59]" />}
                   {aiState.action === "optimize" && <Wand2 className="h-4 w-4 text-emerald-600" />}
                   {aiState.action === "draft" && <Sparkles className="h-4 w-4 text-amber-500" />}
                 </div>
@@ -846,8 +846,8 @@ export default function BlogPostEditor({
               )}
               {aiState.status === "error" && (
                 <div className="flex flex-col items-center gap-4 py-10 text-center">
-                  <div className="flex h-12 w-12 items-center justify-center rounded-full bg-red-50">
-                    <X className="h-5 w-5 text-red-400" />
+                  <div className="flex h-12 w-12 items-center justify-center rounded-full bg-[#FEF3EE]">
+                    <X className="h-5 w-5 text-[#B85C33]" />
                   </div>
                   <div>
                     <p className="text-sm font-medium text-[#111110]">오류가 발생했습니다</p>
@@ -1153,9 +1153,9 @@ export default function BlogPostEditor({
         {notice && (() => {
           const isError = /문제|오류|필수|입력/.test(notice)
           return (
-            <div className={`flex items-center justify-between border-t px-6 py-2 ${isError ? "border-red-100 bg-red-50" : "border-emerald-100 bg-emerald-50"}`}>
-              <span className={`text-[13px] ${isError ? "text-red-700" : "text-emerald-800"}`}>{notice}</span>
-              <button type="button" onClick={() => setNotice("")} className={`${isError ? "text-red-400 hover:text-red-700" : "text-emerald-500 hover:text-emerald-800"}`}>
+            <div className={`flex items-center justify-between border-t px-6 py-2 ${isError ? "border-[#F6D5C5] bg-[#FEF3EE]" : "border-emerald-100 bg-emerald-50"}`}>
+              <span className={`text-[13px] ${isError ? "text-[#B85C33]" : "text-emerald-800"}`}>{notice}</span>
+              <button type="button" onClick={() => setNotice("")} className={`${isError ? "text-[#B85C33] hover:text-[#9A4A27]" : "text-emerald-500 hover:text-emerald-800"}`}>
                 <X className="h-3.5 w-3.5" />
               </button>
             </div>
@@ -1176,7 +1176,7 @@ export default function BlogPostEditor({
                 <div className="flex items-center justify-between">
                   <Label htmlFor="title">제목</Label>
                   <span className={`text-[11px] tabular-nums ${
-                    form.title.length > 60 ? "text-red-500" :
+                    form.title.length > 60 ? "text-[#B85C33]" :
                     form.title.length >= 30 ? "text-emerald-600" :
                     "text-[#1a1a1a]/30"
                   }`}>
@@ -1208,7 +1208,7 @@ export default function BlogPostEditor({
                   <div className="flex items-center justify-between">
                     <Label htmlFor="excerpt">한 줄 요약</Label>
                     <span className={`text-[11px] tabular-nums ${
-                      form.excerpt.length > 160 ? "text-red-500" :
+                      form.excerpt.length > 160 ? "text-[#B85C33]" :
                       form.excerpt.length >= 80 ? "text-emerald-600" :
                       "text-[#1a1a1a]/30"
                     }`}>
@@ -1750,11 +1750,11 @@ export default function BlogPostEditor({
                     {seoAnalysis.checks.map((check) => (
                       <div key={check.id} className="flex items-start gap-3 transition-colors duration-100">
                         <div className={`mt-0.5 flex h-5 w-5 shrink-0 items-center justify-center rounded-full ${
-                          check.ok ? "bg-emerald-100" : "bg-red-50"
+                          check.ok ? "bg-emerald-100" : "bg-[#FEF3EE]"
                         }`}>
                           {check.ok
                             ? <Check className="h-3 w-3 text-emerald-600" />
-                            : <X className="h-3 w-3 text-red-400" />
+                            : <X className="h-3 w-3 text-[#B85C33]" />
                           }
                         </div>
                         <div className="min-w-0">
@@ -1776,7 +1776,7 @@ export default function BlogPostEditor({
                       <div className="flex items-center justify-between">
                         <Label className="text-[12px]">SEO 제목</Label>
                         <span className={`text-[11px] tabular-nums ${
-                          form.seoTitle.length > 60 ? "text-red-500" :
+                          form.seoTitle.length > 60 ? "text-[#B85C33]" :
                           form.seoTitle.length >= 30 ? "text-emerald-600" :
                           "text-[#1a1a1a]/30"
                         }`}>
@@ -1793,7 +1793,7 @@ export default function BlogPostEditor({
                       <div className="flex items-center justify-between">
                         <Label className="text-[12px]">메타 설명</Label>
                         <span className={`text-[11px] tabular-nums ${
-                          form.seoDescription.length > 160 ? "text-red-500" :
+                          form.seoDescription.length > 160 ? "text-[#B85C33]" :
                           form.seoDescription.length >= 120 ? "text-emerald-600" :
                           "text-[#1a1a1a]/30"
                         }`}>
@@ -1901,15 +1901,15 @@ export default function BlogPostEditor({
                           action: "card-news" as AiAction,
                           label: "카드뉴스 생성",
                           desc: "표지 + 6~8장 슬라이드 구성안 자동 생성",
-                          icon: <LayoutTemplate className="h-[18px] w-[18px] text-blue-500" />,
-                          bg: "bg-blue-50",
+                          icon: <LayoutTemplate className="h-[18px] w-[18px] text-[#084734]" />,
+                          bg: "bg-[#ECFDF5]",
                         },
                         {
                           action: "reels" as AiAction,
                           label: "릴스 스크립트",
                           desc: "Hook 3초 + 핵심 포인트 + CTA 자막 생성",
-                          icon: <Video className="h-[18px] w-[18px] text-purple-500" />,
-                          bg: "bg-purple-50",
+                          icon: <Video className="h-[18px] w-[18px] text-[#615D59]" />,
+                          bg: "bg-[#F6F5F4]",
                         },
                         {
                           action: "optimize" as AiAction,

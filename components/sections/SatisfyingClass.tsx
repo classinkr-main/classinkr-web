@@ -99,7 +99,7 @@ export function SatisfyingClass() {
                             style={{ boxShadow: 'rgba(0,0,0,0.04) 0px 4px 18px, rgba(0,0,0,0.027) 0px 2px 7.8px, rgba(0,0,0,0.02) 0px 0.8px 2.9px' }}
                         >
                             <div className="flex items-center gap-3 mb-6">
-                                <div className="w-3 h-3 rounded-full bg-red-400" />
+                                <div className="w-3 h-3 rounded-full bg-[#B85C33]" />
                                 <div className="w-3 h-3 rounded-full bg-amber-400" />
                                 <div className="w-3 h-3 rounded-full bg-emerald-400" />
                             </div>
@@ -110,10 +110,10 @@ export function SatisfyingClass() {
                                 </h3>
                                 <div className="mt-8 flex gap-4">
                                     <div className="w-12 h-12 rounded-2xl bg-white/10 border border-white/5 flex items-center justify-center">
-                                        <div className="w-6 h-6 border-2 border-[#ECFDF5] rounded-full" />
+                                        <div className="w-6 h-6 border border-[#ECFDF5] rounded-full" />
                                     </div>
                                     <div className="w-12 h-12 rounded-2xl bg-white/10 border border-white/5 flex items-center justify-center">
-                                        <div className="w-6 h-6 bg-blue-400 rounded-sm" />
+                                        <div className="w-6 h-6 bg-[#084734] rounded-sm" />
                                     </div>
                                     <div className="w-12 h-12 rounded-2xl bg-white/10 border border-white/5 flex items-center justify-center">
                                         <div className="w-6 h-1 border-t-2 border-b-2 border-white/60" />

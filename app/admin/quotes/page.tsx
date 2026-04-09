@@ -173,11 +173,11 @@ const STATUS_LABEL: Record<QuoteStatus, string> = {
 
 const STATUS_COLOR: Record<QuoteStatus, string> = {
   draft: "bg-[#f0f0ec] text-[#1a1a1a]/50",
-  sent: "bg-blue-50 text-blue-600",
+  sent: "bg-[#ECFDF5] text-[#084734]",
   accepted: "bg-emerald-50 text-emerald-700",
-  rejected: "bg-red-50 text-red-500",
+  rejected: "bg-[#FEF3EE] text-[#B85C33]",
   expired: "bg-[#f0f0ec] text-[#1a1a1a]/40",
-  converted: "bg-violet-50 text-violet-600",
+  converted: "bg-[#D1FAE5] text-[#065c41]",
 }
 
 function adminFetch(url: string, options?: RequestInit) {
@@ -468,7 +468,7 @@ export default function QuotesPage() {
                         <Button
                           variant="ghost"
                           size="sm"
-                          className="h-7 px-2 text-xs text-violet-600 hover:text-violet-700"
+                          className="h-7 px-2 text-xs text-[#084734] hover:text-[#065c41]"
                           onClick={() => handleConvert(quote.id)}
                           disabled={converting === quote.id}
                         >
@@ -479,7 +479,7 @@ export default function QuotesPage() {
                       <Button
                         variant="ghost"
                         size="sm"
-                        className="h-7 px-2 text-xs text-red-500"
+                        className="h-7 px-2 text-xs text-[#B85C33]"
                         onClick={() => handleDelete(quote.id)}
                       >
                         <Trash2 className="w-3.5 h-3.5" />
@@ -583,7 +583,7 @@ export default function QuotesPage() {
                     <button
                       type="button"
                       onClick={() => setItems((prev) => [...prev, createItemFromKey("custom")])}
-                      className="flex items-center gap-0.5 text-xs text-blue-600 hover:underline"
+                      className="flex items-center gap-0.5 text-xs text-[#084734] hover:underline"
                     >
                       <Plus className="w-3 h-3" />
                       품목 추가
@@ -684,7 +684,7 @@ export default function QuotesPage() {
                                 <button
                                   type="button"
                                   onClick={() => setItems((prev) => prev.filter((_, index) => index !== idx))}
-                                  className="text-[#1a1a1a]/30 hover:text-red-400"
+                                  className="text-[#1a1a1a]/30 hover:text-[#B85C33]"
                                 >
                                   <X className="w-3.5 h-3.5" />
                                 </button>

@@ -97,7 +97,7 @@ export default function SubscriberTable({
                 <span className={`inline-flex items-center rounded-full px-2 py-0.5 text-[10px] font-medium ${
                   s.status === "active"
                     ? "bg-green-50 text-green-700"
-                    : "bg-red-50 text-red-500"
+                    : "bg-[#FEF3EE] text-[#B85C33]"
                 }`}>
                   {s.status === "active" ? "수신중" : "거부"}
                 </span>
@@ -131,7 +131,7 @@ export default function SubscriberTable({
                     variant="ghost"
                     size="sm"
                     title="구독자 삭제"
-                    className="h-7 w-7 p-0 text-[#1a1a1a]/25 hover:text-red-500 hover:bg-red-50"
+                    className="h-7 w-7 p-0 text-[#1a1a1a]/25 hover:text-[#B85C33] hover:bg-[#FEF3EE]"
                     onClick={() => onDelete(s)}
                   >
                     <Trash2 className="w-3.5 h-3.5" />

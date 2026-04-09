@@ -258,7 +258,7 @@ export default function AdminSidebar({ role, name, email }: Props) {
         <button
           onClick={handleLogout}
           title={effectiveCollapsed ? "로그아웃" : undefined}
-          className={`flex w-full items-center gap-2.5 rounded-lg text-[13px] text-[#1a1a1a]/40 transition-colors hover:bg-red-50 hover:text-red-500 ${
+          className={`flex w-full items-center gap-2.5 rounded-lg text-[13px] text-[#1a1a1a]/40 transition-colors hover:bg-[#FEF3EE] hover:text-[#B85C33] ${
             effectiveCollapsed ? "justify-center px-2 py-2.5" : "px-3 py-2"
           }`}
         >

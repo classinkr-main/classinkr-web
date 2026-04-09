@@ -79,11 +79,11 @@ const DUMMY_QUOTES: Record<string, QuoteDetail> = {
 function StatusBadge({ status }: { status: string }) {
   const map: Record<string, { label: string; color: string; icon: React.ReactNode }> = {
     draft:     { label: "초안",     color: "bg-[#f0f0ec] text-[#1a1a1a]/50", icon: <Clock className="w-3 h-3" /> },
-    sent:      { label: "발송됨",   color: "bg-blue-50 text-blue-600",        icon: <Clock className="w-3 h-3" /> },
-    accepted:  { label: "수락됨",   color: "bg-green-50 text-green-700",      icon: <CheckCircle2 className="w-3 h-3" /> },
-    rejected:  { label: "거절됨",   color: "bg-red-50 text-red-500",          icon: <XCircle className="w-3 h-3" /> },
+    sent:      { label: "발송됨",   color: "bg-[#ECFDF5] text-[#084734]",    icon: <Clock className="w-3 h-3" /> },
+    accepted:  { label: "수락됨",   color: "bg-[#D1FAE5] text-[#065c41]",    icon: <CheckCircle2 className="w-3 h-3" /> },
+    rejected:  { label: "거절됨",   color: "bg-[#FEF3EE] text-[#B85C33]",   icon: <XCircle className="w-3 h-3" /> },
     expired:   { label: "만료됨",   color: "bg-[#f0f0ec] text-[#1a1a1a]/40", icon: <AlertCircle className="w-3 h-3" /> },
-    converted: { label: "계약전환", color: "bg-purple-50 text-purple-600",    icon: <CheckCircle2 className="w-3 h-3" /> },
+    converted: { label: "계약전환", color: "bg-[#D1FAE5] text-[#065c41]",    icon: <CheckCircle2 className="w-3 h-3" /> },
   }
   const s = map[status] ?? { label: status, color: "bg-[#f0f0ec] text-[#1a1a1a]/50", icon: null }
   return (
@@ -141,7 +141,7 @@ export default function QuotePreviewPage() {
   if (error || !quote) return (
     <div className="min-h-screen flex items-center justify-center bg-[#f7f7f5] p-4">
       <div className="bg-white rounded-2xl shadow-sm border border-[#e8e8e4] p-8 max-w-md w-full text-center">
-        <AlertCircle className="w-10 h-10 text-red-400 mx-auto mb-3" />
+        <AlertCircle className="w-10 h-10 text-[#B85C33] mx-auto mb-3" />
         <h2 className="text-base font-semibold text-[#1a1a1a] mb-2">견적서를 찾을 수 없습니다</h2>
         <p className="text-sm text-[#1a1a1a]/50">{error ?? "유효하지 않은 링크입니다."}</p>
       </div>
@@ -252,7 +252,7 @@ export default function QuotePreviewPage() {
               {quote.discount_amount > 0 && (
                 <div className="flex justify-between text-sm">
                   <span className="text-[#1a1a1a]/50">할인금액</span>
-                  <span className="font-medium text-red-500">−{quote.discount_amount.toLocaleString()}원</span>
+                  <span className="font-medium text-[#B85C33]">−{quote.discount_amount.toLocaleString()}원</span>
                 </div>
               )}
               <div className="flex justify-between text-sm">

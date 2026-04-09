@@ -179,11 +179,11 @@ function latestVersionLabel(
 function docTone(kind: HubDocumentKind) {
   switch (kind) {
     case "quote":
-      return "bg-blue-50 text-blue-700 border-blue-200"
+      return "bg-[#ECFDF5] text-[#084734] border-[#D1FAE5]"
     case "contract":
-      return "bg-violet-50 text-violet-700 border-violet-200"
+      return "bg-[#D1FAE5] text-[#065c41] border-[#D1FAE5]"
     case "receipt":
-      return "bg-emerald-50 text-emerald-700 border-emerald-200"
+      return "bg-[#f0f0ec] text-[#615D59] border-[#e8e8e4]"
     default:
       return "bg-white text-[#1a1a1a]/60 border-[#e8e8e4]"
   }

@@ -182,7 +182,7 @@ export function NewsletterModal({
               </div>
 
               {error && (
-                <p className="text-sm text-red-400">{error}</p>
+                <p className="text-sm text-[#B85C33]">{error}</p>
               )}
 
               {benefits && benefits.length > 0 && (

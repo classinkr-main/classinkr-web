@@ -1024,7 +1024,7 @@ export default function ProductHWPage() {
                         className="absolute -bottom-3 -left-3 bg-white rounded-2xl shadow-lg border border-slate-100 px-4 py-2.5"
                     >
                         <div className="text-xs text-slate-400 mb-0.5">빛 투과율</div>
-                        <div className="text-lg font-bold text-blue-600 font-mono">90%+</div>
+                        <div className="text-lg font-bold text-[#084734] font-mono">90%+</div>
                     </motion.div>
                 </motion.div>
             </FeatureSection>
