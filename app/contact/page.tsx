@@ -10,6 +10,7 @@ import Image from "next/image"
 import { motion } from "framer-motion"
 import { submitLead } from "@/lib/submitLead"
 import { trackEvent } from "@/lib/analytics"
+import { useToast } from "@/components/ui/toast"
 
 export default function ContactPage() {
     const kakaoChannelUrl = process.env.NEXT_PUBLIC_CONTACT_KAKAO_URL?.trim()
@@ -18,13 +19,20 @@ export default function ContactPage() {
     const [submitted, setSubmitted] = useState(false)
     const [error, setError] = useState("")
     const [notice, setNotice] = useState("")
+    const [shake, setShake] = useState(false)
     const formRef = useRef<HTMLFormElement>(null)
+    const toast = useToast()
 
     const resetForm = () => {
         setSubmitted(false)
         setError("")
         setNotice("")
         formRef.current?.reset()
+    }
+
+    const triggerShake = () => {
+        setShake(true)
+        setTimeout(() => setShake(false), 200)
     }
 
     const handleSubmit = async (e: React.FormEvent<HTMLFormElement>) => {
@@ -51,9 +59,12 @@ export default function ContactPage() {
                 setNotice("문의는 접수되었지만 일부 외부 연동이 지연되었습니다. 내부 시스템에는 정상 등록되었습니다.")
             }
             trackEvent("submit_demo_request", { source: "contact_page" })
+            toast.success("문의가 접수되었어요")
             setSubmitted(true)
         } catch (err) {
-            setError(err instanceof Error ? err.message : "제출에 실패했습니다. 다시 시도해주세요.")
+            const msg = err instanceof Error ? err.message : "제출에 실패했습니다. 다시 시도해주세요."
+            setError(msg)
+            triggerShake()
         } finally {
             setLoading(false)
         }
@@ -108,7 +119,7 @@ export default function ContactPage() {
                     <div className="bg-white rounded-[2rem] shadow-[0_20px_60px_rgba(0,0,0,0.05)] border border-slate-100 p-8 md:p-12 overflow-hidden relative">
                         {/* Decorative background elements */}
                         <div className="absolute top-0 right-0 w-64 h-64 bg-orange-50 rounded-full blur-[80px] -mr-20 -mt-20 pointer-events-none" />
-                        <div className="absolute bottom-0 left-0 w-64 h-64 bg-blue-50 rounded-full blur-[80px] -ml-20 -mb-20 pointer-events-none" />
+                        <div className="absolute bottom-0 left-0 w-64 h-64 bg-[#ECFDF5] rounded-full blur-[80px] -ml-20 -mb-20 pointer-events-none" />
                         
                         <div className="flex flex-col md:flex-row items-center justify-between gap-10 relative z-10">
                             <div className="flex-1 space-y-4 text-center md:text-left">
@@ -187,17 +198,17 @@ export default function ContactPage() {
                                 <div className="w-full grid grid-cols-1 md:grid-cols-2 gap-8">
                                     <div className="space-y-3 w-full">
                                         <Label htmlFor="org-name" className="text-slate-700 font-bold ml-1">학원명 / 기관명 <span className="text-[#E05024]">*</span></Label>
-                                        <Input id="org-name" name="org-name" placeholder="예: 무궁화 학원" required className="w-full bg-white border-slate-200 focus-visible:ring-[#E05024] h-14 rounded-xl shadow-sm text-base" />
+                                        <Input id="org-name" name="org-name" placeholder="예: 무궁화 학원" required aria-invalid={!!error} aria-describedby="org-name-error" className={`w-full bg-white border-slate-200 focus-visible:ring-[#E05024] h-14 rounded-xl shadow-sm text-base${shake ? " animate-shake" : ""}`} />
                                     </div>
                                     <div className="space-y-3 w-full">
                                         <Label htmlFor="name" className="text-slate-700 font-bold ml-1">담당자 성함 <span className="text-[#E05024]">*</span></Label>
-                                        <Input id="name" name="name" placeholder="홍길동 원장" required className="w-full bg-white border-slate-200 focus-visible:ring-[#E05024] h-14 rounded-xl shadow-sm text-base" />
+                                        <Input id="name" name="name" placeholder="홍길동 원장" required aria-invalid={!!error} aria-describedby="name-error" className={`w-full bg-white border-slate-200 focus-visible:ring-[#E05024] h-14 rounded-xl shadow-sm text-base${shake ? " animate-shake" : ""}`} />
                                     </div>
                                 </div>
                                 <div className="w-full grid grid-cols-1 md:grid-cols-2 gap-8">
                                     <div className="space-y-3 w-full">
                                         <Label htmlFor="phone" className="text-slate-700 font-bold ml-1">연락처 <span className="text-[#E05024]">*</span></Label>
-                                        <Input id="phone" name="phone" placeholder="010-0000-0000" type="tel" required className="w-full bg-white border-slate-200 focus-visible:ring-[#E05024] h-14 rounded-xl shadow-sm text-base" />
+                                        <Input id="phone" name="phone" placeholder="010-0000-0000" type="tel" required aria-invalid={!!error} aria-describedby="phone-error" className={`w-full bg-white border-slate-200 focus-visible:ring-[#E05024] h-14 rounded-xl shadow-sm text-base${shake ? " animate-shake" : ""}`} />
                                     </div>
                                     <div className="space-y-3 w-full">
                                         <Label htmlFor="email" className="text-slate-700 font-bold ml-1">이메일 (선택)</Label>
@@ -207,11 +218,13 @@ export default function ContactPage() {
                                 <div className="space-y-3 w-full">
                                     <Label htmlFor="message" className="text-slate-700 font-bold ml-1">문의 내용 <span className="text-[#E05024]">*</span></Label>
                                     <textarea
-                                        className="w-full resize-none rounded-xl border border-slate-200 bg-white px-4 py-4 text-base focus:outline-none focus:ring-2 focus:ring-[#E05024] focus:border-transparent transition-all shadow-sm min-h-[160px]"
+                                        className={`w-full resize-none rounded-xl border border-slate-200 bg-white px-4 py-4 text-base focus:outline-none focus:ring-2 focus:ring-[#E05024] focus:border-transparent transition-all shadow-sm min-h-[160px]${shake ? " animate-shake" : ""}`}
                                         placeholder="현재 겪고 계신 운영상의 고민이나 필요하신 기능을 자유롭게 적어주세요."
                                         id="message"
                                         name="message"
                                         required
+                                        aria-invalid={!!error}
+                                        aria-describedby="message-error"
                                     />
                                 </div>
                                 <label className="flex items-start gap-3 rounded-2xl border border-slate-200 bg-slate-50/70 px-4 py-3 text-sm text-slate-600">
@@ -227,7 +240,7 @@ export default function ContactPage() {
                                     </span>
                                 </label>
                                 {error && (
-                                    <p className="text-red-500 text-sm text-center">{error}</p>
+                                    <p id="message-error" role="alert" aria-live="polite" className="text-[#B85C33] text-sm text-center">{error}</p>
                                 )}
                                 <Button type="submit" disabled={loading} className="w-full h-16 text-lg font-bold bg-[#E05024] hover:bg-[#C9431A] text-white rounded-xl shadow-[0_8px_20px_rgba(224,80,36,0.2)] hover:shadow-[0_12px_25px_rgba(224,80,36,0.3)] transition-all hover:-translate-y-0.5 mt-4">
                                     {loading ? (
@@ -265,7 +278,7 @@ export default function ContactPage() {
                                 </div>
                                 
                                 <div className="flex items-start gap-4">
-                                    <div className="w-12 h-12 rounded-2xl bg-blue-50 flex items-center justify-center shrink-0 text-blue-600">
+                                    <div className="w-12 h-12 rounded-2xl bg-[#ECFDF5] flex items-center justify-center shrink-0 text-[#084734]">
                                         <Mail className="w-6 h-6" />
                                     </div>
                                     <div>

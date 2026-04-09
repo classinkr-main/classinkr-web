@@ -8,6 +8,7 @@ import { Button } from "@/components/ui/button"
 import { CheckCircle2, Loader2 } from "lucide-react"
 import { submitLead } from "@/lib/submitLead"
 import { trackEvent } from "@/lib/analytics"
+import { useToast } from "@/components/ui/toast"
 
 export function DemoModal({ children, trackingButton }: { children: React.ReactNode; trackingButton?: string }) {
     const [open, setOpen] = useState(false)
@@ -15,9 +16,11 @@ export function DemoModal({ children, trackingButton }: { children: React.ReactN
     const [loading, setLoading] = useState(false)
     const [error, setError] = useState("")
     const [warning, setWarning] = useState("")
+    const [shake, setShake] = useState(false)
     const [marketingConsent, setMarketingConsent] = useState(false)
     const formRef = useRef<HTMLFormElement>(null)
     const resetTimerRef = useRef<ReturnType<typeof setTimeout> | null>(null)
+    const toast = useToast()
 
     const resetFormState = () => {
         setSubmitted(false)
@@ -76,9 +79,13 @@ export function DemoModal({ children, trackingButton }: { children: React.ReactN
                 ? "리드는 접수되었지만 일부 외부 연동은 지연되었습니다. 내부 시스템에는 정상 등록되었습니다."
                 : "")
             trackEvent("submit_demo_request", { source: "demo_modal" })
+            toast.success("문의가 접수되었어요")
             setSubmitted(true)
         } catch (err) {
-            setError(err instanceof Error ? err.message : "제출에 실패했습니다. 다시 시도해주세요.")
+            const msg = err instanceof Error ? err.message : "제출에 실패했습니다. 다시 시도해주세요."
+            setError(msg)
+            setShake(true)
+            setTimeout(() => setShake(false), 200)
         } finally {
             setLoading(false)
         }
@@ -112,29 +119,29 @@ export function DemoModal({ children, trackingButton }: { children: React.ReactN
                         <form ref={formRef} onSubmit={handleSubmit} className="grid gap-4 py-4">
                             <div className="grid gap-2">
                                 <Label htmlFor="name" className="text-slate-200">이름</Label>
-                                <Input id="name" name="name" placeholder="홍길동" required className="bg-white/5 border-white/10 text-white placeholder:text-slate-500" />
+                                <Input id="name" name="name" placeholder="홍길동" required aria-invalid={!!error} aria-describedby="demo-name-error" className={`bg-white/5 border-white/10 text-white placeholder:text-slate-500${shake ? " animate-shake" : ""}`} />
                             </div>
                             <div className="grid gap-2">
                                 <Label htmlFor="org" className="text-slate-200">학원명</Label>
-                                <Input id="org" name="org" placeholder="클래스인 아카데미" required className="bg-white/5 border-white/10 text-white placeholder:text-slate-500" />
+                                <Input id="org" name="org" placeholder="클래스인 아카데미" required aria-invalid={!!error} aria-describedby="demo-org-error" className={`bg-white/5 border-white/10 text-white placeholder:text-slate-500${shake ? " animate-shake" : ""}`} />
                             </div>
                             <div className="grid grid-cols-2 gap-4">
                                 <div className="grid gap-2">
                                     <Label htmlFor="role" className="text-slate-200">직책</Label>
-                                    <Input id="role" name="role" placeholder="원장 / 관리자" required className="bg-white/5 border-white/10 text-white placeholder:text-slate-500" />
+                                    <Input id="role" name="role" placeholder="원장 / 관리자" required aria-invalid={!!error} aria-describedby="demo-role-error" className={`bg-white/5 border-white/10 text-white placeholder:text-slate-500${shake ? " animate-shake" : ""}`} />
                                 </div>
                                 <div className="grid gap-2">
                                     <Label htmlFor="size" className="text-slate-200">원생 수</Label>
-                                    <Input id="size" name="size" placeholder="예: 500+" required className="bg-white/5 border-white/10 text-white placeholder:text-slate-500" />
+                                    <Input id="size" name="size" placeholder="예: 500+" required aria-invalid={!!error} aria-describedby="demo-size-error" className={`bg-white/5 border-white/10 text-white placeholder:text-slate-500${shake ? " animate-shake" : ""}`} />
                                 </div>
                             </div>
                             <div className="grid gap-2">
                                 <Label htmlFor="email" className="text-slate-200">이메일</Label>
-                                <Input id="email" name="email" type="email" placeholder="email@example.com" required className="bg-white/5 border-white/10 text-white placeholder:text-slate-500" />
+                                <Input id="email" name="email" type="email" placeholder="email@example.com" required aria-invalid={!!error} aria-describedby="demo-email-error" className={`bg-white/5 border-white/10 text-white placeholder:text-slate-500${shake ? " animate-shake" : ""}`} />
                             </div>
                             <div className="grid gap-2">
                                 <Label htmlFor="phone" className="text-slate-200">전화번호</Label>
-                                <Input id="phone" name="phone" type="tel" placeholder="010-1234-5678" required className="bg-white/5 border-white/10 text-white placeholder:text-slate-500" />
+                                <Input id="phone" name="phone" type="tel" placeholder="010-1234-5678" required aria-invalid={!!error} aria-describedby="demo-phone-error" className={`bg-white/5 border-white/10 text-white placeholder:text-slate-500${shake ? " animate-shake" : ""}`} />
                             </div>
                             <label className="flex items-start gap-2.5 cursor-pointer group">
                                 <div className="relative mt-0.5 shrink-0">
@@ -146,7 +153,7 @@ export function DemoModal({ children, trackingButton }: { children: React.ReactN
                                     />
                                     <div className={`w-4 h-4 rounded border transition-all ${
                                         marketingConsent
-                                            ? "bg-blue-500 border-blue-500"
+                                            ? "bg-[#084734] border-[#084734]"
                                             : "bg-white/10 border-white/20 group-hover:border-white/40"
                                     }`}>
                                         {marketingConsent && (
@@ -162,7 +169,7 @@ export function DemoModal({ children, trackingButton }: { children: React.ReactN
                                 </span>
                             </label>
                             {error && (
-                                <p className="text-red-400 text-sm text-center">{error}</p>
+                                <p id="demo-name-error" role="alert" aria-live="polite" className="text-[#B85C33] text-sm text-center">{error}</p>
                             )}
                             <Button type="submit" disabled={loading} className="w-full mt-2 bg-primary hover:bg-primary/90 text-white">
                                 {loading ? (

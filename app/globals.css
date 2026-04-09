@@ -151,6 +151,13 @@
   }
 }
 
+@keyframes shake {
+  0%,100%{transform:translateX(0)}
+  25%{transform:translateX(-3px)}
+  75%{transform:translateX(3px)}
+}
+.animate-shake{animation:shake .2s ease-in-out}
+
 /* ── Admin Rich Markdown Editor (Tiptap WYSIWYG) ─────────────────── */
 .rich-editor-content {
   min-height: 560px;
