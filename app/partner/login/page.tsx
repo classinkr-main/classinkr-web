@@ -2,7 +2,9 @@
 
 import { useState } from "react"
 import { useRouter } from "next/navigation"
+import Image from "next/image"
 import { createSupabaseBrowserClient } from "@/lib/supabase/browser"
+import { useToast } from "@/components/ui/toast"
 
 export default function PartnerLoginPage() {
   const router = useRouter()
@@ -12,6 +14,13 @@ export default function PartnerLoginPage() {
   const [error, setError] = useState<string | null>(null)
   const [magicSent, setMagicSent] = useState(false)
   const [mode, setMode] = useState<"password" | "magic">("magic")
+  const [shake, setShake] = useState(false)
+  const toast = useToast()
+
+  const triggerShake = () => {
+    setShake(true)
+    setTimeout(() => setShake(false), 200)
+  }
 
   async function handleLogin(e: React.FormEvent) {
     e.preventDefault()
@@ -25,12 +34,17 @@ export default function PartnerLoginPage() {
         email,
         options: { emailRedirectTo: `${window.location.origin}/partner/workspace` },
       })
-      if (error) setError(error.message)
-      else setMagicSent(true)
+      if (error) {
+        setError(error.message)
+        triggerShake()
+      } else {
+        setMagicSent(true)
+      }
     } else {
       const { data, error } = await supabase.auth.signInWithPassword({ email, password })
       if (error) {
         setError("이메일 또는 비밀번호가 올바르지 않습니다")
+        triggerShake()
       } else if (data.user) {
         // status → active, last_login_at 갱신은 서버에서
         await fetch("/api/partner/session", { method: "POST" })
@@ -59,37 +73,55 @@ export default function PartnerLoginPage() {
       <div className="bg-white rounded-2xl border border-[#e8e8e4] shadow-sm w-full max-w-sm">
         <div className="p-8">
           <div className="text-center mb-8">
-            <h1 className="text-xl font-bold text-[#1a1a1a]">파트너 포털</h1>
-            <p className="text-xs text-[#1a1a1a]/40 mt-1">ClassIn Partner Portal</p>
+            <div className="flex justify-center mb-4">
+              <Image
+                src="/images/logo.png"
+                alt="Classin"
+                width={120}
+                height={32}
+                className="object-contain"
+                priority
+              />
+            </div>
+            <h1 className="text-base font-semibold text-[#111110]">파트너 포털</h1>
+            <p className="text-xs text-[#A39E98] mt-1">Partner Portal</p>
           </div>
 
           <form onSubmit={handleLogin} className="space-y-4">
             <div>
-              <label className="text-xs font-medium text-[#1a1a1a]/60 mb-1 block">이메일</label>
+              <label htmlFor="partner-email" className="text-xs font-medium text-[#1a1a1a]/60 mb-1 block">이메일</label>
               <input
+                id="partner-email"
                 type="email"
                 required
                 value={email}
                 onChange={(e) => setEmail(e.target.value)}
                 placeholder="partner@company.com"
-                className="w-full border border-[#e8e8e4] rounded-xl px-4 py-2.5 text-sm focus:outline-none focus:border-[#1a1a1a]"
+                aria-invalid={!!error}
+                aria-describedby="partner-login-error"
+                className={`w-full border border-[#e8e8e4] rounded-xl px-4 py-2.5 text-sm focus:outline-none focus:border-[#084734] focus-visible:ring-2 focus-visible:ring-[#084734]/30${shake ? " animate-shake" : ""}`}
               />
             </div>
 
             {mode === "password" && (
               <div>
-                <label className="text-xs font-medium text-[#1a1a1a]/60 mb-1 block">비밀번호</label>
+                <label htmlFor="partner-password" className="text-xs font-medium text-[#1a1a1a]/60 mb-1 block">비밀번호</label>
                 <input
+                  id="partner-password"
                   type="password"
                   required={mode === "password"}
                   value={password}
                   onChange={(e) => setPassword(e.target.value)}
-                  className="w-full border border-[#e8e8e4] rounded-xl px-4 py-2.5 text-sm focus:outline-none focus:border-[#1a1a1a]"
+                  aria-invalid={!!error}
+                  aria-describedby="partner-login-error"
+                  className={`w-full border border-[#e8e8e4] rounded-xl px-4 py-2.5 text-sm focus:outline-none focus:border-[#084734] focus-visible:ring-2 focus-visible:ring-[#084734]/30${shake ? " animate-shake" : ""}`}
                 />
               </div>
             )}
 
-            {error && <p className="text-xs text-red-500">{error}</p>}
+            {error && (
+              <p id="partner-login-error" role="alert" aria-live="polite" className="text-xs text-[#B85C33]">{error}</p>
+            )}
 
             <button
               type="submit"
@@ -102,7 +134,7 @@ export default function PartnerLoginPage() {
 
           <button
             type="button"
-            onClick={() => setMode(mode === "magic" ? "password" : "magic")}
+            onClick={() => { setMode(mode === "magic" ? "password" : "magic"); setError(null) }}
             className="w-full mt-4 text-xs text-[#1a1a1a]/40 hover:text-[#1a1a1a] text-center"
           >
             {mode === "magic" ? "비밀번호로 로그인" : "이메일 링크로 로그인"}

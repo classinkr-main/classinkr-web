@@ -3,12 +3,14 @@
 import { useState } from "react"
 import { useRouter } from "next/navigation"
 import { Lock } from "lucide-react"
+import Image from "next/image"
 import { clearAdminSessionStorage } from "@/lib/admin-client"
 import { getAdminAuthErrorMessage } from "@/lib/admin-auth-errors"
 import { createSupabaseBrowserClient } from "@/lib/supabase/browser"
 import { hasSupabaseBrowserEnv } from "@/lib/supabase/public-env"
 import { Button } from "@/components/ui/button"
 import { Input } from "@/components/ui/input"
+import { useToast } from "@/components/ui/toast"
 
 const INVALID_CREDENTIALS_MESSAGE = "이메일 또는 비밀번호가 올바르지 않습니다."
 const UNAUTHORIZED_MESSAGE = "관리자 권한이 있는 계정만 로그인할 수 있습니다."
@@ -20,6 +22,13 @@ export default function AdminLoginPage() {
   const [password, setPassword] = useState("")
   const [error, setError] = useState("")
   const [loading, setLoading] = useState(false)
+  const [shake, setShake] = useState(false)
+  const toast = useToast()
+
+  const triggerShake = () => {
+    setShake(true)
+    setTimeout(() => setShake(false), 200)
+  }
 
   const handleSubmit = async (e: React.FormEvent) => {
     e.preventDefault()
@@ -40,6 +49,7 @@ export default function AdminLoginPage() {
 
         if (!response.ok) {
           setError(getAdminAuthErrorMessage(data?.code))
+          triggerShake()
           return
         }
 
@@ -68,6 +78,7 @@ export default function AdminLoginPage() {
 
       if (signInError || !signInData.user) {
         setError(INVALID_CREDENTIALS_MESSAGE)
+        triggerShake()
         return
       }
 
@@ -80,6 +91,7 @@ export default function AdminLoginPage() {
       if (!profile) {
         await supabase.auth.signOut()
         setError("관리자 프로필이 없습니다. 관리자 초대를 확인해 주세요.")
+        triggerShake()
         return
       }
 
@@ -90,6 +102,7 @@ export default function AdminLoginPage() {
             ? "초대를 수락한 후 접근할 수 있습니다."
             : UNAUTHORIZED_MESSAGE
         )
+        triggerShake()
         return
       }
 
@@ -106,6 +119,7 @@ export default function AdminLoginPage() {
       console.error("[AdminLogin] 오류:", err)
       clearAdminSessionStorage()
       setError(useSupabaseAuth ? INVALID_CREDENTIALS_MESSAGE : "서버 연결에 실패했습니다.")
+      triggerShake()
     } finally {
       setLoading(false)
     }
@@ -115,11 +129,21 @@ export default function AdminLoginPage() {
     <div className="min-h-screen flex items-center justify-center bg-[#FAFAF8] px-4">
       <div className="w-full max-w-sm">
         <div className="rounded-2xl border border-[#e8e8e4] bg-white p-8 shadow-sm">
-          <div className="mx-auto mb-6 flex h-12 w-12 items-center justify-center rounded-xl bg-[#f0f0ec]">
-            <Lock className="h-5 w-5 text-[#1a1a1a]/40" />
+          <div className="flex flex-col items-center mb-6 gap-3">
+            <Image
+              src="/images/logo.png"
+              alt="Classin"
+              width={120}
+              height={32}
+              className="object-contain"
+              priority
+            />
+            <div className="flex h-10 w-10 items-center justify-center rounded-xl bg-[#f0f0ec]">
+              <Lock className="h-4 w-4 text-[#1a1a1a]/40" />
+            </div>
           </div>
-          <h1 className="mb-1 text-center text-lg font-semibold text-[#111110]">
-            Classin Admin
+          <h1 className="mb-1 text-center text-sm font-medium text-[#A39E98]">
+            Admin
           </h1>
           <p className="mb-6 text-center text-[13px] text-[#1a1a1a]/40">
             {useSupabaseAuth
@@ -136,6 +160,9 @@ export default function AdminLoginPage() {
                 onChange={(e) => setEmail(e.target.value)}
                 autoFocus
                 autoComplete="email"
+                aria-invalid={!!error}
+                aria-describedby="admin-login-error"
+                className={shake ? "animate-shake" : undefined}
               />
             ) : null}
             <Input
@@ -145,8 +172,13 @@ export default function AdminLoginPage() {
               onChange={(e) => setPassword(e.target.value)}
               autoFocus={!useSupabaseAuth}
               autoComplete="current-password"
+              aria-invalid={!!error}
+              aria-describedby="admin-login-error"
+              className={shake ? "animate-shake" : undefined}
             />
-            {error ? <p className="text-[13px] text-red-500">{error}</p> : null}
+            {error ? (
+              <p id="admin-login-error" role="alert" aria-live="polite" className="text-[13px] text-[#B85C33]">{error}</p>
+            ) : null}
             <Button
               type="submit"
               className="w-full"
