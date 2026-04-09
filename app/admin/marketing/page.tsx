@@ -1,6 +1,6 @@
 "use client"
 
-import { useCallback, useEffect, useMemo, useState } from "react"
+import { useCallback, useEffect, useMemo, useRef, useState } from "react"
 import type { ReactNode } from "react"
 import { useRouter } from "next/navigation"
 import {
@@ -10,6 +10,7 @@ import {
   CheckCircle2,
   ChevronRight,
   History,
+  MessageSquare,
   Plus,
   RefreshCw,
   Search,
@@ -28,13 +29,16 @@ import {
   DialogHeader,
   DialogTitle,
 } from "@/components/ui/dialog"
+import { adminFetch } from "@/lib/admin-client"
 import SubscriberTable from "@/components/admin/marketing/SubscriberTable"
 import SubscriberForm from "@/components/admin/marketing/SubscriberForm"
 import EmailComposer from "@/components/admin/marketing/EmailComposer"
+import SmsComposer from "@/components/admin/marketing/SmsComposer"
 import CampaignHistory from "@/components/admin/marketing/CampaignHistory"
 import type { EmailCampaign, EmailDraft, SavedEmailSegment, Subscriber } from "@/lib/marketing-types"
 
 type Tab = "subscribers" | "compose" | "history"
+type Channel = "email" | "sms"
 type SubscriberStatusFilter = "all" | Subscriber["status"]
 type SubscriberSourceFilter = "all" | Subscriber["source"]
 type PreSendCheckStatus = "ok" | "warning" | "error" | "info"
@@ -52,21 +56,6 @@ const EMPTY_DRAFT: EmailDraft = {
 }
 
 const SAVED_SEGMENTS_KEY = "classinkr.admin.email.savedSegments.v1"
-
-function getToken() {
-  return sessionStorage.getItem("admin_password") ?? ""
-}
-
-function adminFetch(url: string, options?: RequestInit) {
-  return fetch(url, {
-    ...options,
-    headers: {
-      "Content-Type": "application/json",
-      Authorization: `Bearer ${getToken()}`,
-      ...options?.headers,
-    },
-  })
-}
 
 function safeTime(value?: string) {
   if (!value) return 0
@@ -115,7 +104,7 @@ function checkToneClass(status: PreSendCheckStatus) {
     : status === "warning"
       ? "border-amber-100 bg-amber-50 text-amber-700"
       : status === "error"
-        ? "border-[#F6D5C5] bg-[#FEF3EE] text-[#B85C33]"
+        ? "border-red-100 bg-red-50 text-red-600"
         : "border-[#e8e8e4] bg-[#f0f0ec] text-[#1a1a1a]/55"
 }
 
@@ -220,7 +209,7 @@ function StatCard({
       : tone === "warning"
         ? "bg-amber-50 text-amber-700"
         : tone === "danger"
-          ? "bg-[#FEF3EE] text-[#B85C33]"
+          ? "bg-red-50 text-red-600"
           : "bg-[#f0f0ec] text-[#1a1a1a]/50"
 
   return (
@@ -278,38 +267,6 @@ function TabButton({
   )
 }
 
-function FlowStep({
-  active,
-  step,
-  title,
-  desc,
-  onClick,
-}: {
-  active: boolean
-  step: string
-  title: string
-  desc: string
-  onClick: () => void
-}) {
-  return (
-    <button
-      onClick={onClick}
-      className={`flex min-w-[180px] flex-1 items-start gap-3 rounded-2xl border px-4 py-4 text-left transition-all sm:min-w-0 ${
-        active
-          ? "border-[#111110] bg-[#111110] text-white shadow-sm"
-          : "border-[#e8e8e4] bg-white text-[#1a1a1a]/65 hover:border-[#c8c8c4] hover:bg-[#fafaf8] hover:text-[#111110]"
-      }`}
-    >
-      <div className={`flex h-8 w-8 shrink-0 items-center justify-center rounded-full text-[11px] font-semibold ${active ? "bg-white/10 text-white" : "bg-[#f0f0ec] text-[#1a1a1a]/55"}`}>
-        {step}
-      </div>
-      <div className="min-w-0 flex-1">
-        <p className="text-[13px] font-semibold">{title}</p>
-        <p className={`mt-1 text-[11px] leading-relaxed ${active ? "text-white/70" : "text-[#1a1a1a]/40"}`}>{desc}</p>
-      </div>
-    </button>
-  )
-}
 
 function EmptyState({
   title,
@@ -343,18 +300,15 @@ function MiniBadge({ children, tone = "neutral" }: { children: ReactNode; tone?:
       : tone === "warning"
         ? "bg-amber-50 text-amber-700"
         : tone === "danger"
-          ? "bg-[#FEF3EE] text-[#B85C33]"
+          ? "bg-red-50 text-red-600"
           : "bg-[#f0f0ec] text-[#1a1a1a]/55"
   return <span className={`inline-flex items-center rounded-full px-2 py-0.5 text-[11px] font-medium ${className}`}>{children}</span>
 }
 
 export default function AdminMarketingPage() {
   const router = useRouter()
-  const [activeTab, setActiveTabRaw] = useState<Tab>("subscribers")
-  const setActiveTab = useCallback((tab: Tab) => {
-    setActiveTabRaw(tab)
-    window.scrollTo({ top: 0, behavior: "smooth" })
-  }, [])
+  const [activeTab, setActiveTab] = useState<Tab>("subscribers")
+  const [channel, setChannel] = useState<Channel>("email")
   const [subscribers, setSubscribers] = useState<Subscriber[]>([])
   const [campaigns, setCampaigns] = useState<EmailCampaign[]>([])
   const [composerDraft, setComposerDraft] = useState<EmailDraft>(EMPTY_DRAFT)
@@ -366,11 +320,25 @@ export default function AdminMarketingPage() {
   const [deleteTarget, setDeleteTarget] = useState<Subscriber | null>(null)
   const [toast, setToast] = useState<{ kind: "success" | "error"; message: string } | null>(null)
   const [draftNotice, setDraftNotice] = useState<string | null>(null)
+  const [showClearDraftConfirm, setShowClearDraftConfirm] = useState(false)
   const [segmentName, setSegmentName] = useState("")
   const [query, setQuery] = useState("")
   const [statusFilter, setStatusFilter] = useState<SubscriberStatusFilter>("all")
   const [sourceFilter, setSourceFilter] = useState<SubscriberSourceFilter>("all")
   const [campaignStatusFilter, setCampaignStatusFilter] = useState<"all" | EmailCampaign["status"]>("all")
+
+  const contentRef = useRef<HTMLDivElement>(null)
+  const isInitialMount = useRef(true)
+
+  useEffect(() => {
+    if (isInitialMount.current) {
+      isInitialMount.current = false
+      return
+    }
+    requestAnimationFrame(() => {
+      contentRef.current?.scrollIntoView({ behavior: "smooth", block: "start" })
+    })
+  }, [activeTab])
 
   const handleUnauthorized = useCallback(() => {
     sessionStorage.removeItem("admin_password")
@@ -430,34 +398,49 @@ export default function AdminMarketingPage() {
   const draftCount = campaigns.filter((c) => c.status === "draft").length
   const failedCount = campaigns.filter((c) => c.status === "failed").length
 
-  const latestCampaign = [...campaigns].sort((a, b) => safeTime(b.sentAt ?? b.createdAt) - safeTime(a.sentAt ?? a.createdAt))[0]
-  const latestSubscriber = [...subscribers].sort((a, b) => safeTime(b.createdAt) - safeTime(a.createdAt))[0]
-  const recentWindowStart = Date.now() - 30 * 24 * 60 * 60 * 1000
-  const recentCampaignWindow = campaigns.filter((campaign) => safeTime(campaign.sentAt ?? campaign.createdAt) >= recentWindowStart)
-  const recentSentCampaigns = recentCampaignWindow.filter((campaign) => campaign.status === "sent")
-  const recentFailedCampaigns = recentCampaignWindow.filter((campaign) => campaign.status === "failed")
-  const recentDraftCampaigns = recentCampaignWindow.filter((campaign) => campaign.status === "draft")
-  const recentSuccessRate =
-    recentSentCampaigns.length + recentFailedCampaigns.length > 0
-      ? Math.round((recentSentCampaigns.length / (recentSentCampaigns.length + recentFailedCampaigns.length)) * 100)
+  const latestCampaign = useMemo(
+    () => [...campaigns].sort((a, b) => safeTime(b.sentAt ?? b.createdAt) - safeTime(a.sentAt ?? a.createdAt))[0],
+    [campaigns]
+  )
+  const latestSubscriber = useMemo(
+    () => [...subscribers].sort((a, b) => safeTime(b.createdAt) - safeTime(a.createdAt))[0],
+    [subscribers]
+  )
+  const { recentSentCampaigns, recentFailedCampaigns, recentDraftCampaigns, recentSuccessRate, recentAudienceAverage } = useMemo(() => {
+    const windowStart = Date.now() - 30 * 24 * 60 * 60 * 1000
+    const window30d = campaigns.filter((c) => safeTime(c.sentAt ?? c.createdAt) >= windowStart)
+    const sent = window30d.filter((c) => c.status === "sent")
+    const failed = window30d.filter((c) => c.status === "failed")
+    const draft = window30d.filter((c) => c.status === "draft")
+    const successRate = sent.length + failed.length > 0
+      ? Math.round((sent.length / (sent.length + failed.length)) * 100)
       : null
-  const recentAudienceAverage =
-    recentSentCampaigns.length > 0
-      ? Math.round(recentSentCampaigns.reduce((sum, campaign) => sum + campaign.recipientCount, 0) / recentSentCampaigns.length)
+    const audienceAvg = sent.length > 0
+      ? Math.round(sent.reduce((s, c) => s + c.recipientCount, 0) / sent.length)
       : 0
+    return {
+      recentSentCampaigns: sent,
+      recentFailedCampaigns: failed,
+      recentDraftCampaigns: draft,
+      recentSuccessRate: successRate,
+      recentAudienceAverage: audienceAvg,
+    }
+  }, [campaigns])
 
-  const sourceCounts = countBy(subscribers.map((s) => s.source))
-  const sourceOrder = ["demo_modal", "contact_page", "newsletter", "manual"] as const
-  const sourceRows = sourceOrder
-    .map((source) => ({
-      source,
-      count: sourceCounts[source] ?? 0,
-    }))
-    .filter((row) => row.count > 0)
-    .sort((a, b) => b.count - a.count)
-  const topSource = sourceRows[0]
+  const { sourceRows, topSource } = useMemo(() => {
+    const counts = countBy(subscribers.map((s) => s.source))
+    const order = ["demo_modal", "contact_page", "newsletter", "manual"] as const
+    const rows = order
+      .map((source) => ({ source, count: counts[source] ?? 0 }))
+      .filter((r) => r.count > 0)
+      .sort((a, b) => b.count - a.count)
+    return { sourceRows: rows, topSource: rows[0] }
+  }, [subscribers])
 
-  const recentCampaigns = [...campaigns].sort((a, b) => safeTime(b.sentAt ?? b.createdAt) - safeTime(a.sentAt ?? a.createdAt)).slice(0, 4)
+  const recentCampaigns = useMemo(
+    () => [...campaigns].sort((a, b) => safeTime(b.sentAt ?? b.createdAt) - safeTime(a.sentAt ?? a.createdAt)).slice(0, 4),
+    [campaigns]
+  )
 
   const filteredSubscribers = subscribers.filter((subscriber) => {
     const matchesQuery =
@@ -472,6 +455,19 @@ export default function AdminMarketingPage() {
   })
 
   const filteredCampaigns = campaigns.filter((campaign) => campaignStatusFilter === "all" || campaign.status === campaignStatusFilter)
+
+  // 태그별 active 구독자 수 맵 (TagSelector countMap용)
+  const tagCountMap = useMemo(() => {
+    const map: Record<string, number> = {}
+    for (const s of subscribers) {
+      if (s.status !== "active") continue
+      for (const tag of s.tags) {
+        map[tag] = (map[tag] ?? 0) + 1
+      }
+    }
+    return map
+  }, [subscribers])
+
   const activeSegment = useMemo(
     () => savedSegments.find((segment) => areTagsEqual(segment.targetTags, composerDraft.targetTags)) ?? null,
     [composerDraft.targetTags, savedSegments]
@@ -526,17 +522,17 @@ export default function AdminMarketingPage() {
           key: "body",
           label: "본문",
           status:
-            length >= 500
+            length >= 120
               ? "ok"
-              : length >= 200
+              : length >= 60
                 ? "warning"
                 : "error",
           detail:
-            length >= 500
+            length >= 120
               ? `본문 길이가 충분합니다. (${length}자)`
-              : length >= 200
-                ? `본문이 짧은 편입니다. (${length}자, 500자 이상 권장)`
-                : `본문이 너무 짧습니다. (${length}자, 최소 200자 권장)`,
+              : length >= 60
+                ? `본문이 짧은 편입니다. (${length}자, 120자 이상 권장)`
+                : `본문이 너무 짧습니다. (${length}자, 최소 60자 권장)`,
         },
         {
           key: "audience",
@@ -677,16 +673,20 @@ export default function AdminMarketingPage() {
   }
 
   const clearComposerDraft = useCallback(() => {
-    const hasDraft =
-      composerDraft.subject.trim() ||
-      composerDraft.body.trim() ||
-      composerDraft.targetTags.length > 0
-
-    if (!hasDraft || window.confirm("현재 작성 중인 내용을 비우고 새로 시작할까요?")) {
+    const hasDraft = composerDraft.subject.trim() || composerDraft.body.trim() || composerDraft.targetTags.length > 0
+    if (!hasDraft) {
       setComposerDraft({ ...EMPTY_DRAFT })
       setDraftNotice(null)
+    } else {
+      setShowClearDraftConfirm(true)
     }
   }, [composerDraft])
+
+  const confirmClearDraft = useCallback(() => {
+    setComposerDraft({ ...EMPTY_DRAFT })
+    setDraftNotice(null)
+    setShowClearDraftConfirm(false)
+  }, [])
 
   const handleSaveSegment = useCallback(() => {
     const trimmedName = segmentName.trim()
@@ -761,7 +761,7 @@ export default function AdminMarketingPage() {
 
   const handleDuplicateCampaign = useCallback((campaign: EmailCampaign) => {
     setComposerDraft({
-      subject: campaign.subject,
+      subject: `[복제] ${campaign.subject}`,
       body: campaign.body,
       targetTags: [...campaign.targetTags],
     })
@@ -785,19 +785,10 @@ export default function AdminMarketingPage() {
   const handleSendEmail = async (data: EmailDraft) => {
     const evaluated = evaluateDraft(data)
     const blockingErrors = evaluated.checks.filter((check) => check.status === "error")
-    const warningChecks = evaluated.checks.filter((check) => check.status === "warning")
 
     if (blockingErrors.length > 0) {
       showToast("error", blockingErrors[0]?.detail || "발송 전 체크를 확인해주세요.")
       return
-    }
-
-    if (warningChecks.length > 0) {
-      const warningSummary = warningChecks.map((check) => `${check.label}: ${check.detail}`).join("\n")
-      const proceed = window.confirm(
-        `주의 항목이 ${warningChecks.length}개 있습니다.\n\n${warningSummary}\n\n그래도 발송할까요?`
-      )
-      if (!proceed) return
     }
 
     if (evaluated.selectedAudience === 0) {
@@ -836,12 +827,6 @@ export default function AdminMarketingPage() {
     }
   }
 
-  const workflowSteps: Array<{ step: string; title: string; desc: string; tab: Tab }> = [
-    { step: "1", title: "구독자 정리", desc: "활성 대상과 유입 경로를 먼저 확인합니다.", tab: "subscribers" },
-    { step: "2", title: "이메일 작성", desc: "제목, 본문, 타깃 태그를 구성합니다.", tab: "compose" },
-    { step: "3", title: "발송 이력", desc: "발송 결과와 대상 수를 확인합니다.", tab: "history" },
-  ]
-
   const topActions: Array<{ key: Tab; label: string; icon: ReactNode }> = [
     { key: "subscribers", label: "구독자 추가", icon: <Plus className="h-4 w-4" /> },
     { key: "compose", label: "이메일 작성", icon: <Send className="h-4 w-4" /> },
@@ -853,10 +838,13 @@ export default function AdminMarketingPage() {
     composerDraft.body.trim() ||
     composerDraft.targetTags.length > 0
 
-  const savedSegmentViews = savedSegments.slice(0, 6).map((segment) => ({
-    ...segment,
-    recipientCount: countSelectedAudience(segment.targetTags),
-  }))
+  const savedSegmentViews = useMemo(
+    () => savedSegments.slice(0, 6).map((segment) => ({
+      ...segment,
+      recipientCount: countSelectedAudience(segment.targetTags),
+    })),
+    [savedSegments, countSelectedAudience]
+  )
 
   return (
     <div className="min-h-screen bg-[#FAFAF8]">
@@ -928,7 +916,7 @@ export default function AdminMarketingPage() {
                 <p className="text-[11px] font-medium uppercase tracking-[0.2em] text-[#1a1a1a]/35">최근 30일 발송</p>
                 <p className="mt-2 text-[28px] font-bold tracking-[-0.03em] text-[#111110]">{recentSentCampaigns.length}건</p>
                 <p className="mt-1 text-[12px] leading-relaxed text-[#1a1a1a]/45">
-                  {recentCampaignWindow.length > 0
+                  {recentSentCampaigns.length + recentFailedCampaigns.length + recentDraftCampaigns.length > 0
                     ? `실패 ${recentFailedCampaigns.length}건 · 초안 ${recentDraftCampaigns.length}건`
                     : "아직 최근 발송 기록이 없습니다."}
                 </p>
@@ -972,47 +960,37 @@ export default function AdminMarketingPage() {
             </div>
           </Panel>
 
-          <div className="grid gap-3 lg:grid-cols-3">
-            {workflowSteps.map((step) => (
-              <FlowStep
-                key={step.tab}
-                active={activeTab === step.tab}
-                step={step.step}
-                title={step.title}
-                desc={step.desc}
-                onClick={() => setActiveTab(step.tab)}
+          <div className="sticky top-0 z-20 -mx-4 px-4 pt-2 pb-3 sm:-mx-6 sm:px-6" style={{ background: "linear-gradient(to bottom, #FAFAF8 85%, transparent)" }}>
+            <div className="flex flex-wrap gap-3 rounded-2xl border border-[#e8e8e4] bg-white p-3 shadow-[0_2px_12px_rgba(0,0,0,0.06)]">
+              <TabButton
+                active={activeTab === "subscribers"}
+                icon={<Users className="h-4 w-4" />}
+                label="구독자 관리"
+                desc="목록 조회, 필터, 수동 추가"
+                count={subscribers.length}
+                onClick={() => setActiveTab("subscribers")}
               />
-            ))}
-          </div>
-
-          <div className="flex flex-wrap gap-3 rounded-2xl border border-[#e8e8e4] bg-white p-3">
-            <TabButton
-              active={activeTab === "subscribers"}
-              icon={<Users className="h-4 w-4" />}
-              label="구독자 관리"
-              desc="목록 조회, 필터, 수동 추가"
-              count={subscribers.length}
-              onClick={() => setActiveTab("subscribers")}
-            />
-            <TabButton
-              active={activeTab === "compose"}
-              icon={<Send className="h-4 w-4" />}
-              label="이메일 발송"
-              desc="캠페인 작성과 대상 선택"
-              count={draftCount}
-              onClick={() => setActiveTab("compose")}
-            />
-            <TabButton
-              active={activeTab === "history"}
-              icon={<History className="h-4 w-4" />}
-              label="발송 이력"
-              desc="최근 발송 결과와 대상 확인"
-              count={campaigns.length}
-              onClick={() => setActiveTab("history")}
-            />
+              <TabButton
+                active={activeTab === "compose"}
+                icon={<Send className="h-4 w-4" />}
+                label="이메일 발송"
+                desc="캠페인 작성과 대상 선택"
+                count={draftCount}
+                onClick={() => setActiveTab("compose")}
+              />
+              <TabButton
+                active={activeTab === "history"}
+                icon={<History className="h-4 w-4" />}
+                label="발송 이력"
+                desc="최근 발송 결과와 대상 확인"
+                count={campaigns.length}
+                onClick={() => setActiveTab("history")}
+              />
+            </div>
           </div>
         </div>
 
+        <div ref={contentRef} className="scroll-mt-4">
         {activeTab === "subscribers" && (
           <div className="grid gap-6 xl:grid-cols-[1.35fr_0.85fr]">
             <div className="space-y-6">
@@ -1128,13 +1106,6 @@ export default function AdminMarketingPage() {
                     onCompose={handleComposeFromSubscriber}
                     onAddSubscriber={() => setIsFormOpen(true)}
                     onComposeCampaign={() => setActiveTab("compose")}
-                    onTagFilter={(tag) => {
-                      setQuery("")
-                      setStatusFilter("all")
-                      setSourceFilter("all")
-                      // 태그 검색어로 바로 필터
-                      setQuery(tag)
-                    }}
                   />
                 )}
               </Panel>
@@ -1200,59 +1171,73 @@ export default function AdminMarketingPage() {
 
         {activeTab === "compose" && (
           <div className="grid gap-6 xl:grid-cols-[1.25fr_0.75fr]">
-            <div className="space-y-6">
-              <Panel
-                title="이메일 발송"
-                description="제목, 본문, 대상 태그를 구성하고 발송 전 결과를 확인합니다."
-                action={
-                  <div className="flex flex-col gap-2 sm:flex-row">
-                    <Button variant="outline" size="sm" onClick={() => setActiveTab("subscribers")}>
-                      <Users className="mr-1.5 h-4 w-4" />
-                      구독자 보기
-                    </Button>
-                    <Button variant="outline" size="sm" onClick={clearComposerDraft} disabled={!hasComposerDraft}>
-                      초안 비우기
-                    </Button>
-                  </div>
-                }
-              >
-                {activeCount === 0 && (
-                  <div className="mb-5 rounded-2xl border border-amber-100 bg-amber-50 px-4 py-3 text-[13px] text-amber-800">
-                    활성 구독자가 없습니다. 발송 대상이 비어 있을 수 있으니 먼저 구독자를 확인하세요.
-                  </div>
-                )}
-                {(activeSegment || hasComposerDraft) && (
-                  <div className="mb-5 flex flex-col gap-3 rounded-2xl border border-[#e8e8e4] bg-[#fafaf8] p-4">
-                    <div className="flex flex-col gap-2 sm:flex-row sm:items-center sm:justify-between">
-                      <div>
-                        <p className="text-[12px] font-medium text-[#111110]">현재 초안 상태</p>
-                        <p className="mt-1 text-[12px] leading-relaxed text-[#1a1a1a]/45">
-                          {draftNotice
-                            ? draftNotice
-                            : activeSegment
-                              ? `"${activeSegment.name}" 세그먼트 기준으로 작성 중입니다.`
-                              : "이 초안은 탭을 이동해도 유지됩니다."}
-                        </p>
-                      </div>
-                      <div className="flex flex-wrap items-center gap-1.5">
-                        {composerDraft.targetTags.length > 0 ? (
-                          composerDraft.targetTags.map((tag) => <MiniBadge key={tag}>#{tag}</MiniBadge>)
-                        ) : (
-                          <MiniBadge>전체 active 구독자</MiniBadge>
-                        )}
-                      </div>
-                    </div>
-                  </div>
-                )}
+            <div className="space-y-4">
+              {/* 채널 토글 */}
+              <div className="flex items-center gap-2 rounded-xl border border-[#e8e8e4] bg-white p-1.5">
+                <button
+                  onClick={() => setChannel("email")}
+                  className={`flex flex-1 items-center justify-center gap-2 rounded-lg px-4 py-2.5 text-[13px] font-medium transition-all ${
+                    channel === "email"
+                      ? "bg-[#111110] text-white shadow-sm"
+                      : "text-[#1a1a1a]/55 hover:text-[#111110]"
+                  }`}
+                >
+                  <Send className="h-3.5 w-3.5" />
+                  이메일
+                </button>
+                <button
+                  onClick={() => setChannel("sms")}
+                  className={`flex flex-1 items-center justify-center gap-2 rounded-lg px-4 py-2.5 text-[13px] font-medium transition-all ${
+                    channel === "sms"
+                      ? "bg-[#111110] text-white shadow-sm"
+                      : "text-[#1a1a1a]/55 hover:text-[#111110]"
+                  }`}
+                >
+                  <MessageSquare className="h-3.5 w-3.5" />
+                  문자 (SMS/LMS)
+                </button>
+              </div>
 
+              {/* 초안 상태 배너 (이메일 채널 + 초안 있을 때만) */}
+              {channel === "email" && (activeSegment || hasComposerDraft) && (
+                <div className="flex flex-col gap-2 rounded-xl border border-[#e8e8e4] bg-[#fafaf8] px-4 py-3 sm:flex-row sm:items-center sm:justify-between">
+                  <p className="text-[12px] text-[#1a1a1a]/55">
+                    {draftNotice
+                      ? draftNotice
+                      : activeSegment
+                        ? `"${activeSegment.name}" 세그먼트 기준`
+                        : "초안이 유지됩니다 — 탭 이동 후 돌아와도 내용이 남아있습니다."}
+                  </p>
+                  <Button variant="outline" size="sm" onClick={clearComposerDraft} className="shrink-0 text-[12px]">
+                    초안 비우기
+                  </Button>
+                </div>
+              )}
+
+              {activeCount === 0 && channel === "email" && (
+                <div className="rounded-xl border border-amber-100 bg-amber-50 px-4 py-3 text-[13px] text-amber-800">
+                  활성 구독자가 없습니다. 발송 대상이 비어 있을 수 있으니 먼저 구독자를 확인하세요.
+                </div>
+              )}
+
+              {channel === "email" ? (
                 <EmailComposer
                   value={composerDraft}
                   onChange={setComposerDraft}
                   onSend={handleSendEmail}
                   loading={sendLoading}
                   subscriberCount={activeCount}
+                  countMap={tagCountMap}
+                  presendWarnings={composerReview.checks.filter((c) => c.status === "warning").map((c) => c.detail)}
+                  presendErrors={composerReview.checks.filter((c) => c.status === "error").map((c) => c.detail)}
+                  selectedAudience={composerReview.selectedAudience}
                 />
-              </Panel>
+              ) : (
+                <SmsComposer
+                  subscriberCount={activeCount}
+                  countMap={tagCountMap}
+                />
+              )}
             </div>
 
             <div className="space-y-6">
@@ -1267,33 +1252,7 @@ export default function AdminMarketingPage() {
                   </MiniBadge>
                 }
               >
-                <div className="grid gap-3 md:grid-cols-3 xl:grid-cols-1">
-                  <div className={`rounded-2xl border p-4 ${checkToneClass(composerReview.readiness.status)}`}>
-                    <p className="text-[11px] font-medium uppercase tracking-[0.2em] opacity-70">준비도</p>
-                    <p className="mt-2 text-[28px] font-bold tracking-[-0.03em]">{composerReview.readinessScore}%</p>
-                    <p className="mt-1 text-[12px] leading-relaxed opacity-80">{composerReview.readiness.detail}</p>
-                  </div>
-                  <div className="rounded-2xl border border-[#e8e8e4] bg-[#fafaf8] p-4">
-                    <p className="text-[11px] font-medium uppercase tracking-[0.2em] text-[#1a1a1a]/35">예상 대상</p>
-                    <p className="mt-2 text-[28px] font-bold tracking-[-0.03em] text-[#111110]">{composerReview.selectedAudience}명</p>
-                    <p className="mt-1 text-[12px] leading-relaxed text-[#1a1a1a]/45">
-                      {composerDraft.targetTags.length === 0
-                        ? `전체 active 구독자 ${activeCount}명 기준입니다.`
-                        : `선택 태그 ${composerDraft.targetTags.join(", ")} 기준입니다.`}
-                    </p>
-                  </div>
-                  <div className="rounded-2xl border border-[#e8e8e4] bg-[#fafaf8] p-4">
-                    <p className="text-[11px] font-medium uppercase tracking-[0.2em] text-[#1a1a1a]/35">최근 발송</p>
-                    <p className="mt-2 text-[13px] font-medium text-[#111110]">
-                      {latestCampaign ? latestCampaign.subject : "아직 발송된 캠페인이 없습니다."}
-                    </p>
-                    <p className="mt-1 text-[12px] leading-relaxed text-[#1a1a1a]/45">
-                      {latestCampaign ? `${formatDateTime(latestCampaign.sentAt ?? latestCampaign.createdAt)} · 대상 ${latestCampaign.recipientCount}명` : "이력 기준으로 중복 제목을 확인합니다."}
-                    </p>
-                  </div>
-                </div>
-
-                <div className="mt-4 space-y-2">
+                <div className="space-y-2">
                   {composerReview.checks.map((check) => (
                     <div key={check.key} className={`rounded-2xl border p-4 ${checkToneClass(check.status)}`}>
                       <div className="flex items-start justify-between gap-3">
@@ -1316,20 +1275,6 @@ export default function AdminMarketingPage() {
                 action={activeSegment ? <MiniBadge tone="success">적용 중</MiniBadge> : undefined}
               >
                 <div className="space-y-4">
-                  <div className="rounded-2xl border border-[#e8e8e4] bg-[#fafaf8] p-4">
-                    <p className="text-[12px] font-medium text-[#111110]">현재 선택 대상</p>
-                    <div className="mt-3 flex flex-wrap gap-1.5">
-                      {composerDraft.targetTags.length > 0 ? (
-                        composerDraft.targetTags.map((tag) => <MiniBadge key={tag}>#{tag}</MiniBadge>)
-                      ) : (
-                        <MiniBadge>전체 active 구독자</MiniBadge>
-                      )}
-                    </div>
-                    <p className="mt-3 text-[12px] leading-relaxed text-[#1a1a1a]/45">
-                      예상 발송 인원 {composerReview.selectedAudience}명
-                    </p>
-                  </div>
-
                   <div className="grid gap-2 sm:grid-cols-[1fr_auto]">
                     <Input
                       value={segmentName}
@@ -1389,24 +1334,6 @@ export default function AdminMarketingPage() {
                 </div>
               </Panel>
 
-              <Panel title="빠른 이동" description="발송 후 자주 확인하는 화면입니다.">
-                <div className="space-y-2">
-                  <Button variant="outline" className="w-full justify-between text-[13px]" onClick={() => setActiveTab("subscribers")}>
-                    <span className="flex items-center gap-2">
-                      <Users className="h-3.5 w-3.5 text-[#1a1a1a]/40" />
-                      구독자 관리
-                    </span>
-                    <ChevronRight className="h-4 w-4 opacity-40" />
-                  </Button>
-                  <Button variant="outline" className="w-full justify-between text-[13px]" onClick={() => setActiveTab("history")}>
-                    <span className="flex items-center gap-2">
-                      <History className="h-3.5 w-3.5 text-[#1a1a1a]/40" />
-                      발송 이력 확인
-                    </span>
-                    <ChevronRight className="h-4 w-4 opacity-40" />
-                  </Button>
-                </div>
-              </Panel>
             </div>
           </div>
         )}
@@ -1493,72 +1420,117 @@ export default function AdminMarketingPage() {
             </div>
 
             <div className="space-y-6">
-              {/* 30일 발송 통계 */}
-              <Panel title="최근 30일 통계" description="이번 달 캠페인 운영 현황입니다.">
-                <div className="space-y-3">
-                  <div className="grid grid-cols-2 gap-3">
-                    <div className="rounded-2xl border border-[#e8e8e4] bg-[#fafaf8] p-4">
-                      <p className="text-[10px] font-medium uppercase tracking-[0.18em] text-[#1a1a1a]/35">발송</p>
-                      <p className="mt-2 text-[24px] font-bold tracking-[-0.02em] text-[#111110]">{recentSentCampaigns.length}건</p>
-                    </div>
-                    <div className="rounded-2xl border border-[#e8e8e4] bg-[#fafaf8] p-4">
-                      <p className="text-[10px] font-medium uppercase tracking-[0.18em] text-[#1a1a1a]/35">실패</p>
-                      <p className={`mt-2 text-[24px] font-bold tracking-[-0.02em] ${recentFailedCampaigns.length > 0 ? "text-[#B85C33]" : "text-[#111110]"}`}>
-                        {recentFailedCampaigns.length}건
-                      </p>
-                    </div>
+              <Panel title="상태 요약" description="최근 발송의 운영 맥락을 바로 보여줍니다.">
+                {recentCampaigns.length === 0 ? (
+                  <EmptyInline message="최근 캠페인 정보가 없습니다." />
+                ) : (
+                  <div className="space-y-3">
+                    {recentCampaigns.map((campaign) => (
+                      <div key={campaign.id} className="rounded-2xl border border-[#e8e8e4] bg-[#fafaf8] p-4">
+                        <div className="flex items-start justify-between gap-3">
+                          <div className="min-w-0">
+                            <p className="truncate text-[13px] font-semibold text-[#111110]">{campaign.subject}</p>
+                            <p className="mt-1 text-[12px] text-[#1a1a1a]/40">
+                              {formatDateTime(campaign.sentAt ?? campaign.createdAt)} · 대상 {campaign.recipientCount}명
+                            </p>
+                          </div>
+                          <MiniBadge
+                            tone={
+                              campaign.status === "sent"
+                                ? "success"
+                                : campaign.status === "failed"
+                                  ? "danger"
+                                  : "warning"
+                            }
+                          >
+                            {campaign.status === "sent" ? "발송됨" : campaign.status === "failed" ? "실패" : "초안"}
+                          </MiniBadge>
+                        </div>
+                        <div className="mt-3 flex flex-wrap gap-1.5">
+                            {campaign.targetTags.length > 0 ? (
+                              campaign.targetTags.map((tag) => (
+                                <MiniBadge key={tag}>#{tag}</MiniBadge>
+                              ))
+                            ) : (
+                              <MiniBadge>전체 발송</MiniBadge>
+                            )}
+                        </div>
+                        <div className="mt-3 flex justify-end">
+                          <Button variant="outline" size="sm" onClick={() => handleDuplicateCampaign(campaign)}>
+                            복제해서 작성
+                          </Button>
+                        </div>
+                      </div>
+                    ))}
                   </div>
-                  <div className="rounded-2xl border border-[#e8e8e4] bg-[#fafaf8] px-4 py-3">
-                    <p className="text-[10px] font-medium uppercase tracking-[0.18em] text-[#1a1a1a]/35">총 발송 대상</p>
-                    <p className="mt-2 text-[24px] font-bold tracking-[-0.02em] text-[#111110]">
-                      {recentSentCampaigns.reduce((s, c) => s + c.recipientCount, 0).toLocaleString()}명
-                    </p>
-                    <p className="mt-1 text-[11px] text-[#1a1a1a]/40">
-                      평균 {recentAudienceAverage}명 · 성공률 {recentSuccessRate !== null ? `${recentSuccessRate}%` : "—"}
-                    </p>
-                  </div>
-                  {draftCount > 0 && (
-                    <div className="rounded-2xl border border-amber-100 bg-amber-50 px-4 py-3">
-                      <p className="text-[12px] font-medium text-amber-800">미발송 초안 {draftCount}건</p>
-                      <p className="mt-1 text-[11px] text-amber-700/70">초안이 쌓이지 않도록 확인하거나 삭제하세요.</p>
-                      <Button size="sm" variant="outline" className="mt-2 h-7 text-[11px] border-amber-200 bg-white text-amber-800 hover:bg-amber-50" onClick={() => setCampaignStatusFilter("draft")}>
-                        초안 필터 보기
-                      </Button>
-                    </div>
-                  )}
-                  {failedCount > 0 && (
-                    <div className="rounded-2xl border border-[#F6D5C5] bg-[#FEF3EE] px-4 py-3">
-                      <p className="text-[12px] font-medium text-[#B85C33]">실패 캠페인 {failedCount}건 확인 필요</p>
-                      <p className="mt-1 text-[11px] text-[#9A4A27]/70">웹훅 설정이나 이메일 설정을 점검하세요.</p>
-                      <Button size="sm" variant="outline" className="mt-2 h-7 text-[11px] border-[#F6D5C5] bg-white text-[#B85C33] hover:bg-[#FEF3EE]" onClick={() => setCampaignStatusFilter("failed")}>
-                        실패 필터 보기
-                      </Button>
-                    </div>
-                  )}
-                </div>
+                )}
               </Panel>
 
-              <Panel title="다음 액션" description="이력에서 바로 다음 작업으로 이어집니다.">
+              <Panel title="추천 다음 액션" description="이력 데이터 기반으로 바로 할 수 있는 것을 제안합니다.">
                 <div className="space-y-2">
-                  <Button variant="outline" className="w-full justify-between text-[13px]" onClick={() => setActiveTab("compose")}>
-                    <span className="flex items-center gap-2">
-                      <Send className="h-3.5 w-3.5 text-[#1a1a1a]/40" />
-                      새 캠페인 작성
-                    </span>
-                    <ChevronRight className="h-4 w-4 opacity-40" />
-                  </Button>
-                  <Button variant="outline" className="w-full justify-between text-[13px]" onClick={() => setActiveTab("subscribers")}>
-                    <span className="flex items-center gap-2">
-                      <Users className="h-3.5 w-3.5 text-[#1a1a1a]/40" />
-                      구독자 확인
-                    </span>
-                    <ChevronRight className="h-4 w-4 opacity-40" />
-                  </Button>
+                  {recentDraftCampaigns.length > 0 && (
+                    <button
+                      onClick={() => setActiveTab("compose")}
+                      className="w-full rounded-xl border border-amber-100 bg-amber-50 p-3 text-left transition-colors hover:bg-amber-100/60"
+                    >
+                      <p className="text-[12px] font-semibold text-amber-700">
+                        미완성 초안 {recentDraftCampaigns.length}개
+                      </p>
+                      <p className="mt-0.5 text-[11px] leading-relaxed text-amber-600/80">
+                        작성 탭에서 제목과 대상 태그를 확정하고 발송을 완료하세요.
+                      </p>
+                    </button>
+                  )}
+                  {recentFailedCampaigns.length > 0 && (
+                    <button
+                      onClick={() => setCampaignStatusFilter("failed")}
+                      className="w-full rounded-xl border border-red-100 bg-red-50 p-3 text-left transition-colors hover:bg-red-100/60"
+                    >
+                      <p className="text-[12px] font-semibold text-red-700">
+                        실패 캠페인 {recentFailedCampaigns.length}개 점검 필요
+                      </p>
+                      <p className="mt-0.5 text-[11px] leading-relaxed text-red-600/80">
+                        발송 설정 또는 웹훅 상태를 확인하세요.
+                      </p>
+                    </button>
+                  )}
+                  {recentSuccessRate !== null && recentSuccessRate > 0 && recentSuccessRate < 80 && (
+                    <button
+                      onClick={() => setActiveTab("subscribers")}
+                      className="w-full rounded-xl border border-[#e8e8e4] bg-[#fafaf8] p-3 text-left transition-colors hover:bg-[#f0f0ec]"
+                    >
+                      <p className="text-[12px] font-semibold text-[#111110]">
+                        최근 성공률 {recentSuccessRate}% — 구독자 점검
+                      </p>
+                      <p className="mt-0.5 text-[11px] leading-relaxed text-[#1a1a1a]/45">
+                        거부 상태 구독자나 잘못된 이메일을 정리하면 개선됩니다.
+                      </p>
+                    </button>
+                  )}
+                  {latestCampaign && (
+                    <button
+                      onClick={() => handleDuplicateCampaign(latestCampaign)}
+                      className="w-full rounded-xl border border-[#084734]/15 bg-[#ECFDF5] p-3 text-left transition-colors hover:bg-[#D1FAE5]"
+                    >
+                      <p className="text-[12px] font-semibold text-[#084734]">
+                        최근 캠페인 복제해서 재활용
+                      </p>
+                      <p className="mt-0.5 text-[11px] leading-relaxed text-[#084734]/60 truncate">
+                        "{latestCampaign.subject}" 기반으로 새 발송 시작
+                      </p>
+                    </button>
+                  )}
+                  {recentDraftCampaigns.length === 0 && recentFailedCampaigns.length === 0 && !latestCampaign && (
+                    <div className="rounded-xl border border-[#e8e8e4] bg-[#fafaf8] p-3">
+                      <p className="text-[12px] text-[#1a1a1a]/40">발송 이력이 쌓이면 맞춤 제안이 나타납니다.</p>
+                    </div>
+                  )}
                 </div>
               </Panel>
             </div>
           </div>
         )}
+        </div>
       </div>
 
       <Dialog open={isFormOpen} onOpenChange={(v) => !v && setIsFormOpen(false)}>
@@ -1595,10 +1567,23 @@ export default function AdminMarketingPage() {
         </DialogContent>
       </Dialog>
 
+      <Dialog open={showClearDraftConfirm} onOpenChange={setShowClearDraftConfirm}>
+        <DialogContent className="sm:max-w-sm bg-white">
+          <DialogHeader>
+            <DialogTitle>초안 비우기</DialogTitle>
+            <DialogDescription>작성 중인 내용을 모두 지우고 새로 시작합니다.</DialogDescription>
+          </DialogHeader>
+          <DialogFooter>
+            <Button variant="outline" onClick={() => setShowClearDraftConfirm(false)}>취소</Button>
+            <Button variant="destructive" onClick={confirmClearDraft}>비우기</Button>
+          </DialogFooter>
+        </DialogContent>
+      </Dialog>
+
       {toast && (
         <div
           className={`fixed bottom-6 right-6 z-50 flex items-center gap-2.5 rounded-xl px-4 py-3 text-[13px] font-medium shadow-xl ${
-            toast.kind === "success" ? "bg-[#111110] text-white" : "bg-[#B85C33] text-white"
+            toast.kind === "success" ? "bg-[#111110] text-white" : "bg-red-500 text-white"
           }`}
         >
           {toast.kind === "success" ? <CheckCircle2 className="h-4 w-4" /> : <XCircle className="h-4 w-4" />}

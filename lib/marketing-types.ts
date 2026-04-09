@@ -91,7 +91,6 @@ export interface NewsletterSubscribeRequest {
   email: string
   name?: string
   tags?: string[]
-  source?: string
 }
 
 /** 뉴스레터 수신거부 요청 (프론트엔드 → /api/newsletter/unsubscribe) */
@@ -130,3 +129,11 @@ export const PRESET_TAGS = [
   "서울", "경기", "지방",
   "데모신청", "행사참여", "VIP",
 ] as const
+
+export const TAG_GROUPS: Array<{ label: string; tags: readonly string[] }> = [
+  { label: "역할",   tags: ["원장", "관리자", "강사"] },
+  { label: "규모",   tags: ["100명이하", "100~300명", "300~500명", "500명이상"] },
+  { label: "과목",   tags: ["수학", "영어", "과학", "코딩", "종합"] },
+  { label: "지역",   tags: ["서울", "경기", "지방"] },
+  { label: "이벤트", tags: ["데모신청", "행사참여", "VIP"] },
+]

@@ -3,96 +3,81 @@
 import { useState } from "react"
 import { MessageSquare, Sparkles, Info } from "lucide-react"
 import { Button } from "@/components/ui/button"
-import { Badge } from "@/components/ui/badge"
-import { PRESET_TAGS } from "@/lib/marketing-types"
+import TagSelector from "./TagSelector"
 
 const SMS_MAX = 90
-const LMMS_MAX = 2000
+const LMS_MAX = 2000
 
-export default function SmsComposer() {
-  const [body,       setBody]       = useState("")
+interface Props {
+  subscriberCount?: number
+  countMap?: Record<string, number>
+}
+
+export default function SmsComposer({ subscriberCount = 0, countMap }: Props) {
+  const [body, setBody] = useState("")
   const [targetTags, setTargetTags] = useState<string[]>([])
-  const [aiMode,     setAiMode]     = useState(false)
-  const [aiBrief,    setAiBrief]    = useState("")
+  const [aiMode, setAiMode] = useState(false)
+  const [aiBrief, setAiBrief] = useState("")
 
-  const toggleTag = (tag: string) =>
-    setTargetTags((prev) =>
-      prev.includes(tag) ? prev.filter((t) => t !== tag) : [...prev, tag]
-    )
-
-  const isLmms   = body.length > SMS_MAX
-  const charLimit = isLmms ? LMMS_MAX : SMS_MAX
-  const overLimit = body.length > LMMS_MAX
+  const isLms = body.length > SMS_MAX
+  const charLimit = isLms ? LMS_MAX : SMS_MAX
+  const overLimit = body.length > LMS_MAX
 
   return (
-    <div className="space-y-5">
+    <div className="space-y-4">
       {/* 준비 중 배너 */}
-      <div className="flex items-start gap-3 px-4 py-3 bg-amber-50 border border-amber-100 rounded-xl">
-        <Info className="w-4 h-4 text-amber-500 shrink-0 mt-0.5" />
+      <div className="flex items-start gap-3 rounded-xl border border-amber-100 bg-amber-50 px-4 py-3">
+        <Info className="mt-0.5 h-4 w-4 shrink-0 text-amber-500" />
         <div>
           <p className="text-[13px] font-medium text-amber-700">SMS/LMS 발송 연동 준비 중</p>
-          <p className="text-[12px] text-amber-600/80 mt-0.5">
-            UI는 완성되어 있으며, Coolsms 등 SMS API 연동 후 실제 발송이 가능합니다.
-            현재는 미리보기 전용입니다.
+          <p className="mt-0.5 text-[12px] text-amber-600/80">
+            UI는 완성되어 있으며 Coolsms 등 SMS API 연동 후 실제 발송이 가능합니다. 현재는 미리보기 전용입니다.
           </p>
         </div>
       </div>
 
-      <div className="bg-white rounded-xl border border-[#e8e8e4] p-6">
-        <div className="flex items-center gap-2 mb-5">
-          <div className="w-7 h-7 rounded-lg bg-[#ECFDF5] flex items-center justify-center">
-            <MessageSquare className="w-3.5 h-3.5 text-[#084734]" />
-          </div>
-          <h3 className="text-[15px] font-semibold text-[#111110]">문자(SMS/LMS) 발송</h3>
-        </div>
-
-        <div className="space-y-4">
+      {/* ── Step 1: 내용 ────────────────────────────── */}
+      <div className="rounded-xl border border-[#e8e8e4] bg-white">
+        <div className="flex items-center gap-2 border-b border-[#e8e8e4] px-4 py-3">
+          <span className="flex h-5 w-5 items-center justify-center rounded-full bg-[#084734] text-[10px] font-bold text-white">1</span>
+          <span className="text-[13px] font-semibold text-[#111110]">문자 내용</span>
           {/* AI 모드 토글 */}
-          <div className="flex items-center gap-3">
-            <button
-              onClick={() => setAiMode(!aiMode)}
-              className={`flex items-center gap-1.5 px-3 py-1.5 rounded-lg border text-[12px] font-medium transition-colors ${
-                aiMode
-                  ? "bg-[#084734] text-white border-[#084734]"
-                  : "bg-white text-[#1a1a1a]/50 border-[#e8e8e4] hover:border-[#D1FAE5] hover:text-[#084734]"
-              }`}
-            >
-              <Sparkles className="w-3.5 h-3.5" />
-              AI 개인화 모드
-            </button>
-            <span className="text-[11px] text-[#1a1a1a]/30">
-              {aiMode ? "수신자별 맞춤 문자 자동 생성" : "동일한 문자를 전체 발송"}
-            </span>
-          </div>
-
-          {/* AI 브리프 (AI 모드일 때) */}
-          {aiMode && (
-            <div>
-              <label className="text-[12px] font-medium text-[#1a1a1a]/60 block mb-1.5">
+          <button
+            onClick={() => setAiMode(!aiMode)}
+            className={`ml-auto flex items-center gap-1.5 rounded-lg border px-2.5 py-1 text-[12px] font-medium transition-colors ${
+              aiMode
+                ? "border-[#084734] bg-[#084734] text-white"
+                : "border-[#e8e8e4] bg-white text-[#1a1a1a]/50 hover:border-[#084734]/40 hover:text-[#084734]"
+            }`}
+          >
+            <Sparkles className="h-3 w-3" />
+            AI 개인화
+          </button>
+        </div>
+        <div className="space-y-3 p-4">
+          {aiMode ? (
+            <div className="space-y-1.5">
+              <label className="block text-[12px] font-medium text-[#1a1a1a]/60">
                 AI 생성 지침
               </label>
               <textarea
                 value={aiBrief}
                 onChange={(e) => setAiBrief(e.target.value)}
-                rows={2}
+                rows={3}
                 placeholder="예: 데모 신청 감사 문자. 학원명 포함, 친근한 톤으로 80자 이내."
-                className="w-full px-3 py-2 border border-[#e8e8e4] rounded-lg text-[13px] focus:outline-none focus:ring-2 focus:ring-[#084734]/20 resize-none placeholder:text-[#1a1a1a]/25"
+                className="w-full resize-none rounded-lg border border-[#e8e8e4] px-3 py-2 text-[13px] leading-relaxed focus:outline-none focus:ring-2 focus:ring-[#084734]/20 placeholder:text-[#1a1a1a]/25"
               />
+              <p className="text-[11px] text-[#1a1a1a]/35">수신자별 맞춤 문자를 자동 생성합니다. (연동 후 활성화)</p>
             </div>
-          )}
-
-          {/* 문자 내용 */}
-          {!aiMode && (
-            <div>
-              <div className="flex items-center justify-between mb-1.5">
-                <label className="text-[12px] font-medium text-[#1a1a1a]/60">
-                  문자 내용 *
-                </label>
-                <span className={`text-[11px] font-mono ${
-                  overLimit ? "text-[#B85C33]" : isLmms ? "text-amber-500" : "text-[#1a1a1a]/40"
+          ) : (
+            <div className="space-y-1.5">
+              <div className="flex items-center justify-between">
+                <label className="text-[12px] font-medium text-[#1a1a1a]/60">문자 내용 *</label>
+                <span className={`font-mono text-[11px] ${
+                  overLimit ? "text-red-500" : isLms ? "text-amber-500" : "text-[#1a1a1a]/40"
                 }`}>
                   {body.length} / {charLimit}자
-                  {isLmms && !overLimit && <span className="ml-1 text-amber-500">(LMS)</span>}
+                  {isLms && !overLimit && <span className="ml-1 text-amber-500">(LMS)</span>}
                 </span>
               </div>
               <textarea
@@ -100,78 +85,68 @@ export default function SmsComposer() {
                 onChange={(e) => setBody(e.target.value)}
                 rows={4}
                 placeholder={`[클래스인]\n안녕하세요 {name}님,\n{org}에 클래스인을 소개드립니다.`}
-                className={`w-full px-3 py-2.5 border rounded-lg text-[13px] focus:outline-none focus:ring-2 resize-none placeholder:text-[#1a1a1a]/25 leading-relaxed ${
+                className={`w-full resize-none rounded-lg border px-3 py-2.5 text-[13px] leading-relaxed focus:outline-none focus:ring-2 placeholder:text-[#1a1a1a]/25 ${
                   overLimit
-                    ? "border-[#F6D5C5] focus:ring-[#B85C33]/20"
+                    ? "border-red-300 focus:ring-red-500/20"
                     : "border-[#e8e8e4] focus:ring-[#084734]/20"
                 }`}
               />
-              <div className="flex gap-3 mt-1.5">
+              <div className="flex gap-3">
                 {body.length <= SMS_MAX && (
-                  <p className="text-[10px] text-[#1a1a1a]/30">90자 이하: SMS (단문)</p>
+                  <p className="text-[10px] text-[#1a1a1a]/30">{SMS_MAX}자 이하 → SMS (단문)</p>
                 )}
-                {body.length > SMS_MAX && body.length <= LMMS_MAX && (
-                  <p className="text-[10px] text-amber-500">90자 초과: LMS (장문, 요금 다름)</p>
+                {body.length > SMS_MAX && !overLimit && (
+                  <p className="text-[10px] text-amber-500">{SMS_MAX}자 초과 → LMS (장문, 요금 다름)</p>
                 )}
                 {overLimit && (
-                  <p className="text-[10px] text-[#B85C33]">2000자 초과: 발송 불가</p>
+                  <p className="text-[10px] text-red-500">{LMS_MAX}자 초과 → 발송 불가</p>
                 )}
               </div>
             </div>
           )}
 
-          {/* 수신 대상 */}
+          {/* 폰 미리보기 */}
           <div>
-            <label className="text-[12px] font-medium text-[#1a1a1a]/60 block mb-1.5">
-              발송 대상 태그 <span className="text-[#1a1a1a]/30 font-normal">(미선택 시 전체)</span>
-            </label>
-            <div className="flex flex-wrap gap-1.5 p-3 border border-[#e8e8e4] rounded-lg bg-[#FAFAF8]">
-              {PRESET_TAGS.map((tag) => (
-                <Badge
-                  key={tag}
-                  variant="secondary"
-                  className={`cursor-pointer text-[11px] px-2 py-0.5 transition-colors ${
-                    targetTags.includes(tag)
-                      ? "bg-[#084734] text-white hover:bg-[#065c41]"
-                      : "bg-white text-[#1a1a1a]/60 hover:bg-[#ECFDF5] hover:text-[#084734] border border-[#e8e8e4]"
-                  }`}
-                  onClick={() => toggleTag(tag)}
-                >
-                  {tag}
-                </Badge>
-              ))}
-            </div>
-          </div>
-
-          {/* 발송 미리보기 (폰 목업) */}
-          <div>
-            <label className="text-[12px] font-medium text-[#1a1a1a]/60 block mb-2">미리보기</label>
-            <div className="w-[240px] bg-[#f0f0ec] rounded-2xl p-4 shadow-inner">
-              <div className="bg-white rounded-xl p-3 shadow-sm">
-                <p className="text-[10px] text-[#1a1a1a]/40 mb-1">클래스인</p>
-                <p className="text-[12px] text-[#111110] leading-relaxed whitespace-pre-wrap">
+            <p className="mb-2 text-[11px] font-medium text-[#1a1a1a]/40">미리보기</p>
+            <div className="w-[220px] rounded-2xl bg-[#f0f0ec] p-3 shadow-inner">
+              <div className="rounded-xl bg-white p-3 shadow-sm">
+                <p className="mb-1 text-[10px] text-[#1a1a1a]/40">클래스인</p>
+                <p className="whitespace-pre-wrap text-[12px] leading-relaxed text-[#111110]">
                   {aiMode
                     ? aiBrief
-                      ? `✦ AI가 각 수신자에게 맞는 문자를\n  자동으로 생성합니다.`
-                      : "(AI 생성 지침을 입력해주세요)"
-                    : body || "(문자 내용을 입력해주세요)"}
+                      ? "✦ AI가 수신자별 맞춤 문자를 자동 생성합니다."
+                      : <span className="text-[#1a1a1a]/30">(AI 지침을 입력해주세요)</span>
+                    : body || <span className="text-[#1a1a1a]/30">(내용을 입력해주세요)</span>}
                 </p>
               </div>
             </div>
           </div>
-
-          {/* 발송 버튼 (비활성) */}
-          <div className="flex items-center gap-3">
-            <Button
-              disabled
-              className="bg-[#f0f0ec] text-[#A39E98] cursor-not-allowed"
-            >
-              <MessageSquare className="w-3.5 h-3.5 mr-1.5" />
-              문자 발송 (연동 준비 중)
-            </Button>
-            <p className="text-[11px] text-[#1a1a1a]/30">SMS API 연동 후 활성화됩니다</p>
-          </div>
         </div>
+      </div>
+
+      {/* ── Step 2: 발송 대상 ────────────────────────── */}
+      <div className="rounded-xl border border-[#e8e8e4] bg-white">
+        <div className="flex items-center gap-2 border-b border-[#e8e8e4] px-4 py-3">
+          <span className="flex h-5 w-5 items-center justify-center rounded-full bg-[#084734] text-[10px] font-bold text-white">2</span>
+          <span className="text-[13px] font-semibold text-[#111110]">발송 대상 선택</span>
+        </div>
+        <div className="p-4">
+          <TagSelector
+            selected={targetTags}
+            onChange={setTargetTags}
+            countMap={countMap}
+            totalCount={subscriberCount}
+          />
+        </div>
+      </div>
+
+      {/* ── 발송 버튼 (비활성) ──────────────────────── */}
+      <div className="flex items-center justify-between gap-3 rounded-xl border border-[#e8e8e4] bg-[#fafaf8] px-4 py-3">
+        <p className="text-[12px] text-[#1a1a1a]/40">SMS API 연동 후 활성화됩니다.</p>
+        <Button disabled className="cursor-not-allowed opacity-40">
+          <MessageSquare className="mr-1.5 h-3.5 w-3.5" />
+          문자 발송 (준비 중)
+        </Button>
       </div>
     </div>
   )
