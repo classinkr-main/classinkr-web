@@ -49,7 +49,11 @@ export function CustomerForm({ partnerAccountId, existing, onClose, onSaved }: P
       ? `/api/portal/customers/${existing.id}`
       : "/api/portal/customers"
     const method = isEdit ? "PUT" : "POST"
-    const body = isEdit ? form : { ...form, partner_account_id: partnerAccountId }
+    const body = isEdit
+      ? form
+      : partnerAccountId
+        ? { ...form, partner_account_id: partnerAccountId }
+        : form
 
     const res = await portalFetch(url, {
       method,

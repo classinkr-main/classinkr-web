@@ -1,8 +1,17 @@
-"use client"
-
+import { redirect } from "next/navigation"
+import { hasSupabaseBrowserEnv } from "@/lib/supabase/public-env"
+import { createSupabaseServerClient } from "@/lib/supabase/server"
 import { PortalNav } from "@/components/partner-portal/PortalNav"
 
-export default function PortalLayout({ children }: { children: React.ReactNode }) {
+export default async function PortalLayout({ children }: { children: React.ReactNode }) {
+  if (hasSupabaseBrowserEnv()) {
+    const supabase = await createSupabaseServerClient()
+    const { data: { user } } = await supabase.auth.getUser()
+    if (!user) {
+      redirect("/partner/login")
+    }
+  }
+
   return (
     <div className="min-h-screen bg-[#f5f5f2] text-[#1a1a1a]">
       <div className="sticky top-0 z-20 border-b border-[#e7e0d6] bg-white/95 backdrop-blur-sm">
