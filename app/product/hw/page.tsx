@@ -13,6 +13,16 @@ import Image from "next/image"
 import Link from "next/link"
 import { useRef, useState } from "react"
 
+import OpeningStatement from "@/components/product/hw/OpeningStatement"
+import PainPointsV2 from "@/components/product/hw/PainPointsV2"
+import AllInOneStatement from "@/components/product/hw/AllInOneStatement"
+import BigBackdropImage from "@/components/product/hw/BigBackdropImage"
+import DesignDetails from "@/components/product/hw/DesignDetails"
+import LatencyProof from "@/components/product/hw/LatencyProof"
+import AICameraSection from "@/components/product/hw/AICameraSection"
+import SizeChooser from "@/components/product/hw/SizeChooser"
+import ValueAnchor from "@/components/product/hw/ValueAnchor"
+
 /* ── Animation helpers ───────────────────────────────────────────── */
 const fadeUp = {
     initial: { opacity: 0, y: 30 },
@@ -837,9 +847,9 @@ export default function ProductHWPage() {
                             </h1>
 
                             <p className="text-xl md:text-2xl text-slate-500 leading-relaxed font-medium max-w-2xl mx-auto mb-12">
-                                분필의 직관은 그대로. 디지털의 가능성은 무한히.
+                                보드 한 대 안에 PC, 4K 카메라, 소프트웨어가 모두 들어 있습니다.
                                 <br className="hidden md:block" />
-                                아날로그와 디지털이 하나 되는 교육 경험.
+                                책상 위에 둘 게 사라진 교실.
                             </p>
                         </motion.div>
 
@@ -851,10 +861,10 @@ export default function ProductHWPage() {
                             className="flex flex-wrap justify-center gap-8 md:gap-14 mt-4"
                         >
                             {[
-                                { value: "0.03초", label: "초저지연 필기" },
-                                { value: "178°", label: "광시야각" },
-                                { value: "50점", label: "멀티터치" },
-                                { value: "4K", label: "AI 카메라" },
+                                { value: "0.03s", label: "초저지연 필기" },
+                                { value: "OPS", label: "PC 내장" },
+                                { value: "AI", label: "트래킹 카메라" },
+                                { value: "AG/AF", label: "반사·지문 방지" },
                             ].map((m, i) => (
                                 <div key={i} className="text-center">
                                     <div className="text-2xl md:text-3xl font-sans font-bold tabular-nums tracking-tight text-[#22A366]">{m.value}</div>
@@ -885,14 +895,38 @@ export default function ProductHWPage() {
             </section>
 
             {/* ================================================================
-                IMPACT NUMBERS — 숫자로 보는 ClassIn Board
+                NEW INTRO ARC — 도입부 2배 확장 (스토리텔링 + 제품 직설)
             ================================================================ */}
+
+            {/* OPENING STATEMENT — 텍스트 임팩트 */}
+            <OpeningStatement />
+
+            {/* PAIN POINTS V2 — 5가지 고민 → 5가지 부품 매칭 */}
+            <PainPointsV2 />
+
+            {/* ALL-IN-ONE STATEMENT — OPS 내장 강조 + 분해도 */}
+            <AllInOneStatement />
+
+            {/* BIG BACKDROP — 베젤 클로즈업 풀블리드 */}
+            <BigBackdropImage />
+
+            {/* IMPACT NUMBERS — 숫자로 보는 ClassIn Board */}
             <ImpactNumbersSection />
 
-            {/* ================================================================
-                PAIN POINTS — 선생님의 고민
-            ================================================================ */}
-            <PainPointSection />
+            {/* DESIGN DETAILS — 반사·지문·몰입 3카드 */}
+            <DesignDetails />
+
+            {/* LATENCY PROOF — 0.03s 시연 */}
+            <LatencyProof />
+
+            {/* AI CAMERA — 트래킹 카메라 */}
+            <AICameraSection />
+
+            {/* SIZE CHOOSER — 75"/86" 비교 */}
+            <SizeChooser />
+
+            {/* VALUE ANCHOR — 한 대에 포함된 모든 것 */}
+            <ValueAnchor />
 
             {/* ================================================================
                 ACT 1 — COMPARISON: 왜 ClassIn Board인가
