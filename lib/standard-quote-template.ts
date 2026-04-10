@@ -3,6 +3,7 @@ import type {
   PartnerQuoteLineItemInput,
   QuoteOptionSelectionValue,
 } from "@/lib/partners-types"
+import { getProductBySku } from "@/lib/product-templates"
 
 export type StandardQuoteTemplateId = "camera_t1" | "board_75" | "board_86"
 export type StandardQuoteOptionSelections = Record<string, QuoteOptionSelectionValue | undefined>
@@ -84,20 +85,26 @@ export const STANDARD_QUOTE_DEFAULT_VAT_LABEL = "(단위:원, VAT포함)"
 export const STANDARD_QUOTE_DEFAULT_VAT_EXCLUDED_LABEL = "(단위:원, VAT별도)"
 export const STANDARD_QUOTE_DEFAULT_DELIVERY_NOTE = "구매처 지정장소"
 
+const STANDARD_PRICE_BOARD_86 = getProductBySku("board-86")?.unit_price ?? 5_800_000
+const STANDARD_PRICE_BOARD_75 = getProductBySku("board-75")?.unit_price ?? 4_900_000
+const STANDARD_PRICE_CAMERA_T1 = getProductBySku("camera-t1")?.unit_price ?? 1_200_000
+const STANDARD_PRICE_STAND = getProductBySku("stand")?.unit_price ?? 500_000
+const STANDARD_PRICE_WALL_MOUNT = getProductBySku("wall-mount")?.unit_price ?? 500_000
+
 export const STANDARD_QUOTE_TEMPLATES: StandardQuoteTemplatePreset[] = [
   {
     id: "camera_t1",
-    label: "카메라 T1",
+    label: "T1 카메라",
     description: "강사용 모션트래킹 카메라 기본 견적",
     lines: [
       {
         itemType: "hardware",
         itemCode: "camera-t1",
-        itemName: "ClassInX 카메라 T1",
+        itemName: "T1 카메라",
         itemDescription: "강사용 모션트래킹 카메라 (전용 POE 스위치 포함)",
         quantity: 1,
         quantityUnit: "대",
-        unitPrice: 1_050_000,
+        unitPrice: STANDARD_PRICE_CAMERA_T1,
         quantityEditable: true,
         priceEditable: true,
       },
@@ -172,7 +179,7 @@ export const STANDARD_QUOTE_TEMPLATES: StandardQuoteTemplatePreset[] = [
         itemDescription: "중형 전자칠판 패널",
         quantity: 1,
         quantityUnit: "대",
-        unitPrice: 4_000_000,
+        unitPrice: STANDARD_PRICE_BOARD_75,
         quantityEditable: true,
         priceEditable: true,
       },
@@ -215,7 +222,7 @@ export const STANDARD_QUOTE_TEMPLATES: StandardQuoteTemplatePreset[] = [
       },
       {
         id: "camera_bundle",
-        label: "카메라 번들",
+        label: "T1 카메라 추가",
         description: "전자칠판 수량에 맞춰 T1 카메라를 추가합니다.",
         control: "toggle",
         defaultValue: false,
@@ -246,9 +253,9 @@ export const STANDARD_QUOTE_TEMPLATES: StandardQuoteTemplatePreset[] = [
         },
       },
       {
-        id: "board_75_bundle",
-        label: "카메라 번들형",
-        description: "카메라 포함 교실 패키지",
+        id: "board_75_t1_addon",
+        label: "T1 추가형",
+        description: "전자칠판에 T1 카메라를 함께 포함",
         templateId: "board_75",
         optionSelections: {
           installation_mode: "included_quote",
@@ -271,7 +278,7 @@ export const STANDARD_QUOTE_TEMPLATES: StandardQuoteTemplatePreset[] = [
         itemDescription: "대형 전자칠판 패널",
         quantity: 1,
         quantityUnit: "대",
-        unitPrice: 5_000_000,
+        unitPrice: STANDARD_PRICE_BOARD_86,
         quantityEditable: true,
         priceEditable: true,
       },
@@ -314,10 +321,10 @@ export const STANDARD_QUOTE_TEMPLATES: StandardQuoteTemplatePreset[] = [
       },
       {
         id: "camera_bundle",
-        label: "카메라 번들",
+        label: "T1 카메라 추가",
         description: "전자칠판 수량에 맞춰 T1 카메라를 추가합니다.",
         control: "toggle",
-        defaultValue: true,
+        defaultValue: false,
         enabledLabel: "추가",
         disabledLabel: "제외",
       },
@@ -335,7 +342,19 @@ export const STANDARD_QUOTE_TEMPLATES: StandardQuoteTemplatePreset[] = [
       {
         id: "board_86_classroom",
         label: "교실 기본형",
-        description: "벽걸이 + 카메라 포함",
+        description: "벽걸이 + 설치 포함",
+        templateId: "board_86",
+        optionSelections: {
+          installation_mode: "included_quote",
+          mounting_option: "wall_mount",
+          camera_bundle: false,
+          support_package: true,
+        },
+      },
+      {
+        id: "board_86_bundle",
+        label: "86 번들",
+        description: '전자칠판 86" + T1 + 벽걸이',
         templateId: "board_86",
         optionSelections: {
           installation_mode: "included_quote",
@@ -802,7 +821,7 @@ export function buildConfigurableStandardQuoteDetails({
         itemDescription: "현장 벽면 고정 및 기본 부자재 포함",
         quantity,
         quantityUnit: "대",
-        unitPrice: 500_000,
+        unitPrice: STANDARD_PRICE_WALL_MOUNT,
         optionGroupId: "mounting_option",
         optionId: mountingOption,
       })
@@ -813,7 +832,7 @@ export function buildConfigurableStandardQuoteDetails({
         itemDescription: "이동형 스탠드 거치",
         quantity,
         quantityUnit: "대",
-        unitPrice: 500_000,
+        unitPrice: STANDARD_PRICE_STAND,
         optionGroupId: "mounting_option",
         optionId: mountingOption,
       })
@@ -858,11 +877,11 @@ export function buildConfigurableStandardQuoteDetails({
     if (readSelectionBoolean(selections, "camera_bundle", false)) {
       addOptionalLine("camera-t1", {
         itemType: "hardware",
-        itemName: "ClassInX 카메라 T1",
+        itemName: "T1 카메라",
         itemDescription: "강사용 모션트래킹 카메라 (전용 POE 스위치 포함)",
         quantity,
         quantityUnit: "대",
-        unitPrice: 1_050_000,
+        unitPrice: STANDARD_PRICE_CAMERA_T1,
         optionGroupId: "camera_bundle",
         optionId: "enabled",
       })

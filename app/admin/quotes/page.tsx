@@ -13,7 +13,7 @@ import {
   PencilLine,
 } from "lucide-react"
 
-import { PRODUCT_TEMPLATES, getProductBySku } from "@/lib/product-templates"
+import { getProductBySku } from "@/lib/product-templates"
 import { Button } from "@/components/ui/button"
 import type { Partner, Quote, QuoteStatus } from "@/lib/supabase/database.types"
 
@@ -47,13 +47,13 @@ type ProductOption = {
 const PRODUCT_OPTIONS: ProductOption[] = [
   {
     key: "board-86",
-    label: "ClassIn Board 86인치",
+    label: '전자칠판 86"',
     description: "메인 대형 패널",
     unit_price: 5_000_000,
   },
   {
     key: "board-75",
-    label: "ClassIn Board 75인치",
+    label: '전자칠판 75"',
     description: "중형 패널",
     unit_price: 4_000_000,
   },
@@ -125,7 +125,7 @@ const DUMMY_QUOTES_LIST: Quote[] = [
     partner_id: "p1",
     lead_id: null,
     version: 1,
-    title: "ClassIn Board 86인치 5대 견적",
+    title: '전자칠판 86" 5대 견적',
     status: "converted",
     valid_until: "2026-04-30",
     subtotal: 22_727_272,
@@ -146,7 +146,7 @@ const DUMMY_QUOTES_LIST: Quote[] = [
     partner_id: "p2",
     lead_id: null,
     version: 1,
-    title: "ClassIn Board 75인치 추가 도입",
+    title: '전자칠판 75" 추가 도입',
     status: "sent",
     valid_until: "2026-04-20",
     subtotal: 10_909_090,
@@ -544,7 +544,7 @@ export default function QuotesPage() {
                       required
                       value={form.title}
                       onChange={(e) => setForm({ ...form, title: e.target.value })}
-                      placeholder="예) ClassIn Board 86인치 도입 견적"
+                      placeholder='예) 전자칠판 86" 도입 견적'
                       className="w-full rounded-lg border border-[#e8e8e4] px-3 py-2 text-sm focus:border-[#1a1a1a] focus:outline-none"
                     />
                   </div>

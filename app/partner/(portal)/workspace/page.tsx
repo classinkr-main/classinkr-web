@@ -20,7 +20,6 @@ import { Badge } from "@/components/ui/badge"
 import { Card, CardContent, CardHeader, CardTitle } from "@/components/ui/card"
 import { Tabs, TabsContent, TabsList, TabsTrigger } from "@/components/ui/tabs"
 import { MobileActionLauncher } from "@/components/partner-portal/mobile/MobileActionLauncher"
-import { PortalNav } from "@/components/partner-portal/PortalNav"
 import type {
   CalendarEvent,
   CustomerListItem,
@@ -225,7 +224,7 @@ const DEMO_DETAIL: DealDetailPayload = {
     payment_status: "partial",
     starts_at: "2026-02-22T00:00:00Z",
     closed_at: null,
-    notes: "CB-86 4대, 스탠드 4대, T1 카메라 2대",
+    notes: '전자칠판 86" 4대, 스탠드 4대, T1 카메라 2대',
     created_by: null,
     created_at: "2026-02-22T00:00:00Z",
     updated_at: "2026-04-03T00:00:00Z",
@@ -237,7 +236,7 @@ const DEMO_DETAIL: DealDetailPayload = {
       deal_id: "demo-deal-1",
       sku: "CB-86",
       category: "board" as const,
-      product_name: "ClassIn CB-86 전자칠판",
+      product_name: '전자칠판 86"',
       quantity: 4,
       unit_price: 5500000,
       amount: 22000000,
@@ -313,6 +312,13 @@ function formatDate(value: string | null | undefined) {
     month: "short",
     day: "numeric",
   })
+}
+
+function formatBoardSkuLabel(value: string | null | undefined) {
+  if (!value) return "-"
+  if (value === "CB-86" || value === "board-86") return '86"'
+  if (value === "CB-75" || value === "board-75") return '75"'
+  return value
 }
 
 function stageLabel(stage: DealListItem["current_stage"]) {
@@ -799,7 +805,7 @@ export default function PartnerWorkspacePage() {
                           {detail.line_items.map((item) => (
                             <div key={item.id} className="flex items-center justify-between gap-3 text-sm">
                               <div className="flex items-center gap-2 min-w-0">
-                                <span className="shrink-0 rounded-md bg-[#f0f0ec] px-1.5 py-0.5 text-[10px] font-mono text-[#1a1a1a]/50">{item.sku}</span>
+                                <span className="shrink-0 rounded-md bg-[#f0f0ec] px-1.5 py-0.5 text-[10px] font-mono text-[#1a1a1a]/50">{formatBoardSkuLabel(item.sku)}</span>
                                 <span className="truncate text-[#1a1a1a]">{item.product_name}</span>
                                 <span className="shrink-0 text-xs text-[#1a1a1a]/40">×{item.quantity}</span>
                               </div>

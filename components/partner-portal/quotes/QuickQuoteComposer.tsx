@@ -7,6 +7,7 @@ import { Button } from "@/components/ui/button"
 import { Input } from "@/components/ui/input"
 import { Label } from "@/components/ui/label"
 import { portalFetch } from "@/lib/partner-portal/portal-fetch"
+import { getProductBySku } from "@/lib/product-templates"
 import type {
   CustomerListItem,
   DealListItem,
@@ -26,6 +27,7 @@ import {
   formatStandardQuoteCurrency,
   getStandardQuoteDefaultSelections,
   getStandardQuoteOptionGroups,
+  getStandardQuoteQuickPresets,
   getStandardQuoteTemplate,
   inferStandardQuoteTemplateId,
   STANDARD_QUOTE_SUPPLIER,
@@ -98,6 +100,61 @@ type QuoteFetchPayload = {
 type CustomerPayload = { customers: CustomerListItem[] }
 type DealPayload = { deals: DealListItem[] }
 
+type QuickAddRailItemId =
+  | "board_86"
+  | "board_75"
+  | "camera_t1"
+  | "stand"
+  | "wall_mount"
+  | "bundle_86_t1_wall"
+
+type QuickAddRailItem = {
+  id: QuickAddRailItemId
+  label: string
+  description: string
+  price: number
+}
+
+const TEMPLATE_CARD_ORDER: StandardQuoteTemplateId[] = ["board_86", "board_75", "camera_t1"]
+const QUICK_ADD_RAIL_ITEMS: QuickAddRailItem[] = [
+  {
+    id: "board_86",
+    label: '전자칠판 86"',
+    description: "메인 대형 패널",
+    price: getProductBySku("board-86")?.unit_price ?? 5_800_000,
+  },
+  {
+    id: "board_75",
+    label: '전자칠판 75"',
+    description: "중형 전자칠판",
+    price: getProductBySku("board-75")?.unit_price ?? 4_900_000,
+  },
+  {
+    id: "camera_t1",
+    label: "T1 카메라",
+    description: "강사용 추적 카메라",
+    price: getProductBySku("camera-t1")?.unit_price ?? 1_200_000,
+  },
+  {
+    id: "stand",
+    label: "스탠드",
+    description: "이동형 거치",
+    price: getProductBySku("stand")?.unit_price ?? 500_000,
+  },
+  {
+    id: "wall_mount",
+    label: "벽걸이",
+    description: "벽면 설치",
+    price: getProductBySku("wall-mount")?.unit_price ?? 500_000,
+  },
+  {
+    id: "bundle_86_t1_wall",
+    label: "번들",
+    description: '86" + T1 + 벽걸이',
+    price: getProductBySku("bundle-86-t1-wall")?.unit_price ?? 7_500_000,
+  },
+]
+
 function mergeCustomerListItems(
   preferred: CustomerListItem[],
   fallback: CustomerListItem[]
@@ -130,6 +187,10 @@ function addDays(dateValue: string, days: number) {
   if (Number.isNaN(base.getTime())) return dateValue
   base.setDate(base.getDate() + days)
   return base.toISOString().slice(0, 10)
+}
+
+function formatQuickAddPrice(value: number) {
+  return `${Math.round(value / 10_000).toLocaleString("ko-KR")}만`
 }
 
 function isRecord(value: unknown): value is Record<string, unknown> {
@@ -271,6 +332,55 @@ function parseNumericInput(value: string) {
   return Number.isFinite(parsed) ? parsed : undefined
 }
 
+function buildDefaultDealTitle({
+  templateId,
+  quantity,
+  customerName,
+}: {
+  templateId: StandardQuoteTemplateId
+  quantity: number
+  customerName?: string | null
+}) {
+  const template = getStandardQuoteTemplate(templateId)
+  const subject = `${template.label} ${Math.max(1, quantity)}대`
+  return customerName?.trim() ? `${customerName.trim()} ${subject}` : subject
+}
+
+async function copyTextToClipboard(text: string) {
+  if (typeof navigator !== "undefined" && navigator.clipboard?.writeText) {
+    try {
+      await navigator.clipboard.writeText(text)
+      return true
+    } catch {
+      // Fall through to legacy copy flow.
+    }
+  }
+
+  if (typeof document === "undefined") {
+    return false
+  }
+
+  const textarea = document.createElement("textarea")
+  textarea.value = text
+  textarea.setAttribute("readonly", "true")
+  textarea.style.position = "fixed"
+  textarea.style.top = "0"
+  textarea.style.left = "0"
+  textarea.style.opacity = "0"
+  document.body.appendChild(textarea)
+  textarea.focus()
+  textarea.select()
+
+  let copied = false
+  try {
+    copied = document.execCommand("copy")
+  } finally {
+    document.body.removeChild(textarea)
+  }
+
+  return copied
+}
+
 function PreviewField({
   label,
   value,
@@ -281,9 +391,11 @@ function PreviewField({
   align?: "left" | "right"
 }) {
   return (
-    <div className="grid grid-cols-[92px_minmax(0,1fr)] gap-2 border-b border-black/80 pb-1 text-[12px] text-black">
-      <span>{label}</span>
-      <span className={align === "right" ? "text-right" : ""}>{value || " "}</span>
+    <div className="grid grid-cols-[86px_minmax(0,1fr)] gap-3 border-b border-black/80 pb-1 text-[11px] leading-5 text-black">
+      <span className="break-keep">{label}</span>
+      <span className={`break-keep whitespace-pre-wrap ${align === "right" ? "text-right" : ""}`}>
+        {value || " "}
+      </span>
     </div>
   )
 }
@@ -294,10 +406,10 @@ function QuotePreviewPanel({ quote }: { quote: PartnerQuoteDetailsInput }) {
 
   return (
     <aside className="rounded-[28px] border border-[#e8e8e4] bg-[#f6f5f2] p-4">
-      <div className="mx-auto w-full max-w-[360px] rounded-[24px] bg-white px-6 py-8 shadow-[0_12px_32px_rgba(17,17,16,0.08)]">
+      <div className="mx-auto w-[560px] min-w-[560px] rounded-[24px] bg-white px-9 py-10 shadow-[0_12px_32px_rgba(17,17,16,0.08)]">
         <p className="text-center text-[18px] font-semibold tracking-tight text-black">견적서</p>
 
-        <div className="mt-8 grid grid-cols-2 gap-10">
+        <div className="mt-8 grid grid-cols-[minmax(0,0.8fr)_minmax(0,1.2fr)] gap-6">
           <div className="space-y-3">
             <PreviewField label="발행일" value={quote.issuedAt} />
             <PreviewField label="수신" value={quote.recipientCompanyName} />
@@ -319,7 +431,15 @@ function QuotePreviewPanel({ quote }: { quote: PartnerQuoteDetailsInput }) {
         <p className="mt-10 text-center text-[13px] text-black">{quote.subjectText}</p>
         <div className="mt-4 text-right text-[12px] text-black">{quote.vatPolicyLabel}</div>
 
-        <table className="mt-3 w-full border-collapse text-[12px] text-black">
+        <table className="mt-3 w-full table-fixed border-collapse text-[12px] text-black">
+          <colgroup>
+            <col className="w-[30px]" />
+            <col className="w-[110px]" />
+            <col />
+            <col className="w-[82px]" />
+            <col className="w-[56px]" />
+            <col className="w-[92px]" />
+          </colgroup>
           <thead className="bg-[#ecebea]">
             <tr className="border-y border-black">
               <th className="px-1 py-2 text-left font-normal">No</th>
@@ -334,13 +454,13 @@ function QuotePreviewPanel({ quote }: { quote: PartnerQuoteDetailsInput }) {
             {lineItems.map((line) => (
               <tr key={`preview-${line.lineNumber}-${line.itemName}`} className="border-b border-black">
                 <td className="px-1 py-2 align-top">{line.lineNumber}</td>
-                <td className="px-1 py-2 align-top">{line.itemName}</td>
-                <td className="px-1 py-2 align-top">{line.itemDescription || "-"}</td>
-                <td className="px-1 py-2 text-right align-top">
+                <td className="px-1 py-2 align-top break-keep">{line.itemName}</td>
+                <td className="px-1 py-2 align-top break-keep">{line.itemDescription || "-"}</td>
+                <td className="px-1 py-2 text-right align-top whitespace-nowrap">
                   {line.unitPrice == null ? "-" : formatStandardQuoteCurrency(line.unitPrice)}
                 </td>
-                <td className="px-1 py-2 text-right align-top">{line.quantity ?? "-"}</td>
-                <td className="px-1 py-2 text-right align-top">
+                <td className="px-1 py-2 text-right align-top whitespace-nowrap">{line.quantity ?? "-"}</td>
+                <td className="px-1 py-2 text-right align-top whitespace-nowrap">
                   {line.lineSupplyAmount == null ? "-" : formatStandardQuoteCurrency(line.lineSupplyAmount)}
                 </td>
               </tr>
@@ -358,7 +478,7 @@ function QuotePreviewPanel({ quote }: { quote: PartnerQuoteDetailsInput }) {
             <tr className="border-b border-black">
               <td className="px-1 py-3" colSpan={4} />
               <td className="px-1 py-3 text-right">합계</td>
-              <td className="px-1 py-3 text-right">{formatStandardQuoteCurrency(quote.grandTotalAmount)} </td>
+              <td className="px-1 py-3 text-right whitespace-nowrap">{formatStandardQuoteCurrency(quote.grandTotalAmount)}</td>
             </tr>
           </tbody>
         </table>
@@ -417,6 +537,7 @@ export default function QuickQuoteComposer({
     [customers]
   )
   const selectedCustomer = sortedCustomers.find((item) => item.customer.id === selectedCustomerId)?.customer ?? null
+  const fallbackExistingCustomer = selectedCustomer ?? sortedCustomers[0]?.customer ?? null
   const availableDeals = useMemo(
     () =>
       customerMode === "existing" && selectedCustomerId
@@ -424,11 +545,18 @@ export default function QuickQuoteComposer({
         : [],
     [customerMode, deals, selectedCustomerId]
   )
-  const selectedCustomerName = selectedCustomer?.name ?? null
+  const selectedCustomerName = fallbackExistingCustomer?.name ?? null
   const totals = calculateStandardQuoteTotals(quote.lineItems, quote.vatIncluded ?? true)
   const baseLine = getBaseLine(quote)
   const baseQuantity = Math.max(1, Number(baseLine?.quantity ?? 1))
   const optionGroups = getStandardQuoteOptionGroups(templateId)
+  const bundlePreset =
+    getStandardQuoteQuickPresets("board_86").find((preset) => preset.id === "board_86_bundle") ?? null
+  const hasNoExpiration = !quote.validUntil
+  const isBundleSelected =
+    templateId === "board_86" &&
+    optionSelections.camera_bundle === true &&
+    optionSelections.mounting_option === "wall_mount"
 
   useEffect(() => {
     if (!open) return
@@ -553,6 +681,104 @@ export default function QuickQuoteComposer({
     )
   }
 
+  function updateTemplateShortcut(
+    nextTemplateId: StandardQuoteTemplateId,
+    nextSelections: StandardQuoteOptionSelections,
+    nextBaseQuantity: number,
+    presetId?: string
+  ) {
+    setTemplateId(nextTemplateId)
+    setOptionSelections(nextSelections)
+    rebuildQuote({
+      templateId: nextTemplateId,
+      optionSelections: nextSelections,
+      baseQuantity: nextBaseQuantity,
+      patch: {
+        templateId: nextTemplateId,
+        presetId,
+      },
+    })
+  }
+
+  function handleQuickAdd(itemId: QuickAddRailItemId) {
+    if (itemId === "board_86") {
+      if (templateId === "board_86" && !isBundleSelected) {
+        rebuildQuote({ baseQuantity: baseQuantity + 1, patch: { presetId: undefined } })
+        return
+      }
+
+      updateTemplateShortcut(
+        "board_86",
+        getStandardQuoteDefaultSelections("board_86"),
+        templateId === "board_86" ? baseQuantity : 1
+      )
+      return
+    }
+
+    if (itemId === "board_75") {
+      if (templateId === "board_75") {
+        rebuildQuote({ baseQuantity: baseQuantity + 1, patch: { presetId: undefined } })
+        return
+      }
+
+      updateTemplateShortcut(
+        "board_75",
+        getStandardQuoteDefaultSelections("board_75"),
+        1
+      )
+      return
+    }
+
+    if (itemId === "camera_t1") {
+      if (templateId === "camera_t1") {
+        rebuildQuote({ baseQuantity: baseQuantity + 1, patch: { presetId: undefined } })
+        return
+      }
+
+      updateTemplateShortcut(
+        "camera_t1",
+        getStandardQuoteDefaultSelections("camera_t1"),
+        1
+      )
+      return
+    }
+
+    if (itemId === "bundle_86_t1_wall") {
+      if (isBundleSelected) {
+        rebuildQuote({
+          baseQuantity: baseQuantity + 1,
+          patch: { presetId: bundlePreset?.id ?? "board_86_bundle" },
+        })
+        return
+      }
+
+      updateTemplateShortcut(
+        "board_86",
+        {
+          ...getStandardQuoteDefaultSelections("board_86"),
+          ...(bundlePreset?.optionSelections ?? {}),
+        },
+        templateId === "board_86" ? baseQuantity : 1,
+        bundlePreset?.id ?? "board_86_bundle"
+      )
+      return
+    }
+
+    const boardTemplateId: StandardQuoteTemplateId =
+      templateId === "board_75" ? "board_75" : "board_86"
+    const nextSelections: StandardQuoteOptionSelections = {
+      ...getStandardQuoteDefaultSelections(boardTemplateId),
+      ...(boardTemplateId === templateId ? optionSelections : {}),
+      mounting_option: itemId === "stand" ? "stand" : "wall_mount",
+    }
+
+    updateTemplateShortcut(
+      boardTemplateId,
+      nextSelections,
+      boardTemplateId === templateId ? baseQuantity : 1
+    )
+  }
+
   function updateLine(
     lineIndex: number,
     patch: Partial<PartnerQuoteLineItemInput>
@@ -586,6 +812,15 @@ export default function QuickQuoteComposer({
         templateId
       )
     })
+  }
+
+  function nudgeLineQuantity(lineIndex: number, delta: number) {
+    const target = quote.lineItems?.[lineIndex]
+    if (!target) return
+    if (target.quantityLocked === true && target.optionGroupId !== "main_product") return
+
+    const nextQuantity = Math.max(1, Math.round(Number(target.quantity ?? 1)) + delta)
+    updateLine(lineIndex, { quantity: nextQuantity })
   }
 
   async function handleReuseQuote(quoteId: string) {
@@ -656,7 +891,7 @@ export default function QuickQuoteComposer({
             templateId: nextTemplateId,
             optionSelections: nextSelections,
             issuedAt: today,
-            validUntil: normalized.validUntil || addDays(today, 7),
+            validUntil: normalized.validUntil ?? undefined,
             generatedFromVersionId: payload.version?.id,
             recipientCompanyName: payload.deal.customer_name ?? normalized.recipientCompanyName,
           },
@@ -675,10 +910,10 @@ export default function QuickQuoteComposer({
   }
 
   async function resolveCustomer() {
-    if (customerMode === "existing" && selectedCustomer) {
+    if (customerMode === "existing" && fallbackExistingCustomer) {
       return {
-        id: selectedCustomer.id,
-        name: selectedCustomer.name,
+        id: fallbackExistingCustomer.id,
+        name: fallbackExistingCustomer.name,
       }
     }
 
@@ -702,7 +937,7 @@ export default function QuickQuoteComposer({
     return payload.customer
   }
 
-  async function resolveDeal(customerId: string) {
+  async function resolveDeal(customerId: string, customerName?: string | null) {
     const existingDeal =
       selectedDealId && deals.find((deal) => deal.id === selectedDealId && deal.customer_id === customerId)
 
@@ -710,7 +945,13 @@ export default function QuickQuoteComposer({
       return existingDeal
     }
 
-    const title = newDealTitle.trim()
+    const title =
+      newDealTitle.trim() ||
+      buildDefaultDealTitle({
+        templateId,
+        quantity: baseQuantity,
+        customerName,
+      })
     if (!title) {
       throw new Error("거래 제목을 입력해 주세요.")
     }
@@ -737,10 +978,14 @@ export default function QuickQuoteComposer({
   async function handleSubmit(action: CreateAction) {
     setSubmittingAction(action)
     setError(null)
+    const previewWindow =
+      action === "save_and_preview" && typeof window !== "undefined"
+        ? window.open("", "_blank")
+        : null
 
     try {
       const customer = await resolveCustomer()
-      const deal = await resolveDeal(customer.id)
+      const deal = await resolveDeal(customer.id, customer.name)
       const preparedQuote = finalizeStandardQuoteDetails(
         {
           ...quote,
@@ -748,7 +993,7 @@ export default function QuickQuoteComposer({
           optionSelections,
           recipientCompanyName: customer.name,
           issuedAt: quote.issuedAt || today,
-          validUntil: quote.validUntil || addDays(today, 7),
+          validUntil: quote.validUntil ?? undefined,
         },
         templateId
       )
@@ -803,13 +1048,23 @@ export default function QuickQuoteComposer({
 
           share = sharePayload.share ?? null
           shareUrl = sharePayload.shareUrl
-          if (action === "save_and_copy_link" && navigator.clipboard?.writeText) {
-            await navigator.clipboard.writeText(shareUrl)
+          if (action === "save_and_copy_link") {
+            const copied = await copyTextToClipboard(shareUrl)
+            if (!copied) {
+              throw new Error("브라우저에서 링크 복사를 허용하지 않았습니다.")
+            }
           }
           if (action === "save_and_preview") {
-            window.open(shareUrl, "_blank", "noopener,noreferrer")
+            if (previewWindow) {
+              previewWindow.location.href = shareUrl
+            } else if (typeof window !== "undefined") {
+              window.location.href = shareUrl
+            }
           }
         } catch (shareIssue) {
+          if (previewWindow && !previewWindow.closed) {
+            previewWindow.close()
+          }
           shareError =
             shareIssue instanceof Error
               ? shareIssue.message
@@ -834,6 +1089,9 @@ export default function QuickQuoteComposer({
 
       onOpenChange(false)
     } catch (submitError) {
+      if (previewWindow && !previewWindow.closed) {
+        previewWindow.close()
+      }
       setError(
         submitError instanceof Error
           ? submitError.message
@@ -1035,10 +1293,34 @@ export default function QuickQuoteComposer({
                 </div>
 
                 <div className="grid gap-2">
-                  <Label htmlFor="quote-valid-until">유효기한</Label>
+                  <div className="flex items-center justify-between gap-3">
+                    <Label htmlFor="quote-valid-until">유효기한</Label>
+                    <button
+                      type="button"
+                      onClick={() =>
+                        setQuote((current) =>
+                          finalizeStandardQuoteDetails(
+                            {
+                              ...current,
+                              validUntil: current.validUntil ? undefined : addDays(current.issuedAt || today, 7),
+                            },
+                            templateId
+                          )
+                        )
+                      }
+                      className={`rounded-full px-3 py-1.5 text-[11px] font-medium ${
+                        hasNoExpiration
+                          ? "bg-[#111110] text-white"
+                          : "bg-[#f6f5f2] text-[#615D59]"
+                      }`}
+                    >
+                      유효기간 없음
+                    </button>
+                  </div>
                   <Input
                     id="quote-valid-until"
                     type="date"
+                    disabled={hasNoExpiration}
                     value={quote.validUntil ?? ""}
                     onChange={(event) =>
                       setQuote((current) =>
@@ -1052,6 +1334,9 @@ export default function QuickQuoteComposer({
                       )
                     }
                   />
+                  <p className="text-xs text-[#615D59]">
+                    {hasNoExpiration ? "만료일 표시 없이 발송합니다." : "기본값은 발행일 기준 7일입니다."}
+                  </p>
                 </div>
 
                 <div className="grid gap-2">
@@ -1126,9 +1411,68 @@ export default function QuickQuoteComposer({
               </section>
 
               <section className="rounded-2xl border border-[#e8e8e4] bg-[#fafaf8] p-4">
+                <div className="flex items-center justify-between gap-3">
+                  <div>
+                    <p className="text-sm font-semibold text-[#111110]">Quick Add</p>
+                    <p className="mt-1 text-xs text-[#615D59]">
+                      패스트푸드 POS처럼 눌러서 바로 구성합니다. 같은 버튼을 다시 누르면 수량이 늘어납니다.
+                    </p>
+                  </div>
+                  <div className="rounded-full bg-white px-3 py-1 text-[11px] font-medium text-[#615D59] ring-1 ring-[#e8e8e4]">
+                    현재 본체 {baseQuantity}대
+                  </div>
+                </div>
+                <div className="mt-4 grid gap-3 md:grid-cols-3 xl:grid-cols-6">
+                  {QUICK_ADD_RAIL_ITEMS.map((item) => {
+                    const active =
+                      (item.id === "board_86" && templateId === "board_86" && !isBundleSelected) ||
+                      (item.id === "board_75" && templateId === "board_75") ||
+                      (item.id === "camera_t1" && templateId === "camera_t1") ||
+                      (item.id === "stand" &&
+                        (templateId === "board_86" || templateId === "board_75") &&
+                        optionSelections.mounting_option === "stand") ||
+                      (item.id === "wall_mount" &&
+                        (templateId === "board_86" || templateId === "board_75") &&
+                        optionSelections.mounting_option === "wall_mount") ||
+                      (item.id === "bundle_86_t1_wall" && isBundleSelected)
+
+                    return (
+                      <button
+                        key={item.id}
+                        type="button"
+                        onClick={() => handleQuickAdd(item.id)}
+                        className={`rounded-2xl border px-4 py-4 text-left transition-colors ${
+                          active
+                            ? "border-[#084734] bg-[#ECFDF5]"
+                            : "border-[#e8e8e4] bg-white hover:border-[#CBE7DE] hover:bg-[#f8fbf9]"
+                        }`}
+                      >
+                        <div className="flex items-start justify-between gap-3">
+                          <div>
+                            <div className="text-sm font-semibold text-[#111110]">{item.label}</div>
+                            <div className="mt-1 text-xs text-[#615D59]">{item.description}</div>
+                          </div>
+                          <span className="rounded-full bg-[#f6f5f2] px-2.5 py-1 text-[11px] font-medium text-[#111110]">
+                            {formatQuickAddPrice(item.price)}
+                          </span>
+                        </div>
+                        <div className="mt-3 text-[11px] font-medium text-[#615D59]">
+                          {active
+                            ? item.id === "stand" || item.id === "wall_mount"
+                              ? "적용됨"
+                              : `현재 ${baseQuantity}대`
+                            : "빠르게 추가"}
+                        </div>
+                      </button>
+                    )
+                  })}
+                </div>
+              </section>
+
+              <section className="rounded-2xl border border-[#e8e8e4] bg-[#fafaf8] p-4">
                 <p className="text-sm font-semibold text-[#111110]">템플릿 선택</p>
                 <div className="mt-3 flex flex-wrap gap-2">
-                  {(["camera_t1", "board_75", "board_86"] as StandardQuoteTemplateId[]).map((item) => {
+                  {TEMPLATE_CARD_ORDER.map((item) => {
                     const template = getStandardQuoteTemplate(item)
                     return (
                       <button
@@ -1302,7 +1646,15 @@ export default function QuickQuoteComposer({
                             </div>
                           </td>
                           <td className="px-3 py-3">
-                            <div className="ml-auto w-20">
+                            <div className="ml-auto flex w-[124px] items-center gap-2">
+                              <button
+                                type="button"
+                                onClick={() => nudgeLineQuantity(index, -1)}
+                                disabled={line.quantityLocked === true && line.optionGroupId !== "main_product"}
+                                className="rounded-full border border-[#e8e8e4] p-1 text-[#615D59] hover:bg-[#f6f5f2] disabled:cursor-not-allowed disabled:opacity-40"
+                              >
+                                <Minus className="h-3.5 w-3.5" />
+                              </button>
                               <Input
                                 type="number"
                                 min={0}
@@ -1311,8 +1663,16 @@ export default function QuickQuoteComposer({
                                 onChange={(event) =>
                                   updateLine(index, { quantity: parseNumericInput(event.target.value) })
                                 }
-                                className="text-right"
+                                className="text-center"
                               />
+                              <button
+                                type="button"
+                                onClick={() => nudgeLineQuantity(index, 1)}
+                                disabled={line.quantityLocked === true && line.optionGroupId !== "main_product"}
+                                className="rounded-full border border-[#e8e8e4] p-1 text-[#615D59] hover:bg-[#f6f5f2] disabled:cursor-not-allowed disabled:opacity-40"
+                              >
+                                <Plus className="h-3.5 w-3.5" />
+                              </button>
                             </div>
                           </td>
                           <td className="px-3 py-3 text-right font-medium text-[#111110]">
@@ -1404,7 +1764,7 @@ export default function QuickQuoteComposer({
             </div>
           </div>
 
-          <div className="min-h-0 overflow-y-auto border-l border-[#ecebe6] bg-[#fcfbf8] px-6 py-6">
+          <div className="min-h-0 overflow-auto border-l border-[#ecebe6] bg-[#fcfbf8] px-6 py-6">
             <QuotePreviewPanel quote={quote} />
           </div>
         </div>

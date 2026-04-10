@@ -490,6 +490,7 @@ export default function QuotePreviewPage() {
   const recipientName = details?.recipientCompanyName?.trim() || quote?.customer_name || "고객사"
   const issueDate = details?.issuedAt ?? quote?.version.created_at
   const validUntil = details?.validUntil ?? quote?.version.valid_until
+  const validUntilText = validUntil ? formatDate(validUntil) : "유효기간 없음"
   const subtotalAmount = details?.subtotalAmount ?? quote?.version.subtotal ?? 0
   const discountAmount = details?.discountAmount ?? quote?.version.discount_amount ?? 0
   const vatAmount = details?.vatAmount ?? quote?.version.tax_amount ?? 0
@@ -636,7 +637,7 @@ export default function QuotePreviewPage() {
                   </div>
                   <div>
                     <p className="text-[11px] text-[#1a1a1a]/35">유효기간</p>
-                    <p className="mt-1 font-medium text-[#1a1a1a]">{validUntil ? formatDate(validUntil) : "-"}</p>
+                    <p className="mt-1 font-medium text-[#1a1a1a]">{validUntilText}</p>
                   </div>
                 </div>
               </div>

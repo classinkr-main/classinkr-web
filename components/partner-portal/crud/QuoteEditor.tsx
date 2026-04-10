@@ -31,8 +31,8 @@ type QuoteItem = {
 type ProductOption = { key: string; label: string; description: string; unit_price: number }
 
 const PRODUCT_OPTIONS: ProductOption[] = [
-  { key: "board-86", label: "ClassIn Board 86인치", description: "메인 대형 패널", unit_price: 5_000_000 },
-  { key: "board-75", label: "ClassIn Board 75인치", description: "중형 패널", unit_price: 4_000_000 },
+  { key: "board-86", label: '전자칠판 86"', description: "메인 대형 패널", unit_price: 5_000_000 },
+  { key: "board-75", label: '전자칠판 75"', description: "중형 패널", unit_price: 4_000_000 },
   { key: "camera", label: "카메라 세트", description: "수업/회의 촬영 세트", unit_price: 1_320_000 },
   { key: "speaker", label: "스피커 세트", description: "음향 보강 세트", unit_price: 935_000 },
   { key: "install", label: "설치 및 교육", description: "현장 설치 + 운영 교육", unit_price: 0 },
@@ -284,7 +284,7 @@ export function QuoteEditor({ dealId }: Props) {
       ) : quotes.length === 0 ? (
         <div className="py-12 text-center border border-dashed border-[#e0e0dc] rounded-xl bg-white">
           <p className="text-sm text-[#1a1a1a]/50">작성된 견적서가 없습니다.</p>
-          <p className="mt-1 text-xs text-[#1a1a1a]/35">위 "견적 작성" 버튼으로 첫 견적을 시작하세요.</p>
+          <p className="mt-1 text-xs text-[#1a1a1a]/35">위 &quot;견적 작성&quot; 버튼으로 첫 견적을 시작하세요.</p>
         </div>
       ) : (
         <div className="border border-[#e8e8e4] rounded-xl overflow-hidden bg-white">

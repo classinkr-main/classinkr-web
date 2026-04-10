@@ -104,16 +104,16 @@ function SignatureCanvas({ onSave }: { onSave: (dataUrl: string) => void }) {
 // ── 더미 데이터 ─────────────────────────────────────────────
 const DUMMY_CONTRACTS: Record<string, Partial<Contract>> = {
   "tok_demo_abc123": {
-    id: "c1", contract_number: "C-2026-001", title: "ClassIn Board 86인치 5대 납품계약",
+    id: "c1", contract_number: "C-2026-001", title: '전자칠판 86" 5대 납품계약',
     status: "sent", total_amount: 25000000,
     content_html: `
       <h3 style="font-size:1rem;font-weight:600;margin-bottom:0.75rem">제1조 (목적)</h3>
-      <p style="margin-bottom:1rem">본 계약은 이이오클래스인코리아 유한회사(이하 "공급사")와 한국교육솔루션(주)(이하 "구매사") 사이에 ClassIn Board 전자칠판 납품에 관한 제반 사항을 규정함을 목적으로 합니다.</p>
+      <p style="margin-bottom:1rem">본 계약은 이이오클래스인코리아 유한회사(이하 "공급사")와 한국교육솔루션(주)(이하 "구매사") 사이에 전자칠판 납품에 관한 제반 사항을 규정함을 목적으로 합니다.</p>
       <h3 style="font-size:1rem;font-weight:600;margin-bottom:0.75rem">제2조 (납품 품목)</h3>
       <table style="width:100%;border-collapse:collapse;margin-bottom:1rem;font-size:0.875rem">
         <thead><tr style="background:#f7f7f5"><th style="padding:8px;border:1px solid #e8e8e4;text-align:left">품목</th><th style="padding:8px;border:1px solid #e8e8e4;text-align:center">수량</th><th style="padding:8px;border:1px solid #e8e8e4;text-align:right">단가</th><th style="padding:8px;border:1px solid #e8e8e4;text-align:right">금액</th></tr></thead>
         <tbody>
-          <tr><td style="padding:8px;border:1px solid #e8e8e4">ClassIn Board 86인치 (CB-86)</td><td style="padding:8px;border:1px solid #e8e8e4;text-align:center">5</td><td style="padding:8px;border:1px solid #e8e8e4;text-align:right">4,545,454원</td><td style="padding:8px;border:1px solid #e8e8e4;text-align:right">22,727,270원</td></tr>
+          <tr><td style="padding:8px;border:1px solid #e8e8e4">전자칠판 86"</td><td style="padding:8px;border:1px solid #e8e8e4;text-align:center">5</td><td style="padding:8px;border:1px solid #e8e8e4;text-align:right">4,545,454원</td><td style="padding:8px;border:1px solid #e8e8e4;text-align:right">22,727,270원</td></tr>
           <tr><td style="padding:8px;border:1px solid #e8e8e4">설치 및 교육</td><td style="padding:8px;border:1px solid #e8e8e4;text-align:center">1식</td><td style="padding:8px;border:1px solid #e8e8e4;text-align:right">—</td><td style="padding:8px;border:1px solid #e8e8e4;text-align:right">포함</td></tr>
         </tbody>
       </table>
@@ -128,7 +128,7 @@ const DUMMY_CONTRACTS: Record<string, Partial<Contract>> = {
   "tok_demo_def456": {
     id: "c2", contract_number: "C-2026-002", title: "유지보수 서비스 계약 (연간)",
     status: "completed", total_amount: 3600000,
-    content_html: `<h3 style="font-size:1rem;font-weight:600;margin-bottom:0.75rem">유지보수 서비스 계약서</h3><p>ClassIn Board 제품에 대한 연간 유지보수 서비스 계약입니다.</p>`,
+    content_html: `<h3 style="font-size:1rem;font-weight:600;margin-bottom:0.75rem">유지보수 서비스 계약서</h3><p>전자칠판 제품에 대한 연간 유지보수 서비스 계약입니다.</p>`,
     valid_from: "2026-01-01", valid_until: "2026-12-31",
     partner_signed_at: "2026-01-05T10:00:00Z", admin_signed_at: "2026-01-06T09:00:00Z",
   },
