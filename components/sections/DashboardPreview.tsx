@@ -128,12 +128,12 @@ export function DashboardPreview() {
                             <AreaChart data={engagementData} margin={{ top: 5, right: 5, left: -28, bottom: 0 }}>
                                 <defs>
                                     <linearGradient id="gradScore" x1="0" y1="0" x2="1" y2="0">
-                                        <stop offset="0%" stopColor="#7c3aed" />
-                                        <stop offset="100%" stopColor="#38bdf8" />
+                                        <stop offset="0%" stopColor="#084734" />
+                                        <stop offset="100%" stopColor="#6EE7B7" />
                                     </linearGradient>
                                     <linearGradient id="gradScoreFill" x1="0" y1="0" x2="0" y2="1">
-                                        <stop offset="0%" stopColor="#7c3aed" stopOpacity={0.25} />
-                                        <stop offset="100%" stopColor="#38bdf8" stopOpacity={0} />
+                                        <stop offset="0%" stopColor="#084734" stopOpacity={0.25} />
+                                        <stop offset="100%" stopColor="#6EE7B7" stopOpacity={0} />
                                     </linearGradient>
                                 </defs>
                                 <CartesianGrid strokeDasharray="3 3" vertical={false} stroke="rgba(255,255,255,0.06)" />
@@ -179,7 +179,7 @@ export function DashboardPreview() {
                                     strokeWidth={2.5}
                                     fill="url(#gradScoreFill)"
                                     dot={false}
-                                    activeDot={{ r: 5, fill: "#7c3aed", strokeWidth: 0 }}
+                                    activeDot={{ r: 5, fill: "#084734", strokeWidth: 0 }}
                                 />
                             </AreaChart>
                         </ResponsiveContainer>
@@ -208,8 +208,8 @@ export function DashboardPreview() {
                             <BarChart data={homeworkData} margin={{ top: 5, right: 5, left: -28, bottom: 0 }} barGap={4}>
                                 <defs>
                                     <linearGradient id="gradBar" x1="0" y1="0" x2="0" y2="1">
-                                        <stop offset="0%" stopColor="#38bdf8" />
-                                        <stop offset="100%" stopColor="#2563eb" />
+                                        <stop offset="0%" stopColor="#6EE7B7" />
+                                        <stop offset="100%" stopColor="#084734" />
                                     </linearGradient>
                                 </defs>
                                 <CartesianGrid strokeDasharray="3 3" vertical={false} stroke="rgba(255,255,255,0.06)" />

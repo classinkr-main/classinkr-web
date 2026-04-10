@@ -10,7 +10,7 @@ export function FinalCTA() {
     return (
         <section className="py-16 md:py-32 relative overflow-hidden bg-[#111110]">
             {/* Background Effects */}
-            <div className="absolute inset-0 bg-gradient-to-br from-[#084734] to-slate-950 opacity-90" />
+            <div className="absolute inset-0 bg-gradient-to-br from-[#084734] to-[#111110] opacity-90" />
             <div className="absolute inset-0 bg-[url('/images/noise-texture.svg')] opacity-20 mix-blend-overlay pointer-events-none" />
             <div className="absolute top-0 right-0 w-[800px] h-[800px] bg-primary/30 rounded-full blur-[120px] pointer-events-none translate-x-1/2 -translate-y-1/2" />
 

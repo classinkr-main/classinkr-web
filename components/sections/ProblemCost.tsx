@@ -60,12 +60,12 @@ const pains = [
 
 export function ProblemCost() {
     return (
-        <section className="relative py-16 md:py-32 bg-slate-950 overflow-hidden">
+        <section className="relative py-16 md:py-32 bg-[#111110] overflow-hidden">
             {/* Grid pattern */}
             <div className="absolute inset-0 opacity-[0.03]"
                 style={{ backgroundImage: 'linear-gradient(rgba(255,255,255,0.1) 1px, transparent 1px), linear-gradient(90deg, rgba(255,255,255,0.1) 1px, transparent 1px)', backgroundSize: '60px 60px' }} />
 
-            {/* Red/Orange ambient glow blobs */}
+            {/* Amber/terracotta ambient glow blobs */}
             <div className="absolute top-1/4 left-1/4 w-[500px] h-[500px] bg-[#B85C33]/[0.08] rounded-full blur-[60px] animate-blob1" />
             <div className="absolute bottom-1/4 right-1/4 w-[400px] h-[400px] bg-orange-500/[0.06] rounded-full blur-[60px] animate-blob2" />
 
@@ -89,7 +89,7 @@ export function ProblemCost() {
                         강사에 기대는 학원은<br className="md:hidden" />{" "}
                         <span className="text-transparent bg-clip-text bg-gradient-to-r from-[#B85C33] to-[#F6D5C5] break-keep">흔들릴 수밖에 없습니다</span>
                     </h2>
-                    <p className="text-lg text-slate-400 break-keep">
+                    <p className="text-lg text-[#A39E98] break-keep">
                         시스템 없이 사람에만 의존하면, 잘 될 때도 있지만 한 명이 빠지면 학원 전체가 흔들립니다.
                     </p>
                 </motion.div>
@@ -105,7 +105,7 @@ export function ProblemCost() {
                             viewport={{ once: true }}
                             className="h-full"
                         >
-                            <div className="relative h-full md:min-h-[440px] rounded-3xl overflow-hidden group bg-slate-900/60 backdrop-blur-xl border border-[rgba(255,255,255,0.08)] hover:border-[#B85C33]/30 transition-all duration-500 shadow-[0_0_0_1px_rgba(255,255,255,0.03)] hover:shadow-[0_0_40px_rgba(184,92,51,0.1)]">
+                            <div className="relative h-full md:min-h-[440px] rounded-3xl overflow-hidden group bg-[#1C1B1A]/60 backdrop-blur-xl border border-white/[0.08] hover:border-[#B85C33]/30 transition-all duration-500 shadow-[0_0_0_1px_rgba(255,255,255,0.03)] hover:shadow-[0_0_40px_rgba(184,92,51,0.1)]">
                                 {/* Top accent line */}
                                 <div className="absolute top-0 inset-x-0 h-px bg-gradient-to-r from-transparent via-[#B85C33]/50 to-transparent group-hover:via-[#B85C33] group-hover:h-0.5 transition-all duration-500" />
 
@@ -119,10 +119,10 @@ export function ProblemCost() {
                                     </div>
 
                                     <h3 className="text-2xl font-extrabold mb-4 text-white break-keep" style={{ letterSpacing: '-0.25px' }}>{pain.title}</h3>
-                                    <p className="text-slate-400 mb-8 flex-grow text-lg leading-relaxed break-keep">{pain.desc}</p>
+                                    <p className="text-[#A39E98] mb-8 flex-grow text-lg leading-relaxed break-keep">{pain.desc}</p>
 
                                     {/* Cost footer with counter */}
-                                    <div className="w-full pt-6 border-t border-[rgba(255,255,255,0.08)] mt-auto">
+                                    <div className="w-full pt-6 border-t border-white/[0.08] mt-auto">
                                         <p className="text-xs font-bold text-[#F6D5C5]/70 uppercase tracking-[0.2em] mb-2">예상 손실</p>
                                         <p className="text-2xl font-black text-transparent bg-clip-text bg-gradient-to-r from-[#B85C33] to-[#F6D5C5]">
                                             <CountUp target={pain.countTarget} suffix={pain.countSuffix} /> {pain.countLabel}
@@ -142,12 +142,12 @@ export function ProblemCost() {
                     transition={{ delay: 0.5, duration: 0.7 }}
                     className="mt-20 mx-auto max-w-4xl"
                 >
-                    <div className="bg-slate-900/80 backdrop-blur-xl p-8 md:p-10 rounded-3xl border border-[rgba(255,255,255,0.08)] shadow-[0_0_80px_rgba(184,92,51,0.06)]">
+                    <div className="bg-[#1C1B1A]/80 backdrop-blur-xl p-8 md:p-10 rounded-3xl border border-white/[0.08] shadow-[0_0_80px_rgba(184,92,51,0.06)]">
                         {/* Header */}
                         <div className="flex flex-col sm:flex-row items-start sm:items-center justify-between gap-4 mb-8">
                             <div>
                                 <h3 className="font-bold text-white text-xl mb-1">운영 리스크 대시보드</h3>
-                                <p className="text-slate-500 text-sm">시스템 미도입 학원 평균 데이터</p>
+                                <p className="text-white/40 text-sm">시스템 미도입 학원 평균 데이터</p>
                             </div>
                             <span className="inline-flex items-center gap-2 px-4 py-2 rounded-full bg-[#B85C33]/15 border border-[#B85C33]/30">
                                 <span className="w-2 h-2 rounded-full bg-[#B85C33] animate-pulse" />
@@ -168,10 +168,10 @@ export function ProblemCost() {
                                     whileInView={{ opacity: 1, scale: 1 }}
                                     viewport={{ once: true }}
                                     transition={{ delay: 0.6 + i * 0.15 }}
-                                    className="relative p-5 rounded-2xl bg-slate-800/50 border border-[rgba(255,255,255,0.08)] group hover:border-[rgba(255,255,255,0.15)] transition-all duration-300"
+                                    className="relative p-5 rounded-2xl bg-[#2a2925]/50 border border-white/[0.08] group hover:border-white/[0.15] transition-all duration-300"
                                 >
                                     <div className="flex items-center justify-between mb-3">
-                                        <span className="text-slate-400 text-sm font-medium">{metric.label}</span>
+                                        <span className="text-[#A39E98] text-sm font-medium">{metric.label}</span>
                                         <span className={`text-xs font-bold px-2 py-0.5 rounded-full ${
                                             metric.color === "red" ? "bg-[#B85C33]/15 text-[#F6D5C5]" :
                                             metric.color === "orange" ? "bg-orange-500/15 text-orange-400" :
@@ -188,10 +188,10 @@ export function ProblemCost() {
                                         }`}>
                                             <CountUp target={metric.value} suffix="" />
                                         </span>
-                                        <span className="text-slate-500 text-lg font-bold mb-1">%</span>
+                                        <span className="text-white/40 text-lg font-bold mb-1">%</span>
                                     </div>
                                     {/* Mini bar */}
-                                    <div className="h-1.5 bg-slate-700/50 rounded-full overflow-hidden">
+                                    <div className="h-1.5 bg-white/10 rounded-full overflow-hidden">
                                         <motion.div
                                             initial={{ width: "0%" }}
                                             whileInView={{ width: `${metric.value}%` }}
@@ -204,18 +204,18 @@ export function ProblemCost() {
                                             }`}
                                         />
                                     </div>
-                                    <p className="text-slate-500 text-xs mt-2">{metric.desc}</p>
+                                    <p className="text-white/40 text-xs mt-2">{metric.desc}</p>
                                 </motion.div>
                             ))}
                         </div>
 
                         {/* Overall Risk Bar */}
-                        <div className="p-5 rounded-2xl bg-slate-800/30 border border-[rgba(255,255,255,0.08)]">
+                        <div className="p-5 rounded-2xl bg-[#2a2925]/30 border border-white/[0.08]">
                             <div className="flex items-center justify-between mb-3">
-                                <span className="text-slate-300 font-semibold text-sm">종합 운영 비효율 지수</span>
+                                <span className="text-white/70 font-semibold text-sm">종합 운영 비효율 지수</span>
                                 <span className="text-[#F6D5C5] font-black text-lg"><CountUp target={85} suffix="%" /></span>
                             </div>
-                            <div className="relative h-3 bg-slate-800 rounded-full overflow-hidden">
+                            <div className="relative h-3 bg-white/10 rounded-full overflow-hidden">
                                 <motion.div
                                     initial={{ width: "0%" }}
                                     whileInView={{ width: "85%" }}
@@ -226,7 +226,7 @@ export function ProblemCost() {
                                     <div className="absolute inset-0 bg-gradient-to-r from-transparent via-white/20 to-transparent animate-shimmer bg-[length:200%_100%]" />
                                 </motion.div>
                             </div>
-                            <p className="text-xs text-slate-500 mt-3 text-center">
+                            <p className="text-xs text-white/40 mt-3 text-center">
                                 멀티 지점 학원의 85%가 표준화 시스템 부재로 운영 비효율을 겪고 있습니다
                             </p>
                         </div>
@@ -235,7 +235,7 @@ export function ProblemCost() {
             </div>
 
             {/* Bottom edge line */}
-            <div className="absolute bottom-0 inset-x-0 h-px bg-gradient-to-r from-transparent via-red-500/30 to-transparent" />
+            <div className="absolute bottom-0 inset-x-0 h-px bg-gradient-to-r from-transparent via-[#B85C33]/30 to-transparent" />
         </section>
     )
 }

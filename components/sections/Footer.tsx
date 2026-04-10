@@ -8,7 +8,7 @@ import { NewsletterSubscribe } from "./NewsletterSubscribe"
 
 export function Footer() {
     return (
-        <footer className="bg-slate-950 py-12 text-slate-400 text-sm">
+        <footer className="bg-[#111110] py-12 text-[#A39E98] text-sm">
             <div className="container mx-auto">
                 <div className="grid grid-cols-2 md:grid-cols-4 gap-8 mb-12">
                     <div>
@@ -51,10 +51,10 @@ export function Footer() {
                         </ul>
                     </div>
                 </div>
-                <div className="pt-8 border-t border-slate-800 space-y-3">
-                    <div className="flex flex-col md:flex-row md:justify-between gap-1 md:gap-4 text-xs text-slate-500 leading-relaxed">
+                <div className="pt-8 border-t border-white/[0.08] space-y-3">
+                    <div className="flex flex-col md:flex-row md:justify-between gap-1 md:gap-4 text-xs text-white/40 leading-relaxed">
                         <div className="space-y-0.5">
-                            <p><span className="text-slate-400">이이오클래스인코리아 유한회사</span> | 대표자: 구옌</p>
+                            <p><span className="text-[#A39E98]">이이오클래스인코리아 유한회사</span> | 대표자: 구옌</p>
                             <p>사업자등록번호: 724-88-02403</p>
                             <p>주소: 서울특별시 양천구 목동동로 233-1, 8층 806호 (목동, 드림타워)</p>
                         </div>
@@ -63,7 +63,7 @@ export function Footer() {
                             <p>전화번호: <a href="tel:02-6958-8566" className="hover:text-white transition-colors">02-6958-8566</a></p>
                         </div>
                     </div>
-                    <p className="text-xs text-slate-600">© 2025 이이오클래스인코리아 유한회사. All rights reserved.</p>
+                    <p className="text-xs text-white/25">© 2025 이이오클래스인코리아 유한회사. All rights reserved.</p>
                 </div>
             </div>
         </footer>

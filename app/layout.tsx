@@ -6,7 +6,8 @@ import { FloatingChatbot } from "@/components/ui/FloatingChatbot";
 import { MobileFloatingCTA } from "@/components/ui/MobileFloatingCTA";
 import { AnalyticsProviders } from "@/components/AnalyticsProviders";
 import { ToastProvider } from "@/components/ui/toast";
-import { GTMScript } from "@/components/GTMScript";
+import { GTMScript } from "@/components/GTMScript"
+import { MetaPixelScript } from "@/components/MetaPixelScript";
 
 
 export const metadata: Metadata = {
@@ -46,16 +47,17 @@ export default function RootLayout({
       <head>
         <link
           rel="preload"
-          href="https://cdn.jsdelivr.net/gh/orioncactus/pretendard@v1.3.9/dist/web/static/pretendard.min.css"
+          href="https://cdn.jsdelivr.net/gh/orioncactus/pretendard@v1.3.9/dist/web/variable/pretendardvariable-dynamic-subset.min.css"
           as="style"
         />
         <link
           rel="stylesheet"
-          href="https://cdn.jsdelivr.net/gh/orioncactus/pretendard@v1.3.9/dist/web/static/pretendard.min.css"
+          href="https://cdn.jsdelivr.net/gh/orioncactus/pretendard@v1.3.9/dist/web/variable/pretendardvariable-dynamic-subset.min.css"
         />
       </head>
       <body>
         <GTMScript />
+        <MetaPixelScript />
         <ToastProvider>
           <ConditionalHeader />
           <main className="min-h-screen bg-background font-sans antialiased selection:bg-primary/20 selection:text-primary">
