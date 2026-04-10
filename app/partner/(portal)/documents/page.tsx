@@ -485,6 +485,34 @@ export default function PartnerDocumentsPage() {
   const [hydratedDealIds, setHydratedDealIds] = useState<Record<string, true>>({})
   const [loading, setLoading] = useState(true)
   const [error, setError] = useState<string | null>(null)
+  const [quoteDialog, setQuoteDialog] = useState(false)
+  const [quoteCreating, setQuoteCreating] = useState(false)
+  const [quoteForm, setQuoteForm] = useState({ customerName: "", dealTitle: "", quoteTitle: "" })
+
+  async function handleQuoteCreate(e: React.FormEvent) {
+    e.preventDefault()
+    if (!quoteForm.customerName || !quoteForm.dealTitle) return
+    setQuoteCreating(true)
+    try {
+      const quoteRes = await fetch("/api/partner/quotes", {
+        method: "POST",
+        headers: { "Content-Type": "application/json" },
+        body: JSON.stringify({
+          customerName: quoteForm.customerName,
+          dealTitle: quoteForm.dealTitle,
+          title: quoteForm.quoteTitle || `${quoteForm.customerName} 견적서`,
+        }),
+      })
+      if (!quoteRes.ok) throw new Error("견적서 생성 실패")
+      const { document: quoteDoc } = await quoteRes.json() as { document: { id: string } }
+      setQuoteDialog(false)
+      router.push(`/partner/quote-editor/${quoteDoc.id}`)
+    } catch {
+      alert("견적서 생성에 실패했습니다. 다시 시도해주세요.")
+    } finally {
+      setQuoteCreating(false)
+    }
+  }
 
   useEffect(() => {
     let alive = true
@@ -662,6 +690,14 @@ export default function PartnerDocumentsPage() {
                   <BadgeCheck className="h-4 w-4" />
                   버전 고정 링크와 PDF는 현재 {sourceDealCount > 0 ? `${sourceDealCount}개 거래` : "demo"} 기준으로 노출합니다
                 </div>
+                <button
+                  type="button"
+                  onClick={() => setQuoteDialog(true)}
+                  className="inline-flex items-center gap-2 rounded-xl border border-[#084734] bg-[#084734] px-4 py-2.5 text-sm font-medium text-white hover:bg-[#065c41]"
+                >
+                  <FileText className="h-4 w-4" />
+                  견적서 초안 시작
+                </button>
                 <button
                   type="button"
                   onClick={() => router.refresh()}
@@ -908,5 +944,65 @@ export default function PartnerDocumentsPage() {
           </Card>
         </div>
       </div>
+
+      {/* 견적서 생성 다이얼로그 */}
+      {quoteDialog && (
+        <div className="fixed inset-0 z-50 flex items-center justify-center bg-black/40 p-4">
+          <div className="w-full max-w-md rounded-2xl border border-[#e8e8e4] bg-white p-6 shadow-xl">
+            <h2 className="text-lg font-semibold text-[#1a1a1a]">견적서 초안 시작</h2>
+            <p className="mt-1 text-sm text-[#1a1a1a]/50">기본 정보를 입력하면 에디터로 이동합니다.</p>
+            <form onSubmit={handleQuoteCreate} className="mt-5 space-y-4">
+              <div>
+                <label className="block text-sm font-medium text-[#1a1a1a]">고객 기관명 <span className="text-red-500">*</span></label>
+                <input
+                  type="text"
+                  required
+                  value={quoteForm.customerName}
+                  onChange={(e) => setQuoteForm((prev) => ({ ...prev, customerName: e.target.value }))}
+                  placeholder="예: 강남메가스터디학원"
+                  className="mt-1.5 w-full rounded-lg border border-[#e0e0dc] px-3 py-2 text-sm focus:outline-none focus:ring-2 focus:ring-[#084734]"
+                />
+              </div>
+              <div>
+                <label className="block text-sm font-medium text-[#1a1a1a]">거래명 <span className="text-red-500">*</span></label>
+                <input
+                  type="text"
+                  required
+                  value={quoteForm.dealTitle}
+                  onChange={(e) => setQuoteForm((prev) => ({ ...prev, dealTitle: e.target.value }))}
+                  placeholder="예: 2-4층 전자칠판 설치"
+                  className="mt-1.5 w-full rounded-lg border border-[#e0e0dc] px-3 py-2 text-sm focus:outline-none focus:ring-2 focus:ring-[#084734]"
+                />
+              </div>
+              <div>
+                <label className="block text-sm font-medium text-[#1a1a1a]">견적서 제목 <span className="text-[#1a1a1a]/40 text-xs font-normal">(선택)</span></label>
+                <input
+                  type="text"
+                  value={quoteForm.quoteTitle}
+                  onChange={(e) => setQuoteForm((prev) => ({ ...prev, quoteTitle: e.target.value }))}
+                  placeholder="비우면 고객명 기준으로 자동 생성"
+                  className="mt-1.5 w-full rounded-lg border border-[#e0e0dc] px-3 py-2 text-sm focus:outline-none focus:ring-2 focus:ring-[#084734]"
+                />
+              </div>
+              <div className="flex justify-end gap-2 pt-2">
+                <button
+                  type="button"
+                  onClick={() => setQuoteDialog(false)}
+                  className="rounded-lg border border-[#e8e8e4] bg-[#f7f7f5] px-4 py-2 text-sm font-medium text-[#1a1a1a] hover:bg-[#f0f0ec]"
+                >
+                  취소
+                </button>
+                <button
+                  type="submit"
+                  disabled={quoteCreating}
+                  className="rounded-lg bg-[#084734] px-4 py-2 text-sm font-medium text-white hover:bg-[#065c41] disabled:opacity-60"
+                >
+                  {quoteCreating ? "생성 중…" : "에디터 열기"}
+                </button>
+              </div>
+            </form>
+          </div>
+        </div>
+      )}
   )
 }
