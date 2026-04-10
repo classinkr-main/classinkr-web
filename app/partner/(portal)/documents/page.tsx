@@ -17,6 +17,9 @@ import {
   Signature,
 } from "lucide-react"
 
+import QuickQuoteComposer, {
+  type QuickQuoteCreatedPayload,
+} from "@/components/partner-portal/quotes/QuickQuoteComposer"
 import { Badge } from "@/components/ui/badge"
 import { Card, CardContent, CardHeader, CardTitle } from "@/components/ui/card"
 import { Tabs, TabsList, TabsTrigger } from "@/components/ui/tabs"
@@ -615,39 +618,6 @@ export default function PartnerDocumentsPage() {
   const [loading, setLoading] = useState(true)
   const [error, setError] = useState<string | null>(null)
   const [quoteDialog, setQuoteDialog] = useState(false)
-  const [quoteCreating, setQuoteCreating] = useState(false)
-  const [quoteForm, setQuoteForm] = useState({ customerName: "", dealTitle: "", quoteTitle: "" })
-
-  async function handleQuoteCreate(e: React.FormEvent) {
-    e.preventDefault()
-    if (!quoteForm.customerName || !quoteForm.dealTitle) return
-    setQuoteCreating(true)
-    try {
-      const quoteRes = await fetch("/api/partner/quotes", {
-        method: "POST",
-        headers: { "Content-Type": "application/json" },
-        body: JSON.stringify({
-          customerName: quoteForm.customerName,
-          dealTitle: quoteForm.dealTitle,
-          title: quoteForm.quoteTitle || `${quoteForm.customerName} 견적서`,
-        }),
-      })
-      if (!quoteRes.ok) throw new Error("견적서 생성 실패")
-      const { document: quoteDoc } = await quoteRes.json() as { document: { id: string } }
-      setQuoteDialog(false)
-      router.push(`/partner/quote-editor/${quoteDoc.id}`)
-    } catch {
-      alert("견적서 생성에 실패했습니다. 다시 시도해주세요.")
-    } finally {
-      setQuoteCreating(false)
-    }
-  }
-
-  /* ── 견적서 빠른 생성 다이얼로그 ──────────────────────────── */
-  const [quoteDialog, setQuoteDialog] = useState(false)
-  const [qForm, setQForm] = useState({ customerName: "", dealTitle: "", quoteTitle: "", amount: "" })
-  const [qSubmitting, setQSubmitting] = useState(false)
-  const [qError, setQError] = useState<string | null>(null)
   const [notice, setNotice] = useState<{
     tone: "success" | "warning" | "error"
     text: string
@@ -660,7 +630,6 @@ export default function PartnerDocumentsPage() {
   function openQuickCreateDialog() {
     handleHubModeChange("create")
     setQuoteDialog(true)
-    setQError(null)
     setNotice(null)
   }
 
@@ -668,135 +637,66 @@ export default function PartnerDocumentsPage() {
     setNotice({ tone, text })
   }
 
-  async function handleQuoteCreate(e: React.FormEvent) {
-    e.preventDefault()
-    setQSubmitting(true)
-    setQError(null)
-    setNotice(null)
-    try {
-      const parsedAmount = qForm.amount
-        ? Number(qForm.amount.replace(/[^\d.-]/g, ""))
-        : 0
-
-      // 1. 고객 생성
-      const custRes = await portalFetch("/api/partner/customers", {
-        method: "POST",
-        body: JSON.stringify({ name: qForm.customerName }),
-      })
-      if (!custRes.ok) {
-        const err = await custRes.json()
-        throw new Error(`고객 생성 실패: ${err.error ?? "알 수 없는 오류"}`)
-      }
-      const customerPayload = (await custRes.json()) as {
-        customer?: {
-          id: string
-          name: string
-        }
-      }
-      const customer = customerPayload.customer
-      if (!customer) {
-        throw new Error("고객 생성 응답이 올바르지 않습니다")
-      }
-
-      // 2. 거래 생성
-      const dealRes = await portalFetch("/api/partner/deals", {
-        method: "POST",
-        body: JSON.stringify({
-          customer_id: customer.id,
-          title: qForm.dealTitle,
-          expected_amount: parsedAmount || null,
-        }),
-      })
-      if (!dealRes.ok) {
-        const err = await dealRes.json()
-        throw new Error(`거래 생성 실패: ${err.error ?? "알 수 없는 오류"}`)
-      }
-      const dealPayload = (await dealRes.json()) as {
-        deal?: {
-          id: string
-          title: string
-          deal_code: string
-        }
-      }
-      const deal = dealPayload.deal
-      if (!deal) {
-        throw new Error("거래 생성 응답이 올바르지 않습니다")
-      }
-
-      // 3. 견적서 생성
-      const quoteRes = await portalFetch("/api/partner/quotes", {
-        method: "POST",
-        body: JSON.stringify({
-          deal_id: deal.id,
-          title: qForm.quoteTitle,
-          total_amount: parsedAmount,
-          subtotal: parsedAmount,
-        }),
-      })
-      if (!quoteRes.ok) {
-        const err = await quoteRes.json()
-        throw new Error(`견적서 생성 실패: ${err.error ?? "알 수 없는 오류"}`)
-      }
-      const quotePayload = (await quoteRes.json()) as {
-        document?: {
-          id: string
-          quote_number: string
-          status: string
-          updated_at: string
-        }
-        version?: QuoteDocumentBundle["versions"][number]
-      }
-      const document = quotePayload.document
-      const version = quotePayload.version
-
-      if (!document || !version) {
-        throw new Error("견적서 생성 응답이 올바르지 않습니다")
-      }
-
-      const nextDocument: HubDocument = {
-        id: document.id,
-        kind: "quote",
-        number: document.quote_number,
-        title: version.title ?? qForm.quoteTitle,
-        status: document.status,
-        updatedAt: document.updated_at,
-        customerName: customer.name,
-        customerId: customer.id,
-        dealId: deal.id,
-        dealTitle: deal.title,
-        dealCode: deal.deal_code,
-        versionCount: 1,
-        currentVersionLabel: latestVersionLabel("quote", [version]),
-        totalAmount: version.total_amount ?? parsedAmount,
-        versions: [version],
-        shares: [],
-        pdfUrl: null,
-      }
-
-      const currentRealDocuments = documents.filter(
-        (item) => !isDemoDocument(item) && item.id !== nextDocument.id
-      )
-      const nextDocuments = [nextDocument, ...currentRealDocuments]
-
-      setQuoteDialog(false)
-      setQForm({ customerName: "", dealTitle: "", quoteTitle: "", amount: "" })
-      setMode("v2")
-      setError(null)
-      setDocuments(nextDocuments)
-      setSelectedDocumentId(nextDocument.id)
-      setSection("quote")
-      setSourceDealCount(new Set(nextDocuments.map((item) => item.dealId)).size)
-      setHydratedDealIds((current) => ({
-        ...current,
-        [deal.id]: true,
-      }))
-      handleHubModeChange("send")
-      showNotice("success", "견적서를 만들었고 바로 발송 준비 큐로 전환했습니다.")
-    } catch (err) {
-      setQError(err instanceof Error ? err.message : "생성 중 오류가 발생했습니다")
-    } finally {
-      setQSubmitting(false)
+  async function handleQuoteCreated(payload: QuickQuoteCreatedPayload) {
+    const nextShares = payload.share ? [payload.share] : []
+    const nextDocument: HubDocument = {
+      id: payload.document.id,
+      kind: "quote",
+      number: payload.document.quote_number,
+      title: payload.version.title,
+      status: payload.share ? "shared" : payload.document.status,
+      updatedAt: payload.document.updated_at,
+      customerName: payload.customer.name,
+      customerId: payload.customer.id,
+      dealId: payload.deal.id,
+      dealTitle: payload.deal.title,
+      dealCode: payload.deal.deal_code,
+      versionCount: 1,
+      currentVersionLabel: latestVersionLabel("quote", [payload.version]),
+      totalAmount: payload.version.total_amount ?? 0,
+      versions: [payload.version],
+      shares: nextShares,
+      pdfUrl: null,
     }
+
+    const currentRealDocuments = documents.filter(
+      (item) => !isDemoDocument(item) && item.id !== nextDocument.id
+    )
+    const nextDocuments = [nextDocument, ...currentRealDocuments]
+
+    setMode("v2")
+    setError(null)
+    setDocuments(nextDocuments)
+    setSelectedDocumentId(nextDocument.id)
+    setSection("quote")
+    setSourceDealCount(new Set(nextDocuments.map((item) => item.dealId)).size)
+    setHydratedDealIds((current) => ({
+      ...current,
+      [payload.deal.id]: true,
+    }))
+    handleHubModeChange("send")
+
+    if (payload.action === "save_and_copy_link") {
+      showNotice(
+        payload.shareError ? "warning" : "success",
+        payload.shareError
+          ? `견적서는 저장했지만 링크 준비는 실패했습니다. ${payload.shareError}`
+          : "견적서를 저장했고 발송 링크를 바로 복사했습니다."
+      )
+      return
+    }
+
+    if (payload.action === "save_and_preview") {
+      showNotice(
+        payload.shareError ? "warning" : "success",
+        payload.shareError
+          ? `견적서는 저장했지만 미리보기 링크 준비는 실패했습니다. ${payload.shareError}`
+          : "견적서를 저장했고 고객 미리보기를 새 탭으로 열었습니다."
+      )
+      return
+    }
+
+    showNotice("success", "견적서를 임시 저장했고 바로 발송 준비 큐로 전환했습니다.")
   }
 
   useEffect(() => {
@@ -1066,6 +966,17 @@ export default function PartnerDocumentsPage() {
   const respondedCount = documents.filter((document) => matchesQueue(document, "responded")).length
   const expiringCount = documents.filter((document) => matchesQueue(document, "expiring")).length
   const draftDocuments = documents.filter((document) => matchesQueue(document, "draft")).slice(0, 4)
+  const recentQuoteOptions = documents
+    .filter((document) => document.kind === "quote" && !isDemoDocument(document))
+    .sort((left, right) => new Date(right.updatedAt).getTime() - new Date(left.updatedAt).getTime())
+    .map((document) => ({
+      id: document.id,
+      title: document.title,
+      customerName: document.customerName,
+      updatedAt: document.updatedAt,
+      totalAmount: document.totalAmount,
+      currentVersionLabel: document.currentVersionLabel,
+    }))
   const queueOptions: HubQueue[] =
     hubMode === "create"
       ? ["draft", "all", "done"]
@@ -1131,7 +1042,7 @@ export default function PartnerDocumentsPage() {
                 </div>
                 <button
                   type="button"
-                  onClick={() => setQuoteDialog(true)}
+                  onClick={openQuickCreateDialog}
                   className="inline-flex items-center gap-2 rounded-xl border border-[#084734] bg-[#084734] px-4 py-2.5 text-sm font-medium text-white hover:bg-[#065c41]"
                 >
                   <FileText className="h-4 w-4" />
@@ -1251,7 +1162,7 @@ export default function PartnerDocumentsPage() {
                   <div className="grid gap-3">
                     <button
                       type="button"
-                      onClick={() => setQuoteDialog(true)}
+                      onClick={openQuickCreateDialog}
                       className="flex items-center justify-between rounded-2xl border border-[#e8e8e4] bg-[#fafaf8] px-4 py-4 text-left hover:border-[#D1FAE5] hover:bg-[#ECFDF5]"
                     >
                       <div>
@@ -1583,80 +1494,12 @@ export default function PartnerDocumentsPage() {
         </div>
       </div>
 
-      {/* ── 견적서 빠른 생성 다이얼로그 ─────────────────────────── */}
-      {quoteDialog && (
-        <div className="fixed inset-0 z-50 flex items-center justify-center bg-black/30 px-4 backdrop-blur-sm">
-          <div className="w-full max-w-md rounded-2xl border border-[rgba(0,0,0,0.08)] bg-white p-6 shadow-xl">
-            <div className="mb-5">
-              <h2 className="text-base font-semibold text-[#111110]">견적서 빠른 생성</h2>
-              <p className="mt-1 text-xs text-[#615D59]">고객·거래·견적서를 한 번에 만듭니다.</p>
-            </div>
-
-            <form onSubmit={handleQuoteCreate} className="space-y-3">
-              <div>
-                <label className="mb-1 block text-xs font-medium text-[#615D59]">고객명 <span className="text-red-400">*</span></label>
-                <input
-                  required
-                  value={qForm.customerName}
-                  onChange={e => setQForm(f => ({ ...f, customerName: e.target.value }))}
-                  placeholder="예) 강남메가스터디학원"
-                  className="w-full rounded-lg border border-[#E5E5E0] px-3 py-2 text-sm focus:border-[#084734] focus:outline-none focus:ring-2 focus:ring-[#084734]/20"
-                />
-              </div>
-              <div>
-                <label className="mb-1 block text-xs font-medium text-[#615D59]">거래명 <span className="text-red-400">*</span></label>
-                <input
-                  required
-                  value={qForm.dealTitle}
-                  onChange={e => setQForm(f => ({ ...f, dealTitle: e.target.value }))}
-                  placeholder="예) 전자칠판 4대 설치"
-                  className="w-full rounded-lg border border-[#E5E5E0] px-3 py-2 text-sm focus:border-[#084734] focus:outline-none focus:ring-2 focus:ring-[#084734]/20"
-                />
-              </div>
-              <div>
-                <label className="mb-1 block text-xs font-medium text-[#615D59]">견적서 제목 <span className="text-red-400">*</span></label>
-                <input
-                  required
-                  value={qForm.quoteTitle}
-                  onChange={e => setQForm(f => ({ ...f, quoteTitle: e.target.value }))}
-                  placeholder="예) ClassIn Board CB-86 4대 견적"
-                  className="w-full rounded-lg border border-[#E5E5E0] px-3 py-2 text-sm focus:border-[#084734] focus:outline-none focus:ring-2 focus:ring-[#084734]/20"
-                />
-              </div>
-              <div>
-                <label className="mb-1 block text-xs font-medium text-[#615D59]">견적 금액 (원, 선택)</label>
-                <input
-                  value={qForm.amount}
-                  onChange={e => setQForm(f => ({ ...f, amount: e.target.value }))}
-                  placeholder="예) 14000000"
-                  className="w-full rounded-lg border border-[#E5E5E0] px-3 py-2 text-sm focus:border-[#084734] focus:outline-none focus:ring-2 focus:ring-[#084734]/20"
-                />
-              </div>
-
-              {qError && (
-                <p className="rounded-lg bg-red-50 px-3 py-2 text-xs text-red-600">{qError}</p>
-              )}
-
-              <div className="flex gap-2 pt-2">
-                <button
-                  type="button"
-                  onClick={() => { setQuoteDialog(false); setQError(null) }}
-                  className="flex-1 rounded-lg border border-[rgba(0,0,0,0.08)] py-2.5 text-sm font-medium text-[#615D59] hover:bg-[#F6F5F4]"
-                >
-                  취소
-                </button>
-                <button
-                  type="submit"
-                  disabled={qSubmitting}
-                  className="flex-1 rounded-lg bg-[#084734] py-2.5 text-sm font-medium text-white hover:bg-[#065c41] disabled:opacity-50"
-                >
-                  {qSubmitting ? "생성 중…" : "견적서 만들기"}
-                </button>
-              </div>
-            </form>
-          </div>
-        </div>
-      )}
+      <QuickQuoteComposer
+        open={quoteDialog}
+        onOpenChange={setQuoteDialog}
+        recentQuotes={recentQuoteOptions}
+        onCreated={handleQuoteCreated}
+      />
     </>
   )
 }

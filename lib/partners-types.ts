@@ -26,6 +26,7 @@ export type PartnerQuoteWorkflowStatus =
 export type QuoteLineItemType = "hardware" | "installation" | "shipping" | "service" | "discount" | "note_only"
 export type QuoteLineItemStatus = "priced" | "pending_price" | "separate_billing" | "informational"
 export type QuoteBillingMode = "included_in_quote" | "separate_invoice" | "tbd"
+export type QuoteOptionSelectionValue = string | number | boolean
 export type ScheduleKind = "meeting" | "follow_up" | "deadline" | "renewal"
 export type ScheduleStatus = "planned" | "completed" | "canceled"
 export type AutomationStatus = "active" | "paused"
@@ -372,10 +373,17 @@ export interface PartnerQuoteLineItemInput {
   remark?: string
   linkedQuantityRowId?: string
   linkedChecklistTemplateId?: string
+  optionGroupId?: string
+  optionId?: string
+  isOptional?: boolean
+  isUserAdded?: boolean
+  priceLocked?: boolean
+  quantityLocked?: boolean
 }
 
 export interface PartnerQuoteDetailsInput {
   templateId?: string
+  presetId?: string
   estimateNumber?: string
   workflowStatus?: PartnerQuoteWorkflowStatus
   issuedAt?: string
@@ -404,6 +412,10 @@ export interface PartnerQuoteDetailsInput {
   specialTerms?: string
   footerContactText?: string
   internalMemo?: string
+  optionSelections?: Record<string, QuoteOptionSelectionValue | undefined>
+  pricingSource?: string
+  generatedFromVersionId?: string
+  generatedFromTemplateVersion?: string
   subtotalAmount?: number
   vatAmount?: number
   discountAmount?: number

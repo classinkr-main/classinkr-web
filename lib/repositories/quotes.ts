@@ -1,5 +1,6 @@
 "server-only";
 
+import { getProductBySku } from "@/lib/product-templates";
 import { createSupabaseAdminClient } from "@/lib/supabase/admin";
 import type {
   Quote, QuoteInsert, QuoteUpdate,
@@ -69,25 +70,19 @@ export async function getQuote(id: string): Promise<QuoteWithItems | null> {
 
   return { ...quote, items: items ?? [] };
 }
-
-import { getProductBySku } from "@/lib/product-templates"
-
-// ... (기존 코드)
-
 export async function createQuote(
   input: QuoteInsert,
   items: Omit<QuoteItemInsert, "quote_id">[]
 ): Promise<QuoteWithItems> {
   const supabase = createSupabaseAdminClient();
-  
-  // 서버 측 검증: 품목 데이터 타입 캐스팅 및 가격 재계산
-  const verifiedItems = items.map(item => {
-    // 템플릿(SKU)이 있다면 공식 가격으로 재검증/보정 가능
-    const template = item.product_key ? getProductBySku(item.product_key as string) : null;
+
+  // 템플릿 SKU가 있는 경우 서버 측에서 단가를 한 번 더 보정한다.
+  const verifiedItems = items.map((item) => {
+    const template = item.sku ? getProductBySku(item.sku) : null;
     return {
       ...item,
       unit_price: template ? template.unit_price : Number(item.unit_price || 0),
-    }
+    };
   });
 
   const { data: quote, error } = await supabase
@@ -101,11 +96,8 @@ export async function createQuote(
     .select()
     .single();
   if (error) throw error;
-  
-  // ... (이하 동일)
 
-
-  const itemRows = items.map((item, idx) =>
+  const itemRows = verifiedItems.map((item, idx) =>
     normalizeQuoteItemInput(item, quote.id, idx)
   );
   const { data: savedItems, error: iErr } = await supabase

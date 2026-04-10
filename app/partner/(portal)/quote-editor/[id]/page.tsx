@@ -12,6 +12,7 @@ import {
   Save,
   Trash2,
 } from "lucide-react"
+import { getProductBySku } from "@/lib/product-templates"
 
 /* ─── Types ────────────────────────────────────────────────── */
 
@@ -35,7 +36,20 @@ type QuoteEditorData = {
   deal: { id: string; title: string; customer_name: string | null; customer_campus_name: string | null }
 }
 
+type QuickAddPreset = {
+  key: string
+  label: string
+}
+
 /* ─── Helpers ──────────────────────────────────────────────── */
+
+const QUICK_ADD_PRESETS: QuickAddPreset[] = [
+  { key: "board-86", label: '86"' },
+  { key: "board-75", label: '75"' },
+  { key: "camera-t1", label: "T1 카메라" },
+  { key: "stand", label: "스탠드" },
+  { key: "wall-mount", label: "벽걸이" },
+]
 
 function fmt(n: number) {
   return n.toLocaleString("ko-KR")
@@ -51,6 +65,37 @@ function newLine(sortOrder: number): LineItem {
     quantity: 1,
     lineSupplyAmount: 0,
   }
+}
+
+function createPresetLine(productKey: string, quantity: number): LineItem {
+  const preset = getProductBySku(productKey)
+  const safeQuantity = Number.isFinite(quantity) && quantity > 0 ? quantity : 1
+  const unitPrice = preset?.unit_price ?? 0
+
+  return {
+    id: crypto.randomUUID(),
+    sortOrder: 1,
+    itemName: preset?.label ?? "",
+    itemDescription: preset?.description ?? "",
+    unitPrice,
+    quantity: safeQuantity,
+    lineSupplyAmount: Math.round(unitPrice * safeQuantity),
+  }
+}
+
+function isBlankLine(line: LineItem) {
+  return (
+    line.itemName.trim() === "" &&
+    line.itemDescription.trim() === "" &&
+    line.unitPrice === 0 &&
+    line.quantity === 1 &&
+    line.lineSupplyAmount === 0
+  )
+}
+
+function serializeLineItem(line: LineItem) {
+  const { sortOrder, itemName, itemDescription, unitPrice, quantity, lineSupplyAmount } = line
+  return { sortOrder, itemName, itemDescription, unitPrice, quantity, lineSupplyAmount }
 }
 
 function parseLineItems(json: Record<string, unknown> | null): LineItem[] {
@@ -124,6 +169,7 @@ export default function QuoteEditorPage() {
   const [recipientName, setRecipientName] = useState("")
   const [validUntil, setValidUntil] = useState("")
   const [lines, setLines] = useState<LineItem[]>([])
+  const [quickQuantity, setQuickQuantity] = useState("1")
 
   const toastTimer = useRef<ReturnType<typeof setTimeout> | null>(null)
 
@@ -179,6 +225,26 @@ export default function QuoteEditorPage() {
   const addLine = () =>
     setLines((prev) => [...prev, newLine(prev.length + 1)])
 
+  function addPresetLine(productKey: string) {
+    const quantity = Math.max(1, Number.parseInt(quickQuantity, 10) || 1)
+    const presetLine = createPresetLine(productKey, quantity)
+
+    setLines((prev) => {
+      const blankIndex = prev.findIndex(isBlankLine)
+      if (blankIndex >= 0) {
+        return prev.map((line, index) =>
+          index === blankIndex
+            ? { ...presetLine, id: line.id, sortOrder: line.sortOrder }
+            : line
+        )
+      }
+
+      return [...prev, { ...presetLine, sortOrder: prev.length + 1 }]
+    })
+    setError(null)
+    showToast(`${presetLine.itemName} ${quantity}개를 추가했습니다`)
+  }
+
   const removeLine = (lineId: string) =>
     setLines((prev) => {
       const next = prev.filter((l) => l.id !== lineId)
@@ -202,7 +268,7 @@ export default function QuoteEditorPage() {
           title,
           validUntil: validUntil || null,
           recipientCompanyName: recipientName,
-          lineItems: lines.map(({ id: _id, ...l }) => l),
+          lineItems: lines.map(serializeLineItem),
         }),
       })
       if (!res.ok) throw new Error("저장 실패")
@@ -226,7 +292,7 @@ export default function QuoteEditorPage() {
           title,
           validUntil: validUntil || null,
           recipientCompanyName: recipientName,
-          lineItems: lines.map(({ id: _id, ...l }) => l),
+          lineItems: lines.map(serializeLineItem),
         }),
       })
       // 링크 생성
@@ -340,6 +406,46 @@ export default function QuoteEditorPage() {
               className="w-full rounded-lg border border-[#E5E5E0] px-3 py-2 text-sm focus:border-[#084734] focus:outline-none focus:ring-2 focus:ring-[#084734]/20"
             />
           </div>
+        </div>
+      </div>
+
+      <div className="mb-4 rounded-2xl border border-[rgba(0,0,0,0.08)] bg-white p-4">
+        <div className="flex flex-col gap-4 sm:flex-row sm:items-end sm:justify-between">
+          <div>
+            <p className="text-xs font-semibold uppercase tracking-wider text-[#A39E98]">빠른 추가</p>
+            <p className="mt-1 text-sm text-[#615D59]">
+              자주 쓰는 품목은 버튼으로 바로 넣고, 수량만 먼저 정하면 됩니다.
+            </p>
+          </div>
+          <div className="w-full sm:w-auto">
+            <label className="mb-1.5 block text-xs font-medium text-[#A39E98]">기본 수량</label>
+            <input
+              type="number"
+              min={1}
+              value={quickQuantity}
+              onChange={(e) => setQuickQuantity(e.target.value)}
+              className="w-full rounded-lg border border-[#E5E5E0] px-3 py-2 text-sm focus:border-[#084734] focus:outline-none focus:ring-2 focus:ring-[#084734]/20 sm:w-24"
+            />
+          </div>
+        </div>
+        <div className="mt-4 flex flex-wrap gap-2">
+          {QUICK_ADD_PRESETS.map((preset) => (
+            <button
+              key={preset.key}
+              type="button"
+              onClick={() => addPresetLine(preset.key)}
+              className="rounded-xl border border-[#E5E5E0] bg-[#F6F5F4] px-4 py-2 text-sm font-medium text-[#111110] hover:border-[#084734]/25 hover:bg-[#ECFDF5]"
+            >
+              {preset.label}
+            </button>
+          ))}
+          <button
+            type="button"
+            onClick={addLine}
+            className="rounded-xl border border-dashed border-[#D8D5CF] bg-white px-4 py-2 text-sm font-medium text-[#615D59] hover:border-[#084734]/25 hover:text-[#111110]"
+          >
+            직접 입력
+          </button>
         </div>
       </div>
 
@@ -460,7 +566,7 @@ export default function QuoteEditorPage() {
                 미리보기
               </a>
               <button
-                onClick={() => window.open(shareUrl, "_blank")}
+                onClick={() => { void handlePrint() }}
                 className="flex items-center gap-2 rounded-xl border border-[rgba(0,0,0,0.08)] bg-white px-4 py-2.5 text-sm font-medium text-[#111110] hover:bg-[#F6F5F4]"
               >
                 <Printer className="h-4 w-4" />

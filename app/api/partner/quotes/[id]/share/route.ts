@@ -33,5 +33,5 @@ export async function POST(
   const origin = req.nextUrl.origin;
   const shareUrl = `${origin}/partner/quote/${share.token}`;
 
-  return NextResponse.json({ token: share.token, shareUrl });
+  return NextResponse.json({ share, token: share.token, shareUrl });
 }
