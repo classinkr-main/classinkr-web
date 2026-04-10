@@ -614,66 +614,184 @@ export default function PartnerDocumentsPage() {
   const [sharingDocumentId, setSharingDocumentId] = useState<string | null>(null)
   const [loading, setLoading] = useState(true)
   const [error, setError] = useState<string | null>(null)
+  const [quoteDialog, setQuoteDialog] = useState(false)
+  const [quoteCreating, setQuoteCreating] = useState(false)
+  const [quoteForm, setQuoteForm] = useState({ customerName: "", dealTitle: "", quoteTitle: "" })
+
+  async function handleQuoteCreate(e: React.FormEvent) {
+    e.preventDefault()
+    if (!quoteForm.customerName || !quoteForm.dealTitle) return
+    setQuoteCreating(true)
+    try {
+      const quoteRes = await fetch("/api/partner/quotes", {
+        method: "POST",
+        headers: { "Content-Type": "application/json" },
+        body: JSON.stringify({
+          customerName: quoteForm.customerName,
+          dealTitle: quoteForm.dealTitle,
+          title: quoteForm.quoteTitle || `${quoteForm.customerName} 견적서`,
+        }),
+      })
+      if (!quoteRes.ok) throw new Error("견적서 생성 실패")
+      const { document: quoteDoc } = await quoteRes.json() as { document: { id: string } }
+      setQuoteDialog(false)
+      router.push(`/partner/quote-editor/${quoteDoc.id}`)
+    } catch {
+      alert("견적서 생성에 실패했습니다. 다시 시도해주세요.")
+    } finally {
+      setQuoteCreating(false)
+    }
+  }
 
   /* ── 견적서 빠른 생성 다이얼로그 ──────────────────────────── */
   const [quoteDialog, setQuoteDialog] = useState(false)
   const [qForm, setQForm] = useState({ customerName: "", dealTitle: "", quoteTitle: "", amount: "" })
   const [qSubmitting, setQSubmitting] = useState(false)
   const [qError, setQError] = useState<string | null>(null)
+  const [notice, setNotice] = useState<{
+    tone: "success" | "warning" | "error"
+    text: string
+  } | null>(null)
+
+  function isDemoDocument(document: Pick<HubDocument, "id">) {
+    return document.id.startsWith("demo-")
+  }
+
+  function openQuickCreateDialog() {
+    handleHubModeChange("create")
+    setQuoteDialog(true)
+    setQError(null)
+    setNotice(null)
+  }
+
+  function showNotice(tone: "success" | "warning" | "error", text: string) {
+    setNotice({ tone, text })
+  }
 
   async function handleQuoteCreate(e: React.FormEvent) {
     e.preventDefault()
     setQSubmitting(true)
     setQError(null)
+    setNotice(null)
     try {
+      const parsedAmount = qForm.amount
+        ? Number(qForm.amount.replace(/[^\d.-]/g, ""))
+        : 0
+
       // 1. 고객 생성
-      const custRes = await fetch("/api/partner/customers", {
+      const custRes = await portalFetch("/api/partner/customers", {
         method: "POST",
-        headers: { "Content-Type": "application/json" },
         body: JSON.stringify({ name: qForm.customerName }),
       })
       if (!custRes.ok) {
         const err = await custRes.json()
         throw new Error(`고객 생성 실패: ${err.error ?? "알 수 없는 오류"}`)
       }
-      const cust = await custRes.json()
+      const customerPayload = (await custRes.json()) as {
+        customer?: {
+          id: string
+          name: string
+        }
+      }
+      const customer = customerPayload.customer
+      if (!customer) {
+        throw new Error("고객 생성 응답이 올바르지 않습니다")
+      }
 
       // 2. 거래 생성
-      const dealRes = await fetch("/api/partner/deals", {
+      const dealRes = await portalFetch("/api/partner/deals", {
         method: "POST",
-        headers: { "Content-Type": "application/json" },
         body: JSON.stringify({
-          customer_id: cust.id,
+          customer_id: customer.id,
           title: qForm.dealTitle,
-          expected_amount: qForm.amount ? Number(qForm.amount.replace(/,/g, "")) : null,
+          expected_amount: parsedAmount || null,
         }),
       })
       if (!dealRes.ok) {
         const err = await dealRes.json()
         throw new Error(`거래 생성 실패: ${err.error ?? "알 수 없는 오류"}`)
       }
-      const deal = await dealRes.json()
+      const dealPayload = (await dealRes.json()) as {
+        deal?: {
+          id: string
+          title: string
+          deal_code: string
+        }
+      }
+      const deal = dealPayload.deal
+      if (!deal) {
+        throw new Error("거래 생성 응답이 올바르지 않습니다")
+      }
 
       // 3. 견적서 생성
-      const quoteRes = await fetch("/api/partner/quotes", {
+      const quoteRes = await portalFetch("/api/partner/quotes", {
         method: "POST",
-        headers: { "Content-Type": "application/json" },
         body: JSON.stringify({
           deal_id: deal.id,
           title: qForm.quoteTitle,
-          total_amount: qForm.amount ? Number(qForm.amount.replace(/,/g, "")) : 0,
-          subtotal: qForm.amount ? Number(qForm.amount.replace(/,/g, "")) : 0,
+          total_amount: parsedAmount,
+          subtotal: parsedAmount,
         }),
       })
       if (!quoteRes.ok) {
         const err = await quoteRes.json()
         throw new Error(`견적서 생성 실패: ${err.error ?? "알 수 없는 오류"}`)
       }
+      const quotePayload = (await quoteRes.json()) as {
+        document?: {
+          id: string
+          quote_number: string
+          status: string
+          updated_at: string
+        }
+        version?: QuoteDocumentBundle["versions"][number]
+      }
+      const document = quotePayload.document
+      const version = quotePayload.version
+
+      if (!document || !version) {
+        throw new Error("견적서 생성 응답이 올바르지 않습니다")
+      }
+
+      const nextDocument: HubDocument = {
+        id: document.id,
+        kind: "quote",
+        number: document.quote_number,
+        title: version.title ?? qForm.quoteTitle,
+        status: document.status,
+        updatedAt: document.updated_at,
+        customerName: customer.name,
+        customerId: customer.id,
+        dealId: deal.id,
+        dealTitle: deal.title,
+        dealCode: deal.deal_code,
+        versionCount: 1,
+        currentVersionLabel: latestVersionLabel("quote", [version]),
+        totalAmount: version.total_amount ?? parsedAmount,
+        versions: [version],
+        shares: [],
+        pdfUrl: null,
+      }
+
+      const currentRealDocuments = documents.filter(
+        (item) => !isDemoDocument(item) && item.id !== nextDocument.id
+      )
+      const nextDocuments = [nextDocument, ...currentRealDocuments]
 
       setQuoteDialog(false)
       setQForm({ customerName: "", dealTitle: "", quoteTitle: "", amount: "" })
-      router.refresh()
-      window.location.reload()
+      setMode("v2")
+      setError(null)
+      setDocuments(nextDocuments)
+      setSelectedDocumentId(nextDocument.id)
+      setSection("quote")
+      setSourceDealCount(new Set(nextDocuments.map((item) => item.dealId)).size)
+      setHydratedDealIds((current) => ({
+        ...current,
+        [deal.id]: true,
+      }))
+      handleHubModeChange("send")
+      showNotice("success", "견적서를 만들었고 바로 발송 준비 큐로 전환했습니다.")
     } catch (err) {
       setQError(err instanceof Error ? err.message : "생성 중 오류가 발생했습니다")
     } finally {
@@ -786,6 +904,10 @@ export default function PartnerDocumentsPage() {
   async function ensureShareLink(document: HubDocument) {
     if (typeof window === "undefined") return ""
 
+    if (isDemoDocument(document)) {
+      throw new Error("데모 문서는 실제 공유 링크를 만들 수 없습니다. 먼저 새 문서를 생성해 주세요.")
+    }
+
     if (document.kind === "receipt") {
       return document.pdfUrl ?? `${window.location.origin}/partner/workspace`
     }
@@ -867,6 +989,60 @@ export default function PartnerDocumentsPage() {
     }
   }
 
+  async function handleQuickSend() {
+    handleHubModeChange("send")
+    setNotice(null)
+
+    const selectedCandidate =
+      documents.find((document) => document.id === selectedDocumentId) ?? null
+    const sendCandidates = documents.filter(
+      (document) =>
+        !isDemoDocument(document) &&
+        document.kind !== "receipt" &&
+        matchesQueue(document, "send")
+    )
+    const candidate =
+      selectedCandidate &&
+      !isDemoDocument(selectedCandidate) &&
+      selectedCandidate.kind !== "receipt" &&
+      matchesQueue(selectedCandidate, "send")
+        ? selectedCandidate
+        : sendCandidates[0] ?? null
+
+    if (!candidate) {
+      if (documents.some((document) => isDemoDocument(document)) || documents.length === 0) {
+        openQuickCreateDialog()
+        showNotice("warning", "실제 발송할 문서가 없어 새 견적서 생성으로 이동했습니다.")
+        return
+      }
+
+      showNotice("warning", "발송할 견적서나 계약서가 없습니다. 먼저 새 문서를 만들어 주세요.")
+      return
+    }
+
+    setSelectedDocumentId(candidate.id)
+
+    try {
+      const link = await ensureShareLink(candidate)
+      if (navigator.clipboard?.writeText) {
+        await navigator.clipboard.writeText(link)
+        showNotice(
+          "success",
+          `${candidate.kind === "quote" ? "견적서" : "계약서"} 발송 링크를 복사했습니다.`
+        )
+        return
+      }
+
+      window.open(link, "_blank", "noopener,noreferrer")
+      showNotice("success", "발송 링크를 새 탭에서 열었습니다.")
+    } catch (err) {
+      showNotice(
+        "error",
+        err instanceof Error ? err.message : "빠른 발송 링크를 준비하지 못했습니다."
+      )
+    }
+  }
+
   function handleHubModeChange(nextMode: HubMode) {
     setHubMode(nextMode)
     setQueue(
@@ -933,7 +1109,7 @@ export default function PartnerDocumentsPage() {
             <div className="flex flex-wrap justify-end gap-2 self-end">
                 <button
                   type="button"
-                  onClick={() => handleHubModeChange("create")}
+                  onClick={openQuickCreateDialog}
                   className="inline-flex items-center gap-2 rounded-xl border border-[#D1FAE5] bg-[#084734] px-4 py-2.5 text-sm font-medium text-white hover:bg-[#065c41]"
                 >
                   <Plus className="h-4 w-4" />
@@ -941,7 +1117,9 @@ export default function PartnerDocumentsPage() {
                 </button>
                 <button
                   type="button"
-                  onClick={() => handleHubModeChange("send")}
+                  onClick={() => {
+                    void handleQuickSend()
+                  }}
                   className="inline-flex items-center gap-2 rounded-xl border border-[#e8e8e4] bg-white px-4 py-2.5 text-sm font-medium text-[#1a1a1a] hover:bg-[#f7f7f5]"
                 >
                   <Send className="h-4 w-4" />
@@ -953,7 +1131,15 @@ export default function PartnerDocumentsPage() {
                 </div>
                 <button
                   type="button"
-                  onClick={() => router.refresh()}
+                  onClick={() => setQuoteDialog(true)}
+                  className="inline-flex items-center gap-2 rounded-xl border border-[#084734] bg-[#084734] px-4 py-2.5 text-sm font-medium text-white hover:bg-[#065c41]"
+                >
+                  <FileText className="h-4 w-4" />
+                  견적서 초안 시작
+                </button>
+                <button
+                  type="button"
+                  onClick={() => window.location.reload()}
                   className="inline-flex items-center gap-2 rounded-xl border border-[#e8e8e4] bg-white px-4 py-2.5 text-sm font-medium text-[#1a1a1a] hover:bg-[#f7f7f5]"
                 >
                   새로고침
@@ -1011,6 +1197,19 @@ export default function PartnerDocumentsPage() {
         {error && (
           <div className="mt-4 rounded-xl border border-amber-200 bg-amber-50 px-4 py-3 text-sm text-amber-800">
             {error}
+          </div>
+        )}
+        {notice && (
+          <div
+            className={`mt-4 rounded-xl border px-4 py-3 text-sm ${
+              notice.tone === "success"
+                ? "border-emerald-200 bg-emerald-50 text-emerald-800"
+                : notice.tone === "error"
+                  ? "border-rose-200 bg-rose-50 text-rose-700"
+                  : "border-amber-200 bg-amber-50 text-amber-800"
+            }`}
+          >
+            {notice.text}
           </div>
         )}
 
@@ -1205,9 +1404,14 @@ export default function PartnerDocumentsPage() {
                               const link = await ensureShareLink(selectedDocument)
                               if (navigator.clipboard?.writeText) {
                                 await navigator.clipboard.writeText(link)
+                                showNotice("success", "링크를 복사했습니다.")
                               }
                             } catch (error) {
                               console.error("[partner/documents] copy share link", error)
+                              showNotice(
+                                "error",
+                                error instanceof Error ? error.message : "링크 복사에 실패했습니다."
+                              )
                             }
                           }}
                           className="inline-flex items-center gap-2 rounded-xl border border-[#e8e8e4] bg-[#f7f7f5] px-3 py-2 text-sm font-medium text-[#1a1a1a] hover:bg-white disabled:cursor-not-allowed disabled:opacity-60"
@@ -1222,8 +1426,13 @@ export default function PartnerDocumentsPage() {
                             try {
                               const link = await ensureShareLink(selectedDocument)
                               window.open(link, "_blank", "noopener,noreferrer")
+                              showNotice("success", "링크를 새 탭에서 열었습니다.")
                             } catch (error) {
                               console.error("[partner/documents] open share link", error)
+                              showNotice(
+                                "error",
+                                error instanceof Error ? error.message : "링크 열기에 실패했습니다."
+                              )
                             }
                           }}
                           className="inline-flex items-center gap-2 rounded-xl border border-[#e8e8e4] bg-white px-3 py-2 text-sm font-medium text-[#1a1a1a] hover:bg-[#f7f7f5] disabled:cursor-not-allowed disabled:opacity-60"
