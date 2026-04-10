@@ -22,6 +22,7 @@ import LatencyProof from "@/components/product/hw/LatencyProof"
 import AICameraSection from "@/components/product/hw/AICameraSection"
 import SizeChooser from "@/components/product/hw/SizeChooser"
 import ValueAnchor from "@/components/product/hw/ValueAnchor"
+import ClassroomStudioSection from "@/components/product/hw/ClassroomStudioSection"
 
 /* ── Animation helpers ───────────────────────────────────────────── */
 const fadeUp = {
@@ -196,12 +197,12 @@ const featureTabs = [
     {
         label: "판서",
         image: "/images/product/hw/writing/writing-multitouch.jpg",
-        badge: "0.03s 초저지연",
-        title: "분필보다 자연스러운 판서",
+        badge: "50페이지 무한 캔버스",
+        title: "공간 걱정 없는 수업, 쓰는 즉시 공유",
         points: [
-            "0.03초 초저지연 — 생각의 속도로 판서",
-            "50포인트 멀티터치, 교사+학생 동시 판서 협업",
-            "무한 캔버스, 최대 50페이지 수업 파일 저장",
+            "50페이지 무한 캔버스 — 지우지 않고 넘기며 수업",
+            "쓰는 순간 전 학생 기기에 실시간 동기화 → 필기 대신 수업에 집중",
+            "0.03초 초저지연 + 50포인트 멀티터치로 분필보다 자연스러운 판서",
         ],
     },
     {
@@ -229,11 +230,12 @@ const featureTabs = [
     {
         label: "AI 카메라",
         image: "/images/product/hw/camera/camera-hybrid-class.jpg",
-        badge: "4K + 8배열 마이크",
-        title: "교실과 원격을 하나로",
+        badge: "수업 영상 자동 생성",
+        title: "수업이 끝나면, 영상도 완성됩니다",
         points: [
-            "신체 추적 알고리즘으로 교사 자동 트래킹",
-            "8배열 마이크 + AI 노이즈캔슬링",
+            "4K AI 카메라가 교사를 자동 추적하며 수업 전체를 녹화",
+            "수업 종료 즉시 수업 영상 자동 생성 — 별도 편집·업로드 불필요",
+            "8배열 마이크 + AI 노이즈캔슬링으로 선명한 음성 전달",
             "교실+원격 학생 동시 판서, 진짜 하이브리드 수업",
         ],
     },
@@ -527,8 +529,8 @@ const timelineSteps = [
     {
         time: "09:00",
         icon: <PenTool className="w-4 h-4" />,
-        title: "판서 시작, 전원 동시 연결",
-        desc: "칠판에 쓰는 순간 학생 기기에 실시간 반영. 교실 학생과 원격 학생이 같은 캔버스를 공유합니다.",
+        title: "판서 시작 + AI 카메라 자동 녹화",
+        desc: "칠판에 쓰는 순간 학생 기기에 실시간 반영. 동시에 AI 카메라가 교사를 추적하며 수업 영상 녹화를 시작합니다.",
     },
     {
         time: "09:15",
@@ -539,14 +541,14 @@ const timelineSteps = [
     {
         time: "09:40",
         icon: <Share2 className="w-4 h-4" />,
-        title: "원클릭 저장 · 배포",
-        desc: "수업 종료 후 판서 내용이 PDF로 자동 변환되어 학생 전원에게 즉시 전송됩니다.",
+        title: "수업 종료 → 판서 PDF + 수업 영상 동시 업로드",
+        desc: "수업이 끝나는 순간, 50페이지 판서 노트가 PDF로 자동 변환되고 수업 영상이 동시에 생성·업로드됩니다.",
     },
     {
-        time: "퇴근 후",
+        time: "방과후",
         icon: <Monitor className="w-4 h-4" />,
-        title: "데이터로 복기하는 수업",
-        desc: "출결 현황, 과제 제출률, 학부모 알림까지. 앱 하나로 오늘 수업 전체를 확인합니다.",
+        title: "수업 영상 + 판서 노트로 복습",
+        desc: "학생이 수업 영상을 돌려보며 50페이지 판서를 함께 복습합니다. 결석 학생도 완벽한 수업 경험.",
     },
 ]
 
@@ -843,12 +845,12 @@ export default function ProductHWPage() {
                                 className="text-[2.25rem] sm:text-5xl md:text-6xl lg:text-[4.25rem] xl:text-[5rem] font-bold leading-[1.05] mb-10 text-[#1a1a19]"
                                 style={{ letterSpacing: "-0.045em" }}
                             >
-                                칠판 하나로, 교실의 한계가{" "}
-                                <span className="text-[#084734] whitespace-nowrap">사라집니다.</span>
+                                하나의 수업 스튜디오가{" "}
+                                <span className="text-[#084734] whitespace-nowrap">교실에 들어섭니다.</span>
                             </h1>
 
                             <p className="text-lg md:text-xl lg:text-2xl text-[#615D59] leading-relaxed font-medium max-w-3xl mx-auto mb-12">
-                                보드 한 대 안에 PC, 4K AI 카메라, 소프트웨어까지. 책상 위에 둘 게 사라진 교실.
+                                보드 위에 쓰면 전원에게 공유되고, AI 카메라가 수업을 녹화하고, 끝나면 영상과 노트가 동시에 올라갑니다.
                             </p>
                         </motion.div>
 
@@ -860,10 +862,10 @@ export default function ProductHWPage() {
                             className="flex flex-wrap justify-center gap-8 md:gap-14 mt-4"
                         >
                             {[
-                                { value: "0.03s", label: "초저지연 필기" },
-                                { value: "OPS", label: "PC 내장" },
-                                { value: "AI", label: "트래킹 카메라" },
-                                { value: "AG/AF", label: "반사·지문 방지" },
+                                { value: "수업 영상", label: "종료 즉시 자동 업로드" },
+                                { value: "50페이지", label: "공간 걱정 없는 무한 판서" },
+                                { value: "AI 카메라", label: "4K 자동 트래킹 녹화" },
+                                { value: "실시간", label: "판서 즉시 전체 공유" },
                             ].map((m, i) => (
                                 <div key={i} className="text-center">
                                     <div className="text-2xl md:text-3xl font-sans font-bold tabular-nums tracking-tight text-[#22A366]">{m.value}</div>
@@ -900,11 +902,17 @@ export default function ProductHWPage() {
             {/* OPENING STATEMENT — 텍스트 임팩트 */}
             <OpeningStatement />
 
+            {/* 🆕 CLASSROOM STUDIO — 보드+카메라+SW 시너지 3요소 */}
+            <ClassroomStudioSection />
+
             {/* PAIN POINTS V2 — 5가지 고민 → 5가지 부품 매칭 */}
             <PainPointsV2 />
 
             {/* ALL-IN-ONE STATEMENT — OPS 내장 강조 + 분해도 */}
             <AllInOneStatement />
+
+            {/* AI CAMERA — 트래킹 카메라 (상위 이동: 카메라 비중 UP) */}
+            <AICameraSection />
 
             {/* BIG BACKDROP — 베젤 클로즈업 풀블리드 */}
             <BigBackdropImage />
@@ -917,9 +925,6 @@ export default function ProductHWPage() {
 
             {/* LATENCY PROOF — 0.03s 시연 */}
             <LatencyProof />
-
-            {/* AI CAMERA — 트래킹 카메라 */}
-            <AICameraSection />
 
             {/* SIZE CHOOSER — 75"/86" 비교 */}
             <SizeChooser />

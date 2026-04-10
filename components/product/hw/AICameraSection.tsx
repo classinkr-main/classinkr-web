@@ -8,6 +8,8 @@ const capabilities = [
   { icon: ZoomIn, label: "자동 줌·팬" },
   { icon: PenLine, label: "판서 자동 캡처" },
   { icon: Users, label: "학생 멀티 앵글" },
+  { icon: Crosshair, label: "수업 영상 자동 생성" },
+  { icon: ZoomIn, label: "복습 영상 즉시 배포" },
 ];
 
 // Student dot positions (scattered in lower portion of classroom)
@@ -49,18 +51,18 @@ export default function AICameraSection() {
             className="text-4xl md:text-5xl lg:text-6xl mt-4 leading-tight"
             style={{ letterSpacing: "-1.5px" }}
           >
-            강사가 움직여도,
+            수업이 끝나면,
             <br />
-            카메라가 따라옵니다.
+            영상도 완성됩니다.
           </h2>
 
           <p className="text-lg text-white/70 mt-6 leading-relaxed">
-            보드 상단에 내장된 4K 광각 카메라가 강사를 자동 인식해 프레이밍을
-            유지합니다. 별도 캠코더, 짐벌, 운영자가 필요 없습니다. 라이브
-            송출도, 녹화도 카메라 한 대로 끝납니다.
+            보드 상단 4K AI 카메라가 교사를 자동 추적하며 수업 전체를 녹화합니다.
+            수업 종료와 동시에 편집 없이 수업 영상이 자동 생성·업로드.
+            별도 캠코더도, 운영자도 필요 없는 원스톱 수업 스튜디오.
           </p>
 
-          <ul className="mt-8 grid grid-cols-2 gap-3">
+          <ul className="mt-8 grid grid-cols-2 gap-3 sm:grid-cols-3">
             {capabilities.map(({ icon: Icon, label }) => (
               <li key={label} className="flex items-center gap-2.5">
                 <Icon className="w-4 h-4 text-[#6EE7B7] shrink-0" />
