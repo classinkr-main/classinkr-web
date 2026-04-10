@@ -70,17 +70,40 @@ export async function getQuote(id: string): Promise<QuoteWithItems | null> {
   return { ...quote, items: items ?? [] };
 }
 
+import { getProductBySku } from "@/lib/product-templates"
+
+// ... (기존 코드)
+
 export async function createQuote(
   input: QuoteInsert,
   items: Omit<QuoteItemInsert, "quote_id">[]
 ): Promise<QuoteWithItems> {
   const supabase = createSupabaseAdminClient();
+  
+  // 서버 측 검증: 품목 데이터 타입 캐스팅 및 가격 재계산
+  const verifiedItems = items.map(item => {
+    // 템플릿(SKU)이 있다면 공식 가격으로 재검증/보정 가능
+    const template = item.product_key ? getProductBySku(item.product_key as string) : null;
+    return {
+      ...item,
+      unit_price: template ? template.unit_price : Number(item.unit_price || 0),
+    }
+  });
+
   const { data: quote, error } = await supabase
     .from("quotes")
-    .insert(input)
+    .insert({
+      ...input,
+      subtotal: Number(input.subtotal || 0),
+      tax_amount: Number(input.tax_amount || 0),
+      total_amount: Number(input.total_amount || 0),
+    })
     .select()
     .single();
   if (error) throw error;
+  
+  // ... (이하 동일)
+
 
   const itemRows = items.map((item, idx) =>
     normalizeQuoteItemInput(item, quote.id, idx)

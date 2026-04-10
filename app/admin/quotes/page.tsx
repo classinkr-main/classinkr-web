@@ -13,6 +13,7 @@ import {
   PencilLine,
 } from "lucide-react"
 
+import { PRODUCT_TEMPLATES, getProductBySku } from "@/lib/product-templates"
 import { Button } from "@/components/ui/button"
 import type { Partner, Quote, QuoteStatus } from "@/lib/supabase/database.types"
 
@@ -202,7 +203,7 @@ function calcLineAmount(item: QuoteItem) {
 }
 
 function getPresetProduct(productKey: string) {
-  return PRODUCT_OPTIONS.find((option) => option.key === productKey) ?? PRODUCT_OPTIONS[0]
+  return getProductBySku(productKey) ?? { key: 'custom', label: '커스텀 항목', description: '직접 입력', unit_price: 0 }
 }
 
 function createItemFromKey(productKey: string): QuoteItem {
@@ -385,6 +386,9 @@ export default function QuotesPage() {
     if (res.ok) {
       setShowForm(false)
       await load()
+    } else {
+      const errorData = await res.json()
+      alert(`견적 생성 실패: ${errorData.error ?? "알 수 없는 오류"}`)
     }
 
     setSaving(false)
@@ -426,7 +430,7 @@ export default function QuotesPage() {
           <Button variant="outline" size="sm" onClick={load} disabled={loading}>
             <RefreshCw className={`w-4 h-4 ${loading ? "animate-spin" : ""}`} />
           </Button>
-          <Button size="sm" onClick={openForm}>
+          <Button size="sm" onClick={openForm} className="bg-[#084734] hover:bg-[#065c41] text-white">
             <Plus className="w-4 h-4 mr-1" />
             견적서 작성
           </Button>

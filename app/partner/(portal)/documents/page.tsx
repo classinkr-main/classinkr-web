@@ -615,6 +615,72 @@ export default function PartnerDocumentsPage() {
   const [loading, setLoading] = useState(true)
   const [error, setError] = useState<string | null>(null)
 
+  /* ── 견적서 빠른 생성 다이얼로그 ──────────────────────────── */
+  const [quoteDialog, setQuoteDialog] = useState(false)
+  const [qForm, setQForm] = useState({ customerName: "", dealTitle: "", quoteTitle: "", amount: "" })
+  const [qSubmitting, setQSubmitting] = useState(false)
+  const [qError, setQError] = useState<string | null>(null)
+
+  async function handleQuoteCreate(e: React.FormEvent) {
+    e.preventDefault()
+    setQSubmitting(true)
+    setQError(null)
+    try {
+      // 1. 고객 생성
+      const custRes = await fetch("/api/partner/customers", {
+        method: "POST",
+        headers: { "Content-Type": "application/json" },
+        body: JSON.stringify({ name: qForm.customerName }),
+      })
+      if (!custRes.ok) {
+        const err = await custRes.json()
+        throw new Error(`고객 생성 실패: ${err.error ?? "알 수 없는 오류"}`)
+      }
+      const cust = await custRes.json()
+
+      // 2. 거래 생성
+      const dealRes = await fetch("/api/partner/deals", {
+        method: "POST",
+        headers: { "Content-Type": "application/json" },
+        body: JSON.stringify({
+          customer_id: cust.id,
+          title: qForm.dealTitle,
+          expected_amount: qForm.amount ? Number(qForm.amount.replace(/,/g, "")) : null,
+        }),
+      })
+      if (!dealRes.ok) {
+        const err = await dealRes.json()
+        throw new Error(`거래 생성 실패: ${err.error ?? "알 수 없는 오류"}`)
+      }
+      const deal = await dealRes.json()
+
+      // 3. 견적서 생성
+      const quoteRes = await fetch("/api/partner/quotes", {
+        method: "POST",
+        headers: { "Content-Type": "application/json" },
+        body: JSON.stringify({
+          deal_id: deal.id,
+          title: qForm.quoteTitle,
+          total_amount: qForm.amount ? Number(qForm.amount.replace(/,/g, "")) : 0,
+          subtotal: qForm.amount ? Number(qForm.amount.replace(/,/g, "")) : 0,
+        }),
+      })
+      if (!quoteRes.ok) {
+        const err = await quoteRes.json()
+        throw new Error(`견적서 생성 실패: ${err.error ?? "알 수 없는 오류"}`)
+      }
+
+      setQuoteDialog(false)
+      setQForm({ customerName: "", dealTitle: "", quoteTitle: "", amount: "" })
+      router.refresh()
+      window.location.reload()
+    } catch (err) {
+      setQError(err instanceof Error ? err.message : "생성 중 오류가 발생했습니다")
+    } finally {
+      setQSubmitting(false)
+    }
+  }
+
   useEffect(() => {
     let alive = true
 
@@ -833,6 +899,7 @@ export default function PartnerDocumentsPage() {
   void summary
 
   return (
+    <>
     <div className="mx-auto max-w-[1600px] px-5 py-6 lg:px-8">
         <Card className="border-[#e8e8e4] bg-white shadow-none">
           <CardContent className="flex flex-col gap-4 p-5 lg:flex-row lg:items-end lg:justify-between">
@@ -867,7 +934,7 @@ export default function PartnerDocumentsPage() {
                 <button
                   type="button"
                   onClick={() => handleHubModeChange("create")}
-                  className="inline-flex items-center gap-2 rounded-xl border border-[#D1FAE5] bg-[#ECFDF5] px-4 py-2.5 text-sm font-medium text-[#084734] hover:bg-[#D1FAE5]"
+                  className="inline-flex items-center gap-2 rounded-xl border border-[#D1FAE5] bg-[#084734] px-4 py-2.5 text-sm font-medium text-white hover:bg-[#065c41]"
                 >
                   <Plus className="h-4 w-4" />
                   새 문서
@@ -985,12 +1052,12 @@ export default function PartnerDocumentsPage() {
                   <div className="grid gap-3">
                     <button
                       type="button"
-                      onClick={() => router.push("/partner/quotes")}
+                      onClick={() => setQuoteDialog(true)}
                       className="flex items-center justify-between rounded-2xl border border-[#e8e8e4] bg-[#fafaf8] px-4 py-4 text-left hover:border-[#D1FAE5] hover:bg-[#ECFDF5]"
                     >
                       <div>
                         <p className="text-sm font-semibold text-[#1a1a1a]">견적서 초안 시작</p>
-                        <p className="mt-1 text-xs text-[#1a1a1a]/50">거래를 선택해 첫 견적이나 수정본을 만듭니다.</p>
+                        <p className="mt-1 text-xs text-[#1a1a1a]/50">고객·거래·견적서를 한 번에 만듭니다.</p>
                       </div>
                       <ArrowRight className="h-4 w-4 text-[#1a1a1a]/25" />
                     </button>
@@ -1306,5 +1373,81 @@ export default function PartnerDocumentsPage() {
           </Card>
         </div>
       </div>
+
+      {/* ── 견적서 빠른 생성 다이얼로그 ─────────────────────────── */}
+      {quoteDialog && (
+        <div className="fixed inset-0 z-50 flex items-center justify-center bg-black/30 px-4 backdrop-blur-sm">
+          <div className="w-full max-w-md rounded-2xl border border-[rgba(0,0,0,0.08)] bg-white p-6 shadow-xl">
+            <div className="mb-5">
+              <h2 className="text-base font-semibold text-[#111110]">견적서 빠른 생성</h2>
+              <p className="mt-1 text-xs text-[#615D59]">고객·거래·견적서를 한 번에 만듭니다.</p>
+            </div>
+
+            <form onSubmit={handleQuoteCreate} className="space-y-3">
+              <div>
+                <label className="mb-1 block text-xs font-medium text-[#615D59]">고객명 <span className="text-red-400">*</span></label>
+                <input
+                  required
+                  value={qForm.customerName}
+                  onChange={e => setQForm(f => ({ ...f, customerName: e.target.value }))}
+                  placeholder="예) 강남메가스터디학원"
+                  className="w-full rounded-lg border border-[#E5E5E0] px-3 py-2 text-sm focus:border-[#084734] focus:outline-none focus:ring-2 focus:ring-[#084734]/20"
+                />
+              </div>
+              <div>
+                <label className="mb-1 block text-xs font-medium text-[#615D59]">거래명 <span className="text-red-400">*</span></label>
+                <input
+                  required
+                  value={qForm.dealTitle}
+                  onChange={e => setQForm(f => ({ ...f, dealTitle: e.target.value }))}
+                  placeholder="예) 전자칠판 4대 설치"
+                  className="w-full rounded-lg border border-[#E5E5E0] px-3 py-2 text-sm focus:border-[#084734] focus:outline-none focus:ring-2 focus:ring-[#084734]/20"
+                />
+              </div>
+              <div>
+                <label className="mb-1 block text-xs font-medium text-[#615D59]">견적서 제목 <span className="text-red-400">*</span></label>
+                <input
+                  required
+                  value={qForm.quoteTitle}
+                  onChange={e => setQForm(f => ({ ...f, quoteTitle: e.target.value }))}
+                  placeholder="예) ClassIn Board CB-86 4대 견적"
+                  className="w-full rounded-lg border border-[#E5E5E0] px-3 py-2 text-sm focus:border-[#084734] focus:outline-none focus:ring-2 focus:ring-[#084734]/20"
+                />
+              </div>
+              <div>
+                <label className="mb-1 block text-xs font-medium text-[#615D59]">견적 금액 (원, 선택)</label>
+                <input
+                  value={qForm.amount}
+                  onChange={e => setQForm(f => ({ ...f, amount: e.target.value }))}
+                  placeholder="예) 14000000"
+                  className="w-full rounded-lg border border-[#E5E5E0] px-3 py-2 text-sm focus:border-[#084734] focus:outline-none focus:ring-2 focus:ring-[#084734]/20"
+                />
+              </div>
+
+              {qError && (
+                <p className="rounded-lg bg-red-50 px-3 py-2 text-xs text-red-600">{qError}</p>
+              )}
+
+              <div className="flex gap-2 pt-2">
+                <button
+                  type="button"
+                  onClick={() => { setQuoteDialog(false); setQError(null) }}
+                  className="flex-1 rounded-lg border border-[rgba(0,0,0,0.08)] py-2.5 text-sm font-medium text-[#615D59] hover:bg-[#F6F5F4]"
+                >
+                  취소
+                </button>
+                <button
+                  type="submit"
+                  disabled={qSubmitting}
+                  className="flex-1 rounded-lg bg-[#084734] py-2.5 text-sm font-medium text-white hover:bg-[#065c41] disabled:opacity-50"
+                >
+                  {qSubmitting ? "생성 중…" : "견적서 만들기"}
+                </button>
+              </div>
+            </form>
+          </div>
+        </div>
+      )}
+    </>
   )
 }
