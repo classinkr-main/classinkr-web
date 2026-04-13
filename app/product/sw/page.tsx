@@ -69,13 +69,27 @@ function useCountUp(target: number, trigger: boolean, duration = 2) {
 function SlotDigit({ digit, delay, trigger, onDone }: { digit: string; delay: number; trigger: boolean; onDone?: () => void }) {
     const num = parseInt(digit)
     const [done, setDone] = useState(false)
+    const containerRef = useRef<HTMLDivElement>(null)
+    const [cellH, setCellH] = useState(0)
+
+    useEffect(() => {
+        function measure() {
+            const firstSpan = containerRef.current?.querySelector("span")
+            if (firstSpan) setCellH(firstSpan.getBoundingClientRect().height)
+        }
+        measure()
+        window.addEventListener("resize", measure)
+        return () => window.removeEventListener("resize", measure)
+    }, [])
+
     return (
         <div className="w-14 sm:w-20 md:w-28 h-[4.5rem] sm:h-28 md:h-36 bg-white border border-slate-200/80 shadow-[0_2px_20px_rgba(0,0,0,0.04)] rounded-xl md:rounded-2xl flex items-center justify-center relative overflow-hidden">
-            <div className="absolute inset-0 bg-gradient-to-b from-slate-50/80 to-transparent h-1/2"></div>
+            <div className="absolute inset-0 bg-gradient-to-b from-slate-50/80 to-transparent h-1/2 pointer-events-none z-10"></div>
             <motion.div
+                ref={containerRef}
                 className="flex flex-col items-center"
                 initial={{ y: 0 }}
-                animate={trigger ? { y: -(num * 10) + "%" } : {}}
+                animate={trigger && cellH > 0 ? { y: -(num * cellH) } : {}}
                 transition={{ duration: 1.2, delay, ease: [0.25, 0.46, 0.45, 0.94] }}
                 onAnimationComplete={() => { if (trigger) { setDone(true); onDone?.() } }}
             >
@@ -191,7 +205,7 @@ function FinalCTASection() {
     const particles = useMemo(() => createParticles(particleCount), [particleCount])
 
     const handleLastSlotDone = useCallback(() => setSlotsDone(true), [])
-    const displayDigits = useMemo(() => (1341483 + liveCount).toString().split(""), [liveCount])
+    const displayDigits = useMemo(() => (1411800 + liveCount).toString().split(""), [liveCount])
 
     return (
         <section ref={sectionRef} className="relative py-32 md:py-44 overflow-hidden" style={{ minHeight: "100vh" }}>
@@ -212,7 +226,7 @@ function FinalCTASection() {
                     <div className="inline-flex items-center gap-2 px-4 py-1.5 rounded-full bg-orange-50 border border-orange-200/60 text-sm font-medium text-[#E05024]"><Clock className="w-3.5 h-3.5" />되찾은 수업 시간</div>
                 </motion.div>
 
-                <motion.p initial={{ opacity: 0, y: 10 }} animate={phase >= 2 ? { opacity: 1, y: 0 } : {}} transition={{ duration: 0.5 }} className="text-base sm:text-lg text-slate-400 font-medium mb-8 max-w-xl mx-auto">하나의 플랫폼으로 수업한 전국 2,400개 학원이 되찾은 시간</motion.p>
+                <motion.p initial={{ opacity: 0, y: 10 }} animate={phase >= 2 ? { opacity: 1, y: 0 } : {}} transition={{ duration: 0.5 }} className="text-base sm:text-lg text-slate-400 font-medium mb-8 max-w-xl mx-auto">181개 기업 고객사가 ClassIn으로 되찾은 시간</motion.p>
                 <div className="relative">
                     <motion.div className="absolute top-1/2 left-1/2 -translate-x-1/2 -translate-y-1/2 w-[500px] h-[300px] bg-gradient-radial from-orange-300/25 via-orange-200/10 to-transparent rounded-full pointer-events-none" initial={{ scale: 0, opacity: 0 }} animate={phase >= 2 ? { scale: [0, 1.2, 1], opacity: [0, 0.7, 0] } : {}} transition={{ duration: 1.5 }} />
                     <motion.div className="flex justify-center mb-5" initial={{ scale: 0.9, opacity: 0.3, filter: "blur(8px)" }} animate={phase >= 2 ? { scale: 1, opacity: 1, filter: "blur(0px)" } : {}} transition={{ type: "spring", stiffness: 120, damping: 20 }}>
@@ -235,7 +249,7 @@ function FinalCTASection() {
 
                 <motion.div className="w-full max-w-sm mx-auto h-px bg-gradient-to-r from-transparent via-orange-300/30 to-transparent mb-14 mt-14" initial={{ scaleX: 0 }} animate={phase >= 3 ? { scaleX: 1 } : {}} transition={{ duration: 0.6 }} style={{ originX: 0.5 }} />
                 <div className="grid grid-cols-2 lg:grid-cols-4 gap-3 sm:gap-4 mb-14 max-w-3xl mx-auto">
-                    <StatCard value={2400} suffix="+" label="줌 대신 선택한 학원" icon={<Monitor className="w-5 h-5" />} delay={0} trigger={phase >= 3} />
+                    <StatCard value={181} suffix="+" label="기업 고객사" icon={<Monitor className="w-5 h-5" />} delay={0} trigger={phase >= 3} />
                     <StatCard value={30} suffix="+" label="인터랙티브 수업 도구" icon={<MousePointerClick className="w-5 h-5" />} delay={0.1} trigger={phase >= 3} />
                     <StatCard value={10} suffix="가지" label={"참여형\n수업 활동"} icon={<Layers className="w-5 h-5" />} delay={0.2} trigger={phase >= 3} />
                     <StatCard value={98} suffix="%" label={`"과거로 못 돌아간다"\n응답률`} icon={<Sparkles className="w-5 h-5" />} delay={0.3} trigger={phase >= 3} />
