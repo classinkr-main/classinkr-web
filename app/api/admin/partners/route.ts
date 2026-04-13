@@ -19,7 +19,7 @@ import {
 } from "@/lib/partners-data"
 
 export async function GET(req: NextRequest) {
-  const err = verifyAdmin(req)
+  const err = await verifyAdmin(req)
   if (err) return err
 
   try {
@@ -37,7 +37,7 @@ export async function GET(req: NextRequest) {
 }
 
 export async function POST(req: NextRequest) {
-  const err = verifyAdmin(req)
+  const err = await verifyAdmin(req)
   if (err) return err
 
   try {

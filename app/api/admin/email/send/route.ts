@@ -28,7 +28,7 @@ type PersonalizedRecipient = {
 }
 
 export async function POST(req: NextRequest) {
-  const authError = verifyAdmin(req)
+  const authError = await verifyAdmin(req)
   if (authError) return authError
 
   try {

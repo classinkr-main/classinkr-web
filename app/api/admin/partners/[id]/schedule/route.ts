@@ -19,7 +19,7 @@ export async function POST(
   req: NextRequest,
   { params }: { params: Promise<{ id: string }> }
 ) {
-  const err = verifyAdmin(req)
+  const err = await verifyAdmin(req)
   if (err) return err
 
   try {

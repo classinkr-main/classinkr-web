@@ -10,7 +10,7 @@ export async function POST(req: NextRequest) {
     const body: NewsletterSubscribeRequest = await req.json()
     const VALID_SOURCES = ["demo_modal", "contact_page", "newsletter", "manual"] as const
     type SubscriberSource = typeof VALID_SOURCES[number]
-    const rawSource = body.source?.trim()
+    const rawSource = body.source?.trim() ?? ""
     const source: SubscriberSource = VALID_SOURCES.includes(rawSource as SubscriberSource)
       ? (rawSource as SubscriberSource)
       : "newsletter"
