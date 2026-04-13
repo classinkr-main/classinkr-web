@@ -92,7 +92,6 @@ export interface NewsletterSubscribeRequest {
   name?: string
   source?: string
   tags?: string[]
-  source?: string
 }
 
 /** 뉴스레터 수신거부 요청 (프론트엔드 → /api/newsletter/unsubscribe) */
