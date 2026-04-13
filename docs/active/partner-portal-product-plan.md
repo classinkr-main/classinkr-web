@@ -5,6 +5,11 @@
 이 문서는 파트너 포털의 실제 화면 설계, UI/UX 원칙, 기능 구조, 구현 순서를 정의한다.
 운영 규칙 자체는 `partner-portal-guidelines.md`를 우선하고, 이 문서는 그 규칙을 제품 화면으로 풀어낸다.
 
+문서 허브 재설계 세부 기준은 아래 문서를 함께 본다.
+
+- `partner-portal-document-hub-guidelines.md`
+- `partner-portal-document-hub-wireframes.md`
+
 ## 1. 제품 한 줄 정의
 
 파트너 포털은 `기관별 거래 운영 보드 + 문서 허브 + 설치/수납 관제판`이다.

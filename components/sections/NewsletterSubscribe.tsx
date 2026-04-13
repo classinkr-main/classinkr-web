@@ -67,7 +67,7 @@ export function NewsletterSubscribe({ variant = "dark" }: Props) {
     return (
       <div className="flex items-center gap-2 py-2">
         <CheckCircle2 className={`w-5 h-5 ${isDark ? "text-green-400" : "text-green-600"}`} />
-        <span className={`text-sm font-medium ${isDark ? "text-slate-200" : "text-[#111110]"}`}>
+        <span className={`text-sm font-medium ${isDark ? "text-white/85" : "text-[#111110]"}`}>
           구독이 완료되었습니다! 소식을 기대해주세요.
         </span>
       </div>
@@ -78,7 +78,7 @@ export function NewsletterSubscribe({ variant = "dark" }: Props) {
     <div>
       <form onSubmit={handleSubmit} className="flex gap-2">
         <div className="relative flex-1">
-          <Mail className={`absolute left-3 top-1/2 -translate-y-1/2 w-4 h-4 ${isDark ? "text-slate-500" : "text-[#1a1a1a]/30"}`} />
+          <Mail className={`absolute left-3 top-1/2 -translate-y-1/2 w-4 h-4 ${isDark ? "text-white/40" : "text-[#A39E98]"}`} />
           <Input
             type="email"
             value={email}
@@ -87,7 +87,7 @@ export function NewsletterSubscribe({ variant = "dark" }: Props) {
             required
             className={`pl-10 ${
               isDark
-                ? "bg-white/5 border-white/10 text-white placeholder:text-slate-500"
+                ? "bg-white/[0.06] border-white/[0.08] text-white placeholder:text-white/40"
                 : "bg-white border-[#e8e8e4] text-[#111110]"
             }`}
           />
@@ -110,13 +110,13 @@ export function NewsletterSubscribe({ variant = "dark" }: Props) {
       </form>
 
       {error && (
-        <p className={`text-sm mt-2 ${isDark ? "text-red-400" : "text-red-500"}`}>
+        <p className={`text-sm mt-2 ${isDark ? "text-[#F6D5C5]" : "text-[#B85C33]"}`}>
           {error}
         </p>
       )}
 
       {/* [NOTE-23] 옵트인 동의 안내 문구 (법적 필수) */}
-      <p className={`text-[10px] mt-2 leading-relaxed ${isDark ? "text-slate-500" : "text-[#1a1a1a]/30"}`}>
+      <p className={`text-[10px] mt-2 leading-relaxed ${isDark ? "text-white/35" : "text-[#A39E98]"}`}>
         구독 시 Classin의 교육 인사이트, 제품 업데이트, 행사 안내를 이메일로 받아보는 것에 동의합니다.
         언제든지 수신거부할 수 있습니다.
       </p>

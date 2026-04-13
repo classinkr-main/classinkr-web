@@ -8,6 +8,7 @@ import { Button } from "@/components/ui/button"
 import { CheckCircle2, Loader2 } from "lucide-react"
 import { submitLead } from "@/lib/submitLead"
 import { trackEvent } from "@/lib/analytics"
+import { useToast } from "@/components/ui/toast"
 
 export function DemoModal({ children, trackingButton }: { children: React.ReactNode; trackingButton?: string }) {
     const [open, setOpen] = useState(false)
@@ -15,9 +16,11 @@ export function DemoModal({ children, trackingButton }: { children: React.ReactN
     const [loading, setLoading] = useState(false)
     const [error, setError] = useState("")
     const [warning, setWarning] = useState("")
+    const [shake, setShake] = useState(false)
     const [marketingConsent, setMarketingConsent] = useState(false)
     const formRef = useRef<HTMLFormElement>(null)
     const resetTimerRef = useRef<ReturnType<typeof setTimeout> | null>(null)
+    const toast = useToast()
 
     const resetFormState = () => {
         setSubmitted(false)
@@ -76,28 +79,41 @@ export function DemoModal({ children, trackingButton }: { children: React.ReactN
                 ? "리드는 접수되었지만 일부 외부 연동은 지연되었습니다. 내부 시스템에는 정상 등록되었습니다."
                 : "")
             trackEvent("submit_demo_request", { source: "demo_modal" })
+            toast.success("문의가 접수되었어요")
             setSubmitted(true)
         } catch (err) {
-            setError(err instanceof Error ? err.message : "제출에 실패했습니다. 다시 시도해주세요.")
+            const msg = err instanceof Error ? err.message : "제출에 실패했습니다. 다시 시도해주세요."
+            setError(msg)
+            setShake(true)
+            setTimeout(() => setShake(false), 200)
         } finally {
             setLoading(false)
         }
     }
+
+    // dark modal 인풋 공통 클래스
+    const darkInput = `bg-white/[0.06] border-white/[0.12] text-white placeholder:text-white/40 focus-visible:border-[#6EE7B7] focus-visible:ring-[#6EE7B7]/20${shake ? " animate-shake" : ""}`
 
     return (
         <Dialog open={open} onOpenChange={handleOpenChange}>
             <DialogTrigger asChild>
                 {children}
             </DialogTrigger>
-            <DialogContent className="sm:max-w-[480px] bg-slate-900 border border-white/10 text-white shadow-2xl">
+            <DialogContent className="sm:max-w-[480px] bg-[#1C1B1A] border border-white/[0.08] text-white shadow-[rgba(0,0,0,0.3)_0px_20px_60px]">
                 {submitted ? (
-                    <div className="flex flex-col items-center justify-center space-y-4 py-8 text-center bg-transparent rounded-lg">
-                        <CheckCircle2 className="h-12 w-12 text-green-400" />
-                        <h3 className="text-xl font-semibold text-white">데모 신청이 접수되었습니다!</h3>
-                        <p className="text-slate-300">
+                    <div className="flex flex-col items-center justify-center space-y-4 py-8 text-center">
+                        <div className="w-12 h-12 rounded-full bg-[#ECFDF5] flex items-center justify-center">
+                            <CheckCircle2 className="h-7 w-7 text-[#084734]" />
+                        </div>
+                        <h3 className="text-xl font-bold text-white tracking-[-0.25px]">데모 신청이 접수되었습니다!</h3>
+                        <p className="text-white/70 text-sm leading-relaxed">
                             {warning || "15분 내로 맞춤형 도입 플랜과 함께 연락드리겠습니다."}
                         </p>
-                        <Button onClick={() => handleOpenChange(false)} variant="outline" className="text-slate-950">
+                        <Button
+                            onClick={() => handleOpenChange(false)}
+                            variant="secondary"
+                            className="bg-white/10 text-white hover:bg-white/15"
+                        >
                             닫기
                         </Button>
                     </div>
@@ -105,36 +121,36 @@ export function DemoModal({ children, trackingButton }: { children: React.ReactN
                     <React.Fragment>
                         <DialogHeader>
                             <DialogTitle className="text-white">맞춤형 데모 신청하기</DialogTitle>
-                            <DialogDescription className="text-slate-300">
+                            <DialogDescription className="text-white/60">
                                 LMS와 분석 플랫폼을 직접 경험해보세요. 운영 품질을 표준화하는 방법을 안내해 드립니다.
                             </DialogDescription>
                         </DialogHeader>
                         <form ref={formRef} onSubmit={handleSubmit} className="grid gap-4 py-4">
                             <div className="grid gap-2">
-                                <Label htmlFor="name" className="text-slate-200">이름</Label>
-                                <Input id="name" name="name" placeholder="홍길동" required className="bg-white/5 border-white/10 text-white placeholder:text-slate-500" />
+                                <Label htmlFor="name" className="text-white/80 text-[13px]">이름</Label>
+                                <Input id="name" name="name" placeholder="홍길동" required aria-invalid={!!error} aria-describedby="demo-name-error" className={darkInput} />
                             </div>
                             <div className="grid gap-2">
-                                <Label htmlFor="org" className="text-slate-200">학원명</Label>
-                                <Input id="org" name="org" placeholder="클래스인 아카데미" required className="bg-white/5 border-white/10 text-white placeholder:text-slate-500" />
+                                <Label htmlFor="org" className="text-white/80 text-[13px]">학원명</Label>
+                                <Input id="org" name="org" placeholder="클래스인 아카데미" required aria-invalid={!!error} aria-describedby="demo-org-error" className={darkInput} />
                             </div>
                             <div className="grid grid-cols-2 gap-4">
                                 <div className="grid gap-2">
-                                    <Label htmlFor="role" className="text-slate-200">직책</Label>
-                                    <Input id="role" name="role" placeholder="원장 / 관리자" required className="bg-white/5 border-white/10 text-white placeholder:text-slate-500" />
+                                    <Label htmlFor="role" className="text-white/80 text-[13px]">직책</Label>
+                                    <Input id="role" name="role" placeholder="원장 / 관리자" required aria-invalid={!!error} aria-describedby="demo-role-error" className={darkInput} />
                                 </div>
                                 <div className="grid gap-2">
-                                    <Label htmlFor="size" className="text-slate-200">원생 수</Label>
-                                    <Input id="size" name="size" placeholder="예: 500+" required className="bg-white/5 border-white/10 text-white placeholder:text-slate-500" />
+                                    <Label htmlFor="size" className="text-white/80 text-[13px]">원생 수</Label>
+                                    <Input id="size" name="size" placeholder="예: 500+" required aria-invalid={!!error} aria-describedby="demo-size-error" className={darkInput} />
                                 </div>
                             </div>
                             <div className="grid gap-2">
-                                <Label htmlFor="email" className="text-slate-200">이메일</Label>
-                                <Input id="email" name="email" type="email" placeholder="email@example.com" required className="bg-white/5 border-white/10 text-white placeholder:text-slate-500" />
+                                <Label htmlFor="email" className="text-white/80 text-[13px]">이메일</Label>
+                                <Input id="email" name="email" type="email" placeholder="email@example.com" required aria-invalid={!!error} aria-describedby="demo-email-error" className={darkInput} />
                             </div>
                             <div className="grid gap-2">
-                                <Label htmlFor="phone" className="text-slate-200">전화번호</Label>
-                                <Input id="phone" name="phone" type="tel" placeholder="010-1234-5678" required className="bg-white/5 border-white/10 text-white placeholder:text-slate-500" />
+                                <Label htmlFor="phone" className="text-white/80 text-[13px]">전화번호</Label>
+                                <Input id="phone" name="phone" type="tel" placeholder="010-1234-5678" required aria-invalid={!!error} aria-describedby="demo-phone-error" className={darkInput} />
                             </div>
                             <label className="flex items-start gap-2.5 cursor-pointer group">
                                 <div className="relative mt-0.5 shrink-0">
@@ -146,8 +162,8 @@ export function DemoModal({ children, trackingButton }: { children: React.ReactN
                                     />
                                     <div className={`w-4 h-4 rounded border transition-all ${
                                         marketingConsent
-                                            ? "bg-blue-500 border-blue-500"
-                                            : "bg-white/10 border-white/20 group-hover:border-white/40"
+                                            ? "bg-[#084734] border-[#084734]"
+                                            : "bg-white/10 border-white/[0.2] group-hover:border-white/40"
                                     }`}>
                                         {marketingConsent && (
                                             <svg className="w-4 h-4 text-white p-0.5" fill="none" viewBox="0 0 24 24" stroke="currentColor" strokeWidth={3}>
@@ -156,17 +172,17 @@ export function DemoModal({ children, trackingButton }: { children: React.ReactN
                                         )}
                                     </div>
                                 </div>
-                                <span className="text-[12px] text-slate-400 leading-relaxed">
+                                <span className="text-[12px] text-white/50 leading-relaxed">
                                     클래스인의 제품 소식 및 마케팅 이메일 수신에 동의합니다.{" "}
-                                    <span className="text-slate-500">(선택)</span>
+                                    <span className="text-white/35">(선택)</span>
                                 </span>
                             </label>
                             {error && (
-                                <p className="text-red-400 text-sm text-center">{error}</p>
+                                <p id="demo-name-error" role="alert" aria-live="polite" className="text-[#F6D5C5] text-sm text-center">{error}</p>
                             )}
-                            <Button type="submit" disabled={loading} className="w-full mt-2 bg-primary hover:bg-primary/90 text-white">
+                            <Button type="submit" disabled={loading} className="w-full mt-2">
                                 {loading ? (
-                                    <span className="flex items-center"><Loader2 className="mr-2 h-4 w-4 animate-spin" />제출 중...</span>
+                                    <span className="flex items-center gap-2"><Loader2 className="h-4 w-4 animate-spin" />제출 중...</span>
                                 ) : (
                                     "데모 신청하기"
                                 )}

@@ -96,7 +96,7 @@ export default function BlogPostTable({ posts, onEdit, onDelete, onToggleFeature
                                             onClick={(e) => { e.stopPropagation(); onDelete(post) }}
                                             title="휴지통으로 이동"
                                         >
-                                            <Trash2 className="w-4 h-4 text-red-400" />
+                                            <Trash2 className="w-4 h-4 text-[#B85C33]" />
                                         </Button>
                                     </div>
                                 </td>

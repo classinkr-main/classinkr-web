@@ -11,8 +11,8 @@ const DUMMY_PARTNERS_MAP: Record<string, string> = {
   p1: "삼성초등학교", p2: "판교중학교", p3: "해운대여자고등학교", p4: "서초과학기술원", p5: "강동초등학교",
 }
 const DUMMY_CONTRACTS_LIST = [
-  { id: "c1", contract_number: "C-2026-001", quote_id: "q1", partner_id: "p1", title: "ClassIn Board 납품 계약",    status: "partner_signed", total_amount: 25000000, content_html: "<h2>ClassIn Board 납품 계약서</h2><p>본 계약은 삼성초등학교(이하 '갑')와 ClassIn(이하 '을') 사이에 체결된 납품 계약입니다.</p>", notes: null,                  valid_from: "2026-03-10", valid_until: "2026-12-31", sign_token: "tok_demo_abc123", partner_signed_at: "2026-03-12T14:30:00Z", partner_signature_url: null, partner_signed_ip: "1.2.3.4", admin_signed_at: null,               admin_signature_url: null, admin_signed_by: null, created_by: null, created_at: "2026-03-10T00:00:00Z", updated_at: "2026-03-12T00:00:00Z" },
-  { id: "c3", contract_number: "C-2026-002", quote_id: "q3", partner_id: "p3", title: "CB-75 납품 및 설치 계약",   status: "completed",      total_amount: 12000000, content_html: "<p>CB-75 3대 납품 계약서</p>", notes: null, valid_from: "2026-02-20", valid_until: "2026-12-31", sign_token: "tok_demo_ghi789", partner_signed_at: "2026-02-22T10:00:00Z", partner_signature_url: null, partner_signed_ip: "5.6.7.8",  admin_signed_at: "2026-02-23T09:00:00Z", admin_signature_url: null, admin_signed_by: null, created_by: null, created_at: "2026-02-20T00:00:00Z", updated_at: "2026-02-23T00:00:00Z" },
+  { id: "c1", contract_number: "C-2026-001", quote_id: "q1", partner_id: "p1", title: "전자칠판 납품 계약",    status: "partner_signed", total_amount: 25000000, content_html: "<h2>전자칠판 납품 계약서</h2><p>본 계약은 삼성초등학교(이하 '갑')와 ClassIn(이하 '을') 사이에 체결된 납품 계약입니다.</p>", notes: null,                  valid_from: "2026-03-10", valid_until: "2026-12-31", sign_token: "tok_demo_abc123", partner_signed_at: "2026-03-12T14:30:00Z", partner_signature_url: null, partner_signed_ip: "1.2.3.4", admin_signed_at: null,               admin_signature_url: null, admin_signed_by: null, created_by: null, created_at: "2026-03-10T00:00:00Z", updated_at: "2026-03-12T00:00:00Z" },
+  { id: "c3", contract_number: "C-2026-002", quote_id: "q3", partner_id: "p3", title: "전자칠판 75\" 납품 및 설치 계약",   status: "completed",      total_amount: 12000000, content_html: "<p>전자칠판 75\" 3대 납품 계약서</p>", notes: null, valid_from: "2026-02-20", valid_until: "2026-12-31", sign_token: "tok_demo_ghi789", partner_signed_at: "2026-02-22T10:00:00Z", partner_signature_url: null, partner_signed_ip: "5.6.7.8",  admin_signed_at: "2026-02-23T09:00:00Z", admin_signature_url: null, admin_signed_by: null, created_by: null, created_at: "2026-02-20T00:00:00Z", updated_at: "2026-02-23T00:00:00Z" },
   { id: "c2", contract_number: "C-2026-003", quote_id: null, partner_id: "p4", title: "서초과기원 유지보수 계약",   status: "completed",      total_amount: 18000000, content_html: null,                                                                                                                                                                                    notes: "연간 유지보수", valid_from: "2026-01-01", valid_until: "2026-12-31", sign_token: "tok_demo_def456", partner_signed_at: "2026-01-20T10:00:00Z", partner_signature_url: null, partner_signed_ip: "9.9.9.9",  admin_signed_at: "2026-01-21T09:00:00Z", admin_signature_url: null, admin_signed_by: null, created_by: null, created_at: "2026-01-18T00:00:00Z", updated_at: "2026-01-21T00:00:00Z" },
 ] satisfies Array<Omit<Contract, "version">>
 
@@ -22,11 +22,11 @@ const STATUS_LABEL: Record<ContractStatus, string> = {
 }
 const STATUS_COLOR: Record<ContractStatus, string> = {
   draft: "bg-[#f0f0ec] text-[#1a1a1a]/50",
-  sent: "bg-blue-50 text-blue-600",
+  sent: "bg-[#ECFDF5] text-[#084734]",
   partner_signed: "bg-yellow-50 text-yellow-700",
-  admin_signed: "bg-green-50 text-green-700",
-  completed: "bg-green-100 text-green-800 font-semibold",
-  cancelled: "bg-red-50 text-red-400",
+  admin_signed: "bg-[#D1FAE5] text-[#065c41]",
+  completed: "bg-[#D1FAE5] text-[#065c41] font-semibold",
+  cancelled: "bg-[#FEF3EE] text-[#B85C33]",
 }
 
 function adminFetch(url: string, options?: RequestInit) {
@@ -85,7 +85,7 @@ function SignatureCanvas({ onSave }: { onSave: (dataUrl: string) => void }) {
 
   return (
     <div className="space-y-2">
-      <div className="border-2 border-dashed border-[#e8e8e4] rounded-xl overflow-hidden bg-white">
+      <div className="border border-dashed border-[#e8e8e4] rounded-xl overflow-hidden bg-white">
         <canvas
           ref={canvasRef}
           width={480}
@@ -254,7 +254,7 @@ export default function ContractsPage() {
                   <td className="px-4 py-3">
                     <div className="flex items-center justify-end gap-1">
                       {c.status === "draft" && (
-                        <Button variant="ghost" size="sm" className="h-7 px-2 text-xs text-blue-600" onClick={() => handleSend(c)}>
+                        <Button variant="ghost" size="sm" className="h-7 px-2 text-xs text-[#084734]" onClick={() => handleSend(c)}>
                           <Send className="w-3.5 h-3.5 mr-1" />발송
                         </Button>
                       )}
@@ -264,12 +264,12 @@ export default function ContractsPage() {
                         </Button>
                       )}
                       {c.status === "partner_signed" && (
-                        <Button variant="ghost" size="sm" className="h-7 px-2 text-xs text-purple-600"
+                        <Button variant="ghost" size="sm" className="h-7 px-2 text-xs text-[#615D59]"
                           onClick={() => { setSelected(c); setShowSign(true) }}>
                           <PenLine className="w-3.5 h-3.5 mr-1" />서명
                         </Button>
                       )}
-                      <Button variant="ghost" size="sm" className="h-7 px-2 text-xs text-red-400" onClick={() => handleDelete(c.id)}>
+                      <Button variant="ghost" size="sm" className="h-7 px-2 text-xs text-[#B85C33]" onClick={() => handleDelete(c.id)}>
                         <Trash2 className="w-3.5 h-3.5" />
                       </Button>
                     </div>

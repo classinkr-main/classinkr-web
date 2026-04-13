@@ -60,7 +60,7 @@ const STATUS_LABEL = {
 } as const
 
 const STATUS_STYLE = {
-  lead: "bg-blue-50 text-blue-700",
+  lead: "bg-[#ECFDF5] text-[#084734]",
   active: "bg-emerald-50 text-emerald-700",
   paused: "bg-slate-100 text-slate-700",
   churn_risk: "bg-amber-50 text-amber-700",
@@ -431,8 +431,8 @@ export default function PartnerWorkspacePageClient({
             label: "계약 대기",
             value: totalContractWaiting,
             sub: "견적/계약 검토 필요",
-            icon: <Handshake className="h-4 w-4 text-blue-600" />,
-            accent: "bg-blue-50",
+            icon: <Handshake className="h-4 w-4 text-[#084734]" />,
+            accent: "bg-[#ECFDF5]",
           },
           {
             label: "실행 중",
@@ -452,8 +452,8 @@ export default function PartnerWorkspacePageClient({
             label: "이슈 필요",
             value: totalIssueNeeded,
             sub: "리스크/메모 기반 판단 필요",
-            icon: <AlertTriangle className="h-4 w-4 text-rose-600" />,
-            accent: "bg-rose-50",
+            icon: <AlertTriangle className="h-4 w-4 text-[#B85C33]" />,
+            accent: "bg-[#FEF3EE]",
           },
         ].map((item) => (
           <div key={item.label} className="rounded-2xl border border-[#e8e8e4] bg-white p-5">
@@ -636,7 +636,7 @@ export default function PartnerWorkspacePageClient({
                   {workspace.partner.tags.slice(0, 3).map((tag) => (
                     <span
                       key={tag}
-                      className="rounded-full bg-blue-50 px-2.5 py-1 text-[11px] font-medium text-blue-700"
+                      className="rounded-full bg-[#ECFDF5] px-2.5 py-1 text-[11px] font-medium text-[#084734]"
                     >
                       #{tag}
                     </span>

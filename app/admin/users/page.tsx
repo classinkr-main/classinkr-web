@@ -17,7 +17,7 @@ function adminFetch(url: string) {
 const ROLE_LABEL = { admin: "관리자", branch: "지사장" }
 const ROLE_COLOR = {
   admin: "bg-[#111110] text-white",
-  branch: "bg-blue-50 text-blue-600",
+  branch: "bg-[#ECFDF5] text-[#084734]",
 }
 
 export default function UsersPage() {
@@ -93,7 +93,7 @@ export default function UsersPage() {
               <ul>
                 {branches.map((u, i) => (
                   <li key={i} className="flex items-center gap-3 px-5 py-3.5 border-b border-[#e8e8e4] last:border-0">
-                    <div className="w-8 h-8 rounded-full bg-blue-50 flex items-center justify-center text-[12px] font-bold text-blue-600 shrink-0">
+                    <div className="w-8 h-8 rounded-full bg-[#ECFDF5] flex items-center justify-center text-[12px] font-bold text-[#084734] shrink-0">
                       {u.name[0]}
                     </div>
                     <div className="flex-1">

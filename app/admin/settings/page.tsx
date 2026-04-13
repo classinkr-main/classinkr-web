@@ -57,7 +57,7 @@ function Toast({ msg, type }: { msg: string; type: "success" | "error" }) {
     <div
       className={cn(
         "fixed bottom-6 right-6 z-50 flex items-center gap-2.5 rounded-xl px-4 py-3 text-[13px] font-medium shadow-xl animate-in slide-in-from-bottom-2 duration-200",
-        type === "success" ? "bg-[#111110] text-white" : "bg-red-500 text-white"
+        type === "success" ? "bg-[#111110] text-white" : "bg-[#B85C33] text-white"
       )}
     >
       {type === "success" ? (
@@ -271,9 +271,9 @@ function WebhookRow({
               className={cn(
                 "flex items-center gap-1.5 whitespace-nowrap rounded-lg border px-3 py-2 text-[12px] font-medium transition-all",
                 status === "success"
-                  ? "border-green-200 bg-green-50 text-green-600"
+                  ? "border-[#D1FAE5] bg-[#ECFDF5] text-[#084734]"
                   : status === "error"
-                    ? "border-red-200 bg-red-50 text-red-500"
+                    ? "border-[#F6D5C5] bg-[#FEF3EE] text-[#B85C33]"
                     : "border-[#e8e8e4] bg-[#f0f0ec] text-[#1a1a1a]/60 hover:bg-[#e8e8e4]"
               )}
             >
@@ -305,7 +305,7 @@ function WebhookRow({
             <p
               className={cn(
                 "mt-1.5 text-[11px]",
-                status === "success" ? "text-green-600" : "text-red-400"
+                status === "success" ? "text-[#084734]" : "text-[#B85C33]"
               )}
             >
               {statusMsg}
@@ -684,9 +684,9 @@ export default function SettingsPage() {
   if (loadError || !settings || !initialSettings) {
     return (
       <div className="max-w-[1320px] px-4 pt-8 sm:px-6 sm:pt-10 lg:px-8">
-        <div className="rounded-2xl border border-red-200 bg-red-50 px-5 py-4 text-[13px] text-red-700">
+        <div className="rounded-2xl border border-[#F6D5C5] bg-[#FEF3EE] px-5 py-4 text-[13px] text-[#B85C33]">
           <p className="font-medium">설정 로드 실패</p>
-          <p className="mt-1 text-[12px] leading-5 text-red-600/80">{loadError ?? "설정을 불러오지 못했습니다."}</p>
+          <p className="mt-1 text-[12px] leading-5 text-[#9A4A27]/80">{loadError ?? "설정을 불러오지 못했습니다."}</p>
           <Button className="mt-4 gap-1.5" variant="outline" onClick={() => void loadSettings()}>
             다시 시도
           </Button>

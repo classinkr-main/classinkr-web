@@ -117,7 +117,7 @@ export default function AutomationRuleDetail({
             </Button>
             <Button
               variant="outline" size="sm"
-              className="h-7 px-2 text-red-400 hover:text-red-500 hover:border-red-200"
+              className="h-7 px-2 text-[#B85C33] hover:text-[#9A4A27] hover:border-[#F6D5C5]"
               onClick={() => onDelete(rule)}
             >
               <Trash2 className="w-3 h-3" />
@@ -186,12 +186,12 @@ export default function AutomationRuleDetail({
                 <div key={log.id} className="flex items-center gap-2.5">
                   {log.status === "sent"
                     ? <CheckCircle className="w-3.5 h-3.5 text-green-500 flex-shrink-0" />
-                    : <XCircle className="w-3.5 h-3.5 text-red-400 flex-shrink-0" />
+                    : <XCircle className="w-3.5 h-3.5 text-[#B85C33] flex-shrink-0" />
                   }
                   <span className="text-[11px] text-[#1a1a1a]/50 flex-1">{formatDate(log.triggeredAt)}</span>
                   {log.status === "sent"
                     ? <span className="text-[11px] font-medium text-[#111110]">{log.recipientCount}명</span>
-                    : <span className="text-[10px] text-red-400 truncate max-w-[120px]">{log.errorMessage ?? "실패"}</span>
+                    : <span className="text-[10px] text-[#B85C33] truncate max-w-[120px]">{log.errorMessage ?? "실패"}</span>
                   }
                 </div>
               ))}

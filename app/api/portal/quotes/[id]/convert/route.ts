@@ -36,6 +36,15 @@ export async function POST(
       doc.deal_id,
       ctx.userId ?? null
     );
+    const sourceQuote =
+      version.structured_json &&
+      typeof version.structured_json === "object" &&
+      !Array.isArray(version.structured_json) &&
+      version.structured_json.sourceQuote &&
+      typeof version.structured_json.sourceQuote === "object" &&
+      !Array.isArray(version.structured_json.sourceQuote)
+        ? (version.structured_json.sourceQuote as Record<string, unknown>)
+        : null;
 
     const actor = getActorInfo(ctx);
     await logActivity({
@@ -47,8 +56,16 @@ export async function POST(
       target_type: "contract_document",
       target_id: contractDocument.id,
       summary: `견적 ${doc.quote_number} → 계약 ${contractDocument.contract_number} 전환`,
-      before_json: { quote_document_id: id },
-      after_json: contractDocument as unknown as Record<string, unknown>,
+      before_json: {
+        quote_document_id: id,
+        quote_number: doc.quote_number,
+      },
+      after_json: {
+        contract_document_id: contractDocument.id,
+        contract_number: contractDocument.contract_number,
+        contract_version_id: version.id,
+        source_quote: sourceQuote,
+      },
     });
 
     return NextResponse.json(

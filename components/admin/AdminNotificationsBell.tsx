@@ -1,6 +1,6 @@
 "use client"
 
-import { Bell, CheckCheck, Loader2 } from "lucide-react"
+import { Bell, CheckCheck, Loader2, X } from "lucide-react"
 import { useCallback, useEffect, useRef, useState } from "react"
 import { useRouter } from "next/navigation"
 
@@ -105,6 +105,21 @@ export default function AdminNotificationsBell() {
     }
   }, [])
 
+  const handleDeleteItem = useCallback(async (e: React.MouseEvent, id: string) => {
+    e.stopPropagation()
+    setItems((current) => current.filter((item) => item.id !== id))
+    setUnreadCount((current) => {
+      const item = items.find((i) => i.id === id)
+      return item?.status === "unread" ? Math.max(current - 1, 0) : current
+    })
+    try {
+      await adminFetchJson(`/api/admin/notifications/${id}`, { method: "DELETE" })
+    } catch (error) {
+      console.error("[admin notifications] delete failed", error)
+      void load(true)
+    }
+  }, [items, load])
+
   const handleOpenItem = useCallback(
     async (item: NotificationInboxItem) => {
       if (item.status === "unread") {
@@ -197,56 +212,66 @@ export default function AdminNotificationsBell() {
                   const tone = NOTIFICATION_TONE_STYLES[item.tone]
 
                   return (
-                    <button
-                      key={item.id}
-                      type="button"
-                      onClick={() => void handleOpenItem(item)}
-                      className={cn(
-                        "flex w-full items-start gap-3 px-5 py-4 text-left transition-colors",
-                        tone.panel
-                      )}
-                    >
-                      <div
+                    <div key={item.id} className="group relative">
+                      <button
+                        type="button"
+                        onClick={() => void handleOpenItem(item)}
                         className={cn(
-                          "mt-0.5 flex h-9 w-9 shrink-0 items-center justify-center rounded-2xl",
-                          tone.icon
+                          "flex w-full items-start gap-3 px-5 py-4 pr-10 text-left transition-colors",
+                          tone.panel
                         )}
                       >
-                        <NotificationIcon iconKey={item.iconKey} />
-                      </div>
+                        <div
+                          className={cn(
+                            "mt-0.5 flex h-9 w-9 shrink-0 items-center justify-center rounded-2xl",
+                            tone.icon
+                          )}
+                        >
+                          <NotificationIcon iconKey={item.iconKey} />
+                        </div>
 
-                      <div className="min-w-0 flex-1">
-                        <div className="flex items-start justify-between gap-3">
-                          <p className="truncate text-[13px] font-semibold text-[#111110]">
-                            {item.title}
+                        <div className="min-w-0 flex-1">
+                          <div className="flex items-start justify-between gap-3">
+                            <p className="truncate text-[13px] font-semibold text-[#111110]">
+                              {item.title}
+                            </p>
+                            <div className="flex items-center gap-2">
+                              {item.status === "unread" ? (
+                                <span className="h-2 w-2 rounded-full bg-[#111110]" />
+                              ) : null}
+                              <span className="shrink-0 text-[11px] text-[#1a1a1a]/35">
+                                {formatRelativeTime(item.createdAt)}
+                              </span>
+                            </div>
+                          </div>
+                          <p className="mt-1 line-clamp-2 text-[12px] leading-5 text-[#1a1a1a]/60">
+                            {item.message}
                           </p>
-                          <div className="flex items-center gap-2">
-                            {item.status === "unread" ? (
-                              <span className="h-2 w-2 rounded-full bg-[#111110]" />
-                            ) : null}
-                            <span className="shrink-0 text-[11px] text-[#1a1a1a]/35">
-                              {formatRelativeTime(item.createdAt)}
+                          <div className="mt-2 flex items-center gap-2">
+                            <span
+                              className={cn(
+                                "rounded-full border px-2 py-0.5 text-[10px] font-medium uppercase tracking-wide",
+                                tone.badge
+                              )}
+                            >
+                              {item.notificationType.replaceAll("_", " ")}
+                            </span>
+                            <span className="text-[10px] uppercase tracking-wide text-[#1a1a1a]/30">
+                              {item.categoryTag}
                             </span>
                           </div>
                         </div>
-                        <p className="mt-1 line-clamp-2 text-[12px] leading-5 text-[#1a1a1a]/60">
-                          {item.message}
-                        </p>
-                        <div className="mt-2 flex items-center gap-2">
-                          <span
-                            className={cn(
-                              "rounded-full border px-2 py-0.5 text-[10px] font-medium uppercase tracking-wide",
-                              tone.badge
-                            )}
-                          >
-                            {item.notificationType.replaceAll("_", " ")}
-                          </span>
-                          <span className="text-[10px] uppercase tracking-wide text-[#1a1a1a]/30">
-                            {item.categoryTag}
-                          </span>
-                        </div>
-                      </div>
-                    </button>
+                      </button>
+
+                      <button
+                        type="button"
+                        onClick={(e) => void handleDeleteItem(e, item.id)}
+                        className="absolute right-3 top-3 hidden h-6 w-6 items-center justify-center rounded-full text-[#1a1a1a]/30 transition-colors hover:bg-[#f0f0ec] hover:text-[#1a1a1a]/70 group-hover:flex"
+                        aria-label="알림 삭제"
+                      >
+                        <X className="h-3.5 w-3.5" />
+                      </button>
+                    </div>
                   )
                 })}
               </div>

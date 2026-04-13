@@ -56,6 +56,7 @@ function readOptionalQuoteDetails(body: JsonObject): PartnerQuoteDetailsInput | 
   const lineItems = (rawLineItems ?? []).map((item, index) => readQuoteLineItem(item, index))
 
   return {
+    templateId: readOptionalString(value, "templateId", "견적 템플릿 ID"),
     estimateNumber: readOptionalString(value, "estimateNumber", "견적번호"),
     workflowStatus: readOptionalEnum(value, "workflowStatus", "견적 진행 상태", QUOTE_WORKFLOW_STATUS_VALUES),
     issuedAt,

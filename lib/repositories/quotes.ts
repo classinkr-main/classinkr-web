@@ -1,5 +1,6 @@
 "server-only";
 
+import { getProductBySku } from "@/lib/product-templates";
 import { createSupabaseAdminClient } from "@/lib/supabase/admin";
 import type {
   Quote, QuoteInsert, QuoteUpdate,
@@ -69,20 +70,34 @@ export async function getQuote(id: string): Promise<QuoteWithItems | null> {
 
   return { ...quote, items: items ?? [] };
 }
-
 export async function createQuote(
   input: QuoteInsert,
   items: Omit<QuoteItemInsert, "quote_id">[]
 ): Promise<QuoteWithItems> {
   const supabase = createSupabaseAdminClient();
+
+  // 템플릿 SKU가 있는 경우 서버 측에서 단가를 한 번 더 보정한다.
+  const verifiedItems = items.map((item) => {
+    const template = item.sku ? getProductBySku(item.sku) : null;
+    return {
+      ...item,
+      unit_price: template ? template.unit_price : Number(item.unit_price || 0),
+    };
+  });
+
   const { data: quote, error } = await supabase
     .from("quotes")
-    .insert(input)
+    .insert({
+      ...input,
+      subtotal: Number(input.subtotal || 0),
+      tax_amount: Number(input.tax_amount || 0),
+      total_amount: Number(input.total_amount || 0),
+    })
     .select()
     .single();
   if (error) throw error;
 
-  const itemRows = items.map((item, idx) =>
+  const itemRows = verifiedItems.map((item, idx) =>
     normalizeQuoteItemInput(item, quote.id, idx)
   );
   const { data: savedItems, error: iErr } = await supabase

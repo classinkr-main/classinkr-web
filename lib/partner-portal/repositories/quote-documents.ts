@@ -12,6 +12,11 @@ import type {
   QuoteDocumentShare,
 } from "@/lib/partner-portal/types";
 
+function isExpired(expiresAt?: string | null) {
+  if (!expiresAt) return false;
+  return new Date(expiresAt).getTime() < Date.now();
+}
+
 /* ─── Number Generation ─────────────────────────────────── */
 
 async function generateQuoteNumber(): Promise<string> {
@@ -122,4 +127,131 @@ export async function createQuoteDocumentShare(input: {
 
   if (error) throw error;
   return data as QuoteDocumentShare;
+}
+
+async function getResolvableQuoteVersion(document: QuoteDocument): Promise<QuoteDocumentVersion | null> {
+  const supabase = createSupabaseAdminClient();
+
+  if (document.current_version_id) {
+    const { data, error } = await supabase
+      .from("quote_document_versions")
+      .select("*")
+      .eq("id", document.current_version_id)
+      .maybeSingle();
+
+    if (!error && data) return data as QuoteDocumentVersion;
+  }
+
+  const { data, error } = await supabase
+    .from("quote_document_versions")
+    .select("*")
+    .eq("quote_document_id", document.id)
+    .order("version_number", { ascending: false })
+    .limit(1)
+    .maybeSingle();
+
+  if (error || !data) return null;
+  return data as QuoteDocumentVersion;
+}
+
+export async function ensureQuoteDocumentShare(input: {
+  quote_document_id: string;
+  access_mode?: "view" | "sign";
+  expires_at?: string | null;
+  created_by?: string | null;
+}): Promise<{
+  document: QuoteDocument;
+  version: QuoteDocumentVersion;
+  share: QuoteDocumentShare;
+}> {
+  const supabase = createSupabaseAdminClient();
+  const document = await getQuoteDocument(input.quote_document_id);
+  if (!document) {
+    throw new Error("견적서를 찾을 수 없습니다.");
+  }
+
+  const version = await getResolvableQuoteVersion(document);
+  if (!version) {
+    throw new Error("공유할 견적 버전이 없습니다.");
+  }
+
+  const accessMode = input.access_mode ?? "view";
+  const { data: existingShares, error: shareError } = await supabase
+    .from("quote_document_shares")
+    .select("*")
+    .eq("quote_document_version_id", version.id)
+    .eq("access_mode", accessMode)
+    .order("created_at", { ascending: false })
+    .limit(20);
+
+  if (shareError) throw shareError;
+  const existingShare = (existingShares as QuoteDocumentShare[] | null)?.find(
+    (candidate) => !isExpired(candidate.expires_at)
+  );
+  if (existingShare) {
+    return {
+      document,
+      version,
+      share: existingShare,
+    };
+  }
+
+  const share = await createQuoteDocumentShare({
+    quote_document_version_id: version.id,
+    access_mode: accessMode,
+    expires_at: input.expires_at ?? null,
+    created_by: input.created_by ?? null,
+  });
+
+  return { document, version, share };
+}
+
+export async function getPublicQuoteByToken(token: string): Promise<{
+  share: QuoteDocumentShare;
+  document: QuoteDocument;
+  version: QuoteDocumentVersion;
+  customer_name: string | null;
+} | null> {
+  const supabase = createSupabaseAdminClient();
+
+  const { data: shareData, error: shareError } = await supabase
+    .from("quote_document_shares")
+    .select("*")
+    .eq("token", token)
+    .maybeSingle();
+
+  if (shareError || !shareData) return null;
+
+  const share = shareData as QuoteDocumentShare;
+  if (isExpired(share.expires_at)) {
+    return null;
+  }
+
+  const { data: versionData, error: versionError } = await supabase
+    .from("quote_document_versions")
+    .select("*")
+    .eq("id", share.quote_document_version_id)
+    .maybeSingle();
+
+  if (versionError || !versionData) return null;
+  const version = versionData as QuoteDocumentVersion;
+
+  const document = await getQuoteDocument(version.quote_document_id);
+  if (!document) return null;
+
+  const { data: dealData } = await supabase
+    .from("deals")
+    .select("customers(name)")
+    .eq("id", document.deal_id)
+    .maybeSingle();
+
+  const customerName =
+    (dealData as { customers?: { name?: string | null } | null } | null)?.customers?.name ?? null;
+
+  return {
+    share,
+    document,
+    version,
+    customer_name: customerName,
+  };
 }

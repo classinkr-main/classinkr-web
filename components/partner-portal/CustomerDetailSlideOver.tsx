@@ -18,14 +18,14 @@ interface Props {
 }
 
 const STAGE_COLOR: Record<DealStage, string> = {
-  contact: "bg-stone-100 text-stone-600",
-  quote: "bg-blue-100 text-blue-700",
-  contract: "bg-violet-100 text-violet-700",
-  confirmed: "bg-indigo-100 text-indigo-700",
+  contact: "bg-[#f0f0ec] text-[#615D59]",
+  quote: "bg-[#ECFDF5] text-[#084734]",
+  contract: "bg-[#D1FAE5] text-[#065c41]",
+  confirmed: "bg-[#D1FAE5] text-[#065c41]",
   installation: "bg-orange-100 text-orange-700",
   payment: "bg-emerald-100 text-emerald-700",
-  closed: "bg-gray-100 text-gray-500",
-  cancelled: "bg-red-100 text-red-500",
+  closed: "bg-[#f0f0ec] text-[#A39E98]",
+  cancelled: "bg-[#FEF3EE] text-[#B85C33]",
 };
 
 const STAGE_LABEL: Record<DealStage, string> = {
@@ -104,7 +104,7 @@ export function CustomerDetailSlideOver({ customerId, onClose, onEdit }: Props) 
 
         {error && (
           <div className="flex flex-1 flex-col items-center justify-center gap-3 p-8">
-            <p className="text-sm text-red-500">{error}</p>
+            <p className="text-sm text-[#B85C33]">{error}</p>
             <button
               onClick={onClose}
               className="text-xs text-[#1a1a1a]/50 underline"

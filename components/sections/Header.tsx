@@ -13,6 +13,7 @@ const navItems = [
     { name: "요금제", href: "/pricing" },
     { name: "블로그", href: "/blog" },
     { name: "행사", href: "/events" },
+    { name: "회사 소개", href: "/about" },
 ]
 
 const productTabs = [
@@ -39,14 +40,12 @@ export function Header() {
         return () => window.removeEventListener("scroll", handleScroll)
     }, [])
 
-    const isLightModeHeader = true;
-
     return (
         <header
             className={cn(
                 "fixed top-0 left-0 right-0 z-50 transition-all duration-300",
                 isScrolled
-                    ? "bg-white/90 backdrop-blur-md border-b border-slate-200 shadow-sm py-4"
+                    ? "bg-white/92 backdrop-blur-md border-b border-black/[0.06] shadow-[0_1px_0_rgba(0,0,0,0.04)] py-4"
                     : "bg-white/60 backdrop-blur-sm py-6"
             )}
         >
@@ -63,7 +62,7 @@ export function Header() {
                 </Link>
 
                 <button
-                    className="md:hidden p-2 text-slate-800"
+                    className="md:hidden p-2 text-[#111110]"
                     onClick={() => setIsMobileMenuOpen(!isMobileMenuOpen)}
                 >
                     {isMobileMenuOpen ? <X size={24} /> : <Menu size={24} />}
@@ -72,7 +71,7 @@ export function Header() {
                 <nav className={cn(
                     "items-center gap-8",
                     isMobileMenuOpen
-                        ? "absolute top-full left-0 w-full bg-white border-b border-slate-200 flex flex-col items-center py-8 gap-6 shadow-xl"
+                        ? "absolute top-full left-0 w-full bg-white border-b border-black/[0.08] flex flex-col items-center py-8 gap-6 shadow-[0_8px_24px_rgba(0,0,0,0.06)]"
                         : "hidden md:flex"
                 )}>
                     {navItems.map((item) => {
@@ -86,17 +85,17 @@ export function Header() {
                                     href={item.href}
                                     onClick={() => setIsMobileMenuOpen(false)}
                                     className={cn(
-                                        "text-sm font-medium transition-colors",
+                                        "text-[15px] font-semibold transition-colors",
                                         isActive
-                                            ? (isLightModeHeader ? "text-primary font-bold" : "text-white font-bold")
-                                            : (isLightModeHeader ? "text-slate-800 hover:text-primary" : "text-slate-300 hover:text-white")
+                                            ? "text-[#084734]"
+                                            : "text-[#111110] hover:text-[#084734]"
                                     )}
                                 >
                                     {item.name}
                                 </Link>
                                 {isOnProduct && (
                                     <div className="absolute top-full left-1/2 -translate-x-1/2 pt-3">
-                                        <div className="flex gap-1 bg-white rounded-full shadow-md border border-slate-200 px-1.5 py-1">
+                                        <div className="flex gap-1 bg-white rounded-full shadow-[0_2px_12px_rgba(0,0,0,0.08)] border border-black/[0.08] px-1.5 py-1">
                                             {productTabs.map((tab) => {
                                                 const isTabActive = pathname === tab.href
                                                 return (
@@ -106,8 +105,8 @@ export function Header() {
                                                         className={cn(
                                                             "inline-flex items-center gap-1.5 px-4 py-1.5 rounded-full text-xs font-semibold transition-all whitespace-nowrap",
                                                             isTabActive
-                                                                ? "bg-[#E8F5EE] text-primary shadow-sm"
-                                                                : "text-slate-500 hover:text-slate-800 hover:bg-slate-100"
+                                                                ? "bg-[#ECFDF5] text-[#084734] shadow-sm"
+                                                                : "text-[#615D59] hover:text-[#111110] hover:bg-[#F6F5F4]"
                                                         )}
                                                     >
                                                         <tab.icon className="w-3.5 h-3.5" />
@@ -125,10 +124,10 @@ export function Header() {
                                 href={item.href}
                                 onClick={() => setIsMobileMenuOpen(false)}
                                 className={cn(
-                                    "text-sm font-medium transition-colors",
+                                    "text-[15px] font-semibold transition-colors",
                                     isActive
-                                        ? (isLightModeHeader ? "text-primary font-bold" : "text-white font-bold")
-                                        : (isLightModeHeader ? "text-slate-800 hover:text-primary" : "text-slate-300 hover:text-white")
+                                        ? "text-[#084734]"
+                                        : "text-[#111110] hover:text-[#084734]"
                                 )}
                             >
                                 {item.name}
@@ -149,20 +148,13 @@ export function Header() {
                             "Classin 주최 행사 · 웨비나 초대",
                         ]}
                     >
-                        <button type="button" className={cn("hidden md:flex font-medium transition-colors text-sm cursor-pointer bg-transparent border-none p-0",
-                             isLightModeHeader ? "text-slate-600 hover:text-primary" : "text-white/80 hover:text-white"
-                        )}>
+                        <button type="button" className="hidden md:flex font-semibold transition-colors text-[15px] cursor-pointer bg-transparent border-none p-0 text-[#615D59] hover:text-[#084734]">
                             자료 받아보기
                         </button>
                     </NewsletterModal>
                     <Link
                         href="/contact"
-                        className={cn(
-                            "inline-flex items-center justify-center whitespace-nowrap rounded-md px-4 py-2 text-sm font-semibold shadow-lg transition-all",
-                            isLightModeHeader
-                                ? "bg-primary text-white hover:bg-primary/90"
-                                : "bg-white text-slate-950 hover:bg-white/90"
-                        )}
+                        className="inline-flex items-center justify-center whitespace-nowrap rounded-[6px] px-5 py-2 text-[15px] font-semibold bg-[#084734] text-white hover:bg-[#065c41] active:scale-[0.97] transition-all shadow-sm"
                     >
                         도입 문의
                     </Link>

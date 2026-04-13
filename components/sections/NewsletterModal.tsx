@@ -111,12 +111,12 @@ export function NewsletterModal({
         className={cn(
           "sm:max-w-[460px] shadow-2xl border p-0 overflow-hidden",
           isDark
-            ? "bg-slate-900 border-white/10 text-white"
-            : "bg-white border-slate-200 text-[#111110]"
+            ? "bg-[#1C1B1A] border-white/[0.08] text-white"
+            : "bg-white border-black/[0.08] text-[#111110]"
         )}
       >
         {/* 상단 액센트 바 */}
-        <div className="h-1 w-full bg-gradient-to-r from-[#084734] via-emerald-500 to-[#084734]" />
+        <div className="h-1 w-full bg-gradient-to-r from-[#084734] via-[#6EE7B7] to-[#084734]" />
 
         <div className="px-6 pb-6 pt-5">
           <DialogHeader className="space-y-2 mb-5">
@@ -125,8 +125,8 @@ export function NewsletterModal({
                 className={cn(
                   "inline-flex items-center gap-1.5 text-xs font-semibold px-3 py-1 rounded-full w-fit mb-1",
                   isDark
-                    ? "bg-emerald-500/15 text-emerald-400 border border-emerald-500/20"
-                    : "bg-[#084734]/8 text-[#084734] border border-[#084734]/15"
+                    ? "bg-[#1a3a2a] text-[#6EE7B7] border border-[#6EE7B7]/20"
+                    : "bg-[#ECFDF5] text-[#084734] border border-[#084734]/15"
                 )}
               >
                 <Sparkles className="w-3 h-3" />
@@ -144,7 +144,7 @@ export function NewsletterModal({
             <DialogDescription
               className={cn(
                 "text-sm leading-relaxed",
-                isDark ? "text-slate-400" : "text-slate-500"
+                isDark ? "text-white/60" : "text-[#615D59]"
               )}
             >
               {description}
@@ -163,7 +163,7 @@ export function NewsletterModal({
                 <Mail
                   className={cn(
                     "absolute left-3 top-1/2 -translate-y-1/2 w-4 h-4",
-                    isDark ? "text-slate-500" : "text-slate-400"
+                    isDark ? "text-white/40" : "text-[#A39E98]"
                   )}
                 />
                 <Input
@@ -175,14 +175,14 @@ export function NewsletterModal({
                   className={cn(
                     "pl-10 h-11 transition-all",
                     isDark
-                      ? "bg-white/5 border-white/10 text-white placeholder:text-slate-500 focus-visible:border-emerald-500/50 focus-visible:ring-emerald-500/20"
-                      : "border-slate-200 focus-visible:border-[#084734]/40 focus-visible:ring-[#084734]/10"
+                      ? "bg-white/[0.06] border-white/[0.08] text-white placeholder:text-white/40 focus-visible:border-[#6EE7B7]/50 focus-visible:ring-[#6EE7B7]/15"
+                      : "border-black/[0.08] focus-visible:border-[#084734]/50 focus-visible:ring-[#084734]/10"
                   )}
                 />
               </div>
 
               {error && (
-                <p className="text-sm text-red-400">{error}</p>
+                <p className="text-sm text-[#B85C33]">{error}</p>
               )}
 
               {benefits && benefits.length > 0 && (
@@ -192,10 +192,10 @@ export function NewsletterModal({
                       key={b}
                       className={cn(
                         "flex items-center gap-2 text-xs",
-                        isDark ? "text-slate-400" : "text-slate-500"
+                        isDark ? "text-white/60" : "text-[#615D59]"
                       )}
                     >
-                      <span className="w-1.5 h-1.5 rounded-full bg-emerald-500 shrink-0" />
+                      <span className="w-1.5 h-1.5 rounded-full bg-[#6EE7B7] shrink-0" />
                       {b}
                     </li>
                   ))}
@@ -208,8 +208,8 @@ export function NewsletterModal({
                 className={cn(
                   "w-full h-11 font-semibold transition-all",
                   isDark
-                    ? "bg-emerald-600 hover:bg-emerald-500 text-white"
-                    : "bg-[#084734] hover:bg-[#084734]/90 text-white"
+                    ? "bg-[#084734] hover:bg-[#065c41] text-white"
+                    : "bg-[#084734] hover:bg-[#065c41] text-white"
                 )}
               >
                 {loading ? (
@@ -222,7 +222,7 @@ export function NewsletterModal({
               <p
                 className={cn(
                   "text-[10px] leading-relaxed text-center",
-                  isDark ? "text-slate-600" : "text-slate-400"
+                  isDark ? "text-white/35" : "text-[#A39E98]"
                 )}
               >
                 구독 시 Classin의 교육 인사이트, 제품 업데이트, 행사 안내를 이메일로
@@ -252,13 +252,13 @@ function SuccessState({
       <div
         className={cn(
           "w-14 h-14 rounded-full flex items-center justify-center",
-          isDark ? "bg-emerald-500/15" : "bg-[#084734]/8"
+          isDark ? "bg-[#1a3a2a]" : "bg-[#ECFDF5]"
         )}
       >
         <CheckCircle2
           className={cn(
             "w-7 h-7",
-            isDark ? "text-emerald-400" : "text-[#084734]"
+            isDark ? "text-[#6EE7B7]" : "text-[#084734]"
           )}
         />
       </div>
@@ -267,7 +267,7 @@ function SuccessState({
         <p className={cn("font-bold text-lg", isDark ? "text-white" : "text-[#111110]")}>
           구독이 완료되었습니다!
         </p>
-        <p className={cn("text-sm", isDark ? "text-slate-400" : "text-slate-500")}>
+        <p className={cn("text-sm", isDark ? "text-white/60" : "text-[#615D59]")}>
           {successCta
             ? "아래 버튼을 눌러 바로 확인하세요."
             : "앞으로 유용한 소식을 보내드릴게요."}
@@ -281,7 +281,7 @@ function SuccessState({
             className={cn(
               "w-full h-11 font-semibold",
               isDark
-                ? "bg-emerald-600 hover:bg-emerald-500 text-white"
+                ? "bg-[#084734] hover:bg-[#065c41] text-white"
                 : "bg-[#084734] hover:bg-[#084734]/90 text-white"
             )}
           >
@@ -296,8 +296,8 @@ function SuccessState({
           className={cn(
             "w-full h-9 text-sm",
             isDark
-              ? "text-slate-500 hover:text-slate-300 hover:bg-white/5"
-              : "text-slate-400 hover:text-slate-600"
+              ? "text-white/50 hover:text-white/80 hover:bg-white/[0.05]"
+              : "text-[#615D59] hover:text-[#111110]"
           )}
           onClick={onClose}
         >

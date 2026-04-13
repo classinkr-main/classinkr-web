@@ -59,11 +59,11 @@ export function Comparison() {
                     whileInView={{ opacity: 1, y: 0 }}
                     transition={{ duration: 0.6 }}
                     viewport={{ once: true }}
-                    className="max-w-4xl mx-auto overflow-hidden rounded-2xl border border-[rgba(0,0,0,0.08)] bg-white"
+                    className="max-w-4xl mx-auto overflow-hidden rounded-2xl border border-[rgba(0,0,0,0.08)] bg-white transition-all duration-200 hover:shadow-lg hover:-translate-y-0.5"
                     style={{ boxShadow: 'rgba(0,0,0,0.04) 0px 4px 18px, rgba(0,0,0,0.027) 0px 2px 7.8px, rgba(0,0,0,0.02) 0px 0.8px 2.9px' }}
                 >
                     {/* Table Header */}
-                    <div className="grid grid-cols-3 bg-[#111110] text-white text-sm font-semibold">
+                    <div className="grid grid-cols-1 md:grid-cols-3 bg-[#111110] text-white text-sm font-semibold">
                         <div className="py-4 px-6 text-[#A39E98] text-xs uppercase tracking-wider">영역</div>
                         <div className="py-4 px-6 border-l border-[rgba(255,255,255,0.1)] flex items-center gap-2">
                             <X className="w-4 h-4 text-[#A39E98]" />
@@ -83,7 +83,7 @@ export function Comparison() {
                             whileInView={{ opacity: 1, x: 0 }}
                             transition={{ delay: index * 0.07, duration: 0.4 }}
                             viewport={{ once: true }}
-                            className={`grid grid-cols-3 text-sm border-t border-[rgba(0,0,0,0.05)] ${index % 2 === 0 ? "bg-white" : "bg-[#F6F5F4]/60"}`}
+                            className={`grid grid-cols-1 md:grid-cols-3 text-sm border-t border-[rgba(0,0,0,0.05)] ${index % 2 === 0 ? "bg-white" : "bg-[#F6F5F4]/60"}`}
                         >
                             <div className="py-4 px-6 font-semibold text-[#615D59] flex items-center break-keep">
                                 {row.feature}

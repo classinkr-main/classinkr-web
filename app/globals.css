@@ -21,12 +21,24 @@
   --color-input: var(--input);
   --color-ring: var(--ring);
 
-  --font-sans: "Pretendard Variable", Pretendard, ui-sans-serif, system-ui, sans-serif, "Apple Color Emoji", "Segoe UI Emoji", "Segoe UI Symbol", "Noto Color Emoji";
+  /* ── Classin 브랜드 컬러 직접 노출 (Tailwind 유틸로 사용 가능) ── */
+  --color-green-50: var(--green-50);
+  --color-green-100: var(--green-100);
+  --color-green-muted: var(--green-muted);
+  --color-warm-white: #F6F5F4;
+  --color-warm-dark: #31302E;
+  --color-warm-gray: #615D59;
+  --color-warm-gray-300: #A39E98;
+  --color-near-black: #111110;
 
-  --radius-sm: calc(var(--radius) - 2px);
-  --radius-md: calc(var(--radius) - 2px);
-  --radius-lg: var(--radius);
-  --radius-xl: calc(var(--radius) + 2px);
+  --font-sans: "Pretendard Variable", Pretendard, -apple-system, BlinkMacSystemFont, system-ui, sans-serif;
+
+  --radius-sm: 4px;   /* 인풋, 작은 기능성 UI */
+  --radius-md: 6px;   /* 버튼 */
+  --radius-lg: 8px;   /* 작은 카드, 인라인 요소 */
+  --radius-xl: 12px;  /* 표준 카드 */
+  --radius-2xl: 16px; /* 히어로 카드, 피처 블록 */
+  --radius-full: 9999px; /* 배지, 필 태그 */
 
   --animate-accordion-down: accordion-down 0.3s ease-in-out;
   --animate-accordion-up: accordion-up 0.3s ease-in-out;
@@ -87,51 +99,82 @@
 }
 
 :root {
-  --background: hsl(0 0% 100%);
-  --foreground: hsl(224 71.4% 4.1%);
-  --card: hsl(0 0% 100%);
-  --card-foreground: hsl(224 71.4% 4.1%);
-  --popover: hsl(0 0% 100%);
-  --popover-foreground: hsl(224 71.4% 4.1%);
-  --primary: hsl(162 80% 15%);
-  /* Deep Green #084734 */
-  --primary-foreground: hsl(110 85% 94%);
-  --secondary: hsl(110 85% 94%);
-  /* Pale Green #E5FCCD */
-  --secondary-foreground: hsl(162 80% 15%);
-  --muted: hsl(110 85% 94%);
-  --muted-foreground: hsl(162 40% 40%);
-  --accent: hsl(82 78% 71%);
-  /* Lime Green #CEF17B */
-  --accent-foreground: hsl(162 80% 15%);
+  /* ── Core ── */
+  --background: #FAFAF8;
+  --foreground: #111110;
+
+  /* ── Card / Popover ── */
+  --card: #FFFFFF;
+  --card-foreground: #111110;
+  --popover: #FFFFFF;
+  --popover-foreground: #111110;
+
+  /* ── Brand Green ── */
+  --primary: #084734;
+  --primary-foreground: #FFFFFF;
+  --primary-hover: #065c41;
+
+  /* ── Surfaces ── */
+  --secondary: #F6F5F4;          /* Warm White — section alt bg */
+  --secondary-foreground: #31302E;
+  --muted: #F6F5F4;              /* Warm White */
+  --muted-foreground: #615D59;   /* Warm Gray 500 */
+
+  /* ── Green Surfaces ── */
+  --green-50: #ECFDF5;
+  --green-100: #D1FAE5;
+  --green-muted: #6EE7B7;
+
+  /* ── Accent (lime, 섹션 강조용) ── */
+  --accent: #ECFDF5;
+  --accent-foreground: #084734;
+
+  /* ── Destructive ── */
   --destructive: hsl(0 84.2% 60.2%);
-  --destructive-foreground: hsl(210 40% 98%);
-  --border: hsl(220 13% 91%);
-  --input: hsl(220 13% 91%);
-  --ring: hsl(220 50% 18%);
-  --radius: 0.5rem;
+  --destructive-foreground: #FFFFFF;
+
+  /* ── Border / Input / Ring ── */
+  --border: rgba(0, 0, 0, 0.08);
+  --input: #E5E5E0;
+  --ring: #084734;
+
+  /* ── Radius ── */
+  --radius: 0.375rem;            /* 6px — 버튼 기본 */
+
+  /* ── Card Shadow ── */
+  --shadow-card:
+    rgba(0,0,0,0.04) 0px 4px 18px,
+    rgba(0,0,0,0.027) 0px 2px 7.8px,
+    rgba(0,0,0,0.02) 0px 0.8px 2.9px,
+    rgba(0,0,0,0.01) 0px 0.175px 1px;
+  --shadow-deep:
+    rgba(0,0,0,0.05) 0px 20px 60px,
+    rgba(0,0,0,0.04) 0px 10px 30px,
+    rgba(0,0,0,0.03) 0px 5px 15px,
+    rgba(0,0,0,0.02) 0px 2px 6px,
+    rgba(0,0,0,0.01) 0px 0.5px 2px;
 }
 
 .dark {
-  --background: hsl(224 71.4% 4.1%);
-  --foreground: hsl(210 20% 98%);
-  --card: hsl(224 71.4% 4.1%);
-  --card-foreground: hsl(210 20% 98%);
-  --popover: hsl(224 71.4% 4.1%);
-  --popover-foreground: hsl(210 20% 98%);
-  --primary: hsl(210 20% 98%);
-  --primary-foreground: hsl(220.9 39.3% 11%);
-  --secondary: hsl(215 27.9% 16.9%);
-  --secondary-foreground: hsl(210 20% 98%);
-  --muted: hsl(215 27.9% 16.9%);
-  --muted-foreground: hsl(217.9 10.6% 64.9%);
-  --accent: hsl(215 27.9% 16.9%);
-  --accent-foreground: hsl(210 20% 98%);
+  --background: #111110;
+  --foreground: #F6F5F4;
+  --card: #1C1B1A;
+  --card-foreground: #F6F5F4;
+  --popover: #1C1B1A;
+  --popover-foreground: #F6F5F4;
+  --primary: #6EE7B7;
+  --primary-foreground: #084734;
+  --secondary: #31302E;
+  --secondary-foreground: #F6F5F4;
+  --muted: #31302E;
+  --muted-foreground: #A39E98;
+  --accent: #1a3a2a;
+  --accent-foreground: #6EE7B7;
   --destructive: hsl(0 62.8% 30.6%);
-  --destructive-foreground: hsl(210 40% 98%);
-  --border: hsl(215 27.9% 16.9%);
-  --input: hsl(215 27.9% 16.9%);
-  --ring: hsl(216 34% 17%);
+  --destructive-foreground: #F6F5F4;
+  --border: rgba(255, 255, 255, 0.08);
+  --input: rgba(255, 255, 255, 0.1);
+  --ring: #6EE7B7;
 }
 
 @layer base {
@@ -141,15 +184,54 @@
 
   body {
     @apply bg-background text-foreground;
-    font-family: "Pretendard Variable", Pretendard, -apple-system, BlinkMacSystemFont, "Segoe UI", Roboto, "Helvetica Neue", Arial, sans-serif, "Apple Color Emoji", "Segoe UI Emoji", "Segoe UI Symbol";
+    font-family: "Pretendard Variable", Pretendard, -apple-system, BlinkMacSystemFont, system-ui, sans-serif;
+    font-feature-settings: "kern" 1, "liga" 1;
+    -webkit-font-smoothing: antialiased;
+    -moz-osx-font-smoothing: grayscale;
+    word-break: keep-all;
   }
+
+  /* 헤딩 letter-spacing — DESIGN.md 스펙 */
+  h1 { letter-spacing: -0.04em; }
+  h2 { letter-spacing: -0.03em; }
+  h3 { letter-spacing: -0.02em; }
+  h4 { letter-spacing: -0.01em; }
 }
 
 @layer utilities {
   .container {
     @apply px-4 md:px-12 lg:px-24 mx-auto max-w-[1400px];
   }
+
+  /* ── 카드 그림자 ── */
+  .shadow-card {
+    box-shadow: var(--shadow-card);
+  }
+  .shadow-deep {
+    box-shadow: var(--shadow-deep);
+  }
+
+  /* ── 섹션 배경 교차 ── */
+  .section-white   { background-color: #FFFFFF; }
+  .section-warm    { background-color: #F6F5F4; }
+  .section-green   { background-color: #ECFDF5; }
+
+  /* ── Whisper border ── */
+  .border-whisper  { border: 1px solid rgba(0, 0, 0, 0.08); }
+
+  /* ── 헤딩 letter-spacing 유틸 ── */
+  .tracking-display  { letter-spacing: -0.04em; }   /* 64px hero */
+  .tracking-section  { letter-spacing: -0.03em; }   /* 48px section heading */
+  .tracking-subhead  { letter-spacing: -0.02em; }   /* 32px subheading */
+  .tracking-card     { letter-spacing: -0.015em; }  /* 22px card title */
 }
+
+@keyframes shake {
+  0%,100%{transform:translateX(0)}
+  25%{transform:translateX(-3px)}
+  75%{transform:translateX(3px)}
+}
+.animate-shake{animation:shake .2s ease-in-out}
 
 /* ── Admin Rich Markdown Editor (Tiptap WYSIWYG) ─────────────────── */
 .rich-editor-content {
@@ -263,7 +345,7 @@
 }
 
 .animate-text-gradient {
-  background: linear-gradient(to right, #10b981, #cef17b, #38bdf8, #cef17b, #10b981);
+  background: linear-gradient(to right, #084734, #6EE7B7, #CEF17B, #6EE7B7, #084734);
   background-size: 200% auto;
   color: transparent;
   -webkit-background-clip: text;

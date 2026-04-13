@@ -65,7 +65,7 @@ export default function TemplateCard({ template, rules, onEdit, onDuplicate, onD
           {/* 사용 중 뱃지 */}
           {usedByCount > 0 ? (
             <span
-              className="text-[10px] px-1.5 py-0.5 rounded-full bg-blue-50 text-blue-600 border border-blue-100 flex-shrink-0"
+              className="text-[10px] px-1.5 py-0.5 rounded-full bg-[#ECFDF5] text-[#084734] border border-[#D1FAE5] flex-shrink-0"
               title={usedBy.map((r) => r.name).join(", ")}
             >
               {usedByCount}개 규칙 사용 중
@@ -87,7 +87,7 @@ export default function TemplateCard({ template, rules, onEdit, onDuplicate, onD
             variant="outline" size="sm"
             className={`h-6 px-1.5 ${usedByCount > 0
               ? "text-[#1a1a1a]/20 cursor-not-allowed"
-              : "text-red-400 hover:text-red-500 hover:border-red-200"
+              : "text-[#B85C33] hover:text-[#9A4A27] hover:border-[#F6D5C5]"
             }`}
             onClick={() => usedByCount === 0 && onDelete(template)}
             title={usedByCount > 0 ? `${usedByCount}개 규칙에서 사용 중 — 먼저 규칙을 수정하세요` : "삭제"}

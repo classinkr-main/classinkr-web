@@ -47,22 +47,22 @@ export function DashboardPreview() {
             id="dashboard"
             className="relative overflow-hidden py-20 md:py-32"
             style={{
-                background: "linear-gradient(135deg, #0f0c29 0%, #302b63 50%, #24243e 100%)",
+                background: "linear-gradient(135deg, #031a12 0%, #052e1e 50%, #084734 100%)",
             }}
         >
             {/* 배경 장식 오브 */}
             <div className="pointer-events-none absolute inset-0">
                 <div
                     className="absolute -top-32 -left-32 h-[500px] w-[500px] rounded-full opacity-20"
-                    style={{ background: "radial-gradient(circle, #7c3aed 0%, transparent 70%)" }}
+                    style={{ background: "radial-gradient(circle, #084734 0%, transparent 70%)" }}
                 />
                 <div
                     className="absolute -bottom-40 -right-20 h-[600px] w-[600px] rounded-full opacity-15"
-                    style={{ background: "radial-gradient(circle, #2563eb 0%, transparent 70%)" }}
+                    style={{ background: "radial-gradient(circle, #065c41 0%, transparent 70%)" }}
                 />
                 <div
                     className="absolute top-1/2 left-1/2 h-[400px] w-[400px] -translate-x-1/2 -translate-y-1/2 rounded-full opacity-10"
-                    style={{ background: "radial-gradient(circle, #06b6d4 0%, transparent 70%)" }}
+                    style={{ background: "radial-gradient(circle, #6EE7B7 0%, transparent 70%)" }}
                 />
             </div>
 
@@ -86,7 +86,7 @@ export function DashboardPreview() {
                         {kpis.map((kpi) => (
                             <div
                                 key={kpi.label}
-                                className="rounded-2xl border border-white/10 px-4 py-4 w-28"
+                                className="rounded-2xl border border-white/10 px-4 py-4 w-24 sm:w-28 md:w-32"
                                 style={{ background: "rgba(255,255,255,0.06)", backdropFilter: "blur(16px)" }}
                             >
                                 <div className="mb-2 flex items-center gap-1.5 text-white/40">
@@ -118,8 +118,8 @@ export function DashboardPreview() {
                                     <span className="inline-block h-0.5 w-4 rounded bg-white/25 border-dashed" />
                                     지역 평균
                                 </span>
-                                <span className="flex items-center gap-1.5 text-violet-300">
-                                    <span className="inline-block h-0.5 w-4 rounded" style={{ background: "linear-gradient(90deg,#7c3aed,#38bdf8)" }} />
+                                <span className="flex items-center gap-1.5 text-[#6EE7B7]">
+                                    <span className="inline-block h-0.5 w-4 rounded" style={{ background: "linear-gradient(90deg,#084734,#6EE7B7)" }} />
                                     우리 학원
                                 </span>
                             </div>
@@ -128,12 +128,12 @@ export function DashboardPreview() {
                             <AreaChart data={engagementData} margin={{ top: 5, right: 5, left: -28, bottom: 0 }}>
                                 <defs>
                                     <linearGradient id="gradScore" x1="0" y1="0" x2="1" y2="0">
-                                        <stop offset="0%" stopColor="#7c3aed" />
-                                        <stop offset="100%" stopColor="#38bdf8" />
+                                        <stop offset="0%" stopColor="#084734" />
+                                        <stop offset="100%" stopColor="#6EE7B7" />
                                     </linearGradient>
                                     <linearGradient id="gradScoreFill" x1="0" y1="0" x2="0" y2="1">
-                                        <stop offset="0%" stopColor="#7c3aed" stopOpacity={0.25} />
-                                        <stop offset="100%" stopColor="#38bdf8" stopOpacity={0} />
+                                        <stop offset="0%" stopColor="#084734" stopOpacity={0.25} />
+                                        <stop offset="100%" stopColor="#6EE7B7" stopOpacity={0} />
                                     </linearGradient>
                                 </defs>
                                 <CartesianGrid strokeDasharray="3 3" vertical={false} stroke="rgba(255,255,255,0.06)" />
@@ -179,7 +179,7 @@ export function DashboardPreview() {
                                     strokeWidth={2.5}
                                     fill="url(#gradScoreFill)"
                                     dot={false}
-                                    activeDot={{ r: 5, fill: "#7c3aed", strokeWidth: 0 }}
+                                    activeDot={{ r: 5, fill: "#084734", strokeWidth: 0 }}
                                 />
                             </AreaChart>
                         </ResponsiveContainer>
@@ -198,8 +198,8 @@ export function DashboardPreview() {
                                     <span className="inline-block h-2.5 w-2.5 rounded-sm bg-white/20" />
                                     평균 점수
                                 </span>
-                                <span className="flex items-center gap-1.5 text-cyan-300">
-                                    <span className="inline-block h-2.5 w-2.5 rounded-sm" style={{ background: "linear-gradient(180deg,#38bdf8,#2563eb)" }} />
+                                <span className="flex items-center gap-1.5 text-[#6EE7B7]">
+                                    <span className="inline-block h-2.5 w-2.5 rounded-sm" style={{ background: "linear-gradient(180deg,#6EE7B7,#084734)" }} />
                                     완료율 %
                                 </span>
                             </div>
@@ -208,8 +208,8 @@ export function DashboardPreview() {
                             <BarChart data={homeworkData} margin={{ top: 5, right: 5, left: -28, bottom: 0 }} barGap={4}>
                                 <defs>
                                     <linearGradient id="gradBar" x1="0" y1="0" x2="0" y2="1">
-                                        <stop offset="0%" stopColor="#38bdf8" />
-                                        <stop offset="100%" stopColor="#2563eb" />
+                                        <stop offset="0%" stopColor="#6EE7B7" />
+                                        <stop offset="100%" stopColor="#084734" />
                                     </linearGradient>
                                 </defs>
                                 <CartesianGrid strokeDasharray="3 3" vertical={false} stroke="rgba(255,255,255,0.06)" />

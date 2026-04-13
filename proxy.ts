@@ -7,20 +7,31 @@ import { updateSupabaseSession } from "@/lib/supabase/middleware"
 export async function proxy(req: NextRequest) {
   const { pathname } = req.nextUrl
 
-  const response = await updateSupabaseSession(req)
+  // Supabase 세션 갱신 (전체 라우트)
+  let response: NextResponse
+  try {
+    response = await updateSupabaseSession(req)
+  } catch {
+    response = NextResponse.next({ request: req })
+  }
 
-  if (!pathname.startsWith("/admin")) return response
-  if (pathname === "/admin/login") return response
-  if (isAdminAuthBypassEnabled()) return response
-
-  const admin = await getVerifiedAdminContext(req)
-  if (!admin) {
-    return NextResponse.redirect(new URL("/admin/login", req.url))
+  // 어드민 인증 가드
+  if (
+    pathname.startsWith("/admin") &&
+    pathname !== "/admin/login" &&
+    !isAdminAuthBypassEnabled()
+  ) {
+    const admin = await getVerifiedAdminContext(req)
+    if (!admin) {
+      return NextResponse.redirect(new URL("/admin/login", req.url))
+    }
   }
 
   return response
 }
 
 export const config = {
-  matcher: ["/admin/:path*"],
+  matcher: [
+    "/((?!_next/static|_next/image|_next/webpack-hmr|favicon.ico|images/|icons/|.*\\.(?:svg|png|jpg|jpeg|gif|webp|ico|css|js)$).*)",
+  ],
 }

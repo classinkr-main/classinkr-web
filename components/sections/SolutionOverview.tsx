@@ -39,7 +39,7 @@ export function SolutionOverview() {
     const [activeStep, setActiveStep] = useState(0)
 
     return (
-        <section id="solution" className="py-16 md:py-24 bg-white">
+        <section id="solution" className="py-16 md:py-24 bg-[#F6F5F4]">
             <div className="container mx-auto">
                 <div className="text-center max-w-3xl mx-auto mb-16 px-4">
                     <span className="inline-block py-1 px-3 rounded-full bg-[#ECFDF5] text-[#084734] text-sm font-semibold mb-4">
@@ -61,7 +61,7 @@ export function SolutionOverview() {
                                 key={index}
                                 onClick={() => setActiveStep(index)}
                                 className={cn(
-                                    "relative flex-1 lg:flex-none flex flex-col lg:flex-row items-center lg:items-start gap-3 p-4 lg:p-5 rounded-2xl text-left transition-all duration-300 border-2",
+                                    "relative flex-1 lg:flex-none flex flex-col lg:flex-row items-center lg:items-start gap-3 p-4 lg:p-5 rounded-2xl text-left transition-all duration-300 border",
                                     activeStep === index
                                         ? "bg-white border-[#084734] shadow-[0_4px_18px_rgba(8,71,52,0.12)]"
                                         : "bg-transparent border-transparent hover:bg-[#F6F5F4] opacity-60 hover:opacity-90"

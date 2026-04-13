@@ -122,29 +122,29 @@ const TABS = [
 type Tab = typeof TABS[number]["id"]
 
 const SEVERITY_CONFIG = {
-  critical: { label: "Critical", bg: "bg-red-100 text-red-800 border-red-200" },
+  critical: { label: "Critical", bg: "bg-[#FEF3EE] text-[#9A4A27] border-[#F6D5C5]" },
   high: { label: "High", bg: "bg-orange-100 text-orange-800 border-orange-200" },
   medium: { label: "Medium", bg: "bg-yellow-100 text-yellow-800 border-yellow-200" },
-  low: { label: "Low", bg: "bg-gray-100 text-gray-700 border-gray-200" },
+  low: { label: "Low", bg: "bg-[#f0f0ec] text-[#615D59] border-[#e8e8e4]" },
 }
 
 const BUG_STATUS_CONFIG = {
-  open: { label: "오픈", bg: "bg-red-50 text-red-700" },
-  "in-progress": { label: "진행중", bg: "bg-blue-50 text-blue-700" },
-  resolved: { label: "해결됨", bg: "bg-green-50 text-green-700" },
-  closed: { label: "종료", bg: "bg-gray-100 text-gray-500" },
+  open: { label: "오픈", bg: "bg-[#FEF3EE] text-[#B85C33]" },
+  "in-progress": { label: "진행중", bg: "bg-[#ECFDF5] text-[#084734]" },
+  resolved: { label: "해결됨", bg: "bg-emerald-50 text-emerald-700" },
+  closed: { label: "종료", bg: "bg-[#f0f0ec] text-[#A39E98]" },
 }
 
 const FEATURE_STATUS = {
-  done: { label: "완료", dot: "bg-green-500", text: "text-green-700" },
-  "in-progress": { label: "진행중", dot: "bg-blue-500", text: "text-blue-700" },
-  planned: { label: "예정", dot: "bg-gray-300", text: "text-gray-500" },
+  done: { label: "완료", dot: "bg-emerald-500", text: "text-emerald-700" },
+  "in-progress": { label: "진행중", dot: "bg-[#084734]", text: "text-[#084734]" },
+  planned: { label: "예정", dot: "bg-[#A39E98]", text: "text-[#615D59]" },
 }
 
 const VERSION_STATUS = {
-  done: { badge: "bg-green-100 text-green-800 border-green-200", label: "완료" },
-  "in-progress": { badge: "bg-blue-100 text-blue-800 border-blue-200", label: "진행중" },
-  planned: { badge: "bg-gray-100 text-gray-600 border-gray-200", label: "예정" },
+  done: { badge: "bg-emerald-100 text-emerald-800 border-emerald-200", label: "완료" },
+  "in-progress": { badge: "bg-[#ECFDF5] text-[#084734] border-[#D1FAE5]", label: "진행중" },
+  planned: { badge: "bg-[#f0f0ec] text-[#615D59] border-[#e8e8e4]", label: "예정" },
 }
 
 // ─── Roadmap Tab ─────────────────────────────────────────
@@ -393,7 +393,7 @@ function RoadmapTab({ token }: { token: string }) {
                               <option value="in-progress">진행중</option>
                               <option value="done">완료</option>
                             </select>
-                            <button onClick={() => deleteFeat(ver, feat.id)} className="opacity-0 group-hover:opacity-100 text-[#1a1a1a]/20 hover:text-red-400 transition-all p-0.5">
+                            <button onClick={() => deleteFeat(ver, feat.id)} className="opacity-0 group-hover:opacity-100 text-[#1a1a1a]/20 hover:text-[#B85C33] transition-all p-0.5">
                               <svg className="w-3 h-3" fill="none" viewBox="0 0 24 24" stroke="currentColor" strokeWidth={2}><path strokeLinecap="round" strokeLinejoin="round" d="M6 18L18 6M6 6l12 12" /></svg>
                             </button>
                           </div>
@@ -603,7 +603,7 @@ function BugsTab({ token, userName, onCountChange }: { token: string; userName: 
                   <div className="flex items-center gap-1.5 mb-1.5 flex-wrap">
                     <span className={`text-[10px] font-medium px-1.5 py-0.5 rounded-full border ${sc.bg}`}>{sc.label}</span>
                     <span className={`text-[10px] font-medium px-1.5 py-0.5 rounded-full ${stc.bg}`}>{stc.label}</span>
-                    {bug.environment && <span className="text-[10px] bg-purple-50 text-purple-700 px-1.5 py-0.5 rounded-full">{bug.environment}</span>}
+                    {bug.environment && <span className="text-[10px] bg-[#f0f0ec] text-[#615D59] px-1.5 py-0.5 rounded-full">{bug.environment}</span>}
                     {bug.tags.map((tag) => (
                       <span key={tag} className="text-[10px] bg-[#f5f5f2] text-[#1a1a1a]/50 px-1.5 py-0.5 rounded-full">#{tag}</span>
                     ))}
@@ -629,11 +629,11 @@ function BugsTab({ token, userName, onCountChange }: { token: string; userName: 
                   </select>
                   {isDeleting ? (
                     <div className="flex items-center gap-1">
-                      <button onClick={() => deleteBug(bug.id)} className="text-[10px] px-2 py-1 bg-red-500 text-white rounded-lg hover:bg-red-600 transition-colors">삭제</button>
+                      <button onClick={() => deleteBug(bug.id)} className="text-[10px] px-2 py-1 bg-[#B85C33] text-white rounded-lg hover:bg-[#9A4A27] transition-colors">삭제</button>
                       <button onClick={() => setDeleteConfirm(null)} className="text-[10px] px-2 py-1 border border-[#e8e8e4] rounded-lg hover:bg-[#fafaf8] transition-colors">취소</button>
                     </div>
                   ) : (
-                    <button onClick={() => setDeleteConfirm(bug.id)} className="text-[#1a1a1a]/20 hover:text-red-400 transition-colors p-1">
+                    <button onClick={() => setDeleteConfirm(bug.id)} className="text-[#1a1a1a]/20 hover:text-[#B85C33] transition-colors p-1">
                       <svg className="w-3.5 h-3.5" fill="none" viewBox="0 0 24 24" stroke="currentColor" strokeWidth={2}><path strokeLinecap="round" strokeLinejoin="round" d="M19 7l-.867 12.142A2 2 0 0116.138 21H7.862a2 2 0 01-1.995-1.858L5 7m5 4v6m4-6v6m1-10V4a1 1 0 00-1-1h-4a1 1 0 00-1 1v3M4 7h16" /></svg>
                     </button>
                   )}
@@ -649,9 +649,9 @@ function BugsTab({ token, userName, onCountChange }: { token: string; userName: 
 
 // ─── Patch Notes Tab ──────────────────────────────────────
 const CHANGE_CONFIG: Record<ChangeType, { label: string; bg: string; dot: string }> = {
-  feat:     { label: "신기능",  bg: "bg-blue-50 text-blue-700 border-blue-200",    dot: "bg-blue-500" },
-  fix:      { label: "버그수정", bg: "bg-red-50 text-red-700 border-red-200",      dot: "bg-red-500" },
-  improve:  { label: "개선",    bg: "bg-green-50 text-green-700 border-green-200", dot: "bg-green-500" },
+  feat:     { label: "신기능",  bg: "bg-[#ECFDF5] text-[#084734] border-[#D1FAE5]",    dot: "bg-[#084734]" },
+  fix:      { label: "버그수정", bg: "bg-[#FEF3EE] text-[#B85C33] border-[#F6D5C5]",   dot: "bg-[#B85C33]" },
+  improve:  { label: "개선",    bg: "bg-emerald-50 text-emerald-700 border-emerald-200", dot: "bg-emerald-500" },
   breaking: { label: "주의",    bg: "bg-orange-50 text-orange-700 border-orange-200", dot: "bg-orange-500" },
 }
 
@@ -901,7 +901,7 @@ function PatchNotesTab({ token }: { token: string }) {
                   <button
                     type="button"
                     onClick={() => removeChange(c.id)}
-                    className="text-[#1a1a1a]/20 hover:text-red-400 transition-colors p-1 shrink-0"
+                    className="text-[#1a1a1a]/20 hover:text-[#B85C33] transition-colors p-1 shrink-0"
                   >
                     <svg className="w-3.5 h-3.5" fill="none" viewBox="0 0 24 24" stroke="currentColor" strokeWidth={2}>
                       <path strokeLinecap="round" strokeLinejoin="round" d="M6 18L18 6M6 6l12 12" />
@@ -1005,10 +1005,10 @@ function PatchNotesTab({ token }: { token: string }) {
                       <span className="text-[10px] px-1.5 py-0.5 rounded-full bg-orange-50 text-orange-600 font-medium">⚠ {breakings.length}</span>
                     )}
                     {feats.length > 0 && (
-                      <span className="text-[10px] px-1.5 py-0.5 rounded-full bg-blue-50 text-blue-600 font-medium">feat {feats.length}</span>
+                      <span className="text-[10px] px-1.5 py-0.5 rounded-full bg-[#ECFDF5] text-[#084734] font-medium">feat {feats.length}</span>
                     )}
                     {fixes.length > 0 && (
-                      <span className="text-[10px] px-1.5 py-0.5 rounded-full bg-red-50 text-red-600 font-medium">fix {fixes.length}</span>
+                      <span className="text-[10px] px-1.5 py-0.5 rounded-full bg-[#FEF3EE] text-[#B85C33] font-medium">fix {fixes.length}</span>
                     )}
                     {improves.length > 0 && (
                       <span className="text-[10px] px-1.5 py-0.5 rounded-full bg-green-50 text-green-600 font-medium">개선 {improves.length}</span>
@@ -1030,7 +1030,7 @@ function PatchNotesTab({ token }: { token: string }) {
                     </button>
                     <button
                       onClick={() => handleDelete(note.id)}
-                      className="text-[#1a1a1a]/20 hover:text-red-400 transition-colors p-1"
+                      className="text-[#1a1a1a]/20 hover:text-[#B85C33] transition-colors p-1"
                     >
                       <svg className="w-3 h-3" fill="none" viewBox="0 0 24 24" stroke="currentColor" strokeWidth={2}>
                         <path strokeLinecap="round" strokeLinejoin="round" d="M19 7l-.867 12.142A2 2 0 0116.138 21H7.862a2 2 0 01-1.995-1.858L5 7m5 4v6m4-6v6m1-10V4a1 1 0 00-1-1h-4a1 1 0 00-1 1v3M4 7h16" />
@@ -1087,8 +1087,8 @@ function ArchitectureTab() {
   const sections = [
     {
       title: "Frontend (Next.js 16 App Router)",
-      color: "bg-blue-50 border-blue-200",
-      headerColor: "bg-blue-100",
+      color: "bg-[#ECFDF5] border-[#D1FAE5]",
+      headerColor: "bg-[#D1FAE5]",
       items: [
         { name: "홈페이지", desc: "마케팅 랜딩 페이지 — Hero, Features, Pricing, Blog, FAQ, CTA 섹션별 컴포넌트" },
         { name: "Admin Dashboard", desc: "/admin/* — 미들웨어 쿠키 검증, admin/branch 역할 기반 라우팅" },
@@ -1119,8 +1119,8 @@ function ArchitectureTab() {
     },
     {
       title: "외부 연동",
-      color: "bg-purple-50 border-purple-200",
-      headerColor: "bg-purple-100",
+      color: "bg-[#F6F5F4] border-[#e8e8e4]",
+      headerColor: "bg-[#e8e8e4]",
       items: [
         { name: "Google Sheets", desc: "리드 데이터 동기화 (GOOGLE_SHEET_WEBHOOK_URL)" },
         { name: "ChannelTalk", desc: "리드 이벤트 알림 (CHANNEL_TALK_WEBHOOK_URL)" },
@@ -1224,20 +1224,20 @@ function GitLogTab({ token }: { token: string }) {
 
   if (loading) return <div className="text-center py-12 text-[#1a1a1a]/40 text-[13px]">git log 로딩중...</div>
   if (error) return (
-    <div className="bg-red-50 border border-red-200 rounded-xl p-5 text-red-700 text-[13px]">{error}</div>
+    <div className="bg-[#FEF3EE] border border-[#F6D5C5] rounded-xl p-5 text-[#B85C33] text-[13px]">{error}</div>
   )
 
   const getCommitType = (message: string) => {
-    if (message.startsWith("feat"))     return { label: "feat",     bg: "bg-blue-100 text-blue-800",    dot: "bg-[#1e8aff]" }
-    if (message.startsWith("fix"))      return { label: "fix",      bg: "bg-red-100 text-red-800",      dot: "bg-red-400" }
-    if (message.startsWith("refactor")) return { label: "refactor", bg: "bg-purple-100 text-purple-800", dot: "bg-purple-400" }
-    if (message.startsWith("docs"))     return { label: "docs",     bg: "bg-sky-100 text-sky-800",      dot: "bg-sky-300" }
-    if (message.startsWith("chore"))    return { label: "chore",    bg: "bg-gray-100 text-gray-600",    dot: "bg-[#d0d0cc]" }
-    if (message.startsWith("style"))    return { label: "style",    bg: "bg-pink-100 text-pink-800",    dot: "bg-pink-300" }
+    if (message.startsWith("feat"))     return { label: "feat",     bg: "bg-[#ECFDF5] text-[#084734]",   dot: "bg-[#084734]" }
+    if (message.startsWith("fix"))      return { label: "fix",      bg: "bg-[#FEF3EE] text-[#B85C33]",  dot: "bg-[#B85C33]" }
+    if (message.startsWith("refactor")) return { label: "refactor", bg: "bg-[#f0f0ec] text-[#615D59]",  dot: "bg-[#A39E98]" }
+    if (message.startsWith("docs"))     return { label: "docs",     bg: "bg-[#F6F5F4] text-[#615D59]",  dot: "bg-[#A39E98]" }
+    if (message.startsWith("chore"))    return { label: "chore",    bg: "bg-[#f0f0ec] text-[#615D59]",  dot: "bg-[#d0d0cc]" }
+    if (message.startsWith("style"))    return { label: "style",    bg: "bg-[#D1FAE5] text-[#065c41]",  dot: "bg-[#6EE7B7]" }
     if (message.startsWith("test"))     return { label: "test",     bg: "bg-yellow-100 text-yellow-800", dot: "bg-yellow-400" }
-    if (message.startsWith("design"))   return { label: "design",   bg: "bg-fuchsia-100 text-fuchsia-800", dot: "bg-fuchsia-400" }
-    if (message.startsWith("Merge"))    return { label: "merge",    bg: "bg-indigo-100 text-indigo-800", dot: "bg-indigo-400" }
-    return { label: "commit", bg: "bg-gray-100 text-gray-600", dot: "bg-[#d0d0cc]" }
+    if (message.startsWith("design"))   return { label: "design",   bg: "bg-[#D1FAE5] text-[#065c41]",  dot: "bg-[#6EE7B7]" }
+    if (message.startsWith("Merge"))    return { label: "merge",    bg: "bg-[#f0f0ec] text-[#615D59]",  dot: "bg-[#A39E98]" }
+    return { label: "commit", bg: "bg-[#f0f0ec] text-[#615D59]", dot: "bg-[#d0d0cc]" }
   }
 
   const grouped = commits.reduce<{ date: string; items: GitCommit[] }[]>((acc, commit) => {
@@ -1323,7 +1323,7 @@ function GitLogTab({ token }: { token: string }) {
                             <span>·</span>
                             <span className="text-[#1a1a1a]/30">{commit.stats.files}파일</span>
                             {commit.stats.added > 0 && <span className="text-green-600/70">+{commit.stats.added}</span>}
-                            {commit.stats.deleted > 0 && <span className="text-red-500/60">-{commit.stats.deleted}</span>}
+                            {commit.stats.deleted > 0 && <span className="text-[#B85C33]/60">-{commit.stats.deleted}</span>}
                           </>
                         )}
                       </div>
@@ -1385,7 +1385,7 @@ export default function DevPage() {
       <div className="mb-6">
         <div className="flex items-center gap-3 mb-1">
           <h1 className="text-2xl font-bold text-gray-900">Dev Mode</h1>
-          <span className="text-xs font-medium bg-purple-100 text-purple-800 px-2.5 py-1 rounded-full border border-purple-200">
+          <span className="text-xs font-medium bg-[#f0f0ec] text-[#615D59] px-2.5 py-1 rounded-full border border-[#e8e8e4]">
             Beta
           </span>
         </div>
@@ -1406,7 +1406,7 @@ export default function DevPage() {
           >
             {t.label}
             {t.id === "bugs" && openBugCount > 0 && (
-              <span className="absolute -top-1 -right-1 w-4 h-4 bg-red-500 text-white text-[9px] font-bold rounded-full flex items-center justify-center">
+              <span className="absolute -top-1 -right-1 w-4 h-4 bg-[#B85C33] text-white text-[9px] font-bold rounded-full flex items-center justify-center">
                 {openBugCount > 9 ? "9+" : openBugCount}
               </span>
             )}

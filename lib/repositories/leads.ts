@@ -7,7 +7,6 @@
 
 import "server-only";
 
-import { createSupabaseServerClient } from "@/lib/supabase/server";
 import { createSupabaseAdminClient } from "@/lib/supabase/admin";
 import type { Lead, LeadInsert, LeadUpdate } from "@/lib/supabase/database.types";
 
@@ -65,7 +64,7 @@ export async function getLeads(): Promise<LeadRecord[]> {
     return jsonGetLeads();
   }
 
-  const supabase = await createSupabaseServerClient();
+  const supabase = createSupabaseAdminClient();
   const { data, error } = await supabase
     .from("leads")
     .select("*")
@@ -81,7 +80,7 @@ export async function getLeadById(id: string): Promise<LeadRecord | null> {
     return jsonGetLeads().find((l) => l.id === id) ?? null;
   }
 
-  const supabase = await createSupabaseServerClient();
+  const supabase = createSupabaseAdminClient();
   const { data, error } = await supabase
     .from("leads")
     .select("*")
@@ -145,7 +144,7 @@ export async function updateLead(
     return jsonUpdateLead(id, patch);
   }
 
-  const supabase = await createSupabaseServerClient();
+  const supabase = createSupabaseAdminClient();
 
   const update: LeadUpdate = {};
   if (patch.status !== undefined) update.status = patch.status;
@@ -177,7 +176,7 @@ export async function deleteLead(id: string): Promise<boolean> {
     return jsonDeleteLead(id);
   }
 
-  const supabase = await createSupabaseServerClient();
+  const supabase = createSupabaseAdminClient();
   const { error } = await supabase.from("leads").delete().eq("id", id);
 
   return !error;
@@ -200,7 +199,7 @@ export async function getLeadStats() {
     return { total, byStatus, todayCount };
   }
 
-  const supabase = await createSupabaseServerClient();
+  const supabase = createSupabaseAdminClient();
   const today = new Date().toISOString().slice(0, 10);
 
   const [totalRes, newRes, contactedRes, convertedRes, closedRes, todayRes] =

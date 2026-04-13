@@ -59,14 +59,14 @@ const OVERVIEW_RANGE_OPTIONS: Array<{ id: CommercialOverviewRange; label: string
 ];
 
 const DEAL_STAGE_META: Record<DealStage, { color: string; dot: string; ring: string }> = {
-  contact:      { color: "bg-slate-100 text-slate-600",    dot: "bg-slate-400",   ring: "ring-slate-200"   },
-  quote:        { color: "bg-blue-50 text-blue-600",       dot: "bg-blue-500",    ring: "ring-blue-200"    },
-  contract:     { color: "bg-violet-50 text-violet-600",   dot: "bg-violet-500",  ring: "ring-violet-200"  },
-  confirmed:    { color: "bg-violet-50 text-violet-600",   dot: "bg-violet-500",  ring: "ring-violet-200"  },
+  contact:      { color: "bg-[#f0f0ec] text-[#615D59]",   dot: "bg-[#A39E98]",   ring: "ring-[#e8e8e4]"   },
+  quote:        { color: "bg-[#ECFDF5] text-[#084734]",   dot: "bg-[#084734]",   ring: "ring-[#D1FAE5]"   },
+  contract:     { color: "bg-[#D1FAE5] text-[#065c41]",   dot: "bg-[#065c41]",   ring: "ring-[#A7F3D0]"   },
+  confirmed:    { color: "bg-[#D1FAE5] text-[#065c41]",   dot: "bg-[#065c41]",   ring: "ring-[#A7F3D0]"   },
   installation: { color: "bg-amber-50 text-amber-700",     dot: "bg-amber-500",   ring: "ring-amber-200"   },
   payment:      { color: "bg-emerald-50 text-emerald-700", dot: "bg-emerald-500", ring: "ring-emerald-200" },
   closed:       { color: "bg-emerald-50 text-emerald-700", dot: "bg-emerald-500", ring: "ring-emerald-200" },
-  cancelled:    { color: "bg-red-50 text-red-400",         dot: "bg-red-300",     ring: "ring-red-100"     },
+  cancelled:    { color: "bg-[#FEF3EE] text-[#B85C33]",   dot: "bg-[#E8956B]",   ring: "ring-[#F6D5C5]"   },
 };
 
 const STAGE_FLOW: DealStage[] = ["contact", "quote", "contract", "confirmed", "installation", "payment"];
@@ -522,7 +522,7 @@ export default function AdminCommercialPage() {
         </div>
 
         {error && (
-          <div className="rounded-xl border border-red-200 bg-red-50 px-4 py-3 text-sm text-red-700">
+          <div className="rounded-xl border border-[#F6D5C5] bg-[#FEF3EE] px-4 py-3 text-sm text-[#B85C33]">
             {error}
           </div>
         )}
@@ -670,7 +670,7 @@ export default function AdminCommercialPage() {
                       ].join(" ")}
                     >
                       {hasOutstanding && (
-                        <span className="absolute right-3 top-3 w-1.5 h-1.5 rounded-full bg-red-400" />
+                        <span className="absolute right-3 top-3 w-1.5 h-1.5 rounded-full bg-[#B85C33]" />
                       )}
                       <div className="flex items-center justify-between gap-3">
                         <div className="min-w-0 pr-4">
@@ -693,7 +693,7 @@ export default function AdminCommercialPage() {
                           吏꾪뻾 {item.summary?.active_deals ?? 0}嫄?
                         </span>
                         {hasOutstanding && (
-                          <span className="rounded-full bg-red-50 px-2.5 py-1 text-red-600">
+                          <span className="rounded-full bg-[#FEF3EE] px-2.5 py-1 text-[#B85C33]">
                             誘몄닔 {formatMoney(item.summary?.outstanding_amount ?? 0)}
                           </span>
                         )}
@@ -886,8 +886,8 @@ export default function AdminCommercialPage() {
                         {dealDetail.deal.payment_status}
                       </span>
                       {(dealDetail.deal.outstanding_amount ?? 0) > 0 ? (
-                        <span className="rounded-full bg-red-50 border border-red-200 px-2.5 py-1 text-[10px] font-semibold text-red-600 flex items-center gap-1">
-                          <span className="w-1.5 h-1.5 rounded-full bg-red-400 shrink-0" />
+                        <span className="rounded-full bg-[#FEF3EE] border border-[#F6D5C5] px-2.5 py-1 text-[10px] font-semibold text-[#B85C33] flex items-center gap-1">
+                          <span className="w-1.5 h-1.5 rounded-full bg-[#B85C33] shrink-0" />
                           {fmtM(dealDetail.deal.outstanding_amount)} 미수
                         </span>
                       ) : (
@@ -1101,12 +1101,12 @@ function SummaryChip({
   danger?: boolean;
 }) {
   return (
-    <div className={`rounded-xl border px-4 py-3 ${danger ? "border-red-100 bg-red-50" : "border-[#e8e8e4] bg-white"}`}>
-      <div className={`shrink-0 w-7 h-7 rounded-lg flex items-center justify-center ${danger ? "bg-red-100 text-red-400" : "bg-[#f7f7f5] text-[#1a1a1a]/40"}`}>
+    <div className={`rounded-xl border px-4 py-3 ${danger ? "border-[#F6D5C5] bg-[#FEF3EE]" : "border-[#e8e8e4] bg-white"}`}>
+      <div className={`shrink-0 w-7 h-7 rounded-lg flex items-center justify-center ${danger ? "bg-[#F6D5C5] text-[#B85C33]" : "bg-[#f7f7f5] text-[#1a1a1a]/40"}`}>
         {icon}
       </div>
-      <p className={`text-[10px] uppercase tracking-wider mt-2 ${danger ? "text-red-400" : "text-[#1a1a1a]/40"}`}>{label}</p>
-      <p className={`text-base font-bold mt-0.5 ${danger ? "text-red-600" : "text-[#1a1a1a]"}`}>{value}</p>
+      <p className={`text-[10px] uppercase tracking-wider mt-2 ${danger ? "text-[#B85C33]" : "text-[#1a1a1a]/40"}`}>{label}</p>
+      <p className={`text-base font-bold mt-0.5 ${danger ? "text-[#9A4A27]" : "text-[#1a1a1a]"}`}>{value}</p>
     </div>
   );
 }
@@ -1133,20 +1133,20 @@ function MiniStat({
     <div
       className={[
         "inline-flex items-center gap-2 rounded-full px-2.5 py-1.5",
-        danger ? "bg-red-50" : "bg-[#f7f7f5]",
+        danger ? "bg-[#FEF3EE]" : "bg-[#f7f7f5]",
       ].join(" ")}
     >
-      <p className={`text-[10px] ${danger ? "text-red-400" : "text-[#1a1a1a]/40"}`}>{label}</p>
-      <p className={`text-xs font-semibold ${danger ? "text-red-600" : "text-[#1a1a1a]"}`}>{value}</p>
+      <p className={`text-[10px] ${danger ? "text-[#B85C33]" : "text-[#1a1a1a]/40"}`}>{label}</p>
+      <p className={`text-xs font-semibold ${danger ? "text-[#9A4A27]" : "text-[#1a1a1a]"}`}>{value}</p>
     </div>
   );
 }
 
 function InlineMetric({ label, value, danger }: { label: string; value: string; danger?: boolean }) {
   return (
-    <div className={`rounded-xl px-3 py-2 ${danger ? "bg-red-50" : "bg-[#f7f7f5]"}`}>
-      <p className={`text-[10px] ${danger ? "text-red-400" : "text-[#1a1a1a]/40"}`}>{label}</p>
-      <p className={`mt-1 text-xs font-semibold ${danger ? "text-red-600" : "text-[#1a1a1a]"}`}>{value}</p>
+    <div className={`rounded-xl px-3 py-2 ${danger ? "bg-[#FEF3EE]" : "bg-[#f7f7f5]"}`}>
+      <p className={`text-[10px] ${danger ? "text-[#B85C33]" : "text-[#1a1a1a]/40"}`}>{label}</p>
+      <p className={`mt-1 text-xs font-semibold ${danger ? "text-[#9A4A27]" : "text-[#1a1a1a]"}`}>{value}</p>
     </div>
   );
 }
@@ -1184,7 +1184,7 @@ function AlertRow({
     alert.tone === "warning"
       ? "bg-amber-50 border-amber-200 text-amber-800"
       : alert.tone === "accent"
-        ? "bg-blue-50 border-blue-200 text-blue-700"
+        ? "bg-[#ECFDF5] border-[#D1FAE5] text-[#084734]"
         : "bg-[#f7f7f5] border-[#e8e8e4] text-[#1a1a1a]";
 
   return (
@@ -1222,8 +1222,8 @@ function AgendaRow({
 function StageRoadmap({ currentStage }: { currentStage: DealStage }) {
   if (currentStage === "cancelled") return (
     <div className="flex items-center gap-2">
-      <span className="w-2 h-2 rounded-full bg-red-300" />
-      <span className="text-xs text-red-400">취소됨</span>
+      <span className="w-2 h-2 rounded-full bg-[#E8956B]" />
+      <span className="text-xs text-[#B85C33]">취소됨</span>
     </div>
   );
 
@@ -1271,7 +1271,7 @@ function ActionCard({
     tone === "warning"
       ? "bg-amber-50 border-amber-200"
       : tone === "accent"
-        ? "bg-blue-50 border-blue-200"
+        ? "bg-[#ECFDF5] border-[#D1FAE5]"
         : "bg-[#f7f7f5] border-[#e8e8e4]";
 
   return (

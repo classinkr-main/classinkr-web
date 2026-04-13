@@ -42,10 +42,10 @@ export default function AdminLayout({ children }: { children: React.ReactNode })
   useEffect(() => {
     if (isLoginPage) return
 
-    const cachedSession = readCachedSession() ?? session
+    const cachedSession = readCachedSession()
 
-    if (cachedSession && !session) {
-      queueMicrotask(() => setSession(cachedSession))
+    if (cachedSession) {
+      queueMicrotask(() => setSession((prev) => prev ?? cachedSession))
     }
 
     if (isAdminAuthBypassEnabled()) {
@@ -148,7 +148,10 @@ export default function AdminLayout({ children }: { children: React.ReactNode })
     return () => {
       cancelled = true
     }
-  }, [isLoginPage, router, session])
+    // session 을 deps 에 넣으면 setSession → effect 재실행 → 무한 루프가 발생해
+    // 어드민 탭 이동/새로고침이 멈추는 문제가 있었음. 의도적으로 제외.
+    // eslint-disable-next-line react-hooks/exhaustive-deps
+  }, [isLoginPage, router])
 
   if (isLoginPage) return <>{children}</>
 

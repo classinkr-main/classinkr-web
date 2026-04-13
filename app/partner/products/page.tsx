@@ -9,10 +9,10 @@ function ProgressBar({ quoted, contracted, scheduled, installed }: { quoted: num
   const max = Math.max(quoted, 1)
   return (
     <div className="flex gap-0.5 h-1.5 rounded-full overflow-hidden bg-[#f0f0ec]">
-      <div className="bg-blue-200 transition-all" style={{ width: `${(quoted / max) * 100}%` }} />
-      <div className="bg-blue-500 transition-all" style={{ width: `${(contracted / max) * 100}%` }} />
+      <div className="bg-[#ECFDF5] transition-all" style={{ width: `${(quoted / max) * 100}%` }} />
+      <div className="bg-[#084734] transition-all" style={{ width: `${(contracted / max) * 100}%` }} />
       <div className="bg-yellow-400 transition-all" style={{ width: `${(scheduled / max) * 100}%` }} />
-      <div className="bg-green-500 transition-all" style={{ width: `${(installed / max) * 100}%` }} />
+      <div className="bg-[#065c41] transition-all" style={{ width: `${(installed / max) * 100}%` }} />
     </div>
   )
 }
@@ -72,14 +72,14 @@ export default function PartnerProductsPage() {
       </header>
       <main className="max-w-3xl mx-auto px-4 py-6 space-y-4">
         <div className="flex items-center gap-4 text-[10px] text-[#1a1a1a]/50">
-          {[["bg-blue-200","견적"],["bg-blue-500","계약"],["bg-yellow-400","설치예정"],["bg-green-500","설치완료"]].map(([c,l]) => (
+          {[["bg-[#ECFDF5]","견적"],["bg-[#084734]","계약"],["bg-yellow-400","설치예정"],["bg-[#065c41]","설치완료"]].map(([c,l]) => (
             <span key={l} className="flex items-center gap-1"><span className={`w-2 h-2 rounded-full ${c} inline-block`}/>{l}</span>
           ))}
         </div>
         <div className="bg-white rounded-2xl border border-[#e8e8e4] p-5">
           <p className="text-xs font-semibold text-[#1a1a1a]/40 uppercase tracking-widest mb-4">전체 합계</p>
           <div className="grid grid-cols-4 gap-4 mb-4 text-center">
-            {[["견적",totals.quoted,"text-blue-400"],["계약",totals.contracted,"text-blue-600"],["설치예정",totals.scheduled,"text-yellow-500"],["설치완료",totals.installed,"text-green-600"]].map(([l,v,c]) => (
+            {[["견적",totals.quoted,"text-[#6EE7B7]"],["계약",totals.contracted,"text-[#084734]"],["설치예정",totals.scheduled,"text-yellow-500"],["설치완료",totals.installed,"text-[#065c41]"]].map(([l,v,c]) => (
               <div key={l as string}><p className={`text-xl font-bold ${c}`}>{(v as number).toLocaleString()}</p><p className="text-[10px] text-[#1a1a1a]/40 mt-0.5">{l}</p></div>
             ))}
           </div>
@@ -102,7 +102,7 @@ export default function PartnerProductsPage() {
                     <span className="text-xs text-[#1a1a1a]/40">총 {s.quoted_qty}대 견적</span>
                   </div>
                   <div className="grid grid-cols-4 gap-2 text-center">
-                    {[["견적",s.quoted_qty,"text-blue-400"],["계약",s.contracted_qty,"text-blue-600"],["설치예정",s.scheduled_qty,"text-yellow-500"],["설치완료",s.installed_qty,"text-green-600"]].map(([l,v,c]) => (
+                    {[["견적",s.quoted_qty,"text-[#6EE7B7]"],["계약",s.contracted_qty,"text-[#084734]"],["설치예정",s.scheduled_qty,"text-yellow-500"],["설치완료",s.installed_qty,"text-[#065c41]"]].map(([l,v,c]) => (
                       <div key={l as string}><p className={`text-lg font-bold ${c}`}>{v as number}</p><p className="text-[10px] text-[#1a1a1a]/40">{l}</p></div>
                     ))}
                   </div>

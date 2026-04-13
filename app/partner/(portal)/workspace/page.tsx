@@ -20,7 +20,6 @@ import { Badge } from "@/components/ui/badge"
 import { Card, CardContent, CardHeader, CardTitle } from "@/components/ui/card"
 import { Tabs, TabsContent, TabsList, TabsTrigger } from "@/components/ui/tabs"
 import { MobileActionLauncher } from "@/components/partner-portal/mobile/MobileActionLauncher"
-import { PortalNav } from "@/components/partner-portal/PortalNav"
 import type {
   CalendarEvent,
   CustomerListItem,
@@ -225,7 +224,7 @@ const DEMO_DETAIL: DealDetailPayload = {
     payment_status: "partial",
     starts_at: "2026-02-22T00:00:00Z",
     closed_at: null,
-    notes: "CB-86 4대, 스탠드 4대, T1 카메라 2대",
+    notes: '전자칠판 86" 4대, 스탠드 4대, T1 카메라 2대',
     created_by: null,
     created_at: "2026-02-22T00:00:00Z",
     updated_at: "2026-04-03T00:00:00Z",
@@ -237,7 +236,7 @@ const DEMO_DETAIL: DealDetailPayload = {
       deal_id: "demo-deal-1",
       sku: "CB-86",
       category: "board" as const,
-      product_name: "ClassIn CB-86 전자칠판",
+      product_name: '전자칠판 86"',
       quantity: 4,
       unit_price: 5500000,
       amount: 22000000,
@@ -287,14 +286,14 @@ const DEMO_DETAIL: DealDetailPayload = {
 // ─── Design System ────────────────────────────────────────────────────────────
 
 const STAGE_COLORS: Record<string, { color: string; dot: string; ring: string }> = {
-  contact:      { color: "bg-slate-100 text-slate-600",    dot: "bg-slate-400",   ring: "ring-slate-200"   },
-  quote:        { color: "bg-blue-50 text-blue-600",       dot: "bg-blue-500",    ring: "ring-blue-200"    },
-  contract:     { color: "bg-violet-50 text-violet-600",   dot: "bg-violet-500",  ring: "ring-violet-200"  },
-  confirmed:    { color: "bg-violet-50 text-violet-600",   dot: "bg-violet-500",  ring: "ring-violet-200"  },
-  installation: { color: "bg-amber-50 text-amber-700",     dot: "bg-amber-500",   ring: "ring-amber-200"   },
-  payment:      { color: "bg-emerald-50 text-emerald-700", dot: "bg-emerald-500", ring: "ring-emerald-200" },
-  closed:       { color: "bg-emerald-50 text-emerald-700", dot: "bg-emerald-500", ring: "ring-emerald-200" },
-  cancelled:    { color: "bg-red-50 text-red-400",         dot: "bg-red-300",     ring: "ring-red-100"     },
+  contact:      { color: "bg-[#f0f0ec] text-[#615D59]",    dot: "bg-[#A39E98]",   ring: "ring-[#e8e8e4]"   },
+  quote:        { color: "bg-[#ECFDF5] text-[#084734]",    dot: "bg-[#084734]",   ring: "ring-[#D1FAE5]"   },
+  contract:     { color: "bg-[#D1FAE5] text-[#065c41]",    dot: "bg-[#065c41]",   ring: "ring-[#D1FAE5]"   },
+  confirmed:    { color: "bg-[#D1FAE5] text-[#065c41]",    dot: "bg-[#065c41]",   ring: "ring-[#D1FAE5]"   },
+  installation: { color: "bg-amber-50 text-amber-700",      dot: "bg-amber-500",   ring: "ring-amber-200"   },
+  payment:      { color: "bg-[#ECFDF5] text-[#084734]",    dot: "bg-[#084734]",   ring: "ring-[#D1FAE5]"   },
+  closed:       { color: "bg-[#ECFDF5] text-[#084734]",    dot: "bg-[#084734]",   ring: "ring-[#D1FAE5]"   },
+  cancelled:    { color: "bg-[#FEF3EE] text-[#B85C33]",    dot: "bg-[#F6D5C5]",   ring: "ring-[#F6D5C5]"   },
 }
 
 const STAGE_ORDER_PORTAL = ["contact", "quote", "contract", "confirmed", "installation", "payment"] as const
@@ -313,6 +312,13 @@ function formatDate(value: string | null | undefined) {
     month: "short",
     day: "numeric",
   })
+}
+
+function formatBoardSkuLabel(value: string | null | undefined) {
+  if (!value) return "-"
+  if (value === "CB-86" || value === "board-86") return '86"'
+  if (value === "CB-75" || value === "board-75") return '75"'
+  return value
 }
 
 function stageLabel(stage: DealListItem["current_stage"]) {
@@ -359,8 +365,8 @@ async function readJson<T>(url: string): Promise<T> {
 function StageRoadmapBar({ stage }: { stage: string }) {
   if (stage === "cancelled") return (
     <div className="flex items-center gap-2">
-      <span className="w-2 h-2 rounded-full bg-red-300" />
-      <span className="text-xs text-red-400">취소됨</span>
+      <span className="w-2 h-2 rounded-full bg-[#F6D5C5]" />
+      <span className="text-xs text-[#B85C33]">취소됨</span>
     </div>
   )
   const activeIdx = STAGE_ORDER_PORTAL.indexOf(stage as typeof STAGE_ORDER_PORTAL[number])
@@ -411,13 +417,13 @@ function FinancialSummary({
         <p className="text-[10px] text-[#1a1a1a]/40 uppercase tracking-wider mb-0.5">계약</p>
         <p className="text-sm font-bold text-[#1a1a1a]">{fmtM(contracted)}원</p>
       </div>
-      <div className="bg-emerald-50 rounded-xl px-3 py-2.5">
-        <p className="text-[10px] text-emerald-600/70 uppercase tracking-wider mb-0.5">납입</p>
-        <p className="text-sm font-bold text-emerald-700">{fmtM(paid)}원</p>
+      <div className="bg-[#ECFDF5] rounded-xl px-3 py-2.5">
+        <p className="text-[10px] text-[#084734]/70 uppercase tracking-wider mb-0.5">납입</p>
+        <p className="text-sm font-bold text-[#084734]">{fmtM(paid)}원</p>
       </div>
-      <div className={`rounded-xl px-3 py-2.5 ${hasOutstanding ? "bg-red-50" : "bg-emerald-50"}`}>
-        <p className={`text-[10px] uppercase tracking-wider mb-0.5 ${hasOutstanding ? "text-red-500/70" : "text-emerald-600/70"}`}>미수금</p>
-        <p className={`text-sm font-bold ${hasOutstanding ? "text-red-600" : "text-emerald-700"}`}>{fmtM(outstanding)}원</p>
+      <div className={`rounded-xl px-3 py-2.5 ${hasOutstanding ? "bg-[#FEF3EE]" : "bg-[#ECFDF5]"}`}>
+        <p className={`text-[10px] uppercase tracking-wider mb-0.5 ${hasOutstanding ? "text-[#B85C33]/70" : "text-[#084734]/70"}`}>미수금</p>
+        <p className={`text-sm font-bold ${hasOutstanding ? "text-[#B85C33]" : "text-[#084734]"}`}>{fmtM(outstanding)}원</p>
       </div>
     </div>
   )
@@ -434,9 +440,9 @@ function Chip({ icon, label }: { icon: React.ReactNode; label: string }) {
 
 function MiniStat({ label, value, danger }: { label: string; value: string; danger?: boolean }) {
   return (
-    <div className={`rounded-xl px-3 py-2 ${danger ? "bg-red-50" : "bg-[#f7f7f5]"}`}>
-      <p className={`text-[11px] ${danger ? "text-red-400" : "text-[#1a1a1a]/35"}`}>{label}</p>
-      <p className={`mt-1 text-xs font-semibold ${danger ? "text-red-600" : "text-[#1a1a1a]"}`}>{value}</p>
+    <div className={`rounded-xl px-3 py-2 ${danger ? "bg-[#FEF3EE]" : "bg-[#f7f7f5]"}`}>
+      <p className={`text-[11px] ${danger ? "text-[#B85C33]" : "text-[#1a1a1a]/35"}`}>{label}</p>
+      <p className={`mt-1 text-xs font-semibold ${danger ? "text-[#B85C33]" : "text-[#1a1a1a]"}`}>{value}</p>
     </div>
   )
 }
@@ -688,7 +694,7 @@ export default function PartnerWorkspacePage() {
                       </div>
                       <div className="flex items-center gap-1.5 shrink-0">
                         {hasOutstanding && (
-                          <span className="w-1.5 h-1.5 rounded-full bg-red-400" />
+                          <span className="w-1.5 h-1.5 rounded-full bg-[#B85C33]" />
                         )}
                         <ArrowRight className="h-4 w-4 text-[#1a1a1a]/25" />
                       </div>
@@ -799,7 +805,7 @@ export default function PartnerWorkspacePage() {
                           {detail.line_items.map((item) => (
                             <div key={item.id} className="flex items-center justify-between gap-3 text-sm">
                               <div className="flex items-center gap-2 min-w-0">
-                                <span className="shrink-0 rounded-md bg-[#f0f0ec] px-1.5 py-0.5 text-[10px] font-mono text-[#1a1a1a]/50">{item.sku}</span>
+                                <span className="shrink-0 rounded-md bg-[#f0f0ec] px-1.5 py-0.5 text-[10px] font-mono text-[#1a1a1a]/50">{formatBoardSkuLabel(item.sku)}</span>
                                 <span className="truncate text-[#1a1a1a]">{item.product_name}</span>
                                 <span className="shrink-0 text-xs text-[#1a1a1a]/40">×{item.quantity}</span>
                               </div>
@@ -1063,8 +1069,8 @@ export default function PartnerWorkspacePage() {
                       <ActionLine text="거래 완료 상태입니다." />
                     )}
                     {(selectedDeal.outstanding_amount ?? 0) > 0 && selectedDeal.current_stage !== "contact" && (
-                      <div className="flex items-center gap-2 rounded-xl bg-red-50 px-3 py-2 text-sm text-red-600">
-                        <span className="h-1.5 w-1.5 rounded-full bg-red-400" />
+                      <div className="flex items-center gap-2 rounded-xl bg-[#FEF3EE] px-3 py-2 text-sm text-[#B85C33]">
+                        <span className="h-1.5 w-1.5 rounded-full bg-[#B85C33]" />
                         미수금 {fmtM(selectedDeal.outstanding_amount)}원 미해결
                       </div>
                     )}

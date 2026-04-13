@@ -88,11 +88,11 @@ function isWithinNextDays(dateStr: string, days: number) {
 function statusToneClasses(tone: "neutral" | "info" | "warning" | "danger" | "success") {
   switch (tone) {
     case "info":
-      return "bg-blue-50 text-blue-700 border-blue-100"
+      return "bg-[#ECFDF5] text-[#084734] border-[#D1FAE5]"
     case "warning":
       return "bg-amber-50 text-amber-700 border-amber-100"
     case "danger":
-      return "bg-red-50 text-red-600 border-red-100"
+      return "bg-[#FEF3EE] text-[#B85C33] border-[#F6D5C5]"
     case "success":
       return "bg-green-50 text-green-700 border-green-100"
     default:
@@ -191,7 +191,7 @@ function KpiCard({
                 ? "text-[#1a1a1a]/40 bg-[#f0f0ec]"
                 : trendPositive
                   ? "text-green-600 bg-green-50"
-                  : "text-red-500 bg-red-50"
+                  : "text-[#B85C33] bg-[#FEF3EE]"
             }`}
           >
             {trendNeutral ? (
@@ -244,9 +244,9 @@ const STATUS_LABEL: Record<string, string> = {
   closed: "종료",
 }
 const STATUS_COLOR: Record<string, string> = {
-  new: "bg-blue-50 text-blue-600",
+  new: "bg-[#ECFDF5] text-[#084734]",
   contacted: "bg-yellow-50 text-yellow-600",
-  converted: "bg-green-50 text-green-600",
+  converted: "bg-[#D1FAE5] text-[#065c41]",
   closed: "bg-[#f0f0ec] text-[#1a1a1a]/40",
 }
 const CAMPAIGN_STATUS_LABEL: Record<EmailCampaign["status"], string> = {
@@ -256,8 +256,8 @@ const CAMPAIGN_STATUS_LABEL: Record<EmailCampaign["status"], string> = {
 }
 const CAMPAIGN_STATUS_COLOR: Record<EmailCampaign["status"], string> = {
   draft: "bg-amber-50 text-amber-700",
-  sent: "bg-green-50 text-green-700",
-  failed: "bg-red-50 text-red-600",
+  sent: "bg-[#ECFDF5] text-[#084734]",
+  failed: "bg-[#FEF3EE] text-[#B85C33]",
 }
 const BUG_STATUS_LABEL: Record<BugReport["status"], string> = {
   open: "오픈",
@@ -660,14 +660,14 @@ export default function OverviewPage() {
       </div>
 
       {!loading && newLeads > 0 && (
-        <div className="relative mb-6 flex flex-col gap-3 rounded-xl border border-blue-100 bg-blue-50 px-4 py-3 shadow-[0_1px_0_rgba(59,130,246,0.04)] sm:flex-row sm:items-center">
-          <AlertCircle className="w-4 h-4 text-blue-500 shrink-0" />
-          <p className="text-[13px] text-blue-700 font-medium">
+        <div className="relative mb-6 flex flex-col gap-3 rounded-xl border border-[#D1FAE5] bg-[#ECFDF5] px-4 py-3 shadow-[0_1px_0_rgba(8,71,52,0.04)] sm:flex-row sm:items-center">
+          <AlertCircle className="w-4 h-4 text-[#084734] shrink-0" />
+          <p className="text-[13px] text-[#084734] font-medium">
             미처리 신규 문의 <span className="font-bold">{newLeads}건</span>이 대기 중입니다.
           </p>
           <a
             href="/admin/crm"
-            className="text-[12px] text-blue-500 hover:text-blue-700 font-medium flex items-center gap-1 shrink-0 transition-colors sm:ml-auto"
+            className="text-[12px] text-[#065c41] hover:text-[#084734] font-medium flex items-center gap-1 shrink-0 transition-colors sm:ml-auto"
           >
             문의 관리 <ArrowUpRight className="w-3 h-3" />
           </a>
@@ -704,8 +704,8 @@ export default function OverviewPage() {
             icon={<TrendingUp className="w-4 h-4" />}
             label="신규 (미처리)"
             value={newLeads}
-            accent="bg-blue-50"
-            iconColor="text-blue-500"
+            accent="bg-[#ECFDF5]"
+            iconColor="text-[#084734]"
           />
           <KpiCard
             icon={<CheckCircle2 className="w-4 h-4" />}
@@ -720,8 +720,8 @@ export default function OverviewPage() {
             label="이번 주"
             value={thisWeekLeads}
             trend={{ value: weekTrend, label: "지난주 대비" }}
-            accent="bg-purple-50"
-            iconColor="text-purple-500"
+            accent="bg-[#F6F5F4]"
+            iconColor="text-[#615D59]"
           />
           <KpiCard
             icon={<Mail className="w-4 h-4" />}
@@ -959,7 +959,7 @@ export default function OverviewPage() {
                   <div className="min-w-0 flex-1">
                     <div className="flex items-center gap-2 flex-wrap">
                       <p className="text-[13px] font-semibold text-[#111110]">{event.title}</p>
-                      <span className="text-[10px] px-1.5 py-0.5 rounded-full bg-blue-50 text-blue-700">
+                      <span className="text-[10px] px-1.5 py-0.5 rounded-full bg-[#ECFDF5] text-[#084734]">
                         {event.type === "team"
                           ? "팀 일정"
                           : event.type === "meeting"

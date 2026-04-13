@@ -159,7 +159,7 @@ export default function ReceiptsPage() {
                   <td className="px-4 py-3 text-xs text-[#1a1a1a]/70">{METHOD_LABEL[r.payment_method]}</td>
                   <td className="px-4 py-3 text-xs">
                     {r.cash_receipt_requested
-                      ? <span className="text-green-600">발행 ({r.cash_receipt_type === "business" ? "사업자" : "개인"})</span>
+                      ? <span className="text-[#084734]">발행 ({r.cash_receipt_type === "business" ? "사업자" : "개인"})</span>
                       : <span className="text-[#1a1a1a]/30">미발행</span>}
                   </td>
                   <td className="px-4 py-3 text-xs text-[#1a1a1a]/50">
@@ -174,7 +174,7 @@ export default function ReceiptsPage() {
                           </Button>
                         </a>
                       )}
-                      <Button variant="ghost" size="sm" className="h-7 px-2 text-xs text-red-400" onClick={() => handleDelete(r.id)}>
+                      <Button variant="ghost" size="sm" className="h-7 px-2 text-xs text-[#B85C33]" onClick={() => handleDelete(r.id)}>
                         <Trash2 className="w-3.5 h-3.5" />
                       </Button>
                     </div>

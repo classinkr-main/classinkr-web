@@ -19,7 +19,9 @@ const DialogOverlay = React.forwardRef<
     <DialogPrimitive.Overlay
         ref={ref}
         className={cn(
-            "fixed inset-0 z-50 bg-black/80  data-[state=open]:animate-in data-[state=closed]:animate-out data-[state=closed]:fade-out-0 data-[state=open]:fade-in-0",
+            "fixed inset-0 z-50 bg-black/40 backdrop-blur-[2px]",
+            "data-[state=open]:animate-in data-[state=closed]:animate-out",
+            "data-[state=closed]:fade-out-0 data-[state=open]:fade-in-0",
             className
         )}
         {...props}
@@ -33,18 +35,35 @@ const DialogContent = React.forwardRef<
 >(({ className, children, ...props }, ref) => (
     <DialogPortal>
         <DialogOverlay />
-	    <DialogPrimitive.Content
-	        ref={ref}
-	        className={cn(
-	            "fixed left-[50%] top-[50%] z-50 grid max-h-[90vh] w-full max-w-lg translate-x-[-50%] translate-y-[-50%] gap-4 overflow-y-auto border bg-background p-6 shadow-lg duration-200 data-[state=open]:animate-in data-[state=closed]:animate-out data-[state=closed]:fade-out-0 data-[state=open]:fade-in-0 data-[state=closed]:zoom-out-95 data-[state=open]:zoom-in-95 data-[state=closed]:slide-out-to-left-1/2 data-[state=closed]:slide-out-to-top-[48%] data-[state=open]:slide-in-from-left-1/2 data-[state=open]:slide-in-from-top-[48%] sm:rounded-lg",
-	                className
-	            )}
-	            {...props}
-	        >
+        <DialogPrimitive.Content
+            ref={ref}
+            className={cn(
+                "fixed left-[50%] top-[50%] z-50 grid w-full max-w-lg max-h-[90vh] overflow-y-auto",
+                "translate-x-[-50%] translate-y-[-50%] gap-4",
+                "bg-white rounded-2xl border border-black/[0.08] p-6",
+                "shadow-[rgba(0,0,0,0.05)_0px_20px_60px,rgba(0,0,0,0.04)_0px_10px_30px,rgba(0,0,0,0.03)_0px_5px_15px,rgba(0,0,0,0.02)_0px_2px_6px]",
+                "duration-200",
+                "data-[state=open]:animate-in data-[state=closed]:animate-out",
+                "data-[state=closed]:fade-out-0 data-[state=open]:fade-in-0",
+                "data-[state=closed]:zoom-out-95 data-[state=open]:zoom-in-95",
+                "data-[state=closed]:slide-out-to-left-1/2 data-[state=closed]:slide-out-to-top-[48%]",
+                "data-[state=open]:slide-in-from-left-1/2 data-[state=open]:slide-in-from-top-[48%]",
+                className
+            )}
+            {...props}
+        >
             {children}
-            <DialogPrimitive.Close className="absolute right-4 top-4 rounded-sm opacity-70 ring-offset-background transition-opacity hover:opacity-100 focus:outline-none focus:ring-2 focus:ring-ring focus:ring-offset-2 disabled:pointer-events-none data-[state=open]:bg-accent data-[state=open]:text-muted-foreground">
-                <X className="h-4 w-4" />
-                <span className="sr-only">Close</span>
+            <DialogPrimitive.Close
+                className={cn(
+                    "absolute right-4 top-4 rounded-lg p-1.5",
+                    "text-[#A39E98] hover:text-[#111110] hover:bg-black/[0.05]",
+                    "transition-all duration-150",
+                    "focus:outline-none focus:ring-2 focus:ring-[#084734] focus:ring-offset-1",
+                    "disabled:pointer-events-none"
+                )}
+            >
+                <X className="h-4 w-4" strokeWidth={2} />
+                <span className="sr-only">닫기</span>
             </DialogPrimitive.Close>
         </DialogPrimitive.Content>
     </DialogPortal>
@@ -56,10 +75,7 @@ const DialogHeader = ({
     ...props
 }: React.HTMLAttributes<HTMLDivElement>) => (
     <div
-        className={cn(
-            "flex flex-col space-y-1.5 text-center sm:text-left",
-            className
-        )}
+        className={cn("flex flex-col gap-1.5", className)}
         {...props}
     />
 )
@@ -71,7 +87,7 @@ const DialogFooter = ({
 }: React.HTMLAttributes<HTMLDivElement>) => (
     <div
         className={cn(
-            "flex flex-col-reverse sm:flex-row sm:justify-end sm:space-x-2",
+            "flex flex-col-reverse gap-2 sm:flex-row sm:justify-end",
             className
         )}
         {...props}
@@ -86,7 +102,7 @@ const DialogTitle = React.forwardRef<
     <DialogPrimitive.Title
         ref={ref}
         className={cn(
-            "text-lg font-semibold leading-none tracking-tight",
+            "text-[18px] font-bold leading-snug tracking-[-0.25px] text-[#111110]",
             className
         )}
         {...props}
@@ -100,7 +116,7 @@ const DialogDescription = React.forwardRef<
 >(({ className, ...props }, ref) => (
     <DialogPrimitive.Description
         ref={ref}
-        className={cn("text-sm text-muted-foreground", className)}
+        className={cn("text-[14px] leading-relaxed text-[#615D59]", className)}
         {...props}
     />
 ))

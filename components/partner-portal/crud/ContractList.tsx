@@ -18,11 +18,11 @@ const STATUS_LABEL: Record<ContractDocumentStatus, string> = {
 
 const STATUS_COLOR: Record<ContractDocumentStatus, string> = {
   draft: "bg-[#f0f0ec] text-[#1a1a1a]/50",
-  shared: "bg-blue-50 text-blue-600",
+  shared: "bg-[#ECFDF5] text-[#084734]",
   partner_signed: "bg-yellow-50 text-yellow-700",
-  admin_signed: "bg-green-50 text-green-700",
-  completed: "bg-green-100 text-green-800 font-semibold",
-  cancelled: "bg-red-50 text-red-400",
+  admin_signed: "bg-[#D1FAE5] text-[#065c41]",
+  completed: "bg-[#D1FAE5] text-[#065c41] font-semibold",
+  cancelled: "bg-[#FEF3EE] text-[#B85C33]",
 }
 
 interface Props {
@@ -187,13 +187,13 @@ export function ContractList({ dealId }: Props) {
                     <td className="px-4 py-3">
                       <div className="flex items-center justify-end gap-1">
                         {c.status === "draft" && (
-                          <Button variant="ghost" size="sm" className="h-7 px-2 text-xs text-blue-600"
+                          <Button variant="ghost" size="sm" className="h-7 px-2 text-xs text-[#084734]"
                             onClick={() => handleStatusChange(c, "shared")}>
                             <Send className="w-3.5 h-3.5 mr-1" />공유
                           </Button>
                         )}
                         {(c.status === "shared" || c.status === "partner_signed") && (
-                          <Button variant="ghost" size="sm" className="h-7 px-2 text-xs text-purple-600"
+                          <Button variant="ghost" size="sm" className="h-7 px-2 text-xs text-[#084734]"
                             onClick={() => { setSelected(c); setShowSign(true) }}>
                             <PenLine className="w-3.5 h-3.5 mr-1" />서명
                           </Button>
@@ -225,7 +225,7 @@ export function ContractList({ dealId }: Props) {
                 마우스(PC) 또는 터치펜/손가락(태블릿)으로 서명란에 직접 서명해주세요.
               </div>
               {signError && (
-                <div className="rounded-lg border border-red-200 bg-red-50 px-3 py-2 text-sm text-red-600">
+                <div className="rounded-lg border border-[#F6D5C5] bg-[#FEF3EE] px-3 py-2 text-sm text-[#B85C33]">
                   {signError}
                 </div>
               )}

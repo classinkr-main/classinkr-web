@@ -13,7 +13,7 @@ export function CaseStudies() {
 
                 <div className="grid md:grid-cols-2 lg:grid-cols-3 gap-8">
                     {/* Case 1 */}
-                    <Card className="border border-[rgba(0,0,0,0.08)] bg-white">
+                    <Card className="border border-[rgba(0,0,0,0.08)] bg-white transition-all duration-200 hover:shadow-lg hover:-translate-y-0.5">
                         <CardContent className="p-8">
                             <div className="flex items-center gap-4 mb-6">
                                 <div className="w-12 h-12 bg-[#ECFDF5] rounded-full flex items-center justify-center font-bold text-[#A39E98]">대치</div>
@@ -39,7 +39,7 @@ export function CaseStudies() {
                     </Card>
 
                     {/* Case 2 */}
-                    <Card className="border border-[rgba(0,0,0,0.08)] bg-white">
+                    <Card className="border border-[rgba(0,0,0,0.08)] bg-white transition-all duration-200 hover:shadow-lg hover:-translate-y-0.5">
                         <CardContent className="p-8">
                             <div className="flex items-center gap-4 mb-6">
                                 <div className="w-12 h-12 bg-[#ECFDF5] rounded-full flex items-center justify-center font-bold text-[#A39E98]">하이</div>
@@ -65,7 +65,7 @@ export function CaseStudies() {
                     </Card>
 
                     {/* Case 3 */}
-                    <Card className="border border-[rgba(0,0,0,0.08)] bg-white md:col-span-2 lg:col-span-1">
+                    <Card className="border border-[rgba(0,0,0,0.08)] bg-white md:col-span-2 lg:col-span-1 transition-all duration-200 hover:shadow-lg hover:-translate-y-0.5">
                         <CardContent className="p-8">
                             <div className="flex items-center gap-4 mb-6">
                                 <div className="w-12 h-12 bg-[#ECFDF5] rounded-full flex items-center justify-center font-bold text-[#A39E98]">이데</div>

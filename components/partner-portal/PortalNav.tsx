@@ -4,11 +4,8 @@ import Link from "next/link"
 import { usePathname } from "next/navigation"
 import {
   CalendarDays,
-  Calculator,
-  FileSignature,
   FileText,
   House,
-  Receipt,
   Users,
 } from "lucide-react"
 
@@ -17,9 +14,6 @@ const ITEMS = [
   { href: "/partner/customers", label: "고객", icon: Users },
   { href: "/partner/calendar", label: "캘린더", icon: CalendarDays },
   { href: "/partner/documents", label: "문서", icon: FileText },
-  { href: "/partner/quotes", label: "견적서", icon: Calculator },
-  { href: "/partner/contracts", label: "계약서", icon: FileSignature },
-  { href: "/partner/receipts", label: "영수증", icon: Receipt },
 ] as const
 
 export function PortalNav() {
@@ -33,6 +27,12 @@ export function PortalNav() {
           const isActive =
             item.href === "/partner"
               ? pathname === "/partner" || pathname.startsWith("/partner/workspace")
+              : item.href === "/partner/documents"
+                ? pathname === item.href ||
+                  pathname.startsWith(`${item.href}/`) ||
+                  pathname.startsWith("/partner/quotes") ||
+                  pathname.startsWith("/partner/contracts") ||
+                  pathname.startsWith("/partner/receipts")
               : pathname === item.href || pathname.startsWith(`${item.href}/`)
 
           return (

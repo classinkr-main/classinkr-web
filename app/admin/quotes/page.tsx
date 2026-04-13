@@ -13,6 +13,7 @@ import {
   PencilLine,
 } from "lucide-react"
 
+import { getProductBySku } from "@/lib/product-templates"
 import { Button } from "@/components/ui/button"
 import type { Partner, Quote, QuoteStatus } from "@/lib/supabase/database.types"
 
@@ -46,13 +47,13 @@ type ProductOption = {
 const PRODUCT_OPTIONS: ProductOption[] = [
   {
     key: "board-86",
-    label: "ClassIn Board 86인치",
+    label: '전자칠판 86"',
     description: "메인 대형 패널",
     unit_price: 5_000_000,
   },
   {
     key: "board-75",
-    label: "ClassIn Board 75인치",
+    label: '전자칠판 75"',
     description: "중형 패널",
     unit_price: 4_000_000,
   },
@@ -124,7 +125,7 @@ const DUMMY_QUOTES_LIST: Quote[] = [
     partner_id: "p1",
     lead_id: null,
     version: 1,
-    title: "ClassIn Board 86인치 5대 견적",
+    title: '전자칠판 86" 5대 견적',
     status: "converted",
     valid_until: "2026-04-30",
     subtotal: 22_727_272,
@@ -145,7 +146,7 @@ const DUMMY_QUOTES_LIST: Quote[] = [
     partner_id: "p2",
     lead_id: null,
     version: 1,
-    title: "ClassIn Board 75인치 추가 도입",
+    title: '전자칠판 75" 추가 도입',
     status: "sent",
     valid_until: "2026-04-20",
     subtotal: 10_909_090,
@@ -173,11 +174,11 @@ const STATUS_LABEL: Record<QuoteStatus, string> = {
 
 const STATUS_COLOR: Record<QuoteStatus, string> = {
   draft: "bg-[#f0f0ec] text-[#1a1a1a]/50",
-  sent: "bg-blue-50 text-blue-600",
+  sent: "bg-[#ECFDF5] text-[#084734]",
   accepted: "bg-emerald-50 text-emerald-700",
-  rejected: "bg-red-50 text-red-500",
+  rejected: "bg-[#FEF3EE] text-[#B85C33]",
   expired: "bg-[#f0f0ec] text-[#1a1a1a]/40",
-  converted: "bg-violet-50 text-violet-600",
+  converted: "bg-[#D1FAE5] text-[#065c41]",
 }
 
 function adminFetch(url: string, options?: RequestInit) {
@@ -202,7 +203,7 @@ function calcLineAmount(item: QuoteItem) {
 }
 
 function getPresetProduct(productKey: string) {
-  return PRODUCT_OPTIONS.find((option) => option.key === productKey) ?? PRODUCT_OPTIONS[0]
+  return getProductBySku(productKey) ?? { key: 'custom', label: '커스텀 항목', description: '직접 입력', unit_price: 0 }
 }
 
 function createItemFromKey(productKey: string): QuoteItem {
@@ -385,6 +386,9 @@ export default function QuotesPage() {
     if (res.ok) {
       setShowForm(false)
       await load()
+    } else {
+      const errorData = await res.json()
+      alert(`견적 생성 실패: ${errorData.error ?? "알 수 없는 오류"}`)
     }
 
     setSaving(false)
@@ -426,7 +430,7 @@ export default function QuotesPage() {
           <Button variant="outline" size="sm" onClick={load} disabled={loading}>
             <RefreshCw className={`w-4 h-4 ${loading ? "animate-spin" : ""}`} />
           </Button>
-          <Button size="sm" onClick={openForm}>
+          <Button size="sm" onClick={openForm} className="bg-[#084734] hover:bg-[#065c41] text-white">
             <Plus className="w-4 h-4 mr-1" />
             견적서 작성
           </Button>
@@ -468,7 +472,7 @@ export default function QuotesPage() {
                         <Button
                           variant="ghost"
                           size="sm"
-                          className="h-7 px-2 text-xs text-violet-600 hover:text-violet-700"
+                          className="h-7 px-2 text-xs text-[#084734] hover:text-[#065c41]"
                           onClick={() => handleConvert(quote.id)}
                           disabled={converting === quote.id}
                         >
@@ -479,7 +483,7 @@ export default function QuotesPage() {
                       <Button
                         variant="ghost"
                         size="sm"
-                        className="h-7 px-2 text-xs text-red-500"
+                        className="h-7 px-2 text-xs text-[#B85C33]"
                         onClick={() => handleDelete(quote.id)}
                       >
                         <Trash2 className="w-3.5 h-3.5" />
@@ -540,7 +544,7 @@ export default function QuotesPage() {
                       required
                       value={form.title}
                       onChange={(e) => setForm({ ...form, title: e.target.value })}
-                      placeholder="예) ClassIn Board 86인치 도입 견적"
+                      placeholder='예) 전자칠판 86" 도입 견적'
                       className="w-full rounded-lg border border-[#e8e8e4] px-3 py-2 text-sm focus:border-[#1a1a1a] focus:outline-none"
                     />
                   </div>
@@ -583,7 +587,7 @@ export default function QuotesPage() {
                     <button
                       type="button"
                       onClick={() => setItems((prev) => [...prev, createItemFromKey("custom")])}
-                      className="flex items-center gap-0.5 text-xs text-blue-600 hover:underline"
+                      className="flex items-center gap-0.5 text-xs text-[#084734] hover:underline"
                     >
                       <Plus className="w-3 h-3" />
                       품목 추가
@@ -684,7 +688,7 @@ export default function QuotesPage() {
                                 <button
                                   type="button"
                                   onClick={() => setItems((prev) => prev.filter((_, index) => index !== idx))}
-                                  className="text-[#1a1a1a]/30 hover:text-red-400"
+                                  className="text-[#1a1a1a]/30 hover:text-[#B85C33]"
                                 >
                                   <X className="w-3.5 h-3.5" />
                                 </button>

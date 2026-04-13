@@ -1,3 +1,4 @@
+import type { Metadata } from "next"
 import Image from "next/image"
 import Link from "next/link"
 import { notFound } from "next/navigation"
@@ -11,6 +12,36 @@ import {
 import { extractMarkdownHeadings } from "@/lib/blog-markdown"
 
 export const revalidate = 3600 // 1시간마다 재생성
+
+export async function generateMetadata({
+  params,
+}: BlogDetailPageProps): Promise<Metadata> {
+  const { slug } = await params
+  const post = await getPublishedPostBySlug(slug)
+  if (!post) {
+    return {
+      title: "글을 찾을 수 없습니다",
+      description: "요청하신 블로그 글을 찾을 수 없습니다.",
+    }
+  }
+  const ogImage = post.heroImageUrl || post.imageUrl || undefined
+  return {
+    title: post.title,
+    description: post.excerpt,
+    openGraph: {
+      title: post.title,
+      description: post.excerpt,
+      type: "article",
+      ...(ogImage ? { images: [{ url: ogImage }] } : {}),
+    },
+    twitter: {
+      card: "summary_large_image",
+      title: post.title,
+      description: post.excerpt,
+      ...(ogImage ? { images: [ogImage] } : {}),
+    },
+  }
+}
 
 export async function generateStaticParams() {
   return getPublishedSlugsForStaticParams()

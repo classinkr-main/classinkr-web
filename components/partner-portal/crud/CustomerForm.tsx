@@ -49,7 +49,11 @@ export function CustomerForm({ partnerAccountId, existing, onClose, onSaved }: P
       ? `/api/portal/customers/${existing.id}`
       : "/api/portal/customers"
     const method = isEdit ? "PUT" : "POST"
-    const body = isEdit ? form : { ...form, partner_account_id: partnerAccountId }
+    const body = isEdit
+      ? form
+      : partnerAccountId
+        ? { ...form, partner_account_id: partnerAccountId }
+        : form
 
     const res = await portalFetch(url, {
       method,
@@ -101,7 +105,7 @@ export function CustomerForm({ partnerAccountId, existing, onClose, onSaved }: P
               rows={2} className="w-full border border-[#e8e8e4] rounded-lg px-3 py-2 text-sm focus:outline-none focus:border-[#1a1a1a] resize-none" />
           </div>
           {saveError && (
-            <div className="rounded-lg border border-red-200 bg-red-50 px-3 py-2 text-sm text-red-600">
+            <div className="rounded-lg border border-[#F6D5C5] bg-[#FEF3EE] px-3 py-2 text-sm text-[#B85C33]">
               {saveError}
             </div>
           )}

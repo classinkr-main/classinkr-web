@@ -183,7 +183,7 @@ export function DealQuickCreateDialog({
           </Field>
 
           {error && (
-            <p className="rounded-md border border-red-200 bg-red-50 px-3 py-2 text-sm text-red-600">
+            <p className="rounded-md border border-[#F6D5C5] bg-[#FEF3EE] px-3 py-2 text-sm text-[#B85C33]">
               {error}
             </p>
           )}

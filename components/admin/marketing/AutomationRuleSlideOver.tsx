@@ -399,17 +399,17 @@ export default function AutomationRuleSlideOver({ open, templates, initial, onSa
 
               {/* 세그먼트 미리보기 카운트 */}
               <div className={`flex items-center gap-3 rounded-xl px-4 py-3 border ${
-                previewLoading ? "bg-[#FAFAF8] border-[#e8e8e4]" : "bg-blue-50 border-blue-100"
+                previewLoading ? "bg-[#FAFAF8] border-[#e8e8e4]" : "bg-[#ECFDF5] border-[#D1FAE5]"
               }`}>
-                <Target className={`w-4 h-4 flex-shrink-0 ${previewLoading ? "text-[#1a1a1a]/30 animate-pulse" : "text-blue-500"}`} />
+                <Target className={`w-4 h-4 flex-shrink-0 ${previewLoading ? "text-[#1a1a1a]/30 animate-pulse" : "text-[#084734]"}`} />
                 {previewLoading ? (
                   <p className="text-[12px] text-[#1a1a1a]/40">수신자 수 계산 중...</p>
                 ) : preview ? (
                   <div>
-                    <p className="text-[13px] font-semibold text-blue-700">
+                    <p className="text-[13px] font-semibold text-[#084734]">
                       예상 수신자: {preview.estimatedCount.toLocaleString()}명
                     </p>
-                    <p className="text-[11px] text-blue-500 mt-0.5">
+                    <p className="text-[11px] text-[#065c41] mt-0.5">
                       리드 {preview.breakdown.leads}명 + 구독자 {preview.breakdown.subscribers}명 (이메일 보유 기준)
                     </p>
                   </div>
