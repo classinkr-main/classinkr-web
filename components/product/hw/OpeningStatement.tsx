@@ -42,7 +42,7 @@ export default function OpeningStatement() {
             className="text-[2rem] sm:text-4xl md:text-5xl lg:text-[3.75rem] xl:text-[4.25rem] font-bold tracking-tight text-[#111110]"
             style={{ lineHeight: 1.1, letterSpacing: "-0.045em" }}
           >
-            교실에 두는 건 분필 한 자루입니다.
+            선생님은 수업만 하세요.
           </motion.p>
 
           {/* Line 2 — accent */}
@@ -54,7 +54,7 @@ export default function OpeningStatement() {
             className="text-[2rem] sm:text-4xl md:text-5xl lg:text-[3.75rem] xl:text-[4.25rem] font-bold tracking-tight text-[#084734]"
             style={{ lineHeight: 1.1, letterSpacing: "-0.045em" }}
           >
-            나머지는 보드 안에 들어 있습니다.
+            녹화도, 공유도, 기록도 —
           </motion.p>
 
           {/* Line 3 */}
@@ -66,7 +66,7 @@ export default function OpeningStatement() {
             className="text-[2rem] sm:text-4xl md:text-5xl lg:text-[3.75rem] xl:text-[4.25rem] font-bold tracking-tight text-[#111110]"
             style={{ lineHeight: 1.1, letterSpacing: "-0.045em" }}
           >
-            PC, 카메라, 마이크, 그리고 소프트웨어까지.
+            교실이 알아서 합니다.
           </motion.p>
         </div>
 
