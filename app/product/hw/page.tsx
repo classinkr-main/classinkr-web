@@ -23,6 +23,7 @@ import AICameraSection from "@/components/product/hw/AICameraSection"
 import SizeChooser from "@/components/product/hw/SizeChooser"
 import ValueAnchor from "@/components/product/hw/ValueAnchor"
 import ClassroomStudioSection from "@/components/product/hw/ClassroomStudioSection"
+import AfterClassSection from "@/components/product/hw/AfterClassSection"
 
 /* ── Animation helpers ───────────────────────────────────────────── */
 const fadeUp = {
@@ -1137,6 +1138,11 @@ export default function ProductHWPage() {
                     </motion.div>
                 </FeatureSection>
             </div>
+
+            {/* ================================================================
+                AFTER CLASS — 학생·학부모·교사 3관점 수업 이후 경험
+            ================================================================ */}
+            <AfterClassSection />
 
             {/* ================================================================
                 FULL-WIDTH POINT — 여기서도, 저기서도 같은 수업
