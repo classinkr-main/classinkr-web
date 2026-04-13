@@ -2,6 +2,7 @@ import "server-only"
 
 import { getResolvedSettings } from "@/lib/repositories/settings"
 import { postJson } from "@/lib/server/post-json"
+import { sendInternalNotification, wrapNotificationHtml } from "@/lib/email"
 import { resolveNotificationPresentation } from "@/lib/notifications/presentation"
 import {
   createDeliveryLog,
@@ -112,26 +113,65 @@ function getWebhookUrl(
   return undefined
 }
 
-async function deliverChannel(
-  channel: Exclude<NotificationChannel, "in_app">,
+async function deliverEmailChannel(
   input: EmitNotificationEventInput,
-  eventId: string
+  eventId: string,
+) {
+  const settings = await getResolvedSettings()
+  const recipients = settings.notificationDigestEmailList
+
+  if (!recipients.length) {
+    await createDeliveryLog({
+      eventId,
+      channel: "email",
+      status: "skipped",
+      requestPayload: { title: input.title },
+      errorMessage: "Notification digest email list is empty.",
+    })
+    return
+  }
+
+  const html = wrapNotificationHtml(input.title, input.message, input.routeUrl)
+  const subjectPrefix =
+    input.severity === "critical" ? "[긴급] " : input.severity === "warning" ? "[주의] " : ""
+
+  try {
+    const result = await sendInternalNotification({
+      to: recipients,
+      subject: `${subjectPrefix}${input.title}`,
+      html,
+      routeUrl: input.routeUrl,
+    })
+
+    await createDeliveryLog({
+      eventId,
+      channel: "email",
+      status: result.failed === recipients.length ? "failed" : "sent",
+      requestPayload: { to: recipients, provider: result.provider },
+      responsePayload: { sent: result.sent, failed: result.failed },
+      ...(result.sent > 0 ? { deliveredAt: new Date().toISOString() } : {}),
+      ...(result.errors?.length ? { errorMessage: result.errors.join("; ") } : {}),
+    })
+  } catch (error) {
+    await createDeliveryLog({
+      eventId,
+      channel: "email",
+      status: "failed",
+      requestPayload: { to: recipients },
+      errorMessage: error instanceof Error ? error.message : "Unknown error",
+    })
+  }
+}
+
+async function deliverWebhookChannel(
+  channel: Exclude<NotificationChannel, "in_app" | "email">,
+  input: EmitNotificationEventInput,
+  eventId: string,
 ) {
   const severity = input.severity ?? "info"
   const settings = await getResolvedSettings()
   const payload = buildExternalPayload(channel, input)
   const url = getWebhookUrl(channel, severity, settings)
-
-  if (channel === "email" && !settings.notificationDigestEmailList.length) {
-    await createDeliveryLog({
-      eventId,
-      channel,
-      status: "skipped",
-      requestPayload: payload,
-      errorMessage: "Notification digest email list is empty.",
-    })
-    return
-  }
 
   if (!url) {
     await createDeliveryLog({
@@ -144,16 +184,8 @@ async function deliverChannel(
     return
   }
 
-  const requestPayload =
-    channel === "email"
-      ? {
-          ...payload,
-          recipients: settings.notificationDigestEmailList,
-        }
-      : payload
-
   try {
-    const response = await postJson(url, requestPayload)
+    const response = await postJson(url, payload)
     const responsePayload = {
       ok: response.ok,
       status: response.status,
@@ -164,7 +196,7 @@ async function deliverChannel(
         eventId,
         channel,
         status: "failed",
-        requestPayload,
+        requestPayload: payload,
         responsePayload,
         errorMessage: `HTTP ${response.status}`,
       })
@@ -175,7 +207,7 @@ async function deliverChannel(
       eventId,
       channel,
       status: "sent",
-      requestPayload,
+      requestPayload: payload,
       responsePayload,
       deliveredAt: new Date().toISOString(),
     })
@@ -184,7 +216,7 @@ async function deliverChannel(
       eventId,
       channel,
       status: "failed",
-      requestPayload,
+      requestPayload: payload,
       errorMessage: error instanceof Error ? error.message : "Unknown error",
     })
   }
@@ -244,7 +276,13 @@ export async function emitNotificationEvent(input: EmitNotificationEventInput) {
       channel !== "in_app"
   )
 
-  await Promise.all(channels.map((channel) => deliverChannel(channel, input, String(event.id))))
+  await Promise.all(
+    channels.map((channel) =>
+      channel === "email"
+        ? deliverEmailChannel(input, String(event.id))
+        : deliverWebhookChannel(channel, input, String(event.id))
+    )
+  )
 
   return event
 }

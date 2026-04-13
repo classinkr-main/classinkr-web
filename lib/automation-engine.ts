@@ -22,14 +22,13 @@
 
 import "server-only"
 import { createSupabaseAdminClient } from "@/lib/supabase/admin"
-import { getResolvedSettings } from "@/lib/repositories/settings"
-import { postJson } from "@/lib/server/post-json"
 import {
   getActiveRulesByTrigger,
   getRuleById,
   createLog,
   updateLogStatus,
 } from "@/lib/repositories/automation"
+import { sendBatchEmail, wrapCampaignHtml } from "@/lib/email"
 import type {
   AutomationRule,
   AutomationRecipient,
@@ -263,50 +262,34 @@ export async function executeRule(ruleId: string): Promise<{
       return { logId: log.id, recipientCount: 0, status: "sent" }
     }
 
-    const settings = await getResolvedSettings()
-    const emailWebhookUrl = settings.emailWebhookUrl
-    if (!emailWebhookUrl) throw new Error("EMAIL_WEBHOOK_URL 환경변수 없음")
-
     const baseUrl = process.env.NEXT_PUBLIC_SITE_URL
     const sendDate = new Date().toLocaleDateString("ko-KR", { year: "numeric", month: "long", day: "numeric" })
 
-    const personalizedRecipients = await Promise.all(
+    const emailPayloads = await Promise.all(
       recipients.map(async (r) => {
         const unsubscribeUrl = baseUrl
           ? `${baseUrl}/api/newsletter/unsubscribe?email=${encodeURIComponent(r.email)}`
-          : ""
+          : undefined
         const opts: PersonalizeOpts = { sendDate, unsubscribeUrl }
-        // AI 블록 먼저 확장, 그 다음 변수 치환
         const expandedBody    = await expandAiBlocks(rule.template!.body, r)
         const expandedSubject = await expandAiBlocks(rule.template!.subject, r)
         return {
-          email: r.email,
-          name: r.name ?? "고객",
-          personalizedSubject: personalizeBody(expandedSubject, r, opts),
-          personalizedBody:    personalizeBody(expandedBody, r, opts),
+          to: r.email,
+          subject: personalizeBody(expandedSubject, r, opts),
+          html: wrapCampaignHtml(personalizeBody(expandedBody, r, opts), unsubscribeUrl),
         }
       })
     )
 
-    const res = await postJson(
-      emailWebhookUrl,
-      {
-        subject: rule.template.subject,
-        personalizedRecipients,
-        unsubscribeBaseUrl: baseUrl
-          ? `${baseUrl}/api/newsletter/unsubscribe`
-          : undefined,
-        automationRuleId: ruleId,
-        automationRuleName: rule.name,
-      },
-      { timeoutMs: 10_000 }
-    )
+    const result = await sendBatchEmail(emailPayloads)
 
-    if (!res.ok) throw new Error(`이메일 웹훅 응답 오류: ${res.status}`)
+    if (result.failed > 0 && result.sent === 0) {
+      throw new Error(`이메일 전체 실패 (${result.provider}): ${result.errors?.join(", ")}`)
+    }
 
     const emails = recipients.map((r) => r.email)
     await updateLogStatus(log.id, "sent", {
-      recipientCount: recipients.length,
+      recipientCount: result.sent,
       recipientEmails: emails,
     })
 
@@ -351,10 +334,6 @@ export async function triggerOnSubmitRules(payload: OnSubmitPayload): Promise<vo
 
     if (matchingRules.length === 0) return
 
-    const settings = await getResolvedSettings()
-    const emailWebhookUrl = settings.emailWebhookUrl
-    if (!emailWebhookUrl) return
-
     await Promise.allSettled(
       matchingRules.map(async (rule: AutomationRule) => {
         if (!rule.template) return
@@ -365,7 +344,7 @@ export async function triggerOnSubmitRules(payload: OnSubmitPayload): Promise<vo
           const baseUrl = process.env.NEXT_PUBLIC_SITE_URL
           const unsubscribeUrl = baseUrl
             ? `${baseUrl}/api/newsletter/unsubscribe?email=${encodeURIComponent(recipient.email)}`
-            : ""
+            : undefined
           const sendDate = new Date().toLocaleDateString("ko-KR", { year: "numeric", month: "long", day: "numeric" })
           const opts: PersonalizeOpts = { sendDate, unsubscribeUrl }
           const expandedBody    = await expandAiBlocks(rule.template.body, recipient)
@@ -373,23 +352,13 @@ export async function triggerOnSubmitRules(payload: OnSubmitPayload): Promise<vo
           const personalizedBody    = personalizeBody(expandedBody, recipient, opts)
           const personalizedSubject = personalizeBody(expandedSubject, recipient, opts)
 
-          const res = await postJson(
-            emailWebhookUrl,
-            {
-              subject: personalizedSubject,
-              personalizedRecipients: [
-                { email: recipient.email, name: recipient.name ?? "고객", personalizedSubject, personalizedBody },
-              ],
-              unsubscribeBaseUrl: process.env.NEXT_PUBLIC_SITE_URL
-                ? `${process.env.NEXT_PUBLIC_SITE_URL}/api/newsletter/unsubscribe`
-                : undefined,
-              automationRuleId: rule.id,
-              automationRuleName: rule.name,
-            },
-            { timeoutMs: 10_000 }
-          )
+          const result = await sendBatchEmail([{
+            to: recipient.email,
+            subject: personalizedSubject,
+            html: wrapCampaignHtml(personalizedBody, unsubscribeUrl),
+          }])
 
-          if (!res.ok) throw new Error(`웹훅 응답 오류: ${res.status}`)
+          if (result.failed > 0) throw new Error(`발송 실패 (${result.provider})`)
 
           await updateLogStatus(log.id, "sent", {
             recipientCount: 1,

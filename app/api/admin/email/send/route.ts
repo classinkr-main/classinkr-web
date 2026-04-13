@@ -1,6 +1,7 @@
 import { NextRequest, NextResponse } from "next/server"
 import { verifyAdmin } from "@/lib/admin-auth"
 import { createCampaign, getActiveSubscribersByTags } from "@/lib/repositories/marketing"
+import { sendBatchEmail, wrapCampaignHtml } from "@/lib/email"
 import type { SendEmailRequest } from "@/lib/marketing-types"
 
 const EMAIL_REGEX = /^[^\s@]+@[^\s@]+\.[^\s@]+$/
@@ -42,7 +43,7 @@ export async function POST(req: NextRequest) {
       )
     }
 
-    const emailWebhookUrl = process.env.EMAIL_WEBHOOK_URL
+    const unsubscribeBaseUrl = `${req.nextUrl.origin}/api/newsletter/unsubscribe`
     let recipients: PersonalizedRecipient[] = []
 
     if (sendMode === "test") {
@@ -116,51 +117,25 @@ export async function POST(req: NextRequest) {
       }
     }
 
-    const webhookRecipients = recipients.map((recipient) => ({
-      email: recipient.email,
-      name: recipient.name,
-      org: recipient.org,
-      personalizedSubject: recipient.personalizedSubject,
-      personalizedBody: recipient.personalizedBody,
+    // 통합 이메일 엔진으로 발송
+    const emails = recipients.map((r) => ({
+      to: r.email,
+      subject: r.personalizedSubject ?? body.subject,
+      html: wrapCampaignHtml(
+        r.personalizedBody,
+        `${unsubscribeBaseUrl}?email=${encodeURIComponent(r.email)}`,
+      ),
     }))
 
-    let sendStatus: "sent" | "failed" = "sent"
-
-    if (emailWebhookUrl) {
-      try {
-        const res = await fetch(emailWebhookUrl, {
-          method: "POST",
-          headers: { "Content-Type": "application/json" },
-          body: JSON.stringify({
-            subject: body.subject,
-            recipients: webhookRecipients,
-            personalizedRecipients: webhookRecipients,
-            mode: sendMode,
-            unsubscribeBaseUrl: `${req.nextUrl.origin}/api/newsletter/unsubscribe`,
-          }),
-        })
-
-        if (!res.ok) sendStatus = "failed"
-      } catch {
-        sendStatus = "failed"
-      }
-    } else {
-      console.log("[EMAIL-DEV] 웹훅 URL 미설정. 발송 시뮬레이션:")
-      console.log(`  제목: ${body.subject}`)
-      console.log(`  대상: ${recipients.length}명`)
-      console.log(`  태그: ${(body.targetTags ?? []).join(", ") || "전체"}`)
-      if (sendMode === "test") {
-        console.log(`  테스트 이메일: ${body.testEmail?.trim()}`)
-      } else if (body.aiPersonalized?.length) {
-        console.log("  모드: AI 개인화 발송")
-      }
-    }
+    const result = await sendBatchEmail(emails)
+    const sendStatus = result.failed > 0 && result.sent === 0 ? "failed" : "sent"
 
     if (sendMode === "test") {
       return NextResponse.json({
         ok: true,
         test: true,
-        recipientCount: recipients.length,
+        provider: result.provider,
+        recipientCount: result.sent,
         status: sendStatus,
       })
     }
@@ -169,15 +144,16 @@ export async function POST(req: NextRequest) {
       subject: body.subject,
       body: body.body,
       targetTags: body.targetTags ?? [],
-      status: sendStatus,
+      status: sendStatus as "sent" | "failed",
       sentAt: sendStatus === "sent" ? new Date().toISOString() : undefined,
-      recipientCount: recipients.length,
+      recipientCount: result.sent,
     })
 
     return NextResponse.json({
       ok: true,
       campaign,
-      recipientCount: recipients.length,
+      provider: result.provider,
+      recipientCount: result.sent,
       status: sendStatus,
     })
   } catch {
