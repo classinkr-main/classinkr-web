@@ -58,12 +58,12 @@ function calcScore(lead: LeadRecord): number {
 }
 
 function ScoreBadge({ score }: { score: number }) {
-  const color = score >= 70 ? "bg-green-50 text-green-700 border-green-200"
-    : score >= 40 ? "bg-yellow-50 text-yellow-700 border-yellow-200"
-    : "bg-[#f0f0ec] text-[#1a1a1a]/50 border-[#e8e8e4]"
+  const color = score >= 70 ? "text-[#084734]/70"
+    : score >= 40 ? "text-[#1a1a1a]/40"
+    : "text-[#1a1a1a]/25"
   return (
-    <span className={`text-[11px] px-2 py-0.5 rounded-full font-bold border ${color}`}>
-      ★ {score}
+    <span className={`text-[10px] font-medium tabular-nums ${color}`}>
+      ★{score}
     </span>
   )
 }
@@ -801,7 +801,7 @@ export default function CrmPage() {
             <thead>
               <tr className="border-b border-[#e8e8e4] bg-[#fafaf8]">
                 {["시간", "소스", "이름", "기관", "연락처", "팔로업", "상태"].map((h) => (
-                  <th key={h} className="text-left px-4 py-3 font-medium text-[#1a1a1a]/40 whitespace-nowrap text-[12px]">{h}</th>
+                  <th key={h} className="text-left px-5 py-3.5 font-medium text-[#1a1a1a]/40 whitespace-nowrap text-[12px]">{h}</th>
                 ))}
               </tr>
             </thead>
@@ -818,23 +818,23 @@ export default function CrmPage() {
                       selected?.id === lead.id ? "bg-[#f0f0ec]" : "hover:bg-[#fafaf8]"
                     }`}
                   >
-                    <td className="px-4 py-3 text-[#1a1a1a]/40 whitespace-nowrap text-[12px]">
+                    <td className="px-5 py-4 text-[#1a1a1a]/40 whitespace-nowrap text-[12px]">
                       {new Date(lead.timestamp).toLocaleDateString("ko-KR", { month: "2-digit", day: "2-digit", hour: "2-digit", minute: "2-digit" })}
                     </td>
-                    <td className="px-4 py-3 whitespace-nowrap">
-                      <span className="px-2 py-0.5 rounded-md bg-[#f0f0ec] text-[#1a1a1a]/60 text-[11px]">
+                    <td className="px-5 py-4 whitespace-nowrap">
+                      <span className="px-2 py-0.5 rounded-md bg-[#f0f0ec] text-[#1a1a1a]/50 text-[11px]">
                         {SOURCE_LABEL[lead.source] ?? lead.source}
                       </span>
                     </td>
-                    <td className="px-4 py-3 font-medium text-[#111110]">
+                    <td className="px-5 py-4 font-medium text-[#111110]">
                       <div className="flex items-center gap-1.5">
                         {lead.name ?? "—"}
                         <ScoreBadge score={calcScore(lead)} />
                       </div>
                     </td>
-                    <td className="px-4 py-3 text-[#1a1a1a]/60">{lead.org ?? "—"}</td>
-                    <td className="px-4 py-3 text-[#1a1a1a]/60">{lead.phone ?? lead.email ?? "—"}</td>
-                    <td className="px-4 py-3 whitespace-nowrap text-[12px]">
+                    <td className="px-5 py-4 text-[#1a1a1a]/55">{lead.org ?? "—"}</td>
+                    <td className="px-5 py-4 text-[#1a1a1a]/55">{lead.phone ?? lead.email ?? "—"}</td>
+                    <td className="px-5 py-4 whitespace-nowrap text-[12px]">
                       {lead.follow_up_at ? (
                         <span className={isOverdue ? "text-[#B85C33] font-medium" : isTodayFollowUp ? "text-[#084734] font-medium" : "text-[#1a1a1a]/40"}>
                           {isOverdue ? "⚠ " : isTodayFollowUp ? "● " : ""}
@@ -844,7 +844,7 @@ export default function CrmPage() {
                         <span className="text-[#1a1a1a]/20">—</span>
                       )}
                     </td>
-                    <td className="px-4 py-3">
+                    <td className="px-5 py-4">
                       <div className="flex items-center gap-2 flex-wrap">
                         <span className={`text-[11px] px-2 py-0.5 rounded-full font-medium ${STATUS_COLOR[lead.status]}`}>
                           {STATUS_LABEL[lead.status]}
