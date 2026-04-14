@@ -24,12 +24,29 @@ interface Props {
     email: string
     org?: string
     role?: string
+    size?: string
     phone?: string
     tags: string[]
   }) => void
   onCancel: () => void
   loading?: boolean
 }
+
+const ROLE_OPTIONS = [
+  { value: "", label: "선택 안함" },
+  { value: "원장", label: "원장" },
+  { value: "강사", label: "강사" },
+  { value: "관리자", label: "관리자" },
+  { value: "기타", label: "기타" },
+]
+
+const SIZE_OPTIONS = [
+  { value: "", label: "선택 안함" },
+  { value: "30명 미만", label: "30명 미만" },
+  { value: "30–100명", label: "30–100명" },
+  { value: "100–300명", label: "100–300명" },
+  { value: "300명 이상", label: "300명 이상" },
+]
 
 export default function SubscriberForm({ onSave, onCancel, loading }: Props) {
   const [selectedTags, setSelectedTags] = useState<string[]>([])
@@ -48,6 +65,7 @@ export default function SubscriberForm({ onSave, onCancel, loading }: Props) {
       email: fd.get("email") as string,
       org: (fd.get("org") as string) || undefined,
       role: (fd.get("role") as string) || undefined,
+      size: (fd.get("size") as string) || undefined,
       phone: (fd.get("phone") as string) || undefined,
       tags: selectedTags,
     })
@@ -65,17 +83,43 @@ export default function SubscriberForm({ onSave, onCancel, loading }: Props) {
       </div>
       <div className="grid grid-cols-2 gap-4">
         <div className="grid gap-2">
-          <Label htmlFor="sub-org">학원명</Label>
+          <Label htmlFor="sub-org">학원명 / 기관명</Label>
           <Input id="sub-org" name="org" placeholder="클래스인 아카데미" />
         </div>
         <div className="grid gap-2">
-          <Label htmlFor="sub-role">직책</Label>
-          <Input id="sub-role" name="role" placeholder="원장" />
+          <Label htmlFor="sub-phone">전화번호</Label>
+          <Input id="sub-phone" name="phone" placeholder="010-1234-5678" />
         </div>
       </div>
-      <div className="grid gap-2">
-        <Label htmlFor="sub-phone">전화번호</Label>
-        <Input id="sub-phone" name="phone" placeholder="010-1234-5678" />
+      <div className="grid grid-cols-2 gap-4">
+        <div className="grid gap-2">
+          <Label htmlFor="sub-role">역할</Label>
+          <select
+            id="sub-role"
+            name="role"
+            className="flex h-9 w-full rounded-md border border-[#E5E5E0] bg-white px-3 py-1 text-sm text-[#111110] shadow-none outline-none focus:ring-2 focus:ring-[#084734] focus:ring-offset-0 transition-colors"
+          >
+            {ROLE_OPTIONS.map((opt) => (
+              <option key={opt.value} value={opt.value}>
+                {opt.label}
+              </option>
+            ))}
+          </select>
+        </div>
+        <div className="grid gap-2">
+          <Label htmlFor="sub-size">원생 규모</Label>
+          <select
+            id="sub-size"
+            name="size"
+            className="flex h-9 w-full rounded-md border border-[#E5E5E0] bg-white px-3 py-1 text-sm text-[#111110] shadow-none outline-none focus:ring-2 focus:ring-[#084734] focus:ring-offset-0 transition-colors"
+          >
+            {SIZE_OPTIONS.map((opt) => (
+              <option key={opt.value} value={opt.value}>
+                {opt.label}
+              </option>
+            ))}
+          </select>
+        </div>
       </div>
 
       {/* [NOTE-18] 태그 선택 영역 */}

@@ -1,6 +1,6 @@
 import { NextRequest, NextResponse } from "next/server"
 import { verifyAdmin } from "@/lib/admin-auth"
-import { createCampaign, getActiveSubscribersByTags } from "@/lib/repositories/marketing"
+import { createCampaign, updateCampaign, getActiveSubscribersByTags } from "@/lib/repositories/marketing"
 import { sendBatchEmail, wrapCampaignHtml } from "@/lib/email"
 import type { SendEmailRequest } from "@/lib/marketing-types"
 
@@ -91,6 +91,42 @@ export async function POST(req: NextRequest) {
           { status: 400 }
         )
       }
+    } else if (Array.isArray(body.directEmails) && body.directEmails.length > 0) {
+      // 직접 입력 모드: 이메일 주소 목록으로 발송
+      const validEmails = body.directEmails
+        .map((e) => e.trim())
+        .filter((e) => isValidEmail(e))
+
+      // 구독자 DB에서 매칭되는 사람은 이름 가져오기
+      const allSubscribers = await getActiveSubscribersByTags([])
+      const subMap = new Map(allSubscribers.map((s) => [s.email.toLowerCase(), s]))
+
+      recipients = validEmails.map((email) => {
+        const sub = subMap.get(email.toLowerCase())
+        const name = sub?.name ?? email.split("@")[0]
+        return {
+          email,
+          name,
+          org: sub?.org ?? "",
+          personalizedSubject: replacePlaceholders(body.subject, {
+            name,
+            org: sub?.org ?? "",
+            role: sub?.role ?? "",
+          }),
+          personalizedBody: replacePlaceholders(body.body, {
+            name,
+            org: sub?.org ?? "",
+            role: sub?.role ?? "",
+          }),
+        }
+      })
+
+      if (recipients.length === 0) {
+        return NextResponse.json(
+          { error: "유효한 이메일 주소가 없습니다." },
+          { status: 400 }
+        )
+      }
     } else {
       const activeRecipients = await getActiveSubscribersByTags(body.targetTags ?? [])
       recipients = activeRecipients.map((recipient) => ({
@@ -117,6 +153,38 @@ export async function POST(req: NextRequest) {
       }
     }
 
+    // 테스트 발송: 캠페인 레코드 없이 바로 발송
+    if (sendMode === "test") {
+      const testEmails = recipients.map((r) => ({
+        to: r.email,
+        subject: r.personalizedSubject ?? body.subject,
+        html: wrapCampaignHtml(
+          r.personalizedBody,
+          `${unsubscribeBaseUrl}?email=${encodeURIComponent(r.email)}`,
+        ),
+      }))
+      const testResult = await sendBatchEmail(testEmails)
+      return NextResponse.json({
+        ok: true,
+        test: true,
+        provider: testResult.provider,
+        recipientCount: testResult.sent,
+        status: testResult.failed > 0 && testResult.sent === 0 ? "failed" : "sent",
+      })
+    }
+
+    // 캠페인 레코드를 먼저 생성(draft)해서 ID를 확보 — 추적 픽셀 URL에 사용
+    const campaign = await createCampaign({
+      subject: body.subject,
+      body: body.body,
+      targetTags: body.targetTags ?? [],
+      status: "draft",
+      recipientCount: 0,
+    })
+
+    const baseUrl = req.nextUrl.origin
+    const trackingUrl = `${baseUrl}/api/track/open?cid=${campaign.id}`
+
     // 통합 이메일 엔진으로 발송
     const emails = recipients.map((r) => ({
       to: r.email,
@@ -124,26 +192,15 @@ export async function POST(req: NextRequest) {
       html: wrapCampaignHtml(
         r.personalizedBody,
         `${unsubscribeBaseUrl}?email=${encodeURIComponent(r.email)}`,
+        trackingUrl,
       ),
     }))
 
     const result = await sendBatchEmail(emails)
     const sendStatus = result.failed > 0 && result.sent === 0 ? "failed" : "sent"
 
-    if (sendMode === "test") {
-      return NextResponse.json({
-        ok: true,
-        test: true,
-        provider: result.provider,
-        recipientCount: result.sent,
-        status: sendStatus,
-      })
-    }
-
-    const campaign = await createCampaign({
-      subject: body.subject,
-      body: body.body,
-      targetTags: body.targetTags ?? [],
+    // 발송 결과로 캠페인 레코드 업데이트
+    await updateCampaign(campaign.id, {
       status: sendStatus as "sent" | "failed",
       sentAt: sendStatus === "sent" ? new Date().toISOString() : undefined,
       recipientCount: result.sent,
@@ -151,7 +208,7 @@ export async function POST(req: NextRequest) {
 
     return NextResponse.json({
       ok: true,
-      campaign,
+      campaign: { ...campaign, status: sendStatus, recipientCount: result.sent },
       provider: result.provider,
       recipientCount: result.sent,
       status: sendStatus,

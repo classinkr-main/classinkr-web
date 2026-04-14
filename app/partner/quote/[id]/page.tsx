@@ -414,6 +414,7 @@ export default function QuotePreviewPage() {
   const [actionNotice, setActionNotice] = useState<{ tone: "success" | "error"; text: string } | null>(
     null
   )
+  const [showAgreeModal, setShowAgreeModal] = useState(false)
 
   useEffect(() => {
     let alive = true
@@ -502,6 +503,7 @@ export default function QuotePreviewPage() {
   async function confirmReview() {
     if (!quote || !quoteToken) return
 
+    setShowAgreeModal(false)
     setActionLoading("review_confirmed")
     setActionNotice(null)
 
@@ -516,13 +518,13 @@ export default function QuotePreviewPage() {
       }
 
       if (!response.ok) {
-        throw new Error(body.error ?? "검토 완료를 접수하지 못했습니다")
+        throw new Error(body.error ?? "진행 동의를 접수하지 못했습니다")
       }
 
       setQuote(body as PublicQuoteApiResponse)
-      setActionNotice({ tone: "success", text: "검토 완료가 접수되었습니다." })
+      setActionNotice({ tone: "success", text: "진행 동의가 접수되었습니다. 담당자가 다음 단계를 안내드립니다." })
     } catch (err) {
-      setActionNotice({ tone: "error", text: parseErrorMessage(err, "검토 완료를 접수하지 못했습니다") })
+      setActionNotice({ tone: "error", text: parseErrorMessage(err, "진행 동의를 접수하지 못했습니다") })
     } finally {
       setActionLoading(null)
     }
@@ -644,7 +646,7 @@ export default function QuotePreviewPage() {
             </div>
 
             {interaction && (
-              <div className="mt-6 rounded-2xl border border-[#e8e8e4] bg-[#fafaf8] px-5 py-4">
+              <div className="mt-6 rounded-2xl border border-[#e8e8e4] bg-[#fafaf8] px-5 py-4 print:hidden">
                 <div className="flex flex-col gap-4 md:flex-row md:items-center md:justify-between">
                   <div className="space-y-1">
                     <p className="text-xs font-semibold uppercase tracking-[0.18em] text-[#1a1a1a]/30">응답 상태</p>
@@ -654,7 +656,7 @@ export default function QuotePreviewPage() {
                         최근 열람 {interaction.summary.viewCount}회
                         {interaction.summary.lastViewedAt ? ` · ${formatCompactDate(interaction.summary.lastViewedAt)}` : ""}
                         {interaction.summary.reviewConfirmedAt
-                          ? ` · 검토 완료 ${formatCompactDate(interaction.summary.reviewConfirmedAt)}`
+                          ? ` · 진행 동의 ${formatCompactDate(interaction.summary.reviewConfirmedAt)}`
                           : ""}
                       </p>
                     )}
@@ -672,9 +674,9 @@ export default function QuotePreviewPage() {
                     {interaction.canConfirmReview ? (
                       <button
                         type="button"
-                        onClick={confirmReview}
+                        onClick={() => setShowAgreeModal(true)}
                         disabled={actionLoading === "review_confirmed"}
-                        className="inline-flex items-center gap-2 rounded-xl bg-[#1a1a1a] px-4 py-2 text-sm font-medium text-white transition-colors hover:bg-[#2a2a2a] disabled:cursor-not-allowed disabled:bg-[#1a1a1a]/40"
+                        className="inline-flex items-center gap-2 rounded-xl bg-[#084734] px-5 py-2.5 text-sm font-medium text-white transition-colors hover:bg-[#065c41] disabled:cursor-not-allowed disabled:opacity-40"
                       >
                         {actionLoading === "review_confirmed" ? (
                           <Loader2 className="h-4 w-4 animate-spin" />
@@ -686,25 +688,8 @@ export default function QuotePreviewPage() {
                     ) : (
                       <span className="inline-flex items-center gap-2 rounded-xl bg-[#ECFDF5] px-4 py-2 text-sm font-medium text-[#084734]">
                         <CheckCircle2 className="h-4 w-4" />
-                        검토 완료됨
+                        동의 완료됨
                       </span>
-                    )}
-                    {interaction.canRequestProceed && (
-                      <button
-                        type="button"
-                        onClick={requestProceed}
-                        disabled={actionLoading === "proceed_requested"}
-                        className="inline-flex items-center gap-2 rounded-xl border border-[#e8e8e4] bg-white px-4 py-2 text-sm font-medium text-[#1a1a1a]/70 transition-colors hover:bg-[#fafafa] hover:text-[#1a1a1a] disabled:cursor-not-allowed disabled:opacity-60"
-                      >
-                        {actionLoading === "proceed_requested" ? (
-                          <Loader2 className="h-4 w-4 animate-spin" />
-                        ) : supplierEmail ? (
-                          <Mail className="h-4 w-4" />
-                        ) : (
-                          <ArrowRight className="h-4 w-4" />
-                        )}
-                        {interaction.secondaryActionLabel}
-                      </button>
                     )}
                   </div>
                 </div>
@@ -712,7 +697,7 @@ export default function QuotePreviewPage() {
             )}
           </div>
 
-          <div className="grid gap-0 border-b border-[#e8e8e4] md:grid-cols-2">
+          <div className="grid gap-0 border-b border-[#e8e8e4] md:grid-cols-2" style={{ breakInside: "avoid" }}>
             <div className="border-b border-[#e8e8e4] px-8 py-6 md:border-b-0 md:border-r">
               <p className="text-xs font-semibold uppercase tracking-[0.18em] text-[#1a1a1a]/30">수신</p>
               <p className="mt-2 text-lg font-semibold text-[#1a1a1a]">{recipientName}</p>
@@ -752,9 +737,9 @@ export default function QuotePreviewPage() {
             </div>
 
             {hasStructuredLines ? (
-              <div className="overflow-hidden rounded-2xl border border-[#e8e8e4]">
-                <table className="w-full border-collapse text-sm">
-                  <thead className="bg-[#fafaf8]">
+              <div className="overflow-hidden rounded-2xl border border-[#e8e8e4] print:rounded-none print:border print:border-[#ccc]">
+                <table className="w-full border-collapse text-sm" style={{ breakInside: "avoid" }}>
+                  <thead className="bg-[#fafaf8]" style={{ display: "table-header-group" }}>
                     <tr className="border-b border-[#e8e8e4] text-left text-[11px] font-semibold uppercase tracking-[0.14em] text-[#1a1a1a]/35">
                       <th className="px-4 py-3">품목</th>
                       <th className="px-4 py-3">설명</th>
@@ -828,8 +813,8 @@ export default function QuotePreviewPage() {
             )}
           </div>
 
-          <div className="border-t border-[#e8e8e4] px-8 py-7">
-            <div className="grid gap-6 lg:grid-cols-[minmax(0,1fr)_320px]">
+          <div className="border-t border-[#e8e8e4] px-8 py-7" style={{ breakInside: "avoid" }}>
+            <div className="grid gap-6 lg:grid-cols-[minmax(0,1fr)_320px] print:grid-cols-[minmax(0,1fr)_280px]">
               <div className="space-y-4">
                 {details.generalNotes && (
                   <div className="rounded-2xl bg-[#fafaf8] px-5 py-4">
@@ -874,7 +859,7 @@ export default function QuotePreviewPage() {
                 )}
               </div>
 
-              <div className="rounded-3xl border border-[#e8e8e4] bg-[#fbfbfa] p-5">
+              <div className="rounded-3xl border border-[#e8e8e4] bg-[#fbfbfa] p-5" style={{ breakInside: "avoid" }}>
                 <p className="text-xs font-semibold uppercase tracking-[0.18em] text-[#1a1a1a]/30">금액 요약</p>
                 <div className="mt-4 space-y-2 text-sm">
                   <div className="flex items-center justify-between text-[#1a1a1a]/58">
@@ -927,6 +912,36 @@ export default function QuotePreviewPage() {
           인쇄 시 배경색을 포함하려면 브라우저 인쇄 옵션에서 &quot;배경 그래픽&quot;을 활성화하세요.
         </p>
       </div>
+
+      {/* ── 진행 동의 확인 모달 ───────────────────────────────── */}
+      {showAgreeModal && (
+        <div className="fixed inset-0 z-50 flex items-center justify-center bg-black/40 px-4 backdrop-blur-sm print:hidden">
+          <div className="w-full max-w-md rounded-2xl bg-white p-6 shadow-[0_24px_60px_rgba(0,0,0,0.18)]">
+            <h3 className="text-lg font-semibold text-[#111110]">진행 동의 확인</h3>
+            <p className="mt-3 text-sm leading-6 text-[#615D59]">
+              이 견적 내용에 동의하고 다음 단계(계약) 진행을 요청합니다.
+              <br />
+              동의 후에는 취소할 수 없으며, 담당자에게 알림이 전송됩니다.
+            </p>
+            <div className="mt-6 flex items-center justify-end gap-3">
+              <button
+                type="button"
+                onClick={() => setShowAgreeModal(false)}
+                className="rounded-lg border border-[#e8e8e4] px-4 py-2 text-sm font-medium text-[#615D59] hover:bg-[#fafafa]"
+              >
+                취소
+              </button>
+              <button
+                type="button"
+                onClick={confirmReview}
+                className="rounded-lg bg-[#084734] px-5 py-2 text-sm font-medium text-white hover:bg-[#065c41]"
+              >
+                동의합니다
+              </button>
+            </div>
+          </div>
+        </div>
+      )}
     </div>
   )
 }

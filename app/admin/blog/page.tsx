@@ -1,8 +1,9 @@
 "use client"
 
-import { useState, useEffect, useCallback } from "react"
+import { useState, useEffect, useCallback, useMemo } from "react"
 import { useRouter } from "next/navigation"
-import { Plus, RefreshCw, Trash2, RotateCcw, AlertTriangle } from "lucide-react"
+import { Plus, RefreshCw, Trash2, RotateCcw, AlertTriangle, Search, X } from "lucide-react"
+import { CATEGORIES } from "@/lib/blog-types"
 import { Button } from "@/components/ui/button"
 import {
     Dialog,
@@ -39,6 +40,8 @@ export default function AdminBlogPage() {
     const [trashedPosts, setTrashedPosts] = useState<BlogPost[]>([])
     const [loading, setLoading] = useState(false)
     const [formLoading, setFormLoading] = useState(false)
+    const [searchQuery, setSearchQuery] = useState("")
+    const [categoryFilter, setCategoryFilter] = useState<string>("전체")
 
     const [isFormOpen, setIsFormOpen] = useState(false)
     const [editingPost, setEditingPost] = useState<BlogPost | undefined>(undefined)
@@ -171,16 +174,49 @@ export default function AdminBlogPage() {
         await fetchPosts()
     }
 
-    const displayedPosts =
-        tab === "trash" ? trashedPosts :
-        tab === "private" ? posts.filter((p) => p.status !== "published") :
-        posts
+    const handleDuplicate = async (post: BlogPost) => {
+        await adminFetch("/api/admin/blog", {
+            method: "POST",
+            body: JSON.stringify({
+                ...post,
+                title: `${post.title} (복사)`,
+                slug: "",
+                status: "draft",
+                featured: false,
+                publishedAt: undefined,
+            }),
+        })
+        await fetchPosts()
+    }
+
+    const filteredPosts = useMemo(() => {
+        const base =
+            tab === "private" ? posts.filter((p) => p.status !== "published") : posts
+        return base
+            .filter((p) => categoryFilter === "전체" || p.category === categoryFilter)
+            .filter((p) => {
+                if (!searchQuery.trim()) return true
+                const q = searchQuery.toLowerCase()
+                return (
+                    p.title.toLowerCase().includes(q) ||
+                    p.excerpt?.toLowerCase().includes(q) ||
+                    p.author?.toLowerCase().includes(q)
+                )
+            })
+    }, [posts, tab, categoryFilter, searchQuery])
+
+    const displayedPosts = tab === "trash" ? trashedPosts : filteredPosts
 
     const TABS: { key: Tab; label: string; count: number }[] = [
         { key: "all", label: "전체", count: posts.length },
         { key: "private", label: "비공개", count: posts.filter((p) => p.status !== "published").length },
         { key: "trash", label: "휴지통", count: trashedPosts.length },
     ]
+
+    const usedCategories = useMemo(() => {
+        const cats = Array.from(new Set(posts.map((p) => p.category).filter(Boolean)))
+        return ["전체", ...CATEGORIES.slice(1).filter((c) => cats.includes(c)), ...cats.filter((c) => !CATEGORIES.includes(c as typeof CATEGORIES[number]))]
+    }, [posts])
 
     return (
         <div className="px-4 pt-8 pb-16 sm:px-6 sm:pt-10 sm:pb-20 lg:px-8">
@@ -255,6 +291,47 @@ export default function AdminBlogPage() {
                 ))}
             </div>
 
+            {/* 검색 + 카테고리 필터 */}
+            {tab !== "trash" && (
+                <div className="mb-4 flex flex-col gap-2 sm:flex-row sm:items-center">
+                    <div className="relative flex-1">
+                        <Search className="absolute left-3 top-1/2 -translate-y-1/2 h-3.5 w-3.5 text-[#1a1a1a]/30" />
+                        <input
+                            type="text"
+                            value={searchQuery}
+                            onChange={(e) => setSearchQuery(e.target.value)}
+                            placeholder="제목, 요약, 작성자 검색"
+                            className="w-full rounded-lg border border-[#e8e8e4] bg-white py-2 pl-9 pr-8 text-[13px] outline-none placeholder:text-[#1a1a1a]/30 focus:border-[#084734]"
+                        />
+                        {searchQuery && (
+                            <button
+                                type="button"
+                                onClick={() => setSearchQuery("")}
+                                className="absolute right-2.5 top-1/2 -translate-y-1/2 text-[#1a1a1a]/30 hover:text-[#1a1a1a]/60"
+                            >
+                                <X className="h-3.5 w-3.5" />
+                            </button>
+                        )}
+                    </div>
+                    <div className="flex flex-wrap gap-1.5">
+                        {usedCategories.map((cat) => (
+                            <button
+                                key={cat}
+                                type="button"
+                                onClick={() => setCategoryFilter(cat)}
+                                className={`shrink-0 rounded-lg px-2.5 py-1.5 text-[12px] font-medium transition-colors ${
+                                    categoryFilter === cat
+                                        ? "bg-[#084734] text-white"
+                                        : "border border-[#e8e8e4] bg-white text-[#1a1a1a]/50 hover:text-[#1a1a1a] hover:bg-[#f0f0ec]"
+                                }`}
+                            >
+                                {cat}
+                            </button>
+                        ))}
+                    </div>
+                </div>
+            )}
+
             {/* Trash warning banner */}
             {tab === "trash" && trashedPosts.length > 0 && (
                 <div className="mb-4 flex items-start gap-2 rounded-lg border border-[#F6D5C5] bg-[#FEF3EE] px-3 py-2 text-[13px] text-[#B85C33]">
@@ -276,6 +353,7 @@ export default function AdminBlogPage() {
                         posts={displayedPosts}
                         onEdit={handleEdit}
                         onDelete={setDeleteTarget}
+                        onDuplicate={handleDuplicate}
                         onToggleFeatured={handleToggleFeatured}
                         onTogglePublished={handleTogglePublished}
                     />

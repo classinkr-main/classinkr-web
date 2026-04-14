@@ -15,6 +15,7 @@ export type DealStatus = "active" | "paused" | "closed" | "cancelled";
 export type CatalogCategory = "board" | "camera" | "mount" | "install_fee";
 
 export type QuoteDocumentStatus =
+  | "pending_approval"
   | "draft"
   | "shared"
   | "accepted"
@@ -159,6 +160,9 @@ export interface QuoteDocument {
   current_version_id: string | null;
   status: QuoteDocumentStatus;
   created_by: string | null;
+  created_by_role: "admin" | "partner";
+  approved_by: string | null;
+  approved_at: string | null;
   created_at: string;
   updated_at: string;
 }

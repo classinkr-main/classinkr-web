@@ -47,9 +47,10 @@ const QUOTE_TEMPLATES = [
 ]
 
 const STATUS_LABEL: Record<QuoteDocumentStatus, string> = {
-  draft: "초안", shared: "공유됨", accepted: "수락", expired: "만료", archived: "보관",
+  pending_approval: "승인 대기", draft: "초안", shared: "공유됨", accepted: "수락", expired: "만료", archived: "보관",
 }
 const STATUS_COLOR: Record<QuoteDocumentStatus, string> = {
+  pending_approval: "bg-amber-50 text-amber-700",
   draft: "bg-[#f0f0ec] text-[#1a1a1a]/50",
   shared: "bg-[#ECFDF5] text-[#084734]",
   accepted: "bg-emerald-50 text-emerald-700",

@@ -244,6 +244,9 @@ async function buildLegacyDealDetailPayload(partner: Partner): Promise<DealDetai
               ? "expired"
               : "draft",
       created_by: quote.created_by,
+      created_by_role: "partner" as const,
+      approved_by: null,
+      approved_at: null,
       created_at: quote.created_at,
       updated_at: quote.updated_at,
       versions: [version],

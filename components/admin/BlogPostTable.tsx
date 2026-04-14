@@ -1,6 +1,6 @@
 "use client"
 
-import { Pencil, Trash2, Star, Eye, EyeOff } from "lucide-react"
+import { Copy, Pencil, Trash2, Star, Eye, EyeOff } from "lucide-react"
 import { Button } from "@/components/ui/button"
 import { Badge } from "@/components/ui/badge"
 import type { BlogPost } from "@/lib/blog-types"
@@ -9,11 +9,12 @@ interface BlogPostTableProps {
     posts: BlogPost[]
     onEdit: (post: BlogPost) => void
     onDelete: (post: BlogPost) => void
+    onDuplicate: (post: BlogPost) => void
     onToggleFeatured: (post: BlogPost) => void
     onTogglePublished: (post: BlogPost) => void
 }
 
-export default function BlogPostTable({ posts, onEdit, onDelete, onToggleFeatured, onTogglePublished }: BlogPostTableProps) {
+export default function BlogPostTable({ posts, onEdit, onDelete, onDuplicate, onToggleFeatured, onTogglePublished }: BlogPostTableProps) {
     if (posts.length === 0) {
         return (
             <div className="py-20 text-center text-[#1a1a1a]/30 text-sm">
@@ -32,12 +33,12 @@ export default function BlogPostTable({ posts, onEdit, onDelete, onToggleFeature
                         <th className="py-3 px-3 font-medium hidden md:table-cell">카테고리</th>
                         <th className="py-3 px-3 font-medium hidden md:table-cell">날짜</th>
                         <th className="py-3 px-3 font-medium hidden lg:table-cell">작성자</th>
-                        <th className="py-3 px-3 font-medium w-28 text-right">관리</th>
+                        <th className="py-3 px-3 font-medium w-36 text-right">관리</th>
                     </tr>
                 </thead>
                 <tbody>
                     {posts.map((post) => {
-                        const isPublished = post.published !== false
+                        const isPublished = post.status === "published"
                         return (
                             <tr
                                 key={post.id}
@@ -68,6 +69,7 @@ export default function BlogPostTable({ posts, onEdit, onDelete, onToggleFeature
                                             size="icon"
                                             onClick={(e) => { e.stopPropagation(); onTogglePublished(post) }}
                                             title={isPublished ? "비공개로 전환" : "공개로 전환"}
+                                            className="active:scale-90 transition-transform duration-75"
                                         >
                                             {isPublished
                                                 ? <Eye className="w-4 h-4 text-[#084734]" />
@@ -79,14 +81,25 @@ export default function BlogPostTable({ posts, onEdit, onDelete, onToggleFeature
                                             size="icon"
                                             onClick={(e) => { e.stopPropagation(); onToggleFeatured(post) }}
                                             title={post.featured ? "주요 글 해제" : "주요 글 설정"}
+                                            className="active:scale-90 transition-transform duration-75"
                                         >
                                             <Star className={`w-4 h-4 ${post.featured ? "fill-yellow-400 text-yellow-400" : "text-[#1a1a1a]/20"}`} />
                                         </Button>
                                         <Button
                                             variant="ghost"
                                             size="icon"
+                                            onClick={(e) => { e.stopPropagation(); onDuplicate(post) }}
+                                            title="글 복제"
+                                            className="active:scale-90 transition-transform duration-75"
+                                        >
+                                            <Copy className="w-4 h-4 text-[#1a1a1a]/30" />
+                                        </Button>
+                                        <Button
+                                            variant="ghost"
+                                            size="icon"
                                             onClick={(e) => { e.stopPropagation(); onEdit(post) }}
                                             title="수정"
+                                            className="active:scale-90 transition-transform duration-75"
                                         >
                                             <Pencil className="w-4 h-4 text-[#1a1a1a]/40" />
                                         </Button>
@@ -95,6 +108,7 @@ export default function BlogPostTable({ posts, onEdit, onDelete, onToggleFeature
                                             size="icon"
                                             onClick={(e) => { e.stopPropagation(); onDelete(post) }}
                                             title="휴지통으로 이동"
+                                            className="active:scale-90 transition-transform duration-75"
                                         >
                                             <Trash2 className="w-4 h-4 text-[#B85C33]" />
                                         </Button>

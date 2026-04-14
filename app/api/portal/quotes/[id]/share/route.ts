@@ -37,6 +37,13 @@ export async function POST(
       if (forbidden) return forbidden;
     }
 
+    if (document.status === "pending_approval") {
+      return NextResponse.json(
+        { error: "파트너 승인 대기 중인 견적은 공유할 수 없습니다." },
+        { status: 403 }
+      );
+    }
+
     const ensured = await ensureQuoteDocumentShare({
       quote_document_id: id,
       access_mode: "view",

@@ -28,11 +28,15 @@ export async function POST(req: NextRequest) {
       if (f) return f;
     }
 
+    const isAdmin = ctx.type === "admin";
     const quoteDoc = await createQuoteDocument({
       deal_id: body.deal_id,
-      status: "draft",
+      status: isAdmin ? "pending_approval" : "draft",
       current_version_id: null,
       created_by: ctx.userId ?? null,
+      created_by_role: isAdmin ? "admin" : "partner",
+      approved_by: null,
+      approved_at: null,
     });
 
     const actor = getActorInfo(ctx);

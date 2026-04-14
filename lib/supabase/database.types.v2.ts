@@ -25,6 +25,7 @@ export type DealStatusV2 = "active" | "paused" | "closed" | "cancelled";
 export type CatalogCategoryV2 = "board" | "camera" | "mount" | "install_fee";
 
 export type QuoteDocumentStatusV2 =
+  | "pending_approval"
   | "draft"
   | "shared"
   | "accepted"
@@ -166,6 +167,9 @@ export interface QuoteDocumentRow {
   current_version_id: string | null;
   status: QuoteDocumentStatusV2;
   created_by: string | null;
+  created_by_role: CreatedByRoleV2;
+  approved_by: string | null;
+  approved_at: string | null;
   created_at: string;
   updated_at: string;
 }

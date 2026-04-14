@@ -18,6 +18,7 @@ import type {
   QuoteDocumentShare,
   QuoteDocumentVersion,
 } from "@/lib/partner-portal/types";
+import { createInAppNotifications } from "@/lib/notifications/repository";
 import {
   STANDARD_QUOTE_DEFAULT_BODY,
   STANDARD_QUOTE_DEFAULT_VAT_LABEL,
@@ -283,10 +284,10 @@ function buildPublicQuoteInteraction({
     return {
       status: "confirmed",
       canConfirmReview: false,
-      canRequestProceed: true,
-      primaryActionLabel: "진행 요청",
+      canRequestProceed: false,
+      primaryActionLabel: "동의 완료",
       secondaryActionLabel: "인쇄 / 저장",
-      helperText: "검토 완료가 접수된 견적입니다. 다음 단계를 바로 요청할 수 있습니다.",
+      helperText: "견적 내용에 동의하셨습니다. 담당자가 다음 단계를 안내드립니다.",
       summary,
     };
   }
@@ -306,10 +307,10 @@ function buildPublicQuoteInteraction({
   return {
     status: "open",
     canConfirmReview: share.access_mode === "view",
-    canRequestProceed: true,
-    primaryActionLabel: "검토 완료",
-    secondaryActionLabel: "진행 요청",
-    helperText: "검토를 마쳤다면 확인을 남기고, 추가 협의가 필요하면 진행 요청을 보내세요.",
+    canRequestProceed: false,
+    primaryActionLabel: "진행 동의",
+    secondaryActionLabel: "인쇄 / 저장",
+    helperText: "견적 내용을 검토한 뒤, 동의하시면 계약 단계로 진행됩니다.",
     summary,
   };
 }
@@ -490,6 +491,24 @@ export async function POST(req: NextRequest) {
       });
     } catch (logError) {
       console.warn("[partner/quote] accept log skipped:", logError);
+    }
+
+    // 고객 동의 알림 → 파트너 계정
+    if (publicQuote.document.status !== "accepted" && deal.partner_account_id) {
+      createInAppNotifications([{
+        recipientType: "partner_account",
+        recipientId: deal.partner_account_id,
+        eventType: "quote_customer_agreed",
+        notificationType: "status_update",
+        categoryTag: "partner",
+        scopeTag: "team",
+        severity: "info",
+        title: "고객 진행 동의",
+        message: `${publicQuote.customer_name ?? "고객"}이 견적(${publicQuote.document.quote_number})에 동의했습니다.`,
+        routeUrl: `/partner/quotes`,
+        iconKey: "badge_check",
+        tone: "green",
+      }]).catch(console.error);
     }
 
     let summary = emptyInteractionSummary();

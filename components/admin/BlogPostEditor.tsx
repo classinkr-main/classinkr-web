@@ -33,6 +33,7 @@ import {
   Sparkles,
   Type,
   Undo2,
+  Upload,
   Video,
   Wand2,
   X,
@@ -80,6 +81,155 @@ type BlogTemplate = {
     cta: BlogPostInput["cta"]
   }
 }
+
+const DEFAULT_TEMPLATES: BlogTemplate[] = [
+  {
+    id: "default-insight",
+    name: "인사이트 기본형",
+    savedAt: "2024-01-01T00:00:00.000Z",
+    data: {
+      category: "인사이트",
+      targetReader: "운영 효율을 높이고 싶은 학원 원장·관리자",
+      benefitItems: [
+        "현장에서 바로 적용할 수 있는 핵심 포인트를 파악할 수 있습니다.",
+        "문제의 근본 원인을 빠르게 진단하는 방법을 배울 수 있습니다.",
+        "다음 액션을 구체적으로 잡아 실행력을 높일 수 있습니다.",
+      ],
+      cta: { ...DEFAULT_BLOG_CTA },
+      contentMarkdown: [
+        "## 지금 이 문제, 혼자만 겪는 게 아닙니다",
+        "",
+        "많은 학원 운영자들이 비슷한 고민을 안고 있습니다. 여기서는 그 문제를 구체적으로 짚고, 현장에서 바로 쓸 수 있는 해법을 정리합니다.",
+        "",
+        "## 핵심 인사이트",
+        "",
+        "### 첫 번째 포인트",
+        "",
+        "핵심 내용을 2–3문장으로 정리해보세요. 데이터나 사례가 있으면 설득력이 올라갑니다.",
+        "",
+        "### 두 번째 포인트",
+        "",
+        "실행 가능한 구체적인 방법을 설명해보세요. 단계나 리스트 형태가 읽기 좋습니다.",
+        "",
+        "- 실행 단계 1",
+        "- 실행 단계 2",
+        "- 실행 단계 3",
+        "",
+        "### 세 번째 포인트",
+        "",
+        "주의해야 할 점이나 흔히 저지르는 실수를 짚어주면 신뢰감이 생깁니다.",
+        "",
+        "> 핵심은 복잡한 기능을 늘리는 것이 아니라, 운영자가 바로 움직일 수 있는 흐름을 만드는 것입니다.",
+        "",
+        "## 오늘 바로 해볼 수 있는 것",
+        "",
+        "글을 읽고 나서 독자가 취할 수 있는 첫 번째 행동을 명확하게 제시해주세요. 작고 구체적일수록 실행률이 높아집니다.",
+      ].join("\n"),
+    },
+  },
+  {
+    id: "default-case-study",
+    name: "사례 연구",
+    savedAt: "2024-01-01T00:00:00.000Z",
+    data: {
+      category: "사례",
+      targetReader: "비슷한 문제를 겪고 있는 학원 운영자",
+      benefitItems: [
+        "실제 현장 사례를 통해 문제 해결 과정을 구체적으로 파악할 수 있습니다.",
+        "우리 학원에 적용 가능한 포인트를 빠르게 찾을 수 있습니다.",
+        "시행착오 없이 검증된 방법으로 바로 실행할 수 있습니다.",
+      ],
+      cta: { ...DEFAULT_BLOG_CTA },
+      contentMarkdown: [
+        "## 배경",
+        "",
+        "어떤 학원인지, 어떤 상황이었는지 간략하게 소개해주세요. 독자가 공감할 수 있는 맥락을 잡아주는 게 중요합니다.",
+        "",
+        "- 학원 규모 / 운영 형태",
+        "- 이전에 쓰던 방식",
+        "- 변화가 필요했던 시점",
+        "",
+        "## 어떤 문제가 있었나",
+        "",
+        "구체적인 수치나 사례로 문제를 보여주세요. 숫자가 있으면 설득력이 올라갑니다.",
+        "",
+        "## 어떻게 접근했나",
+        "",
+        "문제를 해결하기 위해 어떤 방법을 선택했는지, 왜 그 방법을 골랐는지 설명해주세요.",
+        "",
+        "### 1단계",
+        "",
+        "첫 번째로 한 일을 구체적으로 설명해주세요.",
+        "",
+        "### 2단계",
+        "",
+        "두 번째로 한 일을 구체적으로 설명해주세요.",
+        "",
+        "## 결과",
+        "",
+        "수치, 변화, 현장 반응을 구체적으로 정리해주세요.",
+        "",
+        "| 항목 | 이전 | 이후 |",
+        "|------|------|------|",
+        "| 예시 지표 | - | - |",
+        "",
+        "## 이 사례에서 얻을 수 있는 것",
+        "",
+        "독자가 자신의 상황에 적용할 수 있도록 핵심 교훈을 2–3가지로 정리해주세요.",
+      ].join("\n"),
+    },
+  },
+  {
+    id: "default-feature",
+    name: "기능·제품 소개",
+    savedAt: "2024-01-01T00:00:00.000Z",
+    data: {
+      category: "제품",
+      targetReader: "새로운 기능을 도입하려는 학원 담당자",
+      benefitItems: [
+        "기능의 핵심 가치와 어떤 문제를 해결하는지 명확하게 파악할 수 있습니다.",
+        "실제 사용 시나리오를 통해 우리 학원에 맞는지 빠르게 판단할 수 있습니다.",
+        "도입 전 준비사항과 시작 방법을 한눈에 파악할 수 있습니다.",
+      ],
+      cta: { ...DEFAULT_BLOG_CTA },
+      contentMarkdown: [
+        "## 왜 이 기능이 필요한가",
+        "",
+        "이 기능이 해결하는 문제를 독자가 공감할 수 있는 언어로 설명해주세요. 기능 설명보다 '이런 상황에서 도움이 됩니다'가 먼저입니다.",
+        "",
+        "## 주요 기능",
+        "",
+        "### 기능 1",
+        "",
+        "기능을 설명할 때는 '무엇을 할 수 있다'보다 '덕분에 어떤 게 달라진다'는 관점으로 써주세요.",
+        "",
+        "### 기능 2",
+        "",
+        "스크린샷이나 예시가 있으면 여기에 추가해주세요.",
+        "",
+        "![기능 설명 이미지](이미지URL)",
+        "",
+        "### 기능 3",
+        "",
+        "세 번째 핵심 기능을 설명해주세요.",
+        "",
+        "## 실제 사용 시나리오",
+        "",
+        "구체적인 상황을 예로 들어 기능이 어떻게 작동하는지 보여주세요.",
+        "",
+        "> 예: 상담 당일 학생 정보를 미리 확인하고, 수업 후 피드백까지 자동으로 발송할 수 있습니다.",
+        "",
+        "## 시작하는 방법",
+        "",
+        "1. 첫 번째 단계",
+        "2. 두 번째 단계",
+        "3. 세 번째 단계",
+        "",
+        "처음 시작할 때 주의할 점이나 팁이 있으면 여기에 추가해주세요.",
+      ].join("\n"),
+    },
+  },
+]
 type AiState = { action: AiAction; status: "loading" | "streaming" | "done" | "error"; result: string; topic?: string; tone?: string; length?: string; reference?: string }
 type EditorSnapshot = {
   form: BlogPostInput
@@ -209,6 +359,7 @@ export default function BlogPostEditor({
   const [tagsInput, setTagsInput] = useState(initialForm.tags.join(", "))
   const [draftState, setDraftState] = useState<DraftState>("saved")
   const [isSubmitting, setIsSubmitting] = useState(false)
+  const [uploadingField, setUploadingField] = useState<"imageUrl" | "heroImageUrl" | null>(null)
   const [notice, setNotice] = useState("")
   const [aiState, setAiState] = useState<AiState | null>(null)
   const [draftInput, setDraftInput] = useState({ topic: "", tone: "전문적", length: "medium", reference: "" })
@@ -221,6 +372,8 @@ export default function BlogPostEditor({
   const [confirmDeleteTemplateId, setConfirmDeleteTemplateId] = useState<string | null>(null)
   const [slugEdited, setSlugEdited] = useState(Boolean(initialPost?.slug))
   const [lastSavedAt, setLastSavedAt] = useState<Date | null>(null)
+  const [showInlineDraft, setShowInlineDraft] = useState(false)
+  const [inlineDraftTopic, setInlineDraftTopic] = useState("")
   const formRef = useRef(form)
   const tagsInputRef = useRef(tagsInput)
   const slugEditedRef = useRef(slugEdited)
@@ -487,6 +640,32 @@ export default function BlogPostEditor({
     }
   }
 
+  const handleImageUpload = async (field: "imageUrl" | "heroImageUrl", file: File) => {
+    setUploadingField(field)
+    try {
+      const formData = new FormData()
+      formData.append("file", file)
+      const res = await fetch("/api/admin/upload", {
+        method: "POST",
+        headers: { Authorization: `Bearer ${getToken()}` },
+        body: formData,
+      })
+      if (!res.ok) {
+        const err = await res.json().catch(() => ({}))
+        setNotice(err.error ?? "업로드에 실패했습니다.")
+        return
+      }
+      const { url } = await res.json() as { url: string }
+      updateForm(field, url)
+      if (field === "imageUrl" && !form.heroImageUrl) updateForm("heroImageUrl", url)
+      if (field === "heroImageUrl" && !form.imageUrl) updateForm("imageUrl", url)
+    } catch {
+      setNotice("업로드 중 오류가 발생했습니다.")
+    } finally {
+      setUploadingField(null)
+    }
+  }
+
   const handleSubmit = async (nextStatus?: BlogPostStatus) => {
     const payload = buildPayload(nextStatus)
     if (!payload.title || !payload.excerpt || !payload.category) {
@@ -520,7 +699,7 @@ export default function BlogPostEditor({
     }
   }
 
-  const handleAiAction = async (action: AiAction, params?: { topic: string; tone: string; length: string; reference?: string }) => {
+  const handleAiAction = async (action: AiAction, params?: { topic: string; tone: string; length: string; reference?: string }, contentOverride?: string) => {
     setAiState({ action, status: "loading", result: "", ...(params ?? {}) })
     try {
       const res = await adminFetch("/api/admin/blog/ai", {
@@ -528,7 +707,7 @@ export default function BlogPostEditor({
         body: JSON.stringify(
           action === "draft" && params
             ? { action, category: form.category, topic: params.topic, tone: params.tone, length: params.length, reference: params.reference ?? "" }
-            : { action, title: form.title, content: form.contentMarkdown, category: form.category }
+            : { action, title: form.title, content: contentOverride ?? form.contentMarkdown, category: form.category }
         ),
       })
       if (res.status === 401) {
@@ -672,13 +851,13 @@ export default function BlogPostEditor({
               )}
 
               {templateTab === "load" && (
-                templates.length === 0 ? (
-                  <div className="py-12 text-center text-[13px] text-[#1a1a1a]/30">
-                    저장된 템플릿이 없습니다
-                  </div>
-                ) : (
-                  <div className="space-y-2.5">
-                    {templates.map((t) => {
+                <div className="space-y-5">
+                  {/* 저장한 템플릿 */}
+                  {templates.length > 0 && (
+                    <div>
+                      <p className="mb-2.5 text-[11px] font-semibold uppercase tracking-widest text-[#1a1a1a]/30">내 템플릿</p>
+                      <div className="space-y-2.5">
+                        {templates.map((t) => {
                       const isExpanded = expandedTemplateId === t.id
                       const isPendingDelete = confirmDeleteTemplateId === t.id
                       return (
@@ -770,9 +949,73 @@ export default function BlogPostEditor({
                           )}
                         </div>
                       )
-                    })}
+                        })}
+                      </div>
+                    </div>
+                  )}
+
+                  {/* 기본 제공 템플릿 */}
+                  <div>
+                    <p className="mb-2.5 text-[11px] font-semibold uppercase tracking-widest text-[#1a1a1a]/30">기본 제공</p>
+                    <div className="space-y-2.5">
+                      {DEFAULT_TEMPLATES.map((t) => {
+                        const isExpanded = expandedTemplateId === t.id
+                        return (
+                          <div
+                            key={t.id}
+                            className="rounded-2xl border border-[#e8e8e4] bg-[#fcfcfb] p-4 transition-colors"
+                          >
+                            <div className="flex items-start justify-between gap-3">
+                              <button
+                                type="button"
+                                onClick={() => setExpandedTemplateId(isExpanded ? null : t.id)}
+                                className="min-w-0 flex-1 text-left"
+                              >
+                                <p className="font-semibold text-[13px] text-[#111110]">{t.name}</p>
+                                <p className="mt-0.5 text-[11px] text-[#1a1a1a]/40">{t.data.category} · 기본 제공</p>
+                                {!isExpanded && (
+                                  <p className="mt-1.5 text-xs text-[#1a1a1a]/40 line-clamp-1">
+                                    {t.data.contentMarkdown.replace(/#{1,6}\s|[*_`>-]/g, "").slice(0, 80)}…
+                                  </p>
+                                )}
+                              </button>
+                              <button
+                                type="button"
+                                onClick={() => {
+                                  updateEditor((snapshot) => ({
+                                    ...snapshot,
+                                    form: {
+                                      ...snapshot.form,
+                                      contentMarkdown: t.data.contentMarkdown,
+                                      benefitItems: t.data.benefitItems,
+                                      targetReader: t.data.targetReader,
+                                      category: t.data.category,
+                                      cta: { ...t.data.cta },
+                                    },
+                                  }))
+                                  setShowTemplateModal(false)
+                                  setExpandedTemplateId(null)
+                                  setNotice("템플릿을 불러왔습니다.")
+                                }}
+                                className="shrink-0 text-[12px] font-medium text-[#084734] hover:text-[#084734]/70 transition-colors"
+                              >
+                                불러오기
+                              </button>
+                            </div>
+                            {isExpanded && (
+                              <div className="mt-3 rounded-xl border border-[#e8e8e4] bg-white px-4 py-3">
+                                <p className="text-[11px] font-medium uppercase tracking-wider text-[#1a1a1a]/30 mb-2">본문 미리보기</p>
+                                <pre className="whitespace-pre-wrap font-sans text-[12px] leading-6 text-[#1a1a1a]/55 line-clamp-6">
+                                  {t.data.contentMarkdown.slice(0, 400)}{t.data.contentMarkdown.length > 400 ? "…" : ""}
+                                </pre>
+                              </div>
+                            )}
+                          </div>
+                        )
+                      })}
+                    </div>
                   </div>
-                )
+                </div>
               )}
             </div>
           </div>
@@ -1320,8 +1563,12 @@ export default function BlogPostEditor({
                     value={form.contentMarkdown}
                     onChange={(markdown) => updateForm("contentMarkdown", markdown)}
                     placeholder="본문을 작성해주세요"
+                    onTemplateClick={() => { setTemplateTab("load"); setShowTemplateModal(true) }}
+                    onAiDraftClick={() => setShowInlineDraft(true)}
+                    onSelectionOptimize={(text) => handleAiAction("optimize", undefined, text || undefined)}
                   />
                   <div className="space-y-4 rounded-2xl border border-[#e8e8e4] bg-[#fcfcfb] p-4">
+                    {/* 자동 목차 */}
                     <div>
                       <p className="text-sm font-semibold text-[#111110]">자동 목차</p>
                       <p className="mt-1 text-[11px] text-[#1a1a1a]/40">
@@ -1347,6 +1594,138 @@ export default function BlogPostEditor({
                         ))
                       )}
                     </div>
+
+                    {/* 구분선 */}
+                    <div className="h-px bg-[#e8e8e4]" />
+
+                    {/* 템플릿 */}
+                    <div>
+                      <div className="mb-2 flex items-center justify-between">
+                        <p className="text-[12px] font-semibold text-[#111110]">템플릿</p>
+                        <button
+                          type="button"
+                          onClick={() => { setTemplateTab("load"); setShowTemplateModal(true) }}
+                          className="text-[11px] text-[#084734] hover:underline"
+                        >
+                          전체 보기 →
+                        </button>
+                      </div>
+                      {(() => {
+                        const quickList = [
+                          ...templates.slice(0, 3),
+                          ...DEFAULT_TEMPLATES.slice(0, Math.max(0, 3 - templates.length)),
+                        ]
+                        return (
+                          <div className="space-y-1">
+                            {quickList.map((t) => (
+                              <div key={t.id} className="flex items-center justify-between gap-1.5 rounded-lg px-2 py-1.5 hover:bg-[#f0f0ec]">
+                                <span className="truncate text-[11px] text-[#1a1a1a]/70">
+                                  {t.name}
+                                  {t.id.startsWith("default-") && (
+                                    <span className="ml-1 text-[9px] text-[#1a1a1a]/30">기본</span>
+                                  )}
+                                </span>
+                                <button
+                                  type="button"
+                                  onClick={() => {
+                                    updateForm("contentMarkdown", t.data.contentMarkdown)
+                                    if (t.data.benefitItems) updateForm("benefitItems", t.data.benefitItems)
+                                    if (t.data.targetReader) updateForm("targetReader", t.data.targetReader)
+                                    if (t.data.category) updateForm("category", t.data.category)
+                                    if (t.data.cta) updateForm("cta", t.data.cta)
+                                  }}
+                                  className="shrink-0 text-[10px] font-medium text-[#084734] hover:underline"
+                                >
+                                  적용
+                                </button>
+                              </div>
+                            ))}
+                          </div>
+                        )
+                      })()}
+                    </div>
+
+                    {/* 구분선 */}
+                    <div className="h-px bg-[#e8e8e4]" />
+
+                    {/* AI 다듬기 */}
+                    <div>
+                      <div className="mb-2 flex items-center gap-1.5">
+                        <Wand2 className="h-3 w-3 text-[#084734]" />
+                        <p className="text-[12px] font-semibold text-[#111110]">AI</p>
+                      </div>
+                      <div className="space-y-1.5">
+                        <button
+                          type="button"
+                          disabled={aiState?.status === "loading" || aiState?.status === "streaming"}
+                          onClick={() => handleAiAction("optimize")}
+                          className="flex w-full items-center gap-1.5 rounded-lg border border-[#e8e8e4] bg-white px-2.5 py-2 text-[11px] font-medium text-[#111110] hover:bg-[#f0f0ec] disabled:opacity-40 transition-colors"
+                        >
+                          {aiState?.action === "optimize" && (aiState.status === "loading" || aiState.status === "streaming") ? (
+                            <Loader2 className="h-3 w-3 shrink-0 animate-spin text-[#084734]" />
+                          ) : (
+                            <Sparkles className="h-3 w-3 shrink-0 text-[#084734]" />
+                          )}
+                          본문 다듬기
+                        </button>
+
+                        {!showInlineDraft ? (
+                          <button
+                            type="button"
+                            onClick={() => setShowInlineDraft(true)}
+                            className="flex w-full items-center gap-1.5 rounded-lg border border-[#e8e8e4] bg-white px-2.5 py-2 text-[11px] font-medium text-[#111110] hover:bg-[#f0f0ec] transition-colors"
+                          >
+                            <Type className="h-3 w-3 shrink-0 text-[#084734]" />
+                            초안 생성
+                          </button>
+                        ) : (
+                          <div className="space-y-1.5 rounded-lg border border-[#e8e8e4] bg-white p-2.5">
+                            <input
+                              autoFocus
+                              type="text"
+                              value={inlineDraftTopic}
+                              onChange={(e) => setInlineDraftTopic(e.target.value)}
+                              onKeyDown={(e) => {
+                                if (e.key === "Enter" && inlineDraftTopic.trim()) {
+                                  handleAiAction("draft", { topic: inlineDraftTopic, tone: "전문적", length: "medium", reference: "" })
+                                  setShowInlineDraft(false)
+                                  setInlineDraftTopic("")
+                                }
+                                if (e.key === "Escape") { setShowInlineDraft(false); setInlineDraftTopic("") }
+                              }}
+                              placeholder="주제를 입력하세요"
+                              className="w-full rounded-md border border-[#e8e8e4] bg-[#f8f8f6] px-2 py-1.5 text-[11px] outline-none focus:border-[#084734]"
+                            />
+                            <div className="flex gap-1">
+                              <button
+                                type="button"
+                                disabled={!inlineDraftTopic.trim() || (aiState?.status === "loading" || aiState?.status === "streaming")}
+                                onClick={() => {
+                                  handleAiAction("draft", { topic: inlineDraftTopic, tone: "전문적", length: "medium", reference: "" })
+                                  setShowInlineDraft(false)
+                                  setInlineDraftTopic("")
+                                }}
+                                className="flex-1 rounded-md bg-[#084734] px-2 py-1 text-[10px] font-semibold text-white hover:bg-[#065c41] disabled:opacity-40 transition-colors"
+                              >
+                                생성
+                              </button>
+                              <button
+                                type="button"
+                                onClick={() => { setShowInlineDraft(false); setInlineDraftTopic("") }}
+                                className="rounded-md border border-[#e8e8e4] px-2 py-1 text-[10px] text-[#1a1a1a]/50 hover:bg-[#f0f0ec] transition-colors"
+                              >
+                                취소
+                              </button>
+                            </div>
+                          </div>
+                        )}
+                      </div>
+                    </div>
+
+                    {/* 구분선 */}
+                    <div className="h-px bg-[#e8e8e4]" />
+
+                    {/* 문법 팁 */}
                     <div className="rounded-xl border border-emerald-100 bg-emerald-50/60 p-3.5">
                       <p className="text-[12px] font-semibold text-[#084734]">문법 팁</p>
                       <div className="mt-2 space-y-1.5 text-[11px] leading-5 text-[#084734]/75">
@@ -1525,22 +1904,40 @@ export default function BlogPostEditor({
                 <div className="rounded-[20px] border border-[#e8e8e4] bg-white p-5 shadow-sm">
                   <p className="mb-3.5 text-sm font-semibold text-[#111110]">비주얼</p>
                   <div className="space-y-3">
-                    <div className="space-y-1.5">
-                      <Label className="text-[12px]">썸네일 이미지 URL</Label>
-                      <Input
-                        value={form.imageUrl}
-                        onChange={(event) => updateForm("imageUrl", event.target.value)}
-                        placeholder="/images/blog/thumb.png"
-                      />
-                    </div>
-                    <div className="space-y-1.5">
-                      <Label className="text-[12px]">상단 배너 이미지 URL</Label>
-                      <Input
-                        value={form.heroImageUrl}
-                        onChange={(event) => updateForm("heroImageUrl", event.target.value)}
-                        placeholder="/images/blog/hero.png"
-                      />
-                    </div>
+                    {(["imageUrl", "heroImageUrl"] as const).map((field) => (
+                      <div key={field} className="space-y-1.5">
+                        <Label className="text-[12px]">
+                          {field === "imageUrl" ? "썸네일 이미지 URL" : "상단 배너 이미지 URL"}
+                        </Label>
+                        <div className="flex gap-1.5">
+                          <Input
+                            value={form[field]}
+                            onChange={(event) => updateForm(field, event.target.value)}
+                            placeholder="/images/blog/thumb.png"
+                            className="flex-1"
+                          />
+                          <label className="relative flex cursor-pointer items-center gap-1.5 rounded-md border border-[#e8e8e4] bg-white px-2.5 py-1.5 text-[12px] font-medium text-[#615D59] hover:bg-[#F6F5F4] transition-colors">
+                            {uploadingField === field ? (
+                              <Loader2 className="h-3.5 w-3.5 animate-spin" />
+                            ) : (
+                              <Upload className="h-3.5 w-3.5" />
+                            )}
+                            업로드
+                            <input
+                              type="file"
+                              accept="image/jpeg,image/png,image/webp,image/gif"
+                              className="absolute inset-0 cursor-pointer opacity-0"
+                              disabled={uploadingField !== null}
+                              onChange={(e) => {
+                                const file = e.target.files?.[0]
+                                if (file) void handleImageUpload(field, file)
+                                e.target.value = ""
+                              }}
+                            />
+                          </label>
+                        </div>
+                      </div>
+                    ))}
                     {(form.heroImageUrl || form.imageUrl) && (
                       <div className="overflow-hidden rounded-xl border border-[#e8e8e4]">
                         {/* eslint-disable-next-line @next/next/no-img-element */}
@@ -1770,7 +2167,21 @@ export default function BlogPostEditor({
 
                 {/* SEO inputs */}
                 <div className="rounded-[20px] border border-[#e8e8e4] bg-white p-5 shadow-sm">
-                  <p className="mb-3.5 text-sm font-semibold text-[#111110]">SEO 메타 태그</p>
+                  <div className="mb-3.5 flex items-center justify-between">
+                    <p className="text-sm font-semibold text-[#111110]">SEO 메타 태그</p>
+                    <button
+                      type="button"
+                      onClick={() => {
+                        if (form.title) updateForm("seoTitle", form.title.slice(0, 60))
+                        if (form.excerpt) updateForm("seoDescription", form.excerpt.slice(0, 160))
+                      }}
+                      disabled={!form.title && !form.excerpt}
+                      className="flex items-center gap-1 rounded-md px-2 py-1 text-[11px] font-medium text-[#084734] hover:bg-[#ECFDF5] disabled:opacity-30 transition-colors"
+                    >
+                      <Sparkles className="h-3 w-3" />
+                      제목·요약에서 자동완성
+                    </button>
+                  </div>
                   <div className="space-y-3">
                     <div className="space-y-1.5">
                       <div className="flex items-center justify-between">

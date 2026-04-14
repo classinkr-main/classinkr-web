@@ -6,6 +6,7 @@ import {
   createQuoteDocument,
   createQuoteDocumentVersion,
 } from "@/lib/partner-portal/repositories/quote-documents";
+import { createInAppNotifications } from "@/lib/notifications/repository";
 
 export async function POST(req: NextRequest) {
   const context = await resolvePartnerAccountContext(req);
@@ -58,12 +59,16 @@ export async function POST(req: NextRequest) {
       );
     }
 
-    // 견적서 생성
+    // 어드민이 생성하면 파트너 승인 대기, 파트너가 직접 생성하면 바로 draft
+    const isAdmin = context.isSuperAdmin === true;
     const document = await createQuoteDocument({
       deal_id,
-      status: "draft",
+      status: isAdmin ? "pending_approval" : "draft",
       current_version_id: null,
       created_by: context.userId ?? null,
+      created_by_role: isAdmin ? "admin" : "partner",
+      approved_by: null,
+      approved_at: null,
     });
 
     // 첫 버전 생성
@@ -80,6 +85,24 @@ export async function POST(req: NextRequest) {
       valid_until,
       created_by: context.userId ?? null,
     });
+
+    // 어드민 생성 → 파트너에게 승인 요청 알림
+    if (isAdmin && context.partnerAccountId) {
+      createInAppNotifications([{
+        recipientType: "partner_account",
+        recipientId: context.partnerAccountId,
+        eventType: "quote_approval_requested",
+        notificationType: "action_required",
+        categoryTag: "partner",
+        scopeTag: "team",
+        severity: "info",
+        title: "견적 승인 요청",
+        message: `새 견적(${document.quote_number})이 승인을 기다리고 있습니다.`,
+        routeUrl: `/partner/quotes`,
+        iconKey: "file_text",
+        tone: "amber",
+      }]).catch(console.error);
+    }
 
     return NextResponse.json({ document, version }, { status: 201 });
   } catch (error) {

@@ -7,6 +7,7 @@ import {
   AlertCircle,
   ArrowLeft,
   ArrowRight,
+  BarChart2,
   CheckCircle2,
   ChevronRight,
   History,
@@ -35,9 +36,10 @@ import SubscriberForm from "@/components/admin/marketing/SubscriberForm"
 import EmailComposer from "@/components/admin/marketing/EmailComposer"
 import SmsComposer from "@/components/admin/marketing/SmsComposer"
 import CampaignHistory from "@/components/admin/marketing/CampaignHistory"
+import MarketingDashboard from "@/components/admin/marketing/MarketingDashboard"
 import type { EmailCampaign, EmailDraft, SavedEmailSegment, Subscriber } from "@/lib/marketing-types"
 
-type Tab = "subscribers" | "compose" | "history"
+type Tab = "subscribers" | "compose" | "history" | "dashboard"
 type Channel = "email" | "sms"
 type SubscriberStatusFilter = "all" | Subscriber["status"]
 type SubscriberSourceFilter = "all" | Subscriber["source"]
@@ -672,6 +674,48 @@ export default function AdminMarketingPage() {
     }
   }
 
+  const handleBulkDelete = async (ids: string[]) => {
+    try {
+      const res = await adminFetch("/api/admin/subscribers/bulk", {
+        method: "DELETE",
+        body: JSON.stringify({ ids }),
+      })
+      if (res.status === 401) {
+        handleUnauthorized()
+        return
+      }
+      if (!res.ok) {
+        showToast("error", "일괄 삭제에 실패했습니다.")
+        return
+      }
+      await fetchSubscribers()
+      showToast("success", `${ids.length}명의 구독자가 삭제되었습니다.`)
+    } catch {
+      showToast("error", "일괄 삭제에 실패했습니다.")
+    }
+  }
+
+  const handleBulkTagAdd = async (ids: string[], tags: string[]) => {
+    try {
+      const res = await adminFetch("/api/admin/subscribers/bulk", {
+        method: "PATCH",
+        body: JSON.stringify({ ids, tags }),
+      })
+      if (res.status === 401) {
+        handleUnauthorized()
+        return
+      }
+      if (!res.ok) {
+        showToast("error", "태그 일괄 추가에 실패했습니다.")
+        return
+      }
+      await fetchSubscribers()
+      showToast("success", `${ids.length}명에게 태그가 추가되었습니다.`)
+    } catch {
+      showToast("error", "태그 일괄 추가에 실패했습니다.")
+    }
+  }
+
   const clearComposerDraft = useCallback(() => {
     const hasDraft = composerDraft.subject.trim() || composerDraft.body.trim() || composerDraft.targetTags.length > 0
     if (!hasDraft) {
@@ -772,6 +816,19 @@ export default function AdminMarketingPage() {
     showToast("success", `"${campaign.subject}" 캠페인을 작성기로 가져왔습니다.`)
   }, [savedSegments, showToast])
 
+  const handleCopyCampaign = useCallback((campaign: EmailCampaign) => {
+    setComposerDraft({
+      subject: campaign.subject,
+      body: campaign.body,
+      targetTags: [...campaign.targetTags],
+    })
+    const linkedSegment = savedSegments.find((segment) => areTagsEqual(segment.targetTags, campaign.targetTags))
+    setSegmentName(linkedSegment?.name ?? "")
+    setDraftNotice(`'${campaign.subject}' 캠페인을 그대로 불러왔습니다. 수정 후 발송하세요.`)
+    setActiveTab("compose")
+    showToast("success", `"${campaign.subject}" 캠페인을 편집기로 가져왔습니다.`)
+  }, [savedSegments, showToast])
+
   const handleComposeFromSubscriber = useCallback((subscriber: Subscriber) => {
     setComposerDraft((current) => ({
       ...current,
@@ -782,18 +839,23 @@ export default function AdminMarketingPage() {
     showToast("success", `${subscriber.name} 기준으로 발송 초안을 열었습니다.`)
   }, [showToast])
 
-  const handleSendEmail = async (data: EmailDraft) => {
-    const evaluated = evaluateDraft(data)
-    const blockingErrors = evaluated.checks.filter((check) => check.status === "error")
+  const handleSendEmail = async (data: EmailDraft & { directEmails?: string[] }) => {
+    // 직접 입력 모드면 audience 체크 스킵
+    const isDirectMode = Array.isArray(data.directEmails) && data.directEmails.length > 0
 
-    if (blockingErrors.length > 0) {
-      showToast("error", blockingErrors[0]?.detail || "발송 전 체크를 확인해주세요.")
-      return
-    }
+    if (!isDirectMode) {
+      const evaluated = evaluateDraft(data)
+      const blockingErrors = evaluated.checks.filter((check) => check.status === "error")
 
-    if (evaluated.selectedAudience === 0) {
-      showToast("error", "발송 대상이 없습니다. 태그 조건을 확인해주세요.")
-      return
+      if (blockingErrors.length > 0) {
+        showToast("error", blockingErrors[0]?.detail || "발송 전 체크를 확인해주세요.")
+        return
+      }
+
+      if (evaluated.selectedAudience === 0) {
+        showToast("error", "발송 대상이 없습니다. 태그 조건을 확인해주세요.")
+        return
+      }
     }
 
     setSendLoading(true)
@@ -986,6 +1048,13 @@ export default function AdminMarketingPage() {
                 count={campaigns.length}
                 onClick={() => setActiveTab("history")}
               />
+              <TabButton
+                active={activeTab === "dashboard"}
+                icon={<BarChart2 className="h-4 w-4" />}
+                label="현황 대시보드"
+                desc="구독자·캠페인·자동화 한눈에"
+                onClick={() => setActiveTab("dashboard")}
+              />
             </div>
           </div>
         </div>
@@ -1106,6 +1175,8 @@ export default function AdminMarketingPage() {
                     onCompose={handleComposeFromSubscriber}
                     onAddSubscriber={() => setIsFormOpen(true)}
                     onComposeCampaign={() => setActiveTab("compose")}
+                    onBulkDelete={handleBulkDelete}
+                    onBulkTagAdd={handleBulkTagAdd}
                   />
                 )}
               </Panel>
@@ -1231,6 +1302,7 @@ export default function AdminMarketingPage() {
                   presendWarnings={composerReview.checks.filter((c) => c.status === "warning").map((c) => c.detail)}
                   presendErrors={composerReview.checks.filter((c) => c.status === "error").map((c) => c.detail)}
                   selectedAudience={composerReview.selectedAudience}
+                  subscribers={subscribers}
                 />
               ) : (
                 <SmsComposer
@@ -1411,6 +1483,7 @@ export default function AdminMarketingPage() {
                     <CampaignHistory
                       campaigns={filteredCampaigns}
                       onDuplicate={handleDuplicateCampaign}
+                      onCopy={handleCopyCampaign}
                       onCreateCampaign={() => setActiveTab("compose")}
                       onViewSubscribers={() => setActiveTab("subscribers")}
                     />
@@ -1529,6 +1602,10 @@ export default function AdminMarketingPage() {
               </Panel>
             </div>
           </div>
+        )}
+
+        {activeTab === "dashboard" && (
+          <MarketingDashboard />
         )}
         </div>
       </div>

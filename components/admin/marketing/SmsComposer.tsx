@@ -1,9 +1,10 @@
 "use client"
 
 import { useState } from "react"
-import { MessageSquare, Sparkles, Info } from "lucide-react"
+import { MessageSquare, Sparkles, CheckCircle, AlertCircle } from "lucide-react"
 import { Button } from "@/components/ui/button"
 import TagSelector from "./TagSelector"
+import type { SendSmsRequest } from "@/lib/marketing-types"
 
 const SMS_MAX = 90
 const LMS_MAX = 2000
@@ -13,28 +14,95 @@ interface Props {
   countMap?: Record<string, number>
 }
 
+type SendState =
+  | { kind: "idle" }
+  | { kind: "loading" }
+  | { kind: "success"; message: string }
+  | { kind: "error"; message: string }
+
 export default function SmsComposer({ subscriberCount = 0, countMap }: Props) {
   const [body, setBody] = useState("")
   const [targetTags, setTargetTags] = useState<string[]>([])
   const [aiMode, setAiMode] = useState(false)
   const [aiBrief, setAiBrief] = useState("")
+  const [sendState, setSendState] = useState<SendState>({ kind: "idle" })
 
   const isLms = body.length > SMS_MAX
   const charLimit = isLms ? LMS_MAX : SMS_MAX
   const overLimit = body.length > LMS_MAX
 
+  // 발송 대상 수 계산
+  const recipientCount =
+    targetTags.length === 0
+      ? subscriberCount
+      : targetTags.reduce((sum, tag) => sum + (countMap?.[tag] ?? 0), 0)
+
+  const canSend =
+    !aiMode &&
+    body.trim().length > 0 &&
+    !overLimit &&
+    recipientCount > 0 &&
+    sendState.kind !== "loading"
+
+  async function handleSend() {
+    if (!canSend) return
+
+    setSendState({ kind: "loading" })
+
+    try {
+      const payload: SendSmsRequest = {
+        message: body.trim(),
+        targetTags,
+        recipientCount,
+      }
+
+      const res = await fetch("/api/admin/sms/send", {
+        method: "POST",
+        headers: { "Content-Type": "application/json" },
+        body: JSON.stringify(payload),
+      })
+
+      const data = await res.json()
+
+      if (!res.ok || !data.ok) {
+        setSendState({
+          kind: "error",
+          message: data.error ?? "발송 중 오류가 발생했습니다.",
+        })
+        return
+      }
+
+      const typeLabel = data.type === "LMS" ? "LMS" : "SMS"
+      setSendState({
+        kind: "success",
+        message: `문자 발송이 완료되었습니다. (${typeLabel} ${data.recipientCount}명)`,
+      })
+      // 성공 후 폼 초기화
+      setBody("")
+      setTargetTags([])
+    } catch {
+      setSendState({
+        kind: "error",
+        message: "네트워크 오류가 발생했습니다. 다시 시도해주세요.",
+      })
+    }
+  }
+
   return (
     <div className="space-y-4">
-      {/* 준비 중 배너 */}
-      <div className="flex items-start gap-3 rounded-xl border border-amber-100 bg-amber-50 px-4 py-3">
-        <Info className="mt-0.5 h-4 w-4 shrink-0 text-amber-500" />
-        <div>
-          <p className="text-[13px] font-medium text-amber-700">SMS/LMS 발송 연동 준비 중</p>
-          <p className="mt-0.5 text-[12px] text-amber-600/80">
-            UI는 완성되어 있으며 Coolsms 등 SMS API 연동 후 실제 발송이 가능합니다. 현재는 미리보기 전용입니다.
-          </p>
+      {/* 발송 결과 피드백 */}
+      {sendState.kind === "success" && (
+        <div className="flex items-start gap-3 rounded-xl border border-[#bbf7d0] bg-[#ECFDF5] px-4 py-3">
+          <CheckCircle className="mt-0.5 h-4 w-4 shrink-0 text-[#084734]" />
+          <p className="text-[13px] font-medium text-[#084734]">{sendState.message}</p>
         </div>
-      </div>
+      )}
+      {sendState.kind === "error" && (
+        <div className="flex items-start gap-3 rounded-xl border border-red-100 bg-red-50 px-4 py-3">
+          <AlertCircle className="mt-0.5 h-4 w-4 shrink-0 text-red-500" />
+          <p className="text-[13px] font-medium text-red-700">{sendState.message}</p>
+        </div>
+      )}
 
       {/* ── Step 1: 내용 ────────────────────────────── */}
       <div className="rounded-xl border border-[#e8e8e4] bg-white">
@@ -82,7 +150,10 @@ export default function SmsComposer({ subscriberCount = 0, countMap }: Props) {
               </div>
               <textarea
                 value={body}
-                onChange={(e) => setBody(e.target.value)}
+                onChange={(e) => {
+                  setBody(e.target.value)
+                  if (sendState.kind !== "idle") setSendState({ kind: "idle" })
+                }}
                 rows={4}
                 placeholder={`[클래스인]\n안녕하세요 {name}님,\n{org}에 클래스인을 소개드립니다.`}
                 className={`w-full resize-none rounded-lg border px-3 py-2.5 text-[13px] leading-relaxed focus:outline-none focus:ring-2 placeholder:text-[#1a1a1a]/25 ${
@@ -133,19 +204,44 @@ export default function SmsComposer({ subscriberCount = 0, countMap }: Props) {
         <div className="p-4">
           <TagSelector
             selected={targetTags}
-            onChange={setTargetTags}
+            onChange={(tags) => {
+              setTargetTags(tags)
+              if (sendState.kind !== "idle") setSendState({ kind: "idle" })
+            }}
             countMap={countMap}
             totalCount={subscriberCount}
           />
         </div>
       </div>
 
-      {/* ── 발송 버튼 (비활성) ──────────────────────── */}
+      {/* ── 발송 버튼 ──────────────────────────────────── */}
       <div className="flex items-center justify-between gap-3 rounded-xl border border-[#e8e8e4] bg-[#fafaf8] px-4 py-3">
-        <p className="text-[12px] text-[#1a1a1a]/40">SMS API 연동 후 활성화됩니다.</p>
-        <Button disabled className="cursor-not-allowed opacity-40">
+        <div className="text-[12px] text-[#1a1a1a]/50">
+          {aiMode ? (
+            "AI 개인화 모드에서는 직접 발송이 비활성화됩니다."
+          ) : recipientCount > 0 ? (
+            <>
+              발송 대상{" "}
+              <span className="font-semibold text-[#111110]">{recipientCount}명</span>
+              {" "}· {isLms ? <span className="text-amber-600 font-medium">LMS (장문)</span> : "SMS (단문)"}
+            </>
+          ) : (
+            "발송 대상을 선택하거나 구독자를 확인해주세요."
+          )}
+        </div>
+        <Button
+          onClick={handleSend}
+          disabled={!canSend}
+          className={`transition-opacity ${
+            canSend
+              ? "cursor-pointer bg-[#084734] text-white hover:bg-[#065c41] active:scale-[0.97]"
+              : "cursor-not-allowed opacity-40"
+          }`}
+        >
           <MessageSquare className="mr-1.5 h-3.5 w-3.5" />
-          문자 발송 (준비 중)
+          {sendState.kind === "loading"
+            ? "발송 중…"
+            : "문자 발송"}
         </Button>
       </div>
     </div>
