@@ -550,7 +550,7 @@ export default function BlogPostEditor({
     }
   }
 
-  const handleAiAction = async (action: AiAction, params?: { topic: string; tone: string; length: string; reference?: string }) => {
+  const handleAiAction = async (action: AiAction, params?: { topic: string; tone: string; length: string; reference?: string }, contentOverride?: string) => {
     setAiState({ action, status: "loading", result: "", ...(params ?? {}) })
     try {
       const res = await adminFetch("/api/admin/blog/ai", {
@@ -558,7 +558,7 @@ export default function BlogPostEditor({
         body: JSON.stringify(
           action === "draft" && params
             ? { action, category: form.category, topic: params.topic, tone: params.tone, length: params.length, reference: params.reference ?? "" }
-            : { action, title: form.title, content: form.contentMarkdown, category: form.category }
+            : { action, title: form.title, content: contentOverride ?? form.contentMarkdown, category: form.category }
         ),
       })
       if (res.status === 401) {
@@ -1350,6 +1350,9 @@ export default function BlogPostEditor({
                     value={form.contentMarkdown}
                     onChange={(markdown) => updateForm("contentMarkdown", markdown)}
                     placeholder="본문을 작성해주세요"
+                    onTemplateClick={() => { setTemplateTab("load"); setShowTemplateModal(true) }}
+                    onAiDraftClick={() => setShowInlineDraft(true)}
+                    onSelectionOptimize={(text) => handleAiAction("optimize", undefined, text || undefined)}
                   />
                   <div className="space-y-4 rounded-2xl border border-[#e8e8e4] bg-[#fcfcfb] p-4">
                     {/* 자동 목차 */}
