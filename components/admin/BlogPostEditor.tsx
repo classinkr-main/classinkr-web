@@ -223,6 +223,8 @@ export default function BlogPostEditor({
   const [confirmDeleteTemplateId, setConfirmDeleteTemplateId] = useState<string | null>(null)
   const [slugEdited, setSlugEdited] = useState(Boolean(initialPost?.slug))
   const [lastSavedAt, setLastSavedAt] = useState<Date | null>(null)
+  const [showInlineDraft, setShowInlineDraft] = useState(false)
+  const [inlineDraftTopic, setInlineDraftTopic] = useState("")
   const formRef = useRef(form)
   const tagsInputRef = useRef(tagsInput)
   const slugEditedRef = useRef(slugEdited)
@@ -1350,6 +1352,7 @@ export default function BlogPostEditor({
                     placeholder="본문을 작성해주세요"
                   />
                   <div className="space-y-4 rounded-2xl border border-[#e8e8e4] bg-[#fcfcfb] p-4">
+                    {/* 자동 목차 */}
                     <div>
                       <p className="text-sm font-semibold text-[#111110]">자동 목차</p>
                       <p className="mt-1 text-[11px] text-[#1a1a1a]/40">
@@ -1375,6 +1378,129 @@ export default function BlogPostEditor({
                         ))
                       )}
                     </div>
+
+                    {/* 구분선 */}
+                    <div className="h-px bg-[#e8e8e4]" />
+
+                    {/* 템플릿 */}
+                    <div>
+                      <div className="mb-2 flex items-center justify-between">
+                        <p className="text-[12px] font-semibold text-[#111110]">템플릿</p>
+                        <button
+                          type="button"
+                          onClick={() => { setTemplateTab("load"); setShowTemplateModal(true) }}
+                          className="text-[11px] text-[#084734] hover:underline"
+                        >
+                          전체 보기 →
+                        </button>
+                      </div>
+                      {templates.length === 0 ? (
+                        <p className="text-[11px] text-[#1a1a1a]/30">저장된 템플릿이 없습니다.</p>
+                      ) : (
+                        <div className="space-y-1">
+                          {templates.slice(0, 3).map((t) => (
+                            <div key={t.id} className="flex items-center justify-between gap-1.5 rounded-lg px-2 py-1.5 hover:bg-[#f0f0ec]">
+                              <span className="truncate text-[11px] text-[#1a1a1a]/70">{t.name}</span>
+                              <button
+                                type="button"
+                                onClick={() => {
+                                  updateForm("contentMarkdown", t.data.contentMarkdown)
+                                  if (t.data.benefitItems) updateForm("benefitItems", t.data.benefitItems)
+                                  if (t.data.targetReader) updateForm("targetReader", t.data.targetReader)
+                                  if (t.data.category) updateForm("category", t.data.category)
+                                  if (t.data.cta) updateForm("cta", t.data.cta)
+                                }}
+                                className="shrink-0 text-[10px] font-medium text-[#084734] hover:underline"
+                              >
+                                적용
+                              </button>
+                            </div>
+                          ))}
+                        </div>
+                      )}
+                    </div>
+
+                    {/* 구분선 */}
+                    <div className="h-px bg-[#e8e8e4]" />
+
+                    {/* AI 다듬기 */}
+                    <div>
+                      <div className="mb-2 flex items-center gap-1.5">
+                        <Wand2 className="h-3 w-3 text-[#084734]" />
+                        <p className="text-[12px] font-semibold text-[#111110]">AI</p>
+                      </div>
+                      <div className="space-y-1.5">
+                        <button
+                          type="button"
+                          disabled={aiState?.status === "loading" || aiState?.status === "streaming"}
+                          onClick={() => handleAiAction("optimize")}
+                          className="flex w-full items-center gap-1.5 rounded-lg border border-[#e8e8e4] bg-white px-2.5 py-2 text-[11px] font-medium text-[#111110] hover:bg-[#f0f0ec] disabled:opacity-40 transition-colors"
+                        >
+                          {aiState?.action === "optimize" && (aiState.status === "loading" || aiState.status === "streaming") ? (
+                            <Loader2 className="h-3 w-3 shrink-0 animate-spin text-[#084734]" />
+                          ) : (
+                            <Sparkles className="h-3 w-3 shrink-0 text-[#084734]" />
+                          )}
+                          본문 다듬기
+                        </button>
+
+                        {!showInlineDraft ? (
+                          <button
+                            type="button"
+                            onClick={() => setShowInlineDraft(true)}
+                            className="flex w-full items-center gap-1.5 rounded-lg border border-[#e8e8e4] bg-white px-2.5 py-2 text-[11px] font-medium text-[#111110] hover:bg-[#f0f0ec] transition-colors"
+                          >
+                            <Type className="h-3 w-3 shrink-0 text-[#084734]" />
+                            초안 생성
+                          </button>
+                        ) : (
+                          <div className="space-y-1.5 rounded-lg border border-[#e8e8e4] bg-white p-2.5">
+                            <input
+                              autoFocus
+                              type="text"
+                              value={inlineDraftTopic}
+                              onChange={(e) => setInlineDraftTopic(e.target.value)}
+                              onKeyDown={(e) => {
+                                if (e.key === "Enter" && inlineDraftTopic.trim()) {
+                                  handleAiAction("draft", { topic: inlineDraftTopic, tone: "전문적", length: "medium", reference: "" })
+                                  setShowInlineDraft(false)
+                                  setInlineDraftTopic("")
+                                }
+                                if (e.key === "Escape") { setShowInlineDraft(false); setInlineDraftTopic("") }
+                              }}
+                              placeholder="주제를 입력하세요"
+                              className="w-full rounded-md border border-[#e8e8e4] bg-[#f8f8f6] px-2 py-1.5 text-[11px] outline-none focus:border-[#084734]"
+                            />
+                            <div className="flex gap-1">
+                              <button
+                                type="button"
+                                disabled={!inlineDraftTopic.trim() || (aiState?.status === "loading" || aiState?.status === "streaming")}
+                                onClick={() => {
+                                  handleAiAction("draft", { topic: inlineDraftTopic, tone: "전문적", length: "medium", reference: "" })
+                                  setShowInlineDraft(false)
+                                  setInlineDraftTopic("")
+                                }}
+                                className="flex-1 rounded-md bg-[#084734] px-2 py-1 text-[10px] font-semibold text-white hover:bg-[#065c41] disabled:opacity-40 transition-colors"
+                              >
+                                생성
+                              </button>
+                              <button
+                                type="button"
+                                onClick={() => { setShowInlineDraft(false); setInlineDraftTopic("") }}
+                                className="rounded-md border border-[#e8e8e4] px-2 py-1 text-[10px] text-[#1a1a1a]/50 hover:bg-[#f0f0ec] transition-colors"
+                              >
+                                취소
+                              </button>
+                            </div>
+                          </div>
+                        )}
+                      </div>
+                    </div>
+
+                    {/* 구분선 */}
+                    <div className="h-px bg-[#e8e8e4]" />
+
+                    {/* 문법 팁 */}
                     <div className="rounded-xl border border-emerald-100 bg-emerald-50/60 p-3.5">
                       <p className="text-[12px] font-semibold text-[#084734]">문법 팁</p>
                       <div className="mt-2 space-y-1.5 text-[11px] leading-5 text-[#084734]/75">
