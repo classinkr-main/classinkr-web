@@ -36,6 +36,7 @@ type ActivityLog = {
   summary: string
   action_type: string
   created_at: string
+  _dummy?: boolean
 }
 
 type InstallationEvent = {
@@ -44,6 +45,7 @@ type InstallationEvent = {
   location: string | null
   scheduled_start_at: string
   scheduled_end_at: string
+  _dummy?: boolean
 }
 
 type PaymentRecord = {
@@ -51,6 +53,7 @@ type PaymentRecord = {
   amount: number
   paid_at: string
   payment_method: string
+  _dummy?: boolean
 }
 
 type CalendarEvent = {
@@ -59,6 +62,7 @@ type CalendarEvent = {
   starts_at: string
   ends_at: string
   source_type: string
+  _dummy?: boolean
 }
 
 type CustomerItem = {
@@ -74,6 +78,7 @@ type CustomerItem = {
     outstanding_amount: number
     last_deal_updated_at: string | null
   } | null
+  _dummy?: boolean
 }
 
 type DealItem = {
@@ -88,6 +93,7 @@ type DealItem = {
   paid_amount: number
   outstanding_amount: number
   manager_name?: string | null
+  _dummy?: boolean
 }
 
 type InventorySkuSummary = {
@@ -97,6 +103,7 @@ type InventorySkuSummary = {
   shipped_qty: number
   delivered_qty: number
   total_qty: number
+  _dummy?: boolean
 }
 
 type PartnerOverviewPayload = {
@@ -177,50 +184,105 @@ const DEMO: PartnerOverviewPayload = {
     {
       customer: { id: "c1", name: "강남메가스터디학원", campus_name: "본관", region_label: "강남" },
       summary: { active_deals: 3, unpaid_deals: 2, outstanding_amount: 31100000, last_deal_updated_at: "2026-04-04T02:00:00Z" },
+      _dummy: true,
     },
     {
       customer: { id: "c2", name: "리더스입시학원", campus_name: "3층", region_label: "분당" },
       summary: { active_deals: 2, unpaid_deals: 1, outstanding_amount: 15600000, last_deal_updated_at: "2026-04-03T12:00:00Z" },
+      _dummy: true,
     },
     {
       customer: { id: "c3", name: "서초수학교습소", campus_name: null, region_label: "서초" },
       summary: { active_deals: 1, unpaid_deals: 0, outstanding_amount: 0, last_deal_updated_at: "2026-04-02T09:00:00Z" },
+      _dummy: true,
     },
   ],
   deals: [
-    { id: "d1", title: "본관 전자칠판 4대 설치", deal_code: "D-2026-001", current_stage: "installation", customer_name: "강남메가스터디학원", customer_campus_name: "본관", expected_amount: 29000000, contracted_amount: 29000000, paid_amount: 12000000, outstanding_amount: 17000000, manager_name: "김민준" },
-    { id: "d2", title: "추가 교실 계약", deal_code: "D-2026-011", current_stage: "quote", customer_name: "강남메가스터디학원", customer_campus_name: "본관", expected_amount: 14000000, contracted_amount: 14000000, paid_amount: 0, outstanding_amount: 14000000, manager_name: "이서연" },
-    { id: "d3", title: "3층 전체 교체", deal_code: "D-2026-004", current_stage: "payment", customer_name: "리더스입시학원", customer_campus_name: "3층", expected_amount: 24200000, contracted_amount: 24200000, paid_amount: 24200000, outstanding_amount: 0, manager_name: "박지훈" },
-    { id: "d4", title: "별관 추가 계약", deal_code: "D-2026-015", current_stage: "contract", customer_name: "강남메가스터디학원", customer_campus_name: "별관", expected_amount: 8600000, contracted_amount: 8600000, paid_amount: 0, outstanding_amount: 8600000, manager_name: "김민준" },
-    { id: "d5", title: "2교실 신설 견적", deal_code: "D-2026-018", current_stage: "contact", customer_name: "서초수학교습소", customer_campus_name: null, expected_amount: 12400000, contracted_amount: 0, paid_amount: 0, outstanding_amount: 0, manager_name: "이서연" },
-    { id: "d6", title: "분당지점 추가 설치", deal_code: "D-2026-007", current_stage: "installation", customer_name: "리더스입시학원", customer_campus_name: "3층", expected_amount: 15600000, contracted_amount: 15600000, paid_amount: 0, outstanding_amount: 15600000, manager_name: "박지훈" },
+    { id: "d1", title: "본관 전자칠판 4대 설치", deal_code: "D-2026-001", current_stage: "installation", customer_name: "강남메가스터디학원", customer_campus_name: "본관", expected_amount: 29000000, contracted_amount: 29000000, paid_amount: 12000000, outstanding_amount: 17000000, manager_name: "김민준", _dummy: true },
+    { id: "d2", title: "추가 교실 계약", deal_code: "D-2026-011", current_stage: "quote", customer_name: "강남메가스터디학원", customer_campus_name: "본관", expected_amount: 14000000, contracted_amount: 14000000, paid_amount: 0, outstanding_amount: 14000000, manager_name: "이서연", _dummy: true },
+    { id: "d3", title: "3층 전체 교체", deal_code: "D-2026-004", current_stage: "payment", customer_name: "리더스입시학원", customer_campus_name: "3층", expected_amount: 24200000, contracted_amount: 24200000, paid_amount: 24200000, outstanding_amount: 0, manager_name: "박지훈", _dummy: true },
+    { id: "d4", title: "별관 추가 계약", deal_code: "D-2026-015", current_stage: "contract", customer_name: "강남메가스터디학원", customer_campus_name: "별관", expected_amount: 8600000, contracted_amount: 8600000, paid_amount: 0, outstanding_amount: 8600000, manager_name: "김민준", _dummy: true },
+    { id: "d5", title: "2교실 신설 견적", deal_code: "D-2026-018", current_stage: "contact", customer_name: "서초수학교습소", customer_campus_name: null, expected_amount: 12400000, contracted_amount: 0, paid_amount: 0, outstanding_amount: 0, manager_name: "이서연", _dummy: true },
+    { id: "d6", title: "분당지점 추가 설치", deal_code: "D-2026-007", current_stage: "installation", customer_name: "리더스입시학원", customer_campus_name: "3층", expected_amount: 15600000, contracted_amount: 15600000, paid_amount: 0, outstanding_amount: 15600000, manager_name: "박지훈", _dummy: true },
   ],
   recent_activity: [
-    { id: "a1", summary: "견적서 v3 링크 발송", action_type: "document", created_at: "2026-04-04T02:10:00Z" },
-    { id: "a2", summary: "설치 일정 4/20-4/21 확정", action_type: "schedule", created_at: "2026-04-04T01:30:00Z" },
-    { id: "a3", summary: "분할 수납 300만원 입금 확인", action_type: "payment", created_at: "2026-04-03T10:30:00Z" },
-    { id: "a4", summary: "별관 추가 계약 초안 생성", action_type: "document", created_at: "2026-04-03T09:00:00Z" },
+    { id: "a1", summary: "견적서 v3 링크 발송", action_type: "document", created_at: "2026-04-04T02:10:00Z", _dummy: true },
+    { id: "a2", summary: "설치 일정 4/20-4/21 확정", action_type: "schedule", created_at: "2026-04-04T01:30:00Z", _dummy: true },
+    { id: "a3", summary: "분할 수납 300만원 입금 확인", action_type: "payment", created_at: "2026-04-03T10:30:00Z", _dummy: true },
+    { id: "a4", summary: "별관 추가 계약 초안 생성", action_type: "document", created_at: "2026-04-03T09:00:00Z", _dummy: true },
   ],
   upcoming_installations: [
-    { id: "i1", title: "강남메가 본관 설치", location: "서울 강남구", scheduled_start_at: "2026-04-20T09:00:00+09:00", scheduled_end_at: "2026-04-21T17:00:00+09:00" },
-    { id: "i2", title: "리더스 분당지점 설치", location: "경기 성남시", scheduled_start_at: "2026-04-25T09:00:00+09:00", scheduled_end_at: "2026-04-25T18:00:00+09:00" },
+    { id: "i1", title: "강남메가 본관 설치", location: "서울 강남구", scheduled_start_at: "2026-04-20T09:00:00+09:00", scheduled_end_at: "2026-04-21T17:00:00+09:00", _dummy: true },
+    { id: "i2", title: "리더스 분당지점 설치", location: "경기 성남시", scheduled_start_at: "2026-04-25T09:00:00+09:00", scheduled_end_at: "2026-04-25T18:00:00+09:00", _dummy: true },
   ],
   recent_payments: [
-    { id: "p1", amount: 3000000, paid_at: "2026-04-03T10:30:00Z", payment_method: "bank_transfer" },
-    { id: "p2", amount: 9000000, paid_at: "2026-04-01T09:10:00Z", payment_method: "bank_transfer" },
+    { id: "p1", amount: 3000000, paid_at: "2026-04-03T10:30:00Z", payment_method: "bank_transfer", _dummy: true },
+    { id: "p2", amount: 9000000, paid_at: "2026-04-01T09:10:00Z", payment_method: "bank_transfer", _dummy: true },
   ],
   recent_calendar_events: [
-    { id: "ce1", title: "견적 링크 만료 전 확인", starts_at: "2026-04-12T10:00:00+09:00", ends_at: "2026-04-12T11:00:00+09:00", source_type: "document_due" },
-    { id: "ce2", title: "추가 계약 조정 미팅", starts_at: "2026-04-16T14:00:00+09:00", ends_at: "2026-04-16T15:00:00+09:00", source_type: "meeting" },
+    { id: "ce1", title: "견적 링크 만료 전 확인", starts_at: "2026-04-12T10:00:00+09:00", ends_at: "2026-04-12T11:00:00+09:00", source_type: "document_due", _dummy: true },
+    { id: "ce2", title: "추가 계약 조정 미팅", starts_at: "2026-04-16T14:00:00+09:00", ends_at: "2026-04-16T15:00:00+09:00", source_type: "meeting", _dummy: true },
   ],
   inventory_summary: [
-    { sku: "IFP-110", product_name: "IFP 110인치", pending_qty: 2, shipped_qty: 1, delivered_qty: 4, total_qty: 7 },
-    { sku: "IFP-86",  product_name: "IFP 86인치",  pending_qty: 4, shipped_qty: 2, delivered_qty: 8, total_qty: 14 },
-    { sku: "IFP-75",  product_name: "IFP 75인치",  pending_qty: 1, shipped_qty: 0, delivered_qty: 5, total_qty: 6 },
-    { sku: "CAM-T1",  product_name: "카메라 T1",    pending_qty: 3, shipped_qty: 1, delivered_qty: 6, total_qty: 10 },
-    { sku: "CAM-S1",  product_name: "카메라 S1",    pending_qty: 1, shipped_qty: 0, delivered_qty: 3, total_qty: 4 },
-    { sku: "STAND",   product_name: "스탠드",        pending_qty: 2, shipped_qty: 2, delivered_qty: 7, total_qty: 11 },
+    { sku: "IFP-110", product_name: "IFP 110인치", pending_qty: 2, shipped_qty: 1, delivered_qty: 4, total_qty: 7, _dummy: true },
+    { sku: "IFP-86",  product_name: "IFP 86인치",  pending_qty: 4, shipped_qty: 2, delivered_qty: 8, total_qty: 14, _dummy: true },
+    { sku: "IFP-75",  product_name: "IFP 75인치",  pending_qty: 1, shipped_qty: 0, delivered_qty: 5, total_qty: 6, _dummy: true },
+    { sku: "CAM-T1",  product_name: "카메라 T1",    pending_qty: 3, shipped_qty: 1, delivered_qty: 6, total_qty: 10, _dummy: true },
+    { sku: "CAM-S1",  product_name: "카메라 S1",    pending_qty: 1, shipped_qty: 0, delivered_qty: 3, total_qty: 4, _dummy: true },
+    { sku: "STAND",   product_name: "스탠드",        pending_qty: 2, shipped_qty: 2, delivered_qty: 7, total_qty: 11, _dummy: true },
   ],
+}
+
+const EMPTY_OVERVIEW: PartnerOverviewPayload = {
+  mode: "v2",
+  metrics: {
+    customer_count: 0,
+    active_deal_count: 0,
+    installation_deal_count: 0,
+    unpaid_deal_count: 0,
+    contracted_amount: 0,
+    installed_amount: 0,
+    paid_amount: 0,
+    outstanding_amount: 0,
+  },
+  customers: [],
+  deals: [],
+  recent_activity: [],
+  upcoming_installations: [],
+  recent_payments: [],
+  recent_calendar_events: [],
+  inventory_summary: [],
+}
+
+// process.env.NODE_ENV is a compile-time constant in Next.js client bundles.
+// This flag is `true` only during `npm run dev` (local) — always `false` in production builds.
+const IS_LOCAL_DEV = process.env.NODE_ENV === "development"
+
+function mergeWithDummy(
+  real: PartnerOverviewPayload,
+  dummy: PartnerOverviewPayload,
+): PartnerOverviewPayload {
+  return {
+    mode: real.mode,
+    metrics: {
+      customer_count: real.metrics.customer_count + dummy.metrics.customer_count,
+      active_deal_count: real.metrics.active_deal_count + dummy.metrics.active_deal_count,
+      installation_deal_count: real.metrics.installation_deal_count + dummy.metrics.installation_deal_count,
+      unpaid_deal_count: real.metrics.unpaid_deal_count + dummy.metrics.unpaid_deal_count,
+      contracted_amount: real.metrics.contracted_amount + dummy.metrics.contracted_amount,
+      installed_amount: real.metrics.installed_amount + dummy.metrics.installed_amount,
+      paid_amount: real.metrics.paid_amount + dummy.metrics.paid_amount,
+      outstanding_amount: real.metrics.outstanding_amount + dummy.metrics.outstanding_amount,
+    },
+    // 더미를 앞에 배치: slice/take가 있는 목록에서도 샘플이 보이도록 "위에 얹는" 효과
+    customers: [...dummy.customers, ...real.customers],
+    deals: [...dummy.deals, ...real.deals],
+    recent_activity: [...dummy.recent_activity, ...real.recent_activity],
+    upcoming_installations: [...dummy.upcoming_installations, ...real.upcoming_installations],
+    recent_payments: [...dummy.recent_payments, ...real.recent_payments],
+    recent_calendar_events: [...dummy.recent_calendar_events, ...real.recent_calendar_events],
+    inventory_summary: [...dummy.inventory_summary, ...real.inventory_summary],
+  }
 }
 
 /* ─── Utils ──────────────────────────────────────────────────── */
@@ -265,6 +327,17 @@ function dealPaymentBadge(deal: DealItem): { label: string; cls: string } {
   if (deal.paid_amount > 0) return { label: "부분수납", cls: "bg-amber-100 text-amber-700" }
   return { label: "미수", cls: "bg-red-100 text-red-600" }
 }
+
+/** 로컬 개발에서 실데이터 위에 얹은 샘플 아이템 앞에 붙는 "(더미)" 라벨 */
+function DummyBadge() {
+  return (
+    <span className="mr-1.5 inline-flex items-center rounded-full border border-dashed border-stone-400 bg-white px-1.5 py-0 align-middle text-[9px] font-bold text-stone-500">
+      더미
+    </span>
+  )
+}
+
+const DUMMY_CARD_CLS = "border-dashed border-stone-300 bg-stone-50/40"
 
 /* ─── Normalize / Type-guard ─────────────────────────────────── */
 
@@ -445,7 +518,7 @@ function LeftSidebar({
 
   // upcoming schedule: merge installations + calendar events, sort by date, max 6
   const upcomingItems = useMemo(() => {
-    type Item = { id: string; title: string; date: string; type: "installation" | "calendar"; source_type?: string; location?: string | null; days: number }
+    type Item = { id: string; title: string; date: string; type: "installation" | "calendar"; source_type?: string; location?: string | null; days: number; isDummy: boolean }
     const items: Item[] = [
       ...upcoming_installations.map(i => ({
         id: i.id,
@@ -454,6 +527,7 @@ function LeftSidebar({
         type: "installation" as const,
         location: i.location,
         days: daysUntil(i.scheduled_start_at),
+        isDummy: !!i._dummy,
       })),
       ...recent_calendar_events.map(e => ({
         id: e.id,
@@ -462,6 +536,7 @@ function LeftSidebar({
         type: "calendar" as const,
         source_type: e.source_type,
         days: daysUntil(e.starts_at),
+        isDummy: !!e._dummy,
       })),
     ]
     return items
@@ -501,11 +576,12 @@ function LeftSidebar({
                       isInstall
                         ? "border border-orange-100 bg-orange-50"
                         : "border border-[#ece4d8] bg-[#faf6ef]"
-                    }`}
+                    } ${item.isDummy ? "border-dashed opacity-90" : ""}`}
                   >
                     <span className="mt-0.5 text-sm leading-none">{emoji}</span>
                     <div className="min-w-0 flex-1">
                       <p className={`truncate text-xs font-medium ${isInstall ? "text-orange-900" : "text-[#111110]"}`}>
+                        {item.isDummy && <DummyBadge />}
                         {item.title}
                       </p>
                       <p className={`mt-0.5 text-[10px] ${isInstall ? "text-orange-600/70" : "text-[#1a1a1a]/40"}`}>
@@ -545,13 +621,16 @@ function LeftSidebar({
                 return (
                   <div key={log.id} className="flex gap-2">
                     <div className="flex flex-col items-center">
-                      <div className={`flex h-6 w-6 shrink-0 items-center justify-center rounded-full text-[11px] ${atCfg.cls}`}>
+                      <div className={`flex h-6 w-6 shrink-0 items-center justify-center rounded-full text-[11px] ${atCfg.cls} ${log._dummy ? "border border-dashed border-stone-400" : ""}`}>
                         {atCfg.emoji}
                       </div>
                       {!isLast && <div className="w-px flex-1 bg-[#e7e0d6]" style={{ minHeight: 10 }} />}
                     </div>
                     <div className="pb-3 pt-0.5">
-                      <p className="text-xs font-medium text-[#111110] leading-snug">{log.summary}</p>
+                      <p className="text-xs font-medium text-[#111110] leading-snug">
+                        {log._dummy && <DummyBadge />}
+                        {log.summary}
+                      </p>
                       <p className="mt-0.5 text-[10px] text-[#1a1a1a]/40">{fmtRelative(log.created_at)}</p>
                     </div>
                   </div>
@@ -568,7 +647,7 @@ function LeftSidebar({
 /* ─── Main Component ──────────────────────────────────────────── */
 
 export function PartnerPortalHome() {
-  const [overview, setOverview] = useState<PartnerOverviewPayload>(DEMO)
+  const [realOverview, setRealOverview] = useState<PartnerOverviewPayload>(EMPTY_OVERVIEW)
   const [loading, setLoading]   = useState(true)
   const [error, setError]       = useState<string | null>(null)
   const [expandedCustomers, setExpandedCustomers] = useState<Set<string>>(new Set(["c1"]))
@@ -579,6 +658,8 @@ export function PartnerPortalHome() {
   const [contractOpen, setContractOpen]   = useState(true)
   const [inventoryOpen, setInventoryOpen] = useState(true)
   const [sidebarOpen, setSidebarOpen]     = useState(true)
+  // Dummy overlay: only ever turns on during local dev. In production this state stays false.
+  const [showDummy, setShowDummy] = useState(IS_LOCAL_DEV)
 
   const refreshPortal = useCallback(() => {
     window.location.reload()
@@ -592,10 +673,15 @@ export function PartnerPortalHome() {
         if (!r.ok) throw new Error(payload.error ?? "Failed to fetch overview")
         return normalizeOverviewPayload(payload)
       })
-      .then(payload => { if (alive) { setOverview(payload); setLoading(false) } })
-      .catch(() => { if (alive) { setOverview(DEMO); setLoading(false); setError("연결된 계정이 없어 데모 홈으로 표시 중입니다.") } })
+      .then(payload => { if (alive) { setRealOverview(payload); setLoading(false) } })
+      .catch(() => { if (alive) { setLoading(false); setError("실데이터를 불러올 수 없습니다.") } })
     return () => { alive = false }
   }, [])
+
+  const overview = useMemo(
+    () => (IS_LOCAL_DEV && showDummy ? mergeWithDummy(realOverview, DEMO) : realOverview),
+    [realOverview, showDummy],
+  )
 
   /* pipeline: group deals by stage */
   const pipeline = useMemo(() => {
@@ -639,7 +725,7 @@ export function PartnerPortalHome() {
 
   /* action queue: priority-ordered to-do list */
   const actionQueue = useMemo(() => {
-    type AItem = { id: string; num: number; label: string; sub: string; href: string; numCls: string }
+    type AItem = { id: string; num: number; label: string; sub: string; href: string; numCls: string; isDummy: boolean }
     const q: AItem[] = []
     let n = 1
 
@@ -647,7 +733,7 @@ export function PartnerPortalHome() {
       .filter(d => d.outstanding_amount > 0 && (d.current_stage === "installation" || d.current_stage === "payment"))
       .slice(0, 2)
       .forEach(d => {
-        q.push({ id: `ov-${d.id}`, num: n++, label: `미수금 ${fmt(d.outstanding_amount)} 확인`, sub: `${d.customer_name ?? ""} · ${d.title}`, href: "/partner/workspace", numCls: "bg-red-500 text-white" })
+        q.push({ id: `ov-${d.id}`, num: n++, label: `미수금 ${fmt(d.outstanding_amount)} 확인`, sub: `${d.customer_name ?? ""} · ${d.title}`, href: "/partner/workspace", numCls: "bg-red-500 text-white", isDummy: !!d._dummy })
       })
 
     overview.upcoming_installations
@@ -655,18 +741,18 @@ export function PartnerPortalHome() {
       .slice(0, 2)
       .forEach(i => {
         const d = daysUntil(i.scheduled_start_at)
-        q.push({ id: `inst-${i.id}`, num: n++, label: d === 0 ? "오늘 설치 확인" : `설치 D-${d} 준비`, sub: `${i.title} · ${i.location ?? "장소 미지정"}`, href: "/partner/calendar", numCls: "bg-orange-500 text-white" })
+        q.push({ id: `inst-${i.id}`, num: n++, label: d === 0 ? "오늘 설치 확인" : `설치 D-${d} 준비`, sub: `${i.title} · ${i.location ?? "장소 미지정"}`, href: "/partner/calendar", numCls: "bg-orange-500 text-white", isDummy: !!i._dummy })
       })
 
     overview.deals
       .filter(d => d.current_stage === "contract")
       .slice(0, 2)
       .forEach(d => {
-        q.push({ id: `ct-${d.id}`, num: n++, label: "계약 서명 검토", sub: `${d.customer_name ?? ""} · ${d.title}`, href: "/partner/documents", numCls: "bg-[#084734] text-white" })
+        q.push({ id: `ct-${d.id}`, num: n++, label: "계약 서명 검토", sub: `${d.customer_name ?? ""} · ${d.title}`, href: "/partner/documents", numCls: "bg-[#084734] text-white", isDummy: !!d._dummy })
       })
 
     overview.recent_calendar_events.slice(0, 2).forEach(e => {
-      q.push({ id: `ce-${e.id}`, num: n++, label: e.title, sub: fmtShortDate(e.starts_at), href: "/partner/calendar", numCls: "bg-teal-500 text-white" })
+      q.push({ id: `ce-${e.id}`, num: n++, label: e.title, sub: fmtShortDate(e.starts_at), href: "/partner/calendar", numCls: "bg-teal-500 text-white", isDummy: !!e._dummy })
     })
 
     return q.slice(0, 7)
@@ -719,6 +805,20 @@ export function PartnerPortalHome() {
                 <p className="text-sm text-[#1a1a1a]/50">{todayStr}</p>
               </div>
               <div className="flex items-center gap-2">
+                {IS_LOCAL_DEV && (
+                  <button
+                    type="button"
+                    onClick={() => setShowDummy(v => !v)}
+                    className={`rounded-full border px-3 py-1.5 text-xs font-medium transition-colors ${
+                      showDummy
+                        ? "border-dashed border-stone-400 bg-stone-50 text-stone-600 hover:bg-stone-100"
+                        : "border-[#e0e0dc] bg-white text-[#1a1a1a]/50 hover:bg-[#faf6ef]"
+                    }`}
+                    title="로컬 개발에서만 보이는 샘플 데이터 레이어"
+                  >
+                    {showDummy ? "더미 걷어내기" : "더미 보이기"}
+                  </button>
+                )}
                 {canCreateInPortal ? (
                   <>
                     <QuickActionButton label="새 고객" onClick={() => setIsCustomerDialogOpen(true)} />
@@ -753,15 +853,15 @@ export function PartnerPortalHome() {
 
           {/* Scrollable content */}
           <div
-            className="grid gap-6 px-6 py-6"
-            style={{
-              gridTemplateColumns: sidebarOpen ? "1fr 300px" : "1fr 36px",
-              transition: "grid-template-columns 280ms cubic-bezier(0.4,0,0.2,1)",
-            }}
+            className={`grid gap-6 px-6 py-6 [grid-template-columns:minmax(0,1fr)] transition-[grid-template-columns] duration-300 ease-out ${
+              sidebarOpen
+                ? "xl:[grid-template-columns:minmax(0,1fr)_300px]"
+                : "xl:[grid-template-columns:minmax(0,1fr)_36px]"
+            }`}
           >
 
           {/* ── Left: 메인 콘텐츠 ──────────────────────────────── */}
-          <div className="space-y-6">
+          <div className="min-w-0 space-y-6">
 
             {/* ── 지금 할 일 (Action Queue) ─────────────────────── */}
             {actionQueue.length > 0 && (
@@ -776,13 +876,16 @@ export function PartnerPortalHome() {
                 <div className="grid gap-2 sm:grid-cols-2 xl:grid-cols-3">
                   {actionQueue.map(item => (
                     <a key={item.id} href={item.href}
-                      className="group flex items-center gap-3 rounded-xl border border-[#ece4d8] bg-[#faf6ef] px-3 py-3 transition-colors hover:border-[#111110]/20 hover:bg-white"
+                      className={`group flex items-center gap-3 rounded-xl border border-[#ece4d8] bg-[#faf6ef] px-3 py-3 transition-colors hover:border-[#111110]/20 hover:bg-white ${item.isDummy ? "border-dashed border-stone-300 bg-stone-50/50" : ""}`}
                     >
                       <span className={`flex h-6 w-6 shrink-0 items-center justify-center rounded-full text-[11px] font-bold ${item.numCls}`}>
                         {item.num}
                       </span>
                       <div className="min-w-0 flex-1">
-                        <p className="text-sm font-medium leading-snug text-[#111110]">{item.label}</p>
+                        <p className="text-sm font-medium leading-snug text-[#111110]">
+                          {item.isDummy && <DummyBadge />}
+                          {item.label}
+                        </p>
                         <p className="mt-0.5 truncate text-xs text-[#1a1a1a]/45">{item.sub}</p>
                       </div>
                       <ArrowRight className="h-4 w-4 shrink-0 text-[#1a1a1a]/25 transition-transform group-hover:translate-x-0.5" />
@@ -856,9 +959,10 @@ export function PartnerPortalHome() {
                               return (
                                 <div
                                   key={deal.id}
-                                  className={`group rounded-xl border border-[#e7e0d6] border-l-4 bg-white p-3 shadow-sm transition-all hover:-translate-y-0.5 hover:shadow-md ${cfg.borderCls}`}
+                                  className={`group rounded-xl border border-[#e7e0d6] border-l-4 bg-white p-3 shadow-sm transition-all hover:-translate-y-0.5 hover:shadow-md ${cfg.borderCls} ${deal._dummy ? DUMMY_CARD_CLS : ""}`}
                                 >
                                   <p className="text-xs font-semibold leading-snug text-[#111110]">
+                                    {deal._dummy && <DummyBadge />}
                                     {deal.title}
                                   </p>
                                   <p className="mt-1 text-[11px] text-[#1a1a1a]/45">
@@ -900,7 +1004,10 @@ export function PartnerPortalHome() {
                   const hasOutstanding = (cs.summary?.outstanding_amount ?? 0) > 0
 
                   return (
-                    <div key={cs.customer.id} className="overflow-hidden rounded-2xl border border-[#e7e0d6] bg-white">
+                    <div
+                      key={cs.customer.id}
+                      className={`overflow-hidden rounded-2xl border border-[#e7e0d6] bg-white ${cs._dummy ? DUMMY_CARD_CLS : ""}`}
+                    >
                       <button
                         type="button"
                         onClick={() => setExpandedCustomers(prev => {
@@ -914,6 +1021,7 @@ export function PartnerPortalHome() {
                         <div>
                           <div className="flex items-center gap-2">
                             <span className="text-sm font-semibold text-[#111110]">
+                              {cs._dummy && <DummyBadge />}
                               {cs.customer.name}
                             </span>
                             {hasOutstanding && (
@@ -951,10 +1059,11 @@ export function PartnerPortalHome() {
                                 return (
                                   <div
                                     key={deal.id}
-                                    className={`flex items-center justify-between gap-3 rounded-xl border border-l-4 border-[#e7e0d6] bg-[#faf6ef] px-4 py-3 ${cfg.borderCls}`}
+                                    className={`flex items-center justify-between gap-3 rounded-xl border border-l-4 border-[#e7e0d6] bg-[#faf6ef] px-4 py-3 ${cfg.borderCls} ${deal._dummy ? DUMMY_CARD_CLS : ""}`}
                                   >
                                     <div className="min-w-0">
                                       <p className="truncate text-sm font-medium text-[#111110]">
+                                        {deal._dummy && <DummyBadge />}
                                         {deal.title}
                                       </p>
                                       <p className="mt-0.5 text-xs text-[#1a1a1a]/40">{deal.deal_code}</p>
@@ -996,10 +1105,11 @@ export function PartnerPortalHome() {
                   {overview.recent_payments.slice(0, 3).map(p => (
                     <div
                       key={p.id}
-                      className="flex items-center justify-between rounded-xl border border-[#ece4d8] bg-white px-4 py-3"
+                      className={`flex items-center justify-between rounded-xl border border-[#ece4d8] bg-white px-4 py-3 ${p._dummy ? DUMMY_CARD_CLS : ""}`}
                     >
                       <div>
                         <p className="text-sm font-semibold text-emerald-600">
+                          {p._dummy && <DummyBadge />}
                           {fmtFull(p.amount)}
                         </p>
                         <p className="mt-0.5 text-xs text-[#1a1a1a]/40">
@@ -1069,9 +1179,15 @@ export function PartnerPortalHome() {
                             </p>
                           </div>
                           {pipeline["quote"].map(deal => (
-                            <div key={deal.id} className="flex items-center justify-between gap-2 rounded-xl border border-[#ece4d8] bg-[#faf6ef] px-3 py-2.5">
+                            <div
+                              key={deal.id}
+                              className={`flex items-center justify-between gap-2 rounded-xl border border-[#ece4d8] bg-[#faf6ef] px-3 py-2.5 ${deal._dummy ? DUMMY_CARD_CLS : ""}`}
+                            >
                               <div className="min-w-0">
-                                <p className="truncate text-sm font-medium text-[#111110]">{deal.title}</p>
+                                <p className="truncate text-sm font-medium text-[#111110]">
+                                  {deal._dummy && <DummyBadge />}
+                                  {deal.title}
+                                </p>
                                 <p className="mt-0.5 truncate text-xs text-[#1a1a1a]/45">{deal.customer_name}</p>
                               </div>
                               <span className="shrink-0 text-sm font-semibold text-[#111110]">
@@ -1117,9 +1233,15 @@ export function PartnerPortalHome() {
                             </p>
                           </div>
                           {pipeline["contract"].map(deal => (
-                            <div key={deal.id} className="flex items-center justify-between gap-2 rounded-xl border border-[#D1FAE5] bg-[#ECFDF5] px-3 py-2.5">
+                            <div
+                              key={deal.id}
+                              className={`flex items-center justify-between gap-2 rounded-xl border border-[#D1FAE5] bg-[#ECFDF5] px-3 py-2.5 ${deal._dummy ? DUMMY_CARD_CLS : ""}`}
+                            >
                               <div className="min-w-0">
-                                <p className="truncate text-sm font-medium text-[#111110]">{deal.title}</p>
+                                <p className="truncate text-sm font-medium text-[#111110]">
+                                  {deal._dummy && <DummyBadge />}
+                                  {deal.title}
+                                </p>
                                 <p className="mt-0.5 truncate text-xs text-[#1a1a1a]/45">{deal.customer_name}</p>
                               </div>
                               <div className="flex shrink-0 items-center gap-1.5">
@@ -1157,10 +1279,16 @@ export function PartnerPortalHome() {
                           {overview.inventory_summary.map(item => {
                             const deliveredPct = item.total_qty > 0 ? Math.round((item.delivered_qty / item.total_qty) * 100) : 0
                             return (
-                              <div key={item.sku}>
+                              <div
+                                key={item.sku}
+                                className={item._dummy ? "rounded-lg border border-dashed border-stone-300 bg-stone-50/40 p-2" : ""}
+                              >
                                 <div className="mb-1.5 flex items-center justify-between gap-2">
                                   <div className="min-w-0">
-                                    <span className="text-sm font-medium text-[#111110]">{item.product_name}</span>
+                                    <span className="text-sm font-medium text-[#111110]">
+                                      {item._dummy && <DummyBadge />}
+                                      {item.product_name}
+                                    </span>
                                     <span className="ml-1.5 text-[11px] text-[#1a1a1a]/35">{item.sku}</span>
                                   </div>
                                   <span className="shrink-0 text-sm font-bold text-[#111110]">
