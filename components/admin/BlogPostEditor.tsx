@@ -33,6 +33,7 @@ import {
   Sparkles,
   Type,
   Undo2,
+  Upload,
   Video,
   Wand2,
   X,
@@ -209,6 +210,7 @@ export default function BlogPostEditor({
   const [tagsInput, setTagsInput] = useState(initialForm.tags.join(", "))
   const [draftState, setDraftState] = useState<DraftState>("saved")
   const [isSubmitting, setIsSubmitting] = useState(false)
+  const [uploadingField, setUploadingField] = useState<"imageUrl" | "heroImageUrl" | null>(null)
   const [notice, setNotice] = useState("")
   const [aiState, setAiState] = useState<AiState | null>(null)
   const [draftInput, setDraftInput] = useState({ topic: "", tone: "전문적", length: "medium", reference: "" })
@@ -484,6 +486,32 @@ export default function BlogPostEditor({
         buttonHref: form.cta.buttonHref.trim() || DEFAULT_BLOG_CTA.buttonHref,
       },
       status: nextStatus ?? form.status,
+    }
+  }
+
+  const handleImageUpload = async (field: "imageUrl" | "heroImageUrl", file: File) => {
+    setUploadingField(field)
+    try {
+      const formData = new FormData()
+      formData.append("file", file)
+      const res = await fetch("/api/admin/upload", {
+        method: "POST",
+        headers: { Authorization: `Bearer ${getToken()}` },
+        body: formData,
+      })
+      if (!res.ok) {
+        const err = await res.json().catch(() => ({}))
+        setNotice(err.error ?? "업로드에 실패했습니다.")
+        return
+      }
+      const { url } = await res.json() as { url: string }
+      updateForm(field, url)
+      if (field === "imageUrl" && !form.heroImageUrl) updateForm("heroImageUrl", url)
+      if (field === "heroImageUrl" && !form.imageUrl) updateForm("imageUrl", url)
+    } catch {
+      setNotice("업로드 중 오류가 발생했습니다.")
+    } finally {
+      setUploadingField(null)
     }
   }
 
@@ -1525,22 +1553,40 @@ export default function BlogPostEditor({
                 <div className="rounded-[20px] border border-[#e8e8e4] bg-white p-5 shadow-sm">
                   <p className="mb-3.5 text-sm font-semibold text-[#111110]">비주얼</p>
                   <div className="space-y-3">
-                    <div className="space-y-1.5">
-                      <Label className="text-[12px]">썸네일 이미지 URL</Label>
-                      <Input
-                        value={form.imageUrl}
-                        onChange={(event) => updateForm("imageUrl", event.target.value)}
-                        placeholder="/images/blog/thumb.png"
-                      />
-                    </div>
-                    <div className="space-y-1.5">
-                      <Label className="text-[12px]">상단 배너 이미지 URL</Label>
-                      <Input
-                        value={form.heroImageUrl}
-                        onChange={(event) => updateForm("heroImageUrl", event.target.value)}
-                        placeholder="/images/blog/hero.png"
-                      />
-                    </div>
+                    {(["imageUrl", "heroImageUrl"] as const).map((field) => (
+                      <div key={field} className="space-y-1.5">
+                        <Label className="text-[12px]">
+                          {field === "imageUrl" ? "썸네일 이미지 URL" : "상단 배너 이미지 URL"}
+                        </Label>
+                        <div className="flex gap-1.5">
+                          <Input
+                            value={form[field]}
+                            onChange={(event) => updateForm(field, event.target.value)}
+                            placeholder="/images/blog/thumb.png"
+                            className="flex-1"
+                          />
+                          <label className="relative flex cursor-pointer items-center gap-1.5 rounded-md border border-[#e8e8e4] bg-white px-2.5 py-1.5 text-[12px] font-medium text-[#615D59] hover:bg-[#F6F5F4] transition-colors">
+                            {uploadingField === field ? (
+                              <Loader2 className="h-3.5 w-3.5 animate-spin" />
+                            ) : (
+                              <Upload className="h-3.5 w-3.5" />
+                            )}
+                            업로드
+                            <input
+                              type="file"
+                              accept="image/jpeg,image/png,image/webp,image/gif"
+                              className="absolute inset-0 cursor-pointer opacity-0"
+                              disabled={uploadingField !== null}
+                              onChange={(e) => {
+                                const file = e.target.files?.[0]
+                                if (file) void handleImageUpload(field, file)
+                                e.target.value = ""
+                              }}
+                            />
+                          </label>
+                        </div>
+                      </div>
+                    ))}
                     {(form.heroImageUrl || form.imageUrl) && (
                       <div className="overflow-hidden rounded-xl border border-[#e8e8e4]">
                         {/* eslint-disable-next-line @next/next/no-img-element */}
