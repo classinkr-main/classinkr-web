@@ -674,6 +674,48 @@ export default function AdminMarketingPage() {
     }
   }
 
+  const handleBulkDelete = async (ids: string[]) => {
+    try {
+      const res = await adminFetch("/api/admin/subscribers/bulk", {
+        method: "DELETE",
+        body: JSON.stringify({ ids }),
+      })
+      if (res.status === 401) {
+        handleUnauthorized()
+        return
+      }
+      if (!res.ok) {
+        showToast("error", "일괄 삭제에 실패했습니다.")
+        return
+      }
+      await fetchSubscribers()
+      showToast("success", `${ids.length}명의 구독자가 삭제되었습니다.`)
+    } catch {
+      showToast("error", "일괄 삭제에 실패했습니다.")
+    }
+  }
+
+  const handleBulkTagAdd = async (ids: string[], tags: string[]) => {
+    try {
+      const res = await adminFetch("/api/admin/subscribers/bulk", {
+        method: "PATCH",
+        body: JSON.stringify({ ids, tags }),
+      })
+      if (res.status === 401) {
+        handleUnauthorized()
+        return
+      }
+      if (!res.ok) {
+        showToast("error", "태그 일괄 추가에 실패했습니다.")
+        return
+      }
+      await fetchSubscribers()
+      showToast("success", `${ids.length}명에게 태그가 추가되었습니다.`)
+    } catch {
+      showToast("error", "태그 일괄 추가에 실패했습니다.")
+    }
+  }
+
   const clearComposerDraft = useCallback(() => {
     const hasDraft = composerDraft.subject.trim() || composerDraft.body.trim() || composerDraft.targetTags.length > 0
     if (!hasDraft) {
@@ -1128,6 +1170,8 @@ export default function AdminMarketingPage() {
                     onCompose={handleComposeFromSubscriber}
                     onAddSubscriber={() => setIsFormOpen(true)}
                     onComposeCampaign={() => setActiveTab("compose")}
+                    onBulkDelete={handleBulkDelete}
+                    onBulkTagAdd={handleBulkTagAdd}
                   />
                 )}
               </Panel>
