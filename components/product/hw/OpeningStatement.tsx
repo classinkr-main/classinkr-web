@@ -7,7 +7,7 @@ const LABELS = [
   "OPS 내장",
   "AI 카메라",
   "4K 디스플레이",
-  "0.03s 응답",
+  "50포인트 터치",
 ] as const;
 
 const fadeUp = {
@@ -42,7 +42,7 @@ export default function OpeningStatement() {
             className="text-[2rem] sm:text-4xl md:text-5xl lg:text-[3.75rem] xl:text-[4.25rem] font-bold tracking-tight text-[#111110]"
             style={{ lineHeight: 1.1, letterSpacing: "-0.045em" }}
           >
-            선생님은 수업만 하세요.
+            수업은 더 잘 남고.
           </motion.p>
 
           {/* Line 2 — accent */}
@@ -54,7 +54,7 @@ export default function OpeningStatement() {
             className="text-[2rem] sm:text-4xl md:text-5xl lg:text-[3.75rem] xl:text-[4.25rem] font-bold tracking-tight text-[#084734]"
             style={{ lineHeight: 1.1, letterSpacing: "-0.045em" }}
           >
-            녹화도, 공유도, 기록도 —
+            운영은 더 단순해집니다.
           </motion.p>
 
           {/* Line 3 */}
@@ -66,7 +66,7 @@ export default function OpeningStatement() {
             className="text-[2rem] sm:text-4xl md:text-5xl lg:text-[3.75rem] xl:text-[4.25rem] font-bold tracking-tight text-[#111110]"
             style={{ lineHeight: 1.1, letterSpacing: "-0.045em" }}
           >
-            교실이 알아서 합니다.
+            좋은 교실은 그렇게 완성됩니다.
           </motion.p>
         </div>
 

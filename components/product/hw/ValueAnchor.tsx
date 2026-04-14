@@ -7,31 +7,31 @@ import Link from "next/link";
 const items = [
   {
     label: "86\" / 75\" 4K 디스플레이",
-    desc: "AG/AF 코팅, 90% 이상 빛 투과율",
+    desc: "AG/AF 코팅, 선명한 가독성 유지",
   },
   {
     label: "50점 멀티터치 + 0.03s 응답",
-    desc: "분필보다 빠른 필기, 동시 필기 지원",
+    desc: "끊김 없는 필기, 동시 판서 지원",
   },
   {
     label: "OPS PC 내장 (i5 / i7)",
-    desc: "별도 본체·HDMI·어댑터 불필요",
+    desc: "별도 본체·HDMI·어댑터 없이 시작",
   },
   {
     label: "4K AI 트래킹 카메라 + 마이크 어레이",
-    desc: "강사 자동 추적, 라이브·녹화 한 번에",
+    desc: "교사 자동 추적, 라이브와 녹화를 한 번에",
   },
   {
     label: "ClassIn 소프트웨어 라이선스",
-    desc: "학원 단위 무제한, 판서 자동 캡처 포함",
+    desc: "판서 기록, 공유, 수업 운영 흐름 포함",
   },
   {
     label: "설치 + 교사 온보딩",
-    desc: "전문 엔지니어 출장, 4시간 핸즈온 교육",
+    desc: "전문 엔지니어 설치, 4시간 현장 교육",
   },
   {
     label: "24시간 원격지원 + 출장 A/S",
-    desc: "1년 무상, 평일 24시간 대응",
+    desc: "도입 후 운영 지원과 유지보수까지",
   },
 ];
 
@@ -89,9 +89,9 @@ export default function ValueAnchor() {
           className="text-4xl md:text-5xl lg:text-6xl mt-4 leading-tight text-white"
           style={{ letterSpacing: "-1.5px" }}
         >
-          한 대 안에,
+          필요한 것은,
           <br />
-          교실이 필요한 모든 것.
+          이미 한 대에 담았습니다.
         </motion.h2>
 
         {/* Sub-copy */}
@@ -103,7 +103,8 @@ export default function ValueAnchor() {
           viewport={{ once: true, margin: "-80px" }}
           className="text-lg text-white/70 mt-6 max-w-2xl mx-auto leading-relaxed"
         >
-          ClassIn Board를 들이는 순간, 더 살 것이 없습니다. 별도 PC도, 캠코더도, 마이크도, 소프트웨어도 모두 보드 안에 들어 있습니다.
+          보드, 컴퓨팅, 카메라, 오디오, 소프트웨어, 설치와 운영 지원까지.
+          도입 이후가 더 단순하도록 처음부터 함께 설계했습니다.
         </motion.p>
 
         {/* Value card */}
@@ -161,10 +162,10 @@ export default function ValueAnchor() {
             href="/contact"
             className="inline-block bg-[#6EE7B7] hover:bg-white text-[#0D1A12] font-bold px-10 py-4 rounded-md text-base transition-all hover:scale-[1.02] active:scale-[0.98]"
           >
-            데모 신청하고 직접 사용해보기 →
+            도입 상담 신청
           </Link>
           <p className="text-sm text-white/50">
-            30일 만족 보장 — 사용해보고 결정하세요.
+            교실 규모와 운영 방식에 맞는 구성까지 차분하게 안내해드립니다.
           </p>
         </motion.div>
       </div>

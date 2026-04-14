@@ -21,9 +21,9 @@ const cards = [
     {
         icon: BookOpen,
         perspective: "학생",
-        headline: "결석한 날 밤도,\n완전한 수업입니다",
+        headline: "결석한 날에도,\n수업의 흐름이 남습니다",
         detail:
-            "영상과 판서 노트가 함께 저장됩니다. 집에서 영상을 틀면 교사의 설명이, 옆에 PDF를 열면 판서가 — 교실과 똑같은 복습 환경이 펼쳐집니다.",
+            "영상과 판서 노트가 함께 남아 집에서도 같은 흐름으로 복습할 수 있습니다. 결석한 날에도 수업 맥락을 놓치지 않습니다.",
         accent: "#084734",
         bg: "#ECFDF5",
         borderColor: "rgba(8,71,52,0.12)",
@@ -31,9 +31,9 @@ const cards = [
     {
         icon: Users,
         perspective: "학부모",
-        headline: "\"오늘 뭘 배웠어?\"\n이제 직접 확인합니다",
+        headline: "\"오늘 무엇을 배웠는지\"\n바로 확인할 수 있습니다",
         detail:
-            "수업 종료 후 판서 PDF가 자동으로 공유됩니다. 학부모는 자녀가 어떤 내용을 배웠는지, 어디까지 진행됐는지 그대로 볼 수 있습니다.",
+            "수업 종료 후 판서 PDF가 자동으로 공유됩니다. 학부모는 자녀가 어떤 내용을 배우고 어디까지 진도 나갔는지 직접 확인할 수 있습니다.",
         accent: "#084734",
         bg: "#FFFFFF",
         borderColor: "rgba(0,0,0,0.08)",
@@ -41,9 +41,9 @@ const cards = [
     {
         icon: Star,
         perspective: "교사",
-        headline: "내 수업을 돌아보면\n다음 수업이 달라집니다",
+        headline: "지난 수업을 보면,\n다음 수업이 더 좋아집니다",
         detail:
-            "AI 카메라가 녹화한 수업 영상을 교사 스스로 복기합니다. 어느 순간 학생 집중이 흩어졌는지, 판서 흐름이 자연스러웠는지 — 성찰이 성장이 됩니다.",
+            "교사는 수업 영상을 다시 보며 설명 흐름과 학생 반응을 점검할 수 있습니다. 복기는 다음 수업의 완성도를 높입니다.",
         accent: "#084734",
         bg: "#F6F5F4",
         borderColor: "rgba(0,0,0,0.08)",
@@ -63,14 +63,14 @@ export default function AfterClassSection() {
                         className="text-3xl sm:text-4xl md:text-5xl font-bold text-[#111110] mb-5 leading-tight"
                         style={{ letterSpacing: "-0.035em" }}
                     >
-                        수업이 끝나도,
+                        좋은 수업은,
                         <br />
-                        <span className="text-[#084734]">배움은 계속됩니다</span>
+                        <span className="text-[#084734]">교실 밖에서도 이어집니다</span>
                     </h2>
                     <p className="text-base sm:text-lg text-[#615D59] max-w-xl mx-auto leading-relaxed">
-                        ClassIn Board가 만든 결과물은 교실 밖에서도 살아 숨쉽니다.
+                        ClassIn Board가 남기는 판서와 영상은 교실 밖에서도 바로 활용됩니다.
                         <br />
-                        학생도, 학부모도, 교사도 — 각자의 방식으로 수업을 이어갑니다.
+                        학생, 학부모, 교사 모두 같은 수업의 근거를 각자의 방식으로 다시 확인할 수 있습니다.
                     </p>
                 </motion.div>
 

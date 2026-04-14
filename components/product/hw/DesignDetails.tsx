@@ -18,18 +18,18 @@ const transition = (delay: number) => ({
 const CARDS = [
   {
     icon: Sun,
-    heading: "형광등이 켜져 있어도, 글씨가 죽지 않습니다.",
-    body: "AG(Anti-Glare) 코팅 + 90% 이상 빛 투과율. 창가 자리든 뒷자리든, 같은 글씨를 봅니다.",
+    heading: "밝은 교실에서도 선명합니다.",
+    body: "AG 코팅과 높은 빛 투과율로 반사와 눈부심을 줄여, 앞자리와 뒷자리 모두 같은 화면을 볼 수 있습니다.",
   },
   {
     icon: Sparkles,
-    heading: "닦지 않아도, 깨끗합니다.",
-    body: "AF(Anti-Fingerprint) 마감. 50명이 만져도 흔적이 남지 않습니다. 수업 사이에 닦을 시간이 필요 없습니다.",
+    heading: "자주 정리하지 않아도 깔끔합니다.",
+    body: "AF 마감으로 지문과 얼룩이 덜 남아 수업 사이 정리 시간이 줄어듭니다.",
   },
   {
     icon: Maximize2,
-    heading: "몰입을 방해하지 않습니다.",
-    body: "8mm 슬림 베젤, 무광 알루미늄 프레임. 학생의 시선이 학습에만 머뭅니다.",
+    heading: "시선이 화면에 오래 머뭅니다.",
+    body: "슬림 베젤과 무광 프레임으로 시야 분산을 줄여 수업 집중도가 높아집니다.",
   },
 ] as const;
 
@@ -62,7 +62,9 @@ export default function DesignDetails() {
           className="text-4xl md:text-5xl text-[#111110] mt-4 leading-tight"
           style={{ letterSpacing: "-1.5px" }}
         >
-          디테일이 수업의 질을 바꿉니다.
+          디테일은 조용하지만
+          <br />
+          수업은 분명히 달라집니다.
         </motion.h2>
 
         <motion.p
@@ -72,7 +74,8 @@ export default function DesignDetails() {
           transition={transition(0.2)}
           className="text-lg text-[#615D59] mt-5 max-w-2xl"
         >
-          보드의 강함은 스펙시트가 아니라, 손에 닿는 표면에 있습니다.
+          반사, 얼룩, 시선 분산.
+          작아 보이는 차이를 줄이는 것이 좋은 교실의 완성도를 만듭니다.
         </motion.p>
 
         {/* Cards */}

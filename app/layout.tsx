@@ -8,13 +8,20 @@ import { AnalyticsProviders } from "@/components/AnalyticsProviders";
 import { ToastProvider } from "@/components/ui/toast";
 import { GTMScript } from "@/components/GTMScript"
 import { MetaPixelScript } from "@/components/MetaPixelScript";
+import {
+  DEFAULT_OG_IMAGE_PATH,
+  DEFAULT_SITE_TITLE,
+  DEFAULT_TWITTER_IMAGE_PATH,
+  SITE_NAME,
+  SITE_URL,
+} from "@/lib/seo";
 
 
 export const metadata: Metadata = {
-  metadataBase: new URL("https://classin.co.kr"),
+  metadataBase: new URL(SITE_URL),
   title: {
-    default: "Classin — 학원 운영의 새로운 기준",
-    template: "%s | Classin",
+    default: DEFAULT_SITE_TITLE,
+    template: `%s | ${SITE_NAME}`,
   },
   description: "데이터 기반의 학원 관리 플랫폼 Classin으로 교육 품질을 표준화하고, 행정 업무를 자동화하며, 학습 성과를 보장하세요.",
   icons: {
@@ -22,17 +29,19 @@ export const metadata: Metadata = {
     apple: "/apple-icon",
   },
   openGraph: {
-    title: "Classin — 학원 운영의 새로운 기준",
+    title: DEFAULT_SITE_TITLE,
     description: "데이터 기반의 학원 관리 플랫폼 Classin으로 교육 품질을 표준화하고, 행정 업무를 자동화하며, 학습 성과를 보장하세요.",
-    url: "https://classin.co.kr",
-    siteName: "Classin",
+    url: SITE_URL,
+    siteName: SITE_NAME,
     locale: "ko_KR",
     type: "website",
+    images: [{ url: DEFAULT_OG_IMAGE_PATH }],
   },
   twitter: {
     card: "summary_large_image",
-    title: "Classin — 학원 운영의 새로운 기준",
+    title: DEFAULT_SITE_TITLE,
     description: "데이터 기반의 학원 관리 플랫폼 Classin으로 교육 품질을 표준화하고, 행정 업무를 자동화하며, 학습 성과를 보장하세요.",
+    images: [DEFAULT_TWITTER_IMAGE_PATH],
   },
   robots: { index: true, follow: true },
 };

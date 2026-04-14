@@ -193,9 +193,9 @@ export default function LatencyProof() {
             className="text-4xl md:text-5xl text-[#111110] mt-4 leading-tight"
             style={{ letterSpacing: "-1.5px" }}
           >
-            분필보다 빠릅니다.
+            설명의 흐름을
             <br />
-            0.03초.
+            끊지 않습니다.
           </motion.h2>
 
           {/* Body */}
@@ -206,9 +206,8 @@ export default function LatencyProof() {
             transition={{ duration: 0.6, ease: easing, delay: 0.24 }}
             className="text-lg text-[#615D59] mt-5 leading-relaxed"
           >
-            사람의 시신경이 손동작과 결과를 분리해 느끼기 시작하는 한계는 약
-            0.1초. ClassIn Board는 그 1/3입니다. 글씨를 쓰는 손이 디지털을
-            의식하지 않습니다.
+            반응이 느리면 설명은 한 번씩 끊깁니다. ClassIn Board는 손동작과 화면 반응 사이의 지연을 낮춰,
+            쓰는 사람과 보는 사람 모두 수업 흐름에 더 오래 집중할 수 있게 합니다.
           </motion.p>
 
           {/* Comparison table */}

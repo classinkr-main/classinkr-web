@@ -1,3 +1,5 @@
+import { KAKAO_PIXEL_ID } from "@/lib/analytics-config"
+
 export type EventNames =
   | "page_view"
   | "click_cta"
@@ -22,12 +24,18 @@ declare global {
       params?: AnalyticsParams
     ) => void
     kakaoPixel?: (pixelId: string) => KakaoPixelClient
-    dataLayer?: unknown[]
+    dataLayer?: Array<Record<string, unknown>>
   }
 }
 
 export const trackEvent = (eventName: EventNames, params?: AnalyticsParams) => {
   if (typeof window === "undefined") return
+
+  window.dataLayer = window.dataLayer || []
+  window.dataLayer.push({
+    event: eventName,
+    ...(params ?? {}),
+  })
 
   if (window.gtag) {
     window.gtag("event", eventName, params)
@@ -41,11 +49,9 @@ export const trackEvent = (eventName: EventNames, params?: AnalyticsParams) => {
     }
   }
 
-  if (!window.kakaoPixel) return
+  if (!window.kakaoPixel || !KAKAO_PIXEL_ID) return
 
-  const kakaoPixelId =
-    process.env.NEXT_PUBLIC_KAKAO_PIXEL_ID || "YOUR_KAKAO_PIXEL_ID"
-  const kakaoPixel = window.kakaoPixel(kakaoPixelId)
+  const kakaoPixel = window.kakaoPixel(KAKAO_PIXEL_ID)
 
   switch (eventName) {
     case "submit_demo_request":

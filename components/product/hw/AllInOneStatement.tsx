@@ -36,7 +36,7 @@ const layers = [
   },
 ]
 
-const chips = ["i5 / i7 OPS", "전원 1개", "케이블 0개", "본체 불필요"]
+const chips = ["i5 / i7 OPS", "전원 1개", "본체 없음", "복잡한 연결 없음"]
 
 function LayerStack() {
   const ref = useRef<HTMLDivElement>(null)
@@ -102,13 +102,15 @@ export default function AllInOneStatement() {
             className="text-4xl md:text-5xl lg:text-6xl leading-tight font-bold"
             style={{ letterSpacing: "-1.5px" }}
           >
-            보드 안에 PC가 있습니다.
+            보드 안에,
+            <br />
+            시작에 필요한 모든 것을 담았습니다.
           </h2>
 
           {/* Body */}
           <p className="text-lg text-white/70 leading-relaxed mt-6">
-            OPS 슬롯 표준 규격으로 내장된 인텔 i5 / i7. 별도 본체, HDMI 케이블,
-            어댑터가 없습니다. 전원 하나로 모든 게 켜집니다.
+            OPS 표준 규격의 인텔 i5 / i7 PC를 내장해 별도 본체와 복잡한 연결을 줄였습니다.
+            전원 하나로 보드, 카메라, 소프트웨어가 함께 시작됩니다.
           </p>
 
           {/* Chips */}
