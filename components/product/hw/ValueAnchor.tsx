@@ -113,17 +113,16 @@ export default function ValueAnchor() {
           initial="hidden"
           whileInView="visible"
           viewport={{ once: true, margin: "-80px" }}
-          className="mt-16 max-w-3xl mx-auto bg-white/[0.04] backdrop-blur-sm border border-white/10 rounded-3xl p-10 md:p-14 text-left"
+          whileTap={{ scale: 0.985 }}
+          className="mt-12 max-w-xl mx-auto bg-white/[0.05] backdrop-blur-sm border border-white/10 rounded-2xl p-6 md:p-8 text-left cursor-default"
+          style={{ transition: "box-shadow 0.15s" }}
         >
-          <p className="text-xs uppercase tracking-wider text-[#6EE7B7]">INCLUDED</p>
-          <h3
-            className="text-2xl md:text-3xl text-white mt-2"
-            style={{ letterSpacing: "-0.5px" }}
-          >
-            이 한 대에 포함되는 것
-          </h3>
+          <div className="flex items-center justify-between mb-5">
+            <p className="text-[10px] uppercase tracking-widest text-[#6EE7B7] font-semibold">INCLUDED</p>
+            <span className="text-[10px] text-white/30 font-medium">{items.length}가지 포함</span>
+          </div>
 
-          <ul className="mt-8 space-y-4">
+          <ul className="space-y-2.5">
             {items.map((item, i) => (
               <motion.li
                 key={item.label}
@@ -132,20 +131,18 @@ export default function ValueAnchor() {
                 initial="hidden"
                 whileInView="visible"
                 viewport={{ once: true, margin: "-60px" }}
-                className="flex items-start gap-4"
+                className="flex items-center gap-3"
               >
                 <Check
-                  className="w-5 h-5 text-[#6EE7B7] mt-1 shrink-0"
+                  className="w-3.5 h-3.5 text-[#6EE7B7] shrink-0"
                   aria-hidden="true"
                 />
-                <div>
-                  <span className="block text-base font-semibold text-white">
-                    {item.label}
-                  </span>
-                  <span className="block text-sm text-white/55 mt-0.5">
-                    {item.desc}
-                  </span>
-                </div>
+                <span className="text-sm font-semibold text-white/90 leading-snug">
+                  {item.label}
+                </span>
+                <span className="hidden sm:block text-xs text-white/35 leading-snug truncate">
+                  — {item.desc}
+                </span>
               </motion.li>
             ))}
           </ul>
