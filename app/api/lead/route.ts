@@ -5,6 +5,7 @@
  */
 import { NextRequest, NextResponse } from "next/server"
 
+import { checkRateLimit, getClientIp } from "@/lib/server/rate-limit"
 import { triggerOnSubmitRules } from "@/lib/automation-engine"
 import { emitNotificationEvent } from "@/lib/notifications/emit-event"
 import { saveLead } from "@/lib/repositories/leads"
@@ -136,6 +137,15 @@ function buildLeadNotificationMessage(body: LeadPayload) {
 }
 
 export async function POST(req: NextRequest) {
+  const ip = getClientIp(req)
+  const { allowed } = checkRateLimit(ip, "lead", { windowMs: 60_000, max: 5 })
+  if (!allowed) {
+    return NextResponse.json(
+      { ok: false, error: "요청이 너무 많습니다. 잠시 후 다시 시도해주세요." },
+      { status: 429 }
+    )
+  }
+
   try {
     const body = buildPayload(await req.json())
     const settings = await getResolvedSettings()

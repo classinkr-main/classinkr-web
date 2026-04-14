@@ -322,6 +322,9 @@ export interface CalendarEvent {
   created_by: string | null;
   created_at: string;
   updated_at: string;
+  customer_name?: string | null;
+  deal_title?: string | null;
+  deal_stage?: DealStage | null;
 }
 
 export interface CustomerDealSummary {
@@ -360,9 +363,28 @@ export interface CustomerDealHistoryItem {
   last_paid_at: string | null;
 }
 
+export interface CustomerDealPreview {
+  deal_id: string;
+  title: string;
+  current_stage: DealStage;
+  status: DealStatus;
+  updated_at: string;
+  next_event_at: string | null;
+}
+
+export interface CustomerInsight {
+  primary_stage: DealStage | null;
+  next_event_at: string | null;
+  next_event_type: CalendarSourceType | null;
+  recent_activity_at: string | null;
+  attention_level: "high" | "medium" | "low";
+}
+
 export interface CustomerListItem {
   customer: Customer;
   summary: CustomerDealSummary | null;
+  insight?: CustomerInsight | null;
+  deal_previews?: CustomerDealPreview[];
 }
 
 export interface CustomerDetailPayload {

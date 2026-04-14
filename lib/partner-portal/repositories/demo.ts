@@ -135,6 +135,9 @@ const demoCustomerDetails: Record<string, CustomerDetailPayload> = {
         created_by: null,
         created_at: "2026-04-03T09:00:00Z",
         updated_at: "2026-04-03T09:00:00Z",
+        customer_name: "강남메가수학학원",
+        deal_title: "본관 2~4층 전자칠판 설치",
+        deal_stage: "installation",
       },
     ],
   },
@@ -528,6 +531,52 @@ export async function listDemoCustomerListItems(): Promise<CustomerListItem[]> {
   return demoCustomers.map((customer) => ({
     customer,
     summary: demoCustomerDetails[customer.id]?.summary ?? null,
+    insight:
+      customer.id === "demo-customer-1"
+        ? {
+            primary_stage: "installation",
+            next_event_at: "2026-04-20T09:00:00+09:00",
+            next_event_type: "installation",
+            recent_activity_at: "2026-04-03T09:00:00Z",
+            attention_level: "high",
+          }
+        : {
+            primary_stage: "payment",
+            next_event_at: null,
+            next_event_type: null,
+            recent_activity_at: "2026-04-04T11:00:00Z",
+            attention_level: "low",
+          },
+    deal_previews:
+      customer.id === "demo-customer-1"
+        ? [
+            {
+              deal_id: "demo-deal-1",
+              title: "본관 2~4층 전자칠판 설치",
+              current_stage: "installation",
+              status: "active",
+              updated_at: "2026-04-03T00:00:00Z",
+              next_event_at: "2026-04-20T09:00:00+09:00",
+            },
+            {
+              deal_id: "demo-deal-2",
+              title: "별관 추가 계약",
+              current_stage: "quote",
+              status: "active",
+              updated_at: "2026-04-02T00:00:00Z",
+              next_event_at: null,
+            },
+          ]
+        : [
+            {
+              deal_id: "demo-deal-3",
+              title: "3층 전체 전자칠판 교체",
+              current_stage: "payment",
+              status: "active",
+              updated_at: "2026-04-04T00:00:00Z",
+              next_event_at: null,
+            },
+          ],
   }));
 }
 

@@ -1,6 +1,11 @@
 "use client"
 
+import DOMPurify from "isomorphic-dompurify"
 import { useState, useEffect, useRef } from "react"
+
+function sanitizeHtml(html: string): string {
+  return DOMPurify.sanitize(html, { USE_PROFILES: { html: true } })
+}
 import { useParams } from "next/navigation"
 import { CheckCircle2, AlertCircle, PenLine } from "lucide-react"
 import { Button } from "@/components/ui/button"
@@ -242,7 +247,7 @@ export default function PartnerSignPage() {
           </div>
           <div
             className="px-6 py-6 prose prose-sm max-w-none text-[#1a1a1a]"
-            dangerouslySetInnerHTML={{ __html: contract.content_html ?? "" }}
+            dangerouslySetInnerHTML={{ __html: sanitizeHtml(contract.content_html ?? "") }}
           />
           {contract.total_amount && (
             <div className="px-6 py-4 border-t border-[#e8e8e4] bg-[#fafafa] flex justify-between items-center">

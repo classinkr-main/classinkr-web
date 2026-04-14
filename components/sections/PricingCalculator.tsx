@@ -97,6 +97,7 @@ const MIN_BUSINESS_CASH = 10000;
 export function PricingCalculator() {
     const containerRef = React.useRef<HTMLDivElement>(null)
     const [visible, setVisible] = React.useState(false)
+    const [isStudentHelpOpen, setIsStudentHelpOpen] = React.useState(false)
 
     React.useEffect(() => {
         // Tiny delay so the layout is painted before we measure & animate
@@ -232,14 +233,31 @@ export function PricingCalculator() {
                         {/* Student Slider (On-Stage) */}
                         <div className="space-y-6">
                             <div className="flex justify-between items-center">
-                                <div className="flex items-center gap-2 group cursor-help relative">
+                                <details
+                                    className="relative flex items-center gap-2"
+                                    open={isStudentHelpOpen}
+                                    onToggle={(event) => setIsStudentHelpOpen(event.currentTarget.open)}
+                                    onMouseEnter={() => setIsStudentHelpOpen(true)}
+                                    onMouseLeave={() => setIsStudentHelpOpen(false)}
+                                >
                                     <span className="text-[16px] font-bold text-[#111110]">학생 수 (온스테이지)</span>
-                                    <Info className="w-[18px] h-[18px] text-[#A39E98] group-hover:text-primary transition-colors" />
-                                    <div className="absolute left-0 top-[130%] w-[280px] sm:w-[320px] bg-[#1C1B1A] text-white text-[13.5px] leading-relaxed p-4 rounded-xl shadow-xl opacity-0 invisible group-hover:opacity-100 group-hover:visible transition-all z-50 pointer-events-none">
+                                    <summary className="inline-flex h-6 w-6 list-none items-center justify-center rounded-full text-[#A39E98] transition-colors hover:text-primary focus:outline-none focus:ring-2 focus:ring-[#084734]/20 focus:ring-offset-2 focus:ring-offset-white [&::-webkit-details-marker]:hidden">
+                                        <span className="sr-only">학생 수 도움말 열기</span>
+                                        <Info className="w-[18px] h-[18px]" />
+                                    </summary>
+                                    <div
+                                        id="student-count-help"
+                                        role="tooltip"
+                                        className={`absolute left-0 top-[calc(100%+0.75rem)] w-[280px] sm:w-[320px] max-w-[calc(100vw-2rem)] bg-[#1C1B1A] text-white text-[13.5px] leading-relaxed p-4 rounded-xl shadow-xl transition-all z-50 ${
+                                            isStudentHelpOpen
+                                                ? "opacity-100 visible translate-y-0"
+                                                : "opacity-0 invisible translate-y-1"
+                                        }`}
+                                    >
                                         <span className="font-bold text-amber-300 block mb-1.5 flex items-center gap-1.5">💡 온스테이지(1v@)란?</span>
                                         전체 시청, 참가 인원이 아닌, 실제로 동시에 집중 비디오/오디오를 켜고 <b>화면에 띄워 소통하는 학생 수</b>를 말합니다. (예: 1v6, 1v12)
                                     </div>
-                                </div>
+                                </details>
                                 <div className="px-4 py-1.5 bg-primary/10 text-primary font-bold rounded-xl text-lg">
                                     {studentsNum}명
                                 </div>

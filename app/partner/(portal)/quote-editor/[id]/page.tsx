@@ -451,69 +451,73 @@ export default function QuoteEditorPage() {
 
       {/* 라인 아이템 테이블 */}
       <div className="mb-4 rounded-2xl border border-[rgba(0,0,0,0.08)] bg-white overflow-hidden">
-        {/* 컬럼 헤더 */}
-        <div className="grid grid-cols-[32px_1fr_1fr_120px_80px_120px_36px] gap-1 border-b border-[rgba(0,0,0,0.06)] bg-[#F6F5F4] px-3 py-2.5 text-[11px] font-semibold uppercase tracking-wider text-[#A39E98]">
-          <span className="text-center">No</span>
-          <span>품목명</span>
-          <span>세부내역</span>
-          <span className="text-right">단가</span>
-          <span className="text-right">수량</span>
-          <span className="text-right">공급가액</span>
-          <span />
-        </div>
-
-        {/* 행 */}
-        <div className="divide-y divide-[rgba(0,0,0,0.04)]">
-          {lines.map((line, i) => (
-            <div
-              key={line.id}
-              className="grid grid-cols-[32px_1fr_1fr_120px_80px_120px_36px] items-center gap-1 px-3 py-1 hover:bg-[#FAFAF8]"
-            >
-              <span className="text-center text-xs text-[#A39E98]">{i + 1}</span>
-              <Cell
-                value={line.itemName}
-                onChange={(v) => updateLine(line.id, "itemName", v)}
-                placeholder="제품명"
-              />
-              <Cell
-                value={line.itemDescription}
-                onChange={(v) => updateLine(line.id, "itemDescription", v)}
-                placeholder="세부 내역"
-              />
-              <Cell
-                value={line.unitPrice === 0 ? "" : String(line.unitPrice)}
-                onChange={(v) => updateLine(line.id, "unitPrice", v)}
-                align="right"
-                placeholder="0"
-                type="number"
-              />
-              <Cell
-                value={String(line.quantity)}
-                onChange={(v) => updateLine(line.id, "quantity", v)}
-                align="right"
-                type="number"
-              />
-              <div className="py-1.5 pr-2 text-right text-sm font-medium text-[#111110]">
-                {fmt(line.lineSupplyAmount)}
-              </div>
-              <button
-                onClick={() => removeLine(line.id)}
-                className="flex items-center justify-center rounded-lg p-1 text-[#A39E98] hover:bg-red-50 hover:text-red-500"
-              >
-                <Trash2 className="h-3.5 w-3.5" />
-              </button>
+        <div className="overflow-x-auto">
+          <div className="min-w-[860px]">
+            {/* 컬럼 헤더 */}
+            <div className="grid grid-cols-[32px_1fr_1fr_120px_80px_120px_36px] gap-1 border-b border-[rgba(0,0,0,0.06)] bg-[#F6F5F4] px-3 py-2.5 text-[11px] font-semibold uppercase tracking-wider text-[#A39E98]">
+              <span className="text-center">No</span>
+              <span>품목명</span>
+              <span>세부내역</span>
+              <span className="text-right">단가</span>
+              <span className="text-right">수량</span>
+              <span className="text-right">공급가액</span>
+              <span />
             </div>
-          ))}
-        </div>
 
-        {/* 행 추가 */}
-        <button
-          onClick={addLine}
-          className="flex w-full items-center gap-2 border-t border-dashed border-[rgba(0,0,0,0.08)] px-4 py-2.5 text-xs font-medium text-[#A39E98] hover:bg-[#F6F5F4] hover:text-[#615D59]"
-        >
-          <Plus className="h-3.5 w-3.5" />
-          품목 추가
-        </button>
+            {/* 행 */}
+            <div className="divide-y divide-[rgba(0,0,0,0.04)]">
+              {lines.map((line, i) => (
+                <div
+                  key={line.id}
+                  className="grid grid-cols-[32px_1fr_1fr_120px_80px_120px_36px] items-center gap-1 px-3 py-1 hover:bg-[#FAFAF8]"
+                >
+                  <span className="text-center text-xs text-[#A39E98]">{i + 1}</span>
+                  <Cell
+                    value={line.itemName}
+                    onChange={(v) => updateLine(line.id, "itemName", v)}
+                    placeholder="제품명"
+                  />
+                  <Cell
+                    value={line.itemDescription}
+                    onChange={(v) => updateLine(line.id, "itemDescription", v)}
+                    placeholder="세부 내역"
+                  />
+                  <Cell
+                    value={line.unitPrice === 0 ? "" : String(line.unitPrice)}
+                    onChange={(v) => updateLine(line.id, "unitPrice", v)}
+                    align="right"
+                    placeholder="0"
+                    type="number"
+                  />
+                  <Cell
+                    value={String(line.quantity)}
+                    onChange={(v) => updateLine(line.id, "quantity", v)}
+                    align="right"
+                    type="number"
+                  />
+                  <div className="py-1.5 pr-2 text-right text-sm font-medium text-[#111110]">
+                    {fmt(line.lineSupplyAmount)}
+                  </div>
+                  <button
+                    onClick={() => removeLine(line.id)}
+                    className="flex items-center justify-center rounded-lg p-1 text-[#A39E98] hover:bg-red-50 hover:text-red-500"
+                  >
+                    <Trash2 className="h-3.5 w-3.5" />
+                  </button>
+                </div>
+              ))}
+            </div>
+
+            {/* 행 추가 */}
+            <button
+              onClick={addLine}
+              className="flex w-full items-center gap-2 border-t border-dashed border-[rgba(0,0,0,0.08)] px-4 py-2.5 text-xs font-medium text-[#A39E98] hover:bg-[#F6F5F4] hover:text-[#615D59]"
+            >
+              <Plus className="h-3.5 w-3.5" />
+              품목 추가
+            </button>
+          </div>
+        </div>
       </div>
 
       {/* 합계 */}

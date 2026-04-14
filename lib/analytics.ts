@@ -43,8 +43,9 @@ export const trackEvent = (eventName: EventNames, params?: AnalyticsParams) => {
 
   if (!window.kakaoPixel) return
 
-  const kakaoPixelId =
-    process.env.NEXT_PUBLIC_KAKAO_PIXEL_ID || "YOUR_KAKAO_PIXEL_ID"
+  const kakaoPixelId = process.env.NEXT_PUBLIC_KAKAO_PIXEL_ID
+  if (!kakaoPixelId) return
+
   const kakaoPixel = window.kakaoPixel(kakaoPixelId)
 
   switch (eventName) {

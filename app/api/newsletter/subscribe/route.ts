@@ -1,4 +1,5 @@
 import { NextRequest, NextResponse } from "next/server"
+import { checkRateLimit, getClientIp } from "@/lib/server/rate-limit"
 import { subscribeSubscriber } from "@/lib/repositories/marketing"
 import { getResolvedSettings } from "@/lib/repositories/settings"
 import { triggerOnSubmitRules } from "@/lib/automation-engine"
@@ -6,6 +7,15 @@ import type { NewsletterSubscribeRequest } from "@/lib/marketing-types"
 import { postJson } from "@/lib/server/post-json"
 
 export async function POST(req: NextRequest) {
+  const ip = getClientIp(req)
+  const { allowed } = checkRateLimit(ip, "newsletter", { windowMs: 60_000, max: 3 })
+  if (!allowed) {
+    return NextResponse.json(
+      { error: "요청이 너무 많습니다. 잠시 후 다시 시도해주세요." },
+      { status: 429 }
+    )
+  }
+
   try {
     const body: NewsletterSubscribeRequest = await req.json()
     const VALID_SOURCES = ["demo_modal", "contact_page", "newsletter", "manual"] as const
@@ -47,7 +57,9 @@ export async function POST(req: NextRequest) {
             timestamp: new Date().toISOString(),
           },
           { timeoutMs: 8000 }
-        ).catch(() => {})
+        ).catch((err: unknown) => {
+          console.warn("[newsletter/subscribe] Google Sheet sync failed:", err)
+        })
       }
 
       // Only fire onboarding automation for newly created subscriptions.
@@ -55,7 +67,9 @@ export async function POST(req: NextRequest) {
         email,
         name: body.name,
         source: "newsletter",
-      }).catch(() => {})
+      }).catch((err: unknown) => {
+        console.warn("[newsletter/subscribe] automation trigger failed:", err)
+      })
     }
 
     return NextResponse.json({

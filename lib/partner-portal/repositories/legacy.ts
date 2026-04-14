@@ -538,10 +538,34 @@ async function buildLegacyCustomerSummary(partner: Partner) {
 export async function listLegacyCustomerListItems(): Promise<CustomerListItem[]> {
   const partners = await listPartners();
   return Promise.all(
-    partners.map(async (partner) => ({
-      customer: toLegacyCustomer(partner),
-      summary: await buildLegacyCustomerSummary(partner),
-    }))
+    partners.map(async (partner) => {
+      const summary = await buildLegacyCustomerSummary(partner);
+      const detail = await buildLegacyDealDetailPayload(partner);
+      const nextInstall = detail.installations[0]?.scheduled_start_at ?? null;
+
+      return {
+        customer: toLegacyCustomer(partner),
+        summary,
+        insight: {
+          primary_stage: detail.deal.current_stage,
+          next_event_at: nextInstall,
+          next_event_type: nextInstall ? "installation" : null,
+          recent_activity_at: detail.activity_logs[0]?.created_at ?? null,
+          attention_level:
+            summary.outstanding_amount > 0 || !nextInstall ? "high" : "medium",
+        },
+        deal_previews: [
+          {
+            deal_id: partner.id,
+            title: partner.name,
+            current_stage: detail.deal.current_stage,
+            status: detail.deal.status,
+            updated_at: detail.deal.updated_at,
+            next_event_at: nextInstall,
+          },
+        ],
+      };
+    })
   );
 }
 

@@ -52,6 +52,38 @@ function formatDate(iso: string | null): string {
   });
 }
 
+function formatDateTime(iso: string | null): string {
+  if (!iso) return "-";
+  return new Date(iso).toLocaleString("ko-KR", {
+    month: "2-digit",
+    day: "2-digit",
+    hour: "2-digit",
+    minute: "2-digit",
+  });
+}
+
+function calendarSourceLabel(source: CustomerDetailPayload["recent_calendar_events"][number]["source_type"]) {
+  return (
+    {
+      installation: "설치",
+      meeting: "미팅",
+      document_due: "문서 기한",
+      internal: "내부 일정",
+    }[source] ?? source
+  );
+}
+
+function calendarSourceTone(source: CustomerDetailPayload["recent_calendar_events"][number]["source_type"]) {
+  return (
+    {
+      installation: "bg-amber-50 text-amber-700",
+      meeting: "bg-[#ECFDF5] text-[#084734]",
+      document_due: "bg-[#f0f0ec] text-[#615D59]",
+      internal: "bg-[#f0f0ec] text-[#615D59]",
+    }[source] ?? "bg-[#f0f0ec] text-[#615D59]"
+  );
+}
+
 const SECTION_HEADER =
   "text-xs font-semibold uppercase tracking-widest text-[#1a1a1a]/30 mb-3";
 
@@ -62,9 +94,6 @@ export function CustomerDetailSlideOver({ customerId, onClose, onEdit }: Props) 
 
   useEffect(() => {
     let cancelled = false;
-    setLoading(true);
-    setError(null);
-    setData(null);
 
     portalFetch(`/api/portal/customers/${customerId}`)
       .then(async (res) => {
@@ -156,6 +185,11 @@ export function CustomerDetailSlideOver({ customerId, onClose, onEdit }: Props) 
 
               {/* 재무 현황 */}
               <FinancialSection summary={data.summary} />
+
+              {/* 최근 일정 */}
+              {data.recent_calendar_events.length > 0 && (
+                <RecentCalendarSection events={data.recent_calendar_events} />
+              )}
 
               {/* 딜 이력 */}
               {data.deals.length > 0 && (
@@ -457,6 +491,45 @@ function RecentActivitySection({
               {formatDate(log.created_at)}
             </span>
             <span className="text-[#1a1a1a]">{log.summary}</span>
+          </li>
+        ))}
+      </ul>
+    </section>
+  );
+}
+
+function RecentCalendarSection({
+  events,
+}: {
+  events: CustomerDetailPayload["recent_calendar_events"];
+}) {
+  const items = events.slice(0, 4);
+
+  return (
+    <section className="rounded-xl border border-[#e8e8e4] bg-white p-4">
+      <p className={SECTION_HEADER}>최근 일정</p>
+      <ul className="space-y-3">
+        {items.map((event) => (
+          <li
+            key={event.id}
+            className="rounded-lg border border-[#e8e8e4] bg-[#f5f5f2] p-3"
+          >
+            <div className="flex flex-wrap items-center gap-2">
+              <span
+                className={`rounded-full px-2 py-0.5 text-[11px] font-medium ${calendarSourceTone(event.source_type)}`}
+              >
+                {calendarSourceLabel(event.source_type)}
+              </span>
+              <span className="text-xs text-[#1a1a1a]/40">
+                {formatDateTime(event.starts_at)}
+              </span>
+            </div>
+            <p className="mt-2 text-sm font-medium text-[#1a1a1a]">
+              {event.title}
+            </p>
+            <p className="mt-1 text-xs text-[#1a1a1a]/50">
+              {event.deal_title ?? event.description ?? "거래/메모 정보가 아직 없습니다."}
+            </p>
           </li>
         ))}
       </ul>

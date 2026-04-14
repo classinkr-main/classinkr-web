@@ -22,7 +22,7 @@ const sb = () => createSupabaseAdminClient();
 
 /* ─── 구독자 ─────────────────────────────────────────────── */
 
-export async function getAllSubscribers(): Promise<SubRow[]> {
+export async function getAllSubscribers(limit = 1000, offset = 0): Promise<SubRow[]> {
   if (!USE_SUPABASE) {
     const { getAllSubscribers: jsonGet } = await import("@/lib/marketing-data");
     return jsonGet();
@@ -31,7 +31,8 @@ export async function getAllSubscribers(): Promise<SubRow[]> {
   const { data, error } = await sb()
     .from("newsletter_subscribers")
     .select("*")
-    .order("created_at", { ascending: false });
+    .order("created_at", { ascending: false })
+    .range(offset, offset + limit - 1);
   if (error) throw new Error(`[marketing] 구독자 조회 실패: ${error.message}`);
   return (data ?? []).map(rowToSubscriber);
 }
@@ -218,7 +219,7 @@ export async function deleteSubscriber(id: string | number): Promise<boolean> {
 
 /* ─── 이메일 캠페인 ──────────────────────────────────────── */
 
-export async function getAllCampaigns(): Promise<CampaignRow[]> {
+export async function getAllCampaigns(limit = 200, offset = 0): Promise<CampaignRow[]> {
   if (!USE_SUPABASE) {
     const { getAllCampaigns: jsonGet } = await import("@/lib/marketing-data");
     return jsonGet();
@@ -227,7 +228,8 @@ export async function getAllCampaigns(): Promise<CampaignRow[]> {
   const { data, error } = await sb()
     .from("email_campaigns")
     .select("*")
-    .order("created_at", { ascending: false });
+    .order("created_at", { ascending: false })
+    .range(offset, offset + limit - 1);
   if (error) throw new Error(`[marketing] 캠페인 조회 실패: ${error.message}`);
   return (data ?? []).map(rowToCampaign);
 }
