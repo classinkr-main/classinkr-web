@@ -7,6 +7,7 @@ import {
   AlertCircle,
   ArrowLeft,
   ArrowRight,
+  BarChart2,
   CheckCircle2,
   ChevronRight,
   History,
@@ -35,9 +36,10 @@ import SubscriberForm from "@/components/admin/marketing/SubscriberForm"
 import EmailComposer from "@/components/admin/marketing/EmailComposer"
 import SmsComposer from "@/components/admin/marketing/SmsComposer"
 import CampaignHistory from "@/components/admin/marketing/CampaignHistory"
+import MarketingDashboard from "@/components/admin/marketing/MarketingDashboard"
 import type { EmailCampaign, EmailDraft, SavedEmailSegment, Subscriber } from "@/lib/marketing-types"
 
-type Tab = "subscribers" | "compose" | "history"
+type Tab = "subscribers" | "compose" | "history" | "dashboard"
 type Channel = "email" | "sms"
 type SubscriberStatusFilter = "all" | Subscriber["status"]
 type SubscriberSourceFilter = "all" | Subscriber["source"]
@@ -772,6 +774,19 @@ export default function AdminMarketingPage() {
     showToast("success", `"${campaign.subject}" 캠페인을 작성기로 가져왔습니다.`)
   }, [savedSegments, showToast])
 
+  const handleCopyCampaign = useCallback((campaign: EmailCampaign) => {
+    setComposerDraft({
+      subject: campaign.subject,
+      body: campaign.body,
+      targetTags: [...campaign.targetTags],
+    })
+    const linkedSegment = savedSegments.find((segment) => areTagsEqual(segment.targetTags, campaign.targetTags))
+    setSegmentName(linkedSegment?.name ?? "")
+    setDraftNotice(`'${campaign.subject}' 캠페인을 그대로 불러왔습니다. 수정 후 발송하세요.`)
+    setActiveTab("compose")
+    showToast("success", `"${campaign.subject}" 캠페인을 편집기로 가져왔습니다.`)
+  }, [savedSegments, showToast])
+
   const handleComposeFromSubscriber = useCallback((subscriber: Subscriber) => {
     setComposerDraft((current) => ({
       ...current,
@@ -985,6 +1000,13 @@ export default function AdminMarketingPage() {
                 desc="최근 발송 결과와 대상 확인"
                 count={campaigns.length}
                 onClick={() => setActiveTab("history")}
+              />
+              <TabButton
+                active={activeTab === "dashboard"}
+                icon={<BarChart2 className="h-4 w-4" />}
+                label="현황 대시보드"
+                desc="구독자·캠페인·자동화 한눈에"
+                onClick={() => setActiveTab("dashboard")}
               />
             </div>
           </div>
@@ -1411,6 +1433,7 @@ export default function AdminMarketingPage() {
                     <CampaignHistory
                       campaigns={filteredCampaigns}
                       onDuplicate={handleDuplicateCampaign}
+                      onCopy={handleCopyCampaign}
                       onCreateCampaign={() => setActiveTab("compose")}
                       onViewSubscribers={() => setActiveTab("subscribers")}
                     />
@@ -1529,6 +1552,10 @@ export default function AdminMarketingPage() {
               </Panel>
             </div>
           </div>
+        )}
+
+        {activeTab === "dashboard" && (
+          <MarketingDashboard />
         )}
         </div>
       </div>

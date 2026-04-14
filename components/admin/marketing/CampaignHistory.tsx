@@ -18,6 +18,7 @@ import type { EmailCampaign } from "@/lib/marketing-types"
 interface Props {
   campaigns: EmailCampaign[]
   onDuplicate?: (campaign: EmailCampaign) => void
+  onCopy?: (campaign: EmailCampaign) => void
   onCreateCampaign?: () => void
   onViewSubscribers?: () => void
 }
@@ -41,6 +42,7 @@ function fmtDate(v?: string) {
 export default function CampaignHistory({
   campaigns,
   onDuplicate,
+  onCopy,
   onCreateCampaign,
   onViewSubscribers,
 }: Props) {
@@ -78,14 +80,14 @@ export default function CampaignHistory({
               <th className="text-left px-4 py-3 font-medium text-[#1a1a1a]/50 whitespace-nowrap hidden sm:table-cell">발송 수</th>
               <th className="text-left px-4 py-3 font-medium text-[#1a1a1a]/50 hidden md:table-cell">대상 태그</th>
               <th className="text-left px-4 py-3 font-medium text-[#1a1a1a]/50 whitespace-nowrap hidden lg:table-cell">발송일</th>
-              {onDuplicate && <th className="text-right px-4 py-3 font-medium text-[#1a1a1a]/50"></th>}
+              {(onDuplicate || onCopy) && <th className="text-right px-4 py-3 font-medium text-[#1a1a1a]/50"></th>}
             </tr>
           </thead>
           <tbody>
             {campaigns.map((c) => (
               <tr
                 key={c.id}
-                className="border-b border-[#f0f0ec] hover:bg-[#FAFAF8]/60 transition-colors cursor-pointer"
+                className="group border-b border-[#f0f0ec] hover:bg-[#FAFAF8]/60 transition-colors cursor-pointer"
                 onClick={() => setDetail(c)}
                 title="클릭하여 상세 보기"
               >
@@ -131,19 +133,33 @@ export default function CampaignHistory({
                   {fmtDate(c.sentAt)}
                 </td>
 
-                {/* 복제 버튼 — 클릭 전파 방지 */}
-                {onDuplicate && (
+                {/* 액션 버튼 셀 — 클릭 전파 방지 */}
+                {(onDuplicate || onCopy) && (
                   <td className="px-4 py-3 text-right align-middle" onClick={(e) => e.stopPropagation()}>
-                    <Button
-                      type="button"
-                      variant="outline"
-                      size="sm"
-                      onClick={() => onDuplicate(c)}
-                      className="h-7 gap-1.5 border-[#e8e8e4] bg-white px-2.5 text-[11px] text-[#084734] hover:bg-[#084734]/5 hover:text-[#063523] whitespace-nowrap"
-                    >
-                      <Copy className="h-3.5 w-3.5" />
-                      <span className="hidden sm:inline">복제</span>
-                    </Button>
+                    <div className="flex items-center justify-end gap-1.5">
+                      {onCopy && (
+                        <button
+                          type="button"
+                          onClick={() => onCopy(c)}
+                          className="opacity-0 group-hover:opacity-100 transition-opacity text-xs font-medium text-[#615D59] hover:text-[#084734] hover:bg-[#ECFDF5] px-2 py-1 rounded-[4px] whitespace-nowrap"
+                          title="복사해서 편집"
+                        >
+                          복사해서 편집
+                        </button>
+                      )}
+                      {onDuplicate && (
+                        <Button
+                          type="button"
+                          variant="outline"
+                          size="sm"
+                          onClick={() => onDuplicate(c)}
+                          className="h-7 gap-1.5 border-[#e8e8e4] bg-white px-2.5 text-[11px] text-[#084734] hover:bg-[#084734]/5 hover:text-[#063523] whitespace-nowrap"
+                        >
+                          <Copy className="h-3.5 w-3.5" />
+                          <span className="hidden sm:inline">복제</span>
+                        </Button>
+                      )}
+                    </div>
                   </td>
                 )}
               </tr>
@@ -219,19 +235,31 @@ export default function CampaignHistory({
                 </div>
               )}
             </div>
-            {onDuplicate && (
+            {(onDuplicate || onCopy) && (
               <div className="flex justify-end gap-2 px-6 py-4 border-t border-[#e8e8e4]">
                 <Button variant="outline" size="sm" onClick={() => setDetail(null)}>
                   닫기
                 </Button>
-                <Button
-                  size="sm"
-                  className="bg-[#084734] hover:bg-[#084734]/90"
-                  onClick={() => { onDuplicate(detail); setDetail(null) }}
-                >
-                  <Copy className="mr-1.5 h-3.5 w-3.5" />
-                  복제해서 작성
-                </Button>
+                {onCopy && (
+                  <Button
+                    variant="outline"
+                    size="sm"
+                    onClick={() => { onCopy(detail); setDetail(null) }}
+                    className="border-[#e8e8e4] text-[#615D59] hover:text-[#084734] hover:bg-[#ECFDF5] hover:border-[#ECFDF5]"
+                  >
+                    복사해서 편집
+                  </Button>
+                )}
+                {onDuplicate && (
+                  <Button
+                    size="sm"
+                    className="bg-[#084734] hover:bg-[#084734]/90"
+                    onClick={() => { onDuplicate(detail); setDetail(null) }}
+                  >
+                    <Copy className="mr-1.5 h-3.5 w-3.5" />
+                    복제해서 작성
+                  </Button>
+                )}
               </div>
             )}
           </div>
