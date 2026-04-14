@@ -28,11 +28,15 @@ import {
   createLog,
   updateLogStatus,
 } from "@/lib/repositories/automation"
+import {
+  createDelayQueueItem,
+} from "@/lib/repositories/automation-delay"
 import { sendBatchEmail, wrapCampaignHtml } from "@/lib/email"
 import type {
   AutomationRule,
   AutomationRecipient,
   SegmentConfig,
+  DelayTriggerConfig,
 } from "@/lib/automation-types"
 
 const sb = () => createSupabaseAdminClient()
@@ -273,10 +277,13 @@ export async function executeRule(ruleId: string): Promise<{
         const opts: PersonalizeOpts = { sendDate, unsubscribeUrl }
         const expandedBody    = await expandAiBlocks(rule.template!.body, r)
         const expandedSubject = await expandAiBlocks(rule.template!.subject, r)
+        const trackingUrl = baseUrl
+          ? `${baseUrl}/api/track/open?cid=${log.id}`
+          : undefined
         return {
           to: r.email,
           subject: personalizeBody(expandedSubject, r, opts),
-          html: wrapCampaignHtml(personalizeBody(expandedBody, r, opts), unsubscribeUrl),
+          html: wrapCampaignHtml(personalizeBody(expandedBody, r, opts), unsubscribeUrl, trackingUrl),
         }
       })
     )
@@ -302,6 +309,47 @@ export async function executeRule(ruleId: string): Promise<{
 }
 
 /* ─────────────────────────────────────────────────────────────
+   delay 큐 항목 실행 — cron 에서 단일 수신자 발송 시 호출
+   ───────────────────────────────────────────────────────────── */
+
+/**
+ * delay 큐의 단일 항목을 처리한다.
+ * 규칙과 템플릿을 로드하고, 수신자 데이터로 개인화 후 이메일을 발송한다.
+ * cron 핸들러가 updateDelayItemStatus 를 직접 관리하므로 이 함수는 순수하게 발송만 담당.
+ */
+export async function executeDelayQueueItem(
+  ruleId: string,
+  recipient: AutomationRecipient
+): Promise<void> {
+  const rule = await getRuleById(ruleId)
+  if (!rule || !rule.template) {
+    throw new Error(`[automation] delay 큐 실행 오류: 규칙 또는 템플릿 없음 (ruleId=${ruleId})`)
+  }
+
+  const baseUrl = process.env.NEXT_PUBLIC_SITE_URL
+  const unsubscribeUrl = baseUrl
+    ? `${baseUrl}/api/newsletter/unsubscribe?email=${encodeURIComponent(recipient.email)}`
+    : undefined
+  const sendDate = new Date().toLocaleDateString("ko-KR", { year: "numeric", month: "long", day: "numeric" })
+  const opts: PersonalizeOpts = { sendDate, unsubscribeUrl }
+
+  const expandedBody    = await expandAiBlocks(rule.template.body, recipient)
+  const expandedSubject = await expandAiBlocks(rule.template.subject, recipient)
+  const personalizedBody    = personalizeBody(expandedBody, recipient, opts)
+  const personalizedSubject = personalizeBody(expandedSubject, recipient, opts)
+
+  const result = await sendBatchEmail([{
+    to: recipient.email,
+    subject: personalizedSubject,
+    html: wrapCampaignHtml(personalizedBody, unsubscribeUrl),
+  }])
+
+  if (result.failed > 0) {
+    throw new Error(`[automation] delay 큐 이메일 발송 실패 (${result.provider})`)
+  }
+}
+
+/* ─────────────────────────────────────────────────────────────
    on_submit 트리거 — /api/lead, /api/newsletter/subscribe 에서 호출
    ───────────────────────────────────────────────────────────── */
 
@@ -317,9 +365,6 @@ export async function triggerOnSubmitRules(payload: OnSubmitPayload): Promise<vo
   if (!payload.email) return
 
   try {
-    const activeRules = await getActiveRulesByTrigger("on_submit")
-    if (activeRules.length === 0) return
-
     const recipient: AutomationRecipient = {
       email: payload.email,
       name: payload.name,
@@ -328,48 +373,88 @@ export async function triggerOnSubmitRules(payload: OnSubmitPayload): Promise<vo
       source: payload.source,
     }
 
-    const matchingRules = activeRules.filter((rule: AutomationRule) =>
+    // ── on_submit 규칙: 즉시 발송 ─────────────────────────────
+    const onSubmitRules = await getActiveRulesByTrigger("on_submit")
+    const matchingOnSubmit = onSubmitRules.filter((rule: AutomationRule) =>
       matchesSegment(recipient, rule.segmentConfig)
     )
 
-    if (matchingRules.length === 0) return
+    if (matchingOnSubmit.length > 0) {
+      await Promise.allSettled(
+        matchingOnSubmit.map(async (rule: AutomationRule) => {
+          if (!rule.template) return
 
-    await Promise.allSettled(
-      matchingRules.map(async (rule: AutomationRule) => {
-        if (!rule.template) return
+          const log = await createLog({ ruleId: rule.id, status: "pending" })
 
-        const log = await createLog({ ruleId: rule.id, status: "pending" })
+          try {
+            const baseUrl = process.env.NEXT_PUBLIC_SITE_URL
+            const unsubscribeUrl = baseUrl
+              ? `${baseUrl}/api/newsletter/unsubscribe?email=${encodeURIComponent(recipient.email)}`
+              : undefined
+            const sendDate = new Date().toLocaleDateString("ko-KR", { year: "numeric", month: "long", day: "numeric" })
+            const opts: PersonalizeOpts = { sendDate, unsubscribeUrl }
+            const expandedBody    = await expandAiBlocks(rule.template.body, recipient)
+            const expandedSubject = await expandAiBlocks(rule.template.subject, recipient)
+            const personalizedBody    = personalizeBody(expandedBody, recipient, opts)
+            const personalizedSubject = personalizeBody(expandedSubject, recipient, opts)
+            const trackingUrl = baseUrl
+              ? `${baseUrl}/api/track/open?cid=${log.id}`
+              : undefined
 
-        try {
-          const baseUrl = process.env.NEXT_PUBLIC_SITE_URL
-          const unsubscribeUrl = baseUrl
-            ? `${baseUrl}/api/newsletter/unsubscribe?email=${encodeURIComponent(recipient.email)}`
-            : undefined
-          const sendDate = new Date().toLocaleDateString("ko-KR", { year: "numeric", month: "long", day: "numeric" })
-          const opts: PersonalizeOpts = { sendDate, unsubscribeUrl }
-          const expandedBody    = await expandAiBlocks(rule.template.body, recipient)
-          const expandedSubject = await expandAiBlocks(rule.template.subject, recipient)
-          const personalizedBody    = personalizeBody(expandedBody, recipient, opts)
-          const personalizedSubject = personalizeBody(expandedSubject, recipient, opts)
+            const result = await sendBatchEmail([{
+              to: recipient.email,
+              subject: personalizedSubject,
+              html: wrapCampaignHtml(personalizedBody, unsubscribeUrl, trackingUrl),
+            }])
 
-          const result = await sendBatchEmail([{
-            to: recipient.email,
-            subject: personalizedSubject,
-            html: wrapCampaignHtml(personalizedBody, unsubscribeUrl),
-          }])
+            if (result.failed > 0) throw new Error(`발송 실패 (${result.provider})`)
 
-          if (result.failed > 0) throw new Error(`발송 실패 (${result.provider})`)
+            await updateLogStatus(log.id, "sent", {
+              recipientCount: 1,
+              recipientEmails: [recipient.email],
+            })
+          } catch (err) {
+            const message = err instanceof Error ? err.message : String(err)
+            await updateLogStatus(log.id, "failed", { errorMessage: message })
+          }
+        })
+      )
+    }
 
-          await updateLogStatus(log.id, "sent", {
-            recipientCount: 1,
-            recipientEmails: [recipient.email],
-          })
-        } catch (err) {
-          const message = err instanceof Error ? err.message : String(err)
-          await updateLogStatus(log.id, "failed", { errorMessage: message })
-        }
-      })
+    // ── delay 규칙: 큐에 예약 삽입 ───────────────────────────
+    const delayRules = await getActiveRulesByTrigger("delay")
+    const matchingDelay = delayRules.filter((rule: AutomationRule) =>
+      matchesSegment(recipient, rule.segmentConfig)
     )
+
+    if (matchingDelay.length > 0) {
+      await Promise.allSettled(
+        matchingDelay.map(async (rule: AutomationRule) => {
+          try {
+            const config = rule.triggerConfig as DelayTriggerConfig
+            const scheduledAt = new Date(Date.now() + config.hours * 3_600_000)
+
+            await createDelayQueueItem({
+              ruleId: rule.id,
+              recipientEmail: recipient.email,
+              recipientName: recipient.name,
+              recipientData: recipient,
+              scheduledAt,
+            })
+
+            console.log(
+              `[triggerOnSubmitRules] delay 큐 추가 — rule=${rule.id}, ` +
+              `email=${recipient.email}, scheduledAt=${scheduledAt.toISOString()}`
+            )
+          } catch (err) {
+            console.error(
+              `[triggerOnSubmitRules] delay 큐 삽입 실패 (rule=${rule.id}):`,
+              err
+            )
+          }
+        })
+      )
+    }
   } catch (err) {
     console.error("[triggerOnSubmitRules] 오류:", err)
   }

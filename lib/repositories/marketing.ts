@@ -257,6 +257,26 @@ export async function createCampaign(
   return rowToCampaign(row);
 }
 
+export async function updateCampaign(
+  id: string | number,
+  data: Partial<Pick<EmailCampaign, "status" | "sentAt" | "recipientCount" | "openCount">>
+): Promise<void> {
+  if (!USE_SUPABASE) return // JSON 폴백에서는 무시
+
+  const patch: Record<string, unknown> = {}
+  if (data.status !== undefined) patch.status = data.status
+  if (data.sentAt !== undefined) patch.sent_at = data.sentAt
+  if (data.recipientCount !== undefined) patch.recipient_count = data.recipientCount
+  if (data.openCount !== undefined) patch.open_count = data.openCount
+
+  const { error } = await sb()
+    .from("email_campaigns")
+    .update(patch)
+    .eq("id", id as string)
+
+  if (error) throw new Error(`[marketing] 캠페인 업데이트 실패: ${error.message}`)
+}
+
 /* ─── 변환 헬퍼 ──────────────────────────────────────────── */
 
 // eslint-disable-next-line @typescript-eslint/no-explicit-any
@@ -289,6 +309,7 @@ function rowToCampaign(row: any): CampaignRow {
     status: row.status,
     sentAt: row.sent_at ?? undefined,
     recipientCount: row.recipient_count ?? 0,
+    openCount: row.open_count ?? 0,
     externalId: row.external_id ?? undefined,
     createdAt: row.created_at,
   };

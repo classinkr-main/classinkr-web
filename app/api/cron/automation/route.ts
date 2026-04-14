@@ -16,11 +16,15 @@
  */
 
 import { NextRequest, NextResponse } from "next/server"
-import { executeRule } from "@/lib/automation-engine"
+import { executeRule, executeDelayQueueItem } from "@/lib/automation-engine"
 import {
   getActiveRulesByTrigger,
   getAllLogs,
 } from "@/lib/repositories/automation"
+import {
+  getDueDelayItems,
+  updateDelayItemStatus,
+} from "@/lib/repositories/automation-delay"
 import type { AutomationRule } from "@/lib/automation-types"
 
 const DAILY_CRON = "0 9 * * *"
@@ -87,10 +91,6 @@ export async function GET(request: NextRequest): Promise<NextResponse> {
     )
   }
 
-  if (rules.length === 0) {
-    return NextResponse.json({ ran: 0, skipped: 0, errors: [] })
-  }
-
   // ── 규칙별 실행 ───────────────────────────────────────────
   let ran = 0
   let skipped = 0
@@ -118,7 +118,50 @@ export async function GET(request: NextRequest): Promise<NextResponse> {
     })
   )
 
-  console.log(`[cron/automation] 완료 — ran=${ran}, skipped=${skipped}, errors=${errors.length}`)
+  console.log(`[cron/automation] scheduled 완료 — ran=${ran}, skipped=${skipped}, errors=${errors.length}`)
 
-  return NextResponse.json({ ran, skipped, errors })
+  // ── delay 큐 처리 ─────────────────────────────────────────
+  let delayProcessed = 0
+  let delayFailed = 0
+  const delayErrors: string[] = []
+
+  try {
+    const dueItems = await getDueDelayItems()
+
+    await Promise.allSettled(
+      dueItems.map(async (item) => {
+        try {
+          await executeDelayQueueItem(item.ruleId, item.recipientData)
+          await updateDelayItemStatus(item.id, "sent")
+          delayProcessed++
+          console.log(
+            `[cron/automation] delay 큐 발송 완료 — id=${item.id}, email=${item.recipientEmail}`
+          )
+        } catch (err) {
+          const message = err instanceof Error ? err.message : String(err)
+          await updateDelayItemStatus(item.id, "failed", message).catch(() => {
+            // 상태 업데이트 실패는 무시하고 오류만 기록
+          })
+          delayFailed++
+          delayErrors.push(`[${item.id}] ${item.recipientEmail}: ${message}`)
+          console.error(`[cron/automation] delay 큐 발송 실패 — id=${item.id}:`, message)
+        }
+      })
+    )
+  } catch (err) {
+    const message = err instanceof Error ? err.message : String(err)
+    console.error("[cron/automation] delay 큐 조회 실패:", message)
+    delayErrors.push(`delay 큐 조회 오류: ${message}`)
+  }
+
+  console.log(
+    `[cron/automation] delay 큐 완료 — processed=${delayProcessed}, failed=${delayFailed}`
+  )
+
+  return NextResponse.json({
+    ran,
+    skipped,
+    errors,
+    delay: { processed: delayProcessed, failed: delayFailed, errors: delayErrors },
+  })
 }

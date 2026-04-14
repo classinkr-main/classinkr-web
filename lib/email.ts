@@ -53,19 +53,23 @@ export interface SendResult {
 
 /* ── 설정 ───────────────────────────────────────────────────── */
 
-const RESEND_FROM = process.env.RESEND_FROM ?? "ClassIn <noreply@classin.co.kr>"
+const RESEND_FROM = process.env.RESEND_FROM ?? "ClassIn <noreply@classin.ai.kr>"
 const GMAIL_FROM = process.env.GOOGLE_SERVICE_ACCOUNT_EMAIL ?? ""
 const RESEND_BATCH_SIZE = 100
 
 /* ── HTML 래퍼 (캠페인용) ────────────────────────────────────── */
 
-export function wrapCampaignHtml(body: string, unsubscribeUrl?: string): string {
+export function wrapCampaignHtml(body: string, unsubscribeUrl?: string, trackingPixelUrl?: string): string {
   const footer = unsubscribeUrl
     ? `<p style="margin:8px 0 0">
          더 이상 이메일을 받고 싶지 않으시면
          <a href="${unsubscribeUrl}" style="color:#084734;text-decoration:underline">수신거부</a>를
          클릭해주세요.
        </p>`
+    : ""
+
+  const trackingPixel = trackingPixelUrl
+    ? `<img src="${trackingPixelUrl}" width="1" height="1" style="display:block;border:0" alt="" />`
     : ""
 
   return `<!DOCTYPE html>
@@ -81,6 +85,7 @@ export function wrapCampaignHtml(body: string, unsubscribeUrl?: string): string 
       ${footer}
     </div>
   </div>
+  ${trackingPixel}
 </body>
 </html>`
 }

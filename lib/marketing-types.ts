@@ -55,6 +55,8 @@ export interface EmailCampaign {
   status: "draft" | "sent" | "failed"
   sentAt?: string                 // 발송 완료 일시
   recipientCount: number          // 실제 발송 수
+  /** 이메일 열람 수 (추적 픽셀 기반) */
+  openCount?: number
   /** [NOTE-3] 외부 이메일 서비스 캠페인 ID (Resend, Brevo 등) */
   externalId?: string
   createdAt: string
@@ -84,6 +86,26 @@ export interface PersonalizedEmailRecipient {
 export type EmailDraft = EmailComposerDraft
 export type SavedEmailSegment = SavedAudienceSegment
 
+// ─── SMS 캠페인 모델 ─────────────────────────────────────────
+export interface SmsCampaign {
+  id: string
+  message: string
+  targetTags: string[]
+  recipientCount: number
+  status: 'draft' | 'sent' | 'failed'
+  sentAt?: string
+  errorMessage?: string
+  createdAt: string
+}
+
+/** SMS 발송 요청 (관리자 → /api/admin/sms/send) */
+export interface SendSmsRequest {
+  message: string
+  targetTags: string[]
+  recipientCount: number
+  testMode?: boolean
+}
+
 // ─── API 요청/응답 타입 ──────────────────────────────────────
 
 /** 뉴스레터 구독 요청 (프론트엔드 → /api/newsletter/subscribe) */
@@ -104,6 +126,8 @@ export interface SendEmailRequest extends EmailComposerDraft {
   mode?: "campaign" | "test"
   testEmail?: string
   aiPersonalized?: PersonalizedEmailRecipient[]
+  /** 직접 입력한 이메일 주소 목록 — 구독자 DB 밖의 수신자 */
+  directEmails?: string[]
 }
 
 /** 구독자 수동 추가/수정 요청 (관리자 → /api/admin/subscribers) */
