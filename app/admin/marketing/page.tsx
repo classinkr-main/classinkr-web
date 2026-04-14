@@ -839,18 +839,23 @@ export default function AdminMarketingPage() {
     showToast("success", `${subscriber.name} 기준으로 발송 초안을 열었습니다.`)
   }, [showToast])
 
-  const handleSendEmail = async (data: EmailDraft) => {
-    const evaluated = evaluateDraft(data)
-    const blockingErrors = evaluated.checks.filter((check) => check.status === "error")
+  const handleSendEmail = async (data: EmailDraft & { directEmails?: string[] }) => {
+    // 직접 입력 모드면 audience 체크 스킵
+    const isDirectMode = Array.isArray(data.directEmails) && data.directEmails.length > 0
 
-    if (blockingErrors.length > 0) {
-      showToast("error", blockingErrors[0]?.detail || "발송 전 체크를 확인해주세요.")
-      return
-    }
+    if (!isDirectMode) {
+      const evaluated = evaluateDraft(data)
+      const blockingErrors = evaluated.checks.filter((check) => check.status === "error")
 
-    if (evaluated.selectedAudience === 0) {
-      showToast("error", "발송 대상이 없습니다. 태그 조건을 확인해주세요.")
-      return
+      if (blockingErrors.length > 0) {
+        showToast("error", blockingErrors[0]?.detail || "발송 전 체크를 확인해주세요.")
+        return
+      }
+
+      if (evaluated.selectedAudience === 0) {
+        showToast("error", "발송 대상이 없습니다. 태그 조건을 확인해주세요.")
+        return
+      }
     }
 
     setSendLoading(true)
@@ -1297,6 +1302,7 @@ export default function AdminMarketingPage() {
                   presendWarnings={composerReview.checks.filter((c) => c.status === "warning").map((c) => c.detail)}
                   presendErrors={composerReview.checks.filter((c) => c.status === "error").map((c) => c.detail)}
                   selectedAudience={composerReview.selectedAudience}
+                  subscribers={subscribers}
                 />
               ) : (
                 <SmsComposer

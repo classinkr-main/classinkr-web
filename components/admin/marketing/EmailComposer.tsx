@@ -30,19 +30,23 @@ import {
   X,
 } from "lucide-react"
 import { adminFetch } from "@/lib/admin-client"
-import type { EmailDraft } from "@/lib/marketing-types"
+import type { EmailDraft, Subscriber } from "@/lib/marketing-types"
 import TagSelector from "./TagSelector"
+
+type AudienceMode = "tags" | "direct"
 
 interface Props {
   value: EmailDraft
   onChange: (value: EmailDraft) => void
-  onSend: (data: EmailDraft) => Promise<void>
+  onSend: (data: EmailDraft & { directEmails?: string[] }) => Promise<void>
   loading?: boolean
   subscriberCount: number
   countMap?: Record<string, number>
   presendWarnings?: string[]
   presendErrors?: string[]
   selectedAudience?: number
+  /** 구독자 목록 — 수신자 미리보기용 */
+  subscribers?: Subscriber[]
 }
 
 // ── 변수 메타 ─────────────────────────────────────────────────
@@ -106,8 +110,12 @@ export default function EmailComposer({
   presendWarnings = [],
   presendErrors = [],
   selectedAudience,
+  subscribers = [],
 }: Props) {
   const [showPreview, setShowPreview] = useState(false)
+  const [audienceMode, setAudienceMode] = useState<AudienceMode>("tags")
+  const [directInput, setDirectInput] = useState("")
+  const [showRecipientList, setShowRecipientList] = useState(false)
 
   // 테스트 계정
   const [testAccounts, setTestAccounts] = useState<string[]>(() => loadTestAccounts())
@@ -192,7 +200,11 @@ export default function EmailComposer({
     setSendingConfirmed(true)
     setShowConfirm(false)
     try {
-      await onSend(value)
+      if (audienceMode === "direct" && parsedDirectEmails.length > 0) {
+        await onSend({ ...value, directEmails: parsedDirectEmails })
+      } else {
+        await onSend(value)
+      }
     } finally {
       setSendingConfirmed(false)
     }
@@ -201,8 +213,31 @@ export default function EmailComposer({
   const previewBody = useMemo(() => applyVariables(value.body), [value.body])
   const previewSubject = useMemo(() => applyVariables(value.subject), [value.subject])
 
-  const audienceCount = selectedAudience ?? subscriberCount
-  const canSend = !!value.subject.trim() && !!value.body.trim() && presendErrors.length === 0
+  // 직접 입력 모드: 이메일 파싱
+  const parsedDirectEmails = useMemo(() => {
+    if (!directInput.trim()) return []
+    return directInput
+      .split(/[\n,;]+/)
+      .map((e) => e.trim())
+      .filter((e) => /^[^\s@]+@[^\s@]+\.[^\s@]+$/.test(e))
+  }, [directInput])
+
+  const directEmailCount = parsedDirectEmails.length
+
+  // 태그 모드 수신자 미리보기
+  const tagRecipientPreview = useMemo(() => {
+    if (value.targetTags.length === 0) {
+      return subscribers.filter((s) => s.status === "active")
+    }
+    return subscribers.filter(
+      (s) => s.status === "active" && s.tags.some((t) => value.targetTags.includes(t))
+    )
+  }, [subscribers, value.targetTags])
+
+  const audienceCount = audienceMode === "direct"
+    ? directEmailCount
+    : (selectedAudience ?? subscriberCount)
+  const canSend = !!value.subject.trim() && !!value.body.trim() && presendErrors.length === 0 && audienceCount > 0
   const testCanSend = !!value.subject.trim() && !!value.body.trim() && !!testEmail.trim()
 
   return (
@@ -345,16 +380,121 @@ export default function EmailComposer({
         <div className="overflow-hidden rounded-xl border border-[#e8e8e4] bg-white">
           <div className="flex items-center gap-2 border-b border-[#e8e8e4] px-4 py-3">
             <StepBadge n={2} />
-            <span className="text-[13px] font-semibold text-[#111110]">발송 대상 선택</span>
-            <span className="ml-auto text-[12px] font-medium text-[#084734]">예상 {audienceCount}명</span>
+            <span className="text-[13px] font-semibold text-[#111110]">발송 대상</span>
+            <span className="ml-auto text-[12px] font-medium text-[#084734]">
+              {audienceCount > 0 ? `${audienceCount}명` : "미선택"}
+            </span>
           </div>
+
+          {/* 모드 토글 */}
+          <div className="flex border-b border-[#e8e8e4]">
+            <button
+              type="button"
+              onClick={() => setAudienceMode("tags")}
+              className={`flex-1 px-4 py-2.5 text-[12px] font-medium transition-colors ${
+                audienceMode === "tags"
+                  ? "bg-[#084734]/5 text-[#084734] border-b-2 border-[#084734]"
+                  : "text-[#1a1a1a]/45 hover:text-[#111110]"
+              }`}
+            >
+              태그 필터
+            </button>
+            <button
+              type="button"
+              onClick={() => setAudienceMode("direct")}
+              className={`flex-1 px-4 py-2.5 text-[12px] font-medium transition-colors ${
+                audienceMode === "direct"
+                  ? "bg-[#084734]/5 text-[#084734] border-b-2 border-[#084734]"
+                  : "text-[#1a1a1a]/45 hover:text-[#111110]"
+              }`}
+            >
+              직접 입력
+            </button>
+          </div>
+
           <div className="p-4">
-            <TagSelector
-              selected={value.targetTags}
-              onChange={(tags) => updateDraft({ targetTags: tags })}
-              countMap={countMap}
-              totalCount={subscriberCount}
-            />
+            {audienceMode === "tags" ? (
+              <div className="space-y-3">
+                <TagSelector
+                  selected={value.targetTags}
+                  onChange={(tags) => updateDraft({ targetTags: tags })}
+                  countMap={countMap}
+                  totalCount={subscriberCount}
+                />
+
+                {/* 수신자 미리보기 */}
+                {tagRecipientPreview.length > 0 && (
+                  <div className="rounded-xl border border-[#e8e8e4] overflow-hidden">
+                    <button
+                      type="button"
+                      onClick={() => setShowRecipientList((v) => !v)}
+                      className="flex w-full items-center justify-between bg-[#fafaf8] px-4 py-2.5 text-left hover:bg-[#f0f0ec] transition-colors"
+                    >
+                      <span className="text-[12px] font-medium text-[#1a1a1a]/55">
+                        수신자 미리보기 ({tagRecipientPreview.length}명)
+                      </span>
+                      <ChevronDown className={`h-3.5 w-3.5 text-[#1a1a1a]/35 transition-transform duration-200 ${showRecipientList ? "rotate-180" : ""}`} />
+                    </button>
+                    {showRecipientList && (
+                      <div className="border-t border-[#e8e8e4] max-h-[240px] overflow-y-auto">
+                        {tagRecipientPreview.map((s) => (
+                          <div key={s.id} className="flex items-center justify-between px-4 py-2 border-b border-[#e8e8e4] last:border-b-0 hover:bg-[#fafaf8]">
+                            <div className="min-w-0">
+                              <span className="text-[12px] font-medium text-[#111110]">{s.name}</span>
+                              <span className="ml-2 text-[11px] text-[#1a1a1a]/35">{s.email}</span>
+                            </div>
+                            {s.org && <span className="text-[10px] text-[#1a1a1a]/30 shrink-0 ml-2">{s.org}</span>}
+                          </div>
+                        ))}
+                      </div>
+                    )}
+                  </div>
+                )}
+              </div>
+            ) : (
+              <div className="space-y-3">
+                <div className="space-y-1.5">
+                  <p className="text-[11px] font-medium text-[#1a1a1a]/40">
+                    이메일 주소를 입력하세요 (줄바꿈, 콤마, 세미콜론으로 구분)
+                  </p>
+                  <textarea
+                    value={directInput}
+                    onChange={(e) => setDirectInput(e.target.value)}
+                    rows={6}
+                    placeholder={"hong@example.com\nkim@school.kr\npark@academy.com"}
+                    className="w-full resize-y rounded-lg border border-[#e8e8e4] p-3 text-[13px] leading-relaxed font-mono focus:outline-none focus:ring-2 focus:ring-[#084734]/20"
+                  />
+                </div>
+                <div className="flex items-center justify-between rounded-xl border border-[#e8e8e4] bg-[#fafaf8] px-3 py-2.5">
+                  <span className="text-[12px] text-[#1a1a1a]/45">
+                    {directEmailCount > 0
+                      ? <span className="text-[#084734] font-medium">유효한 이메일 {directEmailCount}개</span>
+                      : "이메일 주소를 입력하면 자동으로 파싱됩니다"}
+                  </span>
+                  {directInput.trim() && (
+                    <button
+                      type="button"
+                      onClick={() => setDirectInput("")}
+                      className="text-[11px] text-[#1a1a1a]/35 hover:text-[#111110]"
+                    >
+                      비우기
+                    </button>
+                  )}
+                </div>
+
+                {/* 파싱 결과 미리보기 */}
+                {parsedDirectEmails.length > 0 && (
+                  <div className="rounded-xl border border-[#e8e8e4] max-h-[200px] overflow-y-auto">
+                    {parsedDirectEmails.map((email, i) => (
+                      <div key={i} className="flex items-center px-4 py-2 border-b border-[#e8e8e4] last:border-b-0">
+                        <CheckCircle2 className="h-3 w-3 text-[#084734] shrink-0 mr-2" />
+                        <span className="text-[12px] text-[#111110] font-mono">{email}</span>
+                      </div>
+                    ))}
+                  </div>
+                )}
+              </div>
+            )}
           </div>
         </div>
 
@@ -511,7 +651,11 @@ export default function EmailComposer({
               <div className="flex gap-3 px-4 py-3">
                 <span className="w-12 shrink-0 text-[11px] text-[#1a1a1a]/40">대상</span>
                 <span className="text-[13px] text-[#111110]">
-                  {value.targetTags.length > 0 ? value.targetTags.join(" · ") : "전체 active 구독자"}
+                  {audienceMode === "direct"
+                    ? `직접 입력 ${directEmailCount}개 주소`
+                    : value.targetTags.length > 0
+                      ? value.targetTags.join(" · ")
+                      : "전체 active 구독자"}
                   <span className="ml-1.5 font-semibold text-[#084734]">{audienceCount}명</span>
                 </span>
               </div>
