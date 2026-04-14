@@ -81,6 +81,155 @@ type BlogTemplate = {
     cta: BlogPostInput["cta"]
   }
 }
+
+const DEFAULT_TEMPLATES: BlogTemplate[] = [
+  {
+    id: "default-insight",
+    name: "인사이트 기본형",
+    savedAt: "2024-01-01T00:00:00.000Z",
+    data: {
+      category: "인사이트",
+      targetReader: "운영 효율을 높이고 싶은 학원 원장·관리자",
+      benefitItems: [
+        "현장에서 바로 적용할 수 있는 핵심 포인트를 파악할 수 있습니다.",
+        "문제의 근본 원인을 빠르게 진단하는 방법을 배울 수 있습니다.",
+        "다음 액션을 구체적으로 잡아 실행력을 높일 수 있습니다.",
+      ],
+      cta: { ...DEFAULT_BLOG_CTA },
+      contentMarkdown: [
+        "## 지금 이 문제, 혼자만 겪는 게 아닙니다",
+        "",
+        "많은 학원 운영자들이 비슷한 고민을 안고 있습니다. 여기서는 그 문제를 구체적으로 짚고, 현장에서 바로 쓸 수 있는 해법을 정리합니다.",
+        "",
+        "## 핵심 인사이트",
+        "",
+        "### 첫 번째 포인트",
+        "",
+        "핵심 내용을 2–3문장으로 정리해보세요. 데이터나 사례가 있으면 설득력이 올라갑니다.",
+        "",
+        "### 두 번째 포인트",
+        "",
+        "실행 가능한 구체적인 방법을 설명해보세요. 단계나 리스트 형태가 읽기 좋습니다.",
+        "",
+        "- 실행 단계 1",
+        "- 실행 단계 2",
+        "- 실행 단계 3",
+        "",
+        "### 세 번째 포인트",
+        "",
+        "주의해야 할 점이나 흔히 저지르는 실수를 짚어주면 신뢰감이 생깁니다.",
+        "",
+        "> 핵심은 복잡한 기능을 늘리는 것이 아니라, 운영자가 바로 움직일 수 있는 흐름을 만드는 것입니다.",
+        "",
+        "## 오늘 바로 해볼 수 있는 것",
+        "",
+        "글을 읽고 나서 독자가 취할 수 있는 첫 번째 행동을 명확하게 제시해주세요. 작고 구체적일수록 실행률이 높아집니다.",
+      ].join("\n"),
+    },
+  },
+  {
+    id: "default-case-study",
+    name: "사례 연구",
+    savedAt: "2024-01-01T00:00:00.000Z",
+    data: {
+      category: "사례",
+      targetReader: "비슷한 문제를 겪고 있는 학원 운영자",
+      benefitItems: [
+        "실제 현장 사례를 통해 문제 해결 과정을 구체적으로 파악할 수 있습니다.",
+        "우리 학원에 적용 가능한 포인트를 빠르게 찾을 수 있습니다.",
+        "시행착오 없이 검증된 방법으로 바로 실행할 수 있습니다.",
+      ],
+      cta: { ...DEFAULT_BLOG_CTA },
+      contentMarkdown: [
+        "## 배경",
+        "",
+        "어떤 학원인지, 어떤 상황이었는지 간략하게 소개해주세요. 독자가 공감할 수 있는 맥락을 잡아주는 게 중요합니다.",
+        "",
+        "- 학원 규모 / 운영 형태",
+        "- 이전에 쓰던 방식",
+        "- 변화가 필요했던 시점",
+        "",
+        "## 어떤 문제가 있었나",
+        "",
+        "구체적인 수치나 사례로 문제를 보여주세요. 숫자가 있으면 설득력이 올라갑니다.",
+        "",
+        "## 어떻게 접근했나",
+        "",
+        "문제를 해결하기 위해 어떤 방법을 선택했는지, 왜 그 방법을 골랐는지 설명해주세요.",
+        "",
+        "### 1단계",
+        "",
+        "첫 번째로 한 일을 구체적으로 설명해주세요.",
+        "",
+        "### 2단계",
+        "",
+        "두 번째로 한 일을 구체적으로 설명해주세요.",
+        "",
+        "## 결과",
+        "",
+        "수치, 변화, 현장 반응을 구체적으로 정리해주세요.",
+        "",
+        "| 항목 | 이전 | 이후 |",
+        "|------|------|------|",
+        "| 예시 지표 | - | - |",
+        "",
+        "## 이 사례에서 얻을 수 있는 것",
+        "",
+        "독자가 자신의 상황에 적용할 수 있도록 핵심 교훈을 2–3가지로 정리해주세요.",
+      ].join("\n"),
+    },
+  },
+  {
+    id: "default-feature",
+    name: "기능·제품 소개",
+    savedAt: "2024-01-01T00:00:00.000Z",
+    data: {
+      category: "제품",
+      targetReader: "새로운 기능을 도입하려는 학원 담당자",
+      benefitItems: [
+        "기능의 핵심 가치와 어떤 문제를 해결하는지 명확하게 파악할 수 있습니다.",
+        "실제 사용 시나리오를 통해 우리 학원에 맞는지 빠르게 판단할 수 있습니다.",
+        "도입 전 준비사항과 시작 방법을 한눈에 파악할 수 있습니다.",
+      ],
+      cta: { ...DEFAULT_BLOG_CTA },
+      contentMarkdown: [
+        "## 왜 이 기능이 필요한가",
+        "",
+        "이 기능이 해결하는 문제를 독자가 공감할 수 있는 언어로 설명해주세요. 기능 설명보다 '이런 상황에서 도움이 됩니다'가 먼저입니다.",
+        "",
+        "## 주요 기능",
+        "",
+        "### 기능 1",
+        "",
+        "기능을 설명할 때는 '무엇을 할 수 있다'보다 '덕분에 어떤 게 달라진다'는 관점으로 써주세요.",
+        "",
+        "### 기능 2",
+        "",
+        "스크린샷이나 예시가 있으면 여기에 추가해주세요.",
+        "",
+        "![기능 설명 이미지](이미지URL)",
+        "",
+        "### 기능 3",
+        "",
+        "세 번째 핵심 기능을 설명해주세요.",
+        "",
+        "## 실제 사용 시나리오",
+        "",
+        "구체적인 상황을 예로 들어 기능이 어떻게 작동하는지 보여주세요.",
+        "",
+        "> 예: 상담 당일 학생 정보를 미리 확인하고, 수업 후 피드백까지 자동으로 발송할 수 있습니다.",
+        "",
+        "## 시작하는 방법",
+        "",
+        "1. 첫 번째 단계",
+        "2. 두 번째 단계",
+        "3. 세 번째 단계",
+        "",
+        "처음 시작할 때 주의할 점이나 팁이 있으면 여기에 추가해주세요.",
+      ].join("\n"),
+    },
+  },
+]
 type AiState = { action: AiAction; status: "loading" | "streaming" | "done" | "error"; result: string; topic?: string; tone?: string; length?: string; reference?: string }
 type EditorSnapshot = {
   form: BlogPostInput
@@ -702,13 +851,13 @@ export default function BlogPostEditor({
               )}
 
               {templateTab === "load" && (
-                templates.length === 0 ? (
-                  <div className="py-12 text-center text-[13px] text-[#1a1a1a]/30">
-                    저장된 템플릿이 없습니다
-                  </div>
-                ) : (
-                  <div className="space-y-2.5">
-                    {templates.map((t) => {
+                <div className="space-y-5">
+                  {/* 저장한 템플릿 */}
+                  {templates.length > 0 && (
+                    <div>
+                      <p className="mb-2.5 text-[11px] font-semibold uppercase tracking-widest text-[#1a1a1a]/30">내 템플릿</p>
+                      <div className="space-y-2.5">
+                        {templates.map((t) => {
                       const isExpanded = expandedTemplateId === t.id
                       const isPendingDelete = confirmDeleteTemplateId === t.id
                       return (
@@ -800,9 +949,73 @@ export default function BlogPostEditor({
                           )}
                         </div>
                       )
-                    })}
+                        })}
+                      </div>
+                    </div>
+                  )}
+
+                  {/* 기본 제공 템플릿 */}
+                  <div>
+                    <p className="mb-2.5 text-[11px] font-semibold uppercase tracking-widest text-[#1a1a1a]/30">기본 제공</p>
+                    <div className="space-y-2.5">
+                      {DEFAULT_TEMPLATES.map((t) => {
+                        const isExpanded = expandedTemplateId === t.id
+                        return (
+                          <div
+                            key={t.id}
+                            className="rounded-2xl border border-[#e8e8e4] bg-[#fcfcfb] p-4 transition-colors"
+                          >
+                            <div className="flex items-start justify-between gap-3">
+                              <button
+                                type="button"
+                                onClick={() => setExpandedTemplateId(isExpanded ? null : t.id)}
+                                className="min-w-0 flex-1 text-left"
+                              >
+                                <p className="font-semibold text-[13px] text-[#111110]">{t.name}</p>
+                                <p className="mt-0.5 text-[11px] text-[#1a1a1a]/40">{t.data.category} · 기본 제공</p>
+                                {!isExpanded && (
+                                  <p className="mt-1.5 text-xs text-[#1a1a1a]/40 line-clamp-1">
+                                    {t.data.contentMarkdown.replace(/#{1,6}\s|[*_`>-]/g, "").slice(0, 80)}…
+                                  </p>
+                                )}
+                              </button>
+                              <button
+                                type="button"
+                                onClick={() => {
+                                  updateEditor((snapshot) => ({
+                                    ...snapshot,
+                                    form: {
+                                      ...snapshot.form,
+                                      contentMarkdown: t.data.contentMarkdown,
+                                      benefitItems: t.data.benefitItems,
+                                      targetReader: t.data.targetReader,
+                                      category: t.data.category,
+                                      cta: { ...t.data.cta },
+                                    },
+                                  }))
+                                  setShowTemplateModal(false)
+                                  setExpandedTemplateId(null)
+                                  setNotice("템플릿을 불러왔습니다.")
+                                }}
+                                className="shrink-0 text-[12px] font-medium text-[#084734] hover:text-[#084734]/70 transition-colors"
+                              >
+                                불러오기
+                              </button>
+                            </div>
+                            {isExpanded && (
+                              <div className="mt-3 rounded-xl border border-[#e8e8e4] bg-white px-4 py-3">
+                                <p className="text-[11px] font-medium uppercase tracking-wider text-[#1a1a1a]/30 mb-2">본문 미리보기</p>
+                                <pre className="whitespace-pre-wrap font-sans text-[12px] leading-6 text-[#1a1a1a]/55 line-clamp-6">
+                                  {t.data.contentMarkdown.slice(0, 400)}{t.data.contentMarkdown.length > 400 ? "…" : ""}
+                                </pre>
+                              </div>
+                            )}
+                          </div>
+                        )
+                      })}
+                    </div>
                   </div>
-                )
+                </div>
               )}
             </div>
           </div>
@@ -1397,30 +1610,39 @@ export default function BlogPostEditor({
                           전체 보기 →
                         </button>
                       </div>
-                      {templates.length === 0 ? (
-                        <p className="text-[11px] text-[#1a1a1a]/30">저장된 템플릿이 없습니다.</p>
-                      ) : (
-                        <div className="space-y-1">
-                          {templates.slice(0, 3).map((t) => (
-                            <div key={t.id} className="flex items-center justify-between gap-1.5 rounded-lg px-2 py-1.5 hover:bg-[#f0f0ec]">
-                              <span className="truncate text-[11px] text-[#1a1a1a]/70">{t.name}</span>
-                              <button
-                                type="button"
-                                onClick={() => {
-                                  updateForm("contentMarkdown", t.data.contentMarkdown)
-                                  if (t.data.benefitItems) updateForm("benefitItems", t.data.benefitItems)
-                                  if (t.data.targetReader) updateForm("targetReader", t.data.targetReader)
-                                  if (t.data.category) updateForm("category", t.data.category)
-                                  if (t.data.cta) updateForm("cta", t.data.cta)
-                                }}
-                                className="shrink-0 text-[10px] font-medium text-[#084734] hover:underline"
-                              >
-                                적용
-                              </button>
-                            </div>
-                          ))}
-                        </div>
-                      )}
+                      {(() => {
+                        const quickList = [
+                          ...templates.slice(0, 3),
+                          ...DEFAULT_TEMPLATES.slice(0, Math.max(0, 3 - templates.length)),
+                        ]
+                        return (
+                          <div className="space-y-1">
+                            {quickList.map((t) => (
+                              <div key={t.id} className="flex items-center justify-between gap-1.5 rounded-lg px-2 py-1.5 hover:bg-[#f0f0ec]">
+                                <span className="truncate text-[11px] text-[#1a1a1a]/70">
+                                  {t.name}
+                                  {t.id.startsWith("default-") && (
+                                    <span className="ml-1 text-[9px] text-[#1a1a1a]/30">기본</span>
+                                  )}
+                                </span>
+                                <button
+                                  type="button"
+                                  onClick={() => {
+                                    updateForm("contentMarkdown", t.data.contentMarkdown)
+                                    if (t.data.benefitItems) updateForm("benefitItems", t.data.benefitItems)
+                                    if (t.data.targetReader) updateForm("targetReader", t.data.targetReader)
+                                    if (t.data.category) updateForm("category", t.data.category)
+                                    if (t.data.cta) updateForm("cta", t.data.cta)
+                                  }}
+                                  className="shrink-0 text-[10px] font-medium text-[#084734] hover:underline"
+                                >
+                                  적용
+                                </button>
+                              </div>
+                            ))}
+                          </div>
+                        )
+                      })()}
                     </div>
 
                     {/* 구분선 */}
