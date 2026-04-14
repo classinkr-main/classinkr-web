@@ -2167,7 +2167,21 @@ export default function BlogPostEditor({
 
                 {/* SEO inputs */}
                 <div className="rounded-[20px] border border-[#e8e8e4] bg-white p-5 shadow-sm">
-                  <p className="mb-3.5 text-sm font-semibold text-[#111110]">SEO 메타 태그</p>
+                  <div className="mb-3.5 flex items-center justify-between">
+                    <p className="text-sm font-semibold text-[#111110]">SEO 메타 태그</p>
+                    <button
+                      type="button"
+                      onClick={() => {
+                        if (form.title) updateForm("seoTitle", form.title.slice(0, 60))
+                        if (form.excerpt) updateForm("seoDescription", form.excerpt.slice(0, 160))
+                      }}
+                      disabled={!form.title && !form.excerpt}
+                      className="flex items-center gap-1 rounded-md px-2 py-1 text-[11px] font-medium text-[#084734] hover:bg-[#ECFDF5] disabled:opacity-30 transition-colors"
+                    >
+                      <Sparkles className="h-3 w-3" />
+                      제목·요약에서 자동완성
+                    </button>
+                  </div>
                   <div className="space-y-3">
                     <div className="space-y-1.5">
                       <div className="flex items-center justify-between">
