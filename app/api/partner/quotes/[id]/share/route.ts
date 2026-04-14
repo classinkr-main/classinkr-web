@@ -24,6 +24,13 @@ export async function POST(
     return NextResponse.json({ error: "Access denied" }, { status: 403 });
   }
 
+  if (quote.status === "pending_approval") {
+    return NextResponse.json(
+      { error: "파트너 승인 대기 중인 견적은 공유할 수 없습니다." },
+      { status: 403 }
+    );
+  }
+
   const { share } = await ensureQuoteDocumentShare({
     quote_document_id: id,
     access_mode: "view",

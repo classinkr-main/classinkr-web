@@ -1,7 +1,7 @@
 "use client"
 
 import { useEffect, useMemo, useState } from "react"
-import { Copy, Eye, Loader2, Minus, Plus, RefreshCw, Sparkles } from "lucide-react"
+import { Copy, Eye, Loader2, Minus, Plus, RefreshCw, Sparkles, ZoomIn, ZoomOut } from "lucide-react"
 
 import { Button } from "@/components/ui/button"
 import { Input } from "@/components/ui/input"
@@ -120,31 +120,31 @@ const QUICK_ADD_RAIL_ITEMS: QuickAddRailItem[] = [
   {
     id: "board_86",
     label: '전자칠판 86"',
-    description: "메인 대형 패널",
+    description: "",
     price: getProductBySku("board-86")?.unit_price ?? 5_800_000,
   },
   {
     id: "board_75",
     label: '전자칠판 75"',
-    description: "중형 전자칠판",
+    description: "",
     price: getProductBySku("board-75")?.unit_price ?? 4_900_000,
   },
   {
     id: "camera_t1",
     label: "T1 카메라",
-    description: "강사용 추적 카메라",
+    description: "",
     price: getProductBySku("camera-t1")?.unit_price ?? 1_200_000,
   },
   {
     id: "stand",
     label: "스탠드",
-    description: "이동형 거치",
+    description: "",
     price: getProductBySku("stand")?.unit_price ?? 500_000,
   },
   {
     id: "wall_mount",
     label: "벽걸이",
-    description: "벽면 설치",
+    description: "",
     price: getProductBySku("wall-mount")?.unit_price ?? 500_000,
   },
   {
@@ -403,10 +403,32 @@ function PreviewField({
 function QuotePreviewPanel({ quote }: { quote: PartnerQuoteDetailsInput }) {
   const lineItems = quote.lineItems ?? []
   const fillerRowCount = Math.max(0, 4 - lineItems.length)
+  const [zoom, setZoom] = useState(0.72)
+  const zoomIn = () => setZoom(z => Math.min(1.2, +(z + 0.08).toFixed(2)))
+  const zoomOut = () => setZoom(z => Math.max(0.4, +(z - 0.08).toFixed(2)))
 
   return (
-    <aside className="rounded-[28px] border border-[#e8e8e4] bg-[#f6f5f2] p-4">
-      <div className="mx-auto w-[560px] min-w-[560px] rounded-[24px] bg-white px-9 py-10 shadow-[0_12px_32px_rgba(17,17,16,0.08)]">
+    <aside className="flex flex-col rounded-[28px] border border-[#e8e8e4] bg-[#f6f5f2]">
+      {/* Zoom Controls */}
+      <div className="flex items-center justify-between px-4 pt-3 pb-1">
+        <span className="text-[11px] font-medium text-[#A39E98]">미리보기</span>
+        <div className="flex items-center gap-1">
+          <button onClick={zoomOut} className="rounded-lg p-1 text-[#615D59] hover:bg-black/5" title="축소">
+            <ZoomOut className="h-3.5 w-3.5" />
+          </button>
+          <span className="min-w-[36px] text-center text-[11px] tabular-nums text-[#A39E98]">{Math.round(zoom * 100)}%</span>
+          <button onClick={zoomIn} className="rounded-lg p-1 text-[#615D59] hover:bg-black/5" title="확대">
+            <ZoomIn className="h-3.5 w-3.5" />
+          </button>
+        </div>
+      </div>
+      {/* Scrollable preview area */}
+      <div className="min-h-0 flex-1 overflow-auto p-4 pt-2">
+        <div className="flex justify-center">
+        <div
+          style={{ transform: `scale(${zoom})`, transformOrigin: "top center" }}
+        >
+      <div className="mx-auto w-[560px] rounded-[24px] bg-white px-9 py-10 shadow-[0_12px_32px_rgba(17,17,16,0.08)]">
         <p className="text-center text-[18px] font-semibold tracking-tight text-black">견적서</p>
 
         <div className="mt-8 grid grid-cols-[minmax(0,0.8fr)_minmax(0,1.2fr)] gap-6">
@@ -494,6 +516,9 @@ function QuotePreviewPanel({ quote }: { quote: PartnerQuoteDetailsInput }) {
           </div>
         )}
       </div>
+        </div>{/* end scale wrapper */}
+        </div>{/* end flex center */}
+      </div>{/* end scrollable area */}
     </aside>
   )
 }
@@ -1127,7 +1152,7 @@ export default function QuickQuoteComposer({
           </button>
         </div>
 
-        <div className="grid min-h-0 flex-1 gap-0 xl:grid-cols-[minmax(0,1.35fr)_440px]">
+        <div className="grid min-h-0 flex-1 gap-0 xl:grid-cols-[minmax(0,1fr)_minmax(520px,560px)]">
           <div className="min-h-0 overflow-y-auto px-6 py-6">
             <div className="space-y-6">
               <section className="rounded-2xl border border-[#e8e8e4] bg-[#fafaf8] p-4">
@@ -1441,27 +1466,16 @@ export default function QuickQuoteComposer({
                         key={item.id}
                         type="button"
                         onClick={() => handleQuickAdd(item.id)}
-                        className={`rounded-2xl border px-4 py-4 text-left transition-colors ${
+                        className={`rounded-2xl border px-3 py-3 text-left transition-colors ${
                           active
                             ? "border-[#084734] bg-[#ECFDF5]"
                             : "border-[#e8e8e4] bg-white hover:border-[#CBE7DE] hover:bg-[#f8fbf9]"
                         }`}
                       >
-                        <div className="flex items-start justify-between gap-3">
-                          <div>
-                            <div className="text-sm font-semibold text-[#111110]">{item.label}</div>
-                            <div className="mt-1 text-xs text-[#615D59]">{item.description}</div>
-                          </div>
-                          <span className="rounded-full bg-[#f6f5f2] px-2.5 py-1 text-[11px] font-medium text-[#111110]">
-                            {formatQuickAddPrice(item.price)}
-                          </span>
-                        </div>
-                        <div className="mt-3 text-[11px] font-medium text-[#615D59]">
-                          {active
-                            ? item.id === "stand" || item.id === "wall_mount"
-                              ? "적용됨"
-                              : `현재 ${baseQuantity}대`
-                            : "빠르게 추가"}
+                        <div className="truncate text-sm font-semibold text-[#111110]">{item.label}</div>
+                        {item.description && <div className="mt-0.5 truncate text-[11px] text-[#615D59]">{item.description}</div>}
+                        <div className="mt-1 text-xs font-medium text-[#111110]">
+                          {formatQuickAddPrice(item.price)}
                         </div>
                       </button>
                     )
