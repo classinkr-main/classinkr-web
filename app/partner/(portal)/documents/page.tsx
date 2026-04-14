@@ -6,10 +6,12 @@ import {
   ArrowRight,
   BadgeCheck,
   BookCopy,
+  Clock,
   Eye,
   FileText,
   Layers3,
   Link2,
+  MessageSquarePlus,
   Pencil,
   Plus,
   RefreshCw,
@@ -517,6 +519,106 @@ function hydrateDocumentFromDetail(
   }
 }
 
+/* ─── 활동 로그 (shares/versions 기반 간단 타임라인) ────────── */
+
+function DocumentActivityLog({ document }: { document: HubDocument }) {
+  const logs: { label: string; date: string; tone: string }[] = []
+
+  // 버전 생성 이력
+  for (const v of document.versions) {
+    logs.push({
+      label: `v${v.version_number} 작성`,
+      date: v.created_at,
+      tone: "text-[#615D59]",
+    })
+  }
+
+  // 공유 이력
+  for (const s of document.shares) {
+    logs.push({
+      label: "링크 발송",
+      date: s.created_at,
+      tone: "text-[#084734]",
+    })
+  }
+
+  // 상태 기반 이벤트
+  if (document.status === "accepted") {
+    logs.push({
+      label: "고객 동의",
+      date: document.updatedAt,
+      tone: "text-[#084734]",
+    })
+  }
+
+  logs.sort((a, b) => new Date(b.date).getTime() - new Date(a.date).getTime())
+
+  if (logs.length === 0) {
+    return (
+      <div className="rounded-2xl border border-dashed border-[#e0e0dc] bg-[#fafaf8] px-4 py-4 text-center text-sm text-[#1a1a1a]/40">
+        아직 활동 내역이 없습니다.
+      </div>
+    )
+  }
+
+  return (
+    <div className="rounded-2xl border border-[#e8e8e4] bg-white p-4">
+      <p className="text-sm font-semibold text-[#1a1a1a]">활동 내역</p>
+      <div className="mt-3 space-y-0">
+        {logs.slice(0, 8).map((log, i) => (
+          <div key={i} className="flex items-start gap-3 py-2">
+            <div className="relative mt-1.5 flex flex-col items-center">
+              <div className={`h-1.5 w-1.5 rounded-full ${i === 0 ? "bg-[#084734]" : "bg-[#d4d0cc]"}`} />
+              {i < Math.min(logs.length, 8) - 1 && (
+                <div className="absolute top-2.5 h-full w-px bg-[#e8e8e4]" />
+              )}
+            </div>
+            <div className="flex-1 min-w-0">
+              <p className={`text-xs font-medium ${log.tone}`}>{log.label}</p>
+              <p className="text-[11px] text-[#1a1a1a]/35">
+                {new Date(log.date).toLocaleDateString("ko-KR", { month: "short", day: "numeric", hour: "2-digit", minute: "2-digit" })}
+              </p>
+            </div>
+          </div>
+        ))}
+      </div>
+    </div>
+  )
+}
+
+/* ─── 메모 입력 ─────────────────────────────────────────── */
+
+function DocumentMemo({ documentId }: { documentId: string }) {
+  const [memo, setMemo] = useState("")
+  const [saved, setSaved] = useState(false)
+
+  return (
+    <div className="rounded-2xl border border-[#e8e8e4] bg-white p-4">
+      <div className="flex items-center justify-between">
+        <div className="flex items-center gap-2">
+          <MessageSquarePlus className="h-3.5 w-3.5 text-[#A39E98]" />
+          <p className="text-sm font-semibold text-[#1a1a1a]">메모</p>
+        </div>
+        {saved && <span className="text-[11px] text-[#084734]">저장됨</span>}
+      </div>
+      <textarea
+        value={memo}
+        onChange={(e) => {
+          setMemo(e.target.value)
+          setSaved(false)
+        }}
+        onBlur={() => {
+          if (memo.trim()) setSaved(true)
+        }}
+        placeholder="이 문서에 대한 메모를 남겨주세요..."
+        className="mt-2 w-full resize-none rounded-xl border border-[#e8e8e4] bg-[#fafaf8] px-3 py-2.5 text-sm text-[#1a1a1a] placeholder:text-[#A39E98] focus:border-[#084734] focus:outline-none"
+        rows={3}
+        data-document-id={documentId}
+      />
+    </div>
+  )
+}
+
 function DocumentStat({
   label,
   value,
@@ -532,7 +634,7 @@ function DocumentStat({
         {icon}
         <span className="text-xs font-medium uppercase tracking-wider">{label}</span>
       </div>
-      <p className="mt-2 text-lg font-semibold text-[#1a1a1a]">{value}</p>
+      <p className="mt-2 text-center text-lg font-bold text-[#1a1a1a]">{value}</p>
     </div>
   )
 }
@@ -1449,10 +1551,6 @@ export default function PartnerDocumentsPage() {
                     </div>
                   )}
 
-                  <div className="rounded-2xl border border-dashed border-[#e0e0dc] bg-[#fafaf8] px-4 py-4 text-sm text-[#1a1a1a]/50">
-                    견적서와 계약서는 버전 고정 링크 방식으로, 영수증은 수납 레코드 기반으로 노출합니다.
-                    전용 문서 API가 생기면 이 패널은 그대로 이어서 붙일 수 있습니다.
-                  </div>
                 </div>
               )}
             </CardContent>
@@ -1461,46 +1559,19 @@ export default function PartnerDocumentsPage() {
           <Card className="border-[#e8e8e4] bg-white shadow-none">
             <CardHeader className="pb-3">
               <CardTitle className="text-sm font-semibold text-[#1a1a1a]">
-                {hubMode === "create" ? "만들기 메모" : hubMode === "send" ? "발송 메모" : "정리 메모"}
+                {selectedDocument ? `${selectedDocument.customerName} 로그` : "활동 로그"}
               </CardTitle>
             </CardHeader>
             <CardContent className="space-y-3 text-sm text-[#1a1a1a]/60">
-              {hubMode === "create" ? (
+              {selectedDocument ? (
                 <>
-                  <div className="rounded-xl border border-[#e8e8e4] bg-[#f7f7f5] p-4">
-                    새 문서는 거래 맥락에서 시작하고, 최근 초안은 여기서 다시 이어 붙입니다.
-                  </div>
-                  <div className="rounded-xl border border-[#e8e8e4] bg-[#f7f7f5] p-4">
-                    견적, 계약, 영수증은 종류가 달라도 같은 문서 허브 안에서 시작하도록 유도합니다.
-                  </div>
-                  <div className="rounded-xl border border-[#e8e8e4] bg-[#f7f7f5] p-4">
-                    작성이 끝나면 바로 발송하기 모드로 넘어가서 버전과 수신자를 고정하는 흐름이 좋습니다.
-                  </div>
-                </>
-              ) : hubMode === "send" ? (
-                <>
-                  <div className="rounded-xl border border-[#e8e8e4] bg-[#f7f7f5] p-4">
-                    링크와 PDF는 같은 버튼이 아니라 다른 전달 수단으로 봅니다.
-                  </div>
-                  <div className="rounded-xl border border-[#e8e8e4] bg-[#f7f7f5] p-4">
-                    최신 문서와 실제로 나간 버전은 다를 수 있으니, 발송 전에는 항상 버전을 다시 확인해야 합니다.
-                  </div>
-                  <div className="rounded-xl border border-[#e8e8e4] bg-[#f7f7f5] p-4">
-                    만료 임박 큐는 재발송이나 연장 액션을 바로 결정하는 운영용 레일입니다.
-                  </div>
+                  <DocumentActivityLog document={selectedDocument} />
+                  <DocumentMemo documentId={selectedDocument.id} />
                 </>
               ) : (
-                <>
-                  <div className="rounded-xl border border-[#e8e8e4] bg-[#f7f7f5] p-4">
-                    견적서는 고객에게 버전 고정 링크로 보여주고, 계약서는 서명 링크와 함께 관리합니다.
-                  </div>
-                  <div className="rounded-xl border border-[#e8e8e4] bg-[#f7f7f5] p-4">
-                    영수증은 분할 입금이 많기 때문에 수납 기록과 연결해서 보는 것이 기본입니다.
-                  </div>
-                  <div className="rounded-xl border border-[#e8e8e4] bg-[#f7f7f5] p-4">
-                    현재는 전용 문서 API가 없어 거래 상세를 모아 보여주는 구조입니다.
-                  </div>
-                </>
+                <div className="rounded-xl border border-dashed border-[#e0e0dc] bg-[#fafaf8] px-4 py-6 text-center text-sm text-[#1a1a1a]/40">
+                  문서를 선택하면 활동 내역이 표시됩니다.
+                </div>
               )}
               <button
                 type="button"
