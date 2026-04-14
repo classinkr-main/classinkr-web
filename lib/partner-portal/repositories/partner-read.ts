@@ -123,6 +123,29 @@ function flattenDetails(details: DealDetailPayload[]) {
   };
 }
 
+function decorateCalendarEvents(
+  events: CalendarEvent[],
+  deals: DealListItem[],
+  customers: CustomerListItem[]
+) {
+  const dealMap = new Map(deals.map((deal) => [deal.id, deal]));
+  const customerMap = new Map(
+    customers.map((item) => [item.customer.id, item.customer])
+  );
+
+  return events.map((event) => {
+    const deal = event.deal_id ? dealMap.get(event.deal_id) : null;
+    const customer = event.customer_id ? customerMap.get(event.customer_id) : null;
+
+    return {
+      ...event,
+      customer_name: event.customer_name ?? deal?.customer_name ?? customer?.name ?? null,
+      deal_title: event.deal_title ?? deal?.title ?? null,
+      deal_stage: event.deal_stage ?? deal?.current_stage ?? null,
+    };
+  });
+}
+
 function mapQuoteDocuments(detail: DealDetailPayload): PartnerDocumentListItem[] {
   return detail.quote_documents.map((document: QuoteDocumentBundle) => {
     const currentVersion =
@@ -471,7 +494,14 @@ export async function loadPartnerCalendar(
 
   if (deals.length === 0) {
     const overview = await loadPartnerOverview(context);
-    return { mode: overview.mode, events: overview.recent_calendar_events };
+    return {
+      mode: overview.mode,
+      events: decorateCalendarEvents(
+        overview.recent_calendar_events,
+        overview.deals,
+        overview.customers
+      ),
+    };
   }
 
   const detailPayloads = await Promise.all(
@@ -496,11 +526,22 @@ export async function loadPartnerCalendar(
   );
 
   if (events.length > 0) {
-    return { mode, events };
+    const customerPayload = await loadPartnerCustomers(context);
+    return {
+      mode,
+      events: decorateCalendarEvents(events, deals, customerPayload.customers),
+    };
   }
 
   const overview = await loadPartnerOverview(context);
-  return { mode: overview.mode, events: overview.recent_calendar_events };
+  return {
+    mode: overview.mode,
+    events: decorateCalendarEvents(
+      overview.recent_calendar_events,
+      overview.deals,
+      overview.customers
+    ),
+  };
 }
 
 export async function loadPartnerPayments(

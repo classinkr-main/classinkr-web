@@ -259,18 +259,6 @@ const CAMPAIGN_STATUS_COLOR: Record<EmailCampaign["status"], string> = {
   sent: "bg-[#ECFDF5] text-[#084734]",
   failed: "bg-[#FEF3EE] text-[#B85C33]",
 }
-const BUG_STATUS_LABEL: Record<BugReport["status"], string> = {
-  open: "오픈",
-  "in-progress": "진행중",
-  resolved: "해결됨",
-  closed: "종료",
-}
-const BUG_SEVERITY_LABEL: Record<BugReport["severity"], string> = {
-  low: "Low",
-  medium: "Medium",
-  high: "High",
-  critical: "Critical",
-}
 const PUBLISH_STATUS_LABEL: Record<BlogPost["status"], string> = {
   draft: "초안",
   published: "공개",
@@ -280,6 +268,18 @@ const PUBLISH_STATUS_COLOR: Record<BlogPost["status"], string> = {
   draft: "bg-amber-50 text-amber-700",
   published: "bg-green-50 text-green-700",
   archived: "bg-[#f0f0ec] text-[#1a1a1a]/40",
+}
+
+type OverviewOperationalAlert = {
+  id: string
+  scope: string
+  title: string
+  description: string
+  meta: string
+  tone: "neutral" | "info" | "warning" | "danger" | "success"
+  action: string
+  href: string
+  priority: number
 }
 
 function getLast7DayLabels() {
@@ -461,6 +461,9 @@ export default function OverviewPage() {
   const recentCampaigns = [...campaigns]
     .sort((a, b) => scoreDate(b.sentAt ?? b.createdAt) - scoreDate(a.sentAt ?? a.createdAt))
     .slice(0, 4)
+  const failedCampaigns = [...campaigns]
+    .filter((campaign) => campaign.status === "failed")
+    .sort((a, b) => scoreDate(b.sentAt ?? b.createdAt) - scoreDate(a.sentAt ?? a.createdAt))
   const upcomingEvents = [...calendarEvents]
     .filter((event) => isWithinNextDays(event.date, 7))
     .sort((a, b) => a.date.localeCompare(b.date) || (a.time ?? "").localeCompare(b.time ?? ""))
@@ -483,6 +486,10 @@ export default function OverviewPage() {
   const draftCampaigns = campaigns.filter((campaign) => campaign.status === "draft")
   const sentCampaigns = campaigns.filter((campaign) => campaign.status === "sent")
   const latestPatchNote = [...patchNotes].sort((a, b) => scoreDate(b.date) - scoreDate(a.date))[0]
+  const latestFailedCampaign = failedCampaigns[0]
+  const nextUpcomingEvent = upcomingEvents[0]
+  const criticalOpenBugs = openBugs.filter((bug) => bug.severity === "critical" || bug.severity === "high")
+  const publishedPostsWithoutCta = Math.max(0, publishedBlogPosts.length - publishedPostsWithCta)
 
   const connections = [
     {
@@ -559,6 +566,11 @@ export default function OverviewPage() {
   ]
 
   const missingConnections = connections.filter((connection) => !connection.value?.trim())
+  const missingConnectionLabels = missingConnections.map((connection) => connection.label)
+  const missingConnectionSummary =
+    missingConnectionLabels.length > 2
+      ? `${missingConnectionLabels.slice(0, 2).join(", ")} 외 ${missingConnectionLabels.length - 2}개`
+      : missingConnectionLabels.join(", ")
   const topSignals = [
     {
       label: "홈페이지 모듈",
@@ -600,27 +612,117 @@ export default function OverviewPage() {
     },
   ]
   const operationalAlerts = [
-    ...openBugs.map((bug) => ({
-      id: bug.id,
-      title: bug.title,
-      description: `${BUG_SEVERITY_LABEL[bug.severity]} · ${BUG_STATUS_LABEL[bug.status]} · ${formatDateTime(bug.updatedAt)}`,
-      tone: bug.severity === "critical" || bug.severity === "high" ? ("danger" as const) : ("warning" as const),
-      action: "Dev 열기",
-      href: "/admin/dev",
-    })),
-    ...(latestPatchNote
-      ? [
-          {
-            id: latestPatchNote.id,
-            title: `최근 패치노트 v${latestPatchNote.version}`,
-            description: `${latestPatchNote.title} · ${formatDateShort(latestPatchNote.date)}`,
-            tone: latestPatchNote.status === "published" ? ("success" as const) : ("info" as const),
-            action: "패치노트 보기",
-            href: "/admin/dev",
-          },
-        ]
-      : []),
-  ].slice(0, 4)
+    newLeads > 0
+      ? {
+          id: "lead-followup",
+          scope: "CRM",
+          title: "신규 문의 후속 확인",
+          description: `미처리 ${newLeads}건 · 오늘 유입 ${todayLeads}건 · CRM 후속을 먼저 정리하세요.`,
+          meta: todayLeads > 0 ? `오늘 ${todayLeads}건` : `이번 주 ${thisWeekLeads}건`,
+          tone: "warning" as const,
+          action: "CRM 확인",
+          href: "/admin/crm",
+          priority: 100,
+        }
+      : null,
+    latestFailedCampaign
+      ? {
+          id: `campaign-failed-${latestFailedCampaign.id}`,
+          scope: "캠페인",
+          title: "실패 캠페인 재점검",
+          description: `${latestFailedCampaign.subject} · ${formatDateTime(latestFailedCampaign.sentAt ?? latestFailedCampaign.createdAt)} · 발송 실패 상태입니다.`,
+          meta: "즉시 확인",
+          tone: "danger" as const,
+          action: "캠페인",
+          href: "/admin/campaigns",
+          priority: 95,
+        }
+      : null,
+    missingConnections.length > 0
+      ? {
+          id: "connection-missing",
+          scope: "연동",
+          title: "외부 연동 설정 필요",
+          description: `미연결 ${missingConnections.length}건 · ${missingConnectionSummary} · 전송 경로를 먼저 복구하세요.`,
+          meta: `미연결 ${missingConnections.length}건`,
+          tone: "warning" as const,
+          action: "설정",
+          href: "/admin/settings",
+          priority: 90,
+        }
+      : null,
+    openBugs.length > 0
+      ? {
+          id: "open-bugs",
+          scope: "Dev",
+          title: "오픈 이슈 모니터링",
+          description: `진행중 ${openBugs.length}건 · Critical/High ${criticalOpenBugs.length}건 · 최근 업데이트 ${formatDateTime(openBugs[0]?.updatedAt)}.`,
+          meta: criticalOpenBugs.length > 0 ? `긴급 ${criticalOpenBugs.length}건` : `오픈 ${openBugs.length}건`,
+          tone: criticalOpenBugs.length > 0 ? ("danger" as const) : ("warning" as const),
+          action: "Dev 열기",
+          href: "/admin/dev",
+          priority: criticalOpenBugs.length > 0 ? 85 : 75,
+        }
+      : null,
+    publishedPostsWithoutCta > 0
+      ? {
+          id: "cta-coverage",
+          scope: "콘텐츠",
+          title: "콘텐츠 CTA 보강 필요",
+          description: `공개 글 ${publishedBlogPosts.length}건 중 CTA 미완성 ${publishedPostsWithoutCta}건 · 현재 커버리지 ${ctaCoverage}%.`,
+          meta: `CTA ${ctaCoverage}%`,
+          tone: ctaCoverage < 50 ? ("warning" as const) : ("info" as const),
+          action: "콘텐츠",
+          href: "/admin/blog",
+          priority: 70,
+        }
+      : null,
+    draftCampaigns.length > 0
+      ? {
+          id: "campaign-drafts",
+          scope: "캠페인",
+          title: "발송 대기 초안 확인",
+          description: `초안 ${draftCampaigns.length}건 · 발송 완료 ${sentCampaigns.length}건 · 오늘 보낼 캠페인을 정리하세요.`,
+          meta: `초안 ${draftCampaigns.length}건`,
+          tone: "info" as const,
+          action: "초안 열기",
+          href: "/admin/campaigns",
+          priority: 60,
+        }
+      : null,
+    nextUpcomingEvent
+      ? {
+          id: `calendar-${nextUpcomingEvent.id}`,
+          scope: "일정",
+          title: "다가오는 일정 점검",
+          description: `${nextUpcomingEvent.title} · ${formatDateTime(`${nextUpcomingEvent.date}T${nextUpcomingEvent.time ?? "09:00"}`)} · 준비 상태를 미리 확인하세요.`,
+          meta: nextUpcomingEvent.assignees?.join(", ") || "캘린더",
+          tone: "info" as const,
+          action: "캘린더",
+          href: "/admin/calendar",
+          priority: 50,
+        }
+      : null,
+    latestPatchNote
+      ? {
+          id: latestPatchNote.id,
+          scope: "배포",
+          title: `최근 패치노트 v${latestPatchNote.version}`,
+          description: `${latestPatchNote.title} · ${formatDateShort(latestPatchNote.date)} · 최근 변경 범위를 빠르게 확인합니다.`,
+          meta: latestPatchNote.status === "published" ? "배포 완료" : "초안",
+          tone: latestPatchNote.status === "published" ? ("success" as const) : ("info" as const),
+          action: "패치노트",
+          href: "/admin/dev",
+          priority: 40,
+        }
+      : null,
+  ]
+    .filter((item): item is OverviewOperationalAlert => Boolean(item))
+    .sort((a, b) => b.priority - a.priority)
+    .slice(0, 6)
+  const actionableOperationalAlertCount = operationalAlerts.filter(
+    (item) => item.tone === "warning" || item.tone === "danger"
+  ).length
 
   return (
     <div className="relative overflow-hidden px-4 pt-6 pb-16 sm:px-6 sm:pt-8 lg:px-8 lg:pb-20">
@@ -1117,18 +1219,18 @@ export default function OverviewPage() {
               <div className="rounded-2xl border border-[#e8e8e4] bg-[#fafaf8] p-5">
                 <div className="flex items-center justify-between mb-4">
                   <div>
-                    <p className="text-[13px] font-semibold text-[#111110]">운영 알림</p>
-                    <p className="text-[11px] text-[#1a1a1a]/40 mt-0.5">버그와 배포 메모를 함께 확인합니다.</p>
+                    <p className="text-[13px] font-semibold text-[#111110]">운영 알림 내역</p>
+                    <p className="text-[11px] text-[#1a1a1a]/40 mt-0.5">즉시 대응, 오늘 확인, 최근 변경을 우선순위로 정렬합니다.</p>
                   </div>
-                  <span className={`text-[10px] px-2 py-0.5 rounded-full border ${statusToneClasses(operationalAlerts.length > 0 ? "warning" : "success")}`}>
-                    {operationalAlerts.length > 0 ? `${operationalAlerts.length}건` : "정상"}
+                  <span className={`text-[10px] px-2 py-0.5 rounded-full border ${statusToneClasses(actionableOperationalAlertCount > 0 ? "warning" : operationalAlerts.length > 0 ? "info" : "success")}`}>
+                    {actionableOperationalAlertCount > 0 ? `주의 ${actionableOperationalAlertCount}` : operationalAlerts.length > 0 ? `최근 ${operationalAlerts.length}` : "정상"}
                   </span>
                 </div>
 
                 {operationalAlerts.length === 0 ? (
                   <EmptyState
-                    title="현재 운영 경고가 없습니다."
-                    description="이슈가 생기면 여기에서 먼저 확인하고 바로 Dev Mode로 이동할 수 있습니다."
+                    title="지금은 운영 주의 신호가 없습니다."
+                    description="문의, 캠페인, 연동, 일정, 배포 변경이 안정 상태면 이 영역은 비어 있습니다."
                     action={
                       <a
                         href="/admin/dev"
@@ -1151,7 +1253,13 @@ export default function OverviewPage() {
                           <ShieldAlert className="w-4 h-4" />
                         </div>
                         <div className="min-w-0 flex-1">
-                          <p className="text-[13px] font-semibold text-[#111110] truncate">{item.title}</p>
+                          <div className="flex items-center gap-2 flex-wrap">
+                            <span className={`rounded-full border px-1.5 py-0.5 text-[10px] font-medium ${statusToneClasses(item.tone)}`}>
+                              {item.scope}
+                            </span>
+                            <span className="text-[11px] text-[#1a1a1a]/35">{item.meta}</span>
+                          </div>
+                          <p className="mt-1 text-[13px] font-semibold text-[#111110] truncate">{item.title}</p>
                           <p className="text-[12px] text-[#1a1a1a]/40 mt-1 leading-relaxed">{item.description}</p>
                         </div>
                         <span className="text-[12px] font-medium text-[#1a1a1a]/35 group-hover:text-[#111110] flex items-center gap-1 shrink-0">
