@@ -10,6 +10,7 @@ import {
   FileText,
   Layers3,
   Link2,
+  Pencil,
   Plus,
   RefreshCw,
   ReceiptText,
@@ -676,27 +677,27 @@ export default function PartnerDocumentsPage() {
     }))
     handleHubModeChange("send")
 
-    if (payload.action === "save_and_copy_link") {
-      showNotice(
-        payload.shareError ? "warning" : "success",
-        payload.shareError
-          ? `견적서는 저장했지만 링크 준비는 실패했습니다. ${payload.shareError}`
-          : "견적서를 저장했고 발송 링크를 바로 복사했습니다."
-      )
-      return
-    }
-
     if (payload.action === "save_and_preview") {
       showNotice(
         payload.shareError ? "warning" : "success",
         payload.shareError
-          ? `견적서는 저장했지만 미리보기 링크 준비는 실패했습니다. ${payload.shareError}`
-          : "견적서를 저장했고 고객 미리보기를 새 탭으로 열었습니다."
+          ? `견적서는 저장했지만 미리보기 링크 준비에 실패했습니다. ${payload.shareError}`
+          : "견적서를 저장했고 미리보기를 새 탭으로 열었습니다."
       )
       return
     }
 
-    showNotice("success", "견적서를 임시 저장했고 바로 발송 준비 큐로 전환했습니다.")
+    if (payload.action === "save_and_send") {
+      showNotice(
+        payload.shareError ? "warning" : "success",
+        payload.shareError
+          ? `견적서는 저장했지만 공유 링크 생성에 실패했습니다. ${payload.shareError}`
+          : "견적서를 저장했고 전송 준비가 완료되었습니다."
+      )
+      return
+    }
+
+    showNotice("success", "견적서를 임시 저장했습니다.")
   }
 
   useEffect(() => {
@@ -1297,6 +1298,26 @@ export default function PartnerDocumentsPage() {
                       </div>
                     </div>
                   </div>
+
+                  {selectedDocument.kind === "quote" && (
+                    <div className="rounded-2xl border border-[#e8e8e4] bg-white p-4">
+                      <div className="flex items-center justify-between gap-3">
+                        <div>
+                          <p className="text-sm font-semibold text-[#1a1a1a]">견적 수정</p>
+                          <p className="mt-1 text-xs text-[#1a1a1a]/45">
+                            내용을 수정하면 새 버전으로 저장됩니다.
+                          </p>
+                        </div>
+                        <a
+                          href={`/partner/quote-editor/${selectedDocument.id}`}
+                          className="inline-flex items-center gap-2 rounded-xl border border-[#e8e8e4] bg-[#f7f7f5] px-3 py-2 text-sm font-medium text-[#1a1a1a] hover:bg-white"
+                        >
+                          <Pencil className="h-4 w-4" />
+                          편집
+                        </a>
+                      </div>
+                    </div>
+                  )}
 
                   <div className="rounded-2xl border border-[#e8e8e4] bg-white p-4">
                     <div className="flex items-center justify-between gap-3">

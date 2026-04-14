@@ -1,7 +1,7 @@
 "use client"
 
 import { useEffect, useMemo, useState } from "react"
-import { Copy, Eye, Loader2, Minus, Plus, RefreshCw, Sparkles, ZoomIn, ZoomOut } from "lucide-react"
+import { Check, Eye, Link2, Loader2, MessageCircle, Minus, Plus, Printer, RefreshCw, Send, Share2, Smartphone, Sparkles, ZoomIn, ZoomOut } from "lucide-react"
 
 import { Button } from "@/components/ui/button"
 import { Input } from "@/components/ui/input"
@@ -44,7 +44,7 @@ type RecentQuoteOption = {
   currentVersionLabel: string | null
 }
 
-type CreateAction = "save" | "save_and_copy_link" | "save_and_preview"
+type CreateAction = "save" | "save_and_preview" | "save_and_send"
 
 export type QuickQuoteCreatedPayload = {
   action: CreateAction
@@ -556,6 +556,9 @@ export default function QuickQuoteComposer({
   const [submittingAction, setSubmittingAction] = useState<CreateAction | null>(null)
   const [reuseLoadingId, setReuseLoadingId] = useState<string | null>(null)
   const [error, setError] = useState<string | null>(null)
+  const [shareSheet, setShareSheet] = useState<{ url: string; quoteNumber: string; customerName: string } | null>(null)
+  const [linkCopied, setLinkCopied] = useState(false)
+  const [saveToast, setSaveToast] = useState(false)
 
   const sortedCustomers = useMemo(
     () => [...customers].sort((left, right) => left.customer.name.localeCompare(right.customer.name, "ko")),
@@ -1003,10 +1006,6 @@ export default function QuickQuoteComposer({
   async function handleSubmit(action: CreateAction) {
     setSubmittingAction(action)
     setError(null)
-    const previewWindow =
-      action === "save_and_preview" && typeof window !== "undefined"
-        ? window.open("", "_blank")
-        : null
 
     try {
       const customer = await resolveCustomer()
@@ -1059,7 +1058,8 @@ export default function QuickQuoteComposer({
       let shareUrl: string | null = null
       let shareError: string | null = null
       let share: QuoteDocumentShare | null = null
-      if (action !== "save") {
+
+      if (action === "save_and_preview" || action === "save_and_send") {
         try {
           const shareResponse = await portalFetch(`/api/partner/quotes/${payload.document.id}/share`, {
             method: "POST",
@@ -1073,27 +1073,25 @@ export default function QuickQuoteComposer({
 
           share = sharePayload.share ?? null
           shareUrl = sharePayload.shareUrl
-          if (action === "save_and_copy_link") {
-            const copied = await copyTextToClipboard(shareUrl)
-            if (!copied) {
-              throw new Error("브라우저에서 링크 복사를 허용하지 않았습니다.")
-            }
-          }
+
           if (action === "save_and_preview") {
-            if (previewWindow) {
-              previewWindow.location.href = shareUrl
-            } else if (typeof window !== "undefined") {
-              window.location.href = shareUrl
-            }
+            window.open(shareUrl, "_blank")
+          }
+
+          if (action === "save_and_send") {
+            setShareSheet({
+              url: shareUrl,
+              quoteNumber: payload.document.quote_number,
+              customerName: customer.name,
+            })
+            setLinkCopied(false)
           }
         } catch (shareIssue) {
-          if (previewWindow && !previewWindow.closed) {
-            previewWindow.close()
-          }
           shareError =
             shareIssue instanceof Error
               ? shareIssue.message
               : "공유 링크 생성에 실패했습니다."
+          setError(`견적서는 저장했지만 ${shareError}`)
         }
       }
 
@@ -1112,11 +1110,16 @@ export default function QuickQuoteComposer({
         version: payload.version,
       })
 
-      onOpenChange(false)
-    } catch (submitError) {
-      if (previewWindow && !previewWindow.closed) {
-        previewWindow.close()
+      if (action === "save") {
+        // 임시저장 → 토스트 표시, 모달 유지
+        setSaveToast(true)
+        setTimeout(() => setSaveToast(false), 2000)
+      } else if (action === "save_and_preview") {
+        // 미리보기 → 모달 닫기 (새 탭은 이미 열림)
+        onOpenChange(false)
       }
+      // save_and_send → 공유 시트 유지
+    } catch (submitError) {
       setError(
         submitError instanceof Error
           ? submitError.message
@@ -1783,6 +1786,16 @@ export default function QuickQuoteComposer({
           </div>
         </div>
 
+        {error && (
+          <div className="border-t border-[#F6D5C5] bg-[#FEF3EE] px-6 py-2.5">
+            <p
+              className="text-center text-sm font-medium text-[#B85C33]"
+              style={{ textShadow: "0 1px 2px rgba(184,92,51,0.08)" }}
+            >
+              {error}
+            </p>
+          </div>
+        )}
         <div className="flex flex-wrap items-center justify-between gap-3 border-t border-[#ecebe6] bg-white px-6 py-4">
           <div className="text-sm text-[#615D59]">
             {buildStandardQuoteTitle(quote)}
@@ -1821,18 +1834,127 @@ export default function QuickQuoteComposer({
               type="button"
               disabled={Boolean(submittingAction) || loadingOptions}
               onClick={() => {
-                void handleSubmit("save_and_copy_link")
+                void handleSubmit("save_and_send")
               }}
+              className="bg-[#084734] text-white hover:bg-[#065c41]"
             >
-              {submittingAction === "save_and_copy_link" ? (
+              {submittingAction === "save_and_send" ? (
                 <Loader2 className="mr-2 h-4 w-4 animate-spin" />
               ) : (
-                <Copy className="mr-2 h-4 w-4" />
+                <Send className="mr-2 h-4 w-4" />
               )}
-              저장 후 링크 복사
+              저장 후 발송
             </Button>
           </div>
         </div>
+
+        {/* ── 임시저장 토스트 ─────────────────────────────────── */}
+        {saveToast && (
+          <div className="pointer-events-none absolute inset-0 z-10 flex items-center justify-center">
+            <div
+              className="pointer-events-auto rounded-2xl bg-[#111110] px-6 py-4 text-center shadow-[0_12px_40px_rgba(0,0,0,0.25)]"
+              style={{ animation: "fadeInUp 0.25s ease-out" }}
+            >
+              <Check className="mx-auto h-6 w-6 text-[#6EE7B7]" />
+              <p className="mt-2 text-sm font-medium text-white">임시 저장 완료</p>
+            </div>
+          </div>
+        )}
+
+        {/* ── 공유 시트 오버레이 ──────────────────────────────── */}
+        {shareSheet && (
+          <div className="absolute inset-0 z-10 flex items-center justify-center rounded-[32px] bg-black/30 backdrop-blur-sm">
+            <div className="w-full max-w-sm rounded-2xl bg-white p-6 shadow-[0_24px_60px_rgba(0,0,0,0.2)]">
+              <div className="text-center">
+                <div className="mx-auto flex h-12 w-12 items-center justify-center rounded-full bg-[#ECFDF5]">
+                  <Check className="h-6 w-6 text-[#084734]" />
+                </div>
+                <h3 className="mt-3 text-lg font-semibold text-[#111110]">견적서 전송 준비 완료</h3>
+                <p className="mt-1 text-sm text-[#615D59]">
+                  {shareSheet.customerName} · {shareSheet.quoteNumber}
+                </p>
+              </div>
+
+              <div className="mt-5 space-y-2">
+                <button
+                  type="button"
+                  onClick={async () => {
+                    await copyTextToClipboard(shareSheet.url)
+                    setLinkCopied(true)
+                    setTimeout(() => setLinkCopied(false), 2000)
+                  }}
+                  className="flex w-full items-center gap-3 rounded-xl border border-[#e8e8e4] px-4 py-3 text-left text-sm font-medium text-[#111110] transition-colors hover:bg-[#fafaf8]"
+                >
+                  {linkCopied ? <Check className="h-4 w-4 text-[#084734]" /> : <Link2 className="h-4 w-4 text-[#615D59]" />}
+                  {linkCopied ? "링크 복사됨!" : "링크 복사"}
+                </button>
+
+                <button
+                  type="button"
+                  onClick={() => {
+                    const text = `[견적서] ${shareSheet.quoteNumber}\n${shareSheet.customerName}님 견적서입니다.\n${shareSheet.url}`
+                    window.open(`https://sharer.kakao.com/talk/friends/picker/link?url=${encodeURIComponent(shareSheet.url)}&text=${encodeURIComponent(text)}`, "_blank", "width=480,height=640")
+                  }}
+                  className="flex w-full items-center gap-3 rounded-xl border border-[#e8e8e4] px-4 py-3 text-left text-sm font-medium text-[#111110] transition-colors hover:bg-[#fafaf8]"
+                >
+                  <MessageCircle className="h-4 w-4 text-[#615D59]" />
+                  카카오톡 전송
+                </button>
+
+                <button
+                  type="button"
+                  onClick={() => {
+                    const body = `[견적서 ${shareSheet.quoteNumber}] ${shareSheet.customerName}님 견적서입니다. ${shareSheet.url}`
+                    window.location.href = `sms:?body=${encodeURIComponent(body)}`
+                  }}
+                  className="flex w-full items-center gap-3 rounded-xl border border-[#e8e8e4] px-4 py-3 text-left text-sm font-medium text-[#111110] transition-colors hover:bg-[#fafaf8]"
+                >
+                  <Smartphone className="h-4 w-4 text-[#615D59]" />
+                  문자 전송
+                </button>
+
+                {typeof navigator !== "undefined" && "share" in navigator && (
+                  <button
+                    type="button"
+                    onClick={() => {
+                      navigator.share({
+                        title: `견적서 ${shareSheet.quoteNumber}`,
+                        text: `${shareSheet.customerName}님 견적서입니다.`,
+                        url: shareSheet.url,
+                      }).catch(() => {})
+                    }}
+                    className="flex w-full items-center gap-3 rounded-xl border border-[#e8e8e4] px-4 py-3 text-left text-sm font-medium text-[#111110] transition-colors hover:bg-[#fafaf8]"
+                  >
+                    <Share2 className="h-4 w-4 text-[#615D59]" />
+                    기타 공유
+                  </button>
+                )}
+
+                <button
+                  type="button"
+                  onClick={() => {
+                    window.open(shareSheet.url, "_blank")
+                  }}
+                  className="flex w-full items-center gap-3 rounded-xl border border-[#e8e8e4] px-4 py-3 text-left text-sm font-medium text-[#111110] transition-colors hover:bg-[#fafaf8]"
+                >
+                  <Printer className="h-4 w-4 text-[#615D59]" />
+                  인쇄 / 미리보기
+                </button>
+              </div>
+
+              <button
+                type="button"
+                onClick={() => {
+                  setShareSheet(null)
+                  onOpenChange(false)
+                }}
+                className="mt-4 w-full rounded-xl bg-[#111110] px-4 py-2.5 text-sm font-medium text-white transition-colors hover:bg-[#2a2a2a]"
+              >
+                닫기
+              </button>
+            </div>
+          </div>
+        )}
       </div>
     </div>
   )

@@ -226,6 +226,11 @@
   .tracking-card     { letter-spacing: -0.015em; }  /* 22px card title */
 }
 
+@keyframes fadeInUp {
+  from { opacity: 0; transform: translateY(8px) scale(0.96); }
+  to { opacity: 1; transform: translateY(0) scale(1); }
+}
+
 @keyframes shake {
   0%,100%{transform:translateX(0)}
   25%{transform:translateX(-3px)}
@@ -467,3 +472,21 @@
 .animate-dot-pulse { animation: dot-pulse 3s ease-in-out infinite; }
 .animate-marquee { animation: marquee 30s linear infinite; }
 .animate-progress-fill { animation: progress-fill 1.5s ease-out forwards; }
+
+/* ── 견적서 인쇄 최적화 ────────────────────────────────────── */
+@media print {
+  body { background: white !important; -webkit-print-color-adjust: exact; print-color-adjust: exact; }
+
+  /* 테이블 행 잘림 방지 */
+  tr, td, th { break-inside: avoid; }
+  table { break-inside: avoid; }
+  thead { display: table-header-group; }
+
+  /* 섹션 잘림 방지 */
+  section, .break-avoid { break-inside: avoid; }
+
+  /* 불필요 UI 숨김 — Tailwind print:hidden이 처리 */
+
+  /* 여백 */
+  @page { margin: 12mm 10mm; }
+}

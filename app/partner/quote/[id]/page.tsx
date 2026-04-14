@@ -646,7 +646,7 @@ export default function QuotePreviewPage() {
             </div>
 
             {interaction && (
-              <div className="mt-6 rounded-2xl border border-[#e8e8e4] bg-[#fafaf8] px-5 py-4">
+              <div className="mt-6 rounded-2xl border border-[#e8e8e4] bg-[#fafaf8] px-5 py-4 print:hidden">
                 <div className="flex flex-col gap-4 md:flex-row md:items-center md:justify-between">
                   <div className="space-y-1">
                     <p className="text-xs font-semibold uppercase tracking-[0.18em] text-[#1a1a1a]/30">응답 상태</p>
@@ -697,7 +697,7 @@ export default function QuotePreviewPage() {
             )}
           </div>
 
-          <div className="grid gap-0 border-b border-[#e8e8e4] md:grid-cols-2">
+          <div className="grid gap-0 border-b border-[#e8e8e4] md:grid-cols-2" style={{ breakInside: "avoid" }}>
             <div className="border-b border-[#e8e8e4] px-8 py-6 md:border-b-0 md:border-r">
               <p className="text-xs font-semibold uppercase tracking-[0.18em] text-[#1a1a1a]/30">수신</p>
               <p className="mt-2 text-lg font-semibold text-[#1a1a1a]">{recipientName}</p>
@@ -737,9 +737,9 @@ export default function QuotePreviewPage() {
             </div>
 
             {hasStructuredLines ? (
-              <div className="overflow-hidden rounded-2xl border border-[#e8e8e4]">
-                <table className="w-full border-collapse text-sm">
-                  <thead className="bg-[#fafaf8]">
+              <div className="overflow-hidden rounded-2xl border border-[#e8e8e4] print:rounded-none print:border print:border-[#ccc]">
+                <table className="w-full border-collapse text-sm" style={{ breakInside: "avoid" }}>
+                  <thead className="bg-[#fafaf8]" style={{ display: "table-header-group" }}>
                     <tr className="border-b border-[#e8e8e4] text-left text-[11px] font-semibold uppercase tracking-[0.14em] text-[#1a1a1a]/35">
                       <th className="px-4 py-3">품목</th>
                       <th className="px-4 py-3">설명</th>
@@ -813,8 +813,8 @@ export default function QuotePreviewPage() {
             )}
           </div>
 
-          <div className="border-t border-[#e8e8e4] px-8 py-7">
-            <div className="grid gap-6 lg:grid-cols-[minmax(0,1fr)_320px]">
+          <div className="border-t border-[#e8e8e4] px-8 py-7" style={{ breakInside: "avoid" }}>
+            <div className="grid gap-6 lg:grid-cols-[minmax(0,1fr)_320px] print:grid-cols-[minmax(0,1fr)_280px]">
               <div className="space-y-4">
                 {details.generalNotes && (
                   <div className="rounded-2xl bg-[#fafaf8] px-5 py-4">
@@ -859,7 +859,7 @@ export default function QuotePreviewPage() {
                 )}
               </div>
 
-              <div className="rounded-3xl border border-[#e8e8e4] bg-[#fbfbfa] p-5">
+              <div className="rounded-3xl border border-[#e8e8e4] bg-[#fbfbfa] p-5" style={{ breakInside: "avoid" }}>
                 <p className="text-xs font-semibold uppercase tracking-[0.18em] text-[#1a1a1a]/30">금액 요약</p>
                 <div className="mt-4 space-y-2 text-sm">
                   <div className="flex items-center justify-between text-[#1a1a1a]/58">
