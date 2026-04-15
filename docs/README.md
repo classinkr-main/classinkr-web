@@ -26,6 +26,8 @@
   - 파트너 포털 구현 순서
 - [active/quote-lifecycle-execution-plan.md](./active/quote-lifecycle-execution-plan.md)
   - 견적 문서 라이프사이클 실행 기준
+- [active/software-checkout-revamp-plan.md](./active/software-checkout-revamp-plan.md)
+  - /checkout 구독형/충전형 재정렬 실행안
 
 ## 3. Architecture
 
