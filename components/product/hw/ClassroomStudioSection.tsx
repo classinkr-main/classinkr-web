@@ -59,9 +59,9 @@ export default function ClassroomStudioSection() {
             CLASSROOM STUDIO
           </p>
           <h2 className="text-3xl md:text-4xl lg:text-5xl text-[#1a1a19] leading-tight">
-            보드, 카메라, 소프트웨어.
+            복잡한 장비 없이 Classin 하나로
             <br />
-            <span className="text-[#22A366]">하나의 수업 스튜디오</span>가 됩니다.
+            <span className="text-[#22A366]">하나의 스튜디오</span>가 됩니다.
           </h2>
         </motion.div>
 

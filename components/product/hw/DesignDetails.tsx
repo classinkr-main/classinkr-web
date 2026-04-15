@@ -1,8 +1,8 @@
 "use client";
 
 import { useRef } from "react";
+import Image from "next/image";
 import { motion, useInView } from "framer-motion";
-import { Sun, Sparkles, Maximize2 } from "lucide-react";
 
 const fadeUp = {
   hidden: { opacity: 0, y: 24 },
@@ -17,19 +17,22 @@ const transition = (delay: number) => ({
 
 const CARDS = [
   {
-    icon: Sun,
-    heading: "형광등이 켜져 있어도, 글씨가 죽지 않습니다.",
-    body: "AG(Anti-Glare) 코팅 + 90% 이상 빛 투과율. 창가 자리든 뒷자리든, 같은 글씨를 봅니다.",
+    image: "/images/product/hw/display/display-coating.png",
+    alt: "ClassIn Board anti-glare coating detail",
+    heading: "빛이 강해도 글씨가 묻히지 않습니다.",
+    body: "AG(Anti-Glare) 코팅과 저반사 설계로 창가 자리와 뒷자리에서도 판서가 선명하게 보입니다.",
   },
   {
-    icon: Sparkles,
-    heading: "닦지 않아도, 깨끗합니다.",
-    body: "AF(Anti-Fingerprint) 마감. 50명이 만져도 흔적이 남지 않습니다. 수업 사이에 닦을 시간이 필요 없습니다.",
+    image: "/images/product/hw/board/board-bezel-detail.png",
+    alt: "ClassIn Board anti-fingerprint surface detail",
+    heading: "손이 닿아도 금방 지저분해지지 않습니다.",
+    body: "AF(Anti-Fingerprint) 마감으로 많은 학생이 만져도 흔적이 덜 남고, 수업 사이 청소 부담도 줄어듭니다.",
   },
   {
-    icon: Maximize2,
-    heading: "몰입을 방해하지 않습니다.",
-    body: "8mm 슬림 베젤, 무광 알루미늄 프레임. 학생의 시선이 학습에만 머뭅니다.",
+    image: "/images/product/hw/board/board-bezel-curve.png",
+    alt: "ClassIn Board slim bezel detail",
+    heading: "몰입을 방해하지 않는 베젤입니다.",
+    body: "슬림 베젤과 정돈된 프레임 비율로 시선이 화면에 더 오래 머물고, 보드 자체가 덜 거슬립니다.",
   },
 ] as const;
 
@@ -38,12 +41,8 @@ export default function DesignDetails() {
   const inView = useInView(ref, { once: true, margin: "-10% 0px" });
 
   return (
-    <section
-      ref={ref}
-      className="bg-white py-24 md:py-32 px-6"
-    >
+    <section ref={ref} className="bg-white py-24 md:py-32 px-6">
       <div className="max-w-7xl mx-auto">
-        {/* Header */}
         <motion.p
           variants={fadeUp}
           initial="hidden"
@@ -72,12 +71,11 @@ export default function DesignDetails() {
           transition={transition(0.2)}
           className="text-lg text-[#615D59] mt-5 max-w-2xl"
         >
-          보드의 강함은 스펙시트가 아니라, 손에 닿는 표면에 있습니다.
+          보드는 스펙보다 손과 눈이 먼저 반응합니다. 매일 쓰는 화면일수록 표면, 반사, 베젤의 차이가 크게 느껴집니다.
         </motion.p>
 
-        {/* Cards */}
         <div className="mt-16 grid sm:grid-cols-2 md:grid-cols-3 gap-8">
-          {CARDS.map(({ icon: Icon, heading, body }, i) => (
+          {CARDS.map(({ image, alt, heading, body }, i) => (
             <motion.div
               key={heading}
               variants={fadeUp}
@@ -86,16 +84,16 @@ export default function DesignDetails() {
               transition={transition(0.3 + i * 0.15)}
               className="bg-[#FAFAF8] rounded-2xl border border-black/[0.08] overflow-hidden flex flex-col transition-all duration-200 hover:shadow-lg hover:-translate-y-1"
             >
-              {/* Image area */}
-              <div className="aspect-square bg-gradient-to-br from-[#ECFDF5] to-[#F6F5F4] flex items-center justify-center">
-                <Icon
-                  size={80}
-                  strokeWidth={1.25}
-                  style={{ color: "#084734", opacity: 0.5 }}
+              <div className="relative aspect-square bg-gradient-to-br from-[#ECFDF5] to-[#F6F5F4]">
+                <Image
+                  src={image}
+                  alt={alt}
+                  fill
+                  sizes="(max-width: 768px) 100vw, (max-width: 1200px) 50vw, 33vw"
+                  className="object-cover"
                 />
               </div>
 
-              {/* Body */}
               <div className="p-7 flex flex-col">
                 <h3
                   className="text-2xl text-[#111110] leading-snug"
