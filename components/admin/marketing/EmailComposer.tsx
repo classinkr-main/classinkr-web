@@ -127,6 +127,13 @@ export default function EmailComposer({
   const [showConfirm, setShowConfirm] = useState(false)
   const [sendingConfirmed, setSendingConfirmed] = useState(false)
 
+  // 인라인 토스트
+  const [toast, setToast] = useState<{ ok: boolean; msg: string } | null>(null)
+  const showToast = (ok: boolean, msg: string) => {
+    setToast({ ok, msg })
+    setTimeout(() => setToast(null), 4000)
+  }
+
   const bodyRef = useRef<HTMLTextAreaElement>(null)
 
   // 테스트 계정 localStorage 동기화
@@ -193,7 +200,26 @@ export default function EmailComposer({
 
   // 발송 확인
   const handleSendClick = () => {
-    if (!value.subject.trim() || !value.body.trim()) return
+    if (!value.subject.trim()) {
+      showToast(false, "제목을 입력해주세요.")
+      return
+    }
+    if (!value.body.trim()) {
+      showToast(false, "본문을 입력해주세요.")
+      return
+    }
+    if (audienceMode === "tags" && audienceCount === 0) {
+      showToast(false, "발송 대상이 없습니다. 태그 조건을 확인해주세요.")
+      return
+    }
+    if (audienceMode === "direct" && parsedDirectEmails.length === 0) {
+      showToast(false, "유효한 이메일 주소를 입력해주세요.")
+      return
+    }
+    if (presendErrors.length > 0) {
+      showToast(false, presendErrors[0])
+      return
+    }
     setShowConfirm(true)
   }
   const handleConfirmedSend = async () => {
@@ -205,6 +231,8 @@ export default function EmailComposer({
       } else {
         await onSend(value)
       }
+    } catch {
+      showToast(false, "발송 중 오류가 발생했습니다. 잠시 후 다시 시도해주세요.")
     } finally {
       setSendingConfirmed(false)
     }
@@ -613,6 +641,20 @@ export default function EmailComposer({
             )}
           </div>
         </div>
+
+        {/* ══ 인라인 토스트 ══════════════════════════════ */}
+        {toast && (
+          <div className={`flex items-center gap-2 rounded-lg border px-3 py-2 text-[12px] font-medium ${
+            toast.ok
+              ? "border-[#084734]/20 bg-[#ECFDF5] text-[#084734]"
+              : "border-red-200 bg-red-50 text-red-700"
+          }`}>
+            {toast.ok
+              ? <CheckCircle2 className="h-3.5 w-3.5 shrink-0" />
+              : <AlertTriangle className="h-3.5 w-3.5 shrink-0" />}
+            {toast.msg}
+          </div>
+        )}
 
         {/* ══ 발송 버튼 바 ══════════════════════════════ */}
         <div className="flex items-center justify-between gap-3 rounded-xl border border-[#e8e8e4] bg-[#fafaf8] px-4 py-3">
