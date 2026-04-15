@@ -32,8 +32,8 @@
 
 관련 문서:
 
-- [partner-portal-guidelines.md](C:/Projects/PUBLIC_Classin/Classin_Home_bae_v1/docs/active/partner-portal-guidelines.md)
-- [partner-portal-product-plan.md](C:/Projects/PUBLIC_Classin/Classin_Home_bae_v1/docs/active/partner-portal-product-plan.md)
+- [partner-portal-guidelines.md](./partner-portal-guidelines.md)
+- [partner-portal-product-plan.md](./partner-portal-product-plan.md)
 - [partner-portal-document-hub-execution-plan.md](./partner-portal-document-hub-execution-plan.md)
 
 메모:
@@ -448,7 +448,7 @@
 - 내부 일정
 - 문서 due
 
-기존 [app/admin/calendar/page.tsx](C:/Projects/PUBLIC_Classin/Classin_Home_bae_v1/app/admin/calendar/page.tsx) 를 베이스로 확장 가능
+기존 [app/admin/calendar/page.tsx](../../app/admin/calendar/page.tsx) 를 베이스로 확장 가능
 
 ## 5-2. 파트너 포털
 
@@ -591,7 +591,7 @@
 
 ## Phase 3: 관리자 Workspace 재구성
 
-- [app/admin/partners/page.tsx](C:/Projects/PUBLIC_Classin/Classin_Home_bae_v1/app/admin/partners/page.tsx) 분해
+- [app/admin/partners/page.tsx](../../app/admin/partners/page.tsx) 분해
 - 기관 + 거래건 보드 구조 도입
 - 문서 / 설치 / 수납 패널 분리
 
@@ -601,7 +601,7 @@
 
 ## Phase 4: 파트너 포털 재구성
 
-- [app/partner/dashboard/page.tsx](C:/Projects/PUBLIC_Classin/Classin_Home_bae_v1/app/partner/dashboard/page.tsx) 를
+- [app/partner/dashboard/page.tsx](../../app/partner/dashboard/page.tsx) 를
   문서 허브에서 거래 허브로 승격
 - 캘린더, 수납, 활동 로그 추가
 
@@ -705,7 +705,7 @@
 
 원칙:
 
-- [app/admin/partners/page.tsx](C:/Projects/PUBLIC_Classin/Classin_Home_bae_v1/app/admin/partners/page.tsx) 는 shell만 남기고 분해한다
+- [app/admin/partners/page.tsx](../../app/admin/partners/page.tsx) 는 shell만 남기고 분해한다
 - 좌측 고객 목록 + 중앙 거래 보드 + 우측 거래 상세 패널 구조를 기준으로 한다
 
 ### F. 파트너 포털 UI

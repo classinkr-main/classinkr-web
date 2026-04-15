@@ -6,14 +6,14 @@
 
 관련 파일:
 
-- [문서 허브 빠른 생성](/Users/clmagi/Desktop/Projects/classin_home/app/partner/(portal)/documents/page.tsx)
-- [관리자 표준 견적 템플릿 에디터](/Users/clmagi/Desktop/Projects/classin_home/components/admin/partners/StandardQuoteTemplateEditor.tsx)
-- [표준 견적 템플릿 유틸](/Users/clmagi/Desktop/Projects/classin_home/lib/standard-quote-template.ts)
-- [파트너 포털 구형 견적 작성기](/Users/clmagi/Desktop/Projects/classin_home/components/partner-portal/crud/QuoteEditor.tsx)
-- [파트너 단독 견적 편집기](/Users/clmagi/Desktop/Projects/classin_home/app/partner/(portal)/quote-editor/[id]/page.tsx)
-- [견적 라이프사이클 실행안](/Users/clmagi/Desktop/Projects/classin_home/docs/active/quote-lifecycle-execution-plan.md)
-- [문서 허브 와이어프레임](/Users/clmagi/Desktop/Projects/classin_home/docs/active/partner-portal-document-hub-wireframes.md)
-- [견적 문서 스펙](/Users/clmagi/Desktop/Projects/classin_home/docs/hardware-ops/quote-document-spec.md)
+- [문서 허브 빠른 생성](../../app/partner/(portal)/documents/page.tsx)
+- [관리자 표준 견적 템플릿 에디터](../../components/admin/partners/StandardQuoteTemplateEditor.tsx)
+- [표준 견적 템플릿 유틸](../../lib/standard-quote-template.ts)
+- [파트너 포털 구형 견적 작성기](../../components/partner-portal/crud/QuoteEditor.tsx)
+- [파트너 단독 견적 편집기](../../app/partner/(portal)/quote-editor/[id]/page.tsx)
+- [견적 라이프사이클 실행안](./quote-lifecycle-execution-plan.md)
+- [문서 허브 와이어프레임](./partner-portal-document-hub-wireframes.md)
+- [견적 문서 스펙](../hardware-ops/quote-document-spec.md)
 
 ## 1. 현재 UX 진단
 

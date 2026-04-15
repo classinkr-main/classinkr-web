@@ -25,6 +25,7 @@
 *.pem
 .claude/
 .git_backup*/
+classin_secret/
 
 # debug
 npm-debug.log*

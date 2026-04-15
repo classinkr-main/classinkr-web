@@ -7,9 +7,9 @@
 
 관련 문서:
 
-- [partner-portal-master-spec.md](C:/Projects/PUBLIC_Classin/Classin_Home_bae_v1/docs/active/partner-portal-master-spec.md)
-- [partner-portal-screen-layout.md](C:/Projects/PUBLIC_Classin/Classin_Home_bae_v1/docs/active/partner-portal-screen-layout.md)
-- [partner-portal-implementation-roadmap.md](C:/Projects/PUBLIC_Classin/Classin_Home_bae_v1/docs/active/partner-portal-implementation-roadmap.md)
+- [partner-portal-master-spec.md](./partner-portal-master-spec.md)
+- [partner-portal-screen-layout.md](./partner-portal-screen-layout.md)
+- [partner-portal-implementation-roadmap.md](./partner-portal-implementation-roadmap.md)
 
 ## 1. 제품 구조 한 줄 정리
 
@@ -121,7 +121,7 @@
 
 비고:
 
-- 지금의 [page.tsx](C:/Projects/PUBLIC_Classin/Classin_Home_bae_v1/app/admin/commercial/page.tsx) 는 이 구조의 첫 미리보기다.
+- 지금의 [page.tsx](../../app/admin/commercial/page.tsx) 는 이 구조의 첫 미리보기다.
 
 ### C. 거래건 상세
 
@@ -211,7 +211,7 @@
 
 비고:
 
-- 기존 [page.tsx](C:/Projects/PUBLIC_Classin/Classin_Home_bae_v1/app/partner/dashboard/page.tsx) 는 `견적/계약/영수증 문서함` 구조다.
+- 기존 [page.tsx](../../app/partner/dashboard/page.tsx) 는 `견적/계약/영수증 문서함` 구조다.
 - V2에서는 홈과 거래 허브 중심으로 재편한다.
 
 ### B. 거래 목록 / 거래 상세
@@ -326,14 +326,14 @@
 
 ### A. 현재
 
-- [page.tsx](C:/Projects/PUBLIC_Classin/Classin_Home_bae_v1/app/admin/commercial/page.tsx)
+- [page.tsx](../../app/admin/commercial/page.tsx)
   - 새 V2 미리보기
   - `customer list -> customer detail -> deal detail` 흐름
   - fallback 포함
-- [page.tsx](C:/Projects/PUBLIC_Classin/Classin_Home_bae_v1/app/admin/partners/page.tsx)
+- [page.tsx](../../app/admin/partners/page.tsx)
   - 구형 모놀리식 운영 화면
   - `partner == customer` 가정
-- [page.tsx](C:/Projects/PUBLIC_Classin/Classin_Home_bae_v1/app/partner/dashboard/page.tsx)
+- [page.tsx](../../app/partner/dashboard/page.tsx)
   - 구형 문서함 구조
   - `/api/partner/data` 의존
 

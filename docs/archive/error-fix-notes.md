@@ -2,16 +2,18 @@
 
 기준 시점: 2026-03-18
 
+> 이 문서는 2026-03-18 시점의 역사적 점검 메모다. 현재 상태 판단에는 [../active/repository-audit-2026-04-15.md](../active/repository-audit-2026-04-15.md) 와 실제 코드/검증 결과를 우선한다.
+
 ## 0. 먼저 보는 요약
 
-- `npm run build` 는 현재 통과한다
-- `npm run lint` 는 결과를 그대로 믿기 어렵다
+- 2026-03-18 점검 당시 `npm run build` 는 통과했다
+- `npm run lint` 는 당시에도 결과를 그대로 믿기 어려웠다
   - `.claude/worktrees/**`, 내부 `.next/**` 산출물까지 같이 검사해서 노이즈가 매우 크다
-- 실제 소스만 분리해서 보면 `npx eslint app components lib` 기준
+- 실제 소스만 분리해서 보면 2026-03-18 당시 `npx eslint app components lib` 기준
   - `33 errors`
   - `6 warnings`
 
-즉, “빌드는 되지만 코드 품질 체크와 실제 사용자 동선은 아직 불안한 상태”라고 보면 된다.
+즉, 당시에는 “빌드는 되지만 코드 품질 체크와 실제 사용자 동선은 아직 불안한 상태”라고 보면 됐다.
 
 ## 1. 수정 시작 순서
 

@@ -13,14 +13,14 @@
 
 관련 기준 문서:
 
-- [partner-portal-implementation-roadmap.md](/Users/clmagi/Desktop/Projects/classin_home/docs/active/partner-portal-implementation-roadmap.md)
-- [partner-portal-front-back-contract.md](/Users/clmagi/Desktop/Projects/classin_home/docs/active/partner-portal-front-back-contract.md)
-- [partner-portal-master-spec.md](/Users/clmagi/Desktop/Projects/classin_home/docs/active/partner-portal-master-spec.md)
-- [docs/admin-partners-supabase-schema.sql](/Users/clmagi/Desktop/Projects/classin_home/docs/admin-partners-supabase-schema.sql)
-- [app/partner/(portal)/documents/page.tsx](/Users/clmagi/Desktop/Projects/classin_home/app/partner/(portal)/documents/page.tsx)
-- [components/partner-portal/crud/QuoteEditor.tsx](/Users/clmagi/Desktop/Projects/classin_home/components/partner-portal/crud/QuoteEditor.tsx)
-- [components/partner-portal/crud/ContractList.tsx](/Users/clmagi/Desktop/Projects/classin_home/components/partner-portal/crud/ContractList.tsx)
-- [components/partner-portal/crud/ReceiptForm.tsx](/Users/clmagi/Desktop/Projects/classin_home/components/partner-portal/crud/ReceiptForm.tsx)
+- [partner-portal-implementation-roadmap.md](./partner-portal-implementation-roadmap.md)
+- [partner-portal-front-back-contract.md](./partner-portal-front-back-contract.md)
+- [partner-portal-master-spec.md](./partner-portal-master-spec.md)
+- [docs/admin-partners-supabase-schema.sql](../admin-partners-supabase-schema.sql)
+- [app/partner/(portal)/documents/page.tsx](../../app/partner/(portal)/documents/page.tsx)
+- [components/partner-portal/crud/QuoteEditor.tsx](../../components/partner-portal/crud/QuoteEditor.tsx)
+- [components/partner-portal/crud/ContractList.tsx](../../components/partner-portal/crud/ContractList.tsx)
+- [components/partner-portal/crud/ReceiptForm.tsx](../../components/partner-portal/crud/ReceiptForm.tsx)
 
 ## 1. 문제 정의
 
@@ -238,4 +238,3 @@ API/Data 우선순위:
 3. 공통 발송 모달과 상태 분리 스키마를 먼저 구현한다.
 4. 문서 허브와 거래 상세의 중복 액션을 정리한다.
 5. 로그와 롤아웃을 붙여 운영 안정성을 확보한다.
-
