@@ -18,18 +18,18 @@ const transition = (delay: number) => ({
 const CARDS = [
   {
     icon: Sun,
-    heading: "형광등이 켜져 있어도, 글씨가 죽지 않습니다.",
-    body: "AG(Anti-Glare) 코팅 + 90% 이상 빛 투과율. 창가 자리든 뒷자리든, 같은 글씨를 봅니다.",
+    heading: "맨 뒷자리까지 닿는 선명함, AG 코팅 + 90% 투과율",
+    body: "빛 반사로 인한 사각지대를 완벽히 잡았습니다. 창가 자리든 뒷자리든, 교실 어느 자리에서도 왜곡 없이 선명한 판서를 공유하며 수업의 몰입도를 극대화합니다.",
   },
   {
     icon: Sparkles,
-    heading: "닦지 않아도, 깨끗합니다.",
-    body: "AF(Anti-Fingerprint) 마감. 50명이 만져도 흔적이 남지 않습니다. 수업 사이에 닦을 시간이 필요 없습니다.",
+    heading: "실제 종이에 쓰듯 자연스러운 '리얼 라이팅'",
+    body: "손끝을 그대로 따라오는 0.03초의 압도적인 응답 속도는 딜레이 없는 완벽한 수업 리듬을 만듭니다. 고밀도 터치 센서가 필기 압력과 굵기를 세밀하게 감지하여, 분필이나 펜으로 쓰는 듯한 느낌을 구현합니다.",
   },
   {
     icon: Maximize2,
-    heading: "몰입을 방해하지 않습니다.",
-    body: "8mm 슬림 베젤, 무광 알루미늄 프레임. 학생의 시선이 학습에만 머뭅니다.",
+    heading: "왜곡 없이 선명한 '풀 라미네이션' 디스플레이",
+    body: "패널과 강화유리 사이의 공기층을 완전히 제거한 광학 본딩 기술을 적용했습니다. 어느 자리에서 봐도 왜곡 없이 선명한 화면을 유지하며, 시차 없는 정확한 터치와 블루라이트 차단으로 장시간 수업에도 눈의 피로를 최소화합니다.",
   },
 ] as const;
 
@@ -62,7 +62,7 @@ export default function DesignDetails() {
           className="text-4xl md:text-5xl text-[#111110] mt-4 leading-tight"
           style={{ letterSpacing: "-1.5px" }}
         >
-          디테일이 수업의 질을 바꿉니다.
+          디테일이 만드는 압도적인 몰입감
         </motion.h2>
 
         <motion.p

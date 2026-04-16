@@ -48,18 +48,18 @@ export default function AICameraSection() {
           </p>
 
           <h2
-            className="text-4xl md:text-5xl lg:text-6xl mt-4 leading-tight"
+            className="text-4xl md:text-5xl lg:text-[3.5rem] mt-4 leading-tight"
             style={{ letterSpacing: "-1.5px" }}
           >
-            수업이 끝나면,
+            촬영 감독 없이 만드는 인강 뷰,
             <br />
-            영상도 완성됩니다.
+            종료와 동시에 자동 업로드되는 스마트 강의 시스템
           </h2>
 
           <p className="text-lg text-white/70 mt-6 leading-relaxed">
-            보드 상단 4K AI 카메라가 교사를 자동 추적하며 수업 전체를 녹화합니다.
-            수업 종료와 동시에 편집 없이 수업 영상이 자동 생성·업로드.
-            별도 캠코더도, 운영자도 필요 없는 원스톱 수업 스튜디오.
+            4K AI 카메라가 교사를 자동 추적하며 수업 전체를 녹화합니다.
+            수업 종료와 동시에 편집 없이 영상이 자동 생성·업로드됩니다.
+            별도 캠코더도, 전담 인력이 필요 없는 자동화 수업 시스템입니다.
           </p>
 
           <ul className="mt-8 grid grid-cols-2 gap-3 sm:grid-cols-3">

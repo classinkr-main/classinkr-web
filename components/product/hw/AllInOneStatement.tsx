@@ -36,7 +36,13 @@ const layers = [
   },
 ]
 
-const chips = ["i5 / i7 OPS", "전원 1개", "케이블 0개", "본체 불필요"]
+const capabilities = [
+  "i5 OPS 표준 탑재",
+  "256GB SSD, 16GB RAM",
+  "복잡한 어댑터 없는 간결한 전원",
+  "HDMI 등 외부 기기 연결 불필요",
+  "별도 PC 본체 공간이 필요 없는 일체형",
+]
 
 function LayerStack() {
   const ref = useRef<HTMLDivElement>(null)
@@ -99,29 +105,31 @@ export default function AllInOneStatement() {
 
           {/* Heading */}
           <h2
-            className="text-4xl md:text-5xl lg:text-6xl leading-tight font-bold"
+            className="text-4xl md:text-5xl lg:text-[3.5rem] leading-tight font-bold"
             style={{ letterSpacing: "-1.5px" }}
           >
-            보드 안에 PC가 있습니다.
+            압도적 사양의 고성능 PC 내장
+            <br />
+            끊김 없는 수업을 위한 최고의 퍼포먼스
           </h2>
 
           {/* Body */}
           <p className="text-lg text-white/70 leading-relaxed mt-6">
-            OPS 슬롯 표준 규격으로 내장된 인텔 i5 / i7. 별도 본체, HDMI 케이블,
-            어댑터가 없습니다. 전원 하나로 모든 게 켜집니다.
+            전자칠판에 표준 규격의 인텔 i5 PC가 내장되어 있습니다.
+            별도의 본체나 HDMI 케이블, 전원 어댑터를 연결할 필요가 없습니다.
+            오직 전원 케이블 하나면 수업이 가능합니다.
           </p>
 
-          {/* Chips */}
-          <div className="flex flex-wrap gap-3 mt-8">
-            {chips.map((chip) => (
-              <span
-                key={chip}
-                className="bg-white/5 border border-white/10 px-4 py-2 rounded-full text-sm text-white/80"
+          <ul className="mt-8 grid gap-3 sm:grid-cols-2">
+            {capabilities.map((capability) => (
+              <li
+                key={capability}
+                className="rounded-2xl border border-white/10 bg-white/5 px-4 py-3 text-sm text-white/80"
               >
-                {chip}
-              </span>
+                {capability}
+              </li>
             ))}
-          </div>
+          </ul>
         </div>
       </div>
     </section>
