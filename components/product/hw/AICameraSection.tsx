@@ -4,12 +4,12 @@ import { motion } from "framer-motion";
 import { Crosshair, ZoomIn, PenLine, Users } from "lucide-react";
 
 const capabilities = [
-  { icon: Crosshair, label: "자동 강사 추적" },
-  { icon: ZoomIn, label: "자동 줌·팬" },
-  { icon: PenLine, label: "판서 자동 캡처" },
-  { icon: Users, label: "학생 멀티 앵글" },
-  { icon: Crosshair, label: "수업 영상 자동 생성" },
-  { icon: ZoomIn, label: "복습 영상 즉시 배포" },
+  { icon: Crosshair, label: "교사 자동 추적" },
+  { icon: ZoomIn, label: "자동 줌·프레이밍" },
+  { icon: PenLine, label: "판서 중심 화면" },
+  { icon: Users, label: "교실·원격 동시 대응" },
+  { icon: Crosshair, label: "수업 영상 자동 저장" },
+  { icon: ZoomIn, label: "복습 링크 빠른 공유" },
 ];
 
 // Student dot positions (scattered in lower portion of classroom)
@@ -51,15 +51,14 @@ export default function AICameraSection() {
             className="text-4xl md:text-5xl lg:text-[3.5rem] mt-4 leading-tight"
             style={{ letterSpacing: "-1.5px" }}
           >
-            촬영 감독 없이 만드는 인강 뷰,
+            설명은 지나가도,
             <br />
-            종료와 동시에 자동 업로드되는 스마트 강의 시스템
+            수업은 남습니다.
           </h2>
 
           <p className="text-lg text-white/70 mt-6 leading-relaxed">
-            4K AI 카메라가 교사를 자동 추적하며 수업 전체를 녹화합니다.
-            수업 종료와 동시에 편집 없이 영상이 자동 생성·업로드됩니다.
-            별도 캠코더도, 전담 인력이 필요 없는 자동화 수업 시스템입니다.
+            보드 상단 4K AI 카메라가 교사를 자동으로 추적해 수업 전체를 기록합니다.
+            별도 장비나 보조 인력 없이도, 복습 가능한 수업이 자연스럽게 완성됩니다.
           </p>
 
           <ul className="mt-8 grid grid-cols-2 gap-3 sm:grid-cols-3">

@@ -193,9 +193,9 @@ export default function LatencyProof() {
             className="text-4xl md:text-5xl lg:text-[3.4rem] text-[#111110] mt-4 leading-tight"
             style={{ letterSpacing: "-1.5px" }}
           >
-            쓰는 순간 그려지는 압도적인
+            설명의 흐름을
             <br />
-            반응 속도 0.03초
+            끊지 않습니다.
           </motion.h2>
 
           {/* Body */}
@@ -206,8 +206,8 @@ export default function LatencyProof() {
             transition={{ duration: 0.6, ease: easing, delay: 0.24 }}
             className="text-lg text-[#615D59] mt-5 leading-relaxed"
           >
-            따라오는 느낌이 아니라, 함께 움직이는 감각. 미세한 딜레이조차
-            느껴지지 않아 선생님의 판서 속도를 그대로 담아냅니다.
+            반응이 느리면 설명은 한 번씩 끊깁니다. ClassIn Board는 손동작과 화면 반응 사이의 지연을 낮춰,
+            쓰는 사람과 보는 사람 모두 수업 흐름에 더 오래 집중할 수 있게 합니다.
           </motion.p>
 
           <motion.div

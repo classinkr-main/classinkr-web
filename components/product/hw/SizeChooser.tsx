@@ -6,23 +6,23 @@ import { motion, type Variants } from "framer-motion"
 const sizes = [
   {
     inches: `75"`,
-    heading: `75" — 콤팩트 강의실`,
+    heading: `75" — 집중형 교실`,
     specs: [
       { label: "적정 인원", value: "20~30명" },
       { label: "적정 평수", value: "15~25평" },
       { label: "시야 거리", value: "2.5~5m" },
-      { label: "적합 용도", value: "소그룹·1:1" },
+      { label: "적합 용도", value: "소그룹 수업·1:1" },
     ],
     badge: null,
   },
   {
     inches: `86"`,
-    heading: `86" — 표준 강의실`,
+    heading: `86" — 표준 교실`,
     specs: [
       { label: "적정 인원", value: "30~50명" },
       { label: "적정 평수", value: "25~40평" },
       { label: "시야 거리", value: "3~7m" },
-      { label: "적합 용도", value: "일반 강의·라이브" },
+      { label: "적합 용도", value: "일반 수업·라이브 강의" },
     ],
     badge: "MOST POPULAR",
   },
@@ -49,12 +49,13 @@ export default function SizeChooser() {
           className="text-4xl md:text-5xl text-[#111110] mt-4 leading-tight"
           style={{ letterSpacing: "-1.5px" }}
         >
-          우리 강의실에 딱 맞는 완벽한 크기
+          공간에 맞는 선택이,
+          <br />
+          운영의 완성도를 높입니다.
         </h2>
         <p className="text-lg text-[#615D59] mt-5 max-w-2xl">
-          강의실의 규모와 학생들의 시야를 고려한 두 가지 표준 규격을
-          제안합니다. 소규모 강의실부터 대형 강의실까지, 공간의 제약 없이
-          압도적인 몰입감을 전달하세요.
+          가장 많이 선택되는 75인치와 86인치를 기준으로,
+          교실 규모에 맞는 표준 구성을 안내합니다.
         </p>
 
         {/* Cards */}
@@ -110,7 +111,7 @@ export default function SizeChooser() {
 
                 {/* CTA */}
                 <button className="mt-8 w-full bg-[#084734] hover:bg-[#065c41] text-white rounded-md py-3 text-sm font-semibold transition">
-                  이 사이즈로 데모 신청 →
+                  이 구성 상담받기
                 </button>
               </div>
             </motion.div>
@@ -119,14 +120,14 @@ export default function SizeChooser() {
 
         {/* 110" footnote */}
         <p className="mt-12 text-center text-sm text-[#615D59]">
-          더 큰 공간(50명+, 강당·콘퍼런스)을 위한 110&quot; 모델은{" "}
+          50명 이상 대형 공간이나 강당용 110&quot; 모델은{" "}
           <Link
             href="/contact"
             className="text-[#084734] underline underline-offset-2"
           >
-            별도 문의
+            별도 상담
           </Link>
-          로 안내드립니다.
+          으로 제안해드립니다.
         </p>
       </div>
     </section>

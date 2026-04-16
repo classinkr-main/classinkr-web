@@ -19,20 +19,20 @@ const CARDS = [
   {
     image: "/images/product/hw/display/display-coating.png",
     alt: "ClassIn Board anti-glare coating detail",
-    heading: "빛이 강해도 글씨가 묻히지 않습니다.",
-    body: "AG(Anti-Glare) 코팅과 저반사 설계로 창가 자리와 뒷자리에서도 판서가 선명하게 보입니다.",
+    heading: "밝은 교실에서도 선명합니다.",
+    body: "AG 코팅과 높은 빛 투과율로 반사와 눈부심을 줄여, 앞자리와 뒷자리 모두 같은 화면을 볼 수 있습니다.",
   },
   {
     image: "/images/product/hw/board/board-bezel-detail.png",
     alt: "ClassIn Board anti-fingerprint surface detail",
-    heading: "손이 닿아도 금방 지저분해지지 않습니다.",
-    body: "AF(Anti-Fingerprint) 마감으로 많은 학생이 만져도 흔적이 덜 남고, 수업 사이 청소 부담도 줄어듭니다.",
+    heading: "자주 정리하지 않아도 깔끔합니다.",
+    body: "AF 마감으로 지문과 얼룩이 덜 남아 수업 사이 정리 시간이 줄어듭니다.",
   },
   {
     image: "/images/product/hw/board/board-bezel-curve.png",
     alt: "ClassIn Board slim bezel detail",
-    heading: "몰입을 방해하지 않는 베젤입니다.",
-    body: "슬림 베젤과 정돈된 프레임 비율로 시선이 화면에 더 오래 머물고, 보드 자체가 덜 거슬립니다.",
+    heading: "시선이 화면에 오래 머뭅니다.",
+    body: "슬림 베젤과 무광 프레임으로 시야 분산을 줄여 수업 집중도가 높아집니다.",
   },
 ] as const;
 
@@ -61,7 +61,9 @@ export default function DesignDetails() {
           className="text-4xl md:text-5xl text-[#111110] mt-4 leading-tight"
           style={{ letterSpacing: "-1.5px" }}
         >
-          디테일이 만드는 압도적인 몰입감
+          디테일은 조용하지만
+          <br />
+          수업은 분명히 달라집니다.
         </motion.h2>
 
         <motion.p
@@ -71,7 +73,8 @@ export default function DesignDetails() {
           transition={transition(0.2)}
           className="text-lg text-[#615D59] mt-5 max-w-2xl"
         >
-          보드는 스펙보다 손과 눈이 먼저 반응합니다. 매일 쓰는 화면일수록 표면, 반사, 베젤의 차이가 크게 느껴집니다.
+          반사, 얼룩, 시선 분산.
+          작아 보이는 차이를 줄이는 것이 좋은 교실의 완성도를 만듭니다.
         </motion.p>
 
         <div className="mt-16 grid sm:grid-cols-2 md:grid-cols-3 gap-8">
