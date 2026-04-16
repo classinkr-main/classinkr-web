@@ -10,7 +10,6 @@ import { Menu, X, Monitor, Cpu } from "lucide-react"
 
 const navItems = [
     { name: "제품 소개", href: "/product" },
-    { name: "요금제", href: "/pricing" },
     { name: "블로그", href: "/blog" },
     { name: "행사", href: "/events" },
     { name: "회사 소개", href: "/about" },
@@ -45,7 +44,7 @@ export function Header() {
             className={cn(
                 "fixed top-0 left-0 right-0 z-50 transition-all duration-300",
                 isScrolled
-                    ? "bg-white/92 backdrop-blur-md border-b border-black/[0.06] shadow-[0_1px_0_rgba(0,0,0,0.04)] py-4"
+                    ? "bg-white/65 backdrop-blur-xl backdrop-saturate-150 border-b border-white/40 shadow-[inset_0_1px_0_rgba(255,255,255,0.55),0_1px_0_rgba(0,0,0,0.04)] py-4"
                     : "bg-white/60 backdrop-blur-sm py-6"
             )}
         >

@@ -66,21 +66,21 @@ function ComparisonSection() {
     const items = [
         {
             title: "기존 칠판",
-            problems: ["분필 먼지와 소모 관리", "지우면 기록이 사라짐", "공유·저장 불가"],
+            problems: ["분필 날림, 건강 우려", "지우면 영원히 사라짐", "공유 불가능"],
             bg: "bg-slate-100",
             border: "border-slate-200",
             iconColor: "text-slate-400",
         },
         {
             title: "일반 전자칠판",
-            problems: ["필기감과 반응의 이질감", "운영용 소프트웨어 별도 구성", "화면 출력 중심의 장비"],
+            problems: ["필기감 부자연스러움", "소프트웨어 별도 구매", "단순 화면 출력 장치"],
             bg: "bg-slate-50",
             border: "border-slate-200",
             iconColor: "text-slate-400",
         },
         {
             title: "ClassIn Board",
-            problems: ["자연스러운 판서와 기록의 동시성", "소프트웨어까지 이어지는 통합 경험", "교실 안팎을 잇는 수업 흐름"],
+            problems: ["아날로그의 손맛, 디지털의 기록", "올인원 통합 수업 도구", "시공간을 넘어 어디서든 연결되는 강의"],
             bg: "bg-[#F0FFF4]",
             border: "border-[#22A366]/20",
             iconColor: "text-[#22A366]",
@@ -94,9 +94,9 @@ function ComparisonSection() {
                 <motion.div className="text-center mb-16" {...fadeUp}>
                     <p className="text-sm font-semibold text-[#22A366] tracking-wider uppercase mb-3">WHY CLASSIN BOARD</p>
                     <h2 className="text-3xl md:text-4xl lg:text-5xl text-[#1a1a19] leading-tight">
-                        비슷해 보여도,
+                        도구의 차이가
                         <br className="hidden sm:block" />
-                        <span className="text-[#22A366]">교실의 완성도</span>는 다릅니다
+                        강의의 차이를 만듭니다.
                     </h2>
                 </motion.div>
 
@@ -464,32 +464,32 @@ const timelineSteps = [
     {
         time: "08:55",
         icon: <Fingerprint className="w-4 h-4" />,
-        title: "NFC 원터치 로그인",
-        desc: "카드 태그 한 번으로 내 수업 환경이 바로 열립니다. 비밀번호 입력과 별도 설정이 줄어듭니다.",
+        title: "[준비] 스마트한 수업 준비",
+        desc: "HDMI 케이블도, 복잡한 연결 기기도 필요 없습니다. 로그인으로 클라우드에 수업 자료와 환경이 싱크되어, 어디서나 나만의 완벽한 수업 환경으로 바뀝니다.",
     },
     {
         time: "09:00",
         icon: <PenTool className="w-4 h-4" />,
-        title: "판서 시작, 수업 기록도 동시에",
-        desc: "쓰는 즉시 학생 기기에 반영되고 AI 카메라는 교사를 추적하며 수업 기록을 시작합니다.",
+        title: "[진행] 판서 + AI 카메라 자동 녹화",
+        desc: "칠판에 쓰는 순간 학생 기기에 실시간 반영. 동시에 AI 카메라가 교사를 추적하며 퀄리티 있는 수업과 영상 녹화를 진행합니다.",
     },
     {
         time: "09:15",
         icon: <Users className="w-4 h-4" />,
-        title: "학생 협업 판서",
-        desc: "여러 학생이 동시에 칠판에 참여해 설명형 수업이 참여형 수업으로 바뀝니다.",
+        title: "[참여] 멀티 유저 판서",
+        desc: "온/오프라인 어디서나 실시간 참여가능. 그룹 활동이 별도 도구 없이 칠판 하나로 해결됩니다.",
     },
     {
         time: "09:40",
         icon: <Share2 className="w-4 h-4" />,
-        title: "끝나면 자료가 자동으로 정리",
-        desc: "판서는 PDF로, 수업은 영상으로 저장돼 따로 정리하고 업로드할 일이 줄어듭니다.",
+        title: "[종료] 판서 PDF + 수업 영상 동시 업로드",
+        desc: "수업이 종료되면 판서내용과 수업 영상이 동시에 업로드됩니다. 학생들은 필기 걱정 없이 수업에 온전히 집중할 수 있게됩니다.",
     },
     {
         time: "방과후",
         icon: <Monitor className="w-4 h-4" />,
-        title: "수업 영상 + 판서 노트로 복습",
-        desc: "학생은 영상과 판서를 함께 보며 교실에서 들은 흐름 그대로 복습할 수 있습니다.",
+        title: "[복습] 수업 영상 + 판서 노트로 복습",
+        desc: "바로 업로드된 강의와 판서 노트를 보며 복습합니다. 결석생도 소외되지 않는 자동화 수업 시스템을 경험해보세요.",
     },
 ]
 

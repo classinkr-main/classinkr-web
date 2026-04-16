@@ -19,20 +19,20 @@ const CARDS = [
   {
     image: "/images/product/hw/display/display-coating.png",
     alt: "ClassIn Board anti-glare coating detail",
-    heading: "밝은 교실에서도 선명합니다.",
-    body: "AG 코팅과 높은 빛 투과율로 반사와 눈부심을 줄여, 앞자리와 뒷자리 모두 같은 화면을 볼 수 있습니다.",
+    heading: "맨 뒷자리까지 닿는 선명함, AG 코팅 + 90% 투과율",
+    body: "빛 반사로 인한 사각지대를 완벽히 잡았습니다. 창가 자리든 뒷자리든, 교실 어느 자리에서도 왜곡 없이 선명한 판서를 공유하며 수업의 몰입도를 극대화합니다.",
   },
   {
     image: "/images/product/hw/board/board-bezel-detail.png",
     alt: "ClassIn Board anti-fingerprint surface detail",
-    heading: "자주 정리하지 않아도 깔끔합니다.",
-    body: "AF 마감으로 지문과 얼룩이 덜 남아 수업 사이 정리 시간이 줄어듭니다.",
+    heading: "실제 종이에 쓰듯 자연스러운 '리얼 라이팅'",
+    body: "손끝을 그대로 따라오는 0.03초의 압도적인 응답 속도는 딜레이 없는 완벽한 수업 리듬을 만듭니다. 고밀도 터치 센서가 필기 압력과 굵기를 세밀하게 감지하여, 분필이나 펜으로 쓰는 듯한 느낌을 구현합니다.",
   },
   {
     image: "/images/product/hw/board/board-bezel-curve.png",
     alt: "ClassIn Board slim bezel detail",
-    heading: "시선이 화면에 오래 머뭅니다.",
-    body: "슬림 베젤과 무광 프레임으로 시야 분산을 줄여 수업 집중도가 높아집니다.",
+    heading: "왜곡 없이 선명한 '풀 라미네이션' 디스플레이",
+    body: "패널과 강화유리 사이의 공기층을 완전히 제거한 광학 본딩 기술을 적용했습니다. 어느 자리에서 봐도 왜곡 없이 선명한 화면을 유지하며, 시차 없는 정확한 터치와 블루라이트 차단으로 장시간 수업에도 눈의 피로를 최소화합니다.",
   },
 ] as const;
 
@@ -61,9 +61,7 @@ export default function DesignDetails() {
           className="text-4xl md:text-5xl text-[#111110] mt-4 leading-tight"
           style={{ letterSpacing: "-1.5px" }}
         >
-          디테일은 조용하지만
-          <br />
-          수업은 분명히 달라집니다.
+          디테일이 만드는 압도적인 몰입감
         </motion.h2>
 
         <motion.p
@@ -73,8 +71,7 @@ export default function DesignDetails() {
           transition={transition(0.2)}
           className="text-lg text-[#615D59] mt-5 max-w-2xl"
         >
-          반사, 얼룩, 시선 분산.
-          작아 보이는 차이를 줄이는 것이 좋은 교실의 완성도를 만듭니다.
+          보드의 강함은 스펙시트가 아니라, 손에 닿는 표면에 있습니다.
         </motion.p>
 
         <div className="mt-16 grid sm:grid-cols-2 md:grid-cols-3 gap-8">
