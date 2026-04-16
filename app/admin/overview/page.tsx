@@ -611,7 +611,7 @@ export default function OverviewPage() {
       tone: missingConnections.length > 0 ? ("warning" as const) : ("success" as const),
     },
   ]
-  const operationalAlerts = [
+  const operationalAlertItems: Array<OverviewOperationalAlert | null> = [
     newLeads > 0
       ? {
           id: "lead-followup",
@@ -717,7 +717,8 @@ export default function OverviewPage() {
         }
       : null,
   ]
-    .filter((item): item is OverviewOperationalAlert => Boolean(item))
+  const operationalAlerts = operationalAlertItems
+    .filter((item): item is OverviewOperationalAlert => item !== null)
     .sort((a, b) => b.priority - a.priority)
     .slice(0, 6)
   const actionableOperationalAlertCount = operationalAlerts.filter(
