@@ -1324,18 +1324,16 @@ export default function AdminMarketingPage() {
                   </MiniBadge>
                 }
               >
-                <div className="space-y-2">
+                <div className="space-y-1">
                   {composerReview.checks.map((check) => (
-                    <div key={check.key} className={`rounded-2xl border p-4 ${checkToneClass(check.status)}`}>
-                      <div className="flex items-start justify-between gap-3">
-                        <div className="min-w-0 flex-1">
-                          <p className="text-[12px] font-semibold">{check.label}</p>
-                          <p className="mt-1 text-[12px] leading-relaxed opacity-80">{check.detail}</p>
-                        </div>
-                        <span className="shrink-0 rounded-full border border-current/15 px-2.5 py-1 text-[10px] font-medium">
+                    <div key={check.key} className={`rounded-lg border px-3 py-2 ${checkToneClass(check.status)}`}>
+                      <div className="flex items-center justify-between gap-2">
+                        <p className="text-[11px] font-semibold leading-tight">{check.label}</p>
+                        <span className="shrink-0 rounded-full border border-current/15 px-2 py-0.5 text-[10px] font-medium">
                           {checkLabel(check.status)}
                         </span>
                       </div>
+                      <p className="mt-0.5 text-[11px] leading-snug opacity-70">{check.detail}</p>
                     </div>
                   ))}
                 </div>

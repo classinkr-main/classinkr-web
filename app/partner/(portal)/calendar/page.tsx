@@ -5,7 +5,6 @@ import { useRouter } from "next/navigation"
 import { CalendarDays, ChevronLeft, ChevronRight, MapPinned, Plus, RefreshCw, Users, Wrench } from "lucide-react"
 
 import { MobileActionLauncher } from "@/components/partner-portal/mobile/MobileActionLauncher"
-import { PortalNav } from "@/components/partner-portal/PortalNav"
 import { Badge } from "@/components/ui/badge"
 import { Card, CardContent, CardHeader, CardTitle } from "@/components/ui/card"
 import { ScheduleDialog } from "@/components/partner-portal/crud/ScheduleDialog"
@@ -75,6 +74,38 @@ function sourceTone(source: CalendarSourceType) {
       document_due: "bg-[#f0f0ec] text-[#615D59] border-[#e8e8e4]",
       internal: "bg-[#f0f0ec] text-[#615D59] border-[#e8e8e4]",
     }[source] ?? "bg-white text-[#1a1a1a]/60 border-[#e8e8e4]"
+  )
+}
+
+function dealStageLabel(stage: CalendarEvent["deal_stage"]) {
+  if (!stage) return null
+  return (
+    {
+      contact: "컨택",
+      quote: "견적",
+      contract: "계약",
+      confirmed: "확정",
+      installation: "설치",
+      payment: "수납",
+      closed: "완료",
+      cancelled: "취소",
+    }[stage] ?? null
+  )
+}
+
+function dealStageTone(stage: CalendarEvent["deal_stage"]) {
+  if (!stage) return "bg-[#f7f7f5] text-[#615D59]"
+  return (
+    {
+      contact: "bg-[#f0f0ec] text-[#615D59]",
+      quote: "bg-[#ECFDF5] text-[#084734]",
+      contract: "bg-[#D1FAE5] text-[#065c41]",
+      confirmed: "bg-[#D1FAE5] text-[#065c41]",
+      installation: "bg-amber-50 text-amber-700",
+      payment: "bg-[#ECFDF5] text-[#084734]",
+      closed: "bg-[#f0f0ec] text-[#A39E98]",
+      cancelled: "bg-[#FEF3EE] text-[#B85C33]",
+    }[stage] ?? "bg-[#f7f7f5] text-[#615D59]"
   )
 }
 
@@ -317,6 +348,23 @@ export default function PartnerCalendarPage() {
                     </div>
                     <p className="mt-3 text-sm font-semibold">{event.title}</p>
                     <p className="mt-1 text-sm text-[#1a1a1a]/55">{event.description ?? "세부 메모가 아직 없습니다."}</p>
+                    <div className="mt-3 flex flex-wrap gap-2 text-xs">
+                      {event.customer_name && (
+                        <span className="rounded-full border border-[#e8e8e4] bg-white px-2 py-1 text-[#1a1a1a]/60">
+                          고객 {event.customer_name}
+                        </span>
+                      )}
+                      {event.deal_title && (
+                        <span className="rounded-full border border-[#e8e8e4] bg-white px-2 py-1 text-[#1a1a1a]/60">
+                          거래 {event.deal_title}
+                        </span>
+                      )}
+                      {event.deal_stage && dealStageLabel(event.deal_stage) && (
+                        <span className={`rounded-full px-2 py-1 font-medium ${dealStageTone(event.deal_stage)}`}>
+                          {dealStageLabel(event.deal_stage)}
+                        </span>
+                      )}
+                    </div>
                     <div className="mt-3 flex items-center gap-2 text-xs text-[#1a1a1a]/45"><MapPinned className="h-3.5 w-3.5" />{event.timezone}</div>
                   </button>
                 ))}
@@ -357,10 +405,28 @@ export default function PartnerCalendarPage() {
                         </div>
                         <p className="mt-3 text-base font-semibold">{event.title}</p>
                         <p className="mt-1 text-sm text-[#1a1a1a]/55">{event.description ?? "세부 메모가 아직 없습니다."}</p>
+                        <div className="mt-3 flex flex-wrap gap-2 text-xs">
+                          {event.customer_name && (
+                            <span className="rounded-full border border-[#e8e8e4] bg-white px-2 py-1 text-[#1a1a1a]/60">
+                              고객 {event.customer_name}
+                            </span>
+                          )}
+                          {event.deal_title && (
+                            <span className="rounded-full border border-[#e8e8e4] bg-white px-2 py-1 text-[#1a1a1a]/60">
+                              거래 {event.deal_title}
+                            </span>
+                          )}
+                          {event.deal_stage && dealStageLabel(event.deal_stage) && (
+                            <span className={`rounded-full px-2 py-1 font-medium ${dealStageTone(event.deal_stage)}`}>
+                              {dealStageLabel(event.deal_stage)}
+                            </span>
+                          )}
+                        </div>
                       </div>
                       <div className="min-w-[180px] rounded-xl border border-[#ecece8] bg-white px-3 py-3 text-sm text-[#1a1a1a]/60">
                         <div className="flex items-center gap-2"><MapPinned className="h-4 w-4 text-[#1a1a1a]/30" />{event.timezone}</div>
-                        <p className="mt-2 text-xs text-[#1a1a1a]/45">거래 ID: {event.deal_id ?? "-"}</p>
+                        <p className="mt-2 text-xs text-[#1a1a1a]/45">고객: {event.customer_name ?? "-"}</p>
+                        <p className="mt-1 text-xs text-[#1a1a1a]/45">거래: {event.deal_title ?? event.deal_id ?? "-"}</p>
                       </div>
                     </div>
                   </div>
