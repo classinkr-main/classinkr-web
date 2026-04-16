@@ -46,7 +46,7 @@ export default function LatencyProof() {
 
             {/* Floating badge */}
             <div className="absolute top-5 right-5 z-10 bg-white/10 backdrop-blur rounded-full px-4 py-2 text-white text-xs font-medium">
-              30ms response
+              0.03s response
             </div>
 
             {/* SVG drawing animation */}
@@ -190,12 +190,12 @@ export default function LatencyProof() {
             initial="hidden"
             animate={copyInView ? "visible" : "hidden"}
             transition={{ duration: 0.6, ease: easing, delay: 0.12 }}
-            className="text-4xl md:text-5xl text-[#111110] mt-4 leading-tight"
+            className="text-4xl md:text-5xl lg:text-[3.4rem] text-[#111110] mt-4 leading-tight"
             style={{ letterSpacing: "-1.5px" }}
           >
-            분필보다 빠릅니다.
+            쓰는 순간 그려지는 압도적인
             <br />
-            0.03초.
+            반응 속도 0.03초
           </motion.h2>
 
           {/* Body */}
@@ -206,17 +206,31 @@ export default function LatencyProof() {
             transition={{ duration: 0.6, ease: easing, delay: 0.24 }}
             className="text-lg text-[#615D59] mt-5 leading-relaxed"
           >
-            사람의 시신경이 손동작과 결과를 분리해 느끼기 시작하는 한계는 약
-            0.1초. ClassIn Board는 그 1/3입니다. 글씨를 쓰는 손이 디지털을
-            의식하지 않습니다.
+            따라오는 느낌이 아니라, 함께 움직이는 감각. 미세한 딜레이조차
+            느껴지지 않아 선생님의 판서 속도를 그대로 담아냅니다.
           </motion.p>
+
+          <motion.div
+            variants={fadeUp}
+            initial="hidden"
+            animate={copyInView ? "visible" : "hidden"}
+            transition={{ duration: 0.6, ease: easing, delay: 0.38 }}
+            className="mt-8 rounded-2xl border border-black/[0.08] bg-white/70 px-5 py-4"
+          >
+            <p className="text-sm text-[#615D59]">
+              육안으로 지연을 느낄 수 없는 한계점 0.1초.
+            </p>
+            <p className="mt-2 text-base font-bold text-[#084734]">
+              클래스인 보드는 그 한계를 넘어선 0.03초
+            </p>
+          </motion.div>
 
           {/* Comparison table */}
           <motion.div
             variants={fadeUp}
             initial="hidden"
             animate={copyInView ? "visible" : "hidden"}
-            transition={{ duration: 0.6, ease: easing, delay: 0.38 }}
+            transition={{ duration: 0.6, ease: easing, delay: 0.5 }}
             className="mt-8"
           >
             {COMPARISON_ROWS.map((row, i) => (

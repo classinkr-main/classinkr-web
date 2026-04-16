@@ -49,10 +49,12 @@ export default function SizeChooser() {
           className="text-4xl md:text-5xl text-[#111110] mt-4 leading-tight"
           style={{ letterSpacing: "-1.5px" }}
         >
-          교실의 크기에 맞는 한 대.
+          우리 강의실에 딱 맞는 완벽한 크기
         </h2>
         <p className="text-lg text-[#615D59] mt-5 max-w-2xl">
-          두 가지 표준 사이즈로, 대부분의 학원 강의실을 커버합니다.
+          강의실의 규모와 학생들의 시야를 고려한 두 가지 표준 규격을
+          제안합니다. 소규모 강의실부터 대형 강의실까지, 공간의 제약 없이
+          압도적인 몰입감을 전달하세요.
         </p>
 
         {/* Cards */}

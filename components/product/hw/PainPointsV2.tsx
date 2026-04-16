@@ -7,27 +7,27 @@ const items = [
   {
     pain: "PC, HDMI, 캠코더, 마이크 케이블이 책상 위에 산처럼 쌓였습니다.",
     solutionTitle: "OPS 내장 PC",
-    solutionDesc: "보드 안에 i5/i7 PC가 있습니다. 케이블도, 본체도 없습니다.",
+    solutionDesc: "보드 안에 i5/i7 PC가 내장되어 있어 케이블과 본체가 필요 없습니다.",
   },
   {
-    pain: "강의 영상에 강사가 자꾸 프레임 밖으로 나가서, 보조 인력이 캠을 따라다녀야 합니다.",
+    pain: "강의 영상 촬영 시 강사가 프레임 밖으로 나가서 보조 인력이 캠을 따라다녀야 합니다.",
     solutionTitle: "4K AI 트래킹 카메라",
-    solutionDesc: "강사를 자동 인식하고 따라옵니다. 운영자 한 명 줄어듭니다.",
+    solutionDesc: "강사를 자동 인식하고 추적하여 운영 인력 부담을 줄여줍니다.",
   },
   {
-    pain: "전자 펜은 한 박자 늦어요. 결국 다시 분필로 돌아갑니다.",
+    pain: "전자 펜의 반응이 한 박자 늦어 결국 다시 분필로 돌아갑니다.",
     solutionTitle: "0.03s 응답 패널",
-    solutionDesc: "사람이 지연을 느끼는 한계의 1/3. 분필보다 빠릅니다.",
+    solutionDesc: "사람이 지연을 느끼는 한계의 1/3 수준으로, 분필보다 빠른 반응 속도를 제공합니다.",
   },
   {
     pain: "뒷자리 학생은 형광등 반사 때문에 칠판이 안 보인다고 합니다.",
     solutionTitle: "AG 코팅 + 90% 투과율",
-    solutionDesc: "어느 자리에서도 같은 글씨를 봅니다.",
+    solutionDesc: "어느 각도에서나 선명하게 글씨를 볼 수 있습니다.",
   },
   {
     pain: "지문이 묻으면 매시간 닦아야 해서 수업 흐름이 끊깁니다.",
     solutionTitle: "AF 마감",
-    solutionDesc: "닦지 않아도 깨끗합니다. 50명이 만져도 흔적이 남지 않습니다.",
+    solutionDesc: "닦지 않아도 깨끗하며, 50명이 만져도 흔적이 남지 않습니다.",
   },
 ];
 
@@ -62,11 +62,10 @@ export default function PainPointsV2() {
             className="text-4xl md:text-5xl text-[#111110] mt-4 leading-tight"
             style={{ letterSpacing: "-1.5px" }}
           >
-            선생님의 고민, 보드 한 대로 끝납니다.
+            반복되는 수업의 번거로움에서 해방되세요.
           </h2>
           <p className="text-lg text-[#615D59] mt-5 max-w-2xl">
-            교실에서 매일 마주치는 5가지 마찰. ClassIn Board는 그 모두를 부품
-            단위로 해결합니다.
+            매일 마주하는 5가지 불편함, ClassIn과 함께 사라집니다.
           </p>
         </div>
 

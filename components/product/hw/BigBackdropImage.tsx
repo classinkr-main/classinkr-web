@@ -93,7 +93,7 @@ export default function BigBackdropImage() {
         >
           베젤은 얇아지고,
           <br />
-          손은 자유로워집니다.
+          몰입은 깊어집니다.
         </motion.h2>
 
         {/* 본문 */}
@@ -104,7 +104,7 @@ export default function BigBackdropImage() {
           viewport={{ once: true, margin: "-80px" }}
           className="text-base md:text-lg text-white/80 mt-5 max-w-xl"
         >
-          8mm 슬림 베젤, 매트 알루미늄 마감. 강의실 어느 각도에서 봐도 화면만 보입니다.
+          8mm 슬림 베젤과 매트 알루미늄 마감으로 오직 수업에만 집중할 수 있도록 만들었습니다.
         </motion.p>
       </div>
     </section>
