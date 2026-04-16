@@ -4,17 +4,18 @@ import { useState } from "react"
 import { usePathname } from "next/navigation"
 import { MessageCircle, X } from "lucide-react"
 import { motion, AnimatePresence } from "framer-motion"
+import { isPartnerPortalPath } from "@/lib/partner-portal/pathname"
 
 export function FloatingChatbot() {
     const pathname = usePathname()
     const [isOpen, setIsOpen] = useState(false)
 
-    if (pathname.startsWith("/admin")) {
+    if (pathname.startsWith("/admin") || isPartnerPortalPath(pathname)) {
         return null
     }
 
     return (
-        <div className="fixed bottom-6 right-6 z-50 flex flex-col items-end">
+        <div className="fixed right-4 z-50 hidden items-end md:flex md:right-6 md:bottom-6">
             <AnimatePresence>
                 {isOpen && (
                     <motion.div
@@ -22,7 +23,7 @@ export function FloatingChatbot() {
                         animate={{ opacity: 1, y: 0, scale: 1 }}
                         exit={{ opacity: 0, y: 20, scale: 0.95 }}
                         transition={{ duration: 0.2 }}
-                        className="mb-4 w-[350px] sm:w-[380px] h-[500px] bg-white rounded-2xl border border-black/[0.08] shadow-[rgba(0,0,0,0.08)_0px_20px_60px,rgba(0,0,0,0.04)_0px_8px_20px] flex flex-col overflow-hidden"
+                        className="mb-4 flex h-[500px] w-[calc(100vw-1.5rem)] max-w-[350px] flex-col overflow-hidden rounded-2xl border border-black/[0.08] bg-white shadow-[rgba(0,0,0,0.08)_0px_20px_60px,rgba(0,0,0,0.04)_0px_8px_20px] lg:max-w-[380px]"
                     >
                         {/* Chat Header */}
                         <div className="bg-[#084734] p-5 flex items-center justify-between text-white">

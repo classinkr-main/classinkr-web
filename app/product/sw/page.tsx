@@ -213,7 +213,7 @@ function FinalCTASection() {
     const displayDigits = useMemo(() => (1560000 + liveCount).toString().split(""), [liveCount])
 
     return (
-        <section ref={sectionRef} className="relative py-32 md:py-44 overflow-hidden" style={{ minHeight: "100vh" }}>
+        <section ref={sectionRef} className="relative py-32 md:py-44 overflow-hidden" style={{ minHeight: "100svh" }}>
             <div className="absolute inset-0 bg-gradient-to-b from-[#FFF9F5] via-[#FFFAF7] to-[#FDFCF8]"></div>
             <motion.div className="absolute inset-0 pointer-events-none" style={{ opacity: glowOpacity }}>
                 <motion.div className="absolute top-1/2 left-1/2 -translate-x-1/2 -translate-y-1/2 w-[900px] h-[700px] bg-gradient-radial from-orange-200/30 via-orange-100/10 to-transparent rounded-full blur-3xl" animate={{ x: [0, 30, -20, 0], y: [0, -20, 15, 0] }} transition={{ duration: 20, repeat: Infinity, ease: "easeInOut" }} />
@@ -1281,7 +1281,7 @@ export default function ProductPage() {
 
                 <div className="container mx-auto px-4 lg:px-8 pt-12 md:pt-24 pb-8 md:pb-16 relative">
                     <div className="max-w-4xl mx-auto text-center">
-                        <motion.div initial={{ opacity: 0, y: 30 }} animate={{ opacity: 1, y: 0 }} transition={{ duration: 0.7 }}>
+                        <div>
                             <div className="inline-flex items-center gap-2 px-4 py-1.5 rounded-full bg-[#E05024]/5 text-[#E05024] text-sm font-semibold mb-8 border border-[#E05024]/10">
                                 <span className="w-2 h-2 rounded-full bg-[#E05024] animate-pulse"></span>
                                 교육 전용 플랫폼
@@ -1324,12 +1324,12 @@ export default function ProductPage() {
                                 </Button>
                                 <Button asChild variant="outline" className="rounded-full px-8 h-14 text-base font-bold border-slate-300 text-slate-700 hover:bg-slate-50 hover:border-slate-400 transition-all hover:scale-105">
                                     <a href={BROCHURE_URL} target="_blank" rel="noopener noreferrer">
-                                    <Play className="w-4 h-4 mr-2" />
-                                    서비스 소개서 보기
+                                        <Play className="w-4 h-4 mr-2" />
+                                        서비스 소개서 보기
                                     </a>
                                 </Button>
                             </div>
-                        </motion.div>
+                        </div>
                     </div>
                 </div>
 

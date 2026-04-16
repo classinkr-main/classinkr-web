@@ -55,20 +55,12 @@ export async function listQuotes(partnerId?: string): Promise<Quote[]> {
 
 export async function getQuote(id: string): Promise<QuoteWithItems | null> {
   const supabase = createSupabaseAdminClient();
-  const { data: quote, error: qErr } = await supabase
-    .from("quotes")
-    .select("*")
-    .eq("id", id)
-    .single();
+  const [{ data: quote, error: qErr }, { data: items }] = await Promise.all([
+    supabase.from("quotes").select("*").eq("id", id).single(),
+    supabase.from("quote_items").select("*").eq("quote_id", id).order("sort_order"),
+  ]);
   if (qErr) return null;
-
-  const { data: items } = await supabase
-    .from("quote_items")
-    .select("*")
-    .eq("quote_id", id)
-    .order("sort_order");
-
-  return { ...quote, items: items ?? [] };
+  return { ...quote!, items: items ?? [] };
 }
 export async function createQuote(
   input: QuoteInsert,

@@ -1,6 +1,11 @@
 "use client"
 
+import DOMPurify from "isomorphic-dompurify"
 import { useEffect, useMemo, useState, type ReactNode } from "react"
+
+function sanitizeHtml(html: string): string {
+  return DOMPurify.sanitize(html, { USE_PROFILES: { html: true } })
+}
 import { useParams } from "next/navigation"
 import {
   AlertCircle,
@@ -804,7 +809,7 @@ export default function QuotePreviewPage() {
             ) : hasHtmlBody ? (
               <div
                 className="prose prose-sm max-w-none rounded-2xl border border-[#e8e8e4] px-6 py-5 text-[#1a1a1a]"
-                dangerouslySetInnerHTML={{ __html: quote.version.content_html ?? "" }}
+                dangerouslySetInnerHTML={{ __html: sanitizeHtml(quote.version.content_html ?? "") }}
               />
             ) : (
               <div className="rounded-2xl border border-dashed border-[#e8e8e4] px-6 py-10 text-center text-sm text-[#1a1a1a]/45">
