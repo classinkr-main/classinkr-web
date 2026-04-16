@@ -108,16 +108,14 @@ export default function AllInOneStatement() {
             className="text-4xl md:text-5xl lg:text-[3.5rem] leading-tight font-bold"
             style={{ letterSpacing: "-1.5px" }}
           >
-            압도적 사양의 고성능 PC 내장
+            끊김 없는 수업을 위한
             <br />
-            끊김 없는 수업을 위한 최고의 퍼포먼스
+            최고의 퍼포먼스
           </h2>
 
           {/* Body */}
           <p className="text-lg text-white/70 leading-relaxed mt-6">
-            전자칠판에 표준 규격의 인텔 i5 PC가 내장되어 있습니다.
-            별도의 본체나 HDMI 케이블, 전원 어댑터를 연결할 필요가 없습니다.
-            오직 전원 케이블 하나면 수업이 가능합니다.
+            압도적 사양의 고성능 PC 내장
           </p>
 
           <ul className="mt-8 grid gap-3 sm:grid-cols-2">
