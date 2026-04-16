@@ -230,7 +230,7 @@ const featureTabs = [
     },
     {
         label: "AI 카메라",
-        image: "/images/product/hw/camera/camera-hybrid-class.jpg",
+        image: "/images/product/hw/camera/camera-ai-unit-front.png",
         badge: "수업 영상 자동 생성",
         title: "수업이 끝나면, 영상도 완성됩니다",
         points: [
@@ -277,11 +277,10 @@ function FeatureTabSection() {
                         <button
                             key={i}
                             onClick={() => setActive(i)}
-                            className={`px-5 py-2.5 rounded-full text-sm font-semibold transition-all ${
-                                active === i
-                                    ? "bg-[#22A366] text-white shadow-md"
-                                    : "bg-slate-100 text-slate-600 hover:bg-slate-200"
-                            }`}
+                            className={`px-5 py-2.5 rounded-full text-sm font-semibold transition-all ${active === i
+                                ? "bg-[#22A366] text-white shadow-md"
+                                : "bg-slate-100 text-slate-600 hover:bg-slate-200"
+                                }`}
                         >
                             {t.label}
                         </button>
@@ -713,11 +712,10 @@ function SpaceScenarioSection() {
                         <button
                             key={i}
                             onClick={() => setActive(i)}
-                            className={`px-6 py-2.5 rounded-full text-sm font-bold transition-all ${
-                                active === i
-                                    ? "bg-[#22A366] text-white shadow-md"
-                                    : "bg-white border border-slate-200 text-slate-600 hover:border-slate-300"
-                            }`}
+                            className={`px-6 py-2.5 rounded-full text-sm font-bold transition-all ${active === i
+                                ? "bg-[#22A366] text-white shadow-md"
+                                : "bg-white border border-slate-200 text-slate-600 hover:border-slate-300"
+                                }`}
                         >
                             {s.model}
                             <span className={`ml-1.5 font-normal text-xs ${active === i ? "text-white/70" : "text-slate-400"}`}>{s.size}</span>
@@ -763,8 +761,8 @@ function SpaceScenarioSection() {
                         <p className="text-slate-600 leading-relaxed mb-8">{scenario.story}</p>
                         <Button asChild className="bg-[#22A366] hover:bg-[#1B8A55] text-white rounded-full px-8 h-12 text-sm font-bold shadow-md hover:shadow-lg transition-all group">
                             <Link href="/contact#contact-form">
-                            이 모델로 문의하기
-                            <ArrowRight className="w-4 h-4 ml-2 group-hover:translate-x-1 transition-transform" />
+                                이 모델로 문의하기
+                                <ArrowRight className="w-4 h-4 ml-2 group-hover:translate-x-1 transition-transform" />
                             </Link>
                         </Button>
                     </div>
@@ -846,12 +844,12 @@ export default function ProductHWPage() {
                                 className="text-[2.25rem] sm:text-5xl md:text-6xl lg:text-[4.25rem] xl:text-[5rem] font-bold leading-[1.05] mb-10 text-[#1a1a19]"
                                 style={{ letterSpacing: "-0.045em" }}
                             >
-                                하나의 수업 스튜디오가{" "}
-                                <span className="text-[#084734] whitespace-nowrap">교실에 들어섭니다.</span>
+                                하나의 스튜디오가 <br></br> {" "}
+                                <span className="text-[#084734] whitespace-nowrap">교실에 들어섭니다</span>
                             </h1>
 
                             <p className="text-lg md:text-xl lg:text-2xl text-[#615D59] leading-relaxed font-medium max-w-3xl mx-auto mb-12">
-                                보드 위에 쓰면 전원에게 공유되고, AI 카메라가 수업을 녹화하고, 끝나면 영상과 노트가 동시에 올라갑니다.
+                                판서 공유부터 녹화, 업로드까지. 클래스인 보드가 수업의 모든 과정을 스마트하게 자동화합니다.
                             </p>
                         </motion.div>
 
@@ -883,7 +881,7 @@ export default function ProductHWPage() {
                             className="mt-16 rounded-3xl overflow-hidden shadow-2xl"
                         >
                             <Image
-                                src="/images/product/hw/hero/hero-board-front.png"
+                                src="/images/product/hw/hero/hero-board-front-stand.png"
                                 alt="ClassIn Board S Series — 전자칠판 정면"
                                 width={1200}
                                 height={800}
@@ -1186,7 +1184,7 @@ export default function ProductHWPage() {
                 <motion.div {...fadeUp} className="relative">
                     <div className="rounded-3xl overflow-hidden shadow-2xl">
                         <Image
-                            src="/images/product/hw/camera/camera-hybrid-class.jpg"
+                            src="/images/product/hw/camera/camera-ai-unit-angle.png"
                             alt="하이브리드 교실 — 교실 학생과 원격 학생이 함께 수업하는 모습"
                             width={800}
                             height={600}
@@ -1374,13 +1372,13 @@ export default function ProductHWPage() {
                         <div className="flex flex-col sm:flex-row gap-4 justify-center">
                             <Button asChild className="bg-[#22A366] hover:bg-[#1B8A55] text-white rounded-full px-10 h-14 text-base font-bold shadow-[0_8px_20px_rgba(34,163,102,0.3)] hover:shadow-[0_12px_25px_rgba(34,163,102,0.4)] transition-all hover:scale-105 group">
                                 <Link href="/contact#contact-form">
-                                도입 문의하기
-                                <ArrowRight className="w-4 h-4 ml-2 group-hover:translate-x-1 transition-transform" />
+                                    도입 문의하기
+                                    <ArrowRight className="w-4 h-4 ml-2 group-hover:translate-x-1 transition-transform" />
                                 </Link>
                             </Button>
                             <Button asChild variant="outline" className="rounded-full px-10 h-14 text-base font-bold border-slate-300 hover:border-slate-400 text-slate-700 hover:bg-slate-50 transition-all">
                                 <a href={BROCHURE_URL} target="_blank" rel="noopener noreferrer">
-                                서비스 소개서 보기
+                                    서비스 소개서 보기
                                 </a>
                             </Button>
                         </div>

@@ -1,14 +1,22 @@
 "use client"
 
 import React, { useEffect, useRef, useState } from "react"
-import { Dialog, DialogContent, DialogDescription, DialogHeader, DialogTitle, DialogTrigger } from "@/components/ui/dialog"
-import { Input } from "@/components/ui/input"
-import { Label } from "@/components/ui/label"
-import { Button } from "@/components/ui/button"
-import { CheckCircle2, Loader2 } from "lucide-react"
-import { submitLead } from "@/lib/submitLead"
+import { CheckCircle2, Loader2, Sparkles } from "lucide-react"
+
 import { trackEvent } from "@/lib/analytics"
+import { submitLead } from "@/lib/submitLead"
 import { useToast } from "@/components/ui/toast"
+import { Button } from "@/components/ui/button"
+import { Dialog, DialogContent, DialogDescription, DialogHeader, DialogTitle, DialogTrigger } from "@/components/ui/dialog"
+import {
+    FormCheckbox,
+    FormHint,
+    FormLabel,
+    FormMessage,
+    marketingFieldClassName,
+    marketingSurfaceClassName,
+} from "@/components/ui/marketing-form"
+import { Input } from "@/components/ui/input"
 
 export function DemoModal({ children, trackingButton }: { children: React.ReactNode; trackingButton?: string }) {
     const [open, setOpen] = useState(false)
@@ -45,7 +53,7 @@ export function DemoModal({ children, trackingButton }: { children: React.ReactN
             resetTimerRef.current = null
         }
         if (nextOpen && trackingButton) {
-            trackEvent('click_cta', { button: trackingButton })
+            trackEvent("click_cta", { button: trackingButton })
         }
         if (!nextOpen) {
             resetTimerRef.current = setTimeout(() => {
@@ -75,14 +83,16 @@ export function DemoModal({ children, trackingButton }: { children: React.ReactN
                 phone: formData.get("phone") as string,
                 marketingConsent,
             })
-            setWarning(Array.isArray(data.warnings) && data.warnings.length > 0
-                ? "리드는 접수되었지만 일부 외부 연동은 지연되었습니다. 내부 시스템에는 정상 등록되었습니다."
-                : "")
+            setWarning(
+                Array.isArray(data.warnings) && data.warnings.length > 0
+                    ? "문의는 정상 접수되었지만 일부 연동은 지연 중입니다. 운영 검토는 계속 진행됩니다."
+                    : ""
+            )
             trackEvent("submit_demo_request", { source: "demo_modal" })
             toast.success("문의가 접수되었어요")
             setSubmitted(true)
         } catch (err) {
-            const msg = err instanceof Error ? err.message : "제출에 실패했습니다. 다시 시도해주세요."
+            const msg = err instanceof Error ? err.message : "제출에 실패했습니다. 다시 시도해 주세요."
             setError(msg)
             setShake(true)
             setTimeout(() => setShake(false), 200)
@@ -91,104 +101,107 @@ export function DemoModal({ children, trackingButton }: { children: React.ReactN
         }
     }
 
-    // dark modal 인풋 공통 클래스
-    const darkInput = `bg-white/[0.06] border-white/[0.12] text-white placeholder:text-white/40 focus-visible:border-[#6EE7B7] focus-visible:ring-[#6EE7B7]/20${shake ? " animate-shake" : ""}`
+    const fieldClassName = `${marketingFieldClassName}${shake ? " animate-shake" : ""}`
 
     return (
         <Dialog open={open} onOpenChange={handleOpenChange}>
-            <DialogTrigger asChild>
-                {children}
-            </DialogTrigger>
-            <DialogContent className="sm:max-w-[480px] bg-[#1C1B1A] border border-white/[0.08] text-white shadow-[rgba(0,0,0,0.3)_0px_20px_60px]">
+            <DialogTrigger asChild>{children}</DialogTrigger>
+            <DialogContent className="sm:max-w-[560px] overflow-hidden border-[#E4E8E2] bg-[#FBFCF9] p-0">
                 {submitted ? (
-                    <div className="flex flex-col items-center justify-center space-y-4 py-8 text-center">
-                        <div className="w-12 h-12 rounded-full bg-[#ECFDF5] flex items-center justify-center">
+                    <div className="flex flex-col items-center justify-center space-y-4 px-8 py-12 text-center">
+                        <div className="flex h-14 w-14 items-center justify-center rounded-full bg-[#ECFDF5]">
                             <CheckCircle2 className="h-7 w-7 text-[#084734]" />
                         </div>
-                        <h3 className="text-xl font-bold text-white tracking-[-0.25px]">데모 신청이 접수되었습니다!</h3>
-                        <p className="text-white/70 text-sm leading-relaxed">
-                            {warning || "15분 내로 맞춤형 도입 플랜과 함께 연락드리겠습니다."}
+                        <h3 className="text-[24px] font-bold tracking-[-0.03em] text-[#111110]">
+                            데모 신청이 접수되었습니다
+                        </h3>
+                        <p className="max-w-sm text-sm leading-6 text-[#617067]">
+                            {warning || "담당 매니저가 운영 환경에 맞는 흐름으로 빠르게 연락드릴게요."}
                         </p>
                         <Button
                             onClick={() => handleOpenChange(false)}
-                            variant="secondary"
-                            className="bg-white/10 text-white hover:bg-white/15"
+                            variant="outline"
+                            size="xl"
+                            className="rounded-[18px] px-6"
                         >
                             닫기
                         </Button>
                     </div>
                 ) : (
-                    <React.Fragment>
-                        <DialogHeader>
-                            <DialogTitle className="text-white">맞춤형 데모 신청하기</DialogTitle>
-                            <DialogDescription className="text-white/60">
-                                LMS와 분석 플랫폼을 직접 경험해보세요. 운영 품질을 표준화하는 방법을 안내해 드립니다.
+                    <>
+                        <DialogHeader className="border-b border-[#E7ECE5] bg-[linear-gradient(180deg,#F6FBF7_0%,#FBFCF9_100%)] px-8 py-7">
+                            <div className="mb-3 inline-flex w-fit items-center gap-2 rounded-full border border-[#DCE9E1] bg-white px-3 py-1 text-[11px] font-semibold uppercase tracking-[0.18em] text-[#0E7A49]">
+                                <Sparkles className="h-3.5 w-3.5" />
+                                Live Demo
+                            </div>
+                            <DialogTitle className="text-[28px] leading-[1.1] tracking-[-0.04em] text-[#111110]">
+                                운영에 맞는 데모를 바로 설계합니다
+                            </DialogTitle>
+                            <DialogDescription className="mt-2 max-w-lg text-[15px] leading-7 text-[#617067]">
+                                기관 규모와 관심 기능을 남겨주시면, 제품 소개보다 더 실무적인 흐름으로 안내드릴게요.
                             </DialogDescription>
                         </DialogHeader>
-                        <form ref={formRef} onSubmit={handleSubmit} className="grid gap-4 py-4">
-                            <div className="grid gap-2">
-                                <Label htmlFor="name" className="text-white/80 text-[13px]">이름</Label>
-                                <Input id="name" name="name" placeholder="홍길동" required aria-invalid={!!error} aria-describedby="demo-name-error" className={darkInput} />
-                            </div>
-                            <div className="grid gap-2">
-                                <Label htmlFor="org" className="text-white/80 text-[13px]">학원명</Label>
-                                <Input id="org" name="org" placeholder="클래스인 아카데미" required aria-invalid={!!error} aria-describedby="demo-org-error" className={darkInput} />
-                            </div>
-                            <div className="grid grid-cols-2 gap-4">
-                                <div className="grid gap-2">
-                                    <Label htmlFor="role" className="text-white/80 text-[13px]">직책</Label>
-                                    <Input id="role" name="role" placeholder="원장 / 관리자" required aria-invalid={!!error} aria-describedby="demo-role-error" className={darkInput} />
-                                </div>
-                                <div className="grid gap-2">
-                                    <Label htmlFor="size" className="text-white/80 text-[13px]">원생 수</Label>
-                                    <Input id="size" name="size" placeholder="예: 500+" required aria-invalid={!!error} aria-describedby="demo-size-error" className={darkInput} />
-                                </div>
-                            </div>
-                            <div className="grid gap-2">
-                                <Label htmlFor="email" className="text-white/80 text-[13px]">이메일</Label>
-                                <Input id="email" name="email" type="email" placeholder="email@example.com" required aria-invalid={!!error} aria-describedby="demo-email-error" className={darkInput} />
-                            </div>
-                            <div className="grid gap-2">
-                                <Label htmlFor="phone" className="text-white/80 text-[13px]">전화번호</Label>
-                                <Input id="phone" name="phone" type="tel" placeholder="010-1234-5678" required aria-invalid={!!error} aria-describedby="demo-phone-error" className={darkInput} />
-                            </div>
-                            <label className="flex items-start gap-2.5 cursor-pointer group">
-                                <div className="relative mt-0.5 shrink-0">
-                                    <input
-                                        type="checkbox"
-                                        checked={marketingConsent}
-                                        onChange={(e) => setMarketingConsent(e.target.checked)}
-                                        className="sr-only"
-                                    />
-                                    <div className={`w-4 h-4 rounded border transition-all ${
-                                        marketingConsent
-                                            ? "bg-[#084734] border-[#084734]"
-                                            : "bg-white/10 border-white/[0.2] group-hover:border-white/40"
-                                    }`}>
-                                        {marketingConsent && (
-                                            <svg className="w-4 h-4 text-white p-0.5" fill="none" viewBox="0 0 24 24" stroke="currentColor" strokeWidth={3}>
-                                                <path strokeLinecap="round" strokeLinejoin="round" d="M5 13l4 4L19 7" />
-                                            </svg>
-                                        )}
+                        <form ref={formRef} onSubmit={handleSubmit} className="grid gap-5 px-8 py-7">
+                            <div className={`grid gap-5 rounded-[24px] p-5 ${marketingSurfaceClassName}`}>
+                                <div className="grid gap-5 md:grid-cols-2">
+                                    <div className="grid gap-2">
+                                        <FormLabel htmlFor="name">담당자 이름</FormLabel>
+                                        <Input id="name" name="name" placeholder="홍길동" required aria-invalid={!!error} aria-describedby="demo-error" className={fieldClassName} />
+                                    </div>
+                                    <div className="grid gap-2">
+                                        <FormLabel htmlFor="org">기관명</FormLabel>
+                                        <Input id="org" name="org" placeholder="예: ClassIn Academy" required aria-invalid={!!error} aria-describedby="demo-error" className={fieldClassName} />
                                     </div>
                                 </div>
-                                <span className="text-[12px] text-white/50 leading-relaxed">
-                                    클래스인의 제품 소식 및 마케팅 이메일 수신에 동의합니다.{" "}
-                                    <span className="text-white/35">(선택)</span>
-                                </span>
-                            </label>
-                            {error && (
-                                <p id="demo-name-error" role="alert" aria-live="polite" className="text-[#F6D5C5] text-sm text-center">{error}</p>
-                            )}
-                            <Button type="submit" disabled={loading} className="w-full mt-2">
-                                {loading ? (
-                                    <span className="flex items-center gap-2"><Loader2 className="h-4 w-4 animate-spin" />제출 중...</span>
+                                <div className="grid gap-5 md:grid-cols-2">
+                                    <div className="grid gap-2">
+                                        <FormLabel htmlFor="role">직함</FormLabel>
+                                        <Input id="role" name="role" placeholder="원장 / 관리자" required aria-invalid={!!error} aria-describedby="demo-error" className={fieldClassName} />
+                                    </div>
+                                    <div className="grid gap-2">
+                                        <FormLabel htmlFor="size">학생 수</FormLabel>
+                                        <Input id="size" name="size" placeholder="예: 500+" required aria-invalid={!!error} aria-describedby="demo-error" className={fieldClassName} />
+                                    </div>
+                                </div>
+                                <div className="grid gap-5 md:grid-cols-2">
+                                    <div className="grid gap-2">
+                                        <FormLabel htmlFor="email">이메일</FormLabel>
+                                        <Input id="email" name="email" type="email" placeholder="name@classin.com" required aria-invalid={!!error} aria-describedby="demo-error" className={fieldClassName} />
+                                    </div>
+                                    <div className="grid gap-2">
+                                        <FormLabel htmlFor="phone">연락처</FormLabel>
+                                        <Input id="phone" name="phone" type="tel" placeholder="010-1234-5678" required aria-invalid={!!error} aria-describedby="demo-error" className={fieldClassName} />
+                                    </div>
+                                </div>
+                            </div>
+
+                            <FormCheckbox
+                                checked={marketingConsent}
+                                onChange={(e) => setMarketingConsent(e.target.checked)}
+                                label={<>제품 업데이트와 교육 인사이트를 이메일로 받아보겠습니다 <span className="text-[#6C776F]">(선택)</span></>}
+                                description="데모 일정 안내와 별도로, 신규 기능 및 웨비나 소식을 받아볼 수 있습니다."
+                            />
+
+                            <div className="space-y-3">
+                                {error ? (
+                                    <FormMessage id="demo-error" role="alert" aria-live="polite">
+                                        {error}
+                                    </FormMessage>
                                 ) : (
-                                    "데모 신청하기"
+                                    <FormHint>
+                                        제출 후 담당자가 운영 목적과 기관 환경을 확인한 뒤 가장 적합한 데모 흐름으로 연락드립니다.
+                                    </FormHint>
                                 )}
-                            </Button>
+                                <Button type="submit" disabled={loading} size="xl" className="h-12 w-full rounded-[18px] text-[15px] font-semibold">
+                                    {loading ? (
+                                        <span className="flex items-center gap-2"><Loader2 className="h-4 w-4 animate-spin" />접수 중</span>
+                                    ) : (
+                                        "데모 요청하기"
+                                    )}
+                                </Button>
+                            </div>
                         </form>
-                    </React.Fragment>
+                    </>
                 )}
             </DialogContent>
         </Dialog>

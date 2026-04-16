@@ -54,7 +54,7 @@ export default function OpeningStatement() {
             className="text-[2rem] sm:text-4xl md:text-5xl lg:text-[3.75rem] xl:text-[4.25rem] font-bold tracking-tight text-[#084734]"
             style={{ lineHeight: 1.1, letterSpacing: "-0.045em" }}
           >
-            녹화도, 공유도, 기록도 —
+            나머지는 Classin 이
           </motion.p>
 
           {/* Line 3 */}
@@ -66,7 +66,7 @@ export default function OpeningStatement() {
             className="text-[2rem] sm:text-4xl md:text-5xl lg:text-[3.75rem] xl:text-[4.25rem] font-bold tracking-tight text-[#111110]"
             style={{ lineHeight: 1.1, letterSpacing: "-0.045em" }}
           >
-            교실이 알아서 합니다.
+            알아서 합니다.
           </motion.p>
         </div>
 

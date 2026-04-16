@@ -718,7 +718,7 @@ export default function OverviewPage() {
       : null,
   ]
   const operationalAlerts = operationalAlertItems
-    .filter((item): item is OverviewOperationalAlert => item !== null)
+    .filter((item): item is OverviewOperationalAlert => Boolean(item))
     .sort((a, b) => b.priority - a.priority)
     .slice(0, 6)
   const actionableOperationalAlertCount = operationalAlerts.filter(
