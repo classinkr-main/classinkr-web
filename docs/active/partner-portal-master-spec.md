@@ -7,16 +7,16 @@
 
 보조 문서:
 
-- [partner-portal-guidelines.md](C:/Projects/PUBLIC_Classin/Classin_Home_bae_v1/docs/active/partner-portal-guidelines.md)
+- [partner-portal-guidelines.md](./partner-portal-guidelines.md)
 - [partner-portal-document-hub-guidelines.md](./partner-portal-document-hub-guidelines.md)
-- [partner-portal-product-plan.md](C:/Projects/PUBLIC_Classin/Classin_Home_bae_v1/docs/active/partner-portal-product-plan.md)
-- [partner-portal-screen-layout.md](C:/Projects/PUBLIC_Classin/Classin_Home_bae_v1/docs/active/partner-portal-screen-layout.md)
+- [partner-portal-product-plan.md](./partner-portal-product-plan.md)
+- [partner-portal-screen-layout.md](./partner-portal-screen-layout.md)
 - [partner-portal-document-hub-wireframes.md](./partner-portal-document-hub-wireframes.md)
-- [partner-portal-front-back-contract.md](C:/Projects/PUBLIC_Classin/Classin_Home_bae_v1/docs/active/partner-portal-front-back-contract.md)
-- [partner-portal-implementation-roadmap.md](C:/Projects/PUBLIC_Classin/Classin_Home_bae_v1/docs/active/partner-portal-implementation-roadmap.md)
+- [partner-portal-front-back-contract.md](./partner-portal-front-back-contract.md)
+- [partner-portal-implementation-roadmap.md](./partner-portal-implementation-roadmap.md)
 - [partner-portal-document-hub-execution-plan.md](./partner-portal-document-hub-execution-plan.md)
-- [partner-portal-worklog.md](C:/Projects/PUBLIC_Classin/Classin_Home_bae_v1/docs/active/partner-portal-worklog.md)
-- [partner-portal-future-features.md](C:/Projects/PUBLIC_Classin/Classin_Home_bae_v1/docs/active/partner-portal-future-features.md) — 실험성 기능 목록 (낮은 우선순위)
+- [partner-portal-worklog.md](./partner-portal-worklog.md)
+- [partner-portal-future-features.md](./partner-portal-future-features.md) — 실험성 기능 목록 (낮은 우선순위)
 
 문서 우선순위:
 

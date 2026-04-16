@@ -5,6 +5,7 @@ import type { ReactNode } from "react"
 import {
   Save,
   CheckCircle2,
+  Check,
   XCircle,
   Loader2,
   ExternalLink,
@@ -16,6 +17,9 @@ import {
   Settings2,
   Sparkles,
   CircleAlert,
+  Copy,
+  Code2,
+  Globe,
 } from "lucide-react"
 
 import { NotificationIcon } from "@/components/notifications/NotificationIcon"
@@ -88,6 +92,73 @@ function Section({
         ) : null}
       </div>
       {children}
+    </div>
+  )
+}
+
+function CopyValueButton({
+  value,
+  label = "복사",
+}: {
+  value: string
+  label?: string
+}) {
+  const [copied, setCopied] = useState(false)
+
+  const handleCopy = async () => {
+    try {
+      await navigator.clipboard.writeText(value)
+      setCopied(true)
+      window.setTimeout(() => setCopied(false), 1800)
+    } catch {
+      setCopied(false)
+    }
+  }
+
+  return (
+    <button
+      type="button"
+      onClick={() => void handleCopy()}
+      className={cn(
+        "inline-flex items-center gap-1.5 whitespace-nowrap rounded-lg border px-3 py-2 text-[12px] font-medium transition-all",
+        copied
+          ? "border-[#D1FAE5] bg-[#ECFDF5] text-[#084734]"
+          : "border-[#e8e8e4] bg-white text-[#1a1a1a]/60 hover:border-[#c8c8c4] hover:text-[#111110]"
+      )}
+    >
+      {copied ? <Check className="h-3.5 w-3.5" /> : <Copy className="h-3.5 w-3.5" />}
+      {copied ? "복사됨" : label}
+    </button>
+  )
+}
+
+function CodeSnippet({
+  title,
+  description,
+  value,
+  copyLabel,
+}: {
+  title: string
+  description?: string
+  value: string
+  copyLabel?: string
+}) {
+  return (
+    <div className="rounded-2xl border border-[#e8e8e4] bg-[#fafaf8] p-4">
+      <div className="mb-3 flex items-start justify-between gap-3">
+        <div>
+          <p className="text-[13px] font-medium text-[#111110]">{title}</p>
+          {description ? (
+            <p className="mt-1 text-[12px] leading-relaxed text-[#1a1a1a]/45">
+              {description}
+            </p>
+          ) : null}
+        </div>
+        <CopyValueButton value={value} label={copyLabel ?? "복사"} />
+      </div>
+      <pre className="overflow-x-auto rounded-xl bg-[#111110] px-4 py-3 text-[12px] leading-relaxed text-white">
+        <code>{value}</code>
+      </pre>
     </div>
   )
 }
@@ -467,6 +538,7 @@ export default function SettingsPage() {
   const [toast, setToast] = useState<ToastState>(null)
   const [activeTab, setActiveTab] = useState<SettingsTab>("general")
   const [lastSavedAt, setLastSavedAt] = useState<Date | null>(null)
+  const [currentOrigin, setCurrentOrigin] = useState("")
 
   const showToast = (msg: string, type: "success" | "error" = "success") => {
     setToast({ msg, type })
@@ -499,9 +571,10 @@ export default function SettingsPage() {
     void loadSettings()
   }, [loadSettings])
 
-  const updateSettingsState = (patch: Partial<SiteSettings>) => {
-    setSettings((current) => (current ? { ...current, ...patch } : current))
-  }
+  useEffect(() => {
+    if (typeof window === "undefined") return
+    setCurrentOrigin(window.location.origin)
+  }, [])
 
   const updateTypeStyle = (
     type: NotificationType,
@@ -627,6 +700,68 @@ export default function SettingsPage() {
       },
     ]
   }, [settings])
+
+  const pageWebhookPath = "/api/webhook/page"
+  const pageWebhookUrl = currentOrigin
+    ? `${currentOrigin}${pageWebhookPath}`
+    : pageWebhookPath
+
+  const pageWebhookFetchExample = useMemo(
+    () =>
+      `await fetch("${pageWebhookUrl}", {
+  method: "POST",
+  headers: { "Content-Type": "application/json" },
+  body: JSON.stringify({
+    formType: "demo",
+    name: "홍길동",
+    organization: "무궁화학원",
+    role: "원장",
+    size: "120",
+    email: "demo@example.com",
+    phone: "010-1234-5678",
+    message: "도입 상담 요청",
+    marketingConsent: true
+  })
+})`,
+    [pageWebhookUrl]
+  )
+
+  const pageWebhookDemoPayload = useMemo(
+    () =>
+      JSON.stringify(
+        {
+          formType: "demo",
+          name: "홍길동",
+          organization: "무궁화학원",
+          role: "원장",
+          size: "120",
+          email: "demo@example.com",
+          phone: "010-1234-5678",
+          message: "도입 상담 요청",
+          marketingConsent: true,
+        },
+        null,
+        2
+      ),
+    []
+  )
+
+  const pageWebhookContactPayload = useMemo(
+    () =>
+      JSON.stringify(
+        {
+          formType: "contact",
+          name: "홍길동",
+          organization: "무궁화학원",
+          phone: "010-1234-5678",
+          message: "문의 남깁니다.",
+          marketingConsent: false,
+        },
+        null,
+        2
+      ),
+    []
+  )
 
   const sectionDirtyTotals =
     settings && initialSettings
@@ -994,6 +1129,92 @@ export default function SettingsPage() {
 
           {activeTab === "integrations" && (
             <>
+              <PanelCard
+                title="페이지 폼 웹훅"
+                description="문의하기와 외부 랜딩페이지 데모 신청을 홈페이지 리드 파이프라인으로 바로 연결합니다."
+                badge="복사 가능"
+              >
+                <div className="space-y-4">
+                  <Section
+                    title="Webhook URL"
+                    description="홈페이지 방문 여부와 상관없이 이 주소로 POST하면 같은 CRM 리드로 저장됩니다."
+                  >
+                    <div className="flex w-full flex-col gap-2 sm:w-auto sm:min-w-[420px]">
+                      <div className="flex items-center gap-2 rounded-xl border border-[#e8e8e4] bg-[#fafaf8] px-3 py-2">
+                        <Globe className="h-4 w-4 shrink-0 text-[#1a1a1a]/35" />
+                        <code className="min-w-0 flex-1 truncate text-[12px] text-[#111110]">
+                          {pageWebhookUrl}
+                        </code>
+                        <CopyValueButton value={pageWebhookUrl} />
+                      </div>
+                      <div className="flex items-center gap-2 rounded-xl border border-[#e8e8e4] bg-white px-3 py-2">
+                        <Code2 className="h-4 w-4 shrink-0 text-[#1a1a1a]/35" />
+                        <code className="min-w-0 flex-1 truncate text-[12px] text-[#111110]">
+                          {pageWebhookPath}
+                        </code>
+                        <CopyValueButton value={pageWebhookPath} label="경로 복사" />
+                      </div>
+                    </div>
+                  </Section>
+
+                  <Section
+                    title="지원 타입"
+                    description="`formType`은 `demo`, `contact`, `newsletter`를 받고 내부에서는 기존 `demo_modal`, `contact_page`, `newsletter` 리드로 저장됩니다."
+                  >
+                    <div className="flex flex-wrap gap-2">
+                      {["demo", "contact", "newsletter"].map((item) => (
+                        <span
+                          key={item}
+                          className="inline-flex items-center rounded-full bg-[#f0f0ec] px-3 py-1 text-[11px] font-medium text-[#1a1a1a]/60"
+                        >
+                          {item}
+                        </span>
+                      ))}
+                    </div>
+                  </Section>
+
+                  <Section
+                    title="지원 필드 별칭"
+                    description="외부 폼 이름이 조금 달라도 바로 연결되도록 자주 쓰는 키를 같이 받습니다."
+                  >
+                    <div className="w-full rounded-2xl border border-[#e8e8e4] bg-[#fafaf8] px-4 py-3 text-[12px] leading-relaxed text-[#1a1a1a]/55">
+                      `organization/company` → 기관명, `phone/tel/mobile` → 연락처,
+                      `message/content/note` → 문의 내용, `marketingConsent/marketing_consent`
+                      → 수신 동의
+                    </div>
+                  </Section>
+
+                  <div className="grid gap-4 xl:grid-cols-2">
+                    <CodeSnippet
+                      title="fetch 예시"
+                      description="외부 랜딩페이지 스크립트에서 그대로 붙일 수 있는 기본 예시입니다."
+                      value={pageWebhookFetchExample}
+                      copyLabel="fetch 복사"
+                    />
+                    <CodeSnippet
+                      title="데모 신청 Payload"
+                      description="랜딩페이지 데모 신청 폼용 샘플입니다."
+                      value={pageWebhookDemoPayload}
+                      copyLabel="데모 JSON 복사"
+                    />
+                    <CodeSnippet
+                      title="문의하기 Payload"
+                      description="간단한 문의 폼은 이 구조로 보내면 됩니다."
+                      value={pageWebhookContactPayload}
+                      copyLabel="문의 JSON 복사"
+                    />
+                    <div className="rounded-2xl border border-dashed border-[#e0e0dc] bg-[#fafaf8] p-4">
+                      <p className="text-[13px] font-medium text-[#111110]">운영 메모</p>
+                      <p className="mt-2 text-[12px] leading-relaxed text-[#1a1a1a]/45">
+                        이 웹훅은 CORS가 열려 있어서 다른 도메인의 랜딩페이지에서도 브라우저
+                        `fetch`로 바로 호출할 수 있습니다. 저장되면 CRM, 외부 리드 웹훅,
+                        ChannelTalk, Google Sheet 흐름을 그대로 탑니다.
+                      </p>
+                    </div>
+                  </div>
+                </div>
+              </PanelCard>
+
               <PanelCard
                 title="외부 연동"
                 description="리드 전달 및 이메일 발송에 사용되는 웹훅 URL을 설정합니다."

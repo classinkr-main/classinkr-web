@@ -136,14 +136,14 @@ const BUG_STATUS_CONFIG = {
 }
 
 const FEATURE_STATUS = {
-  done: { label: "완료", dot: "bg-emerald-500", text: "text-emerald-700" },
-  "in-progress": { label: "진행중", dot: "bg-[#084734]", text: "text-[#084734]" },
+  done: { label: "완료", dot: "bg-emerald-500", text: "text-emerald-600" },
+  "in-progress": { label: "진행중", dot: "bg-amber-400", text: "text-amber-600" },
   planned: { label: "예정", dot: "bg-[#A39E98]", text: "text-[#615D59]" },
 }
 
 const VERSION_STATUS = {
-  done: { badge: "bg-emerald-100 text-emerald-800 border-emerald-200", label: "완료" },
-  "in-progress": { badge: "bg-[#ECFDF5] text-[#084734] border-[#D1FAE5]", label: "진행중" },
+  done: { badge: "bg-emerald-50 text-emerald-700 border-emerald-200", label: "완료" },
+  "in-progress": { badge: "bg-amber-50 text-amber-700 border-amber-200", label: "진행중" },
   planned: { badge: "bg-[#f0f0ec] text-[#615D59] border-[#e8e8e4]", label: "예정" },
 }
 
@@ -325,9 +325,13 @@ function RoadmapTab({ token }: { token: string }) {
 
       {/* Timeline */}
       <div className="relative">
-        {versions.map((ver, idx) => {
+        {[...versions].sort((a, b) => {
+          const da = a.startDate ? new Date(a.startDate).getTime() : Infinity
+          const db = b.startDate ? new Date(b.startDate).getTime() : Infinity
+          return da - db
+        }).map((ver, idx, sorted) => {
           const isExpanded = expanded.has(ver.id)
-          const isLast = idx === versions.length - 1
+          const isLast = idx === sorted.length - 1
           const sc = VERSION_STATUS[ver.status]
           const vDone = ver.features.filter((f) => f.status === "done").length
           const vProgress = ver.features.length > 0 ? Math.round((vDone / ver.features.length) * 100) : 0
@@ -338,8 +342,8 @@ function RoadmapTab({ token }: { token: string }) {
               <div className="flex flex-col items-center w-10 shrink-0">
                 {idx > 0 && <div className="w-px flex-none h-4 bg-[#e8e8e4]" />}
                 <div className={`w-8 h-8 rounded-full flex items-center justify-center shrink-0 z-10 border-2 ${
-                  ver.status === "done" ? "bg-green-500 border-green-500" :
-                  ver.status === "in-progress" ? "bg-[#1e8aff] border-[#1e8aff]" :
+                  ver.status === "done" ? "bg-emerald-500 border-emerald-500" :
+                  ver.status === "in-progress" ? "bg-amber-400 border-amber-400" :
                   "bg-white border-[#d0d0cc]"
                 }`}>
                   {ver.status === "done" ? (
@@ -363,7 +367,7 @@ function RoadmapTab({ token }: { token: string }) {
                     {(ver.startDate || ver.targetDate) && (
                       <span className="text-[11px] text-[#1a1a1a]/30">{fmtDate(ver.startDate)} ~ {fmtDate(ver.targetDate)}</span>
                     )}
-                    <span className="text-[11px] font-medium text-[#1e8aff]">{vProgress}%</span>
+                    <span className="text-[11px] font-medium text-[#615D59]">{vProgress}%</span>
                     <button onClick={() => openEdit(ver)} className="text-[10px] px-2 py-0.5 rounded-full border border-[#e8e8e4] text-[#1a1a1a]/40 hover:border-[#c8c8c4] hover:text-[#111110] transition-all">수정</button>
                   </div>
                   <svg className={`w-3.5 h-3.5 text-[#1a1a1a]/25 transition-transform shrink-0 ${isExpanded ? "rotate-180" : ""}`} fill="none" viewBox="0 0 24 24" stroke="currentColor"><path strokeLinecap="round" strokeLinejoin="round" strokeWidth={2} d="M19 9l-7 7-7-7" /></svg>
@@ -373,7 +377,7 @@ function RoadmapTab({ token }: { token: string }) {
                   <div className="border-t border-[#e8e8e4] px-5 py-4">
                     {ver.features.length > 0 && (
                       <div className="w-full bg-[#f0f0ec] rounded-full h-1.5 mb-4">
-                        <div className="bg-[#1e8aff] h-1.5 rounded-full" style={{ width: `${vProgress}%` }} />
+                        <div className={`h-1.5 rounded-full ${ver.status === "done" ? "bg-emerald-500" : "bg-amber-400"}`} style={{ width: `${vProgress}%` }} />
                       </div>
                     )}
                     <div className="space-y-1">

@@ -201,11 +201,20 @@
 
 웹훅과 외부 서비스 연결 상태를 관리한다.
 
+2026년 4월 15일 구현 반영:
+
+- `/admin/settings`의 `외부 연동` 탭에 `페이지 폼 웹훅` 카드가 추가되었다.
+- 운영자는 여기서 외부 랜딩페이지용 웹훅 URL과 상대 경로를 바로 복사할 수 있다.
+- `fetch` 예시, 데모 신청 payload, 문의 payload를 UI에서 바로 복사할 수 있다.
+- 이 카드는 홈페이지 방문 여부와 상관없이 외부 페이지 폼을 같은 CRM 리드 파이프라인으로 연결하는 운영 진입점 역할을 한다.
+
 관리 항목:
 
 - Google Sheet Webhook URL
 - Generic Lead Webhook URL
 - ChannelTalk Webhook URL
+- Page Form Webhook URL
+- Page Form Webhook fetch 예시 / payload 예시 복사
 - 각 연동의 활성화 여부
 - 비밀 키 또는 서명 헤더
 - 타임아웃
@@ -218,6 +227,10 @@
 - 비밀값 입력 필드
   - 기본 마스킹
 - 연결 상태 카드
+- 읽기 전용 운영 가이드 카드
+  - URL 복사
+  - 경로 복사
+  - 요청 예시 복사
 - "테스트 요청 보내기" 버튼
 - 헬스체크 로그 표
 

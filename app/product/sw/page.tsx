@@ -13,6 +13,11 @@ import {
 import Link from "next/link"
 import { useRef, useEffect, useState, useMemo, useCallback } from "react"
 
+const CHECKOUT_ENABLED = process.env.NEXT_PUBLIC_SW_CHECKOUT_ENABLED === "true"
+const CHECKOUT_HREF = CHECKOUT_ENABLED ? "/checkout" : "/contact#contact-form"
+const CHECKOUT_CTA_LABEL = CHECKOUT_ENABLED ? "지금 바로 결제 시작" : "지금 무료로 시작하기"
+const CHECKOUT_SUB_LABEL = CHECKOUT_ENABLED ? "카드·네이버페이로 즉시 시작" : "설치 없이 바로 체험 · 카드 등록 불필요"
+
 /* ── Animation helpers ───────────────────────────────────────────── */
 const fadeUp = {
     initial: { opacity: 0, y: 30 },
@@ -257,9 +262,9 @@ function FinalCTASection() {
                 <motion.p initial={{ opacity: 0, letterSpacing: "0.3em" }} animate={phase >= 3 ? { opacity: 1, letterSpacing: "0.05em" } : {}} transition={{ delay: 0.5, duration: 0.8 }} className="text-lg sm:text-xl font-serif text-slate-600 font-medium mb-10">수업만을 위해 만든 플랫폼, 다음은 당신의 교실입니다</motion.p>
                 <motion.div initial={{ opacity: 0, y: 20 }} animate={phase >= 3 ? { opacity: 1, y: 0 } : {}} transition={{ delay: 0.7, type: "spring", stiffness: 200, damping: 25 }} className="flex flex-col items-center gap-4">
                     <Button asChild className="bg-[#E05024] hover:bg-[#C9431A] text-white rounded-full px-10 h-14 text-base font-bold animate-glow-pulse transition-all hover:scale-105 group">
-                        <Link href="/contact#contact-form">지금 무료로 시작하기<ArrowRight className="w-4 h-4 ml-2 group-hover:translate-x-1 transition-transform" /></Link>
+                        <Link href={CHECKOUT_HREF}>{CHECKOUT_CTA_LABEL}<ArrowRight className="w-4 h-4 ml-2 group-hover:translate-x-1 transition-transform" /></Link>
                     </Button>
-                    <p className="text-xs sm:text-sm text-slate-400 font-medium">설치 없이 바로 체험 · 카드 등록 불필요</p>
+                    <p className="text-xs sm:text-sm text-slate-400 font-medium">{CHECKOUT_SUB_LABEL}</p>
                 </motion.div>
             </div>
         </section>
@@ -1312,8 +1317,8 @@ export default function ProductPage() {
 
                             <div className="flex flex-wrap items-center justify-center gap-4">
                                 <Button asChild className="bg-[#E05024] hover:bg-[#C9431A] text-white rounded-full px-8 h-14 text-base font-bold shadow-[0_8px_20px_rgba(224,80,36,0.3)] hover:shadow-[0_12px_25px_rgba(224,80,36,0.4)] transition-all hover:scale-105 group">
-                                    <Link href="/contact#contact-form">
-                                    무료로 시작하기
+                                    <Link href={CHECKOUT_HREF}>
+                                    {CHECKOUT_CTA_LABEL}
                                     <ArrowRight className="w-4 h-4 ml-2 group-hover:translate-x-1 transition-transform" />
                                     </Link>
                                 </Button>

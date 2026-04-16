@@ -1,26 +1,43 @@
-# Classin Web — Claude Code 지침
+# Classin Home — Repository Notes
 
 ## 프로젝트 개요
-- Next.js 14 (App Router) + TypeScript + Tailwind CSS
-- Supabase (인증, DB), Recharts (차트), Lucide (아이콘)
-- 관리자(`/admin`), 파트너 포털(`/partner`), 랜딩 페이지(`/`)
 
-## 디자인 시스템
-@DESIGN.md
+- Next.js 16 (App Router) + React 19 + TypeScript
+- Tailwind CSS 4, Supabase, Recharts, Lucide
+- 공개 사이트(`/`), 관리자(`/admin`), 파트너 포털(`/partner`), 포털 API(`/app/api/portal`)
+
+## 먼저 볼 문서
+
+- [docs/README.md](docs/README.md)
+- [docs/active/repository-audit-2026-04-15.md](docs/active/repository-audit-2026-04-15.md)
+- [DESIGN.md](DESIGN.md)
 
 ## 코드 규칙
-- 컴포넌트: `components/` — 페이지 전용이 아닌 경우만 분리
-- 관리자 API: `app/api/admin/` — `verifyAdmin()` 필수
-- 파트너 API: `app/api/partner/` — `verifyPartner()` 필수
-- 데이터 레이어: `lib/repositories/` — DB 접근은 여기서만
-- Supabase 없는 환경: `data/*.json` 폴백 사용
+
+- 공용 컴포넌트는 `components/`에 둔다.
+- 관리자 API는 `app/api/admin/`에서 `verifyAdmin()` 또는 동등한 관리자 인증 가드를 사용한다.
+- 파트너 포털 V2 API는 `app/api/portal/`과 `lib/partner-portal/portal-authorize.ts` 기준으로 맞춘다.
+- 데이터 접근은 `lib/repositories/` 또는 `lib/partner-portal/repositories/`로 모은다.
+- 일부 기능은 여전히 `data/*.json` 또는 듀얼 모드 저장소를 통해 폴백한다.
+
+## 검증 기준
+
+```bash
+npx eslint app components lib --max-warnings=0
+npm run build
+```
+
+현재 저장소에서는 위 두 명령을 기본 품질 게이트로 본다.
 
 ## UI 작업 시 필수 체크
-- 색상: DESIGN.md 팔레트만 사용 (파랑/보라 금지, Classin Green `#084734` 액센트)
-- 보더: `1px solid rgba(0,0,0,0.08)` — 절대 두껍게 하지 않음
-- 섹션 배경 교차: `#FFFFFF` ↔ `#F6F5F4` ↔ `#ECFDF5`
-- 반응형: 모바일 우선, `sm:` / `lg:` 브레이크포인트
 
-## 브랜치 구조
-- `main`: 프로덕션
-- `codex/Bae`: 현재 파트너 포털 + 어드민 개발 브랜치
+- 색상: [DESIGN.md](DESIGN.md) 팔레트만 사용
+- 보더: `1px solid rgba(0,0,0,0.08)`
+- 섹션 배경: `#FFFFFF` ↔ `#F6F5F4` ↔ `#ECFDF5`
+- 모바일 우선 반응형 유지
+
+## 문서 운영 규칙
+
+- 기준 문서는 repo-relative 링크만 사용한다.
+- 브랜치명, 로컬 절대경로, 실제 비밀번호 예시는 남기지 않는다.
+- 오래된 사고 메모는 현재 상태 단정에 쓰지 않고, 현재 audit 문서와 실제 코드로 재검증한다.
