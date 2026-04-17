@@ -5,6 +5,11 @@
 import fs from "fs"
 import path from "path"
 
+import {
+  deleteGoogleCalendarEvent,
+  isGoogleCalendarSyncConfigured,
+  upsertGoogleCalendarEvent,
+} from "@/lib/google-calendar-sync"
 import { createSupabaseAdminClient } from "@/lib/supabase/admin"
 import { hasSupabaseBrowserEnv } from "@/lib/supabase/public-env"
 
@@ -33,6 +38,9 @@ export interface CalendarEvent {
   dealTitle?: string
   href?: string
   syncToAdminCalendar?: boolean
+  googleCalendarEventId?: string
+  googleCalendarLastSyncedAt?: string
+  googleCalendarSyncError?: string
   createdAt: string
   updatedAt: string
 }
@@ -51,6 +59,9 @@ type StoredCalendarEventInput = Omit<
   | "dealTitle"
   | "href"
   | "syncToAdminCalendar"
+  | "googleCalendarEventId"
+  | "googleCalendarLastSyncedAt"
+  | "googleCalendarSyncError"
 >
 
 interface PartnerScheduleCalendarRow {
@@ -369,9 +380,92 @@ export async function getEventsByMonth(year: number, month: number): Promise<Cal
     .sort(compareEvents)
 }
 
-export function createEvent(
+function toErrorMessage(error: unknown) {
+  return error instanceof Error ? error.message : String(error)
+}
+
+function buildAdminGoogleDescription(event: CalendarEvent) {
+  const parts = [
+    event.assignees && event.assignees.length > 0
+      ? `담당: ${event.assignees.join(", ")}`
+      : undefined,
+    event.description?.trim() || undefined,
+  ].filter(Boolean)
+
+  return parts.length > 0 ? parts.join("\n\n") : null
+}
+
+function parseAdminDateTime(date: string, time: string) {
+  return new Date(`${date}T${time}:00+09:00`)
+}
+
+function buildAdminTimedRange(event: CalendarEvent) {
+  const start = parseAdminDateTime(event.date, event.time ?? "00:00")
+  const endDate = event.endDate ?? event.date
+  const explicitEnd =
+    event.endDate || event.endTime
+      ? parseAdminDateTime(endDate, event.endTime ?? event.time ?? "00:00")
+      : new Date(start.getTime() + 60 * 60 * 1000)
+
+  const end =
+    explicitEnd.getTime() > start.getTime()
+      ? explicitEnd
+      : new Date(start.getTime() + 60 * 60 * 1000)
+
+  return {
+    kind: "timed" as const,
+    startISO: start.toISOString(),
+    endISO: end.toISOString(),
+    timeZone: "Asia/Seoul",
+  }
+}
+
+async function syncStoredEventWithGoogle(event: CalendarEvent): Promise<CalendarEvent> {
+  if (!isGoogleCalendarSyncConfigured()) {
+    return {
+      ...event,
+      googleCalendarSyncError:
+        "Google Calendar sync is not configured. Set GOOGLE_CALENDAR_ID and service account credentials.",
+    }
+  }
+
+  try {
+    const googleEvent = await upsertGoogleCalendarEvent({
+      googleEventId: event.googleCalendarEventId,
+      title: event.title,
+      description: buildAdminGoogleDescription(event),
+      range:
+        event.allDay || (!event.time && !event.endTime)
+          ? {
+              kind: "all_day",
+              startDate: event.date,
+              endDate: event.endDate ?? event.date,
+            }
+          : buildAdminTimedRange(event),
+      metadata: {
+        classin_source: "admin_calendar",
+        classin_local_event_id: event.id,
+        classin_event_type: event.type,
+      },
+    })
+
+    return {
+      ...event,
+      googleCalendarEventId: googleEvent.id ?? event.googleCalendarEventId,
+      googleCalendarLastSyncedAt: new Date().toISOString(),
+      googleCalendarSyncError: undefined,
+    }
+  } catch (error) {
+    return {
+      ...event,
+      googleCalendarSyncError: toErrorMessage(error),
+    }
+  }
+}
+
+export async function createEvent(
   data: StoredCalendarEventInput
-): CalendarEvent {
+): Promise<CalendarEvent> {
   const events = read()
   const now = new Date().toISOString()
   const event: CalendarEvent = {
@@ -380,27 +474,44 @@ export function createEvent(
     createdAt: now,
     updatedAt: now,
   }
-  events.push(event)
+  const syncedEvent = await syncStoredEventWithGoogle(event)
+  events.push(syncedEvent)
   write(events)
-  return normalizeStoredEvent(event)
+  return normalizeStoredEvent(syncedEvent)
 }
 
-export function updateEvent(
+export async function updateEvent(
   id: string,
   patch: Partial<StoredCalendarEventInput>
-): CalendarEvent | null {
+): Promise<CalendarEvent | null> {
   const events = read()
   const idx = events.findIndex((e) => e.id === id)
   if (idx === -1) return null
-  events[idx] = { ...events[idx], ...patch, id, updatedAt: new Date().toISOString() }
+  const updatedEvent = {
+    ...events[idx],
+    ...patch,
+    id,
+    updatedAt: new Date().toISOString(),
+  }
+  events[idx] = await syncStoredEventWithGoogle(updatedEvent)
   write(events)
   return normalizeStoredEvent(events[idx])
 }
 
-export function deleteEvent(id: string): boolean {
+export async function deleteEvent(id: string): Promise<boolean> {
   const events = read()
+  const current = events.find((event) => event.id === id)
+  if (!current) return false
+
+  if (current.googleCalendarEventId && isGoogleCalendarSyncConfigured()) {
+    try {
+      await deleteGoogleCalendarEvent(current.googleCalendarEventId)
+    } catch (error) {
+      console.error("[calendar-data] failed to delete Google Calendar event", error)
+    }
+  }
+
   const next = events.filter((e) => e.id !== id)
-  if (next.length === events.length) return false
   write(next)
   return true
 }

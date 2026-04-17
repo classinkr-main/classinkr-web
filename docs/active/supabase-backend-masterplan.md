@@ -564,7 +564,7 @@ scripts/
 
 ```
 현재 플로우:
-  .env → ADMIN_USERS=[{"name":"홍길동","password":"classin2014","role":"admin"}]
+  .env → ADMIN_USERS=[{"name":"홍길동","password":"<set-in-secret-store>","role":"admin"}]
          ↓
   POST /api/admin/auth → 패스워드 비교
          ↓

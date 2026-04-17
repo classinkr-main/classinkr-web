@@ -52,10 +52,46 @@ const specRows = [
 ]
 
 const lineupCards = [
-    { model: "S110", size: '110"', rec: "대형 강의실 · 강당", color: "from-slate-900 to-slate-700", textColor: "text-white", badge: "FLAGSHIP" },
-    { model: "S86", size: '86"', rec: "일반 교실 · 회의실", color: "from-[#22A366] to-[#1B8A55]", textColor: "text-white", badge: "BEST" },
-    { model: "S75", size: '75"', rec: "중소 교실 · 세미나실", color: "from-slate-100 to-white", textColor: "text-slate-900", badge: "" },
-    { model: "S65", size: '65"', rec: "소규모 교실 · 스터디룸", color: "from-slate-100 to-white", textColor: "text-slate-900", badge: "" },
+    {
+        model: "S110",
+        size: '110"',
+        rec: "대형 강의실 · 강당",
+        badge: "FLAGSHIP",
+        cardClass: "border-slate-900 bg-slate-900 text-white",
+        badgeClass: "border border-white/10 bg-white/[0.08] text-white/70",
+        sizeClass: "text-white/70",
+        recClass: "text-white/60",
+    },
+    {
+        model: "S86",
+        size: '86"',
+        rec: "10명 이상 교실",
+        badge: "BEST",
+        cardClass: "border-[#22A366] bg-[#22A366] text-white",
+        badgeClass: "border border-white/10 bg-white/[0.12] text-white/80",
+        sizeClass: "text-white/[0.72]",
+        recClass: "text-white/[0.68]",
+    },
+    {
+        model: "S75",
+        size: '75"',
+        rec: "10명 이하 교실",
+        badge: "",
+        cardClass: "border-slate-200 bg-white text-slate-900",
+        badgeClass: "",
+        sizeClass: "text-slate-500",
+        recClass: "text-slate-500",
+    },
+    {
+        model: "S65",
+        size: '65"',
+        rec: "소규모 공부방, 교습소",
+        badge: "",
+        cardClass: "border-slate-200 bg-white text-slate-900",
+        badgeClass: "",
+        sizeClass: "text-slate-500",
+        recClass: "text-slate-500",
+    },
 ]
 
 /* ── Section: Comparison ─────────────────────────────────────────── */
@@ -194,21 +230,42 @@ function FeatureSection({
 }
 
 /* ── Feature Tab data ────────────────────────────────────────────── */
-const featureTabs = [
+type FeatureTab = {
+    label: string
+    badge: string
+    title: string
+    points: string[]
+    visual?: "image" | "camera-stack"
+    image?: string
+    imageAlt?: string
+    imageFit?: "cover" | "contain"
+    imagePanelClassName?: string
+    imageClassName?: string
+    cameraFront?: string
+    cameraBack?: string
+}
+
+const featureTabs: FeatureTab[] = [
     {
         label: "판서",
-        image: "/images/product/hw/writing/writing-multitouch.jpg",
+        image: "/images/product/hw/features/feature-writing.png",
+        imageAlt: "50페이지 판서 기능 시각화",
+        imageFit: "contain",
+        imagePanelClassName: "bg-[#05080C]",
+        imageClassName: "p-6 md:p-8",
         badge: "50페이지 무한 캔버스",
-        title: "공간 걱정 없는 수업, 쓰는 즉시 공유",
+        title: "공간 걱정 없이 쓰고, 쓰는 즉시 전달",
         points: [
-            "50페이지 무한 캔버스 — 지우지 않고 넘기며 수업",
+            "50페이지 무한 캔버스 — 지우지 않고 이어가는 수업",
+            "0.03초 초저지연 + 50포인트 멀티터치로 분필처럼 자연스러운 판서",
             "쓰는 순간 전 학생 기기에 실시간 동기화 → 필기 대신 수업에 집중",
-            "0.03초 초저지연 + 50포인트 멀티터치로 분필보다 자연스러운 판서",
+            "수업 종료 후 자동 PDF 저장·배포로 결석 학생도 그대로 복습",
         ],
     },
     {
         label: "디스플레이",
-        image: "/images/product/hw/display/display-wall-cinematic.jpg",
+        image: "/images/product/hw/features/feature-display.png",
+        imageAlt: "클래스인 보드 디스플레이 화질 이미지",
         badge: "178° 광시야각",
         title: "어디서 봐도 선명한 화면",
         points: [
@@ -218,19 +275,22 @@ const featureTabs = [
         ],
     },
     {
-        label: "판서 공유",
-        image: "/images/product/hw/writing/writing-closeup.jpg",
-        badge: "실시간 동기화",
-        title: "쓰는 순간, 모든 기기에 전달",
+        label: "인터렉티브 수업",
+        image: "/images/product/hw/features/feature-interactive.jpg",
+        imageAlt: "인터렉티브 수업 현장 사진",
+        badge: "30+ 수업 도구",
+        title: "타이머부터 선착순 퀴즈까지, 생동감 있는 인터렉티브 수업",
         points: [
-            "실시간 판서 동기화 → 태블릿·노트북 즉시 반영",
-            "수업 종료 후 자동 PDF 저장·배포",
-            "결석 학생도 판서 기록으로 완벽 복습",
+            "타이머, 스톱워치, 선착순 퀴즈 등 30+ 수업 도구로 수업 리듬을 살립니다",
+            "학생 참여 권한 기능으로 필요한 순간 학생도 보드 위에서 직접 조작·판서",
+            "교사 혼자 끌고 가는 수업이 아니라, 학생이 함께 움직이는 양방향 수업",
         ],
     },
     {
         label: "AI 카메라",
-        image: "/images/product/hw/camera/camera-hybrid-class.jpg",
+        visual: "camera-stack",
+        cameraBack: "/images/product/hw/features/camera-back.png",
+        cameraFront: "/images/product/hw/features/camera-front.png",
         badge: "수업 영상 자동 생성",
         title: "수업이 끝나면, 영상도 완성됩니다",
         points: [
@@ -242,13 +302,14 @@ const featureTabs = [
     },
     {
         label: "SW 생태계",
-        image: "/images/product/hw/ecosystem/ecosystem-board-ui.png",
-        badge: "20+ 강의 도구",
-        title: "ClassIn SW 완전 내장",
+        image: "/images/product/hw/features/feature-ecosystem.png",
+        imageAlt: "클래스인 소프트웨어 생태계 학습 장면",
+        badge: "LMS 완전 통합",
+        title: "수업 이후 운영까지 이어지는 ClassIn SW",
         points: [
             "NFC 원터치 로그인 — 내 수업 환경 즉시 로드",
-            "출결·과제·성적·알림 LMS 완전 통합",
-            "투표·퀴즈·타이머 등 강의 도구 20종+",
+            "출결·과제·성적·알림까지 학원 운영 흐름과 자연스럽게 연결",
+            "수업 기록과 학습 데이터가 ClassIn 시스템 안에 한 번에 쌓입니다",
         ],
     },
 ]
@@ -297,16 +358,45 @@ function FeatureTabSection() {
                     className="max-w-5xl mx-auto grid lg:grid-cols-2 gap-10 items-center"
                 >
                     {/* Image */}
-                    <div className="rounded-3xl overflow-hidden shadow-2xl">
-                        <Image
-                            src={tab.image}
-                            alt={tab.title}
-                            width={800}
-                            height={600}
-                            sizes="(max-width: 768px) 100vw, 50vw"
-                            className="w-full h-auto"
-                        />
-                    </div>
+                    {tab.visual === "camera-stack" ? (
+                        <div className="relative aspect-[4/3] rounded-3xl overflow-hidden border border-[#22A366]/10 bg-[radial-gradient(circle_at_top,_rgba(255,255,255,0.95),_rgba(236,253,245,0.88)_38%,_rgba(224,242,234,0.92)_100%)] shadow-2xl">
+                            <div className="absolute inset-0 bg-[radial-gradient(circle_at_50%_28%,_rgba(255,255,255,0.9),_transparent_35%),linear-gradient(135deg,_rgba(34,163,102,0.06),_transparent_55%)]" />
+                            <div className="absolute inset-0 bg-[linear-gradient(120deg,_transparent_0%,_rgba(255,255,255,0.45)_50%,_transparent_100%)] opacity-70" />
+                            <Image
+                                src={tab.cameraBack ?? ""}
+                                alt="클래스인 AI 카메라 후면"
+                                width={266}
+                                height={224}
+                                sizes="(max-width: 768px) 38vw, 220px"
+                                className="absolute left-[12%] top-[16%] w-[38%] max-w-[220px] rotate-[-12deg] drop-shadow-[0_28px_45px_rgba(15,23,42,0.18)]"
+                            />
+                            <Image
+                                src={tab.cameraFront ?? ""}
+                                alt="클래스인 AI 카메라 전면"
+                                width={292}
+                                height={267}
+                                sizes="(max-width: 768px) 42vw, 250px"
+                                className="absolute right-[10%] bottom-[12%] w-[42%] max-w-[250px] rotate-[10deg] drop-shadow-[0_30px_55px_rgba(15,23,42,0.22)]"
+                            />
+                            <div className="absolute inset-x-0 bottom-6 flex justify-center">
+                                <div className="rounded-full border border-[#22A366]/15 bg-white/70 px-4 py-2 text-[11px] font-semibold tracking-[0.2em] text-[#084734] backdrop-blur-sm">
+                                    4K AI TRACKING CAMERA
+                                </div>
+                            </div>
+                        </div>
+                    ) : (
+                        <div className={`rounded-3xl overflow-hidden shadow-2xl ${tab.imagePanelClassName ?? "bg-white"}`}>
+                            <div className={`relative aspect-[4/3] ${tab.imagePanelClassName ?? ""}`}>
+                                <Image
+                                    src={tab.image ?? ""}
+                                    alt={tab.imageAlt ?? tab.title}
+                                    fill
+                                    sizes="(max-width: 768px) 100vw, 50vw"
+                                    className={`${tab.imageFit === "contain" ? "object-contain" : "object-cover"} ${tab.imageClassName ?? ""}`}
+                                />
+                            </div>
+                        </div>
+                    )}
 
                     {/* Content */}
                     <div>
@@ -352,12 +442,13 @@ function ProductAnatomySection() {
                 <motion.div className="text-center mb-16" {...fadeUp}>
                     <p className="text-sm font-semibold text-[#22A366] tracking-wider uppercase mb-3">PRODUCT DESIGN</p>
                     <h2 className="text-3xl md:text-4xl lg:text-5xl text-[#1a1a19] leading-tight">
-                        디테일에서 시작하는
+                        디테일에서 완성되는
                         <br />
-                        <span className="text-[#22A366]">교육 경험</span>
+                        <span className="text-[#22A366]">수업의 몰입도</span>
                     </h2>
                     <p className="text-lg text-slate-500 mt-4 max-w-xl mx-auto">
-                        110mm 슬림 프로파일부터 시그니처 오렌지 펜 트레이까지 — 교실을 위해 설계된 하드웨어.
+                        110mm의 초슬림 바디부터 사용자 중심의 제스처바까지.
+                        작은 디테일 하나하나가 모여 선생님과 학생 모두가 수업에만 집중할 수 있는 최적의 하드웨어를 완성합니다.
                     </p>
                 </motion.div>
 
@@ -524,32 +615,32 @@ const timelineSteps = [
     {
         time: "08:55",
         icon: <Fingerprint className="w-4 h-4" />,
-        title: "NFC 원터치 로그인",
-        desc: "카드 태그 한 번으로 어제 수업 환경이 그대로 로드됩니다. 비밀번호, 별도 설정 없이 바로 시작.",
+        title: "[준비] 스마트한 수업 준비",
+        desc: "HDMI 케이블도, 복잡한 연결 기기도 필요 없습니다. 로그인만으로 클라우드에 수업 자료와 환경이 싱크되어, 어디서나 나만의 완벽한 수업 환경으로 바뀝니다.",
     },
     {
         time: "09:00",
         icon: <PenTool className="w-4 h-4" />,
-        title: "판서 시작 + AI 카메라 자동 녹화",
-        desc: "칠판에 쓰는 순간 학생 기기에 실시간 반영. 동시에 AI 카메라가 교사를 추적하며 수업 영상 녹화를 시작합니다.",
+        title: "[진행] 판서 + AI 카메라 자동 녹화",
+        desc: "칠판에 쓰는 순간 학생 기기에 실시간 반영. 동시에 AI 카메라가 교사를 추적하며 퀄리티 있는 수업과 영상 녹화를 진행합니다.",
     },
     {
         time: "09:15",
         icon: <Users className="w-4 h-4" />,
-        title: "학생 협업 판서",
-        desc: "50포인트 멀티터치로 여러 학생이 동시에 참여. 그룹 활동이 별도 도구 없이 칠판 하나로 해결됩니다.",
+        title: "[참여] 멀티 유저 판서",
+        desc: "온·오프라인 어디서나 실시간 참여 가능. 그룹 활동이 별도 도구 없이 칠판 하나로 해결됩니다.",
     },
     {
         time: "09:40",
         icon: <Share2 className="w-4 h-4" />,
-        title: "수업 종료 → 판서 PDF + 수업 영상 동시 업로드",
-        desc: "수업이 끝나는 순간, 50페이지 판서 노트가 PDF로 자동 변환되고 수업 영상이 동시에 생성·업로드됩니다.",
+        title: "[종료] 판서 PDF + 수업 영상 동시 업로드",
+        desc: "수업이 종료되면 판서 내용과 수업 영상이 동시에 업로드됩니다. 학생들은 필기 걱정 없이 수업에 온전히 집중할 수 있게 됩니다.",
     },
     {
         time: "방과후",
         icon: <Monitor className="w-4 h-4" />,
-        title: "수업 영상 + 판서 노트로 복습",
-        desc: "학생이 수업 영상을 돌려보며 50페이지 판서를 함께 복습합니다. 결석 학생도 완벽한 수업 경험.",
+        title: "[복습] 수업 영상 + 판서 노트로 복습",
+        desc: "바로 업로드된 강의와 판서 노트를 보며 복습합니다. 결석생도 소외되지 않는 자동화 수업 시스템을 경험해보세요.",
     },
 ]
 
@@ -699,9 +790,9 @@ function SpaceScenarioSection() {
                 <motion.div className="text-center mb-12" {...fadeUp}>
                     <p className="text-sm font-semibold text-[#22A366] tracking-wider uppercase mb-3">LINEUP × SPACE</p>
                     <h2 className="text-3xl md:text-4xl lg:text-5xl text-[#1a1a19] leading-tight">
-                        공간이 달라지면,
+                        공간에 딱 맞는
                         <br />
-                        <span className="text-[#22A366]">모델도 달라집니다</span>
+                        <span className="text-[#22A366]">최적의 모델을 만나보세요</span>
                     </h2>
                     <p className="text-lg text-slate-500 mt-4 max-w-xl mx-auto">
                         설치 공간을 선택하면 최적 모델과 사용 시나리오를 확인할 수 있습니다.
@@ -780,7 +871,6 @@ const processSteps = [
     { num: "02", title: "현장 실측 · 견적", desc: "전문 설치팀이 방문하여 공간 실측 후 정확한 맞춤 견적을 드립니다" },
     { num: "03", title: "설치 (1일 완료)", desc: "하루 안에 설치 완료. 수업 중단을 최소화하고 즉시 사용할 수 있습니다" },
     { num: "04", title: "교사 교육 (2시간)", desc: "현장 교육 2시간으로 모든 기능을 즉시 활용할 수 있도록 안내합니다" },
-    { num: "05", title: "전담 지원 · A/S", desc: "도입 이후에도 전담 CS팀이 운영, 유지보수를 함께 책임집니다" },
 ]
 
 function OnboardingProcessSection() {
@@ -790,18 +880,20 @@ function OnboardingProcessSection() {
                 <motion.div className="text-center mb-16" {...fadeUp}>
                     <p className="text-sm font-semibold text-[#22A366] tracking-wider uppercase mb-3">HOW TO START</p>
                     <h2 className="text-3xl md:text-4xl lg:text-5xl text-[#1a1a19] leading-tight">
-                        도입은 생각보다
+                        수업의 격을 높이는 차원이 다른 스펙,
                         <br />
-                        <span className="text-[#22A366]">훨씬 간단합니다</span>
+                        <span className="text-[#22A366]">가장 먼저 우리 학원에서 만나보세요</span>
                     </h2>
                     <p className="text-lg text-slate-500 mt-4 max-w-xl mx-auto">
-                        문의부터 첫 수업까지, 평균 1주일이면 충분합니다.
+                        단순한 기기 도입을 넘어 수업의 격을 바꿉니다.
+                        <br className="hidden sm:block" />
+                        전문 상담을 통해 학원 규모와 목적에 최적화된 솔루션을 제안해 드립니다.
                     </p>
                 </motion.div>
 
                 <div className="max-w-5xl mx-auto relative">
                     <div className="absolute top-7 left-[12%] right-[12%] h-px bg-gradient-to-r from-transparent via-[#22A366]/25 to-transparent hidden lg:block" />
-                    <div className="grid sm:grid-cols-3 lg:grid-cols-5 gap-8">
+                    <div className="grid sm:grid-cols-2 lg:grid-cols-4 gap-8">
                         {processSteps.map((step, i) => (
                             <motion.div key={i} {...stagger(i)} className="flex flex-col items-center text-center">
                                 <div className="w-14 h-14 rounded-full bg-[#22A366]/10 border border-[#22A366]/20 flex items-center justify-center mb-5 relative z-10 shrink-0">
@@ -846,8 +938,9 @@ export default function ProductHWPage() {
                                 className="text-[2.25rem] sm:text-5xl md:text-6xl lg:text-[4.25rem] xl:text-[5rem] font-bold leading-[1.05] mb-10 text-[#1a1a19]"
                                 style={{ letterSpacing: "-0.045em" }}
                             >
-                                하나의 수업 스튜디오가{" "}
-                                <span className="text-[#084734] whitespace-nowrap">교실에 들어섭니다.</span>
+                                하나의 스튜디오가
+                                <br />
+                                <span className="text-[#084734]">교실에 들어섭니다.</span>
                             </h1>
 
                             <p className="text-lg md:text-xl lg:text-2xl text-[#615D59] leading-relaxed font-medium max-w-3xl mx-auto mb-12">
@@ -883,8 +976,8 @@ export default function ProductHWPage() {
                             className="mt-16 rounded-3xl overflow-hidden shadow-2xl"
                         >
                             <Image
-                                src="/images/product/hw/hero/hero-board-front.png"
-                                alt="ClassIn Board S Series — 전자칠판 정면"
+                                src="/images/product/hw/hero/hero-board-stand.png"
+                                alt="ClassIn Board S Series — 스탠드형 전자칠판"
                                 width={1200}
                                 height={800}
                                 sizes="(max-width: 768px) 100vw, (max-width: 1200px) 80vw, 1200px"
@@ -943,8 +1036,8 @@ export default function ProductHWPage() {
             ================================================================ */}
             <FullWidthPointSection
                 eyebrow="ClassIn Board의 약속"
-                statement={<>교사의 하루를<br />다시 설계합니다</>}
-                sub="분필의 흔적이 디지털 자산이 되는 교실. ClassIn Board가 만드는 새로운 수업의 표준."
+                statement={<>최고의 수업을<br />서포트합니다</>}
+                sub="선생님의 수업의 열기가 언제 어디에서나 이어지도록"
                 dark
             />
 
@@ -1149,8 +1242,8 @@ export default function ProductHWPage() {
             ================================================================ */}
             <FullWidthPointSection
                 eyebrow="교실의 경계를 넘어서"
-                statement={<>여기서도, 저기서도<br />같은 수업입니다</>}
-                sub="AI 카메라와 실시간 판서 동기화가 교실과 원격의 경계를 지웁니다."
+                statement={<>시간과 지역을 넘어서<br />교육의 손길이 닿을 수 있도록</>}
+                sub="Classin은 지역의 한계를 넘어서 교육의 표준화와 시스템화를 돕습니다."
                 image="/images/product/hw/spaces/space-classroom-real.png"
                 dark
             />
@@ -1208,9 +1301,9 @@ export default function ProductHWPage() {
                     <motion.div className="text-center mb-16" {...fadeUp}>
                         <p className="text-sm font-semibold text-[#22A366] tracking-wider uppercase mb-3">COMPLETE ECOSYSTEM</p>
                         <h2 className="text-3xl md:text-4xl lg:text-5xl leading-tight">
-                            하드웨어만 팔지 않습니다.
+                            하드웨어 그 이상,
                             <br />
-                            <span className="text-[#22A366]">교육 생태계</span>를 완성합니다.
+                            <span className="text-[#22A366]">새로운 수업 생태계</span>
                         </h2>
                         <p className="text-lg text-slate-400 mt-6 max-w-2xl mx-auto leading-relaxed">
                             ClassIn 소프트웨어가 보드에 네이티브 탑재. 출결부터 과제, 성적, 학부모 알림까지 — 끊김 없는 하나의 흐름.
@@ -1232,24 +1325,24 @@ export default function ProductHWPage() {
                     <div className="grid sm:grid-cols-2 lg:grid-cols-4 gap-5 max-w-5xl mx-auto">
                         {[
                             {
-                                icon: <Fingerprint className="w-8 h-8" />,
-                                title: "NFC 원터치 로그인",
-                                desc: "카드 한 장으로 본인의 수업 환경이 즉시 로드됩니다",
+                                icon: <Share2 className="w-8 h-8" />,
+                                title: "파일 호환성",
+                                desc: "PDF, 이미지 수업 자료를 선명한 화질로 즉시 업로드하고, 필기도 끊김 없이 이어갑니다.",
                             },
                             {
                                 icon: <Layers className="w-8 h-8" />,
                                 title: "20+ 강의 도구",
-                                desc: "타이머, 투표, 퀴즈, 그룹토론이 칠판 위에서 바로",
+                                desc: "타이머, 투표, 퀴즈, 그룹토론 등 30+ 수업 도구가 칠판 위에서 바로 실행됩니다.",
                             },
                             {
                                 icon: <GraduationCap className="w-8 h-8" />,
                                 title: "LMS 완전 통합",
-                                desc: "출결 → 수업 → 과제 → 성적 → 학부모 알림, 한 번에",
+                                desc: "출결 → 수업 → 과제 → 성적 → 학부모 알림, 숙제와 시험까지 한 곳에서 관리합니다.",
                             },
                             {
                                 icon: <Monitor className="w-8 h-8" />,
                                 title: "무선 미러링",
-                                desc: "어떤 기기에서든 원클릭으로 화면을 공유합니다",
+                                desc: "어떤 기기에서든 원클릭으로 화면을 공유합니다. USB, 빔프로젝터, HDMI 없이 ClassIn만 있다면 어디에서나 가능합니다.",
                             },
                         ].map((item, i) => (
                             <motion.div
@@ -1299,19 +1392,21 @@ export default function ProductHWPage() {
                             <motion.div
                                 key={card.model}
                                 {...stagger(i)}
-                                className={`relative rounded-2xl bg-gradient-to-br ${card.color} p-6 ${card.textColor} overflow-hidden group hover:scale-[1.02] transition-transform`}
-                                style={{ boxShadow: card.badge ? "0 8px 30px rgba(0,0,0,0.15)" : "0 4px 20px rgba(0,0,0,0.06)" }}
+                                className={`rounded-[28px] border p-7 sm:p-8 min-h-[220px] flex flex-col justify-between transition-transform duration-300 hover:-translate-y-0.5 ${card.cardClass}`}
+                                style={{ boxShadow: card.badge ? "0 14px 34px rgba(15, 23, 42, 0.07)" : "0 10px 24px rgba(15, 23, 42, 0.04)" }}
                             >
-                                {card.badge && (
-                                    <div className="absolute top-3 right-3 text-[10px] font-bold tracking-wider bg-white/20 px-2 py-0.5 rounded-full">
-                                        {card.badge}
+                                <div className="flex items-start justify-between gap-4">
+                                    <div>
+                                        <div className="text-5xl font-sans font-bold tabular-nums tracking-tight">{card.model}</div>
+                                        <div className={`mt-1 text-2xl font-sans font-semibold tabular-nums ${card.sizeClass}`}>{card.size}</div>
                                     </div>
-                                )}
-                                <div className="text-5xl font-sans font-bold tabular-nums tracking-tight mb-1">{card.model}</div>
-                                <div className="text-2xl font-sans font-bold tabular-nums mb-4 opacity-70">{card.size}</div>
-                                <p className={`text-sm ${card.textColor === "text-white" ? "text-white/70" : "text-slate-500"}`}>
-                                    {card.rec}
-                                </p>
+                                    {card.badge ? (
+                                        <div className={`shrink-0 rounded-full px-2.5 py-1 text-[10px] font-semibold tracking-[0.18em] ${card.badgeClass}`}>
+                                            {card.badge}
+                                        </div>
+                                    ) : null}
+                                </div>
+                                <p className={`text-sm leading-relaxed ${card.recClass}`}>{card.rec}</p>
                             </motion.div>
                         ))}
                     </div>
@@ -1361,14 +1456,13 @@ export default function ProductHWPage() {
                     <motion.div {...fadeUp}>
                         <p className="text-sm font-semibold text-[#22A366] tracking-wider uppercase mb-3">EXPERIENCE</p>
                         <h2 className="text-3xl md:text-4xl lg:text-5xl text-[#1a1a19] mb-4 leading-tight">
-                            스펙으로 전할 수 없는 건,
+                            압도적인 몰입감,
                             <br />
-                            <span className="text-[#22A366]">직접 써보는 것</span>뿐입니다
+                            <span className="text-[#22A366]">직접 써보는 순간 확신이 됩니다</span>
                         </h2>
                         <p className="text-lg text-slate-500 mb-10 max-w-xl mx-auto leading-relaxed">
-                            교실 규모와 환경에 맞는 최적의 모델을 제안해드립니다.
-                            <br />
-                            데모 체험부터 설치, 유지보수까지 원스톱으로 지원합니다.
+                            직접 써보는 것만큼 확실한 비교는 없습니다.
+                            우리 학원 환경에 최적화된 클래스인 보드의 성능을 데모 시연으로 먼저 경험해 보세요.
                         </p>
 
                         <div className="flex flex-col sm:flex-row gap-4 justify-center">

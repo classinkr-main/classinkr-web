@@ -1,36 +1,43 @@
-This is a [Next.js](https://nextjs.org) project bootstrapped with [`create-next-app`](https://nextjs.org/docs/app/api-reference/cli/create-next-app).
+# Classin Home
 
-## Getting Started
+Classin Home is a mixed Next.js workspace for the public marketing site, admin operations workspace, and partner portal.
 
-First, run the development server:
+## Start Here
+
+- [Docs index](docs/README.md)
+- [Current repo audit and fix playbook](docs/active/repository-audit-2026-04-15.md)
+- [Homepage PRD](docs/active/prd.md)
+- [Partner Portal master spec](docs/active/partner-portal-master-spec.md)
+- [Design system](DESIGN.md)
+
+## Main Surfaces
+
+- Public site: `/`, `/product`, `/pricing`, `/blog`, `/events`
+- Admin workspace: `/admin`
+- Partner portal: `/partner`, `/app/api/portal/*`, `/lib/partner-portal/*`
+
+## Development
 
 ```bash
+npm install
 npm run dev
-# or
-yarn dev
-# or
-pnpm dev
-# or
-bun dev
 ```
 
-Open [http://localhost:3000](http://localhost:3000) with your browser to see the result.
+The dev server runs on port `3888`.
 
-You can start editing the page by modifying `app/page.tsx`. The page auto-updates as you edit the file.
+## Verification
 
-This project uses [`next/font`](https://nextjs.org/docs/app/building-your-application/optimizing/fonts) to automatically optimize and load [Geist](https://vercel.com/font), a new font family for Vercel.
+Use these two commands as the current default truth checks:
 
-## Learn More
+```bash
+npx eslint app components lib --max-warnings=0
+npm run build
+```
 
-To learn more about Next.js, take a look at the following resources:
+`npm run lint` is broader than the current standard source check for this repository.
 
-- [Next.js Documentation](https://nextjs.org/docs) - learn about Next.js features and API.
-- [Learn Next.js](https://nextjs.org/learn) - an interactive Next.js tutorial.
+## Repo Hygiene
 
-You can check out [the Next.js GitHub repository](https://github.com/vercel/next.js) - your feedback and contributions are welcome!
-
-## Deploy on Vercel
-
-The easiest way to deploy your Next.js app is to use the [Vercel Platform](https://vercel.com/new?utm_medium=default-template&filter=next.js&utm_source=create-next-app&utm_campaign=create-next-app-readme) from the creators of Next.js.
-
-Check out our [Next.js deployment documentation](https://nextjs.org/docs/app/building-your-application/deploying) for more details.
+- Keep local secrets out of git-tracked paths.
+- Use repo-relative markdown links in docs.
+- Prefer the docs index and current audit doc over historical notes when checking current status.

@@ -1786,7 +1786,7 @@ export default function PartnerWorkspaceDetailClient({
       />
 
       <ContactFormDialog
-        key={`${contactDialogOpen ? "open" : "closed"}-${editingContact?.id ?? "new"}`}
+        key={`contact-${contactDialogOpen ? "open" : "closed"}-${editingContact?.id ?? "new"}`}
         open={contactDialogOpen}
         partner={workspace.partner}
         initialContact={editingContact}
@@ -1802,7 +1802,7 @@ export default function PartnerWorkspaceDetailClient({
       />
 
       <DealFormDialog
-        key={`${dealDialogOpen ? "open" : "closed"}-${editingDeal?.id ?? creationContext?.dealId ?? "new"}`}
+        key={`deal-${dealDialogOpen ? "open" : "closed"}-${editingDeal?.id ?? creationContext?.dealId ?? "new"}`}
         open={dealDialogOpen}
         initialDeal={editingDeal}
         loading={savingKind === "deal"}
@@ -1817,7 +1817,7 @@ export default function PartnerWorkspaceDetailClient({
       />
 
       <DocumentFormDialog
-        key={`${documentDialogOpen ? "open" : "closed"}-${editingDocument?.id ?? creationContext?.dealId ?? "new"}`}
+        key={`document-${documentDialogOpen ? "open" : "closed"}-${editingDocument?.id ?? creationContext?.dealId ?? "new"}`}
         open={documentDialogOpen}
         deals={workspace.deals}
         initialDocument={editingDocument}
@@ -1834,7 +1834,7 @@ export default function PartnerWorkspaceDetailClient({
       />
 
       <ScheduleFormDialog
-        key={`${scheduleDialogOpen ? "open" : "closed"}-${editingSchedule?.id ?? creationContext?.dealId ?? "new"}`}
+        key={`schedule-${scheduleDialogOpen ? "open" : "closed"}-${editingSchedule?.id ?? creationContext?.dealId ?? "new"}`}
         open={scheduleDialogOpen}
         deals={workspace.deals}
         initialSchedule={editingSchedule}
@@ -1851,7 +1851,7 @@ export default function PartnerWorkspaceDetailClient({
       />
 
       <SalesFormDialog
-        key={`${salesDialogOpen ? "open" : "closed"}-${editingSales?.id ?? creationContext?.dealId ?? "new"}`}
+        key={`sales-${salesDialogOpen ? "open" : "closed"}-${editingSales?.id ?? creationContext?.dealId ?? "new"}`}
         open={salesDialogOpen}
         deals={workspace.deals}
         initialSales={editingSales}
@@ -1868,7 +1868,7 @@ export default function PartnerWorkspaceDetailClient({
       />
 
       <ChecklistFormDialog
-        key={`${checklistDialogOpen ? "open" : "closed"}-${editingChecklist?.id ?? creationContext?.dealId ?? "new"}`}
+        key={`checklist-${checklistDialogOpen ? "open" : "closed"}-${editingChecklist?.id ?? creationContext?.dealId ?? "new"}`}
         open={checklistDialogOpen}
         deals={workspace.deals}
         initialChecklist={editingChecklist}
@@ -1885,7 +1885,7 @@ export default function PartnerWorkspaceDetailClient({
       />
 
       <IssueFormDialog
-        key={`${issueDialogOpen ? "open" : "closed"}-${editingIssue?.id ?? creationContext?.dealId ?? "new"}`}
+        key={`issue-${issueDialogOpen ? "open" : "closed"}-${editingIssue?.id ?? creationContext?.dealId ?? "new"}`}
         open={issueDialogOpen}
         deals={workspace.deals}
         documents={workspace.documents}
@@ -1904,7 +1904,7 @@ export default function PartnerWorkspaceDetailClient({
       />
 
       <ActivityLogFormDialog
-        key={`${activityLogDialogOpen ? "open" : "closed"}-${editingActivityLog?.id ?? creationContext?.dealId ?? "new"}`}
+        key={`activity-log-${activityLogDialogOpen ? "open" : "closed"}-${editingActivityLog?.id ?? creationContext?.dealId ?? "new"}`}
         open={activityLogDialogOpen}
         deals={workspace.deals}
         documents={workspace.documents}

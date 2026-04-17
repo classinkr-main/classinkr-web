@@ -1,6 +1,6 @@
 # Classin Home 구조 / 스키마 / ERD 정리
 
-기준 시점: 2026-03-18
+기준 시점: 2026-04-15
 
 ## 1. 한눈에 보기
 
@@ -8,7 +8,7 @@
 - 데이터 저장용 ORM, DB 스키마, 마이그레이션 파일은 현재 저장소 안에 없다.
 - 실제 런타임 데이터 흐름은 크게 두 갈래다.
   - 마케팅/콘텐츠 렌더링: 페이지 내부 하드코딩 배열과 섹션 컴포넌트 중심
-  - 리드 수집: 폼 입력 → `/api/lead` → 외부 웹훅 3종 전송
+  - 리드 수집: 내부 폼은 `/api/lead`, 외부 랜딩페이지 폼은 `/api/webhook/page` → 공용 리드 처리 → 외부 웹훅 3종 전송
 - 따라서 아래 ERD는 “물리 DB ERD”가 아니라 현재 코드 기준의 “논리 ERD”다.
 
 ## 2. 기술 스택
@@ -31,6 +31,7 @@ app/
   layout.tsx                 전역 레이아웃
   page.tsx                   메인 랜딩 페이지
   api/lead/route.ts          리드 수집 API
+  api/webhook/page/route.ts  외부 페이지 폼용 공개 웹훅
   blog/page.tsx              블로그 목록
   contact/page.tsx           문의 페이지
   events/page.tsx            행사/프로모션 페이지
@@ -67,7 +68,8 @@ public/
 | `/blog` | 정적 | 블로그 목록/검색/뉴스레터 CTA | `app/blog/page.tsx` |
 | `/events` | 정적 | 행사/프로모션 목록 | `app/events/page.tsx` |
 | `/contact` | 정적 | 문의 폼 + 연락처 정보 | `app/contact/page.tsx` |
-| `/api/lead` | 동적 | 리드 수집 및 외부 전송 | `app/api/lead/route.ts` |
+| `/api/lead` | 동적 | 내부 홈페이지 폼 리드 수집 및 외부 전송 | `app/api/lead/route.ts` |
+| `/api/webhook/page` | 동적 | 외부 랜딩페이지 폼 리드 수집 및 외부 전송 | `app/api/webhook/page/route.ts` |
 
 빌드 기준 생성 라우트:
 
@@ -247,6 +249,7 @@ interface EventItem {
 
 - `components/sections/DemoModal.tsx`
 - `app/contact/page.tsx`
+- 외부 랜딩페이지 / 캠페인 페이지 브라우저 `fetch`
 
 ### 공통 제출 함수
 
@@ -255,16 +258,21 @@ interface EventItem {
 ### 서버 처리
 
 - `app/api/lead/route.ts`
+- `app/api/webhook/page/route.ts`
+- `lib/server/lead-capture.ts`
 - `Promise.allSettled`로 3개 외부 연동을 병렬 호출
   - Google Sheet
   - Generic Webhook
   - ChannelTalk
+- `marketingConsent === true` 이고 이메일이 있으면 구독자 DB 동기화
+- `/api/webhook/page`는 CORS 허용 상태라 다른 도메인의 브라우저에서도 직접 호출 가능
 
 ## 8. 논리 플로우 다이어그램
 
 ```mermaid
 flowchart TD
     U[사용자] --> P[페이지 UI]
+    E[외부 랜딩페이지] --> W[/api/webhook/page]
     P --> C1[CTA 클릭]
     P --> C2[문의 폼 입력]
 
@@ -275,9 +283,11 @@ flowchart TD
 
     C2 --> S[submitLead]
     S --> API[/api/lead]
-    API --> GS[Google Sheet Webhook]
-    API --> WB[Lead Webhook]
-    API --> CT[ChannelTalk Webhook]
+    API --> LC[lead-capture]
+    W --> LC
+    LC --> GS[Google Sheet Webhook]
+    LC --> WB[Lead Webhook]
+    LC --> CT[ChannelTalk Webhook]
 ```
 
 ## 9. 논리 ERD

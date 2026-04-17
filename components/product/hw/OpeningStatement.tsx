@@ -45,28 +45,16 @@ export default function OpeningStatement() {
             선생님은 수업만 하세요.
           </motion.p>
 
-          {/* Line 2 — accent */}
+          {/* Line 2 */}
           <motion.p
             variants={fadeUp}
             initial="hidden"
             animate={inView ? "visible" : "hidden"}
             transition={transition(0.2)}
-            className="text-[2rem] sm:text-4xl md:text-5xl lg:text-[3.75rem] xl:text-[4.25rem] font-bold tracking-tight text-[#084734]"
-            style={{ lineHeight: 1.1, letterSpacing: "-0.045em" }}
-          >
-            녹화도, 공유도, 기록도 —
-          </motion.p>
-
-          {/* Line 3 */}
-          <motion.p
-            variants={fadeUp}
-            initial="hidden"
-            animate={inView ? "visible" : "hidden"}
-            transition={transition(0.4)}
             className="text-[2rem] sm:text-4xl md:text-5xl lg:text-[3.75rem] xl:text-[4.25rem] font-bold tracking-tight text-[#111110]"
             style={{ lineHeight: 1.1, letterSpacing: "-0.045em" }}
           >
-            교실이 알아서 합니다.
+            나머지는 <span className="text-[#084734]">Classin</span>이 알아서 합니다.
           </motion.p>
         </div>
 

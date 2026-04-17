@@ -1,4 +1,4 @@
-import type { LeadPayload } from "@/app/api/lead/route"
+import type { LeadPayload } from "@/lib/lead-types"
 
 export async function submitLead(data: Omit<LeadPayload, "timestamp">) {
   const res = await fetch("/api/lead", {

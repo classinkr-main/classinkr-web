@@ -7,10 +7,10 @@
 
 현재 문서 체계:
 
-- 단일 진입 문서: [partner-portal-master-spec.md](C:/Projects/PUBLIC_Classin/Classin_Home_bae_v1/docs/active/partner-portal-master-spec.md)
+- 단일 진입 문서: [partner-portal-master-spec.md](./partner-portal-master-spec.md)
 - 운영 규칙: 이 문서
-- 화면/UX: [partner-portal-product-plan.md](C:/Projects/PUBLIC_Classin/Classin_Home_bae_v1/docs/active/partner-portal-product-plan.md), [partner-portal-screen-layout.md](C:/Projects/PUBLIC_Classin/Classin_Home_bae_v1/docs/active/partner-portal-screen-layout.md)
-- 구현 순서: [partner-portal-implementation-roadmap.md](C:/Projects/PUBLIC_Classin/Classin_Home_bae_v1/docs/active/partner-portal-implementation-roadmap.md)
+- 화면/UX: [partner-portal-product-plan.md](./partner-portal-product-plan.md), [partner-portal-screen-layout.md](./partner-portal-screen-layout.md)
+- 구현 순서: [partner-portal-implementation-roadmap.md](./partner-portal-implementation-roadmap.md)
 
 ## 1. 제품 정의
 

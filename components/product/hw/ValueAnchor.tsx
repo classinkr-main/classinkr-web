@@ -6,31 +6,31 @@ import Link from "next/link";
 
 const items = [
   {
-    label: "86\" / 75\" 4K 디스플레이",
-    desc: "AG/AF 코팅, 90% 이상 빛 투과율",
+    label: "[화질] 86\" / 75\" 4K 디스플레이",
+    desc: "AG/AF 코팅으로 눈부심 없이 선명하게",
   },
   {
-    label: "50점 멀티터치 + 0.03s 응답",
-    desc: "분필보다 빠른 필기, 동시 필기 지원",
+    label: "[판서] 50점 멀티터치 & 0.03s 응답",
+    desc: "이질감 없는 초밀착 판서 경험",
   },
   {
-    label: "OPS PC 내장 (i5 / i7)",
-    desc: "별도 본체·HDMI·어댑터 불필요",
+    label: "[성능] 고성능 OPS PC 내장 (i5 / i7)",
+    desc: "선 연결 없는 깔끔한 데스크탑 환경",
   },
   {
-    label: "4K AI 트래킹 카메라 + 마이크 어레이",
-    desc: "강사 자동 추적, 라이브·녹화 한 번에",
+    label: "[추적] 4K AI 카메라 & 마이크 어레이",
+    desc: "강사 자동 추적과 고음질 녹화를 동시에",
   },
   {
-    label: "ClassIn 소프트웨어 라이선스",
-    desc: "학원 단위 무제한, 판서 자동 캡처 포함",
+    label: "[소프트웨어] ClassIn 전용 라이선스",
+    desc: "판서 캡처부터 학원 운영 관리까지 한 번에",
   },
   {
-    label: "설치 + 교사 온보딩",
+    label: "[도입] 설치 + 교사 온보딩",
     desc: "전문 엔지니어 출장, 4시간 핸즈온 교육",
   },
   {
-    label: "24시간 원격지원 + 출장 A/S",
+    label: "[지원] 24시간 원격지원 + 출장 A/S",
     desc: "1년 무상, 평일 24시간 대응",
   },
 ];
@@ -55,7 +55,7 @@ const itemFadeUp: Variants = {
 
 export default function ValueAnchor() {
   return (
-    <section className="bg-[#0D1A12] text-white py-28 md:py-36 px-6 relative overflow-hidden">
+    <section className="bg-[#0D1A12] text-white min-h-screen flex items-center px-6 py-20 md:py-24 relative overflow-hidden">
       {/* Background glows */}
       <div
         aria-hidden="true"
@@ -66,7 +66,7 @@ export default function ValueAnchor() {
         className="absolute -bottom-32 -right-32 w-[480px] h-[480px] rounded-full bg-[#084734]/30 blur-3xl pointer-events-none"
       />
 
-      <div className="max-w-5xl mx-auto text-center relative z-10">
+      <div className="w-full max-w-5xl mx-auto text-center relative z-10">
         {/* Eyebrow */}
         <motion.p
           custom={0}
@@ -89,9 +89,9 @@ export default function ValueAnchor() {
           className="text-4xl md:text-5xl lg:text-6xl mt-4 leading-tight text-white"
           style={{ letterSpacing: "-1.5px" }}
         >
-          한 대 안에,
+          클래스인 보드 하나에
           <br />
-          교실이 필요한 모든 것.
+          수업을 위한 모든 기능을 담았습니다.
         </motion.h2>
 
         {/* Sub-copy */}
@@ -103,7 +103,9 @@ export default function ValueAnchor() {
           viewport={{ once: true, margin: "-80px" }}
           className="text-lg text-white/70 mt-6 max-w-2xl mx-auto leading-relaxed"
         >
-          ClassIn Board를 들이는 순간, 더 살 것이 없습니다. 별도 PC도, 캠코더도, 마이크도, 소프트웨어도 모두 보드 안에 들어 있습니다.
+          클래스인 보드는 하드웨어부터 소프트웨어까지 단 한 대에 모두 구축된
+          완성형 솔루션입니다. 도입하는 순간, 복잡한 연결 과정 없이 바로 수업을
+          시작할 수 있습니다.
         </motion.p>
 
         {/* Value card */}
@@ -114,7 +116,7 @@ export default function ValueAnchor() {
           whileInView="visible"
           viewport={{ once: true, margin: "-80px" }}
           whileTap={{ scale: 0.985 }}
-          className="mt-12 max-w-xl mx-auto bg-white/[0.05] backdrop-blur-sm border border-white/10 rounded-2xl p-6 md:p-8 text-left cursor-default"
+          className="mt-10 max-w-xl mx-auto bg-white/[0.05] backdrop-blur-sm border border-white/10 rounded-2xl p-6 md:p-8 text-left cursor-default"
           style={{ transition: "box-shadow 0.15s" }}
         >
           <div className="flex items-center justify-between mb-5">
@@ -155,7 +157,7 @@ export default function ValueAnchor() {
           initial="hidden"
           whileInView="visible"
           viewport={{ once: true, margin: "-80px" }}
-          className="mt-12 flex flex-col items-center gap-4"
+          className="mt-10 flex flex-col items-center gap-4"
         >
           <Link
             href="/contact"

@@ -10,6 +10,7 @@ import type {
   UpdateInstallationEvent,
 } from "@/lib/supabase/database.types.v2";
 import type { PartnerAccountContext } from "@/lib/partner-portal/context";
+import { syncPartnerCalendarEventToGoogle } from "@/lib/partner-portal/services/google-calendar-sync";
 import { writeActivityLog } from "@/lib/partner-portal/services/activity-log-write";
 import {
   normalizeOptionalText,
@@ -106,6 +107,32 @@ async function getCalendarEventForInstallation(
 
   if (error || !data) {
     return null;
+  }
+
+  return data as CalendarEventRow;
+}
+
+async function persistGoogleCalendarSyncState(
+  partnerAccountId: string,
+  eventId: string,
+  patch: Pick<
+    Partial<CalendarEventRow>,
+    | "google_calendar_event_id"
+    | "google_calendar_last_synced_at"
+    | "google_calendar_sync_error"
+  >
+) {
+  const supabase = createSupabaseAdminClient();
+  const { data, error } = await supabase
+    .from("calendar_events")
+    .update(patch)
+    .eq("id", eventId)
+    .eq("partner_account_id", partnerAccountId)
+    .select("*")
+    .single();
+
+  if (error) {
+    throw error;
   }
 
   return data as CalendarEventRow;
@@ -290,6 +317,18 @@ export async function updateInstallationForPartnerAccount(
     }
 
     calendarEvent = calendarData as CalendarEventRow;
+    try {
+      calendarEvent = await persistGoogleCalendarSyncState(
+        partnerAccountId,
+        calendarEvent.id,
+        await syncPartnerCalendarEventToGoogle(calendarEvent)
+      );
+    } catch (syncPersistError) {
+      console.error(
+        "[installations-write] failed to persist Google sync state",
+        syncPersistError
+      );
+    }
   }
 
   await writeActivityLog({
@@ -401,7 +440,19 @@ export async function createInstallationForPartnerAccount(
     throw calendarError;
   }
 
-  const calendarEvent = calendarData as CalendarEventRow;
+  let calendarEvent = calendarData as CalendarEventRow;
+  try {
+    calendarEvent = await persistGoogleCalendarSyncState(
+      partnerAccountId,
+      calendarEvent.id,
+      await syncPartnerCalendarEventToGoogle(calendarEvent)
+    );
+  } catch (syncPersistError) {
+    console.error(
+      "[installations-write] failed to persist Google sync state",
+      syncPersistError
+    );
+  }
 
   await writeActivityLog({
     partner_account_id: partnerAccountId,

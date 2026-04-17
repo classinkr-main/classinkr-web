@@ -19,6 +19,7 @@ import {
   Settings,
   SquareChevronLeft,
   SquareChevronRight,
+  Ticket,
   UserCog,
   Users,
 } from "lucide-react"
@@ -47,6 +48,7 @@ const NAV: NavItem[] = [
   { href: "/admin/crm", label: "CRM / 리드", icon: <Users className="h-4 w-4" />, roles: [...ALL_STAFF, "BRANCH"], section: "workspace" },
   { href: "/admin/campaigns", label: "캠페인", icon: <Megaphone className="h-4 w-4" />, roles: STAFF_ADMIN, section: "workspace" },
   { href: "/admin/partners", label: "파트너 운영", icon: <Handshake className="h-4 w-4" />, roles: STAFF_ADMIN, section: "workspace" },
+  { href: "/admin/software-quote-codes", label: "SW 견적 코드", icon: <Ticket className="h-4 w-4" />, roles: STAFF_ADMIN, section: "workspace" },
   { href: "/admin/calendar", label: "캘린더", icon: <CalendarDays className="h-4 w-4" />, roles: [...ALL_STAFF, "BRANCH"], section: "workspace" },
   { href: "/admin/blog", label: "콘텐츠", icon: <FileText className="h-4 w-4" />, roles: STAFF_EDITOR, section: "workspace" },
   { href: "/admin/branch", label: "지사 관리", icon: <Building2 className="h-4 w-4" />, roles: [...STAFF_ADMIN, "BRANCH"], section: "performance" },

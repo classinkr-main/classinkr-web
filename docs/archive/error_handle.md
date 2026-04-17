@@ -2,6 +2,8 @@
 
 기준일: 2026-03-23
 
+> 이 문서는 2026-03-23 시점의 역사적 장애 메모다. 현재 운영 상태 판단에는 [../active/repository-audit-2026-04-15.md](../active/repository-audit-2026-04-15.md) 와 실제 코드/배포 설정을 우선한다.
+
 이 문서는 Classin Home 운영 중 실제로 발생한 장애, 원인, 재발 방지 포인트를 빠르게 파악하기 위한 유지보수 메모다.
 특히 관리자 로그인과 배포 환경변수처럼 "로컬에서는 되는데 배포 후 깨지는" 유형을 우선 정리한다.
 
@@ -47,12 +49,12 @@
 
 ---
 
-## 2. 현재 운영 비밀번호 기준
+## 2. 운영 인증 설정 예시 (실제 값 미기재)
 
-2026-03-23 기준 로컬 개발 기본 비밀번호는 아래 값으로 변경했다.
+이 문서에는 실제 비밀번호를 남기지 않는다. 아래 예시는 형식만 보여준다.
 
 ```env
-ADMIN_PASSWORD=classin2014
+ADMIN_PASSWORD=<set-in-secret-store>
 ```
 
 주의:
@@ -64,12 +66,12 @@ ADMIN_PASSWORD=classin2014
 운영을 단일 비밀번호로 유지할 때 권장 설정:
 
 - `ADMIN_USERS` 삭제 또는 비움
-- `ADMIN_PASSWORD=classin2014`
+- `ADMIN_PASSWORD=<set-in-secret-store>`
 
 다중 계정이 필요할 때 예시:
 
 ```json
-[{"name":"Admin","password":"classin2014","role":"admin"}]
+[{"name":"Admin","password":"<set-in-secret-store>","role":"admin"}]
 ```
 
 ---
@@ -84,9 +86,9 @@ ADMIN_PASSWORD=classin2014
 4. 아래 둘 중 하나만 명확히 설정
 
 - 단일 비밀번호 운영:
-  - `ADMIN_PASSWORD=classin2014`
+  - `ADMIN_PASSWORD=<set-in-secret-store>`
 - 다중 사용자 운영:
-  - `ADMIN_USERS=[{"name":"Admin","password":"classin2014","role":"admin"}]`
+  - `ADMIN_USERS=[{"name":"Admin","password":"<set-in-secret-store>","role":"admin"}]`
 
 ### 꼭 기억할 점
 
@@ -155,7 +157,7 @@ npm run build
 관리자 비밀번호 문자열 검색:
 
 ```bash
-rg -n "ADMIN_PASSWORD|ADMIN_USERS|classin2014" -S .
+rg -n "ADMIN_PASSWORD|ADMIN_USERS" -S .
 ```
 
 운영 문제 재현 시 우선 확인할 파일:
@@ -172,7 +174,7 @@ rg -n "ADMIN_PASSWORD|ADMIN_USERS|classin2014" -S .
 
 - 관리자 로그인 원인 구분 로직 추가
 - 로그인 UI 오류 메시지 개선
-- 로컬 기본 비밀번호 `classin2014` 로 변경
+- 로컬 기본 비밀번호 정책 정리
 - 운영 설정 주의점 문서화
 
 검증:
