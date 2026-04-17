@@ -99,7 +99,7 @@ function SlotDigit({ digit, delay, trigger, onDone }: { digit: string; delay: nu
                 onAnimationComplete={() => { if (trigger) { setDone(true); onDone?.() } }}
             >
                 {[0, 1, 2, 3, 4, 5, 6, 7, 8, 9].map((n) => (
-                    <span key={n} className={`h-[4.5rem] sm:h-28 md:h-36 flex items-center justify-center text-4xl sm:text-6xl md:text-8xl font-serif text-[#E05024] font-light ${done ? "animate-digit-glow" : ""}`}>{n}</span>
+                    <span key={n} className={`h-[4.5rem] sm:h-28 md:h-36 flex items-center justify-center text-4xl sm:text-6xl md:text-8xl font-serif text-[#22A366] font-light ${done ? "animate-digit-glow" : ""}`}>{n}</span>
                 ))}
             </motion.div>
         </div>
@@ -117,7 +117,7 @@ function StatCard({ value, suffix, label, icon, delay, trigger }: { value: numbe
             transition={{ type: "spring", stiffness: 200, damping: 25, delay }}
             style={{ perspective: 800 }}
         >
-            <div className="flex justify-center mb-3 text-[#E05024]/70">{icon}</div>
+            <div className="flex justify-center mb-3 text-[#22A366]/70">{icon}</div>
             <div className="text-2xl sm:text-3xl font-bold text-slate-900 mb-1 font-serif">
                 {value >= 100 ? display.toLocaleString() : display}{suffix}
             </div>
@@ -130,7 +130,7 @@ function StatCard({ value, suffix, label, icon, delay, trigger }: { value: numbe
 function AmbientParticle({ x, size, duration, delayStart }: { x: number; size: number; duration: number; delayStart: number }) {
     return (
         <motion.div
-            className="absolute rounded-full bg-orange-300/15 pointer-events-none"
+            className="absolute rounded-full bg-green-300/15 pointer-events-none"
             style={{ left: `${x}%`, bottom: "-10%", width: size, height: size }}
             animate={{ y: [0, -600, -1200], opacity: [0, 0.5, 0] }}
             transition={{ duration, delay: delayStart, repeat: Infinity, ease: "easeInOut" }}
@@ -214,11 +214,11 @@ function FinalCTASection() {
 
     return (
         <section ref={sectionRef} className="relative py-32 md:py-44 overflow-hidden" style={{ minHeight: "100vh" }}>
-            <div className="absolute inset-0 bg-gradient-to-b from-[#FFF9F5] via-[#FFFAF7] to-[#FDFCF8]"></div>
+            <div className="absolute inset-0 bg-gradient-to-b from-[#F0FDF9] via-[#F0FDF9] to-[#FDFCF8]"></div>
             <motion.div className="absolute inset-0 pointer-events-none" style={{ opacity: glowOpacity }}>
-                <motion.div className="absolute top-1/2 left-1/2 -translate-x-1/2 -translate-y-1/2 w-[900px] h-[700px] bg-gradient-radial from-orange-200/30 via-orange-100/10 to-transparent rounded-full blur-3xl" animate={{ x: [0, 30, -20, 0], y: [0, -20, 15, 0] }} transition={{ duration: 20, repeat: Infinity, ease: "easeInOut" }} />
+                <motion.div className="absolute top-1/2 left-1/2 -translate-x-1/2 -translate-y-1/2 w-[900px] h-[700px] bg-gradient-radial from-green-200/30 via-green-100/10 to-transparent rounded-full blur-3xl" animate={{ x: [0, 30, -20, 0], y: [0, -20, 15, 0] }} transition={{ duration: 20, repeat: Infinity, ease: "easeInOut" }} />
             </motion.div>
-            <div className="absolute top-0 left-0 w-full h-px bg-gradient-to-r from-transparent via-orange-300/20 to-transparent"></div>
+            <div className="absolute top-0 left-0 w-full h-px bg-gradient-to-r from-transparent via-green-300/20 to-transparent"></div>
             <motion.div className="absolute inset-0 pointer-events-none" initial={{ opacity: 0 }} animate={phase >= 1 ? { opacity: 1 } : {}} transition={{ duration: 1 }}>
                 {particles.map(({ key, ...rest }) => <AmbientParticle key={key} {...rest} />)}
             </motion.div>
@@ -226,14 +226,14 @@ function FinalCTASection() {
             <div className="container mx-auto px-4 text-center max-w-5xl relative z-10">
                 <motion.p initial={{ opacity: 0, y: 20 }} animate={phase >= 1 ? { opacity: 1, y: 0 } : {}} transition={{ duration: 0.7 }} className="text-xl sm:text-2xl md:text-3xl text-slate-500 font-medium font-serif leading-relaxed mb-3">줌 열고, 녹화 누르고, 숙제 올리고—</motion.p>
                 <motion.p initial={{ opacity: 0, y: 20 }} animate={phase >= 1 ? { opacity: 1, y: 0 } : {}} transition={{ duration: 0.7, delay: 0.35 }} className="text-xl sm:text-2xl md:text-3xl text-slate-700 font-semibold font-serif mb-8">수업 하나에 도구만 네 개.</motion.p>
-                <motion.p initial={{ opacity: 0, filter: "blur(4px)" }} animate={phase >= 1 ? { opacity: 1, filter: "blur(0px)" } : {}} transition={{ duration: 0.8, delay: 0.7 }} className="text-lg sm:text-xl md:text-2xl text-[#E05024] font-medium font-serif italic mb-10">가르치는 일에만 집중할 수 있다면?</motion.p>
+                <motion.p initial={{ opacity: 0, filter: "blur(4px)" }} animate={phase >= 1 ? { opacity: 1, filter: "blur(0px)" } : {}} transition={{ duration: 0.8, delay: 0.7 }} className="text-lg sm:text-xl md:text-2xl text-[#22A366] font-medium font-serif italic mb-10">가르치는 일에만 집중할 수 있다면?</motion.p>
                 <motion.div initial={{ opacity: 0, y: 10 }} animate={phase >= 1 ? { opacity: 1, y: 0 } : {}} transition={{ duration: 0.5, delay: 1.0 }} className="flex items-center justify-center gap-2 mb-14">
-                    <div className="inline-flex items-center gap-2 px-4 py-1.5 rounded-full bg-orange-50 border border-orange-200/60 text-sm font-medium text-[#E05024]"><Clock className="w-3.5 h-3.5" />되찾은 수업 시간</div>
+                    <div className="inline-flex items-center gap-2 px-4 py-1.5 rounded-full bg-green-50 border border-green-200/60 text-sm font-medium text-[#22A366]"><Clock className="w-3.5 h-3.5" />되찾은 수업 시간</div>
                 </motion.div>
 
                 <motion.p initial={{ opacity: 0, y: 10 }} animate={phase >= 2 ? { opacity: 1, y: 0 } : {}} transition={{ duration: 0.5 }} className="text-base sm:text-lg text-slate-400 font-medium mb-8 max-w-xl mx-auto">200개 기업 고객사가 ClassIn으로 되찾은 시간</motion.p>
                 <div className="relative">
-                    <motion.div className="absolute top-1/2 left-1/2 -translate-x-1/2 -translate-y-1/2 w-[500px] h-[300px] bg-gradient-radial from-orange-300/25 via-orange-200/10 to-transparent rounded-full pointer-events-none" initial={{ scale: 0, opacity: 0 }} animate={phase >= 2 ? { scale: [0, 1.2, 1], opacity: [0, 0.7, 0] } : {}} transition={{ duration: 1.5 }} />
+                    <motion.div className="absolute top-1/2 left-1/2 -translate-x-1/2 -translate-y-1/2 w-[500px] h-[300px] bg-gradient-radial from-green-300/25 via-green-200/10 to-transparent rounded-full pointer-events-none" initial={{ scale: 0, opacity: 0 }} animate={phase >= 2 ? { scale: [0, 1.2, 1], opacity: [0, 0.7, 0] } : {}} transition={{ duration: 1.5 }} />
                     <motion.div className="flex justify-center mb-5" initial={{ scale: 0.9, opacity: 0.3, filter: "blur(8px)" }} animate={phase >= 2 ? { scale: 1, opacity: 1, filter: "blur(0px)" } : {}} transition={{ type: "spring", stiffness: 120, damping: 20 }}>
                         <div className="flex items-center gap-1.5 sm:gap-2.5 select-none relative">
                             <SlotDigit digit={displayDigits[0]} delay={0.2} trigger={phase >= 2} />
@@ -245,14 +245,14 @@ function FinalCTASection() {
                             <SlotDigit digit={displayDigits[4]} delay={0.65} trigger={phase >= 2} />
                             <SlotDigit digit={displayDigits[5]} delay={0.75} trigger={phase >= 2} />
                             <SlotDigit digit={displayDigits[6]} delay={0.85} trigger={phase >= 2} onDone={handleLastSlotDone} />
-                            {slotsDone && <div className="absolute inset-0 overflow-hidden pointer-events-none rounded-2xl"><div className="absolute inset-0 animate-shimmer-sweep bg-gradient-to-r from-transparent via-orange-400/15 to-transparent w-1/3 h-full" /></div>}
+                            {slotsDone && <div className="absolute inset-0 overflow-hidden pointer-events-none rounded-2xl"><div className="absolute inset-0 animate-shimmer-sweep bg-gradient-to-r from-transparent via-green-400/15 to-transparent w-1/3 h-full" /></div>}
                         </div>
                     </motion.div>
                 </div>
                 <motion.p initial={{ opacity: 0 }} animate={phase >= 2 ? { opacity: 1 } : {}} transition={{ delay: 0.5 }} className="text-3xl sm:text-4xl md:text-5xl font-serif text-slate-800 font-light tracking-tight mb-3">시간</motion.p>
                 <motion.p initial={{ opacity: 0, y: 10 }} animate={phase >= 2 ? { opacity: 1, y: 0 } : {}} transition={{ delay: 0.7 }} className="text-sm sm:text-base text-slate-400 font-medium mb-6">지금 이 순간에도 수업이 진행되고 있습니다</motion.p>
 
-                <motion.div className="w-full max-w-sm mx-auto h-px bg-gradient-to-r from-transparent via-orange-300/30 to-transparent mb-14 mt-14" initial={{ scaleX: 0 }} animate={phase >= 3 ? { scaleX: 1 } : {}} transition={{ duration: 0.6 }} style={{ originX: 0.5 }} />
+                <motion.div className="w-full max-w-sm mx-auto h-px bg-gradient-to-r from-transparent via-green-300/30 to-transparent mb-14 mt-14" initial={{ scaleX: 0 }} animate={phase >= 3 ? { scaleX: 1 } : {}} transition={{ duration: 0.6 }} style={{ originX: 0.5 }} />
                 <div className="grid grid-cols-2 lg:grid-cols-4 gap-3 sm:gap-4 mb-14 max-w-3xl mx-auto">
                     <StatCard value={200} suffix="+" label="기업 고객사" icon={<Monitor className="w-5 h-5" />} delay={0} trigger={phase >= 3} />
                     <StatCard value={30} suffix="+" label="인터랙티브 수업 도구" icon={<MousePointerClick className="w-5 h-5" />} delay={0.1} trigger={phase >= 3} />
@@ -261,7 +261,7 @@ function FinalCTASection() {
                 </div>
                 <motion.p initial={{ opacity: 0, letterSpacing: "0.3em" }} animate={phase >= 3 ? { opacity: 1, letterSpacing: "0.05em" } : {}} transition={{ delay: 0.5, duration: 0.8 }} className="text-lg sm:text-xl font-serif text-slate-600 font-medium mb-10">수업만을 위해 만든 플랫폼, 다음은 당신의 교실입니다</motion.p>
                 <motion.div initial={{ opacity: 0, y: 20 }} animate={phase >= 3 ? { opacity: 1, y: 0 } : {}} transition={{ delay: 0.7, type: "spring", stiffness: 200, damping: 25 }} className="flex flex-col items-center gap-4">
-                    <Button asChild className="bg-[#E05024] hover:bg-[#C9431A] text-white rounded-full px-10 h-14 text-base font-bold animate-glow-pulse transition-all hover:scale-105 group">
+                    <Button asChild className="bg-[#22A366] hover:bg-[#1B8A55] text-white rounded-full px-10 h-14 text-base font-bold animate-glow-pulse transition-all hover:scale-105 group">
                         <Link href={CHECKOUT_HREF}>{CHECKOUT_CTA_LABEL}<ArrowRight className="w-4 h-4 ml-2 group-hover:translate-x-1 transition-transform" /></Link>
                     </Button>
                     <p className="text-xs sm:text-sm text-slate-400 font-medium">{CHECKOUT_SUB_LABEL}</p>
@@ -407,7 +407,7 @@ function TypographyHookSection() {
                             viewport={{ once: true }}
                             transition={{ delay: i * 0.18, duration: 0.7, ease: [0.22, 1, 0.36, 1] }}
                             className={`text-[clamp(2rem,5vw,4rem)] font-serif leading-[1.15] tracking-tight ${
-                                line.accent ? "text-[#E05024]" : "text-[#1a1a19]"
+                                line.accent ? "text-[#22A366]" : "text-[#1a1a19]"
                             }`}
                         >
                             {line.text}
@@ -421,7 +421,7 @@ function TypographyHookSection() {
                     viewport={{ once: true }}
                     transition={{ delay: 0.6, duration: 0.6, ease: "easeOut" }}
                     style={{ originX: 0 }}
-                    className="w-16 h-[2px] bg-[#E05024] mb-10"
+                    className="w-16 h-[2px] bg-[#22A366] mb-10"
                 />
 
                 <motion.div
@@ -435,7 +435,7 @@ function TypographyHookSection() {
                         교사가 <span className="font-bold text-slate-900">잘 가르칠 수 있을 때</span>,
                     </p>
                     <p className="text-xl md:text-2xl font-serif text-slate-600 leading-relaxed">
-                        학생은 <span className="font-bold text-[#E05024]">더 깊이 배웁니다.</span>
+                        학생은 <span className="font-bold text-[#22A366]">더 깊이 배웁니다.</span>
                     </p>
                 </motion.div>
             </div>
@@ -514,10 +514,10 @@ function FutureVision2Section() {
                     viewport={{ once: true }}
                     transition={{ duration: 0.8 }}
                 >
-                    <p className="text-sm font-semibold text-[#E05024] tracking-wider uppercase mb-4">The Real Goal</p>
+                    <p className="text-sm font-semibold text-[#22A366] tracking-wider uppercase mb-4">The Real Goal</p>
                     <h2 className="text-[clamp(2rem,5vw,4.5rem)] font-serif text-[#1a1a19] leading-[1.1] tracking-tight mb-6">
                         아이들과의<br />
-                        <span className="text-[#E05024]">진정한 교육</span>
+                        <span className="text-[#22A366]">진정한 교육</span>
                     </h2>
                     <p className="text-xl md:text-2xl text-slate-500 font-serif max-w-2xl mx-auto leading-relaxed">
                         더 많이 가르치면서 더 적게 소진되는 것.
@@ -544,9 +544,9 @@ function FutureVision2Section() {
                         initial={{ opacity: 0, scale: 0.9 }}
                         animate={inView ? { opacity: 1, scale: 1 } : {}}
                         transition={{ duration: 0.7, delay: 0.15, type: "spring", stiffness: 150 }}
-                        className="bg-[#E05024] rounded-3xl p-10 text-center"
+                        className="bg-[#084734] rounded-3xl p-10 text-center"
                     >
-                        <div className="text-[72px] md:text-[88px] font-serif font-bold text-white leading-none mb-2">
+                        <div className="text-[72px] md:text-[88px] font-serif font-bold text-[#6EE7B7] leading-none mb-2">
                             -{r}%
                         </div>
                         <div className="text-white/90 text-lg font-semibold mb-1">반복 업무 리소스</div>
@@ -569,7 +569,7 @@ function FutureVision2Section() {
                             { headline: "학원이 원하는 것", body: "강사에 의존하지 않고 시스템으로 돌아가는 교육의 구조." },
                         ].map((item) => (
                             <div key={item.headline} className="text-left">
-                                <div className="w-6 h-[2px] bg-[#E05024] mb-4" />
+                                <div className="w-6 h-[2px] bg-[#22A366] mb-4" />
                                 <h3 className="text-base font-bold text-[#1a1a19] mb-2">{item.headline}</h3>
                                 <p className="text-sm text-slate-500 leading-relaxed">{item.body}</p>
                             </div>
@@ -599,8 +599,8 @@ const CYCLE_PHASES = [
     {
         phase: "수업 중",
         emoji: "🖊️",
-        color: "bg-[#FEF3EE] border-[#F6D5C5]",
-        accent: "#B85C33",
+        color: "bg-[#ECFDF5] border-[#D1FAE5]",
+        accent: "#22A366",
         old: ["교사 혼자 판서", "학생은 영상만 시청", "출석 수동으로 체크"],
         now: ["학생이 직접 화면에서 문제 풀기", "30+ 도구로 쌍방향 수업", "자동 출석 체크 + 집중도 측정"],
     },
@@ -619,9 +619,9 @@ function LearningCycleSection() {
         <section className="py-24 md:py-32 bg-white">
             <div className="container mx-auto px-4 lg:px-8 max-w-6xl">
                 <motion.div className="text-center mb-14" {...fadeUp}>
-                    <p className="text-sm font-semibold text-[#E05024] tracking-wider uppercase mb-3">LEARNING CYCLE</p>
+                    <p className="text-sm font-semibold text-[#22A366] tracking-wider uppercase mb-3">LEARNING CYCLE</p>
                     <h2 className="text-3xl md:text-4xl lg:text-5xl font-serif text-[#1a1a19] leading-tight">
-                        수업의 처음부터 끝까지,<br /><span className="text-[#E05024]">하나로 연결</span>
+                        수업의 처음부터 끝까지,<br /><span className="text-[#22A366]">하나로 연결</span>
                     </h2>
                     <p className="text-lg text-slate-400 mt-4 max-w-xl mx-auto">
                         수업 전 준비 → 수업 중 운영 → 수업 후 관리. 세 단계가 끊기지 않고 이어집니다.
@@ -842,9 +842,9 @@ function OnboardingSection() {
         <section className="py-24 md:py-32 bg-white">
             <div className="container mx-auto px-4 lg:px-8 max-w-5xl">
                 <motion.div className="text-center mb-16" {...fadeUp}>
-                    <p className="text-sm font-semibold text-[#E05024] tracking-wider uppercase mb-3">GET STARTED</p>
+                    <p className="text-sm font-semibold text-[#22A366] tracking-wider uppercase mb-3">GET STARTED</p>
                     <h2 className="text-3xl md:text-4xl lg:text-5xl font-serif text-[#1a1a19] leading-tight">
-                        도입은 생각보다<br /><span className="text-[#E05024]">쉽습니다</span>
+                        도입은 생각보다<br /><span className="text-[#22A366]">쉽습니다</span>
                     </h2>
                     <p className="text-lg text-slate-400 mt-4 max-w-md mx-auto">
                         상담부터 첫 수업까지, 빠르면 하루 안에 시작할 수 있습니다.
@@ -853,7 +853,7 @@ function OnboardingSection() {
 
                 <div className="relative">
                     {/* 연결선 */}
-                    <div className="hidden lg:block absolute top-9 left-[calc(12.5%+20px)] right-[calc(12.5%+20px)] h-px bg-gradient-to-r from-[#E05024]/20 via-[#E05024]/40 to-[#E05024]/20" />
+                    <div className="hidden lg:block absolute top-9 left-[calc(12.5%+20px)] right-[calc(12.5%+20px)] h-px bg-gradient-to-r from-[#22A366]/20 via-[#22A366]/40 to-[#22A366]/20" />
 
                     <div className="grid sm:grid-cols-2 lg:grid-cols-4 gap-6">
                         {ONBOARDING_STEPS.map((s, i) => (
@@ -865,10 +865,10 @@ function OnboardingSection() {
                                 transition={{ delay: i * 0.12 }}
                                 className="flex flex-col items-center text-center"
                             >
-                                <div className="w-[52px] h-[52px] rounded-full bg-[#E05024] text-white font-bold text-lg flex items-center justify-center mb-5 shadow-[0_8px_20px_rgba(224,80,36,0.25)] relative z-10">
+                                <div className="w-[52px] h-[52px] rounded-full bg-[#22A366] text-white font-bold text-lg flex items-center justify-center mb-5 shadow-[0_8px_20px_rgba(34,163,102,0.25)] relative z-10">
                                     {s.step}
                                 </div>
-                                <span className="inline-block bg-[#E05024]/5 text-[#E05024] text-xs font-bold px-3 py-1 rounded-full mb-3">
+                                <span className="inline-block bg-[#22A366]/5 text-[#22A366] text-xs font-bold px-3 py-1 rounded-full mb-3">
                                     {s.duration}
                                 </span>
                                 <h3 className="text-base font-bold text-slate-900 mb-2">{s.title}</h3>
@@ -916,7 +916,7 @@ function FAQSection() {
         <section className="py-24 md:py-32 bg-[#FDFCF8]">
             <div className="container mx-auto px-4 lg:px-8 max-w-3xl">
                 <motion.div className="text-center mb-14" {...fadeUp}>
-                    <p className="text-sm font-semibold text-[#E05024] tracking-wider uppercase mb-3">FAQ</p>
+                    <p className="text-sm font-semibold text-[#22A366] tracking-wider uppercase mb-3">FAQ</p>
                     <h2 className="text-3xl md:text-4xl font-serif text-[#1a1a19] leading-tight">
                         자주 묻는 질문
                     </h2>
@@ -940,7 +940,7 @@ function FAQSection() {
                                 <motion.span
                                     animate={{ rotate: open === i ? 45 : 0 }}
                                     transition={{ duration: 0.2 }}
-                                    className="text-[#E05024] text-xl font-light shrink-0 leading-none"
+                                    className="text-[#22A366] text-xl font-light shrink-0 leading-none"
                                 >
                                     +
                                 </motion.span>
@@ -990,7 +990,7 @@ function ImpactTextSection() {
                         className="text-xl sm:text-2xl md:text-3xl font-serif text-slate-900 pt-4 border-t border-slate-100"
                     >
                         수업은 했는데,{" "}
-                        <span className="text-[#E05024] font-bold">교육은 안 된 하루.</span>
+                        <span className="text-[#22A366] font-bold">교육은 안 된 하루.</span>
                     </motion.p>
                     <motion.p
                         initial={{ opacity: 0, y: 10 }}
@@ -1116,9 +1116,9 @@ function CaseStudiesSection() {
         <section className="py-24 md:py-32 bg-[#FDFCF8]">
             <div className="container mx-auto px-4 lg:px-8 max-w-6xl">
                 <motion.div className="text-center mb-16" {...fadeUp}>
-                    <p className="text-sm font-semibold text-[#E05024] tracking-wider uppercase mb-3">CASE STUDY</p>
+                    <p className="text-sm font-semibold text-[#22A366] tracking-wider uppercase mb-3">CASE STUDY</p>
                     <h2 className="text-3xl md:text-4xl lg:text-5xl font-serif text-[#1a1a19] leading-tight">
-                        실제 교육 현장의 <span className="text-[#E05024]">변화</span>
+                        실제 교육 현장의 <span className="text-[#22A366]">변화</span>
                     </h2>
                     <p className="text-lg text-slate-400 mt-4 max-w-xl mx-auto">도입 후 실제로 달라진 것들을 현장의 언어로 전달합니다.</p>
                 </motion.div>
@@ -1172,10 +1172,10 @@ function PricingValueSection() {
         <section className="py-24 md:py-32 bg-white">
             <div className="container mx-auto px-4 lg:px-8 max-w-5xl">
                 <motion.div className="text-center mb-14" {...fadeUp}>
-                    <p className="text-sm font-semibold text-[#E05024] tracking-wider uppercase mb-3">PRICING VALUE</p>
+                    <p className="text-sm font-semibold text-[#22A366] tracking-wider uppercase mb-3">PRICING VALUE</p>
                     <h2 className="text-3xl md:text-4xl lg:text-5xl font-serif text-[#1a1a19] leading-tight mb-4">
                         이 가격에,{" "}
-                        <span className="text-[#E05024]">이 모든 것을</span>
+                        <span className="text-[#22A366]">이 모든 것을</span>
                     </h2>
                     <p className="text-lg text-slate-500 max-w-xl mx-auto">
                         LMS 따로, 화상 도구 따로, 녹화 툴 따로 — 세 가지를 각각 쓰면
@@ -1203,7 +1203,7 @@ function PricingValueSection() {
                                     transition={{ delay: i * 0.04 }}
                                     className="flex items-start gap-3 text-sm text-slate-700"
                                 >
-                                    <CheckCircle2 className="w-4 h-4 text-[#E05024] shrink-0 mt-0.5" />
+                                    <CheckCircle2 className="w-4 h-4 text-[#22A366] shrink-0 mt-0.5" />
                                     {item}
                                 </motion.li>
                             ))}
@@ -1224,20 +1224,20 @@ function PricingValueSection() {
                             { label: "+ 녹화 · 클라우드 스토리지", note: "별도 저장소 + 관리 비용", cost: "~₩10,000/월", line: true },
                             { label: "합계", note: "그래도 기능은 분산됨", cost: "₩60,000+/월", line: false, highlight: true },
                         ].map((row) => (
-                            <div key={row.label} className={`flex items-center justify-between pb-4 ${row.line ? "border-b border-slate-100" : ""} ${row.highlight ? "bg-[#FFF9F7] rounded-xl px-4 py-3 -mx-4" : ""}`}>
+                            <div key={row.label} className={`flex items-center justify-between pb-4 ${row.line ? "border-b border-slate-100" : ""} ${row.highlight ? "bg-[#F0FDF9] rounded-xl px-4 py-3 -mx-4" : ""}`}>
                                 <div>
-                                    <p className={`text-sm font-semibold ${row.highlight ? "text-[#E05024]" : "text-slate-700"}`}>{row.label}</p>
+                                    <p className={`text-sm font-semibold ${row.highlight ? "text-[#22A366]" : "text-slate-700"}`}>{row.label}</p>
                                     <p className="text-xs text-slate-400">{row.note}</p>
                                 </div>
-                                <p className={`font-bold font-mono text-sm ${row.highlight ? "text-[#E05024]" : "text-slate-500 line-through"}`}>{row.cost}</p>
+                                <p className={`font-bold font-mono text-sm ${row.highlight ? "text-[#22A366]" : "text-slate-500 line-through"}`}>{row.cost}</p>
                             </div>
                         ))}
 
                         <div className="bg-[#1a1a19] text-white rounded-2xl p-6 text-center mt-4">
                             <p className="text-slate-400 text-sm mb-1">ClassIn 하나로</p>
                             <p className="text-2xl font-serif font-bold text-white mb-1">위의 모든 것 + AI 기능까지</p>
-                            <p className="text-[#E05024] text-sm font-bold mb-5">기관 규모에 맞춘 맞춤 요금제</p>
-                            <Link href="/pricing" className="inline-flex items-center gap-2 bg-[#E05024] hover:bg-[#C9431A] text-white font-bold text-sm px-6 py-2.5 rounded-full transition-all hover:scale-105">
+                            <p className="text-[#22A366] text-sm font-bold mb-5">기관 규모에 맞춘 맞춤 요금제</p>
+                            <Link href="/pricing" className="inline-flex items-center gap-2 bg-[#22A366] hover:bg-[#1B8A55] text-white font-bold text-sm px-6 py-2.5 rounded-full transition-all hover:scale-105">
                                 요금제 확인하기 <ArrowRight className="w-4 h-4" />
                             </Link>
                         </div>
@@ -1266,7 +1266,7 @@ export default function ProductPage() {
     const net99 = useCountUp(99, networkInView)
 
     return (
-        <div className="bg-[#FDFCF8] min-h-screen text-slate-900 font-sans selection:bg-orange-200 pt-20">
+        <div className="bg-[#FDFCF8] min-h-screen text-slate-900 font-sans selection:bg-green-200 pt-20">
 
             {/* ================================================================
                 HERO — "수업을, 더 수업답게"
@@ -1274,22 +1274,22 @@ export default function ProductPage() {
             <section className="relative overflow-hidden">
                 {/* Dot pattern background */}
                 <div className="absolute inset-0 pointer-events-none" style={{
-                    backgroundImage: "radial-gradient(circle, rgba(224,80,36,0.06) 1px, transparent 1px)",
+                    backgroundImage: "radial-gradient(circle, rgba(34,163,102,0.06) 1px, transparent 1px)",
                     backgroundSize: "24px 24px",
                 }} />
-                <div className="absolute inset-0 bg-gradient-to-b from-[#FDFCF8] via-[#FFF9F7]/90 to-[#FDFCF8] pointer-events-none" />
+                <div className="absolute inset-0 bg-gradient-to-b from-[#FDFCF8] via-[#F0FDF9]/60 to-[#FDFCF8] pointer-events-none" />
 
                 <div className="container mx-auto px-4 lg:px-8 pt-12 md:pt-24 pb-8 md:pb-16 relative">
                     <div className="max-w-4xl mx-auto text-center">
                         <motion.div initial={{ opacity: 0, y: 30 }} animate={{ opacity: 1, y: 0 }} transition={{ duration: 0.7 }}>
-                            <div className="inline-flex items-center gap-2 px-4 py-1.5 rounded-full bg-[#E05024]/5 text-[#E05024] text-sm font-semibold mb-8 border border-[#E05024]/10">
-                                <span className="w-2 h-2 rounded-full bg-[#E05024] animate-pulse"></span>
+                            <div className="inline-flex items-center gap-2 px-4 py-1.5 rounded-full bg-[#22A366]/5 text-[#22A366] text-sm font-semibold mb-8 border border-[#22A366]/10">
+                                <span className="w-2 h-2 rounded-full bg-[#22A366] animate-pulse"></span>
                                 교육 전용 플랫폼
                             </div>
 
                             <h1 className="text-4xl sm:text-5xl lg:text-6xl xl:text-7xl font-serif leading-[1.1] tracking-tight mb-8 text-[#1a1a19]">
                                 수업을, 더{" "}
-                                <span className="text-[#E05024]">수업답게</span>
+                                <span className="text-[#22A366]">수업답게</span>
                             </h1>
 
                             <p className="text-xl md:text-2xl text-slate-500 leading-relaxed font-medium max-w-2xl mx-auto mb-8">
@@ -1307,7 +1307,7 @@ export default function ProductPage() {
                                     { value: metric2400.toLocaleString(), suffix: "+", label: "도입 학원", raw: true },
                                 ].map((m, i) => (
                                     <motion.div key={i} initial={{ opacity: 0, y: 15 }} animate={heroMetricInView ? { opacity: 1, y: 0 } : {}} transition={{ delay: i * 0.1 + 0.3 }} className="text-center">
-                                        <div className="text-2xl md:text-3xl font-serif font-bold text-[#E05024]">
+                                        <div className="text-2xl md:text-3xl font-serif font-bold text-[#22A366]">
                                             {m.raw ? m.value : m.value}{m.suffix}
                                         </div>
                                         <div className="text-xs md:text-sm text-slate-400 mt-1 font-medium">{m.label}</div>
@@ -1316,7 +1316,7 @@ export default function ProductPage() {
                             </div>
 
                             <div className="flex flex-wrap items-center justify-center gap-4">
-                                <Button asChild className="bg-[#E05024] hover:bg-[#C9431A] text-white rounded-full px-8 h-14 text-base font-bold shadow-[0_8px_20px_rgba(224,80,36,0.3)] hover:shadow-[0_12px_25px_rgba(224,80,36,0.4)] transition-all hover:scale-105 group">
+                                <Button asChild className="bg-[#22A366] hover:bg-[#1B8A55] text-white rounded-full px-8 h-14 text-base font-bold shadow-[0_8px_20px_rgba(34,163,102,0.3)] hover:shadow-[0_12px_25px_rgba(34,163,102,0.4)] transition-all hover:scale-105 group">
                                     <Link href={CHECKOUT_HREF}>
                                     {CHECKOUT_CTA_LABEL}
                                     <ArrowRight className="w-4 h-4 ml-2 group-hover:translate-x-1 transition-transform" />
@@ -1349,13 +1349,13 @@ export default function ProductPage() {
                                     <div className="space-y-3 flex-1">
                                         {[1, 2, 3, 4, 5, 6].map(i => (
                                             <div key={i} className="flex items-center gap-3">
-                                                <div className={`w-6 h-6 rounded-md ${i === 1 ? "bg-[#E05024]/10" : "bg-slate-100"}`}></div>
-                                                <div className={`h-3 rounded ${i === 1 ? "w-16 bg-[#E05024]/20" : "w-14 bg-slate-100"}`}></div>
+                                                <div className={`w-6 h-6 rounded-md ${i === 1 ? "bg-[#22A366]/10" : "bg-slate-100"}`}></div>
+                                                <div className={`h-3 rounded ${i === 1 ? "w-16 bg-[#22A366]/20" : "w-14 bg-slate-100"}`}></div>
                                             </div>
                                         ))}
                                     </div>
                                     <div className="flex items-center gap-2 pt-4 border-t border-slate-100">
-                                        <div className="w-8 h-8 rounded-full bg-gradient-to-br from-[#E05024] to-orange-400"></div>
+                                        <div className="w-8 h-8 rounded-full bg-gradient-to-br from-[#22A366] to-green-500"></div>
                                         <div className="w-16 h-3 bg-slate-100 rounded"></div>
                                     </div>
                                 </div>
@@ -1363,12 +1363,12 @@ export default function ProductPage() {
                                 <div className="flex-1 bg-[#1e1e1e] p-4 sm:p-6 flex flex-col">
                                     {/* Toolbar */}
                                     <div className="flex items-center gap-2 mb-4 pb-3 border-b border-white/10">
-                                        {["#E05024", "#3B82F6", "#10B981", "#F59E0B"].map(c => (
+                                        {["#22A366", "#3B82F6", "#10B981", "#F59E0B"].map(c => (
                                             <div key={c} className="w-5 h-5 rounded-full border-2 border-white/20" style={{ backgroundColor: c }} />
                                         ))}
                                         <div className="ml-auto flex gap-2">
                                             <div className="px-2 py-1 rounded bg-white/10 text-[10px] text-white/40 font-mono">T 2:30</div>
-                                            <div className="px-2 py-1 rounded bg-[#E05024]/20 text-[10px] text-[#E05024] font-mono">LIVE</div>
+                                            <div className="px-2 py-1 rounded bg-[#22A366]/20 text-[10px] text-[#22A366] font-mono">LIVE</div>
                                         </div>
                                     </div>
                                     {/* Board content with animated lines */}
@@ -1376,7 +1376,7 @@ export default function ProductPage() {
                                         <svg className="absolute inset-0 w-full h-full" viewBox="0 0 400 250" fill="none">
                                             <motion.path d="M30,40 Q80,20 130,45 T230,35" stroke="white" strokeWidth="2" strokeOpacity="0.3" initial={{ pathLength: 0 }} animate={{ pathLength: 1 }} transition={{ duration: 2, delay: 1 }} />
                                             <motion.path d="M30,80 Q100,60 170,85 T300,70" stroke="#3B82F6" strokeWidth="2" strokeOpacity="0.4" initial={{ pathLength: 0 }} animate={{ pathLength: 1 }} transition={{ duration: 2, delay: 1.5 }} />
-                                            <motion.path d="M30,120 L120,120 L120,180 L200,180" stroke="#E05024" strokeWidth="2" strokeOpacity="0.35" initial={{ pathLength: 0 }} animate={{ pathLength: 1 }} transition={{ duration: 2, delay: 2 }} />
+                                            <motion.path d="M30,120 L120,120 L120,180 L200,180" stroke="#22A366" strokeWidth="2" strokeOpacity="0.35" initial={{ pathLength: 0 }} animate={{ pathLength: 1 }} transition={{ duration: 2, delay: 2 }} />
                                             <motion.path d="M250,130 Q280,110 310,135 T370,120" stroke="#10B981" strokeWidth="2" strokeOpacity="0.4" initial={{ pathLength: 0 }} animate={{ pathLength: 1 }} transition={{ duration: 1.5, delay: 2.5 }} />
                                         </svg>
                                         {/* Animated cursors */}
@@ -1393,7 +1393,7 @@ export default function ProductPage() {
                                     <div className="flex items-center justify-between pt-3 border-t border-white/10">
                                         <div className="flex -space-x-2">
                                             {[
-                                                "from-[#E05024] to-orange-400",
+                                                "from-[#22A366] to-green-500",
                                                 "from-blue-500 to-cyan-400",
                                                 "from-green-500 to-emerald-400",
                                                 "from-purple-500 to-pink-400",
@@ -1411,7 +1411,7 @@ export default function ProductPage() {
 
                         {/* Floating elements */}
                         <motion.div animate={{ y: [0, -10, 0] }} transition={{ repeat: Infinity, duration: 4 }} className="absolute -left-4 lg:-left-10 top-12 lg:top-20 w-14 h-14 bg-white rounded-2xl shadow-xl flex items-center justify-center border border-slate-50 z-20">
-                            <PenTool className="w-7 h-7 text-[#E05024]" />
+                            <PenTool className="w-7 h-7 text-[#22A366]" />
                         </motion.div>
                         <motion.div animate={{ y: [0, 12, 0] }} transition={{ repeat: Infinity, duration: 5, delay: 1 }} className="absolute -right-4 lg:-right-10 top-28 lg:top-40 w-12 h-12 bg-white rounded-2xl shadow-xl flex items-center justify-center border border-slate-50 z-20">
                             <Users className="w-6 h-6 text-[#084734]" />
@@ -1430,11 +1430,11 @@ export default function ProductPage() {
             <section className="py-16 md:py-24 bg-white">
                 <div className="container mx-auto px-4 lg:px-8">
                     <motion.div className="text-center mb-16" {...fadeUp}>
-                        <p className="text-sm font-semibold text-[#E05024] tracking-wider uppercase mb-3">WHY CLASSIN</p>
+                        <p className="text-sm font-semibold text-[#22A366] tracking-wider uppercase mb-3">WHY CLASSIN</p>
                         <h2 className="text-3xl md:text-4xl lg:text-5xl font-serif text-[#1a1a19] leading-tight">
                             회의용 도구로 수업하던 시대는
                             <br className="hidden sm:block" />
-                            <span className="text-[#E05024]">끝났습니다</span>
+                            <span className="text-[#22A366]">끝났습니다</span>
                         </h2>
                     </motion.div>
 
@@ -1446,10 +1446,10 @@ export default function ProductPage() {
                                         <tr className="bg-slate-50 border-b border-slate-100">
                                             <th className="text-left py-4 px-6 font-semibold text-slate-500 w-[30%]">구분</th>
                                             <th className="text-center py-4 px-6 font-semibold text-slate-400 w-[35%]">일반 화상 도구 (Zoom 등)</th>
-                                            <th className="text-center py-4 px-6 font-bold text-[#E05024] w-[35%] border-l-2 border-[#E05024]/20">
+                                            <th className="text-center py-4 px-6 font-bold text-[#22A366] w-[35%] border-l-2 border-[#22A366]/20">
                                                 <span className="inline-flex items-center gap-1.5">
                                                     ClassIn
-                                                    <span className="text-[10px] bg-[#E05024] text-white px-1.5 py-0.5 rounded-full font-bold">추천</span>
+                                                    <span className="text-[10px] bg-[#22A366] text-white px-1.5 py-0.5 rounded-full font-bold">추천</span>
                                                 </span>
                                             </th>
                                         </tr>
@@ -1480,9 +1480,9 @@ export default function ProductPage() {
                                                         {row.zoom}
                                                     </span>
                                                 </td>
-                                                <td className="py-4 px-6 text-center text-slate-900 font-medium bg-[#E05024]/[0.02] border-l-2 border-[#E05024]/10">
+                                                <td className="py-4 px-6 text-center text-slate-900 font-medium bg-[#22A366]/[0.02] border-l-2 border-[#22A366]/10">
                                                     <span className="inline-flex items-center gap-1.5">
-                                                        <CheckCircle2 className="w-4 h-4 text-[#E05024] shrink-0" />
+                                                        <CheckCircle2 className="w-4 h-4 text-[#22A366] shrink-0" />
                                                         {row.classin}
                                                     </span>
                                                 </td>
@@ -1508,11 +1508,11 @@ export default function ProductPage() {
                     <div className="flex flex-col lg:flex-row items-center gap-16 lg:gap-20 max-w-7xl mx-auto">
                         <div className="flex-1 max-w-xl">
                             <motion.div {...fadeUp}>
-                                <div className="inline-flex items-center gap-2 px-3 py-1 rounded-full bg-[#E05024]/5 text-[#E05024] text-sm font-bold mb-6">
+                                <div className="inline-flex items-center gap-2 px-3 py-1 rounded-full bg-[#22A366]/5 text-[#22A366] text-sm font-bold mb-6">
                                     <PenTool className="w-4 h-4" />양방향 블랙보드
                                 </div>
                                 <h2 className="text-3xl md:text-5xl font-serif text-[#1a1a19] mb-6 leading-tight">
-                                    교사만 쓰는 칠판은<br /><span className="text-[#E05024]">칠판이 아닙니다</span>
+                                    교사만 쓰는 칠판은<br /><span className="text-[#22A366]">칠판이 아닙니다</span>
                                 </h2>
                                 <p className="text-lg text-slate-500 leading-relaxed font-medium mb-10">교사의 판서를 보기만 하던 시대는 끝났습니다. 학생에게 권한을 주어 직접 문제를 풀고, 그림을 그리고, 아이디어를 표현하게 하세요.</p>
                             </motion.div>
@@ -1523,7 +1523,7 @@ export default function ProductPage() {
                                     { icon: <BookOpen className="w-5 h-5" />, label: "교재 위에 직접 풀기", detail: "PDF, PPT 교재를 올리고 그 위에 바로 필기. 종이 프린트가 필요 없습니다." },
                                 ].map((f, i) => (
                                     <motion.div key={i} {...stagger(i)} className="flex items-start gap-4">
-                                        <div className="w-11 h-11 rounded-xl bg-[#E05024]/5 text-[#E05024] flex items-center justify-center shrink-0">{f.icon}</div>
+                                        <div className="w-11 h-11 rounded-xl bg-[#22A366]/5 text-[#22A366] flex items-center justify-center shrink-0">{f.icon}</div>
                                         <div><h4 className="font-bold text-slate-900 mb-1">{f.label}</h4><p className="text-sm text-slate-500 leading-relaxed">{f.detail}</p></div>
                                     </motion.div>
                                 ))}
@@ -1535,7 +1535,7 @@ export default function ProductPage() {
                             <motion.div {...fadeUp} className="relative">
                                 <div className="aspect-[4/3] rounded-3xl bg-gradient-to-br from-slate-800 to-slate-900 border border-slate-700/50 shadow-2xl overflow-hidden p-6 md:p-8 flex flex-col">
                                     <div className="flex gap-2 mb-4">
-                                        {["#E05024", "#3B82F6", "#10B981", "#F59E0B"].map(c => (
+                                        {["#22A366", "#3B82F6", "#10B981", "#F59E0B"].map(c => (
                                             <div key={c} className="w-5 h-5 rounded-full border-2 border-white/20" style={{ backgroundColor: c }} />
                                         ))}
                                     </div>
@@ -1544,7 +1544,7 @@ export default function ProductPage() {
                                             <motion.path d="M20,30 C60,10 100,50 140,30 S220,40 280,25" stroke="white" strokeWidth="2.5" strokeOpacity="0.4" strokeLinecap="round" initial={{ pathLength: 0 }} whileInView={{ pathLength: 1 }} viewport={{ once: true }} transition={{ duration: 2, delay: 0.3 }} />
                                             <motion.path d="M20,70 L80,70 L80,120 L140,120 L140,90" stroke="#3B82F6" strokeWidth="2" strokeOpacity="0.5" strokeLinecap="round" initial={{ pathLength: 0 }} whileInView={{ pathLength: 1 }} viewport={{ once: true }} transition={{ duration: 2, delay: 0.8 }} />
                                             <motion.path d="M180,80 C200,60 230,100 260,75" stroke="#10B981" strokeWidth="2.5" strokeOpacity="0.5" strokeLinecap="round" initial={{ pathLength: 0 }} whileInView={{ pathLength: 1 }} viewport={{ once: true }} transition={{ duration: 1.5, delay: 1.3 }} />
-                                            <motion.circle cx="60" cy="160" r="20" stroke="#E05024" strokeWidth="2" strokeOpacity="0.4" fill="none" initial={{ pathLength: 0 }} whileInView={{ pathLength: 1 }} viewport={{ once: true }} transition={{ duration: 1.5, delay: 1.8 }} />
+                                            <motion.circle cx="60" cy="160" r="20" stroke="#22A366" strokeWidth="2" strokeOpacity="0.4" fill="none" initial={{ pathLength: 0 }} whileInView={{ pathLength: 1 }} viewport={{ once: true }} transition={{ duration: 1.5, delay: 1.8 }} />
                                             <motion.path d="M120,150 L160,170 L200,145 L240,165" stroke="#F59E0B" strokeWidth="2" strokeOpacity="0.4" strokeLinecap="round" initial={{ pathLength: 0 }} whileInView={{ pathLength: 1 }} viewport={{ once: true }} transition={{ duration: 1.5, delay: 2.2 }} />
                                         </svg>
                                         {/* Animated cursors */}
@@ -1560,7 +1560,7 @@ export default function ProductPage() {
                                     <div className="flex items-center justify-between pt-3 border-t border-white/10">
                                         <div className="flex -space-x-2">
                                             {["T", "A", "B", "C"].map((l, i) => (
-                                                <div key={i} className={`w-7 h-7 rounded-full bg-gradient-to-br ${["from-[#E05024] to-orange-400", "from-blue-500 to-cyan-400", "from-green-500 to-emerald-400", "from-yellow-500 to-amber-400"][i]} border-2 border-slate-800 flex items-center justify-center text-[8px] text-white font-bold`}>{l}</div>
+                                                <div key={i} className={`w-7 h-7 rounded-full bg-gradient-to-br ${["from-[#22A366] to-green-500", "from-blue-500 to-cyan-400", "from-green-500 to-emerald-400", "from-yellow-500 to-amber-400"][i]} border-2 border-slate-800 flex items-center justify-center text-[8px] text-white font-bold`}>{l}</div>
                                             ))}
                                         </div>
                                         <motion.div animate={{ opacity: [0.5, 1, 0.5] }} transition={{ duration: 2, repeat: Infinity }} className="text-xs text-white/30 font-mono">4명 참여 중</motion.div>
@@ -1569,7 +1569,7 @@ export default function ProductPage() {
                                 {/* Floating badge with count-up */}
                                 <motion.div initial={{ opacity: 0, scale: 0.8 }} whileInView={{ opacity: 1, scale: 1 }} viewport={{ once: true }} transition={{ delay: 0.5, type: "spring" }} className="absolute -top-3 -right-3 bg-white rounded-2xl shadow-lg border border-slate-100 px-4 py-2.5">
                                     <div className="text-xs text-slate-400 mb-0.5">동시 판서</div>
-                                    <div className="text-lg font-bold text-[#E05024]">4명</div>
+                                    <div className="text-lg font-bold text-[#22A366]">4명</div>
                                 </motion.div>
                             </motion.div>
                         </div>
@@ -1602,12 +1602,12 @@ export default function ProductPage() {
                                 category: "판서 & 교구",
                                 color: "border-[#e8e8e4]",
                                 tools: [
-                                    { icon: <PenTool className="w-5 h-5" />, label: "판서 펜", color: "text-[#B85C33]", featured: true },
+                                    { icon: <PenTool className="w-5 h-5" />, label: "판서 펜", color: "text-[#22A366]", featured: true },
                                     { icon: <Layout className="w-5 h-5" />, label: "화이트보드", color: "text-[#084734]", featured: true },
                                     { icon: <Layers className="w-5 h-5" />, label: "레이어", color: "text-teal-500" },
                                     { icon: <FileText className="w-5 h-5" />, label: "수식 편집기", color: "text-[#084734]" },
                                     { icon: <Layout className="w-5 h-5" />, label: "도형 도구", color: "text-[#A39E98]" },
-                                    { icon: <MousePointerClick className="w-5 h-5" />, label: "포인터", color: "text-[#B85C33]" },
+                                    { icon: <MousePointerClick className="w-5 h-5" />, label: "포인터", color: "text-[#22A366]" },
                                 ],
                             },
                             {
@@ -1617,7 +1617,7 @@ export default function ProductPage() {
                                     { icon: <Timer className="w-5 h-5" />, label: "타이머", color: "text-[#084734]", featured: true },
                                     { icon: <Dice1 className="w-5 h-5" />, label: "주사위", color: "text-[#065c41]" },
                                     { icon: <Users className="w-5 h-5" />, label: "랜덤 뽑기", color: "text-green-500" },
-                                    { icon: <Sparkles className="w-5 h-5" />, label: "슬롯머신", color: "text-orange-500" },
+                                    { icon: <Sparkles className="w-5 h-5" />, label: "슬롯머신", color: "text-green-600" },
                                     { icon: <Zap className="w-5 h-5" />, label: "응답기", color: "text-yellow-500" },
                                     { icon: <Sparkles className="w-5 h-5" />, label: "보상 스티커", color: "text-yellow-500" },
                                 ],
@@ -1626,14 +1626,14 @@ export default function ProductPage() {
                                 category: "미디어 & 공유",
                                 color: "border-[#e8e8e4]",
                                 tools: [
-                                    { icon: <FileText className="w-5 h-5" />, label: "PDF 뷰어", color: "text-[#B85C33]" },
+                                    { icon: <FileText className="w-5 h-5" />, label: "PDF 뷰어", color: "text-[#22A366]" },
                                     { icon: <Cloud className="w-5 h-5" />, label: "클라우드", color: "text-[#084734]" },
-                                    { icon: <Video className="w-5 h-5" />, label: "녹화", color: "text-[#B85C33]" },
+                                    { icon: <Video className="w-5 h-5" />, label: "녹화", color: "text-[#22A366]" },
                                     { icon: <Mic className="w-5 h-5" />, label: "오디오", color: "text-emerald-500" },
                                     { icon: <Monitor className="w-5 h-5" />, label: "화면 공유", color: "text-[#065c41]" },
                                     { icon: <Play className="w-5 h-5" />, label: "영상 재생", color: "text-[#084734]" },
                                     { icon: <Wifi className="w-5 h-5" />, label: "미러링", color: "text-[#065c41]" },
-                                    { icon: <Cloud className="w-5 h-5" />, label: "EDB 교구", color: "text-orange-400" },
+                                    { icon: <Cloud className="w-5 h-5" />, label: "EDB 교구", color: "text-green-500" },
                                 ],
                             },
                             {
@@ -1684,13 +1684,13 @@ export default function ProductPage() {
                         <div className="grid sm:grid-cols-2 lg:grid-cols-5 gap-4">
                             {[
                                 { label: "그룹 토론", desc: "방 분리 후 동시 토론", icon: <MessageSquare className="w-5 h-5" />, color: "from-[#ECFDF5] to-[#D1FAE5]", border: "border-[#D1FAE5]", iconColor: "text-[#084734]" },
-                                { label: "1:1 퀴즈 대결", desc: "실시간 맞대결 형식", icon: <Zap className="w-5 h-5" />, color: "from-[#FEF3EE] to-[#f0f0ec]", border: "border-[#F6D5C5]", iconColor: "text-[#B85C33]" },
+                                { label: "1:1 퀴즈 대결", desc: "실시간 맞대결 형식", icon: <Zap className="w-5 h-5" />, color: "from-[#ECFDF5] to-[#f0fdf6]", border: "border-[#D1FAE5]", iconColor: "text-[#22A366]" },
                                 { label: "팀 프로젝트", desc: "공동 판서 협업", icon: <Users className="w-5 h-5" />, color: "from-green-50 to-emerald-50", border: "border-green-100", iconColor: "text-green-500" },
                                 { label: "발표 수업", desc: "학생 화면 공유 발표", icon: <Monitor className="w-5 h-5" />, color: "from-[#D1FAE5] to-[#ECFDF5]", border: "border-[#D1FAE5]", iconColor: "text-[#065c41]" },
                                 { label: "실시간 투표", desc: "의견 수렴 · 결과 시각화", icon: <BarChart3 className="w-5 h-5" />, color: "from-amber-50 to-yellow-50", border: "border-amber-100", iconColor: "text-amber-500" },
                                 { label: "릴레이 풀이", desc: "순서대로 문제 풀기", icon: <ArrowRight className="w-5 h-5" />, color: "from-[#ECFDF5] to-[#f7f7f5]", border: "border-[#e8e8e4]", iconColor: "text-[#084734]" },
-                                { label: "타임어택", desc: "제한 시간 내 문제 풀기", icon: <Timer className="w-5 h-5" />, color: "from-orange-50 to-amber-50", border: "border-orange-100", iconColor: "text-orange-500" },
-                                { label: "모둠 경쟁", desc: "팀별 점수 대결", icon: <Sparkles className="w-5 h-5" />, color: "from-[#FEF3EE] to-[#f0f0ec]", border: "border-[#F6D5C5]", iconColor: "text-[#B85C33]" },
+                                { label: "타임어택", desc: "제한 시간 내 문제 풀기", icon: <Timer className="w-5 h-5" />, color: "from-green-50 to-emerald-50", border: "border-green-100", iconColor: "text-green-600" },
+                                { label: "모둠 경쟁", desc: "팀별 점수 대결", icon: <Sparkles className="w-5 h-5" />, color: "from-[#ECFDF5] to-[#f0fdf6]", border: "border-[#D1FAE5]", iconColor: "text-[#22A366]" },
                                 { label: "자유 판서", desc: "전체 학생 동시 판서", icon: <PenTool className="w-5 h-5" />, color: "from-[#ECFDF5] to-[#D1FAE5]", border: "border-[#D1FAE5]", iconColor: "text-[#065c41]" },
                                 { label: "피드백 라운드", desc: "상호 평가 · 코멘트", icon: <CheckCircle2 className="w-5 h-5" />, color: "from-teal-50 to-green-50", border: "border-teal-100", iconColor: "text-teal-500" },
                             ].map((act, i) => (
@@ -1713,9 +1713,9 @@ export default function ProductPage() {
             <section className="py-24 md:py-32">
                 <div className="container mx-auto px-4 lg:px-8">
                     <motion.div className="text-center mb-16" {...fadeUp}>
-                        <p className="text-sm font-semibold text-[#E05024] tracking-wider uppercase mb-3">FLEXIBLE FORMAT</p>
+                        <p className="text-sm font-semibold text-[#22A366] tracking-wider uppercase mb-3">FLEXIBLE FORMAT</p>
                         <h2 className="text-3xl md:text-4xl lg:text-5xl font-serif text-[#1a1a19] leading-tight">
-                            1:1 과외부터 수백 명 강의까지,<br /><span className="text-[#E05024]">하나의 플랫폼</span>
+                            1:1 과외부터 수백 명 강의까지,<br /><span className="text-[#22A366]">하나의 플랫폼</span>
                         </h2>
                     </motion.div>
 
@@ -1724,7 +1724,7 @@ export default function ProductPage() {
                             { icon: <Users className="w-7 h-7" />, title: "1:1 과외", desc: "개인 맞춤 수업에 최적화된 집중 환경", people: 1, color: "bg-[#ECFDF5] border-[#D1FAE5] text-[#084734]", dotColor: "bg-[#084734]" },
                             { icon: <MessageSquare className="w-7 h-7" />, title: "소그룹 토론", desc: "그룹별 방 분리, 동시 판서, 발표 기능", people: 6, color: "bg-green-50 border-green-100 text-green-600", dotColor: "bg-green-400" },
                             { icon: <Monitor className="w-7 h-7" />, title: "일반 수업", desc: "학원 · 학교의 표준 수업 형태", people: 12, color: "bg-[#D1FAE5] border-[#D1FAE5] text-[#065c41]", dotColor: "bg-[#065c41]" },
-                            { icon: <GraduationCap className="w-7 h-7" />, title: "대형 강의", desc: "수백 명이 동시 참여하는 라이브 강의", people: 20, color: "bg-orange-50 border-orange-100 text-orange-600", dotColor: "bg-orange-400" },
+                            { icon: <GraduationCap className="w-7 h-7" />, title: "대형 강의", desc: "수백 명이 동시 참여하는 라이브 강의", people: 20, color: "bg-green-50 border-green-100 text-green-700", dotColor: "bg-green-500" },
                         ].map((item, i) => (
                             <motion.div
                                 key={i}
@@ -1781,12 +1781,12 @@ export default function ProductPage() {
                     </svg>
                 </div>
 
-                <div className="absolute top-1/2 left-1/2 -translate-x-1/2 -translate-y-1/2 w-[600px] h-[600px] bg-[#E05024]/5 rounded-full blur-[120px] pointer-events-none" />
+                <div className="absolute top-1/2 left-1/2 -translate-x-1/2 -translate-y-1/2 w-[600px] h-[600px] bg-[#22A366]/5 rounded-full blur-[120px] pointer-events-none" />
 
                 <div className="container mx-auto px-4 lg:px-8 relative" ref={networkRef}>
                     <motion.div className="text-center mb-16" {...fadeUp}>
-                        <p className="text-sm font-semibold text-[#E05024] tracking-wider uppercase mb-3">GLOBAL NETWORK</p>
-                        <h2 className="text-3xl md:text-4xl lg:text-5xl font-serif leading-tight">전 세계 어디서든,<br /><span className="text-[#E05024]">끊김 없이</span></h2>
+                        <p className="text-sm font-semibold text-[#22A366] tracking-wider uppercase mb-3">GLOBAL NETWORK</p>
+                        <h2 className="text-3xl md:text-4xl lg:text-5xl font-serif leading-tight">전 세계 어디서든,<br /><span className="text-[#22A366]">끊김 없이</span></h2>
                         <p className="text-lg text-slate-400 mt-6 max-w-2xl mx-auto">자체 네트워크 기술로 낮은 지연 시간과 고화질 수업을 보장합니다.</p>
                     </motion.div>
 
@@ -1798,10 +1798,10 @@ export default function ProductPage() {
                         ].map((item, i) => (
                             <motion.div key={i} {...stagger(i)} className="bg-white/5 backdrop-blur-sm border border-white/10 rounded-2xl p-8 text-center hover:bg-white/10 transition-colors relative overflow-hidden group">
                                 {/* Pulse line between cards */}
-                                {i < 2 && <div className="absolute right-0 top-1/2 -translate-y-1/2 w-px h-1/2 bg-gradient-to-b from-transparent via-[#E05024]/20 to-transparent hidden sm:block" />}
-                                <div className="w-14 h-14 rounded-xl bg-[#E05024]/15 text-[#E05024] flex items-center justify-center mx-auto mb-4 group-hover:scale-110 transition-transform">{item.icon}</div>
+                                {i < 2 && <div className="absolute right-0 top-1/2 -translate-y-1/2 w-px h-1/2 bg-gradient-to-b from-transparent via-[#22A366]/20 to-transparent hidden sm:block" />}
+                                <div className="w-14 h-14 rounded-xl bg-[#22A366]/15 text-[#22A366] flex items-center justify-center mx-auto mb-4 group-hover:scale-110 transition-transform">{item.icon}</div>
                                 <div className="text-3xl font-serif font-bold text-white mb-1">{item.value}</div>
-                                <div className="text-sm font-bold text-[#E05024] mb-2">{item.label}</div>
+                                <div className="text-sm font-bold text-[#22A366] mb-2">{item.label}</div>
                                 <p className="text-sm text-slate-400">{item.desc}</p>
                             </motion.div>
                         ))}
@@ -1909,13 +1909,13 @@ export default function ProductPage() {
                 <div className="container mx-auto px-4 max-w-6xl">
                     <motion.div className="text-center mb-20" {...fadeUp}>
                         <h2 className="text-3xl md:text-5xl font-serif text-[#1a1a19] leading-tight">
-                            전국의 교육자들이 <span className="text-[#E05024]">인정하는</span> 솔루션
+                            전국의 교육자들이 <span className="text-[#22A366]">인정하는</span> 솔루션
                         </h2>
                     </motion.div>
 
                     <div className="grid md:grid-cols-2 lg:grid-cols-3 gap-6 md:gap-8 items-start">
                         <div className="space-y-6 md:space-y-8">
-                            <TestimonialCard name="John Kim" role="대치 A수학 대표원장" quote="줌에서 옮긴 뒤로 학생들의 수업 참여도가 확 달라졌습니다. 판서를 학생에게 넘길 수 있다는 것만으로도 수업의 질이 완전히 바뀌었어요." rating={5} gradient="from-[#E05024] to-orange-400" />
+                            <TestimonialCard name="John Kim" role="대치 A수학 대표원장" quote="줌에서 옮긴 뒤로 학생들의 수업 참여도가 확 달라졌습니다. 판서를 학생에게 넘길 수 있다는 것만으로도 수업의 질이 완전히 바뀌었어요." rating={5} gradient="from-[#22A366] to-green-500" />
                             <TestimonialCard name="Sarah Lee" role="분당 어학원 원장" quote="LMS를 따로 쓸 필요가 없어졌어요. 출결, 숙제, 성적이 한 곳에 모이니까 행정 시간이 반 이상 줄었습니다." rating={5} gradient="from-emerald-500 to-teal-400" delay={0.1} />
                         </div>
                         <div className="space-y-6 md:space-y-8 md:mt-12">

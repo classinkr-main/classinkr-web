@@ -109,36 +109,41 @@ export function CheckoutSuccessClient() {
   }, [amount, orderId, paymentKey])
 
   return (
-    <div className="bg-[#FDFCF8] px-4 py-16 md:py-24">
+    <div className="bg-[#FAFAF8] px-4 py-16 font-sans md:py-24">
       <div className="mx-auto max-w-2xl">
-        <Card className="rounded-[32px] border-[#e8ede7] shadow-[0_18px_50px_rgba(23,72,52,0.08)]">
+        <Card className="overflow-hidden rounded-[32px] border-[rgba(8,71,52,0.08)] shadow-[0_18px_50px_rgba(23,72,52,0.08)]">
+          <div className="relative border-b border-[rgba(8,71,52,0.08)] bg-[#FAFAF8] px-6 py-10">
+            <div className="absolute inset-0 overflow-hidden pointer-events-none">
+              <div className="absolute left-1/2 top-0 h-48 w-48 -translate-x-1/2 rounded-full bg-[#ECFDF5] blur-3xl" />
+            </div>
           <CardHeader className="items-center text-center">
             {state.kind === "loading" ? (
               <Loader2 className="h-12 w-12 animate-spin text-[#084734]" />
             ) : (
               <CheckCircle2 className="h-14 w-14 text-[#1e8b58]" />
             )}
-            <CardTitle className="font-serif text-[34px]">{headline}</CardTitle>
+            <CardTitle className="text-[30px] font-semibold tracking-tight">{headline}</CardTitle>
             <CardDescription className="max-w-xl text-base">
               redirect 완료 후 서버 confirm API로 다시 검증한 결과입니다.
             </CardDescription>
           </CardHeader>
+          </div>
           <CardContent className="space-y-6 px-6 pb-8">
             {state.kind === "loading" && (
-              <div className="rounded-3xl border border-[#e9ede8] bg-[#f8fbf9] px-5 py-6 text-center text-sm text-slate-500">
+              <div className="rounded-3xl border border-[rgba(8,71,52,0.08)] bg-[#F8FBF9] px-5 py-6 text-center text-sm text-slate-500">
                 결제 상태를 확인하고 있습니다. 이 화면을 닫지 말아주세요.
               </div>
             )}
 
             {state.kind === "error" && (
-              <div className="rounded-3xl border border-[#f2d7c8] bg-[#fff4ee] px-5 py-6 text-sm text-[#b85c33]">
+              <div className="rounded-3xl border border-[#ead7b2] bg-[#fff9eb] px-5 py-6 text-sm text-[#8d6c1f]">
                 {state.message}
               </div>
             )}
 
             {state.kind === "success" && (
               <>
-                <div className="rounded-[28px] bg-[#101f19] p-6 text-white">
+                <div className="rounded-[28px] bg-[linear-gradient(135deg,#031A12_0%,#052E1E_48%,#084734_100%)] p-6 text-white">
                   <div className="flex items-start justify-between gap-4">
                     <div>
                       <p className="text-sm uppercase tracking-[0.18em] text-white/40">Order</p>
@@ -153,13 +158,13 @@ export function CheckoutSuccessClient() {
                 </div>
 
                 <div className="grid gap-4 md:grid-cols-2">
-                  <div className="rounded-3xl border border-[#ebe4dc] bg-[#fcfbf8] p-5">
+                  <div className="rounded-3xl border border-[rgba(8,71,52,0.08)] bg-[#F8FBF9] p-5">
                     <p className="text-sm text-slate-400">결제수단</p>
                     <p className="mt-2 text-lg font-semibold text-[#1a1a19]">
                       {state.easyPayProvider ?? state.paymentMethod ?? "확인 필요"}
                     </p>
                   </div>
-                  <div className="rounded-3xl border border-[#ebe4dc] bg-[#fcfbf8] p-5">
+                  <div className="rounded-3xl border border-[rgba(8,71,52,0.08)] bg-[#F8FBF9] p-5">
                     <p className="text-sm text-slate-400">영수증</p>
                     {state.receiptUrl ? (
                       <a
@@ -180,7 +185,7 @@ export function CheckoutSuccessClient() {
             )}
 
             <div className="flex flex-wrap gap-3">
-              <Button asChild size="lg" className="rounded-full bg-[#084734] px-7">
+              <Button asChild size="lg" className="rounded-full bg-[#084734] px-7 shadow-[0_14px_36px_rgba(8,71,52,0.18)]">
                 <Link href="/product/sw">소프트웨어 페이지로 돌아가기</Link>
               </Button>
               <Button asChild size="lg" variant="outline" className="rounded-full px-7">

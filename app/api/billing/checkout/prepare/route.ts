@@ -23,6 +23,7 @@ export async function POST(req: NextRequest) {
           accountCount: order.accountCount,
           fxRate: order.fxRate,
           fxFetchedAt: order.fxFetchedAt,
+          fxIsStale: order.fxSource === "env_fallback",
         },
         { status: 201 }
       )
@@ -42,6 +43,7 @@ export async function POST(req: NextRequest) {
           discount: order.discount,
           fxRate: order.fxRate,
           fxFetchedAt: order.fxFetchedAt,
+          fxIsStale: order.fxSource === "env_fallback",
           quoteCode: order.quoteCode?.code ?? null,
           promoCode: order.appliedPromo?.code ?? null,
         },

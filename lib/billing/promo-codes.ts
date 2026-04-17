@@ -221,16 +221,9 @@ export async function recordPromoRedemption(input: {
   })
 
   if (countError) {
-    // rpc 가 아직 없을 수 있으므로 fallback: 직접 update (race 가능)
-    const { data } = await supabase
-      .from("promo_codes")
-      .select("used_count")
-      .eq("id", input.promoCodeId)
-      .maybeSingle()
-    const next = (data?.used_count ?? 0) + 1
-    await supabase
-      .from("promo_codes")
-      .update({ used_count: next })
-      .eq("id", input.promoCodeId)
+    // RPC failed — do not fall back to a racy SELECT+UPDATE.
+    // The RPC (increment_promo_code_used_count) uses a row-level lock and is the only
+    // safe way to increment. If it fails, surface the error so ops can investigate.
+    throw countError
   }
 }

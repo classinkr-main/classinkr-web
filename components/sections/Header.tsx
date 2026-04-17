@@ -10,7 +10,6 @@ import { Menu, X, Monitor, Cpu } from "lucide-react"
 
 const navItems = [
     { name: "제품 소개", href: "/product" },
-    { name: "요금제", href: "/pricing" },
     { name: "블로그", href: "/blog" },
     { name: "행사", href: "/events" },
     { name: "회사 소개", href: "/about" },
