@@ -3,7 +3,7 @@
 import { useEffect, useMemo, useState } from "react"
 import Link from "next/link"
 import { useSearchParams } from "next/navigation"
-import { CheckCircle2, Loader2, ReceiptText, ShieldCheck } from "lucide-react"
+import { CheckCircle2, Copy, Check, FileText, Loader2, ReceiptText, ShieldCheck } from "lucide-react"
 
 import { Button } from "@/components/ui/button"
 import { Card, CardContent, CardDescription, CardHeader, CardTitle } from "@/components/ui/card"
@@ -25,6 +25,7 @@ type ConfirmState =
 export function CheckoutSuccessClient() {
   const searchParams = useSearchParams()
   const [state, setState] = useState<ConfirmState>({ kind: "loading" })
+  const [linkCopied, setLinkCopied] = useState(false)
 
   const paymentKey = searchParams.get("paymentKey") ?? ""
   const orderId = searchParams.get("orderId") ?? ""
@@ -180,6 +181,49 @@ export function CheckoutSuccessClient() {
                       <p className="mt-2 text-lg font-semibold text-[#1a1a19]">승인 완료</p>
                     )}
                   </div>
+                </div>
+
+                <div className="flex flex-wrap gap-3">
+                  <Button asChild size="default" variant="green-surface" className="rounded-full px-5">
+                    <Link href={`/receipt/${state.orderId}`}>
+                      <FileText className="h-4 w-4" />
+                      영수증 보기
+                    </Link>
+                  </Button>
+                  <Button
+                    size="default"
+                    variant="outline"
+                    className="rounded-full px-5"
+                    onClick={async () => {
+                      const url = `${window.location.origin}/receipt/${state.orderId}`
+                      try {
+                        await navigator.clipboard.writeText(url)
+                      } catch {
+                        const ta = document.createElement("textarea")
+                        ta.value = url
+                        ta.style.position = "fixed"
+                        ta.style.opacity = "0"
+                        document.body.appendChild(ta)
+                        ta.select()
+                        document.execCommand("copy")
+                        document.body.removeChild(ta)
+                      }
+                      setLinkCopied(true)
+                      setTimeout(() => setLinkCopied(false), 2000)
+                    }}
+                  >
+                    {linkCopied ? (
+                      <>
+                        <Check className="h-4 w-4" />
+                        복사 완료
+                      </>
+                    ) : (
+                      <>
+                        <Copy className="h-4 w-4" />
+                        영수증 링크 복사
+                      </>
+                    )}
+                  </Button>
                 </div>
               </>
             )}

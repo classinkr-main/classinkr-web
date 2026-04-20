@@ -3,17 +3,16 @@
 import { useEffect, useMemo, useRef, useState } from "react"
 import Link from "next/link"
 import { ANONYMOUS, loadTossPayments, type TossPaymentsWidgets } from "@tosspayments/tosspayments-sdk"
-import { AlertCircle, ArrowRight, CreditCard, Shield, Wallet } from "lucide-react"
+import { AlertCircle, ArrowRight, Wallet } from "lucide-react"
 
 import { Button } from "@/components/ui/button"
-import { Card, CardContent, CardDescription, CardHeader, CardTitle } from "@/components/ui/card"
+import { Card, CardContent } from "@/components/ui/card"
 import { Input } from "@/components/ui/input"
 import { Label } from "@/components/ui/label"
 import { AccountCountStepper } from "@/components/billing/AccountCountStepper"
 import { KrwConversionNote } from "@/components/billing/KrwConversionNote"
 import {
   DEFAULT_ACCOUNT_COUNT,
-  SOFTWARE_PLANS,
   clampAccountCount,
   computeSubscriptionAmountUsd,
   formatUsd,
@@ -44,7 +43,6 @@ type FxState = {
 }
 
 const SELF_SERVE_PLANS = getSelfServePlans()
-const ENTERPRISE_PLAN = SOFTWARE_PLANS.find((plan) => plan.id === "enterprise") ?? null
 const DEFAULT_PLAN_ID: SelfServePlanId = "standard"
 const DEFAULT_BILLING_CYCLE: BillingCycle = "monthly"
 
@@ -88,7 +86,6 @@ export function SubscriptionCheckoutPanel() {
     () => SELF_SERVE_PLANS.find((plan) => plan.id === planId) ?? SELF_SERVE_PLANS[0],
     [planId]
   )
-  const selectedPrice = billingCycle === "monthly" ? selectedPlan.monthly : selectedPlan.yearly
   const amountUsd = useMemo(
     () => computeSubscriptionAmountUsd(selectedPlan.id, billingCycle, accountCount),
     [selectedPlan.id, billingCycle, accountCount]
@@ -368,57 +365,19 @@ export function SubscriptionCheckoutPanel() {
               })}
             </div>
 
-            <div className="grid gap-3 xl:grid-cols-[minmax(0,1fr)_240px]">
-              <div className="rounded-[24px] border border-[rgba(8,71,52,0.08)] bg-[#F8FBF9] p-4">
-                <div className="mb-2.5 flex items-center gap-2 text-sm font-semibold text-[#084734]">
-                  <Shield className="h-4 w-4" />
-                  지금 선택한 구성
-                </div>
-                <div className="flex flex-wrap items-end justify-between gap-3">
-                  <div>
-                    <p className="text-lg font-semibold text-[#111110]">
-                      {selectedPlan.title} · {billingCycle === "monthly" ? "월간" : "연간"} · {accountCount}계정
-                    </p>
-                    <p className="mt-1.5 text-[13px] text-[#615D59]">
-                      카드와 네이버페이가 같은 결제 UI에서 노출됩니다.
-                    </p>
-                  </div>
-                  <span className="rounded-full bg-white px-3 py-1 text-[11px] font-semibold text-[#084734]">
-                    서버 재검증 포함
-                  </span>
-                </div>
-                <ul className="mt-3 grid gap-2 sm:grid-cols-2">
-                  {selectedPlan.features.map((feature) => (
-                    <li
-                      key={feature}
-                      className="flex items-start gap-2 rounded-2xl border border-[rgba(8,71,52,0.08)] bg-white px-3 py-2.5 text-[13px] text-[#44514A]"
-                    >
-                      <span className="mt-1 h-1.5 w-1.5 rounded-full bg-[#084734]" />
-                      <span>{feature}</span>
-                    </li>
-                  ))}
-                </ul>
-              </div>
-
-              <div className="rounded-[24px] bg-[#0E1814] p-4 text-white shadow-[0_18px_36px_rgba(4,19,13,0.22)]">
-                <div className="inline-flex items-center gap-2 rounded-full bg-white/10 px-3 py-1 text-[11px] font-semibold uppercase tracking-[0.18em] text-[#9DE3C8]">
-                  <CreditCard className="h-3.5 w-3.5" />
-                  Contact Sales
-                </div>
-                <h3 className="mt-3 text-[22px] font-semibold leading-none tracking-tight">
-                  {ENTERPRISE_PLAN?.title ?? "Enterprise"}
-                </h3>
-                <p className="mt-2.5 text-[13px] leading-relaxed text-white/65">
-                  {ENTERPRISE_PLAN?.summary ?? "맞춤 계약, 설치, 하드웨어 연동이 필요한 고객은 상담형으로 분리합니다."}
-                </p>
-                <Link
-                  href="/contact#contact-form"
-                  className="mt-5 inline-flex items-center gap-2 text-sm font-semibold text-[#9DE3C8] hover:text-[#C7F3E1]"
-                >
-                  맞춤 도입 상담으로 이동
-                  <ArrowRight className="h-4 w-4" />
-                </Link>
-              </div>
+            <div className="flex items-center justify-between gap-3 rounded-2xl bg-[#0E1814] px-4 py-3">
+              <p className="text-sm text-white/80">
+                <span className="font-semibold text-white">Enterprise</span>
+                <span className="mx-1.5 text-white/30">·</span>
+                맞춤 계약이 필요하면
+              </p>
+              <Link
+                href="/contact#contact-form"
+                className="inline-flex shrink-0 items-center gap-1.5 text-sm font-semibold text-[#9DE3C8] hover:text-[#C7F3E1]"
+              >
+                상담 요청
+                <ArrowRight className="h-3.5 w-3.5" />
+              </Link>
             </div>
           </CardContent>
         </div>
@@ -426,29 +385,18 @@ export function SubscriptionCheckoutPanel() {
 
       <Card className="overflow-hidden rounded-[32px] border-[rgba(8,71,52,0.08)] bg-white/95 shadow-[0_24px_70px_rgba(8,71,52,0.09)] backdrop-blur lg:max-h-[calc(100vh-8rem)]">
         <div className="flex h-full flex-col lg:overflow-y-auto">
-          <CardHeader className="border-b border-[rgba(8,71,52,0.08)] bg-white/95 px-6 py-6">
-            <div className="inline-flex w-fit items-center gap-2 rounded-full bg-[#ECFDF5] px-3 py-1 text-[11px] font-semibold uppercase tracking-[0.18em] text-[#084734]">
-              <Wallet className="h-3.5 w-3.5" />
-              Payment
+          <div className="flex items-center justify-between gap-3 border-b border-[rgba(8,71,52,0.08)] bg-white/95 px-6 py-3.5">
+            <div className="inline-flex items-center gap-2 text-sm font-semibold text-[#084734]">
+              <Wallet className="h-4 w-4" />
+              결제 정보
             </div>
-            <div className="mt-4 flex items-start justify-between gap-4">
-              <div>
-                <CardTitle className="text-[28px] font-semibold tracking-tight text-[#111110]">결제 정보</CardTitle>
-                <CardDescription className="mt-2 text-sm leading-relaxed text-[#615D59]">
-                  최소 정보만 입력하고 바로 승인 단계로 넘어갑니다.
-                </CardDescription>
-              </div>
-              <div className="rounded-2xl bg-[#F4FBF7] px-3 py-2 text-right">
-                <p className="text-[11px] font-semibold uppercase tracking-[0.18em] text-[#5B695E]">
-                  Order
-                </p>
-                <p className="mt-1 text-base font-semibold text-[#111110]">{selectedPlan.title}</p>
-                <p className="text-sm text-[#084734]">{formatUsd(amountUsd)}</p>
-              </div>
+            <div className="flex items-center gap-2.5 text-sm">
+              <span className="font-semibold text-[#111110]">{selectedPlan.title} · {accountCount}계정</span>
+              <span className="font-bold text-[#084734]">{formatUsd(amountUsd)}</span>
             </div>
-          </CardHeader>
+          </div>
 
-          <CardContent className="space-y-4 px-6 py-6">
+          <CardContent className="space-y-3 px-6 py-4">
             {!checkoutEnabled && (
               <div className="rounded-2xl border border-[#EAD7B2] bg-[#FFF9EB] px-4 py-3 text-sm text-[#8D6C1F]">
                 `NEXT_PUBLIC_SW_CHECKOUT_ENABLED=true` 설정 전까지 공개 CTA는 기존 문의 흐름을 유지합니다.
@@ -525,27 +473,14 @@ export function SubscriptionCheckoutPanel() {
               </div>
             </div>
 
-            <div className="rounded-[28px] border border-[rgba(8,71,52,0.08)] bg-white p-4">
-              <div className="mb-4 flex items-center justify-between gap-3">
-                <div>
-                  <p className="text-sm font-semibold text-[#084734]">토스 결제위젯</p>
-                  <p className="mt-1 text-xs leading-relaxed text-[#66726B]">
-                    카드와 네이버페이가 같은 UI에서 노출됩니다.
-                  </p>
-                </div>
-                <div className="inline-flex items-center gap-2 rounded-full bg-[#ECFDF5] px-3 py-1 text-xs font-semibold text-[#084734]">
-                  <Shield className="h-3.5 w-3.5" />
-                  서버 confirm
-                </div>
-              </div>
-
+            <div className="rounded-2xl border border-[rgba(8,71,52,0.08)] bg-white p-3">
               <div
                 id="toss-payment-methods"
-                className="min-h-[220px] rounded-[24px] border border-dashed border-[#DBE7E1] bg-[#FAFAF8]"
+                className="min-h-[140px] rounded-xl border border-dashed border-[#DBE7E1] bg-[#FAFAF8]"
               />
               <div
                 id="toss-agreement"
-                className="mt-3 min-h-[96px] rounded-[24px] border border-dashed border-[#DBE7E1] bg-[#FAFAF8]"
+                className="mt-2 min-h-[50px] rounded-xl border border-dashed border-[#DBE7E1] bg-[#FAFAF8]"
               />
             </div>
 
@@ -555,30 +490,6 @@ export function SubscriptionCheckoutPanel() {
                 <span>{error}</span>
               </div>
             )}
-
-            <div className="rounded-[28px] bg-[linear-gradient(135deg,#031A12_0%,#052E1E_48%,#084734_100%)] p-5 text-white shadow-[0_20px_50px_rgba(8,71,52,0.18)]">
-              <div className="flex items-start justify-between gap-4">
-                <div>
-                  <p className="text-sm uppercase tracking-[0.18em] text-white/45">Order Summary</p>
-                  <h3 className="mt-2 text-2xl font-semibold">{selectedPlan.title}</h3>
-                  <p className="mt-1 text-sm text-white/60">
-                    {billingCycle === "monthly" ? "월간 청구" : "연간 선결제"} · {accountCount}계정
-                  </p>
-                </div>
-                <CreditCard className="mt-1 h-5 w-5 text-[#9DE3C8]" />
-              </div>
-              <div className="mt-6 flex items-end justify-between gap-4">
-                <div>
-                  <p className="text-sm text-white/50">이번 결제 금액</p>
-                  <p className="mt-1 text-4xl font-semibold tracking-tight">{formatUsd(amountUsd)}</p>
-                </div>
-                {selectedPrice.badge ? (
-                  <span className="rounded-full bg-white/10 px-3 py-1 text-xs font-semibold text-[#B7F0D8]">
-                    {selectedPrice.badge}
-                  </span>
-                ) : null}
-              </div>
-            </div>
 
             <KrwConversionNote
               amountKrw={approxAmountKrw}
@@ -598,17 +509,6 @@ export function SubscriptionCheckoutPanel() {
             >
               {isPreparing ? "결제 준비 중..." : `${formatUsd(amountUsd)} 결제하기`}
             </Button>
-
-            <div className="flex flex-wrap gap-2 text-xs text-[#615D59]">
-              {["국내 카드 결제 지원", "네이버페이 지원", "영수증 확인 가능"].map((item) => (
-                <span
-                  key={item}
-                  className="rounded-full border border-[rgba(8,71,52,0.08)] bg-[#F8FBF9] px-3 py-1.5"
-                >
-                  {item}
-                </span>
-              ))}
-            </div>
           </CardContent>
         </div>
       </Card>
