@@ -205,7 +205,7 @@ export default function AdminEventsPage() {
         endsAt: form.endsAt || null,
         location: form.location || null,
         ctaLabel: form.ctaLabel || "자세히 보기",
-        ctaHref: form.ctaHref || null,
+        ctaHref: form.ctaHref || "/contact",
         imagePath: imagePath ?? null,
         highlight: form.highlight,
         statusOverride: form.statusOverride === "auto" ? null : form.statusOverride,
