@@ -394,7 +394,7 @@ export function SubscriptionCheckoutPanel() {
       </div>
 
       {/* ── 오른쪽: 결제 정보 ── */}
-      <div className="rounded-2xl border border-[rgba(0,0,0,0.08)] bg-white lg:max-h-[calc(100vh-8rem)] lg:overflow-y-auto">
+      <div className="rounded-2xl border-2 border-[#084734] bg-white lg:max-h-[calc(100vh-8rem)] lg:overflow-y-auto">
         <div className="flex items-center justify-between gap-3 border-b border-[rgba(0,0,0,0.08)] px-5 py-3">
           <span className="text-sm font-semibold text-[#111110]">결제 정보</span>
           <span className="text-sm font-bold text-[#084734]">{selectedPlan.title} · {accountCount}계정 · {formatUsd(amountUsd)}</span>
