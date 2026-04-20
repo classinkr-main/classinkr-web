@@ -375,14 +375,14 @@ export function SubscriptionCheckoutPanel() {
             <p className="text-2xl font-semibold tracking-tight text-[#111110]">맞춤 견적</p>
             <p className="pb-0.5 text-xs text-[#7D7871]">/ 계정 / 월</p>
           </div>
-          <p className="mt-3 border-t border-[rgba(0,0,0,0.06)] pt-3 text-[12px] font-semibold text-[#111110]">Everything in Plus, and:</p>
+          <p className="mt-3 border-t border-[rgba(0,0,0,0.06)] pt-3 text-[12px] font-semibold text-[#111110]">Plus의 모든 기능 포함, 추가로:</p>
           <div className="mt-2 grid gap-x-6 gap-y-1 sm:grid-cols-2">
             {[
-              "Up to 24 Hours Per Lesson",
-              "Up to 2000 students in a lesson",
-              "Web Streaming",
-              "API Integrations",
-              "Cloud Storage 1,024GB",
+              "1회 수업 최대 24시간",
+              "수업당 최대 2,000명 참여",
+              "웹 스트리밍",
+              "API 연동",
+              "클라우드 스토리지 1,024GB",
             ].map((item) => (
               <div key={item} className="flex items-start gap-2 text-[12px] text-[#44514A]">
                 <span className="mt-1.5 h-1 w-1 shrink-0 rounded-full bg-[#084734]/40" />
