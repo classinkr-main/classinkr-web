@@ -11,6 +11,10 @@ export async function POST(req: NextRequest) {
     if (!file) {
       return NextResponse.json({ error: "file은 필수입니다." }, { status: 400 })
     }
+    const ALLOWED_TYPES = ["image/jpeg", "image/png", "image/webp", "image/gif"]
+    if (!ALLOWED_TYPES.includes(file.type)) {
+      return NextResponse.json({ error: "허용되지 않는 파일 형식입니다. (jpeg, png, webp, gif만 허용)" }, { status: 400 })
+    }
     const supabase = createSupabaseAdminClient()
     const ext = file.name.split(".").pop() ?? "jpg"
     const storagePath = `${Date.now()}-${Math.random().toString(36).slice(2)}.${ext}`

@@ -121,6 +121,8 @@ export async function updatePublicEvent(
   if (patch.highlight !== undefined) dbPatch.highlight = patch.highlight
   if (patch.statusOverride !== undefined) dbPatch.status_override = patch.statusOverride
 
+  if (Object.keys(dbPatch).length === 0) return null
+
   const { data, error } = await supabase
     .from("public_events")
     .update(dbPatch)
