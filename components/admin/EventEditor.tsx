@@ -267,13 +267,13 @@ export default function EventEditor({ event }: { event: PublicEvent }) {
                 role="switch"
                 aria-checked={form.highlight}
                 onClick={() => setForm({ ...form, highlight: !form.highlight })}
-                className={`relative w-10 h-6 rounded-full transition-colors ${
+                className={`relative inline-flex items-center w-10 h-6 rounded-full p-1 transition-colors ${
                   form.highlight ? "bg-emerald-500" : "bg-[#e0e0dc]"
                 }`}
               >
                 <span
-                  className={`absolute top-1 w-4 h-4 bg-white rounded-full shadow transition-transform ${
-                    form.highlight ? "translate-x-5" : "translate-x-1"
+                  className={`w-4 h-4 bg-white rounded-full shadow transition-transform ${
+                    form.highlight ? "translate-x-4" : "translate-x-0"
                   }`}
                 />
               </button>
