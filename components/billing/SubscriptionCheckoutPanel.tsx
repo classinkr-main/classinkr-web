@@ -3,10 +3,9 @@
 import { useEffect, useMemo, useRef, useState } from "react"
 import Link from "next/link"
 import { ANONYMOUS, loadTossPayments, type TossPaymentsWidgets } from "@tosspayments/tosspayments-sdk"
-import { AlertCircle, ArrowRight, Wallet } from "lucide-react"
+import { AlertCircle, ArrowRight } from "lucide-react"
 
 import { Button } from "@/components/ui/button"
-import { Card, CardContent } from "@/components/ui/card"
 import { Input } from "@/components/ui/input"
 import { Label } from "@/components/ui/label"
 import { AccountCountStepper } from "@/components/billing/AccountCountStepper"
@@ -280,161 +279,127 @@ export function SubscriptionCheckoutPanel() {
   }
 
   return (
-    <div className="grid gap-6 lg:min-h-[calc(100vh-8rem)] lg:grid-cols-[minmax(0,1.08fr)_minmax(380px,420px)]">
-      <Card className="overflow-hidden rounded-[32px] border-[rgba(8,71,52,0.08)] bg-white/90 shadow-[0_24px_70px_rgba(8,71,52,0.08)] backdrop-blur lg:max-h-[calc(100vh-8rem)]">
+    <div className="grid gap-4 lg:min-h-[calc(100vh-8rem)] lg:grid-cols-[minmax(0,1.08fr)_minmax(360px,400px)]">
+      {/* ── 왼쪽: 플랜 선택 ── */}
+      <div className="rounded-2xl border border-[rgba(0,0,0,0.08)] bg-white lg:max-h-[calc(100vh-8rem)]">
         <div className="flex h-full flex-col lg:overflow-y-auto">
-          <CardContent className="grid gap-4 px-5 py-5 md:px-6">
+          <div className="grid gap-4 p-5">
             <div className="flex flex-col gap-3 xl:flex-row xl:items-center xl:justify-between">
-              <div className="inline-flex w-fit gap-2 rounded-full bg-[#F1F5F2] p-1">
+              <div className="inline-flex gap-2">
                 {(["monthly", "yearly"] as BillingCycle[]).map((cycle) => {
                   const active = cycle === billingCycle
-
                   return (
                     <button
                       key={cycle}
                       type="button"
                       onClick={() => setBillingCycle(cycle)}
-                      className={`rounded-full px-3.5 py-1.5 text-sm font-semibold transition-all ${
+                      className={`rounded-lg border px-3.5 py-1.5 text-sm font-semibold transition-colors ${
                         active
-                          ? "bg-[#084734] text-white shadow-[0_8px_20px_rgba(8,71,52,0.18)]"
-                          : "text-[#66726B] hover:bg-white hover:text-[#084734]"
+                          ? "border-[#084734] text-[#084734]"
+                          : "border-[rgba(0,0,0,0.08)] text-[#66726B] hover:border-[#084734]/30"
                       }`}
                     >
-                      {cycle === "monthly" ? "월간 결제" : "연간 결제"}
+                      {cycle === "monthly" ? "월간" : "연간"}
                     </button>
                   )
                 })}
               </div>
-
-              <div className="flex flex-wrap items-center gap-3">
-                <span className="text-xs font-semibold text-[#44514A]">계정 수</span>
-                <AccountCountStepper value={accountCount} onChange={setAccountCount} />
-              </div>
+              <AccountCountStepper value={accountCount} onChange={setAccountCount} />
             </div>
 
             <div className="grid gap-3 xl:grid-cols-2">
               {SELF_SERVE_PLANS.map((plan) => {
                 const active = plan.id === planId
                 const activePrice = billingCycle === "monthly" ? plan.monthly : plan.yearly
-
                 return (
                   <button
                     key={plan.id}
                     type="button"
                     onClick={() => setPlanId(plan.id)}
-                    className={`rounded-[24px] border p-4 text-left transition-all ${
+                    className={`rounded-xl border p-4 text-left transition-colors ${
                       active
-                        ? "border-[#084734]/20 bg-[#ECFDF5] shadow-[0_18px_30px_rgba(8,71,52,0.09)]"
-                        : "border-[rgba(0,0,0,0.07)] bg-white hover:border-[#084734]/15 hover:bg-[#F8FBF9]"
+                        ? "border-2 border-[#084734] bg-white"
+                        : "border border-[rgba(0,0,0,0.08)] bg-white hover:border-[#084734]/30"
                     }`}
                   >
-                    <div className="flex items-start justify-between gap-3">
-                      <div>
-                        <span className="inline-flex rounded-full bg-white/85 px-2.5 py-1 text-[11px] font-semibold uppercase tracking-[0.18em] text-[#084734]">
-                          {plan.eyebrow}
-                        </span>
-                        <h2 className="mt-2.5 text-[24px] font-semibold leading-none tracking-tight text-[#111110]">
-                          {plan.title}
-                        </h2>
-                      </div>
+                    <div className="flex items-center justify-between gap-3">
+                      <h2 className="text-lg font-semibold text-[#111110]">{plan.title}</h2>
                       {active ? (
-                        <span className="rounded-full bg-[#084734] px-2.5 py-1 text-[11px] font-semibold text-white">
+                        <span className="rounded-md border border-[#084734] px-2 py-0.5 text-[11px] font-semibold text-[#084734]">
                           선택됨
                         </span>
                       ) : null}
                     </div>
-
-                    <p className="mt-3 text-[13px] leading-5 text-[#615D59]">{plan.summary}</p>
-
-                    <div className="mt-4 flex items-end gap-2">
-                      <p className="text-[26px] font-semibold tracking-tight text-[#111110]">
+                    <div className="mt-3 flex items-end gap-2">
+                      <p className="text-2xl font-semibold tracking-tight text-[#111110]">
                         {formatUsd(activePrice.amount)}
                       </p>
-                      <p className="pb-0.5 text-xs font-medium text-[#7D7871]">
-                        {activePrice.unitSuffix}
-                      </p>
+                      <p className="pb-0.5 text-xs text-[#7D7871]">{activePrice.unitSuffix}</p>
                     </div>
-
                     {activePrice.badge ? (
-                      <div className="mt-2.5 inline-flex rounded-full bg-white px-3 py-1 text-[11px] font-semibold text-[#084734]">
+                      <span className="mt-2 inline-block rounded-md border border-[#084734]/20 px-2 py-0.5 text-[11px] font-semibold text-[#084734]">
                         {activePrice.badge}
-                      </div>
+                      </span>
                     ) : null}
                   </button>
                 )
               })}
             </div>
 
-            <div className="flex items-center justify-between gap-3 rounded-2xl bg-[#0E1814] px-4 py-3">
-              <p className="text-sm text-white/80">
-                <span className="font-semibold text-white">Enterprise</span>
-                <span className="mx-1.5 text-white/30">·</span>
-                맞춤 계약이 필요하면
+            <div className="flex items-center justify-between gap-3 rounded-xl border border-[rgba(0,0,0,0.08)] px-4 py-2.5">
+              <p className="text-sm text-[#44514A]">
+                <span className="font-semibold text-[#111110]">Enterprise</span>
+                <span className="mx-1.5 text-[rgba(0,0,0,0.15)]">·</span>
+                맞춤 계약
               </p>
               <Link
                 href="/contact#contact-form"
-                className="inline-flex shrink-0 items-center gap-1.5 text-sm font-semibold text-[#9DE3C8] hover:text-[#C7F3E1]"
+                className="inline-flex shrink-0 items-center gap-1 text-sm font-semibold text-[#084734] hover:underline"
               >
                 상담 요청
                 <ArrowRight className="h-3.5 w-3.5" />
               </Link>
             </div>
-          </CardContent>
+          </div>
         </div>
-      </Card>
+      </div>
 
-      <Card className="overflow-hidden rounded-[32px] border-[rgba(8,71,52,0.08)] bg-white/95 shadow-[0_24px_70px_rgba(8,71,52,0.09)] backdrop-blur lg:max-h-[calc(100vh-8rem)]">
+      {/* ── 오른쪽: 결제 ── */}
+      <div className="rounded-2xl border border-[rgba(0,0,0,0.08)] bg-white lg:max-h-[calc(100vh-8rem)]">
         <div className="flex h-full flex-col lg:overflow-y-auto">
-          <div className="flex items-center justify-between gap-3 border-b border-[rgba(8,71,52,0.08)] bg-white/95 px-6 py-3.5">
-            <div className="inline-flex items-center gap-2 text-sm font-semibold text-[#084734]">
-              <Wallet className="h-4 w-4" />
-              결제 정보
-            </div>
-            <div className="flex items-center gap-2.5 text-sm">
-              <span className="font-semibold text-[#111110]">{selectedPlan.title} · {accountCount}계정</span>
-              <span className="font-bold text-[#084734]">{formatUsd(amountUsd)}</span>
-            </div>
+          <div className="flex items-center justify-between gap-3 border-b border-[rgba(0,0,0,0.08)] px-5 py-3">
+            <span className="text-sm font-semibold text-[#111110]">결제 정보</span>
+            <span className="text-sm font-bold text-[#084734]">{selectedPlan.title} · {accountCount}계정 · {formatUsd(amountUsd)}</span>
           </div>
 
-          <CardContent className="space-y-3 px-6 py-4">
+          <div className="space-y-3 p-5">
             {!checkoutEnabled && (
-              <div className="rounded-2xl border border-[#EAD7B2] bg-[#FFF9EB] px-4 py-3 text-sm text-[#8D6C1F]">
-                `NEXT_PUBLIC_SW_CHECKOUT_ENABLED=true` 설정 전까지 공개 CTA는 기존 문의 흐름을 유지합니다.
+              <div className="rounded-lg border border-[#EAD7B2] px-3 py-2 text-xs text-[#8D6C1F]">
+                NEXT_PUBLIC_SW_CHECKOUT_ENABLED=true 설정 필요
               </div>
             )}
             {!hasWidgetKey && (
-              <div className="rounded-2xl border border-[#EAD7B2] bg-[#FFF9EB] px-4 py-3 text-sm text-[#8D6C1F]">
-                토스 위젯 키가 없어 결제위젯은 아직 비활성 상태입니다. `.env.local`에
-                `NEXT_PUBLIC_TOSS_WIDGET_CLIENT_KEY`를 넣어주세요.
+              <div className="rounded-lg border border-[#EAD7B2] px-3 py-2 text-xs text-[#8D6C1F]">
+                TOSS_WIDGET_CLIENT_KEY 설정 필요
               </div>
             )}
 
-            <div className="rounded-[28px] border border-[rgba(8,71,52,0.08)] bg-[#F8FBF9] p-4">
-              <div className="mb-4 flex items-center justify-between gap-3">
-                <div>
-                  <p className="text-sm font-semibold text-[#084734]">주문자 정보</p>
-                  <p className="mt-1 text-xs text-[#66726B]">기관명, 담당자명, 이메일만 필수입니다.</p>
-                </div>
-                <span className="rounded-full bg-white px-3 py-1 text-xs font-semibold text-[#084734]">
-                  {isFormComplete ? "입력 완료" : "필수 3개"}
-                </span>
-              </div>
-
-              <div className="grid gap-4 md:grid-cols-2">
-                <div className="space-y-2 md:col-span-2">
-                  <Label htmlFor="organizationName">기관명 / 학원명</Label>
+            <div className="rounded-xl border border-[rgba(0,0,0,0.08)] p-4">
+              <div className="grid gap-3 md:grid-cols-2">
+                <div className="space-y-1.5 md:col-span-2">
+                  <Label htmlFor="organizationName" className="text-xs">기관명 / 학원명</Label>
                   <Input
                     id="organizationName"
                     value={form.organizationName}
                     onChange={(event) =>
                       setForm((current) => ({ ...current, organizationName: event.target.value }))
                     }
-                    placeholder="예: 무궁화학원"
-                    className="h-11 rounded-2xl border-[rgba(8,71,52,0.08)] bg-white"
+                    placeholder="무궁화학원"
+                    className="h-10 rounded-lg border-[rgba(0,0,0,0.08)]"
                   />
                 </div>
-                <div className="space-y-2">
-                  <Label htmlFor="buyerName">담당자명</Label>
+                <div className="space-y-1.5">
+                  <Label htmlFor="buyerName" className="text-xs">담당자명</Label>
                   <Input
                     id="buyerName"
                     value={form.buyerName}
@@ -442,11 +407,11 @@ export function SubscriptionCheckoutPanel() {
                       setForm((current) => ({ ...current, buyerName: event.target.value }))
                     }
                     placeholder="홍길동"
-                    className="h-11 rounded-2xl border-[rgba(8,71,52,0.08)] bg-white"
+                    className="h-10 rounded-lg border-[rgba(0,0,0,0.08)]"
                   />
                 </div>
-                <div className="space-y-2">
-                  <Label htmlFor="buyerPhone">연락처 (선택)</Label>
+                <div className="space-y-1.5">
+                  <Label htmlFor="buyerPhone" className="text-xs">연락처 (선택)</Label>
                   <Input
                     id="buyerPhone"
                     value={form.buyerPhone}
@@ -454,11 +419,11 @@ export function SubscriptionCheckoutPanel() {
                       setForm((current) => ({ ...current, buyerPhone: event.target.value }))
                     }
                     placeholder="01012345678"
-                    className="h-11 rounded-2xl border-[rgba(8,71,52,0.08)] bg-white"
+                    className="h-10 rounded-lg border-[rgba(0,0,0,0.08)]"
                   />
                 </div>
-                <div className="space-y-2 md:col-span-2">
-                  <Label htmlFor="buyerEmail">이메일</Label>
+                <div className="space-y-1.5 md:col-span-2">
+                  <Label htmlFor="buyerEmail" className="text-xs">이메일</Label>
                   <Input
                     id="buyerEmail"
                     type="email"
@@ -467,25 +432,25 @@ export function SubscriptionCheckoutPanel() {
                       setForm((current) => ({ ...current, buyerEmail: event.target.value }))
                     }
                     placeholder="ops@classin.co.kr"
-                    className="h-11 rounded-2xl border-[rgba(8,71,52,0.08)] bg-white"
+                    className="h-10 rounded-lg border-[rgba(0,0,0,0.08)]"
                   />
                 </div>
               </div>
             </div>
 
-            <div className="rounded-2xl border border-[rgba(8,71,52,0.08)] bg-white p-3">
+            <div className="rounded-xl border border-[rgba(0,0,0,0.08)] p-3">
               <div
                 id="toss-payment-methods"
-                className="min-h-[140px] rounded-xl border border-dashed border-[#DBE7E1] bg-[#FAFAF8]"
+                className="min-h-[140px] rounded-lg border border-dashed border-[rgba(0,0,0,0.08)]"
               />
               <div
                 id="toss-agreement"
-                className="mt-2 min-h-[50px] rounded-xl border border-dashed border-[#DBE7E1] bg-[#FAFAF8]"
+                className="mt-2 min-h-[50px] rounded-lg border border-dashed border-[rgba(0,0,0,0.08)]"
               />
             </div>
 
             {error && (
-              <div className="flex items-start gap-2 rounded-2xl border border-[#EAD7B2] bg-[#FFF9EB] px-4 py-3 text-sm text-[#8D6C1F]">
+              <div className="flex items-start gap-2 rounded-lg border border-[#EAD7B2] px-3 py-2 text-sm text-[#8D6C1F]">
                 <AlertCircle className="mt-0.5 h-4 w-4 shrink-0" />
                 <span>{error}</span>
               </div>
@@ -500,8 +465,7 @@ export function SubscriptionCheckoutPanel() {
 
             <Button
               type="button"
-              size="xl"
-              className="h-14 w-full rounded-full bg-[#084734] text-base font-bold text-white shadow-[0_14px_36px_rgba(8,71,52,0.18)] hover:bg-[#065C41]"
+              className="h-12 w-full rounded-lg border-2 border-[#084734] bg-[#084734] text-sm font-bold text-white hover:bg-[#065C41]"
               disabled={!hasWidgetKey || !isWidgetReady || isPreparing || !isFormComplete}
               onClick={() => {
                 void handleCheckout()
@@ -509,9 +473,9 @@ export function SubscriptionCheckoutPanel() {
             >
               {isPreparing ? "결제 준비 중..." : `${formatUsd(amountUsd)} 결제하기`}
             </Button>
-          </CardContent>
+          </div>
         </div>
-      </Card>
+      </div>
     </div>
   )
 }
