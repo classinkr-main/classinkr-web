@@ -279,9 +279,9 @@ export function SubscriptionCheckoutPanel() {
   }
 
   return (
-    <div className="mx-auto max-w-3xl space-y-4">
-      {/* ── 플랜 선택 ── */}
-      <div className="rounded-2xl border border-[rgba(0,0,0,0.08)] bg-white p-5">
+    <div className="grid gap-4 lg:grid-cols-[minmax(0,1fr)_minmax(340px,380px)]">
+      {/* ── 왼쪽: 플랜 선택 (세로 배치) ── */}
+      <div className="rounded-2xl border border-[rgba(0,0,0,0.08)] bg-white p-5 lg:max-h-[calc(100vh-8rem)] lg:overflow-y-auto">
         <div className="flex flex-col gap-3 sm:flex-row sm:items-center sm:justify-between">
           <div className="inline-flex gap-2">
             {(["monthly", "yearly"] as BillingCycle[]).map((cycle) => {
@@ -376,8 +376,8 @@ export function SubscriptionCheckoutPanel() {
         </div>
       </div>
 
-      {/* ── 결제 정보 ── */}
-      <div className="rounded-2xl border border-[rgba(0,0,0,0.08)] bg-white">
+      {/* ── 오른쪽: 결제 정보 ── */}
+      <div className="rounded-2xl border border-[rgba(0,0,0,0.08)] bg-white lg:max-h-[calc(100vh-8rem)] lg:overflow-y-auto">
         <div className="flex items-center justify-between gap-3 border-b border-[rgba(0,0,0,0.08)] px-5 py-3">
           <span className="text-sm font-semibold text-[#111110]">결제 정보</span>
           <span className="text-sm font-bold text-[#084734]">{selectedPlan.title} · {accountCount}계정 · {formatUsd(amountUsd)}</span>
