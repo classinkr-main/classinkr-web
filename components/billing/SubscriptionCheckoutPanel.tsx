@@ -305,7 +305,7 @@ export function SubscriptionCheckoutPanel() {
           <AccountCountStepper value={accountCount} onChange={setAccountCount} />
         </div>
 
-        <div className="mt-4 grid gap-3 sm:grid-cols-2">
+        <div className="mt-4 grid gap-3">
           {SELF_SERVE_PLANS.map((plan) => {
             const active = plan.id === planId
             const activePrice = billingCycle === "monthly" ? plan.monthly : plan.yearly
@@ -339,25 +339,21 @@ export function SubscriptionCheckoutPanel() {
                     {activePrice.badge}
                   </span>
                 ) : null}
-                {plan.limits ? (
-                  <ul className="mt-3 space-y-1 border-t border-[rgba(0,0,0,0.06)] pt-3">
-                    {plan.limits.map((item) => (
-                      <li key={item} className="flex items-start gap-2 text-[12px] text-[#44514A]">
+                {plan.limits || plan.features ? (
+                  <div className="mt-3 grid gap-x-6 gap-y-1 border-t border-[rgba(0,0,0,0.06)] pt-3 sm:grid-cols-2">
+                    {plan.limits?.map((item) => (
+                      <div key={item} className="flex items-start gap-2 text-[12px] text-[#44514A]">
                         <span className="mt-1.5 h-1 w-1 shrink-0 rounded-full bg-[#084734]/40" />
                         {item}
-                      </li>
+                      </div>
                     ))}
-                  </ul>
-                ) : null}
-                {plan.features ? (
-                  <ul className="mt-2 space-y-1">
-                    {plan.features.map((item) => (
-                      <li key={item} className="flex items-start gap-2 text-[12px] text-[#7C8A83]">
+                    {plan.features?.map((item) => (
+                      <div key={item} className="flex items-start gap-2 text-[12px] text-[#7C8A83]">
                         <span className="mt-1.5 h-1 w-1 shrink-0 rounded-full bg-[rgba(0,0,0,0.1)]" />
                         {item}
-                      </li>
+                      </div>
                     ))}
-                  </ul>
+                  </div>
                 ) : null}
               </button>
             )
