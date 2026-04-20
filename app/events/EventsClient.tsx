@@ -48,7 +48,7 @@ export default function EventsClient({ events }: { events: PublicEvent[] }) {
   }, [activeCategory, searchQuery, events])
 
   const highlighted = filtered.filter((e) => e.highlight)
-  const rest = filtered.filter((e) => !e.highlight)
+  const rest = filtered
   const isAnyHovered = hoveredId !== null
 
   const activeCount = events.filter((e) => e.status === "진행 중").length
