@@ -4,8 +4,6 @@ import { useState } from "react"
 import { useRouter } from "next/navigation"
 import Image from "next/image"
 import { createSupabaseBrowserClient } from "@/lib/supabase/browser"
-import { useToast } from "@/components/ui/toast"
-
 export default function PartnerLoginPage() {
   const router = useRouter()
   const [email, setEmail] = useState("")
@@ -15,7 +13,6 @@ export default function PartnerLoginPage() {
   const [magicSent, setMagicSent] = useState(false)
   const [mode, setMode] = useState<"password" | "magic">("magic")
   const [shake, setShake] = useState(false)
-  const toast = useToast()
 
   const triggerShake = () => {
     setShake(true)

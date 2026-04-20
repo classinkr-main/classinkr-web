@@ -423,20 +423,19 @@ function LeftSidebar({
   recent_calendar_events: CalendarEvent[]
   recent_activity: ActivityLog[]
 }) {
-  const today = new Date()
-
   // build event dots for current month
   const calDots: CalDot[] = useMemo(() => {
+    const now = new Date()
     const dots: CalDot[] = []
     for (const inst of upcoming_installations) {
       const d = new Date(inst.scheduled_start_at)
-      if (d.getFullYear() === today.getFullYear() && d.getMonth() === today.getMonth()) {
+      if (d.getFullYear() === now.getFullYear() && d.getMonth() === now.getMonth()) {
         dots.push({ day: d.getDate(), type: "installation" })
       }
     }
     for (const evt of recent_calendar_events) {
       const d = new Date(evt.starts_at)
-      if (d.getFullYear() === today.getFullYear() && d.getMonth() === today.getMonth()) {
+      if (d.getFullYear() === now.getFullYear() && d.getMonth() === now.getMonth()) {
         dots.push({ day: d.getDate(), type: "other" })
       }
     }
@@ -570,7 +569,6 @@ function LeftSidebar({
 export function PartnerPortalHome() {
   const [overview, setOverview] = useState<PartnerOverviewPayload>(DEMO)
   const [loading, setLoading]   = useState(true)
-  const [error, setError]       = useState<string | null>(null)
   const [expandedCustomers, setExpandedCustomers] = useState<Set<string>>(new Set(["c1"]))
   const [isCustomerDialogOpen, setIsCustomerDialogOpen]   = useState(false)
   const [isDealDialogOpen, setIsDealDialogOpen]           = useState(false)
@@ -593,7 +591,7 @@ export function PartnerPortalHome() {
         return normalizeOverviewPayload(payload)
       })
       .then(payload => { if (alive) { setOverview(payload); setLoading(false) } })
-      .catch(() => { if (alive) { setOverview(DEMO); setLoading(false); setError("연결된 계정이 없어 데모 홈으로 표시 중입니다.") } })
+      .catch(() => { if (alive) { setOverview(DEMO); setLoading(false) } })
     return () => { alive = false }
   }, [])
 

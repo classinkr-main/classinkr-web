@@ -4,15 +4,12 @@
 import { ArrowUpRight, TrendingUp, Users, BookOpen } from "lucide-react"
 import {
     ResponsiveContainer,
-    LineChart,
-    Line,
     XAxis,
     YAxis,
     CartesianGrid,
     Tooltip as RechartsTooltip,
     BarChart,
     Bar,
-    Legend,
     Area,
     AreaChart,
 } from "recharts"

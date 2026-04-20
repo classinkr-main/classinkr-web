@@ -41,11 +41,6 @@ const fadeUp = {
   transition: { duration: 0.6 },
 };
 
-const stagger = (i: number) => ({
-  ...fadeUp,
-  transition: { duration: 0.5, delay: i * 0.15 },
-});
-
 export default function ClassroomStudioSection() {
   const ref = useRef(null);
   const inView = useInView(ref, { once: true, margin: "-80px" });

@@ -6,7 +6,6 @@ import {
   ArrowRight,
   BadgeCheck,
   BookCopy,
-  Clock,
   Eye,
   FileText,
   Layers3,

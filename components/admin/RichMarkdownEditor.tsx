@@ -120,7 +120,8 @@ const RichMarkdownEditor = forwardRef<RichMarkdownEditorHandle, RichMarkdownEdit
       lastEmitted.current = value
       skipNextUpdate.current = true
       editor.commands.setContent(value)
-      setIsEmpty(editor.isEmpty)
+      const isEmpty = editor.isEmpty
+      queueMicrotask(() => setIsEmpty(isEmpty))
     }, [editor, value])
 
     useImperativeHandle(ref, () => ({
