@@ -3,7 +3,7 @@
 import { useState, useEffect, useCallback, useRef } from "react"
 import Image from "next/image"
 import { Plus, Pencil, Trash2, X, Upload, ImageIcon } from "lucide-react"
-import { getToken } from "@/lib/admin-client"
+import { getAdminToken } from "@/lib/admin-client"
 import type { PublicEvent, EventCategory, EventStatus } from "@/lib/types/public-events"
 import { EVENT_CATEGORIES } from "@/lib/types/public-events"
 
@@ -14,7 +14,7 @@ function adminFetch(url: string, options?: RequestInit) {
     ...options,
     headers: {
       "Content-Type": "application/json",
-      Authorization: `Bearer ${getToken()}`,
+      Authorization: `Bearer ${getAdminToken()}`,
       ...options?.headers,
     },
   })
@@ -23,7 +23,7 @@ function adminFetch(url: string, options?: RequestInit) {
 function adminUpload(url: string, formData: FormData) {
   return fetch(url, {
     method: "POST",
-    headers: { Authorization: `Bearer ${getToken()}` },
+    headers: { Authorization: `Bearer ${getAdminToken()}` },
     body: formData,
   })
 }

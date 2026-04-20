@@ -4,11 +4,9 @@ import { useEffect, useMemo, useState, type ReactNode } from "react"
 import { useParams } from "next/navigation"
 import {
   AlertCircle,
-  ArrowRight,
   CheckCircle2,
   Clock,
   Loader2,
-  Mail,
   Printer,
   XCircle,
 } from "lucide-react"
@@ -195,45 +193,6 @@ function formatCompactDate(value?: string | null) {
 function parseErrorMessage(error: unknown, fallback: string) {
   if (error instanceof Error) return error.message
   return fallback
-}
-
-function buildActionMessage({
-  kind,
-  quoteNumber,
-  token,
-  supplierName,
-  recipientName,
-  totalAmount,
-}: {
-  kind: "review_confirmed" | "proceed_requested"
-  quoteNumber: string
-  token: string
-  supplierName: string
-  recipientName: string
-  totalAmount: number
-}) {
-  const heading =
-    kind === "review_confirmed" ? "검토 완료 안내" : "견적 진행 요청"
-
-  return [
-    "안녕하세요,",
-    "",
-    kind === "review_confirmed"
-      ? "견적 검토를 완료했습니다."
-      : "견적 검토 후 진행 요청드립니다.",
-    "",
-    `견적번호: ${quoteNumber}`,
-    `수신처: ${recipientName}`,
-    `발신처: ${supplierName}`,
-    `합계 금액: ${formatMoney(totalAmount)}`,
-    `공개 토큰: ${token}`,
-    "",
-    `- ${heading}`,
-  ].join("\n")
-}
-
-function buildMailtoLink(email: string, subject: string, body: string) {
-  return `mailto:${email}?subject=${encodeURIComponent(subject)}&body=${encodeURIComponent(body)}`
 }
 
 function normalizeLineItem(value: unknown, index: number): PublicQuoteLineItem {
@@ -498,8 +457,6 @@ export default function QuotePreviewPage() {
   const totalAmount = details?.grandTotalAmount ?? quote?.version.total_amount ?? subtotalAmount + vatAmount - discountAmount
   const quoteStatus = statusMeta(quote?.quote.status ?? "draft")
   const interaction = quote?.interaction
-  const supplierEmail = details?.supplierContactEmail?.trim()
-
   async function confirmReview() {
     if (!quote || !quoteToken) return
 
@@ -527,37 +484,6 @@ export default function QuotePreviewPage() {
       setActionNotice({ tone: "error", text: parseErrorMessage(err, "진행 동의를 접수하지 못했습니다") })
     } finally {
       setActionLoading(null)
-    }
-  }
-
-  async function requestProceed() {
-    if (!quote) return
-    if (!quoteToken) {
-      setActionNotice({ tone: "error", text: "token이 필요합니다" })
-      return
-    }
-
-    const subject = `[견적 진행 요청] ${quote.quote.quote_number}`
-    const body = buildActionMessage({
-      kind: "proceed_requested",
-      quoteNumber: quote.quote.quote_number,
-      token: quoteToken,
-      supplierName,
-      recipientName,
-      totalAmount,
-    })
-
-    if (supplierEmail) {
-      window.location.href = buildMailtoLink(supplierEmail, subject, body)
-      setActionNotice({ tone: "success", text: "진행 요청 메일 작성 창을 열었습니다." })
-      return
-    }
-
-    try {
-      await navigator.clipboard.writeText(body)
-      setActionNotice({ tone: "success", text: "진행 요청 문구를 복사했습니다." })
-    } catch (err) {
-      setActionNotice({ tone: "error", text: parseErrorMessage(err, "진행 요청 문구를 복사하지 못했습니다") })
     }
   }
 

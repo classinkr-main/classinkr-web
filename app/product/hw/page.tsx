@@ -522,67 +522,6 @@ function ImpactNumbersSection() {
     )
 }
 
-/* ── Section: Pain Points ────────────────────────────────────────── */
-const painItems = [
-    {
-        icon: <PenTool className="w-5 h-5" />,
-        pain: "수업이 끝나면 판서도 사라집니다",
-        fix: "판서 내용이 자동 저장되어 학생 전원에게 즉시 PDF로 배포됩니다",
-    },
-    {
-        icon: <Eye className="w-5 h-5" />,
-        pain: "맨 뒷자리에선 칠판이 잘 안 보입니다",
-        fix: "178° 광시야각과 풀 라미네이션으로 교실 어느 자리서든 선명합니다",
-    },
-    {
-        icon: <Wifi className="w-5 h-5" />,
-        pain: "원격 학생은 항상 소외됩니다",
-        fix: "AI 카메라가 교사를 추적하고 판서가 원격 기기에 실시간 동기화됩니다",
-    },
-    {
-        icon: <Users className="w-5 h-5" />,
-        pain: "학생 참여는 교사 혼자 감당이 안 됩니다",
-        fix: "50포인트 멀티터치로 여러 학생이 칠판 위에 동시에 직접 참여합니다",
-    },
-]
-
-function PainPointSection() {
-    return (
-        <section className="py-24 md:py-32 bg-white">
-            <div className="container mx-auto px-4 lg:px-8">
-                <motion.div className="text-center mb-14" {...fadeUp}>
-                    <p className="text-sm font-semibold text-slate-400 tracking-wider uppercase mb-3">PAIN POINTS</p>
-                    <h2 className="text-3xl md:text-4xl lg:text-5xl text-[#1a1a19] leading-tight">
-                        선생님, 이런 적
-                        <br />
-                        <span className="text-[#22A366]">없으셨나요?</span>
-                    </h2>
-                </motion.div>
-
-                <div className="grid sm:grid-cols-2 gap-5 max-w-4xl mx-auto">
-                    {painItems.map((item, i) => (
-                        <motion.div
-                            key={i}
-                            {...stagger(i)}
-                            className="group rounded-2xl border border-slate-100 bg-slate-50 p-7 hover:border-[#22A366]/30 hover:bg-[#f0fff8] transition-all duration-300"
-                        >
-                            <div className="flex items-start gap-4">
-                                <div className="w-9 h-9 rounded-xl bg-slate-200/70 group-hover:bg-[#22A366]/15 flex items-center justify-center shrink-0 text-slate-400 group-hover:text-[#22A366] transition-all">
-                                    {item.icon}
-                                </div>
-                                <div>
-                                    <p className="font-semibold text-slate-400 text-sm mb-2.5 line-through decoration-slate-300 decoration-2">{item.pain}</p>
-                                    <p className="font-medium text-slate-700 leading-relaxed text-sm">{item.fix}</p>
-                                </div>
-                            </div>
-                        </motion.div>
-                    ))}
-                </div>
-            </div>
-        </section>
-    )
-}
-
 /* ── Section: Full-Width Point (reusable) ────────────────────────── */
 function FullWidthPointSection({
     eyebrow, statement, sub, dark = false, image,

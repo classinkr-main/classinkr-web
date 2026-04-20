@@ -53,14 +53,12 @@ export function CustomerDialog({
   const [form, setForm] = useState<CustomerFormState>(EMPTY_FORM);
   const [saving, setSaving] = useState(false);
   const [error, setError] = useState<string | null>(null);
-  const [savedName, setSavedName] = useState<string | null>(null);
 
   useEffect(() => {
     if (!open) {
       setForm(EMPTY_FORM);
       setSaving(false);
       setError(null);
-      setSavedName(null);
     }
   }, [open]);
 
@@ -89,7 +87,6 @@ export function CustomerDialog({
         throw new Error(payload?.error ?? "고객 생성에 실패했습니다.");
       }
 
-      setSavedName(form.name);
       await onSaved?.();
       onOpenChange(false);
     } catch (submitError) {

@@ -1587,7 +1587,7 @@ export default function AdminMarketingPage() {
                         최근 캠페인 복제해서 재활용
                       </p>
                       <p className="mt-0.5 text-[11px] leading-relaxed text-[#084734]/60 truncate">
-                        "{latestCampaign.subject}" 기반으로 새 발송 시작
+                        &ldquo;{latestCampaign.subject}&rdquo; 기반으로 새 발송 시작
                       </p>
                     </button>
                   )}
