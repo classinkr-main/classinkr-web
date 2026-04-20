@@ -70,12 +70,12 @@ export default function ContactPage() {
         }
     }
     return (
-        <div className="bg-[#EDF7F2] min-h-screen text-slate-900 font-sans selection:bg-[#ECFDF5] pt-20 pb-24">
+        <div className="bg-[#EDF7F2] min-h-screen text-slate-900 font-sans selection:bg-[#ECFDF5] pt-20 pb-14">
 
             {/* Header Section */}
-            <section className="relative px-4 pt-12 md:pt-20 pb-16 overflow-hidden">
+            <section className="relative px-4 pt-8 md:pt-12 pb-8 overflow-hidden">
                 <div className="container mx-auto max-w-6xl relative z-10">
-                    <div className="flex flex-col items-center text-center space-y-6">
+                    <div className="flex flex-col items-center text-center space-y-4">
                         <motion.div
                             initial={{ opacity: 0, y: 20 }}
                             animate={{ opacity: 1, y: 0 }}
@@ -90,7 +90,7 @@ export default function ContactPage() {
                             initial={{ opacity: 0, y: 30 }}
                             animate={{ opacity: 1, y: 0 }}
                             transition={{ duration: 0.7, delay: 0.1 }}
-                            className="text-4xl md:text-[4rem] font-serif leading-[1.1] tracking-tight text-[#1a1a19]"
+                            className="text-3xl md:text-[3rem] font-serif leading-[1.1] tracking-tight text-[#1a1a19]"
                         >
                             궁금한 점이 있으신가요? <br />
                             친절하게 답변해 드립니다.
@@ -108,15 +108,15 @@ export default function ContactPage() {
                 </div>
             </section>
 
-            <section className="container mx-auto max-w-6xl px-4 relative z-10 pb-12">
+            <section className="container mx-auto max-w-6xl px-4 relative z-10 pb-6">
                 {/* Fast Track Banner */}
                 <motion.div 
                     initial={{ opacity: 0, scale: 0.98, y: 20 }}
                     animate={{ opacity: 1, scale: 1, y: 0 }}
                     transition={{ duration: 0.6, delay: 0.3 }}
-                    className="mb-20"
+                    className="mb-10"
                 >
-                    <div className="bg-white rounded-[2rem] shadow-[0_20px_60px_rgba(0,0,0,0.05)] border border-slate-100 p-8 md:p-12 overflow-hidden relative">
+                    <div className="bg-white rounded-[2rem] shadow-[0_20px_60px_rgba(0,0,0,0.05)] border border-slate-100 p-6 md:p-8 overflow-hidden relative">
                         {/* Decorative background elements */}
                         <div className="absolute top-0 right-0 w-64 h-64 bg-[#ECFDF5] rounded-full blur-[80px] -mr-20 -mt-20 pointer-events-none" />
                         <div className="absolute bottom-0 left-0 w-64 h-64 bg-[#ECFDF5] rounded-full blur-[80px] -ml-20 -mb-20 pointer-events-none" />
@@ -166,7 +166,7 @@ export default function ContactPage() {
                     </div>
                 </motion.div>
 
-                <div className="grid lg:grid-cols-5 gap-12 lg:gap-16 items-start">
+                <div className="grid lg:grid-cols-5 gap-6 lg:gap-8 items-start">
                     {/* Contact Form */}
                     <motion.div 
                         initial={{ opacity: 0, x: -20 }}
@@ -176,13 +176,13 @@ export default function ContactPage() {
                         id="contact-form"
                     >
                         <Card className="bg-white border flex flex-col items-center w-full border-slate-100 shadow-[0_10px_40px_rgba(0,0,0,0.03)] rounded-[2rem] overflow-hidden">
-                            <CardHeader className="pb-8 pt-10 px-8 w-full border-b border-slate-50 bg-slate-50/50">
+                            <CardHeader className="pb-5 pt-7 px-6 w-full border-b border-slate-50 bg-slate-50/50">
                                 <CardTitle className="text-2xl font-bold text-slate-900">도입 문의 남기기</CardTitle>
                                 <CardDescription className="text-slate-500 font-medium mt-2">
                                     학원 규모와 원하시는 기능을 남겨주시면, 담당 매니저가 맞춤형 안내 자료와 함께 연락드리겠습니다.
                                 </CardDescription>
                             </CardHeader>
-                            <CardContent className="px-8 py-10 space-y-8 flex flex-col items-center w-full">
+                            <CardContent className="px-6 py-6 space-y-5 flex flex-col items-center w-full">
                                 {submitted ? (
                                     <div className="flex flex-col items-center justify-center space-y-4 py-12 text-center">
                                         <CheckCircle2 className="h-14 w-14 text-green-500" />
@@ -195,30 +195,30 @@ export default function ContactPage() {
                                     </div>
                                 ) : (
                                 <form ref={formRef} onSubmit={handleSubmit} className="w-full space-y-8">
-                                <div className="w-full grid grid-cols-1 md:grid-cols-2 gap-8">
+                                <div className="w-full grid grid-cols-1 md:grid-cols-2 gap-4">
                                     <div className="space-y-3 w-full">
                                         <Label htmlFor="org-name" className="text-slate-700 font-bold ml-1">학원명 / 기관명 <span className="text-[#084734]">*</span></Label>
-                                        <Input id="org-name" name="org-name" placeholder="예: 무궁화 학원" required aria-invalid={!!error} aria-describedby="org-name-error" className={`w-full bg-white border-slate-200 focus-visible:ring-[#084734] h-14 rounded-xl shadow-sm text-base${shake ? " animate-shake" : ""}`} />
+                                        <Input id="org-name" name="org-name" placeholder="예: 무궁화 학원" required aria-invalid={!!error} aria-describedby="org-name-error" className={`w-full bg-white border-slate-200 focus-visible:ring-[#084734] h-11 rounded-xl shadow-sm text-base${shake ? " animate-shake" : ""}`} />
                                     </div>
                                     <div className="space-y-3 w-full">
                                         <Label htmlFor="name" className="text-slate-700 font-bold ml-1">담당자 성함 <span className="text-[#084734]">*</span></Label>
-                                        <Input id="name" name="name" placeholder="홍길동 원장" required aria-invalid={!!error} aria-describedby="name-error" className={`w-full bg-white border-slate-200 focus-visible:ring-[#084734] h-14 rounded-xl shadow-sm text-base${shake ? " animate-shake" : ""}`} />
+                                        <Input id="name" name="name" placeholder="홍길동 원장" required aria-invalid={!!error} aria-describedby="name-error" className={`w-full bg-white border-slate-200 focus-visible:ring-[#084734] h-11 rounded-xl shadow-sm text-base${shake ? " animate-shake" : ""}`} />
                                     </div>
                                 </div>
-                                <div className="w-full grid grid-cols-1 md:grid-cols-2 gap-8">
+                                <div className="w-full grid grid-cols-1 md:grid-cols-2 gap-4">
                                     <div className="space-y-3 w-full">
                                         <Label htmlFor="phone" className="text-slate-700 font-bold ml-1">연락처 <span className="text-[#084734]">*</span></Label>
-                                        <Input id="phone" name="phone" placeholder="010-0000-0000" type="tel" required aria-invalid={!!error} aria-describedby="phone-error" className={`w-full bg-white border-slate-200 focus-visible:ring-[#084734] h-14 rounded-xl shadow-sm text-base${shake ? " animate-shake" : ""}`} />
+                                        <Input id="phone" name="phone" placeholder="010-0000-0000" type="tel" required aria-invalid={!!error} aria-describedby="phone-error" className={`w-full bg-white border-slate-200 focus-visible:ring-[#084734] h-11 rounded-xl shadow-sm text-base${shake ? " animate-shake" : ""}`} />
                                     </div>
                                     <div className="space-y-3 w-full">
                                         <Label htmlFor="email" className="text-slate-700 font-bold ml-1">이메일 (선택)</Label>
-                                        <Input id="email" name="email" placeholder="example@classin.com" type="email" className="w-full bg-white border-slate-200 focus-visible:ring-[#084734] h-14 rounded-xl shadow-sm text-base" />
+                                        <Input id="email" name="email" placeholder="example@classin.com" type="email" className="w-full bg-white border-slate-200 focus-visible:ring-[#084734] h-11 rounded-xl shadow-sm text-base" />
                                     </div>
                                 </div>
                                 <div className="space-y-3 w-full">
                                     <Label htmlFor="message" className="text-slate-700 font-bold ml-1">문의 내용 <span className="text-[#084734]">*</span></Label>
                                     <textarea
-                                        className={`w-full resize-none rounded-xl border border-slate-200 bg-white px-4 py-4 text-base focus:outline-none focus:ring-2 focus:ring-[#084734] focus:border-transparent transition-all shadow-sm min-h-[160px]${shake ? " animate-shake" : ""}`}
+                                        className={`w-full resize-none rounded-xl border border-slate-200 bg-white px-4 py-4 text-base focus:outline-none focus:ring-2 focus:ring-[#084734] focus:border-transparent transition-all shadow-sm min-h-[110px]${shake ? " animate-shake" : ""}`}
                                         placeholder="현재 겪고 계신 운영상의 고민이나 필요하신 기능을 자유롭게 적어주세요."
                                         id="message"
                                         name="message"
@@ -242,7 +242,7 @@ export default function ContactPage() {
                                 {error && (
                                     <p id="message-error" role="alert" aria-live="polite" className="text-red-600 text-sm text-center">{error}</p>
                                 )}
-                                <Button type="submit" disabled={loading} className="w-full h-16 text-lg font-bold bg-[#084734] hover:bg-[#065c41] text-white rounded-xl shadow-[0_8px_20px_rgba(8,71,52,0.18)] hover:shadow-[0_12px_25px_rgba(8,71,52,0.26)] transition-all hover:-translate-y-0.5 mt-4">
+                                <Button type="submit" disabled={loading} className="w-full h-12 text-base font-bold bg-[#084734] hover:bg-[#065c41] text-white rounded-xl shadow-[0_8px_20px_rgba(8,71,52,0.18)] hover:shadow-[0_12px_25px_rgba(8,71,52,0.26)] transition-all hover:-translate-y-0.5 mt-4">
                                     {loading ? (
                                         <><Loader2 className="mr-2 h-5 w-5 animate-spin" />제출 중...</>
                                     ) : (
@@ -262,27 +262,27 @@ export default function ContactPage() {
                         transition={{ duration: 0.6, delay: 0.5 }}
                         className="lg:col-span-2 space-y-6"
                     >
-                        <div className="bg-white rounded-[2rem] p-8 md:p-10 border border-slate-100 shadow-[0_10px_40px_rgba(0,0,0,0.03)] h-full">
-                            <h3 className="text-xl font-bold text-slate-900 mb-8 pb-4 border-b border-slate-100">직접 연락하기</h3>
-                            
-                            <div className="space-y-8">
+                        <div className="bg-white rounded-[2rem] p-6 md:p-8 border border-slate-100 shadow-[0_10px_40px_rgba(0,0,0,0.03)] h-full">
+                            <h3 className="text-xl font-bold text-slate-900 mb-5 pb-3 border-b border-slate-100">직접 연락하기</h3>
+
+                            <div className="space-y-5">
                                 <div className="flex items-start gap-4">
-                                    <div className="w-12 h-12 rounded-2xl bg-[#ECFDF5] flex items-center justify-center shrink-0 text-[#084734]">
-                                        <Phone className="w-6 h-6" />
+                                    <div className="w-9 h-9 rounded-xl bg-[#ECFDF5] flex items-center justify-center shrink-0 text-[#084734]">
+                                        <Phone className="w-4 h-4" />
                                     </div>
                                     <div>
-                                        <h4 className="font-bold text-slate-900 mb-1">지사 전화</h4>
-                                        <p className="text-slate-600 font-medium text-lg">02-6958-8566</p>
+                                        <h4 className="font-bold text-slate-900 mb-0.5 text-sm">지사 전화</h4>
+                                        <p className="text-slate-600 font-medium">02-6958-8566</p>
                                         <p className="text-sm text-slate-500 mt-1">평일 09:00 - 18:00 (점심시간 12:00-13:00)</p>
                                     </div>
                                 </div>
                                 
                                 <div className="flex items-start gap-4">
-                                    <div className="w-12 h-12 rounded-2xl bg-[#ECFDF5] flex items-center justify-center shrink-0 text-[#084734]">
-                                        <Mail className="w-6 h-6" />
+                                    <div className="w-9 h-9 rounded-xl bg-[#ECFDF5] flex items-center justify-center shrink-0 text-[#084734]">
+                                        <Mail className="w-4 h-4" />
                                     </div>
                                     <div>
-                                        <h4 className="font-bold text-slate-900 mb-1">이메일 문의</h4>
+                                        <h4 className="font-bold text-slate-900 mb-0.5 text-sm">이메일 문의</h4>
                                         <a href="mailto:support@classin.com" className="text-slate-600 font-medium hover:text-[#084734] transition-colors">support@classin.com</a>
                                         <p className="text-sm text-slate-500 mt-1">답변 평균 대기 시간: 2시간 이내</p>
                                     </div>
@@ -290,10 +290,10 @@ export default function ContactPage() {
 
                                 <div className="flex items-start gap-4">
                                     <div className="w-12 h-12 rounded-2xl bg-slate-100 flex items-center justify-center shrink-0 text-slate-600">
-                                        <MapPin className="w-6 h-6" />
+                                        <MapPin className="w-4 h-4" />
                                     </div>
                                     <div>
-                                        <h4 className="font-bold text-slate-900 mb-1">오피스 위치</h4>
+                                        <h4 className="font-bold text-slate-900 mb-0.5 text-sm">오피스 위치</h4>
                                         <p className="text-slate-600 font-medium leading-relaxed">
                                             서울시 양천구 목동동로 233-1<br />
                                             806호
@@ -303,8 +303,8 @@ export default function ContactPage() {
                             </div>
 
                             {/* Map */}
-                            <div className="mt-10 pt-8 border-t border-slate-100">
-                                <div className="w-full h-48 bg-slate-100 rounded-2xl border border-slate-200 overflow-hidden relative">
+                            <div className="mt-6 pt-5 border-t border-slate-100">
+                                <div className="w-full h-36 bg-slate-100 rounded-2xl border border-slate-200 overflow-hidden relative">
                                     <iframe
                                         src="https://maps.google.com/maps?q=서울시+양천구+목동동로+233-1&t=&z=17&ie=UTF8&iwloc=&output=embed"
                                         width="100%" 
