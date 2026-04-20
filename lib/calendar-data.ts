@@ -16,7 +16,7 @@ import { hasSupabaseBrowserEnv } from "@/lib/supabase/public-env"
 const FILE = path.join(process.cwd(), "data", "calendar-events.json")
 
 export type EventType = "team" | "deadline" | "meeting" | "launch" | "holiday" | "other"
-export type EventSource = "calendar" | "partner"
+export type EventSource = "calendar" | "partner" | "event"
 
 export interface CalendarEvent {
   id: string
@@ -367,15 +367,56 @@ async function getPartnerCalendarEvents(
   return getLocalPartnerCalendarEvents(options)
 }
 
+interface PublicEventCalendarRow {
+  id: string
+  title: string
+  starts_at: string
+  ends_at: string | null
+  created_at: string
+  updated_at: string
+}
+
+async function getPublicEventsAsCalendarEvents(): Promise<CalendarEvent[]> {
+  try {
+    const supabase = createSupabaseAdminClient()
+    const { data, error } = await supabase
+      .from("public_events")
+      .select("id, title, starts_at, ends_at, created_at, updated_at")
+      .order("starts_at")
+    if (error) return []
+    return (data as PublicEventCalendarRow[]).map((row) => ({
+      id: row.id,
+      title: row.title,
+      date: row.starts_at.slice(0, 10),
+      endDate: row.ends_at ? row.ends_at.slice(0, 10) : undefined,
+      type: "launch" as EventType,
+      source: "event" as EventSource,
+      sourceLabel: "공개 행사",
+      readonly: true,
+      href: "/admin/events",
+      createdAt: row.created_at,
+      updatedAt: row.updated_at,
+    }))
+  } catch {
+    return []
+  }
+}
+
 export async function getAllEvents(): Promise<CalendarEvent[]> {
-  const [partnerEvents] = await Promise.all([getPartnerCalendarEvents()])
-  return [...getStoredEvents(), ...partnerEvents].sort(compareEvents)
+  const [partnerEvents, publicEvents] = await Promise.all([
+    getPartnerCalendarEvents(),
+    getPublicEventsAsCalendarEvents(),
+  ])
+  return [...getStoredEvents(), ...partnerEvents, ...publicEvents].sort(compareEvents)
 }
 
 export async function getEventsByMonth(year: number, month: number): Promise<CalendarEvent[]> {
-  const [partnerEvents] = await Promise.all([getPartnerCalendarEvents({ year, month })])
+  const [partnerEvents, publicEvents] = await Promise.all([
+    getPartnerCalendarEvents({ year, month }),
+    getPublicEventsAsCalendarEvents(),
+  ])
   const prefix = `${year}-${String(month).padStart(2, "0")}`
-  return [...getStoredEvents(), ...partnerEvents]
+  return [...getStoredEvents(), ...partnerEvents, ...publicEvents]
     .filter((event) => isEventVisibleInMonth(event, year, month) || event.date.startsWith(prefix))
     .sort(compareEvents)
 }
