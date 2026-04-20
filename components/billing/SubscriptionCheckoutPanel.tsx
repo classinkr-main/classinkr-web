@@ -279,201 +279,215 @@ export function SubscriptionCheckoutPanel() {
   }
 
   return (
-    <div className="grid gap-4 lg:min-h-[calc(100vh-8rem)] lg:grid-cols-[minmax(0,1.08fr)_minmax(360px,400px)]">
-      {/* ── 왼쪽: 플랜 선택 ── */}
-      <div className="rounded-2xl border border-[rgba(0,0,0,0.08)] bg-white lg:max-h-[calc(100vh-8rem)]">
-        <div className="flex h-full flex-col lg:overflow-y-auto">
-          <div className="grid gap-4 p-5">
-            <div className="flex flex-col gap-3 xl:flex-row xl:items-center xl:justify-between">
-              <div className="inline-flex gap-2">
-                {(["monthly", "yearly"] as BillingCycle[]).map((cycle) => {
-                  const active = cycle === billingCycle
-                  return (
-                    <button
-                      key={cycle}
-                      type="button"
-                      onClick={() => setBillingCycle(cycle)}
-                      className={`rounded-lg border px-3.5 py-1.5 text-sm font-semibold transition-colors ${
-                        active
-                          ? "border-[#084734] text-[#084734]"
-                          : "border-[rgba(0,0,0,0.08)] text-[#66726B] hover:border-[#084734]/30"
-                      }`}
-                    >
-                      {cycle === "monthly" ? "월간" : "연간"}
-                    </button>
-                  )
-                })}
-              </div>
-              <AccountCountStepper value={accountCount} onChange={setAccountCount} />
-            </div>
-
-            <div className="grid gap-3 xl:grid-cols-2">
-              {SELF_SERVE_PLANS.map((plan) => {
-                const active = plan.id === planId
-                const activePrice = billingCycle === "monthly" ? plan.monthly : plan.yearly
-                return (
-                  <button
-                    key={plan.id}
-                    type="button"
-                    onClick={() => setPlanId(plan.id)}
-                    className={`rounded-xl border p-4 text-left transition-colors ${
-                      active
-                        ? "border-2 border-[#084734] bg-white"
-                        : "border border-[rgba(0,0,0,0.08)] bg-white hover:border-[#084734]/30"
-                    }`}
-                  >
-                    <div className="flex items-center justify-between gap-3">
-                      <h2 className="text-lg font-semibold text-[#111110]">{plan.title}</h2>
-                      {active ? (
-                        <span className="rounded-md border border-[#084734] px-2 py-0.5 text-[11px] font-semibold text-[#084734]">
-                          선택됨
-                        </span>
-                      ) : null}
-                    </div>
-                    <div className="mt-3 flex items-end gap-2">
-                      <p className="text-2xl font-semibold tracking-tight text-[#111110]">
-                        {formatUsd(activePrice.amount)}
-                      </p>
-                      <p className="pb-0.5 text-xs text-[#7D7871]">{activePrice.unitSuffix}</p>
-                    </div>
-                    {activePrice.badge ? (
-                      <span className="mt-2 inline-block rounded-md border border-[#084734]/20 px-2 py-0.5 text-[11px] font-semibold text-[#084734]">
-                        {activePrice.badge}
-                      </span>
-                    ) : null}
-                  </button>
-                )
-              })}
-            </div>
-
-            <div className="flex items-center justify-between gap-3 rounded-xl border border-[rgba(0,0,0,0.08)] px-4 py-2.5">
-              <p className="text-sm text-[#44514A]">
-                <span className="font-semibold text-[#111110]">Enterprise</span>
-                <span className="mx-1.5 text-[rgba(0,0,0,0.15)]">·</span>
-                맞춤 계약
-              </p>
-              <Link
-                href="/contact#contact-form"
-                className="inline-flex shrink-0 items-center gap-1 text-sm font-semibold text-[#084734] hover:underline"
-              >
-                상담 요청
-                <ArrowRight className="h-3.5 w-3.5" />
-              </Link>
-            </div>
+    <div className="mx-auto max-w-3xl space-y-4">
+      {/* ── 플랜 선택 ── */}
+      <div className="rounded-2xl border border-[rgba(0,0,0,0.08)] bg-white p-5">
+        <div className="flex flex-col gap-3 sm:flex-row sm:items-center sm:justify-between">
+          <div className="inline-flex gap-2">
+            {(["monthly", "yearly"] as BillingCycle[]).map((cycle) => {
+              const active = cycle === billingCycle
+              return (
+                <button
+                  key={cycle}
+                  type="button"
+                  onClick={() => setBillingCycle(cycle)}
+                  className={`rounded-lg border px-3.5 py-1.5 text-sm font-semibold transition-colors ${
+                    active
+                      ? "border-[#084734] text-[#084734]"
+                      : "border-[rgba(0,0,0,0.08)] text-[#66726B] hover:border-[#084734]/30"
+                  }`}
+                >
+                  {cycle === "monthly" ? "월간" : "연간"}
+                </button>
+              )
+            })}
           </div>
+          <AccountCountStepper value={accountCount} onChange={setAccountCount} />
+        </div>
+
+        <div className="mt-4 grid gap-3 sm:grid-cols-2">
+          {SELF_SERVE_PLANS.map((plan) => {
+            const active = plan.id === planId
+            const activePrice = billingCycle === "monthly" ? plan.monthly : plan.yearly
+            return (
+              <button
+                key={plan.id}
+                type="button"
+                onClick={() => setPlanId(plan.id)}
+                className={`rounded-xl border p-4 text-left transition-colors ${
+                  active
+                    ? "border-2 border-[#084734] bg-white"
+                    : "border border-[rgba(0,0,0,0.08)] bg-white hover:border-[#084734]/30"
+                }`}
+              >
+                <div className="flex items-center justify-between gap-3">
+                  <h2 className="text-lg font-semibold text-[#111110]">{plan.title}</h2>
+                  {active ? (
+                    <span className="rounded-md border border-[#084734] px-2 py-0.5 text-[11px] font-semibold text-[#084734]">
+                      선택됨
+                    </span>
+                  ) : null}
+                </div>
+                <div className="mt-2 flex items-end gap-2">
+                  <p className="text-2xl font-semibold tracking-tight text-[#111110]">
+                    {formatUsd(activePrice.amount)}
+                  </p>
+                  <p className="pb-0.5 text-xs text-[#7D7871]">{activePrice.unitSuffix}</p>
+                </div>
+                {activePrice.badge ? (
+                  <span className="mt-1.5 inline-block rounded-md border border-[#084734]/20 px-2 py-0.5 text-[11px] font-semibold text-[#084734]">
+                    {activePrice.badge}
+                  </span>
+                ) : null}
+                {plan.limits ? (
+                  <ul className="mt-3 space-y-1 border-t border-[rgba(0,0,0,0.06)] pt-3">
+                    {plan.limits.map((item) => (
+                      <li key={item} className="flex items-start gap-2 text-[12px] text-[#44514A]">
+                        <span className="mt-1.5 h-1 w-1 shrink-0 rounded-full bg-[#084734]/40" />
+                        {item}
+                      </li>
+                    ))}
+                  </ul>
+                ) : null}
+                {plan.features ? (
+                  <ul className="mt-2 space-y-1">
+                    {plan.features.map((item) => (
+                      <li key={item} className="flex items-start gap-2 text-[12px] text-[#7C8A83]">
+                        <span className="mt-1.5 h-1 w-1 shrink-0 rounded-full bg-[rgba(0,0,0,0.1)]" />
+                        {item}
+                      </li>
+                    ))}
+                  </ul>
+                ) : null}
+              </button>
+            )
+          })}
+        </div>
+
+        <div className="mt-3 flex items-center justify-between gap-3 rounded-xl border border-[rgba(0,0,0,0.08)] px-4 py-2.5">
+          <p className="text-sm text-[#44514A]">
+            <span className="font-semibold text-[#111110]">Enterprise</span>
+            <span className="mx-1.5 text-[rgba(0,0,0,0.15)]">·</span>
+            맞춤 계약
+          </p>
+          <Link
+            href="/contact#contact-form"
+            className="inline-flex shrink-0 items-center gap-1 text-sm font-semibold text-[#084734] hover:underline"
+          >
+            상담 요청
+            <ArrowRight className="h-3.5 w-3.5" />
+          </Link>
         </div>
       </div>
 
-      {/* ── 오른쪽: 결제 ── */}
-      <div className="rounded-2xl border border-[rgba(0,0,0,0.08)] bg-white lg:max-h-[calc(100vh-8rem)]">
-        <div className="flex h-full flex-col lg:overflow-y-auto">
-          <div className="flex items-center justify-between gap-3 border-b border-[rgba(0,0,0,0.08)] px-5 py-3">
-            <span className="text-sm font-semibold text-[#111110]">결제 정보</span>
-            <span className="text-sm font-bold text-[#084734]">{selectedPlan.title} · {accountCount}계정 · {formatUsd(amountUsd)}</span>
+      {/* ── 결제 정보 ── */}
+      <div className="rounded-2xl border border-[rgba(0,0,0,0.08)] bg-white">
+        <div className="flex items-center justify-between gap-3 border-b border-[rgba(0,0,0,0.08)] px-5 py-3">
+          <span className="text-sm font-semibold text-[#111110]">결제 정보</span>
+          <span className="text-sm font-bold text-[#084734]">{selectedPlan.title} · {accountCount}계정 · {formatUsd(amountUsd)}</span>
+        </div>
+
+        <div className="space-y-3 p-5">
+          {!checkoutEnabled && (
+            <div className="rounded-lg border border-[#EAD7B2] px-3 py-2 text-xs text-[#8D6C1F]">
+              NEXT_PUBLIC_SW_CHECKOUT_ENABLED=true 설정 필요
+            </div>
+          )}
+          {!hasWidgetKey && (
+            <div className="rounded-lg border border-[#EAD7B2] px-3 py-2 text-xs text-[#8D6C1F]">
+              TOSS_WIDGET_CLIENT_KEY 설정 필요
+            </div>
+          )}
+
+          <div className="rounded-xl border border-[rgba(0,0,0,0.08)] p-4">
+            <div className="grid gap-3 md:grid-cols-2">
+              <div className="space-y-1.5 md:col-span-2">
+                <Label htmlFor="organizationName" className="text-xs">기관명 / 학원명</Label>
+                <Input
+                  id="organizationName"
+                  value={form.organizationName}
+                  onChange={(event) =>
+                    setForm((current) => ({ ...current, organizationName: event.target.value }))
+                  }
+                  placeholder="무궁화학원"
+                  className="h-10 rounded-lg border-[rgba(0,0,0,0.08)]"
+                />
+              </div>
+              <div className="space-y-1.5">
+                <Label htmlFor="buyerName" className="text-xs">담당자명</Label>
+                <Input
+                  id="buyerName"
+                  value={form.buyerName}
+                  onChange={(event) =>
+                    setForm((current) => ({ ...current, buyerName: event.target.value }))
+                  }
+                  placeholder="홍길동"
+                  className="h-10 rounded-lg border-[rgba(0,0,0,0.08)]"
+                />
+              </div>
+              <div className="space-y-1.5">
+                <Label htmlFor="buyerPhone" className="text-xs">연락처 (선택)</Label>
+                <Input
+                  id="buyerPhone"
+                  value={form.buyerPhone}
+                  onChange={(event) =>
+                    setForm((current) => ({ ...current, buyerPhone: event.target.value }))
+                  }
+                  placeholder="01012345678"
+                  className="h-10 rounded-lg border-[rgba(0,0,0,0.08)]"
+                />
+              </div>
+              <div className="space-y-1.5 md:col-span-2">
+                <Label htmlFor="buyerEmail" className="text-xs">이메일</Label>
+                <Input
+                  id="buyerEmail"
+                  type="email"
+                  value={form.buyerEmail}
+                  onChange={(event) =>
+                    setForm((current) => ({ ...current, buyerEmail: event.target.value }))
+                  }
+                  placeholder="ops@classin.co.kr"
+                  className="h-10 rounded-lg border-[rgba(0,0,0,0.08)]"
+                />
+              </div>
+            </div>
           </div>
 
-          <div className="space-y-3 p-5">
-            {!checkoutEnabled && (
-              <div className="rounded-lg border border-[#EAD7B2] px-3 py-2 text-xs text-[#8D6C1F]">
-                NEXT_PUBLIC_SW_CHECKOUT_ENABLED=true 설정 필요
-              </div>
-            )}
-            {!hasWidgetKey && (
-              <div className="rounded-lg border border-[#EAD7B2] px-3 py-2 text-xs text-[#8D6C1F]">
-                TOSS_WIDGET_CLIENT_KEY 설정 필요
-              </div>
-            )}
-
-            <div className="rounded-xl border border-[rgba(0,0,0,0.08)] p-4">
-              <div className="grid gap-3 md:grid-cols-2">
-                <div className="space-y-1.5 md:col-span-2">
-                  <Label htmlFor="organizationName" className="text-xs">기관명 / 학원명</Label>
-                  <Input
-                    id="organizationName"
-                    value={form.organizationName}
-                    onChange={(event) =>
-                      setForm((current) => ({ ...current, organizationName: event.target.value }))
-                    }
-                    placeholder="무궁화학원"
-                    className="h-10 rounded-lg border-[rgba(0,0,0,0.08)]"
-                  />
-                </div>
-                <div className="space-y-1.5">
-                  <Label htmlFor="buyerName" className="text-xs">담당자명</Label>
-                  <Input
-                    id="buyerName"
-                    value={form.buyerName}
-                    onChange={(event) =>
-                      setForm((current) => ({ ...current, buyerName: event.target.value }))
-                    }
-                    placeholder="홍길동"
-                    className="h-10 rounded-lg border-[rgba(0,0,0,0.08)]"
-                  />
-                </div>
-                <div className="space-y-1.5">
-                  <Label htmlFor="buyerPhone" className="text-xs">연락처 (선택)</Label>
-                  <Input
-                    id="buyerPhone"
-                    value={form.buyerPhone}
-                    onChange={(event) =>
-                      setForm((current) => ({ ...current, buyerPhone: event.target.value }))
-                    }
-                    placeholder="01012345678"
-                    className="h-10 rounded-lg border-[rgba(0,0,0,0.08)]"
-                  />
-                </div>
-                <div className="space-y-1.5 md:col-span-2">
-                  <Label htmlFor="buyerEmail" className="text-xs">이메일</Label>
-                  <Input
-                    id="buyerEmail"
-                    type="email"
-                    value={form.buyerEmail}
-                    onChange={(event) =>
-                      setForm((current) => ({ ...current, buyerEmail: event.target.value }))
-                    }
-                    placeholder="ops@classin.co.kr"
-                    className="h-10 rounded-lg border-[rgba(0,0,0,0.08)]"
-                  />
-                </div>
-              </div>
-            </div>
-
-            <div className="rounded-xl border border-[rgba(0,0,0,0.08)] p-3">
-              <div
-                id="toss-payment-methods"
-                className="min-h-[140px] rounded-lg border border-dashed border-[rgba(0,0,0,0.08)]"
-              />
-              <div
-                id="toss-agreement"
-                className="mt-2 min-h-[50px] rounded-lg border border-dashed border-[rgba(0,0,0,0.08)]"
-              />
-            </div>
-
-            {error && (
-              <div className="flex items-start gap-2 rounded-lg border border-[#EAD7B2] px-3 py-2 text-sm text-[#8D6C1F]">
-                <AlertCircle className="mt-0.5 h-4 w-4 shrink-0" />
-                <span>{error}</span>
-              </div>
-            )}
-
-            <KrwConversionNote
-              amountKrw={approxAmountKrw}
-              fxRate={fx.rate}
-              isStale={fx.isStale}
-              loading={fx.loading}
+          <div className="rounded-xl border border-[rgba(0,0,0,0.08)] p-3">
+            <div
+              id="toss-payment-methods"
+              className="min-h-[140px] rounded-lg border border-dashed border-[rgba(0,0,0,0.08)]"
             />
-
-            <Button
-              type="button"
-              className="h-12 w-full rounded-lg border-2 border-[#084734] bg-[#084734] text-sm font-bold text-white hover:bg-[#065C41]"
-              disabled={!hasWidgetKey || !isWidgetReady || isPreparing || !isFormComplete}
-              onClick={() => {
-                void handleCheckout()
-              }}
-            >
-              {isPreparing ? "결제 준비 중..." : `${formatUsd(amountUsd)} 결제하기`}
-            </Button>
+            <div
+              id="toss-agreement"
+              className="mt-2 min-h-[50px] rounded-lg border border-dashed border-[rgba(0,0,0,0.08)]"
+            />
           </div>
+
+          {error && (
+            <div className="flex items-start gap-2 rounded-lg border border-[#EAD7B2] px-3 py-2 text-sm text-[#8D6C1F]">
+              <AlertCircle className="mt-0.5 h-4 w-4 shrink-0" />
+              <span>{error}</span>
+            </div>
+          )}
+
+          <KrwConversionNote
+            amountKrw={approxAmountKrw}
+            fxRate={fx.rate}
+            isStale={fx.isStale}
+            loading={fx.loading}
+          />
+
+          <Button
+            type="button"
+            className="h-12 w-full rounded-lg border-2 border-[#084734] bg-[#084734] text-sm font-bold text-white hover:bg-[#065C41]"
+            disabled={!hasWidgetKey || !isWidgetReady || isPreparing || !isFormComplete}
+            onClick={() => {
+              void handleCheckout()
+            }}
+          >
+            {isPreparing ? "결제 준비 중..." : `${formatUsd(amountUsd)} 결제하기`}
+          </Button>
         </div>
       </div>
     </div>
