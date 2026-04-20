@@ -360,19 +360,38 @@ export function SubscriptionCheckoutPanel() {
           })}
         </div>
 
-        <div className="mt-3 flex items-center justify-between gap-3 rounded-xl border border-[rgba(0,0,0,0.08)] px-4 py-2.5">
-          <p className="text-sm text-[#44514A]">
-            <span className="font-semibold text-[#111110]">Enterprise</span>
-            <span className="mx-1.5 text-[rgba(0,0,0,0.15)]">·</span>
-            맞춤 계약
-          </p>
-          <Link
-            href="/contact#contact-form"
-            className="inline-flex shrink-0 items-center gap-1 text-sm font-semibold text-[#084734] hover:underline"
-          >
-            상담 요청
-            <ArrowRight className="h-3.5 w-3.5" />
-          </Link>
+        <div className="mt-3 rounded-xl border border-[rgba(0,0,0,0.08)] p-4">
+          <div className="flex items-center justify-between gap-3">
+            <h2 className="text-lg font-semibold text-[#111110]">Enterprise</h2>
+            <Link
+              href="/contact#contact-form"
+              className="inline-flex shrink-0 items-center gap-1 rounded-md border border-[#084734] px-2 py-0.5 text-[11px] font-semibold text-[#084734] hover:underline"
+            >
+              상담 요청
+              <ArrowRight className="h-3 w-3" />
+            </Link>
+          </div>
+          <div className="mt-2 flex items-end gap-2">
+            <p className="text-2xl font-semibold tracking-tight text-[#111110]">맞춤 견적</p>
+            <p className="pb-0.5 text-xs text-[#7D7871]">/ 계정 / 월</p>
+          </div>
+          <div className="mt-3 grid gap-x-6 gap-y-1 border-t border-[rgba(0,0,0,0.06)] pt-3 sm:grid-cols-2">
+            {[
+              "온스테이지 1v0 ~ 1v12",
+              "전담 CSM과 구축 지원",
+              "반(코스)별 최대 2,000명",
+              "하드웨어/설치 연계",
+              "1회 수업 최대 24시간",
+              "보안·권한 맞춤 설정",
+              "조교 6명 · SD/HD/FHD",
+              "계약 기반 청구",
+            ].map((item) => (
+              <div key={item} className="flex items-start gap-2 text-[12px] text-[#44514A]">
+                <span className="mt-1.5 h-1 w-1 shrink-0 rounded-full bg-[#084734]/40" />
+                {item}
+              </div>
+            ))}
+          </div>
         </div>
       </div>
 
