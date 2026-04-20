@@ -2,7 +2,7 @@
 
 import { useState, useMemo } from "react"
 import { motion, AnimatePresence } from "framer-motion"
-import { Calendar, MapPin, Tag, ArrowRight, Search, ExternalLink } from "lucide-react"
+import { Calendar, MapPin, Tag, ArrowRight, Search, ExternalLink, FileText } from "lucide-react"
 import Image from "next/image"
 import Link from "next/link"
 import type { PublicEvent, EventStatus } from "@/lib/types/public-events"
@@ -251,9 +251,17 @@ export default function EventsClient({ events }: { events: PublicEvent[] }) {
                   </div>
 
                   <div className="flex flex-col gap-1.5">
-                    <h2 className="text-[17px] md:text-[19px] font-semibold leading-snug tracking-[-0.015em] text-[#111110]">
-                      {event.title}
-                    </h2>
+                    {event.slug ? (
+                      <Link href={`/events/${event.slug}`}>
+                        <h2 className="text-[17px] md:text-[19px] font-semibold leading-snug tracking-[-0.015em] text-[#111110] hover:text-[#084734] transition-colors">
+                          {event.title}
+                        </h2>
+                      </Link>
+                    ) : (
+                      <h2 className="text-[17px] md:text-[19px] font-semibold leading-snug tracking-[-0.015em] text-[#111110]">
+                        {event.title}
+                      </h2>
+                    )}
                     <p className="text-[13px] text-[#1a1a1a]/50 leading-relaxed line-clamp-2">
                       {event.description}
                     </p>
@@ -312,6 +320,15 @@ export default function EventsClient({ events }: { events: PublicEvent[] }) {
                         <ExternalLink className="w-3.5 h-3.5" />
                       </Link>
                     ) : null}
+                    {event.slug && event.contentMarkdown && (
+                      <Link
+                        href={`/events/${event.slug}`}
+                        className="inline-flex items-center gap-1.5 text-[12px] text-[#1a1a1a]/40 hover:text-[#084734] transition-colors"
+                      >
+                        <FileText className="w-3 h-3" />
+                        세부 보기
+                      </Link>
+                    )}
                   </div>
                 </article>
               </motion.div>

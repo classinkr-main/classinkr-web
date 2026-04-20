@@ -23,6 +23,8 @@ interface PublicEventRow {
   image_path: string | null
   highlight: boolean
   status_override: string | null
+  slug: string | null
+  content_markdown: string | null
   created_at: string
   updated_at: string
 }
@@ -42,6 +44,18 @@ function getImageUrl(imagePath: string | null): string | null {
   return data.publicUrl
 }
 
+function generateSlug(title: string): string {
+  const base = title
+    .toLowerCase()
+    .replace(/\s+/g, "-")
+    .replace(/[^a-z0-9-가-힣]/g, "")
+    .replace(/-+/g, "-")
+    .replace(/^-|-$/g, "")
+    .slice(0, 60)
+  const suffix = Math.random().toString(36).slice(2, 7)
+  return base ? `${base}-${suffix}` : suffix
+}
+
 function rowToEvent(row: PublicEventRow): PublicEvent {
   return {
     id: row.id,
@@ -59,6 +73,8 @@ function rowToEvent(row: PublicEventRow): PublicEvent {
     highlight: row.highlight,
     statusOverride: row.status_override as EventStatus | null,
     status: computeStatus(row),
+    slug: row.slug,
+    contentMarkdown: row.content_markdown,
     createdAt: row.created_at,
     updatedAt: row.updated_at,
   }
@@ -95,6 +111,8 @@ export async function createPublicEvent(input: PublicEventInsert): Promise<Publi
       image_path: input.imagePath ?? null,
       highlight: input.highlight ?? false,
       status_override: input.statusOverride ?? null,
+      slug: generateSlug(input.title),
+      content_markdown: input.contentMarkdown ?? null,
     })
     .select()
     .single()
@@ -120,6 +138,7 @@ export async function updatePublicEvent(
   if (patch.imagePath !== undefined) dbPatch.image_path = patch.imagePath
   if (patch.highlight !== undefined) dbPatch.highlight = patch.highlight
   if (patch.statusOverride !== undefined) dbPatch.status_override = patch.statusOverride
+  if (patch.contentMarkdown !== undefined) dbPatch.content_markdown = patch.contentMarkdown
 
   if (Object.keys(dbPatch).length === 0) return null
 
@@ -128,6 +147,34 @@ export async function updatePublicEvent(
     .update(dbPatch)
     .eq("id", id)
     .select()
+    .single()
+  if (error) {
+    if (error.code === "PGRST116") return null
+    throw error
+  }
+  return rowToEvent(data as PublicEventRow)
+}
+
+export async function getPublicEventBySlug(slug: string): Promise<PublicEvent | null> {
+  const supabase = createSupabaseAdminClient()
+  const { data, error } = await supabase
+    .from("public_events")
+    .select("*")
+    .eq("slug", slug)
+    .single()
+  if (error) {
+    if (error.code === "PGRST116") return null
+    throw error
+  }
+  return rowToEvent(data as PublicEventRow)
+}
+
+export async function getPublicEventById(id: string): Promise<PublicEvent | null> {
+  const supabase = createSupabaseAdminClient()
+  const { data, error } = await supabase
+    .from("public_events")
+    .select("*")
+    .eq("id", id)
     .single()
   if (error) {
     if (error.code === "PGRST116") return null

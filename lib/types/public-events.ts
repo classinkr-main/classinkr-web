@@ -18,6 +18,8 @@ export interface PublicEvent {
   highlight: boolean
   statusOverride: EventStatus | null
   status: EventStatus    // computed from dates or statusOverride
+  slug: string | null
+  contentMarkdown: string | null
   createdAt: string
   updatedAt: string
 }
@@ -35,6 +37,7 @@ export type PublicEventInsert = {
   imagePath?: string | null
   highlight?: boolean
   statusOverride?: EventStatus | null
+  contentMarkdown?: string | null
 }
 
 export type PublicEventUpdate = Partial<PublicEventInsert>

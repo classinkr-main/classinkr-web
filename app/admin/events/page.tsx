@@ -2,7 +2,8 @@
 
 import { useState, useEffect, useCallback, useRef } from "react"
 import Image from "next/image"
-import { Plus, Pencil, Trash2, X, Upload, ImageIcon } from "lucide-react"
+import Link from "next/link"
+import { Plus, Pencil, Trash2, X, Upload, ImageIcon, FileText } from "lucide-react"
 import { getAdminToken } from "@/lib/admin-client"
 import type { PublicEvent, EventCategory, EventStatus } from "@/lib/types/public-events"
 import { EVENT_CATEGORIES } from "@/lib/types/public-events"
@@ -319,10 +320,17 @@ export default function AdminEventsPage() {
                   </td>
                   <td className="px-4 py-3">
                     <div className="flex items-center gap-2 justify-end">
+                      <Link
+                        href={`/admin/events/${event.id}/edit`}
+                        className="p-1.5 text-[#1a1a1a]/40 hover:text-[#084734] transition-colors"
+                        title="콘텐츠 편집"
+                      >
+                        <FileText className="w-3.5 h-3.5" />
+                      </Link>
                       <button
                         onClick={() => openEdit(event)}
                         className="p-1.5 text-[#1a1a1a]/40 hover:text-[#111110] transition-colors"
-                        title="수정"
+                        title="기본 정보 수정"
                       >
                         <Pencil className="w-3.5 h-3.5" />
                       </button>
