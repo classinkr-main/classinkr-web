@@ -16,12 +16,12 @@ function formatKoreanDate(iso: string): string {
 
 function StatusBadge({ status }: { status: EventStatus }) {
   const styles: Record<EventStatus, string> = {
-    "진행 중": "bg-emerald-50 text-emerald-700 border border-emerald-200",
-    "예정": "bg-[#ECFDF5] text-[#084734] border border-[#D1FAE5]",
-    "마감": "bg-[#f0f0ec] text-[#1a1a1a]/40 border border-[#e8e8e4]",
+    "진행 중": "text-emerald-600",
+    "예정": "text-[#084734]",
+    "마감": "text-[#1a1a1a]/30",
   }
   return (
-    <span className={`px-2.5 py-0.5 rounded-full text-[11px] font-semibold ${styles[status]}`}>
+    <span className={`text-[11px] font-semibold ${styles[status]}`}>
       {status}
     </span>
   )
@@ -254,7 +254,7 @@ export default function EventsClient({ events }: { events: PublicEvent[] }) {
                     <h2 className="text-[17px] md:text-[19px] font-semibold leading-snug tracking-[-0.015em] text-[#111110]">
                       {event.title}
                     </h2>
-                    <p className="text-[13px] text-[#1a1a1a]/38 leading-relaxed line-clamp-2">
+                    <p className="text-[13px] text-[#1a1a1a]/50 leading-relaxed line-clamp-2">
                       {event.description}
                     </p>
                     <div className="flex flex-wrap items-center gap-3 mt-1.5">
