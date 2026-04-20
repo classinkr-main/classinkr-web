@@ -1,12 +1,14 @@
 "use client"
 
 import { useRef, useState } from "react"
+import Image from "next/image"
 import Link from "next/link"
 import {
   ArrowLeft,
   Bold,
   Heading2,
   Heading3,
+  ImageIcon,
   Italic,
   Link2,
   List,
@@ -14,6 +16,8 @@ import {
   Minus,
   Quote,
   Save,
+  Upload,
+  X,
 } from "lucide-react"
 import RichMarkdownEditor, { type RichMarkdownEditorHandle } from "@/components/admin/RichMarkdownEditor"
 import { getAdminToken } from "@/lib/admin-client"
@@ -52,8 +56,17 @@ function adminFetch(url: string, options?: RequestInit) {
   })
 }
 
+function adminUpload(url: string, formData: FormData) {
+  return fetch(url, {
+    method: "POST",
+    headers: { Authorization: `Bearer ${getAdminToken()}` },
+    body: formData,
+  })
+}
+
 export default function EventEditor({ event }: { event: PublicEvent }) {
   const editorRef = useRef<RichMarkdownEditorHandle>(null)
+  const fileInputRef = useRef<HTMLInputElement>(null)
 
   const [form, setForm] = useState<FormState>({
     title: event.title,
@@ -69,9 +82,28 @@ export default function EventEditor({ event }: { event: PublicEvent }) {
     statusOverride: (event.statusOverride as StatusOverrideOption) ?? "auto",
   })
   const [content, setContent] = useState(event.contentMarkdown ?? "")
+  const [imagePath, setImagePath] = useState<string | null>(event.imagePath ?? null)
+  const [imagePreview, setImagePreview] = useState<string | null>(event.imageUrl ?? null)
+  const [imageFile, setImageFile] = useState<File | null>(null)
   const [saving, setSaving] = useState(false)
   const [saveError, setSaveError] = useState<string | null>(null)
   const [saved, setSaved] = useState(false)
+
+  function handleFileChange(e: React.ChangeEvent<HTMLInputElement>) {
+    const file = e.target.files?.[0]
+    if (!file) return
+    if (imagePreview?.startsWith("blob:")) URL.revokeObjectURL(imagePreview)
+    setImageFile(file)
+    setImagePreview(URL.createObjectURL(file))
+    e.target.value = ""
+  }
+
+  function handleRemoveImage() {
+    if (imagePreview?.startsWith("blob:")) URL.revokeObjectURL(imagePreview)
+    setImageFile(null)
+    setImagePreview(null)
+    setImagePath(null)
+  }
 
   async function handleSave() {
     if (!form.title || !form.category || !form.startsAt) {
@@ -81,6 +113,19 @@ export default function EventEditor({ event }: { event: PublicEvent }) {
     setSaving(true)
     setSaveError(null)
     try {
+      let currentImagePath = imagePath
+
+      if (imageFile) {
+        const fd = new FormData()
+        fd.append("file", imageFile)
+        const uploadRes = await adminUpload("/api/admin/events/upload", fd)
+        if (!uploadRes.ok) throw new Error("이미지 업로드 실패")
+        const uploadData = await uploadRes.json() as { path: string }
+        currentImagePath = uploadData.path
+        setImagePath(uploadData.path)
+        setImageFile(null)
+      }
+
       const payload = {
         title: form.title,
         description: form.description || null,
@@ -94,6 +139,7 @@ export default function EventEditor({ event }: { event: PublicEvent }) {
         highlight: form.highlight,
         statusOverride: form.statusOverride === "auto" ? null : form.statusOverride,
         contentMarkdown: content || null,
+        imagePath: currentImagePath,
       }
       const res = await adminFetch(`/api/admin/events/${event.id}`, {
         method: "PATCH",
@@ -126,7 +172,7 @@ export default function EventEditor({ event }: { event: PublicEvent }) {
             {form.title || "행사 편집"}
           </span>
         </div>
-        <div className="flex items-center gap-2">
+        <div className="flex items-center gap-3">
           {event.slug && (
             <Link
               href={`/events/${event.slug}`}
@@ -153,7 +199,69 @@ export default function EventEditor({ event }: { event: PublicEvent }) {
         </div>
       </div>
 
-      <div className="mx-auto max-w-5xl px-6 py-8 space-y-8">
+      <div className="mx-auto max-w-5xl px-6 py-8 space-y-6">
+        {/* Thumbnail */}
+        <section className="rounded-2xl border border-[rgba(0,0,0,0.08)] bg-white p-6">
+          <div className="mb-3 flex items-center justify-between">
+            <h2 className="text-[13px] font-semibold text-[#1a1a1a]/40 uppercase tracking-wide">섬네일 이미지</h2>
+            {imagePreview && (
+              <button
+                type="button"
+                onClick={handleRemoveImage}
+                className="inline-flex items-center gap-1 text-[12px] text-[#1a1a1a]/35 hover:text-red-600 transition-colors"
+              >
+                <X className="h-3.5 w-3.5" />
+                이미지 제거
+              </button>
+            )}
+          </div>
+
+          <div
+            onClick={() => fileInputRef.current?.click()}
+            className="group relative cursor-pointer overflow-hidden rounded-xl border-2 border-dashed border-[rgba(0,0,0,0.10)] transition-colors hover:border-[#084734]/40"
+          >
+            {imagePreview ? (
+              <div className="relative w-full" style={{ aspectRatio: "16/7" }}>
+                <Image
+                  src={imagePreview}
+                  alt="섬네일 미리보기"
+                  fill
+                  className="object-cover"
+                  unoptimized
+                />
+                <div className="absolute inset-0 flex items-center justify-center bg-black/0 transition-colors group-hover:bg-black/25">
+                  <div className="flex items-center gap-2 rounded-lg bg-white/90 px-4 py-2 text-[13px] font-medium text-[#111110] opacity-0 shadow transition-opacity group-hover:opacity-100">
+                    <Upload className="h-4 w-4" />
+                    이미지 교체
+                  </div>
+                </div>
+              </div>
+            ) : (
+              <div className="flex flex-col items-center justify-center gap-3 py-14 text-[#1a1a1a]/30">
+                <ImageIcon className="h-10 w-10" />
+                <div className="text-center">
+                  <p className="text-[13px] font-medium text-[#1a1a1a]/50">클릭하여 이미지 업로드</p>
+                  <p className="mt-0.5 text-[11px]">JPG, PNG, WebP, GIF · 최대 10MB</p>
+                </div>
+              </div>
+            )}
+          </div>
+
+          <input
+            ref={fileInputRef}
+            type="file"
+            accept="image/jpeg,image/png,image/webp,image/gif"
+            onChange={handleFileChange}
+            className="hidden"
+          />
+
+          {imageFile && (
+            <p className="mt-2 text-[12px] text-[#084734]/70">
+              {imageFile.name} — 저장 시 업로드됩니다.
+            </p>
+          )}
+        </section>
+
         {/* Metadata */}
         <section className="rounded-2xl border border-[rgba(0,0,0,0.08)] bg-white p-6 space-y-4">
           <h2 className="text-[13px] font-semibold text-[#1a1a1a]/40 uppercase tracking-wide">기본 정보</h2>
