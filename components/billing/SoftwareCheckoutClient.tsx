@@ -2,8 +2,6 @@
 
 import { useState } from "react"
 import Link from "next/link"
-import { Wallet } from "lucide-react"
-
 import { BillingModeTabs, type BillingMode } from "@/components/billing/BillingModeTabs"
 import { BusinessRechargePanel } from "@/components/billing/BusinessRechargePanel"
 import { SubscriptionCheckoutPanel } from "@/components/billing/SubscriptionCheckoutPanel"
@@ -38,30 +36,12 @@ export function SoftwareCheckoutClient({
         </div>
 
         <section className="container relative mx-auto px-4 py-4 md:px-8 md:py-6">
-          <div className="mb-4 flex flex-wrap items-center justify-between gap-3">
-            <div className="flex items-center gap-2.5">
-              <Link
-                href="/"
-                className="inline-flex items-center rounded-full border border-[#084734]/10 bg-white/85 px-3 py-1.5 text-sm font-semibold text-[#084734] shadow-sm backdrop-blur"
-              >
-                ClassIn
-              </Link>
-              <span className="inline-flex items-center gap-2 rounded-full border border-[#084734]/10 bg-[#ECFDF5] px-3 py-1.5 text-xs font-semibold uppercase tracking-[0.16em] text-[#084734]">
-                <Wallet className="h-3.5 w-3.5" />
-                Software Checkout
-              </span>
-            </div>
-
-            <div className="flex flex-wrap items-center gap-2 text-xs text-[#4C665B]">
-              {["카드 + 네이버페이", "토스 결제위젯", "서버 confirm 검증"].map((item) => (
-                <span
-                  key={item}
-                  className="rounded-full border border-[#084734]/10 bg-white/80 px-3 py-1.5 shadow-sm backdrop-blur"
-                >
-                  {item}
-                </span>
-              ))}
-            </div>
+          <div className="mb-4 flex items-center gap-2">
+            <Link href="/" className="text-sm font-semibold text-[#084734] hover:underline">
+              ClassIn
+            </Link>
+            <span className="text-[#084734]/25">/</span>
+            <span className="text-sm font-medium text-[#44514A]">Software Checkout</span>
           </div>
 
           <div className="mb-4 max-w-md">
