@@ -24,7 +24,13 @@ export function MobileFloatingCTA() {
         return () => window.removeEventListener("scroll", handleScroll)
     }, [dismissed])
 
-    if (pathname.startsWith("/admin")) {
+    if (
+        pathname.startsWith("/admin") ||
+        pathname.startsWith("/checkout") ||
+        pathname.startsWith("/partner") ||
+        pathname.startsWith("/pricing") ||
+        pathname.startsWith("/receipt")
+    ) {
         return null
     }
 

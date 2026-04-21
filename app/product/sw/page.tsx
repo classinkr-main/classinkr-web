@@ -1443,9 +1443,9 @@ function PricingValueSection() {
                         <div className="bg-[#1a1a19] text-white rounded-2xl p-6 text-center mt-4">
                             <p className="text-slate-400 text-sm mb-1">ClassIn 하나로</p>
                             <p className="text-2xl font-serif font-bold text-white mb-1">위의 모든 것 + AI 기능까지</p>
-                            <p className="text-[#22A366] text-sm font-bold mb-5">기관 규모에 맞춘 맞춤 요금제</p>
-                            <Link href="/pricing" className="inline-flex items-center gap-2 bg-[#22A366] hover:bg-[#1B8A55] text-white font-bold text-sm px-6 py-2.5 rounded-full transition-all hover:scale-105">
-                                요금제 확인하기 <ArrowRight className="w-4 h-4" />
+                            <p className="text-[#22A366] text-sm font-bold mb-5">기관 규모에 맞춘 도입 상담</p>
+                            <Link href="/contact" className="inline-flex items-center gap-2 bg-[#22A366] hover:bg-[#1B8A55] text-white font-bold text-sm px-6 py-2.5 rounded-full transition-all hover:scale-105">
+                                도입 문의하기 <ArrowRight className="w-4 h-4" />
                             </Link>
                         </div>
                     </motion.div>

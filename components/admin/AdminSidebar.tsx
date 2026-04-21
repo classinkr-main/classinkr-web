@@ -6,6 +6,7 @@ import type { ReactNode } from "react"
 import { useEffect, useState } from "react"
 import {
   BarChart2,
+  BookOpen,
   Building2,
   CalendarDays,
   ChevronRight,
@@ -53,6 +54,7 @@ const NAV: NavItem[] = [
   { href: "/admin/calendar", label: "캘린더", icon: <CalendarDays className="h-4 w-4" />, roles: [...ALL_STAFF, "BRANCH"], section: "workspace" },
   { href: "/admin/events", label: "공개 행사", icon: <Globe className="h-4 w-4" />, roles: STAFF_ADMIN, section: "workspace" },
   { href: "/admin/blog", label: "콘텐츠", icon: <FileText className="h-4 w-4" />, roles: STAFF_EDITOR, section: "workspace" },
+  { href: "/admin/docs", label: "문서 센터", icon: <BookOpen className="h-4 w-4" />, roles: STAFF_EDITOR, section: "workspace" },
   { href: "/admin/branch", label: "지사 관리", icon: <Building2 className="h-4 w-4" />, roles: [...STAFF_ADMIN, "BRANCH"], section: "performance" },
   { href: "/admin/analytics", label: "Analytics", icon: <BarChart2 className="h-4 w-4" />, roles: [...ALL_STAFF, "BRANCH"], section: "performance" },
   { href: "/admin/users", label: "회원 관리", icon: <UserCog className="h-4 w-4" />, roles: STAFF_ADMIN, section: "system" },
