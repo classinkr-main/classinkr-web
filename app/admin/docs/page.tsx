@@ -27,12 +27,22 @@ function getToken() {
   return (typeof window !== "undefined" ? sessionStorage.getItem("admin_password") : null) ?? ""
 }
 
-function adminFetch(url: string) {
+function adminFetch(url: string, init?: RequestInit) {
+  const headers = new Headers(init?.headers)
+  headers.set("Authorization", `Bearer ${getToken()}`)
+
   return fetch(url, {
-    headers: {
-      Authorization: `Bearer ${getToken()}`,
-    },
+    ...init,
+    headers,
   })
+}
+
+interface ReindexResult {
+  configured: boolean
+  articleCount: number
+  chunkCount: number
+  warnings?: string[]
+  error?: string
 }
 
 function formatDate(value: string | null | undefined) {
@@ -145,6 +155,11 @@ export default function AdminDocsPage() {
   const [error, setError] = useState<string | null>(null)
   const [searchQuery, setSearchQuery] = useState("")
   const [categoryFilter, setCategoryFilter] = useState("all")
+  const [reindexing, setReindexing] = useState(false)
+  const [reindexNotice, setReindexNotice] = useState<{
+    tone: "success" | "warning"
+    message: string
+  } | null>(null)
 
   const load = useCallback(async () => {
     setLoading(true)
@@ -181,6 +196,48 @@ export default function AdminDocsPage() {
   useEffect(() => {
     void load()
   }, [load])
+
+  const handleReindex = useCallback(async () => {
+    setReindexing(true)
+    setReindexNotice(null)
+    setError(null)
+
+    try {
+      const response = await adminFetch("/api/admin/docs/reindex", {
+        method: "POST",
+      })
+
+      if (response.status === 401) {
+        router.replace("/admin/login")
+        return
+      }
+
+      const result = (await response.json()) as ReindexResult
+      if (!response.ok) {
+        throw new Error(result.error ?? "문서 검색 인덱스를 재생성하지 못했습니다.")
+      }
+
+      if (!result.configured) {
+        setReindexNotice({
+          tone: "warning",
+          message: result.warnings?.[0] ?? "Supabase 환경이 없어 인덱스를 재생성하지 않았습니다.",
+        })
+        return
+      }
+
+      setReindexNotice({
+        tone: result.warnings?.length ? "warning" : "success",
+        message: `문서 ${formatNumber(result.articleCount)}개에서 검색 chunk ${formatNumber(result.chunkCount)}개를 재생성했습니다.${
+          result.warnings?.length ? ` ${result.warnings[0]}` : ""
+        }`,
+      })
+      await load()
+    } catch (err) {
+      setError(err instanceof Error ? err.message : "문서 검색 인덱스를 재생성하지 못했습니다.")
+    } finally {
+      setReindexing(false)
+    }
+  }, [load, router])
 
   const categoryTitleById = useMemo(() => {
     return new Map((content?.categories ?? []).map((category) => [category.id, category.title]))
@@ -240,6 +297,15 @@ export default function AdminDocsPage() {
           </Link>
           <button
             type="button"
+            onClick={() => void handleReindex()}
+            disabled={loading || reindexing}
+            className="inline-flex h-9 items-center justify-center gap-2 rounded-lg border border-[#e8e8e4] bg-white px-3 text-[13px] font-semibold text-[#111110] transition-colors hover:bg-[#f5f5f2] disabled:cursor-not-allowed disabled:opacity-60"
+          >
+            <Database className="h-4 w-4" />
+            {reindexing ? "인덱싱 중" : "검색 인덱스 재생성"}
+          </button>
+          <button
+            type="button"
             onClick={() => void load()}
             disabled={loading}
             className="inline-flex h-9 items-center justify-center gap-2 rounded-lg bg-[#111110] px-3 text-[13px] font-semibold text-white transition-colors hover:bg-[#2a2a28] disabled:cursor-not-allowed disabled:opacity-60"
@@ -253,6 +319,18 @@ export default function AdminDocsPage() {
       {error ? (
         <div className="mb-6 rounded-2xl border border-[#F6D5C5] bg-[#FEF3EE] px-4 py-3 text-[13px] text-[#B85C33]">
           {error}
+        </div>
+      ) : null}
+
+      {reindexNotice ? (
+        <div
+          className={`mb-6 rounded-2xl border px-4 py-3 text-[13px] ${
+            reindexNotice.tone === "success"
+              ? "border-emerald-100 bg-emerald-50 text-emerald-800"
+              : "border-amber-100 bg-amber-50 text-amber-800"
+          }`}
+        >
+          {reindexNotice.message}
         </div>
       ) : null}
 
