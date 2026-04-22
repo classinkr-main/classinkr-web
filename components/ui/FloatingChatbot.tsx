@@ -1,98 +1,405 @@
 "use client"
 
-import { useState } from "react"
+import { FormEvent, useMemo, useRef, useState } from "react"
+import Link from "next/link"
 import { usePathname } from "next/navigation"
-import { MessageCircle, X } from "lucide-react"
-import { motion, AnimatePresence } from "framer-motion"
-import { isPartnerPortalPath } from "@/lib/partner-portal/pathname"
+import { AnimatePresence, motion } from "framer-motion"
+import {
+    ArrowUpRight,
+    Bot,
+    Check,
+    FileText,
+    Loader2,
+    MessageCircle,
+    Send,
+    ThumbsDown,
+    ThumbsUp,
+    X,
+} from "lucide-react"
+
+import { cn } from "@/lib/utils"
+
+interface ChatbotSource {
+    title: string
+    heading?: string
+    urlPath: string
+    category: string
+    excerpt: string
+    score: number
+}
+
+interface ChatbotQueryResponse {
+    answer: string
+    answerMode: "direct_answer" | "doc_suggestion" | "clarifying_question" | "handoff" | "fallback"
+    answerEventId?: string
+    confidence: number
+    needsHandoff: boolean
+    sessionId?: string
+    sources: ChatbotSource[]
+    suggestedQuestions: string[]
+    unresolved: boolean
+    warning?: string
+}
+
+interface ChatMessage {
+    id: string
+    role: "assistant" | "user"
+    content: string
+    sources?: ChatbotSource[]
+    answerEventId?: string
+    needsHandoff?: boolean
+}
+
+const hiddenPathPrefixes = [
+    "/admin",
+    "/api",
+    "/checkout",
+    "/partner",
+    "/portal",
+    "/pricing",
+    "/receipt",
+]
+
+const starterQuestions = [
+    "학생이 수업에 입장하지 못해요",
+    "첫 수업 전에 뭘 준비해야 하나요?",
+    "결제 영수증은 어떻게 요청하나요?",
+]
+
+function shouldHideChatbot(pathname: string | null) {
+    if (!pathname) return false
+    return hiddenPathPrefixes.some((prefix) => pathname === prefix || pathname.startsWith(`${prefix}/`))
+}
+
+function makeId() {
+    return `${Date.now()}-${Math.random().toString(16).slice(2)}`
+}
+
+function getAnonymousId() {
+    if (typeof window === "undefined") return undefined
+
+    const key = "classinkr_chatbot_anonymous_id"
+    const existing = window.localStorage.getItem(key)
+    if (existing) return existing
+
+    const next = globalThis.crypto?.randomUUID?.() ?? makeId()
+    window.localStorage.setItem(key, next)
+    return next
+}
+
+function FeedbackButtons({ answerEventId }: { answerEventId?: string }) {
+    const [state, setState] = useState<"idle" | "helpful" | "not_helpful" | "failed">("idle")
+
+    async function sendFeedback(rating: "helpful" | "not_helpful") {
+        setState(rating)
+
+        if (!answerEventId) return
+
+        try {
+            await fetch("/api/chatbot/feedback", {
+                method: "POST",
+                headers: { "Content-Type": "application/json" },
+                body: JSON.stringify({ answerEventId, rating }),
+            })
+        } catch {
+            setState("failed")
+        }
+    }
+
+    return (
+        <div className="flex items-center gap-1.5">
+            <button
+                type="button"
+                onClick={() => sendFeedback("helpful")}
+                className={cn(
+                    "inline-flex h-8 w-8 items-center justify-center rounded-[6px] border border-black/[0.08] bg-white text-[#615D59] transition-colors hover:text-[#084734]",
+                    state === "helpful" && "border-[#084734]/25 bg-[#ECFDF5] text-[#084734]"
+                )}
+                aria-label="도움됨"
+                title="도움됨"
+            >
+                {state === "helpful" ? <Check className="h-4 w-4" /> : <ThumbsUp className="h-4 w-4" />}
+            </button>
+            <button
+                type="button"
+                onClick={() => sendFeedback("not_helpful")}
+                className={cn(
+                    "inline-flex h-8 w-8 items-center justify-center rounded-[6px] border border-black/[0.08] bg-white text-[#615D59] transition-colors hover:text-[#084734]",
+                    state === "not_helpful" && "border-[#084734]/25 bg-[#ECFDF5] text-[#084734]"
+                )}
+                aria-label="도움 안 됨"
+                title="도움 안 됨"
+            >
+                <ThumbsDown className="h-4 w-4" />
+            </button>
+        </div>
+    )
+}
+
+function SourceLinks({ sources }: { sources: ChatbotSource[] }) {
+    if (sources.length === 0) return null
+
+    return (
+        <div className="mt-3 space-y-2">
+            {sources.map((source) => (
+                <Link
+                    key={source.urlPath}
+                    href={source.urlPath}
+                    className="group flex items-start gap-2 rounded-[8px] border border-black/[0.08] bg-[#FAFAF8] px-3 py-2 text-left transition-colors hover:border-[#084734]/25 hover:bg-[#ECFDF5]"
+                >
+                    <FileText className="mt-0.5 h-4 w-4 shrink-0 text-[#084734]" />
+                    <span className="min-w-0 flex-1">
+                        <span className="block truncate text-[13px] font-bold text-[#111110]">{source.title}</span>
+                        {source.heading ? (
+                            <span className="mt-0.5 block truncate text-[12px] text-[#615D59]">{source.heading}</span>
+                        ) : null}
+                    </span>
+                    <ArrowUpRight className="mt-0.5 h-3.5 w-3.5 shrink-0 text-[#A39E98] transition-colors group-hover:text-[#084734]" />
+                </Link>
+            ))}
+        </div>
+    )
+}
 
 export function FloatingChatbot() {
     const pathname = usePathname()
     const [isOpen, setIsOpen] = useState(false)
+    const [input, setInput] = useState("")
+    const [sessionId, setSessionId] = useState<string | undefined>()
+    const [isSending, setIsSending] = useState(false)
+    const [error, setError] = useState<string | null>(null)
+    const bottomRef = useRef<HTMLDivElement | null>(null)
+    const [messages, setMessages] = useState<ChatMessage[]>([
+        {
+            id: "welcome",
+            role: "assistant",
+            content:
+                "안녕하세요. ClassIn 가이드와 도움말 기준으로 답변드릴게요. 수업 운영, 도입 준비, 문제 해결, 결제 증빙을 물어보실 수 있습니다.",
+        },
+    ])
 
-    if (
-        pathname.startsWith("/admin") ||
-        pathname.startsWith("/checkout") ||
-        isPartnerPortalPath(pathname)
-    ) {
-        return null
+    const hidden = shouldHideChatbot(pathname)
+
+    const context = useMemo(
+        () => ({
+            channel: "web",
+            path: pathname,
+        }),
+        [pathname]
+    )
+
+    if (hidden) return null
+
+    async function sendQuestion(question: string) {
+        const trimmed = question.trim()
+        if (!trimmed || isSending) return
+
+        setInput("")
+        setError(null)
+        setIsSending(true)
+
+        const userMessage: ChatMessage = {
+            id: makeId(),
+            role: "user",
+            content: trimmed,
+        }
+
+        setMessages((current) => [...current, userMessage])
+
+        try {
+            const response = await fetch("/api/chatbot/query", {
+                method: "POST",
+                headers: { "Content-Type": "application/json" },
+                body: JSON.stringify({
+                    message: trimmed,
+                    sessionId,
+                    anonymousId: getAnonymousId(),
+                    context,
+                }),
+            })
+
+            const data = (await response.json()) as Partial<ChatbotQueryResponse> & { error?: string }
+
+            if (!response.ok) {
+                throw new Error(data.error ?? "답변을 가져오지 못했습니다.")
+            }
+
+            setSessionId(data.sessionId ?? sessionId)
+            setMessages((current) => [
+                ...current,
+                {
+                    id: makeId(),
+                    role: "assistant",
+                    content: data.answer ?? "확인 가능한 답변을 찾지 못했습니다.",
+                    sources: data.sources ?? [],
+                    answerEventId: data.answerEventId,
+                    needsHandoff: data.needsHandoff,
+                },
+            ])
+            requestAnimationFrame(() => bottomRef.current?.scrollIntoView({ behavior: "smooth" }))
+        } catch (err) {
+            setError(err instanceof Error ? err.message : "챗봇 응답 중 오류가 발생했습니다.")
+            setMessages((current) => [
+                ...current,
+                {
+                    id: makeId(),
+                    role: "assistant",
+                    content: "지금은 답변을 가져오지 못했습니다. 잠시 후 다시 시도하거나 도입 문의로 남겨주세요.",
+                    needsHandoff: true,
+                },
+            ])
+        } finally {
+            setIsSending(false)
+        }
+    }
+
+    function handleSubmit(event: FormEvent<HTMLFormElement>) {
+        event.preventDefault()
+        void sendQuestion(input)
     }
 
     return (
-        <div className="fixed right-4 z-50 hidden items-end md:flex md:right-6 md:bottom-6">
+        <div className="fixed bottom-24 right-4 z-50 flex flex-col items-end md:bottom-6 md:right-6">
             <AnimatePresence>
                 {isOpen && (
                     <motion.div
-                        initial={{ opacity: 0, y: 20, scale: 0.95 }}
+                        initial={{ opacity: 0, y: 16, scale: 0.98 }}
                         animate={{ opacity: 1, y: 0, scale: 1 }}
-                        exit={{ opacity: 0, y: 20, scale: 0.95 }}
-                        transition={{ duration: 0.2 }}
-                        className="mb-4 flex h-[500px] w-[calc(100vw-1.5rem)] max-w-[350px] flex-col overflow-hidden rounded-2xl border border-black/[0.08] bg-white shadow-[rgba(0,0,0,0.08)_0px_20px_60px,rgba(0,0,0,0.04)_0px_8px_20px] lg:max-w-[380px]"
+                        exit={{ opacity: 0, y: 16, scale: 0.98 }}
+                        transition={{ duration: 0.18 }}
+                        className="mb-4 flex h-[min(620px,calc(100vh-8rem))] w-[min(calc(100vw-2rem),390px)] flex-col overflow-hidden rounded-[16px] border border-black/[0.08] bg-white shadow-[rgba(0,0,0,0.10)_0px_20px_60px,rgba(0,0,0,0.05)_0px_8px_20px]"
                     >
-                        {/* Chat Header */}
-                        <div className="bg-[#084734] p-5 flex items-center justify-between text-white">
-                            <div className="flex items-center gap-3">
-                                <div className="w-10 h-10 bg-white/20 rounded-full flex items-center justify-center backdrop-blur-sm">
-                                    <MessageCircle className="w-5 h-5 text-white" />
+                        <div className="flex items-center justify-between bg-[#084734] px-5 py-4 text-white">
+                            <div className="flex min-w-0 items-center gap-3">
+                                <div className="flex h-10 w-10 shrink-0 items-center justify-center rounded-[8px] bg-white/12">
+                                    <Bot className="h-5 w-5" />
                                 </div>
-                                <div>
-                                    <h3 className="font-bold text-base">Classin AI 상담봇</h3>
-                                    <p className="text-xs text-white/75 mt-0.5">24시간 빠른 답변을 제공합니다 ⚡</p>
+                                <div className="min-w-0">
+                                    <h2 className="truncate text-[15px] font-bold">ClassIn 도움말</h2>
+                                    <p className="mt-0.5 truncate text-xs text-white/70">문서 기반 빠른 답변</p>
                                 </div>
                             </div>
                             <button
+                                type="button"
                                 onClick={() => setIsOpen(false)}
-                                className="p-1.5 hover:bg-white/20 rounded-full transition-colors"
+                                className="inline-flex h-8 w-8 items-center justify-center rounded-[6px] text-white/75 transition-colors hover:bg-white/10 hover:text-white"
+                                aria-label="챗봇 닫기"
                             >
-                                <X className="w-5 h-5" />
+                                <X className="h-5 w-5" />
                             </button>
                         </div>
 
-                        {/* Chat Body */}
-                        <div className="flex-1 p-5 bg-[#F6F5F4]/50 flex flex-col gap-4 overflow-y-auto">
-                            <div className="flex gap-3">
-                                <div className="w-8 h-8 rounded-full bg-[#ECFDF5] flex items-center justify-center shrink-0">
-                                    <MessageCircle className="w-4 h-4 text-[#084734]" />
-                                </div>
-                                <div className="bg-white border border-black/[0.06] shadow-sm p-3.5 rounded-2xl rounded-tl-sm text-sm text-[#111110] leading-relaxed">
-                                    안녕하세요! Classin에 오신 것을 환영합니다😊 👋<br/><br/>
-                                    학원 운영, 도입 관련 문의, 요금제 등 궁금한 점이 있으시다면 언제든 말씀해 주세요.
-                                </div>
-                            </div>
+                        <div className="flex-1 overflow-y-auto bg-[#F6F5F4]/55 px-4 py-4">
+                            <div className="space-y-4">
+                                {messages.map((message) => (
+                                    <div
+                                        key={message.id}
+                                        className={cn(
+                                            "flex",
+                                            message.role === "user" ? "justify-end" : "justify-start"
+                                        )}
+                                    >
+                                        <div
+                                            className={cn(
+                                                "max-w-[86%] rounded-[12px] px-3.5 py-3 text-sm leading-6",
+                                                message.role === "user"
+                                                    ? "bg-[#084734] text-white"
+                                                    : "border border-black/[0.06] bg-white text-[#111110] shadow-sm"
+                                            )}
+                                        >
+                                            <p className="whitespace-pre-line break-keep">{message.content}</p>
+                                            {message.role === "assistant" ? (
+                                                <>
+                                                    <SourceLinks sources={message.sources ?? []} />
+                                                    <div className="mt-3 flex flex-wrap items-center justify-between gap-2">
+                                                        <FeedbackButtons answerEventId={message.answerEventId} />
+                                                        {message.needsHandoff ? (
+                                                            <Link
+                                                                href="/contact"
+                                                                className="inline-flex h-8 items-center justify-center rounded-[6px] bg-[#084734] px-3 text-xs font-bold text-white transition-colors hover:bg-[#065c41]"
+                                                            >
+                                                                상담 연결
+                                                            </Link>
+                                                        ) : null}
+                                                    </div>
+                                                </>
+                                            ) : null}
+                                        </div>
+                                    </div>
+                                ))}
 
-                            <div className="flex flex-col gap-2 pl-11">
-                                <button className="text-left text-sm bg-white border border-[#084734]/20 hover:border-[#084734]/50 text-[#111110] p-2.5 rounded-xl transition-colors shadow-sm">
-                                    자료를 받아보고 싶어요
-                                </button>
-                                <button className="text-left text-sm bg-white border border-[#084734]/20 hover:border-[#084734]/50 text-[#111110] p-2.5 rounded-xl transition-colors shadow-sm">
-                                    핵심 기능이 궁금해요
-                                </button>
-                                <button className="text-left text-sm bg-white border border-[#084734]/20 hover:border-[#084734]/50 text-[#111110] p-2.5 rounded-xl transition-colors shadow-sm">
-                                    요금제 안내 부탁드려요
-                                </button>
+                                {messages.length === 1 ? (
+                                    <div className="ml-0 grid gap-2 pl-11">
+                                        {starterQuestions.map((question) => (
+                                            <button
+                                                key={question}
+                                                type="button"
+                                                onClick={() => sendQuestion(question)}
+                                                className="rounded-[8px] border border-[#084734]/15 bg-white px-3 py-2 text-left text-[13px] font-semibold leading-5 text-[#111110] shadow-sm transition-colors hover:border-[#084734]/35 hover:bg-[#ECFDF5]"
+                                            >
+                                                {question}
+                                            </button>
+                                        ))}
+                                    </div>
+                                ) : null}
+
+                                {isSending ? (
+                                    <div className="flex justify-start">
+                                        <div className="inline-flex items-center gap-2 rounded-[12px] border border-black/[0.06] bg-white px-3.5 py-3 text-sm text-[#615D59] shadow-sm">
+                                            <Loader2 className="h-4 w-4 animate-spin text-[#084734]" />
+                                            문서를 찾고 있어요
+                                        </div>
+                                    </div>
+                                ) : null}
+                                <div ref={bottomRef} />
                             </div>
                         </div>
 
-                        {/* Chat Input Placeholder */}
-                        <div className="p-4 border-t border-black/[0.06] bg-white">
-                            <div className="bg-[#F6F5F4] border border-black/[0.08] rounded-full px-5 py-3 text-sm text-[#A39E98] flex items-center justify-between cursor-text">
-                                <span>메시지를 입력하세요...</span>
-                                <div className="w-6 h-6 bg-[#084734] rounded-full flex items-center justify-center">
-                                    <svg width="12" height="12" viewBox="0 0 24 24" fill="none" stroke="white" strokeWidth="2" strokeLinecap="round" strokeLinejoin="round"><path d="m22 2-7 20-4-9-9-4Z"/><path d="M22 2 11 13"/></svg>
-                                </div>
+                        {error ? (
+                            <div className="border-t border-black/[0.06] bg-amber-50 px-4 py-2 text-xs font-medium text-amber-900">
+                                {error}
                             </div>
-                        </div>
+                        ) : null}
+
+                        <form onSubmit={handleSubmit} className="border-t border-black/[0.06] bg-white p-3">
+                            <div className="flex items-end gap-2">
+                                <textarea
+                                    value={input}
+                                    onChange={(event) => setInput(event.target.value)}
+                                    onKeyDown={(event) => {
+                                        if (event.key === "Enter" && !event.shiftKey) {
+                                            event.preventDefault()
+                                            void sendQuestion(input)
+                                        }
+                                    }}
+                                    rows={1}
+                                    maxLength={1000}
+                                    placeholder="질문을 입력하세요"
+                                    className="min-h-10 max-h-28 flex-1 resize-none rounded-[8px] border border-[#E5E5E0] bg-white px-3 py-2 text-sm leading-6 text-[#111110] placeholder:text-[#A39E98] focus-visible:border-[#084734] focus-visible:outline-none focus-visible:ring-2 focus-visible:ring-[#084734]/20"
+                                />
+                                <button
+                                    type="submit"
+                                    disabled={isSending || !input.trim()}
+                                    className="inline-flex h-10 w-10 shrink-0 items-center justify-center rounded-[8px] bg-[#084734] text-white transition-colors hover:bg-[#065c41] disabled:cursor-not-allowed disabled:opacity-40"
+                                    aria-label="질문 보내기"
+                                >
+                                    {isSending ? <Loader2 className="h-4 w-4 animate-spin" /> : <Send className="h-4 w-4" />}
+                                </button>
+                            </div>
+                        </form>
                     </motion.div>
                 )}
             </AnimatePresence>
 
             <motion.button
-                whileHover={{ scale: 1.05 }}
-                whileTap={{ scale: 0.95 }}
-                onClick={() => setIsOpen(!isOpen)}
-                className="w-16 h-16 bg-[#084734] text-white rounded-full shadow-[0_8px_30px_rgba(8,71,52,0.35)] flex items-center justify-center hover:bg-[#065c41] transition-all duration-300 focus:outline-none focus:ring-4 focus:ring-[#084734]/20"
+                type="button"
+                whileHover={{ scale: 1.04 }}
+                whileTap={{ scale: 0.96 }}
+                onClick={() => setIsOpen((current) => !current)}
+                className="flex h-14 w-14 items-center justify-center rounded-full bg-[#084734] text-white shadow-[0_10px_30px_rgba(8,71,52,0.35)] transition-colors hover:bg-[#065c41] focus:outline-none focus:ring-4 focus:ring-[#084734]/20 md:h-16 md:w-16"
+                aria-label={isOpen ? "챗봇 닫기" : "챗봇 열기"}
             >
-                {isOpen ? <X className="w-7 h-7" /> : <MessageCircle className="w-7 h-7" />}
+                {isOpen ? <X className="h-6 w-6" /> : <MessageCircle className="h-6 w-6" />}
             </motion.button>
         </div>
     )

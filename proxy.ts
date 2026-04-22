@@ -7,6 +7,16 @@ import { updateSupabaseSession } from "@/lib/supabase/middleware"
 export async function proxy(req: NextRequest) {
   const { pathname } = req.nextUrl
 
+  if (pathname === "/pricing" || pathname.startsWith("/pricing/")) {
+    return new NextResponse("Not Found", {
+      status: 404,
+      headers: {
+        "content-type": "text/plain; charset=utf-8",
+        "x-robots-tag": "noindex, nofollow",
+      },
+    })
+  }
+
   // Supabase 세션 갱신 (전체 라우트)
   let response: NextResponse
   try {

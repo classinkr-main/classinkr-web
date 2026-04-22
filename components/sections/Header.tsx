@@ -10,6 +10,7 @@ import { Menu, X, Monitor, Cpu } from "lucide-react"
 
 const navItems = [
     { name: "제품 소개", href: "/product" },
+    { name: "가이드", href: "/docs" },
     { name: "블로그", href: "/blog" },
     { name: "행사", href: "/events" },
     { name: "회사 소개", href: "/about" },
@@ -74,7 +75,11 @@ export function Header() {
                         : "hidden md:flex"
                 )}>
                     {navItems.map((item) => {
-                        const isActive = item.href === "/product" ? pathname.startsWith("/product") : pathname === item.href;
+                        const isActive = item.href === "/product"
+                            ? pathname.startsWith("/product")
+                            : item.href === "/docs"
+                                ? pathname.startsWith("/docs")
+                                : pathname === item.href;
                         const isProduct = item.href === "/product"
                         const isOnProduct = pathname.startsWith("/product")
 

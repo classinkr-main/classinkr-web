@@ -6,6 +6,7 @@ import type { ReactNode } from "react"
 import { useEffect, useState } from "react"
 import {
   BarChart2,
+  BookOpen,
   Building2,
   CalendarDays,
   ChevronRight,
@@ -29,7 +30,7 @@ import { createSupabaseBrowserClient } from "@/lib/supabase/browser"
 import { hasSupabaseBrowserEnv } from "@/lib/supabase/public-env"
 
 type SidebarRole = "SUPER_ADMIN" | "ADMIN" | "EDITOR" | "VIEWER" | "BRANCH" | "PARTNER"
-type SidebarSection = "workspace" | "performance" | "system"
+type SidebarSection = "workspace" | "growth" | "performance" | "system"
 
 interface NavItem {
   href: string
@@ -47,16 +48,17 @@ const STAFF_EDITOR: SidebarRole[] = ["SUPER_ADMIN", "ADMIN", "EDITOR"]
 const NAV: NavItem[] = [
   { href: "/admin/overview", label: "Overview", icon: <LayoutDashboard className="h-4 w-4" />, roles: [...ALL_STAFF, "BRANCH"], section: "workspace" },
   { href: "/admin/crm", label: "CRM / 리드", icon: <Users className="h-4 w-4" />, roles: [...ALL_STAFF, "BRANCH"], section: "workspace" },
-  { href: "/admin/campaigns", label: "캠페인", icon: <Megaphone className="h-4 w-4" />, roles: STAFF_ADMIN, section: "workspace" },
+  { href: "/admin/calendar", label: "캘린더", icon: <CalendarDays className="h-4 w-4" />, roles: [...ALL_STAFF, "BRANCH"], section: "workspace" },
   { href: "/admin/partners", label: "파트너 운영", icon: <Handshake className="h-4 w-4" />, roles: STAFF_ADMIN, section: "workspace" },
   { href: "/admin/software-quote-codes", label: "SW 견적 코드", icon: <Ticket className="h-4 w-4" />, roles: STAFF_ADMIN, section: "workspace" },
-  { href: "/admin/calendar", label: "캘린더", icon: <CalendarDays className="h-4 w-4" />, roles: [...ALL_STAFF, "BRANCH"], section: "workspace" },
-  { href: "/admin/events", label: "공개 행사", icon: <Globe className="h-4 w-4" />, roles: STAFF_ADMIN, section: "workspace" },
-  { href: "/admin/blog", label: "콘텐츠", icon: <FileText className="h-4 w-4" />, roles: STAFF_EDITOR, section: "workspace" },
-  { href: "/admin/branch", label: "지사 관리", icon: <Building2 className="h-4 w-4" />, roles: [...STAFF_ADMIN, "BRANCH"], section: "performance" },
+  { href: "/admin/campaigns", label: "캠페인", icon: <Megaphone className="h-4 w-4" />, roles: STAFF_ADMIN, section: "growth" },
+  { href: "/admin/blog", label: "콘텐츠", icon: <FileText className="h-4 w-4" />, roles: STAFF_EDITOR, section: "growth" },
+  { href: "/admin/events", label: "공개 행사", icon: <Globe className="h-4 w-4" />, roles: STAFF_ADMIN, section: "growth" },
+  { href: "/admin/docs", label: "문서 센터", icon: <BookOpen className="h-4 w-4" />, roles: STAFF_EDITOR, section: "growth" },
   { href: "/admin/analytics", label: "Analytics", icon: <BarChart2 className="h-4 w-4" />, roles: [...ALL_STAFF, "BRANCH"], section: "performance" },
-  { href: "/admin/users", label: "회원 관리", icon: <UserCog className="h-4 w-4" />, roles: STAFF_ADMIN, section: "system" },
+  { href: "/admin/branch", label: "지사 관리", icon: <Building2 className="h-4 w-4" />, roles: [...STAFF_ADMIN, "BRANCH"], section: "performance" },
   { href: "/admin/settings", label: "Settings", icon: <Settings className="h-4 w-4" />, roles: STAFF_ADMIN, section: "system" },
+  { href: "/admin/users", label: "회원 관리", icon: <UserCog className="h-4 w-4" />, roles: STAFF_ADMIN, section: "system" },
   { href: "/admin/dev", label: "Dev Mode", icon: <Code2 className="h-4 w-4" />, roles: STAFF_ADMIN, section: "system", badge: "Beta" },
   // 파트너 포털 (외부)
   { href: "/partner", label: "파트너 포털", icon: <ClipboardList className="h-4 w-4" />, roles: STAFF_ADMIN, section: "system" },
@@ -64,6 +66,7 @@ const NAV: NavItem[] = [
 
 const SECTION_META: Record<SidebarSection, { label: string; description: string }> = {
   workspace: { label: "운영", description: "매일 가장 자주 쓰는 화면" },
+  growth: { label: "성장", description: "캠페인과 콘텐츠 운영" },
   performance: { label: "분석", description: "성과와 지점 운영 확인" },
   system: { label: "시스템", description: "권한, 설정, 개발 도구" },
 }
