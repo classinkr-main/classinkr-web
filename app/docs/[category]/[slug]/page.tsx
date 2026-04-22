@@ -1,7 +1,7 @@
 import type { Metadata } from "next"
 import Link from "next/link"
 import { notFound } from "next/navigation"
-import { ArrowRight, Calendar, Clock, LifeBuoy, Search } from "lucide-react"
+import { ArrowRight, Calendar, Clock } from "lucide-react"
 
 import {
   DocsArticle,
@@ -132,7 +132,37 @@ export default async function DocsArticlePage({
         }
         sections={toArticleSections(doc)}
         footer={
-          <div className="space-y-8">
+          <div className="space-y-10">
+            {doc.resources && doc.resources.length > 0 && (
+              <section className="border-t border-black/[0.08] pt-8">
+                <p className="text-xs font-bold uppercase tracking-[0.16em] text-[#084734]">
+                  자료
+                </p>
+                <h2 className="mt-2 text-xl font-black tracking-card text-[#111110]">
+                  함께 보면 좋은 자료
+                </h2>
+                <ul className="mt-5 divide-y divide-black/[0.08]">
+                  {doc.resources.map((resource) => (
+                    <li key={resource.href} className="py-4">
+                      <a
+                        href={resource.href}
+                        target="_blank"
+                        rel="noreferrer"
+                        className="text-[15px] font-bold text-[#084734] underline-offset-4 hover:underline"
+                      >
+                        {resource.label}
+                      </a>
+                      {resource.description ? (
+                        <p className="mt-1 text-sm leading-6 text-[#615D59]">
+                          {resource.description}
+                        </p>
+                      ) : null}
+                    </li>
+                  ))}
+                </ul>
+              </section>
+            )}
+
             <DocsArticleFeedback
               articlePath={activePath}
               articleSlug={doc.slug}
@@ -140,58 +170,44 @@ export default async function DocsArticlePage({
               title={doc.title}
             />
 
-            <section className="rounded-2xl border border-[#084734]/15 bg-[#ECFDF5] p-6 md:p-8">
-              <div className="flex flex-col gap-5 md:flex-row md:items-start">
-                <div className="flex h-11 w-11 shrink-0 items-center justify-center rounded-xl bg-white text-[#084734]">
-                  <Search className="h-5 w-5" aria-hidden />
-                </div>
-                <div>
-                  <p className="text-xs font-bold uppercase tracking-[0.16em] text-[#084734]">
-                    Chatbot Summary
-                  </p>
-                  <h2 className="mt-2 text-xl font-black tracking-card text-[#111110]">
-                    AI 상담 답변용 요약
-                  </h2>
-                  <p className="mt-3 text-[15px] leading-7 text-[#31594B]">
-                    {doc.chatbotSummary}
-                  </p>
-                </div>
-              </div>
+            <section className="border-t border-black/[0.08] pt-8">
+              <p className="text-xs font-bold uppercase tracking-[0.16em] text-[#084734]">
+                요약
+              </p>
+              <h2 className="mt-2 text-xl font-black tracking-card text-[#111110]">
+                핵심만 빠르게 보기
+              </h2>
+              <p className="mt-3 max-w-3xl text-[15px] leading-7 text-[#31594B]">
+                {doc.chatbotSummary}
+              </p>
             </section>
 
             {doc.category !== "troubleshooting" && (
-              <section className="rounded-2xl border border-black/[0.08] bg-white p-6 shadow-card md:p-8">
-                <div className="flex flex-col gap-5 md:flex-row md:items-center md:justify-between">
-                  <div>
-                    <p className="text-xs font-bold uppercase tracking-[0.16em] text-[#084734]">
-                      Need Help?
-                    </p>
-                    <h2 className="mt-2 text-xl font-black tracking-card text-[#111110]">
-                      작동이 원활하지 않다면 문제 해결 가이드를 확인하세요.
-                    </h2>
-                  </div>
-                  <Link
-                    href="/docs/troubleshooting"
-                    className="inline-flex items-center justify-center gap-2 rounded-full bg-[#084734] px-5 py-3 text-sm font-semibold text-white transition-colors hover:bg-[#065c41]"
-                  >
-                    문제 해결 보기
-                    <LifeBuoy className="h-4 w-4" />
-                  </Link>
-                </div>
+              <section className="border-t border-black/[0.08] pt-8">
+                <p className="text-xs font-bold uppercase tracking-[0.16em] text-[#084734]">
+                  도움 필요
+                </p>
+                <h2 className="mt-2 text-xl font-black tracking-card text-[#111110]">
+                  수업 중 문제가 생겼다면 문제 해결 안내를 먼저 확인하세요.
+                </h2>
+                <Link
+                  href="/docs/troubleshooting"
+                  className="mt-3 inline-flex text-sm font-bold text-[#084734] underline-offset-4 hover:underline"
+                >
+                  문제 해결 보기 →
+                </Link>
               </section>
             )}
 
             {relatedDocs.length > 0 && (
-              <section>
-                <div className="mb-4">
-                  <p className="text-sm font-bold uppercase tracking-[0.14em] text-[#084734]">
-                    Related Docs
-                  </p>
-                  <h2 className="mt-2 text-2xl font-black tracking-subhead text-[#111110]">
-                    이어서 보면 좋은 문서
-                  </h2>
-                </div>
-                <div className="grid gap-4 lg:grid-cols-2">
+              <section className="border-t border-black/[0.08] pt-8">
+                <p className="text-sm font-bold uppercase tracking-[0.14em] text-[#084734]">
+                  함께 보기
+                </p>
+                <h2 className="mt-2 text-2xl font-black tracking-subhead text-[#111110]">
+                  이어서 보면 좋은 안내
+                </h2>
+                <div className="mt-5 divide-y divide-black/[0.08]">
                   {relatedDocs.map((relatedDoc) => (
                     <DocsArticleCard
                       key={relatedDoc.slug}

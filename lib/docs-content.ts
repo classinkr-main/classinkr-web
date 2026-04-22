@@ -9,6 +9,7 @@ import {
   type DocArticle,
   type DocCategory,
   type DocCategoryId,
+  type DocResource,
   type DocSection,
 } from "@/lib/docs"
 
@@ -74,6 +75,17 @@ function isDocSection(value: unknown): value is DocSection {
   return typeof section.heading === "string" && typeof section.body === "string" && hasValidSteps
 }
 
+function isDocResource(value: unknown): value is DocResource {
+  if (!value || typeof value !== "object") return false
+
+  const resource = value as Partial<DocResource>
+  return (
+    typeof resource.label === "string" &&
+    typeof resource.href === "string" &&
+    (resource.description === undefined || typeof resource.description === "string")
+  )
+}
+
 function getContentJson(value: unknown): Record<string, unknown> {
   return value && typeof value === "object" && !Array.isArray(value)
     ? (value as Record<string, unknown>)
@@ -102,6 +114,14 @@ function getSections(contentJson: Record<string, unknown>, fallbackBody: string)
       body: fallbackBody,
     },
   ]
+}
+
+function getResources(contentJson: Record<string, unknown>): DocResource[] | undefined {
+  const resources = contentJson.resources
+  if (!Array.isArray(resources)) return undefined
+
+  const validResources = resources.filter(isDocResource)
+  return validResources.length > 0 ? validResources : undefined
 }
 
 function getDateOnly(value: string | null | undefined) {
@@ -187,6 +207,7 @@ async function fetchDocsContentFromSupabase(): Promise<DocsContent> {
       keywords: row.keywords ?? [],
       chatbotSummary: row.chatbot_summary ?? row.description,
       sections: getSections(contentJson, row.content_markdown ?? row.description),
+      resources: getResources(contentJson),
       relatedSlugs: relationsByArticleId.get(row.id),
     } satisfies DocArticle
   })

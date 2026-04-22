@@ -18,11 +18,13 @@ function Checklist({ items }: { items: DocsChecklistItem[] }) {
     return (
         <ul className="mt-5 space-y-3">
             {items.map((item, index) => (
-                <li key={index} className="flex gap-3 rounded-xl border border-black/[0.08] bg-white p-4">
+                <li key={index} className="flex gap-3 border-b border-black/[0.08] pb-3 last:border-b-0 last:pb-0">
                     <span
                         className={cn(
-                            "mt-0.5 flex h-5 w-5 shrink-0 items-center justify-center rounded-full",
-                            item.checked ? "bg-[#084734] text-white" : "bg-[#F6F5F4] text-[#A39E98]"
+                            "mt-0.5 flex h-5 w-5 shrink-0 items-center justify-center rounded-full border",
+                            item.checked
+                                ? "border-[#084734] bg-transparent text-[#084734]"
+                                : "border-black/[0.08] bg-transparent text-[#A39E98]"
                         )}
                     >
                         {item.checked ? <Check aria-hidden className="h-3.5 w-3.5" /> : <Circle aria-hidden className="h-2.5 w-2.5 fill-current" />}
@@ -52,7 +54,7 @@ export function DocsArticle({
 }: DocsArticleProps) {
     return (
         <article className={cn("min-w-0 text-[#111110]", className)}>
-            <header className="rounded-2xl border border-black/[0.08] bg-white p-6 shadow-card md:p-10">
+            <header className="border-b border-black/[0.08] pb-8">
                 {eyebrow ? (
                     <p className="text-sm font-bold uppercase tracking-[0.16em] text-[#084734]">
                         {eyebrow}
@@ -62,23 +64,23 @@ export function DocsArticle({
                     {title}
                 </h1>
                 {description ? (
-                    <p className="mt-5 max-w-3xl text-lg font-medium leading-8 text-[#615D59]">
+                    <p className="mt-5 max-w-3xl text-lg leading-8 text-[#4F4C49]">
                         {description}
                     </p>
                 ) : null}
                 {meta ? (
-                    <div className="mt-6 border-t border-black/[0.08] pt-5 text-sm font-medium text-[#615D59]">
+                    <div className="mt-6 text-sm text-[#615D59]">
                         {meta}
                     </div>
                 ) : null}
             </header>
 
-            <div className="mt-8 space-y-8">
+            <div className="mt-10 space-y-10">
                 {sections.map((section) => (
                     <section
                         key={section.id}
                         id={section.id}
-                        className="scroll-mt-28 rounded-2xl border border-black/[0.08] bg-white p-6 shadow-card md:p-8"
+                        className="scroll-mt-28 border-b border-black/[0.08] pb-8 last:border-b-0"
                     >
                         {section.eyebrow ? (
                             <p className="text-xs font-bold uppercase tracking-[0.14em] text-[#084734]">
@@ -97,12 +99,12 @@ export function DocsArticle({
                         {section.callout ? (
                             <div
                                 className={cn(
-                                    "mt-6 rounded-xl border p-4",
-                                    section.callout.tone === "warning"
-                                        ? "border-amber-200 bg-amber-50 text-amber-950"
-                                        : section.callout.tone === "success"
-                                            ? "border-[#D1FAE5] bg-[#ECFDF5] text-[#084734]"
-                                            : "border-black/[0.08] bg-[#F6F5F4] text-[#31302E]"
+                                    "mt-6 border-l-2 pl-4",
+                                section.callout.tone === "warning"
+                                    ? "border-amber-300 text-amber-950"
+                                    : section.callout.tone === "success"
+                                        ? "border-[#D1FAE5] text-[#084734]"
+                                            : "border-black/[0.08] text-[#31302E]"
                                 )}
                             >
                                 <div className="flex gap-3">

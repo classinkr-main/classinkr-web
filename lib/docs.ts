@@ -22,6 +22,12 @@ export interface DocSection {
   steps?: string[]
 }
 
+export interface DocResource {
+  label: string
+  href: string
+  description?: string
+}
+
 export interface DocArticle {
   slug: string
   category: DocCategoryId
@@ -35,6 +41,7 @@ export interface DocArticle {
   keywords: string[]
   chatbotSummary: string
   sections: DocSection[]
+  resources?: DocResource[]
   relatedSlugs?: string[]
   visibility?: "public" | "unlisted" | "internal"
   noindex?: boolean
@@ -44,37 +51,37 @@ export const docsCategories: DocCategory[] = [
   {
     id: "quick-start",
     title: "빠른 시작",
-    description: "ClassIn을 처음 도입한 학원이 수업 전 꼭 끝내야 할 설정입니다.",
+    description: "ClassIn을 처음 시작하는 학원이 첫 수업 전 확인하면 좋은 준비 항목입니다.",
     order: 1,
   },
   {
     id: "guides",
     title: "운영 가이드",
-    description: "원장님과 운영팀이 반복 업무를 안정적으로 처리하는 방법입니다.",
+    description: "원장님과 운영팀이 수업 운영을 안정적으로 이어가도록 돕는 안내입니다.",
     order: 2,
   },
   {
     id: "manual",
     title: "기능 매뉴얼",
-    description: "계정, 수업, 교재, 통계 등 주요 기능별 사용 설명서입니다.",
+    description: "계정, 수업, 교재, 리포트처럼 자주 쓰는 기능을 차근차근 확인합니다.",
     order: 3,
   },
   {
     id: "help",
     title: "도움말",
-    description: "상담, 결제, 권한, 온보딩에서 자주 묻는 질문입니다.",
+    description: "도입, 결제, 권한, 상담 과정에서 자주 묻는 질문을 모았습니다.",
     order: 4,
   },
   {
     id: "troubleshooting",
     title: "문제 해결",
-    description: "수업 중 자주 발생하는 접속, 음성, 화면, 권한 문제 해결법입니다.",
+    description: "접속, 음성, 화면, 권한 문제가 생겼을 때 바로 따라 할 수 있는 해결 순서입니다.",
     order: 5,
   },
   {
     id: "updates",
     title: "업데이트",
-    description: "학원 운영에 영향을 주는 제품 변경 사항과 권장 조치입니다.",
+    description: "ClassIn의 변경 사항과 학원에서 확인하면 좋은 조치를 안내합니다.",
     order: 6,
   },
 ]
@@ -161,6 +168,192 @@ const docs: DocArticle[] = [
       },
     ],
     relatedSlugs: ["first-class-setup", "parent-preclass-notice-guide", "student-login-help"],
+  },
+  {
+    slug: "classin-download-install-pc",
+    category: "quick-start",
+    title: "PC 다운로드와 설치 매뉴얼",
+    description: "PC에서 ClassIn 앱을 다운로드하고 설치한 뒤 수업 참여 준비까지 확인하는 안내입니다.",
+    audience: "신규 학생, 학부모, 운영팀",
+    updatedAt: "2026-04-22",
+    readMinutes: 3,
+    tags: ["PC", "다운로드", "설치", "수업 참여"],
+    keywords: ["PC 설치", "ClassIn 다운로드", "수업 참여", "회원가입", "로그인", "인증 코드"],
+    chatbotSummary:
+      "PC 사용자는 ClassIn 공식 홈페이지에서 설치 파일을 내려받고 앱을 실행한 뒤 로그인 또는 회원가입을 진행한다. 전화번호 가입은 국가번호 형식과 인증 코드 수신 여부를 함께 확인한다.",
+    sections: [
+      {
+        heading: "설치 흐름",
+        body: "PC 사용자는 먼저 ClassIn 공식 홈페이지에서 사용 중인 기기에 맞는 설치 파일을 다운로드합니다. 설치가 끝나면 ClassIn 앱을 실행하고 로그인 또는 회원가입을 진행합니다.",
+        steps: [
+          "ClassIn 공식 홈페이지에서 PC용 설치 파일을 다운로드합니다.",
+          "설치 파일을 실행해 안내에 따라 설치를 완료합니다.",
+          "ClassIn 앱을 실행한 뒤 로그인 또는 회원가입을 선택합니다.",
+          "이메일 또는 전화번호 가입 방식을 확인합니다.",
+        ],
+      },
+      {
+        heading: "전화번호 가입 주의사항",
+        body: "전화번호로 가입하는 경우 국가번호 형식을 사용해야 합니다. 국내 휴대폰 번호는 맨 앞의 0을 제거하고 +82 형식으로 입력하는 안내가 필요합니다.",
+        steps: [
+          "인증 코드 받기를 누른 뒤 문자 또는 메일로 인증번호가 오는지 확인합니다.",
+          "휴대폰 번호는 +82 1012345678 형식으로 입력하도록 안내합니다.",
+          "인증번호가 오지 않으면 스팸함, 번호 오입력, 재전송 여부를 확인합니다.",
+        ],
+      },
+      {
+        heading: "원본 PDF",
+        body: "이미지와 실제 화면 순서가 필요한 경우 첨부 PDF를 열어 학생 또는 학부모에게 그대로 안내할 수 있습니다.",
+      },
+    ],
+    resources: [
+      {
+        label: "PC 다운로드·설치 매뉴얼 PDF",
+        href: "/docs/files/classin-download-install-pc.pdf",
+        description: "ClassIn PC 설치, 회원가입, 수업 참여 흐름을 화면 기준으로 정리한 자료입니다.",
+      },
+    ],
+    relatedSlugs: ["classin-signup-pc", "student-login-help", "first-class-setup"],
+  },
+  {
+    slug: "classin-download-install-mobile",
+    category: "quick-start",
+    title: "모바일 다운로드와 설치 매뉴얼",
+    description: "모바일에서 ClassIn 앱을 설치하고 회원가입 또는 수업 참여를 준비하는 안내입니다.",
+    audience: "신규 학생, 학부모, 운영팀",
+    updatedAt: "2026-04-22",
+    readMinutes: 3,
+    tags: ["모바일", "다운로드", "설치", "앱"],
+    keywords: ["모바일 설치", "앱스토어", "플레이 스토어", "ClassIn 앱", "회원가입", "인증 코드"],
+    chatbotSummary:
+      "모바일 사용자는 앱스토어 또는 플레이 스토어에서 ClassIn 앱을 설치하고 앱 실행 후 로그인 또는 회원가입을 진행한다. 전화번호 가입 시 국가번호 형식과 인증번호 수신 여부를 확인한다.",
+    sections: [
+      {
+        heading: "설치 흐름",
+        body: "모바일 사용자는 앱스토어 또는 플레이 스토어에서 ClassIn 앱을 검색해 설치합니다. 설치 후 앱을 실행하고 로그인 또는 회원가입을 선택합니다.",
+        steps: [
+          "사용 중인 기기에 맞게 앱스토어 또는 플레이 스토어를 엽니다.",
+          "ClassIn 앱을 검색하고 설치합니다.",
+          "앱 실행 후 로그인 또는 회원가입을 선택합니다.",
+          "이메일 또는 전화번호 가입 방식을 확인합니다.",
+        ],
+      },
+      {
+        heading: "가입 정보 입력",
+        body: "회원가입 단계에서는 이메일 또는 전화번호, 인증 코드 확인이 핵심입니다. 전화번호 가입은 국가번호 형식 안내가 빠지면 문의가 늘어납니다.",
+        steps: [
+          "이메일 또는 전화번호를 정확히 입력합니다.",
+          "인증 코드 받기를 눌러 문자 또는 메일 수신 여부를 확인합니다.",
+          "휴대폰 번호는 맨 앞 0을 제외한 +82 형식으로 입력합니다.",
+          "인증번호가 오지 않으면 담당 선생님 또는 운영팀에 문의하도록 안내합니다.",
+        ],
+      },
+      {
+        heading: "원본 PDF",
+        body: "모바일 화면 캡처가 포함된 상세 안내가 필요하면 첨부 PDF를 함께 전달하세요.",
+      },
+    ],
+    resources: [
+      {
+        label: "모바일 다운로드·설치 매뉴얼 PDF",
+        href: "/docs/files/classin-download-install-mobile.pdf",
+        description: "모바일 앱 설치와 가입 흐름을 화면 기준으로 안내하는 자료입니다.",
+      },
+    ],
+    relatedSlugs: ["classin-signup-mobile", "student-login-help", "parent-preclass-notice-guide"],
+  },
+  {
+    slug: "classin-signup-pc",
+    category: "quick-start",
+    title: "PC 회원가입 매뉴얼",
+    description: "PC에서 ClassIn 계정을 만드는 순서와 인증 코드 입력 시 주의사항입니다.",
+    audience: "신규 학생, 학부모, 운영팀",
+    updatedAt: "2026-04-22",
+    readMinutes: 3,
+    tags: ["PC", "회원가입", "계정"],
+    keywords: ["PC 회원가입", "계정 생성", "이메일 가입", "전화번호 가입", "인증번호", "국가번호"],
+    chatbotSummary:
+      "PC 회원가입은 앱 실행 후 회원가입을 선택하고 이메일 또는 전화번호로 인증 코드를 받아 완료한다. 전화번호는 +82 형식을 사용하며 맨 앞 0을 제거한다.",
+    sections: [
+      {
+        heading: "가입 시작",
+        body: "PC에서 ClassIn 앱을 실행한 뒤 우측 상단의 회원가입을 눌러 계정 생성을 시작합니다. 이미 계정이 있으면 로그인으로 안내합니다.",
+        steps: [
+          "ClassIn 앱을 실행합니다.",
+          "로그인 화면에서 회원가입을 선택합니다.",
+          "이메일 가입 또는 전화번호 가입 중 필요한 방식을 선택합니다.",
+        ],
+      },
+      {
+        heading: "인증 코드 확인",
+        body: "인증 코드가 오지 않는 문의가 자주 발생할 수 있습니다. 입력한 이메일과 전화번호, 스팸함, 재전송 가능 여부를 순서대로 확인하세요.",
+        steps: [
+          "요청 정보를 입력하고 인증 코드 받기를 선택합니다.",
+          "문자 또는 이메일로 받은 인증번호를 입력합니다.",
+          "전화번호는 +82 1012345678 형식으로 입력합니다.",
+          "인증번호가 오지 않으면 연락처 오입력 여부를 먼저 확인합니다.",
+        ],
+      },
+      {
+        heading: "원본 PDF",
+        body: "화면별 안내가 필요한 경우 PC 회원가입 PDF를 열어 그대로 안내할 수 있습니다.",
+      },
+    ],
+    resources: [
+      {
+        label: "PC 회원가입 매뉴얼 PDF",
+        href: "/docs/files/classin-signup-pc.pdf",
+        description: "PC 회원가입 화면과 인증 코드 입력 기준을 정리한 자료입니다.",
+      },
+    ],
+    relatedSlugs: ["classin-download-install-pc", "student-login-help", "first-class-setup"],
+  },
+  {
+    slug: "classin-signup-mobile",
+    category: "quick-start",
+    title: "모바일 회원가입 매뉴얼",
+    description: "모바일 앱에서 ClassIn 계정을 만들고 인증번호를 확인하는 안내입니다.",
+    audience: "신규 학생, 학부모, 운영팀",
+    updatedAt: "2026-04-22",
+    readMinutes: 3,
+    tags: ["모바일", "회원가입", "계정"],
+    keywords: ["모바일 회원가입", "앱 회원가입", "이메일 가입", "전화번호 가입", "인증번호", "학생 계정"],
+    chatbotSummary:
+      "모바일 회원가입은 앱 실행 후 회원가입을 선택하고 이메일 또는 전화번호로 인증번호를 받아 완료한다. 인증번호가 전달되지 않으면 입력 정보와 수신 상태를 확인한 뒤 선생님에게 문의한다.",
+    sections: [
+      {
+        heading: "가입 시작",
+        body: "모바일 앱을 실행한 뒤 회원가입을 눌러 계정 생성을 시작합니다. 학원에서 이미 계정 정보를 안내했다면 새 계정 생성 전에 기존 계정 여부를 먼저 확인합니다.",
+        steps: [
+          "ClassIn 모바일 앱을 실행합니다.",
+          "회원가입을 선택합니다.",
+          "이메일 또는 전화번호 가입 방식을 선택합니다.",
+          "요청 정보를 입력합니다.",
+        ],
+      },
+      {
+        heading: "인증번호 안내",
+        body: "인증번호는 문자 또는 메일로 전달됩니다. 전화번호 가입 시 국가번호 형식을 잘못 입력하면 인증번호가 오지 않을 수 있습니다.",
+        steps: [
+          "인증 코드 받기를 선택합니다.",
+          "전달된 인증번호를 입력합니다.",
+          "휴대폰 번호는 +82 형식으로 입력하고 맨 앞 0은 제거합니다.",
+          "인증번호가 전달되지 않으면 선생님 또는 운영팀에 문의합니다.",
+        ],
+      },
+      {
+        heading: "원본 PDF",
+        body: "모바일 화면 안내가 필요한 경우 첨부 PDF를 함께 전달하세요.",
+      },
+    ],
+    resources: [
+      {
+        label: "모바일 회원가입 매뉴얼 PDF",
+        href: "/docs/files/classin-signup-mobile.pdf",
+        description: "모바일 회원가입과 인증번호 입력 흐름을 화면 기준으로 정리한 자료입니다.",
+      },
+    ],
+    relatedSlugs: ["classin-download-install-mobile", "student-login-help", "parent-preclass-notice-guide"],
   },
   {
     slug: "teacher-onboarding-guide",
@@ -398,6 +591,52 @@ const docs: DocArticle[] = [
     relatedSlugs: ["parent-preclass-notice-guide", "first-class-setup", "connection-troubleshooting"],
   },
   {
+    slug: "business-verification-documents",
+    category: "help",
+    title: "사업자 인증 절차와 제출 서류 안내",
+    description: "사업자등록증, 신분증, 여권 등 인증에 필요한 서류를 미리 확인하는 안내입니다.",
+    audience: "원장, 행정 담당자, 상담팀",
+    updatedAt: "2026-04-22",
+    readMinutes: 2,
+    tags: ["인증", "사업자등록증", "서류"],
+    keywords: ["사업자 인증", "사업자등록증", "신분증", "여권", "서류 제출", "인증 절차"],
+    chatbotSummary:
+      "사업자 인증 문의에는 사업자등록증과 신분 확인 서류가 필요할 수 있음을 안내하고, 제출 주체와 서류 상태를 확인한 뒤 담당자가 검토하도록 연결한다.",
+    sections: [
+      {
+        heading: "인증에 필요한 서류",
+        body: "사업자 인증 절차에서는 사업자등록증과 신분 확인 서류가 필요할 수 있습니다. 제출 전에는 학원명, 사업자 정보, 담당자 정보를 함께 확인해야 합니다.",
+        steps: [
+          "사업자등록증 사본을 준비합니다.",
+          "대표자 또는 담당자 신분 확인 서류를 준비합니다.",
+          "해외 또는 별도 신원 확인이 필요한 경우 여권 등 추가 서류 가능성을 확인합니다.",
+          "서류 제출 후 담당자가 검토할 수 있도록 접수 채널과 담당자를 남깁니다.",
+        ],
+      },
+      {
+        heading: "응대 기준",
+        body: "서류 이미지를 공개 채널에 오래 남기지 않도록 안내하고, 필요한 경우 안전한 제출 링크나 담당자 이메일로만 전달받는 것이 좋습니다.",
+        steps: [
+          "서류의 학원명과 사업자등록번호가 계약 또는 상담 정보와 일치하는지 확인합니다.",
+          "개인정보가 포함된 서류는 접근 권한이 제한된 채널로만 받습니다.",
+          "검토 완료 여부와 추가 요청 사항을 상담 기록에 남깁니다.",
+        ],
+      },
+      {
+        heading: "원본 PDF",
+        body: "인증 절차 화면 안내가 필요하면 첨부 PDF를 열어 확인할 수 있습니다.",
+      },
+    ],
+    resources: [
+      {
+        label: "사업자 인증 절차 PDF",
+        href: "/docs/files/classin-verification-business-registration.pdf",
+        description: "사업자등록증과 신분 확인 서류 안내가 포함된 인증 절차 자료입니다.",
+      },
+    ],
+    relatedSlugs: ["payment-and-invoice-help", "faq", "account-permission-manual"],
+  },
+  {
     slug: "attendance-and-makeup-manual",
     category: "manual",
     title: "출결과 보강 관리 매뉴얼",
@@ -474,7 +713,92 @@ const docs: DocArticle[] = [
         body: "수업 시간이 바뀌면 반 일정만 수정하지 말고 학생 안내, 교사 준비 시간, 출결 기준도 같이 확인합니다. 특히 첫 주에는 변경 내역을 운영팀 채널에 남겨 중복 안내를 막으세요.",
       },
     ],
-    relatedSlugs: ["student-roster-import-checklist", "teacher-onboarding-guide", "pre-class-10-minute-routine"],
+    relatedSlugs: ["activity-publishing-basic-features", "student-roster-import-checklist", "teacher-onboarding-guide"],
+  },
+  {
+    slug: "activity-publishing-basic-features",
+    category: "manual",
+    title: "활동 게시하기 기본 기능 안내",
+    description: "수업, 숙제, 시험, 자료, 토론, AI 언어 활동을 언제 선택하면 좋은지 정리한 안내입니다.",
+    audience: "교사, 교무팀, 콘텐츠 운영 담당자",
+    updatedAt: "2026-04-22",
+    readMinutes: 5,
+    tags: ["활동 게시", "수업 활동", "AI 교육"],
+    keywords: [
+      "활동 게시하기",
+      "수업",
+      "숙제",
+      "시험",
+      "녹화 수업",
+      "학습 자료",
+      "일일 과제",
+      "토론",
+      "OMR 카드",
+      "SCORM",
+      "따라읽기",
+      "받아쓰기",
+      "워크북하기",
+      "본문 외워말하기",
+    ],
+    chatbotSummary:
+      "활동 게시하기에서는 일반 활동으로 수업, 숙제, 시험, 녹화 수업, 학습 자료, 일일 과제, 토론, OMR 카드, SCORM을 선택할 수 있고, AI 기반 영어와 중국어 교육 활동으로 따라읽기, 받아쓰기, 워크북하기, 본문 외워말하기를 사용할 수 있다.",
+    sections: [
+      {
+        heading: "활동 게시하기를 쓰는 기준",
+        body: "활동은 학생에게 무엇을 시킬지 정하는 단위입니다. 실시간으로 만나야 하면 수업을, 제출물이 필요하면 숙제를, 점수와 확인이 필요하면 시험이나 OMR 카드를 선택하면 됩니다.",
+        steps: [
+          "실시간 진행이 필요하면 수업을 선택합니다.",
+          "수업 후 제출과 피드백이 필요하면 숙제를 선택합니다.",
+          "정해진 시간 안에 평가해야 하면 시험을 선택합니다.",
+          "자료만 배포하거나 복습 안내가 목적이면 학습 자료를 선택합니다.",
+          "의견 교환이 목적이면 토론을 선택합니다.",
+        ],
+      },
+      {
+        heading: "일반 활동",
+        body: "일반 활동은 대부분의 정규 수업 운영에 쓰이는 기본 메뉴입니다. 수업 흐름에 맞춰 필요한 활동만 게시하면 학생 화면의 혼선을 줄일 수 있습니다.",
+        steps: [
+          "수업: 실시간 상호작용 수업을 열고 수업 후 AI 분석과 요약을 확인할 때 사용합니다.",
+          "숙제: 다양한 과제 형식을 제출받고 AI 자동 채점 또는 피드백 흐름을 연결할 때 사용합니다.",
+          "시험: 단원 평가, 레벨 테스트, 수업 후 확인 평가처럼 점수 기준이 필요한 활동에 사용합니다.",
+          "녹화 수업: 학생이 정해진 시간 외에 영상을 보고 학습해야 할 때 사용합니다.",
+          "학습 자료: PDF, 이미지, 참고 파일처럼 학생에게 읽거나 내려받게 할 자료를 올릴 때 사용합니다.",
+          "일일 과제: 매일 반복되는 짧은 과제나 루틴 학습을 운영할 때 사용합니다.",
+          "토론: 학생 의견 제출, 주제 토론, 질문 응답처럼 글 기반 참여가 필요할 때 사용합니다.",
+          "OMR 카드: 오프라인 시험지나 객관식 답안 확인을 ClassIn 안에서 관리할 때 사용합니다.",
+          "SCORM: 외부 표준 학습 콘텐츠를 과정 안에 연결해야 할 때 사용합니다.",
+        ],
+      },
+      {
+        heading: "AI 기반 영어 교육",
+        body: "AI 기반 영어 활동은 말하기, 듣기, 교재 기반 연습을 활동 단위로 배정할 때 사용합니다. 영어 수업에서는 반복 학습을 짧게 나누어 게시하는 방식이 안정적입니다.",
+        steps: [
+          "따라읽기: 학생이 문장이나 지문을 듣고 따라 말하는 발화 연습에 사용합니다.",
+          "받아쓰기: 들은 내용을 직접 입력하거나 확인하는 듣기와 철자 훈련에 사용합니다.",
+          "워크북하기: 교재 또는 워크북 기반 문항을 학생이 차례대로 풀게 할 때 사용합니다.",
+        ],
+      },
+      {
+        heading: "AI 기반 중국어 교육",
+        body: "AI 기반 중국어 활동은 성조, 발음, 본문 암기처럼 반복 확인이 중요한 학습에 맞춰 게시합니다.",
+        steps: [
+          "따라읽기: 학생이 중국어 문장을 듣고 따라 말하며 발음과 리듬을 연습할 때 사용합니다.",
+          "받아쓰기: 듣고 쓰는 훈련으로 어휘, 문장, 성조 학습을 확인할 때 사용합니다.",
+          "본문 외워말하기: 본문을 암기한 뒤 말로 재현하는 활동을 배정할 때 사용합니다.",
+        ],
+      },
+      {
+        heading: "운영 팁",
+        body: "한 차시에 활동을 너무 많이 올리면 학생이 무엇부터 해야 하는지 헷갈릴 수 있습니다. 수업 전 자료, 실시간 수업, 수업 후 숙제처럼 순서를 나누고 제목에 차시와 마감 기준을 함께 적어 주세요.",
+        steps: [
+          "활동 제목에는 과목, 차시, 해야 할 행동을 같이 적습니다.",
+          "마감이 있는 활동은 날짜와 시간을 제목 또는 설명에 반복해서 표시합니다.",
+          "AI 활동은 짧은 단위로 나누고, 결과 확인 기준을 교사에게 먼저 공유합니다.",
+          "학생에게 보이지 않아야 하는 테스트 활동은 게시 전에 공개 범위를 확인합니다.",
+        ],
+      },
+    ],
+    relatedSlugs: ["release-2026-classin-6-0-6", "class-and-schedule-manual", "materials-board-manual"],
   },
   {
     slug: "account-permission-manual",
@@ -1036,7 +1360,7 @@ const docs: DocArticle[] = [
       },
       {
         heading: "지원과 문제 해결",
-        body: "로그인, 접속, 마이크, 결제, 장비 설치처럼 반복 문의가 많은 항목은 문서 센터의 문제 해결 가이드에서 증상별로 확인할 수 있습니다.",
+        body: "로그인, 접속, 마이크, 결제, 장비 설치처럼 반복 문의가 많은 항목은 가이드의 문제 해결 안내에서 증상별로 확인할 수 있습니다.",
       },
     ],
     relatedSlugs: ["first-class-setup", "connection-troubleshooting", "payment-and-invoice-help"],
@@ -1071,21 +1395,112 @@ const docs: DocArticle[] = [
     relatedSlugs: ["attendance-and-makeup-manual", "monthly-owner-report-guide"],
   },
   {
+    slug: "release-2026-classin-6-0-6",
+    category: "updates",
+    title: "ClassIn 6.0.6 업데이트 안내",
+    description: "AI 학습 활동 강화, 그룹 토론 UI 개선, iOS 가상 배경 지원을 중심으로 한 업데이트입니다.",
+    audience: "원장, 운영팀, 교사, 콘텐츠 담당자",
+    updatedAt: "2026-04-23",
+    readMinutes: 4,
+    featured: true,
+    tags: ["6.0.6", "업데이트", "AI 교육", "iOS"],
+    keywords: [
+      "ClassIn 6.0.6",
+      "업데이트",
+      "AI 교육 활동",
+      "따라읽기",
+      "받아쓰기",
+      "외워말하기",
+      "그룹 토론",
+      "Breakout Room",
+      "가상 배경",
+      "Virtual Background",
+      "iOS",
+    ],
+    chatbotSummary:
+      "ClassIn 6.0.6은 PC, Android, iOS에서 AI 기반 따라읽기, 받아쓰기, 외워말하기 활동을 강화하고, PC 그룹 토론 UI를 개선하며, iPhone과 iPad에서 수업 중 가상 배경을 사용할 수 있게 한 업데이트다.",
+    sections: [
+      {
+        heading: "업데이트 요약",
+        body: "이번 6.0.6 업데이트는 교사의 채점과 피드백 부담을 줄이고, 학생이 AI 피드백을 더 빠르게 받을 수 있게 하는 데 초점이 있습니다.",
+        steps: [
+          "PC, Android, iOS에서 AI 기반 교육 활동이 강화되었습니다.",
+          "따라읽기, 받아쓰기, 외워말하기 활동을 통해 학생은 연습 결과를 바로 확인할 수 있습니다.",
+          "교사는 제출 현황, 학생별 진행 상황, 완료 여부를 확인할 수 있습니다.",
+          "PC 그룹 토론 화면이 더 직관적인 UI로 개편되었습니다.",
+          "iPhone과 iPad에서도 수업 중 가상 배경을 사용할 수 있습니다.",
+        ],
+      },
+      {
+        heading: "AI 교육 활동 강화",
+        body: "기존에는 따라읽기, 받아쓰기, 외워말하기 같은 반복 과제를 교사가 직접 확인하고 채점해야 했습니다. 이번 업데이트에서는 AI가 학습 결과를 분석해 학생에게 즉시 점수와 피드백을 제공하고, 교사는 관리와 개별 지도에 더 집중할 수 있습니다.",
+        steps: [
+          "따라읽기: 학생이 화면의 단어 또는 문장을 소리 내어 읽으면 AI가 정확도, 유창성, 완성도를 기준으로 평가합니다.",
+          "받아쓰기: 학생이 들은 내용을 공책 등에 적고 사진으로 제출하면 AI가 답안을 분석해 정확도 기반 점수를 제공합니다.",
+          "외워말하기: 학생이 주어진 본문을 외워 말하면 AI가 수행 결과를 평가하고 점수를 제공합니다.",
+          "교사는 직접 입력, AI 콘텐츠 자동 생성, 엑셀 또는 파일 가져오기 방식으로 콘텐츠를 준비할 수 있습니다.",
+          "제출별 상세 리포트와 학생별 진행 상황을 확인할 수 있습니다.",
+        ],
+      },
+      {
+        heading: "그룹 토론 UI 개선",
+        body: "PC의 그룹 토론 기능은 버튼 배치와 토론 흐름이 더 직관적으로 정리되었습니다. 신규 사용자는 기능을 시작하기 쉬워지고, 기존 사용자는 협업 흐름에 더 집중할 수 있습니다.",
+        steps: [
+          "토론 진행 중 필요한 주요 조작을 더 쉽게 찾을 수 있게 정리했습니다.",
+          "새 사용자가 그룹 토론 기능에 진입할 때 느끼는 복잡도를 낮췄습니다.",
+          "PC 기반 협업 수업에서 토론 흐름이 끊기지 않도록 UI를 개선했습니다.",
+        ],
+      },
+      {
+        heading: "iOS 가상 배경 지원",
+        body: "기존 PC와 Android 중심으로 제공되던 가상 배경 기능이 iOS로 확대되었습니다. iPhone과 iPad로 수업에 참여하는 교사와 학생도 수업 중 배경을 정리해 보일 수 있습니다.",
+        steps: [
+          "iPhone과 iPad에서 수업 중 가상 배경을 사용할 수 있습니다.",
+          "모바일 참여자도 주변 환경을 가리고 더 정돈된 화면으로 수업에 참여할 수 있습니다.",
+          "모바일 중심 수업이나 이동 중 수업 참여 상황에서 시각적 일관성을 높일 수 있습니다.",
+        ],
+      },
+      {
+        heading: "운영팀 권장 조치",
+        body: "업데이트 후에는 교사에게 새 AI 활동의 용도와 제출 확인 위치를 먼저 안내하는 것이 좋습니다. 학생에게는 활동별 제출 방식이 다르다는 점을 짧게 공지해 주세요.",
+        steps: [
+          "영어와 중국어 수업에서 따라읽기, 받아쓰기, 외워말하기를 어떤 과제에 쓸지 기준을 정합니다.",
+          "교사용 안내에는 콘텐츠 입력 방식과 제출 현황 확인 방법을 포함합니다.",
+          "학생 안내에는 사진 제출, 음성 녹음, 즉시 피드백 확인 방법을 활동별로 나눠 적습니다.",
+          "iOS 사용자가 많은 학원은 앱 업데이트 후 가상 배경 사용 가능 여부를 공지합니다.",
+        ],
+      },
+    ],
+    resources: [
+      {
+        label: "ClassIn 6.0.6 업데이트 Notion 원문",
+        href: "https://remarkable-marquess-225.notion.site/ClassIn-6-0-6-2026-04-23-33e9585602f98084bf70fdd1f0bd519b?pvs=74",
+        description: "2026년 4월 23일 기준 한국어 업데이트 정리 문서입니다.",
+      },
+      {
+        label: "ClassIn Vietnam 6.0.6 공식 업데이트 글",
+        href: "https://classin.vn/ban-cap-nhat-thang-4-2026-6-0-6/",
+        description: "AI 학습 활동, 그룹 토론 UI, iOS 가상 배경 업데이트를 안내한 공식 공개 글입니다.",
+      },
+    ],
+    relatedSlugs: ["activity-publishing-basic-features", "materials-board-manual", "pre-class-10-minute-routine"],
+  },
+  {
     slug: "release-2026-docs-center-v0",
     category: "updates",
-    title: "문서 센터 v0 공개 안내",
-    description: "빠른 시작, 운영 가이드, 기능 매뉴얼, 도움말, 문제 해결, 업데이트 문서를 한곳에서 볼 수 있게 정리했습니다.",
+    title: "ClassIn 가이드가 새로 정리되었습니다",
+    description: "도입 준비, 운영 가이드, 기능 안내, 문제 해결, 업데이트를 한곳에서 확인할 수 있습니다.",
     audience: "ClassIn 도입 검토 학원, 기존 사용 학원 운영팀",
     updatedAt: "2026-04-21",
     readMinutes: 3,
-    tags: ["문서 센터", "업데이트", "도움말"],
-    keywords: ["문서 센터", "가이드", "도움말", "문제 해결", "기능 매뉴얼", "업데이트"],
+    tags: ["가이드", "업데이트", "도움말"],
+    keywords: ["가이드", "도움말", "문제 해결", "기능 매뉴얼", "업데이트"],
     chatbotSummary:
-      "문서 센터 v0는 빠른 시작, 운영 가이드, 기능 매뉴얼, 도움말, 문제 해결, 업데이트 문서를 공개 문서로 묶고 관련 문서와 챗봇 요약을 함께 제공한다.",
+      "ClassIn 가이드는 도입 준비, 반복 운영, 기능 사용, 문제 해결, 업데이트 확인 흐름으로 나뉘어 필요한 안내를 빠르게 찾을 수 있게 돕는다.",
     sections: [
       {
         heading: "무엇이 달라졌나요",
-        body: "ClassIn을 처음 보는 원장님과 이미 운영 중인 팀이 같은 기준으로 문서를 찾을 수 있도록 문서 센터를 공개했습니다. 문서는 도입 준비, 반복 운영, 기능 사용, 문제 해결, 업데이트 확인 흐름으로 나뉩니다.",
+        body: "ClassIn을 처음 살펴보는 원장님과 이미 운영 중인 팀이 필요한 안내를 같은 곳에서 찾을 수 있도록 가이드를 정리했습니다. 도입 준비, 반복 운영, 기능 사용, 문제 해결, 업데이트 확인 흐름으로 나뉩니다.",
         steps: [
           "처음 도입하는 학원은 빠른 시작 문서부터 확인합니다.",
           "운영팀은 출결, 보강, 리포트, 상담 가이드를 함께 봅니다.",
@@ -1094,12 +1509,12 @@ const docs: DocArticle[] = [
         ],
       },
       {
-        heading: "챗봇 응답에 쓰이는 정보",
-        body: "각 문서에는 챗봇이 빠르게 참고할 수 있는 요약, 키워드, 태그가 포함되어 있습니다. 챗봇 답변이 필요한 경우에도 공개 문서 기준을 우선 사용하고, 계약별 세부 조건은 상담으로 연결합니다.",
+        heading: "필요한 내용을 찾는 방법",
+        body: "검색창에는 기능명뿐 아니라 겪고 있는 상황을 입력해도 됩니다. 예를 들어 첫 수업, 학생 로그인, 음성 문제, 출결 보강처럼 실제 문의 표현으로 찾아보세요. 계약별 세부 조건은 상담을 통해 이어서 확인할 수 있습니다.",
       },
       {
-        heading: "운영팀 권장 조치",
-        body: "문서 센터 공개 후 첫 주에는 자주 보내던 안내 문구를 문서 링크 중심으로 정리하세요. 반복 문의가 많은 항목은 관련 문서를 먼저 보내고, 학원별 정책이 필요한 내용만 별도 안내로 보완하면 됩니다.",
+        heading: "기존 사용 학원이라면",
+        body: "자주 보내던 안내 문구를 가이드 링크 중심으로 정리해 보세요. 반복 문의가 많은 항목은 관련 안내를 먼저 공유하고, 학원별 정책이 필요한 내용만 별도 공지로 보완하면 됩니다.",
       },
     ],
     relatedSlugs: ["first-class-setup", "account-permission-manual", "connection-troubleshooting"],
@@ -1107,19 +1522,19 @@ const docs: DocArticle[] = [
   {
     slug: "release-2026-troubleshooting-routing",
     category: "updates",
-    title: "문제 해결 문서 라우팅 개선",
-    description: "접속, 음성, 카메라, 화면 공유, 자료 업로드, 복습 자료 문의를 증상별 문서로 연결했습니다.",
+    title: "문제 해결 안내가 더 쉬워졌습니다",
+    description: "접속, 음성, 카메라, 화면 공유, 자료 업로드, 복습 자료 문의를 증상별로 확인할 수 있습니다.",
     audience: "운영팀, 상담팀, 원격 지원 담당자",
     updatedAt: "2026-04-21",
     readMinutes: 3,
     tags: ["문제 해결", "지원", "업데이트"],
     keywords: ["문제 해결", "접속 장애", "음성 문제", "카메라", "화면 공유", "자료 업로드", "지원 라우팅"],
     chatbotSummary:
-      "문제 해결 라우팅 개선으로 접속, 음성, 카메라, 화면 공유, 자료 업로드, 녹화와 복습 자료 문의를 각각 증상별 문서로 안내할 수 있다.",
+      "문제 해결 안내는 접속, 음성, 카메라, 화면 공유, 자료 업로드, 녹화와 복습 자료 문의를 증상별로 나누어 빠른 조치 순서를 제공한다.",
     sections: [
       {
         heading: "추가된 증상별 문서",
-        body: "수업 중 문의는 빠르게 원인을 좁혀야 합니다. 이번 업데이트에서는 기존 접속과 음성 문서에 더해 카메라, 화면 공유, 자료 업로드, 복습 자료 문서를 추가했습니다.",
+        body: "수업 중 문의는 빠르게 원인을 좁혀야 합니다. 기존 접속과 음성 안내에 더해 카메라, 화면 공유, 자료 업로드, 복습 자료 안내를 추가했습니다.",
         steps: [
           "입장 실패나 끊김은 접속 문제 해결 문서로 안내합니다.",
           "마이크와 스피커 문제는 음성 문제 해결 문서로 안내합니다.",
@@ -1129,8 +1544,8 @@ const docs: DocArticle[] = [
         ],
       },
       {
-        heading: "지원팀 사용 방식",
-        body: "상담팀은 증상을 들은 뒤 가장 가까운 문서를 먼저 보내고, 해결되지 않을 때 기기명, 수업일, 반, 학생 계정, 오류 시점을 함께 남기면 됩니다.",
+        heading: "상담할 때 확인할 내용",
+        body: "증상을 들은 뒤 가장 가까운 안내를 먼저 공유하고, 해결되지 않을 때는 기기명, 수업일, 반, 학생 계정, 오류 시점을 함께 남기면 원인을 더 빨리 좁힐 수 있습니다.",
       },
       {
         heading: "권장 운영",

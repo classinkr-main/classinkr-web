@@ -6,6 +6,7 @@ import {
   AlertTriangle,
   ArrowLeft,
   ClipboardList,
+  ExternalLink,
   FileText,
   Handshake,
   Pencil,
@@ -319,6 +320,17 @@ function getDocumentRecipientLabel(document: PartnerDocument, latestDelivery?: P
     document.quoteDetails?.recipientCompanyName ||
     document.fileLabel
   )
+}
+
+function getDocumentExternalHref(document: PartnerDocument) {
+  const url = document.externalUrl?.trim()
+  if (!url) return null
+
+  if (/^(https?:|mailto:|tel:)/i.test(url) || url.startsWith("/")) {
+    return url
+  }
+
+  return `https://${url}`
 }
 
 function getDocumentPolicyFlags(delivery?: PartnerDocumentDelivery) {
@@ -1387,6 +1399,7 @@ export default function PartnerWorkspaceShell({
                     prioritizedDocuments.map((document) => {
                       const linkedDeal = document.dealId ? dealTitleById.get(document.dealId) : undefined
                       const latestDelivery = getDocumentLatestDelivery(document)
+                      const externalHref = getDocumentExternalHref(document)
                       return (
                         <div key={document.id} className="rounded-2xl border border-[#e8e8e4] bg-[#fafaf8] p-5">
                           <div className="flex flex-col gap-4 lg:flex-row lg:items-start lg:justify-between">
@@ -1407,7 +1420,8 @@ export default function PartnerWorkspaceShell({
                                 </Badge>
                               </div>
                               <p className="text-[12px] leading-5 text-[#1a1a1a]/50">
-                                발행 {formatDateDisplay(document.issuedAt)} · 마감 {formatDateDisplay(document.dueAt)} · 파일 {document.fileLabel}
+                                발행 {formatDateDisplay(document.issuedAt)} · 마감 {formatDateDisplay(document.dueAt)} ·{" "}
+                                {externalHref ? "외부 링크 연결" : `파일 ${document.fileLabel}`}
                               </p>
                               <p className="text-[12px] leading-5 text-[#1a1a1a]/45">
                                 {formatDocumentDeliverySummary(document, latestDelivery)}
@@ -1416,6 +1430,7 @@ export default function PartnerWorkspaceShell({
                                 <span className="rounded-full bg-white px-2.5 py-1">거래 {linkedDeal ?? "미연결"}</span>
                                 <span className="rounded-full bg-white px-2.5 py-1">수신자 {getDocumentRecipientLabel(document, latestDelivery)}</span>
                                 <span className="rounded-full bg-white px-2.5 py-1">다음 작업 {getDocumentNextAction(document, latestDelivery)}</span>
+                                {externalHref && <span className="rounded-full bg-white px-2.5 py-1">공유 링크 보관됨</span>}
                               </div>
                               <div className="flex flex-wrap gap-2">
                                 {getDocumentPolicyFlags(latestDelivery).map((flag) => (
@@ -1431,6 +1446,14 @@ export default function PartnerWorkspaceShell({
                                   <span className="block text-[#1a1a1a]/35">금액</span>
                                   <strong className="text-[15px] text-[#111110]">{formatCurrency(document.amount)}</strong>
                                 </div>
+                              )}
+                              {externalHref && (
+                                <Button asChild variant="outline" size="sm" className="gap-1.5">
+                                  <a href={externalHref} target="_blank" rel="noreferrer">
+                                    <ExternalLink className="h-3.5 w-3.5" />
+                                    열기
+                                  </a>
+                                </Button>
                               )}
                               <Button variant="outline" size="sm" className="gap-1.5" onClick={() => onEditDocument(document)}>
                                 <Pencil className="h-3.5 w-3.5" />
@@ -1451,6 +1474,7 @@ export default function PartnerWorkspaceShell({
                 <div className="space-y-3 text-[12px] leading-5 text-[#1a1a1a]/55">
                   {docsRequiringAttention.slice(0, 4).map((document) => {
                     const latestDelivery = getDocumentLatestDelivery(document)
+                    const externalHref = getDocumentExternalHref(document)
                     return (
                       <div key={document.id} className="rounded-2xl border border-[#e8e8e4] bg-[#fafaf8] px-4 py-3">
                         <div className="flex items-start justify-between gap-3">
@@ -1477,6 +1501,14 @@ export default function PartnerWorkspaceShell({
                             <Pencil className="h-3.5 w-3.5" />
                             수정
                           </Button>
+                          {externalHref && (
+                            <Button asChild variant="outline" size="sm" className="gap-1.5">
+                              <a href={externalHref} target="_blank" rel="noreferrer">
+                                <ExternalLink className="h-3.5 w-3.5" />
+                                열기
+                              </a>
+                            </Button>
+                          )}
                         </div>
                       </div>
                     )

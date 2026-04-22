@@ -76,16 +76,16 @@ export function NewsletterSubscribe({ variant = "dark" }: Props) {
 
   return (
     <div>
-      <form onSubmit={handleSubmit} className="flex gap-2">
-        <div className="relative flex-1">
-          <Mail className={`absolute left-3 top-1/2 -translate-y-1/2 w-4 h-4 ${isDark ? "text-white/40" : "text-[#A39E98]"}`} />
+      <form onSubmit={handleSubmit} className="flex items-center gap-2">
+        <div className="relative w-[174px] max-w-full">
+          <Mail className={`absolute left-3 top-1/2 h-3.5 w-3.5 -translate-y-1/2 ${isDark ? "text-white/40" : "text-[#A39E98]"}`} />
           <Input
             type="email"
             value={email}
             onChange={(e) => setEmail(e.target.value)}
             placeholder="이메일을 입력해주세요"
             required
-            className={`pl-10 ${
+            className={`h-9 rounded-[5px] pl-9 pr-3 text-[13px] ${
               isDark
                 ? "bg-white/[0.06] border-white/[0.08] text-white placeholder:text-white/40"
                 : "bg-white border-[#e8e8e4] text-[#111110]"
@@ -95,10 +95,11 @@ export function NewsletterSubscribe({ variant = "dark" }: Props) {
         <Button
           type="submit"
           disabled={loading}
+          size="sm"
           className={
             isDark
-              ? "bg-[#084734] hover:bg-[#084734]/90 text-white whitespace-nowrap"
-              : "bg-[#084734] hover:bg-[#084734]/90 text-white whitespace-nowrap"
+              ? "h-9 rounded-[5px] bg-[#084734] px-4 text-[13px] text-white hover:bg-[#084734]/90"
+              : "h-9 rounded-[5px] bg-[#084734] px-4 text-[13px] text-white hover:bg-[#084734]/90"
           }
         >
           {loading ? (

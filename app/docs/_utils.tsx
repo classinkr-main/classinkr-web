@@ -63,6 +63,11 @@ function getDocSearchText(doc: DocArticle) {
     doc.chatbotSummary,
     ...doc.tags,
     ...doc.keywords,
+    ...(doc.resources?.flatMap((resource) => [
+      resource.label,
+      resource.description ?? "",
+      resource.href,
+    ]) ?? []),
     ...doc.sections.flatMap((section) => [
       section.heading,
       section.body,
@@ -206,21 +211,21 @@ export function getDocsCategoryCards(content = staticDocsContent) {
 
 export const docsTrustCards = [
   {
-    title: "가이드는 공개하고, 문제 해결은 필요한 순간에 보이게",
+    title: "처음 보는 분도 바로 따라갈 수 있게",
     description:
-      "에러 조치 문서는 감추지 않습니다. 다만 제품 첫인상에서는 덜 드러내고, 검색·FAQ·챗봇에서 바로 찾을 수 있게 설계했습니다.",
+      "도입 준비부터 첫 수업, 학생 안내까지 실제 운영 순서대로 읽을 수 있게 정리했습니다.",
     icon: Wrench,
   },
   {
-    title: "챗봇이 읽기 좋은 원본 문서",
+    title: "수업 중 막히는 순간에도 빠르게",
     description:
-      "각 문서는 대상, 증상, 키워드, 요약을 함께 담아 상담 챗봇이 같은 기준으로 답변할 수 있도록 준비했습니다.",
+      "접속, 음성, 화면 공유처럼 수업을 바로 막는 문제는 증상별로 빠른 조치 순서부터 확인할 수 있습니다.",
     icon: LifeBuoy,
   },
   {
-    title: "업데이트까지 하나의 흐름으로",
+    title: "바뀐 점까지 한 흐름으로",
     description:
-      "신규 기능과 운영 변경사항은 업데이트 문서로 남겨, 원장님과 운영팀이 바뀐 점을 빠르게 확인할 수 있게 합니다.",
+      "새 기능과 운영 변경 사항은 업데이트 안내로 남겨 원장님과 운영팀이 필요한 조치를 놓치지 않게 돕습니다.",
     icon: Sparkles,
   },
 ]

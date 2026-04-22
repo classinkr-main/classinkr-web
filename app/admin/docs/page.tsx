@@ -6,15 +6,11 @@ import { useRouter } from "next/navigation"
 import {
   AlertCircle,
   BarChart3,
-  Bot,
   Database,
   ExternalLink,
-  FileText,
-  FolderTree,
   MessageSquareText,
   RefreshCw,
   Search,
-  ThumbsUp,
 } from "lucide-react"
 
 import type {
@@ -82,41 +78,36 @@ function getSourceLabel(content: AdminDocsContentResponse | null) {
 function StatusBadge({ label, tone }: { label: string; tone?: string }) {
   return (
     <span
-      className={`inline-flex items-center rounded-full border px-2.5 py-1 text-[11px] font-semibold ${tone ?? "border-[#e8e8e4] bg-white text-[#1a1a1a]/45"}`}
+      className={`inline-flex items-center rounded-full border px-2.5 py-1 text-[11px] font-semibold ${tone ?? "border-[#e8e8e4] bg-transparent text-[#1a1a1a]/45"}`}
     >
       {label}
     </span>
   )
 }
 
-function MetricCard({
-  icon,
+function StatRow({
   label,
   value,
   hint,
 }: {
-  icon: React.ReactNode
   label: string
   value: string
   hint: string
 }) {
   return (
-    <div className="rounded-2xl border border-[#e8e8e4] bg-white p-5">
-      <div className="mb-4 flex items-start justify-between gap-4">
-        <div className="inline-flex rounded-xl bg-[#f0f0ec] p-2 text-[#1a1a1a]/55">{icon}</div>
-      </div>
+    <div className="border-t border-[#f0f0ec] pt-3">
       <p className="text-[11px] font-semibold uppercase tracking-[0.16em] text-[#1a1a1a]/35">
         {label}
       </p>
-      <p className="mt-2 text-3xl font-bold tracking-[-0.03em] text-[#111110]">{value}</p>
-      <p className="mt-2 text-[12px] leading-relaxed text-[#1a1a1a]/42">{hint}</p>
+      <p className="mt-1 text-[20px] font-semibold tracking-[-0.03em] text-[#111110]">{value}</p>
+      <p className="mt-1 text-[12px] leading-relaxed text-[#1a1a1a]/42">{hint}</p>
     </div>
   )
 }
 
 function EmptyState({ title, description }: { title: string; description: string }) {
   return (
-    <div className="rounded-2xl border border-dashed border-[#e8e8e4] bg-[#fafaf8] px-5 py-12 text-center">
+    <div className="py-10 text-center">
       <p className="text-[14px] font-semibold text-[#111110]">{title}</p>
       <p className="mx-auto mt-2 max-w-md text-[12px] leading-relaxed text-[#1a1a1a]/42">
         {description}
@@ -226,14 +217,14 @@ export default function AdminDocsPage() {
             문서 센터 관리
           </h1>
           <p className="mt-2 max-w-2xl text-[13px] leading-relaxed text-[#1a1a1a]/45">
-            공개 문서 카테고리와 문서 상태, 검색·피드백·챗봇 질문 흐름을 확인합니다.
+            공개 문서 카테고리와 문서 상태, 검색·피드백·챗봇 질문 흐름을 한 화면에서 확인합니다.
           </p>
         </div>
 
         <div className="flex flex-col gap-2 sm:flex-row sm:items-center">
           <Link
             href="/docs"
-            className="inline-flex h-9 items-center justify-center gap-2 rounded-lg border border-[#e8e8e4] bg-white px-3 text-[13px] font-semibold text-[#111110] transition-colors hover:bg-[#f5f5f2]"
+            className="inline-flex h-9 items-center justify-center gap-2 rounded-lg border border-[#e8e8e4] bg-transparent px-3 text-[13px] font-semibold text-[#111110] transition-colors hover:bg-[#fafaf8]"
           >
             <ExternalLink className="h-4 w-4" />
             공개 문서
@@ -251,13 +242,13 @@ export default function AdminDocsPage() {
       </div>
 
       {error ? (
-        <div className="mb-6 rounded-2xl border border-[#F6D5C5] bg-[#FEF3EE] px-4 py-3 text-[13px] text-[#B85C33]">
+        <div className="mb-6 border-l-2 border-[#F6D5C5] pl-3 text-[13px] text-[#B85C33]">
           {error}
         </div>
       ) : null}
 
       {warnings.length > 0 ? (
-        <div className="mb-6 rounded-2xl border border-amber-100 bg-amber-50 px-4 py-3">
+        <div className="mb-6 border-l-2 border-amber-200 pl-3">
           <div className="flex gap-2 text-[13px] text-amber-800">
             <AlertCircle className="mt-0.5 h-4 w-4 shrink-0" />
             <div className="space-y-1">
@@ -269,15 +260,13 @@ export default function AdminDocsPage() {
         </div>
       ) : null}
 
-      <section className="mb-8 grid gap-4 md:grid-cols-2 xl:grid-cols-4">
-        <MetricCard
-          icon={<FolderTree className="h-5 w-5" />}
+      <section className="mb-8 grid gap-8 border-y border-[#f0f0ec] py-6 md:grid-cols-2 xl:grid-cols-4">
+        <StatRow
           label="카테고리"
           value={formatNumber(content?.categories.length ?? 0)}
           hint={`${formatNumber(content?.articles.length ?? 0)}개 문서 연결`}
         />
-        <MetricCard
-          icon={<ThumbsUp className="h-5 w-5" />}
+        <StatRow
           label="문서 피드백"
           value={formatNumber(summary?.feedbackTotal ?? 0)}
           hint={
@@ -286,23 +275,21 @@ export default function AdminDocsPage() {
               : `도움됨 ${summary.helpfulRate}% · 부정 ${formatNumber(summary.notHelpfulTotal)}건`
           }
         />
-        <MetricCard
-          icon={<Search className="h-5 w-5" />}
+        <StatRow
           label="검색 이벤트"
           value={formatNumber(summary?.searchTotal ?? 0)}
           hint={`결과 없음 ${formatNumber(summary?.zeroResultSearches ?? 0)}건`}
         />
-        <MetricCard
-          icon={<Bot className="h-5 w-5" />}
+        <StatRow
           label="챗봇 질문"
           value={formatNumber(summary?.chatbotQuestions ?? 0)}
           hint={`미해결 ${formatNumber(summary?.chatbotUnresolved ?? 0)}건 · 상담 연결 ${formatNumber(summary?.chatbotHandoffs ?? 0)}건`}
         />
       </section>
 
-      <section className="mb-8 grid gap-6 xl:grid-cols-[minmax(0,1fr)_380px]">
-        <div className="overflow-hidden rounded-2xl border border-[#e8e8e4] bg-white">
-          <div className="flex flex-col gap-4 border-b border-[#e8e8e4] px-4 py-4 sm:flex-row sm:items-center sm:justify-between">
+      <section className="mb-8 grid gap-8 xl:grid-cols-[minmax(0,1fr)_320px]">
+        <div>
+          <div className="flex flex-col gap-4 border-b border-[#f0f0ec] pb-4 sm:flex-row sm:items-center sm:justify-between">
             <div>
               <h2 className="text-[14px] font-semibold text-[#111110]">문서 목록</h2>
               <p className="mt-0.5 text-[11px] text-[#1a1a1a]/40">
@@ -311,18 +298,18 @@ export default function AdminDocsPage() {
             </div>
             <div className="flex flex-col gap-2 sm:flex-row sm:items-center">
               <label className="relative block">
-                <Search className="pointer-events-none absolute left-3 top-1/2 h-4 w-4 -translate-y-1/2 text-[#1a1a1a]/30" />
+                <Search className="pointer-events-none absolute left-0 top-1/2 h-4 w-4 -translate-y-1/2 text-[#1a1a1a]/30" />
                 <input
                   value={searchQuery}
                   onChange={(event) => setSearchQuery(event.target.value)}
                   placeholder="문서 검색"
-                  className="h-9 w-full rounded-lg border border-[#e8e8e4] bg-white pr-3 pl-9 text-[13px] outline-none transition-colors placeholder:text-[#1a1a1a]/25 focus:border-[#084734] sm:w-56"
+                  className="h-9 w-full border-b border-[#e8e8e4] bg-transparent pr-3 pl-7 text-[13px] outline-none transition-colors placeholder:text-[#1a1a1a]/25 focus:border-[#084734] sm:w-56"
                 />
               </label>
               <select
                 value={categoryFilter}
                 onChange={(event) => setCategoryFilter(event.target.value)}
-                className="h-9 rounded-lg border border-[#e8e8e4] bg-white px-3 text-[13px] text-[#111110] outline-none transition-colors focus:border-[#084734]"
+                className="h-9 border-b border-[#e8e8e4] bg-transparent px-1 text-[13px] text-[#111110] outline-none transition-colors focus:border-[#084734]"
               >
                 <option value="all">전체 카테고리</option>
                 {(content?.categories ?? []).map((category) => (
@@ -334,65 +321,58 @@ export default function AdminDocsPage() {
             </div>
           </div>
 
-          <div className="overflow-x-auto">
-            <table className="min-w-[860px] w-full text-left">
-              <thead className="bg-[#fafaf8] text-[11px] uppercase tracking-[0.12em] text-[#1a1a1a]/35">
+          <div className="mt-4">
+            <table className="w-full text-left">
+              <thead className="text-[11px] uppercase tracking-[0.12em] text-[#1a1a1a]/35">
                 <tr>
-                  <th className="px-4 py-3 font-semibold">문서</th>
-                  <th className="px-4 py-3 font-semibold">카테고리</th>
-                  <th className="px-4 py-3 font-semibold">상태</th>
-                  <th className="px-4 py-3 font-semibold">유형</th>
-                  <th className="px-4 py-3 font-semibold">업데이트</th>
+                  <th className="py-3 pr-4 font-semibold">문서</th>
+                  <th className="py-3 pr-4 font-semibold">카테고리</th>
+                  <th className="py-3 pr-4 font-semibold">상태</th>
+                  <th className="py-3 pr-4 font-semibold">유형</th>
+                  <th className="py-3 font-semibold">업데이트</th>
                 </tr>
               </thead>
               <tbody className="divide-y divide-[#f0f0ec]">
                 {loading ? (
                   <tr>
-                    <td colSpan={5} className="px-4 py-10 text-center text-[13px] text-[#1a1a1a]/35">
+                    <td colSpan={5} className="py-10 text-center text-[13px] text-[#1a1a1a]/35">
                       문서 목록을 불러오는 중입니다.
                     </td>
                   </tr>
                 ) : filteredArticles.length === 0 ? (
                   <tr>
-                    <td colSpan={5} className="px-4 py-8">
+                    <td colSpan={5} className="py-8">
                       <EmptyState title="표시할 문서가 없습니다" description="검색어나 카테고리 필터를 조정해 보세요." />
                     </td>
                   </tr>
                 ) : (
                   filteredArticles.map((article) => (
                     <tr key={article.id} className="align-top">
-                      <td className="px-4 py-4">
-                        <div className="max-w-lg">
-                          <div className="flex items-start gap-2">
-                            <FileText className="mt-0.5 h-4 w-4 shrink-0 text-[#1a1a1a]/30" />
-                            <div>
-                              <Link
-                                href={article.publicPath}
-                                className="text-[13px] font-semibold text-[#111110] transition-colors hover:text-[#084734]"
-                              >
-                                {article.title}
-                              </Link>
-                              <p className="mt-1 line-clamp-2 text-[12px] leading-relaxed text-[#1a1a1a]/42">
-                                {article.description}
-                              </p>
-                              <p className="mt-1 font-mono text-[11px] text-[#1a1a1a]/30">
-                                {article.slug}
-                              </p>
-                            </div>
-                          </div>
-                        </div>
+                      <td className="py-4 pr-4">
+                        <Link
+                          href={article.publicPath}
+                          className="block max-w-lg text-[13px] font-semibold text-[#111110] transition-colors hover:text-[#084734]"
+                        >
+                          {article.title}
+                        </Link>
+                        <p className="mt-1 line-clamp-2 max-w-lg text-[12px] leading-relaxed text-[#1a1a1a]/42">
+                          {article.description}
+                        </p>
+                        <p className="mt-1 font-mono text-[11px] text-[#1a1a1a]/30">
+                          {article.slug}
+                        </p>
                       </td>
-                      <td className="px-4 py-4 text-[12px] text-[#1a1a1a]/55">
+                      <td className="py-4 pr-4 text-[12px] text-[#1a1a1a]/55">
                         {categoryTitleById.get(article.categoryId) ?? article.categoryId}
                       </td>
-                      <td className="px-4 py-4">
+                      <td className="py-4 pr-4">
                         <ArticleStatus article={article} />
                       </td>
-                      <td className="px-4 py-4 text-[12px] text-[#1a1a1a]/55">
+                      <td className="py-4 pr-4 text-[12px] text-[#1a1a1a]/55">
                         <div>{article.docType}</div>
                         <div className="mt-1 text-[#1a1a1a]/30">{article.productArea}</div>
                       </td>
-                      <td className="px-4 py-4 text-[12px] text-[#1a1a1a]/55">
+                      <td className="py-4 text-[12px] text-[#1a1a1a]/55">
                         {formatDate(article.updatedAt ?? article.lastReviewedAt)}
                       </td>
                     </tr>
@@ -403,18 +383,16 @@ export default function AdminDocsPage() {
           </div>
         </div>
 
-        <aside className="space-y-6">
-          <div className="overflow-hidden rounded-2xl border border-[#e8e8e4] bg-white">
-            <div className="border-b border-[#e8e8e4] px-4 py-4">
-              <h2 className="text-[14px] font-semibold text-[#111110]">카테고리</h2>
-            </div>
-            <div className="divide-y divide-[#f0f0ec]">
+        <aside className="space-y-8">
+          <div>
+            <h2 className="text-[14px] font-semibold text-[#111110]">카테고리</h2>
+            <div className="mt-3 divide-y divide-[#f0f0ec]">
               {loading ? (
-                <p className="px-4 py-8 text-center text-[13px] text-[#1a1a1a]/35">
+                <p className="py-8 text-center text-[13px] text-[#1a1a1a]/35">
                   카테고리를 불러오는 중입니다.
                 </p>
               ) : (content?.categories.length ?? 0) === 0 ? (
-                <div className="p-4">
+                <div className="py-4">
                   <EmptyState title="카테고리 없음" description="문서 카테고리 데이터가 아직 없습니다." />
                 </div>
               ) : (
@@ -423,7 +401,7 @@ export default function AdminDocsPage() {
                     type="button"
                     key={category.id}
                     onClick={() => setCategoryFilter(category.id)}
-                    className="flex w-full items-start justify-between gap-4 px-4 py-4 text-left transition-colors hover:bg-[#fafaf8]"
+                    className="flex w-full items-start justify-between gap-4 py-4 text-left transition-colors hover:text-[#084734]"
                   >
                     <div>
                       <div className="flex flex-wrap items-center gap-2">
@@ -434,7 +412,7 @@ export default function AdminDocsPage() {
                         {category.description}
                       </p>
                     </div>
-                    <span className="shrink-0 rounded-lg bg-[#f0f0ec] px-2 py-1 text-[12px] font-semibold text-[#1a1a1a]/55">
+                    <span className="shrink-0 text-[12px] font-semibold text-[#1a1a1a]/35">
                       {category.articleCount}
                     </span>
                   </button>
@@ -443,21 +421,19 @@ export default function AdminDocsPage() {
             </div>
           </div>
 
-          <div className="overflow-hidden rounded-2xl border border-[#e8e8e4] bg-white">
-            <div className="border-b border-[#e8e8e4] px-4 py-4">
-              <div className="flex items-center gap-2">
-                <BarChart3 className="h-4 w-4 text-[#1a1a1a]/35" />
-                <h2 className="text-[14px] font-semibold text-[#111110]">검색 상위</h2>
-              </div>
+          <div>
+            <div className="flex items-center gap-2">
+              <BarChart3 className="h-4 w-4 text-[#1a1a1a]/35" />
+              <h2 className="text-[14px] font-semibold text-[#111110]">검색 상위</h2>
             </div>
-            <div className="divide-y divide-[#f0f0ec]">
+            <div className="mt-3 divide-y divide-[#f0f0ec]">
               {(analytics?.topSearchQueries.length ?? 0) === 0 ? (
-                <p className="px-4 py-8 text-center text-[13px] text-[#1a1a1a]/35">
+                <p className="py-8 text-center text-[13px] text-[#1a1a1a]/35">
                   최근 30일 검색 데이터가 없습니다.
                 </p>
               ) : (
                 analytics?.topSearchQueries.map((item) => (
-                  <div key={item.query} className="flex items-start justify-between gap-4 px-4 py-3">
+                  <div key={item.query} className="flex items-start justify-between gap-4 py-3">
                     <div>
                       <p className="text-[13px] font-semibold text-[#111110]">{item.query}</p>
                       <p className="mt-1 text-[11px] text-[#1a1a1a]/35">
@@ -475,22 +451,20 @@ export default function AdminDocsPage() {
         </aside>
       </section>
 
-      <section className="grid gap-6 xl:grid-cols-2">
-        <div className="overflow-hidden rounded-2xl border border-[#e8e8e4] bg-white">
-          <div className="border-b border-[#e8e8e4] px-4 py-4">
-            <div className="flex items-center gap-2">
-              <MessageSquareText className="h-4 w-4 text-[#1a1a1a]/35" />
-              <h2 className="text-[14px] font-semibold text-[#111110]">최근 문서 피드백</h2>
-            </div>
+      <section className="grid gap-8 xl:grid-cols-2">
+        <div>
+          <div className="flex items-center gap-2">
+            <MessageSquareText className="h-4 w-4 text-[#1a1a1a]/35" />
+            <h2 className="text-[14px] font-semibold text-[#111110]">최근 문서 피드백</h2>
           </div>
-          <div className="divide-y divide-[#f0f0ec]">
+          <div className="mt-3 divide-y divide-[#f0f0ec]">
             {(analytics?.recentFeedback.length ?? 0) === 0 ? (
-              <p className="px-4 py-8 text-center text-[13px] text-[#1a1a1a]/35">
+              <p className="py-8 text-center text-[13px] text-[#1a1a1a]/35">
                 최근 30일 문서 피드백이 없습니다.
               </p>
             ) : (
               analytics?.recentFeedback.map((item) => (
-                <div key={item.id} className="px-4 py-4">
+                <div key={item.id} className="py-4">
                   <div className="flex flex-wrap items-center gap-2">
                     <StatusBadge
                       label={item.helpful ? "helpful" : "not helpful"}
@@ -512,21 +486,19 @@ export default function AdminDocsPage() {
           </div>
         </div>
 
-        <div className="overflow-hidden rounded-2xl border border-[#e8e8e4] bg-white">
-          <div className="border-b border-[#e8e8e4] px-4 py-4">
-            <div className="flex items-center gap-2">
-              <Database className="h-4 w-4 text-[#1a1a1a]/35" />
-              <h2 className="text-[14px] font-semibold text-[#111110]">챗봇 질문 상위</h2>
-            </div>
+        <div>
+          <div className="flex items-center gap-2">
+            <Database className="h-4 w-4 text-[#1a1a1a]/35" />
+            <h2 className="text-[14px] font-semibold text-[#111110]">챗봇 질문 상위</h2>
           </div>
-          <div className="divide-y divide-[#f0f0ec]">
+          <div className="mt-3 divide-y divide-[#f0f0ec]">
             {(analytics?.topChatbotQuestions.length ?? 0) === 0 ? (
-              <p className="px-4 py-8 text-center text-[13px] text-[#1a1a1a]/35">
+              <p className="py-8 text-center text-[13px] text-[#1a1a1a]/35">
                 최근 30일 챗봇 질문 데이터가 없습니다.
               </p>
             ) : (
               analytics?.topChatbotQuestions.map((item) => (
-                <div key={`${item.question}:${item.category ?? "none"}`} className="px-4 py-4">
+                <div key={`${item.question}:${item.category ?? "none"}`} className="py-4">
                   <div className="flex items-start justify-between gap-4">
                     <div>
                       <p className="text-[13px] font-semibold text-[#111110]">{item.question}</p>
