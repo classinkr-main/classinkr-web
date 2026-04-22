@@ -1,3 +1,4 @@
+<!-- /autoplan restore point: /Users/clmagi/.gstack/projects/classinkr-main-classinkr-web/hook_v1-autoplan-restore-20260416-163532.md -->
 # Software Checkout Revamp Plan
 
 기준 시점: 2026-04-15
@@ -277,3 +278,705 @@
 - 환율 운영은 1차에서 무인 자동이다. 이상치(예: 1 USD < 1000 KRW) 발생 시 결제 prepare에서 명시적으로 실패 응답을 낸다.
 - 견적서 코드는 외부 공유된 순간부터 유출 위험이 있으므로 1회 redemption + 만료일 필수.
 - 프로모션 코드는 1차에서 소수 수동 발급. 시드 스크립트 또는 SQL 스냅샷으로만 관리.
+
+---
+
+# /autoplan Review — Software Checkout Revamp
+*Generated: 2026-04-16 | Branch: hook_v1 | Mode: SELECTIVE EXPANSION*
+*Status: Plan already implemented (phases 1-4 committed). This is a post-implementation audit.*
+
+---
+
+## Decision Audit Trail
+
+| # | Phase | Decision | Classification | Principle | Rationale | Rejected |
+|---|-------|----------|----------------|-----------|-----------|---------|
+| 1 | CEO | Mode = SELECTIVE EXPANSION | Mechanical | P3 | Feature enhancement on existing system; not greenfield | EXPANSION, REDUCTION |
+| 2 | CEO | Premises: accept all 4 | Mechanical | P6 | All premises have been validated by the fact of working implementation | — |
+| 3 | CEO | FX serverless cache gap: flag as concern, not auto-fix | Mechanical | P3 | Fix touches infra + cache layer; needs user decision on storage approach | — |
+| 4 | CEO | .env.local.example outdated: add to NOT_IN_SCOPE for this review; flag as follow-up | Mechanical | P5 | Doc fix < 5 min but not in original plan scope | — |
+| 5 | CEO | RLS on new tables: flag HIGH concern | Mechanical | P1 | Missing RLS on promo_codes/software_quote_codes exposes financial data | — |
+| 6 | CEO | No tests: flag, defer test writing to TODOS | Mechanical | P3 | No test infrastructure in repo; adding now is scope expansion | — |
+| 7 | Eng | CodeInputField consolidation (vs separate QuoteCodeField/PromoCodeField): accept | Mechanical | P5 | Fewer files, same behavior — explicit over clever | — |
+| 8 | Eng | Google Calendar sync in same branch: flag as scope mixing concern | Mechanical | P6 | Not in this plan; mixing billing + calendar in one branch increases risk | — |
+
+---
+
+## Phase 1: CEO Review
+
+### PRE-REVIEW SYSTEM AUDIT
+
+**Git state:**
+- Branch `hook_v1` — 86 files changed vs main, 7185 insertions
+- All 4 phases COMMITTED (latest: "Fix TypeScript build errors" → "feat(checkout): complete phase 2-4")
+- Uncommitted work: billing UI polish (CheckoutSuccessClient/Fail) + Google Calendar sync (NEW: unplanned feature)
+- 1 stash: `WIP on home_v2: e633c5f` — pre-dates this work
+
+**TODO/FIXME scan:**
+- `BusinessRechargePanel.tsx`: referenced in TODO scan
+- Plan doc itself has a placeholder comment (now cleaned)
+
+**Taste references (well-designed):**
+- `lib/billing/fx.ts` — clean error handling, explicit fallback chain
+- `lib/server/software-checkout.ts` — redemption flow with silent-fail pattern, good isolation
+
+**Anti-patterns noted:**
+- In-memory module cache in serverless environment
+- `.env.local.example` stale (KRW keys, no USD keys)
+
+---
+
+### Step 0A: Premise Challenge
+
+**Premises evaluated:**
+
+1. "기존 KRW 하드코딩 구조는 PDF 요금제를 수용할 수 없다" — **Valid.** USD per-account and CNY prepaid are structurally incompatible with KRW inline constants. Rewrite was the only path.
+
+2. "기존 토스 결제 흐름(prepare → widget → confirm)을 재사용할 수 있다" — **Valid.** Implementation confirms this. `confirmTossPayment` in `lib/billing/toss.ts` handles both subscription and business modes via the same widget flow, with mode differentiated at the prepare layer.
+
+3. "1차에서는 어드민 수동 코드 발급으로 충분하다" — **Valid with a caveat.** Works for controlled rollout. Risk: if quote code volume grows, admin will become a bottleneck. The plan acknowledges this in 8절 (scope out).
+
+4. "환율은 결제 준비 시점에만 서버에서 결정하면 충분하다" — **Valid in concept, implementation has a gap.** The module-level in-memory cache (`let cached`) will not persist across Vercel serverless cold starts. In practice, every cold start triggers a live `open.er-api.com` fetch. Free tier: 1500 req/month. At moderate traffic (50+ daily visits), this could exhaust in weeks. Fallback to hardcoded 1400/190 is there but silent — user has no visibility.
+
+**Premise verdict: 3/4 valid. #4 has a deployment gap.**
+
+---
+
+### Step 0B: Existing Code Leverage Map
+
+| Sub-problem | Existing code leveraged |
+|-------------|------------------------|
+| Payment execution | `lib/billing/toss.ts` — `confirmTossPayment()` reused unchanged |
+| Supabase writes | `createSupabaseAdminClient()` — admin pattern consistent with rest of codebase |
+| UI tab switching | New `BillingModeTabs.tsx` — reasonable; no existing tab component matched this exact pattern |
+| Order ID generation | New (orderId is nanoid-like in `software-checkout.ts`) — appropriate since this is a new domain |
+| Quote code lookup | New `lib/billing/quote-codes.ts` — couldn't reuse HW quotes table (different schema) |
+
+**No rebuilding of existing functionality detected.** The separation from HW quotes (`quotes` table) is correct.
+
+---
+
+### Step 0C: Dream State Mapping
+
+```
+CURRENT (before this plan)              THIS PLAN                    12-MONTH IDEAL
+──────────────────────────────         ───────────────────────       ─────────────────────────
+KRW 하드코딩 단가                  →   USD 구독 + CNY 충전형         →  자동 갱신 구독 관리
+단일 플랜 (Standard/Plus)          →   코드 기반 견적/프로모션        →  파트너 자동 견적 발급
+                                   →   어드민 수동 코드 발급          →  견적→결제 통합 파이프라인
+수동 KRW 환산                      →   서버 실시간 환율 (30분 캐시)   →  환율 이상 알림 + 공급사 교체
+결제 후 처리 없음                  →   redemption 기록               →  구독 상태 DB + 갱신 알림
+```
+
+**This plan moves solidly toward the 12-month ideal.** The main gap: subscription management (cancel, renew, payment method change) remains manual.
+
+---
+
+### Step 0C-bis: Implementation Alternatives
+
+```
+APPROACH A: 현재 구현 (Plan 그대로)
+  Summary: KRW 파생 방식으로 토스 결제 흐름 유지, USD/CNY 단가를 서버에서 KRW로 환산
+  Effort:  L (implemented)
+  Risk:    Med — FX cache 서버리스 갭, RLS 미적용
+  Pros:    토스 재사용으로 PG 연동 최소화; 코드 시스템으로 충전형 제어 가능
+  Cons:    서버리스 캐시 이슈; RLS 미적용 테이블
+  Reuses:  confirmTossPayment, createSupabaseAdminClient
+
+APPROACH B: Stripe 또는 Paddle 전환
+  Summary: 국제 결제 PG로 전환, USD/CNY 원화 환산 불필요
+  Effort:  XL
+  Risk:    High — PG 교체는 전체 결제 흐름 재작성
+  Pros:    다중 통화 네이티브 지원; 구독 관리 내장
+  Cons:    토스 KG 이니시스 계약 종료 필요; 한국 시장 간편결제(카카오페이) 커버 안됨
+  Reuses:  없음
+
+APPROACH C: 토스 다통화 API 직접 활용
+  Summary: 토스 서버 API에서 USD 또는 CNY 결제를 직접 받는 방식 탐색
+  Effort:  M
+  Risk:    Med — 토스 다통화 지원 범위 제한 (KRW 기반이 기본)
+  Pros:    PG 변경 없이 통화 문제 해결 가능할 수 있음
+  Cons:    토스 다통화 정책 불명확; 현재 계약 조건 확인 필요
+  Reuses:  confirmTossPayment 일부
+```
+
+**RECOMMENDATION: Approach A (현재 구현) — 토스 의존성이 이미 존재하고, FX 갭은 Redis/KV 캐시로 보완 가능.**
+
+---
+
+### Step 0D: SELECTIVE EXPANSION Analysis
+
+**Complexity check:** Plan touches 20+ files and introduces 4 new tables. This is above the 8-file threshold. However, the scope is internally coherent (one feature: billing checkout), so this isn't fragmentation smell — it's inherent complexity of a payment flow.
+
+**Minimum set:** Phases 1+2 (subscription + business skeleton) are core. Phase 3 (code system) + Phase 4 (admin) are the value-add layer. The plan is well-scoped.
+
+**Expansion opportunities (cherry-pick candidates — for user decision):**
+
+These are NOT auto-added. They go to TODOS.md.
+
+1. **FX Redis/KV 캐시** (S effort) — Replace module-level cache with Vercel KV or Redis. Prevents cold-start API exhaustion. Deferred.
+2. **RLS on new tables** (S effort) — Add row-level security to `software_quote_codes`, `promo_codes`, `promo_code_redemptions`. Deferred.
+3. **`.env.local.example` 업데이트** (XS effort) — Add USD billing env vars + fallback rates. Deferred.
+4. **결제 완료 이메일** (M effort) — Resend 연동으로 결제 확인 이메일. Deferred.
+5. **어드민 구독 상태 뷰** (M effort) — `software_checkout_orders`에서 paid 상태 뷰. Deferred.
+
+**Auto-decided: all expansions → TODOS.md.** (P3: pragmatic; each is a separate workstream)
+
+---
+
+### Step 0E: Temporal Interrogation
+
+```
+HOUR 1 (foundations):
+  - Supabase 마이그레이션 실행 순서: 20260415 → 20260416 필수
+  - 두 마이그레이션 사이에는 business mode 주문 불가 (plan_id NOT NULL)
+  - 해결: 프로덕션 배포 시 두 마이그레이션 동시에 적용해야 함
+
+HOUR 2-3 (core logic):
+  - open.er-api.com 서버리스 캐시 갭: 각 cold start마다 API 호출
+  - 1500 req/month 한도 내에서 운영 가능한지 확인 필요
+
+HOUR 4-5 (integration):
+  - 견적 코드 format은 plan에서 "QB-YYYY-XXXX"라고 했지만
+    실제 admin 화면에서 auto-generate 로직이 있는지 확인 필요
+  - promo 동시성: RPC fallback에서 race condition 가능
+
+HOUR 6+ (polish/tests):
+  - CheckoutSuccessClient, CheckoutFailClient 의 uncommitted UI polish
+  - app/product/sw/page.tsx 182줄 변경 미커밋 — 배포 전 커밋 필요
+```
+
+---
+
+### Step 0F: Mode = SELECTIVE EXPANSION ✓ (auto-decided)
+
+---
+
+## Phase 1 Sections
+
+### Section 1: Architecture Review
+
+```
+ARCHITECTURE — SOFTWARE CHECKOUT REVAMP
+═══════════════════════════════════════════════════════════════
+  [CLIENT]
+  /checkout?mode=subscription|business
+      ↓
+  SoftwareCheckoutClient.tsx (탭 분기)
+      ├── SubscriptionCheckoutPanel.tsx → prepare API → TossWidget → confirm API
+      └── BusinessRechargePanel.tsx    → prepare API → TossWidget → confirm API
+
+  [SERVER — prepare]
+  POST /api/billing/checkout/prepare
+      ├── createSubscriptionCheckoutOrder()  ← lib/server/software-checkout.ts
+      │       ├── getSelfServeSoftwarePlan()  ← lib/billing/plans.ts
+      │       ├── getFxRates()               ← lib/billing/fx.ts → open.er-api.com
+      │       └── INSERT software_checkout_orders
+      └── createBusinessRechargeOrder()
+              ├── validateRechargeAmount()   ← lib/billing/recharge.ts
+              ├── validateQuoteCode()        ← lib/billing/quote-codes.ts → DB
+              ├── validatePromoCode()        ← lib/billing/promo-codes.ts → DB
+              ├── getFxRates()               ← lib/billing/fx.ts
+              └── INSERT software_checkout_orders
+
+  [SERVER — confirm]
+  POST /api/billing/checkout/confirm
+      ├── getSoftwareCheckoutOrder()
+      ├── confirmTossPayment()              ← lib/billing/toss.ts → Toss API
+      ├── markSoftwareCheckoutOrderPaid()
+      │       ├── markQuoteCodeRedeemed()
+      │       └── recordPromoRedemption()   ← lib/billing/promo-codes.ts → RPC
+      └── return order
+
+  [ADMIN]
+  /admin/software-quote-codes
+      └── Manual CRUD for software_quote_codes
+```
+
+**Coupling concerns:**
+- `software-checkout.ts` does validation + DB write in one function. Acceptable for phase 1 scope.
+- `getFxRates()` is called during both prepare and could be called multiple times per request if there are retry patterns. Cache mitigates this but cold-start issue remains.
+- No circular imports detected.
+
+**Security analysis:**
+- All server code uses `createSupabaseAdminClient()` — bypasses RLS correctly.
+- `paymentKey` is validated against `orderId` in confirm route — protects against key swap attacks.
+- Amount re-validation in confirm (`existingOrder.amount !== amount`) — prevents amount tampering. ✅
+- Idempotency: confirm checks `status === "paid" && paymentKey === paymentKey` — prevents double-confirm. ✅
+
+**Gap: RLS not enabled on `software_quote_codes`, `promo_codes`, `promo_code_redemptions`** — If Supabase anon key is ever used (e.g., browser direct fetch), all financial data is readable. Since current code always uses admin client, this is not an active exploit vector — but it's a footgun.
+
+---
+
+### Section 2: Error & Rescue Registry
+
+| Error | Where | Trigger | User sees | Silent? | Tested? |
+|-------|-------|---------|-----------|---------|---------|
+| FX API timeout (5s) | fx.ts:fetchRemoteRates | open.er-api.com slow/down | Continues with stale/fallback rate | ⚠️ Silent | ❌ |
+| FX outlier rate (USD < 500 or > 5000) | fx.ts | Bad API response | Fallback to previous cached/default | ⚠️ Silent | ❌ |
+| Quote code not found/expired/redeemed | quote-codes.ts | User enters bad code | Error message from `ok: false, reason` | No ✅ | ❌ |
+| Promo RPC fails | promo-codes.ts:219 | RPC missing/DB error | Falls back to direct UPDATE (race) | ⚠️ Partial | ❌ |
+| Quote code redemption fails after payment | software-checkout.ts:492 | DB error post-confirm | console.error only; order marked paid | ⚠️ Silent | ❌ |
+| Promo redemption fails after payment | software-checkout.ts:534 | DB error post-confirm | console.error only; order marked paid | ⚠️ Silent | ❌ |
+| Toss confirm fails | confirm/route.ts | Toss API error | HTTP 500 with error message | No ✅ | ❌ |
+| Amount mismatch at confirm | confirm/route.ts | Client-side tampering | HTTP 400 | No ✅ | ❌ |
+| prepare → widget timeout | Client side | User session expires | TossWidget handles natively | N/A | ❌ |
+
+**Critical gap:** Quote/promo redemption failures after payment are silent. The order is marked paid but the redemption audit trail is incomplete. This means:
+- A quote code could be used multiple times if redemption write fails
+- Promo `used_count` could be understated
+
+This is a **data integrity risk** for the business.
+
+---
+
+### Section 3: Test Review
+
+**No tests exist in this repository.**
+
+Test coverage needed for this plan:
+
+| Flow | Test type | Status |
+|------|-----------|--------|
+| `validateRechargeAmount()` boundary cases (9999, 10000, 10001, 12000) | Unit | ❌ Missing |
+| `validateQuoteCode()` — not_found / expired / redeemed / wrong_mode | Unit | ❌ Missing |
+| `validatePromoCode()` — percent vs flat_cny discount math | Unit | ❌ Missing |
+| `getFxRates()` — stale cache fallback, outlier rejection | Unit | ❌ Missing |
+| `createSubscriptionCheckoutOrder()` — happy path | Integration | ❌ Missing |
+| `createBusinessRechargeOrder()` with quote + promo | Integration | ❌ Missing |
+| confirm route — idempotency (double confirm same paymentKey) | Integration | ❌ Missing |
+| confirm route — amount mismatch rejection | Integration | ❌ Missing |
+| redemption failure → order still marked paid | Integration | ❌ Missing |
+
+**Auto-decided: defer all test writing to TODOS.md.** (P3: no test infrastructure; adding now expands scope significantly)
+
+---
+
+### Section 4: Performance Review
+
+- `getFxRates()` has 30-min in-memory cache. **In serverless, module-level `let cached` resets on cold start.** With Vercel, cold start frequency depends on traffic volume. Low traffic = frequent cold starts = frequent API calls.
+- N+1 risk: `createBusinessRechargeOrder()` does up to 3 sequential DB reads (quote code, promo code, order insert). Acceptable at current scale.
+- `SubscriptionCheckoutPanel.tsx` is 25KB. `BusinessRechargePanel.tsx` is 33KB. Both are code-split since they're under `/checkout` — acceptable.
+
+---
+
+### Section 5: Security Review
+
+**High concern — RLS missing on 3 tables:**
+- `software_quote_codes` — contains buyer email, org name, amounts
+- `promo_codes` — business intelligence (discount rates, usage)
+- `promo_code_redemptions` — financial audit trail
+
+`ALTER TABLE ... ENABLE ROW LEVEL SECURITY` is called for `software_checkout_orders` (migration 20260415) but not for the 3 tables above (migration 20260416). If Supabase anon key is used in any client context, these tables are readable.
+
+**Current mitigation:** All code paths use admin client → no active exploit. But this is a single-layer defense.
+
+**Medium concern — quote code format predictability:**
+Plan mentions `QB-YYYY-XXXX` format. If the code is sequential or time-derived, it's brute-forceable. The admin page should generate cryptographically random codes.
+
+**Low concern — promo race condition:**
+The `increment_promo_code_used_count` RPC does a proper row-level lock update. The fallback in app code is racy. Since the RPC exists in the migration, the fallback should theoretically never fire — but it's dead code that could be reached if the RPC is dropped.
+
+---
+
+### Section 6: Deployment Review
+
+**Migration ordering is critical:**
+1. `20260415_software_checkout_orders.sql` must run first
+2. `20260416_software_quote_codes_and_promos.sql` must run second
+
+Between runs: business mode orders would fail (plan_id NOT NULL). Deploy both atomically.
+
+**Vercel env vars needed (not in `.env.local.example`):**
+- `NEXT_PUBLIC_BILLING_STANDARD_MONTHLY_USD` (99)
+- `NEXT_PUBLIC_BILLING_STANDARD_YEARLY_USD` (990)
+- `NEXT_PUBLIC_BILLING_PLUS_MONTHLY_USD` (199)
+- `NEXT_PUBLIC_BILLING_PLUS_YEARLY_USD` (1990)
+- `USD_KRW_FALLBACK_RATE` (optional, default 1400)
+- `CNY_KRW_FALLBACK_RATE` (optional, default 190)
+
+**OLD env vars to remove from Vercel:**
+- `NEXT_PUBLIC_BILLING_STANDARD_MONTHLY_KRW`
+- `NEXT_PUBLIC_BILLING_STANDARD_YEARLY_KRW`
+- `NEXT_PUBLIC_BILLING_PLUS_MONTHLY_KRW`
+- `NEXT_PUBLIC_BILLING_PLUS_YEARLY_KRW`
+
+**Uncommitted work** — the following must be committed before deploy:
+- `components/billing/CheckoutSuccessClient.tsx` (UI polish)
+- `components/billing/CheckoutFailClient.tsx` (UI polish)
+- `components/sections/ConditionalHeader.tsx`, `ConditionalFooter.tsx`, `Header.tsx`
+- `app/product/sw/page.tsx` (182 line change)
+- `lib/supabase/database.types.v2.ts`
+
+**Google Calendar sync files are uncommitted and belong to a different feature** — do NOT commit them with the checkout revamp.
+
+---
+
+### Section 7: Observability Review
+
+**What exists:** `console.error` on redemption failures.
+
+**What's missing:**
+- No structured logging for payment events
+- No metric for: prepare called, widget launched, confirm called, confirm failed
+- No alert for: FX API failure rate, redemption failure rate
+- No runbook for: what to do when a quote code was used but redemption write failed
+
+The `isStale: true` flag on FX rates is computed but never surfaced to operators — there's no alert when the system is operating on a stale rate.
+
+---
+
+### Section 8: Data Model Review
+
+**Strengths:**
+- `redeemed_at` + `redeemed_order_id` on quote codes — prevents double-redemption at DB level
+- `increment_promo_code_used_count` RPC with row-level lock — concurrency safe
+- `promo_code_redemptions` audit table — financial record of discounts applied
+
+**Gaps:**
+- `software_checkout_orders.plan_id` migration has a timing gap (NOT NULL in migration 1, relaxed in migration 2)
+- No FK from `promo_code_redemptions.order_id` → `software_checkout_orders.order_id` (order_id is TEXT, not UUID — intentional but worth noting)
+- `software_quote_codes` has no `account_count` column — subscription-kind codes can't lock in account count
+
+---
+
+### Section 9: API Contract Review
+
+**`POST /api/billing/checkout/prepare` — subscription mode:**
+- Input validation: planId checked against `SOFTWARE_PLANS`, billingCycle checked, accountCount clamped
+- ✅ Server re-computes amount (client-provided amount ignored)
+- ⚠️ `buyerPhone` is optional but Toss widget may require it — not validated
+
+**`POST /api/billing/checkout/prepare` — business mode:**
+- Input: `amountCny`, optional `quoteCode`, optional `promoCode`
+- ✅ Amount unit validation via `validateRechargeAmount()`
+- ✅ Quote code preFills + locks amount
+- ⚠️ No rate limiting on validate endpoints — brute-force of promo codes possible
+
+**`POST /api/billing/checkout/confirm`:**
+- ✅ Amount re-verification
+- ✅ Idempotency check
+- ⚠️ `orderId` format not validated (any string accepted)
+
+---
+
+### Section 10: Plan Document Quality
+
+**Plan vs Implementation gaps:**
+- Plan says `QuoteCodeField.tsx` + `PromoCodeField.tsx` → actual: `CodeInputField.tsx` (consolidated)
+- Plan says migration files `YYYYMMDD_checkout_quote_code.sql` + `YYYYMMDD_promo_codes.sql` → actual: `20260415_software_checkout_orders.sql` + `20260416_software_quote_codes_and_promos.sql`
+- Plan's acceptance criteria in 7절 are complete and appear to be met by implementation
+
+**Verdict: Plan is accurate in spirit, minor file name discrepancies only.**
+
+---
+
+### Section 11: Design Scope Detected ✓
+
+*(Covered in Phase 2 below)*
+
+---
+
+### Phase 1 — NOT in Scope
+
+Items explicitly deferred to TODOS.md:
+1. FX Redis/Vercel KV 캐시 교체 (serverless cache gap fix)
+2. RLS on `software_quote_codes`, `promo_codes`, `promo_code_redemptions`
+3. `.env.local.example` USD 환경변수 추가
+4. 결제 완료 이메일 (Resend 연동)
+5. 어드민 구독 상태 뷰
+6. 단위 테스트 + 통합 테스트
+7. Rate limiting on validate API endpoints
+8. 구조화 로그 + 결제 이벤트 메트릭
+
+### Phase 1 — What Already Exists
+
+- `lib/billing/toss.ts` — Toss PG wrapper, untouched ✅
+- `createSupabaseAdminClient()` — admin DB access pattern ✅
+- Admin auth pattern (`verifyAdmin()`) — used in admin quote codes page ✅
+- Header/sidebar component patterns — extended, not replaced ✅
+
+### CEO Completion Summary
+
+| Dimension | Status | Notes |
+|-----------|--------|-------|
+| Premises valid? | ✅ 3/4 | FX serverless cache gap in premise #4 |
+| Right problem to solve? | ✅ | PDF pricing model alignment was necessary |
+| Scope calibrated? | ✅ | 4 phases, coherent scope |
+| Code reuse adequate? | ✅ | Toss + Supabase patterns well-reused |
+| Critical gaps? | ⚠️ 2 | RLS missing; FX cold-start issue |
+| Deployment ready? | ⚠️ | Env vars not documented; uncommitted files |
+
+**Phase 1 COMPLETE.**
+
+---
+
+## Phase 2: Design Review
+
+*UI scope detected: checkout tabs, panels, stepper, code inputs*
+
+### Design Scope Assessment: 6/10
+
+Existing DESIGN.md palette is referenced. Components use `#084734` / `#ECFDF5` / `rgba(8,71,52,0.08)` correctly. The uncommitted `CheckoutSuccessClient` changes improve design alignment.
+
+### Pass 1 — Information Hierarchy: 7/10
+
+**Subscription mode:**
+- Tab → Plan card → Stepper → Payment widget — correct hierarchy
+- Enterprise card is visually de-emphasized ✅
+
+**Business mode:**
+- Tab → Preset buttons → Code inputs → Payment widget
+- Code input blocks are side-by-side (quote + promo) — could be confusing if user applies both
+
+**Gap:** Order Summary on business mode shows CNY amount. Korean users may not intuitively understand CNY. The KRW conversion note is present but small — consider making the final KRW amount more prominent.
+
+### Pass 2 — Missing States: 6/10
+
+| State | Subscription | Business |
+|-------|-------------|---------|
+| Loading (FX rate fetching) | ⚠️ KrwConversionNote shows "..." or static? | Same |
+| Empty (no code applied) | ✅ Default state shown | ✅ |
+| Error (invalid code) | N/A | ✅ Error badge on code field |
+| Error (FX unavailable) | ⚠️ Falls back silently | Same |
+| Success (code applied, locked) | N/A | ✅ Lock display |
+| Payment pending | ✅ Toss widget handles | Same |
+
+**Gap:** When FX rate is stale (fallback active), the UI shows the same KRW estimate as normal. User has no signal that the rate might be outdated. This could cause KRW amount discrepancy at payment confirm.
+
+### Pass 3 — User Journey: 7/10
+
+**Subscription path:** Tab → Select plan → Adjust account count → Fill buyer info → Pay. Clean.
+
+**Business path:** Tab → Enter amount (or apply quote code) → Optionally apply promo → Fill buyer info → Pay.
+
+**Concern:** Quote code locks the CNY amount, but the locked amount display doesn't show what plan/service it corresponds to. A user receiving a quote code might not understand what they're paying for.
+
+### Pass 4 — Specificity of UX: 7/10
+
+Plan specifies exact preset values (10k/20k/50k/100k CNY), min amount (10k), increment (2k), stepper min/max (1/999). These are all implemented. Good specificity.
+
+**Gap:** Quote code format shown to users (`QB-YYYY-XXXX`) is undefined in the admin UI — the admin page generates codes, but the format logic wasn't specified in the plan.
+
+### Pass 5 — Design System Alignment: 8/10
+
+DESIGN.md palette used correctly in `CheckoutSuccessClient` uncommitted changes. Border `rgba(8,71,52,0.08)` present. Green gradient on success card is on-brand. Minor: font is `font-serif` in current code but uncommitted changes switch to `font-semibold tracking-tight` — the uncommitted version is more consistent with the rest of the site.
+
+### Pass 6 — Responsive Strategy: 6/10
+
+Plan specifies left/right column layout (Plan Builder + Payment). On mobile, this must stack. No explicit mobile breakpoint design in the plan. `SubscriptionCheckoutPanel.tsx` (25KB) likely has responsive handling but plan didn't spec mobile UX explicitly.
+
+**Gap:** Mobile checkout flow for business mode with multiple code inputs (quote + promo) could be cramped.
+
+### Pass 7 — Accessibility: 5/10
+
+- `AccountCountStepper` uses `+`/`-` buttons — keyboard accessible? Need `aria-label`.
+- Code input fields need `aria-describedby` for error states
+- Toss widget handles its own a11y
+- Focus management after code validation not specified
+
+**Design phase — NOT in scope:**
+- Full mobile UX redesign for business mode
+- Accessibility audit (separate pass)
+- FX stale rate visual indicator
+
+### Design Completion Summary
+
+| Dimension | Score | Notes |
+|-----------|-------|-------|
+| Information hierarchy | 7/10 | CNY prominence could be improved |
+| Missing states | 6/10 | Stale FX state unhandled in UI |
+| User journey | 7/10 | Quote code context missing on lock |
+| Specificity | 7/10 | Code format not defined in plan |
+| Design system | 8/10 | Uncommitted changes improve alignment |
+| Responsive | 6/10 | Mobile business mode not specced |
+| Accessibility | 5/10 | Stepper + code inputs need aria labels |
+
+**Phase 2 COMPLETE.**
+
+---
+
+## Phase 3: Engineering Review
+
+### Scope Challenge
+
+Plan touches: 20 new/modified files, 4 new DB tables, 3 new API routes, 1 new admin page.
+
+Reading actual affected files confirms all planned components exist. No "zombie" files (files listed in plan but not created). The consolidation of `QuoteCodeField` + `PromoCodeField` → `CodeInputField` is a net improvement (DRY).
+
+### Architecture ASCII (see Phase 1, Section 1)
+
+### Test Coverage Map
+
+| Codepath | Test type needed | Gap |
+|----------|-----------------|-----|
+| `validateRechargeAmount(10000)` → ok | Unit | ❌ |
+| `validateRechargeAmount(9999)` → fail + suggestion | Unit | ❌ |
+| `validateRechargeAmount(10001)` → fail (not 2k increment) | Unit | ❌ |
+| `validateQuoteCode("expired")` → reason: expired | Unit | ❌ |
+| `validateQuoteCode("redeemed")` → reason: redeemed | Unit | ❌ |
+| `validateQuoteCode("wrong_mode")` → reason: wrong_mode | Unit | ❌ |
+| `getFxRates()` → cache hit (no API call) | Unit | ❌ |
+| `getFxRates()` → API returns invalid rate → fallback | Unit | ❌ |
+| `createBusinessRechargeOrder()` → quote code preFill | Integration | ❌ |
+| `createBusinessRechargeOrder()` → promo + quote combined | Integration | ❌ |
+| `markSoftwareCheckoutOrderPaid()` → redemption fail silent | Integration | ❌ |
+| confirm route → idempotent on paid+same key | Integration | ❌ |
+
+**Test plan artifact written to:** `~/.gstack/projects/classinkr-main-classinkr-web/hook_v1-test-plan.md` *(see below)*
+
+### Section 1: Architecture — see Phase 1
+
+### Section 2: Code Quality
+
+- `software-checkout.ts` is ~550 lines — approaching the limit before it should be split. Not a problem now.
+- `BusinessRechargePanel.tsx` is 33KB — very large client component. Should be reviewed for dead code.
+- `SubscriptionCheckoutPanel.tsx` is 25KB — same concern.
+- `CodeInputField.tsx` is properly generic (handles both quote and promo) ✅
+- Error messages are in Korean — consistent with rest of app ✅
+- `normalizeString()` utility usage is consistent ✅
+
+### Section 3: Performance
+
+- FX serverless cache gap: covered in CEO/Section 4
+- DB query pattern in `createBusinessRechargeOrder`: 3 sequential reads (quote, promo, order) — N+1 mitigated by fact that at most 2 code lookups happen
+- No pagination on admin quote codes page — will degrade at 1000+ codes
+
+### Section 4: Security (see CEO Section 5)
+
+**Critical items:**
+1. RLS missing on 3 tables
+2. Promo code brute-force possible on `/api/billing/promo-code/validate`
+3. Quote code format may be predictable
+
+### Failure Modes Registry
+
+| # | Failure mode | Probability | Impact | Detection | Mitigation in plan |
+|---|-------------|-------------|--------|-----------|-------------------|
+| 1 | FX API down at payment time | Low | Med | None | Fallback to stale/default ✅ |
+| 2 | Quote code used after expiry (clock drift) | Very Low | Med | None | Server-side expiry check ✅ |
+| 3 | Promo `used_count` overflow (race) | Low | Low | None | RPC with row lock ✅ |
+| 4 | Redemption fails after payment | Low | High | console.error only | ⚠️ Gap |
+| 5 | Migration 1+2 applied non-atomically | Very Low | High | NOT NULL fail | Deploy procedure needed |
+| 6 | Toss webhook retry (double confirm) | Low | Med | Idempotency check ✅ | ✅ |
+| 7 | FX outlier rate (API bug) | Very Low | High | Range validation ✅ | ✅ |
+| 8 | Stale FX rate served (>30min cold start) | Med | Low | None | isStale flag (unused) ⚠️ |
+
+**Critical gap flag:** Failure mode #4 (redemption fails silently after payment) requires an operational recovery runbook. Currently: no runbook, no alert.
+
+### Eng Completion Summary
+
+| Dimension | Status | Notes |
+|-----------|--------|-------|
+| Architecture sound? | ✅ | Clean separation, good reuse |
+| Test coverage? | ❌ | 0 tests; full gap |
+| Performance risks? | ⚠️ | FX cold-start; large panel components |
+| Security threats? | ⚠️ | RLS missing; brute-force possible |
+| Error paths handled? | ⚠️ | Post-payment redemption failures silent |
+| Deployment risk? | ⚠️ | Migration atomicity; env vars not updated |
+
+**Phase 3 COMPLETE.**
+
+---
+
+## Cross-Phase Themes
+
+**Theme 1: FX in-memory cache in serverless** — Flagged in CEO (premise #4), Eng (Section 3, Failure mode #8), Design (missing state: stale FX in UI). High-confidence signal: this is an operational risk that needs addressing before heavy traffic.
+
+**Theme 2: Post-payment redemption silent failures** — Flagged in CEO (Error Registry), Eng (Failure Modes #4). Both phases independently identified this. The pattern `try { await redemption } catch { console.error }` means a failed redemption is invisible to operators.
+
+**Theme 3: Missing RLS on new tables** — Flagged in CEO (Section 5), Eng (Section 4). Single-layer defense (admin client only). Should be hardened.
+
+---
+
+## Deferred to TODOS.md
+
+1. FX Redis/Vercel KV 캐시 교체 — prevents cold-start exhaustion of open.er-api.com free tier
+2. RLS on `software_quote_codes`, `promo_codes`, `promo_code_redemptions` — security hardening
+3. `.env.local.example` 업데이트 — new USD env vars + fallback rate vars
+4. 결제 완료 이메일 발송 (Resend 연동) — user confirmation
+5. 어드민 구독 상태 뷰 — monitor paid orders
+6. 단위/통합 테스트 스위트 — billing domain tests
+7. Rate limiting on `/api/billing/quote-code/validate` + `/api/billing/promo-code/validate`
+8. 구조화 로그 + 결제 이벤트 메트릭
+9. Post-payment redemption failure alert + runbook
+10. Mobile UX for business checkout (quote + promo inputs cramped on small screens)
+
+
+---
+
+## CEO DUAL VOICES — CONSENSUS TABLE
+
+*Source: Claude subagent (independent) | Codex: unavailable [subagent-only]*
+
+```
+CEO DUAL VOICES — CONSENSUS TABLE:
+═══════════════════════════════════════════════════════════════
+  Dimension                           Claude  Codex  Consensus
+  ──────────────────────────────────── ─────── ─────── ─────────
+  1. Premises valid?                   ⚠️ 3/4  N/A    [subagent-only]
+  2. Right problem to solve?           ⚠️ Yes*  N/A    [subagent-only]
+  3. Scope calibration correct?        ⚠️ High  N/A    [subagent-only]
+  4. Alternatives sufficiently explored?⚠️ Med  N/A    [subagent-only]
+  5. Competitive/market risks covered? ⚠️ Med  N/A    [subagent-only]
+  6. 6-month trajectory sound?         ⚠️ High  N/A    [subagent-only]
+═══════════════════════════════════════════════════════════════
+*Subagent raised: buyer identity (who holds card) as CRITICAL concern
+ and fapiao/invoice gap as HIGH. These are USER CHALLENGE territory.
+```
+
+### CLAUDE SUBAGENT (CEO — strategic independence)
+
+**Finding 1 [CRITICAL]: Buyer identity — who holds the card?**
+The plan assumes a Korean operator will complete USD checkout via Toss. If the actual paying entity is a Chinese institution, Toss's KRW-based flow is structurally wrong regardless of UX polish.
+
+**Finding 2 [HIGH]: Admin-gated quote codes limit self-serve conversion**
+If >80% of Business revenue flows through manually-issued quote codes, the checkout revamp optimizes a path that requires a human touchpoint anyway. Self-serve conversion should be validated before investing in Phase 3.
+
+**Finding 3 [HIGH]: 6-month regret — no fapiao/invoice path, no auto-renewal**
+Chinese institutional buyers often require fapiao (Chinese VAT invoice). The plan has no invoice generation. Standard/Plus subscribers have no auto-renewal, no payment method management. These will be the first support complaints.
+
+**Finding 4 [MEDIUM]: Stripe for subscription lifecycle dismissed too quickly**
+Stripe provides auto-renewal, proration, dunning, invoice generation out of the box. The plan's dismissal ("Korean cards not covered") is valid only for Toss's home market. A hybrid (Stripe for USD subscriptions, Toss for KRW) may be worth a 2-week spike.
+
+**Finding 5 [MEDIUM]: Competitive moat is thin**
+ClassIn (the underlying platform) could add Korean-language self-serve checkout in a localization sprint. The checkout revamp is only defensible if bundled with non-replicable local services.
+
+
+---
+
+## ENG DUAL VOICES — CONSENSUS TABLE
+
+*Source: Claude subagent (independent) | Codex: unavailable [subagent-only]*
+
+```
+ENG DUAL VOICES — CONSENSUS TABLE:
+═══════════════════════════════════════════════════════════════
+  Dimension                           Claude  Codex  Consensus
+  ──────────────────────────────────── ─────── ─────── ─────────
+  1. Architecture sound?               ✅ Yes   N/A    [subagent-only]
+  2. Test coverage sufficient?         ❌ No    N/A    [subagent-only]
+  3. Performance risks addressed?      ⚠️ FX   N/A    [subagent-only]
+  4. Security threats covered?         ❌ No    N/A    [subagent-only]
+  5. Error paths handled?              ⚠️ Gap  N/A    [subagent-only]
+  6. Deployment risk manageable?       ⚠️ Med  N/A    [subagent-only]
+═══════════════════════════════════════════════════════════════
+```
+
+### CLAUDE SUBAGENT (Eng — independent review)
+
+**NEW finding [Critical]: Promo `used_count` fallback is live race condition**
+`promo-codes.ts:225-234` — when the RPC fails, SELECT+UPDATE without atomic guard. Two concurrent confirms can both read `used_count=5`, both write `6`. Promo limit silently bypassed. Fix: add `WHERE used_count < usage_limit` to fallback UPDATE.
+
+**NEW finding [High]: Subscription promo scaffolding writes CORRUPT redemption rows**
+`lib/server/software-checkout.ts:510-515` — `before = after = raw.amountUsd` records zero-discount redemption. If subscription promo support is ever added without reading this comment, all redemption rows will show $0 discount. Fix: delete or `if (false)` guard this branch until prepare side supports `amountUsdBeforeDiscount`.
+
+**NEW finding [High]: `accountCount` not re-verified at confirm**
+Only `amountKrw` is re-verified. A race between two prepare calls could result in the wrong order being confirmed. Fix: store and re-verify `accountCount` + `planId` at confirm.
+
+**Confirmed gaps (also in Phase 1/3 above):**
+- FX stale rate served silently → customer pays wrong KRW
+- RLS missing on 3 financial tables
+- No rate limiting on validate endpoints
+- Migration atomicity gap
+

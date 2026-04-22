@@ -316,6 +316,9 @@ export interface CalendarEventRow {
   title: string;
   description: string | null;
   status: CalendarEventStatus;
+  google_calendar_event_id: string | null;
+  google_calendar_last_synced_at: string | null;
+  google_calendar_sync_error: string | null;
   created_by: string | null;
   created_at: string;
   updated_at: string;
@@ -392,5 +395,13 @@ export type InsertReceiptV2 = Omit<ReceiptV2Row, "id" | "created_at" | "updated_
 
 export type InsertActivityLog = Omit<ActivityLogRow, "id" | "created_at">;
 
-export type InsertCalendarEvent = Omit<CalendarEventRow, "id" | "created_at" | "updated_at">;
+export type InsertCalendarEvent = Omit<
+  CalendarEventRow,
+  | "id"
+  | "created_at"
+  | "updated_at"
+  | "google_calendar_event_id"
+  | "google_calendar_last_synced_at"
+  | "google_calendar_sync_error"
+>;
 export type UpdateCalendarEvent = Partial<Omit<CalendarEventRow, "id" | "created_at" | "updated_at">>;

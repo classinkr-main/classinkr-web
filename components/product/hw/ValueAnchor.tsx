@@ -47,7 +47,7 @@ const itemFadeUp: Variants = {
 
 export default function ValueAnchor() {
   return (
-    <section className="bg-[#0D1A12] text-white py-28 md:py-36 px-6 relative overflow-hidden">
+    <section className="bg-[#0D1A12] text-white min-h-screen flex items-center px-6 py-20 md:py-24 relative overflow-hidden">
       {/* Background glows */}
       <div
         aria-hidden="true"
@@ -58,7 +58,7 @@ export default function ValueAnchor() {
         className="absolute -bottom-32 -right-32 w-[480px] h-[480px] rounded-full bg-[#084734]/30 blur-3xl pointer-events-none"
       />
 
-      <div className="max-w-5xl mx-auto text-center relative z-10">
+      <div className="w-full max-w-5xl mx-auto text-center relative z-10">
         {/* Eyebrow */}
         <motion.p
           custom={0}
@@ -106,7 +106,7 @@ export default function ValueAnchor() {
           whileInView="visible"
           viewport={{ once: true, margin: "-80px" }}
           whileTap={{ scale: 0.985 }}
-          className="mt-12 max-w-xl mx-auto bg-white/[0.05] backdrop-blur-sm border border-white/10 rounded-2xl p-6 md:p-8 text-left cursor-default"
+          className="mt-10 max-w-xl mx-auto bg-white/[0.05] backdrop-blur-sm border border-white/10 rounded-2xl p-6 md:p-8 text-left cursor-default"
           style={{ transition: "box-shadow 0.15s" }}
         >
           <div className="flex items-center justify-between mb-5">
@@ -147,7 +147,7 @@ export default function ValueAnchor() {
           initial="hidden"
           whileInView="visible"
           viewport={{ once: true, margin: "-80px" }}
-          className="mt-12 flex flex-col items-center gap-4"
+          className="mt-10 flex flex-col items-center gap-4"
         >
           <Link
             href="/contact"

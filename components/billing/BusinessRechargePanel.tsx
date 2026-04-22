@@ -2,17 +2,15 @@
 
 import { useEffect, useMemo, useRef, useState } from "react"
 import { ANONYMOUS, loadTossPayments, type TossPaymentsWidgets } from "@tosspayments/tosspayments-sdk"
-import { AlertCircle, CircleDollarSign, Shield, Sparkles, Wallet } from "lucide-react"
+import { AlertCircle } from "lucide-react"
 
 import { Button } from "@/components/ui/button"
-import { Card, CardContent, CardDescription, CardHeader, CardTitle } from "@/components/ui/card"
 import { Input } from "@/components/ui/input"
 import { Label } from "@/components/ui/label"
 import { CodeInputField, type CodeFieldStatus } from "@/components/billing/CodeInputField"
 import { KrwConversionNote } from "@/components/billing/KrwConversionNote"
 import {
   BUSINESS_RECHARGE,
-  buildRechargeOrderName,
   formatCny,
   validateRechargeAmount,
 } from "@/lib/billing/recharge"
@@ -533,26 +531,13 @@ export function BusinessRechargePanel({ initialQuoteCode }: Props = {}) {
   }
 
   return (
-    <div className="grid gap-6 lg:min-h-[calc(100vh-8rem)] lg:grid-cols-[minmax(0,1.08fr)_minmax(380px,420px)]">
-      <Card className="overflow-hidden rounded-[32px] border-[rgba(8,71,52,0.08)] bg-white/90 shadow-[0_24px_70px_rgba(8,71,52,0.08)] backdrop-blur lg:max-h-[calc(100vh-8rem)]">
+    <div className="grid gap-4 lg:min-h-[calc(100vh-8rem)] lg:grid-cols-[minmax(0,1.08fr)_minmax(360px,400px)]">
+      {/* ── 왼쪽: 충전 설정 ── */}
+      <div className="rounded-2xl border border-[rgba(0,0,0,0.08)] bg-white lg:max-h-[calc(100vh-8rem)]">
         <div className="flex h-full flex-col lg:overflow-y-auto">
-          <CardHeader className="border-b border-[rgba(8,71,52,0.08)] bg-[linear-gradient(180deg,rgba(236,253,245,0.92)_0%,rgba(255,255,255,0.98)_100%)] px-5 py-5 md:px-6">
-            <div className="inline-flex w-fit items-center gap-2 rounded-full bg-white/85 px-3 py-1 text-[11px] font-semibold uppercase tracking-[0.18em] text-[#084734] shadow-sm">
-              <Sparkles className="h-3.5 w-3.5" />
-              Business 충전형
-            </div>
-            <CardTitle className="mt-3 text-[27px] font-semibold leading-[1.08] tracking-tight text-[#111110] md:text-[32px]">
-              충전 금액을 고르고 바로 결제
-            </CardTitle>
-            <CardDescription className="mt-2 max-w-2xl text-[14px] leading-relaxed text-[#5F665F]">
-              최초 10,000 CNY 이상, 이후 2,000 CNY 단위로 충전할 수 있습니다. 견적서 코드가 있으면 자동으로 금액을 불러오고, 프로모션 코드는 추가 할인에 적용됩니다.
-            </CardDescription>
-          </CardHeader>
-
-          <CardContent className="grid gap-5 px-5 py-5 md:px-6">
+          <div className="grid gap-4 p-5">
             <div>
-              <p className="text-xs font-semibold uppercase tracking-[0.18em] text-[#5B695E]">충전 금액</p>
-              <div className="mt-2.5 grid grid-cols-2 gap-2 md:grid-cols-4">
+              <div className="grid grid-cols-2 gap-2 md:grid-cols-4">
                 {BUSINESS_RECHARGE.presetsCny.map((amount) => {
                   const active = selectedPresetCny === amount && !quoteCode
                   return (
@@ -561,16 +546,14 @@ export function BusinessRechargePanel({ initialQuoteCode }: Props = {}) {
                       type="button"
                       disabled={Boolean(quoteCode)}
                       onClick={() => selectPreset(amount)}
-                      className={`rounded-2xl border px-4 py-3 text-left transition-colors ${
+                      className={`rounded-xl border px-3 py-2.5 text-left transition-colors ${
                         active
-                          ? "border-[#084734]/20 bg-[#ECFDF5]"
-                          : "border-[rgba(0,0,0,0.08)] bg-white hover:border-[#084734]/15 hover:bg-[#F8FBF9]"
+                          ? "border-2 border-[#084734] bg-white"
+                          : "border border-[rgba(0,0,0,0.08)] bg-white hover:border-[#084734]/30"
                       } ${quoteCode ? "cursor-not-allowed opacity-50" : ""}`}
                     >
-                      <p className="text-sm font-semibold text-[#111110]">
-                        {formatCny(amount)}
-                      </p>
-                      <p className="mt-1 text-[11px] text-[#7C8A83]">
+                      <p className="text-sm font-semibold text-[#111110]">{formatCny(amount)}</p>
+                      <p className="mt-0.5 text-[11px] text-[#7C8A83]">
                         ≈ {approxKrw(amount, fx.cnyKrw) ? formatKrw(approxKrw(amount, fx.cnyKrw) as number) : "-"}
                       </p>
                     </button>
@@ -578,37 +561,29 @@ export function BusinessRechargePanel({ initialQuoteCode }: Props = {}) {
                 })}
               </div>
 
-              <div className="mt-3 flex items-end gap-3">
-                <div className="flex-1">
-                  <Label htmlFor="custom-cny" className="text-xs text-[#44514A]">
-                    직접 입력 (CNY)
-                  </Label>
-                  <div className="relative mt-1.5">
-                    <span className="pointer-events-none absolute left-3 top-1/2 -translate-y-1/2 text-sm text-[#7C8A83]">
-                      ¥
-                    </span>
-                    <Input
-                      id="custom-cny"
-                      type="text"
-                      inputMode="numeric"
-                      value={customAmountInput}
-                      disabled={Boolean(quoteCode)}
-                      onChange={(event) => handleCustomInput(event.target.value)}
-                      onBlur={blurValidateCustom}
-                      className="h-11 rounded-2xl border-[rgba(8,71,52,0.08)] bg-white pl-7 text-sm"
-                      placeholder="10000"
-                    />
-                  </div>
+              <div className="mt-3">
+                <Label htmlFor="custom-cny" className="text-xs text-[#44514A]">직접 입력 (CNY)</Label>
+                <div className="relative mt-1">
+                  <span className="pointer-events-none absolute left-3 top-1/2 -translate-y-1/2 text-sm text-[#7C8A83]">¥</span>
+                  <Input
+                    id="custom-cny"
+                    type="text"
+                    inputMode="numeric"
+                    value={customAmountInput}
+                    disabled={Boolean(quoteCode)}
+                    onChange={(event) => handleCustomInput(event.target.value)}
+                    onBlur={blurValidateCustom}
+                    className="h-10 rounded-lg border-[rgba(0,0,0,0.08)] pl-7 text-sm"
+                    placeholder="10000"
+                  />
                 </div>
+                {amountError ? <p className="mt-1 text-[11px] text-[#B85C33]">{amountError}</p> : null}
               </div>
-              {amountError ? (
-                <p className="mt-2 text-[11px] text-[#B85C33]">{amountError}</p>
-              ) : null}
             </div>
 
             <CodeInputField
               title="견적서 코드"
-              description="어드민에서 발급받은 코드를 입력하면 지정된 충전 금액으로 바로 결제합니다."
+              description=""
               placeholder="QB-2026-XXXX"
               status={quoteStatus}
               onApply={handleApplyQuoteCode}
@@ -617,209 +592,118 @@ export function BusinessRechargePanel({ initialQuoteCode }: Props = {}) {
 
             <CodeInputField
               title="프로모션 코드"
-              description="할인 프로모 코드를 입력하면 위 금액에서 즉시 차감됩니다."
+              description=""
               placeholder="PROMO-2026"
               status={promoStatus}
               onApply={handleApplyPromo}
               onRemove={handleRemovePromo}
             />
 
-            <div className="rounded-[24px] border border-[rgba(8,71,52,0.08)] bg-[#F8FBF9] p-4">
-              <div className="flex items-center gap-2 text-sm font-semibold text-[#084734]">
-                <CircleDollarSign className="h-4 w-4" />
-                과금 기준 안내 (PDF 요약)
-              </div>
-              <ul className="mt-3 grid gap-1.5 text-[12px] text-[#44514A] md:grid-cols-2">
+            <div className="rounded-xl border border-[rgba(0,0,0,0.08)] p-4">
+              <p className="text-xs font-semibold text-[#111110]">과금 기준</p>
+              <ul className="mt-2 grid gap-1 text-[11px] text-[#44514A] md:grid-cols-2">
                 {RATE_TABLE_ROWS.map((row) => (
-                  <li
-                    key={row.label}
-                    className="flex items-start justify-between gap-3 rounded-xl bg-white px-3 py-2"
-                  >
-                    <div>
-                      <p className="font-semibold text-[#111110]">{row.label}</p>
-                      <p className="text-[11px] text-[#7C8A83]">{row.detail}</p>
-                    </div>
-                    <span className="text-right text-[11px] font-semibold text-[#084734]">
-                      {row.price}
-                    </span>
+                  <li key={row.label} className="flex justify-between gap-2 border-b border-[rgba(0,0,0,0.04)] py-1.5 last:border-0">
+                    <span className="font-medium text-[#111110]">{row.label}</span>
+                    <span className="text-[#084734]">{row.price}</span>
                   </li>
                 ))}
               </ul>
-              <p className="mt-3 text-[11px] leading-relaxed text-[#66726B]">
-                학생이 10분 이하로 교실에 머무르면 과금되지 않고, 30분 이하 수업은 30분 기준으로 계산됩니다. 수업 알림 SMS · 웹라이브 · 스토리지 초과분은 별도 요율로 차감됩니다.
-              </p>
             </div>
-          </CardContent>
+          </div>
         </div>
-      </Card>
+      </div>
 
-      <Card className="overflow-hidden rounded-[32px] border-[rgba(8,71,52,0.08)] bg-white/95 shadow-[0_24px_70px_rgba(8,71,52,0.09)] backdrop-blur lg:max-h-[calc(100vh-8rem)]">
+      {/* ── 오른쪽: 결제 ── */}
+      <div className="rounded-2xl border border-[rgba(0,0,0,0.08)] bg-white lg:max-h-[calc(100vh-8rem)]">
         <div className="flex h-full flex-col lg:overflow-y-auto">
-          <CardHeader className="border-b border-[rgba(8,71,52,0.08)] bg-white/95 px-6 py-6">
-            <div className="inline-flex w-fit items-center gap-2 rounded-full bg-[#ECFDF5] px-3 py-1 text-[11px] font-semibold uppercase tracking-[0.18em] text-[#084734]">
-              <Wallet className="h-3.5 w-3.5" />
-              Payment
-            </div>
-            <div className="mt-4 flex items-start justify-between gap-4">
-              <div>
-                <CardTitle className="text-[28px] font-semibold tracking-tight text-[#111110]">결제 정보</CardTitle>
-                <CardDescription className="mt-2 text-sm leading-relaxed text-[#615D59]">
-                  최소 정보만 입력하고 바로 충전 결제로 넘어갑니다.
-                </CardDescription>
-              </div>
-              <div className="rounded-2xl bg-[#F4FBF7] px-3 py-2 text-right">
-                <p className="text-[11px] font-semibold uppercase tracking-[0.18em] text-[#5B695E]">Order</p>
-                <p className="mt-1 text-base font-semibold text-[#111110]">
-                  {buildRechargeOrderName(effectiveFinalAmountCny || BUSINESS_RECHARGE.baseMinCny)}
-                </p>
-                <p className="text-sm text-[#084734]">{formatCny(effectiveFinalAmountCny || 0)}</p>
-              </div>
-            </div>
-          </CardHeader>
+          <div className="flex items-center justify-between gap-3 border-b border-[rgba(0,0,0,0.08)] px-5 py-3">
+            <span className="text-sm font-semibold text-[#111110]">결제 정보</span>
+            <span className="text-sm font-bold text-[#084734]">{formatCny(effectiveFinalAmountCny || 0)}</span>
+          </div>
 
-          <CardContent className="space-y-4 px-6 py-6">
+          <div className="space-y-3 p-5">
             {!checkoutEnabled && (
-              <div className="rounded-2xl border border-[#EAD7B2] bg-[#FFF9EB] px-4 py-3 text-sm text-[#8D6C1F]">
-                `NEXT_PUBLIC_SW_CHECKOUT_ENABLED=true` 설정 전까지 공개 CTA는 기존 문의 흐름을 유지합니다.
+              <div className="rounded-lg border border-[#EAD7B2] px-3 py-2 text-xs text-[#8D6C1F]">
+                NEXT_PUBLIC_SW_CHECKOUT_ENABLED=true 설정 필요
               </div>
             )}
             {!hasWidgetKey && (
-              <div className="rounded-2xl border border-[#EAD7B2] bg-[#FFF9EB] px-4 py-3 text-sm text-[#8D6C1F]">
-                토스 위젯 키가 없어 결제위젯은 아직 비활성 상태입니다. `.env.local`에
-                `NEXT_PUBLIC_TOSS_WIDGET_CLIENT_KEY`를 넣어주세요.
+              <div className="rounded-lg border border-[#EAD7B2] px-3 py-2 text-xs text-[#8D6C1F]">
+                TOSS_WIDGET_CLIENT_KEY 설정 필요
               </div>
             )}
 
-            <div className="rounded-[28px] border border-[rgba(8,71,52,0.08)] bg-[#F8FBF9] p-4">
-              <div className="mb-4 flex items-center justify-between gap-3">
-                <div>
-                  <p className="text-sm font-semibold text-[#084734]">주문자 정보</p>
-                  <p className="mt-1 text-xs text-[#66726B]">기관명, 담당자명, 이메일만 필수입니다.</p>
-                </div>
-                <span className="rounded-full bg-white px-3 py-1 text-xs font-semibold text-[#084734]">
-                  {isFormComplete ? "입력 완료" : "필수 3개"}
-                </span>
-              </div>
-
-              <div className="grid gap-4 md:grid-cols-2">
-                <div className="space-y-2 md:col-span-2">
-                  <Label htmlFor="biz-organizationName">기관명 / 학원명</Label>
+            <div className="rounded-xl border border-[rgba(0,0,0,0.08)] p-4">
+              <div className="grid gap-3 md:grid-cols-2">
+                <div className="space-y-1.5 md:col-span-2">
+                  <Label htmlFor="biz-organizationName" className="text-xs">기관명 / 학원명</Label>
                   <Input
                     id="biz-organizationName"
                     value={form.organizationName}
-                    onChange={(event) =>
-                      setForm((current) => ({ ...current, organizationName: event.target.value }))
-                    }
-                    placeholder="예: 무궁화학원"
-                    className="h-11 rounded-2xl border-[rgba(8,71,52,0.08)] bg-white"
+                    onChange={(event) => setForm((c) => ({ ...c, organizationName: event.target.value }))}
+                    placeholder="무궁화학원"
+                    className="h-10 rounded-lg border-[rgba(0,0,0,0.08)]"
                   />
                 </div>
-                <div className="space-y-2">
-                  <Label htmlFor="biz-buyerName">담당자명</Label>
+                <div className="space-y-1.5">
+                  <Label htmlFor="biz-buyerName" className="text-xs">담당자명</Label>
                   <Input
                     id="biz-buyerName"
                     value={form.buyerName}
-                    onChange={(event) =>
-                      setForm((current) => ({ ...current, buyerName: event.target.value }))
-                    }
+                    onChange={(event) => setForm((c) => ({ ...c, buyerName: event.target.value }))}
                     placeholder="홍길동"
-                    className="h-11 rounded-2xl border-[rgba(8,71,52,0.08)] bg-white"
+                    className="h-10 rounded-lg border-[rgba(0,0,0,0.08)]"
                   />
                 </div>
-                <div className="space-y-2">
-                  <Label htmlFor="biz-buyerPhone">연락처 (선택)</Label>
+                <div className="space-y-1.5">
+                  <Label htmlFor="biz-buyerPhone" className="text-xs">연락처 (선택)</Label>
                   <Input
                     id="biz-buyerPhone"
                     value={form.buyerPhone}
-                    onChange={(event) =>
-                      setForm((current) => ({ ...current, buyerPhone: event.target.value }))
-                    }
+                    onChange={(event) => setForm((c) => ({ ...c, buyerPhone: event.target.value }))}
                     placeholder="01012345678"
-                    className="h-11 rounded-2xl border-[rgba(8,71,52,0.08)] bg-white"
+                    className="h-10 rounded-lg border-[rgba(0,0,0,0.08)]"
                   />
                 </div>
-                <div className="space-y-2 md:col-span-2">
-                  <Label htmlFor="biz-buyerEmail">이메일</Label>
+                <div className="space-y-1.5 md:col-span-2">
+                  <Label htmlFor="biz-buyerEmail" className="text-xs">이메일</Label>
                   <Input
                     id="biz-buyerEmail"
                     type="email"
                     value={form.buyerEmail}
-                    onChange={(event) =>
-                      setForm((current) => ({ ...current, buyerEmail: event.target.value }))
-                    }
+                    onChange={(event) => setForm((c) => ({ ...c, buyerEmail: event.target.value }))}
                     placeholder="ops@classin.co.kr"
-                    className="h-11 rounded-2xl border-[rgba(8,71,52,0.08)] bg-white"
+                    className="h-10 rounded-lg border-[rgba(0,0,0,0.08)]"
                   />
                 </div>
               </div>
             </div>
 
-            <div className="rounded-[28px] border border-[rgba(8,71,52,0.08)] bg-white p-4">
-              <div className="mb-4 flex items-center justify-between gap-3">
-                <div>
-                  <p className="text-sm font-semibold text-[#084734]">토스 결제위젯</p>
-                  <p className="mt-1 text-xs leading-relaxed text-[#66726B]">
-                    카드와 네이버페이가 같은 UI에서 노출됩니다.
-                  </p>
-                </div>
-                <div className="inline-flex items-center gap-2 rounded-full bg-[#ECFDF5] px-3 py-1 text-xs font-semibold text-[#084734]">
-                  <Shield className="h-3.5 w-3.5" />
-                  서버 confirm
-                </div>
-              </div>
-
+            <div className="rounded-xl border border-[rgba(0,0,0,0.08)] p-3">
               <div
                 id={TOSS_METHODS_ID}
-                className="min-h-[220px] rounded-[24px] border border-dashed border-[#DBE7E1] bg-[#FAFAF8]"
+                className="min-h-[140px] rounded-lg border border-dashed border-[rgba(0,0,0,0.08)]"
               />
               <div
                 id={TOSS_AGREEMENT_ID}
-                className="mt-3 min-h-[96px] rounded-[24px] border border-dashed border-[#DBE7E1] bg-[#FAFAF8]"
+                className="mt-2 min-h-[50px] rounded-lg border border-dashed border-[rgba(0,0,0,0.08)]"
               />
             </div>
 
             {error && (
-              <div className="flex items-start gap-2 rounded-2xl border border-[#EAD7B2] bg-[#FFF9EB] px-4 py-3 text-sm text-[#8D6C1F]">
+              <div className="flex items-start gap-2 rounded-lg border border-[#EAD7B2] px-3 py-2 text-sm text-[#8D6C1F]">
                 <AlertCircle className="mt-0.5 h-4 w-4 shrink-0" />
                 <span>{error}</span>
               </div>
             )}
 
-            <div className="rounded-[28px] bg-[linear-gradient(135deg,#031A12_0%,#052E1E_48%,#084734_100%)] p-5 text-white shadow-[0_20px_50px_rgba(8,71,52,0.18)]">
-              <div className="flex items-start justify-between gap-4">
-                <div>
-                  <p className="text-sm uppercase tracking-[0.18em] text-white/45">Order Summary</p>
-                  <h3 className="mt-2 text-2xl font-semibold">Business 충전</h3>
-                  <p className="mt-1 text-sm text-white/60">
-                    {quoteCode
-                      ? `견적 ${quoteCode.code}`
-                      : "프리셋 또는 직접 입력"}
-                    {promo ? ` · 프로모 ${promo.code}` : ""}
-                  </p>
-                </div>
+            {promo ? (
+              <div className="flex items-center justify-between rounded-lg border border-[#084734]/20 px-3 py-2 text-sm">
+                <span className="text-[#44514A]">{formatCny(effectiveBaseAmountCny)} → -{formatCny(promo.discountAmount)}</span>
+                <span className="font-bold text-[#084734]">{formatCny(effectiveFinalAmountCny || 0)}</span>
               </div>
-
-              <div className="mt-6 space-y-1.5 text-sm">
-                <div className="flex items-center justify-between text-white/65">
-                  <span>충전 금액</span>
-                  <span className="font-semibold text-white">{formatCny(effectiveBaseAmountCny)}</span>
-                </div>
-                {promo ? (
-                  <div className="flex items-center justify-between text-[#9DE3C8]">
-                    <span>프로모션 할인</span>
-                    <span className="font-semibold">- {formatCny(promo.discountAmount)}</span>
-                  </div>
-                ) : null}
-                <div className="mt-2 border-t border-white/10 pt-3 flex items-end justify-between gap-4">
-                  <div>
-                    <p className="text-sm text-white/50">이번 결제 금액</p>
-                    <p className="mt-1 text-4xl font-semibold tracking-tight">
-                      {formatCny(effectiveFinalAmountCny || 0)}
-                    </p>
-                  </div>
-                </div>
-              </div>
-            </div>
+            ) : null}
 
             <KrwConversionNote
               amountKrw={approxAmountKrw}
@@ -830,37 +714,15 @@ export function BusinessRechargePanel({ initialQuoteCode }: Props = {}) {
 
             <Button
               type="button"
-              size="xl"
-              className="h-14 w-full rounded-full bg-[#084734] text-base font-bold text-white shadow-[0_14px_36px_rgba(8,71,52,0.18)] hover:bg-[#065C41]"
-              disabled={
-                !hasWidgetKey ||
-                !isWidgetReady ||
-                isPreparing ||
-                !isFormComplete ||
-                !effectiveFinalAmountCny
-              }
-              onClick={() => {
-                void handleCheckout()
-              }}
+              className="h-12 w-full rounded-lg border-2 border-[#084734] bg-[#084734] text-sm font-bold text-white hover:bg-[#065C41]"
+              disabled={!hasWidgetKey || !isWidgetReady || isPreparing || !isFormComplete || !effectiveFinalAmountCny}
+              onClick={() => { void handleCheckout() }}
             >
-              {isPreparing
-                ? "결제 준비 중..."
-                : `${formatCny(effectiveFinalAmountCny || 0)} 충전하기`}
+              {isPreparing ? "결제 준비 중..." : `${formatCny(effectiveFinalAmountCny || 0)} 충전하기`}
             </Button>
-
-            <div className="flex flex-wrap gap-2 text-xs text-[#615D59]">
-              {["국내 카드 결제 지원", "네이버페이 지원", "영수증 확인 가능"].map((item) => (
-                <span
-                  key={item}
-                  className="rounded-full border border-[rgba(8,71,52,0.08)] bg-[#F8FBF9] px-3 py-1.5"
-                >
-                  {item}
-                </span>
-              ))}
-            </div>
-          </CardContent>
+          </div>
         </div>
-      </Card>
+      </div>
     </div>
   )
 }

@@ -507,13 +507,11 @@ export async function markSoftwareCheckoutOrderPaid(
         before = Number(raw.amountCnyBeforeDiscount ?? 0)
         after = Number(raw.amountCny ?? 0)
         currency = "CNY"
-      } else if (order.mode === "subscription" && typeof raw.amountUsd === "number") {
-        // 향후 subscription + promo 확장 시 여기서 amountUsdBeforeDiscount 를
-        // 함께 기록하도록 prepare 측을 확장해야 한다.
-        before = Number(raw.amountUsd)
-        after = Number(raw.amountUsd)
-        currency = "USD"
       }
+      // NOTE: subscription + promo is not yet supported. The prepare route does not
+      // apply promos to subscription orders, so appliedPromoCodeId will always be null
+      // for subscription mode. When subscription promo support is added, add an
+      // amountUsdBeforeDiscount field to the prepare response and set before/after here.
 
       if (
         currency &&

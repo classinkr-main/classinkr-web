@@ -5,13 +5,18 @@
 import fs from "fs"
 import path from "path"
 
+import {
+  deleteGoogleCalendarEvent,
+  isGoogleCalendarSyncConfigured,
+  upsertGoogleCalendarEvent,
+} from "@/lib/google-calendar-sync"
 import { createSupabaseAdminClient } from "@/lib/supabase/admin"
 import { hasSupabaseBrowserEnv } from "@/lib/supabase/public-env"
 
 const FILE = path.join(process.cwd(), "data", "calendar-events.json")
 
 export type EventType = "team" | "deadline" | "meeting" | "launch" | "holiday" | "other"
-export type EventSource = "calendar" | "partner"
+export type EventSource = "calendar" | "partner" | "event"
 
 export interface CalendarEvent {
   id: string
@@ -33,6 +38,9 @@ export interface CalendarEvent {
   dealTitle?: string
   href?: string
   syncToAdminCalendar?: boolean
+  googleCalendarEventId?: string
+  googleCalendarLastSyncedAt?: string
+  googleCalendarSyncError?: string
   createdAt: string
   updatedAt: string
 }
@@ -51,6 +59,9 @@ type StoredCalendarEventInput = Omit<
   | "dealTitle"
   | "href"
   | "syncToAdminCalendar"
+  | "googleCalendarEventId"
+  | "googleCalendarLastSyncedAt"
+  | "googleCalendarSyncError"
 >
 
 interface PartnerScheduleCalendarRow {
@@ -356,22 +367,146 @@ async function getPartnerCalendarEvents(
   return getLocalPartnerCalendarEvents(options)
 }
 
+interface PublicEventCalendarRow {
+  id: string
+  title: string
+  starts_at: string
+  ends_at: string | null
+  created_at: string
+  updated_at: string
+}
+
+async function getPublicEventsAsCalendarEvents(): Promise<CalendarEvent[]> {
+  try {
+    const supabase = createSupabaseAdminClient()
+    const { data, error } = await supabase
+      .from("public_events")
+      .select("id, title, starts_at, ends_at, created_at, updated_at")
+      .order("starts_at")
+    if (error) return []
+    return (data as PublicEventCalendarRow[]).map((row) => ({
+      id: row.id,
+      title: row.title,
+      date: row.starts_at.slice(0, 10),
+      endDate: row.ends_at ? row.ends_at.slice(0, 10) : undefined,
+      type: "launch" as EventType,
+      source: "event" as EventSource,
+      sourceLabel: "공개 행사",
+      readonly: true,
+      href: "/admin/events",
+      createdAt: row.created_at,
+      updatedAt: row.updated_at,
+    }))
+  } catch {
+    return []
+  }
+}
+
 export async function getAllEvents(): Promise<CalendarEvent[]> {
-  const [partnerEvents] = await Promise.all([getPartnerCalendarEvents()])
-  return [...getStoredEvents(), ...partnerEvents].sort(compareEvents)
+  const [partnerEvents, publicEvents] = await Promise.all([
+    getPartnerCalendarEvents(),
+    getPublicEventsAsCalendarEvents(),
+  ])
+  return [...getStoredEvents(), ...partnerEvents, ...publicEvents].sort(compareEvents)
 }
 
 export async function getEventsByMonth(year: number, month: number): Promise<CalendarEvent[]> {
-  const [partnerEvents] = await Promise.all([getPartnerCalendarEvents({ year, month })])
+  const [partnerEvents, publicEvents] = await Promise.all([
+    getPartnerCalendarEvents({ year, month }),
+    getPublicEventsAsCalendarEvents(),
+  ])
   const prefix = `${year}-${String(month).padStart(2, "0")}`
-  return [...getStoredEvents(), ...partnerEvents]
+  return [...getStoredEvents(), ...partnerEvents, ...publicEvents]
     .filter((event) => isEventVisibleInMonth(event, year, month) || event.date.startsWith(prefix))
     .sort(compareEvents)
 }
 
-export function createEvent(
+function toErrorMessage(error: unknown) {
+  return error instanceof Error ? error.message : String(error)
+}
+
+function buildAdminGoogleDescription(event: CalendarEvent) {
+  const parts = [
+    event.assignees && event.assignees.length > 0
+      ? `담당: ${event.assignees.join(", ")}`
+      : undefined,
+    event.description?.trim() || undefined,
+  ].filter(Boolean)
+
+  return parts.length > 0 ? parts.join("\n\n") : null
+}
+
+function parseAdminDateTime(date: string, time: string) {
+  return new Date(`${date}T${time}:00+09:00`)
+}
+
+function buildAdminTimedRange(event: CalendarEvent) {
+  const start = parseAdminDateTime(event.date, event.time ?? "00:00")
+  const endDate = event.endDate ?? event.date
+  const explicitEnd =
+    event.endDate || event.endTime
+      ? parseAdminDateTime(endDate, event.endTime ?? event.time ?? "00:00")
+      : new Date(start.getTime() + 60 * 60 * 1000)
+
+  const end =
+    explicitEnd.getTime() > start.getTime()
+      ? explicitEnd
+      : new Date(start.getTime() + 60 * 60 * 1000)
+
+  return {
+    kind: "timed" as const,
+    startISO: start.toISOString(),
+    endISO: end.toISOString(),
+    timeZone: "Asia/Seoul",
+  }
+}
+
+async function syncStoredEventWithGoogle(event: CalendarEvent): Promise<CalendarEvent> {
+  if (!isGoogleCalendarSyncConfigured()) {
+    return {
+      ...event,
+      googleCalendarSyncError:
+        "Google Calendar sync is not configured. Set GOOGLE_CALENDAR_ID and service account credentials.",
+    }
+  }
+
+  try {
+    const googleEvent = await upsertGoogleCalendarEvent({
+      googleEventId: event.googleCalendarEventId,
+      title: event.title,
+      description: buildAdminGoogleDescription(event),
+      range:
+        event.allDay || (!event.time && !event.endTime)
+          ? {
+              kind: "all_day",
+              startDate: event.date,
+              endDate: event.endDate ?? event.date,
+            }
+          : buildAdminTimedRange(event),
+      metadata: {
+        classin_source: "admin_calendar",
+        classin_local_event_id: event.id,
+        classin_event_type: event.type,
+      },
+    })
+
+    return {
+      ...event,
+      googleCalendarEventId: googleEvent.id ?? event.googleCalendarEventId,
+      googleCalendarLastSyncedAt: new Date().toISOString(),
+      googleCalendarSyncError: undefined,
+    }
+  } catch (error) {
+    return {
+      ...event,
+      googleCalendarSyncError: toErrorMessage(error),
+    }
+  }
+}
+
+export async function createEvent(
   data: StoredCalendarEventInput
-): CalendarEvent {
+): Promise<CalendarEvent> {
   const events = read()
   const now = new Date().toISOString()
   const event: CalendarEvent = {
@@ -380,27 +515,44 @@ export function createEvent(
     createdAt: now,
     updatedAt: now,
   }
-  events.push(event)
+  const syncedEvent = await syncStoredEventWithGoogle(event)
+  events.push(syncedEvent)
   write(events)
-  return normalizeStoredEvent(event)
+  return normalizeStoredEvent(syncedEvent)
 }
 
-export function updateEvent(
+export async function updateEvent(
   id: string,
   patch: Partial<StoredCalendarEventInput>
-): CalendarEvent | null {
+): Promise<CalendarEvent | null> {
   const events = read()
   const idx = events.findIndex((e) => e.id === id)
   if (idx === -1) return null
-  events[idx] = { ...events[idx], ...patch, id, updatedAt: new Date().toISOString() }
+  const updatedEvent = {
+    ...events[idx],
+    ...patch,
+    id,
+    updatedAt: new Date().toISOString(),
+  }
+  events[idx] = await syncStoredEventWithGoogle(updatedEvent)
   write(events)
   return normalizeStoredEvent(events[idx])
 }
 
-export function deleteEvent(id: string): boolean {
+export async function deleteEvent(id: string): Promise<boolean> {
   const events = read()
+  const current = events.find((event) => event.id === id)
+  if (!current) return false
+
+  if (current.googleCalendarEventId && isGoogleCalendarSyncConfigured()) {
+    try {
+      await deleteGoogleCalendarEvent(current.googleCalendarEventId)
+    } catch (error) {
+      console.error("[calendar-data] failed to delete Google Calendar event", error)
+    }
+  }
+
   const next = events.filter((e) => e.id !== id)
-  if (next.length === events.length) return false
   write(next)
   return true
 }

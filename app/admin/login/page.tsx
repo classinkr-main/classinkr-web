@@ -10,7 +10,6 @@ import { createSupabaseBrowserClient } from "@/lib/supabase/browser"
 import { hasSupabaseBrowserEnv } from "@/lib/supabase/public-env"
 import { Button } from "@/components/ui/button"
 import { Input } from "@/components/ui/input"
-import { useToast } from "@/components/ui/toast"
 
 const INVALID_CREDENTIALS_MESSAGE = "이메일 또는 비밀번호가 올바르지 않습니다."
 const UNAUTHORIZED_MESSAGE = "관리자 권한이 있는 계정만 로그인할 수 있습니다."
@@ -23,8 +22,6 @@ export default function AdminLoginPage() {
   const [error, setError] = useState("")
   const [loading, setLoading] = useState(false)
   const [shake, setShake] = useState(false)
-  const toast = useToast()
-
   const triggerShake = () => {
     setShake(true)
     setTimeout(() => setShake(false), 200)

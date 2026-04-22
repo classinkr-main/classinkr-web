@@ -1,6 +1,7 @@
-﻿import { NextRequest, NextResponse } from "next/server"
+import { NextRequest, NextResponse } from "next/server"
+
 import { verifyAdmin } from "@/lib/admin-auth"
-import { updateEvent, deleteEvent } from "@/lib/repositories/calendar"
+import { deleteEvent, updateEvent } from "@/lib/calendar-data"
 
 export async function PATCH(
   req: NextRequest,

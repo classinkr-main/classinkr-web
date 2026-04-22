@@ -33,24 +33,29 @@ export function CheckoutFailClient() {
   }, [code, message, orderId])
 
   return (
-    <div className="bg-[#FDFCF8] px-4 py-16 md:py-24">
+    <div className="bg-[#FAFAF8] px-4 py-16 font-sans md:py-24">
       <div className="mx-auto max-w-2xl">
-        <Card className="rounded-[32px] border-[#f0e0d5] shadow-[0_18px_50px_rgba(116,78,46,0.08)]">
+        <Card className="overflow-hidden rounded-[32px] border-[rgba(8,71,52,0.08)] shadow-[0_18px_50px_rgba(23,72,52,0.08)]">
+          <div className="relative border-b border-[rgba(8,71,52,0.08)] bg-[#FAFAF8] px-6 py-10">
+            <div className="absolute inset-0 overflow-hidden pointer-events-none">
+              <div className="absolute left-1/2 top-2 h-48 w-48 -translate-x-1/2 rounded-full bg-[#ECFDF5] blur-3xl" />
+            </div>
           <CardHeader className="items-center text-center">
-            <AlertCircle className="h-14 w-14 text-[#d66a3b]" />
-            <CardTitle className="font-serif text-[34px]">결제가 완료되지 않았습니다</CardTitle>
+            <AlertCircle className="h-14 w-14 text-[#084734]" />
+            <CardTitle className="text-[30px] font-semibold tracking-tight">결제가 완료되지 않았습니다</CardTitle>
             <CardDescription className="max-w-xl text-base">
               결제창 취소, 인증 실패, 또는 결제수단 오류로 인해 주문이 마무리되지 않았습니다.
             </CardDescription>
           </CardHeader>
+          </div>
           <CardContent className="space-y-6 px-6 pb-8">
-            <div className="rounded-3xl border border-[#f3d8c8] bg-[#fff4ee] px-5 py-6 text-sm text-[#b85c33]">
+            <div className="rounded-3xl border border-[#ead7b2] bg-[#fff9eb] px-5 py-6 text-sm text-[#8d6c1f]">
               {message}
-              {code ? <div className="mt-2 text-xs text-[#c06d47]">오류 코드: {code}</div> : null}
+              {code ? <div className="mt-2 text-xs text-[#a8842f]">오류 코드: {code}</div> : null}
             </div>
 
             <div className="flex flex-wrap gap-3">
-              <Button asChild size="lg" className="rounded-full bg-[#E05024] px-7 hover:bg-[#c9431a]">
+              <Button asChild size="lg" className="rounded-full bg-[#084734] px-7 shadow-[0_14px_36px_rgba(8,71,52,0.18)] hover:bg-[#065c41]">
                 <Link href="/checkout">
                   <RotateCcw className="h-4 w-4" />
                   다시 결제하기

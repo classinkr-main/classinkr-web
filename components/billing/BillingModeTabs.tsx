@@ -10,11 +10,11 @@ interface Props {
 const TAB_META: Record<BillingMode, { title: string; caption: string }> = {
   subscription: {
     title: "구독형",
-    caption: "Learning Space · USD 월/연 정기",
+    caption: "Learning Space · USD",
   },
   business: {
     title: "충전형",
-    caption: "Business · CNY 선충전 후 사용",
+    caption: "Business · CNY",
   },
 }
 
@@ -23,9 +23,9 @@ export function BillingModeTabs({ mode, onChange }: Props) {
     <div
       role="tablist"
       aria-label="결제 방식"
-      className="grid grid-cols-2 overflow-hidden rounded-2xl border border-[rgba(8,71,52,0.1)] bg-white/90 shadow-sm backdrop-blur"
+      className="inline-flex gap-2"
     >
-      {(Object.keys(TAB_META) as BillingMode[]).map((key, idx) => {
+      {(Object.keys(TAB_META) as BillingMode[]).map((key) => {
         const active = key === mode
         const meta = TAB_META[key]
 
@@ -36,20 +36,14 @@ export function BillingModeTabs({ mode, onChange }: Props) {
             role="tab"
             aria-selected={active}
             onClick={() => onChange(key)}
-            className={`flex flex-col items-start gap-0.5 px-4 py-3 text-left transition-colors ${
-              idx === 0 ? "border-r border-[rgba(8,71,52,0.1)]" : ""
-            } ${
+            className={`flex items-center gap-2 rounded-lg border px-4 py-2.5 text-left transition-colors ${
               active
-                ? "bg-[#084734] text-white"
-                : "bg-white text-[#44514A] hover:bg-[#F1F5F2]"
+                ? "border-[#084734] bg-white text-[#084734]"
+                : "border-[rgba(0,0,0,0.08)] bg-white text-[#66726B] hover:border-[#084734]/30"
             }`}
           >
-            <span className="text-sm font-semibold leading-tight">{meta.title}</span>
-            <span
-              className={`text-[11px] leading-tight ${
-                active ? "text-white/70" : "text-[#7C8A83]"
-              }`}
-            >
+            <span className="text-sm font-semibold">{meta.title}</span>
+            <span className={`text-[11px] ${active ? "text-[#084734]/60" : "text-[#7C8A83]"}`}>
               {meta.caption}
             </span>
           </button>

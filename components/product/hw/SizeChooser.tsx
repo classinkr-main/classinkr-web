@@ -1,5 +1,6 @@
 "use client"
 
+import Image from "next/image"
 import Link from "next/link"
 import { motion, type Variants } from "framer-motion"
 
@@ -7,6 +8,8 @@ const sizes = [
   {
     inches: `75"`,
     heading: `75" — 콤팩트 강의실`,
+    imageSrc: "/images/product/hw/sizes/room-75.jpg",
+    imageAlt: '75인치 클래스인 보드 예시 공간',
     specs: [
       { label: "적정 인원", value: "20~30명" },
       { label: "적정 평수", value: "15~25평" },
@@ -18,6 +21,8 @@ const sizes = [
   {
     inches: `86"`,
     heading: `86" — 표준 강의실`,
+    imageSrc: "/images/product/hw/sizes/room-86.jpg",
+    imageAlt: '86인치 클래스인 보드 수업 공간',
     specs: [
       { label: "적정 인원", value: "30~50명" },
       { label: "적정 평수", value: "25~40평" },
@@ -76,12 +81,15 @@ export default function SizeChooser() {
               )}
 
               {/* Image area */}
-              <div className="aspect-[16/10] bg-gradient-to-br from-[#ECFDF5] to-[#F6F5F4] flex items-center justify-center">
-                <span
-                  className="text-7xl md:text-8xl text-[#084734]/30 font-bold tabular-nums select-none"
-                >
-                  {size.inches}
-                </span>
+              <div className="relative aspect-[16/10] bg-gradient-to-br from-[#ECFDF5] to-[#F6F5F4]">
+                <Image
+                  src={size.imageSrc}
+                  alt={size.imageAlt}
+                  fill
+                  sizes="(max-width: 768px) 100vw, 50vw"
+                  className="object-cover"
+                />
+                <div className="absolute inset-0 bg-gradient-to-t from-black/20 via-transparent to-transparent" />
               </div>
 
               {/* Body */}
