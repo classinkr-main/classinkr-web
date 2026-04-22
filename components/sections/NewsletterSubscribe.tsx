@@ -72,17 +72,17 @@ export function NewsletterSubscribe({ variant = "dark" }: Props) {
       <form onSubmit={handleSubmit} className="flex flex-col gap-3 sm:flex-row">
         <div className="relative flex-1">
           <Mail
-            className={`absolute left-4 top-1/2 h-4 w-4 -translate-y-1/2 ${
-              isDark ? "text-white/40" : "text-[#7A857D]"
+            className={`pointer-events-none absolute left-4 top-1/2 h-4 w-4 -translate-y-1/2 ${
+              isDark ? "text-white/30" : "text-[#7A857D]"
             }`}
           />
           <Input
             type="email"
             value={email}
             onChange={(e) => setEmail(e.target.value)}
-            placeholder="업무용 이메일을 입력해 주세요"
+            placeholder="name@company.com"
             required
-            className={`pl-11 ${fieldClassName}`}
+            className={`pl-12 ${fieldClassName}`}
           />
         </div>
         <Button

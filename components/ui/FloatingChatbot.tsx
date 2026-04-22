@@ -10,7 +10,11 @@ export function FloatingChatbot() {
     const pathname = usePathname()
     const [isOpen, setIsOpen] = useState(false)
 
-    if (pathname.startsWith("/admin") || isPartnerPortalPath(pathname)) {
+    if (
+        pathname.startsWith("/admin") ||
+        pathname.startsWith("/checkout") ||
+        isPartnerPortalPath(pathname)
+    ) {
         return null
     }
 

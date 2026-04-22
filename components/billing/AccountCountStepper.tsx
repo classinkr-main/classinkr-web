@@ -15,13 +15,13 @@ export function AccountCountStepper({ value, onChange }: Props) {
   }
 
   return (
-    <div className="flex items-center gap-2">
+    <div className="inline-flex items-center rounded-lg border border-black/10 bg-white">
       <button
         type="button"
         aria-label="계정 수 감소"
         onClick={() => step(-1)}
         disabled={value <= ACCOUNT_COUNT_MIN}
-        className="flex h-9 w-9 items-center justify-center rounded-full border border-[rgba(8,71,52,0.12)] bg-white text-[#084734] transition-colors hover:bg-[#ECFDF5] disabled:cursor-not-allowed disabled:opacity-40"
+        className="flex h-8 w-8 items-center justify-center text-[#44514A] transition-colors hover:bg-[#F6F5F4] disabled:cursor-not-allowed disabled:opacity-30"
       >
         <Minus className="h-3.5 w-3.5" />
       </button>
@@ -36,7 +36,7 @@ export function AccountCountStepper({ value, onChange }: Props) {
           const raw = Number.parseInt(event.target.value, 10)
           onChange(clampAccountCount(Number.isFinite(raw) ? raw : ACCOUNT_COUNT_MIN))
         }}
-        className="h-9 w-16 rounded-xl border border-[rgba(8,71,52,0.12)] bg-white text-center text-sm font-semibold text-[#111110] focus:border-[#084734] focus:outline-none"
+        className="h-8 w-12 border-x border-black/10 bg-white text-center text-[13px] font-semibold text-[#111110] focus:outline-none focus:ring-1 focus:ring-[#084734]"
       />
 
       <button
@@ -44,12 +44,10 @@ export function AccountCountStepper({ value, onChange }: Props) {
         aria-label="계정 수 증가"
         onClick={() => step(1)}
         disabled={value >= ACCOUNT_COUNT_MAX}
-        className="flex h-9 w-9 items-center justify-center rounded-full border border-[rgba(8,71,52,0.12)] bg-white text-[#084734] transition-colors hover:bg-[#ECFDF5] disabled:cursor-not-allowed disabled:opacity-40"
+        className="flex h-8 w-8 items-center justify-center text-[#44514A] transition-colors hover:bg-[#F6F5F4] disabled:cursor-not-allowed disabled:opacity-30"
       >
         <Plus className="h-3.5 w-3.5" />
       </button>
-
-      <span className="text-xs text-[#7C8A83]">계정</span>
     </div>
   )
 }
