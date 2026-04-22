@@ -1,6 +1,7 @@
 "use client"
 
 import { FormEvent, useMemo, useRef, useState } from "react"
+import Image from "next/image"
 import Link from "next/link"
 import { usePathname } from "next/navigation"
 import { AnimatePresence, motion } from "framer-motion"
@@ -66,9 +67,15 @@ const starterQuestions = [
     "결제 영수증은 어떻게 요청하나요?",
 ]
 
+const DEEP_CONSULTATION_ICON_SRC = "/images/chatbot/ai-deep-consultation.png"
+
 function shouldHideChatbot(pathname: string | null) {
     if (!pathname) return false
     return hiddenPathPrefixes.some((prefix) => pathname === prefix || pathname.startsWith(`${prefix}/`))
+}
+
+function shouldUseDeepConsultationIcon(text: string) {
+    return /심층|상담|컨설팅|도입\s*문의|상담\s*연결/.test(text)
 }
 
 function makeId() {
@@ -168,6 +175,7 @@ export function FloatingChatbot() {
     const [sessionId, setSessionId] = useState<string | undefined>()
     const [isSending, setIsSending] = useState(false)
     const [error, setError] = useState<string | null>(null)
+    const [isDeepConsultation, setIsDeepConsultation] = useState(false)
     const bottomRef = useRef<HTMLDivElement | null>(null)
     const [messages, setMessages] = useState<ChatMessage[]>([
         {
@@ -193,6 +201,10 @@ export function FloatingChatbot() {
     async function sendQuestion(question: string) {
         const trimmed = question.trim()
         if (!trimmed || isSending) return
+
+        if (shouldUseDeepConsultationIcon(trimmed)) {
+            setIsDeepConsultation(true)
+        }
 
         setInput("")
         setError(null)
@@ -225,6 +237,9 @@ export function FloatingChatbot() {
             }
 
             setSessionId(data.sessionId ?? sessionId)
+            if (data.answerMode === "handoff" || data.needsHandoff) {
+                setIsDeepConsultation(true)
+            }
             setMessages((current) => [
                 ...current,
                 {
@@ -239,6 +254,7 @@ export function FloatingChatbot() {
             requestAnimationFrame(() => bottomRef.current?.scrollIntoView({ behavior: "smooth" }))
         } catch (err) {
             setError(err instanceof Error ? err.message : "챗봇 응답 중 오류가 발생했습니다.")
+            setIsDeepConsultation(true)
             setMessages((current) => [
                 ...current,
                 {
@@ -269,10 +285,21 @@ export function FloatingChatbot() {
                         transition={{ duration: 0.18 }}
                         className="mb-4 flex h-[min(620px,calc(100vh-8rem))] w-[min(calc(100vw-2rem),390px)] flex-col overflow-hidden rounded-[16px] border border-black/[0.08] bg-white shadow-[rgba(0,0,0,0.10)_0px_20px_60px,rgba(0,0,0,0.05)_0px_8px_20px]"
                     >
-                        <div className="flex items-center justify-between bg-[#084734] px-5 py-4 text-white">
+                        <div className="flex items-center justify-between bg-[#009060] px-5 py-4 text-white">
                             <div className="flex min-w-0 items-center gap-3">
-                                <div className="flex h-10 w-10 shrink-0 items-center justify-center rounded-[8px] bg-white/12">
-                                    <Bot className="h-5 w-5" />
+                                <div className="relative flex h-10 w-10 shrink-0 items-center justify-center overflow-hidden rounded-[8px] bg-white/12">
+                                    {isDeepConsultation ? (
+                                        <Image
+                                            src={DEEP_CONSULTATION_ICON_SRC}
+                                            alt=""
+                                            fill
+                                            className="object-cover"
+                                            sizes="40px"
+                                            aria-hidden
+                                        />
+                                    ) : (
+                                        <Bot className="h-5 w-5" />
+                                    )}
                                 </div>
                                 <div className="min-w-0">
                                     <h2 className="truncate text-[15px] font-bold">ClassIn 도움말</h2>
@@ -303,7 +330,7 @@ export function FloatingChatbot() {
                                             className={cn(
                                                 "max-w-[86%] rounded-[12px] px-3.5 py-3 text-sm leading-6",
                                                 message.role === "user"
-                                                    ? "bg-[#084734] text-white"
+                                                    ? "bg-[#009060] text-white"
                                                     : "border border-black/[0.06] bg-white text-[#111110] shadow-sm"
                                             )}
                                         >
@@ -316,7 +343,7 @@ export function FloatingChatbot() {
                                                         {message.needsHandoff ? (
                                                             <Link
                                                                 href="/contact"
-                                                                className="inline-flex h-8 items-center justify-center rounded-[6px] bg-[#084734] px-3 text-xs font-bold text-white transition-colors hover:bg-[#065c41]"
+                                                                className="inline-flex h-8 items-center justify-center rounded-[6px] bg-[#009060] px-3 text-xs font-bold text-white transition-colors hover:bg-[#007A52]"
                                                             >
                                                                 상담 연결
                                                             </Link>
@@ -380,7 +407,7 @@ export function FloatingChatbot() {
                                 <button
                                     type="submit"
                                     disabled={isSending || !input.trim()}
-                                    className="inline-flex h-10 w-10 shrink-0 items-center justify-center rounded-[8px] bg-[#084734] text-white transition-colors hover:bg-[#065c41] disabled:cursor-not-allowed disabled:opacity-40"
+                                    className="inline-flex h-10 w-10 shrink-0 items-center justify-center rounded-[8px] bg-[#009060] text-white transition-colors hover:bg-[#007A52] disabled:cursor-not-allowed disabled:opacity-40"
                                     aria-label="질문 보내기"
                                 >
                                     {isSending ? <Loader2 className="h-4 w-4 animate-spin" /> : <Send className="h-4 w-4" />}
@@ -396,10 +423,23 @@ export function FloatingChatbot() {
                 whileHover={{ scale: 1.04 }}
                 whileTap={{ scale: 0.96 }}
                 onClick={() => setIsOpen((current) => !current)}
-                className="flex h-14 w-14 items-center justify-center rounded-full bg-[#084734] text-white shadow-[0_10px_30px_rgba(8,71,52,0.35)] transition-colors hover:bg-[#065c41] focus:outline-none focus:ring-4 focus:ring-[#084734]/20 md:h-16 md:w-16"
+                className="relative flex h-14 w-14 items-center justify-center overflow-hidden rounded-full bg-[#009060] text-white shadow-[0_10px_30px_rgba(0,144,96,0.32)] transition-colors hover:bg-[#007A52] focus:outline-none focus:ring-4 focus:ring-[#009060]/20 md:h-16 md:w-16"
                 aria-label={isOpen ? "챗봇 닫기" : "챗봇 열기"}
             >
-                {isOpen ? <X className="h-6 w-6" /> : <MessageCircle className="h-6 w-6" />}
+                {isOpen ? (
+                    <X className="h-6 w-6" />
+                ) : isDeepConsultation ? (
+                    <Image
+                        src={DEEP_CONSULTATION_ICON_SRC}
+                        alt=""
+                        fill
+                        className="object-cover"
+                        sizes="64px"
+                        aria-hidden
+                    />
+                ) : (
+                    <MessageCircle className="h-6 w-6" />
+                )}
             </motion.button>
         </div>
     )

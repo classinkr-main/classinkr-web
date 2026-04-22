@@ -158,7 +158,7 @@ export function Header() {
                     </NewsletterModal>
                     <Link
                         href="/contact"
-                        className="inline-flex items-center justify-center whitespace-nowrap rounded-[6px] px-5 py-2 text-[15px] font-semibold bg-[#084734] text-white hover:bg-[#065c41] active:scale-[0.97] transition-all shadow-sm"
+                        className="inline-flex items-center justify-center whitespace-nowrap rounded-[6px] bg-[#009060] px-5 py-2 text-[15px] font-semibold text-white shadow-sm transition-all hover:bg-[#007A52] active:scale-[0.97]"
                     >
                         도입 문의
                     </Link>

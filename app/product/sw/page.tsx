@@ -465,7 +465,7 @@ function FinalCTASection() {
                 </div>
                 <motion.p initial={{ opacity: 0, letterSpacing: "0.3em" }} animate={phase >= 3 ? { opacity: 1, letterSpacing: "0.05em" } : {}} transition={{ delay: 0.5, duration: 0.8 }} className="text-lg sm:text-xl font-serif text-slate-600 font-medium mb-10">수업만을 위해 만든 플랫폼, 다음은 당신의 교실입니다</motion.p>
                 <motion.div initial={{ opacity: 0, y: 20 }} animate={phase >= 3 ? { opacity: 1, y: 0 } : {}} transition={{ delay: 0.7, type: "spring", stiffness: 200, damping: 25 }} className="flex flex-col items-center gap-4">
-                    <Button asChild className="bg-[#22A366] hover:bg-[#1B8A55] text-white rounded-full px-10 h-14 text-base font-bold animate-glow-pulse transition-all hover:scale-105 group">
+                    <Button asChild className="h-14 rounded-full bg-[#009060] px-10 text-base font-bold text-white transition-all hover:scale-105 hover:bg-[#007A52] group">
                         <Link href={CHECKOUT_HREF}>{CHECKOUT_CTA_LABEL}<ArrowRight className="w-4 h-4 ml-2 group-hover:translate-x-1 transition-transform" /></Link>
                     </Button>
                     <p className="text-xs sm:text-sm text-slate-400 font-medium">{CHECKOUT_SUB_LABEL}</p>
@@ -1444,7 +1444,7 @@ function PricingValueSection() {
                             <p className="text-slate-400 text-sm mb-1">ClassIn 하나로</p>
                             <p className="text-2xl font-serif font-bold text-white mb-1">위의 모든 것 + AI 기능까지</p>
                             <p className="text-[#22A366] text-sm font-bold mb-5">기관 규모에 맞춘 도입 상담</p>
-                            <Link href="/contact" className="inline-flex items-center gap-2 bg-[#22A366] hover:bg-[#1B8A55] text-white font-bold text-sm px-6 py-2.5 rounded-full transition-all hover:scale-105">
+                            <Link href="/contact" className="inline-flex items-center gap-2 rounded-full bg-[#009060] px-6 py-2.5 text-sm font-bold text-white transition-all hover:scale-105 hover:bg-[#007A52]">
                                 도입 문의하기 <ArrowRight className="w-4 h-4" />
                             </Link>
                         </div>
@@ -1523,7 +1523,7 @@ export default function ProductPage() {
                             </div>
 
                             <div className="flex flex-wrap items-center justify-center gap-4">
-                                <Button asChild className="bg-[#22A366] hover:bg-[#1B8A55] text-white rounded-full px-8 h-14 text-base font-bold shadow-[0_8px_20px_rgba(34,163,102,0.3)] hover:shadow-[0_12px_25px_rgba(34,163,102,0.4)] transition-all hover:scale-105 group">
+                                <Button asChild className="h-14 rounded-full bg-[#009060] px-8 text-base font-bold text-white shadow-[0_8px_20px_rgba(0,144,96,0.24)] transition-all hover:scale-105 hover:bg-[#007A52] hover:shadow-[0_12px_25px_rgba(0,144,96,0.32)] group">
                                     <Link href={CHECKOUT_HREF}>
                                     {CHECKOUT_CTA_LABEL}
                                     <ArrowRight className="w-4 h-4 ml-2 group-hover:translate-x-1 transition-transform" />
