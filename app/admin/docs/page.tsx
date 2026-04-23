@@ -9,6 +9,8 @@ import {
   Database,
   ExternalLink,
   MessageSquareText,
+  Pencil,
+  Plus,
   RefreshCw,
   Search,
 } from "lucide-react"
@@ -233,11 +235,18 @@ export default function AdminDocsPage() {
             type="button"
             onClick={() => void load()}
             disabled={loading}
-            className="inline-flex h-9 items-center justify-center gap-2 rounded-lg bg-[#111110] px-3 text-[13px] font-semibold text-white transition-colors hover:bg-[#2a2a28] disabled:cursor-not-allowed disabled:opacity-60"
+            className="inline-flex h-9 items-center justify-center gap-2 rounded-lg border border-[#e8e8e4] bg-white px-3 text-[13px] font-semibold text-[#111110] transition-colors hover:bg-[#f5f5f2] disabled:cursor-not-allowed disabled:opacity-60"
           >
             <RefreshCw className={`h-4 w-4 ${loading ? "animate-spin" : ""}`} />
             새로고침
           </button>
+          <Link
+            href="/admin/docs/new"
+            className="inline-flex h-9 items-center justify-center gap-2 rounded-lg bg-[#084734] px-3 text-[13px] font-semibold text-white transition-colors hover:bg-[#065c41]"
+          >
+            <Plus className="h-4 w-4" />
+            새 문서
+          </Link>
         </div>
       </div>
 
@@ -346,21 +355,48 @@ export default function AdminDocsPage() {
                     </td>
                   </tr>
                 ) : (
-                  filteredArticles.map((article) => (
+                  filteredArticles.map((article) => {
+                    const isEditable = article.status !== "static"
+                    const titleHref = isEditable
+                      ? `/admin/docs/${article.id}/edit`
+                      : article.publicPath
+                    return (
                     <tr key={article.id} className="align-top">
                       <td className="py-4 pr-4">
-                        <Link
-                          href={article.publicPath}
-                          className="block max-w-lg text-[13px] font-semibold text-[#111110] transition-colors hover:text-[#084734]"
-                        >
-                          {article.title}
-                        </Link>
-                        <p className="mt-1 line-clamp-2 max-w-lg text-[12px] leading-relaxed text-[#1a1a1a]/42">
-                          {article.description}
-                        </p>
-                        <p className="mt-1 font-mono text-[11px] text-[#1a1a1a]/30">
-                          {article.slug}
-                        </p>
+                        <div className="max-w-lg">
+                          <div className="flex flex-wrap items-center gap-2">
+                            <Link
+                              href={titleHref}
+                              className="text-[13px] font-semibold text-[#111110] transition-colors hover:text-[#084734]"
+                            >
+                              {article.title}
+                            </Link>
+                            {isEditable ? (
+                              <Link
+                                href={`/admin/docs/${article.id}/edit`}
+                                title="문서 편집"
+                                className="inline-flex items-center gap-1 rounded-md border border-[#e8e8e4] bg-white px-2 py-0.5 text-[11px] text-[#1a1a1a]/55 transition-colors hover:bg-[#f5f5f2]"
+                              >
+                                <Pencil className="h-3 w-3" />
+                                편집
+                              </Link>
+                            ) : null}
+                            <Link
+                              href={article.publicPath}
+                              target="_blank"
+                              title="공개 페이지"
+                              className="inline-flex items-center text-[#1a1a1a]/35 transition-colors hover:text-[#084734]"
+                            >
+                              <ExternalLink className="h-3.5 w-3.5" />
+                            </Link>
+                          </div>
+                          <p className="mt-1 line-clamp-2 text-[12px] leading-relaxed text-[#1a1a1a]/42">
+                            {article.description}
+                          </p>
+                          <p className="mt-1 font-mono text-[11px] text-[#1a1a1a]/30">
+                            {article.slug}
+                          </p>
+                        </div>
                       </td>
                       <td className="py-4 pr-4 text-[12px] text-[#1a1a1a]/55">
                         {categoryTitleById.get(article.categoryId) ?? article.categoryId}
@@ -376,7 +412,8 @@ export default function AdminDocsPage() {
                         {formatDate(article.updatedAt ?? article.lastReviewedAt)}
                       </td>
                     </tr>
-                  ))
+                    )
+                  })
                 )}
               </tbody>
             </table>
