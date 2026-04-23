@@ -2,12 +2,18 @@
 
 import { createSupabaseAdminClient } from "@/lib/supabase/admin";
 import type {
+  ActivityLog,
   CalendarEvent,
   CustomerDealHistoryItem,
   CustomerListItem,
   DealStage,
   InstallationEvent,
+  PaymentRecord,
 } from "@/lib/partner-portal/types";
+import type {
+  PartnerOverviewMetrics,
+  PartnerOverviewPayload,
+} from "@/lib/partner-portal/repositories/partner-read";
 import type {
   CommercialOverviewRange,
   CommercialOverviewAgendaItem,
@@ -367,6 +373,96 @@ export async function getCommercialOverview(
       dealTitleById
     ),
     updated_at: new Date().toISOString(),
+  };
+}
+
+export async function getAdminPartnerPortalOverview(): Promise<PartnerOverviewPayload> {
+  const supabase = createSupabaseAdminClient();
+  const nowIso = new Date().toISOString();
+
+  const [
+    customers,
+    deals,
+    activityResult,
+    installationResult,
+    paymentResult,
+    calendarResult,
+  ] = await Promise.all([
+    listAllCustomerListItems(),
+    listDealListItems(),
+    supabase
+      .from("activity_logs")
+      .select("*")
+      .order("created_at", { ascending: false })
+      .limit(12),
+    supabase
+      .from("installation_events")
+      .select("*")
+      .neq("status", "cancelled")
+      .gte("scheduled_end_at", nowIso)
+      .order("scheduled_start_at", { ascending: true })
+      .limit(12),
+    supabase
+      .from("payments_v2")
+      .select("*")
+      .order("paid_at", { ascending: false })
+      .limit(12),
+    supabase
+      .from("calendar_events")
+      .select("*")
+      .eq("status", "active")
+      .gte("ends_at", nowIso)
+      .order("starts_at", { ascending: true })
+      .limit(12),
+  ]);
+
+  if (activityResult.error) throw activityResult.error;
+  if (installationResult.error) throw installationResult.error;
+  if (paymentResult.error) throw paymentResult.error;
+  if (calendarResult.error) throw calendarResult.error;
+
+  const metrics = customers.reduce<PartnerOverviewMetrics>(
+    (acc, item) => {
+      acc.customer_count += 1;
+      acc.active_deal_count += item.summary?.active_deals ?? 0;
+      acc.installation_deal_count += item.summary?.installation_deals ?? 0;
+      acc.unpaid_deal_count += item.summary?.unpaid_deals ?? 0;
+      acc.contracted_amount += item.summary?.contracted_amount ?? 0;
+      acc.installed_amount += item.summary?.installed_amount ?? 0;
+      acc.paid_amount += item.summary?.paid_amount ?? 0;
+      acc.outstanding_amount += item.summary?.outstanding_amount ?? 0;
+      return acc;
+    },
+    {
+      customer_count: 0,
+      active_deal_count: 0,
+      installation_deal_count: 0,
+      unpaid_deal_count: 0,
+      contracted_amount: 0,
+      installed_amount: 0,
+      paid_amount: 0,
+      outstanding_amount: 0,
+    }
+  );
+
+  const dealTitleById = new Map(deals.map((deal) => [deal.id, deal.title]));
+  const upcomingInstallations = ((installationResult.data ?? []) as InstallationEvent[]).map(
+    (item) => ({
+      ...item,
+      title: dealTitleById.get(item.deal_id) ?? "Installation",
+    })
+  ) as InstallationEvent[];
+
+  return {
+    mode: "legacy",
+    metrics,
+    customers,
+    deals,
+    recent_activity: (activityResult.data ?? []) as ActivityLog[],
+    upcoming_installations: upcomingInstallations,
+    recent_payments: (paymentResult.data ?? []) as PaymentRecord[],
+    recent_calendar_events: (calendarResult.data ?? []) as CalendarEvent[],
+    inventory_summary: [],
   };
 }
 

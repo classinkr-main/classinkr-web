@@ -632,7 +632,7 @@ export default function PartnerWorkspaceShell({
     <div className="px-4 pb-20 pt-8 sm:px-6 lg:px-8 lg:pt-10">
       <div className="mb-8">
         <Link
-          href="/admin/partners"
+          href="/admin/crm/partners"
           className="mb-4 inline-flex items-center gap-1.5 text-[12px] font-medium text-[#1a1a1a]/45 transition-colors hover:text-[#111110]"
         >
           <ArrowLeft className="h-3.5 w-3.5" />

@@ -8,6 +8,7 @@ import {
   PhoneCall, Bell, UserPlus,
 } from "lucide-react"
 import { clearAdminSessionStorage } from "@/lib/admin-client"
+import CrmSubnav from "@/components/admin/crm/CrmSubnav"
 import { Button } from "@/components/ui/button"
 import type { LeadRecord, LeadStatus } from "@/lib/repositories/leads"
 import type { ContactLogRecord, ContactLogType, ContactLogResult } from "@/lib/repositories/contact-logs"
@@ -743,6 +744,8 @@ export default function CrmPage() {
           <RefreshCw className={`w-4 h-4 ${loading ? "animate-spin" : ""}`} />새로고침
         </Button>
       </div>
+
+      <CrmSubnav active="customers" />
 
       {/* 오늘 팔로업 알림 */}
       {(todayFollowUps.length > 0 || overdueFollowUps.length > 0) && (

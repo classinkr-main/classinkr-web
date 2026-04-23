@@ -116,6 +116,10 @@ type PartnerOverviewResponse = Partial<PartnerOverviewPayload> & {
   inventory_summary?: InventorySkuSummary[]
 }
 
+type PartnerPortalHomeProps = {
+  overviewEndpoint?: string
+}
+
 /* ─── Constants ──────────────────────────────────────────────── */
 
 const STAGE_PIPELINE = [
@@ -566,7 +570,9 @@ function LeftSidebar({
 
 /* ─── Main Component ──────────────────────────────────────────── */
 
-export function PartnerPortalHome() {
+export function PartnerPortalHome({
+  overviewEndpoint = "/api/portal/overview",
+}: PartnerPortalHomeProps = {}) {
   const [overview, setOverview] = useState<PartnerOverviewPayload>(DEMO)
   const [loading, setLoading]   = useState(true)
   const [expandedCustomers, setExpandedCustomers] = useState<Set<string>>(new Set(["c1"]))
@@ -584,7 +590,7 @@ export function PartnerPortalHome() {
 
   useEffect(() => {
     let alive = true
-    portalFetch("/api/portal/overview")
+    portalFetch(overviewEndpoint)
       .then(async r => {
         const payload = await r.json() as PartnerOverviewResponse
         if (!r.ok) throw new Error(payload.error ?? "Failed to fetch overview")
@@ -593,7 +599,7 @@ export function PartnerPortalHome() {
       .then(payload => { if (alive) { setOverview(payload); setLoading(false) } })
       .catch(() => { if (alive) { setOverview(DEMO); setLoading(false) } })
     return () => { alive = false }
-  }, [])
+  }, [overviewEndpoint])
 
   /* pipeline: group deals by stage */
   const pipeline = useMemo(() => {

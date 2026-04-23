@@ -10,11 +10,9 @@ import {
   Building2,
   CalendarDays,
   ChevronRight,
-  ClipboardList,
   Code2,
   FileText,
   Globe,
-  Handshake,
   LayoutDashboard,
   LogOut,
   Megaphone,
@@ -46,9 +44,8 @@ const STAFF_EDITOR: SidebarRole[] = ["SUPER_ADMIN", "ADMIN", "EDITOR"]
 
 const NAV: NavItem[] = [
   { href: "/admin/overview", label: "Overview", icon: <LayoutDashboard className="h-4 w-4" />, roles: [...ALL_STAFF, "BRANCH"], section: "workspace" },
-  { href: "/admin/crm", label: "CRM / 고객", icon: <Users className="h-4 w-4" />, roles: [...ALL_STAFF, "BRANCH"], section: "workspace" },
+  { href: "/admin/crm", label: "CRM", icon: <Users className="h-4 w-4" />, roles: [...ALL_STAFF, "BRANCH"], section: "workspace" },
   { href: "/admin/calendar", label: "캘린더", icon: <CalendarDays className="h-4 w-4" />, roles: [...ALL_STAFF, "BRANCH"], section: "workspace" },
-  { href: "/admin/partners", label: "파트너 운영", icon: <Handshake className="h-4 w-4" />, roles: STAFF_ADMIN, section: "workspace" },
   { href: "/admin/quotes", label: "견적·문서", icon: <FileText className="h-4 w-4" />, roles: STAFF_ADMIN, section: "workspace" },
   { href: "/admin/campaigns", label: "캠페인", icon: <Megaphone className="h-4 w-4" />, roles: STAFF_ADMIN, section: "growth" },
   { href: "/admin/blog", label: "콘텐츠", icon: <FileText className="h-4 w-4" />, roles: STAFF_EDITOR, section: "growth" },
@@ -59,8 +56,6 @@ const NAV: NavItem[] = [
   { href: "/admin/settings", label: "Settings", icon: <Settings className="h-4 w-4" />, roles: STAFF_ADMIN, section: "system" },
   { href: "/admin/users", label: "회원 관리", icon: <UserCog className="h-4 w-4" />, roles: STAFF_ADMIN, section: "system" },
   { href: "/admin/dev", label: "Dev Mode", icon: <Code2 className="h-4 w-4" />, roles: STAFF_ADMIN, section: "system", badge: "Beta" },
-  // 파트너 포털 (외부)
-  { href: "/partner", label: "파트너 포털", icon: <ClipboardList className="h-4 w-4" />, roles: STAFF_ADMIN, section: "system" },
 ]
 
 const SECTION_META: Record<SidebarSection, { label: string; description: string }> = {
