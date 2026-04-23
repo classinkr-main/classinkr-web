@@ -45,6 +45,7 @@ type RecentQuoteOption = {
 }
 
 type CreateAction = "save" | "save_and_preview" | "save_and_send"
+type QuickQuoteApiBase = "/api/partner" | "/api/portal"
 
 export type QuickQuoteCreatedPayload = {
   action: CreateAction
@@ -74,6 +75,8 @@ type QuickQuoteComposerProps = {
   onOpenChange: (open: boolean) => void
   recentQuotes: RecentQuoteOption[]
   onCreated: (payload: QuickQuoteCreatedPayload) => void | Promise<void>
+  apiBase?: QuickQuoteApiBase
+  portalPartnerAccountId?: string | null
 }
 
 type QuoteFetchPayload = {
@@ -99,6 +102,11 @@ type QuoteFetchPayload = {
 
 type CustomerPayload = { customers: CustomerListItem[] }
 type DealPayload = { deals: DealListItem[] }
+type ResolvedCustomer = {
+  id: string
+  name: string
+  partnerAccountId?: string | null
+}
 
 type QuickAddRailItemId =
   | "board_86"
@@ -528,8 +536,12 @@ export default function QuickQuoteComposer({
   onOpenChange,
   recentQuotes,
   onCreated,
+  apiBase = "/api/partner",
+  portalPartnerAccountId = null,
 }: QuickQuoteComposerProps) {
   const today = getTodayDateValue()
+  const isPortalApi = apiBase === "/api/portal"
+  const allowNewCustomer = !isPortalApi || Boolean(portalPartnerAccountId)
   const [customers, setCustomers] = useState<CustomerListItem[]>([])
   const [deals, setDeals] = useState<DealListItem[]>([])
   const [loadingOptions, setLoadingOptions] = useState(false)
@@ -594,11 +606,11 @@ export default function QuickQuoteComposer({
     setError(null)
 
     Promise.allSettled([
-      portalFetch("/api/partner/customers").then(async (response) => {
+      portalFetch(`${apiBase}/customers`).then(async (response) => {
         if (!response.ok) throw new Error("고객 목록을 불러오지 못했습니다.")
         return (await response.json()) as CustomerPayload
       }),
-      portalFetch("/api/partner/deals").then(async (response) => {
+      portalFetch(`${apiBase}/deals`).then(async (response) => {
         if (!response.ok) throw new Error("거래 목록을 불러오지 못했습니다.")
         return (await response.json()) as DealPayload
       }),
@@ -622,7 +634,7 @@ export default function QuickQuoteComposer({
     return () => {
       alive = false
     }
-  }, [open])
+  }, [apiBase, open])
 
   useEffect(() => {
     if (!open) return
@@ -856,7 +868,7 @@ export default function QuickQuoteComposer({
     setError(null)
 
     try {
-      const response = await portalFetch(`/api/partner/quotes/${quoteId}`)
+      const response = await portalFetch(`${apiBase}/quotes/${quoteId}`)
       if (!response.ok) {
         throw new Error("기존 견적을 불러오지 못했습니다.")
       }
@@ -937,11 +949,12 @@ export default function QuickQuoteComposer({
     }
   }
 
-  async function resolveCustomer() {
+  async function resolveCustomer(): Promise<ResolvedCustomer> {
     if (customerMode === "existing" && fallbackExistingCustomer) {
       return {
         id: fallbackExistingCustomer.id,
         name: fallbackExistingCustomer.name,
+        partnerAccountId: fallbackExistingCustomer.partner_account_id,
       }
     }
 
@@ -950,24 +963,37 @@ export default function QuickQuoteComposer({
       throw new Error("고객사 이름을 입력해 주세요.")
     }
 
-    const response = await portalFetch("/api/partner/customers", {
+    const requestBody: { name: string; partner_account_id?: string } = { name }
+    if (isPortalApi) {
+      const partnerAccountId = portalPartnerAccountId ?? undefined
+      if (!partnerAccountId) {
+        throw new Error("어드민에서는 기존 고객을 선택한 뒤 견적서를 생성해 주세요.")
+      }
+      requestBody.partner_account_id = partnerAccountId
+    }
+
+    const response = await portalFetch(`${apiBase}/customers`, {
       method: "POST",
-      body: JSON.stringify({ name }),
+      body: JSON.stringify(requestBody),
     })
     const payload = (await response.json().catch(() => null)) as
-      | { error?: string; customer?: { id: string; name: string } }
+      | { error?: string; customer?: { id: string; name: string; partner_account_id?: string | null } }
       | null
 
     if (!response.ok || !payload?.customer) {
       throw new Error(payload?.error ?? "고객 생성에 실패했습니다.")
     }
 
-    return payload.customer
+    return {
+      id: payload.customer.id,
+      name: payload.customer.name,
+      partnerAccountId: payload.customer.partner_account_id ?? portalPartnerAccountId,
+    }
   }
 
-  async function resolveDeal(customerId: string, customerName?: string | null) {
+  async function resolveDeal(customer: ResolvedCustomer) {
     const existingDeal =
-      selectedDealId && deals.find((deal) => deal.id === selectedDealId && deal.customer_id === customerId)
+      selectedDealId && deals.find((deal) => deal.id === selectedDealId && deal.customer_id === customer.id)
 
     if (existingDeal) {
       return existingDeal
@@ -978,19 +1004,36 @@ export default function QuickQuoteComposer({
       buildDefaultDealTitle({
         templateId,
         quantity: baseQuantity,
-        customerName,
+        customerName: customer.name,
       })
     if (!title) {
       throw new Error("거래 제목을 입력해 주세요.")
     }
 
-    const response = await portalFetch("/api/partner/deals", {
+    const partnerAccountId = customer.partnerAccountId ?? portalPartnerAccountId ?? undefined
+    if (isPortalApi && !partnerAccountId) {
+      throw new Error("어드민 견적서는 고객의 파트너 계정 연결이 필요합니다.")
+    }
+
+    const requestBody: {
+      customer_id: string
+      title: string
+      expected_amount: number
+      current_stage: "quote"
+      partner_account_id?: string
+    } = {
+      customer_id: customer.id,
+      title,
+      expected_amount: quote.grandTotalAmount ?? 0,
+      current_stage: "quote",
+    }
+    if (isPortalApi && partnerAccountId) {
+      requestBody.partner_account_id = partnerAccountId
+    }
+
+    const response = await portalFetch(`${apiBase}/deals`, {
       method: "POST",
-      body: JSON.stringify({
-        customer_id: customerId,
-        title,
-        expected_amount: quote.grandTotalAmount ?? 0,
-      }),
+      body: JSON.stringify(requestBody),
     })
     const payload = (await response.json().catch(() => null)) as
       | { error?: string; deal?: DealListItem }
@@ -1009,7 +1052,7 @@ export default function QuickQuoteComposer({
 
     try {
       const customer = await resolveCustomer()
-      const deal = await resolveDeal(customer.id, customer.name)
+      const deal = await resolveDeal(customer)
       const preparedQuote = finalizeStandardQuoteDetails(
         {
           ...quote,
@@ -1022,7 +1065,7 @@ export default function QuickQuoteComposer({
         templateId
       )
 
-      const response = await portalFetch("/api/partner/quotes", {
+      const response = await portalFetch(`${apiBase}/quotes`, {
         method: "POST",
         body: JSON.stringify({
           deal_id: deal.id,
@@ -1061,7 +1104,7 @@ export default function QuickQuoteComposer({
 
       if (action === "save_and_preview" || action === "save_and_send") {
         try {
-          const shareResponse = await portalFetch(`/api/partner/quotes/${payload.document.id}/share`, {
+          const shareResponse = await portalFetch(`${apiBase}/quotes/${payload.document.id}/share`, {
             method: "POST",
           })
           const sharePayload = (await shareResponse.json().catch(() => null)) as
@@ -1231,20 +1274,22 @@ export default function QuickQuoteComposer({
                     >
                       기존 고객
                     </button>
-                    <button
-                      type="button"
-                      onClick={() => {
-                        setCustomerMode("new")
-                        setSelectedDealId("")
-                      }}
-                      className={`rounded-full px-3 py-1.5 text-xs font-medium ${
-                        customerMode === "new"
-                          ? "bg-[#111110] text-white"
-                          : "bg-[#f6f5f2] text-[#615D59]"
-                      }`}
-                    >
-                      신규 고객
-                    </button>
+                    {allowNewCustomer && (
+                      <button
+                        type="button"
+                        onClick={() => {
+                          setCustomerMode("new")
+                          setSelectedDealId("")
+                        }}
+                        className={`rounded-full px-3 py-1.5 text-xs font-medium ${
+                          customerMode === "new"
+                            ? "bg-[#111110] text-white"
+                            : "bg-[#f6f5f2] text-[#615D59]"
+                        }`}
+                      >
+                        신규 고객
+                      </button>
+                    )}
                   </div>
                   {customerMode === "existing" ? (
                     <select
