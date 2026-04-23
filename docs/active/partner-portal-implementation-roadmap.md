@@ -32,8 +32,8 @@
 
 관련 문서:
 
-- [partner-portal-guidelines.md](./partner-portal-guidelines.md)
-- [partner-portal-product-plan.md](./partner-portal-product-plan.md)
+- [partner-portal-guidelines.md](../archive/partner-portal-guidelines.md) (아카이브)
+- [partner-portal-product-plan.md](../archive/partner-portal-product-plan.md) (아카이브)
 - [partner-portal-document-hub-execution-plan.md](./partner-portal-document-hub-execution-plan.md)
 
 메모:

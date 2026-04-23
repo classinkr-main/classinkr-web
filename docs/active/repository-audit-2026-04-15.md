@@ -83,12 +83,17 @@ npm run build
 
 ### 중복 또는 링크 정리가 필요한 활성 문서
 
-- [partner-portal-guidelines.md](./partner-portal-guidelines.md)
-- [partner-portal-product-plan.md](./partner-portal-product-plan.md)
-- [partner-portal-screen-layout.md](./partner-portal-screen-layout.md)
+활성 유지:
+
 - [partner-portal-front-back-contract.md](./partner-portal-front-back-contract.md)
 - [partner-portal-implementation-roadmap.md](./partner-portal-implementation-roadmap.md)
-- [partner-portal-worklog.md](./partner-portal-worklog.md)
+
+2026-04-23 아카이브 (중복 제거):
+
+- [partner-portal-guidelines.md](../archive/partner-portal-guidelines.md)
+- [partner-portal-product-plan.md](../archive/partner-portal-product-plan.md)
+- [partner-portal-screen-layout.md](../archive/partner-portal-screen-layout.md)
+- [partner-portal-worklog.md](../archive/partner-portal-worklog.md)
 
 메모:
 
@@ -127,6 +132,55 @@ npm run build
 - `ADR-005 homepage-lead-capture-success-criteria`
 - `ADR-006 marketing-storage-mode-json-vs-supabase`
 - `ADR-007 admin-auth-model`
+
+## 8a. Backend / DB Findings (2026-04-23)
+
+현재 저장소의 DB 설계와 코드 연결 상태를 대조하며 발견한 점들.
+
+### 고아 / 방치 요소
+
+- `lib/repositories/calendar.ts` — **삭제됨**. 존재하지 않는 컬럼(`date`, `time`, `assignees` 등)을 참조하던 깨진 코드였다. `calendar_events` 테이블은 partner-portal 전용 스키마(`partner_account_id` 필수)이며, 관리자 팀 캘린더용 테이블은 별도로 설계되어 있지 않다. 관리자 팀 캘린더는 [lib/calendar-data.ts](../../lib/calendar-data.ts) (JSON + Supabase 하이브리드)가 담당한다.
+- `lib/marketing-data.ts` — **삭제됨**. `lib/repositories/marketing.ts` 로 완전 대체된 JSON 구현체.
+- `data/subscribers.json`, `data/leads.json` — **삭제됨**. 활성 읽기 경로 없음.
+- `docs_redirects` 테이블 — **연결 완료**. [lib/docs-content.ts](../../lib/docs-content.ts) `resolveDocsRedirect()` 추가, [app/docs/[category]/page.tsx](../../app/docs/[category]/page.tsx) 및 `[slug]/page.tsx` 에서 `notFound()` 이전에 lookup.
+
+### 스키마 중복 / Split-brain
+
+- V1 파트너 포털 테이블(partners, quotes, contracts, receipts, partner_users 등 20260402_partner_portal.sql) 과 V2(partner_accounts, customers, deals, quote_documents, contract_documents, payments_v2, receipts_v2 — 20260404_partner_portal_v2_domain.sql) 이 **공존**한다.
+- Admin API 는 V1, Partner Portal API 는 V2 에 쓰고, Partner Portal 은 [lib/partner-portal/repositories/legacy.ts](../../lib/partner-portal/repositories/legacy.ts) 를 통해 V1 을 V2 타입으로 매핑해 **읽기만** 한다.
+- 결과: admin 이 만든 파트너/견적/계약을 portal 이 읽기는 하나 편집은 못 하고, 반대로 portal 이 만든 deal/quote_document 를 admin 이 못 본다.
+- 통합 방향 결정 필요 (ADR 후보).
+
+### Repo hygiene — 추적되지 않은 테이블
+
+아래 테이블들은 코드가 실제로 쿼리하지만 `supabase/migrations/` 에 `CREATE TABLE` 이 없다. 과거 Supabase 대시보드나 migration tracking 이전에 만들어진 것으로 추정.
+
+- `email_campaigns`
+- `partner_contacts`, `partner_deals`, `partner_documents`, `partner_schedule_items`, `partner_sales_records`, `partner_ops_checklist_items`, `partner_ops_issues`, `partner_activity_logs`
+- `blog_posts` (20260402_blog_page_layout.sql 에서 ALTER 하지만 CREATE 없음)
+
+DB dump → migration 파일로 역추적하는 작업이 필요하다. 현재 repo 로는 스키마 재현 불가.
+
+### 레이어 정리 완료 항목
+
+- [app/api/admin/software-quote-codes/route.ts](../../app/api/admin/software-quote-codes/route.ts) — 직접 Supabase 호출 제거, [lib/billing/quote-codes.ts](../../lib/billing/quote-codes.ts) 의 `listQuoteCodes` / `createQuoteCode` 사용.
+- [app/api/admin/upload/route.ts](../../app/api/admin/upload/route.ts) — 직접 Supabase Storage 호출 제거, [lib/storage/blog-images.ts](../../lib/storage/blog-images.ts) `uploadBlogImage()` 로 추출.
+
+### RLS 커버리지 보완 (2026-04-23 마이그레이션 추가)
+
+[supabase/migrations/20260423_rls_admin_only_tables.sql](../../supabase/migrations/20260423_rls_admin_only_tables.sql) 로 아래 테이블에 RLS 활성화 (deny-all by default, service role 만 접근):
+
+- automation_rules, automation_logs, automation_delay_queue
+- email_templates, email_campaigns (IF EXISTS), sms_campaigns
+- site_settings, notification_events, notifications, notification_delivery_logs
+- newsletter_subscribers
+
+### 아직 남은 이슈
+
+- 파트너 포털 V1/V2 통합 전략 (ADR 필요).
+- 위의 tracked-outside-repo 테이블들에 대한 DB dump / migration 복원 작업.
+- `lib/blog-data.ts`, `lib/bugs-data.ts`, `lib/patch-notes-data.ts`, `lib/roadmap-data.ts` 의 JSON CRUD 함수들은 현재 아무도 호출하지 않는다 (타입만 import 됨). 순수 types 파일로 축소 가능.
+- `data/blog-posts.json`, `data/bugs.json`, `data/patch-notes.json`, `data/roadmap.json` 은 위 CRUD 함수들이 제거되면 같이 삭제 가능.
 
 ## 9. Operating Rules For Future Updates
 

@@ -153,3 +153,60 @@ export function generateQuoteCode(kind: QuoteCodeKind = "business_recharge") {
     .slice(-4)
   return `${prefix}-${year}-${random}`
 }
+
+export interface QuoteCodeCreateInput {
+  kind: QuoteCodeKind
+  amountCny: number | null
+  amountUsd: number | null
+  organizationName?: string | null
+  buyerName?: string | null
+  buyerEmail?: string | null
+  notes?: string | null
+  expiresAt?: string | null
+  createdBy?: string | null
+}
+
+export async function listQuoteCodes(limit = 200): Promise<SoftwareQuoteCode[]> {
+  const supabase = createSupabaseAdminClient()
+  const { data, error } = await supabase
+    .from("software_quote_codes")
+    .select("*")
+    .order("created_at", { ascending: false })
+    .limit(limit)
+  if (error) throw error
+  return (data ?? []).map((row) => mapQuoteCode(row as QuoteCodeRow))
+}
+
+async function generateUniqueCode(kind: QuoteCodeKind) {
+  for (let attempt = 0; attempt < 6; attempt += 1) {
+    const candidate = generateQuoteCode(kind)
+    const existing = await findQuoteCodeByCode(candidate)
+    if (!existing) return candidate
+  }
+  return `${generateQuoteCode(kind)}-${Date.now().toString(36).toUpperCase().slice(-3)}`
+}
+
+export async function createQuoteCode(
+  input: QuoteCodeCreateInput
+): Promise<SoftwareQuoteCode> {
+  const code = await generateUniqueCode(input.kind)
+  const supabase = createSupabaseAdminClient()
+  const { data, error } = await supabase
+    .from("software_quote_codes")
+    .insert({
+      code,
+      kind: input.kind,
+      amount_cny: input.amountCny,
+      amount_usd: input.amountUsd,
+      organization_name: input.organizationName ?? null,
+      buyer_name: input.buyerName ?? null,
+      buyer_email: input.buyerEmail ?? null,
+      notes: input.notes ?? null,
+      expires_at: input.expiresAt ?? null,
+      created_by: input.createdBy ?? null,
+    })
+    .select("*")
+    .single()
+  if (error) throw error
+  return mapQuoteCode(data as QuoteCodeRow)
+}

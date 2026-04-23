@@ -1,6 +1,6 @@
 import type { Metadata } from "next"
 import Link from "next/link"
-import { notFound } from "next/navigation"
+import { notFound, permanentRedirect, redirect } from "next/navigation"
 import { ArrowRight, Calendar, Clock } from "lucide-react"
 
 import {
@@ -23,6 +23,7 @@ import {
   getDocFromContent,
   getDocsContent,
   getRelatedDocsFromContent,
+  resolveDocsRedirect,
 } from "@/lib/docs-content"
 
 import {
@@ -85,12 +86,28 @@ export default async function DocsArticlePage({
   const { category: categoryParam, slug } = await params
   const docsContent = await getDocsContent()
 
+  const currentPath = `/docs/${categoryParam}/${slug}`
+
   if (!isDocCategoryId(categoryParam)) {
+    const target = await resolveDocsRedirect(currentPath)
+    if (target) {
+      if (target.httpStatus === 301 || target.httpStatus === 308) {
+        permanentRedirect(target.toPath)
+      }
+      redirect(target.toPath)
+    }
     notFound()
   }
 
   const doc = getDocFromContent(docsContent, slug, categoryParam)
   if (!doc || doc.category !== categoryParam) {
+    const target = await resolveDocsRedirect(currentPath)
+    if (target) {
+      if (target.httpStatus === 301 || target.httpStatus === 308) {
+        permanentRedirect(target.toPath)
+      }
+      redirect(target.toPath)
+    }
     notFound()
   }
 
@@ -107,7 +124,7 @@ export default async function DocsArticlePage({
     >
       <Link
         href={getDocCategoryPath(doc.category)}
-        className="mb-6 inline-flex items-center gap-2 text-sm font-medium text-[#1a1a1a]/45 transition-colors hover:text-[#084734]"
+        className="mb-6 inline-flex origin-left items-center gap-2 text-sm font-medium text-[#1a1a1a]/45 transition-all duration-150 hover:text-[#084734] active:scale-[0.98]"
       >
         <ArrowRight className="h-4 w-4 rotate-180" />
         {category.title}로 돌아가기
@@ -148,7 +165,7 @@ export default async function DocsArticlePage({
                         href={resource.href}
                         target="_blank"
                         rel="noreferrer"
-                        className="text-[15px] font-bold text-[#084734] underline-offset-4 hover:underline"
+                        className="inline-block origin-left break-words text-[15px] font-bold text-[#084734] underline-offset-4 transition-transform duration-150 hover:underline active:scale-[0.98]"
                       >
                         {resource.label}
                       </a>
@@ -192,7 +209,7 @@ export default async function DocsArticlePage({
                 </h2>
                 <Link
                   href="/docs/troubleshooting"
-                  className="mt-3 inline-flex text-sm font-bold text-[#084734] underline-offset-4 hover:underline"
+                  className="mt-3 inline-flex origin-left text-sm font-bold text-[#084734] underline-offset-4 transition-transform duration-150 hover:underline active:scale-[0.98]"
                 >
                   문제 해결 보기 →
                 </Link>

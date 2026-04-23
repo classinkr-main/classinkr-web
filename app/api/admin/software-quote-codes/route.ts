@@ -1,11 +1,10 @@
 import { NextRequest, NextResponse } from "next/server"
 
 import { verifyAdmin } from "@/lib/admin-auth"
-import { createSupabaseAdminClient } from "@/lib/supabase/admin"
 import { validateRechargeAmount } from "@/lib/billing/recharge"
 import {
-  findQuoteCodeByCode,
-  generateQuoteCode,
+  createQuoteCode,
+  listQuoteCodes,
   type QuoteCodeKind,
 } from "@/lib/billing/quote-codes"
 
@@ -24,29 +23,13 @@ function parseAmount(value: unknown): number | null {
   return Number.isFinite(n) && n > 0 ? Math.round(n) : null
 }
 
-async function generateUniqueCode(kind: QuoteCodeKind) {
-  for (let attempt = 0; attempt < 6; attempt += 1) {
-    const candidate = generateQuoteCode(kind)
-    const existing = await findQuoteCodeByCode(candidate)
-    if (!existing) return candidate
-  }
-  // 극단적 충돌. 현실에서는 거의 불가능.
-  return `${generateQuoteCode(kind)}-${Date.now().toString(36).toUpperCase().slice(-3)}`
-}
-
 export async function GET(req: NextRequest) {
   const authError = await verifyAdmin(req)
   if (authError) return authError
 
   try {
-    const supabase = createSupabaseAdminClient()
-    const { data, error } = await supabase
-      .from("software_quote_codes")
-      .select("*")
-      .order("created_at", { ascending: false })
-      .limit(200)
-    if (error) throw error
-    return NextResponse.json({ codes: data ?? [] })
+    const codes = await listQuoteCodes(200)
+    return NextResponse.json({ codes })
   } catch (error) {
     console.error("[admin/software-quote-codes] GET error:", error)
     return NextResponse.json({ error: "코드 조회에 실패했습니다." }, { status: 500 })
@@ -81,28 +64,20 @@ export async function POST(req: NextRequest) {
 
     const expiresAtRaw = normalizeString(body.expiresAt)
     const expiresAt = expiresAtRaw ? new Date(expiresAtRaw).toISOString() : null
-    const code = await generateUniqueCode(kind)
 
-    const supabase = createSupabaseAdminClient()
-    const { data, error } = await supabase
-      .from("software_quote_codes")
-      .insert({
-        code,
-        kind,
-        amount_cny: amountCny,
-        amount_usd: amountUsd,
-        organization_name: normalizeString(body.organizationName) || null,
-        buyer_name: normalizeString(body.buyerName) || null,
-        buyer_email: normalizeString(body.buyerEmail) || null,
-        notes: normalizeString(body.notes) || null,
-        expires_at: expiresAt,
-        created_by: normalizeString(body.createdBy) || null,
-      })
-      .select("*")
-      .single()
-    if (error) throw error
+    const code = await createQuoteCode({
+      kind,
+      amountCny,
+      amountUsd,
+      organizationName: normalizeString(body.organizationName) || null,
+      buyerName: normalizeString(body.buyerName) || null,
+      buyerEmail: normalizeString(body.buyerEmail) || null,
+      notes: normalizeString(body.notes) || null,
+      expiresAt,
+      createdBy: normalizeString(body.createdBy) || null,
+    })
 
-    return NextResponse.json({ code: data }, { status: 201 })
+    return NextResponse.json({ code }, { status: 201 })
   } catch (error) {
     console.error("[admin/software-quote-codes] POST error:", error)
     return NextResponse.json(
