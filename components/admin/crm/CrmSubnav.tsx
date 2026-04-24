@@ -2,7 +2,7 @@
 
 import Link from "next/link"
 import type { ReactNode } from "react"
-import { Handshake, LayoutDashboard, Users } from "lucide-react"
+import { Building2, LayoutDashboard, ListChecks, Users } from "lucide-react"
 
 type CrmTab = "customers" | "partners" | "partnerPortal" | "partnerCustomers"
 
@@ -10,30 +10,30 @@ const CRM_TABS = [
   {
     key: "customers",
     href: "/admin/crm",
-    label: "고객 / 리드",
-    description: "문의, 팔로업, 고객 전환",
+    label: "리드 관리",
+    description: "문의, 팔로업, 전환 관리",
     icon: <Users className="h-4 w-4" />,
   },
   {
     key: "partners",
     href: "/admin/crm/partners",
-    label: "파트너사",
-    description: "파트너 계정, 담당 고객, 운영 리스크",
-    icon: <Handshake className="h-4 w-4" />,
+    label: "처리 큐",
+    description: "계약, 설치, 정산, 이슈 우선순위",
+    icon: <ListChecks className="h-4 w-4" />,
   },
   {
     key: "partnerPortal",
     href: "/admin/crm/partners/portal",
-    label: "포털 대시보드",
-    description: "파트너 포털 현황과 우선순위",
+    label: "거래 현황",
+    description: "파이프라인, 일정, 수납 집계",
     icon: <LayoutDashboard className="h-4 w-4" />,
   },
   {
     key: "partnerCustomers",
     href: "/admin/crm/partners/customers",
-    label: "포털 고객",
-    description: "포털 고객 목록과 상세 로그",
-    icon: <Users className="h-4 w-4" />,
+    label: "고객사",
+    description: "기관 목록, 상세 정보, 활동 로그",
+    icon: <Building2 className="h-4 w-4" />,
   },
 ] satisfies Array<{
   key: CrmTab
@@ -45,7 +45,7 @@ const CRM_TABS = [
 
 export default function CrmSubnav({ active }: { active: CrmTab }) {
   return (
-    <div className="mb-6 flex flex-wrap gap-2">
+    <div className="-mx-4 mb-6 flex gap-2 overflow-x-auto px-4 pb-2 sm:mx-0 sm:flex-wrap sm:overflow-visible sm:px-0 sm:pb-0">
       {CRM_TABS.map((tab) => {
         const isActive = active === tab.key
 
@@ -53,7 +53,7 @@ export default function CrmSubnav({ active }: { active: CrmTab }) {
           <Link
             key={tab.key}
             href={tab.href}
-            className={`flex min-w-[180px] items-center gap-3 rounded-2xl border px-4 py-3 transition-colors ${
+            className={`flex min-w-[176px] shrink-0 items-center gap-3 rounded-xl border px-3 py-3 transition-colors sm:min-w-[180px] sm:rounded-2xl sm:px-4 ${
               isActive
                 ? "border-[#111110] bg-[#111110] text-white"
                 : "border-[#e8e8e4] bg-white text-[#111110] hover:border-[#c8c8c4]"

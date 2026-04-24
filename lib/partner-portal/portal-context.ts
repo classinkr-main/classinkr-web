@@ -35,11 +35,33 @@ export interface PortalContextPartner {
 
 export type PortalUserContext = PortalContextAdmin | PortalContextPartner;
 
+function toAdminPortalContext(
+  admin: NonNullable<Awaited<ReturnType<typeof getVerifiedAdminContext>>>
+): PortalContextAdmin {
+  return {
+    type: "admin",
+    scope: "all",
+    userId: admin.userId,
+    name: admin.name,
+    role: admin.role,
+  };
+}
+
 /* ─── Resolver ──────────────────────────────────────────── */
 
 export async function resolvePortalContext(
   req: NextRequest
 ): Promise<PortalUserContext | null> {
+  const forceAdminScope = req.headers.get("x-portal-scope") === "admin";
+
+  let admin = null;
+  if (forceAdminScope) {
+    admin = await getVerifiedAdminContext(req);
+    if (admin) {
+      return toAdminPortalContext(admin);
+    }
+  }
+
   // 1) Partner 인증 시도 (Supabase cookie 기반)
   const partner = await resolvePartnerAccountContext(req);
   if (partner) {
@@ -47,15 +69,9 @@ export async function resolvePortalContext(
   }
 
   // 2) Admin 인증 시도 (cookie session / Supabase admin_profiles)
-  const admin = await getVerifiedAdminContext(req);
+  admin = admin ?? await getVerifiedAdminContext(req);
   if (admin) {
-    return {
-      type: "admin",
-      scope: "all",
-      userId: admin.userId,
-      name: admin.name,
-      role: admin.role,
-    };
+    return toAdminPortalContext(admin);
   }
 
   return null;

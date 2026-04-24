@@ -165,8 +165,8 @@ export function ReceiptsPanel() {
   const partnerName = (id: string) => (DUMMY_MODE ? (DUMMY_PARTNERS_MAP[id] ?? id) : (partners.find((p) => p.id === id)?.name ?? id))
 
   return (
-    <div className="p-6 max-w-5xl mx-auto space-y-6">
-      <div className="flex items-center justify-between">
+    <div className="mx-auto max-w-5xl space-y-6 p-4 sm:p-6">
+      <div className="flex flex-col gap-3 sm:flex-row sm:items-center sm:justify-between">
         <div>
           <h1 className="text-xl font-semibold text-[#1a1a1a]">Receipts</h1>
           <p className="text-sm text-[#1a1a1a]/50 mt-0.5">{receipts.length} items</p>
@@ -188,64 +188,114 @@ export function ReceiptsPanel() {
         ) : receipts.length === 0 ? (
           <div className="py-16 text-center text-sm text-[#1a1a1a]/40">No receipts yet.</div>
         ) : (
-          <table className="w-full text-sm">
-            <thead className="bg-[#f7f7f5] border-b border-[#e8e8e4]">
-              <tr>
-                {["No.", "Partner", "Total", "Method", "Cash Receipt", "Paid On", ""].map((h) => (
-                  <th key={h} className="px-4 py-3 text-left font-medium text-[#1a1a1a]/60 text-xs">
-                    {h}
-                  </th>
-                ))}
-              </tr>
-            </thead>
-            <tbody>
+          <>
+            <div className="divide-y divide-[#f0f0ec] md:hidden">
               {receipts.map((r) => (
-                <tr key={r.id} className="border-b border-[#f0f0ec] hover:bg-[#fafafa] transition-colors">
-                  <td className="px-4 py-3 font-mono text-xs text-[#1a1a1a]/60">{r.receipt_number}</td>
-                  <td className="px-4 py-3 text-[#1a1a1a]/70">{partnerName(r.partner_id)}</td>
-                  <td className="px-4 py-3 font-medium">{r.total_amount.toLocaleString()} KRW</td>
-                  <td className="px-4 py-3 text-xs text-[#1a1a1a]/70">{METHOD_LABEL[r.payment_method]}</td>
-                  <td className="px-4 py-3 text-xs">
-                    {r.cash_receipt_requested ? (
-                      <span className="text-[#084734]">Issued ({r.cash_receipt_type === "business" ? "Business" : "Personal"})</span>
-                    ) : (
-                      <span className="text-[#1a1a1a]/30">Not issued</span>
-                    )}
-                  </td>
-                  <td className="px-4 py-3 text-xs text-[#1a1a1a]/50">{r.paid_at ? new Date(r.paid_at).toLocaleDateString("ko") : "-"}</td>
-                  <td className="px-4 py-3">
-                    <div className="flex items-center justify-end gap-1">
-                      {r.pdf_url && (
-                        <a href={r.pdf_url} target="_blank" rel="noreferrer">
-                          <Button variant="ghost" size="sm" className="h-7 px-2 text-xs">
-                            <Download className="w-3.5 h-3.5 mr-1" />
-                            PDF
-                          </Button>
-                        </a>
-                      )}
-                      <Button variant="ghost" size="sm" className="h-7 px-2 text-xs text-[#B85C33]" onClick={() => handleDelete(r.id)}>
-                        <Trash2 className="w-3.5 h-3.5" />
-                      </Button>
+                <div key={`mobile-${r.id}`} className="px-4 py-4">
+                  <div className="flex items-start justify-between gap-3">
+                    <div className="min-w-0">
+                      <p className="font-mono text-xs text-[#1a1a1a]/45">{r.receipt_number}</p>
+                      <p className="mt-1 truncate text-sm font-semibold text-[#111110]">{partnerName(r.partner_id)}</p>
                     </div>
-                  </td>
-                </tr>
+                    <p className="shrink-0 text-sm font-semibold text-[#111110]">{r.total_amount.toLocaleString()} KRW</p>
+                  </div>
+                  <div className="mt-3 grid grid-cols-2 gap-2 text-xs text-[#1a1a1a]/55">
+                    <div>
+                      <p className="text-[#1a1a1a]/32">Method</p>
+                      <p className="mt-0.5 font-medium text-[#111110]">{METHOD_LABEL[r.payment_method]}</p>
+                    </div>
+                    <div>
+                      <p className="text-[#1a1a1a]/32">Paid On</p>
+                      <p className="mt-0.5 font-medium text-[#111110]">{r.paid_at ? new Date(r.paid_at).toLocaleDateString("ko") : "-"}</p>
+                    </div>
+                    <div className="col-span-2">
+                      <p className="text-[#1a1a1a]/32">Cash Receipt</p>
+                      {r.cash_receipt_requested ? (
+                        <p className="mt-0.5 font-medium text-[#084734]">Issued ({r.cash_receipt_type === "business" ? "Business" : "Personal"})</p>
+                      ) : (
+                        <p className="mt-0.5 text-[#1a1a1a]/35">Not issued</p>
+                      )}
+                    </div>
+                  </div>
+                  <div className="mt-3 flex gap-2">
+                    {r.pdf_url && (
+                      <a href={r.pdf_url} target="_blank" rel="noreferrer" className="flex-1">
+                        <Button variant="outline" size="sm" className="w-full">
+                          <Download className="mr-1 h-3.5 w-3.5" />
+                          PDF
+                        </Button>
+                      </a>
+                    )}
+                    <Button variant="outline" size="sm" className="flex-1 text-[#B85C33]" onClick={() => handleDelete(r.id)}>
+                      <Trash2 className="mr-1 h-3.5 w-3.5" />
+                      Delete
+                    </Button>
+                  </div>
+                </div>
               ))}
-            </tbody>
-          </table>
+            </div>
+
+            <div className="hidden overflow-x-auto md:block">
+              <table className="w-full text-sm">
+                <thead className="bg-[#f7f7f5] border-b border-[#e8e8e4]">
+                  <tr>
+                    {["No.", "Partner", "Total", "Method", "Cash Receipt", "Paid On", ""].map((h) => (
+                      <th key={h} className="px-4 py-3 text-left font-medium text-[#1a1a1a]/60 text-xs">
+                        {h}
+                      </th>
+                    ))}
+                  </tr>
+                </thead>
+                <tbody>
+                  {receipts.map((r) => (
+                    <tr key={r.id} className="border-b border-[#f0f0ec] hover:bg-[#fafafa] transition-colors">
+                      <td className="px-4 py-3 font-mono text-xs text-[#1a1a1a]/60">{r.receipt_number}</td>
+                      <td className="px-4 py-3 text-[#1a1a1a]/70">{partnerName(r.partner_id)}</td>
+                      <td className="px-4 py-3 font-medium">{r.total_amount.toLocaleString()} KRW</td>
+                      <td className="px-4 py-3 text-xs text-[#1a1a1a]/70">{METHOD_LABEL[r.payment_method]}</td>
+                      <td className="px-4 py-3 text-xs">
+                        {r.cash_receipt_requested ? (
+                          <span className="text-[#084734]">Issued ({r.cash_receipt_type === "business" ? "Business" : "Personal"})</span>
+                        ) : (
+                          <span className="text-[#1a1a1a]/30">Not issued</span>
+                        )}
+                      </td>
+                      <td className="px-4 py-3 text-xs text-[#1a1a1a]/50">{r.paid_at ? new Date(r.paid_at).toLocaleDateString("ko") : "-"}</td>
+                      <td className="px-4 py-3">
+                        <div className="flex items-center justify-end gap-1">
+                          {r.pdf_url && (
+                            <a href={r.pdf_url} target="_blank" rel="noreferrer">
+                              <Button variant="ghost" size="sm" className="h-7 px-2 text-xs">
+                                <Download className="w-3.5 h-3.5 mr-1" />
+                                PDF
+                              </Button>
+                            </a>
+                          )}
+                          <Button variant="ghost" size="sm" className="h-7 px-2 text-xs text-[#B85C33]" onClick={() => handleDelete(r.id)}>
+                            <Trash2 className="w-3.5 h-3.5" />
+                          </Button>
+                        </div>
+                      </td>
+                    </tr>
+                  ))}
+                </tbody>
+              </table>
+            </div>
+          </>
         )}
       </div>
 
       {showForm && (
-        <div className="fixed inset-0 bg-black/30 z-50 flex items-center justify-center p-4">
-          <div className="bg-white rounded-2xl shadow-xl w-full max-w-lg">
-            <div className="flex items-center justify-between px-6 py-4 border-b border-[#e8e8e4]">
+        <div className="fixed inset-0 z-50 flex items-end justify-center bg-black/30 p-0 sm:items-center sm:p-4">
+          <div className="max-h-[calc(100dvh-1rem)] w-full max-w-lg overflow-hidden rounded-t-2xl bg-white shadow-xl sm:rounded-2xl">
+            <div className="flex items-center justify-between border-b border-[#e8e8e4] px-4 py-4 sm:px-6">
               <h2 className="text-base font-semibold">Issue Receipt</h2>
               <button onClick={() => setShowForm(false)} className="text-[#1a1a1a]/40 hover:text-[#1a1a1a]">
                 <X className="w-5 h-5" />
               </button>
             </div>
-            <form onSubmit={handleCreate} className="p-6 space-y-4">
-              <div className="grid grid-cols-2 gap-4">
+            <form onSubmit={handleCreate} className="max-h-[calc(100dvh-5.5rem)] space-y-4 overflow-y-auto p-4 sm:p-6">
+              <div className="grid gap-4 sm:grid-cols-2">
                 <div>
                   <label className="text-xs font-medium text-[#1a1a1a]/60 mb-1 block">Partner *</label>
                   <select
@@ -327,7 +377,7 @@ export function ReceiptsPanel() {
                         <option value="business">Business</option>
                       </select>
                     </div>
-                    <div className="col-span-2">
+                    <div className="sm:col-span-2">
                       <label className="text-xs font-medium text-[#1a1a1a]/60 mb-1 block">Receipt Number</label>
                       <input
                         value={form.cash_receipt_number}
@@ -338,7 +388,7 @@ export function ReceiptsPanel() {
                     </div>
                   </>
                 )}
-                <div className="col-span-2">
+                <div className="sm:col-span-2">
                   <label className="text-xs font-medium text-[#1a1a1a]/60 mb-1 block">Notes</label>
                   <textarea
                     value={form.notes}
@@ -348,7 +398,7 @@ export function ReceiptsPanel() {
                   />
                 </div>
               </div>
-              <div className="flex justify-end gap-2 pt-2">
+              <div className="flex flex-col-reverse gap-2 pt-2 sm:flex-row sm:justify-end">
                 <Button type="button" variant="outline" onClick={() => setShowForm(false)}>
                   Cancel
                 </Button>

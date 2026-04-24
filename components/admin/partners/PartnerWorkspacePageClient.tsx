@@ -76,12 +76,12 @@ const QUEUE_LABEL = {
 } as const
 
 const QUEUE_DESCRIPTION = {
-  all: "전체 파트너 워크스페이스를 보되, 우선순위는 큐 배지로 빠르게 판단합니다.",
-  contract_waiting: "견적 발송 또는 계약 검토가 필요한 파트너를 먼저 처리합니다.",
-  fulfillment_active: "설치·후속 실행 흐름이 움직이는 파트너를 모아서 봅니다.",
+  all: "전체 계정을 보되, 우선순위는 큐 배지로 빠르게 판단합니다.",
+  contract_waiting: "견적 발송 또는 계약 검토가 필요한 계정을 먼저 처리합니다.",
+  fulfillment_active: "설치·후속 실행 흐름이 움직이는 계정을 모아서 봅니다.",
   settlement_delayed: "연체 또는 미정산 가능성이 있는 문서를 우선 확인합니다.",
-  issue_needed: "리스크가 높거나 메모/상태상 판단이 필요한 파트너를 묶어 봅니다.",
-  caution: "리드 초기 상태이거나 휴면/리스크 상태의 파트너를 정리합니다.",
+  issue_needed: "리스크가 높거나 메모/상태상 판단이 필요한 계정을 묶어 봅니다.",
+  caution: "리드 초기 상태이거나 휴면/리스크 상태의 계정을 정리합니다.",
 } as const
 
 const QUEUE_OPTIONS: QueueView[] = [
@@ -386,15 +386,15 @@ export default function PartnerWorkspacePageClient({
       <div className="mb-8 flex flex-col gap-4 lg:flex-row lg:items-start lg:justify-between">
         <div className="max-w-4xl">
           <p className="mb-1 text-[11px] font-medium uppercase tracking-widest text-[#1a1a1a]/30">Admin</p>
-          <h1 className="text-2xl font-bold tracking-[-0.02em] text-[#111110]">파트너 운영 큐</h1>
+          <h1 className="text-2xl font-bold tracking-[-0.02em] text-[#111110]">처리 큐</h1>
           <p className="mt-2 text-[13px] leading-6 text-[#1a1a1a]/55">
-            등록된 파트너 목록보다 <strong className="text-[#111110]">지금 손이 가야 하는 파트너</strong>가 먼저 보이도록 큐 중심으로 재정렬합니다.
+            등록된 계정 목록보다 <strong className="text-[#111110]">지금 손이 가야 하는 계약, 설치, 정산, 이슈</strong>가 먼저 보이도록 큐 중심으로 재정렬합니다.
             운영자는 이 화면에서 계약 대기, 실행 중, 정산 지연, 리스크 상태를 빠르게 훑고 바로 상세로 들어갑니다.
           </p>
         </div>
         <Button onClick={openCreateDialog} className="gap-1.5 self-start" disabled={saving}>
           <Plus className="h-4 w-4" />
-          파트너 추가
+          계정 추가
         </Button>
       </div>
 
@@ -402,9 +402,9 @@ export default function PartnerWorkspacePageClient({
         <div className="flex items-start gap-3">
           <BellRing className="mt-0.5 h-4 w-4 shrink-0 text-[#2f6fed]" />
           <div>
-            <p className="text-[13px] font-semibold text-[#173b8f]">운영 큐 기준</p>
+            <p className="text-[13px] font-semibold text-[#173b8f]">처리 큐 기준</p>
             <p className="mt-1 text-[12px] leading-5 text-[#3052a0]">
-              `계약 대기`, `설치 진행`, `정산 지연`, `이슈 필요`를 우선 큐로 두고, 검색과 상태 필터는 보조 수단으로 사용합니다.
+              `계약 대기`, `설치 진행`, `정산 지연`, `이슈 필요`를 처리 큐로 두고, 검색과 상태 필터는 보조 수단으로 사용합니다.
             </p>
           </div>
         </div>
@@ -421,7 +421,7 @@ export default function PartnerWorkspacePageClient({
       <div className="mb-8 grid grid-cols-2 gap-4 xl:grid-cols-5">
         {[
           {
-            label: "활성 파트너",
+            label: "활성 계정",
             value: insights.filter((insight) => insight.workspace.partner.status === "active").length,
             sub: `${insights.length}개 전체`,
             icon: <Users className="h-4 w-4 text-[#111110]" />,
@@ -514,7 +514,7 @@ export default function PartnerWorkspacePageClient({
             <Input
               value={searchQuery}
               onChange={(event) => setSearchQuery(event.target.value)}
-              placeholder="파트너명, 지역, 담당자, 태그, 운영 문맥 검색"
+              placeholder="계정명, 지역, 담당자, 태그, 운영 문맥 검색"
               className="pl-9"
             />
           </div>
@@ -549,11 +549,11 @@ export default function PartnerWorkspacePageClient({
           {filteredInsights.length === 0 && (
             <div className="rounded-2xl border border-dashed border-[#d9d9d3] bg-white px-6 py-12 text-center">
               <p className="text-[14px] font-semibold text-[#111110]">
-                {workspaces.length === 0 ? "등록된 파트너가 없습니다." : "조건에 맞는 파트너가 없습니다."}
+                {workspaces.length === 0 ? "등록된 계정이 없습니다." : "조건에 맞는 계정이 없습니다."}
               </p>
               <p className="mt-2 text-[12px] leading-5 text-[#1a1a1a]/45">
                 {workspaces.length === 0
-                  ? "첫 파트너를 등록하면 계약, 실행, 정산 흐름을 같은 운영 큐에서 추적할 수 있습니다."
+                  ? "첫 계정을 등록하면 계약, 실행, 정산 흐름을 같은 처리 큐에서 추적할 수 있습니다."
                   : "필터를 줄이거나 초기화하면 다시 운영 우선순위 큐를 볼 수 있습니다."}
               </p>
               <div className="mt-5 flex flex-wrap justify-center gap-2">
@@ -564,7 +564,7 @@ export default function PartnerWorkspacePageClient({
                 )}
                 <Button onClick={openCreateDialog} className="gap-1.5" disabled={saving}>
                   <Plus className="h-4 w-4" />
-                  {workspaces.length === 0 ? "첫 파트너 추가" : "파트너 추가"}
+                  {workspaces.length === 0 ? "첫 계정 추가" : "계정 추가"}
                 </Button>
               </div>
             </div>
@@ -708,16 +708,16 @@ export default function PartnerWorkspacePageClient({
             <h2 className="text-[14px] font-semibold text-[#111110]">빠른 액션</h2>
             <div className="mt-4 space-y-3 text-[12px] leading-5 text-[#1a1a1a]/55">
               <div className="rounded-xl bg-[#fafaf8] px-4 py-3">
-                <strong className="block text-[#111110]">새 파트너 등록</strong>
-                <p className="mt-1">리드 또는 신규 협력사를 즉시 큐에 올립니다.</p>
+                <strong className="block text-[#111110]">새 계정 등록</strong>
+                <p className="mt-1">리드 또는 신규 협력사를 즉시 처리 큐에 올립니다.</p>
                 <Button onClick={openCreateDialog} className="mt-3 h-8 gap-1.5 px-3 text-[11px]" disabled={saving}>
                   <Plus className="h-3.5 w-3.5" />
-                  파트너 추가
+                  계정 추가
                 </Button>
               </div>
               <div className="rounded-xl bg-[#fafaf8] px-4 py-3">
                 <strong className="block text-[#111110]">거래 시작</strong>
-                <p className="mt-1">계약 대기 파트너부터 열어 견적/계약 흐름을 바로 이어갑니다.</p>
+                <p className="mt-1">계약 대기 계정부터 열어 견적/계약 흐름을 바로 이어갑니다.</p>
                 {contractCandidate ? (
                   <Link
                     href={`/admin/crm/partners/${contractCandidate.partner.id}?tab=deal-flow`}
@@ -728,13 +728,13 @@ export default function PartnerWorkspacePageClient({
                   </Link>
                 ) : (
                   <span className="mt-3 inline-flex h-8 items-center rounded-full border border-[#e8e8e4] px-3 text-[11px] text-[#1a1a1a]/35">
-                    대기 파트너 없음
+                    대기 계정 없음
                   </span>
                 )}
               </div>
               <div className="rounded-xl bg-[#fafaf8] px-4 py-3">
                 <strong className="block text-[#111110]">실행 항목 정리</strong>
-                <p className="mt-1">설치 진행 또는 정산 지연 파트너를 열어 후속 작업을 바로 처리합니다.</p>
+                <p className="mt-1">설치 진행 또는 정산 지연 계정을 열어 후속 작업을 바로 처리합니다.</p>
                 <div className="mt-3 flex flex-wrap gap-2">
                   {fulfillmentCandidate ? (
                     <Link

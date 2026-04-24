@@ -173,7 +173,7 @@ const AUTOMATION_STATUS_LABEL = {
 
 const TODO_STATUS_LABEL = {
   open: "대기",
-  waiting_partner: "파트너 대기",
+  waiting_partner: "외부 대기",
   waiting_internal: "내부 대기",
   blocked: "차단",
   done: "완료",
@@ -417,7 +417,7 @@ function getDocumentNextAction(document: PartnerDocument, delivery?: PartnerDocu
 
 function getChecklistNextAction(item: PartnerChecklistLike) {
   if (item.todoStatus === "blocked") return "차단 원인 해소"
-  if (item.todoStatus === "waiting_partner") return "파트너 회신 대기"
+  if (item.todoStatus === "waiting_partner") return "외부 회신 대기"
   if (item.todoStatus === "waiting_internal") return "내부 담당 배정"
   if (item.todoStatus === "done" || item.todoStatus === "canceled") return "완료 내역 점검"
   if (item.installStatus === "issue") return "설치 이슈 확인"
@@ -636,7 +636,7 @@ export default function PartnerWorkspaceShell({
           className="mb-4 inline-flex items-center gap-1.5 text-[12px] font-medium text-[#1a1a1a]/45 transition-colors hover:text-[#111110]"
         >
           <ArrowLeft className="h-3.5 w-3.5" />
-          파트너 운영 큐로 돌아가기
+          처리 큐로 돌아가기
         </Link>
 
         <div className="flex flex-col gap-4 xl:flex-row xl:items-start xl:justify-between">
@@ -664,7 +664,7 @@ export default function PartnerWorkspaceShell({
             </div>
             <Button variant="outline" size="sm" className="gap-1.5" onClick={onEditPartner}>
               <Pencil className="h-3.5 w-3.5" />
-              파트너 정보 수정
+              계정 정보 수정
             </Button>
           </div>
         </div>
@@ -851,7 +851,7 @@ export default function PartnerWorkspaceShell({
                   ) : (
                     <EmptyPanel
                       title="연락처가 없습니다."
-                      description="대표 연락처를 추가하면 파트너 카드와 문서 운영에서 바로 참조할 수 있습니다."
+                      description="대표 연락처를 추가하면 계정 카드와 문서 운영에서 바로 참조할 수 있습니다."
                     />
                   )}
 

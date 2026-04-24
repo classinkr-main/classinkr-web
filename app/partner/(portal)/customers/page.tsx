@@ -70,11 +70,13 @@ function formatRecentLabel(value: string | null) {
 type PartnerCustomersPageProps = {
   allowCreate?: boolean
   allowEdit?: boolean
+  title?: string
 }
 
 export function PartnerCustomersPage({
   allowCreate = true,
   allowEdit = true,
+  title = "고객 관리",
 }: PartnerCustomersPageProps = {}) {
   const [customers, setCustomers] = useState<CustomerListItem[]>([])
   const [loading, setLoading] = useState(true)
@@ -142,7 +144,7 @@ export function PartnerCustomersPage({
       <div className="space-y-6">
         <div className="flex items-center justify-between">
           <div>
-            <h1 className="text-xl font-semibold text-[#1a1a1a]">고객 관리</h1>
+            <h1 className="text-xl font-semibold text-[#1a1a1a]">{title}</h1>
             <p className="mt-0.5 text-sm text-[#1a1a1a]/50">{customers.length}개 기관</p>
           </div>
           <div className="flex gap-2">

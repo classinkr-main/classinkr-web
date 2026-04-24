@@ -7,7 +7,7 @@ export default function AdminCrmPartnerCustomersPage() {
       <div className="px-4 pt-8 sm:px-6 lg:px-8 lg:pt-10">
         <CrmSubnav active="partnerCustomers" />
       </div>
-      <PartnerCustomersPage allowCreate={false} />
+      <PartnerCustomersPage allowCreate={false} allowEdit title="고객사" />
     </>
   )
 }

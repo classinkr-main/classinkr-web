@@ -773,7 +773,7 @@ function ScheduleFormDialog({
       open={open}
       onClose={onClose}
       title={initialSchedule ? "일정 수정" : "일정 추가"}
-      description="파트너 후속 연락, 미팅, 마감 일정을 등록합니다."
+      description="후속 연락, 미팅, 마감 일정을 등록합니다."
     >
       <form onSubmit={handleSubmit} className="grid gap-4">
         <div className="grid gap-2">

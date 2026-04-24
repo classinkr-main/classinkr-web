@@ -20,7 +20,7 @@ export function DocsCategoryCard({
         <a
             href={href}
             className={cn(
-                "group flex h-full flex-col border-b border-black/[0.08] py-5 text-left transition-colors hover:border-[#084734]/25 focus-visible:outline-none focus-visible:ring-2 focus-visible:ring-[#084734] focus-visible:ring-offset-2 focus-visible:ring-offset-[#FAFAF8]",
+                "group flex h-full origin-center flex-col border-b border-black/[0.08] py-5 text-left transition-all duration-150 hover:border-[#084734]/25 active:scale-[0.98] active:opacity-90 focus-visible:outline-none focus-visible:ring-2 focus-visible:ring-[#084734] focus-visible:ring-offset-2 focus-visible:ring-offset-[#FAFAF8]",
                 className
             )}
         >
@@ -39,11 +39,11 @@ export function DocsCategoryCard({
                 />
             </div>
 
-            <div className="mt-4 flex-1">
-                <h3 className="text-[22px] font-bold leading-snug tracking-card text-[#111110]">
+            <div className="mt-4 min-w-0 flex-1">
+                <h3 className="break-words text-[22px] font-bold leading-snug tracking-card text-[#111110]">
                     {title}
                 </h3>
-                <p className="mt-3 text-[15px] leading-7 text-[#4F4C49]">
+                <p className="mt-3 break-words text-[15px] leading-7 text-[#4F4C49]">
                     {description}
                 </p>
             </div>
@@ -53,7 +53,7 @@ export function DocsCategoryCard({
                     {articles.slice(0, 3).map((article) => (
                         <div key={article.href} className="flex items-start gap-2 text-sm text-[#31302E]">
                             <span className="mt-2 h-px w-3 shrink-0 bg-[#084734]" />
-                            <span>{article.title}</span>
+                            <span className="min-w-0 break-words">{article.title}</span>
                         </div>
                     ))}
                 </div>

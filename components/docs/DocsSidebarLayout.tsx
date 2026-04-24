@@ -25,7 +25,7 @@ export function DocsSidebar({ groups, title = "가이드", className }: DocsSide
                                     key={link.href}
                                     href={link.href}
                                     className={cn(
-                                        "block border-l border-transparent py-1.5 pl-3 text-sm leading-5 transition-colors focus-visible:outline-none focus-visible:ring-2 focus-visible:ring-[#084734]",
+                                        "block origin-left break-words border-l border-transparent py-1.5 pl-3 text-sm leading-5 transition-all duration-150 active:scale-[0.98] focus-visible:outline-none focus-visible:ring-2 focus-visible:ring-[#084734]",
                                         link.isActive
                                             ? "border-[#084734] font-semibold text-[#084734]"
                                             : "text-[#615D59] hover:border-[#084734]/25 hover:text-[#111110]"
@@ -67,7 +67,7 @@ export function DocsTableOfContents({
                     <a
                         key={item.id}
                         href={`#${item.id}`}
-                        className="block border-l border-transparent py-1.5 pl-3 text-sm leading-5 text-[#615D59] transition-colors hover:border-[#084734]/25 hover:text-[#111110] focus-visible:outline-none focus-visible:ring-2 focus-visible:ring-[#084734]"
+                        className="block origin-left break-words border-l border-transparent py-1.5 pl-3 text-sm leading-5 text-[#615D59] transition-all duration-150 hover:border-[#084734]/25 hover:text-[#111110] active:scale-[0.98] focus-visible:outline-none focus-visible:ring-2 focus-visible:ring-[#084734]"
                     >
                         {item.title}
                     </a>

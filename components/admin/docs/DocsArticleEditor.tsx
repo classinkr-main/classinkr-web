@@ -3,7 +3,7 @@
 import { useMemo, useState } from "react"
 import Link from "next/link"
 import { useRouter } from "next/navigation"
-import { ArrowLeft, ExternalLink, Save, Trash2 } from "lucide-react"
+import { ArrowLeft, Bot, CheckCircle2, CircleAlert, ExternalLink, Save, Trash2, Wand2 } from "lucide-react"
 
 import { adminFetch, adminFetchJson } from "@/lib/admin-client"
 import type {
@@ -108,6 +108,41 @@ function slugify(value: string) {
     .replace(/^-|-$/g, "")
 }
 
+function getOptionLabel<T extends { value: string; label: string }>(options: T[], value: string) {
+  return options.find((option) => option.value === value)?.label ?? value
+}
+
+function mergeCsv(current: string, values: string[]) {
+  return Array.from(new Set([...fromCsv(current), ...values])).join(", ")
+}
+
+function suggestKeywords(form: Pick<FormState, "title" | "description" | "docType" | "productArea">) {
+  const productArea = getOptionLabel(PRODUCT_AREA_OPTIONS, form.productArea)
+  const docType = getOptionLabel(DOC_TYPE_OPTIONS, form.docType)
+  const source = `${form.title} ${form.description}`
+  const tokens = source
+    .split(/[\s,./|·()[\]{}]+/)
+    .map((token) => token.trim())
+    .filter((token) => token.length >= 2 && token.length <= 18)
+
+  return Array.from(new Set([productArea, docType, ...tokens])).slice(0, 10)
+}
+
+function createSummaryDraft(form: Pick<FormState, "description" | "contentMarkdown">) {
+  const firstBodyParagraph =
+    form.contentMarkdown
+      .split(/\n{2,}/)
+      .map((paragraph) => paragraph.trim())
+      .find((paragraph) => paragraph && !paragraph.startsWith("#")) ?? ""
+  const summary = [form.description.trim(), firstBodyParagraph]
+    .filter(Boolean)
+    .join(" ")
+    .replace(/\s+/g, " ")
+    .trim()
+
+  return summary.slice(0, 180)
+}
+
 function initialForm(
   article: DocsArticleDetail | null,
   fallbackCategoryId: string
@@ -175,9 +210,72 @@ export default function DocsArticleEditor({ mode, categories, article }: Props) 
     () => `/docs/${form.categoryId}/${form.slug || article?.slug || "new"}`,
     [form.categoryId, form.slug, article?.slug]
   )
+  const suggestedKeywords = useMemo(
+    () =>
+      suggestKeywords({
+        title: form.title,
+        description: form.description,
+        docType: form.docType,
+        productArea: form.productArea,
+      }),
+    [form.description, form.docType, form.productArea, form.title]
+  )
+  const suggestedSummary = useMemo(
+    () =>
+      createSummaryDraft({
+        contentMarkdown: form.contentMarkdown,
+        description: form.description,
+      }),
+    [form.contentMarkdown, form.description]
+  )
+  const chatbotIncluded =
+    form.status === "published" && form.visibility !== "internal" && !form.noindex
+  const aiChecklist = useMemo(
+    () => [
+      {
+        label: "챗봇 노출",
+        complete: chatbotIncluded,
+        hint: chatbotIncluded ? "게시/공개/noindex 해제 상태입니다." : "게시 후 공개 상태로 두면 챗봇 후보가 됩니다.",
+      },
+      {
+        label: "챗봇 요약",
+        complete: form.chatbotSummary.trim().length >= 30,
+        hint: "답변 첫 문맥으로 쓸 2~3문장 요약을 넣으세요.",
+      },
+      {
+        label: "키워드",
+        complete: fromCsv(form.keywordsCsv).length + fromCsv(form.tagsCsv).length >= 3,
+        hint: "사용자가 검색할 표현을 태그/키워드에 넣으세요.",
+      },
+      {
+        label: "본문 청킹",
+        complete: form.contentMarkdown.trim().length >= 120 && form.contentMarkdown.includes("## "),
+        hint: "본문 120자 이상, 섹션은 ## 헤딩으로 나누면 좋습니다.",
+      },
+    ],
+    [chatbotIncluded, form.chatbotSummary, form.contentMarkdown, form.keywordsCsv, form.tagsCsv]
+  )
+  const completedAiChecks = aiChecklist.filter((item) => item.complete).length
 
   function update<K extends keyof FormState>(key: K, value: FormState[K]) {
     setForm((previous) => ({ ...previous, [key]: value }))
+  }
+
+  function applySummaryDraft() {
+    if (!suggestedSummary) return
+    update("chatbotSummary", suggestedSummary)
+  }
+
+  function applySuggestedKeywords() {
+    update("keywordsCsv", mergeCsv(form.keywordsCsv, suggestedKeywords))
+  }
+
+  function applyChatbotVisibility() {
+    setForm((previous) => ({
+      ...previous,
+      visibility: "public",
+      noindex: false,
+    }))
   }
 
   function buildPayload(overrides: Partial<FormState> = {}): Record<string, unknown> {
@@ -349,6 +447,70 @@ export default function DocsArticleEditor({ mode, categories, article }: Props) 
       </div>
 
       <div className="mx-auto max-w-5xl space-y-6 px-6 py-8">
+        <section className="rounded-2xl border border-[#DDEFE5] bg-[#F7FBF8] p-6">
+          <div className="flex flex-col gap-4 sm:flex-row sm:items-start sm:justify-between">
+            <div>
+              <div className="flex items-center gap-2">
+                <Bot className="h-4 w-4 text-[#084734]" />
+                <h2 className="text-[13px] font-semibold uppercase tracking-wide text-[#084734]">
+                  AI/챗봇 준비 상태
+                </h2>
+              </div>
+              <p className="mt-2 max-w-2xl text-[12px] leading-relaxed text-[#1a1a1a]/48">
+                저장 전에 챗봇 답변 후보로 쓸 수 있는지 확인하고, 부족한 메타데이터를 빠르게 채웁니다.
+              </p>
+            </div>
+            <span className="inline-flex w-fit items-center rounded-full border border-emerald-100 bg-white px-3 py-1 text-[12px] font-semibold text-[#084734]">
+              {completedAiChecks}/{aiChecklist.length} 완료
+            </span>
+          </div>
+
+          <div className="mt-5 grid gap-3 sm:grid-cols-2 lg:grid-cols-4">
+            {aiChecklist.map((item) => (
+              <div key={item.label} className="border-t border-[#DDEFE5] pt-3">
+                <div className="flex items-center gap-2">
+                  {item.complete ? (
+                    <CheckCircle2 className="h-4 w-4 text-emerald-600" />
+                  ) : (
+                    <CircleAlert className="h-4 w-4 text-[#B85C33]" />
+                  )}
+                  <p className="text-[13px] font-semibold text-[#111110]">{item.label}</p>
+                </div>
+                <p className="mt-2 text-[11px] leading-relaxed text-[#1a1a1a]/42">{item.hint}</p>
+              </div>
+            ))}
+          </div>
+
+          <div className="mt-5 flex flex-wrap gap-2">
+            <button
+              type="button"
+              onClick={applySummaryDraft}
+              disabled={!suggestedSummary}
+              className="inline-flex items-center gap-1.5 rounded-lg border border-[#DDEFE5] bg-white px-3 py-2 text-[12px] font-semibold text-[#084734] transition-colors hover:bg-[#EDF8F1] disabled:cursor-not-allowed disabled:opacity-45"
+            >
+              <Wand2 className="h-3.5 w-3.5" />
+              요약 초안 채우기
+            </button>
+            <button
+              type="button"
+              onClick={applySuggestedKeywords}
+              disabled={suggestedKeywords.length === 0}
+              className="inline-flex items-center gap-1.5 rounded-lg border border-[#DDEFE5] bg-white px-3 py-2 text-[12px] font-semibold text-[#084734] transition-colors hover:bg-[#EDF8F1] disabled:cursor-not-allowed disabled:opacity-45"
+            >
+              <Wand2 className="h-3.5 w-3.5" />
+              추천 키워드 추가
+            </button>
+            <button
+              type="button"
+              onClick={applyChatbotVisibility}
+              className="inline-flex items-center gap-1.5 rounded-lg border border-[#DDEFE5] bg-white px-3 py-2 text-[12px] font-semibold text-[#084734] transition-colors hover:bg-[#EDF8F1]"
+            >
+              <Wand2 className="h-3.5 w-3.5" />
+              챗봇 노출값 맞추기
+            </button>
+          </div>
+        </section>
+
         <section className="space-y-4 rounded-2xl border border-[rgba(0,0,0,0.08)] bg-white p-6">
           <h2 className="text-[13px] font-semibold uppercase tracking-wide text-[#1a1a1a]/40">
             기본 정보

@@ -5,6 +5,9 @@ import { clearAdminSessionStorage, getAdminToken } from "@/lib/admin-client";
 export async function portalFetch(input: string, init?: RequestInit) {
   const headers = new Headers(init?.headers);
   const adminToken = getAdminToken();
+  const isAdminPage =
+    typeof window !== "undefined" &&
+    window.location.pathname.startsWith("/admin");
 
   if (init?.body !== undefined && !headers.has("Content-Type")) {
     headers.set("Content-Type", "application/json");
@@ -12,6 +15,10 @@ export async function portalFetch(input: string, init?: RequestInit) {
 
   if (adminToken) {
     headers.set("Authorization", `Bearer ${adminToken}`);
+  }
+
+  if (isAdminPage && !headers.has("x-portal-scope")) {
+    headers.set("x-portal-scope", "admin");
   }
 
   const response = await fetch(input, {

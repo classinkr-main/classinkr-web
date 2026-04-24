@@ -278,8 +278,8 @@ export function ContractsPanel() {
   }
 
   return (
-    <div className="p-6 max-w-6xl mx-auto space-y-6">
-      <div className="flex items-center justify-between">
+    <div className="mx-auto max-w-6xl space-y-6 p-4 sm:p-6">
+      <div className="flex flex-col gap-3 sm:flex-row sm:items-center sm:justify-between">
         <div>
           <h1 className="text-xl font-semibold text-[#1a1a1a]">Contracts</h1>
           <p className="text-sm text-[#1a1a1a]/50 mt-0.5">{contracts.length} items</p>
@@ -295,83 +295,156 @@ export function ContractsPanel() {
         ) : contracts.length === 0 ? (
           <div className="py-16 text-center text-sm text-[#1a1a1a]/40">No contracts yet.</div>
         ) : (
-          <table className="w-full text-sm">
-            <thead className="bg-[#f7f7f5] border-b border-[#e8e8e4]">
-              <tr>
-                {["No.", "Partner", "Title", "Total", "Status", "Partner Sign", "Admin Sign", ""].map((h) => (
-                  <th key={h} className="px-4 py-3 text-left font-medium text-[#1a1a1a]/60 text-xs">
-                    {h}
-                  </th>
-                ))}
-              </tr>
-            </thead>
-            <tbody>
+          <>
+            <div className="divide-y divide-[#f0f0ec] md:hidden">
               {contracts.map((c) => (
-                <tr key={c.id} className="border-b border-[#f0f0ec] hover:bg-[#fafafa] transition-colors">
-                  <td className="px-4 py-3 font-mono text-xs text-[#1a1a1a]/60">{c.contract_number}</td>
-                  <td className="px-4 py-3 text-[#1a1a1a]/70">{partnerName(c.partner_id)}</td>
-                  <td className="px-4 py-3 font-medium text-[#1a1a1a]">{c.title}</td>
-                  <td className="px-4 py-3 font-medium">{c.total_amount.toLocaleString()} KRW</td>
-                  <td className="px-4 py-3">
-                    <span className={`text-xs px-2 py-0.5 rounded-full ${STATUS_COLOR[c.status]}`}>{STATUS_LABEL[c.status]}</span>
-                  </td>
-                  <td className="px-4 py-3 text-xs">
-                    {c.partner_signed_at ? (
-                      <span className="text-green-600">Done {new Date(c.partner_signed_at).toLocaleDateString("ko")}</span>
-                    ) : (
-                      <span className="text-[#1a1a1a]/30">Pending</span>
-                    )}
-                  </td>
-                  <td className="px-4 py-3 text-xs">
-                    {c.admin_signed_at ? (
-                      <span className="text-green-600">Done {new Date(c.admin_signed_at).toLocaleDateString("ko")}</span>
-                    ) : (
-                      <span className="text-[#1a1a1a]/30">Pending</span>
-                    )}
-                  </td>
-                  <td className="px-4 py-3">
-                    <div className="flex items-center justify-end gap-1">
-                      {c.status === "draft" && (
-                        <Button variant="ghost" size="sm" className="h-7 px-2 text-xs text-[#084734]" onClick={() => handleSend(c)}>
-                          <Send className="w-3.5 h-3.5 mr-1" />
-                          Send
-                        </Button>
-                      )}
-                      {["sent", "draft"].includes(c.status) && c.sign_token && (
-                        <Button variant="ghost" size="sm" className="h-7 px-2 text-xs" onClick={() => copySignLink(c)}>
-                          {copied === c.id ? <Check className="w-3.5 h-3.5 text-green-500" /> : <Copy className="w-3.5 h-3.5" />}
-                        </Button>
-                      )}
-                      {c.status === "partner_signed" && (
-                        <Button
-                          variant="ghost"
-                          size="sm"
-                          className="h-7 px-2 text-xs text-[#615D59]"
-                          onClick={() => {
-                            setSelected(c)
-                            setShowSign(true)
-                          }}
-                        >
-                          <PenLine className="w-3.5 h-3.5 mr-1" />
-                          Sign
-                        </Button>
-                      )}
-                      <Button variant="ghost" size="sm" className="h-7 px-2 text-xs text-[#B85C33]" onClick={() => handleDelete(c.id)}>
-                        <Trash2 className="w-3.5 h-3.5" />
-                      </Button>
+                <div key={`mobile-${c.id}`} className="px-4 py-4">
+                  <div className="flex items-start justify-between gap-3">
+                    <div className="min-w-0">
+                      <p className="font-mono text-xs text-[#1a1a1a]/45">{c.contract_number}</p>
+                      <p className="mt-1 line-clamp-2 text-sm font-semibold text-[#111110]">{c.title}</p>
+                      <p className="mt-1 truncate text-xs text-[#1a1a1a]/45">{partnerName(c.partner_id)}</p>
                     </div>
-                  </td>
-                </tr>
+                    <span className={`shrink-0 rounded-full px-2 py-0.5 text-xs ${STATUS_COLOR[c.status]}`}>{STATUS_LABEL[c.status]}</span>
+                  </div>
+                  <div className="mt-3 grid grid-cols-2 gap-2 text-xs">
+                    <div>
+                      <p className="text-[#1a1a1a]/32">Total</p>
+                      <p className="mt-0.5 font-semibold text-[#111110]">{c.total_amount.toLocaleString()} KRW</p>
+                    </div>
+                    <div>
+                      <p className="text-[#1a1a1a]/32">Partner Sign</p>
+                      {c.partner_signed_at ? (
+                        <p className="mt-0.5 font-medium text-green-600">Done {new Date(c.partner_signed_at).toLocaleDateString("ko")}</p>
+                      ) : (
+                        <p className="mt-0.5 text-[#1a1a1a]/35">Pending</p>
+                      )}
+                    </div>
+                    <div>
+                      <p className="text-[#1a1a1a]/32">Admin Sign</p>
+                      {c.admin_signed_at ? (
+                        <p className="mt-0.5 font-medium text-green-600">Done {new Date(c.admin_signed_at).toLocaleDateString("ko")}</p>
+                      ) : (
+                        <p className="mt-0.5 text-[#1a1a1a]/35">Pending</p>
+                      )}
+                    </div>
+                  </div>
+                  <div className="mt-3 flex flex-col gap-2 sm:flex-row">
+                    {c.status === "draft" && (
+                      <Button variant="outline" size="sm" className="w-full text-[#084734]" onClick={() => handleSend(c)}>
+                        <Send className="mr-1 h-3.5 w-3.5" />
+                        Send
+                      </Button>
+                    )}
+                    {["sent", "draft"].includes(c.status) && c.sign_token && (
+                      <Button variant="outline" size="sm" className="w-full" onClick={() => copySignLink(c)}>
+                        {copied === c.id ? <Check className="mr-1 h-3.5 w-3.5 text-green-500" /> : <Copy className="mr-1 h-3.5 w-3.5" />}
+                        Copy Link
+                      </Button>
+                    )}
+                    {c.status === "partner_signed" && (
+                      <Button
+                        variant="outline"
+                        size="sm"
+                        className="w-full text-[#615D59]"
+                        onClick={() => {
+                          setSelected(c)
+                          setShowSign(true)
+                        }}
+                      >
+                        <PenLine className="mr-1 h-3.5 w-3.5" />
+                        Sign
+                      </Button>
+                    )}
+                    <Button variant="outline" size="sm" className="w-full text-[#B85C33]" onClick={() => handleDelete(c.id)}>
+                      <Trash2 className="mr-1 h-3.5 w-3.5" />
+                      Delete
+                    </Button>
+                  </div>
+                </div>
               ))}
-            </tbody>
-          </table>
+            </div>
+
+            <div className="hidden overflow-x-auto md:block">
+              <table className="w-full text-sm">
+                <thead className="bg-[#f7f7f5] border-b border-[#e8e8e4]">
+                  <tr>
+                    {["No.", "Partner", "Title", "Total", "Status", "Partner Sign", "Admin Sign", ""].map((h) => (
+                      <th key={h} className="px-4 py-3 text-left font-medium text-[#1a1a1a]/60 text-xs">
+                        {h}
+                      </th>
+                    ))}
+                  </tr>
+                </thead>
+                <tbody>
+                  {contracts.map((c) => (
+                    <tr key={c.id} className="border-b border-[#f0f0ec] hover:bg-[#fafafa] transition-colors">
+                      <td className="px-4 py-3 font-mono text-xs text-[#1a1a1a]/60">{c.contract_number}</td>
+                      <td className="px-4 py-3 text-[#1a1a1a]/70">{partnerName(c.partner_id)}</td>
+                      <td className="px-4 py-3 font-medium text-[#1a1a1a]">{c.title}</td>
+                      <td className="px-4 py-3 font-medium">{c.total_amount.toLocaleString()} KRW</td>
+                      <td className="px-4 py-3">
+                        <span className={`text-xs px-2 py-0.5 rounded-full ${STATUS_COLOR[c.status]}`}>{STATUS_LABEL[c.status]}</span>
+                      </td>
+                      <td className="px-4 py-3 text-xs">
+                        {c.partner_signed_at ? (
+                          <span className="text-green-600">Done {new Date(c.partner_signed_at).toLocaleDateString("ko")}</span>
+                        ) : (
+                          <span className="text-[#1a1a1a]/30">Pending</span>
+                        )}
+                      </td>
+                      <td className="px-4 py-3 text-xs">
+                        {c.admin_signed_at ? (
+                          <span className="text-green-600">Done {new Date(c.admin_signed_at).toLocaleDateString("ko")}</span>
+                        ) : (
+                          <span className="text-[#1a1a1a]/30">Pending</span>
+                        )}
+                      </td>
+                      <td className="px-4 py-3">
+                        <div className="flex items-center justify-end gap-1">
+                          {c.status === "draft" && (
+                            <Button variant="ghost" size="sm" className="h-7 px-2 text-xs text-[#084734]" onClick={() => handleSend(c)}>
+                              <Send className="w-3.5 h-3.5 mr-1" />
+                              Send
+                            </Button>
+                          )}
+                          {["sent", "draft"].includes(c.status) && c.sign_token && (
+                            <Button variant="ghost" size="sm" className="h-7 px-2 text-xs" onClick={() => copySignLink(c)}>
+                              {copied === c.id ? <Check className="w-3.5 h-3.5 text-green-500" /> : <Copy className="w-3.5 h-3.5" />}
+                            </Button>
+                          )}
+                          {c.status === "partner_signed" && (
+                            <Button
+                              variant="ghost"
+                              size="sm"
+                              className="h-7 px-2 text-xs text-[#615D59]"
+                              onClick={() => {
+                                setSelected(c)
+                                setShowSign(true)
+                              }}
+                            >
+                              <PenLine className="w-3.5 h-3.5 mr-1" />
+                              Sign
+                            </Button>
+                          )}
+                          <Button variant="ghost" size="sm" className="h-7 px-2 text-xs text-[#B85C33]" onClick={() => handleDelete(c.id)}>
+                            <Trash2 className="w-3.5 h-3.5" />
+                          </Button>
+                        </div>
+                      </td>
+                    </tr>
+                  ))}
+                </tbody>
+              </table>
+            </div>
+          </>
         )}
       </div>
 
       {showSign && selected && (
-        <div className="fixed inset-0 bg-black/30 z-50 flex items-center justify-center p-4">
-          <div className="bg-white rounded-2xl shadow-xl w-full max-w-lg">
-            <div className="flex items-center justify-between px-6 py-4 border-b border-[#e8e8e4]">
+        <div className="fixed inset-0 z-50 flex items-end justify-center bg-black/30 p-0 sm:items-center sm:p-4">
+          <div className="max-h-[calc(100dvh-1rem)] w-full max-w-lg overflow-hidden rounded-t-2xl bg-white shadow-xl sm:rounded-2xl">
+            <div className="flex items-center justify-between border-b border-[#e8e8e4] px-4 py-4 sm:px-6">
               <div>
                 <h2 className="text-base font-semibold">Admin Sign</h2>
                 <p className="text-xs text-[#1a1a1a]/50 mt-0.5">
@@ -382,7 +455,7 @@ export function ContractsPanel() {
                 <X className="w-5 h-5" />
               </button>
             </div>
-            <div className="p-6">
+            <div className="max-h-[calc(100dvh-8rem)] overflow-y-auto p-4 sm:p-6">
               {signing ? <div className="py-8 text-center text-sm text-[#1a1a1a]/50">Processing...</div> : <SignatureCanvas onSave={handleAdminSign} />}
             </div>
           </div>

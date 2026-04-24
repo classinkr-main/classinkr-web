@@ -28,11 +28,23 @@ export interface AdminDocsArticleSummary {
   description: string
   status: string
   visibility: string
+  noindex: boolean
   docType: string
   productArea: string
   featured: boolean
   orderIndex: number
   publicPath: string
+  tags: string[]
+  keywords: string[]
+  symptoms: string[]
+  chatbotSummary: string | null
+  chatbotIncluded: boolean
+  aiChunkCount: number | null
+  aiIndexed: boolean
+  aiReady: boolean
+  aiIssues: string[]
+  contentLength: number
+  stale: boolean
   updatedAt: string | null
   publishedAt: string | null
   lastReviewedAt: string | null
@@ -115,10 +127,16 @@ interface DocsArticleRow {
   description: string
   status: string
   visibility: string
+  noindex: boolean | null
   doc_type: string
   product_area: string
   featured: boolean | null
   order_index: number | null
+  tags: string[] | null
+  keywords: string[] | null
+  symptoms: string[] | null
+  chatbot_summary: string | null
+  content_markdown: string | null
   updated_at: string | null
   published_at: string | null
   last_reviewed_at: string | null
@@ -197,29 +215,121 @@ function createStaticContentResponse(warnings: string[] = []): AdminDocsContentR
       updatedAt: null,
       articleCount: articleCounts.get(category.id) ?? 0,
     })),
-    articles: staticArticles.map((article) => ({
-      id: `${article.category}:${article.slug}`,
-      categoryId: article.category,
-      slug: article.slug,
-      title: article.title,
-      description: article.description,
-      status: "static",
-      visibility: "public",
-      docType: "guide",
-      productArea: "general",
-      featured: Boolean(article.featured),
-      orderIndex: 100,
-      publicPath: getDocPath(article),
-      updatedAt: article.updatedAt,
-      publishedAt: null,
-      lastReviewedAt: article.updatedAt,
-    })),
+    articles: staticArticles.map((article) => {
+      const contentLength = getStaticContentLength(article)
+      const noindex = Boolean(article.noindex)
+      const visibility = article.visibility ?? "public"
+      const aiState = getArticleAiState({
+        status: "published",
+        visibility,
+        noindex,
+        tags: article.tags,
+        keywords: article.keywords,
+        chatbotSummary: article.chatbotSummary,
+        contentLength,
+        aiChunkCount: null,
+        updatedAt: article.updatedAt,
+        lastReviewedAt: article.updatedAt,
+      })
+
+      return {
+        id: `${article.category}:${article.slug}`,
+        categoryId: article.category,
+        slug: article.slug,
+        title: article.title,
+        description: article.description,
+        status: "static",
+        visibility,
+        noindex,
+        docType: "guide",
+        productArea: "general",
+        featured: Boolean(article.featured),
+        orderIndex: 100,
+        publicPath: getDocPath(article),
+        tags: article.tags,
+        keywords: article.keywords,
+        symptoms: [],
+        chatbotSummary: article.chatbotSummary,
+        aiChunkCount: null,
+        contentLength,
+        ...aiState,
+        updatedAt: article.updatedAt,
+        publishedAt: null,
+        lastReviewedAt: article.updatedAt,
+      }
+    }),
     warnings,
   }
 }
 
 function getPublicPath(article: Pick<DocsArticleRow, "category_id" | "slug">) {
   return `/docs/${article.category_id}/${article.slug}`
+}
+
+const REVIEW_STALE_DAYS = 60
+
+interface ArticleAiInput {
+  status: string
+  visibility: string
+  noindex: boolean
+  tags: string[]
+  keywords: string[]
+  chatbotSummary: string | null
+  contentLength: number
+  aiChunkCount: number | null
+  updatedAt: string | null
+  lastReviewedAt: string | null
+}
+
+function getDaysSince(value: string | null) {
+  if (!value) return null
+  const date = new Date(value)
+  if (Number.isNaN(date.getTime())) return null
+  return Math.floor((Date.now() - date.getTime()) / (1000 * 60 * 60 * 24))
+}
+
+function getArticleAiState(article: ArticleAiInput) {
+  const chatbotIncluded =
+    article.status === "published" && article.visibility !== "internal" && !article.noindex
+  const reviewAge = getDaysSince(article.lastReviewedAt ?? article.updatedAt)
+  const stale = article.status === "published" && reviewAge !== null && reviewAge > REVIEW_STALE_DAYS
+  const aiIndexed = article.aiChunkCount !== null && article.aiChunkCount > 0
+  const aiIssues: string[] = []
+
+  if (chatbotIncluded && !article.chatbotSummary?.trim()) {
+    aiIssues.push("챗봇 요약 없음")
+  }
+  if (chatbotIncluded && article.tags.length === 0 && article.keywords.length === 0) {
+    aiIssues.push("검색 키워드 없음")
+  }
+  if (chatbotIncluded && article.contentLength < 120) {
+    aiIssues.push("본문 보강 필요")
+  }
+  if (chatbotIncluded && article.aiChunkCount !== null && article.aiChunkCount === 0) {
+    aiIssues.push("AI 인덱스 없음")
+  }
+  if (stale) {
+    aiIssues.push("검토 주기 초과")
+  }
+
+  return {
+    chatbotIncluded,
+    aiIndexed,
+    aiReady: chatbotIncluded && aiIssues.length === 0,
+    aiIssues,
+    stale,
+  }
+}
+
+function getStaticContentLength(article: ReturnType<typeof listStaticDocs>[number]) {
+  const sectionText = article.sections
+    .flatMap((section) => [section.heading, section.body, ...(section.steps ?? [])])
+    .join(" ")
+
+  return [article.title, article.description, article.chatbotSummary, sectionText]
+    .filter(Boolean)
+    .join(" ")
+    .trim().length
 }
 
 function clampRangeDays(value?: string | null) {
@@ -254,7 +364,7 @@ export async function listAdminDocsContent(): Promise<AdminDocsContentResponse> 
         supabase
           .from("docs_articles")
           .select(
-            "id, category_id, slug, title, description, status, visibility, doc_type, product_area, featured, order_index, updated_at, published_at, last_reviewed_at"
+            "id, category_id, slug, title, description, status, visibility, noindex, doc_type, product_area, featured, order_index, tags, keywords, symptoms, chatbot_summary, content_markdown, updated_at, published_at, last_reviewed_at"
           )
           .order("updated_at", { ascending: false }),
       ])
@@ -263,10 +373,30 @@ export async function listAdminDocsContent(): Promise<AdminDocsContentResponse> 
     if (articleError) throw articleError
 
     const rows = (articleRows ?? []) as DocsArticleRow[]
+    const warnings: string[] = []
     const articleCounts = new Map<string, number>()
 
     for (const article of rows) {
       articleCounts.set(article.category_id, (articleCounts.get(article.category_id) ?? 0) + 1)
+    }
+
+    const aiChunkCounts = new Map<string, number>()
+    const articleIds = rows.map((article) => article.id)
+    if (articleIds.length > 0) {
+      const { data: chunkRows, error: chunkError } = await supabase
+        .from("docs_ai_chunks")
+        .select("article_id")
+        .in("article_id", articleIds)
+        .limit(5000)
+
+      if (chunkError) {
+        warnings.push(`docs_ai_chunks: ${chunkError.message}`)
+      } else {
+        for (const chunk of (chunkRows ?? []) as Array<{ article_id: string | null }>) {
+          if (!chunk.article_id) continue
+          aiChunkCounts.set(chunk.article_id, (aiChunkCounts.get(chunk.article_id) ?? 0) + 1)
+        }
+      }
     }
 
     const categories = ((categoryRows ?? []) as DocsCategoryRow[]).map((category) => ({
@@ -289,24 +419,53 @@ export async function listAdminDocsContent(): Promise<AdminDocsContentResponse> 
       status: "live",
       generatedAt: new Date().toISOString(),
       categories,
-      articles: rows.map((article) => ({
-        id: article.id,
-        categoryId: article.category_id,
-        slug: article.slug,
-        title: article.title,
-        description: article.description,
-        status: article.status,
-        visibility: article.visibility,
-        docType: article.doc_type,
-        productArea: article.product_area,
-        featured: Boolean(article.featured),
-        orderIndex: article.order_index ?? 100,
-        publicPath: getPublicPath(article),
-        updatedAt: article.updated_at,
-        publishedAt: article.published_at,
-        lastReviewedAt: article.last_reviewed_at,
-      })),
-      warnings: [],
+      articles: rows.map((article) => {
+        const tags = article.tags ?? []
+        const keywords = article.keywords ?? []
+        const symptoms = article.symptoms ?? []
+        const contentLength = article.content_markdown?.trim().length ?? 0
+        const noindex = Boolean(article.noindex)
+        const aiChunkCount = aiChunkCounts.get(article.id) ?? 0
+        const aiState = getArticleAiState({
+          status: article.status,
+          visibility: article.visibility,
+          noindex,
+          tags,
+          keywords,
+          chatbotSummary: article.chatbot_summary,
+          contentLength,
+          aiChunkCount,
+          updatedAt: article.updated_at,
+          lastReviewedAt: article.last_reviewed_at,
+        })
+
+        return {
+          id: article.id,
+          categoryId: article.category_id,
+          slug: article.slug,
+          title: article.title,
+          description: article.description,
+          status: article.status,
+          visibility: article.visibility,
+          noindex,
+          docType: article.doc_type,
+          productArea: article.product_area,
+          featured: Boolean(article.featured),
+          orderIndex: article.order_index ?? 100,
+          publicPath: getPublicPath(article),
+          tags,
+          keywords,
+          symptoms,
+          chatbotSummary: article.chatbot_summary,
+          aiChunkCount,
+          contentLength,
+          ...aiState,
+          updatedAt: article.updated_at,
+          publishedAt: article.published_at,
+          lastReviewedAt: article.last_reviewed_at,
+        }
+      }),
+      warnings,
     }
   } catch (error) {
     const message = error instanceof Error ? error.message : "알 수 없는 오류"

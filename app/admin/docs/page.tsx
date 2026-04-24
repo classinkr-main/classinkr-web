@@ -6,6 +6,8 @@ import { useRouter } from "next/navigation"
 import {
   AlertCircle,
   BarChart3,
+  Bot,
+  CircleAlert,
   Database,
   ExternalLink,
   MessageSquareText,
@@ -20,6 +22,8 @@ import type {
   AdminDocsArticleSummary,
   AdminDocsContentResponse,
 } from "@/lib/admin-docs"
+
+type AiFilter = "all" | "needs-work" | "chatbot" | "not-indexed"
 
 function getToken() {
   return (typeof window !== "undefined" ? sessionStorage.getItem("admin_password") : null) ?? ""
@@ -130,6 +134,57 @@ function ArticleStatus({ article }: { article: AdminDocsArticleSummary }) {
   )
 }
 
+function getAiStatus(article: AdminDocsArticleSummary) {
+  if (!article.chatbotIncluded) {
+    return {
+      label: "챗봇 제외",
+      tone: "border-[#e8e8e4] bg-white text-[#1a1a1a]/45",
+      hint: "비공개, 내부, noindex 문서는 챗봇 답변 후보에서 제외됩니다.",
+    }
+  }
+
+  if (article.aiReady) {
+    return {
+      label: "AI 준비",
+      tone: "border-emerald-100 bg-emerald-50 text-emerald-700",
+      hint: "요약, 키워드, 인덱스 상태가 안정적입니다.",
+    }
+  }
+
+  if (!article.aiIndexed) {
+    return {
+      label: "미인덱스",
+      tone: "border-amber-100 bg-amber-50 text-amber-700",
+      hint: "챗봇 검색용 chunk 생성이 필요합니다.",
+    }
+  }
+
+  return {
+    label: "보강 필요",
+    tone: "border-[#F6D5C5] bg-[#FEF3EE] text-[#B85C33]",
+    hint: "챗봇 답변 품질을 위해 메타데이터를 보강하세요.",
+  }
+}
+
+function ArticleAiStatus({ article }: { article: AdminDocsArticleSummary }) {
+  const aiStatus = getAiStatus(article)
+  const chunkLabel =
+    article.aiChunkCount == null ? "chunk 확인 전" : `${formatNumber(article.aiChunkCount)} chunks`
+
+  return (
+    <div className="space-y-1.5">
+      <div className="flex flex-wrap items-center gap-1.5">
+        <Bot className="h-3.5 w-3.5 text-[#1a1a1a]/30" />
+        <StatusBadge label={aiStatus.label} tone={aiStatus.tone} />
+        {article.chatbotIncluded ? <StatusBadge label={chunkLabel} /> : null}
+      </div>
+      <p className="max-w-[220px] text-[11px] leading-relaxed text-[#1a1a1a]/38">
+        {article.aiIssues.length > 0 ? article.aiIssues.slice(0, 2).join(" · ") : aiStatus.hint}
+      </p>
+    </div>
+  )
+}
+
 export default function AdminDocsPage() {
   const router = useRouter()
   const [content, setContent] = useState<AdminDocsContentResponse | null>(null)
@@ -138,6 +193,7 @@ export default function AdminDocsPage() {
   const [error, setError] = useState<string | null>(null)
   const [searchQuery, setSearchQuery] = useState("")
   const [categoryFilter, setCategoryFilter] = useState("all")
+  const [aiFilter, setAiFilter] = useState<AiFilter>("all")
 
   const load = useCallback(async () => {
     setLoading(true)
@@ -189,11 +245,43 @@ export default function AdminDocsPage() {
         !query ||
         article.title.toLowerCase().includes(query) ||
         article.description.toLowerCase().includes(query) ||
-        article.slug.toLowerCase().includes(query)
+        article.slug.toLowerCase().includes(query) ||
+        article.tags.some((tag) => tag.toLowerCase().includes(query)) ||
+        article.keywords.some((keyword) => keyword.toLowerCase().includes(query)) ||
+        Boolean(article.chatbotSummary?.toLowerCase().includes(query))
+      const matchesAi =
+        aiFilter === "all" ||
+        (aiFilter === "needs-work" && article.aiIssues.length > 0) ||
+        (aiFilter === "chatbot" && article.chatbotIncluded) ||
+        (aiFilter === "not-indexed" && article.chatbotIncluded && !article.aiIndexed)
 
-      return matchesCategory && matchesQuery
+      return matchesCategory && matchesQuery && matchesAi
     })
-  }, [categoryFilter, content, searchQuery])
+  }, [aiFilter, categoryFilter, content, searchQuery])
+
+  const opsSummary = useMemo(() => {
+    const articles = content?.articles ?? []
+
+    return {
+      aiReady: articles.filter((article) => article.aiReady).length,
+      chatbotIncluded: articles.filter((article) => article.chatbotIncluded).length,
+      needsWork: articles.filter((article) => article.aiIssues.length > 0).length,
+      notIndexed: articles.filter((article) => article.chatbotIncluded && !article.aiIndexed)
+        .length,
+      stale: articles.filter((article) => article.stale).length,
+    }
+  }, [content])
+
+  const improvementArticles = useMemo(() => {
+    return [...(content?.articles ?? [])]
+      .filter((article) => article.aiIssues.length > 0)
+      .sort((a, b) => {
+        if (a.aiReady !== b.aiReady) return a.aiReady ? 1 : -1
+        if (a.stale !== b.stale) return a.stale ? -1 : 1
+        return b.aiIssues.length - a.aiIssues.length
+      })
+      .slice(0, 6)
+  }, [content])
 
   const warnings = [...(content?.warnings ?? []), ...(analytics?.warnings ?? [])]
   const summary = analytics?.summary
@@ -296,6 +384,34 @@ export default function AdminDocsPage() {
         />
       </section>
 
+      <section className="mb-8 grid gap-8 border-b border-[#f0f0ec] pb-6 md:grid-cols-2 xl:grid-cols-5">
+        <StatRow
+          label="AI 준비"
+          value={formatNumber(opsSummary.aiReady)}
+          hint="바로 챗봇 답변 후보로 쓰기 좋은 문서"
+        />
+        <StatRow
+          label="챗봇 포함"
+          value={formatNumber(opsSummary.chatbotIncluded)}
+          hint="공개 상태이며 noindex가 아닌 문서"
+        />
+        <StatRow
+          label="보강 필요"
+          value={formatNumber(opsSummary.needsWork)}
+          hint="요약, 키워드, 인덱스, 검토 주기 점검 대상"
+        />
+        <StatRow
+          label="미인덱스"
+          value={formatNumber(opsSummary.notIndexed)}
+          hint="chunk 생성 또는 재생성이 필요한 문서"
+        />
+        <StatRow
+          label="검토 지연"
+          value={formatNumber(opsSummary.stale)}
+          hint="최근 검토 기준 60일 초과 문서"
+        />
+      </section>
+
       <section className="mb-8 grid gap-8 xl:grid-cols-[minmax(0,1fr)_320px]">
         <div>
           <div className="flex flex-col gap-4 border-b border-[#f0f0ec] pb-4 sm:flex-row sm:items-center sm:justify-between">
@@ -327,16 +443,27 @@ export default function AdminDocsPage() {
                   </option>
                 ))}
               </select>
+              <select
+                value={aiFilter}
+                onChange={(event) => setAiFilter(event.target.value as AiFilter)}
+                className="h-9 border-b border-[#e8e8e4] bg-transparent px-1 text-[13px] text-[#111110] outline-none transition-colors focus:border-[#084734]"
+              >
+                <option value="all">AI 전체</option>
+                <option value="needs-work">보강 필요</option>
+                <option value="chatbot">챗봇 포함</option>
+                <option value="not-indexed">미인덱스</option>
+              </select>
             </div>
           </div>
 
-          <div className="mt-4">
-            <table className="w-full text-left">
+          <div className="mt-4 overflow-x-auto">
+            <table className="min-w-[880px] w-full text-left">
               <thead className="text-[11px] uppercase tracking-[0.12em] text-[#1a1a1a]/35">
                 <tr>
                   <th className="py-3 pr-4 font-semibold">문서</th>
                   <th className="py-3 pr-4 font-semibold">카테고리</th>
                   <th className="py-3 pr-4 font-semibold">상태</th>
+                  <th className="py-3 pr-4 font-semibold">AI/챗봇</th>
                   <th className="py-3 pr-4 font-semibold">유형</th>
                   <th className="py-3 font-semibold">업데이트</th>
                 </tr>
@@ -344,13 +471,13 @@ export default function AdminDocsPage() {
               <tbody className="divide-y divide-[#f0f0ec]">
                 {loading ? (
                   <tr>
-                    <td colSpan={5} className="py-10 text-center text-[13px] text-[#1a1a1a]/35">
+                    <td colSpan={6} className="py-10 text-center text-[13px] text-[#1a1a1a]/35">
                       문서 목록을 불러오는 중입니다.
                     </td>
                   </tr>
                 ) : filteredArticles.length === 0 ? (
                   <tr>
-                    <td colSpan={5} className="py-8">
+                    <td colSpan={6} className="py-8">
                       <EmptyState title="표시할 문서가 없습니다" description="검색어나 카테고리 필터를 조정해 보세요." />
                     </td>
                   </tr>
@@ -404,6 +531,9 @@ export default function AdminDocsPage() {
                       <td className="py-4 pr-4">
                         <ArticleStatus article={article} />
                       </td>
+                      <td className="py-4 pr-4">
+                        <ArticleAiStatus article={article} />
+                      </td>
                       <td className="py-4 pr-4 text-[12px] text-[#1a1a1a]/55">
                         <div>{article.docType}</div>
                         <div className="mt-1 text-[#1a1a1a]/30">{article.productArea}</div>
@@ -421,6 +551,53 @@ export default function AdminDocsPage() {
         </div>
 
         <aside className="space-y-8">
+          <div>
+            <div className="flex items-center gap-2">
+              <CircleAlert className="h-4 w-4 text-[#B85C33]" />
+              <h2 className="text-[14px] font-semibold text-[#111110]">AI 보강 큐</h2>
+            </div>
+            <div className="mt-3 divide-y divide-[#f0f0ec]">
+              {loading ? (
+                <p className="py-8 text-center text-[13px] text-[#1a1a1a]/35">
+                  보강 대상을 확인하는 중입니다.
+                </p>
+              ) : improvementArticles.length === 0 ? (
+                <p className="py-8 text-center text-[13px] text-[#1a1a1a]/35">
+                  현재 보강이 필요한 문서가 없습니다.
+                </p>
+              ) : (
+                improvementArticles.map((article) => {
+                  const href =
+                    article.status === "static" ? article.publicPath : `/admin/docs/${article.id}/edit`
+
+                  return (
+                    <Link
+                      key={article.id}
+                      href={href}
+                      className="block py-4 transition-colors hover:text-[#084734]"
+                    >
+                      <div className="flex items-start justify-between gap-4">
+                        <div className="min-w-0">
+                          <p className="truncate text-[13px] font-semibold text-[#111110]">
+                            {article.title}
+                          </p>
+                          <p className="mt-1 text-[11px] leading-relaxed text-[#B85C33]">
+                            {article.aiIssues.slice(0, 2).join(" · ")}
+                          </p>
+                        </div>
+                        <span className="shrink-0 text-[11px] font-semibold text-[#1a1a1a]/35">
+                          {article.aiChunkCount == null
+                            ? "chunk ?"
+                            : `${formatNumber(article.aiChunkCount)} chunks`}
+                        </span>
+                      </div>
+                    </Link>
+                  )
+                })
+              )}
+            </div>
+          </div>
+
           <div>
             <h2 className="text-[14px] font-semibold text-[#111110]">카테고리</h2>
             <div className="mt-3 divide-y divide-[#f0f0ec]">
