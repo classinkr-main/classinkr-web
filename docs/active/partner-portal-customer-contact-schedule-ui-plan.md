@@ -40,10 +40,10 @@
 
 이 계획은 아래 문서의 기준을 UI에 반영한다.
 
-- [docs/active/partner-portal-guidelines.md](C:/Projects/PUBLIC_Classin/Classin_Home_bae_v1/docs/active/partner-portal-guidelines.md)
-- [docs/active/partner-portal-master-spec.md](C:/Projects/PUBLIC_Classin/Classin_Home_bae_v1/docs/active/partner-portal-master-spec.md)
-- [docs/active/partner-portal-product-plan.md](C:/Projects/PUBLIC_Classin/Classin_Home_bae_v1/docs/active/partner-portal-product-plan.md)
-- [docs/active/partner-portal-screen-layout.md](C:/Projects/PUBLIC_Classin/Classin_Home_bae_v1/docs/active/partner-portal-screen-layout.md)
+- [partner-portal-guidelines.md](../archive/partner-portal-guidelines.md) (아카이브)
+- [partner-portal-master-spec.md](./partner-portal-master-spec.md)
+- [partner-portal-product-plan.md](../archive/partner-portal-product-plan.md) (아카이브)
+- [partner-portal-screen-layout.md](../archive/partner-portal-screen-layout.md) (아카이브)
 
 특히 아래 원칙을 그대로 따른다.
 

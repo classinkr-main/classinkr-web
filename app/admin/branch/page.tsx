@@ -97,8 +97,8 @@ export default function BranchPage() {
   const selectedStat = stats.find((s) => s.branch === selected)
 
   return (
-    <div className="px-8 pt-12 pb-20">
-      <div className="mb-8">
+    <div className="px-4 pt-6 pb-24 sm:px-6 sm:pt-8 lg:px-8 lg:pt-10 lg:pb-20">
+      <div className="mb-6 sm:mb-8">
         <p className="text-[11px] font-medium text-[#1a1a1a]/30 uppercase tracking-widest mb-1">Admin</p>
         <h1 className="text-2xl font-bold text-[#111110] tracking-[-0.02em]">지사 관리</h1>
       </div>
@@ -114,15 +114,15 @@ export default function BranchPage() {
           지사 데이터가 없습니다.
         </div>
       ) : (
-        <div className="flex gap-5">
-          <div className="w-56 shrink-0 space-y-2">
+        <div className="flex flex-col gap-5 lg:flex-row">
+          <div className="-mx-4 flex gap-2 overflow-x-auto px-4 pb-2 sm:mx-0 sm:px-0 lg:block lg:w-56 lg:shrink-0 lg:space-y-2 lg:overflow-visible lg:pb-0">
             {stats.map((s) => {
               const active = selected === s.branch
               return (
                 <button
                   key={s.branch}
                   onClick={() => setSelected(active ? null : s.branch)}
-                  className={`w-full text-left px-4 py-3 rounded-xl border transition-all ${
+                  className={`min-w-[180px] rounded-xl border px-4 py-3 text-left transition-all lg:w-full ${
                     active ? "border-[#111110] bg-[#111110] text-white" : "border-[#e8e8e4] bg-white hover:border-[#c8c8c4]"
                   }`}
                 >
@@ -135,8 +135,9 @@ export default function BranchPage() {
 
           <div className="flex-1 min-w-0">
             {!selected ? (
-              <div className="bg-white rounded-xl border border-[#e8e8e4] overflow-hidden">
-                <table className="w-full text-[13px]">
+              <div className="overflow-hidden rounded-xl border border-[#e8e8e4] bg-white">
+                <div className="overflow-x-auto">
+                <table className="min-w-[680px] w-full text-[13px]">
                   <thead>
                     <tr className="border-b border-[#e8e8e4] bg-[#fafaf8]">
                       {["지사", "전체", "신규", "연락중", "전환", "종료", "전환율"].map((h) => (
@@ -158,16 +159,17 @@ export default function BranchPage() {
                     ))}
                   </tbody>
                 </table>
+                </div>
               </div>
             ) : (
               <div className="space-y-4">
-                <div className="grid grid-cols-3 gap-4">
+                <div className="grid gap-3 sm:grid-cols-3 sm:gap-4">
                   {[
                     { icon: <Users className="w-4 h-4 text-[#1a1a1a]/40" />, label: "전체 리드", value: selectedStat?.total ?? 0, accent: "" },
                     { icon: <TrendingUp className="w-4 h-4 text-[#084734]" />, label: "신규", value: selectedStat?.new ?? 0, accent: "bg-[#ECFDF5]" },
                     { icon: <CheckCircle2 className="w-4 h-4 text-green-500" />, label: "전환율", value: selectedStat?.convRate ?? "0%", accent: "bg-green-50" },
                   ].map((card) => (
-                    <div key={card.label} className="bg-white rounded-xl border border-[#e8e8e4] p-5">
+                    <div key={card.label} className="rounded-xl border border-[#e8e8e4] bg-white p-4 sm:p-5">
                       <div className={`inline-flex p-2 rounded-lg mb-1 ${card.accent || "bg-[#f0f0ec]"}`}>{card.icon}</div>
                       <p className="text-[12px] text-[#1a1a1a]/40 mb-0.5">{card.label}</p>
                       <p className="text-2xl font-bold text-[#111110]">{card.value}</p>
@@ -175,15 +177,16 @@ export default function BranchPage() {
                   ))}
                 </div>
 
-                <div className="bg-white rounded-xl border border-[#e8e8e4] overflow-hidden">
-                  <div className="px-5 py-3.5 border-b border-[#e8e8e4] flex items-center justify-between">
+                <div className="overflow-hidden rounded-xl border border-[#e8e8e4] bg-white">
+                  <div className="flex items-center justify-between border-b border-[#e8e8e4] px-4 py-3.5 sm:px-5">
                     <h2 className="text-[13px] font-semibold text-[#111110]">{selected} 리드</h2>
                     <span className="text-[12px] text-[#1a1a1a]/40">{selectedLeads.length}건</span>
                   </div>
                   {selectedLeads.length === 0 ? (
                     <p className="text-center py-10 text-[13px] text-[#1a1a1a]/30">리드 없음</p>
                   ) : (
-                    <table className="w-full text-[13px]">
+                    <div className="overflow-x-auto">
+                    <table className="min-w-[640px] w-full text-[13px]">
                       <thead>
                         <tr className="border-b border-[#e8e8e4] bg-[#fafaf8]">
                           {["시간", "이름", "기관", "연락처", "상태"].map((h) => (
@@ -209,6 +212,7 @@ export default function BranchPage() {
                         ))}
                       </tbody>
                     </table>
+                    </div>
                   )}
                 </div>
               </div>

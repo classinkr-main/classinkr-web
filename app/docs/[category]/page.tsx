@@ -1,6 +1,6 @@
 import type { Metadata } from "next"
 import Link from "next/link"
-import { notFound } from "next/navigation"
+import { notFound, permanentRedirect, redirect } from "next/navigation"
 import { ArrowRight, Search } from "lucide-react"
 
 import {
@@ -11,6 +11,7 @@ import {
   getDocCategoryFromContent,
   getDocsByCategoryFromContent,
   getDocsContent,
+  resolveDocsRedirect,
 } from "@/lib/docs-content"
 
 import { toArticleSummary } from "../_utils"
@@ -64,11 +65,27 @@ export default async function DocsCategoryPage({
   const docsContent = await getDocsContent()
 
   if (!isDocCategoryId(categoryParam)) {
+    const target = await resolveDocsRedirect(`/docs/${categoryParam}`)
+    if (target) {
+      if (target.httpStatus === 301 || target.httpStatus === 308) {
+        permanentRedirect(target.toPath)
+      }
+      redirect(target.toPath)
+    }
     notFound()
   }
 
   const category = getDocCategoryFromContent(docsContent, categoryParam)
-  if (!category) notFound()
+  if (!category) {
+    const target = await resolveDocsRedirect(`/docs/${categoryParam}`)
+    if (target) {
+      if (target.httpStatus === 301 || target.httpStatus === 308) {
+        permanentRedirect(target.toPath)
+      }
+      redirect(target.toPath)
+    }
+    notFound()
+  }
 
   const docs = getDocsByCategoryFromContent(docsContent, categoryParam)
   const articleSummaries = docs.map((doc) => toArticleSummary(doc, docsContent.categories))
@@ -88,7 +105,7 @@ export default async function DocsCategoryPage({
       <section className="container">
         <Link
           href="/docs"
-          className="inline-flex items-center gap-2 text-sm font-medium text-[#1a1a1a]/45 transition-colors hover:text-[#084734]"
+          className="inline-flex origin-left items-center gap-2 text-sm font-medium text-[#1a1a1a]/45 transition-all duration-150 hover:text-[#084734] active:scale-[0.98]"
         >
           <ArrowRight className="h-4 w-4 rotate-180" />
           가이드 홈으로 돌아가기
@@ -112,7 +129,7 @@ export default async function DocsCategoryPage({
             name="q"
             defaultValue={q ?? ""}
             placeholder="이 주제에서 궁금한 내용 검색"
-            className="w-full bg-transparent text-base outline-none placeholder:text-[#A39E98]"
+            className="min-w-0 flex-1 bg-transparent text-base outline-none placeholder:text-[#A39E98]"
           />
           <button type="submit" className="text-sm font-semibold text-[#084734]">
             검색
@@ -137,13 +154,13 @@ export default async function DocsCategoryPage({
           <ul className="divide-y divide-black/[0.08]">
             {(query ? filteredDocs : articleSummaries).map((article) => (
               <li key={article.href} className="py-4">
-                <Link href={article.href} className="block">
+                <Link href={article.href} className="group block origin-center transition-all duration-150 active:scale-[0.98] active:opacity-90">
                   <div className="flex items-start justify-between gap-4">
-                    <div>
-                      <p className="text-[15px] font-semibold text-[#111110] hover:text-[#084734]">
+                    <div className="min-w-0">
+                      <p className="break-words text-[15px] font-semibold text-[#111110] group-hover:text-[#084734]">
                         {article.title}
                       </p>
-                      <p className="mt-1 max-w-3xl text-sm leading-6 text-[#615D59]">
+                      <p className="mt-1 max-w-3xl break-words text-sm leading-6 text-[#615D59]">
                         {article.description}
                       </p>
                       <p className="mt-2 text-xs text-[#A39E98]">

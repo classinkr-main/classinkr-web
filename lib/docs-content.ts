@@ -287,3 +287,50 @@ export function listListedDocsFromContent(content: DocsContent) {
 export function getDocPathFromContent(doc: Pick<DocArticle, "category" | "slug">) {
   return getDocPath(doc)
 }
+
+interface DocsRedirectRow {
+  to_path: string | null
+  to_article_id: string | null
+  http_status: number
+}
+
+interface DocsRedirectTarget {
+  toPath: string
+  httpStatus: 301 | 302 | 307 | 308
+}
+
+export async function resolveDocsRedirect(
+  fromPath: string
+): Promise<DocsRedirectTarget | null> {
+  try {
+    const supabase = createSupabaseAdminClient()
+    const { data, error } = await supabase
+      .from("docs_redirects")
+      .select("to_path, to_article_id, http_status")
+      .eq("from_path", fromPath)
+      .maybeSingle()
+
+    if (error || !data) return null
+    const row = data as DocsRedirectRow
+
+    let toPath = row.to_path
+    if (!toPath && row.to_article_id) {
+      const { data: articleRow } = await supabase
+        .from("docs_articles")
+        .select("category_id, slug")
+        .eq("id", row.to_article_id)
+        .maybeSingle()
+      if (articleRow?.category_id && articleRow?.slug) {
+        toPath = `/docs/${articleRow.category_id}/${articleRow.slug}`
+      }
+    }
+
+    if (!toPath) return null
+    const status = [301, 302, 307, 308].includes(row.http_status)
+      ? (row.http_status as 301 | 302 | 307 | 308)
+      : 301
+    return { toPath, httpStatus: status }
+  } catch {
+    return null
+  }
+}

@@ -35,13 +35,13 @@ export default function UsersPage() {
   const branches = users.filter((u) => u.role === "branch")
 
   return (
-    <div className="px-8 pt-12 pb-20 max-w-2xl">
-      <div className="mb-8">
+    <div className="max-w-2xl px-4 pt-6 pb-24 sm:px-6 sm:pt-8 lg:px-8 lg:pt-10 lg:pb-20">
+      <div className="mb-6 sm:mb-8">
         <p className="text-[11px] font-medium text-[#1a1a1a]/30 uppercase tracking-widest mb-1">Admin</p>
         <h1 className="text-2xl font-bold text-[#111110] tracking-[-0.02em]">회원 관리</h1>
       </div>
 
-      <div className="flex items-start gap-3 bg-[#f0f0ec] rounded-xl px-4 py-3.5 mb-6 text-[13px] text-[#1a1a1a]/60">
+      <div className="mb-6 flex items-start gap-3 rounded-xl bg-[#f0f0ec] px-4 py-3.5 text-[13px] text-[#1a1a1a]/60">
         <Info className="w-4 h-4 shrink-0 mt-0.5 text-[#1a1a1a]/40" />
         <p>
           계정 추가·삭제는 서버의 <code className="font-mono bg-white px-1.5 py-0.5 rounded text-[12px]">.env.local</code> 파일의{" "}
@@ -64,15 +64,15 @@ export default function UsersPage() {
             ) : (
               <ul>
                 {admins.map((u, i) => (
-                  <li key={i} className="flex items-center gap-3 px-5 py-3.5 border-b border-[#e8e8e4] last:border-0">
+                  <li key={i} className="flex items-center gap-3 border-b border-[#e8e8e4] px-4 py-3.5 last:border-0 sm:px-5">
                     <div className="w-8 h-8 rounded-full bg-[#111110] flex items-center justify-center text-[12px] font-bold text-white shrink-0">
                       {u.name[0]}
                     </div>
-                    <div className="flex-1">
+                    <div className="min-w-0 flex-1">
                       <p className="text-[13px] font-medium text-[#111110]">{u.name}</p>
                       <p className="text-[11px] text-[#1a1a1a]/40">전체 접근 권한</p>
                     </div>
-                    <span className={`text-[11px] px-2.5 py-1 rounded-full font-medium ${ROLE_COLOR[u.role]}`}>
+                    <span className={`shrink-0 rounded-full px-2.5 py-1 text-[11px] font-medium ${ROLE_COLOR[u.role]}`}>
                       {ROLE_LABEL[u.role]}
                     </span>
                   </li>
@@ -92,15 +92,15 @@ export default function UsersPage() {
             ) : (
               <ul>
                 {branches.map((u, i) => (
-                  <li key={i} className="flex items-center gap-3 px-5 py-3.5 border-b border-[#e8e8e4] last:border-0">
+                  <li key={i} className="flex items-center gap-3 border-b border-[#e8e8e4] px-4 py-3.5 last:border-0 sm:px-5">
                     <div className="w-8 h-8 rounded-full bg-[#ECFDF5] flex items-center justify-center text-[12px] font-bold text-[#084734] shrink-0">
                       {u.name[0]}
                     </div>
-                    <div className="flex-1">
+                    <div className="min-w-0 flex-1">
                       <p className="text-[13px] font-medium text-[#111110]">{u.name}</p>
                       <p className="text-[11px] text-[#1a1a1a]/40">{u.branch ?? "지사 미지정"} · 본인 지사만 열람</p>
                     </div>
-                    <span className={`text-[11px] px-2.5 py-1 rounded-full font-medium ${ROLE_COLOR[u.role]}`}>
+                    <span className={`shrink-0 rounded-full px-2.5 py-1 text-[11px] font-medium ${ROLE_COLOR[u.role]}`}>
                       {ROLE_LABEL[u.role]}
                     </span>
                   </li>

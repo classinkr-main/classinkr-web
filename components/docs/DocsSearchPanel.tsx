@@ -140,7 +140,7 @@ export function DocsSearchPanel({
           <button
             type="button"
             onClick={() => setQuery("")}
-            className="flex h-10 w-10 shrink-0 items-center justify-center text-[#615D59] transition-colors hover:text-[#111110] focus-visible:outline-none focus-visible:ring-2 focus-visible:ring-[#084734]"
+            className="flex h-10 w-10 shrink-0 items-center justify-center text-[#615D59] transition-all duration-150 hover:text-[#111110] active:scale-[0.92] focus-visible:outline-none focus-visible:ring-2 focus-visible:ring-[#084734]"
             aria-label="검색어 지우기"
           >
             <X className="h-4 w-4" aria-hidden />
@@ -155,7 +155,7 @@ export function DocsSearchPanel({
               key={term}
               type="button"
               onClick={() => setQuery(term)}
-              className="min-h-10 border-b border-transparent px-0 text-sm font-medium text-[#615D59] transition-colors hover:border-[#084734]/25 hover:text-[#084734] focus-visible:outline-none focus-visible:ring-2 focus-visible:ring-[#084734]"
+              className="min-h-10 origin-center border-b border-transparent px-0 text-sm font-medium text-[#615D59] transition-all duration-150 hover:border-[#084734]/25 hover:text-[#084734] active:scale-[0.98] active:opacity-90 focus-visible:outline-none focus-visible:ring-2 focus-visible:ring-[#084734]"
             >
               {term}
             </button>
@@ -177,7 +177,7 @@ export function DocsSearchPanel({
                   clickedPath: article.href,
                 })
               }}
-              className="group flex min-h-[92px] gap-4 border-b border-black/[0.08] py-4 transition-colors hover:border-[#084734]/25 focus-visible:outline-none focus-visible:ring-2 focus-visible:ring-[#084734]"
+              className="group flex min-h-[92px] origin-center gap-4 border-b border-black/[0.08] py-4 transition-all duration-150 hover:border-[#084734]/25 active:scale-[0.98] active:opacity-90 focus-visible:outline-none focus-visible:ring-2 focus-visible:ring-[#084734]"
             >
               <span className="flex h-10 w-10 shrink-0 items-center justify-center text-[#084734]">
                 <FileText className="h-5 w-5" aria-hidden />
@@ -187,10 +187,10 @@ export function DocsSearchPanel({
                   {article.category ? <span>{article.category}</span> : null}
                   {article.readTime ? <span className="text-[#A39E98]">{article.readTime}</span> : null}
                 </span>
-                <span className="mt-2 block text-base font-semibold leading-snug text-[#111110] group-hover:text-[#084734]">
+                <span className="mt-2 block break-words text-base font-semibold leading-snug text-[#111110] group-hover:text-[#084734]">
                   {article.title}
                 </span>
-                <span className="mt-1 block text-sm leading-6 text-[#4F4C49]">
+                <span className="mt-1 block break-words text-sm leading-6 text-[#4F4C49]">
                   {article.description}
                 </span>
               </span>

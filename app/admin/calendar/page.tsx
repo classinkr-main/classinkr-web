@@ -158,7 +158,7 @@ function EventForm({ initial, onSave, onCancel, loading, isEdit }: EventFormProp
 
       <div className="space-y-1.5">
         <Label>유형 *</Label>
-        <div className="grid grid-cols-3 gap-1.5">
+        <div className="grid grid-cols-2 gap-1.5 sm:grid-cols-3">
           {EVENT_TYPES.map((t) => (
             <button
               key={t.value}
@@ -177,7 +177,7 @@ function EventForm({ initial, onSave, onCancel, loading, isEdit }: EventFormProp
         </div>
       </div>
 
-      <div className="grid grid-cols-2 gap-3">
+      <div className="grid gap-3 sm:grid-cols-2">
         <div className="space-y-1.5">
           <Label>시작일 *</Label>
           <Input type="date" value={form.date} onChange={(e) => set("date", e.target.value)} required />
@@ -200,7 +200,7 @@ function EventForm({ initial, onSave, onCancel, loading, isEdit }: EventFormProp
       </div>
 
       {!form.allDay && (
-        <div className="grid grid-cols-2 gap-3">
+        <div className="grid gap-3 sm:grid-cols-2">
           <div className="space-y-1.5">
             <Label>시작 시간</Label>
             <Input type="time" value={form.time} onChange={(e) => set("time", e.target.value)} />
@@ -232,7 +232,7 @@ function EventForm({ initial, onSave, onCancel, loading, isEdit }: EventFormProp
         />
       </div>
 
-      <div className="flex justify-end gap-2 pt-1">
+      <div className="flex flex-col-reverse gap-2 pt-1 sm:flex-row sm:justify-end">
         <Button type="button" variant="outline" onClick={onCancel} disabled={loading}>취소</Button>
         <Button type="submit" disabled={loading}>
           {loading ? "저장 중..." : isEdit ? "수정" : "추가"}
@@ -395,9 +395,9 @@ export default function AdminCalendarPage() {
   const totalTeamEvents = events.filter((event) => getEventSource(event) === "calendar").length
 
   return (
-    <div className="px-8 pt-12 pb-20">
+    <div className="px-4 pt-6 pb-24 sm:px-6 sm:pt-8 lg:px-8 lg:pt-10 lg:pb-20">
       {/* Header */}
-      <div className="flex items-center justify-between mb-8">
+      <div className="mb-6 flex flex-col gap-4 sm:mb-8 sm:flex-row sm:items-center sm:justify-between">
         <div>
           <p className="text-[11px] font-medium text-[#1a1a1a]/30 uppercase tracking-widest mb-1">Admin</p>
           <h1 className="text-2xl font-bold text-[#111110] tracking-[-0.02em]">운영 캘린더</h1>
@@ -405,7 +405,7 @@ export default function AdminCalendarPage() {
             팀 일정과 파트너 운영 일정을 함께 보되, 파트너 일정은 읽기 전용으로 표시되고 수정은 파트너 워크스페이스에서 진행합니다.
           </p>
         </div>
-        <Button size="sm" onClick={() => openCreate()}>
+        <Button size="sm" onClick={() => openCreate()} className="w-full sm:w-auto">
           <Plus className="w-4 h-4 mr-1.5" />
           일정 추가
         </Button>
@@ -419,7 +419,7 @@ export default function AdminCalendarPage() {
       )}
 
       {/* Stats strip */}
-      <div className="flex flex-wrap items-center gap-4 mb-6 text-[13px]">
+      <div className="mb-6 flex flex-wrap items-center gap-3 text-[13px]">
         <span className="text-[#1a1a1a]/40">
           이번달 <span className="font-semibold text-[#111110]">{totalThisMonth}개</span>
         </span>
@@ -439,7 +439,7 @@ export default function AdminCalendarPage() {
             </span>
           )
         })}
-        <div className="ml-auto inline-flex rounded-xl border border-[#e8e8e4] bg-white p-1">
+        <div className="inline-flex w-full overflow-x-auto rounded-xl border border-[#e8e8e4] bg-white p-1 sm:ml-auto sm:w-auto">
           {SOURCE_FILTERS.map((filter) => (
             <button
               key={filter.value}
@@ -458,9 +458,9 @@ export default function AdminCalendarPage() {
       </div>
 
       {/* Main grid */}
-      <div className="flex gap-6 items-start">
+      <div className="flex flex-col gap-6 items-stretch xl:flex-row xl:items-start">
         {/* Calendar */}
-        <div className="flex-1 min-w-0 bg-white rounded-2xl border border-[#e8e8e4] overflow-hidden">
+        <div className="min-w-0 flex-1 overflow-hidden rounded-2xl border border-[#e8e8e4] bg-white">
           {/* Month nav */}
           <div className="flex items-center justify-between px-5 py-4 border-b border-[#e8e8e4]">
             <button
@@ -499,7 +499,7 @@ export default function AdminCalendarPage() {
           <div className="grid grid-cols-7">
             {/* Empty cells before month start */}
             {Array.from({ length: firstDay }).map((_, i) => (
-              <div key={`empty-${i}`} className="h-24 border-b border-r border-[#f0f0ec]" />
+              <div key={`empty-${i}`} className="h-20 border-b border-r border-[#f0f0ec] sm:h-24" />
             ))}
 
             {/* Day cells */}
@@ -525,7 +525,7 @@ export default function AdminCalendarPage() {
                   role="button"
                   tabIndex={0}
                   aria-label={`${monthLabel} ${day}일 일정 보기`}
-                  className={`h-24 border-b border-r border-[#f0f0ec] p-1.5 cursor-pointer transition-colors relative group ${
+                  className={`relative h-20 cursor-pointer border-b border-r border-[#f0f0ec] p-1 transition-colors group sm:h-24 sm:p-1.5 ${
                     isSelected
                       ? "bg-[#111110]/5"
                       : "hover:bg-[#fafaf8]"
@@ -555,7 +555,7 @@ export default function AdminCalendarPage() {
                   </div>
 
                   {/* Event dots/chips */}
-                  <div className="space-y-0.5 overflow-hidden">
+                  <div className="hidden space-y-0.5 overflow-hidden sm:block">
                     {dayEvents.slice(0, 3).map((ev) => {
                       const style = getTypeStyle(ev.type)
                       const isPartnerEvent = getEventSource(ev) === "partner"
@@ -587,7 +587,7 @@ export default function AdminCalendarPage() {
         </div>
 
         {/* Right panel */}
-        <div className="w-72 shrink-0 space-y-4">
+        <div className="w-full shrink-0 space-y-4 xl:w-72">
           {/* Selected day */}
           {selectedDate && (
             <div className="bg-white rounded-2xl border border-[#e8e8e4] overflow-hidden">
@@ -775,7 +775,7 @@ export default function AdminCalendarPage() {
           setEditingEvent(null)
         }
       }}>
-        <DialogContent className="max-w-md bg-white max-h-[90vh] overflow-y-auto">
+        <DialogContent className="max-h-[90vh] max-w-md overflow-y-auto bg-white">
           <DialogHeader>
             <DialogTitle>{editingEvent ? "일정 수정" : "일정 추가"}</DialogTitle>
             <DialogDescription>

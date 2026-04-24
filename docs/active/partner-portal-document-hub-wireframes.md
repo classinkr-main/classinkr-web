@@ -11,8 +11,8 @@
 관련 기준 문서:
 
 - [partner-portal-master-spec.md](./partner-portal-master-spec.md)
-- [partner-portal-screen-layout.md](./partner-portal-screen-layout.md)
-- [partner-portal-product-plan.md](./partner-portal-product-plan.md)
+- [partner-portal-screen-layout.md](../archive/partner-portal-screen-layout.md) (아카이브)
+- [partner-portal-product-plan.md](../archive/partner-portal-product-plan.md) (아카이브)
 - [documents/page.tsx](/Users/clmagi/Desktop/Projects/classin_home/app/partner/(portal)/documents/page.tsx)
 
 ## 1. 제품 한 줄 정의

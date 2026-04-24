@@ -29,10 +29,10 @@ function Checklist({ items }: { items: DocsChecklistItem[] }) {
                     >
                         {item.checked ? <Check aria-hidden className="h-3.5 w-3.5" /> : <Circle aria-hidden className="h-2.5 w-2.5 fill-current" />}
                     </span>
-                    <span>
-                        <span className="block text-sm font-bold leading-6 text-[#111110]">{item.label}</span>
+                    <span className="min-w-0">
+                        <span className="block break-words text-sm font-bold leading-6 text-[#111110]">{item.label}</span>
                         {item.description ? (
-                            <span className="mt-1 block text-sm leading-6 text-[#615D59]">
+                            <span className="mt-1 block break-words text-sm leading-6 text-[#615D59]">
                                 {item.description}
                             </span>
                         ) : null}
@@ -60,11 +60,11 @@ export function DocsArticle({
                         {eyebrow}
                     </p>
                 ) : null}
-                <h1 className="mt-4 text-4xl font-black leading-[1.08] tracking-display text-[#111110] md:text-5xl">
+                <h1 className="mt-4 break-words text-4xl font-black leading-[1.08] tracking-display text-[#111110] md:text-5xl">
                     {title}
                 </h1>
                 {description ? (
-                    <p className="mt-5 max-w-3xl text-lg leading-8 text-[#4F4C49]">
+                    <p className="mt-5 max-w-3xl break-words text-lg leading-8 text-[#4F4C49]">
                         {description}
                     </p>
                 ) : null}
@@ -87,11 +87,11 @@ export function DocsArticle({
                                 {section.eyebrow}
                             </p>
                         ) : null}
-                        <h2 className="text-2xl font-black leading-tight tracking-subhead text-[#111110] md:text-3xl">
+                        <h2 className="break-words text-2xl font-black leading-tight tracking-subhead text-[#111110] md:text-3xl">
                             {section.title}
                         </h2>
                         {section.body ? (
-                            <div className="mt-4 text-base leading-8 text-[#31302E]">
+                            <div className="mt-4 break-words text-base leading-8 text-[#31302E]">
                                 {section.body}
                             </div>
                         ) : null}
@@ -113,11 +113,11 @@ export function DocsArticle({
                                     ) : (
                                         <Info aria-hidden className="mt-0.5 h-5 w-5 shrink-0" />
                                     )}
-                                    <div>
+                                    <div className="min-w-0">
                                         {section.callout.title ? (
-                                            <p className="font-bold">{section.callout.title}</p>
+                                            <p className="break-words font-bold">{section.callout.title}</p>
                                         ) : null}
-                                        <div className="mt-1 text-sm leading-6">{section.callout.body}</div>
+                                        <div className="mt-1 break-words text-sm leading-6">{section.callout.body}</div>
                                     </div>
                                 </div>
                             </div>

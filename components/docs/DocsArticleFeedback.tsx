@@ -95,7 +95,7 @@ export function DocsArticleFeedback({
               onClick={() => void submitFeedback("helpful", "")}
               disabled={isSaving}
               className={cn(
-                "inline-flex min-h-8 items-center justify-center gap-1.5 border-b border-transparent px-0 text-sm font-semibold transition-colors focus-visible:outline-none focus-visible:ring-2 focus-visible:ring-[#084734]",
+                "inline-flex min-h-8 origin-center items-center justify-center gap-1.5 border-b border-transparent px-0 text-sm font-semibold transition-all duration-150 active:scale-[0.97] focus-visible:outline-none focus-visible:ring-2 focus-visible:ring-[#084734]",
                 rating === "helpful"
                   ? "border-[#084734] text-[#084734]"
                   : "text-[#31302E] hover:border-[#084734]/30 hover:text-[#084734]",
@@ -114,7 +114,7 @@ export function DocsArticleFeedback({
               onClick={() => setRating("not_helpful")}
               disabled={isSaving}
               className={cn(
-                "inline-flex min-h-8 items-center justify-center gap-1.5 border-b border-transparent px-0 text-sm font-semibold transition-colors focus-visible:outline-none focus-visible:ring-2 focus-visible:ring-[#084734]",
+                "inline-flex min-h-8 origin-center items-center justify-center gap-1.5 border-b border-transparent px-0 text-sm font-semibold transition-all duration-150 active:scale-[0.97] focus-visible:outline-none focus-visible:ring-2 focus-visible:ring-[#084734]",
                 rating === "not_helpful"
                   ? "border-[#B85C33] text-[#B85C33]"
                   : "text-[#31302E] hover:border-[#B85C33]/30 hover:text-[#B85C33]",
@@ -148,7 +148,7 @@ export function DocsArticleFeedback({
               type="button"
               onClick={() => void submitFeedback("not_helpful")}
               disabled={isSaving}
-              className="inline-flex min-h-11 items-center justify-center gap-2 border-b border-[#084734] px-0 text-sm font-semibold text-[#084734] transition-colors hover:text-[#065c41] disabled:cursor-wait disabled:opacity-70 focus-visible:outline-none focus-visible:ring-2 focus-visible:ring-[#084734]"
+              className="inline-flex min-h-11 origin-center items-center justify-center gap-2 border-b border-[#084734] px-0 text-sm font-semibold text-[#084734] transition-all duration-150 hover:text-[#065c41] active:scale-[0.97] disabled:cursor-wait disabled:opacity-70 focus-visible:outline-none focus-visible:ring-2 focus-visible:ring-[#084734]"
             >
               {isSaving ? <Loader2 className="h-4 w-4 animate-spin" aria-hidden /> : null}
               피드백 보내기

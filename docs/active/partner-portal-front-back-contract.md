@@ -8,7 +8,7 @@
 관련 문서:
 
 - [partner-portal-master-spec.md](./partner-portal-master-spec.md)
-- [partner-portal-screen-layout.md](./partner-portal-screen-layout.md)
+- [partner-portal-screen-layout.md](../archive/partner-portal-screen-layout.md) (아카이브)
 - [partner-portal-implementation-roadmap.md](./partner-portal-implementation-roadmap.md)
 
 ## 1. 제품 구조 한 줄 정리

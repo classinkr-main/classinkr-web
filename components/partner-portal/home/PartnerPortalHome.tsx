@@ -78,6 +78,7 @@ type CustomerItem = {
 
 type DealItem = {
   id: string
+  customer_id: string
   title: string
   deal_code: string
   current_stage: string
@@ -114,6 +115,24 @@ type PartnerOverviewPayload = {
 type PartnerOverviewResponse = Partial<PartnerOverviewPayload> & {
   error?: string
   inventory_summary?: InventorySkuSummary[]
+}
+
+type PartnerPortalLinkTargets = {
+  calendar: string
+  documents: string
+  workspace: string
+}
+
+type PartnerPortalHomeProps = {
+  overviewEndpoint?: string
+  linkTargets?: Partial<PartnerPortalLinkTargets>
+  allowCreate?: boolean
+}
+
+const DEFAULT_LINK_TARGETS: PartnerPortalLinkTargets = {
+  calendar: "/partner/calendar",
+  documents: "/partner/documents",
+  workspace: "/partner/workspace",
 }
 
 /* ─── Constants ──────────────────────────────────────────────── */
@@ -188,12 +207,12 @@ const DEMO: PartnerOverviewPayload = {
     },
   ],
   deals: [
-    { id: "d1", title: "본관 전자칠판 4대 설치", deal_code: "D-2026-001", current_stage: "installation", customer_name: "강남메가스터디학원", customer_campus_name: "본관", expected_amount: 29000000, contracted_amount: 29000000, paid_amount: 12000000, outstanding_amount: 17000000, manager_name: "김민준" },
-    { id: "d2", title: "추가 교실 계약", deal_code: "D-2026-011", current_stage: "quote", customer_name: "강남메가스터디학원", customer_campus_name: "본관", expected_amount: 14000000, contracted_amount: 14000000, paid_amount: 0, outstanding_amount: 14000000, manager_name: "이서연" },
-    { id: "d3", title: "3층 전체 교체", deal_code: "D-2026-004", current_stage: "payment", customer_name: "리더스입시학원", customer_campus_name: "3층", expected_amount: 24200000, contracted_amount: 24200000, paid_amount: 24200000, outstanding_amount: 0, manager_name: "박지훈" },
-    { id: "d4", title: "별관 추가 계약", deal_code: "D-2026-015", current_stage: "contract", customer_name: "강남메가스터디학원", customer_campus_name: "별관", expected_amount: 8600000, contracted_amount: 8600000, paid_amount: 0, outstanding_amount: 8600000, manager_name: "김민준" },
-    { id: "d5", title: "2교실 신설 견적", deal_code: "D-2026-018", current_stage: "contact", customer_name: "서초수학교습소", customer_campus_name: null, expected_amount: 12400000, contracted_amount: 0, paid_amount: 0, outstanding_amount: 0, manager_name: "이서연" },
-    { id: "d6", title: "분당지점 추가 설치", deal_code: "D-2026-007", current_stage: "installation", customer_name: "리더스입시학원", customer_campus_name: "3층", expected_amount: 15600000, contracted_amount: 15600000, paid_amount: 0, outstanding_amount: 15600000, manager_name: "박지훈" },
+    { id: "d1", customer_id: "c1", title: "본관 전자칠판 4대 설치", deal_code: "D-2026-001", current_stage: "installation", customer_name: "강남메가스터디학원", customer_campus_name: "본관", expected_amount: 29000000, contracted_amount: 29000000, paid_amount: 12000000, outstanding_amount: 17000000, manager_name: "김민준" },
+    { id: "d2", customer_id: "c1", title: "추가 교실 계약", deal_code: "D-2026-011", current_stage: "quote", customer_name: "강남메가스터디학원", customer_campus_name: "본관", expected_amount: 14000000, contracted_amount: 14000000, paid_amount: 0, outstanding_amount: 14000000, manager_name: "이서연" },
+    { id: "d3", customer_id: "c2", title: "3층 전체 교체", deal_code: "D-2026-004", current_stage: "payment", customer_name: "리더스입시학원", customer_campus_name: "3층", expected_amount: 24200000, contracted_amount: 24200000, paid_amount: 24200000, outstanding_amount: 0, manager_name: "박지훈" },
+    { id: "d4", customer_id: "c1", title: "별관 추가 계약", deal_code: "D-2026-015", current_stage: "contract", customer_name: "강남메가스터디학원", customer_campus_name: "별관", expected_amount: 8600000, contracted_amount: 8600000, paid_amount: 0, outstanding_amount: 8600000, manager_name: "김민준" },
+    { id: "d5", customer_id: "c3", title: "2교실 신설 견적", deal_code: "D-2026-018", current_stage: "contact", customer_name: "서초수학교습소", customer_campus_name: null, expected_amount: 12400000, contracted_amount: 0, paid_amount: 0, outstanding_amount: 0, manager_name: "이서연" },
+    { id: "d6", customer_id: "c2", title: "분당지점 추가 설치", deal_code: "D-2026-007", current_stage: "installation", customer_name: "리더스입시학원", customer_campus_name: "3층", expected_amount: 15600000, contracted_amount: 15600000, paid_amount: 0, outstanding_amount: 15600000, manager_name: "박지훈" },
   ],
   recent_activity: [
     { id: "a1", summary: "견적서 v3 링크 발송", action_type: "document", created_at: "2026-04-04T02:10:00Z" },
@@ -418,10 +437,12 @@ function LeftSidebar({
   upcoming_installations,
   recent_calendar_events,
   recent_activity,
+  calendarHref,
 }: {
   upcoming_installations: InstallationEvent[]
   recent_calendar_events: CalendarEvent[]
   recent_activity: ActivityLog[]
+  calendarHref: string
 }) {
   // build event dots for current month
   const calDots: CalDot[] = useMemo(() => {
@@ -482,7 +503,7 @@ function LeftSidebar({
         <div>
           <div className="mb-3 flex items-center justify-between">
             <h3 className="text-xs font-semibold text-[#111110]">급한 일정</h3>
-            <a href="/partner/calendar" className="text-[10px] text-[#1a1a1a]/40 hover:text-[#1a1a1a]">
+            <a href={calendarHref} className="text-[10px] text-[#1a1a1a]/40 hover:text-[#1a1a1a]">
               전체 →
             </a>
           </div>
@@ -566,7 +587,11 @@ function LeftSidebar({
 
 /* ─── Main Component ──────────────────────────────────────────── */
 
-export function PartnerPortalHome() {
+export function PartnerPortalHome({
+  overviewEndpoint = "/api/portal/overview",
+  linkTargets,
+  allowCreate,
+}: PartnerPortalHomeProps = {}) {
   const [overview, setOverview] = useState<PartnerOverviewPayload>(DEMO)
   const [loading, setLoading]   = useState(true)
   const [expandedCustomers, setExpandedCustomers] = useState<Set<string>>(new Set(["c1"]))
@@ -582,9 +607,14 @@ export function PartnerPortalHome() {
     window.location.reload()
   }, [])
 
+  const resolvedLinkTargets = useMemo(
+    () => ({ ...DEFAULT_LINK_TARGETS, ...linkTargets }),
+    [linkTargets]
+  )
+
   useEffect(() => {
     let alive = true
-    portalFetch("/api/portal/overview")
+    portalFetch(overviewEndpoint)
       .then(async r => {
         const payload = await r.json() as PartnerOverviewResponse
         if (!r.ok) throw new Error(payload.error ?? "Failed to fetch overview")
@@ -593,7 +623,7 @@ export function PartnerPortalHome() {
       .then(payload => { if (alive) { setOverview(payload); setLoading(false) } })
       .catch(() => { if (alive) { setOverview(DEMO); setLoading(false) } })
     return () => { alive = false }
-  }, [])
+  }, [overviewEndpoint])
 
   /* pipeline: group deals by stage */
   const pipeline = useMemo(() => {
@@ -609,7 +639,7 @@ export function PartnerPortalHome() {
   const customerStacks = useMemo(() =>
     overview.customers.map(item => ({
       ...item,
-      deals: overview.deals.filter(d => d.customer_name === item.customer.name),
+      deals: overview.deals.filter(d => d.customer_id === item.customer.id),
     })),
   [overview])
 
@@ -619,21 +649,21 @@ export function PartnerPortalHome() {
 
     const contractDeals = overview.deals.filter(d => d.current_stage === "contract")
     if (contractDeals.length > 0) {
-      chips.push({ id: "sign", label: `계약 서명 대기 ${contractDeals.length}건`, href: "/partner/documents", cls: "bg-[#084734]/30 text-[#ECFDF5] hover:bg-[#084734]/40 border border-[#084734]/20" })
+      chips.push({ id: "sign", label: `계약 서명 대기 ${contractDeals.length}건`, href: resolvedLinkTargets.documents, cls: "bg-[#084734]/30 text-[#ECFDF5] hover:bg-[#084734]/40 border border-[#084734]/20" })
     }
 
     const nearInstalls = overview.upcoming_installations.filter(i => daysUntil(i.scheduled_start_at) <= 7)
     if (nearInstalls.length > 0) {
       const d = daysUntil(nearInstalls[0].scheduled_start_at)
-      chips.push({ id: "install", label: d === 0 ? "오늘 설치 예정" : `설치 D-${d}`, href: "/partner/calendar", cls: "bg-orange-500/25 text-orange-200 hover:bg-orange-500/35 border border-orange-500/20" })
+      chips.push({ id: "install", label: d === 0 ? "오늘 설치 예정" : `설치 D-${d}`, href: resolvedLinkTargets.calendar, cls: "bg-orange-500/25 text-orange-200 hover:bg-orange-500/35 border border-orange-500/20" })
     }
 
     if (overview.metrics.outstanding_amount > 0) {
-      chips.push({ id: "pay", label: `미수금 ${fmt(overview.metrics.outstanding_amount)}`, href: "/partner/workspace", cls: "bg-red-500/25 text-red-200 hover:bg-red-500/35 border border-red-500/20" })
+      chips.push({ id: "pay", label: `미수금 ${fmt(overview.metrics.outstanding_amount)}`, href: resolvedLinkTargets.workspace, cls: "bg-red-500/25 text-red-200 hover:bg-red-500/35 border border-red-500/20" })
     }
 
     return chips
-  }, [overview])
+  }, [overview, resolvedLinkTargets])
 
   /* action queue: priority-ordered to-do list */
   const actionQueue = useMemo(() => {
@@ -645,7 +675,7 @@ export function PartnerPortalHome() {
       .filter(d => d.outstanding_amount > 0 && (d.current_stage === "installation" || d.current_stage === "payment"))
       .slice(0, 2)
       .forEach(d => {
-        q.push({ id: `ov-${d.id}`, num: n++, label: `미수금 ${fmt(d.outstanding_amount)} 확인`, sub: `${d.customer_name ?? ""} · ${d.title}`, href: "/partner/workspace", numCls: "bg-red-500 text-white" })
+        q.push({ id: `ov-${d.id}`, num: n++, label: `미수금 ${fmt(d.outstanding_amount)} 확인`, sub: `${d.customer_name ?? ""} · ${d.title}`, href: resolvedLinkTargets.workspace, numCls: "bg-red-500 text-white" })
       })
 
     overview.upcoming_installations
@@ -653,28 +683,28 @@ export function PartnerPortalHome() {
       .slice(0, 2)
       .forEach(i => {
         const d = daysUntil(i.scheduled_start_at)
-        q.push({ id: `inst-${i.id}`, num: n++, label: d === 0 ? "오늘 설치 확인" : `설치 D-${d} 준비`, sub: `${i.title} · ${i.location ?? "장소 미지정"}`, href: "/partner/calendar", numCls: "bg-orange-500 text-white" })
+        q.push({ id: `inst-${i.id}`, num: n++, label: d === 0 ? "오늘 설치 확인" : `설치 D-${d} 준비`, sub: `${i.title} · ${i.location ?? "장소 미지정"}`, href: resolvedLinkTargets.calendar, numCls: "bg-orange-500 text-white" })
       })
 
     overview.deals
       .filter(d => d.current_stage === "contract")
       .slice(0, 2)
       .forEach(d => {
-        q.push({ id: `ct-${d.id}`, num: n++, label: "계약 서명 검토", sub: `${d.customer_name ?? ""} · ${d.title}`, href: "/partner/documents", numCls: "bg-[#084734] text-white" })
+        q.push({ id: `ct-${d.id}`, num: n++, label: "계약 서명 검토", sub: `${d.customer_name ?? ""} · ${d.title}`, href: resolvedLinkTargets.documents, numCls: "bg-[#084734] text-white" })
       })
 
     overview.recent_calendar_events.slice(0, 2).forEach(e => {
-      q.push({ id: `ce-${e.id}`, num: n++, label: e.title, sub: fmtShortDate(e.starts_at), href: "/partner/calendar", numCls: "bg-teal-500 text-white" })
+      q.push({ id: `ce-${e.id}`, num: n++, label: e.title, sub: fmtShortDate(e.starts_at), href: resolvedLinkTargets.calendar, numCls: "bg-teal-500 text-white" })
     })
 
     return q.slice(0, 7)
-  }, [overview])
+  }, [overview, resolvedLinkTargets])
 
   /* KPI progress */
   const { contracted_amount, installed_amount, paid_amount, outstanding_amount } = overview.metrics
   const installPct = contracted_amount > 0 ? Math.round((installed_amount / contracted_amount) * 100) : 0
   const paidPct    = contracted_amount > 0 ? Math.round((paid_amount    / contracted_amount) * 100) : 0
-  const canCreateInPortal = overview.mode === "v2"
+  const canCreateInPortal = allowCreate ?? overview.mode === "v2"
 
   const todayStr = new Date().toLocaleDateString("ko-KR", {
     year: "numeric", month: "long", day: "numeric", weekday: "short",
@@ -704,6 +734,7 @@ export function PartnerPortalHome() {
           upcoming_installations={overview.upcoming_installations}
           recent_calendar_events={overview.recent_calendar_events}
           recent_activity={overview.recent_activity}
+          calendarHref={resolvedLinkTargets.calendar}
         />
 
         {/* ── Main Content ──────────────────────────────────────── */}
@@ -1050,7 +1081,7 @@ export function PartnerPortalHome() {
                       </span>
                     </div>
                     <div className="flex items-center gap-2">
-                      <a href="/partner/documents" onClick={e => e.stopPropagation()} className="text-xs text-[#1a1a1a]/40 hover:text-[#1a1a1a]">문서 →</a>
+                      <a href={resolvedLinkTargets.documents} onClick={e => e.stopPropagation()} className="text-xs text-[#1a1a1a]/40 hover:text-[#1a1a1a]">문서 →</a>
                       <ChevronDown className={`h-3.5 w-3.5 text-[#1a1a1a]/30 transition-transform duration-200 ${quoteOpen ? "" : "-rotate-90"}`} />
                     </div>
                   </button>
@@ -1098,7 +1129,7 @@ export function PartnerPortalHome() {
                       </span>
                     </div>
                     <div className="flex items-center gap-2">
-                      <a href="/partner/documents" onClick={e => e.stopPropagation()} className="text-xs text-[#1a1a1a]/40 hover:text-[#1a1a1a]">계약서 →</a>
+                      <a href={resolvedLinkTargets.documents} onClick={e => e.stopPropagation()} className="text-xs text-[#1a1a1a]/40 hover:text-[#1a1a1a]">계약서 →</a>
                       <ChevronDown className={`h-3.5 w-3.5 text-[#1a1a1a]/30 transition-transform duration-200 ${contractOpen ? "" : "-rotate-90"}`} />
                     </div>
                   </button>

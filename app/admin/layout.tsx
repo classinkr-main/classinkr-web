@@ -178,7 +178,7 @@ export default function AdminLayout({ children }: { children: React.ReactNode })
         </aside>
       )}
       {session ? <AdminNotificationsBell /> : null}
-      <main className="min-w-0 flex-1 overflow-x-hidden">
+      <main className="min-w-0 flex-1 overflow-x-hidden pt-16 pb-24 lg:pt-0 lg:pb-0">
         <div className="mx-auto w-full max-w-[1320px]">{children}</div>
       </main>
     </div>
