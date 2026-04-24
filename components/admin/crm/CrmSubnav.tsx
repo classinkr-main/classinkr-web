@@ -2,9 +2,9 @@
 
 import Link from "next/link"
 import type { ReactNode } from "react"
-import { Building2, LayoutDashboard, ListChecks, Users } from "lucide-react"
+import { Building2, CircleDollarSign, LayoutDashboard, ListChecks, Users } from "lucide-react"
 
-type CrmTab = "customers" | "partners" | "partnerPortal" | "partnerCustomers"
+type CrmTab = "customers" | "partners" | "partnerPortal" | "partnerCustomers" | "revenue"
 
 const CRM_TABS = [
   {
@@ -35,6 +35,13 @@ const CRM_TABS = [
     description: "기관 목록, 상세 정보, 활동 로그",
     icon: <Building2 className="h-4 w-4" />,
   },
+  {
+    key: "revenue",
+    href: "/admin/crm/revenue",
+    label: "매출",
+    description: "견적, 계약, 수납, 시트 연결",
+    icon: <CircleDollarSign className="h-4 w-4" />,
+  },
 ] satisfies Array<{
   key: CrmTab
   href: string
@@ -45,7 +52,7 @@ const CRM_TABS = [
 
 export default function CrmSubnav({ active }: { active: CrmTab }) {
   return (
-    <div className="-mx-4 mb-6 flex gap-2 overflow-x-auto px-4 pb-2 sm:mx-0 sm:flex-wrap sm:overflow-visible sm:px-0 sm:pb-0">
+    <div className="-mx-4 mb-6 flex gap-2 overflow-x-auto px-4 pb-2 sm:mx-0 sm:grid sm:grid-cols-2 sm:overflow-visible sm:px-0 sm:pb-0 lg:grid-cols-5">
       {CRM_TABS.map((tab) => {
         const isActive = active === tab.key
 
@@ -53,7 +60,7 @@ export default function CrmSubnav({ active }: { active: CrmTab }) {
           <Link
             key={tab.key}
             href={tab.href}
-            className={`flex min-w-[176px] shrink-0 items-center gap-3 rounded-xl border px-3 py-3 transition-colors sm:min-w-[180px] sm:rounded-2xl sm:px-4 ${
+            className={`flex min-w-[164px] shrink-0 items-center gap-3 rounded-xl border px-3 py-3 transition-colors sm:min-w-0 sm:rounded-2xl sm:px-4 ${
               isActive
                 ? "border-[#111110] bg-[#111110] text-white"
                 : "border-[#e8e8e4] bg-white text-[#111110] hover:border-[#c8c8c4]"
@@ -66,7 +73,7 @@ export default function CrmSubnav({ active }: { active: CrmTab }) {
             >
               {tab.icon}
             </span>
-            <span className="min-w-0">
+            <span className="min-w-0 flex-1">
               <span className="block text-[13px] font-semibold">{tab.label}</span>
               <span className={`mt-0.5 block text-[11px] ${isActive ? "text-white/60" : "text-[#1a1a1a]/42"}`}>
                 {tab.description}

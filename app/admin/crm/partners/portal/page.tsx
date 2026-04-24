@@ -10,6 +10,7 @@ export default function AdminCrmPartnerPortalPage() {
       <PartnerPortalHome
         overviewEndpoint="/api/portal/overview?shape=partner"
         allowCreate={false}
+        adminView
         linkTargets={{
           calendar: "/admin/calendar",
           documents: "/admin/quotes",

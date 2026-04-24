@@ -254,16 +254,16 @@ export default function AdminEventsPage() {
   // ── render ─────────────────────────────────────────────────────────────────
 
   return (
-    <div className="p-6 max-w-5xl mx-auto">
+    <div className="mx-auto max-w-5xl px-4 pt-6 pb-24 sm:px-6 sm:pt-8 lg:px-8 lg:pt-10 lg:pb-20">
       {/* Header */}
-      <div className="flex items-center justify-between mb-6">
+      <div className="mb-6 flex flex-col gap-4 sm:flex-row sm:items-center sm:justify-between">
         <div>
           <h1 className="text-xl font-bold text-[#111110]">공개 행사 관리</h1>
           <p className="text-[13px] text-[#1a1a1a]/40 mt-0.5">/events 페이지에 표시되는 행사를 등록·수정합니다.</p>
         </div>
         <button
           onClick={openCreate}
-          className="inline-flex items-center gap-2 bg-[#111110] text-white text-[13px] font-medium px-4 py-2 rounded-lg hover:bg-emerald-700 transition-colors"
+          className="inline-flex min-h-10 items-center justify-center gap-2 rounded-lg bg-[#111110] px-4 py-2 text-[13px] font-medium text-white transition-colors hover:bg-emerald-700"
         >
           <Plus className="w-4 h-4" />
           행사 추가
@@ -285,8 +285,9 @@ export default function AdminEventsPage() {
           등록된 행사가 없습니다. 행사 추가 버튼을 눌러 시작하세요.
         </div>
       ) : (
-        <div className="border border-[rgba(0,0,0,0.08)] rounded-xl overflow-hidden">
-          <table className="w-full text-[13px]">
+        <div className="overflow-hidden rounded-xl border border-[rgba(0,0,0,0.08)]">
+          <div className="overflow-x-auto">
+          <table className="min-w-[760px] w-full text-[13px]">
             <thead className="bg-[#F6F5F4] text-[#1a1a1a]/50 text-left">
               <tr>
                 <th className="px-4 py-3 font-medium">제목</th>
@@ -348,15 +349,16 @@ export default function AdminEventsPage() {
               ))}
             </tbody>
           </table>
+          </div>
         </div>
       )}
 
       {/* Modal */}
       {modalOpen && (
-        <div className="fixed inset-0 bg-black/40 z-50 flex items-center justify-center p-4">
-          <div className="bg-white rounded-2xl w-full max-w-2xl max-h-[90vh] overflow-y-auto shadow-2xl">
+        <div className="fixed inset-0 z-50 flex items-end justify-center bg-black/40 p-0 sm:items-center sm:p-4">
+          <div className="max-h-[calc(100dvh-1rem)] w-full max-w-2xl overflow-hidden rounded-t-2xl bg-white shadow-2xl sm:max-h-[90vh] sm:rounded-2xl">
             {/* Modal Header */}
-            <div className="flex items-center justify-between px-6 py-4 border-b border-[rgba(0,0,0,0.08)]">
+            <div className="flex items-center justify-between border-b border-[rgba(0,0,0,0.08)] px-4 py-4 sm:px-6">
               <h2 className="text-base font-semibold text-[#111110]">
                 {editing ? "행사 수정" : "행사 추가"}
               </h2>
@@ -366,7 +368,7 @@ export default function AdminEventsPage() {
             </div>
 
             {/* Modal Body */}
-            <div className="px-6 py-5 space-y-4">
+            <div className="max-h-[calc(100dvh-9rem)] space-y-4 overflow-y-auto px-4 py-5 sm:px-6">
               {saveError && (
                 <div className="px-4 py-3 bg-red-50 text-red-700 text-[13px] rounded-lg border border-red-200">
                   {saveError}
@@ -386,7 +388,7 @@ export default function AdminEventsPage() {
               </div>
 
               {/* 카테고리 + 태그 */}
-              <div className="grid grid-cols-2 gap-4">
+              <div className="grid gap-4 sm:grid-cols-2">
                 <div>
                   <label className="block text-[12px] font-medium text-[#1a1a1a]/50 mb-1.5">카테고리 *</label>
                   <select
@@ -424,7 +426,7 @@ export default function AdminEventsPage() {
               </div>
 
               {/* 시작일시 + 종료일시 */}
-              <div className="grid grid-cols-2 gap-4">
+              <div className="grid gap-4 sm:grid-cols-2">
                 <div>
                   <label className="block text-[12px] font-medium text-[#1a1a1a]/50 mb-1.5">시작일시 *</label>
                   <input
@@ -458,7 +460,7 @@ export default function AdminEventsPage() {
               </div>
 
               {/* CTA */}
-              <div className="grid grid-cols-2 gap-4">
+              <div className="grid gap-4 sm:grid-cols-2">
                 <div>
                   <label className="block text-[12px] font-medium text-[#1a1a1a]/50 mb-1.5">CTA 버튼 텍스트</label>
                   <input
@@ -519,7 +521,7 @@ export default function AdminEventsPage() {
               </div>
 
               {/* Highlight + 상태 override */}
-              <div className="grid grid-cols-2 gap-4">
+              <div className="grid gap-4 sm:grid-cols-2">
                 <div className="flex items-center gap-3">
                   <button
                     type="button"
@@ -555,7 +557,7 @@ export default function AdminEventsPage() {
             </div>
 
             {/* Modal Footer */}
-            <div className="flex items-center justify-end gap-3 px-6 py-4 border-t border-[rgba(0,0,0,0.08)]">
+            <div className="flex flex-col-reverse gap-2 border-t border-[rgba(0,0,0,0.08)] px-4 py-4 sm:flex-row sm:items-center sm:justify-end sm:gap-3 sm:px-6">
               <button
                 onClick={closeModal}
                 className="px-4 py-2 text-[13px] text-[#1a1a1a]/50 hover:text-[#111110] transition-colors"

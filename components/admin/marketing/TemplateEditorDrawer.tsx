@@ -231,17 +231,17 @@ export default function TemplateEditorDrawer({ open, initial, onSave, onClose, l
       <div className="fixed inset-0 z-40 bg-black/20 backdrop-blur-[2px]" onClick={onClose} />
 
       {/* Drawer */}
-      <div className="fixed right-0 top-0 bottom-0 z-50 w-[680px] bg-white shadow-2xl border-l border-[#e8e8e4] flex flex-col overflow-hidden">
+      <div className="fixed inset-x-0 bottom-0 top-16 z-50 flex flex-col overflow-hidden rounded-t-2xl border-t border-[#e8e8e4] bg-white shadow-2xl sm:top-0 sm:right-0 sm:left-auto sm:w-[680px] sm:rounded-none sm:border-l sm:border-t-0">
 
         {/* Header */}
-        <div className="flex items-center justify-between px-6 pt-5 pb-4 border-b border-[#e8e8e4] flex-shrink-0">
+        <div className="flex flex-shrink-0 items-center justify-between gap-3 border-b border-[#e8e8e4] px-4 pt-5 pb-4 sm:px-6">
           <div>
             <p className="text-[11px] font-medium text-[#1a1a1a]/30 uppercase tracking-widest mb-0.5">
               {initial?.id ? "템플릿 편집" : "새 템플릿"}
             </p>
             <h2 className="text-[15px] font-bold text-[#111110]">{name || "이름 없음"}</h2>
           </div>
-          <div className="flex items-center gap-2">
+          <div className="flex shrink-0 items-center gap-2">
             <Button
               size="sm"
               onClick={handleSave}
@@ -260,10 +260,10 @@ export default function TemplateEditorDrawer({ open, initial, onSave, onClose, l
         </div>
 
         {/* Field rows + variable palette */}
-        <div className="px-6 pt-4 pb-0 space-y-3 flex-shrink-0">
+        <div className="flex-shrink-0 space-y-3 px-4 pt-4 pb-0 sm:px-6">
 
           {/* Name + Subject */}
-          <div className="grid grid-cols-2 gap-3">
+          <div className="grid gap-3 sm:grid-cols-2">
             <div className="space-y-1.5">
               <Label className="text-[12px] font-medium text-[#1a1a1a]/60">템플릿 이름 *</Label>
               <Input
@@ -294,7 +294,7 @@ export default function TemplateEditorDrawer({ open, initial, onSave, onClose, l
               />
               {/* Subject slash popup */}
               {showSubjectSlash && (
-                <div className="absolute left-0 right-0 top-full mt-1 z-20 bg-white border border-[#e8e8e4] rounded-xl shadow-xl overflow-hidden">
+                <div className="absolute left-0 right-0 top-full mt-1 z-20 max-h-[260px] overflow-y-auto rounded-xl border border-[#e8e8e4] bg-white shadow-xl">
                   <SlashPopupHeader />
                   {filteredVars.map((v, i) => (
                     <SlashPopupItem
@@ -327,10 +327,10 @@ export default function TemplateEditorDrawer({ open, initial, onSave, onClose, l
         </div>
 
         {/* Split editor */}
-        <div className="flex-1 flex overflow-hidden">
+        <div className="flex flex-1 flex-col overflow-hidden lg:flex-row">
 
           {/* Left: body editor with highlight overlay */}
-          <div className="flex-1 flex flex-col border-r border-[#e8e8e4]">
+          <div className="flex flex-1 flex-col lg:border-r lg:border-[#e8e8e4]">
             <div className="flex items-center justify-between px-4 py-2 bg-[#FAFAF8] border-b border-[#e8e8e4] flex-shrink-0">
               <span className="text-[11px] font-medium text-[#1a1a1a]/40">HTML 편집</span>
               <div className="flex items-center gap-2">
@@ -391,7 +391,7 @@ export default function TemplateEditorDrawer({ open, initial, onSave, onClose, l
 
               {/* Body slash popup */}
               {showBodySlash && (
-                <div className="absolute right-2 top-2 z-10 bg-white border border-[#e8e8e4] rounded-xl shadow-xl overflow-hidden w-[256px]">
+                <div className="absolute inset-x-2 top-2 z-10 max-h-[280px] overflow-y-auto rounded-xl border border-[#e8e8e4] bg-white shadow-xl sm:left-auto sm:w-[256px]">
                   <SlashPopupHeader />
                   {filteredVars.map((v, i) => (
                     <SlashPopupItem
@@ -409,7 +409,7 @@ export default function TemplateEditorDrawer({ open, initial, onSave, onClose, l
           </div>
 
           {/* Right: preview */}
-          <div className="flex-1 flex flex-col">
+          <div className="hidden flex-1 flex-col lg:flex">
             <div className="flex items-center justify-between px-4 py-2 bg-[#FAFAF8] border-b border-[#e8e8e4] flex-shrink-0">
               <span className="text-[11px] font-medium text-[#1a1a1a]/40">미리보기</span>
               <span className="text-[10px] text-[#1a1a1a]/25">샘플 값으로 치환</span>
@@ -436,7 +436,7 @@ export default function TemplateEditorDrawer({ open, initial, onSave, onClose, l
         </div>
 
         {/* Footer */}
-        <div className="px-6 py-2 border-t border-[#e8e8e4] bg-[#FAFAF8] flex-shrink-0 flex items-center justify-between gap-4">
+        <div className="flex flex-shrink-0 flex-col gap-2 border-t border-[#e8e8e4] bg-[#FAFAF8] px-4 py-3 sm:px-6 lg:flex-row lg:items-center lg:justify-between lg:gap-4 lg:py-2">
           <p className="text-[10px] text-[#1a1a1a]/30">
             <span className="font-mono">{"{변수}"}</span> 형태로 작성 · 발송 시 수신자 값으로 치환 · HTML 태그 사용 가능
           </p>
