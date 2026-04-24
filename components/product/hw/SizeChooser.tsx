@@ -126,16 +126,18 @@ export default function SizeChooser() {
         </div>
 
         {/* 110" footnote */}
-        <p className="mt-12 text-center text-sm text-[#615D59]">
-          더 큰 공간(50명+, 강당·콘퍼런스)을 위한 110&quot; 모델은{" "}
-          <Link
-            href="/contact"
-            className="text-[#084734] underline underline-offset-2"
-          >
-            별도 문의
-          </Link>
-          로 안내드립니다.
-        </p>
+        <div className="mt-10 mx-auto flex max-w-5xl justify-center">
+          <p className="text-center text-sm text-[#615D59]">
+            더 큰 공간(50명+, 강당·콘퍼런스)을 위한 110&quot; 모델은{" "}
+            <Link
+              href="/contact"
+              className="text-[#084734] underline underline-offset-2"
+            >
+              별도 문의
+            </Link>
+            로 안내드립니다.
+          </p>
+        </div>
       </div>
     </section>
   )

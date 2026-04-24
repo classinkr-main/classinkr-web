@@ -21,8 +21,8 @@ export function ScienceBased() {
                     className="text-center mb-24"
                 >
                     <h2 className="text-4xl md:text-5xl font-extrabold text-white mb-6 font-sans break-keep" style={{ letterSpacing: '-1.5px' }}>
-                        우리의 솔루션은 <br className="md:hidden" />
-                        과학적 이론에 기반합니다
+                        교육적 이론에 최적화된 <br className="md:hidden" />
+                        학습 솔루션
                     </h2>
                     <p className="text-xl text-[#A39E98] font-medium break-keep">
                         단순히 편리한 도구가 아닙니다. 학습 효율을 극대화하는 검증된 교육 공학입니다.

@@ -87,7 +87,7 @@ export function ProblemCost() {
                     </span>
                     <h2 className="text-4xl font-black text-white sm:text-5xl md:text-[3.5rem] mb-6 leading-tight break-keep" style={{ letterSpacing: '-1.5px' }}>
                         강사에 기대는 학원은<br className="md:hidden" />{" "}
-                        <span className="text-transparent bg-clip-text bg-gradient-to-r from-[#B85C33] to-[#F6D5C5] break-keep">흔들릴 수밖에 없습니다</span>
+                        <span className="text-transparent bg-clip-text bg-gradient-to-r from-[#B85C33] to-[#F6D5C5] break-keep">흔들릴 수 밖에 없습니다</span>
                     </h2>
                     <p className="text-lg text-[#A39E98] break-keep">
                         시스템 없이 사람에만 의존하면, 잘 될 때도 있지만 한 명이 빠지면 학원 전체가 흔들립니다.

@@ -524,9 +524,9 @@ function ImpactNumbersSection() {
 
 /* ── Section: Full-Width Point (reusable) ────────────────────────── */
 function FullWidthPointSection({
-    eyebrow, statement, sub, dark = false, image,
+    eyebrow, statement, sub, dark = false, image, contentClassName,
 }: {
-    eyebrow: string; statement: React.ReactNode; sub?: string; dark?: boolean; image?: string
+    eyebrow: string; statement: React.ReactNode; sub?: string; dark?: boolean; image?: string; contentClassName?: string
 }) {
     return (
         <section className={`relative min-h-[65vh] flex items-center justify-center overflow-hidden ${dark ? "bg-[#0d1a12]" : "bg-[#22A366]"}`}>
@@ -535,7 +535,7 @@ function FullWidthPointSection({
             )}
             <div className={`absolute inset-0 ${dark ? "bg-[#0d1a12]/75" : "bg-[#0d1a12]/65"}`} />
             <div className="relative container mx-auto px-4 lg:px-8 py-28 md:py-40 text-center text-white">
-                <motion.div {...fadeUp}>
+                <motion.div {...fadeUp} className={contentClassName}>
                     <p className="text-xs font-bold tracking-[0.35em] uppercase mb-7 text-white/50">{eyebrow}</p>
                     <h2 className="text-4xl sm:text-5xl lg:text-6xl xl:text-[5rem] leading-[1.1] tracking-tight mb-8 max-w-4xl mx-auto">
                         {statement}
@@ -1183,6 +1183,7 @@ export default function ProductHWPage() {
                 eyebrow="교실의 경계를 넘어서"
                 statement={<>시간과 지역을 넘어서<br />교육의 손길이 닿을 수 있도록</>}
                 sub="Classin은 지역의 한계를 넘어서 교육의 표준화와 시스템화를 돕습니다."
+                contentClassName="font-bold"
                 image="/images/product/hw/spaces/space-classroom-real.png"
                 dark
             />
