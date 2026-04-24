@@ -40,251 +40,13 @@ type WorkspaceOverview = {
 
 // ─── Demo Data ────────────────────────────────────────────────────────────────
 
-const DEMO_OVERVIEW: WorkspaceOverview = {
-  mode: "demo",
-  metrics: { customer_count: 2, active_deal_count: 3, outstanding_amount: 17000000 },
-  customers: [
-    {
-      customer: {
-        id: "demo-customer-1",
-        partner_account_id: "demo-account",
-        name: "강남메가수학학원",
-        contact_name: "이준호",
-        email: null,
-        phone: "02-1234-5678",
-        address: null,
-        business_number: null,
-        campus_name: "본관",
-        region_label: "강남",
-        notes: null,
-        created_by: null,
-        created_at: "2026-02-20T00:00:00Z",
-        updated_at: "2026-04-04T00:00:00Z",
-      } as CustomerListItem["customer"],
-      summary: {
-        customer_id: "demo-customer-1",
-        partner_account_id: "demo-account",
-        customer_name: "강남메가수학학원",
-        total_deals: 2,
-        active_deals: 2,
-        installation_deals: 1,
-        unpaid_deals: 1,
-        contracted_amount: 43000000,
-        installed_amount: 18000000,
-        paid_amount: 12000000,
-        outstanding_amount: 31000000,
-        last_deal_updated_at: "2026-04-04T00:00:00Z",
-      },
-    },
-    {
-      customer: {
-        id: "demo-customer-2",
-        partner_account_id: "demo-account",
-        name: "리더스입시학원",
-        contact_name: "최민서",
-        email: null,
-        phone: "031-123-4567",
-        address: null,
-        business_number: null,
-        campus_name: "3층관",
-        region_label: "분당",
-        notes: null,
-        created_by: null,
-        created_at: "2026-02-10T00:00:00Z",
-        updated_at: "2026-04-04T00:00:00Z",
-      } as CustomerListItem["customer"],
-      summary: {
-        customer_id: "demo-customer-2",
-        partner_account_id: "demo-account",
-        customer_name: "리더스입시학원",
-        total_deals: 1,
-        active_deals: 1,
-        installation_deals: 1,
-        unpaid_deals: 0,
-        contracted_amount: 24200000,
-        installed_amount: 24200000,
-        paid_amount: 24200000,
-        outstanding_amount: 0,
-        last_deal_updated_at: "2026-04-04T00:00:00Z",
-      },
-    },
-  ],
-  deals: [
-    {
-      id: "demo-deal-1",
-      partner_account_id: "demo-account",
-      customer_id: "demo-customer-1",
-      deal_code: "D-2026-001",
-      title: "본관 2~4층 전자칠판 설치",
-      status: "active",
-      current_stage: "installation",
-      expected_amount: 29000000,
-      contracted_amount: 29000000,
-      installed_amount: 18000000,
-      paid_amount: 12000000,
-      outstanding_amount: 17000000,
-      payment_status: "partial",
-      starts_at: "2026-02-22T00:00:00Z",
-      closed_at: null,
-      notes: null,
-      created_by: null,
-      created_at: "2026-02-22T00:00:00Z",
-      updated_at: "2026-04-03T00:00:00Z",
-      customer_name: "강남메가수학학원",
-      customer_contact_name: "이준호",
-      customer_region_label: "강남",
-      customer_campus_name: "본관",
-    } as DealListItem,
-    {
-      id: "demo-deal-2",
-      partner_account_id: "demo-account",
-      customer_id: "demo-customer-1",
-      deal_code: "D-2026-011",
-      title: "별관 추가 계약",
-      status: "active",
-      current_stage: "quote",
-      expected_amount: 14000000,
-      contracted_amount: 14000000,
-      installed_amount: 0,
-      paid_amount: 0,
-      outstanding_amount: 14000000,
-      payment_status: "unpaid",
-      starts_at: "2026-03-28T00:00:00Z",
-      closed_at: null,
-      notes: null,
-      created_by: null,
-      created_at: "2026-03-28T00:00:00Z",
-      updated_at: "2026-04-02T00:00:00Z",
-      customer_name: "강남메가수학학원",
-      customer_contact_name: "이준호",
-      customer_region_label: "강남",
-      customer_campus_name: "본관",
-    } as DealListItem,
-    {
-      id: "demo-deal-3",
-      partner_account_id: "demo-account",
-      customer_id: "demo-customer-2",
-      deal_code: "D-2026-004",
-      title: "3층 전체 전자칠판 교체",
-      status: "active",
-      current_stage: "payment",
-      expected_amount: 24200000,
-      contracted_amount: 24200000,
-      installed_amount: 24200000,
-      paid_amount: 24200000,
-      outstanding_amount: 0,
-      payment_status: "paid",
-      starts_at: "2026-02-12T00:00:00Z",
-      closed_at: null,
-      notes: null,
-      created_by: null,
-      created_at: "2026-02-12T00:00:00Z",
-      updated_at: "2026-04-04T00:00:00Z",
-      customer_name: "리더스입시학원",
-      customer_contact_name: "최민서",
-      customer_region_label: "분당",
-      customer_campus_name: "3층관",
-    } as DealListItem,
-  ],
-  recent_calendar_events: [
-    {
-      id: "demo-calendar-1",
-      partner_account_id: "demo-account",
-      customer_id: "demo-customer-1",
-      deal_id: "demo-deal-1",
-      source_type: "installation",
-      source_id: "demo-install-1",
-      starts_at: "2026-04-20T09:00:00+09:00",
-      ends_at: "2026-04-20T17:00:00+09:00",
-      timezone: "Asia/Seoul",
-      title: "강남메가수학학원 설치",
-      description: "서울시 강남구 역삼로 123",
-      status: "active",
-      created_by: null,
-      created_at: "2026-04-03T09:00:00Z",
-      updated_at: "2026-04-03T09:00:00Z",
-    },
-  ],
+const EMPTY_OVERVIEW: WorkspaceOverview = {
+  mode: "legacy",
+  metrics: { customer_count: 0, active_deal_count: 0, outstanding_amount: 0 },
+  customers: [],
+  deals: [],
+  recent_calendar_events: [],
 }
-
-const DEMO_DETAIL: DealDetailPayload = {
-  deal: {
-    id: "demo-deal-1",
-    partner_account_id: "demo-account",
-    customer_id: "demo-customer-1",
-    deal_code: "D-2026-001",
-    title: "본관 2~4층 전자칠판 설치",
-    status: "active",
-    current_stage: "installation",
-    expected_amount: 29000000,
-    contracted_amount: 29000000,
-    installed_amount: 18000000,
-    paid_amount: 12000000,
-    outstanding_amount: 17000000,
-    payment_status: "partial",
-    starts_at: "2026-02-22T00:00:00Z",
-    closed_at: null,
-    notes: '전자칠판 86" 4대, 스탠드 4대, T1 카메라 2대',
-    created_by: null,
-    created_at: "2026-02-22T00:00:00Z",
-    updated_at: "2026-04-03T00:00:00Z",
-  },
-  customer: DEMO_OVERVIEW.customers[0].customer as DealDetailPayload["customer"],
-  line_items: [
-    {
-      id: "demo-li-1",
-      deal_id: "demo-deal-1",
-      sku: "CB-86",
-      category: "board" as const,
-      product_name: '전자칠판 86"',
-      quantity: 4,
-      unit_price: 5500000,
-      amount: 22000000,
-      sort_order: 1,
-      notes: null,
-      created_at: "2026-02-22T00:00:00Z",
-      updated_at: "2026-02-22T00:00:00Z",
-    },
-    {
-      id: "demo-li-2",
-      deal_id: "demo-deal-1",
-      sku: "STAND-86",
-      category: "mount" as const,
-      product_name: "이동식 스탠드",
-      quantity: 4,
-      unit_price: 550000,
-      amount: 2200000,
-      sort_order: 2,
-      notes: null,
-      created_at: "2026-02-22T00:00:00Z",
-      updated_at: "2026-02-22T00:00:00Z",
-    },
-    {
-      id: "demo-li-3",
-      deal_id: "demo-deal-1",
-      sku: "CAM-T1",
-      category: "camera" as const,
-      product_name: "T1 카메라",
-      quantity: 2,
-      unit_price: 1900000,
-      amount: 3800000,
-      sort_order: 3,
-      notes: null,
-      created_at: "2026-02-22T00:00:00Z",
-      updated_at: "2026-02-22T00:00:00Z",
-    },
-  ],
-  quote_documents: [],
-  contract_documents: [],
-  installations: [],
-  payments: [],
-  receipts: [],
-  activity_logs: [],
-  calendar_events: DEMO_OVERVIEW.recent_calendar_events,
-}
-
-// ─── Design System ────────────────────────────────────────────────────────────
-
 const STAGE_COLORS: Record<string, { color: string; dot: string; ring: string }> = {
   contact:      { color: "bg-[#f0f0ec] text-[#615D59]",    dot: "bg-[#A39E98]",   ring: "ring-[#e8e8e4]"   },
   quote:        { color: "bg-[#ECFDF5] text-[#084734]",    dot: "bg-[#084734]",   ring: "ring-[#D1FAE5]"   },
@@ -515,11 +277,11 @@ function EmptyText({ text }: { text: string }) {
 
 export default function PartnerWorkspacePage() {
   const router = useRouter()
-  const [overview, setOverview] = useState<WorkspaceOverview>(DEMO_OVERVIEW)
-  const [detail, setDetail] = useState<DealDetailPayload>(DEMO_DETAIL)
-  const [mode, setMode] = useState<PartnerReadMode>("demo")
-  const [selectedCustomerId, setSelectedCustomerId] = useState(DEMO_OVERVIEW.customers[0].customer.id)
-  const [selectedDealId, setSelectedDealId] = useState(DEMO_OVERVIEW.deals[0].id)
+  const [overview, setOverview] = useState<WorkspaceOverview>(EMPTY_OVERVIEW)
+  const [detail, setDetail] = useState<DealDetailPayload | null>(null)
+  const [mode, setMode] = useState<PartnerReadMode>("legacy")
+  const [selectedCustomerId, setSelectedCustomerId] = useState("")
+  const [selectedDealId, setSelectedDealId] = useState("")
   const [loading, setLoading] = useState(true)
   const [error, setError] = useState<string | null>(null)
   const refreshPortal = useCallback(() => {
@@ -535,17 +297,19 @@ export default function PartnerWorkspacePage() {
       try {
         const payload = await readJson<WorkspaceOverview>("/api/partner/overview")
         if (!alive) return
-        setMode(payload.mode ?? "demo")
-        setOverview(payload)
+        const nextMode = payload.mode === "v2" ? "v2" : "legacy"
+        setMode(nextMode)
+        setOverview({ ...payload, mode: nextMode })
         setSelectedCustomerId(payload.customers[0]?.customer.id ?? "")
         setSelectedDealId(payload.deals[0]?.id ?? "")
+        setDetail(null)
       } catch {
         if (!alive) return
-        setMode("demo")
-        setOverview(DEMO_OVERVIEW)
-        setSelectedCustomerId(DEMO_OVERVIEW.customers[0].customer.id)
-        setSelectedDealId(DEMO_OVERVIEW.deals[0].id)
-        setDetail(DEMO_DETAIL)
+        setMode("legacy")
+        setOverview(EMPTY_OVERVIEW)
+        setSelectedCustomerId("")
+        setSelectedDealId("")
+        setDetail(null)
         setError("연결된 계정이 없어 데모 셸로 전환했습니다.")
       } finally {
         if (alive) setLoading(false)
@@ -562,9 +326,8 @@ export default function PartnerWorkspacePage() {
     let alive = true
 
     async function loadDetail() {
-      if (!selectedDealId) return
-      if (mode === "demo") {
-        setDetail(DEMO_DETAIL)
+      if (!selectedDealId) {
+        setDetail(null)
         return
       }
 
@@ -574,7 +337,7 @@ export default function PartnerWorkspacePage() {
         setDetail(payload.deal)
       } catch {
         if (!alive) return
-        setDetail(DEMO_DETAIL)
+        setDetail(null)
       }
     }
 
@@ -584,11 +347,19 @@ export default function PartnerWorkspacePage() {
     }
   }, [mode, selectedDealId])
 
-  const selectedCustomer = overview.customers.find((item) => item.customer.id === selectedCustomerId) ?? overview.customers[0]
+  const selectedCustomer = overview.customers.find((item) => item.customer.id === selectedCustomerId) ?? overview.customers[0] ?? null
   const selectedDeals = selectedCustomer
     ? overview.deals.filter((deal) => deal.customer_id === selectedCustomer.customer.id)
     : overview.deals
   const selectedDeal = selectedDeals.find((deal) => deal.id === selectedDealId) ?? selectedDeals[0]
+  const detailLineItems = detail?.line_items ?? []
+  const quoteDocuments = detail?.quote_documents ?? []
+  const contractDocuments = detail?.contract_documents ?? []
+  const installations = detail?.installations ?? []
+  const payments = detail?.payments ?? []
+  const receipts = detail?.receipts ?? []
+  const activityLogs = detail?.activity_logs ?? []
+  const calendarEvents = detail?.calendar_events ?? []
   const canCreateInPortal = mode === "v2"
 
   if (loading) {
@@ -614,7 +385,7 @@ export default function PartnerWorkspacePage() {
             <div className="max-w-3xl">
               <div className="flex flex-wrap items-center gap-2">
                 <Badge variant="outline" className="border-[#1a1a1a]/15 bg-[#1a1a1a] text-white">
-                  {mode === "demo" ? "DEMO" : "LIVE"}
+                  {mode === "v2" ? "LIVE" : "LEGACY"}
                 </Badge>
                 <Badge variant="outline" className="border-[#e8e8e4] bg-white text-[#1a1a1a]/50">
                   Partner Workspace
@@ -798,11 +569,11 @@ export default function PartnerWorkspacePage() {
                     </div>
 
                     {/* 판매 품목 요약 */}
-                    {detail.line_items.length > 0 && (
+                    {detailLineItems.length > 0 && (
                       <div className="rounded-xl border border-[#e8e8e4] bg-white p-4">
                         <p className="text-[10px] font-semibold uppercase tracking-widest text-[#1a1a1a]/30 mb-3">판매 품목</p>
                         <div className="space-y-2">
-                          {detail.line_items.map((item) => (
+                          {detailLineItems.map((item) => (
                             <div key={item.id} className="flex items-center justify-between gap-3 text-sm">
                               <div className="flex items-center gap-2 min-w-0">
                                 <span className="shrink-0 rounded-md bg-[#f0f0ec] px-1.5 py-0.5 text-[10px] font-mono text-[#1a1a1a]/50">{formatBoardSkuLabel(item.sku)}</span>
@@ -816,7 +587,7 @@ export default function PartnerWorkspacePage() {
                         <div className="mt-3 flex items-center justify-between border-t border-[#f0f0ec] pt-3 text-sm font-semibold">
                           <span className="text-[#1a1a1a]/50">합계</span>
                           <span className="text-[#1a1a1a]">
-                            {detail.line_items.reduce((sum, i) => sum + i.amount, 0).toLocaleString("ko-KR")}원
+                            {detailLineItems.reduce((sum, i) => sum + i.amount, 0).toLocaleString("ko-KR")}원
                           </span>
                         </div>
                       </div>
@@ -832,10 +603,10 @@ export default function PartnerWorkspacePage() {
 
                   <TabsContent value="documents" className="mt-0 space-y-4 transition-opacity duration-150">
                     <SectionBox icon={<FileText className="h-4 w-4" />} title="문서">
-                      {detail.quote_documents.length === 0 ? (
+                      {quoteDocuments.length === 0 ? (
                         <p className="text-sm text-[#1a1a1a]/45">견적 문서가 없습니다.</p>
                       ) : (
-                        detail.quote_documents.map((doc) => (
+                        quoteDocuments.map((doc) => (
                           <DocRow
                             key={doc.id}
                             label={doc.quote_number}
@@ -848,10 +619,10 @@ export default function PartnerWorkspacePage() {
                           />
                         ))
                       )}
-                      {detail.contract_documents.length === 0 ? (
+                      {contractDocuments.length === 0 ? (
                         <p className="text-sm text-[#1a1a1a]/45">계약 문서가 없습니다.</p>
                       ) : (
-                        detail.contract_documents.map((doc) => (
+                        contractDocuments.map((doc) => (
                           <DocRow
                             key={doc.id}
                             label={doc.contract_number}
@@ -869,10 +640,10 @@ export default function PartnerWorkspacePage() {
 
                   <TabsContent value="install" className="mt-0 space-y-4 transition-opacity duration-150">
                     <SectionBox icon={<CalendarDays className="h-4 w-4" />} title="설치 일정">
-                      {detail.installations.length === 0 ? (
+                      {installations.length === 0 ? (
                         <p className="text-sm text-[#1a1a1a]/45">설치 일정이 없습니다.</p>
                       ) : (
-                        detail.installations.map((event) => (
+                        installations.map((event) => (
                           <div key={event.id} className="rounded-xl border border-[#e8e8e4] bg-[#f7f7f5] p-4">
                             <p className="text-sm font-semibold text-[#1a1a1a]">{event.location ?? "설치 위치 미지정"}</p>
                             <p className="mt-1 text-xs text-[#1a1a1a]/50">
@@ -887,14 +658,14 @@ export default function PartnerWorkspacePage() {
                   <TabsContent value="payments" className="mt-0 space-y-4 transition-opacity duration-150">
                     <div className="grid gap-3 md:grid-cols-3">
                       <InfoCard icon={<CircleDollarSign className="h-4 w-4" />} label="실수납" value={formatMoney(selectedDeal.paid_amount)} />
-                      <InfoCard icon={<ReceiptText className="h-4 w-4" />} label="영수증" value={`${detail.receipts.length}건`} />
+                      <InfoCard icon={<ReceiptText className="h-4 w-4" />} label="영수증" value={`${receipts.length}건`} />
                       <InfoCard icon={<Layers3 className="h-4 w-4" />} label="미수금" value={formatMoney(selectedDeal.outstanding_amount)} />
                     </div>
-                    {detail.payments.length === 0 ? (
+                    {payments.length === 0 ? (
                       <p className="text-sm text-[#1a1a1a]/45">수납 내역이 없습니다.</p>
                     ) : (
                       <div className="space-y-3">
-                        {detail.payments.map((payment) => (
+                        {payments.map((payment) => (
                           <div key={payment.id} className="rounded-xl border border-[#e8e8e4] bg-[#f7f7f5] p-4">
                             <p className="text-sm font-semibold text-[#1a1a1a]">{formatMoney(payment.amount)}</p>
                             <p className="mt-1 text-xs text-[#1a1a1a]/50">
@@ -908,10 +679,10 @@ export default function PartnerWorkspacePage() {
 
                   <TabsContent value="activity" className="mt-0 space-y-4 transition-opacity duration-150">
                     <SectionBox icon={<Activity className="h-4 w-4" />} title="활동 로그">
-                      {detail.activity_logs.length === 0 ? (
+                      {activityLogs.length === 0 ? (
                         <p className="text-sm text-[#1a1a1a]/45">활동 로그가 없습니다.</p>
                       ) : (
-                        detail.activity_logs.map((log) => (
+                        activityLogs.map((log) => (
                           <div key={log.id} className="rounded-xl border border-[#e8e8e4] bg-[#f7f7f5] p-4">
                             <p className="text-sm font-semibold text-[#1a1a1a]">{log.summary}</p>
                             <p className="mt-1 text-xs text-[#1a1a1a]/50">
@@ -939,10 +710,10 @@ export default function PartnerWorkspacePage() {
                           <ArrowRight className="h-4 w-4" />
                         </button>
                       </div>
-                      {detail.calendar_events.length === 0 ? (
+                      {calendarEvents.length === 0 ? (
                         <p className="text-sm text-[#1a1a1a]/45">캘린더 이벤트가 없습니다.</p>
                       ) : (
-                        detail.calendar_events.map((event) => (
+                        calendarEvents.map((event) => (
                           <div key={event.id} className="rounded-xl border border-[#e8e8e4] bg-[#f7f7f5] p-4">
                             <p className="text-sm font-semibold text-[#1a1a1a]">{event.title}</p>
                             <p className="mt-1 text-xs text-[#1a1a1a]/50">
@@ -968,12 +739,12 @@ export default function PartnerWorkspacePage() {
               {/* 현재 선택 */}
               <div className="rounded-xl border border-[#e8e8e4] bg-[#f7f7f5] p-4">
                 <p className="text-[10px] font-semibold uppercase tracking-wider text-[#1a1a1a]/40">현재 선택</p>
-                <p className="mt-2 text-sm font-semibold text-[#1a1a1a]">{selectedCustomer.customer.name}</p>
-                {selectedCustomer.customer.region_label && (
+                <p className="mt-2 text-sm font-semibold text-[#1a1a1a]">{selectedCustomer?.customer.name ?? "-"}</p>
+                {selectedCustomer?.customer.region_label && (
                   <p className="mt-0.5 text-xs text-[#1a1a1a]/45">
-                    {selectedCustomer.customer.region_label}
-                    {selectedCustomer.customer.campus_name ? ` · ${selectedCustomer.customer.campus_name}` : ""}
-                    {selectedCustomer.customer.contact_name ? ` · ${selectedCustomer.customer.contact_name}` : ""}
+                    {selectedCustomer?.customer.region_label}
+                    {selectedCustomer?.customer.campus_name ? ` · ${selectedCustomer.customer.campus_name}` : ""}
+                    {selectedCustomer?.customer.contact_name ? ` · ${selectedCustomer.customer.contact_name}` : ""}
                   </p>
                 )}
                 {selectedDeal && (
@@ -993,9 +764,9 @@ export default function PartnerWorkspacePage() {
               )}
 
               {/* 제품 구성 요약 */}
-              {detail.line_items.length > 0 && (() => {
+              {detailLineItems.length > 0 && (() => {
                 const CAT_KO: Record<string, string> = { board: "전자칠판", camera: "카메라", mount: "거치대/스탠드", install_fee: "설치비" }
-                const byCategory = detail.line_items.reduce<Record<string, { qty: number; amount: number }>>((acc, item) => {
+                const byCategory = detailLineItems.reduce<Record<string, { qty: number; amount: number }>>((acc, item) => {
                   const cat = CAT_KO[item.category] ?? item.category ?? "기타"
                   if (!acc[cat]) acc[cat] = { qty: 0, amount: 0 }
                   acc[cat].qty += item.quantity
@@ -1017,8 +788,8 @@ export default function PartnerWorkspacePage() {
                       ))}
                     </div>
                     <div className="mt-2 pt-2 border-t border-[#f0f0ec] flex justify-between text-[10px] text-[#1a1a1a]/40">
-                      <span>총 {detail.line_items.reduce((s, i) => s + i.quantity, 0)}대</span>
-                      <span>{fmtM(detail.line_items.reduce((s, i) => s + i.amount, 0))}원</span>
+                      <span>총 {detailLineItems.reduce((s, i) => s + i.quantity, 0)}대</span>
+                      <span>{fmtM(detailLineItems.reduce((s, i) => s + i.amount, 0))}원</span>
                     </div>
                   </div>
                 )
@@ -1080,9 +851,7 @@ export default function PartnerWorkspacePage() {
 
               {/* 연결 상태 */}
               <div className="rounded-xl border border-dashed border-[#e0e0dc] p-3 text-xs text-[#1a1a1a]/45">
-                {mode === "demo"
-                  ? "데모 셸입니다. 로그인하면 실데이터가 연결됩니다."
-                  : "실데이터 연결됨."}
+                {mode === "v2" ? "실데이터 연결됨" : "레거시 데이터 연결됨"}
               </div>
             </CardContent>
           </Card>

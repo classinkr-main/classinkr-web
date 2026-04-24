@@ -696,13 +696,7 @@ export default function CrmPage() {
       showToast(`${partnerData.name || "고객사"}이(가) 고객사로 등록되었습니다.`)
     } catch (err) {
       const message = err instanceof Error ? err.message : "고객사 등록에 실패했습니다."
-      if (message.includes("fetch") || message.includes("network") || message.includes("500")) {
-        alert("더미 모드: 고객사로 등록됩니다. 실제 연동 시 /api/admin/partners POST")
-        setLeads((prev) => prev.map((l) => l.id === lead.id ? { ...l, status: "converted" } : l))
-        showToast("고객사로 등록되었습니다. (더미)")
-      } else {
-        showToast(message, "error")
-      }
+      showToast(message, "error")
     }
   }
 

@@ -1,6 +1,5 @@
 "server-only";
 
-import { getDemoCustomerDetail, getDemoDealDetail, listDemoCustomerListItems } from "@/lib/partner-portal/repositories/demo";
 import { getLegacyCustomerDetail, getLegacyDealDetail, listLegacyCustomerListItems } from "@/lib/partner-portal/repositories/legacy";
 import { getCustomerDetailForPartnerAccount, listCustomerListItems } from "@/lib/partner-portal/repositories/customers";
 import { getDealDetailForPartnerAccount, listDealListItems } from "@/lib/partner-portal/repositories/deals";
@@ -22,7 +21,7 @@ import type {
   ReceiptRecord,
 } from "@/lib/partner-portal/types";
 
-export type PartnerReadMode = "v2" | "legacy" | "demo";
+export type PartnerReadMode = "v2" | "legacy";
 
 export interface InventorySkuSummary {
   sku: string;
@@ -250,7 +249,7 @@ export async function loadPartnerCustomers(
   const legacyCustomers = await loadLegacyCustomers();
   if (legacyCustomers) return { mode: "legacy", customers: legacyCustomers };
 
-  return { mode: "demo", customers: await listDemoCustomerListItems() };
+  return { mode: "legacy", customers: [] };
 }
 
 export async function loadPartnerCustomerDetail(
@@ -274,8 +273,7 @@ export async function loadPartnerCustomerDetail(
     if (customer) return { mode: "legacy", customer };
   }
 
-  const customer = await getDemoCustomerDetail(customerId);
-  return { mode: "demo", customer };
+  return { mode: context.partnerAccountId ? "v2" : "legacy", customer: null };
 }
 
 async function loadV2Deals(
@@ -305,19 +303,6 @@ async function loadLegacyDeals(): Promise<DealListItem[] | null> {
   return deals.length > 0 ? deals : null;
 }
 
-async function loadDemoDeals(): Promise<DealListItem[] | null> {
-  const customers = await listDemoCustomerListItems();
-  const details = await Promise.all(
-    customers.map((item) => getDemoCustomerDetail(item.customer.id))
-  );
-
-  const deals = details
-    .filter(isTruthy)
-    .flatMap((detail) => detail.deals.map((history) => historyToDealListItem(detail, history)));
-
-  return deals;
-}
-
 export async function loadPartnerDeals(
   context: PartnerAccountContext
 ): Promise<{ mode: PartnerReadMode; deals: DealListItem[] }> {
@@ -329,7 +314,7 @@ export async function loadPartnerDeals(
   const legacyDeals = await loadLegacyDeals();
   if (legacyDeals) return { mode: "legacy", deals: legacyDeals };
 
-  return { mode: "demo", deals: (await loadDemoDeals()) ?? [] };
+  return { mode: "legacy", deals: [] };
 }
 
 export async function loadPartnerDealDetail(
@@ -353,8 +338,7 @@ export async function loadPartnerDealDetail(
     if (deal) return { mode: "legacy", deal };
   }
 
-  const deal = await getDemoDealDetail(dealId);
-  return { mode: "demo", deal };
+  return { mode: context.partnerAccountId ? "v2" : "legacy", deal: null };
 }
 
 async function loadInventorySummary(partnerId: string): Promise<InventorySkuSummary[]> {
@@ -424,7 +408,7 @@ async function loadDetailsForOverview(
         return detail;
       }
       if (mode === "legacy") return getLegacyDealDetail(id);
-      return getDemoDealDetail(id);
+      return null;
     })
   );
 
@@ -436,7 +420,7 @@ export async function loadPartnerOverview(
 ): Promise<PartnerOverviewPayload> {
   const { mode: customerMode, customers } = await loadPartnerCustomers(context);
   const { mode: dealMode, deals } = await loadPartnerDeals(context);
-  const mode = customerMode === "v2" && dealMode === "v2" ? "v2" : customerMode === "legacy" || dealMode === "legacy" ? "legacy" : "demo";
+  const mode = customerMode === "v2" && dealMode === "v2" ? "v2" : "legacy";
 
   const metrics = customers.reduce<PartnerOverviewMetrics>(
     (acc, item) => {

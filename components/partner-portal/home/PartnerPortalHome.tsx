@@ -19,7 +19,7 @@ import { portalFetch } from "@/lib/partner-portal/portal-fetch"
 
 /* ─── Types ──────────────────────────────────────────────────── */
 
-type PartnerReadMode = "v2" | "legacy" | "demo"
+type PartnerReadMode = "v2" | "legacy"
 
 type OverviewMetrics = {
   customer_count: number
@@ -251,7 +251,7 @@ function dealPaymentBadge(deal: DealItem): { label: string; cls: string } {
 /* ─── Normalize / Type-guard ─────────────────────────────────── */
 
 function isPartnerReadMode(value: unknown): value is PartnerReadMode {
-  return value === "v2" || value === "legacy" || value === "demo"
+  return value === "v2" || value === "legacy"
 }
 
 function isPipelineStage(value: string): value is PipelineStage {
@@ -269,8 +269,6 @@ function readStoredBoolean(key: string, fallback: boolean) {
 }
 
 function normalizeOverviewPayload(payload: PartnerOverviewResponse): PartnerOverviewPayload {
-  if (payload.mode === "demo") return EMPTY_OVERVIEW
-
   const metrics = payload.metrics
   return {
     mode: isPartnerReadMode(payload.mode) ? payload.mode : EMPTY_OVERVIEW.mode,
@@ -782,8 +780,6 @@ export function PartnerPortalHome({
   }, [])
 
   const persistDealStage = useCallback(async (dealId: string, stage: string) => {
-    if (overview.mode === "demo") return
-
     const response = await portalFetch(`/api/portal/deals/${dealId}`, {
       method: "PUT",
       headers: { "Content-Type": "application/json" },
@@ -793,7 +789,7 @@ export function PartnerPortalHome({
     if (!response.ok) {
       throw new Error(payload?.error ?? "거래 상태 변경에 실패했습니다.")
     }
-  }, [overview.mode])
+  }, [])
 
   const moveDealToStage = useCallback(async (deal: DealItem, nextStage: PipelineStage) => {
     const fromStage = deal.current_stage

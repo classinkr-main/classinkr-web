@@ -26,13 +26,6 @@ const FILTERS: { value: CalendarFilter; label: string }[] = [
   { value: "internal", label: "내부 일정" },
 ]
 
-const DEMO_EVENTS: CalendarEvent[] = [
-  { id: "demo-calendar-1", partner_account_id: "demo", customer_id: "c1", deal_id: "d1", source_type: "installation", source_id: "s1", starts_at: "2026-04-20T09:00:00+09:00", ends_at: "2026-04-20T17:00:00+09:00", timezone: "Asia/Seoul", title: "강남메가스터디학원 설치", description: "전자칠판 4대, T1 2대", status: "active", created_by: null, created_at: "2026-04-03T09:00:00Z", updated_at: "2026-04-03T09:00:00Z" },
-  { id: "demo-calendar-2", partner_account_id: "demo", customer_id: "c1", deal_id: "d2", source_type: "meeting", source_id: "s2", starts_at: "2026-04-16T14:00:00+09:00", ends_at: "2026-04-16T15:00:00+09:00", timezone: "Asia/Seoul", title: "추가 계약 범위 조정 미팅", description: "본관 추가 설치 관 확장 여부 확인", status: "active", created_by: null, created_at: "2026-04-02T05:00:00Z", updated_at: "2026-04-02T05:00:00Z" },
-  { id: "demo-calendar-3", partner_account_id: "demo", customer_id: "c2", deal_id: "d3", source_type: "document_due", source_id: "s3", starts_at: "2026-04-12T10:00:00+09:00", ends_at: "2026-04-12T11:00:00+09:00", timezone: "Asia/Seoul", title: "견적 링크 만료 전 확인", description: "추가 견적 링크 확인", status: "active", created_by: null, created_at: "2026-04-01T01:00:00Z", updated_at: "2026-04-01T01:00:00Z" },
-  { id: "demo-calendar-4", partner_account_id: "demo", customer_id: "c1", deal_id: "d1", source_type: "installation", source_id: "s4", starts_at: "2026-04-24T08:00:00+09:00", ends_at: "2026-04-25T18:00:00+09:00", timezone: "Asia/Seoul", title: "본관 2일 설치 일정", description: "2층, 3층, 4층 순차 설치", status: "active", created_by: null, created_at: "2026-04-03T09:00:00Z", updated_at: "2026-04-03T09:00:00Z" },
-]
-
 const readJson = <T,>(url: string) =>
   fetch(url, { cache: "no-store" }).then(async (response) => {
     if (!response.ok) throw new Error(`Request failed: ${response.status}`)
@@ -113,6 +106,10 @@ function sortEvents(events: CalendarEvent[]) {
   return [...events].sort((left, right) => new Date(left.starts_at).getTime() - new Date(right.starts_at).getTime())
 }
 
+function normalizeReadMode(mode: PartnerReadMode | undefined): PartnerReadMode {
+  return mode === "v2" ? "v2" : "legacy"
+}
+
 function buildDateMap(events: CalendarEvent[]) {
   const map = new Map<string, CalendarEvent[]>()
   for (const event of events) {
@@ -132,8 +129,8 @@ export default function PartnerCalendarPage() {
   const router = useRouter()
   const today = new Date()
   const todayKey = localDateKey(today)
-  const [mode, setMode] = useState<PartnerReadMode>("demo")
-  const [events, setEvents] = useState<CalendarEvent[]>(DEMO_EVENTS)
+  const [mode, setMode] = useState<PartnerReadMode>("legacy")
+  const [events, setEvents] = useState<CalendarEvent[]>([])
   const [actionDeals, setActionDeals] = useState<DealListItem[]>([])
   const [actionCustomers, setActionCustomers] = useState<CustomerListItem["customer"][]>([])
   const [filter, setFilter] = useState<CalendarFilter>("all")
@@ -162,15 +159,13 @@ export default function PartnerCalendarPage() {
       if (!alive) return
 
       if (calendarResult.status === "fulfilled") {
-        const nextEvents =
-          calendarResult.value.events.length > 0 ? calendarResult.value.events : DEMO_EVENTS
-        setMode(calendarResult.value.mode ?? "demo")
-        setEvents(nextEvents)
+        setMode(normalizeReadMode(calendarResult.value.mode))
+        setEvents(calendarResult.value.events)
       } else {
         if (!alive) return
-        setMode("demo")
-        setEvents(DEMO_EVENTS)
-        setError("연결된 계정이 없어 데모 일정으로 전환했습니다.")
+        setMode("legacy")
+        setEvents([])
+        setError("일정을 불러오지 못했습니다. 연결된 데이터가 없으면 빈 일정으로 표시합니다.")
       }
 
       setActionDeals(
@@ -225,14 +220,14 @@ export default function PartnerCalendarPage() {
           <CardContent className="flex flex-col gap-4 p-5 lg:flex-row lg:items-end lg:justify-between">
             <div className="max-w-3xl">
               <div className="flex flex-wrap items-center gap-2">
-                <Badge variant="outline" className="border-[#1a1a1a]/15 bg-[#1a1a1a] text-white">{mode === "demo" ? "DEMO" : "LIVE"}</Badge>
+                <Badge variant="outline" className="border-[#1a1a1a]/15 bg-[#1a1a1a] text-white">{mode === "v2" ? "LIVE" : "LEGACY"}</Badge>
                 <Badge variant="outline" className="border-[#e8e8e4] bg-white text-[#1a1a1a]/50">Shared Calendar</Badge>
               </div>
               <h1 className="mt-3 text-3xl font-semibold tracking-tight lg:text-4xl">파트너 포털 캘린더</h1>
               <p className="mt-2 max-w-2xl text-sm leading-6 text-[#1a1a1a]/50">설치, 미팅, 문서 기한을 달력과 리스트 두 방식으로 보고 관리자와 같은 일정 원본을 확인합니다.</p>
             </div>
             <div className="flex flex-wrap justify-end gap-2 self-end">
-              {mode !== "demo" && deals.length > 0 && (
+              {canCreateInPortal && deals.length > 0 && (
                 <button
                   type="button"
                   onClick={() => setScheduleOpen(true)}

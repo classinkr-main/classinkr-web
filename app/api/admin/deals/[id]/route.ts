@@ -1,7 +1,6 @@
 import { NextRequest, NextResponse } from "next/server";
 
 import { verifyAdmin } from "@/lib/admin-auth";
-import { getDemoDealDetail } from "@/lib/partner-portal/repositories/demo";
 import { getDealDetail } from "@/lib/partner-portal/repositories/deals";
 import { getLegacyDealDetail } from "@/lib/partner-portal/repositories/legacy";
 
@@ -22,9 +21,6 @@ export async function GET(req: NextRequest, { params }: RouteContext) {
     if (!deal) {
       deal = await getLegacyDealDetail(id);
     }
-    if (!deal) {
-      deal = await getDemoDealDetail(id);
-    }
 
     if (!deal) {
       return NextResponse.json({ error: "Deal not found" }, { status: 404 });
@@ -38,10 +34,6 @@ export async function GET(req: NextRequest, { params }: RouteContext) {
       const legacyDeal = await getLegacyDealDetail(id);
       if (legacyDeal) {
         return NextResponse.json({ deal: legacyDeal, mode: "legacy" });
-      }
-      const demoDeal = await getDemoDealDetail(id);
-      if (demoDeal) {
-        return NextResponse.json({ deal: demoDeal, mode: "demo" });
       }
       return NextResponse.json({ error: "Deal not found" }, { status: 404 });
     } catch (legacyError) {
