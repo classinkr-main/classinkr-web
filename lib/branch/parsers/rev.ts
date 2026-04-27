@@ -1,7 +1,7 @@
 import type { FormattedCell } from "@/lib/branch/google-sheets"
 import { isRedBg } from "@/lib/branch/google-sheets"
 
-export const REV_RANGE = "REV!A1:CZ400"
+export const REV_RANGE = "'2. REV'!A1:CF400"
 export const REV_COLS = {
   customer: 0, branchContact: 1, team: 2, manager: 3,
   dealType: 4, status: 5, firstPayment: 6, productVersion: 7,
@@ -50,17 +50,24 @@ function asNumber(v: unknown): number | null { if (v == null || v === "") return
 function asDate(v: unknown): string | null { const s = asString(v); if (!s) return null; const m = s.match(/^(\d{4})-(\d{1,2})-(\d{1,2})/); if (!m) return null; return `${m[1]}-${m[2].padStart(2,"0")}-${m[3].padStart(2,"0")}` }
 
 export function parseRev(grid: FormattedCell[][], opts?: { refFy?: number }): RevDealParsed[] {
-  if (grid.length === 0) return []
+  if (grid.length < 2) return []
   const refFy = opts?.refFy ?? new Date().getUTCFullYear()
-  const headers = grid[0] ?? []
+  const headers = grid[1] ?? []
   const monthMap: Array<{ idx: number; ym: string }> = []
   for (let i = REV_COLS.monthlyStart; i < headers.length; i++) {
-    const ym = normalizeMonthHeader(headers[i]?.value, refFy)
-    if (ym) monthMap.push({ idx: i, ym })
+    const v = headers[i]?.value
+    if (v == null) continue
+    const s = String(v).trim()
+    // accept only "1".."12" (skip "w1"-"w5" weekly cols and other text)
+    if (!/^([1-9]|1[0-2])$/.test(s)) continue
+    const month = parseInt(s, 10)
+    const year = month >= 4 ? refFy : refFy + 1
+    const ym = `${year}-${String(month).padStart(2, "0")}`
+    monthMap.push({ idx: i, ym })
   }
 
   const out: RevDealParsed[] = []
-  for (let r = 1; r < grid.length; r++) {
+  for (let r = 2; r < grid.length; r++) {
     const row = grid[r] ?? []
     const customer = asString(row[REV_COLS.customer]?.value)
     if (!customer) continue
