@@ -29,12 +29,20 @@ describe("computeHeatmap", () => {
     const map = Object.fromEntries(out.map((r) => [r.region, r.status]))
     expect(map.A).toBe("good"); expect(map.B).toBe("warning"); expect(map.C).toBe("critical")
   })
-  it("ignores cells without red flag", () => {
+  it("filters by red flag when any are present", () => {
+    const out = computeHeatmap([
+      mk({ region: "A", contract_target: 1000, first_payment: "2026-04-01",
+          monthly_payments: { "2026-04": 800, "2026-05": 200 }, monthly_red: { "2026-04": true } }),
+    ], "Y", now)
+    // Only "2026-04" is red-flagged → 800 counted, 200 ignored
+    expect(out[0].revenue).toBe(800)
+  })
+  it("treats all monthly cells as confirmed when no red flags exist (sheet without color convention)", () => {
     const out = computeHeatmap([
       mk({ region: "A", contract_target: 1000, first_payment: "2026-04-01",
           monthly_payments: { "2026-04": 800 }, monthly_red: {} }),
     ], "Y", now)
-    expect(out[0].revenue).toBe(0)
+    expect(out[0].revenue).toBe(800)
   })
   it("velocity in Q4 (January) computes a sane denominator", () => {
     const jan = new Date("2027-01-15T00:00:00Z")

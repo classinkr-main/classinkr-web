@@ -63,18 +63,23 @@ export function parseOutbound(grid: FormattedCell[][]): HwOutboundParsed[] {
   return out
 }
 
+// Real "재고현황" tab is a cumulative inbound/outbound report by FY,
+// not a current-stock table. Treat as advisory: extract product+category
+// from col 1+2 with a numeric value somewhere in the FY columns (col 3+).
+// Real stock = computed from inbound − outbound in branch_hw_inbound/outbound.
 export function parseStock(grid: FormattedCell[][]): HwStockParsed[] {
   const out: HwStockParsed[] = []
   for (let r = 0; r < grid.length; r++) {
     const row = grid[r] ?? []
-    const product = s(row[0]?.value); if (!product) continue
-    // Skip header bands (where col B is non-numeric label like "카테고리")
-    const qtyRaw = row[2]?.value
-    const qty = n(qtyRaw)
-    if (qty == null) continue   // requires a real number in qty column
-    if (product.includes("재고") && product.includes("현황")) continue
-    if (product.toLowerCase() === "product" || product === "제품명") continue
-    out.push({ product, category: s(row[1]?.value), quantity: qty, raw: row.map((c) => c?.value ?? null) })
+    const product = s(row[1]?.value); if (!product) continue
+    if (product === "제품명" || product.toLowerCase() === "product") continue
+    let qty = 0
+    for (let c = 3; c < row.length; c++) {
+      const v = n(row[c]?.value)
+      if (v != null) qty += v
+    }
+    if (qty === 0) continue
+    out.push({ product, category: s(row[2]?.value), quantity: qty, raw: row.map((c) => c?.value ?? null) })
   }
   return out
 }

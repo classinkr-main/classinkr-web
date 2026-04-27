@@ -69,7 +69,13 @@ export function buildInsightInput(a: BuildArgs): InsightInput {
     const dealsOf = a.deals.filter((d) => d.manager === m)
     const confirmed = dealsOf
       .filter((d) => d.first_payment)
-      .reduce((s, d) => s + Object.entries(d.monthly_payments).reduce((acc, [ym, v]) => acc + (d.monthly_red[ym] ? Number(v) : 0), 0), 0)
+      .reduce((s, d) => {
+        const hasRed = Object.keys(d.monthly_red).length > 0
+        return s + Object.entries(d.monthly_payments).reduce((acc, [ym, v]) => {
+          if (hasRed && !d.monthly_red[ym]) return acc
+          return acc + Number(v)
+        }, 0)
+      }, 0)
     const goalRow = a.dsh.rows.find((r) => r.level === "member" && r.member === m && r.kind === "goal")
     const goalVal = goalRow?.annual ?? 0
     const pipelineSum = dealsOf

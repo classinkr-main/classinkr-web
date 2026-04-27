@@ -15,13 +15,16 @@ describe("hw parsers", () => {
     expect(out[0].quantity).toBe(10)
     expect(out[0].serials).toEqual(["S1", "S2"])
   })
-  it("stock skips header band", () => {
+  it("stock reads product/category at col 1/2 and sums FY quantity columns from col 3+", () => {
     const grid: FormattedCell[][] = [
-      [c("메모"), c(""), c("")],
-      [c("재고 현황"), c(""), c("")],
-      [c('86" IFP'), c("IFP"), c(4)],
+      [c("입출고"), c("제품명"), c("분류"), c("FY24-25 H1"), c("FY24-25 H2")],
+      [c("입고 현황"), c('86" IFP'), c("전자칠판"), c(34), c(23)],
+      [c(""), c('75" IFP'), c("전자칠판"), c(16), c(17)],
     ]
-    expect(parseStock(grid)[0]).toMatchObject({ product: '86" IFP', quantity: 4 })
+    const out = parseStock(grid)
+    expect(out).toHaveLength(2)
+    expect(out[0]).toMatchObject({ product: '86" IFP', category: "전자칠판", quantity: 57 })
+    expect(out[1]).toMatchObject({ product: '75" IFP', quantity: 33 })
   })
   it("salesMonthly maps FY months", () => {
     const grid: FormattedCell[][] = [

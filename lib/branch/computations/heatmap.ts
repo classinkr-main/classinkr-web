@@ -28,9 +28,10 @@ export function computeHeatmap(deals: BranchRevDeal[], scope: Period, now: Date,
     const region = d.region ?? "미정"
     targets.set(region, (targets.get(region) ?? 0) + Number(d.contract_target ?? 0))
     if (!d.first_payment) continue
+    const hasRedFlags = Object.keys(d.monthly_red).length > 0
     let rev = 0
     for (const [ym, amt] of Object.entries(d.monthly_payments)) {
-      if (!d.monthly_red[ym]) continue
+      if (hasRedFlags && !d.monthly_red[ym]) continue
       if (!inScope(ym, scope, now)) continue
       rev += Number(amt)
     }

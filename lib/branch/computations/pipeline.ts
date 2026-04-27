@@ -33,7 +33,11 @@ export function listPipeline(deals: BranchRevDeal[], filter?: { team?: string; m
     if (filter?.stage && stageOf(d) !== filter.stage) return false
     return true
   }).map((d) => {
-    const confirmed = Object.entries(d.monthly_payments).reduce((s, [ym, v]) => s + (d.monthly_red[ym] ? Number(v) : 0), 0)
+    const hasRedFlags = Object.keys(d.monthly_red).length > 0
+    const confirmed = Object.entries(d.monthly_payments).reduce((s, [ym, v]) => {
+      if (hasRedFlags && !d.monthly_red[ym]) return s
+      return s + Number(v)
+    }, 0)
     return {
       id: d.id, customer: d.customer_name, manager: d.manager, team: d.team,
       region: d.region, importance: d.importance, stage: stageOf(d),

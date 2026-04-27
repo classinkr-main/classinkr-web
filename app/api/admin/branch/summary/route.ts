@@ -12,6 +12,24 @@ import { summarizeCampaigns } from "@/lib/branch/computations/campaigns"
 import { getRecentSyncRuns } from "@/lib/repositories/branch-sync"
 import { listPublicEvents } from "@/lib/repositories/public-events"
 
+type BranchTeam = "ALL" | "BD" | "MKT" | "CSM"
+type BranchPeriod = "M" | "Q" | "Y"
+
+const BRANCH_TEAMS = new Set<BranchTeam>(["ALL", "BD", "MKT", "CSM"])
+const BRANCH_PERIODS = new Set<BranchPeriod>(["M", "Q", "Y"])
+
+function readTeamParam(url: URL): BranchTeam | NextResponse {
+  const team = url.searchParams.get("team") ?? "ALL"
+  if (BRANCH_TEAMS.has(team as BranchTeam)) return team as BranchTeam
+  return NextResponse.json({ error: "Invalid team query" }, { status: 400 })
+}
+
+function readPeriodParam(url: URL): BranchPeriod | NextResponse {
+  const period = url.searchParams.get("period") ?? "Q"
+  if (BRANCH_PERIODS.has(period as BranchPeriod)) return period as BranchPeriod
+  return NextResponse.json({ error: "Invalid period query" }, { status: 400 })
+}
+
 const readDsh = unstable_cache(async () => {
   const id = envSheetId("dashboard")
   const grid = await readRangeWithFormat(id, DSH_RANGE)
@@ -27,18 +45,17 @@ const readKpi = unstable_cache(async () => {
 export async function GET(req: NextRequest) {
   const err = await verifyAdmin(req); if (err) return err
   const url = new URL(req.url)
-  const team = (url.searchParams.get("team") ?? "ALL") as "ALL"|"BD"|"MKT"|"CSM"
-  const period = (url.searchParams.get("period") ?? "Q") as "M"|"Q"|"Y"
+  const team = readTeamParam(url); if (team instanceof NextResponse) return team
+  const period = readPeriodParam(url); if (period instanceof NextResponse) return period
   const now = new Date()
   try {
     const [dsh, kpi, deals, campaigns, runs, events] = await Promise.all([
-      readDsh(), readKpi(), listBranchRevDeals(), summarizeCampaigns(now), getRecentSyncRuns(3), listPublicEvents(),
+      readDsh(), readKpi(), listBranchRevDeals({ team }), summarizeCampaigns(now), getRecentSyncRuns(3), listPublicEvents(),
     ])
-    const filteredDeals = team === "ALL" ? deals : deals.filter((d) => d.team === team)
     const teamMembers = new Set(listMembersByTeam(dsh, team))
-    const revenue = summarizeRevenue(dsh, filteredDeals, team, period, now)
+    const revenue = summarizeRevenue(dsh, deals, team, period, now)
     const bottle = bottleneckKpi(kpi, teamMembers)
-    const closing = closingDeals(filteredDeals, now)
+    const closing = closingDeals(deals, now)
     const events30 = events.filter((e) => {
       const t = new Date(e.startsAt).getTime()
       return t >= now.getTime() && t <= now.getTime() + 30*86400_000
@@ -61,9 +78,10 @@ export async function GET(req: NextRequest) {
 
     let revCum = 0
     const revenue_cum = months.map((m) => {
-      const sum = filteredDeals.reduce((s, d) => {
+      const sum = deals.reduce((s, d) => {
         if (!d.first_payment) return s
-        if (!d.monthly_red[m]) return s
+        const hasRed = Object.keys(d.monthly_red).length > 0
+        if (hasRed && !d.monthly_red[m]) return s
         return s + Number(d.monthly_payments[m] ?? 0)
       }, 0)
       revCum += sum
@@ -73,7 +91,7 @@ export async function GET(req: NextRequest) {
     const eventsTimeline = events
       .filter((e) => months.some((mm) => e.startsAt.startsWith(mm)))
       .map((e) => ({ date: e.startsAt.slice(0, 10), title: e.title }))
-    const dealsTimeline = filteredDeals
+    const dealsTimeline = deals
       .filter((d) => d.first_payment && months.some((mm) => d.first_payment!.startsWith(mm)))
       .map((d) => ({ date: d.first_payment!, customer: d.customer_name, amount: Number(d.contract_target ?? 0) }))
     const campaignsTimeline = campaigns.recent

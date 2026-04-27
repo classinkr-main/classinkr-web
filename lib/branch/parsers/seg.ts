@@ -1,5 +1,5 @@
 import type { FormattedCell } from "@/lib/branch/google-sheets"
-export const SEG_RANGE = "SEG!A1:AZ100"
+export const SEG_RANGE = "'4. 지역 매출'!A1:AM100"
 export interface SegRow { region: string; goal: number; status: number }
 
 export function parseSeg(grid: FormattedCell[][]): SegRow[] {
