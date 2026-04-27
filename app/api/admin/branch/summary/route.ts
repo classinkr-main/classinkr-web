@@ -3,14 +3,38 @@ import { verifyAdmin } from "@/lib/admin-auth"
 import { unstable_cache } from "next/cache"
 import { readRangeWithFormat, envSheetId } from "@/lib/branch/google-sheets"
 import { parseDsh, DSH_RANGE } from "@/lib/branch/parsers/dsh"
+import type { DshBreakdownRow } from "@/lib/branch/parsers/dsh"
 import { parseKpi, KPI_RANGE } from "@/lib/branch/parsers/kpi"
 import { listBranchRevDeals } from "@/lib/repositories/branch-deals"
-import { fyOf, FISCAL_MONTH_ORDER } from "@/lib/branch/fiscal"
+import { fyOf, FISCAL_MONTH_ORDER, fiscalQuarter, ymKey } from "@/lib/branch/fiscal"
 import { summarizeRevenue, bottleneckKpi, closingDeals } from "@/lib/branch/computations/core-kpi"
 import { listMembersByTeamFromDeals } from "@/lib/branch/computations/member-teams"
 import { summarizeCampaigns } from "@/lib/branch/computations/campaigns"
 import { getRecentSyncRuns } from "@/lib/repositories/branch-sync"
 import { listPublicEvents } from "@/lib/repositories/public-events"
+
+function pickValue(row: DshBreakdownRow, scope: "M" | "Q" | "Y", now: Date): number {
+  if (scope === "Y") return row.annual
+  if (scope === "Q") return row.quarters[fiscalQuarter(now.getUTCMonth() + 1) - 1] ?? 0
+  return row.months[ymKey(now)] ?? 0
+}
+
+interface MixSlice { name: string; goal: number; actual: number; pct: number }
+function buildMix(breakdown: DshBreakdownRow[], dim: "category" | "status_type" | "channel", scope: "M" | "Q" | "Y", now: Date): MixSlice[] {
+  const goals = new Map<string, number>()
+  const actuals = new Map<string, number>()
+  for (const row of breakdown) {
+    const key = row[dim]
+    if (row.kind === "goal") goals.set(key, (goals.get(key) ?? 0) + pickValue(row, scope, now))
+    else actuals.set(key, (actuals.get(key) ?? 0) + pickValue(row, scope, now))
+  }
+  const keys = new Set([...goals.keys(), ...actuals.keys()])
+  return [...keys].map((k) => {
+    const g = goals.get(k) ?? 0
+    const a = actuals.get(k) ?? 0
+    return { name: k, goal: g, actual: a, pct: g > 0 ? (a / g) * 100 : 0 }
+  }).sort((x, y) => y.goal - x.goal)
+}
 
 type BranchTeam = "ALL" | "BD" | "MKT" | "CSM"
 type BranchPeriod = "M" | "Q" | "Y"
@@ -98,6 +122,12 @@ export async function GET(req: NextRequest) {
       .filter((c) => c.sentAt && months.some((mm) => c.sentAt!.startsWith(mm)))
       .map((c) => ({ date: c.sentAt!, name: c.subject }))
 
+    const dealMix = {
+      by_category: buildMix(dsh.breakdown ?? [], "category", period, now),
+      by_status_type: buildMix(dsh.breakdown ?? [], "status_type", period, now),
+      by_channel: buildMix(dsh.breakdown ?? [], "channel", period, now),
+    }
+
     return NextResponse.json({
       team, period,
       revenue, bottleneck: bottle, closing,
@@ -107,6 +137,7 @@ export async function GET(req: NextRequest) {
       lastSync: lastRun?.finished_at ?? lastRun?.started_at ?? null,
       lastError: lastRun?.status === "failed" ? lastRun.error ?? "동기화 실패" : null,
       monthly_series: { months, goal_cum, revenue_cum, events: eventsTimeline, deals: dealsTimeline, campaigns: campaignsTimeline },
+      deal_mix: dealMix,
     })
   } catch (e) {
     return NextResponse.json({ error: String(e) }, { status: 500 })
