@@ -7,6 +7,7 @@ import FiscalRoadmap from "./sections/FiscalRoadmap"
 import TeamPacingSection from "./sections/TeamPacingSection"
 import ManagerScorecard from "./sections/ManagerScorecard"
 import KpiActivityMatrix from "./sections/KpiActivityMatrix"
+import PipelineTable from "./sections/PipelineTable"
 
 export type Team = "ALL" | "BD" | "MKT" | "CSM"
 export type Period = "M" | "Q" | "Y"
@@ -80,6 +81,7 @@ export default function BranchDashboardClient() {
         <TeamPacingSection team={team} period={period} refreshKey={refreshKey} />
         <ManagerScorecard team={team} period={period} refreshKey={refreshKey} />
         <KpiActivityMatrix team={team} period={period} refreshKey={refreshKey} />
+        <PipelineTable team={team} period={period} refreshKey={refreshKey} />
       </div>
     </div>
   )
