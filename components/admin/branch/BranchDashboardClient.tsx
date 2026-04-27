@@ -1,6 +1,7 @@
 "use client"
 import { useEffect, useState, useCallback } from "react"
 import SyncStatusBar from "./SyncStatusBar"
+import CoreKpiGrid from "./sections/CoreKpiGrid"
 
 export type Team = "ALL" | "BD" | "MKT" | "CSM"
 export type Period = "M" | "Q" | "Y"
@@ -68,8 +69,9 @@ export default function BranchDashboardClient() {
       </div>
 
       <div className="mt-8 space-y-10">
+        <CoreKpiGrid team={team} period={period} refreshKey={refreshKey} />
         <div className="rounded-2xl border border-dashed border-[#e8e8e4] bg-white p-6 text-[12px] text-[#1a1a1a]/40">
-          섹션이 다음 단계에서 추가됩니다 (CoreKpiGrid → RegionHeatmap → FiscalRoadmap → 팀/매니저 → 파이프라인 → 캠페인 → 하드웨어 → 데이터 품질).
+          추가 섹션은 다음 단계에서 추가됩니다.
         </div>
       </div>
     </div>
