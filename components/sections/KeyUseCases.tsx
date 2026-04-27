@@ -45,7 +45,7 @@ export function KeyUseCases() {
                                 imageObjectPosition="50% 50%"
                                 overlayImageSrc="/images/use-cases/generated/interactive-generated-v3.png"
                                 overlayImageAlt="인터랙티브 수업 투명 오브젝트"
-                                overlayImageClassName="w-[32%] min-w-[7rem] right-[1%] bottom-[-4%] md:w-[38%] md:right-[0%] md:bottom-[-7%]"
+                                overlayImageClassName="w-[36%] min-w-[7.5rem] right-[-1%] bottom-[-6%] md:w-[42%] md:right-[-2%] md:bottom-[-9%]"
                             />
                         </TabsContent>
                         <TabsContent value="homework">
@@ -63,7 +63,7 @@ export function KeyUseCases() {
                                 imageObjectPosition="52% 45%"
                                 overlayImageSrc="/images/use-cases/generated/homework-generated-v3.png"
                                 overlayImageAlt="과제 및 테스트 투명 오브젝트"
-                                overlayImageClassName="w-[34%] min-w-[7rem] right-[0%] bottom-[-5%] md:w-[40%] md:right-[0%] md:bottom-[-8%]"
+                                overlayImageClassName="w-[38%] min-w-[7.5rem] right-[-2%] bottom-[-7%] md:w-[44%] md:right-[-3%] md:bottom-[-10%]"
                             />
                         </TabsContent>
                         <TabsContent value="admin">
@@ -159,7 +159,7 @@ function UseCaseCard({
         >
             <Card className="overflow-hidden border border-[rgba(0,0,0,0.08)] bg-white rounded-[2rem]" style={{ boxShadow: 'rgba(0,0,0,0.04) 0px 4px 18px, rgba(0,0,0,0.027) 0px 2px 7.8px, rgba(0,0,0,0.02) 0px 0.8px 2.9px' }}>
                 <div className="grid gap-0 md:grid-cols-[1.12fr_0.88fr]">
-                    <div className={`h-[22rem] md:h-auto ${imageColor} flex items-center justify-center p-5 md:p-8 lg:p-9 relative overflow-hidden`}>
+                    <div className={`h-[22rem] md:h-auto ${imageColor} flex items-center justify-center p-4 md:p-6 lg:p-7 relative overflow-hidden`}>
                         <div className="absolute inset-0 bg-gradient-to-br from-white/50 via-white/8 to-transparent z-0" />
                         <div className="absolute left-8 top-8 h-24 w-24 rounded-full bg-white/45 blur-3xl z-0" />
                         <div className="absolute right-10 bottom-10 h-28 w-28 rounded-full bg-[#CFEFE1]/75 blur-3xl z-0" />
@@ -168,9 +168,9 @@ function UseCaseCard({
                             <motion.div
                                 whileHover={{ y: -4, rotate: -1 }}
                                 transition={{ type: "spring", bounce: 0.3 }}
-                                className="relative z-20 w-full max-w-none"
+                                className="relative z-20 w-[108%] max-w-none"
                             >
-                                <div className="relative aspect-[16/10] overflow-hidden rounded-[1.75rem] border border-[rgba(17,17,16,0.08)] bg-white shadow-[0_34px_64px_rgba(8,71,52,0.12),0_12px_24px_rgba(17,17,16,0.08)]">
+                                <div className="relative aspect-[16/10] overflow-hidden">
                                     <Image
                                         src={imageSrc}
                                         alt={imageAlt || title}

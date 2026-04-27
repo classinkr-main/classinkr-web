@@ -1,6 +1,7 @@
 "use client"
 
 import Link from "next/link"
+import { usePathname } from "next/navigation"
 import type { ReactNode } from "react"
 import { Building2, LayoutDashboard, ListChecks, Users } from "lucide-react"
 
@@ -43,11 +44,23 @@ const CRM_TABS = [
   icon: ReactNode
 }>
 
-export default function CrmSubnav({ active }: { active: CrmTab }) {
+function resolveActiveTab(pathname: string | null): CrmTab | null {
+  if (!pathname) return null
+  if (pathname === "/admin/crm/partners/portal") return "partnerPortal"
+  if (pathname === "/admin/crm/partners/customers") return "partnerCustomers"
+  if (pathname.startsWith("/admin/crm/partners")) return "partners"
+  if (pathname === "/admin/crm" || pathname.startsWith("/admin/crm/")) return "customers"
+  return null
+}
+
+export default function CrmSubnav({ active }: { active?: CrmTab } = {}) {
+  const pathname = usePathname()
+  const resolved = active ?? resolveActiveTab(pathname)
+
   return (
     <div className="-mx-4 mb-6 flex gap-2 overflow-x-auto px-4 pb-2 sm:mx-0 sm:flex-wrap sm:overflow-visible sm:px-0 sm:pb-0">
       {CRM_TABS.map((tab) => {
-        const isActive = active === tab.key
+        const isActive = resolved === tab.key
 
         return (
           <Link

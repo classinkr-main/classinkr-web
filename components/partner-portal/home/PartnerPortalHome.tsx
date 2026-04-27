@@ -127,6 +127,7 @@ type PartnerPortalHomeProps = {
   overviewEndpoint?: string
   linkTargets?: Partial<PartnerPortalLinkTargets>
   allowCreate?: boolean
+  embedded?: boolean
 }
 
 const DEFAULT_LINK_TARGETS: PartnerPortalLinkTargets = {
@@ -591,6 +592,7 @@ export function PartnerPortalHome({
   overviewEndpoint = "/api/portal/overview",
   linkTargets,
   allowCreate,
+  embedded = false,
 }: PartnerPortalHomeProps = {}) {
   const [overview, setOverview] = useState<PartnerOverviewPayload>(DEMO)
   const [loading, setLoading]   = useState(true)
@@ -710,13 +712,29 @@ export function PartnerPortalHome({
     year: "numeric", month: "long", day: "numeric", weekday: "short",
   })
 
+  const rootClass = embedded
+    ? "text-[#1a1a1a]"
+    : "min-h-screen bg-[#f6f3ed] text-[#1a1a1a]"
+  const bodyGridClass = embedded ? "" : "grid lg:grid-cols-[272px_1fr]"
+  const actionBarBorderClass = embedded
+    ? "rounded-2xl border border-[#e7e0d6] bg-white px-4 py-3 sm:px-6"
+    : "border-b border-[#e7e0d6] bg-white px-6 py-3"
+  const urgencyStripClass = embedded
+    ? "mt-3 rounded-2xl bg-[#111110] px-4 py-2.5 sm:px-6"
+    : "bg-[#111110] px-6 py-2.5"
+  const contentPaddingClass = embedded ? "px-0 py-6" : "px-6 py-6"
+
   return (
-    <div className="min-h-screen bg-[#f6f3ed] text-[#1a1a1a]">
+    <div className={rootClass}>
 
       {/* ── Demo Banner ─────────────────────────────────────────── */}
       {overview.mode === "demo" && (
-        <div className="border-b border-amber-300/60 bg-amber-50 px-6 py-2.5">
-          <div className="mx-auto flex max-w-[1680px] items-center justify-between gap-4">
+        <div className={
+          embedded
+            ? "mb-4 rounded-2xl border border-amber-300/60 bg-amber-50 px-4 py-2.5 sm:px-6"
+            : "border-b border-amber-300/60 bg-amber-50 px-6 py-2.5"
+        }>
+          <div className={embedded ? "flex flex-wrap items-center justify-between gap-3" : "mx-auto flex max-w-[1680px] items-center justify-between gap-4"}>
             <div className="flex items-center gap-2 text-sm text-amber-800">
               <span className="rounded-full bg-amber-200 px-2 py-0.5 text-[11px] font-bold uppercase tracking-wider text-amber-700">DEMO</span>
               지금 보이는 데이터는 <strong>샘플 데이터</strong>입니다. 실제 계정을 연결하면 실데이터로 전환됩니다.
@@ -727,21 +745,23 @@ export function PartnerPortalHome({
       )}
 
       {/* ── Body: Sidebar + Main ─────────────────────────────────── */}
-      <div className="grid lg:grid-cols-[272px_1fr]">
+      <div className={bodyGridClass}>
 
-        {/* ── Left Sidebar ──────────────────────────────────────── */}
-        <LeftSidebar
-          upcoming_installations={overview.upcoming_installations}
-          recent_calendar_events={overview.recent_calendar_events}
-          recent_activity={overview.recent_activity}
-          calendarHref={resolvedLinkTargets.calendar}
-        />
+        {/* ── Left Sidebar (admin embed에서는 숨김) ─────────────── */}
+        {!embedded && (
+          <LeftSidebar
+            upcoming_installations={overview.upcoming_installations}
+            recent_calendar_events={overview.recent_calendar_events}
+            recent_activity={overview.recent_activity}
+            calendarHref={resolvedLinkTargets.calendar}
+          />
+        )}
 
         {/* ── Main Content ──────────────────────────────────────── */}
         <main className="min-w-0">
 
           {/* Action Bar */}
-          <div className="border-b border-[#e7e0d6] bg-white px-6 py-3">
+          <div className={actionBarBorderClass}>
             <div className="flex items-center justify-between gap-4">
               <div className="flex items-center gap-3">
                 {loading && <Loader2 className="h-4 w-4 animate-spin text-[#1a1a1a]/40" />}
@@ -765,7 +785,7 @@ export function PartnerPortalHome({
 
           {/* Urgency Strip */}
           {urgencyChips.length > 0 && (
-            <div className="bg-[#111110] px-6 py-2.5">
+            <div className={urgencyStripClass}>
               <div className="flex flex-wrap items-center gap-2">
                 <span className="text-[11px] font-semibold uppercase tracking-widest text-white/35">지금 확인</span>
                 {urgencyChips.map(chip => (
@@ -782,9 +802,11 @@ export function PartnerPortalHome({
 
           {/* Scrollable content */}
           <div
-            className="grid gap-6 px-6 py-6"
+            className={`grid gap-6 ${contentPaddingClass}`}
             style={{
-              gridTemplateColumns: sidebarOpen ? "1fr 300px" : "1fr 36px",
+              gridTemplateColumns: sidebarOpen
+                ? "minmax(0, 1fr) 300px"
+                : "minmax(0, 1fr) 36px",
               transition: "grid-template-columns 280ms cubic-bezier(0.4,0,0.2,1)",
             }}
           >

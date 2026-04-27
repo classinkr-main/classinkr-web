@@ -9,7 +9,6 @@ async function adminFetch(url: string) {
 }
 function fmt(n: number) { return new Intl.NumberFormat("ko-KR", { maximumFractionDigits: 0 }).format(n) }
 
-const PAGE_SIZE = 50
 const ALL_REGIONS = "ALL"
 
 type RevenueSort = "desc" | "asc"
@@ -19,7 +18,16 @@ interface Row {
   region: string|null; revenue: number
 }
 
-export default function PipelineTable({ team, refreshKey }: { team: Team; period: Period; refreshKey: number }) {
+export default function PipelineTable({
+  team,
+  refreshKey,
+  pageSize = 50,
+}: {
+  team: Team
+  period: Period
+  refreshKey: number
+  pageSize?: number
+}) {
   const [tableTeam, setTableTeam] = useState<Team>(team)
   const requestKey = `${refreshKey}:${tableTeam}`
   const [rowsState, setRowsState] = useState<{ key: string; rows: Row[] | null }>({ key: requestKey, rows: null })
@@ -70,11 +78,11 @@ export default function PipelineTable({ team, refreshKey }: { team: Team; period
       })
   }, [activeRegion, query, revenueSort, rows])
 
-  const totalPages = Math.max(1, Math.ceil(filteredRows.length / PAGE_SIZE))
+  const totalPages = Math.max(1, Math.ceil(filteredRows.length / pageSize))
   const safePage = Math.min(page, totalPages)
-  const pageRows = filteredRows.slice((safePage - 1) * PAGE_SIZE, safePage * PAGE_SIZE)
-  const pageStart = filteredRows.length === 0 ? 0 : (safePage - 1) * PAGE_SIZE + 1
-  const pageEnd = Math.min(safePage * PAGE_SIZE, filteredRows.length)
+  const pageRows = filteredRows.slice((safePage - 1) * pageSize, safePage * pageSize)
+  const pageStart = filteredRows.length === 0 ? 0 : (safePage - 1) * pageSize + 1
+  const pageEnd = Math.min(safePage * pageSize, filteredRows.length)
 
   if (!rows) return <div className="h-64 animate-pulse rounded-2xl bg-[#f0f0ec]" />
   if (rows.length === 0) return (
@@ -87,7 +95,7 @@ export default function PipelineTable({ team, refreshKey }: { team: Team; period
     <section>
       <div className="mb-3 flex flex-wrap items-end justify-between gap-3">
         <h2 className="text-[13px] font-semibold text-[#111110]/70">REV 고객별 매출</h2>
-        <p className="text-[11px] text-[#1a1a1a]/40">{filteredRows.length}건 · 50개씩 보기</p>
+        <p className="text-[11px] text-[#1a1a1a]/40">{filteredRows.length}건 · {pageSize}개씩 보기</p>
       </div>
       <div className="mb-3 flex flex-wrap items-center gap-3">
         <label className="relative min-w-0 flex-1 sm:max-w-md">

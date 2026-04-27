@@ -382,7 +382,7 @@ export default function PartnerWorkspacePageClient({
   }
 
   return (
-    <div className="mx-auto w-full max-w-[1320px] px-4 pb-20 pt-8 sm:px-6 lg:px-8 lg:pt-10">
+    <div>
       <div className="mb-8 flex flex-col gap-4 lg:flex-row lg:items-start lg:justify-between">
         <div className="max-w-4xl">
           <p className="mb-1 text-[11px] font-medium uppercase tracking-widest text-[#1a1a1a]/30">Admin</p>

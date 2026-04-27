@@ -71,12 +71,14 @@ type PartnerCustomersPageProps = {
   allowCreate?: boolean
   allowEdit?: boolean
   title?: string
+  embedded?: boolean
 }
 
 export function PartnerCustomersPage({
   allowCreate = true,
   allowEdit = true,
   title = "고객 관리",
+  embedded = false,
 }: PartnerCustomersPageProps = {}) {
   const [customers, setCustomers] = useState<CustomerListItem[]>([])
   const [loading, setLoading] = useState(true)
@@ -139,8 +141,12 @@ export function PartnerCustomersPage({
     return (right.summary?.active_deals ?? 0) - (left.summary?.active_deals ?? 0)
   })
 
+  const wrapperClass = embedded
+    ? ""
+    : "mx-auto max-w-[1600px] px-5 py-6 lg:px-8"
+
   return (
-    <div className="mx-auto max-w-[1600px] px-5 py-6 lg:px-8">
+    <div className={wrapperClass}>
       <div className="space-y-6">
         <div className="flex items-center justify-between">
           <div>

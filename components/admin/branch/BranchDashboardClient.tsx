@@ -115,7 +115,7 @@ export default function BranchDashboardClient() {
               <TeamPacingSection rows={kpi.data?.teams ?? null} loading={kpi.loading} error={kpi.error} />
               <CampaignsSection rows={summary.data?.campaigns_recent ?? null} loading={summary.loading} error={summary.error} />
             </div>
-            <PipelineTable key={`dashboard-rev-${team}`} team={team} period={period} refreshKey={refreshKey} />
+            <PipelineTable key={`dashboard-rev-${team}`} team={team} period={period} refreshKey={refreshKey} pageSize={20} />
           </div>
         )}
 

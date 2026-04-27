@@ -250,7 +250,7 @@ const featureTabs: FeatureTab[] = [
         imageAlt: "50페이지 판서 기능 시각화",
         imageFit: "contain",
         imagePanelClassName: "bg-[#05080C]",
-        imageClassName: "scale-[2]",
+        imageClassName: "scale-[1.8] -translate-y-[8%]",
         badge: "50페이지 무한 캔버스",
         title: "공간 걱정 없이 쓰고, 쓰는 즉시 전달",
         points: [

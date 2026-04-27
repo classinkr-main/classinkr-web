@@ -101,16 +101,24 @@ export async function GET(req: NextRequest) {
     const goal_cum = months.map((m) => { goalCum += monthGoal(m); return goalCum })
 
     let revCum = 0
-    const revenue_cum = months.map((m) => {
-      const sum = deals.reduce((s, d) => {
-        if (!d.first_payment) return s
+    let trendCum = 0
+    const revenue_cum: number[] = []
+    const revenue_trend_cum: number[] = []
+    for (const m of months) {
+      const month = deals.reduce((acc, d) => {
+        const amount = Number(d.monthly_payments[m] ?? 0)
+        if (!amount) return acc
+        if (!d.first_payment) return { ...acc, trend: acc.trend + amount }
         const hasRed = Object.keys(d.monthly_red).length > 0
-        if (hasRed && !d.monthly_red[m]) return s
-        return s + Number(d.monthly_payments[m] ?? 0)
-      }, 0)
-      revCum += sum
-      return revCum
-    })
+        if (!hasRed || d.monthly_red[m]) return { ...acc, confirmed: acc.confirmed + amount }
+        return { ...acc, trend: acc.trend + amount }
+      }, { confirmed: 0, trend: 0 })
+      revCum += month.confirmed
+      trendCum += month.confirmed + month.trend
+      revenue_cum.push(revCum)
+      revenue_trend_cum.push(trendCum)
+    }
+    const confirmed_through_index = Math.max(0, months.indexOf(ymKey(now)))
 
     const eventsTimeline = events
       .filter((e) => months.some((mm) => e.startsAt.startsWith(mm)))
@@ -136,7 +144,16 @@ export async function GET(req: NextRequest) {
       campaigns_recent: campaigns.recent.slice(0, 8),
       lastSync: lastRun?.finished_at ?? lastRun?.started_at ?? null,
       lastError: lastRun?.status === "failed" ? lastRun.error ?? "동기화 실패" : null,
-      monthly_series: { months, goal_cum, revenue_cum, events: eventsTimeline, deals: dealsTimeline, campaigns: campaignsTimeline },
+      monthly_series: {
+        months,
+        goal_cum,
+        revenue_cum,
+        revenue_trend_cum,
+        confirmed_through_index,
+        events: eventsTimeline,
+        deals: dealsTimeline,
+        campaigns: campaignsTimeline,
+      },
       deal_mix: dealMix,
     })
   } catch (e) {

@@ -63,7 +63,7 @@ export default function SizeChooser() {
         </p>
 
         {/* Cards */}
-        <div className="mt-14 grid max-w-5xl md:grid-cols-2 gap-6 lg:gap-8">
+        <div className="mt-14 mx-auto grid max-w-5xl md:grid-cols-2 gap-6 lg:gap-8">
           {sizes.map((size, i) => (
             <motion.div
               key={size.inches}

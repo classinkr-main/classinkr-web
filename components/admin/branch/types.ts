@@ -8,6 +8,8 @@ export interface BranchMonthlySeries {
   months: string[]
   goal_cum: number[]
   revenue_cum: number[]
+  revenue_trend_cum: number[]
+  confirmed_through_index: number
   events: { date: string; title: string }[]
   deals: { date: string; customer: string; amount: number }[]
   campaigns: { date: string; name: string }[]
