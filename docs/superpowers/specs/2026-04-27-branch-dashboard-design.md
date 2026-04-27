@@ -37,7 +37,7 @@ GOOGLE_BRANCH_DASHBOARD_SHEET_ID=1BTXyid66wpTDTCA-fm-lTrJJ1G4KxzjhGWsN7LLP4qg
 GOOGLE_BRANCH_HARDWARE_SHEET_ID=1XZNIPCYE8sZnyk2K-iHVAJmpaFFBvbDM1q_jsxK4t-k
 BRANCH_DASHBOARD_CRON_SECRET=<32바이트 랜덤>
 GEMINI_API_KEY=<Google AI Studio 키. 절대 커밋 금지>
-GEMINI_MODEL=gemini-2.5-flash   # 옵션, 기본값
+GEMINI_MODEL=gemini-3.1-pro     # 옵션, 기본값 (env 미설정 시 적용)
 ```
 
 `.env.local.example` 동일하게 추가하되 값은 빈 문자열.
@@ -528,10 +528,11 @@ export const readDsh = unstable_cache(
 
 ### 11.1 모델 / SDK
 
-- 기본 모델: `gemini-2.5-flash` (env `GEMINI_MODEL` 로 override 가능)
+- 기본 모델: `gemini-3.1-pro` (env `GEMINI_MODEL` 로 override 가능)
 - 호출: REST 직접 (`fetch`) — `https://generativelanguage.googleapis.com/v1beta/models/${model}:generateContent?key=${GEMINI_API_KEY}`
 - 응답 모드: `responseMimeType: 'application/json'` + `responseSchema` 로 JSON 출력 강제
 - 추가 의존성 없음 (`@google/generative-ai` 미사용)
+- 비용: pro 등급은 flash 대비 약 5~10배. 일 4회 cron 기준 월 $5~10 예상. 실측 후 flash 로 다운그레이드 가능 (env 변경만)
 
 ### 11.2 입력 빌더 (`input-builder.ts`)
 
