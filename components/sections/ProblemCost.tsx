@@ -81,9 +81,12 @@ export function ProblemCost() {
                     transition={{ duration: 0.7 }}
                     className="text-center max-w-3xl mx-auto mb-20 px-4"
                 >
-                    <span className="inline-flex items-center gap-2 py-1.5 px-4 rounded-full bg-[#B85C33]/10 border border-[#B85C33]/20 text-[#F6D5C5] text-sm font-semibold mb-6 backdrop-blur-sm">
-                        <span className="w-2 h-2 rounded-full bg-[#F6D5C5] animate-pulse" />
-                        원장님, 이 질문들을 받아본 적 있으신가요
+                    <span className="inline-flex items-center gap-2.5 py-2 px-5 rounded-full bg-[#B85C33]/8 border border-[#B85C33]/15 text-[#F6D5C5] text-sm font-semibold mb-6 backdrop-blur-md shadow-[0_2px_16px_rgba(184,92,51,0.12)]">
+                        <span className="relative flex h-2 w-2">
+                            <span className="absolute inline-flex h-full w-full animate-ping rounded-full bg-[#F6D5C5]/40" />
+                            <span className="relative inline-flex h-2 w-2 rounded-full bg-[#F6D5C5]" />
+                        </span>
+                        <span className="tracking-[0.02em]">원장님, 이 질문들을 받아본 적 있으신가요</span>
                     </span>
                     <h2 className="text-4xl font-black text-white sm:text-5xl md:text-[3.5rem] mb-6 leading-tight break-keep" style={{ letterSpacing: '-1.5px' }}>
                         강사에 기대는 학원은<br className="md:hidden" />{" "}
@@ -123,7 +126,7 @@ export function ProblemCost() {
 
                                     {/* Cost footer with counter */}
                                     <div className="w-full pt-6 border-t border-white/[0.08] mt-auto">
-                                        <p className="text-xs font-bold text-[#F6D5C5]/70 uppercase tracking-[0.2em] mb-2">예상 손실</p>
+                                        <p className="text-[11px] font-bold text-[#F6D5C5]/50 uppercase tracking-[0.25em] mb-2">예상 손실</p>
                                         <p className="text-2xl font-black text-transparent bg-clip-text bg-gradient-to-r from-[#B85C33] to-[#F6D5C5]">
                                             <CountUp target={pain.countTarget} suffix={pain.countSuffix} /> {pain.countLabel}
                                         </p>
@@ -149,9 +152,12 @@ export function ProblemCost() {
                                 <h3 className="font-bold text-white text-xl mb-1">운영 리스크 대시보드</h3>
                                 <p className="text-white/40 text-sm">시스템 미도입 학원 평균 데이터</p>
                             </div>
-                            <span className="inline-flex items-center gap-2 px-4 py-2 rounded-full bg-[#B85C33]/15 border border-[#B85C33]/30">
-                                <span className="w-2 h-2 rounded-full bg-[#B85C33] animate-pulse" />
-                                <span className="font-bold text-[#F6D5C5] text-sm">즉시 개선 필요</span>
+                            <span className="inline-flex items-center gap-2.5 px-4 py-2 rounded-full bg-gradient-to-r from-[#B85C33]/15 to-[#B85C33]/8 border border-[#B85C33]/25 backdrop-blur-sm shadow-[0_0_20px_rgba(184,92,51,0.1)]">
+                                <span className="relative flex h-2 w-2">
+                                    <span className="absolute inline-flex h-full w-full animate-ping rounded-full bg-[#B85C33]/50" />
+                                    <span className="relative inline-flex h-2 w-2 rounded-full bg-[#B85C33]" />
+                                </span>
+                                <span className="font-bold text-[#F6D5C5] text-sm tracking-[0.02em]">즉시 개선 필요</span>
                             </span>
                         </div>
 

@@ -67,7 +67,8 @@ export function DashboardPreview() {
                 {/* 헤더 */}
                 <div className="mb-14 flex flex-col gap-10 md:flex-row md:items-end md:justify-between">
                     <div className="max-w-xl">
-                        <span className="mb-3 inline-block rounded-full border border-white/10 bg-white/5 px-3 py-1 text-xs font-medium tracking-widest text-white/50 uppercase">
+                        <span className="mb-3 inline-flex items-center gap-2 rounded-full border border-white/10 bg-white/[0.04] backdrop-blur-sm px-4 py-1.5 text-[11px] font-semibold tracking-[0.25em] text-white/40 uppercase shadow-[0_2px_12px_rgba(0,0,0,0.2)]">
+                            <span className="w-1 h-1 rounded-full bg-[#6EE7B7]/60" />
                             Analytics
                         </span>
                         <h2 className="text-3xl font-extrabold tracking-tight text-white sm:text-4xl break-keep leading-tight">
@@ -107,7 +108,7 @@ export function DashboardPreview() {
                         className="rounded-2xl border border-white/10 p-6"
                         style={{ background: "rgba(255,255,255,0.05)", backdropFilter: "blur(20px)" }}
                     >
-                        <div className="mb-1 text-[11px] font-semibold uppercase tracking-widest text-white/30">Engagement</div>
+                        <div className="mb-1 text-[11px] font-semibold uppercase tracking-[0.25em] text-white/25">Engagement</div>
                         <div className="mb-5 flex items-end justify-between">
                             <p className="text-base font-semibold text-white">수업 참여도 추이</p>
                             <div className="flex items-center gap-3 text-[11px]">
@@ -187,7 +188,7 @@ export function DashboardPreview() {
                         className="rounded-2xl border border-white/10 p-6"
                         style={{ background: "rgba(255,255,255,0.05)", backdropFilter: "blur(20px)" }}
                     >
-                        <div className="mb-1 text-[11px] font-semibold uppercase tracking-widest text-white/30">Performance</div>
+                        <div className="mb-1 text-[11px] font-semibold uppercase tracking-[0.25em] text-white/25">Performance</div>
                         <div className="mb-5 flex items-end justify-between">
                             <p className="text-base font-semibold text-white">과제 완료율 vs 성적</p>
                             <div className="flex items-center gap-3 text-[11px]">

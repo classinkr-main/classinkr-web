@@ -359,27 +359,26 @@ function FeatureTabSection() {
                 >
                     {/* Image */}
                     {tab.visual === "camera-stack" ? (
-                        <div className="relative aspect-[4/3] rounded-3xl overflow-hidden border border-[#22A366]/10 bg-[radial-gradient(circle_at_top,_rgba(255,255,255,0.95),_rgba(236,253,245,0.88)_38%,_rgba(224,242,234,0.92)_100%)] shadow-2xl">
-                            <div className="absolute inset-0 bg-[radial-gradient(circle_at_50%_28%,_rgba(255,255,255,0.9),_transparent_35%),linear-gradient(135deg,_rgba(34,163,102,0.06),_transparent_55%)]" />
-                            <div className="absolute inset-0 bg-[linear-gradient(120deg,_transparent_0%,_rgba(255,255,255,0.45)_50%,_transparent_100%)] opacity-70" />
+                        <div className="relative aspect-[4/3] bg-transparent">
+                            <div className="absolute inset-0 bg-[radial-gradient(circle_at_50%_32%,_rgba(255,255,255,0.08),_transparent_30%),radial-gradient(circle_at_20%_20%,_rgba(34,163,102,0.08),_transparent_26%),linear-gradient(180deg,_rgba(8,10,9,1)_0%,_rgba(2,3,3,1)_100%)]" />
                             <Image
                                 src={tab.cameraBack ?? ""}
                                 alt="클래스인 AI 카메라 후면"
                                 width={266}
                                 height={224}
-                                sizes="(max-width: 768px) 38vw, 220px"
-                                className="absolute left-[12%] top-[16%] w-[38%] max-w-[220px] rotate-[-12deg] drop-shadow-[0_28px_45px_rgba(15,23,42,0.18)]"
+                                sizes="(max-width: 768px) 46vw, 280px"
+                                className="absolute left-[6%] top-[7%] w-[46%] max-w-[280px] rotate-[-11deg] drop-shadow-[0_30px_55px_rgba(0,0,0,0.5)]"
                             />
                             <Image
                                 src={tab.cameraFront ?? ""}
                                 alt="클래스인 AI 카메라 전면"
                                 width={292}
                                 height={267}
-                                sizes="(max-width: 768px) 42vw, 250px"
-                                className="absolute right-[10%] bottom-[12%] w-[42%] max-w-[250px] rotate-[10deg] drop-shadow-[0_30px_55px_rgba(15,23,42,0.22)]"
+                                sizes="(max-width: 768px) 52vw, 320px"
+                                className="absolute right-[0%] bottom-[3%] w-[54%] max-w-[330px] rotate-[8deg] drop-shadow-[0_36px_70px_rgba(0,0,0,0.62)]"
                             />
                             <div className="absolute inset-x-0 bottom-6 flex justify-center">
-                                <div className="rounded-full border border-[#22A366]/15 bg-white/70 px-4 py-2 text-[11px] font-semibold tracking-[0.2em] text-[#084734] backdrop-blur-sm">
+                                <div className="px-1 py-1 text-[11px] font-semibold tracking-[0.24em] text-white/80">
                                     4K AI TRACKING CAMERA
                                 </div>
                             </div>
@@ -1183,8 +1182,8 @@ export default function ProductHWPage() {
                 eyebrow="교실의 경계를 넘어서"
                 statement={<>시간과 지역을 넘어서<br />교육의 손길이 닿을 수 있도록</>}
                 sub="Classin은 지역의 한계를 넘어서 교육의 표준화와 시스템화를 돕습니다."
-                contentClassName="font-bold"
                 image="/images/product/hw/spaces/space-classroom-real.png"
+                contentClassName="font-bold"
                 dark
             />
 

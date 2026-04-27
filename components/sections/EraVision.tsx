@@ -42,11 +42,11 @@ export function EraVision() {
                     transition={{ duration: 0.6 }}
                     className="flex items-center justify-center gap-3 mb-10"
                 >
-                    <div className="h-px w-12 bg-[#084734]/30" />
-                    <span className="text-sm font-bold text-[#084734] uppercase tracking-[0.2em]">
+                    <div className="h-px w-10 bg-gradient-to-r from-transparent to-[#084734]/40" />
+                    <span className="text-[13px] font-semibold text-[#084734] uppercase tracking-[0.25em]">
                         New Era of Education
                     </span>
-                    <div className="h-px w-12 bg-[#084734]/30" />
+                    <div className="h-px w-10 bg-gradient-to-l from-transparent to-[#084734]/40" />
                 </motion.div>
 
                 {/* Main statement */}
@@ -88,7 +88,7 @@ export function EraVision() {
                             className="bg-white px-8 py-10 flex flex-col gap-5 group hover:bg-[#ECFDF5]/40 transition-colors duration-300"
                         >
                             {/* Keyword badge */}
-                            <span className="self-start text-xs font-bold text-[#084734] bg-[#ECFDF5] px-3 py-1 rounded-full tracking-wide">
+                            <span className="self-start text-[11px] font-bold text-[#084734] bg-gradient-to-r from-[#ECFDF5] to-[#D1FAE5]/60 px-3.5 py-1 rounded-full tracking-[0.08em] uppercase border border-[#084734]/8 shadow-[0_1px_4px_rgba(8,71,52,0.06)]">
                                 {shift.keyword}
                             </span>
 

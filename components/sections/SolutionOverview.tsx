@@ -42,7 +42,8 @@ export function SolutionOverview() {
         <section id="solution" className="py-16 md:py-24 bg-[#F6F5F4]">
             <div className="container mx-auto">
                 <div className="text-center max-w-3xl mx-auto mb-16 px-4">
-                    <span className="inline-block py-1 px-3 rounded-full bg-[#ECFDF5] text-[#084734] text-sm font-semibold mb-4">
+                    <span className="inline-flex items-center gap-2 py-1.5 px-4 rounded-full bg-gradient-to-r from-[#ECFDF5] to-[#D1FAE5]/60 text-[#084734] text-[13px] font-semibold mb-4 border border-[#084734]/8 shadow-[0_2px_8px_rgba(8,71,52,0.06)] tracking-[0.02em]">
+                        <span className="w-1 h-1 rounded-full bg-[#084734]/60" />
                         핵심 기능 3가지
                     </span>
                     <h2 className="text-3xl font-extrabold text-[#111110] sm:text-4xl mb-4 break-keep" style={{ letterSpacing: '-1px' }}>
@@ -103,7 +104,8 @@ export function SolutionOverview() {
                                 transition={{ duration: 0.28 }}
                                 className="p-8 md:p-10 h-full flex flex-col justify-center"
                             >
-                                <span className="inline-block text-xs font-bold text-[#6EE7B7] uppercase tracking-[0.15em] mb-4">
+                                <span className="inline-flex items-center gap-2 text-[11px] font-bold text-[#6EE7B7] uppercase tracking-[0.2em] mb-4">
+                                    <span className="w-4 h-px bg-[#6EE7B7]/40" />
                                     {steps[activeStep].phase}
                                 </span>
                                 <h3 className="text-2xl md:text-3xl font-extrabold text-white mb-3 break-keep" style={{ letterSpacing: '-0.625px' }}>
