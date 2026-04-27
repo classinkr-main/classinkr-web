@@ -38,9 +38,11 @@ export async function readRangeWithFormat(spreadsheetId: string, range: string):
     return data.map((row) =>
       (row.values ?? []).map((cell): FormattedCell => ({
         value:
-          (cell.userEnteredValue?.numberValue as number | undefined) ??
-          cell.userEnteredValue?.stringValue ??
-          (cell.formattedValue ? cell.formattedValue : null),
+          cell.formattedValue != null && cell.formattedValue !== ""
+            ? cell.formattedValue
+            : cell.userEnteredValue?.stringValue ??
+              cell.userEnteredValue?.numberValue ??
+              null,
         bg: (cell.effectiveFormat?.backgroundColor as CellFormat | null | undefined) ?? null,
       }))
     )

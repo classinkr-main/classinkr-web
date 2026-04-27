@@ -9,8 +9,19 @@ export const HW_RANGES = {
 } as const
 
 const s = (v: unknown) => { if (v == null) return null; const t = String(v).trim(); return t.length ? t : null }
-const n = (v: unknown) => { const x = Number(v); return Number.isFinite(x) ? x : null }
-const date = (v: unknown) => { const t = s(v); if (!t) return null; const m = t.match(/^(\d{4})-(\d{1,2})-(\d{1,2})/); return m ? `${m[1]}-${m[2].padStart(2,"0")}-${m[3].padStart(2,"0")}` : null }
+const n = (v: unknown) => {
+  if (v == null || v === "") return null
+  if (typeof v === "number") return Number.isFinite(v) ? v : null
+  const cleaned = String(v).replace(/[¥₩$€£,\s]/g, "")
+  if (cleaned === "" || cleaned === "-") return null
+  const x = Number(cleaned)
+  return Number.isFinite(x) ? x : null
+}
+const date = (v: unknown) => {
+  const t = s(v); if (!t) return null
+  const m = t.match(/^(\d{4})[-/.](\d{1,2})[-/.](\d{1,2})/)
+  return m ? `${m[1]}-${m[2].padStart(2,"0")}-${m[3].padStart(2,"0")}` : null
+}
 const arr = (v: unknown): string[] => { const t = s(v); return t ? t.split(/[,;\s]+/).filter(Boolean) : [] }
 
 export interface HwInboundParsed { logistics_no: string|null; inbound_date: string|null; product: string; quantity: number; unit_price: number|null; amount: number|null; serials: string[]; storage: string|null; importer: string|null; remarks: string|null; raw: unknown }
@@ -54,14 +65,16 @@ export function parseOutbound(grid: FormattedCell[][]): HwOutboundParsed[] {
 
 export function parseStock(grid: FormattedCell[][]): HwStockParsed[] {
   const out: HwStockParsed[] = []
-  let inSection = false
   for (let r = 0; r < grid.length; r++) {
     const row = grid[r] ?? []
-    const first = String(row[0]?.value ?? "").trim()
-    if (!inSection) { if (first.includes("재고 현황") || first.includes("재고현황")) inSection = true; continue }
     const product = s(row[0]?.value); if (!product) continue
+    // Skip header bands (where col B is non-numeric label like "카테고리")
+    const qtyRaw = row[2]?.value
+    const qty = n(qtyRaw)
+    if (qty == null) continue   // requires a real number in qty column
     if (product.includes("재고") && product.includes("현황")) continue
-    out.push({ product, category: s(row[1]?.value), quantity: n(row[2]?.value) ?? 0, raw: row.map((c) => c?.value ?? null) })
+    if (product.toLowerCase() === "product" || product === "제품명") continue
+    out.push({ product, category: s(row[1]?.value), quantity: qty, raw: row.map((c) => c?.value ?? null) })
   }
   return out
 }

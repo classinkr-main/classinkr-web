@@ -46,8 +46,22 @@ export function normalizeMonthHeader(value: unknown, refFy: number): string | nu
 }
 
 function asString(v: unknown): string | null { if (v == null) return null; const s = String(v).trim(); return s.length ? s : null }
-function asNumber(v: unknown): number | null { if (v == null || v === "") return null; const n = Number(v); return Number.isFinite(n) ? n : null }
-function asDate(v: unknown): string | null { const s = asString(v); if (!s) return null; const m = s.match(/^(\d{4})-(\d{1,2})-(\d{1,2})/); if (!m) return null; return `${m[1]}-${m[2].padStart(2,"0")}-${m[3].padStart(2,"0")}` }
+function asNumber(v: unknown): number | null {
+  if (v == null || v === "") return null
+  if (typeof v === "number") return Number.isFinite(v) ? v : null
+  // Strip currency symbols, thousand separators, and whitespace
+  const cleaned = String(v).replace(/[¥₩$€£,\s]/g, "")
+  if (cleaned === "" || cleaned === "-") return null
+  const n = Number(cleaned)
+  return Number.isFinite(n) ? n : null
+}
+function asDate(v: unknown): string | null {
+  const s = asString(v)
+  if (!s) return null
+  const m = s.match(/^(\d{4})[-/.](\d{1,2})[-/.](\d{1,2})/)
+  if (!m) return null
+  return `${m[1]}-${m[2].padStart(2,"0")}-${m[3].padStart(2,"0")}`
+}
 
 export function parseRev(grid: FormattedCell[][], opts?: { refFy?: number }): RevDealParsed[] {
   if (grid.length < 2) return []

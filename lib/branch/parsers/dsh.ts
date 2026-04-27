@@ -23,7 +23,7 @@ export interface DshOutput { rows: DshRow[]; members: Record<string, string> }
 
 function asNum(v: unknown): number {
   if (v == null) return 0
-  const cleaned = typeof v === "number" ? v : Number(String(v).replace(/[,¥$\s]/g, ""))
+  const cleaned = typeof v === "number" ? v : Number(String(v).replace(/[¥₩$€£,\s]/g, ""))
   return Number.isFinite(cleaned) ? cleaned : 0
 }
 
