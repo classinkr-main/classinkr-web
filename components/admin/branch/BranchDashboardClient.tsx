@@ -10,6 +10,7 @@ import KpiActivityMatrix from "./sections/KpiActivityMatrix"
 import PipelineTable from "./sections/PipelineTable"
 import CampaignsSection from "./sections/CampaignsSection"
 import HardwareSection from "./sections/HardwareSection"
+import DataQualityPanel from "./sections/DataQualityPanel"
 
 export type Team = "ALL" | "BD" | "MKT" | "CSM"
 export type Period = "M" | "Q" | "Y"
@@ -86,6 +87,7 @@ export default function BranchDashboardClient() {
         <PipelineTable team={team} period={period} refreshKey={refreshKey} />
         <CampaignsSection refreshKey={refreshKey} />
         <HardwareSection refreshKey={refreshKey} />
+        <DataQualityPanel refreshKey={refreshKey} />
       </div>
     </div>
   )
