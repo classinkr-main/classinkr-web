@@ -1,4 +1,4 @@
-"server-only"
+import "server-only"
 import { createSupabaseAdminClient } from "@/lib/supabase/admin"
 
 export interface HwInbound { id: string; logistics_no: string | null; inbound_date: string | null; product: string; quantity: number; unit_price: number | null; amount: number | null; serials: string[]; storage: string | null; importer: string | null; remarks: string | null; synced_at: string }

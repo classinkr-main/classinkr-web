@@ -44,8 +44,10 @@ export function computeHeatmap(deals: BranchRevDeal[], scope: Period, now: Date,
   }
   if (scope === "Q") {
     const monthIdx = now.getUTCMonth() + 1
-    const qStartMonth = (Math.floor((monthIdx - 1 - 3 + 12) % 12 / 3)) * 3 + 4
-    const dayInQ = Math.max(1, (now.getUTCMonth() + 1 - qStartMonth) * 30 + now.getUTCDate())
+    const q = fiscalQuarter(monthIdx)
+    const qStartMonth = q === 4 ? 1 : q * 3 + 1   // Q1=4, Q2=7, Q3=10, Q4=1
+    const monthsInto = (monthIdx - qStartMonth + 12) % 12
+    const dayInQ = Math.max(1, monthsInto * 30 + now.getUTCDate())
     const qPct = Math.min(100, (dayInQ / 90) * 100)
     rows.forEach((r) => { r.velocity = qPct > 0 ? r.progress / qPct : 0 })
   }

@@ -36,4 +36,13 @@ describe("computeHeatmap", () => {
     ], "Y", now)
     expect(out[0].revenue).toBe(0)
   })
+  it("velocity in Q4 (January) computes a sane denominator", () => {
+    const jan = new Date("2027-01-15T00:00:00Z")
+    const out = computeHeatmap([
+      mk({ region: "A", contract_target: 1000, first_payment: "2027-01-01", monthly_payments: { "2027-01": 100 }, monthly_red: { "2027-01": true } }),
+    ], "Q", jan)
+    // 1월 15일은 Q4(1,2,3)의 약 절반 시점 → velocity 는 progress / ~50 정도, 1 미만이어야 정상
+    expect(out[0].velocity).toBeGreaterThan(0)
+    expect(out[0].velocity).toBeLessThan(2)
+  })
 })

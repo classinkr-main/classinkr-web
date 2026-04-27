@@ -1,4 +1,4 @@
-"server-only"
+import "server-only"
 import { createSupabaseAdminClient } from "@/lib/supabase/admin"
 
 export type SyncSource = "rev" | "hw" | "all" | "insights"
@@ -31,7 +31,12 @@ export async function getRecentSyncRuns(limit = 10): Promise<SyncRun[]> {
 }
 export async function isAnyRunning(): Promise<boolean> {
   const sb = createSupabaseAdminClient()
-  const { count, error } = await sb.from("branch_sync_runs").select("*", { count: "exact", head: true }).eq("status", "running")
+  const cutoff = new Date(Date.now() - 10 * 60_000).toISOString()
+  const { count, error } = await sb
+    .from("branch_sync_runs")
+    .select("*", { count: "exact", head: true })
+    .eq("status", "running")
+    .gte("started_at", cutoff)
   if (error) throw error
   return (count ?? 0) > 0
 }

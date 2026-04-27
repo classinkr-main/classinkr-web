@@ -29,6 +29,15 @@ export interface RunInsightsResult {
 export async function runInsights(team: TeamScope, force: boolean): Promise<RunInsightsResult> {
   const now = new Date()
   try {
+    if (force) {
+      const latest = await getLatestInsight(team)
+      if (latest) {
+        const ageMs = Date.now() - new Date(latest.generated_at).getTime()
+        if (ageMs < 60_000) {
+          return { from: "cache", insight: latest }
+        }
+      }
+    }
     const [dsh, kpi, deals, events, campaigns] = await Promise.all([
       readDsh(), readKpi(), listBranchRevDeals(), listPublicEvents(), summarizeCampaigns(now),
     ])

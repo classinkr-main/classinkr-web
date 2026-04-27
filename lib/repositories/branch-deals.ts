@@ -1,4 +1,4 @@
-"server-only"
+import "server-only"
 import { createSupabaseAdminClient } from "@/lib/supabase/admin"
 
 export interface BranchRevDeal {
