@@ -30,15 +30,16 @@
 
 ## 3. 환경 변수
 
-`.env.local` 추가:
+`.env.local` 추가 (3개 신규, `CRON_SECRET` 은 기존 키 재사용):
 
 ```
 GOOGLE_BRANCH_DASHBOARD_SHEET_ID=1BTXyid66wpTDTCA-fm-lTrJJ1G4KxzjhGWsN7LLP4qg
 GOOGLE_BRANCH_HARDWARE_SHEET_ID=1XZNIPCYE8sZnyk2K-iHVAJmpaFFBvbDM1q_jsxK4t-k
-BRANCH_DASHBOARD_CRON_SECRET=<32바이트 랜덤>
 GEMINI_API_KEY=<Google AI Studio 키. 절대 커밋 금지>
 GEMINI_MODEL=gemini-3.1-pro     # 옵션, 기본값 (env 미설정 시 적용)
 ```
+
+기존 `CRON_SECRET` 을 cron 라우트 인증에 그대로 사용한다. 별도 `BRANCH_DASHBOARD_CRON_SECRET` 추가하지 않음.
 
 `.env.local.example` 동일하게 추가하되 값은 빈 문자열.
 
@@ -495,7 +496,7 @@ function pipelineValue(d: BranchRevDeal): number {
 }
 ```
 
-`/api/cron/sync-branch` 는 `Bearer ${BRANCH_DASHBOARD_CRON_SECRET}` 검증 후 `runAll()` 호출.
+`/api/cron/sync-branch` 는 `Bearer ${CRON_SECRET}` 검증 후 `runAll()` 호출.
 `/api/cron/sync-branch-insights` 는 매일 새벽 5시 (KST 새벽), 4개 팀 컨텍스트(`ALL`/`BD`/`MKT`/`CSM`) 각각 LLM 호출.
 
 ### 10.2 동기화 로직 (`run-all.ts`)

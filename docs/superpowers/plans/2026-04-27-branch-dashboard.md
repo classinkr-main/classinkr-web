@@ -57,7 +57,7 @@ tests/branch/
 Engineer should follow these conventions:
 - All admin DB access via `createSupabaseAdminClient()` (not server client; RLS would block).
 - All admin API routes start with `const err = await verifyAdmin(req); if (err) return err;`
-- Cron routes verify `Authorization: Bearer ${process.env.BRANCH_DASHBOARD_CRON_SECRET}`.
+- Cron routes verify `Authorization: Bearer ${process.env.CRON_SECRET}`.
 - UI palette: `#FFFFFF` ↔ `#F6F5F4` ↔ `#ECFDF5`, borders `1px solid rgba(0,0,0,0.08)`.
 - Korean labels in UI, English identifiers in code.
 
@@ -70,22 +70,23 @@ Engineer should follow these conventions:
 **Files:**
 - Modify: `.env.local.example`
 
-- [ ] **Step 1: Append env vars**
+`CRON_SECRET` 은 기존 키를 재사용하므로 이 plan 에서는 추가하지 않는다. 신규 4 줄만 추가:
+
+- [ ] **Step 1: Append env vars to `.env.local.example`**
 
 ```diff
++GEMINI_API_KEY=
++GEMINI_MODEL=gemini-3.1-pro
 +GOOGLE_BRANCH_DASHBOARD_SHEET_ID=
 +GOOGLE_BRANCH_HARDWARE_SHEET_ID=
-+BRANCH_DASHBOARD_CRON_SECRET=
-+GEMINI_API_KEY=
-+GEMINI_MODEL=
 ```
 
-- [ ] **Step 2: Confirm `.env.local` already populated**
+- [ ] **Step 2: Confirm `.env.local` populated**
 
-Run: `grep -E '^(GOOGLE_BRANCH|BRANCH_DASHBOARD_CRON|GEMINI_)' .env.local | wc -l`
-Expected: `5`
+Run: `grep -cE '^(GOOGLE_BRANCH_(DASHBOARD|HARDWARE)_SHEET_ID|GEMINI_API_KEY|CRON_SECRET)' .env.local`
+Expected: `4`
 
-If less than 5, ask user to populate before proceeding.
+If less than 4, populate before proceeding. (`CRON_SECRET` already exists; new are 2 sheet IDs + Gemini key.)
 
 - [ ] **Step 3: Commit**
 
@@ -1919,7 +1920,7 @@ import { runAll } from "@/lib/branch/sync/run-all"
 function unauthorized() { return NextResponse.json({ error: "unauthorized" }, { status: 401 }) }
 
 export async function GET(req: NextRequest) {
-  const expected = process.env.BRANCH_DASHBOARD_CRON_SECRET
+  const expected = process.env.CRON_SECRET
   const auth = req.headers.get("authorization") ?? ""
   if (!expected || auth !== `Bearer ${expected}`) return unauthorized()
   const result = await runAll({ trigger: "cron" })
@@ -3261,7 +3262,7 @@ import { NextRequest, NextResponse } from "next/server"
 const TEAMS = ["ALL", "BD", "MKT", "CSM"] as const
 
 export async function GET(req: NextRequest) {
-  const expected = process.env.BRANCH_DASHBOARD_CRON_SECRET
+  const expected = process.env.CRON_SECRET
   const auth = req.headers.get("authorization") ?? ""
   if (!expected || auth !== `Bearer ${expected}`) return NextResponse.json({ error: "unauthorized" }, { status: 401 })
   const base = req.nextUrl.origin
@@ -3411,7 +3412,7 @@ git commit -m "chore(branch): post-smoke fixes"
 
 - All admin DB access via `createSupabaseAdminClient()`; never the server client.
 - `verifyAdmin(req)` returns a `NextResponse` (401/403) when not authorized; otherwise undefined.
-- Cron routes verify `Authorization: Bearer ${BRANCH_DASHBOARD_CRON_SECRET}`.
+- Cron routes verify `Authorization: Bearer ${CRON_SECRET}`.
 - Sheet ranges: `'2.입고 현황'` and `'3.출고 현황'` need single-quotes due to leading digit.
 - M열 (`contract_target`) must NEVER be displayed labelled as 매출. Always pair with `confirmed_revenue` from red-cell logic.
 - `monthly_red` empty across all rows after sync = red-cell threshold needs tuning (see spec §17.2).
