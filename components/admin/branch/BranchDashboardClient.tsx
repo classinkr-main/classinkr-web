@@ -11,6 +11,7 @@ import PipelineTable from "./sections/PipelineTable"
 import CampaignsSection from "./sections/CampaignsSection"
 import HardwareSection from "./sections/HardwareSection"
 import DataQualityPanel from "./sections/DataQualityPanel"
+import InsightCard from "./sections/InsightCard"
 
 export type Team = "ALL" | "BD" | "MKT" | "CSM"
 export type Period = "M" | "Q" | "Y"
@@ -78,6 +79,7 @@ export default function BranchDashboardClient() {
       </div>
 
       <div className="mt-8 space-y-10">
+        <InsightCard team={team} refreshKey={refreshKey} />
         <CoreKpiGrid team={team} period={period} refreshKey={refreshKey} />
         <RegionHeatmap team={team} period={period} refreshKey={refreshKey} />
         <FiscalRoadmap team={team} period={period} refreshKey={refreshKey} />
