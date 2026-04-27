@@ -31,3 +31,10 @@ export async function insertInsight(row: Omit<BranchInsight, "id" | "generated_a
   if (error) throw error
   return data as BranchInsight
 }
+export async function listInsightHistory(team: TeamScope, limit = 10): Promise<BranchInsight[]> {
+  const sb = createSupabaseAdminClient()
+  const { data, error } = await sb.from("branch_dashboard_insights")
+    .select("*").eq("team", team).order("generated_at", { ascending: false }).limit(limit)
+  if (error) throw error
+  return (data ?? []) as BranchInsight[]
+}
