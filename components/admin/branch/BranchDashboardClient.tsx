@@ -3,6 +3,7 @@ import { useEffect, useState, useCallback } from "react"
 import SyncStatusBar from "./SyncStatusBar"
 import CoreKpiGrid from "./sections/CoreKpiGrid"
 import RegionHeatmap from "./sections/RegionHeatmap"
+import FiscalRoadmap from "./sections/FiscalRoadmap"
 
 export type Team = "ALL" | "BD" | "MKT" | "CSM"
 export type Period = "M" | "Q" | "Y"
@@ -72,6 +73,7 @@ export default function BranchDashboardClient() {
       <div className="mt-8 space-y-10">
         <CoreKpiGrid team={team} period={period} refreshKey={refreshKey} />
         <RegionHeatmap team={team} period={period} refreshKey={refreshKey} />
+        <FiscalRoadmap team={team} period={period} refreshKey={refreshKey} />
       </div>
     </div>
   )

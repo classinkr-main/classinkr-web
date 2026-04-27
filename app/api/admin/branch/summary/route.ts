@@ -5,7 +5,7 @@ import { readRangeWithFormat, envSheetId } from "@/lib/branch/google-sheets"
 import { parseDsh, DSH_RANGE } from "@/lib/branch/parsers/dsh"
 import { parseKpi, KPI_RANGE } from "@/lib/branch/parsers/kpi"
 import { listBranchRevDeals } from "@/lib/repositories/branch-deals"
-import { fyOf } from "@/lib/branch/fiscal"
+import { fyOf, FISCAL_MONTH_ORDER } from "@/lib/branch/fiscal"
 import { summarizeRevenue, bottleneckKpi, closingDeals } from "@/lib/branch/computations/core-kpi"
 import { listMembersByTeam } from "@/lib/branch/computations/pacing"
 import { summarizeCampaigns } from "@/lib/branch/computations/campaigns"
@@ -44,6 +44,42 @@ export async function GET(req: NextRequest) {
       return t >= now.getTime() && t <= now.getTime() + 30*86400_000
     })
     const lastRun = runs[0]
+
+    const fy = fyOf(now)
+    const months: string[] = FISCAL_MONTH_ORDER.map((m) => `${m >= 4 ? fy : fy + 1}-${String(m).padStart(2, "0")}`)
+
+    const teamGoalRow = team === "ALL" ? null : dsh.rows.find((r) => r.level === "team" && r.team === team && r.kind === "goal")
+    const monthGoal = (m: string) => team === "ALL"
+      ? (["BD", "MKT", "CSM"] as const).reduce((s, t) => {
+          const g = dsh.rows.find((r) => r.level === "team" && r.team === t && r.kind === "goal")
+          return s + (g?.months[m] ?? 0)
+        }, 0)
+      : (teamGoalRow?.months[m] ?? 0)
+
+    let goalCum = 0
+    const goal_cum = months.map((m) => { goalCum += monthGoal(m); return goalCum })
+
+    let revCum = 0
+    const revenue_cum = months.map((m) => {
+      const sum = filteredDeals.reduce((s, d) => {
+        if (!d.first_payment) return s
+        if (!d.monthly_red[m]) return s
+        return s + Number(d.monthly_payments[m] ?? 0)
+      }, 0)
+      revCum += sum
+      return revCum
+    })
+
+    const eventsTimeline = events
+      .filter((e) => months.some((mm) => e.startsAt.startsWith(mm)))
+      .map((e) => ({ date: e.startsAt.slice(0, 10), title: e.title }))
+    const dealsTimeline = filteredDeals
+      .filter((d) => d.first_payment && months.some((mm) => d.first_payment!.startsWith(mm)))
+      .map((d) => ({ date: d.first_payment!, customer: d.customer_name, amount: Number(d.contract_target ?? 0) }))
+    const campaignsTimeline = campaigns.recent
+      .filter((c) => c.sentAt && months.some((mm) => c.sentAt!.startsWith(mm)))
+      .map((c) => ({ date: c.sentAt!, name: c.subject }))
+
     return NextResponse.json({
       team, period,
       revenue, bottleneck: bottle, closing,
@@ -52,6 +88,7 @@ export async function GET(req: NextRequest) {
       campaigns_recent: campaigns.recent.slice(0, 8),
       lastSync: lastRun?.finished_at ?? lastRun?.started_at ?? null,
       lastError: lastRun?.status === "failed" ? lastRun.error ?? "동기화 실패" : null,
+      monthly_series: { months, goal_cum, revenue_cum, events: eventsTimeline, deals: dealsTimeline, campaigns: campaignsTimeline },
     })
   } catch (e) {
     return NextResponse.json({ error: String(e) }, { status: 500 })
