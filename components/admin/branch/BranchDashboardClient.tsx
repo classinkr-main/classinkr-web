@@ -4,6 +4,9 @@ import SyncStatusBar from "./SyncStatusBar"
 import CoreKpiGrid from "./sections/CoreKpiGrid"
 import RegionHeatmap from "./sections/RegionHeatmap"
 import FiscalRoadmap from "./sections/FiscalRoadmap"
+import TeamPacingSection from "./sections/TeamPacingSection"
+import ManagerScorecard from "./sections/ManagerScorecard"
+import KpiActivityMatrix from "./sections/KpiActivityMatrix"
 
 export type Team = "ALL" | "BD" | "MKT" | "CSM"
 export type Period = "M" | "Q" | "Y"
@@ -74,6 +77,9 @@ export default function BranchDashboardClient() {
         <CoreKpiGrid team={team} period={period} refreshKey={refreshKey} />
         <RegionHeatmap team={team} period={period} refreshKey={refreshKey} />
         <FiscalRoadmap team={team} period={period} refreshKey={refreshKey} />
+        <TeamPacingSection team={team} period={period} refreshKey={refreshKey} />
+        <ManagerScorecard team={team} period={period} refreshKey={refreshKey} />
+        <KpiActivityMatrix team={team} period={period} refreshKey={refreshKey} />
       </div>
     </div>
   )
