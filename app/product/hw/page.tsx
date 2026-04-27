@@ -6,7 +6,7 @@ import { motion, useInView } from "framer-motion"
 import {
     ArrowRight, PenTool, Eye, Share2,
     Monitor, Fingerprint, Users, Layers, Wifi,
-    Shield, Maximize, ChevronRight, Zap, Hand,
+    Shield, Maximize, Zap, Hand,
     GraduationCap, Mic, Camera, Star,
 } from "lucide-react"
 import Image from "next/image"
@@ -250,7 +250,7 @@ const featureTabs: FeatureTab[] = [
         imageAlt: "50페이지 판서 기능 시각화",
         imageFit: "contain",
         imagePanelClassName: "bg-[#05080C]",
-        imageClassName: "p-6 md:p-8",
+        imageClassName: "scale-[2]",
         badge: "50페이지 무한 캔버스",
         title: "공간 걱정 없이 쓰고, 쓰는 즉시 전달",
         points: [
@@ -669,25 +669,19 @@ const spaceScenarios = [
         model: "S110", size: '110"', badge: "FLAGSHIP",
         tag: "강당 · 대형 강의실",
         story: "300명이 앉은 강당에서도 맨 뒷자리가 선명합니다. 110인치 화면이 공간을 압도하며, 교사 한 명의 판서가 전석에 전달됩니다. 대규모 강의, 특강, 입시 설명회에 최적.",
-        image: "/images/product/hw/spaces/space-classroom-real.png",
+        image: "/images/product/hw/spaces/space-s110-hall.png",
     },
     {
         model: "S86", size: '86"', badge: "BEST",
         tag: "일반 교실 · 회의실",
         story: "30명 담임반의 하루 6교시를 완주하는 기준 모델. 가장 많은 교실 환경에 최적화된 사이즈. 8배열 마이크가 교실 소음 속에서도 교사 음성을 또렷이 전달합니다.",
-        image: "/images/product/hw/spaces/space-classroom.jpg",
+        image: "/images/product/hw/spaces/space-s86-classroom.png",
     },
     {
         model: "S75", size: '75"', badge: "",
         tag: "세미나 · 중형 회의실",
         story: "20명 내외의 세미나실과 중형 회의실에 딱 맞는 사이즈. 임원 PT, 팀 회의, 교사 연수에서 화이트보드를 완전히 대체합니다.",
-        image: "/images/product/hw/spaces/space-classroom.jpg",
-    },
-    {
-        model: "S65", size: '65"', badge: "",
-        tag: "스터디룸 · 소규모",
-        story: "소수 심화반, 과외, 스터디그룹에 최적. 좁은 공간에서도 학생이 직접 칠판 앞에 나와 판서하며 참여하는 수업이 가능합니다.",
-        image: "/images/product/hw/spaces/space-classroom.jpg",
+        image: "/images/product/hw/spaces/space-s75-seminar.png",
     },
 ]
 
@@ -953,25 +947,14 @@ export default function ProductHWPage() {
                     <motion.div {...fadeUp} className="relative">
                         <div className="rounded-3xl overflow-hidden shadow-2xl">
                             <Image
-                                src="/images/product/hw/writing/writing-teacher.jpg"
+                                src="/images/product/hw/writing/writing-experience-classroom.png"
                                 alt="교사가 ClassIn Board에 수학 문제를 판서하는 모습"
-                                width={800}
-                                height={600}
+                                width={1661}
+                                height={947}
                                 sizes="(max-width: 768px) 100vw, 500px"
                                 className="w-full h-auto"
                             />
                         </div>
-                        {/* Floating latency badge */}
-                        <motion.div
-                            initial={{ opacity: 0, scale: 0.8 }}
-                            whileInView={{ opacity: 1, scale: 1 }}
-                            viewport={{ once: true }}
-                            transition={{ delay: 0.5 }}
-                            className="absolute -top-3 -right-3 bg-white rounded-2xl shadow-lg border border-slate-100 px-4 py-2.5"
-                        >
-                            <div className="text-xs text-slate-400 mb-0.5">지연 시간</div>
-                            <div className="text-lg font-bold text-[#22A366] font-mono">0.03s</div>
-                        </motion.div>
                     </motion.div>
                 </FeatureSection>
             </div>
@@ -1002,14 +985,14 @@ export default function ProductHWPage() {
                     },
                 ]}
             >
-                {/* Display visual — cinematic wall scene */}
+                {/* Display visual — premium black-hole board scene */}
                 <motion.div {...fadeUp} className="relative">
                     <div className="rounded-3xl overflow-hidden shadow-2xl">
                         <Image
-                            src="/images/product/hw/display/display-wall-cinematic.jpg"
-                            alt="ClassIn Board에 우주 영상이 표시된 시네마틱 장면"
-                            width={800}
-                            height={600}
+                            src="/images/product/hw/features/feature-display.png"
+                            alt="ClassIn Board에 블랙홀 우주 영상이 선명하게 표시된 장면"
+                            width={1536}
+                            height={1024}
                             sizes="(max-width: 768px) 100vw, 500px"
                             className="w-full h-auto"
                         />
@@ -1054,46 +1037,17 @@ export default function ProductHWPage() {
                         },
                     ]}
                 >
-                    {/* Sharing visual — board to devices flow */}
+                    {/* Sharing visual — board camera close-up */}
                     <motion.div {...fadeUp} className="relative">
-                        <div className="aspect-[4/3] rounded-3xl bg-gradient-to-br from-emerald-50 to-green-50 border border-emerald-100/60 shadow-xl overflow-hidden p-8 flex flex-col justify-center items-center gap-6">
-                            {/* Board icon */}
-                            <div className="w-16 h-12 rounded-xl bg-slate-800 flex items-center justify-center shadow-md">
-                                <PenTool className="w-6 h-6 text-white/70" />
-                            </div>
-                            {/* Arrow flow */}
-                            <div className="flex flex-col items-center gap-1">
-                                <motion.div
-                                    animate={{ y: [0, 4, 0] }}
-                                    transition={{ duration: 1.5, repeat: Infinity, ease: "easeInOut" }}
-                                    className="text-[#22A366]/40"
-                                >
-                                    <ChevronRight className="w-5 h-5 rotate-90" />
-                                </motion.div>
-                                <motion.div
-                                    animate={{ y: [0, 4, 0] }}
-                                    transition={{ duration: 1.5, repeat: Infinity, ease: "easeInOut", delay: 0.2 }}
-                                    className="text-[#22A366]/30"
-                                >
-                                    <ChevronRight className="w-5 h-5 rotate-90" />
-                                </motion.div>
-                            </div>
-                            {/* Device icons */}
-                            <div className="flex gap-4">
-                                {["태블릿", "노트북", "스마트폰"].map((d, i) => (
-                                    <motion.div
-                                        key={d}
-                                        initial={{ opacity: 0, y: 10 }}
-                                        whileInView={{ opacity: 1, y: 0 }}
-                                        viewport={{ once: true }}
-                                        transition={{ delay: 0.6 + i * 0.15 }}
-                                        className="bg-white rounded-xl shadow-md border border-emerald-100 px-4 py-3 text-center"
-                                    >
-                                        <Monitor className="w-5 h-5 text-[#22A366]/60 mx-auto mb-1" />
-                                        <div className="text-[10px] text-slate-400 font-medium">{d}</div>
-                                    </motion.div>
-                                ))}
-                            </div>
+                        <div className="rounded-3xl overflow-hidden bg-black shadow-2xl">
+                            <Image
+                                src="/images/product/hw/sharing/instant-sharing-camera.webp"
+                                alt="ClassIn Board 측면 카메라와 판서 화면 클로즈업"
+                                width={1536}
+                                height={1240}
+                                sizes="(max-width: 768px) 100vw, 500px"
+                                className="w-full h-auto"
+                            />
                         </div>
                     </motion.div>
                 </FeatureSection>
