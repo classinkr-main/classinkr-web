@@ -116,7 +116,7 @@ function PartnerFormDialogInner({
     const ownerEmail = form.ownerEmail.trim().toLowerCase()
 
     if (!name || !ownerName || !ownerEmail) {
-      setClientError("파트너명, 대표 연락처명, 대표 이메일은 필수입니다.")
+      setClientError("계정명, 대표 연락처명, 대표 이메일은 필수입니다.")
       return
     }
 
@@ -145,9 +145,9 @@ function PartnerFormDialogInner({
     <Dialog open={open} onOpenChange={(nextOpen) => !nextOpen && onClose()}>
       <DialogContent className="bg-white sm:max-w-2xl">
         <DialogHeader>
-          <DialogTitle>{initialPartner ? "파트너 정보 수정" : "새 파트너 등록"}</DialogTitle>
+          <DialogTitle>{initialPartner ? "계정 정보 수정" : "새 계정 등록"}</DialogTitle>
           <DialogDescription>
-            파트너 기본 정보는 리스트, 상세 워크스페이스, 거래/정산 담당 흐름의 기준값으로 사용됩니다.
+            계정 기본 정보는 리스트, 상세 워크스페이스, 거래/정산 담당 흐름의 기준값으로 사용됩니다.
           </DialogDescription>
         </DialogHeader>
 
@@ -159,7 +159,7 @@ function PartnerFormDialogInner({
           )}
 
           <div className="grid gap-2">
-            <Label htmlFor="partner-name">파트너명 *</Label>
+            <Label htmlFor="partner-name">계정명 *</Label>
             <Input
               id="partner-name"
               value={form.name}
@@ -272,7 +272,7 @@ function PartnerFormDialogInner({
               취소
             </Button>
             <Button type="submit" disabled={loading}>
-              {loading ? "저장 중..." : initialPartner ? "수정 저장" : "파트너 추가"}
+              {loading ? "저장 중..." : initialPartner ? "수정 저장" : "계정 추가"}
             </Button>
           </DialogFooter>
         </form>

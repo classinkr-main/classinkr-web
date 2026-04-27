@@ -7,22 +7,25 @@
 
 보조 문서:
 
-- [partner-portal-guidelines.md](./partner-portal-guidelines.md)
 - [partner-portal-document-hub-guidelines.md](./partner-portal-document-hub-guidelines.md)
-- [partner-portal-product-plan.md](./partner-portal-product-plan.md)
-- [partner-portal-screen-layout.md](./partner-portal-screen-layout.md)
 - [partner-portal-document-hub-wireframes.md](./partner-portal-document-hub-wireframes.md)
 - [partner-portal-front-back-contract.md](./partner-portal-front-back-contract.md)
 - [partner-portal-implementation-roadmap.md](./partner-portal-implementation-roadmap.md)
 - [partner-portal-document-hub-execution-plan.md](./partner-portal-document-hub-execution-plan.md)
-- [partner-portal-worklog.md](./partner-portal-worklog.md)
 - [partner-portal-future-features.md](./partner-portal-future-features.md) — 실험성 기능 목록 (낮은 우선순위)
+
+아카이브된 보조 문서 (2026-04-23 통합·이동):
+
+- [partner-portal-guidelines.md](../archive/partner-portal-guidelines.md)
+- [partner-portal-product-plan.md](../archive/partner-portal-product-plan.md)
+- [partner-portal-screen-layout.md](../archive/partner-portal-screen-layout.md)
+- [partner-portal-worklog.md](../archive/partner-portal-worklog.md)
 
 문서 우선순위:
 
 1. 이 문서
-2. 운영 규칙은 `partner-portal-guidelines.md`, 문서 허브 세부 원칙은 `partner-portal-document-hub-guidelines.md`
-3. 화면/UX는 `partner-portal-product-plan.md`, `partner-portal-screen-layout.md`, `partner-portal-document-hub-wireframes.md`, `partner-portal-front-back-contract.md`
+2. 문서 허브 세부 원칙은 `partner-portal-document-hub-guidelines.md`
+3. 화면/UX는 `partner-portal-document-hub-wireframes.md`, `partner-portal-front-back-contract.md`
 4. 개발 순서는 `partner-portal-implementation-roadmap.md`, 문서 허브 투입 순서는 `partner-portal-document-hub-execution-plan.md`
 
 ## 1. 제품 한 줄 정의

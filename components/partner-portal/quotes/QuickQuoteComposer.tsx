@@ -1,7 +1,27 @@
 "use client"
 
-import { useEffect, useMemo, useState } from "react"
-import { Check, Eye, Link2, Loader2, MessageCircle, Minus, Plus, Printer, RefreshCw, Send, Share2, Smartphone, Sparkles, ZoomIn, ZoomOut } from "lucide-react"
+import { useEffect, useMemo, useRef, useState, type ReactNode } from "react"
+import {
+  AlertCircle,
+  Check,
+  Copy,
+  Eye,
+  Link2,
+  Loader2,
+  Mail,
+  MessageCircle,
+  Minus,
+  Plus,
+  Printer,
+  RefreshCw,
+  Send,
+  Share2,
+  Smartphone,
+  Sparkles,
+  X,
+  ZoomIn,
+  ZoomOut,
+} from "lucide-react"
 
 import { Button } from "@/components/ui/button"
 import { Input } from "@/components/ui/input"
@@ -45,6 +65,18 @@ type RecentQuoteOption = {
 }
 
 type CreateAction = "save" | "save_and_preview" | "save_and_send"
+type QuickQuoteApiBase = "/api/partner" | "/api/portal"
+
+type ShareSheetState = {
+  url: string
+  quoteNumber: string
+  customerName: string
+}
+
+type ErrorToastState = {
+  title: string
+  message: string
+}
 
 export type QuickQuoteCreatedPayload = {
   action: CreateAction
@@ -74,6 +106,8 @@ type QuickQuoteComposerProps = {
   onOpenChange: (open: boolean) => void
   recentQuotes: RecentQuoteOption[]
   onCreated: (payload: QuickQuoteCreatedPayload) => void | Promise<void>
+  apiBase?: QuickQuoteApiBase
+  portalPartnerAccountId?: string | null
 }
 
 type QuoteFetchPayload = {
@@ -99,6 +133,11 @@ type QuoteFetchPayload = {
 
 type CustomerPayload = { customers: CustomerListItem[] }
 type DealPayload = { deals: DealListItem[] }
+type ResolvedCustomer = {
+  id: string
+  name: string
+  partnerAccountId?: string | null
+}
 
 type QuickAddRailItemId =
   | "board_86"
@@ -381,6 +420,86 @@ async function copyTextToClipboard(text: string) {
   return copied
 }
 
+function buildQuoteShareText(share: ShareSheetState) {
+  return `[견적서] ${share.quoteNumber}\n${share.customerName}님 견적서입니다.\n${share.url}`
+}
+
+function openKakaoShare(share: ShareSheetState) {
+  const text = buildQuoteShareText(share)
+  window.open(
+    `https://sharer.kakao.com/talk/friends/picker/link?url=${encodeURIComponent(share.url)}&text=${encodeURIComponent(text)}`,
+    "_blank",
+    "width=480,height=640"
+  )
+}
+
+function openSmsShare(share: ShareSheetState) {
+  const body = `[견적서 ${share.quoteNumber}] ${share.customerName}님 견적서입니다. ${share.url}`
+  window.location.href = `sms:?body=${encodeURIComponent(body)}`
+}
+
+function openMailShare(share: ShareSheetState) {
+  const subject = `[견적서] ${share.quoteNumber}`
+  const body = `${share.customerName}님 견적서입니다.\n\n${share.url}`
+  window.location.href = `mailto:?subject=${encodeURIComponent(subject)}&body=${encodeURIComponent(body)}`
+}
+
+function isInputFixMessage(message: string) {
+  return ["입력", "선택", "필수", "required"].some((keyword) =>
+    message.toLowerCase().includes(keyword.toLowerCase())
+  )
+}
+
+function getQuoteSubmitErrorMessage(error: unknown) {
+  const message =
+    error instanceof Error
+      ? error.message
+      : "견적서 생성에 실패했습니다."
+  const normalized = message.toLowerCase()
+
+  if (normalized.includes("deal_id") && normalized.includes("title")) {
+    return "거래 또는 견적 제목이 비어 있습니다. 거래 제목을 입력해 주세요."
+  }
+
+  if (normalized.includes("title") && normalized.includes("required")) {
+    return "견적 제목이 비어 있습니다. 제목을 입력해 주세요."
+  }
+
+  if (normalized.includes("deal_id") || message.includes("deal_id 필수")) {
+    return "거래 연결이 필요합니다. 기존 거래를 선택하거나 새 거래 제목을 입력해 주세요."
+  }
+
+  return message
+}
+
+type ShareOptionButtonProps = {
+  icon: ReactNode
+  label: string
+  title: string
+  onClick: () => void
+}
+
+function ShareOptionButton({
+  icon,
+  label,
+  title,
+  onClick,
+}: ShareOptionButtonProps) {
+  return (
+    <button
+      type="button"
+      title={title}
+      onClick={onClick}
+      className="flex h-[74px] w-[76px] flex-col items-center justify-center gap-1.5 rounded-xl border border-[#e8e8e4] bg-white text-[#111110] shadow-sm transition-colors hover:border-[#B7E8D1] hover:bg-[#F0FDF7]"
+    >
+      <span className="flex h-8 w-8 items-center justify-center rounded-full bg-[#f6f5f2] text-[#615D59]">
+        {icon}
+      </span>
+      <span className="whitespace-nowrap text-[11px] font-medium">{label}</span>
+    </button>
+  )
+}
+
 function PreviewField({
   label,
   value,
@@ -528,8 +647,12 @@ export default function QuickQuoteComposer({
   onOpenChange,
   recentQuotes,
   onCreated,
+  apiBase = "/api/partner",
+  portalPartnerAccountId = null,
 }: QuickQuoteComposerProps) {
   const today = getTodayDateValue()
+  const isPortalApi = apiBase === "/api/portal"
+  const allowNewCustomer = !isPortalApi || Boolean(portalPartnerAccountId)
   const [customers, setCustomers] = useState<CustomerListItem[]>([])
   const [deals, setDeals] = useState<DealListItem[]>([])
   const [loadingOptions, setLoadingOptions] = useState(false)
@@ -556,9 +679,11 @@ export default function QuickQuoteComposer({
   const [submittingAction, setSubmittingAction] = useState<CreateAction | null>(null)
   const [reuseLoadingId, setReuseLoadingId] = useState<string | null>(null)
   const [error, setError] = useState<string | null>(null)
-  const [shareSheet, setShareSheet] = useState<{ url: string; quoteNumber: string; customerName: string } | null>(null)
+  const [shareSheet, setShareSheet] = useState<ShareSheetState | null>(null)
   const [linkCopied, setLinkCopied] = useState(false)
   const [saveToast, setSaveToast] = useState(false)
+  const [errorToast, setErrorToast] = useState<ErrorToastState | null>(null)
+  const errorToastTimerRef = useRef<ReturnType<typeof setTimeout> | null>(null)
 
   const sortedCustomers = useMemo(
     () => [...customers].sort((left, right) => left.customer.name.localeCompare(right.customer.name, "ko")),
@@ -586,6 +711,17 @@ export default function QuickQuoteComposer({
     optionSelections.camera_bundle === true &&
     optionSelections.mounting_option === "wall_mount"
 
+  function showErrorToast(message: string, title?: string) {
+    if (errorToastTimerRef.current) {
+      clearTimeout(errorToastTimerRef.current)
+    }
+    setErrorToast({
+      title: title ?? (isInputFixMessage(message) ? "입력 확인 필요" : "견적서 생성 실패"),
+      message,
+    })
+    errorToastTimerRef.current = setTimeout(() => setErrorToast(null), 3200)
+  }
+
   useEffect(() => {
     if (!open) return
 
@@ -594,11 +730,11 @@ export default function QuickQuoteComposer({
     setError(null)
 
     Promise.allSettled([
-      portalFetch("/api/partner/customers").then(async (response) => {
+      portalFetch(`${apiBase}/customers`).then(async (response) => {
         if (!response.ok) throw new Error("고객 목록을 불러오지 못했습니다.")
         return (await response.json()) as CustomerPayload
       }),
-      portalFetch("/api/partner/deals").then(async (response) => {
+      portalFetch(`${apiBase}/deals`).then(async (response) => {
         if (!response.ok) throw new Error("거래 목록을 불러오지 못했습니다.")
         return (await response.json()) as DealPayload
       }),
@@ -622,7 +758,7 @@ export default function QuickQuoteComposer({
     return () => {
       alive = false
     }
-  }, [open])
+  }, [apiBase, open])
 
   useEffect(() => {
     if (!open) return
@@ -647,8 +783,20 @@ export default function QuickQuoteComposer({
     )
     setSubmittingAction(null)
     setReuseLoadingId(null)
+    setShareSheet(null)
+    setLinkCopied(false)
+    setSaveToast(false)
+    setErrorToast(null)
     setError(null)
   }, [open, today])
+
+  useEffect(() => {
+    return () => {
+      if (errorToastTimerRef.current) {
+        clearTimeout(errorToastTimerRef.current)
+      }
+    }
+  }, [])
 
   useEffect(() => {
     if (!open || customerMode !== "existing") return
@@ -856,7 +1004,7 @@ export default function QuickQuoteComposer({
     setError(null)
 
     try {
-      const response = await portalFetch(`/api/partner/quotes/${quoteId}`)
+      const response = await portalFetch(`${apiBase}/quotes/${quoteId}`)
       if (!response.ok) {
         throw new Error("기존 견적을 불러오지 못했습니다.")
       }
@@ -937,12 +1085,17 @@ export default function QuickQuoteComposer({
     }
   }
 
-  async function resolveCustomer() {
-    if (customerMode === "existing" && fallbackExistingCustomer) {
-      return {
-        id: fallbackExistingCustomer.id,
-        name: fallbackExistingCustomer.name,
+  async function resolveCustomer(): Promise<ResolvedCustomer> {
+    if (customerMode === "existing") {
+      if (fallbackExistingCustomer) {
+        return {
+          id: fallbackExistingCustomer.id,
+          name: fallbackExistingCustomer.name,
+          partnerAccountId: fallbackExistingCustomer.partner_account_id,
+        }
       }
+
+      throw new Error("고객사를 선택해 주세요.")
     }
 
     const name = newCustomerName.trim()
@@ -950,24 +1103,37 @@ export default function QuickQuoteComposer({
       throw new Error("고객사 이름을 입력해 주세요.")
     }
 
-    const response = await portalFetch("/api/partner/customers", {
+    const requestBody: { name: string; partner_account_id?: string } = { name }
+    if (isPortalApi) {
+      const partnerAccountId = portalPartnerAccountId ?? undefined
+      if (!partnerAccountId) {
+        throw new Error("어드민에서는 기존 고객을 선택한 뒤 견적서를 생성해 주세요.")
+      }
+      requestBody.partner_account_id = partnerAccountId
+    }
+
+    const response = await portalFetch(`${apiBase}/customers`, {
       method: "POST",
-      body: JSON.stringify({ name }),
+      body: JSON.stringify(requestBody),
     })
     const payload = (await response.json().catch(() => null)) as
-      | { error?: string; customer?: { id: string; name: string } }
+      | { error?: string; customer?: { id: string; name: string; partner_account_id?: string | null } }
       | null
 
     if (!response.ok || !payload?.customer) {
       throw new Error(payload?.error ?? "고객 생성에 실패했습니다.")
     }
 
-    return payload.customer
+    return {
+      id: payload.customer.id,
+      name: payload.customer.name,
+      partnerAccountId: payload.customer.partner_account_id ?? portalPartnerAccountId,
+    }
   }
 
-  async function resolveDeal(customerId: string, customerName?: string | null) {
+  async function resolveDeal(customer: ResolvedCustomer) {
     const existingDeal =
-      selectedDealId && deals.find((deal) => deal.id === selectedDealId && deal.customer_id === customerId)
+      selectedDealId && deals.find((deal) => deal.id === selectedDealId && deal.customer_id === customer.id)
 
     if (existingDeal) {
       return existingDeal
@@ -978,19 +1144,36 @@ export default function QuickQuoteComposer({
       buildDefaultDealTitle({
         templateId,
         quantity: baseQuantity,
-        customerName,
+        customerName: customer.name,
       })
     if (!title) {
       throw new Error("거래 제목을 입력해 주세요.")
     }
 
-    const response = await portalFetch("/api/partner/deals", {
+    const partnerAccountId = customer.partnerAccountId ?? portalPartnerAccountId ?? undefined
+    if (isPortalApi && !partnerAccountId) {
+      throw new Error("어드민 견적서는 고객의 파트너 계정 연결이 필요합니다.")
+    }
+
+    const requestBody: {
+      customer_id: string
+      title: string
+      expected_amount: number
+      current_stage: "quote"
+      partner_account_id?: string
+    } = {
+      customer_id: customer.id,
+      title,
+      expected_amount: quote.grandTotalAmount ?? 0,
+      current_stage: "quote",
+    }
+    if (isPortalApi && partnerAccountId) {
+      requestBody.partner_account_id = partnerAccountId
+    }
+
+    const response = await portalFetch(`${apiBase}/deals`, {
       method: "POST",
-      body: JSON.stringify({
-        customer_id: customerId,
-        title,
-        expected_amount: quote.grandTotalAmount ?? 0,
-      }),
+      body: JSON.stringify(requestBody),
     })
     const payload = (await response.json().catch(() => null)) as
       | { error?: string; deal?: DealListItem }
@@ -1009,7 +1192,7 @@ export default function QuickQuoteComposer({
 
     try {
       const customer = await resolveCustomer()
-      const deal = await resolveDeal(customer.id, customer.name)
+      const deal = await resolveDeal(customer)
       const preparedQuote = finalizeStandardQuoteDetails(
         {
           ...quote,
@@ -1022,7 +1205,7 @@ export default function QuickQuoteComposer({
         templateId
       )
 
-      const response = await portalFetch("/api/partner/quotes", {
+      const response = await portalFetch(`${apiBase}/quotes`, {
         method: "POST",
         body: JSON.stringify({
           deal_id: deal.id,
@@ -1061,7 +1244,7 @@ export default function QuickQuoteComposer({
 
       if (action === "save_and_preview" || action === "save_and_send") {
         try {
-          const shareResponse = await portalFetch(`/api/partner/quotes/${payload.document.id}/share`, {
+          const shareResponse = await portalFetch(`${apiBase}/quotes/${payload.document.id}/share`, {
             method: "POST",
           })
           const sharePayload = (await shareResponse.json().catch(() => null)) as
@@ -1091,7 +1274,9 @@ export default function QuickQuoteComposer({
             shareIssue instanceof Error
               ? shareIssue.message
               : "공유 링크 생성에 실패했습니다."
-          setError(`견적서는 저장했지만 ${shareError}`)
+          const message = `견적서는 저장했지만 ${shareError}`
+          setError(message)
+          showErrorToast(message, "발송 준비 실패")
         }
       }
 
@@ -1120,11 +1305,9 @@ export default function QuickQuoteComposer({
       }
       // save_and_send → 공유 시트 유지
     } catch (submitError) {
-      setError(
-        submitError instanceof Error
-          ? submitError.message
-          : "견적서 생성에 실패했습니다."
-      )
+      const message = getQuoteSubmitErrorMessage(submitError)
+      setError(message)
+      showErrorToast(message)
     } finally {
       setSubmittingAction(null)
     }
@@ -1133,10 +1316,10 @@ export default function QuickQuoteComposer({
   if (!open) return null
 
   return (
-    <div className="fixed inset-0 z-50 flex items-center justify-center bg-black/35 px-4 py-6 backdrop-blur-sm">
-      <div className="flex max-h-[92vh] w-full max-w-[1480px] flex-col overflow-hidden rounded-[32px] border border-[rgba(255,255,255,0.25)] bg-white shadow-[0_24px_80px_rgba(17,17,16,0.28)]">
-        <div className="flex items-start justify-between gap-4 border-b border-[#ecebe6] px-6 py-5">
-          <div>
+    <div className="fixed inset-0 z-50 flex items-stretch justify-stretch bg-black/35 p-0 backdrop-blur-sm sm:items-center sm:justify-center sm:px-4 sm:py-6">
+      <div className="relative flex h-[100dvh] max-h-[100dvh] w-full flex-col overflow-hidden rounded-none border border-[rgba(255,255,255,0.25)] bg-white shadow-[0_24px_80px_rgba(17,17,16,0.28)] sm:max-h-[92vh] sm:max-w-[1480px] sm:rounded-[28px] xl:rounded-[32px]">
+        <div className="flex items-start justify-between gap-3 border-b border-[#ecebe6] px-4 py-4 sm:gap-4 sm:px-6 sm:py-5">
+          <div className="min-w-0">
             <div className="inline-flex items-center gap-2 rounded-full bg-[#ECFDF5] px-3 py-1 text-[11px] font-medium text-[#084734]">
               <Sparkles className="h-3.5 w-3.5" />
               Quick Quote Composer
@@ -1149,14 +1332,14 @@ export default function QuickQuoteComposer({
           <button
             type="button"
             onClick={() => onOpenChange(false)}
-            className="rounded-full border border-[#e8e8e4] px-3 py-1.5 text-sm text-[#615D59] hover:bg-[#f6f5f2]"
+            className="shrink-0 rounded-md border border-[#e8e8e4] px-3 py-2 text-sm text-[#615D59] hover:bg-[#f6f5f2] sm:rounded-full sm:py-1.5"
           >
             닫기
           </button>
         </div>
 
         <div className="grid min-h-0 flex-1 gap-0 xl:grid-cols-[minmax(0,1fr)_minmax(520px,560px)]">
-          <div className="min-h-0 overflow-y-auto px-6 py-6">
+          <div className="min-h-0 overflow-y-auto px-4 py-4 sm:px-6 sm:py-6">
             <div className="space-y-6">
               <section className="rounded-2xl border border-[#e8e8e4] bg-[#fafaf8] p-4">
                 <div className="flex items-center justify-between gap-3">
@@ -1231,20 +1414,22 @@ export default function QuickQuoteComposer({
                     >
                       기존 고객
                     </button>
-                    <button
-                      type="button"
-                      onClick={() => {
-                        setCustomerMode("new")
-                        setSelectedDealId("")
-                      }}
-                      className={`rounded-full px-3 py-1.5 text-xs font-medium ${
-                        customerMode === "new"
-                          ? "bg-[#111110] text-white"
-                          : "bg-[#f6f5f2] text-[#615D59]"
-                      }`}
-                    >
-                      신규 고객
-                    </button>
+                    {allowNewCustomer && (
+                      <button
+                        type="button"
+                        onClick={() => {
+                          setCustomerMode("new")
+                          setSelectedDealId("")
+                        }}
+                        className={`rounded-full px-3 py-1.5 text-xs font-medium ${
+                          customerMode === "new"
+                            ? "bg-[#111110] text-white"
+                            : "bg-[#f6f5f2] text-[#615D59]"
+                        }`}
+                      >
+                        신규 고객
+                      </button>
+                    )}
                   </div>
                   {customerMode === "existing" ? (
                     <select
@@ -1630,8 +1815,8 @@ export default function QuickQuoteComposer({
                   </div>
                 </div>
 
-                <div className="mt-4 overflow-hidden rounded-2xl border border-[#ecebe6]">
-                  <table className="w-full text-sm">
+                <div className="mt-4 overflow-x-auto rounded-2xl border border-[#ecebe6]">
+                  <table className="min-w-[760px] w-full text-sm">
                     <thead className="bg-[#f7f6f3] text-[#1a1a1a]/55">
                       <tr>
                         <th className="px-3 py-2 text-left text-xs font-medium">No</th>
@@ -1781,7 +1966,7 @@ export default function QuickQuoteComposer({
             </div>
           </div>
 
-          <div className="min-h-0 overflow-auto border-l border-[#ecebe6] bg-[#fcfbf8] px-6 py-6">
+          <div className="hidden min-h-0 overflow-auto border-l border-[#ecebe6] bg-[#fcfbf8] px-6 py-6 xl:block">
             <QuotePreviewPanel quote={quote} />
           </div>
         </div>
@@ -1796,56 +1981,187 @@ export default function QuickQuoteComposer({
             </p>
           </div>
         )}
-        <div className="flex flex-wrap items-center justify-between gap-3 border-t border-[#ecebe6] bg-white px-6 py-4">
-          <div className="text-sm text-[#615D59]">
-            {buildStandardQuoteTitle(quote)}
+        {shareSheet && (
+          <div className="border-t border-[#D1FAE5] bg-[#F0FDF7] px-4 py-4 sm:px-6">
+            <div className="flex flex-col gap-4 lg:flex-row lg:items-center lg:justify-between">
+              <div className="min-w-0 flex-1">
+                <div className="flex flex-wrap items-center gap-2">
+                  <span className="inline-flex items-center gap-1.5 rounded-full bg-white px-2.5 py-1 text-[11px] font-semibold text-[#084734] ring-1 ring-[#B7E8D1]">
+                    <Check className="h-3.5 w-3.5" />
+                    전송 준비 완료
+                  </span>
+                  <span className="text-xs font-medium text-[#1a1a1a]/45">
+                    {shareSheet.customerName} · {shareSheet.quoteNumber}
+                  </span>
+                </div>
+                <div className="mt-3 flex min-w-0 items-center gap-2 rounded-lg bg-white px-3 py-2 ring-1 ring-[#D1FAE5]">
+                  <Link2 className="h-4 w-4 shrink-0 text-[#084734]" />
+                  <span className="min-w-0 flex-1 truncate text-xs text-[#1a1a1a]/55">
+                    {shareSheet.url}
+                  </span>
+                  <button
+                    type="button"
+                    title="링크 복사"
+                    onClick={() => {
+                      void copyTextToClipboard(shareSheet.url).then(() => {
+                        setLinkCopied(true)
+                        setTimeout(() => setLinkCopied(false), 2000)
+                      })
+                    }}
+                    className="inline-flex h-7 items-center gap-1.5 rounded-md bg-[#084734] px-2.5 text-[11px] font-medium text-white transition-colors hover:bg-[#065c41]"
+                  >
+                    {linkCopied ? <Check className="h-3.5 w-3.5" /> : <Copy className="h-3.5 w-3.5" />}
+                    {linkCopied ? "복사됨" : "복사"}
+                  </button>
+                </div>
+              </div>
+
+              <div className="flex flex-wrap items-center gap-2">
+                <ShareOptionButton
+                  icon={linkCopied ? <Check className="h-4 w-4 text-[#084734]" /> : <Copy className="h-4 w-4" />}
+                  label={linkCopied ? "복사됨" : "링크"}
+                  title="링크 복사"
+                  onClick={() => {
+                    void copyTextToClipboard(shareSheet.url).then(() => {
+                      setLinkCopied(true)
+                      setTimeout(() => setLinkCopied(false), 2000)
+                    })
+                  }}
+                />
+                <ShareOptionButton
+                  icon={<MessageCircle className="h-4 w-4" />}
+                  label="카카오"
+                  title="카카오톡으로 전송"
+                  onClick={() => openKakaoShare(shareSheet)}
+                />
+                <ShareOptionButton
+                  icon={<Smartphone className="h-4 w-4" />}
+                  label="문자"
+                  title="문자로 전송"
+                  onClick={() => openSmsShare(shareSheet)}
+                />
+                <ShareOptionButton
+                  icon={<Mail className="h-4 w-4" />}
+                  label="메일"
+                  title="메일 앱으로 전송"
+                  onClick={() => openMailShare(shareSheet)}
+                />
+                {typeof navigator !== "undefined" && "share" in navigator && (
+                  <ShareOptionButton
+                    icon={<Share2 className="h-4 w-4" />}
+                    label="기타"
+                    title="기기 공유 메뉴 열기"
+                    onClick={() => {
+                      navigator.share({
+                        title: `견적서 ${shareSheet.quoteNumber}`,
+                        text: `${shareSheet.customerName}님 견적서입니다.`,
+                        url: shareSheet.url,
+                      }).catch(() => {})
+                    }}
+                  />
+                )}
+                <ShareOptionButton
+                  icon={<Printer className="h-4 w-4" />}
+                  label="미리보기"
+                  title="견적서 미리보기"
+                  onClick={() => {
+                    window.open(shareSheet.url, "_blank")
+                  }}
+                />
+                <button
+                  type="button"
+                  title="공유 메뉴 닫기"
+                  onClick={() => {
+                    setShareSheet(null)
+                  }}
+                  className="flex h-[74px] w-10 items-center justify-center rounded-xl border border-[#e8e8e4] bg-white text-[#615D59] shadow-sm transition-colors hover:border-[#c8c8c4] hover:text-[#111110]"
+                >
+                  <X className="h-4 w-4" />
+                </button>
+              </div>
+            </div>
           </div>
-          <div className="flex flex-wrap gap-2">
-            <Button type="button" variant="outline" onClick={() => onOpenChange(false)} disabled={Boolean(submittingAction)}>
-              취소
-            </Button>
-            <Button
-              type="button"
-              variant="outline"
-              disabled={Boolean(submittingAction) || loadingOptions}
-              onClick={() => {
-                void handleSubmit("save")
-              }}
-            >
-              {submittingAction === "save" ? <Loader2 className="mr-2 h-4 w-4 animate-spin" /> : null}
-              임시 저장
-            </Button>
-            <Button
-              type="button"
-              variant="outline"
-              disabled={Boolean(submittingAction) || loadingOptions}
-              onClick={() => {
-                void handleSubmit("save_and_preview")
-              }}
-            >
-              {submittingAction === "save_and_preview" ? (
-                <Loader2 className="mr-2 h-4 w-4 animate-spin" />
-              ) : (
-                <Eye className="mr-2 h-4 w-4" />
-              )}
-              저장 후 미리보기
-            </Button>
-            <Button
-              type="button"
-              disabled={Boolean(submittingAction) || loadingOptions}
-              onClick={() => {
-                void handleSubmit("save_and_send")
-              }}
-              className="bg-[#084734] text-white hover:bg-[#065c41]"
-            >
-              {submittingAction === "save_and_send" ? (
-                <Loader2 className="mr-2 h-4 w-4 animate-spin" />
-              ) : (
-                <Send className="mr-2 h-4 w-4" />
-              )}
-              저장 후 발송
-            </Button>
+        )}
+
+        <div className="flex flex-col gap-3 border-t border-[#ecebe6] bg-white px-4 py-4 sm:flex-row sm:flex-wrap sm:items-center sm:justify-between sm:px-6">
+          <div className="min-w-0 flex-1 text-sm text-[#615D59]">
+            <div className="truncate">{buildStandardQuoteTitle(quote)}</div>
+            {shareSheet && (
+              <p className="mt-1 text-xs text-[#084734]">공유 메뉴에서 복사하거나 앱으로 바로 보낼 수 있습니다.</p>
+            )}
           </div>
+          {shareSheet ? (
+            <div className="flex w-full flex-col gap-2 sm:w-auto sm:flex-row sm:flex-wrap">
+              <Button
+                type="button"
+                variant="outline"
+                onClick={() => {
+                  setShareSheet(null)
+                }}
+              >
+                편집 계속
+              </Button>
+              <Button
+                type="button"
+                onClick={() => {
+                  setShareSheet(null)
+                  onOpenChange(false)
+                }}
+                className="bg-[#084734] text-white hover:bg-[#065c41]"
+              >
+                완료
+              </Button>
+            </div>
+          ) : (
+            <div className="flex w-full flex-col gap-2 sm:w-auto sm:flex-row sm:flex-wrap">
+              <Button type="button" variant="outline" onClick={() => onOpenChange(false)} disabled={Boolean(submittingAction)}>
+                취소
+              </Button>
+              <Button
+                type="button"
+                variant="outline"
+                disabled={Boolean(submittingAction) || loadingOptions}
+                onClick={() => {
+                  void handleSubmit("save")
+                }}
+              >
+                {submittingAction === "save" ? <Loader2 className="mr-2 h-4 w-4 animate-spin" /> : null}
+                저장
+              </Button>
+              <Button
+                type="button"
+                variant="outline"
+                title="저장 후 미리보기"
+                disabled={Boolean(submittingAction) || loadingOptions}
+                onClick={() => {
+                  void handleSubmit("save_and_preview")
+                }}
+              >
+                {submittingAction === "save_and_preview" ? (
+                  <Loader2 className="mr-2 h-4 w-4 animate-spin" />
+                ) : (
+                  <Eye className="mr-2 h-4 w-4" />
+                )}
+                미리보기
+              </Button>
+              <Button
+                type="button"
+                title="저장 후 공유 링크 생성"
+                disabled={Boolean(submittingAction) || loadingOptions}
+                onClick={() => {
+                  void handleSubmit("save_and_send")
+                }}
+                className="bg-[#084734] text-white hover:bg-[#065c41]"
+              >
+                {submittingAction === "save_and_send" ? (
+                  <Loader2 className="mr-2 h-4 w-4 animate-spin" />
+                ) : (
+                  <Send className="mr-2 h-4 w-4" />
+                )}
+                발송
+              </Button>
+            </div>
+          )}
         </div>
 
         {/* ── 임시저장 토스트 ─────────────────────────────────── */}
@@ -1856,101 +2172,33 @@ export default function QuickQuoteComposer({
               style={{ animation: "fadeInUp 0.25s ease-out" }}
             >
               <Check className="mx-auto h-6 w-6 text-[#6EE7B7]" />
-              <p className="mt-2 text-sm font-medium text-white">임시 저장 완료</p>
+              <p className="mt-2 text-sm font-medium text-white">저장 완료</p>
             </div>
           </div>
         )}
 
-        {/* ── 공유 시트 오버레이 ──────────────────────────────── */}
-        {shareSheet && (
-          <div className="absolute inset-0 z-10 flex items-center justify-center rounded-[32px] bg-black/30 backdrop-blur-sm">
-            <div className="w-full max-w-sm rounded-2xl bg-white p-6 shadow-[0_24px_60px_rgba(0,0,0,0.2)]">
-              <div className="text-center">
-                <div className="mx-auto flex h-12 w-12 items-center justify-center rounded-full bg-[#ECFDF5]">
-                  <Check className="h-6 w-6 text-[#084734]" />
-                </div>
-                <h3 className="mt-3 text-lg font-semibold text-[#111110]">견적서 전송 준비 완료</h3>
-                <p className="mt-1 text-sm text-[#615D59]">
-                  {shareSheet.customerName} · {shareSheet.quoteNumber}
+        {errorToast && (
+          <div className="pointer-events-none absolute inset-0 z-20 flex items-center justify-center px-4">
+            <div
+              role="alert"
+              className="pointer-events-auto flex w-full max-w-md items-start gap-3 rounded-2xl border border-[#F2B8A2] bg-white px-4 py-4 shadow-[0_18px_60px_rgba(80,30,12,0.22)]"
+            >
+              <span className="mt-0.5 flex h-9 w-9 shrink-0 items-center justify-center rounded-full bg-[#FEF3EE] text-[#B85C33]">
+                <AlertCircle className="h-5 w-5" />
+              </span>
+              <div className="min-w-0 flex-1">
+                <p className="text-sm font-semibold text-[#111110]">{errorToast.title}</p>
+                <p className="mt-1 text-sm leading-5 text-[#7A4A36]">
+                  이유: {errorToast.message}
                 </p>
               </div>
-
-              <div className="mt-5 space-y-2">
-                <button
-                  type="button"
-                  onClick={async () => {
-                    await copyTextToClipboard(shareSheet.url)
-                    setLinkCopied(true)
-                    setTimeout(() => setLinkCopied(false), 2000)
-                  }}
-                  className="flex w-full items-center gap-3 rounded-xl border border-[#e8e8e4] px-4 py-3 text-left text-sm font-medium text-[#111110] transition-colors hover:bg-[#fafaf8]"
-                >
-                  {linkCopied ? <Check className="h-4 w-4 text-[#084734]" /> : <Link2 className="h-4 w-4 text-[#615D59]" />}
-                  {linkCopied ? "링크 복사됨!" : "링크 복사"}
-                </button>
-
-                <button
-                  type="button"
-                  onClick={() => {
-                    const text = `[견적서] ${shareSheet.quoteNumber}\n${shareSheet.customerName}님 견적서입니다.\n${shareSheet.url}`
-                    window.open(`https://sharer.kakao.com/talk/friends/picker/link?url=${encodeURIComponent(shareSheet.url)}&text=${encodeURIComponent(text)}`, "_blank", "width=480,height=640")
-                  }}
-                  className="flex w-full items-center gap-3 rounded-xl border border-[#e8e8e4] px-4 py-3 text-left text-sm font-medium text-[#111110] transition-colors hover:bg-[#fafaf8]"
-                >
-                  <MessageCircle className="h-4 w-4 text-[#615D59]" />
-                  카카오톡 전송
-                </button>
-
-                <button
-                  type="button"
-                  onClick={() => {
-                    const body = `[견적서 ${shareSheet.quoteNumber}] ${shareSheet.customerName}님 견적서입니다. ${shareSheet.url}`
-                    window.location.href = `sms:?body=${encodeURIComponent(body)}`
-                  }}
-                  className="flex w-full items-center gap-3 rounded-xl border border-[#e8e8e4] px-4 py-3 text-left text-sm font-medium text-[#111110] transition-colors hover:bg-[#fafaf8]"
-                >
-                  <Smartphone className="h-4 w-4 text-[#615D59]" />
-                  문자 전송
-                </button>
-
-                {typeof navigator !== "undefined" && "share" in navigator && (
-                  <button
-                    type="button"
-                    onClick={() => {
-                      navigator.share({
-                        title: `견적서 ${shareSheet.quoteNumber}`,
-                        text: `${shareSheet.customerName}님 견적서입니다.`,
-                        url: shareSheet.url,
-                      }).catch(() => {})
-                    }}
-                    className="flex w-full items-center gap-3 rounded-xl border border-[#e8e8e4] px-4 py-3 text-left text-sm font-medium text-[#111110] transition-colors hover:bg-[#fafaf8]"
-                  >
-                    <Share2 className="h-4 w-4 text-[#615D59]" />
-                    기타 공유
-                  </button>
-                )}
-
-                <button
-                  type="button"
-                  onClick={() => {
-                    window.open(shareSheet.url, "_blank")
-                  }}
-                  className="flex w-full items-center gap-3 rounded-xl border border-[#e8e8e4] px-4 py-3 text-left text-sm font-medium text-[#111110] transition-colors hover:bg-[#fafaf8]"
-                >
-                  <Printer className="h-4 w-4 text-[#615D59]" />
-                  인쇄 / 미리보기
-                </button>
-              </div>
-
               <button
                 type="button"
-                onClick={() => {
-                  setShareSheet(null)
-                  onOpenChange(false)
-                }}
-                className="mt-4 w-full rounded-xl bg-[#111110] px-4 py-2.5 text-sm font-medium text-white transition-colors hover:bg-[#2a2a2a]"
+                title="오류 메시지 닫기"
+                onClick={() => setErrorToast(null)}
+                className="rounded-md p-1 text-[#7A4A36]/60 transition-colors hover:bg-[#FEF3EE] hover:text-[#7A4A36]"
               >
-                닫기
+                <X className="h-4 w-4" />
               </button>
             </div>
           </div>

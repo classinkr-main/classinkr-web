@@ -49,9 +49,12 @@ export function Hero() {
                         animate={{ opacity: 1, scale: 1, y: 0 }}
                         transition={{ duration: 0.6, ease: "easeOut" }}
                     >
-                        <span className="inline-flex items-center gap-2 py-1.5 px-4 rounded-full bg-[#ECFDF5] border border-[#084734]/20 text-[#084734] text-sm md:text-base font-medium mb-8">
-                            <span className="w-2 h-2 rounded-full bg-[#084734] animate-pulse" />
-                            기술 × 교육 — 새로운 시대의 학원 운영
+                        <span className="inline-flex items-center gap-2.5 py-2 px-5 rounded-full bg-[#ECFDF5]/80 backdrop-blur-sm border border-[#084734]/10 text-[#084734] text-sm md:text-base font-semibold mb-8 shadow-[0_2px_12px_rgba(8,71,52,0.08)]">
+                            <span className="relative flex h-2 w-2">
+                                <span className="absolute inline-flex h-full w-full animate-ping rounded-full bg-[#084734]/40" />
+                                <span className="relative inline-flex h-2 w-2 rounded-full bg-[#084734]" />
+                            </span>
+                            <span className="tracking-[0.02em]">기술 × 교육 — 새로운 시대의 학원 운영</span>
                         </span>
                     </motion.div>
 

@@ -3,6 +3,14 @@
     {
       "path": "/api/cron/automation",
       "schedule": "0 9 * * *"
+    },
+    {
+      "path": "/api/cron/sync-branch",
+      "schedule": "0 */4 * * *"
+    },
+    {
+      "path": "/api/cron/sync-branch-insights",
+      "schedule": "0 5 * * *"
     }
   ]
 }

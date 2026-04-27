@@ -18,8 +18,8 @@ export const metadata: Metadata = {
   },
   description: "데이터 기반의 학원 관리 플랫폼 Classin으로 교육 품질을 표준화하고, 행정 업무를 자동화하며, 학습 성과를 보장하세요.",
   icons: {
-    icon: "/icon",
-    apple: "/apple-icon",
+    icon: "/icon.png",
+    apple: "/apple-icon.png",
   },
   openGraph: {
     title: "Classin — 학원 운영의 새로운 기준",

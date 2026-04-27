@@ -155,11 +155,11 @@ export default function AdminNotificationsBell() {
   )
 
   return (
-    <div className="fixed right-5 top-4 z-50" ref={panelRef}>
+    <div className="fixed right-3 top-2.5 z-50 lg:right-5 lg:top-4" ref={panelRef}>
       <button
         type="button"
         onClick={() => setOpen((current) => !current)}
-        className="relative flex h-11 w-11 items-center justify-center rounded-2xl border border-[#e8e8e4] bg-white text-[#111110] shadow-sm transition-colors hover:bg-[#f7f7f4]"
+        className="relative flex h-11 w-11 items-center justify-center rounded-md border border-[#e8e8e4] bg-white text-[#111110] shadow-sm transition-colors hover:bg-[#f7f7f4] lg:rounded-2xl"
         aria-label="Open notifications"
       >
         <Bell className="h-4 w-4" />
@@ -171,7 +171,7 @@ export default function AdminNotificationsBell() {
       </button>
 
       {open ? (
-        <div className="mt-3 w-[360px] overflow-hidden rounded-[24px] border border-[#e8e8e4] bg-white shadow-2xl">
+        <div className="fixed inset-x-3 top-16 max-h-[calc(100dvh-5rem)] overflow-hidden rounded-[16px] border border-[#e8e8e4] bg-white shadow-2xl lg:static lg:mt-3 lg:w-[360px] lg:rounded-[24px]">
           <div className="flex items-center justify-between border-b border-[#efefea] px-5 py-4">
             <div>
               <p className="text-[11px] font-medium uppercase tracking-[0.18em] text-[#1a1a1a]/35">
@@ -196,7 +196,7 @@ export default function AdminNotificationsBell() {
             </button>
           </div>
 
-          <div className="max-h-[420px] overflow-y-auto">
+          <div className="max-h-[calc(100dvh-12rem)] overflow-y-auto lg:max-h-[420px]">
             {loading ? (
               <div className="flex items-center justify-center gap-2 px-5 py-10 text-[13px] text-[#1a1a1a]/45">
                 <Loader2 className="h-4 w-4 animate-spin" />

@@ -6,30 +6,31 @@ import type { ReactNode } from "react"
 import { useEffect, useState } from "react"
 import {
   BarChart2,
+  BookOpen,
   Building2,
   CalendarDays,
   ChevronRight,
-  ClipboardList,
   Code2,
   FileText,
   Globe,
-  Handshake,
   LayoutDashboard,
   LogOut,
+  Menu,
   Megaphone,
+  MoreHorizontal,
   Settings,
   SquareChevronLeft,
   SquareChevronRight,
-  Ticket,
   UserCog,
   Users,
+  X,
 } from "lucide-react"
 import { clearAdminSessionStorage } from "@/lib/admin-client"
 import { createSupabaseBrowserClient } from "@/lib/supabase/browser"
 import { hasSupabaseBrowserEnv } from "@/lib/supabase/public-env"
 
 type SidebarRole = "SUPER_ADMIN" | "ADMIN" | "EDITOR" | "VIEWER" | "BRANCH" | "PARTNER"
-type SidebarSection = "workspace" | "performance" | "system"
+type SidebarSection = "workspace" | "growth" | "performance" | "system"
 
 interface NavItem {
   href: string
@@ -46,24 +47,23 @@ const STAFF_EDITOR: SidebarRole[] = ["SUPER_ADMIN", "ADMIN", "EDITOR"]
 
 const NAV: NavItem[] = [
   { href: "/admin/overview", label: "Overview", icon: <LayoutDashboard className="h-4 w-4" />, roles: [...ALL_STAFF, "BRANCH"], section: "workspace" },
-  { href: "/admin/crm", label: "CRM / 리드", icon: <Users className="h-4 w-4" />, roles: [...ALL_STAFF, "BRANCH"], section: "workspace" },
-  { href: "/admin/campaigns", label: "캠페인", icon: <Megaphone className="h-4 w-4" />, roles: STAFF_ADMIN, section: "workspace" },
-  { href: "/admin/partners", label: "파트너 운영", icon: <Handshake className="h-4 w-4" />, roles: STAFF_ADMIN, section: "workspace" },
-  { href: "/admin/software-quote-codes", label: "SW 견적 코드", icon: <Ticket className="h-4 w-4" />, roles: STAFF_ADMIN, section: "workspace" },
+  { href: "/admin/crm", label: "CRM", icon: <Users className="h-4 w-4" />, roles: [...ALL_STAFF, "BRANCH"], section: "workspace" },
   { href: "/admin/calendar", label: "캘린더", icon: <CalendarDays className="h-4 w-4" />, roles: [...ALL_STAFF, "BRANCH"], section: "workspace" },
-  { href: "/admin/events", label: "공개 행사", icon: <Globe className="h-4 w-4" />, roles: STAFF_ADMIN, section: "workspace" },
-  { href: "/admin/blog", label: "콘텐츠", icon: <FileText className="h-4 w-4" />, roles: STAFF_EDITOR, section: "workspace" },
-  { href: "/admin/branch", label: "지사 관리", icon: <Building2 className="h-4 w-4" />, roles: [...STAFF_ADMIN, "BRANCH"], section: "performance" },
+  { href: "/admin/quotes", label: "견적·문서", icon: <FileText className="h-4 w-4" />, roles: STAFF_ADMIN, section: "workspace" },
+  { href: "/admin/campaigns", label: "캠페인", icon: <Megaphone className="h-4 w-4" />, roles: STAFF_ADMIN, section: "growth" },
+  { href: "/admin/blog", label: "콘텐츠", icon: <FileText className="h-4 w-4" />, roles: STAFF_EDITOR, section: "growth" },
+  { href: "/admin/events", label: "공개 행사", icon: <Globe className="h-4 w-4" />, roles: STAFF_ADMIN, section: "growth" },
+  { href: "/admin/docs", label: "도움말 문서", icon: <BookOpen className="h-4 w-4" />, roles: STAFF_EDITOR, section: "growth" },
   { href: "/admin/analytics", label: "Analytics", icon: <BarChart2 className="h-4 w-4" />, roles: [...ALL_STAFF, "BRANCH"], section: "performance" },
-  { href: "/admin/users", label: "회원 관리", icon: <UserCog className="h-4 w-4" />, roles: STAFF_ADMIN, section: "system" },
+  { href: "/admin/branch", label: "지사 관리", icon: <Building2 className="h-4 w-4" />, roles: [...STAFF_ADMIN, "BRANCH"], section: "performance" },
   { href: "/admin/settings", label: "Settings", icon: <Settings className="h-4 w-4" />, roles: STAFF_ADMIN, section: "system" },
+  { href: "/admin/users", label: "회원 관리", icon: <UserCog className="h-4 w-4" />, roles: STAFF_ADMIN, section: "system" },
   { href: "/admin/dev", label: "Dev Mode", icon: <Code2 className="h-4 w-4" />, roles: STAFF_ADMIN, section: "system", badge: "Beta" },
-  // 파트너 포털 (외부)
-  { href: "/partner", label: "파트너 포털", icon: <ClipboardList className="h-4 w-4" />, roles: STAFF_ADMIN, section: "system" },
 ]
 
 const SECTION_META: Record<SidebarSection, { label: string; description: string }> = {
   workspace: { label: "운영", description: "매일 가장 자주 쓰는 화면" },
+  growth: { label: "성장", description: "캠페인과 콘텐츠 운영" },
   performance: { label: "분석", description: "성과와 지점 운영 확인" },
   system: { label: "시스템", description: "권한, 설정, 개발 도구" },
 }
@@ -104,6 +104,7 @@ export default function AdminSidebar({ role, name, email }: Props) {
     return localStorage.getItem("admin_sidebar_collapsed") === "true"
   })
   const [isDesktop, setIsDesktop] = useState(false)
+  const [mobileMenuOpen, setMobileMenuOpen] = useState(false)
 
   // PARTNER 역할은 별도 포털로 이동
   useEffect(() => {
@@ -147,14 +148,161 @@ export default function AdminSidebar({ role, name, email }: Props) {
 
   const normalizedRole = normalizeRole(role)
   const visibleNav = NAV.filter((item) => item.roles.includes(normalizedRole))
+  const isNavActive = (href: string) => pathname === href || pathname.startsWith(`${href}/`)
+  const currentNavItem = visibleNav.find((item) => isNavActive(item.href)) ?? visibleNav[0]
+  const mobilePrimaryNav = visibleNav
+    .filter((item) => item.section === "workspace")
+    .slice(0, 4)
   const groupedNav = (Object.keys(SECTION_META) as SidebarSection[]).map((section) => ({
     section,
     items: visibleNav.filter((item) => item.section === section),
   })).filter((group) => group.items.length > 0)
 
   return (
+    <>
+    <header className="fixed inset-x-0 top-0 z-40 flex h-16 items-center gap-3 border-b border-[#e8e8e4] bg-white/95 px-3 pr-16 shadow-sm backdrop-blur lg:hidden">
+      <button
+        type="button"
+        onClick={() => setMobileMenuOpen(true)}
+        className="flex h-11 w-11 shrink-0 items-center justify-center rounded-md border border-[#e8e8e4] bg-white text-[#111110] shadow-sm"
+        aria-label="Open admin menu"
+      >
+        <Menu className="h-5 w-5" />
+      </button>
+      <div className="min-w-0 flex-1">
+        <p className="text-[10px] font-semibold uppercase tracking-[0.16em] text-[#1a1a1a]/35">
+          Classin Admin
+        </p>
+        <h1 className="truncate text-[15px] font-semibold text-[#111110]">
+          {currentNavItem?.label ?? "Admin"}
+        </h1>
+      </div>
+    </header>
+
+    {mobileMenuOpen ? (
+      <div className="fixed inset-0 z-[60] lg:hidden">
+        <button
+          type="button"
+          className="absolute inset-0 bg-[#111110]/35"
+          aria-label="Close admin menu"
+          onClick={() => setMobileMenuOpen(false)}
+        />
+        <div className="absolute inset-y-0 left-0 flex w-[min(88vw,360px)] flex-col border-r border-[#e8e8e4] bg-white shadow-2xl">
+          <div className="flex items-center gap-3 border-b border-[#e8e8e4] px-4 py-4">
+            <div className="min-w-0 flex-1">
+              <p className="text-[11px] font-medium uppercase tracking-widest text-[#1a1a1a]/30">Classin</p>
+              <p className="text-[15px] font-semibold text-[#111110]">Admin</p>
+            </div>
+            <button
+              type="button"
+              onClick={() => setMobileMenuOpen(false)}
+              className="flex h-10 w-10 items-center justify-center rounded-md border border-[#e8e8e4] text-[#1a1a1a]/55"
+              aria-label="Close admin menu"
+            >
+              <X className="h-4 w-4" />
+            </button>
+          </div>
+
+          <div className="border-b border-[#e8e8e4] px-4 py-3">
+            <p className="truncate text-[13px] font-medium text-[#111110]">{name}</p>
+            <p className="truncate text-[11px] text-[#1a1a1a]/40">
+              {ROLE_LABEL[normalizedRole]}{email ? ` - ${email}` : ""}
+            </p>
+          </div>
+
+          <nav className="min-h-0 flex-1 overflow-y-auto px-3 py-4">
+            {groupedNav.map(({ section, items }, groupIndex) => (
+              <div key={`mobile-${section}`} className={groupIndex === 0 ? "" : "mt-5 border-t border-[#f0f0ec] pt-4"}>
+                <div className="px-3 pb-2">
+                  <p className="text-[10px] font-semibold uppercase tracking-[0.16em] text-[#1a1a1a]/28">
+                    {SECTION_META[section].label}
+                  </p>
+                </div>
+                <div className="space-y-1">
+                  {items.map((item) => {
+                    const isActive = isNavActive(item.href)
+
+                    return (
+                      <Link
+                        key={`mobile-${item.href}`}
+                        href={item.href}
+                        onClick={() => setMobileMenuOpen(false)}
+                        className={`flex min-h-11 items-center gap-3 rounded-md px-3 text-[14px] font-medium transition-colors ${
+                          isActive
+                            ? "bg-[#111110] text-white"
+                            : "text-[#1a1a1a]/65 hover:bg-[#f5f5f2] hover:text-[#111110]"
+                        }`}
+                      >
+                        <span className={isActive ? "text-white" : "text-[#1a1a1a]/40"}>
+                          {item.icon}
+                        </span>
+                        <span className="min-w-0 flex-1 truncate">{item.label}</span>
+                        {item.badge ? (
+                          <span className={`rounded px-1.5 py-0.5 text-[10px] font-normal ${
+                            isActive ? "bg-white/15 text-white/80" : "bg-[#e8e8e4] text-[#1a1a1a]/50"
+                          }`}>
+                            {item.badge}
+                          </span>
+                        ) : null}
+                      </Link>
+                    )
+                  })}
+                </div>
+              </div>
+            ))}
+          </nav>
+
+          <div className="border-t border-[#e8e8e4] p-3">
+            <button
+              onClick={() => {
+                setMobileMenuOpen(false)
+                void handleLogout()
+              }}
+              className="flex min-h-11 w-full items-center gap-3 rounded-md px-3 text-[14px] text-[#B85C33] transition-colors hover:bg-[#FEF3EE]"
+            >
+              <LogOut className="h-4 w-4 shrink-0" />
+              <span>Logout</span>
+            </button>
+          </div>
+        </div>
+      </div>
+    ) : null}
+
+    <nav className="fixed inset-x-0 bottom-0 z-40 border-t border-[#e8e8e4] bg-white/95 px-2 pb-[max(env(safe-area-inset-bottom),0.5rem)] pt-2 shadow-[0_-8px_24px_rgba(0,0,0,0.06)] backdrop-blur lg:hidden">
+      <div className="grid grid-cols-5 gap-1">
+        {mobilePrimaryNav.map((item) => {
+          const isActive = isNavActive(item.href)
+
+          return (
+            <Link
+              key={`bottom-${item.href}`}
+              href={item.href}
+              className={`flex min-h-[52px] flex-col items-center justify-center gap-1 rounded-md px-1 text-[10px] font-medium leading-none transition-colors ${
+                isActive
+                  ? "bg-[#111110] text-white"
+                  : "text-[#1a1a1a]/55 hover:bg-[#f5f5f2] hover:text-[#111110]"
+              }`}
+            >
+              <span className={isActive ? "text-white" : "text-[#1a1a1a]/40"}>
+                {item.icon}
+              </span>
+              <span className="max-w-full truncate">{item.label}</span>
+            </Link>
+          )
+        })}
+        <button
+          type="button"
+          onClick={() => setMobileMenuOpen(true)}
+          className="flex min-h-[52px] flex-col items-center justify-center gap-1 rounded-md px-1 text-[10px] font-medium leading-none text-[#1a1a1a]/55 transition-colors hover:bg-[#f5f5f2] hover:text-[#111110]"
+        >
+          <MoreHorizontal className="h-4 w-4 text-[#1a1a1a]/40" />
+          <span>More</span>
+        </button>
+      </div>
+    </nav>
+
     <aside
-      className={`flex w-full shrink-0 flex-col border-b border-[#e8e8e4] bg-white lg:sticky lg:top-0 lg:min-h-screen lg:border-r lg:border-b-0 ${
+      className={`hidden shrink-0 flex-col border-r border-[#e8e8e4] bg-white lg:sticky lg:top-0 lg:flex lg:min-h-screen ${
         effectiveCollapsed ? "lg:w-16" : "lg:w-60"
       }`}
     >
@@ -180,7 +328,7 @@ export default function AdminSidebar({ role, name, email }: Props) {
         <div className="border-b border-[#e8e8e4] px-4 py-3 sm:px-5">
           <p className="text-[12px] font-medium text-[#111110]">{name}</p>
           <p className="text-[11px] text-[#1a1a1a]/40">
-            {ROLE_LABEL[normalizedRole]}{email ? ` · ${email}` : ""}
+            {ROLE_LABEL[normalizedRole]}{email ? ` - ${email}` : ""}
           </p>
         </div>
       )}
@@ -200,7 +348,7 @@ export default function AdminSidebar({ role, name, email }: Props) {
             )}
             <div className="space-y-0.5">
               {items.map((item) => {
-                const isActive = pathname === item.href || pathname.startsWith(item.href + "/")
+                const isActive = isNavActive(item.href)
 
                 return (
                   <Link
@@ -271,5 +419,6 @@ export default function AdminSidebar({ role, name, email }: Props) {
         </button>
       </div>
     </aside>
+    </>
   )
 }

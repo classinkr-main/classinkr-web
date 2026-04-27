@@ -184,6 +184,7 @@ function createDocumentFormState(
       issuedAt,
       dueAt: "",
       fileLabel: "",
+      externalUrl: "",
       quoteDetails: buildStandardQuoteDetails({ issuedAt }),
     }
   }
@@ -198,6 +199,7 @@ function createDocumentFormState(
     issuedAt: initialDocument.issuedAt ?? "",
     dueAt: initialDocument.dueAt ?? "",
     fileLabel: initialDocument.fileLabel,
+    externalUrl: initialDocument.externalUrl ?? "",
     quoteDetails: initialDocument.quoteDetails
       ? buildStandardQuoteDetails({
           ...initialDocument.quoteDetails,
@@ -595,6 +597,7 @@ function DocumentFormDialog({
         amount: quoteDetails.grandTotalAmount ?? undefined,
         issuedAt: quoteDetails.issuedAt || undefined,
         dueAt: quoteDetails.validUntil || undefined,
+        externalUrl: form.externalUrl?.trim() || undefined,
         quoteDetails,
       })
       return
@@ -608,6 +611,7 @@ function DocumentFormDialog({
       amount: form.amount ? Number(form.amount) : undefined,
       issuedAt: form.issuedAt || undefined,
       dueAt: form.dueAt || undefined,
+      externalUrl: form.externalUrl?.trim() || undefined,
       quoteDetails: undefined,
     })
   }
@@ -705,6 +709,19 @@ function DocumentFormDialog({
             </div>
           </>
         )}
+        <div className="grid gap-2">
+          <Label htmlFor="doc-external-url">외부 문서 링크</Label>
+          <Input
+            id="doc-external-url"
+            type="url"
+            value={form.externalUrl ?? ""}
+            onChange={(event) => set("externalUrl", event.target.value)}
+            placeholder="https://drive.google.com/..."
+          />
+          <p className="text-[12px] leading-5 text-[#1a1a1a]/45">
+            고객에게 공유한 Google Drive, Notion, 공개 견적 링크가 있으면 문서 원장과 함께 보관합니다.
+          </p>
+        </div>
         <DialogFooter>
           <Button type="button" variant="outline" onClick={onClose} disabled={loading}>취소</Button>
           <Button type="submit" disabled={loading}>{loading ? "저장 중..." : initialDocument ? "문서 수정" : "문서 추가"}</Button>
@@ -756,7 +773,7 @@ function ScheduleFormDialog({
       open={open}
       onClose={onClose}
       title={initialSchedule ? "일정 수정" : "일정 추가"}
-      description="파트너 후속 연락, 미팅, 마감 일정을 등록합니다."
+      description="후속 연락, 미팅, 마감 일정을 등록합니다."
     >
       <form onSubmit={handleSubmit} className="grid gap-4">
         <div className="grid gap-2">

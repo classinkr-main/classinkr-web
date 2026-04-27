@@ -8,6 +8,7 @@ import {
   PhoneCall, Bell, UserPlus,
 } from "lucide-react"
 import { clearAdminSessionStorage } from "@/lib/admin-client"
+import CrmSubnav from "@/components/admin/crm/CrmSubnav"
 import { Button } from "@/components/ui/button"
 import type { LeadRecord, LeadStatus } from "@/lib/repositories/leads"
 import type { ContactLogRecord, ContactLogType, ContactLogResult } from "@/lib/repositories/contact-logs"
@@ -279,10 +280,10 @@ function LeadDrawer({
   return (
     <>
       <div className="fixed inset-0 z-40 bg-black/20 backdrop-blur-[2px]" onClick={onClose} />
-      <div className="fixed right-0 top-0 bottom-0 z-50 w-[440px] bg-white shadow-2xl flex flex-col overflow-hidden border-l border-[#e8e8e4]">
+      <div className="fixed inset-x-0 bottom-0 top-16 z-50 flex flex-col overflow-hidden rounded-t-2xl border-t border-[#e8e8e4] bg-white shadow-2xl sm:top-0 sm:right-0 sm:left-auto sm:w-[440px] sm:rounded-none sm:border-l sm:border-t-0">
 
         {/* 헤더 */}
-        <div className="flex items-start gap-4 px-6 pt-6 pb-5 border-b border-[#e8e8e4]">
+        <div className="flex items-start gap-4 border-b border-[#e8e8e4] px-4 pt-5 pb-4 sm:px-6 sm:pt-6 sm:pb-5">
           <div className="w-11 h-11 rounded-full bg-[#f0f0ec] flex items-center justify-center text-[16px] font-bold text-[#1a1a1a]/50 shrink-0">
             {initials}
           </div>
@@ -308,7 +309,7 @@ function LeadDrawer({
         <div className="flex-1 overflow-y-auto">
 
           {/* 연락처 + 전화 버튼 */}
-          <div className="px-6 py-4 border-b border-[#e8e8e4]">
+          <div className="border-b border-[#e8e8e4] px-4 py-4 sm:px-6">
             <div className="flex items-center justify-between mb-3">
               <p className="text-[11px] font-semibold text-[#1a1a1a]/30 uppercase tracking-wide">연락처</p>
               {lead.phone && (
@@ -732,25 +733,27 @@ export default function CrmPage() {
   )
 
   return (
-    <div className="px-8 pt-10 pb-20">
+    <div className="px-4 pt-6 pb-24 sm:px-6 sm:pt-8 lg:px-8 lg:pt-10 lg:pb-20">
       {/* 헤더 */}
-      <div className="flex items-center justify-between mb-8">
+      <div className="mb-6 flex flex-col gap-4 sm:mb-8 sm:flex-row sm:items-center sm:justify-between">
         <div>
           <p className="text-[11px] font-medium text-[#1a1a1a]/30 uppercase tracking-widest mb-1">Admin</p>
-          <h1 className="text-2xl font-bold text-[#111110] tracking-[-0.02em]">CRM / 리드</h1>
+          <h1 className="text-2xl font-bold text-[#111110] tracking-[-0.02em]">리드 관리</h1>
         </div>
-        <Button variant="outline" size="sm" onClick={fetchLeads} disabled={loading} className="gap-1.5">
+        <Button variant="outline" size="sm" onClick={fetchLeads} disabled={loading} className="w-full gap-1.5 sm:w-auto">
           <RefreshCw className={`w-4 h-4 ${loading ? "animate-spin" : ""}`} />새로고침
         </Button>
       </div>
 
+      <CrmSubnav active="customers" />
+
       {/* 오늘 팔로업 알림 */}
       {(todayFollowUps.length > 0 || overdueFollowUps.length > 0) && (
-        <div className="mb-4 flex gap-3">
+        <div className="mb-4 flex flex-col gap-3 sm:flex-row">
           {todayFollowUps.length > 0 && (
             <button
               onClick={() => setFilter("contacted")}
-              className="flex items-center gap-2 px-4 py-2.5 rounded-xl bg-[#ECFDF5] border border-[#D1FAE5] text-[13px] text-[#084734] font-medium hover:bg-[#D1FAE5] transition-colors"
+              className="flex min-h-11 items-center gap-2 rounded-xl border border-[#D1FAE5] bg-[#ECFDF5] px-4 py-2.5 text-left text-[13px] font-medium text-[#084734] transition-colors hover:bg-[#D1FAE5]"
             >
               <Bell className="w-3.5 h-3.5" />
               오늘 팔로업 {todayFollowUps.length}건
@@ -759,7 +762,7 @@ export default function CrmPage() {
           {overdueFollowUps.length > 0 && (
             <button
               onClick={() => setFilter("contacted")}
-              className="flex items-center gap-2 px-4 py-2.5 rounded-xl bg-[#FEF3EE] border border-[#F6D5C5] text-[13px] text-[#B85C33] font-medium hover:bg-[#F6D5C5] transition-colors"
+              className="flex min-h-11 items-center gap-2 rounded-xl border border-[#F6D5C5] bg-[#FEF3EE] px-4 py-2.5 text-left text-[13px] font-medium text-[#B85C33] transition-colors hover:bg-[#F6D5C5]"
             >
               <Bell className="w-3.5 h-3.5" />
               기한 초과 {overdueFollowUps.length}건
@@ -769,7 +772,7 @@ export default function CrmPage() {
       )}
 
       {/* 필터 카운트 카드 */}
-      <div className="grid grid-cols-5 gap-3 mb-6">
+      <div className="mb-6 grid grid-cols-2 gap-3 sm:grid-cols-3 lg:grid-cols-5">
         {([
           ["all", "전체", leads.length],
           ["new", "신규", counts.new ?? 0],
@@ -780,7 +783,7 @@ export default function CrmPage() {
           <button
             key={key}
             onClick={() => setFilter(key)}
-            className={`text-left p-4 rounded-2xl border transition-all ${
+            className={`min-h-[88px] rounded-xl border p-3 text-left transition-all sm:rounded-2xl sm:p-4 ${
               filter === key ? "border-[#111110] bg-[#111110] text-white" : "border-[#e8e8e4] bg-white hover:border-[#c8c8c4] hover:shadow-sm"
             }`}
           >
@@ -797,7 +800,83 @@ export default function CrmPage() {
             {loading ? "불러오는 중..." : "리드가 없습니다."}
           </div>
         ) : (
-          <table className="w-full text-[13px]">
+          <>
+          <div className="divide-y divide-[#f0f0ec] sm:hidden">
+            {filtered.map((lead) => {
+              const followUpDateKey = lead.follow_up_at ? toLocalDateKey(lead.follow_up_at) : null
+              const isOverdue = Boolean(followUpDateKey && followUpDateKey < today && lead.status !== "converted" && lead.status !== "closed")
+              const isTodayFollowUp = followUpDateKey === today
+
+              return (
+                <button
+                  key={`mobile-${lead.id}`}
+                  type="button"
+                  onClick={() => setSelected(lead)}
+                  className={`block w-full px-4 py-4 text-left transition-colors ${
+                    selected?.id === lead.id ? "bg-[#f0f0ec]" : "hover:bg-[#fafaf8]"
+                  }`}
+                >
+                  <div className="flex items-start justify-between gap-3">
+                    <div className="min-w-0 flex-1">
+                      <div className="flex items-center gap-2">
+                        <p className="truncate text-[14px] font-semibold text-[#111110]">
+                          {lead.name ?? "No name"}
+                        </p>
+                        <ScoreBadge score={calcScore(lead)} />
+                      </div>
+                      <p className="mt-1 truncate text-[12px] text-[#1a1a1a]/50">
+                        {lead.org ?? lead.phone ?? lead.email ?? "-"}
+                      </p>
+                    </div>
+                    <span className={`shrink-0 rounded-full px-2 py-0.5 text-[11px] font-medium ${STATUS_COLOR[lead.status]}`}>
+                      {STATUS_LABEL[lead.status]}
+                    </span>
+                  </div>
+
+                  <div className="mt-3 flex flex-wrap items-center gap-2 text-[11px] text-[#1a1a1a]/45">
+                    <span className="rounded-md bg-[#f0f0ec] px-2 py-1">
+                      {SOURCE_LABEL[lead.source] ?? lead.source}
+                    </span>
+                    <span>
+                      {new Date(lead.timestamp).toLocaleDateString("ko-KR", { month: "2-digit", day: "2-digit" })}
+                    </span>
+                    {lead.follow_up_at ? (
+                      <span className={isOverdue ? "font-medium text-[#B85C33]" : isTodayFollowUp ? "font-medium text-[#084734]" : ""}>
+                        {isOverdue ? "??" : isTodayFollowUp ? "??" : ""}
+                        {new Date(lead.follow_up_at).toLocaleDateString("ko-KR", { month: "2-digit", day: "2-digit" })}
+                      </span>
+                    ) : null}
+                    {lead.assigned_to ? <span>{lead.assigned_to}</span> : null}
+                  </div>
+
+                  <div className="mt-3 flex gap-2">
+                    {lead.phone ? (
+                      <a
+                        href={`tel:${lead.phone}`}
+                        onClick={(event) => event.stopPropagation()}
+                        className="inline-flex min-h-9 items-center justify-center gap-1.5 rounded-md bg-[#084734] px-3 text-[12px] font-medium text-white"
+                      >
+                        <PhoneCall className="h-3.5 w-3.5" />
+                        Call
+                      </a>
+                    ) : null}
+                    {lead.email ? (
+                      <a
+                        href={`mailto:${lead.email}`}
+                        onClick={(event) => event.stopPropagation()}
+                        className="inline-flex min-h-9 items-center justify-center gap-1.5 rounded-md border border-[#e8e8e4] bg-white px-3 text-[12px] font-medium text-[#111110]"
+                      >
+                        <Mail className="h-3.5 w-3.5" />
+                        Email
+                      </a>
+                    ) : null}
+                  </div>
+                </button>
+              )
+            })}
+          </div>
+          <div className="hidden overflow-x-auto sm:block">
+          <table className="min-w-[860px] w-full text-[13px]">
             <thead>
               <tr className="border-b border-[#e8e8e4] bg-[#fafaf8]">
                 {["시간", "소스", "이름", "기관", "연락처", "팔로업", "상태"].map((h) => (
@@ -867,6 +946,8 @@ export default function CrmPage() {
               })}
             </tbody>
           </table>
+          </div>
+          </>
         )}
       </div>
 

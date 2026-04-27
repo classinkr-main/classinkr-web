@@ -4,6 +4,7 @@
  * NewsletterSubscribe 컴포넌트의 dark variant 사용.
  */
 import Image from "next/image"
+import Link from "next/link"
 import { NewsletterSubscribe } from "./NewsletterSubscribe"
 
 export function Footer() {
@@ -29,18 +30,18 @@ export function Footer() {
                     <div>
                         <h4 className="font-semibold text-white mb-4">제품</h4>
                         <ul className="space-y-2">
-                            <li><a href="#" className="hover:text-white transition-colors">인터랙티브 교실</a></li>
-                            <li><a href="#" className="hover:text-white transition-colors">LMS 자동화</a></li>
-                            <li><a href="#" className="hover:text-white transition-colors">성과 분석</a></li>
+                            <li><Link href="/product/sw" className="hover:text-white transition-colors">소프트웨어</Link></li>
+                            <li><Link href="/product/hw" className="hover:text-white transition-colors">하드웨어</Link></li>
+                            <li><Link href="/contact" className="hover:text-white transition-colors">도입 문의</Link></li>
                         </ul>
                     </div>
                     <div>
                         <h4 className="font-semibold text-white mb-4">자원</h4>
                         <ul className="space-y-2">
-                            <li><a href="#" className="hover:text-white transition-colors">블로그</a></li>
-                            <li><a href="#" className="hover:text-white transition-colors">고객 사례</a></li>
-                            <li><a href="/faq" className="hover:text-white transition-colors">자주 묻는 질문</a></li>
-                            <li><a href="#" className="hover:text-white transition-colors">고객 센터</a></li>
+                            <li><Link href="/docs" className="hover:text-white transition-colors">가이드와 도움말</Link></li>
+                            <li><Link href="/docs/troubleshooting" className="hover:text-white transition-colors">문제 해결</Link></li>
+                            <li><Link href="/faq" className="hover:text-white transition-colors">자주 묻는 질문</Link></li>
+                            <li><Link href="/updates" className="hover:text-white transition-colors">업데이트</Link></li>
                         </ul>
                     </div>
                     <div>

@@ -13,6 +13,10 @@
   - 파트너 포털의 현재 기준 제품 스펙
 - [active/architecture-schema-erd.md](./active/architecture-schema-erd.md)
   - 현재 아키텍처/스키마 입구
+- [active/chatbot-knowledgebase-faq-analytics-plan.md](./active/chatbot-knowledgebase-faq-analytics-plan.md)
+  - 문서/정보 탭 기반 챗봇 지식베이스와 FAQ 통계 설계
+- [active/docs-center-content-guidelines.md](./active/docs-center-content-guidelines.md)
+  - 공개 문서 탭의 가이드/매뉴얼/도움말 작성 지침과 미완성 콘텐츠 처리 규칙
 - [hardware-ops/README.md](./hardware-ops/README.md)
   - 하드웨어 운영 허브 문서의 상위 인덱스
 
@@ -28,15 +32,25 @@
   - 견적 문서 라이프사이클 실행 기준
 - [active/software-checkout-revamp-plan.md](./active/software-checkout-revamp-plan.md)
   - /checkout 구독형/충전형 재정렬 실행안
+- [active/docs-center-db-design.md](./active/docs-center-db-design.md)
+  - 공개 가이드/매뉴얼/도움말/문제 해결/업데이트 문서센터와 챗봇 지식 베이스 설계
+- [active/docs-center-content-guidelines.md](./active/docs-center-content-guidelines.md)
+  - 문서센터 콘텐츠 작성 순서, 공개/보류 기준, 운영 가이드 우선순위
+- [active/chatbot-knowledgebase-faq-analytics-plan.md](./active/chatbot-knowledgebase-faq-analytics-plan.md)
+  - 문서/정보 탭을 챗봇 답변 원천으로 쓰고 질문 통계를 FAQ 개선으로 되돌리는 설계
 
 ## 3. Architecture
 
 - [active/architecture-schema-erd.md](./active/architecture-schema-erd.md)
   - 엔티티와 스키마 관점의 입구
+- [active/docs-center-db-design.md](./active/docs-center-db-design.md)
+  - 문서센터 DB, RLS, SEO 노출 정책, AI 청크 파이프라인
 - [active/notification-architecture-plan.md](./active/notification-architecture-plan.md)
   - 알림 아키텍처 계획
 - [active/partner-portal-front-back-contract.md](./active/partner-portal-front-back-contract.md)
   - 파트너 포털 BFF/API 계약 문서
+- [active/chatbot-knowledgebase-faq-analytics-plan.md](./active/chatbot-knowledgebase-faq-analytics-plan.md)
+  - 챗봇 지식베이스, 질문 이벤트, FAQ 통계 스키마와 API 설계
 - [adr/README.md](./adr/README.md)
   - ADR 작성 규칙과 초기 백로그
 

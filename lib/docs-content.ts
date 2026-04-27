@@ -1,0 +1,336 @@
+import "server-only"
+
+import { createSupabaseAdminClient } from "@/lib/supabase/admin"
+import {
+  DOC_CATEGORY_IDS,
+  docsCategories as staticDocsCategories,
+  getDocPath,
+  listDocs as listStaticDocs,
+  type DocArticle,
+  type DocCategory,
+  type DocCategoryId,
+  type DocResource,
+  type DocSection,
+} from "@/lib/docs"
+
+export interface DocsContent {
+  categories: DocCategory[]
+  docs: DocArticle[]
+}
+
+interface DocsCategoryRow {
+  id: string
+  title: string
+  description: string | null
+  order_index: number
+}
+
+interface DocsArticleRow {
+  id: string
+  category_id: string
+  slug: string
+  title: string
+  description: string
+  audience: string[] | null
+  tags: string[] | null
+  keywords: string[] | null
+  chatbot_summary: string | null
+  content_markdown: string | null
+  content_json: unknown
+  featured: boolean
+  visibility: "public" | "unlisted" | "internal"
+  noindex: boolean
+  last_reviewed_at: string | null
+  published_at: string | null
+  updated_at: string
+}
+
+interface DocsRelationRow {
+  article_id: string
+  related_article_id: string
+  order_index: number | null
+}
+
+const staticDocsContent: DocsContent = {
+  categories: staticDocsCategories,
+  docs: listStaticDocs(),
+}
+
+function shouldUseSupabaseDocs() {
+  return process.env.USE_SUPABASE_DOCS === "true"
+}
+
+function isDocCategoryId(value: string): value is DocCategoryId {
+  return (DOC_CATEGORY_IDS as readonly string[]).includes(value)
+}
+
+function isDocSection(value: unknown): value is DocSection {
+  if (!value || typeof value !== "object") return false
+
+  const section = value as Partial<DocSection>
+  const hasValidSteps =
+    section.steps === undefined ||
+    (Array.isArray(section.steps) && section.steps.every((step) => typeof step === "string"))
+
+  return typeof section.heading === "string" && typeof section.body === "string" && hasValidSteps
+}
+
+function isDocResource(value: unknown): value is DocResource {
+  if (!value || typeof value !== "object") return false
+
+  const resource = value as Partial<DocResource>
+  return (
+    typeof resource.label === "string" &&
+    typeof resource.href === "string" &&
+    (resource.description === undefined || typeof resource.description === "string")
+  )
+}
+
+function getContentJson(value: unknown): Record<string, unknown> {
+  return value && typeof value === "object" && !Array.isArray(value)
+    ? (value as Record<string, unknown>)
+    : {}
+}
+
+function getReadMinutes(contentJson: Record<string, unknown>, markdown: string | null) {
+  const readMinutes = contentJson.readMinutes
+  if (typeof readMinutes === "number" && Number.isFinite(readMinutes) && readMinutes > 0) {
+    return Math.ceil(readMinutes)
+  }
+
+  const estimatedWords = (markdown ?? "").replace(/\s+/g, " ").trim().length / 4
+  return Math.max(1, Math.ceil(estimatedWords / 450))
+}
+
+function getSections(contentJson: Record<string, unknown>, fallbackBody: string): DocSection[] {
+  const sections = contentJson.sections
+  if (Array.isArray(sections) && sections.every(isDocSection)) {
+    return sections
+  }
+
+  return [
+    {
+      heading: "개요",
+      body: fallbackBody,
+    },
+  ]
+}
+
+function getResources(contentJson: Record<string, unknown>): DocResource[] | undefined {
+  const resources = contentJson.resources
+  if (!Array.isArray(resources)) return undefined
+
+  const validResources = resources.filter(isDocResource)
+  return validResources.length > 0 ? validResources : undefined
+}
+
+function getDateOnly(value: string | null | undefined) {
+  return value?.slice(0, 10) ?? new Date().toISOString().slice(0, 10)
+}
+
+async function fetchDocsContentFromSupabase(): Promise<DocsContent> {
+  const supabase = createSupabaseAdminClient()
+
+  const [{ data: categoryRows, error: categoryError }, { data: articleRows, error: articleError }] =
+    await Promise.all([
+      supabase
+        .from("docs_categories")
+        .select("id, title, description, order_index")
+        .eq("is_visible", true)
+        .order("order_index", { ascending: true }),
+      supabase
+        .from("docs_articles")
+        .select(
+          "id, category_id, slug, title, description, audience, tags, keywords, chatbot_summary, content_markdown, content_json, featured, visibility, noindex, last_reviewed_at, published_at, updated_at"
+        )
+        .eq("status", "published")
+        .in("visibility", ["public", "unlisted"])
+        .order("order_index", { ascending: true }),
+    ])
+
+  if (categoryError) throw categoryError
+  if (articleError) throw articleError
+
+  const categories = ((categoryRows ?? []) as DocsCategoryRow[])
+    .filter((row) => isDocCategoryId(row.id))
+    .map((row) => ({
+      id: row.id as DocCategoryId,
+      title: row.title,
+      description: row.description ?? "",
+      order: row.order_index,
+    }))
+
+  const rows = ((articleRows ?? []) as DocsArticleRow[]).filter((row) =>
+    isDocCategoryId(row.category_id)
+  )
+
+  if (categories.length === 0 || rows.length === 0) {
+    throw new Error("Supabase docs content is empty.")
+  }
+
+  const articleIds = rows.map((row) => row.id)
+  const { data: relationRows, error: relationError } = await supabase
+    .from("docs_article_relations")
+    .select("article_id, related_article_id, order_index")
+    .in("article_id", articleIds)
+    .order("order_index", { ascending: true })
+
+  if (relationError) throw relationError
+
+  const slugById = new Map(rows.map((row) => [row.id, row.slug]))
+  const relationsByArticleId = new Map<string, string[]>()
+
+  for (const relation of (relationRows ?? []) as DocsRelationRow[]) {
+    const relatedSlug = slugById.get(relation.related_article_id)
+    if (!relatedSlug) continue
+
+    const slugs = relationsByArticleId.get(relation.article_id) ?? []
+    slugs.push(relatedSlug)
+    relationsByArticleId.set(relation.article_id, slugs)
+  }
+
+  const docs = rows.map((row) => {
+    const contentJson = getContentJson(row.content_json)
+
+    return {
+      slug: row.slug,
+      category: row.category_id as DocCategoryId,
+      title: row.title,
+      description: row.description,
+      audience: (row.audience ?? []).join(", "),
+      updatedAt: getDateOnly(row.last_reviewed_at ?? row.published_at ?? row.updated_at),
+      readMinutes: getReadMinutes(contentJson, row.content_markdown),
+      featured: row.featured,
+      visibility: row.visibility,
+      noindex: row.noindex,
+      tags: row.tags ?? [],
+      keywords: row.keywords ?? [],
+      chatbotSummary: row.chatbot_summary ?? row.description,
+      sections: getSections(contentJson, row.content_markdown ?? row.description),
+      resources: getResources(contentJson),
+      relatedSlugs: relationsByArticleId.get(row.id),
+    } satisfies DocArticle
+  })
+
+  return { categories, docs }
+}
+
+export async function getDocsContent(): Promise<DocsContent> {
+  if (!shouldUseSupabaseDocs()) {
+    return staticDocsContent
+  }
+
+  try {
+    return await fetchDocsContentFromSupabase()
+  } catch (error) {
+    console.warn(
+      "Falling back to static docs content:",
+      error instanceof Error ? error.message : error
+    )
+    return staticDocsContent
+  }
+}
+
+export function getStaticDocsContent(): DocsContent {
+  return staticDocsContent
+}
+
+export function isListedDoc(doc: DocArticle) {
+  return (doc.visibility ?? "public") === "public" && !doc.noindex
+}
+
+export function getDocFromContent(
+  content: DocsContent,
+  slug: string,
+  categoryId?: DocCategoryId | string
+) {
+  return content.docs.find(
+    (doc) => doc.slug === slug && (!categoryId || doc.category === categoryId)
+  )
+}
+
+export function getDocCategoryFromContent(content: DocsContent, categoryId: string) {
+  return content.categories.find((category) => category.id === categoryId)
+}
+
+export function getDocsByCategoryFromContent(content: DocsContent, categoryId: DocCategoryId) {
+  return content.docs.filter((doc) => doc.category === categoryId && isListedDoc(doc))
+}
+
+export function getRelatedDocsFromContent(content: DocsContent, doc: DocArticle, limit = 3) {
+  const related = (doc.relatedSlugs ?? [])
+    .map((slug) => getDocFromContent(content, slug))
+    .filter((item): item is DocArticle => Boolean(item))
+    .filter(isListedDoc)
+
+  if (related.length >= limit) return related.slice(0, limit)
+
+  const fallback = content.docs.filter(
+    (item) =>
+      item.category === doc.category &&
+      item.slug !== doc.slug &&
+      isListedDoc(item) &&
+      !related.some((relatedDoc) => relatedDoc.slug === item.slug)
+  )
+
+  return [...related, ...fallback].slice(0, limit)
+}
+
+export function listDocsFromContent(content: DocsContent) {
+  return [...content.docs]
+}
+
+export function listListedDocsFromContent(content: DocsContent) {
+  return content.docs.filter(isListedDoc)
+}
+
+export function getDocPathFromContent(doc: Pick<DocArticle, "category" | "slug">) {
+  return getDocPath(doc)
+}
+
+interface DocsRedirectRow {
+  to_path: string | null
+  to_article_id: string | null
+  http_status: number
+}
+
+interface DocsRedirectTarget {
+  toPath: string
+  httpStatus: 301 | 302 | 307 | 308
+}
+
+export async function resolveDocsRedirect(
+  fromPath: string
+): Promise<DocsRedirectTarget | null> {
+  try {
+    const supabase = createSupabaseAdminClient()
+    const { data, error } = await supabase
+      .from("docs_redirects")
+      .select("to_path, to_article_id, http_status")
+      .eq("from_path", fromPath)
+      .maybeSingle()
+
+    if (error || !data) return null
+    const row = data as DocsRedirectRow
+
+    let toPath = row.to_path
+    if (!toPath && row.to_article_id) {
+      const { data: articleRow } = await supabase
+        .from("docs_articles")
+        .select("category_id, slug")
+        .eq("id", row.to_article_id)
+        .maybeSingle()
+      if (articleRow?.category_id && articleRow?.slug) {
+        toPath = `/docs/${articleRow.category_id}/${articleRow.slug}`
+      }
+    }
+
+    if (!toPath) return null
+    const status = [301, 302, 307, 308].includes(row.http_status)
+      ? (row.http_status as 301 | 302 | 307 | 308)
+      : 301
+    return { toPath, httpStatus: status }
+  } catch {
+    return null
+  }
+}

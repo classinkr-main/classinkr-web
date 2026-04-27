@@ -8,8 +8,8 @@
 관련 문서:
 
 - [partner-portal-master-spec.md](./partner-portal-master-spec.md)
-- [partner-portal-guidelines.md](./partner-portal-guidelines.md)
-- [partner-portal-product-plan.md](./partner-portal-product-plan.md)
+- [partner-portal-guidelines.md](../archive/partner-portal-guidelines.md) (아카이브)
+- [partner-portal-product-plan.md](../archive/partner-portal-product-plan.md) (아카이브)
 - [quote-document-spec.md](../hardware-ops/quote-document-spec.md)
 
 ## 1. 제품 한 줄 정의

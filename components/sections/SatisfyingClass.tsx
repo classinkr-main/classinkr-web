@@ -2,6 +2,8 @@
 
 import { motion } from "framer-motion"
 
+const cardShadow = "0 24px 60px rgba(17,17,16,0.08), 0 8px 20px rgba(17,17,16,0.05)"
+
 export function SatisfyingClass() {
     return (
         <section className="py-16 md:py-32 bg-[#F9F8F4] overflow-hidden">
@@ -27,7 +29,7 @@ export function SatisfyingClass() {
                             transition={{ delay: 0.1 }}
                             className="text-lg text-[#615D59] font-medium leading-relaxed mb-6 break-keep"
                         >
-                            Classin은 강사들의 에너지를 서류나 채점에 낭비하지 않도록 돕습니다. 자동화된 AI 보조 교사가 학생별 수준을 분석하고, 수업에 필요한 모든 인터랙티브 자료를 한 번의 클릭으로 세팅합니다.
+                            Classin은 강사들의 에너지를 서류나 채점에 낭비하지 않도록 돕습니다. AI 채점 요약, 성취도 분석, 자동 녹화와 학부모 리포트까지 수업 전후 운영을 하나의 흐름으로 연결하고, 필요한 인터랙티브 자료는 한 번의 클릭으로 바로 세팅합니다.
                         </motion.p>
 
                         <motion.div
@@ -42,85 +44,160 @@ export function SatisfyingClass() {
                         </motion.div>
                     </div>
 
-                    {/* Right illustrative area (UI Cards stacked) */}
-                    <div className="w-full lg:w-3/5 h-[400px] md:h-[500px] relative pointer-events-none mt-10 lg:mt-0 flex justify-center items-center">
+                    {/* Right illustrative area (stacked UI cards) */}
+                    <div className="w-full lg:w-3/5 h-[460px] sm:h-[520px] md:h-[590px] relative pointer-events-none mt-10 lg:mt-0 flex justify-center items-center">
+                        <div className="relative h-full w-full max-w-[44rem]">
+                            <div className="absolute left-[10%] top-[7%] h-44 w-44 rounded-full bg-[#D9F4E7] opacity-70 blur-[76px]" />
+                            <div className="absolute right-[6%] bottom-[10%] h-48 w-48 rounded-full bg-[#EDE7DC] opacity-70 blur-[90px]" />
 
-                        {/* AI Grading Card */}
-                        <motion.div
-                            initial={{ opacity: 0, scale: 0.9, x: 50, rotate: 10 }}
-                            whileInView={{ opacity: 1, scale: 1, x: 0, rotate: 6 }}
-                            viewport={{ once: true }}
-                            transition={{ duration: 0.8, delay: 0.1, type: "spring", bounce: 0.4 }}
-                            className="absolute right-[5%] top-[5%] md:top-0 w-60 md:w-72 bg-white rounded-3xl p-6 border border-[rgba(0,0,0,0.08)] z-10 hidden md:block"
-                            style={{ boxShadow: 'rgba(0,0,0,0.04) 0px 4px 18px, rgba(0,0,0,0.027) 0px 2px 7.8px, rgba(0,0,0,0.02) 0px 0.8px 2.9px' }}
-                        >
-                            <div className="flex justify-between items-center mb-6">
-                                <span className="font-bold text-[#111110] text-lg">AI 채점 요약</span>
-                                <span className="bg-[#ECFDF5] text-[#084734] px-3 py-1 rounded-full text-xs font-bold">진행완료</span>
-                            </div>
-                            <div className="space-y-3">
-                                <div className="h-2 bg-[#F6F5F4] rounded-full w-full overflow-hidden">
-                                    <div className="h-full bg-[#084734] w-[85%] rounded-full" />
+                            <motion.div
+                                initial={{ opacity: 0, scale: 0.94, x: 58, y: -28, rotate: 10 }}
+                                whileInView={{ opacity: 1, scale: 1, x: 0, y: 0, rotate: 5 }}
+                                viewport={{ once: true }}
+                                transition={{ duration: 0.82, delay: 0.08, type: "spring", bounce: 0.22 }}
+                                className="absolute right-[1%] top-[1%] z-10 w-[44%] min-w-[12rem] max-w-[18.5rem] rounded-[2rem] border border-[rgba(17,17,16,0.08)] bg-white p-5 md:p-6"
+                                style={{ boxShadow: cardShadow }}
+                            >
+                                <div className="mb-5 flex items-center justify-between gap-3">
+                                    <span className="text-base font-black text-[#111110] md:text-lg">AI 채점 요약</span>
+                                    <span className="rounded-full bg-[#ECFDF5] px-3 py-1 text-[10px] font-extrabold text-[#084734] md:text-[11px]">첨삭완료</span>
                                 </div>
-                                <div className="h-2 bg-[#F6F5F4] rounded-full w-full overflow-hidden">
-                                    <div className="h-full bg-[#A39E98] w-[60%] rounded-full" />
-                                </div>
-                                <div className="h-2 bg-[#F6F5F4] rounded-full w-full overflow-hidden">
-                                    <div className="h-full bg-[#A39E98] w-[40%] rounded-full" />
-                                </div>
-                            </div>
-                        </motion.div>
-
-                        {/* Auto Analytics Report Card */}
-                        <motion.div
-                            initial={{ opacity: 0, y: -50, rotate: -20 }}
-                            whileInView={{ opacity: 1, y: 0, rotate: -12 }}
-                            viewport={{ once: true }}
-                            transition={{ duration: 0.8, delay: 0.2, type: "spring", bounce: 0.4 }}
-                            className="absolute left-[5%] top-1/4 w-56 md:w-64 bg-[#084734] rounded-3xl p-6 border border-[rgba(0,0,0,0.08)] z-20 text-white hidden md:block"
-                            style={{ boxShadow: 'rgba(0,0,0,0.04) 0px 4px 18px, rgba(0,0,0,0.027) 0px 2px 7.8px, rgba(0,0,0,0.02) 0px 0.8px 2.9px' }}
-                        >
-                            <div className="font-black text-xl mb-4 text-white">학습 성취도 분석</div>
-                            <div className="flex items-end gap-2 h-24 mt-4">
-                                <div className="w-1/4 bg-white/40 rounded-t-lg h-[40%]" />
-                                <div className="w-1/4 bg-white/40 rounded-t-lg h-[60%]" />
-                                <div className="w-1/4 bg-white/40 rounded-t-lg h-[30%]" />
-                                <div className="w-1/4 bg-white rounded-t-lg h-[90%]" />
-                            </div>
-                        </motion.div>
-
-                        {/* Interactive Whiteboard Card */}
-                        <motion.div
-                            initial={{ opacity: 0, y: 100, rotate: 5 }}
-                            whileInView={{ opacity: 1, y: 0, rotate: -2 }}
-                            viewport={{ once: true }}
-                            transition={{ duration: 0.8, delay: 0.3, type: "spring", bounce: 0.3 }}
-                            className="absolute right-[10%] bottom-0 md:-bottom-10 w-[85%] md:w-[28rem] bg-[#111110] rounded-[2.5rem] p-8 border border-[rgba(255,255,255,0.08)] z-30"
-                            style={{ boxShadow: 'rgba(0,0,0,0.04) 0px 4px 18px, rgba(0,0,0,0.027) 0px 2px 7.8px, rgba(0,0,0,0.02) 0px 0.8px 2.9px' }}
-                        >
-                            <div className="flex items-center gap-3 mb-6">
-                                <div className="w-3 h-3 rounded-full bg-[#B85C33]" />
-                                <div className="w-3 h-3 rounded-full bg-amber-400" />
-                                <div className="w-3 h-3 rounded-full bg-emerald-400" />
-                            </div>
-                            <div className="text-white">
-                                <span className="text-[#ECFDF5] block text-sm tracking-widest uppercase font-extrabold mb-2">Interactive Canvas</span>
-                                <h3 className="font-bold text-2xl md:text-3xl leading-snug">
-                                    One-Click <br />화이트보드 실행
-                                </h3>
-                                <div className="mt-8 flex gap-4">
-                                    <div className="w-12 h-12 rounded-2xl bg-white/10 border border-white/5 flex items-center justify-center">
-                                        <div className="w-6 h-6 border border-[#ECFDF5] rounded-full" />
+                                <div className="space-y-3">
+                                    <div>
+                                        <div className="mb-1.5 flex items-center justify-between text-[11px] font-semibold text-[#615D59]">
+                                            <span>객관식 정확도</span>
+                                            <span>92%</span>
+                                        </div>
+                                        <div className="h-2 overflow-hidden rounded-full bg-[#F6F5F4]">
+                                            <div className="h-full w-[84%] rounded-full bg-[#0E5B42]" />
+                                        </div>
                                     </div>
-                                    <div className="w-12 h-12 rounded-2xl bg-white/10 border border-white/5 flex items-center justify-center">
-                                        <div className="w-6 h-6 bg-[#084734] rounded-sm" />
+                                    <div>
+                                        <div className="mb-1.5 flex items-center justify-between text-[11px] font-semibold text-[#615D59]">
+                                            <span>서술형 재검토</span>
+                                            <span>4건</span>
+                                        </div>
+                                        <div className="h-2 overflow-hidden rounded-full bg-[#F6F5F4]">
+                                            <div className="h-full w-[58%] rounded-full bg-[#A39E98]" />
+                                        </div>
                                     </div>
-                                    <div className="w-12 h-12 rounded-2xl bg-white/10 border border-white/5 flex items-center justify-center">
-                                        <div className="w-6 h-1 border-t-2 border-b-2 border-white/60" />
+                                    <div>
+                                        <div className="mb-1.5 flex items-center justify-between text-[11px] font-semibold text-[#615D59]">
+                                            <span>오답 개념 정리</span>
+                                            <span>자동</span>
+                                        </div>
+                                        <div className="h-2 overflow-hidden rounded-full bg-[#F6F5F4]">
+                                            <div className="h-full w-[40%] rounded-full bg-[#D6D2CC]" />
+                                        </div>
                                     </div>
                                 </div>
-                            </div>
-                        </motion.div>
+                            </motion.div>
+
+                            <motion.div
+                                initial={{ opacity: 0, scale: 0.95, x: -64, y: -24, rotate: -16 }}
+                                whileInView={{ opacity: 1, scale: 1, x: 0, y: 0, rotate: -10 }}
+                                viewport={{ once: true }}
+                                transition={{ duration: 0.82, delay: 0.14, type: "spring", bounce: 0.22 }}
+                                className="absolute left-[0%] top-[15%] z-20 w-[40%] min-w-[11rem] max-w-[16rem] rounded-[2.2rem] border border-[rgba(255,255,255,0.08)] bg-[#084734] p-5 text-white md:p-6"
+                                style={{ boxShadow: cardShadow }}
+                            >
+                                <div className="mb-2 text-[11px] font-bold uppercase tracking-[0.22em] text-white/55">Today&apos;s Analytics</div>
+                                <div className="text-lg font-black leading-tight md:text-[1.75rem]">학습 성취도 분석</div>
+                                <div className="mt-5 flex h-24 items-end gap-2">
+                                    <div className="flex-1 rounded-t-xl bg-white/40" style={{ height: "38%" }} />
+                                    <div className="flex-1 rounded-t-xl bg-white/45" style={{ height: "56%" }} />
+                                    <div className="flex-1 rounded-t-xl bg-white/32" style={{ height: "44%" }} />
+                                    <div className="flex-1 rounded-t-xl bg-white" style={{ height: "86%" }} />
+                                </div>
+                                <div className="mt-3 grid grid-cols-4 text-[10px] font-bold tracking-[0.18em] text-white/55">
+                                    <span>기초</span>
+                                    <span>응용</span>
+                                    <span>서술</span>
+                                    <span>복습</span>
+                                </div>
+                            </motion.div>
+
+                            <motion.div
+                                initial={{ opacity: 0, scale: 0.94, x: -34, y: 52, rotate: -2 }}
+                                whileInView={{ opacity: 1, scale: 1, x: 0, y: 0, rotate: 4 }}
+                                viewport={{ once: true }}
+                                transition={{ duration: 0.82, delay: 0.18, type: "spring", bounce: 0.2 }}
+                                className="absolute bottom-[2%] left-[0%] z-10 w-[40%] min-w-[11rem] max-w-[16rem] rounded-[2rem] border border-[rgba(8,71,52,0.1)] bg-[#EAF5EF] p-5 md:p-6"
+                                style={{ boxShadow: cardShadow }}
+                            >
+                                <div className="mb-4 flex items-center justify-between gap-3">
+                                    <span className="text-sm font-black text-[#084734] md:text-base">주간 리포트 자동 발송</span>
+                                    <span className="rounded-full bg-white/85 px-2.5 py-1 text-[10px] font-extrabold text-[#084734]">매주 금</span>
+                                </div>
+                                <div className="mb-4 flex flex-wrap gap-2">
+                                    <span className="rounded-full bg-white px-2.5 py-1 text-[10px] font-bold text-[#084734]">출결</span>
+                                    <span className="rounded-full bg-white px-2.5 py-1 text-[10px] font-bold text-[#084734]">과제</span>
+                                    <span className="rounded-full bg-white px-2.5 py-1 text-[10px] font-bold text-[#084734]">참여도</span>
+                                </div>
+                                <div className="space-y-2.5">
+                                    <div className="h-2 rounded-full bg-white/80" />
+                                    <div className="h-2 w-[82%] rounded-full bg-white/80" />
+                                    <div className="h-2 w-[60%] rounded-full bg-white/80" />
+                                </div>
+                            </motion.div>
+
+                            <motion.div
+                                initial={{ opacity: 0, scale: 0.94, x: 56, y: 30, rotate: 14 }}
+                                whileInView={{ opacity: 1, scale: 1, x: 0, y: 0, rotate: 8 }}
+                                viewport={{ once: true }}
+                                transition={{ duration: 0.82, delay: 0.24, type: "spring", bounce: 0.2 }}
+                                className="absolute bottom-[8%] right-[0%] z-20 w-[37%] min-w-[10.5rem] max-w-[14.5rem] rounded-[2rem] border border-[rgba(17,17,16,0.08)] bg-[#F4F1EC] p-5 md:p-6"
+                                style={{ boxShadow: cardShadow }}
+                            >
+                                <div className="mb-3 flex items-center gap-2 text-[11px] font-extrabold uppercase tracking-[0.18em] text-[#B85C33]">
+                                    <span className="h-2.5 w-2.5 rounded-full bg-[#E05024]" />
+                                    Auto Recording
+                                </div>
+                                <div className="text-base font-black leading-tight text-[#111110] md:text-lg">자동 녹화 수업</div>
+                                <p className="mt-2 text-sm font-medium leading-relaxed text-[#615D59]">
+                                    수업 종료 후 클라우드 저장, 다시보기 링크까지 자동 정리
+                                </p>
+                                <div className="mt-4 flex flex-wrap gap-2">
+                                    <span className="rounded-full bg-white px-2.5 py-1 text-[10px] font-bold text-[#615D59]">복습 링크</span>
+                                    <span className="rounded-full bg-white px-2.5 py-1 text-[10px] font-bold text-[#615D59]">결석생 공유</span>
+                                </div>
+                            </motion.div>
+
+                            <motion.div
+                                initial={{ opacity: 0, scale: 0.96, x: 28, y: 86, rotate: 3 }}
+                                whileInView={{ opacity: 1, scale: 1, x: 0, y: 0, rotate: -2 }}
+                                viewport={{ once: true }}
+                                transition={{ duration: 0.88, delay: 0.3, type: "spring", bounce: 0.18 }}
+                                className="absolute left-[19%] top-[32%] z-30 w-[72%] min-w-[17rem] max-w-[25.75rem] rounded-[2.75rem] border border-[rgba(255,255,255,0.08)] bg-[#111110] p-7 md:left-[21%] md:w-[66%] md:min-w-[18.5rem] md:p-8"
+                                style={{ boxShadow: "0 32px 80px rgba(17,17,16,0.18), 0 12px 28px rgba(17,17,16,0.12)" }}
+                            >
+                                <div className="mb-6 flex items-center gap-3">
+                                    <div className="h-3 w-3 rounded-full bg-[#B85C33]" />
+                                    <div className="h-3 w-3 rounded-full bg-amber-400" />
+                                    <div className="h-3 w-3 rounded-full bg-emerald-400" />
+                                </div>
+                                <div className="text-white">
+                                    <span className="mb-2.5 block text-[12px] font-bold uppercase tracking-[0.3em] text-[#ECFDF5]/70">Interactive Canvas</span>
+                                    <h3 className="text-2xl font-bold leading-snug md:text-3xl">
+                                        One-Click <br />화이트보드 실행
+                                    </h3>
+                                    <p className="mt-4 max-w-xs text-sm font-medium leading-relaxed text-white/58 md:text-[15px]">
+                                        판서, 퀴즈, 자료 공유까지 수업 시작 전에 한 번에 준비
+                                    </p>
+                                    <div className="mt-8 flex gap-4">
+                                        <div className="flex h-12 w-12 items-center justify-center rounded-2xl border border-white/5 bg-white/10">
+                                            <div className="h-6 w-6 rounded-full border border-[#ECFDF5]" />
+                                        </div>
+                                        <div className="flex h-12 w-12 items-center justify-center rounded-2xl border border-white/5 bg-white/10">
+                                            <div className="h-6 w-6 rounded-sm bg-[#084734]" />
+                                        </div>
+                                        <div className="flex h-12 w-12 items-center justify-center rounded-2xl border border-white/5 bg-white/10">
+                                            <div className="h-1 w-6 border-y-2 border-white/60" />
+                                        </div>
+                                    </div>
+                                </div>
+                            </motion.div>
+                        </div>
                     </div>
                 </div>
             </div>

@@ -1,4 +1,5 @@
 import { FAQ } from "@/components/sections/FAQ"
+import Link from "next/link"
 
 export const metadata = {
   title: "자주 묻는 질문 | Classin",
@@ -15,6 +16,20 @@ export default function FAQPage() {
         <h1 className="text-4xl md:text-5xl font-black text-[#111110] break-keep" style={{ letterSpacing: '-1.5px' }}>
           자주 묻는 질문
         </h1>
+        <div className="mt-6 flex flex-col items-center justify-center gap-3 sm:flex-row">
+          <Link
+            href="/docs/help/faq"
+            className="inline-flex items-center justify-center rounded-full bg-[#084734] px-5 py-2.5 text-sm font-semibold text-white transition-colors hover:bg-[#065c41]"
+          >
+            문서센터 FAQ 보기
+          </Link>
+          <Link
+            href="/docs/troubleshooting"
+            className="inline-flex items-center justify-center rounded-full border border-black/[0.08] bg-white px-5 py-2.5 text-sm font-semibold text-[#084734] transition-colors hover:bg-[#ECFDF5]"
+          >
+            문제 해결 가이드
+          </Link>
+        </div>
       </div>
       <FAQ />
     </main>
