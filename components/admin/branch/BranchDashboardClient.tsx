@@ -5,12 +5,12 @@ import SyncStatusBar from "./SyncStatusBar"
 import CoreKpiGrid from "./sections/CoreKpiGrid"
 import RegionHeatmap from "./sections/RegionHeatmap"
 import TeamPacingSection from "./sections/TeamPacingSection"
-import ManagerScorecard from "./sections/ManagerScorecard"
-import KpiActivityMatrix from "./sections/KpiActivityMatrix"
+import TeamKpiIndexSection from "./sections/TeamKpiIndexSection"
 import PipelineTable from "./sections/PipelineTable"
 import CampaignsSection from "./sections/CampaignsSection"
 import HardwareSection from "./sections/HardwareSection"
 import DataQualityPanel from "./sections/DataQualityPanel"
+import CrmVariancePanel from "./sections/CrmVariancePanel"
 import InsightCard from "./sections/InsightCard"
 import DealMixSection from "./sections/DealMixSection"
 import { adminFetchJson, clearBranchRequestCache, useBranchJson } from "./client-api"
@@ -115,16 +115,15 @@ export default function BranchDashboardClient() {
               <TeamPacingSection rows={kpi.data?.teams ?? null} loading={kpi.loading} error={kpi.error} />
               <CampaignsSection rows={summary.data?.campaigns_recent ?? null} loading={summary.loading} error={summary.error} />
             </div>
-            <PipelineTable team={team} period={period} refreshKey={refreshKey} />
+            <PipelineTable key={`dashboard-rev-${team}`} team={team} period={period} refreshKey={refreshKey} />
           </div>
         )}
 
         {activeTab === "team" && (
           <div role="tabpanel" className="space-y-6">
             <TeamPacingSection rows={kpi.data?.teams ?? null} loading={kpi.loading} error={kpi.error} />
-            <ManagerScorecard rows={kpi.data?.members ?? null} loading={kpi.loading} error={kpi.error} />
-            <KpiActivityMatrix rows={kpi.data?.members ?? null} loading={kpi.loading} error={kpi.error} />
-            <PipelineTable team={team} period={period} refreshKey={refreshKey} />
+            <TeamKpiIndexSection team={team} />
+            <PipelineTable key={`team-rev-${team}`} team={team} period={period} refreshKey={refreshKey} />
           </div>
         )}
 
@@ -137,7 +136,10 @@ export default function BranchDashboardClient() {
         {activeTab === "ops" && (
           <div role="tabpanel" className="grid gap-6 xl:grid-cols-[minmax(0,1fr)_minmax(360px,0.7fr)]">
             <HardwareSection refreshKey={refreshKey} />
-            <DataQualityPanel refreshKey={refreshKey} />
+            <div className="space-y-6">
+              <DataQualityPanel refreshKey={refreshKey} />
+              <CrmVariancePanel />
+            </div>
           </div>
         )}
       </div>

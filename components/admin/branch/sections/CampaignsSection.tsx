@@ -1,22 +1,9 @@
 "use client"
-import { useEffect, useState } from "react"
+import type { BranchCampaignRow } from "../types"
 
-async function adminFetch(url: string) {
-  const token = (typeof window !== "undefined" ? sessionStorage.getItem("admin_password") : null) ?? ""
-  return fetch(url, { headers: { Authorization: `Bearer ${token}` } })
-}
-
-interface Row { id: string|number; subject: string; sentAt?: string; recipientCount: number; openCount: number; openPct: number }
-
-export default function CampaignsSection({ refreshKey }: { refreshKey: number }) {
-  const [rows, setRows] = useState<Row[] | null>(null)
-  useEffect(() => {
-    adminFetch("/api/admin/branch/summary?team=ALL&period=Q")
-      .then((r) => r.json())
-      .then((d) => setRows((d.campaigns_recent as Row[]) ?? []))
-      .catch(() => setRows([]))
-  }, [refreshKey])
-  if (!rows) return <div className="h-32 animate-pulse rounded-2xl bg-[#f0f0ec]" />
+export default function CampaignsSection({ rows, loading, error }: { rows: BranchCampaignRow[] | null; loading: boolean; error: string | null }) {
+  if (error) return <div className="rounded-2xl border border-rose-200 bg-rose-50 p-4 text-[12px] text-rose-700">{error}</div>
+  if (loading || !rows) return <div className="h-32 animate-pulse rounded-2xl bg-[#f0f0ec]" />
   return (
     <section>
       <h2 className="mb-3 text-[13px] font-semibold text-[#111110]/70">캠페인 성과 (최근 30일)</h2>

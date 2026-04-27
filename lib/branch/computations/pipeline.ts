@@ -23,6 +23,22 @@ export function stageOf(d: BranchRevDeal): PipelineStage {
 }
 
 export interface PipelineRow { id: string; customer: string; manager: string|null; team: string|null; region: string|null; importance: string|null; stage: PipelineStage; probability: number; target: number; confirmed_revenue: number; pipeline_value: number }
+export interface RevRevenueRow {
+  id: string
+  customer: string
+  manager: string | null
+  team: string | null
+  region: string | null
+  revenue: number
+}
+
+function revenueFromRev(d: BranchRevDeal): number {
+  const hasRedFlags = Object.keys(d.monthly_red).length > 0
+  return Object.entries(d.monthly_payments).reduce((sum, [ym, value]) => {
+    if (hasRedFlags && !d.monthly_red[ym]) return sum
+    return sum + Number(value)
+  }, 0)
+}
 
 export function listPipeline(deals: BranchRevDeal[], filter?: { team?: string; manager?: string; region?: string; importance?: string; stage?: PipelineStage }): PipelineRow[] {
   return deals.filter((d) => {
@@ -46,4 +62,23 @@ export function listPipeline(deals: BranchRevDeal[], filter?: { team?: string; m
       pipeline_value: pipelineValue(d),
     }
   })
+}
+
+export function listRevRevenue(deals: BranchRevDeal[], filter?: { team?: string; manager?: string; region?: string }): RevRevenueRow[] {
+  return deals
+    .filter((d) => {
+      if (filter?.team && filter.team !== "ALL" && d.team !== filter.team) return false
+      if (filter?.manager && d.manager !== filter.manager) return false
+      if (filter?.region && d.region !== filter.region) return false
+      return true
+    })
+    .map((d) => ({
+      id: d.id,
+      customer: d.customer_name,
+      manager: d.manager,
+      team: d.team,
+      region: d.region,
+      revenue: revenueFromRev(d),
+    }))
+    .sort((a, b) => b.revenue - a.revenue || a.customer.localeCompare(b.customer))
 }

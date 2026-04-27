@@ -1,21 +1,11 @@
 "use client"
-import { useEffect, useState } from "react"
-import type { Team, Period } from "../BranchDashboardClient"
+import type { BranchKpiMemberRow } from "../types"
 
-async function adminFetch(url: string) {
-  const token = (typeof window !== "undefined" ? sessionStorage.getItem("admin_password") : null) ?? ""
-  return fetch(url, { headers: { Authorization: `Bearer ${token}` } })
-}
 const METRICS = ["LD","ACC","OPP","SOL","VST"] as const
-interface MemberRow { member: string; kpi: Record<string, { goal: number; actual: number }> }
 
-export default function KpiActivityMatrix({ team, period, refreshKey }: { team: Team; period: Period; refreshKey: number }) {
-  const [rows, setRows] = useState<MemberRow[] | null>(null)
-  useEffect(() => {
-    adminFetch(`/api/admin/branch/kpi?team=${team}&period=${period}`)
-      .then((r) => r.json()).then((d) => setRows(d.members ?? [])).catch(() => setRows([]))
-  }, [team, period, refreshKey])
-  if (!rows) return <div className="h-48 animate-pulse rounded-2xl bg-[#f0f0ec]" />
+export default function KpiActivityMatrix({ rows, loading, error }: { rows: BranchKpiMemberRow[] | null; loading: boolean; error: string | null }) {
+  if (error) return <div className="rounded-2xl border border-rose-200 bg-rose-50 p-4 text-[12px] text-rose-700">{error}</div>
+  if (loading || !rows) return <div className="h-48 animate-pulse rounded-2xl bg-[#f0f0ec]" />
   if (rows.length === 0) return null
   return (
     <section>
@@ -29,8 +19,8 @@ export default function KpiActivityMatrix({ team, period, refreshKey }: { team: 
             </tr>
           </thead>
           <tbody>
-            {rows.map((r) => (
-              <tr key={r.member} className="border-t border-[#f0f0ec]">
+            {rows.map((r, index) => (
+              <tr key={`${r.member}-${index}`} className="border-t border-[#f0f0ec]">
                 <td className="px-3 py-2 font-medium">{r.member}</td>
                 {METRICS.map((m) => {
                   const v = r.kpi[m]

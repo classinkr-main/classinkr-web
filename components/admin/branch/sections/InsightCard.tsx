@@ -1,6 +1,6 @@
 "use client"
 import { useEffect, useState, useCallback } from "react"
-import type { Team } from "../BranchDashboardClient"
+import type { Team } from "../types"
 import { RefreshCw } from "lucide-react"
 
 async function adminFetch(url: string) {

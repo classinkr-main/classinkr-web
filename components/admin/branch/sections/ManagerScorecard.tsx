@@ -1,34 +1,19 @@
 "use client"
-import { useEffect, useState } from "react"
-import type { Team, Period } from "../BranchDashboardClient"
+import type { BranchKpiMemberRow } from "../types"
 
-async function adminFetch(url: string) {
-  const token = (typeof window !== "undefined" ? sessionStorage.getItem("admin_password") : null) ?? ""
-  return fetch(url, { headers: { Authorization: `Bearer ${token}` } })
-}
-function fmt(n: number) { return new Intl.NumberFormat("ko-KR", { maximumFractionDigits: 0 }).format(n) }
-interface MemberRow {
-  member: string; team: string|null
-  goal: number; status: number; achievement_pct: number
-  confirmed: number; deals_total: number; deals_confirmed: number
-  new_renew: { new: number; renew: number }
-  kpi: Record<string, { goal: number; actual: number }>
-}
+const numberFormatter = new Intl.NumberFormat("ko-KR", { maximumFractionDigits: 0 })
+function fmt(n: number) { return numberFormatter.format(n) }
 
-export default function ManagerScorecard({ team, period, refreshKey }: { team: Team; period: Period; refreshKey: number }) {
-  const [rows, setRows] = useState<MemberRow[] | null>(null)
-  useEffect(() => {
-    adminFetch(`/api/admin/branch/kpi?team=${team}&period=${period}`)
-      .then((r) => r.json()).then((d) => setRows(d.members ?? [])).catch(() => setRows([]))
-  }, [team, period, refreshKey])
-  if (!rows) return <div className="h-48 animate-pulse rounded-2xl bg-[#f0f0ec]" />
+export default function ManagerScorecard({ rows, loading, error }: { rows: BranchKpiMemberRow[] | null; loading: boolean; error: string | null }) {
+  if (error) return <div className="rounded-2xl border border-rose-200 bg-rose-50 p-4 text-[12px] text-rose-700">{error}</div>
+  if (loading || !rows) return <div className="h-48 animate-pulse rounded-2xl bg-[#f0f0ec]" />
   if (rows.length === 0) return null
   return (
     <section>
       <h2 className="mb-3 text-[13px] font-semibold text-[#111110]/70">매니저 스코어카드</h2>
       <div className="grid gap-3 md:grid-cols-2 lg:grid-cols-3">
-        {rows.map((m) => (
-          <div key={m.member} className="rounded-2xl border border-[#e8e8e4] bg-white p-4">
+        {rows.map((m, index) => (
+          <div key={`${m.team ?? "team"}-${m.member}-${index}`} className="rounded-2xl border border-[#e8e8e4] bg-white p-4">
             <div className="flex items-baseline justify-between">
               <p className="text-[14px] font-semibold">{m.member}</p>
               <span className="rounded-full bg-[#f0f0ec] px-2 py-0.5 text-[10px]">{m.team ?? "?"}</span>

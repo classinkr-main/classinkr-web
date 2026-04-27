@@ -1,21 +1,12 @@
 "use client"
-import { useEffect, useState } from "react"
-import type { Team, Period } from "../BranchDashboardClient"
+import type { BranchKpiTeamRow } from "../types"
 
-async function adminFetch(url: string) {
-  const token = (typeof window !== "undefined" ? sessionStorage.getItem("admin_password") : null) ?? ""
-  return fetch(url, { headers: { Authorization: `Bearer ${token}` } })
-}
-function fmt(n: number) { return new Intl.NumberFormat("ko-KR", { maximumFractionDigits: 0 }).format(n) }
-interface TeamRow { team: string; goal: number; status: number; pacing_pct: number }
+const numberFormatter = new Intl.NumberFormat("ko-KR", { maximumFractionDigits: 0 })
+function fmt(n: number) { return numberFormatter.format(n) }
 
-export default function TeamPacingSection({ team, period, refreshKey }: { team: Team; period: Period; refreshKey: number }) {
-  const [rows, setRows] = useState<TeamRow[] | null>(null)
-  useEffect(() => {
-    adminFetch(`/api/admin/branch/kpi?team=${team}&period=${period}`)
-      .then((r) => r.json()).then((d) => setRows(d.teams ?? [])).catch(() => setRows([]))
-  }, [team, period, refreshKey])
-  if (!rows) return <div className="h-32 animate-pulse rounded-2xl bg-[#f0f0ec]" />
+export default function TeamPacingSection({ rows, loading, error }: { rows: BranchKpiTeamRow[] | null; loading: boolean; error: string | null }) {
+  if (error) return <div className="rounded-2xl border border-rose-200 bg-rose-50 p-4 text-[12px] text-rose-700">{error}</div>
+  if (loading || !rows) return <div className="h-32 animate-pulse rounded-2xl bg-[#f0f0ec]" />
   if (rows.length === 0) return null
   return (
     <section>

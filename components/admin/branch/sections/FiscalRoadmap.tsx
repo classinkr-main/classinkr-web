@@ -1,31 +1,15 @@
 "use client"
-import { useEffect, useState } from "react"
+import { useMemo } from "react"
 import { LineChart, Line, XAxis, YAxis, Tooltip, CartesianGrid, ResponsiveContainer } from "recharts"
-import type { Team, Period } from "../BranchDashboardClient"
+import type { BranchMonthlySeries } from "../types"
 
-interface Series {
-  months: string[]
-  goal_cum: number[]
-  revenue_cum: number[]
-  events: { date: string; title: string }[]
-  deals: { date: string; customer: string; amount: number }[]
-  campaigns: { date: string; name: string }[]
-}
-async function adminFetch(url: string) {
-  const token = (typeof window !== "undefined" ? sessionStorage.getItem("admin_password") : null) ?? ""
-  return fetch(url, { headers: { Authorization: `Bearer ${token}` } })
-}
-
-export default function FiscalRoadmap({ team, period, refreshKey }: { team: Team; period: Period; refreshKey: number }) {
-  const [data, setData] = useState<Series | null>(null)
-  useEffect(() => {
-    adminFetch(`/api/admin/branch/summary?team=${team}&period=${period}`)
-      .then((r) => r.json())
-      .then((d) => setData(d.monthly_series ?? null))
-      .catch(() => setData(null))
-  }, [team, period, refreshKey])
-  if (!data) return <div className="h-72 animate-pulse rounded-2xl bg-[#f0f0ec]" />
-  const chart = data.months.map((m, i) => ({ month: m.slice(5), goal: data.goal_cum[i], revenue: data.revenue_cum[i] }))
+export default function FiscalRoadmap({ data, loading, error }: { data: BranchMonthlySeries | null; loading: boolean; error: string | null }) {
+  const chart = useMemo(
+    () => data?.months.map((m, i) => ({ month: m.slice(5), goal: data.goal_cum[i], revenue: data.revenue_cum[i] })) ?? [],
+    [data],
+  )
+  if (error) return <div className="rounded-2xl border border-rose-200 bg-rose-50 p-4 text-[12px] text-rose-700">{error}</div>
+  if (loading || !data) return <div className="h-72 animate-pulse rounded-2xl bg-[#f0f0ec]" />
   return (
     <section>
       <h2 className="mb-3 text-[13px] font-semibold text-[#111110]/70">FY 로드맵</h2>

@@ -1,6 +1,7 @@
 import { readFileSync } from "node:fs"
 import { join } from "node:path"
 import { createClient } from "@supabase/supabase-js"
+import type { CellFormat, FormattedCell } from "../lib/branch/google-sheets"
 
 const envText = readFileSync(join(process.cwd(), ".env.local"), "utf-8")
 for (const line of envText.split(/\r?\n/)) {
@@ -38,15 +39,15 @@ async function main() {
       fields: "sheets.data.rowData.values(formattedValue,effectiveFormat.backgroundColor,userEnteredValue)",
     })
     const data = res.data.sheets?.[0]?.data?.[0]?.rowData ?? []
-    return data.map((row: { values?: Array<{ formattedValue?: string|null; effectiveFormat?: { backgroundColor?: { red?:number; green?:number; blue?:number } }; userEnteredValue?: { numberValue?: number; stringValue?: string } }> }) =>
-      (row.values ?? []).map((cell) => ({
+    return data.map((row) =>
+      (row.values ?? []).map((cell): FormattedCell => ({
         value:
           cell.formattedValue != null && cell.formattedValue !== ""
             ? cell.formattedValue
             : cell.userEnteredValue?.stringValue ??
               cell.userEnteredValue?.numberValue ??
               null,
-        bg: cell.effectiveFormat?.backgroundColor ?? null,
+        bg: (cell.effectiveFormat?.backgroundColor as CellFormat | null | undefined) ?? null,
       }))
     )
   }

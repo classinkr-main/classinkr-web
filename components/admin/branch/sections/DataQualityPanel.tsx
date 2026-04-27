@@ -31,7 +31,7 @@ export default function DataQualityPanel({ refreshKey }: { refreshKey: number })
           </div>
         )}
         {issues.map((i) => (
-          <details key={i.id} className={`rounded-2xl border p-3 text-[12px] ${TONE[i.severity]}`}>
+          <details key={`${i.id}-${i.message}`} className={`rounded-2xl border p-3 text-[12px] ${TONE[i.severity]}`}>
             <summary className="cursor-pointer">
               <span className="font-medium">[{i.id}]</span> {i.message}
             </summary>

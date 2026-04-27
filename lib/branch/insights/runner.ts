@@ -7,7 +7,8 @@ import { listBranchRevDeals } from "@/lib/repositories/branch-deals"
 import { listPublicEvents } from "@/lib/repositories/public-events"
 import { summarizeCampaigns } from "@/lib/branch/computations/campaigns"
 import { buildInsightInput, digestInput, type TeamScope } from "./input-builder"
-import { callGemini } from "./gemini-runner"
+import { callGemini, type GeminiMode } from "./gemini-runner"
+import { checkNumericalSanity, type NumericalWarning } from "./sanity-check"
 import { findInsightByDigest, getLatestInsight, insertInsight, type BranchInsight } from "@/lib/repositories/branch-insights"
 import { fyOf } from "@/lib/branch/fiscal"
 
@@ -24,6 +25,8 @@ export interface RunInsightsResult {
   from: "cache" | "fresh" | "stale" | "error"
   insight?: BranchInsight
   error?: string
+  numerical_warnings?: NumericalWarning[]
+  retried?: boolean
 }
 
 export async function runInsights(team: TeamScope, force: boolean): Promise<RunInsightsResult> {
@@ -53,13 +56,25 @@ export async function runInsights(team: TeamScope, force: boolean): Promise<RunI
       const cached = await findInsightByDigest(team, digest)
       if (cached) return { from: "cache", insight: cached }
     }
-    const { result, raw } = await callGemini(input)
+    const mode: GeminiMode = force ? "fast" : "quality"
+    let { result, raw, model: usedModel } = await callGemini(input, mode)
+    let warnings = checkNumericalSanity(input, result)
+    let retried = false
+    if (warnings.length >= 3) {
+      retried = true
+      const retry = await callGemini(input, mode)
+      const retryWarnings = checkNumericalSanity(input, retry.result)
+      if (retryWarnings.length < warnings.length) {
+        result = retry.result; raw = retry.raw; usedModel = retry.model; warnings = retryWarnings
+      }
+    }
     const saved = await insertInsight({
       team, fiscal_period: input.fiscalPeriod,
       one_liner: result.one_liner, next_actions: result.next_actions,
-      raw_response: raw, input_digest: digest,
+      raw_response: { ...((raw as object) ?? {}), _model: usedModel, _mode: mode, _retried: retried, _warnings: warnings },
+      input_digest: digest,
     })
-    return { from: "fresh", insight: saved }
+    return { from: "fresh", insight: saved, numerical_warnings: warnings.length > 0 ? warnings : undefined, retried }
   } catch (e) {
     const msg = e instanceof Error ? e.message : String(e)
     const fallback = await getLatestInsight(team)

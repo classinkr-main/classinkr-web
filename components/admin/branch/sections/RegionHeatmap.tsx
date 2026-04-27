@@ -1,5 +1,6 @@
 "use client"
 import { ArrowDownRight, ArrowUpRight, Map as MapIcon, Maximize2 } from "lucide-react"
+import Image from "next/image"
 import { useEffect, useMemo, useState } from "react"
 import {
   Dialog,
@@ -21,14 +22,14 @@ interface Row {
 
 interface MapPoint {
   label: string
-  x: number
-  y: number
+  xPct: number
+  yPct: number
 }
 
 interface MapRow extends Row {
   label: string
-  x: number
-  y: number
+  xPct: number
+  yPct: number
   regions: string[]
 }
 
@@ -54,23 +55,23 @@ const STATUS_STYLE = {
 } as const
 
 const REGION_POINTS: Record<string, MapPoint> = {
-  서울: { label: "서울", x: 92, y: 76 },
-  인천: { label: "인천", x: 70, y: 84 },
-  경기: { label: "경기", x: 96, y: 105 },
-  강원: { label: "강원", x: 139, y: 76 },
-  충북: { label: "충북", x: 117, y: 148 },
-  충남: { label: "충남", x: 82, y: 176 },
-  세종: { label: "세종", x: 98, y: 164 },
-  대전: { label: "대전", x: 104, y: 192 },
-  경북: { label: "경북", x: 151, y: 195 },
-  대구: { label: "대구", x: 148, y: 231 },
-  울산: { label: "울산", x: 171, y: 260 },
-  부산: { label: "부산", x: 156, y: 288 },
-  경남: { label: "경남", x: 133, y: 268 },
-  전북: { label: "전북", x: 101, y: 226 },
-  광주: { label: "광주", x: 86, y: 272 },
-  전남: { label: "전남", x: 95, y: 292 },
-  제주: { label: "제주", x: 73, y: 329 },
+  서울: { label: "서울", xPct: 34.8, yPct: 21.6 },
+  인천: { label: "인천", xPct: 28.2, yPct: 22.8 },
+  경기: { label: "경기", xPct: 38.3, yPct: 24.2 },
+  강원: { label: "강원", xPct: 59.8, yPct: 19.8 },
+  충북: { label: "충북", xPct: 48.4, yPct: 34.9 },
+  충남: { label: "충남", xPct: 35.7, yPct: 38.7 },
+  세종: { label: "세종", xPct: 41.2, yPct: 39.5 },
+  대전: { label: "대전", xPct: 42.0, yPct: 43.1 },
+  경북: { label: "경북", xPct: 63.0, yPct: 44.2 },
+  대구: { label: "대구", xPct: 61.2, yPct: 54.1 },
+  울산: { label: "울산", xPct: 78.5, yPct: 61.2 },
+  부산: { label: "부산", xPct: 72.8, yPct: 67.2 },
+  경남: { label: "경남", xPct: 57.7, yPct: 63.4 },
+  전북: { label: "전북", xPct: 41.4, yPct: 55.8 },
+  광주: { label: "광주", xPct: 34.9, yPct: 66.7 },
+  전남: { label: "전남", xPct: 36.6, yPct: 73.8 },
+  제주: { label: "제주", xPct: 29.7, yPct: 91.2 },
 }
 
 const REGION_ALIASES: Array<[string, string]> = [
@@ -137,8 +138,8 @@ function mergeForMap(rows: Row[]) {
       mapped.set(canonical, {
         ...row,
         label: point.label,
-        x: point.x,
-        y: point.y,
+        xPct: point.xPct,
+        yPct: point.yPct,
         regions: [row.region],
       })
       continue
@@ -184,44 +185,65 @@ function KoreaMapHeatmap({ rows }: { rows: MapRow[] }) {
 
   return (
     <div className="rounded-2xl border border-[#e8e8e4] bg-[#fbfbf8] p-3">
-      <svg viewBox="0 0 240 360" className="h-[520px] w-full max-h-[70vh]" role="img" aria-label="대한민국 지역별 매출 달성률 히트맵">
-        <path
-          d="M111 21 C137 27 156 48 161 75 C166 100 146 114 155 136 C164 160 183 173 177 199 C171 225 153 232 158 252 C164 275 147 300 123 309 C101 317 81 304 88 282 C94 263 76 251 82 230 C88 209 104 202 100 181 C96 158 79 144 84 121 C89 99 73 88 80 67 C86 47 92 29 111 21 Z"
-          fill="#eef0ea"
-          stroke="#d9ddd2"
-          strokeWidth="2"
+      <div className="relative mx-auto aspect-[947/1660] max-h-[70vh] w-full max-w-[520px] overflow-hidden rounded-xl bg-[#fbfbf8]" role="img" aria-label="대한민국 지역별 매출 달성률 히트맵">
+        {/* Generated dashboard map asset. Heatmap layers stay code-rendered for data accuracy. */}
+        <Image
+          src="/images/admin/south-korea-heatmap-base.png"
+          alt=""
+          aria-hidden
+          fill
+          sizes="(min-width: 1024px) 560px, 100vw"
+          className="absolute inset-0 h-full w-full object-contain"
         />
-        <path
-          d="M45 325 C61 309 94 307 112 319 C96 337 62 341 45 325 Z"
-          fill="#eef0ea"
-          stroke="#d9ddd2"
-          strokeWidth="2"
-        />
-        <path d="M71 85 C91 74 113 72 132 83" fill="none" stroke="#d9ddd2" strokeWidth="1" />
-        <path d="M84 136 C107 132 134 140 155 153" fill="none" stroke="#d9ddd2" strokeWidth="1" />
-        <path d="M91 212 C116 207 145 214 166 228" fill="none" stroke="#d9ddd2" strokeWidth="1" />
         {rows.map((row) => {
           const tone = STATUS_STYLE[row.status]
-          const radius = 8 + Math.sqrt(row.target / maxTarget) * 22
+          const heatSize = 78 + Math.sqrt(row.target / maxTarget) * 110
+          const heatOpacity = row.status === "good" ? 0.24 : row.status === "warning" ? 0.3 : 0.34
           return (
-            <g key={row.label}>
-              <circle cx={row.x} cy={row.y} r={radius + 5} fill={tone.fill} opacity="0.08" />
-              <circle cx={row.x} cy={row.y} r={radius} fill={tone.fill} opacity="0.68" stroke="#fff" strokeWidth="2" />
-              <text x={row.x} y={row.y + 4} textAnchor="middle" className="fill-white text-[10px] font-bold">
-                {row.progress.toFixed(0)}
-              </text>
-              <text x={row.x} y={row.y + radius + 15} textAnchor="middle" className="fill-[#111110] text-[10px] font-semibold">
-                {row.label}
-              </text>
-            </g>
+            <div
+              key={`heat-${row.label}`}
+              className="pointer-events-none absolute -translate-x-1/2 -translate-y-1/2 rounded-full"
+              style={{
+                left: `${row.xPct}%`,
+                top: `${row.yPct}%`,
+                width: heatSize,
+                height: heatSize,
+                background: `radial-gradient(circle, ${tone.fill} 0%, ${tone.fill} 42%, transparent 72%)`,
+                filter: "blur(8px)",
+                mixBlendMode: "multiply",
+                opacity: heatOpacity,
+              }}
+            />
           )
         })}
-      </svg>
+        {rows.map((row) => {
+          const tone = STATUS_STYLE[row.status]
+          const size = 18 + Math.sqrt(row.target / maxTarget) * 28
+          return (
+            <div
+              key={`marker-${row.label}`}
+              className="absolute flex -translate-x-1/2 -translate-y-1/2 flex-col items-center"
+              style={{ left: `${row.xPct}%`, top: `${row.yPct}%` }}
+            >
+              <div
+                className="flex items-center justify-center rounded-full border-2 border-white text-[10px] font-bold text-white shadow-[0_8px_18px_rgba(17,17,16,0.16)]"
+                style={{ width: size, height: size, backgroundColor: tone.fill }}
+                title={`${row.label}: ${row.progress.toFixed(0)}%`}
+              >
+                {row.progress.toFixed(0)}
+              </div>
+              <span className="mt-1 rounded-full bg-white/85 px-1.5 py-0.5 text-[10px] font-semibold text-[#111110] shadow-sm">
+                {row.label}
+              </span>
+            </div>
+          )
+        })}
+      </div>
       <div className="mt-2 flex flex-wrap items-center gap-3 px-1 text-[11px] text-[#1a1a1a]/45">
         <span className="inline-flex items-center gap-1"><i className="h-2.5 w-2.5 rounded-full bg-emerald-600" />95% 이상</span>
         <span className="inline-flex items-center gap-1"><i className="h-2.5 w-2.5 rounded-full bg-amber-600" />75-94%</span>
         <span className="inline-flex items-center gap-1"><i className="h-2.5 w-2.5 rounded-full bg-rose-600" />75% 미만</span>
-        <span>원 크기 = 목표 금액</span>
+        <span>열감 크기 = 목표 금액</span>
       </div>
     </div>
   )

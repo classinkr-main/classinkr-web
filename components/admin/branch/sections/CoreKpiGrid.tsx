@@ -1,39 +1,12 @@
 "use client"
-import { useEffect, useState } from "react"
-import type { Team, Period } from "../BranchDashboardClient"
+import type { BranchSummaryResponse } from "../types"
 
-interface SummaryResponse {
-  revenue: { confirmed: number; goal: number; pacing_pct: number }
-  bottleneck: { metric: string|null; pct: number; worst_member: string|null }
-  closing: { count: number; total_target: number }
-  events_30d: { count: number; regions: number }
-  campaigns_30d: { count: number; avg_open_pct: number }
-}
+const numberFormatter = new Intl.NumberFormat("ko-KR", { maximumFractionDigits: 0 })
+function fmt(n: number) { return numberFormatter.format(n) }
 
-function fmt(n: number) { return new Intl.NumberFormat("ko-KR", { maximumFractionDigits: 0 }).format(n) }
-
-async function adminFetch(url: string) {
-  const token = (typeof window !== "undefined" ? sessionStorage.getItem("admin_password") : null) ?? ""
-  return fetch(url, { headers: { Authorization: `Bearer ${token}` } })
-}
-
-export default function CoreKpiGrid({ team, period, refreshKey }: { team: Team; period: Period; refreshKey: number }) {
-  const [data, setData] = useState<SummaryResponse | null>(null)
-  const [error, setError] = useState<string | null>(null)
-  useEffect(() => {
-    let cancelled = false
-    void adminFetch(`/api/admin/branch/summary?team=${team}&period=${period}`)
-      .then((r) => r.json())
-      .then((d) => {
-        if (cancelled) return
-        if (d.error) { setError(d.error); setData(null) }
-        else { setError(null); setData(d) }
-      })
-      .catch((e) => { if (!cancelled) setError(String(e)) })
-    return () => { cancelled = true }
-  }, [team, period, refreshKey])
+export default function CoreKpiGrid({ data, loading, error }: { data: BranchSummaryResponse | null; loading: boolean; error: string | null }) {
   if (error) return <div className="rounded-2xl border border-rose-200 bg-rose-50 p-4 text-[12px] text-rose-700">{error}</div>
-  if (!data) return (
+  if (loading || !data) return (
     <div className="grid grid-cols-2 gap-4 lg:grid-cols-5">
       {Array.from({length:5}).map((_,i) => <div key={i} className="h-28 animate-pulse rounded-2xl bg-[#f0f0ec]"/>)}
     </div>
