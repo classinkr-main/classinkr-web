@@ -1297,7 +1297,7 @@ const INCLUDED = [
     "수업 자동 녹화 · 클라우드 저장",
     "LMS (숙제 · 출결 · 성적 · 평가)",
     "학습 데이터 리포트 및 분석",
-    "1:1부터 수백 명 대형 강의까지",
+    "1:1부터 최대 1,000명 대형 강의까지",
     "12개 언어 지원 · 160개국 서비스",
     "AI 첨삭 · AI 과제 생성 · AI 교안",
     "전담 고객 지원 · 전문가 온보딩",
@@ -1319,7 +1319,7 @@ function PricingValueSection() {
                     </p>
                 </motion.div>
 
-                <div className="grid lg:grid-cols-2 gap-10 items-center">
+                <div className="grid lg:grid-cols-[2fr_3fr] gap-10">
                     {/* Included list */}
                     <motion.div
                         initial={{ opacity: 0, x: -20 }}
@@ -1357,30 +1357,77 @@ function PricingValueSection() {
                         className="space-y-5"
                     >
                         {[
-                            { label: "일반 화상 도구", note: "Zoom · Teams 등", cost: "~₩20,000/월", line: true },
-                            { label: "+ LMS 별도 구독", note: "Classting · Google Classroom Pro 등", cost: "~₩30,000/월", line: true },
-                            { label: "+ 녹화 · 클라우드 스토리지", note: "별도 저장소 + 관리 비용", cost: "~₩10,000/월", line: true },
-                            { label: "합계", note: "그래도 기능은 분산됨", cost: "₩60,000+/월", line: false, highlight: true },
+                            { label: "일반 화상 도구", note: "Zoom · Teams 등", scope: "화상 수업만", line: true },
+                            { label: "+ LMS 별도 구독", note: "Canvas · Classting Pro 등", scope: "출결 · 과제 · 평가만", line: true },
+                            { label: "+ 녹화 · 클라우드 스토리지", note: "별도 저장소 + 관리", scope: "영상 보관만", line: true },
+                            { label: "+ AI 기능 별도 구독", note: "ChatGPT Team · AI 첨삭 도구 등", scope: "AI 도구만", line: true },
+                            { label: "ClassIn 하나로", note: "도구마다 다른 계약 · 다른 로그인 없이", scope: "전부 한 번에", line: false, highlight: true },
                         ].map((row) => (
-                            <div key={row.label} className={`flex items-center justify-between pb-4 ${row.line ? "border-b border-slate-100" : ""} ${row.highlight ? "bg-[#F0FDF9] rounded-xl px-4 py-3 -mx-4" : ""}`}>
+                            <div key={row.label} className={`flex items-center justify-between ${row.line ? "pb-4 border-b border-slate-100" : ""} ${row.highlight ? "bg-[#F0FDF9] border border-[#22A366]/15 rounded-2xl px-6 py-6 -mx-4 mt-2" : ""}`}>
                                 <div>
-                                    <p className={`text-sm font-semibold ${row.highlight ? "text-[#22A366]" : "text-slate-700"}`}>{row.label}</p>
-                                    <p className="text-xs text-slate-400">{row.note}</p>
+                                    <p className={`font-bold ${row.highlight ? "text-xl text-[#22A366]" : "text-sm font-semibold text-slate-700"}`}>{row.label}</p>
+                                    <p className={`${row.highlight ? "text-sm text-slate-500" : "text-xs text-slate-400"}`}>{row.note}</p>
                                 </div>
-                                <p className={`font-bold font-mono text-sm ${row.highlight ? "text-[#22A366]" : "text-slate-500 line-through"}`}>{row.cost}</p>
+                                <p className={`font-bold ${row.highlight ? "text-lg text-[#22A366]" : "text-xs text-slate-500"}`}>{row.scope}</p>
                             </div>
                         ))}
-
-                        <div className="bg-[#1a1a19] text-white rounded-2xl p-6 text-center mt-4">
-                            <p className="text-slate-400 text-sm mb-1">ClassIn 하나로</p>
-                            <p className="text-2xl font-serif font-bold text-white mb-1">위의 모든 것 + AI 기능까지</p>
-                            <p className="text-[#22A366] text-sm font-bold mb-5">기관 규모에 맞춘 도입 상담</p>
-                            <Link href="/contact" className="inline-flex items-center gap-2 rounded-full bg-[#009060] px-6 py-2.5 text-sm font-bold text-white transition-all hover:scale-105 hover:bg-[#007A52]">
-                                도입 문의하기 <ArrowRight className="w-4 h-4" />
-                            </Link>
-                        </div>
                     </motion.div>
                 </div>
+
+                {/* Full-width pricing callout */}
+                <motion.div
+                    initial={{ opacity: 0, y: 20 }}
+                    whileInView={{ opacity: 1, y: 0 }}
+                    viewport={{ once: true }}
+                    transition={{ duration: 0.6, delay: 0.2 }}
+                    className="bg-[#1a1a19] text-white rounded-2xl px-6 md:px-10 py-6 md:py-7 mt-10"
+                >
+                    <div className="flex flex-col lg:flex-row lg:items-center lg:justify-between gap-6 lg:gap-10">
+                        {/* Heading */}
+                        <div className="text-center lg:text-left lg:shrink-0">
+                            <p className="text-slate-300 text-sm font-bold uppercase tracking-[0.18em] mb-1.5">ClassIn 하나로</p>
+                            <p className="font-serif font-bold text-white leading-tight">
+                                <span className="text-2xl md:text-3xl">이 모든 기능</span>
+                                <span className="text-sm md:text-base font-medium text-slate-300 ml-2 align-middle">+ AI 기능까지</span>
+                            </p>
+                        </div>
+
+                        {/* Tier prices + note */}
+                        <div className="flex flex-col items-center gap-2 lg:flex-1">
+                            <div className="flex items-center gap-5 sm:gap-7">
+                                <div className="text-center">
+                                    <p className="text-[11px] text-slate-400 uppercase tracking-[0.16em] mb-1">Standard</p>
+                                    <p className="text-lg font-bold text-white tabular-nums whitespace-nowrap">
+                                        $99<span className="text-xs text-slate-300 font-medium ml-0.5">/계정/월</span>
+                                    </p>
+                                </div>
+                                <div className="w-px h-10 bg-white/10" />
+                                <div className="text-center">
+                                    <p className="text-[11px] text-slate-400 uppercase tracking-[0.16em] mb-1">Plus</p>
+                                    <p className="text-lg font-bold text-white tabular-nums whitespace-nowrap">
+                                        $199<span className="text-xs text-slate-300 font-medium ml-0.5">/계정/월</span>
+                                    </p>
+                                </div>
+                                <div className="w-px h-10 bg-white/10" />
+                                <div className="text-center">
+                                    <p className="text-[11px] text-slate-400 uppercase tracking-[0.16em] mb-1">Enterprise</p>
+                                    <p className="text-lg font-bold text-white whitespace-nowrap">맞춤 견적</p>
+                                </div>
+                            </div>
+                            <p className="text-[#22A366] text-xs font-medium">연 결제 시 약 2개월 절감</p>
+                        </div>
+
+                        {/* CTAs */}
+                        <div className="flex flex-col sm:flex-row gap-2 justify-center lg:justify-end lg:shrink-0">
+                            <Link href={CHECKOUT_HREF} className="inline-flex items-center justify-center gap-2 rounded-full bg-[#009060] px-5 py-2.5 text-sm font-bold text-white transition-all hover:scale-105 hover:bg-[#007A52] whitespace-nowrap">
+                                {CHECKOUT_CTA_LABEL} <ArrowRight className="w-4 h-4" />
+                            </Link>
+                            <Link href="/contact#contact-form" className="inline-flex items-center justify-center gap-2 rounded-full border border-white/20 bg-white/[0.04] px-5 py-2.5 text-sm font-bold text-white transition-all hover:bg-white/[0.08] whitespace-nowrap">
+                                도입 상담
+                            </Link>
+                        </div>
+                    </div>
+                </motion.div>
             </div>
         </section>
     )
