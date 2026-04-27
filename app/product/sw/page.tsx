@@ -20,6 +20,8 @@ const CHECKOUT_ENABLED = process.env.NEXT_PUBLIC_SW_CHECKOUT_ENABLED === "true"
 const CHECKOUT_HREF = CHECKOUT_ENABLED ? "/checkout" : "/contact#contact-form"
 const CHECKOUT_CTA_LABEL = CHECKOUT_ENABLED ? "지금 바로 결제 시작" : "지금 무료로 시작하기"
 const CHECKOUT_SUB_LABEL = CHECKOUT_ENABLED ? "카드·네이버페이로 즉시 시작" : "설치 없이 바로 체험 · 카드 등록 불필요"
+const HERO_CLASSROOM_VIDEO_SRC = "/video/쿼드러닝 수업_클립1.mp4"
+const BLACKBOARD_VIDEO_SRC = "/video/클립2.mp4"
 
 const LESSON_TOOLS: {
     label: string
@@ -920,27 +922,18 @@ function HardwareTeaserSection() {
 
                     {/* Hardware visual */}
                     <motion.div initial={{ opacity: 0, x: 30 }} whileInView={{ opacity: 1, x: 0 }} viewport={{ once: true }} transition={{ duration: 0.7, delay: 0.1 }}>
-                        <div className="relative bg-white/5 rounded-2xl border border-white/10 p-8 text-center">
-                            <div className="w-full aspect-[4/3] bg-gradient-to-br from-[#084734]/30 to-[#1a1a19] rounded-xl border border-white/10 flex items-center justify-center mb-6 relative overflow-hidden">
-                                <div className="absolute inset-0 flex items-center justify-center">
-                                    <div className="w-4/5 aspect-video bg-[#0f0f0f] rounded-lg border-4 border-[#6EE7B7]/20 shadow-2xl flex items-center justify-center relative">
-                                        <span className="text-[#6EE7B7]/30 text-xs font-mono">AI Interactive Board</span>
-                                        {/* Camera indicator */}
-                                        <div className="absolute -top-3 left-1/2 -translate-x-1/2 w-6 h-6 bg-[#1a1a19] border border-white/10 rounded-full flex items-center justify-center">
-                                            <div className="w-2 h-2 rounded-full bg-[#6EE7B7]/60" />
-                                        </div>
-                                    </div>
-                                </div>
-                                {/* Mic dots */}
-                                <div className="absolute bottom-3 left-1/2 -translate-x-1/2 flex gap-2">
-                                    {[...Array(5)].map((_, i) => (
-                                        <motion.div key={i} className="w-1.5 h-1.5 rounded-full bg-[#6EE7B7]/40"
-                                            animate={{ opacity: [0.3, 1, 0.3] }}
-                                            transition={{ duration: 1.5, delay: i * 0.2, repeat: Infinity }} />
-                                    ))}
-                                </div>
+                        <div className="text-center">
+                            <div className="relative aspect-video w-full overflow-hidden rounded-2xl border border-white/10 bg-white/5 shadow-[0_24px_70px_rgba(0,0,0,0.28)]">
+                                <Image
+                                    src="/images/smartroon.png"
+                                    alt="ClassIn 소프트웨어와 연동되는 스마트 교실 구성"
+                                    fill
+                                    className="object-cover"
+                                    sizes="(min-width: 1024px) 44vw, 100vw"
+                                />
+                                <div className="absolute inset-0 bg-gradient-to-t from-[#1a1a19]/28 via-transparent to-white/8" />
                             </div>
-                            <p className="text-white/30 text-xs">ClassIn X · 스마트 교실 구성</p>
+                            <p className="mt-4 text-white/30 text-xs">ClassIn X · 스마트 교실 구성</p>
                         </div>
                     </motion.div>
                 </div>
@@ -1456,28 +1449,34 @@ export default function ProductPage() {
             {/* ================================================================
                 HERO — "수업을, 더 수업답게"
             ================================================================ */}
-            <section className="relative overflow-hidden">
-                {/* Dot pattern background */}
-                <div className="absolute inset-0 pointer-events-none" style={{
-                    backgroundImage: "radial-gradient(circle, rgba(34,163,102,0.06) 1px, transparent 1px)",
-                    backgroundSize: "24px 24px",
-                }} />
-                <div className="absolute inset-0 bg-gradient-to-b from-[#FDFCF8] via-[#F0FDF9]/60 to-[#FDFCF8] pointer-events-none" />
+            <section className="relative h-[calc(100svh-8rem)] min-h-[560px] max-h-[760px] overflow-hidden bg-[#07110d] text-white">
+                <video
+                    className="absolute inset-0 h-full w-full object-cover"
+                    src={HERO_CLASSROOM_VIDEO_SRC}
+                    autoPlay
+                    muted
+                    loop
+                    playsInline
+                    preload="metadata"
+                    aria-hidden="true"
+                />
+                <div className="absolute inset-0 bg-[linear-gradient(180deg,rgba(3,10,8,0.70)_0%,rgba(3,10,8,0.42)_42%,rgba(3,10,8,0.78)_100%)] pointer-events-none" />
+                <div className="absolute inset-0 bg-[radial-gradient(circle_at_center,rgba(3,10,8,0.10)_0%,rgba(3,10,8,0.50)_78%)] pointer-events-none" />
 
-                <div className="container mx-auto px-4 lg:px-8 pt-12 md:pt-24 pb-8 md:pb-16 relative">
+                <div className="container relative z-10 mx-auto flex h-full items-center px-4 py-16 lg:px-8 md:py-20">
                     <div className="max-w-4xl mx-auto text-center">
                         <motion.div initial={{ opacity: 0, y: 30 }} animate={{ opacity: 1, y: 0 }} transition={{ duration: 0.7 }}>
-                            <div className="inline-flex items-center gap-2.5 px-5 py-2 rounded-full bg-white border border-[rgba(34,163,102,0.2)] shadow-[0_2px_12px_rgba(34,163,102,0.1)] text-[#22A366] text-xs font-bold mb-8 tracking-widest uppercase">
+                            <div className="inline-flex items-center gap-2.5 px-5 py-2 rounded-full bg-white/12 border border-white/18 shadow-[0_2px_18px_rgba(0,0,0,0.18)] text-[#6EE7B7] text-xs font-bold mb-8 tracking-widest uppercase backdrop-blur-sm">
                                 <span className="w-1.5 h-1.5 rounded-full bg-[#22A366] animate-pulse"></span>
                                 교육 전용 플랫폼
                             </div>
 
-                            <h1 className="text-4xl sm:text-5xl lg:text-6xl xl:text-7xl font-serif leading-[1.1] tracking-tight mb-8 text-[#1a1a19]">
+                            <h1 className="text-4xl sm:text-5xl lg:text-6xl xl:text-7xl font-serif leading-[1.1] mb-8 text-white drop-shadow-[0_3px_20px_rgba(0,0,0,0.35)]">
                                 수업을, 더{" "}
-                                <span className="text-[#22A366]">수업답게</span>
+                                <span className="text-[#6EE7B7]">수업답게</span>
                             </h1>
 
-                            <p className="text-xl md:text-2xl text-slate-500 leading-relaxed font-medium max-w-2xl mx-auto mb-8">
+                            <p className="text-xl md:text-2xl text-white/78 leading-relaxed font-medium max-w-2xl mx-auto mb-8 drop-shadow-[0_2px_14px_rgba(0,0,0,0.35)]">
                                 30여 가지 수업 도구와 10가지 수업 활동으로
                                 <br className="hidden md:block" />
                                 교사와 학생이 함께 만들어가는 교육 전용 플랫폼.
@@ -1491,11 +1490,11 @@ export default function ProductPage() {
                                     { value: metric150, suffix: "+", label: "지원 국가" },
                                     { value: metric2400.toLocaleString(), suffix: "+", label: "도입 학원", raw: true },
                                 ].map((m, i) => (
-                                    <motion.div key={i} initial={{ opacity: 0, y: 15 }} animate={heroMetricInView ? { opacity: 1, y: 0 } : {}} transition={{ delay: i * 0.1 + 0.3 }} className="text-center bg-white border border-[rgba(0,0,0,0.07)] rounded-2xl px-5 py-3 shadow-[0_2px_12px_rgba(0,0,0,0.05)]">
-                                        <div className="text-2xl md:text-3xl font-serif font-bold text-[#22A366]">
+                                    <motion.div key={i} initial={{ opacity: 0, y: 15 }} animate={heroMetricInView ? { opacity: 1, y: 0 } : {}} transition={{ delay: i * 0.1 + 0.3 }} className="min-w-[84px] text-center">
+                                        <div className="text-2xl md:text-3xl font-sans font-bold tabular-nums text-[#6EE7B7] drop-shadow-[0_2px_12px_rgba(0,0,0,0.35)]">
                                             {m.raw ? m.value : m.value}{m.suffix}
                                         </div>
-                                        <div className="text-[11px] md:text-xs text-slate-400 mt-0.5 font-semibold tracking-wide">{m.label}</div>
+                                        <div className="text-[11px] md:text-xs text-white/62 mt-0.5 font-semibold">{m.label}</div>
                                     </motion.div>
                                 ))}
                             </div>
@@ -1507,7 +1506,7 @@ export default function ProductPage() {
                                     <ArrowRight className="w-4 h-4 ml-2 group-hover:translate-x-1 transition-transform" />
                                     </Link>
                                 </Button>
-                                <Button asChild variant="outline" className="rounded-full px-8 h-14 text-base font-bold border-slate-300 text-slate-700 hover:bg-slate-50 hover:border-slate-400 transition-all hover:scale-105">
+                                <Button asChild variant="outline" className="rounded-full px-8 h-14 text-base font-bold border-white/35 bg-white/8 text-white backdrop-blur-sm hover:bg-white/16 hover:border-white/55 transition-all hover:scale-105">
                                     <a href={BROCHURE_URL} target="_blank" rel="noopener noreferrer">
                                     <Play className="w-4 h-4 mr-2" />
                                     서비스 소개서 보기
@@ -1516,92 +1515,6 @@ export default function ProductPage() {
                             </div>
                         </motion.div>
                     </div>
-                </div>
-
-                {/* Hero classroom mockup */}
-                <div className="container mx-auto px-4 lg:px-8 pb-12 md:pb-24 relative">
-                    <motion.div
-                        initial={{ opacity: 0, y: 50, scale: 0.95 }}
-                        animate={{ opacity: 1, y: 0, scale: 1 }}
-                        transition={{ duration: 0.9, delay: 0.4, type: "spring", bounce: 0.15 }}
-                        className="max-w-5xl mx-auto"
-                    >
-                        <div className="relative bg-white rounded-2xl shadow-[0_30px_60px_rgba(0,0,0,0.08)] border border-slate-100 p-2 overflow-hidden">
-                            <div className="bg-slate-50 rounded-xl overflow-hidden border border-slate-100 flex h-[300px] sm:h-[400px] lg:h-[480px]">
-                                {/* Sidebar */}
-                                <div className="w-1/4 border-r border-slate-200 bg-white p-4 hidden sm:flex flex-col">
-                                    <div className="w-20 h-3 bg-slate-200 rounded mb-6"></div>
-                                    <div className="space-y-3 flex-1">
-                                        {[1, 2, 3, 4, 5, 6].map(i => (
-                                            <div key={i} className="flex items-center gap-3">
-                                                <div className={`w-6 h-6 rounded-md ${i === 1 ? "bg-[#22A366]/10" : "bg-slate-100"}`}></div>
-                                                <div className={`h-3 rounded ${i === 1 ? "w-16 bg-[#22A366]/20" : "w-14 bg-slate-100"}`}></div>
-                                            </div>
-                                        ))}
-                                    </div>
-                                    <div className="flex items-center gap-2 pt-4 border-t border-slate-100">
-                                        <div className="w-8 h-8 rounded-full bg-gradient-to-br from-[#22A366] to-green-500"></div>
-                                        <div className="w-16 h-3 bg-slate-100 rounded"></div>
-                                    </div>
-                                </div>
-                                {/* Main content area — blackboard */}
-                                <div className="flex-1 bg-[#1e1e1e] p-4 sm:p-6 flex flex-col">
-                                    {/* Toolbar */}
-                                    <div className="flex items-center gap-2 mb-4 pb-3 border-b border-white/10">
-                                        {["#22A366", "#3B82F6", "#10B981", "#F59E0B"].map(c => (
-                                            <div key={c} className="w-5 h-5 rounded-full border-2 border-white/20" style={{ backgroundColor: c }} />
-                                        ))}
-                                        <div className="ml-auto flex gap-2">
-                                            <div className="px-2 py-1 rounded bg-white/10 text-[10px] text-white/40 font-mono">T 2:30</div>
-                                            <div className="px-2 py-1 rounded bg-[#22A366]/20 text-[10px] text-[#22A366] font-mono">LIVE</div>
-                                        </div>
-                                    </div>
-                                    {/* Board content with animated lines */}
-                                    <div className="flex-1 relative">
-                                        <svg className="absolute inset-0 w-full h-full" viewBox="0 0 400 250" fill="none">
-                                            <motion.path d="M30,40 Q80,20 130,45 T230,35" stroke="white" strokeWidth="2" strokeOpacity="0.3" initial={{ pathLength: 0 }} animate={{ pathLength: 1 }} transition={{ duration: 2, delay: 1 }} />
-                                            <motion.path d="M30,80 Q100,60 170,85 T300,70" stroke="#3B82F6" strokeWidth="2" strokeOpacity="0.4" initial={{ pathLength: 0 }} animate={{ pathLength: 1 }} transition={{ duration: 2, delay: 1.5 }} />
-                                            <motion.path d="M30,120 L120,120 L120,180 L200,180" stroke="#22A366" strokeWidth="2" strokeOpacity="0.35" initial={{ pathLength: 0 }} animate={{ pathLength: 1 }} transition={{ duration: 2, delay: 2 }} />
-                                            <motion.path d="M250,130 Q280,110 310,135 T370,120" stroke="#10B981" strokeWidth="2" strokeOpacity="0.4" initial={{ pathLength: 0 }} animate={{ pathLength: 1 }} transition={{ duration: 1.5, delay: 2.5 }} />
-                                        </svg>
-                                        {/* Animated cursors */}
-                                        <motion.div animate={{ x: [120, 160, 180], y: [70, 55, 75] }} transition={{ duration: 3, repeat: Infinity, repeatType: "reverse" }} className="absolute w-3 h-3">
-                                            <div className="w-3 h-3 rounded-full bg-[#3B82F6] animate-cursor-blink shadow-[0_0_8px_rgba(59,130,246,0.5)]" />
-                                            <div className="absolute -top-4 left-3 text-[8px] text-[#3B82F6] font-mono whitespace-nowrap">학생 B</div>
-                                        </motion.div>
-                                        <motion.div animate={{ x: [250, 280, 300], y: [115, 105, 125] }} transition={{ duration: 4, repeat: Infinity, repeatType: "reverse", delay: 1 }} className="absolute w-3 h-3">
-                                            <div className="w-3 h-3 rounded-full bg-[#10B981] animate-cursor-blink shadow-[0_0_8px_rgba(16,185,129,0.5)]" />
-                                            <div className="absolute -top-4 left-3 text-[8px] text-[#10B981] font-mono whitespace-nowrap">학생 C</div>
-                                        </motion.div>
-                                    </div>
-                                    {/* Bottom bar */}
-                                    <div className="flex items-center justify-between pt-3 border-t border-white/10">
-                                        <div className="flex -space-x-2">
-                                            {[
-                                                "from-[#22A366] to-green-500",
-                                                "from-blue-500 to-cyan-400",
-                                                "from-green-500 to-emerald-400",
-                                                "from-purple-500 to-pink-400",
-                                            ].map((g, i) => (
-                                                <div key={i} className={`w-7 h-7 rounded-full bg-gradient-to-br ${g} border-2 border-[#1e1e1e] flex items-center justify-center text-[8px] text-white font-bold`}>
-                                                    {["T", "A", "B", "C"][i]}
-                                                </div>
-                                            ))}
-                                        </div>
-                                        <div className="text-xs text-white/20 font-mono">4명 참여 중</div>
-                                    </div>
-                                </div>
-                            </div>
-                        </div>
-
-                        {/* Floating elements */}
-                        <motion.div animate={{ y: [0, -10, 0] }} transition={{ repeat: Infinity, duration: 4 }} className="absolute -left-4 lg:-left-10 top-12 lg:top-20 w-14 h-14 bg-white rounded-2xl shadow-xl flex items-center justify-center border border-slate-50 z-20">
-                            <PenTool className="w-7 h-7 text-[#22A366]" />
-                        </motion.div>
-                        <motion.div animate={{ y: [0, 12, 0] }} transition={{ repeat: Infinity, duration: 5, delay: 1 }} className="absolute -right-4 lg:-right-10 top-28 lg:top-40 w-12 h-12 bg-white rounded-2xl shadow-xl flex items-center justify-center border border-slate-50 z-20">
-                            <Users className="w-6 h-6 text-[#084734]" />
-                        </motion.div>
-                    </motion.div>
                 </div>
             </section>
 
@@ -1716,17 +1629,19 @@ export default function ProductPage() {
                             </div>
                         </div>
 
-                        {/* Blackboard classroom image */}
+                        {/* Blackboard classroom video */}
                         <div className="flex-1 w-full max-w-lg">
                             <motion.div {...fadeUp} className="relative">
                                 <div className="relative aspect-[3/2] overflow-hidden rounded-3xl border border-slate-200/80 bg-white shadow-[0_24px_60px_rgba(15,23,42,0.14)]">
-                                    <Image
-                                        src="/images/product/sw/two-way-blackboard.jpg"
-                                        alt="교사와 학생이 함께 참여하는 ClassIn 양방향 블랙보드 수업 장면"
-                                        fill
-                                        className="object-cover"
-                                        sizes="(min-width: 1024px) 40vw, 100vw"
-                                        priority={false}
+                                    <video
+                                        className="absolute inset-0 h-full w-full object-cover"
+                                        src={BLACKBOARD_VIDEO_SRC}
+                                        autoPlay
+                                        muted
+                                        loop
+                                        playsInline
+                                        preload="metadata"
+                                        aria-label="교사와 학생이 함께 참여하는 ClassIn 양방향 블랙보드 수업 장면"
                                     />
                                     <div className="absolute inset-0 bg-gradient-to-t from-[#084734]/18 via-transparent to-white/12" />
                                     <div className="absolute left-5 top-5 rounded-full border border-white/70 bg-white/88 px-3 py-1.5 text-xs font-semibold text-[#084734] shadow-[0_10px_30px_rgba(15,23,42,0.08)] backdrop-blur-sm">
