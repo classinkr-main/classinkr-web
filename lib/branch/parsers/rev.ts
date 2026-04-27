@@ -28,6 +28,26 @@ export interface RevDealParsed {
   raw: Record<string, unknown>
 }
 
+const TEAM_ALIASES: Record<string, string> = {
+  "BD": "BD",
+  "Business Development": "BD",
+  "사업개발": "BD",
+  "MK": "MKT",
+  "MKT": "MKT",
+  "Marketing": "MKT",
+  "마케팅": "MKT",
+  "CS": "CSM",
+  "CSM": "CSM",
+  "Customer Success": "CSM",
+  "고객지원": "CSM",
+}
+
+export function normalizeTeam(raw: unknown): string | null {
+  const s = raw == null ? "" : String(raw).trim()
+  if (!s) return null
+  return TEAM_ALIASES[s] ?? "기타"
+}
+
 const ymRe = /^(\d{4})-(\d{1,2})$/
 const monthOnlyRe = /^([1-9]|1[0-2])월?$/
 
@@ -97,7 +117,7 @@ export function parseRev(grid: FormattedCell[][], opts?: { refFy?: number }): Re
       sheet_row: r + 1,
       customer_name: customer,
       branch_contact: asString(row[REV_COLS.branchContact]?.value),
-      team: asString(row[REV_COLS.team]?.value),
+      team: normalizeTeam(row[REV_COLS.team]?.value),
       manager: asString(row[REV_COLS.manager]?.value),
       deal_type: asString(row[REV_COLS.dealType]?.value),
       status: asString(row[REV_COLS.status]?.value),

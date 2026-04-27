@@ -5,7 +5,8 @@ import { readRangeWithFormat, envSheetId } from "@/lib/branch/google-sheets"
 import { parseDsh, DSH_RANGE } from "@/lib/branch/parsers/dsh"
 import { parseKpi, KPI_RANGE, KPI_METRICS } from "@/lib/branch/parsers/kpi"
 import { listBranchRevDeals } from "@/lib/repositories/branch-deals"
-import { teamPacing, memberPacing, listMembersByTeam } from "@/lib/branch/computations/pacing"
+import { teamPacing, memberPacing } from "@/lib/branch/computations/pacing"
+import { deriveMemberTeams } from "@/lib/branch/computations/member-teams"
 import { fyOf } from "@/lib/branch/fiscal"
 
 type BranchTeam = "ALL" | "BD" | "MKT" | "CSM"
@@ -51,7 +52,11 @@ export async function GET(req: NextRequest) {
       if (managerDeals) managerDeals.push(deal)
       else dealsByManager.set(deal.manager, [deal])
     }
-    const members = listMembersByTeam(dsh, team).filter((m) => kpiByMember.has(m))
+    const memberTeams = deriveMemberTeams(deals)
+    const allMembersFromKpi = kpi.map((k) => k.member)
+    const members = team === "ALL"
+      ? allMembersFromKpi
+      : allMembersFromKpi.filter((m) => memberTeams[m] === team)
     const teams = team === "ALL" ? ["BD","MKT","CSM"] : [team]
     const teamSummaries = teams.map((t) => ({ team: t, ...teamPacing(dsh, t, period, now) }))
     const memberSummaries = members.map((m) => {
@@ -74,7 +79,7 @@ export async function GET(req: NextRequest) {
         return acc
       }, { new: 0, renew: 0 })
       return {
-        member: m, team: p.team,
+        member: m, team: memberTeams[m] ?? null,
         goal: p.goal, status: p.status, achievement_pct: p.pacing_pct,
         confirmed,
         deals_total: dealsOf.length,

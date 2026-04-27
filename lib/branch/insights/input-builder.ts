@@ -3,7 +3,8 @@ import { createHash } from "crypto"
 import type { DshOutput } from "@/lib/branch/parsers/dsh"
 import type { KpiRow } from "@/lib/branch/parsers/kpi"
 import type { BranchRevDeal } from "@/lib/repositories/branch-deals"
-import { teamPacing, listMembersByTeam } from "@/lib/branch/computations/pacing"
+import { teamPacing } from "@/lib/branch/computations/pacing"
+import { deriveMemberTeams } from "@/lib/branch/computations/member-teams"
 import { computeHeatmap } from "@/lib/branch/computations/heatmap"
 import { dealProbability } from "@/lib/branch/computations/pipeline"
 import { fyOf, fiscalQuarter } from "@/lib/branch/fiscal"
@@ -63,7 +64,10 @@ export function buildInsightInput(a: BuildArgs): InsightInput {
   }
   pacing.pacing_pct = pacing.goal > 0 ? (pacing.status / pacing.goal) * 100 : 0
 
-  const members = listMembersByTeam(a.dsh, a.team)
+  const memberTeams = deriveMemberTeams(a.deals)
+  const members = a.team === "ALL"
+    ? Object.keys(memberTeams)
+    : Object.entries(memberTeams).filter(([, t]) => t === a.team).map(([m]) => m)
   const managers = members.map((m) => {
     const k = a.kpi.find((r) => r.member === m)
     const dealsOf = a.deals.filter((d) => d.manager === m)
@@ -83,7 +87,7 @@ export function buildInsightInput(a: BuildArgs): InsightInput {
       .reduce((s, d) => s + Number(d.contract_target ?? 0) * dealProbability(d), 0)
     return {
       name: m,
-      team: a.dsh.members[m] ?? null,
+      team: memberTeams[m] ?? null,
       goal: goalVal,
       status: confirmed,
       pipeline: pipelineSum,

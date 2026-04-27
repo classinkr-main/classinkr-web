@@ -1,6 +1,6 @@
 import { describe, it, expect } from "vitest"
 import fixture from "../fixtures/rev-sample.json"
-import { parseRev, normalizeMonthHeader } from "@/lib/branch/parsers/rev"
+import { parseRev, normalizeMonthHeader, normalizeTeam } from "@/lib/branch/parsers/rev"
 import type { FormattedCell } from "@/lib/branch/google-sheets"
 
 const grid = fixture as unknown as FormattedCell[][]
@@ -33,5 +33,15 @@ describe("parseRev", () => {
     expect(normalizeMonthHeader("4월", 2026)).toBe("2026-04")
     expect(normalizeMonthHeader("3", 2026)).toBe("2027-03")  // FY 회계연도 기준
     expect(normalizeMonthHeader("invalid", 2026)).toBeNull()
+  })
+  it("normalizeTeam aliases", () => {
+    expect(normalizeTeam("MK")).toBe("MKT")
+    expect(normalizeTeam("Marketing")).toBe("MKT")
+    expect(normalizeTeam("마케팅")).toBe("MKT")
+    expect(normalizeTeam("CS")).toBe("CSM")
+    expect(normalizeTeam("BD")).toBe("BD")
+    expect(normalizeTeam("Unknown Team")).toBe("기타")
+    expect(normalizeTeam("")).toBeNull()
+    expect(normalizeTeam(null)).toBeNull()
   })
 })

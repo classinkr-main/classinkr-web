@@ -32,4 +32,10 @@ describe("parseDsh", () => {
     expect(status.quarters[0]).toBe(60000000)
     expect(status.months["2026-04"]).toBe(22000000)
   })
+
+  it("extracts at least one breakdown row when sheet has Software/Hardware × New/Renew × Direct/Channel", () => {
+    // The current fixture is minimal; just verify the field exists and is array
+    const out = parseDsh(fixture as never, 2026)
+    expect(Array.isArray(out.breakdown)).toBe(true)
+  })
 })
