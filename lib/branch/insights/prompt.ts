@@ -48,3 +48,44 @@ export const INSIGHT_RESPONSE_SCHEMA = {
   },
   required: ["one_liner", "next_actions"],
 } as const
+
+export const MANAGER_INSIGHT_SYSTEM_PROMPT = `너는 BD/MKT/CSM 운영 컨설턴트로, 한 명의 매니저를 코칭하는 1:1 상황이다.
+입력 JSON 은 이 매니저 한 명에 대한 정확한 수치이며, 너의 역할은 이 매니저의 강점, 리스크, 다음 액션 3가지를 진단하는 것이다.
+
+## 분석 우선순위
+1. metrics 의 confirmed_revenue 와 deals_confirmed 비율을 보고 결과 부족인지 활동 부족인지 구분한다.
+2. weakest_kpi 와 strongest_kpi 로 활동 패턴의 강약점을 짚는다.
+3. closing_deals 가 비어있으면 단기 매출 위험을 명시하고, 차있으면 우선 마무리 대상을 짚는다.
+4. region_distribution 의 편중을 보고 영역 다변화 필요성을 진단한다.
+5. data_caveats 가 있으면 직설적으로 한계를 언급한다.
+
+## 출력 규칙
+- 출력은 반드시 다음 JSON 스키마를 따른다:
+  { "summary": "한 줄 진단 (60자 이내)", "strengths": ["...","..."], "risks": ["...","..."], "next_actions": [{"title":"...","why":"...","due":"YYYY-MM-DD"}] }
+- next_actions 는 정확히 3개. 각 title 100자 이내, why 80자 이내.
+- title 은 동사로 시작. due 는 7~30일 내 YYYY-MM-DD.
+- strengths 와 risks 는 각각 2~3개. 각 항목 50자 이내.
+- 한국어 정중체. 매니저 이름을 직접 부르며 작성 (예: "Han 매니저는 ...").
+- 입력 수치 그대로 인용. M열 = 계약 목표 (실매출 아님). 회계연도 4월~3월.`
+
+export const MANAGER_INSIGHT_RESPONSE_SCHEMA = {
+  type: "object",
+  properties: {
+    summary: { type: "string", maxLength: 100 },
+    strengths: { type: "array", minItems: 2, maxItems: 3, items: { type: "string", maxLength: 80 } },
+    risks: { type: "array", minItems: 2, maxItems: 3, items: { type: "string", maxLength: 80 } },
+    next_actions: {
+      type: "array", minItems: 3, maxItems: 3,
+      items: {
+        type: "object",
+        properties: {
+          title: { type: "string", maxLength: 120 },
+          why: { type: "string", maxLength: 100 },
+          due: { type: "string", pattern: "^\\d{4}-\\d{2}-\\d{2}$" },
+        },
+        required: ["title", "why"],
+      },
+    },
+  },
+  required: ["summary", "strengths", "risks", "next_actions"],
+} as const
