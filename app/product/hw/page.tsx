@@ -24,6 +24,7 @@ import SizeChooser from "@/components/product/hw/SizeChooser"
 import ValueAnchor from "@/components/product/hw/ValueAnchor"
 import ClassroomStudioSection from "@/components/product/hw/ClassroomStudioSection"
 import AfterClassSection from "@/components/product/hw/AfterClassSection"
+import OnboardingRoadmap from "@/components/product/hw/OnboardingRoadmap"
 
 /* ── Animation helpers ───────────────────────────────────────────── */
 const fadeUp = {
@@ -57,27 +58,27 @@ const lineupCards = [
         size: '110"',
         rec: "대형 강의실 · 강당",
         badge: "FLAGSHIP",
-        cardClass: "border-slate-900 bg-slate-900 text-white",
-        badgeClass: "border border-white/10 bg-white/[0.08] text-white/70",
-        sizeClass: "text-white/70",
-        recClass: "text-white/60",
+        cardClass: "border-slate-900 text-slate-900",
+        badgeClass: "border border-slate-900/20 text-slate-900",
+        sizeClass: "text-slate-500",
+        recClass: "text-slate-500",
     },
     {
         model: "S86",
         size: '86"',
         rec: "10명 이상 교실",
         badge: "BEST",
-        cardClass: "border-[#22A366] bg-[#22A366] text-white",
-        badgeClass: "border border-white/10 bg-white/[0.12] text-white/80",
-        sizeClass: "text-white/[0.72]",
-        recClass: "text-white/[0.68]",
+        cardClass: "border-[#22A366] text-slate-900",
+        badgeClass: "border border-[#22A366]/30 text-[#22A366]",
+        sizeClass: "text-slate-500",
+        recClass: "text-slate-500",
     },
     {
         model: "S75",
         size: '75"',
         rec: "10명 이하 교실",
         badge: "",
-        cardClass: "border-slate-200 bg-white text-slate-900",
+        cardClass: "border-slate-200 text-slate-900",
         badgeClass: "",
         sizeClass: "text-slate-500",
         recClass: "text-slate-500",
@@ -87,7 +88,7 @@ const lineupCards = [
         size: '65"',
         rec: "소규모 공부방, 교습소",
         badge: "",
-        cardClass: "border-slate-200 bg-white text-slate-900",
+        cardClass: "border-slate-200 text-slate-900",
         badgeClass: "",
         sizeClass: "text-slate-500",
         recClass: "text-slate-500",
@@ -235,14 +236,11 @@ type FeatureTab = {
     badge: string
     title: string
     points: string[]
-    visual?: "image" | "camera-stack"
     image?: string
     imageAlt?: string
     imageFit?: "cover" | "contain"
     imagePanelClassName?: string
     imageClassName?: string
-    cameraFront?: string
-    cameraBack?: string
 }
 
 const featureTabs: FeatureTab[] = [
@@ -288,9 +286,11 @@ const featureTabs: FeatureTab[] = [
     },
     {
         label: "AI 카메라",
-        visual: "camera-stack",
-        cameraBack: "/images/product/hw/features/camera-back.png",
-        cameraFront: "/images/product/hw/features/camera-front.png",
+        image: "/images/product/hw/camera/camera-dual-premium-blended.png",
+        imageAlt: "ClassIn Board AI 트래킹 카메라 클로즈업",
+        imageFit: "contain",
+        imagePanelClassName: "bg-[#050708]",
+        imageClassName: "scale-[1.08]",
         badge: "수업 영상 자동 생성",
         title: "수업이 끝나면, 영상도 완성됩니다",
         points: [
@@ -358,44 +358,17 @@ function FeatureTabSection() {
                     className="max-w-5xl mx-auto grid lg:grid-cols-2 gap-10 items-center"
                 >
                     {/* Image */}
-                    {tab.visual === "camera-stack" ? (
-                        <div className="relative aspect-[4/3] bg-transparent">
-                            <div className="absolute inset-0 bg-[radial-gradient(circle_at_50%_32%,_rgba(255,255,255,0.08),_transparent_30%),radial-gradient(circle_at_20%_20%,_rgba(34,163,102,0.08),_transparent_26%),linear-gradient(180deg,_rgba(8,10,9,1)_0%,_rgba(2,3,3,1)_100%)]" />
+                    <div className={`rounded-3xl overflow-hidden shadow-2xl ${tab.imagePanelClassName ?? "bg-white"}`}>
+                        <div className={`relative aspect-[4/3] ${tab.imagePanelClassName ?? ""}`}>
                             <Image
-                                src={tab.cameraBack ?? ""}
-                                alt="클래스인 AI 카메라 후면"
-                                width={266}
-                                height={224}
-                                sizes="(max-width: 768px) 46vw, 280px"
-                                className="absolute left-[6%] top-[7%] w-[46%] max-w-[280px] rotate-[-11deg] drop-shadow-[0_30px_55px_rgba(0,0,0,0.5)]"
+                                src={tab.image ?? ""}
+                                alt={tab.imageAlt ?? tab.title}
+                                fill
+                                sizes="(max-width: 768px) 100vw, 50vw"
+                                className={`${tab.imageFit === "contain" ? "object-contain" : "object-cover"} ${tab.imageClassName ?? ""}`}
                             />
-                            <Image
-                                src={tab.cameraFront ?? ""}
-                                alt="클래스인 AI 카메라 전면"
-                                width={292}
-                                height={267}
-                                sizes="(max-width: 768px) 52vw, 320px"
-                                className="absolute right-[0%] bottom-[3%] w-[54%] max-w-[330px] rotate-[8deg] drop-shadow-[0_36px_70px_rgba(0,0,0,0.62)]"
-                            />
-                            <div className="absolute inset-x-0 bottom-6 flex justify-center">
-                                <div className="px-1 py-1 text-[11px] font-semibold tracking-[0.24em] text-white/80">
-                                    4K AI TRACKING CAMERA
-                                </div>
-                            </div>
                         </div>
-                    ) : (
-                        <div className={`rounded-3xl overflow-hidden shadow-2xl ${tab.imagePanelClassName ?? "bg-white"}`}>
-                            <div className={`relative aspect-[4/3] ${tab.imagePanelClassName ?? ""}`}>
-                                <Image
-                                    src={tab.image ?? ""}
-                                    alt={tab.imageAlt ?? tab.title}
-                                    fill
-                                    sizes="(max-width: 768px) 100vw, 50vw"
-                                    className={`${tab.imageFit === "contain" ? "object-contain" : "object-cover"} ${tab.imageClassName ?? ""}`}
-                                />
-                            </div>
-                        </div>
-                    )}
+                    </div>
 
                     {/* Content */}
                     <div>
@@ -804,50 +777,6 @@ function SpaceScenarioSection() {
 }
 
 /* ── Section: Onboarding Process ─────────────────────────────────── */
-const processSteps = [
-    { num: "01", title: "문의 · 상담", desc: "공간 규모와 목적을 알려주시면 최적 모델과 구성을 제안합니다" },
-    { num: "02", title: "현장 실측 · 견적", desc: "전문 설치팀이 방문하여 공간 실측 후 정확한 맞춤 견적을 드립니다" },
-    { num: "03", title: "설치 (1일 완료)", desc: "하루 안에 설치 완료. 수업 중단을 최소화하고 즉시 사용할 수 있습니다" },
-    { num: "04", title: "교사 교육 (2시간)", desc: "현장 교육 2시간으로 모든 기능을 즉시 활용할 수 있도록 안내합니다" },
-]
-
-function OnboardingProcessSection() {
-    return (
-        <section className="py-24 md:py-32 bg-[#FDFCF8]">
-            <div className="container mx-auto px-4 lg:px-8">
-                <motion.div className="text-center mb-16" {...fadeUp}>
-                    <p className="text-sm font-semibold text-[#22A366] tracking-wider uppercase mb-3">HOW TO START</p>
-                    <h2 className="text-3xl md:text-4xl lg:text-5xl text-[#1a1a19] leading-tight">
-                        수업의 격을 높이는 차원이 다른 스펙,
-                        <br />
-                        <span className="text-[#22A366]">가장 먼저 우리 학원에서 만나보세요</span>
-                    </h2>
-                    <p className="text-lg text-slate-500 mt-4 max-w-xl mx-auto">
-                        단순한 기기 도입을 넘어 수업의 격을 바꿉니다.
-                        <br className="hidden sm:block" />
-                        전문 상담을 통해 학원 규모와 목적에 최적화된 솔루션을 제안해 드립니다.
-                    </p>
-                </motion.div>
-
-                <div className="max-w-5xl mx-auto relative">
-                    <div className="absolute top-7 left-[12%] right-[12%] h-px bg-gradient-to-r from-transparent via-[#22A366]/25 to-transparent hidden lg:block" />
-                    <div className="grid sm:grid-cols-2 lg:grid-cols-4 gap-8">
-                        {processSteps.map((step, i) => (
-                            <motion.div key={i} {...stagger(i)} className="flex flex-col items-center text-center">
-                                <div className="w-14 h-14 rounded-full bg-[#22A366]/10 border border-[#22A366]/20 flex items-center justify-center mb-5 relative z-10 shrink-0">
-                                    <span className="text-sm font-bold tabular-nums text-[#22A366]">{step.num}</span>
-                                </div>
-                                <h3 className="font-bold text-slate-900 text-sm mb-2 leading-snug">{step.title}</h3>
-                                <p className="text-xs text-slate-400 leading-relaxed">{step.desc}</p>
-                            </motion.div>
-                        ))}
-                    </div>
-                </div>
-            </div>
-        </section>
-    )
-}
-
 /* ── Main Page Component ─────────────────────────────────────────── */
 export default function ProductHWPage() {
     return (
@@ -1326,26 +1255,25 @@ export default function ProductHWPage() {
                     </motion.div>
 
                     {/* Lineup cards */}
-                    <div className="grid sm:grid-cols-2 lg:grid-cols-4 gap-5 max-w-5xl mx-auto mb-20">
+                    <div className="grid sm:grid-cols-2 lg:grid-cols-4 gap-4 max-w-5xl mx-auto mb-20">
                         {lineupCards.map((card, i) => (
                             <motion.div
                                 key={card.model}
                                 {...stagger(i)}
-                                className={`rounded-[28px] border p-7 sm:p-8 min-h-[220px] flex flex-col justify-between transition-transform duration-300 hover:-translate-y-0.5 ${card.cardClass}`}
-                                style={{ boxShadow: card.badge ? "0 14px 34px rgba(15, 23, 42, 0.07)" : "0 10px 24px rgba(15, 23, 42, 0.04)" }}
+                                className={`rounded-2xl border p-5 min-h-[150px] flex flex-col justify-between transition-colors duration-200 hover:bg-slate-50/60 ${card.cardClass}`}
                             >
-                                <div className="flex items-start justify-between gap-4">
+                                <div className="flex items-start justify-between gap-3">
                                     <div>
-                                        <div className="text-5xl font-sans font-bold tabular-nums tracking-tight">{card.model}</div>
-                                        <div className={`mt-1 text-2xl font-sans font-semibold tabular-nums ${card.sizeClass}`}>{card.size}</div>
+                                        <div className="text-3xl font-sans font-bold tabular-nums tracking-tight">{card.model}</div>
+                                        <div className={`mt-0.5 text-base font-sans font-medium tabular-nums ${card.sizeClass}`}>{card.size}</div>
                                     </div>
                                     {card.badge ? (
-                                        <div className={`shrink-0 rounded-full px-2.5 py-1 text-[10px] font-semibold tracking-[0.18em] ${card.badgeClass}`}>
+                                        <div className={`shrink-0 rounded-full px-2 py-0.5 text-[10px] font-semibold tracking-[0.16em] ${card.badgeClass}`}>
                                             {card.badge}
                                         </div>
                                     ) : null}
                                 </div>
-                                <p className={`text-sm leading-relaxed ${card.recClass}`}>{card.rec}</p>
+                                <p className={`text-xs leading-relaxed ${card.recClass}`}>{card.rec}</p>
                             </motion.div>
                         ))}
                     </div>
@@ -1385,7 +1313,7 @@ export default function ProductHWPage() {
             {/* ================================================================
                 ONBOARDING PROCESS — 도입 절차
             ================================================================ */}
-            <OnboardingProcessSection />
+            <OnboardingRoadmap />
 
             {/* ================================================================
                 ACT 5 — CTA: 직접 체험해보세요

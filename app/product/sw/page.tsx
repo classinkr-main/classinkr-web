@@ -14,6 +14,8 @@ import Link from "next/link"
 import Image from "next/image"
 import { useRef, useEffect, useState, useMemo, useCallback } from "react"
 
+import OnboardingRoadmap from "@/components/product/sw/OnboardingRoadmap"
+
 const CHECKOUT_ENABLED = process.env.NEXT_PUBLIC_SW_CHECKOUT_ENABLED === "true"
 const CHECKOUT_HREF = CHECKOUT_ENABLED ? "/checkout" : "/contact#contact-form"
 const CHECKOUT_CTA_LABEL = CHECKOUT_ENABLED ? "지금 바로 결제 시작" : "지금 무료로 시작하기"
@@ -1014,78 +1016,7 @@ function AIFeaturesSection() {
     )
 }
 
-/* ── [D] 도입 프로세스 섹션 ──────────────────────────────────── */
-const ONBOARDING_STEPS = [
-    {
-        step: "01",
-        title: "상담 신청",
-        desc: "기관 규모와 수업 방식을 공유해주시면 전담 매니저가 맞춤 플랜을 안내합니다.",
-        duration: "당일 회신",
-    },
-    {
-        step: "02",
-        title: "무료 체험",
-        desc: "실제 수업 환경에서 직접 사용해보세요. 설치 없이 브라우저에서 바로 시작합니다.",
-        duration: "2주 무료",
-    },
-    {
-        step: "03",
-        title: "팀 온보딩",
-        desc: "강사진 교육부터 시스템 설정까지. 전담 온보딩 팀이 처음부터 함께합니다.",
-        duration: "1–3일",
-    },
-    {
-        step: "04",
-        title: "수업 시작",
-        desc: "준비 완료. 학생들과 함께 첫 수업을 시작하세요. 이후에도 전담 지원이 이어집니다.",
-        duration: "바로 시작",
-    },
-]
-
-function OnboardingSection() {
-    return (
-        <section className="py-24 md:py-32 bg-white">
-            <div className="container mx-auto px-4 lg:px-8 max-w-5xl">
-                <motion.div className="text-center mb-16" {...fadeUp}>
-                    <EyebrowTag>GET STARTED</EyebrowTag>
-                    <h2 className="text-3xl md:text-4xl lg:text-5xl font-serif text-[#1a1a19] leading-tight">
-                        도입은 생각보다<br /><span className="text-[#22A366]">쉽습니다</span>
-                    </h2>
-                    <p className="text-lg text-slate-400 mt-4 max-w-md mx-auto">
-                        상담부터 첫 수업까지, 빠르면 하루 안에 시작할 수 있습니다.
-                    </p>
-                </motion.div>
-
-                <div className="relative">
-                    {/* 연결선 */}
-                    <div className="hidden lg:block absolute top-9 left-[calc(12.5%+26px)] right-[calc(12.5%+26px)] h-px bg-gradient-to-r from-[#22A366]/10 via-[#22A366]/30 to-[#22A366]/10" />
-
-                    <div className="grid sm:grid-cols-2 lg:grid-cols-4 gap-6">
-                        {ONBOARDING_STEPS.map((s, i) => (
-                            <motion.div
-                                key={s.step}
-                                initial={{ opacity: 0, y: 25 }}
-                                whileInView={{ opacity: 1, y: 0 }}
-                                viewport={{ once: true }}
-                                transition={{ delay: i * 0.12 }}
-                                className="flex flex-col items-center text-center"
-                            >
-                                <div className="w-[52px] h-[52px] rounded-full bg-white border-2 border-[#22A366] text-[#22A366] font-serif font-bold text-xl flex items-center justify-center mb-5 shadow-[0_4px_16px_rgba(34,163,102,0.2)] relative z-10">
-                                    {s.step}
-                                </div>
-                                <span className="inline-block bg-[#ECFDF5] border border-[rgba(34,163,102,0.2)] text-[#22A366] text-[10px] font-bold px-3 py-1 rounded-full mb-3 tracking-wide">
-                                    {s.duration}
-                                </span>
-                                <h3 className="text-base font-bold text-slate-900 mb-2">{s.title}</h3>
-                                <p className="text-sm text-slate-500 leading-relaxed">{s.desc}</p>
-                            </motion.div>
-                        ))}
-                    </div>
-                </div>
-            </div>
-        </section>
-    )
-}
+/* ── [D] 도입 프로세스 섹션 → components/product/sw/OnboardingRoadmap.tsx 로 추출됨 ──────────── */
 
 /* ── [E] FAQ 섹션 ────────────────────────────────────────────── */
 const FAQS = [
@@ -2083,7 +2014,7 @@ export default function ProductPage() {
 
             <PricingValueSection />
 
-            <OnboardingSection />
+            <OnboardingRoadmap />
 
             <FAQSection />
 
