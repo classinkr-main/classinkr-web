@@ -21,11 +21,16 @@ export default function CoreKpiGrid({ team, period, refreshKey }: { team: Team; 
   const [data, setData] = useState<SummaryResponse | null>(null)
   const [error, setError] = useState<string | null>(null)
   useEffect(() => {
-    setError(null)
-    adminFetch(`/api/admin/branch/summary?team=${team}&period=${period}`)
+    let cancelled = false
+    void adminFetch(`/api/admin/branch/summary?team=${team}&period=${period}`)
       .then((r) => r.json())
-      .then((d) => { if (d.error) setError(d.error); else setData(d) })
-      .catch((e) => setError(String(e)))
+      .then((d) => {
+        if (cancelled) return
+        if (d.error) { setError(d.error); setData(null) }
+        else { setError(null); setData(d) }
+      })
+      .catch((e) => { if (!cancelled) setError(String(e)) })
+    return () => { cancelled = true }
   }, [team, period, refreshKey])
   if (error) return <div className="rounded-2xl border border-rose-200 bg-rose-50 p-4 text-[12px] text-rose-700">{error}</div>
   if (!data) return (

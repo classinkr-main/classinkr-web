@@ -18,11 +18,16 @@ export default function RegionHeatmap({ team, period, refreshKey }: { team: Team
   const [rows, setRows] = useState<Row[] | null>(null)
   const [error, setError] = useState<string | null>(null)
   useEffect(() => {
-    setError(null)
-    adminFetch(`/api/admin/branch/heatmap?team=${team}&period=${period}`)
+    let cancelled = false
+    void adminFetch(`/api/admin/branch/heatmap?team=${team}&period=${period}`)
       .then((r) => r.json())
-      .then((d) => d.error ? setError(d.error) : setRows(d.rows))
-      .catch((e) => setError(String(e)))
+      .then((d) => {
+        if (cancelled) return
+        if (d.error) { setError(d.error); setRows(null) }
+        else { setError(null); setRows(d.rows) }
+      })
+      .catch((e) => { if (!cancelled) setError(String(e)) })
+    return () => { cancelled = true }
   }, [team, period, refreshKey])
   if (error) return <div className="rounded-2xl border border-rose-200 bg-rose-50 p-4 text-[12px] text-rose-700">{error}</div>
   if (!rows) return <div className="h-48 animate-pulse rounded-2xl bg-[#f0f0ec]" />

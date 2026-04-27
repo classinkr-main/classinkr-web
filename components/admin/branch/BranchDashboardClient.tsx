@@ -44,7 +44,14 @@ export default function BranchDashboardClient() {
     }
   }, [team, period])
 
-  useEffect(() => { refreshSummary() }, [refreshSummary, refreshKey])
+  useEffect(() => {
+    let cancelled = false
+    void (async () => {
+      await refreshSummary()
+      void cancelled
+    })()
+    return () => { cancelled = true }
+  }, [refreshSummary, refreshKey])
 
   const onRefresh = useCallback(async () => {
     try {
