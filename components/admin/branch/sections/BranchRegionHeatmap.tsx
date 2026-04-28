@@ -372,7 +372,7 @@ export default function BranchRegionHeatmap({ team, period, refreshKey }: { team
         <p className="text-[10.5px] text-[#A39E98]">호버 시 지역 상세</p>
       </div>
 
-      <div className="mx-auto grid w-full max-w-[920px] gap-6 p-5 lg:grid-cols-[minmax(0,1fr)_minmax(0,1fr)]">
+      <div className="grid w-full gap-6 p-5 lg:grid-cols-[minmax(280px,420px)_minmax(0,1fr)]">
         <HeatMap rows={mappedRows} selectedLabel={selected?.label ?? null}
           onSelect={(r) => setSelectedLabel(r.label)} />
 
