@@ -58,13 +58,13 @@ export default function FiscalRoadmap({ data, loading, error }: { data: BranchMo
             <YAxis width={72} tick={{ fontSize: 11 }} tickFormatter={formatMoneyM} />
             <Tooltip formatter={(value) => formatMoneyM(value)} />
             <Line type="monotone" dataKey="goal" name="FY 목표" stroke="#888" strokeDasharray="4 4" dot={false} />
-            <Line type="monotone" dataKey="revenue" name="확정 매출" stroke="#0d8a4d" strokeWidth={2.5} dot={{ r: 3 }} />
-            <Line type="monotone" dataKey="trend" name="미확정 추세" stroke="#0d8a4d" strokeWidth={2.5} strokeDasharray="6 5" dot={false} />
+            <Line type="monotone" dataKey="revenue" name="확정 매출" stroke="#B43E3E" strokeWidth={2.5} dot={{ r: 3, fill: "#B43E3E" }} />
+            <Line type="monotone" dataKey="trend" name="가능성 추세" stroke="#1E5DA8" strokeWidth={2.5} strokeDasharray="6 5" dot={false} />
           </LineChart>
         </ResponsiveContainer>
         <div className="mt-3 flex flex-wrap items-center gap-3 text-[11px] text-[#1a1a1a]/50">
-          <span className="inline-flex items-center gap-1.5"><i className="h-0.5 w-5 bg-[#0d8a4d]" />확정 매출 (¥M)</span>
-          <span className="inline-flex items-center gap-1.5"><i className="h-0.5 w-5 border-t border-dashed border-[#0d8a4d]" />미확정 추세 (¥M)</span>
+          <span className="inline-flex items-center gap-1.5"><i className="h-0.5 w-5 bg-[#B43E3E]" /><span className="font-semibold text-[#B43E3E]">확정 매출</span> (¥M)</span>
+          <span className="inline-flex items-center gap-1.5"><i className="h-0.5 w-5 border-t border-dashed border-[#1E5DA8]" /><span className="font-semibold text-[#1E5DA8]">가능성 추세</span> (¥M)</span>
           <span className="inline-flex items-center gap-1.5"><i className="h-0.5 w-5 border-t border-dashed border-[#888]" />FY 목표 (¥M)</span>
         </div>
         <div className="mt-3 flex flex-wrap gap-2 text-[11px]">

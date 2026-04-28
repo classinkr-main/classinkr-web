@@ -28,6 +28,7 @@ import {
 import { clearAdminSessionStorage } from "@/lib/admin-client"
 import { createSupabaseBrowserClient } from "@/lib/supabase/browser"
 import { hasSupabaseBrowserEnv } from "@/lib/supabase/public-env"
+import AdminNotificationsBell from "./AdminNotificationsBell"
 
 type SidebarRole = "SUPER_ADMIN" | "ADMIN" | "EDITOR" | "VIEWER" | "BRANCH" | "PARTNER"
 type SidebarSection = "workspace" | "growth" | "performance" | "system"
@@ -306,17 +307,18 @@ export default function AdminSidebar({ role, name, email }: Props) {
         effectiveCollapsed ? "lg:w-16" : "lg:w-60"
       }`}
     >
-      <div className="flex items-center border-b border-[#e8e8e4] px-4 py-4 sm:px-5 lg:pt-6 lg:pb-4">
+      <div className="flex items-center gap-1 border-b border-[#e8e8e4] px-4 py-4 sm:px-5 lg:pt-6 lg:pb-4">
         {!effectiveCollapsed && (
           <div className="flex-1">
             <p className="mb-0.5 text-[11px] font-medium uppercase tracking-widest text-[#1a1a1a]/30">Classin</p>
             <p className="text-[15px] font-semibold text-[#111110]">Admin</p>
           </div>
         )}
+        <AdminNotificationsBell placement="inline" />
         <button
           onClick={toggle}
           className={`rounded-md p-1 text-[#1a1a1a]/30 transition-colors hover:bg-[#f5f5f2] hover:text-[#111110] ${
-            effectiveCollapsed ? "ml-0 lg:mx-auto" : "ml-auto"
+            effectiveCollapsed ? "lg:mx-auto" : ""
           }`}
           title={effectiveCollapsed ? "사이드바 열기" : "사이드바 닫기"}
         >
