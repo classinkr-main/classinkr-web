@@ -15,8 +15,12 @@ export function FinalCTA() {
             <div className="absolute top-0 right-0 w-[800px] h-[800px] bg-primary/30 rounded-full blur-[120px] pointer-events-none translate-x-1/2 -translate-y-1/2" />
 
             <div className="container mx-auto relative z-10 text-center">
-                <span className="inline-block py-1.5 px-4 rounded-full bg-[#ECFDF5]/10 text-[#6EE7B7] text-sm font-semibold mb-6 border border-white/10 backdrop-blur-md">
-                    무료 컨설팅 제공
+                <span className="inline-flex items-center gap-2.5 py-2 px-5 rounded-full bg-white/[0.06] text-[#6EE7B7] text-sm font-semibold mb-6 border border-white/[0.08] backdrop-blur-md shadow-[0_2px_20px_rgba(110,231,183,0.08),inset_0_1px_0_rgba(255,255,255,0.06)]">
+                    <span className="relative flex h-2 w-2">
+                        <span className="absolute inline-flex h-full w-full animate-ping rounded-full bg-[#6EE7B7]/30" />
+                        <span className="relative inline-flex h-2 w-2 rounded-full bg-[#6EE7B7]" />
+                    </span>
+                    <span className="tracking-[0.04em]">무료 컨설팅 제공</span>
                 </span>
 
                 <h2 className="text-4xl md:text-5xl lg:text-6xl font-extrabold text-white mb-6 break-keep" style={{ letterSpacing: '-1.5px' }}>

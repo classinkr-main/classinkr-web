@@ -21,8 +21,8 @@ export function ScienceBased() {
                     className="text-center mb-24"
                 >
                     <h2 className="text-4xl md:text-5xl font-extrabold text-white mb-6 font-sans break-keep" style={{ letterSpacing: '-1.5px' }}>
-                        우리의 솔루션은 <br className="md:hidden" />
-                        과학적 이론에 기반합니다
+                        교육적 이론에 최적화된 <br className="md:hidden" />
+                        학습 솔루션
                     </h2>
                     <p className="text-xl text-[#A39E98] font-medium break-keep">
                         단순히 편리한 도구가 아닙니다. 학습 효율을 극대화하는 검증된 교육 공학입니다.
@@ -56,7 +56,7 @@ export function ScienceBased() {
                                     className="absolute bottom-6 left-6 z-10"
                                 >
                                     <div className="font-extrabold text-2xl md:text-3xl text-white drop-shadow-xl">Hermann Ebbinghaus</div>
-                                    <div className="text-sm font-semibold text-[#6EE7B7] tracking-widest mt-1 uppercase drop-shadow-md">Memory & Psychology</div>
+                                    <div className="text-[12px] font-bold text-[#6EE7B7]/80 tracking-[0.3em] mt-1.5 uppercase drop-shadow-md">Memory & Psychology</div>
                                 </motion.div>
                             </div>
                         </motion.div>
@@ -89,8 +89,8 @@ export function ScienceBased() {
                             </div>
 
                             <div className="flex gap-3">
-                                <span className="px-4 py-1.5 bg-[#2a2925] border border-white/[0.08] text-white/70 text-sm font-semibold rounded-full">#즉시복습</span>
-                                <span className="px-4 py-1.5 bg-[#2a2925] border border-white/[0.08] text-white/70 text-sm font-semibold rounded-full">#장기기억</span>
+                                <span className="px-4 py-1.5 bg-gradient-to-r from-[#2a2925] to-[#2a2925]/80 border border-white/[0.06] text-white/60 text-[13px] font-semibold rounded-full backdrop-blur-sm shadow-[0_1px_6px_rgba(0,0,0,0.2),inset_0_1px_0_rgba(255,255,255,0.04)] tracking-[0.01em]">#즉시복습</span>
+                                <span className="px-4 py-1.5 bg-gradient-to-r from-[#2a2925] to-[#2a2925]/80 border border-white/[0.06] text-white/60 text-[13px] font-semibold rounded-full backdrop-blur-sm shadow-[0_1px_6px_rgba(0,0,0,0.2),inset_0_1px_0_rgba(255,255,255,0.04)] tracking-[0.01em]">#장기기억</span>
                             </div>
                         </motion.div>
                     </div>
@@ -121,7 +121,7 @@ export function ScienceBased() {
                                     className="absolute bottom-6 right-6 z-10 text-right"
                                 >
                                     <div className="font-extrabold text-2xl md:text-3xl text-white drop-shadow-xl">Scott Freeman</div>
-                                    <div className="text-sm font-semibold text-[#6EE7B7] tracking-widest mt-1 uppercase drop-shadow-md">Biology Education</div>
+                                    <div className="text-[12px] font-bold text-[#6EE7B7]/80 tracking-[0.3em] mt-1.5 uppercase drop-shadow-md">Biology Education</div>
                                 </motion.div>
                             </div>
                         </motion.div>
@@ -154,8 +154,8 @@ export function ScienceBased() {
                             </div>
 
                             <div className="flex gap-3">
-                                <span className="px-4 py-1.5 bg-[#2a2925] border border-white/[0.08] text-white/70 text-sm font-semibold rounded-full">#ActiveLearning</span>
-                                <span className="px-4 py-1.5 bg-[#2a2925] border border-white/[0.08] text-white/70 text-sm font-semibold rounded-full">#참여수업</span>
+                                <span className="px-4 py-1.5 bg-gradient-to-r from-[#2a2925] to-[#2a2925]/80 border border-white/[0.06] text-white/60 text-[13px] font-semibold rounded-full backdrop-blur-sm shadow-[0_1px_6px_rgba(0,0,0,0.2),inset_0_1px_0_rgba(255,255,255,0.04)] tracking-[0.01em]">#ActiveLearning</span>
+                                <span className="px-4 py-1.5 bg-gradient-to-r from-[#2a2925] to-[#2a2925]/80 border border-white/[0.06] text-white/60 text-[13px] font-semibold rounded-full backdrop-blur-sm shadow-[0_1px_6px_rgba(0,0,0,0.2),inset_0_1px_0_rgba(255,255,255,0.04)] tracking-[0.01em]">#참여수업</span>
                             </div>
                         </motion.div>
                     </div>

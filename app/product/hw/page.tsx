@@ -6,7 +6,7 @@ import { motion, useInView } from "framer-motion"
 import {
     ArrowRight, PenTool, Eye, Share2,
     Monitor, Fingerprint, Users, Layers, Wifi,
-    Shield, Maximize, ChevronRight, Zap, Hand,
+    Shield, Maximize, Zap, Hand,
     GraduationCap, Mic, Camera, Star,
 } from "lucide-react"
 import Image from "next/image"
@@ -24,6 +24,7 @@ import SizeChooser from "@/components/product/hw/SizeChooser"
 import ValueAnchor from "@/components/product/hw/ValueAnchor"
 import ClassroomStudioSection from "@/components/product/hw/ClassroomStudioSection"
 import AfterClassSection from "@/components/product/hw/AfterClassSection"
+import OnboardingRoadmap from "@/components/product/hw/OnboardingRoadmap"
 
 /* ── Animation helpers ───────────────────────────────────────────── */
 const fadeUp = {
@@ -57,27 +58,27 @@ const lineupCards = [
         size: '110"',
         rec: "대형 강의실 · 강당",
         badge: "FLAGSHIP",
-        cardClass: "border-slate-900 bg-slate-900 text-white",
-        badgeClass: "border border-white/10 bg-white/[0.08] text-white/70",
-        sizeClass: "text-white/70",
-        recClass: "text-white/60",
+        cardClass: "border-slate-900 text-slate-900",
+        badgeClass: "border border-slate-900/20 text-slate-900",
+        sizeClass: "text-slate-500",
+        recClass: "text-slate-500",
     },
     {
         model: "S86",
         size: '86"',
         rec: "10명 이상 교실",
         badge: "BEST",
-        cardClass: "border-[#22A366] bg-[#22A366] text-white",
-        badgeClass: "border border-white/10 bg-white/[0.12] text-white/80",
-        sizeClass: "text-white/[0.72]",
-        recClass: "text-white/[0.68]",
+        cardClass: "border-[#22A366] text-slate-900",
+        badgeClass: "border border-[#22A366]/30 text-[#22A366]",
+        sizeClass: "text-slate-500",
+        recClass: "text-slate-500",
     },
     {
         model: "S75",
         size: '75"',
         rec: "10명 이하 교실",
         badge: "",
-        cardClass: "border-slate-200 bg-white text-slate-900",
+        cardClass: "border-slate-200 text-slate-900",
         badgeClass: "",
         sizeClass: "text-slate-500",
         recClass: "text-slate-500",
@@ -87,7 +88,7 @@ const lineupCards = [
         size: '65"',
         rec: "소규모 공부방, 교습소",
         badge: "",
-        cardClass: "border-slate-200 bg-white text-slate-900",
+        cardClass: "border-slate-200 text-slate-900",
         badgeClass: "",
         sizeClass: "text-slate-500",
         recClass: "text-slate-500",
@@ -235,14 +236,11 @@ type FeatureTab = {
     badge: string
     title: string
     points: string[]
-    visual?: "image" | "camera-stack"
     image?: string
     imageAlt?: string
     imageFit?: "cover" | "contain"
     imagePanelClassName?: string
     imageClassName?: string
-    cameraFront?: string
-    cameraBack?: string
 }
 
 const featureTabs: FeatureTab[] = [
@@ -252,7 +250,7 @@ const featureTabs: FeatureTab[] = [
         imageAlt: "50페이지 판서 기능 시각화",
         imageFit: "contain",
         imagePanelClassName: "bg-[#05080C]",
-        imageClassName: "p-6 md:p-8",
+        imageClassName: "scale-[1.8] -translate-y-[8%]",
         badge: "50페이지 무한 캔버스",
         title: "공간 걱정 없이 쓰고, 쓰는 즉시 전달",
         points: [
@@ -288,9 +286,11 @@ const featureTabs: FeatureTab[] = [
     },
     {
         label: "AI 카메라",
-        visual: "camera-stack",
-        cameraBack: "/images/product/hw/features/camera-back.png",
-        cameraFront: "/images/product/hw/features/camera-front.png",
+        image: "/images/product/hw/camera/camera-dual-premium-blended.png",
+        imageAlt: "ClassIn Board AI 트래킹 카메라 클로즈업",
+        imageFit: "contain",
+        imagePanelClassName: "bg-[#050708]",
+        imageClassName: "scale-[1.08]",
         badge: "수업 영상 자동 생성",
         title: "수업이 끝나면, 영상도 완성됩니다",
         points: [
@@ -358,45 +358,17 @@ function FeatureTabSection() {
                     className="max-w-5xl mx-auto grid lg:grid-cols-2 gap-10 items-center"
                 >
                     {/* Image */}
-                    {tab.visual === "camera-stack" ? (
-                        <div className="relative aspect-[4/3] rounded-3xl overflow-hidden border border-[#22A366]/10 bg-[radial-gradient(circle_at_top,_rgba(255,255,255,0.95),_rgba(236,253,245,0.88)_38%,_rgba(224,242,234,0.92)_100%)] shadow-2xl">
-                            <div className="absolute inset-0 bg-[radial-gradient(circle_at_50%_28%,_rgba(255,255,255,0.9),_transparent_35%),linear-gradient(135deg,_rgba(34,163,102,0.06),_transparent_55%)]" />
-                            <div className="absolute inset-0 bg-[linear-gradient(120deg,_transparent_0%,_rgba(255,255,255,0.45)_50%,_transparent_100%)] opacity-70" />
+                    <div className={`rounded-3xl overflow-hidden shadow-2xl ${tab.imagePanelClassName ?? "bg-white"}`}>
+                        <div className={`relative aspect-[4/3] ${tab.imagePanelClassName ?? ""}`}>
                             <Image
-                                src={tab.cameraBack ?? ""}
-                                alt="클래스인 AI 카메라 후면"
-                                width={266}
-                                height={224}
-                                sizes="(max-width: 768px) 38vw, 220px"
-                                className="absolute left-[12%] top-[16%] w-[38%] max-w-[220px] rotate-[-12deg] drop-shadow-[0_28px_45px_rgba(15,23,42,0.18)]"
+                                src={tab.image ?? ""}
+                                alt={tab.imageAlt ?? tab.title}
+                                fill
+                                sizes="(max-width: 768px) 100vw, 50vw"
+                                className={`${tab.imageFit === "contain" ? "object-contain" : "object-cover"} ${tab.imageClassName ?? ""}`}
                             />
-                            <Image
-                                src={tab.cameraFront ?? ""}
-                                alt="클래스인 AI 카메라 전면"
-                                width={292}
-                                height={267}
-                                sizes="(max-width: 768px) 42vw, 250px"
-                                className="absolute right-[10%] bottom-[12%] w-[42%] max-w-[250px] rotate-[10deg] drop-shadow-[0_30px_55px_rgba(15,23,42,0.22)]"
-                            />
-                            <div className="absolute inset-x-0 bottom-6 flex justify-center">
-                                <div className="rounded-full border border-[#22A366]/15 bg-white/70 px-4 py-2 text-[11px] font-semibold tracking-[0.2em] text-[#084734] backdrop-blur-sm">
-                                    4K AI TRACKING CAMERA
-                                </div>
-                            </div>
                         </div>
-                    ) : (
-                        <div className={`rounded-3xl overflow-hidden shadow-2xl ${tab.imagePanelClassName ?? "bg-white"}`}>
-                            <div className={`relative aspect-[4/3] ${tab.imagePanelClassName ?? ""}`}>
-                                <Image
-                                    src={tab.image ?? ""}
-                                    alt={tab.imageAlt ?? tab.title}
-                                    fill
-                                    sizes="(max-width: 768px) 100vw, 50vw"
-                                    className={`${tab.imageFit === "contain" ? "object-contain" : "object-cover"} ${tab.imageClassName ?? ""}`}
-                                />
-                            </div>
-                        </div>
-                    )}
+                    </div>
 
                     {/* Content */}
                     <div>
@@ -524,9 +496,9 @@ function ImpactNumbersSection() {
 
 /* ── Section: Full-Width Point (reusable) ────────────────────────── */
 function FullWidthPointSection({
-    eyebrow, statement, sub, dark = false, image,
+    eyebrow, statement, sub, dark = false, image, contentClassName,
 }: {
-    eyebrow: string; statement: React.ReactNode; sub?: string; dark?: boolean; image?: string
+    eyebrow: string; statement: React.ReactNode; sub?: string; dark?: boolean; image?: string; contentClassName?: string
 }) {
     return (
         <section className={`relative min-h-[65vh] flex items-center justify-center overflow-hidden ${dark ? "bg-[#0d1a12]" : "bg-[#22A366]"}`}>
@@ -535,7 +507,7 @@ function FullWidthPointSection({
             )}
             <div className={`absolute inset-0 ${dark ? "bg-[#0d1a12]/75" : "bg-[#0d1a12]/65"}`} />
             <div className="relative container mx-auto px-4 lg:px-8 py-28 md:py-40 text-center text-white">
-                <motion.div {...fadeUp}>
+                <motion.div {...fadeUp} className={contentClassName}>
                     <p className="text-xs font-bold tracking-[0.35em] uppercase mb-7 text-white/50">{eyebrow}</p>
                     <h2 className="text-4xl sm:text-5xl lg:text-6xl xl:text-[5rem] leading-[1.1] tracking-tight mb-8 max-w-4xl mx-auto">
                         {statement}
@@ -697,25 +669,19 @@ const spaceScenarios = [
         model: "S110", size: '110"', badge: "FLAGSHIP",
         tag: "강당 · 대형 강의실",
         story: "300명이 앉은 강당에서도 맨 뒷자리가 선명합니다. 110인치 화면이 공간을 압도하며, 교사 한 명의 판서가 전석에 전달됩니다. 대규모 강의, 특강, 입시 설명회에 최적.",
-        image: "/images/product/hw/spaces/space-classroom-real.png",
+        image: "/images/product/hw/spaces/space-s110-hall.png",
     },
     {
         model: "S86", size: '86"', badge: "BEST",
         tag: "일반 교실 · 회의실",
         story: "30명 담임반의 하루 6교시를 완주하는 기준 모델. 가장 많은 교실 환경에 최적화된 사이즈. 8배열 마이크가 교실 소음 속에서도 교사 음성을 또렷이 전달합니다.",
-        image: "/images/product/hw/spaces/space-classroom.jpg",
+        image: "/images/product/hw/spaces/space-s86-classroom.png",
     },
     {
         model: "S75", size: '75"', badge: "",
         tag: "세미나 · 중형 회의실",
         story: "20명 내외의 세미나실과 중형 회의실에 딱 맞는 사이즈. 임원 PT, 팀 회의, 교사 연수에서 화이트보드를 완전히 대체합니다.",
-        image: "/images/product/hw/spaces/space-classroom.jpg",
-    },
-    {
-        model: "S65", size: '65"', badge: "",
-        tag: "스터디룸 · 소규모",
-        story: "소수 심화반, 과외, 스터디그룹에 최적. 좁은 공간에서도 학생이 직접 칠판 앞에 나와 판서하며 참여하는 수업이 가능합니다.",
-        image: "/images/product/hw/spaces/space-classroom.jpg",
+        image: "/images/product/hw/spaces/space-s75-seminar.png",
     },
 ]
 
@@ -805,50 +771,6 @@ function SpaceScenarioSection() {
 }
 
 /* ── Section: Onboarding Process ─────────────────────────────────── */
-const processSteps = [
-    { num: "01", title: "문의 · 상담", desc: "공간 규모와 목적을 알려주시면 최적 모델과 구성을 제안합니다" },
-    { num: "02", title: "현장 실측 · 견적", desc: "전문 설치팀이 방문하여 공간 실측 후 정확한 맞춤 견적을 드립니다" },
-    { num: "03", title: "설치 (1일 완료)", desc: "하루 안에 설치 완료. 수업 중단을 최소화하고 즉시 사용할 수 있습니다" },
-    { num: "04", title: "교사 교육 (2시간)", desc: "현장 교육 2시간으로 모든 기능을 즉시 활용할 수 있도록 안내합니다" },
-]
-
-function OnboardingProcessSection() {
-    return (
-        <section className="py-24 md:py-32 bg-[#FDFCF8]">
-            <div className="container mx-auto px-4 lg:px-8">
-                <motion.div className="text-center mb-16" {...fadeUp}>
-                    <p className="text-sm font-semibold text-[#22A366] tracking-wider uppercase mb-3">HOW TO START</p>
-                    <h2 className="text-3xl md:text-4xl lg:text-5xl text-[#1a1a19] leading-tight">
-                        수업의 격을 높이는 차원이 다른 스펙,
-                        <br />
-                        <span className="text-[#22A366]">가장 먼저 우리 학원에서 만나보세요</span>
-                    </h2>
-                    <p className="text-lg text-slate-500 mt-4 max-w-xl mx-auto">
-                        단순한 기기 도입을 넘어 수업의 격을 바꿉니다.
-                        <br className="hidden sm:block" />
-                        전문 상담을 통해 학원 규모와 목적에 최적화된 솔루션을 제안해 드립니다.
-                    </p>
-                </motion.div>
-
-                <div className="max-w-5xl mx-auto relative">
-                    <div className="absolute top-7 left-[12%] right-[12%] h-px bg-gradient-to-r from-transparent via-[#22A366]/25 to-transparent hidden lg:block" />
-                    <div className="grid sm:grid-cols-2 lg:grid-cols-4 gap-8">
-                        {processSteps.map((step, i) => (
-                            <motion.div key={i} {...stagger(i)} className="flex flex-col items-center text-center">
-                                <div className="w-14 h-14 rounded-full bg-[#22A366]/10 border border-[#22A366]/20 flex items-center justify-center mb-5 relative z-10 shrink-0">
-                                    <span className="text-sm font-bold tabular-nums text-[#22A366]">{step.num}</span>
-                                </div>
-                                <h3 className="font-bold text-slate-900 text-sm mb-2 leading-snug">{step.title}</h3>
-                                <p className="text-xs text-slate-400 leading-relaxed">{step.desc}</p>
-                            </motion.div>
-                        ))}
-                    </div>
-                </div>
-            </div>
-        </section>
-    )
-}
-
 /* ── Main Page Component ─────────────────────────────────────────── */
 export default function ProductHWPage() {
     return (
@@ -1025,25 +947,14 @@ export default function ProductHWPage() {
                     <motion.div {...fadeUp} className="relative">
                         <div className="rounded-3xl overflow-hidden shadow-2xl">
                             <Image
-                                src="/images/product/hw/writing/writing-teacher.jpg"
+                                src="/images/product/hw/writing/writing-experience-classroom.png"
                                 alt="교사가 ClassIn Board에 수학 문제를 판서하는 모습"
-                                width={800}
-                                height={600}
+                                width={1661}
+                                height={947}
                                 sizes="(max-width: 768px) 100vw, 500px"
                                 className="w-full h-auto"
                             />
                         </div>
-                        {/* Floating latency badge */}
-                        <motion.div
-                            initial={{ opacity: 0, scale: 0.8 }}
-                            whileInView={{ opacity: 1, scale: 1 }}
-                            viewport={{ once: true }}
-                            transition={{ delay: 0.5 }}
-                            className="absolute -top-3 -right-3 bg-white rounded-2xl shadow-lg border border-slate-100 px-4 py-2.5"
-                        >
-                            <div className="text-xs text-slate-400 mb-0.5">지연 시간</div>
-                            <div className="text-lg font-bold text-[#22A366] font-mono">0.03s</div>
-                        </motion.div>
                     </motion.div>
                 </FeatureSection>
             </div>
@@ -1074,14 +985,14 @@ export default function ProductHWPage() {
                     },
                 ]}
             >
-                {/* Display visual — cinematic wall scene */}
+                {/* Display visual — premium black-hole board scene */}
                 <motion.div {...fadeUp} className="relative">
                     <div className="rounded-3xl overflow-hidden shadow-2xl">
                         <Image
-                            src="/images/product/hw/display/display-wall-cinematic.jpg"
-                            alt="ClassIn Board에 우주 영상이 표시된 시네마틱 장면"
-                            width={800}
-                            height={600}
+                            src="/images/product/hw/features/feature-display.png"
+                            alt="ClassIn Board에 블랙홀 우주 영상이 선명하게 표시된 장면"
+                            width={1536}
+                            height={1024}
                             sizes="(max-width: 768px) 100vw, 500px"
                             className="w-full h-auto"
                         />
@@ -1126,46 +1037,17 @@ export default function ProductHWPage() {
                         },
                     ]}
                 >
-                    {/* Sharing visual — board to devices flow */}
+                    {/* Sharing visual — board camera close-up */}
                     <motion.div {...fadeUp} className="relative">
-                        <div className="aspect-[4/3] rounded-3xl bg-gradient-to-br from-emerald-50 to-green-50 border border-emerald-100/60 shadow-xl overflow-hidden p-8 flex flex-col justify-center items-center gap-6">
-                            {/* Board icon */}
-                            <div className="w-16 h-12 rounded-xl bg-slate-800 flex items-center justify-center shadow-md">
-                                <PenTool className="w-6 h-6 text-white/70" />
-                            </div>
-                            {/* Arrow flow */}
-                            <div className="flex flex-col items-center gap-1">
-                                <motion.div
-                                    animate={{ y: [0, 4, 0] }}
-                                    transition={{ duration: 1.5, repeat: Infinity, ease: "easeInOut" }}
-                                    className="text-[#22A366]/40"
-                                >
-                                    <ChevronRight className="w-5 h-5 rotate-90" />
-                                </motion.div>
-                                <motion.div
-                                    animate={{ y: [0, 4, 0] }}
-                                    transition={{ duration: 1.5, repeat: Infinity, ease: "easeInOut", delay: 0.2 }}
-                                    className="text-[#22A366]/30"
-                                >
-                                    <ChevronRight className="w-5 h-5 rotate-90" />
-                                </motion.div>
-                            </div>
-                            {/* Device icons */}
-                            <div className="flex gap-4">
-                                {["태블릿", "노트북", "스마트폰"].map((d, i) => (
-                                    <motion.div
-                                        key={d}
-                                        initial={{ opacity: 0, y: 10 }}
-                                        whileInView={{ opacity: 1, y: 0 }}
-                                        viewport={{ once: true }}
-                                        transition={{ delay: 0.6 + i * 0.15 }}
-                                        className="bg-white rounded-xl shadow-md border border-emerald-100 px-4 py-3 text-center"
-                                    >
-                                        <Monitor className="w-5 h-5 text-[#22A366]/60 mx-auto mb-1" />
-                                        <div className="text-[10px] text-slate-400 font-medium">{d}</div>
-                                    </motion.div>
-                                ))}
-                            </div>
+                        <div className="rounded-3xl overflow-hidden bg-black shadow-2xl">
+                            <Image
+                                src="/images/product/hw/sharing/instant-sharing-camera.webp"
+                                alt="ClassIn Board 측면 카메라와 판서 화면 클로즈업"
+                                width={1536}
+                                height={1240}
+                                sizes="(max-width: 768px) 100vw, 500px"
+                                className="w-full h-auto"
+                            />
                         </div>
                     </motion.div>
                 </FeatureSection>
@@ -1184,6 +1066,7 @@ export default function ProductHWPage() {
                 statement={<>시간과 지역을 넘어서<br />교육의 손길이 닿을 수 있도록</>}
                 sub="Classin은 지역의 한계를 넘어서 교육의 표준화와 시스템화를 돕습니다."
                 image="/images/product/hw/spaces/space-classroom-real.png"
+                contentClassName="font-bold"
                 dark
             />
 
@@ -1326,26 +1209,25 @@ export default function ProductHWPage() {
                     </motion.div>
 
                     {/* Lineup cards */}
-                    <div className="grid sm:grid-cols-2 lg:grid-cols-4 gap-5 max-w-5xl mx-auto mb-20">
+                    <div className="grid sm:grid-cols-2 lg:grid-cols-4 gap-4 max-w-5xl mx-auto mb-20">
                         {lineupCards.map((card, i) => (
                             <motion.div
                                 key={card.model}
                                 {...stagger(i)}
-                                className={`rounded-[28px] border p-7 sm:p-8 min-h-[220px] flex flex-col justify-between transition-transform duration-300 hover:-translate-y-0.5 ${card.cardClass}`}
-                                style={{ boxShadow: card.badge ? "0 14px 34px rgba(15, 23, 42, 0.07)" : "0 10px 24px rgba(15, 23, 42, 0.04)" }}
+                                className={`rounded-2xl border p-5 min-h-[150px] flex flex-col justify-between transition-colors duration-200 hover:bg-slate-50/60 ${card.cardClass}`}
                             >
-                                <div className="flex items-start justify-between gap-4">
+                                <div className="flex items-start justify-between gap-3">
                                     <div>
-                                        <div className="text-5xl font-sans font-bold tabular-nums tracking-tight">{card.model}</div>
-                                        <div className={`mt-1 text-2xl font-sans font-semibold tabular-nums ${card.sizeClass}`}>{card.size}</div>
+                                        <div className="text-3xl font-sans font-bold tabular-nums tracking-tight">{card.model}</div>
+                                        <div className={`mt-0.5 text-base font-sans font-medium tabular-nums ${card.sizeClass}`}>{card.size}</div>
                                     </div>
                                     {card.badge ? (
-                                        <div className={`shrink-0 rounded-full px-2.5 py-1 text-[10px] font-semibold tracking-[0.18em] ${card.badgeClass}`}>
+                                        <div className={`shrink-0 rounded-full px-2 py-0.5 text-[10px] font-semibold tracking-[0.16em] ${card.badgeClass}`}>
                                             {card.badge}
                                         </div>
                                     ) : null}
                                 </div>
-                                <p className={`text-sm leading-relaxed ${card.recClass}`}>{card.rec}</p>
+                                <p className={`text-xs leading-relaxed ${card.recClass}`}>{card.rec}</p>
                             </motion.div>
                         ))}
                     </div>
@@ -1385,7 +1267,7 @@ export default function ProductHWPage() {
             {/* ================================================================
                 ONBOARDING PROCESS — 도입 절차
             ================================================================ */}
-            <OnboardingProcessSection />
+            <OnboardingRoadmap />
 
             {/* ================================================================
                 ACT 5 — CTA: 직접 체험해보세요

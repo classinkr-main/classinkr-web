@@ -214,6 +214,47 @@ Professional architectural photography. Modern Korean educational facility.`,
         priority: 2,
     },
 
+    // ── SPACES v2: LINEUP × SPACE (사람 없음 / 모던 미니멀 / 시네마틱) ───
+    {
+        folder: "spaces",
+        filename: "space-s110-hall.png",
+        prompt: `${CINEMATIC} ${PRODUCT_DESC}
+Wide cinematic interior shot of a large modern minimalist auditorium / lecture hall — completely empty, NO PEOPLE.
+A 110-inch ClassIn smart board (proportionally massive) is wall-mounted at the front center, with WHITE MATTE bezels, orange pen tray at bottom center, and "Classin" branding visible. Screen is powered off (deep black with subtle reflection).
+The auditorium has tiered/raked rows of empty modern seats, clean architectural lines, polished concrete or muted oak flooring, and a high ceiling with linear recessed lighting. Front stage area is uncluttered.
+Color palette: warm off-white walls, soft beige, muted charcoal accents, NO bright colors, NO posters, NO text on walls.
+Lighting: cinematic — a soft directional light pool emphasizes the board, ambient shadow gradient toward the back rows, gentle volumetric haze for depth.
+Composition: symmetric, slight low-angle wide shot from center aisle, board centered. The 110-inch board should feel grand against the room scale.
+Architectural editorial photography. 8K, ultra-sharp. ABSOLUTELY NO PEOPLE, NO TEXT OVERLAYS, NO LOGOS other than Classin.`,
+        priority: 0,
+    },
+    {
+        folder: "spaces",
+        filename: "space-s86-classroom.png",
+        prompt: `${CINEMATIC} ${PRODUCT_DESC}
+Cinematic interior shot of a modern minimalist Korean classroom — completely empty, NO PEOPLE, NO STUDENTS.
+An 86-inch ClassIn smart board is wall-mounted at the front center of the classroom, with WHITE MATTE bezels, orange pen tray at bottom center, "Classin" branding visible. Screen is powered off (deep black).
+Approximately 20-30 empty modern light-oak desks with neutral chairs arranged in clean rows facing the board. Polished light wood or warm gray flooring.
+Color palette: warm off-white walls, light oak, soft sage or muted green accent on a single side wall, minimal decoration, NO posters, NO clutter, NO chalkboard.
+Lighting: soft daylight from large left-side floor-to-ceiling windows, casting long gentle shadows across the floor. Cinematic warmth, golden-hour ambient, subtle volumetric haze.
+Composition: slight 3/4 angle from the back of the room, board as the focal anchor.
+Architectural editorial photography, modern minimal Korean academy aesthetic. 8K, ultra-sharp. ABSOLUTELY NO PEOPLE, NO TEXT OVERLAYS.`,
+        priority: 0,
+    },
+    {
+        folder: "spaces",
+        filename: "space-s75-seminar.png",
+        prompt: `${CINEMATIC} ${PRODUCT_DESC}
+Cinematic interior shot of a modern minimalist mid-size seminar / boardroom — completely empty, NO PEOPLE.
+A 75-inch ClassIn smart board is wall-mounted at the head of the room, with WHITE MATTE bezels, orange pen tray at bottom center, "Classin" branding visible. Screen is powered off (deep black with subtle ambient reflection).
+A long modern oval or rectangular oak conference table with 12-14 empty designer chairs (Eames-style or muted leather) arranged around it, perfectly aligned. Polished concrete or warm wood flooring.
+Color palette: warm off-white walls, natural oak, muted black accents, single-tone minimalist art piece (abstract, no text) on the side wall. NO clutter, NO papers on the table.
+Lighting: dramatic window light from the right with linear architectural shadows on the table surface, supplemented by warm pendant lights above. Cinematic, premium, executive feel.
+Composition: low-angle 3/4 shot looking down the length of the table toward the board.
+Architectural editorial photography. 8K, ultra-sharp. ABSOLUTELY NO PEOPLE, NO TEXT OVERLAYS.`,
+        priority: 0,
+    },
+
     // ── SHARING ─────────────────────────────────────────────────
     {
         folder: "sharing",

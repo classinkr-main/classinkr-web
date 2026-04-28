@@ -123,10 +123,10 @@ export function NewsletterModal({
             {badge && (
               <span
                 className={cn(
-                  "inline-flex items-center gap-1.5 text-xs font-semibold px-3 py-1 rounded-full w-fit mb-1",
+                  "inline-flex items-center gap-1.5 text-[11px] font-bold px-3.5 py-1 rounded-full w-fit mb-1 tracking-[0.04em]",
                   isDark
-                    ? "bg-[#1a3a2a] text-[#6EE7B7] border border-[#6EE7B7]/20"
-                    : "bg-[#ECFDF5] text-[#084734] border border-[#084734]/15"
+                    ? "bg-[#1a3a2a]/80 text-[#6EE7B7] border border-[#6EE7B7]/15 shadow-[0_1px_8px_rgba(110,231,183,0.08)]"
+                    : "bg-gradient-to-r from-[#ECFDF5] to-[#D1FAE5]/60 text-[#084734] border border-[#084734]/8 shadow-[0_1px_6px_rgba(8,71,52,0.06)]"
                 )}
               >
                 <Sparkles className="w-3 h-3" />

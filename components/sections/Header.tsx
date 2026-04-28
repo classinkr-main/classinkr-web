@@ -81,10 +81,8 @@ export function Header() {
                                 ? pathname.startsWith("/docs")
                                 : pathname === item.href;
                         const isProduct = item.href === "/product"
-                        const isOnProduct = pathname.startsWith("/product")
-
                         return isProduct ? (
-                            <div key={item.name} className="relative">
+                            <div key={item.name} className="relative group">
                                 <Link
                                     href={item.href}
                                     onClick={() => setIsMobileMenuOpen(false)}
@@ -97,9 +95,9 @@ export function Header() {
                                 >
                                     {item.name}
                                 </Link>
-                                {isOnProduct && (
-                                    <div className="absolute top-full left-1/2 -translate-x-1/2 pt-3">
-                                        <div className="flex gap-1 bg-white rounded-full shadow-[0_2px_12px_rgba(0,0,0,0.08)] border border-black/[0.08] px-1.5 py-1">
+                                <div className="pointer-events-none absolute top-full left-1/2 z-40 hidden w-48 -translate-x-1/2 pt-3 opacity-0 transition-all duration-200 group-hover:pointer-events-auto group-hover:translate-y-0 group-hover:opacity-100 group-focus-within:pointer-events-auto group-focus-within:translate-y-0 group-focus-within:opacity-100 md:block">
+                                    <div className="translate-y-1 rounded-2xl border border-black/[0.08] bg-white p-1.5 shadow-[0_12px_28px_rgba(0,0,0,0.08)] transition-transform duration-200 group-hover:translate-y-0 group-focus-within:translate-y-0">
+                                        <div className="flex flex-col gap-1">
                                             {productTabs.map((tab) => {
                                                 const isTabActive = pathname === tab.href
                                                 return (
@@ -107,20 +105,20 @@ export function Header() {
                                                         key={tab.href}
                                                         href={tab.href}
                                                         className={cn(
-                                                            "inline-flex items-center gap-1.5 px-4 py-1.5 rounded-full text-xs font-semibold transition-all whitespace-nowrap",
+                                                            "inline-flex items-center gap-2 px-4 py-3 rounded-xl text-sm font-semibold transition-all whitespace-nowrap",
                                                             isTabActive
                                                                 ? "bg-[#ECFDF5] text-[#084734] shadow-sm"
                                                                 : "text-[#615D59] hover:text-[#111110] hover:bg-[#F6F5F4]"
                                                         )}
                                                     >
-                                                        <tab.icon className="w-3.5 h-3.5" />
+                                                        <tab.icon className="w-4 h-4" />
                                                         {tab.name}
                                                     </Link>
                                                 )
                                             })}
                                         </div>
                                     </div>
-                                )}
+                                </div>
                             </div>
                         ) : (
                             <Link

@@ -19,7 +19,7 @@ import { portalFetch } from "@/lib/partner-portal/portal-fetch"
 
 /* ─── Types ──────────────────────────────────────────────────── */
 
-type PartnerReadMode = "v2" | "legacy"
+type PartnerReadMode = "v2" | "legacy" | "demo"
 
 type OverviewMetrics = {
   customer_count: number
@@ -129,6 +129,7 @@ type PartnerPortalHomeProps = {
   linkTargets?: Partial<PartnerPortalLinkTargets>
   allowCreate?: boolean
   adminView?: boolean
+  embedded?: boolean
 }
 
 const DEFAULT_LINK_TARGETS: PartnerPortalLinkTargets = {
@@ -251,7 +252,7 @@ function dealPaymentBadge(deal: DealItem): { label: string; cls: string } {
 /* ─── Normalize / Type-guard ─────────────────────────────────── */
 
 function isPartnerReadMode(value: unknown): value is PartnerReadMode {
-  return value === "v2" || value === "legacy"
+  return value === "v2" || value === "legacy" || value === "demo"
 }
 
 function isPipelineStage(value: string): value is PipelineStage {
@@ -616,6 +617,7 @@ export function PartnerPortalHome({
   linkTargets,
   allowCreate,
   adminView = false,
+  embedded = false,
 }: PartnerPortalHomeProps = {}) {
   const [overview, setOverview] = useState<PartnerOverviewPayload>(EMPTY_OVERVIEW)
   const [loading, setLoading]   = useState(true)
@@ -886,38 +888,74 @@ export function PartnerPortalHome({
     year: "numeric", month: "long", day: "numeric", weekday: "short",
   })
 
-  return (
-    <div className={`${adminView ? "min-h-[calc(100dvh-4rem)]" : "min-h-screen"} bg-[#f6f3ed] text-[#1a1a1a]`}>
-      {/* ── Body: Sidebar + Main ─────────────────────────────────── */}
-      <div className={`grid ${leftSidebarOpen ? "lg:grid-cols-[272px_minmax(0,1fr)]" : "lg:grid-cols-[48px_minmax(0,1fr)]"}`}>
+  const rootClass = embedded
+    ? "text-[#1a1a1a]"
+    : `${adminView ? "min-h-[calc(100dvh-4rem)]" : "min-h-screen"} bg-[#f6f3ed] text-[#1a1a1a]`
+  const bodyGridClass = embedded
+    ? ""
+    : `grid ${leftSidebarOpen ? "lg:grid-cols-[272px_minmax(0,1fr)]" : "lg:grid-cols-[48px_minmax(0,1fr)]"}`
+  const actionBarBorderClass = embedded
+    ? "rounded-2xl border border-[#e7e0d6] bg-white px-4 py-3 sm:px-6"
+    : "border-b border-[#e7e0d6] bg-white px-6 py-3"
+  const urgencyStripClass = embedded
+    ? "mt-3 rounded-2xl bg-[#111110] px-4 py-2.5 sm:px-6"
+    : "bg-[#111110] px-6 py-2.5"
+  const contentPaddingClass = embedded ? "px-0 py-6" : "px-4 py-5 sm:px-6 sm:py-6"
 
-        {/* ── Left Sidebar ──────────────────────────────────────── */}
-        <LeftSidebar
-          open={leftSidebarOpen}
-          onOpenChange={setLeftSidebarOpen}
-          upcoming_installations={overview.upcoming_installations}
-          recent_calendar_events={overview.recent_calendar_events}
-          recent_activity={overview.recent_activity}
-          calendarHref={resolvedLinkTargets.calendar}
-          adminView={adminView}
-        />
+  return (
+    <div className={rootClass}>
+
+      {/* ── Demo Banner ─────────────────────────────────────────── */}
+      {overview.mode === "demo" && (
+        <div className={
+          embedded
+            ? "mb-4 rounded-2xl border border-amber-300/60 bg-amber-50 px-4 py-2.5 sm:px-6"
+            : "border-b border-amber-300/60 bg-amber-50 px-6 py-2.5"
+        }>
+          <div className={embedded ? "flex flex-wrap items-center justify-between gap-3" : "mx-auto flex max-w-[1680px] items-center justify-between gap-4"}>
+            <div className="flex items-center gap-2 text-sm text-amber-800">
+              <span className="rounded-full bg-amber-200 px-2 py-0.5 text-[11px] font-bold uppercase tracking-wider text-amber-700">DEMO</span>
+              지금 보이는 데이터는 <strong>샘플 데이터</strong>입니다. 실제 계정을 연결하면 실데이터로 전환됩니다.
+            </div>
+            <span className="text-xs text-amber-600/70">실계정 연결 필요</span>
+          </div>
+        </div>
+      )}
+
+      {/* ── Body: Sidebar + Main ─────────────────────────────────── */}
+      <div className={bodyGridClass}>
+
+        {/* ── Left Sidebar (admin embed에서는 숨김) ─────────────── */}
+        {!embedded && (
+          <LeftSidebar
+            open={leftSidebarOpen}
+            onOpenChange={setLeftSidebarOpen}
+            upcoming_installations={overview.upcoming_installations}
+            recent_calendar_events={overview.recent_calendar_events}
+            recent_activity={overview.recent_activity}
+            calendarHref={resolvedLinkTargets.calendar}
+            adminView={adminView}
+          />
+        )}
 
         {/* ── Main Content ──────────────────────────────────────── */}
         <main className="min-w-0">
 
           {/* Action Bar */}
-          <div className="border-b border-[#e7e0d6] bg-white px-6 py-3">
+          <div className={actionBarBorderClass}>
             <div className="flex flex-col gap-3 sm:flex-row sm:items-center sm:justify-between">
               <div className="flex min-w-0 flex-wrap items-center gap-2 sm:gap-3">
-                <button
-                  type="button"
-                  onClick={() => setLeftSidebarOpen(open => !open)}
-                  title={leftSidebarOpen ? "일정 패널 접기" : "일정 패널 펼치기"}
-                  className="hidden h-8 items-center gap-1.5 rounded-lg border border-[#e8e8e4] bg-white px-2.5 text-xs font-semibold text-[#1a1a1a]/55 transition-colors hover:border-[#c8c8c4] hover:text-[#111110] lg:inline-flex"
-                >
-                  {leftSidebarOpen ? <ChevronLeft className="h-3.5 w-3.5" /> : <ChevronRight className="h-3.5 w-3.5" />}
-                  일정
-                </button>
+                {!embedded && (
+                  <button
+                    type="button"
+                    onClick={() => setLeftSidebarOpen(open => !open)}
+                    title={leftSidebarOpen ? "일정 패널 접기" : "일정 패널 펼치기"}
+                    className="hidden h-8 items-center gap-1.5 rounded-lg border border-[#e8e8e4] bg-white px-2.5 text-xs font-semibold text-[#1a1a1a]/55 transition-colors hover:border-[#c8c8c4] hover:text-[#111110] lg:inline-flex"
+                  >
+                    {leftSidebarOpen ? <ChevronLeft className="h-3.5 w-3.5" /> : <ChevronRight className="h-3.5 w-3.5" />}
+                    일정
+                  </button>
+                )}
                 <button
                   type="button"
                   onClick={() => setSidebarOpen(open => !open)}
@@ -948,7 +986,7 @@ export function PartnerPortalHome({
 
           {/* Urgency Strip */}
           {urgencyChips.length > 0 && (
-            <div className="bg-[#111110] px-6 py-2.5">
+            <div className={urgencyStripClass}>
               <div className="flex flex-wrap items-center gap-2">
                 <span className="text-[11px] font-semibold uppercase tracking-widest text-white/35">지금 확인</span>
                 {urgencyChips.map(chip => (
@@ -965,7 +1003,7 @@ export function PartnerPortalHome({
 
           {/* Scrollable content */}
           <div
-            className={`grid min-w-0 gap-6 px-4 py-5 transition-[grid-template-columns] duration-300 sm:px-6 sm:py-6 ${
+            className={`grid min-w-0 gap-6 ${contentPaddingClass} transition-[grid-template-columns] duration-300 ${
               sidebarOpen
                 ? "xl:grid-cols-[minmax(0,1fr)_300px]"
                 : "xl:grid-cols-[minmax(0,1fr)_36px]"
