@@ -451,7 +451,7 @@ function DetailPanel({ row }: { row: MapRow | null }) {
           </p>
         </div>
         <div>
-          <p className="text-[10px] text-[#A39E98]">기간 목표</p>
+          <p className="text-[10px] text-[#A39E98]">목표 (계약가 합)</p>
           <p className="mt-0.5 text-[13px] font-semibold text-[#111110]">¥{cny(row.target)}</p>
         </div>
         <div>

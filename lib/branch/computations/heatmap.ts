@@ -14,10 +14,12 @@ export interface RegionTopCustomer {
 
 export interface RegionRow {
   region: string
+  // Sum of contract_target across deals in the region. Lifetime goal — not
+  // scaled by period; the period bites into the numerator instead.
   target: number
   revenue: number
-  // Future-month estimate that hasn't been confirmed yet. Kept separate so
-  // the UI can show "확정 + 추정" while still ranking by total expected value.
+  // Future-month estimate. Past/current confirmed go into revenue; future
+  // months and past-non-confirmed months go into projected.
   projected: number
   expected: number
   progress: number
@@ -46,7 +48,6 @@ function inScope(ym: string, scope: Period, now: Date): boolean {
   return fiscalQuarter(m) === fiscalQuarter(now.getUTCMonth() + 1)
 }
 
-// Compares ym (YYYY-MM) against now's year-month. Returns -1 / 0 / +1.
 function compareYm(ym: string, now: Date): number {
   const nowKey = ymKey(now)
   return ym < nowKey ? -1 : ym > nowKey ? 1 : 0
@@ -55,9 +56,6 @@ function compareYm(ym: string, now: Date): number {
 export function computeHeatmap(deals: BranchRevDeal[], scope: Period, now: Date, teamFilter?: string): RegionRow[] {
   const filtered = teamFilter && teamFilter !== "ALL" ? deals.filter((d) => d.team === teamFilter) : deals
   const byRegion = new Map<string, {
-    // Period target = sum of monthly_payments inside the period. The deal's
-    // contract_target is the lifetime goal; for an M/Q view we want only the
-    // portion scheduled within the period.
     target: number
     revenue: number
     projected: number
@@ -80,16 +78,14 @@ export function computeHeatmap(deals: BranchRevDeal[], scope: Period, now: Date,
     const region = d.region ?? "미정"
     const acc = ensure(region)
     const lifetimeTarget = Number(d.contract_target ?? 0)
+    acc.target += lifetimeTarget
     acc.deals_count += 1
 
-    // No first_payment AND no monthly schedule for the period → still goes into
-    // the open-target bucket so the panel shows "잔량" honestly.
     if (!d.first_payment) acc.open_target += lifetimeTarget
 
     const hasRedFlags = Object.keys(d.monthly_red).length > 0
     let dealRevenue = 0
     let dealProjected = 0
-    let dealTargetInPeriod = 0
     let countedAsConfirmed = false
 
     for (const [ym, amtRaw] of Object.entries(d.monthly_payments)) {
@@ -97,27 +93,22 @@ export function computeHeatmap(deals: BranchRevDeal[], scope: Period, now: Date,
       if (!Number.isFinite(amt) || amt === 0) continue
       if (!inScope(ym, scope, now)) continue
 
-      // monthly_payments doubles as the scheduled goal — sum within the period
-      // gives a meaningful denominator that actually moves with M/Q/Y.
-      dealTargetInPeriod += amt
-
       const isFuture = compareYm(ym, now) > 0
 
       if (isFuture) {
-        // Future months are always projection — they haven't happened.
+        // Future months are always projection regardless of any flag.
         dealProjected += amt
         continue
       }
-      // Past or current month.
       if (!d.first_payment) {
-        // Deal hasn't started — even past-month rows are projection (they
-        // shouldn't really be there, but treat defensively).
+        // Past/current with no first_payment — treat as projection.
         dealProjected += amt
         continue
       }
-      // first_payment is set. Confirmed if no red-flag system OR this month
-      // is explicitly red-flagged (matches the existing fallback rule
-      // documented in branch-dashboard-development-log.md).
+      // first_payment is set. Sheet without red-flag convention: every
+      // monthly_payment counts as confirmed (matches the documented fallback
+      // in branch-dashboard-development-log.md). Sheet with red-flag
+      // convention: only red-flagged months are confirmed.
       if (!hasRedFlags || d.monthly_red[ym]) {
         dealRevenue += amt
         countedAsConfirmed = true
@@ -126,7 +117,6 @@ export function computeHeatmap(deals: BranchRevDeal[], scope: Period, now: Date,
       }
     }
 
-    acc.target += dealTargetInPeriod
     acc.revenue += dealRevenue
     acc.projected += dealProjected
     if (countedAsConfirmed) acc.confirmed_count += 1
@@ -134,7 +124,7 @@ export function computeHeatmap(deals: BranchRevDeal[], scope: Period, now: Date,
     const customerKey = d.customer_name || `row-${d.sheet_row}`
     const current = acc.customers.get(customerKey)
     if (current) {
-      current.target += dealTargetInPeriod
+      current.target += lifetimeTarget
       current.revenue += dealRevenue + dealProjected
       current.first_payment = current.first_payment ?? d.first_payment
     } else {
@@ -144,7 +134,7 @@ export function computeHeatmap(deals: BranchRevDeal[], scope: Period, now: Date,
         team: d.team,
         status: d.status,
         first_payment: d.first_payment,
-        target: dealTargetInPeriod,
+        target: lifetimeTarget,
         // Top-customer "revenue" represents expected value (confirmed + projection)
         // so deals weighted toward future months still rank meaningfully.
         revenue: dealRevenue + dealProjected,
