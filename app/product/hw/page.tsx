@@ -1,6 +1,7 @@
 "use client"
 
 import { Button } from "@/components/ui/button"
+import { trackEvent } from "@/lib/analytics"
 import { BROCHURE_URL } from "@/lib/marketing-links"
 import { motion, useInView } from "framer-motion"
 import {
@@ -758,7 +759,10 @@ function SpaceScenarioSection() {
                         </h3>
                         <p className="text-slate-600 leading-relaxed mb-8">{scenario.story}</p>
                         <Button asChild className="h-12 rounded-full bg-[#009060] px-8 text-sm font-bold text-white shadow-md transition-all hover:bg-[#007A52] hover:shadow-lg group">
-                            <Link href="/contact#contact-form">
+                            <Link
+                                href="/contact#contact-form"
+                                onClick={() => trackEvent("click_cta", { button: "hw_model_inquiry", page: "/product/hw", model: scenario.model })}
+                            >
                             이 모델로 문의하기
                             <ArrowRight className="w-4 h-4 ml-2 group-hover:translate-x-1 transition-transform" />
                             </Link>
@@ -1097,17 +1101,25 @@ export default function ProductHWPage() {
                     },
                 ]}
             >
-                {/* Hybrid classroom visual — real photo */}
+                {/* Hybrid classroom visual — looping interactive learning video */}
                 <motion.div {...fadeUp} className="relative">
-                    <div className="rounded-3xl overflow-hidden shadow-2xl">
-                        <Image
-                            src="/images/product/hw/camera/camera-hybrid-class.jpg"
-                            alt="하이브리드 교실 — 교실 학생과 원격 학생이 함께 수업하는 모습"
-                            width={800}
-                            height={600}
-                            sizes="(max-width: 768px) 100vw, 500px"
-                            className="w-full h-auto"
-                        />
+                    <div className="absolute -inset-8 rounded-[2.25rem] bg-[radial-gradient(circle_at_35%_20%,rgba(34,163,102,0.18),transparent_46%),radial-gradient(circle_at_80%_75%,rgba(8,71,52,0.14),transparent_45%)] blur-2xl" />
+                    <div className="relative rounded-[2rem] bg-gradient-to-br from-white via-[#F2EFE7] to-[#CFC8BA] p-[10px] shadow-[0_32px_90px_rgba(8,71,52,0.18)] ring-1 ring-black/5">
+                        <div className="relative aspect-video overflow-hidden rounded-[1.35rem] bg-black shadow-inner">
+                            <video
+                                src="/video/Interactive%20Learning%20with%20ClassIn.mp4"
+                                className="h-full w-full object-cover"
+                                autoPlay
+                                muted
+                                loop
+                                playsInline
+                                preload="metadata"
+                                aria-label="ClassIn 인터렉티브 러닝 수업 영상"
+                            />
+                            <div className="pointer-events-none absolute inset-0 rounded-[1.35rem] ring-1 ring-white/25" />
+                            <div className="pointer-events-none absolute inset-x-0 top-0 h-20 bg-gradient-to-b from-white/20 to-transparent" />
+                            <div className="pointer-events-none absolute inset-x-10 bottom-0 h-px bg-gradient-to-r from-transparent via-white/35 to-transparent" />
+                        </div>
                     </div>
                 </motion.div>
             </FeatureSection>
@@ -1288,13 +1300,21 @@ export default function ProductHWPage() {
 
                         <div className="flex flex-col sm:flex-row gap-4 justify-center">
                             <Button asChild className="h-14 rounded-full bg-[#009060] px-10 text-base font-bold text-white shadow-[0_8px_20px_rgba(0,144,96,0.24)] transition-all hover:scale-105 hover:bg-[#007A52] hover:shadow-[0_12px_25px_rgba(0,144,96,0.32)] group">
-                                <Link href="/contact#contact-form">
+                                <Link
+                                    href="/contact#contact-form"
+                                    onClick={() => trackEvent("click_cta", { button: "hw_final_inquiry", page: "/product/hw" })}
+                                >
                                 도입 문의하기
                                 <ArrowRight className="w-4 h-4 ml-2 group-hover:translate-x-1 transition-transform" />
                                 </Link>
                             </Button>
                             <Button asChild variant="outline" className="rounded-full px-10 h-14 text-base font-bold border-slate-300 hover:border-slate-400 text-slate-700 hover:bg-slate-50 transition-all">
-                                <a href={BROCHURE_URL} target="_blank" rel="noopener noreferrer">
+                                <a
+                                    href={BROCHURE_URL}
+                                    target="_blank"
+                                    rel="noopener noreferrer"
+                                    onClick={() => trackEvent("download_materials", { asset_id: "hw_brochure", page: "/product/hw" })}
+                                >
                                 서비스 소개서 보기
                                 </a>
                             </Button>

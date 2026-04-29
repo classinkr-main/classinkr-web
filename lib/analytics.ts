@@ -2,8 +2,10 @@ export type EventNames =
   | "page_view"
   | "click_cta"
   | "submit_demo_request"
+  | "submit_newsletter"
   | "download_materials"
   | "view_demo_video"
+  | "begin_checkout"
 
 type AnalyticsParamValue = string | number | boolean | null | undefined
 type AnalyticsParams = Record<string, AnalyticsParamValue>
@@ -26,8 +28,32 @@ declare global {
   }
 }
 
+const INTERNAL_TRACKING_ENABLED =
+  process.env.NEXT_PUBLIC_INTERNAL_TRACKING_ENABLED !== "false"
+
+const sendInternalTracking = (eventName: EventNames, params?: AnalyticsParams) => {
+  if (!INTERNAL_TRACKING_ENABLED) return
+  try {
+    const payload = JSON.stringify({
+      event: eventName,
+      page: window.location.pathname,
+      params: params ?? {},
+    })
+    fetch("/api/track/event", {
+      method: "POST",
+      headers: { "Content-Type": "application/json" },
+      body: payload,
+      keepalive: true,
+    }).catch(() => {})
+  } catch {
+    // 추적 실패는 무시
+  }
+}
+
 export const trackEvent = (eventName: EventNames, params?: AnalyticsParams) => {
   if (typeof window === "undefined") return
+
+  sendInternalTracking(eventName, params)
 
   if (window.gtag) {
     window.gtag("event", eventName, params)
@@ -49,11 +75,13 @@ export const trackEvent = (eventName: EventNames, params?: AnalyticsParams) => {
 
   switch (eventName) {
     case "submit_demo_request":
+    case "submit_newsletter":
       kakaoPixel.completeRegistration()
       break
     case "click_cta":
     case "download_materials":
     case "view_demo_video":
+    case "begin_checkout":
       kakaoPixel.participate({ tag: eventName })
       break
     default:

@@ -1,6 +1,7 @@
 "use client"
 
 import { Button } from "@/components/ui/button"
+import { trackEvent } from "@/lib/analytics"
 import { BROCHURE_URL } from "@/lib/marketing-links"
 import { motion, useInView, useMotionValue, useTransform, useScroll, useMotionValueEvent, animate } from "framer-motion"
 import {
@@ -20,6 +21,14 @@ const CHECKOUT_ENABLED = process.env.NEXT_PUBLIC_SW_CHECKOUT_ENABLED === "true"
 const CHECKOUT_HREF = CHECKOUT_ENABLED ? "/checkout" : "/contact#contact-form"
 const CHECKOUT_CTA_LABEL = CHECKOUT_ENABLED ? "지금 바로 결제 시작" : "지금 무료로 시작하기"
 const CHECKOUT_SUB_LABEL = CHECKOUT_ENABLED ? "카드·네이버페이로 즉시 시작" : "설치 없이 바로 체험 · 카드 등록 불필요"
+
+const trackCheckoutClick = (location: string) => {
+    if (CHECKOUT_ENABLED) {
+        trackEvent("begin_checkout", { button: location, page: "/product/sw" })
+    } else {
+        trackEvent("click_cta", { button: location, page: "/product/sw", destination: "contact_form" })
+    }
+}
 const HERO_CLASSROOM_VIDEO_SRC = "/video/쿼드러닝 수업_클립1.mp4"
 const BLACKBOARD_VIDEO_SRC = "/video/클립2.mp4"
 
@@ -470,7 +479,7 @@ function FinalCTASection() {
                 <motion.p initial={{ opacity: 0, letterSpacing: "0.3em" }} animate={phase >= 3 ? { opacity: 1, letterSpacing: "0.05em" } : {}} transition={{ delay: 0.5, duration: 0.8 }} className="text-lg sm:text-xl font-sans text-slate-600 font-medium mb-10">수업만을 위해 만든 플랫폼, 다음은 당신의 교실입니다</motion.p>
                 <motion.div initial={{ opacity: 0, y: 20 }} animate={phase >= 3 ? { opacity: 1, y: 0 } : {}} transition={{ delay: 0.7, type: "spring", stiffness: 200, damping: 25 }} className="flex flex-col items-center gap-4">
                     <Button asChild className="h-14 rounded-full bg-[#009060] px-10 text-base font-bold text-white transition-all hover:scale-105 hover:bg-[#007A52] group">
-                        <Link href={CHECKOUT_HREF}>{CHECKOUT_CTA_LABEL}<ArrowRight className="w-4 h-4 ml-2 group-hover:translate-x-1 transition-transform" /></Link>
+                        <Link href={CHECKOUT_HREF} onClick={() => trackCheckoutClick("sw_story_checkout")}>{CHECKOUT_CTA_LABEL}<ArrowRight className="w-4 h-4 ml-2 group-hover:translate-x-1 transition-transform" /></Link>
                     </Button>
                     <p className="text-xs sm:text-sm text-slate-400 font-medium">{CHECKOUT_SUB_LABEL}</p>
                 </motion.div>
@@ -1001,7 +1010,11 @@ function AIFeaturesSection() {
                         <p className="font-bold text-base mb-0.5">AI 기능 모두 기본 포함</p>
                         <p className="text-white/50 text-sm">별도 AI 툴 구독 없이 ClassIn 하나로 사용 가능합니다.</p>
                     </div>
-                    <Link href="/contact" className="shrink-0 inline-flex items-center gap-2 bg-white text-[#084734] font-bold text-sm px-5 py-2.5 rounded-full hover:bg-white/90 transition-colors">
+                    <Link
+                        href="/contact"
+                        onClick={() => trackEvent("click_cta", { button: "sw_ai_freetrial", page: "/product/sw" })}
+                        className="shrink-0 inline-flex items-center gap-2 bg-white text-[#084734] font-bold text-sm px-5 py-2.5 rounded-full hover:bg-white/90 transition-colors"
+                    >
                         무료 체험 시작 <ArrowRight className="w-4 h-4" />
                     </Link>
                 </motion.div>
@@ -1413,10 +1426,18 @@ function PricingValueSection() {
 
                         {/* CTAs */}
                         <div className="flex flex-col sm:flex-row gap-2 justify-center lg:justify-end lg:shrink-0">
-                            <Link href={CHECKOUT_HREF} className="inline-flex items-center justify-center gap-2 rounded-full bg-[#009060] px-5 py-2.5 text-sm font-bold text-white transition-all hover:scale-105 hover:bg-[#007A52] whitespace-nowrap">
+                            <Link
+                                href={CHECKOUT_HREF}
+                                onClick={() => trackCheckoutClick("sw_pricing_checkout")}
+                                className="inline-flex items-center justify-center gap-2 rounded-full bg-[#009060] px-5 py-2.5 text-sm font-bold text-white transition-all hover:scale-105 hover:bg-[#007A52] whitespace-nowrap"
+                            >
                                 {CHECKOUT_CTA_LABEL} <ArrowRight className="w-4 h-4" />
                             </Link>
-                            <Link href="/contact#contact-form" className="inline-flex items-center justify-center gap-2 rounded-full border border-white/20 bg-white/[0.04] px-5 py-2.5 text-sm font-bold text-white transition-all hover:bg-white/[0.08] whitespace-nowrap">
+                            <Link
+                                href="/contact#contact-form"
+                                onClick={() => trackEvent("click_cta", { button: "sw_pricing_consultation", page: "/product/sw" })}
+                                className="inline-flex items-center justify-center gap-2 rounded-full border border-white/20 bg-white/[0.04] px-5 py-2.5 text-sm font-bold text-white transition-all hover:bg-white/[0.08] whitespace-nowrap"
+                            >
                                 도입 상담
                             </Link>
                         </div>
@@ -1502,13 +1523,21 @@ export default function ProductPage() {
 
                             <div className="flex flex-wrap items-center justify-center gap-4">
                                 <Button asChild className="h-14 rounded-full bg-[#009060] px-8 text-base font-bold text-white shadow-[0_8px_20px_rgba(0,144,96,0.24)] transition-all hover:scale-105 hover:bg-[#007A52] hover:shadow-[0_12px_25px_rgba(0,144,96,0.32)] group">
-                                    <Link href={CHECKOUT_HREF}>
+                                    <Link
+                                        href={CHECKOUT_HREF}
+                                        onClick={() => trackCheckoutClick("sw_final_checkout")}
+                                    >
                                     {CHECKOUT_CTA_LABEL}
                                     <ArrowRight className="w-4 h-4 ml-2 group-hover:translate-x-1 transition-transform" />
                                     </Link>
                                 </Button>
                                 <Button asChild variant="outline" className="rounded-full px-8 h-14 text-base font-bold border-white/35 bg-white/8 text-white backdrop-blur-sm hover:bg-white/16 hover:border-white/55 transition-all hover:scale-105">
-                                    <a href={BROCHURE_URL} target="_blank" rel="noopener noreferrer">
+                                    <a
+                                        href={BROCHURE_URL}
+                                        target="_blank"
+                                        rel="noopener noreferrer"
+                                        onClick={() => trackEvent("download_materials", { asset_id: "sw_brochure", page: "/product/sw" })}
+                                    >
                                     <Play className="w-4 h-4 mr-2" />
                                     서비스 소개서 보기
                                     </a>
