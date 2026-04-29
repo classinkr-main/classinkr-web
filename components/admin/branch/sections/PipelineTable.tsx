@@ -118,11 +118,13 @@ export default function PipelineTable({
   team,
   refreshKey,
   pageSize = 20,
+  onRowClick,
 }: {
   team: Team
   period: Period
   refreshKey: number
   pageSize?: number
+  onRowClick?: (row: Row) => void
 }) {
   const initialTeams: Set<string> = team === "ALL" ? new Set() : new Set([team])
   const [rowsState, setRowsState] = useState<{ key: string; rows: Row[] | null }>({ key: String(refreshKey), rows: null })
@@ -259,33 +261,55 @@ export default function PipelineTable({
       </div>
       <div className="overflow-x-auto rounded-2xl border border-[#e8e8e4] bg-white">
         <table className="w-full text-[12px]">
+          <colgroup>
+            <col style={{ width: "34%" }} />
+            <col style={{ width: "16%" }} />
+            <col style={{ width: "10%" }} />
+            <col style={{ width: "14%" }} />
+            <col style={{ width: "26%" }} />
+          </colgroup>
           <thead className="bg-[#fafaf8] text-[#1a1a1a]/60">
             <tr>
-              <th className="px-3 py-1 text-left">고객사</th>
+              <th className="px-5 py-1 text-left">고객사</th>
               <th className="px-3 py-1">담당 매니저</th>
               <th className="px-3 py-1">팀</th>
               <th className="px-3 py-1">지역</th>
-              <th className="px-3 py-1 text-right">매출</th>
+              <th className="px-5 py-1 text-right">매출</th>
             </tr>
           </thead>
           <tbody>
             {pageRows.length === 0 && (
               <tr>
-                <td className="px-3 py-10 text-center text-[#1a1a1a]/40" colSpan={5}>검색 결과가 없습니다.</td>
+                <td className="px-5 py-10 text-center text-[#1a1a1a]/40" colSpan={5}>검색 결과가 없습니다.</td>
               </tr>
             )}
             {pageRows.map((r) => (
-              <tr key={r.id} className="border-t border-[#f0f0ec]">
-                <td className="px-3 py-1 font-medium">{r.customer}</td>
+              <tr key={r.id}
+                onClick={onRowClick ? () => onRowClick(r) : undefined}
+                className={`border-t border-[#f0f0ec] ${onRowClick ? "cursor-pointer transition hover:bg-[#FAFAF8]" : ""}`}>
+                <td className="px-5 py-1 font-medium">
+                  {onRowClick ? (
+                    <button
+                      type="button"
+                      onClick={(e) => { e.stopPropagation(); onRowClick(r) }}
+                      className="text-left font-medium text-[#111110] underline-offset-2 hover:underline"
+                      title="세부 내역 로그 보기"
+                    >
+                      {r.customer}
+                    </button>
+                  ) : (
+                    r.customer
+                  )}
+                </td>
                 <td className="px-3 py-1 text-center">{r.manager ?? "-"}</td>
                 <td className="px-3 py-1 text-center">{r.team ?? "-"}</td>
                 <td className="px-3 py-1 text-center">{r.region ?? "-"}</td>
-                <td className="px-3 py-1 text-right font-semibold">¥{fmt(r.revenue)}</td>
+                <td className="px-5 py-1 text-right font-semibold">¥{fmt(r.revenue)}</td>
               </tr>
             ))}
           </tbody>
         </table>
-        <div className="flex flex-wrap items-center justify-between gap-3 border-t border-[#f0f0ec] px-3 py-1">
+        <div className="flex flex-wrap items-center justify-between gap-3 border-t border-[#f0f0ec] px-5 py-1">
           <p className="text-[11px] text-[#1a1a1a]/45">
             {pageStart}-{pageEnd} / {filteredRows.length}건
           </p>

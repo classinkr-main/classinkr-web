@@ -27,6 +27,15 @@ export async function listBranchRevDeals(filter?: { team?: string }): Promise<Br
   }))
 }
 
+export async function getBranchRevDeal(id: string): Promise<BranchRevDeal | null> {
+  const sb = createSupabaseAdminClient()
+  const { data, error } = await sb.from("branch_rev_deals").select("*").eq("id", id).maybeSingle()
+  if (error) throw error
+  if (!data) return null
+  const deal = data as BranchRevDeal
+  return { ...deal, manager: normalizeBranchMemberName(deal.manager) }
+}
+
 export async function replaceBranchRevDeals(rows: unknown[]): Promise<number> {
   const sb = createSupabaseAdminClient()
   const { error } = await sb.rpc("replace_branch_rev_deals", { rows })

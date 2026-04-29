@@ -50,7 +50,7 @@ export default function BlogPageClient({ posts }: BlogPageClientProps) {
         <div className="min-h-screen bg-[#FAFAF8] text-[#1a1a1a] selection:bg-emerald-100 selection:text-emerald-900">
 
             {/* ─── Hero + Gallery ─────────────────────────────── */}
-            <section className="relative pt-32 md:pt-40 pb-6 px-6">
+            <section className="relative px-4 pb-6 pt-28 sm:px-6 md:pt-40">
                 <div className="max-w-[1100px] mx-auto">
                     {/* Title */}
                     <motion.p
@@ -66,7 +66,7 @@ export default function BlogPageClient({ posts }: BlogPageClientProps) {
                         initial={{ opacity: 0, y: 20 }}
                         animate={{ opacity: 1, y: 0 }}
                         transition={{ duration: 0.6, delay: 0.05 }}
-                        className="text-[2.25rem] md:text-[3.25rem] font-bold leading-[1.1] tracking-[-0.03em] text-[#111110] max-w-2xl mb-12"
+                        className="mb-10 max-w-2xl text-[2.15rem] font-bold leading-[1.1] tracking-[-0.03em] text-[#111110] md:mb-12 md:text-[3.25rem]"
                     >
                         교육의 미래를
                         <br />
@@ -84,7 +84,7 @@ export default function BlogPageClient({ posts }: BlogPageClientProps) {
                             {/* Main featured card */}
                             {galleryFinal[0] && (
                                 <Link href={`/blog/${galleryFinal[0].slug}`} className="group block">
-                                    <article className="relative h-[320px] md:h-[420px] rounded-2xl overflow-hidden bg-[#f0f0ec]">
+                                    <article className="relative h-[280px] overflow-hidden rounded-2xl bg-[#f0f0ec] sm:h-[320px] md:h-[420px]">
                                         <Image
                                             src={galleryFinal[0].imageUrl}
                                             alt={galleryFinal[0].title}
@@ -121,7 +121,7 @@ export default function BlogPageClient({ posts }: BlogPageClientProps) {
                             <div className="grid grid-cols-1 gap-4">
                                 {galleryFinal.slice(1, 3).map((post) => (
                                     <Link key={post.id} href={`/blog/${post.slug}`} className="group block">
-                                        <article className="relative h-[200px] md:h-[202px] rounded-2xl overflow-hidden bg-[#f0f0ec]">
+                                        <article className="relative h-[180px] overflow-hidden rounded-2xl bg-[#f0f0ec] sm:h-[200px] md:h-[202px]">
                                             <Image
                                                 src={post.imageUrl}
                                                 alt={post.title}
@@ -155,7 +155,7 @@ export default function BlogPageClient({ posts }: BlogPageClientProps) {
             </section>
 
             {/* ─── Filter Bar ─────────────────────────────────── */}
-            <section className="max-w-[1100px] mx-auto px-6 mt-8 mb-2">
+            <section className="mx-auto mb-2 mt-8 max-w-[1100px] px-4 sm:px-6">
                 <motion.div
                     initial={{ opacity: 0 }}
                     animate={{ opacity: 1 }}
@@ -163,7 +163,7 @@ export default function BlogPageClient({ posts }: BlogPageClientProps) {
                     className="flex flex-col sm:flex-row sm:items-center sm:justify-between gap-4 pb-5 border-b border-[#e8e8e4]"
                 >
                     {/* Categories */}
-                    <div className="flex items-center gap-1.5 overflow-x-auto no-scrollbar">
+                    <div className="-mx-1 flex items-center gap-1.5 overflow-x-auto px-1 pb-1 no-scrollbar">
                         {CATEGORIES.map((cat) => {
                             const isActive = activeCategory === cat
                             return (
@@ -183,7 +183,7 @@ export default function BlogPageClient({ posts }: BlogPageClientProps) {
                     </div>
 
                     {/* Search */}
-                    <div className="relative shrink-0">
+                    <div className="relative w-full shrink-0 sm:w-auto">
                         <Search className="absolute left-3 top-1/2 -translate-y-1/2 w-4 h-4 text-[#1a1a1a]/20" />
                         <input
                             type="text"
@@ -207,7 +207,7 @@ export default function BlogPageClient({ posts }: BlogPageClientProps) {
             </section>
 
             {/* ─── Post List ──────────────────────────────────── */}
-            <section className="max-w-[1100px] mx-auto px-6 pb-20">
+            <section className="mx-auto max-w-[1100px] px-4 pb-16 sm:px-6 md:pb-20">
                 <AnimatePresence mode="wait">
                     <motion.div
                         key={activeCategory + searchQuery}
@@ -230,7 +230,7 @@ export default function BlogPageClient({ posts }: BlogPageClientProps) {
                                     onMouseLeave={() => setHoveredListId(null)}
                                 >
                                     <article
-                                        className="grid grid-cols-1 md:grid-cols-[160px_1fr_180px] gap-4 md:gap-8 py-6 border-b border-[#ebebea] transition-opacity duration-300"
+                                        className="grid grid-cols-1 gap-3 border-b border-[#ebebea] py-5 transition-opacity duration-300 md:grid-cols-[160px_1fr_180px] md:gap-8 md:py-6"
                                         style={{
                                             opacity: isAnyListHovered ? (hoveredListId === post.id ? 1 : 0.3) : 1,
                                         }}
@@ -253,7 +253,7 @@ export default function BlogPageClient({ posts }: BlogPageClientProps) {
                                             <p className="text-[13px] text-[#1a1a1a]/38 leading-relaxed line-clamp-2">
                                                 {post.excerpt}
                                             </p>
-                                            <div className="flex items-center gap-3 mt-1">
+                                            <div className="mt-1 flex flex-wrap items-center gap-x-3 gap-y-1">
                                                 <span className="text-[11px] text-[#1a1a1a]/28">{post.date}</span>
                                                 <span className="text-[#1a1a1a]/10">·</span>
                                                 <span className="text-[11px] text-[#1a1a1a]/28 flex items-center gap-1">
@@ -297,14 +297,14 @@ export default function BlogPageClient({ posts }: BlogPageClientProps) {
             </section>
 
             {/* ─── Newsletter ─────────────────────────────────── */}
-            <section className="max-w-[1100px] mx-auto px-6 pb-28">
+            <section className="mx-auto max-w-[1100px] px-4 pb-24 sm:px-6 md:pb-28">
                 <motion.div
                     initial={{ opacity: 0, y: 20 }}
                     whileInView={{ opacity: 1, y: 0 }}
                     viewport={{ once: true, margin: "-60px" }}
                     transition={{ duration: 0.5 }}
                 >
-                    <div className="relative bg-[#111110] rounded-2xl p-10 md:p-14 overflow-hidden">
+                    <div className="relative overflow-hidden rounded-2xl bg-[#111110] p-6 sm:p-10 md:p-14">
                         <div className="absolute top-0 right-0 w-72 h-72 bg-emerald-500/[0.06] rounded-full blur-[100px] pointer-events-none" />
 
                         <div className="relative z-10 max-w-xl">

@@ -291,7 +291,7 @@ function SlotDigit({ digit, delay, trigger, onDone }: { digit: string; delay: nu
     }, [cellH, delay, num, trigger])
 
     return (
-        <div className="relative h-[4.5rem] w-14 overflow-hidden rounded-xl border border-[rgba(34,163,102,0.12)] bg-white shadow-[0_4px_24px_rgba(0,0,0,0.06)] sm:h-28 sm:w-20 md:h-36 md:w-28 md:rounded-2xl">
+        <div className="relative h-14 w-9 overflow-hidden rounded-lg border border-[rgba(34,163,102,0.12)] bg-white shadow-[0_4px_24px_rgba(0,0,0,0.06)] sm:h-28 sm:w-20 sm:rounded-xl md:h-36 md:w-28 md:rounded-2xl">
             <div className="absolute inset-0 bg-gradient-to-b from-slate-50/80 to-transparent h-1/2 pointer-events-none z-10"></div>
             <motion.div
                 className="absolute left-0 top-0 flex w-full flex-col items-center"
@@ -313,7 +313,7 @@ function SlotDigit({ digit, delay, trigger, onDone }: { digit: string; delay: nu
                     <span
                         key={`${n}-${index}`}
                         ref={index === 0 ? cellRef : undefined}
-                        className={`block w-full h-[4.5rem] sm:h-28 md:h-36 flex-none flex items-center justify-center text-4xl sm:text-6xl md:text-8xl leading-none tabular-nums font-sans font-semibold text-[#22A366] ${done ? "animate-digit-glow" : ""}`}
+                        className={`flex h-14 w-full flex-none items-center justify-center text-3xl font-semibold leading-none tabular-nums text-[#22A366] sm:h-28 sm:text-6xl md:h-36 md:text-8xl ${done ? "animate-digit-glow" : ""}`}
                     >
                         {n}
                     </span>
@@ -452,13 +452,13 @@ function FinalCTASection() {
                 <div className="relative">
                     <motion.div className="absolute top-1/2 left-1/2 -translate-x-1/2 -translate-y-1/2 w-[500px] h-[300px] bg-gradient-radial from-green-300/25 via-green-200/10 to-transparent rounded-full pointer-events-none" initial={{ scale: 0, opacity: 0 }} animate={phase >= 2 ? { scale: [0, 1.2, 1], opacity: [0, 0.7, 0] } : {}} transition={{ duration: 1.5 }} />
                     <motion.div className="flex justify-center mb-5" initial={{ scale: 0.9, opacity: 0.3, filter: "blur(8px)" }} animate={phase >= 2 ? { scale: 1, opacity: 1, filter: "blur(0px)" } : {}} transition={{ type: "spring", stiffness: 120, damping: 20 }}>
-                        <div className="flex items-center gap-1.5 sm:gap-2.5 select-none relative">
+                        <div className="relative flex items-center gap-1 select-none sm:gap-2.5">
                             <SlotDigit digit={displayDigits[0]} delay={0.2} trigger={phase >= 2} />
-                            <span className="text-4xl sm:text-6xl md:text-8xl font-sans font-semibold text-slate-300">,</span>
+                            <span className="text-3xl font-semibold text-slate-300 sm:text-6xl md:text-8xl">,</span>
                             <SlotDigit digit={displayDigits[1]} delay={0.35} trigger={phase >= 2} />
                             <SlotDigit digit={displayDigits[2]} delay={0.45} trigger={phase >= 2} />
                             <SlotDigit digit={displayDigits[3]} delay={0.55} trigger={phase >= 2} />
-                            <span className="text-4xl sm:text-6xl md:text-8xl font-sans font-semibold text-slate-300">,</span>
+                            <span className="text-3xl font-semibold text-slate-300 sm:text-6xl md:text-8xl">,</span>
                             <SlotDigit digit={displayDigits[4]} delay={0.65} trigger={phase >= 2} />
                             <SlotDigit digit={displayDigits[5]} delay={0.75} trigger={phase >= 2} />
                             <SlotDigit digit={displayDigits[6]} delay={0.85} trigger={phase >= 2} onDone={handleLastSlotDone} />
@@ -466,7 +466,7 @@ function FinalCTASection() {
                         </div>
                     </motion.div>
                 </div>
-                <motion.p initial={{ opacity: 0 }} animate={phase >= 2 ? { opacity: 1 } : {}} transition={{ delay: 0.5 }} className="text-3xl sm:text-4xl md:text-5xl font-sans font-semibold text-slate-800 tracking-tight mb-3">시간</motion.p>
+                <motion.p initial={{ opacity: 0 }} animate={phase >= 2 ? { opacity: 1 } : {}} transition={{ delay: 0.5 }} className="mb-3 text-2xl font-semibold tracking-tight text-slate-800 sm:text-4xl md:text-5xl">시간</motion.p>
                 <motion.p initial={{ opacity: 0, y: 10 }} animate={phase >= 2 ? { opacity: 1, y: 0 } : {}} transition={{ delay: 0.7 }} className="text-sm sm:text-base text-slate-400 font-medium mb-6">지금 이 순간에도 수업이 진행되고 있습니다</motion.p>
 
                 <motion.div className="w-full max-w-sm mx-auto h-px bg-gradient-to-r from-transparent via-green-300/30 to-transparent mb-14 mt-14" initial={{ scaleX: 0 }} animate={phase >= 3 ? { scaleX: 1 } : {}} transition={{ duration: 0.6 }} style={{ originX: 0.5 }} />
@@ -1054,7 +1054,7 @@ const FAQS = [
 ]
 
 function FAQSection() {
-    const [open, setOpen] = useState<number | null>(null)
+    const [openItems, setOpenItems] = useState<number[]>([])
     return (
         <section className="py-24 md:py-32 bg-[#FDFCF8]">
             <div className="container mx-auto px-4 lg:px-8 max-w-[24rem]">
@@ -1076,12 +1076,12 @@ function FAQSection() {
                             className="bg-white rounded-xl border border-[rgba(0,0,0,0.06)] overflow-hidden shadow-[0_1px_4px_rgba(0,0,0,0.04)] hover:border-[rgba(34,163,102,0.15)] transition-colors"
                         >
                             <button
-                                onClick={() => setOpen(open === i ? null : i)}
+                                onClick={() => setOpenItems((items) => items.includes(i) ? items.filter((item) => item !== i) : [...items, i])}
                                 className="w-full flex items-center justify-between gap-4 px-6 py-5 text-left"
                             >
                                 <span className="text-sm font-semibold text-slate-800 leading-snug">{faq.q}</span>
                                 <motion.span
-                                    animate={{ rotate: open === i ? 45 : 0 }}
+                                    animate={{ rotate: openItems.includes(i) ? 45 : 0 }}
                                     transition={{ duration: 0.2 }}
                                     className="w-7 h-7 rounded-full border border-[rgba(34,163,102,0.2)] text-[#22A366] text-base font-bold shrink-0 leading-none flex items-center justify-center bg-[#ECFDF5]/50"
                                 >
@@ -1090,7 +1090,7 @@ function FAQSection() {
                             </button>
                             <motion.div
                                 initial={false}
-                                animate={{ height: open === i ? "auto" : 0, opacity: open === i ? 1 : 0 }}
+                                animate={{ height: openItems.includes(i) ? "auto" : 0, opacity: openItems.includes(i) ? 1 : 0 }}
                                 transition={{ duration: 0.25 }}
                                 className="overflow-hidden"
                             >
@@ -1190,7 +1190,7 @@ function FullscreenQuoteSection() {
                     whileInView={{ opacity: 1 }}
                     viewport={{ once: true }}
                     transition={{ delay: 0.5, duration: 0.7 }}
-                    className="mt-16 grid grid-cols-3 gap-8 max-w-2xl mx-auto border-t border-white/10 pt-12"
+                    className="mx-auto mt-14 grid max-w-2xl grid-cols-1 gap-5 border-t border-white/10 pt-10 sm:mt-16 sm:grid-cols-3 sm:gap-8 sm:pt-12"
                 >
                     {[
                         { value: "287개", label: "하이브리드 수업 (2021 가을학기 단 한 학기)" },
@@ -1471,7 +1471,7 @@ export default function ProductPage() {
             {/* ================================================================
                 HERO — "수업을, 더 수업답게"
             ================================================================ */}
-            <section className="relative h-[calc(100svh-8rem)] min-h-[560px] max-h-[760px] overflow-hidden bg-[#07110d] text-white">
+            <section className="relative min-h-[660px] overflow-hidden bg-[#07110d] text-white sm:min-h-[600px] md:h-[calc(100svh-8rem)] md:max-h-[760px]">
                 <video
                     className="absolute inset-0 h-full w-full object-cover"
                     src={HERO_CLASSROOM_VIDEO_SRC}
@@ -1485,7 +1485,7 @@ export default function ProductPage() {
                 <div className="absolute inset-0 bg-[linear-gradient(180deg,rgba(3,10,8,0.70)_0%,rgba(3,10,8,0.42)_42%,rgba(3,10,8,0.78)_100%)] pointer-events-none" />
                 <div className="absolute inset-0 bg-[radial-gradient(circle_at_center,rgba(3,10,8,0.10)_0%,rgba(3,10,8,0.50)_78%)] pointer-events-none" />
 
-                <div className="container relative z-10 mx-auto flex h-full items-center px-4 py-16 lg:px-8 md:py-20">
+                <div className="container relative z-10 mx-auto flex min-h-[660px] items-center px-4 py-14 sm:min-h-[600px] lg:px-8 md:h-full md:min-h-0 md:py-20">
                     <div className="max-w-4xl mx-auto text-center">
                         <motion.div initial={{ opacity: 0, y: 30 }} animate={{ opacity: 1, y: 0 }} transition={{ duration: 0.7 }}>
                             <div className="inline-flex items-center gap-2.5 px-5 py-2 rounded-full bg-white/12 border border-white/18 shadow-[0_2px_18px_rgba(0,0,0,0.18)] text-[#6EE7B7] text-xs font-bold mb-8 tracking-widest uppercase backdrop-blur-sm">
@@ -1521,8 +1521,8 @@ export default function ProductPage() {
                                 ))}
                             </div>
 
-                            <div className="flex flex-wrap items-center justify-center gap-4">
-                                <Button asChild className="h-14 rounded-full bg-[#009060] px-8 text-base font-bold text-white shadow-[0_8px_20px_rgba(0,144,96,0.24)] transition-all hover:scale-105 hover:bg-[#007A52] hover:shadow-[0_12px_25px_rgba(0,144,96,0.32)] group">
+                            <div className="flex flex-col items-stretch justify-center gap-3 sm:flex-row sm:items-center sm:gap-4">
+                                <Button asChild className="h-[3.25rem] rounded-full bg-[#009060] px-7 text-base font-bold text-white shadow-[0_8px_20px_rgba(0,144,96,0.24)] transition-all hover:scale-105 hover:bg-[#007A52] hover:shadow-[0_12px_25px_rgba(0,144,96,0.32)] group sm:h-14 sm:px-8">
                                     <Link
                                         href={CHECKOUT_HREF}
                                         onClick={() => trackCheckoutClick("sw_final_checkout")}
@@ -1531,7 +1531,7 @@ export default function ProductPage() {
                                     <ArrowRight className="w-4 h-4 ml-2 group-hover:translate-x-1 transition-transform" />
                                     </Link>
                                 </Button>
-                                <Button asChild variant="outline" className="rounded-full px-8 h-14 text-base font-bold border-white/35 bg-white/8 text-white backdrop-blur-sm hover:bg-white/16 hover:border-white/55 transition-all hover:scale-105">
+                                <Button asChild variant="outline" className="h-[3.25rem] rounded-full border-white/35 bg-white/8 px-7 text-base font-bold text-white backdrop-blur-sm transition-all hover:scale-105 hover:border-white/55 hover:bg-white/16 sm:h-14 sm:px-8">
                                     <a
                                         href={BROCHURE_URL}
                                         target="_blank"
@@ -1569,7 +1569,7 @@ export default function ProductPage() {
                     <div className="max-w-4xl mx-auto">
                         <div className="bg-white rounded-2xl border border-slate-200/60 shadow-lg overflow-hidden">
                             <div className="overflow-x-auto">
-                                <table className="w-full text-sm">
+                                <table className="min-w-[720px] w-full text-sm">
                                     <thead>
                                         <tr className="bg-slate-50 border-b border-slate-100">
                                             <th className="text-left py-4 px-6 font-semibold text-slate-500 w-[30%]">구분</th>

@@ -70,7 +70,7 @@ export default function BigBackdropImage() {
       />
 
       {/* 카피 영역 — 좌하단 고정 */}
-      <div className="absolute bottom-12 left-6 md:bottom-20 md:left-16 max-w-2xl">
+      <div className="absolute bottom-12 left-6 right-6 max-w-2xl md:bottom-20 md:left-16 md:right-auto">
         {/* 라벨 */}
         <motion.p
           variants={labelVariants}

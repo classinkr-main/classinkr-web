@@ -27,6 +27,7 @@ export function MobileFloatingCTA() {
     if (
         pathname.startsWith("/admin") ||
         pathname.startsWith("/checkout") ||
+        pathname.startsWith("/contact") ||
         pathname.startsWith("/partner") ||
         pathname.startsWith("/pricing") ||
         pathname.startsWith("/receipt")
@@ -44,9 +45,9 @@ export function MobileFloatingCTA() {
                         animate={{ y: 0, opacity: 1 }}
                         exit={{ y: 80, opacity: 0 }}
                         transition={{ type: "spring", stiffness: 320, damping: 28 }}
-                        className="fixed bottom-6 left-1/2 -translate-x-1/2 z-40"
+                        className="fixed bottom-[calc(1.25rem+env(safe-area-inset-bottom))] left-1/2 z-40 w-[calc(100vw-2rem)] max-w-[20rem] -translate-x-1/2"
                     >
-                        <div className="relative flex items-center">
+                        <div className="relative flex items-center justify-center">
                             {/* 펄스 링 */}
                             <span className="absolute inset-0 rounded-full bg-primary opacity-20 animate-ping" />
 
@@ -60,7 +61,7 @@ export function MobileFloatingCTA() {
                                 }}
                             >
                                 <Link href="/contact">
-                                    <button className="flex items-center gap-2 bg-primary hover:bg-primary/90 active:scale-95 text-white pl-4 pr-10 py-3 rounded-full shadow-[0_8px_24px_rgba(16,185,129,0.35)] text-sm font-bold transition-all duration-200">
+                                    <button className="flex min-h-12 w-full items-center justify-center gap-2 rounded-full bg-primary py-3 pl-4 pr-10 text-sm font-bold text-white shadow-[0_8px_24px_rgba(16,185,129,0.35)] transition-all duration-200 hover:bg-primary/90 active:scale-95">
                                         <MessageSquare className="w-4 h-4 shrink-0" />
                                         도입 문의하기
                                     </button>

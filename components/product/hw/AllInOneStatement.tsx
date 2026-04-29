@@ -1,40 +1,6 @@
 "use client"
 
-import { motion, useInView } from "framer-motion"
-import { useRef } from "react"
-
-const layers = [
-  {
-    label: "AG/AF Coating",
-    highlight: false,
-    gradient: "from-white/10 to-white/5",
-  },
-  {
-    label: "4K Display Panel",
-    highlight: false,
-    gradient: "from-white/10 to-white/5",
-  },
-  {
-    label: "Touch Layer (50pt)",
-    highlight: false,
-    gradient: "from-white/10 to-white/5",
-  },
-  {
-    label: "OPS PC (i5/i7)",
-    highlight: true,
-    gradient: "from-[#084734]/80 to-[#065c41]/60",
-  },
-  {
-    label: "AI Camera + Mic Array",
-    highlight: false,
-    gradient: "from-white/10 to-white/5",
-  },
-  {
-    label: "Speaker × 2",
-    highlight: false,
-    gradient: "from-white/10 to-white/5",
-  },
-]
+import Image from "next/image"
 
 const capabilities = [
   "i5 OPS 표준 탑재",
@@ -44,53 +10,36 @@ const capabilities = [
   "별도 PC 본체 공간이 필요 없는 일체형",
 ]
 
-function LayerStack() {
-  const ref = useRef<HTMLDivElement>(null)
-  const isInView = useInView(ref, { once: true, margin: "-80px" })
-
-  return (
-    <div
-      ref={ref}
-      className="flex flex-col gap-3 w-full max-w-sm mx-auto lg:mx-0 lg:ml-auto"
-      style={{ transform: "skewY(-3deg)" }}
-    >
-      {layers.map((layer, i) => (
-        <motion.div
-          key={layer.label}
-          initial={{ opacity: 0, x: -40 }}
-          animate={isInView ? { opacity: 1, x: 0 } : { opacity: 0, x: -40 }}
-          transition={{ duration: 0.45, delay: i * 0.1, ease: "easeOut" }}
-          className="flex items-center gap-4"
-        >
-          {/* Layer bar */}
-          <div
-            className={`flex-1 h-[22px] rounded-md bg-gradient-to-r ${layer.gradient} border ${
-              layer.highlight ? "border-[#084734]" : "border-white/15"
-            }`}
-          />
-          {/* Label */}
-          <span
-            className={`text-xs font-medium w-[160px] shrink-0 ${
-              layer.highlight ? "text-[#6EE7B7]" : "text-white/60"
-            }`}
-            style={{ letterSpacing: "0.02em" }}
-          >
-            {layer.label}
-          </span>
-        </motion.div>
-      ))}
-    </div>
-  )
-}
+const opsEnergyModuleImage = "/images/product/hw/ops/ops-glass-energy-module.png"
 
 export default function AllInOneStatement() {
   return (
-    <section className="bg-[#0D1A12] text-white py-24 md:py-32 px-6">
-      <div className="max-w-7xl mx-auto grid lg:grid-cols-2 gap-16 items-center">
-        {/* Mobile: diagram first */}
+    <section className="relative overflow-hidden bg-[#050806] text-white py-24 md:py-32 px-6">
+      <div className="pointer-events-none absolute inset-0 bg-[radial-gradient(circle_at_72%_44%,rgba(34,163,102,0.24),transparent_30%),radial-gradient(circle_at_84%_68%,rgba(110,231,183,0.10),transparent_26%),linear-gradient(90deg,#050806_0%,#07110B_42%,#06140D_100%)]" />
+      <div className="pointer-events-none absolute inset-y-0 right-0 w-1/2 bg-[linear-gradient(90deg,transparent,rgba(34,163,102,0.08),transparent)]" />
+
+      <div className="relative max-w-7xl mx-auto grid lg:grid-cols-[0.92fr_1.08fr] gap-14 lg:gap-16 items-center">
+        {/* Mobile: visual first */}
         <div className="order-first lg:order-last flex items-center justify-center lg:justify-end">
-          <div className="w-full aspect-square max-w-xs sm:max-w-sm flex items-center">
-            <LayerStack />
+          <div className="relative w-full max-w-2xl py-8">
+            <div className="pointer-events-none absolute inset-6 rounded-[2rem] bg-[#22A366]/20 blur-3xl" />
+            <div className="relative overflow-hidden rounded-[1.75rem] border border-white/10 bg-[#0B120E] shadow-[0_34px_90px_rgba(0,0,0,0.42)]">
+              <div className="relative aspect-[16/9]">
+                <Image
+                  src={opsEnergyModuleImage}
+                  alt="ClassIn 로고가 빛나는 글래스모피즘 OPS 모듈이 전자칠판에 에너지를 전달하는 3D 비유 이미지"
+                  fill
+                  sizes="(max-width: 768px) 92vw, 54vw"
+                  className="object-cover"
+                />
+                <div className="absolute inset-0 bg-[radial-gradient(circle_at_62%_52%,transparent_0%,transparent_46%,rgba(5,8,6,0.32)_100%)]" />
+              </div>
+            </div>
+            <div className="mt-4 grid grid-cols-3 gap-2 text-center text-[11px] font-semibold text-white/52">
+              <span className="rounded-full border border-white/10 bg-white/5 px-3 py-2">PC 본체 없음</span>
+              <span className="rounded-full border border-white/10 bg-white/5 px-3 py-2">어댑터 없음</span>
+              <span className="rounded-full border border-white/10 bg-white/5 px-3 py-2">HDMI 불필요</span>
+            </div>
           </div>
         </div>
 

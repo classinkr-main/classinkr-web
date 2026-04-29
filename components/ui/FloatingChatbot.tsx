@@ -314,7 +314,7 @@ export function FloatingChatbot() {
     }
 
     return (
-        <div className="fixed bottom-24 right-4 z-50 flex flex-col items-end md:bottom-6 md:right-6">
+        <div className="fixed bottom-[calc(5.5rem+env(safe-area-inset-bottom))] right-4 z-50 flex flex-col items-end md:bottom-6 md:right-6">
             <AnimatePresence>
                 {isOpen && (
                     <motion.div
@@ -322,7 +322,7 @@ export function FloatingChatbot() {
                         animate={{ opacity: 1, y: 0, scale: 1 }}
                         exit={{ opacity: 0, y: 16, scale: 0.98 }}
                         transition={{ duration: 0.18 }}
-                        className="mb-4 flex h-[min(620px,calc(100vh-8rem))] w-[min(calc(100vw-2rem),390px)] flex-col overflow-hidden rounded-[16px] border border-black/[0.08] bg-white shadow-[rgba(0,0,0,0.10)_0px_20px_60px,rgba(0,0,0,0.05)_0px_8px_20px]"
+                        className="mb-4 flex h-[min(620px,calc(100svh-7rem))] w-[min(calc(100vw-2rem),390px)] flex-col overflow-hidden rounded-[16px] border border-black/[0.08] bg-white shadow-[rgba(0,0,0,0.10)_0px_20px_60px,rgba(0,0,0,0.05)_0px_8px_20px]"
                     >
                         <div className="flex items-center justify-between bg-[#009060] px-5 py-4 text-white">
                             <div className="flex min-w-0 items-center gap-3">

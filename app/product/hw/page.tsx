@@ -174,7 +174,7 @@ function ComparisonSection() {
                             initial={{ opacity: 0, y: 40 }}
                             animate={inView ? { opacity: 1, y: 0 } : {}}
                             transition={{ duration: 0.5, delay: i * 0.15 }}
-                            className={`rounded-2xl border ${item.border} ${item.bg} p-8 ${item.highlight ? "ring-2 ring-[#22A366]/20 shadow-lg shadow-[#22A366]/5 scale-[1.02]" : ""}`}
+                            className={`rounded-2xl border ${item.border} ${item.bg} p-6 sm:p-8 ${item.highlight ? "ring-2 ring-[#22A366]/20 shadow-lg shadow-[#22A366]/5 md:scale-[1.02]" : ""}`}
                         >
                             <h3 className={`text-xl font-bold mb-6 ${item.highlight ? "text-[#22A366]" : "text-slate-900"}`}>
                                 {item.title}
@@ -207,11 +207,11 @@ function ComparisonSection() {
 
 /* ── Section: Feature Block (reusable) ───────────────────────────── */
 function FeatureSection({
-    tag, title, desc, features, reverse = false, accent = "#22A366", children,
+    tag, title, desc, features, reverse = false, accent = "#22A366", children, visualClassName = "",
 }: {
-    tag: string; title: React.ReactNode; desc: string
+    tag: string; title: React.ReactNode; desc: React.ReactNode
     features: { icon: React.ReactNode; label: string; detail: string }[]
-    reverse?: boolean; accent?: string; children?: React.ReactNode
+    reverse?: boolean; accent?: string; children?: React.ReactNode; visualClassName?: string
 }) {
     return (
         <section className="py-24 md:py-32">
@@ -244,7 +244,7 @@ function FeatureSection({
                     </div>
 
                     {/* Visual side */}
-                    <div className="flex-1 w-full max-w-lg">
+                    <div className={`flex-1 w-full max-w-lg ${visualClassName}`}>
                         {children ?? (
                             <motion.div
                                 {...fadeUp}
@@ -450,7 +450,9 @@ function ProductAnatomySection() {
                     </h2>
                     <p className="text-lg text-slate-500 mt-4 max-w-xl mx-auto">
                         110mm의 초슬림 바디부터 사용자 중심의 제스처바까지.
-                        작은 디테일 하나하나가 모여 선생님과 학생 모두가 수업에만 집중할 수 있는 최적의 하드웨어를 완성합니다.
+                        작은 디테일 하나하나가 모여
+                        <br />
+                        선생님과 학생 모두가 수업에만 집중할 수 있는 최적의 하드웨어를 완성합니다.
                     </p>
                 </motion.div>
 
@@ -694,24 +696,26 @@ function TestimonialSection() {
 }
 
 /* ── Section: Space Scenarios ────────────────────────────────────── */
+const spaceImageVersion = "20260429-1604"
+
 const spaceScenarios = [
     {
         model: "S110", size: '110"', badge: "FLAGSHIP",
         tag: "강당 · 대형 강의실",
         story: "300명이 앉은 강당에서도 맨 뒷자리가 선명합니다. 110인치 화면이 공간을 압도하며, 교사 한 명의 판서가 전석에 전달됩니다. 대규모 강의, 특강, 입시 설명회에 최적.",
-        image: "/images/product/hw/spaces/space-s110-hall.png",
+        image: `/images/product/hw/spaces/space-s110-hall.png?v=${spaceImageVersion}`,
     },
     {
         model: "S86", size: '86"', badge: "BEST",
         tag: "일반 교실 · 회의실",
         story: "30명 담임반의 하루 6교시를 완주하는 기준 모델. 가장 많은 교실 환경에 최적화된 사이즈. 8배열 마이크가 교실 소음 속에서도 교사 음성을 또렷이 전달합니다.",
-        image: "/images/product/hw/spaces/space-s86-classroom.png",
+        image: `/images/product/hw/spaces/space-s86-classroom.png?v=${spaceImageVersion}`,
     },
     {
         model: "S75", size: '75"', badge: "",
         tag: "세미나 · 중형 회의실",
         story: "20명 내외의 세미나실과 중형 회의실에 딱 맞는 사이즈. 임원 PT, 팀 회의, 교사 연수에서 화이트보드를 완전히 대체합니다.",
-        image: "/images/product/hw/spaces/space-s75-seminar.png",
+        image: `/images/product/hw/spaces/space-s75-seminar.png?v=${spaceImageVersion}`,
     },
 ]
 
@@ -957,7 +961,7 @@ export default function ProductHWPage() {
                 <FeatureSection
                     tag="WRITING EXPERIENCE"
                     title={<>쓰는 순간,<br />전자칠판이란 걸 <span className="text-[#22A366]">잊게 됩니다</span></>}
-                    desc="분필의 마찰감을 재현한 표면 코팅과 0.03초 초저지연이 만나, 손끝을 따라오는 가장 자연스러운 디지털 필기를 경험하세요."
+                    desc={<>분필의 마찰감을 재현한 표면 코팅과 0.03초 초저지연이 만나,<br />손끝을 따라오는 가장 자연스러운 디지털 필기를 경험하세요.</>}
                     features={[
                         {
                             icon: <Zap className="w-7 h-7" />,
@@ -998,7 +1002,7 @@ export default function ProductHWPage() {
             <FeatureSection
                 tag="DISPLAY QUALITY"
                 title={<>맨 뒷자리 학생도,<br /><span className="text-[#22A366]">맨 앞자리</span>와 같은 화면을 봅니다</>}
-                desc="풀 라미네이션 패널과 정밀 코팅 기술이 만들어내는 선명함. 조명 반사 없이, 어느 각도에서든 또렷한 화면을 제공합니다."
+                desc={<>풀 라미네이션 패널과 정밀 코팅 기술이 만들어내는 선명함. 조명 반사 없이,<br />어느 각도에서든 또렷한 화면을 제공합니다.</>}
                 reverse
                 features={[
                     {
@@ -1051,7 +1055,8 @@ export default function ProductHWPage() {
                 <FeatureSection
                     tag="INSTANT SHARING"
                     title={<>판서가 끝나기도 전에,<br />학생 기기에 <span className="text-[#22A366]">도착합니다</span></>}
-                    desc="실시간 판서 동기화로 모든 학생이 같은 내용을 동시에 봅니다. 수업이 끝나면 자동 저장. 결석한 학생도 놓치지 않습니다."
+                    desc={<>실시간 판서 동기화로 모든 학생이 같은 내용을 동시에 봅니다.<br />수업이 끝나면 자동 저장. 결석한 학생도 놓칠 수 없습니다.</>}
+                    visualClassName="lg:max-w-[660px] lg:-ml-14"
                     features={[
                         {
                             icon: <Share2 className="w-7 h-7" />,
@@ -1072,14 +1077,13 @@ export default function ProductHWPage() {
                 >
                     {/* Sharing visual — board camera close-up */}
                     <motion.div {...fadeUp} className="relative">
-                        <div className="rounded-3xl overflow-hidden bg-black shadow-2xl">
+                        <div className="relative aspect-[4/3] overflow-hidden rounded-3xl bg-black shadow-2xl">
                             <Image
                                 src="/images/product/hw/sharing/instant-sharing-camera.webp"
                                 alt="ClassIn Board 측면 카메라와 판서 화면 클로즈업"
-                                width={1536}
-                                height={1240}
-                                sizes="(max-width: 768px) 100vw, 500px"
-                                className="w-full h-auto"
+                                fill
+                                sizes="(max-width: 768px) 100vw, 640px"
+                                className="object-cover object-[48%_50%] translate-x-[-5%] translate-y-[4%] scale-[1.36]"
                             />
                         </div>
                     </motion.div>
@@ -1112,6 +1116,7 @@ export default function ProductHWPage() {
                 desc="AI 카메라와 고성능 마이크가 물리적 거리를 지웁니다. 교실 학생과 원격 학생이 하나의 캔버스에서 함께 배우는 하이브리드 수업."
                 reverse
                 accent="#22A366"
+                visualClassName="lg:max-w-[640px]"
                 features={[
                     {
                         icon: <Camera className="w-7 h-7" />,
@@ -1132,9 +1137,9 @@ export default function ProductHWPage() {
             >
                 {/* Hybrid classroom visual — looping interactive learning video */}
                 <motion.div {...fadeUp} className="relative">
-                    <div className="absolute -inset-8 rounded-[2.25rem] bg-[radial-gradient(circle_at_35%_20%,rgba(34,163,102,0.18),transparent_46%),radial-gradient(circle_at_80%_75%,rgba(8,71,52,0.14),transparent_45%)] blur-2xl" />
-                    <div className="relative rounded-[2rem] bg-gradient-to-br from-white via-[#F2EFE7] to-[#CFC8BA] p-[10px] shadow-[0_32px_90px_rgba(8,71,52,0.18)] ring-1 ring-black/5">
-                        <div className="relative aspect-video overflow-hidden rounded-[1.35rem] bg-black shadow-inner">
+                    <div className="absolute -inset-7 rounded-[2rem] bg-[radial-gradient(circle_at_35%_20%,rgba(34,163,102,0.18),transparent_46%),radial-gradient(circle_at_80%_75%,rgba(8,71,52,0.14),transparent_45%)] blur-2xl" />
+                    <div className="relative rounded-[1.55rem] bg-gradient-to-br from-white via-[#F2EFE7] to-[#CFC8BA] p-[4px] shadow-[0_32px_90px_rgba(8,71,52,0.18)] ring-1 ring-black/5">
+                        <div className="relative aspect-video overflow-hidden rounded-[1.25rem] bg-black shadow-inner">
                             <video
                                 src="/video/Interactive%20Learning%20with%20ClassIn.mp4"
                                 className="h-full w-full object-cover"
@@ -1145,7 +1150,7 @@ export default function ProductHWPage() {
                                 preload="metadata"
                                 aria-label="ClassIn 인터렉티브 러닝 수업 영상"
                             />
-                            <div className="pointer-events-none absolute inset-0 rounded-[1.35rem] ring-1 ring-white/25" />
+                            <div className="pointer-events-none absolute inset-0 rounded-[1.25rem] ring-1 ring-white/25" />
                             <div className="pointer-events-none absolute inset-x-0 top-0 h-20 bg-gradient-to-b from-white/20 to-transparent" />
                             <div className="pointer-events-none absolute inset-x-10 bottom-0 h-px bg-gradient-to-r from-transparent via-white/35 to-transparent" />
                         </div>
@@ -1287,7 +1292,7 @@ export default function ProductHWPage() {
 
                         <div className="bg-white rounded-2xl border border-slate-200/60 shadow-lg overflow-hidden">
                             <div className="overflow-x-auto">
-                                <table className="w-full text-sm">
+                                <table className="min-w-[760px] w-full text-sm">
                                     <thead>
                                         <tr className="bg-slate-50 border-b border-slate-100">
                                             <th className="text-left py-4 px-6 font-semibold text-slate-500 w-44">사양</th>

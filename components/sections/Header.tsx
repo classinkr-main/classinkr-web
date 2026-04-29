@@ -40,6 +40,10 @@ export function Header() {
         return () => window.removeEventListener("scroll", handleScroll)
     }, [])
 
+    React.useEffect(() => {
+        setIsMobileMenuOpen(false)
+    }, [pathname])
+
     return (
         <header
             className={cn(
@@ -49,7 +53,7 @@ export function Header() {
                     : "bg-white/60 backdrop-blur-sm py-6"
             )}
         >
-            <div className="container mx-auto flex items-center justify-between">
+            <div className="container mx-auto flex items-center justify-between gap-4">
                 <Link href="/" className="flex items-center gap-2">
                     <Image
                         src="/images/logo.png"
@@ -57,13 +61,18 @@ export function Header() {
                         width={120}
                         height={32}
                         className="h-7 md:h-8 w-auto object-contain"
+                        style={{ width: "auto" }}
                         priority
                     />
                 </Link>
 
                 <button
-                    className="md:hidden p-2 text-[#111110]"
+                    type="button"
+                    className="inline-flex h-11 w-11 items-center justify-center rounded-[8px] text-[#111110] transition-colors hover:bg-black/[0.05] md:hidden"
                     onClick={() => setIsMobileMenuOpen(!isMobileMenuOpen)}
+                    aria-label={isMobileMenuOpen ? "메뉴 닫기" : "메뉴 열기"}
+                    aria-expanded={isMobileMenuOpen}
+                    aria-controls="site-mobile-menu"
                 >
                     {isMobileMenuOpen ? <X size={24} /> : <Menu size={24} />}
                 </button>
@@ -71,9 +80,11 @@ export function Header() {
                 <nav className={cn(
                     "items-center gap-8",
                     isMobileMenuOpen
-                        ? "absolute top-full left-0 w-full bg-white border-b border-black/[0.08] flex flex-col items-center py-8 gap-6 shadow-[0_8px_24px_rgba(0,0,0,0.06)]"
+                        ? "absolute left-0 top-full flex max-h-[calc(100svh-5rem)] w-full flex-col items-stretch gap-1 overflow-y-auto border-b border-black/[0.08] bg-white px-5 py-5 shadow-[0_14px_34px_rgba(0,0,0,0.08)]"
                         : "hidden md:flex"
-                )}>
+                )}
+                    id="site-mobile-menu"
+                >
                     {navItems.map((item) => {
                         const isActive = item.href === "/product"
                             ? pathname.startsWith("/product")
@@ -82,19 +93,42 @@ export function Header() {
                                 : pathname === item.href;
                         const isProduct = item.href === "/product"
                         return isProduct ? (
-                            <div key={item.name} className="relative group">
+                            <div key={item.name} className="relative group w-full md:w-auto">
                                 <Link
                                     href={item.href}
                                     onClick={() => setIsMobileMenuOpen(false)}
                                     className={cn(
-                                        "text-[15px] font-semibold transition-colors",
+                                        "flex min-h-11 items-center justify-between rounded-[8px] px-3 text-[15px] font-semibold transition-colors md:min-h-0 md:rounded-none md:px-0",
                                         isActive
-                                            ? "text-[#084734]"
-                                            : "text-[#111110] hover:text-[#084734]"
+                                            ? "bg-[#ECFDF5] text-[#084734] md:bg-transparent"
+                                            : "text-[#111110] hover:bg-[#F6F5F4] hover:text-[#084734] md:hover:bg-transparent"
                                     )}
                                 >
                                     {item.name}
                                 </Link>
+                                {isMobileMenuOpen ? (
+                                    <div className="mt-2 grid grid-cols-2 gap-2 px-1 md:hidden">
+                                        {productTabs.map((tab) => {
+                                            const isTabActive = pathname === tab.href
+                                            return (
+                                                <Link
+                                                    key={tab.href}
+                                                    href={tab.href}
+                                                    onClick={() => setIsMobileMenuOpen(false)}
+                                                    className={cn(
+                                                        "inline-flex min-h-11 items-center justify-center gap-2 rounded-[8px] border px-3 text-sm font-semibold transition-colors",
+                                                        isTabActive
+                                                            ? "border-[#084734]/20 bg-[#ECFDF5] text-[#084734]"
+                                                            : "border-black/[0.08] bg-white text-[#615D59] hover:bg-[#F6F5F4]"
+                                                    )}
+                                                >
+                                                    <tab.icon className="h-4 w-4" />
+                                                    {tab.name}
+                                                </Link>
+                                            )
+                                        })}
+                                    </div>
+                                ) : null}
                                 <div className="pointer-events-none absolute top-full left-1/2 z-40 hidden w-48 -translate-x-1/2 pt-3 opacity-0 transition-all duration-200 group-hover:pointer-events-auto group-hover:translate-y-0 group-hover:opacity-100 group-focus-within:pointer-events-auto group-focus-within:translate-y-0 group-focus-within:opacity-100 md:block">
                                     <div className="translate-y-1 rounded-2xl border border-black/[0.08] bg-white p-1.5 shadow-[0_12px_28px_rgba(0,0,0,0.08)] transition-transform duration-200 group-hover:translate-y-0 group-focus-within:translate-y-0">
                                         <div className="flex flex-col gap-1">
@@ -126,16 +160,42 @@ export function Header() {
                                 href={item.href}
                                 onClick={() => setIsMobileMenuOpen(false)}
                                 className={cn(
-                                    "text-[15px] font-semibold transition-colors",
+                                    "flex min-h-11 w-full items-center rounded-[8px] px-3 text-[15px] font-semibold transition-colors md:min-h-0 md:w-auto md:rounded-none md:px-0",
                                     isActive
-                                        ? "text-[#084734]"
-                                        : "text-[#111110] hover:text-[#084734]"
+                                        ? "bg-[#ECFDF5] text-[#084734] md:bg-transparent"
+                                        : "text-[#111110] hover:bg-[#F6F5F4] hover:text-[#084734] md:hover:bg-transparent"
                                 )}
                             >
                                 {item.name}
                             </Link>
                         )
                     })}
+                    {isMobileMenuOpen ? (
+                        <div className="mt-3 grid gap-2 border-t border-black/[0.08] pt-4 md:hidden">
+                            <NewsletterModal
+                                source="gnb_mobile_materials"
+                                badge="무료 구독"
+                                title="교육 인사이트 받아보기"
+                                description="Classin의 최신 교육 트렌드, 제품 업데이트, 행사 정보를 이메일로 받아보세요."
+                                benefits={[
+                                    "월 1~2회 학원 운영 인사이트 레터",
+                                    "신기능 · 업데이트 소식 우선 공지",
+                                    "Classin 주최 행사 · 웨비나 초대",
+                                ]}
+                            >
+                                <button type="button" className="flex min-h-11 w-full items-center justify-center rounded-[8px] border border-black/[0.08] bg-white px-4 text-[15px] font-semibold text-[#615D59]">
+                                    자료 받아보기
+                                </button>
+                            </NewsletterModal>
+                            <Link
+                                href="/contact"
+                                onClick={() => setIsMobileMenuOpen(false)}
+                                className="inline-flex min-h-11 w-full items-center justify-center rounded-[8px] bg-[#009060] px-4 text-[15px] font-semibold text-white shadow-sm transition-colors hover:bg-[#007A52]"
+                            >
+                                도입 문의
+                            </Link>
+                        </div>
+                    ) : null}
                 </nav>
 
                 <div className="hidden md:flex items-center gap-4">

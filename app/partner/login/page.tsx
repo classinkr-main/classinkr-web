@@ -77,6 +77,7 @@ export default function PartnerLoginPage() {
                 width={120}
                 height={32}
                 className="object-contain"
+                style={{ width: "auto", height: "auto" }}
                 priority
               />
             </div>

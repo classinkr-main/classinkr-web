@@ -7,8 +7,8 @@ const numberFmt = new Intl.NumberFormat("ko-KR", { maximumFractionDigits: 0 })
 const fmt = (n: number) => numberFmt.format(n)
 function cny(n: number) {
   if (!Number.isFinite(n)) return "-"
-  if (n >= 100_000_000) return `${(n / 100_000_000).toFixed(1).replace(/\.0$/, "")}억`
-  if (n >= 10_000) return `${Math.round(n / 10_000)}만`
+  if (n >= 100_000_000) return `${(n / 100_000_000).toFixed(1)}억`
+  if (n >= 10_000) return `${(n / 10_000).toFixed(1)}만`
   return n.toLocaleString()
 }
 

@@ -67,7 +67,7 @@ export default async function BlogDetailPage({
 
   return (
     <div className="min-h-screen bg-[#FAFAF8] text-[#111110]">
-      <section className="px-6 pb-10 pt-32 md:pt-40">
+      <section className="px-4 pb-10 pt-28 sm:px-6 md:pt-40">
         <div className="mx-auto max-w-[1200px]">
           <Link
             href="/blog"
@@ -93,15 +93,15 @@ export default async function BlogDetailPage({
                 ))}
               </div>
 
-              <h1 className="max-w-4xl text-[2.4rem] font-bold leading-[1.05] tracking-[-0.05em] text-[#111110] md:text-[4.2rem]">
+              <h1 className="max-w-4xl text-[2.15rem] font-bold leading-[1.08] tracking-[-0.05em] text-[#111110] sm:text-[2.4rem] md:text-[4.2rem]">
                 {post.title}
               </h1>
 
-              <p className="mt-6 max-w-3xl text-[18px] leading-8 text-[#1a1a1a]/55 md:text-[20px]">
+              <p className="mt-5 max-w-3xl text-[16px] leading-7 text-[#1a1a1a]/55 sm:mt-6 md:text-[20px] md:leading-8">
                 {post.excerpt}
               </p>
 
-              <div className="mt-8 flex flex-wrap items-center gap-4 text-sm text-[#1a1a1a]/40">
+              <div className="mt-7 flex flex-wrap items-center gap-x-4 gap-y-2 text-sm text-[#1a1a1a]/40 sm:mt-8">
                 <span>{post.date}</span>
                 <span>•</span>
                 <span className="inline-flex items-center gap-1.5">
@@ -115,7 +115,7 @@ export default async function BlogDetailPage({
               </div>
             </div>
 
-            <div className="overflow-hidden rounded-[32px] border border-[#e8e8e4] bg-white shadow-sm">
+            <div className="overflow-hidden rounded-[24px] border border-[#e8e8e4] bg-white shadow-sm md:rounded-[32px]">
               <div className="relative aspect-[16/10] overflow-hidden">
                 <Image
                   src={post.heroImageUrl || post.imageUrl}
@@ -131,8 +131,8 @@ export default async function BlogDetailPage({
       </section>
 
       {benefits.length > 0 && (
-        <section className="px-6 pb-8">
-          <div className="mx-auto max-w-[1200px] rounded-[32px] border border-[#dcebd9] bg-white p-6 shadow-sm md:p-8">
+        <section className="px-4 pb-8 sm:px-6">
+          <div className="mx-auto max-w-[1200px] rounded-[24px] border border-[#dcebd9] bg-white p-5 shadow-sm md:rounded-[32px] md:p-8">
             <div className="grid gap-6 md:grid-cols-[220px_minmax(0,1fr)] md:items-start">
               <div>
                 <p className="text-[12px] font-medium uppercase tracking-[0.24em] text-[#084734]/55">
@@ -168,7 +168,7 @@ export default async function BlogDetailPage({
         </section>
       )}
 
-      <section className="px-6 pb-20 pt-10">
+      <section className="px-4 pb-16 pt-8 sm:px-6 md:pb-20 md:pt-10">
         <div className={`mx-auto max-w-[1200px] gap-12 ${
           post.pageLayout === "minimal"
             ? "flex flex-col"
@@ -198,13 +198,13 @@ export default async function BlogDetailPage({
           )}
 
           <div className={post.pageLayout === "minimal" ? "mx-auto w-full max-w-3xl" : "min-w-0"}>
-            <div className="rounded-[36px] border border-[#e8e8e4] bg-white px-6 py-8 shadow-sm md:px-10 md:py-12">
+            <div className="rounded-[24px] border border-[#e8e8e4] bg-white px-5 py-7 shadow-sm md:rounded-[36px] md:px-10 md:py-12">
               <BlogMarkdownRenderer markdown={post.contentMarkdown} />
             </div>
 
-            <div className="mt-10 rounded-[32px] border border-[#e8e8e4] bg-white p-6 shadow-sm md:p-8">
+            <div className="mt-8 rounded-[24px] border border-[#e8e8e4] bg-white p-5 shadow-sm md:mt-10 md:rounded-[32px] md:p-8">
               <div className="flex flex-col gap-6 md:flex-row md:items-center">
-                <div className="relative h-16 w-16 overflow-hidden rounded-full bg-[#f0f0ec]">
+                <div className="relative h-16 w-16 shrink-0 overflow-hidden rounded-full bg-[#f0f0ec]">
                   {post.authorAvatarUrl ? (
                     <Image
                       src={post.authorAvatarUrl}
@@ -233,7 +233,7 @@ export default async function BlogDetailPage({
 
             {relatedPosts.length > 0 && (
               <div className="mt-12">
-                <div className="mb-5 flex items-end justify-between gap-4">
+                <div className="mb-5 flex flex-col gap-4 sm:flex-row sm:items-end sm:justify-between">
                   <div>
                     <p className="text-[12px] font-medium uppercase tracking-[0.24em] text-[#084734]/45">
                       Recommended
@@ -282,12 +282,12 @@ export default async function BlogDetailPage({
               </div>
             )}
 
-            <div className="mt-12 overflow-hidden rounded-[36px] bg-[#111110] p-8 text-white shadow-sm md:p-10">
+            <div className="mt-12 overflow-hidden rounded-[24px] bg-[#111110] p-6 text-white shadow-sm md:rounded-[36px] md:p-10">
               <p className="text-[12px] font-medium uppercase tracking-[0.24em] text-white/35">
                 {post.cta.eyebrow}
               </p>
               <div className="mt-4 max-w-2xl">
-                <h2 className="text-[2rem] font-semibold tracking-[-0.04em] text-white md:text-[2.4rem]">
+                <h2 className="text-[1.75rem] font-semibold tracking-[-0.04em] text-white md:text-[2.4rem]">
                   {post.cta.title}
                 </h2>
                 <p className="mt-4 text-[15px] leading-7 text-white/58">

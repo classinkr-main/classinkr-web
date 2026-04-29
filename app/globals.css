@@ -178,6 +178,13 @@
 }
 
 @layer base {
+  html,
+  body {
+    width: 100%;
+    max-width: 100%;
+    overflow-x: clip;
+  }
+
   * {
     @apply border-border;
     /* Firefox — 얇은 스크롤바 + 반투명 thumb */
@@ -227,6 +234,7 @@
     font-feature-settings: "kern" 1, "liga" 1;
     -webkit-font-smoothing: antialiased;
     -moz-osx-font-smoothing: grayscale;
+    text-size-adjust: 100%;
     word-break: keep-all;
   }
 
@@ -235,11 +243,38 @@
   h2 { letter-spacing: -0.03em; }
   h3 { letter-spacing: -0.02em; }
   h4 { letter-spacing: -0.01em; }
+
+  @media (max-width: 640px) {
+    h1,
+    h2,
+    h3,
+    h4 {
+      letter-spacing: 0 !important;
+    }
+  }
 }
 
 @layer utilities {
   .container {
-    @apply px-4 md:px-12 lg:px-24 mx-auto max-w-[1400px];
+    @apply px-4 sm:px-6 md:px-12 lg:px-24 mx-auto max-w-[1400px];
+  }
+
+  .no-scrollbar {
+    scrollbar-width: none;
+    -ms-overflow-style: none;
+  }
+
+  .no-scrollbar::-webkit-scrollbar {
+    display: none;
+  }
+
+  .admin-scroll-snap-x {
+    -webkit-overflow-scrolling: touch;
+    scroll-snap-type: x proximity;
+  }
+
+  .admin-scroll-snap-x > * {
+    scroll-snap-align: start;
   }
 
   /* ── 카드 그림자 ── */
@@ -263,6 +298,15 @@
   .tracking-section  { letter-spacing: -0.03em; }   /* 48px section heading */
   .tracking-subhead  { letter-spacing: -0.02em; }   /* 32px subheading */
   .tracking-card     { letter-spacing: -0.015em; }  /* 22px card title */
+
+  @media (max-width: 640px) {
+    .tracking-display,
+    .tracking-section,
+    .tracking-subhead,
+    .tracking-card {
+      letter-spacing: 0 !important;
+    }
+  }
 }
 
 @keyframes fadeInUp {
@@ -398,6 +442,18 @@
   animation: text-gradient 3s linear infinite;
 }
 
+/* ── Gauge overshoot emphasis (when ring goes past 100%) ──────────── */
+@keyframes gauge-overshoot-glow {
+  0%, 100% { filter: drop-shadow(0 0 2px rgba(245,158,11,0.45)) drop-shadow(0 0 5px rgba(245,158,11,0.35)); }
+  50%      { filter: drop-shadow(0 0 3px rgba(245,158,11,0.6))  drop-shadow(0 0 9px rgba(245,158,11,0.5)); }
+}
+.gauge-overshoot-arc {
+  animation: gauge-overshoot-glow 1.6s ease-in-out infinite;
+}
+.gauge-overshoot-dot {
+  box-shadow: 0 0 0 2px rgba(245,158,11,0.18), 0 0 6px rgba(245,158,11,0.45);
+}
+
 .prism-glass {
   position: relative;
   overflow: hidden;
@@ -472,6 +528,56 @@
 
 .animate-glow-pulse {
   animation: glow-pulse-light 2s ease-in-out infinite;
+}
+
+.blog-markdown {
+  overflow-wrap: anywhere;
+}
+
+.blog-markdown img,
+.blog-markdown video,
+.blog-markdown iframe,
+.blog-markdown table {
+  max-width: 100%;
+}
+
+.blog-markdown table {
+  display: block;
+  overflow-x: auto;
+  white-space: nowrap;
+}
+
+@media (max-width: 640px) {
+  .blog-markdown h2 {
+    font-size: 1.625rem !important;
+    line-height: 1.2 !important;
+    letter-spacing: 0 !important;
+  }
+
+  .blog-markdown h3 {
+    font-size: 1.375rem !important;
+    line-height: 1.25 !important;
+    letter-spacing: 0 !important;
+  }
+
+  .blog-markdown p,
+  .blog-markdown li {
+    font-size: 1rem !important;
+    line-height: 1.75 !important;
+  }
+
+  .blog-markdown blockquote {
+    border-radius: 1rem !important;
+    padding: 1rem !important;
+    font-size: 1rem !important;
+    line-height: 1.75 !important;
+  }
+
+  .blog-markdown figure {
+    border-radius: 1rem !important;
+    margin-left: -0.25rem !important;
+    margin-right: -0.25rem !important;
+  }
 }
 
 /* ── SW Product page animations ──────────────────────────────────── */

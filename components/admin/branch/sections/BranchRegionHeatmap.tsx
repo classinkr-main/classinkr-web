@@ -57,40 +57,51 @@ const REGION_ALIASES: Array<[string, string]> = [
 function fmt(n: number) { return new Intl.NumberFormat("ko-KR", { maximumFractionDigits: 0 }).format(n) }
 function cny(n: number) {
   if (!Number.isFinite(n)) return "-"
-  if (n >= 100_000_000) return `${(n / 100_000_000).toFixed(1).replace(/\.0$/, "")}억`
-  if (n >= 10_000) return `${Math.round(n / 10_000)}만`
+  if (n >= 100_000_000) return `${(n / 100_000_000).toFixed(1)}억`
+  if (n >= 10_000) return `${(n / 10_000).toFixed(1)}만`
   return n.toLocaleString()
 }
 
-// Heat color — single green scale; progress determines opacity, not hue.
-// Saturated green for strong regions, faint green for weak ones — the eye latches onto strong.
-const HEAT_BASE = "#084734"
-const HEAT_LOW  = "#B43E3E" // only the weakest tier shifts to red as a clear warning
+// Heat ramp — premium business palette, 4-stop gradient from terracotta to
+// deep forest. Every stop is desaturated and mid-dark so it reads as a
+// professional dashboard rather than a primary-color alert chart.
+const HEAT_STOPS: Array<{ t: number; rgb: [number, number, number] }> = [
+  { t: 0,    rgb: [168, 89,  82]  }, // #A85952 muted terracotta — low / critical
+  { t: 0.34, rgb: [192, 148, 96]  }, // #C09460 warm tan — needs attention
+  { t: 0.67, rgb: [127, 154, 130] }, // #7F9A82 sage — on track
+  { t: 1,    rgb: [62,  95,  77]  }, // #3E5F4D deep forest — strong
+]
+const HEAT_LOW = `rgb(${HEAT_STOPS[0].rgb.join(",")})`
+const HEAT_HIGH = `rgb(${HEAT_STOPS[HEAT_STOPS.length - 1].rgb.join(",")})`
 
-function heatColor(p: number): string {
-  // Three tiers: weak → warning red, mid → muted olive blend, strong → green
-  if (p < 50) return HEAT_LOW
-  return HEAT_BASE
+function lerp(a: number, b: number, t: number) { return a + (b - a) * t }
+function heatColorRamp(value: number, max: number): string {
+  if (!Number.isFinite(value) || !Number.isFinite(max) || max <= 0) return HEAT_LOW
+  const t = Math.max(0, Math.min(1, value / max))
+  for (let i = 0; i < HEAT_STOPS.length - 1; i++) {
+    const a = HEAT_STOPS[i], b = HEAT_STOPS[i + 1]
+    if (t <= b.t) {
+      const local = (t - a.t) / (b.t - a.t)
+      const r = Math.round(lerp(a.rgb[0], b.rgb[0], local))
+      const g = Math.round(lerp(a.rgb[1], b.rgb[1], local))
+      const bb = Math.round(lerp(a.rgb[2], b.rgb[2], local))
+      return `rgb(${r}, ${g}, ${bb})`
+    }
+  }
+  return HEAT_HIGH
 }
-// Opacity bound to progress — low progress fades into background, high progress pops.
-function heatOpacity(p: number): number {
-  const clamped = Math.max(0, Math.min(120, p))
-  // 0% → 0.15 (barely visible), 100%+ → 0.92
-  return 0.15 + (Math.min(100, clamped) / 100) * 0.77
+// Mild opacity range — the gradient hue already carries the signal, so we
+// only nudge opacity to keep weak regions slightly recessed.
+function rampOpacity(value: number, max: number): number {
+  if (!Number.isFinite(value) || !Number.isFinite(max) || max <= 0) return 0.78
+  const t = Math.max(0, Math.min(1, value / max))
+  return 0.78 + t * 0.14
 }
 function statusOf(p: number): Row["status"] {
   if (p >= 95) return "good"
   if (p >= 75) return "warning"
   return "critical"
 }
-function statusLabel(p: number) {
-  if (p >= 100) return "초과달성"
-  if (p >= 90) return "순조"
-  if (p >= 70) return "주의"
-  if (p >= 50) return "위험"
-  return "심각"
-}
-
 function adminFetch(url: string) {
   const token = (typeof window !== "undefined" ? sessionStorage.getItem("admin_password") : null) ?? ""
   return fetch(url, { headers: { Authorization: `Bearer ${token}` } })
@@ -161,15 +172,31 @@ const ZOOM_MIN = 1
 const ZOOM_MAX = 4
 const ZOOM_STEP = 1.4
 
-function HeatMap({ rows, selectedLabel, onSelect }: {
+type Metric = "revenue" | "progress"
+
+function HeatMap({ rows, selectedLabel, onSelect, metric }: {
   rows: MapRow[]
   selectedLabel: string | null
   onSelect: (row: MapRow) => void
+  metric: Metric
 }) {
   const [hovered, setHovered] = useState<string | null>(null)
   const [mousePos, setMousePos] = useState({ x: 0, y: 0 })
   const rowsByLabel = useMemo(() => new Map(rows.map((r) => [r.label, r])), [rows])
   const hoveredRow = hovered ? rowsByLabel.get(hovered) ?? null : null
+  // For revenue mode the visual must scale by absolute money. We use
+  // `expected` (확정 + 추정) so future-weighted regions still register.
+  const maxExpected = useMemo(
+    () => Math.max(1, ...rows.map((r) => r.expected || 0)),
+    [rows],
+  )
+  // Hovered region last → its scale + shadow paints above neighbor strokes.
+  const orderedShapes = useMemo(() => {
+    if (!hovered) return KOREA_PROVINCE_SHAPES
+    return [...KOREA_PROVINCE_SHAPES].sort((a, b) =>
+      a.label === hovered ? 1 : b.label === hovered ? -1 : 0,
+    )
+  }, [hovered])
 
   // Sequential N→S reveal. Sort by centroid Y (smaller y = north in our SVG
   // coord space) and stagger reveal so the eye follows the peninsula down.
@@ -253,29 +280,38 @@ function HeatMap({ rows, selectedLabel, onSelect }: {
         <g>
           {KOREA_PROVINCE_SHAPES.map((s) => (
             <path key={`base-${s.label}`} d={s.path}
-              fill="#F0EFEC" stroke="#E2DFD8" strokeWidth={0.35} />
+              fill="#F0EFEC" stroke="#E2DFD8" strokeWidth={0.18} />
           ))}
         </g>
 
-        {/* Heat fills — opacity = progress, hue only flips below 50% */}
+        {/* Heat fills — color/opacity scale by the active metric. The hovered
+            region is rendered last so its scale-up + drop-shadow draw above
+            neighboring strokes instead of getting clipped by them. */}
         <g>
-          {KOREA_PROVINCE_SHAPES.map((s) => {
+          {orderedShapes.map((s) => {
             const row = rowsByLabel.get(s.label)
             if (!row) return null
             const sel = selectedLabel === row.label
             const hov = hovered === row.label
             const someoneElseHovered = hovered !== null && !hov
             const isRevealed = revealedSet.has(row.label)
-            const baseOpacity = Math.min(1, heatOpacity(row.progress) * (sel ? 1.15 : 1))
-            // Reveal step gates opacity to 0 until the path's turn.
+            const metricValue = metric === "revenue" ? row.expected : row.progress
+            const metricMax = metric === "revenue" ? maxExpected : 100
+            const baseOpacity = Math.min(1, rampOpacity(metricValue, metricMax) * (sel ? 1.08 : 1))
             const visibleOpacity = isRevealed
               ? (someoneElseHovered ? 0.35 : (hov ? 1 : baseOpacity))
               : 0
+            const fillColor = someoneElseHovered
+              ? DIMMED_FILL
+              : heatColorRamp(metricValue, metricMax)
+            const aria = metric === "revenue"
+              ? `${row.label} 매출 ${cny(row.expected)}원`
+              : `${row.label} ${row.progress.toFixed(0)}%`
             return (
               <path key={`fill-${s.label}`} d={row.path}
-                fill={someoneElseHovered ? DIMMED_FILL : heatColor(row.progress)}
+                fill={fillColor}
                 stroke="#ffffff"
-                strokeWidth={sel ? 0.45 : 0.3}
+                strokeWidth={sel ? 0.225 : 0.15}
                 opacity={visibleOpacity}
                 className="cursor-pointer focus:outline-none focus-visible:outline-none [-webkit-tap-highlight-color:transparent]"
                 style={{
@@ -287,14 +323,14 @@ function HeatMap({ rows, selectedLabel, onSelect }: {
                   filter: hov ? "drop-shadow(0 1.6px 1.6px rgba(0,0,0,0.32))" : "none",
                 }}
                 role="button" tabIndex={0}
-                aria-label={`${row.label} ${row.progress.toFixed(0)}%`}
+                aria-label={aria}
                 onClick={() => onSelect(row)}
                 onMouseEnter={() => setHovered(row.label)}
                 onFocus={() => setHovered(row.label)}
                 onBlur={() => setHovered(null)}
                 onKeyDown={(e) => { if (e.key === "Enter" || e.key === " ") { e.preventDefault(); onSelect(row) } }}
               >
-                <title>{`${row.label} ${row.progress.toFixed(0)}%`}</title>
+                <title>{aria}</title>
               </path>
             )
           })}
@@ -308,19 +344,20 @@ function HeatMap({ rows, selectedLabel, onSelect }: {
             const isRevealed = revealedSet.has(r.label)
             const someoneElseHovered = hovered !== null && hovered !== r.label
             const nudge = LABEL_NUDGE[r.label] ?? { dx: 0, dy: 0 }
-            // Font scales inversely with zoom so labels stay readable but
-            // don't blow up when the user zooms into a metro area.
             const fontSize = Math.max(1.6, 2.5 / Math.sqrt(zoom))
+            // Every stop on the ramp is mid-dark, so white text reads cleanly
+            // throughout. A subtle dark stroke (paint-order trick) keeps the
+            // text legible against the lighter "needs attention" stops.
             return (
               <text key={`label-${r.label}`} x={r.x + nudge.dx} y={r.y + 1 + nudge.dy}
                 textAnchor="middle"
                 style={{
                   fontSize, fontWeight: 700,
-                  fill: someoneElseHovered ? "#8C8884" : (r.progress >= 50 ? "#fff" : "#111110"),
+                  fill: someoneElseHovered ? "#8C8884" : "#fff",
                   opacity: isRevealed ? (someoneElseHovered ? 0.55 : 0.95) : 0,
                   paintOrder: "stroke",
-                  stroke: someoneElseHovered ? "transparent" : (r.progress >= 50 ? "rgba(0,0,0,0.18)" : "rgba(255,255,255,0.85)"),
-                  strokeWidth: 0.35,
+                  stroke: someoneElseHovered ? "transparent" : "rgba(0,0,0,0.32)",
+                  strokeWidth: 0.175,
                   transition: "opacity 280ms ease-out, fill 180ms ease-out",
                 }}>
                 {r.label}
@@ -341,20 +378,24 @@ function HeatMap({ rows, selectedLabel, onSelect }: {
           }}>
           <div className="flex items-baseline justify-between">
             <span className="text-[12px] font-bold text-[#111110]">{hoveredRow.label}</span>
-            <span className="text-[12px] font-bold" style={{ color: heatColor(hoveredRow.progress) }}>
-              {hoveredRow.progress.toFixed(0)}%
-            </span>
+            {metric === "revenue" ? (
+              <span className="text-[12px] font-bold tabular-nums" style={{ color: heatColorRamp(hoveredRow.expected, maxExpected) }}>
+                ¥{cny(hoveredRow.expected)}
+              </span>
+            ) : (
+              <span className="text-[12px] font-bold tabular-nums" style={{ color: heatColorRamp(hoveredRow.progress, 100) }}>
+                {hoveredRow.progress.toFixed(0)}%
+              </span>
+            )}
           </div>
           <p className="mt-1 text-[10.5px] text-[#615D59]">
-            <span className="font-semibold" style={{ color: "#B43E3E" }}>¥{cny(hoveredRow.revenue)}</span>
+            <span className="font-semibold" style={{ color: "#B43E3E" }}>확정 ¥{cny(hoveredRow.revenue)}</span>
             {hoveredRow.projected > 0 && (
               <span className="ml-1 text-[#615D59]">+ 추정 ¥{cny(hoveredRow.projected)}</span>
             )}
-            <span className="mx-1">/</span>
-            ¥{cny(hoveredRow.target)}
           </p>
           <p className="mt-0.5 text-[10px] text-[#615D59]">
-            {hoveredRow.confirmed_count} / {hoveredRow.deals_count}건 · {statusLabel(hoveredRow.progress)}
+            목표 ¥{cny(hoveredRow.target)} · {hoveredRow.progress.toFixed(0)}% · {hoveredRow.confirmed_count}/{hoveredRow.deals_count}건
           </p>
         </div>
       )}
@@ -381,11 +422,12 @@ function HeatMap({ rows, selectedLabel, onSelect }: {
         </button>
       </div>
 
-      {/* Tiny legend */}
+      {/* Tiny legend — mirrors the active ramp so the user reads the map and
+          legend with the same visual vocabulary. */}
       <div className="mt-2 flex items-center gap-2 px-1 text-[10px] text-[#615D59]">
-        <span>달성률</span>
-        <div className="h-[3px] w-24 rounded-full"
-          style={{ background: `linear-gradient(90deg, ${HEAT_LOW} 0%, rgba(8,71,52,0.18) 50%, ${HEAT_BASE} 100%)` }} />
+        <span>{metric === "revenue" ? "매출" : "달성률"}</span>
+        <div className="h-[3px] w-28 rounded-full"
+          style={{ background: `linear-gradient(90deg, ${HEAT_STOPS.map((s) => `rgb(${s.rgb.join(",")}) ${(s.t * 100).toFixed(0)}%`).join(", ")})` }} />
         <span className="text-[#A39E98]">낮음</span>
         <span className="ml-auto text-[#A39E98]">높음</span>
       </div>
@@ -393,26 +435,36 @@ function HeatMap({ rows, selectedLabel, onSelect }: {
   )
 }
 
-function CompactRow({ row, rank, selected, onSelect }: { row: Row; rank: number; selected: boolean; onSelect: () => void }) {
-  const barWidth = `${Math.min(100, row.progress)}%`
+function CompactRow({ row, rank, selected, onSelect, metric, maxExpected }: {
+  row: Row; rank: number; selected: boolean; onSelect: () => void
+  metric: Metric; maxExpected: number
+}) {
+  const metricValue = metric === "revenue" ? row.expected : row.progress
+  const metricMax = metric === "revenue" ? maxExpected : 100
+  const barPct = metric === "revenue"
+    ? (maxExpected > 0 ? Math.min(100, (row.expected / maxExpected) * 100) : 0)
+    : Math.min(100, row.progress)
+  const barColor = heatColorRamp(metricValue, metricMax)
+  const barOpacity = rampOpacity(metricValue, metricMax)
+  const valueColor = barColor
   return (
     <button type="button" onClick={onSelect}
-      className={`grid w-full grid-cols-[18px_60px_minmax(0,1fr)_36px] items-center gap-2 rounded px-1.5 py-1.5 text-left transition ${
+      className={`grid w-full grid-cols-[18px_56px_minmax(0,1fr)_56px] items-center gap-2 rounded px-1.5 py-1.5 text-left transition ${
         selected ? "bg-[#F0EFEC]" : "hover:bg-[#F6F5F4]"
       }`}>
       <span className="text-[10px] tabular-nums text-[#A39E98]">{String(rank).padStart(2, "0")}</span>
       <span className="truncate text-[11.5px] font-semibold text-[#111110]">{row.region}</span>
       <div className="h-1 overflow-hidden rounded-full bg-[#EFEDE7]">
-        <div className="h-full rounded-full transition-[width]" style={{ width: barWidth, background: heatColor(row.progress), opacity: heatOpacity(row.progress) }} />
+        <div className="h-full rounded-full transition-[width]" style={{ width: `${barPct}%`, background: barColor, opacity: barOpacity }} />
       </div>
-      <span className="text-right text-[11px] font-bold tabular-nums" style={{ color: heatColor(row.progress) }}>
-        {row.progress.toFixed(0)}%
+      <span className="text-right text-[11px] font-bold tabular-nums" style={{ color: valueColor }}>
+        {metric === "revenue" ? `¥${cny(row.expected)}` : `${row.progress.toFixed(0)}%`}
       </span>
     </button>
   )
 }
 
-function DetailPanel({ row }: { row: MapRow | null }) {
+function DetailPanel({ row, metric }: { row: MapRow | null; metric: Metric }) {
   if (!row) {
     return (
       <div className="px-1 py-2 text-[12px] text-[#A39E98]">
@@ -429,9 +481,29 @@ function DetailPanel({ row }: { row: MapRow | null }) {
             <p className="mt-0.5 text-[10px] text-[#A39E98]">{row.regions.join(", ")}</p>
           )}
         </div>
-        <span className="text-[16px] font-bold tabular-nums" style={{ color: heatColor(row.progress) }}>
-          {row.progress.toFixed(0)}%
-        </span>
+        {(() => {
+          // DetailPanel doesn't know maxExpected, but it can derive a sane
+          // ramp by using the region's progress for the progress mode and the
+          // ratio of expected to its own target for the revenue mode (since
+          // we want "this region is X% of max" coloring; without maxExpected
+          // here we fall back to progress as the secondary indicator).
+          const progressColor = heatColorRamp(row.progress, 100)
+          return metric === "revenue" ? (
+            <div className="text-right">
+              <span className="text-[18px] font-bold tabular-nums" style={{ color: progressColor }}>
+                ¥{cny(row.expected)}
+              </span>
+              <p className="mt-0.5 text-[10px] tabular-nums text-[#A39E98]">{row.progress.toFixed(0)}%</p>
+            </div>
+          ) : (
+            <div className="text-right">
+              <span className="text-[18px] font-bold tabular-nums" style={{ color: progressColor }}>
+                {row.progress.toFixed(0)}%
+              </span>
+              <p className="mt-0.5 text-[10px] tabular-nums text-[#A39E98]">¥{cny(row.expected)}</p>
+            </div>
+          )
+        })()}
       </div>
       <div className="mt-3 grid grid-cols-2 gap-x-4 gap-y-2 text-[11.5px]">
         <div>
@@ -446,7 +518,7 @@ function DetailPanel({ row }: { row: MapRow | null }) {
         </div>
         <div>
           <p className="text-[10px] text-[#A39E98]">합계 (확정+추정)</p>
-          <p className="mt-0.5 text-[13px] font-bold tracking-[-0.01em]" style={{ color: heatColor(row.progress) }}>
+          <p className="mt-0.5 text-[13px] font-bold tracking-[-0.01em]" style={{ color: heatColorRamp(row.progress, 100) }}>
             ¥{cny(row.expected)}
           </p>
         </div>
@@ -491,6 +563,9 @@ export default function BranchRegionHeatmap({ team, period, refreshKey }: { team
   const rows = state.key === requestKey ? state.rows : null
   const error = state.key === requestKey ? state.error : null
   const [selectedLabel, setSelectedLabel] = useState<string | null>(null)
+  // Default to revenue — magnitude tells the operator where the money is,
+  // which is more actionable than achievement %.
+  const [metric, setMetric] = useState<Metric>("revenue")
 
   useEffect(() => {
     let cancelled = false
@@ -505,12 +580,19 @@ export default function BranchRegionHeatmap({ team, period, refreshKey }: { team
     return () => { cancelled = true }
   }, [requestKey, team, period])
 
-  // Ranking: revenue total first, then achievement %
-  const sortedByProgress = useMemo(
-    () => [...(rows ?? [])].sort((a, b) => b.revenue - a.revenue || b.progress - a.progress),
+  // Ranking sort follows the active metric so the list and the map agree.
+  const sortedRanking = useMemo(() => {
+    const list = [...(rows ?? [])]
+    if (metric === "revenue") {
+      return list.sort((a, b) => b.expected - a.expected || b.progress - a.progress)
+    }
+    return list.sort((a, b) => b.progress - a.progress || b.expected - a.expected)
+  }, [rows, metric])
+  const { mappedRows, otherRows } = useMemo(() => mergeForMap(rows ?? []), [rows])
+  const maxExpected = useMemo(
+    () => Math.max(1, ...(rows ?? []).map((r) => r.expected || 0)),
     [rows],
   )
-  const { mappedRows, otherRows } = useMemo(() => mergeForMap(rows ?? []), [rows])
   const selected = mappedRows.find((r) => r.label === selectedLabel) ?? mappedRows[0] ?? null
 
   if (error) return <div className="rounded-xl border border-rose-200 bg-rose-50 p-4 text-[12px] text-rose-700">{error}</div>
@@ -525,31 +607,42 @@ export default function BranchRegionHeatmap({ team, period, refreshKey }: { team
 
   return (
     <section className="rounded-xl border border-[rgba(0,0,0,0.08)] bg-white shadow-[0_1px_2px_rgba(0,0,0,0.02)]">
-      <div className="flex items-center justify-between gap-3 border-b border-[rgba(0,0,0,0.08)] px-5 py-3.5">
+      <div className="flex flex-wrap items-center justify-between gap-3 border-b border-[rgba(0,0,0,0.08)] px-5 py-3">
         <div className="flex items-center gap-2">
           <MapPin className="h-4 w-4 text-[#084734]" />
           <h2 className="text-[14px] font-bold tracking-[-0.01em] text-[#111110]">KR 지역 히트맵</h2>
         </div>
-        <p className="text-[10.5px] text-[#A39E98]">호버 시 지역 상세</p>
+        <div className="inline-flex rounded-md border border-[rgba(0,0,0,0.08)] bg-[#F6F5F4] p-[2px]" role="group" aria-label="히트맵 지표 선택">
+          {(["revenue", "progress"] as const).map((m) => (
+            <button key={m} type="button" onClick={() => setMetric(m)}
+              aria-pressed={metric === m}
+              className={`rounded px-2.5 py-1 text-[11px] font-semibold transition ${
+                metric === m ? "bg-white text-[#111110] shadow-[0_1px_2px_rgba(0,0,0,0.06)]" : "text-[#615D59]"
+              }`}>
+              {m === "revenue" ? "매출" : "달성률"}
+            </button>
+          ))}
+        </div>
       </div>
 
       <div className="grid w-full gap-6 p-5 lg:grid-cols-[minmax(520px,1fr)_minmax(280px,360px)]">
         <HeatMap rows={mappedRows} selectedLabel={selected?.label ?? null}
-          onSelect={(r) => setSelectedLabel(r.label)} />
+          onSelect={(r) => setSelectedLabel(r.label)} metric={metric} />
 
         <div className="flex w-full max-w-[360px] flex-col gap-4 lg:ml-auto">
-          <DetailPanel row={selected} />
+          <DetailPanel row={selected} metric={metric} />
 
           <div>
             <p className="mb-2 px-1 text-[10.5px] font-semibold uppercase tracking-[0.04em] text-[#615D59]">
-              지역 순위 · {sortedByProgress.length}개
+              지역 순위 · {sortedRanking.length}개 ({metric === "revenue" ? "매출 순" : "달성률 순"})
             </p>
             <div className="max-h-[280px] overflow-y-auto">
-              {sortedByProgress.map((r, i) => {
+              {sortedRanking.map((r, i) => {
                 const canon = canonicalRegion(r.region)
                 const sel = canon ? selected?.label === canon : false
                 return (
                   <CompactRow key={r.region} row={r} rank={i + 1} selected={sel}
+                    metric={metric} maxExpected={maxExpected}
                     onSelect={() => { if (canon) setSelectedLabel(canon) }} />
                 )
               })}
@@ -562,7 +655,7 @@ export default function BranchRegionHeatmap({ team, period, refreshKey }: { team
               <div className="flex flex-wrap gap-1">
                 {otherRows.map((r) => (
                   <span key={r.region} className="rounded-full bg-[#F6F5F4] px-2 py-0.5 text-[10px] text-[#615D59]">
-                    {r.region} {r.progress.toFixed(0)}%
+                    {r.region} {metric === "revenue" ? `¥${cny(r.expected)}` : `${r.progress.toFixed(0)}%`}
                   </span>
                 ))}
               </div>

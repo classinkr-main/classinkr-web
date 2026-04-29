@@ -754,7 +754,7 @@ export default function AnalyticsPage() {
       </div>
 
       <div className="mb-6 rounded-2xl border border-[#e8e8e4] bg-white p-4">
-        <div className="flex gap-2 overflow-x-auto pb-1 [-ms-overflow-style:none] [scrollbar-width:none]">
+        <div className="admin-scroll-snap-x no-scrollbar flex gap-2 overflow-x-auto pb-1">
           {tabButtons.map((tab) => {
             const active = activeTab === tab.key
             return (

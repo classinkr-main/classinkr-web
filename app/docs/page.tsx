@@ -88,13 +88,13 @@ export default async function DocsHomePage({ searchParams }: DocsHomePageProps) 
     : allDocs
 
   return (
-    <div className="min-h-screen bg-[#FAFAF8] pt-28 pb-24 text-[#111110] md:pt-36">
+    <div className="min-h-screen bg-[#FAFAF8] pb-20 pt-28 text-[#111110] md:pb-24 md:pt-36">
       <section className="container">
         <div className="max-w-4xl">
           <p className="text-sm font-semibold uppercase tracking-[0.16em] text-[#084734]">
             ClassIn Guide
           </p>
-          <h1 className="mt-4 text-4xl font-black leading-[1.06] tracking-display md:text-6xl">
+          <h1 className="mt-4 text-[2.35rem] font-black leading-[1.08] tracking-display sm:text-4xl md:text-6xl">
             클래스인을
             <br className="hidden md:block" />
             만나보세요.
@@ -104,7 +104,7 @@ export default async function DocsHomePage({ searchParams }: DocsHomePageProps) 
           </p>
         </div>
 
-        <form action="/docs" method="get" className="mt-10 flex max-w-2xl items-center gap-3 border-b border-black/[0.08] pb-4">
+        <form action="/docs" method="get" className="mt-9 flex max-w-2xl items-center gap-3 border-b border-black/[0.08] pb-4 md:mt-10">
           <Search className="h-4 w-4 shrink-0 text-[#A39E98]" aria-hidden />
           <input
             name="q"
@@ -112,7 +112,7 @@ export default async function DocsHomePage({ searchParams }: DocsHomePageProps) 
             placeholder="궁금한 기능, 수업 준비, 문제 상황 검색"
             className="min-w-0 flex-1 bg-transparent text-base outline-none placeholder:text-[#A39E98]"
           />
-          <button type="submit" className="text-sm font-semibold text-[#084734]">
+          <button type="submit" className="shrink-0 text-sm font-semibold text-[#084734]">
             검색
           </button>
         </form>

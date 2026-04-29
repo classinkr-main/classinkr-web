@@ -862,7 +862,7 @@ export default function AdminCampaignsPage() {
 
       {/* Sub-tabs — branch admin 스타일 */}
       <div className="border-b border-[rgba(0,0,0,0.08)] bg-[#EBE8E2] px-2 sm:px-4 lg:px-9">
-        <div className="-mb-px flex flex-nowrap gap-0 overflow-x-auto" role="tablist" aria-label="캠페인 보기">
+        <div className="admin-scroll-snap-x no-scrollbar -mb-px flex flex-nowrap gap-0 overflow-x-auto" role="tablist" aria-label="캠페인 보기">
           {CAMPAIGN_TABS.map((tab) => {
             const active = activeTab === tab.id
             return (
@@ -872,7 +872,7 @@ export default function AdminCampaignsPage() {
                 role="tab"
                 aria-selected={active}
                 onClick={() => setActiveTab(tab.id)}
-                className={`relative mt-1 flex shrink-0 flex-col items-start gap-0.5 rounded-t-lg px-4 py-3 text-left transition sm:px-5 ${
+                className={`relative mt-1 flex shrink-0 flex-col items-start gap-0.5 rounded-t-lg px-4 py-2.5 text-left transition sm:px-5 sm:py-3 ${
                   active
                     ? "bg-[#FAFAF8] text-[#111110]"
                     : "bg-transparent text-[#615D59] hover:text-[#111110]"
@@ -882,7 +882,7 @@ export default function AdminCampaignsPage() {
                   {tab.id === "email" && <Mail className="w-3 h-3" />}
                   {tab.label}
                 </span>
-                <span className="whitespace-nowrap text-[10.5px] font-medium text-[#615D59]">{tab.sub}</span>
+                <span className="hidden whitespace-nowrap text-[10.5px] font-medium text-[#615D59] min-[420px]:block">{tab.sub}</span>
                 {active && (
                   <span className="absolute inset-x-3 -bottom-px h-[2.5px] rounded-sm bg-[#084734]" />
                 )}

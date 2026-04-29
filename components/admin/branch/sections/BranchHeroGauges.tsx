@@ -4,8 +4,8 @@ import type { BranchKpiResponse, BranchSummaryResponse } from "../types"
 
 function cny(n: number) {
   if (!Number.isFinite(n)) return "-"
-  if (n >= 100_000_000) return `${(n / 100_000_000).toFixed(1).replace(/\.0$/, "")}억`
-  if (n >= 10_000) return `${Math.round(n / 10_000)}만`
+  if (n >= 100_000_000) return `${(n / 100_000_000).toFixed(1)}억`
+  if (n >= 10_000) return `${(n / 10_000).toFixed(1)}만`
   return n.toLocaleString()
 }
 
@@ -20,12 +20,23 @@ const COLORS = {
   border: "rgba(0,0,0,0.08)",
 }
 
+const OVERSHOOT_COLOR = "#F59E0B" // amber-500 — distinct emphasis for >100%
+
 function GaugeRing({ value, goal, size = 108, stroke = 9 }: { value: number; goal: number; size?: number; stroke?: number }) {
   const pct = goal ? Math.min(120, (value / goal) * 100) : 0
   const r = (size - stroke) / 2
   const c = 2 * Math.PI * r
-  const offset = c - (Math.min(100, pct) / 100) * c
+  const safePct = Math.min(100, pct)
+  const overshoot = Math.max(0, pct - 100) // 0..20
+  const offset = c - (safePct / 100) * c
+  const overshootOffset = c - (overshoot / 100) * c
   const stop = pct >= 100 ? COLORS.green : pct >= 70 ? COLORS.green : pct >= 40 ? COLORS.olive : COLORS.amber
+  const angle = (pct / 100) * 2 * Math.PI // uncapped — wraps past 2π for >100%
+  const dotSize = stroke + 6
+  const dotX = size / 2 + r * Math.sin(angle)
+  const dotY = size / 2 - r * Math.cos(angle)
+  const isOver = overshoot > 0
+  const dotBorder = isOver ? OVERSHOOT_COLOR : stop
   return (
     <div className="relative" style={{ width: size, height: size }}>
       <svg width={size} height={size} className="-rotate-90">
@@ -33,9 +44,24 @@ function GaugeRing({ value, goal, size = 108, stroke = 9 }: { value: number; goa
         <circle cx={size / 2} cy={size / 2} r={r} fill="none" stroke={stop} strokeWidth={stroke}
           strokeDasharray={c} strokeDashoffset={offset} strokeLinecap="round"
           style={{ transition: "stroke-dashoffset .8s cubic-bezier(.4,0,.2,1)" }} />
+        {isOver && (
+          <circle cx={size / 2} cy={size / 2} r={r} fill="none" stroke={OVERSHOOT_COLOR} strokeWidth={stroke}
+            strokeDasharray={c} strokeDashoffset={overshootOffset} strokeLinecap="round"
+            className="gauge-overshoot-arc"
+            style={{ transition: "stroke-dashoffset .8s cubic-bezier(.4,0,.2,1)" }} />
+        )}
       </svg>
+      <div className={`pointer-events-none absolute rounded-full bg-white ${isOver ? "gauge-overshoot-dot" : ""}`}
+        style={{
+          left: dotX, top: dotY,
+          width: dotSize, height: dotSize,
+          transform: "translate(-50%, -50%)",
+          border: `2.5px solid ${dotBorder}`,
+          transition: "left .8s cubic-bezier(.4,0,.2,1), top .8s cubic-bezier(.4,0,.2,1), border-color .4s ease",
+        }} />
       <div className="absolute inset-0 flex flex-col items-center justify-center">
-        <span className="text-[22px] font-bold leading-none tracking-[-0.02em] text-[#111110]">
+        <span className="text-[22px] font-bold leading-none tracking-[-0.02em]"
+          style={{ color: isOver ? OVERSHOOT_COLOR : "#111110" }}>
           {Math.round(pct)}<span className="ml-px text-[11px] text-[#615D59]">%</span>
         </span>
       </div>

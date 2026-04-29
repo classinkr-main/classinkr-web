@@ -9,20 +9,21 @@ import { NewsletterSubscribe } from "./NewsletterSubscribe"
 
 export function Footer() {
     return (
-        <footer className="bg-[#111110] py-12 text-[#A39E98] text-sm">
+        <footer className="bg-[#111110] py-10 text-sm text-[#A39E98] sm:py-12">
             <div className="container mx-auto">
-                <div className="grid grid-cols-2 md:grid-cols-4 gap-8 mb-12">
-                    <div>
+                <div className="mb-10 grid grid-cols-1 gap-8 sm:grid-cols-2 md:mb-12 md:grid-cols-4">
+                    <div className="sm:col-span-2 md:col-span-1">
                         <Image
                             src="/images/logo.png"
                             alt="Classin Logo"
                             width={120}
                             height={28}
                             className="h-7 w-auto mb-4 object-contain"
+                            style={{ width: "auto" }}
                         />
                         <p className="mb-4">다음 세대를 위한 교육 품질 표준화.</p>
                         {/* [NOTE-25] 뉴스레터 구독 영역 */}
-                        <div className="mt-4">
+                        <div className="mt-4 max-w-sm">
                             <p className="text-white font-semibold text-xs mb-2">교육 인사이트 뉴스레터</p>
                             <NewsletterSubscribe variant="dark" />
                         </div>
@@ -53,9 +54,9 @@ export function Footer() {
                     </div>
                 </div>
                 <div className="pt-8 border-t border-white/[0.08] space-y-3">
-                    <div className="flex flex-col md:flex-row md:justify-between gap-1 md:gap-4 text-xs text-white/40 leading-relaxed">
+                    <div className="flex flex-col gap-4 text-xs leading-relaxed text-white/40 md:flex-row md:justify-between">
                         <div className="space-y-0.5">
-                            <p><span className="text-[#A39E98]">이이오클래스인코리아 유한회사</span> | 대표자: 구옌</p>
+                            <p><span className="text-[#A39E98]">이이오클래스인코리아 유한회사</span><span className="mx-1 text-white/20">|</span>대표자: 구옌</p>
                             <p>사업자등록번호: 724-88-02403</p>
                             <p>주소: 서울특별시 양천구 목동동로 233-1, 8층 806호 (목동, 드림타워)</p>
                         </div>

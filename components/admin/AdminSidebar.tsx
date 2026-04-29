@@ -154,6 +154,7 @@ export default function AdminSidebar({ role, name, email }: Props) {
   const mobilePrimaryNav = visibleNav
     .filter((item) => item.section === "workspace")
     .slice(0, 4)
+  const mobileBottomColumns = Math.min(mobilePrimaryNav.length + 1, 5)
   const groupedNav = (Object.keys(SECTION_META) as SidebarSection[]).map((section) => ({
     section,
     items: visibleNav.filter((item) => item.section === section),
@@ -270,7 +271,7 @@ export default function AdminSidebar({ role, name, email }: Props) {
     ) : null}
 
     <nav className="fixed inset-x-0 bottom-0 z-40 border-t border-[#e8e8e4] bg-white/95 px-2 pb-[max(env(safe-area-inset-bottom),0.5rem)] pt-2 shadow-[0_-8px_24px_rgba(0,0,0,0.06)] backdrop-blur lg:hidden">
-      <div className="grid grid-cols-5 gap-1">
+      <div className="grid gap-1" style={{ gridTemplateColumns: `repeat(${mobileBottomColumns}, minmax(0, 1fr))` }}>
         {mobilePrimaryNav.map((item) => {
           const isActive = isNavActive(item.href)
 

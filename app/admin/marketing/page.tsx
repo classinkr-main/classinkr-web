@@ -244,13 +244,13 @@ function TabButton({
   return (
     <button
       onClick={onClick}
-      className={`group flex min-w-[180px] flex-1 items-center gap-3 rounded-2xl border px-4 py-4 text-left transition-all sm:min-w-0 ${
+      className={`group flex min-w-[164px] flex-1 items-center gap-2 rounded-xl border px-3 py-3 text-left transition-all sm:min-w-0 sm:gap-3 sm:rounded-2xl sm:px-4 sm:py-4 ${
         active
           ? "border-[#111110] bg-[#111110] text-white shadow-sm"
           : "border-[#e8e8e4] bg-white text-[#1a1a1a]/65 hover:border-[#c8c8c4] hover:bg-[#fafaf8] hover:text-[#111110]"
       }`}
     >
-      <div className={`flex h-10 w-10 shrink-0 items-center justify-center rounded-xl ${active ? "bg-white/10" : "bg-[#f0f0ec]"}`}>
+      <div className={`flex h-9 w-9 shrink-0 items-center justify-center rounded-lg sm:h-10 sm:w-10 sm:rounded-xl ${active ? "bg-white/10" : "bg-[#f0f0ec]"}`}>
         <span className={active ? "text-white" : "text-[#1a1a1a]/45"}>{icon}</span>
       </div>
       <div className="min-w-0 flex-1">
@@ -262,7 +262,7 @@ function TabButton({
             </span>
           )}
         </div>
-        <p className={`mt-0.5 text-[11px] ${active ? "text-white/70" : "text-[#1a1a1a]/40"}`}>{desc}</p>
+        <p className={`mt-0.5 hidden text-[11px] sm:block ${active ? "text-white/70" : "text-[#1a1a1a]/40"}`}>{desc}</p>
       </div>
       <ChevronRight className={`h-3 w-3 shrink-0 transition-transform ${active ? "opacity-70" : "opacity-40 group-hover:translate-x-0.5"}`} />
     </button>
@@ -1022,39 +1022,41 @@ export default function AdminMarketingPage() {
             </div>
           </Panel>
 
-          <div className="sticky top-0 z-20 -mx-4 px-4 pt-2 pb-3 sm:-mx-6 sm:px-6" style={{ background: "linear-gradient(to bottom, #FAFAF8 85%, transparent)" }}>
-            <div className="flex flex-wrap gap-3 rounded-2xl border border-[#e8e8e4] bg-white p-3 shadow-[0_2px_12px_rgba(0,0,0,0.06)]">
-              <TabButton
-                active={activeTab === "subscribers"}
-                icon={<Users className="h-4 w-4" />}
-                label="구독자 관리"
-                desc="목록 조회, 필터, 수동 추가"
-                count={subscribers.length}
-                onClick={() => setActiveTab("subscribers")}
-              />
-              <TabButton
-                active={activeTab === "compose"}
-                icon={<Send className="h-4 w-4" />}
-                label="이메일 발송"
-                desc="캠페인 작성과 대상 선택"
-                count={draftCount}
-                onClick={() => setActiveTab("compose")}
-              />
-              <TabButton
-                active={activeTab === "history"}
-                icon={<History className="h-4 w-4" />}
-                label="발송 이력"
-                desc="최근 발송 결과와 대상 확인"
-                count={campaigns.length}
-                onClick={() => setActiveTab("history")}
-              />
-              <TabButton
-                active={activeTab === "dashboard"}
-                icon={<BarChart2 className="h-4 w-4" />}
-                label="현황 대시보드"
-                desc="구독자·캠페인·자동화 한눈에"
-                onClick={() => setActiveTab("dashboard")}
-              />
+          <div className="sticky top-16 z-20 -mx-4 px-4 pt-2 pb-3 sm:-mx-6 sm:px-6 lg:top-0" style={{ background: "linear-gradient(to bottom, #FAFAF8 85%, transparent)" }}>
+            <div className="admin-scroll-snap-x no-scrollbar -mx-4 overflow-x-auto px-4 pb-1 sm:mx-0 sm:overflow-visible sm:px-0 sm:pb-0">
+              <div className="flex w-max min-w-full flex-nowrap gap-2 rounded-xl border border-[#e8e8e4] bg-white p-2 shadow-[0_2px_12px_rgba(0,0,0,0.06)] sm:w-full sm:flex-wrap sm:gap-3 sm:rounded-2xl sm:p-3">
+                <TabButton
+                  active={activeTab === "subscribers"}
+                  icon={<Users className="h-4 w-4" />}
+                  label="구독자 관리"
+                  desc="목록 조회, 필터, 수동 추가"
+                  count={subscribers.length}
+                  onClick={() => setActiveTab("subscribers")}
+                />
+                <TabButton
+                  active={activeTab === "compose"}
+                  icon={<Send className="h-4 w-4" />}
+                  label="이메일 발송"
+                  desc="캠페인 작성과 대상 선택"
+                  count={draftCount}
+                  onClick={() => setActiveTab("compose")}
+                />
+                <TabButton
+                  active={activeTab === "history"}
+                  icon={<History className="h-4 w-4" />}
+                  label="발송 이력"
+                  desc="최근 발송 결과와 대상 확인"
+                  count={campaigns.length}
+                  onClick={() => setActiveTab("history")}
+                />
+                <TabButton
+                  active={activeTab === "dashboard"}
+                  icon={<BarChart2 className="h-4 w-4" />}
+                  label="현황 대시보드"
+                  desc="구독자·캠페인·자동화 한눈에"
+                  onClick={() => setActiveTab("dashboard")}
+                />
+              </div>
             </div>
           </div>
         </div>

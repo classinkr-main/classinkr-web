@@ -65,7 +65,7 @@ export default function CrmSubnav({ active }: { active?: CrmTab } = {}) {
   const resolved = active ?? resolveActiveTab(pathname)
 
   return (
-    <div className="-mx-4 mb-6 flex gap-2 overflow-x-auto px-4 pb-2 sm:mx-0 sm:grid sm:grid-cols-2 sm:overflow-visible sm:px-0 sm:pb-0 lg:grid-cols-5">
+    <div className="admin-scroll-snap-x no-scrollbar -mx-4 mb-6 flex gap-2 overflow-x-auto px-4 pb-2 sm:mx-0 sm:grid sm:grid-cols-2 sm:overflow-visible sm:px-0 sm:pb-0 lg:grid-cols-5">
       {CRM_TABS.map((tab) => {
         const isActive = resolved === tab.key
 
@@ -73,7 +73,7 @@ export default function CrmSubnav({ active }: { active?: CrmTab } = {}) {
           <Link
             key={tab.key}
             href={tab.href}
-            className={`flex min-w-[164px] shrink-0 items-center gap-3 rounded-xl border px-3 py-3 transition-colors sm:min-w-0 sm:rounded-2xl sm:px-4 ${
+            className={`flex min-w-[144px] shrink-0 items-center gap-2 rounded-xl border px-3 py-2.5 transition-colors sm:min-w-0 sm:gap-3 sm:rounded-2xl sm:px-4 sm:py-3 ${
               isActive
                 ? "border-[#111110] bg-[#111110] text-white"
                 : "border-[#e8e8e4] bg-white text-[#111110] hover:border-[#c8c8c4]"
@@ -88,7 +88,7 @@ export default function CrmSubnav({ active }: { active?: CrmTab } = {}) {
             </span>
             <span className="min-w-0 flex-1">
               <span className="block text-[13px] font-semibold">{tab.label}</span>
-              <span className={`mt-0.5 block text-[11px] ${isActive ? "text-white/60" : "text-[#1a1a1a]/42"}`}>
+              <span className={`mt-0.5 hidden text-[11px] sm:block ${isActive ? "text-white/60" : "text-[#1a1a1a]/42"}`}>
                 {tab.description}
               </span>
             </span>
