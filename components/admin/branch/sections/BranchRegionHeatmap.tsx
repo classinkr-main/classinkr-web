@@ -228,14 +228,15 @@ function HeatMap({ rows, selectedLabel, onSelect }: {
   }
 
   return (
-    <div className="relative w-full"
+    <div className="relative w-full overflow-hidden rounded-md"
       onMouseMove={(e) => {
         const rect = e.currentTarget.getBoundingClientRect()
         setMousePos({ x: e.clientX - rect.left, y: e.clientY - rect.top })
       }}
       onMouseLeave={() => { setHovered(null); dragRef.current = null }}>
       <svg ref={svgRef} viewBox={viewBox}
-        className={`block h-auto w-full overflow-visible ${zoom > 1 ? (dragRef.current ? "cursor-grabbing" : "cursor-grab") : ""}`}
+        preserveAspectRatio="xMidYMid meet"
+        className={`block h-auto w-full ${zoom > 1 ? (dragRef.current ? "cursor-grabbing" : "cursor-grab") : ""}`}
         role="group" aria-label="대한민국 지역별 매출 달성률 히트맵"
         onMouseDown={(e) => {
           if (zoom <= 1) return
