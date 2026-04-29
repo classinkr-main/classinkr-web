@@ -29,6 +29,23 @@ function isOpenDeal(deal: DealListItem) {
   return deal.status !== "closed" && deal.status !== "cancelled";
 }
 
+function emptyCustomerDealSummary(customer: Customer): CustomerDealSummary {
+  return {
+    customer_id: customer.id,
+    partner_account_id: customer.partner_account_id,
+    customer_name: customer.name,
+    total_deals: 0,
+    active_deals: 0,
+    installation_deals: 0,
+    unpaid_deals: 0,
+    contracted_amount: 0,
+    installed_amount: 0,
+    paid_amount: 0,
+    outstanding_amount: 0,
+    last_deal_updated_at: null,
+  };
+}
+
 function resolveAttentionLevel({
   summary,
   activeDealCount,
@@ -398,13 +415,13 @@ export async function getCustomerDetail(
       listRecentCustomerCalendarEvents(customerId, 12),
     ]);
 
-  if (!customer || !summary) {
+  if (!customer) {
     return null;
   }
 
   return {
     customer,
-    summary,
+    summary: summary ?? emptyCustomerDealSummary(customer),
     deals,
     recent_activity: recentActivity,
     recent_calendar_events: recentCalendarEvents,

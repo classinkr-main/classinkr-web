@@ -1,5 +1,6 @@
 "use client"
 
+import Image from "next/image"
 import { Tabs, TabsContent, TabsList, TabsTrigger } from "@/components/ui/tabs"
 import { Card } from "@/components/ui/card"
 import { Check } from "lucide-react"
@@ -18,7 +19,7 @@ export function KeyUseCases() {
                     </p>
                 </div>
 
-                <Tabs defaultValue="classes" className="w-full max-w-5xl mx-auto">
+                <Tabs defaultValue="classes" className="w-full max-w-6xl mx-auto">
                     <div className="flex justify-center mb-12 px-4">
                         <TabsList className="grid w-full max-w-3xl grid-cols-2 sm:grid-cols-2 md:grid-cols-4 h-auto p-1.5 bg-[rgba(0,0,0,0.06)] rounded-2xl gap-1">
                             <TabsTrigger value="classes" className="py-3 text-base md:text-lg font-bold rounded-xl data-[state=active]:bg-white data-[state=active]:shadow-sm data-[state=active]:text-[#111110] text-[#A39E98] transition-all">인터랙티브 수업</TabsTrigger>
@@ -39,8 +40,12 @@ export function KeyUseCases() {
                                     "자동 출석 체크",
                                 ]}
                                 imageColor="bg-[#ECFDF5]"
-                                imageSrc="/images/use-cases/interactive-cutout.png"
-                                imageAlt="Interactive 3D Elements"
+                                imageSrc="/images/use-cases/generated/classes-source.png"
+                                imageAlt="ClassIn 활동 게시하기 화면"
+                                imageObjectPosition="50% 50%"
+                                overlayImageSrc="/images/use-cases/generated/interactive-generated-v3.png"
+                                overlayImageAlt="인터랙티브 수업 투명 오브젝트"
+                                overlayImageClassName="w-[36%] min-w-[7.5rem] right-[-1%] bottom-[-6%] md:w-[42%] md:right-[-2%] md:bottom-[-9%]"
                             />
                         </TabsContent>
                         <TabsContent value="homework">
@@ -53,8 +58,12 @@ export function KeyUseCases() {
                                     "학생 즉각 피드백",
                                 ]}
                                 imageColor="bg-[#ECFDF5]"
-                                imageSrc="/images/use-cases/homework.png"
-                                imageAlt="Homework 3D Elements"
+                                imageSrc="/images/use-cases/generated/homework-source.png"
+                                imageAlt="ClassIn 숙제 채점 데이터 화면"
+                                imageObjectPosition="52% 45%"
+                                overlayImageSrc="/images/use-cases/generated/homework-generated-v3.png"
+                                overlayImageAlt="과제 및 테스트 투명 오브젝트"
+                                overlayImageClassName="w-[38%] min-w-[7.5rem] right-[-2%] bottom-[-7%] md:w-[44%] md:right-[-3%] md:bottom-[-10%]"
                             />
                         </TabsContent>
                         <TabsContent value="admin">
@@ -67,8 +76,17 @@ export function KeyUseCases() {
                                     "이탈 위험 학생 알림",
                                 ]}
                                 imageColor="bg-[#ECFDF5]"
-                                imageSrc="/images/use-cases/admin.png"
-                                imageAlt="Admin 3D Elements"
+                                imageSrc="/images/use-cases/generated/admin-dashboard-source-1.png"
+                                imageAlt="관리자 출결 대시보드 화면"
+                                imageObjectPosition="48% 42%"
+                                overlayImageSrc="/images/use-cases/generated/admin-dashboard-source-2.png"
+                                overlayImageAlt="관리자 상세 분석 화면"
+                                overlayImageClassName="w-[40%] min-w-[8rem] right-[-2%] top-[4%] md:w-[42%] md:right-[-2%] md:top-[2%] rotate-[4deg]"
+                                overlayImageObjectPosition="50% 50%"
+                                overlayImageFramed
+                                secondaryOverlayImageSrc="/images/use-cases/admin.png"
+                                secondaryOverlayImageAlt="관리 테마 보조 오브젝트"
+                                secondaryOverlayImageClassName="w-[28%] min-w-[6rem] right-[2%] bottom-[-2%] md:w-[30%] md:right-[1%] md:bottom-[-5%]"
                             />
                         </TabsContent>
                         <TabsContent value="comms">
@@ -81,8 +99,12 @@ export function KeyUseCases() {
                                     "일정 및 결제 알림",
                                 ]}
                                 imageColor="bg-[#ECFDF5]"
-                                imageSrc="/images/use-cases/comms.png"
-                                imageAlt="Communication 3D Elements"
+                                imageSrc="/images/use-cases/generated/comms-source.png"
+                                imageAlt="ClassIn 반 운영 및 알림 화면"
+                                imageObjectPosition="86% 50%"
+                                overlayImageSrc="/images/use-cases/comms.png"
+                                overlayImageAlt="소통 및 알림 투명 오브젝트"
+                                overlayImageClassName="w-[32%] min-w-[7rem] right-[2%] bottom-[-4%] md:w-[37%] md:right-[1%] md:bottom-[-7%]"
                             />
                         </TabsContent>
                     </div>
@@ -92,7 +114,43 @@ export function KeyUseCases() {
     )
 }
 
-function UseCaseCard({ title, desc, points, imageColor, imageSrc, imageAlt }: { title: string, desc: string, points: string[], imageColor: string, imageSrc?: string, imageAlt?: string }) {
+function UseCaseCard({
+    title,
+    desc,
+    points,
+    imageColor,
+    imageSrc,
+    imageAlt,
+    imageObjectPosition = "50% 50%",
+    overlayImageSrc,
+    overlayImageAlt,
+    overlayImageObjectPosition = "50% 50%",
+    overlayImageClassName = "",
+    overlayImageFramed = false,
+    secondaryOverlayImageSrc,
+    secondaryOverlayImageAlt,
+    secondaryOverlayImageObjectPosition = "50% 50%",
+    secondaryOverlayImageClassName = "",
+    secondaryOverlayImageFramed = false,
+}: {
+    title: string
+    desc: string
+    points: string[]
+    imageColor: string
+    imageSrc?: string
+    imageAlt?: string
+    imageObjectPosition?: string
+    overlayImageSrc?: string
+    overlayImageAlt?: string
+    overlayImageObjectPosition?: string
+    overlayImageClassName?: string
+    overlayImageFramed?: boolean
+    secondaryOverlayImageSrc?: string
+    secondaryOverlayImageAlt?: string
+    secondaryOverlayImageObjectPosition?: string
+    secondaryOverlayImageClassName?: string
+    secondaryOverlayImageFramed?: boolean
+}) {
     return (
         <motion.div
             initial={{ opacity: 0, y: 15 }}
@@ -100,30 +158,94 @@ function UseCaseCard({ title, desc, points, imageColor, imageSrc, imageAlt }: { 
             transition={{ duration: 0.4, type: "spring", bounce: 0.2 }}
         >
             <Card className="overflow-hidden border border-[rgba(0,0,0,0.08)] bg-white rounded-[2rem]" style={{ boxShadow: 'rgba(0,0,0,0.04) 0px 4px 18px, rgba(0,0,0,0.027) 0px 2px 7.8px, rgba(0,0,0,0.02) 0px 0.8px 2.9px' }}>
-                <div className="grid md:grid-cols-2 gap-0">
-                    <div className={`h-72 md:h-auto ${imageColor} flex items-center justify-center p-8 md:p-12 relative overflow-hidden`}>
-                        <div className="absolute inset-0 bg-gradient-to-br from-white/40 to-transparent z-0" />
-                        
+                <div className="grid gap-0 md:grid-cols-[1.12fr_0.88fr]">
+                    <div className={`h-[22rem] md:h-auto ${imageColor} flex items-center justify-center p-4 md:p-6 lg:p-7 relative overflow-hidden`}>
+                        <div className="absolute inset-0 bg-gradient-to-br from-white/50 via-white/8 to-transparent z-0" />
+                        <div className="absolute left-8 top-8 h-24 w-24 rounded-full bg-white/45 blur-3xl z-0" />
+                        <div className="absolute right-10 bottom-10 h-28 w-28 rounded-full bg-[#CFEFE1]/75 blur-3xl z-0" />
+
                         {imageSrc && (
-                            <motion.img 
-                                src={imageSrc} 
-                                alt={imageAlt || title}
-                                className="absolute -bottom-8 -right-8 w-64 md:w-80 h-auto z-20 drop-shadow-[0_20px_28px_rgba(8,71,52,0.16)]"
-                                animate={{ y: [0, -12, 0] }}
-                                transition={{ repeat: Infinity, duration: 4, ease: "easeInOut" }}
-                            />
+                            <motion.div
+                                whileHover={{ y: -4, rotate: -1 }}
+                                transition={{ type: "spring", bounce: 0.3 }}
+                                className="relative z-20 w-[108%] max-w-none"
+                            >
+                                <div className="relative aspect-[16/10] overflow-hidden">
+                                    <Image
+                                        src={imageSrc}
+                                        alt={imageAlt || title}
+                                        fill
+                                        sizes="(min-width: 1024px) 42vw, (min-width: 768px) 50vw, 92vw"
+                                        className="object-cover"
+                                        style={{ objectPosition: imageObjectPosition }}
+                                    />
+                                </div>
+                            </motion.div>
                         )}
 
-                        {/* Mock UI Element */}
-                        <motion.div
-                            whileHover={{ scale: 1.05 }}
-                            transition={{ type: "spring", bounce: 0.4 }}
-                            className="w-full max-w-sm bg-white/90 backdrop-blur-md rounded-2xl shadow-2xl p-6 space-y-4 z-10 border border-white/50 relative"
-                        >
-                            <div className="h-3 w-1/3 bg-[rgba(0,0,0,0.08)] rounded-full" />
-                            <div className="h-3 w-2/3 bg-[rgba(0,0,0,0.08)] rounded-full" />
-                            <div className="h-40 bg-[#F6F5F4] rounded-xl mt-6 border border-[rgba(0,0,0,0.06)]" />
-                        </motion.div>
+                        {overlayImageSrc && (
+                            <motion.div
+                                whileHover={{ y: -6, rotate: 1 }}
+                                transition={{ type: "spring", bounce: 0.28 }}
+                                className={`absolute z-30 ${overlayImageClassName}`}
+                            >
+                                {overlayImageFramed ? (
+                                    <div className="relative aspect-[16/10] overflow-hidden rounded-[1.25rem] border border-[rgba(17,17,16,0.08)] bg-white shadow-[0_22px_44px_rgba(17,17,16,0.14)]">
+                                        <Image
+                                            src={overlayImageSrc}
+                                            alt={overlayImageAlt || title}
+                                            fill
+                                            sizes="(min-width: 1024px) 18vw, 32vw"
+                                            className="object-cover"
+                                            style={{ objectPosition: overlayImageObjectPosition }}
+                                        />
+                                    </div>
+                                ) : (
+                                    <div className="relative aspect-square">
+                                        <Image
+                                            src={overlayImageSrc}
+                                            alt={overlayImageAlt || title}
+                                            fill
+                                            sizes="(min-width: 1024px) 15vw, 28vw"
+                                            className="object-contain drop-shadow-[0_14px_18px_rgba(8,71,52,0.14)]"
+                                            style={{ objectPosition: overlayImageObjectPosition }}
+                                        />
+                                    </div>
+                                )}
+                            </motion.div>
+                        )}
+
+                        {secondaryOverlayImageSrc && (
+                            <motion.div
+                                whileHover={{ y: -5, rotate: -1 }}
+                                transition={{ type: "spring", bounce: 0.26 }}
+                                className={`absolute z-20 ${secondaryOverlayImageClassName}`}
+                            >
+                                {secondaryOverlayImageFramed ? (
+                                    <div className="relative aspect-[16/10] overflow-hidden rounded-[1.25rem] border border-[rgba(17,17,16,0.08)] bg-white shadow-[0_22px_44px_rgba(17,17,16,0.14)]">
+                                        <Image
+                                            src={secondaryOverlayImageSrc}
+                                            alt={secondaryOverlayImageAlt || title}
+                                            fill
+                                            sizes="(min-width: 1024px) 16vw, 24vw"
+                                            className="object-cover"
+                                            style={{ objectPosition: secondaryOverlayImageObjectPosition }}
+                                        />
+                                    </div>
+                                ) : (
+                                    <div className="relative aspect-square">
+                                        <Image
+                                            src={secondaryOverlayImageSrc}
+                                            alt={secondaryOverlayImageAlt || title}
+                                            fill
+                                            sizes="(min-width: 1024px) 12vw, 22vw"
+                                            className="object-contain drop-shadow-[0_14px_18px_rgba(8,71,52,0.12)]"
+                                            style={{ objectPosition: secondaryOverlayImageObjectPosition }}
+                                        />
+                                    </div>
+                                )}
+                            </motion.div>
+                        )}
                     </div>
                     <div className="p-8 md:p-14 flex flex-col justify-center bg-white">
                         <h3 className="text-3xl font-extrabold mb-5 text-[#111110] leading-tight break-keep" style={{ letterSpacing: '-1px' }}>{title}</h3>

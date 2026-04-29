@@ -123,6 +123,20 @@ type PartnerOverviewResponse = Partial<PartnerOverviewPayload> & {
   inventory_summary?: InventorySkuSummary[]
 }
 
+type PartnerPortalLinkTargets = {
+  calendar: string
+  documents: string
+  workspace: string
+}
+
+type PartnerPortalHomeProps = {
+  overviewEndpoint?: string
+  linkTargets?: Partial<PartnerPortalLinkTargets>
+  allowCreate?: boolean
+  adminView?: boolean
+  embedded?: boolean
+}
+
 /* ─── Constants ──────────────────────────────────────────────── */
 
 const STAGE_PIPELINE = [
@@ -164,6 +178,12 @@ const PAYMENT_METHOD_LABEL: Record<string, string> = {
   bank_transfer: "계좌이체",
   card:          "카드",
   cash:          "현금",
+}
+
+const DEFAULT_LINK_TARGETS: PartnerPortalLinkTargets = {
+  calendar: "/partner/calendar",
+  documents: "/partner/documents",
+  workspace: "/partner/workspace",
 }
 
 /* ─── Demo Data ──────────────────────────────────────────────── */
@@ -645,7 +665,12 @@ function LeftSidebar({
 
 /* ─── Main Component ──────────────────────────────────────────── */
 
-export function PartnerPortalHome() {
+export function PartnerPortalHome(props: PartnerPortalHomeProps = {}) {
+  const overviewEndpoint = props.overviewEndpoint ?? "/api/portal/overview"
+  const resolvedLinkTargets = useMemo(
+    () => ({ ...DEFAULT_LINK_TARGETS, ...(props.linkTargets ?? {}) }),
+    [props.linkTargets],
+  )
   const [realOverview, setRealOverview] = useState<PartnerOverviewPayload>(EMPTY_OVERVIEW)
   const [loading, setLoading]   = useState(true)
   const [expandedCustomers, setExpandedCustomers] = useState<Set<string>>(new Set(["c1"]))
@@ -665,7 +690,7 @@ export function PartnerPortalHome() {
 
   useEffect(() => {
     let alive = true
-    portalFetch("/api/portal/overview")
+    portalFetch(overviewEndpoint)
       .then(async r => {
         const payload = await r.json() as PartnerOverviewResponse
         if (!r.ok) throw new Error(payload.error ?? "Failed to fetch overview")
@@ -674,7 +699,7 @@ export function PartnerPortalHome() {
       .then(payload => { if (alive) { setRealOverview(payload); setLoading(false) } })
       .catch(() => { if (alive) setLoading(false) })
     return () => { alive = false }
-  }, [])
+  }, [overviewEndpoint])
 
   const overview = useMemo(
     () => (IS_LOCAL_DEV && showDummy ? mergeWithDummy(realOverview, DEMO) : realOverview),
@@ -705,21 +730,21 @@ export function PartnerPortalHome() {
 
     const contractDeals = overview.deals.filter(d => d.current_stage === "contract")
     if (contractDeals.length > 0) {
-      chips.push({ id: "sign", label: `계약 서명 대기 ${contractDeals.length}건`, href: "/partner/documents", cls: "bg-[#084734]/30 text-[#ECFDF5] hover:bg-[#084734]/40 border border-[#084734]/20" })
+      chips.push({ id: "sign", label: `계약 서명 대기 ${contractDeals.length}건`, href: resolvedLinkTargets.documents, cls: "bg-[#084734]/30 text-[#ECFDF5] hover:bg-[#084734]/40 border border-[#084734]/20" })
     }
 
     const nearInstalls = overview.upcoming_installations.filter(i => daysUntil(i.scheduled_start_at) <= 7)
     if (nearInstalls.length > 0) {
       const d = daysUntil(nearInstalls[0].scheduled_start_at)
-      chips.push({ id: "install", label: d === 0 ? "오늘 설치 예정" : `설치 D-${d}`, href: "/partner/calendar", cls: "bg-orange-500/25 text-orange-200 hover:bg-orange-500/35 border border-orange-500/20" })
+      chips.push({ id: "install", label: d === 0 ? "오늘 설치 예정" : `설치 D-${d}`, href: resolvedLinkTargets.calendar, cls: "bg-orange-500/25 text-orange-200 hover:bg-orange-500/35 border border-orange-500/20" })
     }
 
     if (overview.metrics.outstanding_amount > 0) {
-      chips.push({ id: "pay", label: `미수금 ${fmt(overview.metrics.outstanding_amount)}`, href: "/partner/workspace", cls: "bg-red-500/25 text-red-200 hover:bg-red-500/35 border border-red-500/20" })
+      chips.push({ id: "pay", label: `미수금 ${fmt(overview.metrics.outstanding_amount)}`, href: resolvedLinkTargets.workspace, cls: "bg-red-500/25 text-red-200 hover:bg-red-500/35 border border-red-500/20" })
     }
 
     return chips
-  }, [overview])
+  }, [overview, resolvedLinkTargets])
 
   /* action queue: priority-ordered to-do list */
   const actionQueue = useMemo(() => {
@@ -731,7 +756,7 @@ export function PartnerPortalHome() {
       .filter(d => d.outstanding_amount > 0 && (d.current_stage === "installation" || d.current_stage === "payment"))
       .slice(0, 2)
       .forEach(d => {
-        q.push({ id: `ov-${d.id}`, num: n++, label: `미수금 ${fmt(d.outstanding_amount)} 확인`, sub: `${d.customer_name ?? ""} · ${d.title}`, href: "/partner/workspace", numCls: "bg-red-500 text-white", isDummy: !!d._dummy })
+        q.push({ id: `ov-${d.id}`, num: n++, label: `미수금 ${fmt(d.outstanding_amount)} 확인`, sub: `${d.customer_name ?? ""} · ${d.title}`, href: resolvedLinkTargets.workspace, numCls: "bg-red-500 text-white", isDummy: !!d._dummy })
       })
 
     overview.upcoming_installations
@@ -739,28 +764,28 @@ export function PartnerPortalHome() {
       .slice(0, 2)
       .forEach(i => {
         const d = daysUntil(i.scheduled_start_at)
-        q.push({ id: `inst-${i.id}`, num: n++, label: d === 0 ? "오늘 설치 확인" : `설치 D-${d} 준비`, sub: `${i.title} · ${i.location ?? "장소 미지정"}`, href: "/partner/calendar", numCls: "bg-orange-500 text-white", isDummy: !!i._dummy })
+        q.push({ id: `inst-${i.id}`, num: n++, label: d === 0 ? "오늘 설치 확인" : `설치 D-${d} 준비`, sub: `${i.title} · ${i.location ?? "장소 미지정"}`, href: resolvedLinkTargets.calendar, numCls: "bg-orange-500 text-white", isDummy: !!i._dummy })
       })
 
     overview.deals
       .filter(d => d.current_stage === "contract")
       .slice(0, 2)
       .forEach(d => {
-        q.push({ id: `ct-${d.id}`, num: n++, label: "계약 서명 검토", sub: `${d.customer_name ?? ""} · ${d.title}`, href: "/partner/documents", numCls: "bg-[#084734] text-white", isDummy: !!d._dummy })
+        q.push({ id: `ct-${d.id}`, num: n++, label: "계약 서명 검토", sub: `${d.customer_name ?? ""} · ${d.title}`, href: resolvedLinkTargets.documents, numCls: "bg-[#084734] text-white", isDummy: !!d._dummy })
       })
 
     overview.recent_calendar_events.slice(0, 2).forEach(e => {
-      q.push({ id: `ce-${e.id}`, num: n++, label: e.title, sub: fmtShortDate(e.starts_at), href: "/partner/calendar", numCls: "bg-teal-500 text-white", isDummy: !!e._dummy })
+      q.push({ id: `ce-${e.id}`, num: n++, label: e.title, sub: fmtShortDate(e.starts_at), href: resolvedLinkTargets.calendar, numCls: "bg-teal-500 text-white", isDummy: !!e._dummy })
     })
 
     return q.slice(0, 7)
-  }, [overview])
+  }, [overview, resolvedLinkTargets])
 
   /* KPI progress */
   const { contracted_amount, installed_amount, paid_amount, outstanding_amount } = overview.metrics
   const installPct = contracted_amount > 0 ? Math.round((installed_amount / contracted_amount) * 100) : 0
   const paidPct    = contracted_amount > 0 ? Math.round((paid_amount    / contracted_amount) * 100) : 0
-  const canCreateInPortal = overview.mode === "v2"
+  const canCreateInPortal = overview.mode === "v2" && props.allowCreate !== false
 
   const todayStr = new Date().toLocaleDateString("ko-KR", {
     year: "numeric", month: "long", day: "numeric", weekday: "short",

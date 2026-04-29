@@ -16,7 +16,7 @@ export interface DocsLandingShellProps {
 }
 
 export function DocsLandingShell({
-    eyebrow = "Classinkr Docs",
+    eyebrow = "ClassIn Guide",
     title,
     description,
     categories = [],
@@ -25,7 +25,7 @@ export function DocsLandingShell({
     className,
 }: DocsLandingShellProps) {
     return (
-        <section className={cn("bg-[#FAFAF8] pb-16 pt-28 md:pb-24 md:pt-36", className)}>
+        <section className={cn("pb-16 pt-28 md:pb-24 md:pt-36", className)}>
             <div className="container">
                 <div className="mx-auto max-w-3xl text-center">
                     <p className="text-sm font-bold uppercase tracking-[0.16em] text-[#084734]">
@@ -50,8 +50,8 @@ export function DocsLandingShell({
                 ) : null}
 
                 {featuredArticles.length > 0 ? (
-                    <div className="mt-16 rounded-2xl border border-black/[0.08] bg-[#F6F5F4] p-5 md:p-8">
-                        <div className="mb-6 flex flex-col gap-2 md:flex-row md:items-end md:justify-between">
+                    <div className="mt-16 border-t border-black/[0.08] pt-8">
+                        <div className="mb-5 flex flex-col gap-2 md:flex-row md:items-end md:justify-between">
                             <div>
                                 <p className="text-sm font-bold uppercase tracking-[0.14em] text-[#084734]">
                                     추천 문서
@@ -61,7 +61,7 @@ export function DocsLandingShell({
                                 </h2>
                             </div>
                         </div>
-                        <div className="grid gap-4 lg:grid-cols-2">
+                        <div className="grid gap-0 lg:grid-cols-2 lg:gap-x-10">
                             {featuredArticles.map((article) => (
                                 <DocsArticleCard key={article.href} {...article} />
                             ))}

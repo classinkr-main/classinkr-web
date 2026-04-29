@@ -4,6 +4,7 @@ import { NextRequest } from "next/server"
 import { verifyAdmin } from "@/lib/admin-auth"
 
 export const runtime = "nodejs"
+export const maxDuration = 60 // 1분으로 타임아웃 연장
 
 type AiAction = "card-news" | "reels" | "optimize" | "draft"
 
@@ -259,6 +260,8 @@ export async function POST(req: NextRequest) {
       "Content-Type": "text/plain; charset=utf-8",
       "Transfer-Encoding": "chunked",
       "X-Content-Type-Options": "nosniff",
+      "Cache-Control": "no-cache, no-transform",
+      "Connection": "keep-alive",
     },
   })
 }

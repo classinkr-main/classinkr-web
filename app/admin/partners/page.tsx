@@ -1,14 +1,5 @@
-import PartnerWorkspacePageClient from "@/components/admin/partners/PartnerWorkspacePageClient"
-import { listPartnerWorkspacesData } from "@/lib/partners-data"
+import { redirect } from "next/navigation"
 
-export default async function AdminPartnersPage() {
-  const { workspaces, source, warning } = await listPartnerWorkspacesData()
-
-  return (
-    <PartnerWorkspacePageClient
-      initialWorkspaces={workspaces}
-      initialSource={source}
-      initialWarning={warning}
-    />
-  )
+export default function AdminPartnersPage() {
+  redirect("/admin/crm/partners")
 }

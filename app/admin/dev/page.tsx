@@ -3,6 +3,7 @@
 import React, { useEffect, useState, useCallback } from "react"
 import type { PatchNote, PatchChange, ChangeType, NoteStatus } from "@/lib/patch-notes-data"
 import { useRouter } from "next/navigation"
+import DataQualityPanel from "@/components/admin/branch/sections/DataQualityPanel"
 
 // ─── Types ───────────────────────────────────────────────
 interface RoadmapFeature {
@@ -114,6 +115,7 @@ function RefreshBtn({ onClick, refreshing }: { onClick: () => void; refreshing: 
 const TABS = [
   { id: "roadmap", label: "로드맵" },
   { id: "bugs", label: "버그 리포트" },
+  { id: "dataQuality", label: "데이터 품질" },
   { id: "patchnotes", label: "패치노트" },
   { id: "architecture", label: "시스템 구조" },
   { id: "gitlog", label: "배포 이력" },
@@ -1421,6 +1423,7 @@ export default function DevPage() {
       {/* Tab Content */}
       {tab === "roadmap" && <RoadmapTab token={token} />}
       {tab === "bugs" && <BugsTab token={token} userName={userName} onCountChange={setOpenBugCount} />}
+      {tab === "dataQuality" && <DataQualityPanel mode="dev" />}
       {tab === "patchnotes" && <PatchNotesTab token={token} />}
       {tab === "architecture" && <ArchitectureTab />}
       {tab === "gitlog" && <GitLogTab token={token} />}

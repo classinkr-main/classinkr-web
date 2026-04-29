@@ -67,7 +67,19 @@ function formatRecentLabel(value: string | null) {
   })
 }
 
-export default function CustomersPage() {
+type PartnerCustomersPageProps = {
+  allowCreate?: boolean
+  allowEdit?: boolean
+  title?: string
+  embedded?: boolean
+}
+
+export function PartnerCustomersPage({
+  allowCreate = true,
+  allowEdit = true,
+  title = "고객 관리",
+  embedded = false,
+}: PartnerCustomersPageProps = {}) {
   const [customers, setCustomers] = useState<CustomerListItem[]>([])
   const [loading, setLoading] = useState(true)
   const [search, setSearch] = useState("")
@@ -129,22 +141,28 @@ export default function CustomersPage() {
     return (right.summary?.active_deals ?? 0) - (left.summary?.active_deals ?? 0)
   })
 
+  const wrapperClass = embedded
+    ? ""
+    : "mx-auto max-w-[1600px] px-5 py-6 lg:px-8"
+
   return (
-    <div className="mx-auto max-w-[1600px] px-5 py-6 lg:px-8">
+    <div className={wrapperClass}>
       <div className="space-y-6">
         <div className="flex items-center justify-between">
           <div>
-            <h1 className="text-xl font-semibold text-[#1a1a1a]">고객 관리</h1>
+            <h1 className="text-xl font-semibold text-[#1a1a1a]">{title}</h1>
             <p className="mt-0.5 text-sm text-[#1a1a1a]/50">{customers.length}개 기관</p>
           </div>
           <div className="flex gap-2">
             <Button variant="outline" size="sm" onClick={() => { void load() }} disabled={loading}>
               <RefreshCw className={`h-4 w-4 ${loading ? "animate-spin" : ""}`} />
             </Button>
-            <Button size="sm" onClick={() => { setEditing(null); setShowForm(true) }}>
-              <Plus className="mr-1 h-4 w-4" />
-              고객 추가
-            </Button>
+            {allowCreate && (
+              <Button size="sm" onClick={() => { setEditing(null); setShowForm(true) }}>
+                <Plus className="mr-1 h-4 w-4" />
+                고객 추가
+              </Button>
+            )}
           </div>
         </div>
 
@@ -172,13 +190,15 @@ export default function CustomersPage() {
             <div className="rounded-xl border border-dashed border-[#e0e0dc] bg-white py-14 text-center">
               <p className="text-sm font-medium text-[#1a1a1a]/50">아직 등록된 고객이 없습니다</p>
               <p className="mt-1 text-xs text-[#1a1a1a]/35">첫 고객을 추가하면 거래·문서·일정을 연결해서 관리할 수 있습니다.</p>
-              <button
-                onClick={() => { setEditing(null); setShowForm(true) }}
-                className="mt-4 inline-flex items-center gap-1.5 rounded-lg bg-[#084734] px-4 py-2 text-sm font-medium text-white transition-colors hover:bg-[#065c41]"
-              >
-                <Plus className="h-4 w-4" />
-                첫 고객 추가
-              </button>
+              {allowCreate && (
+                <button
+                  onClick={() => { setEditing(null); setShowForm(true) }}
+                  className="mt-4 inline-flex items-center gap-1.5 rounded-lg bg-[#084734] px-4 py-2 text-sm font-medium text-white transition-colors hover:bg-[#065c41]"
+                >
+                  <Plus className="h-4 w-4" />
+                  첫 고객 추가
+                </button>
+              )}
             </div>
           )
         ) : (
@@ -277,7 +297,7 @@ export default function CustomersPage() {
           </div>
         )}
 
-        {showForm && (
+        {(allowCreate || allowEdit) && showForm && (
           <CustomerForm
             existing={editing}
             onClose={() => { setShowForm(false); setEditing(null) }}
@@ -291,13 +311,19 @@ export default function CustomersPage() {
           key={detailId}
           customerId={detailId}
           onClose={() => setDetailId(null)}
-          onEdit={(customer) => {
-            setDetailId(null)
-            setEditing(customer)
-            setShowForm(true)
-          }}
+          onEdit={allowEdit
+            ? (customer) => {
+                setDetailId(null)
+                setEditing(customer)
+                setShowForm(true)
+              }
+            : undefined}
         />
       )}
     </div>
   )
+}
+
+export default function CustomersPage() {
+  return <PartnerCustomersPage />
 }

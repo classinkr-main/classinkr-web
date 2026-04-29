@@ -138,12 +138,17 @@ function sectionToMarkdown(section: DocSection) {
 }
 
 function docToMarkdown(doc: DocArticle) {
+  const resourceLines = doc.resources?.map((resource) =>
+    `- [${resource.label}](${resource.href})${resource.description ? ` - ${resource.description}` : ""}`
+  )
+
   return [
     `# ${doc.title}`,
     doc.description,
     `대상: ${doc.audience}`,
     `업데이트: ${doc.updatedAt}`,
     ...doc.sections.map(sectionToMarkdown),
+    resourceLines?.length ? ["## 첨부 자료", resourceLines.join("\n")].join("\n\n") : undefined,
   ].join("\n\n")
 }
 
@@ -183,6 +188,7 @@ function buildArticleRows() {
       readMinutes: doc.readMinutes,
       updatedAt: doc.updatedAt,
       sections: doc.sections,
+      resources: doc.resources ?? [],
       relatedSlugs: doc.relatedSlugs ?? [],
     },
     seo_title: `${doc.title} | ClassIn 가이드`,
@@ -210,6 +216,7 @@ function buildVersionRows(articleMap: Map<string, ArticleIdentity>) {
         readMinutes: doc.readMinutes,
         updatedAt: doc.updatedAt,
         sections: doc.sections,
+        resources: doc.resources ?? [],
         relatedSlugs: doc.relatedSlugs ?? [],
       },
       change_note: "Initial import from lib/docs.ts",
@@ -233,6 +240,9 @@ function buildChunkRows(
       doc.chatbotSummary,
       `키워드: ${doc.keywords.join(", ")}`,
       `대상: ${doc.audience}`,
+      doc.resources?.length
+        ? `첨부 자료: ${doc.resources.map((resource) => `${resource.label} ${resource.href}`).join(", ")}`
+        : "",
     ].join("\n\n")
 
     const chunks: ChunkRow[] = [
@@ -252,6 +262,7 @@ function buildChunkRows(
           tags: doc.tags,
           keywords: doc.keywords,
           audience: doc.audience,
+          resources: doc.resources ?? [],
           chunkType: "summary",
         },
         embedding_model: null,

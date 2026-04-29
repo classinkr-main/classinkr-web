@@ -96,79 +96,12 @@ const QUEUE_LABELS: Record<HubQueue, string> = {
   done: "완료/보관",
 }
 
-const DEMO_DOCUMENTS: HubDocument[] = [
-  {
-    id: "demo-quote-1",
-    kind: "quote",
-    number: "Q-2026-001",
-    title: "강남메가스터디학원 전자칠판 견적",
-    status: "shared",
-    updatedAt: "2026-04-04T09:00:00Z",
-    customerName: "강남메가스터디학원",
-    customerId: "demo-customer-1",
-    dealId: "demo-deal-1",
-    dealTitle: "2-4층 전자칠판 설치",
-    dealCode: "D-2026-001",
-    versionCount: 3,
-    currentVersionLabel: "v3 · 29,000,000원",
-    totalAmount: 29000000,
-    versions: [],
-    shares: [],
-    pdfUrl: null,
-  },
-  {
-    id: "demo-contract-1",
-    kind: "contract",
-    number: "C-2026-001",
-    title: "강남메가스터디학원 계약서",
-    status: "shared",
-    updatedAt: "2026-04-03T11:20:00Z",
-    customerName: "강남메가스터디학원",
-    customerId: "demo-customer-1",
-    dealId: "demo-deal-1",
-    dealTitle: "2-4층 전자칠판 설치",
-    dealCode: "D-2026-001",
-    versionCount: 2,
-    currentVersionLabel: "v2 · 서명 대기",
-    totalAmount: 29000000,
-    versions: [],
-    shares: [],
-    pdfUrl: null,
-  },
-  {
-    id: "demo-receipt-1",
-    kind: "receipt",
-    number: "R-2026-004",
-    title: "리더스입시학원 수납 영수증",
-    status: "issued",
-    updatedAt: "2026-04-02T05:30:00Z",
-    customerName: "리더스입시학원",
-    customerId: "demo-customer-2",
-    dealId: "demo-deal-3",
-    dealTitle: "3층 전체 전자칠판 교체",
-    dealCode: "D-2026-004",
-    versionCount: 1,
-    currentVersionLabel: "영수 1건",
-    totalAmount: 24200000,
-    versions: [],
-    shares: [],
-    pdfUrl: "/demo/receipt.pdf",
-  },
-]
-
-const DEMO_PAYLOAD: DocumentsApiPayload = {
-  mode: "demo",
-  summary: {
-    all: DEMO_DOCUMENTS.length,
-    quote: DEMO_DOCUMENTS.filter((item) => item.kind === "quote").length,
-    contract: DEMO_DOCUMENTS.filter((item) => item.kind === "contract").length,
-    receipt: DEMO_DOCUMENTS.filter((item) => item.kind === "receipt").length,
-  },
-  documents: [],
-  deals: [],
-  customers: [],
+const EMPTY_DOCUMENT_SUMMARY: PartnerDocumentSummary = {
+  all: 0,
+  quote: 0,
+  contract: 0,
+  receipt: 0,
 }
-
 function readJson<T>(url: string) {
   return fetch(url, { cache: "no-store" }).then(async (response) => {
     if (!response.ok) {
@@ -707,14 +640,14 @@ function DocumentRow({
 
 export default function PartnerDocumentsPage() {
   const router = useRouter()
-  const [mode, setMode] = useState<PartnerReadMode>("demo")
-  const [documents, setDocuments] = useState<HubDocument[]>(DEMO_DOCUMENTS)
-  const [summary, setSummary] = useState<PartnerDocumentSummary>(DEMO_PAYLOAD.summary)
+  const [mode, setMode] = useState<PartnerReadMode>("legacy")
+  const [documents, setDocuments] = useState<HubDocument[]>([])
+  const [summary, setSummary] = useState<PartnerDocumentSummary>(EMPTY_DOCUMENT_SUMMARY)
   const [sourceDealCount, setSourceDealCount] = useState(0)
   const [hubMode, setHubMode] = useState<HubMode>("organize")
   const [queue, setQueue] = useState<HubQueue>("all")
   const [section, setSection] = useState<HubSection>("all")
-  const [selectedDocumentId, setSelectedDocumentId] = useState<string>(DEMO_DOCUMENTS[0].id)
+  const [selectedDocumentId, setSelectedDocumentId] = useState<string>("")
   const [hydratedDealIds, setHydratedDealIds] = useState<Record<string, true>>({})
   const [sharingDocumentId, setSharingDocumentId] = useState<string | null>(null)
   const [loading, setLoading] = useState(true)
@@ -724,10 +657,6 @@ export default function PartnerDocumentsPage() {
     tone: "success" | "warning" | "error"
     text: string
   } | null>(null)
-
-  function isDemoDocument(document: Pick<HubDocument, "id">) {
-    return document.id.startsWith("demo-")
-  }
 
   function openQuickCreateDialog() {
     handleHubModeChange("create")
@@ -761,9 +690,7 @@ export default function PartnerDocumentsPage() {
       pdfUrl: null,
     }
 
-    const currentRealDocuments = documents.filter(
-      (item) => !isDemoDocument(item) && item.id !== nextDocument.id
-    )
+    const currentRealDocuments = documents.filter((item) => item.id !== nextDocument.id)
     const nextDocuments = [nextDocument, ...currentRealDocuments]
 
     setMode("v2")
@@ -812,38 +739,27 @@ export default function PartnerDocumentsPage() {
         const payload = await readJson<DocumentsApiPayload>("/api/partner/documents")
         if (!alive) return
 
-        const hubDocuments =
-          payload.documents.length > 0
-            ? payload.documents.map(buildDocumentFromListItem)
-            : DEMO_DOCUMENTS
+        const hubDocuments = payload.documents.map(buildDocumentFromListItem)
         const nextDealCount = new Set(
           hubDocuments.map((document) => document.dealId)
         ).size
 
-        setMode(payload.mode ?? "demo")
-        setSummary(
-          payload.documents.length > 0 ? payload.summary : DEMO_PAYLOAD.summary
-        )
+        setMode(payload.mode === "v2" ? "v2" : "legacy")
+        setSummary(payload.summary ?? EMPTY_DOCUMENT_SUMMARY)
         setSourceDealCount(nextDealCount)
         setHydratedDealIds({})
         setDocuments(hubDocuments)
         setSelectedDocumentId(hubDocuments[0]?.id ?? "")
-
-        if (payload.documents.length === 0) {
-          setError("등록된 문서가 없어 demo 문서를 보여주고 있습니다.")
-        }
       } catch {
         if (!alive) return
 
-        setMode("demo")
-        setSummary(DEMO_PAYLOAD.summary)
-        setSourceDealCount(
-          new Set(DEMO_DOCUMENTS.map((document) => document.dealId)).size
-        )
+        setMode("legacy")
+        setSummary(EMPTY_DOCUMENT_SUMMARY)
+        setSourceDealCount(0)
         setHydratedDealIds({})
-        setDocuments(DEMO_DOCUMENTS)
-        setSelectedDocumentId(DEMO_DOCUMENTS[0].id)
-        setError("문서 전용 API가 아직 없어 데모 문서로 전환했습니다.")
+        setDocuments([])
+        setSelectedDocumentId("")
+        setError("문서를 불러오지 못했습니다. 연결된 데이터가 없으면 빈 목록으로 표시합니다.")
       } finally {
         if (alive) setLoading(false)
       }
@@ -865,7 +781,6 @@ export default function PartnerDocumentsPage() {
 
     if (!selectedDocument) return
     // 데모 모드(비로그인·폴백)에서는 실제 API를 찌르지 않는다 — 401 유발 방지
-    if (mode === "demo") return
     const targetDealId = selectedDocument.dealId
     if (hydratedDealIds[targetDealId]) return
 
@@ -906,10 +821,6 @@ export default function PartnerDocumentsPage() {
   async function ensureShareLink(document: HubDocument) {
     if (typeof window === "undefined") return ""
 
-    if (isDemoDocument(document)) {
-      throw new Error("데모 문서는 실제 공유 링크를 만들 수 없습니다. 먼저 새 문서를 생성해 주세요.")
-    }
-
     if (document.kind === "receipt") {
       return document.pdfUrl ?? `${window.location.origin}/partner/workspace`
     }
@@ -917,10 +828,6 @@ export default function PartnerDocumentsPage() {
     const existingShare = getLatestShare(document)
     if (existingShare?.token) {
       return getDocumentShareUrl(document, existingShare.token)
-    }
-
-    if (mode === "demo") {
-      return `${window.location.origin}/partner/workspace`
     }
 
     setSharingDocumentId(document.id)
@@ -999,20 +906,18 @@ export default function PartnerDocumentsPage() {
       documents.find((document) => document.id === selectedDocumentId) ?? null
     const sendCandidates = documents.filter(
       (document) =>
-        !isDemoDocument(document) &&
         document.kind !== "receipt" &&
         matchesQueue(document, "send")
     )
     const candidate =
       selectedCandidate &&
-      !isDemoDocument(selectedCandidate) &&
       selectedCandidate.kind !== "receipt" &&
       matchesQueue(selectedCandidate, "send")
         ? selectedCandidate
         : sendCandidates[0] ?? null
 
     if (!candidate) {
-      if (documents.some((document) => isDemoDocument(document)) || documents.length === 0) {
+      if (documents.length === 0) {
         openQuickCreateDialog()
         showNotice("warning", "실제 발송할 문서가 없어 새 견적서 생성으로 이동했습니다.")
         return
@@ -1069,7 +974,7 @@ export default function PartnerDocumentsPage() {
   const expiringCount = documents.filter((document) => matchesQueue(document, "expiring")).length
   const draftDocuments = documents.filter((document) => matchesQueue(document, "draft")).slice(0, 4)
   const recentQuoteOptions = documents
-    .filter((document) => document.kind === "quote" && !isDemoDocument(document))
+    .filter((document) => document.kind === "quote")
     .sort((left, right) => new Date(right.updatedAt).getTime() - new Date(left.updatedAt).getTime())
     .map((document) => ({
       id: document.id,
@@ -1095,7 +1000,7 @@ export default function PartnerDocumentsPage() {
             <div className="max-w-3xl">
               <div className="flex flex-wrap items-center gap-2">
                 <Badge variant="outline" className="border-[#1a1a1a]/15 bg-[#1a1a1a] text-white">
-                  {mode === "demo" ? "DEMO" : "LIVE"}
+                  {mode === "v2" ? "LIVE" : "LEGACY"}
                 </Badge>
                 <Badge variant="outline" className="border-[#e8e8e4] bg-white text-[#1a1a1a]/50">
                   Documents Hub
@@ -1140,7 +1045,7 @@ export default function PartnerDocumentsPage() {
                 </button>
                 <div className="inline-flex items-center gap-2 rounded-xl border border-[#e8e8e4] bg-[#f7f7f5] px-4 py-2.5 text-sm text-[#1a1a1a]/60">
                   <BadgeCheck className="h-4 w-4" />
-                  버전 고정 링크와 PDF는 현재 {sourceDealCount > 0 ? `${sourceDealCount}개 거래` : "demo"} 기준으로 노출합니다
+                  버전 고정 링크와 PDF는 현재 {sourceDealCount > 0 ? `${sourceDealCount}개 거래` : "연결된 거래 없음"} 기준으로 노출합니다
                 </div>
                 <button
                   type="button"

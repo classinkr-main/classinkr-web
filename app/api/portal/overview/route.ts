@@ -5,7 +5,10 @@ import {
   isErrorResponse,
 } from "@/lib/partner-portal/portal-context";
 import { loadPartnerOverview } from "@/lib/partner-portal/repositories/partner-read";
-import { getCommercialOverview } from "@/lib/partner-portal/repositories/overview";
+import {
+  getAdminPartnerPortalOverview,
+  getCommercialOverview,
+} from "@/lib/partner-portal/repositories/overview";
 import type { CommercialOverviewRange } from "@/lib/partner-portal/overview-types";
 
 export async function GET(req: NextRequest) {
@@ -15,15 +18,21 @@ export async function GET(req: NextRequest) {
 
   const { searchParams } = new URL(req.url);
   const range = (searchParams.get("range") as CommercialOverviewRange) ?? "today";
+  const shape = searchParams.get("shape");
 
   try {
     if (ctx.type === "admin") {
+      if (shape === "partner") {
+        const overview = await getAdminPartnerPortalOverview();
+        return NextResponse.json({ type: "partner", ...overview });
+      }
+
       // admin: 전체 상업 개요
       const overview = await getCommercialOverview(range);
       return NextResponse.json({ type: "commercial", ...overview });
     }
 
-    // partner: 자기 계정 개요 (V2 → legacy → demo 폴백)
+    // partner: 자기 계정 개요 (V2 → legacy → empty 폴백)
     const overview = await loadPartnerOverview({
       userId: ctx.userId,
       partnerAccountId: ctx.partnerAccountId,

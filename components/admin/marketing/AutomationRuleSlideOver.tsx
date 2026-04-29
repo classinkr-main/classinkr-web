@@ -153,10 +153,10 @@ export default function AutomationRuleSlideOver({ open, templates, initial, onSa
       <div className="fixed inset-0 z-40 bg-black/20 backdrop-blur-[2px]" onClick={onClose} />
 
       {/* 슬라이드오버 패널 */}
-      <div className="fixed right-0 top-0 bottom-0 z-50 w-[520px] bg-white shadow-2xl border-l border-[#e8e8e4] flex flex-col overflow-hidden">
+      <div className="fixed inset-x-0 bottom-0 top-16 z-50 flex flex-col overflow-hidden rounded-t-2xl border-t border-[#e8e8e4] bg-white shadow-2xl sm:top-0 sm:right-0 sm:left-auto sm:w-[520px] sm:rounded-none sm:border-l sm:border-t-0">
 
         {/* 헤더 */}
-        <div className="flex items-center justify-between px-6 pt-5 pb-4 border-b border-[#e8e8e4] flex-shrink-0">
+        <div className="flex flex-shrink-0 items-center justify-between border-b border-[#e8e8e4] px-4 pt-5 pb-4 sm:px-6">
           <div>
             <p className="text-[11px] font-medium text-[#1a1a1a]/30 uppercase tracking-widest mb-0.5">
               {initial ? "규칙 편집" : "새 자동화 규칙"}
@@ -171,7 +171,7 @@ export default function AutomationRuleSlideOver({ open, templates, initial, onSa
         </div>
 
         {/* 스텝 인디케이터 */}
-        <div className="flex items-center gap-0 px-6 py-3 border-b border-[#e8e8e4] flex-shrink-0 bg-[#FAFAF8]">
+        <div className="flex flex-shrink-0 items-center gap-0 overflow-x-auto border-b border-[#e8e8e4] bg-[#FAFAF8] px-4 py-3 sm:px-6">
           {[{ n: 1, label: "트리거" }, { n: 2, label: "세그먼트" }, { n: 3, label: "템플릿" }].map(({ n, label }, i) => (
             <div key={n} className="flex items-center">
               <button
@@ -193,7 +193,7 @@ export default function AutomationRuleSlideOver({ open, templates, initial, onSa
         </div>
 
         {/* 콘텐츠 */}
-        <div className="flex-1 overflow-y-auto px-6 py-5">
+        <div className="flex-1 overflow-y-auto px-4 py-5 sm:px-6">
 
           {/* ── Step 1: 트리거 ── */}
           {step === 1 && (
@@ -305,7 +305,7 @@ export default function AutomationRuleSlideOver({ open, templates, initial, onSa
               {/* 대상 테이블 */}
               <div className="space-y-2">
                 <Label className="text-[12px] font-medium text-[#1a1a1a]/60">대상 테이블</Label>
-                <div className="flex gap-2">
+                <div className="flex flex-col gap-2 sm:flex-row">
                   {TARGET_TABLES.map(({ value, label }) => (
                     <button
                       key={value}
@@ -375,7 +375,7 @@ export default function AutomationRuleSlideOver({ open, templates, initial, onSa
               {/* 기간 */}
               <div className="space-y-2">
                 <Label className="text-[12px] font-medium text-[#1a1a1a]/60">기간 조건</Label>
-                <div className="flex items-center gap-3">
+                <div className="flex flex-col gap-3 sm:flex-row sm:items-center">
                   <label className={`flex items-center gap-2 px-3 py-2 rounded-lg border cursor-pointer ${
                     !daysSinceSubmit ? "border-[#084734] bg-[#084734]/4" : "border-[#e8e8e4]"
                   }`}>
@@ -515,7 +515,7 @@ export default function AutomationRuleSlideOver({ open, templates, initial, onSa
         </div>
 
         {/* 푸터 네비게이션 */}
-        <div className="flex items-center justify-between px-6 py-4 border-t border-[#e8e8e4] flex-shrink-0 bg-[#FAFAF8]">
+        <div className="flex flex-shrink-0 flex-col gap-2 border-t border-[#e8e8e4] bg-[#FAFAF8] px-4 py-4 sm:flex-row sm:items-center sm:justify-between sm:px-6">
           <Button
             variant="outline" size="sm"
             onClick={step === 1 ? onClose : () => setStep((s) => s - 1)}

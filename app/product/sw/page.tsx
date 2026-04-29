@@ -14,10 +14,14 @@ import Link from "next/link"
 import Image from "next/image"
 import { useRef, useEffect, useState, useMemo, useCallback } from "react"
 
+import OnboardingRoadmap from "@/components/product/sw/OnboardingRoadmap"
+
 const CHECKOUT_ENABLED = process.env.NEXT_PUBLIC_SW_CHECKOUT_ENABLED === "true"
 const CHECKOUT_HREF = CHECKOUT_ENABLED ? "/checkout" : "/contact#contact-form"
 const CHECKOUT_CTA_LABEL = CHECKOUT_ENABLED ? "지금 바로 결제 시작" : "지금 무료로 시작하기"
 const CHECKOUT_SUB_LABEL = CHECKOUT_ENABLED ? "카드·네이버페이로 즉시 시작" : "설치 없이 바로 체험 · 카드 등록 불필요"
+const HERO_CLASSROOM_VIDEO_SRC = "/video/쿼드러닝 수업_클립1.mp4"
+const BLACKBOARD_VIDEO_SRC = "/video/클립2.mp4"
 
 const LESSON_TOOLS: {
     label: string
@@ -300,7 +304,7 @@ function SlotDigit({ digit, delay, trigger, onDone }: { digit: string; delay: nu
                     <span
                         key={`${n}-${index}`}
                         ref={index === 0 ? cellRef : undefined}
-                        className={`block w-full h-[4.5rem] sm:h-28 md:h-36 flex-none flex items-center justify-center text-4xl sm:text-6xl md:text-8xl leading-none tabular-nums font-serif text-[#22A366] font-light ${done ? "animate-digit-glow" : ""}`}
+                        className={`block w-full h-[4.5rem] sm:h-28 md:h-36 flex-none flex items-center justify-center text-4xl sm:text-6xl md:text-8xl leading-none tabular-nums font-sans font-semibold text-[#22A366] ${done ? "animate-digit-glow" : ""}`}
                     >
                         {n}
                     </span>
@@ -322,7 +326,7 @@ function StatCard({ value, suffix, label, icon, delay, trigger }: { value: numbe
             style={{ perspective: 800 }}
         >
             <div className="flex justify-center mb-3 text-[#22A366]/70">{icon}</div>
-            <div className="text-2xl sm:text-3xl font-bold text-slate-900 mb-1 font-serif">
+            <div className="text-2xl sm:text-3xl font-sans font-bold text-slate-900 mb-1">
                 {value >= 100 ? display.toLocaleString() : display}{suffix}
             </div>
             <div className="text-xs sm:text-sm text-slate-400 font-medium leading-snug whitespace-pre-line">{label}</div>
@@ -419,18 +423,18 @@ function FinalCTASection() {
     return (
         <section ref={sectionRef} className="relative py-32 md:py-44 overflow-hidden" style={{ minHeight: "100vh" }}>
             <div className="absolute inset-0 bg-gradient-to-b from-[#F0FDF9] via-[#F0FDF9] to-[#FDFCF8]"></div>
+            <div className="absolute top-0 left-0 right-0 h-44 md:h-60 bg-gradient-to-b from-[#FDFCF8] via-[#F0FDF9]/85 to-transparent pointer-events-none"></div>
             <motion.div className="absolute inset-0 pointer-events-none" style={{ opacity: glowOpacity }}>
                 <motion.div className="absolute top-1/2 left-1/2 -translate-x-1/2 -translate-y-1/2 w-[900px] h-[700px] bg-gradient-radial from-green-200/30 via-green-100/10 to-transparent rounded-full blur-3xl" animate={{ x: [0, 30, -20, 0], y: [0, -20, 15, 0] }} transition={{ duration: 20, repeat: Infinity, ease: "easeInOut" }} />
             </motion.div>
-            <div className="absolute top-0 left-0 w-full h-px bg-gradient-to-r from-transparent via-green-300/20 to-transparent"></div>
             <motion.div className="absolute inset-0 pointer-events-none" initial={{ opacity: 0 }} animate={phase >= 1 ? { opacity: 1 } : {}} transition={{ duration: 1 }}>
                 {particles.map(({ key, ...rest }) => <AmbientParticle key={key} {...rest} />)}
             </motion.div>
 
             <div className="container mx-auto px-4 text-center max-w-5xl relative z-10">
-                <motion.p initial={{ opacity: 0, y: 20 }} animate={phase >= 1 ? { opacity: 1, y: 0 } : {}} transition={{ duration: 0.7 }} className="text-xl sm:text-2xl md:text-3xl text-slate-500 font-medium font-serif leading-relaxed mb-3">줌 열고, 녹화 누르고, 숙제 올리고—</motion.p>
-                <motion.p initial={{ opacity: 0, y: 20 }} animate={phase >= 1 ? { opacity: 1, y: 0 } : {}} transition={{ duration: 0.7, delay: 0.35 }} className="text-xl sm:text-2xl md:text-3xl text-slate-700 font-semibold font-serif mb-8">수업 하나에 도구만 네 개.</motion.p>
-                <motion.p initial={{ opacity: 0, filter: "blur(4px)" }} animate={phase >= 1 ? { opacity: 1, filter: "blur(0px)" } : {}} transition={{ duration: 0.8, delay: 0.7 }} className="text-lg sm:text-xl md:text-2xl text-[#22A366] font-medium font-serif italic mb-10">가르치는 일에만 집중할 수 있다면?</motion.p>
+                <motion.p initial={{ opacity: 0, y: 20 }} animate={phase >= 1 ? { opacity: 1, y: 0 } : {}} transition={{ duration: 0.7 }} className="text-xl sm:text-2xl md:text-3xl text-slate-500 font-sans font-medium leading-relaxed mb-3">줌 열고, 녹화 누르고, 숙제 올리고—</motion.p>
+                <motion.p initial={{ opacity: 0, y: 20 }} animate={phase >= 1 ? { opacity: 1, y: 0 } : {}} transition={{ duration: 0.7, delay: 0.35 }} className="text-xl sm:text-2xl md:text-3xl text-slate-700 font-sans font-semibold mb-8">수업 하나에 도구만 네 개.</motion.p>
+                <motion.p initial={{ opacity: 0, filter: "blur(4px)" }} animate={phase >= 1 ? { opacity: 1, filter: "blur(0px)" } : {}} transition={{ duration: 0.8, delay: 0.7 }} className="text-lg sm:text-xl md:text-2xl text-[#22A366] font-sans font-medium italic mb-10">가르치는 일에만 집중할 수 있다면?</motion.p>
                 <motion.div initial={{ opacity: 0, y: 10 }} animate={phase >= 1 ? { opacity: 1, y: 0 } : {}} transition={{ duration: 0.5, delay: 1.0 }} className="flex items-center justify-center gap-2 mb-14">
                     <div className="inline-flex items-center gap-2 px-4 py-1.5 rounded-full bg-green-50 border border-green-200/60 text-sm font-medium text-[#22A366]"><Clock className="w-3.5 h-3.5" />되찾은 수업 시간</div>
                 </motion.div>
@@ -441,11 +445,11 @@ function FinalCTASection() {
                     <motion.div className="flex justify-center mb-5" initial={{ scale: 0.9, opacity: 0.3, filter: "blur(8px)" }} animate={phase >= 2 ? { scale: 1, opacity: 1, filter: "blur(0px)" } : {}} transition={{ type: "spring", stiffness: 120, damping: 20 }}>
                         <div className="flex items-center gap-1.5 sm:gap-2.5 select-none relative">
                             <SlotDigit digit={displayDigits[0]} delay={0.2} trigger={phase >= 2} />
-                            <span className="text-4xl sm:text-6xl md:text-8xl font-serif text-slate-300 font-light">,</span>
+                            <span className="text-4xl sm:text-6xl md:text-8xl font-sans font-semibold text-slate-300">,</span>
                             <SlotDigit digit={displayDigits[1]} delay={0.35} trigger={phase >= 2} />
                             <SlotDigit digit={displayDigits[2]} delay={0.45} trigger={phase >= 2} />
                             <SlotDigit digit={displayDigits[3]} delay={0.55} trigger={phase >= 2} />
-                            <span className="text-4xl sm:text-6xl md:text-8xl font-serif text-slate-300 font-light">,</span>
+                            <span className="text-4xl sm:text-6xl md:text-8xl font-sans font-semibold text-slate-300">,</span>
                             <SlotDigit digit={displayDigits[4]} delay={0.65} trigger={phase >= 2} />
                             <SlotDigit digit={displayDigits[5]} delay={0.75} trigger={phase >= 2} />
                             <SlotDigit digit={displayDigits[6]} delay={0.85} trigger={phase >= 2} onDone={handleLastSlotDone} />
@@ -453,7 +457,7 @@ function FinalCTASection() {
                         </div>
                     </motion.div>
                 </div>
-                <motion.p initial={{ opacity: 0 }} animate={phase >= 2 ? { opacity: 1 } : {}} transition={{ delay: 0.5 }} className="text-3xl sm:text-4xl md:text-5xl font-serif text-slate-800 font-light tracking-tight mb-3">시간</motion.p>
+                <motion.p initial={{ opacity: 0 }} animate={phase >= 2 ? { opacity: 1 } : {}} transition={{ delay: 0.5 }} className="text-3xl sm:text-4xl md:text-5xl font-sans font-semibold text-slate-800 tracking-tight mb-3">시간</motion.p>
                 <motion.p initial={{ opacity: 0, y: 10 }} animate={phase >= 2 ? { opacity: 1, y: 0 } : {}} transition={{ delay: 0.7 }} className="text-sm sm:text-base text-slate-400 font-medium mb-6">지금 이 순간에도 수업이 진행되고 있습니다</motion.p>
 
                 <motion.div className="w-full max-w-sm mx-auto h-px bg-gradient-to-r from-transparent via-green-300/30 to-transparent mb-14 mt-14" initial={{ scaleX: 0 }} animate={phase >= 3 ? { scaleX: 1 } : {}} transition={{ duration: 0.6 }} style={{ originX: 0.5 }} />
@@ -463,9 +467,9 @@ function FinalCTASection() {
                     <StatCard value={10} suffix="가지" label={"참여형\n수업 활동"} icon={<Layers className="w-5 h-5" />} delay={0.2} trigger={phase >= 3} />
                     <StatCard value={98} suffix="%" label={`"과거로 못 돌아간다"\n응답률`} icon={<Sparkles className="w-5 h-5" />} delay={0.3} trigger={phase >= 3} />
                 </div>
-                <motion.p initial={{ opacity: 0, letterSpacing: "0.3em" }} animate={phase >= 3 ? { opacity: 1, letterSpacing: "0.05em" } : {}} transition={{ delay: 0.5, duration: 0.8 }} className="text-lg sm:text-xl font-serif text-slate-600 font-medium mb-10">수업만을 위해 만든 플랫폼, 다음은 당신의 교실입니다</motion.p>
+                <motion.p initial={{ opacity: 0, letterSpacing: "0.3em" }} animate={phase >= 3 ? { opacity: 1, letterSpacing: "0.05em" } : {}} transition={{ delay: 0.5, duration: 0.8 }} className="text-lg sm:text-xl font-sans text-slate-600 font-medium mb-10">수업만을 위해 만든 플랫폼, 다음은 당신의 교실입니다</motion.p>
                 <motion.div initial={{ opacity: 0, y: 20 }} animate={phase >= 3 ? { opacity: 1, y: 0 } : {}} transition={{ delay: 0.7, type: "spring", stiffness: 200, damping: 25 }} className="flex flex-col items-center gap-4">
-                    <Button asChild className="bg-[#22A366] hover:bg-[#1B8A55] text-white rounded-full px-10 h-14 text-base font-bold animate-glow-pulse transition-all hover:scale-105 group">
+                    <Button asChild className="h-14 rounded-full bg-[#009060] px-10 text-base font-bold text-white transition-all hover:scale-105 hover:bg-[#007A52] group">
                         <Link href={CHECKOUT_HREF}>{CHECKOUT_CTA_LABEL}<ArrowRight className="w-4 h-4 ml-2 group-hover:translate-x-1 transition-transform" /></Link>
                     </Button>
                     <p className="text-xs sm:text-sm text-slate-400 font-medium">{CHECKOUT_SUB_LABEL}</p>
@@ -666,7 +670,7 @@ function FutureVision1Section() {
                 <div className="grid lg:grid-cols-2 gap-16 items-center">
                     <motion.div initial={{ opacity: 0, x: -30 }} whileInView={{ opacity: 1, x: 0 }} viewport={{ once: true }} transition={{ duration: 0.8 }}>
                         <p className="text-[#6EE7B7]/60 text-sm font-semibold tracking-wider uppercase mb-6">The Future of Education</p>
-                        <h2 className="text-4xl md:text-5xl lg:text-6xl font-serif text-white leading-[1.1] tracking-tight mb-6">
+                        <h2 className="text-4xl md:text-5xl lg:text-6xl font-sans font-bold text-white leading-[1.1] tracking-tight mb-6">
                             2030년의<br />교실은<br /><span className="text-[#6EE7B7]">달라집니다</span>
                         </h2>
                         <p className="text-lg text-white/50 leading-relaxed">
@@ -883,7 +887,7 @@ function HardwareTeaserSection() {
             <div className="absolute inset-0 pointer-events-none opacity-10" style={{
                 backgroundImage: "radial-gradient(circle at 70% 50%, rgba(110,231,183,0.3) 0%, transparent 60%)",
             }} />
-            <div className="container mx-auto px-4 lg:px-8 max-w-6xl relative">
+            <div className="container mx-auto px-4 sm:px-6 lg:px-[10%] max-w-6xl relative">
                 <div className="grid lg:grid-cols-2 gap-14 items-center">
                     <motion.div initial={{ opacity: 0, x: -30 }} whileInView={{ opacity: 1, x: 0 }} viewport={{ once: true }} transition={{ duration: 0.7 }}>
                         <span className="inline-flex items-center gap-2 bg-[#6EE7B7]/10 text-[#6EE7B7] text-xs font-bold px-3 py-1.5 rounded-full mb-6">
@@ -894,7 +898,8 @@ function HardwareTeaserSection() {
                         </h2>
                         <p className="text-lg text-white/50 leading-relaxed mb-8">
                             AI 전자칠판 + 모션 트래킹 카메라 + AI 노이즈 캔슬링 마이크.
-                            클래스인 소프트웨어와 완벽하게 연동되는 스마트 교실을 구축하세요.
+                            <br />
+                            Classin 소프트웨어와 완벽하게 연동되는 스마트 교실을 구축하세요.
                         </p>
                         <div className="space-y-3 mb-10">
                             {[
@@ -918,27 +923,18 @@ function HardwareTeaserSection() {
 
                     {/* Hardware visual */}
                     <motion.div initial={{ opacity: 0, x: 30 }} whileInView={{ opacity: 1, x: 0 }} viewport={{ once: true }} transition={{ duration: 0.7, delay: 0.1 }}>
-                        <div className="relative bg-white/5 rounded-2xl border border-white/10 p-8 text-center">
-                            <div className="w-full aspect-[4/3] bg-gradient-to-br from-[#084734]/30 to-[#1a1a19] rounded-xl border border-white/10 flex items-center justify-center mb-6 relative overflow-hidden">
-                                <div className="absolute inset-0 flex items-center justify-center">
-                                    <div className="w-4/5 aspect-video bg-[#0f0f0f] rounded-lg border-4 border-[#6EE7B7]/20 shadow-2xl flex items-center justify-center relative">
-                                        <span className="text-[#6EE7B7]/30 text-xs font-mono">AI Interactive Board</span>
-                                        {/* Camera indicator */}
-                                        <div className="absolute -top-3 left-1/2 -translate-x-1/2 w-6 h-6 bg-[#1a1a19] border border-white/10 rounded-full flex items-center justify-center">
-                                            <div className="w-2 h-2 rounded-full bg-[#6EE7B7]/60" />
-                                        </div>
-                                    </div>
-                                </div>
-                                {/* Mic dots */}
-                                <div className="absolute bottom-3 left-1/2 -translate-x-1/2 flex gap-2">
-                                    {[...Array(5)].map((_, i) => (
-                                        <motion.div key={i} className="w-1.5 h-1.5 rounded-full bg-[#6EE7B7]/40"
-                                            animate={{ opacity: [0.3, 1, 0.3] }}
-                                            transition={{ duration: 1.5, delay: i * 0.2, repeat: Infinity }} />
-                                    ))}
-                                </div>
+                        <div className="text-center">
+                            <div className="relative aspect-video w-full overflow-hidden rounded-2xl border border-white/10 bg-white/5 shadow-[0_24px_70px_rgba(0,0,0,0.28)]">
+                                <Image
+                                    src="/images/smartroon.png"
+                                    alt="ClassIn 소프트웨어와 연동되는 스마트 교실 구성"
+                                    fill
+                                    className="object-cover"
+                                    sizes="(min-width: 1024px) 44vw, 100vw"
+                                />
+                                <div className="absolute inset-0 bg-gradient-to-t from-[#1a1a19]/28 via-transparent to-white/8" />
                             </div>
-                            <p className="text-white/30 text-xs">ClassIn X · 스마트 교실 구성</p>
+                            <p className="mt-4 text-white/30 text-xs">ClassIn X · 스마트 교실 구성</p>
                         </div>
                     </motion.div>
                 </div>
@@ -1014,78 +1010,7 @@ function AIFeaturesSection() {
     )
 }
 
-/* ── [D] 도입 프로세스 섹션 ──────────────────────────────────── */
-const ONBOARDING_STEPS = [
-    {
-        step: "01",
-        title: "상담 신청",
-        desc: "기관 규모와 수업 방식을 공유해주시면 전담 매니저가 맞춤 플랜을 안내합니다.",
-        duration: "당일 회신",
-    },
-    {
-        step: "02",
-        title: "무료 체험",
-        desc: "실제 수업 환경에서 직접 사용해보세요. 설치 없이 브라우저에서 바로 시작합니다.",
-        duration: "2주 무료",
-    },
-    {
-        step: "03",
-        title: "팀 온보딩",
-        desc: "강사진 교육부터 시스템 설정까지. 전담 온보딩 팀이 처음부터 함께합니다.",
-        duration: "1–3일",
-    },
-    {
-        step: "04",
-        title: "수업 시작",
-        desc: "준비 완료. 학생들과 함께 첫 수업을 시작하세요. 이후에도 전담 지원이 이어집니다.",
-        duration: "바로 시작",
-    },
-]
-
-function OnboardingSection() {
-    return (
-        <section className="py-24 md:py-32 bg-white">
-            <div className="container mx-auto px-4 lg:px-8 max-w-5xl">
-                <motion.div className="text-center mb-16" {...fadeUp}>
-                    <EyebrowTag>GET STARTED</EyebrowTag>
-                    <h2 className="text-3xl md:text-4xl lg:text-5xl font-serif text-[#1a1a19] leading-tight">
-                        도입은 생각보다<br /><span className="text-[#22A366]">쉽습니다</span>
-                    </h2>
-                    <p className="text-lg text-slate-400 mt-4 max-w-md mx-auto">
-                        상담부터 첫 수업까지, 빠르면 하루 안에 시작할 수 있습니다.
-                    </p>
-                </motion.div>
-
-                <div className="relative">
-                    {/* 연결선 */}
-                    <div className="hidden lg:block absolute top-9 left-[calc(12.5%+26px)] right-[calc(12.5%+26px)] h-px bg-gradient-to-r from-[#22A366]/10 via-[#22A366]/30 to-[#22A366]/10" />
-
-                    <div className="grid sm:grid-cols-2 lg:grid-cols-4 gap-6">
-                        {ONBOARDING_STEPS.map((s, i) => (
-                            <motion.div
-                                key={s.step}
-                                initial={{ opacity: 0, y: 25 }}
-                                whileInView={{ opacity: 1, y: 0 }}
-                                viewport={{ once: true }}
-                                transition={{ delay: i * 0.12 }}
-                                className="flex flex-col items-center text-center"
-                            >
-                                <div className="w-[52px] h-[52px] rounded-full bg-white border-2 border-[#22A366] text-[#22A366] font-serif font-bold text-xl flex items-center justify-center mb-5 shadow-[0_4px_16px_rgba(34,163,102,0.2)] relative z-10">
-                                    {s.step}
-                                </div>
-                                <span className="inline-block bg-[#ECFDF5] border border-[rgba(34,163,102,0.2)] text-[#22A366] text-[10px] font-bold px-3 py-1 rounded-full mb-3 tracking-wide">
-                                    {s.duration}
-                                </span>
-                                <h3 className="text-base font-bold text-slate-900 mb-2">{s.title}</h3>
-                                <p className="text-sm text-slate-500 leading-relaxed">{s.desc}</p>
-                            </motion.div>
-                        ))}
-                    </div>
-                </div>
-            </div>
-        </section>
-    )
-}
+/* ── [D] 도입 프로세스 섹션 → components/product/sw/OnboardingRoadmap.tsx 로 추출됨 ──────────── */
 
 /* ── [E] FAQ 섹션 ────────────────────────────────────────────── */
 const FAQS = [
@@ -1119,7 +1044,7 @@ function FAQSection() {
     const [open, setOpen] = useState<number | null>(null)
     return (
         <section className="py-24 md:py-32 bg-[#FDFCF8]">
-            <div className="container mx-auto px-4 lg:px-8 max-w-3xl">
+            <div className="container mx-auto px-4 lg:px-8 max-w-[24rem]">
                 <motion.div className="text-center mb-14" {...fadeUp}>
                     <EyebrowTag>FAQ</EyebrowTag>
                     <h2 className="text-3xl md:text-4xl font-serif text-[#1a1a19] leading-tight">
@@ -1366,7 +1291,7 @@ const INCLUDED = [
     "수업 자동 녹화 · 클라우드 저장",
     "LMS (숙제 · 출결 · 성적 · 평가)",
     "학습 데이터 리포트 및 분석",
-    "1:1부터 수백 명 대형 강의까지",
+    "1:1부터 최대 1,000명 대형 강의까지",
     "12개 언어 지원 · 160개국 서비스",
     "AI 첨삭 · AI 과제 생성 · AI 교안",
     "전담 고객 지원 · 전문가 온보딩",
@@ -1388,7 +1313,7 @@ function PricingValueSection() {
                     </p>
                 </motion.div>
 
-                <div className="grid lg:grid-cols-2 gap-10 items-center">
+                <div className="grid lg:grid-cols-[2fr_3fr] gap-10">
                     {/* Included list */}
                     <motion.div
                         initial={{ opacity: 0, x: -20 }}
@@ -1426,30 +1351,77 @@ function PricingValueSection() {
                         className="space-y-5"
                     >
                         {[
-                            { label: "일반 화상 도구", note: "Zoom · Teams 등", cost: "~₩20,000/월", line: true },
-                            { label: "+ LMS 별도 구독", note: "Classting · Google Classroom Pro 등", cost: "~₩30,000/월", line: true },
-                            { label: "+ 녹화 · 클라우드 스토리지", note: "별도 저장소 + 관리 비용", cost: "~₩10,000/월", line: true },
-                            { label: "합계", note: "그래도 기능은 분산됨", cost: "₩60,000+/월", line: false, highlight: true },
+                            { label: "일반 화상 도구", note: "Zoom · Teams 등", scope: "화상 수업만", line: true },
+                            { label: "+ LMS 별도 구독", note: "Canvas · Classting Pro 등", scope: "출결 · 과제 · 평가만", line: true },
+                            { label: "+ 녹화 · 클라우드 스토리지", note: "별도 저장소 + 관리", scope: "영상 보관만", line: true },
+                            { label: "+ AI 기능 별도 구독", note: "ChatGPT Team · AI 첨삭 도구 등", scope: "AI 도구만", line: true },
+                            { label: "ClassIn 하나로", note: "도구마다 다른 계약 · 다른 로그인 없이", scope: "전부 한 번에", line: false, highlight: true },
                         ].map((row) => (
-                            <div key={row.label} className={`flex items-center justify-between pb-4 ${row.line ? "border-b border-slate-100" : ""} ${row.highlight ? "bg-[#F0FDF9] rounded-xl px-4 py-3 -mx-4" : ""}`}>
+                            <div key={row.label} className={`flex items-center justify-between ${row.line ? "pb-4 border-b border-slate-100" : ""} ${row.highlight ? "bg-[#F0FDF9] border border-[#22A366]/15 rounded-2xl px-6 py-6 -mx-4 mt-2" : ""}`}>
                                 <div>
-                                    <p className={`text-sm font-semibold ${row.highlight ? "text-[#22A366]" : "text-slate-700"}`}>{row.label}</p>
-                                    <p className="text-xs text-slate-400">{row.note}</p>
+                                    <p className={`font-bold ${row.highlight ? "text-xl text-[#22A366]" : "text-sm font-semibold text-slate-700"}`}>{row.label}</p>
+                                    <p className={`${row.highlight ? "text-sm text-slate-500" : "text-xs text-slate-400"}`}>{row.note}</p>
                                 </div>
-                                <p className={`font-bold font-mono text-sm ${row.highlight ? "text-[#22A366]" : "text-slate-500 line-through"}`}>{row.cost}</p>
+                                <p className={`font-bold ${row.highlight ? "text-lg text-[#22A366]" : "text-xs text-slate-500"}`}>{row.scope}</p>
                             </div>
                         ))}
-
-                        <div className="bg-[#1a1a19] text-white rounded-2xl p-6 text-center mt-4">
-                            <p className="text-slate-400 text-sm mb-1">ClassIn 하나로</p>
-                            <p className="text-2xl font-serif font-bold text-white mb-1">위의 모든 것 + AI 기능까지</p>
-                            <p className="text-[#22A366] text-sm font-bold mb-5">기관 규모에 맞춘 도입 상담</p>
-                            <Link href="/contact" className="inline-flex items-center gap-2 bg-[#22A366] hover:bg-[#1B8A55] text-white font-bold text-sm px-6 py-2.5 rounded-full transition-all hover:scale-105">
-                                도입 문의하기 <ArrowRight className="w-4 h-4" />
-                            </Link>
-                        </div>
                     </motion.div>
                 </div>
+
+                {/* Full-width pricing callout */}
+                <motion.div
+                    initial={{ opacity: 0, y: 20 }}
+                    whileInView={{ opacity: 1, y: 0 }}
+                    viewport={{ once: true }}
+                    transition={{ duration: 0.6, delay: 0.2 }}
+                    className="bg-[#1a1a19] text-white rounded-2xl px-6 md:px-10 py-6 md:py-7 mt-10"
+                >
+                    <div className="flex flex-col lg:flex-row lg:items-center lg:justify-between gap-6 lg:gap-10">
+                        {/* Heading */}
+                        <div className="text-center lg:text-left lg:shrink-0">
+                            <p className="text-slate-300 text-sm font-bold uppercase tracking-[0.18em] mb-1.5">ClassIn 하나로</p>
+                            <p className="font-serif font-bold text-white leading-tight">
+                                <span className="text-2xl md:text-3xl">이 모든 기능</span>
+                                <span className="text-sm md:text-base font-medium text-slate-300 ml-2 align-middle">+ AI 기능까지</span>
+                            </p>
+                        </div>
+
+                        {/* Tier prices + note */}
+                        <div className="flex flex-col items-center gap-2 lg:flex-1">
+                            <div className="flex items-center gap-5 sm:gap-7">
+                                <div className="text-center">
+                                    <p className="text-[11px] text-slate-400 uppercase tracking-[0.16em] mb-1">Standard</p>
+                                    <p className="text-lg font-bold text-white tabular-nums whitespace-nowrap">
+                                        $99<span className="text-xs text-slate-300 font-medium ml-0.5">/계정/월</span>
+                                    </p>
+                                </div>
+                                <div className="w-px h-10 bg-white/10" />
+                                <div className="text-center">
+                                    <p className="text-[11px] text-slate-400 uppercase tracking-[0.16em] mb-1">Plus</p>
+                                    <p className="text-lg font-bold text-white tabular-nums whitespace-nowrap">
+                                        $199<span className="text-xs text-slate-300 font-medium ml-0.5">/계정/월</span>
+                                    </p>
+                                </div>
+                                <div className="w-px h-10 bg-white/10" />
+                                <div className="text-center">
+                                    <p className="text-[11px] text-slate-400 uppercase tracking-[0.16em] mb-1">Enterprise</p>
+                                    <p className="text-lg font-bold text-white whitespace-nowrap">맞춤 견적</p>
+                                </div>
+                            </div>
+                            <p className="text-[#22A366] text-xs font-medium">연 결제 시 약 2개월 절감</p>
+                        </div>
+
+                        {/* CTAs */}
+                        <div className="flex flex-col sm:flex-row gap-2 justify-center lg:justify-end lg:shrink-0">
+                            <Link href={CHECKOUT_HREF} className="inline-flex items-center justify-center gap-2 rounded-full bg-[#009060] px-5 py-2.5 text-sm font-bold text-white transition-all hover:scale-105 hover:bg-[#007A52] whitespace-nowrap">
+                                {CHECKOUT_CTA_LABEL} <ArrowRight className="w-4 h-4" />
+                            </Link>
+                            <Link href="/contact#contact-form" className="inline-flex items-center justify-center gap-2 rounded-full border border-white/20 bg-white/[0.04] px-5 py-2.5 text-sm font-bold text-white transition-all hover:bg-white/[0.08] whitespace-nowrap">
+                                도입 상담
+                            </Link>
+                        </div>
+                    </div>
+                </motion.div>
             </div>
         </section>
     )
@@ -1478,28 +1450,34 @@ export default function ProductPage() {
             {/* ================================================================
                 HERO — "수업을, 더 수업답게"
             ================================================================ */}
-            <section className="relative overflow-hidden">
-                {/* Dot pattern background */}
-                <div className="absolute inset-0 pointer-events-none" style={{
-                    backgroundImage: "radial-gradient(circle, rgba(34,163,102,0.06) 1px, transparent 1px)",
-                    backgroundSize: "24px 24px",
-                }} />
-                <div className="absolute inset-0 bg-gradient-to-b from-[#FDFCF8] via-[#F0FDF9]/60 to-[#FDFCF8] pointer-events-none" />
+            <section className="relative h-[calc(100svh-8rem)] min-h-[560px] max-h-[760px] overflow-hidden bg-[#07110d] text-white">
+                <video
+                    className="absolute inset-0 h-full w-full object-cover"
+                    src={HERO_CLASSROOM_VIDEO_SRC}
+                    autoPlay
+                    muted
+                    loop
+                    playsInline
+                    preload="metadata"
+                    aria-hidden="true"
+                />
+                <div className="absolute inset-0 bg-[linear-gradient(180deg,rgba(3,10,8,0.70)_0%,rgba(3,10,8,0.42)_42%,rgba(3,10,8,0.78)_100%)] pointer-events-none" />
+                <div className="absolute inset-0 bg-[radial-gradient(circle_at_center,rgba(3,10,8,0.10)_0%,rgba(3,10,8,0.50)_78%)] pointer-events-none" />
 
-                <div className="container mx-auto px-4 lg:px-8 pt-12 md:pt-24 pb-8 md:pb-16 relative">
+                <div className="container relative z-10 mx-auto flex h-full items-center px-4 py-16 lg:px-8 md:py-20">
                     <div className="max-w-4xl mx-auto text-center">
                         <motion.div initial={{ opacity: 0, y: 30 }} animate={{ opacity: 1, y: 0 }} transition={{ duration: 0.7 }}>
-                            <div className="inline-flex items-center gap-2.5 px-5 py-2 rounded-full bg-white border border-[rgba(34,163,102,0.2)] shadow-[0_2px_12px_rgba(34,163,102,0.1)] text-[#22A366] text-xs font-bold mb-8 tracking-widest uppercase">
+                            <div className="inline-flex items-center gap-2.5 px-5 py-2 rounded-full bg-white/12 border border-white/18 shadow-[0_2px_18px_rgba(0,0,0,0.18)] text-[#6EE7B7] text-xs font-bold mb-8 tracking-widest uppercase backdrop-blur-sm">
                                 <span className="w-1.5 h-1.5 rounded-full bg-[#22A366] animate-pulse"></span>
                                 교육 전용 플랫폼
                             </div>
 
-                            <h1 className="text-4xl sm:text-5xl lg:text-6xl xl:text-7xl font-serif leading-[1.1] tracking-tight mb-8 text-[#1a1a19]">
+                            <h1 className="text-4xl sm:text-5xl lg:text-6xl xl:text-7xl font-sans font-bold leading-[1.1] mb-8 text-white drop-shadow-[0_3px_20px_rgba(0,0,0,0.35)]">
                                 수업을, 더{" "}
-                                <span className="text-[#22A366]">수업답게</span>
+                                <span className="text-[#6EE7B7]">수업답게</span>
                             </h1>
 
-                            <p className="text-xl md:text-2xl text-slate-500 leading-relaxed font-medium max-w-2xl mx-auto mb-8">
+                            <p className="text-xl md:text-2xl text-white/78 leading-relaxed font-medium max-w-2xl mx-auto mb-8 drop-shadow-[0_2px_14px_rgba(0,0,0,0.35)]">
                                 30여 가지 수업 도구와 10가지 수업 활동으로
                                 <br className="hidden md:block" />
                                 교사와 학생이 함께 만들어가는 교육 전용 플랫폼.
@@ -1513,23 +1491,23 @@ export default function ProductPage() {
                                     { value: metric150, suffix: "+", label: "지원 국가" },
                                     { value: metric2400.toLocaleString(), suffix: "+", label: "도입 학원", raw: true },
                                 ].map((m, i) => (
-                                    <motion.div key={i} initial={{ opacity: 0, y: 15 }} animate={heroMetricInView ? { opacity: 1, y: 0 } : {}} transition={{ delay: i * 0.1 + 0.3 }} className="text-center bg-white border border-[rgba(0,0,0,0.07)] rounded-2xl px-5 py-3 shadow-[0_2px_12px_rgba(0,0,0,0.05)]">
-                                        <div className="text-2xl md:text-3xl font-serif font-bold text-[#22A366]">
+                                    <motion.div key={i} initial={{ opacity: 0, y: 15 }} animate={heroMetricInView ? { opacity: 1, y: 0 } : {}} transition={{ delay: i * 0.1 + 0.3 }} className="min-w-[84px] text-center">
+                                        <div className="text-2xl md:text-3xl font-sans font-bold tabular-nums text-[#6EE7B7] drop-shadow-[0_2px_12px_rgba(0,0,0,0.35)]">
                                             {m.raw ? m.value : m.value}{m.suffix}
                                         </div>
-                                        <div className="text-[11px] md:text-xs text-slate-400 mt-0.5 font-semibold tracking-wide">{m.label}</div>
+                                        <div className="text-[11px] md:text-xs text-white/62 mt-0.5 font-semibold">{m.label}</div>
                                     </motion.div>
                                 ))}
                             </div>
 
                             <div className="flex flex-wrap items-center justify-center gap-4">
-                                <Button asChild className="bg-[#22A366] hover:bg-[#1B8A55] text-white rounded-full px-8 h-14 text-base font-bold shadow-[0_8px_20px_rgba(34,163,102,0.3)] hover:shadow-[0_12px_25px_rgba(34,163,102,0.4)] transition-all hover:scale-105 group">
+                                <Button asChild className="h-14 rounded-full bg-[#009060] px-8 text-base font-bold text-white shadow-[0_8px_20px_rgba(0,144,96,0.24)] transition-all hover:scale-105 hover:bg-[#007A52] hover:shadow-[0_12px_25px_rgba(0,144,96,0.32)] group">
                                     <Link href={CHECKOUT_HREF}>
                                     {CHECKOUT_CTA_LABEL}
                                     <ArrowRight className="w-4 h-4 ml-2 group-hover:translate-x-1 transition-transform" />
                                     </Link>
                                 </Button>
-                                <Button asChild variant="outline" className="rounded-full px-8 h-14 text-base font-bold border-slate-300 text-slate-700 hover:bg-slate-50 hover:border-slate-400 transition-all hover:scale-105">
+                                <Button asChild variant="outline" className="rounded-full px-8 h-14 text-base font-bold border-white/35 bg-white/8 text-white backdrop-blur-sm hover:bg-white/16 hover:border-white/55 transition-all hover:scale-105">
                                     <a href={BROCHURE_URL} target="_blank" rel="noopener noreferrer">
                                     <Play className="w-4 h-4 mr-2" />
                                     서비스 소개서 보기
@@ -1538,92 +1516,6 @@ export default function ProductPage() {
                             </div>
                         </motion.div>
                     </div>
-                </div>
-
-                {/* Hero classroom mockup */}
-                <div className="container mx-auto px-4 lg:px-8 pb-12 md:pb-24 relative">
-                    <motion.div
-                        initial={{ opacity: 0, y: 50, scale: 0.95 }}
-                        animate={{ opacity: 1, y: 0, scale: 1 }}
-                        transition={{ duration: 0.9, delay: 0.4, type: "spring", bounce: 0.15 }}
-                        className="max-w-5xl mx-auto"
-                    >
-                        <div className="relative bg-white rounded-2xl shadow-[0_30px_60px_rgba(0,0,0,0.08)] border border-slate-100 p-2 overflow-hidden">
-                            <div className="bg-slate-50 rounded-xl overflow-hidden border border-slate-100 flex h-[300px] sm:h-[400px] lg:h-[480px]">
-                                {/* Sidebar */}
-                                <div className="w-1/4 border-r border-slate-200 bg-white p-4 hidden sm:flex flex-col">
-                                    <div className="w-20 h-3 bg-slate-200 rounded mb-6"></div>
-                                    <div className="space-y-3 flex-1">
-                                        {[1, 2, 3, 4, 5, 6].map(i => (
-                                            <div key={i} className="flex items-center gap-3">
-                                                <div className={`w-6 h-6 rounded-md ${i === 1 ? "bg-[#22A366]/10" : "bg-slate-100"}`}></div>
-                                                <div className={`h-3 rounded ${i === 1 ? "w-16 bg-[#22A366]/20" : "w-14 bg-slate-100"}`}></div>
-                                            </div>
-                                        ))}
-                                    </div>
-                                    <div className="flex items-center gap-2 pt-4 border-t border-slate-100">
-                                        <div className="w-8 h-8 rounded-full bg-gradient-to-br from-[#22A366] to-green-500"></div>
-                                        <div className="w-16 h-3 bg-slate-100 rounded"></div>
-                                    </div>
-                                </div>
-                                {/* Main content area — blackboard */}
-                                <div className="flex-1 bg-[#1e1e1e] p-4 sm:p-6 flex flex-col">
-                                    {/* Toolbar */}
-                                    <div className="flex items-center gap-2 mb-4 pb-3 border-b border-white/10">
-                                        {["#22A366", "#3B82F6", "#10B981", "#F59E0B"].map(c => (
-                                            <div key={c} className="w-5 h-5 rounded-full border-2 border-white/20" style={{ backgroundColor: c }} />
-                                        ))}
-                                        <div className="ml-auto flex gap-2">
-                                            <div className="px-2 py-1 rounded bg-white/10 text-[10px] text-white/40 font-mono">T 2:30</div>
-                                            <div className="px-2 py-1 rounded bg-[#22A366]/20 text-[10px] text-[#22A366] font-mono">LIVE</div>
-                                        </div>
-                                    </div>
-                                    {/* Board content with animated lines */}
-                                    <div className="flex-1 relative">
-                                        <svg className="absolute inset-0 w-full h-full" viewBox="0 0 400 250" fill="none">
-                                            <motion.path d="M30,40 Q80,20 130,45 T230,35" stroke="white" strokeWidth="2" strokeOpacity="0.3" initial={{ pathLength: 0 }} animate={{ pathLength: 1 }} transition={{ duration: 2, delay: 1 }} />
-                                            <motion.path d="M30,80 Q100,60 170,85 T300,70" stroke="#3B82F6" strokeWidth="2" strokeOpacity="0.4" initial={{ pathLength: 0 }} animate={{ pathLength: 1 }} transition={{ duration: 2, delay: 1.5 }} />
-                                            <motion.path d="M30,120 L120,120 L120,180 L200,180" stroke="#22A366" strokeWidth="2" strokeOpacity="0.35" initial={{ pathLength: 0 }} animate={{ pathLength: 1 }} transition={{ duration: 2, delay: 2 }} />
-                                            <motion.path d="M250,130 Q280,110 310,135 T370,120" stroke="#10B981" strokeWidth="2" strokeOpacity="0.4" initial={{ pathLength: 0 }} animate={{ pathLength: 1 }} transition={{ duration: 1.5, delay: 2.5 }} />
-                                        </svg>
-                                        {/* Animated cursors */}
-                                        <motion.div animate={{ x: [120, 160, 180], y: [70, 55, 75] }} transition={{ duration: 3, repeat: Infinity, repeatType: "reverse" }} className="absolute w-3 h-3">
-                                            <div className="w-3 h-3 rounded-full bg-[#3B82F6] animate-cursor-blink shadow-[0_0_8px_rgba(59,130,246,0.5)]" />
-                                            <div className="absolute -top-4 left-3 text-[8px] text-[#3B82F6] font-mono whitespace-nowrap">학생 B</div>
-                                        </motion.div>
-                                        <motion.div animate={{ x: [250, 280, 300], y: [115, 105, 125] }} transition={{ duration: 4, repeat: Infinity, repeatType: "reverse", delay: 1 }} className="absolute w-3 h-3">
-                                            <div className="w-3 h-3 rounded-full bg-[#10B981] animate-cursor-blink shadow-[0_0_8px_rgba(16,185,129,0.5)]" />
-                                            <div className="absolute -top-4 left-3 text-[8px] text-[#10B981] font-mono whitespace-nowrap">학생 C</div>
-                                        </motion.div>
-                                    </div>
-                                    {/* Bottom bar */}
-                                    <div className="flex items-center justify-between pt-3 border-t border-white/10">
-                                        <div className="flex -space-x-2">
-                                            {[
-                                                "from-[#22A366] to-green-500",
-                                                "from-blue-500 to-cyan-400",
-                                                "from-green-500 to-emerald-400",
-                                                "from-purple-500 to-pink-400",
-                                            ].map((g, i) => (
-                                                <div key={i} className={`w-7 h-7 rounded-full bg-gradient-to-br ${g} border-2 border-[#1e1e1e] flex items-center justify-center text-[8px] text-white font-bold`}>
-                                                    {["T", "A", "B", "C"][i]}
-                                                </div>
-                                            ))}
-                                        </div>
-                                        <div className="text-xs text-white/20 font-mono">4명 참여 중</div>
-                                    </div>
-                                </div>
-                            </div>
-                        </div>
-
-                        {/* Floating elements */}
-                        <motion.div animate={{ y: [0, -10, 0] }} transition={{ repeat: Infinity, duration: 4 }} className="absolute -left-4 lg:-left-10 top-12 lg:top-20 w-14 h-14 bg-white rounded-2xl shadow-xl flex items-center justify-center border border-slate-50 z-20">
-                            <PenTool className="w-7 h-7 text-[#22A366]" />
-                        </motion.div>
-                        <motion.div animate={{ y: [0, 12, 0] }} transition={{ repeat: Infinity, duration: 5, delay: 1 }} className="absolute -right-4 lg:-right-10 top-28 lg:top-40 w-12 h-12 bg-white rounded-2xl shadow-xl flex items-center justify-center border border-slate-50 z-20">
-                            <Users className="w-6 h-6 text-[#084734]" />
-                        </motion.div>
-                    </motion.div>
                 </div>
             </section>
 
@@ -1663,14 +1555,14 @@ export default function ProductPage() {
                                     </thead>
                                     <tbody>
                                         {[
-                                            { label: "주요 목적", zoom: "비즈니스 회의 · 정보 전달", classin: "실시간 상호작용 · 교육" },
+                                            { label: "주요 목적", zoom: "비즈니스 회의 · 정보 전달", classin: "실시간 상호작용 수업 · 교육" },
                                             { label: "판서 기능", zoom: "기본적인 그리기 위주", classin: "레이어 기반 전문 교구 활용" },
                                             { label: "학생 참여", zoom: "채팅 또는 음소거 해제", classin: "교재 직접 조작 · 능동 참여" },
                                             { label: "수업 도구", zoom: "화면 공유 + 기본 그리기", classin: "30여 가지 인터랙티브 도구" },
                                             { label: "수업 활동", zoom: "없음 (별도 앱 필요)", classin: "10가지 참여형 수업 활동" },
-                                            { label: "학습 관리", zoom: "별도 LMS 필요", classin: "플랫폼 내 학습 데이터 축적" },
+                                            { label: "학습 관리", zoom: "별도 LMS 필요", classin: "자체 LMS 기능 탑재" },
                                             { label: "수업 형태", zoom: "화상 회의 1가지", classin: "1:1 ~ 수백 명 대형 강의" },
-                                            { label: "녹화 · 복습", zoom: "파일 수동 관리", classin: "클라우드 자동 저장 · 복습" },
+                                            { label: "녹화 · 복습", zoom: "파일 수동 관리", classin: "클라우드 자동 녹화& 업로드" },
                                         ].map((row, i) => (
                                             <motion.tr
                                                 key={i}
@@ -1738,17 +1630,19 @@ export default function ProductPage() {
                             </div>
                         </div>
 
-                        {/* Blackboard classroom image */}
+                        {/* Blackboard classroom video */}
                         <div className="flex-1 w-full max-w-lg">
                             <motion.div {...fadeUp} className="relative">
                                 <div className="relative aspect-[3/2] overflow-hidden rounded-3xl border border-slate-200/80 bg-white shadow-[0_24px_60px_rgba(15,23,42,0.14)]">
-                                    <Image
-                                        src="/images/product/sw/two-way-blackboard.jpg"
-                                        alt="교사와 학생이 함께 참여하는 ClassIn 양방향 블랙보드 수업 장면"
-                                        fill
-                                        className="object-cover"
-                                        sizes="(min-width: 1024px) 40vw, 100vw"
-                                        priority={false}
+                                    <video
+                                        className="absolute inset-0 h-full w-full object-cover"
+                                        src={BLACKBOARD_VIDEO_SRC}
+                                        autoPlay
+                                        muted
+                                        loop
+                                        playsInline
+                                        preload="metadata"
+                                        aria-label="교사와 학생이 함께 참여하는 ClassIn 양방향 블랙보드 수업 장면"
                                     />
                                     <div className="absolute inset-0 bg-gradient-to-t from-[#084734]/18 via-transparent to-white/12" />
                                     <div className="absolute left-5 top-5 rounded-full border border-white/70 bg-white/88 px-3 py-1.5 text-xs font-semibold text-[#084734] shadow-[0_10px_30px_rgba(15,23,42,0.08)] backdrop-blur-sm">
@@ -2083,7 +1977,7 @@ export default function ProductPage() {
 
             <PricingValueSection />
 
-            <OnboardingSection />
+            <OnboardingRoadmap />
 
             <FAQSection />
 

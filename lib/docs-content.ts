@@ -9,6 +9,7 @@ import {
   type DocArticle,
   type DocCategory,
   type DocCategoryId,
+  type DocResource,
   type DocSection,
 } from "@/lib/docs"
 
@@ -74,6 +75,17 @@ function isDocSection(value: unknown): value is DocSection {
   return typeof section.heading === "string" && typeof section.body === "string" && hasValidSteps
 }
 
+function isDocResource(value: unknown): value is DocResource {
+  if (!value || typeof value !== "object") return false
+
+  const resource = value as Partial<DocResource>
+  return (
+    typeof resource.label === "string" &&
+    typeof resource.href === "string" &&
+    (resource.description === undefined || typeof resource.description === "string")
+  )
+}
+
 function getContentJson(value: unknown): Record<string, unknown> {
   return value && typeof value === "object" && !Array.isArray(value)
     ? (value as Record<string, unknown>)
@@ -102,6 +114,14 @@ function getSections(contentJson: Record<string, unknown>, fallbackBody: string)
       body: fallbackBody,
     },
   ]
+}
+
+function getResources(contentJson: Record<string, unknown>): DocResource[] | undefined {
+  const resources = contentJson.resources
+  if (!Array.isArray(resources)) return undefined
+
+  const validResources = resources.filter(isDocResource)
+  return validResources.length > 0 ? validResources : undefined
 }
 
 function getDateOnly(value: string | null | undefined) {
@@ -187,6 +207,7 @@ async function fetchDocsContentFromSupabase(): Promise<DocsContent> {
       keywords: row.keywords ?? [],
       chatbotSummary: row.chatbot_summary ?? row.description,
       sections: getSections(contentJson, row.content_markdown ?? row.description),
+      resources: getResources(contentJson),
       relatedSlugs: relationsByArticleId.get(row.id),
     } satisfies DocArticle
   })
@@ -265,4 +286,51 @@ export function listListedDocsFromContent(content: DocsContent) {
 
 export function getDocPathFromContent(doc: Pick<DocArticle, "category" | "slug">) {
   return getDocPath(doc)
+}
+
+interface DocsRedirectRow {
+  to_path: string | null
+  to_article_id: string | null
+  http_status: number
+}
+
+interface DocsRedirectTarget {
+  toPath: string
+  httpStatus: 301 | 302 | 307 | 308
+}
+
+export async function resolveDocsRedirect(
+  fromPath: string
+): Promise<DocsRedirectTarget | null> {
+  try {
+    const supabase = createSupabaseAdminClient()
+    const { data, error } = await supabase
+      .from("docs_redirects")
+      .select("to_path, to_article_id, http_status")
+      .eq("from_path", fromPath)
+      .maybeSingle()
+
+    if (error || !data) return null
+    const row = data as DocsRedirectRow
+
+    let toPath = row.to_path
+    if (!toPath && row.to_article_id) {
+      const { data: articleRow } = await supabase
+        .from("docs_articles")
+        .select("category_id, slug")
+        .eq("id", row.to_article_id)
+        .maybeSingle()
+      if (articleRow?.category_id && articleRow?.slug) {
+        toPath = `/docs/${articleRow.category_id}/${articleRow.slug}`
+      }
+    }
+
+    if (!toPath) return null
+    const status = [301, 302, 307, 308].includes(row.http_status)
+      ? (row.http_status as 301 | 302 | 307 | 308)
+      : 301
+    return { toPath, httpStatus: status }
+  } catch {
+    return null
+  }
 }

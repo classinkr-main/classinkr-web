@@ -3,6 +3,7 @@ import "./globals.css";
 import { ConditionalHeader } from "@/components/sections/ConditionalHeader";
 import { ConditionalFooter } from "@/components/sections/ConditionalFooter";
 import { FloatingChatbot } from "@/components/ui/FloatingChatbot";
+import { ChannelTalkLoader } from "@/components/ui/ChannelTalkLoader";
 import { MobileFloatingCTA } from "@/components/ui/MobileFloatingCTA";
 import { AnalyticsProviders } from "@/components/AnalyticsProviders";
 import { ToastProvider } from "@/components/ui/toast";
@@ -25,8 +26,8 @@ export const metadata: Metadata = {
   },
   description: "데이터 기반의 학원 관리 플랫폼 Classin으로 교육 품질을 표준화하고, 행정 업무를 자동화하며, 학습 성과를 보장하세요.",
   icons: {
-    icon: "/icon",
-    apple: "/apple-icon",
+    icon: "/icon.png",
+    apple: "/apple-icon.png",
   },
   openGraph: {
     title: DEFAULT_SITE_TITLE,
@@ -74,6 +75,7 @@ export default function RootLayout({
           </main>
           <ConditionalFooter />
           <FloatingChatbot />
+          <ChannelTalkLoader />
           <MobileFloatingCTA />
           <AnalyticsProviders />
         </ToastProvider>

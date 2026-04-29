@@ -72,13 +72,13 @@ function LeadDrawer({
   onAddSubscriber?: (lead: LeadRecord) => void
 }) {
   return (
-    <div className="fixed inset-0 z-40 flex justify-end" onClick={onClose}>
+    <div className="fixed inset-0 z-40 flex items-end justify-center bg-black/20 backdrop-blur-[2px] sm:items-stretch sm:justify-end sm:bg-transparent sm:backdrop-blur-0" onClick={onClose}>
       <div
-        className="w-[420px] h-full bg-white shadow-2xl flex flex-col overflow-y-auto"
+        className="flex max-h-[calc(100dvh-4rem)] w-full flex-col overflow-y-auto rounded-t-2xl bg-white shadow-2xl sm:h-full sm:max-h-none sm:w-[420px] sm:rounded-none"
         onClick={(e) => e.stopPropagation()}
       >
         {/* 헤더 */}
-        <div className="flex items-center justify-between px-6 py-4 border-b border-[#e8e8e4]">
+        <div className="flex items-center justify-between border-b border-[#e8e8e4] px-4 py-4 sm:px-6">
           <div>
             <p className="font-semibold text-[#111110]">{lead.name || "(이름 없음)"}</p>
             <p className="text-[12px] text-[#1a1a1a]/40">{lead.org || "학원명 없음"}</p>
@@ -89,7 +89,7 @@ function LeadDrawer({
         </div>
 
         {/* 본문 */}
-        <div className="flex-1 px-6 py-5 space-y-5">
+        <div className="flex-1 space-y-5 px-4 py-5 sm:px-6">
           {/* 상태 + 유입경로 */}
           <div className="flex gap-2">
             <span className={`px-2.5 py-1 rounded-full text-[11px] font-semibold ${STATUS_COLOR[lead.status]}`}>
@@ -123,7 +123,7 @@ function LeadDrawer({
           </div>
 
           {/* 상세 정보 */}
-          <div className="grid grid-cols-2 gap-3">
+          <div className="grid gap-3 sm:grid-cols-2">
             {lead.role && (
               <div className="bg-[#FAFAF8] rounded-lg p-3">
                 <p className="text-[10px] text-[#1a1a1a]/30 mb-1">직책</p>
@@ -161,7 +161,7 @@ function LeadDrawer({
 
         {/* 푸터 */}
         {lead.email && onAddSubscriber && (
-          <div className="px-6 py-4 border-t border-[#e8e8e4]">
+          <div className="border-t border-[#e8e8e4] px-4 py-4 sm:px-6">
             <Button
               size="sm"
               className="w-full bg-[#084734] hover:bg-[#084734]/90 text-white"
@@ -272,7 +272,7 @@ export default function LeadSegmentView({ leads, loading, onRefresh, onSendToSeg
       </div>
 
       {/* ── 결과 헤더 + 액션 ── */}
-      <div className="flex items-center justify-between">
+      <div className="flex flex-col gap-3 sm:flex-row sm:items-center sm:justify-between">
         <div className="flex items-center gap-2">
           <p className="text-[13px] text-[#1a1a1a]/60">
             <span className="font-semibold text-[#111110]">{filtered.length}건</span> 표시 중
@@ -293,7 +293,7 @@ export default function LeadSegmentView({ leads, loading, onRefresh, onSendToSeg
           size="sm"
           disabled={!hasFilter}
           onClick={() => onSendToSegment(buildSegmentTags())}
-          className="bg-[#084734] hover:bg-[#084734]/90 text-white disabled:opacity-40"
+          className="w-full bg-[#084734] text-white hover:bg-[#084734]/90 disabled:opacity-40 sm:w-auto"
         >
           <Send className="w-3.5 h-3.5 mr-1.5" />
           이 세그먼트에 이메일 발송
@@ -308,7 +308,7 @@ export default function LeadSegmentView({ leads, loading, onRefresh, onSendToSeg
           </div>
         ) : (
           <div className="overflow-x-auto">
-            <table className="w-full text-sm">
+            <table className="min-w-[620px] w-full text-sm">
               <thead>
                 <tr className="border-b border-[#e8e8e4] text-left">
                   <th className="py-3 px-4 text-[11px] font-medium text-[#1a1a1a]/40">신청일</th>

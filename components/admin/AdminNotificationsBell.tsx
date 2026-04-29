@@ -25,7 +25,11 @@ function formatRelativeTime(value: string) {
   return `${diffDays}d ago`
 }
 
-export default function AdminNotificationsBell() {
+interface BellProps {
+  placement?: "floating" | "inline"
+}
+
+export default function AdminNotificationsBell({ placement = "floating" }: BellProps = {}) {
   const router = useRouter()
   const panelRef = useRef<HTMLDivElement | null>(null)
   const [open, setOpen] = useState(false)
@@ -154,24 +158,34 @@ export default function AdminNotificationsBell() {
     [router]
   )
 
+  const wrapperClass = placement === "inline"
+    ? "relative"
+    : "fixed right-3 top-2.5 z-50 lg:hidden"
+  const buttonClass = placement === "inline"
+    ? "relative flex h-8 w-8 items-center justify-center rounded-md text-[#111110] transition-colors hover:bg-[#f5f5f2]"
+    : "relative flex h-11 w-11 items-center justify-center rounded-md border border-[#e8e8e4] bg-white text-[#111110] shadow-sm transition-colors hover:bg-[#f7f7f4]"
+  const panelClass = placement === "inline"
+    ? "fixed left-3 top-16 max-h-[calc(100dvh-5rem)] overflow-hidden rounded-[16px] border border-[#e8e8e4] bg-white shadow-2xl lg:absolute lg:left-auto lg:right-[-380px] lg:top-0 lg:mt-0 lg:w-[360px] lg:rounded-[16px] z-50"
+    : "fixed inset-x-3 top-16 max-h-[calc(100dvh-5rem)] overflow-hidden rounded-[16px] border border-[#e8e8e4] bg-white shadow-2xl"
+
   return (
-    <div className="fixed right-5 top-4 z-50" ref={panelRef}>
+    <div className={wrapperClass} ref={panelRef}>
       <button
         type="button"
         onClick={() => setOpen((current) => !current)}
-        className="relative flex h-11 w-11 items-center justify-center rounded-2xl border border-[#e8e8e4] bg-white text-[#111110] shadow-sm transition-colors hover:bg-[#f7f7f4]"
+        className={buttonClass}
         aria-label="Open notifications"
       >
         <Bell className="h-4 w-4" />
         {unreadCount > 0 ? (
-          <span className="absolute -right-1 -top-1 min-w-[20px] rounded-full bg-[#111110] px-1.5 py-0.5 text-[10px] font-semibold text-white">
+          <span className="absolute -right-1 -top-1 min-w-[18px] rounded-full bg-[#111110] px-1 py-0.5 text-[9px] font-semibold text-white">
             {unreadCount > 99 ? "99+" : unreadCount}
           </span>
         ) : null}
       </button>
 
       {open ? (
-        <div className="mt-3 w-[360px] overflow-hidden rounded-[24px] border border-[#e8e8e4] bg-white shadow-2xl">
+        <div className={panelClass}>
           <div className="flex items-center justify-between border-b border-[#efefea] px-5 py-4">
             <div>
               <p className="text-[11px] font-medium uppercase tracking-[0.18em] text-[#1a1a1a]/35">
@@ -196,7 +210,7 @@ export default function AdminNotificationsBell() {
             </button>
           </div>
 
-          <div className="max-h-[420px] overflow-y-auto">
+          <div className="max-h-[calc(100dvh-12rem)] overflow-y-auto lg:max-h-[420px]">
             {loading ? (
               <div className="flex items-center justify-center gap-2 px-5 py-10 text-[13px] text-[#1a1a1a]/45">
                 <Loader2 className="h-4 w-4 animate-spin" />

@@ -416,12 +416,18 @@ export interface PartnerDocumentListItem {
   customer_name: string | null;
   deal_title: string;
   document_number: string;
+  title?: string;
   status: string;
   version_count: number;
   total_amount: number | null;
   updated_at: string;
   latest_version_number: number | null;
   share_count: number;
+  latest_share_created_at?: string | null;
+  view_count?: number;
+  last_viewed_at?: string | null;
+  review_confirmed_at?: string | null;
+  accepted_at?: string | null;
   pdf_url: string | null;
 }
 

@@ -37,7 +37,7 @@ export async function POST(
       if (forbidden) return forbidden;
     }
 
-    if (document.status === "pending_approval") {
+    if (ctx.type === "partner" && document.status === "pending_approval") {
       return NextResponse.json(
         { error: "파트너 승인 대기 중인 견적은 공유할 수 없습니다." },
         { status: 403 }
@@ -55,8 +55,18 @@ export async function POST(
         ? ensured.document
         : await updateQuoteDocument(id, { status: "shared" });
 
+    const origin = req.nextUrl.origin;
+    const shareUrl = `${origin}/partner/quote/${ensured.share.token}`;
+
     return NextResponse.json(
-      { quote: nextDocument, version: ensured.version, share: ensured.share },
+      {
+        quote: nextDocument,
+        document: nextDocument,
+        version: ensured.version,
+        share: ensured.share,
+        token: ensured.share.token,
+        shareUrl,
+      },
       { status: 201 }
     );
   } catch (error) {

@@ -14,7 +14,7 @@ import type {
 interface Props {
   customerId: string;
   onClose: () => void;
-  onEdit: (customer: Customer) => void;
+  onEdit?: (customer: Customer) => void;
 }
 
 const STAGE_COLOR: Record<DealStage, string> = {
@@ -166,12 +166,14 @@ export function CustomerDetailSlideOver({ customerId, onClose, onEdit }: Props) 
                 )}
               </div>
               <div className="ml-4 flex shrink-0 items-center gap-2">
-                <button
-                  onClick={() => onEdit(data.customer)}
-                  className="rounded-md border border-[#e8e8e4] bg-[#f5f5f2] px-3 py-1.5 text-xs font-medium text-[#1a1a1a] transition hover:bg-[#ebebea]"
-                >
-                  수정
-                </button>
+                {onEdit && (
+                  <button
+                    onClick={() => onEdit(data.customer)}
+                    className="rounded-md border border-[#e8e8e4] bg-[#f5f5f2] px-3 py-1.5 text-xs font-medium text-[#1a1a1a] transition hover:bg-[#ebebea]"
+                  >
+                    수정
+                  </button>
+                )}
                 <button
                   onClick={onClose}
                   className="flex h-7 w-7 items-center justify-center rounded-md text-[#1a1a1a]/50 transition hover:bg-[#f5f5f2] hover:text-[#1a1a1a]"
