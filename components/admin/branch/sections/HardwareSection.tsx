@@ -139,9 +139,13 @@ export default function HardwareSection({ refreshKey }: { refreshKey: number }) 
         <p className="mb-1.5 text-[11px] font-semibold text-[#615D59]">출고 진행 상태</p>
         <div className="flex flex-wrap gap-2 text-[11px]">
           {Object.keys(data.progress).length === 0 && <span className="text-[#615D59]">데이터 없음</span>}
-          {Object.entries(data.progress).map(([k, v]) => (
-            <span key={k} className="rounded-full bg-[#F6F5F4] px-2.5 py-1 text-[#111110]">{k} {v}대</span>
-          ))}
+          {Object.entries(data.progress)
+            .filter(([k]) => k !== "미정")
+            .sort(([, a], [, b]) => b - a)
+            .slice(0, 5)
+            .map(([k, v]) => (
+              <span key={k} className="rounded-full bg-[#F6F5F4] px-2.5 py-1 text-[#111110]">{k} {v}대</span>
+            ))}
         </div>
       </div>
     </section>

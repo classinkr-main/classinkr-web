@@ -1,5 +1,5 @@
 "use client"
-import { useMemo } from "react"
+import { useMemo, useState } from "react"
 import type { BranchKpiResponse, BranchSummaryResponse } from "../types"
 
 function krw(n: number) {
@@ -44,6 +44,7 @@ function GaugeRing({ value, goal, size = 108, stroke = 9 }: { value: number; goa
 }
 
 function RoadmapGauge({ actual, goal }: { actual: number; goal: number }) {
+  const [hover, setHover] = useState<{ x: number; pct: number } | null>(null)
   const pct = goal ? Math.min(120, (actual / goal) * 100) : 0
   const safe = Math.min(100, pct)
   const milestones = [
@@ -52,6 +53,12 @@ function RoadmapGauge({ actual, goal }: { actual: number; goal: number }) {
     { pct: 75, label: "Push" },
     { pct: 100, label: "Goal" },
   ]
+  const handleMove = (e: React.MouseEvent<HTMLDivElement>) => {
+    const rect = e.currentTarget.getBoundingClientRect()
+    const x = e.clientX - rect.left
+    const ratio = Math.max(0, Math.min(1, x / rect.width))
+    setHover({ x, pct: ratio * 100 })
+  }
   return (
     <div>
       <div className="mb-3 flex items-end justify-between">
@@ -69,7 +76,9 @@ function RoadmapGauge({ actual, goal }: { actual: number; goal: number }) {
         </span>
       </div>
       <div className="relative pb-7">
-        <div className="relative h-[14px] overflow-visible rounded-[7px] bg-[rgba(0,0,0,0.045)]">
+        <div className="group relative h-[14px] overflow-visible rounded-[7px] bg-[rgba(0,0,0,0.045)]"
+          onMouseMove={handleMove}
+          onMouseLeave={() => setHover(null)}>
           <div className="absolute inset-y-0 left-0 rounded-[7px] transition-[width] duration-700"
             style={{
               width: `${safe}%`,
@@ -77,6 +86,16 @@ function RoadmapGauge({ actual, goal }: { actual: number; goal: number }) {
             }} />
           <div className="absolute -top-[3px] h-5 w-5 -translate-x-1/2 rounded-full border-[2.5px] border-[#084734] bg-white"
             style={{ left: `${safe}%`, transition: "left .8s cubic-bezier(.4,0,.2,1)" }} />
+          {hover && (
+            <>
+              <div className="pointer-events-none absolute -top-1 bottom-[-2px] w-px bg-[#084734]/35"
+                style={{ left: hover.x }} />
+              <div className="pointer-events-none absolute -top-9 -translate-x-1/2 whitespace-nowrap rounded-md bg-[#111110] px-2 py-1 text-[10.5px] font-semibold text-white shadow-[0_2px_8px_rgba(0,0,0,0.18)]"
+                style={{ left: hover.x }}>
+                {hover.pct.toFixed(1)}% · ₩{krw((hover.pct / 100) * goal)}
+              </div>
+            </>
+          )}
         </div>
         <div className="relative mt-2 h-5">
           {milestones.map((m) => {
