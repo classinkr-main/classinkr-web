@@ -133,7 +133,7 @@ export default function ManagerScorecard({ team, period, refreshKey }: { team: T
               <span className="rounded-full bg-[#f0f0ec] px-2 py-0.5 text-[10px]">{m.team ?? "?"}</span>
             </div>
             <p className="mt-2 text-[18px] font-bold">{m.achievement_pct.toFixed(0)}%</p>
-            <p className="mt-1 text-[11px] text-[#1a1a1a]/45">실적 ₩{fmt(m.confirmed)} / 목표 ₩{fmt(m.goal)}</p>
+            <p className="mt-1 text-[11px] text-[#1a1a1a]/45">실적 ¥{fmt(m.confirmed)} / 목표 ¥{fmt(m.goal)}</p>
             <p className="mt-2 text-[11px] text-[#1a1a1a]/55">딜 {m.deals_total}건 (확정 {m.deals_confirmed}) · 신규 {m.new_renew.new} · 갱신 {m.new_renew.renew}</p>
             <div className="mt-2 grid grid-cols-5 gap-1 text-[10px]">
               {Object.entries(m.kpi).map(([k, v]) => {

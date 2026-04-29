@@ -6,7 +6,7 @@ async function adminFetch(url: string) {
   const token = (typeof window !== "undefined" ? sessionStorage.getItem("admin_password") : null) ?? ""
   return fetch(url, { headers: { Authorization: `Bearer ${token}` } })
 }
-function krw(n: number) {
+function cny(n: number) {
   if (!Number.isFinite(n)) return "-"
   if (n >= 100_000_000) return `${(n / 100_000_000).toFixed(1).replace(/\.0$/, "")}억`
   if (n >= 10_000) return `${Math.round(n / 10_000)}만`
@@ -101,9 +101,9 @@ function CompareCard({ title, desc, a, b, aTone, bTone }: {
           </div>
           <div className="text-right">
             <p className="text-[13px] font-bold leading-none tracking-[-0.01em]" style={{ color: COLORS.red }}>
-              ¥{krw(row.side.actual)}
+              ¥{cny(row.side.actual)}
             </p>
-            <p className="mt-0.5 text-[9.5px] text-[#615D59]">목표 ¥{krw(row.side.goal)}</p>
+            <p className="mt-0.5 text-[9.5px] text-[#615D59]">목표 ¥{cny(row.side.goal)}</p>
           </div>
         </div>
       ))}
@@ -153,8 +153,8 @@ export default function DealMixSection({ period, refreshKey }: { period: Period;
           <p className="mt-0.5 text-[11px] font-medium text-[#615D59]">제품 · 신규/갱신 · 채널 · 고객규모 — <span className="font-semibold text-[#B43E3E]">빨강 = 확정 매출</span></p>
         </div>
         <div className="text-right">
-          <p className="text-[18px] font-bold leading-none tracking-[-0.01em] text-[#111110]">¥{krw(totalActual)}</p>
-          <p className="mt-1 text-[10.5px] text-[#615D59]">확정 평균 · 잔량 ¥{krw(gap)}</p>
+          <p className="text-[18px] font-bold leading-none tracking-[-0.01em] text-[#111110]">¥{cny(totalActual)}</p>
+          <p className="mt-1 text-[10.5px] text-[#615D59]">확정 평균 · 잔량 ¥{cny(gap)}</p>
         </div>
       </div>
       <div className={`grid gap-[18px] p-5 md:grid-cols-2 ${cardCount >= 4 ? "xl:grid-cols-4" : "lg:grid-cols-3"}`}>

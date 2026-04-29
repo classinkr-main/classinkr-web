@@ -4,7 +4,7 @@ import type { BranchSummaryResponse } from "../types"
 
 const numberFormatter = new Intl.NumberFormat("ko-KR", { maximumFractionDigits: 0 })
 function fmt(n: number) { return numberFormatter.format(n) }
-function krw(n: number) {
+function cny(n: number) {
   if (n >= 100_000_000) return `${(n / 100_000_000).toFixed(1).replace(/\.0$/, "")}억`
   if (n >= 10_000) return `${Math.round(n / 10_000)}만`
   return n.toLocaleString()
@@ -79,14 +79,14 @@ export default function CoreKpiGrid({ data, loading, error }: { data: BranchSumm
     <section>
       <div className="grid grid-cols-2 gap-3 lg:grid-cols-5">
         <StatCard tone="green" icon={<TrendingUp className="h-[18px] w-[18px]" />}
-          label="총 매출 (확정)" value={`₩${krw(data.revenue.confirmed)}`}
-          sub={`목표 ₩${krw(data.revenue.goal)} · ${data.revenue.pacing_pct.toFixed(0)}%`} />
+          label="총 매출 (확정)" value={`¥${cny(data.revenue.confirmed)}`}
+          sub={`목표 ¥${cny(data.revenue.goal)} · ${data.revenue.pacing_pct.toFixed(0)}%`} />
         <StatCard tone="amber" icon={<Sparkles className="h-[18px] w-[18px]" />}
           label="활동 KPI 병목" value={metricLabel(data.bottleneck.metric)}
           sub={`${data.bottleneck.pct.toFixed(0)}% · ${data.bottleneck.worst_member ?? "-"}`} />
         <StatCard tone="olive" icon={<Users className="h-[18px] w-[18px]" />}
           label="가까운 딜" value={`${data.closing.count}건`}
-          sub={`목표 합 ₩${krw(data.closing.total_target)}`} />
+          sub={`목표 합 ¥${cny(data.closing.total_target)}`} />
         <StatCard tone="red" icon={<Calendar className="h-[18px] w-[18px]" />}
           label="행사 (30일)" value={`${data.events_30d.count}건`}
           sub={`지역 ${data.events_30d.regions}개`} />
@@ -98,4 +98,4 @@ export default function CoreKpiGrid({ data, loading, error }: { data: BranchSumm
   )
 }
 
-export { krw, fmt }
+export { cny, fmt }

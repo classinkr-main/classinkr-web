@@ -3,7 +3,7 @@ import Link from "next/link"
 import { Calendar, ExternalLink } from "lucide-react"
 import type { BranchMonthlySeries } from "../types"
 
-function krw(n: number) {
+function cny(n: number) {
   if (!Number.isFinite(n)) return "-"
   if (n >= 100_000_000) return `${(n / 100_000_000).toFixed(1).replace(/\.0$/, "")}억`
   if (n >= 10_000) return `${Math.round(n / 10_000)}만`
@@ -95,7 +95,7 @@ export default function BranchUpcomingDeals({
                   <div className="text-right">
                     {typeof it.amount === "number" ? (
                       <p className="text-[12.5px] font-bold tracking-[-0.01em]" style={{ color: "#1E5DA8" }}>
-                        ₩{krw(it.amount)}
+                        ¥{cny(it.amount)}
                       </p>
                     ) : <span className="text-[10.5px] text-[#615D59]">—</span>}
                     <p className="text-[9.5px] text-[#615D59]">{typeof it.amount === "number" ? "예상" : ""}</p>

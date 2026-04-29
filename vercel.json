@@ -6,11 +6,15 @@
     },
     {
       "path": "/api/cron/sync-branch",
-      "schedule": "0 4 * * *"
+      "schedule": "30 0 * * *"
+    },
+    {
+      "path": "/api/cron/sync-branch",
+      "schedule": "0 8 * * *"
     },
     {
       "path": "/api/cron/sync-branch-insights",
-      "schedule": "0 5 * * *"
+      "schedule": "30 8 * * *"
     }
   ]
 }

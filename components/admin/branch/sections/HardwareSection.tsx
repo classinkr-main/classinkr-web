@@ -108,8 +108,10 @@ function GaugeView({ rows }: { rows: StockRow[] }) {
   )
 }
 
+interface RecentInstall { customer: string; quantity: number; date: string | null }
+
 export default function HardwareSection({ refreshKey }: { refreshKey: number }) {
-  const [data, setData] = useState<{ stock: StockRow[]; sales_monthly: SalesRow[]; progress: Record<string, number> } | null>(null)
+  const [data, setData] = useState<{ stock: StockRow[]; sales_monthly: SalesRow[]; progress: Record<string, number>; recent_installs?: RecentInstall[] } | null>(null)
   const [view, setView] = useState<"table" | "gauge">("table")
   useEffect(() => {
     adminFetch("/api/admin/branch/hw").then((r) => r.json()).then((d) => setData(d.error ? null : d)).catch(() => setData(null))
@@ -136,16 +138,20 @@ export default function HardwareSection({ refreshKey }: { refreshKey: number }) 
         ) : view === "table" ? <TableView rows={data.stock} /> : <GaugeView rows={data.stock} />}
       </div>
       <div className="border-t border-[rgba(0,0,0,0.08)] px-5 py-3">
-        <p className="mb-1.5 text-[11px] font-semibold text-[#615D59]">출고 진행 상태</p>
+        <p className="mb-1.5 text-[11px] font-semibold text-[#615D59]">최근 설치</p>
         <div className="flex flex-wrap gap-2 text-[11px]">
-          {Object.keys(data.progress).length === 0 && <span className="text-[#615D59]">데이터 없음</span>}
-          {Object.entries(data.progress)
-            .filter(([k]) => k !== "미정")
-            .sort(([, a], [, b]) => b - a)
-            .slice(0, 5)
-            .map(([k, v]) => (
-              <span key={k} className="rounded-full bg-[#F6F5F4] px-2.5 py-1 text-[#111110]">{k} {v}대</span>
-            ))}
+          {(!data.recent_installs || data.recent_installs.length === 0) && (
+            <span className="text-[#615D59]">데이터 없음</span>
+          )}
+          {data.recent_installs?.map((r) => (
+            <span
+              key={`${r.customer}-${r.date ?? ""}`}
+              className="rounded-full bg-[#F6F5F4] px-2.5 py-1 text-[#111110]"
+              title={r.date ? `최근 설치 ${r.date}` : undefined}
+            >
+              <span className="font-semibold">{r.customer}</span> <span className="text-[#615D59]">{r.quantity}대</span>
+            </span>
+          ))}
         </div>
       </div>
     </section>

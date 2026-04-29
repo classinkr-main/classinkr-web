@@ -6,7 +6,7 @@ async function adminFetch(url: string) {
   const token = (typeof window !== "undefined" ? sessionStorage.getItem("admin_password") : null) ?? ""
   return fetch(url, { headers: { Authorization: `Bearer ${token}` } })
 }
-function krw(n: number) {
+function cny(n: number) {
   if (!Number.isFinite(n)) return "-"
   if (n >= 100_000_000) return `${(n / 100_000_000).toFixed(1).replace(/\.0$/, "")}억`
   if (n >= 10_000) return `${Math.round(n / 10_000)}만`
@@ -59,7 +59,7 @@ function PipelineCard({ deal, onClick }: { deal: Row; onClick?: () => void }) {
       </p>
       <div className="mt-2 flex items-baseline justify-between">
         <span className="text-[14px] font-bold tracking-[-0.01em]" style={{ color: stageIdx >= 2 ? "#B43E3E" : "#1E5DA8" }}>
-          ₩{krw(deal.revenue)}
+          ¥{cny(deal.revenue)}
         </span>
         <span className="text-[10.5px] font-bold" style={{ color: stage.color }}>
           {stage.probability}%
@@ -84,11 +84,11 @@ function PipelineColumn({ stage, deals, onCardClick }: { stage: typeof STAGES[nu
             </span>
           </div>
           <span className="text-[13px] font-bold tracking-[-0.01em]" style={{ color: stage.color }}>
-            ₩{krw(total)}
+            ¥{cny(total)}
           </span>
         </div>
         <p className="mt-1 text-[10.5px] text-[#615D59]">
-          가중 가치 <span className="font-semibold text-[#111110]">₩{krw(weighted)}</span> · 확률 {stage.probability}%
+          가중 가치 <span className="font-semibold text-[#111110]">¥{cny(weighted)}</span> · 확률 {stage.probability}%
         </p>
       </div>
       <div className="flex max-h-[600px] flex-col gap-2 overflow-y-auto">
@@ -138,8 +138,8 @@ export default function BranchPipelineKanban({ team, refreshKey, onDealClick }: 
           </p>
         </div>
         <div className="text-right">
-          <p className="text-[16px] font-bold leading-none tracking-[-0.01em] text-[#111110]">₩{krw(totalAll)}</p>
-          <p className="mt-0.5 text-[10.5px] text-[#615D59]">총 합 · 가중 ₩{krw(totalWeighted)}</p>
+          <p className="text-[16px] font-bold leading-none tracking-[-0.01em] text-[#111110]">¥{cny(totalAll)}</p>
+          <p className="mt-0.5 text-[10.5px] text-[#615D59]">총 합 · 가중 ¥{cny(totalWeighted)}</p>
         </div>
       </div>
       <div className="overflow-x-auto p-4">

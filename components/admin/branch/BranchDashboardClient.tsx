@@ -66,9 +66,10 @@ export default function BranchDashboardClient() {
 
   const lastSync = summary.data?.lastSync ?? null
   const lastError = syncError ?? summary.error ?? summary.data?.lastError ?? null
+  const sheetModifiedAt = summary.data?.sheetModifiedAt ?? null
 
   // Filter visibility per design
-  const showPeriodFilter = activeTab === "overview" || activeTab === "pipeline"
+  const showPeriodFilter = activeTab === "overview" || activeTab === "pipeline" || activeTab === "heatmap"
   const showTeamFilter = activeTab !== "ai"
 
   return (
@@ -167,7 +168,12 @@ export default function BranchDashboardClient() {
 
       {/* Tab content */}
       <div className="px-4 pt-6 sm:px-6 lg:px-9">
-        <SyncStatusBar lastSync={lastSync} lastError={lastError} onRefresh={onRefresh} />
+        <SyncStatusBar
+          lastSync={lastSync}
+          lastError={lastError}
+          sheetModifiedAt={sheetModifiedAt}
+          onRefresh={onRefresh}
+        />
 
         <div className="mt-6">
           {activeTab === "overview" && (
@@ -198,15 +204,15 @@ export default function BranchDashboardClient() {
           )}
 
           {activeTab === "pipeline" && (
-            <div role="tabpanel" className="space-y-6">
+            <div role="tabpanel" className="space-y-4">
               <BranchKpiAccordion data={kpi.data} loading={kpi.loading} error={kpi.error} />
               <section className="rounded-xl border border-[rgba(0,0,0,0.08)] bg-white shadow-[0_1px_2px_rgba(0,0,0,0.02)]">
-                <div className="flex items-center justify-between gap-3 border-b border-[rgba(0,0,0,0.08)] px-5 py-3.5">
-                  <h2 className="text-[14px] font-bold tracking-[-0.01em] text-[#111110]">파이프라인</h2>
-                  <div className="inline-flex rounded-md border border-[rgba(0,0,0,0.08)] bg-[#F6F5F4] p-[3px]">
+                <div className="flex items-center justify-between gap-3 border-b border-[rgba(0,0,0,0.08)] px-4 py-2.5">
+                  <h2 className="text-[13px] font-bold tracking-[-0.01em] text-[#111110]">파이프라인</h2>
+                  <div className="inline-flex rounded-md border border-[rgba(0,0,0,0.08)] bg-[#F6F5F4] p-[2px]">
                     {(["table", "kanban"] as const).map((v) => (
                       <button key={v} type="button" onClick={() => setPipelineView(v)}
-                        className={`rounded-[5px] px-2.5 py-1 text-[11px] font-semibold transition ${
+                        className={`rounded-[5px] px-2.5 py-0.5 text-[11px] font-semibold transition ${
                           pipelineView === v ? "bg-white text-[#111110] shadow-[0_1px_2px_rgba(0,0,0,0.06)]" : "text-[#615D59]"
                         }`}>
                         {v === "table" ? "테이블" : "칸반 (MVP)"}
@@ -214,7 +220,7 @@ export default function BranchDashboardClient() {
                     ))}
                   </div>
                 </div>
-                <div className="p-1">
+                <div className="px-2.5 py-2">
                   {pipelineView === "table" ? (
                     <PipelineTable key={`pipeline-rev-${team}`} team={team} period={period} refreshKey={refreshKey} />
                   ) : (

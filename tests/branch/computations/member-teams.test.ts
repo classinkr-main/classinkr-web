@@ -26,4 +26,9 @@ describe("member-teams", () => {
     expect(listMembersByTeamFromDeals(deals, "BD")).toEqual(["Han"])
     expect(listMembersByTeamFromDeals(deals, "ALL").sort()).toEqual(["Han", "Mira"])
   })
+  it("normalizes confirmed CSM placeholder names from REV", () => {
+    const deals = [mk({ manager: "Somang", team: "CSM" }), mk({ manager: "New 2", team: "CSM" })]
+    expect(deriveMemberTeams(deals)).toEqual({ Somang: "CSM", Minjae: "CSM" })
+    expect(listMembersByTeamFromDeals(deals, "CSM")).toEqual(["Somang", "Minjae"])
+  })
 })

@@ -13,18 +13,32 @@ export interface RegionTopCustomer {
 }
 
 export interface RegionRow {
-  region: string; target: number; revenue: number
-  progress: number; status: "good" | "warning" | "critical"; velocity: number
-  deals_count: number; confirmed_count: number; open_target: number
+  region: string
+  target: number
+  revenue: number
+  // Future-month estimate that hasn't been confirmed yet. Kept separate so
+  // the UI can show "확정 + 추정" while still ranking by total expected value.
+  projected: number
+  expected: number
+  progress: number
+  status: "good" | "warning" | "critical"
+  velocity: number
+  deals_count: number
+  confirmed_count: number
+  open_target: number
   top_customers: RegionTopCustomer[]
 }
 
-function statusOf(p: number): "good"|"warning"|"critical" {
-  if (p >= 95) return "good"; if (p >= 75) return "warning"; return "critical"
+function statusOf(p: number): "good" | "warning" | "critical" {
+  if (p >= 95) return "good"
+  if (p >= 75) return "warning"
+  return "critical"
 }
 
 function inScope(ym: string, scope: Period, now: Date): boolean {
-  const fy = fyOf(now); const m = Number(ym.slice(5, 7)); const y = Number(ym.slice(0, 4))
+  const fy = fyOf(now)
+  const m = Number(ym.slice(5, 7))
+  const y = Number(ym.slice(0, 4))
   const fyOfYm = m >= 4 ? y : y - 1
   if (fyOfYm !== fy) return false
   if (scope === "Y") return true
@@ -32,11 +46,21 @@ function inScope(ym: string, scope: Period, now: Date): boolean {
   return fiscalQuarter(m) === fiscalQuarter(now.getUTCMonth() + 1)
 }
 
+// Compares ym (YYYY-MM) against now's year-month. Returns -1 / 0 / +1.
+function compareYm(ym: string, now: Date): number {
+  const nowKey = ymKey(now)
+  return ym < nowKey ? -1 : ym > nowKey ? 1 : 0
+}
+
 export function computeHeatmap(deals: BranchRevDeal[], scope: Period, now: Date, teamFilter?: string): RegionRow[] {
   const filtered = teamFilter && teamFilter !== "ALL" ? deals.filter((d) => d.team === teamFilter) : deals
   const byRegion = new Map<string, {
+    // Period target = sum of monthly_payments inside the period. The deal's
+    // contract_target is the lifetime goal; for an M/Q view we want only the
+    // portion scheduled within the period.
     target: number
     revenue: number
+    projected: number
     deals_count: number
     confirmed_count: number
     open_target: number
@@ -46,7 +70,7 @@ export function computeHeatmap(deals: BranchRevDeal[], scope: Period, now: Date,
   const ensure = (region: string) => {
     let acc = byRegion.get(region)
     if (!acc) {
-      acc = { target: 0, revenue: 0, deals_count: 0, confirmed_count: 0, open_target: 0, customers: new Map() }
+      acc = { target: 0, revenue: 0, projected: 0, deals_count: 0, confirmed_count: 0, open_target: 0, customers: new Map() }
       byRegion.set(region, acc)
     }
     return acc
@@ -55,29 +79,63 @@ export function computeHeatmap(deals: BranchRevDeal[], scope: Period, now: Date,
   for (const d of filtered) {
     const region = d.region ?? "미정"
     const acc = ensure(region)
-    const target = Number(d.contract_target ?? 0)
-    acc.target += target
+    const lifetimeTarget = Number(d.contract_target ?? 0)
     acc.deals_count += 1
 
+    // No first_payment AND no monthly schedule for the period → still goes into
+    // the open-target bucket so the panel shows "잔량" honestly.
+    if (!d.first_payment) acc.open_target += lifetimeTarget
+
     const hasRedFlags = Object.keys(d.monthly_red).length > 0
-    let rev = 0
-    if (d.first_payment) {
-      for (const [ym, amt] of Object.entries(d.monthly_payments)) {
-        if (hasRedFlags && !d.monthly_red[ym]) continue
-        if (!inScope(ym, scope, now)) continue
-        rev += Number(amt)
+    let dealRevenue = 0
+    let dealProjected = 0
+    let dealTargetInPeriod = 0
+    let countedAsConfirmed = false
+
+    for (const [ym, amtRaw] of Object.entries(d.monthly_payments)) {
+      const amt = Number(amtRaw)
+      if (!Number.isFinite(amt) || amt === 0) continue
+      if (!inScope(ym, scope, now)) continue
+
+      // monthly_payments doubles as the scheduled goal — sum within the period
+      // gives a meaningful denominator that actually moves with M/Q/Y.
+      dealTargetInPeriod += amt
+
+      const isFuture = compareYm(ym, now) > 0
+
+      if (isFuture) {
+        // Future months are always projection — they haven't happened.
+        dealProjected += amt
+        continue
       }
-      acc.confirmed_count += 1
-      acc.revenue += rev
-    } else {
-      acc.open_target += target
+      // Past or current month.
+      if (!d.first_payment) {
+        // Deal hasn't started — even past-month rows are projection (they
+        // shouldn't really be there, but treat defensively).
+        dealProjected += amt
+        continue
+      }
+      // first_payment is set. Confirmed if no red-flag system OR this month
+      // is explicitly red-flagged (matches the existing fallback rule
+      // documented in branch-dashboard-development-log.md).
+      if (!hasRedFlags || d.monthly_red[ym]) {
+        dealRevenue += amt
+        countedAsConfirmed = true
+      } else {
+        dealProjected += amt
+      }
     }
+
+    acc.target += dealTargetInPeriod
+    acc.revenue += dealRevenue
+    acc.projected += dealProjected
+    if (countedAsConfirmed) acc.confirmed_count += 1
 
     const customerKey = d.customer_name || `row-${d.sheet_row}`
     const current = acc.customers.get(customerKey)
     if (current) {
-      current.target += target
-      current.revenue += rev
+      current.target += dealTargetInPeriod
+      current.revenue += dealRevenue + dealProjected
       current.first_payment = current.first_payment ?? d.first_payment
     } else {
       acc.customers.set(customerKey, {
@@ -86,19 +144,24 @@ export function computeHeatmap(deals: BranchRevDeal[], scope: Period, now: Date,
         team: d.team,
         status: d.status,
         first_payment: d.first_payment,
-        target,
-        revenue: rev,
+        target: dealTargetInPeriod,
+        // Top-customer "revenue" represents expected value (confirmed + projection)
+        // so deals weighted toward future months still rank meaningfully.
+        revenue: dealRevenue + dealProjected,
       })
     }
   }
+
   const rows: RegionRow[] = []
   for (const [region, acc] of byRegion) {
-    const { target, revenue } = acc
-    const progress = target > 0 ? (revenue / target) * 100 : 0
+    const expected = acc.revenue + acc.projected
+    const progress = acc.target > 0 ? (expected / acc.target) * 100 : 0
     rows.push({
       region,
-      target,
-      revenue,
+      target: acc.target,
+      revenue: acc.revenue,
+      projected: acc.projected,
+      expected,
       progress,
       status: statusOf(progress),
       velocity: 0,
@@ -114,7 +177,7 @@ export function computeHeatmap(deals: BranchRevDeal[], scope: Period, now: Date,
   if (scope === "Q") {
     const monthIdx = now.getUTCMonth() + 1
     const q = fiscalQuarter(monthIdx)
-    const qStartMonth = q === 4 ? 1 : q * 3 + 1   // Q1=4, Q2=7, Q3=10, Q4=1
+    const qStartMonth = q === 4 ? 1 : q * 3 + 1
     const monthsInto = (monthIdx - qStartMonth + 12) % 12
     const dayInQ = Math.max(1, monthsInto * 30 + now.getUTCDate())
     const qPct = Math.min(100, (dayInQ / 90) * 100)

@@ -8,6 +8,7 @@ import { fyOf, fiscalQuarter } from "@/lib/branch/fiscal"
 import { buildManagerInsightInput } from "@/lib/branch/insights/manager-input-builder"
 import { callManagerInsight } from "@/lib/branch/insights/manager-runner"
 import { deriveMemberTeams } from "@/lib/branch/computations/member-teams"
+import { normalizeBranchMemberName } from "@/lib/branch/member-names"
 
 const readKpi = unstable_cache(
   async () => parseKpi(await readRangeWithFormat(envSheetId("dashboard"), KPI_RANGE)),
@@ -17,7 +18,7 @@ const readKpi = unstable_cache(
 export async function GET(req: NextRequest) {
   const err = await verifyAdmin(req); if (err) return err
   const url = new URL(req.url)
-  const manager = url.searchParams.get("name")?.trim()
+  const manager = normalizeBranchMemberName(url.searchParams.get("name"))
   if (!manager) return NextResponse.json({ error: "name query required" }, { status: 400 })
   const scope = (url.searchParams.get("scope") ?? "Q") as "M" | "Q" | "Y"
 

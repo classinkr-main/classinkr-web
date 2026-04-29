@@ -4,7 +4,7 @@ import { Sparkles, FileDown, RefreshCw, AlertTriangle } from "lucide-react"
 import type { BranchSummaryResponse, Team } from "../types"
 import { adminFetchJson } from "../client-api"
 
-function krw(n: number) {
+function cny(n: number) {
   if (!Number.isFinite(n)) return "-"
   if (n >= 100_000_000) return `${(n / 100_000_000).toFixed(1).replace(/\.0$/, "")}억`
   if (n >= 10_000) return `${Math.round(n / 10_000)}만`
@@ -142,13 +142,13 @@ function ExternalReport({ summary, lang }: { summary: BranchSummaryResponse | nu
           <div className="rounded-lg bg-[#F6F5F4] p-3">
             <p className="text-[10.5px] text-[#615D59]">{t.revenueLabel}</p>
             <p className="mt-1 text-[18px] font-bold leading-none tracking-[-0.01em]" style={{ color: "#B43E3E" }}>
-              ₩{krw(rev.confirmed)}
+              ¥{cny(rev.confirmed)}
             </p>
           </div>
           <div className="rounded-lg bg-[#F6F5F4] p-3">
             <p className="text-[10.5px] text-[#615D59]">{t.goalLabel}</p>
             <p className="mt-1 text-[18px] font-bold leading-none tracking-[-0.01em] text-[#111110]">
-              ₩{krw(rev.goal)}
+              ¥{cny(rev.goal)}
             </p>
           </div>
           <div className="rounded-lg bg-[#F6F5F4] p-3">
@@ -160,8 +160,8 @@ function ExternalReport({ summary, lang }: { summary: BranchSummaryResponse | nu
         </div>
         <p className="mt-3 text-[12px] leading-relaxed text-[#615D59]">
           {lang === "zh"
-            ? `本期 KR 分公司销售额达 ${rev.pacing_pct.toFixed(0)}%。剩余目标 ₩${krw(open)}。`
-            : `이번 기 KR 지사 매출은 목표 대비 ${rev.pacing_pct.toFixed(0)}% 달성. 잔여 목표 ₩${krw(open)}.`}
+            ? `本期 KR 分公司销售额达 ${rev.pacing_pct.toFixed(0)}%。剩余目标 ¥${cny(open)}。`
+            : `이번 기 KR 지사 매출은 목표 대비 ${rev.pacing_pct.toFixed(0)}% 달성. 잔여 목표 ¥${cny(open)}.`}
         </p>
       </section>
 

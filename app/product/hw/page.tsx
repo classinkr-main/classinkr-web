@@ -12,7 +12,7 @@ import {
 } from "lucide-react"
 import Image from "next/image"
 import Link from "next/link"
-import { useRef, useState } from "react"
+import { Fragment, useRef, useState } from "react"
 
 import OpeningStatement from "@/components/product/hw/OpeningStatement"
 import PainPointsV2 from "@/components/product/hw/PainPointsV2"
@@ -41,16 +41,45 @@ const stagger = (i: number) => ({
 })
 
 /* ── Spec data ───────────────────────────────────────────────────── */
-const specRows = [
-    { label: "화면 크기", s110: '110"', s86: '86"', s75: '75"', s65: '65"' },
-    { label: "모델명", s110: "BS110A", s86: "BS86A", s75: "BS75A", s65: "BS65A" },
-    { label: "터치 포인트", s110: "50점", s86: "50점", s75: "50점", s65: "50점" },
-    { label: "터치 방식", s110: "적외선", s86: "적외선", s75: "적외선", s65: "적외선" },
-    { label: "응답 속도", s110: "2ms", s86: "2ms", s75: "2ms", s65: "2ms" },
-    { label: "스피커", s110: "2×15W", s86: "2×15W", s75: "2×15W", s65: "2×15W" },
-    { label: "내장 마이크", s110: "—", s86: "8배열", s75: "8배열", s65: "8배열" },
-    { label: "측면 제스처바", s110: "양측", s86: "양측", s75: "—", s65: "—" },
-    { label: "OPS 모듈", s110: "기본 제공", s86: "기본 제공", s75: "기본 제공", s65: "기본 제공" },
+type SpecRow = { label: string; s110: string; s86: string; s75: string; s65: string }
+type SpecGroup = { category: string; rows: SpecRow[] }
+
+const specGroups: SpecGroup[] = [
+    {
+        category: "제품 사양",
+        rows: [
+            { label: "모델명", s110: "BS110A", s86: "BS86A", s75: "BS75A", s65: "BS65A" },
+            { label: "화면 크기", s110: '110"', s86: '86"', s75: '75"', s65: '65"' },
+            { label: "전체 길이", s110: "2,620.55mm", s86: "1,976.63mm", s75: "1,730.63mm", s65: "1,508.71mm" },
+            { label: "전체 높이", s110: "1,457.20mm", s86: "1,153.31mm", s75: "1,015.22mm", s65: "889.87mm" },
+            { label: "두께", s110: "110.00mm", s86: "95.50mm", s75: "95.50mm", s65: "94.79mm" },
+        ],
+    },
+    {
+        category: "터치 방식",
+        rows: [
+            { label: "터치 포인트", s110: "50점", s86: "50점", s75: "50점", s65: "50점" },
+            { label: "터치 기술", s110: "적외선 터치", s86: "적외선 터치", s75: "적외선 터치", s65: "적외선 터치" },
+            { label: "응답 속도", s110: "2ms", s86: "2ms", s75: "2ms", s65: "2ms" },
+            { label: "인식 범위", s110: "1.5mm", s86: "1.5mm", s75: "1.5mm", s65: "1.5mm" },
+            { label: "측면 제스처바", s110: "양측 제공", s86: "양측 제공", s75: "—", s65: "—" },
+        ],
+    },
+    {
+        category: "오디오",
+        rows: [
+            { label: "내장 마이크", s110: "—", s86: "8배열", s75: "8배열", s65: "8배열" },
+            { label: "스피커 채널", s110: "2.0", s86: "2.0", s75: "2.0", s65: "2.0" },
+            { label: "스피커 출력", s110: "2×15W", s86: "2×15W", s75: "2×15W", s65: "2×15W" },
+        ],
+    },
+    {
+        category: "부속품 (악세서리)",
+        rows: [
+            { label: "스탠드 (별도 옵션)", s110: "벽걸이 & 이동형", s86: "벽걸이 & 이동형", s75: "벽걸이 & 이동형", s65: "벽걸이 & 이동형" },
+            { label: "OPS 컴퓨터 모듈", s110: "기본 제공", s86: "기본 제공", s75: "기본 제공", s65: "기본 제공" },
+        ],
+    },
 ]
 
 const lineupCards = [
@@ -1244,14 +1273,24 @@ export default function ProductHWPage() {
                         ))}
                     </div>
 
-                    {/* Spec table */}
+                    {/* Detailed spec table */}
                     <motion.div {...fadeUp} className="max-w-5xl mx-auto">
+                        <div className="text-center mb-8">
+                            <p className="text-sm font-semibold text-[#22A366] tracking-wider uppercase mb-3">SPECIFICATIONS</p>
+                            <h3 className="text-2xl md:text-3xl font-bold text-[#1a1a19] leading-tight mb-3">
+                                클래스인 제품 상세 스펙
+                            </h3>
+                            <p className="text-base text-slate-500">
+                                클래스인 제품들의 상세한 스펙을 안내해드립니다.
+                            </p>
+                        </div>
+
                         <div className="bg-white rounded-2xl border border-slate-200/60 shadow-lg overflow-hidden">
                             <div className="overflow-x-auto">
                                 <table className="w-full text-sm">
                                     <thead>
                                         <tr className="bg-slate-50 border-b border-slate-100">
-                                            <th className="text-left py-4 px-6 font-semibold text-slate-500 w-40">사양</th>
+                                            <th className="text-left py-4 px-6 font-semibold text-slate-500 w-44">사양</th>
                                             <th className="text-center py-4 px-4 font-bold text-slate-900">S110</th>
                                             <th className="text-center py-4 px-4 font-bold text-[#22A366]">S86</th>
                                             <th className="text-center py-4 px-4 font-bold text-slate-900">S75</th>
@@ -1259,14 +1298,23 @@ export default function ProductHWPage() {
                                         </tr>
                                     </thead>
                                     <tbody>
-                                        {specRows.map((row, i) => (
-                                            <tr key={i} className={`border-b border-slate-50 ${i % 2 === 0 ? "bg-white" : "bg-slate-50/50"}`}>
-                                                <td className="py-3.5 px-6 font-medium text-slate-600">{row.label}</td>
-                                                <td className="py-3.5 px-4 text-center text-slate-700">{row.s110}</td>
-                                                <td className="py-3.5 px-4 text-center text-slate-700 font-medium">{row.s86}</td>
-                                                <td className="py-3.5 px-4 text-center text-slate-700">{row.s75}</td>
-                                                <td className="py-3.5 px-4 text-center text-slate-700">{row.s65}</td>
-                                            </tr>
+                                        {specGroups.map((group) => (
+                                            <Fragment key={group.category}>
+                                                <tr className="bg-[#22A366]/5 border-y border-[#22A366]/10">
+                                                    <td colSpan={5} className="py-2.5 px-6 text-[11px] font-bold tracking-[0.16em] uppercase text-[#22A366]">
+                                                        {group.category}
+                                                    </td>
+                                                </tr>
+                                                {group.rows.map((row, i) => (
+                                                    <tr key={`${group.category}-${row.label}`} className={`border-b border-slate-50 ${i % 2 === 0 ? "bg-white" : "bg-slate-50/40"}`}>
+                                                        <td className="py-3.5 px-6 font-medium text-slate-600">{row.label}</td>
+                                                        <td className="py-3.5 px-4 text-center tabular-nums text-slate-700">{row.s110}</td>
+                                                        <td className="py-3.5 px-4 text-center tabular-nums text-slate-700 font-medium">{row.s86}</td>
+                                                        <td className="py-3.5 px-4 text-center tabular-nums text-slate-700">{row.s75}</td>
+                                                        <td className="py-3.5 px-4 text-center tabular-nums text-slate-700">{row.s65}</td>
+                                                    </tr>
+                                                ))}
+                                            </Fragment>
                                         ))}
                                     </tbody>
                                 </table>

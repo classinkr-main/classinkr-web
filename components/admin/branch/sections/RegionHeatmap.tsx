@@ -189,7 +189,7 @@ function CompactRegionRow({ row, rank, onSelect }: { row: Row; rank: number; onS
       <span className="text-[11px] text-[#1a1a1a]/35">{String(rank).padStart(2, "0")}</span>
       <div className="min-w-0">
         <p className="truncate text-[12px] font-medium text-[#111110]">{row.region}</p>
-        <p className="mt-0.5 truncate text-[11px] text-[#1a1a1a]/40">₩{fmt(row.revenue)} / ₩{fmt(row.target)}</p>
+        <p className="mt-0.5 truncate text-[11px] text-[#1a1a1a]/40">¥{fmt(row.revenue)} / ¥{fmt(row.target)}</p>
       </div>
       <span className={`rounded-full px-2 py-1 text-right text-[11px] font-semibold ${tone.bg} ${tone.text}`}>
         {row.progress.toFixed(0)}%
@@ -211,7 +211,7 @@ function RegionHoverCard({ row }: { row: MapRow }) {
         <p className="text-[12px] font-semibold text-[#111110]">{row.label}</p>
         <span className="text-[12px] font-bold text-[#111110]">{row.progress.toFixed(0)}%</span>
       </div>
-      <p className="mt-1 text-[11px] text-[#1a1a1a]/50">매출 ₩{fmt(row.revenue)} / 목표 ₩{fmt(row.target)}</p>
+      <p className="mt-1 text-[11px] text-[#1a1a1a]/50">매출 ¥{fmt(row.revenue)} / 목표 ¥{fmt(row.target)}</p>
       <p className="mt-1 truncate text-[11px] text-[#1a1a1a]/50">
         주요 고객 {row.top_customers[0]?.customer ?? "-"}
       </p>
@@ -238,11 +238,11 @@ function RegionDetailPanel({ row }: { row: MapRow | null }) {
       <div className="mt-4 grid grid-cols-2 gap-2 text-[11px]">
         <div className="rounded-xl bg-[#fafaf8] p-3">
           <p className="text-[#1a1a1a]/40">확정 매출</p>
-          <p className="mt-1 text-[13px] font-semibold text-[#111110]">₩{fmt(row.revenue)}</p>
+          <p className="mt-1 text-[13px] font-semibold text-[#111110]">¥{fmt(row.revenue)}</p>
         </div>
         <div className="rounded-xl bg-[#fafaf8] p-3">
           <p className="text-[#1a1a1a]/40">목표 금액</p>
-          <p className="mt-1 text-[13px] font-semibold text-[#111110]">₩{fmt(row.target)}</p>
+          <p className="mt-1 text-[13px] font-semibold text-[#111110]">¥{fmt(row.target)}</p>
         </div>
         <div className="rounded-xl bg-[#fafaf8] p-3">
           <p className="text-[#1a1a1a]/40">딜</p>
@@ -250,7 +250,7 @@ function RegionDetailPanel({ row }: { row: MapRow | null }) {
         </div>
         <div className="rounded-xl bg-[#fafaf8] p-3">
           <p className="text-[#1a1a1a]/40">미확정 목표</p>
-          <p className="mt-1 text-[13px] font-semibold text-[#111110]">₩{fmt(row.open_target)}</p>
+          <p className="mt-1 text-[13px] font-semibold text-[#111110]">¥{fmt(row.open_target)}</p>
         </div>
       </div>
       <div className="mt-4">
@@ -264,9 +264,9 @@ function RegionDetailPanel({ row }: { row: MapRow | null }) {
                   <p className="truncate text-[12px] font-medium text-[#111110]">{customer.customer}</p>
                   <p className="mt-0.5 text-[11px] text-[#1a1a1a]/40">{customer.manager ?? "-"} · {customer.status ?? "-"}</p>
                 </div>
-                <p className="shrink-0 text-right text-[11px] font-semibold text-[#111110]">₩{fmt(customer.revenue)}</p>
+                <p className="shrink-0 text-right text-[11px] font-semibold text-[#111110]">¥{fmt(customer.revenue)}</p>
               </div>
-              <p className="mt-1 text-[11px] text-[#1a1a1a]/40">목표 ₩{fmt(customer.target)}</p>
+              <p className="mt-1 text-[11px] text-[#1a1a1a]/40">목표 ¥{fmt(customer.target)}</p>
             </div>
           ))}
         </div>

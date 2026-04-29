@@ -36,6 +36,7 @@ export interface BranchSummaryResponse {
   monthly_series: BranchMonthlySeries
   lastSync: string | null
   lastError: string | null
+  sheetModifiedAt: string | null
 }
 
 export interface BranchKpiTeamRow {

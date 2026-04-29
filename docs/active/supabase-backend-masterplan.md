@@ -44,7 +44,7 @@ docs/supabase-backend-masterplan.md 읽고 현재 상태 파악해줘"
 
 ### Phase 2 이후 (중장기)
 - [ ] `subscribers`, `email_campaigns` 테이블 + 마케팅 연동
-- [ ] Neo CRM API 연동 (리드 → Neo CRM 푸시)
+- [ ] Neo CRM API 연동 (리드 → Neo CRM 푸시) — 본사 요청서: [neo-crm-integration-request.md](neo-crm-integration-request.md)
 - [ ] Supabase Storage (이미지 업로드)
 - [ ] 운영자 초대 플로우
 - [ ] `data/` 폴더 완전 제거

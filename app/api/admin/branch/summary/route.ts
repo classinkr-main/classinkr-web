@@ -1,7 +1,7 @@
 import { NextRequest, NextResponse } from "next/server"
 import { verifyAdmin } from "@/lib/admin-auth"
 import { unstable_cache } from "next/cache"
-import { readRangeWithFormat, envSheetId } from "@/lib/branch/google-sheets"
+import { readRangeWithFormat, envSheetId, getSheetModifiedTime } from "@/lib/branch/google-sheets"
 import { parseDsh, DSH_RANGE } from "@/lib/branch/parsers/dsh"
 import type { DshBreakdownRow } from "@/lib/branch/parsers/dsh"
 import { parseKpi, KPI_RANGE } from "@/lib/branch/parsers/kpi"
@@ -190,6 +190,19 @@ const readKpi = unstable_cache(async () => {
   return parseKpi(grid)
 }, ["branch-kpi"], { revalidate: 60, tags: ["branch-kpi"] })
 
+// Freshness hint — newest modifiedTime across both source sheets.
+// 60s revalidate keeps Drive API call rate well under any quota concern
+// while still surfacing edits within a minute.
+const readSheetFreshness = unstable_cache(async () => {
+  const [dash, hw] = await Promise.all([
+    getSheetModifiedTime(envSheetId("dashboard")),
+    getSheetModifiedTime(envSheetId("hardware")),
+  ])
+  const candidates = [dash, hw].filter((t): t is string => Boolean(t))
+  if (candidates.length === 0) return null
+  return candidates.sort().pop() ?? null
+}, ["branch-sheet-freshness"], { revalidate: 60, tags: ["branch-sheet-freshness"] })
+
 export async function GET(req: NextRequest) {
   const err = await verifyAdmin(req); if (err) return err
   const url = new URL(req.url)
@@ -197,8 +210,9 @@ export async function GET(req: NextRequest) {
   const period = readPeriodParam(url); if (period instanceof NextResponse) return period
   const now = new Date()
   try {
-    const [dsh, kpi, deals, campaigns, runs, events] = await Promise.all([
+    const [dsh, kpi, deals, campaigns, runs, events, sheetModifiedAt] = await Promise.all([
       readDsh(), readKpi(), listBranchRevDeals({ team }), summarizeCampaigns(now), getRecentSyncRuns(3), listPublicEvents(),
+      readSheetFreshness(),
     ])
     const teamMembers = new Set(listMembersByTeam(dsh, team))
     const revenue = summarizeRevenue(dsh, deals, team, period, now)
@@ -374,6 +388,7 @@ export async function GET(req: NextRequest) {
       campaigns_recent: campaigns.recent.slice(0, 8),
       lastSync: lastRun?.finished_at ?? lastRun?.started_at ?? null,
       lastError: lastRun?.status === "failed" ? lastRun.error ?? "동기화 실패" : null,
+      sheetModifiedAt,
       monthly_series: {
         months,
         goal_cum,

@@ -19,11 +19,12 @@
 1. [정체성과 원칙](./identity.md)
 2. [정보 구조와 메뉴 관점](./information-architecture.md)
 3. [도메인 모델과 원장 구조](./domain-model.md)
-4. [데이터 계약](./data-contracts.md)
-5. [견적서 스펙과 UX](./quote-document-spec.md)
-6. [상태 흐름과 전이 규칙](./state-flow.md)
-7. [운영 건 상세 화면](./operation-case-workspace.md)
-8. [열린 질문과 다음 결정](./open-questions.md)
+4. [하드웨어 시트 해석 기준](./sheet-interpretation.md)
+5. [데이터 계약](./data-contracts.md)
+6. [견적서 스펙과 UX](./quote-document-spec.md)
+7. [상태 흐름과 전이 규칙](./state-flow.md)
+8. [운영 건 상세 화면](./operation-case-workspace.md)
+9. [열린 질문과 다음 결정](./open-questions.md)
 
 ## 4. 기존 문서와 연결
 

@@ -5,7 +5,7 @@ import type { BranchKpiResponse, BranchKpiTeamRow, BranchKpiMemberRow } from "..
 
 const numberFmt = new Intl.NumberFormat("ko-KR", { maximumFractionDigits: 0 })
 const fmt = (n: number) => numberFmt.format(n)
-function krw(n: number) {
+function cny(n: number) {
   if (!Number.isFinite(n)) return "-"
   if (n >= 100_000_000) return `${(n / 100_000_000).toFixed(1).replace(/\.0$/, "")}억`
   if (n >= 10_000) return `${Math.round(n / 10_000)}만`
@@ -77,7 +77,7 @@ function MemberRow({ member, viewMode }: { member: BranchKpiMemberRow; viewMode:
       <div>
         <div className="mb-1 flex items-baseline justify-between text-[11px]">
           <span className="text-[#615D59]">
-            <span className="font-semibold" style={{ color: COLORS.red }}>¥{krw(member.confirmed)}</span> / ¥{krw(member.goal)}
+            <span className="font-semibold" style={{ color: COLORS.red }}>¥{cny(member.confirmed)}</span> / ¥{cny(member.goal)}
           </span>
           <span className="font-bold" style={{ color: memberPct >= 70 ? COLORS.green : COLORS.amber }}>{memberPct}%</span>
         </div>
@@ -215,7 +215,7 @@ function TeamRow({ team, members, defaultOpen }: { team: BranchKpiTeamRow; membe
         <div>
           <div className="mb-1.5 flex justify-between text-[11.5px]">
             <span className="text-[#615D59]">
-              매출 <span className="font-bold" style={{ color: COLORS.red }}>¥{krw(team.status)}</span> / ¥{krw(team.goal)}
+              매출 <span className="font-bold" style={{ color: COLORS.red }}>¥{cny(team.status)}</span> / ¥{cny(team.goal)}
             </span>
             <span className="font-bold" style={{ color: pct >= 70 ? COLORS.green : COLORS.amber }}>{pct}%</span>
           </div>
@@ -225,23 +225,32 @@ function TeamRow({ team, members, defaultOpen }: { team: BranchKpiTeamRow; membe
           {renderRightChip()}
         </div>
       </button>
-      {open && expandable && (
-        <div className="mb-3 rounded-[10px] bg-[#F6F5F4] p-3.5">
-          {teamHasKpi && (
-            <div className="mb-2 flex justify-end">
-              <div className="inline-flex rounded-md border border-[rgba(0,0,0,0.08)] bg-white p-[3px]">
-                {(["list", "matrix"] as const).map((v) => (
-                  <button key={v} type="button" onClick={() => setViewMode(v)}
-                    className={`rounded-[5px] px-2.5 py-1 text-[11px] font-semibold ${
-                      viewMode === v ? "bg-[#111110] text-white" : "text-[#615D59]"
-                    }`}>
-                    {v === "list" ? "리스트" : "매트릭스 %"}
-                  </button>
-                ))}
-              </div>
+      {expandable && (
+        <div
+          className={`grid transition-[grid-template-rows,opacity,margin] duration-200 ease-out ${
+            open ? "mb-3 grid-rows-[1fr] opacity-100" : "mb-0 grid-rows-[0fr] opacity-0"
+          }`}
+          aria-hidden={!open}
+        >
+          <div className="overflow-hidden">
+            <div className="rounded-[10px] bg-[#F6F5F4] p-3.5">
+              {teamHasKpi && (
+                <div className="mb-2 flex justify-end">
+                  <div className="inline-flex rounded-md border border-[rgba(0,0,0,0.08)] bg-white p-[3px]">
+                    {(["list", "matrix"] as const).map((v) => (
+                      <button key={v} type="button" onClick={() => setViewMode(v)}
+                        className={`rounded-[5px] px-2.5 py-1 text-[11px] font-semibold ${
+                          viewMode === v ? "bg-[#111110] text-white" : "text-[#615D59]"
+                        }`}>
+                        {v === "list" ? "리스트" : "매트릭스 %"}
+                      </button>
+                    ))}
+                  </div>
+                </div>
+              )}
+              {members.map((m) => <MemberRow key={m.member} member={m} viewMode={viewMode} />)}
             </div>
-          )}
-          {members.map((m) => <MemberRow key={m.member} member={m} viewMode={viewMode} />)}
+          </div>
         </div>
       )}
     </div>

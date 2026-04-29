@@ -67,4 +67,29 @@ describe("parseDsh", () => {
       annual: 25,
     })
   })
+
+  it("normalizes confirmed CSM placeholder names", () => {
+    const empty: FormattedCell = { value: "", bg: null }
+    const row = (values: Record<number, string | number>): FormattedCell[] => {
+      const cells = Array(23).fill(empty).map(() => ({ value: "", bg: null }))
+      for (const [idx, value] of Object.entries(values)) cells[Number(idx)] = { value, bg: null }
+      return cells
+    }
+    const gridWithMembers: FormattedCell[][] = [
+      row({ 10: 4 }),
+      row({ 0: "CSM", 1: "Goal", 5: 20, 10: 2 }),
+      row({ 1: "Status", 5: 10, 10: 1 }),
+      row({ 3: "Somang", 4: "Goal", 5: 8, 10: 1 }),
+      row({ 4: "Status", 5: 4, 10: 1 }),
+      row({ 3: "New 2", 4: "Goal", 5: 12, 10: 1 }),
+      row({ 4: "Status", 5: 6, 10: 0 }),
+    ]
+
+    const out = parseDsh(gridWithMembers, 2026)
+    expect(out.members).toEqual({ Somang: "CSM", Minjae: "CSM" })
+    expect(out.rows.find((r) => r.level === "member" && r.member === "Minjae" && r.kind === "goal")).toMatchObject({
+      team: "CSM",
+      annual: 12,
+    })
+  })
 })

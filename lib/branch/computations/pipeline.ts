@@ -1,4 +1,5 @@
 import type { BranchRevDeal } from "@/lib/repositories/branch-deals"
+import { normalizeBranchMemberName } from "@/lib/branch/member-names"
 
 export function dealProbability(d: BranchRevDeal): number {
   if (d.first_payment) return 1.0
@@ -41,21 +42,24 @@ function revenueFromRev(d: BranchRevDeal): number {
 }
 
 export function listPipeline(deals: BranchRevDeal[], filter?: { team?: string; manager?: string; region?: string; importance?: string; stage?: PipelineStage }): PipelineRow[] {
+  const managerFilter = normalizeBranchMemberName(filter?.manager)
   return deals.filter((d) => {
+    const manager = normalizeBranchMemberName(d.manager)
     if (filter?.team && filter.team !== "ALL" && d.team !== filter.team) return false
-    if (filter?.manager && d.manager !== filter.manager) return false
+    if (managerFilter && manager !== managerFilter) return false
     if (filter?.region && d.region !== filter.region) return false
     if (filter?.importance && d.importance !== filter.importance) return false
     if (filter?.stage && stageOf(d) !== filter.stage) return false
     return true
   }).map((d) => {
+    const manager = normalizeBranchMemberName(d.manager)
     const hasRedFlags = Object.keys(d.monthly_red).length > 0
     const confirmed = Object.entries(d.monthly_payments).reduce((s, [ym, v]) => {
       if (hasRedFlags && !d.monthly_red[ym]) return s
       return s + Number(v)
     }, 0)
     return {
-      id: d.id, customer: d.customer_name, manager: d.manager, team: d.team,
+      id: d.id, customer: d.customer_name, manager, team: d.team,
       region: d.region, importance: d.importance, stage: stageOf(d),
       probability: dealProbability(d), target: Number(d.contract_target ?? 0),
       confirmed_revenue: d.first_payment ? confirmed : 0,
@@ -65,17 +69,19 @@ export function listPipeline(deals: BranchRevDeal[], filter?: { team?: string; m
 }
 
 export function listRevRevenue(deals: BranchRevDeal[], filter?: { team?: string; manager?: string; region?: string }): RevRevenueRow[] {
+  const managerFilter = normalizeBranchMemberName(filter?.manager)
   return deals
     .filter((d) => {
+      const manager = normalizeBranchMemberName(d.manager)
       if (filter?.team && filter.team !== "ALL" && d.team !== filter.team) return false
-      if (filter?.manager && d.manager !== filter.manager) return false
+      if (managerFilter && manager !== managerFilter) return false
       if (filter?.region && d.region !== filter.region) return false
       return true
     })
     .map((d) => ({
       id: d.id,
       customer: d.customer_name,
-      manager: d.manager,
+      manager: normalizeBranchMemberName(d.manager),
       team: d.team,
       region: d.region,
       revenue: revenueFromRev(d),

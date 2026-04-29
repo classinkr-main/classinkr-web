@@ -52,6 +52,20 @@ describe("parseKpi", () => {
     expect(out[0].pairs.OPP).toEqual({ goal: 0, actual: 0 })
   })
 
+  it("normalizes confirmed CSM member aliases", () => {
+    const empty: FormattedCell = { value: "", bg: null }
+    const grid: FormattedCell[][] = [Array(20).fill(empty), Array(20).fill(empty), Array(20).fill(empty)]
+    const row: FormattedCell[] = Array(20).fill(empty).map(() => ({ value: "", bg: null }))
+    row[0] = { value: "minjae", bg: null }
+    row[4] = { value: 5, bg: null }
+    row[14] = { value: 3, bg: null }
+    grid.push(row)
+
+    const out = parseKpi(grid)
+    expect(out[0].member).toBe("Minjae")
+    expect(out[0].pairs.LD).toEqual({ goal: 5, actual: 3 })
+  })
+
   it("stops after the FY summary block before monthly repeats", () => {
     const empty: FormattedCell = { value: "", bg: null }
     const row = (name: string, goal: number, actual: number) => {

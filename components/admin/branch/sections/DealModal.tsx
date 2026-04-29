@@ -17,7 +17,7 @@ export interface DealModalDeal {
   items?: string
 }
 
-function krw(n: number | undefined | null) {
+function cny(n: number | undefined | null) {
   if (n == null || !Number.isFinite(n)) return "-"
   if (n >= 100_000_000) return `${(n / 100_000_000).toFixed(1).replace(/\.0$/, "")}억`
   if (n >= 10_000) return `${Math.round(n / 10_000)}만`
@@ -77,7 +77,7 @@ export default function DealModal({ deal, onClose }: { deal: DealModalDeal | nul
             )}
             {deal.amount != null && (
               <p className="mt-1 text-[14px] font-bold" style={{ color: isConfirmed ? "#B43E3E" : "#1E5DA8" }}>
-                ₩{krw(deal.amount)}
+                ¥{cny(deal.amount)}
                 <span className="ml-1.5 text-[10.5px] font-semibold text-[#615D59]">
                   {isConfirmed ? "· 확정" : "· 가능성"}
                 </span>

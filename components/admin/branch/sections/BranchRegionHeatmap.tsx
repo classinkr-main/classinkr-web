@@ -1,10 +1,11 @@
 "use client"
-import { useEffect, useMemo, useState } from "react"
-import { MapPin } from "lucide-react"
+import { useEffect, useMemo, useRef, useState } from "react"
+import { MapPin, Minus, Plus, RotateCcw } from "lucide-react"
 import {
   KOREA_PROVINCE_BY_LABEL,
+  KOREA_PROVINCE_HEIGHT,
   KOREA_PROVINCE_SHAPES,
-  KOREA_PROVINCE_VIEWBOX,
+  KOREA_PROVINCE_WIDTH,
 } from "@/lib/branch/korea-province-map"
 import type { Period, Team } from "../types"
 
@@ -22,6 +23,10 @@ interface Row {
   region: string
   target: number
   revenue: number
+  // Future-month estimate (not yet confirmed). API returns this separately so
+  // the panel can break out 확정 vs 추정 instead of lumping them together.
+  projected: number
+  expected: number
   progress: number
   status: "good" | "warning" | "critical"
   velocity: number
@@ -50,7 +55,7 @@ const REGION_ALIASES: Array<[string, string]> = [
 ]
 
 function fmt(n: number) { return new Intl.NumberFormat("ko-KR", { maximumFractionDigits: 0 }).format(n) }
-function krw(n: number) {
+function cny(n: number) {
   if (!Number.isFinite(n)) return "-"
   if (n >= 100_000_000) return `${(n / 100_000_000).toFixed(1).replace(/\.0$/, "")}억`
   if (n >= 10_000) return `${Math.round(n / 10_000)}만`
@@ -113,10 +118,12 @@ function mergeForMap(rows: Row[]) {
     }
     const target = current.target + row.target
     const revenue = current.revenue + row.revenue
-    const progress = target > 0 ? (revenue / target) * 100 : 0
+    const projected = current.projected + row.projected
+    const expected = revenue + projected
+    const progress = target > 0 ? (expected / target) * 100 : 0
     mapped.set(canonical, {
       ...current,
-      target, revenue, progress,
+      target, revenue, projected, expected, progress,
       status: statusOf(progress),
       deals_count: current.deals_count + row.deals_count,
       confirmed_count: current.confirmed_count + row.confirmed_count,
@@ -132,6 +139,28 @@ function mergeForMap(rows: Row[]) {
   }
 }
 
+// Fill swapped to neutral gray for non-hovered regions when something IS
+// hovered — hue separation reads faster than opacity alone.
+const DIMMED_FILL = "#D5D2CB"
+
+// Manual offsets for metropolitan-city labels that would otherwise collide
+// with their surrounding province (e.g., 서울 sits inside 경기, 대전 inside 충남).
+// Values are in SVG units (viewBox 130×121.52).
+const LABEL_NUDGE: Record<string, { dx: number; dy: number }> = {
+  "서울": { dx: -3.5, dy: -2 },
+  "인천": { dx: -4, dy: -1.5 },
+  "세종": { dx: -1, dy: -3 },
+  "대전": { dx: 0, dy: 3 },
+  "광주": { dx: -3, dy: 0 },
+  "대구": { dx: 0, dy: -1.5 },
+  "울산": { dx: 2.5, dy: -1 },
+  "부산": { dx: 1.5, dy: 2 },
+}
+
+const ZOOM_MIN = 1
+const ZOOM_MAX = 4
+const ZOOM_STEP = 1.4
+
 function HeatMap({ rows, selectedLabel, onSelect }: {
   rows: MapRow[]
   selectedLabel: string | null
@@ -142,14 +171,83 @@ function HeatMap({ rows, selectedLabel, onSelect }: {
   const rowsByLabel = useMemo(() => new Map(rows.map((r) => [r.label, r])), [rows])
   const hoveredRow = hovered ? rowsByLabel.get(hovered) ?? null : null
 
+  // Sequential N→S reveal. Sort by centroid Y (smaller y = north in our SVG
+  // coord space) and stagger reveal so the eye follows the peninsula down.
+  const revealOrder = useMemo(
+    () => [...rows].sort((a, b) => a.y - b.y).map((r) => r.label),
+    [rows],
+  )
+  const [revealedCount, setRevealedCount] = useState(0)
+  useEffect(() => {
+    setRevealedCount(0)
+    if (revealOrder.length === 0) return
+    const timers: number[] = []
+    for (let i = 0; i < revealOrder.length; i++) {
+      timers.push(
+        window.setTimeout(() => setRevealedCount((c) => Math.max(c, i + 1)), i * 55),
+      )
+    }
+    return () => { timers.forEach((t) => window.clearTimeout(t)) }
+  }, [revealOrder])
+  const revealedSet = useMemo(
+    () => new Set(revealOrder.slice(0, revealedCount)),
+    [revealOrder, revealedCount],
+  )
+
+  // Zoom + pan state. Pan is in SVG coordinate units, capped so the user
+  // can't drag the peninsula off-screen.
+  const [zoom, setZoom] = useState(1)
+  const [pan, setPan] = useState({ x: 0, y: 0 })
+  const visibleW = KOREA_PROVINCE_WIDTH / zoom
+  const visibleH = KOREA_PROVINCE_HEIGHT / zoom
+  const maxPanX = (KOREA_PROVINCE_WIDTH - visibleW) / 2
+  const maxPanY = (KOREA_PROVINCE_HEIGHT - visibleH) / 2
+  const clampedPan = {
+    x: Math.max(-maxPanX, Math.min(maxPanX, pan.x)),
+    y: Math.max(-maxPanY, Math.min(maxPanY, pan.y)),
+  }
+  const viewX = (KOREA_PROVINCE_WIDTH - visibleW) / 2 + clampedPan.x
+  const viewY = (KOREA_PROVINCE_HEIGHT - visibleH) / 2 + clampedPan.y
+  const viewBox = `${viewX.toFixed(2)} ${viewY.toFixed(2)} ${visibleW.toFixed(2)} ${visibleH.toFixed(2)}`
+
+  const dragRef = useRef<{ startX: number; startY: number; panX: number; panY: number } | null>(null)
+  const svgRef = useRef<SVGSVGElement | null>(null)
+  // Pixels-to-SVG-units conversion uses the rendered svg width vs the viewBox
+  // width — independent of zoom, since viewBox adjusts with zoom.
+  function pxToSvg(dx: number, dy: number) {
+    const rect = svgRef.current?.getBoundingClientRect()
+    if (!rect || rect.width === 0) return { x: 0, y: 0 }
+    const ratio = visibleW / rect.width
+    return { x: dx * ratio, y: dy * ratio }
+  }
+
+  function applyZoom(next: number) {
+    const clamped = Math.max(ZOOM_MIN, Math.min(ZOOM_MAX, next))
+    if (clamped === 1) setPan({ x: 0, y: 0 })
+    setZoom(clamped)
+  }
+
   return (
     <div className="relative w-full"
       onMouseMove={(e) => {
         const rect = e.currentTarget.getBoundingClientRect()
         setMousePos({ x: e.clientX - rect.left, y: e.clientY - rect.top })
       }}
-      onMouseLeave={() => setHovered(null)}>
-      <svg viewBox={KOREA_PROVINCE_VIEWBOX} className="block h-auto w-full" role="group" aria-label="대한민국 지역별 매출 달성률 히트맵">
+      onMouseLeave={() => { setHovered(null); dragRef.current = null }}>
+      <svg ref={svgRef} viewBox={viewBox}
+        className={`block h-auto w-full overflow-visible ${zoom > 1 ? (dragRef.current ? "cursor-grabbing" : "cursor-grab") : ""}`}
+        role="group" aria-label="대한민국 지역별 매출 달성률 히트맵"
+        onMouseDown={(e) => {
+          if (zoom <= 1) return
+          dragRef.current = { startX: e.clientX, startY: e.clientY, panX: clampedPan.x, panY: clampedPan.y }
+        }}
+        onMouseMoveCapture={(e) => {
+          const drag = dragRef.current
+          if (!drag) return
+          const { x: dx, y: dy } = pxToSvg(e.clientX - drag.startX, e.clientY - drag.startY)
+          setPan({ x: drag.panX - dx, y: drag.panY - dy })
+        }}
+        onMouseUp={() => { dragRef.current = null }}>
         {/* Province base — quiet background shapes */}
         <g>
           {KOREA_PROVINCE_SHAPES.map((s) => (
@@ -165,15 +263,28 @@ function HeatMap({ rows, selectedLabel, onSelect }: {
             if (!row) return null
             const sel = selectedLabel === row.label
             const hov = hovered === row.label
-            const dimmed = hovered !== null && !hov
+            const someoneElseHovered = hovered !== null && !hov
+            const isRevealed = revealedSet.has(row.label)
+            const baseOpacity = Math.min(1, heatOpacity(row.progress) * (sel ? 1.15 : 1))
+            // Reveal step gates opacity to 0 until the path's turn.
+            const visibleOpacity = isRevealed
+              ? (someoneElseHovered ? 0.35 : (hov ? 1 : baseOpacity))
+              : 0
             return (
               <path key={`fill-${s.label}`} d={row.path}
-                fill={heatColor(row.progress)}
+                fill={someoneElseHovered ? DIMMED_FILL : heatColor(row.progress)}
                 stroke="#ffffff"
-                strokeWidth={sel ? 0.6 : 0.4}
-                opacity={dimmed ? 0.18 : Math.min(1, heatOpacity(row.progress) * (sel ? 1.2 : hov ? 1.1 : 1))}
-                className="cursor-pointer transition-opacity focus:outline-none focus-visible:outline-none [-webkit-tap-highlight-color:transparent]"
-                style={{ outline: "none" }}
+                strokeWidth={sel ? 0.45 : 0.3}
+                opacity={visibleOpacity}
+                className="cursor-pointer focus:outline-none focus-visible:outline-none [-webkit-tap-highlight-color:transparent]"
+                style={{
+                  outline: "none",
+                  transition: "opacity 280ms ease-out, fill 180ms ease-out, stroke-width 180ms ease-out, transform 200ms ease-out, filter 200ms ease-out",
+                  transformBox: "fill-box",
+                  transformOrigin: "center",
+                  transform: hov ? "scale(1.025)" : "scale(1)",
+                  filter: hov ? "drop-shadow(0 1.6px 1.6px rgba(0,0,0,0.32))" : "none",
+                }}
                 role="button" tabIndex={0}
                 aria-label={`${row.label} ${row.progress.toFixed(0)}%`}
                 onClick={() => onSelect(row)}
@@ -188,19 +299,33 @@ function HeatMap({ rows, selectedLabel, onSelect }: {
           })}
         </g>
 
-        {/* Centroid labels — small, only province name */}
+        {/* Centroid labels — small, only province name. Metropolitan cities
+            embedded inside larger provinces get nudged off their centroid so
+            they don't collide with the surrounding province's label. */}
         <g className="pointer-events-none">
-          {rows.map((r) => (
-            <text key={`label-${r.label}`} x={r.x} y={r.y + 1}
-              textAnchor="middle"
-              style={{
-                fontSize: 3.6, fontWeight: 700,
-                fill: r.progress >= 50 ? "#fff" : "#111110",
-                opacity: hovered && hovered !== r.label ? 0.25 : 0.95,
-              }}>
-              {r.label}
-            </text>
-          ))}
+          {rows.map((r) => {
+            const isRevealed = revealedSet.has(r.label)
+            const someoneElseHovered = hovered !== null && hovered !== r.label
+            const nudge = LABEL_NUDGE[r.label] ?? { dx: 0, dy: 0 }
+            // Font scales inversely with zoom so labels stay readable but
+            // don't blow up when the user zooms into a metro area.
+            const fontSize = Math.max(1.6, 2.5 / Math.sqrt(zoom))
+            return (
+              <text key={`label-${r.label}`} x={r.x + nudge.dx} y={r.y + 1 + nudge.dy}
+                textAnchor="middle"
+                style={{
+                  fontSize, fontWeight: 700,
+                  fill: someoneElseHovered ? "#8C8884" : (r.progress >= 50 ? "#fff" : "#111110"),
+                  opacity: isRevealed ? (someoneElseHovered ? 0.55 : 0.95) : 0,
+                  paintOrder: "stroke",
+                  stroke: someoneElseHovered ? "transparent" : (r.progress >= 50 ? "rgba(0,0,0,0.18)" : "rgba(255,255,255,0.85)"),
+                  strokeWidth: 0.35,
+                  transition: "opacity 280ms ease-out, fill 180ms ease-out",
+                }}>
+                {r.label}
+              </text>
+            )
+          })}
         </g>
       </svg>
 
@@ -220,15 +345,40 @@ function HeatMap({ rows, selectedLabel, onSelect }: {
             </span>
           </div>
           <p className="mt-1 text-[10.5px] text-[#615D59]">
-            <span className="font-semibold" style={{ color: "#B43E3E" }}>₩{krw(hoveredRow.revenue)}</span>
+            <span className="font-semibold" style={{ color: "#B43E3E" }}>¥{cny(hoveredRow.revenue)}</span>
+            {hoveredRow.projected > 0 && (
+              <span className="ml-1 text-[#615D59]">+ 추정 ¥{cny(hoveredRow.projected)}</span>
+            )}
             <span className="mx-1">/</span>
-            ₩{krw(hoveredRow.target)}
+            ¥{cny(hoveredRow.target)}
           </p>
           <p className="mt-0.5 text-[10px] text-[#615D59]">
             {hoveredRow.confirmed_count} / {hoveredRow.deals_count}건 · {statusLabel(hoveredRow.progress)}
           </p>
         </div>
       )}
+
+      {/* Zoom controls — top-right floating cluster */}
+      <div className="absolute right-2 top-2 z-20 flex flex-col gap-1 rounded-md border border-[rgba(0,0,0,0.08)] bg-white/90 p-0.5 shadow-[0_2px_6px_rgba(0,0,0,0.06)] backdrop-blur">
+        <button type="button" aria-label="확대"
+          disabled={zoom >= ZOOM_MAX}
+          onClick={() => applyZoom(zoom * ZOOM_STEP)}
+          className="flex h-6 w-6 items-center justify-center rounded text-[#111110] transition hover:bg-[#F0EFEC] disabled:opacity-30">
+          <Plus className="h-3.5 w-3.5" />
+        </button>
+        <button type="button" aria-label="축소"
+          disabled={zoom <= ZOOM_MIN}
+          onClick={() => applyZoom(zoom / ZOOM_STEP)}
+          className="flex h-6 w-6 items-center justify-center rounded text-[#111110] transition hover:bg-[#F0EFEC] disabled:opacity-30">
+          <Minus className="h-3.5 w-3.5" />
+        </button>
+        <button type="button" aria-label="원래 크기"
+          disabled={zoom === 1 && pan.x === 0 && pan.y === 0}
+          onClick={() => { setZoom(1); setPan({ x: 0, y: 0 }) }}
+          className="flex h-6 w-6 items-center justify-center rounded text-[#615D59] transition hover:bg-[#F0EFEC] disabled:opacity-30">
+          <RotateCcw className="h-3 w-3" />
+        </button>
+      </div>
 
       {/* Tiny legend */}
       <div className="mt-2 flex items-center gap-2 px-1 text-[10px] text-[#615D59]">
@@ -284,14 +434,24 @@ function DetailPanel({ row }: { row: MapRow | null }) {
       </div>
       <div className="mt-3 grid grid-cols-2 gap-x-4 gap-y-2 text-[11.5px]">
         <div>
-          <p className="text-[10px] text-[#A39E98]">확정</p>
+          <p className="text-[10px] text-[#A39E98]">확정 (당월·이전)</p>
           <p className="mt-0.5 text-[13px] font-bold tracking-[-0.01em]" style={{ color: "#B43E3E" }}>
-            ₩{krw(row.revenue)}
+            ¥{cny(row.revenue)}
           </p>
         </div>
         <div>
-          <p className="text-[10px] text-[#A39E98]">목표</p>
-          <p className="mt-0.5 text-[13px] font-semibold text-[#111110]">₩{krw(row.target)}</p>
+          <p className="text-[10px] text-[#A39E98]">추정 (미래)</p>
+          <p className="mt-0.5 text-[13px] font-semibold text-[#615D59]">¥{cny(row.projected)}</p>
+        </div>
+        <div>
+          <p className="text-[10px] text-[#A39E98]">합계 (확정+추정)</p>
+          <p className="mt-0.5 text-[13px] font-bold tracking-[-0.01em]" style={{ color: heatColor(row.progress) }}>
+            ¥{cny(row.expected)}
+          </p>
+        </div>
+        <div>
+          <p className="text-[10px] text-[#A39E98]">기간 목표</p>
+          <p className="mt-0.5 text-[13px] font-semibold text-[#111110]">¥{cny(row.target)}</p>
         </div>
         <div>
           <p className="text-[10px] text-[#A39E98]">딜</p>
@@ -300,9 +460,9 @@ function DetailPanel({ row }: { row: MapRow | null }) {
           </p>
         </div>
         <div>
-          <p className="text-[10px] text-[#A39E98]">잔량</p>
+          <p className="text-[10px] text-[#A39E98]">미시작 잔량</p>
           <p className="mt-0.5 text-[13px] font-bold" style={{ color: "#1E5DA8" }}>
-            ₩{krw(row.open_target)}
+            ¥{cny(row.open_target)}
           </p>
         </div>
       </div>
@@ -314,7 +474,7 @@ function DetailPanel({ row }: { row: MapRow | null }) {
               <li key={`${c.customer}-${c.manager ?? ""}`}
                 className="grid grid-cols-[minmax(0,1fr)_auto] items-baseline gap-3 py-0.5">
                 <span className="truncate text-[11.5px] text-[#111110]">{c.customer}</span>
-                <span className="whitespace-nowrap text-[11px] font-semibold tabular-nums" style={{ color: "#B43E3E" }}>₩{krw(c.revenue)}</span>
+                <span className="whitespace-nowrap text-[11px] font-semibold tabular-nums" style={{ color: "#B43E3E" }}>¥{cny(c.revenue)}</span>
               </li>
             ))}
           </ul>
@@ -372,7 +532,7 @@ export default function BranchRegionHeatmap({ team, period, refreshKey }: { team
         <p className="text-[10.5px] text-[#A39E98]">호버 시 지역 상세</p>
       </div>
 
-      <div className="grid w-full gap-6 p-5 lg:grid-cols-[minmax(280px,420px)_minmax(0,1fr)]">
+      <div className="grid w-full gap-6 p-5 lg:grid-cols-[minmax(520px,1fr)_minmax(280px,360px)]">
         <HeatMap rows={mappedRows} selectedLabel={selected?.label ?? null}
           onSelect={(r) => setSelectedLabel(r.label)} />
 

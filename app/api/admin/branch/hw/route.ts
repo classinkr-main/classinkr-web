@@ -5,8 +5,10 @@ import { listHwInbound, listHwOutbound, listHwStock, listHwSalesMonthly } from "
 const HW_PATTERNS: Array<{ key: string; match: RegExp; threshold: number; thresholdSheet: number }> = [
   { key: "IFP86",  match: /86[""]?\s*IFP/i, threshold: 2, thresholdSheet: 5 },
   { key: "IFP75",  match: /75[""]?\s*IFP/i, threshold: 2, thresholdSheet: 5 },
-  { key: "CAM_T1", match: /T1\s*카메라|카메라\s*T1/i, threshold: 2, thresholdSheet: 5 },
-  { key: "CAM_S1", match: /S1\s*카메라|카메라\s*S1/i, threshold: 2, thresholdSheet: 5 },
+  { key: "IFP65",  match: /65[""]?\s*IFP/i, threshold: 1, thresholdSheet: 3 },
+  { key: "T1",     match: /\bT1\b/i, threshold: 2, thresholdSheet: 5 },
+  { key: "S1",     match: /\bS1\b/i, threshold: 2, thresholdSheet: 5 },
+  { key: "STD1",   match: /\bSTD1\b/i, threshold: 2, thresholdSheet: 5 },
   { key: "OPS",    match: /\bOPS\b/i, threshold: 5, thresholdSheet: 5 },
 ]
 
@@ -17,18 +19,45 @@ export async function GET(req: NextRequest) {
       listHwInbound(), listHwOutbound(), listHwStock(), listHwSalesMonthly(),
     ])
     const stockByPattern = HW_PATTERNS.map((p) => {
-      const inSum = inbound.filter((r) => p.match.test(r.product)).reduce((s, r) => s + r.quantity, 0)
-      const outSum = outbound.filter((r) => p.match.test(r.product)).reduce((s, r) => s + r.quantity, 0)
+      const inboundRows = inbound.filter((r) => p.match.test(r.product))
+      const outboundRows = outbound.filter((r) => p.match.test(r.product))
+      const inSum = inboundRows.reduce((s, r) => s + r.quantity, 0)
+      const outSum = outboundRows.reduce((s, r) => s + r.quantity, 0)
       const fromIO = inSum - outSum
       const fromSheet = stock.filter((r) => p.match.test(r.product)).reduce((s, r) => s + r.quantity, 0)
-      return { product: p.key, io_stock: fromIO, sheet_stock: fromSheet, low: fromIO <= p.threshold || fromSheet <= p.thresholdSheet }
+      const hasIoLedger = inboundRows.length > 0 || outboundRows.length > 0
+      return {
+        product: p.key,
+        io_stock: fromIO,
+        sheet_stock: fromSheet,
+        low: (hasIoLedger && fromIO <= p.threshold) || fromSheet <= p.thresholdSheet,
+      }
     })
     const progress = outbound.reduce<Record<string, number>>((acc, r) => {
       const k = r.progress ?? "미정"
       acc[k] = (acc[k] ?? 0) + r.quantity
       return acc
     }, {})
-    return NextResponse.json({ stock: stockByPattern, sales_monthly: sales, progress })
+    const installRows = outbound.filter((r) => (r.progress ?? "").includes("설치"))
+    const byCustomer = new Map<string, { quantity: number; latest: string | null }>()
+    for (const r of installRows) {
+      const customer = (r.destination ?? "").trim()
+      if (!customer) continue
+      const cur = byCustomer.get(customer) ?? { quantity: 0, latest: null }
+      cur.quantity += r.quantity
+      if (r.outbound_date && (!cur.latest || r.outbound_date > cur.latest)) cur.latest = r.outbound_date
+      byCustomer.set(customer, cur)
+    }
+    const recent_installs = Array.from(byCustomer.entries())
+      .map(([customer, v]) => ({ customer, quantity: v.quantity, date: v.latest }))
+      .sort((a, b) => {
+        if (a.date && b.date) return b.date.localeCompare(a.date)
+        if (a.date) return -1
+        if (b.date) return 1
+        return b.quantity - a.quantity
+      })
+      .slice(0, 8)
+    return NextResponse.json({ stock: stockByPattern, sales_monthly: sales, progress, recent_installs })
   } catch (e) {
     return NextResponse.json({ error: String(e) }, { status: 500 })
   }

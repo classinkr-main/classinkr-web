@@ -46,7 +46,7 @@ import {
 // ─── helpers ──────────────────────────────────────────────────────────────────
 
 const KRW = new Intl.NumberFormat("ko-KR")
-const krw = (n: number | null | undefined) => (n == null ? "—" : `₩${KRW.format(Math.round(n))}`)
+const cny = (n: number | null | undefined) => (n == null ? "—" : `¥${KRW.format(Math.round(n))}`)
 const pct = (n: number | null | undefined) => (n == null ? "—" : `${n}%`)
 
 function statusTone(status: EventStatus): string {
@@ -357,15 +357,15 @@ function EventFunnelCard({
       <div className="mb-3 grid grid-cols-2 gap-2 sm:grid-cols-4">
         <div className="rounded-xl bg-[#fafaf8] px-3 py-2">
           <p className="text-[10px] font-medium uppercase tracking-[0.15em] text-[#1a1a1a]/35">광고비</p>
-          <p className="mt-0.5 text-[14px] font-bold text-[#111110]">{krw(economics.adSpendTotal)}</p>
+          <p className="mt-0.5 text-[14px] font-bold text-[#111110]">{cny(economics.adSpendTotal)}</p>
         </div>
         <div className="rounded-xl bg-[#fafaf8] px-3 py-2">
           <p className="text-[10px] font-medium uppercase tracking-[0.15em] text-[#1a1a1a]/35">매출</p>
-          <p className="mt-0.5 text-[14px] font-bold text-[#111110]">{krw(economics.revenue)}</p>
+          <p className="mt-0.5 text-[14px] font-bold text-[#111110]">{cny(economics.revenue)}</p>
         </div>
         <div className="rounded-xl bg-[#fafaf8] px-3 py-2">
           <p className="text-[10px] font-medium uppercase tracking-[0.15em] text-[#1a1a1a]/35">CPL</p>
-          <p className="mt-0.5 text-[14px] font-bold text-[#111110]">{economics.cpl != null ? krw(economics.cpl) : "—"}</p>
+          <p className="mt-0.5 text-[14px] font-bold text-[#111110]">{economics.cpl != null ? cny(economics.cpl) : "—"}</p>
         </div>
         <div className="rounded-xl bg-[#fafaf8] px-3 py-2">
           <p className="text-[10px] font-medium uppercase tracking-[0.15em] text-[#1a1a1a]/35">ROI</p>
@@ -918,18 +918,18 @@ export default function AdminCampaignsPage() {
         <KpiCard
           icon={<Wallet className="w-3.5 h-3.5" />}
           label="총 광고비"
-          value={loading ? "..." : krw(aggregate.totalSpend)}
+          value={loading ? "..." : cny(aggregate.totalSpend)}
         />
         <KpiCard
           icon={<TrendingUp className="w-3.5 h-3.5" />}
           label="총 매출"
-          value={loading ? "..." : krw(aggregate.totalRevenue)}
+          value={loading ? "..." : cny(aggregate.totalRevenue)}
           tone="success"
         />
         <KpiCard
           icon={<Target className="w-3.5 h-3.5" />}
           label="평균 CPL"
-          value={loading ? "..." : aggregate.avgCpl != null ? krw(aggregate.avgCpl) : "—"}
+          value={loading ? "..." : aggregate.avgCpl != null ? cny(aggregate.avgCpl) : "—"}
           hint={`총 리드 ${KRW.format(aggregate.totalLeads)}`}
         />
         <KpiCard
@@ -1004,7 +1004,7 @@ export default function AdminCampaignsPage() {
                       ))}
                     </Pie>
                     <Tooltip
-                      formatter={(v: number | undefined) => krw(v ?? 0)}
+                      formatter={(v: number | undefined) => cny(v ?? 0)}
                       contentStyle={{
                         backgroundColor: "#111110",
                         border: "none",
@@ -1023,7 +1023,7 @@ export default function AdminCampaignsPage() {
                       <span className="inline-block w-2 h-2 rounded-full" style={{ background: entry.color }} />
                       {entry.name}
                     </span>
-                    <span className="font-semibold text-[#111110]">{krw(entry.value)}</span>
+                    <span className="font-semibold text-[#111110]">{cny(entry.value)}</span>
                   </div>
                 ))}
               </div>

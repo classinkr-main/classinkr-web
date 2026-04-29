@@ -131,9 +131,14 @@ export default function ContactPage() {
                                     가장 빠른 상담 채널
                                 </h3>
                                 <p className="text-slate-500 text-lg font-medium max-w-md">
-                                    {kakaoChannelUrl
-                                        ? "복잡한 양식 작성 없이, 클래스인 카카오톡 채널로 즉시 매니저와 연결됩니다. 우측 QR코드를 스캔해주세요."
-                                        : "우측 QR 코드를 확인하시거나, 아래 문의 폼으로 바로 도입 상담을 남겨보세요."}
+                                    {kakaoChannelUrl ? (
+                                        "복잡한 양식 작성 없이, 클래스인 카카오톡 채널로 즉시 매니저와 연결됩니다. 우측 QR코드를 스캔해주세요."
+                                    ) : (
+                                        <>
+                                            우측 QR 코드를 확인하시거나,<br />
+                                            아래 문의 폼으로 바로 도입 상담을 남겨보세요.
+                                        </>
+                                    )}
                                 </p>
                                 <div className="pt-4">
                                     <a
@@ -166,16 +171,16 @@ export default function ContactPage() {
                     </div>
                 </motion.div>
 
-                <div className="grid lg:grid-cols-5 gap-6 lg:gap-8 items-start">
+                <div className="grid lg:grid-cols-5 gap-6 lg:gap-8 items-stretch">
                     {/* Contact Form */}
                     <motion.div 
                         initial={{ opacity: 0, x: -20 }}
                         animate={{ opacity: 1, x: 0 }}
                         transition={{ duration: 0.6, delay: 0.4 }}
-                        className="lg:col-span-3"
+                        className="lg:col-span-3 h-full"
                         id="contact-form"
                     >
-                        <Card className="bg-white border flex flex-col items-center w-full border-slate-100 shadow-[0_10px_40px_rgba(0,0,0,0.03)] rounded-[2rem] overflow-hidden">
+                        <Card className="bg-white border flex h-full flex-col items-center w-full border-slate-100 shadow-[0_10px_40px_rgba(0,0,0,0.03)] rounded-[2rem] overflow-hidden">
                             <CardHeader className="pb-5 pt-7 px-6 w-full border-b border-slate-50 bg-slate-50/50">
                                 <CardTitle className="text-2xl font-bold text-slate-900">도입 문의 남기기</CardTitle>
                                 <CardDescription className="text-slate-500 font-medium mt-2">
@@ -260,15 +265,15 @@ export default function ContactPage() {
                         initial={{ opacity: 0, x: 20 }}
                         animate={{ opacity: 1, x: 0 }}
                         transition={{ duration: 0.6, delay: 0.5 }}
-                        className="lg:col-span-2 space-y-6"
+                        className="lg:col-span-2 h-full"
                     >
-                        <div className="bg-white rounded-[2rem] p-6 md:p-8 border border-slate-100 shadow-[0_10px_40px_rgba(0,0,0,0.03)] h-full">
+                        <div className="bg-white rounded-[2rem] p-6 md:p-8 border border-slate-100 shadow-[0_10px_40px_rgba(0,0,0,0.03)] h-full flex flex-col">
                             <h3 className="text-xl font-bold text-slate-900 mb-5 pb-3 border-b border-slate-100">직접 연락하기</h3>
 
                             <div className="space-y-5">
                                 <div className="flex items-start gap-4">
-                                    <div className="w-9 h-9 rounded-xl bg-[#ECFDF5] flex items-center justify-center shrink-0 text-[#084734]">
-                                        <Phone className="w-4 h-4" />
+                                    <div className="w-10 h-10 rounded-full border border-slate-200 bg-white flex items-center justify-center shrink-0 text-[#084734]">
+                                        <Phone className="w-[17px] h-[17px]" strokeWidth={1.8} />
                                     </div>
                                     <div>
                                         <h4 className="font-bold text-slate-900 mb-0.5 text-sm">지사 전화</h4>
@@ -278,8 +283,8 @@ export default function ContactPage() {
                                 </div>
                                 
                                 <div className="flex items-start gap-4">
-                                    <div className="w-9 h-9 rounded-xl bg-[#ECFDF5] flex items-center justify-center shrink-0 text-[#084734]">
-                                        <Mail className="w-4 h-4" />
+                                    <div className="w-10 h-10 rounded-full border border-slate-200 bg-white flex items-center justify-center shrink-0 text-[#084734]">
+                                        <Mail className="w-[17px] h-[17px]" strokeWidth={1.8} />
                                     </div>
                                     <div>
                                         <h4 className="font-bold text-slate-900 mb-0.5 text-sm">이메일 문의</h4>
@@ -289,8 +294,8 @@ export default function ContactPage() {
                                 </div>
 
                                 <div className="flex items-start gap-4">
-                                    <div className="w-12 h-12 rounded-2xl bg-slate-100 flex items-center justify-center shrink-0 text-slate-600">
-                                        <MapPin className="w-4 h-4" />
+                                    <div className="w-10 h-10 rounded-full border border-slate-200 bg-white flex items-center justify-center shrink-0 text-[#084734]">
+                                        <MapPin className="w-[17px] h-[17px]" strokeWidth={1.8} />
                                     </div>
                                     <div>
                                         <h4 className="font-bold text-slate-900 mb-0.5 text-sm">오피스 위치</h4>
@@ -303,7 +308,7 @@ export default function ContactPage() {
                             </div>
 
                             {/* Map */}
-                            <div className="mt-6 pt-5 border-t border-slate-100">
+                            <div className="mt-auto pt-6 border-t border-slate-100">
                                 <div className="w-full h-36 bg-slate-100 rounded-2xl border border-slate-200 overflow-hidden relative">
                                     <iframe
                                         src="https://maps.google.com/maps?q=서울시+양천구+목동동로+233-1&t=&z=17&ie=UTF8&iwloc=&output=embed"

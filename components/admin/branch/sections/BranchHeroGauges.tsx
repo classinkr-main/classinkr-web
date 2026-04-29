@@ -2,7 +2,7 @@
 import { useMemo, useState } from "react"
 import type { BranchKpiResponse, BranchSummaryResponse } from "../types"
 
-function krw(n: number) {
+function cny(n: number) {
   if (!Number.isFinite(n)) return "-"
   if (n >= 100_000_000) return `${(n / 100_000_000).toFixed(1).replace(/\.0$/, "")}억`
   if (n >= 10_000) return `${Math.round(n / 10_000)}만`
@@ -66,9 +66,9 @@ function RoadmapGauge({ actual, goal }: { actual: number; goal: number }) {
           <p className="text-[11px] font-semibold uppercase tracking-[0.04em] text-[#615D59]">매출 로드맵</p>
           <div className="mt-1.5 flex flex-wrap items-baseline gap-2.5">
             <span className="whitespace-nowrap text-[28px] font-bold leading-none tracking-[-0.03em] text-[#111110]">
-              ₩{krw(actual)}
+              ¥{cny(actual)}
             </span>
-            <span className="whitespace-nowrap text-[12px] text-[#615D59]">/ 목표 ₩{krw(goal)}</span>
+            <span className="whitespace-nowrap text-[12px] text-[#615D59]">/ 목표 ¥{cny(goal)}</span>
           </div>
         </div>
         <span className="inline-flex items-center gap-1 rounded-full bg-[#ECFDF5] px-2.5 py-1 text-[11px] font-semibold text-[#084734]">
@@ -92,7 +92,7 @@ function RoadmapGauge({ actual, goal }: { actual: number; goal: number }) {
                 style={{ left: hover.x }} />
               <div className="pointer-events-none absolute -top-9 -translate-x-1/2 whitespace-nowrap rounded-md bg-[#111110] px-2 py-1 text-[10.5px] font-semibold text-white shadow-[0_2px_8px_rgba(0,0,0,0.18)]"
                 style={{ left: hover.x }}>
-                {hover.pct.toFixed(1)}% · ₩{krw((hover.pct / 100) * goal)}
+                {hover.pct.toFixed(1)}% · ¥{cny((hover.pct / 100) * goal)}
               </div>
             </>
           )}
@@ -153,9 +153,9 @@ export default function BranchHeroGauges({
           </p>
           <div className="mt-2 flex flex-wrap items-baseline gap-2.5">
             <span className="whitespace-nowrap text-[40px] font-bold leading-none tracking-[-0.03em] text-[#111110]">
-              ₩{krw(actual)}
+              ¥{cny(actual)}
             </span>
-            <span className="whitespace-nowrap text-[13px] text-[#615D59]">/ {krw(goal)}</span>
+            <span className="whitespace-nowrap text-[13px] text-[#615D59]">/ {cny(goal)}</span>
           </div>
           <div className="mt-3 flex flex-wrap gap-2">
             <span className="inline-flex items-center gap-1 rounded-full bg-[#ECFDF5] px-2.5 py-1 text-[11px] font-semibold text-[#084734]">
@@ -177,8 +177,8 @@ export default function BranchHeroGauges({
               </div>
               <GaugeRing value={t.status} goal={t.goal} />
               <p className="whitespace-nowrap text-center text-[11px] text-[#615D59]">
-                <span className="text-[13px] font-bold text-[#111110]">₩{krw(t.status)}</span>
-                <span> / {krw(t.goal)}</span>
+                <span className="text-[13px] font-bold text-[#111110]">¥{cny(t.status)}</span>
+                <span> / {cny(t.goal)}</span>
               </p>
             </div>
           )

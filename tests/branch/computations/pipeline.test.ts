@@ -1,5 +1,5 @@
 import { describe, it, expect } from "vitest"
-import { dealProbability, pipelineValue, stageOf, listPipeline } from "@/lib/branch/computations/pipeline"
+import { dealProbability, pipelineValue, stageOf, listPipeline, listRevRevenue } from "@/lib/branch/computations/pipeline"
 import type { BranchRevDeal } from "@/lib/repositories/branch-deals"
 
 const mk = (over: Partial<BranchRevDeal>): BranchRevDeal => ({
@@ -18,5 +18,14 @@ describe("pipeline", () => {
   it("listPipeline filters by team", () => {
     const rows = listPipeline([mk({ id:"a", team:"BD" }), mk({ id:"b", team:"MKT" })], { team: "BD" })
     expect(rows.map((r) => r.id)).toEqual(["a"])
+  })
+  it("normalizes confirmed CSM placeholder names in pipeline rows and filters", () => {
+    const deals = [
+      mk({ id: "a", manager: "New 2", team: "CSM", monthly_payments: { "2026-04": 100 } }),
+      mk({ id: "b", manager: "Somang", team: "CSM", monthly_payments: { "2026-04": 200 } }),
+    ]
+
+    expect(listPipeline(deals, { manager: "minjae" }).map((r) => r.manager)).toEqual(["Minjae"])
+    expect(listRevRevenue(deals, { manager: "Minjae" }).map((r) => r.manager)).toEqual(["Minjae"])
   })
 })
