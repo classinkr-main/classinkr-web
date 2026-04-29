@@ -8,37 +8,38 @@ const capabilities = [
   "복잡한 어댑터 없는 간결한 전원",
   "HDMI 등 외부 기기 연결 불필요",
   "별도 PC 본체 공간이 필요 없는 일체형",
+  "Window 기반 호환성 블록",
+  "미러링 제공",
 ]
 
-const opsEnergyModuleImage = "/images/product/hw/ops/ops-glass-energy-module.png"
+const opsEnergyModuleImage = "/images/product/hw/ops/ops-glass-energy-module-black.png"
 
 export default function AllInOneStatement() {
   return (
-    <section className="relative overflow-hidden bg-[#050806] text-white py-24 md:py-32 px-6">
-      <div className="pointer-events-none absolute inset-0 bg-[radial-gradient(circle_at_72%_44%,rgba(34,163,102,0.24),transparent_30%),radial-gradient(circle_at_84%_68%,rgba(110,231,183,0.10),transparent_26%),linear-gradient(90deg,#050806_0%,#07110B_42%,#06140D_100%)]" />
-      <div className="pointer-events-none absolute inset-y-0 right-0 w-1/2 bg-[linear-gradient(90deg,transparent,rgba(34,163,102,0.08),transparent)]" />
+    <section className="relative overflow-hidden bg-[#020403] text-white py-24 md:py-32 px-6">
+      <div className="pointer-events-none absolute inset-0 bg-[radial-gradient(ellipse_at_77%_42%,rgba(34,163,102,0.18)_0%,rgba(12,44,28,0.12)_28%,transparent_58%),radial-gradient(ellipse_at_50%_74%,rgba(255,255,255,0.035)_0%,transparent_42%),linear-gradient(90deg,#020403_0%,#030605_48%,#050907_100%)]" />
+      <div className="pointer-events-none absolute inset-y-0 right-0 w-[58%] bg-[linear-gradient(90deg,transparent,rgba(2,4,3,0.18)_38%,rgba(7,13,10,0.38)_100%)]" />
 
       <div className="relative max-w-7xl mx-auto grid lg:grid-cols-[0.92fr_1.08fr] gap-14 lg:gap-16 items-center">
         {/* Mobile: visual first */}
         <div className="order-first lg:order-last flex items-center justify-center lg:justify-end">
-          <div className="relative w-full max-w-2xl py-8">
-            <div className="pointer-events-none absolute inset-6 rounded-[2rem] bg-[#22A366]/20 blur-3xl" />
-            <div className="relative overflow-hidden rounded-[1.75rem] border border-white/10 bg-[#0B120E] shadow-[0_34px_90px_rgba(0,0,0,0.42)]">
-              <div className="relative aspect-[16/9]">
-                <Image
-                  src={opsEnergyModuleImage}
-                  alt="ClassIn 로고가 빛나는 글래스모피즘 OPS 모듈이 전자칠판에 에너지를 전달하는 3D 비유 이미지"
-                  fill
-                  sizes="(max-width: 768px) 92vw, 54vw"
-                  className="object-cover"
-                />
-                <div className="absolute inset-0 bg-[radial-gradient(circle_at_62%_52%,transparent_0%,transparent_46%,rgba(5,8,6,0.32)_100%)]" />
-              </div>
-            </div>
-            <div className="mt-4 grid grid-cols-3 gap-2 text-center text-[11px] font-semibold text-white/52">
-              <span className="rounded-full border border-white/10 bg-white/5 px-3 py-2">PC 본체 없음</span>
-              <span className="rounded-full border border-white/10 bg-white/5 px-3 py-2">어댑터 없음</span>
-              <span className="rounded-full border border-white/10 bg-white/5 px-3 py-2">HDMI 불필요</span>
+          <div className="relative w-full max-w-[46rem] py-4 lg:-mr-20">
+            <div className="pointer-events-none absolute inset-0 rounded-full bg-[#22A366]/20 blur-3xl" />
+            <div
+              className="relative aspect-[16/9] w-full"
+              style={{
+                WebkitMaskImage: "radial-gradient(ellipse at 62% 50%, #000 0%, #000 48%, rgba(0,0,0,0.72) 62%, transparent 82%)",
+                maskImage: "radial-gradient(ellipse at 62% 50%, #000 0%, #000 48%, rgba(0,0,0,0.72) 62%, transparent 82%)",
+              }}
+            >
+              <Image
+                src={opsEnergyModuleImage}
+                alt="ClassIn 로고가 빛나는 글래스모피즘 OPS 모듈이 전자칠판에 에너지를 전달하는 3D 비유 이미지"
+                fill
+                sizes="(max-width: 768px) 92vw, 54vw"
+                className="object-cover"
+              />
+              <div className="absolute inset-0 bg-[linear-gradient(90deg,rgba(5,8,6,0.34)_0%,transparent_24%,transparent_68%,rgba(5,8,6,0.18)_100%)]" />
             </div>
           </div>
         </div>

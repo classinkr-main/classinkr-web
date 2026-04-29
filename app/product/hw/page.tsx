@@ -1181,7 +1181,7 @@ export default function ProductHWPage() {
                     {/* Board bezel detail hero image */}
                     <motion.div {...fadeUp} className="max-w-3xl mx-auto mb-14 rounded-3xl overflow-hidden shadow-2xl">
                         <Image
-                            src="/images/product/hw/board/board-bezel-detail.png"
+                            src="/images/product/hw/board/board-bezel-detail.png?v=20260429-1834"
                             alt="ClassIn Board 프리미엄 브러시드 메탈 베젤 디테일"
                             width={900}
                             height={500}

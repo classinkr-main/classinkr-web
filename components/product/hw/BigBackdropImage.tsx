@@ -4,6 +4,8 @@ import Image from "next/image"
 import { useRef } from "react"
 import { motion, useScroll, useTransform } from "framer-motion"
 
+const bezelDetailImage = "/images/product/hw/board/board-bezel-detail.png?v=20260429-1834"
+
 export default function BigBackdropImage() {
   const sectionRef = useRef<HTMLElement>(null)
 
@@ -53,7 +55,7 @@ export default function BigBackdropImage() {
         style={{ scale: imageScale }}
       >
         <Image
-          src="/images/product/hw/board/board-bezel-detail.png"
+          src={bezelDetailImage}
           alt="ClassIn Board 베젤 클로즈업"
           fill
           className="object-cover"

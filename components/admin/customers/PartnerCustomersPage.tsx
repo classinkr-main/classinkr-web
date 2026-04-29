@@ -323,7 +323,3 @@ export function PartnerCustomersPage({
     </div>
   )
 }
-
-export default function CustomersPage() {
-  return <PartnerCustomersPage />
-}

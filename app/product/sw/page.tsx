@@ -151,6 +151,8 @@ const LESSON_ACTIVITIES: {
     },
 ]
 
+const ACTIVITY_ICON_VERSION = "20260429"
+
 /* ── Animation helpers ───────────────────────────────────────────── */
 const fadeUp = {
     initial: { opacity: 0, y: 30 },
@@ -1756,9 +1758,10 @@ export default function ProductPage() {
                                     <div className={act.featured ? "flex items-start gap-4" : "flex flex-col items-center text-center"}>
                                         <div className={`relative shrink-0 transition-transform duration-300 group-hover:scale-105 ${act.iconSizeClass}`}>
                                             <Image
-                                                src={act.iconSrc}
+                                                src={`${act.iconSrc}?v=${ACTIVITY_ICON_VERSION}`}
                                                 alt={act.iconAlt}
                                                 fill
+                                                unoptimized
                                                 className="object-contain"
                                                 sizes={act.featured ? "56px" : "40px"}
                                             />
