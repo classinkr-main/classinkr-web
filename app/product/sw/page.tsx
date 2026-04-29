@@ -304,7 +304,7 @@ function SlotDigit({ digit, delay, trigger, onDone }: { digit: string; delay: nu
                     <span
                         key={`${n}-${index}`}
                         ref={index === 0 ? cellRef : undefined}
-                        className={`block w-full h-[4.5rem] sm:h-28 md:h-36 flex-none flex items-center justify-center text-4xl sm:text-6xl md:text-8xl leading-none tabular-nums font-serif text-[#22A366] font-light ${done ? "animate-digit-glow" : ""}`}
+                        className={`block w-full h-[4.5rem] sm:h-28 md:h-36 flex-none flex items-center justify-center text-4xl sm:text-6xl md:text-8xl leading-none tabular-nums font-sans font-semibold text-[#22A366] ${done ? "animate-digit-glow" : ""}`}
                     >
                         {n}
                     </span>
@@ -326,7 +326,7 @@ function StatCard({ value, suffix, label, icon, delay, trigger }: { value: numbe
             style={{ perspective: 800 }}
         >
             <div className="flex justify-center mb-3 text-[#22A366]/70">{icon}</div>
-            <div className="text-2xl sm:text-3xl font-bold text-slate-900 mb-1 font-serif">
+            <div className="text-2xl sm:text-3xl font-sans font-bold text-slate-900 mb-1">
                 {value >= 100 ? display.toLocaleString() : display}{suffix}
             </div>
             <div className="text-xs sm:text-sm text-slate-400 font-medium leading-snug whitespace-pre-line">{label}</div>
@@ -423,18 +423,18 @@ function FinalCTASection() {
     return (
         <section ref={sectionRef} className="relative py-32 md:py-44 overflow-hidden" style={{ minHeight: "100vh" }}>
             <div className="absolute inset-0 bg-gradient-to-b from-[#F0FDF9] via-[#F0FDF9] to-[#FDFCF8]"></div>
+            <div className="absolute top-0 left-0 right-0 h-44 md:h-60 bg-gradient-to-b from-[#FDFCF8] via-[#F0FDF9]/85 to-transparent pointer-events-none"></div>
             <motion.div className="absolute inset-0 pointer-events-none" style={{ opacity: glowOpacity }}>
                 <motion.div className="absolute top-1/2 left-1/2 -translate-x-1/2 -translate-y-1/2 w-[900px] h-[700px] bg-gradient-radial from-green-200/30 via-green-100/10 to-transparent rounded-full blur-3xl" animate={{ x: [0, 30, -20, 0], y: [0, -20, 15, 0] }} transition={{ duration: 20, repeat: Infinity, ease: "easeInOut" }} />
             </motion.div>
-            <div className="absolute top-0 left-0 w-full h-px bg-gradient-to-r from-transparent via-green-300/20 to-transparent"></div>
             <motion.div className="absolute inset-0 pointer-events-none" initial={{ opacity: 0 }} animate={phase >= 1 ? { opacity: 1 } : {}} transition={{ duration: 1 }}>
                 {particles.map(({ key, ...rest }) => <AmbientParticle key={key} {...rest} />)}
             </motion.div>
 
             <div className="container mx-auto px-4 text-center max-w-5xl relative z-10">
-                <motion.p initial={{ opacity: 0, y: 20 }} animate={phase >= 1 ? { opacity: 1, y: 0 } : {}} transition={{ duration: 0.7 }} className="text-xl sm:text-2xl md:text-3xl text-slate-500 font-medium font-serif leading-relaxed mb-3">줌 열고, 녹화 누르고, 숙제 올리고—</motion.p>
-                <motion.p initial={{ opacity: 0, y: 20 }} animate={phase >= 1 ? { opacity: 1, y: 0 } : {}} transition={{ duration: 0.7, delay: 0.35 }} className="text-xl sm:text-2xl md:text-3xl text-slate-700 font-semibold font-serif mb-8">수업 하나에 도구만 네 개.</motion.p>
-                <motion.p initial={{ opacity: 0, filter: "blur(4px)" }} animate={phase >= 1 ? { opacity: 1, filter: "blur(0px)" } : {}} transition={{ duration: 0.8, delay: 0.7 }} className="text-lg sm:text-xl md:text-2xl text-[#22A366] font-medium font-serif italic mb-10">가르치는 일에만 집중할 수 있다면?</motion.p>
+                <motion.p initial={{ opacity: 0, y: 20 }} animate={phase >= 1 ? { opacity: 1, y: 0 } : {}} transition={{ duration: 0.7 }} className="text-xl sm:text-2xl md:text-3xl text-slate-500 font-sans font-medium leading-relaxed mb-3">줌 열고, 녹화 누르고, 숙제 올리고—</motion.p>
+                <motion.p initial={{ opacity: 0, y: 20 }} animate={phase >= 1 ? { opacity: 1, y: 0 } : {}} transition={{ duration: 0.7, delay: 0.35 }} className="text-xl sm:text-2xl md:text-3xl text-slate-700 font-sans font-semibold mb-8">수업 하나에 도구만 네 개.</motion.p>
+                <motion.p initial={{ opacity: 0, filter: "blur(4px)" }} animate={phase >= 1 ? { opacity: 1, filter: "blur(0px)" } : {}} transition={{ duration: 0.8, delay: 0.7 }} className="text-lg sm:text-xl md:text-2xl text-[#22A366] font-sans font-medium italic mb-10">가르치는 일에만 집중할 수 있다면?</motion.p>
                 <motion.div initial={{ opacity: 0, y: 10 }} animate={phase >= 1 ? { opacity: 1, y: 0 } : {}} transition={{ duration: 0.5, delay: 1.0 }} className="flex items-center justify-center gap-2 mb-14">
                     <div className="inline-flex items-center gap-2 px-4 py-1.5 rounded-full bg-green-50 border border-green-200/60 text-sm font-medium text-[#22A366]"><Clock className="w-3.5 h-3.5" />되찾은 수업 시간</div>
                 </motion.div>
@@ -445,11 +445,11 @@ function FinalCTASection() {
                     <motion.div className="flex justify-center mb-5" initial={{ scale: 0.9, opacity: 0.3, filter: "blur(8px)" }} animate={phase >= 2 ? { scale: 1, opacity: 1, filter: "blur(0px)" } : {}} transition={{ type: "spring", stiffness: 120, damping: 20 }}>
                         <div className="flex items-center gap-1.5 sm:gap-2.5 select-none relative">
                             <SlotDigit digit={displayDigits[0]} delay={0.2} trigger={phase >= 2} />
-                            <span className="text-4xl sm:text-6xl md:text-8xl font-serif text-slate-300 font-light">,</span>
+                            <span className="text-4xl sm:text-6xl md:text-8xl font-sans font-semibold text-slate-300">,</span>
                             <SlotDigit digit={displayDigits[1]} delay={0.35} trigger={phase >= 2} />
                             <SlotDigit digit={displayDigits[2]} delay={0.45} trigger={phase >= 2} />
                             <SlotDigit digit={displayDigits[3]} delay={0.55} trigger={phase >= 2} />
-                            <span className="text-4xl sm:text-6xl md:text-8xl font-serif text-slate-300 font-light">,</span>
+                            <span className="text-4xl sm:text-6xl md:text-8xl font-sans font-semibold text-slate-300">,</span>
                             <SlotDigit digit={displayDigits[4]} delay={0.65} trigger={phase >= 2} />
                             <SlotDigit digit={displayDigits[5]} delay={0.75} trigger={phase >= 2} />
                             <SlotDigit digit={displayDigits[6]} delay={0.85} trigger={phase >= 2} onDone={handleLastSlotDone} />
@@ -457,7 +457,7 @@ function FinalCTASection() {
                         </div>
                     </motion.div>
                 </div>
-                <motion.p initial={{ opacity: 0 }} animate={phase >= 2 ? { opacity: 1 } : {}} transition={{ delay: 0.5 }} className="text-3xl sm:text-4xl md:text-5xl font-serif text-slate-800 font-light tracking-tight mb-3">시간</motion.p>
+                <motion.p initial={{ opacity: 0 }} animate={phase >= 2 ? { opacity: 1 } : {}} transition={{ delay: 0.5 }} className="text-3xl sm:text-4xl md:text-5xl font-sans font-semibold text-slate-800 tracking-tight mb-3">시간</motion.p>
                 <motion.p initial={{ opacity: 0, y: 10 }} animate={phase >= 2 ? { opacity: 1, y: 0 } : {}} transition={{ delay: 0.7 }} className="text-sm sm:text-base text-slate-400 font-medium mb-6">지금 이 순간에도 수업이 진행되고 있습니다</motion.p>
 
                 <motion.div className="w-full max-w-sm mx-auto h-px bg-gradient-to-r from-transparent via-green-300/30 to-transparent mb-14 mt-14" initial={{ scaleX: 0 }} animate={phase >= 3 ? { scaleX: 1 } : {}} transition={{ duration: 0.6 }} style={{ originX: 0.5 }} />
@@ -467,7 +467,7 @@ function FinalCTASection() {
                     <StatCard value={10} suffix="가지" label={"참여형\n수업 활동"} icon={<Layers className="w-5 h-5" />} delay={0.2} trigger={phase >= 3} />
                     <StatCard value={98} suffix="%" label={`"과거로 못 돌아간다"\n응답률`} icon={<Sparkles className="w-5 h-5" />} delay={0.3} trigger={phase >= 3} />
                 </div>
-                <motion.p initial={{ opacity: 0, letterSpacing: "0.3em" }} animate={phase >= 3 ? { opacity: 1, letterSpacing: "0.05em" } : {}} transition={{ delay: 0.5, duration: 0.8 }} className="text-lg sm:text-xl font-serif text-slate-600 font-medium mb-10">수업만을 위해 만든 플랫폼, 다음은 당신의 교실입니다</motion.p>
+                <motion.p initial={{ opacity: 0, letterSpacing: "0.3em" }} animate={phase >= 3 ? { opacity: 1, letterSpacing: "0.05em" } : {}} transition={{ delay: 0.5, duration: 0.8 }} className="text-lg sm:text-xl font-sans text-slate-600 font-medium mb-10">수업만을 위해 만든 플랫폼, 다음은 당신의 교실입니다</motion.p>
                 <motion.div initial={{ opacity: 0, y: 20 }} animate={phase >= 3 ? { opacity: 1, y: 0 } : {}} transition={{ delay: 0.7, type: "spring", stiffness: 200, damping: 25 }} className="flex flex-col items-center gap-4">
                     <Button asChild className="h-14 rounded-full bg-[#009060] px-10 text-base font-bold text-white transition-all hover:scale-105 hover:bg-[#007A52] group">
                         <Link href={CHECKOUT_HREF}>{CHECKOUT_CTA_LABEL}<ArrowRight className="w-4 h-4 ml-2 group-hover:translate-x-1 transition-transform" /></Link>
@@ -670,7 +670,7 @@ function FutureVision1Section() {
                 <div className="grid lg:grid-cols-2 gap-16 items-center">
                     <motion.div initial={{ opacity: 0, x: -30 }} whileInView={{ opacity: 1, x: 0 }} viewport={{ once: true }} transition={{ duration: 0.8 }}>
                         <p className="text-[#6EE7B7]/60 text-sm font-semibold tracking-wider uppercase mb-6">The Future of Education</p>
-                        <h2 className="text-4xl md:text-5xl lg:text-6xl font-serif text-white leading-[1.1] tracking-tight mb-6">
+                        <h2 className="text-4xl md:text-5xl lg:text-6xl font-sans font-bold text-white leading-[1.1] tracking-tight mb-6">
                             2030년의<br />교실은<br /><span className="text-[#6EE7B7]">달라집니다</span>
                         </h2>
                         <p className="text-lg text-white/50 leading-relaxed">
@@ -887,7 +887,7 @@ function HardwareTeaserSection() {
             <div className="absolute inset-0 pointer-events-none opacity-10" style={{
                 backgroundImage: "radial-gradient(circle at 70% 50%, rgba(110,231,183,0.3) 0%, transparent 60%)",
             }} />
-            <div className="container mx-auto px-4 lg:px-8 max-w-6xl relative">
+            <div className="container mx-auto px-4 sm:px-6 lg:px-[10%] max-w-6xl relative">
                 <div className="grid lg:grid-cols-2 gap-14 items-center">
                     <motion.div initial={{ opacity: 0, x: -30 }} whileInView={{ opacity: 1, x: 0 }} viewport={{ once: true }} transition={{ duration: 0.7 }}>
                         <span className="inline-flex items-center gap-2 bg-[#6EE7B7]/10 text-[#6EE7B7] text-xs font-bold px-3 py-1.5 rounded-full mb-6">
@@ -898,7 +898,8 @@ function HardwareTeaserSection() {
                         </h2>
                         <p className="text-lg text-white/50 leading-relaxed mb-8">
                             AI 전자칠판 + 모션 트래킹 카메라 + AI 노이즈 캔슬링 마이크.
-                            클래스인 소프트웨어와 완벽하게 연동되는 스마트 교실을 구축하세요.
+                            <br />
+                            Classin 소프트웨어와 완벽하게 연동되는 스마트 교실을 구축하세요.
                         </p>
                         <div className="space-y-3 mb-10">
                             {[
@@ -1043,7 +1044,7 @@ function FAQSection() {
     const [open, setOpen] = useState<number | null>(null)
     return (
         <section className="py-24 md:py-32 bg-[#FDFCF8]">
-            <div className="container mx-auto px-4 lg:px-8 max-w-3xl">
+            <div className="container mx-auto px-4 lg:px-8 max-w-[24rem]">
                 <motion.div className="text-center mb-14" {...fadeUp}>
                     <EyebrowTag>FAQ</EyebrowTag>
                     <h2 className="text-3xl md:text-4xl font-serif text-[#1a1a19] leading-tight">
@@ -1471,7 +1472,7 @@ export default function ProductPage() {
                                 교육 전용 플랫폼
                             </div>
 
-                            <h1 className="text-4xl sm:text-5xl lg:text-6xl xl:text-7xl font-serif leading-[1.1] mb-8 text-white drop-shadow-[0_3px_20px_rgba(0,0,0,0.35)]">
+                            <h1 className="text-4xl sm:text-5xl lg:text-6xl xl:text-7xl font-sans font-bold leading-[1.1] mb-8 text-white drop-shadow-[0_3px_20px_rgba(0,0,0,0.35)]">
                                 수업을, 더{" "}
                                 <span className="text-[#6EE7B7]">수업답게</span>
                             </h1>
@@ -1554,14 +1555,14 @@ export default function ProductPage() {
                                     </thead>
                                     <tbody>
                                         {[
-                                            { label: "주요 목적", zoom: "비즈니스 회의 · 정보 전달", classin: "실시간 상호작용 · 교육" },
+                                            { label: "주요 목적", zoom: "비즈니스 회의 · 정보 전달", classin: "실시간 상호작용 수업 · 교육" },
                                             { label: "판서 기능", zoom: "기본적인 그리기 위주", classin: "레이어 기반 전문 교구 활용" },
                                             { label: "학생 참여", zoom: "채팅 또는 음소거 해제", classin: "교재 직접 조작 · 능동 참여" },
                                             { label: "수업 도구", zoom: "화면 공유 + 기본 그리기", classin: "30여 가지 인터랙티브 도구" },
                                             { label: "수업 활동", zoom: "없음 (별도 앱 필요)", classin: "10가지 참여형 수업 활동" },
-                                            { label: "학습 관리", zoom: "별도 LMS 필요", classin: "플랫폼 내 학습 데이터 축적" },
+                                            { label: "학습 관리", zoom: "별도 LMS 필요", classin: "자체 LMS 기능 탑재" },
                                             { label: "수업 형태", zoom: "화상 회의 1가지", classin: "1:1 ~ 수백 명 대형 강의" },
-                                            { label: "녹화 · 복습", zoom: "파일 수동 관리", classin: "클라우드 자동 저장 · 복습" },
+                                            { label: "녹화 · 복습", zoom: "파일 수동 관리", classin: "클라우드 자동 녹화& 업로드" },
                                         ].map((row, i) => (
                                             <motion.tr
                                                 key={i}

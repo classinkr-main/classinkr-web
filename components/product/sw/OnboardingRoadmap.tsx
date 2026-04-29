@@ -97,9 +97,9 @@ export default function OnboardingRoadmap() {
                                     className="group flex flex-col items-center text-center"
                                 >
                                     <div className="relative mb-5 z-10 shrink-0">
-                                        <div className="w-14 h-14 rounded-full bg-white border border-[#22A366]/30 flex items-center justify-center transition-all duration-200 ease-out group-hover:bg-[#22A366]/[0.08] group-hover:border-[#22A366]/60">
+                                        <div className="w-14 h-14 rounded-full bg-white border border-[#22A366]/30 text-[#22A366] flex items-center justify-center transition-all duration-200 ease-out group-hover:scale-105 group-hover:bg-[#22A366] group-hover:border-[#22A366] group-hover:text-white group-hover:shadow-[0_10px_24px_rgba(34,163,102,0.22)]">
                                             <Icon
-                                                className="w-6 h-6 text-[#22A366] transition-transform duration-200 ease-out group-hover:scale-110"
+                                                className="w-6 h-6 transition-transform duration-200 ease-out group-hover:scale-110"
                                                 strokeWidth={1.75}
                                             />
                                         </div>
