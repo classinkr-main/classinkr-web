@@ -27,7 +27,19 @@ export async function adminFetchJson<T>(url: string, init: RequestInit = {}): Pr
   if (!headers.has("Content-Type")) headers.set("Content-Type", "application/json")
 
   const res = await fetch(url, { ...init, headers })
-  const payload = await res.json().catch(() => null)
+  const text = await res.text()
+  let payload: unknown = null
+
+  if (text.trim()) {
+    try {
+      payload = JSON.parse(text)
+    } catch {
+      const contentType = res.headers.get("content-type") ?? "unknown"
+      const preview = text.replace(/\s+/g, " ").slice(0, 90)
+      throw new Error(`JSON 응답이 아닙니다. ${url} · HTTP ${res.status} · ${contentType} · ${preview}`)
+    }
+  }
+
   if (!res.ok) {
     const message = payload && typeof payload === "object" && "error" in payload
       ? String((payload as { error: unknown }).error)

@@ -10,6 +10,36 @@ function krw(n: number) {
   return n.toLocaleString()
 }
 
+// Map KPI metric codes (sheet abbreviations + API keys) to Korean labels
+const METRIC_LABEL: Record<string, string> = {
+  // sheet abbreviations
+  ACC: "계정",
+  ACC_NEW: "신규 계정",
+  LEAD: "리드",
+  OPP: "기회",
+  SOL: "솔루션",
+  VST: "방문",
+  EVT: "이벤트",
+  CONT: "콘텐츠",
+  TPL: "템플릿",
+  CASE: "사례연구",
+  // lowercase / API keys
+  account: "계정",
+  lead: "리드",
+  opportunity: "기회",
+  solution: "솔루션",
+  visit: "방문",
+  event: "이벤트",
+  content: "콘텐츠",
+  template: "템플릿",
+  caseStudy: "사례연구",
+}
+
+function metricLabel(metric: string | null | undefined): string {
+  if (!metric) return "-"
+  return METRIC_LABEL[metric] ?? METRIC_LABEL[metric.toUpperCase()] ?? metric
+}
+
 type Tone = "green" | "olive" | "amber" | "red" | "neutral"
 
 const TONE: Record<Tone, { bg: string; fg: string }> = {
@@ -52,7 +82,7 @@ export default function CoreKpiGrid({ data, loading, error }: { data: BranchSumm
           label="총 매출 (확정)" value={`₩${krw(data.revenue.confirmed)}`}
           sub={`목표 ₩${krw(data.revenue.goal)} · ${data.revenue.pacing_pct.toFixed(0)}%`} />
         <StatCard tone="amber" icon={<Sparkles className="h-[18px] w-[18px]" />}
-          label="활동 KPI 병목" value={data.bottleneck.metric ?? "-"}
+          label="활동 KPI 병목" value={metricLabel(data.bottleneck.metric)}
           sub={`${data.bottleneck.pct.toFixed(0)}% · ${data.bottleneck.worst_member ?? "-"}`} />
         <StatCard tone="olive" icon={<Users className="h-[18px] w-[18px]" />}
           label="가까운 딜" value={`${data.closing.count}건`}

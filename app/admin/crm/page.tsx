@@ -1,16 +1,19 @@
 "use client"
 
-import { useState, useEffect, useCallback } from "react"
+import { useState, useEffect, useCallback, useMemo } from "react"
+import Link from "next/link"
 import {
   RefreshCw, X, Copy, Check, Trash2,
   Phone, Mail, Building2, Users, Calendar,
   MessageSquare, Tag, Save, Loader2, Plus,
-  PhoneCall, Bell, UserPlus,
+  PhoneCall, Bell, UserPlus, Link2, ExternalLink,
 } from "lucide-react"
 import { clearAdminSessionStorage } from "@/lib/admin-client"
 import { Button } from "@/components/ui/button"
 import type { LeadRecord, LeadStatus } from "@/lib/repositories/leads"
 import type { ContactLogRecord, ContactLogType, ContactLogResult } from "@/lib/repositories/contact-logs"
+import type { PublicEvent } from "@/lib/types/public-events"
+import { parseEventToken, setEventToken } from "@/lib/types/event-metrics"
 
 // ─── 상수 ──────────────────────────────────────────────────────
 const STATUS_LABEL: Record<LeadStatus, string> = {
@@ -223,6 +226,7 @@ function LeadDrawer({
   lead,
   logs,
   logsLoading,
+  events,
   onClose,
   onStatusChange,
   onNotesChange,
@@ -236,6 +240,7 @@ function LeadDrawer({
   lead: LeadRecord
   logs: ContactLogRecord[]
   logsLoading: boolean
+  events: PublicEvent[]
   onClose: () => void
   onStatusChange: (id: string, status: LeadStatus) => void
   onNotesChange: (id: string, notes: string) => Promise<void>
@@ -246,7 +251,13 @@ function LeadDrawer({
   onDeleteLog: (logId: string) => Promise<void>
   onConvert: (lead: LeadRecord) => Promise<void>
 }) {
-  const [notes, setNotes] = useState(lead.notes ?? "")
+  const initial = parseEventToken(lead.notes)
+  const [notes, setNotes] = useState(initial.body)
+  const [linkedEventId, setLinkedEventId] = useState<string>(initial.token ?? "")
+  const linkedEvent = useMemo(() => {
+    if (!linkedEventId) return null
+    return events.find((e) => e.id === linkedEventId || e.slug === linkedEventId) ?? null
+  }, [events, linkedEventId])
   const [savingNotes, setSavingNotes] = useState(false)
   const [notesSaved, setNotesSaved] = useState(false)
   const [assignedTo, setAssignedTo] = useState(lead.assigned_to ?? "")
@@ -263,11 +274,15 @@ function LeadDrawer({
 
   const handleSaveNotes = async () => {
     setSavingNotes(true)
-    await onNotesChange(lead.id, notes)
+    const combined = setEventToken(notes, linkedEventId || null)
+    await onNotesChange(lead.id, combined)
     setSavingNotes(false)
     setNotesSaved(true)
     setTimeout(() => setNotesSaved(false), 2000)
   }
+
+  const linkedTokenInLead = parseEventToken(lead.notes).token ?? ""
+  const dirty = notes !== initial.body || linkedEventId !== linkedTokenInLead
 
   const handleSaveLog = async (entry: Parameters<typeof onAddLog>[0]) => {
     await onAddLog(entry)
@@ -492,6 +507,59 @@ function LeadDrawer({
             </div>
           )}
 
+          {/* 행사 연결 */}
+          <div className="px-6 py-4 border-b border-[#e8e8e4]">
+            <div className="flex items-center justify-between mb-3">
+              <p className="text-[11px] font-semibold text-[#1a1a1a]/30 uppercase tracking-wide">연결된 행사</p>
+              {linkedEvent && (
+                <Link
+                  href="/admin/campaigns"
+                  className="inline-flex items-center gap-1 text-[11px] text-[#1a1a1a]/40 hover:text-[#111110]"
+                >
+                  대시보드 보기
+                  <ExternalLink className="w-3 h-3" />
+                </Link>
+              )}
+            </div>
+            {linkedEvent ? (
+              <div className="mb-2 flex items-center justify-between gap-2 rounded-xl border border-[#e8e8e4] bg-[#ECFDF5]/40 px-3 py-2">
+                <div className="min-w-0 flex items-center gap-2">
+                  <Link2 className="w-3.5 h-3.5 shrink-0 text-[#084734]" />
+                  <div className="min-w-0">
+                    <p className="truncate text-[13px] font-semibold text-[#111110]">{linkedEvent.title}</p>
+                    <p className="text-[11px] text-[#1a1a1a]/40">{linkedEvent.category} · {linkedEvent.status}</p>
+                  </div>
+                </div>
+                <button
+                  onClick={() => setLinkedEventId("")}
+                  className="shrink-0 rounded-md p-1 text-[#1a1a1a]/40 hover:bg-white hover:text-[#B85C33]"
+                  title="연결 해제"
+                >
+                  <X className="w-3.5 h-3.5" />
+                </button>
+              </div>
+            ) : linkedEventId ? (
+              <div className="mb-2 rounded-xl border border-amber-200 bg-amber-50/60 px-3 py-2 text-[12px] text-amber-700">
+                토큰 <code className="rounded bg-white px-1 font-mono text-[11px]">event:{linkedEventId}</code>에 해당하는 행사가 없습니다.
+              </div>
+            ) : null}
+            <select
+              value={linkedEventId}
+              onChange={(e) => setLinkedEventId(e.target.value)}
+              className="w-full text-[13px] text-[#111110] bg-[#fafaf8] border border-[#e8e8e4] rounded-xl px-3 py-2.5 outline-none focus:border-[#c8c8c4] focus:bg-white transition-all"
+            >
+              <option value="">— 행사 선택 (선택) —</option>
+              {events.map((ev) => (
+                <option key={ev.id} value={ev.id}>
+                  [{ev.status}] {ev.title} · {ev.category}
+                </option>
+              ))}
+            </select>
+            <p className="mt-1.5 text-[11px] text-[#1a1a1a]/40">
+              선택 시 메모 첫 줄에 <code className="rounded bg-[#f0f0ec] px-1 font-mono text-[10px] text-[#111110]">[event:&lt;id&gt;]</code> 토큰이 자동 저장됩니다.
+            </p>
+          </div>
+
           {/* 메모 */}
           <div className="px-6 py-4 border-b border-[#e8e8e4]">
             <p className="text-[11px] font-semibold text-[#1a1a1a]/30 uppercase tracking-wide mb-3">메모</p>
@@ -504,11 +572,11 @@ function LeadDrawer({
             />
             <button
               onClick={handleSaveNotes}
-              disabled={savingNotes || notes === (lead.notes ?? "")}
+              disabled={savingNotes || !dirty}
               className="mt-2 flex items-center gap-1.5 px-3 py-1.5 rounded-lg text-[12px] font-medium bg-[#111110] text-white disabled:opacity-30 hover:bg-[#1a1a1a] transition-all"
             >
               {savingNotes ? <Loader2 className="w-3 h-3 animate-spin" /> : notesSaved ? <Check className="w-3 h-3" /> : <Save className="w-3 h-3" />}
-              {savingNotes ? "저장 중..." : notesSaved ? "저장됨" : "메모 저장"}
+              {savingNotes ? "저장 중..." : notesSaved ? "저장됨" : "메모·행사 저장"}
             </button>
           </div>
         </div>
@@ -551,6 +619,22 @@ export default function CrmPage() {
   const [logs, setLogs] = useState<ContactLogRecord[]>([])
   const [logsLoading, setLogsLoading] = useState(false)
   const [toast, setToast] = useState<{ msg: string; type: "success" | "error" } | null>(null)
+  const [events, setEvents] = useState<PublicEvent[]>([])
+
+  useEffect(() => {
+    let cancelled = false
+    void (async () => {
+      try {
+        const res = await adminFetch("/api/admin/events")
+        if (!res.ok) return
+        const data = (await res.json()) as PublicEvent[]
+        if (!cancelled) setEvents(Array.isArray(data) ? data : [])
+      } catch {
+        /* noop — 행사 연결 UI는 events 없어도 동작 */
+      }
+    })()
+    return () => { cancelled = true }
+  }, [])
 
   const showToast = (msg: string, type: "success" | "error" = "success") => {
     setToast({ msg, type })
@@ -948,6 +1032,7 @@ export default function CrmPage() {
           lead={selected}
           logs={logs}
           logsLoading={logsLoading}
+          events={events}
           onClose={() => setSelected(null)}
           onStatusChange={handleStatus}
           onNotesChange={handleNotes}

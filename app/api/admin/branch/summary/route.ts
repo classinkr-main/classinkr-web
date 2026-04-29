@@ -8,7 +8,7 @@ import { parseKpi, KPI_RANGE } from "@/lib/branch/parsers/kpi"
 import { listBranchRevDeals } from "@/lib/repositories/branch-deals"
 import { fyOf, FISCAL_MONTH_ORDER, fiscalQuarter, ymKey } from "@/lib/branch/fiscal"
 import { summarizeRevenue, bottleneckKpi, closingDeals } from "@/lib/branch/computations/core-kpi"
-import { listMembersByTeamFromDeals } from "@/lib/branch/computations/member-teams"
+import { listMembersByTeam } from "@/lib/branch/computations/pacing"
 import { summarizeCampaigns } from "@/lib/branch/computations/campaigns"
 import { getRecentSyncRuns } from "@/lib/repositories/branch-sync"
 import { listPublicEvents } from "@/lib/repositories/public-events"
@@ -76,7 +76,7 @@ export async function GET(req: NextRequest) {
     const [dsh, kpi, deals, campaigns, runs, events] = await Promise.all([
       readDsh(), readKpi(), listBranchRevDeals({ team }), summarizeCampaigns(now), getRecentSyncRuns(3), listPublicEvents(),
     ])
-    const teamMembers = new Set(listMembersByTeamFromDeals(deals, team))
+    const teamMembers = new Set(listMembersByTeam(dsh, team))
     const revenue = summarizeRevenue(dsh, deals, team, period, now)
     const bottle = bottleneckKpi(kpi, teamMembers)
     const closing = closingDeals(deals, now)

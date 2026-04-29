@@ -38,12 +38,15 @@ export interface ChatbotSource {
   score: number
 }
 
+export type HandoffIntent = "demo" | "support"
+
 export interface ChatbotQueryResponse {
   answer: string
   answerMode: AnswerMode
   answerEventId?: string
   confidence: number
   needsHandoff: boolean
+  handoffIntent: HandoffIntent
   sessionId?: string
   sources: ChatbotSource[]
   suggestedQuestions: string[]
@@ -362,6 +365,32 @@ function detectCategory(question: NormalizedQuestion, sources: ChatbotSource[]) 
   return sources[0]?.category ?? "general"
 }
 
+function detectHandoffIntent(question: NormalizedQuestion, category: string): HandoffIntent {
+  const text = question.redacted.toLowerCase()
+
+  if (
+    /컴플레인|불만|환불|짜증|최악|별로|안됨|안 됨|안 되|장애|오류|에러|버그|끊김|느려|느리|문제\s*해결|자세히|자세한\s*얘기|자세한\s*상담|상세\s*상담|기술\s*지원|이슈|고장|파손|as|a\/s/.test(
+      text
+    )
+  ) {
+    return "support"
+  }
+
+  if (
+    /데모|시연|도입\s*문의|도입\s*상담|도입\s*검토|견적|가격\s*문의|영업|구매\s*상담|체험|사용해\s*보고/.test(
+      text
+    )
+  ) {
+    return "demo"
+  }
+
+  if (category === "billing" || category === "hardware" || category === "troubleshooting") {
+    return "support"
+  }
+
+  return "demo"
+}
+
 function detectIntent(category: string) {
   switch (category) {
     case "billing":
@@ -387,7 +416,7 @@ function buildSuggestedQuestions(sources: ChatbotSource[]) {
   return Array.from(new Set([...suggestions, "상담 연결이 필요해요"])).slice(0, 3)
 }
 
-function composeAnswer(question: NormalizedQuestion, sources: ChatbotSource[]): Omit<ChatbotQueryResponse, "answerEventId" | "sessionId" | "warning"> {
+function composeAnswer(question: NormalizedQuestion, sources: ChatbotSource[]): Omit<ChatbotQueryResponse, "answerEventId" | "sessionId" | "warning" | "handoffIntent"> {
   if (sources.length === 0) {
     return {
       answer:
@@ -488,7 +517,7 @@ async function ensureSession(
 async function persistExchange(
   input: ChatbotQueryRequest,
   question: NormalizedQuestion,
-  response: Omit<ChatbotQueryResponse, "answerEventId" | "sessionId">,
+  response: Omit<ChatbotQueryResponse, "answerEventId" | "sessionId" | "handoffIntent">,
   meta: ChatbotRequestMeta,
   category: string,
   intent: string
@@ -598,7 +627,7 @@ async function upsertQuestionCluster(
   supabase: ReturnType<typeof createSupabaseAdminClient>,
   answerEventId: string,
   question: NormalizedQuestion,
-  response: Omit<ChatbotQueryResponse, "answerEventId" | "sessionId">,
+  response: Omit<ChatbotQueryResponse, "answerEventId" | "sessionId" | "handoffIntent">,
   category: string
 ) {
   const topSource = response.sources[0]
@@ -678,12 +707,14 @@ export async function handleChatbotQuery(
   const { sources, warning } = await searchKnowledgeSources(question)
   const category = detectCategory(question, sources)
   const intent = detectIntent(category)
+  const handoffIntent = detectHandoffIntent(question, category)
   const response = composeAnswer(question, sources)
   const persisted = await persistExchange(input, question, response, meta, category, intent)
 
   return {
     ...response,
     ...persisted,
+    handoffIntent,
     warning,
   }
 }

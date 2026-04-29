@@ -15,19 +15,17 @@ const COLORS = {
   red: "#B43E3E",
 }
 
-function statusOf(stock: number, threshold: number): "ok" | "low" | "critical" {
-  const ratio = threshold > 0 ? stock / threshold : 1
-  if (ratio < 0.5) return "critical"
-  if (ratio < 1) return "low"
-  return "ok"
-}
-
-const STATUS_LABEL = { ok: "정상", low: "부족", critical: "위험" } as const
+// Trust API's `low` flag for status — `sheet_stock` is total inventory in sheet,
+// not a threshold; previously deriving status from io/sheet ratio gave false
+// "critical" for healthy items (e.g., IFP86 io=10 sheet=1477 was wrongly flagged).
 const STATUS_TONE = {
-  ok:       { bg: "#ECFDF5", fg: "#084734" },
-  low:      { bg: "#FBF1E0", fg: "#A8741A" },
-  critical: { bg: "#FCE9E9", fg: "#B43E3E" },
+  ok:  { bg: "#ECFDF5", fg: "#084734", label: "정상" },
+  low: { bg: "#FCE9E9", fg: "#B43E3E", label: "부족" },
 } as const
+
+function statusToneOf(low: boolean) {
+  return low ? STATUS_TONE.low : STATUS_TONE.ok
+}
 
 function TableView({ rows }: { rows: StockRow[] }) {
   return (
@@ -35,25 +33,22 @@ function TableView({ rows }: { rows: StockRow[] }) {
       <div className="grid items-end gap-2 px-1 pb-2 text-[10px] font-semibold uppercase tracking-[0.04em] text-[#615D59]"
         style={{ gridTemplateColumns: "1fr 70px 100px 70px" }}>
         <span>품목</span>
-        <span className="text-right">현 재고</span>
+        <span className="text-right">출고 재고</span>
         <span className="text-right">시트 재고</span>
         <span className="text-right">상태</span>
       </div>
       {rows.map((s) => {
-        const threshold = Math.max(s.sheet_stock, 1)
-        const status = statusOf(s.io_stock, threshold)
-        const tone = STATUS_TONE[status]
+        const tone = statusToneOf(s.low)
         return (
           <div key={s.product}
             className="grid items-center gap-2 border-t border-[rgba(0,0,0,0.06)] px-1 py-2.5"
             style={{ gridTemplateColumns: "1fr 70px 100px 70px" }}>
             <div>
               <p className="text-[12.5px] font-semibold text-[#111110]">{s.product}</p>
-              <p className="mt-0.5 text-[10.5px] text-[#615D59]">시트 임계 {s.sheet_stock}대</p>
             </div>
             <div className="text-right">
               <p className="text-[16px] font-bold tracking-[-0.01em] text-[#111110]">{s.io_stock}</p>
-              <p className="text-[9.5px] text-[#615D59]">현 재고</p>
+              <p className="text-[9.5px] text-[#615D59]">대</p>
             </div>
             <p className="text-right text-[11px] text-[#615D59]">
               {s.sheet_stock}대
@@ -61,7 +56,7 @@ function TableView({ rows }: { rows: StockRow[] }) {
             <div className="text-right">
               <span className="inline-flex items-center rounded-full px-2 py-0.5 text-[10.5px] font-bold"
                 style={{ background: tone.bg, color: tone.fg }}>
-                {STATUS_LABEL[status]}
+                {tone.label}
               </span>
             </div>
           </div>
@@ -72,31 +67,39 @@ function TableView({ rows }: { rows: StockRow[] }) {
 }
 
 function GaugeView({ rows }: { rows: StockRow[] }) {
+  // Use the largest io_stock or sheet_stock value across rows as the gauge max,
+  // so bars are visually comparable.
+  const max = Math.max(1, ...rows.map((r) => Math.max(r.io_stock, r.sheet_stock)))
   return (
     <div className="flex flex-col gap-3">
       {rows.map((s) => {
-        const threshold = Math.max(s.sheet_stock, 1)
-        const max = Math.max(threshold * 2, s.io_stock + 5)
-        const status = statusOf(s.io_stock, threshold)
-        const color = status === "critical" ? COLORS.red : status === "low" ? COLORS.amber : COLORS.green
-        const stockPct = (s.io_stock / max) * 100
-        const threshPct = (threshold / max) * 100
+        const color = s.low ? COLORS.red : COLORS.green
+        const ioPct = (s.io_stock / max) * 100
+        const sheetPct = (s.sheet_stock / max) * 100
         return (
           <div key={s.product}>
             <div className="mb-1 flex justify-between">
               <div className="flex items-center gap-1.5">
                 <span className="block h-1.5 w-1.5 rounded-full" style={{ background: color }} />
                 <span className="text-[12px] font-semibold text-[#111110]">{s.product}</span>
+                {s.low && (
+                  <span className="rounded-full bg-[#FCE9E9] px-1.5 py-px text-[9px] font-bold text-[#B43E3E]">
+                    부족
+                  </span>
+                )}
               </div>
               <p className="text-[11px] text-[#615D59]">
-                <span className="text-[13px] font-bold text-[#111110]">{s.io_stock}</span>
-                <span> / 임계 {threshold}</span>
+                출고 <span className="text-[13px] font-bold text-[#111110]">{s.io_stock}</span>
+                <span className="mx-1">·</span>
+                시트 <span className="font-semibold text-[#111110]">{s.sheet_stock}</span>
               </p>
             </div>
-            <div className="relative h-4 overflow-visible rounded-md bg-[#F6F5F4]">
+            {/* Two-tone bar: io_stock filled, sheet_stock as faint outline marker */}
+            <div className="relative h-4 overflow-hidden rounded-md bg-[#F6F5F4]">
               <div className="absolute inset-y-0 left-0 rounded-md transition-[width] duration-500"
-                style={{ width: `${Math.min(100, stockPct)}%`, background: color, opacity: 0.85 }} />
-              <div className="absolute -inset-y-1 w-[2px] bg-[rgba(0,0,0,0.4)]" style={{ left: `${threshPct}%` }} />
+                style={{ width: `${Math.min(100, sheetPct)}%`, background: color, opacity: 0.18 }} />
+              <div className="absolute inset-y-0 left-0 rounded-md transition-[width] duration-500"
+                style={{ width: `${Math.min(100, ioPct)}%`, background: color, opacity: 0.85 }} />
             </div>
           </div>
         )

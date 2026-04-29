@@ -3,6 +3,7 @@ import "./globals.css";
 import { ConditionalHeader } from "@/components/sections/ConditionalHeader";
 import { ConditionalFooter } from "@/components/sections/ConditionalFooter";
 import { FloatingChatbot } from "@/components/ui/FloatingChatbot";
+import { ChannelTalkLoader } from "@/components/ui/ChannelTalkLoader";
 import { MobileFloatingCTA } from "@/components/ui/MobileFloatingCTA";
 import { AnalyticsProviders } from "@/components/AnalyticsProviders";
 import { ToastProvider } from "@/components/ui/toast";
@@ -65,6 +66,7 @@ export default function RootLayout({
           </main>
           <ConditionalFooter />
           <FloatingChatbot />
+          <ChannelTalkLoader />
           <MobileFloatingCTA />
           <AnalyticsProviders />
         </ToastProvider>

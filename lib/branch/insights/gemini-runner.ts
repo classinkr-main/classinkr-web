@@ -37,7 +37,7 @@ export async function callGemini(input: InsightInput, mode: GeminiMode = "qualit
   }
   const res = await fetch(url, {
     method: "POST",
-    headers: { "Content-Type": "application/json" },
+    headers: { "Content-Type": "application/json", "Connection": "close" },
     body: JSON.stringify(body),
   })
   if (!res.ok) {

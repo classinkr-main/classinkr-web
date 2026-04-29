@@ -12,12 +12,17 @@ const ACTUAL_COLS = [14, 15, 16, 17, 18] as const  // same metrics in Status sec
 
 export function parseKpi(grid: FormattedCell[][]): KpiRow[] {
   const out: KpiRow[] = []
-  // Header at row 1; data starts row 2 but row 2 is "Sum" totals — skip it.
+  // The first data block is the FY summary. Later blocks repeat the same rows by month.
   for (let r = 2; r < grid.length; r++) {
     const row = grid[r] ?? []
     const member = String(row[0]?.value ?? "").trim()
-    if (!member) continue
-    if (member.toLowerCase() === "sum") continue   // explicit guard for the totals row
+    if (!member) {
+      if (out.length > 0) break
+      continue
+    }
+    if (/^([1-9]|1[0-2])$/.test(member)) break
+    if (member.toLowerCase().startsWith("fy")) continue
+    if (member.toLowerCase() === "sum") continue
     const pairs = {} as Record<KpiMetric, KpiPair>
     KPI_METRICS.forEach((m, i) => {
       const goal = Number(row[GOAL_COLS[i]]?.value)

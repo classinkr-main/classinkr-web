@@ -249,10 +249,8 @@ export default function BranchDashboardClient() {
           {activeTab === "ai" && (
             <div role="tabpanel" className="space-y-6">
               <BranchAiInsights team={team} refreshKey={refreshKey} summary={summary.data} />
-              <div className="grid gap-6 xl:grid-cols-2">
-                <DataQualityPanel refreshKey={refreshKey} />
-                <CrmVariancePanel />
-              </div>
+              <DataQualityPanel refreshKey={refreshKey} />
+              <CrmVariancePanel />
             </div>
           )}
         </div>

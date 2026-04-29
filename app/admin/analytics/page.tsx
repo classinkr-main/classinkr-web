@@ -22,6 +22,7 @@ import {
   BarChart,
   CartesianGrid,
   Cell,
+  ComposedChart,
   Line,
   LineChart,
   Pie,
@@ -34,8 +35,15 @@ import {
 import type { LeadRecord } from "@/lib/db"
 import type { BlogPost } from "@/lib/blog-types"
 import type { EmailCampaign, Subscriber } from "@/lib/marketing-types"
+import type { PublicEvent } from "@/lib/types/public-events"
+import {
+  computeEconomics,
+  DEFAULT_EVENT_METRICS,
+  type EventFunnel,
+  type EventMetrics,
+} from "@/lib/types/event-metrics"
 
-type AnalyticsTab = "leads" | "sources" | "content" | "campaigns" | "tracking"
+type AnalyticsTab = "leads" | "sources" | "content" | "campaigns" | "events" | "tracking"
 
 function adminFetch(url: string) {
   const token = (typeof window !== "undefined" ? sessionStorage.getItem("admin_password") : null) ?? ""
@@ -299,6 +307,8 @@ export default function AnalyticsPage() {
   const [subscribers, setSubscribers] = useState<Subscriber[]>([])
   const [campaigns, setCampaigns] = useState<EmailCampaign[]>([])
   const [posts, setPosts] = useState<BlogPost[]>([])
+  const [publicEvents, setPublicEvents] = useState<PublicEvent[]>([])
+  const [eventMetricsMap, setEventMetricsMap] = useState<Record<string, EventMetrics>>({})
 
   useEffect(() => {
     let cancelled = false
@@ -306,12 +316,15 @@ export default function AnalyticsPage() {
     const load = async () => {
       setLoading(true)
 
-      const [leadData, subscriberData, campaignData, blogData] = await Promise.all([
-        fetchJson<{ leads: LeadRecord[] }>("/api/admin/leads"),
-        fetchJson<{ subscribers: Subscriber[] }>("/api/admin/subscribers"),
-        fetchJson<{ campaigns: EmailCampaign[] }>("/api/admin/email"),
-        fetchJson<{ posts: BlogPost[] }>("/api/admin/blog"),
-      ])
+      const [leadData, subscriberData, campaignData, blogData, eventData, metricsData] =
+        await Promise.all([
+          fetchJson<{ leads: LeadRecord[] }>("/api/admin/leads"),
+          fetchJson<{ subscribers: Subscriber[] }>("/api/admin/subscribers"),
+          fetchJson<{ campaigns: EmailCampaign[] }>("/api/admin/email"),
+          fetchJson<{ posts: BlogPost[] }>("/api/admin/blog"),
+          fetchJson<PublicEvent[]>("/api/admin/events"),
+          fetchJson<{ metrics: Record<string, EventMetrics> }>("/api/admin/event-metrics"),
+        ])
 
       if (cancelled) return
 
@@ -319,6 +332,8 @@ export default function AnalyticsPage() {
       setSubscribers(subscriberData?.subscribers ?? [])
       setCampaigns(campaignData?.campaigns ?? [])
       setPosts(blogData?.posts ?? [])
+      setPublicEvents(Array.isArray(eventData) ? eventData : [])
+      setEventMetricsMap(metricsData?.metrics ?? {})
       setLoading(false)
     }
 
@@ -519,9 +534,91 @@ export default function AnalyticsPage() {
     { key: "leads", label: "리드" },
     { key: "sources", label: "소스" },
     { key: "content", label: "콘텐츠" },
-    { key: "campaigns", label: "캠페인" },
+    { key: "campaigns", label: "이메일 캠페인" },
+    { key: "events", label: "행사 funnel" },
     { key: "tracking", label: "추적 현황" },
   ]
+
+  // ─── 행사 funnel 데이터 (events tab) ────────────────────────────────────────
+  const eventTabNowMs = today.getTime()
+  const eventFunnelRows = publicEvents.map((event) => {
+    const metrics = eventMetricsMap[event.id] ?? {
+      ...DEFAULT_EVENT_METRICS,
+      eventId: event.id,
+      updatedAt: "",
+    }
+    const tokenId = `event:${event.id}`.toLowerCase()
+    const tokenSlug = event.slug ? `event:${event.slug}`.toLowerCase() : null
+    const attributedCount = leads.filter((l) => {
+      const haystack = `${l.source ?? ""} ${l.notes ?? ""}`.toLowerCase()
+      return haystack.includes(tokenId) || (tokenSlug ? haystack.includes(tokenSlug) : false)
+    }).length
+    const startMs = new Date(event.startsAt).getTime()
+    const endMs = event.endsAt ? new Date(event.endsAt).getTime() : eventTabNowMs
+    const duringCount = leads.filter((l) => {
+      const t = new Date(l.timestamp).getTime()
+      return t >= startMs && t <= endMs
+    }).length
+    const leadsCount = attributedCount > 0 ? attributedCount : duringCount
+    const funnel: EventFunnel = {
+      impressions: metrics.impressionsCount ?? 0,
+      leads: leadsCount,
+      applications: metrics.applicationsCount ?? 0,
+      qualifiedLeads: metrics.qualifiedLeadsCount ?? 0,
+      attendees: metrics.attendeesCount ?? 0,
+      deals: metrics.dealsCount ?? 0,
+    }
+    const economics = computeEconomics(funnel, metrics)
+    return { event, metrics, funnel, economics }
+  })
+
+  const eventTotals = eventFunnelRows.reduce(
+    (acc, row) => ({
+      impressions: acc.impressions + row.funnel.impressions,
+      leads: acc.leads + row.funnel.leads,
+      applications: acc.applications + row.funnel.applications,
+      qualifiedLeads: acc.qualifiedLeads + row.funnel.qualifiedLeads,
+      attendees: acc.attendees + row.funnel.attendees,
+      deals: acc.deals + row.funnel.deals,
+      spend: acc.spend + row.economics.adSpendTotal,
+      revenue: acc.revenue + row.economics.revenue,
+    }),
+    {
+      impressions: 0,
+      leads: 0,
+      applications: 0,
+      qualifiedLeads: 0,
+      attendees: 0,
+      deals: 0,
+      spend: 0,
+      revenue: 0,
+    }
+  )
+
+  const overallEventCpl = eventTotals.leads > 0 ? Math.round(eventTotals.spend / eventTotals.leads) : null
+  const overallEventCpd = eventTotals.deals > 0 ? Math.round(eventTotals.spend / eventTotals.deals) : null
+  const overallEventRoi =
+    eventTotals.spend > 0 ? Math.round(((eventTotals.revenue - eventTotals.spend) / eventTotals.spend) * 100) : null
+
+  const eventCompareData = eventFunnelRows
+    .map((row) => ({
+      name: row.event.title.length > 12 ? row.event.title.slice(0, 11) + "…" : row.event.title,
+      리드: row.funnel.leads,
+      신청: row.funnel.applications,
+      참석: row.funnel.attendees,
+      딜: row.funnel.deals,
+    }))
+    .slice(0, 8)
+
+  const eventEconomicsData = eventFunnelRows
+    .filter((row) => row.economics.adSpendTotal > 0)
+    .map((row) => ({
+      name: row.event.title.length > 12 ? row.event.title.slice(0, 11) + "…" : row.event.title,
+      "광고비(₩K)": Math.round(row.economics.adSpendTotal / 1000),
+      "매출(₩K)": Math.round(row.economics.revenue / 1000),
+      ROI: row.economics.roi ?? 0,
+    }))
+    .slice(0, 8)
 
   return (
     <div className="px-4 pt-8 pb-16 sm:px-6 sm:pt-10 sm:pb-20 lg:px-8">
@@ -1098,6 +1195,213 @@ export default function AnalyticsPage() {
                     <span className="text-[#1a1a1a]/40">{tag.count}회</span>
                   </div>
                 ))}
+              </div>
+            )}
+          </Panel>
+        </div>
+      )}
+
+      {activeTab === "events" && (
+        <div className="space-y-6">
+          {/* KPI 4종 */}
+          <div className="grid grid-cols-2 gap-4 lg:grid-cols-4">
+            <SummaryCard
+              icon={<Send className="w-4 h-4" />}
+              label="총 행사"
+              value={publicEvents.length}
+              hint={`총 광고비 ₩${new Intl.NumberFormat("ko-KR").format(eventTotals.spend)}`}
+            />
+            <SummaryCard
+              icon={<Users className="w-4 h-4" />}
+              label="누적 리드 → 딜"
+              value={`${eventTotals.leads} → ${eventTotals.deals}`}
+              hint={`참석 ${eventTotals.attendees}명`}
+            />
+            <SummaryCard
+              icon={<BarChart2 className="w-4 h-4" />}
+              label="평균 CPL · CPD"
+              value={
+                overallEventCpl != null
+                  ? `₩${new Intl.NumberFormat("ko-KR").format(overallEventCpl)}`
+                  : "—"
+              }
+              hint={
+                overallEventCpd != null
+                  ? `CPD ₩${new Intl.NumberFormat("ko-KR").format(overallEventCpd)}`
+                  : "딜 데이터 부족"
+              }
+            />
+            <SummaryCard
+              icon={<CheckCircle2 className="w-4 h-4" />}
+              label="누적 ROI"
+              value={overallEventRoi != null ? `${overallEventRoi}%` : "—"}
+              hint={`매출 ₩${new Intl.NumberFormat("ko-KR").format(eventTotals.revenue)}`}
+            />
+          </div>
+
+          <Panel
+            title="행사별 깔때기 비교"
+            description="리드 → 신청 → 참석 → 딜의 단계별 절대 수치를 행사별로 비교합니다."
+            action={
+              <a
+                href="/admin/campaigns"
+                className="flex items-center gap-1 text-[12px] text-[#1a1a1a]/40 transition-colors hover:text-[#111110]"
+              >
+                캠페인 대시보드 열기
+                <ChevronRight className="w-3 h-3" />
+              </a>
+            }
+          >
+            {eventCompareData.length === 0 ? (
+              <EmptyState
+                title="아직 등록된 행사가 없습니다."
+                description="행사 캠페인 대시보드에서 행사를 만들고 깔때기 메트릭을 입력하면 비교 차트가 채워집니다."
+                action={
+                  <a
+                    href="/admin/events"
+                    className="inline-flex items-center gap-1.5 rounded-lg bg-[#111110] px-3 py-2 text-[12px] font-medium text-white"
+                  >
+                    행사 관리 열기
+                    <ChevronRight className="w-3 h-3" />
+                  </a>
+                }
+              />
+            ) : (
+              <div className="h-[300px] w-full">
+                <ResponsiveContainer width="100%" height="100%">
+                  <BarChart data={eventCompareData}>
+                    <CartesianGrid stroke="#f0f0ec" vertical={false} />
+                    <XAxis dataKey="name" fontSize={11} stroke="#84827a" />
+                    <YAxis fontSize={11} stroke="#84827a" />
+                    <Tooltip
+                      contentStyle={{
+                        backgroundColor: "#111110",
+                        border: "none",
+                        borderRadius: 12,
+                        color: "white",
+                        fontSize: 12,
+                      }}
+                    />
+                    <Bar dataKey="리드" fill="#84827a" radius={[4, 4, 0, 0]} />
+                    <Bar dataKey="신청" fill="#1a73e8" radius={[4, 4, 0, 0]} />
+                    <Bar dataKey="참석" fill="#084734" radius={[4, 4, 0, 0]} />
+                    <Bar dataKey="딜" fill="#B85C33" radius={[4, 4, 0, 0]} />
+                  </BarChart>
+                </ResponsiveContainer>
+              </div>
+            )}
+          </Panel>
+
+          <Panel
+            title="광고비 vs 매출 (행사별, 단위: ₩1,000)"
+            description="투자 대비 회수율을 한눈에 봅니다. ROI는 우측 라인입니다."
+          >
+            {eventEconomicsData.length === 0 ? (
+              <TableEmpty message="광고비 입력이 있는 행사가 없습니다." />
+            ) : (
+              <div className="h-[300px] w-full">
+                <ResponsiveContainer width="100%" height="100%">
+                  <ComposedChart data={eventEconomicsData}>
+                    <CartesianGrid stroke="#f0f0ec" vertical={false} />
+                    <XAxis dataKey="name" fontSize={11} stroke="#84827a" />
+                    <YAxis yAxisId="left" fontSize={11} stroke="#84827a" />
+                    <YAxis yAxisId="right" orientation="right" fontSize={11} stroke="#84827a" />
+                    <Tooltip
+                      contentStyle={{
+                        backgroundColor: "#111110",
+                        border: "none",
+                        borderRadius: 12,
+                        color: "white",
+                        fontSize: 12,
+                      }}
+                    />
+                    <Bar yAxisId="left" dataKey="광고비(₩K)" fill="#B85C33" radius={[4, 4, 0, 0]} />
+                    <Bar yAxisId="left" dataKey="매출(₩K)" fill="#084734" radius={[4, 4, 0, 0]} />
+                    <Line yAxisId="right" type="monotone" dataKey="ROI" stroke="#111110" strokeWidth={2} dot={{ r: 3 }} />
+                  </ComposedChart>
+                </ResponsiveContainer>
+              </div>
+            )}
+          </Panel>
+
+          <Panel
+            title="행사별 효율 표"
+            description="리드, 유효 전환, 참석률, 딜 전환, CPL, CPD, ROI를 한 줄에 모았습니다."
+            action={
+              <a
+                href="/admin/campaigns"
+                className="flex items-center gap-1 text-[12px] text-[#1a1a1a]/40 transition-colors hover:text-[#111110]"
+              >
+                상세 입력으로
+                <ChevronRight className="w-3 h-3" />
+              </a>
+            }
+          >
+            {eventFunnelRows.length === 0 ? (
+              <TableEmpty message="등록된 행사가 없습니다." />
+            ) : (
+              <div className="overflow-x-auto">
+                <table className="min-w-[820px] w-full text-[12px]">
+                  <thead className="bg-[#fafaf8] text-left text-[#1a1a1a]/45">
+                    <tr>
+                      <th className="px-3 py-2 font-medium">행사</th>
+                      <th className="px-3 py-2 font-medium">상태</th>
+                      <th className="px-3 py-2 font-medium text-right">리드</th>
+                      <th className="px-3 py-2 font-medium text-right">유효 전환</th>
+                      <th className="px-3 py-2 font-medium text-right">참석률</th>
+                      <th className="px-3 py-2 font-medium text-right">딜 전환</th>
+                      <th className="px-3 py-2 font-medium text-right">광고비</th>
+                      <th className="px-3 py-2 font-medium text-right">CPL</th>
+                      <th className="px-3 py-2 font-medium text-right">ROI</th>
+                    </tr>
+                  </thead>
+                  <tbody className="divide-y divide-[#f0f0ec]">
+                    {eventFunnelRows.map((row) => (
+                      <tr key={row.event.id} className="hover:bg-[#fafaf8]">
+                        <td className="px-3 py-2.5">
+                          <p className="truncate font-medium text-[#111110]">{row.event.title}</p>
+                          <p className="text-[10px] text-[#1a1a1a]/35">{row.event.category}</p>
+                        </td>
+                        <td className="px-3 py-2.5">
+                          <span className="rounded-full bg-[#f0f0ec] px-2 py-0.5 text-[10px] font-medium text-[#1a1a1a]/55">
+                            {row.event.status}
+                          </span>
+                        </td>
+                        <td className="px-3 py-2.5 text-right font-semibold text-[#111110]">{row.funnel.leads}</td>
+                        <td className="px-3 py-2.5 text-right text-[#1a1a1a]/60">
+                          {row.economics.leadConversionRate != null ? `${row.economics.leadConversionRate}%` : "—"}
+                        </td>
+                        <td className="px-3 py-2.5 text-right text-[#1a1a1a]/60">
+                          {row.economics.attendanceRate != null ? `${row.economics.attendanceRate}%` : "—"}
+                        </td>
+                        <td className="px-3 py-2.5 text-right text-[#1a1a1a]/60">
+                          {row.economics.dealConversionRate != null ? `${row.economics.dealConversionRate}%` : "—"}
+                        </td>
+                        <td className="px-3 py-2.5 text-right text-[#1a1a1a]/60">
+                          {row.economics.adSpendTotal > 0
+                            ? `₩${new Intl.NumberFormat("ko-KR").format(row.economics.adSpendTotal)}`
+                            : "—"}
+                        </td>
+                        <td className="px-3 py-2.5 text-right text-[#1a1a1a]/60">
+                          {row.economics.cpl != null
+                            ? `₩${new Intl.NumberFormat("ko-KR").format(row.economics.cpl)}`
+                            : "—"}
+                        </td>
+                        <td
+                          className={`px-3 py-2.5 text-right font-semibold ${
+                            row.economics.roi == null
+                              ? "text-[#1a1a1a]/30"
+                              : row.economics.roi >= 0
+                                ? "text-[#084734]"
+                                : "text-[#B85C33]"
+                          }`}
+                        >
+                          {row.economics.roi != null ? `${row.economics.roi}%` : "—"}
+                        </td>
+                      </tr>
+                    ))}
+                  </tbody>
+                </table>
               </div>
             )}
           </Panel>

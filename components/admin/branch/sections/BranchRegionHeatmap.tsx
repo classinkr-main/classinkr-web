@@ -243,17 +243,16 @@ function HeatMap({ rows, selectedLabel, onSelect }: {
 }
 
 function CompactRow({ row, rank, selected, onSelect }: { row: Row; rank: number; selected: boolean; onSelect: () => void }) {
-  // Mini bar showing relative achievement
   const barWidth = `${Math.min(100, row.progress)}%`
   return (
     <button type="button" onClick={onSelect}
-      className={`grid w-full grid-cols-[24px_minmax(0,1fr)_60px_44px] items-center gap-2 rounded px-1.5 py-1.5 text-left transition ${
+      className={`grid w-full grid-cols-[18px_60px_minmax(0,1fr)_36px] items-center gap-2 rounded px-1.5 py-1.5 text-left transition ${
         selected ? "bg-[#F0EFEC]" : "hover:bg-[#F6F5F4]"
       }`}>
       <span className="text-[10px] tabular-nums text-[#A39E98]">{String(rank).padStart(2, "0")}</span>
       <span className="truncate text-[11.5px] font-semibold text-[#111110]">{row.region}</span>
-      <div className="h-[3px] overflow-hidden rounded-full bg-[#EFEDE7]">
-        <div className="h-full rounded-full" style={{ width: barWidth, background: heatColor(row.progress), opacity: heatOpacity(row.progress) }} />
+      <div className="h-1 overflow-hidden rounded-full bg-[#EFEDE7]">
+        <div className="h-full rounded-full transition-[width]" style={{ width: barWidth, background: heatColor(row.progress), opacity: heatOpacity(row.progress) }} />
       </div>
       <span className="text-right text-[11px] font-bold tabular-nums" style={{ color: heatColor(row.progress) }}>
         {row.progress.toFixed(0)}%
@@ -312,9 +311,10 @@ function DetailPanel({ row }: { row: MapRow | null }) {
           <p className="mb-1.5 text-[10px] font-semibold uppercase tracking-[0.04em] text-[#A39E98]">주요 고객</p>
           <ul className="flex flex-col gap-1">
             {row.top_customers.slice(0, 3).map((c) => (
-              <li key={`${c.customer}-${c.manager ?? ""}`} className="flex items-baseline justify-between gap-2 py-0.5">
+              <li key={`${c.customer}-${c.manager ?? ""}`}
+                className="grid grid-cols-[minmax(0,1fr)_auto] items-baseline gap-3 py-0.5">
                 <span className="truncate text-[11.5px] text-[#111110]">{c.customer}</span>
-                <span className="text-[11px] font-semibold tabular-nums" style={{ color: "#B43E3E" }}>₩{krw(c.revenue)}</span>
+                <span className="whitespace-nowrap text-[11px] font-semibold tabular-nums" style={{ color: "#B43E3E" }}>₩{krw(c.revenue)}</span>
               </li>
             ))}
           </ul>
@@ -376,7 +376,7 @@ export default function BranchRegionHeatmap({ team, period, refreshKey }: { team
         <HeatMap rows={mappedRows} selectedLabel={selected?.label ?? null}
           onSelect={(r) => setSelectedLabel(r.label)} />
 
-        <div className="flex flex-col gap-4">
+        <div className="flex w-full max-w-[360px] flex-col gap-4 lg:ml-auto">
           <DetailPanel row={selected} />
 
           <div>

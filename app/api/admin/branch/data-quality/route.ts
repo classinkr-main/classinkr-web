@@ -7,7 +7,7 @@ import { parseSeg, SEG_RANGE } from "@/lib/branch/parsers/seg"
 import { parseKpi, KPI_RANGE } from "@/lib/branch/parsers/kpi"
 import { listBranchRevDeals } from "@/lib/repositories/branch-deals"
 import { listHwInbound, listHwOutbound, listHwStock } from "@/lib/repositories/branch-hw"
-import { runDataQuality } from "@/lib/branch/computations/data-quality"
+import { DATA_QUALITY_RULE_COUNT, runDataQuality } from "@/lib/branch/computations/data-quality"
 import { fyOf } from "@/lib/branch/fiscal"
 
 const readDsh = unstable_cache(
@@ -30,7 +30,21 @@ export async function GET(req: NextRequest) {
       readDsh(), readSeg(), readKpi(), listBranchRevDeals(), listHwInbound(), listHwOutbound(), listHwStock(),
     ])
     const issues = runDataQuality({ deals, dsh, kpi, seg, hwInbound, hwOutbound, hwStock })
-    return NextResponse.json({ issues })
+    return NextResponse.json({
+      issues,
+      checkedAt: new Date().toISOString(),
+      ruleCount: DATA_QUALITY_RULE_COUNT,
+      sourceCounts: {
+        deals: deals.length,
+        dshRows: dsh.rows.length,
+        dshMembers: Object.keys(dsh.members).length,
+        kpiRows: kpi.length,
+        segRows: seg.length,
+        hwInbound: hwInbound.length,
+        hwOutbound: hwOutbound.length,
+        hwStock: hwStock.length,
+      },
+    })
   } catch (e) {
     return NextResponse.json({ error: String(e) }, { status: 500 })
   }

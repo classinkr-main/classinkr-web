@@ -20,8 +20,8 @@ const CHECKOUT_ENABLED = process.env.NEXT_PUBLIC_SW_CHECKOUT_ENABLED === "true"
 const CHECKOUT_HREF = CHECKOUT_ENABLED ? "/checkout" : "/contact#contact-form"
 const CHECKOUT_CTA_LABEL = CHECKOUT_ENABLED ? "지금 바로 결제 시작" : "지금 무료로 시작하기"
 const CHECKOUT_SUB_LABEL = CHECKOUT_ENABLED ? "카드·네이버페이로 즉시 시작" : "설치 없이 바로 체험 · 카드 등록 불필요"
-const HERO_CLASSROOM_VIDEO_SRC = "/video/쿼드러닝 수업_클립1.mp4"
-const BLACKBOARD_VIDEO_SRC = "/video/클립2.mp4"
+const HERO_CLASSROOM_VIDEO_SRC = "/video/쿼드러닝 수업_클립1.mp4"
+const BLACKBOARD_VIDEO_SRC = "/video/클립2.mp4"
 
 const LESSON_TOOLS: {
     label: string

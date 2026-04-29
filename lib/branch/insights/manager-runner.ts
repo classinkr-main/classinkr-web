@@ -32,7 +32,7 @@ export async function callManagerInsight(input: ManagerInsightInput): Promise<{ 
       temperature: 0.4,
     },
   }
-  const res = await fetch(url, { method: "POST", headers: { "Content-Type": "application/json" }, body: JSON.stringify(body) })
+  const res = await fetch(url, { method: "POST", headers: { "Content-Type": "application/json", "Connection": "close" }, body: JSON.stringify(body) })
   if (!res.ok) {
     const t = await res.text()
     throw new Error(`Gemini ${res.status}: ${t}`)

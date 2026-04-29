@@ -129,11 +129,13 @@ function TeamRow({ team, members, defaultOpen }: { team: BranchKpiTeamRow; membe
   const [open, setOpen] = useState(!!defaultOpen)
   const [viewMode, setViewMode] = useState<"list" | "matrix">("list")
   const teamHasKpi = KPI_ACTIVE_TEAMS.has(team.team)
+  const hasMembers = members.length > 0
   const pct = team.goal ? Math.round((team.status / team.goal) * 100) : 0
+  const expandable = hasMembers
 
   // aggregate KPIs across members for the team summary chips
   const aggKpis: Array<{ k: string; actual: number; goal: number }> = []
-  if (teamHasKpi) {
+  if (teamHasKpi && hasMembers) {
     const keys = new Set<string>()
     members.forEach((m) => Object.keys(m.kpi).forEach((k) => keys.add(k)))
     keys.forEach((k) => {
@@ -143,15 +145,53 @@ function TeamRow({ team, members, defaultOpen }: { team: BranchKpiTeamRow; membe
     })
   }
 
+  // Status chip on the right side (replaces KPI chips when no members)
+  const renderRightChip = () => {
+    if (!teamHasKpi) {
+      return (
+        <span className="inline-flex items-center gap-1.5 rounded-full border border-dashed border-[rgba(0,0,0,0.12)] bg-[#F6F5F4] px-2.5 py-1 text-[10.5px] font-medium text-[#615D59]">
+          <span className="text-[#A8741A]">?</span>
+          <span>KPI 미트래킹</span>
+        </span>
+      )
+    }
+    if (!hasMembers) {
+      return (
+        <span className="inline-flex items-center gap-1.5 rounded-full border border-dashed border-[rgba(0,0,0,0.12)] bg-[#F6F5F4] px-2.5 py-1 text-[10.5px] font-medium text-[#615D59]">
+          <span className="text-[#A8741A]">?</span>
+          <span>팀원 KPI 미연동</span>
+        </span>
+      )
+    }
+    return aggKpis.map(({ k, actual, goal }) => {
+      const p = goal ? Math.round((actual / goal) * 100) : 0
+      return (
+        <span key={k}
+          className="inline-flex items-baseline gap-1 rounded-full border border-[rgba(0,0,0,0.08)] bg-[#F6F5F4] px-2 py-0.5 text-[10.5px]">
+          <span className="font-semibold text-[#615D59]">{KPI_LABELS[k] ?? k}</span>
+          <span className="font-bold text-[#111110]">{actual}/{goal}</span>
+          <span className="font-bold" style={{ color: pickKpiColor(p) }}>{p}%</span>
+        </span>
+      )
+    })
+  }
+
+  const headerProps = expandable
+    ? { onClick: () => setOpen((v) => !v), className: "grid w-full cursor-pointer items-center gap-4 px-1 py-3.5 text-left", "aria-expanded": open }
+    : { className: "grid w-full items-center gap-4 px-1 py-3.5 text-left cursor-default", disabled: true as const }
+
   return (
     <div className="border-t border-[rgba(0,0,0,0.08)] first:border-t-0">
-      <button type="button" onClick={() => setOpen((v) => !v)}
-        className="grid w-full cursor-pointer items-center gap-4 px-1 py-3.5 text-left"
-        style={{ gridTemplateColumns: "24px 140px 1fr 1.2fr" }}>
-        <ChevronRight className={`h-4 w-4 text-[#615D59] transition-transform ${open ? "rotate-90" : ""}`} />
+      <button type="button" {...headerProps}
+        style={{ gridTemplateColumns: "24px 140px 1fr 1.3fr" }}>
+        <ChevronRight className={`h-4 w-4 transition-transform ${
+          expandable ? "text-[#615D59]" : "text-transparent"
+        } ${open ? "rotate-90" : ""}`} />
         <div>
           <p className="text-[14px] font-bold text-[#111110]">{team.team}</p>
-          <p className="mt-0.5 text-[11px] text-[#615D59]">{members.length}명</p>
+          <p className="mt-0.5 text-[11px] text-[#615D59]">
+            {hasMembers ? `${members.length}명` : "팀 단위 집계"}
+          </p>
         </div>
         <div>
           <div className="mb-1.5 flex justify-between text-[11.5px]">
@@ -163,25 +203,10 @@ function TeamRow({ team, members, defaultOpen }: { team: BranchKpiTeamRow; membe
           <GaugeBar value={team.status} goal={team.goal} color={pct >= 70 ? COLORS.green : COLORS.olive} height={7} />
         </div>
         <div className="flex flex-wrap justify-end gap-1.5">
-          {!teamHasKpi ? (
-            <span className="inline-flex items-center gap-1.5 rounded-full border border-dashed border-[rgba(0,0,0,0.12)] bg-[#F6F5F4] px-2.5 py-1 text-[10.5px] font-medium text-[#615D59]">
-              <span className="text-[#A8741A]">?</span>
-              <span>KPI 미트래킹</span>
-            </span>
-          ) : aggKpis.map(({ k, actual, goal }) => {
-            const p = goal ? Math.round((actual / goal) * 100) : 0
-            return (
-              <span key={k}
-                className="inline-flex items-baseline gap-1 rounded-full border border-[rgba(0,0,0,0.08)] bg-[#F6F5F4] px-2 py-0.5 text-[10.5px]">
-                <span className="font-semibold text-[#615D59]">{KPI_LABELS[k] ?? k}</span>
-                <span className="font-bold text-[#111110]">{actual}/{goal}</span>
-                <span className="font-bold" style={{ color: pickKpiColor(p) }}>{p}%</span>
-              </span>
-            )
-          })}
+          {renderRightChip()}
         </div>
       </button>
-      {open && (
+      {open && expandable && (
         <div className="mb-3 rounded-[10px] bg-[#F6F5F4] p-3.5">
           {teamHasKpi && (
             <div className="mb-2 flex justify-end">
@@ -197,11 +222,7 @@ function TeamRow({ team, members, defaultOpen }: { team: BranchKpiTeamRow; membe
               </div>
             </div>
           )}
-          {members.length === 0 ? (
-            <p className="px-2 py-3 text-[11px] text-[#615D59]">팀원 데이터 없음</p>
-          ) : (
-            members.map((m) => <MemberRow key={m.member} member={m} viewMode={viewMode} />)
-          )}
+          {members.map((m) => <MemberRow key={m.member} member={m} viewMode={viewMode} />)}
         </div>
       )}
     </div>
@@ -228,13 +249,20 @@ export default function BranchKpiAccordion({
   if (teamsWithMembers.length === 0) return null
 
   const totalMembers = teamsWithMembers.reduce((s, t) => s + t.members.length, 0)
+  const hasAnyMembers = totalMembers > 0
+  const headerTitle = hasAnyMembers
+    ? "팀 KPI · 클릭 시 팀원 펼치기"
+    : "팀별 매출 페이싱"
+  const headerSub = hasAnyMembers
+    ? `${totalMembers}명`
+    : "팀원 단위 데이터 미연동"
 
   return (
     <section className="rounded-xl border border-[rgba(0,0,0,0.08)] bg-white shadow-[0_1px_2px_rgba(0,0,0,0.02)]">
       <div className="flex items-center justify-between gap-3 border-b border-[rgba(0,0,0,0.08)] px-5 py-3.5">
         <div className="flex items-baseline gap-2">
-          <h2 className="text-[14px] font-bold tracking-[-0.01em] text-[#111110]">팀 KPI · 클릭 시 팀원 펼치기</h2>
-          <span className="text-[11px] font-medium text-[#615D59]">{totalMembers}명</span>
+          <h2 className="text-[14px] font-bold tracking-[-0.01em] text-[#111110]">{headerTitle}</h2>
+          <span className="text-[11px] font-medium text-[#615D59]">{headerSub}</span>
         </div>
         <p className="text-[10.5px] text-[#615D59]">
           <span className="font-semibold text-[#B43E3E]">빨강 = 확정 매출</span>
@@ -242,7 +270,7 @@ export default function BranchKpiAccordion({
       </div>
       <div className="px-5 pb-2 pt-1">
         {teamsWithMembers.map((t, i) => (
-          <TeamRow key={t.team.team} team={t.team} members={t.members} defaultOpen={i === 0} />
+          <TeamRow key={t.team.team} team={t.team} members={t.members} defaultOpen={i === 0 && t.members.length > 0} />
         ))}
       </div>
     </section>

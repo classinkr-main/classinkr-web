@@ -51,4 +51,29 @@ describe("parseKpi", () => {
     expect(out[0].pairs.LD).toEqual({ goal: 5, actual: 3 })
     expect(out[0].pairs.OPP).toEqual({ goal: 0, actual: 0 })
   })
+
+  it("stops after the FY summary block before monthly repeats", () => {
+    const empty: FormattedCell = { value: "", bg: null }
+    const row = (name: string, goal: number, actual: number) => {
+      const cells: FormattedCell[] = Array(20).fill(empty).map(() => ({ value: "", bg: null }))
+      cells[0] = { value: name, bg: null }
+      cells[4] = { value: goal, bg: null }
+      cells[14] = { value: actual, bg: null }
+      return cells
+    }
+    const grid: FormattedCell[][] = [
+      Array(20).fill(empty),
+      Array(20).fill(empty),
+      row("Sum", 999, 999),
+      row("Han", 10, 5),
+      Array(20).fill(empty),
+      row("4", 0, 0),
+      row("Sum", 999, 999),
+      row("Han", 20, 10),
+    ]
+
+    const out = parseKpi(grid)
+    expect(out).toHaveLength(1)
+    expect(out[0].pairs.LD).toEqual({ goal: 10, actual: 5 })
+  })
 })

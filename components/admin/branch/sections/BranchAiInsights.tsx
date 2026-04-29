@@ -2,11 +2,7 @@
 import { useEffect, useState } from "react"
 import { Sparkles, FileDown, RefreshCw, AlertTriangle } from "lucide-react"
 import type { BranchSummaryResponse, Team } from "../types"
-
-async function adminFetch(url: string, init?: RequestInit) {
-  const token = (typeof window !== "undefined" ? sessionStorage.getItem("admin_password") : null) ?? ""
-  return fetch(url, { ...init, headers: { ...(init?.headers ?? {}), Authorization: `Bearer ${token}` } })
-}
+import { adminFetchJson } from "../client-api"
 
 function krw(n: number) {
   if (!Number.isFinite(n)) return "-"
@@ -231,8 +227,7 @@ export default function BranchAiInsights({ team, refreshKey, summary }: {
   useEffect(() => {
     let cancelled = false
     setLoading(true); setErrorMsg(null)
-    void adminFetch(`/api/admin/branch/insight?team=${team}`)
-      .then((r) => r.json())
+    void adminFetchJson<InsightResp>(`/api/admin/branch/insights?team=${team}`)
       .then((d: InsightResp) => {
         if (cancelled) return
         if (d.error) setErrorMsg(d.error)
@@ -240,18 +235,17 @@ export default function BranchAiInsights({ team, refreshKey, summary }: {
         setStateKey(requestKey)
         setLoading(false)
       })
-      .catch((e) => { if (!cancelled) { setErrorMsg(String(e)); setLoading(false); setStateKey(requestKey) } })
+      .catch((e) => { if (!cancelled) { setErrorMsg(e instanceof Error ? e.message : String(e)); setLoading(false); setStateKey(requestKey) } })
     return () => { cancelled = true }
   }, [requestKey, team])
 
   const handleRegenerate = async () => {
     setRefreshing(true); setErrorMsg(null)
     try {
-      const res = await adminFetch(`/api/admin/branch/insight?team=${team}&fresh=1`, { method: "POST" })
-      const d: InsightResp = await res.json()
+      const d = await adminFetchJson<InsightResp>(`/api/admin/branch/insights?team=${team}&force=1`)
       if (d.error) setErrorMsg(d.error)
       setInsight(d.insight ?? null)
-    } catch (e) { setErrorMsg(String(e)) }
+    } catch (e) { setErrorMsg(e instanceof Error ? e.message : String(e)) }
     finally { setRefreshing(false) }
   }
 
