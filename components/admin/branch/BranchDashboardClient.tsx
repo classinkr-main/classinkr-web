@@ -45,6 +45,40 @@ export default function BranchDashboardClient() {
   const [refreshing, setRefreshing] = useState(false)
   const [selectedDeal, setSelectedDeal] = useState<DealModalDeal | null>(null)
 
+  const openDealLog = useCallback(async (row: { id: string; customer: string; manager: string | null; team: string | null; region: string | null; revenue: number; stageLabel?: string; stageColor?: string; probability?: number }) => {
+    setSelectedDeal({
+      id: row.id, customer: row.customer, manager: row.manager, team: row.team,
+      region: row.region, amount: row.revenue,
+      stageLabel: row.stageLabel, stageColor: row.stageColor, probability: row.probability,
+      loadingDetail: true,
+    })
+    try {
+      const data = await adminFetchJson<{ deal?: {
+        id: string; customer_name: string; manager: string | null; team: string | null;
+        region: string | null; status: string | null; note: string | null;
+        deal_type: string | null; product_version: string | null;
+        contract_target: number | null; first_payment: string | null;
+        monthly_payments: Record<string, number>; monthly_red: Record<string, boolean>;
+      } }>(`/api/admin/branch/deals/${encodeURIComponent(row.id)}`)
+      const d = data?.deal
+      if (!d) { setSelectedDeal((cur) => cur && cur.id === row.id ? { ...cur, loadingDetail: false } : cur); return }
+      setSelectedDeal((cur) => cur && cur.id === row.id ? {
+        ...cur,
+        status: d.status,
+        note: d.note,
+        dealType: d.deal_type,
+        productVersion: d.product_version,
+        contractTarget: d.contract_target,
+        firstPayment: d.first_payment,
+        monthlyPayments: d.monthly_payments,
+        monthlyRed: d.monthly_red,
+        loadingDetail: false,
+      } : cur)
+    } catch {
+      setSelectedDeal((cur) => cur && cur.id === row.id ? { ...cur, loadingDetail: false } : cur)
+    }
+  }, [])
+
   const summaryUrl = `/api/admin/branch/summary?team=${team}&period=${period}`
   const kpiUrl = `/api/admin/branch/kpi?team=${team}&period=${period}`
   const summary = useBranchJson<BranchSummaryResponse>(summaryUrl, refreshKey)
@@ -139,7 +173,7 @@ export default function BranchDashboardClient() {
 
       {/* Sub-tabs */}
       <div className="border-b border-[rgba(0,0,0,0.08)] bg-[#EBE8E2] px-2 sm:px-4 lg:px-9">
-        <div className="-mb-px flex flex-nowrap gap-0 overflow-x-auto" role="tablist" aria-label="지사 대시보드 보기">
+        <div className="admin-scroll-snap-x no-scrollbar -mb-px flex flex-nowrap gap-0 overflow-x-auto" role="tablist" aria-label="지사 대시보드 보기">
           {BRANCH_TABS.map((tab) => {
             const active = activeTab === tab.id
             return (
@@ -149,14 +183,14 @@ export default function BranchDashboardClient() {
                 role="tab"
                 aria-selected={active}
                 onClick={() => setActiveTab(tab.id)}
-                className={`relative mt-1 flex shrink-0 flex-col items-start gap-0.5 rounded-t-lg px-4 py-3 text-left transition sm:px-5 ${
+                className={`relative mt-1 flex shrink-0 flex-col items-start gap-0.5 rounded-t-lg px-4 py-2.5 text-left transition sm:px-5 sm:py-3 ${
                   active
                     ? "bg-[#FAFAF8] text-[#111110]"
                     : "bg-transparent text-[#615D59] hover:text-[#111110]"
                 }`}
               >
                 <span className="whitespace-nowrap text-[13px] font-bold tracking-[-0.01em]">{tab.label}</span>
-                <span className="whitespace-nowrap text-[10.5px] font-medium text-[#615D59]">{tab.sub}</span>
+                <span className="hidden whitespace-nowrap text-[10.5px] font-medium text-[#615D59] min-[420px]:block">{tab.sub}</span>
                 {active && (
                   <span className="absolute inset-x-3 -bottom-px h-[2.5px] rounded-sm bg-[#084734]" />
                 )}
@@ -207,37 +241,33 @@ export default function BranchDashboardClient() {
             <div role="tabpanel" className="space-y-4">
               <BranchKpiAccordion data={kpi.data} loading={kpi.loading} error={kpi.error} />
               <section className="rounded-xl border border-[rgba(0,0,0,0.08)] bg-white shadow-[0_1px_2px_rgba(0,0,0,0.02)]">
-                <div className="flex items-center justify-between gap-3 border-b border-[rgba(0,0,0,0.08)] px-4 py-2.5">
-                  <h2 className="text-[13px] font-bold tracking-[-0.01em] text-[#111110]">파이프라인</h2>
-                  <div className="inline-flex rounded-md border border-[rgba(0,0,0,0.08)] bg-[#F6F5F4] p-[2px]">
+                <div className="flex items-center justify-between gap-3 border-b border-[rgba(0,0,0,0.08)] px-5 py-3.5">
+                  <h2 className="text-[14px] font-bold tracking-[-0.01em] text-[#111110]">파이프라인</h2>
+                  <div className="inline-flex rounded-md border border-[rgba(0,0,0,0.08)] bg-[#F6F5F4] p-[3px]">
                     {(["table", "kanban"] as const).map((v) => (
                       <button key={v} type="button" onClick={() => setPipelineView(v)}
-                        className={`rounded-[5px] px-2.5 py-0.5 text-[11px] font-semibold transition ${
+                        className={`rounded-[5px] px-2.5 py-1 text-[11px] font-semibold transition ${
                           pipelineView === v ? "bg-white text-[#111110] shadow-[0_1px_2px_rgba(0,0,0,0.06)]" : "text-[#615D59]"
                         }`}>
-                        {v === "table" ? "테이블" : "칸반 (MVP)"}
+                        {v === "table" ? "테이블" : "칸반"}
                       </button>
                     ))}
                   </div>
                 </div>
-                <div className="px-2.5 py-2">
+                <div className={pipelineView === "kanban" ? "" : "px-2.5 py-2"}>
                   {pipelineView === "table" ? (
-                    <PipelineTable key={`pipeline-rev-${team}`} team={team} period={period} refreshKey={refreshKey} />
+                    <PipelineTable key={`pipeline-rev-${team}`} team={team} period={period} refreshKey={refreshKey} onRowClick={openDealLog} />
                   ) : (
                     <BranchPipelineKanban
                       team={team}
                       refreshKey={refreshKey}
-                      onDealClick={(d) => setSelectedDeal({
-                        id: d.id,
-                        customer: d.customer,
-                        manager: d.manager,
-                        team: d.team,
-                        region: d.region,
-                        amount: d.revenue,
-                        stageLabel: d.stageLabel,
-                        stageColor: d.stageColor,
-                        probability: d.probability,
-                      })}
+                      onDealClick={(d) => {
+                        void openDealLog({
+                          id: d.id, customer: d.customer, manager: d.manager,
+                          team: d.team, region: d.region, revenue: d.revenue,
+                          stageLabel: d.stageLabel, stageColor: d.stageColor, probability: d.probability,
+                        })
+                      }}
                     />
                   )}
                 </div>
@@ -248,7 +278,7 @@ export default function BranchDashboardClient() {
           {activeTab === "heatmap" && (
             <div role="tabpanel" className="space-y-6">
               <BranchRegionHeatmap team={team} period={period} refreshKey={refreshKey} />
-              <PipelineTable key={`heatmap-rev-${team}`} team={team} period={period} refreshKey={refreshKey} pageSize={10} />
+              <PipelineTable key={`heatmap-rev-${team}`} team={team} period={period} refreshKey={refreshKey} pageSize={10} onRowClick={openDealLog} />
             </div>
           )}
 
