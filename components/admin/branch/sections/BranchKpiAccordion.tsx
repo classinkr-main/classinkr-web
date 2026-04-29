@@ -27,6 +27,12 @@ const KPI_LABELS: Record<string, string> = {
 // Teams with active KPI tracking (others render "?" for KPI fields)
 const KPI_ACTIVE_TEAMS = new Set(["BD"])
 
+// Placeholder KPI item keys per team — shown as "항목 ?" chips when not yet tracked
+const TEAM_KPI_PLACEHOLDERS: Record<string, string[]> = {
+  MKT: ["event", "content", "template"],
+  CSM: ["caseStudy"],
+}
+
 const COLORS = {
   green: "#084734",
   olive: "#7B8B36",
@@ -71,18 +77,24 @@ function MemberRow({ member, viewMode }: { member: BranchKpiMemberRow; viewMode:
       <div>
         <div className="mb-1 flex items-baseline justify-between text-[11px]">
           <span className="text-[#615D59]">
-            <span className="font-semibold" style={{ color: COLORS.red }}>₩{krw(member.confirmed)}</span> / ₩{krw(member.goal)}
+            <span className="font-semibold" style={{ color: COLORS.red }}>¥{krw(member.confirmed)}</span> / ¥{krw(member.goal)}
           </span>
           <span className="font-bold" style={{ color: memberPct >= 70 ? COLORS.green : COLORS.amber }}>{memberPct}%</span>
         </div>
         <GaugeBar value={member.confirmed} goal={member.goal} color={memberPct >= 70 ? COLORS.green : COLORS.olive} height={5} />
       </div>
       {!teamHasKpi ? (
-        <div className="text-[11px] text-[#615D59]">
-          <span className="inline-flex items-center gap-1.5 rounded-full border border-dashed border-[rgba(0,0,0,0.12)] bg-[#F6F5F4] px-2.5 py-1 font-medium text-[#615D59]">
-            <span className="text-[#A8741A]">?</span>
-            <span>KPI 트래킹 미연동</span>
-          </span>
+        <div className="flex flex-wrap gap-1.5">
+          {(TEAM_KPI_PLACEHOLDERS[member.team ?? ""] ?? []).map((k) => (
+            <span key={k}
+              className="inline-flex items-baseline gap-1 rounded-full border border-dashed border-[rgba(0,0,0,0.1)] bg-[#F6F5F4] px-2 py-0.5 text-[10.5px]">
+              <span className="font-semibold text-[#615D59]">{KPI_LABELS[k] ?? k}</span>
+              <span className="font-bold text-[#A8741A]">?</span>
+            </span>
+          ))}
+          {!TEAM_KPI_PLACEHOLDERS[member.team ?? ""] && (
+            <span className="text-[11px] font-medium text-[#A8741A]">?</span>
+          )}
         </div>
       ) : viewMode === "matrix" ? (
         <div className="grid gap-1" style={{ gridTemplateColumns: `repeat(${Math.max(1, kpiKeys.length)}, 1fr)` }}>
@@ -148,11 +160,18 @@ function TeamRow({ team, members, defaultOpen }: { team: BranchKpiTeamRow; membe
   // Status chip on the right side (replaces KPI chips when no members)
   const renderRightChip = () => {
     if (!teamHasKpi) {
+      const placeholders = TEAM_KPI_PLACEHOLDERS[team.team]
+      if (placeholders?.length) {
+        return placeholders.map((k) => (
+          <span key={k}
+            className="inline-flex items-baseline gap-1 rounded-full border border-dashed border-[rgba(0,0,0,0.1)] bg-[#F6F5F4] px-2 py-0.5 text-[10.5px]">
+            <span className="font-semibold text-[#615D59]">{KPI_LABELS[k] ?? k}</span>
+            <span className="font-bold text-[#A8741A]">?</span>
+          </span>
+        ))
+      }
       return (
-        <span className="inline-flex items-center gap-1.5 rounded-full border border-dashed border-[rgba(0,0,0,0.12)] bg-[#F6F5F4] px-2.5 py-1 text-[10.5px] font-medium text-[#615D59]">
-          <span className="text-[#A8741A]">?</span>
-          <span>KPI 미트래킹</span>
-        </span>
+        <span className="text-[11px] font-bold text-[#A8741A]">?</span>
       )
     }
     if (!hasMembers) {
@@ -196,7 +215,7 @@ function TeamRow({ team, members, defaultOpen }: { team: BranchKpiTeamRow; membe
         <div>
           <div className="mb-1.5 flex justify-between text-[11.5px]">
             <span className="text-[#615D59]">
-              매출 <span className="font-bold" style={{ color: COLORS.red }}>₩{krw(team.status)}</span> / ₩{krw(team.goal)}
+              매출 <span className="font-bold" style={{ color: COLORS.red }}>¥{krw(team.status)}</span> / ¥{krw(team.goal)}
             </span>
             <span className="font-bold" style={{ color: pct >= 70 ? COLORS.green : COLORS.amber }}>{pct}%</span>
           </div>
@@ -269,8 +288,8 @@ export default function BranchKpiAccordion({
         </p>
       </div>
       <div className="px-5 pb-2 pt-1">
-        {teamsWithMembers.map((t, i) => (
-          <TeamRow key={t.team.team} team={t.team} members={t.members} defaultOpen={i === 0 && t.members.length > 0} />
+        {teamsWithMembers.map((t) => (
+          <TeamRow key={t.team.team} team={t.team} members={t.members} defaultOpen={false} />
         ))}
       </div>
     </section>

@@ -3,7 +3,7 @@ import { verifyAdmin } from "@/lib/admin-auth"
 import { unstable_cache } from "next/cache"
 import { readRangeWithFormat, envSheetId } from "@/lib/branch/google-sheets"
 import { parseDsh, DSH_RANGE } from "@/lib/branch/parsers/dsh"
-import { parseKpi, KPI_METRICS, KPI_RANGE } from "@/lib/branch/parsers/kpi"
+import { parseKpiBlocks, selectKpiRows, KPI_METRICS, KPI_RANGE } from "@/lib/branch/parsers/kpi"
 import { listBranchRevDeals } from "@/lib/repositories/branch-deals"
 import { listMembersByTeam, memberPacing, teamPacing } from "@/lib/branch/computations/pacing"
 import { fyOf } from "@/lib/branch/fiscal"
@@ -31,8 +31,8 @@ const readDsh = unstable_cache(
   ["branch-dsh"], { revalidate: 60, tags: ["branch-dsh"] },
 )
 
-const readKpi = unstable_cache(
-  async () => parseKpi(await readRangeWithFormat(envSheetId("dashboard"), KPI_RANGE)),
+const readKpiBlocks = unstable_cache(
+  async () => parseKpiBlocks(await readRangeWithFormat(envSheetId("dashboard"), KPI_RANGE)),
   ["branch-kpi"], { revalidate: 60, tags: ["branch-kpi"] },
 )
 
@@ -44,7 +44,8 @@ export async function GET(req: NextRequest) {
   const now = new Date()
   try {
     const teams = team === "ALL" ? ["BD", "MKT", "CSM"] : [team]
-    const [dsh, kpiRows, deals] = await Promise.all([readDsh(), readKpi(), listBranchRevDeals({ team })])
+    const [dsh, kpiBlocks, deals] = await Promise.all([readDsh(), readKpiBlocks(), listBranchRevDeals({ team })])
+    const kpiRows = selectKpiRows(kpiBlocks, period, now)
     const teamSummaries = teams.map((t) => ({ team: t, ...teamPacing(dsh, t, period, now) }))
     const members = listMembersByTeam(dsh, team).map((member) => {
       const pace = memberPacing(dsh, member, period, now)
