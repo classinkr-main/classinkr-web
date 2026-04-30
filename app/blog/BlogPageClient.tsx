@@ -33,9 +33,8 @@ export default function BlogPageClient({ posts }: BlogPageClientProps) {
         return filtered
     }, [posts, activeCategory, searchQuery])
 
-    // Gallery: top 3 featured posts
+    // Gallery: top 3 (1 hero + 2 stacked)
     const galleryPosts = filteredPosts.filter(p => p.featured).slice(0, 3)
-    // If fewer than 3 featured, fill from top of filtered
     const galleryFinal = galleryPosts.length >= 3
         ? galleryPosts
         : filteredPosts.slice(0, 3)
@@ -73,82 +72,79 @@ export default function BlogPageClient({ posts }: BlogPageClientProps) {
                         함께 만들어갑니다
                     </motion.h1>
 
-                    {/* Gallery Grid: 1 large + 2 stacked */}
+                    {/* Hero: 1 main left + 2 stacked right */}
                     {galleryFinal.length > 0 && (
                         <motion.div
                             initial={{ opacity: 0, y: 16 }}
                             animate={{ opacity: 1, y: 0 }}
                             transition={{ duration: 0.5, delay: 0.1 }}
-                            className="grid grid-cols-1 lg:grid-cols-2 gap-4 mb-6"
+                            className="grid gap-3 mb-6 grid-cols-1 lg:grid-cols-2 lg:grid-rows-2 lg:h-[420px]"
                         >
-                            {/* Main featured card */}
-                            {galleryFinal[0] && (
-                                <Link href={`/blog/${galleryFinal[0].slug}`} className="group block">
-                                    <article className="relative h-[280px] overflow-hidden rounded-2xl bg-[#f0f0ec] sm:h-[320px] md:h-[420px]">
-                                        <Image
-                                            src={galleryFinal[0].imageUrl}
-                                            alt={galleryFinal[0].title}
-                                            fill
-                                            className="object-cover transition-transform duration-700 group-hover:scale-[1.03]"
-                                        />
-                                        <div className="absolute inset-0 bg-gradient-to-t from-black/60 via-black/20 to-transparent" />
-                                        <div className="absolute bottom-0 left-0 right-0 p-6 md:p-8">
-                                            <div className="flex items-center gap-2.5 mb-3">
-                                                <span className="px-2.5 py-0.5 bg-white/15 backdrop-blur-md text-[11px] font-semibold text-white/90 rounded-md border border-white/10">
-                                                    {galleryFinal[0].tag}
-                                                </span>
-                                                <span className="text-[11px] text-white/50">{galleryFinal[0].category}</span>
-                                            </div>
-                                            <h2 className="text-xl md:text-2xl font-bold text-white leading-snug tracking-[-0.02em] mb-2 line-clamp-2 group-hover:text-emerald-200 transition-colors duration-300">
-                                                {galleryFinal[0].title}
-                                            </h2>
-                                            <p className="text-[13px] text-white/50 line-clamp-2 mb-3 hidden md:block">
-                                                {galleryFinal[0].excerpt}
-                                            </p>
-                                            <div className="flex items-center gap-3 text-[11px] text-white/40">
-                                                <span>{galleryFinal[0].date}</span>
-                                                <span>·</span>
-                                                <span className="flex items-center gap-1"><Clock className="w-3 h-3" />{galleryFinal[0].readTime}</span>
-                                                <span>·</span>
-                                                <span>{galleryFinal[0].author}</span>
-                                            </div>
-                                        </div>
-                                    </article>
-                                </Link>
-                            )}
-
-                            {/* Right stack: 2 smaller cards */}
-                            <div className="grid grid-cols-1 gap-4">
-                                {galleryFinal.slice(1, 3).map((post) => (
-                                    <Link key={post.id} href={`/blog/${post.slug}`} className="group block">
-                                        <article className="relative h-[180px] overflow-hidden rounded-2xl bg-[#f0f0ec] sm:h-[200px] md:h-[202px]">
+                            {galleryFinal.map((post, idx) => {
+                                const heroSpans = [
+                                    "lg:row-span-2",
+                                    "",
+                                    "",
+                                ]
+                                const isHero = idx === 0
+                                return (
+                                    <Link
+                                        key={post.id}
+                                        href={`/blog/${post.slug}`}
+                                        className={`group relative ${heroSpans[idx] ?? ""}`}
+                                    >
+                                        <article className={`relative ${isHero ? "h-[300px] md:h-[360px]" : "h-[200px]"} lg:h-full overflow-hidden rounded-2xl bg-[#f0f0ec] ring-1 ring-black/5 transition-all duration-500 ease-out group-hover:-translate-y-0.5 group-hover:ring-black/10 group-hover:shadow-[0_22px_55px_-25px_rgba(0,0,0,0.45)]`}>
                                             <Image
                                                 src={post.imageUrl}
                                                 alt={post.title}
                                                 fill
-                                                className="object-cover transition-transform duration-700 group-hover:scale-[1.03]"
+                                                sizes={isHero
+                                                    ? "(max-width: 1024px) 100vw, 50vw"
+                                                    : "(max-width: 1024px) 100vw, 50vw"}
+                                                className="object-cover transition-transform duration-700 ease-out group-hover:scale-[1.06]"
                                             />
-                                            <div className="absolute inset-0 bg-gradient-to-t from-black/60 via-black/15 to-transparent" />
-                                            <div className="absolute bottom-0 left-0 right-0 p-5 md:p-6">
-                                                <div className="flex items-center gap-2 mb-2">
-                                                    <span className="px-2 py-0.5 bg-white/15 backdrop-blur-md text-[10px] font-semibold text-white/90 rounded border border-white/10">
+                                            <div className="absolute inset-0 bg-gradient-to-t from-black/70 via-black/20 to-transparent transition-colors duration-500 group-hover:from-black/80" />
+
+                                            {/* Hover arrow chip */}
+                                            <div className="absolute right-3 top-3 flex h-7 w-7 items-center justify-center rounded-full bg-white/15 backdrop-blur-md ring-1 ring-white/10 opacity-0 -translate-x-1 transition-all duration-300 group-hover:opacity-100 group-hover:translate-x-0">
+                                                <ArrowRight className="h-3.5 w-3.5 text-white" />
+                                            </div>
+
+                                            <div className={`absolute inset-x-0 bottom-0 ${isHero ? "p-6 md:p-7" : "p-4 md:p-5"}`}>
+                                                <div className="flex items-center gap-2 mb-2.5">
+                                                    <span className={`px-2 py-0.5 bg-white/15 backdrop-blur-md font-semibold text-white/95 rounded-md ring-1 ring-white/10 transition-all duration-300 group-hover:ring-white/35 group-hover:bg-white/20 ${isHero ? "text-[11px]" : "text-[10px]"}`}>
                                                         {post.tag}
                                                     </span>
-                                                    <span className="text-[10px] text-white/45">{post.category}</span>
+                                                    <span className={`text-white/55 ${isHero ? "text-[11px]" : "text-[10px]"}`}>{post.category}</span>
                                                 </div>
-                                                <h3 className="text-[15px] md:text-base font-semibold text-white leading-snug tracking-[-0.01em] line-clamp-2 group-hover:text-emerald-200 transition-colors duration-300">
+                                                <h2 className={`font-bold text-white leading-snug tracking-[-0.02em] line-clamp-2 transition-colors duration-300 group-hover:text-emerald-200 ${isHero ? "text-xl md:text-2xl mb-2" : "text-[14px] md:text-[15px]"}`}>
                                                     {post.title}
-                                                </h3>
-                                                <div className="flex items-center gap-2.5 mt-2 text-[10px] text-white/35">
-                                                    <span>{post.date}</span>
-                                                    <span>·</span>
-                                                    <span className="flex items-center gap-1"><Clock className="w-2.5 h-2.5" />{post.readTime}</span>
-                                                </div>
+                                                </h2>
+                                                {isHero ? (
+                                                    <>
+                                                        <p className="text-[13px] text-white/55 line-clamp-2 mb-3 hidden md:block">
+                                                            {post.excerpt}
+                                                        </p>
+                                                        <div className="flex items-center gap-3 text-[11px] text-white/45">
+                                                            <span>{post.date}</span>
+                                                            <span>·</span>
+                                                            <span className="flex items-center gap-1"><Clock className="w-3 h-3" />{post.readTime}</span>
+                                                            <span>·</span>
+                                                            <span>{post.author}</span>
+                                                        </div>
+                                                    </>
+                                                ) : (
+                                                    <div className="mt-1.5 flex items-center gap-2 text-[10px] text-white/45">
+                                                        <span>{post.date}</span>
+                                                        <span>·</span>
+                                                        <span className="flex items-center gap-1"><Clock className="w-2.5 h-2.5" />{post.readTime}</span>
+                                                    </div>
+                                                )}
                                             </div>
                                         </article>
                                     </Link>
-                                ))}
-                            </div>
+                                )
+                            })}
                         </motion.div>
                     )}
                 </div>
