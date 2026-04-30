@@ -46,7 +46,7 @@ export function SolutionOverview() {
                         <span className="w-1 h-1 rounded-full bg-[#084734]/60" />
                         핵심 기능 3가지
                     </span>
-                    <h2 className="text-3xl font-extrabold text-[#111110] sm:text-4xl mb-4 break-keep" style={{ letterSpacing: '-1px' }}>
+                    <h2 className="text-3xl md:text-5xl lg:text-[3.5rem] font-black text-[#111110] mb-4 leading-[1.1] break-keep" style={{ letterSpacing: '-1.25px' }}>
                         수업 전 · 중 · 후, 전 과정을 시스템으로
                     </h2>
                     <p className="text-lg text-[#615D59] break-keep">

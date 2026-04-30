@@ -56,8 +56,8 @@ export function EraVision() {
                         whileInView={{ opacity: 1, y: 0 }}
                         viewport={{ once: true }}
                         transition={{ duration: 0.8, delay: 0.05, ease: [0.21, 0.47, 0.32, 0.98] }}
-                        className="text-4xl md:text-6xl lg:text-7xl font-black text-[#111110] leading-[1.08] break-keep mb-6"
-                        style={{ letterSpacing: '-2.125px' }}
+                        className="text-3xl md:text-5xl lg:text-[3.5rem] font-black text-[#111110] leading-[1.1] break-keep mb-6"
+                        style={{ letterSpacing: '-1.25px' }}
                     >
                         기술과 교육이 만나는<br />
                         <span className="text-[#084734]">새로운 시대</span>가 열렸습니다.

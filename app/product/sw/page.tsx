@@ -709,7 +709,7 @@ function FutureVision1Section() {
                     <motion.div initial={{ opacity: 0, x: -30 }} whileInView={{ opacity: 1, x: 0 }} viewport={{ once: true }} transition={{ duration: 0.8 }}>
                         <p className="text-[#6EE7B7]/60 text-sm font-semibold tracking-wider uppercase mb-6">The Future of Education</p>
                         <h2 className="text-4xl md:text-5xl lg:text-6xl font-sans font-bold text-white leading-[1.1] tracking-tight mb-6">
-                            2030년의<br />교실은<br /><span className="text-[#6EE7B7]">달라집니다</span>
+                            2030년의<br />교실은 <span className="text-[#6EE7B7]">달라집니다</span>
                         </h2>
                         <p className="text-lg text-white/50 leading-relaxed">
                             학교의 물리적 벽이 사라지고, AI가 개인 맞춤 교육을 제공하며,
@@ -1500,7 +1500,7 @@ export default function ProductPage() {
             {/* ================================================================
                 HERO — "수업을, 더 수업답게"
             ================================================================ */}
-            <section className="relative min-h-[660px] overflow-hidden bg-[#07110d] text-white sm:min-h-[600px] md:h-[calc(100svh-8rem)] md:max-h-[760px]">
+            <section className="relative min-h-[720px] overflow-hidden bg-[#07110d] text-white sm:min-h-[700px] md:h-[calc(100svh-4rem)] md:min-h-[760px] md:max-h-[840px]">
                 <video
                     className="absolute inset-0 h-full w-full object-cover"
                     src={HERO_CLASSROOM_VIDEO_SRC}
@@ -1514,7 +1514,7 @@ export default function ProductPage() {
                 <div className="absolute inset-0 bg-[linear-gradient(180deg,rgba(3,10,8,0.70)_0%,rgba(3,10,8,0.42)_42%,rgba(3,10,8,0.78)_100%)] pointer-events-none" />
                 <div className="absolute inset-0 bg-[radial-gradient(circle_at_center,rgba(3,10,8,0.10)_0%,rgba(3,10,8,0.50)_78%)] pointer-events-none" />
 
-                <div className="container relative z-10 mx-auto flex min-h-[660px] items-center px-4 py-14 sm:min-h-[600px] lg:px-8 md:h-full md:min-h-0 md:py-20">
+                <div className="container relative z-10 mx-auto flex min-h-[720px] items-center px-4 py-14 sm:min-h-[700px] lg:px-8 md:h-full md:min-h-0 md:py-20">
                     <div className="max-w-4xl mx-auto text-center">
                         <motion.div initial={{ opacity: 0, y: 30 }} animate={{ opacity: 1, y: 0 }} transition={{ duration: 0.7 }}>
                             <div className="inline-flex items-center gap-2.5 px-5 py-2 rounded-full bg-white/12 border border-white/18 shadow-[0_2px_18px_rgba(0,0,0,0.18)] text-[#6EE7B7] text-xs font-bold mb-8 tracking-widest uppercase backdrop-blur-sm">

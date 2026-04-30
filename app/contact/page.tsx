@@ -70,7 +70,7 @@ export default function ContactPage() {
         }
     }
     return (
-        <div className="min-h-screen bg-[#EDF7F2] pb-12 pt-20 font-sans text-slate-900 selection:bg-[#ECFDF5] sm:pb-14">
+        <div className="min-h-screen bg-[#EDF7F2] pb-24 pt-20 font-sans text-slate-900 selection:bg-[#ECFDF5] sm:pb-28 lg:pb-32">
 
             {/* Header Section */}
             <section className="relative overflow-hidden px-4 pb-7 pt-7 md:pb-8 md:pt-12">
@@ -109,7 +109,7 @@ export default function ContactPage() {
                 </div>
             </section>
 
-            <section className="container relative z-10 mx-auto max-w-6xl pb-6">
+            <section className="container relative z-10 mx-auto max-w-6xl pb-12 md:pb-16">
                 {/* Fast Track Banner */}
                 <motion.div 
                     initial={{ opacity: 0, scale: 0.98, y: 20 }}
@@ -180,7 +180,6 @@ export default function ContactPage() {
                         animate={{ opacity: 1, x: 0 }}
                         transition={{ duration: 0.6, delay: 0.4 }}
                         className="lg:col-span-3 h-full"
-                        id="contact-form"
                     >
                         <Card className="flex h-full w-full flex-col items-center overflow-hidden rounded-[24px] border border-slate-100 bg-white shadow-[0_10px_40px_rgba(0,0,0,0.03)] md:rounded-[2rem]">
                             <CardHeader className="w-full border-b border-slate-50 bg-slate-50/50 px-5 pb-5 pt-6 md:px-6 md:pt-7">
@@ -189,7 +188,7 @@ export default function ContactPage() {
                                     학원 규모와 원하시는 기능을 남겨주시면, 담당 매니저가 맞춤형 안내 자료와 함께 연락드리겠습니다.
                                 </CardDescription>
                             </CardHeader>
-                            <CardContent className="flex w-full flex-col items-center space-y-5 px-5 py-5 md:px-6 md:py-6">
+                            <CardContent id="contact-form" className="flex w-full scroll-mt-28 flex-col items-center space-y-5 px-5 py-5 md:scroll-mt-32 md:px-6 md:py-6">
                                 {submitted ? (
                                     <div className="flex flex-col items-center justify-center space-y-4 py-12 text-center">
                                         <CheckCircle2 className="h-14 w-14 text-green-500" />

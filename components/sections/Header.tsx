@@ -17,8 +17,8 @@ const navItems = [
 ]
 
 const productTabs = [
-    { name: "소프트웨어", href: "/product/sw", icon: Monitor },
-    { name: "하드웨어", href: "/product/hw", icon: Cpu },
+    { name: "Classin(SW)", href: "/product/sw", icon: Monitor },
+    { name: "Classin X(HW)", href: "/product/hw", icon: Cpu },
 ]
 
 export function Header() {
@@ -116,7 +116,7 @@ export function Header() {
                                                     href={tab.href}
                                                     onClick={() => setIsMobileMenuOpen(false)}
                                                     className={cn(
-                                                        "inline-flex min-h-11 items-center justify-center gap-2 rounded-[8px] border px-3 text-sm font-semibold transition-colors",
+                                                        "inline-flex min-h-11 items-center justify-center gap-2 whitespace-nowrap rounded-[8px] border px-3 text-sm font-semibold transition-colors",
                                                         isTabActive
                                                             ? "border-[#084734]/20 bg-[#ECFDF5] text-[#084734]"
                                                             : "border-black/[0.08] bg-white text-[#615D59] hover:bg-[#F6F5F4]"
