@@ -114,7 +114,7 @@ export default function EventsClient({ events }: { events: PublicEvent[] }) {
               >
                 {(() => {
                   const event = highlighted[0]
-                  const heroHref = event.slug ? `/events/${event.slug}` : event.ctaHref
+                  const heroHref = event.slug ? `/events/${event.slug}` : null
                   return (
                     <div className="relative min-h-[300px] overflow-hidden rounded-2xl text-white sm:min-h-[340px] md:min-h-[400px]">
                       {event.imageUrl ? (
@@ -232,7 +232,7 @@ export default function EventsClient({ events }: { events: PublicEvent[] }) {
             transition={{ duration: 0.25 }}
           >
             {rest.map((event, index) => {
-              const detailHref = event.slug ? `/events/${event.slug}` : event.ctaHref
+              const detailHref = event.slug ? `/events/${event.slug}` : null
               const cardInner = (
                 <article
                   className="grid grid-cols-1 gap-3 border-b border-[#ebebea] py-5 transition-opacity duration-300 md:grid-cols-[160px_1fr_180px] md:gap-8 md:py-6"
