@@ -156,14 +156,14 @@ export default function ContactPage() {
                             </div>
 
                             <div className="shrink-0 flex flex-col items-center gap-4">
-                                <div className="rounded-[20px] border border-[#1c1917] bg-[#292524] p-3 shadow-lg sm:rounded-3xl sm:p-4">
-                                    <div className="w-32 h-32 md:w-40 md:h-40 bg-white rounded-2xl flex items-center justify-center relative overflow-hidden">
+                                <div className="rounded-[22px] border border-[#22A366]/25 bg-[#E9F8F1] p-1.5 shadow-[0_18px_45px_rgba(8,71,52,0.12)] sm:rounded-[26px] sm:p-2">
+                                    <div className="w-40 h-40 md:h-48 md:w-48 bg-white rounded-[18px] flex items-center justify-center relative overflow-hidden ring-1 ring-[#22A366]/10">
                                         <Image
                                             src="/qr-code.png"
                                             alt="카카오톡 상담 QR코드"
                                             fill
-                                            sizes="(max-width: 768px) 128px, 160px"
-                                            className="object-contain p-2"
+                                            sizes="(max-width: 768px) 160px, 192px"
+                                            className="object-contain p-1.5"
                                         />
                                     </div>
                                 </div>

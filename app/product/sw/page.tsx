@@ -9,7 +9,7 @@ import {
     Clock, Users, PenTool, Dice1, FileText, Layout, Video,
     Globe, Wifi, BarChart3, BookOpen, Timer,
     MessageSquare, GraduationCap, CheckCircle2, Zap, Shield,
-    Star, X, Camera, Trophy, Shuffle, FlaskConical, Atom, Ruler, Laptop, Mic
+    Star, X, Camera, Trophy, Shuffle, FlaskConical, Atom, Ruler, Laptop
 } from "lucide-react"
 import Link from "next/link"
 import Image from "next/image"
@@ -66,26 +66,15 @@ const LESSON_TOOLS: {
     { label: "공동 작업", icon: Users, tone: "from-[#F4F4FF] to-[#E0E3FF] text-[#5962AE]" },
 ]
 
-type LessonActivity = {
+const LESSON_ACTIVITIES: {
     label: string
     desc?: string
     featured?: boolean
     cardClass: string
     iconSizeClass: string
-} & (
-    | {
-        iconSrc: string
-        iconAlt: string
-        icon?: never
-    }
-    | {
-        icon: React.ComponentType<{ className?: string }>
-        iconSrc?: never
-        iconAlt?: never
-    }
-)
-
-const LESSON_ACTIVITIES: LessonActivity[] = [
+    iconSrc: string
+    iconAlt: string
+}[] = [
     {
         label: "수업",
         desc: "다양한 실시간 상호작용과 수업 후 AI 분석 및 요약 지원",
@@ -107,78 +96,62 @@ const LESSON_ACTIVITIES: LessonActivity[] = [
     {
         label: "시험",
         cardClass: "col-span-1 xl:col-span-3",
-        icon: CheckCircle2,
+        iconSrc: "/images/product/sw/activity-icons/quiz-mono.png",
+        iconAlt: "시험 흑백 아이콘",
         iconSizeClass: "h-10 w-10",
     },
     {
         label: "녹화+수업",
         cardClass: "col-span-1 xl:col-span-3",
-        icon: Video,
+        iconSrc: "/images/product/sw/activity-icons/recorded-class-mono.png",
+        iconAlt: "녹화 수업 흑백 아이콘",
         iconSizeClass: "h-10 w-10",
     },
     {
         label: "학습 자료",
         cardClass: "col-span-1 xl:col-span-3",
-        icon: BookOpen,
+        iconSrc: "/images/product/sw/activity-icons/learning-materials-mono.png",
+        iconAlt: "학습 자료 흑백 아이콘",
         iconSizeClass: "h-10 w-10",
     },
     {
         label: "일일 과제",
         cardClass: "col-span-1 xl:col-span-3",
-        icon: CheckCircle2,
+        iconSrc: "/images/product/sw/activity-icons/daily-task-mono.png",
+        iconAlt: "일일 과제 흑백 아이콘",
         iconSizeClass: "h-10 w-10",
     },
     {
         label: "토론",
         cardClass: "col-span-1 xl:col-span-3",
-        icon: MessageSquare,
+        iconSrc: "/images/product/sw/activity-icons/discussion-mono.png",
+        iconAlt: "토론 흑백 아이콘",
         iconSizeClass: "h-10 w-10",
     },
     {
         label: "OMR 카드",
         cardClass: "col-span-1 xl:col-span-3",
-        icon: FileText,
+        iconSrc: "/images/product/sw/activity-icons/omr-card-mono.png",
+        iconAlt: "OMR 카드 흑백 아이콘",
         iconSizeClass: "h-10 w-10",
     },
     {
         label: "SCORM",
         cardClass: "col-span-1 xl:col-span-3",
-        icon: Layers,
+        iconSrc: "/images/product/sw/activity-icons/scorm-mono.png",
+        iconAlt: "SCORM 흑백 아이콘",
         iconSizeClass: "h-10 w-10",
     },
     {
         label: "따라읽기",
         cardClass: "col-span-1 xl:col-span-3",
-        icon: Mic,
+        iconSrc: "/images/product/sw/activity-icons/repeat-after-me-mono.png",
+        iconAlt: "따라읽기 흑백 아이콘",
         iconSizeClass: "h-10 w-10",
     },
 ]
 
 const ACTIVITY_ICON_VERSION = "20260429"
-
-function ActivityVisual({ activity }: { activity: LessonActivity }) {
-    if ("icon" in activity) {
-        const Icon = activity.icon
-        return (
-            <div className={`shrink-0 text-[#111827] transition-transform duration-300 group-hover:scale-105 ${activity.iconSizeClass}`}>
-                <Icon className="h-full w-full stroke-[1.7]" />
-            </div>
-        )
-    }
-
-    return (
-        <div className={`relative shrink-0 transition-transform duration-300 group-hover:scale-105 ${activity.iconSizeClass}`}>
-            <Image
-                src={`${activity.iconSrc}?v=${ACTIVITY_ICON_VERSION}`}
-                alt={activity.iconAlt}
-                fill
-                unoptimized
-                className="object-contain"
-                sizes={activity.featured ? "56px" : "40px"}
-            />
-        </div>
-    )
-}
 
 /* ── Animation helpers ───────────────────────────────────────────── */
 const fadeUp = {
@@ -1086,7 +1059,7 @@ function FAQSection() {
     const [openItems, setOpenItems] = useState<number[]>([])
     return (
         <section className="py-24 md:py-32 bg-[#FDFCF8]">
-            <div className="container mx-auto px-4 lg:px-8 max-w-[24rem]">
+            <div className="container mx-auto px-6 md:px-10 lg:px-16 max-w-5xl">
                 <motion.div className="text-center mb-14" {...fadeUp}>
                     <EyebrowTag>FAQ</EyebrowTag>
                     <h2 className="text-3xl md:text-4xl font-serif text-[#1a1a19] leading-tight">
@@ -1106,9 +1079,9 @@ function FAQSection() {
                         >
                             <button
                                 onClick={() => setOpenItems((items) => items.includes(i) ? items.filter((item) => item !== i) : [...items, i])}
-                                className="w-full flex items-center justify-between gap-4 px-6 py-5 text-left"
+                                className="w-full flex items-center justify-between gap-5 px-8 py-6 text-left md:px-10 lg:px-12"
                             >
-                                <span className="text-sm font-semibold text-slate-800 leading-snug">{faq.q}</span>
+                                <span className="text-base font-semibold text-slate-800 leading-snug md:text-lg">{faq.q}</span>
                                 <motion.span
                                     animate={{ rotate: openItems.includes(i) ? 45 : 0 }}
                                     transition={{ duration: 0.2 }}
@@ -1123,7 +1096,7 @@ function FAQSection() {
                                 transition={{ duration: 0.25 }}
                                 className="overflow-hidden"
                             >
-                                <p className="px-6 pb-5 text-sm text-slate-500 leading-relaxed border-t border-slate-50 pt-4">
+                                <p className="px-8 pb-6 text-base text-slate-500 leading-relaxed border-t border-slate-50 pt-5 md:px-10 lg:px-12">
                                     {faq.a}
                                 </p>
                             </motion.div>
@@ -1783,7 +1756,16 @@ export default function ProductPage() {
                                     className={`${act.cardClass} rounded-2xl border border-[rgba(0,0,0,0.08)] bg-white shadow-[0_1px_6px_rgba(0,0,0,0.04)] transition-all hover:-translate-y-1 hover:shadow-[0_14px_30px_rgba(34,163,102,0.08)] group ${act.featured ? "p-5 md:p-6" : "p-4 md:p-5"}`}
                                 >
                                     <div className={act.featured ? "flex items-start gap-4" : "flex flex-col items-center text-center"}>
-                                        <ActivityVisual activity={act} />
+                                        <div className={`relative shrink-0 transition-transform duration-300 group-hover:scale-105 ${act.iconSizeClass}`}>
+                                            <Image
+                                                src={`${act.iconSrc}?v=${ACTIVITY_ICON_VERSION}`}
+                                                alt={act.iconAlt}
+                                                fill
+                                                unoptimized
+                                                className="object-contain"
+                                                sizes={act.featured ? "56px" : "40px"}
+                                            />
+                                        </div>
                                         <div className={act.featured ? "min-w-0 flex-1 pt-1" : "mt-3"}>
                                             <h4 className={`font-bold text-slate-900 ${act.featured ? "text-lg mb-1.5" : "text-sm"}`}>{act.label}</h4>
                                             {act.desc ? <p className="text-sm leading-relaxed text-slate-500">{act.desc}</p> : null}

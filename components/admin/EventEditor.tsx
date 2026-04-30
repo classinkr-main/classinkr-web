@@ -2,7 +2,6 @@
 import { useEffect, useMemo, useRef, useState, type ReactNode } from "react"
 import Image from "next/image"
 import Link from "next/link"
-import { useRouter } from "next/navigation"
 import {
   ArrowLeft,
   ArrowRight,
@@ -104,34 +103,28 @@ function adminUpload(url: string, formData: FormData) {
   })
 }
 
-interface EventEditorProps {
-  mode?: "create" | "edit"
-  event?: PublicEvent
-}
-
-export default function EventEditor({ mode = "edit", event }: EventEditorProps) {
-  const router = useRouter()
+export default function EventEditor({ event }: { event: PublicEvent }) {
   const editorRef = useRef<RichMarkdownEditorHandle>(null)
   const fileInputRef = useRef<HTMLInputElement>(null)
   const isFirstRenderRef = useRef(true)
 
   const [form, setForm] = useState<FormState>({
-    title: event?.title ?? "",
-    slug: event?.slug ?? "",
-    description: event?.description ?? "",
-    category: event?.category ?? "프로모션",
-    tag: event?.tag ?? "",
-    startsAt: toLocalDatetime(event?.startsAt ?? null),
-    endsAt: toLocalDatetime(event?.endsAt ?? null),
-    location: event?.location ?? "",
-    ctaLabel: event?.ctaLabel ?? "자세히 보기",
-    ctaHref: event?.ctaHref ?? "",
-    highlight: event?.highlight ?? false,
-    statusOverride: (event?.statusOverride as StatusOverrideOption) ?? "auto",
+    title: event.title,
+    slug: event.slug ?? "",
+    description: event.description ?? "",
+    category: event.category,
+    tag: event.tag ?? "",
+    startsAt: toLocalDatetime(event.startsAt),
+    endsAt: toLocalDatetime(event.endsAt),
+    location: event.location ?? "",
+    ctaLabel: event.ctaLabel,
+    ctaHref: event.ctaHref ?? "",
+    highlight: event.highlight,
+    statusOverride: (event.statusOverride as StatusOverrideOption) ?? "auto",
   })
-  const [content, setContent] = useState(event?.contentMarkdown ?? "")
-  const [imagePath, setImagePath] = useState<string | null>(event?.imagePath ?? null)
-  const [imagePreview, setImagePreview] = useState<string | null>(event?.imageUrl ?? null)
+  const [content, setContent] = useState(event.contentMarkdown ?? "")
+  const [imagePath, setImagePath] = useState<string | null>(event.imagePath ?? null)
+  const [imagePreview, setImagePreview] = useState<string | null>(event.imageUrl ?? null)
   const [imageFile, setImageFile] = useState<File | null>(null)
   const [saving, setSaving] = useState(false)
   const [saveError, setSaveError] = useState<string | null>(null)
@@ -202,19 +195,7 @@ export default function EventEditor({ mode = "edit", event }: EventEditorProps) 
         contentMarkdown: content || null,
         imagePath: currentImagePath,
       }
-      if (mode === "create") {
-        const res = await adminFetch("/api/admin/events", {
-          method: "POST",
-          body: JSON.stringify(payload),
-        })
-        if (!res.ok) throw new Error(await res.text())
-        const created = (await res.json()) as PublicEvent
-        setDraftState("saved")
-        setLastSavedAt(new Date())
-        router.replace(`/admin/events/${created.id}/edit`)
-        return
-      }
-      const res = await adminFetch(`/api/admin/events/${event!.id}`, {
+      const res = await adminFetch(`/api/admin/events/${event.id}`, {
         method: "PATCH",
         body: JSON.stringify(payload),
       })
@@ -269,7 +250,7 @@ export default function EventEditor({ mode = "edit", event }: EventEditorProps) 
               <Eye className="h-4 w-4 text-[#084734]" />
               <span className="text-sm font-semibold text-[#111110]">페이지 미리보기</span>
               <span className="rounded-full border border-[#e8e8e4] px-2.5 py-0.5 text-[11px] text-[#1a1a1a]/40">
-                /events/{form.slug || event?.slug || "—"}
+                /events/{form.slug || event.slug || "—"}
               </span>
             </div>
             <button
@@ -395,7 +376,7 @@ export default function EventEditor({ mode = "edit", event }: EventEditorProps) 
                 Event Editor
               </p>
               <h1 className="truncate text-base font-semibold tracking-[-0.02em] text-[#111110]">
-                {form.title || (mode === "create" ? "새 행사 작성" : "행사 편집")}
+                {form.title || "행사 편집"}
               </h1>
             </div>
             <div className="hidden items-center gap-2 sm:flex">
@@ -406,7 +387,7 @@ export default function EventEditor({ mode = "edit", event }: EventEditorProps) 
           </div>
 
           <div className="flex shrink-0 items-center gap-1">
-            {event?.slug && (
+            {event.slug && (
               <Button variant="ghost" size="sm" asChild className="h-8">
                 <Link href={`/events/${event.slug}`} target="_blank">
                   실제 페이지 →
@@ -607,8 +588,8 @@ export default function EventEditor({ mode = "edit", event }: EventEditorProps) 
         </section>
 
         {/* Right: settings sidebar */}
-        <aside>
-          <div className="sticky top-[68px] max-h-[calc(100vh-72px)] space-y-5 overflow-y-auto pb-10">
+        <aside className="self-start">
+          <div className="sticky top-[68px] space-y-5 pb-10">
             {/* Basic info */}
             <div className="rounded-[24px] border border-[#e8e8e4] bg-white p-5 shadow-sm space-y-4">
               <h2 className="text-[13px] font-semibold uppercase tracking-wide text-[#1a1a1a]/40">기본 정보</h2>

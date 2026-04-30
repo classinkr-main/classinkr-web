@@ -16,6 +16,7 @@ type CaseStudy = {
     attribution: string
     photo: string
     photoAlt: string
+    photoClassName?: string
 }
 
 const cases: CaseStudy[] = [
@@ -27,7 +28,7 @@ const cases: CaseStudy[] = [
         result: "첨삭 기록과 과제 이력을 누적해 강사별 편차를 줄이고 학부모 상담의 설득력을 높였습니다.",
         quote: "국어 수업은 과정 설명이 중요한데, 누적 기록이 생기니 학생 변화와 다음 과제를 더 선명하게 전달할 수 있었습니다.",
         attribution: "담당 강사",
-        photo: "/images/case-studies/cheongju-imisook-korean.jpg",
+        photo: "/images/case-studies/cheongju-imisook-korean-v3.jpg",
         photoAlt: "청주 이** 국어 도입 사례 사진",
     },
     {
@@ -40,6 +41,7 @@ const cases: CaseStudy[] = [
         attribution: "운영팀장",
         photo: "/images/case-studies/pyeongtaek-yoon-plus.jpg",
         photoAlt: "평택 윤** 도입 사례 사진",
+        photoClassName: "object-cover object-top",
     },
     {
         badge: "부산",
@@ -156,8 +158,9 @@ export function CaseStudies() {
                                                     src={caseItem.photo}
                                                     alt={caseItem.photoAlt}
                                                     fill
+                                                    unoptimized
                                                     sizes="(min-width: 768px) 480px, 82vw"
-                                                    className="object-cover"
+                                                    className={caseItem.photoClassName ?? "object-cover"}
                                                 />
                                             </div>
 
