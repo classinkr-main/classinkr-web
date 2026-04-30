@@ -1,10 +1,8 @@
 "use client"
 
 import { Button } from "@/components/ui/button"
-import { BROCHURE_URL } from "@/lib/marketing-links"
 import Link from "next/link"
 import { DemoModal } from "./DemoModal"
-import { NewsletterModal } from "./NewsletterModal"
 import { motion } from "framer-motion"
 import { trackEvent } from "@/lib/analytics"
 import Image from "next/image"
@@ -89,26 +87,7 @@ export function Hero() {
                                 <span className="relative z-10">내 학원 시스템 설계받기 →</span>
                             </Button>
                         </DemoModal>
-                        <NewsletterModal
-                            source="hero_materials"
-                            badge="무료 자료"
-                            title="서비스 소개서 받아보기"
-                            description="이메일을 남겨주시면 Classin 소개서와 도입 포인트를 바로 확인하실 수 있습니다."
-                            benefits={[
-                                "Classin 주요 기능 한눈에 정리",
-                                "도입 사례 및 성과 데이터 포함",
-                                "요금제 · 도입 프로세스 안내",
-                            ]}
-                            successCta={{
-                                label: "소개서 지금 바로 열기",
-                                href: BROCHURE_URL,
-                            }}
-                        >
-                            <Button variant="outline" size="lg" onClick={() => trackEvent("download_materials")} className="h-[3.5rem] px-8 text-[1.05rem] font-bold bg-[#ECFDF5] hover:bg-[#D1FAE5] text-[#084734] border border-[#084734]/20 hover:border-[#084734]/40 rounded-2xl w-full sm:w-auto transition-all duration-300 hover:scale-[1.03] active:scale-[0.97]">
-                                <span className="relative z-10">도입 사례 보기</span>
-                            </Button>
-                        </NewsletterModal>
-                        <Button asChild variant="outline" size="lg" className="h-[3.5rem] px-8 text-[1.05rem] font-bold bg-white hover:bg-[#F6F5F4] text-[#615D59] border border-[rgba(0,0,0,0.08)] hover:border-[rgba(0,0,0,0.14)] rounded-2xl w-full sm:w-auto transition-all duration-300 hover:scale-[1.03] active:scale-[0.97]">
+                        <Button asChild variant="outline" className="h-12 px-7 text-base font-semibold bg-white/70 hover:bg-white text-[#615D59] hover:text-[#111110] border border-[rgba(0,0,0,0.08)] hover:border-[rgba(0,0,0,0.14)] rounded-2xl w-full sm:w-auto transition-all duration-300">
                             <Link href="/product/sw" onClick={() => trackEvent("click_cta", { button: "hero_product_tour" })}>
                                 <span className="relative z-10">제품 둘러보기</span>
                             </Link>

@@ -7,6 +7,9 @@ import type { HwInbound, HwOutbound, HwStock } from "@/lib/repositories/branch-h
 export type Severity = "info" | "warn" | "error"
 export interface DqIssue { id: string; severity: Severity; message: string; samples?: unknown[] }
 
+export const DATA_QUALITY_RULE_IDS = ["DQ-2", "DQ-3", "DQ-4", "DQ-7", "DQ-9", "DQ-10", "DQ-11", "DQ-13"] as const
+export const DATA_QUALITY_RULE_COUNT = DATA_QUALITY_RULE_IDS.length
+
 export interface DqInputs {
   deals: BranchRevDeal[]; dsh: DshOutput; kpi: KpiRow[]; seg: SegRow[]
   hwInbound: HwInbound[]; hwOutbound: HwOutbound[]; hwStock: HwStock[]

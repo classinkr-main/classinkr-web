@@ -1,40 +1,6 @@
 "use client"
 
-import { motion, useInView } from "framer-motion"
-import { useRef } from "react"
-
-const layers = [
-  {
-    label: "AG/AF Coating",
-    highlight: false,
-    gradient: "from-white/10 to-white/5",
-  },
-  {
-    label: "4K Display Panel",
-    highlight: false,
-    gradient: "from-white/10 to-white/5",
-  },
-  {
-    label: "Touch Layer (50pt)",
-    highlight: false,
-    gradient: "from-white/10 to-white/5",
-  },
-  {
-    label: "OPS PC (i5/i7)",
-    highlight: true,
-    gradient: "from-[#084734]/80 to-[#065c41]/60",
-  },
-  {
-    label: "AI Camera + Mic Array",
-    highlight: false,
-    gradient: "from-white/10 to-white/5",
-  },
-  {
-    label: "Speaker × 2",
-    highlight: false,
-    gradient: "from-white/10 to-white/5",
-  },
-]
+import Image from "next/image"
 
 const capabilities = [
   "i5 OPS 표준 탑재",
@@ -42,55 +8,39 @@ const capabilities = [
   "복잡한 어댑터 없는 간결한 전원",
   "HDMI 등 외부 기기 연결 불필요",
   "별도 PC 본체 공간이 필요 없는 일체형",
+  "Window 기반 호환성 블록",
+  "미러링 제공",
 ]
 
-function LayerStack() {
-  const ref = useRef<HTMLDivElement>(null)
-  const isInView = useInView(ref, { once: true, margin: "-80px" })
-
-  return (
-    <div
-      ref={ref}
-      className="flex flex-col gap-3 w-full max-w-sm mx-auto lg:mx-0 lg:ml-auto"
-      style={{ transform: "skewY(-3deg)" }}
-    >
-      {layers.map((layer, i) => (
-        <motion.div
-          key={layer.label}
-          initial={{ opacity: 0, x: -40 }}
-          animate={isInView ? { opacity: 1, x: 0 } : { opacity: 0, x: -40 }}
-          transition={{ duration: 0.45, delay: i * 0.1, ease: "easeOut" }}
-          className="flex items-center gap-4"
-        >
-          {/* Layer bar */}
-          <div
-            className={`flex-1 h-[22px] rounded-md bg-gradient-to-r ${layer.gradient} border ${
-              layer.highlight ? "border-[#084734]" : "border-white/15"
-            }`}
-          />
-          {/* Label */}
-          <span
-            className={`text-xs font-medium w-[160px] shrink-0 ${
-              layer.highlight ? "text-[#6EE7B7]" : "text-white/60"
-            }`}
-            style={{ letterSpacing: "0.02em" }}
-          >
-            {layer.label}
-          </span>
-        </motion.div>
-      ))}
-    </div>
-  )
-}
+const opsEnergyModuleImage = "/images/product/hw/ops/ops-glass-energy-module-black.png"
 
 export default function AllInOneStatement() {
   return (
-    <section className="bg-[#0D1A12] text-white py-24 md:py-32 px-6">
-      <div className="max-w-7xl mx-auto grid lg:grid-cols-2 gap-16 items-center">
-        {/* Mobile: diagram first */}
+    <section className="relative overflow-hidden bg-[#020403] text-white py-24 md:py-32 px-6">
+      <div className="pointer-events-none absolute inset-0 bg-[radial-gradient(ellipse_at_77%_42%,rgba(34,163,102,0.18)_0%,rgba(12,44,28,0.12)_28%,transparent_58%),radial-gradient(ellipse_at_50%_74%,rgba(255,255,255,0.035)_0%,transparent_42%),linear-gradient(90deg,#020403_0%,#030605_48%,#050907_100%)]" />
+      <div className="pointer-events-none absolute inset-y-0 right-0 w-[58%] bg-[linear-gradient(90deg,transparent,rgba(2,4,3,0.18)_38%,rgba(7,13,10,0.38)_100%)]" />
+
+      <div className="relative max-w-7xl mx-auto grid lg:grid-cols-[0.92fr_1.08fr] gap-14 lg:gap-16 items-center">
+        {/* Mobile: visual first */}
         <div className="order-first lg:order-last flex items-center justify-center lg:justify-end">
-          <div className="w-full aspect-square max-w-xs sm:max-w-sm flex items-center">
-            <LayerStack />
+          <div className="relative w-full max-w-[46rem] py-4 lg:-mr-20">
+            <div className="pointer-events-none absolute inset-0 rounded-full bg-[#22A366]/20 blur-3xl" />
+            <div
+              className="relative aspect-[16/9] w-full"
+              style={{
+                WebkitMaskImage: "radial-gradient(ellipse at 62% 50%, #000 0%, #000 48%, rgba(0,0,0,0.72) 62%, transparent 82%)",
+                maskImage: "radial-gradient(ellipse at 62% 50%, #000 0%, #000 48%, rgba(0,0,0,0.72) 62%, transparent 82%)",
+              }}
+            >
+              <Image
+                src={opsEnergyModuleImage}
+                alt="ClassIn 로고가 빛나는 글래스모피즘 OPS 모듈이 전자칠판에 에너지를 전달하는 3D 비유 이미지"
+                fill
+                sizes="(max-width: 768px) 92vw, 54vw"
+                className="object-cover"
+              />
+              <div className="absolute inset-0 bg-[linear-gradient(90deg,rgba(5,8,6,0.34)_0%,transparent_24%,transparent_68%,rgba(5,8,6,0.18)_100%)]" />
+            </div>
           </div>
         </div>
 

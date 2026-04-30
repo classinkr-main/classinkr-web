@@ -1,8 +1,9 @@
-﻿import { NextRequest, NextResponse } from "next/server"
+import { NextRequest, NextResponse } from "next/server"
 import { GoogleGenerativeAI } from "@google/generative-ai"
 import { verifyAdmin } from "@/lib/admin-auth"
 
 export const runtime = "nodejs"
+export const maxDuration = 60 // 1분으로 타임아웃 연장
 
 interface RecipientContext {
   name?: string

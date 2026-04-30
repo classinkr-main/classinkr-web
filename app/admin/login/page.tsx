@@ -133,6 +133,7 @@ export default function AdminLoginPage() {
               width={120}
               height={32}
               className="object-contain"
+              style={{ width: "auto", height: "auto" }}
               priority
             />
             <div className="flex h-10 w-10 items-center justify-center rounded-xl bg-[#f0f0ec]">

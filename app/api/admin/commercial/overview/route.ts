@@ -4,7 +4,6 @@ import { verifyAdmin } from "@/lib/admin-auth";
 import type { CommercialOverviewRange } from "@/lib/partner-portal/overview-types";
 import {
   getCommercialOverview,
-  getDemoCommercialOverview,
   getLegacyCommercialOverview,
 } from "@/lib/partner-portal/repositories/overview";
 
@@ -31,11 +30,11 @@ export async function GET(req: NextRequest) {
       const legacyOverview = await getLegacyCommercialOverview(range);
       return NextResponse.json({ overview: legacyOverview, mode: "legacy" });
     } catch (legacyError) {
-      console.warn("[GET /api/admin/commercial/overview] demo fallback", legacyError);
-      return NextResponse.json({
-        overview: await getDemoCommercialOverview(range),
-        mode: "demo",
-      });
+      console.error("[GET /api/admin/commercial/overview]", legacyError);
+      return NextResponse.json(
+        { error: "Failed to fetch commercial overview" },
+        { status: 500 }
+      );
     }
   }
 }

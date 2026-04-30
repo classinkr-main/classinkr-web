@@ -21,7 +21,8 @@ const sizes = [
   {
     inches: `86"`,
     heading: `86" — 표준 강의실`,
-    imageSrc: "/images/product/hw/sizes/room-86.jpg",
+    imageSrc: "/images/product/hw/sizes/room-86-jayescan.jpg",
+    imageClassName: "object-cover scale-[1.22]",
     imageAlt: '86인치 클래스인 보드 수업 공간',
     specs: [
       { label: "적정 인원", value: "30~50명" },
@@ -63,7 +64,7 @@ export default function SizeChooser() {
         </p>
 
         {/* Cards */}
-        <div className="mt-14 grid max-w-5xl md:grid-cols-2 gap-6 lg:gap-8">
+        <div className="mt-14 mx-auto grid max-w-5xl md:grid-cols-2 gap-6 lg:gap-8">
           {sizes.map((size, i) => (
             <motion.div
               key={size.inches}
@@ -89,7 +90,7 @@ export default function SizeChooser() {
                   alt={size.imageAlt}
                   fill
                   sizes="(max-width: 768px) 100vw, 50vw"
-                  className="object-cover"
+                  className={size.imageClassName ?? "object-cover"}
                 />
                 <div className="absolute inset-0 bg-gradient-to-t from-black/20 via-transparent to-transparent" />
               </div>
@@ -117,9 +118,12 @@ export default function SizeChooser() {
                 </ul>
 
                 {/* CTA */}
-                <button className="mt-7 w-full bg-[#084734] hover:bg-[#065c41] text-white rounded-md py-3 text-sm font-semibold transition">
+                <Link
+                  href="/contact#contact-form"
+                  className="mt-7 block w-full rounded-md bg-[#084734] py-3 text-center text-sm font-semibold text-white transition hover:bg-[#065c41]"
+                >
                   이 사이즈로 데모 신청 →
-                </button>
+                </Link>
               </div>
             </motion.div>
           ))}
@@ -130,7 +134,7 @@ export default function SizeChooser() {
           <p className="text-center text-sm text-[#615D59]">
             더 큰 공간(50명+, 강당·콘퍼런스)을 위한 110&quot; 모델은{" "}
             <Link
-              href="/contact"
+              href="/contact#contact-form"
               className="text-[#084734] underline underline-offset-2"
             >
               별도 문의

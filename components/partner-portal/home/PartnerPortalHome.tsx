@@ -1,6 +1,6 @@
 "use client"
 
-import { useCallback, useEffect, useMemo, useState } from "react"
+import { type DragEvent, useCallback, useEffect, useMemo, useState } from "react"
 import {
   ArrowRight,
   CheckCircle2,
@@ -8,6 +8,7 @@ import {
   ChevronLeft,
   ChevronRight,
   Loader2,
+  RotateCcw,
 } from "lucide-react"
 import { CustomerDialog } from "@/components/partner-portal/crud/CustomerDialog"
 import { DealQuickCreateDialog } from "@/components/partner-portal/crud/DealQuickCreateDialog"
@@ -127,6 +128,8 @@ type PartnerPortalHomeProps = {
   overviewEndpoint?: string
   linkTargets?: Partial<PartnerPortalLinkTargets>
   allowCreate?: boolean
+  adminView?: boolean
+  embedded?: boolean
 }
 
 const DEFAULT_LINK_TARGETS: PartnerPortalLinkTargets = {
@@ -140,6 +143,8 @@ const DEFAULT_LINK_TARGETS: PartnerPortalLinkTargets = {
 const STAGE_PIPELINE = [
   "contact", "quote", "contract", "confirmed", "installation", "payment",
 ] as const
+
+type PipelineStage = (typeof STAGE_PIPELINE)[number]
 
 const STAGE_CFG: Record<string, {
   label: string
@@ -178,68 +183,27 @@ const PAYMENT_METHOD_LABEL: Record<string, string> = {
   cash:          "현금",
 }
 
-/* ─── Demo Data ──────────────────────────────────────────────── */
+/* ─── Empty Data ─────────────────────────────────────────────── */
 
-const DEMO: PartnerOverviewPayload = {
-  mode: "demo",
+const EMPTY_OVERVIEW: PartnerOverviewPayload = {
+  mode: "legacy",
   metrics: {
-    customer_count: 3,
-    active_deal_count: 6,
-    installation_deal_count: 2,
-    unpaid_deal_count: 3,
-    contracted_amount: 76500000,
-    installed_amount: 41200000,
-    paid_amount: 29800000,
-    outstanding_amount: 46700000,
+    customer_count: 0,
+    active_deal_count: 0,
+    installation_deal_count: 0,
+    unpaid_deal_count: 0,
+    contracted_amount: 0,
+    installed_amount: 0,
+    paid_amount: 0,
+    outstanding_amount: 0,
   },
-  customers: [
-    {
-      customer: { id: "c1", name: "강남메가스터디학원", campus_name: "본관", region_label: "강남" },
-      summary: { active_deals: 3, unpaid_deals: 2, outstanding_amount: 31100000, last_deal_updated_at: "2026-04-04T02:00:00Z" },
-    },
-    {
-      customer: { id: "c2", name: "리더스입시학원", campus_name: "3층", region_label: "분당" },
-      summary: { active_deals: 2, unpaid_deals: 1, outstanding_amount: 15600000, last_deal_updated_at: "2026-04-03T12:00:00Z" },
-    },
-    {
-      customer: { id: "c3", name: "서초수학교습소", campus_name: null, region_label: "서초" },
-      summary: { active_deals: 1, unpaid_deals: 0, outstanding_amount: 0, last_deal_updated_at: "2026-04-02T09:00:00Z" },
-    },
-  ],
-  deals: [
-    { id: "d1", customer_id: "c1", title: "본관 전자칠판 4대 설치", deal_code: "D-2026-001", current_stage: "installation", customer_name: "강남메가스터디학원", customer_campus_name: "본관", expected_amount: 29000000, contracted_amount: 29000000, paid_amount: 12000000, outstanding_amount: 17000000, manager_name: "김민준" },
-    { id: "d2", customer_id: "c1", title: "추가 교실 계약", deal_code: "D-2026-011", current_stage: "quote", customer_name: "강남메가스터디학원", customer_campus_name: "본관", expected_amount: 14000000, contracted_amount: 14000000, paid_amount: 0, outstanding_amount: 14000000, manager_name: "이서연" },
-    { id: "d3", customer_id: "c2", title: "3층 전체 교체", deal_code: "D-2026-004", current_stage: "payment", customer_name: "리더스입시학원", customer_campus_name: "3층", expected_amount: 24200000, contracted_amount: 24200000, paid_amount: 24200000, outstanding_amount: 0, manager_name: "박지훈" },
-    { id: "d4", customer_id: "c1", title: "별관 추가 계약", deal_code: "D-2026-015", current_stage: "contract", customer_name: "강남메가스터디학원", customer_campus_name: "별관", expected_amount: 8600000, contracted_amount: 8600000, paid_amount: 0, outstanding_amount: 8600000, manager_name: "김민준" },
-    { id: "d5", customer_id: "c3", title: "2교실 신설 견적", deal_code: "D-2026-018", current_stage: "contact", customer_name: "서초수학교습소", customer_campus_name: null, expected_amount: 12400000, contracted_amount: 0, paid_amount: 0, outstanding_amount: 0, manager_name: "이서연" },
-    { id: "d6", customer_id: "c2", title: "분당지점 추가 설치", deal_code: "D-2026-007", current_stage: "installation", customer_name: "리더스입시학원", customer_campus_name: "3층", expected_amount: 15600000, contracted_amount: 15600000, paid_amount: 0, outstanding_amount: 15600000, manager_name: "박지훈" },
-  ],
-  recent_activity: [
-    { id: "a1", summary: "견적서 v3 링크 발송", action_type: "document", created_at: "2026-04-04T02:10:00Z" },
-    { id: "a2", summary: "설치 일정 4/20-4/21 확정", action_type: "schedule", created_at: "2026-04-04T01:30:00Z" },
-    { id: "a3", summary: "분할 수납 300만원 입금 확인", action_type: "payment", created_at: "2026-04-03T10:30:00Z" },
-    { id: "a4", summary: "별관 추가 계약 초안 생성", action_type: "document", created_at: "2026-04-03T09:00:00Z" },
-  ],
-  upcoming_installations: [
-    { id: "i1", title: "강남메가 본관 설치", location: "서울 강남구", scheduled_start_at: "2026-04-20T09:00:00+09:00", scheduled_end_at: "2026-04-21T17:00:00+09:00" },
-    { id: "i2", title: "리더스 분당지점 설치", location: "경기 성남시", scheduled_start_at: "2026-04-25T09:00:00+09:00", scheduled_end_at: "2026-04-25T18:00:00+09:00" },
-  ],
-  recent_payments: [
-    { id: "p1", amount: 3000000, paid_at: "2026-04-03T10:30:00Z", payment_method: "bank_transfer" },
-    { id: "p2", amount: 9000000, paid_at: "2026-04-01T09:10:00Z", payment_method: "bank_transfer" },
-  ],
-  recent_calendar_events: [
-    { id: "ce1", title: "견적 링크 만료 전 확인", starts_at: "2026-04-12T10:00:00+09:00", ends_at: "2026-04-12T11:00:00+09:00", source_type: "document_due" },
-    { id: "ce2", title: "추가 계약 조정 미팅", starts_at: "2026-04-16T14:00:00+09:00", ends_at: "2026-04-16T15:00:00+09:00", source_type: "meeting" },
-  ],
-  inventory_summary: [
-    { sku: "IFP-110", product_name: "IFP 110인치", pending_qty: 2, shipped_qty: 1, delivered_qty: 4, total_qty: 7 },
-    { sku: "IFP-86",  product_name: "IFP 86인치",  pending_qty: 4, shipped_qty: 2, delivered_qty: 8, total_qty: 14 },
-    { sku: "IFP-75",  product_name: "IFP 75인치",  pending_qty: 1, shipped_qty: 0, delivered_qty: 5, total_qty: 6 },
-    { sku: "CAM-T1",  product_name: "카메라 T1",    pending_qty: 3, shipped_qty: 1, delivered_qty: 6, total_qty: 10 },
-    { sku: "CAM-S1",  product_name: "카메라 S1",    pending_qty: 1, shipped_qty: 0, delivered_qty: 3, total_qty: 4 },
-    { sku: "STAND",   product_name: "스탠드",        pending_qty: 2, shipped_qty: 2, delivered_qty: 7, total_qty: 11 },
-  ],
+  customers: [],
+  deals: [],
+  recent_activity: [],
+  upcoming_installations: [],
+  recent_payments: [],
+  recent_calendar_events: [],
+  inventory_summary: [],
 }
 
 /* ─── Utils ──────────────────────────────────────────────────── */
@@ -291,10 +255,24 @@ function isPartnerReadMode(value: unknown): value is PartnerReadMode {
   return value === "v2" || value === "legacy" || value === "demo"
 }
 
+function isPipelineStage(value: string): value is PipelineStage {
+  return STAGE_PIPELINE.some(stage => stage === value)
+}
+
+function readStoredBoolean(key: string, fallback: boolean) {
+  if (typeof window === "undefined") return fallback
+  try {
+    const value = window.localStorage.getItem(key)
+    return value === null ? fallback : value === "true"
+  } catch {
+    return fallback
+  }
+}
+
 function normalizeOverviewPayload(payload: PartnerOverviewResponse): PartnerOverviewPayload {
   const metrics = payload.metrics
   return {
-    mode: isPartnerReadMode(payload.mode) ? payload.mode : DEMO.mode,
+    mode: isPartnerReadMode(payload.mode) ? payload.mode : EMPTY_OVERVIEW.mode,
     metrics: {
       customer_count: metrics?.customer_count ?? 0,
       active_deal_count: metrics?.active_deal_count ?? 0,
@@ -434,15 +412,21 @@ function MiniCalendar({
 /* ─── Left Sidebar ───────────────────────────────────────────── */
 
 function LeftSidebar({
+  open,
+  onOpenChange,
   upcoming_installations,
   recent_calendar_events,
   recent_activity,
   calendarHref,
+  adminView = false,
 }: {
+  open: boolean
+  onOpenChange: (open: boolean) => void
   upcoming_installations: InstallationEvent[]
   recent_calendar_events: CalendarEvent[]
   recent_activity: ActivityLog[]
   calendarHref: string
+  adminView?: boolean
 }) {
   // build event dots for current month
   const calDots: CalDot[] = useMemo(() => {
@@ -489,9 +473,50 @@ function LeftSidebar({
       .slice(0, 6)
   }, [upcoming_installations, recent_calendar_events])
 
+  if (!open) {
+    return (
+      <aside
+        className={`hidden border-r border-[#e7e0d6] bg-white lg:flex lg:flex-col lg:items-center ${
+          adminView ? "lg:sticky lg:top-0 lg:h-[100dvh]" : "lg:sticky lg:top-[56px] lg:h-[calc(100vh-56px)]"
+        }`}
+      >
+        <button
+          type="button"
+          onClick={() => onOpenChange(true)}
+          title="일정 패널 펼치기"
+          className="mt-4 flex h-40 w-9 flex-col items-center justify-center gap-2 rounded-2xl border border-[#e7e0d6] bg-[#F6F5F4] text-[#A39E98] transition-colors hover:bg-[#ECFDF5] hover:text-[#084734]"
+        >
+          <ChevronRight className="h-3.5 w-3.5" />
+          <span
+            className="text-[10px] font-semibold"
+            style={{ writingMode: "vertical-lr", transform: "rotate(180deg)" }}
+          >
+            일정
+          </span>
+        </button>
+      </aside>
+    )
+  }
+
   return (
-    <aside className="hidden lg:flex lg:flex-col border-r border-[#e7e0d6] bg-white h-[calc(100vh-56px)] sticky top-[56px] overflow-y-auto">
+    <aside
+      className={`hidden border-r border-[#e7e0d6] bg-white lg:flex lg:flex-col lg:overflow-y-auto ${
+        adminView ? "lg:sticky lg:top-0 lg:h-[100dvh]" : "lg:sticky lg:top-[56px] lg:h-[calc(100vh-56px)]"
+      }`}
+    >
       <div className="p-4 space-y-6">
+        <div className="flex items-center justify-between">
+          <span className="text-[11px] font-semibold uppercase tracking-widest text-[#A39E98]">일정 패널</span>
+          <button
+            type="button"
+            onClick={() => onOpenChange(false)}
+            title="일정 패널 접기"
+            className="rounded-lg p-1 text-[#A39E98] transition-colors hover:bg-black/5 hover:text-[#615D59]"
+          >
+            <ChevronLeft className="h-3.5 w-3.5" />
+          </button>
+        </div>
+
         {/* Mini Calendar */}
         <div>
           <MiniCalendar eventDots={calDots} />
@@ -591,8 +616,10 @@ export function PartnerPortalHome({
   overviewEndpoint = "/api/portal/overview",
   linkTargets,
   allowCreate,
+  adminView = false,
+  embedded = false,
 }: PartnerPortalHomeProps = {}) {
-  const [overview, setOverview] = useState<PartnerOverviewPayload>(DEMO)
+  const [overview, setOverview] = useState<PartnerOverviewPayload>(EMPTY_OVERVIEW)
   const [loading, setLoading]   = useState(true)
   const [expandedCustomers, setExpandedCustomers] = useState<Set<string>>(new Set(["c1"]))
   const [isCustomerDialogOpen, setIsCustomerDialogOpen]   = useState(false)
@@ -601,11 +628,49 @@ export function PartnerPortalHome({
   const [quoteOpen, setQuoteOpen]         = useState(true)
   const [contractOpen, setContractOpen]   = useState(true)
   const [inventoryOpen, setInventoryOpen] = useState(true)
-  const [sidebarOpen, setSidebarOpen]     = useState(true)
+  const [leftSidebarOpen, setLeftSidebarOpen] = useState(true)
+  const [sidebarOpen, setSidebarOpen] = useState(true)
+  const [panelPrefsLoaded, setPanelPrefsLoaded] = useState(false)
+  const [draggingDealId, setDraggingDealId] = useState<string | null>(null)
+  const [dragOverStage, setDragOverStage] = useState<PipelineStage | null>(null)
+  const [stageUpdatePendingId, setStageUpdatePendingId] = useState<string | null>(null)
+  const [stageUpdateError, setStageUpdateError] = useState<string | null>(null)
+  const [undoStageChange, setUndoStageChange] = useState<{
+    deal: DealItem
+    fromStage: string
+    toStage: PipelineStage
+    createdAt: number
+    pending: boolean
+  } | null>(null)
+  const [isUndoingStageChange, setIsUndoingStageChange] = useState(false)
 
   const refreshPortal = useCallback(() => {
     window.location.reload()
   }, [])
+
+  useEffect(() => {
+    setLeftSidebarOpen(readStoredBoolean("partner_portal_left_sidebar_open", true))
+    setSidebarOpen(readStoredBoolean("partner_portal_summary_panel_open", true))
+    setPanelPrefsLoaded(true)
+  }, [])
+
+  useEffect(() => {
+    if (!panelPrefsLoaded) return
+    try {
+      window.localStorage.setItem("partner_portal_left_sidebar_open", String(leftSidebarOpen))
+    } catch {
+      // Ignore private browsing/storage restrictions.
+    }
+  }, [leftSidebarOpen, panelPrefsLoaded])
+
+  useEffect(() => {
+    if (!panelPrefsLoaded) return
+    try {
+      window.localStorage.setItem("partner_portal_summary_panel_open", String(sidebarOpen))
+    } catch {
+      // Ignore private browsing/storage restrictions.
+    }
+  }, [panelPrefsLoaded, sidebarOpen])
 
   const resolvedLinkTargets = useMemo(
     () => ({ ...DEFAULT_LINK_TARGETS, ...linkTargets }),
@@ -621,7 +686,7 @@ export function PartnerPortalHome({
         return normalizeOverviewPayload(payload)
       })
       .then(payload => { if (alive) { setOverview(payload); setLoading(false) } })
-      .catch(() => { if (alive) { setOverview(DEMO); setLoading(false) } })
+      .catch(() => { if (alive) { setOverview(EMPTY_OVERVIEW); setLoading(false) } })
     return () => { alive = false }
   }, [overviewEndpoint])
 
@@ -705,18 +770,149 @@ export function PartnerPortalHome({
   const installPct = contracted_amount > 0 ? Math.round((installed_amount / contracted_amount) * 100) : 0
   const paidPct    = contracted_amount > 0 ? Math.round((paid_amount    / contracted_amount) * 100) : 0
   const canCreateInPortal = allowCreate ?? overview.mode === "v2"
+  const canMoveDealStages = adminView && overview.deals.length > 0
+
+  const applyDealStage = useCallback((dealId: string, stage: string) => {
+    setOverview(prev => ({
+      ...prev,
+      deals: prev.deals.map(deal =>
+        deal.id === dealId ? { ...deal, current_stage: stage } : deal
+      ),
+    }))
+  }, [])
+
+  const persistDealStage = useCallback(async (dealId: string, stage: string) => {
+    const response = await portalFetch(`/api/portal/deals/${dealId}`, {
+      method: "PUT",
+      headers: { "Content-Type": "application/json" },
+      body: JSON.stringify({ current_stage: stage }),
+    })
+    const payload = await response.json().catch(() => null) as { error?: string } | null
+    if (!response.ok) {
+      throw new Error(payload?.error ?? "거래 상태 변경에 실패했습니다.")
+    }
+  }, [])
+
+  const moveDealToStage = useCallback(async (deal: DealItem, nextStage: PipelineStage) => {
+    const fromStage = deal.current_stage
+    if (fromStage === nextStage) return
+
+    setStageUpdateError(null)
+    setStageUpdatePendingId(deal.id)
+    applyDealStage(deal.id, nextStage)
+    setUndoStageChange({
+      deal,
+      fromStage,
+      toStage: nextStage,
+      createdAt: Date.now(),
+      pending: true,
+    })
+
+    try {
+      await persistDealStage(deal.id, nextStage)
+      setUndoStageChange(current =>
+        current?.deal.id === deal.id && current.toStage === nextStage
+          ? { ...current, pending: false }
+          : current
+      )
+    } catch (error) {
+      applyDealStage(deal.id, fromStage)
+      setUndoStageChange(current => current?.deal.id === deal.id ? null : current)
+      setStageUpdateError(error instanceof Error ? error.message : "거래 상태 변경에 실패했습니다.")
+    } finally {
+      setStageUpdatePendingId(current => current === deal.id ? null : current)
+    }
+  }, [applyDealStage, persistDealStage])
+
+  const handleDealDragStart = useCallback((event: DragEvent<HTMLDivElement>, deal: DealItem) => {
+    if (!canMoveDealStages) return
+    event.dataTransfer.effectAllowed = "move"
+    event.dataTransfer.setData("text/plain", deal.id)
+    setDraggingDealId(deal.id)
+  }, [canMoveDealStages])
+
+  const handleDealDragEnd = useCallback(() => {
+    setDraggingDealId(null)
+    setDragOverStage(null)
+  }, [])
+
+  const handleStageDragOver = useCallback((event: DragEvent<HTMLDivElement>, stage: PipelineStage) => {
+    if (!draggingDealId) return
+    event.preventDefault()
+    event.dataTransfer.dropEffect = "move"
+    setDragOverStage(stage)
+  }, [draggingDealId])
+
+  const handleStageDrop = useCallback((event: DragEvent<HTMLDivElement>, stage: PipelineStage) => {
+    event.preventDefault()
+    const dealId = event.dataTransfer.getData("text/plain") || draggingDealId
+    const deal = overview.deals.find(item => item.id === dealId)
+    setDraggingDealId(null)
+    setDragOverStage(null)
+    if (!deal || !isPipelineStage(stage)) return
+    void moveDealToStage(deal, stage)
+  }, [draggingDealId, moveDealToStage, overview.deals])
+
+  const handleUndoStageChange = useCallback(async () => {
+    if (!undoStageChange || undoStageChange.pending || isUndoingStageChange) return
+
+    setIsUndoingStageChange(true)
+    setStageUpdateError(null)
+    setStageUpdatePendingId(undoStageChange.deal.id)
+    applyDealStage(undoStageChange.deal.id, undoStageChange.fromStage)
+
+    try {
+      await persistDealStage(undoStageChange.deal.id, undoStageChange.fromStage)
+      setUndoStageChange(null)
+    } catch (error) {
+      applyDealStage(undoStageChange.deal.id, undoStageChange.toStage)
+      setStageUpdateError(error instanceof Error ? error.message : "작업취소에 실패했습니다.")
+    } finally {
+      setIsUndoingStageChange(false)
+      setStageUpdatePendingId(current => current === undoStageChange.deal.id ? null : current)
+    }
+  }, [applyDealStage, isUndoingStageChange, persistDealStage, undoStageChange])
+
+  useEffect(() => {
+    if (!undoStageChange || undoStageChange.pending) return
+    const timeout = window.setTimeout(() => {
+      setUndoStageChange(current =>
+        current?.createdAt === undoStageChange.createdAt ? null : current
+      )
+    }, 12000)
+
+    return () => window.clearTimeout(timeout)
+  }, [undoStageChange])
 
   const todayStr = new Date().toLocaleDateString("ko-KR", {
     year: "numeric", month: "long", day: "numeric", weekday: "short",
   })
 
+  const rootClass = embedded
+    ? "text-[#1a1a1a]"
+    : `${adminView ? "min-h-[calc(100dvh-4rem)]" : "min-h-screen"} bg-[#f6f3ed] text-[#1a1a1a]`
+  const bodyGridClass = embedded
+    ? ""
+    : `grid ${leftSidebarOpen ? "lg:grid-cols-[272px_minmax(0,1fr)]" : "lg:grid-cols-[48px_minmax(0,1fr)]"}`
+  const actionBarBorderClass = embedded
+    ? "rounded-2xl border border-[#e7e0d6] bg-white px-4 py-3 sm:px-6"
+    : "border-b border-[#e7e0d6] bg-white px-6 py-3"
+  const urgencyStripClass = embedded
+    ? "mt-3 rounded-2xl bg-[#111110] px-4 py-2.5 sm:px-6"
+    : "bg-[#111110] px-6 py-2.5"
+  const contentPaddingClass = embedded ? "px-0 py-6" : "px-4 py-5 sm:px-6 sm:py-6"
+
   return (
-    <div className="min-h-screen bg-[#f6f3ed] text-[#1a1a1a]">
+    <div className={rootClass}>
 
       {/* ── Demo Banner ─────────────────────────────────────────── */}
       {overview.mode === "demo" && (
-        <div className="border-b border-amber-300/60 bg-amber-50 px-6 py-2.5">
-          <div className="mx-auto flex max-w-[1680px] items-center justify-between gap-4">
+        <div className={
+          embedded
+            ? "mb-4 rounded-2xl border border-amber-300/60 bg-amber-50 px-4 py-2.5 sm:px-6"
+            : "border-b border-amber-300/60 bg-amber-50 px-6 py-2.5"
+        }>
+          <div className={embedded ? "flex flex-wrap items-center justify-between gap-3" : "mx-auto flex max-w-[1680px] items-center justify-between gap-4"}>
             <div className="flex items-center gap-2 text-sm text-amber-800">
               <span className="rounded-full bg-amber-200 px-2 py-0.5 text-[11px] font-bold uppercase tracking-wider text-amber-700">DEMO</span>
               지금 보이는 데이터는 <strong>샘플 데이터</strong>입니다. 실제 계정을 연결하면 실데이터로 전환됩니다.
@@ -727,27 +923,52 @@ export function PartnerPortalHome({
       )}
 
       {/* ── Body: Sidebar + Main ─────────────────────────────────── */}
-      <div className="grid lg:grid-cols-[272px_1fr]">
+      <div className={bodyGridClass}>
 
-        {/* ── Left Sidebar ──────────────────────────────────────── */}
-        <LeftSidebar
-          upcoming_installations={overview.upcoming_installations}
-          recent_calendar_events={overview.recent_calendar_events}
-          recent_activity={overview.recent_activity}
-          calendarHref={resolvedLinkTargets.calendar}
-        />
+        {/* ── Left Sidebar (admin embed에서는 숨김) ─────────────── */}
+        {!embedded && (
+          <LeftSidebar
+            open={leftSidebarOpen}
+            onOpenChange={setLeftSidebarOpen}
+            upcoming_installations={overview.upcoming_installations}
+            recent_calendar_events={overview.recent_calendar_events}
+            recent_activity={overview.recent_activity}
+            calendarHref={resolvedLinkTargets.calendar}
+            adminView={adminView}
+          />
+        )}
 
         {/* ── Main Content ──────────────────────────────────────── */}
         <main className="min-w-0">
 
           {/* Action Bar */}
-          <div className="border-b border-[#e7e0d6] bg-white px-6 py-3">
-            <div className="flex items-center justify-between gap-4">
-              <div className="flex items-center gap-3">
+          <div className={actionBarBorderClass}>
+            <div className="flex flex-col gap-3 sm:flex-row sm:items-center sm:justify-between">
+              <div className="flex min-w-0 flex-wrap items-center gap-2 sm:gap-3">
+                {!embedded && (
+                  <button
+                    type="button"
+                    onClick={() => setLeftSidebarOpen(open => !open)}
+                    title={leftSidebarOpen ? "일정 패널 접기" : "일정 패널 펼치기"}
+                    className="hidden h-8 items-center gap-1.5 rounded-lg border border-[#e8e8e4] bg-white px-2.5 text-xs font-semibold text-[#1a1a1a]/55 transition-colors hover:border-[#c8c8c4] hover:text-[#111110] lg:inline-flex"
+                  >
+                    {leftSidebarOpen ? <ChevronLeft className="h-3.5 w-3.5" /> : <ChevronRight className="h-3.5 w-3.5" />}
+                    일정
+                  </button>
+                )}
+                <button
+                  type="button"
+                  onClick={() => setSidebarOpen(open => !open)}
+                  title={sidebarOpen ? "간편 요약 접기" : "간편 요약 펼치기"}
+                  className="hidden h-8 items-center gap-1.5 rounded-lg border border-[#e8e8e4] bg-white px-2.5 text-xs font-semibold text-[#1a1a1a]/55 transition-colors hover:border-[#c8c8c4] hover:text-[#111110] xl:inline-flex"
+                >
+                  {sidebarOpen ? <ChevronRight className="h-3.5 w-3.5" /> : <ChevronLeft className="h-3.5 w-3.5" />}
+                  요약
+                </button>
                 {loading && <Loader2 className="h-4 w-4 animate-spin text-[#1a1a1a]/40" />}
                 <p className="text-sm text-[#1a1a1a]/50">{todayStr}</p>
               </div>
-              <div className="flex items-center gap-2">
+              <div className="flex flex-wrap items-center gap-2 sm:justify-end">
                 {canCreateInPortal ? (
                   <>
                     <QuickActionButton label="새 고객" onClick={() => setIsCustomerDialogOpen(true)} />
@@ -756,7 +977,7 @@ export function PartnerPortalHome({
                   </>
                 ) : (
                   <span className="rounded-full border border-[#e0e0dc] bg-[#f7f7f5] px-3 py-1.5 text-xs text-[#1a1a1a]/40">
-                    읽기 전용 모드
+                    신규 생성 비활성
                   </span>
                 )}
               </div>
@@ -765,7 +986,7 @@ export function PartnerPortalHome({
 
           {/* Urgency Strip */}
           {urgencyChips.length > 0 && (
-            <div className="bg-[#111110] px-6 py-2.5">
+            <div className={urgencyStripClass}>
               <div className="flex flex-wrap items-center gap-2">
                 <span className="text-[11px] font-semibold uppercase tracking-widest text-white/35">지금 확인</span>
                 {urgencyChips.map(chip => (
@@ -782,15 +1003,15 @@ export function PartnerPortalHome({
 
           {/* Scrollable content */}
           <div
-            className="grid gap-6 px-6 py-6"
-            style={{
-              gridTemplateColumns: sidebarOpen ? "1fr 300px" : "1fr 36px",
-              transition: "grid-template-columns 280ms cubic-bezier(0.4,0,0.2,1)",
-            }}
+            className={`grid min-w-0 gap-6 ${contentPaddingClass} transition-[grid-template-columns] duration-300 ${
+              sidebarOpen
+                ? "xl:grid-cols-[minmax(0,1fr)_300px]"
+                : "xl:grid-cols-[minmax(0,1fr)_36px]"
+            }`}
           >
 
           {/* ── Left: 메인 콘텐츠 ──────────────────────────────── */}
-          <div className="space-y-6">
+          <div className="min-w-0 space-y-6">
 
             {/* ── 지금 할 일 (Action Queue) ─────────────────────── */}
             {actionQueue.length > 0 && (
@@ -859,11 +1080,17 @@ export function PartnerPortalHome({
             {/* ── Pipeline Board ────────────────────────────────── */}
             <section>
               <SectionHeader title="거래 파이프라인" sub={`${overview.deals.length}건`} />
-              <div className="mt-3 overflow-x-auto pb-2">
-                <div className="flex gap-3" style={{ minWidth: "max-content" }}>
+              {stageUpdateError && (
+                <div className="mt-3 rounded-xl border border-red-100 bg-red-50 px-3 py-2 text-xs font-medium text-red-600">
+                  {stageUpdateError}
+                </div>
+              )}
+              <div className="mt-3 min-w-0 overflow-x-auto pb-2">
+                <div className="flex min-w-max gap-3">
                   {STAGE_PIPELINE.map(stage => {
                     const deals = pipeline[stage] ?? []
                     const cfg   = STAGE_CFG[stage]
+                    const isDropTarget = dragOverStage === stage
                     return (
                       <div key={stage} className="w-[188px] flex-shrink-0">
                         <div className="mb-2 flex items-center justify-between px-0.5">
@@ -874,6 +1101,18 @@ export function PartnerPortalHome({
                             {deals.length}
                           </span>
                         </div>
+                        <div
+                          onDragOver={event => handleStageDragOver(event, stage)}
+                          onDragLeave={event => {
+                            if (!event.currentTarget.contains(event.relatedTarget as Node | null)) {
+                              setDragOverStage(current => current === stage ? null : current)
+                            }
+                          }}
+                          onDrop={event => handleStageDrop(event, stage)}
+                          className={`min-h-20 rounded-2xl p-1 transition-colors ${
+                            isDropTarget ? "bg-[#084734]/10 ring-1 ring-[#084734]/20" : ""
+                          }`}
+                        >
                         <div className="space-y-2">
                           {deals.length === 0 ? (
                             <div className="flex h-16 items-center justify-center rounded-xl border border-dashed border-[#d9cfbf] bg-[#faf6ef]">
@@ -885,11 +1124,24 @@ export function PartnerPortalHome({
                               return (
                                 <div
                                   key={deal.id}
-                                  className={`group rounded-xl border border-[#e7e0d6] border-l-4 bg-white p-3 shadow-sm transition-all hover:-translate-y-0.5 hover:shadow-md ${cfg.borderCls}`}
+                                  draggable={canMoveDealStages}
+                                  onDragStart={event => handleDealDragStart(event, deal)}
+                                  onDragEnd={handleDealDragEnd}
+                                  aria-grabbed={draggingDealId === deal.id}
+                                  className={`group rounded-xl border border-[#e7e0d6] border-l-4 bg-white p-3 shadow-sm transition-all hover:-translate-y-0.5 hover:shadow-md ${cfg.borderCls} ${
+                                    canMoveDealStages ? "cursor-grab active:cursor-grabbing" : ""
+                                  } ${
+                                    draggingDealId === deal.id ? "opacity-45" : ""
+                                  }`}
                                 >
-                                  <p className="text-xs font-semibold leading-snug text-[#111110]">
-                                    {deal.title}
-                                  </p>
+                                  <div className="flex items-start justify-between gap-2">
+                                    <p className="min-w-0 text-xs font-semibold leading-snug text-[#111110]">
+                                      {deal.title}
+                                    </p>
+                                    {stageUpdatePendingId === deal.id && (
+                                      <Loader2 className="mt-0.5 h-3.5 w-3.5 shrink-0 animate-spin text-[#1a1a1a]/30" />
+                                    )}
+                                  </div>
                                   <p className="mt-1 text-[11px] text-[#1a1a1a]/45">
                                     {deal.customer_name}
                                   </p>
@@ -912,6 +1164,7 @@ export function PartnerPortalHome({
                               )
                             })
                           )}
+                        </div>
                         </div>
                       </div>
                     )
@@ -940,22 +1193,22 @@ export function PartnerPortalHome({
                         })}
                         className="flex w-full items-center justify-between gap-3 px-5 py-4 text-left transition-colors hover:bg-[#faf6ef]"
                       >
-                        <div>
-                          <div className="flex items-center gap-2">
-                            <span className="text-sm font-semibold text-[#111110]">
+                        <div className="min-w-0">
+                          <div className="flex min-w-0 items-center gap-2">
+                            <span className="min-w-0 truncate text-sm font-semibold text-[#111110]">
                               {cs.customer.name}
                             </span>
                             {hasOutstanding && (
                               <span className="h-1.5 w-1.5 rounded-full bg-red-500" />
                             )}
                           </div>
-                          <p className="mt-0.5 text-xs text-[#1a1a1a]/45">
+                          <p className="mt-0.5 truncate text-xs text-[#1a1a1a]/45">
                             {cs.customer.region_label ?? "지역 미지정"}
                             {cs.customer.campus_name ? ` · ${cs.customer.campus_name}` : ""}
                             {" · "}진행 {cs.summary?.active_deals ?? 0}건
                           </p>
                         </div>
-                        <div className="flex shrink-0 items-center gap-3">
+                        <div className="flex shrink-0 flex-wrap items-center justify-end gap-2 sm:gap-3">
                           {hasOutstanding && (
                             <span className="text-xs font-semibold text-red-600">
                               미수 {fmt(cs.summary!.outstanding_amount)}
@@ -980,7 +1233,7 @@ export function PartnerPortalHome({
                                 return (
                                   <div
                                     key={deal.id}
-                                    className={`flex items-center justify-between gap-3 rounded-xl border border-l-4 border-[#e7e0d6] bg-[#faf6ef] px-4 py-3 ${cfg.borderCls}`}
+                                    className={`flex flex-col gap-3 rounded-xl border border-l-4 border-[#e7e0d6] bg-[#faf6ef] px-4 py-3 sm:flex-row sm:items-center sm:justify-between ${cfg.borderCls}`}
                                   >
                                     <div className="min-w-0">
                                       <p className="truncate text-sm font-medium text-[#111110]">
@@ -988,19 +1241,19 @@ export function PartnerPortalHome({
                                       </p>
                                       <p className="mt-0.5 text-xs text-[#1a1a1a]/40">{deal.deal_code}</p>
                                     </div>
-                                    <div className="flex shrink-0 items-center gap-2">
+                                    <div className="flex flex-wrap items-center gap-2 sm:shrink-0 sm:justify-end">
                                       {deal.manager_name && (
                                         <span className="text-xs text-[#1a1a1a]/50">
-                                          담당: {deal.manager_name}
+                                        담당: {deal.manager_name}
                                         </span>
                                       )}
-                                      <span className={`rounded-full px-2 py-0.5 text-[11px] font-medium ${cfg.badgeCls}`}>
+                                      <span className={`shrink-0 rounded-full px-2 py-0.5 text-[11px] font-medium ${cfg.badgeCls}`}>
                                         {cfg.label}
                                       </span>
-                                      <span className={`rounded-full px-2 py-0.5 text-[11px] font-medium ${ps.cls}`}>
+                                      <span className={`shrink-0 rounded-full px-2 py-0.5 text-[11px] font-medium ${ps.cls}`}>
                                         {ps.label}
                                       </span>
-                                      <span className="text-sm font-semibold text-[#111110]">
+                                      <span className="shrink-0 text-sm font-semibold text-[#111110]">
                                         {fmt(deal.contracted_amount || deal.expected_amount)}
                                       </span>
                                     </div>
@@ -1047,7 +1300,7 @@ export function PartnerPortalHome({
           </div>{/* end left */}
 
           {/* ── Right Sidebar ─────────────────────────────────── */}
-          <div className="hidden xl:block overflow-hidden">
+          <div className="hidden min-w-0 xl:block">
 
             {sidebarOpen ? (
               /* ── 펼쳐진 패널 ─────────────────────────────────── */
@@ -1251,6 +1504,40 @@ export function PartnerPortalHome({
         canCreate={canCreateInPortal}
         onSaved={refreshPortal}
       />
+
+      {undoStageChange && (
+        <div className="fixed inset-x-4 bottom-20 z-50 rounded-2xl border border-[#d8d2c8] bg-[#111110] p-3 text-white shadow-2xl sm:bottom-6 sm:left-auto sm:right-6 sm:w-[420px]">
+          <div className="flex items-start gap-3">
+            <div className="min-w-0 flex-1">
+              <p className="truncate text-sm font-semibold">{undoStageChange.deal.title}</p>
+              <p className="mt-0.5 text-xs text-white/55">
+                {STAGE_CFG[undoStageChange.fromStage]?.label ?? undoStageChange.fromStage}
+                {" → "}
+                {STAGE_CFG[undoStageChange.toStage]?.label ?? undoStageChange.toStage}
+              </p>
+            </div>
+            <button
+              type="button"
+              onClick={handleUndoStageChange}
+              disabled={undoStageChange.pending || isUndoingStageChange}
+              className="inline-flex h-8 shrink-0 items-center gap-1.5 rounded-lg bg-white px-3 text-xs font-semibold text-[#111110] transition-colors hover:bg-[#ECFDF5] disabled:cursor-wait disabled:opacity-60"
+            >
+              {undoStageChange.pending || isUndoingStageChange
+                ? <Loader2 className="h-3.5 w-3.5 animate-spin" />
+                : <RotateCcw className="h-3.5 w-3.5" />
+              }
+              작업취소
+            </button>
+            <button
+              type="button"
+              onClick={() => setUndoStageChange(null)}
+              className="h-8 shrink-0 rounded-lg px-2 text-xs font-semibold text-white/45 transition-colors hover:bg-white/10 hover:text-white"
+            >
+              닫기
+            </button>
+          </div>
+        </div>
+      )}
 
       <CustomerDialog
         open={isCustomerDialogOpen}

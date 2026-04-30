@@ -4,6 +4,8 @@ import Image from "next/image"
 import { useRef } from "react"
 import { motion, useScroll, useTransform } from "framer-motion"
 
+const bezelDetailImage = "/images/product/hw/board/board-bezel-detail.png?v=20260429-1834"
+
 export default function BigBackdropImage() {
   const sectionRef = useRef<HTMLElement>(null)
 
@@ -53,7 +55,7 @@ export default function BigBackdropImage() {
         style={{ scale: imageScale }}
       >
         <Image
-          src="/images/product/hw/board/board-bezel-detail.png"
+          src={bezelDetailImage}
           alt="ClassIn Board 베젤 클로즈업"
           fill
           className="object-cover"
@@ -70,7 +72,7 @@ export default function BigBackdropImage() {
       />
 
       {/* 카피 영역 — 좌하단 고정 */}
-      <div className="absolute bottom-12 left-6 md:bottom-20 md:left-16 max-w-2xl">
+      <div className="absolute bottom-12 left-6 right-6 max-w-2xl md:bottom-20 md:left-16 md:right-auto">
         {/* 라벨 */}
         <motion.p
           variants={labelVariants}

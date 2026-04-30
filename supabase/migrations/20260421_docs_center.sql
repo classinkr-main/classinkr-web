@@ -85,16 +85,35 @@ create index if not exists docs_articles_symptoms_idx on public.docs_articles us
 create index if not exists docs_articles_title_trgm_idx
   on public.docs_articles using gin (title extensions.gin_trgm_ops);
 
+-- array_to_string() is marked STABLE in Postgres, so it cannot be used directly
+-- in an index expression. Wrap the search-document construction in an IMMUTABLE
+-- SQL function so the GIN index can be built.
+create or replace function public.docs_articles_search_document(
+  title text,
+  description text,
+  chatbot_summary text,
+  tags text[],
+  keywords text[],
+  symptoms text[]
+) returns tsvector
+language sql
+immutable
+as $$
+  select to_tsvector(
+    'simple',
+    coalesce(title, '') || ' ' ||
+    coalesce(description, '') || ' ' ||
+    coalesce(chatbot_summary, '') || ' ' ||
+    coalesce(array_to_string(tags, ' '), '') || ' ' ||
+    coalesce(array_to_string(keywords, ' '), '') || ' ' ||
+    coalesce(array_to_string(symptoms, ' '), '')
+  )
+$$;
+
 create index if not exists docs_articles_search_idx
   on public.docs_articles using gin (
-    to_tsvector(
-      'simple',
-      coalesce(title, '') || ' ' ||
-      coalesce(description, '') || ' ' ||
-      coalesce(chatbot_summary, '') || ' ' ||
-      array_to_string(tags, ' ') || ' ' ||
-      array_to_string(keywords, ' ') || ' ' ||
-      array_to_string(symptoms, ' ')
+    public.docs_articles_search_document(
+      title, description, chatbot_summary, tags, keywords, symptoms
     )
   );
 

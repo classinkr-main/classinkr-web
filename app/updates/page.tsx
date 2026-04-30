@@ -66,7 +66,7 @@ export default async function UpdatesPage() {
 
   return (
     <div className="min-h-screen bg-[#FAFAF8]">
-      <div className="max-w-[720px] mx-auto px-6 pt-32 pb-24">
+      <div className="mx-auto max-w-[720px] px-4 pb-20 pt-28 sm:px-6 md:pb-24 md:pt-32">
 
         {/* 헤더 */}
         <div className="mb-12">
@@ -95,17 +95,17 @@ export default async function UpdatesPage() {
           {releases.map((release, idx) => (
             <div
               key={release.id}
-              className="relative bg-white rounded-2xl border border-[#e8e8e4] px-8 py-7 hover:border-[#c8c8c4] transition-colors"
+              className="relative rounded-2xl border border-[#e8e8e4] bg-white px-5 py-6 transition-colors hover:border-[#c8c8c4] sm:px-8 sm:py-7"
             >
               {/* 최신 뱃지 */}
               {idx === 0 && (
-                <span className="absolute top-5 right-6 text-[10px] font-bold px-2 py-0.5 rounded-full bg-[#084734] text-white uppercase tracking-wide">
+                <span className="mb-3 inline-flex rounded-full bg-[#084734] px-2 py-0.5 text-[10px] font-bold uppercase tracking-wide text-white sm:absolute sm:right-6 sm:top-5 sm:mb-0">
                   Latest
                 </span>
               )}
 
               {/* 태그 + 날짜 */}
-              <div className="flex items-center gap-3 mb-3">
+              <div className="mb-3 flex flex-wrap items-center gap-2 sm:gap-3">
                 <span className="flex items-center gap-1.5 text-[12px] font-bold text-[#084734] bg-[#f0f7f4] px-2.5 py-1 rounded-lg">
                   <Tag className="w-3 h-3" />{release.tag_name}
                 </span>

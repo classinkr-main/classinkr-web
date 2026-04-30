@@ -17,6 +17,9 @@ function createAuth(extraScopes: string[] = []) {
         "https://www.googleapis.com/auth/spreadsheets",
         "https://www.googleapis.com/auth/calendar",
         "https://www.googleapis.com/auth/gmail.send",
+        // Read-only file metadata — used to surface "sheet has changed since
+        // last sync" badges in the branch dashboard.
+        "https://www.googleapis.com/auth/drive.metadata.readonly",
     ]
 
     return new google.auth.GoogleAuth({
@@ -34,6 +37,7 @@ const auth = createAuth()
 export const sheets = google.sheets({ version: "v4", auth })
 export const calendar = google.calendar({ version: "v3", auth })
 export const gmail = google.gmail({ version: "v1", auth })
+export const drive = google.drive({ version: "v3", auth })
 
 /* ── 헬퍼: Sheets에 행 추가 ──────────────────────────────────── */
 export async function appendSheetRow(

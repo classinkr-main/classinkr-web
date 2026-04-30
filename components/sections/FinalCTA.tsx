@@ -23,7 +23,7 @@ export function FinalCTA() {
                     <span className="tracking-[0.04em]">무료 컨설팅 제공</span>
                 </span>
 
-                <h2 className="text-4xl md:text-5xl lg:text-6xl font-extrabold text-white mb-6 break-keep" style={{ letterSpacing: '-1.5px' }}>
+                <h2 className="text-3xl md:text-5xl lg:text-[3.5rem] font-black text-white mb-6 leading-[1.1] break-keep" style={{ letterSpacing: '-1.25px' }}>
                     강사 의존도에서 벗어날<br className="hidden md:block" /> 준비가 됐다면
                 </h2>
 
@@ -35,7 +35,7 @@ export function FinalCTA() {
                 <div className="flex flex-col sm:flex-row items-center justify-center gap-6">
                     <DemoModal>
                         <Button size="lg" className="h-16 px-10 text-lg font-bold bg-white text-[#111110] hover:bg-[#F6F5F4] hover:scale-105 active:scale-95 transition-all shadow-xl shadow-white/10 w-full sm:w-auto rounded-full">
-                            맞춤형 도입 플랜 받기
+                            무료 컨설팅 신청하기
                             <ArrowRight className="ml-2 w-5 h-5" />
                         </Button>
                     </DemoModal>

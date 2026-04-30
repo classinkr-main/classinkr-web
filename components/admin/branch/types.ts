@@ -8,6 +8,8 @@ export interface BranchMonthlySeries {
   months: string[]
   goal_cum: number[]
   revenue_cum: number[]
+  revenue_trend_cum: number[]
+  confirmed_through_index: number
   events: { date: string; title: string }[]
   deals: { date: string; customer: string; amount: number }[]
   campaigns: { date: string; name: string }[]
@@ -34,6 +36,7 @@ export interface BranchSummaryResponse {
   monthly_series: BranchMonthlySeries
   lastSync: string | null
   lastError: string | null
+  sheetModifiedAt: string | null
 }
 
 export interface BranchKpiTeamRow {

@@ -1,6 +1,7 @@
 "use client"
 
 import { Button } from "@/components/ui/button"
+import { trackEvent } from "@/lib/analytics"
 import { BROCHURE_URL } from "@/lib/marketing-links"
 import { motion, useInView } from "framer-motion"
 import {
@@ -11,7 +12,7 @@ import {
 } from "lucide-react"
 import Image from "next/image"
 import Link from "next/link"
-import { useRef, useState } from "react"
+import { Fragment, useRef, useState } from "react"
 
 import OpeningStatement from "@/components/product/hw/OpeningStatement"
 import PainPointsV2 from "@/components/product/hw/PainPointsV2"
@@ -40,16 +41,45 @@ const stagger = (i: number) => ({
 })
 
 /* ── Spec data ───────────────────────────────────────────────────── */
-const specRows = [
-    { label: "화면 크기", s110: '110"', s86: '86"', s75: '75"', s65: '65"' },
-    { label: "모델명", s110: "BS110A", s86: "BS86A", s75: "BS75A", s65: "BS65A" },
-    { label: "터치 포인트", s110: "50점", s86: "50점", s75: "50점", s65: "50점" },
-    { label: "터치 방식", s110: "적외선", s86: "적외선", s75: "적외선", s65: "적외선" },
-    { label: "응답 속도", s110: "2ms", s86: "2ms", s75: "2ms", s65: "2ms" },
-    { label: "스피커", s110: "2×15W", s86: "2×15W", s75: "2×15W", s65: "2×15W" },
-    { label: "내장 마이크", s110: "—", s86: "8배열", s75: "8배열", s65: "8배열" },
-    { label: "측면 제스처바", s110: "양측", s86: "양측", s75: "—", s65: "—" },
-    { label: "OPS 모듈", s110: "기본 제공", s86: "기본 제공", s75: "기본 제공", s65: "기본 제공" },
+type SpecRow = { label: string; s110: string; s86: string; s75: string; s65: string }
+type SpecGroup = { category: string; rows: SpecRow[] }
+
+const specGroups: SpecGroup[] = [
+    {
+        category: "제품 사양",
+        rows: [
+            { label: "모델명", s110: "BS110A", s86: "BS86A", s75: "BS75A", s65: "BS65A" },
+            { label: "화면 크기", s110: '110"', s86: '86"', s75: '75"', s65: '65"' },
+            { label: "전체 길이", s110: "2,620.55mm", s86: "1,976.63mm", s75: "1,730.63mm", s65: "1,508.71mm" },
+            { label: "전체 높이", s110: "1,457.20mm", s86: "1,153.31mm", s75: "1,015.22mm", s65: "889.87mm" },
+            { label: "두께", s110: "110.00mm", s86: "95.50mm", s75: "95.50mm", s65: "94.79mm" },
+        ],
+    },
+    {
+        category: "터치 방식",
+        rows: [
+            { label: "터치 포인트", s110: "50점", s86: "50점", s75: "50점", s65: "50점" },
+            { label: "터치 기술", s110: "적외선 터치", s86: "적외선 터치", s75: "적외선 터치", s65: "적외선 터치" },
+            { label: "응답 속도", s110: "2ms", s86: "2ms", s75: "2ms", s65: "2ms" },
+            { label: "인식 범위", s110: "1.5mm", s86: "1.5mm", s75: "1.5mm", s65: "1.5mm" },
+            { label: "측면 제스처바", s110: "양측 제공", s86: "양측 제공", s75: "—", s65: "—" },
+        ],
+    },
+    {
+        category: "오디오",
+        rows: [
+            { label: "내장 마이크", s110: "—", s86: "8배열", s75: "8배열", s65: "8배열" },
+            { label: "스피커 채널", s110: "2.0", s86: "2.0", s75: "2.0", s65: "2.0" },
+            { label: "스피커 출력", s110: "2×15W", s86: "2×15W", s75: "2×15W", s65: "2×15W" },
+        ],
+    },
+    {
+        category: "부속품 (악세서리)",
+        rows: [
+            { label: "스탠드 (별도 옵션)", s110: "벽걸이 & 이동형", s86: "벽걸이 & 이동형", s75: "벽걸이 & 이동형", s65: "벽걸이 & 이동형" },
+            { label: "OPS 컴퓨터 모듈", s110: "기본 제공", s86: "기본 제공", s75: "기본 제공", s65: "기본 제공" },
+        ],
+    },
 ]
 
 const lineupCards = [
@@ -144,7 +174,7 @@ function ComparisonSection() {
                             initial={{ opacity: 0, y: 40 }}
                             animate={inView ? { opacity: 1, y: 0 } : {}}
                             transition={{ duration: 0.5, delay: i * 0.15 }}
-                            className={`rounded-2xl border ${item.border} ${item.bg} p-8 ${item.highlight ? "ring-2 ring-[#22A366]/20 shadow-lg shadow-[#22A366]/5 scale-[1.02]" : ""}`}
+                            className={`rounded-2xl border ${item.border} ${item.bg} p-6 sm:p-8 ${item.highlight ? "ring-2 ring-[#22A366]/20 shadow-lg shadow-[#22A366]/5 md:scale-[1.02]" : ""}`}
                         >
                             <h3 className={`text-xl font-bold mb-6 ${item.highlight ? "text-[#22A366]" : "text-slate-900"}`}>
                                 {item.title}
@@ -177,11 +207,11 @@ function ComparisonSection() {
 
 /* ── Section: Feature Block (reusable) ───────────────────────────── */
 function FeatureSection({
-    tag, title, desc, features, reverse = false, accent = "#22A366", children,
+    tag, title, desc, features, reverse = false, accent = "#22A366", children, visualClassName = "",
 }: {
-    tag: string; title: React.ReactNode; desc: string
+    tag: string; title: React.ReactNode; desc: React.ReactNode
     features: { icon: React.ReactNode; label: string; detail: string }[]
-    reverse?: boolean; accent?: string; children?: React.ReactNode
+    reverse?: boolean; accent?: string; children?: React.ReactNode; visualClassName?: string
 }) {
     return (
         <section className="py-24 md:py-32">
@@ -214,7 +244,7 @@ function FeatureSection({
                     </div>
 
                     {/* Visual side */}
-                    <div className="flex-1 w-full max-w-lg">
+                    <div className={`flex-1 w-full max-w-lg ${visualClassName}`}>
                         {children ?? (
                             <motion.div
                                 {...fadeUp}
@@ -250,7 +280,7 @@ const featureTabs: FeatureTab[] = [
         imageAlt: "50페이지 판서 기능 시각화",
         imageFit: "contain",
         imagePanelClassName: "bg-[#05080C]",
-        imageClassName: "scale-[2]",
+        imageClassName: "scale-[1.8] -translate-y-[8%]",
         badge: "50페이지 무한 캔버스",
         title: "공간 걱정 없이 쓰고, 쓰는 즉시 전달",
         points: [
@@ -420,7 +450,9 @@ function ProductAnatomySection() {
                     </h2>
                     <p className="text-lg text-slate-500 mt-4 max-w-xl mx-auto">
                         110mm의 초슬림 바디부터 사용자 중심의 제스처바까지.
-                        작은 디테일 하나하나가 모여 선생님과 학생 모두가 수업에만 집중할 수 있는 최적의 하드웨어를 완성합니다.
+                        작은 디테일 하나하나가 모여
+                        <br />
+                        선생님과 학생 모두가 수업에만 집중할 수 있는 최적의 하드웨어를 완성합니다.
                     </p>
                 </motion.div>
 
@@ -664,24 +696,26 @@ function TestimonialSection() {
 }
 
 /* ── Section: Space Scenarios ────────────────────────────────────── */
+const spaceImageVersion = "20260429-1604"
+
 const spaceScenarios = [
     {
         model: "S110", size: '110"', badge: "FLAGSHIP",
         tag: "강당 · 대형 강의실",
         story: "300명이 앉은 강당에서도 맨 뒷자리가 선명합니다. 110인치 화면이 공간을 압도하며, 교사 한 명의 판서가 전석에 전달됩니다. 대규모 강의, 특강, 입시 설명회에 최적.",
-        image: "/images/product/hw/spaces/space-s110-hall.png",
+        image: `/images/product/hw/spaces/space-s110-hall.png?v=${spaceImageVersion}`,
     },
     {
         model: "S86", size: '86"', badge: "BEST",
         tag: "일반 교실 · 회의실",
         story: "30명 담임반의 하루 6교시를 완주하는 기준 모델. 가장 많은 교실 환경에 최적화된 사이즈. 8배열 마이크가 교실 소음 속에서도 교사 음성을 또렷이 전달합니다.",
-        image: "/images/product/hw/spaces/space-s86-classroom.png",
+        image: `/images/product/hw/spaces/space-s86-classroom.png?v=${spaceImageVersion}`,
     },
     {
         model: "S75", size: '75"', badge: "",
         tag: "세미나 · 중형 회의실",
         story: "20명 내외의 세미나실과 중형 회의실에 딱 맞는 사이즈. 임원 PT, 팀 회의, 교사 연수에서 화이트보드를 완전히 대체합니다.",
-        image: "/images/product/hw/spaces/space-s75-seminar.png",
+        image: `/images/product/hw/spaces/space-s75-seminar.png?v=${spaceImageVersion}`,
     },
 ]
 
@@ -758,7 +792,10 @@ function SpaceScenarioSection() {
                         </h3>
                         <p className="text-slate-600 leading-relaxed mb-8">{scenario.story}</p>
                         <Button asChild className="h-12 rounded-full bg-[#009060] px-8 text-sm font-bold text-white shadow-md transition-all hover:bg-[#007A52] hover:shadow-lg group">
-                            <Link href="/contact#contact-form">
+                            <Link
+                                href="/contact#contact-form"
+                                onClick={() => trackEvent("click_cta", { button: "hw_model_inquiry", page: "/product/hw", model: scenario.model })}
+                            >
                             이 모델로 문의하기
                             <ArrowRight className="w-4 h-4 ml-2 group-hover:translate-x-1 transition-transform" />
                             </Link>
@@ -924,7 +961,7 @@ export default function ProductHWPage() {
                 <FeatureSection
                     tag="WRITING EXPERIENCE"
                     title={<>쓰는 순간,<br />전자칠판이란 걸 <span className="text-[#22A366]">잊게 됩니다</span></>}
-                    desc="분필의 마찰감을 재현한 표면 코팅과 0.03초 초저지연이 만나, 손끝을 따라오는 가장 자연스러운 디지털 필기를 경험하세요."
+                    desc={<>분필의 마찰감을 재현한 표면 코팅과 0.03초 초저지연이 만나,<br />손끝을 따라오는 가장 자연스러운 디지털 필기를 경험하세요.</>}
                     features={[
                         {
                             icon: <Zap className="w-7 h-7" />,
@@ -965,7 +1002,7 @@ export default function ProductHWPage() {
             <FeatureSection
                 tag="DISPLAY QUALITY"
                 title={<>맨 뒷자리 학생도,<br /><span className="text-[#22A366]">맨 앞자리</span>와 같은 화면을 봅니다</>}
-                desc="풀 라미네이션 패널과 정밀 코팅 기술이 만들어내는 선명함. 조명 반사 없이, 어느 각도에서든 또렷한 화면을 제공합니다."
+                desc={<>풀 라미네이션 패널과 정밀 코팅 기술이 만들어내는 선명함. 조명 반사 없이,<br />어느 각도에서든 또렷한 화면을 제공합니다.</>}
                 reverse
                 features={[
                     {
@@ -1018,7 +1055,8 @@ export default function ProductHWPage() {
                 <FeatureSection
                     tag="INSTANT SHARING"
                     title={<>판서가 끝나기도 전에,<br />학생 기기에 <span className="text-[#22A366]">도착합니다</span></>}
-                    desc="실시간 판서 동기화로 모든 학생이 같은 내용을 동시에 봅니다. 수업이 끝나면 자동 저장. 결석한 학생도 놓치지 않습니다."
+                    desc={<>실시간 판서 동기화로 모든 학생이 같은 내용을 동시에 봅니다.<br />수업이 끝나면 자동 저장. 결석한 학생도 놓칠 수 없습니다.</>}
+                    visualClassName="lg:max-w-[660px] lg:-ml-14"
                     features={[
                         {
                             icon: <Share2 className="w-7 h-7" />,
@@ -1039,14 +1077,13 @@ export default function ProductHWPage() {
                 >
                     {/* Sharing visual — board camera close-up */}
                     <motion.div {...fadeUp} className="relative">
-                        <div className="rounded-3xl overflow-hidden bg-black shadow-2xl">
+                        <div className="relative aspect-[4/3] overflow-hidden rounded-3xl bg-black shadow-2xl">
                             <Image
                                 src="/images/product/hw/sharing/instant-sharing-camera.webp"
                                 alt="ClassIn Board 측면 카메라와 판서 화면 클로즈업"
-                                width={1536}
-                                height={1240}
-                                sizes="(max-width: 768px) 100vw, 500px"
-                                className="w-full h-auto"
+                                fill
+                                sizes="(max-width: 768px) 100vw, 640px"
+                                className="object-cover object-[48%_50%] translate-x-[-5%] translate-y-[4%] scale-[1.36]"
                             />
                         </div>
                     </motion.div>
@@ -1079,6 +1116,7 @@ export default function ProductHWPage() {
                 desc="AI 카메라와 고성능 마이크가 물리적 거리를 지웁니다. 교실 학생과 원격 학생이 하나의 캔버스에서 함께 배우는 하이브리드 수업."
                 reverse
                 accent="#22A366"
+                visualClassName="lg:max-w-[640px]"
                 features={[
                     {
                         icon: <Camera className="w-7 h-7" />,
@@ -1097,17 +1135,25 @@ export default function ProductHWPage() {
                     },
                 ]}
             >
-                {/* Hybrid classroom visual — real photo */}
+                {/* Hybrid classroom visual — looping interactive learning video */}
                 <motion.div {...fadeUp} className="relative">
-                    <div className="rounded-3xl overflow-hidden shadow-2xl">
-                        <Image
-                            src="/images/product/hw/camera/camera-hybrid-class.jpg"
-                            alt="하이브리드 교실 — 교실 학생과 원격 학생이 함께 수업하는 모습"
-                            width={800}
-                            height={600}
-                            sizes="(max-width: 768px) 100vw, 500px"
-                            className="w-full h-auto"
-                        />
+                    <div className="absolute -inset-7 rounded-[2rem] bg-[radial-gradient(circle_at_35%_20%,rgba(34,163,102,0.18),transparent_46%),radial-gradient(circle_at_80%_75%,rgba(8,71,52,0.14),transparent_45%)] blur-2xl" />
+                    <div className="relative rounded-[1.55rem] bg-gradient-to-br from-white via-[#F2EFE7] to-[#CFC8BA] p-[4px] shadow-[0_32px_90px_rgba(8,71,52,0.18)] ring-1 ring-black/5">
+                        <div className="relative aspect-video overflow-hidden rounded-[1.25rem] bg-black shadow-inner">
+                            <video
+                                src="/video/Interactive%20Learning%20with%20ClassIn.mp4"
+                                className="h-full w-full object-cover"
+                                autoPlay
+                                muted
+                                loop
+                                playsInline
+                                preload="metadata"
+                                aria-label="ClassIn 인터렉티브 러닝 수업 영상"
+                            />
+                            <div className="pointer-events-none absolute inset-0 rounded-[1.25rem] ring-1 ring-white/25" />
+                            <div className="pointer-events-none absolute inset-x-0 top-0 h-20 bg-gradient-to-b from-white/20 to-transparent" />
+                            <div className="pointer-events-none absolute inset-x-10 bottom-0 h-px bg-gradient-to-r from-transparent via-white/35 to-transparent" />
+                        </div>
                     </div>
                 </motion.div>
             </FeatureSection>
@@ -1135,7 +1181,7 @@ export default function ProductHWPage() {
                     {/* Board bezel detail hero image */}
                     <motion.div {...fadeUp} className="max-w-3xl mx-auto mb-14 rounded-3xl overflow-hidden shadow-2xl">
                         <Image
-                            src="/images/product/hw/board/board-bezel-detail.png"
+                            src="/images/product/hw/board/board-bezel-detail.png?v=20260429-1834"
                             alt="ClassIn Board 프리미엄 브러시드 메탈 베젤 디테일"
                             width={900}
                             height={500}
@@ -1232,14 +1278,24 @@ export default function ProductHWPage() {
                         ))}
                     </div>
 
-                    {/* Spec table */}
+                    {/* Detailed spec table */}
                     <motion.div {...fadeUp} className="max-w-5xl mx-auto">
+                        <div className="text-center mb-8">
+                            <p className="text-sm font-semibold text-[#22A366] tracking-wider uppercase mb-3">SPECIFICATIONS</p>
+                            <h3 className="text-2xl md:text-3xl font-bold text-[#1a1a19] leading-tight mb-3">
+                                클래스인 제품 상세 스펙
+                            </h3>
+                            <p className="text-base text-slate-500">
+                                클래스인 제품들의 상세한 스펙을 안내해드립니다.
+                            </p>
+                        </div>
+
                         <div className="bg-white rounded-2xl border border-slate-200/60 shadow-lg overflow-hidden">
                             <div className="overflow-x-auto">
-                                <table className="w-full text-sm">
+                                <table className="min-w-[760px] w-full text-sm">
                                     <thead>
                                         <tr className="bg-slate-50 border-b border-slate-100">
-                                            <th className="text-left py-4 px-6 font-semibold text-slate-500 w-40">사양</th>
+                                            <th className="text-left py-4 px-6 font-semibold text-slate-500 w-44">사양</th>
                                             <th className="text-center py-4 px-4 font-bold text-slate-900">S110</th>
                                             <th className="text-center py-4 px-4 font-bold text-[#22A366]">S86</th>
                                             <th className="text-center py-4 px-4 font-bold text-slate-900">S75</th>
@@ -1247,14 +1303,23 @@ export default function ProductHWPage() {
                                         </tr>
                                     </thead>
                                     <tbody>
-                                        {specRows.map((row, i) => (
-                                            <tr key={i} className={`border-b border-slate-50 ${i % 2 === 0 ? "bg-white" : "bg-slate-50/50"}`}>
-                                                <td className="py-3.5 px-6 font-medium text-slate-600">{row.label}</td>
-                                                <td className="py-3.5 px-4 text-center text-slate-700">{row.s110}</td>
-                                                <td className="py-3.5 px-4 text-center text-slate-700 font-medium">{row.s86}</td>
-                                                <td className="py-3.5 px-4 text-center text-slate-700">{row.s75}</td>
-                                                <td className="py-3.5 px-4 text-center text-slate-700">{row.s65}</td>
-                                            </tr>
+                                        {specGroups.map((group) => (
+                                            <Fragment key={group.category}>
+                                                <tr className="bg-[#22A366]/5 border-y border-[#22A366]/10">
+                                                    <td colSpan={5} className="py-2.5 px-6 text-[11px] font-bold tracking-[0.16em] uppercase text-[#22A366]">
+                                                        {group.category}
+                                                    </td>
+                                                </tr>
+                                                {group.rows.map((row, i) => (
+                                                    <tr key={`${group.category}-${row.label}`} className={`border-b border-slate-50 ${i % 2 === 0 ? "bg-white" : "bg-slate-50/40"}`}>
+                                                        <td className="py-3.5 px-6 font-medium text-slate-600">{row.label}</td>
+                                                        <td className="py-3.5 px-4 text-center tabular-nums text-slate-700">{row.s110}</td>
+                                                        <td className="py-3.5 px-4 text-center tabular-nums text-slate-700 font-medium">{row.s86}</td>
+                                                        <td className="py-3.5 px-4 text-center tabular-nums text-slate-700">{row.s75}</td>
+                                                        <td className="py-3.5 px-4 text-center tabular-nums text-slate-700">{row.s65}</td>
+                                                    </tr>
+                                                ))}
+                                            </Fragment>
                                         ))}
                                     </tbody>
                                 </table>
@@ -1288,13 +1353,21 @@ export default function ProductHWPage() {
 
                         <div className="flex flex-col sm:flex-row gap-4 justify-center">
                             <Button asChild className="h-14 rounded-full bg-[#009060] px-10 text-base font-bold text-white shadow-[0_8px_20px_rgba(0,144,96,0.24)] transition-all hover:scale-105 hover:bg-[#007A52] hover:shadow-[0_12px_25px_rgba(0,144,96,0.32)] group">
-                                <Link href="/contact#contact-form">
+                                <Link
+                                    href="/contact#contact-form"
+                                    onClick={() => trackEvent("click_cta", { button: "hw_final_inquiry", page: "/product/hw" })}
+                                >
                                 도입 문의하기
                                 <ArrowRight className="w-4 h-4 ml-2 group-hover:translate-x-1 transition-transform" />
                                 </Link>
                             </Button>
                             <Button asChild variant="outline" className="rounded-full px-10 h-14 text-base font-bold border-slate-300 hover:border-slate-400 text-slate-700 hover:bg-slate-50 transition-all">
-                                <a href={BROCHURE_URL} target="_blank" rel="noopener noreferrer">
+                                <a
+                                    href={BROCHURE_URL}
+                                    target="_blank"
+                                    rel="noopener noreferrer"
+                                    onClick={() => trackEvent("download_materials", { asset_id: "hw_brochure", page: "/product/hw" })}
+                                >
                                 서비스 소개서 보기
                                 </a>
                             </Button>

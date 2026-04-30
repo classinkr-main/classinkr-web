@@ -1,5 +1,6 @@
 import "server-only"
 import { createSupabaseAdminClient } from "@/lib/supabase/admin"
+import { normalizeBranchMemberName } from "@/lib/branch/member-names"
 
 export interface BranchRevDeal {
   id: string; sheet_row: number
@@ -20,7 +21,19 @@ export async function listBranchRevDeals(filter?: { team?: string }): Promise<Br
   if (filter?.team && filter.team !== "ALL") q = q.eq("team", filter.team)
   const { data, error } = await q
   if (error) throw error
-  return (data ?? []) as BranchRevDeal[]
+  return ((data ?? []) as BranchRevDeal[]).map((deal) => ({
+    ...deal,
+    manager: normalizeBranchMemberName(deal.manager),
+  }))
+}
+
+export async function getBranchRevDeal(id: string): Promise<BranchRevDeal | null> {
+  const sb = createSupabaseAdminClient()
+  const { data, error } = await sb.from("branch_rev_deals").select("*").eq("id", id).maybeSingle()
+  if (error) throw error
+  if (!data) return null
+  const deal = data as BranchRevDeal
+  return { ...deal, manager: normalizeBranchMemberName(deal.manager) }
 }
 
 export async function replaceBranchRevDeals(rows: unknown[]): Promise<number> {

@@ -28,6 +28,7 @@ import {
 import { clearAdminSessionStorage } from "@/lib/admin-client"
 import { createSupabaseBrowserClient } from "@/lib/supabase/browser"
 import { hasSupabaseBrowserEnv } from "@/lib/supabase/public-env"
+import AdminNotificationsBell from "./AdminNotificationsBell"
 
 type SidebarRole = "SUPER_ADMIN" | "ADMIN" | "EDITOR" | "VIEWER" | "BRANCH" | "PARTNER"
 type SidebarSection = "workspace" | "growth" | "performance" | "system"
@@ -54,8 +55,8 @@ const NAV: NavItem[] = [
   { href: "/admin/blog", label: "콘텐츠", icon: <FileText className="h-4 w-4" />, roles: STAFF_EDITOR, section: "growth" },
   { href: "/admin/events", label: "공개 행사", icon: <Globe className="h-4 w-4" />, roles: STAFF_ADMIN, section: "growth" },
   { href: "/admin/docs", label: "도움말 문서", icon: <BookOpen className="h-4 w-4" />, roles: STAFF_EDITOR, section: "growth" },
-  { href: "/admin/analytics", label: "Analytics", icon: <BarChart2 className="h-4 w-4" />, roles: [...ALL_STAFF, "BRANCH"], section: "performance" },
   { href: "/admin/branch", label: "지사 관리", icon: <Building2 className="h-4 w-4" />, roles: [...STAFF_ADMIN, "BRANCH"], section: "performance" },
+  { href: "/admin/analytics", label: "Analytics", icon: <BarChart2 className="h-4 w-4" />, roles: [...ALL_STAFF, "BRANCH"], section: "performance" },
   { href: "/admin/settings", label: "Settings", icon: <Settings className="h-4 w-4" />, roles: STAFF_ADMIN, section: "system" },
   { href: "/admin/users", label: "회원 관리", icon: <UserCog className="h-4 w-4" />, roles: STAFF_ADMIN, section: "system" },
   { href: "/admin/dev", label: "Dev Mode", icon: <Code2 className="h-4 w-4" />, roles: STAFF_ADMIN, section: "system", badge: "Beta" },
@@ -153,6 +154,7 @@ export default function AdminSidebar({ role, name, email }: Props) {
   const mobilePrimaryNav = visibleNav
     .filter((item) => item.section === "workspace")
     .slice(0, 4)
+  const mobileBottomColumns = Math.min(mobilePrimaryNav.length + 1, 5)
   const groupedNav = (Object.keys(SECTION_META) as SidebarSection[]).map((section) => ({
     section,
     items: visibleNav.filter((item) => item.section === section),
@@ -269,7 +271,7 @@ export default function AdminSidebar({ role, name, email }: Props) {
     ) : null}
 
     <nav className="fixed inset-x-0 bottom-0 z-40 border-t border-[#e8e8e4] bg-white/95 px-2 pb-[max(env(safe-area-inset-bottom),0.5rem)] pt-2 shadow-[0_-8px_24px_rgba(0,0,0,0.06)] backdrop-blur lg:hidden">
-      <div className="grid grid-cols-5 gap-1">
+      <div className="grid gap-1" style={{ gridTemplateColumns: `repeat(${mobileBottomColumns}, minmax(0, 1fr))` }}>
         {mobilePrimaryNav.map((item) => {
           const isActive = isNavActive(item.href)
 
@@ -306,17 +308,18 @@ export default function AdminSidebar({ role, name, email }: Props) {
         effectiveCollapsed ? "lg:w-16" : "lg:w-60"
       }`}
     >
-      <div className="flex items-center border-b border-[#e8e8e4] px-4 py-4 sm:px-5 lg:pt-6 lg:pb-4">
+      <div className="flex items-center gap-1 border-b border-[#e8e8e4] px-4 py-4 sm:px-5 lg:pt-6 lg:pb-4">
         {!effectiveCollapsed && (
           <div className="flex-1">
             <p className="mb-0.5 text-[11px] font-medium uppercase tracking-widest text-[#1a1a1a]/30">Classin</p>
             <p className="text-[15px] font-semibold text-[#111110]">Admin</p>
           </div>
         )}
+        <AdminNotificationsBell placement="inline" />
         <button
           onClick={toggle}
           className={`rounded-md p-1 text-[#1a1a1a]/30 transition-colors hover:bg-[#f5f5f2] hover:text-[#111110] ${
-            effectiveCollapsed ? "ml-0 lg:mx-auto" : "ml-auto"
+            effectiveCollapsed ? "lg:mx-auto" : ""
           }`}
           title={effectiveCollapsed ? "사이드바 열기" : "사이드바 닫기"}
         >

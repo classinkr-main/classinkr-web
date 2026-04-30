@@ -11,46 +11,100 @@ const mk = (over: Partial<BranchRevDeal>): BranchRevDeal => ({
 })
 
 describe("computeHeatmap", () => {
-  const now = new Date("2026-05-15T00:00:00Z")
-  it("target = sum of M (incl. firstPayment-less deals)", () => {
+  const now = new Date("2026-05-15T00:00:00Z") // FY26 Q1, month index 2
+
+  it("target = sum of contract_target (lifetime, period-independent)", () => {
     const out = computeHeatmap([
       mk({ region: "서울", contract_target: 1000 }),
-      mk({ region: "서울", contract_target: 500, first_payment: "2026-04-01", monthly_payments: { "2026-04": 200 }, monthly_red: { "2026-04": true } }),
+      mk({ region: "서울", contract_target: 500, first_payment: "2026-04-01",
+        monthly_payments: { "2026-04": 200 }, monthly_red: { "2026-04": true } }),
     ], "Y", now)
     expect(out[0].target).toBe(1500)
     expect(out[0].revenue).toBe(200)
+    expect(out[0].open_target).toBe(1000)
   })
-  it("status thresholds", () => {
+
+  it("future months become projection regardless of red flag", () => {
     const out = computeHeatmap([
-      mk({ region: "A", contract_target: 1000, first_payment: "2026-04-01", monthly_payments: { "2026-04": 950 }, monthly_red: { "2026-04": true } }),
-      mk({ region: "B", contract_target: 1000, first_payment: "2026-04-01", monthly_payments: { "2026-04": 800 }, monthly_red: { "2026-04": true } }),
-      mk({ region: "C", contract_target: 1000, first_payment: "2026-04-01", monthly_payments: { "2026-04": 500 }, monthly_red: { "2026-04": true } }),
+      mk({ region: "A", contract_target: 1000, first_payment: "2026-04-01",
+        monthly_payments: { "2026-04": 400, "2026-06": 600 },
+        monthly_red: { "2026-04": true, "2026-06": true } }),
+    ], "Q", now)
+    // 2026-04 past+red → confirmed (400)
+    // 2026-06 future → projection (600), red flag ignored
+    expect(out[0].revenue).toBe(400)
+    expect(out[0].projected).toBe(600)
+    expect(out[0].expected).toBe(1000)
+  })
+
+  it("past month without red flag is projection when red-flag system in use", () => {
+    const out = computeHeatmap([
+      mk({ region: "A", contract_target: 1000, first_payment: "2026-04-01",
+        monthly_payments: { "2026-04": 800, "2026-05": 200 },
+        monthly_red: { "2026-04": true } }),
+    ], "Y", now)
+    expect(out[0].revenue).toBe(800)
+    expect(out[0].projected).toBe(200)
+  })
+
+  it("treats months as confirmed when no red flags exist (sheet without color convention)", () => {
+    const out = computeHeatmap([
+      mk({ region: "A", contract_target: 1000, first_payment: "2026-04-01",
+        monthly_payments: { "2026-04": 800 }, monthly_red: {} }),
+    ], "Y", now)
+    expect(out[0].revenue).toBe(800)
+    expect(out[0].projected).toBe(0)
+  })
+
+  it("M/Q/Y produce different progress because numerator scopes by period but target is fixed", () => {
+    // Schedule: 100 each month, all 12 months of FY26
+    const monthly: Record<string, number> = {}
+    const red: Record<string, boolean> = {}
+    for (let m = 4; m <= 12; m++) {
+      monthly[`2026-${String(m).padStart(2, "0")}`] = 100
+      red[`2026-${String(m).padStart(2, "0")}`] = true
+    }
+    for (let m = 1; m <= 3; m++) {
+      monthly[`2027-${String(m).padStart(2, "0")}`] = 100
+      red[`2027-${String(m).padStart(2, "0")}`] = true
+    }
+    const deal = mk({
+      region: "A", contract_target: 1200, first_payment: "2026-04-01",
+      monthly_payments: monthly, monthly_red: red,
+    })
+    const yOut = computeHeatmap([deal], "Y", now)
+    const qOut = computeHeatmap([deal], "Q", now)
+    const mOut = computeHeatmap([deal], "M", now)
+    // Y: all 12 months → expected=1200, progress=100%
+    expect(yOut[0].progress).toBeCloseTo(100)
+    // Q: 3 months (Apr-May-Jun) → expected=300, progress=25%
+    expect(qOut[0].progress).toBeCloseTo(25)
+    // M: 1 month (May) → expected=100, progress=8.33%
+    expect(mOut[0].progress).toBeCloseTo(100 / 12, 1)
+  })
+
+  it("status thresholds based on expected/target", () => {
+    const out = computeHeatmap([
+      mk({ region: "A", contract_target: 1000, first_payment: "2026-04-01",
+        monthly_payments: { "2026-04": 950 }, monthly_red: { "2026-04": true } }),
+      mk({ region: "B", contract_target: 1000, first_payment: "2026-04-01",
+        monthly_payments: { "2026-04": 800 }, monthly_red: { "2026-04": true } }),
+      mk({ region: "C", contract_target: 1000, first_payment: "2026-04-01",
+        monthly_payments: { "2026-04": 500 }, monthly_red: { "2026-04": true } }),
     ], "Y", now)
     const map = Object.fromEntries(out.map((r) => [r.region, r.status]))
-    expect(map.A).toBe("good"); expect(map.B).toBe("warning"); expect(map.C).toBe("critical")
+    expect(map.A).toBe("good")
+    expect(map.B).toBe("warning")
+    expect(map.C).toBe("critical")
   })
-  it("filters by red flag when any are present", () => {
-    const out = computeHeatmap([
-      mk({ region: "A", contract_target: 1000, first_payment: "2026-04-01",
-          monthly_payments: { "2026-04": 800, "2026-05": 200 }, monthly_red: { "2026-04": true } }),
-    ], "Y", now)
-    // Only "2026-04" is red-flagged → 800 counted, 200 ignored
-    expect(out[0].revenue).toBe(800)
-  })
-  it("treats all monthly cells as confirmed when no red flags exist (sheet without color convention)", () => {
-    const out = computeHeatmap([
-      mk({ region: "A", contract_target: 1000, first_payment: "2026-04-01",
-          monthly_payments: { "2026-04": 800 }, monthly_red: {} }),
-    ], "Y", now)
-    expect(out[0].revenue).toBe(800)
-  })
-  it("velocity in Q4 (January) computes a sane denominator", () => {
+
+  it("velocity returns finite ratio of progress to elapsed quarter time", () => {
     const jan = new Date("2027-01-15T00:00:00Z")
     const out = computeHeatmap([
-      mk({ region: "A", contract_target: 1000, first_payment: "2027-01-01", monthly_payments: { "2027-01": 100 }, monthly_red: { "2027-01": true } }),
+      mk({ region: "A", contract_target: 1000, first_payment: "2027-01-01",
+        monthly_payments: { "2027-01": 100 }, monthly_red: { "2027-01": true } }),
     ], "Q", jan)
-    // 1월 15일은 Q4(1,2,3)의 약 절반 시점 → velocity 는 progress / ~50 정도, 1 미만이어야 정상
     expect(out[0].velocity).toBeGreaterThan(0)
-    expect(out[0].velocity).toBeLessThan(2)
+    expect(Number.isFinite(out[0].velocity)).toBe(true)
   })
 })

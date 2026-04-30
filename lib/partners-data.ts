@@ -6,10 +6,6 @@ import path from "path"
 import { createSupabaseAdminClient } from "@/lib/supabase/admin"
 import { hasSupabaseBrowserEnv } from "@/lib/supabase/public-env"
 
-import {
-  getPartnerWorkspace as getDemoPartnerWorkspace,
-  listPartnerWorkspaces as listDemoPartnerWorkspaces,
-} from "./partners-demo-data"
 import type {
   PartnerActivityLog,
   PartnerActivityLogInput,
@@ -458,10 +454,6 @@ const MAIN_DEAL_STAGE_PRIORITY: Record<PartnerDeal["stage"], number> = {
   closed_lost: 5,
 }
 
-function cloneDemoSeed() {
-  return JSON.parse(JSON.stringify(listDemoPartnerWorkspaces())) as PartnerWorkspace[]
-}
-
 function asArray<T>(value: T[] | null | undefined) {
   return Array.isArray(value) ? value : []
 }
@@ -777,7 +769,7 @@ async function ensureLocalWorkspaceFile() {
     await fs.access(LOCAL_FILE)
   } catch {
     await fs.mkdir(path.dirname(LOCAL_FILE), { recursive: true })
-    await fs.writeFile(LOCAL_FILE, JSON.stringify(cloneDemoSeed().map(normalizeWorkspace), null, 2), "utf-8")
+    await fs.writeFile(LOCAL_FILE, JSON.stringify([], null, 2), "utf-8")
   }
 }
 
@@ -786,10 +778,10 @@ async function readLocalWorkspaces() {
   try {
     const raw = await fs.readFile(LOCAL_FILE, "utf-8")
     const parsed = JSON.parse(raw) as unknown
-    const workspaces = Array.isArray(parsed) ? parsed : cloneDemoSeed()
+    const workspaces = Array.isArray(parsed) ? parsed : []
     return workspaces.map((workspace) => normalizeWorkspace(workspace as Partial<PartnerWorkspace>))
   } catch {
-    return cloneDemoSeed().map(normalizeWorkspace)
+    return []
   }
 }
 
@@ -2060,7 +2052,7 @@ export async function getPartnerWorkspaceData(id: string): Promise<PartnerDetail
     }
   } catch (error) {
     return {
-      workspace: await getLocalPartnerWorkspace(id) ?? getDemoPartnerWorkspace(id) ?? null,
+      workspace: await getLocalPartnerWorkspace(id) ?? null,
       source: "local",
       warning: error instanceof Error
         ? `Supabase 조회 실패로 로컬 저장소 데이터로 대체했습니다: ${error.message}`

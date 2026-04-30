@@ -3416,8 +3416,3 @@ git commit -m "chore(branch): post-smoke fixes"
 - Sheet ranges: `'2.입고 현황'` and `'3.출고 현황'` need single-quotes due to leading digit.
 - M열 (`contract_target`) must NEVER be displayed labelled as 매출. Always pair with `confirmed_revenue` from red-cell logic.
 - `monthly_red` empty across all rows after sync = red-cell threshold needs tuning (see spec §17.2).
-
-
-
-
-

@@ -1,7 +1,6 @@
 import { NextRequest, NextResponse } from "next/server";
 
 import { verifyAdmin } from "@/lib/admin-auth";
-import { getDemoCustomerDetail } from "@/lib/partner-portal/repositories/demo";
 import { getCustomerDetail } from "@/lib/partner-portal/repositories/customers";
 import { getLegacyCustomerDetail } from "@/lib/partner-portal/repositories/legacy";
 
@@ -22,9 +21,6 @@ export async function GET(req: NextRequest, { params }: RouteContext) {
     if (!customer) {
       customer = await getLegacyCustomerDetail(id);
     }
-    if (!customer) {
-      customer = await getDemoCustomerDetail(id);
-    }
 
     if (!customer) {
       return NextResponse.json({ error: "Customer not found" }, { status: 404 });
@@ -38,10 +34,6 @@ export async function GET(req: NextRequest, { params }: RouteContext) {
       const legacyCustomer = await getLegacyCustomerDetail(id);
       if (legacyCustomer) {
         return NextResponse.json({ customer: legacyCustomer, mode: "legacy" });
-      }
-      const demoCustomer = await getDemoCustomerDetail(id);
-      if (demoCustomer) {
-        return NextResponse.json({ customer: demoCustomer, mode: "demo" });
       }
       return NextResponse.json({ error: "Customer not found" }, { status: 404 });
     } catch (legacyError) {

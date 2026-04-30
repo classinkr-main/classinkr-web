@@ -1,4 +1,5 @@
 import type { FormattedCell } from "@/lib/branch/google-sheets"
+import { normalizeBranchMemberName } from "@/lib/branch/member-names"
 
 export const DSH_RANGE = "'1. DSH'!A1:W300"
 // Real DSH layout: A=team-label (mostly empty), B=section, C=cat, D=new/renew, E=direct/channel,
@@ -136,12 +137,14 @@ export function parseDsh(grid: FormattedCell[][], refFy: number): DshOutput {
   }
 
   const memberRows: DshRow[] = []
+  let currentMember: string | null = null
   for (let r = 1; r < grid.length; r++) {
-    const member = asText(grid[r]?.[3]?.value)
+    const member = normalizeBranchMemberName(asText(grid[r]?.[3]?.value))
     const kindText = asText(grid[r]?.[4]?.value).toLowerCase()
-    if (!member || (kindText !== "goal" && kindText !== "status")) continue
+    if (member && (kindText === "goal" || kindText === "status" || kindText === "rate")) currentMember = member
+    if (!currentMember || (kindText !== "goal" && kindText !== "status")) continue
     const numeric = readNumericRow(grid, r, monthMap)
-    memberRows.push({ level: "member", team: "", member, kind: kindText, ...numeric })
+    memberRows.push({ level: "member", team: "", member: currentMember, kind: kindText, ...numeric })
   }
 
   let teamIdx = 0

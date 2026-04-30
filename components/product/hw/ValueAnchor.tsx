@@ -160,7 +160,7 @@ export default function ValueAnchor() {
           className="mt-10 flex flex-col items-center gap-4"
         >
           <Link
-            href="/contact"
+            href="/contact#contact-form"
             className="inline-block bg-[#6EE7B7] hover:bg-white text-[#0D1A12] font-bold px-10 py-4 rounded-md text-base transition-all hover:scale-[1.02] active:scale-[0.98]"
           >
             데모 신청하고 직접 사용해보기 →

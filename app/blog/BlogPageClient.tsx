@@ -33,9 +33,8 @@ export default function BlogPageClient({ posts }: BlogPageClientProps) {
         return filtered
     }, [posts, activeCategory, searchQuery])
 
-    // Gallery: top 3 featured posts
+    // Gallery: top 3 (1 hero + 2 stacked)
     const galleryPosts = filteredPosts.filter(p => p.featured).slice(0, 3)
-    // If fewer than 3 featured, fill from top of filtered
     const galleryFinal = galleryPosts.length >= 3
         ? galleryPosts
         : filteredPosts.slice(0, 3)
@@ -50,7 +49,7 @@ export default function BlogPageClient({ posts }: BlogPageClientProps) {
         <div className="min-h-screen bg-[#FAFAF8] text-[#1a1a1a] selection:bg-emerald-100 selection:text-emerald-900">
 
             {/* ─── Hero + Gallery ─────────────────────────────── */}
-            <section className="relative pt-32 md:pt-40 pb-6 px-6">
+            <section className="relative px-4 pb-6 pt-28 sm:px-6 md:pt-40">
                 <div className="max-w-[1100px] mx-auto">
                     {/* Title */}
                     <motion.p
@@ -66,96 +65,93 @@ export default function BlogPageClient({ posts }: BlogPageClientProps) {
                         initial={{ opacity: 0, y: 20 }}
                         animate={{ opacity: 1, y: 0 }}
                         transition={{ duration: 0.6, delay: 0.05 }}
-                        className="text-[2.25rem] md:text-[3.25rem] font-bold leading-[1.1] tracking-[-0.03em] text-[#111110] max-w-2xl mb-12"
+                        className="mb-10 max-w-2xl text-[2.15rem] font-bold leading-[1.1] tracking-[-0.03em] text-[#111110] md:mb-12 md:text-[3.25rem]"
                     >
                         교육의 미래를
                         <br />
                         함께 만들어갑니다
                     </motion.h1>
 
-                    {/* Gallery Grid: 1 large + 2 stacked */}
+                    {/* Hero: 1 main left + 2 stacked right */}
                     {galleryFinal.length > 0 && (
                         <motion.div
                             initial={{ opacity: 0, y: 16 }}
                             animate={{ opacity: 1, y: 0 }}
                             transition={{ duration: 0.5, delay: 0.1 }}
-                            className="grid grid-cols-1 lg:grid-cols-2 gap-4 mb-6"
+                            className="grid gap-3 mb-6 grid-cols-1 lg:grid-cols-2 lg:grid-rows-2 lg:h-[420px]"
                         >
-                            {/* Main featured card */}
-                            {galleryFinal[0] && (
-                                <Link href={`/blog/${galleryFinal[0].slug}`} className="group block">
-                                    <article className="relative h-[320px] md:h-[420px] rounded-2xl overflow-hidden bg-[#f0f0ec]">
-                                        <Image
-                                            src={galleryFinal[0].imageUrl}
-                                            alt={galleryFinal[0].title}
-                                            fill
-                                            className="object-cover transition-transform duration-700 group-hover:scale-[1.03]"
-                                        />
-                                        <div className="absolute inset-0 bg-gradient-to-t from-black/60 via-black/20 to-transparent" />
-                                        <div className="absolute bottom-0 left-0 right-0 p-6 md:p-8">
-                                            <div className="flex items-center gap-2.5 mb-3">
-                                                <span className="px-2.5 py-0.5 bg-white/15 backdrop-blur-md text-[11px] font-semibold text-white/90 rounded-md border border-white/10">
-                                                    {galleryFinal[0].tag}
-                                                </span>
-                                                <span className="text-[11px] text-white/50">{galleryFinal[0].category}</span>
-                                            </div>
-                                            <h2 className="text-xl md:text-2xl font-bold text-white leading-snug tracking-[-0.02em] mb-2 line-clamp-2 group-hover:text-emerald-200 transition-colors duration-300">
-                                                {galleryFinal[0].title}
-                                            </h2>
-                                            <p className="text-[13px] text-white/50 line-clamp-2 mb-3 hidden md:block">
-                                                {galleryFinal[0].excerpt}
-                                            </p>
-                                            <div className="flex items-center gap-3 text-[11px] text-white/40">
-                                                <span>{galleryFinal[0].date}</span>
-                                                <span>·</span>
-                                                <span className="flex items-center gap-1"><Clock className="w-3 h-3" />{galleryFinal[0].readTime}</span>
-                                                <span>·</span>
-                                                <span>{galleryFinal[0].author}</span>
-                                            </div>
-                                        </div>
-                                    </article>
-                                </Link>
-                            )}
-
-                            {/* Right stack: 2 smaller cards */}
-                            <div className="grid grid-cols-1 gap-4">
-                                {galleryFinal.slice(1, 3).map((post) => (
-                                    <Link key={post.id} href={`/blog/${post.slug}`} className="group block">
-                                        <article className="relative h-[200px] md:h-[202px] rounded-2xl overflow-hidden bg-[#f0f0ec]">
+                            {galleryFinal.map((post, idx) => {
+                                const heroSpans = [
+                                    "lg:row-span-2",
+                                    "",
+                                    "",
+                                ]
+                                const isHero = idx === 0
+                                return (
+                                    <Link
+                                        key={post.id}
+                                        href={`/blog/${post.slug}`}
+                                        className={`group relative ${heroSpans[idx] ?? ""}`}
+                                    >
+                                        <article className={`relative ${isHero ? "h-[300px] md:h-[360px]" : "h-[200px]"} lg:h-full overflow-hidden rounded-2xl bg-[#f0f0ec] ring-1 ring-black/5 transition-all duration-500 ease-out group-hover:-translate-y-0.5 group-hover:ring-black/10 group-hover:shadow-[0_22px_55px_-25px_rgba(0,0,0,0.45)]`}>
                                             <Image
                                                 src={post.imageUrl}
                                                 alt={post.title}
                                                 fill
-                                                className="object-cover transition-transform duration-700 group-hover:scale-[1.03]"
+                                                sizes={isHero
+                                                    ? "(max-width: 1024px) 100vw, 50vw"
+                                                    : "(max-width: 1024px) 100vw, 50vw"}
+                                                className="object-cover transition-transform duration-700 ease-out group-hover:scale-[1.06]"
                                             />
-                                            <div className="absolute inset-0 bg-gradient-to-t from-black/60 via-black/15 to-transparent" />
-                                            <div className="absolute bottom-0 left-0 right-0 p-5 md:p-6">
-                                                <div className="flex items-center gap-2 mb-2">
-                                                    <span className="px-2 py-0.5 bg-white/15 backdrop-blur-md text-[10px] font-semibold text-white/90 rounded border border-white/10">
+                                            <div className="absolute inset-0 bg-gradient-to-t from-black/70 via-black/20 to-transparent transition-colors duration-500 group-hover:from-black/80" />
+
+                                            {/* Hover arrow chip */}
+                                            <div className="absolute right-3 top-3 flex h-7 w-7 items-center justify-center rounded-full bg-white/15 backdrop-blur-md ring-1 ring-white/10 opacity-0 -translate-x-1 transition-all duration-300 group-hover:opacity-100 group-hover:translate-x-0">
+                                                <ArrowRight className="h-3.5 w-3.5 text-white" />
+                                            </div>
+
+                                            <div className={`absolute inset-x-0 bottom-0 ${isHero ? "p-6 md:p-7" : "p-4 md:p-5"}`}>
+                                                <div className="flex items-center gap-2 mb-2.5">
+                                                    <span className={`px-2 py-0.5 bg-white/15 backdrop-blur-md font-semibold text-white/95 rounded-md ring-1 ring-white/10 transition-all duration-300 group-hover:ring-white/35 group-hover:bg-white/20 ${isHero ? "text-[11px]" : "text-[10px]"}`}>
                                                         {post.tag}
                                                     </span>
-                                                    <span className="text-[10px] text-white/45">{post.category}</span>
+                                                    <span className={`text-white/55 ${isHero ? "text-[11px]" : "text-[10px]"}`}>{post.category}</span>
                                                 </div>
-                                                <h3 className="text-[15px] md:text-base font-semibold text-white leading-snug tracking-[-0.01em] line-clamp-2 group-hover:text-emerald-200 transition-colors duration-300">
+                                                <h2 className={`font-bold text-white leading-snug tracking-[-0.02em] line-clamp-2 transition-colors duration-300 group-hover:text-emerald-200 ${isHero ? "text-xl md:text-2xl mb-2" : "text-[14px] md:text-[15px]"}`}>
                                                     {post.title}
-                                                </h3>
-                                                <div className="flex items-center gap-2.5 mt-2 text-[10px] text-white/35">
-                                                    <span>{post.date}</span>
-                                                    <span>·</span>
-                                                    <span className="flex items-center gap-1"><Clock className="w-2.5 h-2.5" />{post.readTime}</span>
-                                                </div>
+                                                </h2>
+                                                {isHero ? (
+                                                    <>
+                                                        <p className="text-[13px] text-white/55 line-clamp-2 mb-3 hidden md:block">
+                                                            {post.excerpt}
+                                                        </p>
+                                                        <div className="flex items-center gap-3 text-[11px] text-white/45">
+                                                            <span>{post.date}</span>
+                                                            <span>·</span>
+                                                            <span className="flex items-center gap-1"><Clock className="w-3 h-3" />{post.readTime}</span>
+                                                            <span>·</span>
+                                                            <span>{post.author}</span>
+                                                        </div>
+                                                    </>
+                                                ) : (
+                                                    <div className="mt-1.5 flex items-center gap-2 text-[10px] text-white/45">
+                                                        <span>{post.date}</span>
+                                                        <span>·</span>
+                                                        <span className="flex items-center gap-1"><Clock className="w-2.5 h-2.5" />{post.readTime}</span>
+                                                    </div>
+                                                )}
                                             </div>
                                         </article>
                                     </Link>
-                                ))}
-                            </div>
+                                )
+                            })}
                         </motion.div>
                     )}
                 </div>
             </section>
 
             {/* ─── Filter Bar ─────────────────────────────────── */}
-            <section className="max-w-[1100px] mx-auto px-6 mt-8 mb-2">
+            <section className="mx-auto mb-2 mt-8 max-w-[1100px] px-4 sm:px-6">
                 <motion.div
                     initial={{ opacity: 0 }}
                     animate={{ opacity: 1 }}
@@ -163,7 +159,7 @@ export default function BlogPageClient({ posts }: BlogPageClientProps) {
                     className="flex flex-col sm:flex-row sm:items-center sm:justify-between gap-4 pb-5 border-b border-[#e8e8e4]"
                 >
                     {/* Categories */}
-                    <div className="flex items-center gap-1.5 overflow-x-auto no-scrollbar">
+                    <div className="-mx-1 flex items-center gap-1.5 overflow-x-auto px-1 pb-1 no-scrollbar">
                         {CATEGORIES.map((cat) => {
                             const isActive = activeCategory === cat
                             return (
@@ -183,7 +179,7 @@ export default function BlogPageClient({ posts }: BlogPageClientProps) {
                     </div>
 
                     {/* Search */}
-                    <div className="relative shrink-0">
+                    <div className="relative w-full shrink-0 sm:w-auto">
                         <Search className="absolute left-3 top-1/2 -translate-y-1/2 w-4 h-4 text-[#1a1a1a]/20" />
                         <input
                             type="text"
@@ -207,7 +203,7 @@ export default function BlogPageClient({ posts }: BlogPageClientProps) {
             </section>
 
             {/* ─── Post List ──────────────────────────────────── */}
-            <section className="max-w-[1100px] mx-auto px-6 pb-20">
+            <section className="mx-auto max-w-[1100px] px-4 pb-16 sm:px-6 md:pb-20">
                 <AnimatePresence mode="wait">
                     <motion.div
                         key={activeCategory + searchQuery}
@@ -230,7 +226,7 @@ export default function BlogPageClient({ posts }: BlogPageClientProps) {
                                     onMouseLeave={() => setHoveredListId(null)}
                                 >
                                     <article
-                                        className="grid grid-cols-1 md:grid-cols-[160px_1fr_180px] gap-4 md:gap-8 py-6 border-b border-[#ebebea] transition-opacity duration-300"
+                                        className="grid grid-cols-1 gap-3 border-b border-[#ebebea] py-5 transition-opacity duration-300 md:grid-cols-[160px_1fr_180px] md:gap-8 md:py-6"
                                         style={{
                                             opacity: isAnyListHovered ? (hoveredListId === post.id ? 1 : 0.3) : 1,
                                         }}
@@ -253,7 +249,7 @@ export default function BlogPageClient({ posts }: BlogPageClientProps) {
                                             <p className="text-[13px] text-[#1a1a1a]/38 leading-relaxed line-clamp-2">
                                                 {post.excerpt}
                                             </p>
-                                            <div className="flex items-center gap-3 mt-1">
+                                            <div className="mt-1 flex flex-wrap items-center gap-x-3 gap-y-1">
                                                 <span className="text-[11px] text-[#1a1a1a]/28">{post.date}</span>
                                                 <span className="text-[#1a1a1a]/10">·</span>
                                                 <span className="text-[11px] text-[#1a1a1a]/28 flex items-center gap-1">
@@ -297,14 +293,14 @@ export default function BlogPageClient({ posts }: BlogPageClientProps) {
             </section>
 
             {/* ─── Newsletter ─────────────────────────────────── */}
-            <section className="max-w-[1100px] mx-auto px-6 pb-28">
+            <section className="mx-auto max-w-[1100px] px-4 pb-24 sm:px-6 md:pb-28">
                 <motion.div
                     initial={{ opacity: 0, y: 20 }}
                     whileInView={{ opacity: 1, y: 0 }}
                     viewport={{ once: true, margin: "-60px" }}
                     transition={{ duration: 0.5 }}
                 >
-                    <div className="relative bg-[#111110] rounded-2xl p-10 md:p-14 overflow-hidden">
+                    <div className="relative overflow-hidden rounded-2xl bg-[#111110] p-6 sm:p-10 md:p-14">
                         <div className="absolute top-0 right-0 w-72 h-72 bg-emerald-500/[0.06] rounded-full blur-[100px] pointer-events-none" />
 
                         <div className="relative z-10 max-w-xl">

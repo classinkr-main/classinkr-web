@@ -32,7 +32,7 @@ export async function GET(req: NextRequest) {
       return NextResponse.json({ type: "commercial", ...overview });
     }
 
-    // partner: 자기 계정 개요 (V2 → legacy → demo 폴백)
+    // partner: 자기 계정 개요 (V2 → legacy → empty 폴백)
     const overview = await loadPartnerOverview({
       userId: ctx.userId,
       partnerAccountId: ctx.partnerAccountId,

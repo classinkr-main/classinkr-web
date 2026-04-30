@@ -670,7 +670,7 @@ export default function PartnerWorkspaceShell({
         </div>
       </div>
 
-      <div className="sticky top-4 z-20 mb-6 rounded-2xl border border-[#e8e8e4] bg-white/95 px-4 py-3 shadow-sm backdrop-blur">
+      <div className="sticky top-20 z-20 mb-6 rounded-2xl border border-[#e8e8e4] bg-white/95 px-4 py-3 shadow-sm backdrop-blur lg:top-4">
         <div className="flex flex-col gap-3 lg:flex-row lg:items-center lg:justify-between">
           <div>
             <p className="text-[11px] font-semibold uppercase tracking-[0.16em] text-[#1a1a1a]/30">빠른 액션</p>
@@ -678,24 +678,24 @@ export default function PartnerWorkspaceShell({
               상세를 열지 않고도 바로 이어서 처리할 작업만 모았습니다.
             </p>
           </div>
-          <div className="flex flex-wrap gap-2">
-            <Button size="sm" className="gap-1.5" onClick={() => onCreateDeal(createActionContext(mainDeal, "deal-flow"))}>
+          <div className="grid grid-cols-2 gap-2 sm:flex sm:flex-wrap">
+            <Button size="sm" className="justify-center gap-1.5" onClick={() => onCreateDeal(createActionContext(mainDeal, "deal-flow"))}>
               <Handshake className="h-3.5 w-3.5" />
               새 거래
             </Button>
-            <Button variant="outline" size="sm" className="gap-1.5" onClick={() => onCreateDocument(createActionContext(mainDeal, "documents"))}>
+            <Button variant="outline" size="sm" className="justify-center gap-1.5" onClick={() => onCreateDocument(createActionContext(mainDeal, "documents"))}>
               <FileText className="h-3.5 w-3.5" />
               문서 추가
             </Button>
-            <Button variant="outline" size="sm" className="gap-1.5" onClick={() => onCreateChecklist(createActionContext(mainDeal, "fulfillment"))}>
+            <Button variant="outline" size="sm" className="justify-center gap-1.5" onClick={() => onCreateChecklist(createActionContext(mainDeal, "fulfillment"))}>
               <ClipboardList className="h-3.5 w-3.5" />
               체크리스트
             </Button>
-            <Button variant="outline" size="sm" className="gap-1.5" onClick={() => onCreateActivityLog(createActionContext(mainDeal, "logs-issues"))}>
+            <Button variant="outline" size="sm" className="justify-center gap-1.5" onClick={() => onCreateActivityLog(createActionContext(mainDeal, "logs-issues"))}>
               <Zap className="h-3.5 w-3.5" />
               미팅 로그
             </Button>
-            <Button variant="outline" size="sm" className="gap-1.5" onClick={() => onCreateIssue(createActionContext(mainDeal, "logs-issues"))}>
+            <Button variant="outline" size="sm" className="col-span-2 justify-center gap-1.5 sm:col-span-1" onClick={() => onCreateIssue(createActionContext(mainDeal, "logs-issues"))}>
               <AlertTriangle className="h-3.5 w-3.5" />
               이슈 등록
             </Button>
@@ -718,7 +718,7 @@ export default function PartnerWorkspaceShell({
         </div>
       )}
 
-      <div className="mb-8 grid grid-cols-2 gap-4 xl:grid-cols-6">
+      <div className="mb-8 grid grid-cols-2 gap-3 sm:gap-4 xl:grid-cols-6">
         {[
           {
             label: "메인 거래",
@@ -763,7 +763,7 @@ export default function PartnerWorkspaceShell({
             accent: "bg-[#F6F5F4]",
           },
         ].map((card) => (
-          <div key={card.label} className="rounded-2xl border border-[#e8e8e4] bg-white p-5">
+          <div key={card.label} className="rounded-2xl border border-[#e8e8e4] bg-white p-4 sm:p-5">
             <div className={`mb-3 inline-flex rounded-xl p-2 ${card.accent}`}>{card.icon}</div>
             <p className="text-[11px] font-medium uppercase tracking-wide text-[#1a1a1a]/35">{card.label}</p>
             <p className="mt-1 text-[20px] font-bold leading-none tracking-[-0.03em] text-[#111110]">{card.value}</p>
@@ -773,14 +773,16 @@ export default function PartnerWorkspaceShell({
       </div>
 
       <Tabs value={activeTab} onValueChange={(value) => onTabChange(value as PartnerWorkspaceTab)}>
-        <TabsList className="mb-6 h-auto w-full flex-wrap justify-start rounded-2xl border border-[#e8e8e4] bg-white p-1">
-          <TabsTrigger value="overview" className="rounded-xl px-4 py-2 text-[13px]">Workspace</TabsTrigger>
-          <TabsTrigger value="deal-flow" className="rounded-xl px-4 py-2 text-[13px]">Deal Flow</TabsTrigger>
-          <TabsTrigger value="fulfillment" className="rounded-xl px-4 py-2 text-[13px]">Fulfillment</TabsTrigger>
-          <TabsTrigger value="documents" className="rounded-xl px-4 py-2 text-[13px]">Documents</TabsTrigger>
-          <TabsTrigger value="logs-issues" className="rounded-xl px-4 py-2 text-[13px]">Logs &amp; Issues</TabsTrigger>
-          <TabsTrigger value="automations" className="rounded-xl px-4 py-2 text-[13px]">Automations</TabsTrigger>
-        </TabsList>
+        <div className="admin-scroll-snap-x no-scrollbar -mx-4 mb-6 overflow-x-auto px-4 pb-2 sm:mx-0 sm:overflow-visible sm:px-0 sm:pb-0">
+          <TabsList className="h-auto min-w-full w-max flex-nowrap justify-start rounded-xl border border-[#e8e8e4] bg-white p-1 sm:w-full sm:flex-wrap sm:rounded-2xl">
+            <TabsTrigger value="overview" className="shrink-0 rounded-lg px-3 py-2 text-[12px] sm:rounded-xl sm:px-4 sm:text-[13px]">Workspace</TabsTrigger>
+            <TabsTrigger value="deal-flow" className="shrink-0 rounded-lg px-3 py-2 text-[12px] sm:rounded-xl sm:px-4 sm:text-[13px]">Deal Flow</TabsTrigger>
+            <TabsTrigger value="fulfillment" className="shrink-0 rounded-lg px-3 py-2 text-[12px] sm:rounded-xl sm:px-4 sm:text-[13px]">Fulfillment</TabsTrigger>
+            <TabsTrigger value="documents" className="shrink-0 rounded-lg px-3 py-2 text-[12px] sm:rounded-xl sm:px-4 sm:text-[13px]">Documents</TabsTrigger>
+            <TabsTrigger value="logs-issues" className="shrink-0 rounded-lg px-3 py-2 text-[12px] sm:rounded-xl sm:px-4 sm:text-[13px]">Logs &amp; Issues</TabsTrigger>
+            <TabsTrigger value="automations" className="shrink-0 rounded-lg px-3 py-2 text-[12px] sm:rounded-xl sm:px-4 sm:text-[13px]">Automations</TabsTrigger>
+          </TabsList>
+        </div>
 
         <TabsContent value="overview">
           <div className="grid gap-6 xl:grid-cols-[1.15fr_0.85fr]">

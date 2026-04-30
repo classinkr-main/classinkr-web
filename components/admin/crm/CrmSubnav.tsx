@@ -1,10 +1,11 @@
 "use client"
 
 import Link from "next/link"
+import { usePathname } from "next/navigation"
 import type { ReactNode } from "react"
-import { Building2, LayoutDashboard, ListChecks, Users } from "lucide-react"
+import { Building2, CircleDollarSign, LayoutDashboard, ListChecks, Users } from "lucide-react"
 
-type CrmTab = "customers" | "partners" | "partnerPortal" | "partnerCustomers"
+type CrmTab = "customers" | "partners" | "partnerPortal" | "partnerCustomers" | "revenue"
 
 const CRM_TABS = [
   {
@@ -35,6 +36,13 @@ const CRM_TABS = [
     description: "기관 목록, 상세 정보, 활동 로그",
     icon: <Building2 className="h-4 w-4" />,
   },
+  {
+    key: "revenue",
+    href: "/admin/crm/revenue",
+    label: "매출",
+    description: "견적, 계약, 수납, 시트 연결",
+    icon: <CircleDollarSign className="h-4 w-4" />,
+  },
 ] satisfies Array<{
   key: CrmTab
   href: string
@@ -43,17 +51,29 @@ const CRM_TABS = [
   icon: ReactNode
 }>
 
-export default function CrmSubnav({ active }: { active: CrmTab }) {
+function resolveActiveTab(pathname: string | null): CrmTab | null {
+  if (!pathname) return null
+  if (pathname === "/admin/crm/partners/portal") return "partnerPortal"
+  if (pathname === "/admin/crm/partners/customers") return "partnerCustomers"
+  if (pathname.startsWith("/admin/crm/partners")) return "partners"
+  if (pathname === "/admin/crm" || pathname.startsWith("/admin/crm/")) return "customers"
+  return null
+}
+
+export default function CrmSubnav({ active }: { active?: CrmTab } = {}) {
+  const pathname = usePathname()
+  const resolved = active ?? resolveActiveTab(pathname)
+
   return (
-    <div className="-mx-4 mb-6 flex gap-2 overflow-x-auto px-4 pb-2 sm:mx-0 sm:flex-wrap sm:overflow-visible sm:px-0 sm:pb-0">
+    <div className="admin-scroll-snap-x no-scrollbar -mx-4 mb-6 flex gap-2 overflow-x-auto px-4 pb-2 sm:mx-0 sm:grid sm:grid-cols-2 sm:overflow-visible sm:px-0 sm:pb-0 lg:grid-cols-5">
       {CRM_TABS.map((tab) => {
-        const isActive = active === tab.key
+        const isActive = resolved === tab.key
 
         return (
           <Link
             key={tab.key}
             href={tab.href}
-            className={`flex min-w-[176px] shrink-0 items-center gap-3 rounded-xl border px-3 py-3 transition-colors sm:min-w-[180px] sm:rounded-2xl sm:px-4 ${
+            className={`flex min-w-[144px] shrink-0 items-center gap-2 rounded-xl border px-3 py-2.5 transition-colors sm:min-w-0 sm:gap-3 sm:rounded-2xl sm:px-4 sm:py-3 ${
               isActive
                 ? "border-[#111110] bg-[#111110] text-white"
                 : "border-[#e8e8e4] bg-white text-[#111110] hover:border-[#c8c8c4]"
@@ -66,9 +86,9 @@ export default function CrmSubnav({ active }: { active: CrmTab }) {
             >
               {tab.icon}
             </span>
-            <span className="min-w-0">
+            <span className="min-w-0 flex-1">
               <span className="block text-[13px] font-semibold">{tab.label}</span>
-              <span className={`mt-0.5 block text-[11px] ${isActive ? "text-white/60" : "text-[#1a1a1a]/42"}`}>
+              <span className={`mt-0.5 hidden text-[11px] sm:block ${isActive ? "text-white/60" : "text-[#1a1a1a]/42"}`}>
                 {tab.description}
               </span>
             </span>

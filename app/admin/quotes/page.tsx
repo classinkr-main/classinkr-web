@@ -134,7 +134,7 @@ export default function QuotesPage() {
           </a>
         </div>
 
-        <div className="-mx-4 mt-6 flex gap-2 overflow-x-auto px-4 pb-2 sm:mx-0 sm:grid sm:grid-cols-2 sm:overflow-visible sm:px-0 sm:pb-0 xl:grid-cols-5">
+        <div className="admin-scroll-snap-x no-scrollbar -mx-4 mt-6 flex gap-2 overflow-x-auto px-4 pb-2 sm:mx-0 sm:grid sm:grid-cols-2 sm:overflow-visible sm:px-0 sm:pb-0 xl:grid-cols-5">
           {DOCUMENT_TABS.map((tab) => {
             const active = activeTab === tab.key
 
@@ -143,7 +143,7 @@ export default function QuotesPage() {
                 key={tab.key}
                 type="button"
                 onClick={() => handleTabChange(tab.key)}
-                className={`min-h-[96px] w-[220px] shrink-0 rounded-xl border px-3 py-3 text-left transition-colors sm:w-auto ${
+                className={`min-h-[74px] w-[158px] shrink-0 rounded-xl border px-3 py-3 text-left transition-colors sm:min-h-[96px] sm:w-auto ${
                   active
                     ? "border-[#111110] bg-[#111110] text-white"
                     : "border-[#e8e8e4] bg-[#fafaf8] text-[#111110] hover:border-[#c8c8c4]"
@@ -156,9 +156,9 @@ export default function QuotesPage() {
                 >
                   {tab.icon}
                 </span>
-                <span className="mt-3 block text-[13px] font-semibold">{tab.label}</span>
+                <span className="mt-2 block text-[13px] font-semibold sm:mt-3">{tab.label}</span>
                 <span
-                  className={`mt-1 block text-[11px] leading-snug ${
+                  className={`mt-1 hidden text-[11px] leading-snug sm:block ${
                     active ? "text-white/58" : "text-[#1a1a1a]/42"
                   }`}
                 >

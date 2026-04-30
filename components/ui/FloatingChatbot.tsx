@@ -19,6 +19,11 @@ import {
 } from "lucide-react"
 
 import { cn } from "@/lib/utils"
+import { openChannelTalk } from "@/lib/channel-talk"
+
+type HandoffIntent = "demo" | "support"
+
+const UNRESOLVED_STREAK_THRESHOLD = 2
 
 interface ChatbotSource {
     title: string
@@ -35,6 +40,7 @@ interface ChatbotQueryResponse {
     answerEventId?: string
     confidence: number
     needsHandoff: boolean
+    handoffIntent?: HandoffIntent
     sessionId?: string
     sources: ChatbotSource[]
     suggestedQuestions: string[]
@@ -49,6 +55,8 @@ interface ChatMessage {
     sources?: ChatbotSource[]
     answerEventId?: string
     needsHandoff?: boolean
+    handoffIntent?: HandoffIntent
+    showHandoffCTA?: boolean
 }
 
 const hiddenPathPrefixes = [
@@ -176,6 +184,7 @@ export function FloatingChatbot() {
     const [isSending, setIsSending] = useState(false)
     const [error, setError] = useState<string | null>(null)
     const [isDeepConsultation, setIsDeepConsultation] = useState(false)
+    const [unresolvedStreak, setUnresolvedStreak] = useState(0)
     const bottomRef = useRef<HTMLDivElement | null>(null)
     const [messages, setMessages] = useState<ChatMessage[]>([
         {
@@ -240,6 +249,12 @@ export function FloatingChatbot() {
             if (data.answerMode === "handoff" || data.needsHandoff) {
                 setIsDeepConsultation(true)
             }
+
+            const nextStreak = data.unresolved ? unresolvedStreak + 1 : 0
+            setUnresolvedStreak(nextStreak)
+
+            const showHandoffCTA = Boolean(data.needsHandoff) || nextStreak >= UNRESOLVED_STREAK_THRESHOLD
+
             setMessages((current) => [
                 ...current,
                 {
@@ -249,8 +264,30 @@ export function FloatingChatbot() {
                     sources: data.sources ?? [],
                     answerEventId: data.answerEventId,
                     needsHandoff: data.needsHandoff,
+                    handoffIntent: data.handoffIntent,
+                    showHandoffCTA,
                 },
             ])
+
+            if (showHandoffCTA && nextStreak >= UNRESOLVED_STREAK_THRESHOLD && !data.needsHandoff) {
+                const intent = data.handoffIntent ?? "demo"
+                const nudge =
+                    intent === "support"
+                        ? "여러 번 정확한 답을 드리지 못한 것 같아요. 실시간 상담으로 더 자세히 도와드릴 수 있어요."
+                        : "원하시는 답을 못 찾으신 것 같아요. 도입 담당자가 상황에 맞춰 안내드릴까요?"
+                setMessages((current) => [
+                    ...current,
+                    {
+                        id: makeId(),
+                        role: "assistant",
+                        content: nudge,
+                        needsHandoff: true,
+                        handoffIntent: intent,
+                        showHandoffCTA: true,
+                    },
+                ])
+            }
+
             requestAnimationFrame(() => bottomRef.current?.scrollIntoView({ behavior: "smooth" }))
         } catch (err) {
             setError(err instanceof Error ? err.message : "챗봇 응답 중 오류가 발생했습니다.")
@@ -262,6 +299,8 @@ export function FloatingChatbot() {
                     role: "assistant",
                     content: "지금은 답변을 가져오지 못했습니다. 잠시 후 다시 시도하거나 도입 문의로 남겨주세요.",
                     needsHandoff: true,
+                    handoffIntent: "demo",
+                    showHandoffCTA: true,
                 },
             ])
         } finally {
@@ -275,7 +314,7 @@ export function FloatingChatbot() {
     }
 
     return (
-        <div className="fixed bottom-24 right-4 z-50 flex flex-col items-end md:bottom-6 md:right-6">
+        <div className="fixed bottom-[calc(5.5rem+env(safe-area-inset-bottom))] right-4 z-50 flex flex-col items-end md:bottom-6 md:right-6">
             <AnimatePresence>
                 {isOpen && (
                     <motion.div
@@ -283,7 +322,7 @@ export function FloatingChatbot() {
                         animate={{ opacity: 1, y: 0, scale: 1 }}
                         exit={{ opacity: 0, y: 16, scale: 0.98 }}
                         transition={{ duration: 0.18 }}
-                        className="mb-4 flex h-[min(620px,calc(100vh-8rem))] w-[min(calc(100vw-2rem),390px)] flex-col overflow-hidden rounded-[16px] border border-black/[0.08] bg-white shadow-[rgba(0,0,0,0.10)_0px_20px_60px,rgba(0,0,0,0.05)_0px_8px_20px]"
+                        className="mb-4 flex h-[min(620px,calc(100svh-7rem))] w-[min(calc(100vw-2rem),390px)] flex-col overflow-hidden rounded-[16px] border border-black/[0.08] bg-white shadow-[rgba(0,0,0,0.10)_0px_20px_60px,rgba(0,0,0,0.05)_0px_8px_20px]"
                     >
                         <div className="flex items-center justify-between bg-[#009060] px-5 py-4 text-white">
                             <div className="flex min-w-0 items-center gap-3">
@@ -340,13 +379,28 @@ export function FloatingChatbot() {
                                                     <SourceLinks sources={message.sources ?? []} />
                                                     <div className="mt-3 flex flex-wrap items-center justify-between gap-2">
                                                         <FeedbackButtons answerEventId={message.answerEventId} />
-                                                        {message.needsHandoff ? (
-                                                            <Link
-                                                                href="/contact"
-                                                                className="inline-flex h-8 items-center justify-center rounded-[6px] bg-[#009060] px-3 text-xs font-bold text-white transition-colors hover:bg-[#007A52]"
-                                                            >
-                                                                상담 연결
-                                                            </Link>
+                                                        {message.showHandoffCTA ? (
+                                                            message.handoffIntent === "support" ? (
+                                                                <button
+                                                                    type="button"
+                                                                    onClick={() => {
+                                                                        const opened = openChannelTalk()
+                                                                        if (!opened) {
+                                                                            window.location.href = "/contact"
+                                                                        }
+                                                                    }}
+                                                                    className="inline-flex h-8 items-center justify-center rounded-[6px] bg-[#009060] px-3 text-xs font-bold text-white transition-colors hover:bg-[#007A52]"
+                                                                >
+                                                                    실시간 상담
+                                                                </button>
+                                                            ) : (
+                                                                <Link
+                                                                    href="/contact"
+                                                                    className="inline-flex h-8 items-center justify-center rounded-[6px] bg-[#009060] px-3 text-xs font-bold text-white transition-colors hover:bg-[#007A52]"
+                                                                >
+                                                                    도입 상담 연결
+                                                                </Link>
+                                                            )
                                                         ) : null}
                                                     </div>
                                                 </>

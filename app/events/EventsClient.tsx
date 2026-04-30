@@ -2,7 +2,7 @@
 
 import { useState, useMemo } from "react"
 import { motion, AnimatePresence } from "framer-motion"
-import { Calendar, MapPin, Tag, ArrowRight, Search, ExternalLink, FileText } from "lucide-react"
+import { Calendar, MapPin, Tag, ArrowRight, Search } from "lucide-react"
 import Image from "next/image"
 import Link from "next/link"
 import type { PublicEvent, EventStatus } from "@/lib/types/public-events"
@@ -58,7 +58,7 @@ export default function EventsClient({ events }: { events: PublicEvent[] }) {
     <div className="min-h-screen bg-[#FAFAF8] text-[#1a1a1a] selection:bg-emerald-100 selection:text-emerald-900">
 
       {/* Hero */}
-      <section className="relative pt-32 md:pt-40 pb-6 px-6">
+      <section className="relative px-4 pb-6 pt-28 sm:px-6 md:pt-40">
         <div className="max-w-[1100px] mx-auto">
           <div className="grid grid-cols-1 lg:grid-cols-[1fr_1.1fr] gap-8 lg:gap-12 items-center">
 
@@ -76,7 +76,7 @@ export default function EventsClient({ events }: { events: PublicEvent[] }) {
                 initial={{ opacity: 0, y: 20 }}
                 animate={{ opacity: 1, y: 0 }}
                 transition={{ duration: 0.6, delay: 0.05 }}
-                className="text-[2.5rem] md:text-[3.5rem] lg:text-[4rem] font-extrabold leading-[1.05] tracking-[-0.035em] text-[#111110] mb-5"
+                className="mb-5 text-[2.3rem] font-extrabold leading-[1.05] tracking-[-0.035em] text-[#111110] md:text-[3.5rem] lg:text-[4rem]"
               >
                 행사 &amp;<br />프로모션
               </motion.h1>
@@ -84,7 +84,7 @@ export default function EventsClient({ events }: { events: PublicEvent[] }) {
                 initial={{ opacity: 0, y: 16 }}
                 animate={{ opacity: 1, y: 0 }}
                 transition={{ duration: 0.5, delay: 0.1 }}
-                className="text-[15px] md:text-[16px] text-[#1a1a1a]/45 max-w-sm leading-relaxed mb-8"
+                className="mb-8 max-w-sm text-[15px] leading-relaxed text-[#1a1a1a]/45 md:text-[16px]"
               >
                 클래스인의 최신 이벤트, 웨비나, 특가 프로모션을 한눈에 확인하세요.
               </motion.p>
@@ -92,7 +92,7 @@ export default function EventsClient({ events }: { events: PublicEvent[] }) {
                 initial={{ opacity: 0 }}
                 animate={{ opacity: 1 }}
                 transition={{ duration: 0.4, delay: 0.2 }}
-                className="flex items-center gap-6 text-[13px] text-[#1a1a1a]/30"
+                className="flex flex-wrap items-center gap-x-6 gap-y-2 text-[13px] text-[#1a1a1a]/30"
               >
                 <span className="flex items-center gap-2">
                   <span className="w-2 h-2 rounded-full bg-emerald-500 animate-pulse" />
@@ -114,8 +114,9 @@ export default function EventsClient({ events }: { events: PublicEvent[] }) {
               >
                 {(() => {
                   const event = highlighted[0]
+                  const heroHref = event.slug ? `/events/${event.slug}` : null
                   return (
-                    <div className="relative rounded-2xl overflow-hidden text-white min-h-[340px] md:min-h-[400px]">
+                    <div className="relative min-h-[300px] overflow-hidden rounded-2xl text-white sm:min-h-[340px] md:min-h-[400px]">
                       {event.imageUrl ? (
                         <Image
                           src={event.imageUrl}
@@ -128,7 +129,7 @@ export default function EventsClient({ events }: { events: PublicEvent[] }) {
                         <div className="absolute inset-0 bg-gradient-to-br from-emerald-900 to-[#084734]" />
                       )}
                       <div className="absolute inset-0 bg-gradient-to-t from-black/80 via-black/40 to-black/10" />
-                      <div className="relative z-10 p-8 md:p-10 flex flex-col h-full min-h-[340px] md:min-h-[400px]">
+                      <div className="relative z-10 flex h-full min-h-[300px] flex-col p-6 sm:min-h-[340px] md:min-h-[400px] md:p-10">
                         <div className="flex items-center gap-2.5 mb-auto">
                           <StatusBadge status={event.status} />
                         </div>
@@ -155,12 +156,12 @@ export default function EventsClient({ events }: { events: PublicEvent[] }) {
                               </span>
                             )}
                           </div>
-                          {event.ctaHref && (
+                          {heroHref && (
                             <Link
-                              href={event.ctaHref}
+                              href={heroHref}
                               className="inline-flex items-center gap-2 bg-white text-[#111110] text-[13px] font-semibold px-6 py-2.5 rounded-lg hover:bg-emerald-50 transition-colors duration-200 shadow-lg"
                             >
-                              {event.ctaLabel}
+                              자세히 보기
                               <ArrowRight className="w-3.5 h-3.5" />
                             </Link>
                           )}
@@ -176,14 +177,14 @@ export default function EventsClient({ events }: { events: PublicEvent[] }) {
       </section>
 
       {/* Filter Bar */}
-      <section className="max-w-[1100px] mx-auto px-6 mt-6 mb-2">
+      <section className="mx-auto mb-2 mt-6 max-w-[1100px] px-4 sm:px-6">
         <motion.div
           initial={{ opacity: 0 }}
           animate={{ opacity: 1 }}
           transition={{ duration: 0.4, delay: 0.2 }}
           className="flex flex-col sm:flex-row sm:items-center sm:justify-between gap-4 pb-5 border-b border-[#e8e8e4]"
         >
-          <div className="flex items-center gap-1.5 overflow-x-auto no-scrollbar">
+          <div className="-mx-1 flex items-center gap-1.5 overflow-x-auto px-1 pb-1 no-scrollbar">
             {CATEGORIES.map((cat) => {
               const isActive = activeCategory === cat
               return (
@@ -201,7 +202,7 @@ export default function EventsClient({ events }: { events: PublicEvent[] }) {
               )
             })}
           </div>
-          <div className="relative shrink-0">
+          <div className="relative w-full shrink-0 sm:w-auto">
             <Search className="absolute left-3 top-1/2 -translate-y-1/2 w-4 h-4 text-[#1a1a1a]/20" />
             <input
               type="text"
@@ -221,7 +222,7 @@ export default function EventsClient({ events }: { events: PublicEvent[] }) {
       </section>
 
       {/* Event List */}
-      <section className="max-w-[1100px] mx-auto px-6 pb-28">
+      <section className="mx-auto max-w-[1100px] px-4 pb-24 sm:px-6 md:pb-28">
         <AnimatePresence mode="wait">
           <motion.div
             key={activeCategory + searchQuery}
@@ -230,20 +231,14 @@ export default function EventsClient({ events }: { events: PublicEvent[] }) {
             exit={{ opacity: 0 }}
             transition={{ duration: 0.25 }}
           >
-            {rest.map((event, index) => (
-              <motion.div
-                key={event.id}
-                initial={{ opacity: 0, y: 12 }}
-                animate={{ opacity: 1, y: 0 }}
-                transition={{ duration: 0.4, delay: index * 0.04, ease: [0.25, 0.46, 0.45, 0.94] }}
-              >
+            {rest.map((event, index) => {
+              const detailHref = event.slug ? `/events/${event.slug}` : null
+              const cardInner = (
                 <article
-                  className="grid grid-cols-1 md:grid-cols-[160px_1fr_120px_160px] gap-4 md:gap-6 py-6 border-b border-[#ebebea] transition-opacity duration-300"
+                  className="grid grid-cols-1 gap-3 border-b border-[#ebebea] py-5 transition-opacity duration-300 md:grid-cols-[160px_1fr_180px] md:gap-8 md:py-6"
                   style={{
                     opacity: isAnyHovered ? (hoveredId === event.id ? 1 : 0.3) : 1,
                   }}
-                  onMouseEnter={() => setHoveredId(event.id)}
-                  onMouseLeave={() => setHoveredId(null)}
                 >
                   <div className="flex md:flex-col gap-2 md:gap-2 md:pt-0.5">
                     <span className="text-[12px] font-medium text-[#1a1a1a]/40">{event.category}</span>
@@ -251,17 +246,9 @@ export default function EventsClient({ events }: { events: PublicEvent[] }) {
                   </div>
 
                   <div className="flex flex-col gap-1.5">
-                    {event.slug ? (
-                      <Link href={`/events/${event.slug}`}>
-                        <h2 className="text-[17px] md:text-[19px] font-semibold leading-snug tracking-[-0.015em] text-[#111110] hover:text-[#084734] transition-colors">
-                          {event.title}
-                        </h2>
-                      </Link>
-                    ) : (
-                      <h2 className="text-[17px] md:text-[19px] font-semibold leading-snug tracking-[-0.015em] text-[#111110]">
-                        {event.title}
-                      </h2>
-                    )}
+                    <h2 className="text-[17px] md:text-[19px] font-semibold leading-snug tracking-[-0.015em] text-[#111110] group-hover:text-emerald-800 transition-colors duration-300">
+                      {event.title}
+                    </h2>
                     <p className="text-[13px] text-[#1a1a1a]/50 leading-relaxed line-clamp-2">
                       {event.description}
                     </p>
@@ -293,46 +280,40 @@ export default function EventsClient({ events }: { events: PublicEvent[] }) {
                   </div>
 
                   {event.imageUrl ? (
-                    <div className="hidden md:block relative w-full h-[110px] rounded-xl overflow-hidden bg-[#f0f0ec] shrink-0">
+                    <div className="relative w-full h-28 md:h-[110px] rounded-xl overflow-hidden bg-[#f0f0ec] shrink-0 order-first md:order-last">
                       <Image
                         src={event.imageUrl}
                         alt={`${event.title} 포스터`}
                         fill
-                        className="object-cover"
+                        className="object-cover transition-transform duration-500 group-hover:scale-[1.04]"
                         unoptimized
                       />
                     </div>
                   ) : (
                     <div className="hidden md:block" />
                   )}
-
-                  <div className="flex md:flex-col md:items-end md:justify-center gap-3">
-                    {event.ctaHref ? (
-                      <Link
-                        href={event.ctaHref}
-                        className={`inline-flex items-center gap-1.5 text-[13px] font-semibold px-4 py-2 rounded-lg transition-colors duration-200 ${
-                          event.status === "마감"
-                            ? "bg-[#f0f0ec] text-[#1a1a1a]/30 cursor-not-allowed pointer-events-none"
-                            : "bg-[#111110] text-white hover:bg-emerald-700"
-                        }`}
-                      >
-                        {event.ctaLabel}
-                        <ExternalLink className="w-3.5 h-3.5" />
-                      </Link>
-                    ) : null}
-                    {event.slug && event.contentMarkdown && (
-                      <Link
-                        href={`/events/${event.slug}`}
-                        className="inline-flex items-center gap-1.5 text-[12px] text-[#1a1a1a]/40 hover:text-[#084734] transition-colors"
-                      >
-                        <FileText className="w-3 h-3" />
-                        세부 보기
-                      </Link>
-                    )}
-                  </div>
                 </article>
-              </motion.div>
-            ))}
+              )
+
+              return (
+                <motion.div
+                  key={event.id}
+                  initial={{ opacity: 0, y: 12 }}
+                  animate={{ opacity: 1, y: 0 }}
+                  transition={{ duration: 0.4, delay: index * 0.04, ease: [0.25, 0.46, 0.45, 0.94] }}
+                  onMouseEnter={() => setHoveredId(event.id)}
+                  onMouseLeave={() => setHoveredId(null)}
+                >
+                  {detailHref ? (
+                    <Link href={detailHref} className="group block">
+                      {cardInner}
+                    </Link>
+                  ) : (
+                    cardInner
+                  )}
+                </motion.div>
+              )
+            })}
           </motion.div>
         </AnimatePresence>
 

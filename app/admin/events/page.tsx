@@ -3,12 +3,11 @@
 import { useState, useEffect, useCallback, useRef } from "react"
 import Image from "next/image"
 import Link from "next/link"
-import { Plus, Pencil, Trash2, X, Upload, ImageIcon, FileText } from "lucide-react"
+import { useRouter } from "next/navigation"
+import { Plus, Pencil, Trash2, X, Upload, ImageIcon, ArrowRight } from "lucide-react"
 import { getAdminToken } from "@/lib/admin-client"
 import type { PublicEvent, EventCategory, EventStatus } from "@/lib/types/public-events"
 import { EVENT_CATEGORIES } from "@/lib/types/public-events"
-
-// ─── helpers ──────────────────────────────────────────────────────────────────
 
 function adminFetch(url: string, options?: RequestInit) {
   return fetch(url, {
@@ -29,17 +28,10 @@ function adminUpload(url: string, formData: FormData) {
   })
 }
 
-function toLocalDatetime(iso: string | null): string {
-  if (!iso) return ""
-  return new Date(iso).toISOString().slice(0, 16)
-}
-
 function formatDate(iso: string): string {
   const d = new Date(iso)
   return `${d.getFullYear()}. ${String(d.getMonth() + 1).padStart(2, "0")}. ${String(d.getDate()).padStart(2, "0")}`
 }
-
-// ─── types ────────────────────────────────────────────────────────────────────
 
 type StatusOverrideOption = "auto" | EventStatus
 
@@ -71,24 +63,6 @@ const DEFAULT_FORM: FormState = {
   statusOverride: "auto",
 }
 
-function eventToForm(event: PublicEvent): FormState {
-  return {
-    title: event.title,
-    description: event.description ?? "",
-    category: event.category,
-    tag: event.tag ?? "",
-    startsAt: toLocalDatetime(event.startsAt),
-    endsAt: toLocalDatetime(event.endsAt),
-    location: event.location ?? "",
-    ctaLabel: event.ctaLabel,
-    ctaHref: event.ctaHref ?? "",
-    highlight: event.highlight,
-    statusOverride: event.statusOverride ?? "auto",
-  }
-}
-
-// ─── status badge ─────────────────────────────────────────────────────────────
-
 function StatusBadge({ status }: { status: EventStatus }) {
   const styles: Record<EventStatus, string> = {
     "진행 중": "bg-emerald-50 text-emerald-700 border border-emerald-200",
@@ -102,17 +76,16 @@ function StatusBadge({ status }: { status: EventStatus }) {
   )
 }
 
-// ─── main page ────────────────────────────────────────────────────────────────
-
 export default function AdminEventsPage() {
+  const router = useRouter()
   const [events, setEvents] = useState<PublicEvent[]>([])
   const [loading, setLoading] = useState(true)
   const [error, setError] = useState<string | null>(null)
 
   const [modalOpen, setModalOpen] = useState(false)
-  const [editing, setEditing] = useState<PublicEvent | null>(null)
   const [form, setForm] = useState<FormState>(DEFAULT_FORM)
   const [saving, setSaving] = useState(false)
+  const [savingDetail, setSavingDetail] = useState(false)
   const [saveError, setSaveError] = useState<string | null>(null)
 
   const [imageFile, setImageFile] = useState<File | null>(null)
@@ -120,8 +93,6 @@ export default function AdminEventsPage() {
   const fileInputRef = useRef<HTMLInputElement>(null)
 
   const [deletingId, setDeletingId] = useState<string | null>(null)
-
-  // ── fetch ──────────────────────────────────────────────────────────────────
 
   const fetchEvents = useCallback(async () => {
     setLoading(true)
@@ -139,10 +110,7 @@ export default function AdminEventsPage() {
 
   useEffect(() => { fetchEvents() }, [fetchEvents])
 
-  // ── modal helpers ──────────────────────────────────────────────────────────
-
   function openCreate() {
-    setEditing(null)
     setForm(DEFAULT_FORM)
     setImageFile(null)
     setImagePreview(null)
@@ -150,19 +118,9 @@ export default function AdminEventsPage() {
     setModalOpen(true)
   }
 
-  function openEdit(event: PublicEvent) {
-    setEditing(event)
-    setForm(eventToForm(event))
-    setImageFile(null)
-    setImagePreview(event.imageUrl)
-    setSaveError(null)
-    setModalOpen(true)
-  }
-
   function closeModal() {
     if (imagePreview?.startsWith("blob:")) URL.revokeObjectURL(imagePreview)
     setModalOpen(false)
-    setEditing(null)
     setImageFile(null)
     setImagePreview(null)
   }
@@ -173,27 +131,25 @@ export default function AdminEventsPage() {
     if (imagePreview?.startsWith("blob:")) URL.revokeObjectURL(imagePreview)
     setImageFile(file)
     setImagePreview(URL.createObjectURL(file))
+    e.target.value = ""
   }
 
-  // ── save ───────────────────────────────────────────────────────────────────
-
-  async function handleSave() {
+  async function handleSave({ continueToEditor }: { continueToEditor: boolean }) {
     if (!form.title || !form.category || !form.startsAt) {
       setSaveError("제목, 카테고리, 시작일시는 필수입니다.")
       return
     }
-    setSaving(true)
+    if (continueToEditor) setSavingDetail(true)
+    else setSaving(true)
     setSaveError(null)
     try {
-      let imagePath: string | undefined = editing?.imagePath ?? undefined
-
-      // 이미지 업로드
+      let imagePath: string | null = null
       if (imageFile) {
         const fd = new FormData()
         fd.append("file", imageFile)
         const uploadRes = await adminUpload("/api/admin/events/upload", fd)
         if (!uploadRes.ok) throw new Error("이미지 업로드 실패")
-        const uploadData = await uploadRes.json() as { path: string }
+        const uploadData = (await uploadRes.json()) as { path: string }
         imagePath = uploadData.path
       }
 
@@ -207,35 +163,31 @@ export default function AdminEventsPage() {
         location: form.location || null,
         ctaLabel: form.ctaLabel || "자세히 보기",
         ctaHref: form.ctaHref || "/contact",
-        imagePath: imagePath ?? null,
+        imagePath,
         highlight: form.highlight,
         statusOverride: form.statusOverride === "auto" ? null : form.statusOverride,
       }
 
-      if (editing) {
-        const res = await adminFetch(`/api/admin/events/${editing.id}`, {
-          method: "PATCH",
-          body: JSON.stringify(payload),
-        })
-        if (!res.ok) throw new Error(await res.text())
-      } else {
-        const res = await adminFetch("/api/admin/events", {
-          method: "POST",
-          body: JSON.stringify(payload),
-        })
-        if (!res.ok) throw new Error(await res.text())
-      }
+      const res = await adminFetch("/api/admin/events", {
+        method: "POST",
+        body: JSON.stringify(payload),
+      })
+      if (!res.ok) throw new Error(await res.text())
+      const created = (await res.json()) as PublicEvent
 
       closeModal()
+      if (continueToEditor) {
+        router.push(`/admin/events/${created.id}/edit`)
+        return
+      }
       await fetchEvents()
     } catch (e) {
       setSaveError(e instanceof Error ? e.message : "저장 실패")
     } finally {
       setSaving(false)
+      setSavingDetail(false)
     }
   }
-
-  // ── delete ─────────────────────────────────────────────────────────────────
 
   async function handleDelete(id: string) {
     if (!window.confirm("이 행사를 삭제하시겠습니까?")) return
@@ -251,33 +203,28 @@ export default function AdminEventsPage() {
     }
   }
 
-  // ── render ─────────────────────────────────────────────────────────────────
-
   return (
-    <div className="p-6 max-w-5xl mx-auto">
-      {/* Header */}
-      <div className="flex items-center justify-between mb-6">
+    <div className="mx-auto max-w-5xl px-4 pt-6 pb-24 sm:px-6 sm:pt-8 lg:px-8 lg:pt-10 lg:pb-20">
+      <div className="mb-6 flex flex-col gap-4 sm:flex-row sm:items-center sm:justify-between">
         <div>
           <h1 className="text-xl font-bold text-[#111110]">공개 행사 관리</h1>
           <p className="text-[13px] text-[#1a1a1a]/40 mt-0.5">/events 페이지에 표시되는 행사를 등록·수정합니다.</p>
         </div>
         <button
           onClick={openCreate}
-          className="inline-flex items-center gap-2 bg-[#111110] text-white text-[13px] font-medium px-4 py-2 rounded-lg hover:bg-emerald-700 transition-colors"
+          className="inline-flex min-h-10 items-center justify-center gap-2 rounded-lg bg-[#111110] px-4 py-2 text-[13px] font-medium text-white transition-colors hover:bg-emerald-700"
         >
           <Plus className="w-4 h-4" />
           행사 추가
         </button>
       </div>
 
-      {/* Error */}
       {error && (
         <div className="mb-4 px-4 py-3 bg-red-50 text-red-700 text-[13px] rounded-lg border border-red-200">
           {error}
         </div>
       )}
 
-      {/* Table */}
       {loading ? (
         <div className="py-16 text-center text-[13px] text-[#1a1a1a]/30">불러오는 중...</div>
       ) : events.length === 0 ? (
@@ -285,8 +232,9 @@ export default function AdminEventsPage() {
           등록된 행사가 없습니다. 행사 추가 버튼을 눌러 시작하세요.
         </div>
       ) : (
-        <div className="border border-[rgba(0,0,0,0.08)] rounded-xl overflow-hidden">
-          <table className="w-full text-[13px]">
+        <div className="overflow-hidden rounded-xl border border-[rgba(0,0,0,0.08)]">
+          <div className="overflow-x-auto">
+          <table className="min-w-[760px] w-full text-[13px]">
             <thead className="bg-[#F6F5F4] text-[#1a1a1a]/50 text-left">
               <tr>
                 <th className="px-4 py-3 font-medium">제목</th>
@@ -301,7 +249,12 @@ export default function AdminEventsPage() {
               {events.map((event) => (
                 <tr key={event.id} className="bg-white hover:bg-[#F6F5F4]/50 transition-colors">
                   <td className="px-4 py-3">
-                    <span className="font-medium text-[#111110] line-clamp-1">{event.title}</span>
+                    <Link
+                      href={`/admin/events/${event.id}/edit`}
+                      className="font-medium text-[#111110] line-clamp-1 hover:text-[#084734]"
+                    >
+                      {event.title}
+                    </Link>
                   </td>
                   <td className="px-4 py-3 text-[#1a1a1a]/50">{event.category}</td>
                   <td className="px-4 py-3 text-[#1a1a1a]/50">
@@ -322,18 +275,11 @@ export default function AdminEventsPage() {
                     <div className="flex items-center gap-2 justify-end">
                       <Link
                         href={`/admin/events/${event.id}/edit`}
-                        className="p-1.5 text-[#1a1a1a]/40 hover:text-[#084734] transition-colors"
-                        title="콘텐츠 편집"
-                      >
-                        <FileText className="w-3.5 h-3.5" />
-                      </Link>
-                      <button
-                        onClick={() => openEdit(event)}
                         className="p-1.5 text-[#1a1a1a]/40 hover:text-[#111110] transition-colors"
-                        title="기본 정보 수정"
+                        title="상세 편집"
                       >
                         <Pencil className="w-3.5 h-3.5" />
-                      </button>
+                      </Link>
                       <button
                         onClick={() => handleDelete(event.id)}
                         disabled={deletingId === event.id}
@@ -348,32 +294,27 @@ export default function AdminEventsPage() {
               ))}
             </tbody>
           </table>
+          </div>
         </div>
       )}
 
-      {/* Modal */}
       {modalOpen && (
-        <div className="fixed inset-0 bg-black/40 z-50 flex items-center justify-center p-4">
-          <div className="bg-white rounded-2xl w-full max-w-2xl max-h-[90vh] overflow-y-auto shadow-2xl">
-            {/* Modal Header */}
-            <div className="flex items-center justify-between px-6 py-4 border-b border-[rgba(0,0,0,0.08)]">
-              <h2 className="text-base font-semibold text-[#111110]">
-                {editing ? "행사 수정" : "행사 추가"}
-              </h2>
+        <div className="fixed inset-0 z-50 flex items-end justify-center bg-black/40 p-0 sm:items-center sm:p-4">
+          <div className="max-h-[calc(100dvh-1rem)] w-full max-w-2xl overflow-hidden rounded-t-2xl bg-white shadow-2xl sm:max-h-[90vh] sm:rounded-2xl">
+            <div className="flex items-center justify-between border-b border-[rgba(0,0,0,0.08)] px-4 py-4 sm:px-6">
+              <h2 className="text-base font-semibold text-[#111110]">행사 추가</h2>
               <button onClick={closeModal} className="text-[#1a1a1a]/40 hover:text-[#111110]">
                 <X className="w-5 h-5" />
               </button>
             </div>
 
-            {/* Modal Body */}
-            <div className="px-6 py-5 space-y-4">
+            <div className="max-h-[calc(100dvh-9rem)] space-y-4 overflow-y-auto px-4 py-5 sm:px-6">
               {saveError && (
                 <div className="px-4 py-3 bg-red-50 text-red-700 text-[13px] rounded-lg border border-red-200">
                   {saveError}
                 </div>
               )}
 
-              {/* 제목 */}
               <div>
                 <label className="block text-[12px] font-medium text-[#1a1a1a]/50 mb-1.5">제목 *</label>
                 <input
@@ -385,8 +326,7 @@ export default function AdminEventsPage() {
                 />
               </div>
 
-              {/* 카테고리 + 태그 */}
-              <div className="grid grid-cols-2 gap-4">
+              <div className="grid gap-4 sm:grid-cols-2">
                 <div>
                   <label className="block text-[12px] font-medium text-[#1a1a1a]/50 mb-1.5">카테고리 *</label>
                   <select
@@ -411,7 +351,6 @@ export default function AdminEventsPage() {
                 </div>
               </div>
 
-              {/* 설명 */}
               <div>
                 <label className="block text-[12px] font-medium text-[#1a1a1a]/50 mb-1.5">설명</label>
                 <textarea
@@ -423,8 +362,7 @@ export default function AdminEventsPage() {
                 />
               </div>
 
-              {/* 시작일시 + 종료일시 */}
-              <div className="grid grid-cols-2 gap-4">
+              <div className="grid gap-4 sm:grid-cols-2">
                 <div>
                   <label className="block text-[12px] font-medium text-[#1a1a1a]/50 mb-1.5">시작일시 *</label>
                   <input
@@ -445,7 +383,6 @@ export default function AdminEventsPage() {
                 </div>
               </div>
 
-              {/* 장소 */}
               <div>
                 <label className="block text-[12px] font-medium text-[#1a1a1a]/50 mb-1.5">장소</label>
                 <input
@@ -457,8 +394,7 @@ export default function AdminEventsPage() {
                 />
               </div>
 
-              {/* CTA */}
-              <div className="grid grid-cols-2 gap-4">
+              <div className="grid gap-4 sm:grid-cols-2">
                 <div>
                   <label className="block text-[12px] font-medium text-[#1a1a1a]/50 mb-1.5">CTA 버튼 텍스트</label>
                   <input
@@ -481,7 +417,6 @@ export default function AdminEventsPage() {
                 </div>
               </div>
 
-              {/* 이미지 업로드 */}
               <div>
                 <label className="block text-[12px] font-medium text-[#1a1a1a]/50 mb-1.5">포스터 이미지</label>
                 <div
@@ -491,13 +426,7 @@ export default function AdminEventsPage() {
                 >
                   {imagePreview ? (
                     <div className="relative w-full h-40">
-                      <Image
-                        src={imagePreview}
-                        alt="미리보기"
-                        fill
-                        className="object-cover"
-                        unoptimized
-                      />
+                      <Image src={imagePreview} alt="미리보기" fill className="object-cover" unoptimized />
                       <div className="absolute inset-0 bg-black/30 flex items-center justify-center opacity-0 hover:opacity-100 transition-opacity">
                         <Upload className="w-6 h-6 text-white" />
                       </div>
@@ -512,14 +441,13 @@ export default function AdminEventsPage() {
                 <input
                   ref={fileInputRef}
                   type="file"
-                  accept="image/*"
+                  accept="image/jpeg,image/png,image/webp,image/gif"
                   onChange={handleFileChange}
                   className="hidden"
                 />
               </div>
 
-              {/* Highlight + 상태 override */}
-              <div className="grid grid-cols-2 gap-4">
+              <div className="grid gap-4 sm:grid-cols-2">
                 <div className="flex items-center gap-3">
                   <button
                     type="button"
@@ -554,21 +482,34 @@ export default function AdminEventsPage() {
               </div>
             </div>
 
-            {/* Modal Footer */}
-            <div className="flex items-center justify-end gap-3 px-6 py-4 border-t border-[rgba(0,0,0,0.08)]">
+            <div className="flex flex-col-reverse gap-2 border-t border-[rgba(0,0,0,0.08)] px-4 py-4 sm:flex-row sm:items-center sm:justify-between sm:gap-3 sm:px-6">
               <button
                 onClick={closeModal}
                 className="px-4 py-2 text-[13px] text-[#1a1a1a]/50 hover:text-[#111110] transition-colors"
               >
                 취소
               </button>
-              <button
-                onClick={handleSave}
-                disabled={saving}
-                className="px-5 py-2 bg-[#111110] text-white text-[13px] font-medium rounded-lg hover:bg-emerald-700 transition-colors disabled:opacity-40"
-              >
-                {saving ? "저장 중..." : editing ? "수정 완료" : "행사 등록"}
-              </button>
+              <div className="flex flex-col-reverse gap-2 sm:flex-row sm:items-center sm:gap-3">
+                <button
+                  onClick={() => handleSave({ continueToEditor: false })}
+                  disabled={saving || savingDetail}
+                  className="px-5 py-2 text-[13px] font-medium rounded-lg border border-[rgba(0,0,0,0.12)] text-[#111110] hover:bg-[#F6F5F4] transition-colors disabled:opacity-40"
+                >
+                  {saving ? "저장 중..." : "행사 등록"}
+                </button>
+                <button
+                  onClick={() => handleSave({ continueToEditor: true })}
+                  disabled={saving || savingDetail}
+                  className="inline-flex items-center justify-center gap-1.5 px-5 py-2 bg-[#111110] text-white text-[13px] font-medium rounded-lg hover:bg-emerald-700 transition-colors disabled:opacity-40"
+                >
+                  {savingDetail ? "이동 중..." : (
+                    <>
+                      상세 편집
+                      <ArrowRight className="w-3.5 h-3.5" />
+                    </>
+                  )}
+                </button>
+              </div>
             </div>
           </div>
         </div>

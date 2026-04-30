@@ -21,6 +21,7 @@ import {
 import { Input } from "@/components/ui/input"
 import { Button } from "@/components/ui/button"
 import { CheckCircle2, Loader2, Mail, ArrowRight, Sparkles } from "lucide-react"
+import { trackEvent } from "@/lib/analytics"
 import { cn } from "@/lib/utils"
 
 interface Props {
@@ -79,6 +80,7 @@ export function NewsletterModal({
       const data = await res.json()
 
       if (res.ok && data.ok) {
+        trackEvent("submit_newsletter", { source })
         setSubmitted(true)
       } else {
         setError(data.error || "구독에 실패했습니다.")

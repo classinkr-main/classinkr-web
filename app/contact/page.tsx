@@ -70,10 +70,10 @@ export default function ContactPage() {
         }
     }
     return (
-        <div className="bg-[#EDF7F2] min-h-screen text-slate-900 font-sans selection:bg-[#ECFDF5] pt-20 pb-14">
+        <div className="min-h-screen bg-[#EDF7F2] pb-24 pt-20 font-sans text-slate-900 selection:bg-[#ECFDF5] sm:pb-28 lg:pb-32">
 
             {/* Header Section */}
-            <section className="relative px-4 pt-8 md:pt-12 pb-8 overflow-hidden">
+            <section className="relative overflow-hidden px-4 pb-7 pt-7 md:pb-8 md:pt-12">
                 <div className="container mx-auto max-w-6xl relative z-10">
                     <div className="flex flex-col items-center text-center space-y-4">
                         <motion.div
@@ -90,7 +90,7 @@ export default function ContactPage() {
                             initial={{ opacity: 0, y: 30 }}
                             animate={{ opacity: 1, y: 0 }}
                             transition={{ duration: 0.7, delay: 0.1 }}
-                            className="text-3xl md:text-[3rem] font-serif leading-[1.1] tracking-tight text-[#1a1a19]"
+                            className="text-[2rem] font-serif leading-[1.12] tracking-tight text-[#1a1a19] sm:text-4xl md:text-[3rem]"
                         >
                             궁금한 점이 있으신가요? <br />
                             친절하게 답변해 드립니다.
@@ -100,40 +100,46 @@ export default function ContactPage() {
                             initial={{ opacity: 0, y: 20 }}
                             animate={{ opacity: 1, y: 0 }}
                             transition={{ duration: 0.7, delay: 0.2 }}
-                            className="text-lg md:text-xl text-slate-500 max-w-2xl mx-auto font-medium leading-relaxed"
+                            className="mx-auto max-w-2xl text-base font-medium leading-relaxed text-slate-500 md:text-xl"
                         >
-                            도입 문의부터 맞춤형 솔루션 제안까지, 클래스인 전문 매니저가 학원 운영의 고민을 함께 덜어드립니다.
+                            도입 문의부터 맞춤형 솔루션 제안까지,<br />
+                            클래스인 전문 매니저가 학원 운영의 고민을 함께 덜어드립니다.
                         </motion.p>
                     </div>
                 </div>
             </section>
 
-            <section className="container mx-auto max-w-6xl px-4 relative z-10 pb-6">
+            <section className="container relative z-10 mx-auto max-w-6xl pb-12 md:pb-16">
                 {/* Fast Track Banner */}
                 <motion.div 
                     initial={{ opacity: 0, scale: 0.98, y: 20 }}
                     animate={{ opacity: 1, scale: 1, y: 0 }}
                     transition={{ duration: 0.6, delay: 0.3 }}
-                    className="mb-10"
+                    className="mb-8 md:mb-10"
                 >
-                    <div className="bg-white rounded-[2rem] shadow-[0_20px_60px_rgba(0,0,0,0.05)] border border-slate-100 p-6 md:p-8 overflow-hidden relative">
+                    <div className="relative overflow-hidden rounded-[24px] border border-slate-100 bg-white p-5 shadow-[0_20px_60px_rgba(0,0,0,0.05)] md:rounded-[2rem] md:p-8">
                         {/* Decorative background elements */}
                         <div className="absolute top-0 right-0 w-64 h-64 bg-[#ECFDF5] rounded-full blur-[80px] -mr-20 -mt-20 pointer-events-none" />
                         <div className="absolute bottom-0 left-0 w-64 h-64 bg-[#ECFDF5] rounded-full blur-[80px] -ml-20 -mb-20 pointer-events-none" />
                         
-                        <div className="flex flex-col md:flex-row items-center justify-between gap-10 relative z-10">
+                        <div className="relative z-10 flex flex-col items-center justify-between gap-7 md:flex-row md:gap-10">
                             <div className="flex-1 space-y-4 text-center md:text-left">
                                 <div className="inline-flex items-center gap-2 px-3 py-1 rounded-full bg-slate-100 text-slate-600 text-xs font-bold tracking-wider mb-2">
                                     <MessageSquare className="w-3.5 h-3.5" />
                                     FAST TRACK
                                 </div>
-                                <h3 className="text-3xl font-serif font-bold text-slate-900 tracking-tight">
+                                <h3 className="text-2xl font-serif font-bold tracking-tight text-slate-900 sm:text-3xl">
                                     가장 빠른 상담 채널
                                 </h3>
-                                <p className="text-slate-500 text-lg font-medium max-w-md">
-                                    {kakaoChannelUrl
-                                        ? "복잡한 양식 작성 없이, 클래스인 카카오톡 채널로 즉시 매니저와 연결됩니다. 우측 QR코드를 스캔해주세요."
-                                        : "우측 QR 코드를 확인하시거나, 아래 문의 폼으로 바로 도입 상담을 남겨보세요."}
+                                <p className="max-w-md text-base font-medium leading-relaxed text-slate-500 sm:text-lg">
+                                    {kakaoChannelUrl ? (
+                                        "복잡한 양식 작성 없이, 클래스인 카카오톡 채널로 즉시 매니저와 연결됩니다. QR코드를 스캔해주세요."
+                                    ) : (
+                                        <>
+                                            QR 코드를 확인하시거나,<br />
+                                            아래 문의 폼으로 바로 도입 상담을 남겨보세요.
+                                        </>
+                                    )}
                                 </p>
                                 <div className="pt-4">
                                     <a
@@ -150,13 +156,14 @@ export default function ContactPage() {
                             </div>
 
                             <div className="shrink-0 flex flex-col items-center gap-4">
-                                <div className="bg-[#292524] p-4 rounded-3xl shadow-lg border border-[#1c1917]">
-                                    <div className="w-32 h-32 md:w-40 md:h-40 bg-white rounded-2xl flex items-center justify-center relative overflow-hidden">
+                                <div className="rounded-[22px] border border-[#22A366]/25 bg-[#E9F8F1] p-1.5 shadow-[0_18px_45px_rgba(8,71,52,0.12)] sm:rounded-[26px] sm:p-2">
+                                    <div className="w-40 h-40 md:h-48 md:w-48 bg-white rounded-[18px] flex items-center justify-center relative overflow-hidden ring-1 ring-[#22A366]/10">
                                         <Image
                                             src="/qr-code.png"
                                             alt="카카오톡 상담 QR코드"
                                             fill
-                                            className="object-contain p-2"
+                                            sizes="(max-width: 768px) 160px, 192px"
+                                            className="object-contain p-1.5"
                                         />
                                     </div>
                                 </div>
@@ -166,23 +173,22 @@ export default function ContactPage() {
                     </div>
                 </motion.div>
 
-                <div className="grid lg:grid-cols-5 gap-6 lg:gap-8 items-start">
+                <div className="grid lg:grid-cols-5 gap-6 lg:gap-8 items-stretch">
                     {/* Contact Form */}
                     <motion.div 
                         initial={{ opacity: 0, x: -20 }}
                         animate={{ opacity: 1, x: 0 }}
                         transition={{ duration: 0.6, delay: 0.4 }}
-                        className="lg:col-span-3"
-                        id="contact-form"
+                        className="lg:col-span-3 h-full"
                     >
-                        <Card className="bg-white border flex flex-col items-center w-full border-slate-100 shadow-[0_10px_40px_rgba(0,0,0,0.03)] rounded-[2rem] overflow-hidden">
-                            <CardHeader className="pb-5 pt-7 px-6 w-full border-b border-slate-50 bg-slate-50/50">
-                                <CardTitle className="text-2xl font-bold text-slate-900">도입 문의 남기기</CardTitle>
+                        <Card className="flex h-full w-full flex-col items-center overflow-hidden rounded-[24px] border border-slate-100 bg-white shadow-[0_10px_40px_rgba(0,0,0,0.03)] md:rounded-[2rem]">
+                            <CardHeader className="w-full border-b border-slate-50 bg-slate-50/50 px-5 pb-5 pt-6 md:px-6 md:pt-7">
+                                <CardTitle className="text-[1.35rem] font-bold text-slate-900 sm:text-2xl">도입 문의 남기기</CardTitle>
                                 <CardDescription className="text-slate-500 font-medium mt-2">
                                     학원 규모와 원하시는 기능을 남겨주시면, 담당 매니저가 맞춤형 안내 자료와 함께 연락드리겠습니다.
                                 </CardDescription>
                             </CardHeader>
-                            <CardContent className="px-6 py-6 space-y-5 flex flex-col items-center w-full">
+                            <CardContent id="contact-form" className="flex w-full scroll-mt-28 flex-col items-center space-y-5 px-5 py-5 md:scroll-mt-32 md:px-6 md:py-6">
                                 {submitted ? (
                                     <div className="flex flex-col items-center justify-center space-y-4 py-12 text-center">
                                         <CheckCircle2 className="h-14 w-14 text-green-500" />
@@ -194,7 +200,7 @@ export default function ContactPage() {
                                         </Button>
                                     </div>
                                 ) : (
-                                <form ref={formRef} onSubmit={handleSubmit} className="w-full space-y-8">
+                                <form ref={formRef} onSubmit={handleSubmit} className="w-full space-y-6 md:space-y-8">
                                 <div className="w-full grid grid-cols-1 md:grid-cols-2 gap-4">
                                     <div className="space-y-3 w-full">
                                         <Label htmlFor="org-name" className="text-slate-700 font-bold ml-1">학원명 / 기관명 <span className="text-[#084734]">*</span></Label>
@@ -260,15 +266,15 @@ export default function ContactPage() {
                         initial={{ opacity: 0, x: 20 }}
                         animate={{ opacity: 1, x: 0 }}
                         transition={{ duration: 0.6, delay: 0.5 }}
-                        className="lg:col-span-2 space-y-6"
+                        className="lg:col-span-2 h-full"
                     >
-                        <div className="bg-white rounded-[2rem] p-6 md:p-8 border border-slate-100 shadow-[0_10px_40px_rgba(0,0,0,0.03)] h-full">
+                        <div className="flex h-full flex-col rounded-[24px] border border-slate-100 bg-white p-5 shadow-[0_10px_40px_rgba(0,0,0,0.03)] md:rounded-[2rem] md:p-8">
                             <h3 className="text-xl font-bold text-slate-900 mb-5 pb-3 border-b border-slate-100">직접 연락하기</h3>
 
                             <div className="space-y-5">
                                 <div className="flex items-start gap-4">
-                                    <div className="w-9 h-9 rounded-xl bg-[#ECFDF5] flex items-center justify-center shrink-0 text-[#084734]">
-                                        <Phone className="w-4 h-4" />
+                                    <div className="w-10 h-10 rounded-full border border-slate-200 bg-white flex items-center justify-center shrink-0 text-[#084734]">
+                                        <Phone className="w-[17px] h-[17px]" strokeWidth={1.8} />
                                     </div>
                                     <div>
                                         <h4 className="font-bold text-slate-900 mb-0.5 text-sm">지사 전화</h4>
@@ -278,8 +284,8 @@ export default function ContactPage() {
                                 </div>
                                 
                                 <div className="flex items-start gap-4">
-                                    <div className="w-9 h-9 rounded-xl bg-[#ECFDF5] flex items-center justify-center shrink-0 text-[#084734]">
-                                        <Mail className="w-4 h-4" />
+                                    <div className="w-10 h-10 rounded-full border border-slate-200 bg-white flex items-center justify-center shrink-0 text-[#084734]">
+                                        <Mail className="w-[17px] h-[17px]" strokeWidth={1.8} />
                                     </div>
                                     <div>
                                         <h4 className="font-bold text-slate-900 mb-0.5 text-sm">이메일 문의</h4>
@@ -289,8 +295,8 @@ export default function ContactPage() {
                                 </div>
 
                                 <div className="flex items-start gap-4">
-                                    <div className="w-12 h-12 rounded-2xl bg-slate-100 flex items-center justify-center shrink-0 text-slate-600">
-                                        <MapPin className="w-4 h-4" />
+                                    <div className="w-10 h-10 rounded-full border border-slate-200 bg-white flex items-center justify-center shrink-0 text-[#084734]">
+                                        <MapPin className="w-[17px] h-[17px]" strokeWidth={1.8} />
                                     </div>
                                     <div>
                                         <h4 className="font-bold text-slate-900 mb-0.5 text-sm">오피스 위치</h4>
@@ -303,7 +309,7 @@ export default function ContactPage() {
                             </div>
 
                             {/* Map */}
-                            <div className="mt-6 pt-5 border-t border-slate-100">
+                            <div className="mt-auto pt-6 border-t border-slate-100">
                                 <div className="w-full h-36 bg-slate-100 rounded-2xl border border-slate-200 overflow-hidden relative">
                                     <iframe
                                         src="https://maps.google.com/maps?q=서울시+양천구+목동동로+233-1&t=&z=17&ie=UTF8&iwloc=&output=embed"

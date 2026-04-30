@@ -24,10 +24,6 @@ import type {
 import { listAllCustomerListItems } from "@/lib/partner-portal/repositories/customers";
 import { listDealListItems } from "@/lib/partner-portal/repositories/deals";
 import {
-  getDemoCustomerDetail,
-  listDemoCustomerListItems,
-} from "@/lib/partner-portal/repositories/demo";
-import {
   getLegacyCustomerDetail,
   listLegacyCustomerListItems,
 } from "@/lib/partner-portal/repositories/legacy";
@@ -129,7 +125,6 @@ function filterCustomersByRange(
     )
   );
 }
-
 function buildAgendaFromInstallations(
   installations: InstallationEvent[],
   customerNameById: Map<string, string>,
@@ -472,25 +467,6 @@ export async function getLegacyCommercialOverview(
   const customers = await listLegacyCustomerListItems();
   const details = (
     await Promise.all(customers.map((item) => getLegacyCustomerDetail(item.customer.id)))
-  ).filter((item): item is NonNullable<typeof item> => Boolean(item));
-
-  return buildOverviewFromCustomerItemsAndDealHistory(
-    customers,
-    details.flatMap((item) => item.deals),
-    sortByDateDesc(
-      details.flatMap((item) => item.recent_calendar_events),
-      (item) => item.starts_at
-    ),
-    range
-  );
-}
-
-export async function getDemoCommercialOverview(
-  range: CommercialOverviewRange = "today"
-): Promise<CommercialOverviewPayload> {
-  const customers = await listDemoCustomerListItems();
-  const details = (
-    await Promise.all(customers.map((item) => getDemoCustomerDetail(item.customer.id)))
   ).filter((item): item is NonNullable<typeof item> => Boolean(item));
 
   return buildOverviewFromCustomerItemsAndDealHistory(

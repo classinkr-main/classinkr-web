@@ -1,7 +1,6 @@
 import { NextRequest, NextResponse } from "next/server";
 
 import { verifyAdmin } from "@/lib/admin-auth";
-import { listDemoCustomerListItems } from "@/lib/partner-portal/repositories/demo";
 import { listLegacyCustomerListItems } from "@/lib/partner-portal/repositories/legacy";
 import {
   listAllCustomerListItems,
@@ -36,10 +35,7 @@ export async function GET(req: NextRequest) {
       if (customers.length > 0) {
         return NextResponse.json({ customers, mode: "legacy" });
       }
-      return NextResponse.json({
-        customers: await listDemoCustomerListItems(),
-        mode: "demo",
-      });
+      return NextResponse.json({ customers: [], mode: "legacy" });
     } catch (legacyError) {
       console.error("[GET /api/admin/customers]", legacyError);
       return NextResponse.json(

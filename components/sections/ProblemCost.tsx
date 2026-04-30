@@ -89,7 +89,7 @@ export function ProblemCost() {
                         <span className="tracking-[0.02em]">원장님, 이 질문들을 받아본 적 있으신가요</span>
                     </span>
                     <h2 className="text-4xl font-black text-white sm:text-5xl md:text-[3.5rem] mb-6 leading-tight break-keep" style={{ letterSpacing: '-1.5px' }}>
-                        강사에 기대는 학원은<br className="md:hidden" />{" "}
+                        강사에 기대는 학원은<br />
                         <span className="text-transparent bg-clip-text bg-gradient-to-r from-[#B85C33] to-[#F6D5C5] break-keep">흔들릴 수 밖에 없습니다</span>
                     </h2>
                     <p className="text-lg text-[#A39E98] break-keep">

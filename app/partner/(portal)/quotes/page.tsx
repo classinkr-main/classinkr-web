@@ -1,5 +1,0 @@
-import { redirect } from "next/navigation"
-
-export default function QuotesPage() {
-  redirect("/partner/documents?kind=quote")
-}

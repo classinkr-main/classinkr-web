@@ -915,11 +915,11 @@ export default function SettingsPage() {
 
       <div className="grid gap-6 xl:grid-cols-[240px_minmax(0,1fr)] items-start">
         <aside className="space-y-3 xl:sticky xl:top-6">
-          <div className="rounded-2xl border border-[#e8e8e4] bg-white px-4 py-4">
+          <div className="hidden rounded-2xl border border-[#e8e8e4] bg-white px-4 py-4 xl:block">
             <p className="text-[12px] font-semibold text-[#111110]">설정 카테고리</p>
             <p className="text-[12px] text-[#1a1a1a]/40 mt-1">현재는 6개 핵심 영역만 열어둡니다.</p>
           </div>
-          <nav className="flex gap-2 overflow-x-auto pb-1 [-ms-overflow-style:none] [scrollbar-width:none] xl:block xl:space-y-1 xl:overflow-visible xl:pb-0">
+          <nav className="admin-scroll-snap-x no-scrollbar -mx-4 flex gap-2 overflow-x-auto px-4 pb-2 sm:mx-0 sm:px-0 xl:block xl:space-y-1 xl:overflow-visible xl:pb-0">
             {NAV_ITEMS.map((item) => {
               const active = activeTab === item.key
               const sectionDirty = sectionDirtyTotals?.[item.key] ?? 0
@@ -927,7 +927,7 @@ export default function SettingsPage() {
                 <button
                   key={item.key}
                   onClick={() => setActiveTab(item.key)}
-                  className={`flex min-w-[156px] shrink-0 items-center gap-3 rounded-xl border px-4 py-3 text-left transition-all xl:w-full xl:min-w-0 ${
+                  className={`flex min-w-[148px] shrink-0 items-center gap-2 rounded-xl border px-3 py-2.5 text-left transition-all sm:gap-3 sm:px-4 sm:py-3 xl:w-full xl:min-w-0 ${
                     active
                       ? "bg-[#111110] border-[#111110] text-white shadow-sm"
                       : "bg-white border-[#e8e8e4] text-[#1a1a1a]/65 hover:border-[#c8c8c4] hover:text-[#111110]"
@@ -936,7 +936,7 @@ export default function SettingsPage() {
                   <span className={active ? "text-white" : "text-[#1a1a1a]/40"}>{item.icon}</span>
                   <span className="min-w-0 flex-1">
                     <span className="block text-[13px] font-medium">{item.label}</span>
-                    <span className={`block text-[11px] mt-0.5 ${active ? "text-white/65" : "text-[#1a1a1a]/35"}`}>
+                    <span className={`mt-0.5 hidden text-[11px] sm:block ${active ? "text-white/65" : "text-[#1a1a1a]/35"}`}>
                       {item.desc}
                     </span>
                   </span>

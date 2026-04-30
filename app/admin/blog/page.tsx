@@ -263,7 +263,7 @@ export default function AdminBlogPage() {
             </div>
 
             {/* Tabs */}
-            <div className="-mx-1 mb-4 flex flex-nowrap items-center gap-1.5 overflow-x-auto px-1 pb-1">
+            <div className="admin-scroll-snap-x no-scrollbar -mx-1 mb-4 flex flex-nowrap items-center gap-1.5 overflow-x-auto px-1 pb-1">
                 {TABS.map(({ key, label, count }) => (
                     <button
                         key={key}

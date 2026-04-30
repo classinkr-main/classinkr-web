@@ -1,9 +1,10 @@
 import type { BranchRevDeal } from "@/lib/repositories/branch-deals"
+import { normalizeBranchMemberName } from "@/lib/branch/member-names"
 
 export function deriveMemberTeams(deals: BranchRevDeal[]): Record<string, string> {
   const tally = new Map<string, Map<string, number>>()
   for (const d of deals) {
-    const m = (d.manager ?? "").trim()
+    const m = normalizeBranchMemberName(d.manager)
     if (!m || !d.team) continue
     if (!tally.has(m)) tally.set(m, new Map())
     const t = tally.get(m)!

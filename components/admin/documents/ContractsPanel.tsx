@@ -5,88 +5,6 @@ import { RefreshCw, Trash2, X, PenLine, Copy, Check, Send } from "lucide-react"
 import { Button } from "@/components/ui/button"
 import type { Contract, ContractStatus, Partner } from "@/lib/supabase/database.types"
 
-const DUMMY_MODE = false
-
-const DUMMY_PARTNERS_MAP: Record<string, string> = {
-  p1: "Partner A",
-  p2: "Partner B",
-  p3: "Partner C",
-  p4: "Partner D",
-  p5: "Partner E",
-}
-
-const DUMMY_CONTRACTS_LIST = [
-  {
-    id: "c1",
-    contract_number: "C-2026-001",
-    quote_id: "q1",
-    partner_id: "p1",
-    title: "Digital Publishing Contract",
-    status: "partner_signed",
-    total_amount: 25000000,
-    content_html: "<h2>Digital Publishing Contract</h2><p>Sample contract content.</p>",
-    notes: null,
-    valid_from: "2026-03-10",
-    valid_until: "2026-12-31",
-    sign_token: "tok_demo_abc123",
-    partner_signed_at: "2026-03-12T14:30:00Z",
-    partner_signature_url: null,
-    partner_signed_ip: "1.2.3.4",
-    admin_signed_at: null,
-    admin_signature_url: null,
-    admin_signed_by: null,
-    created_by: null,
-    created_at: "2026-03-10T00:00:00Z",
-    updated_at: "2026-03-12T00:00:00Z",
-  },
-  {
-    id: "c3",
-    contract_number: "C-2026-002",
-    quote_id: "q3",
-    partner_id: "p3",
-    title: "75-inch Display Supply and Installation",
-    status: "completed",
-    total_amount: 12000000,
-    content_html: "<p>Sample 75-inch display contract.</p>",
-    notes: null,
-    valid_from: "2026-02-20",
-    valid_until: "2026-12-31",
-    sign_token: "tok_demo_ghi789",
-    partner_signed_at: "2026-02-22T10:00:00Z",
-    partner_signature_url: null,
-    partner_signed_ip: "5.6.7.8",
-    admin_signed_at: "2026-02-23T09:00:00Z",
-    admin_signature_url: null,
-    admin_signed_by: null,
-    created_by: null,
-    created_at: "2026-02-20T00:00:00Z",
-    updated_at: "2026-02-23T00:00:00Z",
-  },
-  {
-    id: "c2",
-    contract_number: "C-2026-003",
-    quote_id: null,
-    partner_id: "p4",
-    title: "Equipment Maintenance Contract",
-    status: "completed",
-    total_amount: 18000000,
-    content_html: null,
-    notes: "Annual maintenance",
-    valid_from: "2026-01-01",
-    valid_until: "2026-12-31",
-    sign_token: "tok_demo_def456",
-    partner_signed_at: "2026-01-20T10:00:00Z",
-    partner_signature_url: null,
-    partner_signed_ip: "9.9.9.9",
-    admin_signed_at: "2026-01-21T09:00:00Z",
-    admin_signature_url: null,
-    admin_signed_by: null,
-    created_by: null,
-    created_at: "2026-01-18T00:00:00Z",
-    updated_at: "2026-01-21T00:00:00Z",
-  },
-] satisfies Array<Omit<Contract, "version">>
-
 const STATUS_LABEL: Record<ContractStatus, string> = {
   draft: "Draft",
   sent: "Sent",
@@ -199,11 +117,6 @@ export function ContractsPanel() {
   const [copied, setCopied] = useState<string | null>(null)
 
   const load = useCallback(async () => {
-    if (DUMMY_MODE) {
-      setContracts(DUMMY_CONTRACTS_LIST.map((contract) => ({ ...contract, version: 1 })))
-      setLoading(false)
-      return
-    }
     setLoading(true)
     const [cRes, pRes] = await Promise.all([adminFetch("/api/admin/contracts"), adminFetch("/api/admin/partners")])
     if (cRes.ok) setContracts((await cRes.json()).contracts ?? [])
@@ -215,12 +128,6 @@ export function ContractsPanel() {
     let alive = true
 
     const initialize = async () => {
-      if (DUMMY_MODE) {
-        setContracts(DUMMY_CONTRACTS_LIST.map((contract) => ({ ...contract, version: 1 })))
-        setLoading(false)
-        return
-      }
-
       setLoading(true)
       const [cRes, pRes] = await Promise.all([adminFetch("/api/admin/contracts"), adminFetch("/api/admin/partners")])
       if (!alive) return
@@ -236,7 +143,7 @@ export function ContractsPanel() {
     }
   }, [])
 
-  const partnerName = (id: string) => (DUMMY_MODE ? (DUMMY_PARTNERS_MAP[id] ?? id) : (partners.find((p) => p.id === id)?.name ?? id))
+  const partnerName = (id: string) => partners.find((p) => p.id === id)?.name ?? id
 
   function copySignLink(contract: Contract) {
     const url = `${window.location.origin}/partner/sign/${contract.sign_token}`

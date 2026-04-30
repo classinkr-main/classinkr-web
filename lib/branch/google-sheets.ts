@@ -1,5 +1,5 @@
 import "server-only"
-import { sheets } from "@/lib/google"
+import { sheets, drive } from "@/lib/google"
 
 const RETRY_DELAYS_MS = [200, 800, 2000]
 
@@ -52,6 +52,21 @@ export async function readRangeWithFormat(spreadsheetId: string, range: string):
 export function isRedBg(bg: CellFormat | null): boolean {
   if (!bg) return false
   return (bg.red ?? 0) >= 0.85 && (bg.green ?? 0) < 0.5 && (bg.blue ?? 0) < 0.5
+}
+
+// Drive API gives us the sheet's last-edited timestamp without re-reading any
+// values. We surface this in the dashboard so the user can tell whether the
+// DB they're looking at lags behind the spreadsheet.
+export async function getSheetModifiedTime(spreadsheetId: string): Promise<string | null> {
+  try {
+    const res = await drive.files.get({ fileId: spreadsheetId, fields: "modifiedTime" })
+    return res.data.modifiedTime ?? null
+  } catch {
+    // Drive permission or network failure — caller treats null as "unknown"
+    // and falls back to lastSync alone, so the dashboard never breaks because
+    // of this freshness check.
+    return null
+  }
 }
 
 export function envSheetId(kind: "dashboard" | "hardware"): string {
