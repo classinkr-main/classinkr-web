@@ -13,11 +13,16 @@ import { extractMarkdownHeadings } from "@/lib/blog-markdown"
 
 export const revalidate = 3600 // 1시간마다 재생성
 
+// Next.js dynamic params arrive URL-encoded for non-ASCII paths; decode before DB lookup.
+function decodeSlug(raw: string) {
+  try { return decodeURIComponent(raw) } catch { return raw }
+}
+
 export async function generateMetadata({
   params,
 }: BlogDetailPageProps): Promise<Metadata> {
   const { slug } = await params
-  const post = await getPublishedPostBySlug(slug)
+  const post = await getPublishedPostBySlug(decodeSlug(slug))
   if (!post) {
     return {
       title: "글을 찾을 수 없습니다",
@@ -55,7 +60,7 @@ export default async function BlogDetailPage({
   params,
 }: BlogDetailPageProps) {
   const { slug } = await params
-  const post = await getPublishedPostBySlug(slug)
+  const post = await getPublishedPostBySlug(decodeSlug(slug))
 
   if (!post) {
     notFound()
