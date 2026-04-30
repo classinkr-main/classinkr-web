@@ -1,16 +1,14 @@
 "use client"
-
-import { useEffect, useRef, useState } from "react"
+import { useEffect, useMemo, useRef, useState, type ReactNode } from "react"
 import Image from "next/image"
 import Link from "next/link"
+import { useRouter } from "next/navigation"
 import {
   ArrowLeft,
   ArrowRight,
-  Bold,
   Calendar as CalendarIcon,
   Eye,
-  Heading2,
-  Heading3,
+  Highlighter,
   Image as ImageIcon,
   Italic,
   Link2,
@@ -21,7 +19,9 @@ import {
   Minus,
   Quote,
   Save,
+  Sparkles,
   Tag as TagIcon,
+  Type,
   Upload,
   X,
 } from "lucide-react"
@@ -30,14 +30,37 @@ import { Tabs, TabsContent, TabsList, TabsTrigger } from "@/components/ui/tabs"
 import BlogMarkdownRenderer from "@/components/blog/BlogMarkdownRenderer"
 import RichMarkdownEditor, { type RichMarkdownEditorHandle } from "@/components/admin/RichMarkdownEditor"
 import { getAdminToken } from "@/lib/admin-client"
+import { extractMarkdownHeadings } from "@/lib/blog-markdown"
 import type { PublicEvent, EventCategory, EventStatus } from "@/lib/types/public-events"
 import { EVENT_CATEGORIES } from "@/lib/types/public-events"
+
+function ToolbarButton({
+  onClick,
+  children,
+  icon,
+}: {
+  onClick: () => void
+  children: string
+  icon?: ReactNode
+}) {
+  return (
+    <button
+      type="button"
+      onClick={onClick}
+      className="inline-flex items-center gap-1 rounded-lg border border-[#e8e8e4] bg-white px-2 py-1.5 text-xs font-medium text-[#1a1a1a]/60 transition-colors hover:border-[#1a1a1a]/20 hover:text-[#111110] active:scale-[0.96] active:bg-[#f7f7f5] duration-75"
+    >
+      {icon}
+      <span>{children}</span>
+    </button>
+  )
+}
 
 type StatusOverrideOption = "auto" | EventStatus
 type DraftState = "saved" | "saving" | "dirty"
 
 interface FormState {
   title: string
+  slug: string
   description: string
   category: EventCategory
   tag: string
@@ -81,27 +104,34 @@ function adminUpload(url: string, formData: FormData) {
   })
 }
 
-export default function EventEditor({ event }: { event: PublicEvent }) {
+interface EventEditorProps {
+  mode?: "create" | "edit"
+  event?: PublicEvent
+}
+
+export default function EventEditor({ mode = "edit", event }: EventEditorProps) {
+  const router = useRouter()
   const editorRef = useRef<RichMarkdownEditorHandle>(null)
   const fileInputRef = useRef<HTMLInputElement>(null)
   const isFirstRenderRef = useRef(true)
 
   const [form, setForm] = useState<FormState>({
-    title: event.title,
-    description: event.description ?? "",
-    category: event.category,
-    tag: event.tag ?? "",
-    startsAt: toLocalDatetime(event.startsAt),
-    endsAt: toLocalDatetime(event.endsAt),
-    location: event.location ?? "",
-    ctaLabel: event.ctaLabel,
-    ctaHref: event.ctaHref ?? "",
-    highlight: event.highlight,
-    statusOverride: (event.statusOverride as StatusOverrideOption) ?? "auto",
+    title: event?.title ?? "",
+    slug: event?.slug ?? "",
+    description: event?.description ?? "",
+    category: event?.category ?? "프로모션",
+    tag: event?.tag ?? "",
+    startsAt: toLocalDatetime(event?.startsAt ?? null),
+    endsAt: toLocalDatetime(event?.endsAt ?? null),
+    location: event?.location ?? "",
+    ctaLabel: event?.ctaLabel ?? "자세히 보기",
+    ctaHref: event?.ctaHref ?? "",
+    highlight: event?.highlight ?? false,
+    statusOverride: (event?.statusOverride as StatusOverrideOption) ?? "auto",
   })
-  const [content, setContent] = useState(event.contentMarkdown ?? "")
-  const [imagePath, setImagePath] = useState<string | null>(event.imagePath ?? null)
-  const [imagePreview, setImagePreview] = useState<string | null>(event.imageUrl ?? null)
+  const [content, setContent] = useState(event?.contentMarkdown ?? "")
+  const [imagePath, setImagePath] = useState<string | null>(event?.imagePath ?? null)
+  const [imagePreview, setImagePreview] = useState<string | null>(event?.imageUrl ?? null)
   const [imageFile, setImageFile] = useState<File | null>(null)
   const [saving, setSaving] = useState(false)
   const [saveError, setSaveError] = useState<string | null>(null)
@@ -158,6 +188,7 @@ export default function EventEditor({ event }: { event: PublicEvent }) {
 
       const payload = {
         title: form.title,
+        slug: form.slug.trim() || null,
         description: form.description || null,
         category: form.category,
         tag: form.tag || null,
@@ -171,7 +202,19 @@ export default function EventEditor({ event }: { event: PublicEvent }) {
         contentMarkdown: content || null,
         imagePath: currentImagePath,
       }
-      const res = await adminFetch(`/api/admin/events/${event.id}`, {
+      if (mode === "create") {
+        const res = await adminFetch("/api/admin/events", {
+          method: "POST",
+          body: JSON.stringify(payload),
+        })
+        if (!res.ok) throw new Error(await res.text())
+        const created = (await res.json()) as PublicEvent
+        setDraftState("saved")
+        setLastSavedAt(new Date())
+        router.replace(`/admin/events/${created.id}/edit`)
+        return
+      }
+      const res = await adminFetch(`/api/admin/events/${event!.id}`, {
         method: "PATCH",
         body: JSON.stringify(payload),
       })
@@ -185,6 +228,8 @@ export default function EventEditor({ event }: { event: PublicEvent }) {
       setSaving(false)
     }
   }
+
+  const headings = useMemo(() => extractMarkdownHeadings(content || ""), [content])
 
   // Computed preview status (mirrors lib/repositories/public-events status logic, simplified)
   const previewStatus: EventStatus = (() => {
@@ -224,7 +269,7 @@ export default function EventEditor({ event }: { event: PublicEvent }) {
               <Eye className="h-4 w-4 text-[#084734]" />
               <span className="text-sm font-semibold text-[#111110]">페이지 미리보기</span>
               <span className="rounded-full border border-[#e8e8e4] px-2.5 py-0.5 text-[11px] text-[#1a1a1a]/40">
-                /events/{event.slug ?? "—"}
+                /events/{form.slug || event?.slug || "—"}
               </span>
             </div>
             <button
@@ -350,7 +395,7 @@ export default function EventEditor({ event }: { event: PublicEvent }) {
                 Event Editor
               </p>
               <h1 className="truncate text-base font-semibold tracking-[-0.02em] text-[#111110]">
-                {form.title || "행사 편집"}
+                {form.title || (mode === "create" ? "새 행사 작성" : "행사 편집")}
               </h1>
             </div>
             <div className="hidden items-center gap-2 sm:flex">
@@ -361,7 +406,7 @@ export default function EventEditor({ event }: { event: PublicEvent }) {
           </div>
 
           <div className="flex shrink-0 items-center gap-1">
-            {event.slug && (
+            {event?.slug && (
               <Button variant="ghost" size="sm" asChild className="h-8">
                 <Link href={`/events/${event.slug}`} target="_blank">
                   실제 페이지 →
@@ -464,34 +509,30 @@ export default function EventEditor({ event }: { event: PublicEvent }) {
 
           {/* Content */}
           <div className="rounded-[24px] border border-[#e8e8e4] bg-white p-6 shadow-sm">
-            <div className="mb-4 flex items-center justify-between">
-              <h2 className="text-[13px] font-semibold uppercase tracking-wide text-[#1a1a1a]/40">본문 콘텐츠</h2>
-              <p className="text-[11px] text-[#1a1a1a]/30">행사 상세 페이지에 표시됩니다</p>
-            </div>
-
-            {/* Toolbar */}
-            <div className="mb-3 flex flex-wrap items-center gap-1 rounded-xl border border-[rgba(0,0,0,0.08)] bg-[#F6F5F4] px-3 py-2">
-              {[
-                { icon: <Bold className="h-3.5 w-3.5" />, title: "굵게", action: () => editorRef.current?.toggleBold() },
-                { icon: <Italic className="h-3.5 w-3.5" />, title: "기울임", action: () => editorRef.current?.toggleItalic() },
-                { icon: <Heading2 className="h-3.5 w-3.5" />, title: "제목 2", action: () => editorRef.current?.setHeading(2) },
-                { icon: <Heading3 className="h-3.5 w-3.5" />, title: "제목 3", action: () => editorRef.current?.setHeading(3) },
-                { icon: <Quote className="h-3.5 w-3.5" />, title: "인용", action: () => editorRef.current?.toggleBlockquote() },
-                { icon: <List className="h-3.5 w-3.5" />, title: "글머리", action: () => editorRef.current?.toggleBulletList() },
-                { icon: <ListOrdered className="h-3.5 w-3.5" />, title: "번호 목록", action: () => editorRef.current?.toggleOrderedList() },
-                { icon: <Link2 className="h-3.5 w-3.5" />, title: "링크", action: () => editorRef.current?.insertLink() },
-                { icon: <Minus className="h-3.5 w-3.5" />, title: "구분선", action: () => editorRef.current?.insertDivider() },
-              ].map(({ icon, title, action }) => (
-                <button
-                  key={title}
-                  type="button"
-                  title={title}
-                  onClick={action}
-                  className="rounded-md p-1.5 text-[#1a1a1a]/50 transition-all hover:bg-white hover:text-[#111110] hover:shadow-sm"
-                >
-                  {icon}
-                </button>
-              ))}
+            <div className="mb-4 flex flex-wrap items-center justify-between gap-3">
+              <div>
+                <p className="text-sm font-semibold text-[#111110]">본문 작성</p>
+                <p className="mt-0.5 text-[12px] text-[#1a1a1a]/40">
+                  Markdown 기반 · 행사 상세 페이지에 동일하게 렌더링됩니다
+                </p>
+              </div>
+              <div className="flex flex-wrap items-center gap-1.5">
+                <ToolbarButton onClick={() => editorRef.current?.setHeading(2)}>H2</ToolbarButton>
+                <ToolbarButton onClick={() => editorRef.current?.setHeading(3)}>H3</ToolbarButton>
+                <span className="mx-0.5 h-4 w-px bg-[#e8e8e4]" aria-hidden="true" />
+                <ToolbarButton onClick={() => editorRef.current?.toggleBold()} icon={<Type className="h-3 w-3" />}>굵게</ToolbarButton>
+                <ToolbarButton onClick={() => editorRef.current?.toggleItalic()} icon={<Italic className="h-3 w-3" />}>기울이기</ToolbarButton>
+                <ToolbarButton onClick={() => editorRef.current?.toggleHighlight()} icon={<Highlighter className="h-3 w-3" />}>강조색</ToolbarButton>
+                <ToolbarButton onClick={() => editorRef.current?.wrapBrandColor()} icon={<Sparkles className="h-3 w-3" />}>브랜드색</ToolbarButton>
+                <span className="mx-0.5 h-4 w-px bg-[#e8e8e4]" aria-hidden="true" />
+                <ToolbarButton onClick={() => editorRef.current?.toggleBlockquote()} icon={<Quote className="h-3 w-3" />}>인용</ToolbarButton>
+                <ToolbarButton onClick={() => editorRef.current?.toggleBulletList()} icon={<List className="h-3 w-3" />}>리스트</ToolbarButton>
+                <ToolbarButton onClick={() => editorRef.current?.toggleOrderedList()} icon={<ListOrdered className="h-3 w-3" />}>번호</ToolbarButton>
+                <span className="mx-0.5 h-4 w-px bg-[#e8e8e4]" aria-hidden="true" />
+                <ToolbarButton onClick={() => editorRef.current?.insertLink()} icon={<Link2 className="h-3 w-3" />}>링크</ToolbarButton>
+                <ToolbarButton onClick={() => editorRef.current?.insertImage()} icon={<ImageIcon className="h-3 w-3" />}>이미지</ToolbarButton>
+                <ToolbarButton onClick={() => editorRef.current?.insertDivider()} icon={<Minus className="h-3 w-3" />}>구분선</ToolbarButton>
+              </div>
             </div>
 
             <Tabs defaultValue="write">
@@ -504,12 +545,52 @@ export default function EventEditor({ event }: { event: PublicEvent }) {
               </TabsList>
 
               <TabsContent value="write" className="mt-0">
-                <RichMarkdownEditor
-                  ref={editorRef}
-                  value={content}
-                  onChange={setContent}
-                  placeholder="행사 상세 내용을 작성하세요. 일정, 신청 방법, 주의사항 등을 포함할 수 있습니다."
-                />
+                <div className="grid gap-4 lg:grid-cols-[minmax(0,1fr)_220px]">
+                  <RichMarkdownEditor
+                    ref={editorRef}
+                    value={content}
+                    onChange={setContent}
+                    placeholder="행사 상세 내용을 작성하세요. 일정, 신청 방법, 주의사항 등을 포함할 수 있습니다."
+                  />
+                  <div className="space-y-4 rounded-2xl border border-[#e8e8e4] bg-[#fcfcfb] p-4">
+                    <div>
+                      <p className="text-sm font-semibold text-[#111110]">자동 목차</p>
+                      <p className="mt-1 text-[11px] text-[#1a1a1a]/40">
+                        H2, H3가 행사 상세 페이지 내비게이션에 사용됩니다.
+                      </p>
+                    </div>
+                    <div className="space-y-1.5">
+                      {headings.length === 0 ? (
+                        <p className="text-[12px] text-[#1a1a1a]/30">
+                          ## 소제목을 추가하면 목차가 생성됩니다.
+                        </p>
+                      ) : (
+                        headings.map((heading) => (
+                          <div
+                            key={heading.id}
+                            className={`text-[12px] text-[#1a1a1a]/60 ${
+                              heading.level === 3 ? "pl-3 text-[#1a1a1a]/40" : "font-medium"
+                            }`}
+                          >
+                            {heading.level === 3 ? "└ " : "· "}
+                            {heading.text}
+                          </div>
+                        ))
+                      )}
+                    </div>
+
+                    <div className="h-px bg-[#e8e8e4]" />
+
+                    <div className="rounded-xl border border-emerald-100 bg-emerald-50/60 p-3.5">
+                      <p className="text-[12px] font-semibold text-[#084734]">문법 팁</p>
+                      <div className="mt-2 space-y-1.5 text-[11px] leading-5 text-[#084734]/75">
+                        <p>**굵게** · *기울임* · ==강조==</p>
+                        <p>{"{{green:브랜드색}} · [링크](url)"}</p>
+                        <p>![설명](이미지URL) · {">"} 인용</p>
+                      </div>
+                    </div>
+                  </div>
+                </div>
               </TabsContent>
 
               <TabsContent value="preview" className="mt-0">
@@ -533,7 +614,16 @@ export default function EventEditor({ event }: { event: PublicEvent }) {
               <h2 className="text-[13px] font-semibold uppercase tracking-wide text-[#1a1a1a]/40">기본 정보</h2>
 
               <div>
-                <label className="mb-1.5 block text-[12px] font-medium text-[#1a1a1a]/50">제목 *</label>
+                <div className="mb-1.5 flex items-center justify-between">
+                  <label className="block text-[12px] font-medium text-[#1a1a1a]/50">제목 *</label>
+                  <span className={`text-[11px] tabular-nums ${
+                    form.title.length > 60 ? "text-[#B85C33]" :
+                    form.title.length >= 30 ? "text-emerald-600" :
+                    "text-[#1a1a1a]/30"
+                  }`}>
+                    {form.title.length} / 60
+                  </span>
+                </div>
                 <input
                   type="text"
                   value={form.title}
@@ -541,6 +631,23 @@ export default function EventEditor({ event }: { event: PublicEvent }) {
                   placeholder="행사 제목"
                   className="w-full rounded-lg border border-[rgba(0,0,0,0.12)] px-3 py-2 text-[13px] focus:border-[#111110]/30 focus:outline-none"
                 />
+              </div>
+
+              <div>
+                <label className="mb-1.5 block text-[12px] font-medium text-[#1a1a1a]/50">슬러그 (URL)</label>
+                <div className="flex items-center gap-1 rounded-lg border border-[rgba(0,0,0,0.12)] bg-white px-2 py-1.5 focus-within:border-[#111110]/30">
+                  <span className="shrink-0 text-[12px] text-[#1a1a1a]/35">/events/</span>
+                  <input
+                    type="text"
+                    value={form.slug}
+                    onChange={(e) => setForm({ ...form, slug: e.target.value })}
+                    placeholder="비워두면 제목 기반으로 자동 생성"
+                    className="min-w-0 flex-1 bg-transparent text-[13px] focus:outline-none"
+                  />
+                </div>
+                <p className="mt-1 text-[11px] text-[#1a1a1a]/35">
+                  카드 클릭 시 이동하는 상세 페이지 주소입니다. 비워두고 저장하면 자동 생성돼요.
+                </p>
               </div>
 
               <div>
@@ -568,7 +675,16 @@ export default function EventEditor({ event }: { event: PublicEvent }) {
               </div>
 
               <div>
-                <label className="mb-1.5 block text-[12px] font-medium text-[#1a1a1a]/50">설명 (목록 표시용)</label>
+                <div className="mb-1.5 flex items-center justify-between">
+                  <label className="block text-[12px] font-medium text-[#1a1a1a]/50">설명 (목록 표시용)</label>
+                  <span className={`text-[11px] tabular-nums ${
+                    form.description.length > 160 ? "text-[#B85C33]" :
+                    form.description.length >= 80 ? "text-emerald-600" :
+                    "text-[#1a1a1a]/30"
+                  }`}>
+                    {form.description.length} / 160
+                  </span>
+                </div>
                 <textarea
                   value={form.description}
                   onChange={(e) => setForm({ ...form, description: e.target.value })}

@@ -37,6 +37,7 @@ export type PublicEventInsert = {
   imagePath?: string | null
   highlight?: boolean
   statusOverride?: EventStatus | null
+  slug?: string | null
   contentMarkdown?: string | null
 }
 

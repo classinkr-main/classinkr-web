@@ -44,16 +44,29 @@ function getImageUrl(imagePath: string | null): string | null {
   return data.publicUrl
 }
 
-function generateSlug(title: string): string {
-  const base = title
+function normalizeSlug(value: string): string {
+  return value
     .toLowerCase()
+    .trim()
     .replace(/\s+/g, "-")
     .replace(/[^a-z0-9-가-힣]/g, "")
     .replace(/-+/g, "-")
     .replace(/^-|-$/g, "")
     .slice(0, 60)
+}
+
+function generateSlug(title: string): string {
+  const base = normalizeSlug(title)
   const suffix = Math.random().toString(36).slice(2, 7)
   return base ? `${base}-${suffix}` : suffix
+}
+
+function resolveSlug(provided: string | null | undefined, title: string): string {
+  if (provided) {
+    const cleaned = normalizeSlug(provided)
+    if (cleaned) return cleaned
+  }
+  return generateSlug(title)
 }
 
 function rowToEvent(row: PublicEventRow): PublicEvent {
@@ -111,7 +124,7 @@ export async function createPublicEvent(input: PublicEventInsert): Promise<Publi
       image_path: input.imagePath ?? null,
       highlight: input.highlight ?? false,
       status_override: input.statusOverride ?? null,
-      slug: generateSlug(input.title),
+      slug: resolveSlug(input.slug, input.title),
       content_markdown: input.contentMarkdown ?? null,
     })
     .select()
@@ -139,8 +152,23 @@ export async function updatePublicEvent(
   if (patch.highlight !== undefined) dbPatch.highlight = patch.highlight
   if (patch.statusOverride !== undefined) dbPatch.status_override = patch.statusOverride
   if (patch.contentMarkdown !== undefined) dbPatch.content_markdown = patch.contentMarkdown
+  if (patch.slug !== undefined) {
+    dbPatch.slug = resolveSlug(patch.slug, patch.title ?? "event")
+  }
 
   if (Object.keys(dbPatch).length === 0) return null
+
+  // Backfill: if title changed but slug not provided, ensure existing row has a slug
+  if (patch.title !== undefined && patch.slug === undefined) {
+    const { data: current } = await supabase
+      .from("public_events")
+      .select("slug")
+      .eq("id", id)
+      .single()
+    if (current && !current.slug) {
+      dbPatch.slug = generateSlug(patch.title)
+    }
+  }
 
   const { data, error } = await supabase
     .from("public_events")
