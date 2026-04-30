@@ -103,11 +103,11 @@ export default function OnboardingRoadmap() {
                                                 strokeWidth={1.75}
                                             />
                                         </div>
-                                        <span className="absolute -top-1 -right-1 w-6 h-6 rounded-full bg-[#22A366] text-white text-[10px] font-bold tabular-nums flex items-center justify-center shadow-sm">
+                                        <span className="absolute -top-1 -right-1 w-6 h-6 rounded-full bg-[#22A366] text-white text-[10px] font-sans font-bold tabular-nums flex items-center justify-center shadow-sm">
                                             {step.num}
                                         </span>
                                     </div>
-                                    <span className="inline-block bg-[#ECFDF5] border border-[rgba(34,163,102,0.2)] text-[#22A366] text-[10px] font-bold px-3 py-1 rounded-full mb-3 tracking-wide">
+                                    <span className="inline-block bg-[#ECFDF5] border border-[rgba(34,163,102,0.2)] text-[#22A366] text-[10px] font-sans font-bold tabular-nums px-3 py-1 rounded-full mb-3 tracking-wide">
                                         {step.duration}
                                     </span>
                                     <h3 className="text-base font-bold text-slate-900 mb-2">{step.title}</h3>

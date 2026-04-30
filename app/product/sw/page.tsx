@@ -9,7 +9,7 @@ import {
     Clock, Users, PenTool, Dice1, FileText, Layout, Video,
     Globe, Wifi, BarChart3, BookOpen, Timer,
     MessageSquare, GraduationCap, CheckCircle2, Zap, Shield,
-    Star, X, Camera, Trophy, Shuffle, FlaskConical, Atom, Ruler, Laptop
+    Star, X, Camera, Trophy, Shuffle, FlaskConical, Atom, Ruler, Laptop, Mic
 } from "lucide-react"
 import Link from "next/link"
 import Image from "next/image"
@@ -66,15 +66,26 @@ const LESSON_TOOLS: {
     { label: "공동 작업", icon: Users, tone: "from-[#F4F4FF] to-[#E0E3FF] text-[#5962AE]" },
 ]
 
-const LESSON_ACTIVITIES: {
+type LessonActivity = {
     label: string
     desc?: string
     featured?: boolean
     cardClass: string
-    iconSrc: string
-    iconAlt: string
     iconSizeClass: string
-}[] = [
+} & (
+    | {
+        iconSrc: string
+        iconAlt: string
+        icon?: never
+    }
+    | {
+        icon: React.ComponentType<{ className?: string }>
+        iconSrc?: never
+        iconAlt?: never
+    }
+)
+
+const LESSON_ACTIVITIES: LessonActivity[] = [
     {
         label: "수업",
         desc: "다양한 실시간 상호작용과 수업 후 AI 분석 및 요약 지원",
@@ -96,62 +107,78 @@ const LESSON_ACTIVITIES: {
     {
         label: "시험",
         cardClass: "col-span-1 xl:col-span-3",
-        iconSrc: "/images/product/sw/activity-icons/quiz.png",
-        iconAlt: "시험 아이콘",
+        icon: CheckCircle2,
         iconSizeClass: "h-10 w-10",
     },
     {
         label: "녹화+수업",
         cardClass: "col-span-1 xl:col-span-3",
-        iconSrc: "/images/product/sw/activity-icons/recorded-class.png",
-        iconAlt: "녹화 수업 아이콘",
+        icon: Video,
         iconSizeClass: "h-10 w-10",
     },
     {
         label: "학습 자료",
         cardClass: "col-span-1 xl:col-span-3",
-        iconSrc: "/images/product/sw/activity-icons/learning-materials.png",
-        iconAlt: "학습 자료 아이콘",
+        icon: BookOpen,
         iconSizeClass: "h-10 w-10",
     },
     {
         label: "일일 과제",
         cardClass: "col-span-1 xl:col-span-3",
-        iconSrc: "/images/product/sw/activity-icons/daily-task.png",
-        iconAlt: "일일 과제 아이콘",
+        icon: CheckCircle2,
         iconSizeClass: "h-10 w-10",
     },
     {
         label: "토론",
         cardClass: "col-span-1 xl:col-span-3",
-        iconSrc: "/images/product/sw/activity-icons/discussion.png",
-        iconAlt: "토론 아이콘",
+        icon: MessageSquare,
         iconSizeClass: "h-10 w-10",
     },
     {
         label: "OMR 카드",
         cardClass: "col-span-1 xl:col-span-3",
-        iconSrc: "/images/product/sw/activity-icons/omr-card.png",
-        iconAlt: "OMR 카드 아이콘",
+        icon: FileText,
         iconSizeClass: "h-10 w-10",
     },
     {
         label: "SCORM",
         cardClass: "col-span-1 xl:col-span-3",
-        iconSrc: "/images/product/sw/activity-icons/scorm.png",
-        iconAlt: "SCORM 아이콘",
+        icon: Layers,
         iconSizeClass: "h-10 w-10",
     },
     {
         label: "따라읽기",
         cardClass: "col-span-1 xl:col-span-3",
-        iconSrc: "/images/product/sw/activity-icons/repeat-after-me.png",
-        iconAlt: "따라읽기 아이콘",
+        icon: Mic,
         iconSizeClass: "h-10 w-10",
     },
 ]
 
 const ACTIVITY_ICON_VERSION = "20260429"
+
+function ActivityVisual({ activity }: { activity: LessonActivity }) {
+    if ("icon" in activity) {
+        const Icon = activity.icon
+        return (
+            <div className={`shrink-0 text-[#111827] transition-transform duration-300 group-hover:scale-105 ${activity.iconSizeClass}`}>
+                <Icon className="h-full w-full stroke-[1.7]" />
+            </div>
+        )
+    }
+
+    return (
+        <div className={`relative shrink-0 transition-transform duration-300 group-hover:scale-105 ${activity.iconSizeClass}`}>
+            <Image
+                src={`${activity.iconSrc}?v=${ACTIVITY_ICON_VERSION}`}
+                alt={activity.iconAlt}
+                fill
+                unoptimized
+                className="object-contain"
+                sizes={activity.featured ? "56px" : "40px"}
+            />
+        </div>
+    )
+}
 
 /* ── Animation helpers ───────────────────────────────────────────── */
 const fadeUp = {
@@ -315,7 +342,7 @@ function SlotDigit({ digit, delay, trigger, onDone }: { digit: string; delay: nu
                     <span
                         key={`${n}-${index}`}
                         ref={index === 0 ? cellRef : undefined}
-                        className={`flex h-14 w-full flex-none items-center justify-center text-3xl font-semibold leading-none tabular-nums text-[#22A366] sm:h-28 sm:text-6xl md:h-36 md:text-8xl ${done ? "animate-digit-glow" : ""}`}
+                        className={`flex h-14 w-full flex-none items-center justify-center text-3xl font-sans font-semibold leading-none tabular-nums text-[#22A366] sm:h-28 sm:text-6xl md:h-36 md:text-8xl ${done ? "animate-digit-glow" : ""}`}
                     >
                         {n}
                     </span>
@@ -337,7 +364,7 @@ function StatCard({ value, suffix, label, icon, delay, trigger }: { value: numbe
             style={{ perspective: 800 }}
         >
             <div className="flex justify-center mb-3 text-[#22A366]/70">{icon}</div>
-            <div className="text-2xl sm:text-3xl font-sans font-bold text-slate-900 mb-1">
+            <div className="text-2xl sm:text-3xl font-sans font-bold tabular-nums text-slate-900 mb-1">
                 {value >= 100 ? display.toLocaleString() : display}{suffix}
             </div>
             <div className="text-xs sm:text-sm text-slate-400 font-medium leading-snug whitespace-pre-line">{label}</div>
@@ -443,8 +470,8 @@ function FinalCTASection() {
             </motion.div>
 
             <div className="container mx-auto px-4 text-center max-w-5xl relative z-10">
-                <motion.p initial={{ opacity: 0, y: 20 }} animate={phase >= 1 ? { opacity: 1, y: 0 } : {}} transition={{ duration: 0.7 }} className="text-xl sm:text-2xl md:text-3xl text-slate-500 font-sans font-medium leading-relaxed mb-3">줌 열고, 녹화 누르고, 숙제 올리고—</motion.p>
-                <motion.p initial={{ opacity: 0, y: 20 }} animate={phase >= 1 ? { opacity: 1, y: 0 } : {}} transition={{ duration: 0.7, delay: 0.35 }} className="text-xl sm:text-2xl md:text-3xl text-slate-700 font-sans font-semibold mb-8">수업 하나에 도구만 네 개.</motion.p>
+                <motion.p initial={{ opacity: 0, y: 20 }} animate={phase >= 1 ? { opacity: 1, y: 0 } : {}} transition={{ duration: 0.7 }} className="text-xl sm:text-2xl md:text-3xl text-slate-500 font-sans font-medium leading-relaxed mb-3">줌 열고, 녹화 누르고, 숙제 올리고, 각각 연락하고...</motion.p>
+                <motion.p initial={{ opacity: 0, y: 20 }} animate={phase >= 1 ? { opacity: 1, y: 0 } : {}} transition={{ duration: 0.7, delay: 0.35 }} className="text-xl sm:text-2xl md:text-3xl text-slate-700 font-sans font-semibold mb-8">수업 하나에 도구만 네 개...</motion.p>
                 <motion.p initial={{ opacity: 0, filter: "blur(4px)" }} animate={phase >= 1 ? { opacity: 1, filter: "blur(0px)" } : {}} transition={{ duration: 0.8, delay: 0.7 }} className="text-lg sm:text-xl md:text-2xl text-[#22A366] font-sans font-medium italic mb-10">가르치는 일에만 집중할 수 있다면?</motion.p>
                 <motion.div initial={{ opacity: 0, y: 10 }} animate={phase >= 1 ? { opacity: 1, y: 0 } : {}} transition={{ duration: 0.5, delay: 1.0 }} className="flex items-center justify-center gap-2 mb-14">
                     <div className="inline-flex items-center gap-2 px-4 py-1.5 rounded-full bg-green-50 border border-green-200/60 text-sm font-medium text-[#22A366]"><Clock className="w-3.5 h-3.5" />되찾은 수업 시간</div>
@@ -456,11 +483,11 @@ function FinalCTASection() {
                     <motion.div className="flex justify-center mb-5" initial={{ scale: 0.9, opacity: 0.3, filter: "blur(8px)" }} animate={phase >= 2 ? { scale: 1, opacity: 1, filter: "blur(0px)" } : {}} transition={{ type: "spring", stiffness: 120, damping: 20 }}>
                         <div className="relative flex items-center gap-1 select-none sm:gap-2.5">
                             <SlotDigit digit={displayDigits[0]} delay={0.2} trigger={phase >= 2} />
-                            <span className="text-3xl font-semibold text-slate-300 sm:text-6xl md:text-8xl">,</span>
+                            <span className="text-3xl font-sans font-semibold tabular-nums text-slate-300 sm:text-6xl md:text-8xl">,</span>
                             <SlotDigit digit={displayDigits[1]} delay={0.35} trigger={phase >= 2} />
                             <SlotDigit digit={displayDigits[2]} delay={0.45} trigger={phase >= 2} />
                             <SlotDigit digit={displayDigits[3]} delay={0.55} trigger={phase >= 2} />
-                            <span className="text-3xl font-semibold text-slate-300 sm:text-6xl md:text-8xl">,</span>
+                            <span className="text-3xl font-sans font-semibold tabular-nums text-slate-300 sm:text-6xl md:text-8xl">,</span>
                             <SlotDigit digit={displayDigits[4]} delay={0.65} trigger={phase >= 2} />
                             <SlotDigit digit={displayDigits[5]} delay={0.75} trigger={phase >= 2} />
                             <SlotDigit digit={displayDigits[6]} delay={0.85} trigger={phase >= 2} onDone={handleLastSlotDone} />
@@ -564,7 +591,7 @@ function CinematicCasesSection() {
                                     <h3 className="text-lg font-bold text-white mb-6">{c.name}</h3>
                                 </div>
                                 <div>
-                                    <div className="text-4xl font-serif font-bold text-[#6EE7B7] mb-1">{c.num}</div>
+                                    <div className="text-4xl font-sans font-bold tabular-nums text-[#6EE7B7] mb-1">{c.num}</div>
                                     <div className="text-xs text-white/30 leading-snug">{c.numLabel}</div>
                                 </div>
                             </div>
@@ -753,7 +780,7 @@ function FutureVision2Section() {
                         transition={{ duration: 0.7, type: "spring", stiffness: 150 }}
                         className="bg-[#1a1a19] rounded-3xl p-10 text-center"
                     >
-                        <div className="text-[72px] md:text-[88px] font-serif font-bold text-[#6EE7B7] leading-none mb-2">
+                        <div className="text-[72px] md:text-[88px] font-sans font-bold tabular-nums text-[#6EE7B7] leading-none mb-2">
                             {q}x
                         </div>
                         <div className="text-white/80 text-lg font-semibold mb-1">수업 퀄리티</div>
@@ -765,7 +792,7 @@ function FutureVision2Section() {
                         transition={{ duration: 0.7, delay: 0.15, type: "spring", stiffness: 150 }}
                         className="bg-[#084734] rounded-3xl p-10 text-center"
                     >
-                        <div className="text-[72px] md:text-[88px] font-serif font-bold text-[#6EE7B7] leading-none mb-2">
+                        <div className="text-[72px] md:text-[88px] font-sans font-bold tabular-nums text-[#6EE7B7] leading-none mb-2">
                             -{r}%
                         </div>
                         <div className="text-white/90 text-lg font-semibold mb-1">반복 업무 리소스</div>
@@ -1200,7 +1227,7 @@ function FullscreenQuoteSection() {
                         { value: "8만+", label: "글로벌 파트너 기관" },
                     ].map((s) => (
                         <div key={s.label} className="text-center">
-                            <div className="text-2xl sm:text-3xl font-serif font-bold text-white mb-1">{s.value}</div>
+                            <div className="text-2xl sm:text-3xl font-sans font-bold tabular-nums text-white mb-1">{s.value}</div>
                             <div className="text-xs text-white/40 leading-relaxed">{s.label}</div>
                         </div>
                     ))}
@@ -1285,7 +1312,7 @@ function CaseStudiesSection() {
                             <div className="grid grid-cols-3 gap-2 border-t border-black/[0.06] pt-5">
                                 {c.results.map((r) => (
                                     <div key={r.label} className="text-center">
-                                        <div className={`text-sm font-bold ${c.accent}`}>{r.value}</div>
+                                        <div className={`text-sm font-sans font-bold tabular-nums ${c.accent}`}>{r.value}</div>
                                         <div className="text-[10px] text-slate-400 mt-0.5 leading-tight">{r.label}</div>
                                     </div>
                                 ))}
@@ -1406,14 +1433,14 @@ function PricingValueSection() {
                             <div className="flex items-center gap-5 sm:gap-7">
                                 <div className="text-center">
                                     <p className="text-[11px] text-slate-400 uppercase tracking-[0.16em] mb-1">Standard</p>
-                                    <p className="text-lg font-bold text-white tabular-nums whitespace-nowrap">
+                                    <p className="text-lg font-sans font-bold tabular-nums text-white whitespace-nowrap">
                                         $99<span className="text-xs text-slate-300 font-medium ml-0.5">/계정/월</span>
                                     </p>
                                 </div>
                                 <div className="w-px h-10 bg-white/10" />
                                 <div className="text-center">
                                     <p className="text-[11px] text-slate-400 uppercase tracking-[0.16em] mb-1">Plus</p>
-                                    <p className="text-lg font-bold text-white tabular-nums whitespace-nowrap">
+                                    <p className="text-lg font-sans font-bold tabular-nums text-white whitespace-nowrap">
                                         $199<span className="text-xs text-slate-300 font-medium ml-0.5">/계정/월</span>
                                     </p>
                                 </div>
@@ -1756,16 +1783,7 @@ export default function ProductPage() {
                                     className={`${act.cardClass} rounded-2xl border border-[rgba(0,0,0,0.08)] bg-white shadow-[0_1px_6px_rgba(0,0,0,0.04)] transition-all hover:-translate-y-1 hover:shadow-[0_14px_30px_rgba(34,163,102,0.08)] group ${act.featured ? "p-5 md:p-6" : "p-4 md:p-5"}`}
                                 >
                                     <div className={act.featured ? "flex items-start gap-4" : "flex flex-col items-center text-center"}>
-                                        <div className={`relative shrink-0 transition-transform duration-300 group-hover:scale-105 ${act.iconSizeClass}`}>
-                                            <Image
-                                                src={`${act.iconSrc}?v=${ACTIVITY_ICON_VERSION}`}
-                                                alt={act.iconAlt}
-                                                fill
-                                                unoptimized
-                                                className="object-contain"
-                                                sizes={act.featured ? "56px" : "40px"}
-                                            />
-                                        </div>
+                                        <ActivityVisual activity={act} />
                                         <div className={act.featured ? "min-w-0 flex-1 pt-1" : "mt-3"}>
                                             <h4 className={`font-bold text-slate-900 ${act.featured ? "text-lg mb-1.5" : "text-sm"}`}>{act.label}</h4>
                                             {act.desc ? <p className="text-sm leading-relaxed text-slate-500">{act.desc}</p> : null}
@@ -1876,7 +1894,7 @@ export default function ProductPage() {
                                 {/* Pulse line between cards */}
                                 {i < 2 && <div className="absolute right-0 top-1/2 -translate-y-1/2 w-px h-1/2 bg-gradient-to-b from-transparent via-[#22A366]/20 to-transparent hidden sm:block" />}
                                 <div className="w-14 h-14 rounded-xl bg-white/10 border border-white/15 text-[#6EE7B7] flex items-center justify-center mx-auto mb-4 group-hover:scale-110 transition-transform shadow-[inset_0_1px_0_rgba(255,255,255,0.1)]">{item.icon}</div>
-                                <div className="text-3xl font-serif font-bold text-white mb-1">{item.value}</div>
+                                <div className="text-3xl font-sans font-bold tabular-nums text-white mb-1">{item.value}</div>
                                 <div className="text-sm font-bold text-[#22A366] mb-2">{item.label}</div>
                                 <p className="text-sm text-slate-400">{item.desc}</p>
                             </motion.div>
@@ -1919,7 +1937,7 @@ export default function ProductPage() {
                                     <div className="flex justify-between items-end mb-8">
                                         <div>
                                             <div className="text-slate-400 text-sm font-medium mb-1">이번 달 종합 성취도</div>
-                                            <div className="text-white text-3xl font-bold">상위 15%</div>
+                                            <div className="text-white text-3xl font-sans font-bold tabular-nums">상위 15%</div>
                                         </div>
                                     </div>
 
@@ -1928,11 +1946,11 @@ export default function ProductPage() {
                                         <div className="absolute w-full border-b border-dashed border-slate-700/30 top-1/2 -translate-y-1/2"></div>
                                         {[30, 45, 60, 50, 75, 90, 85].map((h, i) => (
                                             <motion.div key={i} initial={{ height: 0 }} whileInView={{ height: `${h}%` }} viewport={{ once: true }} transition={{ delay: 0.3 + i * 0.1, duration: 0.8, type: "spring" }} className="w-full bg-gradient-to-t from-[#084734]/20 to-[#6EE7B7] rounded-t-md relative z-10 group">
-                                                <div className="absolute -top-6 left-1/2 -translate-x-1/2 text-[9px] text-[#6EE7B7] font-mono opacity-0 group-hover:opacity-100 transition-opacity">{h}%</div>
+                                                <div className="absolute -top-6 left-1/2 -translate-x-1/2 text-[9px] font-sans tabular-nums text-[#6EE7B7] opacity-0 group-hover:opacity-100 transition-opacity">{h}%</div>
                                             </motion.div>
                                         ))}
                                     </div>
-                                    <div className="flex justify-between text-slate-500 text-[10px] font-mono px-1 mb-6">
+                                    <div className="flex justify-between text-slate-500 text-[10px] font-sans tabular-nums px-1 mb-6">
                                         <span>W1</span><span>W2</span><span>W3</span><span>W4</span><span>W5</span><span>W6</span><span>W7</span>
                                     </div>
 
@@ -1944,7 +1962,7 @@ export default function ProductPage() {
                                             { label: "참여 시간", value: "48분", color: "text-[#084734]" },
                                         ].map((s, i) => (
                                             <div key={i} className="bg-white/5 rounded-xl p-3 text-center">
-                                                <div className={`text-lg font-bold font-mono ${s.color}`}>{s.value}</div>
+                                                <div className={`text-lg font-sans font-bold tabular-nums ${s.color}`}>{s.value}</div>
                                                 <div className="text-[10px] text-slate-500">{s.label}</div>
                                             </div>
                                         ))}
@@ -1966,7 +1984,7 @@ export default function ProductPage() {
                             {/* Floating data tags */}
                             <motion.div initial={{ opacity: 0 }} whileInView={{ opacity: 1 }} viewport={{ once: true }} transition={{ delay: 1 }} className="absolute -right-2 md:-right-6 top-8 bg-white rounded-xl shadow-lg border border-slate-100 px-3 py-2 z-20 animate-float-tag">
                                 <div className="text-[10px] text-slate-400">집중도</div>
-                                <div className="text-sm font-bold text-green-500 font-mono">87%</div>
+                                <div className="text-sm font-sans font-bold tabular-nums text-green-500">87%</div>
                             </motion.div>
                         </div>
                     </div>
