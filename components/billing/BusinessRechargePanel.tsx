@@ -11,6 +11,7 @@ import { CodeInputField, type CodeFieldStatus } from "@/components/billing/CodeI
 import { KrwConversionNote } from "@/components/billing/KrwConversionNote"
 import {
   BUSINESS_RECHARGE,
+  buildRechargeOrderName,
   formatCny,
   validateRechargeAmount,
 } from "@/lib/billing/recharge"
@@ -63,15 +64,15 @@ const EMPTY_FORM: FormState = {
 const TOSS_METHODS_ID = "toss-business-payment-methods"
 const TOSS_AGREEMENT_ID = "toss-business-agreement"
 
-const RATE_TABLE_ROWS: Array<{ label: string; detail: string; price: string }> = [
-  { label: "1v0", detail: "기본 1:다", price: "1 CNY / 1명 / 1시간" },
-  { label: "1v1", detail: "1:1 강의", price: "2 CNY / 1명 / 1시간" },
-  { label: "1v2 ~ 1v12", detail: "소그룹", price: "4 CNY / 1명 / 1시간" },
-  { label: "1v1 듀얼 카메라", detail: "수업 + 카메라 동시", price: "8 CNY / 1명 / 1시간" },
-  { label: "1v1 HD / 1v6 HD", detail: "HD 화질", price: "4 / 12 CNY" },
-  { label: "1v1 FHD / 1v6 FHD", detail: "FHD 화질", price: "8 / 20 CNY" },
-  { label: "조교 (기본/HD/FHD)", detail: "회당/인당", price: "6 / 10 / 20 CNY" },
-  { label: "녹화 (단일/듀얼)", detail: "1시간 기준", price: "2 / 4 CNY" },
+const RATE_TABLE_ROWS: Array<{ label: string; price: string }> = [
+  { label: "1v0 기본", price: "1 CNY / 1명 / 1시간" },
+  { label: "1v1", price: "2 CNY / 1명 / 1시간" },
+  { label: "1v2~12 소그룹", price: "4 CNY / 1명 / 1시간" },
+  { label: "1v1 듀얼 카메라", price: "8 CNY" },
+  { label: "HD (1v1 / 1v6)", price: "4 / 12 CNY" },
+  { label: "FHD (1v1 / 1v6)", price: "8 / 20 CNY" },
+  { label: "조교 (기본/HD/FHD)", price: "6 / 10 / 20 CNY" },
+  { label: "녹화 (단일/듀얼)", price: "2 / 4 CNY" },
 ]
 
 function approxKrw(amountCny: number | null, rate: number | null) {
@@ -531,198 +532,264 @@ export function BusinessRechargePanel({ initialQuoteCode }: Props = {}) {
   }
 
   return (
-    <div className="grid gap-4 lg:min-h-[calc(100vh-8rem)] lg:grid-cols-[minmax(0,1.08fr)_minmax(360px,400px)]">
-      {/* ── 왼쪽: 충전 설정 ── */}
-      <div className="rounded-2xl border border-[rgba(0,0,0,0.08)] bg-white lg:max-h-[calc(100vh-8rem)]">
-        <div className="flex h-full flex-col lg:overflow-y-auto">
-          <div className="grid gap-4 p-5">
-            <div>
-              <div className="grid grid-cols-2 gap-2 md:grid-cols-4">
-                {BUSINESS_RECHARGE.presetsCny.map((amount) => {
-                  const active = selectedPresetCny === amount && !quoteCode
-                  return (
-                    <button
-                      key={amount}
-                      type="button"
-                      disabled={Boolean(quoteCode)}
-                      onClick={() => selectPreset(amount)}
-                      className={`rounded-xl border px-3 py-2.5 text-left transition-colors ${
-                        active
-                          ? "border-2 border-[#084734] bg-white"
-                          : "border border-[rgba(0,0,0,0.08)] bg-white hover:border-[#084734]/30"
-                      } ${quoteCode ? "cursor-not-allowed opacity-50" : ""}`}
-                    >
-                      <p className="text-sm font-semibold text-[#111110]">{formatCny(amount)}</p>
-                      <p className="mt-0.5 text-[11px] text-[#7C8A83]">
-                        ≈ {approxKrw(amount, fx.cnyKrw) ? formatKrw(approxKrw(amount, fx.cnyKrw) as number) : "-"}
-                      </p>
-                    </button>
-                  )
-                })}
-              </div>
+    <div className="grid gap-6 lg:grid-cols-[minmax(0,1.1fr)_minmax(360px,400px)]">
+      {/* LEFT — Recharge builder */}
+      <section className="space-y-6">
+        <div className="rounded-2xl border border-black/10 bg-white p-6">
+          <div className="flex items-baseline justify-between">
+            <p className="text-[13px] font-semibold text-[#111110]">충전 금액</p>
+            <p className="text-[11px] text-[#7C8A83]">
+              최초 10,000 · 추가 2,000 CNY 단위
+            </p>
+          </div>
 
-              <div className="mt-3">
-                <Label htmlFor="custom-cny" className="text-xs text-[#44514A]">직접 입력 (CNY)</Label>
-                <div className="relative mt-1">
-                  <span className="pointer-events-none absolute left-3 top-1/2 -translate-y-1/2 text-sm text-[#7C8A83]">¥</span>
-                  <Input
-                    id="custom-cny"
-                    type="text"
-                    inputMode="numeric"
-                    value={customAmountInput}
-                    disabled={Boolean(quoteCode)}
-                    onChange={(event) => handleCustomInput(event.target.value)}
-                    onBlur={blurValidateCustom}
-                    className="h-10 rounded-lg border-[rgba(0,0,0,0.08)] pl-7 text-sm"
-                    placeholder="10000"
-                  />
-                </div>
-                {amountError ? <p className="mt-1 text-[11px] text-[#B85C33]">{amountError}</p> : null}
-              </div>
+          <div className="mt-3 grid grid-cols-2 gap-2 md:grid-cols-4">
+            {BUSINESS_RECHARGE.presetsCny.map((amount) => {
+              const active = selectedPresetCny === amount && !quoteCode
+              return (
+                <button
+                  key={amount}
+                  type="button"
+                  disabled={Boolean(quoteCode)}
+                  onClick={() => selectPreset(amount)}
+                  className={`rounded-lg border px-3 py-2.5 text-left transition-colors ${
+                    active
+                      ? "border-[#084734] bg-[#ECFDF5]"
+                      : "border-black/10 bg-white hover:border-black/20"
+                  } ${quoteCode ? "cursor-not-allowed opacity-50" : ""}`}
+                >
+                  <p className="text-[13px] font-semibold text-[#111110]">{formatCny(amount)}</p>
+                  <p className="mt-0.5 text-[11px] text-[#7C8A83]">
+                    ≈ {approxKrw(amount, fx.cnyKrw) ? formatKrw(approxKrw(amount, fx.cnyKrw) as number) : "-"}
+                  </p>
+                </button>
+              )
+            })}
+          </div>
+
+          <div className="mt-4 space-y-1.5">
+            <Label htmlFor="custom-cny" className="text-[12px] text-[#44514A]">
+              직접 입력 (CNY)
+            </Label>
+            <div className="relative">
+              <span className="pointer-events-none absolute left-3 top-1/2 -translate-y-1/2 text-[13px] text-[#7C8A83]">
+                ¥
+              </span>
+              <Input
+                id="custom-cny"
+                type="text"
+                inputMode="numeric"
+                value={customAmountInput}
+                disabled={Boolean(quoteCode)}
+                onChange={(event) => handleCustomInput(event.target.value)}
+                onBlur={blurValidateCustom}
+                className="h-10 rounded-lg border-black/10 bg-white pl-7"
+                placeholder="10000"
+              />
             </div>
-
-            <CodeInputField
-              title="견적서 코드"
-              description=""
-              placeholder="QB-2026-XXXX"
-              status={quoteStatus}
-              onApply={handleApplyQuoteCode}
-              onRemove={handleRemoveQuoteCode}
-            />
-
-            <CodeInputField
-              title="프로모션 코드"
-              description=""
-              placeholder="PROMO-2026"
-              status={promoStatus}
-              onApply={handleApplyPromo}
-              onRemove={handleRemovePromo}
-            />
-
-            <div className="rounded-xl border border-[rgba(0,0,0,0.08)] p-4">
-              <p className="text-xs font-semibold text-[#111110]">과금 기준</p>
-              <ul className="mt-2 grid gap-1 text-[11px] text-[#44514A] md:grid-cols-2">
-                {RATE_TABLE_ROWS.map((row) => (
-                  <li key={row.label} className="flex justify-between gap-2 border-b border-[rgba(0,0,0,0.04)] py-1.5 last:border-0">
-                    <span className="font-medium text-[#111110]">{row.label}</span>
-                    <span className="text-[#084734]">{row.price}</span>
-                  </li>
-                ))}
-              </ul>
-            </div>
+            {amountError ? (
+              <p className="text-[11px] text-[#B85C33]">{amountError}</p>
+            ) : null}
           </div>
         </div>
-      </div>
 
-      {/* ── 오른쪽: 결제 ── */}
-      <div className="rounded-2xl border border-[rgba(0,0,0,0.08)] bg-white lg:max-h-[calc(100vh-8rem)]">
-        <div className="flex h-full flex-col lg:overflow-y-auto">
-          <div className="flex items-center justify-between gap-3 border-b border-[rgba(0,0,0,0.08)] px-5 py-3">
-            <span className="text-sm font-semibold text-[#111110]">결제 정보</span>
-            <span className="text-sm font-bold text-[#084734]">{formatCny(effectiveFinalAmountCny || 0)}</span>
+        <CodeInputField
+          title="견적서 코드"
+          description="어드민에서 발급된 코드를 넣으면 지정 금액으로 고정됩니다."
+          placeholder="QB-2026-XXXX"
+          status={quoteStatus}
+          onApply={handleApplyQuoteCode}
+          onRemove={handleRemoveQuoteCode}
+        />
+
+        <CodeInputField
+          title="프로모션 코드"
+          description="유효한 코드를 넣으면 위 금액에서 즉시 차감됩니다."
+          placeholder="PROMO-2026"
+          status={promoStatus}
+          onApply={handleApplyPromo}
+          onRemove={handleRemovePromo}
+        />
+
+        <details className="group rounded-2xl border border-black/10 bg-white">
+          <summary className="flex cursor-pointer list-none items-center justify-between px-5 py-4 text-[13px] font-semibold text-[#111110]">
+            <span>요금 안내</span>
+            <span className="text-[11px] font-normal text-[#7C8A83] transition-transform group-open:rotate-180">
+              ▾
+            </span>
+          </summary>
+          <div className="border-t border-black/5 px-5 pb-5 pt-4">
+            <ul className="grid gap-1.5 text-[12px] text-[#44514A] md:grid-cols-2">
+              {RATE_TABLE_ROWS.map((row) => (
+                <li key={row.label} className="flex items-center justify-between gap-3">
+                  <span className="text-[#111110]">{row.label}</span>
+                  <span className="text-[#615D59]">{row.price}</span>
+                </li>
+              ))}
+            </ul>
+            <p className="mt-4 text-[11px] leading-relaxed text-[#7C8A83]">
+              학생이 10분 이하로 교실에 머무르면 과금되지 않고, 30분 이하 수업은 30분 기준으로 계산됩니다.
+              수업 알림 SMS · 웹라이브 · 스토리지 초과분은 별도 요율로 차감됩니다.
+            </p>
+          </div>
+        </details>
+      </section>
+
+      {/* RIGHT — Summary + form + widget */}
+      <aside className="space-y-6 lg:sticky lg:top-6 lg:self-start">
+        <div className="rounded-2xl border border-black/10 bg-white p-6">
+          <p className="text-[11px] font-semibold uppercase tracking-[0.14em] text-[#7C8A83]">
+            Order summary
+          </p>
+          <div className="mt-3 flex items-baseline justify-between">
+            <div>
+              <p className="text-[15px] font-semibold text-[#111110]">
+                {buildRechargeOrderName(effectiveFinalAmountCny || BUSINESS_RECHARGE.baseMinCny)}
+              </p>
+              <p className="mt-0.5 text-[12px] text-[#615D59]">
+                {quoteCode ? `견적 ${quoteCode.code}` : "선충전"}
+                {promo ? ` · 프로모 ${promo.code}` : ""}
+              </p>
+            </div>
+            <p className="text-[28px] font-semibold tracking-tight text-[#111110]">
+              {formatCny(effectiveFinalAmountCny || 0)}
+            </p>
           </div>
 
-          <div className="space-y-3 p-5">
-            {!checkoutEnabled && (
-              <div className="rounded-lg border border-[#EAD7B2] px-3 py-2 text-xs text-[#8D6C1F]">
-                NEXT_PUBLIC_SW_CHECKOUT_ENABLED=true 설정 필요
-              </div>
-            )}
-            {!hasWidgetKey && (
-              <div className="rounded-lg border border-[#EAD7B2] px-3 py-2 text-xs text-[#8D6C1F]">
-                TOSS_WIDGET_CLIENT_KEY 설정 필요
-              </div>
-            )}
-
-            <div className="rounded-xl border border-[rgba(0,0,0,0.08)] p-4">
-              <div className="grid gap-3 md:grid-cols-2">
-                <div className="space-y-1.5 md:col-span-2">
-                  <Label htmlFor="biz-organizationName" className="text-xs">기관명 / 학원명</Label>
-                  <Input
-                    id="biz-organizationName"
-                    value={form.organizationName}
-                    onChange={(event) => setForm((c) => ({ ...c, organizationName: event.target.value }))}
-                    placeholder="무궁화학원"
-                    className="h-10 rounded-lg border-[rgba(0,0,0,0.08)]"
-                  />
-                </div>
-                <div className="space-y-1.5">
-                  <Label htmlFor="biz-buyerName" className="text-xs">담당자명</Label>
-                  <Input
-                    id="biz-buyerName"
-                    value={form.buyerName}
-                    onChange={(event) => setForm((c) => ({ ...c, buyerName: event.target.value }))}
-                    placeholder="홍길동"
-                    className="h-10 rounded-lg border-[rgba(0,0,0,0.08)]"
-                  />
-                </div>
-                <div className="space-y-1.5">
-                  <Label htmlFor="biz-buyerPhone" className="text-xs">연락처 (선택)</Label>
-                  <Input
-                    id="biz-buyerPhone"
-                    value={form.buyerPhone}
-                    onChange={(event) => setForm((c) => ({ ...c, buyerPhone: event.target.value }))}
-                    placeholder="01012345678"
-                    className="h-10 rounded-lg border-[rgba(0,0,0,0.08)]"
-                  />
-                </div>
-                <div className="space-y-1.5 md:col-span-2">
-                  <Label htmlFor="biz-buyerEmail" className="text-xs">이메일</Label>
-                  <Input
-                    id="biz-buyerEmail"
-                    type="email"
-                    value={form.buyerEmail}
-                    onChange={(event) => setForm((c) => ({ ...c, buyerEmail: event.target.value }))}
-                    placeholder="ops@classin.co.kr"
-                    className="h-10 rounded-lg border-[rgba(0,0,0,0.08)]"
-                  />
-                </div>
-              </div>
+          {promo ? (
+            <div className="mt-3 flex items-center justify-between rounded-lg bg-[#ECFDF5] px-3 py-2 text-[12px]">
+              <span className="text-[#44514A]">충전 {formatCny(effectiveBaseAmountCny)}</span>
+              <span className="font-semibold text-[#084734]">
+                -{formatCny(promo.discountAmount)}
+              </span>
             </div>
+          ) : null}
 
-            <div className="rounded-xl border border-[rgba(0,0,0,0.08)] p-3">
-              <div
-                id={TOSS_METHODS_ID}
-                className="min-h-[140px] rounded-lg border border-dashed border-[rgba(0,0,0,0.08)]"
-              />
-              <div
-                id={TOSS_AGREEMENT_ID}
-                className="mt-2 min-h-[50px] rounded-lg border border-dashed border-[rgba(0,0,0,0.08)]"
-              />
-            </div>
-
-            {error && (
-              <div className="flex items-start gap-2 rounded-lg border border-[#EAD7B2] px-3 py-2 text-sm text-[#8D6C1F]">
-                <AlertCircle className="mt-0.5 h-4 w-4 shrink-0" />
-                <span>{error}</span>
-              </div>
-            )}
-
-            {promo ? (
-              <div className="flex items-center justify-between rounded-lg border border-[#084734]/20 px-3 py-2 text-sm">
-                <span className="text-[#44514A]">{formatCny(effectiveBaseAmountCny)} → -{formatCny(promo.discountAmount)}</span>
-                <span className="font-bold text-[#084734]">{formatCny(effectiveFinalAmountCny || 0)}</span>
-              </div>
-            ) : null}
-
+          <div className="mt-4 border-t border-black/5 pt-3">
             <KrwConversionNote
               amountKrw={approxAmountKrw}
               fxRate={fx.cnyKrw}
               isStale={fx.isStale}
               loading={fx.loading}
             />
-
-            <Button
-              type="button"
-              className="h-12 w-full rounded-lg border-2 border-[#084734] bg-[#084734] text-sm font-bold text-white hover:bg-[#065C41]"
-              disabled={!hasWidgetKey || !isWidgetReady || isPreparing || !isFormComplete || !effectiveFinalAmountCny}
-              onClick={() => { void handleCheckout() }}
-            >
-              {isPreparing ? "결제 준비 중..." : `${formatCny(effectiveFinalAmountCny || 0)} 충전하기`}
-            </Button>
           </div>
         </div>
-      </div>
+
+        <div className="space-y-4 rounded-2xl border border-black/10 bg-white p-6">
+          <p className="text-[13px] font-semibold text-[#111110]">주문자 정보</p>
+
+          <div className="space-y-3">
+            <div className="space-y-1.5">
+              <Label htmlFor="biz-organizationName" className="text-[12px] text-[#44514A]">
+                기관명 / 학원명
+              </Label>
+              <Input
+                id="biz-organizationName"
+                value={form.organizationName}
+                onChange={(event) =>
+                  setForm((current) => ({ ...current, organizationName: event.target.value }))
+                }
+                placeholder="예: 무궁화학원"
+                className="h-10 rounded-lg border-black/10 bg-white"
+              />
+            </div>
+            <div className="grid gap-3 md:grid-cols-2">
+              <div className="space-y-1.5">
+                <Label htmlFor="biz-buyerName" className="text-[12px] text-[#44514A]">
+                  담당자명
+                </Label>
+                <Input
+                  id="biz-buyerName"
+                  value={form.buyerName}
+                  onChange={(event) =>
+                    setForm((current) => ({ ...current, buyerName: event.target.value }))
+                  }
+                  placeholder="홍길동"
+                  className="h-10 rounded-lg border-black/10 bg-white"
+                />
+              </div>
+              <div className="space-y-1.5">
+                <Label htmlFor="biz-buyerPhone" className="text-[12px] text-[#44514A]">
+                  연락처 <span className="text-[#A39E98]">(선택)</span>
+                </Label>
+                <Input
+                  id="biz-buyerPhone"
+                  value={form.buyerPhone}
+                  onChange={(event) =>
+                    setForm((current) => ({ ...current, buyerPhone: event.target.value }))
+                  }
+                  placeholder="01012345678"
+                  className="h-10 rounded-lg border-black/10 bg-white"
+                />
+              </div>
+            </div>
+            <div className="space-y-1.5">
+              <Label htmlFor="biz-buyerEmail" className="text-[12px] text-[#44514A]">
+                이메일
+              </Label>
+              <Input
+                id="biz-buyerEmail"
+                type="email"
+                value={form.buyerEmail}
+                onChange={(event) =>
+                  setForm((current) => ({ ...current, buyerEmail: event.target.value }))
+                }
+                placeholder="ops@classin.co.kr"
+                className="h-10 rounded-lg border-black/10 bg-white"
+              />
+            </div>
+          </div>
+        </div>
+
+        <div className="rounded-2xl border border-black/10 bg-white p-6">
+          <p className="text-[13px] font-semibold text-[#111110]">결제수단</p>
+          <p className="mt-1 text-[12px] text-[#615D59]">카드 · 네이버페이</p>
+
+          <div
+            id={TOSS_METHODS_ID}
+            className="mt-4 min-h-[200px] rounded-lg border border-black/5 bg-[#FAFAF8]"
+          />
+          <div
+            id={TOSS_AGREEMENT_ID}
+            className="mt-3 min-h-[88px] rounded-lg border border-black/5 bg-[#FAFAF8]"
+          />
+        </div>
+
+        {!checkoutEnabled || !hasWidgetKey ? (
+          <div className="rounded-lg border border-[#EAD7B2] bg-[#FFF9EB] px-4 py-3 text-[12px] leading-relaxed text-[#8D6C1F]">
+            {!checkoutEnabled
+              ? "`NEXT_PUBLIC_SW_CHECKOUT_ENABLED=true` 설정 전까지 공개 결제는 비활성 상태입니다."
+              : "토스 위젯 키가 없습니다. `.env.local`에 `NEXT_PUBLIC_TOSS_WIDGET_CLIENT_KEY`를 설정해 주세요."}
+          </div>
+        ) : null}
+
+        {error ? (
+          <div className="flex items-start gap-2 rounded-lg border border-[#EAD7B2] bg-[#FFF9EB] px-4 py-3 text-[13px] text-[#8D6C1F]">
+            <AlertCircle className="mt-0.5 h-4 w-4 shrink-0" />
+            <span>{error}</span>
+          </div>
+        ) : null}
+
+        <Button
+          type="button"
+          size="lg"
+          className="h-12 w-full rounded-lg bg-[#084734] text-[14px] font-semibold text-white hover:bg-[#065C41]"
+          disabled={
+            !hasWidgetKey ||
+            !isWidgetReady ||
+            isPreparing ||
+            !isFormComplete ||
+            !effectiveFinalAmountCny
+          }
+          onClick={() => {
+            void handleCheckout()
+          }}
+        >
+          {isPreparing
+            ? "결제 준비 중..."
+            : `${formatCny(effectiveFinalAmountCny || 0)} 충전하기`}
+        </Button>
+      </aside>
     </div>
   )
 }

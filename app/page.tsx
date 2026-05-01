@@ -5,16 +5,13 @@ import { EraVision } from "@/components/sections/EraVision"
 import { ProblemCost } from "@/components/sections/ProblemCost"
 import { Manifesto } from "@/components/sections/Manifesto"
 import dynamic from "next/dynamic"
+import { createPublicMetadata } from "@/lib/seo"
 
-export const metadata: Metadata = {
-  description: "학원 운영을 데이터 기반으로 혁신하는 Classin — 수업 관리, 학습 성과 분석, 행정 자동화까지 하나의 플랫폼으로 해결하세요.",
-  openGraph: {
-    description: "학원 운영을 데이터 기반으로 혁신하는 Classin — 수업 관리, 학습 성과 분석, 행정 자동화까지 하나의 플랫폼으로 해결하세요.",
-  },
-  twitter: {
-    description: "학원 운영을 데이터 기반으로 혁신하는 Classin — 수업 관리, 학습 성과 분석, 행정 자동화까지 하나의 플랫폼으로 해결하세요.",
-  },
-}
+export const metadata: Metadata = createPublicMetadata({
+  description:
+    "학원 운영을 데이터 기반으로 혁신하는 Classin — 수업 관리, 학습 성과 분석, 행정 자동화까지 하나의 플랫폼으로 해결하세요.",
+  path: "/",
+})
 
 const Outcomes = dynamic(() => import("@/components/sections/Outcomes").then(m => ({ default: m.Outcomes })))
 const SolutionOverview = dynamic(() => import("@/components/sections/SolutionOverview").then(m => ({ default: m.SolutionOverview })))

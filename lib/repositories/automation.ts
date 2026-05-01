@@ -88,11 +88,12 @@ export async function deleteTemplate(id: string): Promise<boolean> {
    자동화 규칙
    ───────────────────────────────────────────────────────────── */
 
-export async function getAllRules(): Promise<AutomationRule[]> {
+export async function getAllRules(limit = 200, offset = 0): Promise<AutomationRule[]> {
   const { data, error } = await sb()
     .from("automation_rules")
     .select("*, email_templates(*)")
     .order("created_at", { ascending: false })
+    .range(offset, offset + limit - 1)
   if (error) throw new Error(`[automation] 규칙 조회 실패: ${error.message}`)
   return (data ?? []).map(rowToRule)
 }

@@ -7,7 +7,11 @@ import { Footer } from "./Footer";
 export function ConditionalFooter() {
   const pathname = usePathname();
 
-  if (pathname.startsWith("/admin") || pathname.startsWith("/checkout") || isPartnerPortalPath(pathname)) {
+  if (
+    pathname.startsWith("/admin") ||
+    pathname.startsWith("/checkout") ||
+    isPartnerPortalPath(pathname)
+  ) {
     return null;
   }
 

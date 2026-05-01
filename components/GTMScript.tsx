@@ -1,23 +1,19 @@
 "use client"
 
+import { GoogleTagManager } from "@next/third-parties/google"
 import { usePathname } from "next/navigation"
-
-const GTM_ID = "GTM-PJH3SWVL"
+import { GTM_ID } from "@/lib/analytics-config"
+import { isPartnerPortalPath } from "@/lib/partner-portal/pathname"
 
 export function GTMScript() {
   const pathname = usePathname()
-  const isInternal = pathname.startsWith("/admin") || pathname.startsWith("/partner")
+  const isInternal = pathname.startsWith("/admin") || isPartnerPortalPath(pathname)
 
-  if (isInternal) return null
+  if (isInternal || !GTM_ID) return null
 
   return (
     <>
-      {/* eslint-disable-next-line @next/next/next-script-for-ga */}
-      <script
-        dangerouslySetInnerHTML={{
-          __html: `(function(w,d,s,l,i){w[l]=w[l]||[];w[l].push({'gtm.start':new Date().getTime(),event:'gtm.js'});var f=d.getElementsByTagName(s)[0],j=d.createElement(s),dl=l!='dataLayer'?'&l='+l:'';j.async=true;j.src='https://www.googletagmanager.com/gtm.js?id='+i+dl;f.parentNode.insertBefore(j,f);})(window,document,'script','dataLayer','${GTM_ID}');`,
-        }}
-      />
+      <GoogleTagManager gtmId={GTM_ID} />
       <noscript>
         <iframe
           src={`https://www.googletagmanager.com/ns.html?id=${GTM_ID}`}

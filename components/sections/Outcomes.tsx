@@ -39,11 +39,9 @@ export function Outcomes() {
                         <p className="text-[#A39E98] text-lg mb-8 break-keep">
                             주먹구구식 운영에서 벗어나, 데이터 기반의 확장 가능한 교육 기업으로 성장하세요.
                         </p>
-                        <div className="inline-flex flex-col items-start">
-                            <div className="text-base md:text-lg text-[#084734] uppercase tracking-[0.18em] font-black mb-2">평균 절감 시간</div>
-                            <div className="text-7xl md:text-8xl font-black text-[#084734] leading-none" style={{ letterSpacing: '-0.08em' }}>15시간</div>
-                            <div className="text-base md:text-lg text-[#615D59] font-extrabold mt-3">강사 1인당 / 주</div>
-                        </div>
+                        <p className="text-[#615D59] text-base break-keep">
+                            강사 1인당 주 평균 <span className="font-bold text-[#084734]">15시간</span>의 행정 업무를 줄여드립니다.
+                        </p>
                     </div>
 
                     <div className="w-full md:w-2/3 flex flex-col gap-6">

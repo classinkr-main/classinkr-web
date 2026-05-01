@@ -58,14 +58,15 @@ export default function AllInOneStatement() {
             className="text-4xl md:text-5xl lg:text-[3.5rem] leading-tight font-bold"
             style={{ letterSpacing: "-1.5px" }}
           >
-            끊김 없는 수업을 위한
+            보드 안에,
             <br />
-            최고의 퍼포먼스
+            시작에 필요한 모든 것을 담았습니다.
           </h2>
 
           {/* Body */}
           <p className="text-lg text-white/70 leading-relaxed mt-6">
-            압도적 사양의 고성능 PC 내장
+            OPS 표준 규격의 인텔 i5 / i7 PC를 내장해 별도 본체와 복잡한 연결을 줄였습니다.
+            전원 하나로 보드, 카메라, 소프트웨어가 함께 시작됩니다.
           </p>
 
           <ul className="mt-8 grid gap-3 sm:grid-cols-2">

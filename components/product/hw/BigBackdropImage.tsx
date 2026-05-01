@@ -47,7 +47,7 @@ export default function BigBackdropImage() {
   return (
     <section
       ref={sectionRef}
-      className="relative h-[90vh] md:h-[100vh] w-full overflow-hidden bg-black"
+      className="relative min-h-[90svh] md:min-h-[100dvh] w-full overflow-hidden bg-black"
     >
       {/* 패럴랙스 이미지 */}
       <motion.div

@@ -85,8 +85,8 @@ export default function ContactPage() {
                             <span className="w-2 h-2 rounded-full bg-[#084734] animate-pulse"></span>
                             상담 및 문의
                         </motion.div>
-                        
-                        <motion.h1 
+
+                        <motion.h1
                             initial={{ opacity: 0, y: 30 }}
                             animate={{ opacity: 1, y: 0 }}
                             transition={{ duration: 0.7, delay: 0.1 }}
@@ -96,7 +96,7 @@ export default function ContactPage() {
                             친절하게 답변해 드립니다.
                         </motion.h1>
 
-                        <motion.p 
+                        <motion.p
                             initial={{ opacity: 0, y: 20 }}
                             animate={{ opacity: 1, y: 0 }}
                             transition={{ duration: 0.7, delay: 0.2 }}
@@ -111,7 +111,7 @@ export default function ContactPage() {
 
             <section className="container relative z-10 mx-auto max-w-6xl pb-12 md:pb-16">
                 {/* Fast Track Banner */}
-                <motion.div 
+                <motion.div
                     initial={{ opacity: 0, scale: 0.98, y: 20 }}
                     animate={{ opacity: 1, scale: 1, y: 0 }}
                     transition={{ duration: 0.6, delay: 0.3 }}
@@ -175,7 +175,7 @@ export default function ContactPage() {
 
                 <div className="grid lg:grid-cols-5 gap-6 lg:gap-8 items-stretch">
                     {/* Contact Form */}
-                    <motion.div 
+                    <motion.div
                         initial={{ opacity: 0, x: -20 }}
                         animate={{ opacity: 1, x: 0 }}
                         transition={{ duration: 0.6, delay: 0.4 }}
@@ -262,7 +262,7 @@ export default function ContactPage() {
                     </motion.div>
 
                     {/* Contact Info */}
-                    <motion.div 
+                    <motion.div
                         initial={{ opacity: 0, x: 20 }}
                         animate={{ opacity: 1, x: 0 }}
                         transition={{ duration: 0.6, delay: 0.5 }}
@@ -313,11 +313,11 @@ export default function ContactPage() {
                                 <div className="w-full h-36 bg-slate-100 rounded-2xl border border-slate-200 overflow-hidden relative">
                                     <iframe
                                         src="https://maps.google.com/maps?q=서울시+양천구+목동동로+233-1&t=&z=17&ie=UTF8&iwloc=&output=embed"
-                                        width="100%" 
-                                        height="100%" 
-                                        style={{ border: 0 }} 
-                                        allowFullScreen={false} 
-                                        loading="lazy" 
+                                        width="100%"
+                                        height="100%"
+                                        style={{ border: 0 }}
+                                        allowFullScreen={false}
+                                        loading="lazy"
                                         referrerPolicy="no-referrer-when-downgrade"
                                         className="filter grayscale-[0.2] contrast-[1.05] opacity-90 hover:grayscale-0 hover:opacity-100 transition-all duration-500"
                                     ></iframe>

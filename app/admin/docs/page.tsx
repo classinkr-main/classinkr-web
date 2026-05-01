@@ -7,14 +7,14 @@ import {
   AlertCircle,
   BarChart3,
   Bot,
-  CircleAlert,
   Database,
   ExternalLink,
+  FileText,
+  FolderTree,
   MessageSquareText,
-  Pencil,
-  Plus,
   RefreshCw,
   Search,
+  ThumbsUp,
 } from "lucide-react"
 
 import type {
@@ -23,18 +23,26 @@ import type {
   AdminDocsContentResponse,
 } from "@/lib/admin-docs"
 
-type AiFilter = "all" | "needs-work" | "chatbot" | "not-indexed"
-
 function getToken() {
   return (typeof window !== "undefined" ? sessionStorage.getItem("admin_password") : null) ?? ""
 }
 
-function adminFetch(url: string) {
+function adminFetch(url: string, init?: RequestInit) {
+  const headers = new Headers(init?.headers)
+  headers.set("Authorization", `Bearer ${getToken()}`)
+
   return fetch(url, {
-    headers: {
-      Authorization: `Bearer ${getToken()}`,
-    },
+    ...init,
+    headers,
   })
+}
+
+interface ReindexResult {
+  configured: boolean
+  articleCount: number
+  chunkCount: number
+  warnings?: string[]
+  error?: string
 }
 
 function formatDate(value: string | null | undefined) {
@@ -84,36 +92,41 @@ function getSourceLabel(content: AdminDocsContentResponse | null) {
 function StatusBadge({ label, tone }: { label: string; tone?: string }) {
   return (
     <span
-      className={`inline-flex items-center rounded-full border px-2.5 py-1 text-[11px] font-semibold ${tone ?? "border-[#e8e8e4] bg-transparent text-[#1a1a1a]/45"}`}
+      className={`inline-flex items-center rounded-full border px-2.5 py-1 text-[11px] font-semibold ${tone ?? "border-[#e8e8e4] bg-white text-[#1a1a1a]/45"}`}
     >
       {label}
     </span>
   )
 }
 
-function StatRow({
+function MetricCard({
+  icon,
   label,
   value,
   hint,
 }: {
+  icon: React.ReactNode
   label: string
   value: string
   hint: string
 }) {
   return (
-    <div className="border-t border-[#f0f0ec] pt-3">
+    <div className="rounded-2xl border border-[#e8e8e4] bg-white p-5">
+      <div className="mb-4 flex items-start justify-between gap-4">
+        <div className="inline-flex rounded-xl bg-[#f0f0ec] p-2 text-[#1a1a1a]/55">{icon}</div>
+      </div>
       <p className="text-[11px] font-semibold uppercase tracking-[0.16em] text-[#1a1a1a]/35">
         {label}
       </p>
-      <p className="mt-1 text-[20px] font-semibold tracking-[-0.03em] text-[#111110]">{value}</p>
-      <p className="mt-1 text-[12px] leading-relaxed text-[#1a1a1a]/42">{hint}</p>
+      <p className="mt-2 text-3xl font-bold tracking-[-0.03em] text-[#111110]">{value}</p>
+      <p className="mt-2 text-[12px] leading-relaxed text-[#1a1a1a]/42">{hint}</p>
     </div>
   )
 }
 
 function EmptyState({ title, description }: { title: string; description: string }) {
   return (
-    <div className="py-10 text-center">
+    <div className="rounded-2xl border border-dashed border-[#e8e8e4] bg-[#fafaf8] px-5 py-12 text-center">
       <p className="text-[14px] font-semibold text-[#111110]">{title}</p>
       <p className="mx-auto mt-2 max-w-md text-[12px] leading-relaxed text-[#1a1a1a]/42">
         {description}
@@ -134,57 +147,6 @@ function ArticleStatus({ article }: { article: AdminDocsArticleSummary }) {
   )
 }
 
-function getAiStatus(article: AdminDocsArticleSummary) {
-  if (!article.chatbotIncluded) {
-    return {
-      label: "챗봇 제외",
-      tone: "border-[#e8e8e4] bg-white text-[#1a1a1a]/45",
-      hint: "비공개, 내부, noindex 문서는 챗봇 답변 후보에서 제외됩니다.",
-    }
-  }
-
-  if (article.aiReady) {
-    return {
-      label: "AI 준비",
-      tone: "border-emerald-100 bg-emerald-50 text-emerald-700",
-      hint: "요약, 키워드, 인덱스 상태가 안정적입니다.",
-    }
-  }
-
-  if (!article.aiIndexed) {
-    return {
-      label: "미인덱스",
-      tone: "border-amber-100 bg-amber-50 text-amber-700",
-      hint: "챗봇 검색용 chunk 생성이 필요합니다.",
-    }
-  }
-
-  return {
-    label: "보강 필요",
-    tone: "border-[#F6D5C5] bg-[#FEF3EE] text-[#B85C33]",
-    hint: "챗봇 답변 품질을 위해 메타데이터를 보강하세요.",
-  }
-}
-
-function ArticleAiStatus({ article }: { article: AdminDocsArticleSummary }) {
-  const aiStatus = getAiStatus(article)
-  const chunkLabel =
-    article.aiChunkCount == null ? "chunk 확인 전" : `${formatNumber(article.aiChunkCount)} chunks`
-
-  return (
-    <div className="space-y-1.5">
-      <div className="flex flex-wrap items-center gap-1.5">
-        <Bot className="h-3.5 w-3.5 text-[#1a1a1a]/30" />
-        <StatusBadge label={aiStatus.label} tone={aiStatus.tone} />
-        {article.chatbotIncluded ? <StatusBadge label={chunkLabel} /> : null}
-      </div>
-      <p className="max-w-[220px] text-[11px] leading-relaxed text-[#1a1a1a]/38">
-        {article.aiIssues.length > 0 ? article.aiIssues.slice(0, 2).join(" · ") : aiStatus.hint}
-      </p>
-    </div>
-  )
-}
-
 export default function AdminDocsPage() {
   const router = useRouter()
   const [content, setContent] = useState<AdminDocsContentResponse | null>(null)
@@ -193,7 +155,11 @@ export default function AdminDocsPage() {
   const [error, setError] = useState<string | null>(null)
   const [searchQuery, setSearchQuery] = useState("")
   const [categoryFilter, setCategoryFilter] = useState("all")
-  const [aiFilter, setAiFilter] = useState<AiFilter>("all")
+  const [reindexing, setReindexing] = useState(false)
+  const [reindexNotice, setReindexNotice] = useState<{
+    tone: "success" | "warning"
+    message: string
+  } | null>(null)
 
   const load = useCallback(async () => {
     setLoading(true)
@@ -231,6 +197,48 @@ export default function AdminDocsPage() {
     void load()
   }, [load])
 
+  const handleReindex = useCallback(async () => {
+    setReindexing(true)
+    setReindexNotice(null)
+    setError(null)
+
+    try {
+      const response = await adminFetch("/api/admin/docs/reindex", {
+        method: "POST",
+      })
+
+      if (response.status === 401) {
+        router.replace("/admin/login")
+        return
+      }
+
+      const result = (await response.json()) as ReindexResult
+      if (!response.ok) {
+        throw new Error(result.error ?? "문서 검색 인덱스를 재생성하지 못했습니다.")
+      }
+
+      if (!result.configured) {
+        setReindexNotice({
+          tone: "warning",
+          message: result.warnings?.[0] ?? "Supabase 환경이 없어 인덱스를 재생성하지 않았습니다.",
+        })
+        return
+      }
+
+      setReindexNotice({
+        tone: result.warnings?.length ? "warning" : "success",
+        message: `문서 ${formatNumber(result.articleCount)}개에서 검색 chunk ${formatNumber(result.chunkCount)}개를 재생성했습니다.${
+          result.warnings?.length ? ` ${result.warnings[0]}` : ""
+        }`,
+      })
+      await load()
+    } catch (err) {
+      setError(err instanceof Error ? err.message : "문서 검색 인덱스를 재생성하지 못했습니다.")
+    } finally {
+      setReindexing(false)
+    }
+  }, [load, router])
+
   const categoryTitleById = useMemo(() => {
     return new Map((content?.categories ?? []).map((category) => [category.id, category.title]))
   }, [content])
@@ -245,43 +253,11 @@ export default function AdminDocsPage() {
         !query ||
         article.title.toLowerCase().includes(query) ||
         article.description.toLowerCase().includes(query) ||
-        article.slug.toLowerCase().includes(query) ||
-        article.tags.some((tag) => tag.toLowerCase().includes(query)) ||
-        article.keywords.some((keyword) => keyword.toLowerCase().includes(query)) ||
-        Boolean(article.chatbotSummary?.toLowerCase().includes(query))
-      const matchesAi =
-        aiFilter === "all" ||
-        (aiFilter === "needs-work" && article.aiIssues.length > 0) ||
-        (aiFilter === "chatbot" && article.chatbotIncluded) ||
-        (aiFilter === "not-indexed" && article.chatbotIncluded && !article.aiIndexed)
+        article.slug.toLowerCase().includes(query)
 
-      return matchesCategory && matchesQuery && matchesAi
+      return matchesCategory && matchesQuery
     })
-  }, [aiFilter, categoryFilter, content, searchQuery])
-
-  const opsSummary = useMemo(() => {
-    const articles = content?.articles ?? []
-
-    return {
-      aiReady: articles.filter((article) => article.aiReady).length,
-      chatbotIncluded: articles.filter((article) => article.chatbotIncluded).length,
-      needsWork: articles.filter((article) => article.aiIssues.length > 0).length,
-      notIndexed: articles.filter((article) => article.chatbotIncluded && !article.aiIndexed)
-        .length,
-      stale: articles.filter((article) => article.stale).length,
-    }
-  }, [content])
-
-  const improvementArticles = useMemo(() => {
-    return [...(content?.articles ?? [])]
-      .filter((article) => article.aiIssues.length > 0)
-      .sort((a, b) => {
-        if (a.aiReady !== b.aiReady) return a.aiReady ? 1 : -1
-        if (a.stale !== b.stale) return a.stale ? -1 : 1
-        return b.aiIssues.length - a.aiIssues.length
-      })
-      .slice(0, 6)
-  }, [content])
+  }, [categoryFilter, content, searchQuery])
 
   const warnings = [...(content?.warnings ?? []), ...(analytics?.warnings ?? [])]
   const summary = analytics?.summary
@@ -307,45 +283,59 @@ export default function AdminDocsPage() {
             문서 센터 관리
           </h1>
           <p className="mt-2 max-w-2xl text-[13px] leading-relaxed text-[#1a1a1a]/45">
-            공개 문서 카테고리와 문서 상태, 검색·피드백·챗봇 질문 흐름을 한 화면에서 확인합니다.
+            공개 문서 카테고리와 문서 상태, 검색·피드백·챗봇 질문 흐름을 확인합니다.
           </p>
         </div>
 
         <div className="flex flex-col gap-2 sm:flex-row sm:items-center">
           <Link
             href="/docs"
-            className="inline-flex h-9 items-center justify-center gap-2 rounded-lg border border-[#e8e8e4] bg-transparent px-3 text-[13px] font-semibold text-[#111110] transition-colors hover:bg-[#fafaf8]"
+            className="inline-flex h-9 items-center justify-center gap-2 rounded-lg border border-[#e8e8e4] bg-white px-3 text-[13px] font-semibold text-[#111110] transition-colors hover:bg-[#f5f5f2]"
           >
             <ExternalLink className="h-4 w-4" />
             공개 문서
           </Link>
           <button
             type="button"
+            onClick={() => void handleReindex()}
+            disabled={loading || reindexing}
+            className="inline-flex h-9 items-center justify-center gap-2 rounded-lg border border-[#e8e8e4] bg-white px-3 text-[13px] font-semibold text-[#111110] transition-colors hover:bg-[#f5f5f2] disabled:cursor-not-allowed disabled:opacity-60"
+          >
+            <Database className="h-4 w-4" />
+            {reindexing ? "인덱싱 중" : "검색 인덱스 재생성"}
+          </button>
+          <button
+            type="button"
             onClick={() => void load()}
             disabled={loading}
-            className="inline-flex h-9 items-center justify-center gap-2 rounded-lg border border-[#e8e8e4] bg-white px-3 text-[13px] font-semibold text-[#111110] transition-colors hover:bg-[#f5f5f2] disabled:cursor-not-allowed disabled:opacity-60"
+            className="inline-flex h-9 items-center justify-center gap-2 rounded-lg bg-[#111110] px-3 text-[13px] font-semibold text-white transition-colors hover:bg-[#2a2a28] disabled:cursor-not-allowed disabled:opacity-60"
           >
             <RefreshCw className={`h-4 w-4 ${loading ? "animate-spin" : ""}`} />
             새로고침
           </button>
-          <Link
-            href="/admin/docs/new"
-            className="inline-flex h-9 items-center justify-center gap-2 rounded-lg bg-[#084734] px-3 text-[13px] font-semibold text-white transition-colors hover:bg-[#065c41]"
-          >
-            <Plus className="h-4 w-4" />
-            새 문서
-          </Link>
         </div>
       </div>
 
       {error ? (
-        <div className="mb-6 border-l-2 border-[#F6D5C5] pl-3 text-[13px] text-[#B85C33]">
+        <div className="mb-6 rounded-2xl border border-[#F6D5C5] bg-[#FEF3EE] px-4 py-3 text-[13px] text-[#B85C33]">
           {error}
         </div>
       ) : null}
 
+      {reindexNotice ? (
+        <div
+          className={`mb-6 rounded-2xl border px-4 py-3 text-[13px] ${
+            reindexNotice.tone === "success"
+              ? "border-emerald-100 bg-emerald-50 text-emerald-800"
+              : "border-amber-100 bg-amber-50 text-amber-800"
+          }`}
+        >
+          {reindexNotice.message}
+        </div>
+      ) : null}
+
       {warnings.length > 0 ? (
-        <div className="mb-6 border-l-2 border-amber-200 pl-3">
+        <div className="mb-6 rounded-2xl border border-amber-100 bg-amber-50 px-4 py-3">
           <div className="flex gap-2 text-[13px] text-amber-800">
             <AlertCircle className="mt-0.5 h-4 w-4 shrink-0" />
             <div className="space-y-1">
@@ -357,13 +347,15 @@ export default function AdminDocsPage() {
         </div>
       ) : null}
 
-      <section className="mb-8 grid gap-8 border-y border-[#f0f0ec] py-6 md:grid-cols-2 xl:grid-cols-4">
-        <StatRow
+      <section className="mb-8 grid gap-4 md:grid-cols-2 xl:grid-cols-4">
+        <MetricCard
+          icon={<FolderTree className="h-5 w-5" />}
           label="카테고리"
           value={formatNumber(content?.categories.length ?? 0)}
           hint={`${formatNumber(content?.articles.length ?? 0)}개 문서 연결`}
         />
-        <StatRow
+        <MetricCard
+          icon={<ThumbsUp className="h-5 w-5" />}
           label="문서 피드백"
           value={formatNumber(summary?.feedbackTotal ?? 0)}
           hint={
@@ -372,49 +364,23 @@ export default function AdminDocsPage() {
               : `도움됨 ${summary.helpfulRate}% · 부정 ${formatNumber(summary.notHelpfulTotal)}건`
           }
         />
-        <StatRow
+        <MetricCard
+          icon={<Search className="h-5 w-5" />}
           label="검색 이벤트"
           value={formatNumber(summary?.searchTotal ?? 0)}
           hint={`결과 없음 ${formatNumber(summary?.zeroResultSearches ?? 0)}건`}
         />
-        <StatRow
+        <MetricCard
+          icon={<Bot className="h-5 w-5" />}
           label="챗봇 질문"
           value={formatNumber(summary?.chatbotQuestions ?? 0)}
           hint={`미해결 ${formatNumber(summary?.chatbotUnresolved ?? 0)}건 · 상담 연결 ${formatNumber(summary?.chatbotHandoffs ?? 0)}건`}
         />
       </section>
 
-      <section className="mb-8 grid gap-8 border-b border-[#f0f0ec] pb-6 md:grid-cols-2 xl:grid-cols-5">
-        <StatRow
-          label="AI 준비"
-          value={formatNumber(opsSummary.aiReady)}
-          hint="바로 챗봇 답변 후보로 쓰기 좋은 문서"
-        />
-        <StatRow
-          label="챗봇 포함"
-          value={formatNumber(opsSummary.chatbotIncluded)}
-          hint="공개 상태이며 noindex가 아닌 문서"
-        />
-        <StatRow
-          label="보강 필요"
-          value={formatNumber(opsSummary.needsWork)}
-          hint="요약, 키워드, 인덱스, 검토 주기 점검 대상"
-        />
-        <StatRow
-          label="미인덱스"
-          value={formatNumber(opsSummary.notIndexed)}
-          hint="chunk 생성 또는 재생성이 필요한 문서"
-        />
-        <StatRow
-          label="검토 지연"
-          value={formatNumber(opsSummary.stale)}
-          hint="최근 검토 기준 60일 초과 문서"
-        />
-      </section>
-
-      <section className="mb-8 grid gap-8 xl:grid-cols-[minmax(0,1fr)_320px]">
-        <div>
-          <div className="flex flex-col gap-4 border-b border-[#f0f0ec] pb-4 sm:flex-row sm:items-center sm:justify-between">
+      <section className="mb-8 grid gap-6 xl:grid-cols-[minmax(0,1fr)_380px]">
+        <div className="overflow-hidden rounded-2xl border border-[#e8e8e4] bg-white">
+          <div className="flex flex-col gap-4 border-b border-[#e8e8e4] px-4 py-4 sm:flex-row sm:items-center sm:justify-between">
             <div>
               <h2 className="text-[14px] font-semibold text-[#111110]">문서 목록</h2>
               <p className="mt-0.5 text-[11px] text-[#1a1a1a]/40">
@@ -423,18 +389,18 @@ export default function AdminDocsPage() {
             </div>
             <div className="flex flex-col gap-2 sm:flex-row sm:items-center">
               <label className="relative block">
-                <Search className="pointer-events-none absolute left-0 top-1/2 h-4 w-4 -translate-y-1/2 text-[#1a1a1a]/30" />
+                <Search className="pointer-events-none absolute left-3 top-1/2 h-4 w-4 -translate-y-1/2 text-[#1a1a1a]/30" />
                 <input
                   value={searchQuery}
                   onChange={(event) => setSearchQuery(event.target.value)}
                   placeholder="문서 검색"
-                  className="h-9 w-full border-b border-[#e8e8e4] bg-transparent pr-3 pl-7 text-[13px] outline-none transition-colors placeholder:text-[#1a1a1a]/25 focus:border-[#084734] sm:w-56"
+                  className="h-9 w-full rounded-lg border border-[#e8e8e4] bg-white pr-3 pl-9 text-[13px] outline-none transition-colors placeholder:text-[#1a1a1a]/25 focus:border-[#084734] sm:w-56"
                 />
               </label>
               <select
                 value={categoryFilter}
                 onChange={(event) => setCategoryFilter(event.target.value)}
-                className="h-9 border-b border-[#e8e8e4] bg-transparent px-1 text-[13px] text-[#111110] outline-none transition-colors focus:border-[#084734]"
+                className="h-9 rounded-lg border border-[#e8e8e4] bg-white px-3 text-[13px] text-[#111110] outline-none transition-colors focus:border-[#084734]"
               >
                 <option value="all">전체 카테고리</option>
                 {(content?.categories ?? []).map((category) => (
@@ -443,170 +409,90 @@ export default function AdminDocsPage() {
                   </option>
                 ))}
               </select>
-              <select
-                value={aiFilter}
-                onChange={(event) => setAiFilter(event.target.value as AiFilter)}
-                className="h-9 border-b border-[#e8e8e4] bg-transparent px-1 text-[13px] text-[#111110] outline-none transition-colors focus:border-[#084734]"
-              >
-                <option value="all">AI 전체</option>
-                <option value="needs-work">보강 필요</option>
-                <option value="chatbot">챗봇 포함</option>
-                <option value="not-indexed">미인덱스</option>
-              </select>
             </div>
           </div>
 
-          <div className="mt-4 overflow-x-auto">
-            <table className="min-w-[880px] w-full text-left">
-              <thead className="text-[11px] uppercase tracking-[0.12em] text-[#1a1a1a]/35">
+          <div className="overflow-x-auto">
+            <table className="min-w-[860px] w-full text-left">
+              <thead className="bg-[#fafaf8] text-[11px] uppercase tracking-[0.12em] text-[#1a1a1a]/35">
                 <tr>
-                  <th className="py-3 pr-4 font-semibold">문서</th>
-                  <th className="py-3 pr-4 font-semibold">카테고리</th>
-                  <th className="py-3 pr-4 font-semibold">상태</th>
-                  <th className="py-3 pr-4 font-semibold">AI/챗봇</th>
-                  <th className="py-3 pr-4 font-semibold">유형</th>
-                  <th className="py-3 font-semibold">업데이트</th>
+                  <th className="px-4 py-3 font-semibold">문서</th>
+                  <th className="px-4 py-3 font-semibold">카테고리</th>
+                  <th className="px-4 py-3 font-semibold">상태</th>
+                  <th className="px-4 py-3 font-semibold">유형</th>
+                  <th className="px-4 py-3 font-semibold">업데이트</th>
                 </tr>
               </thead>
               <tbody className="divide-y divide-[#f0f0ec]">
                 {loading ? (
                   <tr>
-                    <td colSpan={6} className="py-10 text-center text-[13px] text-[#1a1a1a]/35">
+                    <td colSpan={5} className="px-4 py-10 text-center text-[13px] text-[#1a1a1a]/35">
                       문서 목록을 불러오는 중입니다.
                     </td>
                   </tr>
                 ) : filteredArticles.length === 0 ? (
                   <tr>
-                    <td colSpan={6} className="py-8">
+                    <td colSpan={5} className="px-4 py-8">
                       <EmptyState title="표시할 문서가 없습니다" description="검색어나 카테고리 필터를 조정해 보세요." />
                     </td>
                   </tr>
                 ) : (
-                  filteredArticles.map((article) => {
-                    const isEditable = article.status !== "static"
-                    const titleHref = isEditable
-                      ? `/admin/docs/${article.id}/edit`
-                      : article.publicPath
-                    return (
+                  filteredArticles.map((article) => (
                     <tr key={article.id} className="align-top">
-                      <td className="py-4 pr-4">
+                      <td className="px-4 py-4">
                         <div className="max-w-lg">
-                          <div className="flex flex-wrap items-center gap-2">
-                            <Link
-                              href={titleHref}
-                              className="text-[13px] font-semibold text-[#111110] transition-colors hover:text-[#084734]"
-                            >
-                              {article.title}
-                            </Link>
-                            {isEditable ? (
+                          <div className="flex items-start gap-2">
+                            <FileText className="mt-0.5 h-4 w-4 shrink-0 text-[#1a1a1a]/30" />
+                            <div>
                               <Link
-                                href={`/admin/docs/${article.id}/edit`}
-                                title="문서 편집"
-                                className="inline-flex items-center gap-1 rounded-md border border-[#e8e8e4] bg-white px-2 py-0.5 text-[11px] text-[#1a1a1a]/55 transition-colors hover:bg-[#f5f5f2]"
+                                href={article.publicPath}
+                                className="text-[13px] font-semibold text-[#111110] transition-colors hover:text-[#084734]"
                               >
-                                <Pencil className="h-3 w-3" />
-                                편집
+                                {article.title}
                               </Link>
-                            ) : null}
-                            <Link
-                              href={article.publicPath}
-                              target="_blank"
-                              title="공개 페이지"
-                              className="inline-flex items-center text-[#1a1a1a]/35 transition-colors hover:text-[#084734]"
-                            >
-                              <ExternalLink className="h-3.5 w-3.5" />
-                            </Link>
+                              <p className="mt-1 line-clamp-2 text-[12px] leading-relaxed text-[#1a1a1a]/42">
+                                {article.description}
+                              </p>
+                              <p className="mt-1 font-mono text-[11px] text-[#1a1a1a]/30">
+                                {article.slug}
+                              </p>
+                            </div>
                           </div>
-                          <p className="mt-1 line-clamp-2 text-[12px] leading-relaxed text-[#1a1a1a]/42">
-                            {article.description}
-                          </p>
-                          <p className="mt-1 font-mono text-[11px] text-[#1a1a1a]/30">
-                            {article.slug}
-                          </p>
                         </div>
                       </td>
-                      <td className="py-4 pr-4 text-[12px] text-[#1a1a1a]/55">
+                      <td className="px-4 py-4 text-[12px] text-[#1a1a1a]/55">
                         {categoryTitleById.get(article.categoryId) ?? article.categoryId}
                       </td>
-                      <td className="py-4 pr-4">
+                      <td className="px-4 py-4">
                         <ArticleStatus article={article} />
                       </td>
-                      <td className="py-4 pr-4">
-                        <ArticleAiStatus article={article} />
-                      </td>
-                      <td className="py-4 pr-4 text-[12px] text-[#1a1a1a]/55">
+                      <td className="px-4 py-4 text-[12px] text-[#1a1a1a]/55">
                         <div>{article.docType}</div>
                         <div className="mt-1 text-[#1a1a1a]/30">{article.productArea}</div>
                       </td>
-                      <td className="py-4 text-[12px] text-[#1a1a1a]/55">
+                      <td className="px-4 py-4 text-[12px] text-[#1a1a1a]/55">
                         {formatDate(article.updatedAt ?? article.lastReviewedAt)}
                       </td>
                     </tr>
-                    )
-                  })
+                  ))
                 )}
               </tbody>
             </table>
           </div>
         </div>
 
-        <aside className="space-y-8">
-          <div>
-            <div className="flex items-center gap-2">
-              <CircleAlert className="h-4 w-4 text-[#B85C33]" />
-              <h2 className="text-[14px] font-semibold text-[#111110]">AI 보강 큐</h2>
+        <aside className="space-y-6">
+          <div className="overflow-hidden rounded-2xl border border-[#e8e8e4] bg-white">
+            <div className="border-b border-[#e8e8e4] px-4 py-4">
+              <h2 className="text-[14px] font-semibold text-[#111110]">카테고리</h2>
             </div>
-            <div className="mt-3 divide-y divide-[#f0f0ec]">
+            <div className="divide-y divide-[#f0f0ec]">
               {loading ? (
-                <p className="py-8 text-center text-[13px] text-[#1a1a1a]/35">
-                  보강 대상을 확인하는 중입니다.
-                </p>
-              ) : improvementArticles.length === 0 ? (
-                <p className="py-8 text-center text-[13px] text-[#1a1a1a]/35">
-                  현재 보강이 필요한 문서가 없습니다.
-                </p>
-              ) : (
-                improvementArticles.map((article) => {
-                  const href =
-                    article.status === "static" ? article.publicPath : `/admin/docs/${article.id}/edit`
-
-                  return (
-                    <Link
-                      key={article.id}
-                      href={href}
-                      className="block py-4 transition-colors hover:text-[#084734]"
-                    >
-                      <div className="flex items-start justify-between gap-4">
-                        <div className="min-w-0">
-                          <p className="truncate text-[13px] font-semibold text-[#111110]">
-                            {article.title}
-                          </p>
-                          <p className="mt-1 text-[11px] leading-relaxed text-[#B85C33]">
-                            {article.aiIssues.slice(0, 2).join(" · ")}
-                          </p>
-                        </div>
-                        <span className="shrink-0 text-[11px] font-semibold text-[#1a1a1a]/35">
-                          {article.aiChunkCount == null
-                            ? "chunk ?"
-                            : `${formatNumber(article.aiChunkCount)} chunks`}
-                        </span>
-                      </div>
-                    </Link>
-                  )
-                })
-              )}
-            </div>
-          </div>
-
-          <div>
-            <h2 className="text-[14px] font-semibold text-[#111110]">카테고리</h2>
-            <div className="mt-3 divide-y divide-[#f0f0ec]">
-              {loading ? (
-                <p className="py-8 text-center text-[13px] text-[#1a1a1a]/35">
+                <p className="px-4 py-8 text-center text-[13px] text-[#1a1a1a]/35">
                   카테고리를 불러오는 중입니다.
                 </p>
               ) : (content?.categories.length ?? 0) === 0 ? (
-                <div className="py-4">
+                <div className="p-4">
                   <EmptyState title="카테고리 없음" description="문서 카테고리 데이터가 아직 없습니다." />
                 </div>
               ) : (
@@ -615,7 +501,7 @@ export default function AdminDocsPage() {
                     type="button"
                     key={category.id}
                     onClick={() => setCategoryFilter(category.id)}
-                    className="flex w-full items-start justify-between gap-4 py-4 text-left transition-colors hover:text-[#084734]"
+                    className="flex w-full items-start justify-between gap-4 px-4 py-4 text-left transition-colors hover:bg-[#fafaf8]"
                   >
                     <div>
                       <div className="flex flex-wrap items-center gap-2">
@@ -626,7 +512,7 @@ export default function AdminDocsPage() {
                         {category.description}
                       </p>
                     </div>
-                    <span className="shrink-0 text-[12px] font-semibold text-[#1a1a1a]/35">
+                    <span className="shrink-0 rounded-lg bg-[#f0f0ec] px-2 py-1 text-[12px] font-semibold text-[#1a1a1a]/55">
                       {category.articleCount}
                     </span>
                   </button>
@@ -635,19 +521,21 @@ export default function AdminDocsPage() {
             </div>
           </div>
 
-          <div>
-            <div className="flex items-center gap-2">
-              <BarChart3 className="h-4 w-4 text-[#1a1a1a]/35" />
-              <h2 className="text-[14px] font-semibold text-[#111110]">검색 상위</h2>
+          <div className="overflow-hidden rounded-2xl border border-[#e8e8e4] bg-white">
+            <div className="border-b border-[#e8e8e4] px-4 py-4">
+              <div className="flex items-center gap-2">
+                <BarChart3 className="h-4 w-4 text-[#1a1a1a]/35" />
+                <h2 className="text-[14px] font-semibold text-[#111110]">검색 상위</h2>
+              </div>
             </div>
-            <div className="mt-3 divide-y divide-[#f0f0ec]">
+            <div className="divide-y divide-[#f0f0ec]">
               {(analytics?.topSearchQueries.length ?? 0) === 0 ? (
-                <p className="py-8 text-center text-[13px] text-[#1a1a1a]/35">
+                <p className="px-4 py-8 text-center text-[13px] text-[#1a1a1a]/35">
                   최근 30일 검색 데이터가 없습니다.
                 </p>
               ) : (
                 analytics?.topSearchQueries.map((item) => (
-                  <div key={item.query} className="flex items-start justify-between gap-4 py-3">
+                  <div key={item.query} className="flex items-start justify-between gap-4 px-4 py-3">
                     <div>
                       <p className="text-[13px] font-semibold text-[#111110]">{item.query}</p>
                       <p className="mt-1 text-[11px] text-[#1a1a1a]/35">
@@ -665,20 +553,22 @@ export default function AdminDocsPage() {
         </aside>
       </section>
 
-      <section className="grid gap-8 xl:grid-cols-2">
-        <div>
-          <div className="flex items-center gap-2">
-            <MessageSquareText className="h-4 w-4 text-[#1a1a1a]/35" />
-            <h2 className="text-[14px] font-semibold text-[#111110]">최근 문서 피드백</h2>
+      <section className="grid gap-6 xl:grid-cols-2">
+        <div className="overflow-hidden rounded-2xl border border-[#e8e8e4] bg-white">
+          <div className="border-b border-[#e8e8e4] px-4 py-4">
+            <div className="flex items-center gap-2">
+              <MessageSquareText className="h-4 w-4 text-[#1a1a1a]/35" />
+              <h2 className="text-[14px] font-semibold text-[#111110]">최근 문서 피드백</h2>
+            </div>
           </div>
-          <div className="mt-3 divide-y divide-[#f0f0ec]">
+          <div className="divide-y divide-[#f0f0ec]">
             {(analytics?.recentFeedback.length ?? 0) === 0 ? (
-              <p className="py-8 text-center text-[13px] text-[#1a1a1a]/35">
+              <p className="px-4 py-8 text-center text-[13px] text-[#1a1a1a]/35">
                 최근 30일 문서 피드백이 없습니다.
               </p>
             ) : (
               analytics?.recentFeedback.map((item) => (
-                <div key={item.id} className="py-4">
+                <div key={item.id} className="px-4 py-4">
                   <div className="flex flex-wrap items-center gap-2">
                     <StatusBadge
                       label={item.helpful ? "helpful" : "not helpful"}
@@ -700,19 +590,21 @@ export default function AdminDocsPage() {
           </div>
         </div>
 
-        <div>
-          <div className="flex items-center gap-2">
-            <Database className="h-4 w-4 text-[#1a1a1a]/35" />
-            <h2 className="text-[14px] font-semibold text-[#111110]">챗봇 질문 상위</h2>
+        <div className="overflow-hidden rounded-2xl border border-[#e8e8e4] bg-white">
+          <div className="border-b border-[#e8e8e4] px-4 py-4">
+            <div className="flex items-center gap-2">
+              <Database className="h-4 w-4 text-[#1a1a1a]/35" />
+              <h2 className="text-[14px] font-semibold text-[#111110]">챗봇 질문 상위</h2>
+            </div>
           </div>
-          <div className="mt-3 divide-y divide-[#f0f0ec]">
+          <div className="divide-y divide-[#f0f0ec]">
             {(analytics?.topChatbotQuestions.length ?? 0) === 0 ? (
-              <p className="py-8 text-center text-[13px] text-[#1a1a1a]/35">
+              <p className="px-4 py-8 text-center text-[13px] text-[#1a1a1a]/35">
                 최근 30일 챗봇 질문 데이터가 없습니다.
               </p>
             ) : (
               analytics?.topChatbotQuestions.map((item) => (
-                <div key={`${item.question}:${item.category ?? "none"}`} className="py-4">
+                <div key={`${item.question}:${item.category ?? "none"}`} className="px-4 py-4">
                   <div className="flex items-start justify-between gap-4">
                     <div>
                       <p className="text-[13px] font-semibold text-[#111110]">{item.question}</p>

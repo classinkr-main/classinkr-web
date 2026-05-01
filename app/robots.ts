@@ -1,12 +1,15 @@
 import type { MetadataRoute } from "next"
 
+import { SITE_URL } from "@/lib/seo"
+
 export default function robots(): MetadataRoute.Robots {
   return {
     rules: {
       userAgent: "*",
       allow: "/",
-      disallow: ["/admin", "/checkout", "/partner", "/pricing"],
+      disallow: ["/admin", "/api", "/checkout", "/partner", "/portal", "/pricing", "/receipt", "/unsubscribe"],
     },
-    sitemap: "https://classin.co.kr/sitemap.xml",
+    sitemap: `${SITE_URL}/sitemap.xml`,
+    host: SITE_URL,
   }
 }

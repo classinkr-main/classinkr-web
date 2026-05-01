@@ -1,14 +1,14 @@
 "use client"
 
 import { usePathname } from "next/navigation"
-
-const META_PIXEL_ID = "868517209506127"
+import { META_PIXEL_ID } from "@/lib/analytics-config"
+import { isPartnerPortalPath } from "@/lib/partner-portal/pathname"
 
 export function MetaPixelScript() {
   const pathname = usePathname()
-  const isInternal = pathname.startsWith("/admin") || pathname.startsWith("/partner")
+  const isInternal = pathname.startsWith("/admin") || isPartnerPortalPath(pathname)
 
-  if (isInternal) return null
+  if (isInternal || !META_PIXEL_ID) return null
 
   return (
     <>
@@ -18,6 +18,7 @@ export function MetaPixelScript() {
         }}
       />
       <noscript>
+        {/* Meta Pixel noscript fallback uses a raw image beacon by design. */}
         {/* eslint-disable-next-line @next/next/no-img-element */}
         <img
           height="1"

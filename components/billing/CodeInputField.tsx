@@ -1,7 +1,7 @@
 "use client"
 
 import { useState } from "react"
-import { CheckCircle2, Loader2, Ticket, X } from "lucide-react"
+import { CheckCircle2, Loader2, X } from "lucide-react"
 
 import { Button } from "@/components/ui/button"
 import { Input } from "@/components/ui/input"
@@ -29,7 +29,7 @@ export function CodeInputField({
   description,
   placeholder,
   applyLabel = "적용",
-  removeLabel = "코드 제거",
+  removeLabel = "제거",
   status,
   onApply,
   onRemove,
@@ -51,27 +51,22 @@ export function CodeInputField({
   }
 
   return (
-    <div className="rounded-[24px] border border-[rgba(8,71,52,0.08)] bg-white p-4">
-      <div className="flex items-start gap-2.5">
-        <div className="flex h-9 w-9 shrink-0 items-center justify-center rounded-xl bg-[#ECFDF5] text-[#084734]">
-          <Ticket className="h-4 w-4" />
-        </div>
-        <div className="min-w-0 flex-1">
-          <p className="text-sm font-semibold text-[#111110]">{title}</p>
-          <p className="mt-0.5 text-xs leading-relaxed text-[#7C8A83]">{description}</p>
-        </div>
+    <div className="rounded-2xl border border-black/10 bg-white p-5">
+      <div className="flex items-baseline justify-between gap-4">
+        <p className="text-[13px] font-semibold text-[#111110]">{title}</p>
       </div>
+      <p className="mt-0.5 text-[12px] leading-relaxed text-[#7C8A83]">{description}</p>
 
       {isApplied ? (
-        <div className="mt-3 flex items-center justify-between gap-3 rounded-xl bg-[#ECFDF5] px-3 py-2.5">
-          <div className="flex items-center gap-2 text-sm text-[#084734]">
+        <div className="mt-3 flex items-center justify-between gap-3 rounded-lg bg-[#ECFDF5] px-3 py-2">
+          <div className="flex items-center gap-2 text-[13px] text-[#084734]">
             <CheckCircle2 className="h-4 w-4" />
             <span>{status.summary}</span>
           </div>
           <button
             type="button"
             onClick={handleRemove}
-            className="inline-flex items-center gap-1 rounded-full bg-white px-2.5 py-1 text-xs font-semibold text-[#084734] shadow-sm hover:bg-[#F8FBF9]"
+            className="inline-flex items-center gap-1 text-[11px] font-medium text-[#44514A] hover:text-[#111110]"
           >
             <X className="h-3 w-3" />
             {removeLabel}
@@ -86,7 +81,7 @@ export function CodeInputField({
               onChange={(event) => setValue(event.target.value)}
               placeholder={placeholder}
               disabled={isLoading}
-              className="h-10 flex-1 rounded-xl border-[rgba(8,71,52,0.12)] bg-white font-mono text-sm uppercase tracking-wider"
+              className="h-10 flex-1 rounded-lg border-black/10 bg-white font-mono text-[13px] uppercase tracking-wider"
             />
             <Button
               type="button"
@@ -95,7 +90,7 @@ export function CodeInputField({
                 void handleApply()
               }}
               disabled={isLoading || value.trim().length === 0}
-              className="h-10 min-w-[72px] rounded-xl bg-[#084734] px-4 text-sm font-semibold text-white hover:bg-[#065C41]"
+              className="h-10 min-w-[64px] rounded-lg bg-[#084734] px-4 text-[13px] font-semibold text-white hover:bg-[#065C41]"
             >
               {isLoading ? <Loader2 className="h-4 w-4 animate-spin" /> : applyLabel}
             </Button>

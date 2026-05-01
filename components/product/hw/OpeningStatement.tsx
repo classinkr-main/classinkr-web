@@ -7,7 +7,7 @@ const LABELS = [
   "OPS 내장",
   "AI 카메라",
   "4K 디스플레이",
-  "0.03s 응답",
+  "50포인트 터치",
 ] as const;
 
 const fadeUp = {
@@ -45,16 +45,16 @@ export default function OpeningStatement() {
             선생님은 수업만 하세요.
           </motion.p>
 
-          {/* Line 2 */}
+          {/* Line 2 — accent */}
           <motion.p
             variants={fadeUp}
             initial="hidden"
             animate={inView ? "visible" : "hidden"}
             transition={transition(0.2)}
-            className="text-[2rem] sm:text-4xl md:text-5xl lg:text-[3.75rem] xl:text-[4.25rem] font-bold tracking-tight text-[#111110]"
+            className="text-[2rem] sm:text-4xl md:text-5xl lg:text-[3.75rem] xl:text-[4.25rem] font-bold tracking-tight text-[#084734]"
             style={{ lineHeight: 1.1, letterSpacing: "-0.045em" }}
           >
-            나머지는 <span className="text-[#084734]">Classin</span>이 알아서 합니다.
+            나머지는 Classin이 알아서 합니다.
           </motion.p>
         </div>
 

@@ -22,7 +22,7 @@ export function Manifesto() {
                         className="block font-black text-white leading-[1.05] break-keep"
                         style={{ fontSize: 'clamp(3rem, 8.5vw, 8.5rem)', letterSpacing: '-0.05em' }}
                     >
-                        수업은 선생님
+                        학원이 강사의 개인기에
                     </span>
                 </motion.div>
 
@@ -35,13 +35,10 @@ export function Manifesto() {
                     className="mb-16 md:mb-20"
                 >
                     <span
-                        className="block font-black text-white leading-[1.05] break-keep whitespace-nowrap"
-                        style={{ fontSize: 'clamp(2.5rem, 8.5vw, 8.5rem)', letterSpacing: '-0.05em' }}
+                        className="block font-black leading-[1.05] break-keep text-transparent bg-clip-text bg-gradient-to-r from-[#6EE7B7] to-[#34d399]"
+                        style={{ fontSize: 'clamp(3rem, 8.5vw, 8.5rem)', letterSpacing: '-0.05em' }}
                     >
-                        개인기가{" "}
-                        <span className="text-transparent bg-clip-text bg-gradient-to-r from-[#6EE7B7] to-[#34d399]">
-                            아닙니다
-                        </span>
+                        의존해서는 안됩니다.
                     </span>
                 </motion.div>
 

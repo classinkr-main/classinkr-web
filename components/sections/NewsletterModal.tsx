@@ -122,7 +122,7 @@ export function NewsletterModal({
 
         <div className="px-6 pb-6 pt-5">
           <DialogHeader className="space-y-2 mb-5">
-            {badge && (
+            {badge && source !== "gnb_materials" && (
               <span
                 className={cn(
                   "inline-flex items-center gap-1.5 text-[11px] font-bold px-3.5 py-1 rounded-full w-fit mb-1 tracking-[0.04em]",
