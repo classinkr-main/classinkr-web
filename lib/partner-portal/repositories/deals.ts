@@ -447,6 +447,25 @@ export async function updateDealLineItem(
   return data as DealLineItem;
 }
 
+export async function updateDealLineItemForDeal(
+  dealId: string,
+  id: string,
+  input: UpdateDealLineItem
+): Promise<DealLineItem | null> {
+  const supabase = createSupabaseAdminClient();
+
+  const { data, error } = await supabase
+    .from("deal_line_items")
+    .update(input)
+    .eq("id", id)
+    .eq("deal_id", dealId)
+    .select()
+    .maybeSingle();
+
+  if (error) throw error;
+  return data ? (data as DealLineItem) : null;
+}
+
 export async function deleteDealLineItem(id: string): Promise<void> {
   const supabase = createSupabaseAdminClient();
 
@@ -456,4 +475,22 @@ export async function deleteDealLineItem(id: string): Promise<void> {
     .eq("id", id);
 
   if (error) throw error;
+}
+
+export async function deleteDealLineItemForDeal(
+  dealId: string,
+  id: string
+): Promise<boolean> {
+  const supabase = createSupabaseAdminClient();
+
+  const { data, error } = await supabase
+    .from("deal_line_items")
+    .delete()
+    .eq("id", id)
+    .eq("deal_id", dealId)
+    .select("id")
+    .maybeSingle();
+
+  if (error) throw error;
+  return Boolean(data);
 }

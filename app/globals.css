@@ -73,6 +73,20 @@
     }
   }
 
+  @keyframes admin-progress {
+    0% {
+      transform: translateX(-120%);
+    }
+
+    55% {
+      transform: translateX(90%);
+    }
+
+    100% {
+      transform: translateX(320%);
+    }
+  }
+
   --animate-blob1: blob1 15s infinite ease-in-out;
   @keyframes blob1 {
     0% { transform: translate(0px, 0px) scale(1); }
@@ -96,6 +110,10 @@
     66% { transform: translate(-80px, -60px) scale(1.1); }
     100% { transform: translate(0px, 0px) scale(1); }
   }
+}
+
+.admin-loading-progress {
+  animation: admin-progress 1.15s ease-in-out infinite;
 }
 
 :root {
@@ -617,6 +635,25 @@
 .animate-dot-pulse { animation: dot-pulse 3s ease-in-out infinite; }
 .animate-marquee { animation: marquee 30s linear infinite; }
 .animate-progress-fill { animation: progress-fill 1.5s ease-out forwards; }
+
+@media (prefers-reduced-motion: reduce) {
+  html {
+    scroll-behavior: auto !important;
+  }
+
+  *,
+  *::before,
+  *::after {
+    animation-duration: 0.001ms !important;
+    animation-iteration-count: 1 !important;
+    scroll-behavior: auto !important;
+    transition-duration: 0.001ms !important;
+  }
+
+  video[autoplay] {
+    animation: none !important;
+  }
+}
 
 /* ── 견적서 인쇄 최적화 ────────────────────────────────────── */
 @media print {

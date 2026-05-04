@@ -73,6 +73,15 @@ export function DemoModal({ children, trackingButton }: { children: React.ReactN
         const formData = new FormData(form)
 
         try {
+            const goal = formData.get("goal") as string
+            const timeline = formData.get("timeline") as string
+            const message = [
+                goal ? `상담 목표: ${goal}` : undefined,
+                timeline ? `희망 시점: ${timeline}` : undefined,
+            ]
+                .filter(Boolean)
+                .join("\n")
+
             const data = await submitLead({
                 source: "demo_modal",
                 name: formData.get("name") as string,
@@ -81,18 +90,19 @@ export function DemoModal({ children, trackingButton }: { children: React.ReactN
                 size: formData.get("size") as string,
                 email: formData.get("email") as string,
                 phone: formData.get("phone") as string,
+                message: message || undefined,
                 marketingConsent,
             })
             setWarning(
                 Array.isArray(data.warnings) && data.warnings.length > 0
-                    ? "문의는 정상 접수되었지만 일부 연동은 지연 중입니다. 운영 검토는 계속 진행됩니다."
+                    ? "상담 요청은 접수되었지만 일부 알림 연동이 지연 중입니다. 내부 기록은 저장되었고 담당자가 확인합니다."
                     : ""
             )
             trackEvent("submit_demo_request", { source: "demo_modal" })
-            toast.success("문의가 접수되었어요")
+            toast.success("상담 요청이 접수되었어요")
             setSubmitted(true)
         } catch (err) {
-            const msg = err instanceof Error ? err.message : "제출에 실패했습니다. 다시 시도해 주세요."
+            const msg = err instanceof Error ? err.message : "상담 요청을 제출하지 못했습니다. 잠시 후 다시 시도해 주세요."
             setError(msg)
             setShake(true)
             setTimeout(() => setShake(false), 200)
@@ -113,10 +123,10 @@ export function DemoModal({ children, trackingButton }: { children: React.ReactN
                             <CheckCircle2 className="h-7 w-7 text-[#084734]" />
                         </div>
                         <h3 className="text-[24px] font-bold tracking-[-0.03em] text-[#111110]">
-                            데모 신청이 접수되었습니다
+                            상담 요청이 접수되었습니다
                         </h3>
                         <p className="max-w-sm text-sm leading-6 text-[#617067]">
-                            {warning || "담당 매니저가 운영 환경에 맞는 흐름으로 빠르게 연락드릴게요."}
+                            {warning || "담당 매니저가 남겨주신 운영 상황을 먼저 확인한 뒤, 필요한 자료와 다음 상담 순서를 안내드릴게요."}
                         </p>
                         <Button
                             onClick={() => handleOpenChange(false)}
@@ -132,13 +142,13 @@ export function DemoModal({ children, trackingButton }: { children: React.ReactN
                         <DialogHeader className="border-b border-[#E7ECE5] bg-[linear-gradient(180deg,#F6FBF7_0%,#FBFCF9_100%)] px-8 py-7">
                             <div className="mb-3 inline-flex w-fit items-center gap-2 rounded-full border border-[#DCE9E1] bg-white px-3 py-1 text-[11px] font-semibold uppercase tracking-[0.18em] text-[#0E7A49]">
                                 <Sparkles className="h-3.5 w-3.5" />
-                                Live Demo
+                                Consultation
                             </div>
                             <DialogTitle className="text-[28px] leading-[1.1] tracking-[-0.04em] text-[#111110]">
-                                운영에 맞는 데모를 바로 설계합니다
+                                운영에 맞는 상담 흐름을 바로 잡아드립니다
                             </DialogTitle>
                             <DialogDescription className="mt-2 max-w-lg text-[15px] leading-7 text-[#617067]">
-                                기관 규모와 관심 기능을 남겨주시면, 제품 소개보다 더 실무적인 흐름으로 안내드릴게요.
+                                기관 규모, 현재 고민, 희망 도입 시점을 남겨주시면 제품 소개보다 더 실무적인 순서로 안내드릴게요.
                             </DialogDescription>
                         </DialogHeader>
                         <form ref={formRef} onSubmit={handleSubmit} className="grid gap-5 px-8 py-7">
@@ -149,18 +159,18 @@ export function DemoModal({ children, trackingButton }: { children: React.ReactN
                                         <Input id="name" name="name" placeholder="홍길동" required aria-invalid={!!error} aria-describedby="demo-error" className={fieldClassName} />
                                     </div>
                                     <div className="grid gap-2">
-                                        <FormLabel htmlFor="org">기관명</FormLabel>
-                                        <Input id="org" name="org" placeholder="예: ClassIn Academy" required aria-invalid={!!error} aria-describedby="demo-error" className={fieldClassName} />
+                                        <FormLabel htmlFor="org">학원명 / 기관명</FormLabel>
+                                        <Input id="org" name="org" placeholder="예: 무궁화 학원" required aria-invalid={!!error} aria-describedby="demo-error" className={fieldClassName} />
                                     </div>
                                 </div>
                                 <div className="grid gap-5 md:grid-cols-2">
                                     <div className="grid gap-2">
                                         <FormLabel htmlFor="role">직함</FormLabel>
-                                        <Input id="role" name="role" placeholder="원장 / 관리자" required aria-invalid={!!error} aria-describedby="demo-error" className={fieldClassName} />
+                                        <Input id="role" name="role" placeholder="원장 / 운영 매니저" required aria-invalid={!!error} aria-describedby="demo-error" className={fieldClassName} />
                                     </div>
                                     <div className="grid gap-2">
-                                        <FormLabel htmlFor="size">학생 수</FormLabel>
-                                        <Input id="size" name="size" placeholder="예: 500+" required aria-invalid={!!error} aria-describedby="demo-error" className={fieldClassName} />
+                                        <FormLabel htmlFor="size">운영 규모</FormLabel>
+                                        <Input id="size" name="size" placeholder="예: 학생 300명 / 강사 20명" required aria-invalid={!!error} aria-describedby="demo-error" className={fieldClassName} />
                                     </div>
                                 </div>
                                 <div className="grid gap-5 md:grid-cols-2">
@@ -173,13 +183,23 @@ export function DemoModal({ children, trackingButton }: { children: React.ReactN
                                         <Input id="phone" name="phone" type="tel" placeholder="010-1234-5678" required aria-invalid={!!error} aria-describedby="demo-error" className={fieldClassName} />
                                     </div>
                                 </div>
+                                <div className="grid gap-5 md:grid-cols-2">
+                                    <div className="grid gap-2">
+                                        <FormLabel htmlFor="goal">상담 우선순위</FormLabel>
+                                        <Input id="goal" name="goal" placeholder="예: 출결 관리, 온라인 수업 전환, 하드웨어 견적" required aria-invalid={!!error} aria-describedby="demo-error" className={fieldClassName} />
+                                    </div>
+                                    <div className="grid gap-2">
+                                        <FormLabel htmlFor="timeline">희망 시점</FormLabel>
+                                        <Input id="timeline" name="timeline" placeholder="예: 2주 내 상담 / 여름학기 전 도입" aria-invalid={!!error} aria-describedby="demo-error" className={fieldClassName} />
+                                    </div>
+                                </div>
                             </div>
 
                             <FormCheckbox
                                 checked={marketingConsent}
                                 onChange={(e) => setMarketingConsent(e.target.checked)}
-                                label={<>제품 업데이트와 교육 인사이트를 이메일로 받아보겠습니다 <span className="text-[#6C776F]">(선택)</span></>}
-                                description="데모 일정 안내와 별도로, 신규 기능 및 웨비나 소식을 받아볼 수 있습니다."
+                                label={<>제품 업데이트와 교육 운영 인사이트를 이메일로 받아보겠습니다 <span className="text-[#6C776F]">(선택)</span></>}
+                                description="상담 일정 안내와 별도로 신규 기능, 웨비나, 운영 사례를 받아볼 수 있습니다."
                             />
 
                             <div className="space-y-3">
@@ -189,14 +209,14 @@ export function DemoModal({ children, trackingButton }: { children: React.ReactN
                                     </FormMessage>
                                 ) : (
                                     <FormHint>
-                                        제출 후 담당자가 운영 목적과 기관 환경을 확인한 뒤 가장 적합한 데모 흐름으로 연락드립니다.
+                                        제출 후 담당자가 운영 목적, 규모, 희망 시점을 확인해 가장 적합한 상담 흐름으로 연락드립니다.
                                     </FormHint>
                                 )}
                                 <Button type="submit" disabled={loading} size="xl" className="h-12 w-full rounded-[18px] text-[15px] font-semibold">
                                     {loading ? (
-                                        <span className="flex items-center gap-2"><Loader2 className="h-4 w-4 animate-spin" />접수 중</span>
+                                        <span className="flex items-center gap-2"><Loader2 className="h-4 w-4 animate-spin" />상담 요청 접수 중</span>
                                     ) : (
-                                        "데모 요청하기"
+                                        "상담 요청하기"
                                     )}
                                 </Button>
                             </div>

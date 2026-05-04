@@ -32,6 +32,7 @@ import {
   createDelayQueueItem,
 } from "@/lib/repositories/automation-delay"
 import { sendBatchEmail, wrapCampaignHtml } from "@/lib/email"
+import { createUnsubscribeUrl } from "@/lib/server/security-tokens"
 import type {
   AutomationRule,
   AutomationRecipient,
@@ -271,9 +272,7 @@ export async function executeRule(ruleId: string): Promise<{
 
     const emailPayloads = await Promise.all(
       recipients.map(async (r) => {
-        const unsubscribeUrl = baseUrl
-          ? `${baseUrl}/api/newsletter/unsubscribe?email=${encodeURIComponent(r.email)}`
-          : undefined
+        const unsubscribeUrl = baseUrl ? createUnsubscribeUrl(baseUrl, r.email) : undefined
         const opts: PersonalizeOpts = { sendDate, unsubscribeUrl }
         const expandedBody    = await expandAiBlocks(rule.template!.body, r)
         const expandedSubject = await expandAiBlocks(rule.template!.subject, r)
@@ -327,9 +326,7 @@ export async function executeDelayQueueItem(
   }
 
   const baseUrl = process.env.NEXT_PUBLIC_SITE_URL
-  const unsubscribeUrl = baseUrl
-    ? `${baseUrl}/api/newsletter/unsubscribe?email=${encodeURIComponent(recipient.email)}`
-    : undefined
+  const unsubscribeUrl = baseUrl ? createUnsubscribeUrl(baseUrl, recipient.email) : undefined
   const sendDate = new Date().toLocaleDateString("ko-KR", { year: "numeric", month: "long", day: "numeric" })
   const opts: PersonalizeOpts = { sendDate, unsubscribeUrl }
 
@@ -389,7 +386,7 @@ export async function triggerOnSubmitRules(payload: OnSubmitPayload): Promise<vo
           try {
             const baseUrl = process.env.NEXT_PUBLIC_SITE_URL
             const unsubscribeUrl = baseUrl
-              ? `${baseUrl}/api/newsletter/unsubscribe?email=${encodeURIComponent(recipient.email)}`
+              ? createUnsubscribeUrl(baseUrl, recipient.email)
               : undefined
             const sendDate = new Date().toLocaleDateString("ko-KR", { year: "numeric", month: "long", day: "numeric" })
             const opts: PersonalizeOpts = { sendDate, unsubscribeUrl }

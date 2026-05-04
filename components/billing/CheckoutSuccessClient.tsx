@@ -30,6 +30,7 @@ export function CheckoutSuccessClient() {
   const paymentKey = searchParams.get("paymentKey") ?? ""
   const orderId = searchParams.get("orderId") ?? ""
   const amount = searchParams.get("amount") ?? ""
+  const checkoutToken = searchParams.get("checkoutToken") ?? ""
 
   const headline = useMemo(() => {
     if (state.kind === "success") return "결제가 정상 승인되었습니다"
@@ -56,6 +57,7 @@ export function CheckoutSuccessClient() {
             paymentKey,
             orderId,
             amount: Number(amount),
+            checkoutToken,
           }),
         })
 
@@ -107,7 +109,7 @@ export function CheckoutSuccessClient() {
     return () => {
       cancelled = true
     }
-  }, [amount, orderId, paymentKey])
+  }, [amount, checkoutToken, orderId, paymentKey])
 
   return (
     <div className="bg-[#FAFAF8] px-4 py-16 font-sans md:py-24">

@@ -41,8 +41,8 @@ export default function AdminAuthGate({ onAuth }: AdminAuthGateProps) {
       const data = await res.json().catch(() => null)
 
       if (res.ok) {
-        sessionStorage.setItem("admin_password", password)
-        sessionStorage.setItem("admin_token", password)
+        sessionStorage.setItem("admin_password", "legacy-session")
+        sessionStorage.setItem("admin_token", "legacy-session")
         sessionStorage.setItem("admin_role", data?.role ?? "admin")
         sessionStorage.setItem("admin_name", data?.name ?? "Admin")
 

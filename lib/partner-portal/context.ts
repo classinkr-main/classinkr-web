@@ -1,7 +1,7 @@
 import { createServerClient } from "@supabase/ssr";
 import type { NextRequest } from "next/server";
 
-import { getVerifiedAdminContext } from "@/lib/admin-auth";
+import { getVerifiedAdminContext, hasAdminApiRole } from "@/lib/admin-auth";
 import { createSupabaseAdminClient } from "@/lib/supabase/admin";
 import type { Database } from "@/lib/supabase/database.types";
 import {
@@ -87,7 +87,7 @@ export async function resolvePartnerAccountContext(
   }
 
   // 2. Super admin fallback — admin_session 쿠키가 있으면 첫 번째 파트너 계정으로 진입
-  return resolveSuperAdminAsPartner(req);
+  return null;
 }
 
 async function resolveSuperAdminAsPartner(
@@ -97,7 +97,7 @@ async function resolveSuperAdminAsPartner(
   const adminCtx = await getVerifiedAdminContext(req);
   if (!adminCtx) return null;
   // branch 어드민은 제외, admin 롤만 파트너 접근 허용
-  if (adminCtx.role !== "admin" && adminCtx.role !== "SUPER_ADMIN") return null;
+  if (!hasAdminApiRole(adminCtx.role)) return null;
 
   const db = createSupabaseAdminClient();
 

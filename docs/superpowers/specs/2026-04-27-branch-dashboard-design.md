@@ -23,18 +23,18 @@
 
 | 시트 | spreadsheet ID | 용도 | 비고 |
 |---|---|---|---|
-| Sales Branding | `1BTXyid66wpTDTCA-fm-lTrJJ1G4KxzjhGWsN7LLP4qg` | DSH/SEG/REV/KPI 4 탭 | 분석 대상 = BD/MKT/CSM 모든 팀 |
-| Hardware | `1XZNIPCYE8sZnyk2K-iHVAJmpaFFBvbDM1q_jsxK4t-k` | 판매대시보드/재고현황/2.입고 현황/3.출고 현황 | 4 탭 |
+| Sales Branding | `<GOOGLE_BRANCH_DASHBOARD_SHEET_ID>` | DSH/SEG/REV/KPI 4 탭 | 분석 대상 = BD/MKT/CSM 모든 팀 |
+| Hardware | `<GOOGLE_BRANCH_HARDWARE_SHEET_ID>` | 판매대시보드/재고현황/2.입고 현황/3.출고 현황 | 4 탭 |
 
-서비스 계정 = 기존 `.env.local` 의 `GOOGLE_SERVICE_ACCOUNT_EMAIL` 와 동일 (`classin-admin@classin-home.iam.gserviceaccount.com`). 두 시트 모두 해당 이메일에 **Viewer** 권한 공유 필요 (시트 소유자가 수동 1회).
+서비스 계정 = 기존 `.env.local` 의 `GOOGLE_SERVICE_ACCOUNT_EMAIL` 와 동일. 두 시트 모두 해당 이메일에 **Viewer** 권한 공유 필요 (시트 소유자가 수동 1회).
 
 ## 3. 환경 변수
 
 `.env.local` 추가 (3개 신규, `CRON_SECRET` 은 기존 키 재사용):
 
 ```
-GOOGLE_BRANCH_DASHBOARD_SHEET_ID=1BTXyid66wpTDTCA-fm-lTrJJ1G4KxzjhGWsN7LLP4qg
-GOOGLE_BRANCH_HARDWARE_SHEET_ID=1XZNIPCYE8sZnyk2K-iHVAJmpaFFBvbDM1q_jsxK4t-k
+GOOGLE_BRANCH_DASHBOARD_SHEET_ID=<sheet-id>
+GOOGLE_BRANCH_HARDWARE_SHEET_ID=<sheet-id>
 GEMINI_API_KEY=<Google AI Studio 키. 절대 커밋 금지>
 GEMINI_MODEL=gemini-3.1-pro     # 옵션, 기본값 (env 미설정 시 적용)
 ```

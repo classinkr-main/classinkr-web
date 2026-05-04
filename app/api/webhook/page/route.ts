@@ -1,6 +1,7 @@
 import { NextRequest, NextResponse } from "next/server"
 
 import type { LeadSource } from "@/lib/lead-types"
+import { checkRateLimit, getClientIp } from "@/lib/server/rate-limit"
 import { resolveLeadSource, submitLeadCapture } from "@/lib/server/lead-capture"
 
 const PAGE_FORM_SOURCE_MAP = {
@@ -37,6 +38,12 @@ function pickString(...values: unknown[]) {
   }
 
   return undefined
+}
+
+function isWebhookAuthorized(req: NextRequest) {
+  const secret = process.env.PAGE_WEBHOOK_SECRET?.trim()
+  if (!secret) return process.env.NODE_ENV !== "production"
+  return req.headers.get("x-webhook-secret") === secret
 }
 
 function resolvePageSource(rawSource: unknown, rawFormType: unknown) {
@@ -101,6 +108,22 @@ export async function OPTIONS() {
 }
 
 export async function POST(req: NextRequest) {
+  if (!isWebhookAuthorized(req)) {
+    return withCors(NextResponse.json({ error: "Unauthorized" }, { status: 401 }))
+  }
+
+  const ip = getClientIp(req)
+  const { allowed } = checkRateLimit(ip, "page-webhook", {
+    windowMs: 60_000,
+    max: 10,
+  })
+
+  if (!allowed) {
+    return withCors(
+      NextResponse.json({ error: "Too many requests." }, { status: 429 })
+    )
+  }
+
   try {
     const raw = await req.json()
     const body =

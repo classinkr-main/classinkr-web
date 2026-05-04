@@ -237,6 +237,7 @@ export function SubscriptionCheckoutPanel() {
       const payload = (await response.json().catch(() => null)) as
         | {
             orderId: string
+            checkoutToken: string
             orderName: string
             amount: number
             amountKrw: number
@@ -254,11 +255,12 @@ export function SubscriptionCheckoutPanel() {
       // 서버가 확정한 KRW 금액을 위젯에 재반영 (환율 불일치 방지)
       await widgetsRef.current.setAmount({ currency: "KRW", value: payload.amountKrw })
 
+      const checkoutQuery = `checkoutToken=${encodeURIComponent(payload.checkoutToken)}`
       await widgetsRef.current.requestPayment({
         orderId: payload.orderId,
         orderName: payload.orderName,
-        successUrl: `${window.location.origin}/checkout/success`,
-        failUrl: `${window.location.origin}/checkout/fail`,
+        successUrl: `${window.location.origin}/checkout/success?${checkoutQuery}`,
+        failUrl: `${window.location.origin}/checkout/fail?${checkoutQuery}`,
         customerEmail: form.buyerEmail,
         customerName: form.buyerName,
         customerMobilePhone: form.buyerPhone.replace(/\D/g, ""),

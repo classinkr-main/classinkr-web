@@ -206,24 +206,17 @@ export async function recordPromoRedemption(input: {
   currency: string
 }) {
   const supabase = createSupabaseAdminClient()
-  // redemption row insert + used_count 증가 (간단화: 앱 레벨에서 업데이트. 동시성 보호는 1차 범위 밖)
-  const { error: redemptionError } = await supabase.from("promo_code_redemptions").insert({
-    promo_code_id: input.promoCodeId,
-    order_id: input.orderId,
-    amount_before: input.amountBefore,
-    amount_after: input.amountAfter,
-    currency: input.currency,
-  })
-  if (redemptionError) throw redemptionError
-
-  const { error: countError } = await supabase.rpc("increment_promo_code_used_count", {
+  // Keep redemption insert and usage increment in one locked database function.
+  const { data, error } = await supabase.rpc("redeem_promo_code", {
     p_promo_code_id: input.promoCodeId,
+    p_order_id: input.orderId,
+    p_amount_before: input.amountBefore,
+    p_amount_after: input.amountAfter,
+    p_currency: input.currency,
   })
+  if (error) throw error
 
-  if (countError) {
-    // RPC failed — do not fall back to a racy SELECT+UPDATE.
-    // The RPC (increment_promo_code_used_count) uses a row-level lock and is the only
-    // safe way to increment. If it fails, surface the error so ops can investigate.
-    throw countError
+  if (data !== true) {
+    throw new Error("Promo code usage limit has been exhausted.")
   }
 }

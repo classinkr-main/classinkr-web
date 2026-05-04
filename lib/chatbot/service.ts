@@ -124,11 +124,11 @@ function tokenize(value: string) {
 function normalizeQuestion(raw: unknown): NormalizedQuestion {
   const original = normalizeString(raw)
   if (!original) {
-    throw new ChatbotInputError("질문을 입력해 주세요.")
+    throw new ChatbotInputError("상담받고 싶은 내용을 입력해 주세요.")
   }
 
   if (original.length > MAX_MESSAGE_LENGTH) {
-    throw new ChatbotInputError(`질문은 ${MAX_MESSAGE_LENGTH}자 이내로 입력해 주세요.`)
+    throw new ChatbotInputError(`문의 내용은 ${MAX_MESSAGE_LENGTH}자 이내로 입력해 주세요.`)
   }
 
   const normalized = original.replace(/\s+/g, " ").trim()
@@ -356,11 +356,12 @@ async function searchKnowledgeSources(
 function detectCategory(question: NormalizedQuestion, sources: ChatbotSource[]) {
   const text = `${question.redacted} ${sources.map((source) => source.category).join(" ")}`.toLowerCase()
 
-  if (/결제|요금|가격|영수증|세금|청구|구독|환불/.test(text)) return "billing"
-  if (/하드웨어|보드|board|설치|납품|as|a\/s/.test(text)) return "hardware"
-  if (/접속|로그인|마이크|소리|오류|안됨|장애|끊김|로딩/.test(text)) return "troubleshooting"
-  if (/도입|시작|초기|세팅|설정|초대|온보딩/.test(text)) return "onboarding"
-  if (/수업|출결|보강|교사|학생/.test(text)) return "classroom"
+  if (/결제|요금|가격|견적|영수증|세금|세금계산서|입금|청구|구독|환불|정산/.test(text)) return "billing"
+  if (/하드웨어|전자칠판|보드|board|카메라|마이크|스피커|설치|납품|배송|as|a\/s|수리|고장/.test(text)) return "hardware"
+  if (/접속|로그인|계정|비밀번호|소리|오류|에러|안됨|안 돼|권한|장애|끊김|로딩/.test(text)) return "troubleshooting"
+  if (/도입|시작|초기|세팅|설정|초대|온보딩|첫 수업|준비|교육|전환/.test(text)) return "onboarding"
+  if (/수업|출결|출석|보강|교사|학생|학부모|집중|운영|관리|리포트|숙제|과제/.test(text)) return "classroom"
+  if (/상담|문의|데모|시연|컨설팅|연락|미팅|제안|상담사|담당자/.test(text)) return "consultation"
 
   return sources[0]?.category ?? "general"
 }
@@ -369,7 +370,7 @@ function detectHandoffIntent(question: NormalizedQuestion, category: string): Ha
   const text = question.redacted.toLowerCase()
 
   if (
-    /컴플레인|불만|환불|짜증|최악|별로|안됨|안 됨|안 되|장애|오류|에러|버그|끊김|느려|느리|문제\s*해결|자세히|자세한\s*얘기|자세한\s*상담|상세\s*상담|기술\s*지원|이슈|고장|파손|as|a\/s/.test(
+    /컴플레인|불만|환불|취소|짜증|최악|별로|안됨|안 됨|안 되|장애|오류|에러|버그|끊김|느려|느리|기술\s*지원|이슈|고장|파손|계정|로그인|접속|소리|마이크|as|a\/s/.test(
       text
     )
   ) {
@@ -377,7 +378,7 @@ function detectHandoffIntent(question: NormalizedQuestion, category: string): Ha
   }
 
   if (
-    /데모|시연|도입\s*문의|도입\s*상담|도입\s*검토|견적|가격\s*문의|영업|구매\s*상담|체험|사용해\s*보고/.test(
+    /데모|시연|도입\s*문의|도입\s*상담|도입\s*검토|견적|요금|비용|플랜|가격\s*문의|영업|구매\s*상담|체험|사용해\s*보고|연락|미팅|제안/.test(
       text
     )
   ) {
@@ -401,6 +402,10 @@ function detectIntent(category: string) {
       return "troubleshooting"
     case "onboarding":
       return "onboarding"
+    case "classroom":
+      return "classroom_consulting"
+    case "consultation":
+      return "sales_consulting"
     default:
       return "docs_lookup"
   }
@@ -409,23 +414,64 @@ function detectIntent(category: string) {
 function buildSuggestedQuestions(sources: ChatbotSource[]) {
   const suggestions = sources.map((source) =>
     source.heading && source.heading !== "요약"
-      ? `${source.heading} 자세히 알려줘`
-      : `${source.title} 자세히 알려줘`
+      ? `${source.heading} 내용을 더 알려주세요`
+      : `${source.title} 내용을 더 알려주세요`
   )
 
-  return Array.from(new Set([...suggestions, "상담 연결이 필요해요"])).slice(0, 3)
+  return Array.from(new Set([...suggestions, "담당자 상담으로 이어주세요"])).slice(0, 3)
+}
+
+function wantsHumanConsultation(question: NormalizedQuestion) {
+  return /상담|문의|연락|견적|데모|시연|미팅|제안|담당자|통화|구매|도입\s*검토|도입\s*상담/.test(
+    question.redacted.toLowerCase()
+  )
+}
+
+function getNextStepByCategory(category: string) {
+  switch (category) {
+    case "billing":
+      return "결제 수단, 사업자 정보, 필요한 증빙 종류를 함께 알려주시면 처리 경로를 더 정확히 안내할 수 있어요."
+    case "hardware":
+      return "설치 장소, 장비 모델, 증상이나 필요한 수량을 알려주시면 확인 범위를 좁힐 수 있어요."
+    case "troubleshooting":
+      return "사용 중인 기기, 브라우저/앱, 오류가 발생한 화면을 알려주시면 해결 순서를 더 잘 잡을 수 있어요."
+    case "onboarding":
+      return "학생 수, 수업 방식, 희망 시작 시점을 알려주시면 도입 준비 순서를 맞춰드릴게요."
+    case "classroom":
+      return "현재 수업 운영에서 가장 막히는 지점을 알려주시면 기능과 운영 방법을 함께 제안드릴게요."
+    default:
+      return "조금 더 구체적인 상황을 알려주시면 필요한 문서와 상담 경로를 이어서 안내드릴게요."
+  }
 }
 
 function composeAnswer(question: NormalizedQuestion, sources: ChatbotSource[]): Omit<ChatbotQueryResponse, "answerEventId" | "sessionId" | "warning" | "handoffIntent"> {
   if (sources.length === 0) {
+    const needsConsultation = wantsHumanConsultation(question)
+    const isVague = question.tokens.length < 2 && !needsConsultation
+
+    if (isVague) {
+      return {
+        answer:
+          "상황을 조금만 더 알려주시면 더 정확히 안내드릴 수 있어요. 예를 들어 도입 상담, 수업 운영, 결제/영수증, 계정 오류 중 어떤 내용인지 적어주세요.",
+        answerMode: "clarifying_question",
+        confidence: 0.25,
+        needsHandoff: false,
+        sources: [],
+        suggestedQuestions: ["도입 상담을 받고 싶어요", "수업 운영 문제를 해결하고 싶어요", "결제나 영수증 문의가 있어요"],
+        unresolved: true,
+      }
+    }
+
     return {
       answer:
-        "확인 가능한 문서에서 바로 답을 찾지 못했습니다. 질문을 조금 더 구체적으로 적어주시거나 상담 연결을 요청해 주세요. 운영팀이 확인해야 하는 내용일 수 있습니다.",
-      answerMode: "fallback",
-      confidence: 0.15,
+        needsConsultation
+          ? "상담이 필요한 내용으로 확인했습니다. 학원 규모, 희망 도입 시점, 현재 운영에서 가장 해결하고 싶은 문제를 남겨주시면 담당자가 이어서 안내드릴게요."
+          : "확인 가능한 문서에서 바로 답을 찾지 못했습니다. 운영 환경이나 오류 상황을 조금 더 구체적으로 알려주시거나 상담으로 연결해 주세요.",
+      answerMode: needsConsultation ? "handoff" : "fallback",
+      confidence: needsConsultation ? 0.4 : 0.15,
       needsHandoff: true,
       sources: [],
-      suggestedQuestions: ["도입 상담을 받고 싶어요", "요금이 궁금해요", "수업 접속 문제가 있어요"],
+      suggestedQuestions: ["도입 상담을 받고 싶어요", "요금과 견적이 궁금해요", "계정이나 수업 접속 문제가 있어요"],
       unresolved: true,
     }
   }
@@ -433,10 +479,11 @@ function composeAnswer(question: NormalizedQuestion, sources: ChatbotSource[]): 
   const top = sources[0]
   const category = detectCategory(question, sources)
   const confidence = Math.min(0.92, Math.max(0.35, 0.45 + top.score / 25))
-  const lowConfidence = confidence < 0.55
+  const lowConfidence = confidence < 0.58
   const sensitiveLowConfidence =
     lowConfidence && ["billing", "hardware", "troubleshooting"].includes(category)
-  const answerMode: AnswerMode = sensitiveLowConfidence
+  const explicitConsultation = wantsHumanConsultation(question)
+  const answerMode: AnswerMode = explicitConsultation || sensitiveLowConfidence
     ? "handoff"
     : top.score >= 4
       ? "direct_answer"
@@ -448,8 +495,8 @@ function composeAnswer(question: NormalizedQuestion, sources: ChatbotSource[]): 
 
   const answer =
     answerMode === "handoff"
-      ? `관련 문서는 찾았지만 정확한 처리를 위해 상담 확인이 필요해 보입니다. 우선 문서 기준으로는 "${top.title}"에서 ${top.excerpt} 내용을 확인할 수 있습니다.\n\n관련 문서:\n${sourceLines}`
-      : `문서 기준으로 안내드리면, "${top.title}"${top.heading ? `의 ${top.heading}` : ""}에서 ${top.excerpt} 내용을 확인할 수 있습니다.\n\n관련 문서:\n${sourceLines}`
+      ? `관련 기준은 찾았습니다. 다만 이 내용은 실제 계정, 계약, 장비 상태, 도입 조건에 따라 달라질 수 있어 상담으로 이어드리는 편이 안전합니다.\n\n문서 기준으로는 "${top.title}"${top.heading ? `의 ${top.heading}` : ""}에서 ${top.excerpt} 내용을 확인할 수 있습니다.\n\n다음 단계: ${getNextStepByCategory(category)}\n\n관련 문서:\n${sourceLines}`
+      : `문서 기준으로 먼저 정리드리면, "${top.title}"${top.heading ? `의 ${top.heading}` : ""}에서 ${top.excerpt} 내용을 확인할 수 있습니다.\n\n다음 단계: ${getNextStepByCategory(category)}\n\n관련 문서:\n${sourceLines}`
 
   return {
     answer,

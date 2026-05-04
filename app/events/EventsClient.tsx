@@ -48,7 +48,8 @@ export default function EventsClient({ events }: { events: PublicEvent[] }) {
   }, [activeCategory, searchQuery, events])
 
   const highlighted = filtered.filter((e) => e.highlight)
-  const rest = filtered
+  const featuredEvent = highlighted[0] ?? null
+  const rest = featuredEvent ? filtered.filter((e) => e.id !== featuredEvent.id) : filtered
   const isAnyHovered = hoveredId !== null
 
   const activeCount = events.filter((e) => e.status === "진행 중").length
@@ -106,25 +107,28 @@ export default function EventsClient({ events }: { events: PublicEvent[] }) {
             </div>
 
             {/* Right: Featured */}
-            {highlighted.length > 0 && (
+            {featuredEvent && (
               <motion.div
                 initial={{ opacity: 0, x: 24 }}
                 animate={{ opacity: 1, x: 0 }}
                 transition={{ duration: 0.6, delay: 0.15 }}
               >
                 {(() => {
-                  const event = highlighted[0]
+                  const event = featuredEvent
                   const heroHref = event.slug ? `/events/${event.slug}` : null
                   return (
-                    <div className="relative min-h-[300px] overflow-hidden rounded-2xl text-white sm:min-h-[340px] md:min-h-[400px]">
+                    <div className="relative min-h-[300px] overflow-hidden rounded-2xl bg-[#08231d] text-white sm:min-h-[340px] md:min-h-[400px]">
                       {event.imageUrl ? (
-                        <Image
-                          src={event.imageUrl}
-                          alt={event.title}
-                          fill
-                          className="object-cover"
-                          unoptimized
-                        />
+                        <>
+                          <div className="absolute inset-0 bg-gradient-to-br from-[#08231d] via-[#0d3a2e] to-[#111110]" />
+                          <Image
+                            src={event.imageUrl}
+                            alt={event.title}
+                            fill
+                            className="object-contain p-4 drop-shadow-[0_18px_35px_rgba(0,0,0,0.35)] sm:p-6"
+                            sizes="(min-width: 1024px) 560px, 100vw"
+                          />
+                        </>
                       ) : (
                         <div className="absolute inset-0 bg-gradient-to-br from-emerald-900 to-[#084734]" />
                       )}
@@ -280,13 +284,13 @@ export default function EventsClient({ events }: { events: PublicEvent[] }) {
                   </div>
 
                   {event.imageUrl ? (
-                    <div className="relative w-full h-28 md:h-[110px] rounded-xl overflow-hidden bg-[#f0f0ec] shrink-0 order-first md:order-last">
+                    <div className="relative w-full h-28 md:h-[110px] rounded-xl overflow-hidden bg-white ring-1 ring-[#e8e8e4] shrink-0 order-first md:order-last">
                       <Image
                         src={event.imageUrl}
                         alt={`${event.title} 포스터`}
                         fill
-                        className="object-cover transition-transform duration-500 group-hover:scale-[1.04]"
-                        unoptimized
+                        className="object-contain p-1.5"
+                        sizes="(min-width: 768px) 180px, 100vw"
                       />
                     </div>
                   ) : (

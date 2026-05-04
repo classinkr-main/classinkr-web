@@ -1,5 +1,6 @@
 "use client"
 
+import Link from "next/link"
 import { useCallback, useEffect, useMemo, useState } from "react"
 import {
   ArrowRight,
@@ -577,9 +578,9 @@ function LeftSidebar({
         <div>
           <div className="mb-3 flex items-center justify-between">
             <h3 className="text-xs font-semibold text-[#111110]">급한 일정</h3>
-            <a href="/partner/calendar" className="text-[10px] text-[#1a1a1a]/40 hover:text-[#1a1a1a]">
+            <Link href="/partner/calendar" className="text-[10px] text-[#1a1a1a]/40 hover:text-[#1a1a1a]">
               전체 →
-            </a>
+            </Link>
           </div>
           {upcomingItems.length === 0 ? (
             <p className="text-xs text-[#1a1a1a]/35">예정된 일정이 없습니다.</p>
@@ -1185,7 +1186,7 @@ export function PartnerPortalHome(props: PartnerPortalHomeProps = {}) {
                       </span>
                     </div>
                     <div className="flex items-center gap-2">
-                      <a href="/partner/documents" onClick={e => e.stopPropagation()} className="text-xs text-[#1a1a1a]/40 hover:text-[#1a1a1a]">문서 →</a>
+                      <Link href="/partner/documents" onClick={e => e.stopPropagation()} className="text-xs text-[#1a1a1a]/40 hover:text-[#1a1a1a]">문서 →</Link>
                       <ChevronDown className={`h-3.5 w-3.5 text-[#1a1a1a]/30 transition-transform duration-200 ${quoteOpen ? "" : "-rotate-90"}`} />
                     </div>
                   </button>
@@ -1239,7 +1240,7 @@ export function PartnerPortalHome(props: PartnerPortalHomeProps = {}) {
                       </span>
                     </div>
                     <div className="flex items-center gap-2">
-                      <a href="/partner/documents" onClick={e => e.stopPropagation()} className="text-xs text-[#1a1a1a]/40 hover:text-[#1a1a1a]">계약서 →</a>
+                      <Link href="/partner/documents" onClick={e => e.stopPropagation()} className="text-xs text-[#1a1a1a]/40 hover:text-[#1a1a1a]">계약서 →</Link>
                       <ChevronDown className={`h-3.5 w-3.5 text-[#1a1a1a]/30 transition-transform duration-200 ${contractOpen ? "" : "-rotate-90"}`} />
                     </div>
                   </button>

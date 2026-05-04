@@ -2,7 +2,7 @@
 
 import { useState, useEffect } from "react"
 import { usePathname } from "next/navigation"
-import { motion, AnimatePresence } from "framer-motion"
+import { motion, AnimatePresence, useReducedMotion } from "framer-motion"
 import Link from "next/link"
 import { MessageSquare, X } from "lucide-react"
 
@@ -10,6 +10,7 @@ import { isPartnerPortalPath } from "@/lib/partner-portal/pathname"
 
 export function MobileFloatingCTA() {
     const pathname = usePathname()
+    const shouldReduceMotion = useReducedMotion()
     const [visible, setVisible] = useState(false)
     const [dismissed, setDismissed] = useState(false)
 
@@ -50,15 +51,21 @@ export function MobileFloatingCTA() {
                         className="fixed bottom-[calc(env(safe-area-inset-bottom)+1rem)] left-1/2 z-40 w-[calc(100vw-2rem)] max-w-sm -translate-x-1/2"
                     >
                         <div className="relative flex items-center justify-center">
-                            <span className="absolute inset-0 animate-ping rounded-full bg-primary opacity-20" />
+                            {!shouldReduceMotion ? (
+                                <span className="absolute inset-0 animate-ping rounded-full bg-primary opacity-20" />
+                            ) : null}
 
                             <motion.div
-                                animate={{ y: [0, -4, 0] }}
-                                transition={{
-                                    repeat: Infinity,
-                                    duration: 2.8,
-                                    ease: "easeInOut",
-                                }}
+                                animate={shouldReduceMotion ? undefined : { y: [0, -4, 0] }}
+                                transition={
+                                    shouldReduceMotion
+                                        ? undefined
+                                        : {
+                                            repeat: Infinity,
+                                            duration: 2.8,
+                                            ease: "easeInOut",
+                                        }
+                                }
                                 className="w-full"
                             >
                                 <Link

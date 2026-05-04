@@ -1,6 +1,7 @@
 import { NextRequest, NextResponse } from "next/server"
 import { authenticateUser, decodeSession, encodeSession } from "@/lib/admin-auth"
 import { ADMIN_AUTH_ERROR_CODE } from "@/lib/admin-auth-errors"
+import { checkRateLimit, getClientIp } from "@/lib/server/rate-limit"
 import { createSupabaseServerClient } from "@/lib/supabase/server"
 import { hasSupabaseBrowserEnv } from "@/lib/supabase/public-env"
 
@@ -12,11 +13,26 @@ export async function GET(req: NextRequest) {
     return NextResponse.json({ error: "Unauthorized" }, { status: 401 })
   }
 
-  return NextResponse.json({ ok: true, ...session })
+  return NextResponse.json({
+    ok: true,
+    name: session.name,
+    role: session.role,
+    branch: session.branch,
+  })
 }
 
 // POST — 레거시 관리자 비밀번호 로그인
 export async function POST(req: NextRequest) {
+  const ip = getClientIp(req)
+  const { allowed } = checkRateLimit(ip, "admin-auth", {
+    windowMs: 5 * 60_000,
+    max: 10,
+  })
+
+  if (!allowed) {
+    return NextResponse.json({ error: "Too many requests." }, { status: 429 })
+  }
+
   const body = await req.json().catch(() => null)
   const password = typeof body?.password === "string" ? body.password : ""
   const { session, code } = authenticateUser(password)
@@ -31,7 +47,12 @@ export async function POST(req: NextRequest) {
     )
   }
 
-  const res = NextResponse.json({ ok: true, ...session })
+  const res = NextResponse.json({
+    ok: true,
+    name: session.name,
+    role: session.role,
+    branch: session.branch,
+  })
   res.cookies.set("admin_session", encodeSession(session), {
     httpOnly: true,
     maxAge: 60 * 60 * 24 * 7,

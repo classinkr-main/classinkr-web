@@ -8,7 +8,7 @@ import {
   MessageSquare, Tag, Save, Loader2, Plus,
   PhoneCall, Bell, UserPlus, Link2, ExternalLink,
 } from "lucide-react"
-import { clearAdminSessionStorage } from "@/lib/admin-client"
+import { adminFetch, adminFetchJsonCached } from "@/lib/admin-client"
 import { Button } from "@/components/ui/button"
 import type { LeadRecord, LeadStatus } from "@/lib/repositories/leads"
 import type { ContactLogRecord, ContactLogType, ContactLogResult } from "@/lib/repositories/contact-logs"
@@ -72,26 +72,6 @@ function ScoreBadge({ score }: { score: number }) {
 }
 
 // ─── 인증 헬퍼 ─────────────────────────────────────────────────
-async function adminFetch(url: string, options?: RequestInit) {
-  const token = (
-    typeof window !== "undefined"
-      ? sessionStorage.getItem("admin_token") ?? sessionStorage.getItem("admin_password")
-      : null
-  ) ?? ""
-
-  const response = await fetch(url, {
-    ...options,
-    headers: { "Content-Type": "application/json", Authorization: `Bearer ${token}`, ...options?.headers },
-  })
-
-  if (response.status === 401 && typeof window !== "undefined") {
-    clearAdminSessionStorage()
-    window.location.href = "/admin/login"
-  }
-
-  return response
-}
-
 async function readAdminResponse<T>(response: Response, fallbackMessage: string): Promise<T> {
   const data = await response.json().catch(() => null)
   if (!response.ok) {
@@ -625,9 +605,7 @@ export default function CrmPage() {
     let cancelled = false
     void (async () => {
       try {
-        const res = await adminFetch("/api/admin/events")
-        if (!res.ok) return
-        const data = (await res.json()) as PublicEvent[]
+        const data = await adminFetchJsonCached<PublicEvent[]>("/api/admin/events", undefined, { ttlMs: 60_000 })
         if (!cancelled) setEvents(Array.isArray(data) ? data : [])
       } catch {
         /* noop — 행사 연결 UI는 events 없어도 동작 */
@@ -644,8 +622,7 @@ export default function CrmPage() {
   const fetchLeads = useCallback(async () => {
     setLoading(true)
     try {
-      const res = await adminFetch("/api/admin/leads")
-      const data = await readAdminResponse<{ leads: LeadRecord[] }>(res, "리드를 불러오지 못했습니다.")
+      const data = await adminFetchJsonCached<{ leads: LeadRecord[] }>("/api/admin/leads", undefined, { ttlMs: 45_000 })
       setLeads(data.leads)
     } catch (err) {
       showToast(err instanceof Error ? err.message : "리드를 불러오지 못했습니다.", "error")

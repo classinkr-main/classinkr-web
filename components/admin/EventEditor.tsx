@@ -30,7 +30,7 @@ import BlogMarkdownRenderer from "@/components/blog/BlogMarkdownRenderer"
 import RichMarkdownEditor, { type RichMarkdownEditorHandle } from "@/components/admin/RichMarkdownEditor"
 import { getAdminToken } from "@/lib/admin-client"
 import { extractMarkdownHeadings } from "@/lib/blog-markdown"
-import type { PublicEvent, EventCategory, EventStatus } from "@/lib/types/public-events"
+import type { PublicEvent, EventCategory, EventPublicationStatus, EventStatus } from "@/lib/types/public-events"
 import { EVENT_CATEGORIES } from "@/lib/types/public-events"
 
 function ToolbarButton({
@@ -56,6 +56,12 @@ function ToolbarButton({
 
 type StatusOverrideOption = "auto" | EventStatus
 type DraftState = "saved" | "saving" | "dirty"
+const MAX_IMAGE_UPLOAD_BYTES = 5 * 1024 * 1024
+const EVENT_POSTER_PREVIEWS = [
+  { label: "상단 하이라이트", ratio: "7:5", className: "aspect-[7/5]" },
+  { label: "목록 썸네일", ratio: "18:11", className: "aspect-[18/11]" },
+  { label: "상세 포스터", ratio: "4:5", className: "aspect-[4/5]" },
+] as const
 
 interface FormState {
   title: string
@@ -70,11 +76,21 @@ interface FormState {
   ctaHref: string
   highlight: boolean
   statusOverride: StatusOverrideOption
+  publicationStatus: EventPublicationStatus
 }
 
 function toLocalDatetime(iso: string | null): string {
   if (!iso) return ""
-  return new Date(iso).toISOString().slice(0, 16)
+  const d = new Date(iso)
+  if (Number.isNaN(d.getTime())) return ""
+  const offsetMs = d.getTimezoneOffset() * 60_000
+  return new Date(d.getTime() - offsetMs).toISOString().slice(0, 16)
+}
+
+function localDatetimeToIso(value: string): string {
+  if (!value) return ""
+  const d = new Date(value)
+  return Number.isNaN(d.getTime()) ? value : d.toISOString()
 }
 
 function formatKoreanDate(value: string): string {
@@ -121,6 +137,7 @@ export default function EventEditor({ event }: { event: PublicEvent }) {
     ctaHref: event.ctaHref ?? "",
     highlight: event.highlight,
     statusOverride: (event.statusOverride as StatusOverrideOption) ?? "auto",
+    publicationStatus: event.publicationStatus ?? "draft",
   })
   const [content, setContent] = useState(event.contentMarkdown ?? "")
   const [imagePath, setImagePath] = useState<string | null>(event.imagePath ?? null)
@@ -144,7 +161,13 @@ export default function EventEditor({ event }: { event: PublicEvent }) {
   function handleFileChange(e: React.ChangeEvent<HTMLInputElement>) {
     const file = e.target.files?.[0]
     if (!file) return
+    if (file.size > MAX_IMAGE_UPLOAD_BYTES) {
+      setSaveError("이미지 파일은 5MB 이하만 업로드할 수 있습니다.")
+      e.target.value = ""
+      return
+    }
     if (imagePreview?.startsWith("blob:")) URL.revokeObjectURL(imagePreview)
+    setSaveError(null)
     setImageFile(file)
     setImagePreview(URL.createObjectURL(file))
     e.target.value = ""
@@ -185,13 +208,14 @@ export default function EventEditor({ event }: { event: PublicEvent }) {
         description: form.description || null,
         category: form.category,
         tag: form.tag || null,
-        startsAt: form.startsAt,
-        endsAt: form.endsAt || null,
+        startsAt: localDatetimeToIso(form.startsAt),
+        endsAt: form.endsAt ? localDatetimeToIso(form.endsAt) : null,
         location: form.location || null,
         ctaLabel: form.ctaLabel || "자세히 보기",
         ctaHref: form.ctaHref || "/contact",
         highlight: form.highlight,
         statusOverride: form.statusOverride === "auto" ? null : form.statusOverride,
+        publicationStatus: form.publicationStatus,
         contentMarkdown: content || null,
         imagePath: currentImagePath,
       }
@@ -315,13 +339,14 @@ export default function EventEditor({ event }: { event: PublicEvent }) {
                   </div>
 
                   {imagePreview && (
-                    <div className="overflow-hidden rounded-[28px] border border-[#e8e8e4] shadow-sm">
-                      <div className="relative aspect-[4/3] overflow-hidden">
+                    <div className="overflow-hidden rounded-[28px] border border-[#e8e8e4] bg-white shadow-sm">
+                      <div className="relative aspect-[4/5] overflow-hidden bg-[#f7f7f4]">
                         <Image
                           src={imagePreview}
                           alt={form.title}
                           fill
-                          className="object-cover"
+                          className="object-contain p-4"
+                          sizes="(min-width: 1024px) 420px, 100vw"
                           unoptimized
                         />
                       </div>
@@ -453,8 +478,15 @@ export default function EventEditor({ event }: { event: PublicEvent }) {
               className="group relative cursor-pointer overflow-hidden rounded-xl border-2 border-dashed border-[rgba(0,0,0,0.10)] transition-colors hover:border-[#084734]/40"
             >
               {imagePreview ? (
-                <div className="relative w-full" style={{ aspectRatio: "16/7" }}>
-                  <Image src={imagePreview} alt="섬네일 미리보기" fill className="object-cover" unoptimized />
+                <div className="relative mx-auto aspect-[4/5] w-full max-w-[380px] bg-[#f7f7f4]">
+                  <Image
+                    src={imagePreview}
+                    alt="섬네일 미리보기"
+                    fill
+                    className="object-contain p-4"
+                    sizes="(min-width: 1024px) 380px, 100vw"
+                    unoptimized
+                  />
                   <div className="absolute inset-0 flex items-center justify-center bg-black/0 transition-colors group-hover:bg-black/25">
                     <div className="flex items-center gap-2 rounded-lg bg-white/90 px-4 py-2 text-[13px] font-medium text-[#111110] opacity-0 shadow transition-opacity group-hover:opacity-100">
                       <Upload className="h-4 w-4" />
@@ -467,11 +499,39 @@ export default function EventEditor({ event }: { event: PublicEvent }) {
                   <ImageIcon className="h-10 w-10" />
                   <div className="text-center">
                     <p className="text-[13px] font-medium text-[#1a1a1a]/50">클릭하여 이미지 업로드</p>
-                    <p className="mt-0.5 text-[11px]">JPG, PNG, WebP, GIF · 최대 10MB</p>
+                    <p className="mt-0.5 text-[11px]">JPG, PNG, WebP, GIF · 최대 5MB</p>
                   </div>
                 </div>
               )}
             </div>
+
+            {imagePreview && (
+              <div className="mt-4 rounded-xl border border-[#e8e8e4] bg-[#fcfcfb] p-3">
+                <p className="mb-2.5 text-[11px] font-semibold uppercase tracking-wider text-[#1a1a1a]/35">
+                  공개 화면 포스터 미리보기
+                </p>
+                <div className="grid grid-cols-3 gap-2">
+                  {EVENT_POSTER_PREVIEWS.map((preview) => (
+                    <div key={preview.label} className="min-w-0">
+                      <div className={`relative overflow-hidden rounded-lg bg-white ring-1 ring-[#e8e8e4] ${preview.className}`}>
+                        <Image
+                          src={imagePreview}
+                          alt={`${preview.label} 미리보기`}
+                          fill
+                          className="object-contain p-1.5"
+                          sizes="(min-width: 1024px) 110px, 33vw"
+                          unoptimized
+                        />
+                      </div>
+                      <p className="mt-1 truncate text-[10px] font-medium text-[#1a1a1a]/45">
+                        {preview.label}
+                      </p>
+                      <p className="text-[10px] text-[#1a1a1a]/28">{preview.ratio}</p>
+                    </div>
+                  ))}
+                </div>
+              </div>
+            )}
 
             <input
               ref={fileInputRef}
@@ -739,6 +799,21 @@ export default function EventEditor({ event }: { event: PublicEvent }) {
               </div>
 
               <div className="h-px bg-[#e8e8e4]" />
+
+              <div>
+                <label className="mb-1.5 block text-[12px] font-medium text-[#1a1a1a]/50">공개 상태</label>
+                <select
+                  value={form.publicationStatus}
+                  onChange={(e) => setForm({ ...form, publicationStatus: e.target.value as EventPublicationStatus })}
+                  className="w-full rounded-lg border border-[rgba(0,0,0,0.12)] bg-white px-3 py-2 text-[13px] focus:border-[#111110]/30 focus:outline-none"
+                >
+                  <option value="draft">임시저장</option>
+                  <option value="published">공개</option>
+                </select>
+                <p className="mt-1 text-[11px] text-[#1a1a1a]/35">
+                  공개로 바꿔 저장해야 /events와 상세 페이지에 노출됩니다.
+                </p>
+              </div>
 
               <div className="flex items-center justify-between">
                 <div>

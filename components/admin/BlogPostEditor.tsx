@@ -238,6 +238,12 @@ type EditorSnapshot = {
 }
 
 const HISTORY_LIMIT = 50
+const MAX_IMAGE_UPLOAD_BYTES = 5 * 1024 * 1024
+const BLOG_COVER_PREVIEWS = [
+  { label: "상세 히어로", ratio: "16:10", className: "aspect-[16/10]" },
+  { label: "추천 카드", ratio: "4:3", className: "aspect-[4/3]" },
+  { label: "목록 썸네일", ratio: "16:11", className: "aspect-[16/11]" },
+] as const
 
 function cloneSnapshot(snapshot: EditorSnapshot): EditorSnapshot {
   return {
@@ -383,6 +389,7 @@ export default function BlogPostEditor({
   const draftStorageKey = `admin-blog-editor-${initialPost?.id ?? "new"}`
   const filteredPosts = allPosts.filter((post) => post.id !== initialPost?.id)
   const computedReadTime = estimateReadTime(form.contentMarkdown)
+  const coverPreviewUrl = form.heroImageUrl || form.imageUrl
   const headings = useMemo(
     () => extractMarkdownHeadings(form.contentMarkdown),
     [form.contentMarkdown]
@@ -641,6 +648,10 @@ export default function BlogPostEditor({
   }
 
   const handleImageUpload = async (field: "imageUrl" | "heroImageUrl", file: File) => {
+    if (file.size > MAX_IMAGE_UPLOAD_BYTES) {
+      setNotice("이미지 파일은 5MB 이하만 업로드할 수 있습니다.")
+      return
+    }
     setUploadingField(field)
     try {
       const formData = new FormData()
@@ -1210,6 +1221,7 @@ export default function BlogPostEditor({
                           alt={form.heroImageAlt || form.title || ""}
                           fill
                           className="object-cover"
+                          sizes="(min-width: 1024px) 420px, 100vw"
                           unoptimized
                         />
                       </div>
@@ -1277,7 +1289,7 @@ export default function BlogPostEditor({
                       <div className="flex flex-col gap-6 md:flex-row md:items-center">
                         <div className="relative h-16 w-16 shrink-0 overflow-hidden rounded-full bg-[#f0f0ec]">
                           {form.authorAvatarUrl ? (
-                            <Image src={form.authorAvatarUrl} alt={form.author} fill className="object-cover" unoptimized />
+                            <Image src={form.authorAvatarUrl} alt={form.author} fill className="object-cover" sizes="64px" unoptimized />
                           ) : (
                             <div className="flex h-full items-center justify-center text-lg font-semibold text-[#084734]">
                               {form.author.slice(0, 1)}
@@ -1938,14 +1950,34 @@ export default function BlogPostEditor({
                         </div>
                       </div>
                     ))}
-                    {(form.heroImageUrl || form.imageUrl) && (
-                      <div className="overflow-hidden rounded-xl border border-[#e8e8e4]">
-                        {/* eslint-disable-next-line @next/next/no-img-element */}
-                        <img
-                          src={form.heroImageUrl || form.imageUrl}
-                          alt="미리보기"
-                          className="aspect-[16/9] w-full object-cover"
-                        />
+                    <p className="text-[11px] text-[#1a1a1a]/35">
+                      JPG, PNG, WebP, GIF · 최대 5MB
+                    </p>
+                    {coverPreviewUrl && (
+                      <div className="rounded-xl border border-[#e8e8e4] bg-[#fcfcfb] p-3">
+                        <p className="mb-2.5 text-[11px] font-semibold uppercase tracking-wider text-[#1a1a1a]/35">
+                          공개 화면 크롭 미리보기
+                        </p>
+                        <div className="grid grid-cols-3 gap-2">
+                          {BLOG_COVER_PREVIEWS.map((preview) => (
+                            <div key={preview.label} className="min-w-0">
+                              <div className={`relative overflow-hidden rounded-lg bg-[#f0f0ec] ${preview.className}`}>
+                                <Image
+                                  src={coverPreviewUrl}
+                                  alt={`${preview.label} 미리보기`}
+                                  fill
+                                  className="object-cover"
+                                  sizes="(min-width: 1024px) 110px, 33vw"
+                                  unoptimized
+                                />
+                              </div>
+                              <p className="mt-1 truncate text-[10px] font-medium text-[#1a1a1a]/45">
+                                {preview.label}
+                              </p>
+                              <p className="text-[10px] text-[#1a1a1a]/28">{preview.ratio}</p>
+                            </div>
+                          ))}
+                        </div>
                       </div>
                     )}
                     <div className="grid grid-cols-2 gap-2">
@@ -1990,6 +2022,24 @@ export default function BlogPostEditor({
                       onChange={(event) => updateForm("authorAvatarUrl", event.target.value)}
                       placeholder="아바타 이미지 URL"
                     />
+                    {form.authorAvatarUrl && (
+                      <div className="flex items-center gap-3 rounded-xl border border-[#e8e8e4] bg-[#fcfcfb] p-3">
+                        <div className="relative h-14 w-14 shrink-0 overflow-hidden rounded-full bg-[#f0f0ec]">
+                          <Image
+                            src={form.authorAvatarUrl}
+                            alt={`${form.author || "작성자"} 아바타 미리보기`}
+                            fill
+                            className="object-cover"
+                            sizes="56px"
+                            unoptimized
+                          />
+                        </div>
+                        <div className="min-w-0">
+                          <p className="text-[12px] font-medium text-[#111110]">작성자 공개 프로필</p>
+                          <p className="text-[11px] text-[#1a1a1a]/35">1:1 원형 크롭</p>
+                        </div>
+                      </div>
+                    )}
                     <textarea
                       rows={3}
                       value={form.authorBio}

@@ -1,6 +1,11 @@
 "use client"
 
 import { useEffect, useState } from "react"
+import {
+  adminFetchJson as sharedAdminFetchJson,
+  adminFetchJsonCached,
+  clearAdminRequestCache,
+} from "@/lib/admin-client"
 
 interface BranchJsonState<T> {
   key: string
@@ -9,71 +14,28 @@ interface BranchJsonState<T> {
   loading: boolean
 }
 
-const responseCache = new Map<string, unknown>()
-const inflightRequests = new Map<string, Promise<unknown>>()
-
-function getToken(): string {
-  return typeof window !== "undefined" ? sessionStorage.getItem("admin_password") ?? "" : ""
-}
-
 export function clearBranchRequestCache() {
-  responseCache.clear()
-  inflightRequests.clear()
+  clearAdminRequestCache()
 }
 
 export async function adminFetchJson<T>(url: string, init: RequestInit = {}): Promise<T> {
-  const headers = new Headers(init.headers)
-  headers.set("Authorization", `Bearer ${getToken()}`)
-  if (!headers.has("Content-Type")) headers.set("Content-Type", "application/json")
-
-  const res = await fetch(url, { ...init, headers })
-  const text = await res.text()
-  let payload: unknown = null
-
-  if (text.trim()) {
-    try {
-      payload = JSON.parse(text)
-    } catch {
-      const contentType = res.headers.get("content-type") ?? "unknown"
-      const preview = text.replace(/\s+/g, " ").slice(0, 90)
-      throw new Error(`JSON 응답이 아닙니다. ${url} · HTTP ${res.status} · ${contentType} · ${preview}`)
-    }
-  }
-
-  if (!res.ok) {
-    const message = payload && typeof payload === "object" && "error" in payload
-      ? String((payload as { error: unknown }).error)
-      : `Request failed: ${res.status}`
-    throw new Error(message)
-  }
-  return payload as T
+  return sharedAdminFetchJson<T>(url, init)
 }
 
 function loadBranchJson<T>(key: string, url: string): Promise<T> {
-  const cached = responseCache.get(key)
-  if (cached) return Promise.resolve(cached as T)
-
-  const inflight = inflightRequests.get(key)
-  if (inflight) return inflight as Promise<T>
-
-  const request = adminFetchJson<T>(url).then((data) => {
-    responseCache.set(key, data)
-    return data
-  }).finally(() => {
-    inflightRequests.delete(key)
+  return adminFetchJsonCached<T>(url, undefined, {
+    cacheKey: `branch:${key}`,
+    ttlMs: 60_000,
   })
-  inflightRequests.set(key, request)
-  return request
 }
 
 export function useBranchJson<T>(url: string, refreshKey: number): BranchJsonState<T> {
   const cacheKey = `${refreshKey}:${url}`
-  const hasInitialCache = responseCache.has(cacheKey)
   const [state, setState] = useState<BranchJsonState<T>>({
     key: cacheKey,
-    data: hasInitialCache ? responseCache.get(cacheKey) as T : null,
+    data: null,
     error: null,
-    loading: !hasInitialCache,
+    loading: true,
   })
 
   useEffect(() => {
@@ -97,12 +59,11 @@ export function useBranchJson<T>(url: string, refreshKey: number): BranchJsonSta
   }, [cacheKey, url])
 
   if (state.key !== cacheKey) {
-    const hasCache = responseCache.has(cacheKey)
     return {
       key: cacheKey,
-      data: hasCache ? responseCache.get(cacheKey) as T : null,
+      data: null,
       error: null,
-      loading: !hasCache,
+      loading: true,
     }
   }
 

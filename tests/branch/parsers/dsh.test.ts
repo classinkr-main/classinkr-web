@@ -38,7 +38,7 @@ describe("parseDsh", () => {
   it("maps member summary rows to teams by matching team goal totals", () => {
     const empty: FormattedCell = { value: "", bg: null }
     const row = (values: Record<number, string | number>): FormattedCell[] => {
-      const cells = Array(23).fill(empty).map(() => ({ value: "", bg: null }))
+      const cells: FormattedCell[] = Array(23).fill(empty).map(() => ({ value: "", bg: null }))
       for (const [idx, value] of Object.entries(values)) cells[Number(idx)] = { value, bg: null }
       return cells
     }
@@ -71,7 +71,7 @@ describe("parseDsh", () => {
   it("normalizes confirmed CSM placeholder names", () => {
     const empty: FormattedCell = { value: "", bg: null }
     const row = (values: Record<number, string | number>): FormattedCell[] => {
-      const cells = Array(23).fill(empty).map(() => ({ value: "", bg: null }))
+      const cells: FormattedCell[] = Array(23).fill(empty).map(() => ({ value: "", bg: null }))
       for (const [idx, value] of Object.entries(values)) cells[Number(idx)] = { value, bg: null }
       return cells
     }

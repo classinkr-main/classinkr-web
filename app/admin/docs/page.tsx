@@ -17,25 +17,12 @@ import {
   ThumbsUp,
 } from "lucide-react"
 
+import { adminFetch, adminFetchJsonCached } from "@/lib/admin-client"
 import type {
   AdminDocsAnalyticsResponse,
   AdminDocsArticleSummary,
   AdminDocsContentResponse,
 } from "@/lib/admin-docs"
-
-function getToken() {
-  return (typeof window !== "undefined" ? sessionStorage.getItem("admin_password") : null) ?? ""
-}
-
-function adminFetch(url: string, init?: RequestInit) {
-  const headers = new Headers(init?.headers)
-  headers.set("Authorization", `Bearer ${getToken()}`)
-
-  return fetch(url, {
-    ...init,
-    headers,
-  })
-}
 
 interface ReindexResult {
   configured: boolean
@@ -166,32 +153,19 @@ export default function AdminDocsPage() {
     setError(null)
 
     try {
-      const [contentResponse, analyticsResponse] = await Promise.all([
-        adminFetch("/api/admin/docs"),
-        adminFetch("/api/admin/docs/analytics?days=30"),
+      const [contentData, analyticsData] = await Promise.all([
+        adminFetchJsonCached<AdminDocsContentResponse>("/api/admin/docs", undefined, { ttlMs: 60_000 }),
+        adminFetchJsonCached<AdminDocsAnalyticsResponse>("/api/admin/docs/analytics?days=30", undefined, { ttlMs: 60_000 }),
       ])
 
-      if (contentResponse.status === 401 || analyticsResponse.status === 401) {
-        router.replace("/admin/login")
-        return
-      }
-
-      if (!contentResponse.ok) {
-        throw new Error("문서 목록을 불러오지 못했습니다.")
-      }
-
-      if (!analyticsResponse.ok) {
-        throw new Error("문서 분석 데이터를 불러오지 못했습니다.")
-      }
-
-      setContent((await contentResponse.json()) as AdminDocsContentResponse)
-      setAnalytics((await analyticsResponse.json()) as AdminDocsAnalyticsResponse)
+      setContent(contentData)
+      setAnalytics(analyticsData)
     } catch (err) {
       setError(err instanceof Error ? err.message : "문서 관리 데이터를 불러오지 못했습니다.")
     } finally {
       setLoading(false)
     }
-  }, [router])
+  }, [])
 
   useEffect(() => {
     void load()

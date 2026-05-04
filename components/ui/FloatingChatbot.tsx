@@ -1,10 +1,10 @@
 "use client"
 
-import { FormEvent, useMemo, useRef, useState } from "react"
+import { FormEvent, useEffect, useMemo, useRef, useState } from "react"
 import Image from "next/image"
 import Link from "next/link"
 import { usePathname } from "next/navigation"
-import { AnimatePresence, motion } from "framer-motion"
+import { AnimatePresence, motion, useReducedMotion } from "framer-motion"
 import {
     ArrowUpRight,
     Bot,
@@ -53,6 +53,7 @@ interface ChatMessage {
     role: "assistant" | "user"
     content: string
     sources?: ChatbotSource[]
+    suggestedQuestions?: string[]
     answerEventId?: string
     needsHandoff?: boolean
     handoffIntent?: HandoffIntent
@@ -70,9 +71,9 @@ const hiddenPathPrefixes = [
 ]
 
 const starterQuestions = [
-    "학생이 수업에 입장하지 못해요",
-    "첫 수업 전에 뭘 준비해야 하나요?",
-    "결제 영수증은 어떻게 요청하나요?",
+    "우리 학원에 맞는 도입 방식이 궁금해요",
+    "수업 중 집중도와 출석 관리를 개선하고 싶어요",
+    "결제, 영수증, 계정 문제를 상담받고 싶어요",
 ]
 
 const DEEP_CONSULTATION_ICON_SRC = "/images/chatbot/ai-deep-consultation.png"
@@ -83,7 +84,7 @@ function shouldHideChatbot(pathname: string | null) {
 }
 
 function shouldUseDeepConsultationIcon(text: string) {
-    return /심층|상담|컨설팅|도입\s*문의|상담\s*연결/.test(text)
+    return /상담|컨설팅|도입|문의|견적|문제|장애|오류|AS|A\/S/i.test(text)
 }
 
 function makeId() {
@@ -178,6 +179,7 @@ function SourceLinks({ sources }: { sources: ChatbotSource[] }) {
 
 export function FloatingChatbot() {
     const pathname = usePathname()
+    const shouldReduceMotion = useReducedMotion()
     const [isOpen, setIsOpen] = useState(false)
     const [input, setInput] = useState("")
     const [sessionId, setSessionId] = useState<string | undefined>()
@@ -186,12 +188,15 @@ export function FloatingChatbot() {
     const [isDeepConsultation, setIsDeepConsultation] = useState(false)
     const [unresolvedStreak, setUnresolvedStreak] = useState(0)
     const bottomRef = useRef<HTMLDivElement | null>(null)
+    const inputRef = useRef<HTMLTextAreaElement | null>(null)
+    const triggerRef = useRef<HTMLButtonElement | null>(null)
     const [messages, setMessages] = useState<ChatMessage[]>([
         {
             id: "welcome",
             role: "assistant",
             content:
-                "안녕하세요. ClassIn 가이드와 도움말 기준으로 답변드릴게요. 수업 운영, 도입 준비, 문제 해결, 결제 증빙을 물어보실 수 있습니다.",
+                "안녕하세요. ClassIn 상담 가이드입니다. 운영 고민은 먼저 정리해드리고, 계정·결제·장애처럼 확인이 필요한 내용은 바로 상담으로 이어드릴게요.",
+            suggestedQuestions: starterQuestions,
         },
     ])
 
@@ -204,6 +209,36 @@ export function FloatingChatbot() {
         }),
         [pathname]
     )
+
+    useEffect(() => {
+        if (hidden) {
+            setIsOpen(false)
+        }
+    }, [hidden])
+
+    useEffect(() => {
+        if (!isOpen) return
+
+        const frame = window.requestAnimationFrame(() => {
+            inputRef.current?.focus()
+        })
+
+        return () => window.cancelAnimationFrame(frame)
+    }, [isOpen])
+
+    useEffect(() => {
+        if (!isOpen) return
+
+        const handleKeyDown = (event: KeyboardEvent) => {
+            if (event.key === "Escape") {
+                setIsOpen(false)
+                triggerRef.current?.focus()
+            }
+        }
+
+        document.addEventListener("keydown", handleKeyDown)
+        return () => document.removeEventListener("keydown", handleKeyDown)
+    }, [isOpen])
 
     if (hidden) return null
 
@@ -262,6 +297,7 @@ export function FloatingChatbot() {
                     role: "assistant",
                     content: data.answer ?? "확인 가능한 답변을 찾지 못했습니다.",
                     sources: data.sources ?? [],
+                    suggestedQuestions: data.suggestedQuestions ?? [],
                     answerEventId: data.answerEventId,
                     needsHandoff: data.needsHandoff,
                     handoffIntent: data.handoffIntent,
@@ -273,14 +309,15 @@ export function FloatingChatbot() {
                 const intent = data.handoffIntent ?? "demo"
                 const nudge =
                     intent === "support"
-                        ? "여러 번 정확한 답을 드리지 못한 것 같아요. 실시간 상담으로 더 자세히 도와드릴 수 있어요."
-                        : "원하시는 답을 못 찾으신 것 같아요. 도입 담당자가 상황에 맞춰 안내드릴까요?"
+                        ? "정확한 확인이 필요한 내용으로 보여요. 상담으로 연결하면 계정, 결제, 장비 상태까지 함께 확인해드릴게요."
+                        : "상황에 맞춘 도입 상담이 더 빠를 수 있어요. 학원 규모와 원하는 운영 방식에 맞춰 다음 단계를 안내해드릴게요."
                 setMessages((current) => [
                     ...current,
                     {
                         id: makeId(),
                         role: "assistant",
                         content: nudge,
+                        suggestedQuestions: [],
                         needsHandoff: true,
                         handoffIntent: intent,
                         showHandoffCTA: true,
@@ -297,7 +334,8 @@ export function FloatingChatbot() {
                 {
                     id: makeId(),
                     role: "assistant",
-                    content: "지금은 답변을 가져오지 못했습니다. 잠시 후 다시 시도하거나 도입 문의로 남겨주세요.",
+                    content: "지금은 답변을 불러오지 못했습니다. 급한 문의라면 상담으로 남겨주세요. 담당자가 상황을 확인해 이어서 안내드릴게요.",
+                    suggestedQuestions: [],
                     needsHandoff: true,
                     handoffIntent: "demo",
                     showHandoffCTA: true,
@@ -313,16 +351,27 @@ export function FloatingChatbot() {
         void sendQuestion(input)
     }
 
+    function closeChatbot() {
+        setIsOpen(false)
+        window.requestAnimationFrame(() => {
+            triggerRef.current?.focus()
+        })
+    }
+
     return (
-        <div className="fixed bottom-[calc(5.5rem+env(safe-area-inset-bottom))] right-4 z-50 flex flex-col items-end md:bottom-6 md:right-6">
+        <div className="fixed inset-x-4 bottom-[calc(5.5rem+env(safe-area-inset-bottom))] z-50 flex flex-col items-end md:inset-x-auto md:bottom-6 md:right-6">
             <AnimatePresence>
                 {isOpen && (
                     <motion.div
-                        initial={{ opacity: 0, y: 16, scale: 0.98 }}
-                        animate={{ opacity: 1, y: 0, scale: 1 }}
-                        exit={{ opacity: 0, y: 16, scale: 0.98 }}
-                        transition={{ duration: 0.18 }}
-                        className="mb-4 flex h-[min(620px,calc(100svh-7rem))] w-[min(calc(100vw-2rem),390px)] flex-col overflow-hidden rounded-[16px] border border-black/[0.08] bg-white shadow-[rgba(0,0,0,0.10)_0px_20px_60px,rgba(0,0,0,0.05)_0px_8px_20px]"
+                        id="classin-chatbot-dialog"
+                        role="dialog"
+                        aria-modal="false"
+                        aria-labelledby="classin-chatbot-title"
+                        initial={shouldReduceMotion ? { opacity: 0 } : { opacity: 0, y: 16, scale: 0.98 }}
+                        animate={shouldReduceMotion ? { opacity: 1 } : { opacity: 1, y: 0, scale: 1 }}
+                        exit={shouldReduceMotion ? { opacity: 0 } : { opacity: 0, y: 16, scale: 0.98 }}
+                        transition={{ duration: shouldReduceMotion ? 0.01 : 0.18 }}
+                        className="mb-4 flex h-[min(560px,calc(100svh-8.5rem))] w-full max-w-[390px] flex-col overflow-hidden rounded-[16px] border border-black/[0.08] bg-white shadow-[rgba(0,0,0,0.10)_0px_20px_60px,rgba(0,0,0,0.05)_0px_8px_20px]"
                     >
                         <div className="flex items-center justify-between bg-[#009060] px-5 py-4 text-white">
                             <div className="flex min-w-0 items-center gap-3">
@@ -341,13 +390,13 @@ export function FloatingChatbot() {
                                     )}
                                 </div>
                                 <div className="min-w-0">
-                                    <h2 className="truncate text-[15px] font-bold">ClassIn 도움말</h2>
-                                    <p className="mt-0.5 truncate text-xs text-white/70">문서 기반 빠른 답변</p>
+                                    <h2 id="classin-chatbot-title" className="truncate text-[15px] font-bold">ClassIn 상담 가이드</h2>
+                                    <p className="mt-0.5 truncate text-xs text-white/70">운영·도입·CS 빠른 상담</p>
                                 </div>
                             </div>
                             <button
                                 type="button"
-                                onClick={() => setIsOpen(false)}
+                                onClick={closeChatbot}
                                 className="inline-flex h-8 w-8 items-center justify-center rounded-[6px] text-white/75 transition-colors hover:bg-white/10 hover:text-white"
                                 aria-label="챗봇 닫기"
                             >
@@ -377,58 +426,59 @@ export function FloatingChatbot() {
                                             {message.role === "assistant" ? (
                                                 <>
                                                     <SourceLinks sources={message.sources ?? []} />
-                                                    <div className="mt-3 flex flex-wrap items-center justify-between gap-2">
-                                                        <FeedbackButtons answerEventId={message.answerEventId} />
-                                                        {message.showHandoffCTA ? (
-                                                            message.handoffIntent === "support" ? (
+                                                    {(message.suggestedQuestions?.length ?? 0) > 0 ? (
+                                                        <div className="mt-3 grid gap-2">
+                                                            {message.suggestedQuestions?.map((question) => (
                                                                 <button
+                                                                    key={question}
                                                                     type="button"
-                                                                    onClick={() => {
-                                                                        const opened = openChannelTalk()
-                                                                        if (!opened) {
-                                                                            window.location.href = "/contact"
-                                                                        }
-                                                                    }}
-                                                                    className="inline-flex h-8 items-center justify-center rounded-[6px] bg-[#009060] px-3 text-xs font-bold text-white transition-colors hover:bg-[#007A52]"
+                                                                    onClick={() => sendQuestion(question)}
+                                                                    className="rounded-[8px] border border-[#084734]/15 bg-[#FAFAF8] px-3 py-2 text-left text-[12px] font-semibold leading-5 text-[#111110] transition-colors hover:border-[#084734]/35 hover:bg-[#ECFDF5]"
                                                                 >
-                                                                    실시간 상담
+                                                                    {question}
                                                                 </button>
-                                                            ) : (
-                                                                <Link
-                                                                    href="/contact"
-                                                                    className="inline-flex h-8 items-center justify-center rounded-[6px] bg-[#009060] px-3 text-xs font-bold text-white transition-colors hover:bg-[#007A52]"
-                                                                >
-                                                                    도입 상담 연결
-                                                                </Link>
-                                                            )
-                                                        ) : null}
-                                                    </div>
+                                                            ))}
+                                                        </div>
+                                                    ) : null}
+                                                    {message.answerEventId || message.showHandoffCTA ? (
+                                                        <div className="mt-3 flex flex-wrap items-center justify-between gap-2">
+                                                            {message.answerEventId ? <FeedbackButtons answerEventId={message.answerEventId} /> : <span />}
+                                                            {message.showHandoffCTA ? (
+                                                                message.handoffIntent === "support" ? (
+                                                                    <button
+                                                                        type="button"
+                                                                        onClick={() => {
+                                                                            const opened = openChannelTalk()
+                                                                            if (!opened) {
+                                                                                window.location.href = "/contact"
+                                                                            }
+                                                                        }}
+                                                                        className="inline-flex h-8 items-center justify-center rounded-[6px] bg-[#009060] px-3 text-xs font-bold text-white transition-colors hover:bg-[#007A52]"
+                                                                    >
+                                                                        실시간 상담 연결
+                                                                    </button>
+                                                                ) : (
+                                                                    <Link
+                                                                        href="/contact"
+                                                                        className="inline-flex h-8 items-center justify-center rounded-[6px] bg-[#009060] px-3 text-xs font-bold text-white transition-colors hover:bg-[#007A52]"
+                                                                    >
+                                                                        도입 상담 남기기
+                                                                    </Link>
+                                                                )
+                                                            ) : null}
+                                                        </div>
+                                                    ) : null}
                                                 </>
                                             ) : null}
                                         </div>
                                     </div>
                                 ))}
 
-                                {messages.length === 1 ? (
-                                    <div className="ml-0 grid gap-2 pl-11">
-                                        {starterQuestions.map((question) => (
-                                            <button
-                                                key={question}
-                                                type="button"
-                                                onClick={() => sendQuestion(question)}
-                                                className="rounded-[8px] border border-[#084734]/15 bg-white px-3 py-2 text-left text-[13px] font-semibold leading-5 text-[#111110] shadow-sm transition-colors hover:border-[#084734]/35 hover:bg-[#ECFDF5]"
-                                            >
-                                                {question}
-                                            </button>
-                                        ))}
-                                    </div>
-                                ) : null}
-
                                 {isSending ? (
                                     <div className="flex justify-start">
                                         <div className="inline-flex items-center gap-2 rounded-[12px] border border-black/[0.06] bg-white px-3.5 py-3 text-sm text-[#615D59] shadow-sm">
                                             <Loader2 className="h-4 w-4 animate-spin text-[#084734]" />
-                                            문서를 찾고 있어요
+                                            상황에 맞는 답변을 찾고 있어요
                                         </div>
                                     </div>
                                 ) : null}
@@ -445,6 +495,7 @@ export function FloatingChatbot() {
                         <form onSubmit={handleSubmit} className="border-t border-black/[0.06] bg-white p-3">
                             <div className="flex items-end gap-2">
                                 <textarea
+                                    ref={inputRef}
                                     value={input}
                                     onChange={(event) => setInput(event.target.value)}
                                     onKeyDown={(event) => {
@@ -455,7 +506,7 @@ export function FloatingChatbot() {
                                     }}
                                     rows={1}
                                     maxLength={1000}
-                                    placeholder="질문을 입력하세요"
+                                    placeholder="상담받고 싶은 내용을 입력하세요"
                                     className="min-h-10 max-h-28 flex-1 resize-none rounded-[8px] border border-[#E5E5E0] bg-white px-3 py-2 text-sm leading-6 text-[#111110] placeholder:text-[#A39E98] focus-visible:border-[#084734] focus-visible:outline-none focus-visible:ring-2 focus-visible:ring-[#084734]/20"
                                 />
                                 <button
@@ -473,12 +524,15 @@ export function FloatingChatbot() {
             </AnimatePresence>
 
             <motion.button
+                ref={triggerRef}
                 type="button"
-                whileHover={{ scale: 1.04 }}
-                whileTap={{ scale: 0.96 }}
+                whileHover={shouldReduceMotion ? undefined : { scale: 1.04 }}
+                whileTap={shouldReduceMotion ? undefined : { scale: 0.96 }}
                 onClick={() => setIsOpen((current) => !current)}
                 className="relative flex h-14 w-14 items-center justify-center overflow-hidden rounded-full bg-[#009060] text-white shadow-[0_10px_30px_rgba(0,144,96,0.32)] transition-colors hover:bg-[#007A52] focus:outline-none focus:ring-4 focus:ring-[#009060]/20 md:h-16 md:w-16"
                 aria-label={isOpen ? "챗봇 닫기" : "챗봇 열기"}
+                aria-expanded={isOpen}
+                aria-controls="classin-chatbot-dialog"
             >
                 {isOpen ? (
                     <X className="h-6 w-6" />

@@ -2,16 +2,12 @@
 
 import { useState, useEffect } from "react"
 import { ShieldCheck, Building2, Info } from "lucide-react"
+import { adminFetchJsonCached } from "@/lib/admin-client"
 
 interface AdminUser {
   name: string
   role: "admin" | "branch"
   branch?: string
-}
-
-function adminFetch(url: string) {
-  const token = (typeof window !== "undefined" ? sessionStorage.getItem("admin_password") : null) ?? ""
-  return fetch(url, { headers: { Authorization: `Bearer ${token}` } })
 }
 
 const ROLE_LABEL = { admin: "관리자", branch: "지사장" }
@@ -25,8 +21,7 @@ export default function UsersPage() {
   const [loading, setLoading] = useState(true)
 
   useEffect(() => {
-    adminFetch("/api/admin/users")
-      .then((r) => r.json())
+    adminFetchJsonCached<{ users?: AdminUser[] }>("/api/admin/users", undefined, { ttlMs: 60_000 })
       .then((d) => setUsers(d.users ?? []))
       .finally(() => setLoading(false))
   }, [])

@@ -13,6 +13,7 @@ type AnalyticsParamValue = string | number | boolean | null | undefined
 type AnalyticsParams = Record<string, AnalyticsParamValue>
 
 interface KakaoPixelClient {
+  pageView: () => void
   completeRegistration: () => void
   participate: (params: { tag: EventNames }) => void
 }

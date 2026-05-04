@@ -1,6 +1,7 @@
 import { NextRequest, NextResponse } from "next/server"
 
 import { validatePromoCode, type PromoTargetProduct } from "@/lib/billing/promo-codes"
+import { checkRateLimit, getClientIp } from "@/lib/server/rate-limit"
 
 function parseTarget(value: unknown): PromoTargetProduct {
   if (value === "subscription") return "subscription"
@@ -9,6 +10,15 @@ function parseTarget(value: unknown): PromoTargetProduct {
 }
 
 export async function POST(req: NextRequest) {
+  const ip = getClientIp(req)
+  const { allowed } = checkRateLimit(ip, "billing-promo-code-validate", {
+    windowMs: 60_000,
+    max: 20,
+  })
+  if (!allowed) {
+    return NextResponse.json({ error: "Too many requests." }, { status: 429 })
+  }
+
   try {
     const body = (await req.json().catch(() => null)) as {
       code?: string
@@ -19,6 +29,16 @@ export async function POST(req: NextRequest) {
 
     const code = typeof body?.code === "string" ? body.code : ""
     const target = parseTarget(body?.target)
+    const normalizedCode = code.trim().toUpperCase()
+    if (normalizedCode) {
+      const codeLimit = checkRateLimit(normalizedCode, "billing-promo-code-value", {
+        windowMs: 5 * 60_000,
+        max: 25,
+      })
+      if (!codeLimit.allowed) {
+        return NextResponse.json({ error: "Too many requests." }, { status: 429 })
+      }
+    }
     const baseAmount =
       typeof body?.baseAmount === "number"
         ? body.baseAmount

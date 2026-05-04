@@ -8,7 +8,7 @@
 import type { NextRequest } from "next/server";
 import { NextResponse } from "next/server";
 
-import { getVerifiedAdminContext } from "@/lib/admin-auth";
+import { getVerifiedAdminContext, hasAdminApiRole } from "@/lib/admin-auth";
 import {
   resolvePartnerAccountContext,
   type PartnerAccountContext,
@@ -57,7 +57,7 @@ export async function resolvePortalContext(
   let admin = null;
   if (forceAdminScope) {
     admin = await getVerifiedAdminContext(req);
-    if (admin) {
+    if (admin && hasAdminApiRole(admin.role)) {
       return toAdminPortalContext(admin);
     }
   }
@@ -70,7 +70,7 @@ export async function resolvePortalContext(
 
   // 2) Admin 인증 시도 (cookie session / Supabase admin_profiles)
   admin = admin ?? await getVerifiedAdminContext(req);
-  if (admin) {
+  if (admin && hasAdminApiRole(admin.role)) {
     return toAdminPortalContext(admin);
   }
 

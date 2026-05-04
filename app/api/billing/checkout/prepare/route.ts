@@ -4,8 +4,19 @@ import {
   createBusinessRechargeOrder,
   createSubscriptionCheckoutOrder,
 } from "@/lib/server/software-checkout"
+import { checkRateLimit, getClientIp } from "@/lib/server/rate-limit"
+import { createCheckoutToken } from "@/lib/server/security-tokens"
 
 export async function POST(req: NextRequest) {
+  const ip = getClientIp(req)
+  const { allowed } = checkRateLimit(ip, "billing-checkout-prepare", {
+    windowMs: 60_000,
+    max: 12,
+  })
+  if (!allowed) {
+    return NextResponse.json({ error: "Too many requests." }, { status: 429 })
+  }
+
   try {
     const body = await req.json()
     const mode = typeof body?.mode === "string" ? body.mode : "subscription"
@@ -16,6 +27,7 @@ export async function POST(req: NextRequest) {
         {
           mode: "subscription",
           orderId: order.orderId,
+          checkoutToken: createCheckoutToken(order.orderId, order.amount),
           orderName: order.orderName,
           amount: order.amount,
           amountKrw: order.amount,
@@ -35,6 +47,7 @@ export async function POST(req: NextRequest) {
         {
           mode: "business",
           orderId: order.orderId,
+          checkoutToken: createCheckoutToken(order.orderId, order.amount),
           orderName: order.orderName,
           amount: order.amount,
           amountKrw: order.amount,

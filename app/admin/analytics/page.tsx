@@ -32,6 +32,7 @@ import {
   XAxis,
   YAxis,
 } from "recharts"
+import { adminFetchJsonCached } from "@/lib/admin-client"
 import type { LeadRecord } from "@/lib/db"
 import type { BlogPost } from "@/lib/blog-types"
 import type { EmailCampaign, Subscriber } from "@/lib/marketing-types"
@@ -53,16 +54,9 @@ interface ClientEventCounts {
   daily: Array<{ date: string; count: number }>
 }
 
-function adminFetch(url: string) {
-  const token = (typeof window !== "undefined" ? sessionStorage.getItem("admin_password") : null) ?? ""
-  return fetch(url, { headers: { Authorization: `Bearer ${token}` } })
-}
-
 async function fetchJson<T>(url: string): Promise<T | null> {
   try {
-    const res = await adminFetch(url)
-    if (!res.ok) return null
-    return (await res.json()) as T
+    return await adminFetchJsonCached<T>(url, undefined, { ttlMs: 60_000 })
   } catch {
     return null
   }

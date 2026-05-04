@@ -2,7 +2,7 @@ import type { MetadataRoute } from "next"
 
 import { getDocCategoryPath, getDocPath } from "@/lib/docs"
 import { getDocsContent, listListedDocsFromContent } from "@/lib/docs-content"
-import { getPublishedPosts } from "@/lib/repositories/blog"
+import { getPublishedPostsForStaticSitemap } from "@/lib/repositories/blog"
 import { SITE_URL } from "@/lib/seo"
 
 const staticRoutes: Array<{
@@ -36,7 +36,7 @@ export default async function sitemap(): Promise<MetadataRoute.Sitemap> {
   }))
 
   const [publishedPosts, docsContent] = await Promise.all([
-    getPublishedPosts().catch((error) => {
+    getPublishedPostsForStaticSitemap().catch((error) => {
       console.error("[sitemap] failed to load published posts", error)
       return []
     }),

@@ -11,7 +11,10 @@ import {
   applySignature,
 } from "@/lib/partner-portal/repositories/contract-documents";
 import { logActivity } from "@/lib/partner-portal/repositories/activity";
+import { decodePngDataUrl } from "@/lib/server/image-validation";
 import { createSupabaseAdminClient } from "@/lib/supabase/admin";
+
+const MAX_SIGNATURE_BYTES = 512 * 1024;
 
 export async function POST(
   req: NextRequest,
@@ -46,23 +49,24 @@ export async function POST(
     // 서명 이미지 Supabase Storage에 업로드
     const signerType = ctx.type === "admin" ? "admin" : "partner";
     const supabase = createSupabaseAdminClient();
-    const buffer = Buffer.from(signatureData.split(",")[1] ?? signatureData, "base64");
-    const storagePath = `signatures/contracts/${id}/${signerType}_signature.png`;
+    const decoded = decodePngDataUrl(signatureData, MAX_SIGNATURE_BYTES);
+    if (!decoded.ok) {
+      return NextResponse.json({ error: "Invalid signature image" }, { status: 400 });
+    }
+    const buffer = decoded.buffer;
+    const storagePath = `contracts/${id}/${signerType}/${crypto.randomUUID()}.png`;
 
-    await supabase.storage
+    const { error: uploadError } = await supabase.storage
       .from("signatures")
       .upload(storagePath, buffer, {
         contentType: "image/png",
-        upsert: true,
+        upsert: false,
       });
-
-    const { data: urlData } = supabase.storage
-      .from("signatures")
-      .getPublicUrl(storagePath);
+    if (uploadError) throw uploadError;
 
     const version = await applySignature(
       doc.current_version_id,
-      urlData.publicUrl,
+      storagePath,
       signerType
     );
 

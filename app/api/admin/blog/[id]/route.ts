@@ -40,8 +40,11 @@ export async function PUT(
     revalidatePath("/blog")
     revalidatePath(`/blog/${post.slug}`)
     return NextResponse.json({ post })
-  } catch {
-    return NextResponse.json({ error: "Failed to update post" }, { status: 500 })
+  } catch (error) {
+    return NextResponse.json(
+      { error: error instanceof Error ? error.message : "Failed to update post" },
+      { status: 500 }
+    )
   }
 }
 

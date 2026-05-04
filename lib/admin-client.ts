@@ -9,12 +9,103 @@ const STORAGE_KEYS = [
   "admin_branch",
 ] as const
 
+const ADMIN_REQUEST_CACHE_PREFIX = "admin_request_cache:"
+const DEFAULT_ADMIN_CACHE_TTL_MS = 45_000
+
+interface AdminCacheEntry<T> {
+  data: T
+  expiresAt: number
+  savedAt: number
+}
+
+interface AdminFetchCacheOptions {
+  cacheKey?: string
+  ttlMs?: number
+  persist?: boolean
+  force?: boolean
+  staleIfError?: boolean
+}
+
+const memoryCache = new Map<string, AdminCacheEntry<unknown>>()
+const inflightRequests = new Map<string, Promise<unknown>>()
+
+function isGetRequest(init?: RequestInit) {
+  return !init?.method || init.method.toUpperCase() === "GET"
+}
+
+function getAdminRequestCacheKey(input: string, init?: RequestInit, cacheKey?: string) {
+  const method = init?.method?.toUpperCase() ?? "GET"
+  return `${method}:${cacheKey ?? input}`
+}
+
+function getSessionCacheKey(cacheKey: string) {
+  return `${ADMIN_REQUEST_CACHE_PREFIX}${cacheKey}`
+}
+
+function readSessionCache<T>(cacheKey: string, allowExpired = false): AdminCacheEntry<T> | null {
+  if (typeof window === "undefined") return null
+
+  try {
+    const raw = sessionStorage.getItem(getSessionCacheKey(cacheKey))
+    if (!raw) return null
+
+    const entry = JSON.parse(raw) as AdminCacheEntry<T>
+    if (!entry || typeof entry.expiresAt !== "number") return null
+    if (!allowExpired && entry.expiresAt <= Date.now()) return null
+
+    return entry
+  } catch {
+    sessionStorage.removeItem(getSessionCacheKey(cacheKey))
+    return null
+  }
+}
+
+function writeSessionCache(cacheKey: string, entry: AdminCacheEntry<unknown>) {
+  if (typeof window === "undefined") return
+
+  try {
+    sessionStorage.setItem(getSessionCacheKey(cacheKey), JSON.stringify(entry))
+  } catch {
+    sessionStorage.removeItem(getSessionCacheKey(cacheKey))
+  }
+}
+
+function readAdminCache<T>(cacheKey: string, allowExpired = false): AdminCacheEntry<T> | null {
+  const memoryEntry = memoryCache.get(cacheKey) as AdminCacheEntry<T> | undefined
+  if (memoryEntry && (allowExpired || memoryEntry.expiresAt > Date.now())) {
+    return memoryEntry
+  }
+
+  const sessionEntry = readSessionCache<T>(cacheKey, allowExpired)
+  if (sessionEntry && (!memoryEntry || sessionEntry.savedAt >= memoryEntry.savedAt)) {
+    memoryCache.set(cacheKey, sessionEntry)
+    return sessionEntry
+  }
+
+  return null
+}
+
+export function clearAdminRequestCache() {
+  memoryCache.clear()
+  inflightRequests.clear()
+
+  if (typeof window === "undefined") return
+
+  for (const key of Object.keys(sessionStorage)) {
+    if (key.startsWith(ADMIN_REQUEST_CACHE_PREFIX)) {
+      sessionStorage.removeItem(key)
+    }
+  }
+}
+
 export function clearAdminSessionStorage() {
   if (typeof window === "undefined") return
 
   STORAGE_KEYS.forEach((key) => {
     sessionStorage.removeItem(key)
   })
+
+  clearAdminRequestCache()
 }
 
 export function getAdminToken() {
@@ -30,6 +121,7 @@ export function getAdminToken() {
 export async function adminFetch(input: string, init?: RequestInit) {
   const headers = new Headers(init?.headers)
   const token = getAdminToken()
+  const method = init?.method?.toUpperCase() ?? "GET"
 
   if (init?.body !== undefined && !headers.has("Content-Type")) {
     headers.set("Content-Type", "application/json")
@@ -52,6 +144,10 @@ export async function adminFetch(input: string, init?: RequestInit) {
     }
   }
 
+  if (response.ok && method !== "GET") {
+    clearAdminRequestCache()
+  }
+
   return response
 }
 
@@ -65,4 +161,62 @@ export async function adminFetchJson<T>(input: string, init?: RequestInit) {
   }
 
   return data as T
+}
+
+export async function adminFetchJsonCached<T>(
+  input: string,
+  init?: RequestInit,
+  options: AdminFetchCacheOptions = {}
+) {
+  if (!isGetRequest(init)) {
+    return adminFetchJson<T>(input, init)
+  }
+
+  const ttlMs = options.ttlMs ?? DEFAULT_ADMIN_CACHE_TTL_MS
+  const persist = options.persist ?? true
+  const staleIfError = options.staleIfError ?? true
+
+  if (ttlMs <= 0) {
+    return adminFetchJson<T>(input, init)
+  }
+
+  const cacheKey = getAdminRequestCacheKey(input, init, options.cacheKey)
+
+  if (!options.force) {
+    const cached = readAdminCache<T>(cacheKey)
+    if (cached) return cached.data
+
+    const inflight = inflightRequests.get(cacheKey)
+    if (inflight) return inflight as Promise<T>
+  }
+
+  const request = adminFetchJson<T>(input, init)
+    .then((data) => {
+      const entry: AdminCacheEntry<T> = {
+        data,
+        expiresAt: Date.now() + ttlMs,
+        savedAt: Date.now(),
+      }
+      memoryCache.set(cacheKey, entry)
+      if (persist) writeSessionCache(cacheKey, entry)
+      return data
+    })
+    .catch((error) => {
+      const stale = staleIfError ? readAdminCache<T>(cacheKey, true) : null
+      if (stale) return stale.data
+      throw error
+    })
+    .finally(() => {
+      inflightRequests.delete(cacheKey)
+    })
+
+  inflightRequests.set(cacheKey, request)
+  return request
+}
+
+export function warmAdminRequestCache(input: string, options: AdminFetchCacheOptions = {}) {
+  return adminFetchJsonCached<unknown>(input, undefined, options).then(
+    () => undefined,
+    () => undefined
+  )
 }

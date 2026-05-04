@@ -1,29 +1,47 @@
 import { NextRequest, NextResponse } from "next/server"
+import { checkRateLimit, getClientIp } from "@/lib/server/rate-limit"
+import { verifyUnsubscribeToken } from "@/lib/server/security-tokens"
 import { unsubscribe } from "@/lib/repositories/marketing"
 
 export async function GET(req: NextRequest) {
-  const email = new URL(req.url).searchParams.get("email") ?? ""
+  const url = new URL(req.url)
+  const email = url.searchParams.get("email") ?? ""
+  const token = url.searchParams.get("token") ?? ""
 
-  return new NextResponse(renderUnsubscribePage(email), {
+  return new NextResponse(renderUnsubscribePage(email, token), {
     headers: { "Content-Type": "text/html; charset=utf-8" },
   })
 }
 
 export async function POST(req: NextRequest) {
+  const ip = getClientIp(req)
+  const { allowed } = checkRateLimit(ip, "newsletter-unsubscribe", {
+    windowMs: 60_000,
+    max: 10,
+  })
+
+  if (!allowed) {
+    return NextResponse.json({ error: "Too many requests." }, { status: 429 })
+  }
+
   try {
     const contentType = req.headers.get("content-type") ?? ""
     let email = ""
+    let token = ""
 
     if (contentType.includes("application/json")) {
       const body = await req.json()
       email = typeof body?.email === "string" ? body.email.trim() : ""
+      token = typeof body?.token === "string" ? body.token.trim() : ""
     } else {
       const form = await req.formData()
       const value = form.get("email")
+      const tokenValue = form.get("token")
       email = typeof value === "string" ? value.trim() : ""
+      token = typeof tokenValue === "string" ? tokenValue.trim() : ""
     }
 
-    if (!email) {
+    if (!email || !verifyUnsubscribeToken(email, token)) {
       return NextResponse.json({ error: "Invalid request." }, { status: 400 })
     }
 
@@ -38,8 +56,9 @@ export async function POST(req: NextRequest) {
   }
 }
 
-function renderUnsubscribePage(email: string): string {
+function renderUnsubscribePage(email: string, token: string): string {
   const safeEmail = escapeHtml(email)
+  const safeToken = escapeHtml(token)
 
   return `<!DOCTYPE html>
 <html lang="en">
@@ -94,6 +113,7 @@ function renderUnsubscribePage(email: string): string {
     <p class="email">${safeEmail || "No email provided."}</p>
     <form method="POST" action="/api/newsletter/unsubscribe">
       <input type="hidden" name="email" value="${safeEmail}" />
+      <input type="hidden" name="token" value="${safeToken}" />
       <button type="submit">Unsubscribe</button>
     </form>
     <p class="note">The request is handled the same way regardless of whether the address exists.</p>

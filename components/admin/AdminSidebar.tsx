@@ -3,7 +3,7 @@
 import Link from "next/link"
 import { usePathname, useRouter } from "next/navigation"
 import type { ReactNode } from "react"
-import { useEffect, useState } from "react"
+import { useCallback, useEffect, useMemo, useRef, useState } from "react"
 import {
   BarChart2,
   BookOpen,
@@ -25,7 +25,7 @@ import {
   Users,
   X,
 } from "lucide-react"
-import { clearAdminSessionStorage } from "@/lib/admin-client"
+import { clearAdminSessionStorage, warmAdminRequestCache } from "@/lib/admin-client"
 import { createSupabaseBrowserClient } from "@/lib/supabase/browser"
 import { hasSupabaseBrowserEnv } from "@/lib/supabase/public-env"
 import AdminNotificationsBell from "./AdminNotificationsBell"
@@ -61,6 +61,47 @@ const NAV: NavItem[] = [
   { href: "/admin/users", label: "회원 관리", icon: <UserCog className="h-4 w-4" />, roles: STAFF_ADMIN, section: "system" },
   { href: "/admin/dev", label: "Dev Mode", icon: <Code2 className="h-4 w-4" />, roles: STAFF_ADMIN, section: "system", badge: "Beta" },
 ]
+
+const NAV_WARMUP_REQUESTS: Record<string, string[]> = {
+  "/admin/overview": [
+    "/api/admin/leads",
+    "/api/admin/subscribers",
+    "/api/admin/blog",
+    "/api/admin/email",
+    "/api/admin/calendar",
+    "/api/admin/settings",
+    "/api/admin/bugs",
+    "/api/admin/patch-notes",
+  ],
+  "/admin/crm": ["/api/admin/leads", "/api/admin/events"],
+  "/admin/calendar": ["/api/admin/calendar"],
+  "/admin/quotes": ["/api/admin/quotes"],
+  "/admin/campaigns": [
+    "/api/admin/email",
+    "/api/admin/subscribers",
+    "/api/admin/events",
+    "/api/admin/event-metrics",
+  ],
+  "/admin/blog": ["/api/admin/blog", "/api/admin/blog?trash=1"],
+  "/admin/events": ["/api/admin/events"],
+  "/admin/docs": ["/api/admin/docs", "/api/admin/docs/analytics?days=30"],
+  "/admin/branch": [
+    "/api/admin/branch/summary?team=ALL&period=this-month",
+    "/api/admin/branch/kpi?team=ALL&period=this-month",
+  ],
+  "/admin/analytics": [
+    "/api/admin/leads",
+    "/api/admin/subscribers",
+    "/api/admin/email",
+    "/api/admin/blog",
+    "/api/admin/events",
+    "/api/admin/event-metrics",
+    "/api/admin/event-counts?range=30",
+  ],
+  "/admin/settings": ["/api/admin/settings"],
+  "/admin/users": ["/api/admin/users"],
+  "/admin/dev": ["/api/admin/roadmap", "/api/admin/bugs", "/api/admin/patch-notes"],
+}
 
 const SECTION_META: Record<SidebarSection, { label: string; description: string }> = {
   workspace: { label: "운영", description: "매일 가장 자주 쓰는 화면" },
@@ -100,6 +141,8 @@ function normalizeRole(role: string): SidebarRole {
 export default function AdminSidebar({ role, name, email }: Props) {
   const pathname = usePathname()
   const router = useRouter()
+  const prefetchedHrefs = useRef(new Set<string>())
+  const warmedHrefs = useRef(new Set<string>())
   const [collapsed, setCollapsed] = useState(() => {
     if (typeof window === "undefined") return false
     return localStorage.getItem("admin_sidebar_collapsed") === "true"
@@ -148,7 +191,10 @@ export default function AdminSidebar({ role, name, email }: Props) {
   }
 
   const normalizedRole = normalizeRole(role)
-  const visibleNav = NAV.filter((item) => item.roles.includes(normalizedRole))
+  const visibleNav = useMemo(
+    () => NAV.filter((item) => item.roles.includes(normalizedRole)),
+    [normalizedRole]
+  )
   const isNavActive = (href: string) => pathname === href || pathname.startsWith(`${href}/`)
   const currentNavItem = visibleNav.find((item) => isNavActive(item.href)) ?? visibleNav[0]
   const mobilePrimaryNav = visibleNav
@@ -159,6 +205,46 @@ export default function AdminSidebar({ role, name, email }: Props) {
     section,
     items: visibleNav.filter((item) => item.section === section),
   })).filter((group) => group.items.length > 0)
+
+  const prefetchAdminRoute = useCallback((href: string) => {
+    if (prefetchedHrefs.current.has(href)) return
+    prefetchedHrefs.current.add(href)
+
+    try {
+      router.prefetch(href)
+    } catch {
+      // Prefetch is an optimization only.
+    }
+  }, [router])
+
+  const warmAdminTab = useCallback((href: string) => {
+    prefetchAdminRoute(href)
+
+    if (warmedHrefs.current.has(href)) return
+    warmedHrefs.current.add(href)
+
+    for (const url of NAV_WARMUP_REQUESTS[href] ?? []) {
+      void warmAdminRequestCache(url, { ttlMs: 60_000 })
+    }
+  }, [prefetchAdminRoute])
+
+  useEffect(() => {
+    const run = () => {
+      visibleNav.slice(0, 6).forEach((item) => prefetchAdminRoute(item.href))
+    }
+    const idleWindow = window as typeof window & {
+      requestIdleCallback?: (callback: () => void, options?: { timeout?: number }) => number
+      cancelIdleCallback?: (id: number) => void
+    }
+    const idleId = idleWindow.requestIdleCallback?.(run, { timeout: 1_800 })
+
+    if (idleId !== undefined) {
+      return () => idleWindow.cancelIdleCallback?.(idleId)
+    }
+
+    const timeoutId = window.setTimeout(run, 650)
+    return () => window.clearTimeout(timeoutId)
+  }, [prefetchAdminRoute, visibleNav])
 
   return (
     <>
@@ -179,6 +265,7 @@ export default function AdminSidebar({ role, name, email }: Props) {
           {currentNavItem?.label ?? "Admin"}
         </h1>
       </div>
+      {!isDesktop ? <AdminNotificationsBell placement="inline" /> : null}
     </header>
 
     {mobileMenuOpen ? (
@@ -228,7 +315,13 @@ export default function AdminSidebar({ role, name, email }: Props) {
                       <Link
                         key={`mobile-${item.href}`}
                         href={item.href}
-                        onClick={() => setMobileMenuOpen(false)}
+                        onFocus={() => warmAdminTab(item.href)}
+                        onMouseEnter={() => warmAdminTab(item.href)}
+                        onTouchStart={() => warmAdminTab(item.href)}
+                        onClick={() => {
+                          warmAdminTab(item.href)
+                          setMobileMenuOpen(false)
+                        }}
                         className={`flex min-h-11 items-center gap-3 rounded-md px-3 text-[14px] font-medium transition-colors ${
                           isActive
                             ? "bg-[#111110] text-white"
@@ -279,6 +372,9 @@ export default function AdminSidebar({ role, name, email }: Props) {
             <Link
               key={`bottom-${item.href}`}
               href={item.href}
+              onFocus={() => warmAdminTab(item.href)}
+              onMouseEnter={() => warmAdminTab(item.href)}
+              onTouchStart={() => warmAdminTab(item.href)}
               className={`flex min-h-[52px] flex-col items-center justify-center gap-1 rounded-md px-1 text-[10px] font-medium leading-none transition-colors ${
                 isActive
                   ? "bg-[#111110] text-white"
@@ -315,7 +411,7 @@ export default function AdminSidebar({ role, name, email }: Props) {
             <p className="text-[15px] font-semibold text-[#111110]">Admin</p>
           </div>
         )}
-        <AdminNotificationsBell placement="inline" />
+        {isDesktop ? <AdminNotificationsBell placement="inline" /> : null}
         <button
           onClick={toggle}
           className={`rounded-md p-1 text-[#1a1a1a]/30 transition-colors hover:bg-[#f5f5f2] hover:text-[#111110] ${
@@ -358,6 +454,9 @@ export default function AdminSidebar({ role, name, email }: Props) {
                     key={item.href}
                     href={item.href}
                     title={effectiveCollapsed ? item.label : undefined}
+                    onFocus={() => warmAdminTab(item.href)}
+                    onMouseEnter={() => warmAdminTab(item.href)}
+                    onTouchStart={() => warmAdminTab(item.href)}
                     className={`group flex items-center gap-2.5 rounded-lg text-[13px] font-medium transition-colors ${
                       effectiveCollapsed ? "justify-center px-2 py-2.5" : "px-3 py-2"
                     } ${
@@ -399,6 +498,9 @@ export default function AdminSidebar({ role, name, email }: Props) {
                 <Link
                   key={`quick-${item.href}`}
                   href={item.href}
+                  onFocus={() => warmAdminTab(item.href)}
+                  onMouseEnter={() => warmAdminTab(item.href)}
+                  onTouchStart={() => warmAdminTab(item.href)}
                   className="inline-flex shrink-0 items-center rounded-md border border-[#e8e8e4] bg-white px-2 py-1 text-[11px] text-[#1a1a1a]/55 transition-colors hover:border-[#c8c8c4] hover:text-[#111110]"
                 >
                   {item.label}

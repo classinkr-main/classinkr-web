@@ -12,6 +12,7 @@ import {
   type SegmentConfig, type TriggerConfig, type TriggerType, type AutomationStatus,
   type SegmentPreviewResponse,
 } from "@/lib/automation-types"
+import { sanitizeMarketingHtml } from "@/lib/sanitize-html"
 
 interface Props {
   open: boolean
@@ -477,7 +478,7 @@ export default function AutomationRuleSlideOver({ open, templates, initial, onSa
                     </div>
                     <div
                       className="px-4 py-4 text-[12px] prose prose-sm max-w-none max-h-[200px] overflow-y-auto"
-                      dangerouslySetInnerHTML={{ __html: previewBody }}
+                      dangerouslySetInnerHTML={{ __html: sanitizeMarketingHtml(previewBody) }}
                     />
                   </div>
                 </div>

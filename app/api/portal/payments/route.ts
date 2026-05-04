@@ -9,6 +9,7 @@ import {
   getActorInfo,
 } from "@/lib/partner-portal/portal-authorize";
 import { createPayment } from "@/lib/partner-portal/repositories/payments";
+import { getDeal } from "@/lib/partner-portal/repositories/deals";
 import { logActivity } from "@/lib/partner-portal/repositories/activity";
 
 export async function POST(req: NextRequest) {
@@ -25,6 +26,17 @@ export async function POST(req: NextRequest) {
         { error: "partner_account_id, customer_id, deal_id 필수" },
         { status: 400 }
       );
+    }
+
+    const deal = await getDeal(body.deal_id);
+    if (!deal) {
+      return NextResponse.json({ error: "deal not found" }, { status: 404 });
+    }
+    if (
+      deal.partner_account_id !== partnerAccountId ||
+      deal.customer_id !== body.customer_id
+    ) {
+      return NextResponse.json({ error: "Forbidden" }, { status: 403 });
     }
 
     const payment = await createPayment({

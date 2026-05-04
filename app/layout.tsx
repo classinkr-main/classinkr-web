@@ -1,14 +1,7 @@
 import type { Metadata } from "next";
 import "./globals.css";
-import { ConditionalHeader } from "@/components/sections/ConditionalHeader";
-import { ConditionalFooter } from "@/components/sections/ConditionalFooter";
-import { FloatingChatbot } from "@/components/ui/FloatingChatbot";
-import { ChannelTalkLoader } from "@/components/ui/ChannelTalkLoader";
-import { MobileFloatingCTA } from "@/components/ui/MobileFloatingCTA";
-import { AnalyticsProviders } from "@/components/AnalyticsProviders";
 import { ToastProvider } from "@/components/ui/toast";
-import { GTMScript } from "@/components/GTMScript"
-import { MetaPixelScript } from "@/components/MetaPixelScript";
+import { AppChrome } from "@/components/AppChrome";
 import {
   DEFAULT_OG_IMAGE_PATH,
   DEFAULT_SITE_TITLE,
@@ -55,29 +48,25 @@ export default function RootLayout({
   return (
     <html lang="ko" className="scroll-smooth" data-scroll-behavior="smooth">
       <head>
+        <link rel="preconnect" href="https://cdn.jsdelivr.net" crossOrigin="anonymous" />
         <link
           rel="preload"
           href="https://cdn.jsdelivr.net/gh/orioncactus/pretendard@v1.3.9/dist/web/variable/pretendardvariable-dynamic-subset.min.css"
           as="style"
+          crossOrigin="anonymous"
         />
         <link
           rel="stylesheet"
           href="https://cdn.jsdelivr.net/gh/orioncactus/pretendard@v1.3.9/dist/web/variable/pretendardvariable-dynamic-subset.min.css"
+          crossOrigin="anonymous"
         />
       </head>
       <body>
-        <GTMScript />
-        <MetaPixelScript />
         <ToastProvider>
-          <ConditionalHeader />
+          <AppChrome />
           <main className="min-h-screen bg-background font-sans antialiased selection:bg-primary/20 selection:text-primary">
             {children}
           </main>
-          <ConditionalFooter />
-          <FloatingChatbot />
-          <ChannelTalkLoader />
-          <MobileFloatingCTA />
-          <AnalyticsProviders />
         </ToastProvider>
       </body>
     </html>

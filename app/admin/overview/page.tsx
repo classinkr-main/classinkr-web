@@ -29,6 +29,7 @@ import {
   ResponsiveContainer,
   CartesianGrid,
 } from "recharts"
+import { adminFetchJsonCached } from "@/lib/admin-client"
 import type { LeadRecord, SiteSettings } from "@/lib/db"
 import type { CalendarEvent } from "@/lib/calendar-data"
 import type { BlogPost } from "@/lib/blog-types"
@@ -36,16 +37,9 @@ import type { EmailCampaign } from "@/lib/marketing-types"
 import type { BugReport } from "@/lib/bugs-data"
 import type { PatchNote } from "@/lib/patch-notes-data"
 
-function adminFetch(url: string) {
-  const token = (typeof window !== "undefined" ? sessionStorage.getItem("admin_password") : null) ?? ""
-  return fetch(url, { headers: { Authorization: `Bearer ${token}` } })
-}
-
 async function fetchJson<T>(url: string): Promise<T | null> {
   try {
-    const res = await adminFetch(url)
-    if (!res.ok) return null
-    return (await res.json()) as T
+    return await adminFetchJsonCached<T>(url, undefined, { ttlMs: 60_000 })
   } catch {
     return null
   }

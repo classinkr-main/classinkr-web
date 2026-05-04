@@ -16,6 +16,7 @@ function readJson<T>(file: string): T {
 }
 
 function writeJson(file: string, data: unknown) {
+  if (!fs.existsSync(DATA_DIR)) fs.mkdirSync(DATA_DIR, { recursive: true })
   fs.writeFileSync(path.join(DATA_DIR, file), JSON.stringify(data, null, 2))
 }
 
@@ -101,7 +102,8 @@ function normalizeSettings(raw?: Partial<SiteSettings>): SiteSettings {
 
 export function getLeads(): LeadRecord[] {
   try {
-    return readJson<LeadRecord[]>("leads.json")
+    const leads = readJson<unknown>("leads.json")
+    return Array.isArray(leads) ? (leads as LeadRecord[]) : []
   } catch {
     return []
   }

@@ -9,6 +9,7 @@ import "server-only";
 
 import { createSupabaseServerClient } from "@/lib/supabase/server";
 import type { BlogPost as SupaBlogPost, BlogPostInsert, BlogPostUpdate } from "@/lib/supabase/database.types";
+import { sanitizePublicUrl } from "@/lib/safe-public-url";
 
 // 기존 타입 re-export
 export type { BlogPost, BlogPostInput, BlogPostStatus } from "@/lib/blog-types";
@@ -17,6 +18,7 @@ export { CATEGORIES, BLOG_STATUS_OPTIONS, DEFAULT_BLOG_CTA } from "@/lib/blog-ty
 import type { BlogPost, BlogPostInput } from "@/lib/blog-types";
 
 const USE_SUPABASE = process.env.USE_SUPABASE_BLOG === "true";
+const BLOG_SLUG_CONFLICT_MESSAGE = "이미 사용 중인 블로그 URL 슬러그입니다.";
 
 /* ─── Supabase Row ↔ 기존 BlogPost 변환 ─── */
 
@@ -65,7 +67,7 @@ function supabaseToLegacy(row: SupaBlogPost): BlogPost & { _uuid: string } {
 function legacyToSupabaseInsert(data: Partial<BlogPostInput>): BlogPostInsert {
   return {
     title: data.title ?? "제목 없음",
-    slug: data.slug ?? slugifyTitle(data.title ?? "untitled"),
+    slug: resolveBlogSlug(data.slug, data.title),
     excerpt: data.excerpt ?? null,
     content_markdown: data.contentMarkdown ?? null,
     content_html: null,
@@ -86,7 +88,7 @@ function legacyToSupabaseInsert(data: Partial<BlogPostInput>): BlogPostInsert {
     benefit_items: data.benefitItems ?? [],
     target_reader: data.targetReader ?? null,
     cta_text: data.cta?.buttonLabel ?? null,
-    cta_url: data.cta?.buttonHref ?? null,
+    cta_url: normalizeCtaHref(data.cta?.buttonHref),
     cta_style: "primary",
     related_post_ids: [],
     page_layout: data.pageLayout ?? "standard",
@@ -187,8 +189,20 @@ export async function getPostById(id: number): Promise<BlogPost | null> {
 
   // Supabase에서는 UUID로 검색해야 하므로 전체 검색 후 hash 매칭
   // 실제로는 _uuid를 사용해야 하지만 호환성을 위해 유지
-  const posts = await getAllPosts();
-  return posts.find((p) => p.id === id) ?? null;
+  const summary = (await getAllPosts()).find((p) => p.id === id) as
+    | (BlogPost & { _uuid?: string })
+    | undefined;
+  if (!summary?._uuid) return null;
+
+  const supabase = await createSupabaseServerClient();
+  const { data, error } = await supabase
+    .from("blog_posts")
+    .select("*")
+    .eq("id", summary._uuid)
+    .single();
+
+  if (error || !data) return null;
+  return supabaseToLegacy(data as SupaBlogPost);
 }
 
 /* ─── CREATE ─── */
@@ -201,12 +215,15 @@ export async function createPost(data: Partial<BlogPostInput>): Promise<BlogPost
 
   const supabase = await createSupabaseServerClient();
   const insert = legacyToSupabaseInsert(data);
+  await assertBlogSlugAvailable(supabase, insert.slug);
 
   const { data: row, error } = await supabase
     .from("blog_posts")
     .insert(insert)
     .select()
     .single();
+
+  if (error && isUniqueViolation(error)) throw new Error(BLOG_SLUG_CONFLICT_MESSAGE);
 
   if (error) throw new Error(`[blog] 생성 실패: ${error.message}`);
   return supabaseToLegacy(row as SupaBlogPost);
@@ -232,7 +249,7 @@ export async function updatePost(
 
   const update: BlogPostUpdate = {};
   if (data.title !== undefined) update.title = data.title;
-  if (data.slug !== undefined) update.slug = data.slug;
+  if (data.slug !== undefined) update.slug = resolveBlogSlug(data.slug, data.title);
   if (data.excerpt !== undefined) update.excerpt = data.excerpt;
   if (data.contentMarkdown !== undefined) update.content_markdown = data.contentMarkdown;
   if (data.category !== undefined) update.category = data.category;
@@ -251,7 +268,7 @@ export async function updatePost(
   if (data.targetReader !== undefined) update.target_reader = data.targetReader;
   if (data.cta !== undefined) {
     update.cta_text = data.cta.buttonLabel ?? null;
-    update.cta_url = data.cta.buttonHref ?? null;
+    update.cta_url = normalizeCtaHref(data.cta.buttonHref);
   }
   if (data.pageLayout !== undefined) update.page_layout = data.pageLayout;
   if (data.status !== undefined) {
@@ -261,6 +278,10 @@ export async function updatePost(
     }
   }
 
+  if (update.slug) {
+    await assertBlogSlugAvailable(supabase, update.slug, targetUuid);
+  }
+
   const { data: row, error } = await supabase
     .from("blog_posts")
     .update(update)
@@ -268,6 +289,7 @@ export async function updatePost(
     .select()
     .single();
 
+  if (error && isUniqueViolation(error)) throw new Error(BLOG_SLUG_CONFLICT_MESSAGE);
   if (error || !row) return null;
   return supabaseToLegacy(row as SupaBlogPost);
 }
@@ -372,6 +394,25 @@ export async function getPublishedSlugsForStaticParams(): Promise<{ slug: string
   }
 }
 
+export async function getPublishedPostsForStaticSitemap(): Promise<BlogPost[]> {
+  if (!USE_SUPABASE) {
+    const mod = await import("@/lib/blog-data");
+    return mod.getPublishedPosts();
+  }
+
+  const { createSupabaseAdminClient } = await import("@/lib/supabase/admin");
+  const supabase = createSupabaseAdminClient();
+  const { data, error } = await supabase
+    .from("blog_posts")
+    .select(LIST_COLUMNS)
+    .eq("status", "PUBLISHED")
+    .is("deleted_at", null)
+    .order("published_at", { ascending: false });
+
+  if (error) throw new Error(`[blog] sitemap query failed: ${error.message}`);
+  return (data as unknown as SupaBlogPost[]).map(supabaseToLegacy);
+}
+
 export async function getRelatedPosts(post: BlogPost, limit = 3): Promise<BlogPost[]> {
   if (!USE_SUPABASE) {
     const mod = await import("@/lib/blog-data");
@@ -424,6 +465,33 @@ function slugifyTitle(title: string): string {
     .replace(/\s+/g, "-")
     .replace(/-+/g, "-")
     .slice(0, 80);
+}
+
+function resolveBlogSlug(slug: string | null | undefined, title: string | null | undefined): string {
+  const source = slug?.trim() || title?.trim() || "untitled";
+  return slugifyTitle(source) || "untitled";
+}
+
+function normalizeCtaHref(value: string | null | undefined): string | null {
+  const safe = sanitizePublicUrl(value, "");
+  return safe || null;
+}
+
+function isUniqueViolation(error: { code?: string } | null | undefined): boolean {
+  return error?.code === "23505";
+}
+
+async function assertBlogSlugAvailable(
+  supabase: Awaited<ReturnType<typeof createSupabaseServerClient>>,
+  slug: string,
+  exceptId?: string
+): Promise<void> {
+  let query = supabase.from("blog_posts").select("id").eq("slug", slug).limit(1);
+  if (exceptId) query = query.neq("id", exceptId);
+
+  const { data, error } = await query;
+  if (error) throw error;
+  if (data && data.length > 0) throw new Error(BLOG_SLUG_CONFLICT_MESSAGE);
 }
 
 async function findUuidByLegacyId(legacyId: number): Promise<string | null> {

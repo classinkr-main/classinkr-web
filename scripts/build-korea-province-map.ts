@@ -1,4 +1,3 @@
-/* eslint-disable */
 /**
  * One-shot generator: kostat 2018 GeoJSON → lib/branch/korea-province-map.ts
  *

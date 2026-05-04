@@ -10,6 +10,7 @@ import {
   getActorInfo,
 } from "@/lib/partner-portal/portal-authorize";
 import { listDealListItems, createDeal } from "@/lib/partner-portal/repositories/deals";
+import { getCustomer } from "@/lib/partner-portal/repositories/customers";
 import { logActivity } from "@/lib/partner-portal/repositories/activity";
 import type { DealStage, DealStatus } from "@/lib/partner-portal/types";
 
@@ -56,6 +57,14 @@ export async function POST(req: NextRequest) {
     }
     if (!body.customer_id) {
       return NextResponse.json({ error: "customer_id 필수" }, { status: 400 });
+    }
+
+    const customer = await getCustomer(body.customer_id);
+    if (!customer) {
+      return NextResponse.json({ error: "customer not found" }, { status: 404 });
+    }
+    if (customer.partner_account_id !== partnerAccountId) {
+      return NextResponse.json({ error: "Forbidden" }, { status: 403 });
     }
 
     const deal = await createDeal({

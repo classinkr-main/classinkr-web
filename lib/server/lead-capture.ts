@@ -71,7 +71,7 @@ export function resolveLeadSource(value: unknown): LeadSource | null {
 
 export function buildLeadPayload(raw: unknown): LeadPayload {
   if (!raw || typeof raw !== "object") {
-    throw new Error("Lead payload is invalid.")
+    throw new Error("요청 형식이 올바르지 않습니다.")
   }
 
   const body = raw as Record<string, unknown>
@@ -79,11 +79,11 @@ export function buildLeadPayload(raw: unknown): LeadPayload {
   const email = normalizeEmail(body.email)
 
   if (!source) {
-    throw new Error("Lead source is invalid.")
+    throw new Error("문의 경로가 올바르지 않습니다.")
   }
 
   if (email === null) {
-    throw new Error("Email format is invalid.")
+    throw new Error("이메일 형식을 다시 확인해 주세요.")
   }
 
   const payload: LeadPayload = {
@@ -110,18 +110,18 @@ export function buildLeadPayload(raw: unknown): LeadPayload {
       "phone",
     ])
   ) {
-    throw new Error("Demo request is missing required fields.")
+    throw new Error("상담 요청에 필요한 정보를 모두 입력해 주세요.")
   }
 
   if (
     payload.source === "contact_page" &&
     !hasRequiredFields(payload, ["org", "name", "phone", "message"])
   ) {
-    throw new Error("Contact request is missing required fields.")
+    throw new Error("필수 문의 정보를 모두 입력해 주세요.")
   }
 
   if (payload.source === "newsletter" && !payload.email) {
-    throw new Error("Email is required for newsletter signups.")
+    throw new Error("뉴스레터 구독에는 이메일이 필요합니다.")
   }
 
   return payload
@@ -261,7 +261,7 @@ export async function submitLeadCapture(raw: unknown): Promise<LeadSubmissionRes
         status: 502,
         body: {
           ok: false,
-          error: "Lead storage and delivery both failed.",
+          error: "상담 요청 저장과 전달이 모두 실패했습니다.",
           details: storageError ? [storageError, ...errors] : errors,
         },
       }
@@ -280,7 +280,7 @@ export async function submitLeadCapture(raw: unknown): Promise<LeadSubmissionRes
       status: 400,
       body: {
         ok: false,
-        error: error instanceof Error ? error.message : "Invalid request.",
+        error: error instanceof Error ? error.message : "요청을 처리하지 못했습니다.",
       },
     }
   }

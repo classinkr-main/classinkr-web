@@ -6,6 +6,7 @@ import { Button } from "@/components/ui/button"
 import { Input } from "@/components/ui/input"
 import { Label } from "@/components/ui/label"
 import type { EmailTemplate } from "@/lib/automation-types"
+import { sanitizeMarketingHtml } from "@/lib/sanitize-html"
 import VariablePalette, {
   ALL_VARIABLES,
   applyPreview,
@@ -428,7 +429,7 @@ export default function TemplateEditorDrawer({ open, initial, onSave, onClose, l
               className="flex-1 overflow-y-auto px-4 py-4 text-[12px] prose prose-sm max-w-none"
               dangerouslySetInnerHTML={{
                 __html:
-                  applyPreview(body) ||
+                  sanitizeMarketingHtml(applyPreview(body)) ||
                   '<p style="color:#ccc">본문을 입력하면 미리보기가 표시됩니다.</p>',
               }}
             />
