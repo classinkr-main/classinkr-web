@@ -385,6 +385,23 @@ export default function BlogPostEditor({
   const slugEditedRef = useRef(slugEdited)
   const undoStackRef = useRef<EditorSnapshot[]>([])
   const redoStackRef = useRef<EditorSnapshot[]>([])
+  const wrapperRef = useRef<HTMLDivElement>(null)
+  const headerRef = useRef<HTMLElement>(null)
+
+  useEffect(() => {
+    const wrapper = wrapperRef.current
+    const header = headerRef.current
+    if (!wrapper || !header) return
+
+    const update = () => {
+      wrapper.style.setProperty("--editor-header-h", `${header.offsetHeight}px`)
+    }
+
+    update()
+    const observer = new ResizeObserver(update)
+    observer.observe(header)
+    return () => observer.disconnect()
+  }, [])
 
   const draftStorageKey = `admin-blog-editor-${initialPost?.id ?? "new"}`
   const filteredPosts = allPosts.filter((post) => post.id !== initialPost?.id)
@@ -769,7 +786,11 @@ export default function BlogPostEditor({
   }
 
   return (
-    <div className="min-h-screen bg-[#FAFAF8]">
+    <div
+      ref={wrapperRef}
+      className="min-h-screen bg-[#FAFAF8]"
+      style={{ ["--editor-header-h" as string]: "64px" }}
+    >
 
       {/* ── Template Modal ── */}
       {showTemplateModal && (
@@ -1326,7 +1347,7 @@ export default function BlogPostEditor({
       )}
 
       {/* ── Sticky header ── */}
-      <header className="sticky top-0 z-20 border-b border-[#e8e8e4] bg-[#FAFAF8]/95 backdrop-blur">
+      <header ref={headerRef} className="sticky top-0 z-20 border-b border-[#e8e8e4] bg-[#FAFAF8]/95 backdrop-blur">
         <div className="flex items-center justify-between gap-4 px-6 py-3">
           <div className="flex min-w-0 items-center gap-3">
             <Button variant="ghost" size="sm" asChild className="shrink-0">
@@ -1761,7 +1782,7 @@ export default function BlogPostEditor({
 
         {/* Right: tabbed sidebar */}
         <aside>
-          <div className="sticky top-[65px] max-h-[calc(100vh-65px)] overflow-y-auto pb-10">
+          <div className="sticky top-[var(--editor-header-h)] max-h-[calc(100dvh_-_var(--editor-header-h))] overflow-y-auto pb-6">
             <Tabs defaultValue="settings" className="w-full">
               <div className="sticky top-0 z-10 bg-[#FAFAF8] pb-3">
                 <TabsList className="grid w-full grid-cols-3">
