@@ -90,8 +90,7 @@ export default function BigBackdropImage() {
           initial="hidden"
           whileInView="visible"
           viewport={{ once: true, margin: "-80px" }}
-          className="text-3xl md:text-5xl lg:text-6xl leading-tight text-white mt-4"
-          style={{ letterSpacing: "-1.5px" }}
+          className="mt-4 text-3xl leading-[1.1] tracking-normal text-white md:text-5xl lg:text-6xl"
         >
           베젤은 얇아지고,
           <br />
@@ -106,7 +105,9 @@ export default function BigBackdropImage() {
           viewport={{ once: true, margin: "-80px" }}
           className="text-base md:text-lg text-white/80 mt-5 max-w-xl"
         >
-          8mm 슬림 베젤과 매트 알루미늄 마감으로 오직 수업에만 집중할 수 있도록 만들었습니다.
+          8mm 슬림 베젤과 매트 알루미늄 마감으로
+          <br />
+          오직 수업에만 집중할 수 있도록 만들었습니다.
         </motion.p>
       </div>
     </section>

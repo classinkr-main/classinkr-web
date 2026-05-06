@@ -63,10 +63,9 @@ export default function RootLayout({
       </head>
       <body>
         <ToastProvider>
-          <AppChrome />
-          <main className="min-h-screen bg-background font-sans antialiased selection:bg-primary/20 selection:text-primary">
+          <AppChrome>
             {children}
-          </main>
+          </AppChrome>
         </ToastProvider>
       </body>
     </html>

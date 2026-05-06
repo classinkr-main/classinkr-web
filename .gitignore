@@ -51,5 +51,6 @@ next-env.d.ts
 _antigravity_reset_backup/
 tmp_audit/
 .codex-audit/
+.superpowers/
 scripts/_insight-input.json
 scripts/_insight-output.json

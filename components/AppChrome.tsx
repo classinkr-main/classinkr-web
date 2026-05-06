@@ -2,6 +2,7 @@
 
 import dynamic from "next/dynamic"
 import { usePathname } from "next/navigation"
+import type { ReactNode } from "react"
 import { useEffect, useState } from "react"
 
 import { isPartnerPortalPath } from "@/lib/partner-portal/pathname"
@@ -42,9 +43,10 @@ function isInternalPath(pathname: string) {
   )
 }
 
-export function AppChrome() {
+export function AppChrome({ children }: { children: ReactNode }) {
   const pathname = usePathname()
   const [readyPath, setReadyPath] = useState<string | null>(null)
+  const showPublicChrome = !isInternalPath(pathname)
 
   useEffect(() => {
     const w = window as Window & {
@@ -61,15 +63,14 @@ export function AppChrome() {
     return () => window.clearTimeout(timeout)
   }, [pathname])
 
-  if (isInternalPath(pathname)) {
-    return null
-  }
-
   return (
     <>
-      <ConditionalHeader />
-      <ConditionalFooter />
-      {readyPath === pathname ? (
+      {showPublicChrome ? <ConditionalHeader /> : null}
+      <main className="min-h-screen bg-background font-sans antialiased selection:bg-primary/20 selection:text-primary">
+        {children}
+      </main>
+      {showPublicChrome ? <ConditionalFooter /> : null}
+      {showPublicChrome && readyPath === pathname ? (
         <>
           <GTMScript />
           <MetaPixelScript />

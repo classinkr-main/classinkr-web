@@ -69,10 +69,10 @@ export function NewsletterSubscribe({ variant = "dark" }: Props) {
 
   return (
     <div>
-      <form onSubmit={handleSubmit} className="flex flex-col gap-3 sm:flex-row">
+      <form onSubmit={handleSubmit} className="flex flex-col gap-2 sm:flex-row">
         <div className="relative flex-1">
           <Mail
-            className={`pointer-events-none absolute left-4 top-1/2 h-4 w-4 -translate-y-1/2 ${
+            className={`pointer-events-none absolute left-3.5 top-1/2 h-3.5 w-3.5 -translate-y-1/2 ${
               isDark ? "text-white/30" : "text-[#7A857D]"
             }`}
           />
@@ -80,16 +80,16 @@ export function NewsletterSubscribe({ variant = "dark" }: Props) {
             type="email"
             value={email}
             onChange={(e) => setEmail(e.target.value)}
-            placeholder="name@company.com"
+            placeholder="예: name@classin.com"
             required
-            className={`pl-12 ${fieldClassName}`}
+            className={`${fieldClassName} h-10 rounded-[14px] pl-9 pr-3 text-[13px] placeholder:text-[12px]`}
           />
         </div>
         <Button
           type="submit"
           disabled={loading}
-          size="xl"
-          className="h-12 rounded-[18px] px-6 whitespace-nowrap"
+          size="default"
+          className="h-10 min-w-[82px] rounded-[14px] px-4 text-sm whitespace-nowrap"
         >
           {loading ? (
             <>
@@ -98,7 +98,7 @@ export function NewsletterSubscribe({ variant = "dark" }: Props) {
             </>
           ) : (
             <>
-              무료 구독
+              구독
               <ArrowRight className="h-4 w-4" />
             </>
           )}
