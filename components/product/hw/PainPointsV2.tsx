@@ -5,29 +5,29 @@ import { X, ArrowRight, Check } from "lucide-react";
 
 const items = [
   {
-    pain: "수업 전마다 PC와 주변 장비를 따로 연결해야 합니다.",
+    pain: "PC, HDMI, 캠코더, 마이크 케이블이 책상 위에 산처럼 쌓였습니다.",
     solutionTitle: "OPS 내장 PC",
-    solutionDesc: "보드 안에 i5/i7 PC가 있어 전원을 켜는 것만으로 수업을 시작할 수 있습니다.",
+    solutionDesc: "보드 안에 i5/i7 PC가 내장되어 있어 케이블과 본체가 필요 없습니다.",
   },
   {
-    pain: "강사가 움직일 때마다 화면 구도가 흔들리면 설명의 집중도도 함께 떨어집니다.",
+    pain: "강의 영상 촬영 시 강사가 프레임 밖으로 나가서 보조 인력이 캠을 따라다녀야 합니다.",
     solutionTitle: "4K AI 트래킹 카메라",
-    solutionDesc: "교사를 자동으로 따라가 수업 흐름을 안정적으로 기록합니다. 별도 조작이 거의 필요 없습니다.",
+    solutionDesc: "강사를 자동 인식하고 추적하여 운영 인력 부담을 줄여줍니다.",
   },
   {
-    pain: "필기 반응이 늦으면 설명은 자연스럽게 끊깁니다.",
+    pain: "전자 펜의 반응이 한 박자 늦어 결국 다시 분필로 돌아갑니다.",
     solutionTitle: "0.03s 응답 패널",
-    solutionDesc: "손끝을 바로 따라와 디지털 장비를 의식하지 않고 설명을 이어갈 수 있습니다.",
+    solutionDesc: "사람이 지연을 느끼는 한계의 1/3 수준으로, 분필보다 빠른 반응 속도를 제공합니다.",
   },
   {
-    pain: "조명 반사와 자리별 시야 차이가 같은 교실 안의 수업 경험을 다르게 만듭니다.",
+    pain: "뒷자리 학생은 형광등 반사 때문에 칠판이 안 보인다고 합니다.",
     solutionTitle: "AG 코팅 + 90% 투과율",
-    solutionDesc: "반사와 눈부심을 줄여 어느 자리에서도 같은 화면을 또렷하게 볼 수 있습니다.",
+    solutionDesc: "어느 각도에서나 선명하게 글씨를 볼 수 있습니다.",
   },
   {
-    pain: "지문과 얼룩이 빠르게 쌓이면 수업 사이의 정리까지 일이 됩니다.",
+    pain: "지문이 묻으면 매시간 닦아야 해서 수업 흐름이 끊깁니다.",
     solutionTitle: "AF 마감",
-    solutionDesc: "얼룩이 덜 남아 화면 관리에 쓰는 시간을 줄여줍니다.",
+    solutionDesc: "닦지 않아도 깨끗하며, 50명이 만져도 흔적이 남지 않습니다.",
   },
 ];
 
@@ -62,13 +62,10 @@ export default function PainPointsV2() {
             className="text-4xl md:text-5xl text-[#111110] mt-4 leading-tight"
             style={{ letterSpacing: "-1.5px" }}
           >
-            작은 마찰이 줄어들수록,
-            <br className="hidden md:block" />
-            수업은 더 완성됩니다.
+            반복되는 수업의 번거로움에서 해방되세요.
           </h2>
           <p className="text-lg text-[#615D59] mt-5 max-w-2xl">
-            연결, 반사, 지연, 정리.
-            매일 반복되는 번거로움을 줄이면 수업의 밀도와 운영의 안정감이 함께 올라갑니다.
+            매일 마주하는 5가지 불편함, ClassIn과 함께 사라집니다.
           </p>
         </div>
 

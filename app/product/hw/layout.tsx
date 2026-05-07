@@ -1,11 +1,19 @@
-import { createPublicMetadata } from "@/lib/seo"
+import type { Metadata } from "next"
 
-export const metadata = createPublicMetadata({
+export const metadata: Metadata = {
   title: "하드웨어",
-  description:
-    "판서, 기록, 공유, 복습까지 한 흐름으로 이어지는 교육 전용 보드. ClassIn Board는 수업의 완성도와 운영의 단순함을 함께 설계합니다.",
-  path: "/product/hw",
-})
+  description: "Classin 전용 하드웨어로 교실 환경을 스마트하게 바꾸세요. 수업 몰입도를 높이고 교사의 수업 준비 부담을 줄여줍니다.",
+  openGraph: {
+    title: "하드웨어 | Classin",
+    description: "Classin 전용 하드웨어로 교실 환경을 스마트하게 바꾸세요. 수업 몰입도를 높이고 교사의 수업 준비 부담을 줄여줍니다.",
+    type: "website",
+  },
+  twitter: {
+    card: "summary_large_image",
+    title: "하드웨어 | Classin",
+    description: "Classin 전용 하드웨어로 교실 환경을 스마트하게 바꾸세요. 수업 몰입도를 높이고 교사의 수업 준비 부담을 줄여줍니다.",
+  },
+}
 
 export default function HardwareLayout({ children }: { children: React.ReactNode }) {
   return <>{children}</>
