@@ -11,6 +11,7 @@ import { Card, CardContent, CardDescription, CardHeader, CardTitle } from "@/com
 export function CheckoutFailClient() {
   const searchParams = useSearchParams()
   const orderId = searchParams.get("orderId") ?? ""
+  const checkoutToken = searchParams.get("checkoutToken") ?? ""
   const code = searchParams.get("code") ?? ""
   const message = searchParams.get("message") ?? "결제가 취소되었거나 승인에 실패했습니다."
 
@@ -24,13 +25,14 @@ export function CheckoutFailClient() {
       },
       body: JSON.stringify({
         orderId,
+        checkoutToken,
         code,
         message,
       }),
     }).catch((error) => {
       console.error("[checkout] fail callback error:", error)
     })
-  }, [code, message, orderId])
+  }, [checkoutToken, code, message, orderId])
 
   return (
     <div className="bg-[#FAFAF8] px-4 py-16 font-sans md:py-24">

@@ -10,6 +10,34 @@ import {
   getQuoteDocument,
   updateQuoteDocument,
 } from "@/lib/partner-portal/repositories/quote-documents";
+import type { UpdateQuoteDocument } from "@/lib/supabase/database.types.v2";
+
+function hasOwn(input: Record<string, unknown>, key: string) {
+  return Object.prototype.hasOwnProperty.call(input, key);
+}
+
+function pickQuotePatch(
+  body: Record<string, unknown>,
+  isAdmin: boolean
+): UpdateQuoteDocument {
+  const patch: UpdateQuoteDocument = {};
+
+  if (typeof body.status === "string" && (isAdmin || body.status === "accepted")) {
+    patch.status = body.status as UpdateQuoteDocument["status"];
+  }
+  if (isAdmin && hasOwn(body, "current_version_id")) {
+    patch.current_version_id =
+      typeof body.current_version_id === "string" ? body.current_version_id : null;
+  }
+  if (isAdmin && hasOwn(body, "approved_by")) {
+    patch.approved_by = typeof body.approved_by === "string" ? body.approved_by : null;
+  }
+  if (isAdmin && hasOwn(body, "approved_at")) {
+    patch.approved_at = typeof body.approved_at === "string" ? body.approved_at : null;
+  }
+
+  return patch;
+}
 
 export async function GET(
   req: NextRequest,
@@ -58,8 +86,13 @@ export async function PUT(
       if (f) return f;
     }
 
-    const body = await req.json();
-    const doc = await updateQuoteDocument(id, body);
+    const body = (await req.json()) as Record<string, unknown>;
+    const patch = pickQuotePatch(body, ctx.type === "admin");
+    if (Object.keys(patch).length === 0) {
+      return NextResponse.json({ error: "no allowed fields" }, { status: 400 });
+    }
+
+    const doc = await updateQuoteDocument(id, patch);
     return NextResponse.json({ quote: doc });
   } catch (err) {
     console.error("[portal/quotes/[id]] PUT error:", err);

@@ -10,6 +10,7 @@ import {
   getPublishedSlugsForStaticParams,
 } from "@/lib/repositories/blog"
 import { extractMarkdownHeadings } from "@/lib/blog-markdown"
+import { sanitizePublicUrl } from "@/lib/safe-public-url"
 
 export const revalidate = 3600 // 1시간마다 재생성
 
@@ -69,6 +70,7 @@ export default async function BlogDetailPage({
   const headings = extractMarkdownHeadings(post.contentMarkdown)
   const relatedPosts = await getRelatedPosts(post, 3)
   const benefits = post.benefitItems.filter(Boolean)
+  const ctaHref = sanitizePublicUrl(post.cta.buttonHref, "")
 
   return (
     <div className="min-h-screen bg-[#FAFAF8] text-[#111110]">
@@ -127,6 +129,7 @@ export default async function BlogDetailPage({
                   alt={post.heroImageAlt || post.thumbnailAlt || post.title}
                   fill
                   className="object-cover"
+                  sizes="(min-width: 1024px) 420px, 100vw"
                   priority
                 />
               </div>
@@ -216,6 +219,7 @@ export default async function BlogDetailPage({
                       alt={post.author}
                       fill
                       className="object-cover"
+                      sizes="64px"
                     />
                   ) : (
                     <div className="flex h-full items-center justify-center text-lg font-semibold text-[#084734]">
@@ -268,6 +272,7 @@ export default async function BlogDetailPage({
                           alt={relatedPost.thumbnailAlt || relatedPost.title}
                           fill
                           className="object-cover transition-transform duration-500 group-hover:scale-105"
+                          sizes="(min-width: 1024px) 360px, (min-width: 768px) 33vw, 100vw"
                         />
                       </div>
                       <div className="p-5">
@@ -287,6 +292,7 @@ export default async function BlogDetailPage({
               </div>
             )}
 
+            {ctaHref && (
             <div className="mt-12 overflow-hidden rounded-[24px] bg-[#111110] p-6 text-white shadow-sm md:rounded-[36px] md:p-10">
               <p className="text-[12px] font-medium uppercase tracking-[0.24em] text-white/35">
                 {post.cta.eyebrow}
@@ -301,7 +307,7 @@ export default async function BlogDetailPage({
               </div>
               <div className="mt-8">
                 <Link
-                  href={post.cta.buttonHref}
+                  href={ctaHref}
                   className="inline-flex items-center gap-2 rounded-full bg-white px-5 py-3 text-sm font-semibold text-[#111110] transition-transform hover:-translate-y-0.5"
                 >
                   {post.cta.buttonLabel}
@@ -309,6 +315,7 @@ export default async function BlogDetailPage({
                 </Link>
               </div>
             </div>
+            )}
           </div>
         </div>
       </section>

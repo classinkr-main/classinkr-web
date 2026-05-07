@@ -1,10 +1,12 @@
 import { NextRequest, NextResponse } from "next/server"
 
 import { confirmTossPayment } from "@/lib/billing/toss"
+import { checkRateLimit, getClientIp } from "@/lib/server/rate-limit"
 import {
   getSoftwareCheckoutOrder,
   markSoftwareCheckoutOrderPaid,
 } from "@/lib/server/software-checkout"
+import { verifyCheckoutToken } from "@/lib/server/security-tokens"
 
 function parseAmount(value: unknown) {
   const amount =
@@ -18,11 +20,21 @@ function parseAmount(value: unknown) {
 }
 
 export async function POST(req: NextRequest) {
+  const ip = getClientIp(req)
+  const { allowed } = checkRateLimit(ip, "billing-checkout-confirm", {
+    windowMs: 60_000,
+    max: 20,
+  })
+  if (!allowed) {
+    return NextResponse.json({ error: "Too many requests." }, { status: 429 })
+  }
+
   try {
     const body = (await req.json()) as {
       paymentKey?: string
       orderId?: string
       amount?: string | number
+      checkoutToken?: string
     }
 
     const paymentKey = typeof body.paymentKey === "string" ? body.paymentKey.trim() : ""
@@ -48,6 +60,10 @@ export async function POST(req: NextRequest) {
       )
     }
 
+    if (!verifyCheckoutToken(orderId, amount, body.checkoutToken)) {
+      return NextResponse.json({ error: "Invalid checkout token." }, { status: 403 })
+    }
+
     if (existingOrder.status === "paid" && existingOrder.paymentKey === paymentKey) {
       return NextResponse.json({ order: existingOrder })
     }
@@ -57,8 +73,24 @@ export async function POST(req: NextRequest) {
       orderId,
       amount,
     })
+    if (confirmation.orderId !== orderId) {
+      return NextResponse.json({ error: "Payment order mismatch." }, { status: 400 })
+    }
+    if (typeof confirmation.totalAmount === "number" && confirmation.totalAmount !== amount) {
+      return NextResponse.json({ error: "Payment amount mismatch." }, { status: 400 })
+    }
+    if (typeof confirmation.status === "string" && confirmation.status !== "DONE") {
+      return NextResponse.json({ error: "Payment is not completed." }, { status: 400 })
+    }
 
     const order = await markSoftwareCheckoutOrderPaid(orderId, confirmation)
+    if (!order) {
+      return NextResponse.json(
+        { error: "Order not found or cannot be marked paid." },
+        { status: 409 }
+      )
+    }
+
     return NextResponse.json({ order })
   } catch (error) {
     console.error("[billing/checkout/confirm] POST error:", error)

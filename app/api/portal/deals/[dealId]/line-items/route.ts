@@ -8,9 +8,29 @@ import { authorizeForAccount } from "@/lib/partner-portal/portal-authorize";
 import {
   getDeal,
   createDealLineItem,
-  updateDealLineItem,
-  deleteDealLineItem,
+  updateDealLineItemForDeal,
+  deleteDealLineItemForDeal,
 } from "@/lib/partner-portal/repositories/deals";
+import type { UpdateDealLineItem } from "@/lib/supabase/database.types.v2";
+
+function hasOwn(input: Record<string, unknown>, key: string) {
+  return Object.prototype.hasOwnProperty.call(input, key);
+}
+
+function pickLineItemPatch(body: Record<string, unknown>): UpdateDealLineItem {
+  const patch: UpdateDealLineItem = {};
+
+  if (hasOwn(body, "sku")) patch.sku = typeof body.sku === "string" ? body.sku : null;
+  if (typeof body.category === "string") patch.category = body.category as UpdateDealLineItem["category"];
+  if (typeof body.product_name === "string") patch.product_name = body.product_name;
+  if (typeof body.quantity === "number") patch.quantity = body.quantity;
+  if (typeof body.unit_price === "number") patch.unit_price = body.unit_price;
+  if (typeof body.amount === "number") patch.amount = body.amount;
+  if (typeof body.sort_order === "number") patch.sort_order = body.sort_order;
+  if (hasOwn(body, "notes")) patch.notes = typeof body.notes === "string" ? body.notes : null;
+
+  return patch;
+}
 
 export async function POST(
   req: NextRequest,
@@ -66,10 +86,20 @@ export async function PUT(
       if (f) return f;
     }
 
-    const body = await req.json();
+    const body = (await req.json()) as Record<string, unknown>;
     if (!body.id) return NextResponse.json({ error: "id 필수" }, { status: 400 });
 
-    const item = await updateDealLineItem(body.id, body);
+    const patch = pickLineItemPatch(body);
+    if (Object.keys(patch).length === 0) {
+      return NextResponse.json({ error: "no allowed fields" }, { status: 400 });
+    }
+
+    const item = await updateDealLineItemForDeal(
+      dealId,
+      String(body.id),
+      patch
+    );
+    if (!item) return NextResponse.json({ error: "line item not found" }, { status: 404 });
     return NextResponse.json({ item });
   } catch (err) {
     console.error("[portal/deals/[id]/line-items] PUT error:", err);
@@ -98,7 +128,8 @@ export async function DELETE(
     const itemId = searchParams.get("id");
     if (!itemId) return NextResponse.json({ error: "id 필수" }, { status: 400 });
 
-    await deleteDealLineItem(itemId);
+    const deleted = await deleteDealLineItemForDeal(dealId, itemId);
+    if (!deleted) return NextResponse.json({ error: "line item not found" }, { status: 404 });
     return NextResponse.json({ ok: true });
   } catch (err) {
     console.error("[portal/deals/[id]/line-items] DELETE error:", err);

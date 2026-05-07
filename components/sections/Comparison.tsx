@@ -66,11 +66,11 @@ export function Comparison() {
                     {/* Table Header */}
                     <div className="grid grid-cols-1 md:grid-cols-3 bg-[#111110] text-white text-sm font-semibold">
                         <div className="py-4 px-6 text-[#A39E98] text-xs uppercase tracking-wider">영역</div>
-                        <div className="py-4 px-6 border-l border-[rgba(255,255,255,0.1)] flex items-center gap-2">
+                        <div className="py-4 px-6 md:border-l border-[rgba(255,255,255,0.1)] flex items-center gap-2">
                             <X className="w-4 h-4 text-[#A39E98]" />
                             기존 방식
                         </div>
-                        <div className="py-4 px-6 border-l border-[rgba(255,255,255,0.1)] flex items-center gap-2 text-[#6EE7B7]">
+                        <div className="py-4 px-6 md:border-l border-[rgba(255,255,255,0.1)] flex items-center gap-2 text-[#6EE7B7]">
                             <Check className="w-4 h-4 text-green-400" />
                             Classin 도입 후
                         </div>
@@ -89,11 +89,11 @@ export function Comparison() {
                             <div className="py-4 px-6 font-semibold text-[#615D59] flex items-center break-keep">
                                 {row.feature}
                             </div>
-                            <div className="py-4 px-6 border-l border-[rgba(0,0,0,0.05)] text-[#A39E98] flex items-start gap-2 break-keep">
+                            <div className="py-4 px-6 md:border-l border-[rgba(0,0,0,0.05)] text-[#A39E98] flex items-start gap-2 break-keep">
                                 <X className="w-3.5 h-3.5 text-[#A39E98] mt-0.5 shrink-0" />
                                 {row.traditional}
                             </div>
-                            <div className="py-4 px-6 border-l border-[rgba(0,0,0,0.05)] text-[#111110] font-medium flex items-start gap-2 break-keep">
+                            <div className="py-4 px-6 md:border-l border-[rgba(0,0,0,0.05)] text-[#111110] font-medium flex items-start gap-2 break-keep">
                                 <Check className="w-3.5 h-3.5 text-green-500 mt-0.5 shrink-0" />
                                 {row.eduscale}
                             </div>

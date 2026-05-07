@@ -5,12 +5,12 @@ import { Crosshair, ZoomIn, PenLine, Users } from "lucide-react";
 import Image from "next/image";
 
 const capabilities = [
-  { icon: Crosshair, label: "자동 강사 추적" },
-  { icon: ZoomIn, label: "자동 줌·팬" },
-  { icon: PenLine, label: "판서 자동 캡처" },
-  { icon: Users, label: "학생 멀티 앵글" },
-  { icon: Crosshair, label: "수업 영상 자동 생성" },
-  { icon: ZoomIn, label: "복습 영상 즉시 배포" },
+  { icon: Crosshair, label: "교사 자동 추적" },
+  { icon: ZoomIn, label: "자동 줌·프레이밍" },
+  { icon: PenLine, label: "판서 중심 화면" },
+  { icon: Users, label: "교실·원격 동시 대응" },
+  { icon: Crosshair, label: "수업 영상 자동 저장" },
+  { icon: ZoomIn, label: "복습 링크 빠른 공유" },
 ];
 
 export default function AICameraSection() {
@@ -30,13 +30,14 @@ export default function AICameraSection() {
             className="text-4xl md:text-5xl lg:text-[3.5rem] mt-4 leading-tight"
             style={{ letterSpacing: "-1.5px" }}
           >
-            최소한의 인원으로
+            설명은 지나가도,
             <br />
-            최고의 효율을
+            수업은 남습니다.
           </h2>
 
           <p className="text-lg text-white/70 mt-6 leading-relaxed">
-            카메라 감독 없이도 만드는 트래킹 강의 촬영과 자동녹화 시스템
+            보드 상단 4K AI 카메라가 교사를 자동으로 추적해 수업 전체를 기록합니다.
+            별도 장비나 보조 인력 없이도, 복습 가능한 수업이 자연스럽게 완성됩니다.
           </p>
 
           <ul className="mt-8 grid grid-cols-2 gap-3 sm:grid-cols-3">

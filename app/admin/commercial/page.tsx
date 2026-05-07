@@ -17,6 +17,7 @@ import {
 } from "lucide-react";
 
 import { Card, CardContent, CardHeader, CardTitle } from "@/components/ui/card";
+import { adminFetchJsonCached } from "@/lib/admin-client";
 import type {
   CommercialOverviewPayload,
   CommercialOverviewRange,
@@ -71,22 +72,6 @@ const DEAL_STAGE_META: Record<DealStage, { color: string; dot: string; ring: str
 
 const STAGE_FLOW: DealStage[] = ["contact", "quote", "contract", "confirmed", "installation", "payment"];
 
-function adminFetch(url: string, options?: RequestInit) {
-  const token =
-    typeof window !== "undefined"
-      ? sessionStorage.getItem("admin_password") ?? ""
-      : "";
-
-  return fetch(url, {
-    ...options,
-    headers: {
-      "Content-Type": "application/json",
-      Authorization: `Bearer ${token}`,
-      ...options?.headers,
-    },
-  });
-}
-
 function formatMoney(value?: number | null) {
   if (value == null) return "-";
   return `${value.toLocaleString("ko-KR")}원`;
@@ -113,14 +98,7 @@ function formatDateTime(value?: string | null) {
 }
 
 async function readJson<T>(url: string): Promise<T> {
-  const response = await adminFetch(url);
-  const payload = (await response.json()) as T & { error?: string };
-
-  if (!response.ok) {
-    throw new Error(payload.error ?? "Failed to fetch data");
-  }
-
-  return payload;
+  return adminFetchJsonCached<T>(url, undefined, { ttlMs: 45_000 });
 }
 
 function fmtM(n?: number | null): string {

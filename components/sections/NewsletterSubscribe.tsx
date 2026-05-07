@@ -1,29 +1,17 @@
-/**
- * ─────────────────────────────────────────────────────────────
- * NewsletterSubscribe  —  뉴스레터 이메일 간편 구독 컴포넌트
- * ─────────────────────────────────────────────────────────────
- *
- * [NOTE-22] 사용처
- *   - Footer 하단: 이메일 입력만으로 간편 구독
- *   - FinalCTA 섹션: 기존 CTA와 함께 배치 가능
- *
- *   구독 시 /api/newsletter/subscribe 호출 → 구독자 DB에 등록
- *   + 기존 Google Sheets 웹훅에도 자동 기록 [NOTE-15]
- *
- * [NOTE-23] 옵트인 동의 문구
- *   개인정보보호법 준수를 위해 구독 버튼 하단에
- *   수신 동의 안내 문구를 반드시 표시.
- */
-
 "use client"
 
 import { useState } from "react"
-import { Input } from "@/components/ui/input"
+import { ArrowRight, CheckCircle2, Loader2, Mail } from "lucide-react"
+
 import { Button } from "@/components/ui/button"
-import { CheckCircle2, Loader2, Mail } from "lucide-react"
+import {
+  FormHint,
+  FormMessage,
+  marketingFieldClassName,
+} from "@/components/ui/marketing-form"
+import { Input } from "@/components/ui/input"
 
 interface Props {
-  /** 컴포넌트 배경 테마 */
   variant?: "light" | "dark"
 }
 
@@ -52,75 +40,81 @@ export function NewsletterSubscribe({ variant = "dark" }: Props) {
       if (res.ok && data.ok) {
         setSubmitted(true)
       } else {
-        setError(data.error || "구독에 실패했습니다.")
+        setError(data.error || "구독 처리 중 문제가 발생했습니다.")
       }
     } catch {
-      setError("네트워크 오류가 발생했습니다.")
+      setError("네트워크 상태를 확인한 뒤 다시 시도해 주세요.")
     } finally {
       setLoading(false)
     }
   }
 
   const isDark = variant === "dark"
+  const fieldClassName = isDark
+    ? `${marketingFieldClassName} border-white/10 bg-white/[0.07] text-white placeholder:text-white/40 focus-visible:border-white focus-visible:ring-white/10`
+    : marketingFieldClassName
 
   if (submitted) {
     return (
-      <div className="flex items-center gap-2 py-2">
-        <CheckCircle2 className={`w-5 h-5 ${isDark ? "text-green-400" : "text-green-600"}`} />
-        <span className={`text-sm font-medium ${isDark ? "text-white/85" : "text-[#111110]"}`}>
-          구독이 완료되었습니다! 소식을 기대해주세요.
-        </span>
+      <div className="rounded-[22px] border border-[#DCE9E1] bg-[#F5FBF7] px-4 py-3">
+        <div className="flex items-center gap-2.5">
+          <CheckCircle2 className="h-5 w-5 text-[#0E7A49]" />
+          <span className="text-sm font-medium text-[#203127]">
+            구독이 완료되었습니다. 새로운 제품 소식이 정리되면 가장 먼저 보내드릴게요.
+          </span>
+        </div>
       </div>
     )
   }
 
   return (
     <div>
-      <form onSubmit={handleSubmit} className="flex items-center gap-2">
-        <div className="relative w-[174px] max-w-full">
-          <Mail className={`absolute left-3 top-1/2 h-3.5 w-3.5 -translate-y-1/2 ${isDark ? "text-white/40" : "text-[#A39E98]"}`} />
+      <form onSubmit={handleSubmit} className="flex flex-col gap-2 sm:flex-row">
+        <div className="relative flex-1">
+          <Mail
+            className={`pointer-events-none absolute left-3.5 top-1/2 h-3.5 w-3.5 -translate-y-1/2 ${
+              isDark ? "text-white/30" : "text-[#7A857D]"
+            }`}
+          />
           <Input
             type="email"
             value={email}
             onChange={(e) => setEmail(e.target.value)}
-            placeholder="이메일을 입력해주세요"
+            placeholder="예: name@classin.com"
             required
-            className={`h-9 rounded-[5px] pl-9 pr-3 text-[13px] ${
-              isDark
-                ? "bg-white/[0.06] border-white/[0.08] text-white placeholder:text-white/40"
-                : "bg-white border-[#e8e8e4] text-[#111110]"
-            }`}
+            className={`${fieldClassName} h-10 rounded-[14px] pl-9 pr-3 text-[13px] placeholder:text-[12px]`}
           />
         </div>
         <Button
           type="submit"
           disabled={loading}
-          size="sm"
-          className={
-            isDark
-              ? "h-9 rounded-[5px] bg-[#084734] px-4 text-[13px] text-white hover:bg-[#084734]/90"
-              : "h-9 rounded-[5px] bg-[#084734] px-4 text-[13px] text-white hover:bg-[#084734]/90"
-          }
+          size="default"
+          className="h-10 min-w-[82px] rounded-[14px] px-4 text-sm whitespace-nowrap"
         >
           {loading ? (
-            <Loader2 className="w-4 h-4 animate-spin" />
+            <>
+              <Loader2 className="h-4 w-4 animate-spin" />
+              처리 중
+            </>
           ) : (
-            "무료 구독"
+            <>
+              구독
+              <ArrowRight className="h-4 w-4" />
+            </>
           )}
         </Button>
       </form>
 
-      {error && (
-        <p className={`text-sm mt-2 ${isDark ? "text-[#F6D5C5]" : "text-[#B85C33]"}`}>
+      {error ? (
+        <FormMessage className={isDark ? "mt-2 text-[#F8D4C3]" : "mt-2"}>
           {error}
-        </p>
-      )}
+        </FormMessage>
+      ) : null}
 
-      {/* [NOTE-23] 옵트인 동의 안내 문구 (법적 필수) */}
-      <p className={`text-[10px] mt-2 leading-relaxed ${isDark ? "text-white/35" : "text-[#A39E98]"}`}>
-        구독 시 Classin의 교육 인사이트, 제품 업데이트, 행사 안내를 이메일로 받아보는 것에 동의합니다.
-        언제든지 수신거부할 수 있습니다.
-      </p>
+      <FormHint className={isDark ? "mt-2 text-white/45" : "mt-2"}>
+        구독 시 ClassIn의 교육 인사이트, 제품 업데이트, 웨비나 소식을 이메일로 받아보는 데
+        동의한 것으로 간주됩니다. 언제든 수신 해지할 수 있습니다.
+      </FormHint>
     </div>
   )
 }

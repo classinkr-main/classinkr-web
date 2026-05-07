@@ -2,9 +2,12 @@ import { GoogleGenerativeAI } from "@google/generative-ai"
 import { NextRequest } from "next/server"
 
 import { verifyAdmin } from "@/lib/admin-auth"
+import { checkRateLimit, getClientIp } from "@/lib/server/rate-limit"
 
 export const runtime = "nodejs"
 export const maxDuration = 60 // 1분으로 타임아웃 연장
+
+const AI_RATE_LIMIT = { windowMs: 5 * 60_000, max: 8 }
 
 type AiAction = "card-news" | "reels" | "optimize" | "draft"
 
@@ -167,6 +170,15 @@ function buildPrompt(
 export async function POST(req: NextRequest) {
   const authError = await verifyAdmin(req)
   if (authError) return authError
+
+  const ip = getClientIp(req)
+  const { allowed } = checkRateLimit(ip, "admin-blog-ai", AI_RATE_LIMIT)
+  if (!allowed) {
+    return new Response(JSON.stringify({ error: "Too many requests." }), {
+      status: 429,
+      headers: { "Content-Type": "application/json" },
+    })
+  }
 
   if (!process.env.GEMINI_API_KEY) {
     return new Response(

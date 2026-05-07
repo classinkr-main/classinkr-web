@@ -13,7 +13,7 @@ export const DEFAULT_BLOG_CTA: BlogPostCTA = {
   title: "우리 학원에 맞는 플랜이 궁금하다면?",
   description: "수업 만족도를 높이는 가장 빠른 방법, 지금 컨설팅을 받아보세요.",
   buttonLabel: "무료 상담 신청하기",
-  buttonHref: "#demo",
+  buttonHref: "/contact#contact-form",
 }
 
 export const BLOG_STATUS_OPTIONS: { label: string; value: BlogPostStatus }[] = [

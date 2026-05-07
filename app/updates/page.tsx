@@ -1,13 +1,15 @@
 import type { Metadata } from "next"
 import { getReleases } from "@/lib/github"
 import { ExternalLink, Tag, Calendar } from "lucide-react"
+import { createPublicMetadata } from "@/lib/seo"
 
 export const revalidate = 3600
 
-export const metadata: Metadata = {
-  title: "업데이트 | Classin",
+export const metadata: Metadata = createPublicMetadata({
+  title: "업데이트",
   description: "Classin의 최신 업데이트 및 변경 내역을 확인하세요.",
-}
+  path: "/updates",
+})
 
 function formatDate(iso: string) {
   return new Date(iso).toLocaleDateString("ko-KR", {

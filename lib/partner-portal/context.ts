@@ -1,7 +1,6 @@
 import { createServerClient } from "@supabase/ssr";
 import type { NextRequest } from "next/server";
 
-import { getVerifiedAdminContext } from "@/lib/admin-auth";
 import { createSupabaseAdminClient } from "@/lib/supabase/admin";
 import type { Database } from "@/lib/supabase/database.types";
 import {
@@ -86,58 +85,5 @@ export async function resolvePartnerAccountContext(
     }
   }
 
-  // 2. Super admin fallback — admin_session 쿠키가 있으면 첫 번째 파트너 계정으로 진입
-  return resolveSuperAdminAsPartner(req);
-}
-
-async function resolveSuperAdminAsPartner(
-  req: NextRequest
-): Promise<PartnerAccountContext | null> {
-  // legacy 쿠키 / Supabase admin_profiles 둘 다 처리
-  const adminCtx = await getVerifiedAdminContext(req);
-  if (!adminCtx) return null;
-  // branch 어드민은 제외, admin 롤만 파트너 접근 허용
-  if (adminCtx.role !== "admin" && adminCtx.role !== "SUPER_ADMIN") return null;
-
-  const db = createSupabaseAdminClient();
-
-  // v2 파트너 계정 우선 시도
-  const { data: v2Account } = await db
-    .from("partner_accounts")
-    .select("id")
-    .eq("status", "active")
-    .limit(1)
-    .maybeSingle();
-
-  if (v2Account?.id) {
-    return {
-      userId: "super-admin",
-      partnerAccountId: v2Account.id as string,
-      legacyPartnerId: null,
-      customerId: null,
-      role: "admin",
-      source: "v2",
-      isSuperAdmin: true,
-    };
-  }
-
-  // legacy 파트너 fallback
-  const { data: legacyPartner } = await db
-    .from("partners")
-    .select("id")
-    .eq("status", "active")
-    .limit(1)
-    .maybeSingle();
-
-  if (!legacyPartner?.id) return null;
-
-  return {
-    userId: "super-admin",
-    partnerAccountId: null,
-    legacyPartnerId: legacyPartner.id as string,
-    customerId: legacyPartner.id as string,
-    role: "admin",
-    source: "legacy",
-    isSuperAdmin: true,
-  };
+  return null;
 }

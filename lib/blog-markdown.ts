@@ -1,3 +1,5 @@
+import { sanitizePublicUrlForHtmlAttribute } from "./safe-public-url"
+
 export interface BlogHeading {
   id: string
   text: string
@@ -11,11 +13,6 @@ function escapeHtml(value: string) {
     .replace(/>/g, "&gt;")
     .replace(/"/g, "&quot;")
     .replace(/'/g, "&#39;")
-}
-
-function sanitizeUrl(url: string) {
-  if (/^(https?:\/\/|\/)/i.test(url)) return url
-  return "#"
 }
 
 export function slugify(value: string) {
@@ -49,19 +46,45 @@ export function estimateReadTime(markdown: string) {
   return `${minutes}분`
 }
 
+type InlineToken = {
+  token: string
+  html: string
+}
+
+function stashInlineToken(tokens: InlineToken[], html: string) {
+  const token = `\u0000CLASSIN_INLINE_TOKEN_${tokens.length}\u0000`
+  tokens.push({ token, html })
+  return token
+}
+
 function renderInline(text: string) {
-  let html = escapeHtml(text)
+  const tokens: InlineToken[] = []
+  const source = text
+    .replace(/`([^`]+)`/g, (_match, code: string) =>
+      stashInlineToken(
+        tokens,
+        `<code class="rounded bg-[#111110] px-1.5 py-0.5 text-[0.92em] text-white">${escapeHtml(code)}</code>`
+      )
+    )
+    .replace(
+      /\[([^\]]+)\]\(([^)]+)\)/g,
+      (_match, label: string, url: string) =>
+        stashInlineToken(
+          tokens,
+          `<a href="${sanitizePublicUrlForHtmlAttribute(url)}" target="_blank" rel="noopener noreferrer" class="font-medium text-emerald-700 underline underline-offset-4">${escapeHtml(label)}</a>`
+        )
+    )
+
+  let html = escapeHtml(source)
 
   html = html.replace(/\{\{green:(.+?)\}\}/g, '<span class="font-semibold text-emerald-700">$1</span>')
   html = html.replace(/==(.+?)==/g, '<mark class="rounded bg-[#CEF17B]/60 px-1 text-[#084734]">$1</mark>')
-  html = html.replace(/`([^`]+)`/g, '<code class="rounded bg-[#111110] px-1.5 py-0.5 text-[0.92em] text-white">$1</code>')
-  html = html.replace(
-    /\[([^\]]+)\]\(([^)]+)\)/g,
-    (_match, label: string, url: string) =>
-      `<a href="${sanitizeUrl(url)}" class="font-medium text-emerald-700 underline underline-offset-4">${label}</a>`
-  )
   html = html.replace(/\*\*([^*]+)\*\*/g, "<strong>$1</strong>")
   html = html.replace(/\*([^*]+)\*/g, "<em>$1</em>")
+
+  for (const token of tokens) {
+    html = html.split(token.token).join(token.html)
+  }
 
   return html
 }
@@ -91,7 +114,7 @@ function renderImage(line: string) {
   const [, alt, url] = match
   return `
     <figure class="my-8 overflow-hidden rounded-3xl border border-[#e8e8e4] bg-white">
-      <img src="${sanitizeUrl(url)}" alt="${escapeHtml(alt)}" class="h-auto w-full object-cover" />
+      <img src="${sanitizePublicUrlForHtmlAttribute(url)}" alt="${escapeHtml(alt)}" loading="lazy" decoding="async" class="h-auto w-full object-cover" />
       ${alt ? `<figcaption class="border-t border-[#e8e8e4] px-5 py-3 text-sm text-[#1a1a1a]/45">${escapeHtml(alt)}</figcaption>` : ""}
     </figure>
   `

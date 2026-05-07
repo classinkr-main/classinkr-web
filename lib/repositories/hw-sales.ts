@@ -38,20 +38,12 @@ export async function listHwSales(options?: {
 
 export async function getHwSale(id: string): Promise<HwSaleWithItems | null> {
   const supabase = createSupabaseAdminClient();
-  const { data: sale, error: sErr } = await supabase
-    .from("hw_sales")
-    .select("*")
-    .eq("id", id)
-    .single();
+  const [{ data: sale, error: sErr }, { data: items }] = await Promise.all([
+    supabase.from("hw_sales").select("*").eq("id", id).single(),
+    supabase.from("hw_sale_items").select("*").eq("sale_id", id).order("sort_order"),
+  ]);
   if (sErr) return null;
-
-  const { data: items } = await supabase
-    .from("hw_sale_items")
-    .select("*")
-    .eq("sale_id", id)
-    .order("sort_order");
-
-  return { ...sale, items: items ?? [] };
+  return { ...sale!, items: items ?? [] };
 }
 
 export async function createHwSale(

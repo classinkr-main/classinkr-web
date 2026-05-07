@@ -5,6 +5,7 @@ import { Sparkles, Send, RefreshCw, Loader2, User, ChevronDown, ChevronUp } from
 import { Button } from "@/components/ui/button"
 import { Badge } from "@/components/ui/badge"
 import { PRESET_TAGS } from "@/lib/marketing-types"
+import { sanitizeMarketingHtml } from "@/lib/sanitize-html"
 import type { Subscriber } from "@/lib/marketing-types"
 
 // ─── 타입 ────────────────────────────────────────────────────────────────────
@@ -353,7 +354,7 @@ function PreviewCard({
                 <p className="text-[9px] font-semibold text-[#1a1a1a]/30 uppercase tracking-wider mb-1">본문</p>
                 <div
                   className="text-[11px] text-[#1a1a1a]/60 leading-relaxed prose prose-xs max-w-none [&>p]:mb-1.5"
-                  dangerouslySetInnerHTML={{ __html: preview.result.body }}
+                  dangerouslySetInnerHTML={{ __html: sanitizeMarketingHtml(preview.result.body) }}
                 />
               </div>
             )}

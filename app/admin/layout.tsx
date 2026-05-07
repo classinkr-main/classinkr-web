@@ -4,7 +4,6 @@ import { useEffect, useState } from "react"
 import { usePathname, useRouter } from "next/navigation"
 
 import AdminSidebar from "@/components/admin/AdminSidebar"
-import AdminNotificationsBell from "@/components/admin/AdminNotificationsBell"
 import { clearAdminSessionStorage } from "@/lib/admin-client"
 import { isAdminAuthBypassEnabled } from "@/lib/admin-env"
 import { createSupabaseBrowserClient } from "@/lib/supabase/browser"
@@ -177,7 +176,6 @@ export default function AdminLayout({ children }: { children: React.ReactNode })
           </div>
         </aside>
       )}
-      {session ? <AdminNotificationsBell /> : null}
       <main className="min-w-0 flex-1 overflow-x-hidden pt-16 pb-24 lg:pt-0 lg:pb-0">
         <div className="mx-auto w-full max-w-[1320px]">{children}</div>
       </main>

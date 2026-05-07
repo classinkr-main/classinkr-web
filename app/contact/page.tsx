@@ -22,6 +22,7 @@ export default function ContactPage() {
     const [shake, setShake] = useState(false)
     const formRef = useRef<HTMLFormElement>(null)
     const toast = useToast()
+    const errorMessageId = error ? "contact-form-error" : undefined
 
     const resetForm = () => {
         setSubmitted(false)
@@ -45,24 +46,32 @@ export default function ContactPage() {
         const formData = new FormData(form)
 
         try {
+            const topic = formData.get("topic") as string
+            const message = [
+                topic ? `문의 유형: ${topic}` : undefined,
+                formData.get("message") as string,
+            ]
+                .filter(Boolean)
+                .join("\n")
+
             const data = await submitLead({
                 source: "contact_page",
                 org: formData.get("org-name") as string,
                 name: formData.get("name") as string,
                 phone: formData.get("phone") as string,
                 email: (formData.get("email") as string) || undefined,
-                message: formData.get("message") as string,
+                message,
                 marketingConsent: formData.get("marketing-consent") === "on",
             })
 
             if (Array.isArray(data.warnings) && data.warnings.length > 0) {
-                setNotice("문의는 접수되었지만 일부 외부 연동이 지연되었습니다. 내부 시스템에는 정상 등록되었습니다.")
+                setNotice("상담 요청은 접수되었지만 일부 내부 알림 연동이 지연되었습니다. 기록은 정상 등록되었습니다.")
             }
             trackEvent("submit_demo_request", { source: "contact_page" })
-            toast.success("문의가 접수되었어요")
+            toast.success("상담 요청이 접수되었어요")
             setSubmitted(true)
         } catch (err) {
-            const msg = err instanceof Error ? err.message : "제출에 실패했습니다. 다시 시도해주세요."
+            const msg = err instanceof Error ? err.message : "상담 요청을 제출하지 못했습니다. 잠시 후 다시 시도해주세요."
             setError(msg)
             triggerShake()
         } finally {
@@ -85,25 +94,25 @@ export default function ContactPage() {
                             <span className="w-2 h-2 rounded-full bg-[#084734] animate-pulse"></span>
                             상담 및 문의
                         </motion.div>
-                        
-                        <motion.h1 
+
+                        <motion.h1
                             initial={{ opacity: 0, y: 30 }}
                             animate={{ opacity: 1, y: 0 }}
                             transition={{ duration: 0.7, delay: 0.1 }}
                             className="text-[2rem] font-serif leading-[1.12] tracking-tight text-[#1a1a19] sm:text-4xl md:text-[3rem]"
                         >
                             궁금한 점이 있으신가요? <br />
-                            친절하게 답변해 드립니다.
+                            운영 상황부터 함께 확인해드립니다.
                         </motion.h1>
 
-                        <motion.p 
+                        <motion.p
                             initial={{ opacity: 0, y: 20 }}
                             animate={{ opacity: 1, y: 0 }}
                             transition={{ duration: 0.7, delay: 0.2 }}
                             className="mx-auto max-w-2xl text-base font-medium leading-relaxed text-slate-500 md:text-xl"
                         >
-                            도입 문의부터 맞춤형 솔루션 제안까지,<br />
-                            클래스인 전문 매니저가 학원 운영의 고민을 함께 덜어드립니다.
+                            도입 문의, 기술 지원, 결제 증빙까지<br />
+                            클래스인 전문 매니저가 필요한 다음 단계를 차분히 안내드립니다.
                         </motion.p>
                     </div>
                 </div>
@@ -111,7 +120,7 @@ export default function ContactPage() {
 
             <section className="container relative z-10 mx-auto max-w-6xl pb-12 md:pb-16">
                 {/* Fast Track Banner */}
-                <motion.div 
+                <motion.div
                     initial={{ opacity: 0, scale: 0.98, y: 20 }}
                     animate={{ opacity: 1, scale: 1, y: 0 }}
                     transition={{ duration: 0.6, delay: 0.3 }}
@@ -133,11 +142,11 @@ export default function ContactPage() {
                                 </h3>
                                 <p className="max-w-md text-base font-medium leading-relaxed text-slate-500 sm:text-lg">
                                     {kakaoChannelUrl ? (
-                                        "복잡한 양식 작성 없이, 클래스인 카카오톡 채널로 즉시 매니저와 연결됩니다. QR코드를 스캔해주세요."
+                                        "복잡한 양식 없이 클래스인 카카오톡 채널로 바로 연결됩니다. 급한 CS나 도입 상담은 QR코드를 스캔해주세요."
                                     ) : (
                                         <>
                                             QR 코드를 확인하시거나,<br />
-                                            아래 문의 폼으로 바로 도입 상담을 남겨보세요.
+                                            아래 문의 폼으로 상담 내용을 남겨주세요.
                                         </>
                                     )}
                                 </p>
@@ -175,7 +184,7 @@ export default function ContactPage() {
 
                 <div className="grid lg:grid-cols-5 gap-6 lg:gap-8 items-stretch">
                     {/* Contact Form */}
-                    <motion.div 
+                    <motion.div
                         initial={{ opacity: 0, x: -20 }}
                         animate={{ opacity: 1, x: 0 }}
                         transition={{ duration: 0.6, delay: 0.4 }}
@@ -183,20 +192,20 @@ export default function ContactPage() {
                     >
                         <Card className="flex h-full w-full flex-col items-center overflow-hidden rounded-[24px] border border-slate-100 bg-white shadow-[0_10px_40px_rgba(0,0,0,0.03)] md:rounded-[2rem]">
                             <CardHeader className="w-full border-b border-slate-50 bg-slate-50/50 px-5 pb-5 pt-6 md:px-6 md:pt-7">
-                                <CardTitle className="text-[1.35rem] font-bold text-slate-900 sm:text-2xl">도입 문의 남기기</CardTitle>
+                                <CardTitle className="text-[1.35rem] font-bold text-slate-900 sm:text-2xl">상담 내용 남기기</CardTitle>
                                 <CardDescription className="text-slate-500 font-medium mt-2">
-                                    학원 규모와 원하시는 기능을 남겨주시면, 담당 매니저가 맞춤형 안내 자료와 함께 연락드리겠습니다.
+                                    문의 유형과 현재 상황을 남겨주시면 담당 매니저가 필요한 자료와 확인 순서를 정리해 연락드리겠습니다.
                                 </CardDescription>
                             </CardHeader>
                             <CardContent id="contact-form" className="flex w-full scroll-mt-28 flex-col items-center space-y-5 px-5 py-5 md:scroll-mt-32 md:px-6 md:py-6">
                                 {submitted ? (
                                     <div className="flex flex-col items-center justify-center space-y-4 py-12 text-center">
                                         <CheckCircle2 className="h-14 w-14 text-green-500" />
-                                        <h3 className="text-2xl font-bold text-slate-900">문의가 접수되었습니다!</h3>
-                                        <p className="text-slate-500 text-lg">담당 매니저가 빠르게 연락드리겠습니다.</p>
+                                        <h3 className="text-2xl font-bold text-slate-900">상담 요청이 접수되었습니다</h3>
+                                        <p className="text-slate-500 text-lg">담당 매니저가 내용을 확인한 뒤 이어서 안내드리겠습니다.</p>
                                         {notice && <p className="text-sm text-slate-400 max-w-md">{notice}</p>}
                                         <Button onClick={resetForm} variant="outline" className="mt-4">
-                                            추가 문의하기
+                                            추가 상담 남기기
                                         </Button>
                                     </div>
                                 ) : (
@@ -204,17 +213,17 @@ export default function ContactPage() {
                                 <div className="w-full grid grid-cols-1 md:grid-cols-2 gap-4">
                                     <div className="space-y-3 w-full">
                                         <Label htmlFor="org-name" className="text-slate-700 font-bold ml-1">학원명 / 기관명 <span className="text-[#084734]">*</span></Label>
-                                        <Input id="org-name" name="org-name" placeholder="예: 무궁화 학원" required aria-invalid={!!error} aria-describedby="org-name-error" className={`w-full bg-white border-slate-200 focus-visible:ring-[#084734] h-11 rounded-xl shadow-sm text-base${shake ? " animate-shake" : ""}`} />
+                                        <Input id="org-name" name="org-name" placeholder="예: 무궁화 학원" required aria-invalid={!!error} aria-describedby={errorMessageId} className={`w-full bg-white border-slate-200 focus-visible:ring-[#084734] h-11 rounded-xl shadow-sm text-base${shake ? " animate-shake" : ""}`} />
                                     </div>
                                     <div className="space-y-3 w-full">
                                         <Label htmlFor="name" className="text-slate-700 font-bold ml-1">담당자 성함 <span className="text-[#084734]">*</span></Label>
-                                        <Input id="name" name="name" placeholder="홍길동 원장" required aria-invalid={!!error} aria-describedby="name-error" className={`w-full bg-white border-slate-200 focus-visible:ring-[#084734] h-11 rounded-xl shadow-sm text-base${shake ? " animate-shake" : ""}`} />
+                                        <Input id="name" name="name" placeholder="홍길동 원장" required aria-invalid={!!error} aria-describedby={errorMessageId} className={`w-full bg-white border-slate-200 focus-visible:ring-[#084734] h-11 rounded-xl shadow-sm text-base${shake ? " animate-shake" : ""}`} />
                                     </div>
                                 </div>
                                 <div className="w-full grid grid-cols-1 md:grid-cols-2 gap-4">
                                     <div className="space-y-3 w-full">
                                         <Label htmlFor="phone" className="text-slate-700 font-bold ml-1">연락처 <span className="text-[#084734]">*</span></Label>
-                                        <Input id="phone" name="phone" placeholder="010-0000-0000" type="tel" required aria-invalid={!!error} aria-describedby="phone-error" className={`w-full bg-white border-slate-200 focus-visible:ring-[#084734] h-11 rounded-xl shadow-sm text-base${shake ? " animate-shake" : ""}`} />
+                                        <Input id="phone" name="phone" placeholder="010-0000-0000" type="tel" required aria-invalid={!!error} aria-describedby={errorMessageId} className={`w-full bg-white border-slate-200 focus-visible:ring-[#084734] h-11 rounded-xl shadow-sm text-base${shake ? " animate-shake" : ""}`} />
                                     </div>
                                     <div className="space-y-3 w-full">
                                         <Label htmlFor="email" className="text-slate-700 font-bold ml-1">이메일 (선택)</Label>
@@ -222,15 +231,34 @@ export default function ContactPage() {
                                     </div>
                                 </div>
                                 <div className="space-y-3 w-full">
+                                    <Label htmlFor="topic" className="text-slate-700 font-bold ml-1">문의 유형 <span className="text-[#084734]">*</span></Label>
+                                    <select
+                                        id="topic"
+                                        name="topic"
+                                        required
+                                        aria-invalid={!!error}
+                                        aria-describedby={errorMessageId}
+                                        className={`h-11 w-full rounded-xl border border-slate-200 bg-white px-4 text-base shadow-sm transition-colors focus:outline-none focus:ring-2 focus:ring-[#084734]${shake ? " animate-shake" : ""}`}
+                                        defaultValue=""
+                                    >
+                                        <option value="" disabled>문의 유형을 선택해주세요</option>
+                                        <option value="도입 상담">도입 상담</option>
+                                        <option value="수업 운영 상담">수업 운영 상담</option>
+                                        <option value="결제/영수증/계약">결제/영수증/계약</option>
+                                        <option value="계정/접속/기술 지원">계정/접속/기술 지원</option>
+                                        <option value="하드웨어/설치/AS">하드웨어/설치/AS</option>
+                                    </select>
+                                </div>
+                                <div className="space-y-3 w-full">
                                     <Label htmlFor="message" className="text-slate-700 font-bold ml-1">문의 내용 <span className="text-[#084734]">*</span></Label>
                                     <textarea
                                         className={`w-full resize-none rounded-xl border border-slate-200 bg-white px-4 py-4 text-base focus:outline-none focus:ring-2 focus:ring-[#084734] focus:border-transparent transition-all shadow-sm min-h-[110px]${shake ? " animate-shake" : ""}`}
-                                        placeholder="현재 겪고 계신 운영상의 고민이나 필요하신 기능을 자유롭게 적어주세요."
+                                        placeholder="현재 상황, 원하는 상담 결과, 급한 일정이 있다면 함께 적어주세요."
                                         id="message"
                                         name="message"
                                         required
                                         aria-invalid={!!error}
-                                        aria-describedby="message-error"
+                                        aria-describedby={errorMessageId}
                                     />
                                 </div>
                                 <label className="flex items-start gap-3 rounded-2xl border border-slate-200 bg-slate-50/70 px-4 py-3 text-sm text-slate-600">
@@ -241,18 +269,18 @@ export default function ContactPage() {
                                         className="mt-0.5 h-4 w-4 rounded border-slate-300 text-[#084734] focus:ring-[#084734]"
                                     />
                                     <span>
-                                        제품 업데이트와 이벤트 소식을 이메일로 받아보겠습니다.
+                                        제품 업데이트와 교육 운영 인사이트를 이메일로 받아보겠습니다.
                                         <span className="ml-1 text-slate-400">(선택)</span>
                                     </span>
                                 </label>
                                 {error && (
-                                    <p id="message-error" role="alert" aria-live="polite" className="text-red-600 text-sm text-center">{error}</p>
+                                    <p id="contact-form-error" role="alert" aria-live="polite" className="text-red-600 text-sm text-center">{error}</p>
                                 )}
                                 <Button type="submit" disabled={loading} className="w-full h-12 text-base font-bold bg-[#084734] hover:bg-[#065c41] text-white rounded-xl shadow-[0_8px_20px_rgba(8,71,52,0.18)] hover:shadow-[0_12px_25px_rgba(8,71,52,0.26)] transition-all hover:-translate-y-0.5 mt-4">
                                     {loading ? (
-                                        <><Loader2 className="mr-2 h-5 w-5 animate-spin" />제출 중...</>
+                                        <><Loader2 className="mr-2 h-5 w-5 animate-spin" />상담 요청 접수 중...</>
                                     ) : (
-                                        "문의 제출하기"
+                                        "상담 요청 제출하기"
                                     )}
                                 </Button>
                                 </form>
@@ -262,7 +290,7 @@ export default function ContactPage() {
                     </motion.div>
 
                     {/* Contact Info */}
-                    <motion.div 
+                    <motion.div
                         initial={{ opacity: 0, x: 20 }}
                         animate={{ opacity: 1, x: 0 }}
                         transition={{ duration: 0.6, delay: 0.5 }}
@@ -313,11 +341,11 @@ export default function ContactPage() {
                                 <div className="w-full h-36 bg-slate-100 rounded-2xl border border-slate-200 overflow-hidden relative">
                                     <iframe
                                         src="https://maps.google.com/maps?q=서울시+양천구+목동동로+233-1&t=&z=17&ie=UTF8&iwloc=&output=embed"
-                                        width="100%" 
-                                        height="100%" 
-                                        style={{ border: 0 }} 
-                                        allowFullScreen={false} 
-                                        loading="lazy" 
+                                        width="100%"
+                                        height="100%"
+                                        style={{ border: 0 }}
+                                        allowFullScreen={false}
+                                        loading="lazy"
                                         referrerPolicy="no-referrer-when-downgrade"
                                         className="filter grayscale-[0.2] contrast-[1.05] opacity-90 hover:grayscale-0 hover:opacity-100 transition-all duration-500"
                                     ></iframe>

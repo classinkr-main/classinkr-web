@@ -1,5 +1,7 @@
 import "server-only"
 
+import crypto from "node:crypto"
+
 import { createSupabaseAdminClient } from "@/lib/supabase/admin"
 import {
   docsCategories as staticDocsCategories,
@@ -109,6 +111,15 @@ export interface AdminDocsAnalyticsResponse {
   warnings: string[]
 }
 
+export interface AdminDocsReindexResponse {
+  configured: boolean
+  status: "live" | "unconfigured"
+  generatedAt: string
+  articleCount: number
+  chunkCount: number
+  warnings: string[]
+}
+
 interface DocsCategoryRow {
   id: string
   title: string
@@ -140,6 +151,29 @@ interface DocsArticleRow {
   updated_at: string | null
   published_at: string | null
   last_reviewed_at: string | null
+}
+
+interface DocsArticleForReindexRow extends DocsArticleRow {
+  audience: string[] | null
+  tags: string[] | null
+  keywords: string[] | null
+  symptoms: string[] | null
+  chatbot_summary: string | null
+  content_markdown: string | null
+  content_json: unknown
+  noindex: boolean | null
+}
+
+interface DocsArticleVersionRow {
+  id: string
+  article_id: string
+  version_number: number
+}
+
+interface DocsChunkSection {
+  heading: string
+  body: string
+  steps?: string[]
 }
 
 interface DocsFeedbackRow {
@@ -346,6 +380,132 @@ function getSinceIso(rangeDays: number) {
 
 function compactQuery(value: string | null | undefined) {
   return value?.replace(/\s+/g, " ").trim() || "검색어 없음"
+}
+
+function hashContent(content: string) {
+  return crypto.createHash("sha256").update(content).digest("hex")
+}
+
+function getContentJson(value: unknown): Record<string, unknown> {
+  return value && typeof value === "object" && !Array.isArray(value)
+    ? (value as Record<string, unknown>)
+    : {}
+}
+
+function isChunkSection(value: unknown): value is DocsChunkSection {
+  if (!value || typeof value !== "object") return false
+
+  const section = value as Partial<DocsChunkSection>
+  const validSteps =
+    section.steps === undefined ||
+    (Array.isArray(section.steps) && section.steps.every((step) => typeof step === "string"))
+
+  return typeof section.heading === "string" && typeof section.body === "string" && validSteps
+}
+
+function sectionToChunkContent(section: DocsChunkSection) {
+  const steps = section.steps?.map((step) => `- ${step}`).join("\n")
+  return [`## ${section.heading}`, section.body, steps].filter(Boolean).join("\n\n")
+}
+
+function getSectionsForChunking(article: DocsArticleForReindexRow): DocsChunkSection[] {
+  const contentJson = getContentJson(article.content_json)
+  const sections = contentJson.sections
+
+  if (Array.isArray(sections) && sections.every(isChunkSection)) {
+    return sections
+  }
+
+  if (article.content_markdown?.trim()) {
+    return [
+      {
+        heading: "본문",
+        body: article.content_markdown.trim(),
+      },
+    ]
+  }
+
+  return [
+    {
+      heading: "개요",
+      body: article.description,
+    },
+  ]
+}
+
+function buildChunkRows(
+  articles: DocsArticleForReindexRow[],
+  versionByArticleId: Map<string, DocsArticleVersionRow>
+) {
+  return articles.flatMap((article) => {
+    const version = versionByArticleId.get(article.id)
+    const path = getPublicPath(article)
+    const metadataBase = {
+      source: "docs_articles",
+      path,
+      slug: article.slug,
+      category: article.category_id,
+      docType: article.doc_type,
+      productArea: article.product_area,
+      visibility: article.visibility,
+      noindex: Boolean(article.noindex),
+      tags: article.tags ?? [],
+      keywords: article.keywords ?? [],
+      symptoms: article.symptoms ?? [],
+      audience: article.audience ?? [],
+    }
+
+    const summaryContent = [
+      article.title,
+      article.description,
+      article.chatbot_summary,
+      article.keywords?.length ? `키워드: ${article.keywords.join(", ")}` : null,
+      article.audience?.length ? `대상: ${article.audience.join(", ")}` : null,
+    ]
+      .filter(Boolean)
+      .join("\n\n")
+
+    const summaryChunk = {
+      article_id: article.id,
+      article_version_id: version?.id ?? null,
+      chunk_index: 0,
+      heading: "요약",
+      content: summaryContent,
+      content_hash: hashContent(summaryContent),
+      token_count: null,
+      metadata: {
+        ...metadataBase,
+        chunkType: "summary",
+      },
+      embedding_model: null,
+      embedding: null,
+      embedding_updated_at: null,
+    }
+
+    const sectionChunks = getSectionsForChunking(article).map((section, index) => {
+      const content = sectionToChunkContent(section)
+
+      return {
+        article_id: article.id,
+        article_version_id: version?.id ?? null,
+        chunk_index: index + 1,
+        heading: section.heading,
+        content,
+        content_hash: hashContent(content),
+        token_count: null,
+        metadata: {
+          ...metadataBase,
+          chunkType: "section",
+          sectionIndex: index,
+        },
+        embedding_model: null,
+        embedding: null,
+        embedding_updated_at: null,
+      }
+    })
+
+    return [summaryChunk, ...sectionChunks]
+  })
 }
 
 export async function listAdminDocsContent(): Promise<AdminDocsContentResponse> {
@@ -622,5 +782,83 @@ export async function getAdminDocsAnalytics(
       .sort((left, right) => right.count - left.count)
       .slice(0, 8),
     warnings,
+  }
+}
+
+export async function reindexDocsAiChunks(): Promise<AdminDocsReindexResponse> {
+  const generatedAt = new Date().toISOString()
+
+  if (!hasSupabaseServerEnv()) {
+    return {
+      configured: false,
+      status: "unconfigured",
+      generatedAt,
+      articleCount: 0,
+      chunkCount: 0,
+      warnings: ["Supabase 서버 환경 변수가 없어 문서 인덱스를 재생성하지 않았습니다."],
+    }
+  }
+
+  const supabase = createSupabaseAdminClient()
+  const { data: articleRows, error: articleError } = await supabase
+    .from("docs_articles")
+    .select(
+      "id, category_id, slug, title, description, status, visibility, doc_type, product_area, featured, order_index, updated_at, published_at, last_reviewed_at, audience, tags, keywords, symptoms, chatbot_summary, content_markdown, content_json, noindex"
+    )
+    .eq("status", "published")
+    .in("visibility", ["public", "unlisted"])
+    .eq("noindex", false)
+    .order("updated_at", { ascending: false })
+
+  if (articleError) throw articleError
+
+  const articles = (articleRows ?? []) as DocsArticleForReindexRow[]
+  if (articles.length === 0) {
+    return {
+      configured: true,
+      status: "live",
+      generatedAt,
+      articleCount: 0,
+      chunkCount: 0,
+      warnings: ["게시된 공개 문서가 없어 재생성할 chunk가 없습니다."],
+    }
+  }
+
+  const articleIds = articles.map((article) => article.id)
+  const { data: versionRows, error: versionError } = await supabase
+    .from("docs_article_versions")
+    .select("id, article_id, version_number")
+    .in("article_id", articleIds)
+    .order("version_number", { ascending: false })
+
+  if (versionError) throw versionError
+
+  const versionByArticleId = new Map<string, DocsArticleVersionRow>()
+  for (const version of (versionRows ?? []) as DocsArticleVersionRow[]) {
+    if (!versionByArticleId.has(version.article_id)) {
+      versionByArticleId.set(version.article_id, version)
+    }
+  }
+
+  const chunks = buildChunkRows(articles, versionByArticleId)
+  const { error: deleteError } = await supabase
+    .from("docs_ai_chunks")
+    .delete()
+    .in("article_id", articleIds)
+
+  if (deleteError) throw deleteError
+
+  const { error: insertError } = await supabase.from("docs_ai_chunks").insert(chunks)
+  if (insertError) throw insertError
+
+  return {
+    configured: true,
+    status: "live",
+    generatedAt,
+    articleCount: articles.length,
+    chunkCount: chunks.length,
+    warnings: versionByArticleId.size < articles.length
+      ? ["일부 문서에는 버전 스냅샷이 없어 article_version_id 없이 chunk를 생성했습니다."]
+      : [],
   }
 }

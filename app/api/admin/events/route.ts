@@ -1,6 +1,7 @@
 import { NextRequest, NextResponse } from "next/server"
+import { revalidatePath, revalidateTag } from "next/cache"
 import { verifyAdmin } from "@/lib/admin-auth"
-import { getAllEventsForAdmin, createPublicEvent } from "@/lib/repositories/public-events"
+import { getAllEventsForAdmin, createPublicEvent, PUBLIC_EVENTS_CACHE_TAG } from "@/lib/repositories/public-events"
 
 export async function GET(req: NextRequest) {
   const err = await verifyAdmin(req)
@@ -28,6 +29,9 @@ export async function POST(req: NextRequest) {
       )
     }
     const event = await createPublicEvent(body)
+    revalidateTag(PUBLIC_EVENTS_CACHE_TAG, "max")
+    revalidatePath("/events")
+    if (event.slug) revalidatePath(`/events/${event.slug}`)
     return NextResponse.json(event, { status: 201 })
   } catch (error) {
     return NextResponse.json(

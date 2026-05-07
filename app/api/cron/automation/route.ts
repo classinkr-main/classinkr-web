@@ -65,6 +65,11 @@ async function isDue(rule: AutomationRule): Promise<boolean> {
 
 export async function GET(request: NextRequest): Promise<NextResponse> {
   // ── 인증 ──────────────────────────────────────────────────
+  // Vercel 환경에서는 x-vercel-cron 헤더 필수
+  if (process.env.VERCEL && !request.headers.get("x-vercel-cron")) {
+    return NextResponse.json({ error: "Unauthorized" }, { status: 401 })
+  }
+
   const cronSecret = process.env.CRON_SECRET
   if (!cronSecret) {
     return NextResponse.json(

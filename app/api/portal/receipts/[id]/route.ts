@@ -4,6 +4,7 @@ import {
   requirePortalContext,
   isErrorResponse,
 } from "@/lib/partner-portal/portal-context";
+import { authorizeForAccount } from "@/lib/partner-portal/portal-authorize";
 import { getReceipt } from "@/lib/partner-portal/repositories/payments";
 
 export async function GET(
@@ -12,6 +13,7 @@ export async function GET(
 ) {
   const result = await requirePortalContext(req);
   if (isErrorResponse(result)) return result;
+  const ctx = result;
   const { id } = await params;
 
   try {
@@ -19,6 +21,9 @@ export async function GET(
     if (!receipt) {
       return NextResponse.json({ error: "영수증 없음" }, { status: 404 });
     }
+    const forbidden = authorizeForAccount(ctx, receipt.partner_account_id);
+    if (forbidden) return forbidden;
+
     return NextResponse.json({ receipt });
   } catch (err) {
     console.error("[portal/receipts/[id]] GET error:", err);

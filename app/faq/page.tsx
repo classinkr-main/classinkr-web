@@ -1,10 +1,13 @@
-import { FAQ } from "@/components/sections/FAQ"
 import Link from "next/link"
 
-export const metadata = {
-  title: "자주 묻는 질문 | Classin",
+import { FAQ } from "@/components/sections/FAQ"
+import { createPublicMetadata } from "@/lib/seo"
+
+export const metadata = createPublicMetadata({
+  title: "자주 묻는 질문",
   description: "클래스인 도입, 기능, 요금제에 대한 자주 묻는 질문과 답변입니다.",
-}
+  path: "/faq",
+})
 
 export default function FAQPage() {
   return (

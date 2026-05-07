@@ -1,8 +1,19 @@
 import { NextRequest, NextResponse } from "next/server"
 
 import { ChatbotInputError, saveChatbotFeedback } from "@/lib/chatbot/service"
+import { checkRateLimit, getClientIp } from "@/lib/server/rate-limit"
 
 export async function POST(req: NextRequest) {
+  const ip = getClientIp(req)
+  const { allowed } = checkRateLimit(ip, "chatbot-feedback", {
+    windowMs: 60_000,
+    max: 20,
+  })
+
+  if (!allowed) {
+    return NextResponse.json({ error: "Too many requests." }, { status: 429 })
+  }
+
   try {
     const result = await saveChatbotFeedback(await req.json())
     return NextResponse.json(result)

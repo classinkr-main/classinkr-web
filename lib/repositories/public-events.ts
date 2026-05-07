@@ -1,13 +1,19 @@
 "server-only"
 
+import { unstable_cache } from "next/cache"
 import { createSupabaseAdminClient } from "@/lib/supabase/admin"
+import { sanitizePublicUrl } from "@/lib/safe-public-url"
 import type {
   EventCategory,
+  EventPublicationStatus,
   EventStatus,
   PublicEvent,
   PublicEventInsert,
   PublicEventUpdate,
 } from "@/lib/types/public-events"
+
+export const PUBLIC_EVENTS_REVALIDATE_SECONDS = 3600
+export const PUBLIC_EVENTS_CACHE_TAG = "public-events"
 
 interface PublicEventRow {
   id: string
@@ -23,10 +29,21 @@ interface PublicEventRow {
   image_path: string | null
   highlight: boolean
   status_override: string | null
+  publication_status: string | null
   slug: string | null
   content_markdown: string | null
   created_at: string
   updated_at: string
+}
+
+interface PublicEventSlugRow {
+  slug: string | null
+}
+
+const PUBLICATION_STATUSES = new Set<EventPublicationStatus>(["draft", "published"])
+
+function logPublicEventReadFailure(context: string, error: unknown): void {
+  console.error(`[public-events] ${context}`, error)
 }
 
 function computeStatus(row: PublicEventRow): EventStatus {
@@ -35,6 +52,25 @@ function computeStatus(row: PublicEventRow): EventStatus {
   if (now < new Date(row.starts_at)) return "예정"
   if (!row.ends_at || now <= new Date(row.ends_at)) return "진행 중"
   return "마감"
+}
+
+function normalizePublicationStatus(value: string | null | undefined): EventPublicationStatus {
+  return PUBLICATION_STATUSES.has(value as EventPublicationStatus)
+    ? (value as EventPublicationStatus)
+    : "published"
+}
+
+function normalizeNullablePublicHref(value: string | null | undefined): string | null {
+  const safe = sanitizePublicUrl(value, "")
+  return safe || null
+}
+
+function isUniqueViolation(error: { code?: string } | null | undefined): boolean {
+  return error?.code === "23505"
+}
+
+function isMissingPublicationStatusColumn(error: { code?: string; message?: string } | null | undefined): boolean {
+  return error?.code === "42703" && /publication_status/.test(error.message ?? "")
 }
 
 function getImageUrl(imagePath: string | null): string | null {
@@ -86,6 +122,7 @@ function rowToEvent(row: PublicEventRow): PublicEvent {
     highlight: row.highlight,
     statusOverride: row.status_override as EventStatus | null,
     status: computeStatus(row),
+    publicationStatus: normalizePublicationStatus(row.publication_status),
     slug: row.slug,
     contentMarkdown: row.content_markdown,
     createdAt: row.created_at,
@@ -98,13 +135,85 @@ export async function listPublicEvents(): Promise<PublicEvent[]> {
   const { data, error } = await supabase
     .from("public_events")
     .select("*")
+    .eq("publication_status", "published")
     .order("starts_at", { ascending: false })
+  if (isMissingPublicationStatusColumn(error)) {
+    const legacy = await supabase
+      .from("public_events")
+      .select("*")
+      .order("starts_at", { ascending: false })
+    if (legacy.error) throw legacy.error
+    return (legacy.data as PublicEventRow[]).map(rowToEvent)
+  }
   if (error) throw error
   return (data as PublicEventRow[]).map(rowToEvent)
 }
 
+export async function listPublicEventSlugs(): Promise<string[]> {
+  const supabase = createSupabaseAdminClient()
+  const { data, error } = await supabase
+    .from("public_events")
+    .select("slug")
+    .eq("publication_status", "published")
+    .not("slug", "is", null)
+    .order("starts_at", { ascending: false })
+  if (isMissingPublicationStatusColumn(error)) {
+    const legacy = await supabase
+      .from("public_events")
+      .select("slug")
+      .not("slug", "is", null)
+      .order("starts_at", { ascending: false })
+    if (legacy.error) throw legacy.error
+    return (legacy.data as PublicEventSlugRow[])
+      .map((row) => row.slug)
+      .filter((slug): slug is string => Boolean(slug))
+  }
+  if (error) throw error
+  return (data as PublicEventSlugRow[])
+    .map((row) => row.slug)
+    .filter((slug): slug is string => Boolean(slug))
+}
+
+export const listCachedPublicEvents = unstable_cache(
+  async (): Promise<PublicEvent[]> => {
+    try {
+      return await listPublicEvents()
+    } catch (error) {
+      logPublicEventReadFailure("Failed to list public events", error)
+      return []
+    }
+  },
+  ["public-events"],
+  {
+    revalidate: PUBLIC_EVENTS_REVALIDATE_SECONDS,
+    tags: [PUBLIC_EVENTS_CACHE_TAG],
+  }
+)
+
+export const listCachedPublicEventSlugs = unstable_cache(
+  async (): Promise<string[]> => {
+    try {
+      return await listPublicEventSlugs()
+    } catch (error) {
+      logPublicEventReadFailure("Failed to list public event slugs", error)
+      return []
+    }
+  },
+  ["public-event-slugs"],
+  {
+    revalidate: PUBLIC_EVENTS_REVALIDATE_SECONDS,
+    tags: [PUBLIC_EVENTS_CACHE_TAG],
+  }
+)
+
 export async function getAllEventsForAdmin(): Promise<PublicEvent[]> {
-  return listPublicEvents()
+  const supabase = createSupabaseAdminClient()
+  const { data, error } = await supabase
+    .from("public_events")
+    .select("*")
+    .order("starts_at", { ascending: false })
+  if (error) throw error
+  return (data as PublicEventRow[]).map(rowToEvent)
 }
 
 export async function createPublicEvent(input: PublicEventInsert): Promise<PublicEvent> {
@@ -120,15 +229,17 @@ export async function createPublicEvent(input: PublicEventInsert): Promise<Publi
       ends_at: input.endsAt ?? null,
       location: input.location ?? null,
       cta_label: input.ctaLabel ?? "자세히 보기",
-      cta_href: input.ctaHref ?? null,
+      cta_href: normalizeNullablePublicHref(input.ctaHref),
       image_path: input.imagePath ?? null,
       highlight: input.highlight ?? false,
       status_override: input.statusOverride ?? null,
+      publication_status: input.publicationStatus ?? "draft",
       slug: resolveSlug(input.slug, input.title),
       content_markdown: input.contentMarkdown ?? null,
     })
     .select()
     .single()
+  if (error && isUniqueViolation(error)) throw new Error("이미 사용 중인 행사 URL 슬러그입니다.")
   if (error) throw error
   return rowToEvent(data as PublicEventRow)
 }
@@ -147,10 +258,11 @@ export async function updatePublicEvent(
   if (patch.endsAt !== undefined) dbPatch.ends_at = patch.endsAt
   if (patch.location !== undefined) dbPatch.location = patch.location
   if (patch.ctaLabel !== undefined) dbPatch.cta_label = patch.ctaLabel
-  if (patch.ctaHref !== undefined) dbPatch.cta_href = patch.ctaHref
+  if (patch.ctaHref !== undefined) dbPatch.cta_href = normalizeNullablePublicHref(patch.ctaHref)
   if (patch.imagePath !== undefined) dbPatch.image_path = patch.imagePath
   if (patch.highlight !== undefined) dbPatch.highlight = patch.highlight
   if (patch.statusOverride !== undefined) dbPatch.status_override = patch.statusOverride
+  if (patch.publicationStatus !== undefined) dbPatch.publication_status = patch.publicationStatus
   if (patch.contentMarkdown !== undefined) dbPatch.content_markdown = patch.contentMarkdown
   if (patch.slug !== undefined) {
     dbPatch.slug = resolveSlug(patch.slug, patch.title ?? "event")
@@ -178,6 +290,7 @@ export async function updatePublicEvent(
     .single()
   if (error) {
     if (error.code === "PGRST116") return null
+    if (isUniqueViolation(error)) throw new Error("이미 사용 중인 행사 URL 슬러그입니다.")
     throw error
   }
   return rowToEvent(data as PublicEventRow)
@@ -189,13 +302,42 @@ export async function getPublicEventBySlug(slug: string): Promise<PublicEvent | 
     .from("public_events")
     .select("*")
     .eq("slug", slug)
+    .eq("publication_status", "published")
     .single()
+  if (isMissingPublicationStatusColumn(error)) {
+    const legacy = await supabase
+      .from("public_events")
+      .select("*")
+      .eq("slug", slug)
+      .single()
+    if (legacy.error) {
+      if (legacy.error.code === "PGRST116") return null
+      throw legacy.error
+    }
+    return rowToEvent(legacy.data as PublicEventRow)
+  }
   if (error) {
     if (error.code === "PGRST116") return null
     throw error
   }
   return rowToEvent(data as PublicEventRow)
 }
+
+export const getCachedPublicEventBySlug = unstable_cache(
+  async (slug: string): Promise<PublicEvent | null> => {
+    try {
+      return await getPublicEventBySlug(slug)
+    } catch (error) {
+      logPublicEventReadFailure(`Failed to read public event by slug: ${slug}`, error)
+      return null
+    }
+  },
+  ["public-event-by-slug"],
+  {
+    revalidate: PUBLIC_EVENTS_REVALIDATE_SECONDS,
+    tags: [PUBLIC_EVENTS_CACHE_TAG],
+  }
+)
 
 export async function getPublicEventById(id: string): Promise<PublicEvent | null> {
   const supabase = createSupabaseAdminClient()

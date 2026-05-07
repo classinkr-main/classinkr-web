@@ -1,5 +1,7 @@
 import "server-only"
 
+import { randomBytes } from "crypto"
+
 import { createSupabaseAdminClient } from "@/lib/supabase/admin"
 
 export type QuoteCodeKind = "business_recharge" | "subscription"
@@ -146,11 +148,11 @@ export async function markQuoteCodeRedeemed(codeId: string, orderId: string) {
 export function generateQuoteCode(kind: QuoteCodeKind = "business_recharge") {
   const prefix = kind === "subscription" ? "QS" : "QB"
   const year = new Date().getFullYear()
-  const random = Math.floor(Math.random() * 1_000_000)
-    .toString(36)
+  const random = randomBytes(8)
+    .toString("base64url")
     .toUpperCase()
-    .padStart(4, "0")
-    .slice(-4)
+    .replace(/[^A-Z0-9]/g, "")
+    .slice(0, 10)
   return `${prefix}-${year}-${random}`
 }
 

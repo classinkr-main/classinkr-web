@@ -1,5 +1,6 @@
 import { type NextRequest, NextResponse } from "next/server"
 import { createSupabaseAdminClient } from "@/lib/supabase/admin"
+import { checkRateLimit, getClientIp } from "@/lib/server/rate-limit"
 
 const ALLOWED_EVENTS = new Set([
   "page_view",
@@ -18,6 +19,16 @@ interface TrackEventBody {
 }
 
 export async function POST(req: NextRequest) {
+  const ip = getClientIp(req)
+  const { allowed } = checkRateLimit(ip, "track-event", {
+    windowMs: 60_000,
+    max: 120,
+  })
+
+  if (!allowed) {
+    return NextResponse.json({ ok: false }, { status: 429 })
+  }
+
   let body: TrackEventBody
   try {
     body = await req.json()
@@ -30,7 +41,7 @@ export async function POST(req: NextRequest) {
     return NextResponse.json({ ok: false }, { status: 400 })
   }
 
-  const params = (body.params ?? {}) as Record<string, unknown>
+  const params = sanitizeParams(body.params ?? {})
   const buttonRaw = params.button
   const button = typeof buttonRaw === "string" ? buttonRaw.slice(0, 80) : null
   const page = typeof body.page === "string" ? body.page.slice(0, 200) : null
@@ -53,4 +64,19 @@ export async function POST(req: NextRequest) {
   }
 
   return NextResponse.json({ ok: true })
+}
+
+function sanitizeParams(params: Record<string, unknown>) {
+  return Object.fromEntries(
+    Object.entries(params)
+      .slice(0, 20)
+      .map(([key, value]) => {
+        const safeKey = key.slice(0, 60)
+
+        if (typeof value === "string") return [safeKey, value.slice(0, 500)]
+        if (typeof value === "number" && Number.isFinite(value)) return [safeKey, value]
+        if (typeof value === "boolean" || value == null) return [safeKey, value]
+        return [safeKey, String(value).slice(0, 500)]
+      })
+  )
 }

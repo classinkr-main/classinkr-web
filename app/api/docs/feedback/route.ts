@@ -4,6 +4,7 @@ import {
   DocsAnalyticsInputError,
   saveDocsFeedback,
 } from "@/lib/docs-analytics"
+import { checkRateLimit, getClientIp } from "@/lib/server/rate-limit"
 
 async function readJson(req: NextRequest) {
   try {
@@ -14,6 +15,16 @@ async function readJson(req: NextRequest) {
 }
 
 export async function POST(req: NextRequest) {
+  const ip = getClientIp(req)
+  const { allowed } = checkRateLimit(ip, "docs-feedback", {
+    windowMs: 60_000,
+    max: 20,
+  })
+
+  if (!allowed) {
+    return NextResponse.json({ error: "Too many requests." }, { status: 429 })
+  }
+
   try {
     const result = await saveDocsFeedback(await readJson(req), {
       userAgent: req.headers.get("user-agent"),

@@ -1,6 +1,7 @@
 // lib/types/public-events.ts
 export type EventCategory = "웨비나" | "오프라인 행사" | "프로모션" | "얼리버드" | "파트너십"
 export type EventStatus = "진행 중" | "예정" | "마감"
+export type EventPublicationStatus = "draft" | "published"
 
 export interface PublicEvent {
   id: string
@@ -18,6 +19,7 @@ export interface PublicEvent {
   highlight: boolean
   statusOverride: EventStatus | null
   status: EventStatus    // computed from dates or statusOverride
+  publicationStatus: EventPublicationStatus
   slug: string | null
   contentMarkdown: string | null
   createdAt: string
@@ -37,6 +39,7 @@ export type PublicEventInsert = {
   imagePath?: string | null
   highlight?: boolean
   statusOverride?: EventStatus | null
+  publicationStatus?: EventPublicationStatus
   slug?: string | null
   contentMarkdown?: string | null
 }

@@ -12,6 +12,38 @@ import {
   updateDeal,
 } from "@/lib/partner-portal/repositories/deals";
 import { logActivity } from "@/lib/partner-portal/repositories/activity";
+import type { UpdateDeal } from "@/lib/supabase/database.types.v2";
+
+function hasOwn(input: Record<string, unknown>, key: string) {
+  return Object.prototype.hasOwnProperty.call(input, key);
+}
+
+function pickDealPatch(body: Record<string, unknown>): UpdateDeal {
+  const patch: UpdateDeal = {};
+
+  if (typeof body.title === "string") patch.title = body.title;
+  if (typeof body.status === "string") patch.status = body.status as UpdateDeal["status"];
+  if (typeof body.current_stage === "string") {
+    patch.current_stage = body.current_stage as UpdateDeal["current_stage"];
+  }
+  if (typeof body.expected_amount === "number") patch.expected_amount = body.expected_amount;
+  if (typeof body.contracted_amount === "number") patch.contracted_amount = body.contracted_amount;
+  if (typeof body.installed_amount === "number") patch.installed_amount = body.installed_amount;
+  if (typeof body.paid_amount === "number") patch.paid_amount = body.paid_amount;
+  if (typeof body.outstanding_amount === "number") patch.outstanding_amount = body.outstanding_amount;
+  if (typeof body.payment_status === "string") {
+    patch.payment_status = body.payment_status as UpdateDeal["payment_status"];
+  }
+  if (hasOwn(body, "starts_at")) {
+    patch.starts_at = typeof body.starts_at === "string" ? body.starts_at : null;
+  }
+  if (hasOwn(body, "closed_at")) {
+    patch.closed_at = typeof body.closed_at === "string" ? body.closed_at : null;
+  }
+  if (hasOwn(body, "notes")) patch.notes = typeof body.notes === "string" ? body.notes : null;
+
+  return patch;
+}
 
 export async function GET(
   req: NextRequest,
@@ -65,8 +97,13 @@ export async function PUT(
       if (forbidden) return forbidden;
     }
 
-    const body = await req.json();
-    const deal = await updateDeal(dealId, body);
+    const body = (await req.json()) as Record<string, unknown>;
+    const patch = pickDealPatch(body);
+    if (Object.keys(patch).length === 0) {
+      return NextResponse.json({ error: "no allowed fields" }, { status: 400 });
+    }
+
+    const deal = await updateDeal(dealId, patch);
 
     const actor = getActorInfo(ctx);
     await logActivity({

@@ -8,8 +8,8 @@ const pillars = [
   {
     icon: Monitor,
     tag: "SMART BOARD",
-    title: "50페이지 무한 판서",
-    desc: "지우지 않고 넘기세요. 50페이지 캔버스에 공간 걱정 없이 수업하고, 쓰는 즉시 전 학생 기기에 실시간 동기화됩니다.",
+    title: "판서는 끊기지 않고 이어집니다",
+    desc: "50페이지 캔버스 위에 수업 흐름을 그대로 남깁니다. 쓰는 순간 학생 기기에도 같은 내용이 함께 반영됩니다.",
     accent: "bg-[#084734]",
     accentLight: "bg-[#ECFDF5]",
     accentText: "text-[#084734]",
@@ -17,8 +17,8 @@ const pillars = [
   {
     icon: Camera,
     tag: "AI CAMERA",
-    title: "수업 영상, 자동으로 완성",
-    desc: "4K AI 카메라가 교사를 자동 추적하며 수업을 녹화합니다. 수업이 끝나는 순간, 편집 없이 수업 영상이 즉시 업로드됩니다.",
+    title: "설명은 그대로 기록됩니다",
+    desc: "4K AI 카메라가 교사를 자동으로 추적해 수업을 기록합니다. 끝나면 복습 가능한 영상으로 자연스럽게 이어집니다.",
     accent: "bg-[#084734]",
     accentLight: "bg-[#ECFDF5]",
     accentText: "text-[#084734]",
@@ -26,8 +26,8 @@ const pillars = [
   {
     icon: Layers,
     tag: "SW ECOSYSTEM",
-    title: "판서 + 영상, 한 번에 복습",
-    desc: "50페이지 판서 노트는 PDF로, 수업 영상은 LMS에 자동 저장. 학생은 수업 직후부터 영상과 판서를 동시에 복습합니다.",
+    title: "복습은 수업의 흐름을 따라갑니다",
+    desc: "판서 노트는 PDF로, 수업 영상은 LMS에 저장됩니다. 학생은 교실에서 듣던 흐름 그대로 다시 따라갈 수 있습니다.",
     accent: "bg-[#084734]",
     accentLight: "bg-[#ECFDF5]",
     accentText: "text-[#084734]",
@@ -54,9 +54,9 @@ export default function ClassroomStudioSection() {
             CLASSROOM STUDIO
           </p>
           <h2 className="text-3xl md:text-4xl lg:text-5xl text-[#1a1a19] leading-tight">
-            보드, 카메라, 소프트웨어.
+            복잡한 장비 없이 Classin 하나로
             <br />
-            <span className="text-[#22A366]">하나의 수업 스튜디오</span>가 됩니다.
+            <span className="text-[#22A366]">함께 작동할 때 교실이 완성됩니다.</span>
           </h2>
         </motion.div>
 
@@ -65,9 +65,9 @@ export default function ClassroomStudioSection() {
           {...fadeUp}
           className="text-center text-lg md:text-xl text-[#615D59] max-w-2xl mx-auto mb-16 leading-relaxed"
         >
-          수업이 끝나는 순간, 판서 노트와 수업 영상이 동시에 올라갑니다.
+          판서, 기록, 저장, 공유가 하나의 흐름으로 이어질 때
           <br className="hidden sm:block" />
-          필기 대신 수업에 집중하세요 — 기록은 시스템이 합니다.
+          수업의 완성도와 운영의 안정감이 함께 올라갑니다.
         </motion.p>
 
         {/* Three pillars */}
@@ -129,11 +129,11 @@ export default function ClassroomStudioSection() {
               </div>
 
               <p className="text-white text-lg md:text-xl font-bold leading-snug mb-2">
-                수업 종료 → 판서 PDF + 수업 영상
-                <span className="text-[#6EE7B7]"> 동시 업로드</span>
+                수업이 끝나는 순간,
+                <span className="text-[#6EE7B7]"> 판서와 영상이 함께 남습니다</span>
               </p>
               <p className="text-white/50 text-sm">
-                별도 편집도, 수동 업로드도 필요 없습니다. 시스템이 알아서 합니다.
+                따로 정리하고 업로드하지 않아도, 수업 직후 바로 복습 가능한 상태가 됩니다.
               </p>
             </div>
           </div>

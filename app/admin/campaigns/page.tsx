@@ -29,7 +29,7 @@ import {
   XAxis,
   YAxis,
 } from "recharts"
-import { adminFetch, adminFetchJson } from "@/lib/admin-client"
+import { adminFetchJson, adminFetchJsonCached } from "@/lib/admin-client"
 import type { LeadRecord } from "@/lib/db"
 import type { PublicEvent, EventStatus } from "@/lib/types/public-events"
 import {
@@ -693,18 +693,14 @@ export default function AdminCampaignsPage() {
     setLoading(true)
     setError(null)
     try {
-      const [evRes, leadRes, metRes] = await Promise.all([
-        adminFetch("/api/admin/events"),
-        adminFetch("/api/admin/leads"),
-        adminFetch("/api/admin/event-metrics"),
+      const [ev, leadData, metricData] = await Promise.all([
+        adminFetchJsonCached<PublicEvent[]>("/api/admin/events", undefined, { ttlMs: 60_000 }),
+        adminFetchJsonCached<{ leads: LeadRecord[] }>("/api/admin/leads", undefined, { ttlMs: 45_000 }),
+        adminFetchJsonCached<{ metrics: Record<string, EventMetrics> }>("/api/admin/event-metrics", undefined, { ttlMs: 60_000 }),
       ])
-      if (!evRes.ok) throw new Error("행사 목록 불러오기 실패")
-      const ev = (await evRes.json()) as PublicEvent[]
-      const ld = leadRes.ok ? ((await leadRes.json()) as { leads: LeadRecord[] }).leads : []
-      const mt = metRes.ok ? ((await metRes.json()) as { metrics: Record<string, EventMetrics> }).metrics : {}
       setEvents(ev)
-      setLeads(ld)
-      setMetricsMap(mt)
+      setLeads(leadData.leads)
+      setMetricsMap(metricData.metrics)
     } catch (e) {
       setError(e instanceof Error ? e.message : "데이터 로딩 실패")
     } finally {

@@ -1,7 +1,6 @@
 "use client"
 
 import Image from "next/image"
-import Link from "next/link"
 import { motion, type Variants } from "framer-motion"
 
 const sizes = [
@@ -21,8 +20,7 @@ const sizes = [
   {
     inches: `86"`,
     heading: `86" — 표준 강의실`,
-    imageSrc: "/images/product/hw/sizes/room-86-jayescan.jpg",
-    imageClassName: "object-cover scale-[1.22]",
+    imageSrc: "/images/product/hw/sizes/room-86.jpg",
     imageAlt: '86인치 클래스인 보드 수업 공간',
     specs: [
       { label: "적정 인원", value: "30~50명" },
@@ -46,7 +44,7 @@ const fadeUp: Variants = {
 export default function SizeChooser() {
   return (
     <section className="bg-white py-24 md:py-32 px-6">
-      <div className="max-w-6xl mx-auto">
+      <div className="max-w-7xl mx-auto">
         {/* Header */}
         <p className="text-xs tracking-[0.2em] text-[#084734] font-semibold uppercase">
           CHOOSE YOUR SIZE
@@ -57,14 +55,12 @@ export default function SizeChooser() {
         >
           우리 강의실에 딱 맞는 완벽한 크기
         </h2>
-        <p className="text-lg text-[#615D59] mt-5 max-w-xl">
-          강의실의 규모와 학생들의 시야를 고려한 두 가지 표준 규격을
-          제안합니다. 소규모 강의실부터 대형 강의실까지, 공간의 제약 없이
-          압도적인 몰입감을 전달하세요.
+        <p className="text-lg text-[#615D59] mt-5 max-w-2xl">
+          강의실의 규모와 학생들의 시야를 고려한 두 가지 표준 규격을 제안합니다. 소규모 강의실부터 대형 강의실까지, 공간의 제약 없이 압도적인 몰입감을 전달하세요.
         </p>
 
         {/* Cards */}
-        <div className="mt-14 mx-auto grid max-w-5xl md:grid-cols-2 gap-6 lg:gap-8">
+        <div className="mt-16 grid md:grid-cols-2 gap-8">
           {sizes.map((size, i) => (
             <motion.div
               key={size.inches}
@@ -73,7 +69,7 @@ export default function SizeChooser() {
               whileInView="visible"
               viewport={{ once: true, margin: "-60px" }}
               variants={fadeUp}
-              className="mx-auto w-full max-w-[470px] bg-[#FAFAF8] rounded-[28px] border border-black/[0.08] relative
+              className="bg-[#FAFAF8] rounded-3xl border border-black/[0.08] overflow-hidden relative
                          hover:shadow-xl hover:-translate-y-1 transition-all duration-200"
             >
               {/* Badge */}
@@ -84,28 +80,28 @@ export default function SizeChooser() {
               )}
 
               {/* Image area */}
-              <div className="relative mx-5 mt-5 aspect-[15/10] overflow-hidden rounded-[22px] bg-gradient-to-br from-[#ECFDF5] to-[#F6F5F4]">
+              <div className="relative aspect-[16/10] bg-gradient-to-br from-[#ECFDF5] to-[#F6F5F4]">
                 <Image
                   src={size.imageSrc}
                   alt={size.imageAlt}
                   fill
                   sizes="(max-width: 768px) 100vw, 50vw"
-                  className={size.imageClassName ?? "object-cover"}
+                  className="object-cover"
                 />
                 <div className="absolute inset-0 bg-gradient-to-t from-black/20 via-transparent to-transparent" />
               </div>
 
               {/* Body */}
-              <div className="p-6 sm:p-7">
+              <div className="p-8">
                 <h3
-                  className="text-[1.75rem] text-[#111110]"
+                  className="text-3xl text-[#111110]"
                   style={{ letterSpacing: "-0.5px" }}
                 >
                   {size.heading}
                 </h3>
 
                 {/* Spec lines */}
-                <ul className="mt-5 space-y-3">
+                <ul className="mt-6 space-y-3">
                   {size.specs.map((spec) => (
                     <li
                       key={spec.label}
@@ -118,30 +114,18 @@ export default function SizeChooser() {
                 </ul>
 
                 {/* CTA */}
-                <Link
-                  href="/contact#contact-form"
-                  className="mt-7 block w-full rounded-md bg-[#084734] py-3 text-center text-sm font-semibold text-white transition hover:bg-[#065c41]"
-                >
+                <button className="mt-8 w-full bg-[#084734] hover:bg-[#065c41] text-white rounded-md py-3 text-sm font-semibold transition">
                   이 사이즈로 데모 신청 →
-                </Link>
+                </button>
               </div>
             </motion.div>
           ))}
         </div>
 
         {/* 110" footnote */}
-        <div className="mt-10 mx-auto flex max-w-5xl justify-center">
-          <p className="text-center text-sm text-[#615D59]">
-            더 큰 공간(50명+, 강당·콘퍼런스)을 위한 110&quot; 모델은{" "}
-            <Link
-              href="/contact#contact-form"
-              className="text-[#084734] underline underline-offset-2"
-            >
-              별도 문의
-            </Link>
-            로 안내드립니다.
-          </p>
-        </div>
+        <p className="mt-12 text-center text-sm text-[#615D59]">
+          더 큰 공간(50명+, 강당·콘퍼런스)을 위한 110&quot; 모델은 별도 문의로 안내드립니다.
+        </p>
       </div>
     </section>
   )

@@ -24,6 +24,19 @@ export async function createPayment(
   return data as PaymentRecord;
 }
 
+export async function getPayment(id: string): Promise<PaymentRecord | null> {
+  const supabase = createSupabaseAdminClient();
+
+  const { data, error } = await supabase
+    .from("payments_v2")
+    .select("*")
+    .eq("id", id)
+    .maybeSingle();
+
+  if (error) throw error;
+  return data ? (data as PaymentRecord) : null;
+}
+
 /* ─── Receipt ───────────────────────────────────────────── */
 
 async function generateReceiptNumber(): Promise<string> {

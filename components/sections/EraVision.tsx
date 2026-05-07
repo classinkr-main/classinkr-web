@@ -7,16 +7,19 @@ const shifts = [
         before: "경험 많은 강사의 노하우",
         after: "누구나 쓸 수 있는 시스템으로",
         keyword: "표준화",
+        english: "Normalization",
     },
     {
         before: "수업 후 쌓이는 채점·리포트",
         after: "AI가 처리하는 자동화로",
         keyword: "자동화",
+        english: "Automation",
     },
     {
         before: "감으로 운영하던 학원",
         after: "데이터로 결정하는 운영으로",
         keyword: "데이터화",
+        english: "Data",
     },
 ]
 
@@ -85,12 +88,16 @@ export function EraVision() {
                             whileInView={{ opacity: 1, y: 0 }}
                             viewport={{ once: true }}
                             transition={{ duration: 0.6, delay: i * 0.1 }}
-                            className="bg-white px-8 py-10 flex flex-col gap-5 group hover:bg-[#ECFDF5]/40 transition-colors duration-300"
+                            className="bg-white px-8 py-10 flex flex-col gap-6 group hover:bg-[#ECFDF5]/40 transition-colors duration-300"
                         >
-                            {/* Keyword badge */}
-                            <span className="self-start text-[11px] font-bold text-[#084734] bg-gradient-to-r from-[#ECFDF5] to-[#D1FAE5]/60 px-3.5 py-1 rounded-full tracking-[0.08em] uppercase border border-[#084734]/8 shadow-[0_1px_4px_rgba(8,71,52,0.06)]">
-                                {shift.keyword}
-                            </span>
+                            <div className="flex flex-col items-start gap-1.5">
+                                <span className="text-[11px] font-black uppercase tracking-[0.2em] text-[#084734]/25">
+                                    [{shift.english}]
+                                </span>
+                                <span className="text-2xl md:text-[1.65rem] font-black leading-none text-[#084734] tracking-normal">
+                                    {shift.keyword}
+                                </span>
+                            </div>
 
                             {/* Arrow flow */}
                             <div className="space-y-2">

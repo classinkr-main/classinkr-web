@@ -441,6 +441,7 @@ export async function markSoftwareCheckoutOrderFailed(input: {
       raw_fail: input.rawFail ?? null,
     })
     .eq("order_id", input.orderId)
+    .in("status", ["pending", "processing"])
     .select("*")
     .maybeSingle()
 
@@ -476,10 +477,12 @@ export async function markSoftwareCheckoutOrderPaid(
       failure_message: null,
     })
     .eq("order_id", orderId)
+    .in("status", ["pending", "processing"])
     .select("*")
-    .single()
+    .maybeSingle()
 
   if (error) throw error
+  if (!data) return null
 
   const order = mapCheckoutOrder(data as CheckoutOrderRow)
 

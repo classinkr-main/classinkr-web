@@ -6,7 +6,7 @@ import Link from "next/link";
 
 const items = [
   {
-    label: "[화질] 86\" / 75\" 4K 디스플레이",
+    label: "[화질] 86\"/75\" 4K 디스플레이",
     desc: "AG/AF 코팅으로 눈부심 없이 선명하게",
   },
   {
@@ -24,14 +24,6 @@ const items = [
   {
     label: "[소프트웨어] ClassIn 전용 라이선스",
     desc: "판서 캡처부터 학원 운영 관리까지 한 번에",
-  },
-  {
-    label: "[도입] 설치 + 교사 온보딩",
-    desc: "전문 엔지니어 출장, 4시간 핸즈온 교육",
-  },
-  {
-    label: "[지원] 24시간 원격지원 + 출장 A/S",
-    desc: "1년 무상, 평일 24시간 대응",
   },
 ];
 
@@ -103,9 +95,7 @@ export default function ValueAnchor() {
           viewport={{ once: true, margin: "-80px" }}
           className="text-lg text-white/70 mt-6 max-w-2xl mx-auto leading-relaxed"
         >
-          클래스인 보드는 하드웨어부터 소프트웨어까지 단 한 대에 모두 구축된
-          완성형 솔루션입니다. 도입하는 순간, 복잡한 연결 과정 없이 바로 수업을
-          시작할 수 있습니다.
+          클래스인 보드는 하드웨어부터 소프트웨어까지 단 한 대에 모두 구축된 완성형 솔루션입니다. 도입하는 순간, 복잡한 연결 과정 없이 바로 수업을 시작할 수 있습니다.
         </motion.p>
 
         {/* Value card */}
@@ -121,7 +111,7 @@ export default function ValueAnchor() {
         >
           <div className="flex items-center justify-between mb-5">
             <p className="text-[10px] uppercase tracking-widest text-[#6EE7B7] font-semibold">INCLUDED</p>
-            <span className="text-[10px] text-white/30 font-medium">{items.length}가지 포함</span>
+            <span className="text-[10px] text-white/30 font-medium">5가지 포함</span>
           </div>
 
           <ul className="space-y-2.5">

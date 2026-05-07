@@ -1,5 +1,5 @@
 import { createServerClient } from "@supabase/ssr"
-import { createHmac } from "crypto"
+import { createHmac, timingSafeEqual } from "crypto"
 import { NextRequest, NextResponse } from "next/server"
 
 import {
@@ -14,11 +14,14 @@ import {
 } from "@/lib/supabase/public-env"
 
 function getSessionSecret(): string | null {
-  return (
-    process.env.SESSION_SECRET?.trim() ??
-    process.env.ADMIN_PASSWORD?.trim() ??
-    null
-  )
+  const sessionSecret = process.env.SESSION_SECRET?.trim()
+  if (sessionSecret) return sessionSecret
+
+  if (process.env.NODE_ENV !== "production") {
+    return process.env.ADMIN_PASSWORD?.trim() ?? null
+  }
+
+  return null
 }
 
 function signPayload(payload: string): string | null {
@@ -33,6 +36,8 @@ export interface AdminSession {
   name: string
   role: AdminRole
   branch?: string
+  iat?: number
+  exp?: number
 }
 
 export interface VerifiedAdminContext {
@@ -42,6 +47,16 @@ export interface VerifiedAdminContext {
   branch?: string
   userId?: string
 }
+
+export type AdminApiRole =
+  | "SUPER_ADMIN"
+  | "ADMIN"
+  | "EDITOR"
+  | "VIEWER"
+  | "PARTNER"
+  | "BRANCH"
+
+const DEFAULT_ADMIN_API_ROLES: readonly AdminApiRole[] = ["SUPER_ADMIN", "ADMIN"]
 
 interface UserRecord {
   name: string
@@ -113,7 +128,7 @@ export function authenticateUser(password: string): AuthResult {
   const { users, code } = getAllUsers()
   if (code) return { session: null, code }
 
-  const user = users.find((candidate) => candidate.password === password)
+  const user = users.find((candidate) => safeCompare(candidate.password, password))
   if (!user) {
     return { session: null, code: ADMIN_AUTH_ERROR_CODE.INVALID_CREDENTIALS }
   }
@@ -123,8 +138,45 @@ export function authenticateUser(password: string): AuthResult {
   }
 }
 
+function safeCompare(expected: string, actual: string) {
+  const expectedBuffer = Buffer.from(expected)
+  const actualBuffer = Buffer.from(actual)
+
+  if (expectedBuffer.length !== actualBuffer.length) {
+    return false
+  }
+
+  return timingSafeEqual(expectedBuffer, actualBuffer)
+}
+
+export function normalizeAdminApiRole(role: string): AdminApiRole | null {
+  const normalized = role.trim().toUpperCase()
+  if (normalized === "ADMIN") return "ADMIN"
+  if (normalized === "SUPER_ADMIN") return "SUPER_ADMIN"
+  if (normalized === "EDITOR") return "EDITOR"
+  if (normalized === "VIEWER") return "VIEWER"
+  if (normalized === "PARTNER") return "PARTNER"
+  if (normalized === "BRANCH") return "BRANCH"
+  return null
+}
+
+export function hasAdminApiRole(
+  role: string,
+  allowedRoles: readonly AdminApiRole[] = DEFAULT_ADMIN_API_ROLES
+) {
+  const normalized = normalizeAdminApiRole(role)
+  return normalized != null && allowedRoles.includes(normalized)
+}
+
 export function encodeSession(session: AdminSession): string {
-  const payload = Buffer.from(JSON.stringify(session)).toString("base64url")
+  const now = Math.floor(Date.now() / 1000)
+  const payload = Buffer.from(
+    JSON.stringify({
+      ...session,
+      iat: now,
+      exp: now + 60 * 60 * 24 * 7,
+    })
+  ).toString("base64url")
   const sig = signPayload(payload)
 
   if (!sig) {
@@ -144,11 +196,15 @@ export function decodeSession(cookie: string): AdminSession | null {
     const payload = cookie.slice(0, dotIdx)
     const sig = cookie.slice(dotIdx + 1)
     const expectedSig = signPayload(payload)
-    if (!expectedSig || sig !== expectedSig) return null
+    if (!expectedSig || !safeCompare(expectedSig, sig)) return null
 
-    return JSON.parse(
+    const session = JSON.parse(
       Buffer.from(payload, "base64url").toString("utf8")
     ) as AdminSession
+    if (!session.exp || !Number.isFinite(session.exp)) return null
+    if (session.exp <= Math.floor(Date.now() / 1000)) return null
+
+    return session
   } catch {
     return null
   }
@@ -226,10 +282,17 @@ export async function getVerifiedAdminContext(
 }
 
 export async function verifyAdmin(
-  req: NextRequest
+  req: NextRequest,
+  allowedRoles: readonly AdminApiRole[] = DEFAULT_ADMIN_API_ROLES
 ): Promise<NextResponse | undefined> {
   const admin = await getVerifiedAdminContext(req)
-  if (admin) return undefined
+  if (!admin) {
+    return NextResponse.json({ error: "Unauthorized" }, { status: 401 })
+  }
 
-  return NextResponse.json({ error: "Unauthorized" }, { status: 401 })
+  if (!hasAdminApiRole(admin.role, allowedRoles)) {
+    return NextResponse.json({ error: "Forbidden" }, { status: 403 })
+  }
+
+  return undefined
 }

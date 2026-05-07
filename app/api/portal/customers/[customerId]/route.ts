@@ -17,6 +17,36 @@ import {
 } from "@/lib/partner-portal/repositories/customers";
 import { logActivity } from "@/lib/partner-portal/repositories/activity";
 
+const CUSTOMER_PATCH_FIELDS = [
+  "name",
+  "contact_name",
+  "email",
+  "phone",
+  "address",
+  "business_number",
+  "campus_name",
+  "region_label",
+  "notes",
+] as const;
+
+function pickCustomerPatch(value: unknown) {
+  if (!value || typeof value !== "object") return {};
+  const body = value as Record<string, unknown>;
+  const patch: Record<string, string | null> = {};
+
+  for (const field of CUSTOMER_PATCH_FIELDS) {
+    if (!(field in body)) continue;
+    const nextValue = body[field];
+    if (nextValue == null) {
+      patch[field] = null;
+    } else if (typeof nextValue === "string") {
+      patch[field] = nextValue.trim();
+    }
+  }
+
+  return patch;
+}
+
 export async function GET(
   req: NextRequest,
   { params }: { params: Promise<{ customerId: string }> }
@@ -83,7 +113,11 @@ export async function PUT(
     }
 
     const body = await req.json();
-    const customer = await updateCustomer(customerId, body);
+    const patch = pickCustomerPatch(body);
+    if (Object.keys(patch).length === 0) {
+      return NextResponse.json({ error: "No valid customer fields." }, { status: 400 });
+    }
+    const customer = await updateCustomer(customerId, patch);
 
     const actor = getActorInfo(ctx);
     await logActivity({

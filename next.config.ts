@@ -1,5 +1,53 @@
 import type { NextConfig } from "next";
 
+const supabaseHost = (() => {
+  try {
+    const value = process.env.NEXT_PUBLIC_SUPABASE_URL;
+    return value ? new URL(value).hostname : undefined;
+  } catch {
+    return undefined;
+  }
+})();
+
+const supabaseHttp = supabaseHost ? `https://${supabaseHost}` : "https://*.supabase.co";
+const supabaseWs = supabaseHost ? `wss://${supabaseHost}` : "wss://*.supabase.co";
+
+const contentSecurityPolicy = [
+  "default-src 'self'",
+  "base-uri 'self'",
+  "object-src 'none'",
+  "frame-ancestors 'none'",
+  "form-action 'self'",
+  "script-src 'self' 'unsafe-inline' 'unsafe-eval' blob: https://www.googletagmanager.com https://www.google-analytics.com https://connect.facebook.net https://cdn.channel.io https://js.tosspayments.com",
+  "style-src 'self' 'unsafe-inline' https://cdn.jsdelivr.net",
+  "font-src 'self' data: https://cdn.jsdelivr.net",
+  `img-src 'self' data: blob: https://images.unsplash.com ${supabaseHttp} https://www.facebook.com https://www.googletagmanager.com https://maps.google.com`,
+  `connect-src 'self' ${supabaseHttp} ${supabaseWs} https://www.google-analytics.com https://region1.google-analytics.com https://*.channel.io wss://*.channel.io https://*.tosspayments.com`,
+  "frame-src 'self' https://www.googletagmanager.com https://maps.google.com https://*.tosspayments.com https://*.toss.im",
+  "media-src 'self' data: blob:",
+  "worker-src 'self' blob:",
+  "upgrade-insecure-requests",
+].join("; ");
+
+const securityHeaders = [
+  { key: "Content-Security-Policy", value: contentSecurityPolicy },
+  { key: "X-Content-Type-Options", value: "nosniff" },
+  { key: "X-Frame-Options", value: "DENY" },
+  { key: "X-XSS-Protection", value: "1; mode=block" },
+  { key: "Referrer-Policy", value: "strict-origin-when-cross-origin" },
+  { key: "Strict-Transport-Security", value: "max-age=31536000; includeSubDomains; preload" },
+  { key: "Cross-Origin-Opener-Policy", value: "same-origin-allow-popups" },
+  { key: "X-Permitted-Cross-Domain-Policies", value: "none" },
+  { key: "Permissions-Policy", value: "geolocation=(), microphone=(), camera=()" },
+];
+
+const publicAssetCacheHeaders = [
+  {
+    key: "Cache-Control",
+    value: "public, max-age=31536000, immutable",
+  },
+];
+
 const nextConfig: NextConfig = {
   images: {
     localPatterns: [
@@ -12,10 +60,46 @@ const nextConfig: NextConfig = {
         protocol: "https",
         hostname: "images.unsplash.com",
       },
+      ...(supabaseHost
+        ? [
+            {
+              protocol: "https" as const,
+              hostname: supabaseHost,
+            },
+          ]
+        : []),
     ],
   },
   experimental: {
     optimizePackageImports: ["framer-motion"],
+  },
+  async headers() {
+    return [
+      {
+        source: "/images/:path*",
+        headers: publicAssetCacheHeaders,
+      },
+      {
+        source: "/video/:path*",
+        headers: publicAssetCacheHeaders,
+      },
+      {
+        source: "/docs/files/:path*",
+        headers: publicAssetCacheHeaders,
+      },
+      {
+        source: "/(.*)",
+        headers: securityHeaders,
+      },
+    ];
+  },
+  async rewrites() {
+    return [
+      {
+        source: "/api/partner/:path*",
+        destination: "/api/portal/:path*",
+      },
+    ];
   },
 };
 

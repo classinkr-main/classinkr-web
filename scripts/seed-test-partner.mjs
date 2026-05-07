@@ -20,8 +20,13 @@ const supabase = createClient(supabaseUrl, supabaseKey, {
   auth: { autoRefreshToken: false, persistSession: false },
 });
 
-const TEST_EMAIL = "test-partner@classin.kr";
-const TEST_PASSWORD = "classin1234!";
+const TEST_EMAIL = process.env.TEST_PARTNER_EMAIL;
+const TEST_PASSWORD = process.env.TEST_PARTNER_PASSWORD;
+
+if (!TEST_EMAIL || !TEST_PASSWORD) {
+  console.error("TEST_PARTNER_EMAIL and TEST_PARTNER_PASSWORD are required.");
+  process.exit(1);
+}
 
 async function run() {
   console.log("🔧 테스트 파트너 계정 생성 시작...\n");

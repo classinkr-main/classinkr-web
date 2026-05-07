@@ -7,7 +7,11 @@ import { Header } from "./Header";
 export function ConditionalHeader() {
   const pathname = usePathname();
 
-  if (pathname.startsWith("/admin") || pathname.startsWith("/checkout") || isPartnerPortalPath(pathname)) {
+  if (
+    pathname.startsWith("/admin") ||
+    pathname.startsWith("/checkout") ||
+    isPartnerPortalPath(pathname)
+  ) {
     return null;
   }
 

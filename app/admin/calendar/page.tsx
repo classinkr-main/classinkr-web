@@ -17,6 +17,7 @@ import {
 } from "@/components/ui/dialog"
 import { Input } from "@/components/ui/input"
 import { Label } from "@/components/ui/label"
+import { adminFetch, adminFetchJsonCached } from "@/lib/admin-client"
 import type { CalendarEvent, EventSource, EventType } from "@/lib/calendar-data"
 
 // ─── 상수 ─────────────────────────────────────────────────────────────────────
@@ -78,21 +79,6 @@ function enumerateEventDates(event: CalendarEvent) {
 }
 
 // ─── 인증 헬퍼 ────────────────────────────────────────────────────────────────
-
-function getToken() {
-  return sessionStorage.getItem("admin_password") ?? ""
-}
-
-function adminFetch(url: string, options?: RequestInit) {
-  return fetch(url, {
-    ...options,
-    headers: {
-      "Content-Type": "application/json",
-      Authorization: `Bearer ${getToken()}`,
-      ...options?.headers,
-    },
-  })
-}
 
 async function readJsonOrThrow<T>(response: Response): Promise<T> {
   const data = await response.json().catch(() => null)
@@ -262,8 +248,11 @@ export default function AdminCalendarPage() {
   const fetchEvents = useCallback(async () => {
     setLoading(true)
     try {
-      const res = await adminFetch(`/api/admin/calendar?year=${year}&month=${month}`)
-      const data = await readJsonOrThrow<CalendarEvent[]>(res)
+      const data = await adminFetchJsonCached<CalendarEvent[]>(
+        `/api/admin/calendar?year=${year}&month=${month}`,
+        undefined,
+        { ttlMs: 60_000 }
+      )
       setEvents(data)
       setErrorMessage(null)
     } catch (error) {

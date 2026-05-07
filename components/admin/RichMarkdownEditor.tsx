@@ -74,7 +74,6 @@ const RichMarkdownEditor = forwardRef<RichMarkdownEditorHandle, RichMarkdownEdit
   ) {
     const lastEmitted = useRef(value)
     const skipNextUpdate = useRef(false)
-    const [isEmpty, setIsEmpty] = useState(!value || value.trim() === "")
     const [hasSelection, setHasSelection] = useState(false)
 
     const editor = useEditor({
@@ -106,7 +105,6 @@ const RichMarkdownEditor = forwardRef<RichMarkdownEditorHandle, RichMarkdownEdit
         const markdown = (editor.storage as any).markdown.getMarkdown() as string
         lastEmitted.current = markdown
         onChange(markdown)
-        setIsEmpty(editor.isEmpty)
       },
       onSelectionUpdate({ editor }) {
         const { from, to } = editor.state.selection
@@ -120,9 +118,9 @@ const RichMarkdownEditor = forwardRef<RichMarkdownEditorHandle, RichMarkdownEdit
       lastEmitted.current = value
       skipNextUpdate.current = true
       editor.commands.setContent(value)
-      const isEmpty = editor.isEmpty
-      queueMicrotask(() => setIsEmpty(isEmpty))
     }, [editor, value])
+
+    const isEmpty = editor?.isEmpty ?? (!value || value.trim() === "")
 
     useImperativeHandle(ref, () => ({
       toggleBold: () => editor?.chain().focus().toggleBold().run(),

@@ -35,9 +35,10 @@ export function KeyUseCases() {
                                 title="참여형 하이브리드 수업 진행"
                                 desc="온오프라인 학생들을 동시에 참여시키는 동기화된 수업 도구."
                                 points={[
-                                    "실시간 화이트보드 공유",
-                                    "수업 중 퀴즈 및 투표",
+                                    "실시간 상호작용 화면 공유",
+                                    "30여가지의 수업 도구",
                                     "자동 출석 체크",
+                                    "수업 자동 녹화 및 자동 업로드",
                                 ]}
                                 imageColor="bg-[#ECFDF5]"
                                 imageSrc="/images/use-cases/generated/classes-source.png"
@@ -53,8 +54,8 @@ export function KeyUseCases() {
                                 title="과제 및 채점 자동화"
                                 desc="과제 배포와 채점을 자동화하여 강사의 업무 시간을 획기적으로 줄이세요."
                                 points={[
-                                    "5만 개 이상의 표준화된 문제 은행",
-                                    "서술형 AI 자동 채점",
+                                    "템플릿 화 및 예약 기능",
+                                    "즉석 첨삭 가능 및 자동 저장",
                                     "학생 즉각 피드백",
                                 ]}
                                 imageColor="bg-[#ECFDF5]"
@@ -71,9 +72,9 @@ export function KeyUseCases() {
                                 title="관리자를 위한 360° 뷰"
                                 desc="모든 지점, 반, 학생의 데이터를 세밀하게 파악하여 학원 운영 현황을 모니터링하세요."
                                 points={[
-                                    "매출 및 등록 현황 추적",
-                                    "강사 성과 분석",
-                                    "이탈 위험 학생 알림",
+                                    "수업 내용 및 정보 추적",
+                                    "수업 및 출결 현황",
+                                    "수업 및 숙제 관리, 일괄 생성",
                                 ]}
                                 imageColor="bg-[#ECFDF5]"
                                 imageSrc="/images/use-cases/generated/admin-dashboard-source-1.png"

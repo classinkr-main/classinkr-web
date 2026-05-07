@@ -5,20 +5,9 @@ import Image from "next/image"
 import Link from "next/link"
 import { useRouter } from "next/navigation"
 import { Plus, Pencil, Trash2, X, Upload, ImageIcon, ArrowRight } from "lucide-react"
-import { getAdminToken } from "@/lib/admin-client"
-import type { PublicEvent, EventCategory, EventStatus } from "@/lib/types/public-events"
+import { adminFetch, adminFetchJsonCached, getAdminToken } from "@/lib/admin-client"
+import type { PublicEvent, EventCategory, EventPublicationStatus, EventStatus } from "@/lib/types/public-events"
 import { EVENT_CATEGORIES } from "@/lib/types/public-events"
-
-function adminFetch(url: string, options?: RequestInit) {
-  return fetch(url, {
-    ...options,
-    headers: {
-      "Content-Type": "application/json",
-      Authorization: `Bearer ${getAdminToken()}`,
-      ...options?.headers,
-    },
-  })
-}
 
 function adminUpload(url: string, formData: FormData) {
   return fetch(url, {
@@ -31,6 +20,12 @@ function adminUpload(url: string, formData: FormData) {
 function formatDate(iso: string): string {
   const d = new Date(iso)
   return `${d.getFullYear()}. ${String(d.getMonth() + 1).padStart(2, "0")}. ${String(d.getDate()).padStart(2, "0")}`
+}
+
+function localDatetimeToIso(value: string): string {
+  if (!value) return ""
+  const d = new Date(value)
+  return Number.isNaN(d.getTime()) ? value : d.toISOString()
 }
 
 type StatusOverrideOption = "auto" | EventStatus
@@ -47,6 +42,7 @@ interface FormState {
   ctaHref: string
   highlight: boolean
   statusOverride: StatusOverrideOption
+  publicationStatus: EventPublicationStatus
 }
 
 const DEFAULT_FORM: FormState = {
@@ -61,6 +57,7 @@ const DEFAULT_FORM: FormState = {
   ctaHref: "",
   highlight: false,
   statusOverride: "auto",
+  publicationStatus: "draft",
 }
 
 function StatusBadge({ status }: { status: EventStatus }) {
@@ -98,9 +95,7 @@ export default function AdminEventsPage() {
     setLoading(true)
     setError(null)
     try {
-      const res = await adminFetch("/api/admin/events")
-      if (!res.ok) throw new Error(await res.text())
-      setEvents(await res.json())
+      setEvents(await adminFetchJsonCached<PublicEvent[]>("/api/admin/events", undefined, { ttlMs: 60_000 }))
     } catch (e) {
       setError(e instanceof Error ? e.message : "불러오기 실패")
     } finally {
@@ -158,14 +153,15 @@ export default function AdminEventsPage() {
         description: form.description || null,
         category: form.category,
         tag: form.tag || null,
-        startsAt: form.startsAt,
-        endsAt: form.endsAt || null,
+        startsAt: localDatetimeToIso(form.startsAt),
+        endsAt: form.endsAt ? localDatetimeToIso(form.endsAt) : null,
         location: form.location || null,
         ctaLabel: form.ctaLabel || "자세히 보기",
         ctaHref: form.ctaHref || "/contact",
         imagePath,
         highlight: form.highlight,
         statusOverride: form.statusOverride === "auto" ? null : form.statusOverride,
+        publicationStatus: form.publicationStatus,
       }
 
       const res = await adminFetch("/api/admin/events", {
@@ -234,12 +230,13 @@ export default function AdminEventsPage() {
       ) : (
         <div className="overflow-hidden rounded-xl border border-[rgba(0,0,0,0.08)]">
           <div className="overflow-x-auto">
-          <table className="min-w-[760px] w-full text-[13px]">
+          <table className="min-w-[840px] w-full text-[13px]">
             <thead className="bg-[#F6F5F4] text-[#1a1a1a]/50 text-left">
               <tr>
                 <th className="px-4 py-3 font-medium">제목</th>
                 <th className="px-4 py-3 font-medium">카테고리</th>
                 <th className="px-4 py-3 font-medium">기간</th>
+                <th className="px-4 py-3 font-medium">공개</th>
                 <th className="px-4 py-3 font-medium">상태</th>
                 <th className="px-4 py-3 font-medium">Highlight</th>
                 <th className="px-4 py-3 font-medium w-24" />
@@ -260,6 +257,15 @@ export default function AdminEventsPage() {
                   <td className="px-4 py-3 text-[#1a1a1a]/50">
                     {formatDate(event.startsAt)}
                     {event.endsAt ? ` ~ ${formatDate(event.endsAt)}` : ""}
+                  </td>
+                  <td className="px-4 py-3">
+                    <span className={`rounded-full px-2 py-0.5 text-[11px] font-semibold ${
+                      event.publicationStatus === "published"
+                        ? "bg-emerald-50 text-emerald-700"
+                        : "bg-amber-50 text-amber-700"
+                    }`}>
+                      {event.publicationStatus === "published" ? "공개" : "임시"}
+                    </span>
                   </td>
                   <td className="px-4 py-3">
                     <StatusBadge status={event.status} />
@@ -448,6 +454,18 @@ export default function AdminEventsPage() {
               </div>
 
               <div className="grid gap-4 sm:grid-cols-2">
+                <div>
+                  <label className="block text-[12px] font-medium text-[#1a1a1a]/50 mb-1.5">공개 상태</label>
+                  <select
+                    value={form.publicationStatus}
+                    onChange={(e) => setForm({ ...form, publicationStatus: e.target.value as EventPublicationStatus })}
+                    className="w-full px-3 py-2 border border-[rgba(0,0,0,0.12)] rounded-lg text-[13px] focus:outline-none focus:border-[#111110]/30 bg-white"
+                  >
+                    <option value="draft">임시저장</option>
+                    <option value="published">공개</option>
+                  </select>
+                  <p className="mt-1 text-[11px] text-[#1a1a1a]/35">공개 선택 시 /events에 노출됩니다.</p>
+                </div>
                 <div className="flex items-center gap-3">
                   <button
                     type="button"

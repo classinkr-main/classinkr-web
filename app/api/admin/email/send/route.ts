@@ -2,6 +2,7 @@ import { NextRequest, NextResponse } from "next/server"
 import { verifyAdmin } from "@/lib/admin-auth"
 import { createCampaign, updateCampaign, getActiveSubscribersByTags } from "@/lib/repositories/marketing"
 import { sendBatchEmail, wrapCampaignHtml } from "@/lib/email"
+import { createUnsubscribeUrl } from "@/lib/server/security-tokens"
 import type { SendEmailRequest } from "@/lib/marketing-types"
 
 const EMAIL_REGEX = /^[^\s@]+@[^\s@]+\.[^\s@]+$/
@@ -43,7 +44,6 @@ export async function POST(req: NextRequest) {
       )
     }
 
-    const unsubscribeBaseUrl = `${req.nextUrl.origin}/api/newsletter/unsubscribe`
     let recipients: PersonalizedRecipient[] = []
 
     if (sendMode === "test") {
@@ -160,7 +160,7 @@ export async function POST(req: NextRequest) {
         subject: r.personalizedSubject ?? body.subject,
         html: wrapCampaignHtml(
           r.personalizedBody,
-          `${unsubscribeBaseUrl}?email=${encodeURIComponent(r.email)}`,
+          createUnsubscribeUrl(req.nextUrl.origin, r.email),
         ),
       }))
       const testResult = await sendBatchEmail(testEmails)
@@ -191,7 +191,7 @@ export async function POST(req: NextRequest) {
       subject: r.personalizedSubject ?? body.subject,
       html: wrapCampaignHtml(
         r.personalizedBody,
-        `${unsubscribeBaseUrl}?email=${encodeURIComponent(r.email)}`,
+        createUnsubscribeUrl(req.nextUrl.origin, r.email),
         trackingUrl,
       ),
     }))

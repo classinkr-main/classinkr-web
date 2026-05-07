@@ -2,11 +2,16 @@ import type { Metadata } from "next"
 import Image from "next/image"
 import Link from "next/link"
 import { notFound } from "next/navigation"
+import { cache } from "react"
 import { ArrowRight, Calendar, MapPin, Tag } from "lucide-react"
 import BlogMarkdownRenderer from "@/components/blog/BlogMarkdownRenderer"
-import { getPublicEventBySlug } from "@/lib/repositories/public-events"
+import { sanitizePublicUrl } from "@/lib/safe-public-url"
+import {
+  getCachedPublicEventBySlug,
+  listCachedPublicEventSlugs,
+} from "@/lib/repositories/public-events"
 
-export const dynamic = "force-dynamic"
+export const revalidate = 3600
 
 interface EventDetailPageProps {
   params: Promise<{ slug: string }>
@@ -17,9 +22,16 @@ function formatKoreanDate(iso: string): string {
   return `${d.getFullYear()}. ${String(d.getMonth() + 1).padStart(2, "0")}. ${String(d.getDate()).padStart(2, "0")}`
 }
 
+const readPublicEventBySlug = cache((slug: string) => getCachedPublicEventBySlug(slug))
+
+export async function generateStaticParams() {
+  const slugs = await listCachedPublicEventSlugs()
+  return slugs.map((slug) => ({ slug }))
+}
+
 export async function generateMetadata({ params }: EventDetailPageProps): Promise<Metadata> {
   const { slug } = await params
-  const event = await getPublicEventBySlug(slug)
+  const event = await readPublicEventBySlug(slug)
   if (!event) return { title: "행사를 찾을 수 없습니다" }
   return {
     title: event.title,
@@ -34,9 +46,10 @@ export async function generateMetadata({ params }: EventDetailPageProps): Promis
 
 export default async function EventDetailPage({ params }: EventDetailPageProps) {
   const { slug } = await params
-  const event = await getPublicEventBySlug(slug)
+  const event = await readPublicEventBySlug(slug)
 
   if (!event) notFound()
+  const ctaHref = sanitizePublicUrl(event.ctaHref, "")
 
   return (
     <div className="min-h-screen bg-[#FAFAF8] text-[#111110]">
@@ -89,9 +102,9 @@ export default async function EventDetailPage({ params }: EventDetailPageProps) 
                 )}
               </div>
 
-              {event.ctaHref && event.status !== "마감" ? (
+              {ctaHref && event.status !== "마감" ? (
                 <Link
-                  href={event.ctaHref}
+                  href={ctaHref}
                   className="mt-8 inline-flex items-center gap-2 rounded-full bg-[#111110] px-6 py-3 text-[14px] font-semibold text-white transition-colors hover:bg-emerald-700"
                 >
                   {event.ctaLabel}
@@ -105,15 +118,15 @@ export default async function EventDetailPage({ params }: EventDetailPageProps) 
             </div>
 
             {event.imageUrl && (
-              <div className="overflow-hidden rounded-[22px] border border-[#e8e8e4] shadow-sm md:rounded-[28px]">
-                <div className="relative aspect-[4/3] overflow-hidden">
+              <div className="overflow-hidden rounded-[22px] border border-[#e8e8e4] bg-white shadow-sm md:rounded-[28px]">
+                <div className="relative aspect-[4/5] overflow-hidden bg-[#f7f7f4]">
                   <Image
                     src={event.imageUrl}
                     alt={event.title}
                     fill
-                    className="object-cover"
+                    className="object-contain p-3 sm:p-4"
+                    sizes="(min-width: 1024px) 420px, (min-width: 640px) 50vw, 100vw"
                     priority
-                    unoptimized
                   />
                 </div>
               </div>
@@ -131,7 +144,7 @@ export default async function EventDetailPage({ params }: EventDetailPageProps) 
             </div>
           )}
 
-          {event.ctaHref && event.status !== "마감" && (
+          {ctaHref && event.status !== "마감" && (
             <div className="mt-8 overflow-hidden rounded-[24px] bg-[#111110] p-6 text-white shadow-sm md:rounded-[32px] md:p-10">
               <p className="text-[12px] font-medium uppercase tracking-[0.24em] text-white/35">
                 {event.category}
@@ -141,7 +154,7 @@ export default async function EventDetailPage({ params }: EventDetailPageProps) 
               </h2>
               <div className="mt-6">
                 <Link
-                  href={event.ctaHref}
+                  href={ctaHref}
                   className="inline-flex items-center gap-2 rounded-full bg-white px-5 py-3 text-sm font-semibold text-[#111110] transition-transform hover:-translate-y-0.5"
                 >
                   {event.ctaLabel}

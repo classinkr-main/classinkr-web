@@ -50,8 +50,8 @@ export default function AdminLoginPage() {
           return
         }
 
-        sessionStorage.setItem("admin_password", password)
-        sessionStorage.setItem("admin_token", password)
+        sessionStorage.setItem("admin_password", "legacy-session")
+        sessionStorage.setItem("admin_token", "legacy-session")
         sessionStorage.setItem("admin_role", data?.role ?? "admin")
         sessionStorage.setItem("admin_name", data?.name ?? "Admin")
         sessionStorage.setItem("admin_email", "")

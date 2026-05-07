@@ -5,6 +5,7 @@ import { motion, AnimatePresence } from "framer-motion"
 import { ArrowRight, Clock, Search } from "lucide-react"
 import Image from "next/image"
 import Link from "next/link"
+import { NewsletterSubscribe } from "@/components/sections/NewsletterSubscribe"
 import type { BlogPost } from "@/lib/blog-types"
 import { CATEGORIES } from "@/lib/blog-types"
 
@@ -266,6 +267,7 @@ export default function BlogPageClient({ posts }: BlogPageClientProps) {
                                                 src={post.imageUrl}
                                                 alt={post.title}
                                                 fill
+                                                sizes="(min-width: 768px) 180px, 100vw"
                                                 className="object-cover transition-transform duration-500 group-hover:scale-[1.04]"
                                             />
                                         </div>
@@ -316,31 +318,7 @@ export default function BlogPageClient({ posts }: BlogPageClientProps) {
                                 교육 트렌드, 데이터 분석 리포트, 원장님 인터뷰 등 클래스인이 직접 제작한 콘텐츠를 가장 먼저 만나보세요.
                             </p>
 
-                            <form
-                                className="flex flex-col sm:flex-row gap-2.5"
-                                onSubmit={(e) => {
-                                    e.preventDefault()
-                                    alert("뉴스레터 구독이 완료되었습니다.")
-                                }}
-                            >
-                                <input
-                                    type="email"
-                                    placeholder="name@company.com"
-                                    required
-                                    className="flex-1 bg-white/[0.06] border border-white/[0.08] text-white placeholder:text-white/20 rounded-lg px-4 py-2.5 text-[13px] focus:outline-none focus:border-white/20 transition-colors"
-                                />
-                                <button
-                                    type="submit"
-                                    className="bg-white text-[#111110] px-5 py-2.5 rounded-lg text-[13px] font-semibold flex items-center justify-center gap-1.5 hover:bg-emerald-50 transition-colors duration-200 shrink-0"
-                                >
-                                    구독하기
-                                    <ArrowRight className="w-3.5 h-3.5" />
-                                </button>
-                            </form>
-
-                            <p className="text-[11px] text-white/15 mt-4">
-                                스팸 없이 월 1-2회 발송 · 언제든 구독 취소 가능
-                            </p>
+                            <NewsletterSubscribe variant="dark" />
                         </div>
                     </div>
                 </motion.div>

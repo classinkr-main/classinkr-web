@@ -36,7 +36,10 @@ export async function POST(req: NextRequest) {
       revalidatePath("/blog")
     }
     return NextResponse.json({ post }, { status: 201 })
-  } catch {
-    return NextResponse.json({ error: "Failed to create post" }, { status: 500 })
+  } catch (error) {
+    return NextResponse.json(
+      { error: error instanceof Error ? error.message : "Failed to create post" },
+      { status: 500 }
+    )
   }
 }

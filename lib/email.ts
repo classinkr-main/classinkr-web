@@ -28,9 +28,12 @@
  *   })
  */
 
+import { postJson } from "@/lib/server/post-json"
+
 import "server-only"
 
 import { resend } from "@/lib/resend"
+import { sanitizeMarketingHtml } from "@/lib/sanitize-html"
 
 /* ── 타입 ───────────────────────────────────────────────────── */
 
@@ -78,7 +81,7 @@ export function wrapCampaignHtml(body: string, unsubscribeUrl?: string, tracking
 <body style="margin:0;padding:0;background:#f6f5f4;font-family:-apple-system,system-ui,'Segoe UI',Helvetica,Arial,sans-serif">
   <div style="max-width:600px;margin:0 auto;padding:40px 24px">
     <div style="background:#ffffff;border-radius:12px;padding:32px 28px;border:1px solid rgba(0,0,0,0.08)">
-      ${body}
+      ${sanitizeMarketingHtml(body)}
     </div>
     <div style="text-align:center;padding:24px 0;color:#a39e98;font-size:12px;line-height:1.6">
       <p style="margin:0">ClassIn Korea · classin.co.kr</p>
@@ -222,19 +225,18 @@ async function sendViaWebhook(
   emails: SingleEmail[],
 ): Promise<SendResult> {
   try {
-    const res = await fetch(webhookUrl, {
-      method: "POST",
-      headers: { "Content-Type": "application/json" },
-      body: JSON.stringify({
+    const res = await postJson(
+      webhookUrl,
+      {
         subject: emails[0]?.subject,
         recipients: emails.map((e) => ({
           email: e.to,
           personalizedBody: e.html,
           personalizedSubject: e.subject,
         })),
-      }),
-      signal: AbortSignal.timeout(10_000),
-    })
+      },
+      { timeoutMs: 10_000 }
+    )
     return {
       provider: "webhook",
       sent: res.ok ? emails.length : 0,

@@ -14,24 +14,10 @@ import {
 import BlogPostTable from "@/components/admin/BlogPostTable"
 import BlogPostForm from "@/components/admin/BlogPostForm"
 import DeleteConfirmDialog from "@/components/admin/DeleteConfirmDialog"
+import { adminFetch, adminFetchJsonCached } from "@/lib/admin-client"
 import type { BlogPost, BlogPostInput } from "@/lib/blog-types"
 
 type Tab = "all" | "private" | "trash"
-
-function getToken() {
-    return (typeof window !== "undefined" ? sessionStorage.getItem("admin_password") : null) ?? ""
-}
-
-function adminFetch(url: string, options?: RequestInit) {
-    return fetch(url, {
-        ...options,
-        headers: {
-            "Content-Type": "application/json",
-            Authorization: `Bearer ${getToken()}`,
-            ...options?.headers,
-        },
-    })
-}
 
 export default function AdminBlogPage() {
     const router = useRouter()
@@ -51,18 +37,12 @@ export default function AdminBlogPage() {
     const fetchPosts = useCallback(async () => {
         setLoading(true)
         try {
-            const [res, trashRes] = await Promise.all([
-                fetch("/api/admin/blog"),
-                fetch("/api/admin/blog?trash=1"),
+            const [data, trashData] = await Promise.all([
+                adminFetchJsonCached<{ posts: BlogPost[] }>("/api/admin/blog", undefined, { ttlMs: 60_000 }),
+                adminFetchJsonCached<{ posts: BlogPost[] }>("/api/admin/blog?trash=1", undefined, { ttlMs: 60_000 }),
             ])
-            if (res.ok) {
-                const data = await res.json()
-                setPosts(data.posts)
-            }
-            if (trashRes.ok) {
-                const data = await trashRes.json()
-                setTrashedPosts(data.posts)
-            }
+            setPosts(data.posts)
+            setTrashedPosts(trashData.posts)
         } catch {
             // silent
         } finally {

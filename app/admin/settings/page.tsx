@@ -23,7 +23,7 @@ import {
 } from "lucide-react"
 
 import { NotificationIcon } from "@/components/notifications/NotificationIcon"
-import { adminFetch, adminFetchJson } from "@/lib/admin-client"
+import { adminFetch, adminFetchJson, adminFetchJsonCached } from "@/lib/admin-client"
 import { resolveNotificationPresentation } from "@/lib/notifications/presentation"
 import {
   DEFAULT_NOTIFICATION_APPEARANCE,
@@ -550,12 +550,11 @@ export default function SettingsPage() {
     setLoadError(null)
 
     try {
-      const response = await adminFetch("/api/admin/settings")
-      if (!response.ok) {
-        throw new Error("설정을 불러오지 못했습니다.")
-      }
-
-      const data = (await response.json()) as SiteSettings
+      const data = await adminFetchJsonCached<SiteSettings>(
+        "/api/admin/settings",
+        undefined,
+        { ttlMs: 60_000 }
+      )
       setSettings(data)
       setInitialSettings(data)
       setDigestInput(data.notificationDigestEmailList?.join("\n") ?? "")
