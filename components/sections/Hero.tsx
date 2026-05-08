@@ -14,6 +14,7 @@ export function Hero() {
     const heroRef = useRef<HTMLElement>(null)
     const dashboardRef = useRef<HTMLElement>(null)
     const [showHeroVideo, setShowHeroVideo] = useState(false)
+    const [canLoadHeroVideo, setCanLoadHeroVideo] = useState(false)
     const { scrollYProgress } = useScroll({
         target: heroRef,
         offset: ["start start", "end start"],
@@ -28,13 +29,53 @@ export function Hero() {
 
     useEffect(() => {
         const mediaQuery = window.matchMedia(HERO_VIDEO_MEDIA_QUERY)
-        const updateVideoVisibility = () => setShowHeroVideo(mediaQuery.matches)
+        const w = window as Window & {
+            requestIdleCallback?: (callback: () => void, options?: { timeout: number }) => number
+            cancelIdleCallback?: (handle: number) => void
+        }
+        let idleHandle: number | undefined
+        let timeoutHandle: number | undefined
+        let observer: IntersectionObserver | undefined
+
+        const scheduleVideo = () => {
+            if (!mediaQuery.matches || canLoadHeroVideo) return
+
+            const markReady = () => setCanLoadHeroVideo(true)
+
+            if (w.requestIdleCallback) {
+                idleHandle = w.requestIdleCallback(markReady, { timeout: 2200 })
+            } else {
+                timeoutHandle = window.setTimeout(markReady, 1400)
+            }
+        }
+
+        const updateVideoVisibility = () => {
+            setShowHeroVideo(mediaQuery.matches && canLoadHeroVideo)
+            if (mediaQuery.matches) scheduleVideo()
+        }
+
+        if ("IntersectionObserver" in window && heroRef.current) {
+            observer = new IntersectionObserver(
+                ([entry]) => {
+                    if (entry?.isIntersecting) scheduleVideo()
+                },
+                { rootMargin: "240px" }
+            )
+            observer.observe(heroRef.current)
+        } else {
+            scheduleVideo()
+        }
 
         updateVideoVisibility()
         mediaQuery.addEventListener("change", updateVideoVisibility)
 
-        return () => mediaQuery.removeEventListener("change", updateVideoVisibility)
-    }, [])
+        return () => {
+            mediaQuery.removeEventListener("change", updateVideoVisibility)
+            observer?.disconnect()
+            if (idleHandle !== undefined) w.cancelIdleCallback?.(idleHandle)
+            if (timeoutHandle !== undefined) window.clearTimeout(timeoutHandle)
+        }
+    }, [canLoadHeroVideo])
 
     return (
         <div className="relative bg-[#FAFAF8] pt-[76px] md:pt-20">
@@ -53,7 +94,7 @@ export function Hero() {
                             muted
                             loop
                             playsInline
-                            preload="metadata"
+                            preload="none"
                             aria-hidden="true"
                         >
                             <source src="/video/home-hero.mp4" type="video/mp4" />

@@ -139,7 +139,7 @@ export async function getPublishedPosts(): Promise<BlogPost[]> {
     return mod.getPublishedPosts();
   }
 
-  const supabase = await createSupabaseServerClient();
+  const supabase = await createSupabaseBlogReadClient();
   const { data, error } = await supabase
     .from("blog_posts")
     .select(LIST_COLUMNS)
@@ -174,7 +174,7 @@ export async function getPublishedPostBySlug(slug: string): Promise<BlogPost | n
     return (await mod.getPublishedPostBySlug(slug)) ?? null;
   }
 
-  const supabase = await createSupabaseServerClient();
+  const supabase = await createSupabaseBlogReadClient();
   const { data, error } = await supabase
     .from("blog_posts")
     .select("*")
@@ -504,4 +504,9 @@ async function findUuidByLegacyId(legacyId: number): Promise<string | null> {
   const posts = await getAllPosts();
   const found = posts.find((p) => p.id === legacyId);
   return (found as BlogPost & { _uuid?: string })?._uuid ?? null;
+}
+
+async function createSupabaseBlogReadClient() {
+  const { createSupabaseAdminClient } = await import("@/lib/supabase/admin");
+  return createSupabaseAdminClient();
 }
