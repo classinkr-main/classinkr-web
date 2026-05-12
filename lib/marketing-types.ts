@@ -38,7 +38,7 @@ export interface Subscriber {
   unsubscribedAt?: string         // ISO 8601 - 수신 거부 일시
 
   /** 유입 경로: 데모 신청, 문의 페이지, 뉴스레터 직접 구독 */
-  source: "demo_modal" | "contact_page" | "newsletter" | "manual"
+  source: "demo_modal" | "contact_page" | "newsletter" | "manual" | "meta_lead_ads"
 
   createdAt: string               // ISO 8601
   updatedAt: string               // ISO 8601

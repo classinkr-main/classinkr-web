@@ -20,7 +20,7 @@
 // ─── 세그먼트 설정 ───────────────────────────────────────────
 export interface SegmentConfig {
   /** 유입 경로 필터 (빈 배열 = 전체) */
-  sources?: Array<"demo_modal" | "contact_page" | "newsletter" | "manual">
+  sources?: Array<"demo_modal" | "contact_page" | "newsletter" | "manual" | "meta_lead_ads">
   /** 리드 상태 필터 — leads 테이블에만 적용 */
   leadStatuses?: Array<"new" | "contacted" | "converted" | "closed">
   /** 태그 필터 — newsletter_subscribers에 적용 (OR 조건) */

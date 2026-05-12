@@ -19,7 +19,8 @@ export type LeadSource =
   | "demo_modal"
   | "contact_page"
   | "newsletter"
-  | "manual";
+  | "manual"
+  | "meta_lead_ads";
 
 /* ─── Table Row Types ─── */
 

@@ -1,4 +1,8 @@
-export type LeadSource = "demo_modal" | "contact_page" | "newsletter"
+export type LeadSource =
+  | "demo_modal"
+  | "contact_page"
+  | "newsletter"
+  | "meta_lead_ads"
 
 export interface LeadPayload {
   source: LeadSource

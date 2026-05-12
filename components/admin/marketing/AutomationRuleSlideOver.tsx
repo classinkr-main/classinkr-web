@@ -31,6 +31,7 @@ const SOURCES = [
   { value: "demo_modal", label: "데모 신청" },
   { value: "contact_page", label: "문의 페이지" },
   { value: "newsletter", label: "뉴스레터" },
+  { value: "meta_lead_ads", label: "Meta 리드" },
   { value: "manual", label: "수동 등록" },
 ]
 const LEAD_STATUSES = [

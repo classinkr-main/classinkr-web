@@ -431,7 +431,7 @@ export default function AdminMarketingPage() {
 
   const { sourceRows, topSource } = useMemo(() => {
     const counts = countBy(subscribers.map((s) => s.source))
-    const order = ["demo_modal", "contact_page", "newsletter", "manual"] as const
+    const order = ["demo_modal", "contact_page", "newsletter", "meta_lead_ads", "manual"] as const
     const rows = order
       .map((source) => ({ source, count: counts[source] ?? 0 }))
       .filter((r) => r.count > 0)
@@ -1018,7 +1018,7 @@ export default function AdminMarketingPage() {
                 {failedCount > 0 ? `확인 필요 ${failedCount}건` : "운영 안정"}
               </MiniBadge>
               <span>{latestCampaign ? `최근 발송: ${latestCampaign.subject}` : "최근 발송 없음"}</span>
-              {topSource && <span>주요 유입: {topSource.source === "demo_modal" ? "데모 신청" : topSource.source === "contact_page" ? "문의" : topSource.source === "newsletter" ? "뉴스레터" : "수동 추가"}</span>}
+              {topSource && <span>주요 유입: {topSource.source === "demo_modal" ? "데모 신청" : topSource.source === "contact_page" ? "문의" : topSource.source === "newsletter" ? "뉴스레터" : topSource.source === "meta_lead_ads" ? "Meta 리드" : "수동 추가"}</span>}
             </div>
           </Panel>
 
@@ -1107,7 +1107,7 @@ export default function AdminMarketingPage() {
                     ))}
                   </div>
                   <div className="flex shrink-0 gap-1.5">
-                    {(["all", "demo_modal", "contact_page", "newsletter", "manual"] as const).map((value) => (
+                    {(["all", "demo_modal", "contact_page", "newsletter", "meta_lead_ads", "manual"] as const).map((value) => (
                       <button
                         key={value}
                         onClick={() => setSourceFilter(value)}
@@ -1117,7 +1117,7 @@ export default function AdminMarketingPage() {
                             : "border-[#e8e8e4] bg-white text-[#1a1a1a]/55 hover:border-[#c8c8c4] hover:text-[#111110]"
                         }`}
                       >
-                        {value === "all" ? "소스 전체" : value === "demo_modal" ? "데모" : value === "contact_page" ? "문의" : value === "newsletter" ? "뉴스레터" : "수동"}
+                        {value === "all" ? "소스 전체" : value === "demo_modal" ? "데모" : value === "contact_page" ? "문의" : value === "newsletter" ? "뉴스레터" : value === "meta_lead_ads" ? "Meta" : "수동"}
                       </button>
                     ))}
                   </div>
@@ -1198,7 +1198,9 @@ export default function AdminMarketingPage() {
                             ? "문의"
                             : row.source === "newsletter"
                               ? "뉴스레터"
-                              : "수동 추가"
+                              : row.source === "meta_lead_ads"
+                                ? "Meta 리드"
+                                : "수동 추가"
                       const width = Math.max(10, Math.min(100, (row.count / Math.max(subscribers.length, 1)) * 100))
                       return (
                         <div key={row.source} className="space-y-1.5 rounded-xl border border-[#e8e8e4] bg-[#fafaf8] px-4 py-3">

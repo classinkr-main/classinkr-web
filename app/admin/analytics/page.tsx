@@ -265,6 +265,7 @@ const SOURCE_LABEL: Record<string, string> = {
   demo_modal: "데모 신청",
   contact_page: "문의",
   newsletter: "뉴스레터",
+  meta_lead_ads: "Meta 리드",
   manual: "수동 등록",
 }
 

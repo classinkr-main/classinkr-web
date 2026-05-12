@@ -51,7 +51,7 @@ function formatTrigger(rule: AutomationRule): string {
 function formatSegment(rule: AutomationRule): { label: string; value: string }[] {
   const s = rule.segmentConfig
   const tableMap: Record<string, string> = { both: "리드 + 구독자", leads: "리드만", subscribers: "구독자만" }
-  const srcMap: Record<string, string> = { demo_modal: "데모신청", contact_page: "문의페이지", newsletter: "뉴스레터", manual: "수동" }
+  const srcMap: Record<string, string> = { demo_modal: "데모신청", contact_page: "문의페이지", newsletter: "뉴스레터", meta_lead_ads: "Meta 리드", manual: "수동" }
   const statusMap: Record<string, string> = { new: "신규", contacted: "연락됨", converted: "전환", closed: "종료" }
   return [
     { label: "대상", value: tableMap[s.targetTable ?? "both"] },
