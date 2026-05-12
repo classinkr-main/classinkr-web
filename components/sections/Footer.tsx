@@ -48,8 +48,9 @@ export function Footer() {
                     <div>
                         <h4 className="font-semibold text-white mb-4">이용안내</h4>
                         <ul className="space-y-2">
-                            <li><Link href="/contact#contact-form" className="hover:text-white transition-colors">개인정보처리방침 문의</Link></li>
-                            <li><Link href="/contact#contact-form" className="hover:text-white transition-colors">이용약관 문의</Link></li>
+                            <li><Link href="/privacy" className="hover:text-white transition-colors">개인정보처리방침</Link></li>
+                            <li><Link href="/terms" className="hover:text-white transition-colors">이용약관</Link></li>
+                            <li><Link href="/data-deletion" className="hover:text-white transition-colors">데이터 삭제 안내</Link></li>
                         </ul>
                     </div>
                 </div>
