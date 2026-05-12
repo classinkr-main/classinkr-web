@@ -52,9 +52,20 @@ import {
 // ─── helpers ──────────────────────────────────────────────────────────────────
 
 const KRW = new Intl.NumberFormat("ko-KR")
-const cny = (n: number | null | undefined) => (n == null ? "—" : `¥${KRW.format(Math.round(n))}`)
+const KRW_CURRENCY = new Intl.NumberFormat("ko-KR", {
+  style: "currency",
+  currency: "KRW",
+  maximumFractionDigits: 0,
+})
+const won = (n: number | null | undefined) => (n == null ? "—" : KRW_CURRENCY.format(Math.round(n)))
 const pct = (n: number | null | undefined) => (n == null ? "—" : `${n}%`)
 const compact = new Intl.NumberFormat("ko-KR", { notation: "compact", maximumFractionDigits: 1 })
+
+function previewText(value: string | null | undefined, maxLength = 160) {
+  const text = value?.replace(/\s+/g, " ").trim()
+  if (!text) return null
+  return text.length > maxLength ? `${text.slice(0, maxLength - 1)}…` : text
+}
 
 function money(value: number | null | undefined, currency = "USD") {
   if (value == null) return "—"
@@ -132,7 +143,7 @@ type CampaignTab = "summary" | "events" | "meta" | "email"
 
 const CAMPAIGN_TABS: Array<{ id: CampaignTab; label: string; sub: string }> = [
   { id: "summary", label: "요약", sub: "KPI · 타임라인 · 채널 분포" },
-  { id: "events", label: "행사", sub: "행사별 깔때기 · 광고 효율" },
+  { id: "events", label: "행사", sub: "행사별 퍼널 · 광고 효율" },
   { id: "meta", label: "Meta 광고", sub: "캠페인 현황 · 성과 · 상태 관리" },
   { id: "email", label: "이메일", sub: "구독자 · 이메일 발송 · 이력" },
 ]
@@ -432,6 +443,120 @@ function MetaCampaignPanel({
   )
 }
 
+function MetaLiveSummary({
+  dashboard,
+  loading,
+  error,
+  datePreset,
+  onOpenMeta,
+  onRefresh,
+}: {
+  dashboard: MetaCampaignDashboard | null
+  loading: boolean
+  error: string | null
+  datePreset: MetaDatePreset
+  onOpenMeta: () => void
+  onRefresh: () => void
+}) {
+  const currency = dashboard?.account.currency ?? "USD"
+  const summary = dashboard?.summary
+
+  return (
+    <div className="mb-5 rounded-2xl border border-[#e8e8e4] bg-white p-4 sm:p-5">
+      <div className="flex flex-col gap-3 sm:flex-row sm:items-start sm:justify-between">
+        <div className="flex min-w-0 items-start gap-3">
+          <span className="inline-flex shrink-0 rounded-xl bg-[#ECFDF5] p-2 text-[#084734]">
+            <Activity className="h-4 w-4" />
+          </span>
+          <div className="min-w-0">
+            <div className="flex flex-wrap items-center gap-2">
+              <h2 className="text-[14px] font-semibold text-[#111110]">Meta 라이브 현황</h2>
+              {dashboard && (
+                <span className="inline-flex items-center gap-1 rounded-full border border-emerald-200 bg-emerald-50 px-2 py-0.5 text-[10px] font-bold text-emerald-700">
+                  <CheckCircle2 className="h-3 w-3" />
+                  연결됨
+                </span>
+              )}
+            </div>
+            <p className="mt-1 text-[11px] leading-relaxed text-[#1a1a1a]/45">
+              {dashboard
+                ? `${dashboard.account.name ?? "Meta 광고 계정"} · ${dashboard.account.id} · ${datePreset} 기준`
+                : "Meta Marketing API에서 캠페인 성과를 불러옵니다."}
+            </p>
+          </div>
+        </div>
+
+        <div className="flex shrink-0 flex-wrap items-center gap-2">
+          <button
+            type="button"
+            onClick={onRefresh}
+            disabled={loading}
+            className="inline-flex items-center gap-1.5 rounded-md border border-[rgba(0,0,0,0.08)] bg-white px-3 py-1.5 text-[12px] font-bold text-[#111110] transition hover:bg-[#F6F5F4] disabled:opacity-60"
+          >
+            <RefreshCw className={`h-3.5 w-3.5 ${loading ? "animate-spin" : ""}`} />
+            동기화
+          </button>
+          <button
+            type="button"
+            onClick={onOpenMeta}
+            className="inline-flex items-center gap-1.5 rounded-md bg-[#084734] px-3 py-1.5 text-[12px] font-bold text-white transition hover:bg-[#063d2a]"
+          >
+            Meta 광고 관리
+            <ChevronRight className="h-3.5 w-3.5" />
+          </button>
+        </div>
+      </div>
+
+      {error ? (
+        <div className="mt-4 flex items-start gap-2 rounded-xl border border-red-200 bg-red-50 px-4 py-3 text-[12px] text-red-700">
+          <AlertCircle className="mt-0.5 h-4 w-4 shrink-0" />
+          <span>{error}</span>
+        </div>
+      ) : loading && !dashboard ? (
+        <p className="mt-4 rounded-xl border border-dashed border-[#e8e8e4] py-8 text-center text-[12px] text-[#1a1a1a]/30">
+          Meta 캠페인 현황을 불러오는 중입니다.
+        </p>
+      ) : dashboard ? (
+        <div className="mt-4 grid gap-4 sm:grid-cols-2 lg:grid-cols-4">
+          <div>
+            <p className="text-[10px] font-medium uppercase tracking-[0.18em] text-[#1a1a1a]/35">광고비</p>
+            <p className="mt-1 text-[20px] font-bold leading-none tracking-[-0.02em] text-[#111110]">
+              {money(summary?.spend, currency)}
+            </p>
+          </div>
+          <div>
+            <p className="text-[10px] font-medium uppercase tracking-[0.18em] text-[#1a1a1a]/35">노출 / 클릭</p>
+            <p className="mt-1 text-[20px] font-bold leading-none tracking-[-0.02em] text-[#111110]">
+              {compact.format(summary?.impressions ?? 0)} / {compact.format(summary?.clicks ?? 0)}
+            </p>
+            <p className="mt-1 text-[11px] text-[#1a1a1a]/40">
+              CTR {summary?.ctr != null ? `${summary.ctr.toFixed(2)}%` : "—"}
+            </p>
+          </div>
+          <div>
+            <p className="text-[10px] font-medium uppercase tracking-[0.18em] text-[#1a1a1a]/35">리드</p>
+            <p className="mt-1 text-[20px] font-bold leading-none tracking-[-0.02em] text-[#084734]">
+              {KRW.format(summary?.leads ?? 0)}
+            </p>
+            <p className="mt-1 text-[11px] text-[#1a1a1a]/40">
+              CPC {summary?.cpc != null ? money(summary.cpc, currency) : "—"}
+            </p>
+          </div>
+          <div>
+            <p className="text-[10px] font-medium uppercase tracking-[0.18em] text-[#1a1a1a]/35">상태</p>
+            <p className="mt-1 text-[20px] font-bold leading-none tracking-[-0.02em] text-[#111110]">
+              {summary?.activeCount ?? 0} 활성
+            </p>
+            <p className="mt-1 text-[11px] text-[#1a1a1a]/40">
+              일시중지 {summary?.pausedCount ?? 0} · 전체 {summary?.campaignCount ?? 0}
+            </p>
+          </div>
+        </div>
+      ) : null}
+    </div>
+  )
+}
+
 function FunnelStage({
   label,
   value,
@@ -584,6 +709,14 @@ function EventFunnelCard({
     metrics.targetLeads != null && metrics.targetLeads > 0
       ? Math.min(100, Math.round((funnel.leads / metrics.targetLeads) * 100))
       : null
+  const detailPreview = previewText(event.description) ?? previewText(event.contentMarkdown)
+  const publicHref = event.slug ? `/events/${event.slug}` : null
+  const leadSourceLabel =
+    attributedLeadCount > 0
+      ? `명시 매칭 ${KRW.format(attributedLeadCount)}건`
+      : duringLeadCount > 0
+        ? `기간 fallback ${KRW.format(duringLeadCount)}건`
+        : "집계 리드 없음"
 
   return (
     <div className="rounded-2xl border border-[#e8e8e4] bg-white p-4 sm:p-5">
@@ -621,19 +754,69 @@ function EventFunnelCard({
         </button>
       </div>
 
+      <div className="mb-3 border-y border-[#f0f0ec] py-3">
+        <div className="grid gap-3 lg:grid-cols-[minmax(0,1fr)_260px]">
+          <div className="min-w-0">
+            <p className="text-[10px] font-semibold uppercase tracking-[0.15em] text-[#1a1a1a]/35">
+              행사 정보
+            </p>
+            <p className="mt-1 text-[12px] leading-relaxed text-[#1a1a1a]/60">
+              {detailPreview ?? "설명 또는 상세 본문이 아직 입력되지 않았습니다."}
+            </p>
+            <div className="mt-2 flex flex-wrap items-center gap-2 text-[11px] text-[#1a1a1a]/45">
+              <span>CTA: {event.ctaLabel}</span>
+              {event.ctaHref && <span className="max-w-[220px] truncate">링크: {event.ctaHref}</span>}
+              {publicHref && (
+                <Link
+                  href={publicHref}
+                  className="inline-flex items-center gap-1 font-medium text-[#084734] hover:underline"
+                >
+                  상세 페이지
+                  <ExternalLink className="h-3 w-3" />
+                </Link>
+              )}
+            </div>
+          </div>
+          <dl className="grid gap-1.5 text-[11px]">
+            <div className="flex items-center justify-between gap-3">
+              <dt className="text-[#1a1a1a]/40">공개 상태</dt>
+              <dd className="font-semibold text-[#111110]">
+                {event.publicationStatus === "published" ? "공개" : "초안"}
+              </dd>
+            </div>
+            <div className="flex items-center justify-between gap-3">
+              <dt className="text-[#1a1a1a]/40">리드 집계</dt>
+              <dd className="font-semibold text-[#111110]">{leadSourceLabel}</dd>
+            </div>
+            <div className="flex items-center justify-between gap-3">
+              <dt className="text-[#1a1a1a]/40">성과 업데이트</dt>
+              <dd className="font-semibold text-[#111110]">
+                {metrics.updatedAt ? formatMetaDate(metrics.updatedAt) : "미입력"}
+              </dd>
+            </div>
+          </dl>
+        </div>
+        {metrics.notes && (
+          <p className="mt-2 rounded-lg bg-[#fafaf8] px-3 py-2 text-[11px] leading-relaxed text-[#1a1a1a]/55">
+            <span className="font-semibold text-[#111110]">성과 메모</span>
+            <span className="ml-2">{metrics.notes}</span>
+          </p>
+        )}
+      </div>
+
       {/* economics row */}
       <div className="mb-3 grid grid-cols-2 gap-2 sm:grid-cols-4">
         <div className="rounded-xl bg-[#fafaf8] px-3 py-2">
           <p className="text-[10px] font-medium uppercase tracking-[0.15em] text-[#1a1a1a]/35">광고비</p>
-          <p className="mt-0.5 text-[14px] font-bold text-[#111110]">{cny(economics.adSpendTotal)}</p>
+          <p className="mt-0.5 text-[14px] font-bold text-[#111110]">{won(economics.adSpendTotal)}</p>
         </div>
         <div className="rounded-xl bg-[#fafaf8] px-3 py-2">
           <p className="text-[10px] font-medium uppercase tracking-[0.15em] text-[#1a1a1a]/35">매출</p>
-          <p className="mt-0.5 text-[14px] font-bold text-[#111110]">{cny(economics.revenue)}</p>
+          <p className="mt-0.5 text-[14px] font-bold text-[#111110]">{won(economics.revenue)}</p>
         </div>
         <div className="rounded-xl bg-[#fafaf8] px-3 py-2">
           <p className="text-[10px] font-medium uppercase tracking-[0.15em] text-[#1a1a1a]/35">CPL</p>
-          <p className="mt-0.5 text-[14px] font-bold text-[#111110]">{economics.cpl != null ? cny(economics.cpl) : "—"}</p>
+          <p className="mt-0.5 text-[14px] font-bold text-[#111110]">{economics.cpl != null ? won(economics.cpl) : "—"}</p>
         </div>
         <div className="rounded-xl bg-[#fafaf8] px-3 py-2">
           <p className="text-[10px] font-medium uppercase tracking-[0.15em] text-[#1a1a1a]/35">ROI</p>
@@ -807,14 +990,14 @@ function MetricsEditor({
             </h3>
             <div className="grid gap-3 sm:grid-cols-2">
               <NumInput label="목표 리드 수" value={form.targetLeads} onChange={(v) => updateNum("targetLeads", v)} />
-              <NumInput label="목표 매출 (KRW)" value={form.targetRevenue} onChange={(v) => updateNum("targetRevenue", v)} />
+              <NumInput label="목표 매출 (원)" value={form.targetRevenue} onChange={(v) => updateNum("targetRevenue", v)} />
             </div>
           </section>
 
-          {/* 깔때기 */}
+          {/* 퍼널 */}
           <section>
             <h3 className="mb-2 text-[12px] font-semibold uppercase tracking-[0.15em] text-[#1a1a1a]/50">
-              깔때기 단계
+              퍼널 단계
             </h3>
             <div className="grid gap-3 sm:grid-cols-3">
               <NumInput label="노출 수" value={form.impressionsCount} onChange={(v) => updateNum("impressionsCount", v)} />
@@ -822,7 +1005,7 @@ function MetricsEditor({
               <NumInput label="유효 리드 수" value={form.qualifiedLeadsCount} onChange={(v) => updateNum("qualifiedLeadsCount", v)} />
               <NumInput label="참석자 수" value={form.attendeesCount} onChange={(v) => updateNum("attendeesCount", v)} />
               <NumInput label="딜 수" value={form.dealsCount} onChange={(v) => updateNum("dealsCount", v)} />
-              <NumInput label="딜 매출 (KRW)" value={form.dealsRevenue} onChange={(v) => updateNum("dealsRevenue", v)} />
+              <NumInput label="딜 매출 (원)" value={form.dealsRevenue} onChange={(v) => updateNum("dealsRevenue", v)} />
             </div>
             <p className="mt-1.5 text-[11px] text-[#1a1a1a]/40">
               ※ 리드 수는 리드 DB에서 자동 집계됩니다 (수동 입력 불필요).
@@ -867,7 +1050,7 @@ function MetricsEditor({
                     </select>
                     <input
                       type="number"
-                      placeholder="금액 (KRW)"
+                      placeholder="금액 (원)"
                       value={entry.amount === 0 ? "" : entry.amount}
                       onChange={(e) =>
                         updateAdEntry(idx, { amount: e.target.value === "" ? 0 : Number(e.target.value) })
@@ -953,7 +1136,7 @@ export default function AdminCampaignsPage() {
   const [metricsMap, setMetricsMap] = useState<Record<string, EventMetrics>>({})
   const [loading, setLoading] = useState(true)
   const [error, setError] = useState<string | null>(null)
-  const [period, setPeriod] = useState<Period>("active")
+  const [period, setPeriod] = useState<Period>("all")
   const [editing, setEditing] = useState<PublicEvent | null>(null)
   const [activeTab, setActiveTab] = useState<CampaignTab>("summary")
   const [metaDashboard, setMetaDashboard] = useState<MetaCampaignDashboard | null>(null)
@@ -962,14 +1145,26 @@ export default function AdminCampaignsPage() {
   const [metaDatePreset, setMetaDatePreset] = useState<MetaDatePreset>("last_30d")
   const [metaUpdatingId, setMetaUpdatingId] = useState<string | null>(null)
 
-  const load = useCallback(async () => {
+  const load = useCallback(async ({ force = false }: { force?: boolean } = {}) => {
     setLoading(true)
     setError(null)
     try {
       const [ev, leadData, metricData] = await Promise.all([
-        adminFetchJsonCached<PublicEvent[]>("/api/admin/events", undefined, { ttlMs: 60_000 }),
-        adminFetchJsonCached<{ leads: LeadRecord[] }>("/api/admin/leads", undefined, { ttlMs: 45_000 }),
-        adminFetchJsonCached<{ metrics: Record<string, EventMetrics> }>("/api/admin/event-metrics", undefined, { ttlMs: 60_000 }),
+        adminFetchJsonCached<PublicEvent[]>("/api/admin/events", undefined, {
+          ttlMs: 60_000,
+          force,
+          staleIfError: !force,
+        }),
+        adminFetchJsonCached<{ leads: LeadRecord[] }>("/api/admin/leads", undefined, {
+          ttlMs: 45_000,
+          force,
+          staleIfError: !force,
+        }),
+        adminFetchJsonCached<{ metrics: Record<string, EventMetrics> }>("/api/admin/event-metrics", undefined, {
+          ttlMs: 60_000,
+          force,
+          staleIfError: !force,
+        }),
       ])
       setEvents(ev)
       setLeads(leadData.leads)
@@ -1001,7 +1196,7 @@ export default function AdminCampaignsPage() {
   }, [metaDatePreset])
 
   useEffect(() => {
-    if (activeTab === "meta") {
+    if (activeTab === "summary" || activeTab === "meta") {
       loadMeta()
     }
   }, [activeTab, loadMeta])
@@ -1009,6 +1204,12 @@ export default function AdminCampaignsPage() {
   const toggleMetaCampaignStatus = useCallback(
     async (campaign: MetaCampaignRow) => {
       const nextStatus = campaign.status === "ACTIVE" ? "PAUSED" : "ACTIVE"
+      const actionLabel = nextStatus === "ACTIVE" ? "재개" : "중지"
+      const confirmed = window.confirm(
+        `${campaign.name} 캠페인을 ${actionLabel}할까요?\n\n이 작업은 Meta 광고 관리자에 바로 반영됩니다.`
+      )
+      if (!confirmed) return
+
       setMetaUpdatingId(campaign.id)
       setMetaError(null)
       try {
@@ -1107,6 +1308,19 @@ export default function AdminCampaignsPage() {
   )
 
   const showFilterRow = activeTab === "summary" || activeTab === "events"
+  const refreshLoading =
+    activeTab === "meta" ? metaLoading : activeTab === "summary" ? loading || metaLoading : loading
+  const refreshCurrent = useCallback(() => {
+    if (activeTab === "meta") {
+      void loadMeta()
+      return
+    }
+    if (activeTab === "summary") {
+      void Promise.all([load({ force: true }), loadMeta()])
+      return
+    }
+    void load({ force: true })
+  }, [activeTab, load, loadMeta])
 
   return (
     <div className="pb-24">
@@ -1125,19 +1339,19 @@ export default function AdminCampaignsPage() {
               캠페인
             </h1>
             <p className="mt-2 max-w-[720px] text-[13px] leading-relaxed text-[#615D59]">
-              행사·이메일·자동화를 한 화면에서 운영합니다. 깔때기 전환, 광고 효율, 캘린더 진척을 동시에 추적합니다.
+              행사·이메일·자동화를 한 화면에서 운영합니다. 퍼널 전환, 광고 효율, 캘린더 진척을 동시에 추적합니다.
             </p>
           </div>
 
           <div className="flex shrink-0 items-center gap-2">
             <button
               type="button"
-              onClick={activeTab === "meta" ? loadMeta : load}
-              disabled={activeTab === "meta" ? metaLoading : loading}
+              onClick={refreshCurrent}
+              disabled={refreshLoading}
               className="inline-flex items-center gap-1.5 rounded-md border border-[rgba(0,0,0,0.08)] bg-white px-3 py-1.5 text-[12px] font-bold text-[#111110] transition hover:bg-[#F6F5F4] disabled:opacity-60"
             >
-              <RefreshCw className={`h-3.5 w-3.5 ${(activeTab === "meta" ? metaLoading : loading) ? "animate-spin" : ""}`} />
-              새로고침
+              <RefreshCw className={`h-3.5 w-3.5 ${refreshLoading ? "animate-spin" : ""}`} />
+              동기화
             </button>
             <Link
               href="/admin/events"
@@ -1231,6 +1445,15 @@ export default function AdminCampaignsPage() {
 
       {activeTab === "summary" && (
         <>
+      <MetaLiveSummary
+        dashboard={metaDashboard}
+        loading={metaLoading}
+        error={metaError}
+        datePreset={metaDatePreset}
+        onOpenMeta={() => setActiveTab("meta")}
+        onRefresh={loadMeta}
+      />
+
       {/* KPI strip */}
       <div className="mb-5 grid gap-3 sm:grid-cols-2 lg:grid-cols-3 xl:grid-cols-6">
         <KpiCard
@@ -1242,18 +1465,18 @@ export default function AdminCampaignsPage() {
         <KpiCard
           icon={<Wallet className="w-3.5 h-3.5" />}
           label="총 광고비"
-          value={loading ? "..." : cny(aggregate.totalSpend)}
+          value={loading ? "..." : won(aggregate.totalSpend)}
         />
         <KpiCard
           icon={<TrendingUp className="w-3.5 h-3.5" />}
           label="총 매출"
-          value={loading ? "..." : cny(aggregate.totalRevenue)}
+          value={loading ? "..." : won(aggregate.totalRevenue)}
           tone="success"
         />
         <KpiCard
           icon={<Target className="w-3.5 h-3.5" />}
           label="평균 CPL"
-          value={loading ? "..." : aggregate.avgCpl != null ? cny(aggregate.avgCpl) : "—"}
+          value={loading ? "..." : aggregate.avgCpl != null ? won(aggregate.avgCpl) : "—"}
           hint={`총 리드 ${KRW.format(aggregate.totalLeads)}`}
         />
         <KpiCard
@@ -1278,7 +1501,7 @@ export default function AdminCampaignsPage() {
       {/* charts */}
       <div className="mb-5 grid gap-4 lg:grid-cols-3">
         <div className="rounded-2xl border border-[#e8e8e4] bg-white p-4 sm:p-5 lg:col-span-2">
-          <h2 className="mb-3 text-[14px] font-semibold text-[#111110]">행사별 깔때기 비교</h2>
+          <h2 className="mb-3 text-[14px] font-semibold text-[#111110]">행사별 퍼널 비교</h2>
           {compareChartData.length === 0 ? (
             <p className="py-12 text-center text-[12px] text-[#1a1a1a]/30">표시할 데이터가 없습니다.</p>
           ) : (
@@ -1328,7 +1551,7 @@ export default function AdminCampaignsPage() {
                       ))}
                     </Pie>
                     <Tooltip
-                      formatter={(v: number | undefined) => cny(v ?? 0)}
+                      formatter={(v: number | undefined) => won(v ?? 0)}
                       contentStyle={{
                         backgroundColor: "#111110",
                         border: "none",
@@ -1347,7 +1570,7 @@ export default function AdminCampaignsPage() {
                       <span className="inline-block w-2 h-2 rounded-full" style={{ background: entry.color }} />
                       {entry.name}
                     </span>
-                    <span className="font-semibold text-[#111110]">{cny(entry.value)}</span>
+                    <span className="font-semibold text-[#111110]">{won(entry.value)}</span>
                   </div>
                 ))}
               </div>
@@ -1361,7 +1584,7 @@ export default function AdminCampaignsPage() {
       {activeTab === "events" && (
         <>
           <div className="mb-3 flex items-center justify-between">
-            <h2 className="text-[15px] font-semibold text-[#111110]">행사별 상세</h2>
+            <h2 className="text-[15px] font-semibold text-[#111110]">행사별 퍼널 상세</h2>
             <button
               onClick={() => {
                 setPeriod((p) => (p === "all" ? "active" : "all"))
