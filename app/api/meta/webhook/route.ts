@@ -47,7 +47,8 @@ function getGraphApiVersion() {
 function getMetaAccessToken() {
   return (
     process.env.META_PAGE_ACCESS_TOKEN?.trim() ||
-    process.env.META_ACCESS_TOKEN?.trim()
+    process.env.META_ACCESS_TOKEN?.trim() ||
+    process.env.META_CAPI_ACCESS_TOKEN?.trim()
   )
 }
 

@@ -65,6 +65,11 @@ interface MetaGraphErrorBody {
   }
 }
 
+interface MetaAccessTokenCandidate {
+  name: string
+  value: string
+}
+
 interface MetaCampaignApiRow {
   id: string
   name?: string
@@ -110,8 +115,24 @@ function getVersion() {
   return process.env.META_GRAPH_API_VERSION?.trim() || "v25.0"
 }
 
-function getAccessToken() {
-  return getRequiredEnv("META_ACCESS_TOKEN")
+function getAccessTokenCandidates(): MetaAccessTokenCandidate[] {
+  const rawCandidates = [
+    { name: "META_ACCESS_TOKEN", value: process.env.META_ACCESS_TOKEN?.trim() },
+    { name: "META_CAPI_ACCESS_TOKEN", value: process.env.META_CAPI_ACCESS_TOKEN?.trim() },
+  ]
+
+  const seen = new Set<string>()
+  const candidates = rawCandidates.flatMap((candidate) => {
+    if (!candidate.value || seen.has(candidate.value)) return []
+    seen.add(candidate.value)
+    return [{ name: candidate.name, value: candidate.value }]
+  })
+
+  if (candidates.length === 0) {
+    throw new Error("Missing META_ACCESS_TOKEN or META_CAPI_ACCESS_TOKEN")
+  }
+
+  return candidates
 }
 
 function getAdAccountId() {
@@ -137,9 +158,12 @@ function toNullableNumber(value: unknown) {
   return parsed > 0 ? parsed : null
 }
 
-function buildUrl(path: string, params: Record<string, string | number | undefined> = {}) {
+function buildUrl(
+  path: string,
+  accessToken: string,
+  params: Record<string, string | number | undefined> = {}
+) {
   const url = new URL(`https://graph.facebook.com/${getVersion()}/${path}`)
-  const accessToken = getAccessToken()
   const proof = appSecretProof(accessToken)
 
   for (const [key, value] of Object.entries(params)) {
@@ -150,65 +174,78 @@ function buildUrl(path: string, params: Record<string, string | number | undefin
   return { url, accessToken }
 }
 
-async function metaGet<T>(path: string, params?: Record<string, string | number | undefined>) {
-  const { url, accessToken } = buildUrl(path, params)
-  const response = await fetch(url, {
-    headers: { Authorization: `Bearer ${accessToken}` },
-    cache: "no-store",
-  })
+function formatMetaError(prefix: string, status: number, error: MetaGraphErrorBody["error"]) {
+  return [
+    prefix,
+    status,
+    error?.code ? `code ${error.code}` : undefined,
+    error?.error_subcode ? `subcode ${error.error_subcode}` : undefined,
+    error?.message,
+  ]
+    .filter(Boolean)
+    .join(": ")
+}
 
-  const body = (await response.json().catch(() => ({}))) as T & MetaGraphErrorBody
-  if (!response.ok) {
+function shouldTryNextToken(status: number, error: MetaGraphErrorBody["error"]) {
+  return status === 401 || error?.code === 190
+}
+
+async function metaGet<T>(path: string, params?: Record<string, string | number | undefined>) {
+  const candidates = getAccessTokenCandidates()
+  let lastError: Error | null = null
+
+  for (let index = 0; index < candidates.length; index += 1) {
+    const candidate = candidates[index]
+    const { url, accessToken } = buildUrl(path, candidate.value, params)
+    const response = await fetch(url, {
+      headers: { Authorization: `Bearer ${accessToken}` },
+      cache: "no-store",
+    })
+
+    const body = (await response.json().catch(() => ({}))) as T & MetaGraphErrorBody
+    if (response.ok) return body
+
     const error = body.error
-    throw new Error(
-      [
-        "Meta API request failed",
-        response.status,
-        error?.code ? `code ${error.code}` : undefined,
-        error?.error_subcode ? `subcode ${error.error_subcode}` : undefined,
-        error?.message,
-      ]
-        .filter(Boolean)
-        .join(": ")
-    )
+    lastError = new Error(formatMetaError("Meta API request failed", response.status, error))
+    if (index < candidates.length - 1 && shouldTryNextToken(response.status, error)) continue
+    throw lastError
   }
 
-  return body
+  throw lastError ?? new Error("Meta API request failed")
 }
 
 async function metaPost<T>(path: string, params: Record<string, string | number | undefined>) {
-  const { url, accessToken } = buildUrl(path)
-  const body = new URLSearchParams()
-  for (const [key, value] of Object.entries(params)) {
-    if (value != null && value !== "") body.set(key, String(value))
-  }
+  const candidates = getAccessTokenCandidates()
+  let lastError: Error | null = null
 
-  const response = await fetch(url, {
-    method: "POST",
-    headers: {
-      Authorization: `Bearer ${accessToken}`,
-      "Content-Type": "application/x-www-form-urlencoded",
-    },
-    body,
-    cache: "no-store",
-  })
+  for (let index = 0; index < candidates.length; index += 1) {
+    const candidate = candidates[index]
+    const { url, accessToken } = buildUrl(path, candidate.value)
+    const body = new URLSearchParams()
+    for (const [key, value] of Object.entries(params)) {
+      if (value != null && value !== "") body.set(key, String(value))
+    }
 
-  const json = (await response.json().catch(() => ({}))) as T & MetaGraphErrorBody
-  if (!response.ok) {
+    const response = await fetch(url, {
+      method: "POST",
+      headers: {
+        Authorization: `Bearer ${accessToken}`,
+        "Content-Type": "application/x-www-form-urlencoded",
+      },
+      body,
+      cache: "no-store",
+    })
+
+    const json = (await response.json().catch(() => ({}))) as T & MetaGraphErrorBody
+    if (response.ok) return json
+
     const error = json.error
-    throw new Error(
-      [
-        "Meta API write failed",
-        response.status,
-        error?.code ? `code ${error.code}` : undefined,
-        error?.message,
-      ]
-        .filter(Boolean)
-        .join(": ")
-    )
+    lastError = new Error(formatMetaError("Meta API write failed", response.status, error))
+    if (index < candidates.length - 1 && shouldTryNextToken(response.status, error)) continue
+    throw lastError
   }
 
-  return json
+  throw lastError ?? new Error("Meta API write failed")
 }
 
 function extractLeads(actions: MetaInsightAction[] | undefined) {
