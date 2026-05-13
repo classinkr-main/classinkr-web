@@ -2,6 +2,7 @@
 import { useEffect, useMemo, useRef, useState, type ReactNode } from "react"
 import Image from "next/image"
 import Link from "next/link"
+import { useRouter } from "next/navigation"
 import {
   ArrowLeft,
   ArrowRight,
@@ -79,6 +80,27 @@ interface FormState {
   publicationStatus: EventPublicationStatus
 }
 
+interface EventEditorProps {
+  mode?: "create" | "edit"
+  event?: PublicEvent
+}
+
+const DEFAULT_FORM: FormState = {
+  title: "",
+  slug: "",
+  description: "",
+  category: "프로모션",
+  tag: "",
+  startsAt: "",
+  endsAt: "",
+  location: "",
+  ctaLabel: "자세히 보기",
+  ctaHref: "",
+  highlight: false,
+  statusOverride: "auto",
+  publicationStatus: "draft",
+}
+
 function toLocalDatetime(iso: string | null): string {
   if (!iso) return ""
   const d = new Date(iso)
@@ -119,33 +141,35 @@ function adminUpload(url: string, formData: FormData) {
   })
 }
 
-export default function EventEditor({ event }: { event: PublicEvent }) {
+export default function EventEditor({ event, mode }: EventEditorProps) {
+  const router = useRouter()
   const editorRef = useRef<RichMarkdownEditorHandle>(null)
   const fileInputRef = useRef<HTMLInputElement>(null)
   const isFirstRenderRef = useRef(true)
+  const isCreate = mode === "create" || !event
 
   const [form, setForm] = useState<FormState>({
-    title: event.title,
-    slug: event.slug ?? "",
-    description: event.description ?? "",
-    category: event.category,
-    tag: event.tag ?? "",
-    startsAt: toLocalDatetime(event.startsAt),
-    endsAt: toLocalDatetime(event.endsAt),
-    location: event.location ?? "",
-    ctaLabel: event.ctaLabel,
-    ctaHref: event.ctaHref ?? "",
-    highlight: event.highlight,
-    statusOverride: (event.statusOverride as StatusOverrideOption) ?? "auto",
-    publicationStatus: event.publicationStatus ?? "draft",
+    title: event?.title ?? DEFAULT_FORM.title,
+    slug: event?.slug ?? DEFAULT_FORM.slug,
+    description: event?.description ?? DEFAULT_FORM.description,
+    category: event?.category ?? DEFAULT_FORM.category,
+    tag: event?.tag ?? DEFAULT_FORM.tag,
+    startsAt: toLocalDatetime(event?.startsAt ?? null),
+    endsAt: toLocalDatetime(event?.endsAt ?? null),
+    location: event?.location ?? DEFAULT_FORM.location,
+    ctaLabel: event?.ctaLabel ?? DEFAULT_FORM.ctaLabel,
+    ctaHref: event?.ctaHref ?? DEFAULT_FORM.ctaHref,
+    highlight: event?.highlight ?? DEFAULT_FORM.highlight,
+    statusOverride: (event?.statusOverride as StatusOverrideOption | null) ?? DEFAULT_FORM.statusOverride,
+    publicationStatus: event?.publicationStatus ?? DEFAULT_FORM.publicationStatus,
   })
-  const [content, setContent] = useState(event.contentMarkdown ?? "")
-  const [imagePath, setImagePath] = useState<string | null>(event.imagePath ?? null)
-  const [imagePreview, setImagePreview] = useState<string | null>(event.imageUrl ?? null)
+  const [content, setContent] = useState(event?.contentMarkdown ?? "")
+  const [imagePath, setImagePath] = useState<string | null>(event?.imagePath ?? null)
+  const [imagePreview, setImagePreview] = useState<string | null>(event?.imageUrl ?? null)
   const [imageFile, setImageFile] = useState<File | null>(null)
   const [saving, setSaving] = useState(false)
   const [saveError, setSaveError] = useState<string | null>(null)
-  const [draftState, setDraftState] = useState<DraftState>("saved")
+  const [draftState, setDraftState] = useState<DraftState>(isCreate ? "dirty" : "saved")
   const [lastSavedAt, setLastSavedAt] = useState<Date | null>(null)
   const [showPreview, setShowPreview] = useState(false)
 
@@ -219,13 +243,18 @@ export default function EventEditor({ event }: { event: PublicEvent }) {
         contentMarkdown: content || null,
         imagePath: currentImagePath,
       }
-      const res = await adminFetch(`/api/admin/events/${event.id}`, {
-        method: "PATCH",
+      const saveUrl = isCreate ? "/api/admin/events" : `/api/admin/events/${event?.id}`
+      const res = await adminFetch(saveUrl, {
+        method: isCreate ? "POST" : "PATCH",
         body: JSON.stringify(payload),
       })
       if (!res.ok) throw new Error(await res.text())
+      const savedEvent = (await res.json()) as PublicEvent
       setDraftState("saved")
       setLastSavedAt(new Date())
+      if (isCreate) {
+        router.replace(`/admin/events/${savedEvent.id}/edit`)
+      }
     } catch (e) {
       setSaveError(e instanceof Error ? e.message : "저장 실패")
       setDraftState("dirty")
@@ -274,7 +303,7 @@ export default function EventEditor({ event }: { event: PublicEvent }) {
               <Eye className="h-4 w-4 text-[#084734]" />
               <span className="text-sm font-semibold text-[#111110]">페이지 미리보기</span>
               <span className="rounded-full border border-[#e8e8e4] px-2.5 py-0.5 text-[11px] text-[#1a1a1a]/40">
-                /events/{form.slug || event.slug || "—"}
+                /events/{form.slug || event?.slug || "—"}
               </span>
             </div>
             <button
@@ -398,10 +427,10 @@ export default function EventEditor({ event }: { event: PublicEvent }) {
             </Button>
             <div className="min-w-0">
               <p className="text-[10px] font-medium uppercase tracking-[0.24em] text-[#1a1a1a]/30">
-                Event Editor
+                {isCreate ? "New Event" : "Event Editor"}
               </p>
               <h1 className="truncate text-base font-semibold tracking-[-0.02em] text-[#111110]">
-                {form.title || "행사 편집"}
+                {form.title || (isCreate ? "새 행사 작성" : "행사 편집")}
               </h1>
             </div>
             <div className="hidden items-center gap-2 sm:flex">
@@ -412,7 +441,7 @@ export default function EventEditor({ event }: { event: PublicEvent }) {
           </div>
 
           <div className="flex shrink-0 items-center gap-1">
-            {event.slug && (
+            {!isCreate && event?.slug && (
               <Button variant="ghost" size="sm" asChild className="h-8">
                 <Link href={`/events/${event.slug}`} target="_blank">
                   실제 페이지 →
@@ -434,7 +463,7 @@ export default function EventEditor({ event }: { event: PublicEvent }) {
               ) : (
                 <Save className="mr-1.5 h-3.5 w-3.5" />
               )}
-              저장
+              {isCreate ? "등록" : "저장"}
             </Button>
           </div>
         </div>

@@ -19,6 +19,7 @@ const SOURCE_LABEL: Record<string, string> = {
   demo_modal:   "데모신청",
   contact_page: "문의",
   newsletter:   "뉴스레터",
+  meta_lead_ads: "Meta 리드",
 }
 
 // 세그먼트 필터 → PRESET_TAGS 매핑 (이메일 발송 탭으로 전달)
@@ -214,7 +215,7 @@ export default function LeadSegmentView({ leads, loading, onRefresh, onSendToSeg
         <div className="flex items-center gap-2 flex-wrap">
           <span className="text-[11px] font-medium text-[#1a1a1a]/40 w-14 shrink-0">유입경로</span>
           <div className="flex gap-1.5 flex-wrap">
-            {[null, "demo_modal", "contact_page", "newsletter"].map((v) => (
+            {[null, "demo_modal", "contact_page", "newsletter", "meta_lead_ads"].map((v) => (
               <FilterChip
                 key={v ?? "all"}
                 label={v ? SOURCE_LABEL[v] : "전체"}

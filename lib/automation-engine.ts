@@ -140,7 +140,7 @@ export function matchesSegment(
   seg: SegmentConfig
 ): boolean {
   if (seg.sources && seg.sources.length > 0) {
-    if (!seg.sources.includes(recipient.source as "demo_modal" | "contact_page" | "newsletter" | "manual")) {
+    if (!seg.sources.includes(recipient.source as "demo_modal" | "contact_page" | "newsletter" | "manual" | "meta_lead_ads")) {
       return false
     }
   }
@@ -355,7 +355,7 @@ interface OnSubmitPayload {
   name?: string
   org?: string
   role?: string
-  source: "demo_modal" | "contact_page" | "newsletter" | "manual"
+  source: "demo_modal" | "contact_page" | "newsletter" | "manual" | "meta_lead_ads"
 }
 
 export async function triggerOnSubmitRules(payload: OnSubmitPayload): Promise<void> {

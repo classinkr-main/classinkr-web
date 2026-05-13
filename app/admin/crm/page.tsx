@@ -26,7 +26,7 @@ const STATUS_COLOR: Record<LeadStatus, string> = {
   closed: "bg-[#f0f0ec] text-[#1a1a1a]/40",
 }
 const SOURCE_LABEL: Record<string, string> = {
-  demo_modal: "데모 신청", contact_page: "문의", newsletter: "뉴스레터",
+  demo_modal: "데모 신청", contact_page: "문의", newsletter: "뉴스레터", meta_lead_ads: "Meta 리드",
 }
 
 const LOG_TYPE_LABEL: Record<ContactLogType, string> = {
@@ -47,6 +47,7 @@ function calcScore(lead: LeadRecord): number {
   let s = 0
   if (lead.source === "demo_modal")    s += 40
   else if (lead.source === "contact_page") s += 25
+  else if (lead.source === "meta_lead_ads") s += 25
   else if (lead.source === "newsletter")   s += 10
   if (lead.phone) s += 20
   if (lead.email) s += 5

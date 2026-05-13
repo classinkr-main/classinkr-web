@@ -47,7 +47,7 @@ export default function BigBackdropImage() {
   return (
     <section
       ref={sectionRef}
-      className="relative min-h-[90svh] md:min-h-[100dvh] w-full overflow-hidden bg-black"
+      className="relative h-[90vh] md:h-[100vh] w-full overflow-hidden bg-black"
     >
       {/* 패럴랙스 이미지 */}
       <motion.div
@@ -90,7 +90,8 @@ export default function BigBackdropImage() {
           initial="hidden"
           whileInView="visible"
           viewport={{ once: true, margin: "-80px" }}
-          className="mt-4 text-3xl leading-[1.1] tracking-normal text-white md:text-5xl lg:text-6xl"
+          className="text-3xl md:text-5xl lg:text-6xl leading-tight text-white mt-4"
+          style={{ letterSpacing: "-1.5px" }}
         >
           베젤은 얇아지고,
           <br />
@@ -105,9 +106,7 @@ export default function BigBackdropImage() {
           viewport={{ once: true, margin: "-80px" }}
           className="text-base md:text-lg text-white/80 mt-5 max-w-xl"
         >
-          8mm 슬림 베젤과 매트 알루미늄 마감으로
-          <br />
-          오직 수업에만 집중할 수 있도록 만들었습니다.
+          8mm 슬림 베젤과 매트 알루미늄 마감으로 오직 수업에만 집중할 수 있도록 만들었습니다.
         </motion.p>
       </div>
     </section>

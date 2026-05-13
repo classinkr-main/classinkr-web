@@ -1,5 +1,6 @@
 "use client";
 
+import Image from "next/image";
 import { useRef } from "react";
 import { motion, useInView } from "framer-motion";
 
@@ -49,119 +50,16 @@ export default function LatencyProof() {
               0.03s response
             </div>
 
-            {/* SVG drawing animation */}
-            <div className="absolute inset-0 flex items-center justify-center">
-              <svg
-                viewBox="0 0 320 240"
-                width="75%"
-                height="75%"
-                aria-hidden="true"
-              >
-                {/* "0" stroke */}
-                <motion.path
-                  d="M 52 72 C 28 72, 20 96, 20 120 C 20 144, 28 168, 52 168 C 76 168, 84 144, 84 120 C 84 96, 76 72, 52 72 Z"
-                  stroke="#6EE7B7"
-                  strokeWidth="6"
-                  strokeLinecap="round"
-                  fill="none"
-                  initial={{ pathLength: 0, opacity: 0.9 }}
-                  animate={{ pathLength: [0, 1, 1, 0], opacity: [0.9, 0.9, 0.9, 0] }}
-                  transition={{
-                    duration: 1.2,
-                    times: [0, 0.55, 0.85, 1],
-                    ease: "easeInOut",
-                    repeat: Infinity,
-                    repeatDelay: 0.6,
-                    delay: 0,
-                  }}
-                />
-
-                {/* "." dot */}
-                <motion.circle
-                  cx="100"
-                  cy="160"
-                  r="5"
-                  stroke="#6EE7B7"
-                  strokeWidth="5"
-                  strokeLinecap="round"
-                  fill="none"
-                  initial={{ pathLength: 0, opacity: 0.9 }}
-                  animate={{ pathLength: [0, 1, 1, 0], opacity: [0.9, 0.9, 0.9, 0] }}
-                  transition={{
-                    duration: 0.3,
-                    times: [0, 0.55, 0.85, 1],
-                    ease: "easeInOut",
-                    repeat: Infinity,
-                    repeatDelay: 0.6,
-                    delay: 0.55,
-                  }}
-                />
-
-                {/* "0" second */}
-                <motion.path
-                  d="M 144 72 C 120 72, 112 96, 112 120 C 112 144, 120 168, 144 168 C 168 168, 176 144, 176 120 C 176 96, 168 72, 144 72 Z"
-                  stroke="#6EE7B7"
-                  strokeWidth="6"
-                  strokeLinecap="round"
-                  fill="none"
-                  initial={{ pathLength: 0, opacity: 0.9 }}
-                  animate={{ pathLength: [0, 1, 1, 0], opacity: [0.9, 0.9, 0.9, 0] }}
-                  transition={{
-                    duration: 1.2,
-                    times: [0, 0.55, 0.85, 1],
-                    ease: "easeInOut",
-                    repeat: Infinity,
-                    repeatDelay: 0.6,
-                    delay: 0.7,
-                  }}
-                />
-
-                {/* "3" */}
-                <motion.path
-                  d="M 196 80 C 220 72, 240 90, 232 112 C 224 130, 204 128, 204 128 C 220 128, 244 142, 236 164 C 228 186, 200 176, 192 168"
-                  stroke="#6EE7B7"
-                  strokeWidth="6"
-                  strokeLinecap="round"
-                  fill="none"
-                  initial={{ pathLength: 0, opacity: 0.9 }}
-                  animate={{ pathLength: [0, 1, 1, 0], opacity: [0.9, 0.9, 0.9, 0] }}
-                  transition={{
-                    duration: 1.0,
-                    times: [0, 0.55, 0.85, 1],
-                    ease: "easeInOut",
-                    repeat: Infinity,
-                    repeatDelay: 0.6,
-                    delay: 1.4,
-                  }}
-                />
-
-                {/* Subtle grid lines in background for depth */}
-                {[60, 120, 180].map((y) => (
-                  <line
-                    key={y}
-                    x1="0"
-                    y1={y}
-                    x2="320"
-                    y2={y}
-                    stroke="rgba(110,231,183,0.06)"
-                    strokeWidth="1"
-                  />
-                ))}
-                {[80, 160, 240].map((x) => (
-                  <line
-                    key={x}
-                    x1={x}
-                    y1="0"
-                    x2={x}
-                    y2="240"
-                    stroke="rgba(110,231,183,0.06)"
-                    strokeWidth="1"
-                  />
-                ))}
-              </svg>
-            </div>
+            <Image
+              src="/images/product/hw/latency/touch-latency.png"
+              alt="클래스인 보드 터치 딜레이 시각화"
+              fill
+              sizes="(max-width: 768px) 100vw, 50vw"
+              className="object-cover"
+            />
 
             {/* Bottom label */}
+            <div className="absolute inset-x-0 bottom-0 h-28 bg-gradient-to-t from-[#0D1A12] via-[#0D1A12]/70 to-transparent" />
             <div className="absolute bottom-5 left-0 right-0 flex justify-center">
               <span className="text-[#6EE7B7]/60 text-xs tracking-widest uppercase font-medium">
                 실시간 필기 응답
@@ -193,9 +91,9 @@ export default function LatencyProof() {
             className="text-4xl md:text-5xl lg:text-[3.4rem] text-[#111110] mt-4 leading-tight"
             style={{ letterSpacing: "-1.5px" }}
           >
-            쓰는 순간 그려지는 압도적인
+            판서는 언제나
             <br />
-            반응 속도 0.03초
+            생생하게 전달되어야 하기에
           </motion.h2>
 
           {/* Body */}
@@ -206,7 +104,8 @@ export default function LatencyProof() {
             transition={{ duration: 0.6, ease: easing, delay: 0.24 }}
             className="text-lg text-[#615D59] mt-5 leading-relaxed"
           >
-            따라오는 느낌이 아니라, 함께 움직이는 감각. 미세한 딜레이조차 느껴지지 않아 선생님의 판서 속도를 그대로 담아냅니다.
+            미세한 터치 입력까지 놓치지 않고 즉시 화면에 반영해, 선생님의
+            판서 리듬과 수업의 흐름을 끊김 없이 이어갑니다.
           </motion.p>
 
           <motion.div

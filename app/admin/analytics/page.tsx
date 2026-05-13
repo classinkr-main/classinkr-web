@@ -265,6 +265,7 @@ const SOURCE_LABEL: Record<string, string> = {
   demo_modal: "데모 신청",
   contact_page: "문의",
   newsletter: "뉴스레터",
+  meta_lead_ads: "Meta 리드",
   manual: "수동 등록",
 }
 
@@ -573,11 +574,11 @@ export default function AnalyticsPage() {
     { key: "sources", label: "소스" },
     { key: "content", label: "콘텐츠" },
     { key: "campaigns", label: "이메일 캠페인" },
-    { key: "events", label: "행사 funnel" },
+    { key: "events", label: "행사 퍼널" },
     { key: "tracking", label: "추적 현황" },
   ]
 
-  // ─── 행사 funnel 데이터 (events tab) ────────────────────────────────────────
+  // ─── 행사 퍼널 데이터 (events tab) ────────────────────────────────────────
   const eventTabNowMs = today.getTime()
   const eventFunnelRows = publicEvents.map((event) => {
     const metrics = eventMetricsMap[event.id] ?? {
@@ -1278,7 +1279,7 @@ export default function AnalyticsPage() {
           </div>
 
           <Panel
-            title="행사별 깔때기 비교"
+            title="행사별 퍼널 비교"
             description="리드 → 신청 → 참석 → 딜의 단계별 절대 수치를 행사별로 비교합니다."
             action={
               <a
@@ -1293,7 +1294,7 @@ export default function AnalyticsPage() {
             {eventCompareData.length === 0 ? (
               <EmptyState
                 title="아직 등록된 행사가 없습니다."
-                description="행사 캠페인 대시보드에서 행사를 만들고 깔때기 메트릭을 입력하면 비교 차트가 채워집니다."
+                description="행사 캠페인 대시보드에서 행사를 만들고 퍼널 메트릭을 입력하면 비교 차트가 채워집니다."
                 action={
                   <a
                     href="/admin/events"

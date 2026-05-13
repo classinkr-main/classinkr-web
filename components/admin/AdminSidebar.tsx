@@ -81,6 +81,7 @@ const NAV_WARMUP_REQUESTS: Record<string, string[]> = {
     "/api/admin/subscribers",
     "/api/admin/events",
     "/api/admin/event-metrics",
+    "/api/admin/meta/campaigns?datePreset=last_30d&limit=50",
   ],
   "/admin/blog": ["/api/admin/blog", "/api/admin/blog?trash=1"],
   "/admin/events": ["/api/admin/events"],

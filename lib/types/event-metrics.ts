@@ -14,7 +14,7 @@ export interface EventMetrics {
   // 목표
   targetLeads: number | null
   targetRevenue: number | null
-  // 깔때기 단계 (수동 입력)
+  // 퍼널 단계 (수동 입력)
   impressionsCount: number | null
   applicationsCount: number | null    // 신청자
   qualifiedLeadsCount: number | null  // 유효 리드

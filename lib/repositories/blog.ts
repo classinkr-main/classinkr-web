@@ -8,6 +8,7 @@
 import "server-only";
 
 import { createSupabaseServerClient } from "@/lib/supabase/server";
+import { hasSupabaseBrowserEnv } from "@/lib/supabase/public-env";
 import type { BlogPost as SupaBlogPost, BlogPostInsert, BlogPostUpdate } from "@/lib/supabase/database.types";
 import { sanitizePublicUrl } from "@/lib/safe-public-url";
 
@@ -17,7 +18,12 @@ export { CATEGORIES, BLOG_STATUS_OPTIONS, DEFAULT_BLOG_CTA } from "@/lib/blog-ty
 
 import type { BlogPost, BlogPostInput } from "@/lib/blog-types";
 
-const USE_SUPABASE = process.env.USE_SUPABASE_BLOG === "true";
+const BLOG_DATA_SOURCE = process.env.USE_SUPABASE_BLOG?.trim().toLowerCase();
+const USE_SUPABASE =
+  BLOG_DATA_SOURCE === "true" ||
+  (BLOG_DATA_SOURCE !== "false" &&
+    process.env.NODE_ENV === "production" &&
+    hasSupabaseBrowserEnv());
 const BLOG_SLUG_CONFLICT_MESSAGE = "이미 사용 중인 블로그 URL 슬러그입니다.";
 
 /* ─── Supabase Row ↔ 기존 BlogPost 변환 ─── */
@@ -133,7 +139,7 @@ export async function getPublishedPosts(): Promise<BlogPost[]> {
     return mod.getPublishedPosts();
   }
 
-  const supabase = await createSupabaseServerClient();
+  const supabase = await createSupabaseBlogReadClient();
   const { data, error } = await supabase
     .from("blog_posts")
     .select(LIST_COLUMNS)
@@ -168,7 +174,7 @@ export async function getPublishedPostBySlug(slug: string): Promise<BlogPost | n
     return (await mod.getPublishedPostBySlug(slug)) ?? null;
   }
 
-  const supabase = await createSupabaseServerClient();
+  const supabase = await createSupabaseBlogReadClient();
   const { data, error } = await supabase
     .from("blog_posts")
     .select("*")
@@ -498,4 +504,9 @@ async function findUuidByLegacyId(legacyId: number): Promise<string | null> {
   const posts = await getAllPosts();
   const found = posts.find((p) => p.id === legacyId);
   return (found as BlogPost & { _uuid?: string })?._uuid ?? null;
+}
+
+async function createSupabaseBlogReadClient() {
+  const { createSupabaseAdminClient } = await import("@/lib/supabase/admin");
+  return createSupabaseAdminClient();
 }

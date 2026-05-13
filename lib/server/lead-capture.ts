@@ -12,6 +12,7 @@ const VALID_SOURCES = new Set<LeadSource>([
   "demo_modal",
   "contact_page",
   "newsletter",
+  "meta_lead_ads",
 ])
 
 const EMAIL_REGEX = /^[^\s@]+@[^\s@]+\.[^\s@]+$/
@@ -334,7 +335,11 @@ async function syncToSubscriberDB(data: LeadPayload) {
       role: data.role,
       size: data.size,
       phone: data.phone,
-      tags: data.source === "demo_modal" ? ["demo_request"] : [],
+      tags: data.source === "demo_modal"
+        ? ["demo_request"]
+        : data.source === "meta_lead_ads"
+          ? ["meta_lead_ads"]
+          : [],
       source: data.source,
     })
   } catch (error) {

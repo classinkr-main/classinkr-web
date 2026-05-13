@@ -38,7 +38,7 @@ function segmentSummary(rule: AutomationRule): string {
   const tableMap: Record<string, string> = { both: "리드+구독자", leads: "리드", subscribers: "구독자" }
   parts.push(tableMap[seg.targetTable ?? "both"])
   if (seg.sources?.length) {
-    const srcMap: Record<string, string> = { demo_modal: "데모신청", contact_page: "문의", newsletter: "뉴스레터", manual: "수동" }
+    const srcMap: Record<string, string> = { demo_modal: "데모신청", contact_page: "문의", newsletter: "뉴스레터", meta_lead_ads: "Meta 리드", manual: "수동" }
     parts.push(seg.sources.map((s) => srcMap[s] ?? s).join("/"))
   }
   if (seg.tags?.length) parts.push(seg.tags.slice(0, 2).join(", ") + (seg.tags.length > 2 ? " 외" : ""))
