@@ -206,13 +206,39 @@ export default function AdminEventsPage() {
           <h1 className="text-xl font-bold text-[#111110]">공개 행사 관리</h1>
           <p className="text-[13px] text-[#1a1a1a]/40 mt-0.5">/events 페이지에 표시되는 행사를 등록·수정합니다.</p>
         </div>
-        <button
-          onClick={openCreate}
-          className="inline-flex min-h-10 items-center justify-center gap-2 rounded-lg bg-[#111110] px-4 py-2 text-[13px] font-medium text-white transition-colors hover:bg-emerald-700"
-        >
-          <Plus className="w-4 h-4" />
-          행사 추가
-        </button>
+        <div className="flex flex-col gap-2 sm:flex-row sm:items-center">
+          <button
+            onClick={openCreate}
+            className="inline-flex min-h-10 items-center justify-center rounded-lg border border-[#e8e8e4] bg-white px-4 py-2 text-[13px] font-medium text-[#111110] transition-colors hover:bg-[#F6F5F4]"
+          >
+            빠른 등록
+          </button>
+          <button
+            onClick={() => router.push("/admin/events/new")}
+            className="inline-flex min-h-10 items-center justify-center gap-2 rounded-lg bg-[#111110] px-4 py-2 text-[13px] font-medium text-white transition-colors hover:bg-emerald-700"
+          >
+            <Plus className="w-4 h-4" />
+            새 행사 작성
+          </button>
+        </div>
+      </div>
+
+      <div className="mb-4 rounded-2xl border border-[#e8e8e4] bg-white px-4 py-4">
+        <div className="flex flex-col gap-3 md:flex-row md:items-center md:justify-between">
+          <div>
+            <p className="text-[12px] font-semibold text-[#111110]">행사 에디터</p>
+            <p className="mt-1 text-[12px] leading-relaxed text-[#1a1a1a]/42">
+              블로그 편집 화면처럼 포스터, 본문, 공개 상태, 미리보기를 한 화면에서 작성할 수 있습니다.
+            </p>
+          </div>
+          <button
+            onClick={() => router.push("/admin/events/new")}
+            className="inline-flex min-h-9 items-center justify-center gap-1.5 rounded-lg border border-[#e8e8e4] px-3 py-2 text-[12px] font-medium text-[#111110] transition-colors hover:bg-[#F6F5F4] md:w-auto"
+          >
+            에디터 바로 열기
+            <ArrowRight className="w-3.5 h-3.5" />
+          </button>
+        </div>
       </div>
 
       {error && (
@@ -225,7 +251,7 @@ export default function AdminEventsPage() {
         <div className="py-16 text-center text-[13px] text-[#1a1a1a]/30">불러오는 중...</div>
       ) : events.length === 0 ? (
         <div className="py-16 text-center text-[13px] text-[#1a1a1a]/30">
-          등록된 행사가 없습니다. 행사 추가 버튼을 눌러 시작하세요.
+          등록된 행사가 없습니다. 새 행사 작성 버튼을 눌러 시작하세요.
         </div>
       ) : (
         <div className="overflow-hidden rounded-xl border border-[rgba(0,0,0,0.08)]">
