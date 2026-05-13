@@ -355,7 +355,7 @@ function MetaCampaignPanel({
 
       <div className="grid gap-3 sm:grid-cols-2 lg:grid-cols-4">
         <KpiCard icon={<Wallet className="w-3.5 h-3.5" />} label="Meta 광고비" value={loading && !dashboard ? "..." : money(summary?.spend, currency)} hint={`${datePreset} 기준`} />
-        <KpiCard icon={<Target className="w-3.5 h-3.5" />} label="노출 / 클릭" value={loading && !dashboard ? "..." : `${compact.format(summary?.impressions ?? 0)} / ${compact.format(summary?.clicks ?? 0)}`} hint={`CTR ${summary?.ctr != null ? summary.ctr.toFixed(2) + "%" : "—"}`} />
+        <KpiCard icon={<Target className="w-3.5 h-3.5" />} label="노출 / 전체 클릭" value={loading && !dashboard ? "..." : `${compact.format(summary?.impressions ?? 0)} / ${compact.format(summary?.clicks ?? 0)}`} hint={`CTR ${summary?.ctr != null ? summary.ctr.toFixed(2) + "%" : "—"}`} />
         <KpiCard icon={<Users className="w-3.5 h-3.5" />} label="리드" value={loading && !dashboard ? "..." : KRW.format(summary?.leads ?? 0)} hint={`CPC ${summary?.cpc != null ? money(summary.cpc, currency) : "—"}`} tone="success" />
         <KpiCard icon={<Activity className="w-3.5 h-3.5" />} label="캠페인 상태" value={loading && !dashboard ? "..." : `${summary?.activeCount ?? 0} 활성`} hint={`일시중지 ${summary?.pausedCount ?? 0} · 전체 ${summary?.campaignCount ?? 0}`} />
       </div>
@@ -390,7 +390,7 @@ function MetaCampaignPanel({
                   <th className="px-4 py-3 font-semibold">상태</th>
                   <th className="px-4 py-3 text-right font-semibold">광고비</th>
                   <th className="px-4 py-3 text-right font-semibold">노출</th>
-                  <th className="px-4 py-3 text-right font-semibold">클릭</th>
+                  <th className="px-4 py-3 text-right font-semibold">전체 클릭</th>
                   <th className="px-4 py-3 text-right font-semibold">리드</th>
                   <th className="px-4 py-3 text-right font-semibold">관리</th>
                 </tr>
@@ -525,7 +525,7 @@ function MetaLiveSummary({
             </p>
           </div>
           <div>
-            <p className="text-[10px] font-medium uppercase tracking-[0.18em] text-[#1a1a1a]/35">노출 / 클릭</p>
+            <p className="text-[10px] font-medium uppercase tracking-[0.18em] text-[#1a1a1a]/35">노출 / 전체 클릭</p>
             <p className="mt-1 text-[20px] font-bold leading-none tracking-[-0.02em] text-[#111110]">
               {compact.format(summary?.impressions ?? 0)} / {compact.format(summary?.clicks ?? 0)}
             </p>
@@ -849,7 +849,7 @@ function EventFunnelCard({
         </div>
       )}
 
-      {/* funnel */}
+      {/* 퍼널 */}
       <div className="grid grid-cols-2 gap-1.5 sm:grid-cols-3 lg:grid-cols-6">
         <FunnelStage label="노출" value={funnel.impressions} />
         <FunnelStage label="리드" value={funnel.leads} prevValue={funnel.impressions || null} tone="primary" />

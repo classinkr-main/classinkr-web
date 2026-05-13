@@ -249,11 +249,20 @@ async function metaPost<T>(path: string, params: Record<string, string | number 
 }
 
 function extractLeads(actions: MetaInsightAction[] | undefined) {
-  return (actions ?? []).reduce((total, action) => {
-    const type = action.action_type?.toLowerCase() ?? ""
-    if (!type.includes("lead")) return total
-    return total + toNumber(action.value)
-  }, 0)
+  const normalized = (actions ?? []).map((action) => ({
+    type: action.action_type?.toLowerCase() ?? "",
+    value: toNumber(action.value),
+  }))
+
+  const primaryLead = normalized.find((action) => action.type === "lead")
+  if (primaryLead) return primaryLead.value
+
+  const groupedLead = normalized.find((action) => action.type === "onsite_conversion.lead_grouped")
+  if (groupedLead) return groupedLead.value
+
+  return normalized
+    .filter((action) => action.type.includes("lead"))
+    .reduce((max, action) => Math.max(max, action.value), 0)
 }
 
 function summarize(campaigns: MetaCampaignRow[]) {
