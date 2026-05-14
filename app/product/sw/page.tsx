@@ -542,7 +542,7 @@ function CinematicCasesSection() {
             <div className="container mx-auto px-4 lg:px-8 max-w-6xl">
                 <motion.div className="mb-16" initial={{ opacity: 0, y: 30 }} whileInView={{ opacity: 1, y: 0 }} viewport={{ once: true }}>
                     <p className="text-sm font-semibold text-[#6EE7B7]/60 tracking-wider uppercase mb-3">Customer Stories</p>
-                    <h2 className="text-3xl md:text-5xl font-serif text-white leading-tight">
+                    <h2 className="text-3xl md:text-5xl font-sans text-white leading-tight">
                         그들은 이미<br /><span className="text-[#6EE7B7]">바꿨습니다</span>
                     </h2>
                 </motion.div>
@@ -571,8 +571,8 @@ function CinematicCasesSection() {
 
                             {/* Center: quote */}
                             <div className="bg-white/[0.02] p-8 lg:p-10 flex flex-col justify-center border-x border-white/[0.07]">
-                                <div className="text-[#6EE7B7]/30 text-4xl font-serif mb-4 leading-none">&ldquo;</div>
-                                <blockquote className="text-lg font-serif text-white/80 leading-relaxed mb-5">{c.quote}</blockquote>
+                                <div className="text-[#6EE7B7]/30 text-4xl font-sans mb-4 leading-none">&ldquo;</div>
+                                <blockquote className="text-lg font-sans text-white/80 leading-relaxed mb-5">{c.quote}</blockquote>
                                 <cite className="text-sm text-white/30 not-italic">— {c.person}</cite>
                             </div>
 
@@ -625,7 +625,7 @@ function TypographyHookSection() {
                             whileInView={{ opacity: 1, y: 0 }}
                             viewport={{ once: true }}
                             transition={{ delay: i * 0.18, duration: 0.7, ease: [0.22, 1, 0.36, 1] }}
-                            className={`text-[clamp(2rem,5vw,4rem)] font-serif leading-[1.15] tracking-tight ${
+                            className={`text-[clamp(2rem,5vw,4rem)] font-sans leading-[1.15] tracking-tight ${
                                 line.accent ? "text-[#22A366]" : "text-[#1a1a19]"
                             }`}
                         >
@@ -650,10 +650,10 @@ function TypographyHookSection() {
                     transition={{ delay: 0.8, duration: 0.6 }}
                     className="max-w-lg"
                 >
-                    <p className="text-xl md:text-2xl font-serif text-slate-600 leading-relaxed mb-2">
+                    <p className="text-xl md:text-2xl font-sans text-slate-600 leading-relaxed mb-2">
                         교사가 <span className="font-bold text-slate-900">잘 가르칠 수 있을 때</span>,
                     </p>
-                    <p className="text-xl md:text-2xl font-serif text-slate-600 leading-relaxed">
+                    <p className="text-xl md:text-2xl font-sans text-slate-600 leading-relaxed">
                         학생은 <span className="font-bold text-[#22A366]">더 깊이 배웁니다.</span>
                     </p>
                 </motion.div>
@@ -734,11 +734,11 @@ function FutureVision2Section() {
                     transition={{ duration: 0.8 }}
                 >
                     <EyebrowTag>The Real Goal</EyebrowTag>
-                    <h2 className="text-[clamp(2rem,5vw,4.5rem)] font-serif text-[#1a1a19] leading-[1.1] tracking-tight mb-6">
+                    <h2 className="text-[clamp(2rem,5vw,4.5rem)] font-sans text-[#1a1a19] leading-[1.1] tracking-tight mb-6">
                         아이들과의<br />
                         <span className="text-[#22A366]">진정한 교육</span>
                     </h2>
-                    <p className="text-xl md:text-2xl text-slate-500 font-serif max-w-2xl mx-auto leading-relaxed">
+                    <p className="text-xl md:text-2xl text-slate-500 font-sans max-w-2xl mx-auto leading-relaxed">
                         더 많이 가르치면서 더 적게 소진되는 것.
                         <br className="hidden md:block" />
                         그것이 ClassIn이 교사에게 드리는 약속입니다.
@@ -795,7 +795,7 @@ function FutureVision2Section() {
                         ))}
                     </div>
 
-                    <p className="text-xl md:text-2xl font-serif text-slate-600 leading-relaxed">
+                    <p className="text-xl md:text-2xl font-sans text-slate-600 leading-relaxed">
                         ClassIn은 도구가 아닙니다.<br />
                         <span className="text-[#1a1a19] font-bold">교육이 다시 교육다워지는 환경</span>입니다.
                     </p>
@@ -839,7 +839,7 @@ function LearningCycleSection() {
             <div className="container mx-auto px-4 lg:px-8 max-w-6xl">
                 <motion.div className="text-center mb-14" {...fadeUp}>
                     <EyebrowTag>LEARNING CYCLE</EyebrowTag>
-                    <h2 className="text-3xl md:text-4xl lg:text-5xl font-serif text-[#1a1a19] leading-tight">
+                    <h2 className="text-3xl md:text-4xl lg:text-5xl font-sans text-[#1a1a19] leading-tight">
                         수업의 처음부터 끝까지,<br /><span className="text-[#22A366]">하나로 연결</span>
                     </h2>
                     <p className="text-lg text-slate-400 mt-4 max-w-xl mx-auto">
@@ -904,7 +904,7 @@ function HardwareTeaserSection() {
                         <span className="inline-flex items-center gap-2 bg-[#6EE7B7]/10 text-[#6EE7B7] text-xs font-bold px-3 py-1.5 rounded-full mb-6">
                             ClassIn X · 하드웨어
                         </span>
-                        <h2 className="text-3xl md:text-4xl lg:text-5xl font-serif text-white leading-tight mb-5">
+                        <h2 className="text-3xl md:text-4xl lg:text-5xl font-sans text-white leading-tight mb-5">
                             소프트웨어만으로<br />부족하다면
                         </h2>
                         <p className="text-lg text-white/50 leading-relaxed mb-8">
@@ -974,7 +974,7 @@ function AIFeaturesSection() {
                     <span className="inline-flex items-center gap-1.5 bg-[#084734] text-[#6EE7B7] text-xs font-bold px-3 py-1.5 rounded-full mb-5">
                         ✦ AI-Powered
                     </span>
-                    <h2 className="text-3xl md:text-4xl lg:text-5xl font-serif text-[#1a1a19] leading-tight mb-4">
+                    <h2 className="text-3xl md:text-4xl lg:text-5xl font-sans text-[#1a1a19] leading-tight mb-4">
                         AI가 교사의 시간을<br /><span className="text-[#084734]">돌려드립니다</span>
                     </h2>
                     <p className="text-lg text-slate-500 max-w-xl mx-auto">
@@ -1062,7 +1062,7 @@ function FAQSection() {
             <div className="container mx-auto px-6 md:px-10 lg:px-16 max-w-5xl">
                 <motion.div className="text-center mb-14" {...fadeUp}>
                     <EyebrowTag>FAQ</EyebrowTag>
-                    <h2 className="text-3xl md:text-4xl font-serif text-[#1a1a19] leading-tight">
+                    <h2 className="text-3xl md:text-4xl font-sans text-[#1a1a19] leading-tight">
                         자주 묻는 질문
                     </h2>
                 </motion.div>
@@ -1121,7 +1121,7 @@ function ImpactTextSection() {
                     className="space-y-6"
                 >
                     <p className="text-sm font-semibold text-slate-400 tracking-widest uppercase">Before ClassIn</p>
-                    <div className="space-y-4 text-2xl sm:text-3xl md:text-4xl font-serif text-slate-700 leading-snug">
+                    <div className="space-y-4 text-2xl sm:text-3xl md:text-4xl font-sans text-slate-700 leading-snug">
                         <p>화면을 켜놓고 딴짓하는 학생.</p>
                         <p>녹화 파일을 공유하느라 허비하는 10분.</p>
                         <p className="text-slate-400">숙제는 카톡으로, 출결은 엑셀로,</p>
@@ -1132,7 +1132,7 @@ function ImpactTextSection() {
                         whileInView={{ opacity: 1 }}
                         viewport={{ once: true }}
                         transition={{ delay: 0.4, duration: 0.7 }}
-                        className="text-xl sm:text-2xl md:text-3xl font-serif text-slate-900 pt-4 border-t border-slate-100"
+                        className="text-xl sm:text-2xl md:text-3xl font-sans text-slate-900 pt-4 border-t border-slate-100"
                     >
                         수업은 했는데,{" "}
                         <span className="text-[#22A366] font-bold">교육은 안 된 하루.</span>
@@ -1174,8 +1174,8 @@ function FullscreenQuoteSection() {
                     viewport={{ once: true }}
                     transition={{ duration: 0.9 }}
                 >
-                    <div className="text-[#6EE7B7]/60 text-5xl font-serif mb-8 leading-none select-none">&ldquo;</div>
-                    <blockquote className="text-2xl sm:text-3xl md:text-4xl font-serif text-white leading-[1.4] tracking-tight mb-10">
+                    <div className="text-[#6EE7B7]/60 text-5xl font-sans mb-8 leading-none select-none">&ldquo;</div>
+                    <blockquote className="text-2xl sm:text-3xl md:text-4xl font-sans text-white leading-[1.4] tracking-tight mb-10">
                         하이브리드 수업은 팬데믹의 임시방편이 아닙니다.
                         <br className="hidden md:block" />
                         <span className="text-[#6EE7B7]">교육의 새로운 표준</span>이 될 것입니다.
@@ -1262,7 +1262,7 @@ function CaseStudiesSection() {
             <div className="container mx-auto px-4 lg:px-8 max-w-6xl">
                 <motion.div className="text-center mb-16" {...fadeUp}>
                     <EyebrowTag>CASE STUDY</EyebrowTag>
-                    <h2 className="text-3xl md:text-4xl lg:text-5xl font-serif text-[#1a1a19] leading-tight">
+                    <h2 className="text-3xl md:text-4xl lg:text-5xl font-sans text-[#1a1a19] leading-tight">
                         실제 교육 현장의 <span className="text-[#22A366]">변화</span>
                     </h2>
                     <p className="text-lg text-slate-400 mt-4 max-w-xl mx-auto">도입 후 실제로 달라진 것들을 현장의 언어로 전달합니다.</p>
@@ -1318,7 +1318,7 @@ function PricingValueSection() {
             <div className="container mx-auto px-4 lg:px-8 max-w-5xl">
                 <motion.div className="text-center mb-14" {...fadeUp}>
                     <EyebrowTag>PRICING VALUE</EyebrowTag>
-                    <h2 className="text-3xl md:text-4xl lg:text-5xl font-serif text-[#1a1a19] leading-tight mb-4">
+                    <h2 className="text-3xl md:text-4xl lg:text-5xl font-sans text-[#1a1a19] leading-tight mb-4">
                         이 가격에,{" "}
                         <span className="text-[#22A366]">이 모든 것을</span>
                     </h2>
@@ -1395,7 +1395,7 @@ function PricingValueSection() {
                         {/* Heading */}
                         <div className="text-center lg:text-left lg:shrink-0">
                             <p className="text-slate-300 text-sm font-bold uppercase tracking-[0.18em] mb-1.5">ClassIn 하나로</p>
-                            <p className="font-serif font-bold text-white leading-tight">
+                            <p className="font-sans font-bold text-white leading-tight">
                                 <span className="text-2xl md:text-3xl">이 모든 기능</span>
                                 <span className="text-sm md:text-base font-medium text-slate-300 ml-2 align-middle">+ AI 기능까지</span>
                             </p>
@@ -1561,7 +1561,7 @@ export default function ProductPage() {
                 <div className="container mx-auto px-4 lg:px-8">
                     <motion.div className="text-center mb-16" {...fadeUp}>
                         <EyebrowTag>WHY CLASSIN</EyebrowTag>
-                        <h2 className="text-3xl md:text-4xl lg:text-5xl font-serif text-[#1a1a19] leading-tight">
+                        <h2 className="text-3xl md:text-4xl lg:text-5xl font-sans text-[#1a1a19] leading-tight">
                             회의용 도구로 수업하던 시대는
                             <br className="hidden sm:block" />
                             <span className="text-[#22A366]">끝났습니다</span>
@@ -1641,7 +1641,7 @@ export default function ProductPage() {
                                 <div className="inline-flex items-center gap-2 px-3 py-1 rounded-full bg-[#22A366]/5 text-[#22A366] text-sm font-bold mb-6">
                                     <PenTool className="w-4 h-4" />양방향 블랙보드
                                 </div>
-                                <h2 className="text-3xl md:text-5xl font-serif text-[#1a1a19] mb-6 leading-tight">
+                                <h2 className="text-3xl md:text-5xl font-sans text-[#1a1a19] mb-6 leading-tight">
                                     교사만 쓰는 칠판은<br /><span className="text-[#22A366]">칠판이 아닙니다</span>
                                 </h2>
                                 <p className="text-lg text-slate-500 leading-relaxed font-medium mb-10">교사의 판서를 보기만 하던 시대는 끝났습니다. 학생에게 권한을 주어 직접 문제를 풀고, 그림을 그리고, 아이디어를 표현하게 하세요.</p>
@@ -1701,7 +1701,7 @@ export default function ProductPage() {
                         <div className="inline-flex items-center gap-2 px-3 py-1.5 rounded-full text-xs font-bold mb-6 bg-[#ECFDF5] border border-[rgba(34,163,102,0.2)] text-[#22A366] tracking-wide">
                             <Dice1 className="w-4 h-4" />수업 도구 · 수업 활동
                         </div>
-                        <h2 className="text-3xl md:text-5xl font-serif text-[#1a1a19] mb-4 leading-tight">
+                        <h2 className="text-3xl md:text-5xl font-sans text-[#1a1a19] mb-4 leading-tight">
                             수업이 지루할 틈이 <span className="text-[#22A366]">없습니다</span>
                         </h2>
                         <p className="text-lg text-slate-500 max-w-2xl mx-auto">타이머, 미러링, 스톱워치, 개인칠판 등 30여 가지 수업 도구를 수업 화면 안에서 바로 꺼내 씁니다.</p>
@@ -1790,7 +1790,7 @@ export default function ProductPage() {
                 <div className="container mx-auto px-4 lg:px-8">
                     <motion.div className="text-center mb-16" {...fadeUp}>
                         <EyebrowTag>FLEXIBLE FORMAT</EyebrowTag>
-                        <h2 className="text-3xl md:text-4xl lg:text-5xl font-serif text-[#1a1a19] leading-tight">
+                        <h2 className="text-3xl md:text-4xl lg:text-5xl font-sans text-[#1a1a19] leading-tight">
                             1:1 과외부터 수백 명 강의까지,<br /><span className="text-[#22A366]">하나의 플랫폼</span>
                         </h2>
                     </motion.div>
@@ -1862,7 +1862,7 @@ export default function ProductPage() {
                 <div className="container mx-auto px-4 lg:px-8 relative" ref={networkRef}>
                     <motion.div className="text-center mb-16" {...fadeUp}>
                         <EyebrowTag>GLOBAL NETWORK</EyebrowTag>
-                        <h2 className="text-3xl md:text-4xl lg:text-5xl font-serif leading-tight">전 세계 어디서든,<br /><span className="text-[#22A366]">끊김 없이</span></h2>
+                        <h2 className="text-3xl md:text-4xl lg:text-5xl font-sans leading-tight">전 세계 어디서든,<br /><span className="text-[#22A366]">끊김 없이</span></h2>
                         <p className="text-lg text-slate-400 mt-6 max-w-2xl mx-auto">자체 네트워크 기술로 낮은 지연 시간과 고화질 수업을 보장합니다.</p>
                     </motion.div>
 
@@ -1894,7 +1894,7 @@ export default function ProductPage() {
                         <div className="flex-1 max-w-xl">
                             <motion.div {...fadeUp}>
                                 <div className="inline-flex items-center gap-2 px-3 py-1 rounded-full bg-[#084734]/5 text-[#084734] text-sm font-bold mb-6"><BarChart3 className="w-4 h-4" />데이터 & LMS</div>
-                                <h2 className="text-3xl md:text-5xl font-serif text-[#1a1a19] mb-6 leading-tight">수업이 끝나도<br /><span className="text-[#084734]">학습은 계속됩니다</span></h2>
+                                <h2 className="text-3xl md:text-5xl font-sans text-[#1a1a19] mb-6 leading-tight">수업이 끝나도<br /><span className="text-[#084734]">학습은 계속됩니다</span></h2>
                                 <p className="text-lg text-slate-500 leading-relaxed font-medium mb-10">자동 녹화, 학습 데이터 분석, 숙제·출결·평가까지. 수업 전후의 모든 학사 행정을 하나의 플랫폼에서.</p>
                             </motion.div>
                             <div className="space-y-5">
@@ -1985,7 +1985,7 @@ export default function ProductPage() {
             <section className="py-24 md:py-32 bg-white relative">
                 <div className="container mx-auto px-4 max-w-6xl">
                     <motion.div className="text-center mb-20" {...fadeUp}>
-                        <h2 className="text-3xl md:text-5xl font-serif text-[#1a1a19] leading-tight">
+                        <h2 className="text-3xl md:text-5xl font-sans text-[#1a1a19] leading-tight">
                             전국의 교육자들이 <span className="text-[#22A366]">인정하는</span> 솔루션
                         </h2>
                     </motion.div>

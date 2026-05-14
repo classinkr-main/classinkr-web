@@ -8,6 +8,7 @@ function CountUp({ target, suffix = "", prefix = "" }: { target: number; suffix?
     const ref = useRef<HTMLSpanElement>(null)
     const isInView = useInView(ref, { once: true })
     const [count, setCount] = useState(0)
+    const formattedCount = new Intl.NumberFormat("ko-KR").format(count)
 
     useEffect(() => {
         if (!isInView) return
@@ -28,7 +29,7 @@ function CountUp({ target, suffix = "", prefix = "" }: { target: number; suffix?
         requestAnimationFrame(step)
     }, [isInView, target])
 
-    return <span ref={ref}>{prefix}{count}{suffix}</span>
+    return <span ref={ref}>{prefix}{formattedCount}{suffix}</span>
 }
 
 const pains = [
@@ -127,9 +128,14 @@ export function ProblemCost() {
                                     {/* Cost footer with counter */}
                                     <div className="w-full pt-6 border-t border-white/[0.08] mt-auto">
                                         <p className="text-[11px] font-bold text-[#F6D5C5]/50 uppercase tracking-[0.25em] mb-2">예상 손실</p>
-                                        <p className="text-2xl font-black text-transparent bg-clip-text bg-gradient-to-r from-[#B85C33] to-[#F6D5C5]">
-                                            <CountUp target={pain.countTarget} suffix={pain.countSuffix} /> {pain.countLabel}
-                                        </p>
+                                        <div className="space-y-2">
+                                            <p className="text-4xl font-black leading-none text-transparent bg-clip-text bg-gradient-to-r from-[#B85C33] to-[#F6D5C5] sm:text-[2.75rem]">
+                                                <CountUp target={pain.countTarget} suffix={pain.countSuffix} />
+                                            </p>
+                                            <p className="text-base font-extrabold leading-snug text-[#F6D5C5] break-keep">
+                                                {pain.countLabel}
+                                            </p>
+                                        </div>
                                     </div>
                                 </div>
                             </div>
