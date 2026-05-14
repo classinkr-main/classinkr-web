@@ -6,8 +6,6 @@ import { motion, AnimatePresence, useReducedMotion } from "framer-motion"
 import Link from "next/link"
 import { MessageSquare, X } from "lucide-react"
 
-import { isPartnerPortalPath } from "@/lib/partner-portal/pathname"
-
 export function MobileFloatingCTA() {
     const pathname = usePathname()
     const shouldReduceMotion = useReducedMotion()
@@ -31,10 +29,8 @@ export function MobileFloatingCTA() {
         pathname.startsWith("/admin") ||
         pathname.startsWith("/checkout") ||
         pathname.startsWith("/contact") ||
-        pathname.startsWith("/partner") ||
         pathname.startsWith("/pricing") ||
-        pathname.startsWith("/receipt") ||
-        isPartnerPortalPath(pathname)
+        pathname.startsWith("/receipt")
     ) {
         return null
     }

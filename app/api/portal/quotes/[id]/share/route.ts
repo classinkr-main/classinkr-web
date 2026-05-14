@@ -3,14 +3,14 @@ import { NextRequest, NextResponse } from "next/server";
 import {
   requirePortalContext,
   isErrorResponse,
-} from "@/lib/partner-portal/portal-context";
-import { authorizeForAccount } from "@/lib/partner-portal/portal-authorize";
-import { getDeal } from "@/lib/partner-portal/repositories/deals";
+} from "@/lib/portal/portal-context";
+import { authorizeForAccount } from "@/lib/portal/portal-authorize";
+import { getDeal } from "@/lib/portal/repositories/deals";
 import {
   ensureQuoteDocumentShare,
   getQuoteDocument,
   updateQuoteDocument,
-} from "@/lib/partner-portal/repositories/quote-documents";
+} from "@/lib/portal/repositories/quote-documents";
 
 export async function POST(
   req: NextRequest,
@@ -56,7 +56,7 @@ export async function POST(
         : await updateQuoteDocument(id, { status: "shared" });
 
     const origin = req.nextUrl.origin;
-    const shareUrl = `${origin}/partner/quote/${ensured.share.token}`;
+    const shareUrl = `${origin}/share/quote/${ensured.share.token}`;
 
     return NextResponse.json(
       {

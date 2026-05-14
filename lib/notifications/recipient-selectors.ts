@@ -1,5 +1,5 @@
 import type { VerifiedAdminContext } from "@/lib/admin-auth"
-import type { PartnerAccountContext } from "@/lib/partner-portal/context"
+import type { PartnerAccountContext } from "@/lib/portal/context"
 import type { NotificationRecipientTarget } from "@/lib/notifications/types"
 
 function normalizeAdminRole(role: string) {

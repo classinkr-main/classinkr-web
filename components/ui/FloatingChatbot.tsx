@@ -64,8 +64,6 @@ const hiddenPathPrefixes = [
     "/admin",
     "/api",
     "/checkout",
-    "/partner",
-    "/portal",
     "/pricing",
     "/receipt",
 ]

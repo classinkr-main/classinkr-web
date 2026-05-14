@@ -1,4 +1,4 @@
-import { PartnerPortalHome } from "@/components/partner-portal/home/PartnerPortalHome"
+import { PartnerPortalHome } from "@/components/portal/home/PartnerPortalHome"
 
 export default function AdminCrmPartnerPortalPage() {
   return (

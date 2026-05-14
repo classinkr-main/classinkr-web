@@ -5,8 +5,6 @@ import { usePathname } from "next/navigation"
 import type { ReactNode } from "react"
 import { useEffect, useState } from "react"
 
-import { isPartnerPortalPath } from "@/lib/partner-portal/pathname"
-
 const ConditionalHeader = dynamic(() =>
   import("@/components/sections/ConditionalHeader").then((mod) => mod.ConditionalHeader)
 )
@@ -38,8 +36,7 @@ function isInternalPath(pathname: string) {
   return (
     pathname.startsWith("/admin") ||
     pathname.startsWith("/checkout") ||
-    pathname.startsWith("/receipt") ||
-    isPartnerPortalPath(pathname)
+    pathname.startsWith("/receipt")
   )
 }
 

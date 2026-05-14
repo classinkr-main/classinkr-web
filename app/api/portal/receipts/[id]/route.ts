@@ -3,9 +3,9 @@ import { NextRequest, NextResponse } from "next/server";
 import {
   requirePortalContext,
   isErrorResponse,
-} from "@/lib/partner-portal/portal-context";
-import { authorizeForAccount } from "@/lib/partner-portal/portal-authorize";
-import { getReceipt } from "@/lib/partner-portal/repositories/payments";
+} from "@/lib/portal/portal-context";
+import { authorizeForAccount } from "@/lib/portal/portal-authorize";
+import { getReceipt } from "@/lib/portal/repositories/payments";
 
 export async function GET(
   req: NextRequest,

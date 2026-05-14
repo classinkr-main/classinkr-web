@@ -1,7 +1,6 @@
 "use client";
 
 import { usePathname } from "next/navigation";
-import { isPartnerPortalPath } from "@/lib/partner-portal/pathname";
 import { Header } from "./Header";
 
 export function ConditionalHeader() {
@@ -9,8 +8,7 @@ export function ConditionalHeader() {
 
   if (
     pathname.startsWith("/admin") ||
-    pathname.startsWith("/checkout") ||
-    isPartnerPortalPath(pathname)
+    pathname.startsWith("/checkout")
   ) {
     return null;
   }

@@ -3,14 +3,14 @@ import { NextRequest, NextResponse } from "next/server";
 import {
   requirePortalContext,
   isErrorResponse,
-} from "@/lib/partner-portal/portal-context";
-import { authorizeForAccount } from "@/lib/partner-portal/portal-authorize";
+} from "@/lib/portal/portal-context";
+import { authorizeForAccount } from "@/lib/portal/portal-authorize";
 import {
   getDeal,
   createDealLineItem,
   updateDealLineItemForDeal,
   deleteDealLineItemForDeal,
-} from "@/lib/partner-portal/repositories/deals";
+} from "@/lib/portal/repositories/deals";
 import type { UpdateDealLineItem } from "@/lib/supabase/database.types.v2";
 
 function hasOwn(input: Record<string, unknown>, key: string) {

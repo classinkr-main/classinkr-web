@@ -151,13 +151,6 @@ export default function AdminSidebar({ role, name, email }: Props) {
   const [isDesktop, setIsDesktop] = useState(false)
   const [mobileMenuOpen, setMobileMenuOpen] = useState(false)
 
-  // PARTNER 역할은 별도 포털로 이동
-  useEffect(() => {
-    if (role.toUpperCase() === "PARTNER") {
-      router.replace("/partner/workspace")
-    }
-  }, [pathname, role, router])
-
   useEffect(() => {
     const media = window.matchMedia("(min-width: 1024px)")
     const update = () => setIsDesktop(media.matches)
