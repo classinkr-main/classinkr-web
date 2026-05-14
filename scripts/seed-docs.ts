@@ -108,28 +108,25 @@ function docHaystack(doc: DocArticle) {
 function inferProductArea(doc: DocArticle): ProductArea {
   const haystack = docHaystack(doc)
 
-  if (haystack.includes("하드웨어") || haystack.includes("board")) return "hardware"
-  if (haystack.includes("결제") || haystack.includes("영수증") || haystack.includes("세금")) {
+  if (doc.category === "board" || haystack.includes("하드웨어") || haystack.includes("전자칠판")) return "hardware"
+  if (haystack.includes("결제") || haystack.includes("영수증") || haystack.includes("세금") || haystack.includes("요금")) {
     return "billing"
   }
-  if (doc.category === "quick-start" || haystack.includes("온보딩")) return "onboarding"
-  if (doc.category === "troubleshooting" || haystack.includes("수업")) return "classroom"
+  if (doc.category === "start" || haystack.includes("온보딩")) return "onboarding"
+  if (doc.category === "admin") return "admin"
+  if (doc.category === "teacher" || doc.category === "student" || haystack.includes("수업")) return "classroom"
 
   return "general"
 }
 
 function inferDocType(doc: DocArticle): DocType {
-  if (doc.category === "manual") return "manual"
-  if (doc.category === "help") return "faq"
-  if (doc.category === "troubleshooting") return "troubleshooting"
-  if (doc.category === "updates") return "release_note"
-
-  return "guide"
+  if (doc.category === "board") return "reference"
+  if (doc.category === "start") return "guide"
+  return "manual"
 }
 
-function inferSymptoms(doc: DocArticle) {
-  if (doc.category !== "troubleshooting") return []
-  return unique([...doc.keywords, ...doc.tags])
+function inferSymptoms(_doc: DocArticle) {
+  return []
 }
 
 function sectionToMarkdown(section: DocSection) {

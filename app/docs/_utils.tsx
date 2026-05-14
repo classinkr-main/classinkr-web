@@ -1,11 +1,12 @@
 import type { LucideIcon } from "lucide-react"
 import {
-  BookOpen,
-  CircleHelp,
   ClipboardList,
-  FileText,
+  GraduationCap,
   LifeBuoy,
+  MonitorSpeaker,
+  Presentation,
   Rocket,
+  ShieldCheck,
   Sparkles,
   Wrench,
 } from "lucide-react"
@@ -34,21 +35,19 @@ const staticDocsContent: DocsContent = {
 }
 
 const categoryIcons: Record<DocCategoryId, LucideIcon> = {
-  "quick-start": Rocket,
-  guides: BookOpen,
-  manual: FileText,
-  help: CircleHelp,
-  troubleshooting: LifeBuoy,
-  updates: Sparkles,
+  start: Rocket,
+  admin: ShieldCheck,
+  teacher: Presentation,
+  student: GraduationCap,
+  board: MonitorSpeaker,
 }
 
 const categoryEyebrows: Record<DocCategoryId, string> = {
-  "quick-start": "Start Here",
-  guides: "Guides",
-  manual: "Manual",
-  help: "FAQ & CS",
-  troubleshooting: "Troubleshooting",
-  updates: "Updates",
+  start: "Start Here",
+  admin: "Admin",
+  teacher: "Teacher",
+  student: "Student",
+  board: "Smart Board",
 }
 
 function isListedDoc(doc: DocArticle) {
@@ -96,18 +95,16 @@ export function DocsCategoryIcon({
   className?: string
 }) {
   switch (categoryId) {
-    case "quick-start":
+    case "start":
       return <Rocket className={className} aria-hidden />
-    case "guides":
-      return <BookOpen className={className} aria-hidden />
-    case "manual":
-      return <FileText className={className} aria-hidden />
-    case "help":
-      return <CircleHelp className={className} aria-hidden />
-    case "troubleshooting":
-      return <LifeBuoy className={className} aria-hidden />
-    case "updates":
-      return <Sparkles className={className} aria-hidden />
+    case "admin":
+      return <ShieldCheck className={className} aria-hidden />
+    case "teacher":
+      return <Presentation className={className} aria-hidden />
+    case "student":
+      return <GraduationCap className={className} aria-hidden />
+    case "board":
+      return <MonitorSpeaker className={className} aria-hidden />
     default:
       return <ClipboardList className={className} aria-hidden />
   }
@@ -163,10 +160,10 @@ export function toArticleSections(doc: DocArticle): DocsArticleSection[] {
       checked: true,
     })),
     callout:
-      doc.category === "troubleshooting" && index === 0
+      doc.category === "board" && index === 0
         ? {
-            title: "수업 중이라면 먼저 빠른 복구를 우선하세요.",
-            body: "원인 분석은 수업 이후에 진행하고, 학생에게는 재입장 또는 대체 접속 안내를 짧게 전달하는 것이 좋습니다.",
+            title: "전자칠판 설치는 현장 환경에 맞춰 진행하세요.",
+            body: "네트워크와 카메라 위치는 학원마다 다릅니다. 단계별 절차는 참고용으로 보고, 실제 설치 시에는 본사 엔지니어 안내를 우선합니다.",
             tone: "info" as const,
           }
         : undefined,
@@ -211,21 +208,21 @@ export function getDocsCategoryCards(content = staticDocsContent) {
 
 export const docsTrustCards = [
   {
-    title: "처음 보는 분도 바로 따라갈 수 있게",
+    title: "역할별로 바로 찾을 수 있게",
     description:
-      "도입 준비부터 첫 수업, 학생 안내까지 실제 운영 순서대로 읽을 수 있게 정리했습니다.",
+      "관리자·교사·학생 누구든 맡은 역할에 맞춰 필요한 안내를 한곳에서 찾아볼 수 있게 정리했습니다.",
     icon: Wrench,
   },
   {
     title: "수업 중 막히는 순간에도 빠르게",
     description:
-      "접속, 음성, 화면 공유처럼 수업을 바로 막는 문제는 증상별로 빠른 조치 순서부터 확인할 수 있습니다.",
+      "장비 설정, 접속, 자료 활용처럼 자주 만나는 상황은 단계별 절차로 정리해 즉시 따라 할 수 있습니다.",
     icon: LifeBuoy,
   },
   {
-    title: "바뀐 점까지 한 흐름으로",
+    title: "공식 채널 가이드와 한 흐름으로",
     description:
-      "새 기능과 운영 변경 사항은 업데이트 안내로 남겨 원장님과 운영팀이 필요한 조치를 놓치지 않게 돕습니다.",
+      "channel.io의 공식 가이드 내용을 기반으로 정리해 가장 최신 사용 방법을 그대로 확인할 수 있습니다.",
     icon: Sparkles,
   },
 ]

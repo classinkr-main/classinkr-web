@@ -202,11 +202,8 @@ function dedupeSourcesByPath(sources: ChatbotSource[]) {
 }
 
 function getDocCategory(doc: DocArticle) {
-  if (doc.category === "help") return "help"
-  if (doc.category === "troubleshooting") return "troubleshooting"
-  if (doc.category === "quick-start") return "onboarding"
-  if (doc.category === "manual") return "manual"
-  if (doc.category === "updates") return "updates"
+  if (doc.category === "start") return "onboarding"
+  if (doc.category === "board") return "hardware"
   return "guide"
 }
 
