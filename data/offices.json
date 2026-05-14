@@ -1,0 +1,63 @@
+[
+  {
+    "id": "seoul",
+    "city": "서울",
+    "cityEn": "Seoul",
+    "country": "대한민국",
+    "countryCode": "KR",
+    "role": "한국 본사",
+    "description": "한국 학원·교육기관 도입과 운영 지원을 총괄합니다.",
+    "address": "서울특별시 강남구",
+    "highlight": true
+  },
+  {
+    "id": "singapore",
+    "city": "싱가포르",
+    "cityEn": "Singapore",
+    "country": "Singapore",
+    "countryCode": "SG",
+    "role": "글로벌 HQ",
+    "description": "동남아·중동·유럽 시장의 거점.",
+    "address": "Singapore"
+  },
+  {
+    "id": "beijing",
+    "city": "베이징",
+    "cityEn": "Beijing",
+    "country": "China",
+    "countryCode": "CN",
+    "role": "R&D 센터",
+    "description": "EEO 본사. 플랫폼 코어 엔지니어링.",
+    "address": "Beijing, China"
+  },
+  {
+    "id": "tokyo",
+    "city": "도쿄",
+    "cityEn": "Tokyo",
+    "country": "日本",
+    "countryCode": "JP",
+    "role": "일본 법인",
+    "description": "일본 학원·국제학교 파트너십 운영.",
+    "address": "Tokyo, Japan"
+  },
+  {
+    "id": "hcmc",
+    "city": "호치민",
+    "cityEn": "Ho Chi Minh City",
+    "country": "Việt Nam",
+    "countryCode": "VN",
+    "role": "베트남 법인",
+    "description": "동남아 K-12·어학원 시장 거점.",
+    "address": "Ho Chi Minh City, Vietnam"
+  },
+  {
+    "id": "manila",
+    "city": "마닐라",
+    "cityEn": "Manila",
+    "country": "Philippines",
+    "countryCode": "PH",
+    "role": "필리핀 법인",
+    "description": "온라인 영어교육·튜터링 허브.",
+    "address": "Manila, Philippines"
+  }
+]
