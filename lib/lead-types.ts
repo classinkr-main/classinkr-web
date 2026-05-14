@@ -15,4 +15,5 @@ export interface LeadPayload {
   message?: string
   timestamp: string
   marketingConsent?: boolean
+  eventSlug?: string
 }

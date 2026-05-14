@@ -115,7 +115,7 @@ export async function saveLead(
     message: lead.message ?? null,
     branch: lead.branch ?? null,
     status: "new",
-    notes: null,
+    notes: lead.notes ?? null,
     follow_up_at: null,
     assigned_to: null,
     utm_source: null,

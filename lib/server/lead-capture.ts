@@ -7,6 +7,7 @@ import { saveLead } from "@/lib/repositories/leads"
 import { upsertSubscriber } from "@/lib/repositories/marketing"
 import { getResolvedSettings } from "@/lib/repositories/settings"
 import { postJson } from "@/lib/server/post-json"
+import { setEventToken } from "@/lib/types/event-metrics"
 
 const VALID_SOURCES = new Set<LeadSource>([
   "demo_modal",
@@ -98,6 +99,7 @@ export function buildLeadPayload(raw: unknown): LeadPayload {
     message: normalizeString(body.message),
     timestamp: new Date().toISOString(),
     marketingConsent: body.marketingConsent === true,
+    eventSlug: normalizeString(body.eventSlug),
   }
 
   if (
@@ -129,8 +131,9 @@ export function buildLeadPayload(raw: unknown): LeadPayload {
 }
 
 function buildLeadNotificationTitle(body: LeadPayload) {
-  if (body.org) return `새 리드: ${body.org}`
-  return `새 리드: ${body.name ?? body.email ?? body.phone ?? "Unknown"}`
+  const target = body.org ?? body.name ?? body.email ?? body.phone ?? "Unknown"
+  if (body.eventSlug) return `행사 신청: ${target}`
+  return `새 리드: ${target}`
 }
 
 function buildLeadNotificationMessage(body: LeadPayload) {
@@ -152,8 +155,10 @@ export async function submitLeadCapture(raw: unknown): Promise<LeadSubmissionRes
     let savedLeadId: string | undefined
     let storageError: string | undefined
 
+    const notes = body.eventSlug ? setEventToken("", body.eventSlug) : undefined
+
     try {
-      const savedLead = await saveLead({ ...body })
+      const savedLead = await saveLead({ ...body, notes })
       savedLeadId = savedLead.id
       stored = true
     } catch (error) {
