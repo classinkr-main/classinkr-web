@@ -206,12 +206,18 @@ export async function ensureQuoteDocumentShare(input: {
   return { document, version, share };
 }
 
-export async function getPublicQuoteByToken(token: string): Promise<{
-  share: QuoteDocumentShare;
-  document: QuoteDocument;
-  version: QuoteDocumentVersion;
-  customer_name: string | null;
-} | null> {
+export type PublicQuoteLookup =
+  | {
+      status: "ok";
+      share: QuoteDocumentShare;
+      document: QuoteDocument;
+      version: QuoteDocumentVersion;
+      customer_name: string | null;
+    }
+  | { status: "expired"; expires_at: string | null }
+  | { status: "not_found" };
+
+export async function getPublicQuoteByToken(token: string): Promise<PublicQuoteLookup> {
   const supabase = createSupabaseAdminClient();
 
   const { data: shareData, error: shareError } = await supabase
@@ -220,11 +226,11 @@ export async function getPublicQuoteByToken(token: string): Promise<{
     .eq("token", token)
     .maybeSingle();
 
-  if (shareError || !shareData) return null;
+  if (shareError || !shareData) return { status: "not_found" };
 
   const share = shareData as QuoteDocumentShare;
   if (isExpired(share.expires_at)) {
-    return null;
+    return { status: "expired", expires_at: share.expires_at };
   }
 
   const { data: versionData, error: versionError } = await supabase
@@ -233,11 +239,11 @@ export async function getPublicQuoteByToken(token: string): Promise<{
     .eq("id", share.quote_document_version_id)
     .maybeSingle();
 
-  if (versionError || !versionData) return null;
+  if (versionError || !versionData) return { status: "not_found" };
   const version = versionData as QuoteDocumentVersion;
 
   const document = await getQuoteDocument(version.quote_document_id);
-  if (!document) return null;
+  if (!document) return { status: "not_found" };
 
   const { data: dealData } = await supabase
     .from("deals")
@@ -249,6 +255,7 @@ export async function getPublicQuoteByToken(token: string): Promise<{
     (dealData as { customers?: { name?: string | null } | null } | null)?.customers?.name ?? null;
 
   return {
+    status: "ok",
     share,
     document,
     version,

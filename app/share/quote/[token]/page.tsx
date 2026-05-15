@@ -1,6 +1,14 @@
-import { notFound } from "next/navigation"
+import type { Metadata } from "next"
 
+import { ShareUnavailable } from "@/app/share/_components/ShareUnavailable"
 import { getPublicQuoteByToken } from "@/lib/portal/repositories/quote-documents"
+
+export const dynamic = "force-dynamic"
+
+export const metadata: Metadata = {
+  title: "견적서",
+  robots: { index: false, follow: false, nocache: true },
+}
 
 type PageProps = {
   params: Promise<{ token: string }>
@@ -17,10 +25,18 @@ function formatDate(value: string | null): string | null {
 
 export default async function SharedQuotePage({ params }: PageProps) {
   const { token } = await params
+
+  if (!token) {
+    return <ShareUnavailable variant="not_found" documentLabel="견적서" />
+  }
+
   const result = await getPublicQuoteByToken(token)
 
-  if (!result) {
-    notFound()
+  if (result.status === "not_found") {
+    return <ShareUnavailable variant="not_found" documentLabel="견적서" />
+  }
+  if (result.status === "expired") {
+    return <ShareUnavailable variant="expired" documentLabel="견적서" expiresAt={result.expires_at} />
   }
 
   const { document, version, customer_name } = result

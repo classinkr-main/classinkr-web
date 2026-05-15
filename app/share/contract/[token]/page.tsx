@@ -1,6 +1,14 @@
-import { notFound } from "next/navigation"
+import type { Metadata } from "next"
 
+import { ShareUnavailable } from "@/app/share/_components/ShareUnavailable"
 import { getContractByToken } from "@/lib/repositories/contracts"
+
+export const dynamic = "force-dynamic"
+
+export const metadata: Metadata = {
+  title: "계약서",
+  robots: { index: false, follow: false, nocache: true },
+}
 
 type PageProps = {
   params: Promise<{ token: string }>
@@ -15,12 +23,26 @@ function formatDate(value: string | null): string | null {
   return new Date(value).toLocaleDateString("ko-KR", { year: "numeric", month: "long", day: "numeric" })
 }
 
+function isPast(value: string | null): boolean {
+  if (!value) return false
+  return new Date(value).getTime() < Date.now()
+}
+
 export default async function SharedContractPage({ params }: PageProps) {
   const { token } = await params
+
+  if (!token) {
+    return <ShareUnavailable variant="not_found" documentLabel="계약서" />
+  }
+
   const contract = await getContractByToken(token)
 
   if (!contract) {
-    notFound()
+    return <ShareUnavailable variant="not_found" documentLabel="계약서" />
+  }
+
+  if (isPast(contract.valid_until)) {
+    return <ShareUnavailable variant="expired" documentLabel="계약서" expiresAt={contract.valid_until} />
   }
 
   const validUntil = formatDate(contract.valid_until)
