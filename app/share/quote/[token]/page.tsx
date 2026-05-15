@@ -1,19 +1,79 @@
+import { notFound } from "next/navigation"
+
+import { getPublicQuoteByToken } from "@/lib/portal/repositories/quote-documents"
+
 type PageProps = {
   params: Promise<{ token: string }>
 }
 
+function formatKRW(amount: number): string {
+  return `${amount.toLocaleString("ko-KR")}원`
+}
+
+function formatDate(value: string | null): string | null {
+  if (!value) return null
+  return new Date(value).toLocaleDateString("ko-KR", { year: "numeric", month: "long", day: "numeric" })
+}
+
 export default async function SharedQuotePage({ params }: PageProps) {
-  await params
+  const { token } = await params
+  const result = await getPublicQuoteByToken(token)
+
+  if (!result) {
+    notFound()
+  }
+
+  const { document, version, customer_name } = result
+  const validUntil = formatDate(version.valid_until)
+
   return (
-    <main className="flex min-h-screen items-center justify-center bg-[#F6F5F4] px-6">
-      <div className="max-w-md rounded-2xl border border-black/10 bg-white p-8 text-center shadow-sm">
-        <h1 className="text-lg font-medium text-[#1a1a1a]">견적서 준비 중</h1>
-        <p className="mt-3 text-sm leading-relaxed text-[#1a1a1a]/60">
-          공유 링크가 곧 활성화됩니다.
-          <br />
-          담당자에게 문의 바랍니다.
-        </p>
-      </div>
+    <main className="min-h-screen bg-[#F6F5F4] px-4 py-10 sm:px-6 sm:py-16">
+      <article className="mx-auto max-w-3xl overflow-hidden rounded-2xl border border-black/8 bg-white shadow-sm">
+        <header className="border-b border-black/8 px-6 py-6 sm:px-10 sm:py-8">
+          <div className="flex items-center justify-between gap-4">
+            <span className="rounded-full bg-[#ECFDF5] px-3 py-1 text-xs font-medium text-[#084734]">견적서</span>
+            <span className="text-xs text-[#1a1a1a]/45">No. {document.quote_number}</span>
+          </div>
+          <h1 className="mt-4 text-2xl font-semibold leading-snug text-[#1a1a1a] sm:text-3xl">
+            {version.title}
+          </h1>
+          {customer_name ? (
+            <p className="mt-2 text-sm text-[#1a1a1a]/60">{customer_name} 귀하</p>
+          ) : null}
+        </header>
+
+        <section className="grid gap-6 px-6 py-6 sm:grid-cols-2 sm:px-10 sm:py-8">
+          <div>
+            <p className="text-xs uppercase tracking-wider text-[#1a1a1a]/45">총 금액</p>
+            <p className="mt-1 text-2xl font-semibold text-[#1a1a1a]">{formatKRW(version.total_amount)}</p>
+            {(version.discount_amount > 0 || version.tax_amount > 0) && (
+              <p className="mt-1 text-xs text-[#1a1a1a]/50">
+                {version.discount_amount > 0 ? `할인 ${formatKRW(version.discount_amount)} · ` : ""}
+                부가세 {formatKRW(version.tax_amount)}
+              </p>
+            )}
+          </div>
+          {validUntil ? (
+            <div>
+              <p className="text-xs uppercase tracking-wider text-[#1a1a1a]/45">유효 기간</p>
+              <p className="mt-1 text-base text-[#1a1a1a]">{validUntil}</p>
+            </div>
+          ) : null}
+        </section>
+
+        {version.content_html ? (
+          <section className="border-t border-black/8 px-6 py-6 sm:px-10 sm:py-8">
+            <div
+              className="prose prose-sm max-w-none text-[#1a1a1a]/85"
+              dangerouslySetInnerHTML={{ __html: version.content_html }}
+            />
+          </section>
+        ) : null}
+
+        <footer className="border-t border-black/8 bg-[#F6F5F4] px-6 py-5 text-center text-xs text-[#1a1a1a]/50 sm:px-10">
+          이 견적은 담당자가 발급한 안전한 공유 링크입니다. 문의는 담당자에게 직접 회신해 주세요.
+        </footer>
+      </article>
     </main>
   )
 }
