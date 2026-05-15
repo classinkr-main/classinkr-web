@@ -4,7 +4,7 @@ import {
   requirePortalContext,
   isErrorResponse,
 } from "@/lib/portal/portal-context";
-import { loadPartnerOverview } from "@/lib/portal/repositories/partner-read";
+import { loadPortalOverview } from "@/lib/portal/repositories/partner-read";
 import {
   getAdminPartnerPortalOverview,
   getCommercialOverview,
@@ -33,7 +33,7 @@ export async function GET(req: NextRequest) {
     }
 
     // partner: 자기 계정 개요 (V2 → legacy → empty 폴백)
-    const overview = await loadPartnerOverview({
+    const overview = await loadPortalOverview({
       userId: ctx.userId,
       partnerAccountId: ctx.partnerAccountId,
       legacyPartnerId: ctx.legacyPartnerId,

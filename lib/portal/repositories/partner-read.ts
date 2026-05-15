@@ -21,7 +21,7 @@ import type {
   ReceiptRecord,
 } from "@/lib/portal/types";
 
-export type PartnerReadMode = "v2" | "legacy";
+export type PortalReadMode = "v2" | "legacy";
 
 export interface InventorySkuSummary {
   sku: string;
@@ -43,8 +43,8 @@ export interface PartnerOverviewMetrics {
   outstanding_amount: number;
 }
 
-export interface PartnerOverviewPayload {
-  mode: PartnerReadMode;
+export interface PortalOverviewPayload {
+  mode: PortalReadMode;
   metrics: PartnerOverviewMetrics;
   customers: CustomerListItem[];
   deals: DealListItem[];
@@ -240,7 +240,7 @@ async function loadLegacyCustomers(): Promise<CustomerListItem[] | null> {
 
 export async function loadPartnerCustomers(
   context: PartnerAccountContext
-): Promise<{ mode: PartnerReadMode; customers: CustomerListItem[] }> {
+): Promise<{ mode: PortalReadMode; customers: CustomerListItem[] }> {
   if (context.partnerAccountId) {
     const v2Customers = await loadV2Customers(context.partnerAccountId);
     if (v2Customers) return { mode: "v2", customers: v2Customers };
@@ -255,7 +255,7 @@ export async function loadPartnerCustomers(
 export async function loadPartnerCustomerDetail(
   context: PartnerAccountContext,
   customerId: string
-): Promise<{ mode: PartnerReadMode; customer: CustomerDetailPayload | null }> {
+): Promise<{ mode: PortalReadMode; customer: CustomerDetailPayload | null }> {
   if (context.partnerAccountId) {
     try {
       const customer = await getCustomerDetailForPartnerAccount(
@@ -305,7 +305,7 @@ async function loadLegacyDeals(): Promise<DealListItem[] | null> {
 
 export async function loadPartnerDeals(
   context: PartnerAccountContext
-): Promise<{ mode: PartnerReadMode; deals: DealListItem[] }> {
+): Promise<{ mode: PortalReadMode; deals: DealListItem[] }> {
   if (context.partnerAccountId) {
     const v2Deals = await loadV2Deals(context.partnerAccountId);
     if (v2Deals) return { mode: "v2", deals: v2Deals };
@@ -320,7 +320,7 @@ export async function loadPartnerDeals(
 export async function loadPartnerDealDetail(
   context: PartnerAccountContext,
   dealId: string
-): Promise<{ mode: PartnerReadMode; deal: DealDetailPayload | null }> {
+): Promise<{ mode: PortalReadMode; deal: DealDetailPayload | null }> {
   if (context.partnerAccountId) {
     try {
       const deal = await getDealDetailForPartnerAccount(
@@ -391,7 +391,7 @@ async function loadInventorySummary(partnerId: string): Promise<InventorySkuSumm
 }
 
 async function loadDetailsForOverview(
-  mode: PartnerReadMode,
+  mode: PortalReadMode,
   items: CustomerListItem[] | DealListItem[],
   context: PartnerAccountContext
 ): Promise<DealDetailPayload[]> {
@@ -415,9 +415,9 @@ async function loadDetailsForOverview(
   return details.filter(isTruthy);
 }
 
-export async function loadPartnerOverview(
+export async function loadPortalOverview(
   context: PartnerAccountContext
-): Promise<PartnerOverviewPayload> {
+): Promise<PortalOverviewPayload> {
   const { mode: customerMode, customers } = await loadPartnerCustomers(context);
   const { mode: dealMode, deals } = await loadPartnerDeals(context);
   const mode = customerMode === "v2" && dealMode === "v2" ? "v2" : "legacy";
@@ -473,11 +473,11 @@ export async function loadPartnerOverview(
 
 export async function loadPartnerCalendar(
   context: PartnerAccountContext
-): Promise<{ mode: PartnerReadMode; events: CalendarEvent[] }> {
+): Promise<{ mode: PortalReadMode; events: CalendarEvent[] }> {
   const { mode, deals } = await loadPartnerDeals(context);
 
   if (deals.length === 0) {
-    const overview = await loadPartnerOverview(context);
+    const overview = await loadPortalOverview(context);
     return {
       mode: overview.mode,
       events: decorateCalendarEvents(
@@ -517,7 +517,7 @@ export async function loadPartnerCalendar(
     };
   }
 
-  const overview = await loadPartnerOverview(context);
+  const overview = await loadPortalOverview(context);
   return {
     mode: overview.mode,
     events: decorateCalendarEvents(
@@ -530,14 +530,14 @@ export async function loadPartnerCalendar(
 
 export async function loadPartnerPayments(
   context: PartnerAccountContext
-): Promise<{ mode: PartnerReadMode; payments: PaymentRecord[] }> {
-  const overview = await loadPartnerOverview(context);
+): Promise<{ mode: PortalReadMode; payments: PaymentRecord[] }> {
+  const overview = await loadPortalOverview(context);
   return { mode: overview.mode, payments: overview.recent_payments };
 }
 
 export async function loadPartnerDocuments(
   context: PartnerAccountContext
-): Promise<{ mode: PartnerReadMode; summary: PartnerDocumentSummary; documents: PartnerDocumentListItem[] }> {
+): Promise<{ mode: PortalReadMode; summary: PartnerDocumentSummary; documents: PartnerDocumentListItem[] }> {
   const { mode, deals } = await loadPartnerDeals(context);
 
   if (deals.length === 0) {

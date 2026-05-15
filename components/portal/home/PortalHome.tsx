@@ -17,7 +17,7 @@ import { portalFetch } from "@/lib/portal/portal-fetch"
 
 /* ─── Types ──────────────────────────────────────────────────── */
 
-type PartnerReadMode = "v2" | "legacy" | "demo"
+type PortalReadMode = "v2" | "legacy" | "demo"
 
 type OverviewMetrics = {
   customer_count: number
@@ -105,8 +105,8 @@ type InventorySkuSummary = {
   _dummy?: boolean
 }
 
-type PartnerOverviewPayload = {
-  mode: PartnerReadMode
+type PortalOverviewPayload = {
+  mode: PortalReadMode
   metrics: OverviewMetrics
   customers: CustomerItem[]
   deals: DealItem[]
@@ -117,20 +117,20 @@ type PartnerOverviewPayload = {
   inventory_summary: InventorySkuSummary[]
 }
 
-type PartnerOverviewResponse = Partial<PartnerOverviewPayload> & {
+type PortalOverviewResponse = Partial<PortalOverviewPayload> & {
   error?: string
   inventory_summary?: InventorySkuSummary[]
 }
 
-type PartnerPortalLinkTargets = {
+type PortalLinkTargets = {
   calendar: string
   documents: string
   workspace: string
 }
 
-type PartnerPortalHomeProps = {
+type PortalHomeProps = {
   overviewEndpoint?: string
-  linkTargets?: Partial<PartnerPortalLinkTargets>
+  linkTargets?: Partial<PortalLinkTargets>
   allowCreate?: boolean
   adminView?: boolean
   embedded?: boolean
@@ -179,7 +179,7 @@ const PAYMENT_METHOD_LABEL: Record<string, string> = {
   cash:          "현금",
 }
 
-const DEFAULT_LINK_TARGETS: PartnerPortalLinkTargets = {
+const DEFAULT_LINK_TARGETS: PortalLinkTargets = {
   calendar: "/admin/calendar",
   documents: "/admin/quotes",
   workspace: "/admin/crm/partners",
@@ -187,7 +187,7 @@ const DEFAULT_LINK_TARGETS: PartnerPortalLinkTargets = {
 
 /* ─── Demo Data ──────────────────────────────────────────────── */
 
-const DEMO: PartnerOverviewPayload = {
+const DEMO: PortalOverviewPayload = {
   mode: "demo",
   metrics: {
     customer_count: 3,
@@ -252,7 +252,7 @@ const DEMO: PartnerOverviewPayload = {
   ],
 }
 
-const EMPTY_OVERVIEW: PartnerOverviewPayload = {
+const EMPTY_OVERVIEW: PortalOverviewPayload = {
   mode: "v2",
   metrics: {
     customer_count: 0,
@@ -278,9 +278,9 @@ const EMPTY_OVERVIEW: PartnerOverviewPayload = {
 const IS_LOCAL_DEV = process.env.NODE_ENV === "development"
 
 function mergeWithDummy(
-  real: PartnerOverviewPayload,
-  dummy: PartnerOverviewPayload,
-): PartnerOverviewPayload {
+  real: PortalOverviewPayload,
+  dummy: PortalOverviewPayload,
+): PortalOverviewPayload {
   return {
     mode: real.mode,
     metrics: {
@@ -360,14 +360,14 @@ const DUMMY_CARD_CLS = "border-dashed border-stone-300 bg-stone-50/40"
 
 /* ─── Normalize / Type-guard ─────────────────────────────────── */
 
-function isPartnerReadMode(value: unknown): value is PartnerReadMode {
+function isPortalReadMode(value: unknown): value is PortalReadMode {
   return value === "v2" || value === "legacy" || value === "demo"
 }
 
-function normalizeOverviewPayload(payload: PartnerOverviewResponse): PartnerOverviewPayload {
+function normalizeOverviewPayload(payload: PortalOverviewResponse): PortalOverviewPayload {
   const metrics = payload.metrics
   return {
-    mode: isPartnerReadMode(payload.mode) ? payload.mode : DEMO.mode,
+    mode: isPortalReadMode(payload.mode) ? payload.mode : DEMO.mode,
     metrics: {
       customer_count: metrics?.customer_count ?? 0,
       active_deal_count: metrics?.active_deal_count ?? 0,
@@ -666,13 +666,13 @@ function LeftSidebar({
 
 /* ─── Main Component ──────────────────────────────────────────── */
 
-export function PartnerPortalHome(props: PartnerPortalHomeProps = {}) {
+export function PortalHome(props: PortalHomeProps = {}) {
   const overviewEndpoint = props.overviewEndpoint ?? "/api/portal/overview"
   const resolvedLinkTargets = useMemo(
     () => ({ ...DEFAULT_LINK_TARGETS, ...(props.linkTargets ?? {}) }),
     [props.linkTargets],
   )
-  const [realOverview, setRealOverview] = useState<PartnerOverviewPayload>(EMPTY_OVERVIEW)
+  const [realOverview, setRealOverview] = useState<PortalOverviewPayload>(EMPTY_OVERVIEW)
   const [loading, setLoading]   = useState(true)
   const [expandedCustomers, setExpandedCustomers] = useState<Set<string>>(new Set(["c1"]))
   const [isCustomerDialogOpen, setIsCustomerDialogOpen]   = useState(false)
@@ -692,7 +692,7 @@ export function PartnerPortalHome(props: PartnerPortalHomeProps = {}) {
     let alive = true
     portalFetch(overviewEndpoint)
       .then(async r => {
-        const payload = await r.json() as PartnerOverviewResponse
+        const payload = await r.json() as PortalOverviewResponse
         if (!r.ok) throw new Error(payload.error ?? "Failed to fetch overview")
         return normalizeOverviewPayload(payload)
       })

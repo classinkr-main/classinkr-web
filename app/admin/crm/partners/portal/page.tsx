@@ -1,8 +1,8 @@
-import { PartnerPortalHome } from "@/components/portal/home/PartnerPortalHome"
+import { PortalHome } from "@/components/portal/home/PortalHome"
 
 export default function AdminCrmPartnerPortalPage() {
   return (
-    <PartnerPortalHome
+    <PortalHome
       overviewEndpoint="/api/portal/overview?shape=partner"
       allowCreate={false}
       adminView

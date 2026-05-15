@@ -12,7 +12,7 @@ import type {
 } from "@/lib/portal/types";
 import type {
   PartnerOverviewMetrics,
-  PartnerOverviewPayload,
+  PortalOverviewPayload,
 } from "@/lib/portal/repositories/partner-read";
 import type {
   CommercialOverviewRange,
@@ -371,7 +371,7 @@ export async function getCommercialOverview(
   };
 }
 
-export async function getAdminPartnerPortalOverview(): Promise<PartnerOverviewPayload> {
+export async function getAdminPartnerPortalOverview(): Promise<PortalOverviewPayload> {
   const supabase = createSupabaseAdminClient();
   const nowIso = new Date().toISOString();
 
