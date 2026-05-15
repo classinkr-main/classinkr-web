@@ -5,6 +5,7 @@ import { usePathname } from "next/navigation"
 import type { ReactNode } from "react"
 import { useEffect, useState } from "react"
 
+import { RouteTransition } from "@/components/transitions/RouteTransition"
 import { isPartnerPortalPath } from "@/lib/partner-portal/pathname"
 
 const ConditionalHeader = dynamic(() =>
@@ -67,7 +68,11 @@ export function AppChrome({ children }: { children: ReactNode }) {
     <>
       {showPublicChrome ? <ConditionalHeader /> : null}
       <main className="min-h-screen bg-background font-sans antialiased selection:bg-primary/20 selection:text-primary">
-        {children}
+        {showPublicChrome ? (
+          <RouteTransition className="min-h-screen">{children}</RouteTransition>
+        ) : (
+          children
+        )}
       </main>
       {showPublicChrome ? <ConditionalFooter /> : null}
       {showPublicChrome && readyPath === pathname ? (

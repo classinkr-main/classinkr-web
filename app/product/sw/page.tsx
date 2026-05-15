@@ -346,11 +346,20 @@ function StatCard({ value, suffix, label, icon, delay, trigger }: { value: numbe
 }
 
 /* ── Ambient particle ────────────────────────────────────────────── */
+function formatParticleValue(value: number) {
+    return value.toFixed(3).replace(/\.?0+$/, "")
+}
+
 function AmbientParticle({ x, size, duration, delayStart }: { x: number; size: number; duration: number; delayStart: number }) {
     return (
         <motion.div
             className="absolute rounded-full bg-green-300/15 pointer-events-none"
-            style={{ left: `${x}%`, bottom: "-10%", width: size, height: size }}
+            style={{
+                left: `${formatParticleValue(x)}%`,
+                bottom: "-10%",
+                width: `${formatParticleValue(size)}px`,
+                height: `${formatParticleValue(size)}px`,
+            }}
             animate={{ y: [0, -600, -1200], opacity: [0, 0.5, 0] }}
             transition={{ duration, delay: delayStart, repeat: Infinity, ease: "easeInOut" }}
         />

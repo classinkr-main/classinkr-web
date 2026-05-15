@@ -16,8 +16,8 @@ export default function AdminRouteLoading() {
   const [phase, setPhase] = useState<LoadingPhase>("quiet")
 
   useEffect(() => {
-    const visibleTimer = window.setTimeout(() => setPhase("visible"), 280)
-    const delayedTimer = window.setTimeout(() => setPhase("delayed"), 1_400)
+    const visibleTimer = window.setTimeout(() => setPhase("visible"), 180)
+    const delayedTimer = window.setTimeout(() => setPhase("delayed"), 1_000)
 
     return () => {
       window.clearTimeout(visibleTimer)
@@ -33,7 +33,7 @@ export default function AdminRouteLoading() {
     <div
       role="status"
       aria-live="polite"
-      className="px-4 pt-6 pb-24 sm:px-6 sm:pt-8 lg:px-8 lg:pt-10"
+      className="loading-soft-enter px-4 pt-6 pb-24 sm:px-6 sm:pt-8 lg:px-8 lg:pt-10"
     >
       <div className="overflow-hidden rounded-full bg-[#e8e8e4]">
         <div className="h-1 w-full">
@@ -47,8 +47,8 @@ export default function AdminRouteLoading() {
       </div>
 
       {phase === "delayed" ? (
-        <div className="mt-5 space-y-6">
-          <div className="rounded-2xl border border-[#e8e8e4] bg-white p-5">
+        <div className="loading-soft-enter mt-5 space-y-6">
+          <div className="rounded-lg border border-[#e8e8e4] bg-white p-5">
             <div className="flex flex-col gap-4 sm:flex-row sm:items-center sm:justify-between">
               <div className="space-y-3">
                 <SkeletonBlock className="h-4 w-44" />
@@ -60,7 +60,7 @@ export default function AdminRouteLoading() {
 
           <div className="grid grid-cols-2 gap-4 lg:grid-cols-4">
             {Array.from({ length: 4 }).map((_, index) => (
-              <div key={index} className="rounded-2xl border border-[#e8e8e4] bg-white p-5">
+              <div key={index} className="rounded-lg border border-[#e8e8e4] bg-white p-5">
                 <SkeletonBlock className="h-9 w-9 rounded-xl" />
                 <SkeletonBlock className="mt-4 h-3 w-20" />
                 <SkeletonBlock className="mt-3 h-7 w-16" />
@@ -71,7 +71,7 @@ export default function AdminRouteLoading() {
 
           <div className="grid gap-5 xl:grid-cols-2">
             {Array.from({ length: 2 }).map((_, sectionIndex) => (
-              <div key={sectionIndex} className="rounded-2xl border border-[#e8e8e4] bg-white p-5">
+              <div key={sectionIndex} className="rounded-lg border border-[#e8e8e4] bg-white p-5">
                 <SkeletonBlock className="h-4 w-32" />
                 <div className="mt-5 space-y-3">
                   {Array.from({ length: 4 }).map((__, rowIndex) => (

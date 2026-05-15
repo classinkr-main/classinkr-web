@@ -4,6 +4,7 @@ import { useEffect, useState } from "react"
 import { usePathname, useRouter } from "next/navigation"
 
 import AdminSidebar from "@/components/admin/AdminSidebar"
+import { RouteTransition } from "@/components/transitions/RouteTransition"
 import { clearAdminSessionStorage } from "@/lib/admin-client"
 import { isAdminAuthBypassEnabled } from "@/lib/admin-env"
 import { createSupabaseBrowserClient } from "@/lib/supabase/browser"
@@ -177,7 +178,9 @@ export default function AdminLayout({ children }: { children: React.ReactNode })
         </aside>
       )}
       <main className="min-w-0 flex-1 overflow-x-hidden pt-16 pb-24 lg:pt-0 lg:pb-0">
-        <div className="mx-auto w-full max-w-[1320px]">{children}</div>
+        <div className="mx-auto w-full max-w-[1320px]">
+          <RouteTransition tone="admin">{children}</RouteTransition>
+        </div>
       </main>
     </div>
   )
