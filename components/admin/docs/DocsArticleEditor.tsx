@@ -65,6 +65,247 @@ const DIFFICULTY_OPTIONS: { value: DocsArticleDifficulty; label: string }[] = [
   { value: "advanced", label: "고급" },
 ]
 
+interface DocsArticleTemplate {
+  id: string
+  label: string
+  description: string
+  categoryId: string
+  slugBase: string
+  title: string
+  articleDescription: string
+  audience: string
+  tagsCsv: string
+  keywordsCsv: string
+  symptomsCsv: string
+  chatbotSummary: string
+  productArea: DocsArticleProductArea
+  docType: DocsArticleDocType
+  difficulty: DocsArticleDifficulty
+  contentMarkdown: string
+}
+
+const DOC_TEMPLATES: DocsArticleTemplate[] = [
+  {
+    id: "operations-guide",
+    label: "운영 가이드",
+    description: "상황, 순서, 체크리스트, 안내문을 한 번에 잡습니다.",
+    categoryId: "guides",
+    slugBase: "operations-guide",
+    title: "새 운영 가이드",
+    articleDescription: "운영팀이 같은 순서로 따라 할 수 있는 실행 가이드입니다.",
+    audience: "원장, 운영팀, 교사",
+    tagsCsv: "운영 가이드, 체크리스트",
+    keywordsCsv: "운영, 체크리스트, 안내문",
+    symptomsCsv: "",
+    chatbotSummary:
+      "이 문서는 운영팀이 특정 상황에서 확인해야 할 순서, 체크리스트, 안내 문구를 정리합니다.",
+    productArea: "classroom",
+    docType: "guide",
+    difficulty: "beginner",
+    contentMarkdown: `# 새 운영 가이드
+
+이 문서는 운영팀이 같은 기준으로 움직일 수 있도록 상황, 순서, 체크리스트, 안내 문구를 정리합니다.
+
+## 대상과 사용 시점
+
+누가 읽고 언제 쓰는 문서인지 한 문장으로 정리합니다.
+
+- 원장 또는 운영팀이 확인할 상황을 적습니다.
+- 교사나 상담팀이 함께 봐야 하는 기준을 적습니다.
+
+## 권장 진행 순서
+
+실제로 따라 할 순서를 3-7단계로 정리합니다.
+
+- 먼저 확인할 조건을 적습니다.
+- 다음으로 실행할 작업을 적습니다.
+- 완료 후 기록하거나 공유할 내용을 적습니다.
+
+## 체크리스트
+
+완료 여부를 판단할 수 있는 문장으로 적습니다.
+
+- 담당자가 정해져 있습니다.
+- 고객 또는 교사에게 안내가 전달됐습니다.
+- 후속 확인 일정이 정리됐습니다.
+
+## 복사 안내문
+
+학부모, 교사, 내부 담당자에게 바로 보낼 수 있는 문구를 적습니다.
+
+## 흔한 실수
+
+운영 중 놓치기 쉬운 부분과 예방 방법을 적습니다.`,
+  },
+  {
+    id: "feature-manual",
+    label: "기능 매뉴얼",
+    description: "화면, 권한, 입력값, 확인 결과를 기능 기준으로 씁니다.",
+    categoryId: "manual",
+    slugBase: "feature-manual",
+    title: "새 기능 매뉴얼",
+    articleDescription: "특정 기능을 설정하고 확인하는 방법을 설명합니다.",
+    audience: "운영팀, 교사",
+    tagsCsv: "기능 매뉴얼, 설정",
+    keywordsCsv: "기능, 설정, 권한",
+    symptomsCsv: "",
+    chatbotSummary:
+      "이 문서는 특정 기능을 어디에서 설정하고 어떤 값을 확인해야 하는지 안내합니다.",
+    productArea: "software",
+    docType: "manual",
+    difficulty: "beginner",
+    contentMarkdown: `# 새 기능 매뉴얼
+
+이 문서는 특정 기능을 설정하고 결과를 확인하는 방법을 정리합니다.
+
+## 사용 전 확인
+
+기능을 쓰기 전에 필요한 권한, 계정, 준비 상태를 적습니다.
+
+- 필요한 관리자 권한을 확인합니다.
+- 영향을 받는 수업이나 사용자를 확인합니다.
+
+## 설정 방법
+
+화면 이름과 입력값을 기준으로 순서대로 적습니다.
+
+- 메뉴 또는 화면 진입 위치를 적습니다.
+- 입력해야 하는 값을 적습니다.
+- 저장 후 확인할 결과를 적습니다.
+
+## 확인 방법
+
+설정이 정상 반영됐는지 확인하는 기준을 적습니다.
+
+## 함께 보면 좋은 문서
+
+관련 운영 가이드나 문제 해결 문서를 적습니다.`,
+  },
+  {
+    id: "faq",
+    label: "FAQ",
+    description: "반복 문의를 질문과 답변 단위로 빠르게 정리합니다.",
+    categoryId: "help",
+    slugBase: "faq",
+    title: "새 FAQ",
+    articleDescription: "자주 묻는 질문에 대한 짧고 정확한 답변입니다.",
+    audience: "원장, 운영팀, 상담팀",
+    tagsCsv: "FAQ, 도움말",
+    keywordsCsv: "질문, 답변, 도움말",
+    symptomsCsv: "",
+    chatbotSummary:
+      "이 문서는 자주 묻는 질문에 대해 상담과 문서 검색에서 바로 쓸 수 있는 답변을 제공합니다.",
+    productArea: "general",
+    docType: "faq",
+    difficulty: "beginner",
+    contentMarkdown: `# 새 FAQ
+
+자주 묻는 질문에 짧고 정확하게 답합니다.
+
+## 질문
+
+사용자가 실제로 묻는 표현으로 질문을 적습니다.
+
+## 답변
+
+확정된 기준만 간결하게 답합니다. 가격, 환불, 지원 시간처럼 확인이 필요한 값은 검증 후 게시합니다.
+
+## 추가 확인이 필요한 경우
+
+상담원 또는 운영팀이 확인해야 하는 조건을 적습니다.
+
+## 관련 안내
+
+이어 볼 문서나 상담 연결 기준을 적습니다.`,
+  },
+  {
+    id: "troubleshooting",
+    label: "문제 해결",
+    description: "증상, 빠른 복구, 이관 기준을 수업 중 대응 순서로 씁니다.",
+    categoryId: "troubleshooting",
+    slugBase: "troubleshooting",
+    title: "새 문제 해결 문서",
+    articleDescription: "수업 중 발생할 수 있는 증상을 빠르게 복구하는 안내입니다.",
+    audience: "운영팀, 교사, 상담팀",
+    tagsCsv: "문제 해결, 빠른 복구",
+    keywordsCsv: "접속, 음성, 화면, 복구",
+    symptomsCsv: "접속 안 됨, 소리 안 남, 화면 공유 안 됨",
+    chatbotSummary:
+      "이 문서는 수업 중 문제가 생겼을 때 먼저 시도할 빠른 복구 순서와 상담 이관 기준을 안내합니다.",
+    productArea: "classroom",
+    docType: "troubleshooting",
+    difficulty: "beginner",
+    contentMarkdown: `# 새 문제 해결 문서
+
+수업 중에는 원인 분석보다 빠른 복구를 우선합니다.
+
+## 증상
+
+사용자가 보는 현상을 짧게 적습니다.
+
+- 접속이 되지 않습니다.
+- 소리가 들리지 않습니다.
+- 화면 공유가 정상적으로 보이지 않습니다.
+
+## 빠른 복구 순서
+
+수업을 이어가기 위해 먼저 시도할 순서를 적습니다.
+
+- 새로고침 또는 재입장을 안내합니다.
+- 장치 선택과 권한 허용 상태를 확인합니다.
+- 대체 접속 방법을 안내합니다.
+
+## 재발 방지 확인
+
+수업 이후 확인할 설정이나 환경을 적습니다.
+
+## 상담 이관 기준
+
+운영팀이나 상담팀이 직접 확인해야 하는 조건을 적습니다.`,
+  },
+  {
+    id: "release-note",
+    label: "업데이트",
+    description: "무엇이 바뀌었고 운영팀이 무엇을 확인할지 정리합니다.",
+    categoryId: "updates",
+    slugBase: "release-note",
+    title: "새 업데이트 안내",
+    articleDescription: "제품 또는 운영 정책 변경 사항과 권장 조치를 안내합니다.",
+    audience: "원장, 운영팀",
+    tagsCsv: "업데이트, 변경 사항",
+    keywordsCsv: "업데이트, 변경, 권장 조치",
+    symptomsCsv: "",
+    chatbotSummary:
+      "이 문서는 변경된 내용과 운영팀이 확인해야 할 후속 조치를 안내합니다.",
+    productArea: "general",
+    docType: "release_note",
+    difficulty: "beginner",
+    contentMarkdown: `# 새 업데이트 안내
+
+변경된 내용과 운영팀이 확인할 조치를 정리합니다.
+
+## 변경 내용
+
+무엇이 바뀌었는지 사실 기준으로 적습니다.
+
+## 영향을 받는 대상
+
+어떤 고객, 사용자, 운영 흐름에 영향이 있는지 적습니다.
+
+## 권장 조치
+
+운영팀이 확인하거나 안내해야 할 일을 적습니다.
+
+- 변경 사항을 확인합니다.
+- 고객 안내가 필요한지 판단합니다.
+- 관련 문서를 함께 갱신합니다.
+
+## 참고 사항
+
+아직 확정되지 않은 내용은 공개 문서에 남기지 않습니다.`,
+  },
+]
+
 interface FormState {
   categoryId: string
   slug: string
@@ -141,6 +382,105 @@ function createSummaryDraft(form: Pick<FormState, "description" | "contentMarkdo
     .trim()
 
   return summary.slice(0, 180)
+}
+
+interface StructuredDocSection {
+  heading: string
+  body: string
+  steps?: string[]
+}
+
+function estimateReadMinutes(markdown: string) {
+  const compact = markdown.replace(/[#*`>\-[\]().]/g, " ").replace(/\s+/g, " ").trim()
+  if (!compact) return 1
+
+  return Math.max(1, Math.ceil(compact.length / 900))
+}
+
+function normalizeMarkdown(markdown: string) {
+  return markdown.replace(/\r\n/g, "\n").replace(/\n{3,}/g, "\n\n").trim()
+}
+
+function buildSection(heading: string, lines: string[]): StructuredDocSection | null {
+  const bodyLines: string[] = []
+  const steps: string[] = []
+
+  for (const line of lines) {
+    const trimmed = line.trim()
+    const stepMatch = trimmed.match(/^[-*]\s+(.+)$/)
+
+    if (stepMatch?.[1]) {
+      steps.push(stepMatch[1].trim())
+      continue
+    }
+
+    if (trimmed.startsWith("# ")) continue
+    bodyLines.push(line)
+  }
+
+  const body = normalizeMarkdown(bodyLines.join("\n")) || (steps.length ? "아래 항목을 순서대로 확인하세요." : "")
+  if (!heading.trim() || (!body && steps.length === 0)) return null
+
+  return {
+    heading: heading.trim(),
+    body,
+    ...(steps.length ? { steps } : {}),
+  }
+}
+
+function markdownToSections(markdown: string): StructuredDocSection[] {
+  const lines = markdown.replace(/\r\n/g, "\n").split("\n")
+  const sections: StructuredDocSection[] = []
+  const introLines: string[] = []
+  let currentHeading = ""
+  let currentLines: string[] = []
+
+  const pushCurrent = () => {
+    if (!currentHeading) return
+    const section = buildSection(currentHeading, currentLines)
+    if (section) sections.push(section)
+  }
+
+  for (const line of lines) {
+    const headingMatch = line.match(/^##\s+(.+)$/)
+    if (headingMatch?.[1]) {
+      pushCurrent()
+      currentHeading = headingMatch[1].trim()
+      currentLines = []
+      continue
+    }
+
+    if (currentHeading) {
+      currentLines.push(line)
+      continue
+    }
+
+    introLines.push(line)
+  }
+
+  pushCurrent()
+
+  if (sections.length > 0) return sections
+
+  const intro = buildSection("개요", introLines)
+  return intro ? [intro] : []
+}
+
+function buildContentJson(
+  markdown: string,
+  previousContentJson?: Record<string, unknown>
+): Record<string, unknown> {
+  return {
+    ...(previousContentJson ?? {}),
+    source: "admin-editor",
+    readMinutes: estimateReadMinutes(markdown),
+    updatedAt: new Date().toISOString().slice(0, 10),
+    sections: markdownToSections(markdown),
+  }
+}
+
+function makeTemplateSlug(slugBase: string) {
+  return `${slugBase}-${Date.now().toString(36).slice(-5)}`
 }
 
 function initialForm(
@@ -228,6 +568,10 @@ export default function DocsArticleEditor({ mode, categories, article }: Props) 
       }),
     [form.contentMarkdown, form.description]
   )
+  const previewSections = useMemo(
+    () => markdownToSections(form.contentMarkdown),
+    [form.contentMarkdown]
+  )
   const chatbotIncluded =
     form.status === "published" && form.visibility !== "internal" && !form.noindex
   const aiChecklist = useMemo(
@@ -278,6 +622,37 @@ export default function DocsArticleEditor({ mode, categories, article }: Props) 
     }))
   }
 
+  function applyTemplate(template: DocsArticleTemplate) {
+    const categoryId = categories.some((category) => category.id === template.categoryId)
+      ? template.categoryId
+      : categories[0]?.id ?? form.categoryId
+
+    setForm((previous) => ({
+      ...previous,
+      categoryId,
+      slug: makeTemplateSlug(template.slugBase),
+      title: template.title,
+      description: template.articleDescription,
+      audience: template.audience,
+      tagsCsv: template.tagsCsv,
+      keywordsCsv: template.keywordsCsv,
+      symptomsCsv: template.symptomsCsv,
+      chatbotSummary: template.chatbotSummary,
+      contentMarkdown: template.contentMarkdown,
+      productArea: template.productArea,
+      docType: template.docType,
+      difficulty: template.difficulty,
+      status: "draft",
+      visibility: "public",
+      noindex: false,
+      featured: false,
+      seoTitle: "",
+      seoDescription: "",
+    }))
+    setError(null)
+    setSavedMessage(null)
+  }
+
   function buildPayload(overrides: Partial<FormState> = {}): Record<string, unknown> {
     const next = { ...form, ...overrides }
 
@@ -292,6 +667,7 @@ export default function DocsArticleEditor({ mode, categories, article }: Props) 
       symptoms: fromCsv(next.symptomsCsv),
       chatbotSummary: next.chatbotSummary.trim() ? next.chatbotSummary.trim() : null,
       contentMarkdown: next.contentMarkdown,
+      contentJson: buildContentJson(next.contentMarkdown, article?.contentJson),
       productArea: next.productArea,
       docType: next.docType,
       difficulty: next.difficulty,
@@ -313,7 +689,16 @@ export default function DocsArticleEditor({ mode, categories, article }: Props) 
       return "slug는 소문자·숫자·하이픈만 허용합니다."
     }
     if (!next.categoryId) return "카테고리를 선택하세요."
+    if (next.status === "published" && !next.contentMarkdown.trim()) {
+      return "게시 문서는 본문이 필요합니다."
+    }
     return null
+  }
+
+  async function reindexIfPublished(status: DocsArticleStatus) {
+    if (status !== "published") return
+
+    await adminFetch("/api/admin/docs/reindex", { method: "POST" }).catch(() => null)
   }
 
   async function save(overrides: Partial<FormState> = {}) {
@@ -333,6 +718,7 @@ export default function DocsArticleEditor({ mode, categories, article }: Props) 
           method: "POST",
           body: JSON.stringify(buildPayload(overrides)),
         })
+        await reindexIfPublished(next.status)
         router.replace(`/admin/docs/${detail.id}/edit`)
         router.refresh()
         return
@@ -346,9 +732,10 @@ export default function DocsArticleEditor({ mode, categories, article }: Props) 
           body: JSON.stringify(buildPayload(overrides)),
         }
       )
+      await reindexIfPublished(next.status)
       setForm(initialForm(detail, detail.categoryId))
       setSavedMessage(
-        overrides.status === "published" ? "게시 완료" : "저장 완료"
+        next.status === "published" ? "저장 완료 · 검색 인덱스 반영" : "저장 완료"
       )
       setTimeout(() => setSavedMessage(null), 2500)
       router.refresh()
@@ -447,6 +834,40 @@ export default function DocsArticleEditor({ mode, categories, article }: Props) 
       </div>
 
       <div className="mx-auto max-w-5xl space-y-6 px-6 py-8">
+        {mode === "create" ? (
+          <section className="space-y-4 rounded-2xl border border-[rgba(0,0,0,0.08)] bg-white p-6">
+            <div>
+              <h2 className="text-[13px] font-semibold uppercase tracking-wide text-[#1a1a1a]/40">
+                작성 템플릿
+              </h2>
+              <p className="mt-2 max-w-2xl text-[12px] leading-relaxed text-[#1a1a1a]/45">
+                문서 유형을 고르면 기본 섹션과 검색·챗봇 메타를 함께 채웁니다.
+              </p>
+            </div>
+            <div className="grid gap-3 sm:grid-cols-2 lg:grid-cols-3">
+              {DOC_TEMPLATES.map((template) => (
+                <button
+                  key={template.id}
+                  type="button"
+                  onClick={() => applyTemplate(template)}
+                  className="min-h-[132px] rounded-xl border border-[#e8e8e4] bg-[#FAFAF8] p-4 text-left transition-colors hover:border-[#084734]/30 hover:bg-[#F7FBF8]"
+                >
+                  <span className="block text-[13px] font-semibold text-[#111110]">
+                    {template.label}
+                  </span>
+                  <span className="mt-2 block text-[12px] leading-relaxed text-[#1a1a1a]/45">
+                    {template.description}
+                  </span>
+                  <span className="mt-3 inline-flex items-center gap-1.5 text-[12px] font-semibold text-[#084734]">
+                    <Wand2 className="h-3.5 w-3.5" />
+                    템플릿 적용
+                  </span>
+                </button>
+              ))}
+            </div>
+          </section>
+        ) : null}
+
         <section className="rounded-2xl border border-[#DDEFE5] bg-[#F7FBF8] p-6">
           <div className="flex flex-col gap-4 sm:flex-row sm:items-start sm:justify-between">
             <div>
@@ -723,6 +1144,42 @@ export default function DocsArticleEditor({ mode, categories, article }: Props) 
             placeholder={"# 제목\n\n설명 단락\n\n## 섹션 1\n\n본문..."}
             className="w-full resize-y rounded-lg border border-[rgba(0,0,0,0.12)] bg-[#FAFAF8] px-3 py-3 font-mono text-[13px] leading-6 focus:border-[#111110]/30 focus:outline-none"
           />
+
+          <div className="mt-5 rounded-xl border border-[#e8e8e4] bg-white p-4">
+            <div className="flex flex-wrap items-center justify-between gap-3">
+              <div>
+                <h3 className="text-[13px] font-semibold text-[#111110]">공개 섹션 미리보기</h3>
+                <p className="mt-1 text-[11px] text-[#1a1a1a]/35">
+                  저장 시 공개 페이지와 챗봇 청킹에 반영되는 구조입니다.
+                </p>
+              </div>
+              <span className="rounded-full border border-[#e8e8e4] px-2.5 py-1 text-[11px] font-semibold text-[#1a1a1a]/45">
+                {previewSections.length}개 섹션 · {estimateReadMinutes(form.contentMarkdown)}분
+              </span>
+            </div>
+
+            {previewSections.length === 0 ? (
+              <p className="mt-4 text-[12px] text-[#1a1a1a]/35">
+                본문에 섹션을 입력하면 미리보기가 표시됩니다.
+              </p>
+            ) : (
+              <div className="mt-4 divide-y divide-[#f0f0ec]">
+                {previewSections.map((section, index) => (
+                  <div key={`${section.heading}:${index}`} className="py-3 first:pt-0 last:pb-0">
+                    <p className="text-[13px] font-semibold text-[#111110]">{section.heading}</p>
+                    <p className="mt-1 line-clamp-2 whitespace-pre-line text-[12px] leading-relaxed text-[#1a1a1a]/45">
+                      {section.body}
+                    </p>
+                    {section.steps?.length ? (
+                      <p className="mt-2 text-[11px] text-[#084734]">
+                        체크리스트 {section.steps.length}개
+                      </p>
+                    ) : null}
+                  </div>
+                ))}
+              </div>
+            )}
+          </div>
         </section>
 
         <section className="space-y-4 rounded-2xl border border-[rgba(0,0,0,0.08)] bg-white p-6">
