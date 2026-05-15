@@ -1,7 +1,7 @@
 "use client"
 import dynamic from "next/dynamic"
-import { useState, useCallback } from "react"
-import { ChevronLeft, RefreshCw } from "lucide-react"
+import { useState, useCallback, useMemo } from "react"
+import { CalendarDays, ChevronLeft, RefreshCw } from "lucide-react"
 import SyncStatusBar from "./SyncStatusBar"
 import CoreKpiGrid from "./sections/CoreKpiGrid"
 import BranchHeroGauges from "./sections/BranchHeroGauges"
@@ -31,6 +31,37 @@ const BRANCH_TABS: Array<{ id: BranchTab; label: string; sub: string }> = [
 
 const PERIOD_LABEL: Record<Period, string> = { M: "이번 달", Q: "이번 분기", Y: "연간 누적" }
 
+function ymKeyUtc(date: Date): string {
+  return `${date.getUTCFullYear()}-${String(date.getUTCMonth() + 1).padStart(2, "0")}`
+}
+
+function fiscalYearOf(date: Date): number {
+  const month = date.getUTCMonth() + 1
+  return month >= 4 ? date.getUTCFullYear() : date.getUTCFullYear() - 1
+}
+
+function formatMonthLabel(ym: string): string {
+  const [year, month] = ym.split("-").map(Number)
+  return `${year}년 ${month}월`
+}
+
+function buildMonthOptions(now: Date) {
+  const fy = fiscalYearOf(now)
+  const current = ymKeyUtc(now)
+  const previous = new Date(now)
+  previous.setUTCMonth(previous.getUTCMonth() - 1)
+  const previousKey = ymKeyUtc(previous)
+  const fiscalMonths = [4, 5, 6, 7, 8, 9, 10, 11, 12, 1, 2, 3]
+    .map((month) => `${month >= 4 ? fy : fy + 1}-${String(month).padStart(2, "0")}`)
+  const currentIndex = fiscalMonths.indexOf(current)
+  const visibleMonths = currentIndex >= 0 ? fiscalMonths.slice(0, currentIndex + 1) : [current]
+  return visibleMonths.reverse().map((value) => ({
+    value,
+    label: formatMonthLabel(value),
+    hint: value === current ? "이번 달" : value === previousKey ? "지난 달" : null,
+  }))
+}
+
 const FiscalRoadmap = dynamic(() => import("./sections/FiscalRoadmap"), {
   loading: () => <div className="h-72 animate-pulse rounded-2xl bg-[#f0f0ec]" />,
 })
@@ -38,6 +69,7 @@ const FiscalRoadmap = dynamic(() => import("./sections/FiscalRoadmap"), {
 export default function BranchDashboardClient() {
   const [team, setTeam] = useState<Team>("ALL")
   const [period, setPeriod] = useState<Period>("Q")
+  const [selectedMonth, setSelectedMonth] = useState(() => ymKeyUtc(new Date()))
   const [activeTab, setActiveTab] = useState<BranchTab>("overview")
   const [pipelineView, setPipelineView] = useState<"table" | "kanban">("table")
   const [syncError, setSyncError] = useState<string | null>(null)
@@ -79,10 +111,13 @@ export default function BranchDashboardClient() {
     }
   }, [])
 
-  const summaryUrl = `/api/admin/branch/summary?team=${team}&period=${period}`
-  const kpiUrl = `/api/admin/branch/kpi?team=${team}&period=${period}`
+  const monthQuery = period === "M" ? `&month=${encodeURIComponent(selectedMonth)}` : ""
+  const summaryUrl = `/api/admin/branch/summary?team=${team}&period=${period}${monthQuery}`
+  const kpiUrl = `/api/admin/branch/kpi?team=${team}&period=${period}${monthQuery}`
   const summary = useBranchJson<BranchSummaryResponse>(summaryUrl, refreshKey)
   const kpi = useBranchJson<BranchKpiResponse>(kpiUrl, refreshKey)
+  const monthOptions = useMemo(() => buildMonthOptions(new Date()), [])
+  const activePeriodLabel = period === "M" ? formatMonthLabel(selectedMonth) : PERIOD_LABEL[period]
 
   const onRefresh = useCallback(async () => {
     setSyncError(null)
@@ -155,17 +190,37 @@ export default function BranchDashboardClient() {
               </div>
             )}
             {showPeriodFilter && (
-              <div className="inline-flex rounded-lg border border-[rgba(0,0,0,0.08)] bg-[#F6F5F4] p-[3px]" role="group" aria-label="기간 필터">
-                {PERIODS.map((p) => (
-                  <button key={p} type="button" onClick={() => setPeriod(p)}
-                    aria-pressed={period === p}
-                    className={`rounded-md px-3 py-1.5 text-[12px] font-semibold transition ${
-                      period === p ? "bg-white text-[#111110] shadow-[0_1px_2px_rgba(0,0,0,0.06)]" : "text-[#615D59]"
-                    }`}>
-                    {p}
-                  </button>
-                ))}
-              </div>
+              <>
+                <div className="inline-flex rounded-lg border border-[rgba(0,0,0,0.08)] bg-[#F6F5F4] p-[3px]" role="group" aria-label="기간 필터">
+                  {PERIODS.map((p) => (
+                    <button key={p} type="button" onClick={() => setPeriod(p)}
+                      aria-pressed={period === p}
+                      className={`rounded-md px-3 py-1.5 text-[12px] font-semibold transition ${
+                        period === p ? "bg-white text-[#111110] shadow-[0_1px_2px_rgba(0,0,0,0.06)]" : "text-[#615D59]"
+                      }`}>
+                      {p}
+                    </button>
+                  ))}
+                </div>
+                {period === "M" && (
+                  <label className="inline-flex h-[35px] items-center gap-2 rounded-lg border border-[rgba(0,0,0,0.08)] bg-white px-2.5 text-[12px] font-semibold text-[#615D59]">
+                    <CalendarDays className="h-3.5 w-3.5 text-[#084734]" aria-hidden="true" />
+                    <span className="sr-only">월 선택</span>
+                    <select
+                      value={selectedMonth}
+                      onChange={(event) => setSelectedMonth(event.target.value)}
+                      className="h-7 bg-transparent pr-1 text-[12px] font-semibold text-[#111110] outline-none"
+                      aria-label="월별 데이터 월 선택"
+                    >
+                      {monthOptions.map((option) => (
+                        <option key={option.value} value={option.value}>
+                          {option.label}{option.hint ? ` · ${option.hint}` : ""}
+                        </option>
+                      ))}
+                    </select>
+                  </label>
+                )}
+              </>
             )}
           </div>
         )}
@@ -217,9 +272,9 @@ export default function BranchDashboardClient() {
               <BranchHeroGauges
                 summary={summary.data}
                 kpi={kpi.data}
-                periodLabel={PERIOD_LABEL[period]}
+                periodLabel={activePeriodLabel}
               />
-              <DealMixSection period={period} refreshKey={refreshKey} />
+              <DealMixSection period={period} selectedMonth={selectedMonth} refreshKey={refreshKey} />
               <div className="grid gap-6 xl:grid-cols-[minmax(0,1.35fr)_minmax(360px,0.65fr)]">
                 <FiscalRoadmap data={summary.data?.monthly_series ?? null} loading={summary.loading} error={summary.error} />
                 <BranchUpcomingDeals
@@ -256,10 +311,12 @@ export default function BranchDashboardClient() {
                 </div>
                 <div className={pipelineView === "kanban" ? "" : "px-2.5 py-2"}>
                   {pipelineView === "table" ? (
-                    <PipelineTable key={`pipeline-rev-${team}`} team={team} period={period} refreshKey={refreshKey} onRowClick={openDealLog} />
+                    <PipelineTable key={`pipeline-rev-${team}`} team={team} period={period} selectedMonth={selectedMonth} refreshKey={refreshKey} onRowClick={openDealLog} />
                   ) : (
                     <BranchPipelineKanban
                       team={team}
+                      period={period}
+                      selectedMonth={selectedMonth}
                       refreshKey={refreshKey}
                       onDealClick={(d) => {
                         void openDealLog({
@@ -277,8 +334,8 @@ export default function BranchDashboardClient() {
 
           {activeTab === "heatmap" && (
             <div role="tabpanel" className="space-y-6">
-              <BranchRegionHeatmap team={team} period={period} refreshKey={refreshKey} />
-              <PipelineTable key={`heatmap-rev-${team}`} team={team} period={period} refreshKey={refreshKey} pageSize={10} onRowClick={openDealLog} />
+              <BranchRegionHeatmap team={team} period={period} selectedMonth={selectedMonth} refreshKey={refreshKey} />
+              <PipelineTable key={`heatmap-rev-${team}`} team={team} period={period} selectedMonth={selectedMonth} refreshKey={refreshKey} pageSize={10} onRowClick={openDealLog} />
             </div>
           )}
 

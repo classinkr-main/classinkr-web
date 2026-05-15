@@ -6,7 +6,7 @@ import { parseDsh, DSH_RANGE } from "@/lib/branch/parsers/dsh"
 import { parseKpiBlocks, selectKpiRows, KPI_METRICS, KPI_RANGE } from "@/lib/branch/parsers/kpi"
 import { listBranchRevDeals } from "@/lib/repositories/branch-deals"
 import { listMembersByTeam, memberPacing, teamPacing } from "@/lib/branch/computations/pacing"
-import { fyOf } from "@/lib/branch/fiscal"
+import { fyOf, resolvePeriodDate } from "@/lib/branch/fiscal"
 
 type BranchTeam = "ALL" | "BD" | "MKT" | "CSM"
 type BranchPeriod = "M" | "Q" | "Y"
@@ -27,7 +27,7 @@ function readPeriodParam(url: URL): BranchPeriod | NextResponse {
 }
 
 const readDsh = unstable_cache(
-  async () => parseDsh(await readRangeWithFormat(envSheetId("dashboard"), DSH_RANGE), fyOf(new Date())),
+  async (fy: number) => parseDsh(await readRangeWithFormat(envSheetId("dashboard"), DSH_RANGE), fy),
   ["branch-dsh"], { revalidate: 60, tags: ["branch-dsh"] },
 )
 
@@ -41,10 +41,11 @@ export async function GET(req: NextRequest) {
   const url = new URL(req.url)
   const team = readTeamParam(url); if (team instanceof NextResponse) return team
   const period = readPeriodParam(url); if (period instanceof NextResponse) return period
-  const now = new Date()
+  const now = resolvePeriodDate(period, url.searchParams.get("month"), new Date())
+  if (!now) return NextResponse.json({ error: "Invalid month query" }, { status: 400 })
   try {
     const teams = team === "ALL" ? ["BD", "MKT", "CSM"] : [team]
-    const [dsh, kpiBlocks, deals] = await Promise.all([readDsh(), readKpiBlocks(), listBranchRevDeals({ team })])
+    const [dsh, kpiBlocks, deals] = await Promise.all([readDsh(fyOf(now)), readKpiBlocks(), listBranchRevDeals({ team })])
     const kpiRows = selectKpiRows(kpiBlocks, period, now)
     const teamSummaries = teams.map((t) => ({ team: t, ...teamPacing(dsh, t, period, now) }))
     const members = listMembersByTeam(dsh, team).map((member) => {

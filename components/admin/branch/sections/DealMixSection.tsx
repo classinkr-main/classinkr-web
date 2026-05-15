@@ -111,14 +111,15 @@ function CompareCard({ title, desc, a, b, aTone, bTone }: {
   )
 }
 
-export default function DealMixSection({ period, refreshKey }: { period: Period; refreshKey: number }) {
-  const requestKey = `${refreshKey}:${period}`
+export default function DealMixSection({ period, selectedMonth, refreshKey }: { period: Period; selectedMonth: string; refreshKey: number }) {
+  const requestKey = `${refreshKey}:${period}:${selectedMonth}`
   const [state, setState] = useState<{ key: string; data: DealMix | null; loaded: boolean }>({ key: requestKey, data: null, loaded: false })
   const data = state.key === requestKey ? state.data : null
   const loading = state.key !== requestKey || !state.loaded
   useEffect(() => {
     let cancelled = false
-    void adminFetch(`/api/admin/branch/summary?team=ALL&period=${period}`)
+    const monthQuery = period === "M" ? `&month=${encodeURIComponent(selectedMonth)}` : ""
+    void adminFetch(`/api/admin/branch/summary?team=ALL&period=${period}${monthQuery}`)
       .then((r) => r.json())
       .then((d) => {
         if (cancelled) return
@@ -126,7 +127,7 @@ export default function DealMixSection({ period, refreshKey }: { period: Period;
       })
       .catch(() => { if (!cancelled) setState({ key: requestKey, data: null, loaded: true }) })
     return () => { cancelled = true }
-  }, [requestKey, period])
+  }, [requestKey, period, selectedMonth])
 
   if (loading) return <div className="h-40 animate-pulse rounded-xl bg-[#f0f0ec]" />
   if (!data) return null

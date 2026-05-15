@@ -1,6 +1,6 @@
 "use client"
 import { useEffect, useMemo, useState } from "react"
-import type { Team } from "../types"
+import type { Period, Team } from "../types"
 
 async function adminFetch(url: string) {
   const token = (typeof window !== "undefined" ? sessionStorage.getItem("admin_password") : null) ?? ""
@@ -134,23 +134,26 @@ function PipelineColumn({ stage, deals, onCardClick }: {
   )
 }
 
-export default function BranchPipelineKanban({ team, refreshKey, onDealClick }: {
+export default function BranchPipelineKanban({ team, period, selectedMonth, refreshKey, onDealClick }: {
   team: Team
+  period: Period
+  selectedMonth: string
   refreshKey: number
   onDealClick?: (d: Row & { stageLabel: string; stageColor: string; probability: number }) => void
 }) {
-  const requestKey = `${refreshKey}:${team}`
+  const requestKey = `${refreshKey}:${team}:${period}:${selectedMonth}`
   const [state, setState] = useState<{ key: string; rows: Row[] | null }>({ key: requestKey, rows: null })
   const rows = state.key === requestKey ? state.rows : null
 
   useEffect(() => {
     let active = true
-    void adminFetch(`/api/admin/branch/pipeline?team=${team}`)
+    const monthQuery = period === "M" ? `&month=${encodeURIComponent(selectedMonth)}` : ""
+    void adminFetch(`/api/admin/branch/pipeline?team=${team}&period=${period}${monthQuery}`)
       .then((r) => r.json())
       .then((d) => { if (active) setState({ key: requestKey, rows: d.rows ?? [] }) })
       .catch(() => { if (active) setState({ key: requestKey, rows: [] }) })
     return () => { active = false }
-  }, [requestKey, team])
+  }, [requestKey, team, period, selectedMonth])
 
   const grouped = useMemo(() => {
     const byStage: Record<string, Row[]> = {}

@@ -20,3 +20,21 @@ export function ymKey(d: Date): string {
 export function currentFyPeriod(now: Date): { fy: number; quarter: 1|2|3|4; month: string } {
   return { fy: fyOf(now), quarter: fiscalQuarter(now.getUTCMonth() + 1), month: ymKey(now) }
 }
+
+export function parseYmMonth(value: string | null | undefined): string | null {
+  const text = value?.trim()
+  if (!text || !/^\d{4}-(0[1-9]|1[0-2])$/.test(text)) return null
+  return text
+}
+
+export function dateFromYmMonth(ym: string): Date {
+  const [year, month] = ym.split("-").map(Number)
+  return new Date(Date.UTC(year, month - 1, 1))
+}
+
+export function resolvePeriodDate(scope: "M" | "Q" | "Y", month: string | null | undefined, fallback = new Date()): Date | null {
+  if (scope !== "M") return fallback
+  if (!month) return fallback
+  const parsed = parseYmMonth(month)
+  return parsed ? dateFromYmMonth(parsed) : null
+}

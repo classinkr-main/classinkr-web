@@ -557,8 +557,8 @@ function DetailPanel({ row, metric }: { row: MapRow | null; metric: Metric }) {
   )
 }
 
-export default function BranchRegionHeatmap({ team, period, refreshKey }: { team: Team; period: Period; refreshKey: number }) {
-  const requestKey = `${refreshKey}:${team}:${period}`
+export default function BranchRegionHeatmap({ team, period, selectedMonth, refreshKey }: { team: Team; period: Period; selectedMonth: string; refreshKey: number }) {
+  const requestKey = `${refreshKey}:${team}:${period}:${selectedMonth}`
   const [state, setState] = useState<{ key: string; rows: Row[] | null; error: string | null }>({ key: requestKey, rows: null, error: null })
   const rows = state.key === requestKey ? state.rows : null
   const error = state.key === requestKey ? state.error : null
@@ -569,7 +569,8 @@ export default function BranchRegionHeatmap({ team, period, refreshKey }: { team
 
   useEffect(() => {
     let cancelled = false
-    void adminFetch(`/api/admin/branch/heatmap?team=${team}&period=${period}`)
+    const monthQuery = period === "M" ? `&month=${encodeURIComponent(selectedMonth)}` : ""
+    void adminFetch(`/api/admin/branch/heatmap?team=${team}&period=${period}${monthQuery}`)
       .then((r) => r.json())
       .then((d) => {
         if (cancelled) return
@@ -578,7 +579,7 @@ export default function BranchRegionHeatmap({ team, period, refreshKey }: { team
       })
       .catch((e) => { if (!cancelled) setState({ key: requestKey, rows: null, error: String(e) }) })
     return () => { cancelled = true }
-  }, [requestKey, team, period])
+  }, [requestKey, team, period, selectedMonth])
 
   // Ranking sort follows the active metric so the list and the map agree.
   const sortedRanking = useMemo(() => {

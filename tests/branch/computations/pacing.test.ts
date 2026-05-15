@@ -16,6 +16,10 @@ describe("pacing", () => {
   const now = new Date("2026-05-15T00:00:00Z")
   it("teamPacing yearly", () => { expect(teamPacing(dsh, "BD", "Y", now)).toEqual({ goal: 100, status: 50, pacing_pct: 50 }) })
   it("teamPacing quarter Q1", () => { expect(teamPacing(dsh, "BD", "Q", now)).toEqual({ goal: 25, status: 50, pacing_pct: 200 }) })
+  it("teamPacing monthly follows the supplied reporting month", () => {
+    const april = new Date("2026-04-01T00:00:00Z")
+    expect(teamPacing(dsh, "BD", "M", april)).toEqual({ goal: 8, status: 12, pacing_pct: 150 })
+  })
   it("memberPacing reports team", () => { expect(memberPacing(dsh, "Han", "Y", now).team).toBe("BD") })
   it("listMembersByTeam", () => { expect(listMembersByTeam(dsh, "BD")).toEqual(["Han"]) })
 })

@@ -116,34 +116,38 @@ function MultiSelect({
 
 export default function PipelineTable({
   team,
+  period,
+  selectedMonth,
   refreshKey,
   pageSize = 20,
   onRowClick,
 }: {
   team: Team
   period: Period
+  selectedMonth: string
   refreshKey: number
   pageSize?: number
   onRowClick?: (row: Row) => void
 }) {
   const initialTeams: Set<string> = team === "ALL" ? new Set() : new Set([team])
-  const [rowsState, setRowsState] = useState<{ key: string; rows: Row[] | null }>({ key: String(refreshKey), rows: null })
+  const [rowsState, setRowsState] = useState<{ key: string; rows: Row[] | null }>({ key: `${refreshKey}:${period}:${selectedMonth}`, rows: null })
   const [query, setQuery] = useState("")
   const [selectedTeams, setSelectedTeams] = useState<Set<string>>(initialTeams)
   const [selectedRegions, setSelectedRegions] = useState<Set<string>>(new Set())
   const [revenueSort, setRevenueSort] = useState<RevenueSort>("desc")
   const [page, setPage] = useState(1)
-  const requestKey = String(refreshKey)
+  const requestKey = `${refreshKey}:${period}:${selectedMonth}`
   const rows = rowsState.key === requestKey ? rowsState.rows : null
 
   useEffect(() => {
     let active = true
-    adminFetch(`/api/admin/branch/pipeline?team=ALL`)
+    const monthQuery = period === "M" ? `&month=${encodeURIComponent(selectedMonth)}` : ""
+    adminFetch(`/api/admin/branch/pipeline?team=ALL&period=${period}${monthQuery}`)
       .then((r) => r.json())
       .then((d) => { if (active) setRowsState({ key: requestKey, rows: d.rows ?? [] }) })
       .catch(() => { if (active) setRowsState({ key: requestKey, rows: [] }) })
     return () => { active = false }
-  }, [requestKey])
+  }, [requestKey, period, selectedMonth])
 
   const regionOptions = useMemo(() => {
     if (!rows) return []
