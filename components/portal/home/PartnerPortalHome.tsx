@@ -12,8 +12,6 @@ import {
 } from "lucide-react"
 import { CustomerDialog } from "@/components/portal/crud/CustomerDialog"
 import { DealQuickCreateDialog } from "@/components/portal/crud/DealQuickCreateDialog"
-import { ScheduleDialog } from "@/components/portal/crud/ScheduleDialog"
-import { MobileActionLauncher } from "@/components/portal/mobile/MobileActionLauncher"
 import { Button } from "@/components/ui/button"
 import { portalFetch } from "@/lib/portal/portal-fetch"
 
@@ -679,7 +677,6 @@ export function PartnerPortalHome(props: PartnerPortalHomeProps = {}) {
   const [expandedCustomers, setExpandedCustomers] = useState<Set<string>>(new Set(["c1"]))
   const [isCustomerDialogOpen, setIsCustomerDialogOpen]   = useState(false)
   const [isDealDialogOpen, setIsDealDialogOpen]           = useState(false)
-  const [isScheduleDialogOpen, setIsScheduleDialogOpen]   = useState(false)
   const [quoteOpen, setQuoteOpen]         = useState(true)
   const [contractOpen, setContractOpen]   = useState(true)
   const [inventoryOpen, setInventoryOpen] = useState(true)
@@ -850,7 +847,6 @@ export function PartnerPortalHome(props: PartnerPortalHomeProps = {}) {
                   <>
                     <QuickActionButton label="새 고객" onClick={() => setIsCustomerDialogOpen(true)} />
                     <QuickActionButton label="신규 컨택" disabled={overview.customers.length === 0} onClick={() => setIsDealDialogOpen(true)} />
-                    <QuickActionButton label="일정 추가" disabled={overview.deals.length === 0} onClick={() => setIsScheduleDialogOpen(true)} />
                   </>
                 ) : (
                   <span className="rounded-full border border-[#e0e0dc] bg-[#f7f7f5] px-3 py-1.5 text-xs text-[#1a1a1a]/40">
@@ -1370,14 +1366,6 @@ export function PartnerPortalHome(props: PartnerPortalHomeProps = {}) {
         </main>
       </div>
 
-      <MobileActionLauncher
-        screen="home"
-        customers={overview.customers.map(item => item.customer)}
-        deals={overview.deals}
-        canCreate={canCreateInPortal}
-        onSaved={refreshPortal}
-      />
-
       <CustomerDialog
         open={isCustomerDialogOpen}
         onOpenChange={setIsCustomerDialogOpen}
@@ -1387,12 +1375,6 @@ export function PartnerPortalHome(props: PartnerPortalHomeProps = {}) {
         open={isDealDialogOpen}
         onOpenChange={setIsDealDialogOpen}
         customers={overview.customers.map(item => item.customer)}
-        onSaved={refreshPortal}
-      />
-      <ScheduleDialog
-        open={isScheduleDialogOpen}
-        onOpenChange={setIsScheduleDialogOpen}
-        deals={overview.deals}
         onSaved={refreshPortal}
       />
     </div>
