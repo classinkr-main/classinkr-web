@@ -35,6 +35,20 @@ export default function ContactPage() {
     const eventPickerCategory = topic === "세미나 신청" ? "웨비나" : null
 
     useEffect(() => {
+        const params = new URLSearchParams(window.location.search)
+        const eventParam = params.get("event")?.trim()
+        const sourceParam = params.get("source")?.trim()
+        const topicParam = params.get("topic")?.trim()
+
+        if (eventParam) {
+            setTopic(sourceParam === "seminar" ? "세미나 신청" : "행사 신청")
+            setEventSlug(eventParam)
+        } else if (topicParam && EVENT_TOPICS.has(topicParam)) {
+            setTopic(topicParam)
+        }
+    }, [])
+
+    useEffect(() => {
         if (!showEventPicker || eventsLoaded) return
         let cancelled = false
         fetch("/api/events", { cache: "no-store" })
@@ -107,6 +121,7 @@ export default function ContactPage() {
 
             const data = await submitLead({
                 source: "contact_page",
+                sourceDetail: topicValue,
                 org: formData.get("org-name") as string,
                 name: formData.get("name") as string,
                 phone: formData.get("phone") as string,
@@ -119,7 +134,12 @@ export default function ContactPage() {
             if (Array.isArray(data.warnings) && data.warnings.length > 0) {
                 setNotice("상담 요청은 접수되었지만 일부 내부 알림 연동이 지연되었습니다. 기록은 정상 등록되었습니다.")
             }
-            trackEvent("submit_demo_request", { source: "contact_page" })
+            trackEvent("submit_demo_request", {
+                source: "contact_page",
+                lead_id: data.leadId,
+                stored: data.stored,
+                event_slug: selectedEvent?.slug,
+            })
             toast.success("상담 요청이 접수되었어요")
             setSubmitted(true)
         } catch (err) {

@@ -1,5 +1,5 @@
-import Link from "next/link"
 import { ArrowRight, CheckCircle2 } from "lucide-react"
+import { TrackedLink } from "@/components/TrackedLink"
 
 export default function PricingPage() {
   return (
@@ -56,13 +56,15 @@ export default function PricingPage() {
                   </li>
                 ))}
               </ul>
-              <Link
+              <TrackedLink
                 href={item.href}
+                ctaId={`pricing_${item.title}`}
+                tracking={{ destination: item.href }}
                 className="mt-7 inline-flex items-center gap-2 text-sm font-semibold text-[#084734] transition-colors hover:text-[#111110]"
               >
                 {item.cta}
                 <ArrowRight className="h-4 w-4" aria-hidden="true" />
-              </Link>
+              </TrackedLink>
             </section>
           ))}
         </div>

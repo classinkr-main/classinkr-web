@@ -236,7 +236,7 @@ export default function EventEditor({ event, mode }: EventEditorProps) {
         endsAt: form.endsAt ? localDatetimeToIso(form.endsAt) : null,
         location: form.location || null,
         ctaLabel: form.ctaLabel || "자세히 보기",
-        ctaHref: form.ctaHref || "/contact",
+        ctaHref: form.ctaHref || "/contact#contact-form",
         highlight: form.highlight,
         statusOverride: form.statusOverride === "auto" ? null : form.statusOverride,
         publicationStatus: form.publicationStatus,

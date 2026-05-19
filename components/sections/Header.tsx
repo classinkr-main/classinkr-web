@@ -5,6 +5,7 @@ import Image from "next/image"
 import Link from "next/link"
 import { usePathname } from "next/navigation"
 import { NewsletterModal } from "./NewsletterModal"
+import { TrackedLink } from "@/components/TrackedLink"
 import { cn } from "@/lib/utils"
 import { Menu, X, Monitor, Cpu } from "lucide-react"
 
@@ -187,13 +188,14 @@ export function Header() {
                                     자료 받아보기
                                 </button>
                             </NewsletterModal>
-                            <Link
+                            <TrackedLink
                                 href="/contact"
+                                ctaId="gnb_mobile_contact"
                                 onClick={() => setIsMobileMenuOpen(false)}
                                 className="inline-flex min-h-11 w-full items-center justify-center rounded-[8px] bg-[#009060] px-4 text-[15px] font-semibold text-white shadow-sm transition-colors hover:bg-[#007A52]"
                             >
                                 도입 문의
-                            </Link>
+                            </TrackedLink>
                         </div>
                     ) : null}
                 </nav>
@@ -214,12 +216,13 @@ export function Header() {
                             자료 받아보기
                         </button>
                     </NewsletterModal>
-                    <Link
+                    <TrackedLink
                         href="/contact"
+                        ctaId="gnb_contact"
                         className="inline-flex items-center justify-center whitespace-nowrap rounded-[6px] bg-[#009060] px-5 py-2 text-[15px] font-semibold text-white shadow-sm transition-all hover:bg-[#007A52] active:scale-[0.97]"
                     >
                         도입 문의
-                    </Link>
+                    </TrackedLink>
                 </div>
             </div>
         </header>

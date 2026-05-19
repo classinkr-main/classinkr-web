@@ -4,6 +4,7 @@ import Link from "next/link"
 import { notFound } from "next/navigation"
 import { ArrowRight, Clock } from "lucide-react"
 import BlogMarkdownRenderer from "@/components/blog/BlogMarkdownRenderer"
+import { TrackedLink } from "@/components/TrackedLink"
 import {
   getPublishedPostBySlug,
   getRelatedPosts,
@@ -306,13 +307,15 @@ export default async function BlogDetailPage({
                 </p>
               </div>
               <div className="mt-8">
-                <Link
+                <TrackedLink
                   href={ctaHref}
+                  ctaId="blog_detail_cta"
+                  tracking={{ slug: post.slug }}
                   className="inline-flex items-center gap-2 rounded-full bg-white px-5 py-3 text-sm font-semibold text-[#111110] transition-transform hover:-translate-y-0.5"
                 >
                   {post.cta.buttonLabel}
                   <ArrowRight className="h-4 w-4" />
-                </Link>
+                </TrackedLink>
               </div>
             </div>
             )}

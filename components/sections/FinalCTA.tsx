@@ -33,7 +33,7 @@ export function FinalCTA() {
                 </p>
 
                 <div className="flex flex-col sm:flex-row items-center justify-center gap-6">
-                    <DemoModal>
+                    <DemoModal trackingButton="final_consultation">
                         <Button size="lg" className="h-16 px-10 text-lg font-bold bg-white text-[#111110] hover:bg-[#F6F5F4] hover:scale-105 active:scale-95 transition-all shadow-xl shadow-white/10 w-full sm:w-auto rounded-full">
                             무료 컨설팅 신청하기
                             <ArrowRight className="ml-2 w-5 h-5" />

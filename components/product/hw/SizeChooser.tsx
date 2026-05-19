@@ -1,8 +1,8 @@
 "use client"
 
 import Image from "next/image"
-import Link from "next/link"
 import { motion, type Variants } from "framer-motion"
+import { TrackedLink } from "@/components/TrackedLink"
 
 const sizes = [
   {
@@ -118,12 +118,14 @@ export default function SizeChooser() {
                 </ul>
 
                 {/* CTA */}
-                <Link
+                <TrackedLink
                   href="/contact#contact-form"
+                  ctaId="hw_size_demo"
+                  tracking={{ model: size.inches }}
                   className="mt-7 block w-full rounded-md bg-[#084734] py-3 text-center text-sm font-semibold text-white transition hover:bg-[#065c41]"
                 >
                   이 사이즈로 데모 신청 →
-                </Link>
+                </TrackedLink>
               </div>
             </motion.div>
           ))}
@@ -133,12 +135,13 @@ export default function SizeChooser() {
         <div className="mt-10 mx-auto flex max-w-5xl justify-center">
           <p className="text-center text-sm text-[#615D59]">
             더 큰 공간(50명+, 강당·콘퍼런스)을 위한 110&quot; 모델은{" "}
-            <Link
+            <TrackedLink
               href="/contact#contact-form"
+              ctaId="hw_size_110_inquiry"
               className="text-[#084734] underline underline-offset-2"
             >
               별도 문의
-            </Link>
+            </TrackedLink>
             로 안내드립니다.
           </p>
         </div>

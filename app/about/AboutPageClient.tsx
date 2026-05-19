@@ -4,6 +4,7 @@ import * as React from "react"
 import Link from "next/link"
 import Image from "next/image"
 import { motion, useInView } from "framer-motion"
+import { TrackedLink } from "@/components/TrackedLink"
 import {
   ArrowRight,
   ArrowUpRight,
@@ -780,13 +781,14 @@ export default function AboutPageClient({ offices, press, recentPosts }: Props) 
               <br className="sm:hidden" /> 전문 상담팀이 직접 안내해드립니다.
             </p>
             <div className="flex flex-col sm:flex-row gap-3 justify-center">
-              <Link
+              <TrackedLink
                 href="/contact"
+                ctaId="about_final_contact"
                 className="inline-flex items-center justify-center gap-1.5 bg-[#084734] text-white font-semibold text-[15px] px-7 py-3 rounded-[6px] hover:bg-[#065c41] transition-colors"
               >
                 도입 문의하기
                 <ArrowRight className="w-4 h-4" strokeWidth={2.2} />
-              </Link>
+              </TrackedLink>
               <Link
                 href="/product"
                 className="inline-flex items-center justify-center bg-[rgba(0,0,0,0.05)] text-[#111110] font-semibold text-[15px] px-7 py-3 rounded-[6px] hover:bg-[rgba(0,0,0,0.08)] transition-colors"

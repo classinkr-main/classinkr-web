@@ -2,7 +2,7 @@
 
 import { motion, type Variants } from "framer-motion";
 import { Check } from "lucide-react";
-import Link from "next/link";
+import { TrackedLink } from "@/components/TrackedLink";
 
 const items = [
   {
@@ -159,12 +159,13 @@ export default function ValueAnchor() {
           viewport={{ once: true, margin: "-80px" }}
           className="mt-10 flex flex-col items-center gap-4"
         >
-          <Link
+          <TrackedLink
             href="/contact#contact-form"
+            ctaId="hw_value_anchor_demo"
             className="inline-block bg-[#6EE7B7] hover:bg-white text-[#0D1A12] font-bold px-10 py-4 rounded-md text-base transition-all hover:scale-[1.02] active:scale-[0.98]"
           >
             데모 신청하고 직접 사용해보기 →
-          </Link>
+          </TrackedLink>
           <p className="text-sm text-white/50">
             30일 만족 보장 — 사용해보고 결정하세요.
           </p>

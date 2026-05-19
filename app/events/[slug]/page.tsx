@@ -5,6 +5,7 @@ import { notFound } from "next/navigation"
 import { cache } from "react"
 import { ArrowRight, Calendar, MapPin, Tag } from "lucide-react"
 import BlogMarkdownRenderer from "@/components/blog/BlogMarkdownRenderer"
+import { TrackedLink } from "@/components/TrackedLink"
 import { sanitizePublicUrl } from "@/lib/safe-public-url"
 import {
   getCachedPublicEventBySlug,
@@ -49,7 +50,14 @@ export default async function EventDetailPage({ params }: EventDetailPageProps) 
   const event = await readPublicEventBySlug(slug)
 
   if (!event) notFound()
-  const ctaHref = sanitizePublicUrl(event.ctaHref, "")
+  const defaultEventCtaHref = `/contact?source=event&event=${encodeURIComponent(
+    event.slug ?? event.id
+  )}#contact-form`
+  const sanitizedCtaHref = sanitizePublicUrl(event.ctaHref || defaultEventCtaHref, "")
+  const ctaHref =
+    sanitizedCtaHref === "/contact" || sanitizedCtaHref === "/contact#contact-form"
+      ? defaultEventCtaHref
+      : sanitizedCtaHref
 
   return (
     <div className="min-h-screen bg-[#FAFAF8] text-[#111110]">
@@ -103,13 +111,15 @@ export default async function EventDetailPage({ params }: EventDetailPageProps) 
               </div>
 
               {ctaHref && event.status !== "마감" ? (
-                <Link
+                <TrackedLink
                   href={ctaHref}
+                  ctaId="event_detail_hero_cta"
+                  tracking={{ event_slug: event.slug, event_id: event.id }}
                   className="mt-8 inline-flex items-center gap-2 rounded-full bg-[#111110] px-6 py-3 text-[14px] font-semibold text-white transition-colors hover:bg-emerald-700"
                 >
                   {event.ctaLabel}
                   <ArrowRight className="h-4 w-4" />
-                </Link>
+                </TrackedLink>
               ) : event.status === "마감" ? (
                 <span className="mt-8 inline-flex items-center gap-2 rounded-full bg-[#f0f0ec] px-6 py-3 text-[14px] font-semibold text-[#1a1a1a]/40">
                   마감되었습니다
@@ -153,13 +163,15 @@ export default async function EventDetailPage({ params }: EventDetailPageProps) 
                 {event.title}
               </h2>
               <div className="mt-6">
-                <Link
+                <TrackedLink
                   href={ctaHref}
+                  ctaId="event_detail_bottom_cta"
+                  tracking={{ event_slug: event.slug, event_id: event.id }}
                   className="inline-flex items-center gap-2 rounded-full bg-white px-5 py-3 text-sm font-semibold text-[#111110] transition-transform hover:-translate-y-0.5"
                 >
                   {event.ctaLabel}
                   <ArrowRight className="h-4 w-4" />
-                </Link>
+                </TrackedLink>
               </div>
             </div>
           )}

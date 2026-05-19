@@ -104,7 +104,7 @@ export function Comparison() {
                 {/* Soft CTA */}
                 <div className="text-center mt-10">
                     <p className="text-[#A39E98] mb-4 text-sm">전환할 준비가 되셨나요?</p>
-                    <DemoModal>
+                    <DemoModal trackingButton="comparison_demo">
                         <Button size="lg" className="px-8">
                             무료 데모 신청하기
                         </Button>

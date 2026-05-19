@@ -6,6 +6,7 @@
 import Image from "next/image"
 import Link from "next/link"
 import { NewsletterSubscribe } from "./NewsletterSubscribe"
+import { TrackedLink } from "@/components/TrackedLink"
 
 export function Footer() {
     return (
@@ -33,7 +34,11 @@ export function Footer() {
                         <ul className="space-y-2">
                             <li><Link href="/product/sw" className="hover:text-white transition-colors">소프트웨어</Link></li>
                             <li><Link href="/product/hw" className="hover:text-white transition-colors">하드웨어</Link></li>
-                            <li><Link href="/contact" className="hover:text-white transition-colors">도입 문의</Link></li>
+                            <li>
+                                <TrackedLink href="/contact" ctaId="footer_contact" className="hover:text-white transition-colors">
+                                    도입 문의
+                                </TrackedLink>
+                            </li>
                         </ul>
                     </div>
                     <div>
