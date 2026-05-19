@@ -168,6 +168,39 @@ export function hasAdminApiRole(
   return normalized != null && allowedRoles.includes(normalized)
 }
 
+function isUnsafeMethod(method: string) {
+  return !["GET", "HEAD", "OPTIONS"].includes(method.toUpperCase())
+}
+
+function sameOrigin(value: string | null, expectedOrigin: string) {
+  if (!value) return true
+
+  try {
+    return new URL(value).origin === expectedOrigin
+  } catch {
+    return false
+  }
+}
+
+export function verifySameOriginRequest(req: NextRequest): NextResponse | undefined {
+  if (!isUnsafeMethod(req.method)) return undefined
+
+  const secFetchSite = req.headers.get("sec-fetch-site")?.toLowerCase()
+  if (secFetchSite === "cross-site") {
+    return NextResponse.json({ error: "Forbidden" }, { status: 403 })
+  }
+
+  const expectedOrigin = req.nextUrl.origin
+  if (!sameOrigin(req.headers.get("origin"), expectedOrigin)) {
+    return NextResponse.json({ error: "Forbidden" }, { status: 403 })
+  }
+  if (!sameOrigin(req.headers.get("referer"), expectedOrigin)) {
+    return NextResponse.json({ error: "Forbidden" }, { status: 403 })
+  }
+
+  return undefined
+}
+
 export function encodeSession(session: AdminSession): string {
   const now = Math.floor(Date.now() / 1000)
   const payload = Buffer.from(
@@ -285,6 +318,9 @@ export async function verifyAdmin(
   req: NextRequest,
   allowedRoles: readonly AdminApiRole[] = DEFAULT_ADMIN_API_ROLES
 ): Promise<NextResponse | undefined> {
+  const originError = verifySameOriginRequest(req)
+  if (originError) return originError
+
   const admin = await getVerifiedAdminContext(req)
   if (!admin) {
     return NextResponse.json({ error: "Unauthorized" }, { status: 401 })
@@ -295,4 +331,23 @@ export async function verifyAdmin(
   }
 
   return undefined
+}
+
+export async function requireVerifiedAdminContext(
+  req: NextRequest,
+  allowedRoles: readonly AdminApiRole[] = DEFAULT_ADMIN_API_ROLES
+): Promise<VerifiedAdminContext | NextResponse> {
+  const originError = verifySameOriginRequest(req)
+  if (originError) return originError
+
+  const admin = await getVerifiedAdminContext(req)
+  if (!admin) {
+    return NextResponse.json({ error: "Unauthorized" }, { status: 401 })
+  }
+
+  if (!hasAdminApiRole(admin.role, allowedRoles)) {
+    return NextResponse.json({ error: "Forbidden" }, { status: 403 })
+  }
+
+  return admin
 }

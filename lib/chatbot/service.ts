@@ -5,6 +5,7 @@ import { getDocPath, listDocs, type DocArticle } from "@/lib/docs"
 import { getDocsContent } from "@/lib/docs-content"
 
 const MAX_MESSAGE_LENGTH = 1000
+const MAX_FEEDBACK_COMMENT_LENGTH = 500
 const MAX_SOURCES = 3
 const UUID_RE = /^[0-9a-f]{8}-[0-9a-f]{4}-[1-5][0-9a-f]{3}-[89ab][0-9a-f]{3}-[0-9a-f]{12}$/i
 
@@ -766,15 +767,22 @@ export async function handleChatbotQuery(
 export async function saveChatbotFeedback(raw: unknown) {
   const body = getContextObject(raw)
   const answerEventId = normalizeOptionalUuid(body.answerEventId)
+  const sessionId = normalizeOptionalUuid(body.sessionId)
   const rating = normalizeString(body.rating)
   const comment = normalizeString(body.comment)
 
   if (!answerEventId) {
     throw new ChatbotInputError("answerEventId가 올바르지 않습니다.")
   }
+  if (!sessionId) {
+    throw new ChatbotInputError("sessionId가 올바르지 않습니다.")
+  }
 
   if (rating !== "helpful" && rating !== "not_helpful") {
     throw new ChatbotInputError("rating은 helpful 또는 not_helpful이어야 합니다.")
+  }
+  if (comment && comment.length > MAX_FEEDBACK_COMMENT_LENGTH) {
+    throw new ChatbotInputError(`comment는 ${MAX_FEEDBACK_COMMENT_LENGTH}자 이내여야 합니다.`)
   }
 
   if (!hasSupabaseServerEnv()) {
@@ -786,10 +794,22 @@ export async function saveChatbotFeedback(raw: unknown) {
   }
 
   const supabase = createSupabaseAdminClient()
+  const { data: answerEvent, error: answerEventError } = await supabase
+    .from("chatbot_answer_events")
+    .select("id")
+    .eq("id", answerEventId)
+    .eq("session_id", sessionId)
+    .maybeSingle()
+
+  if (answerEventError) throw new Error(answerEventError.message)
+  if (!answerEvent) {
+    throw new ChatbotInputError("피드백 대상 답변을 찾지 못했습니다.")
+  }
+
   const { error } = await supabase.from("chatbot_feedback").insert({
     answer_event_id: answerEventId,
     rating,
-    comment: comment ?? null,
+    comment: comment ? redactPii(comment.replace(/\s+/g, " ").trim()) : null,
   })
 
   if (error) throw new Error(error.message)

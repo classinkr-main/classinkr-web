@@ -25,13 +25,22 @@ function formatKoreanDate(iso: string): string {
 
 const readPublicEventBySlug = cache((slug: string) => getCachedPublicEventBySlug(slug))
 
+function decodeEventSlugParam(slug: string): string {
+  try {
+    return decodeURIComponent(slug)
+  } catch {
+    return slug
+  }
+}
+
 export async function generateStaticParams() {
   const slugs = await listCachedPublicEventSlugs()
   return slugs.map((slug) => ({ slug }))
 }
 
 export async function generateMetadata({ params }: EventDetailPageProps): Promise<Metadata> {
-  const { slug } = await params
+  const { slug: rawSlug } = await params
+  const slug = decodeEventSlugParam(rawSlug)
   const event = await readPublicEventBySlug(slug)
   if (!event) return { title: "행사를 찾을 수 없습니다" }
   return {
@@ -46,7 +55,8 @@ export async function generateMetadata({ params }: EventDetailPageProps): Promis
 }
 
 export default async function EventDetailPage({ params }: EventDetailPageProps) {
-  const { slug } = await params
+  const { slug: rawSlug } = await params
+  const slug = decodeEventSlugParam(rawSlug)
   const event = await readPublicEventBySlug(slug)
 
   if (!event) notFound()

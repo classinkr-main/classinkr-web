@@ -1,6 +1,6 @@
 import { NextRequest, NextResponse } from "next/server"
 
-import { getVerifiedAdminContext } from "@/lib/admin-auth"
+import { requireVerifiedAdminContext } from "@/lib/admin-auth"
 import { getAdminRecipientSelectors } from "@/lib/notifications/recipient-selectors"
 import {
   countUnreadNotificationsForRecipients,
@@ -9,10 +9,8 @@ import {
 } from "@/lib/notifications/repository"
 
 export async function GET(req: NextRequest) {
-  const admin = await getVerifiedAdminContext(req)
-  if (!admin) {
-    return NextResponse.json({ error: "Unauthorized" }, { status: 401 })
-  }
+  const admin = await requireVerifiedAdminContext(req)
+  if (admin instanceof NextResponse) return admin
 
   const rawLimit = Number.parseInt(req.nextUrl.searchParams.get("limit") ?? "20", 10)
   const limit = Number.isFinite(rawLimit) ? rawLimit : 20
@@ -26,10 +24,8 @@ export async function GET(req: NextRequest) {
 }
 
 export async function PATCH(req: NextRequest) {
-  const admin = await getVerifiedAdminContext(req)
-  if (!admin) {
-    return NextResponse.json({ error: "Unauthorized" }, { status: 401 })
-  }
+  const admin = await requireVerifiedAdminContext(req)
+  if (admin instanceof NextResponse) return admin
 
   const selectors = getAdminRecipientSelectors(admin)
   const updatedCount = await markAllNotificationsReadForRecipients(selectors)

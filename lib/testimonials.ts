@@ -11,7 +11,7 @@ export const TESTIMONIALS: Testimonial[] = [
     {
         id: "olm-eng-director",
         badge: "수능/내신 영어학원",
-        role: "원장",
+        role: "올***영어 원장",
         quote:
             "솔직히 클래스인이 없으면 학원 운영이 안 됩니다. 듣기·단어 자동채점만으로도 보조 강사 업무량과 학원 운영 인력 부담이 확 줄었어요.",
         highlight: true,
@@ -38,7 +38,7 @@ export const TESTIMONIALS: Testimonial[] = [
     {
         id: "growin-up",
         badge: "어학원",
-        role: "원장",
+        role: "부산 **에듀 원장",
         quote:
             "결제 완료했습니다. 아주 잘 사용하고 있어요. 감사합니다.",
         rating: 5,

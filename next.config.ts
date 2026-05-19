@@ -11,6 +11,8 @@ const supabaseHost = (() => {
 
 const supabaseHttp = supabaseHost ? `https://${supabaseHost}` : "https://*.supabase.co";
 const supabaseWs = supabaseHost ? `wss://${supabaseHost}` : "wss://*.supabase.co";
+const developmentScriptPolicy =
+  process.env.NODE_ENV === "production" ? "" : " 'unsafe-eval'";
 
 const contentSecurityPolicy = [
   "default-src 'self'",
@@ -18,7 +20,7 @@ const contentSecurityPolicy = [
   "object-src 'none'",
   "frame-ancestors 'none'",
   "form-action 'self'",
-  "script-src 'self' 'unsafe-inline' 'unsafe-eval' blob: https://www.googletagmanager.com https://www.google-analytics.com https://connect.facebook.net https://t1.daumcdn.net https://*.daumcdn.net https://cdn.channel.io https://js.tosspayments.com",
+  `script-src 'self' 'unsafe-inline'${developmentScriptPolicy} blob: https://www.googletagmanager.com https://www.google-analytics.com https://connect.facebook.net https://t1.daumcdn.net https://*.daumcdn.net https://cdn.channel.io https://js.tosspayments.com`,
   "style-src 'self' 'unsafe-inline' https://cdn.jsdelivr.net",
   "font-src 'self' data: https://cdn.jsdelivr.net",
   `img-src 'self' data: blob: https://images.unsplash.com ${supabaseHttp} https://www.facebook.com https://*.kakao.com https://*.daumcdn.net https://www.googletagmanager.com https://maps.google.com`,
@@ -82,6 +84,15 @@ const nextConfig: NextConfig = {
       {
         source: "/video/:path*",
         headers: publicAssetCacheHeaders,
+      },
+      {
+        source: "/docs/files/classin-verification-business-registration.pdf",
+        headers: [
+          {
+            key: "Cache-Control",
+            value: "private, no-store",
+          },
+        ],
       },
       {
         source: "/docs/files/:path*",

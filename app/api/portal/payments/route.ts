@@ -7,15 +7,23 @@ import {
 import {
   resolvePartnerAccountId,
   getActorInfo,
+  requirePortalAdmin,
 } from "@/lib/portal/portal-authorize";
 import { createPayment } from "@/lib/portal/repositories/payments";
 import { getDeal } from "@/lib/portal/repositories/deals";
 import { logActivity } from "@/lib/portal/repositories/activity";
 
+function parsePositiveAmount(value: unknown) {
+  const amount = typeof value === "number" ? value : Number(value);
+  return Number.isFinite(amount) && amount > 0 ? amount : null;
+}
+
 export async function POST(req: NextRequest) {
   const result = await requirePortalContext(req);
   if (isErrorResponse(result)) return result;
   const ctx = result;
+  const adminOnly = requirePortalAdmin(ctx);
+  if (adminOnly) return adminOnly;
 
   try {
     const body = await req.json();
@@ -39,11 +47,16 @@ export async function POST(req: NextRequest) {
       return NextResponse.json({ error: "Forbidden" }, { status: 403 });
     }
 
+    const amount = parsePositiveAmount(body.amount);
+    if (amount == null) {
+      return NextResponse.json({ error: "amount must be positive" }, { status: 400 });
+    }
+
     const payment = await createPayment({
       partner_account_id: partnerAccountId,
       customer_id: body.customer_id,
       deal_id: body.deal_id,
-      amount: body.amount ?? 0,
+      amount,
       paid_at: body.paid_at ?? new Date().toISOString(),
       payment_method: body.payment_method ?? "bank_transfer",
       memo: body.memo ?? null,

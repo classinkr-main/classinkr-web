@@ -17,17 +17,30 @@ function hasOwn(input: Record<string, unknown>, key: string) {
   return Object.prototype.hasOwnProperty.call(input, key);
 }
 
+function parseNonNegativeNumber(value: unknown, fallback: number) {
+  const amount = typeof value === "number" ? value : Number(value);
+  return Number.isFinite(amount) && amount >= 0 ? amount : fallback;
+}
+
+function parsePositiveNumber(value: unknown, fallback: number) {
+  const amount = typeof value === "number" ? value : Number(value);
+  return Number.isFinite(amount) && amount > 0 ? amount : fallback;
+}
+
 function pickLineItemPatch(body: Record<string, unknown>): UpdateDealLineItem {
   const patch: UpdateDealLineItem = {};
 
   if (hasOwn(body, "sku")) patch.sku = typeof body.sku === "string" ? body.sku : null;
   if (typeof body.category === "string") patch.category = body.category as UpdateDealLineItem["category"];
   if (typeof body.product_name === "string") patch.product_name = body.product_name;
-  if (typeof body.quantity === "number") patch.quantity = body.quantity;
-  if (typeof body.unit_price === "number") patch.unit_price = body.unit_price;
-  if (typeof body.amount === "number") patch.amount = body.amount;
+  if (hasOwn(body, "quantity")) patch.quantity = parsePositiveNumber(body.quantity, 1);
+  if (hasOwn(body, "unit_price")) patch.unit_price = parseNonNegativeNumber(body.unit_price, 0);
   if (typeof body.sort_order === "number") patch.sort_order = body.sort_order;
   if (hasOwn(body, "notes")) patch.notes = typeof body.notes === "string" ? body.notes : null;
+
+  if (patch.quantity != null && patch.unit_price != null) {
+    patch.amount = patch.quantity * patch.unit_price;
+  }
 
   return patch;
 }
@@ -50,14 +63,16 @@ export async function POST(
     }
 
     const body = await req.json();
+    const quantity = parsePositiveNumber(body.quantity, 1);
+    const unitPrice = parseNonNegativeNumber(body.unit_price, 0);
     const item = await createDealLineItem({
       deal_id: dealId,
       sku: body.sku ?? null,
       category: body.category,
       product_name: body.product_name,
-      quantity: body.quantity ?? 1,
-      unit_price: body.unit_price ?? 0,
-      amount: body.amount ?? (body.quantity ?? 1) * (body.unit_price ?? 0),
+      quantity,
+      unit_price: unitPrice,
+      amount: quantity * unitPrice,
       sort_order: body.sort_order ?? 0,
       notes: body.notes ?? null,
     });
@@ -88,6 +103,12 @@ export async function PUT(
 
     const body = (await req.json()) as Record<string, unknown>;
     if (!body.id) return NextResponse.json({ error: "id 필수" }, { status: 400 });
+    if (hasOwn(body, "quantity") !== hasOwn(body, "unit_price")) {
+      return NextResponse.json(
+        { error: "quantity and unit_price must be updated together" },
+        { status: 400 }
+      );
+    }
 
     const patch = pickLineItemPatch(body);
     if (Object.keys(patch).length === 0) {

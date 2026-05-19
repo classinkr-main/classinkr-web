@@ -370,39 +370,134 @@ function AmbientParticle({ x, size, duration, delayStart }: { x: number; size: n
 function Avatar({ name, gradient }: { name: string; gradient: string }) {
     const initials = name.split(" ").map(n => n[0]).join("").slice(0, 2)
     return (
-        <div className={`w-12 h-12 rounded-full flex-shrink-0 flex items-center justify-center text-white font-bold text-sm bg-gradient-to-br ${gradient}`}>
+        <div className={`flex h-11 w-11 flex-shrink-0 items-center justify-center rounded-full bg-gradient-to-br text-sm font-bold text-white ${gradient}`}>
             {initials}
         </div>
     )
 }
 
+type SoftwareTestimonial = {
+    name: string
+    role: string
+    quote: string
+    rating: number
+    gradient: string
+    dark?: boolean
+    delay?: number
+    className?: string
+}
+
+const SOFTWARE_TESTIMONIALS: SoftwareTestimonial[] = [
+    {
+        name: "올***영어 원장",
+        role: "수능/내신 영어학원",
+        quote: "솔직히 클래스인이 없으면 학원 운영이 안 됩니다. 듣기·단어 자동채점만으로도 보조 강사 업무량과 학원 운영 인력 부담이 확 줄었어요.",
+        rating: 5,
+        gradient: "from-[#0FAE73] to-[#087A52]",
+        dark: true,
+        className: "lg:col-span-5",
+    },
+    {
+        name: "권** 대표",
+        role: "국어 전문 학원",
+        quote: "오프라인 수업이 신석기 문화라면, 기존 전자칠판은 청동기, 클래스인은 철기 문화에 가깝습니다. 광선검까지 진화하길 기대합니다.",
+        rating: 5,
+        gradient: "from-[#B950D7] to-[#7C3AED]",
+        className: "lg:col-span-4",
+        delay: 0.08,
+    },
+    {
+        name: "라**",
+        role: "강사 회원",
+        quote: "클래스인 덕분에 돈 벌면서 유학 공부할 수 있게 됐어요. 9월에 해외 의대 5학년으로 편입합니다.",
+        rating: 5,
+        gradient: "from-[#5B7CFA] to-[#3B5BDB]",
+        className: "lg:col-span-3",
+        delay: 0.12,
+    },
+    {
+        name: "천** 부원장",
+        role: "입시 학원",
+        quote: "진심으로 응대해 주시고 잘 케어해 주신 덕분에, 저희가 불편함 없이 쓰고 있다고 직원분들이 입을 모아 말합니다.",
+        rating: 5,
+        gradient: "from-[#4F5F73] to-[#283548]",
+        className: "lg:col-span-4",
+        delay: 0.16,
+    },
+    {
+        name: "고** 원장",
+        role: "어학원",
+        quote: "저도 열심히 활용해서, 우리 지역에서 클래스인의 전도사가 되어보겠습니다.",
+        rating: 5,
+        gradient: "from-[#0FC5A4] to-[#07926F]",
+        className: "lg:col-span-5",
+        delay: 0.2,
+    },
+    {
+        name: "김** 대표",
+        role: "국어 전문 학원",
+        quote: "덕분에 좋은 문물을 접했습니다. 감사합니다.",
+        rating: 5,
+        gradient: "from-[#F95D91] to-[#D6336C]",
+        className: "lg:col-span-3",
+        delay: 0.24,
+    },
+]
+
 /* ── Testimonial Card ────────────────────────────────────────────── */
-function TestimonialCard({ name, role, quote, rating, gradient, dark = false, delay = 0 }: {
-    name: string; role: string; quote: string; rating: number; gradient: string; dark?: boolean; delay?: number
-}) {
+function TestimonialCard({
+    name,
+    role,
+    quote,
+    rating,
+    gradient,
+    dark = false,
+    delay = 0,
+    className = "",
+}: SoftwareTestimonial) {
     return (
         <motion.div
             initial={{ opacity: 0, y: 20 }}
             whileInView={{ opacity: 1, y: 0 }}
-            viewport={{ once: true }}
-            transition={{ delay }}
-            className={`p-8 rounded-3xl ${dark ? "bg-[#1a1a19] text-white shadow-[0_10px_40px_rgba(0,0,0,0.08)]" : "bg-[#FDFCF8] shadow-[0_10px_40px_rgba(0,0,0,0.03)] border border-[#f3f0ea]"} hover:shadow-lg transition-shadow`}
+            viewport={{ once: true, margin: "-80px" }}
+            transition={{ delay, duration: 0.5 }}
+            className={`group relative flex min-h-[190px] flex-col rounded-lg border p-5 transition-all duration-300 after:absolute after:bottom-[-7px] after:h-3.5 after:w-3.5 after:rotate-45 after:rounded-[2px] ${
+                dark
+                    ? "border-[#0E3D30] bg-[#101311] text-white shadow-[0_18px_46px_rgba(16,19,17,0.16)] after:left-9 after:border-b after:border-r after:border-[#0E3D30] after:bg-[#101311]"
+                    : "border-[#E8E6DC] bg-white text-[#172018] shadow-[0_12px_30px_rgba(20,24,21,0.04)] hover:-translate-y-0.5 hover:border-[#22A366]/25 hover:shadow-[0_18px_44px_rgba(8,71,52,0.07)] after:right-9 after:border-b after:border-r after:border-[#E8E6DC] after:bg-white"
+            } ${className}`}
         >
-            <div className="flex items-center gap-4 mb-4">
-                <Avatar name={name} gradient={gradient} />
-                <div>
-                    <div className={`font-bold ${dark ? "text-white" : "text-slate-900"}`}>{name}</div>
-                    <div className={`text-sm ${dark ? "text-slate-400" : "text-slate-500"}`}>{role}</div>
+            <div className="mb-4 flex items-start justify-between gap-4">
+                <div className="flex items-center gap-3">
+                    <Avatar name={name} gradient={gradient} />
+                    <div>
+                        <div className={`text-sm font-extrabold ${dark ? "text-white" : "text-slate-950"}`}>{name}</div>
+                        <div className={`mt-0.5 text-xs font-medium ${dark ? "text-white/50" : "text-slate-500"}`}>{role}</div>
+                    </div>
                 </div>
+                <MessageSquare className={`mt-1 h-4 w-4 shrink-0 ${dark ? "text-[#F8C35B]" : "text-[#22A366]/45"}`} />
             </div>
-            <div className="flex gap-0.5 mb-4">
-                {[...Array(5)].map((_, i) => (
-                    <Star key={i} className={`w-4 h-4 ${i < rating ? "text-amber-400 fill-amber-400" : "text-slate-200"}`} />
-                ))}
-            </div>
-            <p className={`leading-relaxed font-medium ${dark ? "text-slate-200" : "text-slate-600"}`}>
+
+            <p className={`flex-1 text-[15px] font-semibold leading-7 break-keep ${dark ? "text-white/86" : "text-slate-700"}`}>
                 &ldquo;{quote}&rdquo;
             </p>
+
+            <div className={`mt-5 flex items-center border-t pt-3 ${dark ? "border-white/10" : "border-black/[0.06]"}`}>
+                <div className="flex gap-0.5">
+                    {[...Array(5)].map((_, i) => (
+                        <Star
+                            key={i}
+                            className={`h-3.5 w-3.5 ${
+                                i < rating
+                                    ? dark
+                                        ? "fill-[#F8C35B] text-[#F8C35B]"
+                                        : "fill-[#FFB000] text-[#FFB000]"
+                                    : "text-slate-200"
+                            }`}
+                        />
+                    ))}
+                </div>
+            </div>
         </motion.div>
     )
 }
@@ -1991,27 +2086,28 @@ export default function ProductPage() {
             {/* ================================================================
                 TESTIMONIALS (avatars, star ratings, marquee option)
             ================================================================ */}
-            <section className="py-24 md:py-32 bg-white relative">
-                <div className="container mx-auto px-4 max-w-6xl">
-                    <motion.div className="text-center mb-20" {...fadeUp}>
-                        <h2 className="text-3xl md:text-5xl font-sans text-[#1a1a19] leading-tight">
-                            전국의 교육자들이 <span className="text-[#22A366]">인정하는</span> 솔루션
-                        </h2>
-                    </motion.div>
+            <section className="relative overflow-hidden bg-[#F6F7F2] py-20 md:py-24">
+                <div className="absolute inset-x-0 top-0 h-px bg-gradient-to-r from-transparent via-[#084734]/20 to-transparent" />
+                <div className="container mx-auto max-w-7xl px-4 lg:px-8">
+                    <div className="max-w-2xl">
+                        <motion.div {...fadeUp}>
+                            <EyebrowTag>-Real Voice-</EyebrowTag>
+                            <h2 className="mt-5 max-w-2xl text-3xl font-sans leading-tight text-[#1a1a19] md:text-5xl">
+                                수업 운영을 바꾼 사람들의
+                                <br />
+                                <span className="text-[#22A366]">구체적인 한마디</span>
+                            </h2>
+                            <p className="mt-5 max-w-xl text-base font-medium leading-7 text-slate-500">
+                                수업 도구, 자동채점, 온라인 운영, 온보딩 경험까지. ClassIn 소프트웨어를 실제로 쓰며
+                                달라진 장면을 중심으로 정리했습니다.
+                            </p>
+                        </motion.div>
+                    </div>
 
-                    <div className="grid md:grid-cols-2 lg:grid-cols-3 gap-6 md:gap-8 items-start">
-                        <div className="space-y-6 md:space-y-8">
-                            <TestimonialCard name="원장" role="수능/내신 영어학원" quote="솔직히 클래스인이 없으면 학원 운영이 안 됩니다. 듣기·단어 자동채점만으로도 보조 강사 업무량과 학원 운영 인력 부담이 확 줄었어요." rating={5} gradient="from-[#22A366] to-green-500" />
-                            <TestimonialCard name="고** 원장" role="어학원" quote="저도 열심히 활용해서, 우리 지역에서 클래스인의 전도사가 되어보겠습니다." rating={5} gradient="from-emerald-500 to-teal-400" delay={0.1} />
-                        </div>
-                        <div className="space-y-6 md:space-y-8 md:mt-12">
-                            <TestimonialCard name="라**" role="강사 회원" quote="클래스인 덕분에 돈 벌면서 유학 공부할 수 있게 됐어요. 9월에 해외 의대 5학년으로 편입합니다." rating={5} gradient="from-blue-500 to-indigo-400" delay={0.2} />
-                            <TestimonialCard name="권** 대표" role="국어 전문 학원" quote="오프라인 수업이 신석기 문화라면, 기존 전자칠판은 청동기, 클래스인은 철기 문화에 가깝습니다. 광선검까지 진화하길 기대합니다." rating={5} gradient="from-purple-500 to-pink-400" dark delay={0.3} />
-                        </div>
-                        <div className="space-y-6 md:space-y-8 lg:mt-6">
-                            <TestimonialCard name="김** 대표" role="국어 전문 학원" quote="덕분에 좋은 문물을 접했습니다. 감사합니다." rating={5} gradient="from-pink-500 to-rose-400" delay={0.4} />
-                            <TestimonialCard name="천** 부원장" role="입시 학원" quote="진심으로 응대해 주시고 잘 케어해 주신 덕분에, 저희가 불편함 없이 쓰고 있다고 직원분들이 입을 모아 말합니다." rating={5} gradient="from-slate-700 to-slate-500" delay={0.5} />
-                        </div>
+                    <div className="mt-10 grid gap-4 md:grid-cols-2 lg:grid-cols-12">
+                        {SOFTWARE_TESTIMONIALS.map((testimonial) => (
+                            <TestimonialCard key={`${testimonial.name}-${testimonial.role}`} {...testimonial} />
+                        ))}
                     </div>
                 </div>
             </section>

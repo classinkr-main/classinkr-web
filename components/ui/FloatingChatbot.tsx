@@ -101,7 +101,13 @@ function getAnonymousId() {
     return next
 }
 
-function FeedbackButtons({ answerEventId }: { answerEventId?: string }) {
+function FeedbackButtons({
+    answerEventId,
+    sessionId,
+}: {
+    answerEventId?: string
+    sessionId?: string
+}) {
     const [state, setState] = useState<"idle" | "helpful" | "not_helpful" | "failed">("idle")
 
     async function sendFeedback(rating: "helpful" | "not_helpful") {
@@ -113,7 +119,7 @@ function FeedbackButtons({ answerEventId }: { answerEventId?: string }) {
             await fetch("/api/chatbot/feedback", {
                 method: "POST",
                 headers: { "Content-Type": "application/json" },
-                body: JSON.stringify({ answerEventId, rating }),
+                body: JSON.stringify({ answerEventId, sessionId, rating }),
             })
         } catch {
             setState("failed")
@@ -440,7 +446,7 @@ export function FloatingChatbot() {
                                                     ) : null}
                                                     {message.answerEventId || message.showHandoffCTA ? (
                                                         <div className="mt-3 flex flex-wrap items-center justify-between gap-2">
-                                                            {message.answerEventId ? <FeedbackButtons answerEventId={message.answerEventId} /> : <span />}
+                                                            {message.answerEventId ? <FeedbackButtons answerEventId={message.answerEventId} sessionId={sessionId} /> : <span />}
                                                             {message.showHandoffCTA ? (
                                                                 message.handoffIntent === "support" ? (
                                                                     <button

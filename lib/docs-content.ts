@@ -9,6 +9,7 @@ import {
   type DocArticle,
   type DocCategory,
   type DocCategoryId,
+  type DocMedia,
   type DocResource,
   type DocSection,
 } from "@/lib/docs"
@@ -71,8 +72,30 @@ function isDocSection(value: unknown): value is DocSection {
   const hasValidSteps =
     section.steps === undefined ||
     (Array.isArray(section.steps) && section.steps.every((step) => typeof step === "string"))
+  const hasValidMedia =
+    section.media === undefined ||
+    (Array.isArray(section.media) && section.media.every(isDocMedia))
 
-  return typeof section.heading === "string" && typeof section.body === "string" && hasValidSteps
+  return (
+    typeof section.heading === "string" &&
+    typeof section.body === "string" &&
+    hasValidSteps &&
+    hasValidMedia
+  )
+}
+
+function isDocMedia(value: unknown): value is DocMedia {
+  if (!value || typeof value !== "object") return false
+
+  const media = value as Partial<DocMedia>
+  return (
+    (media.type === "image" || media.type === "video") &&
+    typeof media.src === "string" &&
+    typeof media.alt === "string" &&
+    (media.caption === undefined || typeof media.caption === "string") &&
+    (media.width === undefined || typeof media.width === "number") &&
+    (media.height === undefined || typeof media.height === "number")
+  )
 }
 
 function isDocResource(value: unknown): value is DocResource {

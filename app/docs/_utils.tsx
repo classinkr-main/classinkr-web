@@ -1,3 +1,4 @@
+import Image from "next/image"
 import type { LucideIcon } from "lucide-react"
 import {
   ClipboardList,
@@ -26,6 +27,7 @@ import {
   type DocArticle,
   type DocCategory,
   type DocCategoryId,
+  type DocMedia,
 } from "@/lib/docs"
 import type { DocsContent } from "@/lib/docs-content"
 
@@ -71,6 +73,7 @@ function getDocSearchText(doc: DocArticle) {
       section.heading,
       section.body,
       ...(section.steps ?? []),
+      ...(section.media?.flatMap((media) => [media.alt, media.caption ?? "", media.src]) ?? []),
     ]),
   ].join(" ")
 }
@@ -167,7 +170,47 @@ export function toArticleSections(doc: DocArticle): DocsArticleSection[] {
             tone: "info" as const,
           }
         : undefined,
+    children: section.media?.length ? <DocsSectionMedia media={section.media} /> : undefined,
   }))
+}
+
+function DocsSectionMedia({ media }: { media: DocMedia[] }) {
+  return (
+    <div className="space-y-5">
+      {media.map((item) => (
+        <figure key={item.src} className="overflow-hidden rounded-lg border border-black/[0.08] bg-white">
+          {item.type === "image" ? (
+            <Image
+              src={item.src}
+              alt={item.alt}
+              width={item.width ?? 1440}
+              height={item.height ?? 900}
+              sizes="(min-width: 1024px) 760px, calc(100vw - 32px)"
+              className={
+                item.width && item.height && item.height > item.width
+                  ? "mx-auto h-auto max-h-[640px] w-auto max-w-full object-contain"
+                  : "h-auto w-full object-contain"
+              }
+            />
+          ) : (
+            <video
+              controls
+              preload="metadata"
+              src={item.src}
+              className="block w-full bg-black"
+            >
+              {item.alt}
+            </video>
+          )}
+          {item.caption ? (
+            <figcaption className="border-t border-black/[0.08] px-4 py-3 text-sm leading-6 text-[#615D59]">
+              {item.caption}
+            </figcaption>
+          ) : null}
+        </figure>
+      ))}
+    </div>
+  )
 }
 
 export function toTocItems(doc: DocArticle): DocsTocItem[] {

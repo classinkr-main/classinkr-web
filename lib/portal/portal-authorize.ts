@@ -40,6 +40,11 @@ export function resolvePartnerAccountId(
   return bodyPartnerAccountId ?? null;
 }
 
+export function requirePortalAdmin(ctx: PortalUserContext): NextResponse | null {
+  if (ctx.type === "admin") return null;
+  return NextResponse.json({ error: "Forbidden" }, { status: 403 });
+}
+
 /**
  * actor 정보를 activity log에 기록할 때 사용
  */

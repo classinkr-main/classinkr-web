@@ -8,7 +8,11 @@
 import type { NextRequest } from "next/server";
 import { NextResponse } from "next/server";
 
-import { getVerifiedAdminContext, hasAdminApiRole } from "@/lib/admin-auth";
+import {
+  getVerifiedAdminContext,
+  hasAdminApiRole,
+  verifySameOriginRequest,
+} from "@/lib/admin-auth";
 import {
   resolvePartnerAccountContext,
   type PartnerAccountContext,
@@ -94,6 +98,9 @@ function partnerToPortal(ctx: PartnerAccountContext): PortalContextPartner {
 export async function requirePortalContext(
   req: NextRequest
 ): Promise<PortalUserContext | NextResponse> {
+  const originError = verifySameOriginRequest(req);
+  if (originError) return originError;
+
   const ctx = await resolvePortalContext(req);
   if (!ctx) {
     return NextResponse.json({ error: "Unauthorized" }, { status: 401 });
