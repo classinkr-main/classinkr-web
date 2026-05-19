@@ -25,8 +25,8 @@ export function AnalyticsProviders() {
     <>
       {/* Kakao Pixel */}
       <Script
-        src="//t1.daumcdn.net/adfit/static/kp.js"
-        strategy="lazyOnload"
+        src="https://t1.daumcdn.net/adfit/static/kp.js"
+        strategy="afterInteractive"
         onReady={() => setIsKakaoReady(true)}
       />
     </>

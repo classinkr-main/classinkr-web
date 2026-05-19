@@ -25,6 +25,10 @@ const AnalyticsProviders = dynamic(
   () => import("@/components/AnalyticsProviders").then((mod) => mod.AnalyticsProviders),
   { ssr: false }
 )
+const PageViewTracker = dynamic(
+  () => import("@/components/PageViewTracker").then((mod) => mod.PageViewTracker),
+  { ssr: false }
+)
 const GTMScript = dynamic(
   () => import("@/components/GTMScript").then((mod) => mod.GTMScript),
   { ssr: false }
@@ -46,6 +50,7 @@ export function AppChrome({ children }: { children: ReactNode }) {
   const pathname = usePathname()
   const [readyPath, setReadyPath] = useState<string | null>(null)
   const showPublicChrome = !isInternalPath(pathname)
+  const showAnalytics = showPublicChrome
 
   useEffect(() => {
     const w = window as Window & {
@@ -73,13 +78,18 @@ export function AppChrome({ children }: { children: ReactNode }) {
         )}
       </main>
       {showPublicChrome ? <ConditionalFooter /> : null}
-      {showPublicChrome && readyPath === pathname ? (
+      {showAnalytics ? (
         <>
           <GTMScript />
           <MetaPixelScript />
+          <AnalyticsProviders />
+          <PageViewTracker />
+        </>
+      ) : null}
+      {showPublicChrome && readyPath === pathname ? (
+        <>
           <FloatingChatbot />
           <MobileFloatingCTA />
-          <AnalyticsProviders />
         </>
       ) : null}
     </>

@@ -10,6 +10,7 @@ const ALLOWED_EVENTS = new Set([
   "download_materials",
   "view_demo_video",
   "begin_checkout",
+  "purchase",
 ])
 
 interface TrackEventBody {
@@ -51,7 +52,7 @@ export async function POST(req: NextRequest) {
 
   try {
     const sb = createSupabaseAdminClient()
-    await sb.from("client_events").insert({
+    const { error } = await sb.from("client_events").insert({
       event_name: eventName,
       button,
       page,
@@ -59,11 +60,16 @@ export async function POST(req: NextRequest) {
       referrer,
       user_agent: userAgent,
     })
+    if (error) {
+      console.warn("[track/event] client_events insert failed:", error.message)
+      return NextResponse.json({ ok: true, stored: false })
+    }
   } catch {
     // 추적은 사용자 경험을 막지 않는다 — 실패해도 200 반환
+    return NextResponse.json({ ok: true, stored: false })
   }
 
-  return NextResponse.json({ ok: true })
+  return NextResponse.json({ ok: true, stored: true })
 }
 
 function sanitizeParams(params: Record<string, unknown>) {
