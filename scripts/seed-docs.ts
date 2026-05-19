@@ -125,7 +125,7 @@ function inferDocType(doc: DocArticle): DocType {
   return "manual"
 }
 
-function inferSymptoms(_doc: DocArticle) {
+function inferSymptoms() {
   return []
 }
 
@@ -177,7 +177,7 @@ function buildArticleRows() {
     order_index: (docsCategories.find((category) => category.id === doc.category)?.order ?? 99) * 100 + index,
     tags: doc.tags,
     keywords: doc.keywords,
-    symptoms: inferSymptoms(doc),
+    symptoms: inferSymptoms(),
     chatbot_summary: doc.chatbotSummary,
     content_markdown: docToMarkdown(doc),
     content_json: {

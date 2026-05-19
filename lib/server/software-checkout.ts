@@ -152,6 +152,34 @@ function parseAmountCny(value: unknown): number {
   return Number.isFinite(n) ? Math.round(n) : Number.NaN
 }
 
+const ATTRIBUTION_KEYS = [
+  "utmSource",
+  "utmMedium",
+  "utmCampaign",
+  "utmTerm",
+  "utmContent",
+  "gclid",
+  "fbclid",
+  "msclkid",
+  "ttclid",
+  "landingPage",
+  "currentPage",
+  "referrer",
+]
+
+function sanitizeAttribution(value: unknown) {
+  if (!value || typeof value !== "object" || Array.isArray(value)) return null
+
+  const source = value as Record<string, unknown>
+  const attribution: Record<string, string> = {}
+  for (const key of ATTRIBUTION_KEYS) {
+    const normalized = normalizeString(source[key]).slice(0, 500)
+    if (normalized) attribution[key] = normalized
+  }
+
+  return Object.keys(attribution).length > 0 ? attribution : null
+}
+
 function mapCheckoutOrder(row: CheckoutOrderRow): SoftwareCheckoutOrder {
   return {
     id: row.id,
@@ -222,6 +250,7 @@ export async function createSubscriptionCheckoutOrder(raw: unknown): Promise<Sub
   const billingCycle = parseBillingCycle(body.billingCycle)
   const accountCount = parseAccountCount(body.accountCount)
   const identity = validateBuyerIdentity(body)
+  const attribution = sanitizeAttribution(body.attribution)
 
   const plan = getSelfServeSoftwarePlan(planId)
   const price = billingCycle === "monthly" ? plan.monthly : plan.yearly
@@ -261,6 +290,7 @@ export async function createSubscriptionCheckoutOrder(raw: unknown): Promise<Sub
         fxRate: fx.usdKrw,
         fxFetchedAt: fx.fetchedAt,
         fxSource: fx.source,
+        attribution,
       },
     })
     .select("*")
@@ -294,6 +324,7 @@ export async function createBusinessRechargeOrder(raw: unknown): Promise<Busines
 
   const body = raw as Record<string, unknown>
   const identity = validateBuyerIdentity(body)
+  const attribution = sanitizeAttribution(body.attribution)
 
   const quoteCodeInput = normalizeString(body.quoteCode)
   const promoCodeInput = normalizeString(body.promoCode)
@@ -382,6 +413,7 @@ export async function createBusinessRechargeOrder(raw: unknown): Promise<Busines
         fxSource: fx.source,
         quoteCode: quoteCode?.code ?? null,
         promoCode: appliedPromo?.code ?? null,
+        attribution,
         rules: {
           baseMinCny: BUSINESS_RECHARGE.baseMinCny,
           incrementCny: BUSINESS_RECHARGE.incrementCny,

@@ -25,6 +25,8 @@ import {
   hasTossWidgetClientKey,
   isSoftwareCheckoutEnabled,
 } from "@/lib/billing/public-env"
+import { trackEvent } from "@/lib/analytics"
+import { collectLeadAttribution } from "@/lib/submitLead"
 
 type CheckoutFormState = {
   organizationName: string
@@ -231,6 +233,7 @@ export function SubscriptionCheckoutPanel() {
           buyerName: form.buyerName,
           buyerEmail: form.buyerEmail,
           buyerPhone: form.buyerPhone,
+          attribution: collectLeadAttribution(),
         }),
       })
 
@@ -254,6 +257,15 @@ export function SubscriptionCheckoutPanel() {
 
       // 서버가 확정한 KRW 금액을 위젯에 재반영 (환율 불일치 방지)
       await widgetsRef.current.setAmount({ currency: "KRW", value: payload.amountKrw })
+
+      trackEvent("begin_checkout", {
+        mode: "subscription",
+        plan_id: planId,
+        billing_cycle: billingCycle,
+        account_count: clampAccountCount(accountCount),
+        value: payload.amountKrw,
+        currency: "KRW",
+      })
 
       const checkoutQuery = `checkoutToken=${encodeURIComponent(payload.checkoutToken)}`
       await widgetsRef.current.requestPayment({
