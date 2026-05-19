@@ -1,12 +1,12 @@
 import { NextRequest, NextResponse } from "next/server";
 
 import { verifyAdmin } from "@/lib/admin-auth";
-import { listLegacyCustomerListItems } from "@/lib/partner-portal/repositories/legacy";
+import { listLegacyCustomerListItems } from "@/lib/portal/repositories/legacy";
 import {
   listAllCustomerListItems,
   listCustomerDealSummaries,
   listCustomerListItems,
-} from "@/lib/partner-portal/repositories/customers";
+} from "@/lib/portal/repositories/customers";
 
 export async function GET(req: NextRequest) {
   const err = await verifyAdmin(req);

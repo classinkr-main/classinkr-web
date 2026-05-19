@@ -1,0 +1,50 @@
+[
+  {
+    "id": "1",
+    "outlet": "EduPress",
+    "headline": "클래스인, 160개국 5,000만 명이 사용하는 글로벌 교육 플랫폼으로 성장",
+    "date": "2024-11-12",
+    "category": "Global",
+    "url": ""
+  },
+  {
+    "id": "2",
+    "outlet": "한국경제",
+    "headline": "EEO, 텐센트·힐하우스 투자 유치… 30조원 가치 유니콘 등극",
+    "date": "2021-08-04",
+    "category": "Investment",
+    "url": ""
+  },
+  {
+    "id": "3",
+    "outlet": "조선에듀",
+    "headline": "강사 한 명에 의존하는 학원 시대 끝났다 — 시스템화된 수업의 시대",
+    "date": "2024-06-20",
+    "category": "Industry",
+    "url": ""
+  },
+  {
+    "id": "4",
+    "outlet": "전자신문",
+    "headline": "AI 학습 도구를 교실에 — 클래스인, 차세대 하이브리드 클래스룸 공개",
+    "date": "2024-09-03",
+    "category": "Product",
+    "url": ""
+  },
+  {
+    "id": "5",
+    "outlet": "Forbes Asia",
+    "headline": "How ClassIn Built the Operating System for Online Education",
+    "date": "2023-02-15",
+    "category": "Global",
+    "url": ""
+  },
+  {
+    "id": "6",
+    "outlet": "베리타스알파",
+    "headline": "공교육에서 사교육까지 — 5만 기관이 선택한 수업 인프라",
+    "date": "2024-03-08",
+    "category": "Industry",
+    "url": ""
+  }
+]

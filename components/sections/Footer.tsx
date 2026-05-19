@@ -40,7 +40,7 @@ export function Footer() {
                         <h4 className="font-semibold text-white mb-4">자원</h4>
                         <ul className="space-y-2">
                             <li><Link href="/docs" className="hover:text-white transition-colors">가이드와 도움말</Link></li>
-                            <li><Link href="/docs/troubleshooting" className="hover:text-white transition-colors">문제 해결</Link></li>
+                            <li><Link href="/docs/start" className="hover:text-white transition-colors">클래스인 시작하기</Link></li>
                             <li><Link href="/faq" className="hover:text-white transition-colors">자주 묻는 질문</Link></li>
                             <li><Link href="/updates" className="hover:text-white transition-colors">업데이트</Link></li>
                         </ul>

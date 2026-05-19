@@ -3,14 +3,14 @@ import { NextRequest, NextResponse } from "next/server";
 import {
   requirePortalContext,
   isErrorResponse,
-} from "@/lib/partner-portal/portal-context";
-import { authorizeForAccount } from "@/lib/partner-portal/portal-authorize";
-import { getDeal } from "@/lib/partner-portal/repositories/deals";
+} from "@/lib/portal/portal-context";
+import { authorizeForAccount } from "@/lib/portal/portal-authorize";
+import { getDeal } from "@/lib/portal/repositories/deals";
 import {
   ensureContractDocumentShare,
   getContractDocument,
   updateContractDocument,
-} from "@/lib/partner-portal/repositories/contract-documents";
+} from "@/lib/portal/repositories/contract-documents";
 
 export async function POST(
   req: NextRequest,

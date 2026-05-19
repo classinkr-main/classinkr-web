@@ -3,11 +3,11 @@
 import { useCallback, useEffect, useState } from "react"
 import { Plus, RefreshCw, Search } from "lucide-react"
 
-import { CustomerDetailSlideOver } from "@/components/partner-portal/CustomerDetailSlideOver"
-import { CustomerForm } from "@/components/partner-portal/crud/CustomerForm"
+import { CustomerDetailSlideOver } from "@/components/portal/CustomerDetailSlideOver"
+import { CustomerForm } from "@/components/portal/crud/CustomerForm"
 import { Button } from "@/components/ui/button"
-import { portalFetch } from "@/lib/partner-portal/portal-fetch"
-import type { Customer, CustomerListItem } from "@/lib/partner-portal/types"
+import { portalFetch } from "@/lib/portal/portal-fetch"
+import type { Customer, CustomerListItem } from "@/lib/portal/types"
 
 const STAGE_COLOR: Record<string, string> = {
   contact: "bg-[#f0f0ec] text-[#615D59]",

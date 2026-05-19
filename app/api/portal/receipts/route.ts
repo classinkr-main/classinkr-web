@@ -3,14 +3,14 @@ import { NextRequest, NextResponse } from "next/server";
 import {
   requirePortalContext,
   isErrorResponse,
-} from "@/lib/partner-portal/portal-context";
+} from "@/lib/portal/portal-context";
 import {
   resolvePartnerAccountId,
   getActorInfo,
-} from "@/lib/partner-portal/portal-authorize";
-import { createReceipt, getPayment } from "@/lib/partner-portal/repositories/payments";
-import { getDeal } from "@/lib/partner-portal/repositories/deals";
-import { logActivity } from "@/lib/partner-portal/repositories/activity";
+} from "@/lib/portal/portal-authorize";
+import { createReceipt, getPayment } from "@/lib/portal/repositories/payments";
+import { getDeal } from "@/lib/portal/repositories/deals";
+import { logActivity } from "@/lib/portal/repositories/activity";
 
 export async function POST(req: NextRequest) {
   const result = await requirePortalContext(req);

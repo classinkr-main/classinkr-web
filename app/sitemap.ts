@@ -71,8 +71,8 @@ export default async function sitemap(): Promise<MetadataRoute.Sitemap> {
   const docsArticleEntries: MetadataRoute.Sitemap = listedDocs.map((doc) => ({
     url: toAbsoluteUrl(getDocPath(doc)),
     lastModified: new Date(doc.updatedAt),
-    changeFrequency: doc.category === "updates" ? "weekly" : "monthly",
-    priority: doc.category === "troubleshooting" || doc.featured ? 0.8 : 0.65,
+    changeFrequency: "monthly",
+    priority: doc.featured ? 0.8 : 0.65,
   }))
 
   return [...staticEntries, ...blogEntries, ...docsCategoryEntries, ...docsArticleEntries]

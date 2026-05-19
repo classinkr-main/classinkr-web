@@ -3,11 +3,11 @@ import { NextRequest, NextResponse } from "next/server";
 import {
   requirePortalContext,
   isErrorResponse,
-} from "@/lib/partner-portal/portal-context";
-import { authorizeForAccount, getActorInfo } from "@/lib/partner-portal/portal-authorize";
-import { getDeal } from "@/lib/partner-portal/repositories/deals";
-import { createContractDocument } from "@/lib/partner-portal/repositories/contract-documents";
-import { logActivity } from "@/lib/partner-portal/repositories/activity";
+} from "@/lib/portal/portal-context";
+import { authorizeForAccount, getActorInfo } from "@/lib/portal/portal-authorize";
+import { getDeal } from "@/lib/portal/repositories/deals";
+import { createContractDocument } from "@/lib/portal/repositories/contract-documents";
+import { logActivity } from "@/lib/portal/repositories/activity";
 
 export async function POST(req: NextRequest) {
   const result = await requirePortalContext(req);

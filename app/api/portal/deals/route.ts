@@ -4,15 +4,15 @@ import {
   requirePortalContext,
   getPartnerAccountFilter,
   isErrorResponse,
-} from "@/lib/partner-portal/portal-context";
+} from "@/lib/portal/portal-context";
 import {
   resolvePartnerAccountId,
   getActorInfo,
-} from "@/lib/partner-portal/portal-authorize";
-import { listDealListItems, createDeal } from "@/lib/partner-portal/repositories/deals";
-import { getCustomer } from "@/lib/partner-portal/repositories/customers";
-import { logActivity } from "@/lib/partner-portal/repositories/activity";
-import type { DealStage, DealStatus } from "@/lib/partner-portal/types";
+} from "@/lib/portal/portal-authorize";
+import { listDealListItems, createDeal } from "@/lib/portal/repositories/deals";
+import { getCustomer } from "@/lib/portal/repositories/customers";
+import { logActivity } from "@/lib/portal/repositories/activity";
+import type { DealStage, DealStatus } from "@/lib/portal/types";
 
 export async function GET(req: NextRequest) {
   const result = await requirePortalContext(req);

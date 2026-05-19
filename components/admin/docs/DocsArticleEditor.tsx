@@ -539,7 +539,7 @@ function initialForm(
 export default function DocsArticleEditor({ mode, categories, article }: Props) {
   const router = useRouter()
   const [form, setForm] = useState<FormState>(() =>
-    initialForm(article, categories[0]?.id ?? "guides")
+    initialForm(article, categories[0]?.id ?? "start")
   )
   const [saving, setSaving] = useState(false)
   const [deleting, setDeleting] = useState(false)

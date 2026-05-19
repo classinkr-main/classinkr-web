@@ -1,8 +1,8 @@
 import { NextRequest, NextResponse } from "next/server";
 
 import { verifyAdmin } from "@/lib/admin-auth";
-import { getCustomerDetail } from "@/lib/partner-portal/repositories/customers";
-import { getLegacyCustomerDetail } from "@/lib/partner-portal/repositories/legacy";
+import { getCustomerDetail } from "@/lib/portal/repositories/customers";
+import { getLegacyCustomerDetail } from "@/lib/portal/repositories/legacy";
 
 type RouteContext = {
   params: Promise<{

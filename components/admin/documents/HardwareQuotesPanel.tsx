@@ -17,9 +17,9 @@ import {
 import { Button } from "@/components/ui/button"
 import QuickQuoteComposer, {
   type QuickQuoteCreatedPayload,
-} from "@/components/partner-portal/quotes/QuickQuoteComposer"
-import { portalFetch } from "@/lib/partner-portal/portal-fetch"
-import type { PartnerDocumentListItem } from "@/lib/partner-portal/types"
+} from "@/components/portal/quotes/QuickQuoteComposer"
+import { portalFetch } from "@/lib/portal/portal-fetch"
+import type { PartnerDocumentListItem } from "@/lib/portal/types"
 
 type HardwareQuoteRow = {
   id: string

@@ -3,11 +3,10 @@
 import { usePathname } from "next/navigation"
 import Script from "next/script"
 import { META_PIXEL_ID } from "@/lib/analytics-config"
-import { isPartnerPortalPath } from "@/lib/partner-portal/pathname"
 
 export function MetaPixelScript() {
   const pathname = usePathname()
-  const isInternal = pathname.startsWith("/admin") || isPartnerPortalPath(pathname)
+  const isInternal = pathname.startsWith("/admin")
 
   if (isInternal || !META_PIXEL_ID) return null
 

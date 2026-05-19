@@ -93,14 +93,6 @@ const nextConfig: NextConfig = {
       },
     ];
   },
-  async rewrites() {
-    return [
-      {
-        source: "/api/partner/:path*",
-        destination: "/api/portal/:path*",
-      },
-    ];
-  },
 };
 
 export default nextConfig;

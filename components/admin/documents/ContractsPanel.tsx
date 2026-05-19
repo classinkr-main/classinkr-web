@@ -146,7 +146,7 @@ export function ContractsPanel() {
   const partnerName = (id: string) => partners.find((p) => p.id === id)?.name ?? id
 
   function copySignLink(contract: Contract) {
-    const url = `${window.location.origin}/partner/sign/${contract.sign_token}`
+    const url = `${window.location.origin}/share/contract/${contract.sign_token}`
     navigator.clipboard.writeText(url)
     setCopied(contract.id)
     setTimeout(() => setCopied(null), 2000)

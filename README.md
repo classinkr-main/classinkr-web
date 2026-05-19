@@ -1,20 +1,20 @@
 # Classin Home
 
-Classin Home is a mixed Next.js workspace for the public marketing site, admin operations workspace, and partner portal.
+Classin Home is a mixed Next.js workspace for the public marketing site and admin operations workspace.
 
 ## Start Here
 
 - [Docs index](docs/README.md)
 - [Current repo audit and fix playbook](docs/active/repository-audit-2026-04-15.md)
 - [Homepage PRD](docs/active/prd.md)
-- [Partner Portal master spec](docs/active/partner-portal-master-spec.md)
 - [Design system](DESIGN.md)
 
 ## Main Surfaces
 
 - Public site: `/`, `/product`, `/pricing`, `/blog`, `/events`
-- Admin workspace: `/admin`
-- Partner portal: `/partner`, `/app/api/portal/*`, `/lib/partner-portal/*`
+- Admin workspace: `/admin` (includes partner CRM at `/admin/crm/partners/*`)
+- External share links: `/share/quote/[token]`, `/share/contract/[token]`
+- Portal API + data layer: `/app/api/portal/*`, `/lib/portal/*`
 
 ## Development
 
