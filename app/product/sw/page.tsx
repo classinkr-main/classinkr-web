@@ -2001,16 +2001,16 @@ export default function ProductPage() {
 
                     <div className="grid md:grid-cols-2 lg:grid-cols-3 gap-6 md:gap-8 items-start">
                         <div className="space-y-6 md:space-y-8">
-                            <TestimonialCard name="John Kim" role="대치 A수학 대표원장" quote="줌에서 옮긴 뒤로 학생들의 수업 참여도가 확 달라졌습니다. 판서를 학생에게 넘길 수 있다는 것만으로도 수업의 질이 완전히 바뀌었어요." rating={5} gradient="from-[#22A366] to-green-500" />
-                            <TestimonialCard name="Sarah Lee" role="분당 어학원 원장" quote="LMS를 따로 쓸 필요가 없어졌어요. 출결, 숙제, 성적이 한 곳에 모이니까 행정 시간이 반 이상 줄었습니다." rating={5} gradient="from-emerald-500 to-teal-400" delay={0.1} />
+                            <TestimonialCard name="원장" role="수능/내신 영어학원" quote="솔직히 클래스인이 없으면 학원 운영이 안 됩니다. 듣기·단어 자동채점만으로도 보조 강사 업무량과 학원 운영 인력 부담이 확 줄었어요." rating={5} gradient="from-[#22A366] to-green-500" />
+                            <TestimonialCard name="고** 원장" role="어학원" quote="저도 열심히 활용해서, 우리 지역에서 클래스인의 전도사가 되어보겠습니다." rating={5} gradient="from-emerald-500 to-teal-400" delay={0.1} />
                         </div>
                         <div className="space-y-6 md:space-y-8 md:mt-12">
-                            <TestimonialCard name="David Park" role="목동 과학학원 강사" quote="학생들이 직접 화면에 실험 결과를 그리고 발표하는 게 가능해졌어요. 줌에서는 상상도 못했던 수업 방식입니다." rating={5} gradient="from-blue-500 to-indigo-400" delay={0.2} />
-                            <TestimonialCard name="Stella Choi" role="프랜차이즈 교육 본부장" quote="전국 30개 지점의 수업 데이터가 실시간으로 본사에 모입니다. 수업 품질 관리가 이전과는 차원이 달라졌어요." rating={5} gradient="from-purple-500 to-pink-400" dark delay={0.3} />
+                            <TestimonialCard name="라**" role="강사 회원" quote="클래스인 덕분에 돈 벌면서 유학 공부할 수 있게 됐어요. 9월에 해외 의대 5학년으로 편입합니다." rating={5} gradient="from-blue-500 to-indigo-400" delay={0.2} />
+                            <TestimonialCard name="권** 대표" role="국어 전문 학원" quote="오프라인 수업이 신석기 문화라면, 기존 전자칠판은 청동기, 클래스인은 철기 문화에 가깝습니다. 광선검까지 진화하길 기대합니다." rating={5} gradient="from-purple-500 to-pink-400" dark delay={0.3} />
                         </div>
                         <div className="space-y-6 md:space-y-8 lg:mt-6">
-                            <TestimonialCard name="민지 학부모" role="초등 3학년 학부모" quote="아이가 화면에서 직접 문제를 풀 수 있으니까 집중력이 확실히 올라갔어요. 녹화 영상으로 복습하는 것도 정말 좋습니다." rating={5} gradient="from-pink-500 to-rose-400" delay={0.4} />
-                            <TestimonialCard name="Peter Jung" role="에듀테크 컨설턴트" quote="교육용으로 설계된 플랫폼과 회의용 도구를 억지로 쓰는 건 차원이 다릅니다. 새로 개원하는 분들에게 1순위로 추천합니다." rating={5} gradient="from-slate-700 to-slate-500" delay={0.5} />
+                            <TestimonialCard name="김** 대표" role="국어 전문 학원" quote="덕분에 좋은 문물을 접했습니다. 감사합니다." rating={5} gradient="from-pink-500 to-rose-400" delay={0.4} />
+                            <TestimonialCard name="천** 부원장" role="입시 학원" quote="진심으로 응대해 주시고 잘 케어해 주신 덕분에, 저희가 불편함 없이 쓰고 있다고 직원분들이 입을 모아 말합니다." rating={5} gradient="from-slate-700 to-slate-500" delay={0.5} />
                         </div>
                     </div>
                 </div>

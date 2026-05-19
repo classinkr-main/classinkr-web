@@ -20,6 +20,7 @@ const DashboardPreview = dynamic(() => import("@/components/sections/DashboardPr
 const ScienceBased = dynamic(() => import("@/components/sections/ScienceBased").then(m => ({ default: m.ScienceBased })))
 const SatisfyingClass = dynamic(() => import("@/components/sections/SatisfyingClass").then(m => ({ default: m.SatisfyingClass })))
 const CaseStudies = dynamic(() => import("@/components/sections/CaseStudies").then(m => ({ default: m.CaseStudies })))
+const TestimonialWall = dynamic(() => import("@/components/sections/TestimonialWall").then(m => ({ default: m.TestimonialWall })))
 const Comparison = dynamic(() => import("@/components/sections/Comparison").then(m => ({ default: m.Comparison })))
 const FinalCTA = dynamic(() => import("@/components/sections/FinalCTA").then(m => ({ default: m.FinalCTA })))
 
@@ -48,6 +49,7 @@ export default function LandingPage() {
       <ScienceBased />
       <SatisfyingClass />
       <CaseStudies />
+      <TestimonialWall />
       <Outcomes />
 
       {/* Act 6: 확신 — 전환 결정 */}
