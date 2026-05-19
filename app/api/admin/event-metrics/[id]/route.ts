@@ -23,6 +23,18 @@ function sanitizeNumber(value: unknown): number | null {
   return Number.isFinite(n) ? n : null
 }
 
+function sanitizeCount(value: unknown): number | null {
+  const n = sanitizeNumber(value)
+  if (n === null || n < 0) return null
+  return Math.floor(n)
+}
+
+function sanitizeText(value: unknown): string | null {
+  if (typeof value !== "string") return null
+  const text = value.trim()
+  return text.length > 0 ? text : null
+}
+
 function sanitizeAdSpend(value: unknown): AdSpendEntry[] {
   if (!Array.isArray(value)) return []
   return value
@@ -74,8 +86,12 @@ export async function PATCH(
       attendeesCount: sanitizeNumber(body.attendeesCount),
       dealsCount: sanitizeNumber(body.dealsCount),
       dealsRevenue: sanitizeNumber(body.dealsRevenue),
+      closedCustomerCount: sanitizeCount(body.closedCustomerCount),
+      dealCustomers: sanitizeText(body.dealCustomers),
       adSpendEntries: sanitizeAdSpend(body.adSpendEntries),
-      notes: typeof body.notes === "string" ? body.notes : null,
+      notes: sanitizeText(body.notes),
+      retrospective: sanitizeText(body.retrospective),
+      shareMemo: sanitizeText(body.shareMemo),
     }
     const saved = saveEventMetrics(id, patch)
     return NextResponse.json(saved)

@@ -1,6 +1,6 @@
 "use client"
 
-import { useCallback, useEffect, useMemo, useState } from "react"
+import { useCallback, useEffect, useMemo, useState, useSyncExternalStore } from "react"
 import Link from "next/link"
 import {
   Activity,
@@ -69,6 +69,13 @@ function previewText(value: string | null | undefined, maxLength = 160) {
 
 function money(value: number | null | undefined, currency = "USD") {
   if (value == null) return "—"
+  if (currency === "USD") {
+    return new Intl.NumberFormat("en-US", {
+      style: "currency",
+      currency,
+      maximumFractionDigits: 2,
+    }).format(value)
+  }
   return new Intl.NumberFormat("ko-KR", {
     style: "currency",
     currency,
@@ -597,42 +604,65 @@ function FunnelStage({
 
 // ─── timeline (calendar bar) ──────────────────────────────────────────────────
 
-function TimelineRow({ events }: { events: PublicEvent[] }) {
-  const now = new Date()
-  // 표시 범위: 현재 월 ±2개월 (5개월)
-  const start = new Date(now.getFullYear(), now.getMonth() - 2, 1)
-  const end = new Date(now.getFullYear(), now.getMonth() + 3, 0)
-  const totalMs = end.getTime() - start.getTime()
-  const months: { label: string; left: number }[] = []
-  for (let m = -2; m <= 2; m++) {
-    const d = new Date(now.getFullYear(), now.getMonth() + m, 1)
-    months.push({
-      label: `${d.getFullYear()}.${String(d.getMonth() + 1).padStart(2, "0")}`,
-      left: ((d.getTime() - start.getTime()) / totalMs) * 100,
-    })
-  }
-  const todayLeft = Math.max(0, Math.min(100, ((now.getTime() - start.getTime()) / totalMs) * 100))
+function cssPercent(value: number) {
+  return `${value.toFixed(3)}%`
+}
 
-  const sorted = [...events].sort(
-    (a, b) => new Date(a.startsAt).getTime() - new Date(b.startsAt).getTime()
+let browserTimelineNow: Date | null = null
+
+function subscribeTimelineNow() {
+  return () => {}
+}
+
+function getBrowserTimelineNow() {
+  if (typeof window === "undefined") return null
+  browserTimelineNow ??= new Date()
+  return browserTimelineNow
+}
+
+function getServerTimelineNow() {
+  return null
+}
+
+function TimelineRow({ events }: { events: PublicEvent[] }) {
+  const timelineNow = useSyncExternalStore(
+    subscribeTimelineNow,
+    getBrowserTimelineNow,
+    getServerTimelineNow
   )
 
-  return (
-    <div className="rounded-2xl border border-[#e8e8e4] bg-white">
-      <div className="flex items-center justify-between border-b border-[#e8e8e4] px-4 py-3 sm:px-6">
-        <div>
-          <h2 className="text-[14px] font-semibold text-[#111110]">캘린더 타임라인</h2>
-          <p className="mt-0.5 text-[11px] text-[#1a1a1a]/40">현재 월 ±2개월의 행사 진척 현황입니다.</p>
+  function renderTimelineBody() {
+    if (!timelineNow) {
+      return (
+        <div className="relative px-4 pb-5 pt-4 sm:px-6" aria-hidden="true">
+          <div className="relative h-6 border-b border-dashed border-[#e8e8e4]" />
+          <div className="mt-3 space-y-2">
+            <div className="h-7 w-3/5 rounded-md bg-[#f0f0ec]" />
+            <div className="h-7 w-2/5 rounded-md bg-[#f0f0ec]" />
+          </div>
         </div>
-        <Link
-          href="/admin/calendar"
-          className="inline-flex items-center gap-1 rounded-lg border border-[#e8e8e4] bg-white px-2.5 py-1.5 text-[11px] font-medium text-[#1a1a1a]/60 hover:text-[#111110]"
-        >
-          <CalendarIcon className="w-3.5 h-3.5" />
-          전체 캘린더
-        </Link>
-      </div>
+      )
+    }
 
+    // 표시 범위: 현재 월 ±2개월 (5개월)
+    const start = new Date(timelineNow.getFullYear(), timelineNow.getMonth() - 2, 1)
+    const end = new Date(timelineNow.getFullYear(), timelineNow.getMonth() + 3, 0)
+    const totalMs = end.getTime() - start.getTime()
+    const months: { label: string; left: number }[] = []
+    for (let m = -2; m <= 2; m++) {
+      const d = new Date(timelineNow.getFullYear(), timelineNow.getMonth() + m, 1)
+      months.push({
+        label: `${d.getFullYear()}.${String(d.getMonth() + 1).padStart(2, "0")}`,
+        left: ((d.getTime() - start.getTime()) / totalMs) * 100,
+      })
+    }
+    const todayLeft = Math.max(0, Math.min(100, ((timelineNow.getTime() - start.getTime()) / totalMs) * 100))
+
+    const sorted = [...events].sort(
+      (a, b) => new Date(a.startsAt).getTime() - new Date(b.startsAt).getTime()
+    )
+
+    return (
       <div className="relative px-4 pb-5 pt-4 sm:px-6">
         {/* month grid */}
         <div className="relative h-6 border-b border-dashed border-[#e8e8e4]">
@@ -640,7 +670,7 @@ function TimelineRow({ events }: { events: PublicEvent[] }) {
             <div
               key={m.label}
               className="absolute top-0 -translate-x-1/2 text-[10px] font-medium text-[#1a1a1a]/40"
-              style={{ left: `${m.left}%` }}
+              style={{ left: cssPercent(m.left) }}
             >
               {m.label}
             </div>
@@ -648,7 +678,7 @@ function TimelineRow({ events }: { events: PublicEvent[] }) {
           {/* today marker */}
           <div
             className="absolute top-0 h-full w-px bg-[#B85C33]"
-            style={{ left: `${todayLeft}%` }}
+            style={{ left: cssPercent(todayLeft) }}
           />
         </div>
 
@@ -672,7 +702,7 @@ function TimelineRow({ events }: { events: PublicEvent[] }) {
                 <div key={event.id} className="relative h-7">
                   <div
                     className={`absolute top-1/2 -translate-y-1/2 rounded-md ${color} px-2 py-1 text-[11px] font-medium text-white truncate shadow-sm`}
-                    style={{ left: `${left}%`, width: `${width}%`, minWidth: "60px" }}
+                    style={{ left: cssPercent(left), width: cssPercent(width), minWidth: "60px" }}
                     title={`${event.title} · ${formatRange(event.startsAt, event.endsAt)}`}
                   >
                     {event.title}
@@ -683,6 +713,26 @@ function TimelineRow({ events }: { events: PublicEvent[] }) {
           </div>
         )}
       </div>
+    )
+  }
+
+  return (
+    <div className="rounded-2xl border border-[#e8e8e4] bg-white">
+      <div className="flex items-center justify-between border-b border-[#e8e8e4] px-4 py-3 sm:px-6">
+        <div>
+          <h2 className="text-[14px] font-semibold text-[#111110]">캘린더 타임라인</h2>
+          <p className="mt-0.5 text-[11px] text-[#1a1a1a]/40">현재 월 ±2개월의 행사 진척 현황입니다.</p>
+        </div>
+        <Link
+          href="/admin/calendar"
+          className="inline-flex items-center gap-1 rounded-lg border border-[#e8e8e4] bg-white px-2.5 py-1.5 text-[11px] font-medium text-[#1a1a1a]/60 hover:text-[#111110]"
+        >
+          <CalendarIcon className="w-3.5 h-3.5" />
+          전체 캘린더
+        </Link>
+      </div>
+
+      {renderTimelineBody()}
     </div>
   )
 }
@@ -711,6 +761,9 @@ function EventFunnelCard({
       : null
   const detailPreview = previewText(event.description) ?? previewText(event.contentMarkdown)
   const publicHref = event.slug ? `/events/${event.slug}` : null
+  const dealCustomersPreview = previewText(metrics.dealCustomers, 120)
+  const retrospectivePreview = previewText(metrics.retrospective, 180)
+  const shareMemoPreview = previewText(metrics.shareMemo, 180)
   const leadSourceLabel =
     attributedLeadCount > 0
       ? `명시 매칭 ${KRW.format(attributedLeadCount)}건`
@@ -789,6 +842,18 @@ function EventFunnelCard({
               <dd className="font-semibold text-[#111110]">{leadSourceLabel}</dd>
             </div>
             <div className="flex items-center justify-between gap-3">
+              <dt className="text-[#1a1a1a]/40">성사 고객</dt>
+              <dd className="font-semibold text-[#111110]">
+                {metrics.closedCustomerCount != null ? `${KRW.format(metrics.closedCustomerCount)}곳` : "미입력"}
+              </dd>
+            </div>
+            {dealCustomersPreview && (
+              <div className="flex items-start justify-between gap-3">
+                <dt className="shrink-0 text-[#1a1a1a]/40">고객</dt>
+                <dd className="min-w-0 text-right font-semibold text-[#111110]">{dealCustomersPreview}</dd>
+              </div>
+            )}
+            <div className="flex items-center justify-between gap-3">
               <dt className="text-[#1a1a1a]/40">성과 업데이트</dt>
               <dd className="font-semibold text-[#111110]">
                 {metrics.updatedAt ? formatMetaDate(metrics.updatedAt) : "미입력"}
@@ -796,11 +861,27 @@ function EventFunnelCard({
             </div>
           </dl>
         </div>
-        {metrics.notes && (
-          <p className="mt-2 rounded-lg bg-[#fafaf8] px-3 py-2 text-[11px] leading-relaxed text-[#1a1a1a]/55">
-            <span className="font-semibold text-[#111110]">성과 메모</span>
-            <span className="ml-2">{metrics.notes}</span>
-          </p>
+        {(metrics.notes || retrospectivePreview || shareMemoPreview) && (
+          <div className="mt-2 grid gap-2 lg:grid-cols-3">
+            {metrics.notes && (
+              <p className="rounded-lg bg-[#fafaf8] px-3 py-2 text-[11px] leading-relaxed text-[#1a1a1a]/55">
+                <span className="font-semibold text-[#111110]">내부 메모</span>
+                <span className="ml-2">{metrics.notes}</span>
+              </p>
+            )}
+            {retrospectivePreview && (
+              <p className="rounded-lg bg-[#fafaf8] px-3 py-2 text-[11px] leading-relaxed text-[#1a1a1a]/55">
+                <span className="font-semibold text-[#111110]">회고</span>
+                <span className="ml-2">{retrospectivePreview}</span>
+              </p>
+            )}
+            {shareMemoPreview && (
+              <p className="rounded-lg bg-[#ECFDF5] px-3 py-2 text-[11px] leading-relaxed text-[#084734]">
+                <span className="font-semibold">공유 포인트</span>
+                <span className="ml-2">{shareMemoPreview}</span>
+              </p>
+            )}
+          </div>
         )}
       </div>
 
@@ -911,7 +992,11 @@ function MetricsEditor({
     attendeesCount: metrics.attendeesCount,
     dealsCount: metrics.dealsCount,
     dealsRevenue: metrics.dealsRevenue,
+    closedCustomerCount: metrics.closedCustomerCount,
+    dealCustomers: metrics.dealCustomers ?? "",
     notes: metrics.notes ?? "",
+    retrospective: metrics.retrospective ?? "",
+    shareMemo: metrics.shareMemo ?? "",
   })
   const [adSpend, setAdSpend] = useState<AdSpendEntry[]>(metrics.adSpendEntries ?? [])
   const [saving, setSaving] = useState(false)
@@ -936,7 +1021,10 @@ function MetricsEditor({
           method: "PATCH",
           body: JSON.stringify({
             ...form,
+            dealCustomers: form.dealCustomers.trim() || null,
             notes: form.notes.trim() || null,
+            retrospective: form.retrospective.trim() || null,
+            shareMemo: form.shareMemo.trim() || null,
             adSpendEntries: adSpend,
           }),
         }
@@ -1012,6 +1100,32 @@ function MetricsEditor({
             </p>
           </section>
 
+          {/* 딜 성과 */}
+          <section>
+            <h3 className="mb-2 text-[12px] font-semibold uppercase tracking-[0.15em] text-[#1a1a1a]/50">
+              딜 성과
+            </h3>
+            <div className="grid gap-3 sm:grid-cols-[180px_1fr]">
+              <NumInput
+                label="실제 성사 고객 수"
+                value={form.closedCustomerCount}
+                onChange={(v) => updateNum("closedCustomerCount", v)}
+                min={0}
+                step={1}
+              />
+              <div>
+                <label className="mb-1 block text-[11px] font-medium text-[#1a1a1a]/50">성사 고객 / 기관</label>
+                <textarea
+                  value={form.dealCustomers}
+                  onChange={(e) => update("dealCustomers", e.target.value)}
+                  rows={3}
+                  placeholder="예: ○○학원, △△캠퍼스 / 담당자 / 후속 액션"
+                  className="w-full resize-none rounded-lg border border-[#e8e8e4] bg-white px-3 py-2 text-[13px] focus:border-[#111110]/30 focus:outline-none"
+                />
+              </div>
+            </div>
+          </section>
+
           {/* 광고비 */}
           <section>
             <div className="mb-2 flex items-center justify-between">
@@ -1076,16 +1190,43 @@ function MetricsEditor({
             )}
           </section>
 
-          {/* 메모 */}
+          {/* 메모 / 회고 */}
           <section>
-            <label className="mb-1.5 block text-[12px] font-medium text-[#1a1a1a]/55">메모</label>
-            <textarea
-              value={form.notes}
-              onChange={(e) => update("notes", e.target.value)}
-              rows={3}
-              placeholder="회고, 학습, 다음 액션 메모"
-              className="w-full resize-none rounded-lg border border-[#e8e8e4] bg-white px-3 py-2 text-[13px] focus:border-[#111110]/30 focus:outline-none"
-            />
+            <h3 className="mb-2 text-[12px] font-semibold uppercase tracking-[0.15em] text-[#1a1a1a]/50">
+              메모 / 회고
+            </h3>
+            <div className="space-y-3">
+              <div>
+                <label className="mb-1 block text-[11px] font-medium text-[#1a1a1a]/50">내부 메모 / 다음 액션</label>
+                <textarea
+                  value={form.notes}
+                  onChange={(e) => update("notes", e.target.value)}
+                  rows={3}
+                  placeholder="운영 중 이슈, 후속 연락, 다음 액션"
+                  className="w-full resize-none rounded-lg border border-[#e8e8e4] bg-white px-3 py-2 text-[13px] focus:border-[#111110]/30 focus:outline-none"
+                />
+              </div>
+              <div>
+                <label className="mb-1 block text-[11px] font-medium text-[#1a1a1a]/50">회고</label>
+                <textarea
+                  value={form.retrospective}
+                  onChange={(e) => update("retrospective", e.target.value)}
+                  rows={3}
+                  placeholder="잘된 점, 아쉬운 점, 다음 행사에 반영할 점"
+                  className="w-full resize-none rounded-lg border border-[#e8e8e4] bg-white px-3 py-2 text-[13px] focus:border-[#111110]/30 focus:outline-none"
+                />
+              </div>
+              <div>
+                <label className="mb-1 block text-[11px] font-medium text-[#1a1a1a]/50">공유 포인트</label>
+                <textarea
+                  value={form.shareMemo}
+                  onChange={(e) => update("shareMemo", e.target.value)}
+                  rows={3}
+                  placeholder="팀에 공유할 핵심 포인트. 예: 부산권 원장님들은 하이브리드 수업보다 신규반 모집 사례에 반응"
+                  className="w-full resize-none rounded-lg border border-[#e8e8e4] bg-white px-3 py-2 text-[13px] focus:border-[#111110]/30 focus:outline-none"
+                />
+              </div>
+            </div>
           </section>
         </div>
 
@@ -1110,10 +1251,14 @@ function NumInput({
   label,
   value,
   onChange,
+  min,
+  step,
 }: {
   label: string
   value: number | null
   onChange: (v: string) => void
+  min?: number
+  step?: number
 }) {
   return (
     <div>
@@ -1122,6 +1267,8 @@ function NumInput({
         type="number"
         value={value == null ? "" : value}
         onChange={(e) => onChange(e.target.value)}
+        min={min}
+        step={step}
         className="w-full rounded-lg border border-[#e8e8e4] bg-white px-3 py-2 text-[13px] focus:border-[#111110]/30 focus:outline-none"
       />
     </div>

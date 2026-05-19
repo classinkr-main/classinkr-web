@@ -91,6 +91,14 @@ function startOfDay(date: Date) {
   return next
 }
 
+const KRW_CURRENCY = new Intl.NumberFormat("ko-KR", {
+  style: "currency",
+  currency: "KRW",
+  maximumFractionDigits: 0,
+})
+const KRW_NUMBER = new Intl.NumberFormat("ko-KR")
+const won = (value: number) => KRW_CURRENCY.format(Math.round(value))
+
 function getDayWindow(range: number) {
   const today = startOfDay(new Date())
   const start = shiftDays(today, -(range - 1))
@@ -599,16 +607,17 @@ export default function AnalyticsPage() {
       return t >= startMs && t <= endMs
     }).length
     const leadsCount = attributedCount > 0 ? attributedCount : duringCount
+    const closedCustomers = metrics.closedCustomerCount ?? 0
     const funnel: EventFunnel = {
       impressions: metrics.impressionsCount ?? 0,
       leads: leadsCount,
       applications: metrics.applicationsCount ?? 0,
       qualifiedLeads: metrics.qualifiedLeadsCount ?? 0,
       attendees: metrics.attendeesCount ?? 0,
-      deals: metrics.dealsCount ?? 0,
+      deals: metrics.dealsCount ?? closedCustomers,
     }
     const economics = computeEconomics(funnel, metrics)
-    return { event, metrics, funnel, economics }
+    return { event, metrics, funnel, economics, closedCustomers }
   })
 
   const eventTotals = eventFunnelRows.reduce(
@@ -619,6 +628,7 @@ export default function AnalyticsPage() {
       qualifiedLeads: acc.qualifiedLeads + row.funnel.qualifiedLeads,
       attendees: acc.attendees + row.funnel.attendees,
       deals: acc.deals + row.funnel.deals,
+      closedCustomers: acc.closedCustomers + row.closedCustomers,
       spend: acc.spend + row.economics.adSpendTotal,
       revenue: acc.revenue + row.economics.revenue,
     }),
@@ -629,6 +639,7 @@ export default function AnalyticsPage() {
       qualifiedLeads: 0,
       attendees: 0,
       deals: 0,
+      closedCustomers: 0,
       spend: 0,
       revenue: 0,
     }
@@ -646,6 +657,7 @@ export default function AnalyticsPage() {
       신청: row.funnel.applications,
       참석: row.funnel.attendees,
       딜: row.funnel.deals,
+      "성사 고객": row.closedCustomers,
     }))
     .slice(0, 8)
 
@@ -653,8 +665,8 @@ export default function AnalyticsPage() {
     .filter((row) => row.economics.adSpendTotal > 0)
     .map((row) => ({
       name: row.event.title.length > 12 ? row.event.title.slice(0, 11) + "…" : row.event.title,
-      "광고비(¥K)": Math.round(row.economics.adSpendTotal / 1000),
-      "매출(¥K)": Math.round(row.economics.revenue / 1000),
+      "광고비(천원)": Math.round(row.economics.adSpendTotal / 1000),
+      "매출(천원)": Math.round(row.economics.revenue / 1000),
       ROI: row.economics.roi ?? 0,
     }))
     .slice(0, 8)
@@ -1248,25 +1260,25 @@ export default function AnalyticsPage() {
               icon={<Send className="w-4 h-4" />}
               label="총 행사"
               value={publicEvents.length}
-              hint={`총 광고비 ¥${new Intl.NumberFormat("ko-KR").format(eventTotals.spend)}`}
+              hint={`총 광고비 ${won(eventTotals.spend)}`}
             />
             <SummaryCard
               icon={<Users className="w-4 h-4" />}
               label="누적 리드 → 딜"
               value={`${eventTotals.leads} → ${eventTotals.deals}`}
-              hint={`참석 ${eventTotals.attendees}명`}
+              hint={`참석 ${eventTotals.attendees}명 · 성사 고객 ${eventTotals.closedCustomers}곳`}
             />
             <SummaryCard
               icon={<BarChart2 className="w-4 h-4" />}
               label="평균 CPL · CPD"
               value={
                 overallEventCpl != null
-                  ? `¥${new Intl.NumberFormat("ko-KR").format(overallEventCpl)}`
+                  ? won(overallEventCpl)
                   : "—"
               }
               hint={
                 overallEventCpd != null
-                  ? `CPD ¥${new Intl.NumberFormat("ko-KR").format(overallEventCpd)}`
+                  ? `CPD ${won(overallEventCpd)}`
                   : "딜 데이터 부족"
               }
             />
@@ -1274,7 +1286,7 @@ export default function AnalyticsPage() {
               icon={<CheckCircle2 className="w-4 h-4" />}
               label="누적 ROI"
               value={overallEventRoi != null ? `${overallEventRoi}%` : "—"}
-              hint={`매출 ¥${new Intl.NumberFormat("ko-KR").format(eventTotals.revenue)}`}
+              hint={`매출 ${won(eventTotals.revenue)}`}
             />
           </div>
 
@@ -1332,7 +1344,7 @@ export default function AnalyticsPage() {
           </Panel>
 
           <Panel
-            title="광고비 vs 매출 (행사별, 단위: ¥1,000)"
+            title="광고비 vs 매출 (행사별, 단위: 천원)"
             description="투자 대비 회수율을 한눈에 봅니다. ROI는 우측 라인입니다."
           >
             {eventEconomicsData.length === 0 ? (
@@ -1354,8 +1366,8 @@ export default function AnalyticsPage() {
                         fontSize: 12,
                       }}
                     />
-                    <Bar yAxisId="left" dataKey="광고비(¥K)" fill="#B85C33" radius={[4, 4, 0, 0]} />
-                    <Bar yAxisId="left" dataKey="매출(¥K)" fill="#084734" radius={[4, 4, 0, 0]} />
+                    <Bar yAxisId="left" dataKey="광고비(천원)" fill="#B85C33" radius={[4, 4, 0, 0]} />
+                    <Bar yAxisId="left" dataKey="매출(천원)" fill="#084734" radius={[4, 4, 0, 0]} />
                     <Line yAxisId="right" type="monotone" dataKey="ROI" stroke="#111110" strokeWidth={2} dot={{ r: 3 }} />
                   </ComposedChart>
                 </ResponsiveContainer>
@@ -1380,12 +1392,13 @@ export default function AnalyticsPage() {
               <TableEmpty message="등록된 행사가 없습니다." />
             ) : (
               <div className="overflow-x-auto">
-                <table className="min-w-[820px] w-full text-[12px]">
+                <table className="min-w-[900px] w-full text-[12px]">
                   <thead className="bg-[#fafaf8] text-left text-[#1a1a1a]/45">
                     <tr>
                       <th className="px-3 py-2 font-medium">행사</th>
                       <th className="px-3 py-2 font-medium">상태</th>
                       <th className="px-3 py-2 font-medium text-right">리드</th>
+                      <th className="px-3 py-2 font-medium text-right">성사 고객</th>
                       <th className="px-3 py-2 font-medium text-right">유효 전환</th>
                       <th className="px-3 py-2 font-medium text-right">참석률</th>
                       <th className="px-3 py-2 font-medium text-right">딜 전환</th>
@@ -1408,6 +1421,9 @@ export default function AnalyticsPage() {
                         </td>
                         <td className="px-3 py-2.5 text-right font-semibold text-[#111110]">{row.funnel.leads}</td>
                         <td className="px-3 py-2.5 text-right text-[#1a1a1a]/60">
+                          {row.closedCustomers > 0 ? `${KRW_NUMBER.format(row.closedCustomers)}곳` : "—"}
+                        </td>
+                        <td className="px-3 py-2.5 text-right text-[#1a1a1a]/60">
                           {row.economics.leadConversionRate != null ? `${row.economics.leadConversionRate}%` : "—"}
                         </td>
                         <td className="px-3 py-2.5 text-right text-[#1a1a1a]/60">
@@ -1418,12 +1434,12 @@ export default function AnalyticsPage() {
                         </td>
                         <td className="px-3 py-2.5 text-right text-[#1a1a1a]/60">
                           {row.economics.adSpendTotal > 0
-                            ? `¥${new Intl.NumberFormat("ko-KR").format(row.economics.adSpendTotal)}`
+                            ? won(row.economics.adSpendTotal)
                             : "—"}
                         </td>
                         <td className="px-3 py-2.5 text-right text-[#1a1a1a]/60">
                           {row.economics.cpl != null
-                            ? `¥${new Intl.NumberFormat("ko-KR").format(row.economics.cpl)}`
+                            ? won(row.economics.cpl)
                             : "—"}
                         </td>
                         <td
