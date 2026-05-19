@@ -110,6 +110,7 @@ export async function upsertSubscriber(
         phone: data.phone ?? null,
         tags: mergedTags,
         status: data.status ?? "active",
+        source: data.source,
         unsubscribed_at: data.status === "active" ? null : undefined,
       })
       .eq("id", existing.id as string)
@@ -141,11 +142,25 @@ export async function upsertSubscriber(
 
 export async function subscribeSubscriber(
   data: Pick<Subscriber, "name" | "email" | "source"> & { optInAt?: string }
-): Promise<{ subscriber: SubRow; created: boolean }> {
+): Promise<{ subscriber: SubRow; created: boolean; reactivated: boolean }> {
   if (!USE_SUPABASE) {
     const existing = await getSubscriberByEmail(data.email)
     if (existing) {
-      return { subscriber: existing, created: false }
+      if (existing.status === "active") {
+        return { subscriber: existing, created: false, reactivated: false }
+      }
+
+      const { upsertSubscriber: jsonUpsert } = await import("@/lib/marketing-data")
+      const subscriber = await jsonUpsert({
+        name: data.name,
+        email: data.email,
+        tags: existing.tags ?? [],
+        source: data.source,
+        status: "active",
+        optInAt: data.optInAt ?? new Date().toISOString(),
+      })
+
+      return { subscriber, created: false, reactivated: true }
     }
 
     const { upsertSubscriber: jsonUpsert } = await import("@/lib/marketing-data")
@@ -158,12 +173,31 @@ export async function subscribeSubscriber(
       optInAt: data.optInAt,
     })
 
-    return { subscriber, created: true }
+    return { subscriber, created: true, reactivated: false }
   }
 
   const existing = await getSubscriberByEmail(data.email)
   if (existing) {
-    return { subscriber: existing, created: false }
+    if (existing.status === "active") {
+      return { subscriber: existing, created: false, reactivated: false }
+    }
+
+    const now = new Date().toISOString()
+    const { data: row, error } = await sb()
+      .from("newsletter_subscribers")
+      .update({
+        name: data.name,
+        status: "active",
+        source: data.source,
+        opt_in_at: data.optInAt ?? now,
+        unsubscribed_at: null,
+      })
+      .eq("id", existing.id as string)
+      .select()
+      .single()
+
+    if (error) throw new Error(`[marketing] 구독자 재등록 실패: ${error.message}`)
+    return { subscriber: rowToSubscriber(row), created: false, reactivated: true }
   }
 
   const now = new Date().toISOString()
@@ -181,7 +215,7 @@ export async function subscribeSubscriber(
     .single()
 
   if (error) throw new Error(`[marketing] 援щ룆???깅줉 ?ㅽ뙣: ${error.message}`)
-  return { subscriber: rowToSubscriber(row), created: true }
+  return { subscriber: rowToSubscriber(row), created: true, reactivated: false }
 }
 
 export async function unsubscribe(email: string): Promise<boolean> {

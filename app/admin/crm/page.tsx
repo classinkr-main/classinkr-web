@@ -246,6 +246,11 @@ function LeadDrawer({
   const [showLogForm, setShowLogForm] = useState(false)
   const [converting, setConverting] = useState(false)
   const score = calcScore(lead)
+  const attributionItems = [
+    { label: "UTM Source", value: lead.utm_source },
+    { label: "UTM Medium", value: lead.utm_medium },
+    { label: "UTM Campaign", value: lead.utm_campaign },
+  ].filter((item) => item.value)
 
   useEffect(() => {
     const handleKey = (e: KeyboardEvent) => { if (e.key === "Escape") onClose() }
@@ -360,6 +365,22 @@ function LeadDrawer({
               </div>
             </div>
           </div>
+
+          {attributionItems.length > 0 && (
+            <div className="border-b border-[#e8e8e4] px-4 py-4 sm:px-6">
+              <p className="mb-2 text-[11px] font-semibold uppercase tracking-wide text-[#1a1a1a]/30">
+                Attribution
+              </p>
+              <div className="grid gap-2">
+                {attributionItems.map((item) => (
+                  <div key={item.label} className="flex items-center justify-between gap-3 rounded-xl bg-[#fafaf8] px-3 py-2">
+                    <span className="text-[11px] font-medium text-[#1a1a1a]/35">{item.label}</span>
+                    <span className="truncate text-right text-[12px] font-medium text-[#111110]">{item.value}</span>
+                  </div>
+                ))}
+              </div>
+            </div>
+          )}
 
           {/* 상태 + 담당자 + 팔로업 */}
           <div className="px-6 py-4 border-b border-[#e8e8e4] space-y-4">
@@ -620,10 +641,13 @@ export default function CrmPage() {
     setTimeout(() => setToast(null), 3000)
   }
 
-  const fetchLeads = useCallback(async () => {
+  const fetchLeads = useCallback(async (options?: { force?: boolean }) => {
     setLoading(true)
     try {
-      const data = await adminFetchJsonCached<{ leads: LeadRecord[] }>("/api/admin/leads", undefined, { ttlMs: 45_000 })
+      const data = await adminFetchJsonCached<{ leads: LeadRecord[] }>("/api/admin/leads", undefined, {
+        ttlMs: 45_000,
+        force: options?.force,
+      })
       setLeads(data.leads)
     } catch (err) {
       showToast(err instanceof Error ? err.message : "리드를 불러오지 못했습니다.", "error")
@@ -795,7 +819,7 @@ export default function CrmPage() {
           <p className="text-[11px] font-medium text-[#1a1a1a]/30 uppercase tracking-widest mb-1">Admin</p>
           <h1 className="text-2xl font-bold text-[#111110] tracking-[-0.02em]">리드 관리</h1>
         </div>
-        <Button variant="outline" size="sm" onClick={fetchLeads} disabled={loading} className="w-full gap-1.5 sm:w-auto">
+        <Button variant="outline" size="sm" onClick={() => fetchLeads({ force: true })} disabled={loading} className="w-full gap-1.5 sm:w-auto">
           <RefreshCw className={`w-4 h-4 ${loading ? "animate-spin" : ""}`} />새로고침
         </Button>
       </div>

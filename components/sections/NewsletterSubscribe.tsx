@@ -10,12 +10,14 @@ import {
   marketingFieldClassName,
 } from "@/components/ui/marketing-form"
 import { Input } from "@/components/ui/input"
+import { trackEvent } from "@/lib/analytics"
 
 interface Props {
   variant?: "light" | "dark"
+  source?: string
 }
 
-export function NewsletterSubscribe({ variant = "dark" }: Props) {
+export function NewsletterSubscribe({ variant = "dark", source = "footer_newsletter" }: Props) {
   const [email, setEmail] = useState("")
   const [loading, setLoading] = useState(false)
   const [submitted, setSubmitted] = useState(false)
@@ -32,12 +34,13 @@ export function NewsletterSubscribe({ variant = "dark" }: Props) {
       const res = await fetch("/api/newsletter/subscribe", {
         method: "POST",
         headers: { "Content-Type": "application/json" },
-        body: JSON.stringify({ email }),
+        body: JSON.stringify({ email, source }),
       })
 
       const data = await res.json()
 
       if (res.ok && data.ok) {
+        trackEvent("submit_newsletter", { source })
         setSubmitted(true)
       } else {
         setError(data.error || "구독 처리 중 문제가 발생했습니다.")

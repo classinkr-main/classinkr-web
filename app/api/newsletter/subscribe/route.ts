@@ -1,10 +1,14 @@
 import { NextRequest, NextResponse } from "next/server"
 import { checkRateLimit, getClientIp } from "@/lib/server/rate-limit"
-import { subscribeSubscriber } from "@/lib/repositories/marketing"
-import { getResolvedSettings } from "@/lib/repositories/settings"
-import { triggerOnSubmitRules } from "@/lib/automation-engine"
 import type { NewsletterSubscribeRequest } from "@/lib/marketing-types"
-import { postJson } from "@/lib/server/post-json"
+import { submitLeadCapture } from "@/lib/server/lead-capture"
+
+function normalizeNewsletterSource(value: unknown) {
+  if (typeof value !== "string") return "newsletter"
+  const source = value.trim()
+  if (!source) return "newsletter"
+  return /^[a-zA-Z0-9_.:-]+$/.test(source) ? source.slice(0, 80) : "newsletter"
+}
 
 export async function POST(req: NextRequest) {
   const ip = getClientIp(req)
@@ -18,12 +22,7 @@ export async function POST(req: NextRequest) {
 
   try {
     const body: NewsletterSubscribeRequest = await req.json()
-    const VALID_SOURCES = ["demo_modal", "contact_page", "newsletter", "manual"] as const
-    type SubscriberSource = typeof VALID_SOURCES[number]
-    const rawSource = body.source?.trim() ?? ""
-    const source: SubscriberSource = VALID_SOURCES.includes(rawSource as SubscriberSource)
-      ? (rawSource as SubscriberSource)
-      : "newsletter"
+    const source = normalizeNewsletterSource(body.source)
     const email = body.email?.trim().toLowerCase()
 
     if (!email) {
@@ -38,44 +37,15 @@ export async function POST(req: NextRequest) {
       )
     }
 
-    const { created } = await subscribeSubscriber({
+    const result = await submitLeadCapture({
+      source: "newsletter",
+      sourceDetail: source,
       name: body.name || email.split("@")[0],
       email,
-      source,
+      marketingConsent: true,
     })
 
-    if (created) {
-      const settings = await getResolvedSettings()
-      const googleSheetUrl = settings.googleSheetWebhookUrl
-      if (googleSheetUrl) {
-        postJson(
-          googleSheetUrl,
-          {
-            source,
-            email,
-            name: body.name || "",
-            timestamp: new Date().toISOString(),
-          },
-          { timeoutMs: 8000 }
-        ).catch((err: unknown) => {
-          console.warn("[newsletter/subscribe] Google Sheet sync failed:", err)
-        })
-      }
-
-      // Only fire onboarding automation for newly created subscriptions.
-      triggerOnSubmitRules({
-        email,
-        name: body.name,
-        source: "newsletter",
-      }).catch((err: unknown) => {
-        console.warn("[newsletter/subscribe] automation trigger failed:", err)
-      })
-    }
-
-    return NextResponse.json({
-      ok: true,
-      message: "구독 요청을 접수했습니다.",
-    })
+    return NextResponse.json(result.body, { status: result.status })
   } catch {
     return NextResponse.json({ error: "잘못된 요청입니다." }, { status: 400 })
   }

@@ -36,6 +36,9 @@ export interface LeadRecord {
   status: LeadStatus
   branch?: string
   notes?: string
+  utm_source?: string
+  utm_medium?: string
+  utm_campaign?: string
 }
 
 export interface SiteSettings {

@@ -37,8 +37,8 @@ export interface Subscriber {
   optInAt: string                 // ISO 8601 - 최초 수신 동의 일시
   unsubscribedAt?: string         // ISO 8601 - 수신 거부 일시
 
-  /** 유입 경로: 데모 신청, 문의 페이지, 뉴스레터 직접 구독 */
-  source: "demo_modal" | "contact_page" | "newsletter" | "manual" | "meta_lead_ads"
+  /** 유입 경로: 데모 신청, 문의 페이지, 뉴스레터/CTA 상세 구독 경로 */
+  source: string
 
   createdAt: string               // ISO 8601
   updatedAt: string               // ISO 8601
