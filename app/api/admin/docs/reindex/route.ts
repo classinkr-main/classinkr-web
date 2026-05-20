@@ -8,7 +8,9 @@ export async function POST(req: NextRequest) {
   if (authError) return authError
 
   try {
-    const result = await reindexDocsAiChunks()
+    const body = await req.json().catch(() => null) as { articleId?: unknown } | null
+    const articleId = typeof body?.articleId === "string" ? body.articleId : null
+    const result = await reindexDocsAiChunks(articleId)
     return NextResponse.json(result)
   } catch (error) {
     console.error("[POST /api/admin/docs/reindex] error:", error)

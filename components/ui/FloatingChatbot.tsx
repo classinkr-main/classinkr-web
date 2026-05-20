@@ -48,6 +48,11 @@ interface ChatbotQueryResponse {
     warning?: string
 }
 
+interface ChatbotStarterQuestionsResponse {
+    questions?: unknown
+    warning?: string
+}
+
 interface ChatMessage {
     id: string
     role: "assistant" | "user"
@@ -218,6 +223,45 @@ export function FloatingChatbot() {
         if (hidden) {
             setIsOpen(false)
         }
+    }, [hidden])
+
+    useEffect(() => {
+        if (hidden) return
+
+        const controller = new AbortController()
+
+        async function loadStarterQuestions() {
+            try {
+                const response = await fetch("/api/chatbot/recommended-questions", {
+                    cache: "no-store",
+                    signal: controller.signal,
+                })
+                const data = (await response.json()) as ChatbotStarterQuestionsResponse
+                const questions = Array.isArray(data.questions)
+                    ? data.questions
+                        .filter((question): question is string => typeof question === "string")
+                        .map((question) => question.trim())
+                        .filter(Boolean)
+                        .slice(0, 3)
+                    : []
+
+                if (questions.length === 0) return
+
+                setMessages((current) =>
+                    current.map((message) =>
+                        message.id === "welcome"
+                            ? { ...message, suggestedQuestions: questions }
+                            : message
+                    )
+                )
+            } catch (err) {
+                if (err instanceof DOMException && err.name === "AbortError") return
+            }
+        }
+
+        void loadStarterQuestions()
+
+        return () => controller.abort()
     }, [hidden])
 
     useEffect(() => {

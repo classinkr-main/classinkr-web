@@ -7,6 +7,8 @@ import {
   AlertCircle,
   BarChart3,
   Bot,
+  Bookmark,
+  CheckSquare,
   Database,
   Eye,
   ExternalLink,
@@ -17,10 +19,15 @@ import {
   Plus,
   RefreshCw,
   Search,
+  Star,
   ThumbsUp,
 } from "lucide-react"
 
-import { adminFetch, adminFetchJsonCached } from "@/lib/admin-client"
+import DocsCategoryManager from "@/components/admin/docs/DocsCategoryManager"
+import DocsQuestionClusterBacklog from "@/components/admin/docs/DocsQuestionClusterBacklog"
+import DocsRecommendedQuestionsManager from "@/components/admin/docs/DocsRecommendedQuestionsManager"
+import DocsRedirectManager from "@/components/admin/docs/DocsRedirectManager"
+import { adminFetch, adminFetchJson, adminFetchJsonCached } from "@/lib/admin-client"
 import type {
   AdminDocsAnalyticsResponse,
   AdminDocsArticleSummary,
@@ -34,6 +41,18 @@ interface ReindexResult {
   warnings?: string[]
   error?: string
 }
+
+interface SavedDocsView {
+  id: string
+  label: string
+  categoryFilter: string
+  statusFilter: string
+  docTypeFilter: string
+  readinessFilter: string
+  searchQuery: string
+}
+
+const SAVED_VIEWS_STORAGE_KEY = "admin_docs_saved_views"
 
 function formatDate(value: string | null | undefined) {
   if (!value) return "-"
@@ -98,6 +117,19 @@ const DOC_TYPE_FILTERS = [
   { value: "troubleshooting", label: "문제 해결" },
   { value: "release_note", label: "업데이트" },
   { value: "reference", label: "레퍼런스" },
+]
+
+const ARTICLE_STATUS_OPTIONS = [
+  { value: "draft", label: "초안" },
+  { value: "review", label: "리뷰" },
+  { value: "published", label: "게시됨" },
+  { value: "archived", label: "보관" },
+]
+
+const ARTICLE_VISIBILITY_OPTIONS = [
+  { value: "public", label: "공개" },
+  { value: "unlisted", label: "링크 공개" },
+  { value: "internal", label: "내부" },
 ]
 
 const READINESS_FILTERS = [
@@ -188,6 +220,15 @@ export default function AdminDocsPage() {
     tone: "success" | "warning"
     message: string
   } | null>(null)
+  const [articleSavingId, setArticleSavingId] = useState<string | null>(null)
+  const [articleNotice, setArticleNotice] = useState<string | null>(null)
+  const [selectedArticleIds, setSelectedArticleIds] = useState<string[]>([])
+  const [bulkStatus, setBulkStatus] = useState("unchanged")
+  const [bulkVisibility, setBulkVisibility] = useState("unchanged")
+  const [bulkCategoryId, setBulkCategoryId] = useState("unchanged")
+  const [bulkFeatured, setBulkFeatured] = useState("unchanged")
+  const [bulkSaving, setBulkSaving] = useState(false)
+  const [savedViews, setSavedViews] = useState<SavedDocsView[]>([])
 
   const load = useCallback(async () => {
     setLoading(true)
@@ -211,6 +252,45 @@ export default function AdminDocsPage() {
   useEffect(() => {
     void load()
   }, [load])
+
+  useEffect(() => {
+    try {
+      const raw = window.localStorage.getItem(SAVED_VIEWS_STORAGE_KEY)
+      if (!raw) return
+      const parsed = JSON.parse(raw) as SavedDocsView[]
+      if (Array.isArray(parsed)) setSavedViews(parsed)
+    } catch {
+      window.localStorage.removeItem(SAVED_VIEWS_STORAGE_KEY)
+    }
+  }, [])
+
+  function persistSavedViews(next: SavedDocsView[]) {
+    setSavedViews(next)
+    window.localStorage.setItem(SAVED_VIEWS_STORAGE_KEY, JSON.stringify(next))
+  }
+
+  function saveCurrentView() {
+    const label = window.prompt("저장할 뷰 이름을 입력하세요:")
+    if (!label?.trim()) return
+    const view: SavedDocsView = {
+      id: `${Date.now()}`,
+      label: label.trim(),
+      categoryFilter,
+      statusFilter,
+      docTypeFilter,
+      readinessFilter,
+      searchQuery,
+    }
+    persistSavedViews([view, ...savedViews].slice(0, 8))
+  }
+
+  function applySavedView(view: SavedDocsView) {
+    setCategoryFilter(view.categoryFilter)
+    setStatusFilter(view.statusFilter)
+    setDocTypeFilter(view.docTypeFilter)
+    setReadinessFilter(view.readinessFilter)
+    setSearchQuery(view.searchQuery)
+  }
 
   const handleReindex = useCallback(async () => {
     setReindexing(true)
@@ -253,6 +333,80 @@ export default function AdminDocsPage() {
       setReindexing(false)
     }
   }, [load, router])
+
+  const handleArticlePatch = useCallback(
+    async (article: AdminDocsArticleSummary, patch: Record<string, unknown>) => {
+      setArticleSavingId(article.id)
+      setArticleNotice(null)
+      setError(null)
+
+      try {
+        await adminFetchJson(`/api/admin/docs/articles/${article.id}`, {
+          method: "PATCH",
+          body: JSON.stringify(patch),
+        })
+
+        if (patch.status === "published" || article.status === "published") {
+          await adminFetch("/api/admin/docs/reindex", {
+            method: "POST",
+            body: JSON.stringify({ articleId: article.id }),
+          }).catch(() => null)
+        }
+
+        setArticleNotice("문서 설정을 저장했습니다.")
+        window.setTimeout(() => setArticleNotice(null), 2500)
+        await load()
+      } catch (err) {
+        setError(err instanceof Error ? err.message : "문서 설정을 저장하지 못했습니다.")
+      } finally {
+        setArticleSavingId(null)
+      }
+    },
+    [load]
+  )
+
+  const handleBulkPatch = useCallback(async () => {
+    if (selectedArticleIds.length === 0) return
+
+    const patch: Record<string, unknown> = {}
+    if (bulkStatus !== "unchanged") patch.status = bulkStatus
+    if (bulkVisibility !== "unchanged") patch.visibility = bulkVisibility
+    if (bulkCategoryId !== "unchanged") patch.categoryId = bulkCategoryId
+    if (bulkFeatured !== "unchanged") patch.featured = bulkFeatured === "true"
+
+    if (Object.keys(patch).length === 0) {
+      setError("일괄 수정할 값을 선택해 주세요.")
+      return
+    }
+
+    setBulkSaving(true)
+    setError(null)
+    try {
+      const result = await adminFetchJson<{ updatedCount: number }>("/api/admin/docs/articles/bulk", {
+        method: "PATCH",
+        body: JSON.stringify({ ids: selectedArticleIds, ...patch }),
+      })
+
+      if (patch.status === "published") {
+        await adminFetch("/api/admin/docs/reindex", { method: "POST" }).catch(() => null)
+      }
+
+      setSelectedArticleIds([])
+      setArticleNotice(`문서 ${formatNumber(result.updatedCount)}개를 일괄 수정했습니다.`)
+      window.setTimeout(() => setArticleNotice(null), 2500)
+      await load()
+    } catch (err) {
+      setError(err instanceof Error ? err.message : "문서를 일괄 수정하지 못했습니다.")
+    } finally {
+      setBulkSaving(false)
+    }
+  }, [bulkCategoryId, bulkFeatured, bulkStatus, bulkVisibility, load, selectedArticleIds])
+
+  function toggleSelectedArticle(id: string) {
+    setSelectedArticleIds((previous) =>
+      previous.includes(id) ? previous.filter((item) => item !== id) : [...previous, id]
+    )
+  }
 
   const categoryTitleById = useMemo(() => {
     return new Map((content?.categories ?? []).map((category) => [category.id, category.title]))
@@ -378,6 +532,12 @@ export default function AdminDocsPage() {
         </div>
       ) : null}
 
+      {articleNotice ? (
+        <div className="mb-6 rounded-2xl border border-emerald-100 bg-emerald-50 px-4 py-3 text-[13px] text-emerald-800">
+          {articleNotice}
+        </div>
+      ) : null}
+
       {warnings.length > 0 ? (
         <div className="mb-6 rounded-2xl border border-amber-100 bg-amber-50 px-4 py-3">
           <div className="flex gap-2 text-[13px] text-amber-800">
@@ -489,10 +649,112 @@ export default function AdminDocsPage() {
             </div>
           </div>
 
+          <div className="flex flex-col gap-3 border-b border-[#e8e8e4] bg-[#FAFAF8] px-4 py-3">
+            <div className="flex flex-wrap items-center gap-2">
+              <button
+                type="button"
+                onClick={saveCurrentView}
+                className="inline-flex h-8 items-center gap-1.5 rounded-lg border border-[#e8e8e4] bg-white px-2.5 text-[12px] font-semibold text-[#111110] transition-colors hover:bg-[#f5f5f2]"
+              >
+                <Bookmark className="h-3.5 w-3.5" />
+                현재 뷰 저장
+              </button>
+              {savedViews.map((view) => (
+                <button
+                  key={view.id}
+                  type="button"
+                  onClick={() => applySavedView(view)}
+                  className="h-8 rounded-full border border-[#e8e8e4] bg-white px-3 text-[12px] font-semibold text-[#1a1a1a]/55 transition-colors hover:border-[#084734]/30 hover:text-[#084734]"
+                >
+                  {view.label}
+                </button>
+              ))}
+            </div>
+
+            {selectedArticleIds.length > 0 ? (
+              <div className="flex flex-wrap items-center gap-2 rounded-xl border border-[#e8e8e4] bg-white p-2">
+                <span className="inline-flex items-center gap-1.5 px-1 text-[12px] font-semibold text-[#111110]">
+                  <CheckSquare className="h-3.5 w-3.5" />
+                  {formatNumber(selectedArticleIds.length)}개 선택
+                </span>
+                <select
+                  value={bulkStatus}
+                  onChange={(event) => setBulkStatus(event.target.value)}
+                  className="h-8 rounded-lg border border-[#e8e8e4] bg-white px-2 text-[12px] outline-none focus:border-[#084734]"
+                >
+                  <option value="unchanged">상태 유지</option>
+                  {ARTICLE_STATUS_OPTIONS.map((option) => (
+                    <option key={option.value} value={option.value}>{option.label}</option>
+                  ))}
+                </select>
+                <select
+                  value={bulkVisibility}
+                  onChange={(event) => setBulkVisibility(event.target.value)}
+                  className="h-8 rounded-lg border border-[#e8e8e4] bg-white px-2 text-[12px] outline-none focus:border-[#084734]"
+                >
+                  <option value="unchanged">가시성 유지</option>
+                  {ARTICLE_VISIBILITY_OPTIONS.map((option) => (
+                    <option key={option.value} value={option.value}>{option.label}</option>
+                  ))}
+                </select>
+                <select
+                  value={bulkCategoryId}
+                  onChange={(event) => setBulkCategoryId(event.target.value)}
+                  className="h-8 rounded-lg border border-[#e8e8e4] bg-white px-2 text-[12px] outline-none focus:border-[#084734]"
+                >
+                  <option value="unchanged">카테고리 유지</option>
+                  {(content?.categories ?? []).map((category) => (
+                    <option key={category.id} value={category.id}>{category.title}</option>
+                  ))}
+                </select>
+                <select
+                  value={bulkFeatured}
+                  onChange={(event) => setBulkFeatured(event.target.value)}
+                  className="h-8 rounded-lg border border-[#e8e8e4] bg-white px-2 text-[12px] outline-none focus:border-[#084734]"
+                >
+                  <option value="unchanged">대표 유지</option>
+                  <option value="true">대표 지정</option>
+                  <option value="false">대표 해제</option>
+                </select>
+                <button
+                  type="button"
+                  onClick={() => void handleBulkPatch()}
+                  disabled={bulkSaving}
+                  className="inline-flex h-8 items-center justify-center rounded-lg bg-[#111110] px-3 text-[12px] font-semibold text-white transition-colors hover:bg-[#2a2a28] disabled:cursor-not-allowed disabled:opacity-50"
+                >
+                  {bulkSaving ? "적용 중" : "일괄 적용"}
+                </button>
+                <button
+                  type="button"
+                  onClick={() => setSelectedArticleIds([])}
+                  className="h-8 rounded-lg border border-[#e8e8e4] bg-white px-2.5 text-[12px] font-semibold text-[#1a1a1a]/45 transition-colors hover:bg-[#f5f5f2]"
+                >
+                  선택 해제
+                </button>
+              </div>
+            ) : null}
+          </div>
+
           <div className="overflow-x-auto">
             <table className="min-w-[1040px] w-full text-left">
               <thead className="bg-[#fafaf8] text-[11px] uppercase tracking-[0.12em] text-[#1a1a1a]/35">
                 <tr>
+                  <th className="px-4 py-3 font-semibold">
+                    <input
+                      type="checkbox"
+                      checked={filteredArticles.length > 0 && filteredArticles.every((article) => selectedArticleIds.includes(article.id))}
+                      onChange={(event) => {
+                        if (event.target.checked) {
+                          setSelectedArticleIds(Array.from(new Set([...selectedArticleIds, ...filteredArticles.map((article) => article.id)])))
+                        } else {
+                          const visibleIds = new Set(filteredArticles.map((article) => article.id))
+                          setSelectedArticleIds((previous) => previous.filter((id) => !visibleIds.has(id)))
+                        }
+                      }}
+                      aria-label="현재 목록 전체 선택"
+                      className="h-4 w-4 rounded border-[#d6d6d0]"
+                    />
+                  </th>
                   <th className="px-4 py-3 font-semibold">문서</th>
                   <th className="px-4 py-3 font-semibold">카테고리</th>
                   <th className="px-4 py-3 font-semibold">상태</th>
@@ -504,13 +766,13 @@ export default function AdminDocsPage() {
               <tbody className="divide-y divide-[#f0f0ec]">
                 {loading ? (
                   <tr>
-                    <td colSpan={6} className="px-4 py-10 text-center text-[13px] text-[#1a1a1a]/35">
+                    <td colSpan={7} className="px-4 py-10 text-center text-[13px] text-[#1a1a1a]/35">
                       문서 목록을 불러오는 중입니다.
                     </td>
                   </tr>
                 ) : filteredArticles.length === 0 ? (
                   <tr>
-                    <td colSpan={6} className="px-4 py-8">
+                    <td colSpan={7} className="px-4 py-8">
                       <EmptyState title="표시할 문서가 없습니다" description="검색어나 카테고리 필터를 조정해 보세요." />
                     </td>
                   </tr>
@@ -519,6 +781,15 @@ export default function AdminDocsPage() {
                     const editHref = `/admin/docs/${article.id}/edit`
                     return (
                     <tr key={article.id} className="align-top transition-colors hover:bg-[#fafaf8]">
+                      <td className="px-4 py-4">
+                        <input
+                          type="checkbox"
+                          checked={selectedArticleIds.includes(article.id)}
+                          onChange={() => toggleSelectedArticle(article.id)}
+                          aria-label={`${article.title} 선택`}
+                          className="h-4 w-4 rounded border-[#d6d6d0]"
+                        />
+                      </td>
                       <td className="px-4 py-4">
                         <div className="max-w-lg">
                           <div className="flex items-start gap-2">
@@ -575,6 +846,59 @@ export default function AdminDocsPage() {
                       </td>
                       <td className="px-4 py-4">
                         <div className="flex flex-wrap items-center gap-2">
+                          {canMutateDocs ? (
+                            <>
+                              <select
+                                aria-label={`${article.title} 상태 변경`}
+                                value={article.status}
+                                disabled={articleSavingId === article.id}
+                                onChange={(event) =>
+                                  void handleArticlePatch(article, { status: event.target.value })
+                                }
+                                className="h-8 rounded-lg border border-[#e8e8e4] bg-white px-2 text-[12px] font-semibold text-[#111110] outline-none transition-colors focus:border-[#084734] disabled:cursor-not-allowed disabled:opacity-55"
+                              >
+                                {ARTICLE_STATUS_OPTIONS.map((option) => (
+                                  <option key={option.value} value={option.value}>
+                                    {option.label}
+                                  </option>
+                                ))}
+                              </select>
+                              <select
+                                aria-label={`${article.title} 가시성 변경`}
+                                value={article.visibility}
+                                disabled={articleSavingId === article.id}
+                                onChange={(event) =>
+                                  void handleArticlePatch(article, { visibility: event.target.value })
+                                }
+                                className="h-8 rounded-lg border border-[#e8e8e4] bg-white px-2 text-[12px] font-semibold text-[#111110] outline-none transition-colors focus:border-[#084734] disabled:cursor-not-allowed disabled:opacity-55"
+                              >
+                                {ARTICLE_VISIBILITY_OPTIONS.map((option) => (
+                                  <option key={option.value} value={option.value}>
+                                    {option.label}
+                                  </option>
+                                ))}
+                              </select>
+                              <button
+                                type="button"
+                                title={article.featured ? "대표 문서 해제" : "대표 문서로 지정"}
+                                aria-pressed={article.featured}
+                                disabled={articleSavingId === article.id}
+                                onClick={() =>
+                                  void handleArticlePatch(article, { featured: !article.featured })
+                                }
+                                className={`inline-flex h-8 w-8 items-center justify-center rounded-lg border transition-colors disabled:cursor-not-allowed disabled:opacity-55 ${
+                                  article.featured
+                                    ? "border-amber-100 bg-amber-50 text-amber-600"
+                                    : "border-[#e8e8e4] bg-white text-[#1a1a1a]/35 hover:bg-[#f5f5f2]"
+                                }`}
+                              >
+                                <Star className={`h-3.5 w-3.5 ${article.featured ? "fill-current" : ""}`} />
+                                <span className="sr-only">
+                                  {article.featured ? "대표 문서 해제" : "대표 문서로 지정"}
+                                </span>
+                              </button>
+                            </>
+                          ) : null}
                           {canMutateDocs ? (
                             <Link
                               href={editHref}
@@ -712,42 +1036,16 @@ export default function AdminDocsPage() {
           </div>
         </div>
 
-        <div className="overflow-hidden rounded-2xl border border-[#e8e8e4] bg-white">
-          <div className="border-b border-[#e8e8e4] px-4 py-4">
-            <div className="flex items-center gap-2">
-              <Database className="h-4 w-4 text-[#1a1a1a]/35" />
-              <h2 className="text-[14px] font-semibold text-[#111110]">챗봇 질문 상위</h2>
-            </div>
-          </div>
-          <div className="divide-y divide-[#f0f0ec]">
-            {(analytics?.topChatbotQuestions.length ?? 0) === 0 ? (
-              <p className="px-4 py-8 text-center text-[13px] text-[#1a1a1a]/35">
-                최근 30일 챗봇 질문 데이터가 없습니다.
-              </p>
-            ) : (
-              analytics?.topChatbotQuestions.map((item) => (
-                <div key={`${item.question}:${item.category ?? "none"}`} className="px-4 py-4">
-                  <div className="flex items-start justify-between gap-4">
-                    <div>
-                      <p className="text-[13px] font-semibold text-[#111110]">{item.question}</p>
-                      <p className="mt-1 text-[11px] text-[#1a1a1a]/35">
-                        {item.category ?? "카테고리 없음"} · {formatDateTime(item.latestAt)}
-                      </p>
-                    </div>
-                    <span className="shrink-0 text-[13px] font-bold tabular-nums text-[#111110]">
-                      {formatNumber(item.count)}
-                    </span>
-                  </div>
-                  {item.unresolvedCount > 0 ? (
-                    <p className="mt-2 text-[12px] text-[#B85C33]">
-                      미해결 {formatNumber(item.unresolvedCount)}건
-                    </p>
-                  ) : null}
-                </div>
-              ))
-            )}
-          </div>
-        </div>
+        <DocsRecommendedQuestionsManager articles={content?.articles ?? []} />
+      </section>
+
+      <section className="mt-6 grid gap-6 xl:grid-cols-2">
+        <DocsCategoryManager />
+        <DocsRedirectManager articles={content?.articles ?? []} />
+      </section>
+
+      <section className="mt-6">
+        <DocsQuestionClusterBacklog />
       </section>
     </div>
   )

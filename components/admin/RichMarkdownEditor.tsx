@@ -55,6 +55,7 @@ export interface RichMarkdownEditorHandle {
   wrapBrandColor: () => void
   insertLink: () => void
   insertImage: () => void
+  insertMarkdown: (markdown: string) => void
   insertDivider: () => void
 }
 
@@ -170,6 +171,10 @@ const RichMarkdownEditor = forwardRef<RichMarkdownEditorHandle, RichMarkdownEdit
         if (!url) return
         const alt = window.prompt("이미지 설명(alt 텍스트):") ?? ""
         editor.chain().focus().setImage({ src: url, alt }).run()
+      },
+      insertMarkdown: (markdown) => {
+        if (!editor || !markdown.trim()) return
+        editor.chain().focus().insertContent(markdown).run()
       },
       insertDivider: () => editor?.chain().focus().setHorizontalRule().run(),
     }), [editor])
