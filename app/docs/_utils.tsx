@@ -12,6 +12,7 @@ import {
   Wrench,
 } from "lucide-react"
 
+import BlogMarkdownRenderer from "@/components/blog/BlogMarkdownRenderer"
 import type {
   DocsArticleSection,
   DocsArticleSummary,
@@ -157,7 +158,7 @@ export function toArticleSections(doc: DocArticle): DocsArticleSection[] {
   return doc.sections.map((section, index) => ({
     id: `section-${index + 1}`,
     title: section.heading,
-    body: <p>{section.body}</p>,
+    body: section.body ? <BlogMarkdownRenderer markdown={section.body} /> : null,
     checklist: section.steps?.map((step) => ({
       label: step,
       checked: true,

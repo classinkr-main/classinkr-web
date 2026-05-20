@@ -1,10 +1,30 @@
 "use client"
 
-import { useMemo, useState } from "react"
+import { useMemo, useRef, useState, type ReactNode } from "react"
 import Link from "next/link"
 import { useRouter } from "next/navigation"
-import { ArrowLeft, Bot, CheckCircle2, CircleAlert, ExternalLink, Save, Trash2, Wand2 } from "lucide-react"
+import {
+  ArrowLeft,
+  Bot,
+  CheckCircle2,
+  CircleAlert,
+  ExternalLink,
+  Highlighter,
+  Image as ImageIcon,
+  Italic,
+  Link2,
+  List,
+  ListOrdered,
+  Minus,
+  Quote,
+  Save,
+  Sparkles,
+  Trash2,
+  Type,
+  Wand2,
+} from "lucide-react"
 
+import RichMarkdownEditor, { type RichMarkdownEditorHandle } from "@/components/admin/RichMarkdownEditor"
 import { adminFetch, adminFetchJson } from "@/lib/admin-client"
 import type {
   DocsArticleDetail,
@@ -536,8 +556,30 @@ function initialForm(
   }
 }
 
+function ToolbarButton({
+  onClick,
+  children,
+  icon,
+}: {
+  onClick: () => void
+  children: string
+  icon?: ReactNode
+}) {
+  return (
+    <button
+      type="button"
+      onClick={onClick}
+      className="inline-flex items-center gap-1 rounded-lg border border-[#e8e8e4] bg-white px-2 py-1.5 text-xs font-medium text-[#1a1a1a]/60 transition-colors duration-75 hover:border-[#1a1a1a]/20 hover:text-[#111110] active:scale-[0.96] active:bg-[#f7f7f5]"
+    >
+      {icon}
+      <span>{children}</span>
+    </button>
+  )
+}
+
 export default function DocsArticleEditor({ mode, categories, article }: Props) {
   const router = useRouter()
+  const editorRef = useRef<RichMarkdownEditorHandle | null>(null)
   const [form, setForm] = useState<FormState>(() =>
     initialForm(article, categories[0]?.id ?? "start")
   )
@@ -833,478 +875,532 @@ export default function DocsArticleEditor({ mode, categories, article }: Props) 
         </div>
       </div>
 
-      <div className="mx-auto max-w-5xl space-y-6 px-6 py-8">
-        {mode === "create" ? (
-          <section className="space-y-4 rounded-2xl border border-[rgba(0,0,0,0.08)] bg-white p-6">
-            <div>
+      <div className="mx-auto max-w-7xl px-6 py-8">
+        <div className="grid gap-6 lg:grid-cols-[minmax(0,1fr)_320px] xl:grid-cols-[minmax(0,1fr)_360px]">
+          <main className="space-y-6">
+            <section className="space-y-4 rounded-2xl border border-[rgba(0,0,0,0.08)] bg-white p-6">
               <h2 className="text-[13px] font-semibold uppercase tracking-wide text-[#1a1a1a]/40">
-                작성 템플릿
+                기본 정보
               </h2>
-              <p className="mt-2 max-w-2xl text-[12px] leading-relaxed text-[#1a1a1a]/45">
-                문서 유형을 고르면 기본 섹션과 검색·챗봇 메타를 함께 채웁니다.
-              </p>
-            </div>
-            <div className="grid gap-3 sm:grid-cols-2 lg:grid-cols-3">
-              {DOC_TEMPLATES.map((template) => (
-                <button
-                  key={template.id}
-                  type="button"
-                  onClick={() => applyTemplate(template)}
-                  className="min-h-[132px] rounded-xl border border-[#e8e8e4] bg-[#FAFAF8] p-4 text-left transition-colors hover:border-[#084734]/30 hover:bg-[#F7FBF8]"
-                >
-                  <span className="block text-[13px] font-semibold text-[#111110]">
-                    {template.label}
-                  </span>
-                  <span className="mt-2 block text-[12px] leading-relaxed text-[#1a1a1a]/45">
-                    {template.description}
-                  </span>
-                  <span className="mt-3 inline-flex items-center gap-1.5 text-[12px] font-semibold text-[#084734]">
-                    <Wand2 className="h-3.5 w-3.5" />
-                    템플릿 적용
-                  </span>
-                </button>
-              ))}
-            </div>
-          </section>
-        ) : null}
 
-        <section className="rounded-2xl border border-[#DDEFE5] bg-[#F7FBF8] p-6">
-          <div className="flex flex-col gap-4 sm:flex-row sm:items-start sm:justify-between">
-            <div>
-              <div className="flex items-center gap-2">
-                <Bot className="h-4 w-4 text-[#084734]" />
-                <h2 className="text-[13px] font-semibold uppercase tracking-wide text-[#084734]">
-                  AI/챗봇 준비 상태
-                </h2>
-              </div>
-              <p className="mt-2 max-w-2xl text-[12px] leading-relaxed text-[#1a1a1a]/48">
-                저장 전에 챗봇 답변 후보로 쓸 수 있는지 확인하고, 부족한 메타데이터를 빠르게 채웁니다.
-              </p>
-            </div>
-            <span className="inline-flex w-fit items-center rounded-full border border-emerald-100 bg-white px-3 py-1 text-[12px] font-semibold text-[#084734]">
-              {completedAiChecks}/{aiChecklist.length} 완료
-            </span>
-          </div>
-
-          <div className="mt-5 grid gap-3 sm:grid-cols-2 lg:grid-cols-4">
-            {aiChecklist.map((item) => (
-              <div key={item.label} className="border-t border-[#DDEFE5] pt-3">
-                <div className="flex items-center gap-2">
-                  {item.complete ? (
-                    <CheckCircle2 className="h-4 w-4 text-emerald-600" />
-                  ) : (
-                    <CircleAlert className="h-4 w-4 text-[#B85C33]" />
-                  )}
-                  <p className="text-[13px] font-semibold text-[#111110]">{item.label}</p>
-                </div>
-                <p className="mt-2 text-[11px] leading-relaxed text-[#1a1a1a]/42">{item.hint}</p>
-              </div>
-            ))}
-          </div>
-
-          <div className="mt-5 flex flex-wrap gap-2">
-            <button
-              type="button"
-              onClick={applySummaryDraft}
-              disabled={!suggestedSummary}
-              className="inline-flex items-center gap-1.5 rounded-lg border border-[#DDEFE5] bg-white px-3 py-2 text-[12px] font-semibold text-[#084734] transition-colors hover:bg-[#EDF8F1] disabled:cursor-not-allowed disabled:opacity-45"
-            >
-              <Wand2 className="h-3.5 w-3.5" />
-              요약 초안 채우기
-            </button>
-            <button
-              type="button"
-              onClick={applySuggestedKeywords}
-              disabled={suggestedKeywords.length === 0}
-              className="inline-flex items-center gap-1.5 rounded-lg border border-[#DDEFE5] bg-white px-3 py-2 text-[12px] font-semibold text-[#084734] transition-colors hover:bg-[#EDF8F1] disabled:cursor-not-allowed disabled:opacity-45"
-            >
-              <Wand2 className="h-3.5 w-3.5" />
-              추천 키워드 추가
-            </button>
-            <button
-              type="button"
-              onClick={applyChatbotVisibility}
-              className="inline-flex items-center gap-1.5 rounded-lg border border-[#DDEFE5] bg-white px-3 py-2 text-[12px] font-semibold text-[#084734] transition-colors hover:bg-[#EDF8F1]"
-            >
-              <Wand2 className="h-3.5 w-3.5" />
-              챗봇 노출값 맞추기
-            </button>
-          </div>
-        </section>
-
-        <section className="space-y-4 rounded-2xl border border-[rgba(0,0,0,0.08)] bg-white p-6">
-          <h2 className="text-[13px] font-semibold uppercase tracking-wide text-[#1a1a1a]/40">
-            기본 정보
-          </h2>
-
-          <div>
-            <label className="mb-1.5 block text-[12px] font-medium text-[#1a1a1a]/50">
-              제목 *
-            </label>
-            <input
-              type="text"
-              value={form.title}
-              onChange={(event) => {
-                const nextTitle = event.target.value
-                update("title", nextTitle)
-                if (mode === "create" && !form.slug) {
-                  update("slug", slugify(nextTitle))
-                }
-              }}
-              placeholder="예: 첫 수업 전 30분 설정 체크리스트"
-              className="w-full rounded-lg border border-[rgba(0,0,0,0.12)] px-3 py-2 text-[13px] focus:border-[#111110]/30 focus:outline-none"
-            />
-          </div>
-
-          <div className="grid gap-4 sm:grid-cols-2">
-            <div>
-              <label className="mb-1.5 block text-[12px] font-medium text-[#1a1a1a]/50">
-                카테고리 *
-              </label>
-              <select
-                value={form.categoryId}
-                onChange={(event) => update("categoryId", event.target.value)}
-                className="w-full rounded-lg border border-[rgba(0,0,0,0.12)] bg-white px-3 py-2 text-[13px] focus:border-[#111110]/30 focus:outline-none"
-              >
-                {categories.map((category) => (
-                  <option key={category.id} value={category.id}>
-                    {category.title}
-                  </option>
-                ))}
-              </select>
-            </div>
-            <div>
-              <label className="mb-1.5 block text-[12px] font-medium text-[#1a1a1a]/50">
-                slug *
-              </label>
-              <input
-                type="text"
-                value={form.slug}
-                onChange={(event) => update("slug", event.target.value)}
-                placeholder="first-class-setup"
-                className="w-full rounded-lg border border-[rgba(0,0,0,0.12)] px-3 py-2 font-mono text-[12px] focus:border-[#111110]/30 focus:outline-none"
-              />
-              <p className="mt-1 text-[11px] text-[#1a1a1a]/35">공개 URL: {publicPath}</p>
-            </div>
-          </div>
-
-          <div>
-            <label className="mb-1.5 block text-[12px] font-medium text-[#1a1a1a]/50">
-              설명 *
-            </label>
-            <textarea
-              value={form.description}
-              onChange={(event) => update("description", event.target.value)}
-              rows={2}
-              placeholder="문서 목록과 검색 결과에 노출되는 한 줄 요약"
-              className="w-full resize-none rounded-lg border border-[rgba(0,0,0,0.12)] px-3 py-2 text-[13px] focus:border-[#111110]/30 focus:outline-none"
-            />
-          </div>
-
-          <div className="grid gap-4 sm:grid-cols-3">
-            <div>
-              <label className="mb-1.5 block text-[12px] font-medium text-[#1a1a1a]/50">
-                문서 유형
-              </label>
-              <select
-                value={form.docType}
-                onChange={(event) => update("docType", event.target.value as DocsArticleDocType)}
-                className="w-full rounded-lg border border-[rgba(0,0,0,0.12)] bg-white px-3 py-2 text-[13px] focus:border-[#111110]/30 focus:outline-none"
-              >
-                {DOC_TYPE_OPTIONS.map((option) => (
-                  <option key={option.value} value={option.value}>
-                    {option.label}
-                  </option>
-                ))}
-              </select>
-            </div>
-            <div>
-              <label className="mb-1.5 block text-[12px] font-medium text-[#1a1a1a]/50">
-                제품 영역
-              </label>
-              <select
-                value={form.productArea}
-                onChange={(event) =>
-                  update("productArea", event.target.value as DocsArticleProductArea)
-                }
-                className="w-full rounded-lg border border-[rgba(0,0,0,0.12)] bg-white px-3 py-2 text-[13px] focus:border-[#111110]/30 focus:outline-none"
-              >
-                {PRODUCT_AREA_OPTIONS.map((option) => (
-                  <option key={option.value} value={option.value}>
-                    {option.label}
-                  </option>
-                ))}
-              </select>
-            </div>
-            <div>
-              <label className="mb-1.5 block text-[12px] font-medium text-[#1a1a1a]/50">
-                난이도
-              </label>
-              <select
-                value={form.difficulty}
-                onChange={(event) =>
-                  update("difficulty", event.target.value as DocsArticleDifficulty)
-                }
-                className="w-full rounded-lg border border-[rgba(0,0,0,0.12)] bg-white px-3 py-2 text-[13px] focus:border-[#111110]/30 focus:outline-none"
-              >
-                {DIFFICULTY_OPTIONS.map((option) => (
-                  <option key={option.value} value={option.value}>
-                    {option.label}
-                  </option>
-                ))}
-              </select>
-            </div>
-          </div>
-        </section>
-
-        <section className="space-y-4 rounded-2xl border border-[rgba(0,0,0,0.08)] bg-white p-6">
-          <h2 className="text-[13px] font-semibold uppercase tracking-wide text-[#1a1a1a]/40">
-            검색·챗봇 메타
-          </h2>
-
-          <div>
-            <label className="mb-1.5 block text-[12px] font-medium text-[#1a1a1a]/50">
-              대상 (쉼표 구분)
-            </label>
-            <input
-              type="text"
-              value={form.audience}
-              onChange={(event) => update("audience", event.target.value)}
-              placeholder="예: 원장, 운영팀, 교사"
-              className="w-full rounded-lg border border-[rgba(0,0,0,0.12)] px-3 py-2 text-[13px] focus:border-[#111110]/30 focus:outline-none"
-            />
-          </div>
-
-          <div className="grid gap-4 sm:grid-cols-3">
-            <div>
-              <label className="mb-1.5 block text-[12px] font-medium text-[#1a1a1a]/50">
-                태그 (쉼표 구분)
-              </label>
-              <input
-                type="text"
-                value={form.tagsCsv}
-                onChange={(event) => update("tagsCsv", event.target.value)}
-                placeholder="온보딩, 체크리스트"
-                className="w-full rounded-lg border border-[rgba(0,0,0,0.12)] px-3 py-2 text-[13px] focus:border-[#111110]/30 focus:outline-none"
-              />
-            </div>
-            <div>
-              <label className="mb-1.5 block text-[12px] font-medium text-[#1a1a1a]/50">
-                검색 키워드 (쉼표 구분)
-              </label>
-              <input
-                type="text"
-                value={form.keywordsCsv}
-                onChange={(event) => update("keywordsCsv", event.target.value)}
-                placeholder="첫 수업, 학생 초대"
-                className="w-full rounded-lg border border-[rgba(0,0,0,0.12)] px-3 py-2 text-[13px] focus:border-[#111110]/30 focus:outline-none"
-              />
-            </div>
-            <div>
-              <label className="mb-1.5 block text-[12px] font-medium text-[#1a1a1a]/50">
-                증상 (문제 해결 전용)
-              </label>
-              <input
-                type="text"
-                value={form.symptomsCsv}
-                onChange={(event) => update("symptomsCsv", event.target.value)}
-                placeholder="검은 화면, 소리 안 나옴"
-                className="w-full rounded-lg border border-[rgba(0,0,0,0.12)] px-3 py-2 text-[13px] focus:border-[#111110]/30 focus:outline-none"
-              />
-            </div>
-          </div>
-
-          <div>
-            <label className="mb-1.5 block text-[12px] font-medium text-[#1a1a1a]/50">
-              챗봇 요약
-            </label>
-            <textarea
-              value={form.chatbotSummary}
-              onChange={(event) => update("chatbotSummary", event.target.value)}
-              rows={3}
-              placeholder="챗봇이 답변할 때 우선 참고하는 2~3문장 요약"
-              className="w-full resize-none rounded-lg border border-[rgba(0,0,0,0.12)] px-3 py-2 text-[13px] focus:border-[#111110]/30 focus:outline-none"
-            />
-          </div>
-        </section>
-
-        <section className="rounded-2xl border border-[rgba(0,0,0,0.08)] bg-white p-6">
-          <div className="mb-3 flex items-center justify-between">
-            <h2 className="text-[13px] font-semibold uppercase tracking-wide text-[#1a1a1a]/40">
-              본문 (Markdown)
-            </h2>
-            <p className="text-[11px] text-[#1a1a1a]/30">
-              ## 헤딩 단위로 청킹됩니다
-            </p>
-          </div>
-          <textarea
-            value={form.contentMarkdown}
-            onChange={(event) => update("contentMarkdown", event.target.value)}
-            rows={24}
-            placeholder={"# 제목\n\n설명 단락\n\n## 섹션 1\n\n본문..."}
-            className="w-full resize-y rounded-lg border border-[rgba(0,0,0,0.12)] bg-[#FAFAF8] px-3 py-3 font-mono text-[13px] leading-6 focus:border-[#111110]/30 focus:outline-none"
-          />
-
-          <div className="mt-5 rounded-xl border border-[#e8e8e4] bg-white p-4">
-            <div className="flex flex-wrap items-center justify-between gap-3">
               <div>
-                <h3 className="text-[13px] font-semibold text-[#111110]">공개 섹션 미리보기</h3>
-                <p className="mt-1 text-[11px] text-[#1a1a1a]/35">
-                  저장 시 공개 페이지와 챗봇 청킹에 반영되는 구조입니다.
-                </p>
+                <label className="mb-1.5 block text-[12px] font-medium text-[#1a1a1a]/50">
+                  제목 *
+                </label>
+                <input
+                  type="text"
+                  value={form.title}
+                  onChange={(event) => {
+                    const nextTitle = event.target.value
+                    update("title", nextTitle)
+                    if (mode === "create" && !form.slug) {
+                      update("slug", slugify(nextTitle))
+                    }
+                  }}
+                  placeholder="예: 첫 수업 전 30분 설정 체크리스트"
+                  className="w-full rounded-lg border border-[rgba(0,0,0,0.12)] px-3 py-2 text-[13px] focus:border-[#111110]/30 focus:outline-none"
+                />
               </div>
-              <span className="rounded-full border border-[#e8e8e4] px-2.5 py-1 text-[11px] font-semibold text-[#1a1a1a]/45">
-                {previewSections.length}개 섹션 · {estimateReadMinutes(form.contentMarkdown)}분
-              </span>
-            </div>
 
-            {previewSections.length === 0 ? (
-              <p className="mt-4 text-[12px] text-[#1a1a1a]/35">
-                본문에 섹션을 입력하면 미리보기가 표시됩니다.
-              </p>
-            ) : (
-              <div className="mt-4 divide-y divide-[#f0f0ec]">
-                {previewSections.map((section, index) => (
-                  <div key={`${section.heading}:${index}`} className="py-3 first:pt-0 last:pb-0">
-                    <p className="text-[13px] font-semibold text-[#111110]">{section.heading}</p>
-                    <p className="mt-1 line-clamp-2 whitespace-pre-line text-[12px] leading-relaxed text-[#1a1a1a]/45">
-                      {section.body}
+              <div className="grid gap-4 sm:grid-cols-2">
+                <div>
+                  <label className="mb-1.5 block text-[12px] font-medium text-[#1a1a1a]/50">
+                    카테고리 *
+                  </label>
+                  <select
+                    value={form.categoryId}
+                    onChange={(event) => update("categoryId", event.target.value)}
+                    className="w-full rounded-lg border border-[rgba(0,0,0,0.12)] bg-white px-3 py-2 text-[13px] focus:border-[#111110]/30 focus:outline-none"
+                  >
+                    {categories.map((category) => (
+                      <option key={category.id} value={category.id}>
+                        {category.title}
+                      </option>
+                    ))}
+                  </select>
+                </div>
+                <div>
+                  <label className="mb-1.5 block text-[12px] font-medium text-[#1a1a1a]/50">
+                    slug *
+                  </label>
+                  <input
+                    type="text"
+                    value={form.slug}
+                    onChange={(event) => update("slug", event.target.value)}
+                    placeholder="first-class-setup"
+                    className="w-full rounded-lg border border-[rgba(0,0,0,0.12)] px-3 py-2 font-mono text-[12px] focus:border-[#111110]/30 focus:outline-none"
+                  />
+                  <p className="mt-1 text-[11px] text-[#1a1a1a]/35">공개 URL: {publicPath}</p>
+                </div>
+              </div>
+
+              <div>
+                <label className="mb-1.5 block text-[12px] font-medium text-[#1a1a1a]/50">
+                  설명 *
+                </label>
+                <textarea
+                  value={form.description}
+                  onChange={(event) => update("description", event.target.value)}
+                  rows={2}
+                  placeholder="문서 목록과 검색 결과에 노출되는 한 줄 요약"
+                  className="w-full resize-none rounded-lg border border-[rgba(0,0,0,0.12)] px-3 py-2 text-[13px] focus:border-[#111110]/30 focus:outline-none"
+                />
+              </div>
+
+              <div className="grid gap-4 sm:grid-cols-3">
+                <div>
+                  <label className="mb-1.5 block text-[12px] font-medium text-[#1a1a1a]/50">
+                    문서 유형
+                  </label>
+                  <select
+                    value={form.docType}
+                    onChange={(event) => update("docType", event.target.value as DocsArticleDocType)}
+                    className="w-full rounded-lg border border-[rgba(0,0,0,0.12)] bg-white px-3 py-2 text-[13px] focus:border-[#111110]/30 focus:outline-none"
+                  >
+                    {DOC_TYPE_OPTIONS.map((option) => (
+                      <option key={option.value} value={option.value}>
+                        {option.label}
+                      </option>
+                    ))}
+                  </select>
+                </div>
+                <div>
+                  <label className="mb-1.5 block text-[12px] font-medium text-[#1a1a1a]/50">
+                    제품 영역
+                  </label>
+                  <select
+                    value={form.productArea}
+                    onChange={(event) =>
+                      update("productArea", event.target.value as DocsArticleProductArea)
+                    }
+                    className="w-full rounded-lg border border-[rgba(0,0,0,0.12)] bg-white px-3 py-2 text-[13px] focus:border-[#111110]/30 focus:outline-none"
+                  >
+                    {PRODUCT_AREA_OPTIONS.map((option) => (
+                      <option key={option.value} value={option.value}>
+                        {option.label}
+                      </option>
+                    ))}
+                  </select>
+                </div>
+                <div>
+                  <label className="mb-1.5 block text-[12px] font-medium text-[#1a1a1a]/50">
+                    난이도
+                  </label>
+                  <select
+                    value={form.difficulty}
+                    onChange={(event) =>
+                      update("difficulty", event.target.value as DocsArticleDifficulty)
+                    }
+                    className="w-full rounded-lg border border-[rgba(0,0,0,0.12)] bg-white px-3 py-2 text-[13px] focus:border-[#111110]/30 focus:outline-none"
+                  >
+                    {DIFFICULTY_OPTIONS.map((option) => (
+                      <option key={option.value} value={option.value}>
+                        {option.label}
+                      </option>
+                    ))}
+                  </select>
+                </div>
+              </div>
+            </section>
+
+            <section className="rounded-2xl border border-[rgba(0,0,0,0.08)] bg-white p-6">
+              <div className="mb-4 flex flex-wrap items-center justify-between gap-3">
+                <div>
+                  <h2 className="text-[13px] font-semibold uppercase tracking-wide text-[#1a1a1a]/40">
+                    본문
+                  </h2>
+                  <p className="mt-1 text-[11px] text-[#1a1a1a]/35">
+                    Markdown 기반 · 공개 가이드 문서에 동일하게 렌더링됩니다
+                  </p>
+                </div>
+                <div className="flex flex-wrap items-center gap-1.5">
+                  <ToolbarButton onClick={() => editorRef.current?.setHeading(2)}>H2</ToolbarButton>
+                  <ToolbarButton onClick={() => editorRef.current?.setHeading(3)}>H3</ToolbarButton>
+                  <span className="mx-0.5 h-4 w-px bg-[#e8e8e4]" aria-hidden="true" />
+                  <ToolbarButton onClick={() => editorRef.current?.toggleBold()} icon={<Type className="h-3 w-3" />}>
+                    굵게
+                  </ToolbarButton>
+                  <ToolbarButton onClick={() => editorRef.current?.toggleItalic()} icon={<Italic className="h-3 w-3" />}>
+                    기울이기
+                  </ToolbarButton>
+                  <ToolbarButton onClick={() => editorRef.current?.toggleHighlight()} icon={<Highlighter className="h-3 w-3" />}>
+                    강조색
+                  </ToolbarButton>
+                  <ToolbarButton onClick={() => editorRef.current?.wrapBrandColor()} icon={<Sparkles className="h-3 w-3" />}>
+                    브랜드색
+                  </ToolbarButton>
+                  <span className="mx-0.5 h-4 w-px bg-[#e8e8e4]" aria-hidden="true" />
+                  <ToolbarButton onClick={() => editorRef.current?.toggleBlockquote()} icon={<Quote className="h-3 w-3" />}>
+                    인용
+                  </ToolbarButton>
+                  <ToolbarButton onClick={() => editorRef.current?.toggleBulletList()} icon={<List className="h-3 w-3" />}>
+                    리스트
+                  </ToolbarButton>
+                  <ToolbarButton onClick={() => editorRef.current?.toggleOrderedList()} icon={<ListOrdered className="h-3 w-3" />}>
+                    번호
+                  </ToolbarButton>
+                  <span className="mx-0.5 h-4 w-px bg-[#e8e8e4]" aria-hidden="true" />
+                  <ToolbarButton onClick={() => editorRef.current?.insertLink()} icon={<Link2 className="h-3 w-3" />}>
+                    링크
+                  </ToolbarButton>
+                  <ToolbarButton onClick={() => editorRef.current?.insertImage()} icon={<ImageIcon className="h-3 w-3" />}>
+                    이미지
+                  </ToolbarButton>
+                  <ToolbarButton onClick={() => editorRef.current?.insertDivider()} icon={<Minus className="h-3 w-3" />}>
+                    구분선
+                  </ToolbarButton>
+                </div>
+              </div>
+
+              <RichMarkdownEditor
+                ref={editorRef}
+                value={form.contentMarkdown}
+                onChange={(markdown) => update("contentMarkdown", markdown)}
+                placeholder="본문을 작성해주세요"
+              />
+
+              <div className="mt-3 rounded-xl border border-emerald-100 bg-emerald-50/60 p-3.5">
+                <p className="text-[12px] font-semibold text-[#084734]">문법 팁</p>
+                <div className="mt-2 space-y-1.5 text-[11px] leading-5 text-[#084734]/75">
+                  <p>**굵게** · *기울임* · ==강조==</p>
+                  <p>{"{{green:브랜드색}} · [링크](url)"}</p>
+                  <p>![설명](이미지URL) · {">"} 인용</p>
+                </div>
+              </div>
+
+              <div className="mt-5 rounded-xl border border-[#e8e8e4] bg-white p-4">
+                <div className="flex flex-wrap items-center justify-between gap-3">
+                  <div>
+                    <h3 className="text-[13px] font-semibold text-[#111110]">공개 섹션 미리보기</h3>
+                    <p className="mt-1 text-[11px] text-[#1a1a1a]/35">
+                      저장 시 공개 페이지와 챗봇 청킹에 반영되는 구조입니다.
                     </p>
-                    {section.steps?.length ? (
-                      <p className="mt-2 text-[11px] text-[#084734]">
-                        체크리스트 {section.steps.length}개
-                      </p>
-                    ) : null}
+                  </div>
+                  <span className="rounded-full border border-[#e8e8e4] px-2.5 py-1 text-[11px] font-semibold text-[#1a1a1a]/45">
+                    {previewSections.length}개 섹션 · {estimateReadMinutes(form.contentMarkdown)}분
+                  </span>
+                </div>
+
+                {previewSections.length === 0 ? (
+                  <p className="mt-4 text-[12px] text-[#1a1a1a]/35">
+                    본문에 섹션을 입력하면 미리보기가 표시됩니다.
+                  </p>
+                ) : (
+                  <div className="mt-4 divide-y divide-[#f0f0ec]">
+                    {previewSections.map((section, index) => (
+                      <div key={`${section.heading}:${index}`} className="py-3 first:pt-0 last:pb-0">
+                        <p className="text-[13px] font-semibold text-[#111110]">{section.heading}</p>
+                        <p className="mt-1 line-clamp-2 whitespace-pre-line text-[12px] leading-relaxed text-[#1a1a1a]/45">
+                          {section.body}
+                        </p>
+                        {section.steps?.length ? (
+                          <p className="mt-2 text-[11px] text-[#084734]">
+                            체크리스트 {section.steps.length}개
+                          </p>
+                        ) : null}
+                      </div>
+                    ))}
+                  </div>
+                )}
+              </div>
+            </section>
+
+            <section className="rounded-2xl border border-[#DDEFE5] bg-[#F7FBF8] p-6">
+              <div className="flex flex-col gap-4 sm:flex-row sm:items-start sm:justify-between">
+                <div>
+                  <div className="flex items-center gap-2">
+                    <Bot className="h-4 w-4 text-[#084734]" />
+                    <h2 className="text-[13px] font-semibold uppercase tracking-wide text-[#084734]">
+                      AI/챗봇 준비 상태
+                    </h2>
+                  </div>
+                  <p className="mt-2 max-w-2xl text-[12px] leading-relaxed text-[#1a1a1a]/48">
+                    저장 전에 챗봇 답변 후보로 쓸 수 있는지 확인하고, 부족한 메타데이터를 빠르게 채웁니다.
+                  </p>
+                </div>
+                <span className="inline-flex w-fit items-center rounded-full border border-emerald-100 bg-white px-3 py-1 text-[12px] font-semibold text-[#084734]">
+                  {completedAiChecks}/{aiChecklist.length} 완료
+                </span>
+              </div>
+
+              <div className="mt-5 grid gap-3 sm:grid-cols-2 lg:grid-cols-4">
+                {aiChecklist.map((item) => (
+                  <div key={item.label} className="border-t border-[#DDEFE5] pt-3">
+                    <div className="flex items-center gap-2">
+                      {item.complete ? (
+                        <CheckCircle2 className="h-4 w-4 text-emerald-600" />
+                      ) : (
+                        <CircleAlert className="h-4 w-4 text-[#B85C33]" />
+                      )}
+                      <p className="text-[13px] font-semibold text-[#111110]">{item.label}</p>
+                    </div>
+                    <p className="mt-2 text-[11px] leading-relaxed text-[#1a1a1a]/42">{item.hint}</p>
                   </div>
                 ))}
               </div>
-            )}
-          </div>
-        </section>
 
-        <section className="space-y-4 rounded-2xl border border-[rgba(0,0,0,0.08)] bg-white p-6">
-          <h2 className="text-[13px] font-semibold uppercase tracking-wide text-[#1a1a1a]/40">
-            게시 설정
-          </h2>
-
-          <div className="grid gap-4 sm:grid-cols-3">
-            <div>
-              <label className="mb-1.5 block text-[12px] font-medium text-[#1a1a1a]/50">
-                상태
-              </label>
-              <div className="flex flex-wrap gap-2">
-                {STATUS_OPTIONS.map((option) => {
-                  const active = form.status === option.value
-                  return (
-                    <button
-                      key={option.value}
-                      type="button"
-                      onClick={() => update("status", option.value)}
-                      className={`inline-flex items-center rounded-full border px-3 py-1 text-[12px] font-semibold transition-colors ${
-                        active
-                          ? option.tone
-                          : "border-[#e8e8e4] bg-white text-[#1a1a1a]/40 hover:bg-[#f5f5f2]"
-                      }`}
-                    >
-                      {option.label}
-                    </button>
-                  )
-                })}
+              <div className="mt-5 flex flex-wrap gap-2">
+                <button
+                  type="button"
+                  onClick={applySummaryDraft}
+                  disabled={!suggestedSummary}
+                  className="inline-flex items-center gap-1.5 rounded-lg border border-[#DDEFE5] bg-white px-3 py-2 text-[12px] font-semibold text-[#084734] transition-colors hover:bg-[#EDF8F1] disabled:cursor-not-allowed disabled:opacity-45"
+                >
+                  <Wand2 className="h-3.5 w-3.5" />
+                  요약 초안 채우기
+                </button>
+                <button
+                  type="button"
+                  onClick={applySuggestedKeywords}
+                  disabled={suggestedKeywords.length === 0}
+                  className="inline-flex items-center gap-1.5 rounded-lg border border-[#DDEFE5] bg-white px-3 py-2 text-[12px] font-semibold text-[#084734] transition-colors hover:bg-[#EDF8F1] disabled:cursor-not-allowed disabled:opacity-45"
+                >
+                  <Wand2 className="h-3.5 w-3.5" />
+                  추천 키워드 추가
+                </button>
+                <button
+                  type="button"
+                  onClick={applyChatbotVisibility}
+                  className="inline-flex items-center gap-1.5 rounded-lg border border-[#DDEFE5] bg-white px-3 py-2 text-[12px] font-semibold text-[#084734] transition-colors hover:bg-[#EDF8F1]"
+                >
+                  <Wand2 className="h-3.5 w-3.5" />
+                  챗봇 노출값 맞추기
+                </button>
               </div>
-            </div>
-            <div>
-              <label className="mb-1.5 block text-[12px] font-medium text-[#1a1a1a]/50">
-                가시성
-              </label>
-              <select
-                value={form.visibility}
-                onChange={(event) =>
-                  update("visibility", event.target.value as DocsArticleVisibility)
-                }
-                className="w-full rounded-lg border border-[rgba(0,0,0,0.12)] bg-white px-3 py-2 text-[13px] focus:border-[#111110]/30 focus:outline-none"
-              >
-                {VISIBILITY_OPTIONS.map((option) => (
-                  <option key={option.value} value={option.value}>
-                    {option.label}
-                  </option>
-                ))}
-              </select>
-            </div>
-            <div>
-              <label className="mb-1.5 block text-[12px] font-medium text-[#1a1a1a]/50">
-                정렬 순서 (낮을수록 위)
-              </label>
-              <input
-                type="number"
-                value={form.orderIndex}
-                onChange={(event) => update("orderIndex", Number(event.target.value) || 0)}
-                className="w-full rounded-lg border border-[rgba(0,0,0,0.12)] px-3 py-2 text-[13px] focus:border-[#111110]/30 focus:outline-none"
-              />
-            </div>
-          </div>
+            </section>
 
-          <div className="flex flex-wrap gap-6">
-            <label className="inline-flex items-center gap-2 text-[13px] text-[#1a1a1a]/60">
-              <input
-                type="checkbox"
-                checked={form.featured}
-                onChange={(event) => update("featured", event.target.checked)}
-                className="h-4 w-4 rounded border-[rgba(0,0,0,0.15)]"
-              />
-              대표 문서
-            </label>
-            <label className="inline-flex items-center gap-2 text-[13px] text-[#1a1a1a]/60">
-              <input
-                type="checkbox"
-                checked={form.noindex}
-                onChange={(event) => update("noindex", event.target.checked)}
-                className="h-4 w-4 rounded border-[rgba(0,0,0,0.15)]"
-              />
-              검색 엔진 색인 제외 (noindex)
-            </label>
-          </div>
+            <section className="space-y-4 rounded-2xl border border-[rgba(0,0,0,0.08)] bg-white p-6">
+              <h2 className="text-[13px] font-semibold uppercase tracking-wide text-[#1a1a1a]/40">
+                검색 메타
+              </h2>
 
-          <div className="grid gap-4 sm:grid-cols-2">
-            <div>
-              <label className="mb-1.5 block text-[12px] font-medium text-[#1a1a1a]/50">
-                SEO 제목
-              </label>
-              <input
-                type="text"
-                value={form.seoTitle}
-                onChange={(event) => update("seoTitle", event.target.value)}
-                placeholder="기본: 제목 | ClassIn 가이드"
-                className="w-full rounded-lg border border-[rgba(0,0,0,0.12)] px-3 py-2 text-[13px] focus:border-[#111110]/30 focus:outline-none"
-              />
-            </div>
-            <div>
-              <label className="mb-1.5 block text-[12px] font-medium text-[#1a1a1a]/50">
-                SEO 설명
-              </label>
-              <input
-                type="text"
-                value={form.seoDescription}
-                onChange={(event) => update("seoDescription", event.target.value)}
-                placeholder="기본: 설명 필드"
-                className="w-full rounded-lg border border-[rgba(0,0,0,0.12)] px-3 py-2 text-[13px] focus:border-[#111110]/30 focus:outline-none"
-              />
-            </div>
-          </div>
+              <div>
+                <label className="mb-1.5 block text-[12px] font-medium text-[#1a1a1a]/50">
+                  대상 (쉼표 구분)
+                </label>
+                <input
+                  type="text"
+                  value={form.audience}
+                  onChange={(event) => update("audience", event.target.value)}
+                  placeholder="예: 원장, 운영팀, 교사"
+                  className="w-full rounded-lg border border-[rgba(0,0,0,0.12)] px-3 py-2 text-[13px] focus:border-[#111110]/30 focus:outline-none"
+                />
+              </div>
 
-          {mode === "edit" && article ? (
-            <div className="grid gap-3 rounded-xl bg-[#FAFAF8] px-4 py-3 text-[12px] text-[#1a1a1a]/45 sm:grid-cols-3">
-              <span>
-                게시일: {article.publishedAt ? new Date(article.publishedAt).toLocaleString("ko-KR") : "-"}
-              </span>
-              <span>
-                최근 검수: {article.lastReviewedAt ? new Date(article.lastReviewedAt).toLocaleString("ko-KR") : "-"}
-              </span>
-              <span>
-                업데이트: {new Date(article.updatedAt).toLocaleString("ko-KR")}
-              </span>
-            </div>
-          ) : null}
-        </section>
+              <div className="grid gap-4 sm:grid-cols-3">
+                <div>
+                  <label className="mb-1.5 block text-[12px] font-medium text-[#1a1a1a]/50">
+                    태그 (쉼표 구분)
+                  </label>
+                  <input
+                    type="text"
+                    value={form.tagsCsv}
+                    onChange={(event) => update("tagsCsv", event.target.value)}
+                    placeholder="온보딩, 체크리스트"
+                    className="w-full rounded-lg border border-[rgba(0,0,0,0.12)] px-3 py-2 text-[13px] focus:border-[#111110]/30 focus:outline-none"
+                  />
+                </div>
+                <div>
+                  <label className="mb-1.5 block text-[12px] font-medium text-[#1a1a1a]/50">
+                    검색 키워드 (쉼표 구분)
+                  </label>
+                  <input
+                    type="text"
+                    value={form.keywordsCsv}
+                    onChange={(event) => update("keywordsCsv", event.target.value)}
+                    placeholder="첫 수업, 학생 초대"
+                    className="w-full rounded-lg border border-[rgba(0,0,0,0.12)] px-3 py-2 text-[13px] focus:border-[#111110]/30 focus:outline-none"
+                  />
+                </div>
+                <div>
+                  <label className="mb-1.5 block text-[12px] font-medium text-[#1a1a1a]/50">
+                    증상 (문제 해결 전용)
+                  </label>
+                  <input
+                    type="text"
+                    value={form.symptomsCsv}
+                    onChange={(event) => update("symptomsCsv", event.target.value)}
+                    placeholder="검은 화면, 소리 안 나옴"
+                    className="w-full rounded-lg border border-[rgba(0,0,0,0.12)] px-3 py-2 text-[13px] focus:border-[#111110]/30 focus:outline-none"
+                  />
+                </div>
+              </div>
+
+              <div>
+                <label className="mb-1.5 block text-[12px] font-medium text-[#1a1a1a]/50">
+                  챗봇 요약
+                </label>
+                <textarea
+                  value={form.chatbotSummary}
+                  onChange={(event) => update("chatbotSummary", event.target.value)}
+                  rows={3}
+                  placeholder="챗봇이 답변할 때 우선 참고하는 2~3문장 요약"
+                  className="w-full resize-none rounded-lg border border-[rgba(0,0,0,0.12)] px-3 py-2 text-[13px] focus:border-[#111110]/30 focus:outline-none"
+                />
+              </div>
+            </section>
+          </main>
+
+          <aside className="space-y-6 lg:sticky lg:top-20 lg:self-start">
+            <section className="space-y-4 rounded-2xl border border-[rgba(0,0,0,0.08)] bg-white p-6">
+              <h2 className="text-[13px] font-semibold uppercase tracking-wide text-[#1a1a1a]/40">
+                게시 설정
+              </h2>
+
+              <div className="grid gap-4">
+                <div>
+                  <label className="mb-1.5 block text-[12px] font-medium text-[#1a1a1a]/50">
+                    상태
+                  </label>
+                  <div className="flex flex-wrap gap-2">
+                    {STATUS_OPTIONS.map((option) => {
+                      const active = form.status === option.value
+                      return (
+                        <button
+                          key={option.value}
+                          type="button"
+                          onClick={() => update("status", option.value)}
+                          className={`inline-flex items-center rounded-full border px-3 py-1 text-[12px] font-semibold transition-colors ${
+                            active
+                              ? option.tone
+                              : "border-[#e8e8e4] bg-white text-[#1a1a1a]/40 hover:bg-[#f5f5f2]"
+                          }`}
+                        >
+                          {option.label}
+                        </button>
+                      )
+                    })}
+                  </div>
+                </div>
+                <div>
+                  <label className="mb-1.5 block text-[12px] font-medium text-[#1a1a1a]/50">
+                    가시성
+                  </label>
+                  <select
+                    value={form.visibility}
+                    onChange={(event) =>
+                      update("visibility", event.target.value as DocsArticleVisibility)
+                    }
+                    className="w-full rounded-lg border border-[rgba(0,0,0,0.12)] bg-white px-3 py-2 text-[13px] focus:border-[#111110]/30 focus:outline-none"
+                  >
+                    {VISIBILITY_OPTIONS.map((option) => (
+                      <option key={option.value} value={option.value}>
+                        {option.label}
+                      </option>
+                    ))}
+                  </select>
+                </div>
+                <div>
+                  <label className="mb-1.5 block text-[12px] font-medium text-[#1a1a1a]/50">
+                    정렬 순서 (낮을수록 위)
+                  </label>
+                  <input
+                    type="number"
+                    value={form.orderIndex}
+                    onChange={(event) => update("orderIndex", Number(event.target.value) || 0)}
+                    className="w-full rounded-lg border border-[rgba(0,0,0,0.12)] px-3 py-2 text-[13px] focus:border-[#111110]/30 focus:outline-none"
+                  />
+                </div>
+              </div>
+
+              <div className="flex flex-col gap-3">
+                <label className="inline-flex items-center gap-2 text-[13px] text-[#1a1a1a]/60">
+                  <input
+                    type="checkbox"
+                    checked={form.featured}
+                    onChange={(event) => update("featured", event.target.checked)}
+                    className="h-4 w-4 rounded border-[rgba(0,0,0,0.15)]"
+                  />
+                  대표 문서
+                </label>
+                <label className="inline-flex items-center gap-2 text-[13px] text-[#1a1a1a]/60">
+                  <input
+                    type="checkbox"
+                    checked={form.noindex}
+                    onChange={(event) => update("noindex", event.target.checked)}
+                    className="h-4 w-4 rounded border-[rgba(0,0,0,0.15)]"
+                  />
+                  검색 엔진 색인 제외 (noindex)
+                </label>
+              </div>
+
+              <div className="grid gap-4">
+                <div>
+                  <label className="mb-1.5 block text-[12px] font-medium text-[#1a1a1a]/50">
+                    SEO 제목
+                  </label>
+                  <input
+                    type="text"
+                    value={form.seoTitle}
+                    onChange={(event) => update("seoTitle", event.target.value)}
+                    placeholder="기본: 제목 | ClassIn 가이드"
+                    className="w-full rounded-lg border border-[rgba(0,0,0,0.12)] px-3 py-2 text-[13px] focus:border-[#111110]/30 focus:outline-none"
+                  />
+                </div>
+                <div>
+                  <label className="mb-1.5 block text-[12px] font-medium text-[#1a1a1a]/50">
+                    SEO 설명
+                  </label>
+                  <input
+                    type="text"
+                    value={form.seoDescription}
+                    onChange={(event) => update("seoDescription", event.target.value)}
+                    placeholder="기본: 설명 필드"
+                    className="w-full rounded-lg border border-[rgba(0,0,0,0.12)] px-3 py-2 text-[13px] focus:border-[#111110]/30 focus:outline-none"
+                  />
+                </div>
+              </div>
+
+              {mode === "edit" && article ? (
+                <div className="grid gap-2 rounded-xl bg-[#FAFAF8] px-4 py-3 text-[12px] text-[#1a1a1a]/45">
+                  <span>
+                    게시일: {article.publishedAt ? new Date(article.publishedAt).toLocaleString("ko-KR") : "-"}
+                  </span>
+                  <span>
+                    최근 검수: {article.lastReviewedAt ? new Date(article.lastReviewedAt).toLocaleString("ko-KR") : "-"}
+                  </span>
+                  <span>
+                    업데이트: {new Date(article.updatedAt).toLocaleString("ko-KR")}
+                  </span>
+                </div>
+              ) : null}
+            </section>
+
+            {mode === "create" ? (
+              <section className="space-y-4 rounded-2xl border border-[rgba(0,0,0,0.08)] bg-white p-5">
+                <div>
+                  <h2 className="text-[13px] font-semibold uppercase tracking-wide text-[#1a1a1a]/40">
+                    작성 템플릿
+                  </h2>
+                  <p className="mt-2 text-[12px] leading-relaxed text-[#1a1a1a]/45">
+                    문서 유형을 고르면 기본 섹션과 검색 메타를 함께 채웁니다.
+                  </p>
+                </div>
+                <div className="grid gap-3">
+                  {DOC_TEMPLATES.map((template) => (
+                    <button
+                      key={template.id}
+                      type="button"
+                      onClick={() => applyTemplate(template)}
+                      className="min-h-[116px] rounded-xl border border-[#e8e8e4] bg-[#FAFAF8] p-4 text-left transition-colors hover:border-[#084734]/30 hover:bg-[#F7FBF8]"
+                    >
+                      <span className="block text-[13px] font-semibold text-[#111110]">
+                        {template.label}
+                      </span>
+                      <span className="mt-2 block text-[12px] leading-relaxed text-[#1a1a1a]/45">
+                        {template.description}
+                      </span>
+                      <span className="mt-3 inline-flex items-center gap-1.5 text-[12px] font-semibold text-[#084734]">
+                        <Wand2 className="h-3.5 w-3.5" />
+                        템플릿 적용
+                      </span>
+                    </button>
+                  ))}
+                </div>
+              </section>
+            ) : null}
+          </aside>
+        </div>
       </div>
     </div>
   )
