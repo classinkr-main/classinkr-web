@@ -355,7 +355,7 @@ interface OnSubmitPayload {
   name?: string
   org?: string
   role?: string
-  source: "demo_modal" | "contact_page" | "newsletter" | "manual" | "meta_lead_ads"
+  source: string
 }
 
 export async function triggerOnSubmitRules(payload: OnSubmitPayload): Promise<void> {

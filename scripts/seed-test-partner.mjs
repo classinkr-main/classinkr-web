@@ -125,7 +125,7 @@ async function run() {
   console.log("\n🎉 완료!\n");
   console.log("┌─────────────────────────────────────────┐");
   console.log("│  파트너 포털 테스트 계정                 │");
-  console.log("│  URL:  /partner/login                   │");
+  console.log("│  URL:  /admin/crm/partners/portal       │");
   console.log(`│  ID:   ${TEST_EMAIL.padEnd(33)}│`);
   console.log(`│  PW:   ${TEST_PASSWORD.padEnd(33)}│`);
   console.log("└─────────────────────────────────────────┘");

@@ -8,6 +8,7 @@ export type EventNames =
   | "download_materials"
   | "view_demo_video"
   | "begin_checkout"
+  | "purchase"
 
 type AnalyticsParamValue = string | number | boolean | null | undefined
 type AnalyticsParams = Record<string, AnalyticsParamValue>
@@ -56,11 +57,15 @@ const sendInternalTracking = (eventName: EventNames, params?: AnalyticsParams) =
 export const trackEvent = (eventName: EventNames, params?: AnalyticsParams) => {
   if (typeof window === "undefined") return
 
-  window.dataLayer = window.dataLayer || []
-  window.dataLayer.push({
-    event: eventName,
-    ...(params ?? {}),
-  })
+  try {
+    window.dataLayer = window.dataLayer || []
+    window.dataLayer.push({
+      event: eventName,
+      ...(params ?? {}),
+    })
+  } catch {
+    // Some embedded/webview contexts lock the Window object; continue with other transports.
+  }
 
   sendInternalTracking(eventName, params)
 
@@ -71,7 +76,11 @@ export const trackEvent = (eventName: EventNames, params?: AnalyticsParams) => {
   if (window.fbq) {
     if (eventName === "submit_demo_request") {
       window.fbq("track", "Lead", params)
-    } else {
+    } else if (eventName === "submit_newsletter") {
+      window.fbq("track", "CompleteRegistration", params)
+    } else if (eventName === "purchase") {
+      window.fbq("track", "Purchase", params)
+    } else if (eventName !== "page_view") {
       window.fbq("trackCustom", eventName, params)
     }
   }

@@ -1,5 +1,5 @@
 import { NextRequest, NextResponse } from "next/server"
-import { verifyAdmin } from "@/lib/admin-auth"
+import { BRANCH_READ_ADMIN_API_ROLES, verifyAdmin } from "@/lib/admin-auth"
 import { unstable_cache } from "next/cache"
 import { readRangeWithFormat, envSheetId, getSheetModifiedTime } from "@/lib/branch/google-sheets"
 import { parseDsh, DSH_RANGE } from "@/lib/branch/parsers/dsh"
@@ -7,7 +7,7 @@ import type { DshBreakdownRow } from "@/lib/branch/parsers/dsh"
 import { parseKpi, KPI_RANGE } from "@/lib/branch/parsers/kpi"
 import { listBranchRevDeals } from "@/lib/repositories/branch-deals"
 import type { BranchRevDeal } from "@/lib/repositories/branch-deals"
-import { fyOf, FISCAL_MONTH_ORDER, fiscalQuarter, ymKey } from "@/lib/branch/fiscal"
+import { fyOf, FISCAL_MONTH_ORDER, fiscalQuarter, resolvePeriodDate, ymKey } from "@/lib/branch/fiscal"
 import { summarizeRevenue, bottleneckKpi, closingDeals } from "@/lib/branch/computations/core-kpi"
 import { listMembersByTeam } from "@/lib/branch/computations/pacing"
 import { summarizeCampaigns } from "@/lib/branch/computations/campaigns"
@@ -178,10 +178,10 @@ function readPeriodParam(url: URL): BranchPeriod | NextResponse {
   return NextResponse.json({ error: "Invalid period query" }, { status: 400 })
 }
 
-const readDsh = unstable_cache(async () => {
+const readDsh = unstable_cache(async (fy: number) => {
   const id = envSheetId("dashboard")
   const grid = await readRangeWithFormat(id, DSH_RANGE)
-  return parseDsh(grid, fyOf(new Date()))
+  return parseDsh(grid, fy)
 }, ["branch-dsh"], { revalidate: 60, tags: ["branch-dsh"] })
 
 const readKpi = unstable_cache(async () => {
@@ -204,27 +204,29 @@ const readSheetFreshness = unstable_cache(async () => {
 }, ["branch-sheet-freshness"], { revalidate: 60, tags: ["branch-sheet-freshness"] })
 
 export async function GET(req: NextRequest) {
-  const err = await verifyAdmin(req); if (err) return err
+  const err = await verifyAdmin(req, BRANCH_READ_ADMIN_API_ROLES); if (err) return err
   const url = new URL(req.url)
   const team = readTeamParam(url); if (team instanceof NextResponse) return team
   const period = readPeriodParam(url); if (period instanceof NextResponse) return period
-  const now = new Date()
+  const currentDate = new Date()
+  const periodDate = resolvePeriodDate(period, url.searchParams.get("month"), currentDate)
+  if (!periodDate) return NextResponse.json({ error: "Invalid month query" }, { status: 400 })
   try {
     const [dsh, kpi, deals, campaigns, runs, events, sheetModifiedAt] = await Promise.all([
-      readDsh(), readKpi(), listBranchRevDeals({ team }), summarizeCampaigns(now), getRecentSyncRuns(3), listPublicEvents(),
+      readDsh(fyOf(periodDate)), readKpi(), listBranchRevDeals({ team }), summarizeCampaigns(currentDate), getRecentSyncRuns(3), listPublicEvents(),
       readSheetFreshness(),
     ])
     const teamMembers = new Set(listMembersByTeam(dsh, team))
-    const revenue = summarizeRevenue(dsh, deals, team, period, now)
+    const revenue = summarizeRevenue(dsh, deals, team, period, periodDate)
     const bottle = bottleneckKpi(kpi, teamMembers)
-    const closing = closingDeals(deals, now)
+    const closing = closingDeals(deals, currentDate)
     const events30 = events.filter((e) => {
       const t = new Date(e.startsAt).getTime()
-      return t >= now.getTime() && t <= now.getTime() + 30*86400_000
+      return t >= currentDate.getTime() && t <= currentDate.getTime() + 30*86400_000
     })
     const lastRun = runs[0]
 
-    const fy = fyOf(now)
+    const fy = fyOf(periodDate)
     const months: string[] = FISCAL_MONTH_ORDER.map((m) => `${m >= 4 ? fy : fy + 1}-${String(m).padStart(2, "0")}`)
 
     const teamGoalRow = team === "ALL" ? null : dsh.rows.find((r) => r.level === "team" && r.team === team && r.kind === "goal")
@@ -256,7 +258,7 @@ export async function GET(req: NextRequest) {
       revenue_cum.push(revCum)
       revenue_trend_cum.push(trendCum)
     }
-    const confirmed_through_index = Math.max(0, months.indexOf(ymKey(now)))
+    const confirmed_through_index = Math.max(0, months.indexOf(ymKey(periodDate)))
 
     const eventsTimeline = events
       .filter((e) => months.some((mm) => e.startsAt.startsWith(mm)))
@@ -270,16 +272,16 @@ export async function GET(req: NextRequest) {
 
     const breakdown = dsh.breakdown ?? []
 
-    const calMonth = now.getUTCMonth() + 1
+    const calMonth = periodDate.getUTCMonth() + 1
     const fyQuarterMonths = (q: 1 | 2 | 3 | 4): string[] => {
       const qMos = q === 1 ? [4,5,6] : q === 2 ? [7,8,9] : q === 3 ? [10,11,12] : [1,2,3]
       return qMos.map((m) => `${m >= 4 ? fy : fy + 1}-${String(m).padStart(2, "0")}`)
     }
     const periodMonths =
       period === "Y" ? months
-      : period === "M" ? [ymKey(now)]
+      : period === "M" ? [ymKey(periodDate)]
       : fyQuarterMonths(fiscalQuarter(calMonth))
-    const prevMonthDate = (() => { const d = new Date(now); d.setUTCMonth(d.getUTCMonth() - 1); return d })()
+    const prevMonthDate = (() => { const d = new Date(periodDate); d.setUTCMonth(d.getUTCMonth() - 1); return d })()
     const prevPeriodMonths: string[] | null =
       period === "Y" ? null
       : period === "M" ? (months.includes(ymKey(prevMonthDate)) ? [ymKey(prevMonthDate)] : null)
@@ -289,7 +291,7 @@ export async function GET(req: NextRequest) {
           return fyQuarterMonths((q - 1) as 1 | 2 | 3 | 4)
         })()
 
-    const thisWeekStart = startOfWeekMon(now)
+    const thisWeekStart = startOfWeekMon(currentDate)
     const thisWeekEnd = new Date(thisWeekStart)
     thisWeekEnd.setUTCDate(thisWeekEnd.getUTCDate() + 7)
     const prevWeekStart = new Date(thisWeekStart)
@@ -349,7 +351,7 @@ export async function GET(req: NextRequest) {
       const prevWk = aggregateWeekly(deals, prevWeekStart, thisWeekStart, classify)
       const weeklyAvailable = thisWk.mappedCount > 0 || prevWk.mappedCount > 0
       const slices = buildMix(
-        breakdown, dim, period, now,
+        breakdown, dim, period, periodDate,
         weeklyAvailable ? thisWk.totals : null,
         weeklyAvailable ? prevWk.totals : null,
       )
@@ -357,7 +359,7 @@ export async function GET(req: NextRequest) {
         slices,
         meta: {
           prev_period_label: PREV_PERIOD_LABEL[period],
-          prev_period_available: isPrevPeriodAvailable(breakdown, period, now),
+          prev_period_available: isPrevPeriodAvailable(breakdown, period, periodDate),
           weekly_available: weeklyAvailable,
         },
       }

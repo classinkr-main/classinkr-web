@@ -54,7 +54,7 @@ const NAV: NavItem[] = [
   { href: "/admin/campaigns", label: "캠페인", icon: <Megaphone className="h-4 w-4" />, roles: STAFF_ADMIN, section: "growth" },
   { href: "/admin/blog", label: "콘텐츠", icon: <FileText className="h-4 w-4" />, roles: STAFF_EDITOR, section: "growth" },
   { href: "/admin/events", label: "공개 행사", icon: <Globe className="h-4 w-4" />, roles: STAFF_ADMIN, section: "growth" },
-  { href: "/admin/docs", label: "도움말 문서", icon: <BookOpen className="h-4 w-4" />, roles: STAFF_EDITOR, section: "growth" },
+  { href: "/admin/docs", label: "가이드 문서", icon: <BookOpen className="h-4 w-4" />, roles: STAFF_EDITOR, section: "growth" },
   { href: "/admin/branch", label: "지사 관리", icon: <Building2 className="h-4 w-4" />, roles: [...STAFF_ADMIN, "BRANCH"], section: "performance" },
   { href: "/admin/analytics", label: "Analytics", icon: <BarChart2 className="h-4 w-4" />, roles: [...ALL_STAFF, "BRANCH"], section: "performance" },
   { href: "/admin/settings", label: "Settings", icon: <Settings className="h-4 w-4" />, roles: STAFF_ADMIN, section: "system" },
@@ -87,8 +87,8 @@ const NAV_WARMUP_REQUESTS: Record<string, string[]> = {
   "/admin/events": ["/api/admin/events"],
   "/admin/docs": ["/api/admin/docs", "/api/admin/docs/analytics?days=30"],
   "/admin/branch": [
-    "/api/admin/branch/summary?team=ALL&period=this-month",
-    "/api/admin/branch/kpi?team=ALL&period=this-month",
+    "/api/admin/branch/summary?team=ALL&period=Q",
+    "/api/admin/branch/kpi?team=ALL&period=Q",
   ],
   "/admin/analytics": [
     "/api/admin/leads",
@@ -105,10 +105,10 @@ const NAV_WARMUP_REQUESTS: Record<string, string[]> = {
 }
 
 const SECTION_META: Record<SidebarSection, { label: string; description: string }> = {
-  workspace: { label: "운영", description: "매일 가장 자주 쓰는 화면" },
-  growth: { label: "성장", description: "캠페인과 콘텐츠 운영" },
-  performance: { label: "분석", description: "성과와 지점 운영 확인" },
-  system: { label: "시스템", description: "권한, 설정, 개발 도구" },
+  workspace: { label: "운영", description: "팀 현황과 세일즈 진행 관리" },
+  growth: { label: "성장", description: "캠페인, 콘텐츠, 전환 관리" },
+  performance: { label: "분석", description: "성과, 매출, 지점 운영 확인" },
+  system: { label: "시스템", description: "권한, 설정, 감사, 개발 도구" },
 }
 
 const ROLE_LABEL: Record<SidebarRole, string> = {
@@ -150,13 +150,6 @@ export default function AdminSidebar({ role, name, email }: Props) {
   })
   const [isDesktop, setIsDesktop] = useState(false)
   const [mobileMenuOpen, setMobileMenuOpen] = useState(false)
-
-  // PARTNER 역할은 별도 포털로 이동
-  useEffect(() => {
-    if (role.toUpperCase() === "PARTNER") {
-      router.replace("/partner/workspace")
-    }
-  }, [pathname, role, router])
 
   useEffect(() => {
     const media = window.matchMedia("(min-width: 1024px)")

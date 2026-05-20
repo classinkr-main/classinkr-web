@@ -10,34 +10,9 @@ function cny(n: number) {
   return n.toLocaleString()
 }
 
-// Map KPI metric codes (sheet abbreviations + API keys) to Korean labels
-const METRIC_LABEL: Record<string, string> = {
-  // sheet abbreviations
-  ACC: "계정",
-  ACC_NEW: "신규 계정",
-  LEAD: "리드",
-  OPP: "기회",
-  SOL: "솔루션",
-  VST: "방문",
-  EVT: "이벤트",
-  CONT: "콘텐츠",
-  TPL: "템플릿",
-  CASE: "사례연구",
-  // lowercase / API keys
-  account: "계정",
-  lead: "리드",
-  opportunity: "기회",
-  solution: "솔루션",
-  visit: "방문",
-  event: "이벤트",
-  content: "콘텐츠",
-  template: "템플릿",
-  caseStudy: "사례연구",
-}
-
 function metricLabel(metric: string | null | undefined): string {
   if (!metric) return "-"
-  return METRIC_LABEL[metric] ?? METRIC_LABEL[metric.toUpperCase()] ?? metric
+  return metric.toUpperCase()
 }
 
 type Tone = "green" | "olive" | "amber" | "red" | "neutral"

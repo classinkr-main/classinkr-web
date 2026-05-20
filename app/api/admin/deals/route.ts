@@ -1,8 +1,8 @@
 import { NextRequest, NextResponse } from "next/server";
 
 import { verifyAdmin } from "@/lib/admin-auth";
-import { listDealListItems } from "@/lib/partner-portal/repositories/deals";
-import type { DealStage, DealStatus } from "@/lib/partner-portal/types";
+import { listDealListItems } from "@/lib/portal/repositories/deals";
+import type { DealStage, DealStatus } from "@/lib/portal/types";
 
 export async function GET(req: NextRequest) {
   const err = await verifyAdmin(req);

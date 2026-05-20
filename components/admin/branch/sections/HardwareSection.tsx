@@ -1,13 +1,16 @@
 "use client"
-import { useEffect, useState } from "react"
-
-async function adminFetch(url: string) {
-  const token = (typeof window !== "undefined" ? sessionStorage.getItem("admin_password") : null) ?? ""
-  return fetch(url, { headers: { Authorization: `Bearer ${token}` } })
-}
+import { useState } from "react"
+import { useBranchJson } from "../client-api"
 
 interface StockRow { product: string; io_stock: number; sheet_stock: number; low: boolean }
 interface SalesRow { fiscal_year: number; fiscal_month: number; product: string; quantity: number }
+interface RecentInstall { customer: string; quantity: number; date: string | null }
+interface HardwareResponse {
+  stock: StockRow[]
+  sales_monthly: SalesRow[]
+  progress: Record<string, number>
+  recent_installs?: RecentInstall[]
+}
 
 const COLORS = {
   green: "#084734",
@@ -108,15 +111,14 @@ function GaugeView({ rows }: { rows: StockRow[] }) {
   )
 }
 
-interface RecentInstall { customer: string; quantity: number; date: string | null }
-
 export default function HardwareSection({ refreshKey }: { refreshKey: number }) {
-  const [data, setData] = useState<{ stock: StockRow[]; sales_monthly: SalesRow[]; progress: Record<string, number>; recent_installs?: RecentInstall[] } | null>(null)
   const [view, setView] = useState<"table" | "gauge">("table")
-  useEffect(() => {
-    adminFetch("/api/admin/branch/hw").then((r) => r.json()).then((d) => setData(d.error ? null : d)).catch(() => setData(null))
-  }, [refreshKey])
-  if (!data) return <div className="h-48 animate-pulse rounded-xl bg-[#f0f0ec]" />
+  const hw = useBranchJson<HardwareResponse>("/api/admin/branch/hw", refreshKey)
+  const data = hw.data
+
+  if (hw.loading) return <div className="h-48 animate-pulse rounded-xl bg-[#f0f0ec]" />
+  if (hw.error) return <div className="rounded-xl border border-rose-200 bg-rose-50 p-4 text-[12px] text-rose-700">{hw.error}</div>
+  if (!data) return null
   return (
     <section className="rounded-xl border border-[rgba(0,0,0,0.08)] bg-white shadow-[0_1px_2px_rgba(0,0,0,0.02)]">
       <div className="flex items-center justify-between gap-3 border-b border-[rgba(0,0,0,0.08)] px-5 py-3.5">

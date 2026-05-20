@@ -5,9 +5,21 @@ import { updateSupabaseSession } from "@/lib/supabase/middleware"
 import { getSupabaseBrowserEnv, hasSupabaseBrowserEnv } from "@/lib/supabase/public-env"
 
 const ADMIN_LOGIN_PATH = "/admin/login"
+const ADMIN_PAGE_ROLES = new Set(["ADMIN", "SUPER_ADMIN"])
+const BRANCH_PAGE_ROLES = new Set(["ADMIN", "SUPER_ADMIN", "BRANCH"])
 
 function isProtectedAdminPath(pathname: string) {
   return pathname.startsWith("/admin") && pathname !== ADMIN_LOGIN_PATH
+}
+
+function getAllowedAdminPageRoles(pathname: string) {
+  return pathname === "/admin/branch" || pathname.startsWith("/admin/branch/")
+    ? BRANCH_PAGE_ROLES
+    : ADMIN_PAGE_ROLES
+}
+
+function hasAllowedAdminPageRole(role: string | undefined, allowedRoles: ReadonlySet<string>) {
+  return role ? allowedRoles.has(role.trim().toUpperCase()) : false
 }
 
 function getSessionSecret() {
@@ -58,7 +70,7 @@ async function signPayload(payload: string) {
   return toHex(await crypto.subtle.sign("HMAC", key, encoder.encode(payload)))
 }
 
-async function hasLegacyAdminSession(request: NextRequest) {
+async function hasLegacyAdminSession(request: NextRequest, allowedRoles: ReadonlySet<string>) {
   const cookie = request.cookies.get("admin_session")?.value
   if (!cookie) return false
 
@@ -75,13 +87,13 @@ async function hasLegacyAdminSession(request: NextRequest) {
       role?: string
       exp?: number
     }
-    return session.role === "admin" && !!session.exp && session.exp > Math.floor(Date.now() / 1000)
+    return hasAllowedAdminPageRole(session.role, allowedRoles) && !!session.exp && session.exp > Math.floor(Date.now() / 1000)
   } catch {
     return false
   }
 }
 
-async function hasSupabaseAdminSession(request: NextRequest) {
+async function hasSupabaseAdminSession(request: NextRequest, allowedRoles: ReadonlySet<string>) {
   if (!hasSupabaseBrowserEnv()) return false
 
   const { url, publishableKey } = getSupabaseBrowserEnv()
@@ -107,7 +119,7 @@ async function hasSupabaseAdminSession(request: NextRequest) {
     .single()
 
   if (profileError || !profile || profile.status !== "ACTIVE") return false
-  return profile.role === "SUPER_ADMIN" || profile.role === "ADMIN"
+  return hasAllowedAdminPageRole(profile.role, allowedRoles)
 }
 
 function redirectToAdminLogin(request: NextRequest) {
@@ -126,8 +138,9 @@ export async function proxy(request: NextRequest) {
     return response
   }
 
-  if (await hasLegacyAdminSession(request)) return response
-  if (await hasSupabaseAdminSession(request)) return response
+  const allowedRoles = getAllowedAdminPageRoles(request.nextUrl.pathname)
+  if (await hasLegacyAdminSession(request, allowedRoles)) return response
+  if (await hasSupabaseAdminSession(request, allowedRoles)) return response
 
   return redirectToAdminLogin(request)
 }

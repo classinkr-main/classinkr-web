@@ -1,5 +1,15 @@
 import { describe, it, expect } from "vitest"
-import { fyOf, fyStart, fiscalQuarter, fiscalMonthIndex, ymKey, FISCAL_MONTH_ORDER } from "@/lib/branch/fiscal"
+import {
+  fyOf,
+  fyStart,
+  fiscalQuarter,
+  fiscalMonthIndex,
+  ymKey,
+  parseYmMonth,
+  dateFromYmMonth,
+  resolvePeriodDate,
+  FISCAL_MONTH_ORDER,
+} from "@/lib/branch/fiscal"
 
 describe("fiscal", () => {
   it("FY starts April 1", () => {
@@ -22,4 +32,16 @@ describe("fiscal", () => {
     expect(fiscalMonthIndex(3)).toBe(11)
   })
   it("ymKey", () => { expect(ymKey(new Date("2026-04-09"))).toBe("2026-04") })
+  it("parses YYYY-MM month selectors", () => {
+    expect(parseYmMonth("2026-04")).toBe("2026-04")
+    expect(parseYmMonth("2026-4")).toBeNull()
+    expect(parseYmMonth("2026-13")).toBeNull()
+    expect(dateFromYmMonth("2026-04").toISOString().slice(0, 10)).toBe("2026-04-01")
+  })
+  it("resolves a selected month only for monthly scope", () => {
+    const fallback = new Date("2026-05-15T00:00:00Z")
+    expect(resolvePeriodDate("M", "2026-04", fallback)?.toISOString().slice(0, 10)).toBe("2026-04-01")
+    expect(resolvePeriodDate("Q", "2026-04", fallback)?.toISOString()).toBe(fallback.toISOString())
+    expect(resolvePeriodDate("M", "bad", fallback)).toBeNull()
+  })
 })

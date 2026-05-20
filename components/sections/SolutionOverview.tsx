@@ -1,7 +1,7 @@
 "use client"
 
-import { useState } from "react"
-import { motion, AnimatePresence } from "framer-motion"
+import { useEffect, useRef, useState } from "react"
+import { motion, AnimatePresence, useInView } from "framer-motion"
 import { BookOpen, Zap, RefreshCw } from "lucide-react"
 import { cn } from "@/lib/utils"
 
@@ -35,11 +35,25 @@ const steps = [
     },
 ]
 
+const AUTO_SLIDE_DELAY_MS = 2600
+
 export function SolutionOverview() {
+    const sectionRef = useRef<HTMLElement>(null)
+    const isInView = useInView(sectionRef, { amount: 0.35 })
     const [activeStep, setActiveStep] = useState(0)
 
+    useEffect(() => {
+        if (!isInView) return
+
+        const timeout = window.setTimeout(() => {
+            setActiveStep((currentStep) => (currentStep + 1) % steps.length)
+        }, AUTO_SLIDE_DELAY_MS)
+
+        return () => window.clearTimeout(timeout)
+    }, [activeStep, isInView])
+
     return (
-        <section id="solution" className="py-16 md:py-24 bg-[#F6F5F4]">
+        <section ref={sectionRef} id="solution" className="py-16 md:py-24 bg-[#F6F5F4]">
             <div className="container mx-auto">
                 <div className="text-center max-w-3xl mx-auto mb-16 px-4">
                     <span className="inline-flex items-center gap-2 py-1.5 px-4 rounded-full bg-gradient-to-r from-[#ECFDF5] to-[#D1FAE5]/60 text-[#084734] text-[13px] font-semibold mb-4 border border-[#084734]/8 shadow-[0_2px_8px_rgba(8,71,52,0.06)] tracking-[0.02em]">

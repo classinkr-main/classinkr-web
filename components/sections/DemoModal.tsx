@@ -84,6 +84,7 @@ export function DemoModal({ children, trackingButton }: { children: React.ReactN
 
             const data = await submitLead({
                 source: "demo_modal",
+                sourceDetail: trackingButton,
                 name: formData.get("name") as string,
                 org: formData.get("org") as string,
                 role: formData.get("role") as string,
@@ -98,7 +99,11 @@ export function DemoModal({ children, trackingButton }: { children: React.ReactN
                     ? "상담 요청은 접수되었지만 일부 알림 연동이 지연 중입니다. 내부 기록은 저장되었고 담당자가 확인합니다."
                     : ""
             )
-            trackEvent("submit_demo_request", { source: "demo_modal" })
+            trackEvent("submit_demo_request", {
+                source: "demo_modal",
+                lead_id: data.leadId,
+                stored: data.stored,
+            })
             toast.success("상담 요청이 접수되었어요")
             setSubmitted(true)
         } catch (err) {

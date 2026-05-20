@@ -1,15 +1,18 @@
+import Image from "next/image"
 import type { LucideIcon } from "lucide-react"
 import {
-  BookOpen,
-  CircleHelp,
   ClipboardList,
-  FileText,
+  GraduationCap,
   LifeBuoy,
+  MonitorSpeaker,
+  Presentation,
   Rocket,
+  ShieldCheck,
   Sparkles,
   Wrench,
 } from "lucide-react"
 
+import BlogMarkdownRenderer from "@/components/blog/BlogMarkdownRenderer"
 import type {
   DocsArticleSection,
   DocsArticleSummary,
@@ -25,6 +28,7 @@ import {
   type DocArticle,
   type DocCategory,
   type DocCategoryId,
+  type DocMedia,
 } from "@/lib/docs"
 import type { DocsContent } from "@/lib/docs-content"
 
@@ -34,21 +38,19 @@ const staticDocsContent: DocsContent = {
 }
 
 const categoryIcons: Record<DocCategoryId, LucideIcon> = {
-  "quick-start": Rocket,
-  guides: BookOpen,
-  manual: FileText,
-  help: CircleHelp,
-  troubleshooting: LifeBuoy,
-  updates: Sparkles,
+  start: Rocket,
+  admin: ShieldCheck,
+  teacher: Presentation,
+  student: GraduationCap,
+  board: MonitorSpeaker,
 }
 
 const categoryEyebrows: Record<DocCategoryId, string> = {
-  "quick-start": "Start Here",
-  guides: "Guides",
-  manual: "Manual",
-  help: "FAQ & CS",
-  troubleshooting: "Troubleshooting",
-  updates: "Updates",
+  start: "Start Here",
+  admin: "Admin",
+  teacher: "Teacher",
+  student: "Student",
+  board: "Smart Board",
 }
 
 function isListedDoc(doc: DocArticle) {
@@ -72,6 +74,7 @@ function getDocSearchText(doc: DocArticle) {
       section.heading,
       section.body,
       ...(section.steps ?? []),
+      ...(section.media?.flatMap((media) => [media.alt, media.caption ?? "", media.src]) ?? []),
     ]),
   ].join(" ")
 }
@@ -96,18 +99,16 @@ export function DocsCategoryIcon({
   className?: string
 }) {
   switch (categoryId) {
-    case "quick-start":
+    case "start":
       return <Rocket className={className} aria-hidden />
-    case "guides":
-      return <BookOpen className={className} aria-hidden />
-    case "manual":
-      return <FileText className={className} aria-hidden />
-    case "help":
-      return <CircleHelp className={className} aria-hidden />
-    case "troubleshooting":
-      return <LifeBuoy className={className} aria-hidden />
-    case "updates":
-      return <Sparkles className={className} aria-hidden />
+    case "admin":
+      return <ShieldCheck className={className} aria-hidden />
+    case "teacher":
+      return <Presentation className={className} aria-hidden />
+    case "student":
+      return <GraduationCap className={className} aria-hidden />
+    case "board":
+      return <MonitorSpeaker className={className} aria-hidden />
     default:
       return <ClipboardList className={className} aria-hidden />
   }
@@ -157,20 +158,60 @@ export function toArticleSections(doc: DocArticle): DocsArticleSection[] {
   return doc.sections.map((section, index) => ({
     id: `section-${index + 1}`,
     title: section.heading,
-    body: <p>{section.body}</p>,
+    body: section.body ? <BlogMarkdownRenderer markdown={section.body} /> : null,
     checklist: section.steps?.map((step) => ({
       label: step,
       checked: true,
     })),
     callout:
-      doc.category === "troubleshooting" && index === 0
+      doc.category === "board" && index === 0
         ? {
-            title: "수업 중이라면 먼저 빠른 복구를 우선하세요.",
-            body: "원인 분석은 수업 이후에 진행하고, 학생에게는 재입장 또는 대체 접속 안내를 짧게 전달하는 것이 좋습니다.",
+            title: "전자칠판 설치는 현장 환경에 맞춰 진행하세요.",
+            body: "네트워크와 카메라 위치는 학원마다 다릅니다. 단계별 절차는 참고용으로 보고, 실제 설치 시에는 본사 엔지니어 안내를 우선합니다.",
             tone: "info" as const,
           }
         : undefined,
+    children: section.media?.length ? <DocsSectionMedia media={section.media} /> : undefined,
   }))
+}
+
+function DocsSectionMedia({ media }: { media: DocMedia[] }) {
+  return (
+    <div className="space-y-5">
+      {media.map((item) => (
+        <figure key={item.src} className="overflow-hidden rounded-lg border border-black/[0.08] bg-white">
+          {item.type === "image" ? (
+            <Image
+              src={item.src}
+              alt={item.alt}
+              width={item.width ?? 1440}
+              height={item.height ?? 900}
+              sizes="(min-width: 1024px) 760px, calc(100vw - 32px)"
+              className={
+                item.width && item.height && item.height > item.width
+                  ? "mx-auto h-auto max-h-[640px] w-auto max-w-full object-contain"
+                  : "h-auto w-full object-contain"
+              }
+            />
+          ) : (
+            <video
+              controls
+              preload="metadata"
+              src={item.src}
+              className="block w-full bg-black"
+            >
+              {item.alt}
+            </video>
+          )}
+          {item.caption ? (
+            <figcaption className="border-t border-black/[0.08] px-4 py-3 text-sm leading-6 text-[#615D59]">
+              {item.caption}
+            </figcaption>
+          ) : null}
+        </figure>
+      ))}
+    </div>
+  )
 }
 
 export function toTocItems(doc: DocArticle): DocsTocItem[] {
@@ -211,21 +252,72 @@ export function getDocsCategoryCards(content = staticDocsContent) {
 
 export const docsTrustCards = [
   {
-    title: "처음 보는 분도 바로 따라갈 수 있게",
+    title: "역할별로 바로 찾을 수 있게",
     description:
-      "도입 준비부터 첫 수업, 학생 안내까지 실제 운영 순서대로 읽을 수 있게 정리했습니다.",
+      "관리자·교사·학생 누구든 맡은 역할에 맞춰 필요한 안내를 한곳에서 찾아볼 수 있게 정리했습니다.",
     icon: Wrench,
   },
   {
     title: "수업 중 막히는 순간에도 빠르게",
     description:
-      "접속, 음성, 화면 공유처럼 수업을 바로 막는 문제는 증상별로 빠른 조치 순서부터 확인할 수 있습니다.",
+      "장비 설정, 접속, 자료 활용처럼 자주 만나는 상황은 단계별 절차로 정리해 즉시 따라 할 수 있습니다.",
     icon: LifeBuoy,
   },
   {
-    title: "바뀐 점까지 한 흐름으로",
+    title: "공식 채널 가이드와 한 흐름으로",
     description:
-      "새 기능과 운영 변경 사항은 업데이트 안내로 남겨 원장님과 운영팀이 필요한 조치를 놓치지 않게 돕습니다.",
+      "channel.io의 공식 가이드 내용을 기반으로 정리해 가장 최신 사용 방법을 그대로 확인할 수 있습니다.",
     icon: Sparkles,
   },
 ]
+
+export function scoreDocsArticle(doc: any, query: string): number {
+  const tokens = query.split(/\s+/).filter(Boolean)
+  if (tokens.length === 0) return 0
+
+  const titleLower = doc.title.toLowerCase()
+  const descLower = doc.description.toLowerCase()
+  const categoryLower = (doc.category ?? "").toLowerCase()
+  const tagsLower = (doc.tags ?? []).map((t: string) => t.toLowerCase())
+  const searchTextLower = (doc.searchText ?? "").toLowerCase()
+
+  let score = 0
+  let matchesAll = true
+
+  for (const token of tokens) {
+    let tokenMatched = false
+
+    if (titleLower.includes(token)) {
+      score += 100
+      tokenMatched = true
+    }
+    if (descLower.includes(token)) {
+      score += 50
+      tokenMatched = true
+    }
+    if (tagsLower.some((t: string) => t.includes(token))) {
+      score += 30
+      tokenMatched = true
+    }
+    if (categoryLower.includes(token)) {
+      score += 10
+      tokenMatched = true
+    }
+    if (searchTextLower.includes(token)) {
+      score += 10
+      tokenMatched = true
+    }
+
+    if (!tokenMatched) {
+      matchesAll = false
+    }
+  }
+
+  // Bonus for matching all tokens (AND-match gets high priority)
+  if (matchesAll && tokens.length > 1) {
+    score += 500
+  }
+
+  return score
+}
+

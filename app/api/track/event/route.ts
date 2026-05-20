@@ -12,6 +12,34 @@ const ALLOWED_EVENTS = new Set([
   "begin_checkout",
 ])
 
+const ALLOWED_PARAM_KEYS: Record<string, Set<string>> = {
+  page_view: new Set(["path", "title", "referrer"]),
+  click_cta: new Set(["button", "page", "destination", "model"]),
+  submit_demo_request: new Set(["source", "lead_id", "stored", "event_slug"]),
+  submit_newsletter: new Set(["source"]),
+  download_materials: new Set(["asset_id", "page"]),
+  view_demo_video: new Set(["button", "page"]),
+  begin_checkout: new Set([
+    "button",
+    "page",
+    "mode",
+    "plan_id",
+    "billing_cycle",
+    "account_count",
+    "amount_cny",
+    "quote_code",
+    "promo_code",
+    "value",
+    "currency",
+  ]),
+}
+
+const PII_PATTERNS = [
+  /[A-Z0-9._%+-]+@[A-Z0-9.-]+\.[A-Z]{2,}/gi,
+  /\b\d{3}[-\s]?\d{2}[-\s]?\d{5}\b/g,
+  /\b\d{2,3}[-.\s]?\d{3,4}[-.\s]?\d{4}\b/g,
+]
+
 interface TrackEventBody {
   event?: string
   page?: string
@@ -41,17 +69,17 @@ export async function POST(req: NextRequest) {
     return NextResponse.json({ ok: false }, { status: 400 })
   }
 
-  const params = sanitizeParams(body.params ?? {})
+  const params = sanitizeParams(eventName, body.params ?? {})
   const buttonRaw = params.button
   const button = typeof buttonRaw === "string" ? buttonRaw.slice(0, 80) : null
-  const page = typeof body.page === "string" ? body.page.slice(0, 200) : null
+  const page = typeof body.page === "string" ? redactPii(body.page).slice(0, 200) : null
 
-  const referrer = req.headers.get("referer")?.slice(0, 500) ?? null
-  const userAgent = req.headers.get("user-agent")?.slice(0, 500) ?? null
+  const referrer = redactPii(req.headers.get("referer") ?? "").slice(0, 500) || null
+  const userAgent = redactPii(req.headers.get("user-agent") ?? "").slice(0, 500) || null
 
   try {
     const sb = createSupabaseAdminClient()
-    await sb.from("client_events").insert({
+    const { error } = await sb.from("client_events").insert({
       event_name: eventName,
       button,
       page,
@@ -59,24 +87,36 @@ export async function POST(req: NextRequest) {
       referrer,
       user_agent: userAgent,
     })
+    if (error) {
+      console.warn("[track/event] client_events insert failed:", error.message)
+      return NextResponse.json({ ok: true, stored: false })
+    }
   } catch {
     // 추적은 사용자 경험을 막지 않는다 — 실패해도 200 반환
+    return NextResponse.json({ ok: true, stored: false })
   }
 
-  return NextResponse.json({ ok: true })
+  return NextResponse.json({ ok: true, stored: true })
 }
 
-function sanitizeParams(params: Record<string, unknown>) {
+function redactPii(value: string) {
+  return PII_PATTERNS.reduce(
+    (result, pattern) => result.replace(pattern, "[redacted]"),
+    value
+  )
+}
+
+function sanitizeParams(eventName: string, params: Record<string, unknown>) {
+  const allowedKeys = ALLOWED_PARAM_KEYS[eventName] ?? new Set<string>()
+
   return Object.fromEntries(
     Object.entries(params)
-      .slice(0, 20)
+      .filter(([key]) => allowedKeys.has(key))
       .map(([key, value]) => {
-        const safeKey = key.slice(0, 60)
-
-        if (typeof value === "string") return [safeKey, value.slice(0, 500)]
-        if (typeof value === "number" && Number.isFinite(value)) return [safeKey, value]
-        if (typeof value === "boolean" || value == null) return [safeKey, value]
-        return [safeKey, String(value).slice(0, 500)]
+        if (typeof value === "string") return [key, redactPii(value).slice(0, 500)]
+        if (typeof value === "number" && Number.isFinite(value)) return [key, value]
+        if (typeof value === "boolean" || value == null) return [key, value]
+        return [key, redactPii(String(value)).slice(0, 500)]
       })
   )
 }

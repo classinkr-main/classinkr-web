@@ -199,19 +199,19 @@ export default async function DocsArticlePage({
               </p>
             </section>
 
-            {doc.category !== "troubleshooting" && (
+            {doc.category !== "start" && (
               <section className="border-t border-black/[0.08] pt-8">
                 <p className="text-xs font-bold uppercase tracking-[0.16em] text-[#084734]">
                   도움 필요
                 </p>
                 <h2 className="mt-2 text-xl font-black tracking-card text-[#111110]">
-                  수업 중 문제가 생겼다면 문제 해결 안내를 먼저 확인하세요.
+                  처음 사용한다면 설치와 회원 가입부터 확인해 보세요.
                 </h2>
                 <Link
-                  href="/docs/troubleshooting"
+                  href="/docs/start"
                   className="mt-3 inline-flex origin-left text-sm font-bold text-[#084734] underline-offset-4 transition-transform duration-150 hover:underline active:scale-[0.98]"
                 >
-                  문제 해결 보기 →
+                  클래스인 시작하기 보기 →
                 </Link>
               </section>
             )}

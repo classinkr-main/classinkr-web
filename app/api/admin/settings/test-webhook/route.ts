@@ -52,7 +52,30 @@ function isPrivateIpv6(address: string) {
   )
 }
 
+function normalizeIpv4MappedIpv6(address: string) {
+  const normalized = address.toLowerCase().replace(/^\[|\]$/g, "")
+  const dotted = normalized.match(/^::ffff:(\d{1,3}(?:\.\d{1,3}){3})$/)
+  if (dotted) return dotted[1]
+
+  const hex = normalized.match(/^::ffff:([0-9a-f]{1,4}):([0-9a-f]{1,4})$/)
+  if (!hex) return null
+
+  const high = Number.parseInt(hex[1], 16)
+  const low = Number.parseInt(hex[2], 16)
+  if (!Number.isInteger(high) || !Number.isInteger(low)) return null
+
+  return [
+    (high >> 8) & 0xff,
+    high & 0xff,
+    (low >> 8) & 0xff,
+    low & 0xff,
+  ].join(".")
+}
+
 function isPrivateAddress(address: string) {
+  const mappedIpv4 = normalizeIpv4MappedIpv6(address)
+  if (mappedIpv4) return isPrivateIpv4(mappedIpv4)
+
   const version = net.isIP(address)
   if (version === 4) return isPrivateIpv4(address)
   if (version === 6) return isPrivateIpv6(address)

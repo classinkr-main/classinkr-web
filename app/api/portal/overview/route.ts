@@ -3,13 +3,13 @@ import { NextRequest, NextResponse } from "next/server";
 import {
   requirePortalContext,
   isErrorResponse,
-} from "@/lib/partner-portal/portal-context";
-import { loadPartnerOverview } from "@/lib/partner-portal/repositories/partner-read";
+} from "@/lib/portal/portal-context";
+import { loadPortalOverview } from "@/lib/portal/repositories/partner-read";
 import {
   getAdminPartnerPortalOverview,
   getCommercialOverview,
-} from "@/lib/partner-portal/repositories/overview";
-import type { CommercialOverviewRange } from "@/lib/partner-portal/overview-types";
+} from "@/lib/portal/repositories/overview";
+import type { CommercialOverviewRange } from "@/lib/portal/overview-types";
 
 export async function GET(req: NextRequest) {
   const result = await requirePortalContext(req);
@@ -33,7 +33,7 @@ export async function GET(req: NextRequest) {
     }
 
     // partner: 자기 계정 개요 (V2 → legacy → empty 폴백)
-    const overview = await loadPartnerOverview({
+    const overview = await loadPortalOverview({
       userId: ctx.userId,
       partnerAccountId: ctx.partnerAccountId,
       legacyPartnerId: ctx.legacyPartnerId,

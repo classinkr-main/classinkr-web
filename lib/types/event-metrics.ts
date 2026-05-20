@@ -21,10 +21,14 @@ export interface EventMetrics {
   attendeesCount: number | null       // 참석자
   dealsCount: number | null
   dealsRevenue: number | null         // KRW
+  closedCustomerCount: number | null  // 실제 딜 성사 고객 수
+  dealCustomers: string | null        // 성사 고객/기관 메모
   // 광고비
   adSpendEntries: AdSpendEntry[]
-  // 메모
+  // 회고 / 메모
   notes: string | null
+  retrospective: string | null
+  shareMemo: string | null
   updatedAt: string
 }
 
@@ -37,8 +41,12 @@ export const DEFAULT_EVENT_METRICS: Omit<EventMetrics, "eventId" | "updatedAt"> 
   attendeesCount: null,
   dealsCount: null,
   dealsRevenue: null,
+  closedCustomerCount: null,
+  dealCustomers: null,
   adSpendEntries: [],
   notes: null,
+  retrospective: null,
+  shareMemo: null,
 }
 
 export const AD_CHANNEL_LABEL: Record<AdChannel, string> = {

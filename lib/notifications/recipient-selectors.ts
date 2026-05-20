@@ -1,27 +1,29 @@
 import type { VerifiedAdminContext } from "@/lib/admin-auth"
-import type { PartnerAccountContext } from "@/lib/partner-portal/context"
+import type { PartnerAccountContext } from "@/lib/portal/context"
 import type { NotificationRecipientTarget } from "@/lib/notifications/types"
 
 function normalizeAdminRole(role: string) {
   const normalized = role.trim().toUpperCase()
 
   if (normalized === "ADMIN") return "ADMIN"
-  if (normalized === "BRANCH") return "ADMIN"
+  if (normalized === "BRANCH") return "BRANCH"
   if (normalized === "SUPER_ADMIN") return "SUPER_ADMIN"
   if (normalized === "EDITOR") return "EDITOR"
   if (normalized === "VIEWER") return "VIEWER"
   if (normalized === "PARTNER") return "PARTNER"
 
-  return "ADMIN"
+  return null
 }
 
 export function getAdminRecipientSelectors(
   admin: VerifiedAdminContext
 ): NotificationRecipientTarget[] {
   const role = normalizeAdminRole(admin.role)
-  const selectors: NotificationRecipientTarget[] = [
-    { recipientType: "admin_role", recipientId: role },
-  ]
+  const selectors: NotificationRecipientTarget[] = []
+
+  if (role) {
+    selectors.push({ recipientType: "admin_role", recipientId: role })
+  }
 
   if (role === "SUPER_ADMIN") {
     selectors.push({ recipientType: "admin_role", recipientId: "ADMIN" })

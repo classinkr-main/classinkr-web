@@ -66,7 +66,7 @@ function appSecretProof(accessToken: string) {
 
 function verifyMetaSignature(payload: string, signature: string | null) {
   const appSecret = process.env.META_APP_SECRET?.trim()
-  if (!appSecret) return true
+  if (!appSecret) return process.env.NODE_ENV !== "production"
 
   if (!signature?.startsWith("sha256=")) {
     return process.env.NODE_ENV !== "production"
@@ -213,6 +213,9 @@ function buildLeadCapturePayload(value: MetaLeadValue, detail?: MetaLeadDetail) 
     ]),
     message: buildMetaMessage(value, detail),
     marketingConsent: hasMarketingConsent(fields),
+    utmSource: "meta",
+    utmMedium: "lead_ads",
+    utmCampaign: detail?.campaign_name ?? detail?.campaign_id,
   }
 }
 

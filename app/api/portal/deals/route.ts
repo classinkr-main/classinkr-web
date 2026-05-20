@@ -4,15 +4,15 @@ import {
   requirePortalContext,
   getPartnerAccountFilter,
   isErrorResponse,
-} from "@/lib/partner-portal/portal-context";
+} from "@/lib/portal/portal-context";
 import {
   resolvePartnerAccountId,
   getActorInfo,
-} from "@/lib/partner-portal/portal-authorize";
-import { listDealListItems, createDeal } from "@/lib/partner-portal/repositories/deals";
-import { getCustomer } from "@/lib/partner-portal/repositories/customers";
-import { logActivity } from "@/lib/partner-portal/repositories/activity";
-import type { DealStage, DealStatus } from "@/lib/partner-portal/types";
+} from "@/lib/portal/portal-authorize";
+import { listDealListItems, createDeal } from "@/lib/portal/repositories/deals";
+import { getCustomer } from "@/lib/portal/repositories/customers";
+import { logActivity } from "@/lib/portal/repositories/activity";
+import type { DealStage, DealStatus } from "@/lib/portal/types";
 
 export async function GET(req: NextRequest) {
   const result = await requirePortalContext(req);
@@ -73,12 +73,12 @@ export async function POST(req: NextRequest) {
       title: body.title ?? "새 딜",
       status: body.status ?? "active",
       current_stage: body.current_stage ?? "contact",
-      expected_amount: body.expected_amount ?? 0,
-      contracted_amount: body.contracted_amount ?? 0,
-      installed_amount: body.installed_amount ?? 0,
-      paid_amount: body.paid_amount ?? 0,
-      outstanding_amount: body.outstanding_amount ?? 0,
-      payment_status: body.payment_status ?? "unpaid",
+      expected_amount: ctx.type === "admin" ? body.expected_amount ?? 0 : 0,
+      contracted_amount: ctx.type === "admin" ? body.contracted_amount ?? 0 : 0,
+      installed_amount: ctx.type === "admin" ? body.installed_amount ?? 0 : 0,
+      paid_amount: ctx.type === "admin" ? body.paid_amount ?? 0 : 0,
+      outstanding_amount: ctx.type === "admin" ? body.outstanding_amount ?? 0 : 0,
+      payment_status: ctx.type === "admin" ? body.payment_status ?? "unpaid" : "unpaid",
       starts_at: body.starts_at ?? null,
       closed_at: null,
       notes: body.notes ?? null,

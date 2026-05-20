@@ -34,6 +34,9 @@ export interface LeadRecord {
   notes?: string;
   follow_up_at?: string;
   assigned_to?: string;
+  utm_source?: string;
+  utm_medium?: string;
+  utm_campaign?: string;
 }
 
 function supabaseToLegacy(row: Lead): LeadRecord {
@@ -53,6 +56,9 @@ function supabaseToLegacy(row: Lead): LeadRecord {
     notes: row.notes ?? undefined,
     follow_up_at: row.follow_up_at ?? undefined,
     assigned_to: row.assigned_to ?? undefined,
+    utm_source: row.utm_source ?? undefined,
+    utm_medium: row.utm_medium ?? undefined,
+    utm_campaign: row.utm_campaign ?? undefined,
   };
 }
 
@@ -115,12 +121,12 @@ export async function saveLead(
     message: lead.message ?? null,
     branch: lead.branch ?? null,
     status: "new",
-    notes: null,
+    notes: lead.notes ?? null,
     follow_up_at: null,
     assigned_to: null,
-    utm_source: null,
-    utm_medium: null,
-    utm_campaign: null,
+    utm_source: lead.utm_source ?? null,
+    utm_medium: lead.utm_medium ?? null,
+    utm_campaign: lead.utm_campaign ?? null,
   };
 
   const { data, error } = await supabase
@@ -156,6 +162,9 @@ export async function updateLead(
   if (patch.org !== undefined) update.org = patch.org;
   if (patch.follow_up_at !== undefined) update.follow_up_at = patch.follow_up_at;
   if (patch.assigned_to !== undefined) update.assigned_to = patch.assigned_to;
+  if (patch.utm_source !== undefined) update.utm_source = patch.utm_source;
+  if (patch.utm_medium !== undefined) update.utm_medium = patch.utm_medium;
+  if (patch.utm_campaign !== undefined) update.utm_campaign = patch.utm_campaign;
 
   const { data, error } = await supabase
     .from("leads")

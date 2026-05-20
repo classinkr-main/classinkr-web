@@ -108,33 +108,39 @@ function docHaystack(doc: DocArticle) {
 function inferProductArea(doc: DocArticle): ProductArea {
   const haystack = docHaystack(doc)
 
-  if (haystack.includes("하드웨어") || haystack.includes("board")) return "hardware"
-  if (haystack.includes("결제") || haystack.includes("영수증") || haystack.includes("세금")) {
+  if (doc.slug.includes("update") || doc.tags.includes("업데이트")) return "classroom"
+  if (doc.category === "board" || haystack.includes("하드웨어") || haystack.includes("전자칠판")) return "hardware"
+  if (haystack.includes("결제") || haystack.includes("영수증") || haystack.includes("세금") || haystack.includes("요금")) {
     return "billing"
   }
-  if (doc.category === "quick-start" || haystack.includes("온보딩")) return "onboarding"
-  if (doc.category === "troubleshooting" || haystack.includes("수업")) return "classroom"
+  if (doc.category === "start" || haystack.includes("온보딩")) return "onboarding"
+  if (doc.category === "admin") return "admin"
+  if (doc.category === "teacher" || doc.category === "student" || haystack.includes("수업")) return "classroom"
 
   return "general"
 }
 
 function inferDocType(doc: DocArticle): DocType {
-  if (doc.category === "manual") return "manual"
-  if (doc.category === "help") return "faq"
-  if (doc.category === "troubleshooting") return "troubleshooting"
-  if (doc.category === "updates") return "release_note"
-
-  return "guide"
+  if (doc.slug.includes("update") || doc.tags.includes("업데이트")) return "release_note"
+  if (doc.category === "board") return "reference"
+  if (doc.category === "start") return "guide"
+  return "manual"
 }
 
-function inferSymptoms(doc: DocArticle) {
-  if (doc.category !== "troubleshooting") return []
-  return unique([...doc.keywords, ...doc.tags])
+function inferSymptoms() {
+  return []
 }
 
 function sectionToMarkdown(section: DocSection) {
   const steps = section.steps?.map((step) => `- ${step}`).join("\n")
-  return [`## ${section.heading}`, section.body, steps].filter(Boolean).join("\n\n")
+  const media = section.media
+    ?.map((item) => {
+      const asset =
+        item.type === "image" ? `![${item.alt}](${item.src})` : `[${item.alt}](${item.src})`
+      return [asset, item.caption].filter(Boolean).join("\n")
+    })
+    .join("\n\n")
+  return [`## ${section.heading}`, section.body, steps, media].filter(Boolean).join("\n\n")
 }
 
 function docToMarkdown(doc: DocArticle) {
@@ -180,7 +186,7 @@ function buildArticleRows() {
     order_index: (docsCategories.find((category) => category.id === doc.category)?.order ?? 99) * 100 + index,
     tags: doc.tags,
     keywords: doc.keywords,
-    symptoms: inferSymptoms(doc),
+    symptoms: inferSymptoms(),
     chatbot_summary: doc.chatbotSummary,
     content_markdown: docToMarkdown(doc),
     content_json: {

@@ -3,19 +3,27 @@ import { NextRequest, NextResponse } from "next/server";
 import {
   requirePortalContext,
   isErrorResponse,
-} from "@/lib/partner-portal/portal-context";
+} from "@/lib/portal/portal-context";
 import {
   resolvePartnerAccountId,
   getActorInfo,
-} from "@/lib/partner-portal/portal-authorize";
-import { createReceipt, getPayment } from "@/lib/partner-portal/repositories/payments";
-import { getDeal } from "@/lib/partner-portal/repositories/deals";
-import { logActivity } from "@/lib/partner-portal/repositories/activity";
+  requirePortalAdmin,
+} from "@/lib/portal/portal-authorize";
+import { createReceipt, getPayment } from "@/lib/portal/repositories/payments";
+import { getDeal } from "@/lib/portal/repositories/deals";
+import { logActivity } from "@/lib/portal/repositories/activity";
+
+function parsePositiveAmount(value: unknown) {
+  const amount = typeof value === "number" ? value : Number(value);
+  return Number.isFinite(amount) && amount > 0 ? amount : null;
+}
 
 export async function POST(req: NextRequest) {
   const result = await requirePortalContext(req);
   if (isErrorResponse(result)) return result;
   const ctx = result;
+  const adminOnly = requirePortalAdmin(ctx);
+  if (adminOnly) return adminOnly;
 
   try {
     const body = await req.json();
@@ -51,12 +59,17 @@ export async function POST(req: NextRequest) {
       }
     }
 
+    const totalAmount = parsePositiveAmount(body.total_amount);
+    if (totalAmount == null) {
+      return NextResponse.json({ error: "total_amount must be positive" }, { status: 400 });
+    }
+
     const receipt = await createReceipt({
       partner_account_id: partnerAccountId,
       customer_id: body.customer_id,
       deal_id: body.deal_id,
       payment_id: body.payment_id ?? null,
-      total_amount: body.total_amount ?? 0,
+      total_amount: totalAmount,
       pdf_url: body.pdf_url ?? null,
       notes: body.notes ?? null,
       created_by: ctx.userId ?? null,

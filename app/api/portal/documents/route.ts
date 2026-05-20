@@ -4,13 +4,13 @@ import {
   getPartnerAccountFilter,
   isErrorResponse,
   requirePortalContext,
-} from "@/lib/partner-portal/portal-context";
+} from "@/lib/portal/portal-context";
 import {
   getDealDetail,
   getDealDetailForPartnerAccount,
   listDealListItems,
-} from "@/lib/partner-portal/repositories/deals";
-import { summarizeQuoteInteractions } from "@/lib/partner-portal/repositories/activity";
+} from "@/lib/portal/repositories/deals";
+import { summarizeQuoteInteractions } from "@/lib/portal/repositories/activity";
 import type {
   ContractDocumentBundle,
   DealDetailPayload,
@@ -19,7 +19,7 @@ import type {
   PartnerDocumentSummary,
   QuoteDocumentBundle,
   ReceiptRecord,
-} from "@/lib/partner-portal/types";
+} from "@/lib/portal/types";
 
 async function mapQuoteDocuments(detail: DealDetailPayload): Promise<PartnerDocumentListItem[]> {
   return Promise.all(detail.quote_documents.map(async (document: QuoteDocumentBundle) => {

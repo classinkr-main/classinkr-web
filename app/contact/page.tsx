@@ -1,6 +1,6 @@
 "use client"
 
-import { useRef, useState } from "react"
+import { useEffect, useMemo, useRef, useState } from "react"
 import { Button } from "@/components/ui/button"
 import { Input } from "@/components/ui/input"
 import { Label } from "@/components/ui/label"
@@ -11,6 +11,9 @@ import { motion } from "framer-motion"
 import { submitLead } from "@/lib/submitLead"
 import { trackEvent } from "@/lib/analytics"
 import { useToast } from "@/components/ui/toast"
+import type { PublicEvent } from "@/lib/types/public-events"
+
+const EVENT_TOPICS = new Set(["행사 신청", "세미나 신청"])
 
 export default function ContactPage() {
     const kakaoChannelUrl = process.env.NEXT_PUBLIC_CONTACT_KAKAO_URL?.trim()
@@ -20,14 +23,63 @@ export default function ContactPage() {
     const [error, setError] = useState("")
     const [notice, setNotice] = useState("")
     const [shake, setShake] = useState(false)
+    const [topic, setTopic] = useState("")
+    const [eventSlug, setEventSlug] = useState("")
+    const [events, setEvents] = useState<PublicEvent[]>([])
+    const [eventsLoaded, setEventsLoaded] = useState(false)
     const formRef = useRef<HTMLFormElement>(null)
     const toast = useToast()
     const errorMessageId = error ? "contact-form-error" : undefined
+
+    const showEventPicker = EVENT_TOPICS.has(topic)
+    const eventPickerCategory = topic === "세미나 신청" ? "웨비나" : null
+
+    useEffect(() => {
+        const params = new URLSearchParams(window.location.search)
+        const eventParam = params.get("event")?.trim()
+        const sourceParam = params.get("source")?.trim()
+        const topicParam = params.get("topic")?.trim()
+
+        if (eventParam) {
+            setTopic(sourceParam === "seminar" ? "세미나 신청" : "행사 신청")
+            setEventSlug(eventParam)
+        } else if (topicParam && EVENT_TOPICS.has(topicParam)) {
+            setTopic(topicParam)
+        }
+    }, [])
+
+    useEffect(() => {
+        if (!showEventPicker || eventsLoaded) return
+        let cancelled = false
+        fetch("/api/events", { cache: "no-store" })
+            .then((res) => (res.ok ? res.json() : []))
+            .then((data) => {
+                if (cancelled) return
+                setEvents(Array.isArray(data) ? data : [])
+                setEventsLoaded(true)
+            })
+            .catch(() => {
+                if (cancelled) return
+                setEvents([])
+                setEventsLoaded(true)
+            })
+        return () => {
+            cancelled = true
+        }
+    }, [showEventPicker, eventsLoaded])
+
+    const availableEvents = useMemo(() => {
+        const filtered = events.filter((e) => e.status !== "마감" && e.slug)
+        if (!eventPickerCategory) return filtered
+        return filtered.filter((e) => e.category === eventPickerCategory)
+    }, [events, eventPickerCategory])
 
     const resetForm = () => {
         setSubmitted(false)
         setError("")
         setNotice("")
+        setTopic("")
+        setEventSlug("")
         formRef.current?.reset()
     }
 
@@ -46,9 +98,22 @@ export default function ContactPage() {
         const formData = new FormData(form)
 
         try {
-            const topic = formData.get("topic") as string
+            const topicValue = (formData.get("topic") as string) || topic
+            const isEventTopic = EVENT_TOPICS.has(topicValue)
+            const selectedEvent = isEventTopic
+                ? events.find((e) => e.slug === eventSlug)
+                : undefined
+
+            if (isEventTopic && availableEvents.length > 0 && !eventSlug) {
+                setError("신청하실 행사를 선택해주세요.")
+                triggerShake()
+                setLoading(false)
+                return
+            }
+
             const message = [
-                topic ? `문의 유형: ${topic}` : undefined,
+                topicValue ? `문의 유형: ${topicValue}` : undefined,
+                selectedEvent ? `신청 행사: ${selectedEvent.title}` : undefined,
                 formData.get("message") as string,
             ]
                 .filter(Boolean)
@@ -56,18 +121,25 @@ export default function ContactPage() {
 
             const data = await submitLead({
                 source: "contact_page",
+                sourceDetail: topicValue,
                 org: formData.get("org-name") as string,
                 name: formData.get("name") as string,
                 phone: formData.get("phone") as string,
                 email: (formData.get("email") as string) || undefined,
                 message,
                 marketingConsent: formData.get("marketing-consent") === "on",
+                eventSlug: selectedEvent?.slug ?? undefined,
             })
 
             if (Array.isArray(data.warnings) && data.warnings.length > 0) {
                 setNotice("상담 요청은 접수되었지만 일부 내부 알림 연동이 지연되었습니다. 기록은 정상 등록되었습니다.")
             }
-            trackEvent("submit_demo_request", { source: "contact_page" })
+            trackEvent("submit_demo_request", {
+                source: "contact_page",
+                lead_id: data.leadId,
+                stored: data.stored,
+                event_slug: selectedEvent?.slug,
+            })
             toast.success("상담 요청이 접수되었어요")
             setSubmitted(true)
         } catch (err) {
@@ -239,7 +311,11 @@ export default function ContactPage() {
                                         aria-invalid={!!error}
                                         aria-describedby={errorMessageId}
                                         className={`h-11 w-full rounded-xl border border-slate-200 bg-white px-4 text-base shadow-sm transition-colors focus:outline-none focus:ring-2 focus:ring-[#084734]${shake ? " animate-shake" : ""}`}
-                                        defaultValue=""
+                                        value={topic}
+                                        onChange={(e) => {
+                                            setTopic(e.target.value)
+                                            setEventSlug("")
+                                        }}
                                     >
                                         <option value="" disabled>문의 유형을 선택해주세요</option>
                                         <option value="도입 상담">도입 상담</option>
@@ -247,8 +323,45 @@ export default function ContactPage() {
                                         <option value="결제/영수증/계약">결제/영수증/계약</option>
                                         <option value="계정/접속/기술 지원">계정/접속/기술 지원</option>
                                         <option value="하드웨어/설치/AS">하드웨어/설치/AS</option>
+                                        <option value="행사 신청">행사 신청</option>
+                                        <option value="세미나 신청">세미나 신청</option>
                                     </select>
                                 </div>
+                                {showEventPicker && (
+                                    <div className="space-y-3 w-full">
+                                        <Label htmlFor="event-slug" className="text-slate-700 font-bold ml-1">
+                                            신청하실 {topic === "세미나 신청" ? "세미나" : "행사"} <span className="text-[#084734]">*</span>
+                                        </Label>
+                                        {!eventsLoaded ? (
+                                            <div className="flex h-11 items-center gap-2 rounded-xl border border-slate-200 bg-slate-50 px-4 text-sm text-slate-400">
+                                                <Loader2 className="h-4 w-4 animate-spin" />
+                                                목록을 불러오는 중...
+                                            </div>
+                                        ) : availableEvents.length === 0 ? (
+                                            <p className="rounded-xl border border-dashed border-slate-200 bg-slate-50 px-4 py-3 text-sm text-slate-500">
+                                                현재 신청 가능한 {topic === "세미나 신청" ? "세미나" : "행사"}가 없습니다. 아래 문의 내용에 원하시는 일정이나 주제를 적어주세요.
+                                            </p>
+                                        ) : (
+                                            <select
+                                                id="event-slug"
+                                                name="event-slug"
+                                                required
+                                                aria-invalid={!!error}
+                                                aria-describedby={errorMessageId}
+                                                className={`h-11 w-full rounded-xl border border-slate-200 bg-white px-4 text-base shadow-sm transition-colors focus:outline-none focus:ring-2 focus:ring-[#084734]${shake ? " animate-shake" : ""}`}
+                                                value={eventSlug}
+                                                onChange={(e) => setEventSlug(e.target.value)}
+                                            >
+                                                <option value="" disabled>{topic === "세미나 신청" ? "세미나" : "행사"}를 선택해주세요</option>
+                                                {availableEvents.map((e) => (
+                                                    <option key={e.id} value={e.slug ?? ""}>
+                                                        {e.title}
+                                                    </option>
+                                                ))}
+                                            </select>
+                                        )}
+                                    </div>
+                                )}
                                 <div className="space-y-3 w-full">
                                     <Label htmlFor="message" className="text-slate-700 font-bold ml-1">문의 내용 <span className="text-[#084734]">*</span></Label>
                                     <textarea

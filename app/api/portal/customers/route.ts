@@ -4,17 +4,17 @@ import {
   requirePortalContext,
   getPartnerAccountFilter,
   isErrorResponse,
-} from "@/lib/partner-portal/portal-context";
+} from "@/lib/portal/portal-context";
 import {
   resolvePartnerAccountId,
   getActorInfo,
-} from "@/lib/partner-portal/portal-authorize";
+} from "@/lib/portal/portal-authorize";
 import {
   listCustomerListItems,
   listAllCustomerListItems,
   createCustomer,
-} from "@/lib/partner-portal/repositories/customers";
-import { logActivity } from "@/lib/partner-portal/repositories/activity";
+} from "@/lib/portal/repositories/customers";
+import { logActivity } from "@/lib/portal/repositories/activity";
 
 export async function GET(req: NextRequest) {
   const result = await requirePortalContext(req);

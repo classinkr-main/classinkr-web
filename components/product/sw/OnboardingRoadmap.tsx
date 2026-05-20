@@ -60,7 +60,7 @@ export default function OnboardingRoadmap() {
                         <p className="text-[11px] font-bold text-[#22A366] tracking-[0.2em] uppercase whitespace-nowrap">GET STARTED</p>
                         <div className="h-px w-5 bg-[#22A366]/40 shrink-0" />
                     </div>
-                    <h2 className="text-3xl md:text-4xl lg:text-5xl font-serif text-[#1a1a19] leading-tight">
+                    <h2 className="text-3xl md:text-4xl lg:text-5xl font-sans text-[#1a1a19] leading-tight">
                         복잡한 도입은 끝났습니다,
                         <br />
                         <span className="text-[#22A366]">브라우저만 있으면 시작됩니다</span>

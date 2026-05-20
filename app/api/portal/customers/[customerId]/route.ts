@@ -3,19 +3,19 @@ import { NextRequest, NextResponse } from "next/server";
 import {
   requirePortalContext,
   isErrorResponse,
-} from "@/lib/partner-portal/portal-context";
+} from "@/lib/portal/portal-context";
 import {
   authorizeForAccount,
   getActorInfo,
-} from "@/lib/partner-portal/portal-authorize";
+} from "@/lib/portal/portal-authorize";
 import {
   getCustomer,
   getCustomerDetail,
   getCustomerDetailForPartnerAccount,
   updateCustomer,
   deleteCustomer,
-} from "@/lib/partner-portal/repositories/customers";
-import { logActivity } from "@/lib/partner-portal/repositories/activity";
+} from "@/lib/portal/repositories/customers";
+import { logActivity } from "@/lib/portal/repositories/activity";
 
 const CUSTOMER_PATCH_FIELDS = [
   "name",

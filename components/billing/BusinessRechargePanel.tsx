@@ -21,6 +21,8 @@ import {
   hasTossWidgetClientKey,
   isSoftwareCheckoutEnabled,
 } from "@/lib/billing/public-env"
+import { trackEvent } from "@/lib/analytics"
+import { collectLeadAttribution } from "@/lib/submitLead"
 
 type FormState = {
   organizationName: string
@@ -483,6 +485,7 @@ export function BusinessRechargePanel({ initialQuoteCode }: Props = {}) {
           buyerPhone: form.buyerPhone,
           quoteCode: quoteCode?.code ?? "",
           promoCode: promo?.code ?? "",
+          attribution: collectLeadAttribution(),
         }),
       })
 
@@ -504,6 +507,15 @@ export function BusinessRechargePanel({ initialQuoteCode }: Props = {}) {
       }
 
       await widgetsRef.current.setAmount({ currency: "KRW", value: payload.amountKrw })
+
+      trackEvent("begin_checkout", {
+        mode: "business",
+        amount_cny: payload.amountCny,
+        quote_code: quoteCode?.code,
+        promo_code: promo?.code,
+        value: payload.amountKrw,
+        currency: "KRW",
+      })
 
       const checkoutQuery = `checkoutToken=${encodeURIComponent(payload.checkoutToken)}`
       await widgetsRef.current.requestPayment({

@@ -7,6 +7,7 @@ import { saveLead } from "@/lib/repositories/leads"
 import { upsertSubscriber } from "@/lib/repositories/marketing"
 import { getResolvedSettings } from "@/lib/repositories/settings"
 import { postJson } from "@/lib/server/post-json"
+import { setEventToken } from "@/lib/types/event-metrics"
 
 const VALID_SOURCES = new Set<LeadSource>([
   "demo_modal",
@@ -21,6 +22,7 @@ export interface LeadSubmissionSuccess {
   ok: true
   stored: boolean
   warnings: string[]
+  leadId?: string
 }
 
 export interface LeadSubmissionError {
@@ -98,6 +100,20 @@ export function buildLeadPayload(raw: unknown): LeadPayload {
     message: normalizeString(body.message),
     timestamp: new Date().toISOString(),
     marketingConsent: body.marketingConsent === true,
+    eventSlug: normalizeString(body.eventSlug),
+    sourceDetail: normalizeString(body.sourceDetail ?? body.source_detail),
+    utmSource: normalizeString(body.utmSource ?? body.utm_source),
+    utmMedium: normalizeString(body.utmMedium ?? body.utm_medium),
+    utmCampaign: normalizeString(body.utmCampaign ?? body.utm_campaign),
+    utmTerm: normalizeString(body.utmTerm ?? body.utm_term),
+    utmContent: normalizeString(body.utmContent ?? body.utm_content),
+    gclid: normalizeString(body.gclid),
+    fbclid: normalizeString(body.fbclid),
+    msclkid: normalizeString(body.msclkid),
+    ttclid: normalizeString(body.ttclid),
+    landingPage: normalizeString(body.landingPage ?? body.landing_page),
+    currentPage: normalizeString(body.currentPage ?? body.current_page),
+    referrer: normalizeString(body.referrer),
   }
 
   if (
@@ -129,8 +145,9 @@ export function buildLeadPayload(raw: unknown): LeadPayload {
 }
 
 function buildLeadNotificationTitle(body: LeadPayload) {
-  if (body.org) return `새 리드: ${body.org}`
-  return `새 리드: ${body.name ?? body.email ?? body.phone ?? "Unknown"}`
+  const target = body.org ?? body.name ?? body.email ?? body.phone ?? "Unknown"
+  if (body.eventSlug) return `행사 신청: ${target}`
+  return `새 리드: ${target}`
 }
 
 function buildLeadNotificationMessage(body: LeadPayload) {
@@ -152,8 +169,16 @@ export async function submitLeadCapture(raw: unknown): Promise<LeadSubmissionRes
     let savedLeadId: string | undefined
     let storageError: string | undefined
 
+    const notes = body.eventSlug ? setEventToken("", body.eventSlug) : undefined
+
     try {
-      const savedLead = await saveLead({ ...body })
+      const savedLead = await saveLead({
+        ...body,
+        notes,
+        utm_source: body.utmSource,
+        utm_medium: body.utmMedium,
+        utm_campaign: body.utmCampaign,
+      })
       savedLeadId = savedLead.id
       stored = true
     } catch (error) {
@@ -216,12 +241,19 @@ export async function submitLeadCapture(raw: unknown): Promise<LeadSubmissionRes
         payload: {
           leadId: savedLeadId,
           source: body.source,
+          sourceDetail: body.sourceDetail,
           name: body.name,
           org: body.org,
           role: body.role,
           size: body.size,
           email: body.email,
           phone: body.phone,
+          utmSource: body.utmSource,
+          utmMedium: body.utmMedium,
+          utmCampaign: body.utmCampaign,
+          landingPage: body.landingPage,
+          currentPage: body.currentPage,
+          referrer: body.referrer,
         },
       }).catch((error) => {
         console.error("[lead-capture] notification emit failed:", error)
@@ -273,6 +305,7 @@ export async function submitLeadCapture(raw: unknown): Promise<LeadSubmissionRes
       body: {
         ok: true,
         stored,
+        leadId: savedLeadId,
         warnings: [...(storageError ? [storageError] : []), ...errors],
       },
     }
@@ -313,6 +346,7 @@ async function sendToChannelTalk(data: LeadPayload, url?: string) {
   const response = await postJson(url, {
     event: "new_lead",
     source: data.source,
+    sourceDetail: data.sourceDetail,
     name: data.name || data.email,
     org: data.org,
     phone: data.phone,
@@ -339,8 +373,10 @@ async function syncToSubscriberDB(data: LeadPayload) {
         ? ["demo_request"]
         : data.source === "meta_lead_ads"
           ? ["meta_lead_ads"]
+          : data.source === "newsletter"
+            ? ["newsletter"]
           : [],
-      source: data.source,
+      source: data.sourceDetail ?? data.source,
     })
   } catch (error) {
     console.error("[lead-capture] subscriber sync failed:", error)

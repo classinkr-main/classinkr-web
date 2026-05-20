@@ -3,22 +3,22 @@ import { NextRequest, NextResponse } from "next/server";
 import {
   requirePortalContext,
   isErrorResponse,
-} from "@/lib/partner-portal/portal-context";
-import { authorizeForAccount, getActorInfo } from "@/lib/partner-portal/portal-authorize";
+} from "@/lib/portal/portal-context";
+import { authorizeForAccount, getActorInfo } from "@/lib/portal/portal-authorize";
 import {
   getDeal,
   getDealDetail,
   getDealDetailForPartnerAccount,
   updateDeal,
-} from "@/lib/partner-portal/repositories/deals";
-import { logActivity } from "@/lib/partner-portal/repositories/activity";
+} from "@/lib/portal/repositories/deals";
+import { logActivity } from "@/lib/portal/repositories/activity";
 import type { UpdateDeal } from "@/lib/supabase/database.types.v2";
 
 function hasOwn(input: Record<string, unknown>, key: string) {
   return Object.prototype.hasOwnProperty.call(input, key);
 }
 
-function pickDealPatch(body: Record<string, unknown>): UpdateDeal {
+function pickDealPatch(body: Record<string, unknown>, isAdmin: boolean): UpdateDeal {
   const patch: UpdateDeal = {};
 
   if (typeof body.title === "string") patch.title = body.title;
@@ -26,13 +26,15 @@ function pickDealPatch(body: Record<string, unknown>): UpdateDeal {
   if (typeof body.current_stage === "string") {
     patch.current_stage = body.current_stage as UpdateDeal["current_stage"];
   }
-  if (typeof body.expected_amount === "number") patch.expected_amount = body.expected_amount;
-  if (typeof body.contracted_amount === "number") patch.contracted_amount = body.contracted_amount;
-  if (typeof body.installed_amount === "number") patch.installed_amount = body.installed_amount;
-  if (typeof body.paid_amount === "number") patch.paid_amount = body.paid_amount;
-  if (typeof body.outstanding_amount === "number") patch.outstanding_amount = body.outstanding_amount;
-  if (typeof body.payment_status === "string") {
-    patch.payment_status = body.payment_status as UpdateDeal["payment_status"];
+  if (isAdmin) {
+    if (typeof body.expected_amount === "number") patch.expected_amount = body.expected_amount;
+    if (typeof body.contracted_amount === "number") patch.contracted_amount = body.contracted_amount;
+    if (typeof body.installed_amount === "number") patch.installed_amount = body.installed_amount;
+    if (typeof body.paid_amount === "number") patch.paid_amount = body.paid_amount;
+    if (typeof body.outstanding_amount === "number") patch.outstanding_amount = body.outstanding_amount;
+    if (typeof body.payment_status === "string") {
+      patch.payment_status = body.payment_status as UpdateDeal["payment_status"];
+    }
   }
   if (hasOwn(body, "starts_at")) {
     patch.starts_at = typeof body.starts_at === "string" ? body.starts_at : null;
@@ -98,7 +100,7 @@ export async function PUT(
     }
 
     const body = (await req.json()) as Record<string, unknown>;
-    const patch = pickDealPatch(body);
+    const patch = pickDealPatch(body, ctx.type === "admin");
     if (Object.keys(patch).length === 0) {
       return NextResponse.json({ error: "no allowed fields" }, { status: 400 });
     }

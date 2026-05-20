@@ -346,11 +346,20 @@ function StatCard({ value, suffix, label, icon, delay, trigger }: { value: numbe
 }
 
 /* ── Ambient particle ────────────────────────────────────────────── */
+function formatParticleValue(value: number) {
+    return value.toFixed(3).replace(/\.?0+$/, "")
+}
+
 function AmbientParticle({ x, size, duration, delayStart }: { x: number; size: number; duration: number; delayStart: number }) {
     return (
         <motion.div
             className="absolute rounded-full bg-green-300/15 pointer-events-none"
-            style={{ left: `${x}%`, bottom: "-10%", width: size, height: size }}
+            style={{
+                left: `${formatParticleValue(x)}%`,
+                bottom: "-10%",
+                width: `${formatParticleValue(size)}px`,
+                height: `${formatParticleValue(size)}px`,
+            }}
             animate={{ y: [0, -600, -1200], opacity: [0, 0.5, 0] }}
             transition={{ duration, delay: delayStart, repeat: Infinity, ease: "easeInOut" }}
         />
@@ -361,39 +370,134 @@ function AmbientParticle({ x, size, duration, delayStart }: { x: number; size: n
 function Avatar({ name, gradient }: { name: string; gradient: string }) {
     const initials = name.split(" ").map(n => n[0]).join("").slice(0, 2)
     return (
-        <div className={`w-12 h-12 rounded-full flex-shrink-0 flex items-center justify-center text-white font-bold text-sm bg-gradient-to-br ${gradient}`}>
+        <div className={`flex h-11 w-11 flex-shrink-0 items-center justify-center rounded-full bg-gradient-to-br text-sm font-bold text-white ${gradient}`}>
             {initials}
         </div>
     )
 }
 
+type SoftwareTestimonial = {
+    name: string
+    role: string
+    quote: string
+    rating: number
+    gradient: string
+    dark?: boolean
+    delay?: number
+    className?: string
+}
+
+const SOFTWARE_TESTIMONIALS: SoftwareTestimonial[] = [
+    {
+        name: "올***영어 원장",
+        role: "수능/내신 영어학원",
+        quote: "솔직히 클래스인이 없으면 학원 운영이 안 됩니다. 듣기·단어 자동채점만으로도 보조 강사 업무량과 학원 운영 인력 부담이 확 줄었어요.",
+        rating: 5,
+        gradient: "from-[#0FAE73] to-[#087A52]",
+        dark: true,
+        className: "lg:col-span-5",
+    },
+    {
+        name: "권** 대표",
+        role: "국어 전문 학원",
+        quote: "오프라인 수업이 신석기 문화라면, 기존 전자칠판은 청동기, 클래스인은 철기 문화에 가깝습니다. 광선검까지 진화하길 기대합니다.",
+        rating: 5,
+        gradient: "from-[#B950D7] to-[#7C3AED]",
+        className: "lg:col-span-4",
+        delay: 0.08,
+    },
+    {
+        name: "라**",
+        role: "강사 회원",
+        quote: "클래스인 덕분에 돈 벌면서 유학 공부할 수 있게 됐어요. 9월에 해외 의대 5학년으로 편입합니다.",
+        rating: 5,
+        gradient: "from-[#5B7CFA] to-[#3B5BDB]",
+        className: "lg:col-span-3",
+        delay: 0.12,
+    },
+    {
+        name: "천** 부원장",
+        role: "입시 학원",
+        quote: "진심으로 응대해 주시고 잘 케어해 주신 덕분에, 저희가 불편함 없이 쓰고 있다고 직원분들이 입을 모아 말합니다.",
+        rating: 5,
+        gradient: "from-[#4F5F73] to-[#283548]",
+        className: "lg:col-span-4",
+        delay: 0.16,
+    },
+    {
+        name: "고** 원장",
+        role: "어학원",
+        quote: "저도 열심히 활용해서, 우리 지역에서 클래스인의 전도사가 되어보겠습니다.",
+        rating: 5,
+        gradient: "from-[#0FC5A4] to-[#07926F]",
+        className: "lg:col-span-5",
+        delay: 0.2,
+    },
+    {
+        name: "김** 대표",
+        role: "국어 전문 학원",
+        quote: "덕분에 좋은 문물을 접했습니다. 감사합니다.",
+        rating: 5,
+        gradient: "from-[#F95D91] to-[#D6336C]",
+        className: "lg:col-span-3",
+        delay: 0.24,
+    },
+]
+
 /* ── Testimonial Card ────────────────────────────────────────────── */
-function TestimonialCard({ name, role, quote, rating, gradient, dark = false, delay = 0 }: {
-    name: string; role: string; quote: string; rating: number; gradient: string; dark?: boolean; delay?: number
-}) {
+function TestimonialCard({
+    name,
+    role,
+    quote,
+    rating,
+    gradient,
+    dark = false,
+    delay = 0,
+    className = "",
+}: SoftwareTestimonial) {
     return (
         <motion.div
             initial={{ opacity: 0, y: 20 }}
             whileInView={{ opacity: 1, y: 0 }}
-            viewport={{ once: true }}
-            transition={{ delay }}
-            className={`p-8 rounded-3xl ${dark ? "bg-[#1a1a19] text-white shadow-[0_10px_40px_rgba(0,0,0,0.08)]" : "bg-[#FDFCF8] shadow-[0_10px_40px_rgba(0,0,0,0.03)] border border-[#f3f0ea]"} hover:shadow-lg transition-shadow`}
+            viewport={{ once: true, margin: "-80px" }}
+            transition={{ delay, duration: 0.5 }}
+            className={`group relative flex min-h-[190px] flex-col rounded-lg border p-5 transition-all duration-300 after:absolute after:bottom-[-7px] after:h-3.5 after:w-3.5 after:rotate-45 after:rounded-[2px] ${
+                dark
+                    ? "border-[#0E3D30] bg-[#101311] text-white shadow-[0_18px_46px_rgba(16,19,17,0.16)] after:left-9 after:border-b after:border-r after:border-[#0E3D30] after:bg-[#101311]"
+                    : "border-[#E8E6DC] bg-white text-[#172018] shadow-[0_12px_30px_rgba(20,24,21,0.04)] hover:-translate-y-0.5 hover:border-[#22A366]/25 hover:shadow-[0_18px_44px_rgba(8,71,52,0.07)] after:right-9 after:border-b after:border-r after:border-[#E8E6DC] after:bg-white"
+            } ${className}`}
         >
-            <div className="flex items-center gap-4 mb-4">
-                <Avatar name={name} gradient={gradient} />
-                <div>
-                    <div className={`font-bold ${dark ? "text-white" : "text-slate-900"}`}>{name}</div>
-                    <div className={`text-sm ${dark ? "text-slate-400" : "text-slate-500"}`}>{role}</div>
+            <div className="mb-4 flex items-start justify-between gap-4">
+                <div className="flex items-center gap-3">
+                    <Avatar name={name} gradient={gradient} />
+                    <div>
+                        <div className={`text-sm font-extrabold ${dark ? "text-white" : "text-slate-950"}`}>{name}</div>
+                        <div className={`mt-0.5 text-xs font-medium ${dark ? "text-white/50" : "text-slate-500"}`}>{role}</div>
+                    </div>
                 </div>
+                <MessageSquare className={`mt-1 h-4 w-4 shrink-0 ${dark ? "text-[#F8C35B]" : "text-[#22A366]/45"}`} />
             </div>
-            <div className="flex gap-0.5 mb-4">
-                {[...Array(5)].map((_, i) => (
-                    <Star key={i} className={`w-4 h-4 ${i < rating ? "text-amber-400 fill-amber-400" : "text-slate-200"}`} />
-                ))}
-            </div>
-            <p className={`leading-relaxed font-medium ${dark ? "text-slate-200" : "text-slate-600"}`}>
+
+            <p className={`flex-1 text-[15px] font-semibold leading-7 break-keep ${dark ? "text-white/86" : "text-slate-700"}`}>
                 &ldquo;{quote}&rdquo;
             </p>
+
+            <div className={`mt-5 flex items-center border-t pt-3 ${dark ? "border-white/10" : "border-black/[0.06]"}`}>
+                <div className="flex gap-0.5">
+                    {[...Array(5)].map((_, i) => (
+                        <Star
+                            key={i}
+                            className={`h-3.5 w-3.5 ${
+                                i < rating
+                                    ? dark
+                                        ? "fill-[#F8C35B] text-[#F8C35B]"
+                                        : "fill-[#FFB000] text-[#FFB000]"
+                                    : "text-slate-200"
+                            }`}
+                        />
+                    ))}
+                </div>
+            </div>
         </motion.div>
     )
 }
@@ -542,7 +646,7 @@ function CinematicCasesSection() {
             <div className="container mx-auto px-4 lg:px-8 max-w-6xl">
                 <motion.div className="mb-16" initial={{ opacity: 0, y: 30 }} whileInView={{ opacity: 1, y: 0 }} viewport={{ once: true }}>
                     <p className="text-sm font-semibold text-[#6EE7B7]/60 tracking-wider uppercase mb-3">Customer Stories</p>
-                    <h2 className="text-3xl md:text-5xl font-serif text-white leading-tight">
+                    <h2 className="text-3xl md:text-5xl font-sans text-white leading-tight">
                         그들은 이미<br /><span className="text-[#6EE7B7]">바꿨습니다</span>
                     </h2>
                 </motion.div>
@@ -571,8 +675,8 @@ function CinematicCasesSection() {
 
                             {/* Center: quote */}
                             <div className="bg-white/[0.02] p-8 lg:p-10 flex flex-col justify-center border-x border-white/[0.07]">
-                                <div className="text-[#6EE7B7]/30 text-4xl font-serif mb-4 leading-none">&ldquo;</div>
-                                <blockquote className="text-lg font-serif text-white/80 leading-relaxed mb-5">{c.quote}</blockquote>
+                                <div className="text-[#6EE7B7]/30 text-4xl font-sans mb-4 leading-none">&ldquo;</div>
+                                <blockquote className="text-lg font-sans text-white/80 leading-relaxed mb-5">{c.quote}</blockquote>
                                 <cite className="text-sm text-white/30 not-italic">— {c.person}</cite>
                             </div>
 
@@ -625,7 +729,7 @@ function TypographyHookSection() {
                             whileInView={{ opacity: 1, y: 0 }}
                             viewport={{ once: true }}
                             transition={{ delay: i * 0.18, duration: 0.7, ease: [0.22, 1, 0.36, 1] }}
-                            className={`text-[clamp(2rem,5vw,4rem)] font-serif leading-[1.15] tracking-tight ${
+                            className={`text-[clamp(2rem,5vw,4rem)] font-sans leading-[1.15] tracking-tight ${
                                 line.accent ? "text-[#22A366]" : "text-[#1a1a19]"
                             }`}
                         >
@@ -650,10 +754,10 @@ function TypographyHookSection() {
                     transition={{ delay: 0.8, duration: 0.6 }}
                     className="max-w-lg"
                 >
-                    <p className="text-xl md:text-2xl font-serif text-slate-600 leading-relaxed mb-2">
+                    <p className="text-xl md:text-2xl font-sans text-slate-600 leading-relaxed mb-2">
                         교사가 <span className="font-bold text-slate-900">잘 가르칠 수 있을 때</span>,
                     </p>
-                    <p className="text-xl md:text-2xl font-serif text-slate-600 leading-relaxed">
+                    <p className="text-xl md:text-2xl font-sans text-slate-600 leading-relaxed">
                         학생은 <span className="font-bold text-[#22A366]">더 깊이 배웁니다.</span>
                     </p>
                 </motion.div>
@@ -734,11 +838,11 @@ function FutureVision2Section() {
                     transition={{ duration: 0.8 }}
                 >
                     <EyebrowTag>The Real Goal</EyebrowTag>
-                    <h2 className="text-[clamp(2rem,5vw,4.5rem)] font-serif text-[#1a1a19] leading-[1.1] tracking-tight mb-6">
+                    <h2 className="text-[clamp(2rem,5vw,4.5rem)] font-sans text-[#1a1a19] leading-[1.1] tracking-tight mb-6">
                         아이들과의<br />
                         <span className="text-[#22A366]">진정한 교육</span>
                     </h2>
-                    <p className="text-xl md:text-2xl text-slate-500 font-serif max-w-2xl mx-auto leading-relaxed">
+                    <p className="text-xl md:text-2xl text-slate-500 font-sans max-w-2xl mx-auto leading-relaxed">
                         더 많이 가르치면서 더 적게 소진되는 것.
                         <br className="hidden md:block" />
                         그것이 ClassIn이 교사에게 드리는 약속입니다.
@@ -795,7 +899,7 @@ function FutureVision2Section() {
                         ))}
                     </div>
 
-                    <p className="text-xl md:text-2xl font-serif text-slate-600 leading-relaxed">
+                    <p className="text-xl md:text-2xl font-sans text-slate-600 leading-relaxed">
                         ClassIn은 도구가 아닙니다.<br />
                         <span className="text-[#1a1a19] font-bold">교육이 다시 교육다워지는 환경</span>입니다.
                     </p>
@@ -839,7 +943,7 @@ function LearningCycleSection() {
             <div className="container mx-auto px-4 lg:px-8 max-w-6xl">
                 <motion.div className="text-center mb-14" {...fadeUp}>
                     <EyebrowTag>LEARNING CYCLE</EyebrowTag>
-                    <h2 className="text-3xl md:text-4xl lg:text-5xl font-serif text-[#1a1a19] leading-tight">
+                    <h2 className="text-3xl md:text-4xl lg:text-5xl font-sans text-[#1a1a19] leading-tight">
                         수업의 처음부터 끝까지,<br /><span className="text-[#22A366]">하나로 연결</span>
                     </h2>
                     <p className="text-lg text-slate-400 mt-4 max-w-xl mx-auto">
@@ -904,7 +1008,7 @@ function HardwareTeaserSection() {
                         <span className="inline-flex items-center gap-2 bg-[#6EE7B7]/10 text-[#6EE7B7] text-xs font-bold px-3 py-1.5 rounded-full mb-6">
                             ClassIn X · 하드웨어
                         </span>
-                        <h2 className="text-3xl md:text-4xl lg:text-5xl font-serif text-white leading-tight mb-5">
+                        <h2 className="text-3xl md:text-4xl lg:text-5xl font-sans text-white leading-tight mb-5">
                             소프트웨어만으로<br />부족하다면
                         </h2>
                         <p className="text-lg text-white/50 leading-relaxed mb-8">
@@ -974,7 +1078,7 @@ function AIFeaturesSection() {
                     <span className="inline-flex items-center gap-1.5 bg-[#084734] text-[#6EE7B7] text-xs font-bold px-3 py-1.5 rounded-full mb-5">
                         ✦ AI-Powered
                     </span>
-                    <h2 className="text-3xl md:text-4xl lg:text-5xl font-serif text-[#1a1a19] leading-tight mb-4">
+                    <h2 className="text-3xl md:text-4xl lg:text-5xl font-sans text-[#1a1a19] leading-tight mb-4">
                         AI가 교사의 시간을<br /><span className="text-[#084734]">돌려드립니다</span>
                     </h2>
                     <p className="text-lg text-slate-500 max-w-xl mx-auto">
@@ -1062,7 +1166,7 @@ function FAQSection() {
             <div className="container mx-auto px-6 md:px-10 lg:px-16 max-w-5xl">
                 <motion.div className="text-center mb-14" {...fadeUp}>
                     <EyebrowTag>FAQ</EyebrowTag>
-                    <h2 className="text-3xl md:text-4xl font-serif text-[#1a1a19] leading-tight">
+                    <h2 className="text-3xl md:text-4xl font-sans text-[#1a1a19] leading-tight">
                         자주 묻는 질문
                     </h2>
                 </motion.div>
@@ -1121,7 +1225,7 @@ function ImpactTextSection() {
                     className="space-y-6"
                 >
                     <p className="text-sm font-semibold text-slate-400 tracking-widest uppercase">Before ClassIn</p>
-                    <div className="space-y-4 text-2xl sm:text-3xl md:text-4xl font-serif text-slate-700 leading-snug">
+                    <div className="space-y-4 text-2xl sm:text-3xl md:text-4xl font-sans text-slate-700 leading-snug">
                         <p>화면을 켜놓고 딴짓하는 학생.</p>
                         <p>녹화 파일을 공유하느라 허비하는 10분.</p>
                         <p className="text-slate-400">숙제는 카톡으로, 출결은 엑셀로,</p>
@@ -1132,7 +1236,7 @@ function ImpactTextSection() {
                         whileInView={{ opacity: 1 }}
                         viewport={{ once: true }}
                         transition={{ delay: 0.4, duration: 0.7 }}
-                        className="text-xl sm:text-2xl md:text-3xl font-serif text-slate-900 pt-4 border-t border-slate-100"
+                        className="text-xl sm:text-2xl md:text-3xl font-sans text-slate-900 pt-4 border-t border-slate-100"
                     >
                         수업은 했는데,{" "}
                         <span className="text-[#22A366] font-bold">교육은 안 된 하루.</span>
@@ -1174,8 +1278,8 @@ function FullscreenQuoteSection() {
                     viewport={{ once: true }}
                     transition={{ duration: 0.9 }}
                 >
-                    <div className="text-[#6EE7B7]/60 text-5xl font-serif mb-8 leading-none select-none">&ldquo;</div>
-                    <blockquote className="text-2xl sm:text-3xl md:text-4xl font-serif text-white leading-[1.4] tracking-tight mb-10">
+                    <div className="text-[#6EE7B7]/60 text-5xl font-sans mb-8 leading-none select-none">&ldquo;</div>
+                    <blockquote className="text-2xl sm:text-3xl md:text-4xl font-sans text-white leading-[1.4] tracking-tight mb-10">
                         하이브리드 수업은 팬데믹의 임시방편이 아닙니다.
                         <br className="hidden md:block" />
                         <span className="text-[#6EE7B7]">교육의 새로운 표준</span>이 될 것입니다.
@@ -1262,7 +1366,7 @@ function CaseStudiesSection() {
             <div className="container mx-auto px-4 lg:px-8 max-w-6xl">
                 <motion.div className="text-center mb-16" {...fadeUp}>
                     <EyebrowTag>CASE STUDY</EyebrowTag>
-                    <h2 className="text-3xl md:text-4xl lg:text-5xl font-serif text-[#1a1a19] leading-tight">
+                    <h2 className="text-3xl md:text-4xl lg:text-5xl font-sans text-[#1a1a19] leading-tight">
                         실제 교육 현장의 <span className="text-[#22A366]">변화</span>
                     </h2>
                     <p className="text-lg text-slate-400 mt-4 max-w-xl mx-auto">도입 후 실제로 달라진 것들을 현장의 언어로 전달합니다.</p>
@@ -1318,7 +1422,7 @@ function PricingValueSection() {
             <div className="container mx-auto px-4 lg:px-8 max-w-5xl">
                 <motion.div className="text-center mb-14" {...fadeUp}>
                     <EyebrowTag>PRICING VALUE</EyebrowTag>
-                    <h2 className="text-3xl md:text-4xl lg:text-5xl font-serif text-[#1a1a19] leading-tight mb-4">
+                    <h2 className="text-3xl md:text-4xl lg:text-5xl font-sans text-[#1a1a19] leading-tight mb-4">
                         이 가격에,{" "}
                         <span className="text-[#22A366]">이 모든 것을</span>
                     </h2>
@@ -1395,7 +1499,7 @@ function PricingValueSection() {
                         {/* Heading */}
                         <div className="text-center lg:text-left lg:shrink-0">
                             <p className="text-slate-300 text-sm font-bold uppercase tracking-[0.18em] mb-1.5">ClassIn 하나로</p>
-                            <p className="font-serif font-bold text-white leading-tight">
+                            <p className="font-sans font-bold text-white leading-tight">
                                 <span className="text-2xl md:text-3xl">이 모든 기능</span>
                                 <span className="text-sm md:text-base font-medium text-slate-300 ml-2 align-middle">+ AI 기능까지</span>
                             </p>
@@ -1561,7 +1665,7 @@ export default function ProductPage() {
                 <div className="container mx-auto px-4 lg:px-8">
                     <motion.div className="text-center mb-16" {...fadeUp}>
                         <EyebrowTag>WHY CLASSIN</EyebrowTag>
-                        <h2 className="text-3xl md:text-4xl lg:text-5xl font-serif text-[#1a1a19] leading-tight">
+                        <h2 className="text-3xl md:text-4xl lg:text-5xl font-sans text-[#1a1a19] leading-tight">
                             회의용 도구로 수업하던 시대는
                             <br className="hidden sm:block" />
                             <span className="text-[#22A366]">끝났습니다</span>
@@ -1641,7 +1745,7 @@ export default function ProductPage() {
                                 <div className="inline-flex items-center gap-2 px-3 py-1 rounded-full bg-[#22A366]/5 text-[#22A366] text-sm font-bold mb-6">
                                     <PenTool className="w-4 h-4" />양방향 블랙보드
                                 </div>
-                                <h2 className="text-3xl md:text-5xl font-serif text-[#1a1a19] mb-6 leading-tight">
+                                <h2 className="text-3xl md:text-5xl font-sans text-[#1a1a19] mb-6 leading-tight">
                                     교사만 쓰는 칠판은<br /><span className="text-[#22A366]">칠판이 아닙니다</span>
                                 </h2>
                                 <p className="text-lg text-slate-500 leading-relaxed font-medium mb-10">교사의 판서를 보기만 하던 시대는 끝났습니다. 학생에게 권한을 주어 직접 문제를 풀고, 그림을 그리고, 아이디어를 표현하게 하세요.</p>
@@ -1701,7 +1805,7 @@ export default function ProductPage() {
                         <div className="inline-flex items-center gap-2 px-3 py-1.5 rounded-full text-xs font-bold mb-6 bg-[#ECFDF5] border border-[rgba(34,163,102,0.2)] text-[#22A366] tracking-wide">
                             <Dice1 className="w-4 h-4" />수업 도구 · 수업 활동
                         </div>
-                        <h2 className="text-3xl md:text-5xl font-serif text-[#1a1a19] mb-4 leading-tight">
+                        <h2 className="text-3xl md:text-5xl font-sans text-[#1a1a19] mb-4 leading-tight">
                             수업이 지루할 틈이 <span className="text-[#22A366]">없습니다</span>
                         </h2>
                         <p className="text-lg text-slate-500 max-w-2xl mx-auto">타이머, 미러링, 스톱워치, 개인칠판 등 30여 가지 수업 도구를 수업 화면 안에서 바로 꺼내 씁니다.</p>
@@ -1790,7 +1894,7 @@ export default function ProductPage() {
                 <div className="container mx-auto px-4 lg:px-8">
                     <motion.div className="text-center mb-16" {...fadeUp}>
                         <EyebrowTag>FLEXIBLE FORMAT</EyebrowTag>
-                        <h2 className="text-3xl md:text-4xl lg:text-5xl font-serif text-[#1a1a19] leading-tight">
+                        <h2 className="text-3xl md:text-4xl lg:text-5xl font-sans text-[#1a1a19] leading-tight">
                             1:1 과외부터 수백 명 강의까지,<br /><span className="text-[#22A366]">하나의 플랫폼</span>
                         </h2>
                     </motion.div>
@@ -1862,7 +1966,7 @@ export default function ProductPage() {
                 <div className="container mx-auto px-4 lg:px-8 relative" ref={networkRef}>
                     <motion.div className="text-center mb-16" {...fadeUp}>
                         <EyebrowTag>GLOBAL NETWORK</EyebrowTag>
-                        <h2 className="text-3xl md:text-4xl lg:text-5xl font-serif leading-tight">전 세계 어디서든,<br /><span className="text-[#22A366]">끊김 없이</span></h2>
+                        <h2 className="text-3xl md:text-4xl lg:text-5xl font-sans leading-tight">전 세계 어디서든,<br /><span className="text-[#22A366]">끊김 없이</span></h2>
                         <p className="text-lg text-slate-400 mt-6 max-w-2xl mx-auto">자체 네트워크 기술로 낮은 지연 시간과 고화질 수업을 보장합니다.</p>
                     </motion.div>
 
@@ -1894,7 +1998,7 @@ export default function ProductPage() {
                         <div className="flex-1 max-w-xl">
                             <motion.div {...fadeUp}>
                                 <div className="inline-flex items-center gap-2 px-3 py-1 rounded-full bg-[#084734]/5 text-[#084734] text-sm font-bold mb-6"><BarChart3 className="w-4 h-4" />데이터 & LMS</div>
-                                <h2 className="text-3xl md:text-5xl font-serif text-[#1a1a19] mb-6 leading-tight">수업이 끝나도<br /><span className="text-[#084734]">학습은 계속됩니다</span></h2>
+                                <h2 className="text-3xl md:text-5xl font-sans text-[#1a1a19] mb-6 leading-tight">수업이 끝나도<br /><span className="text-[#084734]">학습은 계속됩니다</span></h2>
                                 <p className="text-lg text-slate-500 leading-relaxed font-medium mb-10">자동 녹화, 학습 데이터 분석, 숙제·출결·평가까지. 수업 전후의 모든 학사 행정을 하나의 플랫폼에서.</p>
                             </motion.div>
                             <div className="space-y-5">
@@ -1982,27 +2086,28 @@ export default function ProductPage() {
             {/* ================================================================
                 TESTIMONIALS (avatars, star ratings, marquee option)
             ================================================================ */}
-            <section className="py-24 md:py-32 bg-white relative">
-                <div className="container mx-auto px-4 max-w-6xl">
-                    <motion.div className="text-center mb-20" {...fadeUp}>
-                        <h2 className="text-3xl md:text-5xl font-serif text-[#1a1a19] leading-tight">
-                            전국의 교육자들이 <span className="text-[#22A366]">인정하는</span> 솔루션
-                        </h2>
-                    </motion.div>
+            <section className="relative overflow-hidden bg-[#F6F7F2] py-20 md:py-24">
+                <div className="absolute inset-x-0 top-0 h-px bg-gradient-to-r from-transparent via-[#084734]/20 to-transparent" />
+                <div className="container mx-auto max-w-7xl px-4 lg:px-8">
+                    <div className="max-w-2xl">
+                        <motion.div {...fadeUp}>
+                            <EyebrowTag>-Real Voice-</EyebrowTag>
+                            <h2 className="mt-5 max-w-2xl text-3xl font-sans leading-tight text-[#1a1a19] md:text-5xl">
+                                수업 운영을 바꾼 사람들의
+                                <br />
+                                <span className="text-[#22A366]">구체적인 한마디</span>
+                            </h2>
+                            <p className="mt-5 max-w-xl text-base font-medium leading-7 text-slate-500">
+                                수업 도구, 자동채점, 온라인 운영, 온보딩 경험까지. ClassIn 소프트웨어를 실제로 쓰며
+                                달라진 장면을 중심으로 정리했습니다.
+                            </p>
+                        </motion.div>
+                    </div>
 
-                    <div className="grid md:grid-cols-2 lg:grid-cols-3 gap-6 md:gap-8 items-start">
-                        <div className="space-y-6 md:space-y-8">
-                            <TestimonialCard name="John Kim" role="대치 A수학 대표원장" quote="줌에서 옮긴 뒤로 학생들의 수업 참여도가 확 달라졌습니다. 판서를 학생에게 넘길 수 있다는 것만으로도 수업의 질이 완전히 바뀌었어요." rating={5} gradient="from-[#22A366] to-green-500" />
-                            <TestimonialCard name="Sarah Lee" role="분당 어학원 원장" quote="LMS를 따로 쓸 필요가 없어졌어요. 출결, 숙제, 성적이 한 곳에 모이니까 행정 시간이 반 이상 줄었습니다." rating={5} gradient="from-emerald-500 to-teal-400" delay={0.1} />
-                        </div>
-                        <div className="space-y-6 md:space-y-8 md:mt-12">
-                            <TestimonialCard name="David Park" role="목동 과학학원 강사" quote="학생들이 직접 화면에 실험 결과를 그리고 발표하는 게 가능해졌어요. 줌에서는 상상도 못했던 수업 방식입니다." rating={5} gradient="from-blue-500 to-indigo-400" delay={0.2} />
-                            <TestimonialCard name="Stella Choi" role="프랜차이즈 교육 본부장" quote="전국 30개 지점의 수업 데이터가 실시간으로 본사에 모입니다. 수업 품질 관리가 이전과는 차원이 달라졌어요." rating={5} gradient="from-purple-500 to-pink-400" dark delay={0.3} />
-                        </div>
-                        <div className="space-y-6 md:space-y-8 lg:mt-6">
-                            <TestimonialCard name="민지 학부모" role="초등 3학년 학부모" quote="아이가 화면에서 직접 문제를 풀 수 있으니까 집중력이 확실히 올라갔어요. 녹화 영상으로 복습하는 것도 정말 좋습니다." rating={5} gradient="from-pink-500 to-rose-400" delay={0.4} />
-                            <TestimonialCard name="Peter Jung" role="에듀테크 컨설턴트" quote="교육용으로 설계된 플랫폼과 회의용 도구를 억지로 쓰는 건 차원이 다릅니다. 새로 개원하는 분들에게 1순위로 추천합니다." rating={5} gradient="from-slate-700 to-slate-500" delay={0.5} />
-                        </div>
+                    <div className="mt-10 grid gap-4 md:grid-cols-2 lg:grid-cols-12">
+                        {SOFTWARE_TESTIMONIALS.map((testimonial) => (
+                            <TestimonialCard key={`${testimonial.name}-${testimonial.role}`} {...testimonial} />
+                        ))}
                     </div>
                 </div>
             </section>

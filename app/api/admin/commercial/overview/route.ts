@@ -1,11 +1,11 @@
 import { NextRequest, NextResponse } from "next/server";
 
 import { verifyAdmin } from "@/lib/admin-auth";
-import type { CommercialOverviewRange } from "@/lib/partner-portal/overview-types";
+import type { CommercialOverviewRange } from "@/lib/portal/overview-types";
 import {
   getCommercialOverview,
   getLegacyCommercialOverview,
-} from "@/lib/partner-portal/repositories/overview";
+} from "@/lib/portal/repositories/overview";
 
 function parseRange(value: string | null): CommercialOverviewRange {
   if (value === "week" || value === "month" || value === "quarter") {

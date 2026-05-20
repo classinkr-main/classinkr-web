@@ -1,6 +1,6 @@
 import { NextRequest, NextResponse } from "next/server"
 
-import { getVerifiedAdminContext } from "@/lib/admin-auth"
+import { requireVerifiedAdminContext } from "@/lib/admin-auth"
 import { getAdminRecipientSelectors } from "@/lib/notifications/recipient-selectors"
 import {
   deleteNotificationForRecipients,
@@ -11,10 +11,8 @@ export async function PATCH(
   req: NextRequest,
   { params }: { params: Promise<{ id: string }> }
 ) {
-  const admin = await getVerifiedAdminContext(req)
-  if (!admin) {
-    return NextResponse.json({ error: "Unauthorized" }, { status: 401 })
-  }
+  const admin = await requireVerifiedAdminContext(req)
+  if (admin instanceof NextResponse) return admin
 
   const { id } = await params
   const selectors = getAdminRecipientSelectors(admin)
@@ -31,10 +29,8 @@ export async function DELETE(
   req: NextRequest,
   { params }: { params: Promise<{ id: string }> }
 ) {
-  const admin = await getVerifiedAdminContext(req)
-  if (!admin) {
-    return NextResponse.json({ error: "Unauthorized" }, { status: 401 })
-  }
+  const admin = await requireVerifiedAdminContext(req)
+  if (admin instanceof NextResponse) return admin
 
   const { id } = await params
   const selectors = getAdminRecipientSelectors(admin)

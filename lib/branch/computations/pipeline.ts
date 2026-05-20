@@ -1,5 +1,8 @@
 import type { BranchRevDeal } from "@/lib/repositories/branch-deals"
 import { normalizeBranchMemberName } from "@/lib/branch/member-names"
+import { fiscalQuarter, fyOf, ymKey } from "@/lib/branch/fiscal"
+
+type RevenuePeriod = "M" | "Q" | "Y"
 
 export function dealProbability(d: BranchRevDeal): number {
   if (d.first_payment) return 1.0
@@ -33,9 +36,21 @@ export interface RevRevenueRow {
   revenue: number
 }
 
-function revenueFromRev(d: BranchRevDeal): number {
+function inScope(ym: string, scope: RevenuePeriod, now: Date): boolean {
+  const fy = fyOf(now)
+  const m = Number(ym.slice(5, 7))
+  const y = Number(ym.slice(0, 4))
+  const fyOfYm = m >= 4 ? y : y - 1
+  if (fyOfYm !== fy) return false
+  if (scope === "Y") return true
+  if (scope === "M") return ym === ymKey(now)
+  return fiscalQuarter(m) === fiscalQuarter(now.getUTCMonth() + 1)
+}
+
+function revenueFromRev(d: BranchRevDeal, period?: RevenuePeriod, now = new Date()): number {
   const hasRedFlags = Object.keys(d.monthly_red).length > 0
   return Object.entries(d.monthly_payments).reduce((sum, [ym, value]) => {
+    if (period && !inScope(ym, period, now)) return sum
     if (hasRedFlags && !d.monthly_red[ym]) return sum
     return sum + Number(value)
   }, 0)
@@ -68,7 +83,11 @@ export function listPipeline(deals: BranchRevDeal[], filter?: { team?: string; m
   })
 }
 
-export function listRevRevenue(deals: BranchRevDeal[], filter?: { team?: string; manager?: string; region?: string }): RevRevenueRow[] {
+export function listRevRevenue(
+  deals: BranchRevDeal[],
+  filter?: { team?: string; manager?: string; region?: string },
+  scope?: { period: RevenuePeriod; now: Date },
+): RevRevenueRow[] {
   const managerFilter = normalizeBranchMemberName(filter?.manager)
   return deals
     .filter((d) => {
@@ -84,7 +103,7 @@ export function listRevRevenue(deals: BranchRevDeal[], filter?: { team?: string;
       manager: normalizeBranchMemberName(d.manager),
       team: d.team,
       region: d.region,
-      revenue: revenueFromRev(d),
+      revenue: revenueFromRev(d, scope?.period, scope?.now),
     }))
     .sort((a, b) => b.revenue - a.revenue || a.customer.localeCompare(b.customer))
 }

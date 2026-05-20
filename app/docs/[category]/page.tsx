@@ -14,7 +14,8 @@ import {
   resolveDocsRedirect,
 } from "@/lib/docs-content"
 
-import { toArticleSummary } from "../_utils"
+import { toArticleSummary, scoreDocsArticle } from "../_utils"
+import { SearchHighlight } from "@/components/ui/SearchHighlight"
 
 interface DocsCategoryPageProps {
   params: Promise<{ category: string }>
@@ -91,13 +92,11 @@ export default async function DocsCategoryPage({
   const articleSummaries = docs.map((doc) => toArticleSummary(doc, docsContent.categories))
   const query = q?.trim().toLowerCase() ?? ""
   const filteredDocs = query
-    ? articleSummaries.filter((article) => {
-        const haystack = [article.title, article.description, article.category ?? "", article.searchText ?? "", ...(article.tags ?? [])]
-          .join(" ")
-          .toLowerCase()
-
-        return haystack.includes(query)
-      })
+    ? articleSummaries
+        .map((doc) => ({ doc, score: scoreDocsArticle(doc, query) }))
+        .filter((item) => item.score > 0)
+        .sort((a, b) => b.score - a.score)
+        .map((item) => item.doc)
     : articleSummaries
 
   return (
@@ -158,10 +157,10 @@ export default async function DocsCategoryPage({
                   <div className="flex items-start justify-between gap-4">
                     <div className="min-w-0">
                       <p className="break-words text-[15px] font-semibold text-[#111110] group-hover:text-[#084734]">
-                        {article.title}
+                        <SearchHighlight text={article.title} query={q} />
                       </p>
                       <p className="mt-1 max-w-3xl break-words text-sm leading-6 text-[#615D59]">
-                        {article.description}
+                        <SearchHighlight text={article.description} query={q} />
                       </p>
                       <p className="mt-2 text-xs text-[#A39E98]">
                         {article.readTime} · {article.updatedAt}

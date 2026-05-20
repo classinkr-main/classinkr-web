@@ -1,12 +1,13 @@
 "use client"
 
-import { useEffect, useMemo, useState } from "react"
+import { useEffect, useMemo, useRef, useState } from "react"
 import Link from "next/link"
 import { useSearchParams } from "next/navigation"
 import { CheckCircle2, Copy, Check, FileText, Loader2, ReceiptText, ShieldCheck } from "lucide-react"
 
 import { Button } from "@/components/ui/button"
 import { Card, CardContent, CardDescription, CardHeader, CardTitle } from "@/components/ui/card"
+import { trackEvent } from "@/lib/analytics"
 import { formatKrw } from "@/lib/billing/plans"
 
 type ConfirmState =
@@ -26,6 +27,7 @@ export function CheckoutSuccessClient() {
   const searchParams = useSearchParams()
   const [state, setState] = useState<ConfirmState>({ kind: "loading" })
   const [linkCopied, setLinkCopied] = useState(false)
+  const trackedOrderRef = useRef<string | null>(null)
 
   const paymentKey = searchParams.get("paymentKey") ?? ""
   const orderId = searchParams.get("orderId") ?? ""
@@ -110,6 +112,17 @@ export function CheckoutSuccessClient() {
       cancelled = true
     }
   }, [amount, checkoutToken, orderId, paymentKey])
+
+  useEffect(() => {
+    if (state.kind !== "success") return
+    if (trackedOrderRef.current === state.orderId) return
+
+    trackedOrderRef.current = state.orderId
+    trackEvent("purchase", {
+      value: state.amount,
+      currency: "KRW",
+    })
+  }, [state])
 
   return (
     <div className="bg-[#FAFAF8] px-4 py-16 font-sans md:py-24">

@@ -3,10 +3,8 @@
 import { useState, useEffect } from "react"
 import { usePathname } from "next/navigation"
 import { motion, AnimatePresence, useReducedMotion } from "framer-motion"
-import Link from "next/link"
 import { MessageSquare, X } from "lucide-react"
-
-import { isPartnerPortalPath } from "@/lib/partner-portal/pathname"
+import { TrackedLink } from "@/components/TrackedLink"
 
 export function MobileFloatingCTA() {
     const pathname = usePathname()
@@ -31,10 +29,8 @@ export function MobileFloatingCTA() {
         pathname.startsWith("/admin") ||
         pathname.startsWith("/checkout") ||
         pathname.startsWith("/contact") ||
-        pathname.startsWith("/partner") ||
         pathname.startsWith("/pricing") ||
-        pathname.startsWith("/receipt") ||
-        isPartnerPortalPath(pathname)
+        pathname.startsWith("/receipt")
     ) {
         return null
     }
@@ -68,13 +64,14 @@ export function MobileFloatingCTA() {
                                 }
                                 className="w-full"
                             >
-                                <Link
+                                <TrackedLink
                                     href="/contact"
+                                    ctaId="mobile_floating_contact"
                                     className="flex w-full items-center justify-center gap-2 rounded-full bg-primary px-5 py-3 text-sm font-bold text-white shadow-[0_8px_24px_rgba(16,185,129,0.35)] transition-all duration-200 hover:bg-primary/90 active:scale-95"
                                 >
                                     <MessageSquare className="h-4 w-4 shrink-0" />
                                     도입 문의하기
-                                </Link>
+                                </TrackedLink>
                             </motion.div>
 
                             <button

@@ -70,7 +70,40 @@ function isUniqueViolation(error: { code?: string } | null | undefined): boolean
 }
 
 function isMissingPublicationStatusColumn(error: { code?: string; message?: string } | null | undefined): boolean {
-  return error?.code === "42703" && /publication_status/.test(error.message ?? "")
+  if (!error) return false
+  const message = error.message ?? ""
+  return (
+    /publication_status/.test(message) &&
+    (error.code === "42703" ||
+      error.code === "PGRST204" ||
+      /schema cache|column .*does not exist|could not find/i.test(message))
+  )
+}
+
+function omitPublicationStatus<T extends Record<string, unknown>>(payload: T): Record<string, unknown> {
+  const legacyPayload = { ...payload }
+  delete legacyPayload.publication_status
+  return legacyPayload
+}
+
+function getPublicEventInsertPayload(input: PublicEventInsert): Record<string, unknown> {
+  return {
+    title: input.title,
+    description: input.description ?? null,
+    category: input.category,
+    tag: input.tag ?? null,
+    starts_at: input.startsAt,
+    ends_at: input.endsAt ?? null,
+    location: input.location ?? null,
+    cta_label: input.ctaLabel ?? "자세히 보기",
+    cta_href: normalizeNullablePublicHref(input.ctaHref),
+    image_path: input.imagePath ?? null,
+    highlight: input.highlight ?? false,
+    status_override: input.statusOverride ?? null,
+    publication_status: input.publicationStatus ?? "draft",
+    slug: resolveSlug(input.slug, input.title),
+    content_markdown: input.contentMarkdown ?? null,
+  }
 }
 
 function getImageUrl(imagePath: string | null): string | null {
@@ -123,8 +156,8 @@ function rowToEvent(row: PublicEventRow): PublicEvent {
     statusOverride: row.status_override as EventStatus | null,
     status: computeStatus(row),
     publicationStatus: normalizePublicationStatus(row.publication_status),
-    slug: row.slug,
-    contentMarkdown: row.content_markdown,
+    slug: row.slug ?? null,
+    contentMarkdown: row.content_markdown ?? null,
     createdAt: row.created_at,
     updatedAt: row.updated_at,
   }
@@ -218,27 +251,23 @@ export async function getAllEventsForAdmin(): Promise<PublicEvent[]> {
 
 export async function createPublicEvent(input: PublicEventInsert): Promise<PublicEvent> {
   const supabase = createSupabaseAdminClient()
-  const { data, error } = await supabase
+  const payload = getPublicEventInsertPayload(input)
+  let { data, error } = await supabase
     .from("public_events")
-    .insert({
-      title: input.title,
-      description: input.description ?? null,
-      category: input.category,
-      tag: input.tag ?? null,
-      starts_at: input.startsAt,
-      ends_at: input.endsAt ?? null,
-      location: input.location ?? null,
-      cta_label: input.ctaLabel ?? "자세히 보기",
-      cta_href: normalizeNullablePublicHref(input.ctaHref),
-      image_path: input.imagePath ?? null,
-      highlight: input.highlight ?? false,
-      status_override: input.statusOverride ?? null,
-      publication_status: input.publicationStatus ?? "draft",
-      slug: resolveSlug(input.slug, input.title),
-      content_markdown: input.contentMarkdown ?? null,
-    })
+    .insert(payload)
     .select()
     .single()
+
+  if (isMissingPublicationStatusColumn(error)) {
+    const legacy = await supabase
+      .from("public_events")
+      .insert(omitPublicationStatus(payload))
+      .select()
+      .single()
+    data = legacy.data
+    error = legacy.error
+  }
+
   if (error && isUniqueViolation(error)) throw new Error("이미 사용 중인 행사 URL 슬러그입니다.")
   if (error) throw error
   return rowToEvent(data as PublicEventRow)
@@ -282,12 +311,29 @@ export async function updatePublicEvent(
     }
   }
 
-  const { data, error } = await supabase
+  let { data, error } = await supabase
     .from("public_events")
     .update(dbPatch)
     .eq("id", id)
     .select()
     .single()
+
+  if (isMissingPublicationStatusColumn(error)) {
+    const legacyPatch = omitPublicationStatus(dbPatch)
+    if (Object.keys(legacyPatch).length === 0) {
+      return getPublicEventById(id)
+    }
+
+    const legacy = await supabase
+      .from("public_events")
+      .update(legacyPatch)
+      .eq("id", id)
+      .select()
+      .single()
+    data = legacy.data
+    error = legacy.error
+  }
+
   if (error) {
     if (error.code === "PGRST116") return null
     if (isUniqueViolation(error)) throw new Error("이미 사용 중인 행사 URL 슬러그입니다.")

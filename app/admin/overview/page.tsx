@@ -7,6 +7,7 @@ import {
   CheckCircle2,
   Mail,
   FileText,
+  Eye,
   AlertCircle,
   ArrowUpRight,
   ArrowDownRight,
@@ -264,6 +265,7 @@ const PUBLISH_STATUS_COLOR: Record<BlogPost["status"], string> = {
   published: "bg-green-50 text-green-700",
   archived: "bg-[#f0f0ec] text-[#1a1a1a]/40",
 }
+const COMPACT_NUMBER = new Intl.NumberFormat("ko-KR", { notation: "compact", maximumFractionDigits: 1 })
 
 type OverviewOperationalAlert = {
   id: string
@@ -275,6 +277,19 @@ type OverviewOperationalAlert = {
   action: string
   href: string
   priority: number
+}
+
+interface InstagramOverviewDashboard {
+  account: {
+    username?: string
+    followersCount: number
+  }
+  summary: {
+    mediaCount: number
+    totalViews: number
+    averageViews: number
+    followerDelta: number
+  }
 }
 
 function getLast7DayLabels() {
@@ -346,6 +361,7 @@ export default function OverviewPage() {
   const [settings, setSettings] = useState<SiteSettings | null>(null)
   const [bugs, setBugs] = useState<BugReport[]>([])
   const [patchNotes, setPatchNotes] = useState<PatchNote[]>([])
+  const [instagramDashboard, setInstagramDashboard] = useState<InstagramOverviewDashboard | null>(null)
   const [loading, setLoading] = useState(true)
 
   useEffect(() => {
@@ -363,6 +379,7 @@ export default function OverviewPage() {
         settingsData,
         bugsData,
         patchNotesData,
+        instagramData,
       ] = await Promise.all([
         fetchJson<{ leads: LeadRecord[] }>("/api/admin/leads"),
         fetchJson<{ subscribers: unknown[]; total: number }>("/api/admin/subscribers"),
@@ -372,6 +389,7 @@ export default function OverviewPage() {
         fetchJson<SiteSettings>("/api/admin/settings"),
         fetchJson<BugReport[]>("/api/admin/bugs"),
         fetchJson<PatchNote[]>("/api/admin/patch-notes"),
+        fetchJson<InstagramOverviewDashboard>("/api/admin/meta/instagram?datePreset=last_30d&limit=25").catch(() => null),
       ])
 
       if (cancelled) return
@@ -384,6 +402,7 @@ export default function OverviewPage() {
       setSettings(settingsData ?? null)
       setBugs(bugsData ?? [])
       setPatchNotes(patchNotesData ?? [])
+      setInstagramDashboard(instagramData ?? null)
       setLoading(false)
     }
 
@@ -398,7 +417,10 @@ export default function OverviewPage() {
 
   const total = leads.length
   const newLeads = leads.filter((l) => l.status === "new").length
+  const contactedLeads = leads.filter((l) => l.status === "contacted").length
   const converted = leads.filter((l) => l.status === "converted").length
+  const closedLeads = leads.filter((l) => l.status === "closed").length
+  const activePipelineLeads = newLeads + contactedLeads
   const convRate = total > 0 ? Math.round((converted / total) * 100) : 0
 
   const today = new Date()
@@ -443,13 +465,6 @@ export default function OverviewPage() {
     return Boolean(cta?.title?.trim() && cta?.buttonLabel?.trim() && cta?.buttonHref?.trim())
   }).length
   const ctaCoverage = publishedBlogPosts.length > 0 ? Math.round((publishedPostsWithCta / publishedBlogPosts.length) * 100) : 0
-  const enabledHomepageModules = [
-    settings?.demoFormEnabled,
-    settings?.demoBannerEnabled,
-    settings?.blogSectionEnabled,
-    settings?.noticeBannerEnabled,
-  ].filter(Boolean).length
-  const homepageModuleTotal = 4
   const recentPosts = [...blogPosts]
     .sort((a, b) => scoreDate(b.updatedAt ?? b.publishedAt) - scoreDate(a.updatedAt ?? a.publishedAt))
     .slice(0, 4)
@@ -485,6 +500,25 @@ export default function OverviewPage() {
   const nextUpcomingEvent = upcomingEvents[0]
   const criticalOpenBugs = openBugs.filter((bug) => bug.severity === "critical" || bug.severity === "high")
   const publishedPostsWithoutCta = Math.max(0, publishedBlogPosts.length - publishedPostsWithCta)
+  const instagramViews = instagramDashboard?.summary.totalViews ?? 0
+  const instagramMediaCount = instagramDashboard?.summary.mediaCount ?? 0
+  const instagramAverageViews = instagramDashboard?.summary.averageViews ?? 0
+  const assigneeMap = upcomingEvents.reduce<Record<string, number>>((acc, event) => {
+    event.assignees?.forEach((assignee) => {
+      acc[assignee] = (acc[assignee] ?? 0) + 1
+    })
+    return acc
+  }, {})
+  const activeAssigneeCount = Object.keys(assigneeMap).length
+  const unassignedEventCount = upcomingEvents.filter((event) => !event.assignees?.length).length
+  const busiestAssignee = Object.entries(assigneeMap).sort((a, b) => b[1] - a[1])[0]
+  const branchMap = leads.reduce<Record<string, number>>((acc, lead) => {
+    const branch = lead.branch?.trim()
+    if (!branch) return acc
+    acc[branch] = (acc[branch] ?? 0) + 1
+    return acc
+  }, {})
+  const topBranch = Object.entries(branchMap).sort((a, b) => b[1] - a[1])[0]
 
   const connections = [
     {
@@ -513,51 +547,61 @@ export default function OverviewPage() {
     },
   ]
 
-  const taskItems = [
+  const teamSummaryItems = [
     {
-      title: "홈페이지 전환",
-      count: newLeads,
+      title: "세일즈 퍼널",
+      value: `${activePipelineLeads}건`,
+      badge: newLeads > 0 ? `신규 ${newLeads}` : "신규 없음",
       description:
-        thisWeekLeads > 0
-          ? `오늘 ${todayLeads}건 · 이번 주 ${thisWeekLeads}건의 유입이 들어왔습니다.`
-          : "이번 주 유입이 잠시 쉬고 있습니다.",
+        total > 0
+          ? `전체 ${total}건 · 연락중 ${contactedLeads}건 · 전환 ${converted}건 · 종료 ${closedLeads}건`
+          : "리드가 쌓이면 신규, 연락중, 전환 상태를 퍼널로 보여줍니다.",
       href: "/admin/crm",
-      action: newLeads > 0 ? "유입 관리" : "전환 확인",
+      action: "CRM 열기",
       tone: newLeads > 0 ? ("warning" as const) : ("neutral" as const),
     },
     {
-      title: "콘텐츠 관리",
-      count: publishedBlogPosts.length,
+      title: "담당자 커버리지",
+      value: activeAssigneeCount > 0 ? `${activeAssigneeCount}명` : "대기",
+      badge: unassignedEventCount > 0 ? `미배정 ${unassignedEventCount}` : "배정 안정",
       description:
-        blogPosts.length > 0
-          ? `공개 ${publishedBlogPosts.length}건 · 초안 ${draftBlogPosts}건`
-          : "아직 발행된 콘텐츠가 없습니다.",
-      href: "/admin/blog",
-      action: publishedBlogPosts.length > 0 ? "콘텐츠 보기" : "작성 시작",
-      tone: publishedBlogPosts.length > 0 ? ("info" as const) : ("neutral" as const),
+        upcomingEvents.length > 0
+          ? `${upcomingEvents.length}개 일정 · ${busiestAssignee ? `${busiestAssignee[0]} ${busiestAssignee[1]}건 집중` : "담당자 정보 없음"}`
+          : "이번 주 팀 일정이 등록되면 담당자별 집중도를 표시합니다.",
+      href: "/admin/calendar",
+      action: "캘린더",
+      tone: unassignedEventCount > 0 ? ("warning" as const) : activeAssigneeCount > 0 ? ("success" as const) : ("neutral" as const),
     },
     {
-      title: "캠페인 준비",
-      count: draftCampaigns.length,
+      title: "캠페인 상태",
+      value: `${campaigns.length}건`,
+      badge: failedCampaigns.length > 0 ? `실패 ${failedCampaigns.length}` : `발송 ${sentCampaigns.length}`,
       description:
         campaigns.length > 0
-          ? `초안 ${draftCampaigns.length}건 · 발송 ${sentCampaigns.length}건`
-          : "아직 캠페인 발송 이력이 없습니다.",
+          ? `초안 ${draftCampaigns.length}건 · 발송 ${sentCampaigns.length}건 · 대상 구독자 ${subscriberCount}명`
+          : "캠페인 초안과 발송 이력이 생기면 상태를 집계합니다.",
       href: "/admin/campaigns",
-      action: draftCampaigns.length > 0 ? "캠페인 열기" : "캠페인 만들기",
-      tone: draftCampaigns.length > 0 ? ("info" as const) : ("neutral" as const),
+      action: "캠페인",
+      tone: failedCampaigns.length > 0 ? ("danger" as const) : draftCampaigns.length > 0 ? ("info" as const) : ("neutral" as const),
     },
     {
-      title: "오픈 이슈",
-      count: openBugs.length,
+      title: "문서/콘텐츠 상태",
+      value: `${publishedBlogPosts.length}개`,
+      badge: publishedPostsWithoutCta > 0 ? `CTA 미완 ${publishedPostsWithoutCta}` : "CTA 안정",
       description:
-        openBugs.length > 0
-          ? `운영 이슈 ${openBugs.length}건을 확인하세요.`
-          : "열려 있는 버그가 없습니다.",
-      href: "/admin/dev",
-      action: openBugs.length > 0 ? "이슈 보기" : "Dev Mode",
-      tone: openBugs.length > 0 ? ("danger" as const) : ("neutral" as const),
+        blogPosts.length > 0
+          ? `공개 ${publishedBlogPosts.length}개 · 초안 ${draftBlogPosts}개 · CTA 커버리지 ${publishedBlogPosts.length > 0 ? `${ctaCoverage}%` : "대기"}`
+          : "문서와 블로그가 쌓이면 공개/초안/CTA 상태를 함께 보여줍니다.",
+      href: "/admin/blog",
+      action: "문서 확인",
+      tone: publishedPostsWithoutCta > 0 ? ("warning" as const) : publishedBlogPosts.length > 0 ? ("success" as const) : ("neutral" as const),
     },
+  ]
+  const statusFunnelItems = [
+    { label: STATUS_LABEL.new, value: newLeads, tone: newLeads > 0 ? ("warning" as const) : ("neutral" as const) },
+    { label: STATUS_LABEL.contacted, value: contactedLeads, tone: contactedLeads > 0 ? ("info" as const) : ("neutral" as const) },
+    { label: STATUS_LABEL.converted, value: converted, tone: converted > 0 ? ("success" as const) : ("neutral" as const) },
+    { label: STATUS_LABEL.closed, value: closedLeads, tone: "neutral" as const },
   ]
 
   const missingConnections = connections.filter((connection) => !connection.value?.trim())
@@ -566,44 +610,47 @@ export default function OverviewPage() {
     missingConnectionLabels.length > 2
       ? `${missingConnectionLabels.slice(0, 2).join(", ")} 외 ${missingConnectionLabels.length - 2}개`
       : missingConnectionLabels.join(", ")
+  const urgentRiskCount = [
+    newLeads > 0,
+    Boolean(latestFailedCampaign),
+    missingConnections.length > 0,
+    criticalOpenBugs.length > 0,
+    publishedPostsWithoutCta > 0,
+  ].filter(Boolean).length
   const topSignals = [
     {
-      label: "홈페이지 모듈",
-      value: `${enabledHomepageModules}/${homepageModuleTotal}`,
-      hint: "데모 폼, 배너, 블로그 섹션, 공지 배너의 노출 상태입니다.",
-      href: "/admin/settings",
-      tone: enabledHomepageModules === homepageModuleTotal ? ("success" as const) : ("info" as const),
+      label: "세일즈 파이프라인",
+      value: `${activePipelineLeads}건`,
+      hint:
+        total > 0
+          ? `신규 ${newLeads}건 · 연락중 ${contactedLeads}건 · 전환율 ${convRate}%`
+          : "문의가 들어오면 파이프라인 총량을 표시합니다.",
+      href: "/admin/crm",
+      tone: newLeads > 0 ? ("warning" as const) : activePipelineLeads > 0 ? ("info" as const) : ("neutral" as const),
     },
     {
-      label: "CTA 건강",
-      value: publishedBlogPosts.length > 0 ? `${ctaCoverage}%` : "데이터 대기",
+      label: "급한 리스크",
+      value: urgentRiskCount > 0 ? `${urgentRiskCount}건` : "안정",
       hint:
-        publishedBlogPosts.length > 0
-          ? `공개 글 ${publishedBlogPosts.length}개 중 CTA가 채워진 글 ${publishedPostsWithCta}개`
-          : "공개 글이 쌓이면 CTA 상태를 보여줍니다.",
-      href: "/admin/blog",
-      tone:
-        publishedBlogPosts.length === 0
-          ? ("neutral" as const)
-          : ctaCoverage >= 80
-            ? ("success" as const)
-            : ctaCoverage >= 50
-              ? ("info" as const)
-              : ("warning" as const),
+        urgentRiskCount > 0
+          ? "신규 리드, 캠페인 실패, 연동 누락, 이슈를 우선 점검합니다."
+          : "주의 등급 이상의 운영 알림이 없습니다.",
+      href: urgentRiskCount > 0 ? "/admin/dev" : "/admin/settings",
+      tone: urgentRiskCount > 0 ? ("warning" as const) : ("success" as const),
     },
     {
       label: "이번 주 유입",
       value: `${thisWeekLeads}건`,
-      hint: weekTrend >= 0 ? `지난주 대비 +${weekTrend}건` : `지난주 대비 ${weekTrend}건`,
+      hint: topBranch ? `${topBranch[0]} ${topBranch[1]}건 · 지난주 대비 ${weekTrend >= 0 ? "+" : ""}${weekTrend}건` : weekTrend >= 0 ? `지난주 대비 +${weekTrend}건` : `지난주 대비 ${weekTrend}건`,
       href: "/admin/crm",
       tone: weekTrend >= 0 ? ("info" as const) : ("warning" as const),
     },
     {
-      label: "연동 상태",
-      value: missingConnections.length > 0 ? `미연결 ${missingConnections.length}` : "정상",
-      hint: missingConnections.length > 0 ? "Settings에서 외부 전송 경로를 먼저 연결하세요." : "핵심 웹훅이 모두 연결되어 있습니다.",
-      href: "/admin/settings",
-      tone: missingConnections.length > 0 ? ("warning" as const) : ("success" as const),
+      label: "캠페인/문서",
+      value: `${sentCampaigns.length}/${publishedBlogPosts.length}`,
+      hint: `발송 캠페인 ${sentCampaigns.length}건 · 공개 문서 ${publishedBlogPosts.length}개 · CTA ${publishedBlogPosts.length > 0 ? `${ctaCoverage}%` : "대기"}`,
+      href: "/admin/campaigns",
+      tone: failedCampaigns.length > 0 || publishedPostsWithoutCta > 0 ? ("warning" as const) : ("info" as const),
     },
   ]
   const operationalAlertItems: Array<OverviewOperationalAlert | null> = [
@@ -611,8 +658,8 @@ export default function OverviewPage() {
       ? {
           id: "lead-followup",
           scope: "CRM",
-          title: "신규 문의 후속 확인",
-          description: `미처리 ${newLeads}건 · 오늘 유입 ${todayLeads}건 · CRM 후속을 먼저 정리하세요.`,
+          title: "신규 문의 후속 리스크",
+          description: `미처리 ${newLeads}건 · 오늘 유입 ${todayLeads}건 · 세일즈 후속 상태를 우선 점검하세요.`,
           meta: todayLeads > 0 ? `오늘 ${todayLeads}건` : `이번 주 ${thisWeekLeads}건`,
           tone: "warning" as const,
           action: "CRM 확인",
@@ -677,7 +724,7 @@ export default function OverviewPage() {
           id: "campaign-drafts",
           scope: "캠페인",
           title: "발송 대기 초안 확인",
-          description: `초안 ${draftCampaigns.length}건 · 발송 완료 ${sentCampaigns.length}건 · 오늘 보낼 캠페인을 정리하세요.`,
+          description: `초안 ${draftCampaigns.length}건 · 발송 완료 ${sentCampaigns.length}건 · 발송 검토 대상을 정리하세요.`,
           meta: `초안 ${draftCampaigns.length}건`,
           tone: "info" as const,
           action: "초안 열기",
@@ -729,7 +776,7 @@ export default function OverviewPage() {
           <p className="text-[11px] font-medium text-[#1a1a1a]/30 uppercase tracking-widest mb-1">Admin</p>
           <h1 className="text-2xl font-bold text-[#111110] tracking-[-0.02em]">Overview</h1>
           <p className="mt-2 max-w-2xl text-[13px] leading-relaxed text-[#1a1a1a]/45">
-            홈페이지 노출 상태, CTA, 콘텐츠, 캠페인, 연동을 한 화면에서 점검하는 운영 허브입니다.
+            팀 전체 세일즈 퍼널, 급한 리스크, 담당자 커버리지, 캠페인과 문서 상태를 한 화면에서 점검하는 운영 허브입니다.
           </p>
         </div>
         <div className="flex flex-wrap items-center gap-2">
@@ -761,7 +808,7 @@ export default function OverviewPage() {
         <div className="relative mb-6 flex flex-col gap-3 rounded-xl border border-[#D1FAE5] bg-[#ECFDF5] px-4 py-3 shadow-[0_1px_0_rgba(8,71,52,0.04)] sm:flex-row sm:items-center">
           <AlertCircle className="w-4 h-4 text-[#084734] shrink-0" />
           <p className="text-[13px] text-[#084734] font-medium">
-            미처리 신규 문의 <span className="font-bold">{newLeads}건</span>이 대기 중입니다.
+            세일즈 퍼널에 신규 문의 <span className="font-bold">{newLeads}건</span>이 대기 중입니다.
           </p>
           <a
             href="/admin/crm"
@@ -790,17 +837,17 @@ export default function OverviewPage() {
       </div>
 
       {loading ? (
-        <div className="grid grid-cols-1 gap-4 sm:grid-cols-2 md:grid-cols-3 lg:grid-cols-6 mb-8">
-          {Array.from({ length: 6 }).map((_, i) => (
+        <div className="grid grid-cols-1 gap-4 sm:grid-cols-2 md:grid-cols-3 lg:grid-cols-4 xl:grid-cols-7 mb-8">
+          {Array.from({ length: 7 }).map((_, i) => (
             <KpiSkeleton key={i} />
           ))}
         </div>
       ) : (
-        <div className="grid grid-cols-1 gap-4 sm:grid-cols-2 md:grid-cols-3 lg:grid-cols-6 mb-8">
+        <div className="grid grid-cols-1 gap-4 sm:grid-cols-2 md:grid-cols-3 lg:grid-cols-4 xl:grid-cols-7 mb-8">
           <KpiCard icon={<Users className="w-4 h-4" />} label="전체 리드" value={total} sub={`오늘 +${todayLeads}`} />
           <KpiCard
             icon={<TrendingUp className="w-4 h-4" />}
-            label="신규 (미처리)"
+            label="신규 리드"
             value={newLeads}
             accent="bg-[#ECFDF5]"
             iconColor="text-[#084734]"
@@ -815,7 +862,7 @@ export default function OverviewPage() {
           />
           <KpiCard
             icon={<TrendingUp className="w-4 h-4" />}
-            label="이번 주"
+            label="주간 유입"
             value={thisWeekLeads}
             trend={{ value: weekTrend, label: "지난주 대비" }}
             accent="bg-[#F6F5F4]"
@@ -828,6 +875,18 @@ export default function OverviewPage() {
             sub="활성 구독자"
             accent="bg-orange-50"
             iconColor="text-orange-500"
+          />
+          <KpiCard
+            icon={<Eye className="w-4 h-4" />}
+            label="인스타 조회수"
+            value={instagramDashboard ? COMPACT_NUMBER.format(instagramViews) : "연결 필요"}
+            sub={
+              instagramDashboard
+                ? `최근 ${instagramMediaCount}개 · 평균 ${COMPACT_NUMBER.format(instagramAverageViews)}`
+                : "콘텐츠 탭에서 확인"
+            }
+            accent="bg-[#FEF3EE]"
+            iconColor="text-[#B85C33]"
           />
           <KpiCard icon={<FileText className="w-4 h-4" />} label="블로그" value={blogPosts.length} sub="발행된 포스트" />
         </div>
@@ -909,8 +968,8 @@ export default function OverviewPage() {
       <div className="overflow-hidden rounded-2xl border border-[#e8e8e4] bg-white shadow-[0_1px_0_rgba(17,17,16,0.02)]">
         <div className="flex flex-col gap-3 border-b border-[#e8e8e4] px-4 py-4 sm:flex-row sm:items-center sm:justify-between sm:px-6">
           <div>
-            <h2 className="text-[14px] font-semibold text-[#111110]">최근 유입</h2>
-            <p className="text-[11px] text-[#1a1a1a]/40 mt-0.5">최근 접수 순으로 바로 후속할 수 있습니다.</p>
+            <h2 className="text-[14px] font-semibold text-[#111110]">세일즈 퍼널 / 최근 유입</h2>
+            <p className="text-[11px] text-[#1a1a1a]/40 mt-0.5">상태별 누적과 최근 접수 흐름을 함께 봅니다.</p>
           </div>
           <a href="/admin/crm" className="text-[12px] text-[#1a1a1a]/40 hover:text-[#111110] transition-colors flex items-center gap-1">
             전체 보기 <ArrowUpRight className="w-3 h-3" />
@@ -933,7 +992,7 @@ export default function OverviewPage() {
             <div className="p-4 sm:p-6">
               <EmptyState
                 title="아직 리드가 없습니다."
-                description="데모 신청이나 문의가 들어오면 여기에서 바로 후속 상태를 관리할 수 있습니다."
+                description="데모 신청이나 문의가 들어오면 여기에서 팀 단위 세일즈 상태를 관리할 수 있습니다."
               action={
                 <a
                   href="/admin/crm"
@@ -946,45 +1005,61 @@ export default function OverviewPage() {
             />
           </div>
           ) : (
-            <ul>
-              {recentLeads.map((lead) => (
-                <li
-                  key={lead.id}
-                  className="flex flex-col gap-3 border-b border-[#e8e8e4] px-4 py-3.5 transition-colors last:border-0 hover:bg-[#fafaf8] sm:flex-row sm:items-center sm:gap-4 sm:px-6"
-                >
-                  <div className="flex min-w-0 flex-1 items-center gap-3">
-                    <div className="w-8 h-8 rounded-full bg-[#f0f0ec] flex items-center justify-center text-[12px] font-semibold text-[#1a1a1a]/50 shrink-0">
-                      {(lead.name ?? lead.email ?? "?")[0]?.toUpperCase()}
-                    </div>
-                    <div className="min-w-0">
-                      <p className="text-[13px] font-medium text-[#111110] truncate">
-                        {lead.name ?? lead.email ?? "이름 없음"}
-                        {lead.org && <span className="font-normal text-[#1a1a1a]/40"> · {lead.org}</span>}
-                      </p>
-                      <p className="text-[11px] text-[#1a1a1a]/40">{SOURCE_LABEL[lead.source] ?? lead.source}</p>
-                    </div>
-                  </div>
-                  <div className="flex items-center gap-2 sm:ml-auto">
-                    <span className={`text-[11px] px-2.5 py-1 rounded-full font-medium shrink-0 ${STATUS_COLOR[lead.status]}`}>
-                      {STATUS_LABEL[lead.status]}
+            <>
+              <div className="grid grid-cols-2 gap-3 border-b border-[#e8e8e4] bg-[#fafaf8] p-4 sm:grid-cols-4 sm:px-6">
+                {statusFunnelItems.map((item) => (
+                  <a
+                    key={item.label}
+                    href="/admin/crm"
+                    className="rounded-xl border border-[#e8e8e4] bg-white px-3 py-3 transition-all hover:-translate-y-0.5 hover:border-[#c8c8c4]"
+                  >
+                    <span className={`rounded-full border px-1.5 py-0.5 text-[10px] font-medium ${statusToneClasses(item.tone)}`}>
+                      {item.label}
                     </span>
-                    <p className="text-[11px] text-[#1a1a1a]/30 shrink-0 w-14 text-right">
-                      {formatDateShort(lead.timestamp)}
-                    </p>
-                  </div>
-                </li>
-              ))}
-            </ul>
+                    <p className="mt-2 text-[22px] font-bold leading-none tracking-[-0.03em] text-[#111110]">{item.value}</p>
+                  </a>
+                ))}
+              </div>
+              <ul>
+                {recentLeads.map((lead) => (
+                  <li
+                    key={lead.id}
+                    className="flex flex-col gap-3 border-b border-[#e8e8e4] px-4 py-3.5 transition-colors last:border-0 hover:bg-[#fafaf8] sm:flex-row sm:items-center sm:gap-4 sm:px-6"
+                  >
+                    <div className="flex min-w-0 flex-1 items-center gap-3">
+                      <div className="w-8 h-8 rounded-full bg-[#f0f0ec] flex items-center justify-center text-[12px] font-semibold text-[#1a1a1a]/50 shrink-0">
+                        {(lead.name ?? lead.email ?? "?")[0]?.toUpperCase()}
+                      </div>
+                      <div className="min-w-0">
+                        <p className="text-[13px] font-medium text-[#111110] truncate">
+                          {lead.name ?? lead.email ?? "이름 없음"}
+                          {lead.org && <span className="font-normal text-[#1a1a1a]/40"> · {lead.org}</span>}
+                        </p>
+                        <p className="text-[11px] text-[#1a1a1a]/40">{SOURCE_LABEL[lead.source] ?? lead.source}</p>
+                      </div>
+                    </div>
+                    <div className="flex items-center gap-2 sm:ml-auto">
+                      <span className={`text-[11px] px-2.5 py-1 rounded-full font-medium shrink-0 ${STATUS_COLOR[lead.status]}`}>
+                        {STATUS_LABEL[lead.status]}
+                      </span>
+                      <p className="text-[11px] text-[#1a1a1a]/30 shrink-0 w-14 text-right">
+                        {formatDateShort(lead.timestamp)}
+                      </p>
+                    </div>
+                  </li>
+                ))}
+              </ul>
+            </>
         )}
       </div>
 
       <div className="grid grid-cols-1 xl:grid-cols-2 gap-6 mt-6">
         <SectionCard
-          title="홈페이지 운영 포인트"
-          description="홈페이지 전환, 콘텐츠, 캠페인, 운영 이슈를 한 번에 점검합니다."
+          title="팀 현황 요약"
+          description="퍼널, 담당자, 캠페인, 문서 상태를 팀 단위로 압축해 봅니다."
           action={
             <a href="/admin/crm" className="text-[12px] text-[#1a1a1a]/40 hover:text-[#111110] transition-colors flex items-center gap-1">
-              전체 열기 <ArrowUpRight className="w-3 h-3" />
+              CRM 열기 <ArrowUpRight className="w-3 h-3" />
             </a>
           }
         >
@@ -992,7 +1067,7 @@ export default function OverviewPage() {
             <SectionSkeleton rows={4} />
           ) : (
             <div className="space-y-3">
-              {taskItems.map((item) => (
+              {teamSummaryItems.map((item) => (
                 <a
                   key={item.title}
                   href={item.href}
@@ -1004,9 +1079,10 @@ export default function OverviewPage() {
                   <div className="min-w-0 flex-1">
                     <div className="flex items-center gap-2">
                       <p className="text-[13px] font-semibold text-[#111110]">{item.title}</p>
-                      <span className={`text-[10px] px-1.5 py-0.5 rounded-full border ${statusToneClasses(item.tone)}`}>{item.count}건</span>
+                      <span className={`text-[10px] px-1.5 py-0.5 rounded-full border ${statusToneClasses(item.tone)}`}>{item.badge}</span>
                     </div>
-                    <p className="text-[12px] text-[#1a1a1a]/40 mt-1 leading-relaxed">{item.description}</p>
+                    <p className="mt-1 text-[18px] font-bold leading-none tracking-[-0.03em] text-[#111110]">{item.value}</p>
+                    <p className="text-[12px] text-[#1a1a1a]/40 mt-1.5 leading-relaxed">{item.description}</p>
                   </div>
                   <span className="text-[12px] font-medium text-[#1a1a1a]/35 group-hover:text-[#111110] flex items-center gap-1 shrink-0">
                     {item.action}
@@ -1087,8 +1163,8 @@ export default function OverviewPage() {
 
       <div className="grid grid-cols-1 xl:grid-cols-2 gap-6 mt-6">
         <SectionCard
-          title="최근 콘텐츠"
-          description="최근 수정되거나 발행된 글을 빠르게 확인합니다."
+          title="문서/콘텐츠 상태"
+          description="최근 수정 문서와 공개/초안 흐름을 확인합니다."
           action={
             <a href="/admin/blog" className="text-[12px] text-[#1a1a1a]/40 hover:text-[#111110] transition-colors flex items-center gap-1">
               콘텐츠 열기 <ArrowUpRight className="w-3 h-3" />
@@ -1141,8 +1217,8 @@ export default function OverviewPage() {
         </SectionCard>
 
         <SectionCard
-          title="최근 캠페인"
-          description="구독자 발송 내역과 초안 상태를 확인합니다."
+          title="캠페인 상태"
+          description="구독자 발송 내역, 초안, 실패 상태를 확인합니다."
           action={
             <a href="/admin/campaigns" className="text-[12px] text-[#1a1a1a]/40 hover:text-[#111110] transition-colors flex items-center gap-1">
               캠페인 열기 <ArrowUpRight className="w-3 h-3" />
@@ -1197,8 +1273,8 @@ export default function OverviewPage() {
 
       <div className="mt-6">
         <SectionCard
-          title="운영 알림 / 연동 상태"
-          description="이상 징후와 외부 연결 상태를 한 곳에서 점검합니다."
+          title="급한 리스크 / 연동 상태"
+          description="세일즈, 캠페인, 문서, 외부 연결의 이상 징후를 한 곳에서 점검합니다."
           action={
             <a href="/admin/settings" className="text-[12px] text-[#1a1a1a]/40 hover:text-[#111110] transition-colors flex items-center gap-1">
               설정 열기 <ArrowUpRight className="w-3 h-3" />
@@ -1215,8 +1291,8 @@ export default function OverviewPage() {
               <div className="rounded-2xl border border-[#e8e8e4] bg-[#fafaf8] p-5">
                 <div className="flex items-center justify-between mb-4">
                   <div>
-                    <p className="text-[13px] font-semibold text-[#111110]">운영 알림 내역</p>
-                    <p className="text-[11px] text-[#1a1a1a]/40 mt-0.5">즉시 대응, 오늘 확인, 최근 변경을 우선순위로 정렬합니다.</p>
+                    <p className="text-[13px] font-semibold text-[#111110]">리스크 알림 내역</p>
+                    <p className="text-[11px] text-[#1a1a1a]/40 mt-0.5">즉시 대응, 상태 점검, 최근 변경을 우선순위로 정렬합니다.</p>
                   </div>
                   <span className={`text-[10px] px-2 py-0.5 rounded-full border ${statusToneClasses(actionableOperationalAlertCount > 0 ? "warning" : operationalAlerts.length > 0 ? "info" : "success")}`}>
                     {actionableOperationalAlertCount > 0 ? `주의 ${actionableOperationalAlertCount}` : operationalAlerts.length > 0 ? `최근 ${operationalAlerts.length}` : "정상"}

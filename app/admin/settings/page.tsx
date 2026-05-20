@@ -709,7 +709,10 @@ export default function SettingsPage() {
     () =>
       `await fetch("${pageWebhookUrl}", {
   method: "POST",
-  headers: { "Content-Type": "application/json" },
+  headers: {
+    "Content-Type": "application/json",
+    "X-Webhook-Secret": "<PAGE_WEBHOOK_SECRET>"
+  },
   body: JSON.stringify({
     formType: "demo",
     name: "홍길동",

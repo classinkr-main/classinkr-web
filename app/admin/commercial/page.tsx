@@ -21,7 +21,7 @@ import { adminFetchJsonCached } from "@/lib/admin-client";
 import type {
   CommercialOverviewPayload,
   CommercialOverviewRange,
-} from "@/lib/partner-portal/overview-types";
+} from "@/lib/portal/overview-types";
 import type {
   ContractDocumentBundle,
   CustomerDetailPayload,
@@ -29,7 +29,7 @@ import type {
   DealDetailPayload,
   DealStage,
   InstallationEvent,
-} from "@/lib/partner-portal/types";
+} from "@/lib/portal/types";
 
 type DealTab = "overview" | "documents" | "installations" | "payments" | "activity";
 

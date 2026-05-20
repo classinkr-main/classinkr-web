@@ -5,6 +5,7 @@ import { getDocPath, listDocs, type DocArticle } from "@/lib/docs"
 import { getDocsContent } from "@/lib/docs-content"
 
 const MAX_MESSAGE_LENGTH = 1000
+const MAX_FEEDBACK_COMMENT_LENGTH = 500
 const MAX_SOURCES = 3
 const UUID_RE = /^[0-9a-f]{8}-[0-9a-f]{4}-[1-5][0-9a-f]{3}-[89ab][0-9a-f]{3}-[0-9a-f]{12}$/i
 
@@ -115,7 +116,7 @@ function tokenize(value: string) {
         .replace(/[^\p{L}\p{N}\s-]/gu, " ")
         .split(/\s+/)
         .map((token) => token.trim())
-        .filter((token) => token.length >= 2)
+        .filter((token) => token.length >= 2 || (token.length === 1 && /[\uac00-\ud7a3\u3130-\u318f\u4e00-\u9fff\u3040-\u30ff]/.test(token)))
         .slice(0, 12)
     )
   )
@@ -177,12 +178,40 @@ function scoreText(question: NormalizedQuestion, source: Omit<ChatbotSource, "sc
   }
 
   let score = 0
+  let matchesAll = true
+
   for (const token of question.tokens) {
-    if (haystacks.title.includes(token)) score += 5
-    if (haystacks.heading.includes(token)) score += 4
-    if (haystacks.excerpt.includes(token)) score += 2
-    if (haystacks.category.includes(token)) score += 1
-    if (haystacks.extras.includes(token)) score += 3
+    let tokenMatched = false
+
+    if (haystacks.title.includes(token)) {
+      score += 15
+      tokenMatched = true
+    }
+    if (haystacks.heading.includes(token)) {
+      score += 10
+      tokenMatched = true
+    }
+    if (haystacks.excerpt.includes(token)) {
+      score += 5
+      tokenMatched = true
+    }
+    if (haystacks.category.includes(token)) {
+      score += 2
+      tokenMatched = true
+    }
+    if (haystacks.extras.includes(token)) {
+      score += 8
+      tokenMatched = true
+    }
+
+    if (!tokenMatched) {
+      matchesAll = false
+    }
+  }
+
+  // Bonus for matching all tokens (AND-match gets high priority)
+  if (matchesAll && question.tokens.length > 1) {
+    score += 50
   }
 
   return score
@@ -202,11 +231,8 @@ function dedupeSourcesByPath(sources: ChatbotSource[]) {
 }
 
 function getDocCategory(doc: DocArticle) {
-  if (doc.category === "help") return "help"
-  if (doc.category === "troubleshooting") return "troubleshooting"
-  if (doc.category === "quick-start") return "onboarding"
-  if (doc.category === "manual") return "manual"
-  if (doc.category === "updates") return "updates"
+  if (doc.category === "start") return "onboarding"
+  if (doc.category === "board") return "hardware"
   return "guide"
 }
 
@@ -320,7 +346,10 @@ async function searchSupabaseSources(question: NormalizedQuestion): Promise<Chat
           ...source,
           score: Math.max(
             1,
-            scoreText(question, source, getMetadataStrings(row.metadata))
+            scoreText(question, source, [
+              row.content,
+              ...getMetadataStrings(row.metadata),
+            ])
           ),
         }
       })
@@ -769,15 +798,22 @@ export async function handleChatbotQuery(
 export async function saveChatbotFeedback(raw: unknown) {
   const body = getContextObject(raw)
   const answerEventId = normalizeOptionalUuid(body.answerEventId)
+  const sessionId = normalizeOptionalUuid(body.sessionId)
   const rating = normalizeString(body.rating)
   const comment = normalizeString(body.comment)
 
   if (!answerEventId) {
     throw new ChatbotInputError("answerEventId가 올바르지 않습니다.")
   }
+  if (!sessionId) {
+    throw new ChatbotInputError("sessionId가 올바르지 않습니다.")
+  }
 
   if (rating !== "helpful" && rating !== "not_helpful") {
     throw new ChatbotInputError("rating은 helpful 또는 not_helpful이어야 합니다.")
+  }
+  if (comment && comment.length > MAX_FEEDBACK_COMMENT_LENGTH) {
+    throw new ChatbotInputError(`comment는 ${MAX_FEEDBACK_COMMENT_LENGTH}자 이내여야 합니다.`)
   }
 
   if (!hasSupabaseServerEnv()) {
@@ -789,10 +825,22 @@ export async function saveChatbotFeedback(raw: unknown) {
   }
 
   const supabase = createSupabaseAdminClient()
+  const { data: answerEvent, error: answerEventError } = await supabase
+    .from("chatbot_answer_events")
+    .select("id")
+    .eq("id", answerEventId)
+    .eq("session_id", sessionId)
+    .maybeSingle()
+
+  if (answerEventError) throw new Error(answerEventError.message)
+  if (!answerEvent) {
+    throw new ChatbotInputError("피드백 대상 답변을 찾지 못했습니다.")
+  }
+
   const { error } = await supabase.from("chatbot_feedback").insert({
     answer_event_id: answerEventId,
     rating,
-    comment: comment ?? null,
+    comment: comment ? redactPii(comment.replace(/\s+/g, " ").trim()) : null,
   })
 
   if (error) throw new Error(error.message)

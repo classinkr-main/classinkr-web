@@ -13,7 +13,7 @@ const PAGE_FORM_SOURCE_MAP = {
 const CORS_HEADERS = {
   "Access-Control-Allow-Origin": "*",
   "Access-Control-Allow-Methods": "GET, POST, OPTIONS",
-  "Access-Control-Allow-Headers": "Content-Type, Authorization",
+  "Access-Control-Allow-Headers": "Content-Type, Authorization, X-Webhook-Secret",
   "Access-Control-Max-Age": "86400",
 }
 
@@ -43,7 +43,10 @@ function pickString(...values: unknown[]) {
 function isWebhookAuthorized(req: NextRequest) {
   const secret = process.env.PAGE_WEBHOOK_SECRET?.trim()
   if (!secret) return process.env.NODE_ENV !== "production"
-  return req.headers.get("x-webhook-secret") === secret
+  return (
+    req.headers.get("x-webhook-secret") === secret ||
+    req.headers.get("authorization") === `Bearer ${secret}`
+  )
 }
 
 function resolvePageSource(rawSource: unknown, rawFormType: unknown) {
@@ -81,6 +84,20 @@ function buildPageWebhookPayload(raw: unknown) {
     email: pickString(body.email),
     phone: pickString(body.phone, body.tel, body.mobile),
     message: pickString(body.message, body.content, body.note),
+    eventSlug: pickString(body.eventSlug, body.event_slug, body.event),
+    sourceDetail: pickString(body.sourceDetail, body.source_detail, body.ctaId, body.cta_id),
+    utmSource: pickString(body.utmSource, body.utm_source),
+    utmMedium: pickString(body.utmMedium, body.utm_medium),
+    utmCampaign: pickString(body.utmCampaign, body.utm_campaign),
+    utmTerm: pickString(body.utmTerm, body.utm_term),
+    utmContent: pickString(body.utmContent, body.utm_content),
+    gclid: pickString(body.gclid),
+    fbclid: pickString(body.fbclid),
+    msclkid: pickString(body.msclkid),
+    ttclid: pickString(body.ttclid),
+    landingPage: pickString(body.landingPage, body.landing_page),
+    currentPage: pickString(body.currentPage, body.current_page),
+    referrer: pickString(body.referrer),
     marketingConsent:
       body.marketingConsent === true || body.marketing_consent === true,
   }

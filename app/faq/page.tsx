@@ -21,16 +21,16 @@ export default function FAQPage() {
         </h1>
         <div className="mt-6 flex flex-col items-center justify-center gap-3 sm:flex-row">
           <Link
-            href="/docs/help/faq"
+            href="/docs/start"
             className="inline-flex items-center justify-center rounded-full bg-[#084734] px-5 py-2.5 text-sm font-semibold text-white transition-colors hover:bg-[#065c41]"
           >
-            문서센터 FAQ 보기
+            클래스인 시작하기 가이드
           </Link>
           <Link
-            href="/docs/troubleshooting"
+            href="/docs/admin"
             className="inline-flex items-center justify-center rounded-full border border-black/[0.08] bg-white px-5 py-2.5 text-sm font-semibold text-[#084734] transition-colors hover:bg-[#ECFDF5]"
           >
-            문제 해결 가이드
+            관리자 가이드
           </Link>
         </div>
       </div>

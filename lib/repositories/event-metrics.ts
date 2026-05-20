@@ -65,10 +65,12 @@ export function saveEventMetrics(
   patch: Partial<Omit<EventMetrics, "eventId" | "updatedAt">>
 ): EventMetrics {
   const store = readStore()
-  const current = store[eventId] ?? {
+  const existing = store[eventId]
+  const current: EventMetrics = {
     ...DEFAULT_EVENT_METRICS,
+    ...existing,
     eventId,
-    updatedAt: new Date().toISOString(),
+    updatedAt: existing?.updatedAt ?? new Date().toISOString(),
   }
   const merged: EventMetrics = {
     ...current,

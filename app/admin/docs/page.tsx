@@ -8,10 +8,13 @@ import {
   BarChart3,
   Bot,
   Database,
+  Eye,
   ExternalLink,
   FileText,
   FolderTree,
   MessageSquareText,
+  Pencil,
+  Plus,
   RefreshCw,
   Search,
   ThumbsUp,
@@ -68,6 +71,41 @@ function getStatusTone(status: string) {
   if (status === "static") return "border-sky-100 bg-sky-50 text-sky-700"
   return "border-[#e8e8e4] bg-white text-[#1a1a1a]/50"
 }
+
+const DOC_TYPE_LABELS: Record<string, string> = {
+  guide: "가이드",
+  manual: "매뉴얼",
+  faq: "FAQ",
+  troubleshooting: "문제 해결",
+  release_note: "업데이트",
+  reference: "레퍼런스",
+}
+
+const STATUS_FILTERS = [
+  { value: "all", label: "전체 상태" },
+  { value: "draft", label: "초안" },
+  { value: "review", label: "리뷰" },
+  { value: "published", label: "게시됨" },
+  { value: "archived", label: "보관" },
+  { value: "static", label: "정적 문서" },
+]
+
+const DOC_TYPE_FILTERS = [
+  { value: "all", label: "전체 유형" },
+  { value: "guide", label: "가이드" },
+  { value: "manual", label: "매뉴얼" },
+  { value: "faq", label: "FAQ" },
+  { value: "troubleshooting", label: "문제 해결" },
+  { value: "release_note", label: "업데이트" },
+  { value: "reference", label: "레퍼런스" },
+]
+
+const READINESS_FILTERS = [
+  { value: "all", label: "전체 준비 상태" },
+  { value: "ai-issues", label: "AI 보강 필요" },
+  { value: "stale", label: "검수 주기 초과" },
+  { value: "featured", label: "대표 문서" },
+]
 
 function getSourceLabel(content: AdminDocsContentResponse | null) {
   if (!content) return "연결 확인 중"
@@ -142,6 +180,9 @@ export default function AdminDocsPage() {
   const [error, setError] = useState<string | null>(null)
   const [searchQuery, setSearchQuery] = useState("")
   const [categoryFilter, setCategoryFilter] = useState("all")
+  const [statusFilter, setStatusFilter] = useState("all")
+  const [docTypeFilter, setDocTypeFilter] = useState("all")
+  const [readinessFilter, setReadinessFilter] = useState("all")
   const [reindexing, setReindexing] = useState(false)
   const [reindexNotice, setReindexNotice] = useState<{
     tone: "success" | "warning"
@@ -223,18 +264,28 @@ export default function AdminDocsPage() {
     return (content?.articles ?? []).filter((article) => {
       const matchesCategory =
         categoryFilter === "all" || article.categoryId === categoryFilter
+      const matchesStatus = statusFilter === "all" || article.status === statusFilter
+      const matchesType = docTypeFilter === "all" || article.docType === docTypeFilter
+      const matchesReadiness =
+        readinessFilter === "all" ||
+        (readinessFilter === "ai-issues" && article.aiIssues.length > 0) ||
+        (readinessFilter === "stale" && article.stale) ||
+        (readinessFilter === "featured" && article.featured)
       const matchesQuery =
         !query ||
         article.title.toLowerCase().includes(query) ||
         article.description.toLowerCase().includes(query) ||
-        article.slug.toLowerCase().includes(query)
+        article.slug.toLowerCase().includes(query) ||
+        article.tags.some((tag) => tag.toLowerCase().includes(query)) ||
+        article.keywords.some((keyword) => keyword.toLowerCase().includes(query))
 
-      return matchesCategory && matchesQuery
+      return matchesCategory && matchesStatus && matchesType && matchesReadiness && matchesQuery
     })
-  }, [categoryFilter, content, searchQuery])
+  }, [categoryFilter, content, docTypeFilter, readinessFilter, searchQuery, statusFilter])
 
   const warnings = [...(content?.warnings ?? []), ...(analytics?.warnings ?? [])]
   const summary = analytics?.summary
+  const canMutateDocs = content?.status === "live"
 
   return (
     <div className="px-4 pt-8 pb-16 sm:px-6 sm:pt-10 sm:pb-20 lg:px-8">
@@ -262,6 +313,25 @@ export default function AdminDocsPage() {
         </div>
 
         <div className="flex flex-col gap-2 sm:flex-row sm:items-center">
+          {canMutateDocs ? (
+            <Link
+              href="/admin/docs/new"
+              className="inline-flex h-9 items-center justify-center gap-2 rounded-lg bg-[#084734] px-3 text-[13px] font-semibold text-white transition-colors hover:bg-[#065c41]"
+            >
+              <Plus className="h-4 w-4" />
+              새 문서
+            </Link>
+          ) : (
+            <button
+              type="button"
+              disabled
+              className="inline-flex h-9 cursor-not-allowed items-center justify-center gap-2 rounded-lg bg-[#084734] px-3 text-[13px] font-semibold text-white opacity-45"
+              title="Supabase 문서 원본이 연결되면 새 문서를 만들 수 있습니다."
+            >
+              <Plus className="h-4 w-4" />
+              새 문서
+            </button>
+          )}
           <Link
             href="/docs"
             className="inline-flex h-9 items-center justify-center gap-2 rounded-lg border border-[#e8e8e4] bg-white px-3 text-[13px] font-semibold text-[#111110] transition-colors hover:bg-[#f5f5f2]"
@@ -372,6 +442,17 @@ export default function AdminDocsPage() {
                 />
               </label>
               <select
+                value={statusFilter}
+                onChange={(event) => setStatusFilter(event.target.value)}
+                className="h-9 rounded-lg border border-[#e8e8e4] bg-white px-3 text-[13px] text-[#111110] outline-none transition-colors focus:border-[#084734]"
+              >
+                {STATUS_FILTERS.map((option) => (
+                  <option key={option.value} value={option.value}>
+                    {option.label}
+                  </option>
+                ))}
+              </select>
+              <select
                 value={categoryFilter}
                 onChange={(event) => setCategoryFilter(event.target.value)}
                 className="h-9 rounded-lg border border-[#e8e8e4] bg-white px-3 text-[13px] text-[#111110] outline-none transition-colors focus:border-[#084734]"
@@ -383,11 +464,33 @@ export default function AdminDocsPage() {
                   </option>
                 ))}
               </select>
+              <select
+                value={docTypeFilter}
+                onChange={(event) => setDocTypeFilter(event.target.value)}
+                className="h-9 rounded-lg border border-[#e8e8e4] bg-white px-3 text-[13px] text-[#111110] outline-none transition-colors focus:border-[#084734]"
+              >
+                {DOC_TYPE_FILTERS.map((option) => (
+                  <option key={option.value} value={option.value}>
+                    {option.label}
+                  </option>
+                ))}
+              </select>
+              <select
+                value={readinessFilter}
+                onChange={(event) => setReadinessFilter(event.target.value)}
+                className="h-9 rounded-lg border border-[#e8e8e4] bg-white px-3 text-[13px] text-[#111110] outline-none transition-colors focus:border-[#084734]"
+              >
+                {READINESS_FILTERS.map((option) => (
+                  <option key={option.value} value={option.value}>
+                    {option.label}
+                  </option>
+                ))}
+              </select>
             </div>
           </div>
 
           <div className="overflow-x-auto">
-            <table className="min-w-[860px] w-full text-left">
+            <table className="min-w-[1040px] w-full text-left">
               <thead className="bg-[#fafaf8] text-[11px] uppercase tracking-[0.12em] text-[#1a1a1a]/35">
                 <tr>
                   <th className="px-4 py-3 font-semibold">문서</th>
@@ -395,41 +498,64 @@ export default function AdminDocsPage() {
                   <th className="px-4 py-3 font-semibold">상태</th>
                   <th className="px-4 py-3 font-semibold">유형</th>
                   <th className="px-4 py-3 font-semibold">업데이트</th>
+                  <th className="px-4 py-3 font-semibold">액션</th>
                 </tr>
               </thead>
               <tbody className="divide-y divide-[#f0f0ec]">
                 {loading ? (
                   <tr>
-                    <td colSpan={5} className="px-4 py-10 text-center text-[13px] text-[#1a1a1a]/35">
+                    <td colSpan={6} className="px-4 py-10 text-center text-[13px] text-[#1a1a1a]/35">
                       문서 목록을 불러오는 중입니다.
                     </td>
                   </tr>
                 ) : filteredArticles.length === 0 ? (
                   <tr>
-                    <td colSpan={5} className="px-4 py-8">
+                    <td colSpan={6} className="px-4 py-8">
                       <EmptyState title="표시할 문서가 없습니다" description="검색어나 카테고리 필터를 조정해 보세요." />
                     </td>
                   </tr>
                 ) : (
-                  filteredArticles.map((article) => (
-                    <tr key={article.id} className="align-top">
+                  filteredArticles.map((article) => {
+                    const editHref = `/admin/docs/${article.id}/edit`
+                    return (
+                    <tr key={article.id} className="align-top transition-colors hover:bg-[#fafaf8]">
                       <td className="px-4 py-4">
                         <div className="max-w-lg">
                           <div className="flex items-start gap-2">
                             <FileText className="mt-0.5 h-4 w-4 shrink-0 text-[#1a1a1a]/30" />
                             <div>
-                              <Link
-                                href={article.publicPath}
-                                className="text-[13px] font-semibold text-[#111110] transition-colors hover:text-[#084734]"
-                              >
-                                {article.title}
-                              </Link>
+                              {canMutateDocs ? (
+                                <Link
+                                  href={editHref}
+                                  className="text-[13px] font-semibold text-[#111110] transition-colors hover:text-[#084734]"
+                                >
+                                  {article.title}
+                                </Link>
+                              ) : (
+                                <Link
+                                  href={article.publicPath}
+                                  className="text-[13px] font-semibold text-[#111110] transition-colors hover:text-[#084734]"
+                                >
+                                  {article.title}
+                                </Link>
+                              )}
                               <p className="mt-1 line-clamp-2 text-[12px] leading-relaxed text-[#1a1a1a]/42">
                                 {article.description}
                               </p>
                               <p className="mt-1 font-mono text-[11px] text-[#1a1a1a]/30">
                                 {article.slug}
                               </p>
+                              {article.aiIssues.length > 0 ? (
+                                <div className="mt-2 flex flex-wrap gap-1.5">
+                                  {article.aiIssues.slice(0, 3).map((issue) => (
+                                    <StatusBadge
+                                      key={issue}
+                                      label={issue}
+                                      tone="border-[#F6D5C5] bg-[#FEF3EE] text-[#B85C33]"
+                                    />
+                                  ))}
+                                </div>
+                              ) : null}
                             </div>
                           </div>
                         </div>
@@ -441,14 +567,36 @@ export default function AdminDocsPage() {
                         <ArticleStatus article={article} />
                       </td>
                       <td className="px-4 py-4 text-[12px] text-[#1a1a1a]/55">
-                        <div>{article.docType}</div>
+                        <div>{DOC_TYPE_LABELS[article.docType] ?? article.docType}</div>
                         <div className="mt-1 text-[#1a1a1a]/30">{article.productArea}</div>
                       </td>
                       <td className="px-4 py-4 text-[12px] text-[#1a1a1a]/55">
                         {formatDate(article.updatedAt ?? article.lastReviewedAt)}
                       </td>
+                      <td className="px-4 py-4">
+                        <div className="flex flex-wrap items-center gap-2">
+                          {canMutateDocs ? (
+                            <Link
+                              href={editHref}
+                              className="inline-flex h-8 items-center justify-center gap-1.5 rounded-lg border border-[#e8e8e4] bg-white px-2.5 text-[12px] font-semibold text-[#111110] transition-colors hover:bg-[#f5f5f2]"
+                            >
+                              <Pencil className="h-3.5 w-3.5" />
+                              편집
+                            </Link>
+                          ) : null}
+                          <Link
+                            href={article.publicPath}
+                            target="_blank"
+                            className="inline-flex h-8 items-center justify-center gap-1.5 rounded-lg border border-[#e8e8e4] bg-white px-2.5 text-[12px] font-semibold text-[#111110] transition-colors hover:bg-[#f5f5f2]"
+                          >
+                            <Eye className="h-3.5 w-3.5" />
+                            보기
+                          </Link>
+                        </div>
+                      </td>
                     </tr>
-                  ))
+                    )
+                  })
                 )}
               </tbody>
             </table>

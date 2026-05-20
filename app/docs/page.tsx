@@ -4,11 +4,13 @@ import { ArrowRight, Search } from "lucide-react"
 
 import { getDocCategoryPath, type DocCategoryId } from "@/lib/docs"
 import { getDocsContent } from "@/lib/docs-content"
+import { SearchHighlight } from "@/components/ui/SearchHighlight"
 
 import {
   getCategoryIcon,
   getAllDocsSummaries,
   toArticleSummary,
+  scoreDocsArticle,
 } from "./_utils"
 
 export const metadata: Metadata = {
@@ -28,35 +30,33 @@ interface DocsHomePageProps {
 }
 
 const categoryLauncherCopy: Record<DocCategoryId, { scope: string; summary: string }> = {
-  "quick-start": {
+  start: {
     scope: "처음 시작",
-    summary: "설치, 가입, 첫 수업 전 준비를 빠르게 확인합니다.",
+    summary: "설치, 회원 가입, 비밀번호 변경을 빠르게 확인합니다.",
   },
-  guides: {
-    scope: "운영 기준",
-    summary: "교사 안내, 첫 주 운영, 학부모 공지를 정리합니다.",
+  admin: {
+    scope: "관리자",
+    summary: "유료 전환, 인증, 코스·교사·학생·스토리지 관리를 봅니다.",
   },
-  manual: {
-    scope: "기능 사용",
-    summary: "계정, 수업, 자료, 리포트 사용법을 찾습니다.",
+  teacher: {
+    scope: "교사",
+    summary: "프로필, 코스 생성, 학습 활동, 교실 설정을 정리합니다.",
   },
-  help: {
-    scope: "FAQ",
-    summary: "상담, 결제, 권한, 인증 질문을 확인합니다.",
+  student: {
+    scope: "학생",
+    summary: "코스 참여, 수업 듣기, 과제 제출, AI 기능을 찾습니다.",
   },
-  troubleshooting: {
-    scope: "빠른 복구",
-    summary: "접속, 음성, 화면 공유 문제를 증상별로 봅니다.",
-  },
-  updates: {
-    scope: "변경 사항",
-    summary: "제품 업데이트와 운영팀 권장 조치를 봅니다.",
+  board: {
+    scope: "전자칠판",
+    summary: "T1·Panorama 카메라 설치와 CMS 세팅을 단계별로 봅니다.",
   },
 }
 
 function normalizeQuery(value?: string) {
   return value?.trim().toLowerCase() ?? ""
 }
+
+
 
 export default async function DocsHomePage({ searchParams }: DocsHomePageProps) {
   const { q } = await (searchParams ?? Promise.resolve<{ q?: string }>({}))
@@ -78,13 +78,11 @@ export default async function DocsHomePage({ searchParams }: DocsHomePageProps) 
   const allDocs = getAllDocsSummaries(docsContent)
   const query = normalizeQuery(q)
   const filteredDocs = query
-    ? allDocs.filter((doc) => {
-        const haystack = [doc.title, doc.description, doc.category ?? "", doc.searchText ?? "", ...(doc.tags ?? [])]
-          .join(" ")
-          .toLowerCase()
-
-        return haystack.includes(query)
-      })
+    ? allDocs
+        .map((doc) => ({ doc, score: scoreDocsArticle(doc, query) }))
+        .filter((item) => item.score > 0)
+        .sort((a, b) => b.score - a.score)
+        .map((item) => item.doc)
     : allDocs
 
   return (
@@ -177,10 +175,10 @@ export default async function DocsHomePage({ searchParams }: DocsHomePageProps) 
                   <li key={article.href} className="py-4">
                     <Link href={article.href} className="group block origin-center transition-all duration-150 active:scale-[0.98] active:opacity-90">
                       <p className="break-words text-[15px] font-semibold text-[#111110] group-hover:text-[#084734]">
-                        {article.title}
+                        <SearchHighlight text={article.title} query={q} />
                       </p>
                       <p className="mt-1 break-words text-sm leading-6 text-[#615D59]">
-                        {article.description}
+                        <SearchHighlight text={article.description} query={q} />
                       </p>
                       <p className="mt-2 text-xs text-[#A39E98]">
                         {article.category} · {article.readTime} · {article.updatedAt}
@@ -202,10 +200,10 @@ export default async function DocsHomePage({ searchParams }: DocsHomePageProps) 
                       <li key={article.href} className="py-4">
                         <Link href={article.href} className="group block origin-center transition-all duration-150 active:scale-[0.98] active:opacity-90">
                           <p className="break-words text-[15px] font-semibold text-[#111110] group-hover:text-[#084734]">
-                            {article.title}
+                            <SearchHighlight text={article.title} query={q} />
                           </p>
                           <p className="mt-1 break-words text-sm leading-6 text-[#615D59]">
-                            {article.description}
+                            <SearchHighlight text={article.description} query={q} />
                           </p>
                         </Link>
                       </li>
@@ -226,9 +224,9 @@ export default async function DocsHomePage({ searchParams }: DocsHomePageProps) 
                 처음이라면
               </p>
               <div className="mt-4 space-y-4 text-sm leading-7 text-[#615D59]">
-                <p>ClassIn을 처음 검토 중이라면 빠른 시작과 자주 묻는 질문에서 도입 흐름과 준비 항목을 먼저 확인해 보세요.</p>
-                <p>이미 사용 중이라면 운영 가이드와 기능 매뉴얼에서 교사 안내, 학생 입장, 출결, 자료 운영을 차례로 점검할 수 있습니다.</p>
-                <p>수업 중 문제가 생겼다면 문제 해결 안내에서 증상별로 바로 따라 할 수 있는 복구 순서를 확인하세요.</p>
+                <p>ClassIn을 처음 검토 중이라면 클래스인 시작하기에서 설치와 회원 가입 흐름을 먼저 확인해 보세요.</p>
+                <p>학원 운영자라면 관리자 가이드에서 코스·교사·학생 관리와 스토리지·웹 라이브 설정을 차례로 점검할 수 있습니다.</p>
+                <p>수업을 직접 진행하는 강사라면 교사 가이드에서 코스 생성, 학습 활동 추가, 교실 기본 설정을 확인하세요.</p>
               </div>
             </div>
 
@@ -239,25 +237,25 @@ export default async function DocsHomePage({ searchParams }: DocsHomePageProps) 
               <dl className="mt-4 space-y-3 text-sm text-[#615D59]">
                 <div className="flex items-center justify-between gap-4 border-b border-black/[0.06] pb-3">
                   <dt>처음 도입한다면</dt>
-                  <dd className="font-semibold text-[#111110]">빠른 시작</dd>
+                  <dd className="font-semibold text-[#111110]">클래스인 시작하기</dd>
                 </div>
                 <div className="flex items-center justify-between gap-4 border-b border-black/[0.06] pb-3">
-                  <dt>수업을 운영 중이라면</dt>
-                  <dd className="font-semibold text-[#111110]">운영 가이드</dd>
+                  <dt>학원을 운영 중이라면</dt>
+                  <dd className="font-semibold text-[#111110]">관리자 가이드</dd>
                 </div>
                 <div className="flex items-center justify-between gap-4">
-                  <dt>문제가 생겼다면</dt>
-                  <dd className="font-semibold text-[#111110]">문제 해결</dd>
+                  <dt>수업을 진행하는 강사라면</dt>
+                  <dd className="font-semibold text-[#111110]">교사 가이드</dd>
                 </div>
               </dl>
             </div>
 
             <div className="border-t border-black/[0.08] pt-4">
               <p className="text-xs font-bold uppercase tracking-[0.16em] text-[#084734]">
-                수업 중 도움이 필요할 때
+                수업에 참여하는 학생이라면
               </p>
               <p className="mt-4 text-sm leading-7 text-[#615D59]">
-                접속, 음성, 화면 공유처럼 수업을 바로 막는 문제는 <Link href="/docs/troubleshooting" className="font-semibold text-[#084734] underline underline-offset-4">문제 해결</Link>에서 빠른 조치 순서부터 확인할 수 있습니다.
+                코스 참여와 수업 듣기, 과제 제출, AI 기능까지는 <Link href="/docs/student" className="font-semibold text-[#084734] underline underline-offset-4">학생 가이드</Link>에서 단계별로 확인할 수 있습니다.
               </p>
             </div>
           </aside>

@@ -3,11 +3,10 @@
 import { GoogleTagManager } from "@next/third-parties/google"
 import { usePathname } from "next/navigation"
 import { GTM_ID } from "@/lib/analytics-config"
-import { isPartnerPortalPath } from "@/lib/partner-portal/pathname"
 
 export function GTMScript() {
   const pathname = usePathname()
-  const isInternal = pathname.startsWith("/admin") || isPartnerPortalPath(pathname)
+  const isInternal = pathname.startsWith("/admin")
 
   if (isInternal || !GTM_ID) return null
 

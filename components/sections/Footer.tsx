@@ -6,6 +6,7 @@
 import Image from "next/image"
 import Link from "next/link"
 import { NewsletterSubscribe } from "./NewsletterSubscribe"
+import { TrackedLink } from "@/components/TrackedLink"
 
 export function Footer() {
     return (
@@ -33,14 +34,18 @@ export function Footer() {
                         <ul className="space-y-2">
                             <li><Link href="/product/sw" className="hover:text-white transition-colors">소프트웨어</Link></li>
                             <li><Link href="/product/hw" className="hover:text-white transition-colors">하드웨어</Link></li>
-                            <li><Link href="/contact" className="hover:text-white transition-colors">도입 문의</Link></li>
+                            <li>
+                                <TrackedLink href="/contact" ctaId="footer_contact" className="hover:text-white transition-colors">
+                                    도입 문의
+                                </TrackedLink>
+                            </li>
                         </ul>
                     </div>
                     <div>
                         <h4 className="font-semibold text-white mb-4">자원</h4>
                         <ul className="space-y-2">
                             <li><Link href="/docs" className="hover:text-white transition-colors">가이드와 도움말</Link></li>
-                            <li><Link href="/docs/troubleshooting" className="hover:text-white transition-colors">문제 해결</Link></li>
+                            <li><Link href="/docs/start" className="hover:text-white transition-colors">클래스인 시작하기</Link></li>
                             <li><Link href="/faq" className="hover:text-white transition-colors">자주 묻는 질문</Link></li>
                             <li><Link href="/updates" className="hover:text-white transition-colors">업데이트</Link></li>
                         </ul>

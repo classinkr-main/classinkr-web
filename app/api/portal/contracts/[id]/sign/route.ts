@@ -3,14 +3,14 @@ import { NextRequest, NextResponse } from "next/server";
 import {
   requirePortalContext,
   isErrorResponse,
-} from "@/lib/partner-portal/portal-context";
-import { authorizeForAccount, getActorInfo } from "@/lib/partner-portal/portal-authorize";
-import { getDeal } from "@/lib/partner-portal/repositories/deals";
+} from "@/lib/portal/portal-context";
+import { authorizeForAccount, getActorInfo } from "@/lib/portal/portal-authorize";
+import { getDeal } from "@/lib/portal/repositories/deals";
 import {
   getContractDocument,
   applySignature,
-} from "@/lib/partner-portal/repositories/contract-documents";
-import { logActivity } from "@/lib/partner-portal/repositories/activity";
+} from "@/lib/portal/repositories/contract-documents";
+import { logActivity } from "@/lib/portal/repositories/activity";
 import { decodePngDataUrl } from "@/lib/server/image-validation";
 import { createSupabaseAdminClient } from "@/lib/supabase/admin";
 
@@ -73,7 +73,7 @@ export async function POST(
     // 계약서 상태 업데이트
     const newStatus = signerType === "partner" ? "partner_signed" : "admin_signed";
     const { updateContractDocument } = await import(
-      "@/lib/partner-portal/repositories/contract-documents"
+      "@/lib/portal/repositories/contract-documents"
     );
     await updateContractDocument(id, { status: newStatus });
 

@@ -7,6 +7,7 @@ interface SyncStatusBarProps {
   lastError: string | null
   sheetModifiedAt?: string | null
   onRefresh: () => Promise<void>
+  syncEnabled?: boolean
 }
 
 // Threshold above which a sheet edit that postdates the last sync is loud
@@ -24,7 +25,7 @@ function relativeTime(iso: string, now: number): string {
   return `${Math.floor(diff / 86_400_000)}일 전`
 }
 
-export default function SyncStatusBar({ lastSync, lastError, sheetModifiedAt, onRefresh }: SyncStatusBarProps) {
+export default function SyncStatusBar({ lastSync, lastError, sheetModifiedAt, onRefresh, syncEnabled = true }: SyncStatusBarProps) {
   const [busy, setBusy] = useState(false)
   // Tick once a minute so relative timestamps stay current without a refetch.
   const [now, setNow] = useState(() => Date.now())
@@ -74,7 +75,7 @@ export default function SyncStatusBar({ lastSync, lastError, sheetModifiedAt, on
           className="inline-flex items-center gap-1 rounded-full bg-[#111110] px-3 py-1.5 text-[11px] font-medium text-white disabled:opacity-50"
         >
           <RefreshCw className={`h-3.5 w-3.5 ${busy ? "animate-spin" : ""}`} />
-          {busy ? "동기화 중..." : "지금 동기화"}
+          {busy ? (syncEnabled ? "동기화 중..." : "불러오는 중...") : (syncEnabled ? "지금 동기화" : "다시 불러오기")}
         </button>
       </div>
     </div>

@@ -28,4 +28,16 @@ describe("pipeline", () => {
     expect(listPipeline(deals, { manager: "minjae" }).map((r) => r.manager)).toEqual(["Minjae"])
     expect(listRevRevenue(deals, { manager: "Minjae" }).map((r) => r.manager)).toEqual(["Minjae"])
   })
+  it("listRevRevenue can scope revenue to a selected month", () => {
+    const rows = listRevRevenue([
+      mk({
+        id: "a",
+        customer_name: "A",
+        monthly_payments: { "2026-04": 100, "2026-05": 200 },
+        monthly_red: { "2026-04": true, "2026-05": true },
+      }),
+    ], undefined, { period: "M", now: new Date("2026-04-01T00:00:00Z") })
+
+    expect(rows[0].revenue).toBe(100)
+  })
 })

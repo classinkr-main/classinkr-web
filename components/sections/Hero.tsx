@@ -195,9 +195,9 @@ export function Hero() {
 
             <section
                 ref={dashboardRef}
-                className="relative z-20 isolate overflow-hidden rounded-t-[2rem] bg-[#FAFAF8] pt-20 pb-20 shadow-[0_-18px_50px_rgba(0,0,0,0.16),0_-1px_0_rgba(255,255,255,0.8)] md:rounded-t-[4rem] md:pt-28 md:pb-32 lg:rounded-t-[5rem]"
+                className="relative z-20 isolate overflow-hidden rounded-tl-[1.75rem] rounded-tr-[1.75rem] bg-[#FAFAF8] pt-20 pb-20 shadow-[0_-18px_50px_rgba(0,0,0,0.16),0_-1px_0_rgba(255,255,255,0.8)] md:rounded-tl-[2rem] md:rounded-tr-[2rem] md:pt-28 md:pb-32"
             >
-                <div className="pointer-events-none absolute inset-x-0 top-0 z-0 h-24 bg-[radial-gradient(120%_80%_at_50%_0%,rgba(255,255,255,0.9),rgba(250,250,248,0)_68%)]" />
+                <div className="pointer-events-none absolute inset-x-0 top-0 z-0 h-16 bg-gradient-to-b from-white/75 to-transparent" />
                 <div className="pointer-events-none absolute inset-x-0 top-0 z-0 h-px bg-white/90" />
                 <motion.div
                     className="pointer-events-none relative z-0 mx-auto mb-16 hidden justify-center px-6 md:flex md:mb-24 lg:mb-28"
@@ -205,7 +205,7 @@ export function Hero() {
                     aria-hidden="true"
                 >
                     <h2 className="text-center text-[clamp(3rem,7.8vw,7.5rem)] font-black uppercase leading-[0.9] tracking-[0.12em] select-none text-[#8F8B85]">
-                        <span className="block">Empowering</span>
+                        <span className="block">Empower</span>
                         <span className="block">Education Online</span>
                     </h2>
                 </motion.div>

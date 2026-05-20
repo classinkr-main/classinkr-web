@@ -10,6 +10,10 @@ import { callManagerInsight } from "@/lib/branch/insights/manager-runner"
 import { deriveMemberTeams } from "@/lib/branch/computations/member-teams"
 import { normalizeBranchMemberName } from "@/lib/branch/member-names"
 
+type InsightScope = "M" | "Q" | "Y"
+
+const INSIGHT_SCOPES = new Set<InsightScope>(["M", "Q", "Y"])
+
 const readKpi = unstable_cache(
   async () => parseKpi(await readRangeWithFormat(envSheetId("dashboard"), KPI_RANGE)),
   ["branch-kpi"], { revalidate: 60, tags: ["branch-kpi"] },
@@ -20,7 +24,11 @@ export async function GET(req: NextRequest) {
   const url = new URL(req.url)
   const manager = normalizeBranchMemberName(url.searchParams.get("name"))
   if (!manager) return NextResponse.json({ error: "name query required" }, { status: 400 })
-  const scope = (url.searchParams.get("scope") ?? "Q") as "M" | "Q" | "Y"
+  const rawScope = url.searchParams.get("scope") ?? "Q"
+  if (!INSIGHT_SCOPES.has(rawScope as InsightScope)) {
+    return NextResponse.json({ error: "Invalid scope query" }, { status: 400 })
+  }
+  const scope = rawScope as InsightScope
 
   try {
     const now = new Date()

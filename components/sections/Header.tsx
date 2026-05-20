@@ -5,15 +5,16 @@ import Image from "next/image"
 import Link from "next/link"
 import { usePathname } from "next/navigation"
 import { NewsletterModal } from "./NewsletterModal"
+import { TrackedLink } from "@/components/TrackedLink"
 import { cn } from "@/lib/utils"
 import { Menu, X, Monitor, Cpu } from "lucide-react"
 
 const navItems = [
     { name: "제품 소개", href: "/product" },
-    { name: "가이드", href: "/docs" },
+    { name: "회사 소개", href: "/about" },
     { name: "블로그", href: "/blog" },
     { name: "행사", href: "/events" },
-    { name: "회사 소개", href: "/about" },
+    { name: "가이드", href: "/docs" },
 ]
 
 const productTabs = [
@@ -49,11 +50,11 @@ export function Header() {
             className={cn(
                 "fixed top-0 left-0 right-0 z-50 transition-all duration-300",
                 isScrolled
-                    ? "bg-white/65 backdrop-blur-xl backdrop-saturate-150 border-b border-white/40 shadow-[inset_0_1px_0_rgba(255,255,255,0.55),0_1px_0_rgba(0,0,0,0.04)] py-4"
+                    ? "gnb-scroll-glass bg-white/[0.55] backdrop-blur-xl backdrop-saturate-150 border-b border-white/35 shadow-[inset_0_1px_0_rgba(255,255,255,0.62),0_1px_0_rgba(0,0,0,0.04)] py-4"
                     : "bg-white/60 backdrop-blur-sm py-6"
             )}
         >
-            <div className="container mx-auto flex items-center justify-between gap-4">
+            <div className="container relative z-10 mx-auto flex items-center justify-between gap-4">
                 <Link href="/" className="flex items-center gap-2">
                     <Image
                         src="/images/logo.png"
@@ -187,13 +188,14 @@ export function Header() {
                                     자료 받아보기
                                 </button>
                             </NewsletterModal>
-                            <Link
+                            <TrackedLink
                                 href="/contact"
+                                ctaId="gnb_mobile_contact"
                                 onClick={() => setIsMobileMenuOpen(false)}
                                 className="inline-flex min-h-11 w-full items-center justify-center rounded-[8px] bg-[#009060] px-4 text-[15px] font-semibold text-white shadow-sm transition-colors hover:bg-[#007A52]"
                             >
                                 도입 문의
-                            </Link>
+                            </TrackedLink>
                         </div>
                     ) : null}
                 </nav>
@@ -214,12 +216,13 @@ export function Header() {
                             자료 받아보기
                         </button>
                     </NewsletterModal>
-                    <Link
+                    <TrackedLink
                         href="/contact"
+                        ctaId="gnb_contact"
                         className="inline-flex items-center justify-center whitespace-nowrap rounded-[6px] bg-[#009060] px-5 py-2 text-[15px] font-semibold text-white shadow-sm transition-all hover:bg-[#007A52] active:scale-[0.97]"
                     >
                         도입 문의
-                    </Link>
+                    </TrackedLink>
                 </div>
             </div>
         </header>

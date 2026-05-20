@@ -16,7 +16,7 @@ import { sanitizePublicUrl } from "@/lib/safe-public-url";
 export type { BlogPost, BlogPostInput, BlogPostStatus } from "@/lib/blog-types";
 export { CATEGORIES, BLOG_STATUS_OPTIONS, DEFAULT_BLOG_CTA } from "@/lib/blog-types";
 
-import type { BlogPost, BlogPostInput } from "@/lib/blog-types";
+import { DEFAULT_BLOG_CTA, type BlogPost, type BlogPostInput } from "@/lib/blog-types";
 
 const BLOG_DATA_SOURCE = process.env.USE_SUPABASE_BLOG?.trim().toLowerCase();
 const USE_SUPABASE =
@@ -65,7 +65,7 @@ function supabaseToLegacy(row: SupaBlogPost): BlogPost & { _uuid: string } {
       title: row.cta_text ?? "우리 학원에 맞는 플랜이 궁금하다면?",
       description: "수업 만족도를 높이는 가장 빠른 방법, 지금 컨설팅을 받아보세요.",
       buttonLabel: row.cta_text ?? "무료 상담 신청하기",
-      buttonHref: row.cta_url ?? "#demo",
+      buttonHref: row.cta_url ?? DEFAULT_BLOG_CTA.buttonHref,
     },
   };
 }

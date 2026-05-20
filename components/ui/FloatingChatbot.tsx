@@ -64,8 +64,6 @@ const hiddenPathPrefixes = [
     "/admin",
     "/api",
     "/checkout",
-    "/partner",
-    "/portal",
     "/pricing",
     "/receipt",
 ]
@@ -103,7 +101,13 @@ function getAnonymousId() {
     return next
 }
 
-function FeedbackButtons({ answerEventId }: { answerEventId?: string }) {
+function FeedbackButtons({
+    answerEventId,
+    sessionId,
+}: {
+    answerEventId?: string
+    sessionId?: string
+}) {
     const [state, setState] = useState<"idle" | "helpful" | "not_helpful" | "failed">("idle")
 
     async function sendFeedback(rating: "helpful" | "not_helpful") {
@@ -115,7 +119,7 @@ function FeedbackButtons({ answerEventId }: { answerEventId?: string }) {
             await fetch("/api/chatbot/feedback", {
                 method: "POST",
                 headers: { "Content-Type": "application/json" },
-                body: JSON.stringify({ answerEventId, rating }),
+                body: JSON.stringify({ answerEventId, sessionId, rating }),
             })
         } catch {
             setState("failed")
@@ -407,8 +411,11 @@ export function FloatingChatbot() {
                         <div className="flex-1 overflow-y-auto bg-[#F6F5F4]/55 px-4 py-4">
                             <div className="space-y-4">
                                 {messages.map((message) => (
-                                    <div
+                                    <motion.div
                                         key={message.id}
+                                        initial={shouldReduceMotion ? { opacity: 0 } : { opacity: 0, y: 10 }}
+                                        animate={shouldReduceMotion ? { opacity: 1 } : { opacity: 1, y: 0 }}
+                                        transition={{ duration: shouldReduceMotion ? 0.01 : 0.22, ease: "easeOut" }}
                                         className={cn(
                                             "flex",
                                             message.role === "user" ? "justify-end" : "justify-start"
@@ -442,7 +449,7 @@ export function FloatingChatbot() {
                                                     ) : null}
                                                     {message.answerEventId || message.showHandoffCTA ? (
                                                         <div className="mt-3 flex flex-wrap items-center justify-between gap-2">
-                                                            {message.answerEventId ? <FeedbackButtons answerEventId={message.answerEventId} /> : <span />}
+                                                            {message.answerEventId ? <FeedbackButtons answerEventId={message.answerEventId} sessionId={sessionId} /> : <span />}
                                                             {message.showHandoffCTA ? (
                                                                 message.handoffIntent === "support" ? (
                                                                     <button
@@ -471,16 +478,21 @@ export function FloatingChatbot() {
                                                 </>
                                             ) : null}
                                         </div>
-                                    </div>
+                                    </motion.div>
                                 ))}
 
                                 {isSending ? (
-                                    <div className="flex justify-start">
+                                    <motion.div
+                                        initial={shouldReduceMotion ? { opacity: 0 } : { opacity: 0, y: 8 }}
+                                        animate={shouldReduceMotion ? { opacity: 1 } : { opacity: 1, y: 0 }}
+                                        transition={{ duration: shouldReduceMotion ? 0.01 : 0.18, ease: "easeOut" }}
+                                        className="flex justify-start"
+                                    >
                                         <div className="inline-flex items-center gap-2 rounded-[12px] border border-black/[0.06] bg-white px-3.5 py-3 text-sm text-[#615D59] shadow-sm">
                                             <Loader2 className="h-4 w-4 animate-spin text-[#084734]" />
                                             상황에 맞는 답변을 찾고 있어요
                                         </div>
-                                    </div>
+                                    </motion.div>
                                 ) : null}
                                 <div ref={bottomRef} />
                             </div>

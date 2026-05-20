@@ -5,7 +5,7 @@ import { usePathname } from "next/navigation"
 import type { ReactNode } from "react"
 import { useEffect, useState } from "react"
 
-import { isPartnerPortalPath } from "@/lib/partner-portal/pathname"
+import { RouteTransition } from "@/components/transitions/RouteTransition"
 
 const ConditionalHeader = dynamic(() =>
   import("@/components/sections/ConditionalHeader").then((mod) => mod.ConditionalHeader)
@@ -25,6 +25,10 @@ const AnalyticsProviders = dynamic(
   () => import("@/components/AnalyticsProviders").then((mod) => mod.AnalyticsProviders),
   { ssr: false }
 )
+const PageViewTracker = dynamic(
+  () => import("@/components/PageViewTracker").then((mod) => mod.PageViewTracker),
+  { ssr: false }
+)
 const GTMScript = dynamic(
   () => import("@/components/GTMScript").then((mod) => mod.GTMScript),
   { ssr: false }
@@ -38,8 +42,7 @@ function isInternalPath(pathname: string) {
   return (
     pathname.startsWith("/admin") ||
     pathname.startsWith("/checkout") ||
-    pathname.startsWith("/receipt") ||
-    isPartnerPortalPath(pathname)
+    pathname.startsWith("/receipt")
   )
 }
 
@@ -47,6 +50,7 @@ export function AppChrome({ children }: { children: ReactNode }) {
   const pathname = usePathname()
   const [readyPath, setReadyPath] = useState<string | null>(null)
   const showPublicChrome = !isInternalPath(pathname)
+  const showAnalytics = showPublicChrome
 
   useEffect(() => {
     const w = window as Window & {
@@ -67,16 +71,25 @@ export function AppChrome({ children }: { children: ReactNode }) {
     <>
       {showPublicChrome ? <ConditionalHeader /> : null}
       <main className="min-h-screen bg-background font-sans antialiased selection:bg-primary/20 selection:text-primary">
-        {children}
+        {showPublicChrome ? (
+          <RouteTransition className="min-h-screen">{children}</RouteTransition>
+        ) : (
+          children
+        )}
       </main>
       {showPublicChrome ? <ConditionalFooter /> : null}
-      {showPublicChrome && readyPath === pathname ? (
+      {showAnalytics ? (
         <>
           <GTMScript />
           <MetaPixelScript />
+          <AnalyticsProviders />
+          <PageViewTracker />
+        </>
+      ) : null}
+      {showPublicChrome && readyPath === pathname ? (
+        <>
           <FloatingChatbot />
           <MobileFloatingCTA />
-          <AnalyticsProviders />
         </>
       ) : null}
     </>
