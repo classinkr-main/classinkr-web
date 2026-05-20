@@ -50,7 +50,7 @@ export function Header() {
             className={cn(
                 "fixed top-0 left-0 right-0 z-50 transition-all duration-300",
                 isScrolled
-                    ? "gnb-scroll-glass bg-white/[0.55] backdrop-blur-xl backdrop-saturate-150 border-b border-white/35 shadow-[inset_0_1px_0_rgba(255,255,255,0.62),0_1px_0_rgba(0,0,0,0.04)] py-4"
+                    ? "gnb-scroll-glass bg-white/[0.2] backdrop-blur-xl backdrop-saturate-150 border-b border-white/35 shadow-[inset_0_1px_0_rgba(255,255,255,0.62),0_1px_0_rgba(0,0,0,0.04)] py-4"
                     : "bg-white/60 backdrop-blur-sm py-6"
             )}
         >
