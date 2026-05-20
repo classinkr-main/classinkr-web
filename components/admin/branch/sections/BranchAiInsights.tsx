@@ -208,10 +208,11 @@ function ExternalReport({ summary, lang }: { summary: BranchSummaryResponse | nu
   )
 }
 
-export default function BranchAiInsights({ team, refreshKey, summary }: {
+export default function BranchAiInsights({ team, refreshKey, summary, canGenerate = true }: {
   team: Team
   refreshKey: number
   summary: BranchSummaryResponse | null
+  canGenerate?: boolean
 }) {
   const [view, setView] = useState<View>("internal")
   const [lang, setLang] = useState<Lang>("ko")
@@ -240,6 +241,7 @@ export default function BranchAiInsights({ team, refreshKey, summary }: {
   }, [requestKey, team])
 
   const handleRegenerate = async () => {
+    if (!canGenerate) return
     setRefreshing(true); setErrorMsg(null)
     try {
       const d = await adminFetchJson<InsightResp>(`/api/admin/branch/insights?team=${team}&force=1`)
@@ -294,11 +296,13 @@ export default function BranchAiInsights({ team, refreshKey, summary }: {
               })}
             </div>
           )}
-          <button type="button" onClick={handleRegenerate} disabled={refreshing}
-            className="inline-flex items-center gap-1.5 rounded-md bg-[#084734] px-3.5 py-2 text-[12px] font-bold text-white transition hover:bg-[#065c41] disabled:opacity-60">
-            {refreshing ? <RefreshCw className="h-3.5 w-3.5 animate-spin" /> : <Sparkles className="h-3.5 w-3.5" />}
-            인사이트 새로 생성
-          </button>
+          {canGenerate && (
+            <button type="button" onClick={handleRegenerate} disabled={refreshing}
+              className="inline-flex items-center gap-1.5 rounded-md bg-[#084734] px-3.5 py-2 text-[12px] font-bold text-white transition hover:bg-[#065c41] disabled:opacity-60">
+              {refreshing ? <RefreshCw className="h-3.5 w-3.5 animate-spin" /> : <Sparkles className="h-3.5 w-3.5" />}
+              인사이트 새로 생성
+            </button>
+          )}
           {view === "external" && (
             <button type="button" onClick={() => window.print()}
               className="inline-flex items-center gap-1.5 rounded-md border border-[rgba(0,0,0,0.08)] bg-white px-3.5 py-2 text-[12px] font-bold text-[#111110]">

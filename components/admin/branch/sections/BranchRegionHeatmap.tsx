@@ -7,6 +7,7 @@ import {
   KOREA_PROVINCE_SHAPES,
   KOREA_PROVINCE_WIDTH,
 } from "@/lib/branch/korea-province-map"
+import { useBranchJson } from "../client-api"
 import type { Period, Team } from "../types"
 
 interface TopCustomer {
@@ -102,11 +103,6 @@ function statusOf(p: number): Row["status"] {
   if (p >= 75) return "warning"
   return "critical"
 }
-function adminFetch(url: string) {
-  const token = (typeof window !== "undefined" ? sessionStorage.getItem("admin_password") : null) ?? ""
-  return fetch(url, { headers: { Authorization: `Bearer ${token}` } })
-}
-
 function canonicalRegion(region: string) {
   const text = region.trim()
   const match = REGION_ALIASES.find(([needle]) => text.includes(needle))
@@ -173,6 +169,8 @@ const ZOOM_MAX = 4
 const ZOOM_STEP = 1.4
 
 type Metric = "revenue" | "progress"
+
+const EMPTY_ROWS: Row[] = []
 
 function HeatMap({ rows, selectedLabel, onSelect, metric }: {
   rows: MapRow[]
@@ -558,28 +556,14 @@ function DetailPanel({ row, metric }: { row: MapRow | null; metric: Metric }) {
 }
 
 export default function BranchRegionHeatmap({ team, period, selectedMonth, refreshKey }: { team: Team; period: Period; selectedMonth: string; refreshKey: number }) {
-  const requestKey = `${refreshKey}:${team}:${period}:${selectedMonth}`
-  const [state, setState] = useState<{ key: string; rows: Row[] | null; error: string | null }>({ key: requestKey, rows: null, error: null })
-  const rows = state.key === requestKey ? state.rows : null
-  const error = state.key === requestKey ? state.error : null
+  const monthQuery = period === "M" ? `&month=${encodeURIComponent(selectedMonth)}` : ""
+  const heatmap = useBranchJson<{ rows?: Row[] }>(`/api/admin/branch/heatmap?team=${team}&period=${period}${monthQuery}`, refreshKey)
+  const rows = heatmap.loading ? null : (heatmap.data?.rows ?? EMPTY_ROWS)
+  const error = heatmap.error
   const [selectedLabel, setSelectedLabel] = useState<string | null>(null)
   // Default to revenue — magnitude tells the operator where the money is,
   // which is more actionable than achievement %.
   const [metric, setMetric] = useState<Metric>("revenue")
-
-  useEffect(() => {
-    let cancelled = false
-    const monthQuery = period === "M" ? `&month=${encodeURIComponent(selectedMonth)}` : ""
-    void adminFetch(`/api/admin/branch/heatmap?team=${team}&period=${period}${monthQuery}`)
-      .then((r) => r.json())
-      .then((d) => {
-        if (cancelled) return
-        if (d.error) setState({ key: requestKey, rows: null, error: String(d.error) })
-        else setState({ key: requestKey, rows: d.rows, error: null })
-      })
-      .catch((e) => { if (!cancelled) setState({ key: requestKey, rows: null, error: String(e) }) })
-    return () => { cancelled = true }
-  }, [requestKey, team, period, selectedMonth])
 
   // Ranking sort follows the active metric so the list and the map agree.
   const sortedRanking = useMemo(() => {

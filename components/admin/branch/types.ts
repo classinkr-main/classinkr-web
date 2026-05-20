@@ -24,6 +24,20 @@ export interface BranchCampaignRow {
   openPct: number
 }
 
+export interface BranchDealMixSlice {
+  name: string
+  goal: number
+  actual: number
+  pct: number
+}
+
+export interface BranchDealMix {
+  by_category: BranchDealMixSlice[]
+  by_status_type: BranchDealMixSlice[]
+  by_channel: BranchDealMixSlice[]
+  by_segment?: BranchDealMixSlice[]
+}
+
 export interface BranchSummaryResponse {
   team: Team
   period: Period
@@ -33,10 +47,24 @@ export interface BranchSummaryResponse {
   events_30d: { count: number; regions: number }
   campaigns_30d: { count: number; avg_open_pct: number }
   campaigns_recent: BranchCampaignRow[]
+  deal_mix: BranchDealMix | null
   monthly_series: BranchMonthlySeries
   lastSync: string | null
   lastError: string | null
   sheetModifiedAt: string | null
+}
+
+export interface BranchPipelineRow {
+  id: string
+  customer: string
+  manager: string | null
+  team: string | null
+  region: string | null
+  revenue: number
+}
+
+export interface BranchPipelineResponse {
+  rows?: BranchPipelineRow[]
 }
 
 export interface BranchKpiTeamRow {

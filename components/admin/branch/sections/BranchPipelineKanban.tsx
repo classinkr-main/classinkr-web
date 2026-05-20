@@ -1,11 +1,8 @@
 "use client"
-import { useEffect, useMemo, useState } from "react"
-import type { Period, Team } from "../types"
+import { useMemo } from "react"
+import { useBranchJson } from "../client-api"
+import type { BranchPipelineResponse, BranchPipelineRow, Period, Team } from "../types"
 
-async function adminFetch(url: string) {
-  const token = (typeof window !== "undefined" ? sessionStorage.getItem("admin_password") : null) ?? ""
-  return fetch(url, { headers: { Authorization: `Bearer ${token}` } })
-}
 function cny(n: number) {
   if (!Number.isFinite(n)) return "-"
   if (n >= 100_000_000) return `${(n / 100_000_000).toFixed(1)}억`
@@ -13,14 +10,7 @@ function cny(n: number) {
   return n.toLocaleString()
 }
 
-interface Row {
-  id: string
-  customer: string
-  manager: string | null
-  team: string | null
-  region: string | null
-  revenue: number
-}
+type Row = BranchPipelineRow
 
 interface MergedRow extends Row {
   count: number  // number of deals merged under this customer
@@ -141,19 +131,10 @@ export default function BranchPipelineKanban({ team, period, selectedMonth, refr
   refreshKey: number
   onDealClick?: (d: Row & { stageLabel: string; stageColor: string; probability: number }) => void
 }) {
-  const requestKey = `${refreshKey}:${team}:${period}:${selectedMonth}`
-  const [state, setState] = useState<{ key: string; rows: Row[] | null }>({ key: requestKey, rows: null })
-  const rows = state.key === requestKey ? state.rows : null
-
-  useEffect(() => {
-    let active = true
-    const monthQuery = period === "M" ? `&month=${encodeURIComponent(selectedMonth)}` : ""
-    void adminFetch(`/api/admin/branch/pipeline?team=${team}&period=${period}${monthQuery}`)
-      .then((r) => r.json())
-      .then((d) => { if (active) setState({ key: requestKey, rows: d.rows ?? [] }) })
-      .catch(() => { if (active) setState({ key: requestKey, rows: [] }) })
-    return () => { active = false }
-  }, [requestKey, team, period, selectedMonth])
+  const monthQuery = period === "M" ? `&month=${encodeURIComponent(selectedMonth)}` : ""
+  const pipeline = useBranchJson<BranchPipelineResponse>(`/api/admin/branch/pipeline?team=${team}&period=${period}${monthQuery}`, refreshKey)
+  const pipelineRows = pipeline.data?.rows
+  const rows = useMemo(() => pipeline.loading ? null : (pipelineRows ?? []), [pipeline.loading, pipelineRows])
 
   const grouped = useMemo(() => {
     const byStage: Record<string, Row[]> = {}
@@ -212,8 +193,8 @@ export default function BranchPipelineKanban({ team, period, selectedMonth, refr
           ) : null
         })()}
       </div>
-      {/* Kanban grid — 2-col on md, 4-col on xl */}
-      <div className="grid grid-cols-2 gap-4 p-5 xl:grid-cols-4">
+      {/* Kanban grid — 1-col on mobile, 2-col on md, 4-col on xl */}
+      <div className="grid grid-cols-1 gap-4 p-5 md:grid-cols-2 xl:grid-cols-4">
         {STAGES.map((s) => (
           <PipelineColumn key={s.key} stage={s} deals={grouped[s.key]}
             onCardClick={(d) => onDealClick?.({ ...d, stageLabel: s.label, stageColor: s.color, probability: s.probability })} />

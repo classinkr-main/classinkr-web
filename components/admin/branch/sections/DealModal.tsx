@@ -1,5 +1,5 @@
 "use client"
-import { useEffect } from "react"
+import { useEffect, useRef } from "react"
 import { X } from "lucide-react"
 
 export interface DealModalDeal {
@@ -53,12 +53,25 @@ const TEAM_COLOR: Record<string, string> = {
 }
 
 export default function DealModal({ deal, onClose }: { deal: DealModalDeal | null; onClose: () => void }) {
+  const closeButtonRef = useRef<HTMLButtonElement | null>(null)
+  const dealId = deal?.id ?? null
+
   useEffect(() => {
     if (!deal) return
     const onKey = (e: KeyboardEvent) => { if (e.key === "Escape") onClose() }
     document.addEventListener("keydown", onKey)
     return () => document.removeEventListener("keydown", onKey)
   }, [deal, onClose])
+
+  useEffect(() => {
+    if (!dealId) return
+    const previouslyFocused = document.activeElement instanceof HTMLElement ? document.activeElement : null
+    closeButtonRef.current?.focus()
+
+    return () => {
+      previouslyFocused?.focus()
+    }
+  }, [dealId])
 
   if (!deal) return null
 
@@ -77,12 +90,13 @@ export default function DealModal({ deal, onClose }: { deal: DealModalDeal | nul
   const targetVal = deal.contractTarget ?? null
 
   return (
-    <div role="dialog" aria-modal="true"
+    <div role="dialog" aria-modal="true" aria-labelledby="deal-modal-title"
       onClick={onClose}
       className="fixed inset-0 z-50 flex items-center justify-center bg-[rgba(0,0,0,0.4)] p-4 backdrop-blur-sm">
       <div onClick={(e) => e.stopPropagation()}
         className="relative max-h-[88vh] w-full max-w-[520px] overflow-y-auto rounded-2xl border border-[rgba(0,0,0,0.08)] bg-white p-7 shadow-[0_20px_60px_rgba(0,0,0,0.25)]">
         <button type="button" onClick={onClose}
+          ref={closeButtonRef}
           aria-label="닫기"
           className="absolute right-4 top-4 flex h-7 w-7 items-center justify-center rounded-md bg-[rgba(0,0,0,0.05)] text-[#111110] transition hover:bg-[rgba(0,0,0,0.1)]">
           <X className="h-4 w-4" />
@@ -95,7 +109,7 @@ export default function DealModal({ deal, onClose }: { deal: DealModalDeal | nul
                 {deal.stageLabel}
               </span>
             )}
-            <p className="mt-2 text-[22px] font-bold leading-tight tracking-[-0.02em] text-[#111110]">{deal.customer}</p>
+            <h2 id="deal-modal-title" className="mt-2 text-[22px] font-bold leading-tight tracking-[-0.02em] text-[#111110]">{deal.customer}</h2>
             {(() => {
               const mix = summarizeProductMix(deal.productVersion)
               if (!mix || (mix.hw.length === 0 && mix.sw.length === 0)) return null

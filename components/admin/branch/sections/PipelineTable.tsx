@@ -1,22 +1,16 @@
 "use client"
 import { ArrowDownNarrowWide, ArrowUpNarrowWide, ChevronDown, ChevronLeft, ChevronRight, RotateCcw, Search } from "lucide-react"
 import { useEffect, useMemo, useRef, useState } from "react"
-import { TEAMS, type Team, type Period } from "../types"
+import { useBranchJson } from "../client-api"
+import { TEAMS, type BranchPipelineResponse, type BranchPipelineRow, type Team, type Period } from "../types"
 
 const SELECTABLE_TEAMS = TEAMS.filter((t) => t !== "ALL") as Exclude<Team, "ALL">[]
 
-async function adminFetch(url: string) {
-  const token = (typeof window !== "undefined" ? sessionStorage.getItem("admin_password") : null) ?? ""
-  return fetch(url, { headers: { Authorization: `Bearer ${token}` } })
-}
 function fmt(n: number) { return new Intl.NumberFormat("ko-KR", { maximumFractionDigits: 0 }).format(n) }
 
 type RevenueSort = "desc" | "asc"
 
-interface Row {
-  id: string; customer: string; manager: string|null; team: string|null
-  region: string|null; revenue: number
-}
+type Row = BranchPipelineRow
 
 function MultiSelect({
   label,
@@ -130,24 +124,16 @@ export default function PipelineTable({
   onRowClick?: (row: Row) => void
 }) {
   const initialTeams: Set<string> = team === "ALL" ? new Set() : new Set([team])
-  const [rowsState, setRowsState] = useState<{ key: string; rows: Row[] | null }>({ key: `${refreshKey}:${period}:${selectedMonth}`, rows: null })
   const [query, setQuery] = useState("")
   const [selectedTeams, setSelectedTeams] = useState<Set<string>>(initialTeams)
   const [selectedRegions, setSelectedRegions] = useState<Set<string>>(new Set())
   const [revenueSort, setRevenueSort] = useState<RevenueSort>("desc")
   const [page, setPage] = useState(1)
-  const requestKey = `${refreshKey}:${period}:${selectedMonth}`
-  const rows = rowsState.key === requestKey ? rowsState.rows : null
-
-  useEffect(() => {
-    let active = true
-    const monthQuery = period === "M" ? `&month=${encodeURIComponent(selectedMonth)}` : ""
-    adminFetch(`/api/admin/branch/pipeline?team=ALL&period=${period}${monthQuery}`)
-      .then((r) => r.json())
-      .then((d) => { if (active) setRowsState({ key: requestKey, rows: d.rows ?? [] }) })
-      .catch(() => { if (active) setRowsState({ key: requestKey, rows: [] }) })
-    return () => { active = false }
-  }, [requestKey, period, selectedMonth])
+  const monthQuery = period === "M" ? `&month=${encodeURIComponent(selectedMonth)}` : ""
+  const pipeline = useBranchJson<BranchPipelineResponse>(`/api/admin/branch/pipeline?team=${team}&period=${period}${monthQuery}`, refreshKey)
+  const pipelineRows = pipeline.data?.rows
+  const rows = useMemo(() => pipeline.loading ? null : (pipelineRows ?? []), [pipeline.loading, pipelineRows])
+  const teamOptions = team === "ALL" ? SELECTABLE_TEAMS : [team]
 
   const regionOptions = useMemo(() => {
     if (!rows) return []
@@ -247,7 +233,7 @@ export default function PipelineTable({
         </label>
         <MultiSelect
           label="팀"
-          options={SELECTABLE_TEAMS}
+          options={teamOptions}
           selected={selectedTeams}
           onChange={(next) => { setSelectedTeams(next); setPage(1) }}
           placeholder="전체"

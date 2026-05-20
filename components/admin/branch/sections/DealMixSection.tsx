@@ -1,24 +1,11 @@
 "use client"
-import { useEffect, useState } from "react"
-import type { Period } from "../types"
+import type { BranchDealMixSlice, BranchSummaryResponse } from "../types"
 
-async function adminFetch(url: string) {
-  const token = (typeof window !== "undefined" ? sessionStorage.getItem("admin_password") : null) ?? ""
-  return fetch(url, { headers: { Authorization: `Bearer ${token}` } })
-}
 function cny(n: number) {
   if (!Number.isFinite(n)) return "-"
   if (n >= 100_000_000) return `${(n / 100_000_000).toFixed(1)}억`
   if (n >= 10_000) return `${(n / 10_000).toFixed(1)}만`
   return n.toLocaleString()
-}
-
-interface MixSlice { name: string; goal: number; actual: number; pct: number }
-interface DealMix {
-  by_category: MixSlice[]
-  by_status_type: MixSlice[]
-  by_channel: MixSlice[]
-  by_segment?: MixSlice[]
 }
 
 const LABELS: Record<string, string> = {
@@ -40,7 +27,7 @@ const COLORS = {
   blue: "#1E5DA8",
 }
 
-function pickPair(rows: MixSlice[], aKey: string, bKey: string): { a: MixSlice; b: MixSlice } | null {
+function pickPair(rows: BranchDealMixSlice[], aKey: string, bKey: string): { a: BranchDealMixSlice; b: BranchDealMixSlice } | null {
   const a = rows.find((r) => r.name === aKey)
   const b = rows.find((r) => r.name === bKey)
   if (!a || !b) return null
@@ -48,7 +35,7 @@ function pickPair(rows: MixSlice[], aKey: string, bKey: string): { a: MixSlice; 
 }
 
 function CompareCard({ title, desc, a, b, aTone, bTone }: {
-  title: string; desc: string; a: MixSlice; b: MixSlice; aTone: string; bTone: string
+  title: string; desc: string; a: BranchDealMixSlice; b: BranchDealMixSlice; aTone: string; bTone: string
 }) {
   const sum = a.actual + b.actual
   const aPct = sum ? (a.actual / sum) * 100 : 0
@@ -111,24 +98,8 @@ function CompareCard({ title, desc, a, b, aTone, bTone }: {
   )
 }
 
-export default function DealMixSection({ period, selectedMonth, refreshKey }: { period: Period; selectedMonth: string; refreshKey: number }) {
-  const requestKey = `${refreshKey}:${period}:${selectedMonth}`
-  const [state, setState] = useState<{ key: string; data: DealMix | null; loaded: boolean }>({ key: requestKey, data: null, loaded: false })
-  const data = state.key === requestKey ? state.data : null
-  const loading = state.key !== requestKey || !state.loaded
-  useEffect(() => {
-    let cancelled = false
-    const monthQuery = period === "M" ? `&month=${encodeURIComponent(selectedMonth)}` : ""
-    void adminFetch(`/api/admin/branch/summary?team=ALL&period=${period}${monthQuery}`)
-      .then((r) => r.json())
-      .then((d) => {
-        if (cancelled) return
-        setState({ key: requestKey, data: (d.deal_mix as DealMix) ?? null, loaded: true })
-      })
-      .catch(() => { if (!cancelled) setState({ key: requestKey, data: null, loaded: true }) })
-    return () => { cancelled = true }
-  }, [requestKey, period, selectedMonth])
-
+export default function DealMixSection({ summary, loading }: { summary: BranchSummaryResponse | null; loading: boolean }) {
+  const data = summary?.deal_mix ?? null
   if (loading) return <div className="h-40 animate-pulse rounded-xl bg-[#f0f0ec]" />
   if (!data) return null
 
@@ -137,7 +108,7 @@ export default function DealMixSection({ period, selectedMonth, refreshKey }: { 
   const channel = pickPair(data.by_channel, "Direct", "Channel")
   const kaSme = data.by_segment ? pickPair(data.by_segment, "KA", "SME") : null
 
-  const slices = [hwSw, newRenew, channel].filter(Boolean) as Array<{ a: MixSlice; b: MixSlice }>
+  const slices = [hwSw, newRenew, channel].filter(Boolean) as Array<{ a: BranchDealMixSlice; b: BranchDealMixSlice }>
   if (slices.length === 0) return null
 
   const totalActual = slices.reduce((s, p) => s + p.a.actual + p.b.actual, 0) / slices.length

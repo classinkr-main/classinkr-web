@@ -1,5 +1,5 @@
 import { NextRequest, NextResponse } from "next/server"
-import { verifyAdmin } from "@/lib/admin-auth"
+import { BRANCH_READ_ADMIN_API_ROLES, verifyAdmin } from "@/lib/admin-auth"
 import { unstable_cache } from "next/cache"
 import { readRangeWithFormat, envSheetId, getSheetModifiedTime } from "@/lib/branch/google-sheets"
 import { parseDsh, DSH_RANGE } from "@/lib/branch/parsers/dsh"
@@ -204,7 +204,7 @@ const readSheetFreshness = unstable_cache(async () => {
 }, ["branch-sheet-freshness"], { revalidate: 60, tags: ["branch-sheet-freshness"] })
 
 export async function GET(req: NextRequest) {
-  const err = await verifyAdmin(req); if (err) return err
+  const err = await verifyAdmin(req, BRANCH_READ_ADMIN_API_ROLES); if (err) return err
   const url = new URL(req.url)
   const team = readTeamParam(url); if (team instanceof NextResponse) return team
   const period = readPeriodParam(url); if (period instanceof NextResponse) return period

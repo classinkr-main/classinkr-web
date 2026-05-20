@@ -87,8 +87,8 @@ const NAV_WARMUP_REQUESTS: Record<string, string[]> = {
   "/admin/events": ["/api/admin/events"],
   "/admin/docs": ["/api/admin/docs", "/api/admin/docs/analytics?days=30"],
   "/admin/branch": [
-    "/api/admin/branch/summary?team=ALL&period=this-month",
-    "/api/admin/branch/kpi?team=ALL&period=this-month",
+    "/api/admin/branch/summary?team=ALL&period=Q",
+    "/api/admin/branch/kpi?team=ALL&period=Q",
   ],
   "/admin/analytics": [
     "/api/admin/leads",

@@ -57,6 +57,11 @@ export type AdminApiRole =
   | "BRANCH"
 
 const DEFAULT_ADMIN_API_ROLES: readonly AdminApiRole[] = ["SUPER_ADMIN", "ADMIN"]
+export const BRANCH_READ_ADMIN_API_ROLES: readonly AdminApiRole[] = [
+  "SUPER_ADMIN",
+  "ADMIN",
+  "BRANCH",
+]
 
 interface UserRecord {
   name: string
@@ -248,7 +253,7 @@ function getLegacyAdminContext(req: NextRequest): VerifiedAdminContext | null {
   if (!cookie) return null
 
   const session = decodeSession(cookie)
-  if (session?.role !== "admin") return null
+  if (!session) return null
 
   return {
     source: "legacy",

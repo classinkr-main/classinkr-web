@@ -1,9 +1,9 @@
 import { NextRequest, NextResponse } from "next/server"
-import { verifyAdmin } from "@/lib/admin-auth"
+import { BRANCH_READ_ADMIN_API_ROLES, verifyAdmin } from "@/lib/admin-auth"
 import { getBranchRevDeal } from "@/lib/repositories/branch-deals"
 
 export async function GET(req: NextRequest, ctx: { params: Promise<{ id: string }> }) {
-  const err = await verifyAdmin(req); if (err) return err
+  const err = await verifyAdmin(req, BRANCH_READ_ADMIN_API_ROLES); if (err) return err
   try {
     const { id } = await ctx.params
     const deal = await getBranchRevDeal(id)

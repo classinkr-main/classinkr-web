@@ -1,6 +1,7 @@
 "use client"
 import dynamic from "next/dynamic"
-import { useState, useCallback, useMemo } from "react"
+import type { KeyboardEvent } from "react"
+import { useState, useCallback, useEffect, useMemo, useRef } from "react"
 import { CalendarDays, ChevronLeft, RefreshCw } from "lucide-react"
 import SyncStatusBar from "./SyncStatusBar"
 import CoreKpiGrid from "./sections/CoreKpiGrid"
@@ -30,6 +31,12 @@ const BRANCH_TABS: Array<{ id: BranchTab; label: string; sub: string }> = [
 ]
 
 const PERIOD_LABEL: Record<Period, string> = { M: "이번 달", Q: "이번 분기", Y: "연간 누적" }
+
+function canRunAdminOperationsFromSession(): boolean {
+  if (typeof window === "undefined") return false
+  const role = sessionStorage.getItem("admin_role")?.trim().toUpperCase()
+  return role === "ADMIN" || role === "SUPER_ADMIN"
+}
 
 function ymKeyUtc(date: Date): string {
   return `${date.getUTCFullYear()}-${String(date.getUTCMonth() + 1).padStart(2, "0")}`
@@ -76,6 +83,12 @@ export default function BranchDashboardClient() {
   const [refreshKey, setRefreshKey] = useState(0)
   const [refreshing, setRefreshing] = useState(false)
   const [selectedDeal, setSelectedDeal] = useState<DealModalDeal | null>(null)
+  const [canRunAdminOperations, setCanRunAdminOperations] = useState(canRunAdminOperationsFromSession)
+  const tabRefs = useRef<Array<HTMLButtonElement | null>>([])
+
+  useEffect(() => {
+    setCanRunAdminOperations(canRunAdminOperationsFromSession())
+  }, [])
 
   const openDealLog = useCallback(async (row: { id: string; customer: string; manager: string | null; team: string | null; region: string | null; revenue: number; stageLabel?: string; stageColor?: string; probability?: number }) => {
     setSelectedDeal({
@@ -123,7 +136,9 @@ export default function BranchDashboardClient() {
     setSyncError(null)
     setRefreshing(true)
     try {
-      await adminFetchJson("/api/admin/branch/sync", { method: "POST" })
+      if (canRunAdminOperations) {
+        await adminFetchJson("/api/admin/branch/sync", { method: "POST" })
+      }
     } catch (e) {
       setSyncError(e instanceof Error ? e.message : String(e))
     } finally {
@@ -131,7 +146,7 @@ export default function BranchDashboardClient() {
       setRefreshKey((k) => k + 1)
       setRefreshing(false)
     }
-  }, [])
+  }, [canRunAdminOperations])
 
   const lastSync = summary.data?.lastSync ?? null
   const lastError = syncError ?? summary.error ?? summary.data?.lastError ?? null
@@ -140,6 +155,24 @@ export default function BranchDashboardClient() {
   // Filter visibility per design
   const showPeriodFilter = activeTab === "overview" || activeTab === "pipeline" || activeTab === "heatmap"
   const showTeamFilter = activeTab !== "ai"
+  const activeTabId = `branch-tab-${activeTab}`
+  const activePanelId = `branch-tabpanel-${activeTab}`
+
+  const onTabKeyDown = useCallback((event: KeyboardEvent<HTMLButtonElement>, index: number) => {
+    const lastIndex = BRANCH_TABS.length - 1
+    let nextIndex: number | null = null
+
+    if (event.key === "ArrowRight") nextIndex = index === lastIndex ? 0 : index + 1
+    if (event.key === "ArrowLeft") nextIndex = index === 0 ? lastIndex : index - 1
+    if (event.key === "Home") nextIndex = 0
+    if (event.key === "End") nextIndex = lastIndex
+
+    if (nextIndex == null) return
+    event.preventDefault()
+    const nextTab = BRANCH_TABS[nextIndex]
+    setActiveTab(nextTab.id)
+    tabRefs.current[nextIndex]?.focus()
+  }, [])
 
   return (
     <div className="pb-24">
@@ -229,15 +262,20 @@ export default function BranchDashboardClient() {
       {/* Sub-tabs */}
       <div className="border-b border-[rgba(0,0,0,0.08)] bg-[#EBE8E2] px-2 sm:px-4 lg:px-9">
         <div className="admin-scroll-snap-x no-scrollbar -mb-px flex flex-nowrap gap-0 overflow-x-auto" role="tablist" aria-label="지사 대시보드 보기">
-          {BRANCH_TABS.map((tab) => {
+          {BRANCH_TABS.map((tab, index) => {
             const active = activeTab === tab.id
             return (
               <button
                 key={tab.id}
+                id={`branch-tab-${tab.id}`}
                 type="button"
                 role="tab"
                 aria-selected={active}
+                aria-controls={`branch-tabpanel-${tab.id}`}
+                tabIndex={active ? 0 : -1}
+                ref={(node) => { tabRefs.current[index] = node }}
                 onClick={() => setActiveTab(tab.id)}
+                onKeyDown={(event) => onTabKeyDown(event, index)}
                 className={`relative mt-1 flex shrink-0 flex-col items-start gap-0.5 rounded-t-lg px-4 py-2.5 text-left transition sm:px-5 sm:py-3 ${
                   active
                     ? "bg-[#FAFAF8] text-[#111110]"
@@ -262,11 +300,12 @@ export default function BranchDashboardClient() {
           lastError={lastError}
           sheetModifiedAt={sheetModifiedAt}
           onRefresh={onRefresh}
+          syncEnabled={canRunAdminOperations}
         />
 
         <div className="mt-6">
           {activeTab === "overview" && (
-            <div role="tabpanel" className="space-y-6">
+            <div id={activePanelId} role="tabpanel" aria-labelledby={activeTabId} className="space-y-6">
               <CoreKpiGrid data={summary.data} loading={summary.loading} error={summary.error} />
               {/* D-1: 매출 목표(HeroGauges) 위, FiscalRoadmap 아래 */}
               <BranchHeroGauges
@@ -274,7 +313,7 @@ export default function BranchDashboardClient() {
                 kpi={kpi.data}
                 periodLabel={activePeriodLabel}
               />
-              <DealMixSection period={period} selectedMonth={selectedMonth} refreshKey={refreshKey} />
+              <DealMixSection summary={summary.data} loading={summary.loading} />
               <div className="grid gap-6 xl:grid-cols-[minmax(0,1.35fr)_minmax(360px,0.65fr)]">
                 <FiscalRoadmap data={summary.data?.monthly_series ?? null} loading={summary.loading} error={summary.error} />
                 <BranchUpcomingDeals
@@ -293,7 +332,7 @@ export default function BranchDashboardClient() {
           )}
 
           {activeTab === "pipeline" && (
-            <div role="tabpanel" className="space-y-4">
+            <div id={activePanelId} role="tabpanel" aria-labelledby={activeTabId} className="space-y-4">
               <BranchKpiAccordion data={kpi.data} loading={kpi.loading} error={kpi.error} />
               <section className="rounded-xl border border-[rgba(0,0,0,0.08)] bg-white shadow-[0_1px_2px_rgba(0,0,0,0.02)]">
                 <div className="flex items-center justify-between gap-3 border-b border-[rgba(0,0,0,0.08)] px-5 py-3.5">
@@ -333,16 +372,16 @@ export default function BranchDashboardClient() {
           )}
 
           {activeTab === "heatmap" && (
-            <div role="tabpanel" className="space-y-6">
+            <div id={activePanelId} role="tabpanel" aria-labelledby={activeTabId} className="space-y-6">
               <BranchRegionHeatmap team={team} period={period} selectedMonth={selectedMonth} refreshKey={refreshKey} />
               <PipelineTable key={`heatmap-rev-${team}`} team={team} period={period} selectedMonth={selectedMonth} refreshKey={refreshKey} pageSize={10} onRowClick={openDealLog} />
             </div>
           )}
 
           {activeTab === "ai" && (
-            <div role="tabpanel" className="space-y-6">
-              <BranchAiInsights team={team} refreshKey={refreshKey} summary={summary.data} />
-              <DataQualityPanel refreshKey={refreshKey} />
+            <div id={activePanelId} role="tabpanel" aria-labelledby={activeTabId} className="space-y-6">
+              <BranchAiInsights team={team} refreshKey={refreshKey} summary={summary.data} canGenerate={canRunAdminOperations} />
+              {canRunAdminOperations && <DataQualityPanel refreshKey={refreshKey} />}
               <CrmVariancePanel />
             </div>
           )}

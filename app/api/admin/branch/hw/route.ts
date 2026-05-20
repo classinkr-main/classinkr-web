@@ -1,5 +1,5 @@
 import { NextRequest, NextResponse } from "next/server"
-import { verifyAdmin } from "@/lib/admin-auth"
+import { BRANCH_READ_ADMIN_API_ROLES, verifyAdmin } from "@/lib/admin-auth"
 import { listHwInbound, listHwOutbound, listHwStock, listHwSalesMonthly } from "@/lib/repositories/branch-hw"
 
 const HW_PATTERNS: Array<{ key: string; match: RegExp; threshold: number; thresholdSheet: number }> = [
@@ -13,7 +13,7 @@ const HW_PATTERNS: Array<{ key: string; match: RegExp; threshold: number; thresh
 ]
 
 export async function GET(req: NextRequest) {
-  const err = await verifyAdmin(req); if (err) return err
+  const err = await verifyAdmin(req, BRANCH_READ_ADMIN_API_ROLES); if (err) return err
   try {
     const [inbound, outbound, stock, sales] = await Promise.all([
       listHwInbound(), listHwOutbound(), listHwStock(), listHwSalesMonthly(),
