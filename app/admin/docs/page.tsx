@@ -8,6 +8,7 @@ import {
   BarChart3,
   Bot,
   Bookmark,
+  Check,
   CheckSquare,
   Database,
   Eye,
@@ -19,8 +20,8 @@ import {
   Plus,
   RefreshCw,
   Search,
-  Star,
   ThumbsUp,
+  X,
 } from "lucide-react"
 
 import DocsCategoryManager from "@/components/admin/docs/DocsCategoryManager"
@@ -50,6 +51,17 @@ interface SavedDocsView {
   docTypeFilter: string
   readinessFilter: string
   searchQuery: string
+  sortMode?: DocsSortMode
+}
+
+interface InlineArticleDraft {
+  title: string
+  description: string
+  categoryId: string
+  status: string
+  visibility: string
+  orderIndex: number
+  featured: boolean
 }
 
 const SAVED_VIEWS_STORAGE_KEY = "admin_docs_saved_views"
@@ -139,6 +151,14 @@ const READINESS_FILTERS = [
   { value: "featured", label: "대표 문서" },
 ]
 
+const DOC_SORT_OPTIONS = [
+  { value: "public-order", label: "공개 순서" },
+  { value: "updated", label: "최근 수정" },
+  { value: "title", label: "제목순" },
+] as const
+
+type DocsSortMode = (typeof DOC_SORT_OPTIONS)[number]["value"]
+
 const DOCS_TABS = [
   { value: "documents", label: "문서", icon: FileText },
   { value: "recommended", label: "추천 질문", icon: MessageSquareText },
@@ -214,6 +234,28 @@ function ArticleStatus({ article }: { article: AdminDocsArticleSummary }) {
   )
 }
 
+function createInlineArticleDraft(article: AdminDocsArticleSummary): InlineArticleDraft {
+  return {
+    title: article.title,
+    description: article.description,
+    categoryId: article.categoryId,
+    status: article.status,
+    visibility: article.visibility,
+    orderIndex: article.orderIndex,
+    featured: article.featured,
+  }
+}
+
+function isDocsSortMode(value: unknown): value is DocsSortMode {
+  return DOC_SORT_OPTIONS.some((option) => option.value === value)
+}
+
+function getSortableDate(value: string | null | undefined) {
+  if (!value) return 0
+  const time = new Date(value).getTime()
+  return Number.isNaN(time) ? 0 : time
+}
+
 export default function AdminDocsPage() {
   const router = useRouter()
   const [content, setContent] = useState<AdminDocsContentResponse | null>(null)
@@ -225,6 +267,7 @@ export default function AdminDocsPage() {
   const [statusFilter, setStatusFilter] = useState("all")
   const [docTypeFilter, setDocTypeFilter] = useState("all")
   const [readinessFilter, setReadinessFilter] = useState("all")
+  const [sortMode, setSortMode] = useState<DocsSortMode>("public-order")
   const [reindexing, setReindexing] = useState(false)
   const [reindexNotice, setReindexNotice] = useState<{
     tone: "success" | "warning"
@@ -240,6 +283,8 @@ export default function AdminDocsPage() {
   const [bulkSaving, setBulkSaving] = useState(false)
   const [savedViews, setSavedViews] = useState<SavedDocsView[]>([])
   const [activeTab, setActiveTab] = useState<DocsTab>("documents")
+  const [editingArticleId, setEditingArticleId] = useState<string | null>(null)
+  const [inlineDraft, setInlineDraft] = useState<InlineArticleDraft | null>(null)
 
   const load = useCallback(async () => {
     setLoading(true)
@@ -291,6 +336,7 @@ export default function AdminDocsPage() {
       docTypeFilter,
       readinessFilter,
       searchQuery,
+      sortMode,
     }
     persistSavedViews([view, ...savedViews].slice(0, 8))
   }
@@ -301,6 +347,7 @@ export default function AdminDocsPage() {
     setDocTypeFilter(view.docTypeFilter)
     setReadinessFilter(view.readinessFilter)
     setSearchQuery(view.searchQuery)
+    if (isDocsSortMode(view.sortMode)) setSortMode(view.sortMode)
   }
 
   const handleReindex = useCallback(async () => {
@@ -367,8 +414,10 @@ export default function AdminDocsPage() {
         setArticleNotice("문서 설정을 저장했습니다.")
         window.setTimeout(() => setArticleNotice(null), 2500)
         await load()
+        return true
       } catch (err) {
         setError(err instanceof Error ? err.message : "문서 설정을 저장하지 못했습니다.")
+        return false
       } finally {
         setArticleSavingId(null)
       }
@@ -419,34 +468,135 @@ export default function AdminDocsPage() {
     )
   }
 
+  function startInlineEdit(article: AdminDocsArticleSummary) {
+    setEditingArticleId(article.id)
+    setInlineDraft(createInlineArticleDraft(article))
+    setSelectedArticleIds((previous) => previous.filter((id) => id !== article.id))
+  }
+
+  function cancelInlineEdit() {
+    setEditingArticleId(null)
+    setInlineDraft(null)
+    setError(null)
+  }
+
+  function updateInlineDraft<K extends keyof InlineArticleDraft>(
+    key: K,
+    value: InlineArticleDraft[K]
+  ) {
+    setInlineDraft((previous) => (previous ? { ...previous, [key]: value } : previous))
+  }
+
+  async function saveInlineArticle(article: AdminDocsArticleSummary) {
+    if (!inlineDraft || editingArticleId !== article.id) return
+
+    const nextTitle = inlineDraft.title.trim()
+    const nextDescription = inlineDraft.description.trim()
+    const nextOrderIndex = Math.floor(inlineDraft.orderIndex)
+
+    if (!nextTitle) {
+      setError("문서 제목을 입력해 주세요.")
+      return
+    }
+    if (!nextDescription) {
+      setError("문서 설명을 입력해 주세요.")
+      return
+    }
+    if (!inlineDraft.categoryId) {
+      setError("카테고리를 선택해 주세요.")
+      return
+    }
+    if (!Number.isFinite(nextOrderIndex)) {
+      setError("문서 순서는 숫자로 입력해 주세요.")
+      return
+    }
+
+    const patch: Record<string, unknown> = {}
+    if (nextTitle !== article.title) patch.title = nextTitle
+    if (nextDescription !== article.description) patch.description = nextDescription
+    if (inlineDraft.categoryId !== article.categoryId) patch.categoryId = inlineDraft.categoryId
+    if (inlineDraft.status !== article.status) patch.status = inlineDraft.status
+    if (inlineDraft.visibility !== article.visibility) patch.visibility = inlineDraft.visibility
+    if (nextOrderIndex !== article.orderIndex) patch.orderIndex = nextOrderIndex
+    if (inlineDraft.featured !== article.featured) patch.featured = inlineDraft.featured
+
+    if (Object.keys(patch).length === 0) {
+      setArticleNotice("변경된 문서 설정이 없습니다.")
+      window.setTimeout(() => setArticleNotice(null), 2500)
+      cancelInlineEdit()
+      return
+    }
+
+    const saved = await handleArticlePatch(article, patch)
+    if (saved) {
+      setEditingArticleId(null)
+      setInlineDraft(null)
+    }
+  }
+
   const categoryTitleById = useMemo(() => {
     return new Map((content?.categories ?? []).map((category) => [category.id, category.title]))
+  }, [content])
+
+  const categoryOrderById = useMemo(() => {
+    return new Map((content?.categories ?? []).map((category) => [category.id, category.orderIndex]))
   }, [content])
 
   const filteredArticles = useMemo(() => {
     const query = searchQuery.trim().toLowerCase()
 
-    return (content?.articles ?? []).filter((article) => {
-      const matchesCategory =
-        categoryFilter === "all" || article.categoryId === categoryFilter
-      const matchesStatus = statusFilter === "all" || article.status === statusFilter
-      const matchesType = docTypeFilter === "all" || article.docType === docTypeFilter
-      const matchesReadiness =
-        readinessFilter === "all" ||
-        (readinessFilter === "ai-issues" && article.aiIssues.length > 0) ||
-        (readinessFilter === "stale" && article.stale) ||
-        (readinessFilter === "featured" && article.featured)
-      const matchesQuery =
-        !query ||
-        article.title.toLowerCase().includes(query) ||
-        article.description.toLowerCase().includes(query) ||
-        article.slug.toLowerCase().includes(query) ||
-        article.tags.some((tag) => tag.toLowerCase().includes(query)) ||
-        article.keywords.some((keyword) => keyword.toLowerCase().includes(query))
+    return (content?.articles ?? [])
+      .filter((article) => {
+        const matchesCategory =
+          categoryFilter === "all" || article.categoryId === categoryFilter
+        const matchesStatus = statusFilter === "all" || article.status === statusFilter
+        const matchesType = docTypeFilter === "all" || article.docType === docTypeFilter
+        const matchesReadiness =
+          readinessFilter === "all" ||
+          (readinessFilter === "ai-issues" && article.aiIssues.length > 0) ||
+          (readinessFilter === "stale" && article.stale) ||
+          (readinessFilter === "featured" && article.featured)
+        const matchesQuery =
+          !query ||
+          article.title.toLowerCase().includes(query) ||
+          article.description.toLowerCase().includes(query) ||
+          article.slug.toLowerCase().includes(query) ||
+          article.tags.some((tag) => tag.toLowerCase().includes(query)) ||
+          article.keywords.some((keyword) => keyword.toLowerCase().includes(query))
 
-      return matchesCategory && matchesStatus && matchesType && matchesReadiness && matchesQuery
-    })
-  }, [categoryFilter, content, docTypeFilter, readinessFilter, searchQuery, statusFilter])
+        return matchesCategory && matchesStatus && matchesType && matchesReadiness && matchesQuery
+      })
+      .sort((left, right) => {
+        if (sortMode === "updated") {
+          return (
+            getSortableDate(right.updatedAt ?? right.lastReviewedAt) -
+            getSortableDate(left.updatedAt ?? left.lastReviewedAt)
+          )
+        }
+
+        if (sortMode === "title") {
+          return left.title.localeCompare(right.title, "ko-KR")
+        }
+
+        const leftCategoryOrder = categoryOrderById.get(left.categoryId) ?? 9999
+        const rightCategoryOrder = categoryOrderById.get(right.categoryId) ?? 9999
+        if (leftCategoryOrder !== rightCategoryOrder) return leftCategoryOrder - rightCategoryOrder
+        if (left.categoryId !== right.categoryId) {
+          return left.categoryId.localeCompare(right.categoryId, "ko-KR")
+        }
+        if (left.orderIndex !== right.orderIndex) return left.orderIndex - right.orderIndex
+        return left.title.localeCompare(right.title, "ko-KR")
+      })
+  }, [
+    categoryFilter,
+    categoryOrderById,
+    content,
+    docTypeFilter,
+    readinessFilter,
+    searchQuery,
+    sortMode,
+    statusFilter,
+  ])
 
   const warnings = [...(content?.warnings ?? []), ...(analytics?.warnings ?? [])]
   const summary = analytics?.summary
@@ -690,6 +840,19 @@ export default function AdminDocsPage() {
                   </option>
                 ))}
               </select>
+              <select
+                value={sortMode}
+                onChange={(event) => {
+                  if (isDocsSortMode(event.target.value)) setSortMode(event.target.value)
+                }}
+                className="h-9 rounded-lg border border-[#e8e8e4] bg-white px-3 text-[13px] text-[#111110] outline-none transition-colors focus:border-[#084734]"
+              >
+                {DOC_SORT_OPTIONS.map((option) => (
+                  <option key={option.value} value={option.value}>
+                    정렬: {option.label}
+                  </option>
+                ))}
+              </select>
             </div>
           </div>
 
@@ -718,7 +881,7 @@ export default function AdminDocsPage() {
           </div>
 
           <div className="overflow-x-auto">
-            <table className="min-w-[1040px] w-full text-left">
+            <table className="min-w-[1240px] w-full text-left">
               <thead className="bg-[#fafaf8] text-[11px] uppercase tracking-[0.12em] text-[#1a1a1a]/35">
                 <tr>
                   <th className="px-4 py-3 font-semibold">
@@ -739,6 +902,7 @@ export default function AdminDocsPage() {
                   </th>
                   <th className="px-4 py-3 font-semibold">문서</th>
                   <th className="px-4 py-3 font-semibold">카테고리</th>
+                  <th className="px-4 py-3 font-semibold">순서</th>
                   <th className="px-4 py-3 font-semibold">상태</th>
                   <th className="px-4 py-3 font-semibold">유형</th>
                   <th className="px-4 py-3 font-semibold">업데이트</th>
@@ -748,76 +912,179 @@ export default function AdminDocsPage() {
               <tbody className="divide-y divide-[#f0f0ec]">
                 {loading ? (
                   <tr>
-                    <td colSpan={7} className="px-4 py-10 text-center text-[13px] text-[#1a1a1a]/35">
+                    <td colSpan={8} className="px-4 py-10 text-center text-[13px] text-[#1a1a1a]/35">
                       문서 목록을 불러오는 중입니다.
                     </td>
                   </tr>
                 ) : filteredArticles.length === 0 ? (
                   <tr>
-                    <td colSpan={7} className="px-4 py-8">
+                    <td colSpan={8} className="px-4 py-8">
                       <EmptyState title="표시할 문서가 없습니다" description="검색어나 카테고리 필터를 조정해 보세요." />
                     </td>
                   </tr>
                 ) : (
                   filteredArticles.map((article) => {
                     const editHref = `/admin/docs/${article.id}/edit`
+                    const isEditing = editingArticleId === article.id
+                    const draft = isEditing ? inlineDraft : null
+                    const rowSaving = articleSavingId === article.id
                     return (
-                    <tr key={article.id} className="align-top transition-colors hover:bg-[#fafaf8]">
+                    <tr
+                      key={article.id}
+                      className={`align-top transition-colors ${
+                        isEditing ? "bg-[#F7FBF8]" : "hover:bg-[#fafaf8]"
+                      }`}
+                    >
                       <td className="px-4 py-4">
                         <input
                           type="checkbox"
                           checked={selectedArticleIds.includes(article.id)}
+                          disabled={isEditing}
                           onChange={() => toggleSelectedArticle(article.id)}
                           aria-label={`${article.title} 선택`}
-                          className="h-4 w-4 rounded border-[#d6d6d0]"
+                          className="h-4 w-4 rounded border-[#d6d6d0] disabled:cursor-not-allowed disabled:opacity-45"
                         />
                       </td>
                       <td className="px-4 py-4">
-                        <div className="max-w-lg">
-                          <div className="flex items-start gap-2">
-                            <FileText className="mt-0.5 h-4 w-4 shrink-0 text-[#1a1a1a]/30" />
-                            <div>
-                              {canMutateDocs ? (
-                                <Link
-                                  href={editHref}
-                                  className="text-[13px] font-semibold text-[#111110] transition-colors hover:text-[#084734]"
-                                >
-                                  {article.title}
-                                </Link>
-                              ) : (
-                                <Link
-                                  href={article.publicPath}
-                                  className="text-[13px] font-semibold text-[#111110] transition-colors hover:text-[#084734]"
-                                >
-                                  {article.title}
-                                </Link>
-                              )}
-                              <p className="mt-1 line-clamp-2 text-[12px] leading-relaxed text-[#1a1a1a]/42">
-                                {article.description}
-                              </p>
-                              <p className="mt-1 font-mono text-[11px] text-[#1a1a1a]/30">
-                                {article.slug}
-                              </p>
-                              {article.aiIssues.length > 0 ? (
-                                <div className="mt-2 flex flex-wrap gap-1.5">
-                                  {article.aiIssues.slice(0, 3).map((issue) => (
-                                    <StatusBadge
-                                      key={issue}
-                                      label={issue}
-                                      tone="border-[#F6D5C5] bg-[#FEF3EE] text-[#B85C33]"
-                                    />
-                                  ))}
-                                </div>
-                              ) : null}
+                        {draft ? (
+                          <div className="grid max-w-xl gap-2">
+                            <input
+                              value={draft.title}
+                              disabled={rowSaving}
+                              onChange={(event) => updateInlineDraft("title", event.target.value)}
+                              className="h-9 rounded-lg border border-[#d6d6d0] bg-white px-3 text-[13px] font-semibold text-[#111110] outline-none focus:border-[#084734] disabled:cursor-not-allowed disabled:opacity-60"
+                            />
+                            <textarea
+                              value={draft.description}
+                              disabled={rowSaving}
+                              rows={2}
+                              onChange={(event) =>
+                                updateInlineDraft("description", event.target.value)
+                              }
+                              className="w-full resize-none rounded-lg border border-[#d6d6d0] bg-white px-3 py-2 text-[12px] leading-relaxed text-[#1a1a1a]/70 outline-none focus:border-[#084734] disabled:cursor-not-allowed disabled:opacity-60"
+                            />
+                            <p className="font-mono text-[11px] text-[#1a1a1a]/30">{article.slug}</p>
+                          </div>
+                        ) : (
+                          <div className="max-w-lg">
+                            <div className="flex items-start gap-2">
+                              <FileText className="mt-0.5 h-4 w-4 shrink-0 text-[#1a1a1a]/30" />
+                              <div>
+                                {canMutateDocs ? (
+                                  <Link
+                                    href={editHref}
+                                    className="text-[13px] font-semibold text-[#111110] transition-colors hover:text-[#084734]"
+                                  >
+                                    {article.title}
+                                  </Link>
+                                ) : (
+                                  <Link
+                                    href={article.publicPath}
+                                    className="text-[13px] font-semibold text-[#111110] transition-colors hover:text-[#084734]"
+                                  >
+                                    {article.title}
+                                  </Link>
+                                )}
+                                <p className="mt-1 line-clamp-2 text-[12px] leading-relaxed text-[#1a1a1a]/42">
+                                  {article.description}
+                                </p>
+                                <p className="mt-1 font-mono text-[11px] text-[#1a1a1a]/30">
+                                  {article.slug}
+                                </p>
+                                {article.aiIssues.length > 0 ? (
+                                  <div className="mt-2 flex flex-wrap gap-1.5">
+                                    {article.aiIssues.slice(0, 3).map((issue) => (
+                                      <StatusBadge
+                                        key={issue}
+                                        label={issue}
+                                        tone="border-[#F6D5C5] bg-[#FEF3EE] text-[#B85C33]"
+                                      />
+                                    ))}
+                                  </div>
+                                ) : null}
+                              </div>
                             </div>
                           </div>
-                        </div>
+                        )}
                       </td>
                       <td className="px-4 py-4 text-[12px] text-[#1a1a1a]/55">
-                        {categoryTitleById.get(article.categoryId) ?? article.categoryId}
+                        {draft ? (
+                          <select
+                            value={draft.categoryId}
+                            disabled={rowSaving}
+                            onChange={(event) => updateInlineDraft("categoryId", event.target.value)}
+                            className="h-9 w-full min-w-36 rounded-lg border border-[#d6d6d0] bg-white px-3 text-[12px] font-semibold text-[#111110] outline-none focus:border-[#084734] disabled:cursor-not-allowed disabled:opacity-60"
+                          >
+                            {(content?.categories ?? []).map((category) => (
+                              <option key={category.id} value={category.id}>
+                                {category.title}
+                              </option>
+                            ))}
+                          </select>
+                        ) : (
+                          categoryTitleById.get(article.categoryId) ?? article.categoryId
+                        )}
                       </td>
                       <td className="px-4 py-4">
-                        <ArticleStatus article={article} />
+                        {draft ? (
+                          <input
+                            type="number"
+                            value={draft.orderIndex}
+                            disabled={rowSaving}
+                            onChange={(event) =>
+                              updateInlineDraft("orderIndex", Number(event.target.value))
+                            }
+                            className="h-9 w-24 rounded-lg border border-[#d6d6d0] bg-white px-3 text-[12px] font-semibold tabular-nums text-[#111110] outline-none focus:border-[#084734] disabled:cursor-not-allowed disabled:opacity-60"
+                          />
+                        ) : (
+                          <span className="inline-flex h-8 min-w-12 items-center justify-center rounded-lg bg-[#f0f0ec] px-2 text-[12px] font-bold tabular-nums text-[#111110]">
+                            {article.orderIndex}
+                          </span>
+                        )}
+                      </td>
+                      <td className="px-4 py-4">
+                        {draft ? (
+                          <div className="grid min-w-40 gap-2">
+                            <select
+                              value={draft.status}
+                              disabled={rowSaving}
+                              onChange={(event) => updateInlineDraft("status", event.target.value)}
+                              className="h-8 rounded-lg border border-[#d6d6d0] bg-white px-2 text-[12px] font-semibold text-[#111110] outline-none focus:border-[#084734] disabled:cursor-not-allowed disabled:opacity-60"
+                            >
+                              {ARTICLE_STATUS_OPTIONS.map((option) => (
+                                <option key={option.value} value={option.value}>
+                                  {option.label}
+                                </option>
+                              ))}
+                            </select>
+                            <select
+                              value={draft.visibility}
+                              disabled={rowSaving}
+                              onChange={(event) => updateInlineDraft("visibility", event.target.value)}
+                              className="h-8 rounded-lg border border-[#d6d6d0] bg-white px-2 text-[12px] font-semibold text-[#111110] outline-none focus:border-[#084734] disabled:cursor-not-allowed disabled:opacity-60"
+                            >
+                              {ARTICLE_VISIBILITY_OPTIONS.map((option) => (
+                                <option key={option.value} value={option.value}>
+                                  {option.label}
+                                </option>
+                              ))}
+                            </select>
+                            <label className="inline-flex items-center gap-2 text-[12px] font-semibold text-[#1a1a1a]/55">
+                              <input
+                                type="checkbox"
+                                checked={draft.featured}
+                                disabled={rowSaving}
+                                onChange={(event) =>
+                                  updateInlineDraft("featured", event.target.checked)
+                                }
+                                className="h-4 w-4 rounded border-[#d6d6d0] disabled:cursor-not-allowed disabled:opacity-60"
+                              />
+                              대표 문서
+                            </label>
+                          </div>
+                        ) : (
+                          <ArticleStatus article={article} />
+                        )}
                       </td>
                       <td className="px-4 py-4 text-[12px] text-[#1a1a1a]/55">
                         <div>{DOC_TYPE_LABELS[article.docType] ?? article.docType}</div>
@@ -828,76 +1095,61 @@ export default function AdminDocsPage() {
                       </td>
                       <td className="px-4 py-4">
                         <div className="flex flex-wrap items-center gap-2">
-                          {canMutateDocs ? (
+                          {draft ? (
                             <>
-                              <select
-                                aria-label={`${article.title} 상태 변경`}
-                                value={article.status}
-                                disabled={articleSavingId === article.id}
-                                onChange={(event) =>
-                                  void handleArticlePatch(article, { status: event.target.value })
-                                }
-                                className="h-8 rounded-lg border border-[#e8e8e4] bg-white px-2 text-[12px] font-semibold text-[#111110] outline-none transition-colors focus:border-[#084734] disabled:cursor-not-allowed disabled:opacity-55"
-                              >
-                                {ARTICLE_STATUS_OPTIONS.map((option) => (
-                                  <option key={option.value} value={option.value}>
-                                    {option.label}
-                                  </option>
-                                ))}
-                              </select>
-                              <select
-                                aria-label={`${article.title} 가시성 변경`}
-                                value={article.visibility}
-                                disabled={articleSavingId === article.id}
-                                onChange={(event) =>
-                                  void handleArticlePatch(article, { visibility: event.target.value })
-                                }
-                                className="h-8 rounded-lg border border-[#e8e8e4] bg-white px-2 text-[12px] font-semibold text-[#111110] outline-none transition-colors focus:border-[#084734] disabled:cursor-not-allowed disabled:opacity-55"
-                              >
-                                {ARTICLE_VISIBILITY_OPTIONS.map((option) => (
-                                  <option key={option.value} value={option.value}>
-                                    {option.label}
-                                  </option>
-                                ))}
-                              </select>
                               <button
                                 type="button"
-                                title={article.featured ? "대표 문서 해제" : "대표 문서로 지정"}
-                                aria-pressed={article.featured}
-                                disabled={articleSavingId === article.id}
-                                onClick={() =>
-                                  void handleArticlePatch(article, { featured: !article.featured })
-                                }
-                                className={`inline-flex h-8 w-8 items-center justify-center rounded-lg border transition-colors disabled:cursor-not-allowed disabled:opacity-55 ${
-                                  article.featured
-                                    ? "border-amber-100 bg-amber-50 text-amber-600"
-                                    : "border-[#e8e8e4] bg-white text-[#1a1a1a]/35 hover:bg-[#f5f5f2]"
-                                }`}
+                                title="수정 완료"
+                                onClick={() => void saveInlineArticle(article)}
+                                disabled={rowSaving}
+                                className="inline-flex h-8 items-center justify-center gap-1.5 rounded-lg bg-[#084734] px-2.5 text-[12px] font-semibold text-white transition-colors hover:bg-[#065c41] disabled:cursor-not-allowed disabled:opacity-55"
                               >
-                                <Star className={`h-3.5 w-3.5 ${article.featured ? "fill-current" : ""}`} />
-                                <span className="sr-only">
-                                  {article.featured ? "대표 문서 해제" : "대표 문서로 지정"}
-                                </span>
+                                <Check className="h-3.5 w-3.5" />
+                                {rowSaving ? "저장 중" : "완료"}
+                              </button>
+                              <button
+                                type="button"
+                                title="수정 취소"
+                                onClick={cancelInlineEdit}
+                                disabled={rowSaving}
+                                className="inline-flex h-8 w-8 items-center justify-center rounded-lg border border-[#e8e8e4] bg-white text-[#1a1a1a]/45 transition-colors hover:bg-[#f5f5f2] hover:text-[#111110] disabled:cursor-not-allowed disabled:opacity-55"
+                              >
+                                <X className="h-3.5 w-3.5" />
+                                <span className="sr-only">수정 취소</span>
                               </button>
                             </>
-                          ) : null}
-                          {canMutateDocs ? (
-                            <Link
-                              href={editHref}
-                              className="inline-flex h-8 items-center justify-center gap-1.5 rounded-lg border border-[#e8e8e4] bg-white px-2.5 text-[12px] font-semibold text-[#111110] transition-colors hover:bg-[#f5f5f2]"
-                            >
-                              <Pencil className="h-3.5 w-3.5" />
-                              편집
-                            </Link>
-                          ) : null}
-                          <Link
-                            href={article.publicPath}
-                            target="_blank"
-                            className="inline-flex h-8 items-center justify-center gap-1.5 rounded-lg border border-[#e8e8e4] bg-white px-2.5 text-[12px] font-semibold text-[#111110] transition-colors hover:bg-[#f5f5f2]"
-                          >
-                            <Eye className="h-3.5 w-3.5" />
-                            보기
-                          </Link>
+                          ) : (
+                            <>
+                              {canMutateDocs ? (
+                                <>
+                                  <button
+                                    type="button"
+                                    title="목록에서 바로 수정"
+                                    onClick={() => startInlineEdit(article)}
+                                    disabled={articleSavingId === article.id}
+                                    className="inline-flex h-8 w-8 items-center justify-center rounded-lg border border-[#e8e8e4] bg-white text-[#111110] transition-colors hover:bg-[#f5f5f2] disabled:cursor-not-allowed disabled:opacity-55"
+                                  >
+                                    <Pencil className="h-3.5 w-3.5" />
+                                    <span className="sr-only">목록에서 바로 수정</span>
+                                  </button>
+                                  <Link
+                                    href={editHref}
+                                    className="inline-flex h-8 items-center justify-center rounded-lg border border-[#e8e8e4] bg-white px-2.5 text-[12px] font-semibold text-[#111110] transition-colors hover:bg-[#f5f5f2]"
+                                  >
+                                    상세
+                                  </Link>
+                                </>
+                              ) : null}
+                              <Link
+                                href={article.publicPath}
+                                target="_blank"
+                                className="inline-flex h-8 items-center justify-center gap-1.5 rounded-lg border border-[#e8e8e4] bg-white px-2.5 text-[12px] font-semibold text-[#111110] transition-colors hover:bg-[#f5f5f2]"
+                              >
+                                <Eye className="h-3.5 w-3.5" />
+                                보기
+                              </Link>
+                            </>
+                          )}
                         </div>
                       </td>
                     </tr>
