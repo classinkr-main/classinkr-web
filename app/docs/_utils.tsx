@@ -271,7 +271,7 @@ export const docsTrustCards = [
   },
 ]
 
-export function scoreDocsArticle(doc: any, query: string): number {
+export function scoreDocsArticle(doc: DocsArticleSummary, query: string): number {
   const tokens = query.split(/\s+/).filter(Boolean)
   if (tokens.length === 0) return 0
 
@@ -320,4 +320,3 @@ export function scoreDocsArticle(doc: any, query: string): number {
 
   return score
 }
-
