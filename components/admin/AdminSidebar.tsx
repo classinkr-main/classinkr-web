@@ -105,10 +105,10 @@ const NAV_WARMUP_REQUESTS: Record<string, string[]> = {
 }
 
 const SECTION_META: Record<SidebarSection, { label: string; description: string }> = {
-  workspace: { label: "운영", description: "매일 가장 자주 쓰는 화면" },
-  growth: { label: "성장", description: "캠페인과 콘텐츠 운영" },
-  performance: { label: "분석", description: "성과와 지점 운영 확인" },
-  system: { label: "시스템", description: "권한, 설정, 개발 도구" },
+  workspace: { label: "운영", description: "팀 현황과 세일즈 진행 관리" },
+  growth: { label: "성장", description: "캠페인, 콘텐츠, 전환 관리" },
+  performance: { label: "분석", description: "성과, 매출, 지점 운영 확인" },
+  system: { label: "시스템", description: "권한, 설정, 감사, 개발 도구" },
 }
 
 const ROLE_LABEL: Record<SidebarRole, string> = {

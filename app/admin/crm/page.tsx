@@ -92,6 +92,21 @@ function toFollowUpTimestamp(date: string) {
   return `${date}T12:00:00.000Z`
 }
 
+function daysBetween(from: string | Date, to: string | Date = new Date()) {
+  const fromDate = from instanceof Date ? from : new Date(from)
+  const toDate = to instanceof Date ? to : new Date(to)
+  const diff = toDate.getTime() - fromDate.getTime()
+  return Math.max(0, Math.floor(diff / 86_400_000))
+}
+
+function isActiveLead(status: LeadStatus) {
+  return status !== "converted" && status !== "closed"
+}
+
+function getLeadOwner(lead: LeadRecord) {
+  return lead.assigned_to?.trim() || "미배정"
+}
+
 // ─── 복사 버튼 ─────────────────────────────────────────────────
 function CopyButton({ value }: { value: string }) {
   const [copied, setCopied] = useState(false)
@@ -801,15 +816,50 @@ export default function CrmPage() {
   const today = toLocalDateKey(new Date())
   const filtered = filter === "all" ? leads : leads.filter((l) => l.status === filter)
   const counts = leads.reduce((acc, l) => { acc[l.status] = (acc[l.status] ?? 0) + 1; return acc }, {} as Record<string, number>)
+  const activeLeads = leads.filter((l) => isActiveLead(l.status))
 
-  // 오늘 팔로업 리드
   const todayFollowUps = leads.filter((l) =>
-    l.follow_up_at && toLocalDateKey(l.follow_up_at) === today && l.status !== "converted" && l.status !== "closed"
+    l.follow_up_at && toLocalDateKey(l.follow_up_at) === today && isActiveLead(l.status)
   )
-  // 팔로업 기한 초과
   const overdueFollowUps = leads.filter((l) =>
-    l.follow_up_at && toLocalDateKey(l.follow_up_at) < today && l.status !== "converted" && l.status !== "closed"
+    l.follow_up_at && toLocalDateKey(l.follow_up_at) < today && isActiveLead(l.status)
   )
+  const unassignedLeads = activeLeads.filter((l) => !l.assigned_to?.trim())
+  const stalledLeads = activeLeads.filter((lead) => {
+    const createdDays = daysBetween(lead.timestamp)
+    const followUpKey = lead.follow_up_at ? toLocalDateKey(lead.follow_up_at) : null
+    return createdDays >= 7 && (!followUpKey || followUpKey < today)
+  })
+  const pipelineRiskLeads = [...activeLeads]
+    .filter((lead) => stalledLeads.some((stalled) => stalled.id === lead.id) || overdueFollowUps.some((overdue) => overdue.id === lead.id))
+    .sort((a, b) => {
+      const aFollowUp = a.follow_up_at ? toLocalDateKey(a.follow_up_at) : null
+      const bFollowUp = b.follow_up_at ? toLocalDateKey(b.follow_up_at) : null
+      const aOverdueDays = aFollowUp && aFollowUp < today ? daysBetween(a.follow_up_at!) : 0
+      const bOverdueDays = bFollowUp && bFollowUp < today ? daysBetween(b.follow_up_at!) : 0
+      return bOverdueDays - aOverdueDays || daysBetween(b.timestamp) - daysBetween(a.timestamp)
+    })
+    .slice(0, 5)
+  const stageSummaries = (Object.keys(STATUS_LABEL) as LeadStatus[]).map((status) => {
+    const stageLeads = leads.filter((lead) => lead.status === status)
+    const stageOverdue = stageLeads.filter((lead) => lead.follow_up_at && toLocalDateKey(lead.follow_up_at) < today && isActiveLead(lead.status)).length
+    const highScore = stageLeads.filter((lead) => calcScore(lead) >= 70).length
+    return { status, count: stageLeads.length, stageOverdue, highScore }
+  })
+  const ownerSummaries = Array.from(
+    activeLeads.reduce((acc, lead) => {
+      const owner = getLeadOwner(lead)
+      const current = acc.get(owner) ?? { owner, total: 0, newCount: 0, contactedCount: 0, overdueCount: 0, highScoreCount: 0 }
+      current.total += 1
+      if (lead.status === "new") current.newCount += 1
+      if (lead.status === "contacted") current.contactedCount += 1
+      if (lead.follow_up_at && toLocalDateKey(lead.follow_up_at) < today) current.overdueCount += 1
+      if (calcScore(lead) >= 70) current.highScoreCount += 1
+      acc.set(owner, current)
+      return acc
+    }, new Map<string, { owner: string; total: number; newCount: number; contactedCount: number; overdueCount: number; highScoreCount: number }>())
+      .values()
+  ).sort((a, b) => b.total - a.total || b.overdueCount - a.overdueCount)
 
   return (
     <div>
@@ -824,27 +874,127 @@ export default function CrmPage() {
         </Button>
       </div>
 
-      {/* 오늘 팔로업 알림 */}
-      {(todayFollowUps.length > 0 || overdueFollowUps.length > 0) && (
-        <div className="mb-4 flex flex-col gap-3 sm:flex-row">
-          {todayFollowUps.length > 0 && (
+      {/* 운영 현황 */}
+      <div className="mb-4 grid gap-3 lg:grid-cols-[1.1fr_0.9fr]">
+        <div className="rounded-2xl border border-[#e8e8e4] bg-white p-4">
+          <div className="mb-4 flex items-center justify-between gap-3">
+            <div>
+              <p className="text-[11px] font-semibold uppercase tracking-wide text-[#1a1a1a]/30">Team Pipeline</p>
+              <h2 className="mt-1 text-[17px] font-bold text-[#111110]">팀 전체 파이프라인 현황</h2>
+            </div>
+            <span className="rounded-full bg-[#f0f0ec] px-3 py-1 text-[12px] font-medium text-[#1a1a1a]/55">
+              활성 {activeLeads.length}건
+            </span>
+          </div>
+          <div className="grid grid-cols-2 gap-3 sm:grid-cols-3 xl:grid-cols-5">
+            {[
+              { label: "신규 유입", value: counts.new ?? 0, tone: "text-[#111110]" },
+              { label: "연락 진행", value: counts.contacted ?? 0, tone: "text-yellow-700" },
+              { label: "오늘 예정", value: todayFollowUps.length, tone: "text-[#084734]" },
+              { label: "지연 리드", value: overdueFollowUps.length, tone: "text-[#B85C33]" },
+              { label: "미배정", value: unassignedLeads.length, tone: "text-[#1a1a1a]/60" },
+            ].map((item) => (
+              <div key={item.label} className="rounded-xl bg-[#fafaf8] px-3 py-3">
+                <p className="text-[11px] font-medium text-[#1a1a1a]/40">{item.label}</p>
+                <p className={`mt-1 text-2xl font-bold ${item.tone}`}>{item.value}</p>
+              </div>
+            ))}
+          </div>
+          <div className="mt-4 grid gap-2 sm:grid-cols-2">
+            {stageSummaries.map((stage) => (
+              <button
+                key={stage.status}
+                type="button"
+                onClick={() => setFilter(stage.status)}
+                className="rounded-xl border border-[#e8e8e4] px-3 py-3 text-left transition-colors hover:border-[#c8c8c4] hover:bg-[#fafaf8]"
+              >
+                <div className="flex items-center justify-between gap-2">
+                  <span className={`rounded-full px-2 py-0.5 text-[11px] font-medium ${STATUS_COLOR[stage.status]}`}>
+                    {STATUS_LABEL[stage.status]}
+                  </span>
+                  <span className="text-[18px] font-bold text-[#111110]">{stage.count}</span>
+                </div>
+                <div className="mt-2 flex items-center gap-2 text-[11px] text-[#1a1a1a]/40">
+                  <span>고득점 {stage.highScore}</span>
+                  {stage.stageOverdue > 0 && <span className="font-medium text-[#B85C33]">지연 {stage.stageOverdue}</span>}
+                </div>
+              </button>
+            ))}
+          </div>
+        </div>
+
+        <div className="rounded-2xl border border-[#e8e8e4] bg-white p-4">
+          <div className="mb-4 flex items-center justify-between">
+            <div>
+              <p className="text-[11px] font-semibold uppercase tracking-wide text-[#1a1a1a]/30">Owners</p>
+              <h2 className="mt-1 text-[17px] font-bold text-[#111110]">담당자별 보유 리드</h2>
+            </div>
+            <span className="text-[12px] font-medium text-[#1a1a1a]/40">{ownerSummaries.length}명</span>
+          </div>
+          {ownerSummaries.length === 0 ? (
+            <p className="rounded-xl bg-[#fafaf8] px-3 py-8 text-center text-[13px] text-[#1a1a1a]/30">활성 리드가 없습니다.</p>
+          ) : (
+            <div className="space-y-2">
+              {ownerSummaries.slice(0, 6).map((owner) => (
+                <div key={owner.owner} className="rounded-xl border border-[#f0f0ec] px-3 py-2.5">
+                  <div className="flex items-center justify-between gap-3">
+                    <p className="truncate text-[13px] font-semibold text-[#111110]">{owner.owner}</p>
+                    <p className="text-[15px] font-bold tabular-nums text-[#111110]">{owner.total}</p>
+                  </div>
+                  <div className="mt-1.5 flex flex-wrap gap-2 text-[11px] text-[#1a1a1a]/40">
+                    <span>신규 {owner.newCount}</span>
+                    <span>연락중 {owner.contactedCount}</span>
+                    <span>고득점 {owner.highScoreCount}</span>
+                    {owner.overdueCount > 0 && <span className="font-medium text-[#B85C33]">지연 {owner.overdueCount}</span>}
+                  </div>
+                </div>
+              ))}
+            </div>
+          )}
+        </div>
+      </div>
+
+      {pipelineRiskLeads.length > 0 && (
+        <div className="mb-6 rounded-2xl border border-[#F6D5C5] bg-[#FEF8F5] p-4">
+          <div className="mb-3 flex flex-col gap-1 sm:flex-row sm:items-center sm:justify-between">
+            <div>
+              <p className="text-[11px] font-semibold uppercase tracking-wide text-[#B85C33]/70">Pipeline Risk</p>
+              <h2 className="text-[16px] font-bold text-[#111110]">오래 멈춘 리드 / 지연 리드</h2>
+            </div>
             <button
               onClick={() => setFilter("contacted")}
-              className="flex min-h-11 items-center gap-2 rounded-xl border border-[#D1FAE5] bg-[#ECFDF5] px-4 py-2.5 text-left text-[13px] font-medium text-[#084734] transition-colors hover:bg-[#D1FAE5]"
+              className="text-left text-[12px] font-medium text-[#B85C33] hover:text-[#9A4A27]"
             >
-              <Bell className="w-3.5 h-3.5" />
-              오늘 팔로업 {todayFollowUps.length}건
+              지연 {overdueFollowUps.length}건 · 7일 이상 정체 {stalledLeads.length}건
             </button>
-          )}
-          {overdueFollowUps.length > 0 && (
-            <button
-              onClick={() => setFilter("contacted")}
-              className="flex min-h-11 items-center gap-2 rounded-xl border border-[#F6D5C5] bg-[#FEF3EE] px-4 py-2.5 text-left text-[13px] font-medium text-[#B85C33] transition-colors hover:bg-[#F6D5C5]"
-            >
-              <Bell className="w-3.5 h-3.5" />
-              기한 초과 {overdueFollowUps.length}건
-            </button>
-          )}
+          </div>
+          <div className="grid gap-2 md:grid-cols-2 xl:grid-cols-5">
+            {pipelineRiskLeads.map((lead) => {
+              const followUpKey = lead.follow_up_at ? toLocalDateKey(lead.follow_up_at) : null
+              const overdueDays = followUpKey && followUpKey < today ? daysBetween(lead.follow_up_at!) : 0
+              const ageDays = daysBetween(lead.timestamp)
+              return (
+                <button
+                  key={lead.id}
+                  type="button"
+                  onClick={() => setSelected(lead)}
+                  className="rounded-xl border border-[#F6D5C5] bg-white px-3 py-3 text-left transition-colors hover:bg-[#fffaf7]"
+                >
+                  <div className="flex items-center justify-between gap-2">
+                    <p className="truncate text-[13px] font-semibold text-[#111110]">{lead.name ?? lead.org ?? "이름 없음"}</p>
+                    <ScoreBadge score={calcScore(lead)} />
+                  </div>
+                  <p className="mt-1 truncate text-[12px] text-[#1a1a1a]/45">{lead.org ?? getLeadOwner(lead)}</p>
+                  <div className="mt-2 flex flex-wrap gap-1.5 text-[11px]">
+                    <span className="rounded-md bg-[#FEF3EE] px-2 py-0.5 font-medium text-[#B85C33]">
+                      {overdueDays > 0 ? `${overdueDays}일 지연` : `${ageDays}일 정체`}
+                    </span>
+                    <span className="rounded-md bg-[#f0f0ec] px-2 py-0.5 text-[#1a1a1a]/45">{getLeadOwner(lead)}</span>
+                  </div>
+                </button>
+              )
+            })}
+          </div>
         </div>
       )}
 
@@ -883,6 +1033,7 @@ export default function CrmPage() {
               const followUpDateKey = lead.follow_up_at ? toLocalDateKey(lead.follow_up_at) : null
               const isOverdue = Boolean(followUpDateKey && followUpDateKey < today && lead.status !== "converted" && lead.status !== "closed")
               const isTodayFollowUp = followUpDateKey === today
+              const ageDays = daysBetween(lead.timestamp)
 
               return (
                 <button
@@ -919,11 +1070,14 @@ export default function CrmPage() {
                     </span>
                     {lead.follow_up_at ? (
                       <span className={isOverdue ? "font-medium text-[#B85C33]" : isTodayFollowUp ? "font-medium text-[#084734]" : ""}>
-                        {isOverdue ? "??" : isTodayFollowUp ? "??" : ""}
+                        {isOverdue ? "지연 " : isTodayFollowUp ? "오늘 " : ""}
                         {new Date(lead.follow_up_at).toLocaleDateString("ko-KR", { month: "2-digit", day: "2-digit" })}
                       </span>
                     ) : null}
                     {lead.assigned_to ? <span>{lead.assigned_to}</span> : null}
+                    {ageDays >= 7 && isActiveLead(lead.status) ? (
+                      <span className="font-medium text-[#B85C33]">{ageDays}일 정체</span>
+                    ) : null}
                   </div>
 
                   <div className="mt-3 flex gap-2">
@@ -953,10 +1107,10 @@ export default function CrmPage() {
             })}
           </div>
           <div className="hidden overflow-x-auto sm:block">
-          <table className="min-w-[860px] w-full text-[13px]">
+          <table className="min-w-[1040px] w-full text-[13px]">
             <thead>
               <tr className="border-b border-[#e8e8e4] bg-[#fafaf8]">
-                {["시간", "소스", "이름", "기관", "연락처", "팔로업", "상태"].map((h) => (
+                {["시간", "소스", "이름", "기관", "담당자", "연락처", "팔로업", "정체", "상태"].map((h) => (
                   <th key={h} className="text-left px-5 py-3.5 font-medium text-[#1a1a1a]/40 whitespace-nowrap text-[12px]">{h}</th>
                 ))}
               </tr>
@@ -966,6 +1120,7 @@ export default function CrmPage() {
                 const followUpDateKey = lead.follow_up_at ? toLocalDateKey(lead.follow_up_at) : null
                 const isOverdue = Boolean(followUpDateKey && followUpDateKey < today && lead.status !== "converted" && lead.status !== "closed")
                 const isTodayFollowUp = followUpDateKey === today
+                const ageDays = daysBetween(lead.timestamp)
                 return (
                   <tr
                     key={lead.id}
@@ -989,15 +1144,31 @@ export default function CrmPage() {
                       </div>
                     </td>
                     <td className="px-5 py-4 text-[#1a1a1a]/55">{lead.org ?? "—"}</td>
+                    <td className="px-5 py-4 whitespace-nowrap text-[#1a1a1a]/55">
+                      {lead.assigned_to ? (
+                        <span className="rounded-md bg-[#f0f0ec] px-2 py-0.5 text-[11px] font-medium text-[#1a1a1a]/55">
+                          {lead.assigned_to}
+                        </span>
+                      ) : (
+                        <span className="rounded-md bg-[#FEF3EE] px-2 py-0.5 text-[11px] font-medium text-[#B85C33]">미배정</span>
+                      )}
+                    </td>
                     <td className="px-5 py-4 text-[#1a1a1a]/55">{lead.phone ?? lead.email ?? "—"}</td>
                     <td className="px-5 py-4 whitespace-nowrap text-[12px]">
                       {lead.follow_up_at ? (
                         <span className={isOverdue ? "text-[#B85C33] font-medium" : isTodayFollowUp ? "text-[#084734] font-medium" : "text-[#1a1a1a]/40"}>
-                          {isOverdue ? "⚠ " : isTodayFollowUp ? "● " : ""}
+                          {isOverdue ? "지연 " : isTodayFollowUp ? "오늘 " : ""}
                           {new Date(lead.follow_up_at).toLocaleDateString("ko-KR", { month: "2-digit", day: "2-digit" })}
                         </span>
                       ) : (
                         <span className="text-[#1a1a1a]/20">—</span>
+                      )}
+                    </td>
+                    <td className="px-5 py-4 whitespace-nowrap text-[12px]">
+                      {isActiveLead(lead.status) && ageDays >= 7 ? (
+                        <span className="font-medium text-[#B85C33]">{ageDays}일</span>
+                      ) : (
+                        <span className="text-[#1a1a1a]/25">{ageDays}일</span>
                       )}
                     </td>
                     <td className="px-5 py-4">
@@ -1009,9 +1180,6 @@ export default function CrmPage() {
                           <span className="text-[11px] px-2 py-0.5 rounded-full font-medium bg-green-50 text-green-700 border border-green-200">
                             고객사 전환
                           </span>
-                        )}
-                        {lead.assigned_to && (
-                          <span className="text-[11px] text-[#1a1a1a]/35">{lead.assigned_to}</span>
                         )}
                         {lead.notes && (
                           <span className="w-1.5 h-1.5 rounded-full bg-[#1a1a1a]/20 shrink-0" title="메모 있음" />

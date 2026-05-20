@@ -29,7 +29,7 @@ const DOCUMENT_TABS: DocumentTabItem[] = [
   {
     key: "hardware",
     label: "하드웨어 견적서",
-    description: "품목, 수량, 계약 전환까지 이어지는 현장 견적",
+    description: "품목, 수량, 계약 전환까지 이어지는 매출 견적",
     icon: <FileText className="h-4 w-4" />,
   },
   {
@@ -41,13 +41,13 @@ const DOCUMENT_TABS: DocumentTabItem[] = [
   {
     key: "contracts",
     label: "계약서",
-    description: "서명 링크와 어드민 서명 상태 관리",
+    description: "서명 완료와 계약 확정 상태 관리",
     icon: <FileSignature className="h-4 w-4" />,
   },
   {
     key: "receipts",
     label: "영수증",
-    description: "수납, 현금영수증, PDF 발행 기록",
+    description: "수납 확인, 현금영수증, PDF 발행 기록",
     icon: <ClipboardList className="h-4 w-4" />,
   },
   {
@@ -55,6 +55,27 @@ const DOCUMENT_TABS: DocumentTabItem[] = [
     label: "공유 링크",
     description: "열람 로그와 발송 상태를 모을 다음 단계",
     icon: <Link2 className="h-4 w-4" />,
+  },
+]
+
+const SALES_PROGRESS = [
+  {
+    label: "견적 생성",
+    value: "제안 준비",
+    detail: "하드웨어 견적과 SW 결제 코드를 고객별 제안으로 정리",
+    icon: <FileText className="h-4 w-4" />,
+  },
+  {
+    label: "계약 진행",
+    value: "서명 추적",
+    detail: "파트너 서명, 어드민 서명, 공유 링크 상태를 분리해서 확인",
+    icon: <FileSignature className="h-4 w-4" />,
+  },
+  {
+    label: "매출 확정",
+    value: "수납 기록",
+    detail: "결제 완료, 영수증 발행, 후속 전달 이력을 매출 진행 현황으로 연결",
+    icon: <ClipboardList className="h-4 w-4" />,
   },
 ]
 
@@ -70,6 +91,33 @@ function tabFromSearch() {
   if (raw === "links" || raw === "shares") return "links"
 
   return "hardware"
+}
+
+function SalesProgressStrip() {
+  return (
+    <div className="mt-5 grid gap-3 lg:grid-cols-3">
+      {SALES_PROGRESS.map((item) => (
+        <div key={item.label} className="rounded-xl border border-[#e8e8e4] bg-[#fafaf8] p-4">
+          <div className="flex items-start gap-3">
+            <span className="inline-flex h-9 w-9 shrink-0 items-center justify-center rounded-lg bg-white text-[#1a1a1a]/55">
+              {item.icon}
+            </span>
+            <div className="min-w-0">
+              <p className="text-[10px] font-semibold uppercase tracking-[0.16em] text-[#1a1a1a]/35">
+                {item.label}
+              </p>
+              <p className="mt-1 text-[15px] font-bold tracking-[-0.01em] text-[#111110]">
+                {item.value}
+              </p>
+              <p className="mt-1 text-[12px] leading-relaxed text-[#1a1a1a]/50">
+                {item.detail}
+              </p>
+            </div>
+          </div>
+        </div>
+      ))}
+    </div>
+  )
 }
 
 function PanelShell({
@@ -120,8 +168,8 @@ export default function QuotesPage() {
               견적·문서
             </h1>
             <p className="mt-2 max-w-3xl text-[13px] leading-relaxed text-[#1a1a1a]/50">
-              가격 제안, 결제 코드, 계약서, 영수증을 한 곳에서 만들고 정리합니다.
-              CRM은 고객별 진행 상태와 로그를 가볍게 보여주고, 실제 문서 작업은 이 허브에서 처리합니다.
+              견적 생성, 계약 서명, 수납 확인을 한 흐름으로 정리합니다.
+              CRM은 고객별 접점과 로그를 보여주고, 이 허브는 매출 진행 현황과 실제 문서 작업을 처리합니다.
             </p>
           </div>
           <a
@@ -133,6 +181,8 @@ export default function QuotesPage() {
             <ChevronRight className="h-3.5 w-3.5" />
           </a>
         </div>
+
+        <SalesProgressStrip />
 
         <div className="admin-scroll-snap-x no-scrollbar -mx-4 mt-6 flex gap-2 overflow-x-auto px-4 pb-2 sm:mx-0 sm:grid sm:grid-cols-2 sm:overflow-visible sm:px-0 sm:pb-0 xl:grid-cols-5">
           {DOCUMENT_TABS.map((tab) => {

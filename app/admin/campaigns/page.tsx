@@ -149,8 +149,8 @@ function buildFunnel(
 type CampaignTab = "summary" | "events" | "meta" | "email"
 
 const CAMPAIGN_TABS: Array<{ id: CampaignTab; label: string; sub: string }> = [
-  { id: "summary", label: "요약", sub: "KPI · 타임라인 · 채널 분포" },
-  { id: "events", label: "행사", sub: "행사별 퍼널 · 광고 효율" },
+  { id: "summary", label: "요약", sub: "성과 · 전환 · 채널 분포" },
+  { id: "events", label: "행사", sub: "행사별 퍼널 · 딜 전환" },
   { id: "meta", label: "Meta 광고", sub: "캠페인 현황 · 성과 · 상태 관리" },
   { id: "email", label: "이메일", sub: "구독자 · 이메일 발송 · 이력" },
 ]
@@ -598,6 +598,33 @@ function FunnelStage({
       <div className="mt-2 h-1 w-full overflow-hidden rounded-full bg-[#f0f0ec]">
         <div className={`h-full ${accent}`} style={{ width: `${bar}%` }} />
       </div>
+    </div>
+  )
+}
+
+function ConversionFocusCard({
+  label,
+  value,
+  hint,
+  tone = "neutral",
+}: {
+  label: string
+  value: string
+  hint: string
+  tone?: "neutral" | "success" | "warn"
+}) {
+  const valueTone =
+    tone === "success" ? "text-[#084734]" : tone === "warn" ? "text-[#B85C33]" : "text-[#111110]"
+
+  return (
+    <div className="rounded-xl border border-[#e8e8e4] bg-white px-4 py-3">
+      <p className="text-[10px] font-semibold uppercase tracking-[0.16em] text-[#1a1a1a]/35">
+        {label}
+      </p>
+      <p className={`mt-1 text-[20px] font-bold leading-none tracking-[-0.02em] ${valueTone}`}>
+        {value}
+      </p>
+      <p className="mt-1.5 text-[11px] leading-relaxed text-[#1a1a1a]/45">{hint}</p>
     </div>
   )
 }
@@ -1414,7 +1441,21 @@ export default function AdminCampaignsPage() {
     }
     const avgCpl = totalLeads > 0 ? Math.round(totalSpend / totalLeads) : null
     const overallRoi = totalSpend > 0 ? Math.round(((totalRevenue - totalSpend) / totalSpend) * 100) : null
-    return { totalSpend, totalRevenue, totalLeads, totalDeals, totalAttendees, avgCpl, overallRoi, channelTotals }
+    const dealConversionRate = totalLeads > 0 ? Math.round((totalDeals / totalLeads) * 100) : null
+    const attendanceToDealRate =
+      totalAttendees > 0 ? Math.round((totalDeals / totalAttendees) * 100) : null
+    return {
+      totalSpend,
+      totalRevenue,
+      totalLeads,
+      totalDeals,
+      totalAttendees,
+      avgCpl,
+      overallRoi,
+      dealConversionRate,
+      attendanceToDealRate,
+      channelTotals,
+    }
   }, [filtered, leads, metricsMap])
 
   const channelChartData = useMemo(
@@ -1486,7 +1527,7 @@ export default function AdminCampaignsPage() {
               캠페인
             </h1>
             <p className="mt-2 max-w-[720px] text-[13px] leading-relaxed text-[#615D59]">
-              행사·이메일·자동화를 한 화면에서 운영합니다. 퍼널 전환, 광고 효율, 캘린더 진척을 동시에 추적합니다.
+              행사·광고·이메일을 성과 단위로 운영합니다. 리드 확보부터 참석, 딜 전환, 매출 회수까지 한 화면에서 추적합니다.
             </p>
           </div>
 
@@ -1637,6 +1678,27 @@ export default function AdminCampaignsPage() {
           label="누적 ROI"
           value={loading ? "..." : aggregate.overallRoi != null ? pct(aggregate.overallRoi) : "—"}
           tone={aggregate.overallRoi != null && aggregate.overallRoi >= 0 ? "success" : "warn"}
+        />
+      </div>
+
+      <div className="mb-5 grid gap-3 lg:grid-cols-3">
+        <ConversionFocusCard
+          label="전환 초점"
+          value={loading ? "..." : aggregate.dealConversionRate != null ? pct(aggregate.dealConversionRate) : "—"}
+          hint={`리드 ${KRW.format(aggregate.totalLeads)}건 중 딜 ${KRW.format(aggregate.totalDeals)}건`}
+          tone={aggregate.dealConversionRate != null && aggregate.dealConversionRate > 0 ? "success" : "neutral"}
+        />
+        <ConversionFocusCard
+          label="참석 후 딜"
+          value={loading ? "..." : aggregate.attendanceToDealRate != null ? pct(aggregate.attendanceToDealRate) : "—"}
+          hint={`참석자 ${KRW.format(aggregate.totalAttendees)}명 기준 후속 영업 전환`}
+          tone={aggregate.attendanceToDealRate != null && aggregate.attendanceToDealRate > 0 ? "success" : "neutral"}
+        />
+        <ConversionFocusCard
+          label="운영 판단"
+          value={loading ? "..." : aggregate.overallRoi != null ? (aggregate.overallRoi >= 0 ? "확대 검토" : "비용 점검") : "집계 대기"}
+          hint="ROI와 CPL을 함께 보고 예산 증액, 문구 수정, 후속 연락을 결정합니다."
+          tone={aggregate.overallRoi == null ? "neutral" : aggregate.overallRoi >= 0 ? "success" : "warn"}
         />
       </div>
 
