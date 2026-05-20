@@ -204,7 +204,7 @@ export function FloatingChatbot() {
             id: "welcome",
             role: "assistant",
             content:
-                "안녕하세요. ClassIn 상담 가이드입니다. 운영 고민은 먼저 정리해드리고, 계정·결제·장애처럼 확인이 필요한 내용은 바로 상담으로 이어드릴게요.",
+                "안녕하세요. Classin 상담 가이드입니다. 운영 고민은 먼저 정리해드리고, 계정·결제·장애처럼 확인이 필요한 내용은 바로 상담으로 이어드릴게요.",
             suggestedQuestions: starterQuestions,
         },
     ])
@@ -438,7 +438,7 @@ export function FloatingChatbot() {
                                     )}
                                 </div>
                                 <div className="min-w-0">
-                                    <h2 id="classin-chatbot-title" className="truncate text-[15px] font-bold">ClassIn 상담 가이드</h2>
+                                    <h2 id="classin-chatbot-title" className="truncate text-[15px] font-bold">Classin 상담 가이드</h2>
                                     <p className="mt-0.5 truncate text-xs text-white/70">운영·도입·CS 빠른 상담</p>
                                 </div>
                             </div>

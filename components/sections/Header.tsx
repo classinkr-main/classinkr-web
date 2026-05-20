@@ -18,8 +18,8 @@ const navItems = [
 ]
 
 const productTabs = [
-    { name: "Classin(SW)", href: "/product/sw", icon: Monitor },
-    { name: "Classin X(HW)", href: "/product/hw", icon: Cpu },
+    { name: "Classin 소프트웨어", href: "/product/sw", icon: Monitor },
+    { name: "Classin Board", href: "/product/hw", icon: Cpu },
 ]
 
 export function Header() {

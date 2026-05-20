@@ -42,7 +42,7 @@ export function KeyUseCases() {
                                 ]}
                                 imageColor="bg-[#ECFDF5]"
                                 imageSrc="/images/use-cases/generated/classes-source.png"
-                                imageAlt="ClassIn 활동 게시하기 화면"
+                                imageAlt="Classin 활동 게시하기 화면"
                                 imageObjectPosition="50% 50%"
                                 overlayImageSrc="/images/use-cases/generated/interactive-generated-v3.png"
                                 overlayImageAlt="인터랙티브 수업 투명 오브젝트"
@@ -60,7 +60,7 @@ export function KeyUseCases() {
                                 ]}
                                 imageColor="bg-[#ECFDF5]"
                                 imageSrc="/images/use-cases/generated/homework-source.png"
-                                imageAlt="ClassIn 숙제 채점 데이터 화면"
+                                imageAlt="Classin 숙제 채점 데이터 화면"
                                 imageObjectPosition="52% 45%"
                                 overlayImageSrc="/images/use-cases/generated/homework-generated-v3.png"
                                 overlayImageAlt="과제 및 테스트 투명 오브젝트"
@@ -101,7 +101,7 @@ export function KeyUseCases() {
                                 ]}
                                 imageColor="bg-[#ECFDF5]"
                                 imageSrc="/images/use-cases/generated/comms-source.png"
-                                imageAlt="ClassIn 반 운영 및 알림 화면"
+                                imageAlt="Classin 반 운영 및 알림 화면"
                                 imageObjectPosition="86% 50%"
                                 overlayImageSrc="/images/use-cases/comms.png"
                                 overlayImageAlt="소통 및 알림 투명 오브젝트"

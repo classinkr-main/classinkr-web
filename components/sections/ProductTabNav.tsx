@@ -6,8 +6,8 @@ import { cn } from "@/lib/utils"
 import { Monitor, Cpu } from "lucide-react"
 
 const tabs = [
-    { name: "Classin(SW)", href: "/product/sw", icon: Monitor },
-    { name: "Classin X(HW)", href: "/product/hw", icon: Cpu },
+    { name: "Classin 소프트웨어", href: "/product/sw", icon: Monitor },
+    { name: "Classin Board", href: "/product/hw", icon: Cpu },
 ]
 
 export function ProductTabNav() {
@@ -24,7 +24,7 @@ export function ProductTabNav() {
                                 key={tab.href}
                                 href={tab.href}
                                 className={cn(
-                                    "inline-flex items-center gap-2 whitespace-nowrap px-5 py-2 rounded-full text-sm font-semibold transition-all",
+                                    "inline-flex items-center gap-2 whitespace-nowrap px-3 py-2 rounded-full text-[13px] font-semibold transition-all sm:px-5 sm:text-sm",
                                     isActive
                                         ? "bg-[#ECFDF5] text-[#084734] shadow-sm"
                                         : "text-[#615D59] hover:text-[#111110] hover:bg-[#F6F5F4]"

@@ -9,20 +9,22 @@ const staticRoutes: Array<{
   path: string
   changeFrequency: MetadataRoute.Sitemap[number]["changeFrequency"]
   priority: number
+  lastModified: string
 }> = [
-  { path: "/", changeFrequency: "weekly", priority: 1 },
-  { path: "/docs", changeFrequency: "weekly", priority: 1 },
-  { path: "/product/sw", changeFrequency: "weekly", priority: 0.9 },
-  { path: "/product/hw", changeFrequency: "weekly", priority: 0.9 },
-  { path: "/contact", changeFrequency: "monthly", priority: 0.8 },
-  { path: "/privacy", changeFrequency: "yearly", priority: 0.5 },
-  { path: "/terms", changeFrequency: "yearly", priority: 0.5 },
-  { path: "/data-deletion", changeFrequency: "yearly", priority: 0.5 },
-  { path: "/blog", changeFrequency: "daily", priority: 0.8 },
-  { path: "/events", changeFrequency: "weekly", priority: 0.7 },
-  { path: "/updates", changeFrequency: "weekly", priority: 0.7 },
-  { path: "/faq", changeFrequency: "monthly", priority: 0.6 },
-  { path: "/about", changeFrequency: "monthly", priority: 0.5 },
+  { path: "/", changeFrequency: "weekly", priority: 1, lastModified: "2026-05-20" },
+  { path: "/docs", changeFrequency: "weekly", priority: 1, lastModified: "2026-05-20" },
+  { path: "/product", changeFrequency: "weekly", priority: 0.9, lastModified: "2026-05-20" },
+  { path: "/product/sw", changeFrequency: "weekly", priority: 0.9, lastModified: "2026-05-20" },
+  { path: "/product/hw", changeFrequency: "weekly", priority: 0.9, lastModified: "2026-05-20" },
+  { path: "/contact", changeFrequency: "monthly", priority: 0.8, lastModified: "2026-04-01" },
+  { path: "/privacy", changeFrequency: "yearly", priority: 0.5, lastModified: "2026-04-01" },
+  { path: "/terms", changeFrequency: "yearly", priority: 0.5, lastModified: "2026-04-01" },
+  { path: "/data-deletion", changeFrequency: "yearly", priority: 0.5, lastModified: "2026-04-01" },
+  { path: "/blog", changeFrequency: "daily", priority: 0.8, lastModified: "2026-04-01" },
+  { path: "/events", changeFrequency: "weekly", priority: 0.7, lastModified: "2026-04-01" },
+  { path: "/updates", changeFrequency: "weekly", priority: 0.7, lastModified: "2026-04-01" },
+  { path: "/faq", changeFrequency: "monthly", priority: 0.7, lastModified: "2026-05-20" },
+  { path: "/about", changeFrequency: "monthly", priority: 0.5, lastModified: "2026-04-01" },
 ]
 
 function toAbsoluteUrl(path: string) {
@@ -30,10 +32,9 @@ function toAbsoluteUrl(path: string) {
 }
 
 export default async function sitemap(): Promise<MetadataRoute.Sitemap> {
-  const now = new Date()
   const staticEntries: MetadataRoute.Sitemap = staticRoutes.map((route) => ({
     url: toAbsoluteUrl(route.path),
-    lastModified: now,
+    lastModified: new Date(route.lastModified),
     changeFrequency: route.changeFrequency,
     priority: route.priority,
   }))
@@ -63,7 +64,7 @@ export default async function sitemap(): Promise<MetadataRoute.Sitemap> {
   const listedDocs = listListedDocsFromContent(docsContent)
   const docsCategoryEntries: MetadataRoute.Sitemap = docsContent.categories.map((category) => ({
     url: toAbsoluteUrl(getDocCategoryPath(category.id)),
-    lastModified: now,
+    lastModified: new Date("2026-05-20"),
     changeFrequency: "monthly",
     priority: 0.75,
   }))

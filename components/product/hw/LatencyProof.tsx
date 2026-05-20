@@ -7,7 +7,7 @@ import { motion, useInView } from "framer-motion";
 const COMPARISON_ROWS = [
   { label: "일반 IFP", value: "80~120ms", highlight: false },
   { label: "고급 IFP", value: "30~50ms", highlight: false },
-  { label: "ClassIn Board", value: "30ms", highlight: true },
+  { label: "Classin Board", value: "30ms", highlight: true },
   { label: "분필 (참고)", value: "0ms", highlight: false },
 ] as const;
 

@@ -554,7 +554,7 @@ function FinalCTASection() {
                     <div className="inline-flex items-center gap-2 px-4 py-1.5 rounded-full bg-green-50 border border-green-200/60 text-sm font-medium text-[#22A366]"><Clock className="w-3.5 h-3.5" />되찾은 수업 시간</div>
                 </motion.div>
 
-                <motion.p initial={{ opacity: 0, y: 10 }} animate={phase >= 2 ? { opacity: 1, y: 0 } : {}} transition={{ duration: 0.5 }} className="text-base sm:text-lg text-slate-400 font-medium mb-8 max-w-xl mx-auto">200개 기업 고객사가 ClassIn으로 되찾은 시간</motion.p>
+                <motion.p initial={{ opacity: 0, y: 10 }} animate={phase >= 2 ? { opacity: 1, y: 0 } : {}} transition={{ duration: 0.5 }} className="text-base sm:text-lg text-slate-400 font-medium mb-8 max-w-xl mx-auto">200개 기업 고객사가 Classin으로 되찾은 시간</motion.p>
                 <div className="relative">
                     <motion.div className="absolute top-1/2 left-1/2 -translate-x-1/2 -translate-y-1/2 w-[500px] h-[300px] bg-gradient-radial from-green-300/25 via-green-200/10 to-transparent rounded-full pointer-events-none" initial={{ scale: 0, opacity: 0 }} animate={phase >= 2 ? { scale: [0, 1.2, 1], opacity: [0, 0.7, 0] } : {}} transition={{ duration: 1.5 }} />
                     <motion.div className="flex justify-center mb-5" initial={{ scale: 0.9, opacity: 0.3, filter: "blur(8px)" }} animate={phase >= 2 ? { scale: 1, opacity: 1, filter: "blur(0px)" } : {}} transition={{ type: "spring", stiffness: 120, damping: 20 }}>
@@ -614,7 +614,7 @@ const CINEMATIC_CASES = [
         index: "02",
         tag: "글로벌 튜터링",
         name: "Acadsoc · 1:1 ESL 플랫폼",
-        quote: "ClassIn 이전에도 여러 화상 툴을 써봤습니다. 하지만 영업 데모를 할 때 학생과 교사 모두 ClassIn에 가장 빠르게 반응했어요.",
+        quote: "Classin 이전에도 여러 화상 툴을 써봤습니다. 하지만 영업 데모를 할 때 학생과 교사 모두 Classin에 가장 빠르게 반응했어요.",
         person: "Acadsoc 서비스 팀",
         before: { label: "도입 전", items: ["학생 이탈률 높음", "수업 집중도 측정 불가", "다른 플랫폼으로 전전"] },
         after: { label: "도입 후", items: ["누적 학습자 4,000만+", "영업 데모 1순위 채택", "Series A→C 투자 유치"] },
@@ -791,7 +791,7 @@ function FutureVision1Section() {
                         <p className="text-lg text-white/50 leading-relaxed">
                             학교의 물리적 벽이 사라지고, AI가 개인 맞춤 교육을 제공하며,
                             세계 어느 곳의 학생도 최고의 교사에게 배울 수 있는 시대.
-                            ClassIn은 그 미래를 지금 만들고 있습니다.
+                            Classin은 그 미래를 지금 만들고 있습니다.
                         </p>
                     </motion.div>
 
@@ -845,7 +845,7 @@ function FutureVision2Section() {
                     <p className="text-xl md:text-2xl text-slate-500 font-sans max-w-2xl mx-auto leading-relaxed">
                         더 많이 가르치면서 더 적게 소진되는 것.
                         <br className="hidden md:block" />
-                        그것이 ClassIn이 교사에게 드리는 약속입니다.
+                        그것이 Classin이 교사에게 드리는 약속입니다.
                     </p>
                 </motion.div>
 
@@ -900,7 +900,7 @@ function FutureVision2Section() {
                     </div>
 
                     <p className="text-xl md:text-2xl font-sans text-slate-600 leading-relaxed">
-                        ClassIn은 도구가 아닙니다.<br />
+                        Classin은 도구가 아닙니다.<br />
                         <span className="text-[#1a1a19] font-bold">교육이 다시 교육다워지는 환경</span>입니다.
                     </p>
                 </motion.div>
@@ -979,7 +979,7 @@ function LearningCycleSection() {
                             <div className="h-px bg-black/[0.06] my-5" />
 
                             <div className="space-y-2">
-                                <p className="text-[11px] font-bold tracking-wider uppercase mb-2" style={{ color: p.accent }}>ClassIn</p>
+                                <p className="text-[11px] font-bold tracking-wider uppercase mb-2" style={{ color: p.accent }}>Classin</p>
                                 {p.now.map((item) => (
                                     <div key={item} className="flex items-start gap-2 text-sm font-medium text-slate-700">
                                         <CheckCircle2 className="w-4 h-4 mt-0.5 shrink-0" style={{ color: p.accent }} />
@@ -1006,7 +1006,7 @@ function HardwareTeaserSection() {
                 <div className="grid lg:grid-cols-2 gap-14 items-center">
                     <motion.div initial={{ opacity: 0, x: -30 }} whileInView={{ opacity: 1, x: 0 }} viewport={{ once: true }} transition={{ duration: 0.7 }}>
                         <span className="inline-flex items-center gap-2 bg-[#6EE7B7]/10 text-[#6EE7B7] text-xs font-bold px-3 py-1.5 rounded-full mb-6">
-                            ClassIn X · 하드웨어
+                            Classin Board · 하드웨어
                         </span>
                         <h2 className="text-3xl md:text-4xl lg:text-5xl font-sans text-white leading-tight mb-5">
                             소프트웨어만으로<br />부족하다면
@@ -1042,14 +1042,14 @@ function HardwareTeaserSection() {
                             <div className="relative aspect-video w-full overflow-hidden rounded-2xl border border-white/10 bg-white/5 shadow-[0_24px_70px_rgba(0,0,0,0.28)]">
                                 <Image
                                     src="/images/smartroon.png"
-                                    alt="ClassIn 소프트웨어와 연동되는 스마트 교실 구성"
+                                    alt="Classin 소프트웨어와 연동되는 스마트 교실 구성"
                                     fill
                                     className="object-cover"
                                     sizes="(min-width: 1024px) 44vw, 100vw"
                                 />
                                 <div className="absolute inset-0 bg-gradient-to-t from-[#1a1a19]/28 via-transparent to-white/8" />
                             </div>
-                            <p className="mt-4 text-white/30 text-xs">ClassIn X · 스마트 교실 구성</p>
+                            <p className="mt-4 text-white/30 text-xs">Classin Board · 스마트 교실 구성</p>
                         </div>
                     </motion.div>
                 </div>
@@ -1114,7 +1114,7 @@ function AIFeaturesSection() {
                 >
                     <div>
                         <p className="font-bold text-base mb-0.5">AI 기능 모두 기본 포함</p>
-                        <p className="text-white/50 text-sm">별도 AI 툴 구독 없이 ClassIn 하나로 사용 가능합니다.</p>
+                        <p className="text-white/50 text-sm">별도 AI 툴 구독 없이 Classin 하나로 사용 가능합니다.</p>
                     </div>
                     <Link
                         href="/contact"
@@ -1135,7 +1135,7 @@ function AIFeaturesSection() {
 const FAQS = [
     {
         q: "Zoom과 비교해서 실제로 어떻게 다른가요?",
-        a: "Zoom은 비즈니스 회의를 위해 설계됐습니다. 학생이 화면 안에서 직접 참여(판서, 문제 풀기, 퀴즈 대결)하는 기능이 없습니다. ClassIn은 수업 전용으로 설계돼 30가지 교육 도구, LMS, 자동 녹화까지 하나로 통합되어 있습니다.",
+        a: "Zoom은 비즈니스 회의를 위해 설계됐습니다. 학생이 화면 안에서 직접 참여(판서, 문제 풀기, 퀴즈 대결)하는 기능이 없습니다. Classin은 수업 전용으로 설계돼 30가지 교육 도구, LMS, 자동 녹화까지 하나로 통합되어 있습니다.",
     },
     {
         q: "기존 학원 시스템과 연동이 가능한가요?",
@@ -1151,7 +1151,7 @@ const FAQS = [
     },
     {
         q: "수업 녹화본의 저작권은 누가 갖나요?",
-        a: "수업 녹화본의 저작권은 해당 기관과 강사에게 있습니다. ClassIn은 앱 내 재생만 허용하고 외부 다운로드를 차단하며, 재생 시 워터마크를 제공해 무단 배포를 막습니다.",
+        a: "수업 녹화본의 저작권은 해당 기관과 강사에게 있습니다. Classin은 앱 내 재생만 허용하고 외부 다운로드를 차단하며, 재생 시 워터마크를 제공해 무단 배포를 막습니다.",
     },
     {
         q: "요금제는 어떻게 구성되나요?",
@@ -1224,7 +1224,7 @@ function ImpactTextSection() {
                     transition={{ duration: 0.7 }}
                     className="space-y-6"
                 >
-                    <p className="text-sm font-semibold text-slate-400 tracking-widest uppercase">Before ClassIn</p>
+                    <p className="text-sm font-semibold text-slate-400 tracking-widest uppercase">Before Classin</p>
                     <div className="space-y-4 text-2xl sm:text-3xl md:text-4xl font-sans text-slate-700 leading-snug">
                         <p>화면을 켜놓고 딴짓하는 학생.</p>
                         <p>녹화 파일을 공유하느라 허비하는 10분.</p>
@@ -1287,7 +1287,7 @@ function FullscreenQuoteSection() {
                     <div className="flex flex-col items-center gap-1">
                         <div className="w-8 h-px bg-[#6EE7B7]/40 mb-3" />
                         <p className="text-[#6EE7B7]/70 text-sm font-semibold tracking-wider">왕보 (王博)</p>
-                        <p className="text-white/40 text-sm">북경대학교 부총장 · ClassIn 글로벌 파트너</p>
+                        <p className="text-white/40 text-sm">북경대학교 부총장 · Classin 글로벌 파트너</p>
                     </div>
                 </motion.div>
 
@@ -1320,7 +1320,7 @@ const CASES = [
         tag: "학원 운영",
         name: "부천 정율사관학원",
         headline: "타지역 학생을 온라인으로 끌어들이다",
-        body: "오프라인 수업만 하던 입시학원이 ClassIn의 하이브리드 강의를 도입한 뒤, 부천 외 지역 학생 유치가 가능해졌습니다. 학생이 화면에서 직접 판서하며 풀이하는 방식으로 집중도가 올라갔고, TeacherIn으로 저장한 수업 콘티 덕분에 신규 강사 온보딩 시간도 크게 단축됐습니다.",
+        body: "오프라인 수업만 하던 입시학원이 Classin의 하이브리드 강의를 도입한 뒤, 부천 외 지역 학생 유치가 가능해졌습니다. 학생이 화면에서 직접 판서하며 풀이하는 방식으로 집중도가 올라갔고, TeacherIn으로 저장한 수업 콘티 덕분에 신규 강사 온보딩 시간도 크게 단축됐습니다.",
         results: [
             { label: "타지역 학생 유치", value: "가능" },
             { label: "학생 참여도", value: "급상승" },
@@ -1334,7 +1334,7 @@ const CASES = [
         tag: "글로벌 튜터링",
         name: "Acadsoc",
         headline: "1:1 온라인 튜터링으로 4,000만 학습자",
-        body: "필리핀 튜터와 전 세계 학습자를 연결하는 ESL 플랫폼 Acadsoc는 2017년 ClassIn을 도입한 이후 Series A → C까지 투자를 유치했습니다. 현재도 영업팀과 강사진이 고객 데모에 ClassIn을 1순위로 사용할 만큼 수업 경험의 품질이 검증됐습니다.",
+        body: "필리핀 튜터와 전 세계 학습자를 연결하는 ESL 플랫폼 Acadsoc는 2017년 Classin을 도입한 이후 Series A → C까지 투자를 유치했습니다. 현재도 영업팀과 강사진이 고객 데모에 Classin을 1순위로 사용할 만큼 수업 경험의 품질이 검증됐습니다.",
         results: [
             { label: "누적 학습자", value: "4,000만+" },
             { label: "고용 튜터", value: "15,000명" },
@@ -1348,7 +1348,7 @@ const CASES = [
         tag: "프랜차이즈",
         name: "전국 30개 지점 교육 그룹",
         headline: "본사에서 전국 수업 품질을 실시간 관리",
-        body: "과거에는 지점마다 수업 품질이 달랐습니다. ClassIn 도입 후 전국 모든 수업 데이터가 실시간으로 본사에 집계됩니다. 어떤 강사가 어떤 수업을 어떻게 진행했는지 모니터링이 가능해지면서 교육 품질 편차가 현저히 줄었습니다.",
+        body: "과거에는 지점마다 수업 품질이 달랐습니다. Classin 도입 후 전국 모든 수업 데이터가 실시간으로 본사에 집계됩니다. 어떤 강사가 어떤 수업을 어떻게 진행했는지 모니터링이 가능해지면서 교육 품질 편차가 현저히 줄었습니다.",
         results: [
             { label: "수업 품질 모니터링", value: "실시간" },
             { label: "지점 간 품질 편차", value: "대폭 감소" },
@@ -1428,7 +1428,7 @@ function PricingValueSection() {
                     </h2>
                     <p className="text-lg text-slate-500 max-w-xl mx-auto">
                         LMS 따로, 화상 도구 따로, 녹화 툴 따로 — 세 가지를 각각 쓰면
-                        월 수십만 원이 넘습니다. ClassIn은 하나로 전부 해결합니다.
+                        월 수십만 원이 넘습니다. Classin은 하나로 전부 해결합니다.
                     </p>
                 </motion.div>
 
@@ -1474,7 +1474,7 @@ function PricingValueSection() {
                             { label: "+ LMS 별도 구독", note: "Canvas · Classting Pro 등", scope: "출결 · 과제 · 평가만", line: true },
                             { label: "+ 녹화 · 클라우드 스토리지", note: "별도 저장소 + 관리", scope: "영상 보관만", line: true },
                             { label: "+ AI 기능 별도 구독", note: "ChatGPT Team · AI 첨삭 도구 등", scope: "AI 도구만", line: true },
-                            { label: "ClassIn 하나로", note: "도구마다 다른 계약 · 다른 로그인 없이", scope: "전부 한 번에", line: false, highlight: true },
+                            { label: "Classin 하나로", note: "도구마다 다른 계약 · 다른 로그인 없이", scope: "전부 한 번에", line: false, highlight: true },
                         ].map((row) => (
                             <div key={row.label} className={`flex items-center justify-between ${row.line ? "pb-4 border-b border-slate-100" : ""} ${row.highlight ? "bg-[#F0FDF9] border border-[#22A366]/15 rounded-2xl px-6 py-6 -mx-4 mt-2" : ""}`}>
                                 <div>
@@ -1498,7 +1498,7 @@ function PricingValueSection() {
                     <div className="flex flex-col lg:flex-row lg:items-center lg:justify-between gap-6 lg:gap-10">
                         {/* Heading */}
                         <div className="text-center lg:text-left lg:shrink-0">
-                            <p className="text-slate-300 text-sm font-bold uppercase tracking-[0.18em] mb-1.5">ClassIn 하나로</p>
+                            <p className="text-slate-300 text-sm font-bold uppercase tracking-[0.18em] mb-1.5">Classin 하나로</p>
                             <p className="font-sans font-bold text-white leading-tight">
                                 <span className="text-2xl md:text-3xl">이 모든 기능</span>
                                 <span className="text-sm md:text-base font-medium text-slate-300 ml-2 align-middle">+ AI 기능까지</span>
@@ -1654,17 +1654,42 @@ export default function ProductPage() {
                 </div>
             </section>
 
+            <section aria-labelledby="classin-software-summary" className="bg-white py-12 md:py-16">
+                <div className="container mx-auto px-4 lg:px-8">
+                    <div className="mx-auto grid max-w-5xl gap-6 border-y border-slate-200 py-8 md:grid-cols-[0.9fr_1.4fr] md:py-10">
+                        <div>
+                            <p className="text-xs font-bold uppercase tracking-[0.16em] text-[#22A366]">Classin Software</p>
+                            <h2 id="classin-software-summary" className="mt-3 text-2xl font-bold leading-tight text-slate-950 md:text-3xl">
+                                Classin 소프트웨어는 수업 운영을 한 흐름으로 묶습니다
+                            </h2>
+                        </div>
+                        <div>
+                            <p className="text-base leading-8 text-slate-600 md:text-lg">
+                                Classin 소프트웨어는 실시간 수업, 수업 도구, 과제 제출, AI 자동채점, 학습 데이터 리포트,
+                                학부모 소통을 통합하는 학원 수업 운영 플랫폼입니다. 교사는 수업과 피드백에 집중하고,
+                                관리자는 반별 운영 상태를 데이터로 확인할 수 있습니다.
+                            </p>
+                            <ul className="mt-6 grid gap-3 text-sm font-semibold text-slate-700 sm:grid-cols-3">
+                                <li className="rounded-[8px] bg-[#ECFDF5] px-4 py-3 text-[#084734]">수업 전: 자료·과제 준비</li>
+                                <li className="rounded-[8px] bg-[#ECFDF5] px-4 py-3 text-[#084734]">수업 중: 판서·퀴즈·상호작용</li>
+                                <li className="rounded-[8px] bg-[#ECFDF5] px-4 py-3 text-[#084734]">수업 후: 채점·리포트·복습</li>
+                            </ul>
+                        </div>
+                    </div>
+                </div>
+            </section>
+
             <ImpactTextSection />
 
             <WaveDivider color="#ffffff" />
 
             {/* ================================================================
-                COMPARISON — Zoom vs ClassIn (staggered rows, visual contrast)
+                COMPARISON — Zoom vs Classin (staggered rows, visual contrast)
             ================================================================ */}
             <section className="py-16 md:py-24 bg-white">
                 <div className="container mx-auto px-4 lg:px-8">
                     <motion.div className="text-center mb-16" {...fadeUp}>
-                        <EyebrowTag>WHY CLASSIN</EyebrowTag>
+                        <EyebrowTag>Why Classin</EyebrowTag>
                         <h2 className="text-3xl md:text-4xl lg:text-5xl font-sans text-[#1a1a19] leading-tight">
                             회의용 도구로 수업하던 시대는
                             <br className="hidden sm:block" />
@@ -1682,7 +1707,7 @@ export default function ProductPage() {
                                             <th className="text-center py-4 px-6 font-semibold text-slate-400 w-[35%]">일반 화상 도구 (Zoom 등)</th>
                                             <th className="text-center py-4 px-6 font-bold text-[#22A366] w-[35%] border-l-2 border-[#22A366]/20 bg-[#ECFDF5]/60">
                                                 <span className="inline-flex items-center gap-1.5">
-                                                    ClassIn
+                                                    Classin
                                                     <span className="text-[10px] bg-[#22A366] text-white px-1.5 py-0.5 rounded-full font-bold">추천</span>
                                                 </span>
                                             </th>
@@ -1777,7 +1802,7 @@ export default function ProductPage() {
                                         loop
                                         playsInline
                                         preload="metadata"
-                                        aria-label="교사와 학생이 함께 참여하는 ClassIn 양방향 블랙보드 수업 장면"
+                                        aria-label="교사와 학생이 함께 참여하는 Classin 양방향 블랙보드 수업 장면"
                                     />
                                     <div className="absolute inset-0 bg-gradient-to-t from-[#084734]/18 via-transparent to-white/12" />
                                     <div className="absolute left-5 top-5 rounded-full border border-white/70 bg-white/88 px-3 py-1.5 text-xs font-semibold text-[#084734] shadow-[0_10px_30px_rgba(15,23,42,0.08)] backdrop-blur-sm">
@@ -2005,7 +2030,7 @@ export default function ProductPage() {
                                 {[
                                     { icon: <Video className="w-5 h-5" />, label: "자동 녹화 · 복습", detail: "수업 종료 후 클라우드에 자동 저장. 학생이 언제든 다시 볼 수 있습니다." },
                                     { icon: <BarChart3 className="w-5 h-5" />, label: "학습 데이터 리포트", detail: "집중도, 발언 횟수, 참여 시간을 데이터로. 학부모 상담이 객관적으로 바뀝니다." },
-                                    { icon: <FileText className="w-5 h-5" />, label: "LMS 올인원", detail: "숙제 제출, 평가, 출결 관리 — 별도 LMS 없이 ClassIn 안에서 모두 해결." },
+                                    { icon: <FileText className="w-5 h-5" />, label: "LMS 올인원", detail: "숙제 제출, 평가, 출결 관리 — 별도 LMS 없이 Classin 안에서 모두 해결." },
                                 ].map((f, i) => (
                                     <motion.div key={i} {...stagger(i)} className="flex items-center gap-4 bg-white border border-[rgba(0,0,0,0.06)] rounded-xl p-4 shadow-[0_1px_4px_rgba(0,0,0,0.04)] hover:shadow-[0_4px_18px_rgba(0,0,0,0.07)] hover:border-[rgba(8,71,52,0.15)] transition-all group">
                                         <div className="w-11 h-11 rounded-xl bg-[#ECFDF5] border border-[rgba(34,163,102,0.15)] text-[#084734] flex items-center justify-center shrink-0">{f.icon}</div>
@@ -2098,7 +2123,7 @@ export default function ProductPage() {
                                 <span className="text-[#22A366]">구체적인 한마디</span>
                             </h2>
                             <p className="mt-5 max-w-xl text-base font-medium leading-7 text-slate-500">
-                                수업 도구, 자동채점, 온라인 운영, 온보딩 경험까지. ClassIn 소프트웨어를 실제로 쓰며
+                                수업 도구, 자동채점, 온라인 운영, 온보딩 경험까지. Classin 소프트웨어를 실제로 쓰며
                                 달라진 장면을 중심으로 정리했습니다.
                             </p>
                         </motion.div>

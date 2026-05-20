@@ -67,7 +67,7 @@ export default async function ReceiptPage({
           <div className="mb-8 flex items-start justify-between">
             <div>
               <h1 className="text-[28px] font-bold tracking-[-0.625px] text-[#084734]">
-                ClassIn
+                Classin
               </h1>
               <p className="mt-1 text-sm text-[#615D59]">결제 영수증</p>
             </div>

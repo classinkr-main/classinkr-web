@@ -68,7 +68,7 @@ export default function AfterClassSection() {
                         <span className="text-[#084734]">배움은 계속됩니다</span>
                     </h2>
                     <p className="text-base sm:text-lg text-[#615D59] max-w-xl mx-auto leading-relaxed">
-                        ClassIn Board가 만든 결과물은 교실 밖에서도 살아 숨쉽니다.
+                        Classin Board가 만든 결과물은 교실 밖에서도 살아 숨쉽니다.
                         <br />
                         학생도, 학부모도, 교사도 — 각자의 방식으로 수업을 이어갑니다.
                     </p>

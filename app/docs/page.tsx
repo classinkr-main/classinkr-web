@@ -14,13 +14,13 @@ import {
 } from "./_utils"
 
 export const metadata: Metadata = {
-  title: "ClassIn 가이드 | ClassIn",
+  title: "Classin 가이드 | Classin",
   description:
-    "ClassIn을 처음 살펴보거나 사용 중인 학원이 도입 준비, 수업 운영, 문제 해결 방법을 한곳에서 확인할 수 있습니다.",
+    "Classin을 처음 살펴보거나 사용 중인 학원이 도입 준비, 수업 운영, 문제 해결 방법을 한곳에서 확인할 수 있습니다.",
   openGraph: {
-    title: "ClassIn 가이드",
+    title: "Classin 가이드",
     description:
-      "ClassIn을 처음 살펴보거나 사용 중인 학원이 도입 준비, 수업 운영, 문제 해결 방법을 한곳에서 확인할 수 있습니다.",
+      "Classin을 처음 살펴보거나 사용 중인 학원이 도입 준비, 수업 운영, 문제 해결 방법을 한곳에서 확인할 수 있습니다.",
     type: "website",
   },
 }
@@ -90,7 +90,7 @@ export default async function DocsHomePage({ searchParams }: DocsHomePageProps) 
       <section className="container">
         <div className="max-w-4xl">
           <p className="text-sm font-semibold uppercase tracking-[0.16em] text-[#084734]">
-            ClassIn Guide
+            Classin Guide
           </p>
           <h1 className="mt-4 text-[2.35rem] font-black leading-[1.08] tracking-display sm:text-4xl md:text-6xl">
             클래스인을
@@ -224,7 +224,7 @@ export default async function DocsHomePage({ searchParams }: DocsHomePageProps) 
                 처음이라면
               </p>
               <div className="mt-4 space-y-4 text-sm leading-7 text-[#615D59]">
-                <p>ClassIn을 처음 검토 중이라면 클래스인 시작하기에서 설치와 회원 가입 흐름을 먼저 확인해 보세요.</p>
+                <p>Classin을 처음 검토 중이라면 클래스인 시작하기에서 설치와 회원 가입 흐름을 먼저 확인해 보세요.</p>
                 <p>학원 운영자라면 관리자 가이드에서 코스·교사·학생 관리와 스토리지·웹 라이브 설정을 차례로 점검할 수 있습니다.</p>
                 <p>수업을 직접 진행하는 강사라면 교사 가이드에서 코스 생성, 학습 활동 추가, 교실 기본 설정을 확인하세요.</p>
               </div>
