@@ -270,3 +270,54 @@ export const docsTrustCards = [
     icon: Sparkles,
   },
 ]
+
+export function scoreDocsArticle(doc: any, query: string): number {
+  const tokens = query.split(/\s+/).filter(Boolean)
+  if (tokens.length === 0) return 0
+
+  const titleLower = doc.title.toLowerCase()
+  const descLower = doc.description.toLowerCase()
+  const categoryLower = (doc.category ?? "").toLowerCase()
+  const tagsLower = (doc.tags ?? []).map((t: string) => t.toLowerCase())
+  const searchTextLower = (doc.searchText ?? "").toLowerCase()
+
+  let score = 0
+  let matchesAll = true
+
+  for (const token of tokens) {
+    let tokenMatched = false
+
+    if (titleLower.includes(token)) {
+      score += 100
+      tokenMatched = true
+    }
+    if (descLower.includes(token)) {
+      score += 50
+      tokenMatched = true
+    }
+    if (tagsLower.some((t: string) => t.includes(token))) {
+      score += 30
+      tokenMatched = true
+    }
+    if (categoryLower.includes(token)) {
+      score += 10
+      tokenMatched = true
+    }
+    if (searchTextLower.includes(token)) {
+      score += 10
+      tokenMatched = true
+    }
+
+    if (!tokenMatched) {
+      matchesAll = false
+    }
+  }
+
+  // Bonus for matching all tokens (AND-match gets high priority)
+  if (matchesAll && tokens.length > 1) {
+    score += 500
+  }
+
+  return score
+}
+

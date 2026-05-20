@@ -116,7 +116,7 @@ function tokenize(value: string) {
         .replace(/[^\p{L}\p{N}\s-]/gu, " ")
         .split(/\s+/)
         .map((token) => token.trim())
-        .filter((token) => token.length >= 2)
+        .filter((token) => token.length >= 2 || (token.length === 1 && /[\uac00-\ud7a3\u3130-\u318f\u4e00-\u9fff\u3040-\u30ff]/.test(token)))
         .slice(0, 12)
     )
   )
@@ -178,12 +178,40 @@ function scoreText(question: NormalizedQuestion, source: Omit<ChatbotSource, "sc
   }
 
   let score = 0
+  let matchesAll = true
+
   for (const token of question.tokens) {
-    if (haystacks.title.includes(token)) score += 5
-    if (haystacks.heading.includes(token)) score += 4
-    if (haystacks.excerpt.includes(token)) score += 2
-    if (haystacks.category.includes(token)) score += 1
-    if (haystacks.extras.includes(token)) score += 3
+    let tokenMatched = false
+
+    if (haystacks.title.includes(token)) {
+      score += 15
+      tokenMatched = true
+    }
+    if (haystacks.heading.includes(token)) {
+      score += 10
+      tokenMatched = true
+    }
+    if (haystacks.excerpt.includes(token)) {
+      score += 5
+      tokenMatched = true
+    }
+    if (haystacks.category.includes(token)) {
+      score += 2
+      tokenMatched = true
+    }
+    if (haystacks.extras.includes(token)) {
+      score += 8
+      tokenMatched = true
+    }
+
+    if (!tokenMatched) {
+      matchesAll = false
+    }
+  }
+
+  // Bonus for matching all tokens (AND-match gets high priority)
+  if (matchesAll && question.tokens.length > 1) {
+    score += 50
   }
 
   return score
@@ -318,7 +346,10 @@ async function searchSupabaseSources(question: NormalizedQuestion): Promise<Chat
           ...source,
           score: Math.max(
             1,
-            scoreText(question, source, getMetadataStrings(row.metadata))
+            scoreText(question, source, [
+              row.content,
+              ...getMetadataStrings(row.metadata),
+            ])
           ),
         }
       })

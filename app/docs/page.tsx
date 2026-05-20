@@ -4,11 +4,13 @@ import { ArrowRight, Search } from "lucide-react"
 
 import { getDocCategoryPath, type DocCategoryId } from "@/lib/docs"
 import { getDocsContent } from "@/lib/docs-content"
+import { SearchHighlight } from "@/components/ui/SearchHighlight"
 
 import {
   getCategoryIcon,
   getAllDocsSummaries,
   toArticleSummary,
+  scoreDocsArticle,
 } from "./_utils"
 
 export const metadata: Metadata = {
@@ -54,6 +56,8 @@ function normalizeQuery(value?: string) {
   return value?.trim().toLowerCase() ?? ""
 }
 
+
+
 export default async function DocsHomePage({ searchParams }: DocsHomePageProps) {
   const { q } = await (searchParams ?? Promise.resolve<{ q?: string }>({}))
   const docsContent = await getDocsContent()
@@ -74,13 +78,11 @@ export default async function DocsHomePage({ searchParams }: DocsHomePageProps) 
   const allDocs = getAllDocsSummaries(docsContent)
   const query = normalizeQuery(q)
   const filteredDocs = query
-    ? allDocs.filter((doc) => {
-        const haystack = [doc.title, doc.description, doc.category ?? "", doc.searchText ?? "", ...(doc.tags ?? [])]
-          .join(" ")
-          .toLowerCase()
-
-        return haystack.includes(query)
-      })
+    ? allDocs
+        .map((doc) => ({ doc, score: scoreDocsArticle(doc, query) }))
+        .filter((item) => item.score > 0)
+        .sort((a, b) => b.score - a.score)
+        .map((item) => item.doc)
     : allDocs
 
   return (
@@ -173,10 +175,10 @@ export default async function DocsHomePage({ searchParams }: DocsHomePageProps) 
                   <li key={article.href} className="py-4">
                     <Link href={article.href} className="group block origin-center transition-all duration-150 active:scale-[0.98] active:opacity-90">
                       <p className="break-words text-[15px] font-semibold text-[#111110] group-hover:text-[#084734]">
-                        {article.title}
+                        <SearchHighlight text={article.title} query={q} />
                       </p>
                       <p className="mt-1 break-words text-sm leading-6 text-[#615D59]">
-                        {article.description}
+                        <SearchHighlight text={article.description} query={q} />
                       </p>
                       <p className="mt-2 text-xs text-[#A39E98]">
                         {article.category} · {article.readTime} · {article.updatedAt}
@@ -198,10 +200,10 @@ export default async function DocsHomePage({ searchParams }: DocsHomePageProps) 
                       <li key={article.href} className="py-4">
                         <Link href={article.href} className="group block origin-center transition-all duration-150 active:scale-[0.98] active:opacity-90">
                           <p className="break-words text-[15px] font-semibold text-[#111110] group-hover:text-[#084734]">
-                            {article.title}
+                            <SearchHighlight text={article.title} query={q} />
                           </p>
                           <p className="mt-1 break-words text-sm leading-6 text-[#615D59]">
-                            {article.description}
+                            <SearchHighlight text={article.description} query={q} />
                           </p>
                         </Link>
                       </li>
