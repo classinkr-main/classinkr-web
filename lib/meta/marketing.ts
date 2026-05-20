@@ -56,6 +56,66 @@ export interface MetaCampaignDashboard {
   }
 }
 
+export interface MetaInstagramAccountStatus {
+  id: string
+  username?: string
+  name?: string
+  followersCount: number
+  followsCount: number
+  mediaCount: number
+  profilePictureUrl?: string
+  website?: string
+  biography?: string
+}
+
+export interface MetaInstagramMediaInsights {
+  views: number
+  reach: number
+  likes: number
+  comments: number
+  shares: number
+  saved: number
+  totalInteractions: number
+}
+
+export interface MetaInstagramMediaRow {
+  id: string
+  caption?: string
+  mediaType?: string
+  mediaProductType?: string
+  permalink?: string
+  timestamp?: string
+  thumbnailUrl?: string
+  mediaUrl?: string
+  likeCount: number
+  commentsCount: number
+  insights: MetaInstagramMediaInsights
+  insightsError?: string
+}
+
+export interface MetaInstagramFollowerPoint {
+  date: string
+  value: number
+}
+
+export interface MetaInstagramDashboard {
+  account: MetaInstagramAccountStatus
+  datePreset: string
+  media: MetaInstagramMediaRow[]
+  followerGrowth: MetaInstagramFollowerPoint[]
+  summary: {
+    mediaCount: number
+    totalViews: number
+    totalReach: number
+    totalInteractions: number
+    averageViews: number
+    topMediaId: string | null
+    topMediaViews: number
+    followerDelta: number
+    insightsErrorCount: number
+  }
+}
+
 interface MetaGraphErrorBody {
   error?: {
     message?: string
@@ -105,6 +165,53 @@ interface MetaPagingResponse<T> {
   data?: T[]
 }
 
+interface MetaInstagramAccountApiRow {
+  id: string
+  username?: string
+  name?: string
+  followers_count?: string | number
+  follows_count?: string | number
+  media_count?: string | number
+  profile_picture_url?: string
+  website?: string
+  biography?: string
+}
+
+interface MetaInstagramMediaApiRow {
+  id: string
+  caption?: string
+  media_type?: string
+  media_product_type?: string
+  permalink?: string
+  timestamp?: string
+  thumbnail_url?: string
+  media_url?: string
+  like_count?: string | number
+  comments_count?: string | number
+}
+
+interface MetaInstagramInsightValue {
+  value?: string | number
+  end_time?: string
+}
+
+interface MetaInstagramInsightApiRow {
+  name?: string
+  values?: MetaInstagramInsightValue[]
+}
+
+interface MetaInstagramBusinessAccountResponse {
+  instagram_business_account?: {
+    id?: string
+    username?: string
+  }
+}
+
+interface MetaRequestOptions {
+  tokenKeys?: string[]
+  tryAllTokens?: boolean
+}
+
 function getRequiredEnv(key: string) {
   const value = process.env[key]?.trim()
   if (!value) throw new Error(`Missing ${key}`)
@@ -115,11 +222,12 @@ function getVersion() {
   return process.env.META_GRAPH_API_VERSION?.trim() || "v25.0"
 }
 
-function getAccessTokenCandidates(): MetaAccessTokenCandidate[] {
-  const rawCandidates = [
-    { name: "META_ACCESS_TOKEN", value: process.env.META_ACCESS_TOKEN?.trim() },
-    { name: "META_CAPI_ACCESS_TOKEN", value: process.env.META_CAPI_ACCESS_TOKEN?.trim() },
-  ]
+function getAccessTokenCandidates(tokenKeys?: string[]): MetaAccessTokenCandidate[] {
+  const keys = tokenKeys ?? ["META_ACCESS_TOKEN", "META_CAPI_ACCESS_TOKEN"]
+  const rawCandidates = keys.map((name) => ({
+    name,
+    value: process.env[name]?.trim(),
+  }))
 
   const seen = new Set<string>()
   const candidates = rawCandidates.flatMap((candidate) => {
@@ -129,7 +237,7 @@ function getAccessTokenCandidates(): MetaAccessTokenCandidate[] {
   })
 
   if (candidates.length === 0) {
-    throw new Error("Missing META_ACCESS_TOKEN or META_CAPI_ACCESS_TOKEN")
+    throw new Error(`Missing ${keys.join(" or ")}`)
   }
 
   return candidates
@@ -190,8 +298,12 @@ function shouldTryNextToken(status: number, error: MetaGraphErrorBody["error"]) 
   return status === 401 || error?.code === 190
 }
 
-async function metaGet<T>(path: string, params?: Record<string, string | number | undefined>) {
-  const candidates = getAccessTokenCandidates()
+async function metaGet<T>(
+  path: string,
+  params?: Record<string, string | number | undefined>,
+  options: MetaRequestOptions = {}
+) {
+  const candidates = getAccessTokenCandidates(options.tokenKeys)
   let lastError: Error | null = null
 
   for (let index = 0; index < candidates.length; index += 1) {
@@ -207,7 +319,12 @@ async function metaGet<T>(path: string, params?: Record<string, string | number 
 
     const error = body.error
     lastError = new Error(formatMetaError("Meta API request failed", response.status, error))
-    if (index < candidates.length - 1 && shouldTryNextToken(response.status, error)) continue
+    if (
+      index < candidates.length - 1 &&
+      (options.tryAllTokens || shouldTryNextToken(response.status, error))
+    ) {
+      continue
+    }
     throw lastError
   }
 
@@ -263,6 +380,187 @@ function extractLeads(actions: MetaInsightAction[] | undefined) {
   return normalized
     .filter((action) => action.type.includes("lead"))
     .reduce((max, action) => Math.max(max, action.value), 0)
+}
+
+const INSTAGRAM_TOKEN_KEYS = [
+  "META_ACCESS_TOKEN",
+  "META_PAGE_ACCESS_TOKEN",
+  "META_CAPI_ACCESS_TOKEN",
+]
+
+function getDirectInstagramAccountId() {
+  return (
+    process.env.META_INSTAGRAM_BUSINESS_ACCOUNT_ID?.trim() ||
+    process.env.INSTAGRAM_BUSINESS_ACCOUNT_ID?.trim() ||
+    process.env.IG_USER_ID?.trim() ||
+    ""
+  )
+}
+
+async function resolveInstagramAccountId() {
+  const direct = getDirectInstagramAccountId()
+  if (direct) return direct
+
+  const errors: string[] = []
+  const pageId = process.env.META_PAGE_ID?.trim()
+  if (pageId) {
+    try {
+      const page = await metaGet<MetaInstagramBusinessAccountResponse>(
+        pageId,
+        { fields: "instagram_business_account{id,username}" },
+        { tokenKeys: INSTAGRAM_TOKEN_KEYS, tryAllTokens: true }
+      )
+      const id = page.instagram_business_account?.id
+      if (id) return id
+    } catch (error) {
+      errors.push(error instanceof Error ? error.message : String(error))
+    }
+  }
+
+  try {
+    const adAccounts = await metaGet<MetaPagingResponse<{ id?: string; username?: string }>>(
+      `${getAdAccountId()}/instagram_accounts`,
+      { fields: "id,username", limit: 1 },
+      { tokenKeys: INSTAGRAM_TOKEN_KEYS, tryAllTokens: true }
+    )
+    const id = adAccounts.data?.[0]?.id
+    if (id) return id
+  } catch (error) {
+    errors.push(error instanceof Error ? error.message : String(error))
+  }
+
+  const suffix = errors.length > 0 ? ` Last error: ${errors[errors.length - 1]}` : ""
+  throw new Error(
+    `Missing META_INSTAGRAM_BUSINESS_ACCOUNT_ID. Set it directly, or configure META_PAGE_ID with a connected Instagram business account.${suffix}`
+  )
+}
+
+function getDateRangeForPreset(datePreset: string) {
+  const end = new Date()
+  const start = new Date(end)
+
+  switch (datePreset) {
+    case "last_7d":
+      start.setDate(end.getDate() - 7)
+      break
+    case "last_90d":
+      start.setDate(end.getDate() - 90)
+      break
+    case "this_month":
+      start.setDate(1)
+      start.setHours(0, 0, 0, 0)
+      break
+    case "last_30d":
+    default:
+      start.setDate(end.getDate() - 30)
+      break
+  }
+
+  return {
+    since: Math.floor(start.getTime() / 1000),
+    until: Math.floor(end.getTime() / 1000),
+  }
+}
+
+function mapInsightRows(rows: MetaInstagramInsightApiRow[] | undefined) {
+  const output: Record<string, number> = {}
+  for (const row of rows ?? []) {
+    if (!row.name) continue
+    const firstValue = row.values?.[0]?.value
+    output[row.name] = toNumber(firstValue)
+  }
+  return output
+}
+
+function summarizeInstagram(media: MetaInstagramMediaRow[], followerGrowth: MetaInstagramFollowerPoint[]) {
+  const totalViews = media.reduce((sum, item) => sum + item.insights.views, 0)
+  const totalReach = media.reduce((sum, item) => sum + item.insights.reach, 0)
+  const totalInteractions = media.reduce((sum, item) => sum + item.insights.totalInteractions, 0)
+  const topMedia = media.reduce<MetaInstagramMediaRow | null>((top, item) => {
+    if (!top || item.insights.views > top.insights.views) return item
+    return top
+  }, null)
+  const followerDelta = followerGrowth.reduce((sum, item) => sum + item.value, 0)
+
+  return {
+    mediaCount: media.length,
+    totalViews,
+    totalReach,
+    totalInteractions,
+    averageViews: media.length > 0 ? Math.round(totalViews / media.length) : 0,
+    topMediaId: topMedia?.id ?? null,
+    topMediaViews: topMedia?.insights.views ?? 0,
+    followerDelta,
+    insightsErrorCount: media.filter((item) => item.insightsError).length,
+  }
+}
+
+async function getInstagramMediaInsights(mediaId: string): Promise<{
+  insights: MetaInstagramMediaInsights
+  error?: string
+}> {
+  const metrics = ["views", "reach", "likes", "comments", "shares", "saved", "total_interactions"]
+  const empty: MetaInstagramMediaInsights = {
+    views: 0,
+    reach: 0,
+    likes: 0,
+    comments: 0,
+    shares: 0,
+    saved: 0,
+    totalInteractions: 0,
+  }
+
+  try {
+    const response = await metaGet<MetaPagingResponse<MetaInstagramInsightApiRow>>(
+      `${mediaId}/insights`,
+      { metric: metrics.join(",") },
+      { tokenKeys: INSTAGRAM_TOKEN_KEYS, tryAllTokens: true }
+    )
+    const values = mapInsightRows(response.data)
+    return {
+      insights: {
+        views: values.views ?? 0,
+        reach: values.reach ?? 0,
+        likes: values.likes ?? 0,
+        comments: values.comments ?? 0,
+        shares: values.shares ?? 0,
+        saved: values.saved ?? 0,
+        totalInteractions:
+          values.total_interactions ??
+          (values.likes ?? 0) + (values.comments ?? 0) + (values.shares ?? 0) + (values.saved ?? 0),
+      },
+    }
+  } catch (error) {
+    return {
+      insights: empty,
+      error: error instanceof Error ? error.message : String(error),
+    }
+  }
+}
+
+async function getInstagramFollowerGrowth(igUserId: string, datePreset: string) {
+  const { since, until } = getDateRangeForPreset(datePreset)
+
+  try {
+    const response = await metaGet<MetaPagingResponse<MetaInstagramInsightApiRow>>(
+      `${igUserId}/insights`,
+      {
+        metric: "follower_count",
+        period: "day",
+        since,
+        until,
+      },
+      { tokenKeys: INSTAGRAM_TOKEN_KEYS, tryAllTokens: true }
+    )
+
+    const values = response.data?.[0]?.values ?? []
+    return values.map((point) => ({
+      date: point.end_time?.slice(0, 10) ?? "",
+      value: toNumber(point.value),
+    })).filter((point) => point.date)
+  } catch {
+    return []
+  }
 }
 
 function summarize(campaigns: MetaCampaignRow[]) {
@@ -385,4 +683,74 @@ export async function getMetaCampaignDashboard({
 
 export async function updateMetaCampaignStatus(id: string, status: "ACTIVE" | "PAUSED") {
   return metaPost<{ success?: boolean }>(id, { status })
+}
+
+export async function getMetaInstagramDashboard({
+  datePreset = "last_30d",
+  limit = 25,
+}: {
+  datePreset?: string
+  limit?: number
+} = {}): Promise<MetaInstagramDashboard> {
+  const igUserId = await resolveInstagramAccountId()
+  const safeLimit = Math.min(Math.max(limit, 1), 50)
+
+  const [account, mediaResponse, followerGrowth] = await Promise.all([
+    metaGet<MetaInstagramAccountApiRow>(
+      igUserId,
+      {
+        fields:
+          "id,username,name,followers_count,follows_count,media_count,profile_picture_url,website,biography",
+      },
+      { tokenKeys: INSTAGRAM_TOKEN_KEYS, tryAllTokens: true }
+    ),
+    metaGet<MetaPagingResponse<MetaInstagramMediaApiRow>>(
+      `${igUserId}/media`,
+      {
+        fields:
+          "id,caption,media_type,media_product_type,permalink,timestamp,thumbnail_url,media_url,like_count,comments_count",
+        limit: safeLimit,
+      },
+      { tokenKeys: INSTAGRAM_TOKEN_KEYS, tryAllTokens: true }
+    ),
+    getInstagramFollowerGrowth(igUserId, datePreset),
+  ])
+
+  const media = await Promise.all(
+    (mediaResponse.data ?? []).map(async (row): Promise<MetaInstagramMediaRow> => {
+      const { insights, error } = await getInstagramMediaInsights(row.id)
+      return {
+        id: row.id,
+        caption: row.caption,
+        mediaType: row.media_type,
+        mediaProductType: row.media_product_type,
+        permalink: row.permalink,
+        timestamp: row.timestamp,
+        thumbnailUrl: row.thumbnail_url,
+        mediaUrl: row.media_url,
+        likeCount: toNumber(row.like_count),
+        commentsCount: toNumber(row.comments_count),
+        insights,
+        insightsError: error,
+      }
+    })
+  )
+
+  return {
+    account: {
+      id: account.id,
+      username: account.username,
+      name: account.name,
+      followersCount: toNumber(account.followers_count),
+      followsCount: toNumber(account.follows_count),
+      mediaCount: toNumber(account.media_count),
+      profilePictureUrl: account.profile_picture_url,
+      website: account.website,
+      biography: account.biography,
+    },
+    datePreset,
+    media,
+    followerGrowth,
+    summary: summarizeInstagram(media, followerGrowth),
+  }
 }
