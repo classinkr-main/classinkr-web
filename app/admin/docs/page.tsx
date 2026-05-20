@@ -139,6 +139,16 @@ const READINESS_FILTERS = [
   { value: "featured", label: "대표 문서" },
 ]
 
+const DOCS_TABS = [
+  { value: "documents", label: "문서", icon: FileText },
+  { value: "recommended", label: "추천 질문", icon: MessageSquareText },
+  { value: "categories", label: "카테고리", icon: FolderTree },
+  { value: "redirects", label: "리디렉트", icon: ExternalLink },
+  { value: "backlog", label: "질문 백로그", icon: Bot },
+] as const
+
+type DocsTab = (typeof DOCS_TABS)[number]["value"]
+
 function getSourceLabel(content: AdminDocsContentResponse | null) {
   if (!content) return "연결 확인 중"
   if (content.status === "live") return "Supabase live"
@@ -229,6 +239,7 @@ export default function AdminDocsPage() {
   const [bulkFeatured, setBulkFeatured] = useState("unchanged")
   const [bulkSaving, setBulkSaving] = useState(false)
   const [savedViews, setSavedViews] = useState<SavedDocsView[]>([])
+  const [activeTab, setActiveTab] = useState<DocsTab>("documents")
 
   const load = useCallback(async () => {
     setLoading(true)
@@ -440,9 +451,14 @@ export default function AdminDocsPage() {
   const warnings = [...(content?.warnings ?? []), ...(analytics?.warnings ?? [])]
   const summary = analytics?.summary
   const canMutateDocs = content?.status === "live"
+  const showBulkActions = activeTab === "documents" && selectedArticleIds.length > 0
 
   return (
-    <div className="px-4 pt-8 pb-16 sm:px-6 sm:pt-10 sm:pb-20 lg:px-8">
+    <div
+      className={`px-4 pt-8 sm:px-6 sm:pt-10 lg:px-8 ${
+        showBulkActions ? "pb-44 sm:pb-32" : "pb-16 sm:pb-20"
+      }`}
+    >
       <div className="mb-8 flex flex-col gap-4 lg:flex-row lg:items-start lg:justify-between">
         <div>
           <div className="mb-2 flex flex-wrap items-center gap-2">
@@ -582,7 +598,35 @@ export default function AdminDocsPage() {
         />
       </section>
 
-      <section className="mb-8 grid gap-6 xl:grid-cols-[minmax(0,1fr)_380px]">
+      <div className="mb-6 overflow-x-auto" role="tablist" aria-label="문서 관리 섹션">
+        <div className="inline-flex min-w-full rounded-xl border border-[#e8e8e4] bg-white p-1 sm:min-w-0">
+          {DOCS_TABS.map((tab) => {
+            const Icon = tab.icon
+            const isActive = activeTab === tab.value
+            return (
+              <button
+                key={tab.value}
+                type="button"
+                role="tab"
+                aria-selected={isActive}
+                onClick={() => setActiveTab(tab.value)}
+                className={`inline-flex h-10 flex-1 items-center justify-center gap-2 rounded-lg px-3 text-[13px] font-semibold transition-colors sm:flex-none ${
+                  isActive
+                    ? "bg-[#111110] text-white"
+                    : "text-[#1a1a1a]/45 hover:bg-[#f5f5f2] hover:text-[#111110]"
+                }`}
+              >
+                <Icon className="h-4 w-4" />
+                <span className="whitespace-nowrap">{tab.label}</span>
+              </button>
+            )
+          })}
+        </div>
+      </div>
+
+      {activeTab === "documents" ? (
+        <>
+          <section className="mb-8 grid gap-6 xl:grid-cols-[minmax(0,1fr)_380px]">
         <div className="overflow-hidden rounded-2xl border border-[#e8e8e4] bg-white">
           <div className="flex flex-col gap-4 border-b border-[#e8e8e4] px-4 py-4 sm:flex-row sm:items-center sm:justify-between">
             <div>
@@ -671,68 +715,6 @@ export default function AdminDocsPage() {
               ))}
             </div>
 
-            {selectedArticleIds.length > 0 ? (
-              <div className="flex flex-wrap items-center gap-2 rounded-xl border border-[#e8e8e4] bg-white p-2">
-                <span className="inline-flex items-center gap-1.5 px-1 text-[12px] font-semibold text-[#111110]">
-                  <CheckSquare className="h-3.5 w-3.5" />
-                  {formatNumber(selectedArticleIds.length)}개 선택
-                </span>
-                <select
-                  value={bulkStatus}
-                  onChange={(event) => setBulkStatus(event.target.value)}
-                  className="h-8 rounded-lg border border-[#e8e8e4] bg-white px-2 text-[12px] outline-none focus:border-[#084734]"
-                >
-                  <option value="unchanged">상태 유지</option>
-                  {ARTICLE_STATUS_OPTIONS.map((option) => (
-                    <option key={option.value} value={option.value}>{option.label}</option>
-                  ))}
-                </select>
-                <select
-                  value={bulkVisibility}
-                  onChange={(event) => setBulkVisibility(event.target.value)}
-                  className="h-8 rounded-lg border border-[#e8e8e4] bg-white px-2 text-[12px] outline-none focus:border-[#084734]"
-                >
-                  <option value="unchanged">가시성 유지</option>
-                  {ARTICLE_VISIBILITY_OPTIONS.map((option) => (
-                    <option key={option.value} value={option.value}>{option.label}</option>
-                  ))}
-                </select>
-                <select
-                  value={bulkCategoryId}
-                  onChange={(event) => setBulkCategoryId(event.target.value)}
-                  className="h-8 rounded-lg border border-[#e8e8e4] bg-white px-2 text-[12px] outline-none focus:border-[#084734]"
-                >
-                  <option value="unchanged">카테고리 유지</option>
-                  {(content?.categories ?? []).map((category) => (
-                    <option key={category.id} value={category.id}>{category.title}</option>
-                  ))}
-                </select>
-                <select
-                  value={bulkFeatured}
-                  onChange={(event) => setBulkFeatured(event.target.value)}
-                  className="h-8 rounded-lg border border-[#e8e8e4] bg-white px-2 text-[12px] outline-none focus:border-[#084734]"
-                >
-                  <option value="unchanged">대표 유지</option>
-                  <option value="true">대표 지정</option>
-                  <option value="false">대표 해제</option>
-                </select>
-                <button
-                  type="button"
-                  onClick={() => void handleBulkPatch()}
-                  disabled={bulkSaving}
-                  className="inline-flex h-8 items-center justify-center rounded-lg bg-[#111110] px-3 text-[12px] font-semibold text-white transition-colors hover:bg-[#2a2a28] disabled:cursor-not-allowed disabled:opacity-50"
-                >
-                  {bulkSaving ? "적용 중" : "일괄 적용"}
-                </button>
-                <button
-                  type="button"
-                  onClick={() => setSelectedArticleIds([])}
-                  className="h-8 rounded-lg border border-[#e8e8e4] bg-white px-2.5 text-[12px] font-semibold text-[#1a1a1a]/45 transition-colors hover:bg-[#f5f5f2]"
-                >
-                  선택 해제
-                </button>
-              </div>
-            ) : null}
           </div>
 
           <div className="overflow-x-auto">
@@ -999,7 +981,7 @@ export default function AdminDocsPage() {
         </aside>
       </section>
 
-      <section className="grid gap-6 xl:grid-cols-2">
+          <section className="mb-8">
         <div className="overflow-hidden rounded-2xl border border-[#e8e8e4] bg-white">
           <div className="border-b border-[#e8e8e4] px-4 py-4">
             <div className="flex items-center gap-2">
@@ -1035,18 +1017,100 @@ export default function AdminDocsPage() {
             )}
           </div>
         </div>
+          </section>
+        </>
+      ) : null}
 
-        <DocsRecommendedQuestionsManager articles={content?.articles ?? []} />
-      </section>
+      {activeTab === "recommended" ? (
+        <section className="mb-8">
+          <DocsRecommendedQuestionsManager articles={content?.articles ?? []} />
+        </section>
+      ) : null}
 
-      <section className="mt-6 grid gap-6 xl:grid-cols-2">
-        <DocsCategoryManager />
-        <DocsRedirectManager articles={content?.articles ?? []} />
-      </section>
+      {activeTab === "categories" ? (
+        <section className="mb-8">
+          <DocsCategoryManager />
+        </section>
+      ) : null}
 
-      <section className="mt-6">
-        <DocsQuestionClusterBacklog />
-      </section>
+      {activeTab === "redirects" ? (
+        <section className="mb-8">
+          <DocsRedirectManager articles={content?.articles ?? []} />
+        </section>
+      ) : null}
+
+      {activeTab === "backlog" ? (
+        <section className="mb-8">
+          <DocsQuestionClusterBacklog />
+        </section>
+      ) : null}
+
+      {showBulkActions ? (
+        <div className="fixed inset-x-0 bottom-0 z-30 border-t border-[#e8e8e4] bg-white/95 px-4 py-3 shadow-[0_-12px_30px_rgba(17,17,16,0.08)] backdrop-blur sm:px-6 lg:px-8">
+          <div className="mx-auto flex max-w-7xl flex-col gap-3 lg:flex-row lg:items-center lg:justify-between">
+            <span className="inline-flex items-center gap-2 text-[13px] font-semibold text-[#111110]">
+              <CheckSquare className="h-4 w-4 text-[#084734]" />
+              {formatNumber(selectedArticleIds.length)}개 문서 선택됨
+            </span>
+            <div className="flex flex-col gap-2 sm:flex-row sm:flex-wrap sm:items-center sm:justify-end">
+              <select
+                value={bulkStatus}
+                onChange={(event) => setBulkStatus(event.target.value)}
+                className="h-9 rounded-lg border border-[#e8e8e4] bg-white px-2 text-[12px] outline-none focus:border-[#084734]"
+              >
+                <option value="unchanged">상태 유지</option>
+                {ARTICLE_STATUS_OPTIONS.map((option) => (
+                  <option key={option.value} value={option.value}>{option.label}</option>
+                ))}
+              </select>
+              <select
+                value={bulkVisibility}
+                onChange={(event) => setBulkVisibility(event.target.value)}
+                className="h-9 rounded-lg border border-[#e8e8e4] bg-white px-2 text-[12px] outline-none focus:border-[#084734]"
+              >
+                <option value="unchanged">가시성 유지</option>
+                {ARTICLE_VISIBILITY_OPTIONS.map((option) => (
+                  <option key={option.value} value={option.value}>{option.label}</option>
+                ))}
+              </select>
+              <select
+                value={bulkCategoryId}
+                onChange={(event) => setBulkCategoryId(event.target.value)}
+                className="h-9 rounded-lg border border-[#e8e8e4] bg-white px-2 text-[12px] outline-none focus:border-[#084734]"
+              >
+                <option value="unchanged">카테고리 유지</option>
+                {(content?.categories ?? []).map((category) => (
+                  <option key={category.id} value={category.id}>{category.title}</option>
+                ))}
+              </select>
+              <select
+                value={bulkFeatured}
+                onChange={(event) => setBulkFeatured(event.target.value)}
+                className="h-9 rounded-lg border border-[#e8e8e4] bg-white px-2 text-[12px] outline-none focus:border-[#084734]"
+              >
+                <option value="unchanged">대표 유지</option>
+                <option value="true">대표 지정</option>
+                <option value="false">대표 해제</option>
+              </select>
+              <button
+                type="button"
+                onClick={() => void handleBulkPatch()}
+                disabled={bulkSaving}
+                className="inline-flex h-9 items-center justify-center rounded-lg bg-[#111110] px-3 text-[12px] font-semibold text-white transition-colors hover:bg-[#2a2a28] disabled:cursor-not-allowed disabled:opacity-50"
+              >
+                {bulkSaving ? "적용 중" : "일괄 적용"}
+              </button>
+              <button
+                type="button"
+                onClick={() => setSelectedArticleIds([])}
+                className="h-9 rounded-lg border border-[#e8e8e4] bg-white px-2.5 text-[12px] font-semibold text-[#1a1a1a]/45 transition-colors hover:bg-[#f5f5f2]"
+              >
+                선택 해제
+              </button>
+            </div>
+          </div>
+        </div>
+      ) : null}
     </div>
   )
 }

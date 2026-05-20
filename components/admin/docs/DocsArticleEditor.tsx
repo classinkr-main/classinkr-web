@@ -393,6 +393,19 @@ interface FormState {
   seoDescription: string
 }
 
+type SidebarTab = "publish" | "insights" | "versions" | "templates"
+
+const SIDEBAR_TABS: { value: SidebarTab; label: string; mode: "all" | "create" | "edit" }[] = [
+  { value: "publish", label: "게시", mode: "all" },
+  { value: "insights", label: "성과", mode: "edit" },
+  { value: "versions", label: "버전", mode: "edit" },
+  { value: "templates", label: "템플릿", mode: "create" },
+]
+
+function formSignature(form: FormState) {
+  return JSON.stringify(form)
+}
+
 function toCsv(values: string[] | undefined) {
   return (values ?? []).join(", ")
 }
@@ -726,6 +739,9 @@ export default function DocsArticleEditor({ mode, categories, article }: Props) 
   const [form, setForm] = useState<FormState>(() =>
     initialForm(article, categories[0]?.id ?? "start")
   )
+  const [lastSavedForm, setLastSavedForm] = useState<FormState>(() =>
+    initialForm(article, categories[0]?.id ?? "start")
+  )
   const [saving, setSaving] = useState(false)
   const [deleting, setDeleting] = useState(false)
   const [error, setError] = useState<string | null>(null)
@@ -743,6 +759,9 @@ export default function DocsArticleEditor({ mode, categories, article }: Props) 
   const [rollingBackVersionId, setRollingBackVersionId] = useState<string | null>(null)
   const [uploadingMedia, setUploadingMedia] = useState(false)
   const [snapshotNote, setSnapshotNote] = useState("Manual snapshot")
+  const [activeSidebarTab, setActiveSidebarTab] = useState<SidebarTab>(
+    mode === "create" ? "templates" : "publish"
+  )
 
   const publicPath = useMemo(
     () => `/docs/${form.categoryId}/${form.slug || article?.slug || "new"}`,
@@ -798,6 +817,14 @@ export default function DocsArticleEditor({ mode, categories, article }: Props) 
     [chatbotIncluded, form.chatbotSummary, form.contentMarkdown, form.keywordsCsv, form.tagsCsv]
   )
   const completedAiChecks = aiChecklist.filter((item) => item.complete).length
+  const isDirty = useMemo(
+    () => mode === "create" || formSignature(form) !== formSignature(lastSavedForm),
+    [form, lastSavedForm, mode]
+  )
+  const visibleSidebarTabs = useMemo(
+    () => SIDEBAR_TABS.filter((tab) => tab.mode === "all" || tab.mode === mode),
+    [mode]
+  )
 
   const loadEditorSupport = useCallback(async () => {
     if (mode !== "edit" || !article) return
@@ -1038,7 +1065,9 @@ export default function DocsArticleEditor({ mode, categories, article }: Props) 
         `/api/admin/docs/articles/${article.id}/versions/${version.id}/rollback`,
         { method: "POST" }
       )
-      setForm(initialForm(detail, detail.categoryId))
+      const rolledBackForm = initialForm(detail, detail.categoryId)
+      setForm(rolledBackForm)
+      setLastSavedForm(rolledBackForm)
       await adminFetch("/api/admin/docs/reindex", {
         method: "POST",
         body: JSON.stringify({ articleId: detail.id }),
@@ -1168,7 +1197,9 @@ export default function DocsArticleEditor({ mode, categories, article }: Props) 
         }
       )
       await reindexIfPublished(next.status)
-      setForm(initialForm(detail, detail.categoryId))
+      const savedForm = initialForm(detail, detail.categoryId)
+      setForm(savedForm)
+      setLastSavedForm(savedForm)
       setSavedMessage(
         next.status === "published" ? "저장 완료 · 검색 인덱스 반영" : "저장 완료"
       )
@@ -1216,6 +1247,15 @@ export default function DocsArticleEditor({ mode, categories, article }: Props) 
           <span className="line-clamp-1 max-w-[320px] text-[13px] font-medium text-[#111110]">
             {form.title || (mode === "create" ? "새 문서" : "문서 편집")}
           </span>
+          <span
+            className={`inline-flex items-center rounded-full px-2 py-0.5 text-[11px] font-semibold ${
+              isDirty
+                ? "bg-amber-50 text-amber-700"
+                : "bg-emerald-50 text-emerald-700"
+            }`}
+          >
+            {isDirty ? "저장 안 됨" : "저장됨"}
+          </span>
         </div>
 
         <div className="flex flex-wrap items-center gap-2">
@@ -1257,7 +1297,7 @@ export default function DocsArticleEditor({ mode, categories, article }: Props) 
             className="inline-flex items-center gap-1.5 rounded-lg border border-[#e8e8e4] bg-white px-3 py-2 text-[13px] font-medium text-[#111110] transition-colors hover:bg-[#f5f5f2] disabled:opacity-50"
           >
             <Save className="h-3.5 w-3.5" />
-            {saving ? "저장 중..." : "저장"}
+            {saving ? "저장 중..." : form.status === "published" ? "현재 문서 저장" : "초안 저장"}
           </button>
 
           <button
@@ -1266,7 +1306,7 @@ export default function DocsArticleEditor({ mode, categories, article }: Props) 
             disabled={saving}
             className="inline-flex items-center gap-1.5 rounded-lg bg-[#084734] px-3 py-2 text-[13px] font-medium text-white transition-colors hover:bg-[#065c41] disabled:opacity-50"
           >
-            {form.status === "published" ? "게시 문서 저장" : "게시"}
+            {form.status === "published" ? "게시 상태로 저장" : "게시하기"}
           </button>
         </div>
       </div>
@@ -1275,9 +1315,20 @@ export default function DocsArticleEditor({ mode, categories, article }: Props) 
         <div className="grid gap-6 lg:grid-cols-[minmax(0,1fr)_320px] xl:grid-cols-[minmax(0,1fr)_360px]">
           <main className="space-y-6">
             <section className="space-y-4 rounded-2xl border border-[rgba(0,0,0,0.08)] bg-white p-6">
-              <h2 className="text-[13px] font-semibold uppercase tracking-wide text-[#1a1a1a]/40">
-                기본 정보
-              </h2>
+              <div className="flex flex-wrap items-center justify-between gap-3">
+                <h2 className="text-[13px] font-semibold uppercase tracking-wide text-[#1a1a1a]/40">
+                  기본 정보
+                </h2>
+                {isDirty ? (
+                  <span className="rounded-full border border-amber-100 bg-amber-50 px-2.5 py-1 text-[11px] font-semibold text-amber-700">
+                    저장하지 않은 변경 사항
+                  </span>
+                ) : (
+                  <span className="rounded-full border border-emerald-100 bg-emerald-50 px-2.5 py-1 text-[11px] font-semibold text-emerald-700">
+                    최신 저장 상태
+                  </span>
+                )}
+              </div>
 
               <div>
                 <label className="mb-1.5 block text-[12px] font-medium text-[#1a1a1a]/50">
@@ -1774,56 +1825,243 @@ export default function DocsArticleEditor({ mode, categories, article }: Props) 
               </section>
             ) : null}
 
-            {mode === "edit" && article ? (
-              <section className="grid gap-6 xl:grid-cols-2">
-                <div className="space-y-4 rounded-2xl border border-[rgba(0,0,0,0.08)] bg-white p-6">
+          </main>
+
+          <aside className="lg:sticky lg:top-20 lg:self-start">
+            <section className="rounded-2xl border border-[rgba(0,0,0,0.08)] bg-white p-4">
+              <div className="rounded-xl bg-[#FAFAF8] p-1">
+                <div
+                  className={`grid gap-1 ${
+                    visibleSidebarTabs.length === 4
+                      ? "grid-cols-4"
+                      : visibleSidebarTabs.length === 3
+                        ? "grid-cols-3"
+                        : "grid-cols-2"
+                  }`}
+                >
+                  {visibleSidebarTabs.map((tab) => (
+                    <button
+                      key={tab.value}
+                      type="button"
+                      onClick={() => setActiveSidebarTab(tab.value)}
+                      className={`rounded-lg px-2 py-2 text-[12px] font-semibold transition-colors ${
+                        activeSidebarTab === tab.value
+                          ? "bg-white text-[#111110] shadow-sm"
+                          : "text-[#1a1a1a]/45 hover:text-[#111110]"
+                      }`}
+                    >
+                      {tab.label}
+                    </button>
+                  ))}
+                </div>
+              </div>
+
+              {activeSidebarTab === "publish" ? (
+                <div className="mt-5 space-y-5">
+                  <div className="flex items-start justify-between gap-3">
+                    <div>
+                      <h2 className="text-[13px] font-semibold uppercase tracking-wide text-[#1a1a1a]/40">
+                        게시 설정
+                      </h2>
+                      <p className="mt-1 text-[12px] text-[#1a1a1a]/40">
+                        상태, 공개 범위, SEO 값을 저장 전에 확인합니다.
+                      </p>
+                    </div>
+                    <span
+                      className={`shrink-0 rounded-full px-2 py-0.5 text-[11px] font-semibold ${
+                        isDirty ? "bg-amber-50 text-amber-700" : "bg-emerald-50 text-emerald-700"
+                      }`}
+                    >
+                      {isDirty ? "미저장" : "저장됨"}
+                    </span>
+                  </div>
+
+                  <div>
+                    <label className="mb-1.5 block text-[12px] font-medium text-[#1a1a1a]/50">
+                      상태
+                    </label>
+                    <div className="flex flex-wrap gap-2">
+                      {STATUS_OPTIONS.map((option) => {
+                        const active = form.status === option.value
+                        return (
+                          <button
+                            key={option.value}
+                            type="button"
+                            onClick={() => update("status", option.value)}
+                            className={`inline-flex items-center rounded-full border px-3 py-1 text-[12px] font-semibold transition-colors ${
+                              active
+                                ? option.tone
+                                : "border-[#e8e8e4] bg-white text-[#1a1a1a]/40 hover:bg-[#f5f5f2]"
+                            }`}
+                          >
+                            {option.label}
+                          </button>
+                        )
+                      })}
+                    </div>
+                  </div>
+
+                  <div className="grid gap-4">
+                    <div>
+                      <label className="mb-1.5 block text-[12px] font-medium text-[#1a1a1a]/50">
+                        가시성
+                      </label>
+                      <select
+                        value={form.visibility}
+                        onChange={(event) =>
+                          update("visibility", event.target.value as DocsArticleVisibility)
+                        }
+                        className="w-full rounded-lg border border-[rgba(0,0,0,0.12)] bg-white px-3 py-2 text-[13px] focus:border-[#111110]/30 focus:outline-none"
+                      >
+                        {VISIBILITY_OPTIONS.map((option) => (
+                          <option key={option.value} value={option.value}>
+                            {option.label}
+                          </option>
+                        ))}
+                      </select>
+                    </div>
+                    <div>
+                      <label className="mb-1.5 block text-[12px] font-medium text-[#1a1a1a]/50">
+                        정렬 순서 (낮을수록 위)
+                      </label>
+                      <input
+                        type="number"
+                        value={form.orderIndex}
+                        onChange={(event) => update("orderIndex", Number(event.target.value) || 0)}
+                        className="w-full rounded-lg border border-[rgba(0,0,0,0.12)] px-3 py-2 text-[13px] focus:border-[#111110]/30 focus:outline-none"
+                      />
+                    </div>
+                  </div>
+
+                  <div className="grid gap-3 rounded-xl bg-[#FAFAF8] p-3">
+                    <label className="inline-flex items-center gap-2 text-[13px] text-[#1a1a1a]/60">
+                      <input
+                        type="checkbox"
+                        checked={form.featured}
+                        onChange={(event) => update("featured", event.target.checked)}
+                        className="h-4 w-4 rounded border-[rgba(0,0,0,0.15)]"
+                      />
+                      대표 문서
+                    </label>
+                    <label className="inline-flex items-center gap-2 text-[13px] text-[#1a1a1a]/60">
+                      <input
+                        type="checkbox"
+                        checked={form.noindex}
+                        onChange={(event) => update("noindex", event.target.checked)}
+                        className="h-4 w-4 rounded border-[rgba(0,0,0,0.15)]"
+                      />
+                      검색 엔진 색인 제외
+                    </label>
+                  </div>
+
+                  <div className="grid gap-4 border-t border-[#f0f0ec] pt-4">
+                    <div>
+                      <label className="mb-1.5 block text-[12px] font-medium text-[#1a1a1a]/50">
+                        SEO 제목
+                      </label>
+                      <input
+                        type="text"
+                        value={form.seoTitle}
+                        onChange={(event) => update("seoTitle", event.target.value)}
+                        placeholder="기본: 제목 | ClassIn 가이드"
+                        className="w-full rounded-lg border border-[rgba(0,0,0,0.12)] px-3 py-2 text-[13px] focus:border-[#111110]/30 focus:outline-none"
+                      />
+                    </div>
+                    <div>
+                      <label className="mb-1.5 block text-[12px] font-medium text-[#1a1a1a]/50">
+                        SEO 설명
+                      </label>
+                      <input
+                        type="text"
+                        value={form.seoDescription}
+                        onChange={(event) => update("seoDescription", event.target.value)}
+                        placeholder="기본: 설명 필드"
+                        className="w-full rounded-lg border border-[rgba(0,0,0,0.12)] px-3 py-2 text-[13px] focus:border-[#111110]/30 focus:outline-none"
+                      />
+                    </div>
+                  </div>
+
+                  {mode === "edit" && article ? (
+                    <div className="grid gap-2 rounded-xl bg-[#FAFAF8] px-4 py-3 text-[12px] text-[#1a1a1a]/45">
+                      <span>
+                        게시일: {article.publishedAt ? new Date(article.publishedAt).toLocaleString("ko-KR") : "-"}
+                      </span>
+                      <span>
+                        최근 검수: {article.lastReviewedAt ? new Date(article.lastReviewedAt).toLocaleString("ko-KR") : "-"}
+                      </span>
+                      <span>
+                        업데이트: {new Date(article.updatedAt).toLocaleString("ko-KR")}
+                      </span>
+                    </div>
+                  ) : null}
+                </div>
+              ) : null}
+
+              {activeSidebarTab === "insights" && mode === "edit" ? (
+                <div className="mt-5 space-y-4">
                   <div className="flex items-center gap-2">
                     <BarChart3 className="h-4 w-4 text-[#1a1a1a]/35" />
                     <h2 className="text-[13px] font-semibold uppercase tracking-wide text-[#1a1a1a]/40">
                       문서 성과
                     </h2>
                   </div>
-                  <div className="grid gap-3 sm:grid-cols-3">
-                    <div className="rounded-xl bg-[#FAFAF8] p-3">
-                      <p className="text-[11px] text-[#1a1a1a]/35">피드백</p>
-                      <p className="mt-1 text-xl font-bold text-[#111110]">{support.analytics?.feedbackTotal ?? 0}</p>
-                      <p className="text-[11px] text-[#1a1a1a]/35">
-                        도움됨 {support.analytics?.helpfulRate ?? "-"}%
-                      </p>
-                    </div>
-                    <div className="rounded-xl bg-[#FAFAF8] p-3">
-                      <p className="text-[11px] text-[#1a1a1a]/35">검색 클릭</p>
-                      <p className="mt-1 text-xl font-bold text-[#111110]">{support.analytics?.searchClicks ?? 0}</p>
-                    </div>
-                    <div className="rounded-xl bg-[#FAFAF8] p-3">
-                      <p className="text-[11px] text-[#1a1a1a]/35">챗봇 인용</p>
-                      <p className="mt-1 text-xl font-bold text-[#111110]">{support.analytics?.chatbotCitations ?? 0}</p>
-                    </div>
-                  </div>
-                  {(support.analytics?.recentFeedback.length ?? 0) > 0 ? (
-                    <div className="divide-y divide-[#f0f0ec] rounded-xl border border-[#e8e8e4]">
-                      {support.analytics?.recentFeedback.slice(0, 3).map((item) => (
-                        <div key={item.id} className="p-3">
-                          <p className="text-[12px] font-semibold text-[#111110]">
-                            {item.helpful ? "도움됨" : "도움 안 됨"} · {formatDateTime(item.createdAt)}
+                  {supportLoading ? (
+                    <p className="rounded-xl bg-[#FAFAF8] px-4 py-6 text-center text-[13px] text-[#1a1a1a]/35">
+                      성과를 불러오는 중입니다.
+                    </p>
+                  ) : (
+                    <>
+                      <div className="grid gap-3">
+                        <div className="rounded-xl bg-[#FAFAF8] p-3">
+                          <p className="text-[11px] text-[#1a1a1a]/35">피드백</p>
+                          <p className="mt-1 text-xl font-bold text-[#111110]">{support.analytics?.feedbackTotal ?? 0}</p>
+                          <p className="text-[11px] text-[#1a1a1a]/35">
+                            도움됨 {support.analytics?.helpfulRate ?? "-"}%
                           </p>
-                          {item.reason ? (
-                            <p className="mt-1 line-clamp-2 text-[12px] text-[#1a1a1a]/45">{item.reason}</p>
-                          ) : null}
                         </div>
-                      ))}
-                    </div>
-                  ) : null}
+                        <div className="grid grid-cols-2 gap-3">
+                          <div className="rounded-xl bg-[#FAFAF8] p-3">
+                            <p className="text-[11px] text-[#1a1a1a]/35">검색 클릭</p>
+                            <p className="mt-1 text-xl font-bold text-[#111110]">{support.analytics?.searchClicks ?? 0}</p>
+                          </div>
+                          <div className="rounded-xl bg-[#FAFAF8] p-3">
+                            <p className="text-[11px] text-[#1a1a1a]/35">챗봇 인용</p>
+                            <p className="mt-1 text-xl font-bold text-[#111110]">{support.analytics?.chatbotCitations ?? 0}</p>
+                          </div>
+                        </div>
+                      </div>
+                      {(support.analytics?.recentFeedback.length ?? 0) > 0 ? (
+                        <div className="divide-y divide-[#f0f0ec] rounded-xl border border-[#e8e8e4]">
+                          {support.analytics?.recentFeedback.slice(0, 3).map((item) => (
+                            <div key={item.id} className="p-3">
+                              <p className="text-[12px] font-semibold text-[#111110]">
+                                {item.helpful ? "도움됨" : "도움 안 됨"} · {formatDateTime(item.createdAt)}
+                              </p>
+                              {item.reason ? (
+                                <p className="mt-1 line-clamp-2 text-[12px] text-[#1a1a1a]/45">{item.reason}</p>
+                              ) : null}
+                            </div>
+                          ))}
+                        </div>
+                      ) : (
+                        <p className="rounded-xl border border-dashed border-[#e8e8e4] px-4 py-6 text-center text-[13px] text-[#1a1a1a]/35">
+                          최근 피드백이 없습니다.
+                        </p>
+                      )}
+                    </>
+                  )}
                 </div>
+              ) : null}
 
-                <div className="space-y-4 rounded-2xl border border-[rgba(0,0,0,0.08)] bg-white p-6">
+              {activeSidebarTab === "versions" && mode === "edit" ? (
+                <div className="mt-5 space-y-4">
                   <div className="flex items-center gap-2">
                     <Clock3 className="h-4 w-4 text-[#1a1a1a]/35" />
                     <h2 className="text-[13px] font-semibold uppercase tracking-wide text-[#1a1a1a]/40">
                       버전 기록
                     </h2>
                   </div>
-                  <div className="grid gap-2 sm:grid-cols-[minmax(0,1fr)_auto]">
+                  <div className="grid gap-2">
                     <input
                       value={snapshotNote}
                       onChange={(event) => setSnapshotNote(event.target.value)}
@@ -1836,17 +2074,21 @@ export default function DocsArticleEditor({ mode, categories, article }: Props) 
                       className="inline-flex h-9 items-center justify-center gap-1.5 rounded-lg bg-[#111110] px-3 text-[12px] font-semibold text-white transition-colors hover:bg-[#2a2a28] disabled:cursor-not-allowed disabled:opacity-50"
                     >
                       <Save className="h-3.5 w-3.5" />
-                      {snapshotting ? "생성 중" : "스냅샷"}
+                      {snapshotting ? "스냅샷 생성 중" : "스냅샷 만들기"}
                     </button>
                   </div>
-                  {support.versions.length === 0 ? (
+                  {supportLoading ? (
+                    <p className="rounded-xl bg-[#FAFAF8] px-4 py-6 text-center text-[13px] text-[#1a1a1a]/35">
+                      버전을 불러오는 중입니다.
+                    </p>
+                  ) : support.versions.length === 0 ? (
                     <p className="rounded-xl border border-dashed border-[#e8e8e4] px-4 py-6 text-center text-[13px] text-[#1a1a1a]/35">
                       저장된 버전이 없습니다.
                     </p>
                   ) : (
-                    <div className="max-h-[320px] divide-y divide-[#f0f0ec] overflow-y-auto rounded-xl border border-[#e8e8e4]">
+                    <div className="max-h-[420px] divide-y divide-[#f0f0ec] overflow-y-auto rounded-xl border border-[#e8e8e4]">
                       {support.versions.map((version) => (
-                        <div key={version.id} className="flex items-start justify-between gap-3 p-3">
+                        <div key={version.id} className="grid gap-3 p-3">
                           <div>
                             <p className="text-[13px] font-semibold text-[#111110]">
                               v{version.versionNumber} · {version.title}
@@ -1859,178 +2101,52 @@ export default function DocsArticleEditor({ mode, categories, article }: Props) 
                             type="button"
                             onClick={() => void rollbackToVersion(version)}
                             disabled={rollingBackVersionId === version.id}
-                            className="inline-flex h-8 shrink-0 items-center gap-1.5 rounded-lg border border-[#e8e8e4] bg-white px-2.5 text-[12px] font-semibold text-[#111110] transition-colors hover:bg-[#f5f5f2] disabled:cursor-not-allowed disabled:opacity-50"
+                            className="inline-flex h-8 w-fit items-center gap-1.5 rounded-lg border border-[#e8e8e4] bg-white px-2.5 text-[12px] font-semibold text-[#111110] transition-colors hover:bg-[#f5f5f2] disabled:cursor-not-allowed disabled:opacity-50"
                           >
                             <RotateCcw className="h-3.5 w-3.5" />
-                            롤백
+                            이 버전으로 롤백
                           </button>
                         </div>
                       ))}
                     </div>
                   )}
                 </div>
-              </section>
-            ) : null}
-          </main>
+              ) : null}
 
-          <aside className="space-y-6 lg:sticky lg:top-20 lg:self-start">
-            <section className="space-y-4 rounded-2xl border border-[rgba(0,0,0,0.08)] bg-white p-6">
-              <h2 className="text-[13px] font-semibold uppercase tracking-wide text-[#1a1a1a]/40">
-                게시 설정
-              </h2>
-
-              <div className="grid gap-4">
-                <div>
-                  <label className="mb-1.5 block text-[12px] font-medium text-[#1a1a1a]/50">
-                    상태
-                  </label>
-                  <div className="flex flex-wrap gap-2">
-                    {STATUS_OPTIONS.map((option) => {
-                      const active = form.status === option.value
-                      return (
-                        <button
-                          key={option.value}
-                          type="button"
-                          onClick={() => update("status", option.value)}
-                          className={`inline-flex items-center rounded-full border px-3 py-1 text-[12px] font-semibold transition-colors ${
-                            active
-                              ? option.tone
-                              : "border-[#e8e8e4] bg-white text-[#1a1a1a]/40 hover:bg-[#f5f5f2]"
-                          }`}
-                        >
-                          {option.label}
-                        </button>
-                      )
-                    })}
+              {activeSidebarTab === "templates" && mode === "create" ? (
+                <div className="mt-5 space-y-4">
+                  <div>
+                    <h2 className="text-[13px] font-semibold uppercase tracking-wide text-[#1a1a1a]/40">
+                      작성 템플릿
+                    </h2>
+                    <p className="mt-2 text-[12px] leading-relaxed text-[#1a1a1a]/45">
+                      문서 유형을 고르면 기본 섹션과 검색 메타를 함께 채웁니다.
+                    </p>
                   </div>
-                </div>
-                <div>
-                  <label className="mb-1.5 block text-[12px] font-medium text-[#1a1a1a]/50">
-                    가시성
-                  </label>
-                  <select
-                    value={form.visibility}
-                    onChange={(event) =>
-                      update("visibility", event.target.value as DocsArticleVisibility)
-                    }
-                    className="w-full rounded-lg border border-[rgba(0,0,0,0.12)] bg-white px-3 py-2 text-[13px] focus:border-[#111110]/30 focus:outline-none"
-                  >
-                    {VISIBILITY_OPTIONS.map((option) => (
-                      <option key={option.value} value={option.value}>
-                        {option.label}
-                      </option>
+                  <div className="grid gap-3">
+                    {DOC_TEMPLATES.map((template) => (
+                      <button
+                        key={template.id}
+                        type="button"
+                        onClick={() => applyTemplate(template)}
+                        className="rounded-xl border border-[#e8e8e4] bg-[#FAFAF8] p-4 text-left transition-colors hover:border-[#084734]/30 hover:bg-[#F7FBF8]"
+                      >
+                        <span className="block text-[13px] font-semibold text-[#111110]">
+                          {template.label}
+                        </span>
+                        <span className="mt-2 block text-[12px] leading-relaxed text-[#1a1a1a]/45">
+                          {template.description}
+                        </span>
+                        <span className="mt-3 inline-flex items-center gap-1.5 text-[12px] font-semibold text-[#084734]">
+                          <Wand2 className="h-3.5 w-3.5" />
+                          템플릿 적용
+                        </span>
+                      </button>
                     ))}
-                  </select>
-                </div>
-                <div>
-                  <label className="mb-1.5 block text-[12px] font-medium text-[#1a1a1a]/50">
-                    정렬 순서 (낮을수록 위)
-                  </label>
-                  <input
-                    type="number"
-                    value={form.orderIndex}
-                    onChange={(event) => update("orderIndex", Number(event.target.value) || 0)}
-                    className="w-full rounded-lg border border-[rgba(0,0,0,0.12)] px-3 py-2 text-[13px] focus:border-[#111110]/30 focus:outline-none"
-                  />
-                </div>
-              </div>
-
-              <div className="flex flex-col gap-3">
-                <label className="inline-flex items-center gap-2 text-[13px] text-[#1a1a1a]/60">
-                  <input
-                    type="checkbox"
-                    checked={form.featured}
-                    onChange={(event) => update("featured", event.target.checked)}
-                    className="h-4 w-4 rounded border-[rgba(0,0,0,0.15)]"
-                  />
-                  대표 문서
-                </label>
-                <label className="inline-flex items-center gap-2 text-[13px] text-[#1a1a1a]/60">
-                  <input
-                    type="checkbox"
-                    checked={form.noindex}
-                    onChange={(event) => update("noindex", event.target.checked)}
-                    className="h-4 w-4 rounded border-[rgba(0,0,0,0.15)]"
-                  />
-                  검색 엔진 색인 제외 (noindex)
-                </label>
-              </div>
-
-              <div className="grid gap-4">
-                <div>
-                  <label className="mb-1.5 block text-[12px] font-medium text-[#1a1a1a]/50">
-                    SEO 제목
-                  </label>
-                  <input
-                    type="text"
-                    value={form.seoTitle}
-                    onChange={(event) => update("seoTitle", event.target.value)}
-                    placeholder="기본: 제목 | ClassIn 가이드"
-                    className="w-full rounded-lg border border-[rgba(0,0,0,0.12)] px-3 py-2 text-[13px] focus:border-[#111110]/30 focus:outline-none"
-                  />
-                </div>
-                <div>
-                  <label className="mb-1.5 block text-[12px] font-medium text-[#1a1a1a]/50">
-                    SEO 설명
-                  </label>
-                  <input
-                    type="text"
-                    value={form.seoDescription}
-                    onChange={(event) => update("seoDescription", event.target.value)}
-                    placeholder="기본: 설명 필드"
-                    className="w-full rounded-lg border border-[rgba(0,0,0,0.12)] px-3 py-2 text-[13px] focus:border-[#111110]/30 focus:outline-none"
-                  />
-                </div>
-              </div>
-
-              {mode === "edit" && article ? (
-                <div className="grid gap-2 rounded-xl bg-[#FAFAF8] px-4 py-3 text-[12px] text-[#1a1a1a]/45">
-                  <span>
-                    게시일: {article.publishedAt ? new Date(article.publishedAt).toLocaleString("ko-KR") : "-"}
-                  </span>
-                  <span>
-                    최근 검수: {article.lastReviewedAt ? new Date(article.lastReviewedAt).toLocaleString("ko-KR") : "-"}
-                  </span>
-                  <span>
-                    업데이트: {new Date(article.updatedAt).toLocaleString("ko-KR")}
-                  </span>
+                  </div>
                 </div>
               ) : null}
             </section>
-
-            {mode === "create" ? (
-              <section className="space-y-4 rounded-2xl border border-[rgba(0,0,0,0.08)] bg-white p-5">
-                <div>
-                  <h2 className="text-[13px] font-semibold uppercase tracking-wide text-[#1a1a1a]/40">
-                    작성 템플릿
-                  </h2>
-                  <p className="mt-2 text-[12px] leading-relaxed text-[#1a1a1a]/45">
-                    문서 유형을 고르면 기본 섹션과 검색 메타를 함께 채웁니다.
-                  </p>
-                </div>
-                <div className="grid gap-3">
-                  {DOC_TEMPLATES.map((template) => (
-                    <button
-                      key={template.id}
-                      type="button"
-                      onClick={() => applyTemplate(template)}
-                      className="min-h-[116px] rounded-xl border border-[#e8e8e4] bg-[#FAFAF8] p-4 text-left transition-colors hover:border-[#084734]/30 hover:bg-[#F7FBF8]"
-                    >
-                      <span className="block text-[13px] font-semibold text-[#111110]">
-                        {template.label}
-                      </span>
-                      <span className="mt-2 block text-[12px] leading-relaxed text-[#1a1a1a]/45">
-                        {template.description}
-                      </span>
-                      <span className="mt-3 inline-flex items-center gap-1.5 text-[12px] font-semibold text-[#084734]">
-                        <Wand2 className="h-3.5 w-3.5" />
-                        템플릿 적용
-                      </span>
-                    </button>
-                  ))}
-                </div>
-              </section>
-            ) : null}
           </aside>
         </div>
       </div>
