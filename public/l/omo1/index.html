@@ -23,6 +23,14 @@
     --price: #14181a;
     --radius: 16px;
     --maxw: 1180px;
+    --brand-font: 'Gilroy', 'Giloy', 'Inter', sans-serif;
+  }
+  @font-face {
+    font-family: 'Gilroy';
+    src: local('Gilroy Bold'), local('Gilroy-Bold'), local('Gilroy ExtraBold'), local('Gilroy');
+    font-weight: 700 900;
+    font-style: normal;
+    font-display: swap;
   }
   * { box-sizing: border-box; }
   html { scroll-behavior: smooth; -webkit-text-size-adjust: 100%; }
@@ -74,8 +82,8 @@
     height: 58px;
   }
   .brand {
-    font-family: 'Inter', sans-serif;
-    font-weight: 700;
+    font-family: var(--brand-font);
+    font-weight: 800;
     font-size: 19px;
     letter-spacing: -0.01em;
     color: var(--green);
@@ -146,7 +154,7 @@
     border-bottom: 1px solid var(--line);
   }
   .wordmark {
-    font-family: 'Inter', sans-serif;
+    font-family: var(--brand-font);
     font-weight: 800;
     font-size: clamp(56px, 16vw, 156px);
     letter-spacing: -0.05em;
@@ -618,6 +626,223 @@
     color: var(--green);
   }
 
+  /* ---------- DIAGNOSIS CTA ---------- */
+  .diagnosis {
+    padding: 100px 0;
+    background: var(--green);
+    color: #fff;
+    border-bottom: 1px solid rgba(255,255,255,0.14);
+  }
+  .diagnosis-grid {
+    display: grid;
+    grid-template-columns: 1fr;
+    gap: 44px;
+    align-items: start;
+  }
+  .diagnosis-kicker {
+    font-family: 'Inter', sans-serif;
+    font-size: 12px;
+    letter-spacing: 0.24em;
+    color: rgba(255,255,255,0.58);
+    text-transform: uppercase;
+    font-weight: 600;
+    margin-bottom: 18px;
+  }
+  .diagnosis-title {
+    margin: 0 0 22px;
+    font-family: 'Inter', 'Noto Sans KR', sans-serif;
+    font-weight: 800;
+    font-size: clamp(32px, 8vw, 58px);
+    line-height: 1.08;
+    letter-spacing: -0.035em;
+  }
+  .diagnosis-desc {
+    max-width: 560px;
+    margin: 0;
+    color: rgba(255,255,255,0.78);
+    font-size: clamp(15px, 3.8vw, 18px);
+    line-height: 1.75;
+  }
+  .diagnosis-points {
+    display: grid;
+    gap: 12px;
+    margin-top: 34px;
+    padding: 0;
+    list-style: none;
+  }
+  .diagnosis-points li {
+    display: flex;
+    gap: 10px;
+    align-items: baseline;
+    color: rgba(255,255,255,0.82);
+    font-size: 14px;
+    line-height: 1.65;
+  }
+  .diagnosis-points li::before {
+    content: "";
+    width: 7px;
+    height: 7px;
+    flex: 0 0 auto;
+    border-radius: 50%;
+    background: #c7e1cd;
+    transform: translateY(-1px);
+  }
+  .diagnosis-form {
+    background: rgba(255,255,255,0.97);
+    color: var(--ink);
+    border-radius: var(--radius);
+    padding: 28px 22px;
+    box-shadow: 0 22px 60px rgba(0,0,0,0.18);
+  }
+  .diagnosis-form-head {
+    margin-bottom: 24px;
+    padding-bottom: 18px;
+    border-bottom: 1px solid var(--line);
+  }
+  .diagnosis-form-title {
+    margin: 0 0 8px;
+    font-family: 'Inter', 'Noto Sans KR', sans-serif;
+    font-size: clamp(22px, 5vw, 28px);
+    line-height: 1.2;
+    letter-spacing: -0.02em;
+    color: var(--green);
+  }
+  .diagnosis-form-copy {
+    margin: 0;
+    color: var(--ink-soft);
+    font-size: 14px;
+    line-height: 1.65;
+  }
+  .diagnosis-fields {
+    display: grid;
+    gap: 18px;
+  }
+  .field-grid {
+    display: grid;
+    grid-template-columns: 1fr;
+    gap: 14px;
+  }
+  .field {
+    display: grid;
+    gap: 7px;
+  }
+  .field-label {
+    font-size: 12px;
+    font-weight: 700;
+    color: var(--green);
+    letter-spacing: 0.02em;
+  }
+  .field-input {
+    width: 100%;
+    min-height: 48px;
+    border: 1px solid var(--line);
+    border-radius: 10px;
+    background: #fff;
+    color: var(--ink);
+    font: inherit;
+    font-size: 15px;
+    padding: 12px 13px;
+    outline: none;
+    transition: border-color .16s ease, box-shadow .16s ease;
+  }
+  .field-input:focus {
+    border-color: var(--green);
+    box-shadow: 0 0 0 3px rgba(31,61,43,0.12);
+  }
+  .field-input::placeholder { color: #a3a79f; }
+  .survey-label {
+    display: block;
+    margin-bottom: 10px;
+    font-size: 12px;
+    font-weight: 700;
+    color: var(--green);
+    letter-spacing: 0.02em;
+  }
+  .survey-grid {
+    display: grid;
+    grid-template-columns: 1fr;
+    gap: 8px;
+  }
+  .survey-option {
+    position: relative;
+    cursor: pointer;
+  }
+  .survey-option input {
+    position: absolute;
+    inset: 0;
+    opacity: 0;
+    cursor: pointer;
+  }
+  .survey-option span {
+    display: flex;
+    min-height: 44px;
+    align-items: center;
+    justify-content: center;
+    border: 1px solid var(--line);
+    border-radius: 10px;
+    background: #fff;
+    color: var(--ink-soft);
+    font-size: 13px;
+    font-weight: 700;
+    text-align: center;
+    transition: border-color .16s ease, background .16s ease, color .16s ease;
+  }
+  .survey-option input:checked + span {
+    border-color: var(--green);
+    background: var(--green-soft);
+    color: var(--green);
+  }
+  .survey-option input:focus-visible + span {
+    box-shadow: 0 0 0 3px rgba(31,61,43,0.12);
+  }
+  .consent {
+    display: flex;
+    align-items: flex-start;
+    gap: 9px;
+    color: var(--ink-soft);
+    font-size: 12px;
+    line-height: 1.55;
+  }
+  .consent input {
+    width: 16px;
+    height: 16px;
+    margin-top: 1px;
+    accent-color: var(--green);
+  }
+  .diagnosis-submit {
+    width: 100%;
+    min-height: 52px;
+    border: 0;
+    border-radius: 999px;
+    background: var(--green);
+    color: #fff;
+    font: inherit;
+    font-size: 15px;
+    font-weight: 800;
+    cursor: pointer;
+    transition: transform .15s ease, background .15s ease, box-shadow .2s ease;
+  }
+  .diagnosis-submit:hover {
+    background: var(--green-2);
+    transform: translateY(-1px);
+    box-shadow: 0 10px 20px rgba(31,61,43,0.18);
+  }
+  .diagnosis-submit:disabled {
+    cursor: not-allowed;
+    opacity: .68;
+    transform: none;
+    box-shadow: none;
+  }
+  .form-status {
+    min-height: 20px;
+    margin: 0;
+    font-size: 12.5px;
+    line-height: 1.55;
+    color: var(--ink-mute);
+  }
+  .form-status.success { color: var(--green); font-weight: 700; }
+  .form-status.error { color: #9a3b21; font-weight: 700; }
+
   /* ---------- VALUE ---------- */
   .value-grid {
     display: grid;
@@ -660,12 +885,13 @@
     font-weight: 600;
   }
   .value-title {
-    font-size: clamp(19px, 4.6vw, 22px);
+    font-size: clamp(18px, 4.4vw, 22px);
     color: var(--ink);
     margin: 0 0 12px;
     letter-spacing: -0.015em;
     font-weight: 700;
     line-height: 1.3;
+    white-space: nowrap;
   }
   .value-desc {
     color: var(--ink-soft);
@@ -738,7 +964,7 @@
     font-size: 13px;
   }
   .footer-brand {
-    font-family: 'Inter', sans-serif;
+    font-family: var(--brand-font);
     font-size: 24px;
     font-weight: 700;
     color: var(--green);
@@ -775,6 +1001,22 @@
       grid-template-columns: 1fr auto;
       align-items: end;
       padding: 32px 0;
+    }
+    .diagnosis {
+      padding: 128px 0;
+    }
+    .diagnosis-grid {
+      grid-template-columns: minmax(0, 1fr) minmax(360px, 460px);
+      gap: 56px;
+    }
+    .diagnosis-form {
+      padding: 34px 30px;
+    }
+    .field-grid {
+      grid-template-columns: repeat(2, 1fr);
+    }
+    .survey-grid {
+      grid-template-columns: repeat(2, 1fr);
     }
     .pkg-card { padding: 40px 36px; }
     .hero { padding: 96px 0 128px; }
@@ -814,6 +1056,9 @@
     .pkg-card { padding: 28px 22px; }
     .pkg-card .pkg-price .num { font-size: clamp(40px, 12vw, 56px); }
     .item-row { padding: 22px 0; }
+    .diagnosis { padding: 72px 0; }
+    .diagnosis-form { padding: 24px 18px; }
+    .diagnosis-points { margin-top: 26px; }
 
     .signal { padding: 32px 4px 28px; }
     .signal-row-1 { gap: 14px; }
@@ -837,7 +1082,7 @@
 <header class="nav">
   <div class="container nav-inner">
     <div class="brand">Classin</div>
-    <a href="https://classin.ai.kr/contact" class="nav-cta">Inquiry</a>
+    <a href="#diagnosis" class="nav-cta">도입 진단</a>
   </div>
 </header>
 
@@ -866,8 +1111,8 @@
     </p>
 
     <div class="hero-cta-row reveal">
-      <a href="https://classin.ai.kr/contact" class="btn btn-primary">
-        도입 문의 <span class="arrow">→</span>
+      <a href="#diagnosis" class="btn btn-primary">
+        도입 진단 받기 <span class="arrow">→</span>
       </a>
       <a href="#collection" class="btn btn-ghost">The Collection</a>
     </div>
@@ -958,6 +1203,101 @@
   </div>
 </section>
 
+<!-- ============ MID CTA: DIAGNOSIS ============ -->
+<section class="diagnosis" id="diagnosis">
+  <div class="container diagnosis-grid">
+    <div class="diagnosis-copy reveal">
+      <div class="diagnosis-kicker">Private Diagnosis · For Your Academy</div>
+      <h2 class="diagnosis-title">우리 학원,<br />어디부터 도입하면 좋을까요?</h2>
+      <p class="diagnosis-desc">
+        전자칠판, AI 녹화, 온라인 전환, 랜딩페이지까지. 지금 학원 상황을 기준으로 가장 먼저 바꿔야 할 도입 순서를 짧게 진단해드립니다.
+      </p>
+      <ul class="diagnosis-points">
+        <li>학원 규모와 수업 방식에 맞는 장비·구독 조합을 정리합니다.</li>
+        <li>초기 비용, 할부, 설치 범위를 상담 전에 빠르게 좁혀드립니다.</li>
+        <li>남겨주신 연락처로 담당자가 순차적으로 연락드립니다.</li>
+      </ul>
+    </div>
+
+    <form class="diagnosis-form reveal" id="diagnosis-form">
+      <div class="diagnosis-form-head">
+        <h3 class="diagnosis-form-title">도입 진단 신청</h3>
+        <p class="diagnosis-form-copy">이름과 연락처만 남겨도 접수됩니다. 설문은 상담 방향을 빠르게 잡기 위한 선택 정보입니다.</p>
+      </div>
+
+      <div class="diagnosis-fields">
+        <div class="field-grid">
+          <label class="field">
+            <span class="field-label">이름 *</span>
+            <input class="field-input" type="text" name="name" autocomplete="name" placeholder="홍길동" required />
+          </label>
+          <label class="field">
+            <span class="field-label">연락처 *</span>
+            <input class="field-input" type="tel" name="phone" autocomplete="tel" inputmode="tel" placeholder="010-0000-0000" required />
+          </label>
+        </div>
+
+        <label class="field">
+          <span class="field-label">학원명 또는 지역</span>
+          <input class="field-input" type="text" name="academy" autocomplete="organization" placeholder="예: 분당 수학학원" />
+        </label>
+
+        <div>
+          <span class="survey-label">가장 관심 있는 도입 영역</span>
+          <div class="survey-grid">
+            <label class="survey-option">
+              <input type="radio" name="interest" value="전자칠판" checked />
+              <span>전자칠판</span>
+            </label>
+            <label class="survey-option">
+              <input type="radio" name="interest" value="AI 녹화수업" />
+              <span>AI 녹화수업</span>
+            </label>
+            <label class="survey-option">
+              <input type="radio" name="interest" value="온라인 전환" />
+              <span>온라인 전환</span>
+            </label>
+            <label class="survey-option">
+              <input type="radio" name="interest" value="전체 패키지" />
+              <span>전체 패키지</span>
+            </label>
+          </div>
+        </div>
+
+        <div>
+          <span class="survey-label">현재 학원 규모</span>
+          <div class="survey-grid">
+            <label class="survey-option">
+              <input type="radio" name="scale" value="1~2개 강의실" checked />
+              <span>1~2개 강의실</span>
+            </label>
+            <label class="survey-option">
+              <input type="radio" name="scale" value="3~5개 강의실" />
+              <span>3~5개 강의실</span>
+            </label>
+            <label class="survey-option">
+              <input type="radio" name="scale" value="6개 이상 강의실" />
+              <span>6개 이상</span>
+            </label>
+            <label class="survey-option">
+              <input type="radio" name="scale" value="신규 개원 준비" />
+              <span>신규 개원</span>
+            </label>
+          </div>
+        </div>
+
+        <label class="consent">
+          <input type="checkbox" name="privacy" required />
+          <span>상담 안내를 위한 개인정보 수집·이용에 동의합니다.</span>
+        </label>
+
+        <button class="diagnosis-submit" type="submit">우리 학원 도입 진단 받기</button>
+        <p class="form-status" id="diagnosis-status" aria-live="polite"></p>
+      </div>
+    </form>
+  </div>
+</section>
+
 <!-- ============ MANIFESTO STRIP 1 ============ -->
 <section class="manifesto">
   <div class="container">
@@ -970,7 +1310,7 @@
   <div class="container">
     <div class="s-head reveal">
       <div class="s-kicker">Three Pillars · 운영 체제의 세 가지 축</div>
-      <h2 class="s-title">교육 운영 체제는,<br class="br-desktop" />세 가지로 작동합니다.</h2>
+      <h2 class="s-title">교육 운영 체제는<br />3가지가 꼭 필요합니다.</h2>
       <p class="s-desc">
         흩어진 수업을 묶고, 반복되는 운영을 덜고, 사라지던 강의를 자산으로 남깁니다. 학원이 'OS' 위에서 돌아가기 시작합니다.
       </p>
@@ -1084,8 +1424,8 @@
 <section class="s" id="value">
   <div class="container">
     <div class="s-head reveal">
-      <div class="s-kicker">After Three Years · In Your Academy</div>
-      <h2 class="s-title">3년 후,<br />당신의 학원.</h2>
+      <div class="s-kicker">After One Year · In Your Academy</div>
+      <h2 class="s-title">1년 후,<br />당신의 학원.</h2>
       <p class="s-desc">
         Classin Standard는 장비가 아닙니다. 학원이 다음 단계에서 마주할 풍경을, <span class="em-key">운영 체제</span>의 언어로 빚어냅니다.
       </p>
@@ -1095,25 +1435,25 @@
       <div class="value-card reveal">
         <div class="value-icon">01</div>
         <div class="value-overline">Standardization</div>
-        <h3 class="value-title">관리되는 학원의<br />첫 신호.</h3>
+        <h3 class="value-title">관리되는 학원의 첫 신호.</h3>
         <p class="value-desc">75/86인치 시그니처 디스플레이가 만드는 공간의 권위. 학원에 들어선 순간, 격(格)이 먼저 말합니다.</p>
       </div>
       <div class="value-card reveal">
         <div class="value-icon">02</div>
         <div class="value-overline">Automation</div>
-        <h3 class="value-title">강사를 지키는<br />자동화.</h3>
+        <h3 class="value-title">강사를 지키는 자동화.</h3>
         <p class="value-desc">한 번의 강의가 자산이 됩니다. 자동 녹화와 아카이브로 강사의 시간을 압축하고, 학원의 콘텐츠를 쌓습니다.</p>
       </div>
       <div class="value-card reveal">
         <div class="value-icon">03</div>
         <div class="value-overline">Trust</div>
-        <h3 class="value-title">시스템이 만드는<br />신뢰.</h3>
+        <h3 class="value-title">시스템이 만드는 신뢰.</h3>
         <p class="value-desc">결석 보강, 복습 제공, 운영의 일관성. '시스템화된 학원'은 그 자체로 학부모를 설득합니다.</p>
       </div>
       <div class="value-card reveal">
         <div class="value-icon">04</div>
         <div class="value-overline">Data &amp; Scale</div>
-        <h3 class="value-title">데이터로<br />커지는 학원.</h3>
+        <h3 class="value-title">데이터로 커지는 학원.</h3>
         <p class="value-desc">오프라인의 한계를 넘어 온라인까지. 같은 수업이 더 많은 학생에게 닿고, 학원의 그릇이 커집니다.</p>
       </div>
     </div>
@@ -1129,12 +1469,15 @@
     <div class="quote-by reveal">— Classin</div>
 
     <h3 class="cta-headline reveal">
-      당신의 학원에,<br /><span class="em-key">운영 체제</span>를.
+      Empowering Education
     </h3>
 
     <div class="cta-btn-row reveal">
-      <a href="https://classin.ai.kr/contact" class="btn btn-primary">
-        도입 문의 <span class="arrow">→</span>
+      <a href="#diagnosis" class="btn btn-primary">
+        도입 진단 받기 <span class="arrow">→</span>
+      </a>
+      <a href="/" class="btn btn-ghost">
+        자세히 보기 <span class="arrow">→</span>
       </a>
     </div>
     <div class="cta-note reveal">도입을 검토하시는 학원에 한하여, 프라이빗 컨설팅을 제공합니다.</div>
@@ -1149,6 +1492,107 @@
 </footer>
 
 <script>
+  const diagnosisForm = document.getElementById('diagnosis-form');
+  const diagnosisStatus = document.getElementById('diagnosis-status');
+
+  function setDiagnosisStatus(message, type) {
+    if (!diagnosisStatus) return;
+    diagnosisStatus.textContent = message;
+    diagnosisStatus.className = `form-status${type ? ` ${type}` : ''}`;
+  }
+
+  function getCheckedValue(formData, name) {
+    return (formData.get(name) || '').toString().trim();
+  }
+
+  function getUrlParam(name) {
+    return new URLSearchParams(window.location.search).get(name) || undefined;
+  }
+
+  if (diagnosisForm) {
+    diagnosisForm.addEventListener('submit', async (event) => {
+      event.preventDefault();
+
+      const submitButton = diagnosisForm.querySelector('button[type="submit"]');
+      const formData = new FormData(diagnosisForm);
+      const name = getCheckedValue(formData, 'name');
+      const phone = getCheckedValue(formData, 'phone');
+      const academy = getCheckedValue(formData, 'academy');
+      const interest = getCheckedValue(formData, 'interest');
+      const scale = getCheckedValue(formData, 'scale');
+      const phoneDigits = phone.replace(/\D/g, '');
+
+      if (!name || !phone) {
+        setDiagnosisStatus('이름과 연락처를 입력해 주세요.', 'error');
+        return;
+      }
+
+      if (phoneDigits.length < 8) {
+        setDiagnosisStatus('연락처를 다시 확인해 주세요.', 'error');
+        return;
+      }
+
+      const message = [
+        '문의 유형: OMO1 도입 진단',
+        interest ? `관심 영역: ${interest}` : undefined,
+        scale ? `현재 규모: ${scale}` : undefined,
+        academy ? `학원/지역: ${academy}` : undefined,
+        `페이지: ${window.location.pathname}`,
+      ].filter(Boolean).join('\n');
+
+      const payload = {
+        source: 'contact_page',
+        sourceDetail: 'omo1_diagnosis',
+        org: academy || 'OMO1 랜딩 도입 진단',
+        name,
+        phone,
+        role: '학원 도입 진단 신청',
+        size: scale || undefined,
+        message,
+        marketingConsent: false,
+        landingPage: window.location.origin + '/l/omo1',
+        currentPage: window.location.href,
+        referrer: document.referrer || undefined,
+        utmSource: getUrlParam('utm_source'),
+        utmMedium: getUrlParam('utm_medium'),
+        utmCampaign: getUrlParam('utm_campaign'),
+        utmTerm: getUrlParam('utm_term'),
+        utmContent: getUrlParam('utm_content'),
+        gclid: getUrlParam('gclid'),
+        fbclid: getUrlParam('fbclid'),
+      };
+
+      try {
+        if (submitButton) {
+          submitButton.disabled = true;
+          submitButton.textContent = '접수 중입니다...';
+        }
+        setDiagnosisStatus('', '');
+
+        const response = await fetch('/api/lead', {
+          method: 'POST',
+          headers: { 'Content-Type': 'application/json' },
+          body: JSON.stringify(payload),
+        });
+        const result = await response.json().catch(() => null);
+
+        if (!response.ok || !result?.ok) {
+          throw new Error(result?.error || '접수에 실패했습니다. 잠시 후 다시 시도해 주세요.');
+        }
+
+        diagnosisForm.reset();
+        setDiagnosisStatus('도입 진단 신청이 접수되었습니다. 담당자가 순차적으로 연락드릴게요.', 'success');
+      } catch (error) {
+        setDiagnosisStatus(error instanceof Error ? error.message : '접수에 실패했습니다. 잠시 후 다시 시도해 주세요.', 'error');
+      } finally {
+        if (submitButton) {
+          submitButton.disabled = false;
+          submitButton.textContent = '우리 학원 도입 진단 받기';
+        }
+      }
+    });
+  }
+
   const io = new IntersectionObserver((entries) => {
     entries.forEach((e) => {
       if (e.isIntersecting) {
