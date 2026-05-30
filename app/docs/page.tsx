@@ -34,6 +34,10 @@ const categoryLauncherCopy: Record<DocCategoryId, { scope: string; summary: stri
     scope: "처음 시작",
     summary: "설치, 회원 가입, 비밀번호 변경을 빠르게 확인합니다.",
   },
+  software: {
+    scope: "소프트웨어",
+    summary: "수업 도구, 학습 활동, LMS, AI 기능을 제품 기능 기준으로 봅니다.",
+  },
   admin: {
     scope: "관리자",
     summary: "유료 전환, 인증, 코스·교사·학생·스토리지 관리를 봅니다.",
@@ -49,6 +53,10 @@ const categoryLauncherCopy: Record<DocCategoryId, { scope: string; summary: stri
   board: {
     scope: "전자칠판",
     summary: "T1·Panorama 카메라 설치와 CMS 세팅을 단계별로 봅니다.",
+  },
+  hardware: {
+    scope: "하드웨어",
+    summary: "보드 라인업, 판서, 디스플레이, AI 카메라 기능을 확인합니다.",
   },
 }
 
