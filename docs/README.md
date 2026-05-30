@@ -17,6 +17,8 @@
   - 문서/정보 탭 기반 챗봇 지식베이스와 FAQ 통계 설계
 - [active/docs-center-content-guidelines.md](./active/docs-center-content-guidelines.md)
   - 공개 문서 탭의 가이드/매뉴얼/도움말 작성 지침과 미완성 콘텐츠 처리 규칙
+- [active/classin-software-feature-inventory.md](./active/classin-software-feature-inventory.md)
+  - 제품 캡처 기준 소프트웨어 도구·활동 유형·하드웨어 차별점 단일 진실 소스(SSOT)
 - [hardware-ops/README.md](./hardware-ops/README.md)
   - 하드웨어 운영 허브 문서의 상위 인덱스
 
