@@ -621,6 +621,7 @@ export default function EventEditor({ event, mode }: EventEditorProps) {
                     value={content}
                     onChange={setContent}
                     placeholder="행사 상세 내용을 작성하세요. 일정, 신청 방법, 주의사항 등을 포함할 수 있습니다."
+                    imageUploadEndpoint="/api/admin/events/upload"
                   />
                   <div className="space-y-4 rounded-2xl border border-[#e8e8e4] bg-[#fcfcfb] p-4">
                     <div>

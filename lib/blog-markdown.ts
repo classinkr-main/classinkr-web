@@ -89,6 +89,22 @@ function renderInline(text: string) {
   return html
 }
 
+function parseImageTitle(rawTitle: string | undefined) {
+  const title = rawTitle ?? ""
+  const widthMatch = title.match(/(?:^|\s|\|)width=(\d{2,4})(?:px)?(?:\s|\||$)/i)
+  const parsedWidth = widthMatch ? Number.parseInt(widthMatch[1], 10) : null
+  const width =
+    parsedWidth && Number.isFinite(parsedWidth)
+      ? Math.min(1200, Math.max(120, Math.round(parsedWidth)))
+      : null
+  const cleanTitle = title
+    .replace(/\s*\|?\s*width=\d{2,4}(?:px)?\s*/gi, " ")
+    .replace(/\s+/g, " ")
+    .trim()
+
+  return { title: cleanTitle, width }
+}
+
 export function extractMarkdownHeadings(markdown: string): BlogHeading[] {
   return markdown
     .split(/\r?\n/)
@@ -108,14 +124,18 @@ export function extractMarkdownHeadings(markdown: string): BlogHeading[] {
 }
 
 function renderImage(line: string) {
-  const match = line.trim().match(/^!\[(.*?)\]\((.*?)\)$/)
+  const match = line.trim().match(/^!\[(.*?)\]\((\S+?)(?:\s+["']([^"']*)["'])?\)$/)
   if (!match) return null
 
-  const [, alt, url] = match
+  const [, alt, url, rawTitle] = match
+  const { title, width } = parseImageTitle(rawTitle)
+  const figureStyle = width
+    ? ` style="max-width:${width}px;width:100%;margin-left:auto;margin-right:auto"`
+    : ""
   return `
-    <figure class="my-8 overflow-hidden rounded-3xl border border-[#e8e8e4] bg-white">
+    <figure class="my-8 overflow-hidden rounded-3xl border border-[#e8e8e4] bg-white"${figureStyle}>
       <img src="${sanitizePublicUrlForHtmlAttribute(url)}" alt="${escapeHtml(alt)}" loading="lazy" decoding="async" class="h-auto w-full object-cover" />
-      ${alt ? `<figcaption class="border-t border-[#e8e8e4] px-5 py-3 text-sm text-[#1a1a1a]/45">${escapeHtml(alt)}</figcaption>` : ""}
+      ${alt || title ? `<figcaption class="border-t border-[#e8e8e4] px-5 py-3 text-sm text-[#1a1a1a]/45">${escapeHtml(alt || title)}</figcaption>` : ""}
     </figure>
   `
 }

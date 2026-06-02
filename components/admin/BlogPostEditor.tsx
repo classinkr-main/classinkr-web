@@ -1596,6 +1596,7 @@ export default function BlogPostEditor({
                     value={form.contentMarkdown}
                     onChange={(markdown) => updateForm("contentMarkdown", markdown)}
                     placeholder="본문을 작성해주세요"
+                    imageUploadEndpoint="/api/admin/upload"
                     onTemplateClick={() => { setTemplateTab("load"); setShowTemplateModal(true) }}
                     onAiDraftClick={() => setShowInlineDraft(true)}
                     onSelectionOptimize={(text) => handleAiAction("optimize", undefined, text || undefined)}
