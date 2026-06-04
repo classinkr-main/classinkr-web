@@ -665,6 +665,16 @@ export default function HardwareQuotesPanel() {
                     )}
                     <button
                       type="button"
+                      onClick={() => {
+                        window.open(`/admin/quotes/${quote.id}/view`, "_blank", "noopener,noreferrer")
+                      }}
+                      className="inline-flex min-h-9 items-center justify-center gap-1.5 rounded-md border border-[#e8e8e4] bg-white px-3 py-2 text-xs font-medium text-[#1a1a1a]/65 transition-colors hover:border-[#c8c8c4] hover:text-[#111110] sm:w-auto"
+                    >
+                      <FileText className="h-3.5 w-3.5" />
+                      직접 보기
+                    </button>
+                    <button
+                      type="button"
                       disabled={sharing}
                       onClick={() => {
                         void handleCopyShareLink(quote)

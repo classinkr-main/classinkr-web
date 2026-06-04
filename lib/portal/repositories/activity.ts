@@ -173,5 +173,13 @@ export async function ensureQuoteInteractionLog(input: InsertActivityLog & {
     if (duplicate) return duplicate;
   }
 
-  return logActivity(input);
+  const {
+    dedupeWindowMinutes: _dedupeWindowMinutes,
+    dedupeByVersion: _dedupeByVersion,
+    dedupeByShare: _dedupeByShare,
+    dedupeByToken: _dedupeByToken,
+    ...activityInput
+  } = input;
+
+  return logActivity(activityInput);
 }

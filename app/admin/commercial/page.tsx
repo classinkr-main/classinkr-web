@@ -956,6 +956,7 @@ export default function AdminCommercialPage() {
                               shares={document.shares?.length ?? 0}
                               latestTitle={document.versions[0]?.title ?? "-"}
                               amount={document.versions[0]?.total_amount ?? 0}
+                              viewHref={`/admin/quotes/${document.id}/view`}
                             />
                           ))
                         )}
@@ -1267,6 +1268,7 @@ function DocumentBundleCard({
   shares,
   latestTitle,
   amount,
+  viewHref,
 }: {
   title: string;
   status: string;
@@ -1274,6 +1276,7 @@ function DocumentBundleCard({
   shares: number;
   latestTitle: string;
   amount: number;
+  viewHref?: string;
 }) {
   return (
     <div className="rounded-xl border border-[#e8e8e4] bg-[#f7f7f5] p-4">
@@ -1289,6 +1292,17 @@ function DocumentBundleCard({
         <InlineMetric label="공유" value={`${shares}개`} />
         <InlineMetric label="금액" value={formatMoney(amount)} />
       </div>
+      {viewHref ? (
+        <a
+          href={viewHref}
+          target="_blank"
+          rel="noreferrer"
+          className="mt-3 inline-flex min-h-8 items-center justify-center gap-1.5 rounded-md border border-[#e8e8e4] bg-white px-3 py-1.5 text-xs font-medium text-[#1a1a1a]/65 transition-colors hover:border-[#c8c8c4] hover:text-[#111110]"
+        >
+          <FileText className="h-3.5 w-3.5" />
+          직접 보기
+        </a>
+      ) : null}
     </div>
   );
 }

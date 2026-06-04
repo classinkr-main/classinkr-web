@@ -2,6 +2,8 @@ import type { Metadata } from "next"
 import DOMPurify from "isomorphic-dompurify"
 
 import { ShareUnavailable } from "@/app/share/_components/ShareUnavailable"
+import QuoteViewerActions from "@/components/portal/quotes/QuoteViewerActions"
+import { summarizeQuoteInteractions } from "@/lib/portal/repositories/activity"
 import { getPublicQuoteByToken } from "@/lib/portal/repositories/quote-documents"
 
 export const dynamic = "force-dynamic"
@@ -40,12 +42,18 @@ export default async function SharedQuotePage({ params }: PageProps) {
     return <ShareUnavailable variant="expired" documentLabel="견적서" expiresAt={result.expires_at} />
   }
 
-  const { document, version, customer_name } = result
+  const { share, document, version, customer_name } = result
   const validUntil = formatDate(version.valid_until)
+  const interaction = await summarizeQuoteInteractions({
+    quote_document_id: document.id,
+    version_id: version.id,
+    share_id: share.id,
+    token,
+  }).catch(() => null)
 
   return (
-    <main className="min-h-screen bg-[#F6F5F4] px-4 py-10 sm:px-6 sm:py-16">
-      <article className="mx-auto max-w-3xl overflow-hidden rounded-2xl border border-black/8 bg-white shadow-sm">
+    <main className="min-h-screen bg-[#F6F5F4] px-4 py-10 print:bg-white print:px-0 print:py-0 sm:px-6 sm:py-16">
+      <article className="mx-auto max-w-3xl overflow-hidden rounded-2xl border border-black/8 bg-white shadow-sm print:max-w-none print:rounded-none print:border-0 print:shadow-none">
         <header className="border-b border-black/8 px-6 py-6 sm:px-10 sm:py-8">
           <div className="flex items-center justify-between gap-4">
             <span className="rounded-full bg-[#ECFDF5] px-3 py-1 text-xs font-medium text-[#084734]">견적서</span>
@@ -57,6 +65,12 @@ export default async function SharedQuotePage({ params }: PageProps) {
           {customer_name ? (
             <p className="mt-2 text-sm text-[#1a1a1a]/60">{customer_name} 귀하</p>
           ) : null}
+          <div className="mt-5">
+            <QuoteViewerActions
+              reviewEndpoint={`/api/share/quote/${token}/confirm`}
+              initialConfirmedAt={interaction?.reviewConfirmedAt ?? null}
+            />
+          </div>
         </header>
 
         <section className="grid gap-6 px-6 py-6 sm:grid-cols-2 sm:px-10 sm:py-8">
