@@ -456,6 +456,47 @@
   margin: 0.75rem 0;
   display: block;
 }
+.rich-editor-content [data-resize-container] {
+  margin: 0.75rem 0;
+  max-width: 100%;
+}
+.rich-editor-content [data-resize-wrapper] {
+  max-width: 100%;
+}
+.rich-editor-content [data-resize-wrapper] > img {
+  margin: 0;
+}
+.rich-editor-content [data-resize-container][data-resize-state="true"] img,
+.rich-editor-content .ProseMirror-selectednode img {
+  outline: 2px solid rgba(8, 71, 52, 0.5);
+  outline-offset: 3px;
+}
+.rich-editor-content [data-resize-handle] {
+  z-index: 2;
+  width: 14px;
+  height: 14px;
+  border: 2px solid #084734;
+  border-radius: 999px;
+  background: #ffffff;
+  box-shadow: 0 2px 8px rgba(8, 71, 52, 0.18);
+}
+.rich-editor-content [data-resize-handle*="right"] {
+  transform: translate(50%, 50%);
+  cursor: nwse-resize;
+}
+.rich-editor-content [data-resize-handle*="left"] {
+  transform: translate(-50%, 50%);
+  cursor: nesw-resize;
+}
+.rich-editor-content [data-resize-handle*="top"] {
+  transform: translate(50%, -50%);
+}
+.rich-editor-content [data-resize-handle="top-left"] {
+  transform: translate(-50%, -50%);
+}
+.rich-editor-content [data-resize-handle="bottom-left"] {
+  transform: translate(-50%, 50%);
+}
 /* {{green:text}} 데코레이션 */
 .rich-editor-brand-green {
   color: #059669;

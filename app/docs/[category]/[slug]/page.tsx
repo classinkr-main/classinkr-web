@@ -63,18 +63,21 @@ export async function generateMetadata({
     }
   }
 
+  const isListed = (doc.visibility ?? "public") === "public" && !doc.noindex
+
   return {
-    title: `${doc.title} | ClassIn 가이드`,
+    title: `${doc.title} | Classin 가이드`,
     description: doc.description,
     keywords: doc.keywords,
+    robots: isListed ? undefined : { index: false, follow: true },
     openGraph: {
-      title: `${doc.title} | ClassIn 가이드`,
+      title: `${doc.title} | Classin 가이드`,
       description: doc.description,
       type: "article",
     },
     twitter: {
       card: "summary_large_image",
-      title: `${doc.title} | ClassIn 가이드`,
+      title: `${doc.title} | Classin 가이드`,
       description: doc.description,
     },
   }

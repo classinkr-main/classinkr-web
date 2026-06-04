@@ -1,13 +1,15 @@
 "use client"
 
-import { useMemo, useRef, useState, type ReactNode } from "react"
+import { useCallback, useEffect, useMemo, useRef, useState, type ReactNode } from "react"
 import Link from "next/link"
 import { useRouter } from "next/navigation"
 import {
   ArrowLeft,
+  BarChart3,
   Bot,
   CheckCircle2,
   CircleAlert,
+  Clock3,
   ExternalLink,
   Highlighter,
   Image as ImageIcon,
@@ -17,21 +19,27 @@ import {
   ListOrdered,
   Minus,
   Quote,
+  RotateCcw,
   Save,
   Sparkles,
   Trash2,
   Type,
+  Upload,
   Wand2,
 } from "lucide-react"
 
 import RichMarkdownEditor, { type RichMarkdownEditorHandle } from "@/components/admin/RichMarkdownEditor"
-import { adminFetch, adminFetchJson } from "@/lib/admin-client"
+import { adminFetch, adminFetchJson, getAdminToken } from "@/lib/admin-client"
+import type { AdminDocsContentResponse } from "@/lib/admin-docs"
 import type {
+  DocsArticleAnalyticsDetail,
   DocsArticleDetail,
   DocsArticleDifficulty,
   DocsArticleDocType,
+  DocsArticleRelationDetail,
   DocsArticleProductArea,
   DocsArticleStatus,
+  DocsArticleVersionDetail,
   DocsArticleVisibility,
 } from "@/lib/repositories/docs-articles"
 
@@ -44,6 +52,35 @@ interface Props {
   mode: "create" | "edit"
   categories: DocsCategoryOption[]
   article: DocsArticleDetail | null
+}
+
+type RelationType = NonNullable<DocsArticleRelationDetail["relationType"]>
+
+interface ArticleOption {
+  id: string
+  title: string
+  categoryId: string
+  slug: string
+  status: string
+  publicPath: string
+}
+
+interface RelationsResponse {
+  relations: DocsArticleRelationDetail[]
+  warning?: string
+}
+
+interface VersionsResponse {
+  versions: DocsArticleVersionDetail[]
+  warning?: string
+}
+
+interface EditorSupportState {
+  articleOptions: ArticleOption[]
+  relations: DocsArticleRelationDetail[]
+  versions: DocsArticleVersionDetail[]
+  analytics: DocsArticleAnalyticsDetail | null
+  warning: string | null
 }
 
 const STATUS_OPTIONS: { value: DocsArticleStatus; label: string; tone: string }[] = [
@@ -83,6 +120,13 @@ const DIFFICULTY_OPTIONS: { value: DocsArticleDifficulty; label: string }[] = [
   { value: "beginner", label: "기본" },
   { value: "intermediate", label: "중급" },
   { value: "advanced", label: "고급" },
+]
+
+const RELATION_TYPE_OPTIONS: { value: RelationType; label: string }[] = [
+  { value: "related", label: "함께 보기" },
+  { value: "next_step", label: "다음 단계" },
+  { value: "prerequisite", label: "먼저 보기" },
+  { value: "replaces", label: "대체 문서" },
 ]
 
 interface DocsArticleTemplate {
@@ -349,6 +393,19 @@ interface FormState {
   seoDescription: string
 }
 
+type SidebarTab = "publish" | "insights" | "versions" | "templates"
+
+const SIDEBAR_TABS: { value: SidebarTab; label: string; mode: "all" | "create" | "edit" }[] = [
+  { value: "publish", label: "게시", mode: "all" },
+  { value: "insights", label: "성과", mode: "edit" },
+  { value: "versions", label: "버전", mode: "edit" },
+  { value: "templates", label: "템플릿", mode: "create" },
+]
+
+function formSignature(form: FormState) {
+  return JSON.stringify(form)
+}
+
 function toCsv(values: string[] | undefined) {
   return (values ?? []).join(", ")
 }
@@ -499,6 +556,105 @@ function buildContentJson(
   }
 }
 
+function createArticleDraft(form: FormState) {
+  const title = form.title.trim() || "새 문서"
+  const audience = form.audience.trim() || "원장, 운영팀"
+  const context = form.description.trim() || "이 문서의 목적을 한 문장으로 정리합니다."
+
+  if (form.docType === "faq") {
+    return `# ${title}
+
+${context}
+
+## 질문
+
+사용자가 실제로 묻는 표현으로 질문을 적습니다.
+
+## 답변
+
+핵심 답변을 2~4문장으로 먼저 정리합니다.
+
+## 추가 안내
+
+예외 조건, 필요한 확인 정보, 상담으로 넘겨야 하는 상황을 적습니다.
+
+## 관련 문서
+
+함께 확인하면 좋은 문서를 연결합니다.`
+  }
+
+  if (form.docType === "troubleshooting") {
+    return `# ${title}
+
+${context}
+
+## 증상
+
+사용자가 겪는 현상을 화면, 소리, 계정, 장비 상태 기준으로 적습니다.
+
+## 원인 확인
+
+- 사용 환경과 계정을 확인합니다.
+- 같은 증상이 반복되는 범위를 확인합니다.
+- 최근 변경된 설정이나 장비 상태를 확인합니다.
+
+## 해결 순서
+
+- 가장 안전한 확인부터 진행합니다.
+- 사용자가 직접 할 수 있는 조치를 먼저 안내합니다.
+- 내부 확인이나 상담 연결이 필요한 조건을 적습니다.
+
+## 상담 연결 기준
+
+담당자가 이어받아야 하는 상황과 필요한 정보를 정리합니다.`
+  }
+
+  return `# ${title}
+
+${context}
+
+## 대상과 사용 시점
+
+이 문서는 ${audience}가 같은 기준으로 확인하고 실행할 수 있도록 작성합니다.
+
+## 진행 순서
+
+- 먼저 확인해야 할 조건을 적습니다.
+- 실제 실행 순서를 단계별로 적습니다.
+- 완료 후 기록하거나 공유할 내용을 적습니다.
+
+## 체크리스트
+
+- 담당자가 정해져 있습니다.
+- 안내 대상과 시점이 정리되어 있습니다.
+- 후속 확인 방법이 정리되어 있습니다.
+
+## 안내 문구
+
+고객, 교사, 내부 담당자에게 바로 보낼 수 있는 문구를 적습니다.`
+}
+
+function optimizeMarkdown(markdown: string) {
+  return markdown
+    .replace(/\r\n/g, "\n")
+    .replace(/[ \t]+$/gm, "")
+    .replace(/\n{3,}/g, "\n\n")
+    .replace(/^([^\n#-].{0,70})\n(?=##\s)/gm, "$1\n\n")
+    .trim()
+}
+
+function formatDateTime(value: string | null | undefined) {
+  if (!value) return "-"
+  const date = new Date(value)
+  if (Number.isNaN(date.getTime())) return value
+  return new Intl.DateTimeFormat("ko-KR", {
+    month: "2-digit",
+    day: "2-digit",
+    hour: "2-digit",
+    minute: "2-digit",
+  }).format(date)
+}
+
 function makeTemplateSlug(slugBase: string) {
   return `${slugBase}-${Date.now().toString(36).slice(-5)}`
 }
@@ -583,10 +739,29 @@ export default function DocsArticleEditor({ mode, categories, article }: Props) 
   const [form, setForm] = useState<FormState>(() =>
     initialForm(article, categories[0]?.id ?? "start")
   )
+  const [lastSavedForm, setLastSavedForm] = useState<FormState>(() =>
+    initialForm(article, categories[0]?.id ?? "start")
+  )
   const [saving, setSaving] = useState(false)
   const [deleting, setDeleting] = useState(false)
   const [error, setError] = useState<string | null>(null)
   const [savedMessage, setSavedMessage] = useState<string | null>(null)
+  const [support, setSupport] = useState<EditorSupportState>({
+    articleOptions: [],
+    relations: [],
+    versions: [],
+    analytics: null,
+    warning: null,
+  })
+  const [supportLoading, setSupportLoading] = useState(mode === "edit")
+  const [relationsSaving, setRelationsSaving] = useState(false)
+  const [snapshotting, setSnapshotting] = useState(false)
+  const [rollingBackVersionId, setRollingBackVersionId] = useState<string | null>(null)
+  const [uploadingMedia, setUploadingMedia] = useState(false)
+  const [snapshotNote, setSnapshotNote] = useState("Manual snapshot")
+  const [activeSidebarTab, setActiveSidebarTab] = useState<SidebarTab>(
+    mode === "create" ? "templates" : "publish"
+  )
 
   const publicPath = useMemo(
     () => `/docs/${form.categoryId}/${form.slug || article?.slug || "new"}`,
@@ -642,6 +817,84 @@ export default function DocsArticleEditor({ mode, categories, article }: Props) 
     [chatbotIncluded, form.chatbotSummary, form.contentMarkdown, form.keywordsCsv, form.tagsCsv]
   )
   const completedAiChecks = aiChecklist.filter((item) => item.complete).length
+  const isDirty = useMemo(
+    () => mode === "create" || formSignature(form) !== formSignature(lastSavedForm),
+    [form, lastSavedForm, mode]
+  )
+  const visibleSidebarTabs = useMemo(
+    () => SIDEBAR_TABS.filter((tab) => tab.mode === "all" || tab.mode === mode),
+    [mode]
+  )
+
+  const loadEditorSupport = useCallback(async () => {
+    if (mode !== "edit" || !article) return
+
+    setSupportLoading(true)
+    try {
+      const [contentResult, relationsResult, versionsResult, analyticsResult] = await Promise.all([
+        adminFetchJson<AdminDocsContentResponse>("/api/admin/docs").catch((err) => ({
+          configured: false,
+          status: "unconfigured",
+          generatedAt: new Date().toISOString(),
+          categories: [],
+          articles: [],
+          warnings: [err instanceof Error ? err.message : "문서 목록을 불러오지 못했습니다."],
+        } satisfies AdminDocsContentResponse)),
+        adminFetchJson<RelationsResponse>(`/api/admin/docs/articles/${article.id}/relations`).catch((err) => ({
+          relations: [],
+          warning: err instanceof Error ? err.message : "관련 문서를 불러오지 못했습니다.",
+        })),
+        adminFetchJson<VersionsResponse>(`/api/admin/docs/articles/${article.id}/versions`).catch((err) => ({
+          versions: [],
+          warning: err instanceof Error ? err.message : "버전을 불러오지 못했습니다.",
+        })),
+        adminFetchJson<DocsArticleAnalyticsDetail>(`/api/admin/docs/articles/${article.id}/analytics?days=90`).catch(
+          (err) => ({
+            articleId: article.id,
+            feedbackTotal: 0,
+            helpfulTotal: 0,
+            notHelpfulTotal: 0,
+            helpfulRate: null,
+            searchClicks: 0,
+            chatbotCitations: 0,
+            recentFeedback: [],
+            recentSearches: [],
+            warning: err instanceof Error ? err.message : "성과를 불러오지 못했습니다.",
+          } as DocsArticleAnalyticsDetail & { warning?: string })
+        ),
+      ])
+
+      const warnings = [
+        ...(contentResult.warnings ?? []),
+        relationsResult.warning,
+        versionsResult.warning,
+        "warning" in analyticsResult ? analyticsResult.warning : null,
+      ].filter((item): item is string => Boolean(item))
+
+      setSupport({
+        articleOptions: contentResult.articles
+          .filter((item) => item.id !== article.id)
+          .map((item) => ({
+            id: item.id,
+            title: item.title,
+            categoryId: item.categoryId,
+            slug: item.slug,
+            status: item.status,
+            publicPath: item.publicPath,
+          })),
+        relations: relationsResult.relations,
+        versions: versionsResult.versions,
+        analytics: analyticsResult,
+        warning: warnings[0] ?? null,
+      })
+    } finally {
+      setSupportLoading(false)
+    }
+  }, [article, mode])
+
+  useEffect(() => {
+    void loadEditorSupport()
+  }, [loadEditorSupport])
 
   function update<K extends keyof FormState>(key: K, value: FormState[K]) {
     setForm((previous) => ({ ...previous, [key]: value }))
@@ -695,6 +948,172 @@ export default function DocsArticleEditor({ mode, categories, article }: Props) 
     setSavedMessage(null)
   }
 
+  function applyArticleDraft() {
+    update("contentMarkdown", createArticleDraft(form))
+    if (!form.chatbotSummary.trim()) {
+      update("chatbotSummary", createSummaryDraft({ ...form, contentMarkdown: createArticleDraft(form) }))
+    }
+  }
+
+  function applySeoDraft() {
+    const title = form.seoTitle.trim() || `${form.title.trim()} | ClassIn 가이드`
+    const description = form.seoDescription.trim() || form.description.trim() || createSummaryDraft(form)
+    update("seoTitle", title.slice(0, 70))
+    update("seoDescription", description.slice(0, 155))
+  }
+
+  function optimizeCurrentMarkdown() {
+    update("contentMarkdown", optimizeMarkdown(form.contentMarkdown))
+  }
+
+  function updateRelation<K extends keyof DocsArticleRelationDetail>(
+    index: number,
+    key: K,
+    value: DocsArticleRelationDetail[K]
+  ) {
+    setSupport((previous) => {
+      const relations = [...previous.relations]
+      const current = relations[index]
+      if (!current) return previous
+      relations[index] = { ...current, [key]: value }
+      return { ...previous, relations }
+    })
+  }
+
+  function addRelation() {
+    const candidate = support.articleOptions.find(
+      (option) => !support.relations.some((relation) => relation.relatedArticleId === option.id)
+    )
+    if (!candidate) return
+
+    setSupport((previous) => ({
+      ...previous,
+      relations: [
+        ...previous.relations,
+        {
+          relatedArticleId: candidate.id,
+          relationType: "related",
+          orderIndex: (previous.relations.length + 1) * 10,
+          note: null,
+          relatedSlug: candidate.slug,
+          relatedTitle: candidate.title,
+          relatedCategoryId: candidate.categoryId,
+        },
+      ],
+    }))
+  }
+
+  function removeRelation(index: number) {
+    setSupport((previous) => ({
+      ...previous,
+      relations: previous.relations.filter((_, itemIndex) => itemIndex !== index),
+    }))
+  }
+
+  async function saveRelations() {
+    if (!article) return
+    setRelationsSaving(true)
+    setError(null)
+    try {
+      const result = await adminFetchJson<RelationsResponse>(
+        `/api/admin/docs/articles/${article.id}/relations`,
+        {
+          method: "PUT",
+          body: JSON.stringify({ relations: support.relations }),
+        }
+      )
+      setSupport((previous) => ({ ...previous, relations: result.relations }))
+      setSavedMessage("관련 문서를 저장했습니다.")
+      setTimeout(() => setSavedMessage(null), 2500)
+    } catch (error) {
+      setError(error instanceof Error ? error.message : "관련 문서를 저장하지 못했습니다.")
+    } finally {
+      setRelationsSaving(false)
+    }
+  }
+
+  async function createSnapshot() {
+    if (!article) return
+    setSnapshotting(true)
+    setError(null)
+    try {
+      const version = await adminFetchJson<DocsArticleVersionDetail>(
+        `/api/admin/docs/articles/${article.id}/versions`,
+        {
+          method: "POST",
+          body: JSON.stringify({ changeNote: snapshotNote }),
+        }
+      )
+      setSupport((previous) => ({ ...previous, versions: [version, ...previous.versions] }))
+      setSavedMessage("스냅샷을 만들었습니다.")
+      setTimeout(() => setSavedMessage(null), 2500)
+    } catch (error) {
+      setError(error instanceof Error ? error.message : "스냅샷을 만들지 못했습니다.")
+    } finally {
+      setSnapshotting(false)
+    }
+  }
+
+  async function rollbackToVersion(version: DocsArticleVersionDetail) {
+    if (!article) return
+    if (!window.confirm(`v${version.versionNumber} 버전으로 본문을 되돌립니다. 현재 내용은 백업 스냅샷으로 저장됩니다.`)) return
+
+    setRollingBackVersionId(version.id)
+    setError(null)
+    try {
+      const detail = await adminFetchJson<DocsArticleDetail>(
+        `/api/admin/docs/articles/${article.id}/versions/${version.id}/rollback`,
+        { method: "POST" }
+      )
+      const rolledBackForm = initialForm(detail, detail.categoryId)
+      setForm(rolledBackForm)
+      setLastSavedForm(rolledBackForm)
+      await adminFetch("/api/admin/docs/reindex", {
+        method: "POST",
+        body: JSON.stringify({ articleId: detail.id }),
+      }).catch(() => null)
+      await loadEditorSupport()
+      setSavedMessage("선택한 버전으로 롤백했습니다.")
+      setTimeout(() => setSavedMessage(null), 2500)
+    } catch (error) {
+      setError(error instanceof Error ? error.message : "롤백하지 못했습니다.")
+    } finally {
+      setRollingBackVersionId(null)
+    }
+  }
+
+  async function uploadMedia(file: File) {
+    if (file.size > 5 * 1024 * 1024) {
+      setError("이미지 파일은 5MB 이하만 업로드할 수 있습니다.")
+      return
+    }
+
+    setUploadingMedia(true)
+    setError(null)
+    try {
+      const formData = new FormData()
+      formData.append("file", file)
+      const response = await fetch("/api/admin/upload", {
+        method: "POST",
+        headers: { Authorization: `Bearer ${getAdminToken()}` },
+        body: formData,
+      })
+      const body = await response.json().catch(() => null)
+      if (!response.ok) throw new Error(body?.error ?? "업로드에 실패했습니다.")
+
+      const url = typeof body?.url === "string" ? body.url : ""
+      if (!url) throw new Error("업로드 URL을 받지 못했습니다.")
+      const alt = file.name.replace(/\.[^.]+$/, "")
+      editorRef.current?.insertMarkdown(`\n\n![${alt}](${url})\n\n`)
+      setSavedMessage("이미지를 본문에 삽입했습니다.")
+      setTimeout(() => setSavedMessage(null), 2500)
+    } catch (error) {
+      setError(error instanceof Error ? error.message : "업로드에 실패했습니다.")
+    } finally {
+      setUploadingMedia(false)
+    }
+  }
+
   function buildPayload(overrides: Partial<FormState> = {}): Record<string, unknown> {
     const next = { ...form, ...overrides }
 
@@ -740,7 +1159,10 @@ export default function DocsArticleEditor({ mode, categories, article }: Props) 
   async function reindexIfPublished(status: DocsArticleStatus) {
     if (status !== "published") return
 
-    await adminFetch("/api/admin/docs/reindex", { method: "POST" }).catch(() => null)
+    await adminFetch("/api/admin/docs/reindex", {
+      method: "POST",
+      body: JSON.stringify(article?.id ? { articleId: article.id } : {}),
+    }).catch(() => null)
   }
 
   async function save(overrides: Partial<FormState> = {}) {
@@ -775,7 +1197,9 @@ export default function DocsArticleEditor({ mode, categories, article }: Props) 
         }
       )
       await reindexIfPublished(next.status)
-      setForm(initialForm(detail, detail.categoryId))
+      const savedForm = initialForm(detail, detail.categoryId)
+      setForm(savedForm)
+      setLastSavedForm(savedForm)
       setSavedMessage(
         next.status === "published" ? "저장 완료 · 검색 인덱스 반영" : "저장 완료"
       )
@@ -823,6 +1247,15 @@ export default function DocsArticleEditor({ mode, categories, article }: Props) 
           <span className="line-clamp-1 max-w-[320px] text-[13px] font-medium text-[#111110]">
             {form.title || (mode === "create" ? "새 문서" : "문서 편집")}
           </span>
+          <span
+            className={`inline-flex items-center rounded-full px-2 py-0.5 text-[11px] font-semibold ${
+              isDirty
+                ? "bg-amber-50 text-amber-700"
+                : "bg-emerald-50 text-emerald-700"
+            }`}
+          >
+            {isDirty ? "저장 안 됨" : "저장됨"}
+          </span>
         </div>
 
         <div className="flex flex-wrap items-center gap-2">
@@ -840,6 +1273,9 @@ export default function DocsArticleEditor({ mode, categories, article }: Props) 
           {error ? <span className="text-[12px] text-red-600">{error}</span> : null}
           {savedMessage ? (
             <span className="text-[12px] text-emerald-600">{savedMessage}</span>
+          ) : null}
+          {support.warning ? (
+            <span className="max-w-[280px] truncate text-[12px] text-amber-600">{support.warning}</span>
           ) : null}
 
           {mode === "edit" && article ? (
@@ -861,7 +1297,7 @@ export default function DocsArticleEditor({ mode, categories, article }: Props) 
             className="inline-flex items-center gap-1.5 rounded-lg border border-[#e8e8e4] bg-white px-3 py-2 text-[13px] font-medium text-[#111110] transition-colors hover:bg-[#f5f5f2] disabled:opacity-50"
           >
             <Save className="h-3.5 w-3.5" />
-            {saving ? "저장 중..." : "저장"}
+            {saving ? "저장 중..." : form.status === "published" ? "현재 문서 저장" : "초안 저장"}
           </button>
 
           <button
@@ -870,7 +1306,7 @@ export default function DocsArticleEditor({ mode, categories, article }: Props) 
             disabled={saving}
             className="inline-flex items-center gap-1.5 rounded-lg bg-[#084734] px-3 py-2 text-[13px] font-medium text-white transition-colors hover:bg-[#065c41] disabled:opacity-50"
           >
-            {form.status === "published" ? "저장 + 스냅샷" : "게시"}
+            {form.status === "published" ? "게시 상태로 저장" : "게시하기"}
           </button>
         </div>
       </div>
@@ -879,9 +1315,20 @@ export default function DocsArticleEditor({ mode, categories, article }: Props) 
         <div className="grid gap-6 lg:grid-cols-[minmax(0,1fr)_320px] xl:grid-cols-[minmax(0,1fr)_360px]">
           <main className="space-y-6">
             <section className="space-y-4 rounded-2xl border border-[rgba(0,0,0,0.08)] bg-white p-6">
-              <h2 className="text-[13px] font-semibold uppercase tracking-wide text-[#1a1a1a]/40">
-                기본 정보
-              </h2>
+              <div className="flex flex-wrap items-center justify-between gap-3">
+                <h2 className="text-[13px] font-semibold uppercase tracking-wide text-[#1a1a1a]/40">
+                  기본 정보
+                </h2>
+                {isDirty ? (
+                  <span className="rounded-full border border-amber-100 bg-amber-50 px-2.5 py-1 text-[11px] font-semibold text-amber-700">
+                    저장하지 않은 변경 사항
+                  </span>
+                ) : (
+                  <span className="rounded-full border border-emerald-100 bg-emerald-50 px-2.5 py-1 text-[11px] font-semibold text-emerald-700">
+                    최신 저장 상태
+                  </span>
+                )}
+              </div>
 
               <div>
                 <label className="mb-1.5 block text-[12px] font-medium text-[#1a1a1a]/50">
@@ -1046,6 +1493,21 @@ export default function DocsArticleEditor({ mode, categories, article }: Props) 
                   <ToolbarButton onClick={() => editorRef.current?.insertImage()} icon={<ImageIcon className="h-3 w-3" />}>
                     이미지
                   </ToolbarButton>
+                  <label className="inline-flex cursor-pointer items-center gap-1 rounded-lg border border-[#e8e8e4] bg-white px-2 py-1.5 text-xs font-medium text-[#1a1a1a]/60 transition-colors duration-75 hover:border-[#1a1a1a]/20 hover:text-[#111110]">
+                    <Upload className="h-3 w-3" />
+                    {uploadingMedia ? "업로드 중" : "업로드"}
+                    <input
+                      type="file"
+                      accept="image/png,image/jpeg,image/webp,image/gif"
+                      disabled={uploadingMedia}
+                      className="sr-only"
+                      onChange={(event) => {
+                        const file = event.target.files?.[0]
+                        event.currentTarget.value = ""
+                        if (file) void uploadMedia(file)
+                      }}
+                    />
+                  </label>
                   <ToolbarButton onClick={() => editorRef.current?.insertDivider()} icon={<Minus className="h-3 w-3" />}>
                     구분선
                   </ToolbarButton>
@@ -1057,6 +1519,8 @@ export default function DocsArticleEditor({ mode, categories, article }: Props) 
                 value={form.contentMarkdown}
                 onChange={(markdown) => update("contentMarkdown", markdown)}
                 placeholder="본문을 작성해주세요"
+                onAiDraftClick={applyArticleDraft}
+                onSelectionOptimize={optimizeCurrentMarkdown}
               />
 
               <div className="mt-3 rounded-xl border border-emerald-100 bg-emerald-50/60 p-3.5">
@@ -1166,6 +1630,30 @@ export default function DocsArticleEditor({ mode, categories, article }: Props) 
                   <Wand2 className="h-3.5 w-3.5" />
                   챗봇 노출값 맞추기
                 </button>
+                <button
+                  type="button"
+                  onClick={applyArticleDraft}
+                  className="inline-flex items-center gap-1.5 rounded-lg border border-[#DDEFE5] bg-white px-3 py-2 text-[12px] font-semibold text-[#084734] transition-colors hover:bg-[#EDF8F1]"
+                >
+                  <Sparkles className="h-3.5 w-3.5" />
+                  본문 초안 채우기
+                </button>
+                <button
+                  type="button"
+                  onClick={applySeoDraft}
+                  className="inline-flex items-center gap-1.5 rounded-lg border border-[#DDEFE5] bg-white px-3 py-2 text-[12px] font-semibold text-[#084734] transition-colors hover:bg-[#EDF8F1]"
+                >
+                  <Wand2 className="h-3.5 w-3.5" />
+                  SEO 초안 채우기
+                </button>
+                <button
+                  type="button"
+                  onClick={optimizeCurrentMarkdown}
+                  className="inline-flex items-center gap-1.5 rounded-lg border border-[#DDEFE5] bg-white px-3 py-2 text-[12px] font-semibold text-[#084734] transition-colors hover:bg-[#EDF8F1]"
+                >
+                  <Wand2 className="h-3.5 w-3.5" />
+                  본문 정리
+                </button>
               </div>
             </section>
 
@@ -1239,166 +1727,426 @@ export default function DocsArticleEditor({ mode, categories, article }: Props) 
                 />
               </div>
             </section>
-          </main>
 
-          <aside className="space-y-6 lg:sticky lg:top-20 lg:self-start">
-            <section className="space-y-4 rounded-2xl border border-[rgba(0,0,0,0.08)] bg-white p-6">
-              <h2 className="text-[13px] font-semibold uppercase tracking-wide text-[#1a1a1a]/40">
-                게시 설정
-              </h2>
-
-              <div className="grid gap-4">
-                <div>
-                  <label className="mb-1.5 block text-[12px] font-medium text-[#1a1a1a]/50">
-                    상태
-                  </label>
-                  <div className="flex flex-wrap gap-2">
-                    {STATUS_OPTIONS.map((option) => {
-                      const active = form.status === option.value
-                      return (
-                        <button
-                          key={option.value}
-                          type="button"
-                          onClick={() => update("status", option.value)}
-                          className={`inline-flex items-center rounded-full border px-3 py-1 text-[12px] font-semibold transition-colors ${
-                            active
-                              ? option.tone
-                              : "border-[#e8e8e4] bg-white text-[#1a1a1a]/40 hover:bg-[#f5f5f2]"
-                          }`}
-                        >
-                          {option.label}
-                        </button>
-                      )
-                    })}
+            {mode === "edit" && article ? (
+              <section className="space-y-5 rounded-2xl border border-[rgba(0,0,0,0.08)] bg-white p-6">
+                <div className="flex flex-wrap items-start justify-between gap-3">
+                  <div>
+                    <h2 className="text-[13px] font-semibold uppercase tracking-wide text-[#1a1a1a]/40">
+                      관련 문서
+                    </h2>
+                    <p className="mt-1 text-[12px] text-[#1a1a1a]/40">
+                      공개 문서 하단과 챗봇 문맥 확장에 함께 쓰이는 연결입니다.
+                    </p>
+                  </div>
+                  <div className="flex gap-2">
+                    <button
+                      type="button"
+                      onClick={addRelation}
+                      disabled={support.articleOptions.length === 0}
+                      className="inline-flex items-center gap-1.5 rounded-lg border border-[#e8e8e4] bg-white px-3 py-2 text-[12px] font-semibold text-[#111110] transition-colors hover:bg-[#f5f5f2] disabled:cursor-not-allowed disabled:opacity-45"
+                    >
+                      <Link2 className="h-3.5 w-3.5" />
+                      연결 추가
+                    </button>
+                    <button
+                      type="button"
+                      onClick={() => void saveRelations()}
+                      disabled={relationsSaving}
+                      className="inline-flex items-center gap-1.5 rounded-lg bg-[#111110] px-3 py-2 text-[12px] font-semibold text-white transition-colors hover:bg-[#2a2a28] disabled:cursor-not-allowed disabled:opacity-50"
+                    >
+                      <Save className="h-3.5 w-3.5" />
+                      {relationsSaving ? "저장 중" : "저장"}
+                    </button>
                   </div>
                 </div>
-                <div>
-                  <label className="mb-1.5 block text-[12px] font-medium text-[#1a1a1a]/50">
-                    가시성
-                  </label>
-                  <select
-                    value={form.visibility}
-                    onChange={(event) =>
-                      update("visibility", event.target.value as DocsArticleVisibility)
-                    }
-                    className="w-full rounded-lg border border-[rgba(0,0,0,0.12)] bg-white px-3 py-2 text-[13px] focus:border-[#111110]/30 focus:outline-none"
-                  >
-                    {VISIBILITY_OPTIONS.map((option) => (
-                      <option key={option.value} value={option.value}>
-                        {option.label}
-                      </option>
-                    ))}
-                  </select>
-                </div>
-                <div>
-                  <label className="mb-1.5 block text-[12px] font-medium text-[#1a1a1a]/50">
-                    정렬 순서 (낮을수록 위)
-                  </label>
-                  <input
-                    type="number"
-                    value={form.orderIndex}
-                    onChange={(event) => update("orderIndex", Number(event.target.value) || 0)}
-                    className="w-full rounded-lg border border-[rgba(0,0,0,0.12)] px-3 py-2 text-[13px] focus:border-[#111110]/30 focus:outline-none"
-                  />
-                </div>
-              </div>
 
-              <div className="flex flex-col gap-3">
-                <label className="inline-flex items-center gap-2 text-[13px] text-[#1a1a1a]/60">
-                  <input
-                    type="checkbox"
-                    checked={form.featured}
-                    onChange={(event) => update("featured", event.target.checked)}
-                    className="h-4 w-4 rounded border-[rgba(0,0,0,0.15)]"
-                  />
-                  대표 문서
-                </label>
-                <label className="inline-flex items-center gap-2 text-[13px] text-[#1a1a1a]/60">
-                  <input
-                    type="checkbox"
-                    checked={form.noindex}
-                    onChange={(event) => update("noindex", event.target.checked)}
-                    className="h-4 w-4 rounded border-[rgba(0,0,0,0.15)]"
-                  />
-                  검색 엔진 색인 제외 (noindex)
-                </label>
-              </div>
-
-              <div className="grid gap-4">
-                <div>
-                  <label className="mb-1.5 block text-[12px] font-medium text-[#1a1a1a]/50">
-                    SEO 제목
-                  </label>
-                  <input
-                    type="text"
-                    value={form.seoTitle}
-                    onChange={(event) => update("seoTitle", event.target.value)}
-                    placeholder="기본: 제목 | ClassIn 가이드"
-                    className="w-full rounded-lg border border-[rgba(0,0,0,0.12)] px-3 py-2 text-[13px] focus:border-[#111110]/30 focus:outline-none"
-                  />
-                </div>
-                <div>
-                  <label className="mb-1.5 block text-[12px] font-medium text-[#1a1a1a]/50">
-                    SEO 설명
-                  </label>
-                  <input
-                    type="text"
-                    value={form.seoDescription}
-                    onChange={(event) => update("seoDescription", event.target.value)}
-                    placeholder="기본: 설명 필드"
-                    className="w-full rounded-lg border border-[rgba(0,0,0,0.12)] px-3 py-2 text-[13px] focus:border-[#111110]/30 focus:outline-none"
-                  />
-                </div>
-              </div>
-
-              {mode === "edit" && article ? (
-                <div className="grid gap-2 rounded-xl bg-[#FAFAF8] px-4 py-3 text-[12px] text-[#1a1a1a]/45">
-                  <span>
-                    게시일: {article.publishedAt ? new Date(article.publishedAt).toLocaleString("ko-KR") : "-"}
-                  </span>
-                  <span>
-                    최근 검수: {article.lastReviewedAt ? new Date(article.lastReviewedAt).toLocaleString("ko-KR") : "-"}
-                  </span>
-                  <span>
-                    업데이트: {new Date(article.updatedAt).toLocaleString("ko-KR")}
-                  </span>
-                </div>
-              ) : null}
-            </section>
-
-            {mode === "create" ? (
-              <section className="space-y-4 rounded-2xl border border-[rgba(0,0,0,0.08)] bg-white p-5">
-                <div>
-                  <h2 className="text-[13px] font-semibold uppercase tracking-wide text-[#1a1a1a]/40">
-                    작성 템플릿
-                  </h2>
-                  <p className="mt-2 text-[12px] leading-relaxed text-[#1a1a1a]/45">
-                    문서 유형을 고르면 기본 섹션과 검색 메타를 함께 채웁니다.
+                {supportLoading ? (
+                  <p className="rounded-xl bg-[#FAFAF8] px-4 py-6 text-center text-[13px] text-[#1a1a1a]/35">
+                    관련 문서를 불러오는 중입니다.
                   </p>
-                </div>
-                <div className="grid gap-3">
-                  {DOC_TEMPLATES.map((template) => (
+                ) : support.relations.length === 0 ? (
+                  <p className="rounded-xl border border-dashed border-[#e8e8e4] px-4 py-6 text-center text-[13px] text-[#1a1a1a]/35">
+                    연결된 문서가 없습니다.
+                  </p>
+                ) : (
+                  <div className="grid gap-3">
+                    {support.relations.map((relation, index) => (
+                      <div key={`${relation.relatedArticleId}:${index}`} className="grid gap-2 rounded-xl border border-[#e8e8e4] bg-[#FAFAF8] p-3">
+                        <div className="grid gap-2 md:grid-cols-[minmax(0,1fr)_140px_84px]">
+                          <select
+                            value={relation.relatedArticleId}
+                            onChange={(event) => {
+                              const option = support.articleOptions.find((item) => item.id === event.target.value)
+                              updateRelation(index, "relatedArticleId", event.target.value)
+                              updateRelation(index, "relatedTitle", option?.title ?? "")
+                              updateRelation(index, "relatedSlug", option?.slug ?? "")
+                              updateRelation(index, "relatedCategoryId", option?.categoryId ?? "")
+                            }}
+                            className="h-9 min-w-0 rounded-lg border border-[#e8e8e4] bg-white px-3 text-[13px] outline-none focus:border-[#084734]"
+                          >
+                            {support.articleOptions.map((option) => (
+                              <option key={option.id} value={option.id}>
+                                {option.title}
+                              </option>
+                            ))}
+                          </select>
+                          <select
+                            value={relation.relationType ?? "related"}
+                            onChange={(event) =>
+                              updateRelation(index, "relationType", event.target.value as RelationType)
+                            }
+                            className="h-9 rounded-lg border border-[#e8e8e4] bg-white px-3 text-[13px] outline-none focus:border-[#084734]"
+                          >
+                            {RELATION_TYPE_OPTIONS.map((option) => (
+                              <option key={option.value} value={option.value}>
+                                {option.label}
+                              </option>
+                            ))}
+                          </select>
+                          <button
+                            type="button"
+                            onClick={() => removeRelation(index)}
+                            className="h-9 rounded-lg border border-[#e8e8e4] bg-white text-[12px] font-semibold text-[#B85C33] transition-colors hover:bg-[#FEF3EE]"
+                          >
+                            제거
+                          </button>
+                        </div>
+                        <input
+                          value={relation.note ?? ""}
+                          onChange={(event) => updateRelation(index, "note", event.target.value)}
+                          placeholder="내부 메모 또는 연결 이유"
+                          className="h-9 rounded-lg border border-[#e8e8e4] bg-white px-3 text-[13px] outline-none placeholder:text-[#1a1a1a]/25 focus:border-[#084734]"
+                        />
+                      </div>
+                    ))}
+                  </div>
+                )}
+              </section>
+            ) : null}
+
+          </main>
+
+          <aside className="lg:sticky lg:top-20 lg:self-start">
+            <section className="rounded-2xl border border-[rgba(0,0,0,0.08)] bg-white p-4">
+              <div className="rounded-xl bg-[#FAFAF8] p-1">
+                <div
+                  className={`grid gap-1 ${
+                    visibleSidebarTabs.length === 4
+                      ? "grid-cols-4"
+                      : visibleSidebarTabs.length === 3
+                        ? "grid-cols-3"
+                        : "grid-cols-2"
+                  }`}
+                >
+                  {visibleSidebarTabs.map((tab) => (
                     <button
-                      key={template.id}
+                      key={tab.value}
                       type="button"
-                      onClick={() => applyTemplate(template)}
-                      className="min-h-[116px] rounded-xl border border-[#e8e8e4] bg-[#FAFAF8] p-4 text-left transition-colors hover:border-[#084734]/30 hover:bg-[#F7FBF8]"
+                      onClick={() => setActiveSidebarTab(tab.value)}
+                      className={`rounded-lg px-2 py-2 text-[12px] font-semibold transition-colors ${
+                        activeSidebarTab === tab.value
+                          ? "bg-white text-[#111110] shadow-sm"
+                          : "text-[#1a1a1a]/45 hover:text-[#111110]"
+                      }`}
                     >
-                      <span className="block text-[13px] font-semibold text-[#111110]">
-                        {template.label}
-                      </span>
-                      <span className="mt-2 block text-[12px] leading-relaxed text-[#1a1a1a]/45">
-                        {template.description}
-                      </span>
-                      <span className="mt-3 inline-flex items-center gap-1.5 text-[12px] font-semibold text-[#084734]">
-                        <Wand2 className="h-3.5 w-3.5" />
-                        템플릿 적용
-                      </span>
+                      {tab.label}
                     </button>
                   ))}
                 </div>
-              </section>
-            ) : null}
+              </div>
+
+              {activeSidebarTab === "publish" ? (
+                <div className="mt-5 space-y-5">
+                  <div className="flex items-start justify-between gap-3">
+                    <div>
+                      <h2 className="text-[13px] font-semibold uppercase tracking-wide text-[#1a1a1a]/40">
+                        게시 설정
+                      </h2>
+                      <p className="mt-1 text-[12px] text-[#1a1a1a]/40">
+                        상태, 공개 범위, SEO 값을 저장 전에 확인합니다.
+                      </p>
+                    </div>
+                    <span
+                      className={`shrink-0 rounded-full px-2 py-0.5 text-[11px] font-semibold ${
+                        isDirty ? "bg-amber-50 text-amber-700" : "bg-emerald-50 text-emerald-700"
+                      }`}
+                    >
+                      {isDirty ? "미저장" : "저장됨"}
+                    </span>
+                  </div>
+
+                  <div>
+                    <label className="mb-1.5 block text-[12px] font-medium text-[#1a1a1a]/50">
+                      상태
+                    </label>
+                    <div className="flex flex-wrap gap-2">
+                      {STATUS_OPTIONS.map((option) => {
+                        const active = form.status === option.value
+                        return (
+                          <button
+                            key={option.value}
+                            type="button"
+                            onClick={() => update("status", option.value)}
+                            className={`inline-flex items-center rounded-full border px-3 py-1 text-[12px] font-semibold transition-colors ${
+                              active
+                                ? option.tone
+                                : "border-[#e8e8e4] bg-white text-[#1a1a1a]/40 hover:bg-[#f5f5f2]"
+                            }`}
+                          >
+                            {option.label}
+                          </button>
+                        )
+                      })}
+                    </div>
+                  </div>
+
+                  <div className="grid gap-4">
+                    <div>
+                      <label className="mb-1.5 block text-[12px] font-medium text-[#1a1a1a]/50">
+                        가시성
+                      </label>
+                      <select
+                        value={form.visibility}
+                        onChange={(event) =>
+                          update("visibility", event.target.value as DocsArticleVisibility)
+                        }
+                        className="w-full rounded-lg border border-[rgba(0,0,0,0.12)] bg-white px-3 py-2 text-[13px] focus:border-[#111110]/30 focus:outline-none"
+                      >
+                        {VISIBILITY_OPTIONS.map((option) => (
+                          <option key={option.value} value={option.value}>
+                            {option.label}
+                          </option>
+                        ))}
+                      </select>
+                    </div>
+                    <div>
+                      <label className="mb-1.5 block text-[12px] font-medium text-[#1a1a1a]/50">
+                        정렬 순서 (낮을수록 위)
+                      </label>
+                      <input
+                        type="number"
+                        value={form.orderIndex}
+                        onChange={(event) => update("orderIndex", Number(event.target.value) || 0)}
+                        className="w-full rounded-lg border border-[rgba(0,0,0,0.12)] px-3 py-2 text-[13px] focus:border-[#111110]/30 focus:outline-none"
+                      />
+                    </div>
+                  </div>
+
+                  <div className="grid gap-3 rounded-xl bg-[#FAFAF8] p-3">
+                    <label className="inline-flex items-center gap-2 text-[13px] text-[#1a1a1a]/60">
+                      <input
+                        type="checkbox"
+                        checked={form.featured}
+                        onChange={(event) => update("featured", event.target.checked)}
+                        className="h-4 w-4 rounded border-[rgba(0,0,0,0.15)]"
+                      />
+                      대표 문서
+                    </label>
+                    <label className="inline-flex items-center gap-2 text-[13px] text-[#1a1a1a]/60">
+                      <input
+                        type="checkbox"
+                        checked={form.noindex}
+                        onChange={(event) => update("noindex", event.target.checked)}
+                        className="h-4 w-4 rounded border-[rgba(0,0,0,0.15)]"
+                      />
+                      검색 엔진 색인 제외
+                    </label>
+                  </div>
+
+                  <div className="grid gap-4 border-t border-[#f0f0ec] pt-4">
+                    <div>
+                      <label className="mb-1.5 block text-[12px] font-medium text-[#1a1a1a]/50">
+                        SEO 제목
+                      </label>
+                      <input
+                        type="text"
+                        value={form.seoTitle}
+                        onChange={(event) => update("seoTitle", event.target.value)}
+                        placeholder="기본: 제목 | ClassIn 가이드"
+                        className="w-full rounded-lg border border-[rgba(0,0,0,0.12)] px-3 py-2 text-[13px] focus:border-[#111110]/30 focus:outline-none"
+                      />
+                    </div>
+                    <div>
+                      <label className="mb-1.5 block text-[12px] font-medium text-[#1a1a1a]/50">
+                        SEO 설명
+                      </label>
+                      <input
+                        type="text"
+                        value={form.seoDescription}
+                        onChange={(event) => update("seoDescription", event.target.value)}
+                        placeholder="기본: 설명 필드"
+                        className="w-full rounded-lg border border-[rgba(0,0,0,0.12)] px-3 py-2 text-[13px] focus:border-[#111110]/30 focus:outline-none"
+                      />
+                    </div>
+                  </div>
+
+                  {mode === "edit" && article ? (
+                    <div className="grid gap-2 rounded-xl bg-[#FAFAF8] px-4 py-3 text-[12px] text-[#1a1a1a]/45">
+                      <span>
+                        게시일: {article.publishedAt ? new Date(article.publishedAt).toLocaleString("ko-KR") : "-"}
+                      </span>
+                      <span>
+                        최근 검수: {article.lastReviewedAt ? new Date(article.lastReviewedAt).toLocaleString("ko-KR") : "-"}
+                      </span>
+                      <span>
+                        업데이트: {new Date(article.updatedAt).toLocaleString("ko-KR")}
+                      </span>
+                    </div>
+                  ) : null}
+                </div>
+              ) : null}
+
+              {activeSidebarTab === "insights" && mode === "edit" ? (
+                <div className="mt-5 space-y-4">
+                  <div className="flex items-center gap-2">
+                    <BarChart3 className="h-4 w-4 text-[#1a1a1a]/35" />
+                    <h2 className="text-[13px] font-semibold uppercase tracking-wide text-[#1a1a1a]/40">
+                      문서 성과
+                    </h2>
+                  </div>
+                  {supportLoading ? (
+                    <p className="rounded-xl bg-[#FAFAF8] px-4 py-6 text-center text-[13px] text-[#1a1a1a]/35">
+                      성과를 불러오는 중입니다.
+                    </p>
+                  ) : (
+                    <>
+                      <div className="grid gap-3">
+                        <div className="rounded-xl bg-[#FAFAF8] p-3">
+                          <p className="text-[11px] text-[#1a1a1a]/35">피드백</p>
+                          <p className="mt-1 text-xl font-bold text-[#111110]">{support.analytics?.feedbackTotal ?? 0}</p>
+                          <p className="text-[11px] text-[#1a1a1a]/35">
+                            도움됨 {support.analytics?.helpfulRate ?? "-"}%
+                          </p>
+                        </div>
+                        <div className="grid grid-cols-2 gap-3">
+                          <div className="rounded-xl bg-[#FAFAF8] p-3">
+                            <p className="text-[11px] text-[#1a1a1a]/35">검색 클릭</p>
+                            <p className="mt-1 text-xl font-bold text-[#111110]">{support.analytics?.searchClicks ?? 0}</p>
+                          </div>
+                          <div className="rounded-xl bg-[#FAFAF8] p-3">
+                            <p className="text-[11px] text-[#1a1a1a]/35">챗봇 인용</p>
+                            <p className="mt-1 text-xl font-bold text-[#111110]">{support.analytics?.chatbotCitations ?? 0}</p>
+                          </div>
+                        </div>
+                      </div>
+                      {(support.analytics?.recentFeedback.length ?? 0) > 0 ? (
+                        <div className="divide-y divide-[#f0f0ec] rounded-xl border border-[#e8e8e4]">
+                          {support.analytics?.recentFeedback.slice(0, 3).map((item) => (
+                            <div key={item.id} className="p-3">
+                              <p className="text-[12px] font-semibold text-[#111110]">
+                                {item.helpful ? "도움됨" : "도움 안 됨"} · {formatDateTime(item.createdAt)}
+                              </p>
+                              {item.reason ? (
+                                <p className="mt-1 line-clamp-2 text-[12px] text-[#1a1a1a]/45">{item.reason}</p>
+                              ) : null}
+                            </div>
+                          ))}
+                        </div>
+                      ) : (
+                        <p className="rounded-xl border border-dashed border-[#e8e8e4] px-4 py-6 text-center text-[13px] text-[#1a1a1a]/35">
+                          최근 피드백이 없습니다.
+                        </p>
+                      )}
+                    </>
+                  )}
+                </div>
+              ) : null}
+
+              {activeSidebarTab === "versions" && mode === "edit" ? (
+                <div className="mt-5 space-y-4">
+                  <div className="flex items-center gap-2">
+                    <Clock3 className="h-4 w-4 text-[#1a1a1a]/35" />
+                    <h2 className="text-[13px] font-semibold uppercase tracking-wide text-[#1a1a1a]/40">
+                      버전 기록
+                    </h2>
+                  </div>
+                  <div className="grid gap-2">
+                    <input
+                      value={snapshotNote}
+                      onChange={(event) => setSnapshotNote(event.target.value)}
+                      className="h-9 rounded-lg border border-[#e8e8e4] bg-white px-3 text-[13px] outline-none focus:border-[#084734]"
+                    />
+                    <button
+                      type="button"
+                      onClick={() => void createSnapshot()}
+                      disabled={snapshotting}
+                      className="inline-flex h-9 items-center justify-center gap-1.5 rounded-lg bg-[#111110] px-3 text-[12px] font-semibold text-white transition-colors hover:bg-[#2a2a28] disabled:cursor-not-allowed disabled:opacity-50"
+                    >
+                      <Save className="h-3.5 w-3.5" />
+                      {snapshotting ? "스냅샷 생성 중" : "스냅샷 만들기"}
+                    </button>
+                  </div>
+                  {supportLoading ? (
+                    <p className="rounded-xl bg-[#FAFAF8] px-4 py-6 text-center text-[13px] text-[#1a1a1a]/35">
+                      버전을 불러오는 중입니다.
+                    </p>
+                  ) : support.versions.length === 0 ? (
+                    <p className="rounded-xl border border-dashed border-[#e8e8e4] px-4 py-6 text-center text-[13px] text-[#1a1a1a]/35">
+                      저장된 버전이 없습니다.
+                    </p>
+                  ) : (
+                    <div className="max-h-[420px] divide-y divide-[#f0f0ec] overflow-y-auto rounded-xl border border-[#e8e8e4]">
+                      {support.versions.map((version) => (
+                        <div key={version.id} className="grid gap-3 p-3">
+                          <div>
+                            <p className="text-[13px] font-semibold text-[#111110]">
+                              v{version.versionNumber} · {version.title}
+                            </p>
+                            <p className="mt-1 text-[11px] text-[#1a1a1a]/35">
+                              {version.changeNote ?? "변경 메모 없음"} · {formatDateTime(version.createdAt)}
+                            </p>
+                          </div>
+                          <button
+                            type="button"
+                            onClick={() => void rollbackToVersion(version)}
+                            disabled={rollingBackVersionId === version.id}
+                            className="inline-flex h-8 w-fit items-center gap-1.5 rounded-lg border border-[#e8e8e4] bg-white px-2.5 text-[12px] font-semibold text-[#111110] transition-colors hover:bg-[#f5f5f2] disabled:cursor-not-allowed disabled:opacity-50"
+                          >
+                            <RotateCcw className="h-3.5 w-3.5" />
+                            이 버전으로 롤백
+                          </button>
+                        </div>
+                      ))}
+                    </div>
+                  )}
+                </div>
+              ) : null}
+
+              {activeSidebarTab === "templates" && mode === "create" ? (
+                <div className="mt-5 space-y-4">
+                  <div>
+                    <h2 className="text-[13px] font-semibold uppercase tracking-wide text-[#1a1a1a]/40">
+                      작성 템플릿
+                    </h2>
+                    <p className="mt-2 text-[12px] leading-relaxed text-[#1a1a1a]/45">
+                      문서 유형을 고르면 기본 섹션과 검색 메타를 함께 채웁니다.
+                    </p>
+                  </div>
+                  <div className="grid gap-3">
+                    {DOC_TEMPLATES.map((template) => (
+                      <button
+                        key={template.id}
+                        type="button"
+                        onClick={() => applyTemplate(template)}
+                        className="rounded-xl border border-[#e8e8e4] bg-[#FAFAF8] p-4 text-left transition-colors hover:border-[#084734]/30 hover:bg-[#F7FBF8]"
+                      >
+                        <span className="block text-[13px] font-semibold text-[#111110]">
+                          {template.label}
+                        </span>
+                        <span className="mt-2 block text-[12px] leading-relaxed text-[#1a1a1a]/45">
+                          {template.description}
+                        </span>
+                        <span className="mt-3 inline-flex items-center gap-1.5 text-[12px] font-semibold text-[#084734]">
+                          <Wand2 className="h-3.5 w-3.5" />
+                          템플릿 적용
+                        </span>
+                      </button>
+                    ))}
+                  </div>
+                </div>
+              ) : null}
+            </section>
           </aside>
         </div>
       </div>

@@ -1,0 +1,1609 @@
+<!DOCTYPE html>
+<html lang="ko">
+<head>
+<meta charset="UTF-8" />
+<meta name="viewport" content="width=device-width, initial-scale=1.0" />
+<title>Classin Education OS — 교육의 운영 체제.</title>
+<meta name="description" content="Classin은 교육의 운영 체제(Education OS)입니다. 표준화 · 자동화 · 데이터화로 학원을 작동시키는 검증된 솔루션 컬렉션." />
+<link rel="preconnect" href="https://fonts.googleapis.com" />
+<link rel="preconnect" href="https://fonts.gstatic.com" crossorigin />
+<link href="https://fonts.googleapis.com/css2?family=Inter:ital,wght@0,400;0,500;0,600;0,700;0,800;0,900;1,500;1,700&family=Noto+Sans+KR:wght@300;400;500;700;900&family=Noto+Serif+KR:wght@400;500;700&display=swap" rel="stylesheet" />
+<style>
+  :root {
+    --bg: #f5f3ee;
+    --bg-2: #ecebe2;
+    --ink: #14181a;
+    --ink-soft: #4a534a;
+    --ink-mute: #8a8f86;
+    --green: #1f3d2b;
+    --green-2: #285238;
+    --green-soft: #eaf0ec;
+    --line: #d8d3c4;
+    --line-soft: #e6e1d2;
+    --price: #14181a;
+    --radius: 16px;
+    --maxw: 1180px;
+    --brand-font: 'Gilroy', 'Giloy', 'Inter', sans-serif;
+  }
+  @font-face {
+    font-family: 'Gilroy';
+    src: local('Gilroy Bold'), local('Gilroy-Bold'), local('Gilroy ExtraBold'), local('Gilroy');
+    font-weight: 700 900;
+    font-style: normal;
+    font-display: swap;
+  }
+  * { box-sizing: border-box; }
+  html { scroll-behavior: smooth; -webkit-text-size-adjust: 100%; }
+  body {
+    margin: 0;
+    font-family: 'Noto Sans KR', 'Inter', -apple-system, BlinkMacSystemFont, sans-serif;
+    color: var(--ink);
+    background: var(--bg);
+    line-height: 1.55;
+    -webkit-font-smoothing: antialiased;
+    -moz-osx-font-smoothing: grayscale;
+    /* Korean-aware wrapping: break at word boundaries, not mid-word */
+    word-break: keep-all;
+    overflow-wrap: break-word;
+  }
+  /* Headlines: balance lines on supported browsers */
+  h1, h2, h3, h4, .quote, .manifesto p, .hero-title, .s-title, .cta-headline, .signal-title, .value-title, .pillar-name, .pkg-name {
+    text-wrap: balance;
+  }
+  /* Conditional line breaks */
+  .br-desktop { display: none; }
+  .br-mobile  { display: inline; }
+  @media (min-width: 720px) {
+    .br-desktop { display: inline; }
+    .br-mobile  { display: none; }
+  }
+  a { color: inherit; text-decoration: none; }
+  img { max-width: 100%; display: block; }
+  .container {
+    max-width: var(--maxw);
+    margin: 0 auto;
+    padding: 0 22px;
+  }
+  .em-key {
+    color: var(--green);
+    font-weight: 700;
+  }
+
+  /* ---------- NAV ---------- */
+  .nav {
+    position: sticky; top: 0; z-index: 50;
+    background: rgba(245, 243, 238, 0.88);
+    backdrop-filter: saturate(140%) blur(10px);
+    -webkit-backdrop-filter: saturate(140%) blur(10px);
+    border-bottom: 1px solid rgba(216, 211, 196, 0.55);
+  }
+  .nav-inner {
+    display: flex; align-items: center; justify-content: space-between;
+    height: 58px;
+  }
+  .brand {
+    font-family: var(--brand-font);
+    font-weight: 800;
+    font-size: 19px;
+    letter-spacing: -0.01em;
+    color: var(--green);
+  }
+  .nav-cta {
+    font-size: 13px;
+    font-weight: 600;
+    padding: 9px 16px;
+    border-radius: 999px;
+    background: var(--green);
+    color: #fff;
+    transition: transform .15s ease, background .15s ease;
+  }
+  .nav-cta:hover { background: var(--green-2); transform: translateY(-1px); }
+
+  /* ---------- COMMON ---------- */
+  .eyebrow {
+    font-family: 'Inter', sans-serif;
+    font-size: 12px;
+    letter-spacing: 0.24em;
+    color: var(--ink-mute);
+    text-transform: uppercase;
+    font-weight: 500;
+  }
+  .eyebrow .dash {
+    display: inline-block;
+    width: 24px; height: 1px;
+    background: var(--ink-mute);
+    vertical-align: middle;
+    margin-right: 10px;
+    transform: translateY(-2px);
+  }
+
+  .btn {
+    display: inline-flex; align-items: center; gap: 8px;
+    padding: 15px 24px;
+    border-radius: 999px;
+    font-weight: 600;
+    font-size: 15px;
+    transition: transform .15s ease, background .15s ease, color .15s ease, box-shadow .2s ease;
+    cursor: pointer;
+  }
+  .btn-primary {
+    background: var(--green); color: #fff;
+    box-shadow: 0 1px 0 rgba(0,0,0,0.04);
+  }
+  .btn-primary:hover { background: var(--green-2); transform: translateY(-1px); box-shadow: 0 8px 18px rgba(31,61,43,0.18); }
+  .btn-ghost {
+    color: var(--green);
+    border: 1px solid var(--green);
+  }
+  .btn-ghost:hover { background: var(--green); color: #fff; }
+  .btn .arrow { transition: transform .2s ease; }
+  .btn:hover .arrow { transform: translateX(3px); }
+
+  /* ---------- HERO ---------- */
+  .hero {
+    padding: 60px 0 88px;
+    border-bottom: 1px solid var(--line);
+    position: relative;
+  }
+  .hero .eyebrow { margin-bottom: 32px; }
+
+  /* Brand wordmark block */
+  .brand-block {
+    margin: 0 0 48px;
+    padding-bottom: 36px;
+    border-bottom: 1px solid var(--line);
+  }
+  .wordmark {
+    font-family: var(--brand-font);
+    font-weight: 800;
+    font-size: clamp(56px, 16vw, 156px);
+    letter-spacing: -0.05em;
+    color: var(--green);
+    line-height: 0.92;
+    margin: 0 0 14px;
+  }
+  .catchphrase {
+    display: flex;
+    flex-wrap: wrap;
+    align-items: baseline;
+    gap: 14px;
+    margin-top: 12px;
+  }
+  .catchphrase-en {
+    font-family: 'Inter', 'Noto Sans KR', sans-serif;
+    font-weight: 700;
+    font-size: clamp(22px, 5.6vw, 38px);
+    color: var(--green);
+    letter-spacing: -0.025em;
+    line-height: 1.1;
+  }
+  .catchphrase-ko {
+    font-family: 'Inter', 'Noto Sans KR', sans-serif;
+    font-weight: 500;
+    font-size: clamp(14px, 3.4vw, 18px);
+    color: var(--ink-mute);
+    letter-spacing: 0.04em;
+  }
+  .catchphrase-ko::before {
+    content: "/";
+    margin-right: 12px;
+    color: var(--line);
+    font-weight: 400;
+  }
+
+  /* Manifesto headline */
+  .hero-title {
+    margin: 0 0 26px;
+    font-family: 'Inter', 'Noto Sans KR', sans-serif;
+    line-height: 1.05;
+    letter-spacing: -0.03em;
+  }
+  .hero-title .line-1 {
+    display: block;
+    font-weight: 500;
+    font-size: clamp(20px, 5vw, 36px);
+    color: var(--ink-mute);
+    margin-bottom: 4px;
+    letter-spacing: -0.02em;
+  }
+  .hero-title .line-2 {
+    display: block;
+    font-weight: 700;
+    font-size: clamp(28px, 7.5vw, 60px);
+    color: var(--ink);
+    letter-spacing: -0.03em;
+    line-height: 1.05;
+  }
+  .hero-sub {
+    font-size: clamp(15px, 4vw, 18px);
+    color: var(--ink-soft);
+    max-width: 580px;
+    margin: 0 0 40px;
+    line-height: 1.7;
+  }
+  .hero-cta-row {
+    display: flex; flex-wrap: wrap; gap: 12px;
+    align-items: center;
+  }
+  .hero-pillars {
+    margin-top: 68px;
+    padding-top: 28px;
+    border-top: 1px solid var(--line);
+    display: grid;
+    grid-template-columns: repeat(3, 1fr);
+    gap: 16px;
+  }
+  .hero-pillar {
+    text-align: left;
+  }
+  .hero-pillar .num {
+    font-family: 'Inter', sans-serif;
+    font-size: 11px;
+    letter-spacing: 0.22em;
+    color: var(--green);
+    text-transform: uppercase;
+    font-weight: 700;
+    margin-bottom: 6px;
+    display: block;
+  }
+  .hero-pillar .name {
+    font-family: 'Inter', 'Noto Sans KR', sans-serif;
+    font-size: clamp(13px, 3.4vw, 16px);
+    color: var(--ink);
+    font-weight: 700;
+    letter-spacing: -0.01em;
+    display: block;
+  }
+  .hero-pillar .en {
+    font-family: 'Inter', sans-serif;
+    font-size: 11px;
+    color: var(--ink-mute);
+    letter-spacing: 0.08em;
+    margin-top: 2px;
+    display: block;
+  }
+
+  /* ---------- MANIFESTO STRIP ---------- */
+  .manifesto {
+    padding: 72px 0;
+    border-bottom: 1px solid var(--line);
+    text-align: center;
+  }
+  .manifesto p {
+    margin: 0 auto;
+    max-width: 880px;
+    font-family: 'Noto Serif KR', serif;
+    font-weight: 500;
+    font-size: clamp(22px, 5.6vw, 38px);
+    line-height: 1.4;
+    color: var(--green);
+    letter-spacing: -0.015em;
+    padding: 0 16px;
+  }
+
+  /* ---------- SECTION COMMON ---------- */
+  section.s {
+    padding: 100px 0;
+    border-bottom: 1px solid var(--line);
+  }
+  .s-head { margin-bottom: 60px; max-width: 780px; }
+  .s-kicker {
+    font-family: 'Inter', sans-serif;
+    font-size: 12px;
+    letter-spacing: 0.24em;
+    color: var(--ink-mute);
+    text-transform: uppercase;
+    font-weight: 500;
+    margin-bottom: 18px;
+  }
+  .s-title {
+    font-family: 'Inter', 'Noto Sans KR', sans-serif;
+    font-weight: 700;
+    font-size: clamp(32px, 7.6vw, 60px);
+    line-height: 1.08;
+    letter-spacing: -0.028em;
+    color: var(--green);
+    margin: 0 0 22px;
+  }
+  .s-desc {
+    color: var(--ink-soft);
+    max-width: 620px;
+    font-size: clamp(14px, 3.6vw, 17px);
+    line-height: 1.7;
+  }
+
+  /* ---------- THREE PILLARS ---------- */
+  .pillars-grid {
+    display: grid;
+    grid-template-columns: 1fr;
+    gap: 0;
+    border-top: 1px solid var(--line);
+  }
+  .pillar-row {
+    display: grid;
+    grid-template-columns: 1fr;
+    gap: 14px;
+    padding: 40px 0;
+    border-bottom: 1px solid var(--line);
+  }
+  .pillar-head {
+    display: flex;
+    align-items: baseline;
+    gap: 16px;
+  }
+  .pillar-num {
+    font-family: 'Inter', sans-serif;
+    font-weight: 800;
+    font-size: clamp(30px, 8vw, 48px);
+    color: var(--green);
+    letter-spacing: -0.03em;
+    line-height: 1;
+  }
+  .pillar-en {
+    font-family: 'Inter', sans-serif;
+    font-size: 12px;
+    letter-spacing: 0.24em;
+    color: var(--ink-mute);
+    text-transform: uppercase;
+    font-weight: 600;
+  }
+  .pillar-name {
+    font-family: 'Inter', 'Noto Sans KR', sans-serif;
+    font-size: clamp(24px, 6vw, 36px);
+    color: var(--ink);
+    margin: 0 0 10px;
+    letter-spacing: -0.022em;
+    font-weight: 700;
+    line-height: 1.15;
+  }
+  .pillar-desc {
+    color: var(--ink-soft);
+    font-size: clamp(14px, 3.8vw, 16px);
+    margin: 0;
+    max-width: 580px;
+    line-height: 1.7;
+  }
+
+  /* ---------- THE SHIFT (signals) ---------- */
+  .signals {
+    display: grid;
+    grid-template-columns: 1fr;
+    gap: 0;
+    border-top: 2px solid var(--green);
+  }
+  .signal {
+    padding: 40px 4px 36px;
+    border-bottom: 1px solid var(--line);
+    display: grid;
+    grid-template-columns: 1fr;
+    gap: 14px;
+  }
+  .signal:last-child { border-bottom: 2px solid var(--green); }
+  .signal-row-1 {
+    display: flex;
+    align-items: baseline;
+    gap: 18px;
+  }
+  .signal-num {
+    font-family: 'Inter', sans-serif;
+    font-weight: 800;
+    font-size: clamp(28px, 7vw, 44px);
+    color: var(--green);
+    letter-spacing: -0.03em;
+    line-height: 1;
+  }
+  .signal-label {
+    font-family: 'Inter', sans-serif;
+    font-size: 11px;
+    letter-spacing: 0.28em;
+    color: var(--ink-mute);
+    text-transform: uppercase;
+    font-weight: 600;
+  }
+  .signal-title {
+    font-family: 'Inter', 'Noto Sans KR', sans-serif;
+    font-size: clamp(22px, 5.6vw, 34px);
+    color: var(--ink);
+    margin: 0 0 12px;
+    letter-spacing: -0.02em;
+    font-weight: 700;
+    line-height: 1.25;
+  }
+  .signal-desc {
+    color: var(--ink-soft);
+    font-size: clamp(14px, 3.8vw, 16px);
+    margin: 0;
+    max-width: 640px;
+    line-height: 1.7;
+  }
+
+  /* ---------- COLLECTION (with story labels) ---------- */
+  .col-block {
+    margin-top: 12px;
+    padding-top: 24px;
+  }
+  .col-block + .col-block { margin-top: 84px; }
+  .col-story {
+    font-family: 'Noto Serif KR', serif;
+    font-style: italic;
+    font-weight: 500;
+    font-size: clamp(15px, 4vw, 19px);
+    color: var(--green);
+    margin: 0 0 14px;
+    letter-spacing: -0.005em;
+  }
+  .col-story::before {
+    content: "—";
+    margin-right: 10px;
+    color: var(--ink-mute);
+    font-style: normal;
+  }
+  .col-title {
+    font-family: 'Inter', 'Noto Sans KR', sans-serif;
+    font-weight: 700;
+    font-size: clamp(26px, 5.6vw, 36px);
+    color: var(--ink);
+    letter-spacing: -0.022em;
+    margin: 0 0 6px;
+    line-height: 1.2;
+  }
+  .col-title .num {
+    font-family: 'Inter', sans-serif;
+    font-weight: 800;
+    color: var(--green);
+    margin-right: 8px;
+  }
+  .col-kicker {
+    font-family: 'Inter', sans-serif;
+    font-size: 12px;
+    letter-spacing: 0.22em;
+    color: var(--ink-mute);
+    text-transform: uppercase;
+    font-weight: 500;
+    margin-bottom: 30px;
+  }
+
+  .item-row {
+    display: grid;
+    grid-template-columns: 1fr;
+    gap: 14px 24px;
+    padding: 26px 0;
+    border-top: 1px solid var(--line);
+    align-items: start;
+  }
+  .item-row:last-child { border-bottom: 1px solid var(--line); }
+  .item-name {
+    font-family: 'Inter', 'Noto Sans KR', sans-serif;
+    font-weight: 700;
+    font-size: clamp(19px, 5vw, 24px);
+    color: var(--ink);
+    letter-spacing: -0.01em;
+    margin: 0 0 6px;
+  }
+  .item-spec {
+    color: var(--ink-mute);
+    font-size: 13px;
+    margin: 0 0 8px;
+  }
+  .item-desc {
+    color: var(--ink-soft);
+    font-size: 14.5px;
+    margin: 0;
+    max-width: 440px;
+    line-height: 1.6;
+  }
+  .item-price {
+    font-family: 'Inter', sans-serif;
+    font-size: clamp(32px, 8vw, 52px);
+    font-weight: 700;
+    color: var(--price);
+    letter-spacing: -0.025em;
+    line-height: 1;
+    white-space: nowrap;
+  }
+  .item-price .unit {
+    font-family: 'Noto Sans KR', sans-serif;
+    font-size: 13px;
+    font-weight: 500;
+    color: var(--ink-mute);
+    margin-left: 4px;
+    vertical-align: super;
+  }
+  .item-price .per {
+    font-family: 'Inter', sans-serif;
+    font-size: 14px;
+    color: var(--ink-mute);
+    font-weight: 500;
+    margin-left: 2px;
+  }
+  .item-note {
+    margin-top: 8px;
+    font-size: 12px;
+    color: var(--ink-mute);
+    letter-spacing: 0.02em;
+  }
+  .item-note .star { color: var(--green); margin-right: 4px; }
+
+  /* Package cards (Package 1 & 2) — price-first layout */
+  .pkg-card {
+    border-radius: var(--radius);
+    padding: 32px 28px;
+    margin: 10px 0;
+  }
+  .pkg-card .tag {
+    display: inline-block;
+    font-family: 'Inter', sans-serif;
+    font-size: 10px;
+    letter-spacing: 0.18em;
+    padding: 4px 10px;
+    border-radius: 999px;
+    font-weight: 700;
+    text-transform: uppercase;
+    margin-bottom: 14px;
+  }
+  .pkg-card .pkg-name {
+    font-family: 'Inter', 'Noto Sans KR', sans-serif;
+    font-weight: 700;
+    font-size: clamp(20px, 5.4vw, 28px);
+    color: var(--ink);
+    letter-spacing: -0.018em;
+    margin: 0 0 18px;
+    line-height: 1.25;
+  }
+  .pkg-card .pkg-price {
+    display: flex;
+    align-items: baseline;
+    gap: 6px;
+    margin-bottom: 22px;
+    line-height: 1;
+  }
+  .pkg-card .pkg-price .num {
+    font-family: 'Inter', sans-serif;
+    font-size: clamp(44px, 11vw, 72px);
+    font-weight: 800;
+    color: var(--price);
+    letter-spacing: -0.03em;
+    line-height: 0.9;
+  }
+  .pkg-card .pkg-price .unit {
+    font-family: 'Noto Sans KR', sans-serif;
+    font-size: clamp(13px, 3.4vw, 16px);
+    font-weight: 500;
+    color: var(--ink-mute);
+    margin-left: 4px;
+    align-self: flex-start;
+    margin-top: 6px;
+  }
+  .pkg-card .pkg-divider {
+    height: 1px;
+    background: var(--line);
+    margin: 0 0 20px;
+  }
+  .pkg-card .pkg-spec {
+    color: var(--ink-mute);
+    font-size: 13px;
+    margin: 0 0 10px;
+  }
+  .pkg-card .pkg-desc {
+    color: var(--ink-soft);
+    font-size: 15px;
+    margin: 0 0 14px;
+    line-height: 1.65;
+    max-width: 540px;
+  }
+  .pkg-card .pkg-note {
+    font-size: 12px;
+    color: var(--ink-mute);
+    letter-spacing: 0.02em;
+  }
+  .pkg-card .pkg-note .star { color: var(--green); margin-right: 4px; }
+
+  /* Featured (Package 1) — filled green */
+  .pkg-card.featured {
+    background: var(--green);
+    color: #fff;
+  }
+  .pkg-card.featured .pkg-name,
+  .pkg-card.featured .pkg-price .num { color: #fff; }
+  .pkg-card.featured .pkg-price .unit,
+  .pkg-card.featured .pkg-spec,
+  .pkg-card.featured .pkg-note { color: rgba(255,255,255,0.7); }
+  .pkg-card.featured .pkg-desc { color: rgba(255,255,255,0.86); }
+  .pkg-card.featured .pkg-divider { background: rgba(255,255,255,0.18); }
+  .pkg-card.featured .pkg-note .star { color: #c7e1cd; }
+  .pkg-card.featured .tag {
+    background: rgba(255,255,255,0.16);
+    color: #fff;
+  }
+
+  /* Bordered (Package 2) — outlined box only */
+  .pkg-card.bordered {
+    background: transparent;
+    border: 1.5px solid var(--green);
+  }
+  .pkg-card.bordered .tag {
+    background: var(--green-soft);
+    color: var(--green);
+  }
+
+  /* ---------- DIAGNOSIS CTA ---------- */
+  .diagnosis {
+    padding: 100px 0;
+    background: var(--green);
+    color: #fff;
+    border-bottom: 1px solid rgba(255,255,255,0.14);
+  }
+  .diagnosis-grid {
+    display: grid;
+    grid-template-columns: 1fr;
+    gap: 44px;
+    align-items: start;
+  }
+  .diagnosis-kicker {
+    font-family: 'Inter', sans-serif;
+    font-size: 12px;
+    letter-spacing: 0.24em;
+    color: rgba(255,255,255,0.58);
+    text-transform: uppercase;
+    font-weight: 600;
+    margin-bottom: 18px;
+  }
+  .diagnosis-title {
+    margin: 0 0 22px;
+    font-family: 'Inter', 'Noto Sans KR', sans-serif;
+    font-weight: 800;
+    font-size: clamp(32px, 8vw, 58px);
+    line-height: 1.08;
+    letter-spacing: -0.035em;
+  }
+  .diagnosis-desc {
+    max-width: 560px;
+    margin: 0;
+    color: rgba(255,255,255,0.78);
+    font-size: clamp(15px, 3.8vw, 18px);
+    line-height: 1.75;
+  }
+  .diagnosis-points {
+    display: grid;
+    gap: 12px;
+    margin-top: 34px;
+    padding: 0;
+    list-style: none;
+  }
+  .diagnosis-points li {
+    display: flex;
+    gap: 10px;
+    align-items: baseline;
+    color: rgba(255,255,255,0.82);
+    font-size: 14px;
+    line-height: 1.65;
+  }
+  .diagnosis-points li::before {
+    content: "";
+    width: 7px;
+    height: 7px;
+    flex: 0 0 auto;
+    border-radius: 50%;
+    background: #c7e1cd;
+    transform: translateY(-1px);
+  }
+  .diagnosis-form {
+    background: rgba(255,255,255,0.97);
+    color: var(--ink);
+    border-radius: var(--radius);
+    padding: 28px 22px;
+    box-shadow: 0 22px 60px rgba(0,0,0,0.18);
+  }
+  .diagnosis-form-head {
+    margin-bottom: 24px;
+    padding-bottom: 18px;
+    border-bottom: 1px solid var(--line);
+  }
+  .diagnosis-form-title {
+    margin: 0 0 8px;
+    font-family: 'Inter', 'Noto Sans KR', sans-serif;
+    font-size: clamp(22px, 5vw, 28px);
+    line-height: 1.2;
+    letter-spacing: -0.02em;
+    color: var(--green);
+  }
+  .diagnosis-form-copy {
+    margin: 0;
+    color: var(--ink-soft);
+    font-size: 14px;
+    line-height: 1.65;
+  }
+  .diagnosis-fields {
+    display: grid;
+    gap: 18px;
+  }
+  .field-grid {
+    display: grid;
+    grid-template-columns: 1fr;
+    gap: 14px;
+  }
+  .field {
+    display: grid;
+    gap: 7px;
+  }
+  .field-label {
+    font-size: 12px;
+    font-weight: 700;
+    color: var(--green);
+    letter-spacing: 0.02em;
+  }
+  .field-input {
+    width: 100%;
+    min-height: 48px;
+    border: 1px solid var(--line);
+    border-radius: 10px;
+    background: #fff;
+    color: var(--ink);
+    font: inherit;
+    font-size: 15px;
+    padding: 12px 13px;
+    outline: none;
+    transition: border-color .16s ease, box-shadow .16s ease;
+  }
+  .field-input:focus {
+    border-color: var(--green);
+    box-shadow: 0 0 0 3px rgba(31,61,43,0.12);
+  }
+  .field-input::placeholder { color: #a3a79f; }
+  .survey-label {
+    display: block;
+    margin-bottom: 10px;
+    font-size: 12px;
+    font-weight: 700;
+    color: var(--green);
+    letter-spacing: 0.02em;
+  }
+  .survey-grid {
+    display: grid;
+    grid-template-columns: 1fr;
+    gap: 8px;
+  }
+  .survey-option {
+    position: relative;
+    cursor: pointer;
+  }
+  .survey-option input {
+    position: absolute;
+    inset: 0;
+    opacity: 0;
+    cursor: pointer;
+  }
+  .survey-option span {
+    display: flex;
+    min-height: 44px;
+    align-items: center;
+    justify-content: center;
+    border: 1px solid var(--line);
+    border-radius: 10px;
+    background: #fff;
+    color: var(--ink-soft);
+    font-size: 13px;
+    font-weight: 700;
+    text-align: center;
+    transition: border-color .16s ease, background .16s ease, color .16s ease;
+  }
+  .survey-option input:checked + span {
+    border-color: var(--green);
+    background: var(--green-soft);
+    color: var(--green);
+  }
+  .survey-option input:focus-visible + span {
+    box-shadow: 0 0 0 3px rgba(31,61,43,0.12);
+  }
+  .consent {
+    display: flex;
+    align-items: flex-start;
+    gap: 9px;
+    color: var(--ink-soft);
+    font-size: 12px;
+    line-height: 1.55;
+  }
+  .consent input {
+    width: 16px;
+    height: 16px;
+    margin-top: 1px;
+    accent-color: var(--green);
+  }
+  .diagnosis-submit {
+    width: 100%;
+    min-height: 52px;
+    border: 0;
+    border-radius: 999px;
+    background: var(--green);
+    color: #fff;
+    font: inherit;
+    font-size: 15px;
+    font-weight: 800;
+    cursor: pointer;
+    transition: transform .15s ease, background .15s ease, box-shadow .2s ease;
+  }
+  .diagnosis-submit:hover {
+    background: var(--green-2);
+    transform: translateY(-1px);
+    box-shadow: 0 10px 20px rgba(31,61,43,0.18);
+  }
+  .diagnosis-submit:disabled {
+    cursor: not-allowed;
+    opacity: .68;
+    transform: none;
+    box-shadow: none;
+  }
+  .form-status {
+    min-height: 20px;
+    margin: 0;
+    font-size: 12.5px;
+    line-height: 1.55;
+    color: var(--ink-mute);
+  }
+  .form-status.success { color: var(--green); font-weight: 700; }
+  .form-status.error { color: #9a3b21; font-weight: 700; }
+
+  /* ---------- VALUE ---------- */
+  .value-grid {
+    display: grid;
+    grid-template-columns: 1fr;
+    gap: 14px;
+  }
+  .value-card {
+    background: #fff;
+    border: 1px solid var(--line);
+    border-radius: var(--radius);
+    padding: 34px 28px;
+    transition: transform .25s ease, box-shadow .25s ease, border-color .25s ease;
+  }
+  .value-card:hover {
+    transform: translateY(-3px);
+    box-shadow: 0 14px 32px rgba(20, 30, 20, 0.07);
+    border-color: var(--green);
+  }
+  .value-icon {
+    width: 44px; height: 44px;
+    border-radius: 12px;
+    background: var(--green-soft);
+    color: var(--green);
+    display: inline-flex;
+    align-items: center;
+    justify-content: center;
+    font-family: 'Inter', sans-serif;
+    font-weight: 700;
+    font-size: 16px;
+    margin-bottom: 22px;
+    letter-spacing: -0.02em;
+  }
+  .value-overline {
+    font-family: 'Inter', sans-serif;
+    font-size: 11px;
+    letter-spacing: 0.2em;
+    color: var(--ink-mute);
+    text-transform: uppercase;
+    margin-bottom: 10px;
+    font-weight: 600;
+  }
+  .value-title {
+    font-size: clamp(18px, 4.4vw, 22px);
+    color: var(--ink);
+    margin: 0 0 12px;
+    letter-spacing: -0.015em;
+    font-weight: 700;
+    line-height: 1.3;
+    white-space: nowrap;
+  }
+  .value-desc {
+    color: var(--ink-soft);
+    font-size: 15px;
+    margin: 0;
+    line-height: 1.7;
+  }
+
+  /* ---------- CTA ---------- */
+  .cta {
+    padding: 120px 0 100px;
+    text-align: center;
+    border-bottom: 1px solid var(--line);
+  }
+  .quote {
+    font-family: 'Noto Serif KR', serif;
+    font-size: clamp(20px, 5.2vw, 32px);
+    color: var(--ink);
+    line-height: 1.45;
+    max-width: 760px;
+    margin: 0 auto 52px;
+    position: relative;
+    padding: 0 54px;
+    font-weight: 500;
+    letter-spacing: -0.015em;
+  }
+  .quote::before, .quote::after {
+    font-family: 'Inter', sans-serif;
+    color: var(--ink-mute);
+    font-size: 58px;
+    font-weight: 700;
+    line-height: 1;
+    opacity: 0.28;
+    position: absolute;
+    top: -0.16em;
+  }
+  .quote::before {
+    content: "“";
+    left: 0;
+  }
+  .quote::after {
+    content: "”";
+    right: 0;
+  }
+  .cta-headline {
+    font-family: 'Inter', 'Noto Sans KR', sans-serif;
+    font-weight: 700;
+    font-size: clamp(24px, 6vw, 38px);
+    color: var(--green);
+    letter-spacing: -0.025em;
+    line-height: 1.25;
+    margin: 0 auto 32px;
+    max-width: 660px;
+  }
+  .cta-btn-row {
+    display: flex; gap: 12px; justify-content: center; flex-wrap: wrap;
+  }
+  .cta-note {
+    margin-top: 26px;
+    font-size: 12.5px;
+    color: var(--ink-mute);
+    letter-spacing: 0.02em;
+  }
+
+  /* ---------- FOOTER ---------- */
+  footer {
+    padding: 44px 0 60px;
+    text-align: center;
+    color: var(--ink-mute);
+    font-size: 13px;
+  }
+  .footer-brand {
+    font-family: var(--brand-font);
+    font-size: 24px;
+    font-weight: 700;
+    color: var(--green);
+    letter-spacing: -0.01em;
+    margin-bottom: 14px;
+  }
+
+  /* ---------- REVEAL ---------- */
+  .reveal {
+    opacity: 0;
+    transform: translateY(18px);
+    transition: opacity .8s ease, transform .8s ease;
+  }
+  .reveal.in { opacity: 1; transform: translateY(0); }
+
+  /* ---------- BREAKPOINTS ---------- */
+  @media (min-width: 720px) {
+    .signal {
+      grid-template-columns: 220px 1fr;
+      align-items: start;
+      padding: 56px 4px 48px;
+      gap: 32px;
+    }
+    .signal-row-1 { flex-direction: column; gap: 14px; }
+    .pillar-row {
+      grid-template-columns: 220px 1fr;
+      gap: 32px;
+      padding: 48px 4px;
+      align-items: start;
+    }
+    .pillar-head { flex-direction: column; align-items: flex-start; gap: 12px; }
+    .value-grid { grid-template-columns: repeat(2, 1fr); gap: 16px; }
+    .item-row {
+      grid-template-columns: 1fr auto;
+      align-items: end;
+      padding: 32px 0;
+    }
+    .diagnosis {
+      padding: 128px 0;
+    }
+    .diagnosis-grid {
+      grid-template-columns: minmax(0, 1fr) minmax(360px, 460px);
+      gap: 56px;
+    }
+    .diagnosis-form {
+      padding: 34px 30px;
+    }
+    .field-grid {
+      grid-template-columns: repeat(2, 1fr);
+    }
+    .survey-grid {
+      grid-template-columns: repeat(2, 1fr);
+    }
+    .pkg-card { padding: 40px 36px; }
+    .hero { padding: 96px 0 128px; }
+    section.s { padding: 136px 0; }
+    .manifesto { padding: 96px 0; }
+  }
+  @media (min-width: 1024px) {
+    .value-grid { grid-template-columns: repeat(4, 1fr); }
+  }
+
+  /* Small screens (iPhone SE, smaller) */
+  @media (max-width: 480px) {
+    .container { padding: 0 20px; }
+    .nav-inner { height: 54px; }
+    .hero { padding: 48px 0 64px; }
+    section.s { padding: 76px 0; }
+    .manifesto { padding: 60px 0; }
+    .cta { padding: 88px 0 76px; }
+
+    .wordmark { font-size: clamp(54px, 15.5vw, 88px); line-height: 0.94; }
+    .brand-block { margin-bottom: 36px; padding-bottom: 28px; }
+    .catchphrase { gap: 8px; }
+    .catchphrase-ko::before { display: none; }
+    .catchphrase-ko { margin-top: 2px; }
+
+    .hero-title { margin-bottom: 22px; }
+    .hero .eyebrow { margin-bottom: 24px; }
+    .hero-sub { margin-bottom: 32px; line-height: 1.65; }
+
+    .hero-cta-row { width: 100%; }
+    .hero-cta-row .btn { flex: 1 1 auto; justify-content: center; padding: 14px 18px; }
+
+    .s-head { margin-bottom: 40px; }
+    .s-kicker { margin-bottom: 14px; }
+
+    .col-block + .col-block { margin-top: 56px; }
+    .pkg-card { padding: 28px 22px; }
+    .pkg-card .pkg-price .num { font-size: clamp(40px, 12vw, 56px); }
+    .item-row { padding: 22px 0; }
+    .diagnosis { padding: 72px 0; }
+    .diagnosis-form { padding: 24px 18px; }
+    .diagnosis-points { margin-top: 26px; }
+    .survey-grid { grid-template-columns: repeat(2, minmax(0, 1fr)); gap: 8px; }
+    .survey-option span { min-height: 40px; padding: 9px 8px; font-size: 12.5px; }
+
+    .signal { padding: 32px 4px 28px; }
+    .signal-row-1 { gap: 14px; }
+    .pillar-row { padding: 32px 0; }
+    .value-card { padding: 28px 22px; }
+
+    .quote { padding: 0 34px; margin-bottom: 44px; }
+    .quote::before, .quote::after { font-size: 42px; top: -0.12em; }
+    .cta-btn-row .btn { width: 100%; justify-content: center; }
+  }
+
+  @media (prefers-reduced-motion: reduce) {
+    .reveal { opacity: 1; transform: none; transition: none; }
+    html { scroll-behavior: auto; }
+  }
+</style>
+</head>
+<body>
+
+<!-- NAV -->
+<header class="nav">
+  <div class="container nav-inner">
+    <div class="brand">Classin</div>
+    <a href="#diagnosis" class="nav-cta">도입 진단</a>
+  </div>
+</header>
+
+<!-- ============ 1. HERO ============ -->
+<section class="hero">
+  <div class="container">
+    <div class="eyebrow reveal"><span class="dash"></span>2026 CLASSIN · EDUCATION OS</div>
+
+    <!-- Brand wordmark -->
+    <div class="brand-block reveal">
+      <div class="wordmark">Classin</div>
+      <div class="catchphrase">
+        <span class="catchphrase-en">Education OS.</span>
+        <span class="catchphrase-ko">교육의 운영 체제.</span>
+      </div>
+    </div>
+
+    <!-- Manifesto headline -->
+    <h1 class="hero-title reveal">
+      <span class="line-1">가르치는 학원은 많습니다.</span>
+      <span class="line-2"><span class="em-key">관리</span>되는 학원은 다릅니다.</span>
+    </h1>
+    <p class="hero-sub reveal">
+      Classin은 학원의 운영 체제(OS)입니다.<br class="br-desktop" />
+      교육의 <span class="em-key">표준화</span> · <span class="em-key">자동화</span> · <span class="em-key">데이터화</span>. 그 위에서 학원이 작동합니다.
+    </p>
+
+    <div class="hero-cta-row reveal">
+      <a href="#diagnosis" class="btn btn-primary">
+        도입 진단 받기 <span class="arrow">→</span>
+      </a>
+      <a href="#collection" class="btn btn-ghost">The Collection</a>
+    </div>
+  </div>
+</section>
+
+<!-- ============ 2. COLLECTION ============ -->
+<section class="s" id="collection">
+  <div class="container">
+    <div class="s-head reveal">
+      <div class="s-kicker">Classin Standard · The Collection</div>
+      <h2 class="s-title">선택받은 학원을 위한,<br class="br-desktop" />검증된 컬렉션.</h2>
+      <p class="s-desc">
+        시그니처 디바이스. 올인원 스튜디오. 구독형 운영. 학원의 다음 표준을 구성하는 세 가지 답을 선보입니다.
+      </p>
+    </div>
+
+    <!-- BLOCK A: Single Items -->
+    <div class="col-block reveal">
+      <h3 class="col-title">Single Items</h3>
+      <div class="col-kicker">Classin Signature</div>
+
+      <div class="item-row">
+        <div>
+          <h4 class="item-name">75" Classin 전자칠판</h4>
+          <p class="item-spec">75-inch Interactive Display</p>
+          <p class="item-desc">교실의 새로운 기준이 되는 대형 인터랙티브 보드.</p>
+        </div>
+        <div class="item-price">490<span class="unit">만원</span></div>
+      </div>
+
+      <div class="item-row">
+        <div>
+          <h4 class="item-name">86" Classin 전자칠판</h4>
+          <p class="item-spec">86-inch Flagship Display</p>
+          <p class="item-desc">몰입형 수업과 시연에 최적화된 플래그십 디스플레이.</p>
+        </div>
+        <div class="item-price">580<span class="unit">만원</span></div>
+      </div>
+
+      <div class="item-row">
+        <div>
+          <h4 class="item-name">AI Tracking Camera (T1)</h4>
+          <p class="item-spec">Premium Lecture Camera</p>
+          <p class="item-desc">자동 트래킹 기반의 프리미엄 강의 카메라.</p>
+        </div>
+        <div class="item-price">120<span class="unit">만원</span></div>
+      </div>
+    </div>
+
+    <!-- BLOCK B: Package 1 -->
+    <div class="col-block reveal">
+      <h3 class="col-title"><span class="num">Package 1.</span>Classin AI Studio</h3>
+      <div class="col-kicker">One-Stop Solution</div>
+
+      <div class="pkg-card featured">
+        <span class="tag">Signature</span>
+        <h4 class="pkg-name">올인원 녹화수업 세트</h4>
+        <div class="pkg-price">
+          <span class="num">780</span>
+          <span class="unit">만원</span>
+        </div>
+        <div class="pkg-divider"></div>
+        <p class="pkg-spec">86" Classin 전자칠판 + AI 카메라 + 벽걸이 + 자동 녹화 1년 이용권 (약 1,200시간)</p>
+        <p class="pkg-desc">관리형 학원을 위한 수업 자동 녹화 올인원 패키지.</p>
+        <div class="pkg-note"><span class="star">*</span>설치 배송비 포함 · 12개월 할부 가능</div>
+      </div>
+    </div>
+
+    <!-- BLOCK C: Package 2 -->
+    <div class="col-block reveal">
+      <h3 class="col-title"><span class="num">Package 2.</span>Online Suite</h3>
+      <div class="col-kicker">Academy Consulting · Subscription</div>
+
+      <div class="pkg-card bordered">
+        <span class="tag">Subscription</span>
+        <h4 class="pkg-name">구독형 통합 학원 패키지</h4>
+        <div class="pkg-price">
+          <span class="num">40</span>
+          <span class="unit">만원 / 월</span>
+        </div>
+        <div class="pkg-divider"></div>
+        <p class="pkg-spec">전자칠판 · 카메라 · 무제한 녹화 및 수업 · 랜딩페이지 · 사업자 인가 대행 (온라인 관련)</p>
+        <p class="pkg-desc">온·오프라인 수업 전환을 위한 학원 풀 패키지.</p>
+        <div class="pkg-note"><span class="star">*</span>설치 배송비 별도 · 36개월 할부</div>
+      </div>
+    </div>
+  </div>
+</section>
+
+<!-- ============ MID CTA: DIAGNOSIS ============ -->
+<section class="diagnosis" id="diagnosis">
+  <div class="container diagnosis-grid">
+    <div class="diagnosis-copy reveal">
+      <div class="diagnosis-kicker">Private Diagnosis · For Your Academy</div>
+      <h2 class="diagnosis-title">우리 학원,<br />어디부터 도입하면 좋을까요?</h2>
+      <p class="diagnosis-desc">
+        전자칠판, AI 녹화, 온라인 전환, 랜딩페이지까지. 지금 학원 상황을 기준으로 가장 먼저 바꿔야 할 도입 순서를 짧게 진단해드립니다.
+      </p>
+      <ul class="diagnosis-points">
+        <li>학원 규모와 수업 방식에 맞는 최적의 조합을 추천해 드립니다.</li>
+        <li>초기 비용, 할부, 설치 범위를 상담 전에 빠르게 좁혀드립니다.</li>
+        <li>남겨주신 연락처로 담당자가 순차적으로 연락드립니다.</li>
+      </ul>
+    </div>
+
+    <form class="diagnosis-form reveal" id="diagnosis-form">
+      <div class="diagnosis-form-head">
+        <h3 class="diagnosis-form-title">도입 진단 신청</h3>
+        <p class="diagnosis-form-copy">이름과 연락처만 남겨도 접수됩니다. 설문은 상담 방향을 빠르게 잡기 위한 선택 정보입니다.</p>
+      </div>
+
+      <div class="diagnosis-fields">
+        <div class="field-grid">
+          <label class="field">
+            <span class="field-label">이름 *</span>
+            <input class="field-input" type="text" name="name" autocomplete="name" placeholder="홍길동" required />
+          </label>
+          <label class="field">
+            <span class="field-label">연락처 *</span>
+            <input class="field-input" type="tel" name="phone" autocomplete="tel" inputmode="tel" placeholder="010-0000-0000" required />
+          </label>
+        </div>
+
+        <label class="field">
+          <span class="field-label">학원명 또는 지역</span>
+          <input class="field-input" type="text" name="academy" autocomplete="organization" placeholder="예: 분당 수학학원" />
+        </label>
+
+        <div>
+          <span class="survey-label">가장 관심 있는 도입 영역</span>
+          <div class="survey-grid">
+            <label class="survey-option">
+              <input type="radio" name="interest" value="전자칠판" checked />
+              <span>전자칠판</span>
+            </label>
+            <label class="survey-option">
+              <input type="radio" name="interest" value="AI 녹화수업" />
+              <span>AI 녹화수업</span>
+            </label>
+            <label class="survey-option">
+              <input type="radio" name="interest" value="온라인 전환" />
+              <span>온라인 전환</span>
+            </label>
+            <label class="survey-option">
+              <input type="radio" name="interest" value="전체 패키지" />
+              <span>전체 패키지</span>
+            </label>
+          </div>
+        </div>
+
+        <div>
+          <span class="survey-label">현재 학원 규모</span>
+          <div class="survey-grid">
+            <label class="survey-option">
+              <input type="radio" name="scale" value="1~2개 강의실" checked />
+              <span>1~2개 강의실</span>
+            </label>
+            <label class="survey-option">
+              <input type="radio" name="scale" value="3~5개 강의실" />
+              <span>3~5개 강의실</span>
+            </label>
+            <label class="survey-option">
+              <input type="radio" name="scale" value="6개 이상 강의실" />
+              <span>6개 이상</span>
+            </label>
+            <label class="survey-option">
+              <input type="radio" name="scale" value="신규 개원 준비" />
+              <span>신규 개원</span>
+            </label>
+          </div>
+        </div>
+
+        <label class="consent">
+          <input type="checkbox" name="privacy" required />
+          <span>상담 안내를 위한 개인정보 수집·이용에 동의합니다.</span>
+        </label>
+
+        <button class="diagnosis-submit" type="submit">우리 학원 도입 진단 받기</button>
+        <p class="form-status" id="diagnosis-status" aria-live="polite"></p>
+      </div>
+    </form>
+  </div>
+</section>
+
+<!-- ============ MANIFESTO STRIP 1 ============ -->
+<section class="manifesto">
+  <div class="container">
+    <p class="reveal">학원의 차이는, <span class="em-key">가르침</span>이 아니라<br class="br-desktop" />운영 <span class="em-key">체제</span>에서 납니다.</p>
+  </div>
+</section>
+
+<!-- ============ 2. THREE PILLARS ============ -->
+<section class="s" id="pillars">
+  <div class="container">
+    <div class="s-head reveal">
+      <div class="s-kicker">Three Pillars · 운영 체제의 세 가지 축</div>
+      <h2 class="s-title">교육 운영 체제는<br />3가지가 꼭 필요합니다.</h2>
+      <p class="s-desc">
+        흩어진 수업을 묶고, 반복되는 운영을 덜고, 사라지던 강의를 자산으로 남깁니다. 학원이 'OS' 위에서 돌아가기 시작합니다.
+      </p>
+    </div>
+
+    <div class="pillars-grid">
+      <div class="pillar-row reveal">
+        <div>
+          <div class="pillar-head">
+            <div class="pillar-num">01</div>
+            <div class="pillar-en">Standardization</div>
+          </div>
+        </div>
+        <div>
+          <h3 class="pillar-name">표준화 — 같은 기준 위에서.</h3>
+          <p class="pillar-desc">수업·운영·관리가 동일한 도구와 흐름으로 작동합니다.<br />강사가 바뀌어도, 캠퍼스가 늘어나도, 학원의 품질은 흔들리지 않습니다.</p>
+        </div>
+      </div>
+
+      <div class="pillar-row reveal">
+        <div>
+          <div class="pillar-head">
+            <div class="pillar-num">02</div>
+            <div class="pillar-en">Automation</div>
+          </div>
+        </div>
+        <div>
+          <h3 class="pillar-name">자동화 — 손이 가는 일을 덜어냅니다.</h3>
+          <p class="pillar-desc">녹화·아카이브·복습 제공·결석 보강이 자동으로 이어집니다.<br />강사의 시간이 가르침으로 돌아오고, 학원장은 운영에 집중합니다.</p>
+        </div>
+      </div>
+
+      <div class="pillar-row reveal">
+        <div>
+          <div class="pillar-head">
+            <div class="pillar-num">03</div>
+            <div class="pillar-en">Data</div>
+          </div>
+        </div>
+        <div>
+          <h3 class="pillar-name">데이터화 — 모든 수업이 자산이 됩니다.</h3>
+          <p class="pillar-desc">강의는 콘텐츠가 되고, 콘텐츠는 학원의 자산이 됩니다. 사라지지 않는 수업, 누적되는 운영 — 학원의 가치가 데이터로 남습니다.</p>
+        </div>
+      </div>
+    </div>
+  </div>
+</section>
+
+<!-- ============ 3. THE SHIFT ============ -->
+<section class="s" id="why">
+  <div class="container">
+    <div class="s-head reveal">
+      <div class="s-kicker">The Shift</div>
+      <h2 class="s-title">기준은 이미<br />움직이고 있습니다.</h2>
+      <p class="s-desc">
+        같은 수업을 하던 시대는 끝났습니다. 학생도, 학부모도, 학원도 — '가르침'이 아니라 '<span class="em-key">운영 체제</span>'를 봅니다.
+      </p>
+    </div>
+
+    <div class="signals">
+      <div class="signal reveal">
+        <div>
+          <div class="signal-row-1">
+            <div class="signal-num">01</div>
+            <div class="signal-label">학생 · Student</div>
+          </div>
+        </div>
+        <div>
+          <h3 class="signal-title">수업이 끝나도, 학생은 끝나지 않습니다.</h3>
+          <p class="signal-desc">출석, 진도, 결석 보강, 복습, 시험 — 한 명을 끝까지 끌고 가는 힘이 학원의 실력입니다. 가르치는 것보다, <span class="em-key">관리하는 것</span>이 더 어려워졌습니다.</p>
+        </div>
+      </div>
+
+      <div class="signal reveal">
+        <div>
+          <div class="signal-row-1">
+            <div class="signal-num">02</div>
+            <div class="signal-label">학부모 · Parent</div>
+          </div>
+        </div>
+        <div>
+          <h3 class="signal-title">학부모는 '시스템'을 평가합니다.</h3>
+          <p class="signal-desc">선생님의 실력만큼이나, 학원의 운영 시스템이 신뢰의 근거가 됩니다. 보이는 도구가 곧 보이지 않는 <span class="em-key">운영 체제</span>를 증명합니다.</p>
+        </div>
+      </div>
+
+      <div class="signal reveal">
+        <div>
+          <div class="signal-row-1">
+            <div class="signal-num">03</div>
+            <div class="signal-label">학원 · Operation</div>
+          </div>
+        </div>
+        <div>
+          <h3 class="signal-title">차이는 수업이 아니라, 운영에서 납니다.</h3>
+          <p class="signal-desc">강사 한 사람의 실력에는 한계가 있지만, 학원의 시스템은 누적됩니다. <span class="em-key">관리되는 학원</span>만 다음 10년에 남습니다.</p>
+        </div>
+      </div>
+    </div>
+  </div>
+</section>
+
+<!-- ============ MANIFESTO STRIP 2 ============ -->
+<section class="manifesto">
+  <div class="container">
+    <p class="reveal">Classin은<br />교육의 <span class="em-key">운영 체제</span>를 만듭니다.</p>
+  </div>
+</section>
+
+<!-- ============ 5. VALUE ============ -->
+<section class="s" id="value">
+  <div class="container">
+    <div class="s-head reveal">
+      <div class="s-kicker">After One Year · In Your Academy</div>
+      <h2 class="s-title">1년 후,<br />당신의 학원.</h2>
+      <p class="s-desc">
+        Classin Standard는 장비가 아닙니다. 학원이 다음 단계에서 마주할 풍경을, <span class="em-key">운영 체제</span>의 언어로 빚어냅니다.
+      </p>
+    </div>
+
+    <div class="value-grid">
+      <div class="value-card reveal">
+        <div class="value-icon">01</div>
+        <div class="value-overline">Standardization</div>
+        <h3 class="value-title">관리되는 학원의 첫 신호.</h3>
+        <p class="value-desc">75/86인치 시그니처 디스플레이가 만드는 공간의 권위. 학원에 들어선 순간, 격(格)이 먼저 말합니다.</p>
+      </div>
+      <div class="value-card reveal">
+        <div class="value-icon">02</div>
+        <div class="value-overline">Automation</div>
+        <h3 class="value-title">강사를 지키는 자동화.</h3>
+        <p class="value-desc">한 번의 강의가 자산이 됩니다. 자동 녹화와 아카이브로 강사의 시간을 압축하고, 학원의 콘텐츠를 쌓습니다.</p>
+      </div>
+      <div class="value-card reveal">
+        <div class="value-icon">03</div>
+        <div class="value-overline">Trust</div>
+        <h3 class="value-title">시스템이 만드는 신뢰.</h3>
+        <p class="value-desc">결석 보강, 복습 제공, 운영의 일관성. '시스템화된 학원'은 그 자체로 학부모를 설득합니다.</p>
+      </div>
+      <div class="value-card reveal">
+        <div class="value-icon">04</div>
+        <div class="value-overline">Data &amp; Scale</div>
+        <h3 class="value-title">데이터로 커지는 학원.</h3>
+        <p class="value-desc">오프라인의 한계를 넘어 온라인까지. 같은 수업이 더 많은 학생에게 닿고, 학원의 그릇이 커집니다.</p>
+      </div>
+    </div>
+  </div>
+</section>
+
+<!-- ============ 6. CTA ============ -->
+<section class="cta" id="contact">
+  <div class="container">
+    <p class="quote reveal">
+      학원은 강사가 아니라,<br class="br-desktop" /><span class="em-key">시스템</span>으로 남습니다.
+    </p>
+
+    <h3 class="cta-headline reveal">
+      Empowering Education
+    </h3>
+
+    <div class="cta-btn-row reveal">
+      <a href="#diagnosis" class="btn btn-primary">
+        도입 진단 받기 <span class="arrow">→</span>
+      </a>
+      <a href="/" class="btn btn-ghost">
+        자세히 보기 <span class="arrow">→</span>
+      </a>
+    </div>
+    <div class="cta-note reveal">도입을 검토하시는 학원에 한하여, 프라이빗 컨설팅을 제공합니다.</div>
+  </div>
+</section>
+
+<footer>
+  <div class="container">
+    <div class="footer-brand">Classin</div>
+    <div>© 2026 Classin. All rights reserved.</div>
+  </div>
+</footer>
+
+<script>
+  const diagnosisForm = document.getElementById('diagnosis-form');
+  const diagnosisStatus = document.getElementById('diagnosis-status');
+
+  function setDiagnosisStatus(message, type) {
+    if (!diagnosisStatus) return;
+    diagnosisStatus.textContent = message;
+    diagnosisStatus.className = `form-status${type ? ` ${type}` : ''}`;
+  }
+
+  function getCheckedValue(formData, name) {
+    return (formData.get(name) || '').toString().trim();
+  }
+
+  function getUrlParam(name) {
+    return new URLSearchParams(window.location.search).get(name) || undefined;
+  }
+
+  if (diagnosisForm) {
+    diagnosisForm.addEventListener('submit', async (event) => {
+      event.preventDefault();
+
+      const submitButton = diagnosisForm.querySelector('button[type="submit"]');
+      const formData = new FormData(diagnosisForm);
+      const name = getCheckedValue(formData, 'name');
+      const phone = getCheckedValue(formData, 'phone');
+      const academy = getCheckedValue(formData, 'academy');
+      const interest = getCheckedValue(formData, 'interest');
+      const scale = getCheckedValue(formData, 'scale');
+      const phoneDigits = phone.replace(/\D/g, '');
+
+      if (!name || !phone) {
+        setDiagnosisStatus('이름과 연락처를 입력해 주세요.', 'error');
+        return;
+      }
+
+      if (phoneDigits.length < 8) {
+        setDiagnosisStatus('연락처를 다시 확인해 주세요.', 'error');
+        return;
+      }
+
+      const message = [
+        '문의 유형: OMO1 도입 진단',
+        interest ? `관심 영역: ${interest}` : undefined,
+        scale ? `현재 규모: ${scale}` : undefined,
+        academy ? `학원/지역: ${academy}` : undefined,
+        `페이지: ${window.location.pathname}`,
+      ].filter(Boolean).join('\n');
+
+      const payload = {
+        source: 'contact_page',
+        sourceDetail: 'omo1_diagnosis',
+        org: academy || 'OMO1 랜딩 도입 진단',
+        name,
+        phone,
+        role: '학원 도입 진단 신청',
+        size: scale || undefined,
+        message,
+        marketingConsent: false,
+        landingPage: window.location.origin + '/l/omo1',
+        currentPage: window.location.href,
+        referrer: document.referrer || undefined,
+        utmSource: getUrlParam('utm_source'),
+        utmMedium: getUrlParam('utm_medium'),
+        utmCampaign: getUrlParam('utm_campaign'),
+        utmTerm: getUrlParam('utm_term'),
+        utmContent: getUrlParam('utm_content'),
+        gclid: getUrlParam('gclid'),
+        fbclid: getUrlParam('fbclid'),
+      };
+
+      try {
+        if (submitButton) {
+          submitButton.disabled = true;
+          submitButton.textContent = '접수 중입니다...';
+        }
+        setDiagnosisStatus('', '');
+
+        const response = await fetch('/api/lead', {
+          method: 'POST',
+          headers: { 'Content-Type': 'application/json' },
+          body: JSON.stringify(payload),
+        });
+        const result = await response.json().catch(() => null);
+
+        if (!response.ok || !result?.ok) {
+          throw new Error(result?.error || '접수에 실패했습니다. 잠시 후 다시 시도해 주세요.');
+        }
+
+        diagnosisForm.reset();
+        setDiagnosisStatus('도입 진단 신청이 접수되었습니다. 담당자가 순차적으로 연락드릴게요.', 'success');
+      } catch (error) {
+        setDiagnosisStatus(error instanceof Error ? error.message : '접수에 실패했습니다. 잠시 후 다시 시도해 주세요.', 'error');
+      } finally {
+        if (submitButton) {
+          submitButton.disabled = false;
+          submitButton.textContent = '우리 학원 도입 진단 받기';
+        }
+      }
+    });
+  }
+
+  const io = new IntersectionObserver((entries) => {
+    entries.forEach((e) => {
+      if (e.isIntersecting) {
+        e.target.classList.add('in');
+        io.unobserve(e.target);
+      }
+    });
+  }, { threshold: 0.12, rootMargin: '0px 0px -40px 0px' });
+  document.querySelectorAll('.reveal').forEach((el) => io.observe(el));
+</script>
+
+</body>
+</html>

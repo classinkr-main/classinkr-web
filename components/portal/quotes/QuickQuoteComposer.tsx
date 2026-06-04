@@ -14,6 +14,7 @@ import {
   Plus,
   Printer,
   RefreshCw,
+  Search,
   Send,
   Share2,
   Smartphone,
@@ -652,13 +653,13 @@ export default function QuickQuoteComposer({
 }: QuickQuoteComposerProps) {
   const today = getTodayDateValue()
   const isPortalApi = apiBase === "/api/portal"
-  const allowNewCustomer = !isPortalApi || Boolean(portalPartnerAccountId)
   const [customers, setCustomers] = useState<CustomerListItem[]>([])
   const [deals, setDeals] = useState<DealListItem[]>([])
   const [loadingOptions, setLoadingOptions] = useState(false)
   const [customerMode, setCustomerMode] = useState<"existing" | "new">("existing")
   const [selectedCustomerId, setSelectedCustomerId] = useState("")
   const [newCustomerName, setNewCustomerName] = useState("")
+  const [customerQuery, setCustomerQuery] = useState("")
   const [selectedDealId, setSelectedDealId] = useState("")
   const [newDealTitle, setNewDealTitle] = useState("")
   const [templateId, setTemplateId] = useState<StandardQuoteTemplateId>("board_86")
@@ -683,12 +684,33 @@ export default function QuickQuoteComposer({
   const [linkCopied, setLinkCopied] = useState(false)
   const [saveToast, setSaveToast] = useState(false)
   const [errorToast, setErrorToast] = useState<ErrorToastState | null>(null)
+  const [mobilePreviewOpen, setMobilePreviewOpen] = useState(false)
   const errorToastTimerRef = useRef<ReturnType<typeof setTimeout> | null>(null)
 
   const sortedCustomers = useMemo(
     () => [...customers].sort((left, right) => left.customer.name.localeCompare(right.customer.name, "ko")),
     [customers]
   )
+  const visibleCustomers = useMemo(() => {
+    const normalizedQuery = customerQuery.trim().toLowerCase()
+    if (!normalizedQuery) return sortedCustomers
+
+    const matches = sortedCustomers.filter((item) =>
+      [
+        item.customer.name,
+        item.customer.campus_name,
+        item.customer.region_label,
+        item.customer.contact_name,
+      ]
+        .filter(Boolean)
+        .some((value) => String(value).toLowerCase().includes(normalizedQuery))
+    )
+    const selected = sortedCustomers.find((item) => item.customer.id === selectedCustomerId)
+    if (selected && !matches.some((item) => item.customer.id === selected.customer.id)) {
+      return [selected, ...matches]
+    }
+    return matches
+  }, [customerQuery, selectedCustomerId, sortedCustomers])
   const selectedCustomer = sortedCustomers.find((item) => item.customer.id === selectedCustomerId)?.customer ?? null
   const fallbackExistingCustomer = selectedCustomer ?? sortedCustomers[0]?.customer ?? null
   const availableDeals = useMemo(
@@ -698,10 +720,17 @@ export default function QuickQuoteComposer({
         : [],
     [customerMode, deals, selectedCustomerId]
   )
+  const selectedDeal = selectedDealId
+    ? deals.find((deal) => deal.id === selectedDealId) ?? null
+    : null
   const selectedCustomerName = fallbackExistingCustomer?.name ?? null
   const totals = calculateStandardQuoteTotals(quote.lineItems, quote.vatIncluded ?? true)
   const baseLine = getBaseLine(quote)
   const baseQuantity = Math.max(1, Number(baseLine?.quantity ?? 1))
+  const lineItemCount = quote.lineItems?.length ?? 0
+  const activeCustomerName =
+    customerMode === "existing" ? selectedCustomerName ?? "" : newCustomerName.trim()
+  const activeDealTitle = selectedDeal?.title ?? (newDealTitle.trim() || "새 거래 자동 생성")
   const optionGroups = getStandardQuoteOptionGroups(templateId)
   const bundlePreset =
     getStandardQuoteQuickPresets("board_86").find((preset) => preset.id === "board_86_bundle") ?? null
@@ -710,6 +739,20 @@ export default function QuickQuoteComposer({
     templateId === "board_86" &&
     optionSelections.camera_bundle === true &&
     optionSelections.mounting_option === "wall_mount"
+  const customerReady =
+    customerMode === "existing" ? Boolean(fallbackExistingCustomer) : newCustomerName.trim().length > 0
+  const canCreateQuote = customerReady && lineItemCount > 0
+  const readyChecks = [
+    { label: "고객", value: activeCustomerName || "미선택", done: customerReady },
+    { label: "거래", value: activeDealTitle, done: true },
+    { label: "품목", value: `${lineItemCount}개 · 본체 ${baseQuantity}대`, done: lineItemCount > 0 },
+    {
+      label: "총액",
+      value: `${formatStandardQuoteCurrency(totals.grandTotalAmount)}원`,
+      done: totals.grandTotalAmount > 0,
+    },
+  ]
+  const readyCheckCount = readyChecks.filter((item) => item.done).length
 
   function showErrorToast(message: string, title?: string) {
     if (errorToastTimerRef.current) {
@@ -765,6 +808,7 @@ export default function QuickQuoteComposer({
     setCustomerMode("existing")
     setSelectedCustomerId("")
     setNewCustomerName("")
+    setCustomerQuery("")
     setSelectedDealId("")
     setNewDealTitle("")
     setTemplateId("board_86")
@@ -787,6 +831,7 @@ export default function QuickQuoteComposer({
     setLinkCopied(false)
     setSaveToast(false)
     setErrorToast(null)
+    setMobilePreviewOpen(false)
     setError(null)
   }, [open, today])
 
@@ -874,6 +919,18 @@ export default function QuickQuoteComposer({
         presetId,
       },
     })
+  }
+
+  function setValidityDays(days: number | null) {
+    setQuote((current) =>
+      finalizeStandardQuoteDetails(
+        {
+          ...current,
+          validUntil: days == null ? undefined : addDays(current.issuedAt || today, days),
+        },
+        templateId
+      )
+    )
   }
 
   function handleQuickAdd(itemId: QuickAddRailItemId) {
@@ -1104,11 +1161,8 @@ export default function QuickQuoteComposer({
     }
 
     const requestBody: { name: string; partner_account_id?: string } = { name }
-    if (isPortalApi) {
-      const partnerAccountId = portalPartnerAccountId ?? undefined
-      if (!partnerAccountId) {
-        throw new Error("어드민에서는 기존 고객을 선택한 뒤 견적서를 생성해 주세요.")
-      }
+    if (isPortalApi && portalPartnerAccountId) {
+      const partnerAccountId = portalPartnerAccountId
       requestBody.partner_account_id = partnerAccountId
     }
 
@@ -1187,6 +1241,8 @@ export default function QuickQuoteComposer({
   }
 
   async function handleSubmit(action: CreateAction) {
+    if (submittingAction) return
+
     setSubmittingAction(action)
     setError(null)
 
@@ -1316,9 +1372,9 @@ export default function QuickQuoteComposer({
   if (!open) return null
 
   return (
-    <div className="fixed inset-0 z-50 flex items-stretch justify-stretch bg-black/35 p-0 backdrop-blur-sm sm:items-center sm:justify-center sm:px-4 sm:py-6">
-      <div className="relative flex h-[100dvh] max-h-[100dvh] w-full flex-col overflow-hidden rounded-none border border-[rgba(255,255,255,0.25)] bg-white shadow-[0_24px_80px_rgba(17,17,16,0.28)] sm:max-h-[92vh] sm:max-w-[1480px] sm:rounded-[28px] xl:rounded-[32px]">
-        <div className="flex items-start justify-between gap-3 border-b border-[#ecebe6] px-4 py-4 sm:gap-4 sm:px-6 sm:py-5">
+    <div className="fixed inset-0 z-50 flex items-stretch justify-stretch bg-black/35 p-0 backdrop-blur-sm sm:items-center sm:justify-center sm:px-3 sm:py-3 lg:px-4 lg:py-5">
+      <div className="relative flex h-[100dvh] max-h-[100dvh] w-full flex-col overflow-hidden rounded-none border border-[rgba(255,255,255,0.25)] bg-white shadow-[0_24px_80px_rgba(17,17,16,0.28)] sm:max-h-[calc(100dvh-24px)] sm:max-w-[1480px] sm:rounded-[24px] xl:rounded-[32px]">
+        <div className="flex items-start justify-between gap-3 border-b border-[#ecebe6] px-4 py-3 sm:gap-4 sm:px-5 sm:py-4 lg:px-6 lg:py-5">
           <div className="min-w-0">
             <div className="inline-flex items-center gap-2 rounded-full bg-[#ECFDF5] px-3 py-1 text-[11px] font-medium text-[#084734]">
               <Sparkles className="h-3.5 w-3.5" />
@@ -1338,8 +1394,47 @@ export default function QuickQuoteComposer({
           </button>
         </div>
 
+        <div className="border-b border-[#ecebe6] bg-[#fafaf8] px-4 py-2.5 sm:px-5 lg:px-6">
+          <div className="flex flex-col gap-2 xl:flex-row xl:items-center xl:justify-between">
+            <div className="admin-scroll-snap-x no-scrollbar flex min-w-0 gap-2 overflow-x-auto pb-1 xl:flex-1 xl:flex-wrap xl:overflow-visible xl:pb-0">
+              {readyChecks.map((item) => (
+                <div
+                  key={item.label}
+                  className="min-w-[136px] shrink-0 rounded-xl border border-[#e8e8e4] bg-white px-3 py-2 xl:min-w-[148px]"
+                >
+                  <div className="flex items-center gap-1.5">
+                    <span
+                      className={`flex h-4 w-4 shrink-0 items-center justify-center rounded-full ${
+                        item.done ? "bg-[#084734] text-white" : "bg-[#f6f5f2] text-[#A39E98]"
+                      }`}
+                    >
+                      <Check className="h-2.5 w-2.5" />
+                    </span>
+                    <span className="text-[11px] font-medium text-[#1a1a1a]/45">{item.label}</span>
+                  </div>
+                  <p className="mt-1 truncate text-xs font-semibold text-[#111110]">{item.value}</p>
+                </div>
+              ))}
+            </div>
+
+            <div className="flex flex-wrap items-center gap-2">
+              <span className="rounded-full bg-white px-3 py-1.5 text-xs font-medium text-[#615D59] ring-1 ring-[#e8e8e4]">
+                준비 {readyCheckCount}/{readyChecks.length}
+              </span>
+              <button
+                type="button"
+                onClick={() => setMobilePreviewOpen(true)}
+                className="inline-flex h-9 items-center gap-1.5 rounded-md border border-[#e8e8e4] bg-white px-3 text-xs font-medium text-[#615D59] transition-colors hover:text-[#111110] xl:hidden"
+              >
+                <Eye className="h-3.5 w-3.5" />
+                화면 미리보기
+              </button>
+            </div>
+          </div>
+        </div>
+
         <div className="grid min-h-0 flex-1 gap-0 xl:grid-cols-[minmax(0,1fr)_minmax(520px,560px)]">
-          <div className="min-h-0 overflow-y-auto px-4 py-4 sm:px-6 sm:py-6">
+          <div className="min-h-0 overflow-y-auto px-4 py-4 sm:px-5 sm:py-4 lg:px-6 lg:py-6">
             <div className="space-y-6">
               <section className="rounded-2xl border border-[#e8e8e4] bg-[#fafaf8] p-4">
                 <div className="flex items-center justify-between gap-3">
@@ -1414,44 +1509,55 @@ export default function QuickQuoteComposer({
                     >
                       기존 고객
                     </button>
-                    {allowNewCustomer && (
-                      <button
-                        type="button"
-                        onClick={() => {
-                          setCustomerMode("new")
-                          setSelectedDealId("")
-                        }}
-                        className={`rounded-full px-3 py-1.5 text-xs font-medium ${
-                          customerMode === "new"
-                            ? "bg-[#111110] text-white"
-                            : "bg-[#f6f5f2] text-[#615D59]"
-                        }`}
-                      >
-                        신규 고객
-                      </button>
-                    )}
-                  </div>
-                  {customerMode === "existing" ? (
-                    <select
-                      value={selectedCustomerId}
-                      disabled={loadingOptions}
-                      onChange={(event) => {
-                        setSelectedCustomerId(event.target.value)
+                    <button
+                      type="button"
+                      onClick={() => {
+                        setCustomerMode("new")
                         setSelectedDealId("")
                       }}
-                      className="flex h-10 w-full rounded-md border border-input bg-background px-3 py-2 text-sm outline-none focus-visible:ring-1 focus-visible:ring-ring"
+                      className={`rounded-full px-3 py-1.5 text-xs font-medium ${
+                        customerMode === "new"
+                          ? "bg-[#111110] text-white"
+                          : "bg-[#f6f5f2] text-[#615D59]"
+                      }`}
                     >
-                      {sortedCustomers.length === 0 ? (
-                        <option value="">등록된 고객이 없습니다</option>
-                      ) : (
-                        sortedCustomers.map((item) => (
-                          <option key={item.customer.id} value={item.customer.id}>
-                            {item.customer.name}
-                            {item.customer.campus_name ? ` (${item.customer.campus_name})` : ""}
-                          </option>
-                        ))
-                      )}
-                    </select>
+                      신규 고객
+                    </button>
+                  </div>
+                  {customerMode === "existing" ? (
+                    <div className="grid gap-2">
+                      <label className="relative block">
+                        <Search className="pointer-events-none absolute left-3 top-1/2 h-4 w-4 -translate-y-1/2 text-[#1a1a1a]/35" />
+                        <input
+                          value={customerQuery}
+                          onChange={(event) => setCustomerQuery(event.target.value)}
+                          placeholder="고객사, 캠퍼스, 지역 검색"
+                          className="h-10 w-full rounded-md border border-input bg-background pl-9 pr-3 text-sm outline-none focus-visible:ring-1 focus-visible:ring-ring"
+                        />
+                      </label>
+                      <select
+                        value={selectedCustomerId}
+                        disabled={loadingOptions}
+                        onChange={(event) => {
+                          setSelectedCustomerId(event.target.value)
+                          setSelectedDealId("")
+                        }}
+                        className="flex h-10 w-full rounded-md border border-input bg-background px-3 py-2 text-sm outline-none focus-visible:ring-1 focus-visible:ring-ring"
+                      >
+                        {sortedCustomers.length === 0 ? (
+                          <option value="">등록된 고객이 없습니다</option>
+                        ) : visibleCustomers.length === 0 ? (
+                          <option value="">검색 결과가 없습니다</option>
+                        ) : (
+                          visibleCustomers.map((item) => (
+                            <option key={item.customer.id} value={item.customer.id}>
+                              {item.customer.name}
+                              {item.customer.campus_name ? ` (${item.customer.campus_name})` : ""}
+                            </option>
+                          ))
+                        )}
+                      </select>
+                    </div>
                   ) : (
                     <Input
                       value={newCustomerName}
@@ -1508,27 +1614,9 @@ export default function QuickQuoteComposer({
                 <div className="grid gap-2">
                   <div className="flex items-center justify-between gap-3">
                     <Label htmlFor="quote-valid-until">유효기한</Label>
-                    <button
-                      type="button"
-                      onClick={() =>
-                        setQuote((current) =>
-                          finalizeStandardQuoteDetails(
-                            {
-                              ...current,
-                              validUntil: current.validUntil ? undefined : addDays(current.issuedAt || today, 7),
-                            },
-                            templateId
-                          )
-                        )
-                      }
-                      className={`rounded-full px-3 py-1.5 text-[11px] font-medium ${
-                        hasNoExpiration
-                          ? "bg-[#111110] text-white"
-                          : "bg-[#f6f5f2] text-[#615D59]"
-                      }`}
-                    >
-                      유효기간 없음
-                    </button>
+                    <span className="text-[11px] font-medium text-[#1a1a1a]/35">
+                      {hasNoExpiration ? "만료일 없음" : "빠른 선택 가능"}
+                    </span>
                   </div>
                   <Input
                     id="quote-valid-until"
@@ -1547,6 +1635,37 @@ export default function QuickQuoteComposer({
                       )
                     }
                   />
+                  <div className="flex flex-wrap gap-1.5">
+                    {[7, 14, 30].map((days) => {
+                      const active = quote.validUntil === addDays(quote.issuedAt || today, days)
+
+                      return (
+                        <button
+                          key={days}
+                          type="button"
+                          onClick={() => setValidityDays(days)}
+                          className={`rounded-full px-3 py-1.5 text-[11px] font-medium ${
+                            active
+                              ? "bg-[#111110] text-white"
+                              : "bg-[#f6f5f2] text-[#615D59] hover:text-[#111110]"
+                          }`}
+                        >
+                          {days}일
+                        </button>
+                      )
+                    })}
+                    <button
+                      type="button"
+                      onClick={() => setValidityDays(null)}
+                      className={`rounded-full px-3 py-1.5 text-[11px] font-medium ${
+                        hasNoExpiration
+                          ? "bg-[#111110] text-white"
+                          : "bg-[#f6f5f2] text-[#615D59] hover:text-[#111110]"
+                      }`}
+                    >
+                      없음
+                    </button>
+                  </div>
                   <p className="text-xs text-[#615D59]">
                     {hasNoExpiration ? "만료일 표시 없이 발송합니다." : "기본값은 발행일 기준 7일입니다."}
                   </p>
@@ -1971,6 +2090,28 @@ export default function QuickQuoteComposer({
           </div>
         </div>
 
+        {mobilePreviewOpen && (
+          <div className="absolute inset-0 z-30 flex flex-col bg-white xl:hidden">
+            <div className="flex items-center justify-between border-b border-[#ecebe6] px-4 py-3">
+              <div>
+                <p className="text-sm font-semibold text-[#111110]">견적서 미리보기</p>
+                <p className="mt-0.5 text-xs text-[#615D59]">{buildStandardQuoteTitle(quote)}</p>
+              </div>
+              <button
+                type="button"
+                title="미리보기 닫기"
+                onClick={() => setMobilePreviewOpen(false)}
+                className="rounded-md border border-[#e8e8e4] p-2 text-[#615D59] hover:bg-[#f6f5f2] hover:text-[#111110]"
+              >
+                <X className="h-4 w-4" />
+              </button>
+            </div>
+            <div className="min-h-0 flex-1 overflow-auto bg-[#fcfbf8] p-4">
+              <QuotePreviewPanel quote={quote} />
+            </div>
+          </div>
+        )}
+
         {error && (
           <div className="border-t border-[#F6D5C5] bg-[#FEF3EE] px-6 py-2.5">
             <p
@@ -2083,7 +2224,7 @@ export default function QuickQuoteComposer({
           </div>
         )}
 
-        <div className="flex flex-col gap-3 border-t border-[#ecebe6] bg-white px-4 py-4 sm:flex-row sm:flex-wrap sm:items-center sm:justify-between sm:px-6">
+        <div className="flex flex-col gap-3 border-t border-[#ecebe6] bg-white px-4 py-3 sm:flex-row sm:flex-wrap sm:items-center sm:justify-between sm:px-5 lg:px-6">
           <div className="min-w-0 flex-1 text-sm text-[#615D59]">
             <div className="truncate">{buildStandardQuoteTitle(quote)}</div>
             {shareSheet && (
@@ -2114,13 +2255,22 @@ export default function QuickQuoteComposer({
             </div>
           ) : (
             <div className="flex w-full flex-col gap-2 sm:w-auto sm:flex-row sm:flex-wrap">
+              <Button
+                type="button"
+                variant="outline"
+                onClick={() => setMobilePreviewOpen(true)}
+                className="xl:hidden"
+              >
+                <Eye className="mr-2 h-4 w-4" />
+                화면 미리보기
+              </Button>
               <Button type="button" variant="outline" onClick={() => onOpenChange(false)} disabled={Boolean(submittingAction)}>
                 취소
               </Button>
               <Button
                 type="button"
                 variant="outline"
-                disabled={Boolean(submittingAction) || loadingOptions}
+                disabled={Boolean(submittingAction) || loadingOptions || !canCreateQuote}
                 onClick={() => {
                   void handleSubmit("save")
                 }}
@@ -2132,7 +2282,7 @@ export default function QuickQuoteComposer({
                 type="button"
                 variant="outline"
                 title="저장 후 미리보기"
-                disabled={Boolean(submittingAction) || loadingOptions}
+                disabled={Boolean(submittingAction) || loadingOptions || !canCreateQuote}
                 onClick={() => {
                   void handleSubmit("save_and_preview")
                 }}
@@ -2147,7 +2297,7 @@ export default function QuickQuoteComposer({
               <Button
                 type="button"
                 title="저장 후 공유 링크 생성"
-                disabled={Boolean(submittingAction) || loadingOptions}
+                disabled={Boolean(submittingAction) || loadingOptions || !canCreateQuote}
                 onClick={() => {
                   void handleSubmit("save_and_send")
                 }}

@@ -65,7 +65,7 @@ export default function PainPointsV2() {
             반복되는 수업의 번거로움에서 해방되세요.
           </h2>
           <p className="text-lg text-[#615D59] mt-5 max-w-2xl">
-            매일 마주하는 5가지 불편함, ClassIn과 함께 사라집니다.
+            매일 마주하는 5가지 불편함, Classin과 함께 사라집니다.
           </p>
         </div>
 

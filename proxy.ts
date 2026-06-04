@@ -5,6 +5,7 @@ import { updateSupabaseSession } from "@/lib/supabase/middleware"
 import { getSupabaseBrowserEnv, hasSupabaseBrowserEnv } from "@/lib/supabase/public-env"
 
 const ADMIN_LOGIN_PATH = "/admin/login"
+const PROXY_BYPASS_PATHS = new Set(["/api/meta/webhook"])
 const ADMIN_PAGE_ROLES = new Set(["ADMIN", "SUPER_ADMIN"])
 const BRANCH_PAGE_ROLES = new Set(["ADMIN", "SUPER_ADMIN", "BRANCH"])
 
@@ -132,6 +133,10 @@ function redirectToAdminLogin(request: NextRequest) {
 }
 
 export async function proxy(request: NextRequest) {
+  if (PROXY_BYPASS_PATHS.has(request.nextUrl.pathname)) {
+    return NextResponse.next({ request })
+  }
+
   const response = await updateSupabaseSession(request)
 
   if (!isProtectedAdminPath(request.nextUrl.pathname)) {

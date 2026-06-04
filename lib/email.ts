@@ -56,7 +56,7 @@ export interface SendResult {
 
 /* ── 설정 ───────────────────────────────────────────────────── */
 
-const RESEND_FROM = process.env.RESEND_FROM ?? "ClassIn <noreply@classin.ai.kr>"
+const RESEND_FROM = process.env.RESEND_FROM ?? "Classin <noreply@classin.ai.kr>"
 const GMAIL_FROM = process.env.GOOGLE_SERVICE_ACCOUNT_EMAIL ?? ""
 const RESEND_BATCH_SIZE = 100
 
@@ -84,7 +84,7 @@ export function wrapCampaignHtml(body: string, unsubscribeUrl?: string, tracking
       ${sanitizeMarketingHtml(body)}
     </div>
     <div style="text-align:center;padding:24px 0;color:#a39e98;font-size:12px;line-height:1.6">
-      <p style="margin:0">ClassIn Korea · classin.co.kr</p>
+      <p style="margin:0">Classin Korea · classin.co.kr</p>
       ${footer}
     </div>
   </div>
@@ -108,14 +108,14 @@ export function wrapNotificationHtml(title: string, body: string, routeUrl?: str
     <div style="background:#ffffff;border-radius:12px;padding:28px 24px;border:1px solid rgba(0,0,0,0.08)">
       <div style="display:flex;align-items:center;gap:8px;margin-bottom:16px">
         <div style="width:8px;height:8px;border-radius:50%;background:#084734"></div>
-        <span style="font-size:12px;font-weight:600;color:#084734;text-transform:uppercase;letter-spacing:0.5px">ClassIn 알림</span>
+        <span style="font-size:12px;font-weight:600;color:#084734;text-transform:uppercase;letter-spacing:0.5px">Classin 알림</span>
       </div>
       <h2 style="margin:0 0 12px;font-size:18px;font-weight:700;color:#111110">${title}</h2>
       <div style="font-size:14px;color:#615D59;line-height:1.6">${body}</div>
       ${cta}
     </div>
     <div style="text-align:center;padding:20px 0;color:#a39e98;font-size:11px">
-      ClassIn Korea · 자동 발송 알림
+      Classin Korea · 자동 발송 알림
     </div>
   </div>
 </body>

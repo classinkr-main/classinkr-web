@@ -48,6 +48,11 @@ interface ChatbotQueryResponse {
     warning?: string
 }
 
+interface ChatbotStarterQuestionsResponse {
+    questions?: unknown
+    warning?: string
+}
+
 interface ChatMessage {
     id: string
     role: "assistant" | "user"
@@ -199,7 +204,7 @@ export function FloatingChatbot() {
             id: "welcome",
             role: "assistant",
             content:
-                "안녕하세요. ClassIn 상담 가이드입니다. 운영 고민은 먼저 정리해드리고, 계정·결제·장애처럼 확인이 필요한 내용은 바로 상담으로 이어드릴게요.",
+                "안녕하세요. Classin 상담 가이드입니다. 운영 고민은 먼저 정리해드리고, 계정·결제·장애처럼 확인이 필요한 내용은 바로 상담으로 이어드릴게요.",
             suggestedQuestions: starterQuestions,
         },
     ])
@@ -218,6 +223,45 @@ export function FloatingChatbot() {
         if (hidden) {
             setIsOpen(false)
         }
+    }, [hidden])
+
+    useEffect(() => {
+        if (hidden) return
+
+        const controller = new AbortController()
+
+        async function loadStarterQuestions() {
+            try {
+                const response = await fetch("/api/chatbot/recommended-questions", {
+                    cache: "no-store",
+                    signal: controller.signal,
+                })
+                const data = (await response.json()) as ChatbotStarterQuestionsResponse
+                const questions = Array.isArray(data.questions)
+                    ? data.questions
+                        .filter((question): question is string => typeof question === "string")
+                        .map((question) => question.trim())
+                        .filter(Boolean)
+                        .slice(0, 3)
+                    : []
+
+                if (questions.length === 0) return
+
+                setMessages((current) =>
+                    current.map((message) =>
+                        message.id === "welcome"
+                            ? { ...message, suggestedQuestions: questions }
+                            : message
+                    )
+                )
+            } catch (err) {
+                if (err instanceof DOMException && err.name === "AbortError") return
+            }
+        }
+
+        void loadStarterQuestions()
+
+        return () => controller.abort()
     }, [hidden])
 
     useEffect(() => {
@@ -394,7 +438,7 @@ export function FloatingChatbot() {
                                     )}
                                 </div>
                                 <div className="min-w-0">
-                                    <h2 id="classin-chatbot-title" className="truncate text-[15px] font-bold">ClassIn 상담 가이드</h2>
+                                    <h2 id="classin-chatbot-title" className="truncate text-[15px] font-bold">Classin 상담 가이드</h2>
                                     <p className="mt-0.5 truncate text-xs text-white/70">운영·도입·CS 빠른 상담</p>
                                 </div>
                             </div>

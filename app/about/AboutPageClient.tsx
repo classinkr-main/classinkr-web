@@ -343,27 +343,27 @@ export default function AboutPageClient({ offices, press, recentPosts }: Props) 
               return (
                 <FadeUp key={p.eyebrow} delay={i * 0.08}>
                   <div
-                    className="group relative h-full bg-white border border-[rgba(0,0,0,0.08)] rounded-[16px] p-8 transition-all hover:border-[rgba(8,71,52,0.18)]"
+                    className="group relative h-full overflow-hidden bg-white border border-[rgba(0,0,0,0.08)] rounded-[16px] p-8 transition-all hover:border-[rgba(8,71,52,0.18)]"
                     style={{
                       boxShadow:
                         "rgba(0,0,0,0.04) 0px 4px 18px, rgba(0,0,0,0.027) 0px 2px 7.8px, rgba(0,0,0,0.02) 0px 0.8px 2.9px, rgba(0,0,0,0.01) 0px 0.175px 1px",
                     }}
                   >
-                    <div className="flex items-center justify-between mb-6">
+                    <span className="pointer-events-none absolute right-6 top-5 select-none text-[84px] font-black leading-none tracking-[-0.08em] text-[#084734]/10 [text-shadow:0_18px_45px_rgba(8,71,52,0.14)] sm:right-7 sm:top-6 sm:text-[96px]">
+                      {p.index}
+                    </span>
+                    <div className="relative z-10 mb-6 flex items-center">
                       <div className="w-11 h-11 rounded-full bg-[#ECFDF5] flex items-center justify-center">
                         <Icon className="w-5 h-5 text-[#084734]" strokeWidth={2} />
                       </div>
-                      <span className="text-[40px] font-bold text-[#ECFDF5] leading-none tracking-tight select-none">
-                        {p.index}
-                      </span>
                     </div>
-                    <div className="text-[11px] font-semibold text-[#084734] tracking-[0.15em] uppercase mb-3">
+                    <div className="relative z-10 text-[11px] font-semibold text-[#084734] tracking-[0.15em] uppercase mb-3">
                       {p.eyebrow}
                     </div>
-                    <h3 className="text-[20px] font-bold text-[#111110] leading-[1.3] tracking-[-0.4px] mb-3 whitespace-pre-line">
+                    <h3 className="relative z-10 text-[20px] font-bold text-[#111110] leading-[1.3] tracking-[-0.4px] mb-3 whitespace-pre-line">
                       {p.title}
                     </h3>
-                    <p className="text-[14px] text-[#615D59] leading-[1.65]">{p.desc}</p>
+                    <p className="relative z-10 text-[14px] text-[#615D59] leading-[1.65]">{p.desc}</p>
                   </div>
                 </FadeUp>
               )

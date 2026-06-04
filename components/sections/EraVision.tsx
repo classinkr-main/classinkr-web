@@ -91,10 +91,10 @@ export function EraVision() {
                             className="bg-white px-8 py-10 flex flex-col gap-6 group hover:bg-[#ECFDF5]/40 transition-colors duration-300"
                         >
                             <div className="flex flex-col items-start gap-1.5">
-                                <span className="text-[11px] font-black uppercase tracking-[0.2em] text-[#084734]/25">
+                                <span className="text-[13px] md:text-[14px] font-black uppercase tracking-[0.24em] text-[#084734]/40 [text-shadow:0_1px_0_rgba(255,255,255,0.85),0_10px_24px_rgba(8,71,52,0.18)]">
                                     [{shift.english}]
                                 </span>
-                                <span className="text-2xl md:text-[1.65rem] font-black leading-none text-[#084734] tracking-normal">
+                                <span className="text-[1.8rem] md:text-[2.05rem] font-black leading-none text-[#084734] tracking-normal">
                                     {shift.keyword}
                                 </span>
                             </div>

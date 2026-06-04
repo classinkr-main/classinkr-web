@@ -1,0 +1,26 @@
+# Classin
+
+Classin is a Korean academy class operation platform. It connects live classes, class tools, homework, tests, AI-assisted grading, learning reports, parent communication, and education hardware for academies.
+
+## Primary Pages
+
+- Homepage: https://classin.ai.kr/
+- Product overview: https://classin.ai.kr/product
+- Classin software: https://classin.ai.kr/product/sw
+- Classin Board: https://classin.ai.kr/product/hw
+- FAQ: https://classin.ai.kr/faq
+- Guides: https://classin.ai.kr/docs
+- Blog: https://classin.ai.kr/blog
+- Contact: https://classin.ai.kr/contact
+
+## Entity Summary
+
+- Brand: Classin
+- Category: academy class operation platform, education software, education hardware
+- Software: live class tools, homework and tests, AI grading, learning reports, parent communication
+- Hardware: Classin Board S Series, education interactive display, AI camera recording, PDF whiteboard notes, Classin software integration
+- Primary audience: academy owners, directors, teachers, education operations teams
+
+## Crawling Notes
+
+Public marketing pages, product pages, FAQ, docs, blog, and event pages are intended for search and AI answer systems. Admin, API, checkout, receipt, and unsubscribe paths are not intended for indexing.

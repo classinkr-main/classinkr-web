@@ -16,7 +16,7 @@ export interface DocsLandingShellProps {
 }
 
 export function DocsLandingShell({
-    eyebrow = "ClassIn Guide",
+    eyebrow = "Classin Guide",
     title,
     description,
     categories = [],

@@ -13,7 +13,7 @@ export const PRODUCT_TEMPLATES = [
   },
   {
     key: "camera-t1",
-    label: "ClassIn T1 카메라",
+    label: "Classin T1 카메라",
     description: "수업/회의 촬영용",
     unit_price: 1200000,
   },

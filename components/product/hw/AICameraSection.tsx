@@ -59,7 +59,7 @@ export default function AICameraSection() {
         >
           <Image
             src="/images/product/hw/camera/camera-dual-premium-blended.png"
-            alt="ClassIn Board AI 트래킹 카메라 클로즈업"
+            alt="Classin Board AI 트래킹 카메라 클로즈업"
             width={1402}
             height={1122}
             sizes="(max-width: 1024px) 100vw, 58vw"

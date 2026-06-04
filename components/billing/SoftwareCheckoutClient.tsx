@@ -35,7 +35,7 @@ export function SoftwareCheckoutClient({
             href="/"
             className="text-[15px] font-semibold tracking-tight text-[#084734]"
           >
-            ClassIn
+            Classin
           </Link>
           <Link
             href="/contact#contact-form"

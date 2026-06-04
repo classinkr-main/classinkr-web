@@ -92,9 +92,9 @@ export default function UnsubscribeForm({ email }: Props) {
       <span
         className="text-[13px] font-bold tracking-widest uppercase"
         style={{ color: "#084734" }}
-        aria-label="ClassIn"
+        aria-label="Classin"
       >
-        ClassIn
+        Classin
       </span>
 
       {/* Heading */}

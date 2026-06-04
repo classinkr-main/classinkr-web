@@ -45,7 +45,7 @@ export function TestimonialWall() {
                                 가장 빠른 증거가 됩니다
                             </h2>
                             <p className="mt-5 max-w-2xl text-base leading-7 text-[#615D59] break-keep">
-                                카톡과 문자로 도착한 문장들을 제품 경험이 드러나도록 정리했습니다.
+                                원문 표현은 유지하고, 어떤 경험에서 나온 말인지 함께 볼 수 있게 정리했습니다.
                             </p>
                         </div>
                     </motion.div>
@@ -71,6 +71,9 @@ export function TestimonialWall() {
                                     <blockquote className="mt-5 text-xl font-semibold leading-[1.75] sm:text-2xl break-keep">
                                         {leadTestimonial.quote}
                                     </blockquote>
+                                    <p className="mt-6 rounded-[8px] bg-white/10 px-4 py-3 text-sm font-medium leading-6 text-white/72">
+                                        <span className="font-bold text-white">경험 요약</span> · {leadTestimonial.summary}
+                                    </p>
                                 </div>
 
                                 <figcaption className="mt-10 flex items-end justify-between gap-5 border-t border-white/15 pt-5">
@@ -78,7 +81,7 @@ export function TestimonialWall() {
                                         <div className="text-sm font-bold">{leadTestimonial.role}</div>
                                         <div className="mt-1 text-xs text-white/60">{leadTestimonial.badge}</div>
                                     </div>
-                                    <div className="text-xs font-semibold text-white/55">ClassIn</div>
+                                    <div className="text-xs font-semibold text-white/55">Classin</div>
                                 </figcaption>
                             </div>
 
@@ -95,6 +98,9 @@ export function TestimonialWall() {
                                             <blockquote className="mt-6 text-[15px] font-semibold leading-7 text-[#111110] break-keep">
                                                 &ldquo;{item.quote}&rdquo;
                                             </blockquote>
+                                            <p className="mt-4 text-[12px] font-medium leading-5 text-[#615D59]">
+                                                <span className="font-bold text-[#084734]">경험 요약</span> · {item.summary}
+                                            </p>
                                         </div>
                                         <figcaption className="mt-7 flex items-center justify-between border-t border-[#084734]/10 pt-4 text-xs">
                                             <span className="font-semibold text-[#084734]">{item.role}</span>
@@ -126,10 +132,13 @@ export function TestimonialWall() {
                                 <blockquote className="mt-5 flex-1 text-[14px] leading-7 text-[#31302E] break-keep">
                                     &ldquo;{item.quote}&rdquo;
                                 </blockquote>
+                                <p className="mt-4 text-[12px] font-medium leading-5 text-[#615D59]">
+                                    <span className="font-bold text-[#084734]">경험 요약</span> · {item.summary}
+                                </p>
 
                                 <figcaption className="mt-5 flex items-center justify-between border-t border-black/[0.06] pt-4 text-xs">
                                     <span className="font-semibold text-[#615D59]">{item.role}</span>
-                                    <span className="text-[#A39E98]">ClassIn</span>
+                                    <span className="text-[#A39E98]">Classin</span>
                                 </figcaption>
                             </motion.figure>
                         ))}

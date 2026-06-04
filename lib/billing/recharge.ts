@@ -51,5 +51,5 @@ export function formatCny(amountCny: number) {
 }
 
 export function buildRechargeOrderName(amountCny: number) {
-  return `ClassIn Business 충전 · ${Math.round(amountCny).toLocaleString("en-US")} CNY`
+  return `Classin Business 충전 · ${Math.round(amountCny).toLocaleString("en-US")} CNY`
 }

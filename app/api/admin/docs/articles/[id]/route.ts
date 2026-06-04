@@ -5,6 +5,7 @@ import {
   deleteDocsArticle,
   getDocsArticleById,
   patchDocsArticle,
+  upsertDocsRedirect,
   type DocsArticleDocType,
   type DocsArticleProductArea,
   type DocsArticleStatus,
@@ -151,8 +152,25 @@ export async function PATCH(
   }
 
   try {
+    const existing = await getDocsArticleById(id)
+    if (!existing) return NextResponse.json({ error: "문서를 찾을 수 없습니다." }, { status: 404 })
+
     const detail = await patchDocsArticle(id, patch)
     if (!detail) return NextResponse.json({ error: "문서를 찾을 수 없습니다." }, { status: 404 })
+
+    if (existing.publicPath !== detail.publicPath) {
+      await upsertDocsRedirect({
+        fromPath: existing.publicPath,
+        toPath: detail.publicPath,
+        httpStatus: 301,
+      }).catch((redirectError) => {
+        console.warn(
+          "[PATCH /api/admin/docs/articles/[id]] redirect creation failed:",
+          redirectError instanceof Error ? redirectError.message : redirectError
+        )
+      })
+    }
+
     return NextResponse.json(detail)
   } catch (error) {
     const message = error instanceof Error ? error.message : "문서 수정에 실패했습니다."

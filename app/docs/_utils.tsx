@@ -39,17 +39,21 @@ const staticDocsContent: DocsContent = {
 
 const categoryIcons: Record<DocCategoryId, LucideIcon> = {
   start: Rocket,
+  software: Sparkles,
   admin: ShieldCheck,
   teacher: Presentation,
   student: GraduationCap,
-  board: MonitorSpeaker,
+  hardware: MonitorSpeaker,
+  board: Wrench,
 }
 
 const categoryEyebrows: Record<DocCategoryId, string> = {
   start: "Start Here",
+  software: "Software",
   admin: "Admin",
   teacher: "Teacher",
   student: "Student",
+  hardware: "Hardware",
   board: "Smart Board",
 }
 
@@ -101,14 +105,18 @@ export function DocsCategoryIcon({
   switch (categoryId) {
     case "start":
       return <Rocket className={className} aria-hidden />
+    case "software":
+      return <Sparkles className={className} aria-hidden />
     case "admin":
       return <ShieldCheck className={className} aria-hidden />
     case "teacher":
       return <Presentation className={className} aria-hidden />
     case "student":
       return <GraduationCap className={className} aria-hidden />
-    case "board":
+    case "hardware":
       return <MonitorSpeaker className={className} aria-hidden />
+    case "board":
+      return <Wrench className={className} aria-hidden />
     default:
       return <ClipboardList className={className} aria-hidden />
   }
@@ -271,7 +279,7 @@ export const docsTrustCards = [
   },
 ]
 
-export function scoreDocsArticle(doc: any, query: string): number {
+export function scoreDocsArticle(doc: DocsArticleSummary, query: string): number {
   const tokens = query.split(/\s+/).filter(Boolean)
   if (tokens.length === 0) return 0
 
@@ -320,4 +328,3 @@ export function scoreDocsArticle(doc: any, query: string): number {
 
   return score
 }
-

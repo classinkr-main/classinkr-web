@@ -3,7 +3,7 @@ import Link from "next/link"
 import UnsubscribeForm from "./UnsubscribeForm"
 
 export const metadata: Metadata = {
-  title: "수신 거부 — ClassIn",
+  title: "수신 거부 — Classin",
   robots: { index: false, follow: false },
 }
 

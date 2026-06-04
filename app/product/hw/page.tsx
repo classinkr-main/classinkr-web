@@ -146,7 +146,7 @@ function ComparisonSection() {
             iconColor: "text-slate-400",
         },
         {
-            title: "ClassIn Board",
+            title: "Classin Board",
             problems: ["분필처럼 자연스럽고, 지워도 남는다", "SW 생태계 완전 통합", "시공간을 넘는 교육 연결"],
             bg: "bg-[#F0FFF4]",
             border: "border-[#22A366]/20",
@@ -159,7 +159,7 @@ function ComparisonSection() {
         <section className="py-24 md:py-32 bg-white">
             <div className="container mx-auto px-4 lg:px-8">
                 <motion.div className="text-center mb-16" {...fadeUp}>
-                    <p className="text-sm font-semibold text-[#22A366] tracking-wider uppercase mb-3">WHY CLASSIN BOARD</p>
+                    <p className="text-sm font-semibold text-[#22A366] tracking-wider uppercase mb-3">Why Classin Board</p>
                     <h2 className="text-3xl md:text-4xl lg:text-5xl text-[#1a1a19] leading-tight">
                         도구를 바꾸는 게 아니라,
                         <br className="hidden sm:block" />
@@ -303,11 +303,11 @@ const featureTabs: FeatureTab[] = [
         ],
     },
     {
-        label: "인터렉티브 수업",
+        label: "인터랙티브 수업",
         image: "/images/product/hw/features/feature-interactive.jpg",
-        imageAlt: "인터렉티브 수업 현장 사진",
+        imageAlt: "인터랙티브 수업 현장 사진",
         badge: "30+ 수업 도구",
-        title: "타이머부터 선착순 퀴즈까지, 생동감 있는 인터렉티브 수업",
+        title: "타이머부터 선착순 퀴즈까지, 생동감 있는 인터랙티브 수업",
         points: [
             "타이머, 스톱워치, 선착순 퀴즈 등 30+ 수업 도구로 수업 리듬을 살립니다",
             "학생 참여 권한 기능으로 필요한 순간 학생도 보드 위에서 직접 조작·판서",
@@ -317,7 +317,7 @@ const featureTabs: FeatureTab[] = [
     {
         label: "AI 카메라",
         image: "/images/product/hw/camera/camera-dual-premium-blended.png",
-        imageAlt: "ClassIn Board AI 트래킹 카메라 클로즈업",
+        imageAlt: "Classin Board AI 트래킹 카메라 클로즈업",
         imageFit: "contain",
         imagePanelClassName: "bg-[#050708]",
         imageClassName: "scale-[1.08]",
@@ -335,11 +335,11 @@ const featureTabs: FeatureTab[] = [
         image: "/images/product/hw/features/feature-ecosystem.png",
         imageAlt: "클래스인 소프트웨어 생태계 학습 장면",
         badge: "LMS 완전 통합",
-        title: "수업 이후 운영까지 이어지는 ClassIn SW",
+        title: "수업 이후 운영까지 이어지는 Classin 소프트웨어",
         points: [
             "NFC 원터치 로그인 — 내 수업 환경 즉시 로드",
             "출결·과제·성적·알림까지 학원 운영 흐름과 자연스럽게 연결",
-            "수업 기록과 학습 데이터가 ClassIn 시스템 안에 한 번에 쌓입니다",
+            "수업 기록과 학습 데이터가 Classin 시스템 안에 한 번에 쌓입니다",
         ],
     },
 ]
@@ -461,7 +461,7 @@ function ProductAnatomySection() {
                     <motion.div {...fadeUp} className="rounded-3xl overflow-hidden shadow-xl bg-slate-50">
                         <Image
                             src="/images/product/hw/board/board-side-profile.png"
-                            alt="ClassIn Board 측면 슬림 프로파일 — 110mm"
+                            alt="Classin Board 측면 슬림 프로파일 — 110mm"
                             width={800}
                             height={600}
                             sizes="(max-width: 768px) 100vw, 50vw"
@@ -592,7 +592,7 @@ function LessonTimelineSection() {
         <section className="py-24 md:py-32 bg-[#FDFCF8]">
             <div className="container mx-auto px-4 lg:px-8">
                 <motion.div className="text-center mb-16" {...fadeUp}>
-                    <p className="text-sm font-semibold text-[#22A366] tracking-wider uppercase mb-3">A DAY WITH CLASSIN BOARD</p>
+                    <p className="text-sm font-semibold text-[#22A366] tracking-wider uppercase mb-3">A Day With Classin Board</p>
                     <h2 className="text-3xl md:text-4xl lg:text-5xl text-[#1a1a19] leading-tight">
                         교사의 하루가
                         <br />
@@ -829,7 +829,7 @@ export default function ProductHWPage() {
                         >
                             <div className="inline-flex items-center gap-2 px-4 py-1.5 rounded-full bg-[#22A366]/5 text-[#22A366] text-sm font-semibold mb-8 border border-[#22A366]/10">
                                 <Layers className="w-3.5 h-3.5" />
-                                ClassIn Board S Series
+                                Classin Board S Series
                             </div>
 
                             <h1
@@ -875,7 +875,7 @@ export default function ProductHWPage() {
                         >
                             <Image
                                 src="/images/product/hw/hero/hero-board-stand.png"
-                                alt="ClassIn Board S Series — 스탠드형 전자칠판"
+                                alt="Classin Board S Series — 스탠드형 전자칠판"
                                 width={1200}
                                 height={800}
                                 sizes="(max-width: 768px) 100vw, (max-width: 1200px) 80vw, 1200px"
@@ -883,6 +883,31 @@ export default function ProductHWPage() {
                                 className="w-full h-auto"
                             />
                         </motion.div>
+                    </div>
+                </div>
+            </section>
+
+            <section aria-labelledby="classin-board-summary" className="bg-white py-12 md:py-16">
+                <div className="container mx-auto px-4 lg:px-8">
+                    <div className="mx-auto grid max-w-5xl gap-6 border-y border-slate-200 py-8 md:grid-cols-[0.9fr_1.4fr] md:py-10">
+                        <div>
+                            <p className="text-xs font-bold uppercase tracking-[0.16em] text-[#22A366]">Classin Board</p>
+                            <h2 id="classin-board-summary" className="mt-3 text-2xl font-bold leading-tight text-slate-950 md:text-3xl">
+                                Classin Board는 교실 수업을 기록 가능한 스튜디오로 바꿉니다
+                            </h2>
+                        </div>
+                        <div>
+                            <p className="text-base leading-8 text-slate-600 md:text-lg">
+                                Classin Board는 판서, 4K AI 카메라 자동 추적, 수업 영상 업로드, 판서 PDF 공유,
+                                Classin 소프트웨어 연동을 제공하는 교육용 전자칠판입니다. 수업 중에 만든 자료가
+                                수업 종료 후 복습 콘텐츠와 학부모 공유 자료로 이어집니다.
+                            </p>
+                            <ul className="mt-6 grid gap-3 text-sm font-semibold text-slate-700 sm:grid-cols-3">
+                                <li className="rounded-[8px] bg-[#ECFDF5] px-4 py-3 text-[#084734]">판서: PDF로 저장</li>
+                                <li className="rounded-[8px] bg-[#ECFDF5] px-4 py-3 text-[#084734]">녹화: AI 카메라 추적</li>
+                                <li className="rounded-[8px] bg-[#ECFDF5] px-4 py-3 text-[#084734]">공유: Classin과 연동</li>
+                            </ul>
+                        </div>
                     </div>
                 </div>
             </section>
@@ -909,7 +934,7 @@ export default function ProductHWPage() {
             {/* BIG BACKDROP — 베젤 클로즈업 풀블리드 */}
             <BigBackdropImage />
 
-            {/* IMPACT NUMBERS — 숫자로 보는 ClassIn Board */}
+            {/* IMPACT NUMBERS — 숫자로 보는 Classin Board */}
             <ImpactNumbersSection />
 
             {/* DESIGN DETAILS — 반사·지문·몰입 3카드 */}
@@ -925,7 +950,7 @@ export default function ProductHWPage() {
             <ValueAnchor />
 
             {/* ================================================================
-                ACT 1 — COMPARISON: 왜 ClassIn Board인가
+                ACT 1 — COMPARISON: 왜 Classin Board인가
             ================================================================ */}
             <ComparisonSection />
 
@@ -933,7 +958,7 @@ export default function ProductHWPage() {
                 FULL-WIDTH POINT — 교사의 하루를 다시 설계합니다
             ================================================================ */}
             <FullWidthPointSection
-                eyebrow="ClassIn Board의 약속"
+                eyebrow="Classin Board의 약속"
                 statement={<>최고의 수업을<br />서포트합니다</>}
                 sub="선생님의 수업의 열기가 언제 어디에서나 이어지도록"
                 dark
@@ -985,7 +1010,7 @@ export default function ProductHWPage() {
                         <div className="rounded-3xl overflow-hidden shadow-2xl">
                             <Image
                                 src="/images/product/hw/writing/writing-experience-classroom.png"
-                                alt="교사가 ClassIn Board에 수학 문제를 판서하는 모습"
+                                alt="교사가 Classin Board에 수학 문제를 판서하는 모습"
                                 width={1661}
                                 height={947}
                                 sizes="(max-width: 768px) 100vw, 500px"
@@ -1027,7 +1052,7 @@ export default function ProductHWPage() {
                     <div className="rounded-3xl overflow-hidden shadow-2xl">
                         <Image
                             src="/images/product/hw/features/feature-display.png"
-                            alt="ClassIn Board에 블랙홀 우주 영상이 선명하게 표시된 장면"
+                            alt="Classin Board에 블랙홀 우주 영상이 선명하게 표시된 장면"
                             width={1536}
                             height={1024}
                             sizes="(max-width: 768px) 100vw, 500px"
@@ -1080,7 +1105,7 @@ export default function ProductHWPage() {
                         <div className="relative aspect-[4/3] overflow-hidden rounded-3xl bg-black shadow-2xl">
                             <Image
                                 src="/images/product/hw/sharing/instant-sharing-camera.webp"
-                                alt="ClassIn Board 측면 카메라와 판서 화면 클로즈업"
+                                alt="Classin Board 측면 카메라와 판서 화면 클로즈업"
                                 fill
                                 sizes="(max-width: 768px) 100vw, 640px"
                                 className="object-cover object-[48%_50%] translate-x-[-5%] translate-y-[4%] scale-[1.36]"
@@ -1148,7 +1173,7 @@ export default function ProductHWPage() {
                                 loop
                                 playsInline
                                 preload="metadata"
-                                aria-label="ClassIn 인터렉티브 러닝 수업 영상"
+                                aria-label="Classin 인터랙티브 러닝 수업 영상"
                             />
                             <div className="pointer-events-none absolute inset-0 rounded-[1.25rem] ring-1 ring-white/25" />
                             <div className="pointer-events-none absolute inset-x-0 top-0 h-20 bg-gradient-to-b from-white/20 to-transparent" />
@@ -1174,7 +1199,7 @@ export default function ProductHWPage() {
                             <span className="text-[#22A366]">새로운 수업 생태계</span>
                         </h2>
                         <p className="text-lg text-slate-400 mt-6 max-w-2xl mx-auto leading-relaxed">
-                            ClassIn 소프트웨어가 보드에 네이티브 탑재. 출결부터 과제, 성적, 학부모 알림까지 — 끊김 없는 하나의 흐름.
+                            Classin 소프트웨어가 보드에 네이티브 탑재. 출결부터 과제, 성적, 학부모 알림까지 — 끊김 없는 하나의 흐름.
                         </p>
                     </motion.div>
 
@@ -1182,7 +1207,7 @@ export default function ProductHWPage() {
                     <motion.div {...fadeUp} className="max-w-3xl mx-auto mb-14 rounded-3xl overflow-hidden shadow-2xl">
                         <Image
                             src="/images/product/hw/board/board-bezel-detail.png?v=20260429-1834"
-                            alt="ClassIn Board 프리미엄 브러시드 메탈 베젤 디테일"
+                            alt="Classin Board 프리미엄 브러시드 메탈 베젤 디테일"
                             width={900}
                             height={500}
                             sizes="(max-width: 768px) 100vw, 900px"
@@ -1210,7 +1235,7 @@ export default function ProductHWPage() {
                             {
                                 icon: <Monitor className="w-8 h-8" />,
                                 title: "무선 미러링",
-                                desc: "어떤 기기에서든 원클릭으로 화면을 공유합니다. USB, 빔프로젝터, HDMI 없이 ClassIn만 있다면 어디에서나 가능합니다.",
+                                desc: "어떤 기기에서든 원클릭으로 화면을 공유합니다. USB, 빔프로젝터, HDMI 없이 Classin만 있다면 어디에서나 가능합니다.",
                             },
                         ].map((item, i) => (
                             <motion.div

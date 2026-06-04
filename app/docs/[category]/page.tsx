@@ -47,10 +47,10 @@ export async function generateMetadata({
   }
 
   return {
-    title: `${category.title} | ClassIn 가이드`,
+    title: `${category.title} | Classin 가이드`,
     description: category.description,
     openGraph: {
-      title: `${category.title} | ClassIn 가이드`,
+      title: `${category.title} | Classin 가이드`,
       description: category.description,
       type: "website",
     },

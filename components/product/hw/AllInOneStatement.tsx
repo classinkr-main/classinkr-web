@@ -51,7 +51,7 @@ export default function AllInOneStatement() {
         >
           <Image
             src={opsEnergyModuleImage}
-            alt="ClassIn 로고가 빛나는 글래스모피즘 OPS 모듈이 전자칠판에 에너지를 전달하는 3D 비유 이미지"
+            alt="Classin 로고가 빛나는 글래스모피즘 OPS 모듈이 전자칠판에 에너지를 전달하는 3D 비유 이미지"
             fill
             sizes="92vw"
             className="object-cover opacity-95 mix-blend-screen"

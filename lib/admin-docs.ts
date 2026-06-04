@@ -785,7 +785,7 @@ export async function getAdminDocsAnalytics(
   }
 }
 
-export async function reindexDocsAiChunks(): Promise<AdminDocsReindexResponse> {
+export async function reindexDocsAiChunks(articleId?: string | null): Promise<AdminDocsReindexResponse> {
   const generatedAt = new Date().toISOString()
 
   if (!hasSupabaseServerEnv()) {
@@ -800,7 +800,7 @@ export async function reindexDocsAiChunks(): Promise<AdminDocsReindexResponse> {
   }
 
   const supabase = createSupabaseAdminClient()
-  const { data: articleRows, error: articleError } = await supabase
+  let articleQuery = supabase
     .from("docs_articles")
     .select(
       "id, category_id, slug, title, description, status, visibility, doc_type, product_area, featured, order_index, updated_at, published_at, last_reviewed_at, audience, tags, keywords, symptoms, chatbot_summary, content_markdown, content_json, noindex"
@@ -810,17 +810,35 @@ export async function reindexDocsAiChunks(): Promise<AdminDocsReindexResponse> {
     .eq("noindex", false)
     .order("updated_at", { ascending: false })
 
+  if (articleId) {
+    articleQuery = articleQuery.eq("id", articleId)
+  }
+
+  const { data: articleRows, error: articleError } = await articleQuery
+
   if (articleError) throw articleError
 
   const articles = (articleRows ?? []) as DocsArticleForReindexRow[]
   if (articles.length === 0) {
+    if (articleId) {
+      const { error: deleteError } = await supabase
+        .from("docs_ai_chunks")
+        .delete()
+        .eq("article_id", articleId)
+      if (deleteError) throw deleteError
+    }
+
     return {
       configured: true,
       status: "live",
       generatedAt,
       articleCount: 0,
       chunkCount: 0,
-      warnings: ["게시된 공개 문서가 없어 재생성할 chunk가 없습니다."],
+      warnings: [
+        articleId
+          ? "해당 문서가 게시/공개/색인 허용 상태가 아니어서 기존 chunk만 정리했습니다."
+          : "게시된 공개 문서가 없어 재생성할 chunk가 없습니다.",
+      ],
     }
   }
 

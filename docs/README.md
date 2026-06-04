@@ -17,6 +17,10 @@
   - 문서/정보 탭 기반 챗봇 지식베이스와 FAQ 통계 설계
 - [active/docs-center-content-guidelines.md](./active/docs-center-content-guidelines.md)
   - 공개 문서 탭의 가이드/매뉴얼/도움말 작성 지침과 미완성 콘텐츠 처리 규칙
+- [active/classin-software-feature-inventory.md](./active/classin-software-feature-inventory.md)
+  - 제품 캡처 기준 소프트웨어 도구·활동 유형·하드웨어 차별점 단일 진실 소스(SSOT)
+- [active/classin-board-s-series-safe-manual-guidelines.md](./active/classin-board-s-series-safe-manual-guidelines.md)
+  - ClassIn Board S 시리즈 설명서 기반 한국어 안전 사용·기본 조작 기준
 - [hardware-ops/README.md](./hardware-ops/README.md)
   - 하드웨어 운영 허브 문서의 상위 인덱스
 
@@ -36,6 +40,8 @@
   - 공개 가이드/매뉴얼/도움말/문제 해결/업데이트 문서센터와 챗봇 지식 베이스 설계
 - [active/docs-center-content-guidelines.md](./active/docs-center-content-guidelines.md)
   - 문서센터 콘텐츠 작성 순서, 공개/보류 기준, 운영 가이드 우선순위
+- [active/classin-board-s-series-safe-manual-guidelines.md](./active/classin-board-s-series-safe-manual-guidelines.md)
+  - 하드웨어 안전 안내와 기본 매뉴얼 답변의 한국어 기준
 - [active/chatbot-knowledgebase-faq-analytics-plan.md](./active/chatbot-knowledgebase-faq-analytics-plan.md)
   - 문서/정보 탭을 챗봇 답변 원천으로 쓰고 질문 통계를 FAQ 개선으로 되돌리는 설계
 

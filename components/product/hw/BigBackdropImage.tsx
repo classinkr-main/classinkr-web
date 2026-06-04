@@ -56,7 +56,7 @@ export default function BigBackdropImage() {
       >
         <Image
           src={bezelDetailImage}
-          alt="ClassIn Board 베젤 클로즈업"
+          alt="Classin Board 베젤 클로즈업"
           fill
           className="object-cover"
         />

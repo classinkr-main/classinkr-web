@@ -109,7 +109,7 @@ function inferProductArea(doc: DocArticle): ProductArea {
   const haystack = docHaystack(doc)
 
   if (doc.slug.includes("update") || doc.tags.includes("업데이트")) return "classroom"
-  if (doc.category === "board" || haystack.includes("하드웨어") || haystack.includes("전자칠판")) return "hardware"
+  if (doc.category === "hardware" || doc.category === "board" || haystack.includes("하드웨어") || haystack.includes("전자칠판")) return "hardware"
   if (haystack.includes("결제") || haystack.includes("영수증") || haystack.includes("세금") || haystack.includes("요금")) {
     return "billing"
   }
@@ -122,7 +122,7 @@ function inferProductArea(doc: DocArticle): ProductArea {
 
 function inferDocType(doc: DocArticle): DocType {
   if (doc.slug.includes("update") || doc.tags.includes("업데이트")) return "release_note"
-  if (doc.category === "board") return "reference"
+  if (doc.category === "hardware" || doc.category === "board") return "reference"
   if (doc.category === "start") return "guide"
   return "manual"
 }
