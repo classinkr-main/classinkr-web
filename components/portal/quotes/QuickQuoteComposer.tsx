@@ -653,7 +653,6 @@ export default function QuickQuoteComposer({
 }: QuickQuoteComposerProps) {
   const today = getTodayDateValue()
   const isPortalApi = apiBase === "/api/portal"
-  const allowNewCustomer = !isPortalApi || Boolean(portalPartnerAccountId)
   const [customers, setCustomers] = useState<CustomerListItem[]>([])
   const [deals, setDeals] = useState<DealListItem[]>([])
   const [loadingOptions, setLoadingOptions] = useState(false)
@@ -1162,11 +1161,8 @@ export default function QuickQuoteComposer({
     }
 
     const requestBody: { name: string; partner_account_id?: string } = { name }
-    if (isPortalApi) {
-      const partnerAccountId = portalPartnerAccountId ?? undefined
-      if (!partnerAccountId) {
-        throw new Error("어드민에서는 기존 고객을 선택한 뒤 견적서를 생성해 주세요.")
-      }
+    if (isPortalApi && portalPartnerAccountId) {
+      const partnerAccountId = portalPartnerAccountId
       requestBody.partner_account_id = partnerAccountId
     }
 
@@ -1513,22 +1509,20 @@ export default function QuickQuoteComposer({
                     >
                       기존 고객
                     </button>
-                    {allowNewCustomer && (
-                      <button
-                        type="button"
-                        onClick={() => {
-                          setCustomerMode("new")
-                          setSelectedDealId("")
-                        }}
-                        className={`rounded-full px-3 py-1.5 text-xs font-medium ${
-                          customerMode === "new"
-                            ? "bg-[#111110] text-white"
-                            : "bg-[#f6f5f2] text-[#615D59]"
-                        }`}
-                      >
-                        신규 고객
-                      </button>
-                    )}
+                    <button
+                      type="button"
+                      onClick={() => {
+                        setCustomerMode("new")
+                        setSelectedDealId("")
+                      }}
+                      className={`rounded-full px-3 py-1.5 text-xs font-medium ${
+                        customerMode === "new"
+                          ? "bg-[#111110] text-white"
+                          : "bg-[#f6f5f2] text-[#615D59]"
+                      }`}
+                    >
+                      신규 고객
+                    </button>
                   </div>
                   {customerMode === "existing" ? (
                     <div className="grid gap-2">

@@ -9,12 +9,66 @@ import {
   resolvePartnerAccountId,
   getActorInfo,
 } from "@/lib/portal/portal-authorize";
+import { createSupabaseAdminClient } from "@/lib/supabase/admin";
 import {
   listCustomerListItems,
   listAllCustomerListItems,
   createCustomer,
 } from "@/lib/portal/repositories/customers";
 import { logActivity } from "@/lib/portal/repositories/activity";
+
+const ADMIN_QUOTE_PARTNER_ACCOUNT_NAME = "Classin Direct Sales";
+
+async function getOrCreateAdminQuotePartnerAccountId(createdBy?: string | null) {
+  const supabase = createSupabaseAdminClient();
+
+  const { data: existing, error: existingError } = await supabase
+    .from("partner_accounts")
+    .select("id")
+    .eq("name", ADMIN_QUOTE_PARTNER_ACCOUNT_NAME)
+    .maybeSingle();
+
+  if (existingError) throw existingError;
+  if (existing?.id) return existing.id as string;
+
+  const { data: created, error: createError } = await supabase
+    .from("partner_accounts")
+    .insert({
+      name: ADMIN_QUOTE_PARTNER_ACCOUNT_NAME,
+      owner_name: "Classin Korea",
+      status: "active",
+      notes: "Auto-created for admin quick quotes without an existing customer.",
+      created_by: createdBy ?? null,
+    })
+    .select("id")
+    .single();
+
+  if (createError) throw createError;
+  return created.id as string;
+}
+
+async function resolveWritablePartnerAccountId(
+  ctx: Awaited<ReturnType<typeof requirePortalContext>>,
+  bodyPartnerAccountId?: unknown
+) {
+  if (isErrorResponse(ctx)) return null;
+
+  const normalizedBodyPartnerAccountId =
+    typeof bodyPartnerAccountId === "string" && bodyPartnerAccountId.trim()
+      ? bodyPartnerAccountId.trim()
+      : undefined;
+  const partnerAccountId = resolvePartnerAccountId(
+    ctx,
+    normalizedBodyPartnerAccountId
+  );
+
+  if (partnerAccountId) return partnerAccountId;
+  if (ctx.type === "admin") {
+    return getOrCreateAdminQuotePartnerAccountId(ctx.userId ?? null);
+  }
+
+  return null;
+}
 
 export async function GET(req: NextRequest) {
   const result = await requirePortalContext(req);
@@ -44,7 +98,15 @@ export async function POST(req: NextRequest) {
 
   try {
     const body = await req.json();
-    const partnerAccountId = resolvePartnerAccountId(
+    const name = typeof body.name === "string" ? body.name.trim() : "";
+    if (!name) {
+      return NextResponse.json(
+        { error: "고객사 이름을 입력해 주세요." },
+        { status: 400 }
+      );
+    }
+
+    const partnerAccountId = await resolveWritablePartnerAccountId(
       ctx,
       body.partner_account_id
     );
@@ -58,7 +120,7 @@ export async function POST(req: NextRequest) {
 
     const customer = await createCustomer({
       partner_account_id: partnerAccountId,
-      name: body.name,
+      name,
       contact_name: body.contact_name ?? null,
       email: body.email ?? null,
       phone: body.phone ?? null,

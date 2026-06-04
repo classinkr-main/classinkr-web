@@ -453,6 +453,7 @@ export default function ContactPage() {
                             <div className="mt-auto pt-6 border-t border-slate-100">
                                 <div className="w-full h-36 bg-slate-100 rounded-2xl border border-slate-200 overflow-hidden relative">
                                     <iframe
+                                        title="Classin Korea office map"
                                         src="https://maps.google.com/maps?q=서울시+양천구+목동동로+233-1&t=&z=17&ie=UTF8&iwloc=&output=embed"
                                         width="100%"
                                         height="100%"
