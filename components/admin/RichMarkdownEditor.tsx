@@ -10,7 +10,9 @@ import Placeholder from "@tiptap/extension-placeholder"
 import Link from "@tiptap/extension-link"
 import Image from "@tiptap/extension-image"
 import { Markdown } from "tiptap-markdown"
-import { LayoutTemplate, Sparkles, Wand2 } from "lucide-react"
+import { Image as ImageIcon, LayoutTemplate, Link2, Loader2, Sparkles, Upload, Wand2, X } from "lucide-react"
+import type { JSONContent, MarkdownParseHelpers, MarkdownParseResult, MarkdownToken } from "@tiptap/core"
+import { getAdminToken } from "@/lib/admin-client"
 
 // ProseMirror 플러그인: {{green:text}} 구문을 에디터에서 초록색으로 시각화
 const GreenTextDecoration = Extension.create({
@@ -44,6 +46,63 @@ const GreenTextDecoration = Extension.create({
   },
 })
 
+const MAX_INLINE_IMAGE_BYTES = 5 * 1024 * 1024
+const IMAGE_WIDTH_PRESETS = [
+  { label: "가득", value: "" },
+  { label: "크게", value: "720" },
+  { label: "보통", value: "560" },
+  { label: "작게", value: "360" },
+] as const
+
+type SavedSelection = { from: number; to: number }
+type ImageInsertItem = { src: string; alt: string; width?: number }
+
+function escapeMarkdown(value: string) {
+  return value.replace(/\\/g, "\\\\").replace(/"/g, '\\"').replace(/\]/g, "\\]")
+}
+
+function normalizeImageWidth(value: unknown): number | null {
+  const numberValue = typeof value === "number" ? value : Number.parseInt(String(value ?? ""), 10)
+  if (!Number.isFinite(numberValue)) return null
+  return Math.min(1200, Math.max(120, Math.round(numberValue)))
+}
+
+function parseImageTitle(rawTitle: unknown) {
+  const title = typeof rawTitle === "string" ? rawTitle : ""
+  const widthMatch = title.match(/(?:^|\s|\|)width=(\d{2,4})(?:px)?(?:\s|\||$)/i)
+  const width = widthMatch ? normalizeImageWidth(widthMatch[1]) : null
+  const cleanTitle = title
+    .replace(/\s*\|?\s*width=\d{2,4}(?:px)?\s*/gi, " ")
+    .replace(/\s+/g, " ")
+    .trim()
+
+  return { title: cleanTitle || null, width }
+}
+
+const ResizableMarkdownImage = Image.extend({
+  parseMarkdown: (token: MarkdownToken, helpers: MarkdownParseHelpers): MarkdownParseResult => {
+    const { title, width } = parseImageTitle(token.title)
+    return helpers.createNode("image", {
+      src: typeof token.href === "string" ? token.href : "",
+      alt: typeof token.text === "string" ? token.text : "",
+      title,
+      ...(width ? { width } : {}),
+    })
+  },
+  renderMarkdown: (node: JSONContent) => {
+    const attrs = node.attrs ?? {}
+    const src = typeof attrs.src === "string" ? attrs.src : ""
+    const alt = typeof attrs.alt === "string" ? attrs.alt : ""
+    const title = typeof attrs.title === "string" ? attrs.title : ""
+    const width = normalizeImageWidth(node.attrs?.width)
+    const titleParts = [title, width ? `width=${width}` : ""].filter(Boolean)
+
+    return titleParts.length > 0
+      ? `![${escapeMarkdown(alt)}](${src} "${escapeMarkdown(titleParts.join(" | "))}")`
+      : `![${escapeMarkdown(alt)}](${src})`
+  },
+})
+
 export interface RichMarkdownEditorHandle {
   toggleBold: () => void
   toggleItalic: () => void
@@ -63,6 +122,7 @@ interface RichMarkdownEditorProps {
   value: string
   onChange: (v: string) => void
   placeholder?: string
+  imageUploadEndpoint?: string
   onTemplateClick?: () => void
   onAiDraftClick?: () => void
   onSelectionOptimize?: (text: string) => void
@@ -70,12 +130,115 @@ interface RichMarkdownEditorProps {
 
 const RichMarkdownEditor = forwardRef<RichMarkdownEditorHandle, RichMarkdownEditorProps>(
   function RichMarkdownEditor(
-    { value, onChange, placeholder = "본문을 작성해주세요", onTemplateClick, onAiDraftClick, onSelectionOptimize },
+    {
+      value,
+      onChange,
+      placeholder = "본문을 작성해주세요",
+      imageUploadEndpoint,
+      onTemplateClick,
+      onAiDraftClick,
+      onSelectionOptimize,
+    },
     ref
   ) {
     const lastEmitted = useRef(value)
     const skipNextUpdate = useRef(false)
+    const savedSelection = useRef<SavedSelection | null>(null)
+    const fileInputRef = useRef<HTMLInputElement>(null)
     const [hasSelection, setHasSelection] = useState(false)
+    const [showImageDialog, setShowImageDialog] = useState(false)
+    const [imageUrl, setImageUrl] = useState("")
+    const [imageAlt, setImageAlt] = useState("")
+    const [imageWidth, setImageWidth] = useState<(typeof IMAGE_WIDTH_PRESETS)[number]["value"]>("")
+    const [imageError, setImageError] = useState("")
+    const [uploadingImages, setUploadingImages] = useState(false)
+
+    const closeImageDialog = () => {
+      setShowImageDialog(false)
+      setImageError("")
+    }
+
+    const selectedWidth = () => normalizeImageWidth(imageWidth) ?? undefined
+
+    const insertImages = (items: ImageInsertItem[]) => {
+      if (!editor || items.length === 0) return
+      const selection = savedSelection.current
+      const chain = editor.chain().focus()
+      if (selection) chain.setTextSelection(selection)
+
+      chain
+        .insertContent(
+          items.flatMap((item, index) => [
+            {
+              type: "image",
+              attrs: {
+                src: item.src,
+                alt: item.alt,
+                ...(item.width ? { width: item.width } : {}),
+              },
+            },
+            ...(index === items.length - 1 ? [{ type: "paragraph" }] : []),
+          ])
+        )
+        .run()
+      savedSelection.current = null
+    }
+
+    const uploadFile = async (file: File) => {
+      if (!imageUploadEndpoint) throw new Error("업로드 경로가 설정되지 않았습니다.")
+      const formData = new FormData()
+      formData.append("file", file)
+      const response = await fetch(imageUploadEndpoint, {
+        method: "POST",
+        headers: { Authorization: `Bearer ${getAdminToken()}` },
+        body: formData,
+      })
+      if (!response.ok) {
+        const data = (await response.json().catch(() => null)) as { error?: string } | null
+        throw new Error(data?.error || `${file.name} 업로드에 실패했습니다.`)
+      }
+      const data = (await response.json()) as { url?: string }
+      if (!data.url) throw new Error(`${file.name} 업로드 URL을 받지 못했습니다.`)
+      return data.url
+    }
+
+    const handleFiles = async (files: FileList | File[]) => {
+      const imageFiles = Array.from(files)
+      if (imageFiles.length === 0) return
+
+      const badFile = imageFiles.find((file) => !file.type.startsWith("image/"))
+      if (badFile) {
+        setImageError(`${badFile.name}은 이미지 파일이 아닙니다.`)
+        return
+      }
+      const oversized = imageFiles.find((file) => file.size > MAX_INLINE_IMAGE_BYTES)
+      if (oversized) {
+        setImageError(`${oversized.name}은 5MB 이하로 올려주세요.`)
+        return
+      }
+
+      setUploadingImages(true)
+      setImageError("")
+      try {
+        const uploaded: ImageInsertItem[] = []
+        for (const file of imageFiles) {
+          const src = await uploadFile(file)
+          uploaded.push({
+            src,
+            alt: imageAlt.trim() || file.name.replace(/\.[^.]+$/, ""),
+            width: selectedWidth(),
+          })
+        }
+        insertImages(uploaded)
+        setImageAlt("")
+        closeImageDialog()
+      } catch (error) {
+        setImageError(error instanceof Error ? error.message : "이미지 업로드 중 오류가 발생했습니다.")
+      } finally {
+        setUploadingImages(false)
+        if (fileInputRef.current) fileInputRef.current.value = ""
+      }
+    }
 
     const editor = useEditor({
       immediatelyRender: false,
@@ -83,7 +246,16 @@ const RichMarkdownEditor = forwardRef<RichMarkdownEditorHandle, RichMarkdownEdit
         StarterKit,
         Highlight.configure({ multicolor: false }),
         Link.configure({ openOnClick: false }),
-        Image.configure({ allowBase64: false }),
+        ResizableMarkdownImage.configure({
+          allowBase64: false,
+          resize: {
+            enabled: true,
+            directions: ["bottom-left", "bottom-right", "top-left", "top-right"],
+            minWidth: 120,
+            minHeight: 80,
+            alwaysPreserveAspectRatio: true,
+          },
+        }),
         Placeholder.configure({ placeholder }),
         GreenTextDecoration,
         Markdown.configure({
@@ -166,11 +338,12 @@ const RichMarkdownEditor = forwardRef<RichMarkdownEditorHandle, RichMarkdownEdit
         }
       },
       insertImage: () => {
-        if (!editor) return
-        const url = window.prompt("이미지 URL을 입력하세요:")
-        if (!url) return
-        const alt = window.prompt("이미지 설명(alt 텍스트):") ?? ""
-        editor.chain().focus().setImage({ src: url, alt }).run()
+        if (editor) {
+          const { from, to } = editor.state.selection
+          savedSelection.current = { from, to }
+        }
+        setImageError("")
+        setShowImageDialog(true)
       },
       insertMarkdown: (markdown) => {
         if (!editor || !markdown.trim()) return
@@ -193,6 +366,135 @@ const RichMarkdownEditor = forwardRef<RichMarkdownEditorHandle, RichMarkdownEdit
 
     return (
       <div className="relative">
+        {showImageDialog && (
+          <div className="fixed inset-0 z-50 flex items-center justify-center bg-black/30 px-4">
+            <div className="w-full max-w-[520px] rounded-2xl border border-[#e8e8e4] bg-white p-5 shadow-2xl">
+              <div className="mb-4 flex items-start justify-between gap-3">
+                <div>
+                  <p className="text-sm font-semibold text-[#111110]">이미지 삽입</p>
+                  <p className="mt-1 text-[12px] text-[#1a1a1a]/45">
+                    커서 위치에 들어가며, 여러 장을 선택하면 선택 순서대로 삽입됩니다.
+                  </p>
+                </div>
+                <button
+                  type="button"
+                  onClick={closeImageDialog}
+                  className="flex h-8 w-8 items-center justify-center rounded-lg text-[#1a1a1a]/35 transition-colors hover:bg-[#f5f5f2] hover:text-[#111110]"
+                  aria-label="닫기"
+                >
+                  <X className="h-4 w-4" />
+                </button>
+              </div>
+
+              <div className="space-y-4">
+                <div>
+                  <label className="mb-1.5 block text-[12px] font-medium text-[#1a1a1a]/55">
+                    이미지 설명
+                  </label>
+                  <input
+                    value={imageAlt}
+                    onChange={(event) => setImageAlt(event.target.value)}
+                    placeholder="예) 세미나 현장 사진"
+                    className="h-10 w-full rounded-xl border border-[#e8e8e4] bg-white px-3 text-sm outline-none transition-colors focus:border-[#084734]"
+                  />
+                </div>
+
+                <div>
+                  <p className="mb-1.5 text-[12px] font-medium text-[#1a1a1a]/55">초기 크기</p>
+                  <div className="grid grid-cols-4 gap-1.5 rounded-xl bg-[#f5f5f2] p-1">
+                    {IMAGE_WIDTH_PRESETS.map((preset) => (
+                      <button
+                        key={preset.label}
+                        type="button"
+                        onClick={() => setImageWidth(preset.value)}
+                        className={`rounded-lg px-2 py-2 text-[12px] font-medium transition-colors ${
+                          imageWidth === preset.value
+                            ? "bg-white text-[#084734] shadow-sm"
+                            : "text-[#1a1a1a]/45 hover:text-[#111110]"
+                        }`}
+                      >
+                        {preset.label}
+                      </button>
+                    ))}
+                  </div>
+                  <p className="mt-1.5 text-[11px] text-[#1a1a1a]/35">
+                    삽입 후 이미지를 클릭하고 모서리를 드래그하면 다시 조절할 수 있습니다.
+                  </p>
+                </div>
+
+                {imageUploadEndpoint && (
+                  <div>
+                    <input
+                      ref={fileInputRef}
+                      type="file"
+                      accept="image/jpeg,image/png,image/webp,image/gif"
+                      multiple
+                      className="hidden"
+                      onChange={(event) => {
+                        if (event.target.files) void handleFiles(event.target.files)
+                      }}
+                    />
+                    <button
+                      type="button"
+                      onClick={() => fileInputRef.current?.click()}
+                      disabled={uploadingImages}
+                      className="flex w-full items-center justify-center gap-2 rounded-xl border border-dashed border-[#084734]/30 bg-emerald-50/50 px-4 py-4 text-sm font-semibold text-[#084734] transition-colors hover:border-[#084734]/60 hover:bg-emerald-50 disabled:cursor-not-allowed disabled:opacity-60"
+                    >
+                      {uploadingImages ? <Loader2 className="h-4 w-4 animate-spin" /> : <Upload className="h-4 w-4" />}
+                      {uploadingImages ? "업로드 중..." : "파일 업로드해서 삽입"}
+                    </button>
+                    <p className="mt-1.5 text-center text-[11px] text-[#1a1a1a]/35">
+                      JPG, PNG, WebP, GIF · 파일당 최대 5MB
+                    </p>
+                  </div>
+                )}
+
+                <div className="relative flex items-center gap-2 text-[11px] text-[#1a1a1a]/30">
+                  <span className="h-px flex-1 bg-[#e8e8e4]" />
+                  <span>또는 URL로 삽입</span>
+                  <span className="h-px flex-1 bg-[#e8e8e4]" />
+                </div>
+
+                <div className="flex gap-2">
+                  <div className="relative min-w-0 flex-1">
+                    <Link2 className="pointer-events-none absolute left-3 top-1/2 h-4 w-4 -translate-y-1/2 text-[#1a1a1a]/25" />
+                    <input
+                      value={imageUrl}
+                      onChange={(event) => setImageUrl(event.target.value)}
+                      placeholder="https://... 또는 /images/..."
+                      className="h-10 w-full rounded-xl border border-[#e8e8e4] bg-white pl-9 pr-3 text-sm outline-none transition-colors focus:border-[#084734]"
+                    />
+                  </div>
+                  <button
+                    type="button"
+                    onClick={() => {
+                      const src = imageUrl.trim()
+                      if (!src) {
+                        setImageError("이미지 URL을 입력해주세요.")
+                        return
+                      }
+                      insertImages([{ src, alt: imageAlt.trim(), width: selectedWidth() }])
+                      setImageUrl("")
+                      setImageAlt("")
+                      closeImageDialog()
+                    }}
+                    className="inline-flex h-10 shrink-0 items-center gap-1.5 rounded-xl bg-[#111110] px-3 text-sm font-semibold text-white transition-colors hover:bg-[#084734]"
+                  >
+                    <ImageIcon className="h-4 w-4" />
+                    삽입
+                  </button>
+                </div>
+
+                {imageError && (
+                  <div className="rounded-xl border border-[#F6D5C5] bg-[#FEF3EE] px-3 py-2 text-[12px] text-[#B85C33]">
+                    {imageError}
+                  </div>
+                )}
+              </div>
+            </div>
+          </div>
+        )}
+
         {/* A. 빈 상태 플레이스홀더 CTA */}
         {isEmpty && hasQuickActions && (
           <div className="pointer-events-none absolute inset-0 z-10 flex flex-col items-center justify-center gap-3 pb-16">

@@ -1,9 +1,8 @@
 import { createHmac, timingSafeEqual } from "crypto"
 import { NextRequest, NextResponse } from "next/server"
 
-import { submitLeadCapture } from "@/lib/server/lead-capture"
-
 export const runtime = "nodejs"
+export const dynamic = "force-dynamic"
 
 type MetaLeadValue = {
   leadgen_id?: string
@@ -277,6 +276,7 @@ export async function GET(req: NextRequest) {
 }
 
 export async function POST(req: NextRequest) {
+  const { submitLeadCapture } = await import("@/lib/server/lead-capture")
   const rawBody = await req.text()
   const signature = req.headers.get("x-hub-signature-256")
 
