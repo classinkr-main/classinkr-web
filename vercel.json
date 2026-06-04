@@ -5,6 +5,10 @@
       "schedule": "0 9 * * *"
     },
     {
+      "path": "/api/cron/lead-response-alerts",
+      "schedule": "0 * * * *"
+    },
+    {
       "path": "/api/cron/sync-branch",
       "schedule": "30 0 * * *"
     },

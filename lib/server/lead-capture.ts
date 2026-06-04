@@ -15,6 +15,11 @@ const VALID_SOURCES = new Set<LeadSource>([
   "newsletter",
   "meta_lead_ads",
 ])
+const WECOM_LEAD_SOURCES = new Set<LeadSource>([
+  "demo_modal",
+  "contact_page",
+  "meta_lead_ads",
+])
 
 const EMAIL_REGEX = /^[^\s@]+@[^\s@]+\.[^\s@]+$/
 
@@ -153,6 +158,7 @@ function buildLeadNotificationTitle(body: LeadPayload) {
 function buildLeadNotificationMessage(body: LeadPayload) {
   return [
     body.name,
+    body.org,
     body.role,
     body.size ? `예상 사용자 ${body.size}` : undefined,
     body.source,
@@ -255,6 +261,7 @@ export async function submitLeadCapture(raw: unknown): Promise<LeadSubmissionRes
           currentPage: body.currentPage,
           referrer: body.referrer,
         },
+        channels: WECOM_LEAD_SOURCES.has(body.source) ? ["wecom_webhook"] : undefined,
       }).catch((error) => {
         console.error("[lead-capture] notification emit failed:", error)
       })
