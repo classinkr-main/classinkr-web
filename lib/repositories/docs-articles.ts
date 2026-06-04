@@ -88,6 +88,16 @@ export interface DocsArticleVersionDetail {
   createdAt: string
 }
 
+export interface DocsArticleDraftDetail {
+  articleId: string
+  draftPayload: DocsArticlePatchInput
+  changeNote: string | null
+  createdBy: string | null
+  updatedBy: string | null
+  createdAt: string
+  updatedAt: string
+}
+
 export interface DocsArticleAnalyticsDetail {
   articleId: string
   feedbackTotal: number
@@ -202,6 +212,16 @@ interface DocsArticleVersionRow {
   created_at: string
 }
 
+interface DocsArticleDraftRow {
+  article_id: string
+  draft_payload: unknown
+  change_note: string | null
+  created_by: string | null
+  updated_by: string | null
+  created_at: string
+  updated_at: string
+}
+
 const SELECT_COLUMNS =
   "id, category_id, slug, title, description, audience, product_area, doc_type, difficulty, status, visibility, noindex, featured, order_index, tags, keywords, symptoms, chatbot_summary, content_markdown, content_json, seo_title, seo_description, canonical_path, published_at, last_reviewed_at, created_at, updated_at, updated_by"
 
@@ -286,6 +306,18 @@ function rowToVersion(row: DocsArticleVersionRow): DocsArticleVersionDetail {
     changeNote: row.change_note,
     createdBy: row.created_by,
     createdAt: row.created_at,
+  }
+}
+
+function rowToDraft(row: DocsArticleDraftRow): DocsArticleDraftDetail {
+  return {
+    articleId: row.article_id,
+    draftPayload: getContentJson(row.draft_payload) as DocsArticlePatchInput,
+    changeNote: row.change_note,
+    createdBy: row.created_by,
+    updatedBy: row.updated_by,
+    createdAt: row.created_at,
+    updatedAt: row.updated_at,
   }
 }
 
@@ -605,6 +637,79 @@ export async function rollbackDocsArticleToVersion(
     contentJson: version.contentJson,
     updatedBy,
   })
+}
+
+export async function getDocsArticleDraft(
+  articleId: string
+): Promise<DocsArticleDraftDetail | null> {
+  const supabase = createSupabaseAdminClient()
+  const { data, error } = await supabase
+    .from("docs_article_drafts")
+    .select("article_id, draft_payload, change_note, created_by, updated_by, created_at, updated_at")
+    .eq("article_id", articleId)
+    .maybeSingle()
+  if (error) {
+    if (error.code === "PGRST116") return null
+    throw error
+  }
+
+  return data ? rowToDraft(data as DocsArticleDraftRow) : null
+}
+
+export async function upsertDocsArticleDraft(input: {
+  articleId: string
+  draftPayload: DocsArticlePatchInput
+  changeNote?: string | null
+  updatedBy?: string | null
+}): Promise<DocsArticleDraftDetail> {
+  const existing = await getDocsArticleDraft(input.articleId)
+  const supabase = createSupabaseAdminClient()
+  const payload = {
+    article_id: input.articleId,
+    draft_payload: input.draftPayload,
+    change_note: input.changeNote ?? existing?.changeNote ?? null,
+    created_by: existing?.createdBy ?? input.updatedBy ?? null,
+    updated_by: input.updatedBy ?? null,
+  }
+
+  const { data, error } = await supabase
+    .from("docs_article_drafts")
+    .upsert(payload, { onConflict: "article_id" })
+    .select("article_id, draft_payload, change_note, created_by, updated_by, created_at, updated_at")
+    .single()
+  if (error) throw error
+
+  return rowToDraft(data as DocsArticleDraftRow)
+}
+
+export async function deleteDocsArticleDraft(articleId: string): Promise<void> {
+  const supabase = createSupabaseAdminClient()
+  const { error } = await supabase.from("docs_article_drafts").delete().eq("article_id", articleId)
+  if (error) throw error
+}
+
+export async function publishDocsArticleDraft(
+  articleId: string,
+  updatedBy: string | null
+): Promise<DocsArticleDetail | null> {
+  const [existing, draft] = await Promise.all([
+    getDocsArticleById(articleId),
+    getDocsArticleDraft(articleId),
+  ])
+  if (!existing || !draft) return null
+
+  const detail = await patchDocsArticle(articleId, {
+    ...draft.draftPayload,
+    updatedBy,
+  })
+  if (!detail) return null
+
+  if (existing.status === "published") {
+    await writeVersionSnapshot(detail, draft.changeNote ?? "Publish draft", updatedBy)
+  }
+
+  await deleteDocsArticleDraft(articleId)
+  return detail
 }
 
 export interface DocsArticleRelationInput {

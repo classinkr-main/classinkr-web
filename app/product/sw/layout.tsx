@@ -8,7 +8,7 @@ import {
 } from "@/lib/seo"
 
 export const metadata = createPublicMetadata({
-  title: "소프트웨어: 수업·과제·AI 채점",
+  title: "Classin 소프트웨어: 수업·과제·AI 채점",
   description:
     "Classin 소프트웨어는 실시간 수업, 과제 제출, AI 자동채점, 학습 데이터 리포트, 학부모 소통을 통합하는 학원 수업 운영 플랫폼입니다.",
   path: "/product/sw",

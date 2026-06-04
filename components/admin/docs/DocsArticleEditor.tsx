@@ -36,6 +36,7 @@ import type {
   DocsArticleDetail,
   DocsArticleDifficulty,
   DocsArticleDocType,
+  DocsArticleDraftDetail,
   DocsArticleRelationDetail,
   DocsArticleProductArea,
   DocsArticleStatus,
@@ -75,11 +76,17 @@ interface VersionsResponse {
   warning?: string
 }
 
+interface DraftResponse {
+  draft: DocsArticleDraftDetail | null
+  warning?: string
+}
+
 interface EditorSupportState {
   articleOptions: ArticleOption[]
   relations: DocsArticleRelationDetail[]
   versions: DocsArticleVersionDetail[]
   analytics: DocsArticleAnalyticsDetail | null
+  draft: DocsArticleDraftDetail | null
   warning: string | null
 }
 
@@ -712,6 +719,41 @@ function initialForm(
   }
 }
 
+function formWithDraftPayload(
+  base: FormState,
+  draftPayload: DocsArticleDraftDetail["draftPayload"]
+): FormState {
+  return {
+    ...base,
+    categoryId: draftPayload.categoryId ?? base.categoryId,
+    slug: draftPayload.slug ?? base.slug,
+    title: draftPayload.title ?? base.title,
+    description: draftPayload.description ?? base.description,
+    audience: draftPayload.audience ? toCsv(draftPayload.audience) : base.audience,
+    tagsCsv: draftPayload.tags ? toCsv(draftPayload.tags) : base.tagsCsv,
+    keywordsCsv: draftPayload.keywords ? toCsv(draftPayload.keywords) : base.keywordsCsv,
+    symptomsCsv: draftPayload.symptoms ? toCsv(draftPayload.symptoms) : base.symptomsCsv,
+    chatbotSummary:
+      draftPayload.chatbotSummary === null
+        ? ""
+        : draftPayload.chatbotSummary ?? base.chatbotSummary,
+    contentMarkdown: draftPayload.contentMarkdown ?? base.contentMarkdown,
+    productArea: draftPayload.productArea ?? base.productArea,
+    docType: draftPayload.docType ?? base.docType,
+    difficulty: draftPayload.difficulty ?? base.difficulty,
+    status: draftPayload.status ?? base.status,
+    visibility: draftPayload.visibility ?? base.visibility,
+    noindex: draftPayload.noindex ?? base.noindex,
+    featured: draftPayload.featured ?? base.featured,
+    orderIndex: draftPayload.orderIndex ?? base.orderIndex,
+    seoTitle: draftPayload.seoTitle === null ? "" : draftPayload.seoTitle ?? base.seoTitle,
+    seoDescription:
+      draftPayload.seoDescription === null
+        ? ""
+        : draftPayload.seoDescription ?? base.seoDescription,
+  }
+}
+
 function ToolbarButton({
   onClick,
   children,
@@ -736,6 +778,7 @@ function ToolbarButton({
 export default function DocsArticleEditor({ mode, categories, article }: Props) {
   const router = useRouter()
   const editorRef = useRef<RichMarkdownEditorHandle | null>(null)
+  const draftAppliedRef = useRef(false)
   const [form, setForm] = useState<FormState>(() =>
     initialForm(article, categories[0]?.id ?? "start")
   )
@@ -751,6 +794,7 @@ export default function DocsArticleEditor({ mode, categories, article }: Props) 
     relations: [],
     versions: [],
     analytics: null,
+    draft: null,
     warning: null,
   })
   const [supportLoading, setSupportLoading] = useState(mode === "edit")
@@ -818,8 +862,8 @@ export default function DocsArticleEditor({ mode, categories, article }: Props) 
   )
   const completedAiChecks = aiChecklist.filter((item) => item.complete).length
   const isDirty = useMemo(
-    () => mode === "create" || formSignature(form) !== formSignature(lastSavedForm),
-    [form, lastSavedForm, mode]
+    () => formSignature(form) !== formSignature(lastSavedForm),
+    [form, lastSavedForm]
   )
   const visibleSidebarTabs = useMemo(
     () => SIDEBAR_TABS.filter((tab) => tab.mode === "all" || tab.mode === mode),
@@ -831,7 +875,7 @@ export default function DocsArticleEditor({ mode, categories, article }: Props) 
 
     setSupportLoading(true)
     try {
-      const [contentResult, relationsResult, versionsResult, analyticsResult] = await Promise.all([
+      const [contentResult, relationsResult, versionsResult, analyticsResult, draftResult] = await Promise.all([
         adminFetchJson<AdminDocsContentResponse>("/api/admin/docs").catch((err) => ({
           configured: false,
           status: "unconfigured",
@@ -862,14 +906,29 @@ export default function DocsArticleEditor({ mode, categories, article }: Props) 
             warning: err instanceof Error ? err.message : "성과를 불러오지 못했습니다.",
           } as DocsArticleAnalyticsDetail & { warning?: string })
         ),
+        adminFetchJson<DraftResponse>(`/api/admin/docs/articles/${article.id}/draft`).catch((err) => ({
+          draft: null,
+          warning: err instanceof Error ? err.message : "작업 초안을 불러오지 못했습니다.",
+        })),
       ])
 
       const warnings = [
         ...(contentResult.warnings ?? []),
         relationsResult.warning,
         versionsResult.warning,
+        draftResult.warning,
         "warning" in analyticsResult ? analyticsResult.warning : null,
       ].filter((item): item is string => Boolean(item))
+
+      if (draftResult.draft && !draftAppliedRef.current) {
+        const draftForm = formWithDraftPayload(
+          initialForm(article, article.categoryId),
+          draftResult.draft.draftPayload
+        )
+        setForm(draftForm)
+        setLastSavedForm(draftForm)
+        draftAppliedRef.current = true
+      }
 
       setSupport({
         articleOptions: contentResult.articles
@@ -885,6 +944,7 @@ export default function DocsArticleEditor({ mode, categories, article }: Props) 
         relations: relationsResult.relations,
         versions: versionsResult.versions,
         analytics: analyticsResult,
+        draft: draftResult.draft,
         warning: warnings[0] ?? null,
       })
     } finally {
@@ -895,6 +955,18 @@ export default function DocsArticleEditor({ mode, categories, article }: Props) 
   useEffect(() => {
     void loadEditorSupport()
   }, [loadEditorSupport])
+
+  useEffect(() => {
+    if (!isDirty) return
+
+    const handleBeforeUnload = (event: BeforeUnloadEvent) => {
+      event.preventDefault()
+      event.returnValue = ""
+    }
+
+    window.addEventListener("beforeunload", handleBeforeUnload)
+    return () => window.removeEventListener("beforeunload", handleBeforeUnload)
+  }, [isDirty])
 
   function update<K extends keyof FormState>(key: K, value: FormState[K]) {
     setForm((previous) => ({ ...previous, [key]: value }))
@@ -1156,6 +1228,13 @@ export default function DocsArticleEditor({ mode, categories, article }: Props) 
     return null
   }
 
+  function validateDraft(next: FormState) {
+    if (next.slug.trim() && !/^[a-z0-9]+(?:-[a-z0-9]+)*$/.test(next.slug)) {
+      return "slug는 소문자·숫자·하이픈만 허용합니다."
+    }
+    return null
+  }
+
   async function reindexIfPublished(status: DocsArticleStatus) {
     if (status !== "published") return
 
@@ -1163,6 +1242,119 @@ export default function DocsArticleEditor({ mode, categories, article }: Props) 
       method: "POST",
       body: JSON.stringify(article?.id ? { articleId: article.id } : {}),
     }).catch(() => null)
+  }
+
+  async function saveDraft(overrides: Partial<FormState> = {}) {
+    setError(null)
+    setSavedMessage(null)
+    const next = { ...form, ...overrides }
+
+    if (mode === "create") {
+      await save({ ...overrides, status: "draft" })
+      return
+    }
+
+    if (!article) return
+
+    const validationError = validateDraft(next)
+    if (validationError) {
+      setError(validationError)
+      return
+    }
+
+    setSaving(true)
+    try {
+      const result = await adminFetchJson<DraftResponse>(
+        `/api/admin/docs/articles/${article.id}/draft`,
+        {
+          method: "PUT",
+          body: JSON.stringify(buildPayload(overrides)),
+        }
+      )
+      setSupport((previous) => ({ ...previous, draft: result.draft }))
+      setLastSavedForm(next)
+      setSavedMessage("작업 초안을 저장했습니다. 공개본은 아직 바뀌지 않았습니다.")
+      setTimeout(() => setSavedMessage(null), 3000)
+    } catch (error) {
+      setError(error instanceof Error ? error.message : "작업 초안을 저장하지 못했습니다.")
+    } finally {
+      setSaving(false)
+    }
+  }
+
+  async function publishDraft(overrides: Partial<FormState> = {}) {
+    setError(null)
+    setSavedMessage(null)
+    const next = { ...form, ...overrides }
+    const validationError = validate(next)
+    if (validationError) {
+      setError(validationError)
+      return
+    }
+
+    if (mode === "create") {
+      await save({ ...overrides, status: "published" })
+      return
+    }
+
+    if (!article) return
+
+    const confirmed = window.confirm(
+      "작업 초안을 공개본에 반영합니다. 저장 후 공개 /docs URL과 챗봇 인덱스가 최신화됩니다. 계속할까요?"
+    )
+    if (!confirmed) return
+
+    setSaving(true)
+    try {
+      await adminFetchJson<DraftResponse>(`/api/admin/docs/articles/${article.id}/draft`, {
+        method: "PUT",
+        body: JSON.stringify(buildPayload(overrides)),
+      })
+      const detail = await adminFetchJson<DocsArticleDetail>(
+        `/api/admin/docs/articles/${article.id}/draft/publish`,
+        { method: "POST" }
+      )
+      await reindexIfPublished(detail.status)
+      const savedForm = initialForm(detail, detail.categoryId)
+      setForm(savedForm)
+      setLastSavedForm(savedForm)
+      setSupport((previous) => ({ ...previous, draft: null }))
+      draftAppliedRef.current = true
+      setSavedMessage(
+        detail.status === "published" ? "공개본 반영 완료 · 검색 인덱스 반영" : "문서 반영 완료"
+      )
+      setTimeout(() => setSavedMessage(null), 3000)
+      router.refresh()
+    } catch (error) {
+      setError(error instanceof Error ? error.message : "공개본에 반영하지 못했습니다.")
+    } finally {
+      setSaving(false)
+    }
+  }
+
+  async function discardDraft() {
+    if (!article) return
+    if (!window.confirm("저장된 작업 초안을 삭제하고 현재 공개본 기준으로 되돌립니다. 계속할까요?")) {
+      return
+    }
+
+    setSaving(true)
+    setError(null)
+    try {
+      await adminFetchJson<{ ok: boolean }>(`/api/admin/docs/articles/${article.id}/draft`, {
+        method: "DELETE",
+      })
+      const liveForm = initialForm(article, article.categoryId)
+      setForm(liveForm)
+      setLastSavedForm(liveForm)
+      setSupport((previous) => ({ ...previous, draft: null }))
+      setSavedMessage("작업 초안을 삭제하고 공개본으로 되돌렸습니다.")
+      setTimeout(() => setSavedMessage(null), 3000)
+    } catch (error) {
+      setError(error instanceof Error ? error.message : "작업 초안을 삭제하지 못했습니다.")
+    } finally {
+      setSaving(false)
+    }
   }
 
   async function save(overrides: Partial<FormState> = {}) {
@@ -1292,26 +1484,67 @@ export default function DocsArticleEditor({ mode, categories, article }: Props) 
 
           <button
             type="button"
-            onClick={() => void save()}
+            onClick={() => void saveDraft()}
             disabled={saving}
             className="inline-flex items-center gap-1.5 rounded-lg border border-[#e8e8e4] bg-white px-3 py-2 text-[13px] font-medium text-[#111110] transition-colors hover:bg-[#f5f5f2] disabled:opacity-50"
           >
             <Save className="h-3.5 w-3.5" />
-            {saving ? "저장 중..." : form.status === "published" ? "현재 문서 저장" : "초안 저장"}
+            {saving ? "저장 중..." : mode === "edit" ? "임시 저장" : "초안 저장"}
           </button>
 
           <button
             type="button"
-            onClick={() => void save({ status: "published" })}
+            onClick={() =>
+              void publishDraft(
+                mode === "create" || form.status !== "published" ? { status: "published" } : {}
+              )
+            }
             disabled={saving}
             className="inline-flex items-center gap-1.5 rounded-lg bg-[#084734] px-3 py-2 text-[13px] font-medium text-white transition-colors hover:bg-[#065c41] disabled:opacity-50"
           >
-            {form.status === "published" ? "게시 상태로 저장" : "게시하기"}
+            {mode === "edit" && form.status === "published" ? "공개본에 반영" : "게시하기"}
           </button>
         </div>
       </div>
 
       <div className="mx-auto max-w-7xl px-6 py-8">
+        {mode === "edit" ? (
+          <div className="mb-6 rounded-2xl border border-[#DDEFE5] bg-[#F7FBF8] p-4">
+            <div className="flex flex-col gap-3 md:flex-row md:items-start md:justify-between">
+              <div>
+                <p className="text-[13px] font-semibold text-[#084734]">
+                  {support.draft ? "작업 초안 편집 중" : "공개본 보호 모드"}
+                </p>
+                <p className="mt-1 text-[12px] leading-relaxed text-[#1a1a1a]/55">
+                  임시 저장은 공개 문서를 바꾸지 않습니다. 최종 검수 후
+                  {" "}
+                  <span className="font-semibold text-[#111110]">공개본에 반영</span>
+                  을 눌러야 `/docs` 페이지와 검색 인덱스가 최신화됩니다.
+                </p>
+              </div>
+              {support.draft ? (
+                <div className="flex shrink-0 flex-wrap items-center gap-2">
+                  <span className="rounded-full border border-emerald-100 bg-white px-3 py-1 text-[12px] font-semibold text-[#084734]">
+                    임시 저장 {formatDateTime(support.draft.updatedAt)}
+                  </span>
+                  <button
+                    type="button"
+                    onClick={() => void discardDraft()}
+                    disabled={saving}
+                    className="inline-flex h-8 items-center justify-center rounded-lg border border-[#e8e8e4] bg-white px-2.5 text-[12px] font-semibold text-[#B85C33] transition-colors hover:bg-[#FEF3EE] disabled:cursor-not-allowed disabled:opacity-50"
+                  >
+                    초안 삭제
+                  </button>
+                </div>
+              ) : (
+                <span className="shrink-0 rounded-full border border-[#e8e8e4] bg-white px-3 py-1 text-[12px] font-semibold text-[#1a1a1a]/45">
+                  임시 저장 없음
+                </span>
+              )}
+            </div>
+          </div>
+        ) : null}
+
         <div className="grid gap-6 lg:grid-cols-[minmax(0,1fr)_320px] xl:grid-cols-[minmax(0,1fr)_360px]">
           <main className="space-y-6">
             <section className="space-y-4 rounded-2xl border border-[rgba(0,0,0,0.08)] bg-white p-6">
