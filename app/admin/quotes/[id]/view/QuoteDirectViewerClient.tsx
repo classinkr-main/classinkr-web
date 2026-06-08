@@ -4,8 +4,10 @@ import { useEffect, useState } from "react"
 import DOMPurify from "isomorphic-dompurify"
 import { AlertCircle, Loader2 } from "lucide-react"
 
+import QuoteDocumentPreview from "@/components/portal/quotes/QuoteDocumentPreview"
 import QuoteViewerActions from "@/components/portal/quotes/QuoteViewerActions"
 import { adminFetch } from "@/lib/admin-client"
+import { getQuoteDetailsFromStructuredJson } from "@/lib/portal/quote-details"
 
 type QuoteDocument = {
   id: string
@@ -17,6 +19,7 @@ type QuoteVersion = {
   id: string
   title: string
   content_html: string | null
+  structured_json: Record<string, unknown> | null
   discount_amount: number
   tax_amount: number
   total_amount: number
@@ -110,6 +113,9 @@ export default function QuoteDirectViewerClient({ quoteId }: { quoteId: string }
 
   const { document, version } = payload
   const validUntil = formatDate(version.valid_until)
+  const quoteDetails = getQuoteDetailsFromStructuredJson(version.structured_json, {
+    validUntil: version.valid_until,
+  })
 
   return (
     <main className="min-h-screen bg-[#F6F5F4] px-4 py-10 print:bg-white print:px-0 print:py-0 sm:px-6 sm:py-16">
@@ -157,6 +163,14 @@ export default function QuoteDirectViewerClient({ quoteId }: { quoteId: string }
               dangerouslySetInnerHTML={{ __html: DOMPurify.sanitize(version.content_html) }}
             />
           </section>
+        ) : null}
+
+        {!version.content_html && quoteDetails ? (
+          <QuoteDocumentPreview
+            quote={quoteDetails}
+            documentNumber={document.quote_number}
+            title={version.title}
+          />
         ) : null}
 
         <footer className="border-t border-black/8 bg-[#F6F5F4] px-6 py-5 text-center text-xs text-[#1a1a1a]/50 sm:px-10">

@@ -251,10 +251,11 @@ function createStaticContentResponse(warnings: string[] = []): AdminDocsContentR
     })),
     articles: staticArticles.map((article) => {
       const contentLength = getStaticContentLength(article)
-      const noindex = Boolean(article.noindex)
-      const visibility = article.visibility ?? "public"
+      const status = article.status ?? "published"
+      const visibility = article.visibility ?? (status === "published" ? "public" : "unlisted")
+      const noindex = article.noindex ?? (status !== "published" || visibility !== "public")
       const aiState = getArticleAiState({
-        status: "published",
+        status,
         visibility,
         noindex,
         tags: article.tags,
@@ -272,11 +273,11 @@ function createStaticContentResponse(warnings: string[] = []): AdminDocsContentR
         slug: article.slug,
         title: article.title,
         description: article.description,
-        status: "static",
+        status,
         visibility,
         noindex,
-        docType: "guide",
-        productArea: "general",
+        docType: article.docType ?? "guide",
+        productArea: article.productArea ?? "general",
         featured: Boolean(article.featured),
         orderIndex: 100,
         publicPath: getDocPath(article),

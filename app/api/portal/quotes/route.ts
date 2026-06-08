@@ -67,6 +67,9 @@ export async function POST(req: NextRequest) {
           created_by: ctx.userId ?? null,
         })
       : null;
+    const document = version
+      ? { ...quoteDoc, current_version_id: version.id }
+      : quoteDoc;
 
     const actor = getActorInfo(ctx);
     await logActivity({
@@ -79,11 +82,11 @@ export async function POST(req: NextRequest) {
       target_id: quoteDoc.id,
       summary: `견적서 ${quoteDoc.quote_number} 생성`,
       before_json: null,
-      after_json: quoteDoc as unknown as Record<string, unknown>,
+      after_json: document as unknown as Record<string, unknown>,
     });
 
     return NextResponse.json(
-      { quote: quoteDoc, document: quoteDoc, version },
+      { quote: document, document, version },
       { status: 201 }
     );
   } catch (err) {

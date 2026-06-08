@@ -41,9 +41,9 @@ function matchesInteractionTarget(
   const shareId = readString(payload.share_id);
   const token = readString(payload.token);
 
-  if (target.version_id && versionId && target.version_id !== versionId) return false;
-  if (target.share_id && shareId && target.share_id !== shareId) return false;
-  if (target.token && token && target.token !== token) return false;
+  if (target.version_id && versionId !== target.version_id) return false;
+  if (target.share_id && shareId !== target.share_id) return false;
+  if (target.token && token !== target.token) return false;
   return true;
 }
 
@@ -173,13 +173,11 @@ export async function ensureQuoteInteractionLog(input: InsertActivityLog & {
     if (duplicate) return duplicate;
   }
 
-  const {
-    dedupeWindowMinutes: _dedupeWindowMinutes,
-    dedupeByVersion: _dedupeByVersion,
-    dedupeByShare: _dedupeByShare,
-    dedupeByToken: _dedupeByToken,
-    ...activityInput
-  } = input;
+  const activityInput = { ...input };
+  delete activityInput.dedupeWindowMinutes;
+  delete activityInput.dedupeByVersion;
+  delete activityInput.dedupeByShare;
+  delete activityInput.dedupeByToken;
 
   return logActivity(activityInput);
 }

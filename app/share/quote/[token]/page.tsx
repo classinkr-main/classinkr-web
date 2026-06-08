@@ -2,8 +2,15 @@ import type { Metadata } from "next"
 import DOMPurify from "isomorphic-dompurify"
 
 import { ShareUnavailable } from "@/app/share/_components/ShareUnavailable"
+import QuoteDocumentPreview from "@/components/portal/quotes/QuoteDocumentPreview"
 import QuoteViewerActions from "@/components/portal/quotes/QuoteViewerActions"
-import { summarizeQuoteInteractions } from "@/lib/portal/repositories/activity"
+import { getQuoteDetailsFromStructuredJson } from "@/lib/portal/quote-details"
+import {
+  PUBLIC_QUOTE_VIEW_ACTION,
+  ensureQuoteInteractionLog,
+  summarizeQuoteInteractions,
+} from "@/lib/portal/repositories/activity"
+import { getDeal } from "@/lib/portal/repositories/deals"
 import { getPublicQuoteByToken } from "@/lib/portal/repositories/quote-documents"
 
 export const dynamic = "force-dynamic"
@@ -44,6 +51,39 @@ export default async function SharedQuotePage({ params }: PageProps) {
 
   const { share, document, version, customer_name } = result
   const validUntil = formatDate(version.valid_until)
+  const quoteDetails = getQuoteDetailsFromStructuredJson(version.structured_json, {
+    customerName: customer_name,
+    validUntil: version.valid_until,
+  })
+
+  const deal = await getDeal(document.deal_id).catch(() => null)
+  if (deal) {
+    await ensureQuoteInteractionLog({
+      partner_account_id: deal.partner_account_id,
+      customer_id: deal.customer_id,
+      deal_id: deal.id,
+      actor_user_id: null,
+      actor_role: "public",
+      action_type: PUBLIC_QUOTE_VIEW_ACTION,
+      target_type: "quote_document",
+      target_id: document.id,
+      summary: `견적서 ${document.quote_number} 고객 열람`,
+      before_json: null,
+      after_json: {
+        quote_number: document.quote_number,
+        version_id: version.id,
+        share_id: share.id,
+        token,
+      },
+      dedupeByVersion: version.id,
+      dedupeByShare: share.id,
+      dedupeByToken: token,
+      dedupeWindowMinutes: 5,
+    }).catch((error) => {
+      console.warn("[share/quote] view log skipped", error)
+    })
+  }
+
   const interaction = await summarizeQuoteInteractions({
     quote_document_id: document.id,
     version_id: version.id,
@@ -99,6 +139,14 @@ export default async function SharedQuotePage({ params }: PageProps) {
               dangerouslySetInnerHTML={{ __html: DOMPurify.sanitize(version.content_html) }}
             />
           </section>
+        ) : null}
+
+        {!version.content_html && quoteDetails ? (
+          <QuoteDocumentPreview
+            quote={quoteDetails}
+            documentNumber={document.quote_number}
+            title={version.title}
+          />
         ) : null}
 
         <footer className="border-t border-black/8 bg-[#F6F5F4] px-6 py-5 text-center text-xs text-[#1a1a1a]/50 sm:px-10">

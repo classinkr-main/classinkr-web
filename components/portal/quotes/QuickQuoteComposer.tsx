@@ -27,6 +27,7 @@ import {
 import { Button } from "@/components/ui/button"
 import { Input } from "@/components/ui/input"
 import { Label } from "@/components/ui/label"
+import { normalizeQuoteDetailsFromStructuredJson } from "@/lib/portal/quote-details"
 import { portalFetch } from "@/lib/portal/portal-fetch"
 import { getProductBySku } from "@/lib/product-templates"
 import type {
@@ -38,7 +39,6 @@ import type {
 import type {
   PartnerQuoteDetailsInput,
   PartnerQuoteLineItemInput,
-  QuoteOptionSelectionValue,
 } from "@/lib/partners-types"
 import {
   buildConfigurableStandardQuoteDetails,
@@ -138,6 +138,7 @@ type ResolvedCustomer = {
   id: string
   name: string
   partnerAccountId?: string | null
+  listItem?: CustomerListItem
 }
 
 type QuickAddRailItemId =
@@ -233,131 +234,6 @@ function formatQuickAddPrice(value: number) {
   return `${Math.round(value / 10_000).toLocaleString("ko-KR")}만`
 }
 
-function isRecord(value: unknown): value is Record<string, unknown> {
-  return Boolean(value) && typeof value === "object" && !Array.isArray(value)
-}
-
-function readString(value: unknown) {
-  return typeof value === "string" ? value : undefined
-}
-
-function readNumber(value: unknown) {
-  return typeof value === "number" && Number.isFinite(value) ? value : undefined
-}
-
-function readBoolean(value: unknown) {
-  return typeof value === "boolean" ? value : undefined
-}
-
-function pickString(source: Record<string, unknown>, ...keys: string[]) {
-  for (const key of keys) {
-    const value = readString(source[key])
-    if (value && value.trim()) return value.trim()
-  }
-  return undefined
-}
-
-function pickNumber(source: Record<string, unknown>, ...keys: string[]) {
-  for (const key of keys) {
-    const value = readNumber(source[key])
-    if (value !== undefined) return value
-  }
-  return undefined
-}
-
-function pickBoolean(source: Record<string, unknown>, ...keys: string[]) {
-  for (const key of keys) {
-    const value = readBoolean(source[key])
-    if (value !== undefined) return value
-  }
-  return undefined
-}
-
-function normalizeLineItem(value: unknown, index: number): PartnerQuoteLineItemInput {
-  const item = isRecord(value) ? value : {}
-  const quantity = pickNumber(item, "quantity", "qty")
-  const unitPrice = pickNumber(item, "unitPrice", "unit_price", "price")
-  const lineSupplyAmount =
-    pickNumber(item, "lineSupplyAmount", "amount") ??
-    (quantity != null && unitPrice != null ? Math.max(0, Math.round(quantity * unitPrice)) : undefined)
-
-  return {
-    id: pickString(item, "id"),
-    sortOrder: pickNumber(item, "sortOrder", "sort_order") ?? index + 1,
-    lineNumber: pickNumber(item, "lineNumber", "line_number") ?? index + 1,
-    itemType:
-      (pickString(item, "itemType", "item_type") as PartnerQuoteLineItemInput["itemType"]) ??
-      "hardware",
-    itemCode: pickString(item, "itemCode", "item_code", "sku"),
-    itemName:
-      pickString(item, "itemName", "product_name", "name", "title") ?? `견적 품목 ${index + 1}`,
-    itemDescription: pickString(item, "itemDescription", "description", "notes", "remark"),
-    quantity,
-    quantityUnit: pickString(item, "quantityUnit", "quantity_unit"),
-    unitPrice,
-    lineSupplyAmount,
-    vatIncluded: pickBoolean(item, "vatIncluded", "vat_included") ?? true,
-    lineStatus:
-      pickString(item, "lineStatus", "line_status") as PartnerQuoteLineItemInput["lineStatus"] | undefined,
-    billingMode:
-      pickString(item, "billingMode", "billing_mode") as PartnerQuoteLineItemInput["billingMode"] | undefined,
-    remark: pickString(item, "remark"),
-    optionGroupId: pickString(item, "optionGroupId"),
-    optionId: pickString(item, "optionId"),
-    isOptional: pickBoolean(item, "isOptional"),
-    isUserAdded: pickBoolean(item, "isUserAdded"),
-    priceLocked: pickBoolean(item, "priceLocked"),
-    quantityLocked: pickBoolean(item, "quantityLocked"),
-  }
-}
-
-function normalizeQuoteDetails(
-  structuredJson: Record<string, unknown> | null | undefined,
-  fallback: {
-    customerName?: string | null
-    validUntil?: string | null
-  } = {}
-) {
-  const root = isRecord(structuredJson) ? structuredJson : {}
-  const details = isRecord(root.quoteDetails) ? root.quoteDetails : root
-  const lineItemSource =
-    Array.isArray(details.lineItems) ? details.lineItems :
-    Array.isArray(details.items) ? details.items :
-    Array.isArray(root.lineItems) ? root.lineItems :
-    Array.isArray(root.items) ? root.items :
-    []
-
-  const templateId = inferStandardQuoteTemplateId({
-    templateId: pickString(details, "templateId", "template_id"),
-    lineItems: lineItemSource.map((item, index) => normalizeLineItem(item, index)),
-  })
-
-  return finalizeStandardQuoteDetails(
-    {
-      templateId,
-      presetId: pickString(details, "presetId"),
-      issuedAt: pickString(details, "issuedAt", "issued_at") ?? getTodayDateValue(),
-      validUntil: pickString(details, "validUntil", "valid_until") ?? fallback.validUntil ?? undefined,
-      recipientCompanyName:
-        pickString(details, "recipientCompanyName", "customerName", "customer_name") ??
-        fallback.customerName ??
-        undefined,
-      referenceName: pickString(details, "referenceName"),
-      subjectText: pickString(details, "subjectText", "subject"),
-      generalNotes: pickString(details, "generalNotes"),
-      specialTerms: pickString(details, "specialTerms"),
-      deliveryLocationNote: pickString(details, "deliveryLocationNote"),
-      vatIncluded: pickBoolean(details, "vatIncluded", "vat_included") ?? true,
-      vatPolicyLabel: pickString(details, "vatPolicyLabel", "vat_policy_label"),
-      optionSelections: isRecord(details.optionSelections)
-        ? (details.optionSelections as Record<string, QuoteOptionSelectionValue | undefined>)
-        : undefined,
-      lineItems: lineItemSource.map((item, index) => normalizeLineItem(item, index)),
-    },
-    templateId
-  )
-}
-
 function getBaseLine(quote: PartnerQuoteDetailsInput) {
   return (
     quote.lineItems?.find((item) => item.optionGroupId === "main_product") ??
@@ -443,6 +319,37 @@ function openMailShare(share: ShareSheetState) {
   const subject = `[견적서] ${share.quoteNumber}`
   const body = `${share.customerName}님 견적서입니다.\n\n${share.url}`
   window.location.href = `mailto:?subject=${encodeURIComponent(subject)}&body=${encodeURIComponent(body)}`
+}
+
+function prepareQuotePreviewWindow() {
+  if (typeof window === "undefined") return null
+  const target = window.open("about:blank", "_blank")
+  if (!target) return null
+
+  try {
+    target.document.title = "견적서 준비 중"
+    target.document.body.style.fontFamily = "system-ui, sans-serif"
+    target.document.body.style.padding = "24px"
+    target.document.body.textContent = "견적서를 준비하는 중입니다."
+  } catch {
+    // Some browsers restrict the temporary document; navigation can still work.
+  }
+
+  return target
+}
+
+function openQuotePreviewUrl(url: string, preparedWindow?: Window | null) {
+  if (preparedWindow && !preparedWindow.closed) {
+    preparedWindow.opener = null
+    preparedWindow.location.href = url
+    return true
+  }
+
+  if (typeof window === "undefined") return false
+  const opened = window.open(url, "_blank", "noopener,noreferrer")
+  if (opened) return true
+  window.location.href = url
+  return true
 }
 
 function isInputFixMessage(message: string) {
@@ -1067,7 +974,7 @@ export default function QuickQuoteComposer({
       }
 
       const payload = (await response.json()) as QuoteFetchPayload
-      const normalized = normalizeQuoteDetails(payload.version?.structured_json, {
+      const normalized = normalizeQuoteDetailsFromStructuredJson(payload.version?.structured_json, {
         customerName: payload.deal.customer_name,
         validUntil: payload.version?.valid_until,
       })
@@ -1171,17 +1078,23 @@ export default function QuickQuoteComposer({
       body: JSON.stringify(requestBody),
     })
     const payload = (await response.json().catch(() => null)) as
-      | { error?: string; customer?: { id: string; name: string; partner_account_id?: string | null } }
+      | { error?: string; customer?: CustomerListItem["customer"] }
       | null
 
     if (!response.ok || !payload?.customer) {
       throw new Error(payload?.error ?? "고객 생성에 실패했습니다.")
     }
 
+    const listItem: CustomerListItem = {
+      customer: payload.customer,
+      summary: null,
+    }
+
     return {
       id: payload.customer.id,
       name: payload.customer.name,
       partnerAccountId: payload.customer.partner_account_id ?? portalPartnerAccountId,
+      listItem,
     }
   }
 
@@ -1237,12 +1150,32 @@ export default function QuickQuoteComposer({
       throw new Error(payload?.error ?? "거래 생성에 실패했습니다.")
     }
 
-    return payload.deal
+    return {
+      ...payload.deal,
+      customer_name: payload.deal.customer_name ?? customer.name,
+      customer_contact_name: payload.deal.customer_contact_name ?? null,
+      customer_region_label: payload.deal.customer_region_label ?? null,
+      customer_campus_name: payload.deal.customer_campus_name ?? null,
+    }
+  }
+
+  function rememberResolvedCustomerAndDeal(customer: ResolvedCustomer, deal: DealListItem) {
+    setCustomers((current) => {
+      if (current.some((item) => item.customer.id === customer.id)) return current
+      return customer.listItem ? mergeCustomerListItems([customer.listItem], current) : current
+    })
+    setDeals((current) => mergeDealListItems([deal], current))
+    setCustomerMode("existing")
+    setSelectedCustomerId(customer.id)
+    setSelectedDealId(deal.id)
+    setNewCustomerName("")
+    setNewDealTitle("")
   }
 
   async function handleSubmit(action: CreateAction) {
     if (submittingAction) return
 
+    const previewWindow = action === "save_and_preview" ? prepareQuotePreviewWindow() : null
     setSubmittingAction(action)
     setError(null)
 
@@ -1294,6 +1227,8 @@ export default function QuickQuoteComposer({
         throw new Error(payload?.error ?? "견적서 생성에 실패했습니다.")
       }
 
+      rememberResolvedCustomerAndDeal(customer, deal)
+
       let shareUrl: string | null = null
       let shareError: string | null = null
       let share: QuoteDocumentShare | null = null
@@ -1314,7 +1249,7 @@ export default function QuickQuoteComposer({
           shareUrl = sharePayload.shareUrl
 
           if (action === "save_and_preview") {
-            window.open(shareUrl, "_blank")
+            openQuotePreviewUrl(shareUrl, previewWindow)
           }
 
           if (action === "save_and_send") {
@@ -1326,6 +1261,9 @@ export default function QuickQuoteComposer({
             setLinkCopied(false)
           }
         } catch (shareIssue) {
+          if (previewWindow && !previewWindow.closed) {
+            previewWindow.close()
+          }
           shareError =
             shareIssue instanceof Error
               ? shareIssue.message
@@ -1361,6 +1299,9 @@ export default function QuickQuoteComposer({
       }
       // save_and_send → 공유 시트 유지
     } catch (submitError) {
+      if (previewWindow && !previewWindow.closed) {
+        previewWindow.close()
+      }
       const message = getQuoteSubmitErrorMessage(submitError)
       setError(message)
       showErrorToast(message)
@@ -2206,7 +2147,7 @@ export default function QuickQuoteComposer({
                   label="미리보기"
                   title="견적서 미리보기"
                   onClick={() => {
-                    window.open(shareSheet.url, "_blank")
+                    openQuotePreviewUrl(shareSheet.url)
                   }}
                 />
                 <button

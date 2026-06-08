@@ -8,6 +8,7 @@
 - [docs-center-db-design.md](./docs-center-db-design.md)
 - [chatbot-knowledgebase-faq-analytics-plan.md](./chatbot-knowledgebase-faq-analytics-plan.md)
 - [prd.md](./prd.md)
+- [scripts/seed-docs.ts](../../scripts/seed-docs.ts)
 
 ## 1. 한 줄 원칙
 
@@ -103,7 +104,7 @@
 - 가격, 지원 시간, 기능명, 날짜가 검증된 값인가?
 - 공개하면 안 되는 내부 정책이나 민감 정보가 없는가?
 
-### 정식 발표 배포 TODO
+### 정식 발표 배포 체크리스트
 
 - [ ] 로컬 관리자(`/admin/docs`)에서 상단 상태가 `Supabase live`인지 확인한다.
 - [ ] 발표 문서는 검수 중 `draft` 또는 `review` 상태로 두고, 공개 전에는 필요하면 `unlisted`로 링크 검수한다.
@@ -111,6 +112,21 @@
 - [ ] 최종 승인 후 문서 상태를 `published`, 공개 범위를 `public`으로 바꾼다.
 - [ ] 저장 후 문서 검색 인덱스를 재생성하고, 공개 `/docs/...` URL에서 제목, 본문, SEO, 관련 문서를 확인한다.
 - [ ] 운영 DB에서 관리자 수정본을 원본으로 삼는 문서는 `scripts/seed-docs.ts` 재실행이나 upsert migration으로 덮어쓰지 않도록 배포 전 확인한다.
+
+### 정적 시드 상태 규칙
+
+`lib/docs.ts`의 문서는 정적 폴백 원천이면서 `scripts/seed-docs.ts`의 Supabase 시드 원천이다. 정식 공개 전 검수용 문서는 정적 원천에서도 아래 메타데이터를 명시한다.
+
+- `status: "review"` 또는 `status: "draft"`로 둔다.
+- `visibility: "unlisted"`와 `noindex: true`를 함께 둔다.
+- 챗봇에 공개 답변으로 쓰면 안 되는 검수 문서는 `published`로 바꾸기 전까지 `noindex: true`를 유지한다.
+
+현재 검수용으로 시드되는 체크리스트 문서:
+
+- `admin/academy-system-checklist`
+- `hardware/electronic-whiteboard-classroom-checklist`
+
+`scripts/seed-docs.ts`는 위 상태/공개범위/색인 제외 값을 그대로 upsert한다. 따라서 시드를 실행해도 두 문서는 관리자 문서 탭에서 편집 가능하지만, 공개 목록·공개 검색·챗봇 답변에는 승인 전 노출되지 않는다.
 
 ## 9. DB 전환 후 운영 방식
 

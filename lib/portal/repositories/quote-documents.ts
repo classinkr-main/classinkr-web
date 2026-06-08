@@ -99,11 +99,12 @@ export async function createQuoteDocumentVersion(
   if (error) throw error;
   const version = data as QuoteDocumentVersion;
 
-  // current_version_id 업데이트
-  await supabase
+  const { error: updateError } = await supabase
     .from("quote_documents")
     .update({ current_version_id: version.id })
     .eq("id", input.quote_document_id);
+
+  if (updateError) throw updateError;
 
   return version;
 }

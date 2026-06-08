@@ -124,8 +124,12 @@ function formatDateTime(value: string) {
 
 async function copyTextToClipboard(text: string) {
   if (navigator.clipboard?.writeText) {
-    await navigator.clipboard.writeText(text)
-    return
+    try {
+      await navigator.clipboard.writeText(text)
+      return
+    } catch {
+      // Fall through to the textarea fallback.
+    }
   }
 
   const textarea = document.createElement("textarea")
@@ -137,6 +141,43 @@ async function copyTextToClipboard(text: string) {
   textarea.select()
   document.execCommand("copy")
   document.body.removeChild(textarea)
+}
+
+function prepareShareWindow() {
+  const target = window.open("about:blank", "_blank")
+  if (!target) return null
+
+  try {
+    target.document.title = "견적서 링크 준비 중"
+    target.document.body.style.fontFamily = "system-ui, sans-serif"
+    target.document.body.style.padding = "24px"
+    target.document.body.textContent = "견적서 링크를 준비하는 중입니다."
+  } catch {
+    // Navigation can still work even if the temporary document is restricted.
+  }
+
+  return target
+}
+
+function openShareUrl(url: string, preparedWindow?: Window | null) {
+  if (preparedWindow && !preparedWindow.closed) {
+    preparedWindow.opener = null
+    preparedWindow.location.href = url
+    return
+  }
+
+  const opened = window.open(url, "_blank", "noopener,noreferrer")
+  if (!opened) {
+    window.location.href = url
+  }
+}
+
+function openAdminQuoteView(quoteId: string) {
+  const url = `/admin/quotes/${quoteId}/view`
+  const opened = window.open(url, "_blank")
+  if (!opened) {
+    window.location.href = url
+  }
 }
 
 function mapDocumentToQuoteRow(document: PartnerDocumentListItem): HardwareQuoteRow {
@@ -256,7 +297,7 @@ export default function HardwareQuotesPanel() {
   const summary = useMemo(() => {
     return {
       total: quotes.length,
-      draft: quotes.filter((quote) => quote.status === "draft").length,
+      draft: quotes.filter((quote) => quote.status === "draft" || quote.status === "pending_approval").length,
       shared: quotes.filter((quote) => isQuoteShared(quote)).length,
       accepted: quotes.filter((quote) => quote.status === "accepted" || quote.acceptedAt).length,
       needsAction: quotes.filter((quote) => needsQuoteFollowUp(quote)).length,
@@ -414,10 +455,15 @@ export default function HardwareQuotesPanel() {
   }
 
   async function handleOpenShareLink(quote: HardwareQuoteRow) {
+    const shareWindow = prepareShareWindow()
+
     try {
       const shareUrl = await ensureShareUrl(quote)
-      window.open(shareUrl, "_blank", "noopener,noreferrer")
+      openShareUrl(shareUrl, shareWindow)
     } catch (error) {
+      if (shareWindow && !shareWindow.closed) {
+        shareWindow.close()
+      }
       setNotice({
         tone: "error",
         message: error instanceof Error ? error.message : "공유 링크 열기에 실패했습니다.",
@@ -666,7 +712,7 @@ export default function HardwareQuotesPanel() {
                     <button
                       type="button"
                       onClick={() => {
-                        window.open(`/admin/quotes/${quote.id}/view`, "_blank", "noopener,noreferrer")
+                        openAdminQuoteView(quote.id)
                       }}
                       className="inline-flex min-h-9 items-center justify-center gap-1.5 rounded-md border border-[#e8e8e4] bg-white px-3 py-2 text-xs font-medium text-[#1a1a1a]/65 transition-colors hover:border-[#c8c8c4] hover:text-[#111110] sm:w-auto"
                     >
