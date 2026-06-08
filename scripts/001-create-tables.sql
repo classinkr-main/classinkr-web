@@ -111,9 +111,20 @@ CREATE TABLE IF NOT EXISTS public.leads (
   status        TEXT NOT NULL DEFAULT 'new'
                 CHECK (status IN ('new','contacted','converted','closed')),
   notes         TEXT,
+  source_detail TEXT,
+  lead_magnet   TEXT,
   utm_source    TEXT,
   utm_medium    TEXT,
   utm_campaign  TEXT,
+  utm_term      TEXT,
+  utm_content   TEXT,
+  gclid         TEXT,
+  fbclid        TEXT,
+  msclkid       TEXT,
+  ttclid        TEXT,
+  landing_page  TEXT,
+  current_page  TEXT,
+  referrer      TEXT,
   created_at    TIMESTAMPTZ DEFAULT NOW() NOT NULL,
   updated_at    TIMESTAMPTZ DEFAULT NOW() NOT NULL
 );
@@ -124,6 +135,8 @@ CREATE TRIGGER leads_updated_at
 
 CREATE INDEX IF NOT EXISTS idx_leads_status ON public.leads(status);
 CREATE INDEX IF NOT EXISTS idx_leads_source ON public.leads(source);
+CREATE INDEX IF NOT EXISTS idx_leads_source_detail ON public.leads(source_detail);
+CREATE INDEX IF NOT EXISTS idx_leads_lead_magnet ON public.leads(lead_magnet) WHERE lead_magnet IS NOT NULL;
 CREATE INDEX IF NOT EXISTS idx_leads_created_at ON public.leads(created_at DESC);
 
 COMMENT ON TABLE public.leads IS '리드 — 데모신청/문의/뉴스레터 수집';

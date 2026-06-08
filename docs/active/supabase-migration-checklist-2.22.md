@@ -4,6 +4,31 @@
 
 목적: `2.22` 작업에서 가이드/블로그 비공개 검수, 문서센터 draft 편집, 견적서 저장·공유·신규 고객 생성 흐름을 운영 DB에 안전하게 반영하기 위한 migration 적용 순서를 정리한다.
 
+## 0. 운영 REST 확인 결과
+
+확인일: 2026-06-08
+
+로컬 `.env`/`.env.local`의 Supabase URL과 secret key를 사용해 REST 읽기 요청으로 확인했다. 키 값은 출력하지 않았다.
+
+### 적용 확인
+
+- `docs_articles.visibility`, `docs_articles.noindex`: 적용됨.
+- `lead_alert_states`: 적용됨.
+- `leads.follow_up_at`, `leads.assigned_to`: 적용됨.
+- `customers`, `deals`, `quote_documents`, `quote_document_versions`: 기본 테이블 적용됨.
+- `quote_document_shares`: `quote_document_version_id`, `token`, `access_mode`, `expires_at` 기준 적용됨.
+- `activity_logs`: `action_type`, `target_type`, `target_id`, `after_json` 기준 적용됨.
+- 챗봇 분석 테이블/뷰: `chat_sessions`, `chatbot_answer_events`, `question_clusters`, `v_chatbot_daily_question_stats` 적용됨.
+
+### 미적용 또는 추가 적용 필요
+
+- `docs_article_drafts`: 운영 schema cache에 없음. `20260604_docs_article_drafts.sql` 적용 필요.
+- `chatbot_recommended_questions`: 운영 schema cache에 없음. `20260520_chatbot_recommended_questions.sql` 적용 필요.
+- `quote_documents.created_by_role`, `approved_by`, `approved_at`: 운영 DB에 없음. `20260414_quote_approval_gate.sql` 또는 동등 migration 적용 필요.
+- `quote_document_status_v2.pending_approval`: enum 값 없음. `20260608_quote_pending_approval_status.sql` 적용 필요.
+- `leads.source_detail`, `leads.lead_magnet`, 전체 UTM/click/referrer 컬럼: 새 리드마그넷 추적을 위해 `20260608_lead_attribution_fields.sql` 적용 필요.
+- `blog_posts.visibility`: 컬럼 없음. 현재 코드는 `status = draft/published`만 사용하므로 필수는 아니지만, `published + unlisted/private` 검수 흐름을 쓰려면 별도 migration과 앱 반영이 필요하다.
+
 ## 1. 반드시 적용할 신규 migration
 
 ### 1-0. 운영 DB 기본 스키마 선행 확인
@@ -84,7 +109,42 @@ create index if not exists idx_leads_assigned_to
   where assigned_to is not null;
 ```
 
-### 1-4. 관리자 Quick Quote direct-sales 계정 정리
+### 1-4. 리드마그넷/attribution 추적 컬럼
+
+파일: `supabase/migrations/20260608_lead_attribution_fields.sql`
+
+적용 이유:
+
+- 공개 폼은 이미 `sourceDetail`, UTM, click id, landing/current page, referrer를 수집한다.
+- 기존 `leads` 테이블은 `utm_source`, `utm_medium`, `utm_campaign`만 저장해 블로그/가이드/리드마그넷별 성과 추적이 끊겼다.
+- CRM에서 세부 유입과 리드마그넷 필터를 쓰려면 운영 DB에 컬럼이 있어야 한다.
+
+검증 쿼리:
+
+```sql
+select column_name
+from information_schema.columns
+where table_schema = 'public'
+  and table_name = 'leads'
+  and column_name in (
+    'source_detail',
+    'lead_magnet',
+    'utm_term',
+    'utm_content',
+    'gclid',
+    'fbclid',
+    'msclkid',
+    'ttclid',
+    'landing_page',
+    'current_page',
+    'referrer'
+  )
+order by column_name;
+```
+
+기대값: 위 컬럼 11개가 모두 조회되어야 한다.
+
+### 1-5. 관리자 Quick Quote direct-sales 계정 정리
 
 관리자 신규 고객 생성은 `partner_accounts.name = 'Classin Direct Sales'` 계정을 자동 생성/재사용한다. 앱 코드는 중복 행이 있어도 가장 오래된 행을 재사용하도록 보강했지만, 운영 DB에서는 아래를 확인한다.
 

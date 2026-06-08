@@ -17,6 +17,7 @@ export interface LeadPayload {
   marketingConsent?: boolean
   eventSlug?: string
   sourceDetail?: string
+  leadMagnet?: string
   utmSource?: string
   utmMedium?: string
   utmCampaign?: string

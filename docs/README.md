@@ -1,12 +1,14 @@
 # Docs Index
 
-기준 시점: 2026-04-15
+기준 시점: 2026-06-08
 문서 목적: 현재 저장소에서 무엇을 먼저 읽어야 하는지, 어떤 문서를 믿어야 하는지, 어떤 문서가 역사 기록인지 빠르게 구분한다.
 
 ## 1. Start Here
 
+- [active/repository-status-2026-06-08.md](./active/repository-status-2026-06-08.md)
+  - 현재 검증 상태, 활성 개발 요소, 문서 신뢰도, 다음 우선순위
 - [active/repository-audit-2026-04-15.md](./active/repository-audit-2026-04-15.md)
-  - 현재 검증 상태, 우선 수정 순서, 문서 신뢰도, 빠른 확인 명령
+  - 2026-04-15 기준 감사 기록. 현재 상태 판단용이 아니라 히스토리로 읽는다.
 - [active/prd.md](./active/prd.md)
   - Classin Home 공개 사이트의 현재 기준 PRD
 - [active/partner-portal-master-spec.md](./active/partner-portal-master-spec.md)

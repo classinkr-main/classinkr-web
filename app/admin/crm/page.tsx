@@ -7,7 +7,7 @@ import {
   Phone, Mail, Building2, Users, Calendar,
   MessageSquare, Tag, Save, Loader2, Plus,
   PhoneCall, Bell, UserPlus, Link2, ExternalLink,
-  Clock,
+  Clock, Search,
 } from "lucide-react"
 import { adminFetch, adminFetchJsonCached } from "@/lib/admin-client"
 import { Button } from "@/components/ui/button"
@@ -130,6 +130,19 @@ function formatResponseAge(hours: number) {
 
 function getLeadOwner(lead: LeadRecord) {
   return lead.assigned_to?.trim() || "미배정"
+}
+
+function getLeadSourceDetail(lead: LeadRecord) {
+  return lead.source_detail?.trim() || ""
+}
+
+function getLeadMagnetLabel(value?: string) {
+  if (!value) return ""
+  return value
+    .split(/[-_:]+/)
+    .filter(Boolean)
+    .map((part) => part.slice(0, 1).toUpperCase() + part.slice(1))
+    .join(" ")
 }
 
 // ─── 복사 버튼 ─────────────────────────────────────────────────
@@ -288,9 +301,20 @@ function LeadDrawer({
   const score = calcScore(lead)
   const unrespondedHours = isUnrespondedLead(lead) ? hoursBetween(lead.timestamp) : null
   const attributionItems = [
+    { label: "Source Detail", value: lead.source_detail },
+    { label: "Lead Magnet", value: getLeadMagnetLabel(lead.lead_magnet) || lead.lead_magnet },
     { label: "UTM Source", value: lead.utm_source },
     { label: "UTM Medium", value: lead.utm_medium },
     { label: "UTM Campaign", value: lead.utm_campaign },
+    { label: "UTM Term", value: lead.utm_term },
+    { label: "UTM Content", value: lead.utm_content },
+    { label: "GCLID", value: lead.gclid },
+    { label: "FBCLID", value: lead.fbclid },
+    { label: "MSCLKID", value: lead.msclkid },
+    { label: "TTCLID", value: lead.ttclid },
+    { label: "Landing Page", value: lead.landing_page },
+    { label: "Current Page", value: lead.current_page },
+    { label: "Referrer", value: lead.referrer },
   ].filter((item) => item.value)
 
   useEffect(() => {
@@ -670,6 +694,9 @@ export default function CrmPage() {
   const [leads, setLeads] = useState<LeadRecord[]>([])
   const [loading, setLoading] = useState(false)
   const [filter, setFilter] = useState<LeadFilter>("all")
+  const [searchQuery, setSearchQuery] = useState("")
+  const [sourceDetailFilter, setSourceDetailFilter] = useState("all")
+  const [leadMagnetFilter, setLeadMagnetFilter] = useState("all")
   const [selected, setSelected] = useState<LeadRecord | null>(null)
   const [logs, setLogs] = useState<ContactLogRecord[]>([])
   const [logsLoading, setLogsLoading] = useState(false)
@@ -859,6 +886,13 @@ export default function CrmPage() {
   const unresponded24h = unrespondedLeads.filter((lead) => hoursBetween(lead.timestamp, now) >= 24)
   const unresponded48h = unrespondedLeads.filter((lead) => hoursBetween(lead.timestamp, now) >= 48)
   const unassignedLeads = activeLeads.filter((l) => !l.assigned_to?.trim())
+  const sourceDetailOptions = Array.from(
+    new Set(leads.map((lead) => getLeadSourceDetail(lead)).filter(Boolean))
+  ).sort((a, b) => a.localeCompare(b, "ko"))
+  const leadMagnetOptions = Array.from(
+    new Set(leads.map((lead) => lead.lead_magnet?.trim()).filter(Boolean) as string[])
+  ).sort((a, b) => a.localeCompare(b, "ko"))
+  const normalizedSearch = searchQuery.trim().toLowerCase()
   const filtered = leads.filter((lead) => {
     if (filter === "all") return true
     if (filter === "unresponded") return isUnrespondedLead(lead)
@@ -866,6 +900,28 @@ export default function CrmPage() {
     if (filter === "unresponded_48h") return isUnrespondedLead(lead) && hoursBetween(lead.timestamp, now) >= 48
     if (filter === "unassigned") return isActiveLead(lead.status) && !lead.assigned_to?.trim()
     return lead.status === filter
+  }).filter((lead) => {
+    if (sourceDetailFilter !== "all" && getLeadSourceDetail(lead) !== sourceDetailFilter) return false
+    if (leadMagnetFilter !== "all" && lead.lead_magnet !== leadMagnetFilter) return false
+    if (!normalizedSearch) return true
+
+    return [
+      lead.name,
+      lead.org,
+      lead.role,
+      lead.size,
+      lead.email,
+      lead.phone,
+      lead.message,
+      lead.source,
+      lead.source_detail,
+      lead.lead_magnet,
+      lead.utm_source,
+      lead.utm_medium,
+      lead.utm_campaign,
+    ]
+      .filter(Boolean)
+      .some((value) => String(value).toLowerCase().includes(normalizedSearch))
   })
 
   const todayFollowUps = leads.filter((l) =>
@@ -1085,6 +1141,56 @@ export default function CrmPage() {
         ))}
       </div>
 
+      <div className="mb-4 rounded-2xl border border-[#e8e8e4] bg-white p-3">
+        <div className="grid gap-3 lg:grid-cols-[minmax(0,1fr)_240px_240px]">
+          <label className="relative block">
+            <Search className="pointer-events-none absolute left-3.5 top-1/2 h-4 w-4 -translate-y-1/2 text-[#1a1a1a]/25" />
+            <input
+              value={searchQuery}
+              onChange={(event) => setSearchQuery(event.target.value)}
+              placeholder="이름, 기관, 연락처, 세부 유입 검색"
+              className="h-11 w-full rounded-xl border border-[#e8e8e4] bg-[#fafaf8] pl-10 pr-3 text-[13px] text-[#111110] outline-none transition-colors placeholder:text-[#1a1a1a]/30 focus:border-[#c8c8c4] focus:bg-white"
+            />
+          </label>
+          <select
+            value={sourceDetailFilter}
+            onChange={(event) => setSourceDetailFilter(event.target.value)}
+            className="h-11 rounded-xl border border-[#e8e8e4] bg-[#fafaf8] px-3 text-[13px] text-[#111110] outline-none transition-colors focus:border-[#c8c8c4] focus:bg-white"
+          >
+            <option value="all">세부 유입 전체</option>
+            {sourceDetailOptions.map((sourceDetail) => (
+              <option key={sourceDetail} value={sourceDetail}>{sourceDetail}</option>
+            ))}
+          </select>
+          <select
+            value={leadMagnetFilter}
+            onChange={(event) => setLeadMagnetFilter(event.target.value)}
+            className="h-11 rounded-xl border border-[#e8e8e4] bg-[#fafaf8] px-3 text-[13px] text-[#111110] outline-none transition-colors focus:border-[#c8c8c4] focus:bg-white"
+          >
+            <option value="all">리드마그넷 전체</option>
+            {leadMagnetOptions.map((leadMagnet) => (
+              <option key={leadMagnet} value={leadMagnet}>{getLeadMagnetLabel(leadMagnet) || leadMagnet}</option>
+            ))}
+          </select>
+        </div>
+        {(sourceDetailFilter !== "all" || leadMagnetFilter !== "all" || searchQuery.trim()) && (
+          <div className="mt-3 flex items-center justify-between gap-3 text-[12px] text-[#1a1a1a]/45">
+            <span>현재 조건 {filtered.length}건</span>
+            <button
+              type="button"
+              onClick={() => {
+                setSearchQuery("")
+                setSourceDetailFilter("all")
+                setLeadMagnetFilter("all")
+              }}
+              className="font-medium text-[#084734] hover:text-[#063d2a]"
+            >
+              필터 초기화
+            </button>
+          </div>
+        )}
+      </div>
+
       {/* 테이블 */}
       <div className="bg-white rounded-2xl border border-[#e8e8e4] overflow-hidden">
         {filtered.length === 0 ? (
@@ -1131,6 +1237,16 @@ export default function CrmPage() {
                     <span className="rounded-md bg-[#f0f0ec] px-2 py-1">
                       {SOURCE_LABEL[lead.source] ?? lead.source}
                     </span>
+                    {lead.source_detail ? (
+                      <span className="rounded-md bg-[#ECFDF5] px-2 py-1 text-[#084734]">
+                        {lead.source_detail}
+                      </span>
+                    ) : null}
+                    {lead.lead_magnet ? (
+                      <span className="rounded-md bg-[#FFF9EB] px-2 py-1 text-[#8D6C1F]">
+                        {getLeadMagnetLabel(lead.lead_magnet)}
+                      </span>
+                    ) : null}
                     {unrespondedHours !== null ? (
                       <span className={`inline-flex items-center gap-1 rounded-md px-2 py-1 font-medium ${
                         unrespondedHours >= 48
@@ -1233,9 +1349,21 @@ export default function CrmPage() {
                       )}
                     </td>
                     <td className="px-5 py-4 whitespace-nowrap">
-                      <span className="px-2 py-0.5 rounded-md bg-[#f0f0ec] text-[#1a1a1a]/50 text-[11px]">
-                        {SOURCE_LABEL[lead.source] ?? lead.source}
-                      </span>
+                      <div className="flex max-w-[220px] flex-col items-start gap-1">
+                        <span className="px-2 py-0.5 rounded-md bg-[#f0f0ec] text-[#1a1a1a]/50 text-[11px]">
+                          {SOURCE_LABEL[lead.source] ?? lead.source}
+                        </span>
+                        {lead.source_detail ? (
+                          <span className="max-w-full truncate rounded-md bg-[#ECFDF5] px-2 py-0.5 text-[11px] font-medium text-[#084734]">
+                            {lead.source_detail}
+                          </span>
+                        ) : null}
+                        {lead.lead_magnet ? (
+                          <span className="max-w-full truncate rounded-md bg-[#FFF9EB] px-2 py-0.5 text-[11px] font-medium text-[#8D6C1F]">
+                            {getLeadMagnetLabel(lead.lead_magnet)}
+                          </span>
+                        ) : null}
+                      </div>
                     </td>
                     <td className="px-5 py-4 font-medium text-[#111110]">
                       <div className="flex items-center gap-1.5">
