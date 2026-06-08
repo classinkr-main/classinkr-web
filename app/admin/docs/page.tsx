@@ -906,7 +906,7 @@ export default function AdminDocsPage() {
                   <th className="px-4 py-3 font-semibold">상태</th>
                   <th className="px-4 py-3 font-semibold">유형</th>
                   <th className="px-4 py-3 font-semibold">업데이트</th>
-                  <th className="px-4 py-3 font-semibold">액션</th>
+                  <th className="w-[176px] px-4 py-3 font-semibold">액션</th>
                 </tr>
               </thead>
               <tbody className="divide-y divide-[#f0f0ec]">
@@ -1093,8 +1093,8 @@ export default function AdminDocsPage() {
                       <td className="px-4 py-4 text-[12px] text-[#1a1a1a]/55">
                         {formatDate(article.updatedAt ?? article.lastReviewedAt)}
                       </td>
-                      <td className="px-4 py-4">
-                        <div className="flex flex-wrap items-center gap-2">
+                      <td className="w-[176px] whitespace-nowrap px-4 py-4">
+                        <div className="flex flex-nowrap items-center gap-2">
                           {draft ? (
                             <>
                               <button
