@@ -15,19 +15,23 @@
 - `docs_articles.visibility`, `docs_articles.noindex`: 적용됨.
 - `lead_alert_states`: 적용됨.
 - `leads.follow_up_at`, `leads.assigned_to`: 적용됨.
+- `leads.source_detail`, `leads.lead_magnet`, 전체 UTM/click/referrer 컬럼: 적용됨.
 - `customers`, `deals`, `quote_documents`, `quote_document_versions`: 기본 테이블 적용됨.
+- `quote_documents.created_by_role`, `approved_by`, `approved_at`: 적용됨.
+- `quote_document_status_v2.pending_approval`: 적용됨.
 - `quote_document_shares`: `quote_document_version_id`, `token`, `access_mode`, `expires_at` 기준 적용됨.
 - `activity_logs`: `action_type`, `target_type`, `target_id`, `after_json` 기준 적용됨.
 - 챗봇 분석 테이블/뷰: `chat_sessions`, `chatbot_answer_events`, `question_clusters`, `v_chatbot_daily_question_stats` 적용됨.
+- `docs_article_drafts`: 적용됨.
+- `chatbot_recommended_questions`: 적용됨.
 
-### 미적용 또는 추가 적용 필요
+### 미적용 또는 선택 적용
 
-- `docs_article_drafts`: 운영 schema cache에 없음. `20260604_docs_article_drafts.sql` 적용 필요.
-- `chatbot_recommended_questions`: 운영 schema cache에 없음. `20260520_chatbot_recommended_questions.sql` 적용 필요.
-- `quote_documents.created_by_role`, `approved_by`, `approved_at`: 운영 DB에 없음. `20260414_quote_approval_gate.sql` 또는 동등 migration 적용 필요.
-- `quote_document_status_v2.pending_approval`: enum 값 없음. `20260608_quote_pending_approval_status.sql` 적용 필요.
-- `leads.source_detail`, `leads.lead_magnet`, 전체 UTM/click/referrer 컬럼: 새 리드마그넷 추적을 위해 `20260608_lead_attribution_fields.sql` 적용 필요.
 - `blog_posts.visibility`: 컬럼 없음. 현재 코드는 `status = draft/published`만 사용하므로 필수는 아니지만, `published + unlisted/private` 검수 흐름을 쓰려면 별도 migration과 앱 반영이 필요하다.
+
+### `20260604_lead_response_alert_states.sql` 재실행 주의
+
+운영 DB에는 `lead_alert_states`와 `leads.follow_up_at`, `leads.assigned_to`가 이미 있다. 이 파일을 SQL Editor에서 다시 실행하면 마지막 `CREATE POLICY "Admins manage lead alert states"` 구문에서 정책 중복 에러가 날 수 있다. 재실행이 필요하면 먼저 정책을 지우거나 `drop policy if exists`를 넣은 idempotent 버전으로 실행한다.
 
 ## 1. 반드시 적용할 신규 migration
 

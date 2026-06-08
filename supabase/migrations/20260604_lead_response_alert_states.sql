@@ -24,12 +24,14 @@ CREATE INDEX IF NOT EXISTS idx_lead_alert_states_last_sent
 DROP TRIGGER IF EXISTS lead_alert_states_updated_at ON public.lead_alert_states;
 CREATE TRIGGER lead_alert_states_updated_at
   BEFORE UPDATE ON public.lead_alert_states
-  FOR EACH ROW EXECUTE FUNCTION update_updated_at();
+  FOR EACH ROW EXECUTE FUNCTION public.update_updated_at();
 
 ALTER TABLE public.lead_alert_states ENABLE ROW LEVEL SECURITY;
+
+DROP POLICY IF EXISTS "Admins manage lead alert states" ON public.lead_alert_states;
 
 CREATE POLICY "Admins manage lead alert states"
   ON public.lead_alert_states
   FOR ALL
-  USING (is_active_admin())
-  WITH CHECK (is_active_admin());
+  USING (public.is_active_admin())
+  WITH CHECK (public.is_active_admin());
