@@ -10,6 +10,8 @@ import {
   Bookmark,
   Check,
   CheckSquare,
+  ChevronDown,
+  ChevronUp,
   Database,
   Eye,
   ExternalLink,
@@ -152,7 +154,7 @@ const READINESS_FILTERS = [
 ]
 
 const DOC_SORT_OPTIONS = [
-  { value: "public-order", label: "공개 순서" },
+  { value: "public-order", label: "왼쪽 사이드 순서" },
   { value: "updated", label: "최근 수정" },
   { value: "title", label: "제목순" },
 ] as const
@@ -254,6 +256,33 @@ function getSortableDate(value: string | null | undefined) {
   if (!value) return 0
   const time = new Date(value).getTime()
   return Number.isNaN(time) ? 0 : time
+}
+
+function getOrderedCategoryArticles(
+  articles: AdminDocsArticleSummary[],
+  categoryId: string
+) {
+  return articles
+    .filter((article) => article.categoryId === categoryId)
+    .sort((left, right) => {
+      if (left.orderIndex !== right.orderIndex) return left.orderIndex - right.orderIndex
+      return left.title.localeCompare(right.title, "ko-KR")
+    })
+}
+
+function getArticleOrderMeta(
+  article: AdminDocsArticleSummary,
+  articles: AdminDocsArticleSummary[]
+) {
+  const siblings = getOrderedCategoryArticles(articles, article.categoryId)
+  const index = siblings.findIndex((item) => item.id === article.id)
+
+  return {
+    position: index >= 0 ? index + 1 : 1,
+    total: siblings.length,
+    canMoveUp: index > 0,
+    canMoveDown: index >= 0 && index < siblings.length - 1,
+  }
 }
 
 export default function AdminDocsPage() {
@@ -487,6 +516,74 @@ export default function AdminDocsPage() {
     setInlineDraft((previous) => (previous ? { ...previous, [key]: value } : previous))
   }
 
+  function getNextOrderIndexForCategory(categoryId: string) {
+    const siblings = getOrderedCategoryArticles(content?.articles ?? [], categoryId)
+    const lastOrderIndex = siblings.at(-1)?.orderIndex ?? 0
+    return lastOrderIndex + 10
+  }
+
+  function updateInlineDraftCategory(categoryId: string) {
+    setInlineDraft((previous) =>
+      previous
+        ? {
+            ...previous,
+            categoryId,
+            orderIndex: getNextOrderIndexForCategory(categoryId),
+          }
+        : previous
+    )
+  }
+
+  async function moveArticleInSidebarOrder(
+    article: AdminDocsArticleSummary,
+    direction: "up" | "down"
+  ) {
+    if (!content || !canMutateDocs || articleSavingId) return
+
+    const siblings = getOrderedCategoryArticles(content.articles, article.categoryId)
+    const currentIndex = siblings.findIndex((item) => item.id === article.id)
+    const nextIndex = direction === "up" ? currentIndex - 1 : currentIndex + 1
+
+    if (currentIndex < 0 || nextIndex < 0 || nextIndex >= siblings.length) return
+
+    const reordered = [...siblings]
+    const [moved] = reordered.splice(currentIndex, 1)
+    if (!moved) return
+    reordered.splice(nextIndex, 0, moved)
+
+    const updates = reordered
+      .map((item, index) => ({
+        article: item,
+        orderIndex: (index + 1) * 10,
+      }))
+      .filter((item) => item.article.orderIndex !== item.orderIndex)
+
+    if (updates.length === 0) return
+
+    setArticleSavingId(article.id)
+    setArticleNotice(null)
+    setError(null)
+
+    try {
+      await Promise.all(
+        updates.map((item) =>
+          adminFetchJson(`/api/admin/docs/articles/${item.article.id}`, {
+            method: "PATCH",
+            body: JSON.stringify({ orderIndex: item.orderIndex }),
+          })
+        )
+      )
+
+      setArticleNotice("왼쪽 사이드 문서 순서를 저장했습니다.")
+      window.setTimeout(() => setArticleNotice(null), 2500)
+      await load()
+    } catch (err) {
+      setError(err instanceof Error ? err.message : "문서 순서를 저장하지 못했습니다.")
+    } finally {
+      setArticleSavingId(null)
+    }
+  }
+
   async function saveInlineArticle(article: AdminDocsArticleSummary) {
     if (!inlineDraft || editingArticleId !== article.id) return
 
@@ -507,7 +604,7 @@ export default function AdminDocsPage() {
       return
     }
     if (!Number.isFinite(nextOrderIndex)) {
-      setError("문서 순서는 숫자로 입력해 주세요.")
+      setError("문서 순서를 계산하지 못했습니다.")
       return
     }
 
@@ -902,7 +999,7 @@ export default function AdminDocsPage() {
                   </th>
                   <th className="px-4 py-3 font-semibold">문서</th>
                   <th className="px-4 py-3 font-semibold">카테고리</th>
-                  <th className="px-4 py-3 font-semibold">순서</th>
+                  <th className="px-4 py-3 font-semibold">사이드 순서</th>
                   <th className="px-4 py-3 font-semibold">상태</th>
                   <th className="px-4 py-3 font-semibold">유형</th>
                   <th className="px-4 py-3 font-semibold">업데이트</th>
@@ -928,6 +1025,7 @@ export default function AdminDocsPage() {
                     const isEditing = editingArticleId === article.id
                     const draft = isEditing ? inlineDraft : null
                     const rowSaving = articleSavingId === article.id
+                    const orderMeta = getArticleOrderMeta(article, content?.articles ?? [])
                     return (
                     <tr
                       key={article.id}
@@ -1012,7 +1110,7 @@ export default function AdminDocsPage() {
                           <select
                             value={draft.categoryId}
                             disabled={rowSaving}
-                            onChange={(event) => updateInlineDraft("categoryId", event.target.value)}
+                            onChange={(event) => updateInlineDraftCategory(event.target.value)}
                             className="h-9 w-full min-w-36 rounded-lg border border-[#d6d6d0] bg-white px-3 text-[12px] font-semibold text-[#111110] outline-none focus:border-[#084734] disabled:cursor-not-allowed disabled:opacity-60"
                           >
                             {(content?.categories ?? []).map((category) => (
@@ -1027,19 +1125,39 @@ export default function AdminDocsPage() {
                       </td>
                       <td className="px-4 py-4">
                         {draft ? (
-                          <input
-                            type="number"
-                            value={draft.orderIndex}
-                            disabled={rowSaving}
-                            onChange={(event) =>
-                              updateInlineDraft("orderIndex", Number(event.target.value))
-                            }
-                            className="h-9 w-24 rounded-lg border border-[#d6d6d0] bg-white px-3 text-[12px] font-semibold tabular-nums text-[#111110] outline-none focus:border-[#084734] disabled:cursor-not-allowed disabled:opacity-60"
-                          />
+                          <p className="max-w-32 text-[12px] leading-relaxed text-[#1a1a1a]/45">
+                            카테고리를 바꾸면 해당 카테고리의 마지막 위치로 이동합니다.
+                          </p>
                         ) : (
-                          <span className="inline-flex h-8 min-w-12 items-center justify-center rounded-lg bg-[#f0f0ec] px-2 text-[12px] font-bold tabular-nums text-[#111110]">
-                            {article.orderIndex}
-                          </span>
+                          <div className="flex items-center gap-2">
+                            <span className="inline-flex h-8 min-w-16 items-center justify-center rounded-lg bg-[#f0f0ec] px-2 text-[12px] font-bold tabular-nums text-[#111110]">
+                              {orderMeta.position}/{orderMeta.total}
+                            </span>
+                            {canMutateDocs ? (
+                              <div className="flex items-center gap-1">
+                                <button
+                                  type="button"
+                                  title="왼쪽 사이드에서 위로 이동"
+                                  onClick={() => void moveArticleInSidebarOrder(article, "up")}
+                                  disabled={!orderMeta.canMoveUp || rowSaving || Boolean(articleSavingId)}
+                                  className="inline-flex h-8 w-8 items-center justify-center rounded-lg border border-[#e8e8e4] bg-white text-[#111110] transition-colors hover:bg-[#f5f5f2] disabled:cursor-not-allowed disabled:opacity-35"
+                                >
+                                  <ChevronUp className="h-3.5 w-3.5" />
+                                  <span className="sr-only">왼쪽 사이드에서 위로 이동</span>
+                                </button>
+                                <button
+                                  type="button"
+                                  title="왼쪽 사이드에서 아래로 이동"
+                                  onClick={() => void moveArticleInSidebarOrder(article, "down")}
+                                  disabled={!orderMeta.canMoveDown || rowSaving || Boolean(articleSavingId)}
+                                  className="inline-flex h-8 w-8 items-center justify-center rounded-lg border border-[#e8e8e4] bg-white text-[#111110] transition-colors hover:bg-[#f5f5f2] disabled:cursor-not-allowed disabled:opacity-35"
+                                >
+                                  <ChevronDown className="h-3.5 w-3.5" />
+                                  <span className="sr-only">왼쪽 사이드에서 아래로 이동</span>
+                                </button>
+                              </div>
+                            ) : null}
+                          </div>
                         )}
                       </td>
                       <td className="px-4 py-4">

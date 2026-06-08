@@ -8,6 +8,8 @@ import {
   BarChart3,
   Bot,
   CheckCircle2,
+  ChevronDown,
+  ChevronUp,
   CircleAlert,
   Clock3,
   Eye,
@@ -420,6 +422,15 @@ const SIDEBAR_TABS: { value: SidebarTab; label: string; mode: "all" | "create" |
   { value: "versions", label: "버전", mode: "edit" },
   { value: "templates", label: "템플릿", mode: "create" },
 ]
+
+const CURRENT_PREVIEW_ARTICLE_ID = "__current-preview-article__"
+
+interface PreviewSidebarOrderItem {
+  id: string
+  title: string
+  orderIndex: number
+  current: boolean
+}
 
 function formSignature(form: FormState) {
   return JSON.stringify(form)
@@ -878,6 +889,43 @@ export default function DocsArticleEditor({ mode, categories, article }: Props) 
     [categories, form.categoryId]
   )
   const previewAudience = useMemo(() => fromCsv(form.audience).join(", "), [form.audience])
+  const currentPreviewArticleId = article?.id ?? CURRENT_PREVIEW_ARTICLE_ID
+  const previewSidebarOrderItems = useMemo<PreviewSidebarOrderItem[]>(() => {
+    const currentItem: PreviewSidebarOrderItem = {
+      id: currentPreviewArticleId,
+      title: form.title.trim() || "새 문서",
+      orderIndex: Number.isFinite(form.orderIndex) ? form.orderIndex : 100,
+      current: true,
+    }
+
+    return [
+      ...support.articleOptions
+        .filter((option) => option.categoryId === form.categoryId && option.id !== currentPreviewArticleId)
+        .map((option) => ({
+          id: option.id,
+          title: option.title,
+          orderIndex: option.orderIndex,
+          current: false,
+        })),
+      currentItem,
+    ].sort((left, right) => {
+      if (left.orderIndex !== right.orderIndex) return left.orderIndex - right.orderIndex
+      if (left.current !== right.current) return left.current ? -1 : 1
+      return left.title.localeCompare(right.title, "ko-KR")
+    })
+  }, [
+    currentPreviewArticleId,
+    form.categoryId,
+    form.orderIndex,
+    form.title,
+    support.articleOptions,
+  ])
+  const currentPreviewSidebarIndex = previewSidebarOrderItems.findIndex((item) => item.current)
+  const previewSidebarPosition = currentPreviewSidebarIndex >= 0 ? currentPreviewSidebarIndex + 1 : 1
+  const previewSidebarTotal = previewSidebarOrderItems.length
+  const canMovePreviewUp = currentPreviewSidebarIndex > 0
+  const canMovePreviewDown =
+    currentPreviewSidebarIndex >= 0 && currentPreviewSidebarIndex < previewSidebarOrderItems.length - 1
   const previewNavGroups = useMemo<DocsNavGroup[]>(() => {
     const currentHref = "#preview-current-doc"
     const currentTitle = form.title.trim() || "새 문서"
@@ -1107,6 +1155,54 @@ export default function DocsArticleEditor({ mode, categories, article }: Props) 
     setForm((previous) => ({ ...previous, [key]: value }))
   }
 
+  function getOrderIndexForPreviewPosition(
+    items: PreviewSidebarOrderItem[],
+    targetIndex: number
+  ) {
+    const previous = items[targetIndex - 1]
+    const next = items[targetIndex + 1]
+
+    if (previous && next) {
+      const gap = next.orderIndex - previous.orderIndex
+      if (gap > 1) return Math.floor(previous.orderIndex + gap / 2)
+      return (targetIndex + 1) * 10
+    }
+
+    if (previous) return previous.orderIndex + 10
+    if (next) return Math.max(0, next.orderIndex - 10)
+    return 100
+  }
+
+  function moveCurrentPreviewSidebarOrder(direction: "up" | "down") {
+    const currentIndex = previewSidebarOrderItems.findIndex((item) => item.current)
+    const targetIndex = direction === "up" ? currentIndex - 1 : currentIndex + 1
+
+    if (currentIndex < 0 || targetIndex < 0 || targetIndex >= previewSidebarOrderItems.length) {
+      return
+    }
+
+    const reordered = [...previewSidebarOrderItems]
+    const [currentItem] = reordered.splice(currentIndex, 1)
+    if (!currentItem) return
+    reordered.splice(targetIndex, 0, currentItem)
+
+    update("orderIndex", getOrderIndexForPreviewPosition(reordered, targetIndex))
+  }
+
+  function getLastPreviewOrderIndexForCategory(categoryId: string) {
+    return support.articleOptions
+      .filter((option) => option.categoryId === categoryId && option.id !== currentPreviewArticleId)
+      .reduce((max, option) => Math.max(max, option.orderIndex), 0)
+  }
+
+  function updateCategoryAndMoveToEnd(categoryId: string) {
+    setForm((previous) => ({
+      ...previous,
+      categoryId,
+      orderIndex: getLastPreviewOrderIndexForCategory(categoryId) + 10,
+    }))
+  }
+
   function applySummaryDraft() {
     if (!suggestedSummary) return
     update("chatbotSummary", suggestedSummary)
@@ -1144,6 +1240,7 @@ export default function DocsArticleEditor({ mode, categories, article }: Props) 
       productArea: template.productArea,
       docType: template.docType,
       difficulty: template.difficulty,
+      orderIndex: getLastPreviewOrderIndexForCategory(categoryId) + 10,
       status: "draft",
       visibility: "public",
       noindex: false,
@@ -1724,7 +1821,7 @@ export default function DocsArticleEditor({ mode, categories, article }: Props) 
                   </label>
                   <select
                     value={form.categoryId}
-                    onChange={(event) => update("categoryId", event.target.value)}
+                    onChange={(event) => updateCategoryAndMoveToEnd(event.target.value)}
                     className="w-full rounded-lg border border-[rgba(0,0,0,0.12)] bg-white px-3 py-2 text-[13px] focus:border-[#111110]/30 focus:outline-none"
                   >
                     {categories.map((category) => (
@@ -2276,16 +2373,40 @@ export default function DocsArticleEditor({ mode, categories, article }: Props) 
                         ))}
                       </select>
                     </div>
-                    <div>
-                      <label className="mb-1.5 block text-[12px] font-medium text-[#1a1a1a]/50">
-                        정렬 순서 (낮을수록 위)
-                      </label>
-                      <input
-                        type="number"
-                        value={form.orderIndex}
-                        onChange={(event) => update("orderIndex", Number(event.target.value) || 0)}
-                        className="w-full rounded-lg border border-[rgba(0,0,0,0.12)] px-3 py-2 text-[13px] focus:border-[#111110]/30 focus:outline-none"
-                      />
+                    <div className="rounded-xl border border-[#e8e8e4] bg-[#FAFAF8] p-3">
+                      <div className="flex items-start justify-between gap-3">
+                        <div>
+                          <p className="text-[12px] font-semibold text-[#111110]">
+                            왼쪽 사이드 순서
+                          </p>
+                          <p className="mt-1 text-[11px] leading-relaxed text-[#1a1a1a]/38">
+                            공개 문서 왼쪽 카테고리 목록에서 보일 위치입니다.
+                          </p>
+                        </div>
+                        <span className="shrink-0 rounded-full border border-[#e8e8e4] bg-white px-2.5 py-1 text-[11px] font-bold text-[#111110]">
+                          {previewSidebarPosition}/{previewSidebarTotal}
+                        </span>
+                      </div>
+                      <div className="mt-3 grid grid-cols-2 gap-2">
+                        <button
+                          type="button"
+                          onClick={() => moveCurrentPreviewSidebarOrder("up")}
+                          disabled={!canMovePreviewUp}
+                          className="inline-flex h-9 items-center justify-center gap-1.5 rounded-lg border border-[#e8e8e4] bg-white text-[12px] font-semibold text-[#111110] transition-colors hover:bg-[#f5f5f2] disabled:cursor-not-allowed disabled:opacity-35"
+                        >
+                          <ChevronUp className="h-3.5 w-3.5" />
+                          위로
+                        </button>
+                        <button
+                          type="button"
+                          onClick={() => moveCurrentPreviewSidebarOrder("down")}
+                          disabled={!canMovePreviewDown}
+                          className="inline-flex h-9 items-center justify-center gap-1.5 rounded-lg border border-[#e8e8e4] bg-white text-[12px] font-semibold text-[#111110] transition-colors hover:bg-[#f5f5f2] disabled:cursor-not-allowed disabled:opacity-35"
+                        >
+                          <ChevronDown className="h-3.5 w-3.5" />
+                          아래로
+                        </button>
+                      </div>
                     </div>
                   </div>
 
@@ -2523,7 +2644,7 @@ export default function DocsArticleEditor({ mode, categories, article }: Props) 
                 <div className="mt-1 flex min-w-0 flex-wrap items-center gap-2 text-[12px] text-[#1a1a1a]/45">
                   <span className="truncate font-mono">{publicPath}</span>
                   <span className="rounded-full border border-[#e8e8e4] px-2 py-0.5 font-semibold text-[#1a1a1a]/45">
-                    순서 {form.orderIndex}
+                    왼쪽 사이드 {previewSidebarPosition}/{previewSidebarTotal}
                   </span>
                 </div>
               </div>
