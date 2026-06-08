@@ -29,6 +29,8 @@ import {
 } from "lucide-react"
 
 import RichMarkdownEditor, { type RichMarkdownEditorHandle } from "@/components/admin/RichMarkdownEditor"
+import BlogMarkdownRenderer from "@/components/blog/BlogMarkdownRenderer"
+import { DocsArticle, type DocsArticleSection } from "@/components/docs"
 import { adminFetch, adminFetchJson, getAdminToken } from "@/lib/admin-client"
 import type { AdminDocsContentResponse } from "@/lib/admin-docs"
 import type {
@@ -550,6 +552,18 @@ function markdownToSections(markdown: string): StructuredDocSection[] {
   return intro ? [intro] : []
 }
 
+function toPreviewArticleSections(sections: StructuredDocSection[]): DocsArticleSection[] {
+  return sections.map((section, index) => ({
+    id: `preview-section-${index + 1}`,
+    title: section.heading,
+    body: section.body ? <BlogMarkdownRenderer markdown={section.body} /> : null,
+    checklist: section.steps?.map((step) => ({
+      label: step,
+      checked: true,
+    })),
+  }))
+}
+
 function buildContentJson(
   markdown: string,
   previousContentJson?: Record<string, unknown>
@@ -833,6 +847,15 @@ export default function DocsArticleEditor({ mode, categories, article }: Props) 
     () => markdownToSections(form.contentMarkdown),
     [form.contentMarkdown]
   )
+  const previewArticleSections = useMemo(
+    () => toPreviewArticleSections(previewSections),
+    [previewSections]
+  )
+  const activeCategoryTitle = useMemo(
+    () => categories.find((category) => category.id === form.categoryId)?.title ?? form.categoryId,
+    [categories, form.categoryId]
+  )
+  const previewAudience = useMemo(() => fromCsv(form.audience).join(", "), [form.audience])
   const chatbotIncluded =
     form.status === "published" && form.visibility !== "internal" && !form.noindex
   const aiChecklist = useMemo(
@@ -1765,38 +1788,43 @@ export default function DocsArticleEditor({ mode, categories, article }: Props) 
                 </div>
               </div>
 
-              <div className="mt-5 rounded-xl border border-[#e8e8e4] bg-white p-4">
+              <div className="mt-5 overflow-hidden rounded-xl border border-[#e8e8e4] bg-white">
                 <div className="flex flex-wrap items-center justify-between gap-3">
-                  <div>
-                    <h3 className="text-[13px] font-semibold text-[#111110]">공개 섹션 미리보기</h3>
+                  <div className="p-4 pb-0">
+                    <h3 className="text-[13px] font-semibold text-[#111110]">공개 문서 미리보기</h3>
                     <p className="mt-1 text-[11px] text-[#1a1a1a]/35">
-                      저장 시 공개 페이지와 챗봇 청킹에 반영되는 구조입니다.
+                      작성 중인 제목, 설명, 본문이 공개 문서 컴포넌트로 렌더링됩니다.
                     </p>
                   </div>
-                  <span className="rounded-full border border-[#e8e8e4] px-2.5 py-1 text-[11px] font-semibold text-[#1a1a1a]/45">
+                  <span className="mr-4 mt-4 rounded-full border border-[#e8e8e4] px-2.5 py-1 text-[11px] font-semibold text-[#1a1a1a]/45">
                     {previewSections.length}개 섹션 · {estimateReadMinutes(form.contentMarkdown)}분
                   </span>
                 </div>
 
                 {previewSections.length === 0 ? (
-                  <p className="mt-4 text-[12px] text-[#1a1a1a]/35">
+                  <p className="p-4 pt-4 text-[12px] text-[#1a1a1a]/35">
                     본문에 섹션을 입력하면 미리보기가 표시됩니다.
                   </p>
                 ) : (
-                  <div className="mt-4 divide-y divide-[#f0f0ec]">
-                    {previewSections.map((section, index) => (
-                      <div key={`${section.heading}:${index}`} className="py-3 first:pt-0 last:pb-0">
-                        <p className="text-[13px] font-semibold text-[#111110]">{section.heading}</p>
-                        <p className="mt-1 line-clamp-2 whitespace-pre-line text-[12px] leading-relaxed text-[#1a1a1a]/45">
-                          {section.body}
-                        </p>
-                        {section.steps?.length ? (
-                          <p className="mt-2 text-[11px] text-[#084734]">
-                            체크리스트 {section.steps.length}개
-                          </p>
-                        ) : null}
-                      </div>
-                    ))}
+                  <div className="mt-4 border-t border-[#f0f0ec] bg-[#FAFAF8] p-4">
+                    <div className="max-h-[720px] overflow-y-auto rounded-lg border border-[#e8e8e4] bg-white px-5 py-6 shadow-sm sm:px-7 lg:px-8">
+                      <DocsArticle
+                        eyebrow={activeCategoryTitle}
+                        title={form.title.trim() || "새 문서"}
+                        description={form.description.trim() || "문서 설명이 여기에 표시됩니다."}
+                        meta={
+                          <div className="flex flex-wrap items-center gap-4">
+                            <span className="inline-flex items-center gap-1.5">
+                              <Clock3 className="h-4 w-4" />
+                              {estimateReadMinutes(form.contentMarkdown)}분 읽기
+                            </span>
+                            {previewAudience ? <span>추천 대상: {previewAudience}</span> : null}
+                          </div>
+                        }
+                        sections={previewArticleSections}
+                        className="[&_h1]:!text-3xl [&_h1]:md:!text-4xl [&_h2]:!text-2xl [&_h2]:md:!text-3xl"
+                      />
+                    </div>
                   </div>
                 )}
               </div>
