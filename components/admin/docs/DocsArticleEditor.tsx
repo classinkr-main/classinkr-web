@@ -1916,7 +1916,7 @@ export default function DocsArticleEditor({ mode, categories, article }: Props) 
             </section>
 
             <section className="rounded-2xl border border-[rgba(0,0,0,0.08)] bg-white p-6">
-              <div className="mb-4 flex flex-wrap items-center justify-between gap-3">
+              <div className="mb-4 space-y-3">
                 <div>
                   <h2 className="text-[13px] font-semibold uppercase tracking-wide text-[#1a1a1a]/40">
                     본문
@@ -1925,57 +1925,60 @@ export default function DocsArticleEditor({ mode, categories, article }: Props) 
                     Markdown 기반 · 공개 가이드 문서에 동일하게 렌더링됩니다
                   </p>
                 </div>
-                <div className="flex flex-wrap items-center gap-1.5">
-                  <ToolbarButton onClick={() => editorRef.current?.setHeading(2)}>H2</ToolbarButton>
-                  <ToolbarButton onClick={() => editorRef.current?.setHeading(3)}>H3</ToolbarButton>
-                  <span className="mx-0.5 h-4 w-px bg-[#e8e8e4]" aria-hidden="true" />
-                  <ToolbarButton onClick={() => editorRef.current?.toggleBold()} icon={<Type className="h-3 w-3" />}>
-                    굵게
-                  </ToolbarButton>
-                  <ToolbarButton onClick={() => editorRef.current?.toggleItalic()} icon={<Italic className="h-3 w-3" />}>
-                    기울이기
-                  </ToolbarButton>
-                  <ToolbarButton onClick={() => editorRef.current?.toggleHighlight()} icon={<Highlighter className="h-3 w-3" />}>
-                    강조색
-                  </ToolbarButton>
-                  <ToolbarButton onClick={() => editorRef.current?.wrapBrandColor()} icon={<Sparkles className="h-3 w-3" />}>
-                    브랜드색
-                  </ToolbarButton>
-                  <span className="mx-0.5 h-4 w-px bg-[#e8e8e4]" aria-hidden="true" />
-                  <ToolbarButton onClick={() => editorRef.current?.toggleBlockquote()} icon={<Quote className="h-3 w-3" />}>
-                    인용
-                  </ToolbarButton>
-                  <ToolbarButton onClick={() => editorRef.current?.toggleBulletList()} icon={<List className="h-3 w-3" />}>
-                    리스트
-                  </ToolbarButton>
-                  <ToolbarButton onClick={() => editorRef.current?.toggleOrderedList()} icon={<ListOrdered className="h-3 w-3" />}>
-                    번호
-                  </ToolbarButton>
-                  <span className="mx-0.5 h-4 w-px bg-[#e8e8e4]" aria-hidden="true" />
-                  <ToolbarButton onClick={() => editorRef.current?.insertLink()} icon={<Link2 className="h-3 w-3" />}>
-                    링크
-                  </ToolbarButton>
-                  <ToolbarButton onClick={() => editorRef.current?.insertImage()} icon={<ImageIcon className="h-3 w-3" />}>
-                    이미지
-                  </ToolbarButton>
-                  <label className="inline-flex cursor-pointer items-center gap-1 rounded-lg border border-[#e8e8e4] bg-white px-2 py-1.5 text-xs font-medium text-[#1a1a1a]/60 transition-colors duration-75 hover:border-[#1a1a1a]/20 hover:text-[#111110]">
-                    <Upload className="h-3 w-3" />
-                    {uploadingMedia ? "업로드 중" : "업로드"}
-                    <input
-                      type="file"
-                      accept="image/png,image/jpeg,image/webp,image/gif"
-                      disabled={uploadingMedia}
-                      className="sr-only"
-                      onChange={(event) => {
-                        const file = event.target.files?.[0]
-                        event.currentTarget.value = ""
-                        if (file) void uploadMedia(file)
-                      }}
-                    />
-                  </label>
-                  <ToolbarButton onClick={() => editorRef.current?.insertDivider()} icon={<Minus className="h-3 w-3" />}>
-                    구분선
-                  </ToolbarButton>
+                <div className="space-y-1.5">
+                  <div className="flex flex-wrap items-center gap-1.5">
+                    <ToolbarButton onClick={() => editorRef.current?.setHeading(2)}>H2</ToolbarButton>
+                    <ToolbarButton onClick={() => editorRef.current?.setHeading(3)}>H3</ToolbarButton>
+                    <span className="mx-0.5 h-4 w-px bg-[#e8e8e4]" aria-hidden="true" />
+                    <ToolbarButton onClick={() => editorRef.current?.toggleBold()} icon={<Type className="h-3 w-3" />}>
+                      굵게
+                    </ToolbarButton>
+                    <ToolbarButton onClick={() => editorRef.current?.toggleItalic()} icon={<Italic className="h-3 w-3" />}>
+                      기울이기
+                    </ToolbarButton>
+                    <ToolbarButton onClick={() => editorRef.current?.toggleHighlight()} icon={<Highlighter className="h-3 w-3" />}>
+                      강조색
+                    </ToolbarButton>
+                    <ToolbarButton onClick={() => editorRef.current?.wrapBrandColor()} icon={<Sparkles className="h-3 w-3" />}>
+                      브랜드색
+                    </ToolbarButton>
+                    <span className="mx-0.5 h-4 w-px bg-[#e8e8e4]" aria-hidden="true" />
+                    <ToolbarButton onClick={() => editorRef.current?.toggleBlockquote()} icon={<Quote className="h-3 w-3" />}>
+                      인용
+                    </ToolbarButton>
+                    <ToolbarButton onClick={() => editorRef.current?.toggleBulletList()} icon={<List className="h-3 w-3" />}>
+                      리스트
+                    </ToolbarButton>
+                    <ToolbarButton onClick={() => editorRef.current?.toggleOrderedList()} icon={<ListOrdered className="h-3 w-3" />}>
+                      번호
+                    </ToolbarButton>
+                  </div>
+                  <div className="flex flex-wrap items-center gap-1.5">
+                    <ToolbarButton onClick={() => editorRef.current?.insertLink()} icon={<Link2 className="h-3 w-3" />}>
+                      링크
+                    </ToolbarButton>
+                    <ToolbarButton onClick={() => editorRef.current?.insertImage()} icon={<ImageIcon className="h-3 w-3" />}>
+                      이미지
+                    </ToolbarButton>
+                    <label className="inline-flex cursor-pointer items-center gap-1 rounded-lg border border-[#e8e8e4] bg-white px-2 py-1.5 text-xs font-medium text-[#1a1a1a]/60 transition-colors duration-75 hover:border-[#1a1a1a]/20 hover:text-[#111110]">
+                      <Upload className="h-3 w-3" />
+                      {uploadingMedia ? "업로드 중" : "업로드"}
+                      <input
+                        type="file"
+                        accept="image/png,image/jpeg,image/webp,image/gif"
+                        disabled={uploadingMedia}
+                        className="sr-only"
+                        onChange={(event) => {
+                          const file = event.target.files?.[0]
+                          event.currentTarget.value = ""
+                          if (file) void uploadMedia(file)
+                        }}
+                      />
+                    </label>
+                    <ToolbarButton onClick={() => editorRef.current?.insertDivider()} icon={<Minus className="h-3 w-3" />}>
+                      구분선
+                    </ToolbarButton>
+                  </div>
                 </div>
               </div>
 

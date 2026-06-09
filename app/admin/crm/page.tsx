@@ -145,6 +145,11 @@ function getLeadMagnetLabel(value?: string) {
     .join(" ")
 }
 
+function getLeadDisplayName(lead?: LeadRecord) {
+  if (!lead) return "이 리드"
+  return lead.name?.trim() || lead.org?.trim() || lead.email?.trim() || lead.phone?.trim() || "이름 없는 리드"
+}
+
 // ─── 복사 버튼 ─────────────────────────────────────────────────
 function CopyButton({ value }: { value: string }) {
   const [copied, setCopied] = useState(false)
@@ -280,7 +285,7 @@ function LeadDrawer({
   onNotesChange: (id: string, notes: string) => Promise<void>
   onFollowUpChange: (id: string, date: string) => Promise<void>
   onAssignedToChange: (id: string, name: string) => Promise<void>
-  onDelete: (id: string) => void
+  onDelete: (id: string) => Promise<void> | void
   onAddLog: (entry: { type: ContactLogType; result?: ContactLogResult; notes?: string; contacted_by?: string }) => Promise<void>
   onDeleteLog: (logId: string) => Promise<void>
   onConvert: (lead: LeadRecord) => Promise<void>
@@ -702,6 +707,8 @@ export default function CrmPage() {
   const [logsLoading, setLogsLoading] = useState(false)
   const [toast, setToast] = useState<{ msg: string; type: "success" | "error" } | null>(null)
   const [events, setEvents] = useState<PublicEvent[]>([])
+  const [selectedLeadIds, setSelectedLeadIds] = useState<Set<string>>(() => new Set())
+  const [deletingIds, setDeletingIds] = useState<Set<string>>(() => new Set())
 
   useEffect(() => {
     let cancelled = false
@@ -865,17 +872,75 @@ export default function CrmPage() {
     }
   }
 
-  const handleDelete = async (id: string) => {
-    if (!confirm("이 리드를 삭제하시겠습니까?")) return
+  const handleDeleteMany = async (
+    ids: string[],
+    options?: { confirmMessage?: string; successMessage?: string }
+  ) => {
+    const uniqueIds = Array.from(new Set(ids)).filter(Boolean)
+    if (uniqueIds.length === 0) return
+
+    const confirmMessage =
+      options?.confirmMessage ??
+      `${uniqueIds.length}개 리드를 완전히 삭제할까요? 실수/스팸 리드 정리용이며 되돌릴 수 없습니다.`
+
+    if (!confirm(confirmMessage)) return
+
+    setDeletingIds((prev) => {
+      const next = new Set(prev)
+      uniqueIds.forEach((id) => next.add(id))
+      return next
+    })
+
     try {
-      const res = await adminFetch(`/api/admin/leads/${id}`, { method: "DELETE" })
-      await readAdminResponse(res, "리드를 삭제하지 못했습니다.")
-      setLeads((prev) => prev.filter((l) => l.id !== id))
-      setSelected(null)
-      showToast("리드가 삭제되었습니다.")
-    } catch (err) {
-      showToast(err instanceof Error ? err.message : "리드를 삭제하지 못했습니다.", "error")
+      const results = await Promise.allSettled(
+        uniqueIds.map(async (id) => {
+          const res = await adminFetch(`/api/admin/leads/${id}`, { method: "DELETE" })
+          await readAdminResponse<{ ok: true }>(res, "리드를 삭제하지 못했습니다.")
+          return id
+        })
+      )
+      const deletedIds = results
+        .filter((result): result is PromiseFulfilledResult<string> => result.status === "fulfilled")
+        .map((result) => result.value)
+      const failed = results.find((result): result is PromiseRejectedResult => result.status === "rejected")
+      const failedCount = uniqueIds.length - deletedIds.length
+
+      if (deletedIds.length > 0) {
+        const deletedIdSet = new Set(deletedIds)
+        setLeads((prev) => prev.filter((lead) => !deletedIdSet.has(lead.id)))
+        setSelected((prev) => (prev && deletedIdSet.has(prev.id) ? null : prev))
+        setSelectedLeadIds((prev) => {
+          const next = new Set(prev)
+          deletedIds.forEach((id) => next.delete(id))
+          return next
+        })
+      }
+
+      if (failedCount > 0) {
+        const message = failed?.reason instanceof Error ? failed.reason.message : "리드를 삭제하지 못했습니다."
+        showToast(
+          deletedIds.length > 0 ? `${deletedIds.length}개 삭제, ${failedCount}개 실패: ${message}` : message,
+          "error"
+        )
+        return
+      }
+
+      showToast(options?.successMessage ?? `${deletedIds.length}개 리드를 삭제했습니다.`)
+    } finally {
+      setDeletingIds((prev) => {
+        const next = new Set(prev)
+        uniqueIds.forEach((id) => next.delete(id))
+        return next
+      })
     }
+  }
+
+  const handleDelete = async (id: string) => {
+    const lead = leads.find((item) => item.id === id)
+    await handleDeleteMany([id], {
+      confirmMessage: `"${getLeadDisplayName(lead)}" 리드를 완전히 삭제할까요? 연락 기록도 함께 정리되며 되돌릴 수 없습니다.`,
+      successMessage: "리드가 삭제되었습니다.",
+    })
   }
 
   const now = new Date()
@@ -985,6 +1050,30 @@ export default function CrmPage() {
     { label: "연락 진행", value: counts.contacted ?? 0, tone: "text-yellow-700", filterKey: "contacted" },
     { label: "오늘 예정", value: todayFollowUps.length, tone: "text-[#084734]" },
   ]
+  const filteredIds = filtered.map((lead) => lead.id)
+  const allFilteredSelected = filteredIds.length > 0 && filteredIds.every((id) => selectedLeadIds.has(id))
+  const selectedFilteredCount = filteredIds.filter((id) => selectedLeadIds.has(id)).length
+  const selectedDeleting = Array.from(selectedLeadIds).some((id) => deletingIds.has(id))
+
+  const handleToggleLeadSelection = (id: string, checked: boolean) => {
+    setSelectedLeadIds((prev) => {
+      const next = new Set(prev)
+      if (checked) next.add(id)
+      else next.delete(id)
+      return next
+    })
+  }
+
+  const handleToggleFilteredSelection = (checked: boolean) => {
+    setSelectedLeadIds((prev) => {
+      const next = new Set(prev)
+      filteredIds.forEach((id) => {
+        if (checked) next.add(id)
+        else next.delete(id)
+      })
+      return next
+    })
+  }
 
   return (
     <div>
@@ -1191,6 +1280,44 @@ export default function CrmPage() {
         )}
       </div>
 
+      {selectedLeadIds.size > 0 && (
+        <div className="mb-4 flex flex-col gap-3 rounded-2xl border border-[#F6D5C5] bg-[#FEF8F5] px-4 py-3 sm:flex-row sm:items-center sm:justify-between">
+          <div>
+            <p className="text-[13px] font-semibold text-[#111110]">{selectedLeadIds.size}건 선택됨</p>
+            <p className="mt-0.5 text-[11px] text-[#1a1a1a]/45">
+              현재 목록에서 {selectedFilteredCount}건 선택 · 실수/스팸 리드는 완전 삭제됩니다.
+            </p>
+          </div>
+          <div className="flex flex-wrap gap-2">
+            {selectedFilteredCount < filtered.length && filtered.length > 0 ? (
+              <button
+                type="button"
+                onClick={() => handleToggleFilteredSelection(true)}
+                className="rounded-lg border border-[#e8e8e4] bg-white px-3 py-2 text-[12px] font-medium text-[#111110] transition-colors hover:border-[#c8c8c4]"
+              >
+                현재 목록 전체 선택
+              </button>
+            ) : null}
+            <button
+              type="button"
+              onClick={() => setSelectedLeadIds(new Set())}
+              className="rounded-lg border border-[#e8e8e4] bg-white px-3 py-2 text-[12px] font-medium text-[#1a1a1a]/55 transition-colors hover:border-[#c8c8c4] hover:text-[#111110]"
+            >
+              선택 해제
+            </button>
+            <button
+              type="button"
+              onClick={() => void handleDeleteMany(Array.from(selectedLeadIds))}
+              disabled={selectedDeleting}
+              className="inline-flex items-center gap-1.5 rounded-lg bg-[#B85C33] px-3 py-2 text-[12px] font-semibold text-white transition-colors hover:bg-[#9A4A27] disabled:cursor-not-allowed disabled:opacity-50"
+            >
+              {selectedDeleting ? <Loader2 className="h-3.5 w-3.5 animate-spin" /> : <Trash2 className="h-3.5 w-3.5" />}
+              선택 삭제
+            </button>
+          </div>
+        </div>
+      )}
+
       {/* 테이블 */}
       <div className="bg-white rounded-2xl border border-[#e8e8e4] overflow-hidden">
         {filtered.length === 0 ? (
@@ -1208,15 +1335,34 @@ export default function CrmPage() {
               const unrespondedHours = isUnrespondedLead(lead) ? hoursBetween(lead.timestamp, now) : null
 
               return (
-                <button
+                <div
                   key={`mobile-${lead.id}`}
-                  type="button"
+                  role="button"
+                  tabIndex={0}
                   onClick={() => setSelected(lead)}
-                  className={`block w-full px-4 py-4 text-left transition-colors ${
+                  onKeyDown={(event) => {
+                    if (event.key === "Enter" || event.key === " ") {
+                      event.preventDefault()
+                      setSelected(lead)
+                    }
+                  }}
+                  className={`block w-full cursor-pointer px-4 py-4 text-left transition-colors ${
                     selected?.id === lead.id ? "bg-[#f0f0ec]" : "hover:bg-[#fafaf8]"
                   }`}
                 >
                   <div className="flex items-start justify-between gap-3">
+                    <label
+                      className="mt-0.5 flex h-8 w-8 shrink-0 items-center justify-center rounded-lg border border-[#e8e8e4] bg-white"
+                      onClick={(event) => event.stopPropagation()}
+                    >
+                      <input
+                        type="checkbox"
+                        checked={selectedLeadIds.has(lead.id)}
+                        onChange={(event) => handleToggleLeadSelection(lead.id, event.target.checked)}
+                        aria-label={`${getLeadDisplayName(lead)} 선택`}
+                        className="h-4 w-4 accent-[#084734]"
+                      />
+                    </label>
                     <div className="min-w-0 flex-1">
                       <div className="flex items-center gap-2">
                         <p className="truncate text-[14px] font-semibold text-[#111110]">
@@ -1228,9 +1374,24 @@ export default function CrmPage() {
                         {lead.org ?? lead.phone ?? lead.email ?? "-"}
                       </p>
                     </div>
-                    <span className={`shrink-0 rounded-full px-2 py-0.5 text-[11px] font-medium ${STATUS_COLOR[lead.status]}`}>
-                      {STATUS_LABEL[lead.status]}
-                    </span>
+                    <div className="flex shrink-0 items-center gap-2">
+                      <span className={`rounded-full px-2 py-0.5 text-[11px] font-medium ${STATUS_COLOR[lead.status]}`}>
+                        {STATUS_LABEL[lead.status]}
+                      </span>
+                      <button
+                        type="button"
+                        onClick={(event) => {
+                          event.stopPropagation()
+                          void handleDelete(lead.id)
+                        }}
+                        disabled={deletingIds.has(lead.id)}
+                        className="flex h-8 w-8 items-center justify-center rounded-lg border border-[#F6D5C5] bg-white text-[#B85C33] transition-colors hover:bg-[#FEF3EE] disabled:cursor-not-allowed disabled:opacity-50"
+                        aria-label={`${getLeadDisplayName(lead)} 삭제`}
+                        title="삭제"
+                      >
+                        {deletingIds.has(lead.id) ? <Loader2 className="h-3.5 w-3.5 animate-spin" /> : <Trash2 className="h-3.5 w-3.5" />}
+                      </button>
+                    </div>
                   </div>
 
                   <div className="mt-3 flex flex-wrap items-center gap-2 text-[11px] text-[#1a1a1a]/45">
@@ -1296,17 +1457,28 @@ export default function CrmPage() {
                       </a>
                     ) : null}
                   </div>
-                </button>
+                </div>
               )
             })}
           </div>
           <div className="hidden overflow-x-auto sm:block">
-          <table className="min-w-[1140px] w-full text-[13px]">
+          <table className="min-w-[1240px] w-full text-[13px]">
             <thead>
               <tr className="border-b border-[#e8e8e4] bg-[#fafaf8]">
+                <th className="w-12 px-5 py-3.5">
+                  <input
+                    type="checkbox"
+                    checked={allFilteredSelected}
+                    disabled={filtered.length === 0}
+                    onChange={(event) => handleToggleFilteredSelection(event.target.checked)}
+                    aria-label="현재 목록 전체 선택"
+                    className="h-4 w-4 accent-[#084734] disabled:opacity-30"
+                  />
+                </th>
                 {["시간", "응대", "소스", "이름", "기관", "담당자", "연락처", "팔로업", "정체", "상태"].map((h) => (
                   <th key={h} className="text-left px-5 py-3.5 font-medium text-[#1a1a1a]/40 whitespace-nowrap text-[12px]">{h}</th>
                 ))}
+                <th className="w-16 px-5 py-3.5 text-right text-[12px] font-medium text-[#1a1a1a]/40">관리</th>
               </tr>
             </thead>
             <tbody>
@@ -1324,6 +1496,16 @@ export default function CrmPage() {
                       selected?.id === lead.id ? "bg-[#f0f0ec]" : "hover:bg-[#fafaf8]"
                     }`}
                   >
+                    <td className="px-5 py-4">
+                      <input
+                        type="checkbox"
+                        checked={selectedLeadIds.has(lead.id)}
+                        onClick={(event) => event.stopPropagation()}
+                        onChange={(event) => handleToggleLeadSelection(lead.id, event.target.checked)}
+                        aria-label={`${getLeadDisplayName(lead)} 선택`}
+                        className="h-4 w-4 accent-[#084734]"
+                      />
+                    </td>
                     <td className="px-5 py-4 text-[#1a1a1a]/40 whitespace-nowrap text-[12px]">
                       {new Date(lead.timestamp).toLocaleDateString("ko-KR", { month: "2-digit", day: "2-digit", hour: "2-digit", minute: "2-digit" })}
                     </td>
@@ -1413,6 +1595,21 @@ export default function CrmPage() {
                           <span className="w-1.5 h-1.5 rounded-full bg-[#1a1a1a]/20 shrink-0" title="메모 있음" />
                         )}
                       </div>
+                    </td>
+                    <td className="px-5 py-4 text-right">
+                      <button
+                        type="button"
+                        onClick={(event) => {
+                          event.stopPropagation()
+                          void handleDelete(lead.id)
+                        }}
+                        disabled={deletingIds.has(lead.id)}
+                        className="inline-flex h-8 w-8 items-center justify-center rounded-lg border border-[#F6D5C5] bg-white text-[#B85C33] transition-colors hover:bg-[#FEF3EE] disabled:cursor-not-allowed disabled:opacity-50"
+                        aria-label={`${getLeadDisplayName(lead)} 삭제`}
+                        title="삭제"
+                      >
+                        {deletingIds.has(lead.id) ? <Loader2 className="h-3.5 w-3.5 animate-spin" /> : <Trash2 className="h-3.5 w-3.5" />}
+                      </button>
                     </td>
                   </tr>
                 )
