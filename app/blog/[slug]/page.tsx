@@ -4,8 +4,11 @@ import Link from "next/link"
 import { notFound } from "next/navigation"
 import { ArrowRight, Clock } from "lucide-react"
 import BlogMarkdownRenderer from "@/components/blog/BlogMarkdownRenderer"
+import { ArticleImageLightbox } from "@/components/blog/ArticleImageLightbox"
+import { ReadingProgress } from "@/components/blog/ReadingProgress"
 import { ShareActions } from "@/components/blog/ShareActions"
 import { TrackedLink } from "@/components/TrackedLink"
+import { NEUTRAL_BLUR_DATA_URL } from "@/lib/image-blur"
 import {
   getPublishedPostBySlug,
   getRelatedPosts,
@@ -90,6 +93,8 @@ export default async function BlogDetailPage({
 
   return (
     <div className="min-h-screen bg-[#FAFAF8] text-[#111110]">
+      <ReadingProgress />
+      <ArticleImageLightbox />
       <JsonLd
         data={[
           createArticleJsonLd({
@@ -170,6 +175,8 @@ export default async function BlogDetailPage({
                   className="object-cover"
                   sizes="(min-width: 1024px) 420px, 100vw"
                   priority
+                  placeholder="blur"
+                  blurDataURL={NEUTRAL_BLUR_DATA_URL}
                 />
               </div>
             </div>
@@ -245,6 +252,34 @@ export default async function BlogDetailPage({
           )}
 
           <div className={post.pageLayout === "minimal" ? "mx-auto w-full max-w-3xl" : "min-w-0"}>
+            {post.pageLayout !== "minimal" && headings.length > 0 && (
+              <details className="group mb-5 rounded-2xl border border-[#e8e8e4] bg-white px-4 py-3 lg:hidden">
+                <summary className="flex cursor-pointer list-none items-center justify-between text-sm font-bold text-[#111110] [&::-webkit-details-marker]:hidden">
+                  목차 보기
+                  <svg
+                    className="h-4 w-4 text-[#084734] transition-transform duration-200 group-open:rotate-180"
+                    viewBox="0 0 16 16"
+                    fill="none"
+                    aria-hidden="true"
+                  >
+                    <path d="M4 6l4 4 4-4" stroke="currentColor" strokeWidth="1.6" strokeLinecap="round" strokeLinejoin="round" />
+                  </svg>
+                </summary>
+                <div className="space-y-2 pt-3">
+                  {headings.map((heading) => (
+                    <a
+                      key={heading.id}
+                      href={`#${heading.id}`}
+                      className={`block text-sm leading-6 text-[#1a1a1a]/55 transition-colors hover:text-[#084734] ${
+                        heading.level === 3 ? "pl-4" : ""
+                      }`}
+                    >
+                      {heading.text}
+                    </a>
+                  ))}
+                </div>
+              </details>
+            )}
             <div className="rounded-[24px] border border-[#e8e8e4] bg-white px-5 py-7 shadow-sm md:rounded-[36px] md:px-10 md:py-12">
               <BlogMarkdownRenderer markdown={post.contentMarkdown} />
             </div>
@@ -312,6 +347,8 @@ export default async function BlogDetailPage({
                           fill
                           className="object-cover transition-transform duration-500 group-hover:scale-105"
                           sizes="(min-width: 1024px) 360px, (min-width: 768px) 33vw, 100vw"
+                          placeholder="blur"
+                          blurDataURL={NEUTRAL_BLUR_DATA_URL}
                         />
                       </div>
                       <div className="p-5">

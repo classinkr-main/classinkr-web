@@ -9,11 +9,14 @@ import { TrackedLink } from "@/components/TrackedLink"
 import { sanitizePublicUrl } from "@/lib/safe-public-url"
 import {
   getCachedPublicEventBySlug,
+  listCachedPublicEvents,
   listCachedPublicEventSlugs,
 } from "@/lib/repositories/public-events"
 import { JsonLd } from "@/components/seo/JsonLd"
 import { createBreadcrumbJsonLd, createEventJsonLd, toAbsoluteUrl } from "@/lib/seo"
+import { EventAlertSignup } from "@/components/events/EventAlertSignup"
 import { EventSignupModal } from "@/components/events/EventSignupModal"
+import { NEUTRAL_BLUR_DATA_URL } from "@/lib/image-blur"
 import { CalendarPlus } from "lucide-react"
 
 export const revalidate = 3600
@@ -105,6 +108,14 @@ export default async function EventDetailPage({ params }: EventDetailPageProps) 
   const eventPath = `/events/${event.slug ?? slug}`
   // 어드민이 별도 신청 URL을 지정하지 않은 경우 인라인 신청 모달 사용 (페이지 이탈 없는 신청)
   const usesInlineSignup = ctaHref === defaultEventCtaHref && Boolean(event.slug)
+
+  // 마감 행사 dead-end 해소: 진행 중/예정 행사 추천
+  const upcomingEvents =
+    event.status === "마감"
+      ? (await listCachedPublicEvents().catch(() => []))
+          .filter((item) => item.status !== "마감" && item.id !== event.id && item.slug)
+          .slice(0, 3)
+      : []
   const googleCalendarUrl = buildGoogleCalendarUrl(event, toAbsoluteUrl(eventPath))
   const ctaButtonClassName =
     "mt-8 inline-flex items-center gap-2 rounded-full bg-[#111110] px-6 py-3 text-[14px] font-semibold text-white transition-colors hover:bg-emerald-700"
@@ -239,6 +250,8 @@ export default async function EventDetailPage({ params }: EventDetailPageProps) 
                     className="object-contain p-3 sm:p-4"
                     sizes="(min-width: 1024px) 420px, (min-width: 640px) 50vw, 100vw"
                     priority
+                    placeholder="blur"
+                    blurDataURL={NEUTRAL_BLUR_DATA_URL}
                   />
                 </div>
               </div>
@@ -253,6 +266,49 @@ export default async function EventDetailPage({ params }: EventDetailPageProps) 
           {event.contentMarkdown && (
             <div className="rounded-[24px] border border-[#e8e8e4] bg-white px-5 py-7 shadow-sm md:rounded-[36px] md:px-10 md:py-12">
               <BlogMarkdownRenderer markdown={event.contentMarkdown} />
+            </div>
+          )}
+
+          {event.status === "마감" && (
+            <div className="mt-8 space-y-6">
+              <div className="rounded-[24px] border border-[#e8e8e4] bg-white p-6 shadow-sm md:rounded-[32px] md:p-8">
+                <p className="text-[12px] font-medium uppercase tracking-[0.24em] text-[#084734]/55">
+                  Next Events
+                </p>
+                <h2 className="mt-2 text-[1.5rem] font-semibold tracking-[-0.03em] text-[#111110]">
+                  이 행사는 마감되었어요. 다음 소식을 받아보세요.
+                </h2>
+                <div className="mt-5">
+                  <EventAlertSignup eventSlug={event.slug ?? slug} />
+                </div>
+              </div>
+
+              {upcomingEvents.length > 0 && (
+                <div>
+                  <h3 className="mb-3 text-[15px] font-semibold text-[#1a1a1a]/60">
+                    지금 신청할 수 있는 행사
+                  </h3>
+                  <div className="grid gap-3 sm:grid-cols-3">
+                    {upcomingEvents.map((item) => (
+                      <Link
+                        key={item.id}
+                        href={`/events/${item.slug}`}
+                        className="group rounded-2xl border border-[#e8e8e4] bg-white p-5 transition-all hover:-translate-y-0.5 hover:border-[#084734]/25"
+                      >
+                        <span className="inline-flex rounded-full bg-[#f0f7f4] px-2.5 py-1 text-[11px] font-bold text-[#084734]">
+                          {item.status}
+                        </span>
+                        <p className="mt-3 line-clamp-2 text-[15px] font-bold text-[#111110] transition-colors group-hover:text-[#084734]">
+                          {item.title}
+                        </p>
+                        <p className="mt-2 text-[12px] text-[#1a1a1a]/40">
+                          {formatKoreanDate(item.startsAt)}
+                        </p>
+                      </Link>
+                    ))}
+                  </div>
+                </div>
+              )}
             </div>
           )}
 

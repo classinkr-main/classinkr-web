@@ -123,6 +123,15 @@ export default async function DocsArticlePage({
   const activePath = getDocPath(doc)
   const relatedDocs = getRelatedDocsFromContent(docsContent, doc, 3)
 
+  // 같은 카테고리 내 이전/다음 문서 (설치 → 가입처럼 순서가 있는 가이드의 연속 동선)
+  const categoryDocs = docsContent.docs.filter(
+    (item) => item.category === doc.category && (item.visibility ?? "public") === "public"
+  )
+  const docIndex = categoryDocs.findIndex((item) => item.slug === doc.slug)
+  const prevDoc = docIndex > 0 ? categoryDocs[docIndex - 1] : null
+  const nextDoc =
+    docIndex >= 0 && docIndex < categoryDocs.length - 1 ? categoryDocs[docIndex + 1] : null
+
   // 카테고리가 board(하드웨어)면 하드웨어 상담, 그 외는 기술 지원 상담으로 연결
   const contactTopic = doc.category === "board" ? "하드웨어/설치/AS" : "계정/접속/기술 지원"
   const contactHref = `/contact?topic=${encodeURIComponent(contactTopic)}#contact-form`
@@ -259,6 +268,42 @@ export default async function DocsArticlePage({
                   클래스인 시작하기 보기 →
                 </Link>
               </section>
+            )}
+
+            {(prevDoc || nextDoc) && (
+              <nav
+                aria-label="이전/다음 문서"
+                className="grid gap-3 border-t border-black/[0.08] pt-8 sm:grid-cols-2"
+              >
+                {prevDoc ? (
+                  <Link
+                    href={getDocPath(prevDoc)}
+                    className="group rounded-2xl border border-black/[0.08] bg-white px-5 py-4 transition-colors hover:border-[#084734]/30"
+                  >
+                    <p className="text-[11px] font-bold uppercase tracking-[0.14em] text-[#1a1a1a]/35">
+                      ← 이전 문서
+                    </p>
+                    <p className="mt-1.5 text-[15px] font-bold text-[#111110] transition-colors group-hover:text-[#084734]">
+                      {prevDoc.title}
+                    </p>
+                  </Link>
+                ) : (
+                  <span aria-hidden="true" className="hidden sm:block" />
+                )}
+                {nextDoc ? (
+                  <Link
+                    href={getDocPath(nextDoc)}
+                    className="group rounded-2xl border border-black/[0.08] bg-white px-5 py-4 text-right transition-colors hover:border-[#084734]/30"
+                  >
+                    <p className="text-[11px] font-bold uppercase tracking-[0.14em] text-[#1a1a1a]/35">
+                      다음 문서 →
+                    </p>
+                    <p className="mt-1.5 text-[15px] font-bold text-[#111110] transition-colors group-hover:text-[#084734]">
+                      {nextDoc.title}
+                    </p>
+                  </Link>
+                ) : null}
+              </nav>
             )}
 
             {relatedDocs.length > 0 && (
