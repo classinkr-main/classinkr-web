@@ -7,7 +7,7 @@ import {
 } from "@/lib/repositories/crm-source-links"
 
 function isManualTargetType(value: unknown): value is CrmManualLinkTargetType {
-  return value === "customer" || value === "deal"
+  return value === "partner_account" || value === "customer" || value === "deal"
 }
 
 export async function POST(req: NextRequest) {

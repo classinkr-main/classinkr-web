@@ -22,6 +22,7 @@ related:
 | 외부 CRM snapshot stale tracking | `external_crm_records.last_seen_run_id` 없음 | Xiaoshouyi sync가 원격 query 전에 `409`로 차단됨 |
 | write-back retry state | `crm_write_requests.attempt_count` 없음 | persisted write request 생성/승인/실행이 `409`로 차단됨 |
 | write-back audit | `crm_write_request_events` 없음 | 승인 큐 감사 로그가 없어 live write 차단 |
+| CRM source catalog | `crm_source_priorities`, `crm_match_aliases`, `crm_xiaoshouyi_query_catalog` 없음 | CRM-first source policy, alias matching, MCP compact context가 fallback으로만 동작 |
 | Xiaoshouyi credential | `XIAOSHOUYI_BASE_URL` 및 token/service OAuth 없음 | live snapshot, metadata probe, write executor smoke 불가 |
 
 현재 의도된 동작:
@@ -43,16 +44,20 @@ related:
 | 3 | `supabase/migrations/20260610_crm_source_links.sql` | 리드, REV 시트, Xiaoshouyi snapshot을 앱 고객/거래와 연결하는 identity layer |
 | 4 | `supabase/migrations/20260610_external_crm_write_request_guards.sql` | write request payload 구조와 update/transfer external id DB guard 추가 |
 | 5 | `supabase/migrations/20260610_external_crm_write_request_retry_audit.sql` | retry state, retry index, `crm_write_request_events` audit table, CRM schema contract check RPC 추가 |
-| 6 | `supabase/migrations/20260610_rev_color_amounts.sql` | REV 시트 확정/고확률 월별 금액 column. 이미 운영 DB에 있으면 재적용 불필요 |
+| 6 | `supabase/migrations/20260610_crm_source_priority_aliases_catalog.sql` | CRM source priority, fuzzy alias, Xiaoshouyi query catalog seed |
+| 7 | `supabase/migrations/20260610_rev_color_amounts.sql` | REV 시트 확정/고확률 월별 금액 column. 이미 운영 DB에 있으면 재적용 불필요 |
 
 주의:
 
 - 2번은 1번의 `external_crm_records`와 `external_crm_sync_runs`가 먼저 있어야 한다.
 - 4번과 5번은 1번의 `crm_write_requests`가 먼저 있어야 한다.
+- 6번은 `crm_source_links`를 직접 의존하지는 않지만, source-link 후보 생성과 MCP context가 같은 운영 정책을 읽도록 3번 이후에 적용한다.
 - 4번은 constraint 이름 기준으로 idempotent하게 작성되어 있다. 다만 같은 제약을 다른 이름으로 수동 생성한 DB라면 운영 반영 전 중복 제약을 확인한다.
 - 5번은 `get_crm_schema_contract_status()` RPC를 만든다. `/api/admin/crm/readiness`와 `/api/admin/crm/overview`는 이 RPC로 upsert unique key, source-link confirmed unique index, write guard constraint, audit FK/check constraint까지 확인한다.
 - `supabase/migrations/20260610_blog_posts_backfill_schema.sql`은 CRM 운영 적용과 무관하다.
 - 이 repo에는 같은 `20260610` prefix migration이 여러 개 있다. Supabase CLI처럼 prefix를 migration version으로 보는 도구로 배포한다면, 운영 반영 전에 repo 관례에 맞게 version 충돌을 해소하거나 SQL Editor/manual apply 절차로 위 순서를 보장한다.
+- 운영 bundle은 idempotent 적용 파일이지 손상된 partial schema 자동 복구 도구가 아니다. 같은 이름의 테이블이 이미 있는데 column 일부가 빠진 DB라면 bundle 실행 전에 readiness 응답과 `information_schema.columns`로 누락 column을 확인하고, runbook 순서에 맞는 `ALTER TABLE ... ADD COLUMN IF NOT EXISTS` 보정 SQL을 먼저 적용한다.
+- 개별 migration을 CLI로 적용해야 한다면 `20260610_*` 파일들의 version 충돌을 먼저 renumber하고, 특히 `20260610_rev_color_amounts.sql`은 `branch_rev_deals` base table 존재가 보장된 환경에서만 실행한다.
 
 적용 전 중복 row preflight:
 
@@ -98,7 +103,7 @@ XIAOSHOUYI_PASSWORD=...
 선택 env:
 
 ```text
-XIAOSHOUYI_SYNC_OBJECTS=account,contact,opportunity,ShroffAccount__c,Collection__c
+XIAOSHOUYI_SYNC_OBJECTS=account,contact,opportunity,ShroffAccount__c,Collection__c,SalesPerformance__c,CollectionPlan__c,FinancialInformation__c,ResourceInformation__c
 XIAOSHOUYI_SYNC_PAGE_SIZE=100
 XIAOSHOUYI_SYNC_MAX_PAGES=20
 ```
@@ -121,8 +126,8 @@ curl -sS http://127.0.0.1:3888/api/admin/crm/readiness
 
 | 단계 | readiness 기대값 |
 |---|---|
-| migration 적용 전 | stale tracking, write retry/audit, credential 관련 blocked |
-| migration 적용 후, Xiaoshouyi env 전 | DB schema/contract/REV check는 OK, credential은 blocked, metadata는 warning |
+| migration 적용 전 | stale tracking, write retry/audit, source catalog, credential 관련 blocked |
+| migration 적용 후, Xiaoshouyi env 전 | DB schema/contract/source catalog/REV check는 OK, credential은 blocked, metadata는 warning |
 | Xiaoshouyi env 후 | sync credential OK, metadata probe는 object field 결과에 따라 OK 또는 blocked |
 
 외부 CRM sync smoke:
@@ -158,6 +163,11 @@ curl -sS -X POST http://127.0.0.1:3888/api/admin/crm/write-requests \
 - [ ] `/api/admin/crm/readiness`에서 DB schema 관련 blocked가 0개.
 - [ ] `branch_rev_deals.monthly_confirmed/monthly_high_conf`가 readiness에서 OK.
 - [ ] Xiaoshouyi credential은 개인 토큰이 아니라 운영용 service credential로 등록.
+- [ ] `crm_source_priorities`에서 `xiaoshouyi/app_v2/lead`가 `branch_rev_sheet`보다 높은 priority인지 확인.
+- [ ] `crm_match_aliases`에 초기 한국/영문 alias와 매니저 기반 예외 케이스를 seed하거나 운영자가 입력할 절차를 정함.
+- [ ] source link confirm 후 `crm_match_aliases`에 learned alias가 자동 생성되는지 staging에서 확인.
+- [ ] `crm_xiaoshouyi_query_catalog`의 기본 9개 object가 운영에서 필요한 field를 포함하는지 확인. 이 table은 실제 Xiaoshouyi sync runtime의 우선 catalog다.
+- [ ] `GET /api/admin/crm/mcp-context`가 source priority, matching threshold, endpoint guide를 secret 없이 반환.
 - [ ] `GET /api/admin/crm/write-requests?preflight=metadata`가 writable object field probe를 통과.
 - [ ] `/api/admin/crm/external-sync` 수동 실행 후 `external_crm_records`에 account/contact/opportunity/Collection__c/ShroffAccount__c snapshot 적재 확인.
 - [ ] `/api/admin/crm/source-links/generate`의 `xiaoshouyi_snapshot` 후보 품질을 샘플 검수.

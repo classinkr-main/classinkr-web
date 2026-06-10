@@ -130,12 +130,19 @@ function getOverallStatus(input: {
   writeQueueOk: boolean
   sourceCandidates: number
   sourceStale: number
+  snapshotStale: number
   failedWrites: number
 }): AdminCrmOverviewStatus {
   if (input.schemaBlocked > 0 || !input.sourceLinksOk || !input.externalSnapshotsOk || !input.writeQueueOk) {
     return "blocked"
   }
-  if (!input.xiaoshouyiConfigured || input.sourceCandidates > 0 || input.sourceStale > 0 || input.failedWrites > 0) {
+  if (
+    !input.xiaoshouyiConfigured ||
+    input.sourceCandidates > 0 ||
+    input.sourceStale > 0 ||
+    input.snapshotStale > 0 ||
+    input.failedWrites > 0
+  ) {
     return "warning"
   }
   return "ok"
@@ -176,7 +183,7 @@ export async function getAdminCrmOverview(): Promise<AdminCrmOverview> {
         .eq("is_stale", true),
       sb
         .from("external_crm_sync_runs")
-        .select("status, object_api_key, finished_at, started_at")
+        .select("status, object_api_key, finished_at, started_at, error")
         .eq("source_system", "xiaoshouyi")
         .order("started_at", { ascending: false })
         .limit(1),
@@ -196,6 +203,10 @@ export async function getAdminCrmOverview(): Promise<AdminCrmOverview> {
   const schemaBlocked = schemaChecks.filter((check) => !check.ok)
   const externalRecord = externalRecordsResult.error ? null : externalRecordsResult.data?.[0]
   const latestRun = latestRunResult.error ? null : latestRunResult.data?.[0]
+  const latestRunFailed = latestRun && typeof latestRun.status === "string" && latestRun.status === "failed"
+  const latestRunError = latestRun && typeof latestRun.error === "string" && latestRun.error.trim()
+    ? latestRun.error.trim()
+    : null
 
   const sourceLinks = {
     ok: sourceLinkCounts.ok,
@@ -208,7 +219,7 @@ export async function getAdminCrmOverview(): Promise<AdminCrmOverview> {
   }
 
   const externalSnapshots = {
-    ok: !externalRecordsResult.error && !staleRecordsResult.error && !latestRunResult.error,
+    ok: !externalRecordsResult.error && !staleRecordsResult.error && !latestRunResult.error && !latestRunFailed,
     recordCount: externalRecordsResult.error ? 0 : externalRecordsResult.count ?? 0,
     staleCount: staleRecordsResult.error ? 0 : staleRecordsResult.count ?? 0,
     latestSyncedAt:
@@ -220,11 +231,12 @@ export async function getAdminCrmOverview(): Promise<AdminCrmOverview> {
     latestRunStatus: latestRun && typeof latestRun.status === "string" ? latestRun.status : null,
     latestRunObject: latestRun && typeof latestRun.object_api_key === "string" ? latestRun.object_api_key : null,
     error:
-      externalRecordsResult.error || staleRecordsResult.error || latestRunResult.error
+      externalRecordsResult.error || staleRecordsResult.error || latestRunResult.error || latestRunFailed
         ? [
             formatLabeledSupabaseError("external_crm_records latest", externalRecordsResult.error),
             formatLabeledSupabaseError("external_crm_records stale", staleRecordsResult.error),
             formatLabeledSupabaseError("external_crm_sync_runs latest", latestRunResult.error),
+            latestRunFailed ? `external_crm_sync_runs latest failed${latestRunError ? `: ${latestRunError}` : ""}` : null,
           ]
             .filter((message): message is string => Boolean(message))
             .join("; ")
@@ -253,6 +265,7 @@ export async function getAdminCrmOverview(): Promise<AdminCrmOverview> {
       writeQueueOk: writeQueue.ok,
       sourceCandidates: sourceLinks.candidate,
       sourceStale: sourceLinks.stale,
+      snapshotStale: externalSnapshots.staleCount,
       failedWrites: writeQueue.failed,
     }),
     schema: {

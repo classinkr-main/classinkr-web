@@ -82,10 +82,11 @@ const WRITE_OPERATION_LABEL: Record<string, string> = {
 const WRITE_MAX_ATTEMPTS = 3
 
 interface ManualLinkTargetOption {
-  targetType: "customer" | "deal"
+  targetType: "partner_account" | "customer" | "deal"
   targetId: string
   label: string
   confidence: number
+  evidence: string[]
 }
 
 interface ExternalCrmSyncResult {
@@ -641,19 +642,6 @@ export default function AdminCrmRevenuePage() {
           </button>
           <button
             type="button"
-            onClick={() => void syncSheet()}
-            disabled={syncing || loading}
-            className="inline-flex h-9 items-center gap-2 rounded-lg border border-[#e8e8e4] bg-white px-3 text-[13px] font-semibold text-[#111110] transition-colors hover:bg-[#f5f5f2] disabled:opacity-50"
-          >
-            {syncing ? (
-              <Loader2 className="h-4 w-4 animate-spin" />
-            ) : (
-              <FileSpreadsheet className="h-4 w-4" />
-            )}
-            시트 동기화
-          </button>
-          <button
-            type="button"
             onClick={() => void syncExternalCrm()}
             disabled={syncingExternal || loading}
             className="inline-flex h-9 items-center gap-2 rounded-lg border border-[#e8e8e4] bg-white px-3 text-[13px] font-semibold text-[#111110] transition-colors hover:bg-[#f5f5f2] disabled:opacity-50"
@@ -664,6 +652,19 @@ export default function AdminCrmRevenuePage() {
               <ServerCog className="h-4 w-4" />
             )}
             외부 CRM
+          </button>
+          <button
+            type="button"
+            onClick={() => void syncSheet()}
+            disabled={syncing || loading}
+            className="inline-flex h-9 items-center gap-2 rounded-lg border border-[#e8e8e4] bg-white px-3 text-[13px] font-semibold text-[#111110] transition-colors hover:bg-[#f5f5f2] disabled:opacity-50"
+          >
+            {syncing ? (
+              <Loader2 className="h-4 w-4 animate-spin" />
+            ) : (
+              <FileSpreadsheet className="h-4 w-4" />
+            )}
+            시트 동기화
           </button>
         </div>
       </div>
@@ -872,7 +873,7 @@ export default function AdminCrmRevenuePage() {
                         {formatCurrency(match.amount)}
                       </td>
                       <td className="py-4 pl-4">
-                        {!match.linkId ? (
+                        {match.linkStatus !== "confirmed" ? (
                           <div className="w-[260px] space-y-2">
                             <div className="flex gap-1.5">
                               <input
@@ -914,7 +915,12 @@ export default function AdminCrmRevenuePage() {
                                       className="flex w-full items-center justify-between gap-2 rounded-lg border border-[#e8e8e4] px-2 py-1.5 text-left text-[11px] text-[#111110] transition-colors hover:bg-[#f5f5f2] disabled:opacity-50"
                                     >
                                       <span className="min-w-0 truncate">
-                                        {target.targetType === "customer" ? "고객" : "거래"} · {target.label}
+                                        {target.targetType === "partner_account"
+                                          ? "파트너"
+                                          : target.targetType === "customer"
+                                            ? "고객"
+                                            : "거래"}{" "}
+                                        · {target.label}
                                       </span>
                                       <span className="flex shrink-0 items-center gap-1 text-[#1a1a1a]/35">
                                         {formatPercent(target.confidence)}

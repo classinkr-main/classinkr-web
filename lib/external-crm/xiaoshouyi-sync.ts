@@ -12,10 +12,15 @@ interface XiaoshouyiObjectConfig {
   fields: string[]
   displayNameFields: string[]
   orderBy?: string
+  whereClause?: string | null
   ownerFields?: string[]
   statusFields?: string[]
   amountFields?: string[]
   occurredAtFields?: string[]
+  pageSize?: number
+  maxPages?: number
+  syncPriority?: number
+  catalogSource?: "database" | "runtime"
 }
 
 interface XiaoshouyiConfig {
@@ -45,6 +50,17 @@ interface ExternalRecordRow {
   stale_at: null
 }
 
+interface XiaoshouyiQueryCatalogRow {
+  object_api_key: string
+  fields: string[]
+  where_clause: string | null
+  order_by: string
+  page_size: number
+  max_pages: number
+  sync_priority: number
+  metadata: Record<string, unknown> | null
+}
+
 export interface ExternalCrmSyncObjectResult {
   objectApiKey: string
   status: "success" | "failed" | "skipped"
@@ -67,6 +83,11 @@ export interface ExternalCrmSyncPreflightObject {
   objectApiKey: string
   fields: string[]
   orderBy: string
+  whereClause?: string | null
+  pageSize?: number
+  maxPages?: number
+  syncPriority?: number
+  catalogSource?: "database" | "runtime"
 }
 
 export interface ExternalCrmSyncPreflight {
@@ -153,19 +174,106 @@ const DEFAULT_OBJECTS: XiaoshouyiObjectConfig[] = [
       "id",
       "name",
       "ownerId",
-      "ownerName",
-      "amount",
-      "money",
       "Amount__c",
-      "CollectionAmount__c",
-      "GetDate__c",
+      "ActualTime__c",
+      "CollectionDate__c",
+      "approvalStatus",
+      "Contract__c",
+      "orderAccountId__c",
       "createdAt",
       "updatedAt",
     ],
     displayNameFields: ["name"],
     ownerFields: ["ownerName", "ownerId-label", "ownerId"],
-    amountFields: ["amount", "money", "Amount__c", "CollectionAmount__c"],
+    statusFields: ["approvalStatus-label", "approvalStatus"],
+    amountFields: ["Amount__c"],
+    occurredAtFields: ["ActualTime__c", "CollectionDate__c", "updatedAt", "createdAt"],
+  },
+  {
+    objectApiKey: "SalesPerformance__c",
+    fields: [
+      "id",
+      "name",
+      "amount_Collected__c",
+      "GetDate__c",
+      "type__c",
+      "product_famliy__c",
+      "new_or_addon__c",
+      "Account__c",
+      "ShroffAccount__c",
+      "IsCheckedOver__c",
+      "AccountGet__c",
+      "ownerId",
+      "createdAt",
+      "updatedAt",
+    ],
+    displayNameFields: ["name", "Account__c-label", "ShroffAccount__c-label"],
+    ownerFields: ["ownerName", "ownerId-label", "ownerId"],
+    statusFields: ["type__c-label", "type__c", "new_or_addon__c-label", "new_or_addon__c"],
+    amountFields: ["amount_Collected__c"],
     occurredAtFields: ["GetDate__c", "updatedAt", "createdAt"],
+  },
+  {
+    objectApiKey: "CollectionPlan__c",
+    fields: [
+      "id",
+      "name",
+      "EstimatedTime__c",
+      "collectStatus__c",
+      "Amount__c",
+      "accountId",
+      "ownerId",
+      "createdAt",
+      "updatedAt",
+    ],
+    displayNameFields: ["name", "accountId-label"],
+    ownerFields: ["ownerName", "ownerId-label", "ownerId"],
+    statusFields: ["collectStatus__c-label", "collectStatus__c"],
+    amountFields: ["Amount__c"],
+    occurredAtFields: ["EstimatedTime__c", "updatedAt", "createdAt"],
+  },
+  {
+    objectApiKey: "FinancialInformation__c",
+    fields: [
+      "id",
+      "ShroffAccInfor__c",
+      "currency__c",
+      "AmountReal__c",
+      "GetDate__c",
+      "orderType__c",
+      "PaymentType__c",
+      "orderId__c",
+      "ServiceVersion__c",
+      "newType__c",
+      "refunded__c",
+      "createdAt",
+      "updatedAt",
+    ],
+    displayNameFields: ["ShroffAccInfor__c-label", "orderId__c"],
+    statusFields: ["orderType__c-label", "orderType__c", "PaymentType__c-label", "PaymentType__c"],
+    amountFields: ["AmountReal__c", "currency__c"],
+    occurredAtFields: ["GetDate__c", "updatedAt", "createdAt"],
+  },
+  {
+    objectApiKey: "ResourceInformation__c",
+    fields: [
+      "id",
+      "ShroffAccount__c",
+      "ChangeType__c",
+      "ChangeCause__c",
+      "ChangeDetail__c",
+      "ChangeNumber__c",
+      "ChangeTime__c",
+      "Margin__c",
+      "ServiceType__c",
+      "Amount__c",
+      "createdAt",
+      "updatedAt",
+    ],
+    displayNameFields: ["ShroffAccount__c-label", "ChangeDetail__c"],
+    statusFields: ["ChangeType__c-label", "ChangeType__c", "ServiceType__c-label", "ServiceType__c"],
+    amountFields: ["Amount__c", "ChangeNumber__c"],
+    occurredAtFields: ["ChangeTime__c", "updatedAt", "createdAt"],
   },
 ]
 
@@ -195,22 +303,34 @@ function getXiaoshouyiConfig(): XiaoshouyiConfig | null {
 }
 
 function getSelectedObjects() {
-  const selected = readEnv("XIAOSHOUYI_SYNC_OBJECTS")
-    ?.split(",")
-    .map((item) => item.trim())
-    .filter(Boolean)
+  const selected = getSelectedObjectKeys()
 
   if (!selected?.length) return DEFAULT_OBJECTS
 
   return selected.map((objectApiKey) => {
-    const known = DEFAULT_OBJECTS.find((item) => item.objectApiKey === objectApiKey)
-    return known ?? {
-      objectApiKey,
-      fields: ["id", "name", "createdAt", "updatedAt"],
-      displayNameFields: ["name"],
-      occurredAtFields: ["updatedAt", "createdAt"],
-    }
+    return getKnownObjectConfig(objectApiKey) ?? getGenericObjectConfig(objectApiKey)
   })
+}
+
+function getSelectedObjectKeys() {
+  return readEnv("XIAOSHOUYI_SYNC_OBJECTS")
+    ?.split(",")
+    .map((item) => item.trim())
+    .filter(Boolean)
+}
+
+function getKnownObjectConfig(objectApiKey: string) {
+  return DEFAULT_OBJECTS.find((item) => item.objectApiKey === objectApiKey) ?? null
+}
+
+function getGenericObjectConfig(objectApiKey: string): XiaoshouyiObjectConfig {
+  return {
+    objectApiKey,
+    fields: ["id", "name", "createdAt", "updatedAt"],
+    displayNameFields: ["name"],
+    occurredAtFields: ["updatedAt", "createdAt"],
+    catalogSource: "runtime",
+  }
 }
 
 function getSyncPageSize() {
@@ -223,6 +343,74 @@ function getSyncMaxPages() {
   const parsed = Number(readEnv("XIAOSHOUYI_SYNC_MAX_PAGES"))
   if (!Number.isFinite(parsed)) return DEFAULT_SYNC_MAX_PAGES
   return Math.min(200, Math.max(1, Math.floor(parsed)))
+}
+
+function getMetadataStringArray(metadata: Record<string, unknown>, key: string, fallback: string[] = []) {
+  const value = metadata[key]
+  if (!Array.isArray(value)) return fallback
+  const items = value
+    .map((item) => (typeof item === "string" ? item.trim() : ""))
+    .filter(Boolean)
+  return items.length > 0 ? items : fallback
+}
+
+function toCatalogObjectConfig(row: XiaoshouyiQueryCatalogRow): XiaoshouyiObjectConfig {
+  const known = getKnownObjectConfig(row.object_api_key)
+  const metadata = row.metadata ?? {}
+  return {
+    objectApiKey: row.object_api_key,
+    fields: row.fields.length > 0 ? row.fields : known?.fields ?? ["id", "name", "createdAt", "updatedAt"],
+    displayNameFields: getMetadataStringArray(metadata, "displayNameFields", known?.displayNameFields ?? ["name"]),
+    orderBy: row.order_by,
+    whereClause: row.where_clause,
+    ownerFields: getMetadataStringArray(metadata, "ownerFields", known?.ownerFields ?? []),
+    statusFields: getMetadataStringArray(metadata, "statusFields", known?.statusFields ?? []),
+    amountFields: getMetadataStringArray(metadata, "amountFields", known?.amountFields ?? []),
+    occurredAtFields: getMetadataStringArray(metadata, "occurredAtFields", known?.occurredAtFields ?? ["updatedAt", "createdAt"]),
+    pageSize: Math.min(MAX_SYNC_PAGE_SIZE, Math.max(1, Math.floor(Number(row.page_size) || DEFAULT_SYNC_PAGE_SIZE))),
+    maxPages: Math.min(200, Math.max(1, Math.floor(Number(row.max_pages) || DEFAULT_SYNC_MAX_PAGES))),
+    syncPriority: Math.max(1, Math.floor(Number(row.sync_priority) || 100)),
+    catalogSource: "database",
+  }
+}
+
+async function getRuntimeSelectedObjects(): Promise<XiaoshouyiObjectConfig[]> {
+  const selected = getSelectedObjectKeys()
+  const sb = createSupabaseAdminClient()
+  const query = sb
+    .from("crm_xiaoshouyi_query_catalog")
+    .select("object_api_key, fields, where_clause, order_by, page_size, max_pages, sync_priority, metadata")
+    .eq("is_default_enabled", true)
+    .order("sync_priority", { ascending: true })
+    .limit(50)
+
+  const result = selected?.length ? await query.in("object_api_key", selected) : await query
+
+  if (result.error || !result.data?.length) {
+    return getSelectedObjects().map((object, index) => ({
+      ...object,
+      pageSize: getSyncPageSize(),
+      maxPages: getSyncMaxPages(),
+      syncPriority: (index + 1) * 10,
+      catalogSource: "runtime",
+    }))
+  }
+
+  const catalogObjects = (result.data as unknown as XiaoshouyiQueryCatalogRow[]).map(toCatalogObjectConfig)
+  if (!selected?.length) return catalogObjects
+
+  const found = new Set(catalogObjects.map((object) => object.objectApiKey))
+  const missing = selected
+    .filter((objectApiKey) => !found.has(objectApiKey))
+    .map((objectApiKey, index) => ({
+      ...(getKnownObjectConfig(objectApiKey) ?? getGenericObjectConfig(objectApiKey)),
+      pageSize: getSyncPageSize(),
+      maxPages: getSyncMaxPages(),
+      syncPriority: 1000 + index,
+      catalogSource: "runtime" as const,
+    }))
+
+  return [...catalogObjects, ...missing]
 }
 
 export function getXiaoshouyiSyncPreflight(): ExternalCrmSyncPreflight {
@@ -264,6 +452,25 @@ export function getXiaoshouyiSyncPreflight(): ExternalCrmSyncPreflight {
     pageSize,
     maxPages,
     objects,
+  }
+}
+
+export async function getXiaoshouyiSyncRuntimePreflight(): Promise<ExternalCrmSyncPreflight> {
+  const base = getXiaoshouyiSyncPreflight()
+  const objects = await getRuntimeSelectedObjects()
+
+  return {
+    ...base,
+    objects: objects.map((object) => ({
+      objectApiKey: object.objectApiKey,
+      fields: object.fields,
+      orderBy: object.orderBy ?? (object.fields.includes("updatedAt") ? "updatedAt DESC" : "id DESC"),
+      whereClause: object.whereClause ?? null,
+      pageSize: object.pageSize ?? base.pageSize,
+      maxPages: object.maxPages ?? base.maxPages,
+      syncPriority: object.syncPriority,
+      catalogSource: object.catalogSource ?? "runtime",
+    })),
   }
 }
 
@@ -458,7 +665,9 @@ async function queryXiaoshouyiRecords(
   offset: number
 ) {
   const orderBy = object.orderBy ?? (object.fields.includes("updatedAt") ? "updatedAt DESC" : "id DESC")
-  const query = `SELECT ${object.fields.join(",")} FROM ${object.objectApiKey} ORDER BY ${orderBy} LIMIT ${pageSize} OFFSET ${offset}`
+  const whereClause = object.whereClause?.trim()
+  const whereSql = whereClause ? ` WHERE ${whereClause}` : ""
+  const query = `SELECT ${object.fields.join(",")} FROM ${object.objectApiKey}${whereSql} ORDER BY ${orderBy} LIMIT ${pageSize} OFFSET ${offset}`
   const url = new URL(`${config.baseUrl}/rest/data/v2/query`)
   url.searchParams.set("q", query)
 
@@ -589,10 +798,9 @@ export async function syncXiaoshouyiSnapshots(trigger: ExternalCrmSyncTrigger = 
   }
 
   const results: ExternalCrmSyncObjectResult[] = []
-  const pageSize = getSyncPageSize()
-  const maxPages = getSyncMaxPages()
+  const runtimeObjects = await getRuntimeSelectedObjects()
 
-  for (const object of getSelectedObjects()) {
+  for (const object of runtimeObjects) {
     const runId = await createRun(object.objectApiKey, trigger)
     try {
       const syncedAt = new Date().toISOString()
@@ -602,6 +810,8 @@ export async function syncXiaoshouyiSnapshots(trigger: ExternalCrmSyncTrigger = 
       let nextOffset = 0
       let truncated = false
       const sb = createSupabaseAdminClient()
+      const pageSize = object.pageSize ?? getSyncPageSize()
+      const maxPages = object.maxPages ?? getSyncMaxPages()
 
       for (let page = 0; page < maxPages; page += 1) {
         const offset = page * pageSize
@@ -659,6 +869,9 @@ export async function syncXiaoshouyiSnapshots(trigger: ExternalCrmSyncTrigger = 
           truncated,
           staleMarked: staleRows?.length ?? 0,
           orderBy: object.orderBy ?? (object.fields.includes("updatedAt") ? "updatedAt DESC" : "id DESC"),
+          whereClause: object.whereClause ?? null,
+          catalogSource: object.catalogSource ?? "runtime",
+          syncPriority: object.syncPriority ?? null,
         },
       })
       results.push({
@@ -677,7 +890,11 @@ export async function syncXiaoshouyiSnapshots(trigger: ExternalCrmSyncTrigger = 
         error: message,
         rowsScanned: 0,
         rowsUpserted: 0,
-        metadata: { pageSize, maxPages },
+        metadata: {
+          pageSize: object.pageSize ?? getSyncPageSize(),
+          maxPages: object.maxPages ?? getSyncMaxPages(),
+          catalogSource: object.catalogSource ?? "runtime",
+        },
       })
       results.push({ objectApiKey: object.objectApiKey, status: "failed", rowsScanned: 0, rowsUpserted: 0, error: message })
     }

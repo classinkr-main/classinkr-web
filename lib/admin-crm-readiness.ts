@@ -82,49 +82,131 @@ async function checkDatabaseShape(
 export async function getAdminCrmReadinessReport(): Promise<CrmReadinessReport> {
   const sb = createSupabaseAdminClient()
 
-  const [syncSchema, writeSchema, schemaContract, duplicatePreflight, sourceLinks, branchRev, syncPreflight, writeMetadata] =
-    await Promise.all([
-      getXiaoshouyiSyncSchemaReadiness(),
-      getXiaoshouyiWriteSchemaReadiness(),
-      getCrmSchemaContractReadiness(),
-      getCrmDuplicatePreflightReport(),
-      checkDatabaseShape(
-        "crm_source_links",
-        "CRM source link schema",
-        sb
-          .from("crm_source_links")
-          .select(
-            [
-              "id",
-              "source_system",
-              "source_object",
-              "source_record_key",
-              "normalized_name",
-              "target_type",
-              "target_id",
-              "confidence",
-              "status",
-              "metadata",
-              "confirmed_by",
-              "confirmed_at",
-              "created_at",
-              "updated_at",
-            ].join(", ")
-          )
-          .limit(1),
-        "REV/Xiaoshouyi source-link runtime column contract 확인",
-        "Supabase 운영 DB에 supabase/migrations/20260610_crm_source_links.sql 적용"
-      ),
-      checkDatabaseShape(
-        "branch_rev_deals",
-        "Branch REV sheet schema",
-        sb.from("branch_rev_deals").select("id, monthly_confirmed, monthly_high_conf").limit(1),
-        "REV 시트 동기화본과 색상 금액 column 확인",
-        "Supabase 운영 DB에 supabase/migrations/20260427_branch_dashboard.sql 이후 supabase/migrations/20260610_rev_color_amounts.sql 적용"
-      ),
-      Promise.resolve(getXiaoshouyiSyncPreflight()),
-      getXiaoshouyiWriteMetadataPreflight(),
-    ])
+  const [
+    syncSchema,
+    writeSchema,
+    schemaContract,
+    duplicatePreflight,
+    sourceLinks,
+    sourcePriorities,
+    matchAliases,
+    queryCatalog,
+    branchRev,
+    syncPreflight,
+    writeMetadata,
+  ] = await Promise.all([
+    getXiaoshouyiSyncSchemaReadiness(),
+    getXiaoshouyiWriteSchemaReadiness(),
+    getCrmSchemaContractReadiness(),
+    getCrmDuplicatePreflightReport(),
+    checkDatabaseShape(
+      "crm_source_links",
+      "CRM source link schema",
+      sb
+        .from("crm_source_links")
+        .select(
+          [
+            "id",
+            "source_system",
+            "source_object",
+            "source_record_key",
+            "normalized_name",
+            "target_type",
+            "target_id",
+            "confidence",
+            "status",
+            "metadata",
+            "confirmed_by",
+            "confirmed_at",
+            "created_at",
+            "updated_at",
+          ].join(", ")
+        )
+        .limit(1),
+      "REV/Xiaoshouyi source-link runtime column contract 확인",
+      "Supabase 운영 DB에 supabase/migrations/20260610_crm_source_links.sql 적용"
+    ),
+    checkDatabaseShape(
+      "crm_source_priorities",
+      "CRM source priority schema",
+      sb
+        .from("crm_source_priorities")
+        .select(
+          [
+            "source_system",
+            "label",
+            "priority",
+            "trust_tier",
+            "is_primary",
+            "read_policy",
+            "write_policy",
+            "freshness_window_hours",
+            "metadata",
+          ].join(", ")
+        )
+        .limit(1),
+      "CRM 우선순위/신뢰도 정책 table 확인",
+      "Supabase 운영 DB에 supabase/migrations/20260610_crm_source_priority_aliases_catalog.sql 적용"
+    ),
+    checkDatabaseShape(
+      "crm_match_aliases",
+      "CRM fuzzy alias schema",
+      sb
+        .from("crm_match_aliases")
+        .select(
+          [
+            "id",
+            "alias",
+            "normalized_alias",
+            "canonical_name",
+            "normalized_canonical_name",
+            "target_type",
+            "target_id",
+            "manager_name",
+            "normalized_manager_name",
+            "confidence_boost",
+            "status",
+            "metadata",
+          ].join(", ")
+        )
+        .limit(1),
+      "리드/시트/CRM 이름 불일치 alias table 확인",
+      "Supabase 운영 DB에 supabase/migrations/20260610_crm_source_priority_aliases_catalog.sql 적용"
+    ),
+    checkDatabaseShape(
+      "crm_xiaoshouyi_query_catalog",
+      "Xiaoshouyi query catalog schema",
+      sb
+        .from("crm_xiaoshouyi_query_catalog")
+        .select(
+          [
+            "object_api_key",
+            "source_system",
+            "fields",
+            "where_clause",
+            "order_by",
+            "page_size",
+            "max_pages",
+            "sync_priority",
+            "is_default_enabled",
+            "is_write_allowed",
+            "metadata",
+          ].join(", ")
+        )
+        .limit(1),
+      "MCP/동기화 공용 Xiaoshouyi query catalog 확인",
+      "Supabase 운영 DB에 supabase/migrations/20260610_crm_source_priority_aliases_catalog.sql 적용"
+    ),
+    checkDatabaseShape(
+      "branch_rev_deals",
+      "Branch REV sheet schema",
+      sb.from("branch_rev_deals").select("id, monthly_confirmed, monthly_high_conf").limit(1),
+      "REV 시트 동기화본과 색상 금액 column 확인",
+      "Supabase 운영 DB에 supabase/migrations/20260427_branch_dashboard.sql 이후 supabase/migrations/20260610_rev_color_amounts.sql 적용"
+    ),
+    Promise.resolve(getXiaoshouyiSyncPreflight()),
+    getXiaoshouyiWriteMetadataPreflight(),
+  ])
 
   const checks: CrmReadinessCheck[] = [
     ...syncSchema.checks.map((check): CrmReadinessCheck => ({
@@ -135,6 +217,9 @@ export async function getAdminCrmReadinessReport(): Promise<CrmReadinessReport> 
       action: check.action,
     })),
     sourceLinks,
+    sourcePriorities,
+    matchAliases,
+    queryCatalog,
     branchRev,
     ...duplicatePreflight.checks.map((check): CrmReadinessCheck => ({
       key: check.key,

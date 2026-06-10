@@ -5,9 +5,10 @@ import {
   generateAllCrmLinkCandidates,
   generateBranchRevLinkCandidates,
   generateExternalCrmLinkCandidates,
+  generateLeadLinkCandidates,
 } from "@/lib/repositories/crm-source-links"
 
-type GenerateSource = "branch_rev_sheet" | "xiaoshouyi_snapshot" | "all"
+type GenerateSource = "branch_rev_sheet" | "lead" | "xiaoshouyi_snapshot" | "all"
 
 export async function POST(req: NextRequest) {
   const err = await verifyAdmin(req)
@@ -17,7 +18,7 @@ export async function POST(req: NextRequest) {
     const body = (await req.json().catch(() => null)) as { source?: unknown } | null
     const source = (body?.source ?? "branch_rev_sheet") as GenerateSource
 
-    if (!["branch_rev_sheet", "xiaoshouyi_snapshot", "all"].includes(source)) {
+    if (!["branch_rev_sheet", "lead", "xiaoshouyi_snapshot", "all"].includes(source)) {
       return NextResponse.json({ error: "Unsupported source" }, { status: 400 })
     }
 
@@ -28,6 +29,11 @@ export async function POST(req: NextRequest) {
 
     if (source === "xiaoshouyi_snapshot") {
       const result = await generateExternalCrmLinkCandidates()
+      return NextResponse.json({ ok: true, source, ...result })
+    }
+
+    if (source === "lead") {
+      const result = await generateLeadLinkCandidates()
       return NextResponse.json({ ok: true, source, ...result })
     }
 

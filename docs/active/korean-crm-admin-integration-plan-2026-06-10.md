@@ -29,9 +29,11 @@ related:
 운영 원칙:
 
 - `/admin/crm`은 고객/리드/거래/매출의 운영 source of truth가 된다.
+- CRM 데이터가 신뢰 가능하고 한국 관련 데이터가 충분히 들어온다는 전제에서는 Xiaoshouyi/app CRM/리드가 REV 스프레드시트보다 우선한다.
 - `/admin/branch`는 팀/지역/시트 성과와 데이터 품질 검수 화면으로 둔다.
-- REV 시트와 외부 CRM 금액은 매칭 전까지 앱 매출과 합산하지 않는다.
+- REV 시트 금액은 matching/검수 전까지 앱 매출과 합산하지 않고, 확정 source link가 있을 때만 dedupe 근거로 사용한다.
 - 외부 CRM 쓰기는 직접 실행하지 않고, 승인 큐와 감사 로그를 통과시킨다.
+- source priority, fuzzy alias, Xiaoshouyi query catalog는 SQL table로 관리한다. 코드 상수만으로 운영 정책을 숨기지 않는다.
 
 ## 2. 현재 어드민 CRM 구조
 
@@ -76,6 +78,7 @@ related:
 - 리드 상세의 `고객·거래 등록` 액션은 legacy `/api/admin/partners`가 아니라 단일 `POST /api/admin/leads/[id]/convert-v2` endpoint를 호출한다.
 - 이 endpoint는 V2 `customers`와 초기 `deals`를 만들고, 리드를 `converted`로 전환하며, `crm_source_links`에 `lead -> customer` confirmed link를 남긴다.
 - 전환 notes에는 원본 리드 ID, 유입 경로, UTM, 문의 내용, 생성된 고객/거래 ID가 남아 재시도와 추적이 가능하다.
+- 리드 자체도 source-link 후보 생성 대상이다. 리드의 `org/name/assigned_to`를 고객·파트너·거래 후보와 비교하고, 기존 confirmed lead link는 alias evidence로 재사용한다.
 
 ### 3-2. V2 고객/거래
 
@@ -118,7 +121,7 @@ related:
 
 1. `crm_source_links` 또는 `crm_sheet_matches` 테이블을 만든다.
 2. 시트 row 매칭 키는 `sheet_row` 단독이 아니라 `normalized_customer_name + sheet_row + source_fingerprint`를 함께 쓴다.
-3. 자동 매칭은 후보만 생성하고, admin이 확정해야 canonical 연결로 승격한다.
+3. 자동 매칭은 후보만 생성하고, admin이 확정해야 canonical 연결로 승격한다. 담당자/매니저가 같거나 alias evidence가 있으면 낮은 점수도 검수 queue에 남긴다.
 4. 매칭 전 금액은 `시트 기준`으로 병기만 하고 합산하지 않는다.
 
 ### 3-4. 외부 Xiaoshouyi / eeoCRM
@@ -130,6 +133,8 @@ related:
 - TypeScript/Node 18 MCP server다.
 - Express SSE endpoint로 AI 도구가 연결하고, 개인 OAuth 토큰 `~/.neocrm/credentials.json`로 Xiaoshouyi CRM에 접근한다.
 - 주요 API는 `GET /rest/data/v2/query?q=...`, CRUD는 `/rest/data/v2.0/xobjects/{apiKey}` 계열.
+- create/update/owner transfer 요청 body는 원본 필드를 그대로 보내는 것이 아니라 `{ data: { ...fields } }` envelope로 감싼다.
+- 개인 OAuth token은 약 2시간 만료이고, credential 파일은 로컬 머신/사용자에 묶여 있으므로 서버 배치 credential로 쓰지 않는다.
 - 기본 CRUD, metadata, 고객 360, smart find, quote/order/collection/EEO account health 도구가 있다.
 
 핵심 객체:
@@ -186,6 +191,12 @@ related:
 | `confirmed_by`, `confirmed_at` | 수동 확정 감사 |
 | `metadata` | 원천별 보조 정보 |
 
+2026-06-10 추가 반영:
+
+- `crm_source_priorities`: source별 trust tier, priority, read/write policy, freshness window를 SQL로 관리한다. 기본 우선순위는 `app_v2(10)`, `xiaoshouyi(20)`, `lead(30)`, `branch_rev_sheet(80)`, `legacy_partner(90)`이다.
+- `crm_match_aliases`: 리드명, 시트명, 영문/한글 표기, 매니저명 기반 alias를 관리한다. 예: 영어 `academy/center/campus/classin` 계열은 한국어 토큰으로 변환해 비교하고, 같은 매니저/담당자는 보조 증거로 점수를 올린다. 확정된 source link는 이후 매칭 품질을 위해 alias로 자동 학습된다.
+- `crm_xiaoshouyi_query_catalog`: Xiaoshouyi 객체별 field list, order by, where clause, page size/max pages, sync priority를 SQL로 관리한다. MCP와 서버 sync가 같은 카탈로그를 읽게 하며, DB catalog가 없으면 기존 env/default 설정으로 fallback한다.
+
 ### 4-2. 외부 CRM snapshot
 
 권장 최소 테이블:
@@ -202,7 +213,9 @@ related:
 - `/admin/crm/revenue` 소스 카드에서 Xiaoshouyi snapshot record/sync 상태를 읽도록 연결.
 - Xiaoshouyi read-only sync client와 수동/cron API 추가.
 - credential 미설정 시 sync run을 `skipped`로 남기고 라이브 호출은 하지 않는다.
-- `external_crm_records` snapshot을 `crm_source_links` 후보로 승격하는 generator 추가. `account/ShroffAccount__c` 계열은 `partner_account/customer`, `opportunity/Collection__c` 계열은 `deal/customer` 후보로 생성한다.
+- 기본 snapshot 대상은 `account`, `contact`, `opportunity`, `ShroffAccount__c`, `Collection__c`, `SalesPerformance__c`, `CollectionPlan__c`, `FinancialInformation__c`, `ResourceInformation__c`다. `ClassInformation__c`는 계정별 상세/기간성 데이터라 기본 전체 sync에는 넣지 않고 후속 drill-down 대상으로 둔다.
+- `Collection__c`는 `CollectionDate__c`가 아니라 재무 확인 기준일인 `ActualTime__c`를 우선 발생일로 사용한다.
+- `external_crm_records` snapshot을 `crm_source_links` 후보로 승격하는 generator 추가. `account/ShroffAccount__c` 계열은 `partner_account/customer`, `opportunity/Collection__c/SalesPerformance__c/FinancialInformation__c` 계열은 `deal/customer` 후보로 생성한다.
 - `/admin/crm/revenue` 소스 카드와 수동 sync 버튼은 credential 미설정으로 skipped 된 상태를 성공처럼 숨기지 않고 표시한다.
 - `vercel.json` 자동 스케줄은 서비스 credential 정책 확정 후 켠다.
 
@@ -232,6 +245,7 @@ related:
 - `crm_write_request_events` audit table과 `attempt_count/last_attempt_at/next_retry_at/last_attempt_error` retry state를 추가했다. 실패 요청은 retry window 이후 admin `retry` 액션으로 다시 `approved` 상태가 되고, 최대 3회까지만 실행한다.
 - `/admin/crm/revenue` 승인 큐는 attempt/retry state를 표시한다. 새 retry column이 운영 DB에 아직 없으면 기존 column select로 fallback해 탭 로딩을 유지한다.
 - `GET /api/admin/crm/write-requests?preflight=metadata`를 추가했다. Xiaoshouyi write allowlist의 객체/필드를 `SELECT ... LIMIT 1` query probe로 검증하며, executor도 실제 POST/PATCH 전 target object metadata probe를 통과해야 한다.
+- eeocrm-personal client 규약에 맞춰 live write preview/executor의 HTTP body는 `{ data: ... }` envelope로 만든다. DB의 `crm_write_requests.payload`는 admin 검수용 원본 field map으로 유지하고, `preview_payload.body`에 실제 전송 body를 남긴다.
 
 ## 5. 실행 로드맵
 
@@ -253,8 +267,12 @@ related:
 - REV 시트 후보 확정/제외 API와 `/admin/crm/revenue` 액션 UI 추가. (2026-06-10 반영)
 - 미매칭 행에서 임의 고객/거래를 검색해 수동 후보를 만드는 UI 추가. (2026-06-10 반영)
 - `/api/admin/crm/source-links/generate`가 `branch_rev_sheet`, `xiaoshouyi_snapshot`, `all` 후보 생성을 지원. (2026-06-10 반영)
+- `/api/admin/crm/source-links/generate`가 `lead` 후보 생성도 지원하고, `all`은 CRM snapshot + lead + REV를 함께 돌린다. (2026-06-10 반영)
 - `/admin/crm/partners/customers`에서 admin 고객 생성 버튼 활성화. (2026-06-10 반영)
 - 리드 전환을 V2 고객+초기 거래 생성으로 전환하고 `lead -> customer` source link를 자동 확정. (2026-06-10 반영)
+- 수동 source-link 검색/생성 대상에 `partner_account`를 추가했다. 확정되지 않은 `candidate/stale/rejected/미매칭` 행은 대체 후보를 계속 검색해 붙일 수 있다. (2026-06-10 반영)
+- 이름 매칭은 정규화 문자열만 보지 않고 영어-한국어 token translation, alias table, lead confirmed link, 매니저/담당자 일치 증거를 함께 사용한다. (2026-06-10 반영)
+- source link 확정 시 `crm_match_aliases`를 자동 upsert해 다음 후보 생성의 alias evidence로 재사용한다. (2026-06-10 반영)
 
 ### Phase 2. 외부 CRM read-only ingest
 
@@ -264,8 +282,9 @@ related:
 - `/admin/crm/revenue`에 Xiaoshouyi snapshot source 상태 표시. (2026-06-10 반영)
 - `account/contact/opportunity/Collection__c/ShroffAccount__c` read-only sync client 구현. (2026-06-10 반영)
 - `/api/admin/crm/external-sync`, `/api/cron/sync-external-crm` 추가. (2026-06-10 반영)
-- `GET /api/admin/crm/external-sync` preflight 추가. credential/object/page 설정을 읽기만 하고 sync run은 만들지 않는다. `/admin/crm/revenue`의 외부 CRM 버튼은 preflight 통과 후에만 POST sync를 실행한다. (2026-06-10 반영)
+- `GET /api/admin/crm/external-sync` preflight 추가. credential/object/page 설정을 읽기만 하고 sync run은 만들지 않는다. 이 preflight도 실제 runtime catalog resolver를 사용해 `catalogSource`, `whereClause`, 객체별 page limit을 보여준다. `/admin/crm/revenue`의 외부 CRM 버튼은 preflight 통과 후에만 POST sync를 실행한다. (2026-06-10 반영)
 - `GET /api/admin/crm/readiness`와 `/admin/crm/revenue` 운영 준비도 패널 추가. DB migration/table/column, Xiaoshouyi credential, write metadata probe 상태를 한 번에 점검한다. (2026-06-10 반영)
+- readiness가 `crm_source_priorities`, `crm_match_aliases`, `crm_xiaoshouyi_query_catalog` schema도 점검한다. (2026-06-10 반영)
 - Xiaoshouyi manual/cron sync 실행 전에 `external_crm_sync_runs`와 `external_crm_records` stale-tracking schema를 검사한다. 미적용 상태면 원격 CRM query를 시작하지 않고 `409` + actionable error를 반환한다. (2026-06-10 반영)
 - 고객사 목록/상세에 source badge, external candidate count, last synced 표시. (2026-06-10 반영)
 - 외부 snapshot 레코드의 이름 기반 source-link 후보 생성 및 고객 coverage 반영. (2026-06-10 반영)
@@ -274,10 +293,12 @@ related:
 - 소유자/담당자 discrepancy는 `partner_accounts.owner_name`과 Xiaoshouyi 확정 source link 또는 상세 snapshot의 `owner_name`을 비교한다. REV 시트의 `team · manager` 표기는 담당자 mismatch 판정에서 제외한다.
 - `verified` coverage는 확정 source link와 확정 Xiaoshouyi source link가 모두 있을 때만 부여하고, fuzzy snapshot 후보만 있는 경우는 `needs_review`로 둔다.
 - Xiaoshouyi snapshot query는 객체별 page size/max pages 환경변수, deterministic `ORDER BY`, sync cursor metadata, stale/deleted-record marking을 지원한다. (2026-06-10 반영)
+- Xiaoshouyi snapshot sync runtime이 `crm_xiaoshouyi_query_catalog`를 우선 읽는다. 객체별 `fields/where_clause/order_by/page_size/max_pages/sync_priority`가 DB에서 운영 관리되고, sync run metadata에 catalog source가 기록된다. (2026-06-10 반영)
 - `/admin/crm/revenue`의 CRM 정합성 섹션에 Xiaoshouyi source-link 후보 검수 표를 추가했다. 생성된 외부 CRM 후보는 같은 source-link PATCH API로 확정/제외할 수 있다.
 - 고객 상세 slide-over에서도 admin 모드 source link 후보/재검수 항목을 바로 확정/제외할 수 있다.
 - `/admin/crm/revenue`의 Xiaoshouyi source card가 최근 sync page 수, stale 처리 수, cursor/truncated 상태를 표시한다.
 - `crm_write_requests`는 dry-run validator, 승인 API, executor, Xiaoshouyi write client까지 준비됐다. 단, live service credential, live metadata validation, retry 정책 확인 전까지 운영 UI에서 직접 실행 버튼은 노출하지 않는다.
+- `GET /api/admin/crm/mcp-context`를 추가했다. MCP/서브에이전트는 raw CRM payload를 크게 주고받기 전에 이 compact context로 source priority, query catalog, matching threshold, 안전한 endpoint 목록을 먼저 읽는다.
 
 ### Phase 3. 승인형 write-back
 
@@ -302,6 +323,7 @@ related:
 | REV 시트 금액 처리 | 합산 / 병기 / 매칭 후 dedupe | 병기, 매칭 후 dedupe |
 | 리드 전환 대상 | legacy partner / V2 customer+deal / 선택형 | 선택형, 기본 V2 |
 | Branch 역할 | CRM 편집 / 성과 검수 | 성과 검수 및 CRM deep-link |
+| MCP 사용 범위 | raw data shuttle / compact context first | compact context first, row-level은 필요 시 bounded pull |
 
 ## 7. 즉시 확인할 운영 체크리스트
 
@@ -317,6 +339,8 @@ related:
 - [ ] Supabase 운영 DB에 `external_crm_records.last_seen_run_id/is_stale/stale_at` migration 적용.
 - [ ] Supabase 운영 DB에 `crm_write_requests` guardrail migration 적용.
 - [ ] Supabase 운영 DB에 `crm_write_request_events`와 write retry state migration 적용.
+- [ ] Supabase 운영 DB에 `crm_source_priorities`, `crm_match_aliases`, `crm_xiaoshouyi_query_catalog` migration 적용.
+- [ ] `/api/admin/crm/mcp-context`가 source priority와 Xiaoshouyi query catalog를 secret 없이 반환하는지 확인.
 - [ ] 라이브 Xiaoshouyi snapshot 적재 후 고객사 상세의 `crm_coverage.external_records` 후보 품질과 false positive 기준 확인.
 - [ ] Xiaoshouyi pagination/cursor/stale marking을 live credential로 smoke test.
 - [x] `/admin/crm/revenue`에 외부 CRM 후보 승인 UI 추가.

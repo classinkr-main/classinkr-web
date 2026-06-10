@@ -23,8 +23,6 @@ interface LegacyPartnerRow {
   id: string
   name: string
   status: string
-  pipeline_stage: string
-  deal_amount: number | null
   created_at: string
   updated_at: string
 }
@@ -188,6 +186,7 @@ interface QueryResult<T> {
   rows: T[]
   source: CrmRevenueSource
   warning: string | null
+  limit: number | null
 }
 
 // 시트 status는 자유 입력이라 enum이 없다. 취소·중단 계열 키워드만 예상 매출에서 제외한다.
@@ -197,6 +196,21 @@ const CRM_WRITE_REQUEST_BASE_SELECT =
 const CRM_WRITE_REQUEST_RETRY_SELECT =
   `${CRM_WRITE_REQUEST_BASE_SELECT}, attempt_count, last_attempt_at, next_retry_at, last_attempt_error`
 const CRM_WRITE_REQUEST_RETRY_COLUMNS = ["attempt_count", "last_attempt_at", "next_retry_at", "last_attempt_error"]
+const QUERY_LIMITS = {
+  defaultRows: 1000,
+  sourceLinks: 2000,
+  externalRecords: 2000,
+  syncRuns: 200,
+  writeRequests: 200,
+} as const
+const DISPLAY_LIMITS = {
+  sheetMatches: 12,
+  externalLinks: 20,
+  writeRequests: 20,
+  partners: 10,
+  risks: 8,
+  documents: 20,
+} as const
 
 function hasValue(value: string | undefined) {
   return Boolean(value?.trim())
@@ -363,7 +377,8 @@ function buildExternalCrmSource(
 async function runQuery<T>(
   key: string,
   label: string,
-  promise: PromiseLike<{ data: unknown; error: { message: string } | null }>
+  promise: PromiseLike<{ data: unknown; error: { message: string } | null }>,
+  limit: number | null = null
 ): Promise<QueryResult<T>> {
   const startedAt = Date.now()
 
@@ -375,6 +390,7 @@ async function runQuery<T>(
       return {
         rows: [],
         warning: `${label}: ${error.message}`,
+        limit,
         source: {
           key,
           label,
@@ -392,6 +408,7 @@ async function runQuery<T>(
     return {
       rows,
       warning: null,
+      limit,
       source: {
         key,
         label,
@@ -408,6 +425,7 @@ async function runQuery<T>(
     return {
       rows: [],
       warning: `${label}: ${message}`,
+      limit,
       source: {
         key,
         label,
@@ -507,6 +525,16 @@ function addMonthlyAmountByKey(
   point[key] += amount
 }
 
+function getQueryLimitWarning<T>(result: QueryResult<T>) {
+  if (!result.limit || result.source.status === "error" || result.rows.length < result.limit) return null
+  return `${result.source.label}: ${result.limit.toLocaleString("ko-KR")}건까지만 로드했습니다. 전체 정리를 위해 pagination/export가 필요할 수 있습니다.`
+}
+
+function getDisplayLimitWarning(label: string, totalRows: number, displayedRows: number) {
+  if (totalRows <= displayedRows) return null
+  return `${label}: 화면에는 ${displayedRows.toLocaleString("ko-KR")} / ${totalRows.toLocaleString("ko-KR")}건만 표시됩니다.`
+}
+
 function getPartnerAccumulator(
   rows: Map<string, CrmRevenuePartnerRow>,
   id: string,
@@ -577,9 +605,10 @@ export async function getAdminCrmRevenueDashboard(months = 6): Promise<CrmRevenu
         "레거시 파트너",
         supabase
           .from("partners")
-          .select("id, name, status, pipeline_stage, deal_amount, created_at, updated_at")
+          .select("id, name, status, created_at, updated_at")
           .order("updated_at", { ascending: false })
-          .limit(1000)
+          .limit(QUERY_LIMITS.defaultRows),
+        QUERY_LIMITS.defaultRows
       ),
       runQuery<LegacyQuoteRow>(
         "legacy_quotes",
@@ -588,7 +617,8 @@ export async function getAdminCrmRevenueDashboard(months = 6): Promise<CrmRevenu
           .from("quotes")
           .select("id, quote_number, partner_id, title, status, total_amount, sent_at, accepted_at, created_at, updated_at")
           .order("updated_at", { ascending: false })
-          .limit(1000)
+          .limit(QUERY_LIMITS.defaultRows),
+        QUERY_LIMITS.defaultRows
       ),
       runQuery<LegacyContractRow>(
         "legacy_contracts",
@@ -597,7 +627,8 @@ export async function getAdminCrmRevenueDashboard(months = 6): Promise<CrmRevenu
           .from("contracts")
           .select("id, contract_number, partner_id, quote_id, title, status, total_amount, partner_signed_at, admin_signed_at, created_at, updated_at")
           .order("updated_at", { ascending: false })
-          .limit(1000)
+          .limit(QUERY_LIMITS.defaultRows),
+        QUERY_LIMITS.defaultRows
       ),
       runQuery<LegacyReceiptRow>(
         "legacy_receipts",
@@ -606,7 +637,8 @@ export async function getAdminCrmRevenueDashboard(months = 6): Promise<CrmRevenu
           .from("receipts")
           .select("id, receipt_number, contract_id, partner_id, total_amount, payment_method, paid_at, created_at, updated_at")
           .order("updated_at", { ascending: false })
-          .limit(1000)
+          .limit(QUERY_LIMITS.defaultRows),
+        QUERY_LIMITS.defaultRows
       ),
       runQuery<PartnerAccountRow>(
         "partner_accounts",
@@ -615,7 +647,8 @@ export async function getAdminCrmRevenueDashboard(months = 6): Promise<CrmRevenu
           .from("partner_accounts")
           .select("id, name, status, updated_at")
           .order("updated_at", { ascending: false })
-          .limit(1000)
+          .limit(QUERY_LIMITS.defaultRows),
+        QUERY_LIMITS.defaultRows
       ),
       runQuery<CustomerRow>(
         "customers",
@@ -624,7 +657,8 @@ export async function getAdminCrmRevenueDashboard(months = 6): Promise<CrmRevenu
           .from("customers")
           .select("id, partner_account_id, name, campus_name, region_label, updated_at")
           .order("updated_at", { ascending: false })
-          .limit(1000)
+          .limit(QUERY_LIMITS.defaultRows),
+        QUERY_LIMITS.defaultRows
       ),
       runQuery<DealRow>(
         "deals",
@@ -633,7 +667,8 @@ export async function getAdminCrmRevenueDashboard(months = 6): Promise<CrmRevenu
           .from("deals")
           .select("id, partner_account_id, customer_id, deal_code, title, status, current_stage, expected_amount, contracted_amount, paid_amount, outstanding_amount, payment_status, closed_at, created_at, updated_at")
           .order("updated_at", { ascending: false })
-          .limit(1000)
+          .limit(QUERY_LIMITS.defaultRows),
+        QUERY_LIMITS.defaultRows
       ),
       runQuery<SheetRevDealRow>(
         "crm_sheet",
@@ -642,7 +677,8 @@ export async function getAdminCrmRevenueDashboard(months = 6): Promise<CrmRevenu
         supabase
           .from("branch_rev_deals")
           .select("*")
-          .limit(1000)
+          .limit(QUERY_LIMITS.defaultRows),
+        QUERY_LIMITS.defaultRows
       ),
       runQuery<CrmSourceLinkRow>(
         "crm_source_links",
@@ -652,7 +688,8 @@ export async function getAdminCrmRevenueDashboard(months = 6): Promise<CrmRevenu
           .select("id, source_system, source_object, source_record_key, normalized_name, target_type, target_id, confidence, status, metadata, confirmed_at, updated_at")
           .eq("source_system", "branch_rev_sheet")
           .eq("source_object", "branch_rev_deals")
-          .limit(2000)
+          .limit(QUERY_LIMITS.sourceLinks),
+        QUERY_LIMITS.sourceLinks
       ),
       runQuery<CrmSourceLinkRow>(
         "xiaoshouyi_source_links",
@@ -662,7 +699,8 @@ export async function getAdminCrmRevenueDashboard(months = 6): Promise<CrmRevenu
           .select("id, source_system, source_object, source_record_key, normalized_name, target_type, target_id, confidence, status, metadata, confirmed_at, updated_at")
           .eq("source_system", "xiaoshouyi")
           .order("updated_at", { ascending: false })
-          .limit(2000)
+          .limit(QUERY_LIMITS.sourceLinks),
+        QUERY_LIMITS.sourceLinks
       ),
       runQuery<ExternalCrmRecordRow>(
         "external_crm_records",
@@ -672,7 +710,8 @@ export async function getAdminCrmRevenueDashboard(months = 6): Promise<CrmRevenu
           .select("id, source_system, object_api_key, external_id, normalized_name, display_name, owner_name, status, amount, occurred_at, synced_at, updated_at")
           .eq("source_system", "xiaoshouyi")
           .order("synced_at", { ascending: false })
-          .limit(2000)
+          .limit(QUERY_LIMITS.externalRecords),
+        QUERY_LIMITS.externalRecords
       ),
       runQuery<ExternalCrmSyncRunRow>(
         "external_crm_sync_runs",
@@ -682,7 +721,8 @@ export async function getAdminCrmRevenueDashboard(months = 6): Promise<CrmRevenu
           .select("id, source_system, object_api_key, status, trigger, started_at, finished_at, rows_scanned, rows_upserted, cursor_value, error, metadata, updated_at")
           .eq("source_system", "xiaoshouyi")
           .order("started_at", { ascending: false })
-          .limit(200)
+          .limit(QUERY_LIMITS.syncRuns),
+        QUERY_LIMITS.syncRuns
       ),
       runQuery<CrmWriteRequestRow>(
         "crm_write_requests",
@@ -694,7 +734,7 @@ export async function getAdminCrmRevenueDashboard(months = 6): Promise<CrmRevenu
               .select(select)
               .eq("source_system", "xiaoshouyi")
               .order("created_at", { ascending: false })
-              .limit(200)
+              .limit(QUERY_LIMITS.writeRequests)
 
           const withRetryState = await query(CRM_WRITE_REQUEST_RETRY_SELECT)
           if (!withRetryState.error) return withRetryState
@@ -705,7 +745,8 @@ export async function getAdminCrmRevenueDashboard(months = 6): Promise<CrmRevenu
           if (!missingRetryColumn) return withRetryState
 
           return query(CRM_WRITE_REQUEST_BASE_SELECT)
-        })()
+        })(),
+        QUERY_LIMITS.writeRequests
       ),
     ])
 
@@ -723,6 +764,19 @@ export async function getAdminCrmRevenueDashboard(months = 6): Promise<CrmRevenu
     externalRecordsResult.warning,
     externalSyncRunsResult.warning,
     writeRequestsResult.warning,
+    getQueryLimitWarning(partnersResult),
+    getQueryLimitWarning(quotesResult),
+    getQueryLimitWarning(contractsResult),
+    getQueryLimitWarning(receiptsResult),
+    getQueryLimitWarning(accountsResult),
+    getQueryLimitWarning(customersResult),
+    getQueryLimitWarning(dealsResult),
+    getQueryLimitWarning(sheetResult),
+    getQueryLimitWarning(sourceLinksResult),
+    getQueryLimitWarning(externalSourceLinksResult),
+    getQueryLimitWarning(externalRecordsResult),
+    getQueryLimitWarning(externalSyncRunsResult),
+    getQueryLimitWarning(writeRequestsResult),
   ].filter((warning): warning is string => Boolean(warning))
 
   const partners = partnersResult.rows
@@ -736,6 +790,17 @@ export async function getAdminCrmRevenueDashboard(months = 6): Promise<CrmRevenu
   const sourceLinks = sourceLinksResult.rows
   const externalSourceLinks = externalSourceLinksResult.rows
   const externalRecords = externalRecordsResult.rows
+  const linkedExternalKeys = new Set(
+    externalSourceLinks.map((link) => `${link.source_object}:${link.source_record_key}`)
+  )
+  const unmatchedExternalRecordCount = externalRecords.filter(
+    (record) => !linkedExternalKeys.has(`${record.object_api_key}:${record.external_id}`)
+  ).length
+  if (unmatchedExternalRecordCount > 0) {
+    warnings.push(
+      `Xiaoshouyi snapshot ${unmatchedExternalRecordCount.toLocaleString("ko-KR")}건은 아직 source link 후보/확정 링크가 없습니다. 후보 생성 후 저신뢰 레코드는 수동 검수가 필요합니다.`
+    )
+  }
 
   const partnerNameById = new Map(partners.map((partner) => [partner.id, partner.name]))
   const accountNameById = new Map(accounts.map((account) => [account.id, account.name]))
@@ -946,7 +1011,7 @@ export async function getAdminCrmRevenueDashboard(months = 6): Promise<CrmRevenu
         }
       : null
 
-  const externalLinks: CrmRevenueExternalLinkRow[] = externalSourceLinks
+  const externalLinkRows: CrmRevenueExternalLinkRow[] = externalSourceLinks
     .map((link) => {
       const targetLabel =
         getMetadataString(link.metadata, "target_label") ??
@@ -992,9 +1057,9 @@ export async function getAdminCrmRevenueDashboard(months = 6): Promise<CrmRevenu
       if ((a.confidence ?? 0) !== (b.confidence ?? 0)) return (b.confidence ?? 0) - (a.confidence ?? 0)
       return new Date(b.updatedAt).getTime() - new Date(a.updatedAt).getTime()
     })
-    .slice(0, 20)
+  const externalLinks = externalLinkRows.slice(0, DISPLAY_LIMITS.externalLinks)
 
-  const writeRequests: CrmRevenueWriteRequestRow[] = writeRequestsResult.rows
+  const writeRequestRows: CrmRevenueWriteRequestRow[] = writeRequestsResult.rows
     .map((request) => ({
       id: request.id,
       sourceSystem: request.source_system,
@@ -1014,7 +1079,7 @@ export async function getAdminCrmRevenueDashboard(months = 6): Promise<CrmRevenu
       createdAt: request.created_at,
       updatedAt: request.updated_at,
     }))
-    .slice(0, 20)
+  const writeRequests = writeRequestRows.slice(0, DISPLAY_LIMITS.writeRequests)
 
   for (const row of partnerRows.values()) {
     if (row.outstandingAmount === 0) {
@@ -1035,7 +1100,7 @@ export async function getAdminCrmRevenueDashboard(months = 6): Promise<CrmRevenu
         sumBy(receipts, (receipt) => receipt.total_amount)
     )
 
-  const risks: CrmRevenueRiskItem[] = [
+  const riskRows: CrmRevenueRiskItem[] = [
     ...sheetRisks,
     ...deals
       .filter((deal) => deal.outstanding_amount > 0 || deal.payment_status !== "paid")
@@ -1066,9 +1131,9 @@ export async function getAdminCrmRevenueDashboard(months = 6): Promise<CrmRevenu
       .filter((item) => item.amount > 0),
   ]
     .sort((a, b) => b.amount - a.amount)
-    .slice(0, 8)
+  const risks = riskRows.slice(0, DISPLAY_LIMITS.risks)
 
-  const documents: CrmRevenueDocumentRow[] = [
+  const documentRows: CrmRevenueDocumentRow[] = [
     ...quotes.map((quote) => ({
       id: quote.id,
       kind: "quote" as const,
@@ -1111,7 +1176,29 @@ export async function getAdminCrmRevenueDashboard(months = 6): Promise<CrmRevenu
     })),
   ]
     .sort((a, b) => new Date(b.occurredAt ?? 0).getTime() - new Date(a.occurredAt ?? 0).getTime())
-    .slice(0, 20)
+  const documents = documentRows.slice(0, DISPLAY_LIMITS.documents)
+
+  const sortedSheetMatches = sheetMatches.sort((a, b) => {
+    const aLinked = a.linkStatus === "confirmed" ? 1 : 0
+    const bLinked = b.linkStatus === "confirmed" ? 1 : 0
+    if (aLinked !== bLinked) return aLinked - bLinked
+    return b.amount - a.amount
+  })
+  const displayedSheetMatches = sortedSheetMatches.slice(0, DISPLAY_LIMITS.sheetMatches)
+  const partnerDisplayRows = Array.from(partnerRows.values())
+    .sort((a, b) => b.contractedAmount + b.quotedAmount - (a.contractedAmount + a.quotedAmount))
+    .slice(0, DISPLAY_LIMITS.partners)
+
+  warnings.push(
+    ...[
+      getDisplayLimitWarning("REV 매칭 테이블", sortedSheetMatches.length, displayedSheetMatches.length),
+      getDisplayLimitWarning("Xiaoshouyi 후보 검수", externalLinkRows.length, externalLinks.length),
+      getDisplayLimitWarning("외부 CRM 쓰기 승인 큐", writeRequestRows.length, writeRequests.length),
+      getDisplayLimitWarning("파트너/고객 랭킹", partnerRows.size, partnerDisplayRows.length),
+      getDisplayLimitWarning("정리 리스크", riskRows.length, risks.length),
+      getDisplayLimitWarning("최근 CRM 문서/거래", documentRows.length, documents.length),
+    ].filter((warning): warning is string => Boolean(warning))
+  )
 
   const sheetSource: CrmRevenueSource = {
     ...sheetResult.source,
@@ -1168,20 +1255,11 @@ export async function getAdminCrmRevenueDashboard(months = 6): Promise<CrmRevenu
     },
     sheet: sheetSummary,
     identity: identitySummary,
-    sheetMatches: sheetMatches
-      .sort((a, b) => {
-        const aLinked = a.linkStatus === "confirmed" ? 1 : 0
-        const bLinked = b.linkStatus === "confirmed" ? 1 : 0
-        if (aLinked !== bLinked) return aLinked - bLinked
-        return b.amount - a.amount
-      })
-      .slice(0, 12),
+    sheetMatches: displayedSheetMatches,
     externalLinks,
     writeRequests,
     monthly: Array.from(monthly.values()),
-    partners: Array.from(partnerRows.values())
-      .sort((a, b) => b.contractedAmount + b.quotedAmount - (a.contractedAmount + a.quotedAmount))
-      .slice(0, 10),
+    partners: partnerDisplayRows,
     risks,
     documents,
     sources: [
@@ -1192,13 +1270,13 @@ export async function getAdminCrmRevenueDashboard(months = 6): Promise<CrmRevenu
       accountsResult.source,
       customersResult.source,
       dealsResult.source,
-      sheetSource,
+      externalCrmSource,
       {
         ...sourceLinksResult.source,
         description:
           sourceLinksResult.source.status === "connected"
-            ? "REV 시트 레코드와 앱 고객·거래를 연결하는 identity layer입니다."
-            : "crm_source_links 마이그레이션 적용 후 매칭 상태를 읽습니다.",
+            ? "CRM·리드·REV 원천 레코드를 앱 파트너·고객·거래에 연결하는 identity layer입니다."
+            : "crm_source_links 마이그레이션 적용 후 CRM/리드/REV 매칭 상태를 읽습니다.",
       },
       {
         ...externalSourceLinksResult.source,
@@ -1207,7 +1285,7 @@ export async function getAdminCrmRevenueDashboard(months = 6): Promise<CrmRevenu
             ? "Xiaoshouyi snapshot 후보와 확정 링크를 검수합니다."
             : "Xiaoshouyi source link 후보 생성 후 검수 상태를 읽습니다.",
       },
-      externalCrmSource,
+      sheetSource,
     ],
     warnings,
   }

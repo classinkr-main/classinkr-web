@@ -1,13 +1,13 @@
 import { NextRequest, NextResponse } from "next/server"
 
 import { verifyAdmin } from "@/lib/admin-auth"
-import { getXiaoshouyiSyncPreflight, syncXiaoshouyiSnapshots } from "@/lib/external-crm/xiaoshouyi-sync"
+import { getXiaoshouyiSyncRuntimePreflight, syncXiaoshouyiSnapshots } from "@/lib/external-crm/xiaoshouyi-sync"
 
 export async function GET(req: NextRequest) {
   const err = await verifyAdmin(req)
   if (err) return err
 
-  return NextResponse.json(getXiaoshouyiSyncPreflight())
+  return NextResponse.json(await getXiaoshouyiSyncRuntimePreflight())
 }
 
 export async function POST(req: NextRequest) {

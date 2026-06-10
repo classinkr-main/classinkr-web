@@ -280,6 +280,23 @@ function xobjectPath(objectApiKey: string, externalId?: string | null) {
     : `/rest/data/v2.0/xobjects/${objectApiKey}`
 }
 
+function xobjectMutationBody(data: Record<string, unknown>) {
+  return { data }
+}
+
+function unwrapPersistedPayload(payload: Record<string, unknown>) {
+  const wrappedData = payload.data
+  if (
+    wrappedData &&
+    typeof wrappedData === "object" &&
+    !Array.isArray(wrappedData) &&
+    Object.keys(payload).length === 1
+  ) {
+    return wrappedData as Record<string, unknown>
+  }
+  return payload
+}
+
 function formatSupabaseError(error: { code?: string; details?: string; hint?: string; message?: string } | null) {
   if (!error) return "unknown database error"
   const parts = [error.message, error.details, error.hint, error.code]
@@ -531,7 +548,7 @@ export function buildCrmWritePreview(input: {
   payload: Record<string, unknown>
 }): CrmWritePreview {
   const objectApiKey = assertObjectApiKey(input.objectApiKey)
-  const payload = assertPayload(input.payload)
+  const payload = unwrapPersistedPayload(assertPayload(input.payload))
   const externalId = sanitizeExternalId(input.externalId)
   const policy = getWritePolicy(objectApiKey)
   const warnings: string[] = []
@@ -546,7 +563,7 @@ export function buildCrmWritePreview(input: {
       externalId,
       method: "POST",
       urlPath: xobjectPath(objectApiKey),
-      body: payload,
+      body: xobjectMutationBody(payload),
       warnings,
     }
   }
@@ -561,7 +578,7 @@ export function buildCrmWritePreview(input: {
       externalId,
       method: "PATCH",
       urlPath: xobjectPath(objectApiKey, externalId),
-      body: payload,
+      body: xobjectMutationBody(payload),
       warnings,
     }
   }
@@ -585,7 +602,7 @@ export function buildCrmWritePreview(input: {
       externalId,
       method: "PATCH",
       urlPath: xobjectPath(objectApiKey, externalId),
-      body: { [policy.ownerTransferField]: ownerValue.trim() },
+      body: xobjectMutationBody({ [policy.ownerTransferField]: ownerValue.trim() }),
       warnings,
     }
   }
@@ -605,7 +622,7 @@ export async function createCrmWriteRequest(input: CreateCrmWriteRequestInput) {
       object_api_key: preview.objectApiKey,
       external_id: preview.externalId,
       operation: preview.operation,
-      payload: preview.body,
+      payload: unwrapPersistedPayload(assertPayload(input.payload)),
       preview_payload: preview,
       status: "draft",
       requested_by: input.requestedBy ?? null,

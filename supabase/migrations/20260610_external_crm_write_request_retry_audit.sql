@@ -155,10 +155,15 @@ BEGIN
     constraint_name,
     write_requests_reg IS NOT NULL AND EXISTS (
       SELECT 1
-      FROM pg_constraint
+      FROM pg_constraint constraint_def
       WHERE conrelid = write_requests_reg
         AND conname = constraint_name
         AND contype = 'c'
+        AND NOT EXISTS (
+          SELECT 1
+          FROM unnest(required_fragments) fragment
+          WHERE pg_get_constraintdef(constraint_def.oid) NOT ILIKE '%' || fragment || '%'
+        )
     ),
     CASE
       WHEN write_requests_reg IS NULL THEN 'crm_write_requests table missing'
@@ -166,12 +171,12 @@ BEGIN
     END
   FROM (
     VALUES
-      ('crm_write_requests_payload_object_chk'::TEXT),
-      ('crm_write_requests_preview_object_chk'::TEXT),
-      ('crm_write_requests_response_object_chk'::TEXT),
-      ('crm_write_requests_external_id_required_chk'::TEXT),
-      ('crm_write_requests_attempt_count_chk'::TEXT)
-  ) AS constraints(constraint_name);
+      ('crm_write_requests_payload_object_chk'::TEXT, ARRAY['jsonb_typeof(payload)', '''object''']::TEXT[]),
+      ('crm_write_requests_preview_object_chk'::TEXT, ARRAY['preview_payload IS NULL', 'jsonb_typeof(preview_payload)', '''object''']::TEXT[]),
+      ('crm_write_requests_response_object_chk'::TEXT, ARRAY['response_payload IS NULL', 'jsonb_typeof(response_payload)', '''object''']::TEXT[]),
+      ('crm_write_requests_external_id_required_chk'::TEXT, ARRAY['operation', '''create''', 'external_id']::TEXT[]),
+      ('crm_write_requests_attempt_count_chk'::TEXT, ARRAY['attempt_count', '>= 0']::TEXT[])
+  ) AS constraints(constraint_name, required_fragments);
 
   RETURN QUERY
   SELECT
