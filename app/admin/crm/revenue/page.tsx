@@ -688,9 +688,14 @@ export default function AdminCrmRevenuePage() {
 
       <section className="mb-8 grid gap-8 border-y border-[#f0f0ec] py-6 md:grid-cols-2 xl:grid-cols-4">
         <MetricCard
-          label="확정 매출"
+          label="딜리버리 총매출"
+          value={loading && !data ? "..." : formatCurrency(data?.summary.deliveryTotalAmount ?? 0)}
+          hint="본사 기준 CRM Delivery 합산"
+        />
+        <MetricCard
+          label="계약 기준"
           value={loading && !data ? "..." : formatCurrency(data?.summary.contractedAmount ?? 0)}
-          hint="계약 금액과 V2 거래 확정 금액 합계"
+          hint="보조 확인용 계약 금액 합계"
         />
         <MetricCard
           label="입금 완료"
@@ -702,14 +707,14 @@ export default function AdminCrmRevenuePage() {
           value={loading && !data ? "..." : formatCurrency(data?.summary.outstandingAmount ?? 0)}
           hint="확정 대비 미수, 부분 수납 리스크"
         />
+      </section>
+
+      <section className="mb-8 grid gap-8 border-b border-[#f0f0ec] pb-6 md:grid-cols-2 xl:grid-cols-5">
         <MetricCard
           label="예상 파이프라인"
           value={loading && !data ? "..." : formatCurrency(data?.summary.expectedPipelineAmount ?? 0)}
           hint={`${formatNumber(data?.summary.activeDealCount ?? 0)}건의 active 거래`}
         />
-      </section>
-
-      <section className="mb-8 grid gap-8 border-b border-[#f0f0ec] pb-6 md:grid-cols-2 xl:grid-cols-4">
         <MetricCard
           label="견적 총액"
           value={formatCurrency(data?.summary.quotedAmount ?? 0)}
@@ -736,26 +741,26 @@ export default function AdminCrmRevenuePage() {
         <section className="mb-8 border-b border-[#f0f0ec] pb-6">
           <div className="flex flex-wrap items-center gap-2">
             <FileSpreadsheet className="h-4 w-4 text-[#1a1a1a]/35" />
-            <h2 className="text-[14px] font-semibold text-[#111110]">회사 시트 (REV) 기준</h2>
+            <h2 className="text-[14px] font-semibold text-[#111110]">회사 시트 (REV) 내부 대조</h2>
             <span className="text-[11px] text-[#1a1a1a]/35">
               계약 목표 총액 {formatCurrency(data.sheet.targetAmount)} · 진행{" "}
               {formatNumber(data.sheet.activeDealCount)}건/전체 {formatNumber(data.sheet.dealCount)}건 ·
-              비교용 병기 지표 (앱 집계와 합산하지 않음)
+              오류 체크용 병기 지표 (본사 CRM 매출과 합산하지 않음)
             </span>
           </div>
           <div className="mt-2 grid gap-8 md:grid-cols-2 xl:grid-cols-4">
             <MetricCard
-              label="시트 확정 매출"
+              label="시트 확정 표시"
               value={formatCurrency(data.sheet.confirmedAmount)}
               hint="주차 칸 빨간 글자(확정) 금액 누적 합계"
             />
             <MetricCard
-              label="확정 임박 (90%+)"
+              label="확정 임박 표시"
               value={formatCurrency(data.sheet.highConfidenceAmount)}
               hint="주차 칸 파란 글자 — 높은 확률로 클로징 예정"
             />
             <MetricCard
-              label="시트 예상·목표"
+              label="시트 예정 표시"
               value={formatCurrency(data.sheet.expectedAmount)}
               hint="당월~미래의 색 표시 없는 납부 스케줄 합계"
             />

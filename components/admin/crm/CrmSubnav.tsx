@@ -3,17 +3,17 @@
 import Link from "next/link"
 import { usePathname } from "next/navigation"
 import type { ReactNode } from "react"
-import { Building2, CircleDollarSign, LayoutDashboard, ListChecks, Users } from "lucide-react"
+import { Building2, CircleDollarSign, Handshake, LayoutDashboard, ListChecks } from "lucide-react"
 
-type CrmTab = "customers" | "partners" | "partnerPortal" | "partnerCustomers" | "revenue"
+type CrmTab = "home" | "partners" | "partnerPortal" | "partnerCustomers" | "revenue"
 
 const CRM_TABS = [
   {
-    key: "customers",
+    key: "home",
     href: "/admin/crm",
-    label: "리드",
-    description: "유입, SLA, 담당자",
-    icon: <Users className="h-4 w-4" />,
+    label: "홈",
+    description: "매출, KPI, 고객 로그",
+    icon: <LayoutDashboard className="h-4 w-4" />,
   },
   {
     key: "partners",
@@ -25,9 +25,9 @@ const CRM_TABS = [
   {
     key: "partnerPortal",
     href: "/admin/crm/partners/portal",
-    label: "거래",
+    label: "거래/오더",
     description: "파이프라인, 일정, 수납",
-    icon: <LayoutDashboard className="h-4 w-4" />,
+    icon: <Handshake className="h-4 w-4" />,
   },
   {
     key: "partnerCustomers",
@@ -40,7 +40,7 @@ const CRM_TABS = [
     key: "revenue",
     href: "/admin/crm/revenue",
     label: "매출·정합성",
-    description: "매출, 시트, 소스 상태",
+    description: "Delivery, 시트, 소스",
     icon: <CircleDollarSign className="h-4 w-4" />,
   },
 ] satisfies Array<{
@@ -57,7 +57,7 @@ function resolveActiveTab(pathname: string | null): CrmTab | null {
   if (pathname === "/admin/crm/partners/portal") return "partnerPortal"
   if (pathname === "/admin/crm/partners/customers") return "partnerCustomers"
   if (pathname.startsWith("/admin/crm/partners")) return "partners"
-  if (pathname === "/admin/crm") return "customers"
+  if (pathname === "/admin/crm") return "home"
   return null
 }
 

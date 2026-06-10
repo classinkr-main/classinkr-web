@@ -16,6 +16,7 @@ export interface CrmRevenueSource {
 export interface CrmRevenueSummary {
   quotedAmount: number
   acceptedQuoteAmount: number
+  deliveryTotalAmount: number
   contractedAmount: number
   paidAmount: number
   outstandingAmount: number

@@ -1,13 +1,15 @@
 "use client"
 
-import { useState, useEffect, useCallback, useMemo } from "react"
+import { useState, useEffect, useCallback, useMemo, type ReactNode } from "react"
 import Link from "next/link"
 import {
   RefreshCw, X, Copy, Check, Trash2,
   Phone, Mail, Building2, Users, Calendar,
   MessageSquare, Tag, Save, Loader2, Plus,
   PhoneCall, Bell, UserPlus, Link2, ExternalLink,
-  Clock, Search,
+  Clock, Search, Activity, AlertCircle, BarChart3,
+  CircleDollarSign, ClipboardList, FileText, Handshake,
+  MapPin, ReceiptText, Target,
 } from "lucide-react"
 import { adminFetch, adminFetchJsonCached } from "@/lib/admin-client"
 import { Button } from "@/components/ui/button"
@@ -161,10 +163,53 @@ type ConvertLeadResponse = {
 }
 
 type CrmOverviewStatus = "ok" | "warning" | "blocked"
+type AdminCrmCustomerLogKind = "call" | "visit" | "quote" | "order" | "payment" | "activity"
+
+interface AdminCrmCustomerLogItem {
+  id: string
+  kind: AdminCrmCustomerLogKind
+  title: string
+  summary: string | null
+  status: string | null
+  amount: number | null
+  occurredAt: string | null
+  customerId: string | null
+  customerName: string | null
+  partnerAccountId: string | null
+  partnerAccountName: string | null
+  dealId: string | null
+  dealTitle: string | null
+  href: string
+}
 
 interface AdminCrmOverview {
   generatedAt: string
   overallStatus: CrmOverviewStatus
+  business: {
+    ok: boolean
+    warning: string | null
+    error: string | null
+    revenue: {
+      deliveryTotalAmount: number
+      contractedAmount: number
+      paidAmount: number
+      outstandingAmount: number
+      expectedPipelineAmount: number
+      acceptedQuoteAmount: number
+    }
+    kpis: {
+      partnerAccountCount: number
+      customerCount: number
+      activeDealCount: number
+      paymentRiskCount: number
+      quoteDocumentCount: number
+      recentActivityCount: number
+    }
+    customerLogs: {
+      latestActivityAt: string | null
+      recent: AdminCrmCustomerLogItem[]
+    }
+  }
   schema: {
     ok: number
     blocked: number
@@ -241,6 +286,48 @@ function formatOverviewDate(value: string | null | undefined) {
   return date.toLocaleDateString("ko-KR", { month: "2-digit", day: "2-digit", hour: "2-digit", minute: "2-digit" })
 }
 
+function formatNumber(value: number | null | undefined) {
+  return Number(value ?? 0).toLocaleString("ko-KR")
+}
+
+function formatCurrency(value: number | null | undefined) {
+  const amount = Number(value ?? 0)
+  if (Math.abs(amount) >= 100_000_000) {
+    return `${(amount / 100_000_000).toLocaleString("ko-KR", { maximumFractionDigits: 1 })}억`
+  }
+  if (Math.abs(amount) >= 10_000) {
+    return `${Math.round(amount / 10_000).toLocaleString("ko-KR")}만`
+  }
+  return amount.toLocaleString("ko-KR")
+}
+
+function getCustomerLogKindLabel(kind: AdminCrmCustomerLogKind) {
+  if (kind === "call") return "Call"
+  if (kind === "visit") return "Visit"
+  if (kind === "quote") return "Quote"
+  if (kind === "order") return "Order"
+  if (kind === "payment") return "Payment"
+  return "Log"
+}
+
+function getCustomerLogTone(kind: AdminCrmCustomerLogKind) {
+  if (kind === "payment") return "border-emerald-100 bg-emerald-50 text-emerald-700"
+  if (kind === "order") return "border-[#D6E8DE] bg-[#ECFDF5] text-[#084734]"
+  if (kind === "quote") return "border-[#F3E6B8] bg-[#FFF9EB] text-[#8D6C1F]"
+  if (kind === "visit") return "border-sky-100 bg-sky-50 text-sky-700"
+  if (kind === "call") return "border-[#e8e8e4] bg-[#fafaf8] text-[#111110]"
+  return "border-[#e8e8e4] bg-white text-[#1a1a1a]/50"
+}
+
+function CustomerLogIcon({ kind }: { kind: AdminCrmCustomerLogKind }) {
+  if (kind === "call") return <PhoneCall className="h-3.5 w-3.5" />
+  if (kind === "visit") return <MapPin className="h-3.5 w-3.5" />
+  if (kind === "quote") return <FileText className="h-3.5 w-3.5" />
+  if (kind === "order") return <Handshake className="h-3.5 w-3.5" />
+  if (kind === "payment") return <ReceiptText className="h-3.5 w-3.5" />
+  return <Activity className="h-3.5 w-3.5" />
+}
+
 function getOverviewStatusLabel(status: CrmOverviewStatus) {
   if (status === "ok") return "정상"
   if (status === "warning") return "주의"
@@ -251,6 +338,270 @@ function getOverviewStatusTone(status: CrmOverviewStatus) {
   if (status === "ok") return "border-emerald-100 bg-emerald-50 text-emerald-700"
   if (status === "warning") return "border-amber-100 bg-amber-50 text-amber-700"
   return "border-[#F6D5C5] bg-[#FEF3EE] text-[#B85C33]"
+}
+
+function CrmMetricTile({
+  icon,
+  label,
+  value,
+  hint,
+  tone = "text-[#111110]",
+}: {
+  icon: ReactNode
+  label: string
+  value: string
+  hint: string
+  tone?: string
+}) {
+  return (
+    <div className="border-t border-[#f0f0ec] pt-4">
+      <div className="flex items-center gap-2 text-[#1a1a1a]/35">
+        {icon}
+        <p className="text-[11px] font-semibold uppercase tracking-[0.14em]">{label}</p>
+      </div>
+      <p className={`mt-2 text-2xl font-bold tracking-[-0.035em] ${tone}`}>{value}</p>
+      <p className="mt-1 text-[12px] leading-relaxed text-[#1a1a1a]/42">{hint}</p>
+    </div>
+  )
+}
+
+function CrmOperationsDashboard({
+  overview,
+  loading,
+  error,
+  activeLeadCount,
+  unrespondedCount,
+  todayFollowUpCount,
+  overdueFollowUpCount,
+}: {
+  overview: AdminCrmOverview | null
+  loading: boolean
+  error: string | null
+  activeLeadCount: number
+  unrespondedCount: number
+  todayFollowUpCount: number
+  overdueFollowUpCount: number
+}) {
+  const revenue = overview?.business.revenue
+  const kpis = overview?.business.kpis
+  const logs = overview?.business.customerLogs.recent ?? []
+  const businessWarning = error ?? overview?.business.error ?? overview?.business.warning ?? null
+  const loadingValue = loading && !overview ? "..." : null
+  const priorityRows = [
+    {
+      rank: "01",
+      title: "CRM Delivery 총매출",
+      detail: "본사 기준 매출. 한국 시트 금액은 합산하지 않음",
+      icon: <CircleDollarSign className="h-4 w-4" />,
+      tone: "text-[#084734]",
+    },
+    {
+      rank: "02",
+      title: "KPI 운영",
+      detail: "활성 거래, 고객사, 미수 리스크, 팔로업",
+      icon: <Target className="h-4 w-4" />,
+      tone: "text-[#111110]",
+    },
+    {
+      rank: "03",
+      title: "고객별 로그",
+      detail: "Call, Visit, Quote, Order, Payment 기록",
+      icon: <ClipboardList className="h-4 w-4" />,
+      tone: "text-sky-700",
+    },
+    {
+      rank: "04",
+      title: "시트·외부 정합성",
+      detail: "내부 대조와 오류 체크. CRM보다 낮은 우선순위",
+      icon: <AlertCircle className="h-4 w-4" />,
+      tone: "text-amber-700",
+    },
+  ]
+
+  return (
+    <>
+      <div className="mb-4 grid gap-3 xl:grid-cols-[1.35fr_0.85fr]">
+        <section className="rounded-2xl border border-[#e8e8e4] bg-white p-4">
+          <div className="flex flex-col gap-3 sm:flex-row sm:items-start sm:justify-between">
+            <div>
+              <p className="text-[11px] font-semibold uppercase tracking-wide text-[#1a1a1a]/30">HQ Standard</p>
+              <h2 className="mt-1 text-[18px] font-bold text-[#111110]">CRM 본사 기준 매출·KPI</h2>
+            </div>
+            <Link
+              href="/admin/crm/revenue"
+              className="inline-flex h-9 items-center justify-center gap-1.5 rounded-lg border border-[#e8e8e4] bg-white px-3 text-[12px] font-semibold text-[#111110] transition-colors hover:bg-[#f5f5f2]"
+            >
+              매출 상세
+              <ExternalLink className="h-3.5 w-3.5" />
+            </Link>
+          </div>
+
+          <div className="mt-5 grid gap-4 lg:grid-cols-[1.05fr_1fr]">
+            <div className="border-t border-[#084734]/18 pt-4">
+              <div className="flex items-center gap-2 text-[#084734]/70">
+                <CircleDollarSign className="h-5 w-5" />
+                <p className="text-[11px] font-semibold uppercase tracking-[0.16em]">Delivery Revenue</p>
+              </div>
+              <p className="mt-2 text-4xl font-bold tracking-[-0.045em] text-[#084734] sm:text-[42px]">
+                {loadingValue ?? formatCurrency(revenue?.deliveryTotalAmount)}
+              </p>
+              <div className="mt-3 grid gap-2 text-[12px] text-[#1a1a1a]/45 sm:grid-cols-2">
+                <span>계약 {loadingValue ?? formatCurrency(revenue?.contractedAmount)}</span>
+                <span>수납 {loadingValue ?? formatCurrency(revenue?.paidAmount)}</span>
+                <span className={(revenue?.outstandingAmount ?? 0) > 0 ? "font-semibold text-[#B85C33]" : ""}>
+                  미수 {loadingValue ?? formatCurrency(revenue?.outstandingAmount)}
+                </span>
+                <span>예상 {loadingValue ?? formatCurrency(revenue?.expectedPipelineAmount)}</span>
+              </div>
+            </div>
+
+            <div className="grid gap-4 sm:grid-cols-2">
+              <CrmMetricTile
+                icon={<BarChart3 className="h-4 w-4" />}
+                label="Active Deals"
+                value={loadingValue ?? formatNumber(kpis?.activeDealCount)}
+                hint={`활성 리드 ${formatNumber(activeLeadCount)}건`}
+              />
+              <CrmMetricTile
+                icon={<Building2 className="h-4 w-4" />}
+                label="Customers"
+                value={loadingValue ?? formatNumber(kpis?.customerCount)}
+                hint={`파트너 계정 ${formatNumber(kpis?.partnerAccountCount)}개`}
+              />
+              <CrmMetricTile
+                icon={<ReceiptText className="h-4 w-4" />}
+                label="Payment Risk"
+                value={loadingValue ?? formatNumber(kpis?.paymentRiskCount)}
+                hint="미수 또는 부분 수납 거래"
+                tone={(kpis?.paymentRiskCount ?? 0) > 0 ? "text-[#B85C33]" : "text-[#111110]"}
+              />
+              <CrmMetricTile
+                icon={<Activity className="h-4 w-4" />}
+                label="7D Logs"
+                value={loadingValue ?? formatNumber(kpis?.recentActivityCount)}
+                hint={`최근 활동 ${formatOverviewDate(overview?.business.customerLogs.latestActivityAt)}`}
+              />
+            </div>
+          </div>
+
+          {businessWarning ? (
+            <p className="mt-4 rounded-xl bg-[#FEF3EE] px-3 py-2 text-[12px] leading-relaxed text-[#B85C33]">
+              {businessWarning}
+            </p>
+          ) : null}
+        </section>
+
+        <section className="rounded-2xl border border-[#e8e8e4] bg-white p-4">
+          <div className="mb-4 flex items-center justify-between gap-3">
+            <div>
+              <p className="text-[11px] font-semibold uppercase tracking-wide text-[#1a1a1a]/30">Priority Rule</p>
+              <h2 className="mt-1 text-[17px] font-bold text-[#111110]">선정 기준</h2>
+            </div>
+            <span className="rounded-full bg-[#ECFDF5] px-3 py-1 text-[11px] font-semibold text-[#084734]">CRM 우선</span>
+          </div>
+          <div className="divide-y divide-[#f0f0ec]">
+            {priorityRows.map((row) => (
+              <div key={row.rank} className="flex gap-3 py-3 first:pt-0 last:pb-0">
+                <span className="mt-0.5 text-[11px] font-bold tabular-nums text-[#1a1a1a]/25">{row.rank}</span>
+                <span className={`mt-0.5 flex h-8 w-8 shrink-0 items-center justify-center rounded-lg bg-[#fafaf8] ${row.tone}`}>
+                  {row.icon}
+                </span>
+                <div className="min-w-0">
+                  <p className="text-[13px] font-semibold text-[#111110]">{row.title}</p>
+                  <p className="mt-0.5 text-[12px] leading-relaxed text-[#1a1a1a]/42">{row.detail}</p>
+                </div>
+              </div>
+            ))}
+          </div>
+        </section>
+      </div>
+
+      <div className="mb-4 grid gap-3 xl:grid-cols-[0.75fr_1.25fr]">
+        <section className="rounded-2xl border border-[#e8e8e4] bg-white p-4">
+          <div className="mb-4">
+            <p className="text-[11px] font-semibold uppercase tracking-wide text-[#1a1a1a]/30">Team KPI</p>
+            <h2 className="mt-1 text-[17px] font-bold text-[#111110]">오늘 관리 지표</h2>
+          </div>
+          <div className="grid grid-cols-2 gap-4">
+            <CrmMetricTile
+              icon={<PhoneCall className="h-4 w-4" />}
+              label="Unanswered"
+              value={formatNumber(unrespondedCount)}
+              hint="미응대 리드"
+              tone={unrespondedCount > 0 ? "text-[#B85C33]" : "text-[#111110]"}
+            />
+            <CrmMetricTile
+              icon={<Calendar className="h-4 w-4" />}
+              label="Today"
+              value={formatNumber(todayFollowUpCount)}
+              hint="오늘 팔로업"
+              tone={todayFollowUpCount > 0 ? "text-[#084734]" : "text-[#111110]"}
+            />
+            <CrmMetricTile
+              icon={<AlertCircle className="h-4 w-4" />}
+              label="Overdue"
+              value={formatNumber(overdueFollowUpCount)}
+              hint="지연 팔로업"
+              tone={overdueFollowUpCount > 0 ? "text-[#B85C33]" : "text-[#111110]"}
+            />
+            <CrmMetricTile
+              icon={<FileText className="h-4 w-4" />}
+              label="Quotes"
+              value={loadingValue ?? formatNumber(kpis?.quoteDocumentCount)}
+              hint={`승인 견적 ${loadingValue ?? formatCurrency(revenue?.acceptedQuoteAmount)}`}
+            />
+          </div>
+        </section>
+
+        <section className="rounded-2xl border border-[#e8e8e4] bg-white p-4">
+          <div className="mb-4 flex flex-col gap-3 sm:flex-row sm:items-center sm:justify-between">
+            <div>
+              <p className="text-[11px] font-semibold uppercase tracking-wide text-[#1a1a1a]/30">Customer Timeline</p>
+              <h2 className="mt-1 text-[17px] font-bold text-[#111110]">최근 고객별 로그</h2>
+            </div>
+            <Link
+              href="/admin/crm/partners/customers"
+              className="inline-flex h-9 items-center justify-center gap-1.5 rounded-lg border border-[#e8e8e4] bg-white px-3 text-[12px] font-semibold text-[#111110] transition-colors hover:bg-[#f5f5f2]"
+            >
+              고객사 보기
+              <ExternalLink className="h-3.5 w-3.5" />
+            </Link>
+          </div>
+          {logs.length === 0 ? (
+            <p className="rounded-xl bg-[#fafaf8] px-3 py-8 text-center text-[13px] text-[#1a1a1a]/30">
+              {loading && !overview ? "불러오는 중..." : "최근 고객 로그가 없습니다."}
+            </p>
+          ) : (
+            <div className="divide-y divide-[#f0f0ec]">
+              {logs.slice(0, 8).map((log) => (
+                <Link
+                  key={log.id}
+                  href={log.href}
+                  className="grid gap-3 py-3 transition-colors hover:bg-[#fafaf8] sm:grid-cols-[112px_minmax(0,1fr)_140px]"
+                >
+                  <div className="flex items-start gap-2">
+                    <span className={`inline-flex items-center gap-1 rounded-full border px-2 py-0.5 text-[11px] font-semibold ${getCustomerLogTone(log.kind)}`}>
+                      <CustomerLogIcon kind={log.kind} />
+                      {getCustomerLogKindLabel(log.kind)}
+                    </span>
+                  </div>
+                  <div className="min-w-0">
+                    <p className="truncate text-[13px] font-semibold text-[#111110]">{log.customerName ?? log.partnerAccountName ?? "고객 미지정"}</p>
+                    <p className="mt-0.5 truncate text-[12px] text-[#1a1a1a]/45">{log.title}</p>
+                    {log.summary ? <p className="mt-0.5 truncate text-[11px] text-[#1a1a1a]/30">{log.summary}</p> : null}
+                  </div>
+                  <div className="text-left sm:text-right">
+                    <p className="text-[12px] font-semibold text-[#111110]">{log.amount == null ? log.status ?? "-" : formatCurrency(log.amount)}</p>
+                    <p className="mt-0.5 text-[11px] text-[#1a1a1a]/35">{formatOverviewDate(log.occurredAt)}</p>
+                  </div>
+                </Link>
+              ))}
+            </div>
+          )}
+        </section>
+      </div>
+    </>
+  )
 }
 
 function CrmOverviewPanel({
@@ -286,6 +637,8 @@ function CrmOverviewPanel({
     : "-"
   const warning =
     error ??
+    overview?.business.error ??
+    overview?.business.warning ??
     overview?.schema.firstAction ??
     overview?.sourceLinks.error ??
     overview?.externalSnapshots.error ??
@@ -297,19 +650,19 @@ function CrmOverviewPanel({
       <div className="flex flex-col gap-3 sm:flex-row sm:items-start sm:justify-between">
         <div>
           <div className="flex flex-wrap items-center gap-2">
-            <p className="text-[11px] font-semibold uppercase tracking-wide text-[#1a1a1a]/30">CRM Integration</p>
+            <p className="text-[11px] font-semibold uppercase tracking-wide text-[#1a1a1a]/30">Data Check</p>
             <span className={`rounded-full border px-2 py-0.5 text-[11px] font-semibold ${getOverviewStatusTone(status)}`}>
               {loading && !overview ? "점검 중" : getOverviewStatusLabel(status)}
             </span>
           </div>
-          <h2 className="mt-1 text-[17px] font-bold text-[#111110]">CRM 통합 상태</h2>
-          <p className="mt-1 text-[12px] text-[#1a1a1a]/35">최근 점검 {formatOverviewDate(overview?.generatedAt)}</p>
+          <h2 className="mt-1 text-[17px] font-bold text-[#111110]">운영 보조 정합성</h2>
+          <p className="mt-1 text-[12px] text-[#1a1a1a]/35">시트/외부 CRM은 내부 대조와 오류 체크용 · 최근 점검 {formatOverviewDate(overview?.generatedAt)}</p>
         </div>
         <Link
           href="/admin/crm/revenue"
           className="inline-flex h-9 items-center justify-center gap-1.5 rounded-lg border border-[#e8e8e4] bg-white px-3 text-[12px] font-semibold text-[#111110] transition-colors hover:bg-[#f5f5f2]"
         >
-          정합성 보기
+          정합성 상세
           <ExternalLink className="h-3.5 w-3.5" />
         </Link>
       </div>
@@ -318,7 +671,7 @@ function CrmOverviewPanel({
         {[
           { label: "스키마", value: schemaDetail, tone: overview?.schema.blocked ? "text-[#B85C33]" : "text-[#084734]" },
           { label: "Xiaoshouyi", value: xiaoshouyiDetail, tone: overview?.xiaoshouyi.configured ? "text-[#084734]" : "text-[#B85C33]" },
-          { label: "Source links", value: sourceLinkDetail, tone: overview?.sourceLinks.candidate || overview?.sourceLinks.stale ? "text-amber-700" : "text-[#111110]" },
+          { label: "시트·외부 링크", value: sourceLinkDetail, tone: overview?.sourceLinks.candidate || overview?.sourceLinks.stale ? "text-amber-700" : "text-[#111110]" },
           {
             label: `Snapshot · ${formatOverviewDate(overview?.externalSnapshots.latestSyncedAt)}`,
             value: snapshotDetail,
@@ -1254,34 +1607,68 @@ export default function CrmPage() {
   return (
     <div>
       {/* 헤더 */}
-      <div className="mb-6 flex flex-col gap-4 sm:mb-8 sm:flex-row sm:items-center sm:justify-between">
+      <div className="mb-6 flex flex-col gap-4 sm:mb-8 xl:flex-row xl:items-start xl:justify-between">
         <div>
-          <p className="text-[11px] font-medium text-[#1a1a1a]/30 uppercase tracking-widest mb-1">Admin</p>
-          <h1 className="text-2xl font-bold text-[#111110] tracking-[-0.02em]">리드 관리</h1>
+          <p className="mb-1 text-[11px] font-medium uppercase tracking-widest text-[#1a1a1a]/30">Admin · CRM</p>
+          <h1 className="text-2xl font-bold text-[#111110] tracking-[-0.02em]">CRM 홈</h1>
+          <p className="mt-1 text-[13px] text-[#1a1a1a]/42">본사 기준 Delivery 총매출 · KPI · 고객 로그</p>
         </div>
-        <Button
-          variant="outline"
-          size="sm"
-          onClick={() => {
-            void fetchLeads({ force: true })
-            void fetchCrmOverview({ force: true })
-          }}
-          disabled={loading || crmOverviewLoading}
-          className="w-full gap-1.5 sm:w-auto"
-        >
-          <RefreshCw className={`w-4 h-4 ${loading || crmOverviewLoading ? "animate-spin" : ""}`} />새로고침
-        </Button>
+        <div className="grid gap-2 sm:grid-cols-4 xl:flex xl:justify-end">
+          <Link
+            href="/admin/crm/partners/customers"
+            className="inline-flex h-9 items-center justify-center gap-1.5 rounded-lg border border-[#e8e8e4] bg-white px-3 text-[12px] font-semibold text-[#111110] transition-colors hover:bg-[#f5f5f2]"
+          >
+            <Building2 className="h-3.5 w-3.5" />
+            고객사
+          </Link>
+          <Link
+            href="/admin/crm/partners/portal"
+            className="inline-flex h-9 items-center justify-center gap-1.5 rounded-lg border border-[#e8e8e4] bg-white px-3 text-[12px] font-semibold text-[#111110] transition-colors hover:bg-[#f5f5f2]"
+          >
+            <Handshake className="h-3.5 w-3.5" />
+            거래/오더
+          </Link>
+          <Link
+            href="/admin/crm/revenue"
+            className="inline-flex h-9 items-center justify-center gap-1.5 rounded-lg border border-[#e8e8e4] bg-white px-3 text-[12px] font-semibold text-[#111110] transition-colors hover:bg-[#f5f5f2]"
+          >
+            <CircleDollarSign className="h-3.5 w-3.5" />
+            매출 상세
+          </Link>
+          <Button
+            variant="outline"
+            size="sm"
+            onClick={() => {
+              void fetchLeads({ force: true })
+              void fetchCrmOverview({ force: true })
+            }}
+            disabled={loading || crmOverviewLoading}
+            className="w-full gap-1.5 sm:w-auto"
+          >
+            <RefreshCw className={`w-4 h-4 ${loading || crmOverviewLoading ? "animate-spin" : ""}`} />새로고침
+          </Button>
+        </div>
       </div>
+
+      <CrmOperationsDashboard
+        overview={crmOverview}
+        loading={crmOverviewLoading}
+        error={crmOverviewError}
+        activeLeadCount={activeLeads.length}
+        unrespondedCount={unrespondedLeads.length}
+        todayFollowUpCount={todayFollowUps.length}
+        overdueFollowUpCount={overdueFollowUps.length}
+      />
 
       <CrmOverviewPanel overview={crmOverview} loading={crmOverviewLoading} error={crmOverviewError} />
 
-      {/* 운영 현황 */}
+      {/* 리드 응대 큐 */}
       <div className="mb-4 grid gap-3 lg:grid-cols-[1.1fr_0.9fr]">
         <div className="rounded-2xl border border-[#e8e8e4] bg-white p-4">
           <div className="mb-4 flex items-center justify-between gap-3">
             <div>
-              <p className="text-[11px] font-semibold uppercase tracking-wide text-[#1a1a1a]/30">Team Pipeline</p>
-              <h2 className="mt-1 text-[17px] font-bold text-[#111110]">팀 전체 파이프라인 현황</h2>
+              <p className="text-[11px] font-semibold uppercase tracking-wide text-[#1a1a1a]/30">Lead Queue</p>
+              <h2 className="mt-1 text-[17px] font-bold text-[#111110]">리드 응대 큐</h2>
             </div>
             <span className="rounded-full bg-[#f0f0ec] px-3 py-1 text-[12px] font-medium text-[#1a1a1a]/55">
               활성 {activeLeads.length}건

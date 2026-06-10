@@ -92,6 +92,7 @@ interface DealRow {
   current_stage: string
   expected_amount: number
   contracted_amount: number
+  installed_amount: number
   paid_amount: number
   outstanding_amount: number
   payment_status: string
@@ -453,6 +454,7 @@ function createEmptyDashboard(months: number, warnings: string[]): CrmRevenueDas
     summary: {
       quotedAmount: 0,
       acceptedQuoteAmount: 0,
+      deliveryTotalAmount: 0,
       contractedAmount: 0,
       paidAmount: 0,
       outstandingAmount: 0,
@@ -665,7 +667,7 @@ export async function getAdminCrmRevenueDashboard(months = 6): Promise<CrmRevenu
         "거래 파이프라인",
         supabase
           .from("deals")
-          .select("id, partner_account_id, customer_id, deal_code, title, status, current_stage, expected_amount, contracted_amount, paid_amount, outstanding_amount, payment_status, closed_at, created_at, updated_at")
+          .select("id, partner_account_id, customer_id, deal_code, title, status, current_stage, expected_amount, contracted_amount, installed_amount, paid_amount, outstanding_amount, payment_status, closed_at, created_at, updated_at")
           .order("updated_at", { ascending: false })
           .limit(QUERY_LIMITS.defaultRows),
         QUERY_LIMITS.defaultRows
@@ -1232,6 +1234,7 @@ export async function getAdminCrmRevenueDashboard(months = 6): Promise<CrmRevenu
         quotes.filter((quote) => quote.status === "accepted" || quote.status === "converted"),
         (quote) => quote.total_amount
       ),
+      deliveryTotalAmount: sumBy(deals, (deal) => deal.installed_amount),
       contractedAmount,
       paidAmount,
       outstandingAmount,
