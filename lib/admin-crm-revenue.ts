@@ -6,6 +6,9 @@ import type {
   CrmRevenueDashboard,
   CrmRevenueDocumentRow,
   CrmRevenueExternalLinkRow,
+  CrmRevenueExternalRecordRow,
+  CrmRevenueExternalSnapshotObjectRow,
+  CrmRevenueExternalSnapshotSummary,
   CrmRevenueIdentitySummary,
   CrmRevenueMonthlyPoint,
   CrmRevenuePartnerRow,
@@ -206,12 +209,27 @@ const QUERY_LIMITS = {
 } as const
 const DISPLAY_LIMITS = {
   sheetMatches: 12,
+  externalRecords: 48,
   externalLinks: 20,
   writeRequests: 20,
   partners: 10,
   risks: 8,
   documents: 20,
 } as const
+const EXTERNAL_CRM_OBJECTS = [
+  "account",
+  "contact",
+  "opportunity",
+  "ShroffAccount__c",
+  "Collection__c",
+  "SalesPerformance__c",
+  "CollectionPlan__c",
+  "FinancialInformation__c",
+  "ResourceInformation__c",
+]
+const EXTERNAL_CRM_PREVIEW_PER_OBJECT = 5
+const EXTERNAL_CRM_RECORD_SELECT =
+  "id, source_system, object_api_key, external_id, normalized_name, display_name, owner_name, status, amount, occurred_at, synced_at, updated_at"
 
 function hasValue(value: string | undefined) {
   return Boolean(value?.trim())
@@ -299,7 +317,7 @@ function buildExternalCrmSource(
       label: "Xiaoshouyi CRM Snapshot",
       status: "error",
       mode: "read",
-      recordCount: recordsResult.rows.length,
+      recordCount: recordsResult.source.recordCount,
       latencyMs:
         (recordsResult.source.latencyMs ?? 0) +
         (syncRunsResult.source.latencyMs ?? 0) +
@@ -328,6 +346,7 @@ function buildExternalCrmSource(
     (hasValue(process.env.XIAOSHOUYI_PASSWORD) || hasValue(process.env.XIAOSHOUYI_SERVICE_PASSWORD))
   const configured = hasBaseUrl && (hasToken || hasServiceCredentials)
   const objectKeys = new Set(recordsResult.rows.map((record) => record.object_api_key))
+  const loadedRecordCount = Math.max(recordsResult.source.recordCount, recordsResult.rows.length)
   const pendingWrites = writeRequestsResult.rows.filter((request) =>
     ["draft", "approved", "sent"].includes(request.status)
   ).length
@@ -349,9 +368,9 @@ function buildExternalCrmSource(
   return {
     key: "xiaoshouyi_snapshot",
     label: "Xiaoshouyi CRM Snapshot",
-    status: recordsResult.rows.length > 0 ? "connected" : configured ? "configured" : "not_configured",
+    status: loadedRecordCount > 0 ? "connected" : configured ? "configured" : "not_configured",
     mode: "read",
-    recordCount: recordsResult.rows.length,
+    recordCount: loadedRecordCount,
     latencyMs:
       (recordsResult.source.latencyMs ?? 0) +
       (syncRunsResult.source.latencyMs ?? 0) +
@@ -361,8 +380,8 @@ function buildExternalCrmSource(
       ...syncRunsResult.rows.map((run) => run.finished_at ?? run.started_at),
     ]),
     description:
-      recordsResult.rows.length > 0
-        ? `${objectKeys.size}개 객체 snapshot을 읽습니다. ${syncDetails.length > 0 ? `${syncDetails.join(", ")}. ` : ""}대기 중인 write request ${pendingWrites}건, 실패 sync ${failedRuns}건, skipped ${skippedRuns}건.`
+      loadedRecordCount > 0
+        ? `${objectKeys.size}개 객체 preview · ${loadedRecordCount.toLocaleString("ko-KR")} snapshot records. ${syncDetails.length > 0 ? `${syncDetails.join(", ")}. ` : ""}대기 중인 write request ${pendingWrites}건, 실패 sync ${failedRuns}건, skipped ${skippedRuns}건.`
         : configured
           ? `외부 CRM credential은 준비됐지만 아직 snapshot 레코드가 없습니다.${syncDetails.length > 0 ? ` 최근 상태: ${syncDetails.join(", ")}.` : ""}`
           : hasBaseUrl
@@ -370,7 +389,7 @@ function buildExternalCrmSource(
             : skippedRuns > 0
               ? `Xiaoshouyi credential 미설정으로 최근 sync ${skippedRuns}건을 건너뛰었습니다.`
               : "Xiaoshouyi/eeoCRM은 read-only snapshot sync부터 연결합니다.",
-    actionLabel: configured || recordsResult.rows.length > 0 ? "Snapshot 상태 확인" : "환경변수 연결 필요",
+    actionLabel: configured || loadedRecordCount > 0 ? "Snapshot 상태 확인" : "환경변수 연결 필요",
     actionHref: "/admin/settings",
   }
 }
@@ -441,6 +460,129 @@ async function runQuery<T>(
   }
 }
 
+async function getExternalCrmSnapshotQuery(
+  supabase: ReturnType<typeof createSupabaseAdminClient>
+): Promise<QueryResult<ExternalCrmRecordRow> & { summary: CrmRevenueExternalSnapshotSummary | null }> {
+  const startedAt = Date.now()
+
+  try {
+    const [objectResults, staleResult] = await Promise.all([
+      Promise.all(
+        EXTERNAL_CRM_OBJECTS.map(async (objectApiKey) => {
+          const [countResult, rowsResult] = await Promise.all([
+            supabase
+              .from("external_crm_records")
+              .select("id", { count: "exact", head: true })
+              .eq("source_system", "xiaoshouyi")
+              .eq("object_api_key", objectApiKey)
+              .eq("is_stale", false),
+            supabase
+              .from("external_crm_records")
+              .select(EXTERNAL_CRM_RECORD_SELECT)
+              .eq("source_system", "xiaoshouyi")
+              .eq("object_api_key", objectApiKey)
+              .eq("is_stale", false)
+              .order("synced_at", { ascending: false })
+              .limit(EXTERNAL_CRM_PREVIEW_PER_OBJECT),
+          ])
+
+          return {
+            objectApiKey,
+            countResult,
+            rowsResult,
+          }
+        })
+      ),
+      supabase
+        .from("external_crm_records")
+        .select("id", { count: "exact", head: true })
+        .eq("source_system", "xiaoshouyi")
+        .eq("is_stale", true),
+    ])
+
+    const failedObject = objectResults.find((result) => result.countResult.error || result.rowsResult.error)
+    const error = failedObject?.countResult.error ?? failedObject?.rowsResult.error ?? staleResult.error
+    const latencyMs = Date.now() - startedAt
+
+    if (error) {
+      return {
+        rows: [],
+        warning: `External CRM Snapshot: ${error.message}`,
+        limit: null,
+        summary: null,
+        source: {
+          key: "external_crm_records",
+          label: "External CRM Snapshot",
+          status: "error",
+          mode: "read",
+          recordCount: 0,
+          latencyMs,
+          lastSyncedAt: null,
+          description: "Neo CRM snapshot read failed.",
+        },
+      }
+    }
+
+    const objectCounts: CrmRevenueExternalSnapshotObjectRow[] = objectResults.map((result) => {
+      const rows = (result.rowsResult.data ?? []) as ExternalCrmRecordRow[]
+      return {
+        objectApiKey: result.objectApiKey,
+        recordCount: result.countResult.count ?? 0,
+        latestSyncedAt: maxDate(rows.map((row) => row.synced_at)),
+      }
+    })
+    const rows = objectResults
+      .flatMap((result) => (result.rowsResult.data ?? []) as ExternalCrmRecordRow[])
+      .slice(0, DISPLAY_LIMITS.externalRecords)
+    const totalRecordCount = objectCounts.reduce((sum, object) => sum + object.recordCount, 0)
+    const latestSyncedAt = maxDate([
+      ...objectCounts.map((object) => object.latestSyncedAt),
+      ...rows.map((row) => row.synced_at),
+    ])
+    const summary: CrmRevenueExternalSnapshotSummary = {
+      totalRecordCount,
+      staleRecordCount: staleResult.count ?? 0,
+      latestSyncedAt,
+      objectCounts,
+    }
+
+    return {
+      rows,
+      warning: null,
+      limit: null,
+      summary,
+      source: {
+        key: "external_crm_records",
+        label: "External CRM Snapshot",
+        status: totalRecordCount > 0 ? "connected" : "not_configured",
+        mode: "read",
+        recordCount: totalRecordCount,
+        latencyMs,
+        lastSyncedAt: latestSyncedAt,
+        description: `${totalRecordCount.toLocaleString("ko-KR")} Neo CRM snapshot records loaded.`,
+      },
+    }
+  } catch (error) {
+    const message = error instanceof Error ? error.message : "unknown error"
+    return {
+      rows: [],
+      warning: `External CRM Snapshot: ${message}`,
+      limit: null,
+      summary: null,
+      source: {
+        key: "external_crm_records",
+        label: "External CRM Snapshot",
+        status: "error",
+        mode: "read",
+        recordCount: 0,
+        latencyMs: Date.now() - startedAt,
+        lastSyncedAt: null,
+        description: "Neo CRM snapshot read failed.",
+      },
+    }
+  }
+}
+
 function createEmptyDashboard(months: number, warnings: string[]): CrmRevenueDashboard {
   const monthKeys = getMonthKeys(months)
 
@@ -467,6 +609,8 @@ function createEmptyDashboard(months: number, warnings: string[]): CrmRevenueDas
     sheet: null,
     identity: null,
     sheetMatches: [],
+    externalSnapshot: null,
+    externalRecords: [],
     externalLinks: [],
     writeRequests: [],
     monthly: monthKeys.map((month) => ({
@@ -598,6 +742,7 @@ export async function getAdminCrmRevenueDashboard(months = 6): Promise<CrmRevenu
     sourceLinksResult,
     externalSourceLinksResult,
     externalRecordsResult,
+    externalSnapshotResult,
     externalSyncRunsResult,
     writeRequestsResult,
   ] =
@@ -715,6 +860,7 @@ export async function getAdminCrmRevenueDashboard(months = 6): Promise<CrmRevenu
           .limit(QUERY_LIMITS.externalRecords),
         QUERY_LIMITS.externalRecords
       ),
+      getExternalCrmSnapshotQuery(supabase),
       runQuery<ExternalCrmSyncRunRow>(
         "external_crm_sync_runs",
         "외부 CRM Sync",
@@ -764,6 +910,7 @@ export async function getAdminCrmRevenueDashboard(months = 6): Promise<CrmRevenu
     sourceLinksResult.warning,
     externalSourceLinksResult.warning,
     externalRecordsResult.warning,
+    externalSnapshotResult.warning,
     externalSyncRunsResult.warning,
     writeRequestsResult.warning,
     getQueryLimitWarning(partnersResult),
@@ -777,6 +924,7 @@ export async function getAdminCrmRevenueDashboard(months = 6): Promise<CrmRevenu
     getQueryLimitWarning(sourceLinksResult),
     getQueryLimitWarning(externalSourceLinksResult),
     getQueryLimitWarning(externalRecordsResult),
+    getQueryLimitWarning(externalSnapshotResult),
     getQueryLimitWarning(externalSyncRunsResult),
     getQueryLimitWarning(writeRequestsResult),
   ].filter((warning): warning is string => Boolean(warning))
@@ -792,18 +940,16 @@ export async function getAdminCrmRevenueDashboard(months = 6): Promise<CrmRevenu
   const sourceLinks = sourceLinksResult.rows
   const externalSourceLinks = externalSourceLinksResult.rows
   const externalRecords = externalRecordsResult.rows
-  const linkedExternalKeys = new Set(
-    externalSourceLinks.map((link) => `${link.source_object}:${link.source_record_key}`)
-  )
-  const unmatchedExternalRecordCount = externalRecords.filter(
-    (record) => !linkedExternalKeys.has(`${record.object_api_key}:${record.external_id}`)
-  ).length
-  if (unmatchedExternalRecordCount > 0) {
-    warnings.push(
-      `Xiaoshouyi snapshot ${unmatchedExternalRecordCount.toLocaleString("ko-KR")}건은 아직 source link 후보/확정 링크가 없습니다. 후보 생성 후 저신뢰 레코드는 수동 검수가 필요합니다.`
-    )
-  }
-
+  const externalRecordRows: CrmRevenueExternalRecordRow[] = externalSnapshotResult.rows.map((record) => ({
+    objectApiKey: record.object_api_key,
+    externalId: record.external_id,
+    displayName: record.display_name,
+    ownerName: record.owner_name,
+    status: record.status,
+    amount: record.amount,
+    occurredAt: record.occurred_at,
+    syncedAt: record.synced_at,
+  }))
   const partnerNameById = new Map(partners.map((partner) => [partner.id, partner.name]))
   const accountNameById = new Map(accounts.map((account) => [account.id, account.name]))
   const customerNameById = new Map(
@@ -1212,7 +1358,7 @@ export async function getAdminCrmRevenueDashboard(months = 6): Promise<CrmRevenu
   }
 
   const externalCrmSource = buildExternalCrmSource(
-    externalRecordsResult,
+    externalSnapshotResult,
     externalSyncRunsResult,
     writeRequestsResult
   )
@@ -1253,12 +1399,14 @@ export async function getAdminCrmRevenueDashboard(months = 6): Promise<CrmRevenu
         sheetDeals.length +
         sourceLinks.length +
         externalSourceLinks.length +
-        externalRecords.length +
+        (externalSnapshotResult.summary?.totalRecordCount ?? externalRecords.length) +
         writeRequestsResult.rows.length,
     },
     sheet: sheetSummary,
     identity: identitySummary,
     sheetMatches: displayedSheetMatches,
+    externalSnapshot: externalSnapshotResult.summary,
+    externalRecords: externalRecordRows,
     externalLinks,
     writeRequests,
     monthly: Array.from(monthly.values()),

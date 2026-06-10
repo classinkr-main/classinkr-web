@@ -97,6 +97,30 @@ export interface CrmRevenueExternalLinkRow {
   updatedAt: string
 }
 
+export interface CrmRevenueExternalSnapshotObjectRow {
+  objectApiKey: string
+  recordCount: number
+  latestSyncedAt: string | null
+}
+
+export interface CrmRevenueExternalSnapshotSummary {
+  totalRecordCount: number
+  staleRecordCount: number
+  latestSyncedAt: string | null
+  objectCounts: CrmRevenueExternalSnapshotObjectRow[]
+}
+
+export interface CrmRevenueExternalRecordRow {
+  objectApiKey: string
+  externalId: string
+  displayName: string | null
+  ownerName: string | null
+  status: string | null
+  amount: number | null
+  occurredAt: string | null
+  syncedAt: string
+}
+
 export type CrmWriteRequestStatus = "draft" | "approved" | "sent" | "succeeded" | "failed" | "cancelled"
 export type CrmWriteRequestOperation = "create" | "update" | "transfer_owner"
 
@@ -162,6 +186,8 @@ export interface CrmRevenueDashboard {
   sheet: CrmRevenueSheetSummary | null
   identity: CrmRevenueIdentitySummary | null
   sheetMatches: CrmRevenueSheetMatchRow[]
+  externalSnapshot: CrmRevenueExternalSnapshotSummary | null
+  externalRecords: CrmRevenueExternalRecordRow[]
   externalLinks: CrmRevenueExternalLinkRow[]
   writeRequests: CrmRevenueWriteRequestRow[]
   monthly: CrmRevenueMonthlyPoint[]

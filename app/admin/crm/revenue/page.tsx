@@ -773,6 +773,89 @@ export default function AdminCrmRevenuePage() {
         </section>
       ) : null}
 
+      {data?.externalSnapshot ? (
+        <section className="mb-8 border-b border-[#f0f0ec] pb-6">
+          <div className="flex flex-wrap items-center justify-between gap-3">
+            <div className="flex items-center gap-2">
+              <ServerCog className="h-4 w-4 text-[#1a1a1a]/35" />
+              <h2 className="text-[14px] font-semibold text-[#111110]">Neo CRM Snapshot</h2>
+            </div>
+            <span className="text-[11px] text-[#1a1a1a]/35">
+              {formatNumber(data.externalSnapshot.totalRecordCount)} active records · stale{" "}
+              {formatNumber(data.externalSnapshot.staleRecordCount)} · synced{" "}
+              {formatDate(data.externalSnapshot.latestSyncedAt)}
+            </span>
+          </div>
+
+          <div className="mt-3 grid gap-2 sm:grid-cols-2 lg:grid-cols-3 xl:grid-cols-5">
+            {data.externalSnapshot.objectCounts.map((object) => (
+              <div key={object.objectApiKey} className="rounded-xl bg-[#fafaf8] px-3 py-3">
+                <p className="truncate text-[11px] font-semibold text-[#1a1a1a]/45">
+                  {object.objectApiKey}
+                </p>
+                <p className="mt-1 text-[16px] font-bold text-[#111110]">
+                  {formatNumber(object.recordCount)}
+                </p>
+                <p className="mt-0.5 text-[11px] text-[#1a1a1a]/35">
+                  {formatDate(object.latestSyncedAt)}
+                </p>
+              </div>
+            ))}
+          </div>
+
+          <div className="mt-4 overflow-x-auto">
+            <table className="min-w-[980px] w-full text-left">
+              <thead className="text-[11px] uppercase tracking-[0.12em] text-[#1a1a1a]/35">
+                <tr>
+                  <th className="py-3 pr-4 font-semibold">Object</th>
+                  <th className="py-3 pr-4 font-semibold">Record</th>
+                  <th className="py-3 pr-4 font-semibold">Owner / Status</th>
+                  <th className="py-3 pr-4 text-right font-semibold">Amount</th>
+                  <th className="py-3 pr-4 font-semibold">Occurred</th>
+                  <th className="py-3 text-right font-semibold">Synced</th>
+                </tr>
+              </thead>
+              <tbody className="divide-y divide-[#f0f0ec]">
+                {data.externalRecords.length === 0 ? (
+                  <tr>
+                    <td colSpan={6} className="py-8 text-center text-[13px] text-[#1a1a1a]/35">
+                      Neo CRM snapshot records are not loaded yet.
+                    </td>
+                  </tr>
+                ) : (
+                  data.externalRecords.map((record) => (
+                    <tr key={`${record.objectApiKey}:${record.externalId}`} className="align-top">
+                      <td className="py-4 pr-4">
+                        <p className="text-[12px] font-semibold text-[#111110]">{record.objectApiKey}</p>
+                        <p className="mt-1 text-[11px] text-[#1a1a1a]/35">{record.externalId}</p>
+                      </td>
+                      <td className="py-4 pr-4">
+                        <p className="line-clamp-2 text-[13px] font-semibold text-[#111110]">
+                          {record.displayName ?? record.externalId}
+                        </p>
+                      </td>
+                      <td className="py-4 pr-4 text-[12px] text-[#1a1a1a]/50">
+                        <p>{record.ownerName ?? "-"}</p>
+                        <p className="mt-1 text-[11px] text-[#1a1a1a]/35">{record.status ?? "-"}</p>
+                      </td>
+                      <td className="py-4 pr-4 text-right text-[12px] font-semibold text-[#111110]">
+                        {record.amount == null ? "-" : formatCurrency(record.amount)}
+                      </td>
+                      <td className="py-4 pr-4 text-[12px] text-[#1a1a1a]/45">
+                        {formatDate(record.occurredAt)}
+                      </td>
+                      <td className="py-4 text-right text-[12px] text-[#1a1a1a]/45">
+                        {formatDate(record.syncedAt)}
+                      </td>
+                    </tr>
+                  ))
+                )}
+              </tbody>
+            </table>
+          </div>
+        </section>
+      ) : null}
+
       {data?.identity ? (
         <section className="mb-8 border-b border-[#f0f0ec] pb-6">
           <div className="flex flex-wrap items-center justify-between gap-3">

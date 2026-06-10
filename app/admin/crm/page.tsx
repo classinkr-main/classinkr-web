@@ -632,6 +632,10 @@ function CrmOverviewPanel({
   const snapshotDetail = overview
     ? `${overview.externalSnapshots.recordCount.toLocaleString("ko-KR")} records · ${overview.externalSnapshots.latestRunObject ?? "sync"} ${overview.externalSnapshots.latestRunStatus ?? "-"}`
     : "-"
+  const hasXiaoshouyiSnapshot = Boolean(overview?.externalSnapshots.recordCount)
+  const xiaoshouyiCardDetail = hasXiaoshouyiSnapshot && overview
+    ? `snapshot ${overview.externalSnapshots.recordCount.toLocaleString("ko-KR")} records`
+    : xiaoshouyiDetail
   const writeQueueDetail = overview
     ? `draft ${overview.writeQueue.draft} · approved ${overview.writeQueue.approved} · sent ${overview.writeQueue.sent} · failed ${overview.writeQueue.failed}`
     : "-"
@@ -670,7 +674,7 @@ function CrmOverviewPanel({
       <div className="mt-4 grid gap-2 sm:grid-cols-2 xl:grid-cols-5">
         {[
           { label: "스키마", value: schemaDetail, tone: overview?.schema.blocked ? "text-[#B85C33]" : "text-[#084734]" },
-          { label: "Xiaoshouyi", value: xiaoshouyiDetail, tone: overview?.xiaoshouyi.configured ? "text-[#084734]" : "text-[#B85C33]" },
+          { label: "Xiaoshouyi", value: xiaoshouyiCardDetail, tone: hasXiaoshouyiSnapshot || overview?.xiaoshouyi.configured ? "text-[#084734]" : "text-[#B85C33]" },
           { label: "시트·외부 링크", value: sourceLinkDetail, tone: overview?.sourceLinks.candidate || overview?.sourceLinks.stale ? "text-amber-700" : "text-[#111110]" },
           {
             label: `Snapshot · ${formatOverviewDate(overview?.externalSnapshots.latestSyncedAt)}`,
