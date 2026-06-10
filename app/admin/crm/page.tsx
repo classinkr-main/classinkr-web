@@ -150,6 +150,66 @@ function getLeadDisplayName(lead?: LeadRecord) {
   return lead.name?.trim() || lead.org?.trim() || lead.email?.trim() || lead.phone?.trim() || "이름 없는 리드"
 }
 
+type ConvertLeadResponse = {
+  customer: {
+    name: string
+  }
+  deal: {
+    deal_code?: string | null
+  }
+  lead: LeadRecord
+}
+
+type CrmOverviewStatus = "ok" | "warning" | "blocked"
+
+interface AdminCrmOverview {
+  generatedAt: string
+  overallStatus: CrmOverviewStatus
+  schema: {
+    ok: number
+    blocked: number
+    firstBlocked: string | null
+    firstAction: string | null
+  }
+  xiaoshouyi: {
+    configured: boolean
+    authMode: "access_token" | "service_oauth" | "missing"
+    missingEnvGroups: string[]
+    objectCount: number
+    pageSize: number
+    maxPages: number
+  }
+  sourceLinks: {
+    ok: boolean
+    total: number
+    confirmed: number
+    candidate: number
+    rejected: number
+    stale: number
+    error: string | null
+  }
+  externalSnapshots: {
+    ok: boolean
+    recordCount: number
+    staleCount: number
+    latestSyncedAt: string | null
+    latestRunStatus: string | null
+    latestRunObject: string | null
+    error: string | null
+  }
+  writeQueue: {
+    ok: boolean
+    active: number
+    draft: number
+    approved: number
+    sent: number
+    failed: number
+    succeeded: number
+    cancelled: number
+    error: string | null
+  }
+}
+
 // ─── 복사 버튼 ─────────────────────────────────────────────────
 function CopyButton({ value }: { value: string }) {
   const [copied, setCopied] = useState(false)
@@ -170,6 +230,114 @@ function Toast({ msg, type }: { msg: string; type: "success" | "error" }) {
       type === "success" ? "bg-[#111110] text-white" : "bg-[#B85C33] text-white"
     }`}>
       {msg}
+    </div>
+  )
+}
+
+function formatOverviewDate(value: string | null | undefined) {
+  if (!value) return "-"
+  const date = new Date(value)
+  if (Number.isNaN(date.getTime())) return "-"
+  return date.toLocaleDateString("ko-KR", { month: "2-digit", day: "2-digit", hour: "2-digit", minute: "2-digit" })
+}
+
+function getOverviewStatusLabel(status: CrmOverviewStatus) {
+  if (status === "ok") return "정상"
+  if (status === "warning") return "주의"
+  return "막힘"
+}
+
+function getOverviewStatusTone(status: CrmOverviewStatus) {
+  if (status === "ok") return "border-emerald-100 bg-emerald-50 text-emerald-700"
+  if (status === "warning") return "border-amber-100 bg-amber-50 text-amber-700"
+  return "border-[#F6D5C5] bg-[#FEF3EE] text-[#B85C33]"
+}
+
+function CrmOverviewPanel({
+  overview,
+  loading,
+  error,
+}: {
+  overview: AdminCrmOverview | null
+  loading: boolean
+  error: string | null
+}) {
+  const status = overview?.overallStatus ?? "warning"
+  const schemaDetail = overview
+    ? overview.schema.blocked > 0
+      ? overview.schema.firstBlocked ?? `${overview.schema.blocked}개 blocked`
+      : `${overview.schema.ok}개 check 통과`
+    : loading
+      ? "불러오는 중"
+      : "미점검"
+  const xiaoshouyiDetail = overview
+    ? overview.xiaoshouyi.configured
+      ? `${overview.xiaoshouyi.authMode} · ${overview.xiaoshouyi.objectCount} objects`
+      : overview.xiaoshouyi.missingEnvGroups.join(", ") || "credential 미설정"
+    : "-"
+  const sourceLinkDetail = overview
+    ? `${overview.sourceLinks.confirmed}/${overview.sourceLinks.total} 확정 · 후보 ${overview.sourceLinks.candidate} · 재검수 ${overview.sourceLinks.stale}`
+    : "-"
+  const snapshotDetail = overview
+    ? `${overview.externalSnapshots.recordCount.toLocaleString("ko-KR")} records · ${overview.externalSnapshots.latestRunObject ?? "sync"} ${overview.externalSnapshots.latestRunStatus ?? "-"}`
+    : "-"
+  const writeQueueDetail = overview
+    ? `draft ${overview.writeQueue.draft} · approved ${overview.writeQueue.approved} · sent ${overview.writeQueue.sent} · failed ${overview.writeQueue.failed}`
+    : "-"
+  const warning =
+    error ??
+    overview?.schema.firstAction ??
+    overview?.sourceLinks.error ??
+    overview?.externalSnapshots.error ??
+    overview?.writeQueue.error ??
+    null
+
+  return (
+    <div className="mb-4 rounded-2xl border border-[#e8e8e4] bg-white p-4">
+      <div className="flex flex-col gap-3 sm:flex-row sm:items-start sm:justify-between">
+        <div>
+          <div className="flex flex-wrap items-center gap-2">
+            <p className="text-[11px] font-semibold uppercase tracking-wide text-[#1a1a1a]/30">CRM Integration</p>
+            <span className={`rounded-full border px-2 py-0.5 text-[11px] font-semibold ${getOverviewStatusTone(status)}`}>
+              {loading && !overview ? "점검 중" : getOverviewStatusLabel(status)}
+            </span>
+          </div>
+          <h2 className="mt-1 text-[17px] font-bold text-[#111110]">CRM 통합 상태</h2>
+          <p className="mt-1 text-[12px] text-[#1a1a1a]/35">최근 점검 {formatOverviewDate(overview?.generatedAt)}</p>
+        </div>
+        <Link
+          href="/admin/crm/revenue"
+          className="inline-flex h-9 items-center justify-center gap-1.5 rounded-lg border border-[#e8e8e4] bg-white px-3 text-[12px] font-semibold text-[#111110] transition-colors hover:bg-[#f5f5f2]"
+        >
+          정합성 보기
+          <ExternalLink className="h-3.5 w-3.5" />
+        </Link>
+      </div>
+
+      <div className="mt-4 grid gap-2 sm:grid-cols-2 xl:grid-cols-5">
+        {[
+          { label: "스키마", value: schemaDetail, tone: overview?.schema.blocked ? "text-[#B85C33]" : "text-[#084734]" },
+          { label: "Xiaoshouyi", value: xiaoshouyiDetail, tone: overview?.xiaoshouyi.configured ? "text-[#084734]" : "text-[#B85C33]" },
+          { label: "Source links", value: sourceLinkDetail, tone: overview?.sourceLinks.candidate || overview?.sourceLinks.stale ? "text-amber-700" : "text-[#111110]" },
+          {
+            label: `Snapshot · ${formatOverviewDate(overview?.externalSnapshots.latestSyncedAt)}`,
+            value: snapshotDetail,
+            tone: overview?.externalSnapshots.ok ? "text-[#111110]" : "text-[#B85C33]",
+          },
+          { label: "Write queue", value: writeQueueDetail, tone: overview?.writeQueue.failed ? "text-[#B85C33]" : "text-[#111110]" },
+        ].map((item) => (
+          <div key={item.label} className="rounded-xl bg-[#fafaf8] px-3 py-3">
+            <p className="text-[11px] font-medium text-[#1a1a1a]/40">{item.label}</p>
+            <p className={`mt-1 truncate text-[12px] font-semibold ${item.tone}`}>{item.value}</p>
+          </div>
+        ))}
+      </div>
+
+      {warning ? (
+        <p className="mt-3 rounded-xl bg-[#FEF3EE] px-3 py-2 text-[12px] leading-relaxed text-[#B85C33]">
+          {warning}
+        </p>
+      ) : null}
     </div>
   )
 }
@@ -685,7 +853,7 @@ function LeadDrawer({
               className="flex items-center gap-1.5 px-3 py-1.5 rounded-lg text-[12px] font-medium border border-[#084734] text-[#084734] hover:bg-[#084734] hover:text-white disabled:opacity-40 transition-all"
             >
               {converting ? <Loader2 className="w-3.5 h-3.5 animate-spin" /> : <UserPlus className="w-3.5 h-3.5" />}
-              고객사 등록
+              고객·거래 등록
             </button>
           )}
         </div>
@@ -709,6 +877,9 @@ export default function CrmPage() {
   const [events, setEvents] = useState<PublicEvent[]>([])
   const [selectedLeadIds, setSelectedLeadIds] = useState<Set<string>>(() => new Set())
   const [deletingIds, setDeletingIds] = useState<Set<string>>(() => new Set())
+  const [crmOverview, setCrmOverview] = useState<AdminCrmOverview | null>(null)
+  const [crmOverviewLoading, setCrmOverviewLoading] = useState(false)
+  const [crmOverviewError, setCrmOverviewError] = useState<string | null>(null)
 
   useEffect(() => {
     let cancelled = false
@@ -741,6 +912,22 @@ export default function CrmPage() {
     } finally { setLoading(false) }
   }, [])
 
+  const fetchCrmOverview = useCallback(async (options?: { force?: boolean }) => {
+    setCrmOverviewLoading(true)
+    setCrmOverviewError(null)
+    try {
+      const data = await adminFetchJsonCached<AdminCrmOverview>("/api/admin/crm/overview", undefined, {
+        ttlMs: 60_000,
+        force: options?.force,
+      })
+      setCrmOverview(data)
+    } catch (err) {
+      setCrmOverviewError(err instanceof Error ? err.message : "CRM 통합 상태를 불러오지 못했습니다.")
+    } finally {
+      setCrmOverviewLoading(false)
+    }
+  }, [])
+
   const fetchLogs = useCallback(async (leadId: string) => {
     setLogsLoading(true)
     try {
@@ -753,7 +940,10 @@ export default function CrmPage() {
     } finally { setLogsLoading(false) }
   }, [])
 
-  useEffect(() => { fetchLeads() }, [fetchLeads])
+  useEffect(() => {
+    void fetchLeads()
+    void fetchCrmOverview()
+  }, [fetchLeads, fetchCrmOverview])
 
   useEffect(() => {
     if (selected) {
@@ -842,32 +1032,18 @@ export default function CrmPage() {
   }
 
   const handleConvert = async (lead: LeadRecord) => {
-    const partnerData = {
-      name: lead.org || lead.name || "",
-      contact_name: lead.name || "",
-      phone: lead.phone || "",
-      email: lead.email || "",
-      address: "",
-      pipeline_stage: "prospect",
-    }
-
     try {
-      const res = await adminFetch("/api/admin/partners", {
-        method: "POST",
-        body: JSON.stringify(partnerData),
-      })
-      await readAdminResponse(res, "고객사 등록에 실패했습니다.")
+      const res = await adminFetch(`/api/admin/leads/${lead.id}/convert-v2`, { method: "POST" })
+      const { customer, deal, lead: updatedLead } = await readAdminResponse<ConvertLeadResponse>(
+        res,
+        "V2 고객사·거래 등록에 실패했습니다."
+      )
 
-      const patchRes = await adminFetch(`/api/admin/leads/${lead.id}`, {
-        method: "PATCH",
-        body: JSON.stringify({ status: "converted" }),
-      })
-      await readAdminResponse(patchRes, "리드 상태 변경에 실패했습니다.")
-
-      setLeads((prev) => prev.map((l) => l.id === lead.id ? { ...l, status: "converted" } : l))
-      showToast(`${partnerData.name || "고객사"}이(가) 고객사로 등록되었습니다.`)
+      setLeads((prev) => prev.map((l) => l.id === lead.id ? updatedLead : l))
+      await fetchCrmOverview({ force: true })
+      showToast(`${customer.name} 고객사와 ${deal.deal_code ?? "초기 거래"}가 등록되었습니다.`)
     } catch (err) {
-      const message = err instanceof Error ? err.message : "고객사 등록에 실패했습니다."
+      const message = err instanceof Error ? err.message : "고객사·거래 등록에 실패했습니다."
       showToast(message, "error")
     }
   }
@@ -1083,10 +1259,21 @@ export default function CrmPage() {
           <p className="text-[11px] font-medium text-[#1a1a1a]/30 uppercase tracking-widest mb-1">Admin</p>
           <h1 className="text-2xl font-bold text-[#111110] tracking-[-0.02em]">리드 관리</h1>
         </div>
-        <Button variant="outline" size="sm" onClick={() => fetchLeads({ force: true })} disabled={loading} className="w-full gap-1.5 sm:w-auto">
-          <RefreshCw className={`w-4 h-4 ${loading ? "animate-spin" : ""}`} />새로고침
+        <Button
+          variant="outline"
+          size="sm"
+          onClick={() => {
+            void fetchLeads({ force: true })
+            void fetchCrmOverview({ force: true })
+          }}
+          disabled={loading || crmOverviewLoading}
+          className="w-full gap-1.5 sm:w-auto"
+        >
+          <RefreshCw className={`w-4 h-4 ${loading || crmOverviewLoading ? "animate-spin" : ""}`} />새로고침
         </Button>
       </div>
+
+      <CrmOverviewPanel overview={crmOverview} loading={crmOverviewLoading} error={crmOverviewError} />
 
       {/* 운영 현황 */}
       <div className="mb-4 grid gap-3 lg:grid-cols-[1.1fr_0.9fr]">
@@ -1588,7 +1775,7 @@ export default function CrmPage() {
                         </span>
                         {lead.status === "converted" && (
                           <span className="text-[11px] px-2 py-0.5 rounded-full font-medium bg-green-50 text-green-700 border border-green-200">
-                            고객사 전환
+                            CRM 전환
                           </span>
                         )}
                         {lead.notes && (

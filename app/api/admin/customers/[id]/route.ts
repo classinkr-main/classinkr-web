@@ -16,7 +16,10 @@ export async function GET(req: NextRequest, { params }: RouteContext) {
 
   try {
     const { id } = await params;
-    let customer = await getCustomerDetail(id);
+    let customer = await getCustomerDetail(id, {
+      includeCrmCoverage: true,
+      crmCoverageDepth: "detail",
+    });
 
     if (!customer) {
       customer = await getLegacyCustomerDetail(id);

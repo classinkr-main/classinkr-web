@@ -11,5 +11,5 @@ export async function GET(req: NextRequest) {
   }
 
   const result = await syncXiaoshouyiSnapshots("cron")
-  return NextResponse.json(result, { status: result.ok ? 200 : 500 })
+  return NextResponse.json(result, { status: result.ok ? 200 : result.skipped ? 409 : 500 })
 }

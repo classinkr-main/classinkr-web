@@ -1,12 +1,12 @@
 "use client"
 
 import { useCallback, useEffect, useState } from "react"
-import { Plus, RefreshCw, Search } from "lucide-react"
+import { AlertTriangle, CheckCircle2, Link2, Plus, RefreshCw, Search, ServerCog } from "lucide-react"
 
 import { CustomerDetailSlideOver } from "@/components/portal/CustomerDetailSlideOver"
 import { CustomerForm } from "@/components/portal/crud/CustomerForm"
 import { Button } from "@/components/ui/button"
-import { portalFetch } from "@/lib/portal/portal-fetch"
+import { adminFetchJson } from "@/lib/admin-client"
 import type { Customer, CustomerListItem } from "@/lib/portal/types"
 
 const STAGE_COLOR: Record<string, string> = {
@@ -50,6 +50,20 @@ const NEXT_EVENT_LABEL: Record<string, string> = {
   internal: "내부 일정",
 }
 
+const CRM_COVERAGE_LABEL = {
+  verified: "소스 확인",
+  needs_review: "검토 필요",
+  unmatched: "미매칭",
+  error: "조회 오류",
+} as const
+
+const CRM_COVERAGE_STYLE = {
+  verified: "border-emerald-200 bg-emerald-50 text-emerald-700",
+  needs_review: "border-amber-200 bg-amber-50 text-amber-700",
+  unmatched: "border-[#e8e8e4] bg-[#f7f7f5] text-[#615D59]",
+  error: "border-[#F3D6C8] bg-[#FEF3EE] text-[#B85C33]",
+} as const
+
 function formatDateLabel(value: string | null) {
   if (!value) return "미정"
   return new Date(value).toLocaleDateString("ko-KR", {
@@ -65,6 +79,16 @@ function formatRecentLabel(value: string | null) {
     month: "numeric",
     day: "numeric",
   })
+}
+
+function CrmCoverageIcon({ status }: { status: keyof typeof CRM_COVERAGE_LABEL }) {
+  if (status === "verified") return <CheckCircle2 className="h-3.5 w-3.5" />
+  if (status === "needs_review" || status === "error") return <AlertTriangle className="h-3.5 w-3.5" />
+  return <Link2 className="h-3.5 w-3.5" />
+}
+
+type CustomersResponse = {
+  customers?: CustomerListItem[]
 }
 
 type PartnerCustomersPageProps = {
@@ -86,29 +110,36 @@ export function PartnerCustomersPage({
   const [showForm, setShowForm] = useState(false)
   const [editing, setEditing] = useState<Customer | null>(null)
   const [detailId, setDetailId] = useState<string | null>(null)
+  const [loadError, setLoadError] = useState<string | null>(null)
 
   const load = useCallback(async (showSpinner = true) => {
     if (showSpinner) setLoading(true)
-    const res = await portalFetch("/api/portal/customers")
-    if (res.ok) {
-      const data = await res.json()
+    setLoadError(null)
+    try {
+      const data = await adminFetchJson<CustomersResponse>("/api/admin/customers")
       setCustomers(data.customers ?? [])
+    } catch (error) {
+      setLoadError(error instanceof Error ? error.message : "고객 목록을 불러오지 못했습니다.")
+    } finally {
+      setLoading(false)
     }
-    setLoading(false)
   }, [])
 
   useEffect(() => {
     let active = true
 
     async function initialLoad() {
-      const res = await portalFetch("/api/portal/customers")
-      if (!active) return
-      if (res.ok) {
-        const data = await res.json()
+      setLoadError(null)
+      try {
+        const data = await adminFetchJson<CustomersResponse>("/api/admin/customers")
         if (!active) return
         setCustomers(data.customers ?? [])
+      } catch (error) {
+        if (!active) return
+        setLoadError(error instanceof Error ? error.message : "고객 목록을 불러오지 못했습니다.")
+      } finally {
+        if (active) setLoading(false)
       }
-      setLoading(false)
     }
 
     void initialLoad()
@@ -176,6 +207,12 @@ export function PartnerCustomersPage({
           />
         </div>
 
+        {loadError && !loading && (
+          <div className="rounded-lg border border-[#F3D6C8] bg-[#FEF3EE] px-4 py-3 text-sm text-[#B85C33]">
+            {loadError}
+          </div>
+        )}
+
         {loading ? (
           <div className="py-16 text-center text-sm text-[#1a1a1a]/40">불러오는 중...</div>
         ) : filtered.length === 0 ? (
@@ -203,7 +240,7 @@ export function PartnerCustomersPage({
           )
         ) : (
           <div className="grid gap-3 sm:grid-cols-2 lg:grid-cols-3">
-            {filtered.map(({ customer, summary, insight, deal_previews }) => (
+            {filtered.map(({ customer, summary, insight, deal_previews, crm_coverage }) => (
               <button
                 key={customer.id}
                 type="button"
@@ -224,6 +261,18 @@ export function PartnerCustomersPage({
                 </div>
 
                 <div className="mt-3 flex flex-wrap items-center gap-2">
+                  {crm_coverage && (
+                    <span className={`inline-flex items-center gap-1 rounded-full border px-2 py-0.5 text-[11px] font-medium ${CRM_COVERAGE_STYLE[crm_coverage.status]}`}>
+                      <CrmCoverageIcon status={crm_coverage.status} />
+                      {CRM_COVERAGE_LABEL[crm_coverage.status]}
+                    </span>
+                  )}
+                  {crm_coverage && crm_coverage.discrepancies.length > 0 && (
+                    <span className="inline-flex items-center gap-1 rounded-full border border-amber-200 bg-amber-50 px-2 py-0.5 text-[11px] font-medium text-amber-700">
+                      <AlertTriangle className="h-3.5 w-3.5" />
+                      차이 {crm_coverage.discrepancies.length}
+                    </span>
+                  )}
                   {insight?.attention_level && (
                     <span className={`rounded-full border px-2 py-0.5 text-[11px] font-medium ${ATTENTION_STYLE[insight.attention_level]}`}>
                       {ATTENTION_LABEL[insight.attention_level]}
@@ -240,6 +289,25 @@ export function PartnerCustomersPage({
                     </span>
                   )}
                 </div>
+
+                {crm_coverage && (
+                  <div className="mt-3 flex flex-wrap items-center gap-x-4 gap-y-1 border-t border-[#f0f0ec] pt-3 text-xs text-[#1a1a1a]/50">
+                    <span className="inline-flex items-center gap-1">
+                      <Link2 className="h-3 w-3" />
+                      Source 확정
+                      <span className="font-medium text-[#1a1a1a]">
+                        {crm_coverage.confirmed_link_count}/{crm_coverage.source_link_count}
+                      </span>
+                    </span>
+                    <span className="inline-flex items-center gap-1">
+                      <ServerCog className="h-3 w-3" />
+                      외부 후보
+                      <span className="font-medium text-[#1a1a1a]">
+                        {crm_coverage.external_match_count}건
+                      </span>
+                    </span>
+                  </div>
+                )}
 
                 {deal_previews && deal_previews.length > 0 && (
                   <div className="mt-3 space-y-1.5">
@@ -310,6 +378,7 @@ export function PartnerCustomersPage({
         <CustomerDetailSlideOver
           key={detailId}
           customerId={detailId}
+          fetchMode="admin"
           onClose={() => setDetailId(null)}
           onEdit={allowEdit
             ? (customer) => {

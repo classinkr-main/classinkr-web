@@ -9,6 +9,7 @@ import { listBranchRevDeals } from "@/lib/repositories/branch-deals"
 import type { BranchRevDeal } from "@/lib/repositories/branch-deals"
 import { fyOf, FISCAL_MONTH_ORDER, fiscalQuarter, resolvePeriodDate, ymKey } from "@/lib/branch/fiscal"
 import { summarizeRevenue, bottleneckKpi, closingDeals } from "@/lib/branch/computations/core-kpi"
+import { confirmedMonthAmount } from "@/lib/branch/computations/rev-confirmed"
 import { listMembersByTeam } from "@/lib/branch/computations/pacing"
 import { summarizeCampaigns } from "@/lib/branch/computations/campaigns"
 import { getRecentSyncRuns } from "@/lib/repositories/branch-sync"
@@ -249,9 +250,8 @@ export async function GET(req: NextRequest) {
         const amount = Number(d.monthly_payments[m] ?? 0)
         if (!amount) return acc
         if (!d.first_payment) return { ...acc, trend: acc.trend + amount }
-        const hasRed = Object.keys(d.monthly_red).length > 0
-        if (!hasRed || d.monthly_red[m]) return { ...acc, confirmed: acc.confirmed + amount }
-        return { ...acc, trend: acc.trend + amount }
+        const confirmed = confirmedMonthAmount(d, m, amount)
+        return { confirmed: acc.confirmed + confirmed, trend: acc.trend + (amount - confirmed) }
       }, { confirmed: 0, trend: 0 })
       revCum += month.confirmed
       trendCum += month.confirmed + month.trend
@@ -306,18 +306,17 @@ export async function GET(req: NextRequest) {
       for (const deal of deals) {
         const seg = classifySegment(deal)
         if (!seg) continue
-        const hasRed = Object.keys(deal.monthly_red).length > 0
         for (const mo of periodMonths) {
           const amount = Number(deal.monthly_payments[mo] ?? 0)
           if (!amount) continue
           acc[seg].goal += amount
-          if (deal.first_payment && (!hasRed || deal.monthly_red[mo])) acc[seg].actual += amount
+          if (deal.first_payment) acc[seg].actual += confirmedMonthAmount(deal, mo, amount)
         }
         if (prevPeriodMonths) {
           for (const mo of prevPeriodMonths) {
             const amount = Number(deal.monthly_payments[mo] ?? 0)
             if (!amount) continue
-            if (deal.first_payment && (!hasRed || deal.monthly_red[mo])) acc[seg].prev_actual += amount
+            if (deal.first_payment) acc[seg].prev_actual += confirmedMonthAmount(deal, mo, amount)
           }
         }
       }

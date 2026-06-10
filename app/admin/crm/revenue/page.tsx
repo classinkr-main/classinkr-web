@@ -12,13 +12,14 @@ import {
   Loader2,
   Plus,
   RefreshCw,
+  RotateCcw,
   Search,
   ServerCog,
   TrendingUp,
   X,
 } from "lucide-react"
 
-import { adminFetchJson } from "@/lib/admin-client"
+import { adminFetchJson, adminFetchJsonCached } from "@/lib/admin-client"
 import type {
   CrmRevenueDashboard,
   CrmRevenueDocumentRow,
@@ -55,11 +56,86 @@ const MATCH_STATUS_TONE: Record<CrmSourceLinkStatus, string> = {
   stale: "border-amber-100 bg-amber-50 text-amber-700",
 }
 
+const WRITE_STATUS_LABEL: Record<string, string> = {
+  draft: "검토 대기",
+  approved: "승인됨",
+  sent: "전송 중",
+  succeeded: "완료",
+  failed: "실패",
+  cancelled: "취소",
+}
+
+const WRITE_STATUS_TONE: Record<string, string> = {
+  draft: "border-sky-100 bg-sky-50 text-sky-700",
+  approved: "border-amber-100 bg-amber-50 text-amber-700",
+  sent: "border-[#e8e8e4] bg-[#fafaf8] text-[#1a1a1a]/45",
+  succeeded: "border-emerald-100 bg-emerald-50 text-emerald-700",
+  failed: "border-[#F6D5C5] bg-[#FEF3EE] text-[#B85C33]",
+  cancelled: "border-[#e8e8e4] bg-white text-[#1a1a1a]/35",
+}
+
+const WRITE_OPERATION_LABEL: Record<string, string> = {
+  create: "생성",
+  update: "수정",
+  transfer_owner: "담당자 변경",
+}
+const WRITE_MAX_ATTEMPTS = 3
+
 interface ManualLinkTargetOption {
   targetType: "customer" | "deal"
   targetId: string
   label: string
   confidence: number
+}
+
+interface ExternalCrmSyncResult {
+  ok: boolean
+  skipped?: boolean
+  error?: string
+  objects?: Array<{
+    objectApiKey: string
+    status: "success" | "failed" | "skipped"
+    error?: string
+  }>
+}
+
+interface ExternalCrmSyncPreflight {
+  configured: boolean
+  missingEnvGroups: string[]
+  pageSize: number
+  maxPages: number
+  objects: Array<{ objectApiKey: string }>
+}
+
+interface WriteMetadataPreflight {
+  ok: boolean
+  configured: boolean
+  error?: string
+  objects: Array<{
+    objectApiKey: string
+    status: "ok" | "failed" | "skipped" | "read_only"
+    readOnly: boolean
+    error?: string
+  }>
+}
+
+interface CrmReadinessCheck {
+  key: string
+  label: string
+  status: "ok" | "warning" | "blocked"
+  detail: string
+  action?: string
+}
+
+interface CrmReadinessReport {
+  generatedAt: string
+  overallStatus: "ok" | "warning" | "blocked"
+  summary: {
+    ok: number
+    warning: number
+    blocked: number
+  }
+  checks: CrmReadinessCheck[]
 }
 
 function formatCurrency(value: number) {
@@ -112,6 +188,43 @@ function getTargetLabel(targetType: string | null, targetId: string | null, targ
           ? "파트너"
           : targetType
   return targetLabel ? `${label} · ${targetLabel}` : `${label} ${targetId.slice(0, 8)}`
+}
+
+function formatWritePayload(value: Record<string, unknown>) {
+  const entries = Object.entries(value).slice(0, 3)
+  if (entries.length === 0) return "-"
+  const label = entries.map(([key, item]) => `${key}: ${String(item ?? "-")}`).join(" · ")
+  return Object.keys(value).length > 3 ? `${label} ...` : label
+}
+
+function formatWriteAttempt(request: CrmRevenueDashboard["writeRequests"][number]) {
+  const parts = [`시도 ${request.attemptCount}/${WRITE_MAX_ATTEMPTS}`]
+  if (request.lastAttemptAt) parts.push(`최근 ${formatDate(request.lastAttemptAt)}`)
+  if (request.nextRetryAt) parts.push(`재시도 ${formatDate(request.nextRetryAt)}`)
+  if (request.status === "failed" && request.attemptCount >= WRITE_MAX_ATTEMPTS) parts.push("한도 도달")
+  return parts.join(" · ")
+}
+
+function formatWriteMetadataStatus(result: WriteMetadataPreflight | null) {
+  if (!result) return "미검증"
+  if (!result.configured) return result.error ?? "credential 필요"
+  const okCount = result.objects.filter((object) => object.status === "ok").length
+  const failedCount = result.objects.filter((object) => object.status === "failed").length
+  const readOnlyCount = result.objects.filter((object) => object.status === "read_only").length
+  if (failedCount > 0) return `실패 ${failedCount} · 확인 ${okCount} · read-only ${readOnlyCount}`
+  return `확인 ${okCount} · read-only ${readOnlyCount}`
+}
+
+function getReadinessLabel(status: CrmReadinessReport["overallStatus"] | CrmReadinessCheck["status"]) {
+  if (status === "ok") return "준비됨"
+  if (status === "warning") return "확인 필요"
+  return "막힘"
+}
+
+function getReadinessTone(status: CrmReadinessReport["overallStatus"] | CrmReadinessCheck["status"]) {
+  if (status === "ok") return STATUS_TONE.connected
+  if (status === "warning") return "border-amber-100 bg-amber-50 text-amber-700"
+  return STATUS_TONE.error
 }
 
 function StatusBadge({ label, tone }: { label: string; tone?: string }) {
@@ -188,6 +301,66 @@ function SourcePanel({ source }: { source: CrmRevenueSource }) {
   )
 }
 
+function ReadinessPanel({
+  report,
+  checking,
+  onCheck,
+}: {
+  report: CrmReadinessReport | null
+  checking: boolean
+  onCheck: () => void
+}) {
+  return (
+    <div className="border-t border-[#f0f0ec] pt-4">
+      <div className="flex items-start justify-between gap-3">
+        <div>
+          <p className="text-[13px] font-semibold text-[#111110]">운영 준비도</p>
+          <p className="mt-0.5 text-[11px] text-[#1a1a1a]/35">
+            {report ? formatDate(report.generatedAt) : "아직 점검하지 않음"}
+          </p>
+        </div>
+        <StatusBadge
+          label={report ? getReadinessLabel(report.overallStatus) : "미점검"}
+          tone={report ? getReadinessTone(report.overallStatus) : STATUS_TONE.not_configured}
+        />
+      </div>
+
+      {report ? (
+        <div className="mt-3 grid grid-cols-3 gap-2 text-center text-[11px]">
+          <div className="border-t border-emerald-100 pt-2 text-emerald-700">OK {report.summary.ok}</div>
+          <div className="border-t border-amber-100 pt-2 text-amber-700">주의 {report.summary.warning}</div>
+          <div className="border-t border-[#F6D5C5] pt-2 text-[#B85C33]">막힘 {report.summary.blocked}</div>
+        </div>
+      ) : null}
+
+      <div className="mt-3 space-y-2">
+        {(report?.checks ?? []).map((check) => (
+          <div key={check.key} className="border-t border-[#f0f0ec] pt-2">
+            <div className="flex items-center justify-between gap-2">
+              <p className="truncate text-[12px] font-semibold text-[#111110]">{check.label}</p>
+              <StatusBadge label={getReadinessLabel(check.status)} tone={getReadinessTone(check.status)} />
+            </div>
+            <p className="mt-1 text-[11px] leading-relaxed text-[#1a1a1a]/45">{check.detail}</p>
+            {check.action ? (
+              <p className="mt-1 text-[11px] leading-relaxed text-[#B85C33]">{check.action}</p>
+            ) : null}
+          </div>
+        ))}
+      </div>
+
+      <button
+        type="button"
+        onClick={onCheck}
+        disabled={checking}
+        className="mt-3 inline-flex h-8 w-full items-center justify-center gap-2 rounded-lg border border-[#e8e8e4] bg-white px-3 text-[12px] font-semibold text-[#111110] transition-colors hover:bg-[#f5f5f2] disabled:opacity-50"
+      >
+        {checking ? <Loader2 className="h-3.5 w-3.5 animate-spin" /> : <RefreshCw className="h-3.5 w-3.5" />}
+        운영 점검
+      </button>
+    </div>
+  )
+}
+
 export default function AdminCrmRevenuePage() {
   const [data, setData] = useState<CrmRevenueDashboard | null>(null)
   const [months, setMonths] = useState(6)
@@ -196,19 +369,25 @@ export default function AdminCrmRevenuePage() {
   const [syncingExternal, setSyncingExternal] = useState(false)
   const [generatingLinks, setGeneratingLinks] = useState(false)
   const [updatingLinkId, setUpdatingLinkId] = useState<string | null>(null)
+  const [updatingWriteRequestId, setUpdatingWriteRequestId] = useState<string | null>(null)
+  const [validatingWriteMetadata, setValidatingWriteMetadata] = useState(false)
+  const [writeMetadataStatus, setWriteMetadataStatus] = useState<WriteMetadataPreflight | null>(null)
+  const [checkingReadiness, setCheckingReadiness] = useState(false)
+  const [readiness, setReadiness] = useState<CrmReadinessReport | null>(null)
   const [manualQueries, setManualQueries] = useState<Record<string, string>>({})
   const [manualTargets, setManualTargets] = useState<Record<string, ManualLinkTargetOption[]>>({})
   const [searchingSourceKey, setSearchingSourceKey] = useState<string | null>(null)
   const [creatingManualKey, setCreatingManualKey] = useState<string | null>(null)
   const [error, setError] = useState<string | null>(null)
 
-  const load = useCallback(async () => {
+  const load = useCallback(async (options?: { force?: boolean }) => {
     setLoading(true)
     setError(null)
     try {
-      const next = await adminFetchJson<CrmRevenueDashboard>(
-        `/api/admin/crm/revenue?months=${months}`
-      )
+      const next = await adminFetchJsonCached<CrmRevenueDashboard>(`/api/admin/crm/revenue?months=${months}`, undefined, {
+        ttlMs: 30_000,
+        force: options?.force,
+      })
       setData(next)
     } catch (err) {
       setError(err instanceof Error ? err.message : "매출 데이터를 불러오지 못했습니다.")
@@ -229,7 +408,7 @@ export default function AdminCrmRevenuePage() {
         method: "POST",
         body: JSON.stringify({ sources: ["rev"] }),
       })
-      await load()
+      await load({ force: true })
     } catch (err) {
       setError(err instanceof Error ? err.message : "시트 동기화에 실패했습니다.")
     } finally {
@@ -243,9 +422,9 @@ export default function AdminCrmRevenuePage() {
     try {
       await adminFetchJson(`/api/admin/crm/source-links/generate`, {
         method: "POST",
-        body: JSON.stringify({ source: "branch_rev_sheet" }),
+        body: JSON.stringify({ source: "all" }),
       })
-      await load()
+      await load({ force: true })
     } catch (err) {
       setError(err instanceof Error ? err.message : "CRM 매칭 후보 생성에 실패했습니다.")
     } finally {
@@ -257,8 +436,30 @@ export default function AdminCrmRevenuePage() {
     setSyncingExternal(true)
     setError(null)
     try {
-      await adminFetchJson(`/api/admin/crm/external-sync`, { method: "POST" })
-      await load()
+      const readinessReport = await adminFetchJson<CrmReadinessReport>(`/api/admin/crm/readiness`)
+      setReadiness(readinessReport)
+      const blockedSync = readinessReport.checks.find((check) =>
+        check.status === "blocked" && ["external_crm_sync_runs", "external_crm_records"].includes(check.key)
+      )
+      if (blockedSync) {
+        const action = blockedSync.action ? ` · ${blockedSync.action}` : ""
+        setError(`외부 CRM 동기화 준비 필요: ${blockedSync.label} · ${blockedSync.detail}${action}`)
+        return
+      }
+
+      const preflight = await adminFetchJson<ExternalCrmSyncPreflight>(`/api/admin/crm/external-sync`)
+      if (!preflight.configured) {
+        const missing = preflight.missingEnvGroups.length > 0 ? preflight.missingEnvGroups.join(", ") : "credential"
+        setError(`외부 CRM 동기화 준비 필요: ${missing}`)
+        return
+      }
+
+      const result = await adminFetchJson<ExternalCrmSyncResult>(`/api/admin/crm/external-sync`, { method: "POST" })
+      await load({ force: true })
+      if (result.skipped) {
+        const reason = result.error ?? result.objects?.find((item) => item.error)?.error
+        setError(reason ? `외부 CRM 동기화 skipped: ${reason}` : "외부 CRM credential 미설정으로 동기화를 건너뛰었습니다.")
+      }
     } catch (err) {
       setError(err instanceof Error ? err.message : "외부 CRM 동기화에 실패했습니다.")
     } finally {
@@ -275,7 +476,7 @@ export default function AdminCrmRevenuePage() {
           method: "PATCH",
           body: JSON.stringify({ action }),
         })
-        await load()
+        await load({ force: true })
       } catch (err) {
         setError(err instanceof Error ? err.message : "CRM 매칭 상태 변경에 실패했습니다.")
       } finally {
@@ -284,6 +485,57 @@ export default function AdminCrmRevenuePage() {
     },
     [load]
   )
+
+  const updateWriteRequest = useCallback(
+    async (requestId: string, action: "approve" | "cancel" | "retry") => {
+      setUpdatingWriteRequestId(`${requestId}:${action}`)
+      setError(null)
+      try {
+        await adminFetchJson(`/api/admin/crm/write-requests/${requestId}`, {
+          method: "PATCH",
+          body: JSON.stringify({ action }),
+        })
+        await load({ force: true })
+      } catch (err) {
+        setError(err instanceof Error ? err.message : "CRM 쓰기 요청 상태 변경에 실패했습니다.")
+      } finally {
+        setUpdatingWriteRequestId(null)
+      }
+    },
+    [load]
+  )
+
+  const validateWriteMetadata = useCallback(async () => {
+    setValidatingWriteMetadata(true)
+    setError(null)
+    try {
+      const result = await adminFetchJson<WriteMetadataPreflight>(
+        `/api/admin/crm/write-requests?preflight=metadata`
+      )
+      setWriteMetadataStatus(result)
+      if (!result.ok) {
+        const failed = result.objects.find((object) => object.status === "failed")
+        setError(failed?.error ?? result.error ?? "외부 CRM metadata 검증이 필요합니다.")
+      }
+    } catch (err) {
+      setError(err instanceof Error ? err.message : "외부 CRM metadata 검증에 실패했습니다.")
+    } finally {
+      setValidatingWriteMetadata(false)
+    }
+  }, [])
+
+  const checkReadiness = useCallback(async () => {
+    setCheckingReadiness(true)
+    setError(null)
+    try {
+      const report = await adminFetchJson<CrmReadinessReport>(`/api/admin/crm/readiness`)
+      setReadiness(report)
+    } catch (err) {
+      setError(err instanceof Error ? err.message : "CRM 운영 준비도 점검에 실패했습니다.")
+    } finally {
+      setCheckingReadiness(false)
+    }
+  }, [])
 
   const searchManualTargets = useCallback(
     async (sourceKey: string, fallbackQuery: string) => {
@@ -324,7 +576,7 @@ export default function AdminCrmRevenuePage() {
           }),
         })
         setManualTargets((current) => ({ ...current, [sourceKey]: [] }))
-        await load()
+        await load({ force: true })
       } catch (err) {
         setError(err instanceof Error ? err.message : "수동 CRM 후보 추가에 실패했습니다.")
       } finally {
@@ -380,7 +632,7 @@ export default function AdminCrmRevenuePage() {
           ))}
           <button
             type="button"
-            onClick={() => void load()}
+            onClick={() => void load({ force: true })}
             disabled={loading}
             className="inline-flex h-9 items-center gap-2 rounded-lg border border-[#e8e8e4] bg-white px-3 text-[13px] font-semibold text-[#111110] transition-colors hover:bg-[#f5f5f2] disabled:opacity-50"
           >
@@ -722,6 +974,285 @@ export default function AdminCrmRevenuePage() {
               </tbody>
             </table>
           </div>
+
+          <div className="mt-8 border-t border-[#f0f0ec] pt-6">
+            <div className="flex flex-wrap items-center justify-between gap-3">
+              <div className="flex items-center gap-2">
+                <ServerCog className="h-4 w-4 text-[#1a1a1a]/35" />
+                <h3 className="text-[13px] font-semibold text-[#111110]">외부 CRM 후보 검수</h3>
+              </div>
+              <span className="text-[11px] text-[#1a1a1a]/35">
+                Xiaoshouyi snapshot에서 생성된 source link 후보 {formatNumber(data.externalLinks.length)}건
+              </span>
+            </div>
+
+            <div className="mt-3 overflow-x-auto">
+              <table className="min-w-[1060px] w-full text-left">
+                <thead className="text-[11px] uppercase tracking-[0.12em] text-[#1a1a1a]/35">
+                  <tr>
+                    <th className="py-3 pr-4 font-semibold">상태</th>
+                    <th className="py-3 pr-4 font-semibold">외부 레코드</th>
+                    <th className="py-3 pr-4 font-semibold">담당/상태</th>
+                    <th className="py-3 pr-4 font-semibold">연결 대상</th>
+                    <th className="py-3 pr-4 text-right font-semibold">신뢰도</th>
+                    <th className="py-3 pr-4 text-right font-semibold">금액</th>
+                    <th className="py-3 pr-4 font-semibold">동기화</th>
+                    <th className="py-3 pl-4 text-right font-semibold">액션</th>
+                  </tr>
+                </thead>
+                <tbody className="divide-y divide-[#f0f0ec]">
+                  {data.externalLinks.length === 0 ? (
+                    <tr>
+                      <td colSpan={8} className="py-8 text-center text-[13px] text-[#1a1a1a]/35">
+                        표시할 Xiaoshouyi source link 후보가 없습니다.
+                      </td>
+                    </tr>
+                  ) : (
+                    data.externalLinks.map((link) => (
+                      <tr key={link.linkId} className="align-top">
+                        <td className="py-4 pr-4">
+                          <StatusBadge
+                            label={getMatchStatusLabel(link.linkStatus)}
+                            tone={getMatchStatusTone(link.linkStatus)}
+                          />
+                        </td>
+                        <td className="py-4 pr-4">
+                          <p className="text-[13px] font-semibold text-[#111110]">
+                            {link.sourceLabel ?? link.sourceRecordKey}
+                          </p>
+                          <p className="mt-1 text-[11px] text-[#1a1a1a]/35">
+                            {link.sourceObject} · {link.sourceRecordKey}
+                          </p>
+                        </td>
+                        <td className="py-4 pr-4 text-[12px] text-[#1a1a1a]/50">
+                          <p>{link.sourceOwner ?? "담당 미지정"}</p>
+                          <p className="mt-1 text-[11px] text-[#1a1a1a]/35">{link.sourceStatus ?? "-"}</p>
+                        </td>
+                        <td className="py-4 pr-4 text-[12px] text-[#1a1a1a]/50">
+                          {getTargetLabel(link.targetType, link.targetId, link.targetLabel)}
+                        </td>
+                        <td className="py-4 pr-4 text-right text-[12px] text-[#1a1a1a]/45">
+                          {formatPercent(link.confidence)}
+                        </td>
+                        <td className="py-4 pr-4 text-right text-[12px] font-semibold text-[#111110]">
+                          {link.sourceAmount == null ? "-" : formatCurrency(link.sourceAmount)}
+                        </td>
+                        <td className="py-4 pr-4 text-[12px] text-[#1a1a1a]/45">
+                          <p>{formatDate(link.syncedAt)}</p>
+                          <p className="mt-1 text-[11px] text-[#1a1a1a]/30">
+                            발생 {formatDate(link.occurredAt)}
+                          </p>
+                        </td>
+                        <td className="py-4 pl-4 text-right">
+                          {link.linkStatus === "candidate" || link.linkStatus === "stale" ? (
+                            <div className="flex justify-end gap-1.5">
+                              <button
+                                type="button"
+                                onClick={() => void updateSourceLink(link.linkId, "confirm")}
+                                disabled={updatingLinkId === link.linkId}
+                                className="inline-flex h-7 w-7 items-center justify-center rounded-lg border border-emerald-100 bg-emerald-50 text-emerald-700 transition-colors hover:bg-emerald-100 disabled:opacity-50"
+                                title="확정"
+                                aria-label="확정"
+                              >
+                                {updatingLinkId === link.linkId ? (
+                                  <Loader2 className="h-3.5 w-3.5 animate-spin" />
+                                ) : (
+                                  <Check className="h-3.5 w-3.5" />
+                                )}
+                              </button>
+                              <button
+                                type="button"
+                                onClick={() => void updateSourceLink(link.linkId, "reject")}
+                                disabled={updatingLinkId === link.linkId}
+                                className="inline-flex h-7 w-7 items-center justify-center rounded-lg border border-[#F6D5C5] bg-[#FEF3EE] text-[#B85C33] transition-colors hover:bg-[#FBE8DD] disabled:opacity-50"
+                                title="제외"
+                                aria-label="제외"
+                              >
+                                <X className="h-3.5 w-3.5" />
+                              </button>
+                            </div>
+                          ) : (
+                            <span className="text-[11px] text-[#1a1a1a]/30">
+                              {link.linkStatus === "confirmed" ? "완료" : "제외됨"}
+                            </span>
+                          )}
+                        </td>
+                      </tr>
+                    ))
+                  )}
+                </tbody>
+              </table>
+            </div>
+          </div>
+
+          <div className="mt-8 border-t border-[#f0f0ec] pt-6">
+            <div className="flex flex-wrap items-center justify-between gap-3">
+              <div className="flex items-center gap-2">
+                <ServerCog className="h-4 w-4 text-[#1a1a1a]/35" />
+                <h3 className="text-[13px] font-semibold text-[#111110]">외부 CRM 쓰기 승인 큐</h3>
+              </div>
+              <div className="flex flex-wrap items-center justify-end gap-2">
+                <StatusBadge
+                  label={writeMetadataStatus?.ok ? "metadata 확인" : "metadata 미검증"}
+                  tone={writeMetadataStatus?.ok ? STATUS_TONE.connected : STATUS_TONE.not_configured}
+                />
+                <span className="text-[11px] text-[#1a1a1a]/35">
+                  {formatWriteMetadataStatus(writeMetadataStatus)}
+                </span>
+                <button
+                  type="button"
+                  onClick={() => void validateWriteMetadata()}
+                  disabled={validatingWriteMetadata}
+                  className="inline-flex h-7 items-center gap-1.5 rounded-lg border border-[#e8e8e4] bg-white px-2 text-[11px] font-semibold text-[#111110] transition-colors hover:bg-[#f5f5f2] disabled:opacity-50"
+                >
+                  {validatingWriteMetadata ? (
+                    <Loader2 className="h-3.5 w-3.5 animate-spin" />
+                  ) : (
+                    <Check className="h-3.5 w-3.5" />
+                  )}
+                  검증
+                </button>
+              </div>
+            </div>
+
+            <div className="mt-3 overflow-x-auto">
+              <table className="min-w-[1220px] w-full text-left">
+                <thead className="text-[11px] uppercase tracking-[0.12em] text-[#1a1a1a]/35">
+                  <tr>
+                    <th className="py-3 pr-4 font-semibold">상태</th>
+                    <th className="py-3 pr-4 font-semibold">작업</th>
+                    <th className="py-3 pr-4 font-semibold">객체</th>
+                    <th className="py-3 pr-4 font-semibold">외부 ID</th>
+                    <th className="py-3 pr-4 font-semibold">Payload</th>
+                    <th className="py-3 pr-4 font-semibold">승인</th>
+                    <th className="py-3 pr-4 font-semibold">실행</th>
+                    <th className="py-3 pr-4 font-semibold">재시도</th>
+                    <th className="py-3 pr-4 font-semibold">오류</th>
+                    <th className="py-3 pl-4 text-right font-semibold">액션</th>
+                  </tr>
+                </thead>
+                <tbody className="divide-y divide-[#f0f0ec]">
+                  {(data.writeRequests ?? []).length === 0 ? (
+                    <tr>
+                      <td colSpan={10} className="py-8 text-center text-[13px] text-[#1a1a1a]/35">
+                        대기 중인 외부 CRM 쓰기 요청이 없습니다.
+                      </td>
+                    </tr>
+                  ) : (
+                    data.writeRequests.map((request) => {
+                      const approveKey = `${request.id}:approve`
+                      const cancelKey = `${request.id}:cancel`
+                      const retryKey = `${request.id}:retry`
+                      return (
+                        <tr key={request.id} className="align-top">
+                          <td className="py-4 pr-4">
+                            <StatusBadge
+                              label={WRITE_STATUS_LABEL[request.status] ?? request.status}
+                              tone={WRITE_STATUS_TONE[request.status]}
+                            />
+                          </td>
+                          <td className="py-4 pr-4 text-[12px] font-semibold text-[#111110]">
+                            {WRITE_OPERATION_LABEL[request.operation] ?? request.operation}
+                          </td>
+                          <td className="py-4 pr-4">
+                            <p className="text-[12px] font-semibold text-[#111110]">{request.objectApiKey}</p>
+                            <p className="mt-1 text-[11px] text-[#1a1a1a]/35">{request.sourceSystem}</p>
+                          </td>
+                          <td className="py-4 pr-4 text-[12px] text-[#1a1a1a]/50">
+                            {request.externalId ?? "신규"}
+                          </td>
+                          <td className="max-w-[260px] py-4 pr-4 text-[12px] text-[#1a1a1a]/50">
+                            <p className="line-clamp-2">{formatWritePayload(request.payload)}</p>
+                          </td>
+                          <td className="py-4 pr-4 text-[12px] text-[#1a1a1a]/45">
+                            {formatDate(request.approvedAt)}
+                          </td>
+                          <td className="py-4 pr-4 text-[12px] text-[#1a1a1a]/45">
+                            {formatDate(request.executedAt)}
+                          </td>
+                          <td className="max-w-[220px] py-4 pr-4 text-[12px] text-[#1a1a1a]/45">
+                            <p className="line-clamp-2">{formatWriteAttempt(request)}</p>
+                          </td>
+                          <td className="max-w-[220px] py-4 pr-4 text-[12px] text-[#B85C33]">
+                            <p className="line-clamp-2">{request.error ?? request.lastAttemptError ?? "-"}</p>
+                          </td>
+                          <td className="py-4 pl-4 text-right">
+                            {request.status === "draft" ? (
+                              <div className="flex justify-end gap-1.5">
+                                <button
+                                  type="button"
+                                  onClick={() => void updateWriteRequest(request.id, "approve")}
+                                  disabled={updatingWriteRequestId === approveKey}
+                                  className="inline-flex h-7 items-center gap-1 rounded-lg border border-emerald-100 bg-emerald-50 px-2 text-[11px] font-semibold text-emerald-700 transition-colors hover:bg-emerald-100 disabled:opacity-50"
+                                >
+                                  {updatingWriteRequestId === approveKey ? (
+                                    <Loader2 className="h-3.5 w-3.5 animate-spin" />
+                                  ) : (
+                                    <Check className="h-3.5 w-3.5" />
+                                  )}
+                                  승인
+                                </button>
+                                <button
+                                  type="button"
+                                  onClick={() => void updateWriteRequest(request.id, "cancel")}
+                                  disabled={updatingWriteRequestId === cancelKey}
+                                  className="inline-flex h-7 items-center gap-1 rounded-lg border border-[#F6D5C5] bg-[#FEF3EE] px-2 text-[11px] font-semibold text-[#B85C33] transition-colors hover:bg-[#FBE8DD] disabled:opacity-50"
+                                >
+                                  <X className="h-3.5 w-3.5" />
+                                  취소
+                                </button>
+                              </div>
+                            ) : request.status === "approved" ? (
+                              <button
+                                type="button"
+                                onClick={() => void updateWriteRequest(request.id, "cancel")}
+                                disabled={updatingWriteRequestId === cancelKey}
+                                className="inline-flex h-7 items-center gap-1 rounded-lg border border-[#F6D5C5] bg-[#FEF3EE] px-2 text-[11px] font-semibold text-[#B85C33] transition-colors hover:bg-[#FBE8DD] disabled:opacity-50"
+                              >
+                                <X className="h-3.5 w-3.5" />
+                                취소
+                              </button>
+                            ) : request.status === "failed" ? (
+                              <div className="flex justify-end gap-1.5">
+                                <button
+                                  type="button"
+                                  onClick={() => void updateWriteRequest(request.id, "retry")}
+                                  disabled={
+                                    updatingWriteRequestId === retryKey ||
+                                    request.attemptCount >= WRITE_MAX_ATTEMPTS ||
+                                    Boolean(request.nextRetryAt && new Date(request.nextRetryAt).getTime() > Date.now())
+                                  }
+                                  className="inline-flex h-7 items-center gap-1 rounded-lg border border-amber-100 bg-amber-50 px-2 text-[11px] font-semibold text-amber-700 transition-colors hover:bg-amber-100 disabled:opacity-50"
+                                >
+                                  {updatingWriteRequestId === retryKey ? (
+                                    <Loader2 className="h-3.5 w-3.5 animate-spin" />
+                                  ) : (
+                                    <RotateCcw className="h-3.5 w-3.5" />
+                                  )}
+                                  재시도
+                                </button>
+                                <button
+                                  type="button"
+                                  onClick={() => void updateWriteRequest(request.id, "cancel")}
+                                  disabled={updatingWriteRequestId === cancelKey}
+                                  className="inline-flex h-7 items-center gap-1 rounded-lg border border-[#F6D5C5] bg-[#FEF3EE] px-2 text-[11px] font-semibold text-[#B85C33] transition-colors hover:bg-[#FBE8DD] disabled:opacity-50"
+                                >
+                                  <X className="h-3.5 w-3.5" />
+                                  취소
+                                </button>
+                              </div>
+                            ) : (
+                              <span className="text-[11px] text-[#1a1a1a]/30">-</span>
+                            )}
+                          </td>
+                        </tr>
+                      )
+                    })
+                  )}
+                </tbody>
+              </table>
+            </div>
+          </div>
         </section>
       ) : null}
 
@@ -779,6 +1310,11 @@ export default function AdminCrmRevenuePage() {
             <h2 className="text-[14px] font-semibold text-[#111110]">연결 상태</h2>
           </div>
           <div className="mt-4 space-y-4">
+            <ReadinessPanel
+              report={readiness}
+              checking={checkingReadiness}
+              onCheck={() => void checkReadiness()}
+            />
             {(data?.sources ?? []).map((source) => (
               <SourcePanel key={source.key} source={source} />
             ))}

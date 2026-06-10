@@ -78,6 +78,47 @@ export interface CrmRevenueSheetMatchRow {
   confidence: number | null
 }
 
+export interface CrmRevenueExternalLinkRow {
+  linkId: string
+  sourceObject: string
+  sourceRecordKey: string
+  sourceLabel: string | null
+  sourceOwner: string | null
+  sourceStatus: string | null
+  sourceAmount: number | null
+  occurredAt: string | null
+  syncedAt: string | null
+  linkStatus: CrmSourceLinkStatus
+  targetType: string
+  targetId: string
+  targetLabel: string | null
+  confidence: number | null
+  updatedAt: string
+}
+
+export type CrmWriteRequestStatus = "draft" | "approved" | "sent" | "succeeded" | "failed" | "cancelled"
+export type CrmWriteRequestOperation = "create" | "update" | "transfer_owner"
+
+export interface CrmRevenueWriteRequestRow {
+  id: string
+  sourceSystem: string
+  objectApiKey: string
+  externalId: string | null
+  operation: CrmWriteRequestOperation
+  status: CrmWriteRequestStatus
+  payload: Record<string, unknown>
+  previewPayload: Record<string, unknown> | null
+  approvedAt: string | null
+  executedAt: string | null
+  attemptCount: number
+  lastAttemptAt: string | null
+  nextRetryAt: string | null
+  lastAttemptError: string | null
+  error: string | null
+  createdAt: string
+  updatedAt: string
+}
+
 export interface CrmRevenuePartnerRow {
   id: string
   name: string
@@ -120,6 +161,8 @@ export interface CrmRevenueDashboard {
   sheet: CrmRevenueSheetSummary | null
   identity: CrmRevenueIdentitySummary | null
   sheetMatches: CrmRevenueSheetMatchRow[]
+  externalLinks: CrmRevenueExternalLinkRow[]
+  writeRequests: CrmRevenueWriteRequestRow[]
   monthly: CrmRevenueMonthlyPoint[]
   partners: CrmRevenuePartnerRow[]
   risks: CrmRevenueRiskItem[]

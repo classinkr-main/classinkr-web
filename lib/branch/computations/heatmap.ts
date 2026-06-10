@@ -1,4 +1,5 @@
 import type { BranchRevDeal } from "@/lib/repositories/branch-deals"
+import { confirmedMonthAmount } from "@/lib/branch/computations/rev-confirmed"
 import { fyOf, fiscalQuarter, ymKey } from "@/lib/branch/fiscal"
 
 export type Period = "M" | "Q" | "Y"
@@ -83,7 +84,6 @@ export function computeHeatmap(deals: BranchRevDeal[], scope: Period, now: Date,
 
     if (!d.first_payment) acc.open_target += lifetimeTarget
 
-    const hasRedFlags = Object.keys(d.monthly_red).length > 0
     let dealRevenue = 0
     let dealProjected = 0
     let countedAsConfirmed = false
@@ -105,16 +105,15 @@ export function computeHeatmap(deals: BranchRevDeal[], scope: Period, now: Date,
         dealProjected += amt
         continue
       }
-      // first_payment is set. Sheet without red-flag convention: every
-      // monthly_payment counts as confirmed (matches the documented fallback
-      // in branch-dashboard-development-log.md). Sheet with red-flag
-      // convention: only red-flagged months are confirmed.
-      if (!hasRedFlags || d.monthly_red[ym]) {
-        dealRevenue += amt
+      // first_payment is set. Confirmed = 색 기반 월별 확정 금액
+      // (monthly_confirmed 우선, 구버전 monthly_red/무색 fallback 포함) —
+      // 같은 달 안의 미확정 잔여분은 projection으로 분리한다.
+      const confirmed = confirmedMonthAmount(d, ym, amt)
+      if (confirmed > 0) {
+        dealRevenue += confirmed
         countedAsConfirmed = true
-      } else {
-        dealProjected += amt
       }
+      dealProjected += amt - confirmed
     }
 
     acc.revenue += dealRevenue

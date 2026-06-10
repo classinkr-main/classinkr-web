@@ -4,6 +4,8 @@
 
 목적: `2.22` 작업에서 가이드/블로그 비공개 검수, 문서센터 draft 편집, 견적서 저장·공유·신규 고객 생성 흐름을 운영 DB에 안전하게 반영하기 위한 migration 적용 순서를 정리한다.
 
+CRM 운영 통합(`crm_source_links`, Xiaoshouyi snapshot, write-back 승인 큐)은 별도 runbook을 따른다: [`korean-crm-operational-unblock-runbook-2026-06-10.md`](./korean-crm-operational-unblock-runbook-2026-06-10.md)
+
 ## 0. 운영 REST 확인 결과
 
 확인일: 2026-06-08

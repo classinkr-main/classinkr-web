@@ -3,6 +3,7 @@ import type { BranchRevDeal } from "@/lib/repositories/branch-deals"
 import type { KpiRow } from "@/lib/branch/parsers/kpi"
 import type { Period } from "@/lib/branch/computations/heatmap"
 import { dealProbability } from "@/lib/branch/computations/pipeline"
+import { confirmedMonthAmount } from "@/lib/branch/computations/rev-confirmed"
 
 export interface ManagerInsightInput {
   manager: string
@@ -67,11 +68,10 @@ export function buildManagerInsightInput(args: BuildManagerInputArgs): ManagerIn
 
     if (d.first_payment) {
       dealsConfirmed += 1
-      const hasRed = Object.keys(d.monthly_red).length > 0
-      const dealRev = Object.entries(d.monthly_payments).reduce((s, [ym, v]) => {
-        if (hasRed && !d.monthly_red[ym]) return s
-        return s + Number(v)
-      }, 0)
+      const dealRev = Object.entries(d.monthly_payments).reduce(
+        (s, [ym, v]) => s + confirmedMonthAmount(d, ym, Number(v)),
+        0,
+      )
       confirmedRevenue += dealRev
       r.revenue += dealRev
       const fp = new Date(d.first_payment).getTime()

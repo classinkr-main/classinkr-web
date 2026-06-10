@@ -11,6 +11,7 @@ interface XiaoshouyiObjectConfig {
   objectApiKey: string
   fields: string[]
   displayNameFields: string[]
+  orderBy?: string
   ownerFields?: string[]
   statusFields?: string[]
   amountFields?: string[]
@@ -39,6 +40,9 @@ interface ExternalRecordRow {
   payload: Record<string, unknown>
   payload_hash: string
   synced_at: string
+  last_seen_run_id: string
+  is_stale: boolean
+  stale_at: null
 }
 
 export interface ExternalCrmSyncObjectResult {
@@ -46,6 +50,9 @@ export interface ExternalCrmSyncObjectResult {
   status: "success" | "failed" | "skipped"
   rowsScanned: number
   rowsUpserted: number
+  pagesScanned?: number
+  staleMarked?: number
+  cursorValue?: string
   error?: string
 }
 
@@ -56,7 +63,41 @@ export interface ExternalCrmSyncResult {
   error?: string
 }
 
-const DEFAULT_SYNC_LIMIT = 100
+export interface ExternalCrmSyncPreflightObject {
+  objectApiKey: string
+  fields: string[]
+  orderBy: string
+}
+
+export interface ExternalCrmSyncPreflight {
+  configured: boolean
+  hasBaseUrl: boolean
+  hasAccessToken: boolean
+  hasServiceCredentials: boolean
+  authMode: "access_token" | "service_oauth" | "missing"
+  missingEnvGroups: string[]
+  pageSize: number
+  maxPages: number
+  objects: ExternalCrmSyncPreflightObject[]
+}
+
+export interface ExternalCrmSyncSchemaCheck {
+  key: string
+  label: string
+  ok: boolean
+  detail: string
+  action?: string
+}
+
+export interface ExternalCrmSyncSchemaReadiness {
+  ok: boolean
+  checks: ExternalCrmSyncSchemaCheck[]
+  error?: string
+}
+
+const DEFAULT_SYNC_PAGE_SIZE = 100
+const DEFAULT_SYNC_MAX_PAGES = 20
+const MAX_SYNC_PAGE_SIZE = 100
 
 const DEFAULT_OBJECTS: XiaoshouyiObjectConfig[] = [
   {
@@ -108,7 +149,19 @@ const DEFAULT_OBJECTS: XiaoshouyiObjectConfig[] = [
   },
   {
     objectApiKey: "Collection__c",
-    fields: ["id", "name", "ownerId", "createdAt", "updatedAt"],
+    fields: [
+      "id",
+      "name",
+      "ownerId",
+      "ownerName",
+      "amount",
+      "money",
+      "Amount__c",
+      "CollectionAmount__c",
+      "GetDate__c",
+      "createdAt",
+      "updatedAt",
+    ],
     displayNameFields: ["name"],
     ownerFields: ["ownerName", "ownerId-label", "ownerId"],
     amountFields: ["amount", "money", "Amount__c", "CollectionAmount__c"],
@@ -160,10 +213,58 @@ function getSelectedObjects() {
   })
 }
 
-function getSyncLimit() {
-  const parsed = Number(readEnv("XIAOSHOUYI_SYNC_LIMIT"))
-  if (!Number.isFinite(parsed)) return DEFAULT_SYNC_LIMIT
+function getSyncPageSize() {
+  const parsed = Number(readEnv("XIAOSHOUYI_SYNC_PAGE_SIZE") ?? readEnv("XIAOSHOUYI_SYNC_LIMIT"))
+  if (!Number.isFinite(parsed)) return DEFAULT_SYNC_PAGE_SIZE
+  return Math.min(MAX_SYNC_PAGE_SIZE, Math.max(1, Math.floor(parsed)))
+}
+
+function getSyncMaxPages() {
+  const parsed = Number(readEnv("XIAOSHOUYI_SYNC_MAX_PAGES"))
+  if (!Number.isFinite(parsed)) return DEFAULT_SYNC_MAX_PAGES
   return Math.min(200, Math.max(1, Math.floor(parsed)))
+}
+
+export function getXiaoshouyiSyncPreflight(): ExternalCrmSyncPreflight {
+  const hasBaseUrl = Boolean(
+    readEnv("XIAOSHOUYI_BASE_URL") ??
+      readEnv("XIAOSHOUYI_API_BASE_URL") ??
+      readEnv("XIAOSHOUYI_API_URL") ??
+      readEnv("COMPANY_CRM_API_URL") ??
+      readEnv("CRM_API_URL")
+  )
+  const hasAccessToken = Boolean(readEnv("XIAOSHOUYI_ACCESS_TOKEN") ?? readEnv("XIAOSHOUYI_SERVICE_ACCESS_TOKEN"))
+  const hasServiceCredentials = Boolean(
+    readEnv("XIAOSHOUYI_CLIENT_ID") &&
+      readEnv("XIAOSHOUYI_CLIENT_SECRET") &&
+      (readEnv("XIAOSHOUYI_USERNAME") || readEnv("XIAOSHOUYI_SERVICE_USERNAME")) &&
+      (readEnv("XIAOSHOUYI_PASSWORD") || readEnv("XIAOSHOUYI_SERVICE_PASSWORD"))
+  )
+  const missingEnvGroups: string[] = []
+  if (!hasBaseUrl) missingEnvGroups.push("XIAOSHOUYI_BASE_URL")
+  if (!hasAccessToken && !hasServiceCredentials) {
+    missingEnvGroups.push("XIAOSHOUYI_ACCESS_TOKEN 또는 service OAuth credentials")
+  }
+
+  const pageSize = getSyncPageSize()
+  const maxPages = getSyncMaxPages()
+  const objects = getSelectedObjects().map((object) => ({
+    objectApiKey: object.objectApiKey,
+    fields: object.fields,
+    orderBy: object.orderBy ?? (object.fields.includes("updatedAt") ? "updatedAt DESC" : "id DESC"),
+  }))
+
+  return {
+    configured: hasBaseUrl && (hasAccessToken || hasServiceCredentials),
+    hasBaseUrl,
+    hasAccessToken,
+    hasServiceCredentials,
+    authMode: hasAccessToken ? "access_token" : hasServiceCredentials ? "service_oauth" : "missing",
+    missingEnvGroups,
+    pageSize,
+    maxPages,
+    objects,
+  }
 }
 
 function getRecordArray(payload: unknown): Array<Record<string, unknown>> {
@@ -178,6 +279,111 @@ function getRecordArray(payload: unknown): Array<Record<string, unknown>> {
     value.records
 
   return Array.isArray(records) ? records.filter((record): record is Record<string, unknown> => Boolean(record && typeof record === "object")) : []
+}
+
+function formatSupabaseError(error: { code?: string; details?: string; hint?: string; message?: string } | null) {
+  if (!error) return "unknown database error"
+  const parts = [error.message, error.details, error.hint, error.code]
+    .map((part) => part?.trim())
+    .filter((part): part is string => Boolean(part))
+  return parts.join(" · ") || "unknown database error"
+}
+
+async function checkSyncSchemaShape(
+  key: string,
+  label: string,
+  promise: PromiseLike<{ data: unknown; error: { message: string } | null }>,
+  okDetail: string,
+  action: string
+): Promise<ExternalCrmSyncSchemaCheck> {
+  const { error } = await promise
+  if (error) {
+    return {
+      key,
+      label,
+      ok: false,
+      detail: formatSupabaseError(error),
+      action,
+    }
+  }
+
+  return {
+    key,
+    label,
+    ok: true,
+    detail: okDetail,
+  }
+}
+
+export async function getXiaoshouyiSyncSchemaReadiness(): Promise<ExternalCrmSyncSchemaReadiness> {
+  const sb = createSupabaseAdminClient()
+  const checks = await Promise.all([
+    checkSyncSchemaShape(
+      "external_crm_sync_runs",
+      "외부 CRM sync run schema",
+      sb
+        .from("external_crm_sync_runs")
+        .select(
+          [
+            "id",
+            "source_system",
+            "object_api_key",
+            "status",
+            "trigger",
+            "started_at",
+            "finished_at",
+            "rows_scanned",
+            "rows_upserted",
+            "cursor_value",
+            "error",
+            "metadata",
+            "created_at",
+            "updated_at",
+          ].join(", ")
+        )
+        .limit(1),
+      "sync run runtime column contract 확인",
+      "Supabase 운영 DB에 supabase/migrations/20260610_external_crm_snapshots.sql 적용"
+    ),
+    checkSyncSchemaShape(
+      "external_crm_records",
+      "외부 CRM snapshot schema",
+      sb
+        .from("external_crm_records")
+        .select(
+          [
+            "id",
+            "source_system",
+            "object_api_key",
+            "external_id",
+            "normalized_name",
+            "display_name",
+            "owner_name",
+            "status",
+            "amount",
+            "occurred_at",
+            "payload",
+            "payload_hash",
+            "synced_at",
+            "last_seen_run_id",
+            "is_stale",
+            "stale_at",
+            "created_at",
+            "updated_at",
+          ].join(", ")
+        )
+        .limit(1),
+      "snapshot runtime/stale tracking column contract 확인",
+      "Supabase 운영 DB에 supabase/migrations/20260610_external_crm_snapshots.sql 이후 supabase/migrations/20260610_external_crm_stale_tracking.sql 적용"
+    ),
+  ])
+  const failed = checks.filter((check) => !check.ok)
+
+  return {
+    ok: failed.length === 0,
+    checks,
+    error: failed.length > 0 ? failed.map((check) => `${check.label}: ${check.detail}`).join("; ") : undefined,
+  }
 }
 
 function firstString(record: Record<string, unknown>, keys: string[] = []) {
@@ -244,9 +450,15 @@ async function getAccessToken(config: XiaoshouyiConfig) {
   return typeof payload.access_token === "string" ? payload.access_token : null
 }
 
-async function queryXiaoshouyiRecords(config: XiaoshouyiConfig, token: string, object: XiaoshouyiObjectConfig) {
-  const limit = getSyncLimit()
-  const query = `SELECT ${object.fields.join(",")} FROM ${object.objectApiKey} LIMIT ${limit}`
+async function queryXiaoshouyiRecords(
+  config: XiaoshouyiConfig,
+  token: string,
+  object: XiaoshouyiObjectConfig,
+  pageSize: number,
+  offset: number
+) {
+  const orderBy = object.orderBy ?? (object.fields.includes("updatedAt") ? "updatedAt DESC" : "id DESC")
+  const query = `SELECT ${object.fields.join(",")} FROM ${object.objectApiKey} ORDER BY ${orderBy} LIMIT ${pageSize} OFFSET ${offset}`
   const url = new URL(`${config.baseUrl}/rest/data/v2/query`)
   url.searchParams.set("q", query)
 
@@ -265,7 +477,12 @@ async function queryXiaoshouyiRecords(config: XiaoshouyiConfig, token: string, o
   return getRecordArray(await response.json())
 }
 
-function toExternalRecord(object: XiaoshouyiObjectConfig, record: Record<string, unknown>, syncedAt: string): ExternalRecordRow | null {
+function toExternalRecord(
+  object: XiaoshouyiObjectConfig,
+  record: Record<string, unknown>,
+  syncedAt: string,
+  runId: string
+): ExternalRecordRow | null {
   const externalId = record.id == null ? null : String(record.id)
   if (!externalId) return null
 
@@ -284,6 +501,9 @@ function toExternalRecord(object: XiaoshouyiObjectConfig, record: Record<string,
     payload: record,
     payload_hash: hashPayload(record),
     synced_at: syncedAt,
+    last_seen_run_id: runId,
+    is_stale: false,
+    stale_at: null,
   }
 }
 
@@ -308,7 +528,17 @@ async function createRun(objectApiKey: string, trigger: ExternalCrmSyncTrigger, 
   return data.id as string
 }
 
-async function finishRun(id: string, patch: { status: "success" | "failed"; rowsScanned?: number; rowsUpserted?: number; error?: string }) {
+async function finishRun(
+  id: string,
+  patch: {
+    status: "success" | "failed"
+    rowsScanned?: number
+    rowsUpserted?: number
+    cursorValue?: string
+    error?: string
+    metadata?: Record<string, unknown>
+  }
+) {
   const sb = createSupabaseAdminClient()
   const { error } = await sb
     .from("external_crm_sync_runs")
@@ -317,7 +547,9 @@ async function finishRun(id: string, patch: { status: "success" | "failed"; rows
       finished_at: new Date().toISOString(),
       rows_scanned: patch.rowsScanned ?? null,
       rows_upserted: patch.rowsUpserted ?? null,
+      cursor_value: patch.cursorValue ?? null,
       error: patch.error ?? null,
+      metadata: patch.metadata ?? {},
     })
     .eq("id", id)
 
@@ -325,6 +557,17 @@ async function finishRun(id: string, patch: { status: "success" | "failed"; rows
 }
 
 export async function syncXiaoshouyiSnapshots(trigger: ExternalCrmSyncTrigger = "manual"): Promise<ExternalCrmSyncResult> {
+  const schema = await getXiaoshouyiSyncSchemaReadiness()
+  if (!schema.ok) {
+    const message = `Xiaoshouyi sync schema is not ready: ${schema.error ?? "unknown schema issue"}`
+    return {
+      ok: false,
+      skipped: true,
+      error: message,
+      objects: [{ objectApiKey: "all", status: "skipped", rowsScanned: 0, rowsUpserted: 0, error: message }],
+    }
+  }
+
   const config = getXiaoshouyiConfig()
   if (!config) {
     await createRun("all", trigger, "skipped", "Missing Xiaoshouyi base URL")
@@ -346,33 +589,96 @@ export async function syncXiaoshouyiSnapshots(trigger: ExternalCrmSyncTrigger = 
   }
 
   const results: ExternalCrmSyncObjectResult[] = []
+  const pageSize = getSyncPageSize()
+  const maxPages = getSyncMaxPages()
 
   for (const object of getSelectedObjects()) {
     const runId = await createRun(object.objectApiKey, trigger)
     try {
       const syncedAt = new Date().toISOString()
-      const records = await queryXiaoshouyiRecords(config, token, object)
-      const rows = records
-        .map((record) => toExternalRecord(object, record, syncedAt))
-        .filter((row): row is ExternalRecordRow => Boolean(row))
-
+      let rowsScanned = 0
       let rowsUpserted = 0
-      if (rows.length > 0) {
-        const sb = createSupabaseAdminClient()
-        const { data, error } = await sb
-          .from("external_crm_records")
-          .upsert(rows, { onConflict: "source_system,object_api_key,external_id" })
-          .select("id")
+      let pagesScanned = 0
+      let nextOffset = 0
+      let truncated = false
+      const sb = createSupabaseAdminClient()
 
-        if (error) throw error
-        rowsUpserted = data?.length ?? rows.length
+      for (let page = 0; page < maxPages; page += 1) {
+        const offset = page * pageSize
+        const records = await queryXiaoshouyiRecords(config, token, object, pageSize, offset)
+        pagesScanned += 1
+        rowsScanned += records.length
+        nextOffset = offset + records.length
+
+        const rows = records
+          .map((record) => toExternalRecord(object, record, syncedAt, runId))
+          .filter((row): row is ExternalRecordRow => Boolean(row))
+
+        if (rows.length > 0) {
+          const { data, error } = await sb
+            .from("external_crm_records")
+            .upsert(rows, { onConflict: "source_system,object_api_key,external_id" })
+            .select("id")
+
+          if (error) throw error
+          rowsUpserted += data?.length ?? rows.length
+        }
+
+        if (records.length < pageSize) {
+          truncated = false
+          break
+        }
+
+        truncated = page === maxPages - 1
       }
 
-      await finishRun(runId, { status: "success", rowsScanned: records.length, rowsUpserted })
-      results.push({ objectApiKey: object.objectApiKey, status: "success", rowsScanned: records.length, rowsUpserted })
+      const { data: staleRows, error: staleError } = await sb
+        .from("external_crm_records")
+        .update({
+          is_stale: true,
+          stale_at: syncedAt,
+        })
+        .eq("source_system", "xiaoshouyi")
+        .eq("object_api_key", object.objectApiKey)
+        .or(`last_seen_run_id.is.null,last_seen_run_id.neq.${runId}`)
+        .eq("is_stale", false)
+        .select("id")
+
+      if (staleError) throw staleError
+
+      const cursorValue = truncated ? `offset:${nextOffset}` : "complete"
+      await finishRun(runId, {
+        status: "success",
+        rowsScanned,
+        rowsUpserted,
+        cursorValue,
+        metadata: {
+          pageSize,
+          maxPages,
+          pagesScanned,
+          truncated,
+          staleMarked: staleRows?.length ?? 0,
+          orderBy: object.orderBy ?? (object.fields.includes("updatedAt") ? "updatedAt DESC" : "id DESC"),
+        },
+      })
+      results.push({
+        objectApiKey: object.objectApiKey,
+        status: "success",
+        rowsScanned,
+        rowsUpserted,
+        pagesScanned,
+        staleMarked: staleRows?.length ?? 0,
+        cursorValue,
+      })
     } catch (error) {
       const message = error instanceof Error ? error.message : String(error)
-      await finishRun(runId, { status: "failed", error: message, rowsScanned: 0, rowsUpserted: 0 })
+      await finishRun(runId, {
+        status: "failed",
+        error: message,
+        rowsScanned: 0,
+        rowsUpserted: 0,
+        metadata: { pageSize, maxPages },
+      })
       results.push({ objectApiKey: object.objectApiKey, status: "failed", rowsScanned: 0, rowsUpserted: 0, error: message })
     }
   }

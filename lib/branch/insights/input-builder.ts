@@ -7,6 +7,7 @@ import { teamPacing } from "@/lib/branch/computations/pacing"
 import { deriveMemberTeams } from "@/lib/branch/computations/member-teams"
 import { computeHeatmap } from "@/lib/branch/computations/heatmap"
 import { dealProbability } from "@/lib/branch/computations/pipeline"
+import { confirmedMonthAmount } from "@/lib/branch/computations/rev-confirmed"
 import { fyOf, fiscalQuarter, ymKey } from "@/lib/branch/fiscal"
 import type { Period } from "@/lib/branch/computations/heatmap"
 
@@ -124,11 +125,10 @@ export function buildInsightInput(a: BuildArgs): InsightInput {
     const confirmed = dealsOf
       .filter((d) => d.first_payment)
       .reduce((s, d) => {
-        const hasRed = Object.keys(d.monthly_red).length > 0
-        return s + Object.entries(d.monthly_payments).reduce((acc, [ym, v]) => {
-          if (hasRed && !d.monthly_red[ym]) return acc
-          return acc + Number(v)
-        }, 0)
+        return s + Object.entries(d.monthly_payments).reduce(
+          (acc, [ym, v]) => acc + confirmedMonthAmount(d, ym, Number(v)),
+          0,
+        )
       }, 0)
     const goalRow = a.dsh.rows.find((r) => r.level === "member" && r.member === m && r.kind === "goal")
     const goalVal = goalRow?.annual ?? 0

@@ -380,11 +380,69 @@ export interface CustomerInsight {
   attention_level: "high" | "medium" | "low";
 }
 
+export type CustomerCrmCoverageStatus = "verified" | "needs_review" | "unmatched" | "error";
+
+export interface CustomerCrmSourceLinkSummary {
+  id: string;
+  source_system: string;
+  source_object: string;
+  source_record_key: string;
+  status: "candidate" | "confirmed" | "rejected" | "stale";
+  confidence: number | null;
+  source_label: string | null;
+  source_owner: string | null;
+  source_status: string | null;
+  source_amount: number | null;
+  target_type: string;
+  target_id: string;
+  confirmed_at: string | null;
+  updated_at: string;
+}
+
+export interface CustomerExternalCrmRecordSummary {
+  id: string;
+  object_api_key: string;
+  external_id: string;
+  display_name: string | null;
+  owner_name: string | null;
+  status: string | null;
+  amount: number | null;
+  occurred_at: string | null;
+  synced_at: string;
+  confidence: number;
+}
+
+export interface CustomerCrmDiscrepancy {
+  id: string;
+  severity: "high" | "medium" | "low";
+  kind: "amount_gap" | "status_gap" | "owner_gap" | "missing_confirmed_link" | "unmatched_external";
+  title: string;
+  detail: string;
+  internal_value: string | null;
+  external_value: string | null;
+  source_label: string | null;
+}
+
+export interface CustomerCrmCoverage {
+  status: CustomerCrmCoverageStatus;
+  source_link_count: number;
+  confirmed_link_count: number;
+  candidate_link_count: number;
+  external_match_count: number;
+  last_linked_at: string | null;
+  last_external_synced_at: string | null;
+  warnings: string[];
+  source_links: CustomerCrmSourceLinkSummary[];
+  external_records: CustomerExternalCrmRecordSummary[];
+  discrepancies: CustomerCrmDiscrepancy[];
+}
+
 export interface CustomerListItem {
   customer: Customer;
   summary: CustomerDealSummary | null;
   insight?: CustomerInsight | null;
   deal_previews?: CustomerDealPreview[];
+  crm_coverage?: CustomerCrmCoverage | null;
 }
 
 export interface CustomerDetailPayload {
@@ -393,6 +451,7 @@ export interface CustomerDetailPayload {
   deals: CustomerDealHistoryItem[];
   recent_activity: ActivityLog[];
   recent_calendar_events: CalendarEvent[];
+  crm_coverage?: CustomerCrmCoverage | null;
 }
 
 export interface DealDetailPayload {

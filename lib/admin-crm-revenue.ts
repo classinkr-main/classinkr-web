@@ -5,6 +5,7 @@ import { createSupabaseAdminClient } from "@/lib/supabase/admin"
 import type {
   CrmRevenueDashboard,
   CrmRevenueDocumentRow,
+  CrmRevenueExternalLinkRow,
   CrmRevenueIdentitySummary,
   CrmRevenueMonthlyPoint,
   CrmRevenuePartnerRow,
@@ -12,7 +13,10 @@ import type {
   CrmRevenueSheetMatchRow,
   CrmRevenueSheetSummary,
   CrmRevenueSource,
+  CrmRevenueWriteRequestRow,
   CrmSourceLinkStatus,
+  CrmWriteRequestOperation,
+  CrmWriteRequestStatus,
 } from "@/lib/admin-crm-revenue-types"
 
 interface LegacyPartnerRow {
@@ -124,7 +128,7 @@ interface CrmSourceLinkRow {
   target_id: string
   confidence: number | null
   status: CrmSourceLinkStatus
-  metadata: { target_label?: unknown } | null
+  metadata: Record<string, unknown> | null
   confirmed_at: string | null
   updated_at: string
 }
@@ -154,7 +158,9 @@ interface ExternalCrmSyncRunRow {
   finished_at: string | null
   rows_scanned: number | null
   rows_upserted: number | null
+  cursor_value: string | null
   error: string | null
+  metadata: Record<string, unknown> | null
   updated_at: string
 }
 
@@ -162,8 +168,18 @@ interface CrmWriteRequestRow {
   id: string
   source_system: string
   object_api_key: string
-  operation: string
-  status: string
+  external_id: string | null
+  operation: CrmWriteRequestOperation
+  status: CrmWriteRequestStatus
+  payload: Record<string, unknown> | null
+  preview_payload: Record<string, unknown> | null
+  approved_at: string | null
+  executed_at: string | null
+  attempt_count: number | null
+  last_attempt_at: string | null
+  next_retry_at: string | null
+  last_attempt_error: string | null
+  error: string | null
   created_at: string
   updated_at: string
 }
@@ -176,9 +192,26 @@ interface QueryResult<T> {
 
 // 시트 status는 자유 입력이라 enum이 없다. 취소·중단 계열 키워드만 예상 매출에서 제외한다.
 const SHEET_INACTIVE_PATTERN = /취소|해지|드랍|드롭|중단|보류|cancel|drop|lost/i
+const CRM_WRITE_REQUEST_BASE_SELECT =
+  "id, source_system, object_api_key, external_id, operation, status, payload, preview_payload, approved_at, executed_at, error, created_at, updated_at"
+const CRM_WRITE_REQUEST_RETRY_SELECT =
+  `${CRM_WRITE_REQUEST_BASE_SELECT}, attempt_count, last_attempt_at, next_retry_at, last_attempt_error`
+const CRM_WRITE_REQUEST_RETRY_COLUMNS = ["attempt_count", "last_attempt_at", "next_retry_at", "last_attempt_error"]
 
 function hasValue(value: string | undefined) {
   return Boolean(value?.trim())
+}
+
+function getMetadataString(metadata: Record<string, unknown> | null, key: string) {
+  const value = metadata?.[key]
+  return typeof value === "string" && value.trim() ? value.trim() : null
+}
+
+function getMetadataNumber(metadata: Record<string, unknown> | null, key: string) {
+  const value = metadata?.[key]
+  if (value == null || value === "") return null
+  const number = Number(value)
+  return Number.isFinite(number) ? number : null
 }
 
 function getMonthKey(value: string | null | undefined) {
@@ -264,17 +297,39 @@ function buildExternalCrmSource(
     }
   }
 
-  const configured =
+  const hasBaseUrl =
     hasValue(process.env.XIAOSHOUYI_BASE_URL) ||
     hasValue(process.env.XIAOSHOUYI_API_BASE_URL) ||
     hasValue(process.env.XIAOSHOUYI_API_URL) ||
     hasValue(process.env.COMPANY_CRM_API_URL) ||
     hasValue(process.env.CRM_API_URL)
+  const hasToken =
+    hasValue(process.env.XIAOSHOUYI_ACCESS_TOKEN) ||
+    hasValue(process.env.XIAOSHOUYI_SERVICE_ACCESS_TOKEN)
+  const hasServiceCredentials =
+    hasValue(process.env.XIAOSHOUYI_CLIENT_ID) &&
+    hasValue(process.env.XIAOSHOUYI_CLIENT_SECRET) &&
+    (hasValue(process.env.XIAOSHOUYI_USERNAME) || hasValue(process.env.XIAOSHOUYI_SERVICE_USERNAME)) &&
+    (hasValue(process.env.XIAOSHOUYI_PASSWORD) || hasValue(process.env.XIAOSHOUYI_SERVICE_PASSWORD))
+  const configured = hasBaseUrl && (hasToken || hasServiceCredentials)
   const objectKeys = new Set(recordsResult.rows.map((record) => record.object_api_key))
   const pendingWrites = writeRequestsResult.rows.filter((request) =>
     ["draft", "approved", "sent"].includes(request.status)
   ).length
   const failedRuns = syncRunsResult.rows.filter((run) => run.status === "failed").length
+  const skippedRuns = syncRunsResult.rows.filter((run) => run.status === "skipped").length
+  const latestRun = syncRunsResult.rows[0] ?? null
+  const latestSuccessRun = syncRunsResult.rows.find((run) => run.status === "success") ?? null
+  const latestMetadata = latestSuccessRun?.metadata ?? latestRun?.metadata ?? null
+  const pagesScanned = getMetadataNumber(latestMetadata, "pagesScanned")
+  const staleMarked = getMetadataNumber(latestMetadata, "staleMarked")
+  const truncated = latestMetadata?.truncated === true
+  const cursorValue = latestSuccessRun?.cursor_value ?? latestRun?.cursor_value ?? null
+  const syncDetails = [
+    pagesScanned == null ? null : `최근 sync ${pagesScanned}페이지`,
+    staleMarked == null ? null : `stale ${staleMarked}건`,
+    truncated && cursorValue ? `cursor ${cursorValue}` : null,
+  ].filter(Boolean)
 
   return {
     key: "xiaoshouyi_snapshot",
@@ -292,10 +347,14 @@ function buildExternalCrmSource(
     ]),
     description:
       recordsResult.rows.length > 0
-        ? `${objectKeys.size}개 객체 snapshot을 읽습니다. 대기 중인 write request ${pendingWrites}건, 실패 sync ${failedRuns}건.`
+        ? `${objectKeys.size}개 객체 snapshot을 읽습니다. ${syncDetails.length > 0 ? `${syncDetails.join(", ")}. ` : ""}대기 중인 write request ${pendingWrites}건, 실패 sync ${failedRuns}건, skipped ${skippedRuns}건.`
         : configured
-          ? "외부 CRM credential은 준비됐지만 아직 snapshot 레코드가 없습니다."
-          : "Xiaoshouyi/eeoCRM은 read-only snapshot sync부터 연결합니다.",
+          ? `외부 CRM credential은 준비됐지만 아직 snapshot 레코드가 없습니다.${syncDetails.length > 0 ? ` 최근 상태: ${syncDetails.join(", ")}.` : ""}`
+          : hasBaseUrl
+            ? "Xiaoshouyi base URL은 있으나 token/service credential이 없어 sync를 건너뜁니다."
+            : skippedRuns > 0
+              ? `Xiaoshouyi credential 미설정으로 최근 sync ${skippedRuns}건을 건너뛰었습니다.`
+              : "Xiaoshouyi/eeoCRM은 read-only snapshot sync부터 연결합니다.",
     actionLabel: configured || recordsResult.rows.length > 0 ? "Snapshot 상태 확인" : "환경변수 연결 필요",
     actionHref: "/admin/settings",
   }
@@ -388,6 +447,8 @@ function createEmptyDashboard(months: number, warnings: string[]): CrmRevenueDas
     sheet: null,
     identity: null,
     sheetMatches: [],
+    externalLinks: [],
+    writeRequests: [],
     monthly: monthKeys.map((month) => ({
       month,
       quotedAmount: 0,
@@ -505,6 +566,7 @@ export async function getAdminCrmRevenueDashboard(months = 6): Promise<CrmRevenu
     dealsResult,
     sheetResult,
     sourceLinksResult,
+    externalSourceLinksResult,
     externalRecordsResult,
     externalSyncRunsResult,
     writeRequestsResult,
@@ -584,12 +646,22 @@ export async function getAdminCrmRevenueDashboard(months = 6): Promise<CrmRevenu
       ),
       runQuery<CrmSourceLinkRow>(
         "crm_source_links",
-        "CRM 매칭 링크",
+        "REV 매칭 링크",
         supabase
           .from("crm_source_links")
           .select("id, source_system, source_object, source_record_key, normalized_name, target_type, target_id, confidence, status, metadata, confirmed_at, updated_at")
           .eq("source_system", "branch_rev_sheet")
           .eq("source_object", "branch_rev_deals")
+          .limit(2000)
+      ),
+      runQuery<CrmSourceLinkRow>(
+        "xiaoshouyi_source_links",
+        "Xiaoshouyi 매칭 링크",
+        supabase
+          .from("crm_source_links")
+          .select("id, source_system, source_object, source_record_key, normalized_name, target_type, target_id, confidence, status, metadata, confirmed_at, updated_at")
+          .eq("source_system", "xiaoshouyi")
+          .order("updated_at", { ascending: false })
           .limit(2000)
       ),
       runQuery<ExternalCrmRecordRow>(
@@ -607,7 +679,7 @@ export async function getAdminCrmRevenueDashboard(months = 6): Promise<CrmRevenu
         "외부 CRM Sync",
         supabase
           .from("external_crm_sync_runs")
-          .select("id, source_system, object_api_key, status, trigger, started_at, finished_at, rows_scanned, rows_upserted, error, updated_at")
+          .select("id, source_system, object_api_key, status, trigger, started_at, finished_at, rows_scanned, rows_upserted, cursor_value, error, metadata, updated_at")
           .eq("source_system", "xiaoshouyi")
           .order("started_at", { ascending: false })
           .limit(200)
@@ -615,12 +687,25 @@ export async function getAdminCrmRevenueDashboard(months = 6): Promise<CrmRevenu
       runQuery<CrmWriteRequestRow>(
         "crm_write_requests",
         "CRM 쓰기 요청",
-        supabase
-          .from("crm_write_requests")
-          .select("id, source_system, object_api_key, operation, status, created_at, updated_at")
-          .eq("source_system", "xiaoshouyi")
-          .order("created_at", { ascending: false })
-          .limit(200)
+        (async () => {
+          const query = (select: string) =>
+            supabase
+              .from("crm_write_requests")
+              .select(select)
+              .eq("source_system", "xiaoshouyi")
+              .order("created_at", { ascending: false })
+              .limit(200)
+
+          const withRetryState = await query(CRM_WRITE_REQUEST_RETRY_SELECT)
+          if (!withRetryState.error) return withRetryState
+
+          const missingRetryColumn = CRM_WRITE_REQUEST_RETRY_COLUMNS.some((column) =>
+            withRetryState.error?.message.includes(column)
+          )
+          if (!missingRetryColumn) return withRetryState
+
+          return query(CRM_WRITE_REQUEST_BASE_SELECT)
+        })()
       ),
     ])
 
@@ -634,6 +719,7 @@ export async function getAdminCrmRevenueDashboard(months = 6): Promise<CrmRevenu
     dealsResult.warning,
     sheetResult.warning,
     sourceLinksResult.warning,
+    externalSourceLinksResult.warning,
     externalRecordsResult.warning,
     externalSyncRunsResult.warning,
     writeRequestsResult.warning,
@@ -648,6 +734,7 @@ export async function getAdminCrmRevenueDashboard(months = 6): Promise<CrmRevenu
   const deals = dealsResult.rows
   const sheetDeals = sheetResult.rows
   const sourceLinks = sourceLinksResult.rows
+  const externalSourceLinks = externalSourceLinksResult.rows
   const externalRecords = externalRecordsResult.rows
 
   const partnerNameById = new Map(partners.map((partner) => [partner.id, partner.name]))
@@ -658,6 +745,7 @@ export async function getAdminCrmRevenueDashboard(months = 6): Promise<CrmRevenu
       [customer.name, customer.campus_name].filter(Boolean).join(" · "),
     ])
   )
+  const dealNameById = new Map(deals.map((deal) => [deal.id, `${deal.deal_code} · ${deal.title}`]))
   const partnerRows = new Map<string, CrmRevenuePartnerRow>()
 
   for (const quote of quotes) {
@@ -858,6 +946,76 @@ export async function getAdminCrmRevenueDashboard(months = 6): Promise<CrmRevenu
         }
       : null
 
+  const externalLinks: CrmRevenueExternalLinkRow[] = externalSourceLinks
+    .map((link) => {
+      const targetLabel =
+        getMetadataString(link.metadata, "target_label") ??
+        (link.target_type === "partner_account"
+          ? accountNameById.get(link.target_id)
+          : link.target_type === "customer"
+            ? customerNameById.get(link.target_id)
+            : link.target_type === "deal"
+              ? dealNameById.get(link.target_id)
+              : null) ??
+        null
+
+      return {
+        linkId: link.id,
+        sourceObject: link.source_object,
+        sourceRecordKey: link.source_record_key,
+        sourceLabel:
+          getMetadataString(link.metadata, "source_label") ??
+          getMetadataString(link.metadata, "source_customer_name") ??
+          link.normalized_name,
+        sourceOwner: getMetadataString(link.metadata, "owner_name") ?? getMetadataString(link.metadata, "source_owner"),
+        sourceStatus: getMetadataString(link.metadata, "source_status"),
+        sourceAmount: getMetadataNumber(link.metadata, "source_amount"),
+        occurredAt: getMetadataString(link.metadata, "occurred_at"),
+        syncedAt: getMetadataString(link.metadata, "synced_at"),
+        linkStatus: link.status,
+        targetType: link.target_type,
+        targetId: link.target_id,
+        targetLabel,
+        confidence: link.confidence,
+        updatedAt: link.updated_at,
+      }
+    })
+    .sort((a, b) => {
+      const statusRank: Record<CrmSourceLinkStatus, number> = {
+        candidate: 0,
+        stale: 1,
+        confirmed: 2,
+        rejected: 3,
+      }
+      const rankGap = statusRank[a.linkStatus] - statusRank[b.linkStatus]
+      if (rankGap !== 0) return rankGap
+      if ((a.confidence ?? 0) !== (b.confidence ?? 0)) return (b.confidence ?? 0) - (a.confidence ?? 0)
+      return new Date(b.updatedAt).getTime() - new Date(a.updatedAt).getTime()
+    })
+    .slice(0, 20)
+
+  const writeRequests: CrmRevenueWriteRequestRow[] = writeRequestsResult.rows
+    .map((request) => ({
+      id: request.id,
+      sourceSystem: request.source_system,
+      objectApiKey: request.object_api_key,
+      externalId: request.external_id,
+      operation: request.operation,
+      status: request.status,
+      payload: request.payload ?? {},
+      previewPayload: request.preview_payload,
+      approvedAt: request.approved_at,
+      executedAt: request.executed_at,
+      attemptCount: request.attempt_count ?? 0,
+      lastAttemptAt: request.last_attempt_at,
+      nextRetryAt: request.next_retry_at,
+      lastAttemptError: request.last_attempt_error,
+      error: request.error,
+      createdAt: request.created_at,
+      updatedAt: request.updated_at,
+    }))
+    .slice(0, 20)
+
   for (const row of partnerRows.values()) {
     if (row.outstandingAmount === 0) {
       row.outstandingAmount = Math.max(0, row.contractedAmount - row.paidAmount)
@@ -1003,7 +1161,10 @@ export async function getAdminCrmRevenueDashboard(months = 6): Promise<CrmRevenu
         customers.length +
         deals.length +
         sheetDeals.length +
-        externalRecords.length,
+        sourceLinks.length +
+        externalSourceLinks.length +
+        externalRecords.length +
+        writeRequestsResult.rows.length,
     },
     sheet: sheetSummary,
     identity: identitySummary,
@@ -1015,6 +1176,8 @@ export async function getAdminCrmRevenueDashboard(months = 6): Promise<CrmRevenu
         return b.amount - a.amount
       })
       .slice(0, 12),
+    externalLinks,
+    writeRequests,
     monthly: Array.from(monthly.values()),
     partners: Array.from(partnerRows.values())
       .sort((a, b) => b.contractedAmount + b.quotedAmount - (a.contractedAmount + a.quotedAmount))
@@ -1034,8 +1197,15 @@ export async function getAdminCrmRevenueDashboard(months = 6): Promise<CrmRevenu
         ...sourceLinksResult.source,
         description:
           sourceLinksResult.source.status === "connected"
-            ? "시트/외부 CRM 레코드와 앱 고객·거래를 연결하는 identity layer입니다."
+            ? "REV 시트 레코드와 앱 고객·거래를 연결하는 identity layer입니다."
             : "crm_source_links 마이그레이션 적용 후 매칭 상태를 읽습니다.",
+      },
+      {
+        ...externalSourceLinksResult.source,
+        description:
+          externalSourceLinksResult.source.status === "connected"
+            ? "Xiaoshouyi snapshot 후보와 확정 링크를 검수합니다."
+            : "Xiaoshouyi source link 후보 생성 후 검수 상태를 읽습니다.",
       },
       externalCrmSource,
     ],

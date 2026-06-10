@@ -10,7 +10,7 @@
     },
     {
       "path": "/api/cron/lead-weekly-digest",
-      "schedule": "0 0 * * 1"
+      "schedule": "0 4 * * 4"
     },
     {
       "path": "/api/cron/lead-monthly-digest",

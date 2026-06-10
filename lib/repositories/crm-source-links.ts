@@ -19,29 +19,50 @@ interface BranchRevCandidateSource {
 
 interface CustomerCandidateTarget {
   id: string
+  partner_account_id?: string
   name: string
   campus_name: string | null
 }
 
+interface PartnerAccountCandidateTarget {
+  id: string
+  name: string
+  status: string | null
+}
+
 interface DealCandidateTarget {
   id: string
+  customer_id?: string
   title: string
   deal_code: string
 }
 
 interface ExistingSourceLink {
+  source_object: string
   source_record_key: string
   target_type: string
   target_id: string
   status: string
 }
 
+interface ExternalCrmRecordSource {
+  object_api_key: string
+  external_id: string
+  normalized_name: string | null
+  display_name: string | null
+  owner_name: string | null
+  status: string | null
+  amount: number | null
+  occurred_at: string | null
+  synced_at: string
+}
+
 interface CandidateInsert {
-  source_system: "branch_rev_sheet"
-  source_object: "branch_rev_deals"
+  source_system: "branch_rev_sheet" | "xiaoshouyi"
+  source_object: string
   source_record_key: string
   normalized_name: string
-  target_type: "customer" | "deal"
+  target_type: "partner_account" | "customer" | "deal"
   target_id: string
   confidence: number
   status: "candidate"
@@ -53,6 +74,18 @@ export interface GenerateBranchRevLinkCandidatesResult {
   generatedCandidates: number
   insertedCandidates: number
   skippedExisting: number
+}
+
+export interface GenerateExternalCrmLinkCandidatesResult {
+  scannedExternalRecords: number
+  generatedCandidates: number
+  insertedCandidates: number
+  skippedExisting: number
+}
+
+export interface GenerateAllCrmLinkCandidatesResult {
+  branchRev: GenerateBranchRevLinkCandidatesResult
+  xiaoshouyi: GenerateExternalCrmLinkCandidatesResult
 }
 
 export type CrmSourceLinkAction = "confirm" | "reject" | "stale"
@@ -70,13 +103,42 @@ const MIN_CONFIDENCE = 0.72
 const MAX_CANDIDATES_PER_SOURCE = 3
 const MAX_MANUAL_SEARCH_RESULTS = 8
 
-function buildCandidateKey(candidate: { source_record_key: string; target_type: string; target_id: string }) {
-  return `${candidate.source_record_key}:${candidate.target_type}:${candidate.target_id}`
+function buildCandidateKey(candidate: {
+  source_object?: string
+  source_record_key: string
+  target_type: string
+  target_id: string
+}) {
+  return `${candidate.source_object ?? ""}:${candidate.source_record_key}:${candidate.target_type}:${candidate.target_id}`
 }
 
-function buildSourceTargetLabel(target: CustomerCandidateTarget | DealCandidateTarget) {
+function buildSourceTargetLabel(target: CustomerCandidateTarget | PartnerAccountCandidateTarget | DealCandidateTarget) {
   if ("deal_code" in target) return `${target.deal_code} · ${target.title}`
-  return [target.name, target.campus_name].filter(Boolean).join(" · ")
+  if ("campus_name" in target) return [target.name, target.campus_name].filter(Boolean).join(" · ")
+  return target.name
+}
+
+function getExternalCrmRecordLabel(record: ExternalCrmRecordSource) {
+  return record.display_name ?? record.normalized_name ?? record.external_id
+}
+
+function getExternalCrmTargetTypes(objectApiKey: string): Array<"partner_account" | "customer" | "deal"> {
+  const normalized = objectApiKey.toLowerCase()
+
+  if (normalized.includes("account")) return ["partner_account", "customer"]
+  if (normalized.includes("contact") || normalized === "lead") return ["customer"]
+  if (
+    normalized.includes("opportun") ||
+    normalized.includes("quote") ||
+    normalized.includes("order") ||
+    normalized.includes("collection") ||
+    normalized.includes("performance") ||
+    normalized.includes("financial")
+  ) {
+    return ["deal", "customer"]
+  }
+
+  return ["customer", "deal"]
 }
 
 async function findBranchRevSourceByKey(sourceRecordKey: string) {
@@ -111,7 +173,7 @@ export async function generateBranchRevLinkCandidates(): Promise<GenerateBranchR
       .limit(2000),
     sb
       .from("crm_source_links")
-      .select("source_record_key, target_type, target_id, status")
+      .select("source_object, source_record_key, target_type, target_id, status")
       .eq("source_system", "branch_rev_sheet")
       .eq("source_object", "branch_rev_deals")
       .limit(5000),
@@ -193,6 +255,141 @@ export async function generateBranchRevLinkCandidates(): Promise<GenerateBranchR
     insertedCandidates: rowsToInsert.length,
     skippedExisting: candidates.length - rowsToInsert.length,
   }
+}
+
+export async function generateExternalCrmLinkCandidates(): Promise<GenerateExternalCrmLinkCandidatesResult> {
+  const sb = createSupabaseAdminClient()
+
+  const [recordsResult, partnerAccountsResult, customersResult, dealsResult, linksResult] =
+    await Promise.all([
+      sb
+        .from("external_crm_records")
+        .select("object_api_key, external_id, normalized_name, display_name, owner_name, status, amount, occurred_at, synced_at")
+        .eq("source_system", "xiaoshouyi")
+        .limit(2000),
+      sb
+        .from("partner_accounts")
+        .select("id, name, status")
+        .limit(2000),
+      sb
+        .from("customers")
+        .select("id, partner_account_id, name, campus_name")
+        .limit(2000),
+      sb
+        .from("deals")
+        .select("id, customer_id, title, deal_code")
+        .limit(2000),
+      sb
+        .from("crm_source_links")
+        .select("source_object, source_record_key, target_type, target_id, status")
+        .eq("source_system", "xiaoshouyi")
+        .limit(5000),
+    ])
+
+  if (recordsResult.error) throw recordsResult.error
+  if (partnerAccountsResult.error) throw partnerAccountsResult.error
+  if (customersResult.error) throw customersResult.error
+  if (dealsResult.error) throw dealsResult.error
+  if (linksResult.error) throw linksResult.error
+
+  const records = (recordsResult.data ?? []) as ExternalCrmRecordSource[]
+  const partnerAccounts = (partnerAccountsResult.data ?? []) as PartnerAccountCandidateTarget[]
+  const customers = (customersResult.data ?? []) as CustomerCandidateTarget[]
+  const deals = (dealsResult.data ?? []) as DealCandidateTarget[]
+  const existingLinks = (linksResult.data ?? []) as ExistingSourceLink[]
+  const existingCandidateKeys = new Set(existingLinks.map(buildCandidateKey))
+  const existingConfirmedSources = new Set(
+    existingLinks
+      .filter((link) => link.status === "confirmed")
+      .map((link) => `${link.source_object}:${link.source_record_key}`)
+  )
+
+  const candidates: CandidateInsert[] = []
+
+  for (const record of records) {
+    const sourceLabel = getExternalCrmRecordLabel(record)
+    const normalizedSourceLabel = record.normalized_name ?? normalizeCrmName(sourceLabel)
+    if (normalizedSourceLabel.length < 2) continue
+    if (existingConfirmedSources.has(`${record.object_api_key}:${record.external_id}`)) continue
+
+    const targetTypes = new Set(getExternalCrmTargetTypes(record.object_api_key))
+    const scoredTargets = [
+      ...(targetTypes.has("partner_account")
+        ? partnerAccounts.map((account) => ({
+            targetType: "partner_account" as const,
+            targetId: account.id,
+            targetLabel: buildSourceTargetLabel(account),
+            confidence: scoreCrmNameMatch(sourceLabel, buildSourceTargetLabel(account)),
+          }))
+        : []),
+      ...(targetTypes.has("customer")
+        ? customers.map((customer) => ({
+            targetType: "customer" as const,
+            targetId: customer.id,
+            targetLabel: buildSourceTargetLabel(customer),
+            confidence: scoreCrmNameMatch(sourceLabel, buildSourceTargetLabel(customer)),
+          }))
+        : []),
+      ...(targetTypes.has("deal")
+        ? deals.map((deal) => ({
+            targetType: "deal" as const,
+            targetId: deal.id,
+            targetLabel: buildSourceTargetLabel(deal),
+            confidence: scoreCrmNameMatch(sourceLabel, buildSourceTargetLabel(deal)),
+          }))
+        : []),
+    ]
+      .filter((target) => target.confidence >= MIN_CONFIDENCE)
+      .sort((a, b) => b.confidence - a.confidence)
+      .slice(0, MAX_CANDIDATES_PER_SOURCE)
+
+    for (const target of scoredTargets) {
+      candidates.push({
+        source_system: "xiaoshouyi",
+        source_object: record.object_api_key,
+        source_record_key: record.external_id,
+        normalized_name: normalizedSourceLabel,
+        target_type: target.targetType,
+        target_id: target.targetId,
+        confidence: Number(target.confidence.toFixed(4)),
+        status: "candidate",
+        metadata: {
+          source_label: sourceLabel,
+          external_id: record.external_id,
+          object_api_key: record.object_api_key,
+          owner_name: record.owner_name,
+          source_status: record.status,
+          source_amount: record.amount,
+          occurred_at: record.occurred_at,
+          synced_at: record.synced_at,
+          target_label: target.targetLabel,
+        },
+      })
+    }
+  }
+
+  const rowsToInsert = candidates.filter((candidate) => !existingCandidateKeys.has(buildCandidateKey(candidate)))
+
+  if (rowsToInsert.length > 0) {
+    const { error } = await sb.from("crm_source_links").insert(rowsToInsert)
+    if (error) throw error
+  }
+
+  return {
+    scannedExternalRecords: records.length,
+    generatedCandidates: candidates.length,
+    insertedCandidates: rowsToInsert.length,
+    skippedExisting: candidates.length - rowsToInsert.length,
+  }
+}
+
+export async function generateAllCrmLinkCandidates(): Promise<GenerateAllCrmLinkCandidatesResult> {
+  const [branchRev, xiaoshouyi] = await Promise.all([
+    generateBranchRevLinkCandidates(),
+    generateExternalCrmLinkCandidates(),
+  ])
+
+  return { branchRev, xiaoshouyi }
 }
 
 export async function searchManualCrmLinkTargets(
@@ -304,6 +501,84 @@ export async function createManualBranchRevLinkCandidate(input: {
     .upsert(row, {
       onConflict: "source_system,source_object,source_record_key,target_type,target_id",
     })
+    .select("id, status")
+    .single()
+
+  if (error) throw error
+  return data
+}
+
+export async function upsertConfirmedLeadCustomerLink(input: {
+  leadId: string
+  sourceLabel: string
+  customerId: string
+  customerLabel: string
+  actorUserId?: string | null
+  metadata?: Record<string, unknown>
+}) {
+  const sb = createSupabaseAdminClient()
+  const sourceRecordKey = input.leadId.trim()
+  const sourceLabel = input.sourceLabel.trim()
+  const customerId = input.customerId.trim()
+  const customerLabel = input.customerLabel.trim()
+
+  if (!sourceRecordKey || !sourceLabel || !customerId || !customerLabel) {
+    throw new Error("Invalid lead conversion source link input")
+  }
+
+  const { data: confirmedLinks, error: confirmedError } = await sb
+    .from("crm_source_links")
+    .select("id, target_id, status")
+    .eq("source_system", "lead")
+    .eq("source_object", "leads")
+    .eq("source_record_key", sourceRecordKey)
+    .eq("status", "confirmed")
+    .limit(1)
+
+  if (confirmedError) throw confirmedError
+
+  const existingConfirmed = confirmedLinks?.[0]
+  if (existingConfirmed?.id && existingConfirmed.target_id !== customerId) {
+    return existingConfirmed
+  }
+
+  const { error: staleError } = await sb
+    .from("crm_source_links")
+    .update({ status: "stale", confirmed_by: null, confirmed_at: null })
+    .eq("source_system", "lead")
+    .eq("source_object", "leads")
+    .eq("source_record_key", sourceRecordKey)
+    .neq("target_id", customerId)
+    .in("status", ["candidate", "confirmed"])
+
+  if (staleError) throw staleError
+
+  const now = new Date().toISOString()
+  const { data, error } = await sb
+    .from("crm_source_links")
+    .upsert(
+      {
+        source_system: "lead",
+        source_object: "leads",
+        source_record_key: sourceRecordKey,
+        normalized_name: normalizeCrmName(sourceLabel),
+        target_type: "customer",
+        target_id: customerId,
+        confidence: 1,
+        status: "confirmed",
+        confirmed_by: input.actorUserId ?? null,
+        confirmed_at: now,
+        metadata: {
+          ...(input.metadata ?? {}),
+          source_label: sourceLabel,
+          target_label: customerLabel,
+          converted_at: now,
+        },
+      },
+      {
+        onConflict: "source_system,source_object,source_record_key,target_type,target_id",
+      }
+    )
     .select("id, status")
     .single()
 
