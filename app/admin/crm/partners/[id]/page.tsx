@@ -1,6 +1,5 @@
 import { notFound } from "next/navigation"
 
-import CrmSubnav from "@/components/admin/crm/CrmSubnav"
 import PartnerWorkspaceDetailClient from "@/components/admin/partners/PartnerWorkspaceDetailClient"
 import { getPartnerWorkspaceData } from "@/lib/partners-data"
 
@@ -19,15 +18,10 @@ export default async function AdminCrmPartnerDetailPage({
   }
 
   return (
-    <>
-      <div className="px-4 pt-8 sm:px-6 lg:px-8 lg:pt-10">
-        <CrmSubnav active="partners" />
-      </div>
-      <PartnerWorkspaceDetailClient
-        initialWorkspace={workspace}
-        initialSource={source}
-        initialWarning={warning}
-      />
-    </>
+    <PartnerWorkspaceDetailClient
+      initialWorkspace={workspace}
+      initialSource={source}
+      initialWarning={warning}
+    />
   )
 }

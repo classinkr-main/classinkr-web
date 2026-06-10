@@ -18,19 +18,26 @@ export async function GET(req: NextRequest) {
     const [inbound, outbound, stock, sales] = await Promise.all([
       listHwInbound(), listHwOutbound(), listHwStock(), listHwSalesMonthly(),
     ])
+    // 출고 시트의 "예정" 행(배송 예정 등)은 아직 창고에 있는 물량이다.
+    // 실재고(장부) = 입고 − 완료된 출고, 가용 재고 = 실재고 − 출고 예정.
+    const isPlannedOutbound = (progress: string | null) => (progress ?? "").includes("예정")
     const stockByPattern = HW_PATTERNS.map((p) => {
       const inboundRows = inbound.filter((r) => p.match.test(r.product))
       const outboundRows = outbound.filter((r) => p.match.test(r.product))
       const inSum = inboundRows.reduce((s, r) => s + r.quantity, 0)
-      const outSum = outboundRows.reduce((s, r) => s + r.quantity, 0)
+      const outSum = outboundRows.filter((r) => !isPlannedOutbound(r.progress)).reduce((s, r) => s + r.quantity, 0)
+      const plannedOut = outboundRows.filter((r) => isPlannedOutbound(r.progress)).reduce((s, r) => s + r.quantity, 0)
       const fromIO = inSum - outSum
+      const available = fromIO - plannedOut
       const fromSheet = stock.filter((r) => p.match.test(r.product)).reduce((s, r) => s + r.quantity, 0)
       const hasIoLedger = inboundRows.length > 0 || outboundRows.length > 0
       return {
         product: p.key,
         io_stock: fromIO,
+        planned_out: plannedOut,
+        available_stock: available,
         sheet_stock: fromSheet,
-        low: (hasIoLedger && fromIO <= p.threshold) || fromSheet <= p.thresholdSheet,
+        low: (hasIoLedger && available <= p.threshold) || fromSheet <= p.thresholdSheet,
       }
     })
     const progress = outbound.reduce<Record<string, number>>((acc, r) => {

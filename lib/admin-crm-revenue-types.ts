@@ -32,6 +32,50 @@ export interface CrmRevenueMonthlyPoint {
   contractedAmount: number
   paidAmount: number
   expectedAmount: number
+  sheetConfirmedAmount: number
+  sheetHighConfidenceAmount: number
+  sheetExpectedAmount: number
+}
+
+export interface CrmRevenueSheetSummary {
+  targetAmount: number
+  confirmedAmount: number
+  highConfidenceAmount: number
+  expectedAmount: number
+  unconfirmedPastAmount: number
+  dealCount: number
+  activeDealCount: number
+}
+
+export type CrmSourceLinkStatus = "candidate" | "confirmed" | "rejected" | "stale"
+
+export interface CrmRevenueIdentitySummary {
+  totalLinks: number
+  confirmedLinks: number
+  candidateLinks: number
+  rejectedLinks: number
+  staleLinks: number
+  linkedSheetDealCount: number
+  unmatchedSheetDealCount: number
+  targetCustomerCount: number
+  targetDealCount: number
+  lastLinkedAt: string | null
+}
+
+export interface CrmRevenueSheetMatchRow {
+  key: string
+  linkId: string | null
+  sheetRow: number
+  customerName: string
+  ownerName: string
+  status: string | null
+  amount: number
+  monthCount: number
+  linkStatus: CrmSourceLinkStatus | null
+  targetType: string | null
+  targetId: string | null
+  targetLabel: string | null
+  confidence: number | null
 }
 
 export interface CrmRevenuePartnerRow {
@@ -73,6 +117,9 @@ export interface CrmRevenueDashboard {
     endMonth: string
   }
   summary: CrmRevenueSummary
+  sheet: CrmRevenueSheetSummary | null
+  identity: CrmRevenueIdentitySummary | null
+  sheetMatches: CrmRevenueSheetMatchRow[]
   monthly: CrmRevenueMonthlyPoint[]
   partners: CrmRevenuePartnerRow[]
   risks: CrmRevenueRiskItem[]

@@ -2,7 +2,14 @@
 import { useState } from "react"
 import { useBranchJson } from "../client-api"
 
-interface StockRow { product: string; io_stock: number; sheet_stock: number; low: boolean }
+interface StockRow {
+  product: string
+  io_stock: number          // 실재고(장부): 입고 − 완료 출고
+  planned_out: number       // 출고 예정(아직 창고에 있음)
+  available_stock: number   // 가용 재고: 실재고 − 출고 예정
+  sheet_stock: number
+  low: boolean
+}
 interface SalesRow { fiscal_year: number; fiscal_month: number; product: string; quantity: number }
 interface RecentInstall { customer: string; quantity: number; date: string | null }
 interface HardwareResponse {
@@ -34,9 +41,9 @@ function TableView({ rows }: { rows: StockRow[] }) {
   return (
     <div>
       <div className="grid items-end gap-2 px-1 pb-2 text-[10px] font-semibold uppercase tracking-[0.04em] text-[#615D59]"
-        style={{ gridTemplateColumns: "1fr 70px 100px 70px" }}>
+        style={{ gridTemplateColumns: "1fr 86px 100px 70px" }}>
         <span>품목</span>
-        <span className="text-right">출고 재고</span>
+        <span className="text-right">가용 재고</span>
         <span className="text-right">시트 재고</span>
         <span className="text-right">상태</span>
       </div>
@@ -45,13 +52,15 @@ function TableView({ rows }: { rows: StockRow[] }) {
         return (
           <div key={s.product}
             className="grid items-center gap-2 border-t border-[rgba(0,0,0,0.06)] px-1 py-2.5"
-            style={{ gridTemplateColumns: "1fr 70px 100px 70px" }}>
+            style={{ gridTemplateColumns: "1fr 86px 100px 70px" }}>
             <div>
               <p className="text-[12.5px] font-semibold text-[#111110]">{s.product}</p>
             </div>
             <div className="text-right">
-              <p className="text-[16px] font-bold tracking-[-0.01em] text-[#111110]">{s.io_stock}</p>
-              <p className="text-[9.5px] text-[#615D59]">대</p>
+              <p className="text-[16px] font-bold tracking-[-0.01em] text-[#111110]">{s.available_stock}</p>
+              <p className="text-[9.5px] text-[#615D59]">
+                실재고 {s.io_stock} · 예정 −{s.planned_out}
+              </p>
             </div>
             <p className="text-right text-[11px] text-[#615D59]">
               {s.sheet_stock}대
@@ -70,14 +79,15 @@ function TableView({ rows }: { rows: StockRow[] }) {
 }
 
 function GaugeView({ rows }: { rows: StockRow[] }) {
-  // Use the largest io_stock or sheet_stock value across rows as the gauge max,
+  // Use the largest 실재고(io) or sheet_stock value across rows as the gauge max,
   // so bars are visually comparable.
   const max = Math.max(1, ...rows.map((r) => Math.max(r.io_stock, r.sheet_stock)))
   return (
     <div className="flex flex-col gap-3">
       {rows.map((s) => {
         const color = s.low ? COLORS.red : COLORS.green
-        const ioPct = (s.io_stock / max) * 100
+        const availPct = (Math.max(0, s.available_stock) / max) * 100
+        const plannedPct = (Math.max(0, s.planned_out) / max) * 100
         const sheetPct = (s.sheet_stock / max) * 100
         return (
           <div key={s.product}>
@@ -92,17 +102,21 @@ function GaugeView({ rows }: { rows: StockRow[] }) {
                 )}
               </div>
               <p className="text-[11px] text-[#615D59]">
-                출고 <span className="text-[13px] font-bold text-[#111110]">{s.io_stock}</span>
+                가용 <span className="text-[13px] font-bold text-[#111110]">{s.available_stock}</span>
+                <span className="mx-1">·</span>
+                예정 <span className="font-semibold text-[#A8741A]">{s.planned_out}</span>
                 <span className="mx-1">·</span>
                 시트 <span className="font-semibold text-[#111110]">{s.sheet_stock}</span>
               </p>
             </div>
-            {/* Two-tone bar: io_stock filled, sheet_stock as faint outline marker */}
+            {/* 3단 바: 가용(진하게) + 출고 예정(중간 톤, 가용 뒤에 이어붙임) + 시트 재고(연한 배경) */}
             <div className="relative h-4 overflow-hidden rounded-md bg-[#F6F5F4]">
               <div className="absolute inset-y-0 left-0 rounded-md transition-[width] duration-500"
                 style={{ width: `${Math.min(100, sheetPct)}%`, background: color, opacity: 0.18 }} />
+              <div className="absolute inset-y-0 rounded-r-md transition-[width] duration-500"
+                style={{ left: `${Math.min(100, availPct)}%`, width: `${Math.min(100 - Math.min(100, availPct), plannedPct)}%`, background: "#A8741A", opacity: 0.45 }} />
               <div className="absolute inset-y-0 left-0 rounded-md transition-[width] duration-500"
-                style={{ width: `${Math.min(100, ioPct)}%`, background: color, opacity: 0.85 }} />
+                style={{ width: `${Math.min(100, availPct)}%`, background: color, opacity: 0.85 }} />
             </div>
           </div>
         )

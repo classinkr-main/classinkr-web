@@ -15,7 +15,8 @@ export async function syncRev(): Promise<{ rows: number }> {
     first_payment: p.first_payment, product_version: p.product_version, region: p.region,
     importance: p.importance, note: p.note,
     contract_target: p.contract_target == null ? "" : String(p.contract_target),
-    monthly_payments: p.monthly_payments, monthly_red: p.monthly_red, raw: p.raw,
+    monthly_payments: p.monthly_payments, monthly_red: p.monthly_red,
+    monthly_confirmed: p.monthly_confirmed, monthly_high_conf: p.monthly_high_conf, raw: p.raw,
   }))
   const n = await replaceBranchRevDeals(rows)
   return { rows: n }

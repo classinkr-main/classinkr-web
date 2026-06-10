@@ -24,7 +24,7 @@ export async function readRange(spreadsheetId: string, range: string): Promise<s
 }
 
 export interface CellFormat { red?: number; green?: number; blue?: number }
-export interface FormattedCell { value: string | number | null; bg: CellFormat | null }
+export interface FormattedCell { value: string | number | null; bg: CellFormat | null; fg?: CellFormat | null }
 
 export async function readRangeWithFormat(spreadsheetId: string, range: string): Promise<FormattedCell[][]> {
   return withRetry(async () => {
@@ -32,7 +32,8 @@ export async function readRangeWithFormat(spreadsheetId: string, range: string):
       spreadsheetId,
       ranges: [range],
       includeGridData: true,
-      fields: "sheets.data.rowData.values(formattedValue,effectiveFormat.backgroundColor,userEnteredValue)",
+      fields:
+        "sheets.data.rowData.values(formattedValue,effectiveFormat.backgroundColor,effectiveFormat.textFormat.foregroundColor,userEnteredValue)",
     })
     const data = res.data.sheets?.[0]?.data?.[0]?.rowData ?? []
     return data.map((row) =>
@@ -44,6 +45,7 @@ export async function readRangeWithFormat(spreadsheetId: string, range: string):
               cell.userEnteredValue?.numberValue ??
               null,
         bg: (cell.effectiveFormat?.backgroundColor as CellFormat | null | undefined) ?? null,
+        fg: (cell.effectiveFormat?.textFormat?.foregroundColor as CellFormat | null | undefined) ?? null,
       }))
     )
   }, range)
@@ -52,6 +54,24 @@ export async function readRangeWithFormat(spreadsheetId: string, range: string):
 export function isRedBg(bg: CellFormat | null): boolean {
   if (!bg) return false
   return (bg.red ?? 0) >= 0.85 && (bg.green ?? 0) < 0.5 && (bg.blue ?? 0) < 0.5
+}
+
+// REV 시트 운영 규칙: 금액의 글자색 빨강 = 확정 매출.
+// 실측 색상은 #FF0000, #EB4336 계열. 고객명 칸의 갈색(#B45F06, r0.71/g0.37)은 제외해야 하므로
+// green 상한을 0.3으로 둔다.
+export function isRedText(fg: CellFormat | null | undefined): boolean {
+  if (!fg) return false
+  return (fg.red ?? 0) >= 0.75 && (fg.green ?? 0) <= 0.3 && (fg.blue ?? 0) <= 0.3
+}
+
+// 글자색 파랑 = 클로징 임박(90%+ 확정 예상). 기본 파랑(#0000FF)과
+// 구글 기본 블루(#1155CC, #4A86E8) 계열을 잡고 검정·빨강·초록은 제외한다.
+export function isBlueText(fg: CellFormat | null | undefined): boolean {
+  if (!fg) return false
+  const red = fg.red ?? 0
+  const green = fg.green ?? 0
+  const blue = fg.blue ?? 0
+  return blue >= 0.5 && blue - red >= 0.25 && blue - green >= 0.15
 }
 
 // Drive API gives us the sheet's last-edited timestamp without re-reading any

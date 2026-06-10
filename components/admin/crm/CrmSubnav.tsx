@@ -11,36 +11,36 @@ const CRM_TABS = [
   {
     key: "customers",
     href: "/admin/crm",
-    label: "리드 관리",
-    description: "문의, 팔로업, 전환 관리",
+    label: "리드",
+    description: "유입, SLA, 담당자",
     icon: <Users className="h-4 w-4" />,
   },
   {
     key: "partners",
     href: "/admin/crm/partners",
-    label: "처리 큐",
-    description: "계약, 설치, 정산, 이슈 우선순위",
+    label: "운영 큐",
+    description: "계약, 설치, 정산, 이슈",
     icon: <ListChecks className="h-4 w-4" />,
   },
   {
     key: "partnerPortal",
     href: "/admin/crm/partners/portal",
-    label: "거래 현황",
-    description: "파이프라인, 일정, 수납 집계",
+    label: "거래",
+    description: "파이프라인, 일정, 수납",
     icon: <LayoutDashboard className="h-4 w-4" />,
   },
   {
     key: "partnerCustomers",
     href: "/admin/crm/partners/customers",
     label: "고객사",
-    description: "기관 목록, 상세 정보, 활동 로그",
+    description: "기관, 캠퍼스, 활동",
     icon: <Building2 className="h-4 w-4" />,
   },
   {
     key: "revenue",
     href: "/admin/crm/revenue",
-    label: "매출",
-    description: "견적, 계약, 수납, 시트 연결",
+    label: "매출·정합성",
+    description: "매출, 시트, 소스 상태",
     icon: <CircleDollarSign className="h-4 w-4" />,
   },
 ] satisfies Array<{
@@ -53,10 +53,11 @@ const CRM_TABS = [
 
 function resolveActiveTab(pathname: string | null): CrmTab | null {
   if (!pathname) return null
+  if (pathname === "/admin/crm/revenue" || pathname.startsWith("/admin/crm/revenue/")) return "revenue"
   if (pathname === "/admin/crm/partners/portal") return "partnerPortal"
   if (pathname === "/admin/crm/partners/customers") return "partnerCustomers"
   if (pathname.startsWith("/admin/crm/partners")) return "partners"
-  if (pathname === "/admin/crm" || pathname.startsWith("/admin/crm/")) return "customers"
+  if (pathname === "/admin/crm") return "customers"
   return null
 }
 

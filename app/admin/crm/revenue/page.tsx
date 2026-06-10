@@ -5,22 +5,26 @@ import Link from "next/link"
 import {
   AlertCircle,
   ArrowRight,
+  Check,
   CircleDollarSign,
   Database,
   FileSpreadsheet,
   Loader2,
+  Plus,
   RefreshCw,
+  Search,
   ServerCog,
   TrendingUp,
+  X,
 } from "lucide-react"
 
-import CrmSubnav from "@/components/admin/crm/CrmSubnav"
 import { adminFetchJson } from "@/lib/admin-client"
 import type {
   CrmRevenueDashboard,
   CrmRevenueDocumentRow,
   CrmRevenueSource,
   CrmRevenueSourceStatus,
+  CrmSourceLinkStatus,
 } from "@/lib/admin-crm-revenue-types"
 
 const STATUS_TONE: Record<CrmRevenueSourceStatus, string> = {
@@ -35,6 +39,27 @@ const KIND_LABEL: Record<CrmRevenueDocumentRow["kind"], string> = {
   contract: "계약",
   receipt: "수납",
   deal: "거래",
+}
+
+const MATCH_STATUS_LABEL: Record<CrmSourceLinkStatus, string> = {
+  candidate: "후보",
+  confirmed: "확정",
+  rejected: "제외",
+  stale: "재검수",
+}
+
+const MATCH_STATUS_TONE: Record<CrmSourceLinkStatus, string> = {
+  candidate: "border-sky-100 bg-sky-50 text-sky-700",
+  confirmed: "border-emerald-100 bg-emerald-50 text-emerald-700",
+  rejected: "border-[#e8e8e4] bg-[#fafaf8] text-[#1a1a1a]/45",
+  stale: "border-amber-100 bg-amber-50 text-amber-700",
+}
+
+interface ManualLinkTargetOption {
+  targetType: "customer" | "deal"
+  targetId: string
+  label: string
+  confidence: number
 }
 
 function formatCurrency(value: number) {
@@ -61,6 +86,32 @@ function formatDate(value: string | null | undefined) {
     hour: "2-digit",
     minute: "2-digit",
   }).format(date)
+}
+
+function formatPercent(value: number | null | undefined) {
+  if (value == null) return "-"
+  return `${Math.round(value * 100)}%`
+}
+
+function getMatchStatusLabel(status: CrmSourceLinkStatus | null) {
+  return status ? MATCH_STATUS_LABEL[status] : "미매칭"
+}
+
+function getMatchStatusTone(status: CrmSourceLinkStatus | null) {
+  return status ? MATCH_STATUS_TONE[status] : "border-amber-100 bg-amber-50 text-amber-700"
+}
+
+function getTargetLabel(targetType: string | null, targetId: string | null, targetLabel: string | null) {
+  if (!targetType || !targetId) return "연결 없음"
+  const label =
+    targetType === "customer"
+      ? "고객"
+      : targetType === "deal"
+        ? "거래"
+        : targetType === "partner_account"
+          ? "파트너"
+          : targetType
+  return targetLabel ? `${label} · ${targetLabel}` : `${label} ${targetId.slice(0, 8)}`
 }
 
 function StatusBadge({ label, tone }: { label: string; tone?: string }) {
@@ -141,6 +192,14 @@ export default function AdminCrmRevenuePage() {
   const [data, setData] = useState<CrmRevenueDashboard | null>(null)
   const [months, setMonths] = useState(6)
   const [loading, setLoading] = useState(true)
+  const [syncing, setSyncing] = useState(false)
+  const [syncingExternal, setSyncingExternal] = useState(false)
+  const [generatingLinks, setGeneratingLinks] = useState(false)
+  const [updatingLinkId, setUpdatingLinkId] = useState<string | null>(null)
+  const [manualQueries, setManualQueries] = useState<Record<string, string>>({})
+  const [manualTargets, setManualTargets] = useState<Record<string, ManualLinkTargetOption[]>>({})
+  const [searchingSourceKey, setSearchingSourceKey] = useState<string | null>(null)
+  const [creatingManualKey, setCreatingManualKey] = useState<string | null>(null)
   const [error, setError] = useState<string | null>(null)
 
   const load = useCallback(async () => {
@@ -162,6 +221,119 @@ export default function AdminCrmRevenuePage() {
     void load()
   }, [load])
 
+  const syncSheet = useCallback(async () => {
+    setSyncing(true)
+    setError(null)
+    try {
+      await adminFetchJson(`/api/admin/branch/sync`, {
+        method: "POST",
+        body: JSON.stringify({ sources: ["rev"] }),
+      })
+      await load()
+    } catch (err) {
+      setError(err instanceof Error ? err.message : "시트 동기화에 실패했습니다.")
+    } finally {
+      setSyncing(false)
+    }
+  }, [load])
+
+  const generateLinkCandidates = useCallback(async () => {
+    setGeneratingLinks(true)
+    setError(null)
+    try {
+      await adminFetchJson(`/api/admin/crm/source-links/generate`, {
+        method: "POST",
+        body: JSON.stringify({ source: "branch_rev_sheet" }),
+      })
+      await load()
+    } catch (err) {
+      setError(err instanceof Error ? err.message : "CRM 매칭 후보 생성에 실패했습니다.")
+    } finally {
+      setGeneratingLinks(false)
+    }
+  }, [load])
+
+  const syncExternalCrm = useCallback(async () => {
+    setSyncingExternal(true)
+    setError(null)
+    try {
+      await adminFetchJson(`/api/admin/crm/external-sync`, { method: "POST" })
+      await load()
+    } catch (err) {
+      setError(err instanceof Error ? err.message : "외부 CRM 동기화에 실패했습니다.")
+    } finally {
+      setSyncingExternal(false)
+    }
+  }, [load])
+
+  const updateSourceLink = useCallback(
+    async (linkId: string, action: "confirm" | "reject" | "stale") => {
+      setUpdatingLinkId(linkId)
+      setError(null)
+      try {
+        await adminFetchJson(`/api/admin/crm/source-links/${linkId}`, {
+          method: "PATCH",
+          body: JSON.stringify({ action }),
+        })
+        await load()
+      } catch (err) {
+        setError(err instanceof Error ? err.message : "CRM 매칭 상태 변경에 실패했습니다.")
+      } finally {
+        setUpdatingLinkId(null)
+      }
+    },
+    [load]
+  )
+
+  const searchManualTargets = useCallback(
+    async (sourceKey: string, fallbackQuery: string) => {
+      const query = (manualQueries[sourceKey] ?? fallbackQuery).trim()
+      if (query.length < 2) {
+        setManualTargets((current) => ({ ...current, [sourceKey]: [] }))
+        return
+      }
+
+      setSearchingSourceKey(sourceKey)
+      setError(null)
+      try {
+        const params = new URLSearchParams({ query, sourceKey })
+        const result = await adminFetchJson<{ targets: ManualLinkTargetOption[] }>(
+          `/api/admin/crm/source-links/targets?${params.toString()}`
+        )
+        setManualTargets((current) => ({ ...current, [sourceKey]: result.targets }))
+      } catch (err) {
+        setError(err instanceof Error ? err.message : "CRM 연결 대상 검색에 실패했습니다.")
+      } finally {
+        setSearchingSourceKey(null)
+      }
+    },
+    [manualQueries]
+  )
+
+  const createManualCandidate = useCallback(
+    async (sourceKey: string, target: ManualLinkTargetOption) => {
+      setCreatingManualKey(`${sourceKey}:${target.targetType}:${target.targetId}`)
+      setError(null)
+      try {
+        await adminFetchJson(`/api/admin/crm/source-links/manual`, {
+          method: "POST",
+          body: JSON.stringify({
+            sourceRecordKey: sourceKey,
+            targetType: target.targetType,
+            targetId: target.targetId,
+          }),
+        })
+        setManualTargets((current) => ({ ...current, [sourceKey]: [] }))
+        await load()
+      } catch (err) {
+        setError(err instanceof Error ? err.message : "수동 CRM 후보 추가에 실패했습니다.")
+      } finally {
+        setCreatingManualKey(null)
+      }
+    },
+    [load]
+  )
+
   const maxMonthlyAmount = useMemo(() => {
     const values =
       data?.monthly.flatMap((point) => [
@@ -169,14 +341,15 @@ export default function AdminCrmRevenuePage() {
         point.contractedAmount,
         point.paidAmount,
         point.expectedAmount,
+        point.sheetConfirmedAmount,
+        point.sheetHighConfidenceAmount,
+        point.sheetExpectedAmount,
       ]) ?? []
     return Math.max(1, ...values)
   }, [data])
 
   return (
-    <div className="px-4 pt-8 pb-16 sm:px-6 sm:pt-10 sm:pb-20 lg:px-8">
-      <CrmSubnav active="revenue" />
-
+    <div>
       <div className="mb-8 flex flex-col gap-4 lg:flex-row lg:items-start lg:justify-between">
         <div>
           <p className="text-[11px] font-medium uppercase tracking-widest text-[#1a1a1a]/30">
@@ -213,6 +386,32 @@ export default function AdminCrmRevenuePage() {
           >
             <RefreshCw className={`h-4 w-4 ${loading ? "animate-spin" : ""}`} />
             새로고침
+          </button>
+          <button
+            type="button"
+            onClick={() => void syncSheet()}
+            disabled={syncing || loading}
+            className="inline-flex h-9 items-center gap-2 rounded-lg border border-[#e8e8e4] bg-white px-3 text-[13px] font-semibold text-[#111110] transition-colors hover:bg-[#f5f5f2] disabled:opacity-50"
+          >
+            {syncing ? (
+              <Loader2 className="h-4 w-4 animate-spin" />
+            ) : (
+              <FileSpreadsheet className="h-4 w-4" />
+            )}
+            시트 동기화
+          </button>
+          <button
+            type="button"
+            onClick={() => void syncExternalCrm()}
+            disabled={syncingExternal || loading}
+            className="inline-flex h-9 items-center gap-2 rounded-lg border border-[#e8e8e4] bg-white px-3 text-[13px] font-semibold text-[#111110] transition-colors hover:bg-[#f5f5f2] disabled:opacity-50"
+          >
+            {syncingExternal ? (
+              <Loader2 className="h-4 w-4 animate-spin" />
+            ) : (
+              <ServerCog className="h-4 w-4" />
+            )}
+            외부 CRM
           </button>
         </div>
       </div>
@@ -280,6 +479,252 @@ export default function AdminCrmRevenuePage() {
         />
       </section>
 
+      {data?.sheet ? (
+        <section className="mb-8 border-b border-[#f0f0ec] pb-6">
+          <div className="flex flex-wrap items-center gap-2">
+            <FileSpreadsheet className="h-4 w-4 text-[#1a1a1a]/35" />
+            <h2 className="text-[14px] font-semibold text-[#111110]">회사 시트 (REV) 기준</h2>
+            <span className="text-[11px] text-[#1a1a1a]/35">
+              계약 목표 총액 {formatCurrency(data.sheet.targetAmount)} · 진행{" "}
+              {formatNumber(data.sheet.activeDealCount)}건/전체 {formatNumber(data.sheet.dealCount)}건 ·
+              비교용 병기 지표 (앱 집계와 합산하지 않음)
+            </span>
+          </div>
+          <div className="mt-2 grid gap-8 md:grid-cols-2 xl:grid-cols-4">
+            <MetricCard
+              label="시트 확정 매출"
+              value={formatCurrency(data.sheet.confirmedAmount)}
+              hint="주차 칸 빨간 글자(확정) 금액 누적 합계"
+            />
+            <MetricCard
+              label="확정 임박 (90%+)"
+              value={formatCurrency(data.sheet.highConfidenceAmount)}
+              hint="주차 칸 파란 글자 — 높은 확률로 클로징 예정"
+            />
+            <MetricCard
+              label="시트 예상·목표"
+              value={formatCurrency(data.sheet.expectedAmount)}
+              hint="당월~미래의 색 표시 없는 납부 스케줄 합계"
+            />
+            <MetricCard
+              label="확정 전환 대기"
+              value={formatCurrency(data.sheet.unconfirmedPastAmount)}
+              hint="지난달 이전 예정이었지만 아직 확정 표시가 없는 금액"
+            />
+          </div>
+        </section>
+      ) : null}
+
+      {data?.identity ? (
+        <section className="mb-8 border-b border-[#f0f0ec] pb-6">
+          <div className="flex flex-wrap items-center justify-between gap-3">
+            <div className="flex items-center gap-2">
+              <Database className="h-4 w-4 text-[#1a1a1a]/35" />
+              <h2 className="text-[14px] font-semibold text-[#111110]">CRM 정합성</h2>
+            </div>
+            <div className="flex flex-wrap items-center gap-2">
+              <button
+                type="button"
+                onClick={() => void generateLinkCandidates()}
+                disabled={generatingLinks || loading}
+                className="inline-flex h-8 items-center gap-1.5 rounded-lg border border-[#e8e8e4] px-2.5 text-[12px] font-semibold text-[#111110] transition-colors hover:bg-[#f5f5f2] disabled:opacity-50"
+              >
+                {generatingLinks ? (
+                  <Loader2 className="h-3.5 w-3.5 animate-spin" />
+                ) : (
+                  <Database className="h-3.5 w-3.5" />
+                )}
+                후보 생성
+              </button>
+              <Link
+                href="/admin/crm/partners/customers"
+                className="inline-flex h-8 items-center gap-1 rounded-lg border border-[#e8e8e4] px-2.5 text-[12px] font-semibold text-[#111110] transition-colors hover:bg-[#f5f5f2]"
+              >
+                고객사
+                <ArrowRight className="h-3.5 w-3.5" />
+              </Link>
+            </div>
+          </div>
+
+          <div className="mt-2 grid gap-8 md:grid-cols-2 xl:grid-cols-4">
+            <MetricCard
+              label="확정 매칭"
+              value={`${formatNumber(data.identity.linkedSheetDealCount)} / ${formatNumber(data.sheet?.activeDealCount ?? 0)}`}
+              hint={`고객 ${formatNumber(data.identity.targetCustomerCount)} · 거래 ${formatNumber(data.identity.targetDealCount)}`}
+            />
+            <MetricCard
+              label="매칭 후보"
+              value={formatNumber(data.identity.candidateLinks)}
+              hint={`제외 ${formatNumber(data.identity.rejectedLinks)} · 재검수 ${formatNumber(data.identity.staleLinks)}`}
+            />
+            <MetricCard
+              label="미매칭 REV"
+              value={formatNumber(data.identity.unmatchedSheetDealCount)}
+              hint="확정 link가 없는 활성 시트 고객"
+            />
+            <MetricCard
+              label="최근 연결"
+              value={formatDate(data.identity.lastLinkedAt)}
+              hint={`${formatNumber(data.identity.totalLinks)}개 source link`}
+            />
+          </div>
+
+          <div className="mt-6 overflow-x-auto">
+            <table className="min-w-[1180px] w-full text-left">
+              <thead className="text-[11px] uppercase tracking-[0.12em] text-[#1a1a1a]/35">
+                <tr>
+                  <th className="py-3 pr-4 font-semibold">상태</th>
+                  <th className="py-3 pr-4 font-semibold">시트 고객</th>
+                  <th className="py-3 pr-4 font-semibold">담당</th>
+                  <th className="py-3 pr-4 font-semibold">연결 대상</th>
+                  <th className="py-3 pr-4 text-right font-semibold">월수</th>
+                  <th className="py-3 pr-4 text-right font-semibold">신뢰도</th>
+                  <th className="py-3 pr-4 text-right font-semibold">금액</th>
+                  <th className="py-3 pl-4 font-semibold">수동 연결</th>
+                  <th className="py-3 pl-4 text-right font-semibold">액션</th>
+                </tr>
+              </thead>
+              <tbody className="divide-y divide-[#f0f0ec]">
+                {data.sheetMatches.length === 0 ? (
+                  <tr>
+                    <td colSpan={9} className="py-10 text-center text-[13px] text-[#1a1a1a]/35">
+                      표시할 REV 매칭 데이터가 없습니다.
+                    </td>
+                  </tr>
+                ) : (
+                  data.sheetMatches.map((match) => (
+                    <tr key={match.key} className="align-top">
+                      <td className="py-4 pr-4">
+                        <StatusBadge
+                          label={getMatchStatusLabel(match.linkStatus)}
+                          tone={getMatchStatusTone(match.linkStatus)}
+                        />
+                      </td>
+                      <td className="py-4 pr-4">
+                        <p className="text-[13px] font-semibold text-[#111110]">{match.customerName}</p>
+                        <p className="mt-1 text-[11px] text-[#1a1a1a]/35">
+                          row {match.sheetRow} · {match.status ?? "-"}
+                        </p>
+                      </td>
+                      <td className="py-4 pr-4 text-[12px] text-[#1a1a1a]/50">{match.ownerName}</td>
+                      <td className="py-4 pr-4 text-[12px] text-[#1a1a1a]/50">
+                        {getTargetLabel(match.targetType, match.targetId, match.targetLabel)}
+                      </td>
+                      <td className="py-4 pr-4 text-right text-[12px] font-semibold text-[#111110]">
+                        {formatNumber(match.monthCount)}
+                      </td>
+                      <td className="py-4 pr-4 text-right text-[12px] text-[#1a1a1a]/45">
+                        {formatPercent(match.confidence)}
+                      </td>
+                      <td className="py-4 pr-4 text-right text-[12px] font-semibold text-[#111110]">
+                        {formatCurrency(match.amount)}
+                      </td>
+                      <td className="py-4 pl-4">
+                        {!match.linkId ? (
+                          <div className="w-[260px] space-y-2">
+                            <div className="flex gap-1.5">
+                              <input
+                                type="search"
+                                value={manualQueries[match.key] ?? match.customerName}
+                                onChange={(event) =>
+                                  setManualQueries((current) => ({
+                                    ...current,
+                                    [match.key]: event.target.value,
+                                  }))
+                                }
+                                className="h-8 min-w-0 flex-1 rounded-lg border border-[#e8e8e4] bg-white px-2 text-[12px] text-[#111110] outline-none transition-colors focus:border-[#111110]"
+                              />
+                              <button
+                                type="button"
+                                onClick={() => void searchManualTargets(match.key, match.customerName)}
+                                disabled={searchingSourceKey === match.key}
+                                className="inline-flex h-8 w-8 items-center justify-center rounded-lg border border-[#e8e8e4] text-[#111110] transition-colors hover:bg-[#f5f5f2] disabled:opacity-50"
+                                title="검색"
+                                aria-label="검색"
+                              >
+                                {searchingSourceKey === match.key ? (
+                                  <Loader2 className="h-3.5 w-3.5 animate-spin" />
+                                ) : (
+                                  <Search className="h-3.5 w-3.5" />
+                                )}
+                              </button>
+                            </div>
+                            {(manualTargets[match.key] ?? []).length > 0 ? (
+                              <div className="space-y-1">
+                                {(manualTargets[match.key] ?? []).map((target) => {
+                                  const createKey = `${match.key}:${target.targetType}:${target.targetId}`
+                                  return (
+                                    <button
+                                      key={createKey}
+                                      type="button"
+                                      onClick={() => void createManualCandidate(match.key, target)}
+                                      disabled={creatingManualKey === createKey}
+                                      className="flex w-full items-center justify-between gap-2 rounded-lg border border-[#e8e8e4] px-2 py-1.5 text-left text-[11px] text-[#111110] transition-colors hover:bg-[#f5f5f2] disabled:opacity-50"
+                                    >
+                                      <span className="min-w-0 truncate">
+                                        {target.targetType === "customer" ? "고객" : "거래"} · {target.label}
+                                      </span>
+                                      <span className="flex shrink-0 items-center gap-1 text-[#1a1a1a]/35">
+                                        {formatPercent(target.confidence)}
+                                        {creatingManualKey === createKey ? (
+                                          <Loader2 className="h-3 w-3 animate-spin" />
+                                        ) : (
+                                          <Plus className="h-3 w-3" />
+                                        )}
+                                      </span>
+                                    </button>
+                                  )
+                                })}
+                              </div>
+                            ) : null}
+                          </div>
+                        ) : (
+                          <span className="text-[11px] text-[#1a1a1a]/30">-</span>
+                        )}
+                      </td>
+                      <td className="py-4 pl-4 text-right">
+                        {match.linkId && (match.linkStatus === "candidate" || match.linkStatus === "stale") ? (
+                          <div className="flex justify-end gap-1.5">
+                            <button
+                              type="button"
+                              onClick={() => void updateSourceLink(match.linkId!, "confirm")}
+                              disabled={updatingLinkId === match.linkId}
+                              className="inline-flex h-7 w-7 items-center justify-center rounded-lg border border-emerald-100 bg-emerald-50 text-emerald-700 transition-colors hover:bg-emerald-100 disabled:opacity-50"
+                              title="확정"
+                              aria-label="확정"
+                            >
+                              {updatingLinkId === match.linkId ? (
+                                <Loader2 className="h-3.5 w-3.5 animate-spin" />
+                              ) : (
+                                <Check className="h-3.5 w-3.5" />
+                              )}
+                            </button>
+                            <button
+                              type="button"
+                              onClick={() => void updateSourceLink(match.linkId!, "reject")}
+                              disabled={updatingLinkId === match.linkId}
+                              className="inline-flex h-7 w-7 items-center justify-center rounded-lg border border-[#F6D5C5] bg-[#FEF3EE] text-[#B85C33] transition-colors hover:bg-[#FBE8DD] disabled:opacity-50"
+                              title="제외"
+                              aria-label="제외"
+                            >
+                              <X className="h-3.5 w-3.5" />
+                            </button>
+                          </div>
+                        ) : (
+                          <span className="text-[11px] text-[#1a1a1a]/30">
+                            {match.linkStatus === "confirmed" ? "완료" : "-"}
+                          </span>
+                        )}
+                      </td>
+                    </tr>
+                  ))
+                )}
+              </tbody>
+            </table>
+          </div>
+        </section>
+      ) : null}
+
       <section className="mb-8 grid gap-8 xl:grid-cols-[minmax(0,1fr)_360px]">
         <div>
           <div className="flex items-center gap-2">
@@ -296,10 +741,13 @@ export default function AdminCrmRevenuePage() {
                     ["계약", point.contractedAmount, "bg-[#084734]"],
                     ["입금", point.paidAmount, "bg-emerald-400"],
                     ["예상", point.expectedAmount, "bg-amber-300"],
+                    ["시트 확정", point.sheetConfirmedAmount, "bg-[#065c41]"],
+                    ["시트 임박", point.sheetHighConfidenceAmount, "bg-blue-400"],
+                    ["시트 예상", point.sheetExpectedAmount, "bg-[#6EE7B7]"],
                   ].map(([label, amount, color]) => {
                     const numericAmount = Number(amount)
                     return (
-                      <div key={label} className="grid grid-cols-[44px_minmax(0,1fr)_72px] items-center gap-2">
+                      <div key={label} className="grid grid-cols-[60px_minmax(0,1fr)_72px] items-center gap-2">
                         <span className="text-[11px] text-[#1a1a1a]/40">{label}</span>
                         <div className="h-2 overflow-hidden rounded-full bg-[#f0f0ec]">
                           <div
