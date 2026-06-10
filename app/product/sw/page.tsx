@@ -39,7 +39,8 @@ const useIsClient = () => useSyncExternalStore(noopSubscribe, () => true, () => 
 
 const HERO_CLASSROOM_VIDEO_SRC = "/video/쿼드러닝 수업_클립1.mp4"
 const BLACKBOARD_VIDEO_SRC = "/video/클립2.mp4"
-const VIDEO_BACKDROP_MEDIA_QUERY = "(min-width: 768px) and (prefers-reduced-motion: no-preference)"
+// 640px 미만(폰)에서는 데이터 절약을 위해 영상 대신 포스터만 보여준다.
+const VIDEO_BACKDROP_MEDIA_QUERY = "(min-width: 640px) and (prefers-reduced-motion: no-preference)"
 
 const LESSON_TOOLS: {
     label: string

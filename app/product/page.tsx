@@ -1,5 +1,5 @@
 import Link from "next/link"
-import { ArrowRight, CheckCircle2, Cpu, Monitor } from "lucide-react"
+import { ArrowRight, CheckCircle2, Pencil, Presentation } from "lucide-react"
 
 import { JsonLd } from "@/components/seo/JsonLd"
 import { createBreadcrumbJsonLd, createPublicMetadata, createWebPageJsonLd } from "@/lib/seo"
@@ -16,7 +16,7 @@ const products = [
   {
     name: "Classin 소프트웨어",
     href: "/product/sw",
-    icon: Monitor,
+    icon: Pencil,
     summary: "실시간 수업, 과제 제출, AI 자동채점, 학습 데이터 리포트, 학부모 소통을 하나로 연결합니다.",
     fit: "온라인·오프라인 수업 운영을 표준화하고 싶은 학원",
     points: ["30여 가지 수업 도구", "과제·테스트 관리", "AI 채점·첨삭", "학부모 리포트"],
@@ -24,7 +24,7 @@ const products = [
   {
     name: "Classin Board",
     href: "/product/hw",
-    icon: Cpu,
+    icon: Presentation,
     summary: "판서, AI 카메라 녹화, 수업 영상 업로드, 판서 PDF 공유를 Classin 소프트웨어와 함께 제공합니다.",
     fit: "교실 판서와 녹화, 복습 공유까지 한 번에 정리하고 싶은 학원",
     points: ["65·75·86·110인치", "4K AI 카메라", "50점 터치", "수업 기록 공유"],

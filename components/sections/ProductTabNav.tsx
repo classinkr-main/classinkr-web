@@ -3,11 +3,11 @@
 import Link from "next/link"
 import { usePathname } from "next/navigation"
 import { cn } from "@/lib/utils"
-import { Monitor, Cpu } from "lucide-react"
+import { Pencil, Presentation } from "lucide-react"
 
 const tabs = [
-    { name: "Classin 소프트웨어", href: "/product/sw", icon: Monitor },
-    { name: "Classin Board", href: "/product/hw", icon: Cpu },
+    { name: "Classin 소프트웨어", href: "/product/sw", icon: Pencil },
+    { name: "Classin Board", href: "/product/hw", icon: Presentation },
 ]
 
 export function ProductTabNav() {
