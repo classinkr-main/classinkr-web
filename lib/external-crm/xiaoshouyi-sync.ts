@@ -667,7 +667,7 @@ async function queryXiaoshouyiRecords(
   const orderBy = object.orderBy ?? (object.fields.includes("updatedAt") ? "updatedAt DESC" : "id DESC")
   const whereClause = object.whereClause?.trim()
   const whereSql = whereClause ? ` WHERE ${whereClause}` : ""
-  const query = `SELECT ${object.fields.join(",")} FROM ${object.objectApiKey}${whereSql} ORDER BY ${orderBy} LIMIT ${pageSize} OFFSET ${offset}`
+  const query = `SELECT ${object.fields.join(",")} FROM ${object.objectApiKey}${whereSql} ORDER BY ${orderBy} LIMIT ${offset},${pageSize}`
   const url = new URL(`${config.baseUrl}/rest/data/v2/query`)
   url.searchParams.set("q", query)
 
@@ -842,19 +842,23 @@ export async function syncXiaoshouyiSnapshots(trigger: ExternalCrmSyncTrigger = 
         truncated = page === maxPages - 1
       }
 
-      const { data: staleRows, error: staleError } = await sb
-        .from("external_crm_records")
-        .update({
-          is_stale: true,
-          stale_at: syncedAt,
-        })
-        .eq("source_system", "xiaoshouyi")
-        .eq("object_api_key", object.objectApiKey)
-        .or(`last_seen_run_id.is.null,last_seen_run_id.neq.${runId}`)
-        .eq("is_stale", false)
-        .select("id")
+      let staleMarked: number | null = null
+      if (!truncated) {
+        const { data: staleRows, error: staleError } = await sb
+          .from("external_crm_records")
+          .update({
+            is_stale: true,
+            stale_at: syncedAt,
+          })
+          .eq("source_system", "xiaoshouyi")
+          .eq("object_api_key", object.objectApiKey)
+          .or(`last_seen_run_id.is.null,last_seen_run_id.neq.${runId}`)
+          .eq("is_stale", false)
+          .select("id")
 
-      if (staleError) throw staleError
+        if (staleError) throw staleError
+        staleMarked = staleRows?.length ?? 0
+      }
 
       const cursorValue = truncated ? `offset:${nextOffset}` : "complete"
       await finishRun(runId, {
@@ -867,7 +871,7 @@ export async function syncXiaoshouyiSnapshots(trigger: ExternalCrmSyncTrigger = 
           maxPages,
           pagesScanned,
           truncated,
-          staleMarked: staleRows?.length ?? 0,
+          staleMarked,
           orderBy: object.orderBy ?? (object.fields.includes("updatedAt") ? "updatedAt DESC" : "id DESC"),
           whereClause: object.whereClause ?? null,
           catalogSource: object.catalogSource ?? "runtime",
@@ -880,7 +884,7 @@ export async function syncXiaoshouyiSnapshots(trigger: ExternalCrmSyncTrigger = 
         rowsScanned,
         rowsUpserted,
         pagesScanned,
-        staleMarked: staleRows?.length ?? 0,
+        staleMarked: staleMarked ?? undefined,
         cursorValue,
       })
     } catch (error) {

@@ -153,6 +153,18 @@ const MIN_CONFIDENCE = 0.72
 const MIN_EVIDENCE_REVIEW_CONFIDENCE = 0.45
 const MAX_CANDIDATES_PER_SOURCE = 5
 const MAX_MANUAL_SEARCH_RESULTS = 8
+const EXTERNAL_CRM_RECORD_SELECT =
+  "object_api_key, external_id, normalized_name, display_name, owner_name, status, amount, occurred_at, synced_at, is_stale"
+const EXTERNAL_CRM_LINK_RECORDS_PER_OBJECT = 500
+const EXTERNAL_CRM_LINK_CANDIDATE_OBJECTS = [
+  "account",
+  "contact",
+  "opportunity",
+  "ShroffAccount__c",
+  "Collection__c",
+  "SalesPerformance__c",
+  "FinancialInformation__c",
+]
 
 function buildCandidateKey(candidate: {
   source_object?: string
@@ -546,42 +558,51 @@ export async function generateBranchRevLinkCandidates(): Promise<GenerateBranchR
 
 export async function generateExternalCrmLinkCandidates(): Promise<GenerateExternalCrmLinkCandidatesResult> {
   const sb = createSupabaseAdminClient()
-
-  const [recordsResult, partnerAccountsResult, customersResult, dealsResult, linksResult, aliases] =
-    await Promise.all([
+  const recordsPromise = Promise.all(
+    EXTERNAL_CRM_LINK_CANDIDATE_OBJECTS.map((objectApiKey) =>
       sb
         .from("external_crm_records")
-        .select("object_api_key, external_id, normalized_name, display_name, owner_name, status, amount, occurred_at, synced_at, is_stale")
+        .select(EXTERNAL_CRM_RECORD_SELECT)
         .eq("source_system", "xiaoshouyi")
+        .eq("object_api_key", objectApiKey)
         .eq("is_stale", false)
-        .limit(2000),
-      sb
-        .from("partner_accounts")
-        .select("id, name, status, owner_name")
-        .limit(2000),
-      sb
-        .from("customers")
-        .select("id, partner_account_id, name, campus_name, contact_name")
-        .limit(2000),
-      sb
-        .from("deals")
-        .select("id, customer_id, partner_account_id, title, deal_code")
-        .limit(2000),
-      sb
-        .from("crm_source_links")
-        .select("source_object, source_record_key, target_type, target_id, status")
-        .eq("source_system", "xiaoshouyi")
-        .limit(5000),
-      getCrmMatchAliases(),
-    ])
+        .order("synced_at", { ascending: false })
+        .limit(EXTERNAL_CRM_LINK_RECORDS_PER_OBJECT)
+    )
+  ).then((results) => {
+    const failed = results.find((result) => result.error)
+    if (failed?.error) throw failed.error
+    return results.flatMap((result) => (result.data ?? []) as ExternalCrmRecordSource[])
+  })
 
-  if (recordsResult.error) throw recordsResult.error
+  const [records, partnerAccountsResult, customersResult, dealsResult, linksResult, aliases] = await Promise.all([
+    recordsPromise,
+    sb
+      .from("partner_accounts")
+      .select("id, name, status, owner_name")
+      .limit(2000),
+    sb
+      .from("customers")
+      .select("id, partner_account_id, name, campus_name, contact_name")
+      .limit(2000),
+    sb
+      .from("deals")
+      .select("id, customer_id, partner_account_id, title, deal_code")
+      .limit(2000),
+    sb
+      .from("crm_source_links")
+      .select("source_object, source_record_key, target_type, target_id, status")
+      .eq("source_system", "xiaoshouyi")
+      .limit(5000),
+    getCrmMatchAliases(),
+  ])
+
   if (partnerAccountsResult.error) throw partnerAccountsResult.error
   if (customersResult.error) throw customersResult.error
   if (dealsResult.error) throw dealsResult.error
   if (linksResult.error) throw linksResult.error
 
-  const records = ((recordsResult.data ?? []) as ExternalCrmRecordSource[]).filter((record) => !record.is_stale)
+  const activeRecords = records.filter((record) => !record.is_stale)
   const partnerAccounts = (partnerAccountsResult.data ?? []) as PartnerAccountCandidateTarget[]
   const customers = (customersResult.data ?? []) as CustomerCandidateTarget[]
   const deals = (dealsResult.data ?? []) as DealCandidateTarget[]
@@ -595,7 +616,7 @@ export async function generateExternalCrmLinkCandidates(): Promise<GenerateExter
 
   const candidates: CandidateInsert[] = []
 
-  for (const record of records) {
+  for (const record of activeRecords) {
     const sourceLabel = getExternalCrmRecordLabel(record)
     const normalizedSourceLabel = record.normalized_name ?? normalizeCrmName(sourceLabel)
     if (normalizedSourceLabel.length < 2) continue
@@ -714,7 +735,7 @@ export async function generateExternalCrmLinkCandidates(): Promise<GenerateExter
   }
 
   return {
-    scannedExternalRecords: records.length,
+    scannedExternalRecords: activeRecords.length,
     generatedCandidates: candidates.length,
     insertedCandidates: rowsToInsert.length,
     skippedExisting: candidates.length - rowsToInsert.length,
