@@ -1,7 +1,7 @@
 import { NextRequest, NextResponse } from "next/server"
 
 import { verifyAdmin } from "@/lib/admin-auth"
-import { getMetaCampaignDashboard } from "@/lib/meta/marketing"
+import { getMetaCampaignDashboard, MetaConfigError } from "@/lib/meta/marketing"
 
 const ALLOWED_DATE_PRESETS = new Set([
   "today",
@@ -30,6 +30,14 @@ export async function GET(req: NextRequest) {
 
     return NextResponse.json({ ok: true, ...dashboard })
   } catch (error) {
+    if (error instanceof MetaConfigError) {
+      console.warn(`[GET /api/admin/meta/campaigns] Meta 연동 미설정: ${error.message}`)
+      return NextResponse.json(
+        { ok: false, configured: false, error: "Meta 연동이 설정되지 않았습니다." },
+        { status: 503 }
+      )
+    }
+
     console.error("[GET /api/admin/meta/campaigns]", error)
     return NextResponse.json(
       {

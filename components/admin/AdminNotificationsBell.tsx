@@ -64,7 +64,7 @@ export default function AdminNotificationsBell({ placement = "floating" }: BellP
 
     const timer = window.setInterval(() => {
       void load(true)
-    }, 30_000)
+    }, 60_000)
 
     return () => window.clearInterval(timer)
   }, [load])

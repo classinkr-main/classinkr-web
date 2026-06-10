@@ -40,7 +40,11 @@ import type { PatchNote } from "@/lib/patch-notes-data"
 
 async function fetchJson<T>(url: string): Promise<T | null> {
   try {
-    return await adminFetchJsonCached<T>(url, undefined, { ttlMs: 60_000 })
+    return await adminFetchJsonCached<T>(url, undefined, {
+      ttlMs: 60_000,
+      // 재방문 시 10분 내 데이터면 스피너 없이 즉시 표시 + 백그라운드 갱신
+      staleWhileRevalidateMs: 10 * 60_000,
+    })
   } catch {
     return null
   }
@@ -370,6 +374,23 @@ export default function OverviewPage() {
     const load = async () => {
       setLoading(true)
 
+      // Instagram은 외부 Meta API라 느리거나 미설정일 수 있으므로
+      // 핵심 대시보드 로딩을 막지 않도록 분리해서 로드한다.
+      void fetchJson<InstagramOverviewDashboard>(
+        "/api/admin/meta/instagram?datePreset=last_30d&limit=25"
+      ).then((instagramData) => {
+        if (!cancelled) setInstagramDashboard(instagramData ?? null)
+      })
+
+      // 대시보드는 앞으로 7일치 일정만 쓰므로 전체 일정 대신 해당 월만 요청한다.
+      const now = new Date()
+      const weekLater = new Date(now)
+      weekLater.setDate(now.getDate() + 7)
+      const calendarMonths = [{ year: now.getFullYear(), month: now.getMonth() + 1 }]
+      if (weekLater.getMonth() !== now.getMonth() || weekLater.getFullYear() !== now.getFullYear()) {
+        calendarMonths.push({ year: weekLater.getFullYear(), month: weekLater.getMonth() + 1 })
+      }
+
       const [
         leadsData,
         subscribersData,
@@ -379,17 +400,25 @@ export default function OverviewPage() {
         settingsData,
         bugsData,
         patchNotesData,
-        instagramData,
       ] = await Promise.all([
         fetchJson<{ leads: LeadRecord[] }>("/api/admin/leads"),
         fetchJson<{ subscribers: unknown[]; total: number }>("/api/admin/subscribers"),
         fetchJson<{ posts: BlogPost[] }>("/api/admin/blog"),
         fetchJson<{ campaigns: EmailCampaign[] }>("/api/admin/email"),
-        fetchJson<CalendarEvent[]>("/api/admin/calendar"),
+        Promise.all(
+          calendarMonths.map(({ year, month }) =>
+            fetchJson<CalendarEvent[]>(`/api/admin/calendar?year=${year}&month=${month}`)
+          )
+        ).then((results) => {
+          const merged = new Map<string, CalendarEvent>()
+          for (const events of results) {
+            for (const event of events ?? []) merged.set(event.id, event)
+          }
+          return Array.from(merged.values())
+        }),
         fetchJson<SiteSettings>("/api/admin/settings"),
         fetchJson<BugReport[]>("/api/admin/bugs"),
         fetchJson<PatchNote[]>("/api/admin/patch-notes"),
-        fetchJson<InstagramOverviewDashboard>("/api/admin/meta/instagram?datePreset=last_30d&limit=25").catch(() => null),
       ])
 
       if (cancelled) return
@@ -402,7 +431,6 @@ export default function OverviewPage() {
       setSettings(settingsData ?? null)
       setBugs(bugsData ?? [])
       setPatchNotes(patchNotesData ?? [])
-      setInstagramDashboard(instagramData ?? null)
       setLoading(false)
     }
 

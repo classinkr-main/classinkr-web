@@ -11,6 +11,9 @@ const STORAGE_KEYS = [
 
 const ADMIN_REQUEST_CACHE_PREFIX = "admin_request_cache:"
 const DEFAULT_ADMIN_CACHE_TTL_MS = 45_000
+// TTL이 지나도 이 시간 안의 데이터면 즉시 보여주고 백그라운드에서 갱신한다.
+// (mutation 시 clearAdminRequestCache로 전체 캐시가 비워지므로 편집 직후 staleness 없음)
+const DEFAULT_ADMIN_STALE_WHILE_REVALIDATE_MS = 5 * 60_000
 
 interface AdminCacheEntry<T> {
   data: T
@@ -24,6 +27,12 @@ interface AdminFetchCacheOptions {
   persist?: boolean
   force?: boolean
   staleIfError?: boolean
+  /**
+   * TTL이 지난 캐시라도 이 시간(ms) 안에 저장된 것이면 즉시 반환하고
+   * 백그라운드에서 갱신한다. 재방문 시 로딩 스피너 대신 직전 데이터를 보여준다.
+   * 기본 5분. 0을 주면 비활성화.
+   */
+  staleWhileRevalidateMs?: number
 }
 
 const memoryCache = new Map<string, AdminCacheEntry<unknown>>()
@@ -182,36 +191,53 @@ export async function adminFetchJsonCached<T>(
 
   const cacheKey = getAdminRequestCacheKey(input, init, options.cacheKey)
 
+  const startRequest = (): Promise<T> => {
+    const inflight = inflightRequests.get(cacheKey)
+    if (inflight) return inflight as Promise<T>
+
+    const request = adminFetchJson<T>(input, init)
+      .then((data) => {
+        const entry: AdminCacheEntry<T> = {
+          data,
+          expiresAt: Date.now() + ttlMs,
+          savedAt: Date.now(),
+        }
+        memoryCache.set(cacheKey, entry)
+        if (persist) writeSessionCache(cacheKey, entry)
+        return data
+      })
+      .catch((error) => {
+        const stale = staleIfError ? readAdminCache<T>(cacheKey, true) : null
+        if (stale) return stale.data
+        throw error
+      })
+      .finally(() => {
+        inflightRequests.delete(cacheKey)
+      })
+
+    inflightRequests.set(cacheKey, request)
+    return request
+  }
+
   if (!options.force) {
     const cached = readAdminCache<T>(cacheKey)
     if (cached) return cached.data
 
     const inflight = inflightRequests.get(cacheKey)
     if (inflight) return inflight as Promise<T>
+
+    const staleWindowMs =
+      options.staleWhileRevalidateMs ?? DEFAULT_ADMIN_STALE_WHILE_REVALIDATE_MS
+    if (staleWindowMs > 0) {
+      const stale = readAdminCache<T>(cacheKey, true)
+      if (stale && Date.now() - stale.savedAt <= staleWindowMs) {
+        void startRequest().catch(() => undefined)
+        return stale.data
+      }
+    }
   }
 
-  const request = adminFetchJson<T>(input, init)
-    .then((data) => {
-      const entry: AdminCacheEntry<T> = {
-        data,
-        expiresAt: Date.now() + ttlMs,
-        savedAt: Date.now(),
-      }
-      memoryCache.set(cacheKey, entry)
-      if (persist) writeSessionCache(cacheKey, entry)
-      return data
-    })
-    .catch((error) => {
-      const stale = staleIfError ? readAdminCache<T>(cacheKey, true) : null
-      if (stale) return stale.data
-      throw error
-    })
-    .finally(() => {
-      inflightRequests.delete(cacheKey)
-    })
-
-  inflightRequests.set(cacheKey, request)
-  return request
+  return startRequest()
 }
 
 export function warmAdminRequestCache(input: string, options: AdminFetchCacheOptions = {}) {

@@ -59,10 +59,9 @@ export function Header() {
                     <Image
                         src="/images/logo.png"
                         alt="Classin Logo"
-                        width={120}
-                        height={32}
+                        width={674}
+                        height={244}
                         className="h-7 md:h-8 w-auto object-contain"
-                        style={{ width: "auto" }}
                         priority
                     />
                 </Link>

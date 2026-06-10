@@ -167,18 +167,24 @@ export async function getPublishedPostBySlug(slug: string): Promise<BlogPost | n
 
 export async function getPostById(id: number): Promise<BlogPost | null> {
 
-  // Supabase에서는 UUID로 검색해야 하므로 전체 검색 후 hash 매칭
-  // 실제로는 _uuid를 사용해야 하지만 호환성을 위해 유지
-  const summary = (await getAllPosts()).find((p) => p.id === id) as
-    | (BlogPost & { _uuid?: string })
-    | undefined;
-  if (!summary?._uuid) return null;
-
+  // Supabase에서는 UUID로 검색해야 하므로 uuid 목록만 받아 hash 매칭
+  // (legacy number id = hashUuidToNumber(uuid) 호환 유지)
   const supabase = await createSupabaseServerClient();
+  const { data: idRows, error: idError } = await supabase
+    .from("blog_posts")
+    .select("id")
+    .is("deleted_at", null);
+  if (idError || !idRows) return null;
+
+  const uuid = (idRows as { id: string }[]).find(
+    (row) => hashUuidToNumber(row.id) === id
+  )?.id;
+  if (!uuid) return null;
+
   const { data, error } = await supabase
     .from("blog_posts")
     .select("*")
-    .eq("id", summary._uuid)
+    .eq("id", uuid)
     .single();
 
   if (error || !data) return null;

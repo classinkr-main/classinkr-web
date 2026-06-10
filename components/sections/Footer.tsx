@@ -17,10 +17,9 @@ export function Footer() {
                         <Image
                             src="/images/logo.png"
                             alt="Classin Logo"
-                            width={120}
-                            height={28}
+                            width={674}
+                            height={244}
                             className="h-7 w-auto mb-4 object-contain"
-                            style={{ width: "auto" }}
                         />
                         <p className="mb-4">다음 세대를 위한 교육 품질 표준화.</p>
                         {/* [NOTE-25] 뉴스레터 구독 영역 */}

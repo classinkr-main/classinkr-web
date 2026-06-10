@@ -229,6 +229,11 @@
     overflow-x: clip;
   }
 
+  /* framer-motion useScroll이 스크롤 컨테이너(html)의 non-static position을 요구한다. */
+  html {
+    position: relative;
+  }
+
   * {
     @apply border-border;
     /* Firefox — 얇은 스크롤바 + 반투명 thumb */
