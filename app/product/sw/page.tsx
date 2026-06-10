@@ -1820,8 +1820,11 @@ export default function ProductPage() {
                                         posterSrc="/images/product/sw/two-way-blackboard.webp"
                                         posterAlt="교사와 학생이 함께 참여하는 Classin 양방향 블랙보드 수업 장면"
                                         className="absolute inset-0"
+                                        imageClassName="object-contain bg-[#eef4f0]"
+                                        videoClassName="scale-100 object-contain blur-0 bg-[#eef4f0]"
                                         sizes="(min-width: 1024px) 512px, 100vw"
                                         loadStrategy="in-view"
+                                        preload="auto"
                                         mediaQuery={VIDEO_BACKDROP_MEDIA_QUERY}
                                     />
                                     <div className="absolute inset-0 bg-gradient-to-t from-[#084734]/18 via-transparent to-white/12" />
