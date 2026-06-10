@@ -13,9 +13,13 @@ import {
 } from "lucide-react"
 import Link from "next/link"
 import Image from "next/image"
-import { useRef, useEffect, useState, useMemo, useCallback } from "react"
+import nextDynamic from "next/dynamic"
+import { useRef, useEffect, useState, useMemo, useCallback, useSyncExternalStore } from "react"
 
-import OnboardingRoadmap from "@/components/product/sw/OnboardingRoadmap"
+import { HeroVideoBackdrop } from "@/components/media/HeroVideoBackdrop"
+
+// below-the-fold 섹션은 dynamic import로 메인 번들에서 분리 (SSR은 유지되어 초기 HTML 동일)
+const OnboardingRoadmap = nextDynamic(() => import("@/components/product/sw/OnboardingRoadmap"))
 
 const CHECKOUT_ENABLED = process.env.NEXT_PUBLIC_SW_CHECKOUT_ENABLED === "true"
 const CHECKOUT_HREF = CHECKOUT_ENABLED ? "/checkout" : "/contact#contact-form"
@@ -29,8 +33,13 @@ const trackCheckoutClick = (location: string) => {
         trackEvent("click_cta", { button: location, page: "/product/sw", destination: "contact_form" })
     }
 }
+// SSR/hydration 불일치 없이 클라이언트 마운트 여부를 읽는다 (effect 내 setState 회피)
+const noopSubscribe = () => () => {}
+const useIsClient = () => useSyncExternalStore(noopSubscribe, () => true, () => false)
+
 const HERO_CLASSROOM_VIDEO_SRC = "/video/쿼드러닝 수업_클립1.mp4"
 const BLACKBOARD_VIDEO_SRC = "/video/클립2.mp4"
+const VIDEO_BACKDROP_MEDIA_QUERY = "(min-width: 768px) and (prefers-reduced-motion: no-preference)"
 
 const LESSON_TOOLS: {
     label: string
@@ -350,10 +359,22 @@ function formatParticleValue(value: number) {
     return value.toFixed(3).replace(/\.?0+$/, "")
 }
 
-function AmbientParticle({ x, size, duration, delayStart }: { x: number; size: number; duration: number; delayStart: number }) {
+function AmbientParticle({
+    x,
+    size,
+    duration,
+    delayStart,
+    className = "",
+}: {
+    x: number
+    size: number
+    duration: number
+    delayStart: number
+    className?: string
+}) {
     return (
         <motion.div
-            className="absolute rounded-full bg-green-300/15 pointer-events-none"
+            className={`absolute rounded-full bg-green-300/15 pointer-events-none ${className}`}
             style={{
                 left: `${formatParticleValue(x)}%`,
                 bottom: "-10%",
@@ -509,9 +530,7 @@ function FinalCTASection() {
     const [phase, setPhase] = useState(0)
     const [slotsDone, setSlotsDone] = useState(false)
     const [liveCount, setLiveCount] = useState(0)
-    const [particleCount] = useState(() =>
-        typeof window !== "undefined" && window.innerWidth < 640 ? 8 : 15
-    )
+    const particlesMounted = useIsClient()
 
     useMotionValueEvent(scrollYProgress, "change", (v) => {
         if (v >= 0.55 && phase < 3) setPhase(3)
@@ -530,7 +549,7 @@ function FinalCTASection() {
         return () => { clearTimeout(timeout); clearInterval(interval) }
     }, [slotsDone])
 
-    const particles = useMemo(() => createParticles(particleCount), [particleCount])
+    const particles = useMemo(() => createParticles(15), [])
 
     const handleLastSlotDone = useCallback(() => setSlotsDone(true), [])
     const displayDigits = useMemo(() => (1560000 + liveCount).toString().split(""), [liveCount])
@@ -543,7 +562,11 @@ function FinalCTASection() {
                 <motion.div className="absolute top-1/2 left-1/2 -translate-x-1/2 -translate-y-1/2 w-[900px] h-[700px] bg-gradient-radial from-green-200/30 via-green-100/10 to-transparent rounded-full blur-3xl" animate={{ x: [0, 30, -20, 0], y: [0, -20, 15, 0] }} transition={{ duration: 20, repeat: Infinity, ease: "easeInOut" }} />
             </motion.div>
             <motion.div className="absolute inset-0 pointer-events-none" initial={{ opacity: 0 }} animate={phase >= 1 ? { opacity: 1 } : {}} transition={{ duration: 1 }}>
-                {particles.map(({ key, ...rest }) => <AmbientParticle key={key} {...rest} />)}
+                {particlesMounted
+                    ? particles.map(({ key, ...rest }) => (
+                        <AmbientParticle key={key} className={key >= 8 ? "hidden sm:block" : ""} {...rest} />
+                    ))
+                    : null}
             </motion.div>
 
             <div className="container mx-auto px-4 text-center max-w-5xl relative z-10">
@@ -1041,7 +1064,7 @@ function HardwareTeaserSection() {
                         <div className="text-center">
                             <div className="relative aspect-video w-full overflow-hidden rounded-2xl border border-white/10 bg-white/5 shadow-[0_24px_70px_rgba(0,0,0,0.28)]">
                                 <Image
-                                    src="/images/smartroon.png"
+                                    src="/images/smartroon.webp"
                                     alt="Classin 소프트웨어와 연동되는 스마트 교실 구성"
                                     fill
                                     className="object-cover"
@@ -1578,15 +1601,13 @@ export default function ProductPage() {
                 HERO — "수업을, 더 수업답게"
             ================================================================ */}
             <section className="relative min-h-[720px] overflow-hidden bg-[#07110d] text-white sm:min-h-[700px] md:h-[calc(100svh-4rem)] md:min-h-[760px] md:max-h-[840px]">
-                <video
-                    className="absolute inset-0 h-full w-full object-cover"
+                <HeroVideoBackdrop
                     src={HERO_CLASSROOM_VIDEO_SRC}
-                    autoPlay
-                    muted
-                    loop
-                    playsInline
-                    preload="metadata"
-                    aria-hidden="true"
+                    posterSrc="/images/product/sw/two-way-blackboard.webp"
+                    className="absolute inset-0"
+                    priority
+                    loadStrategy="immediate"
+                    mediaQuery={VIDEO_BACKDROP_MEDIA_QUERY}
                 />
                 <div className="absolute inset-0 bg-[linear-gradient(180deg,rgba(3,10,8,0.70)_0%,rgba(3,10,8,0.42)_42%,rgba(3,10,8,0.78)_100%)] pointer-events-none" />
                 <div className="absolute inset-0 bg-[radial-gradient(circle_at_center,rgba(3,10,8,0.10)_0%,rgba(3,10,8,0.50)_78%)] pointer-events-none" />
@@ -1794,15 +1815,14 @@ export default function ProductPage() {
                         <div className="flex-1 w-full max-w-lg">
                             <motion.div {...fadeUp} className="relative">
                                 <div className="relative aspect-[3/2] overflow-hidden rounded-3xl border border-slate-200/80 bg-white shadow-[0_24px_60px_rgba(15,23,42,0.14)]">
-                                    <video
-                                        className="absolute inset-0 h-full w-full object-cover"
+                                    <HeroVideoBackdrop
                                         src={BLACKBOARD_VIDEO_SRC}
-                                        autoPlay
-                                        muted
-                                        loop
-                                        playsInline
-                                        preload="metadata"
-                                        aria-label="교사와 학생이 함께 참여하는 Classin 양방향 블랙보드 수업 장면"
+                                        posterSrc="/images/product/sw/two-way-blackboard.webp"
+                                        posterAlt="교사와 학생이 함께 참여하는 Classin 양방향 블랙보드 수업 장면"
+                                        className="absolute inset-0"
+                                        sizes="(min-width: 1024px) 512px, 100vw"
+                                        loadStrategy="in-view"
+                                        mediaQuery={VIDEO_BACKDROP_MEDIA_QUERY}
                                     />
                                     <div className="absolute inset-0 bg-gradient-to-t from-[#084734]/18 via-transparent to-white/12" />
                                     <div className="absolute left-5 top-5 rounded-full border border-white/70 bg-white/88 px-3 py-1.5 text-xs font-semibold text-[#084734] shadow-[0_10px_30px_rgba(15,23,42,0.08)] backdrop-blur-sm">

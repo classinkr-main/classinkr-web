@@ -6,15 +6,14 @@ import { DemoModal } from "./DemoModal"
 import { motion, useScroll, useTransform } from "framer-motion"
 import { trackEvent } from "@/lib/analytics"
 import Image from "next/image"
-import { useEffect, useRef, useState } from "react"
+import { useRef } from "react"
+import { HeroVideoBackdrop } from "@/components/media/HeroVideoBackdrop"
 
 const HERO_VIDEO_MEDIA_QUERY = "(min-width: 768px) and (prefers-reduced-motion: no-preference)"
 
 export function Hero() {
     const heroRef = useRef<HTMLElement>(null)
     const dashboardRef = useRef<HTMLElement>(null)
-    const [showHeroVideo, setShowHeroVideo] = useState(false)
-    const [canLoadHeroVideo, setCanLoadHeroVideo] = useState(false)
     const { scrollYProgress } = useScroll({
         target: heroRef,
         offset: ["start start", "end start"],
@@ -27,80 +26,27 @@ export function Hero() {
     const empoweringY = useTransform(dashboardScrollYProgress, [0, 1], ["48px", "-48px"])
     const empoweringOpacity = useTransform(dashboardScrollYProgress, [0, 0.35, 0.8], [0.34, 0.64, 0.28])
 
-    useEffect(() => {
-        const mediaQuery = window.matchMedia(HERO_VIDEO_MEDIA_QUERY)
-        const w = window as Window & {
-            requestIdleCallback?: (callback: () => void, options?: { timeout: number }) => number
-            cancelIdleCallback?: (handle: number) => void
-        }
-        let idleHandle: number | undefined
-        let timeoutHandle: number | undefined
-        let observer: IntersectionObserver | undefined
-
-        const scheduleVideo = () => {
-            if (!mediaQuery.matches || canLoadHeroVideo) return
-
-            const markReady = () => setCanLoadHeroVideo(true)
-
-            if (w.requestIdleCallback) {
-                idleHandle = w.requestIdleCallback(markReady, { timeout: 2200 })
-            } else {
-                timeoutHandle = window.setTimeout(markReady, 1400)
-            }
-        }
-
-        const updateVideoVisibility = () => {
-            setShowHeroVideo(mediaQuery.matches && canLoadHeroVideo)
-            if (mediaQuery.matches) scheduleVideo()
-        }
-
-        if ("IntersectionObserver" in window && heroRef.current) {
-            observer = new IntersectionObserver(
-                ([entry]) => {
-                    if (entry?.isIntersecting) scheduleVideo()
-                },
-                { rootMargin: "240px" }
-            )
-            observer.observe(heroRef.current)
-        } else {
-            scheduleVideo()
-        }
-
-        updateVideoVisibility()
-        mediaQuery.addEventListener("change", updateVideoVisibility)
-
-        return () => {
-            mediaQuery.removeEventListener("change", updateVideoVisibility)
-            observer?.disconnect()
-            if (idleHandle !== undefined) w.cancelIdleCallback?.(idleHandle)
-            if (timeoutHandle !== undefined) window.clearTimeout(timeoutHandle)
-        }
-    }, [canLoadHeroVideo])
-
     return (
         <div className="relative bg-[#FAFAF8] pt-[76px] md:pt-20">
             <section
                 ref={heroRef}
                 className="sticky top-[76px] z-0 isolate h-[calc(100svh-76px)] overflow-hidden bg-[#0A1511] md:top-20 md:h-[calc(100svh-5rem)]"
             >
-                {showHeroVideo && (
-                    <motion.div
-                        className="absolute inset-0 z-0 hidden h-[calc(100%+120px)] md:block pointer-events-none overflow-hidden"
-                        style={{ y: videoY }}
-                    >
-                        <video
-                            className="h-full w-full object-cover saturate-[0.98] contrast-[1.08] brightness-[0.84]"
-                            autoPlay
-                            muted
-                            loop
-                            playsInline
-                            preload="none"
-                            aria-hidden="true"
-                        >
-                            <source src="/video/home-hero.mp4" type="video/mp4" />
-                        </video>
-                    </motion.div>
-                )}
+                <motion.div
+                    className="absolute inset-0 z-0 hidden h-[calc(100%+120px)] md:block pointer-events-none overflow-hidden"
+                    style={{ y: videoY }}
+                >
+                    <HeroVideoBackdrop
+                        src="/video/home-hero.mp4"
+                        posterSrc="/images/hero-dashboard.webp"
+                        className="h-full w-full"
+                        imageClassName="saturate-[0.98] contrast-[1.08] brightness-[0.84]"
+                        videoClassName="saturate-[0.98] contrast-[1.08] brightness-[0.84]"
+                        priority
+                        loadStrategy="idle"
+                        mediaQuery={HERO_VIDEO_MEDIA_QUERY}
+                    />
+                </motion.div>
 
                 <div className="absolute inset-0 z-[1] bg-[rgba(3,13,10,0.42)] md:bg-[rgba(3,13,10,0.36)]" />
                 <div className="absolute inset-0 z-[2] bg-[radial-gradient(circle_at_50%_36%,rgba(255,255,255,0.16),transparent_34%),linear-gradient(to_bottom,rgba(3,13,10,0.18),rgba(3,13,10,0.26)_55%,rgba(3,13,10,0.58))]" />
@@ -221,7 +167,7 @@ export function Hero() {
                     >
                         <div className="relative rounded-xl overflow-hidden bg-[#111110] border border-[rgba(0,0,0,0.08)] flex items-center justify-center group-hover:shadow-[0_0_60px_rgba(8,71,52,0.12)] transition-shadow duration-700">
                             <Image
-                                src="/images/hero-dashboard.png"
+                                src="/images/hero-dashboard.webp"
                                 alt="Classin Education Dashboard"
                                 width={1200}
                                 height={675}

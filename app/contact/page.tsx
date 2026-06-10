@@ -129,6 +129,7 @@ export default function ContactPage() {
                 message,
                 marketingConsent: formData.get("marketing-consent") === "on",
                 eventSlug: selectedEvent?.slug ?? undefined,
+                website: (formData.get("website") as string) || undefined,
             })
 
             if (Array.isArray(data.warnings) && data.warnings.length > 0) {
@@ -282,6 +283,11 @@ export default function ContactPage() {
                                     </div>
                                 ) : (
                                 <form ref={formRef} onSubmit={handleSubmit} className="w-full space-y-6 md:space-y-8">
+                                {/* 스팸 봇 honeypot — 사용자에게 보이지 않으며 값이 채워지면 서버가 무시 */}
+                                <div aria-hidden="true" className="absolute -left-[9999px] top-0 h-px w-px overflow-hidden">
+                                    <label htmlFor="contact-website">Website</label>
+                                    <input id="contact-website" name="website" type="text" tabIndex={-1} autoComplete="off" />
+                                </div>
                                 <div className="w-full grid grid-cols-1 md:grid-cols-2 gap-4">
                                     <div className="space-y-3 w-full">
                                         <Label htmlFor="org-name" className="text-slate-700 font-bold ml-1">학원명 / 기관명 <span className="text-[#084734]">*</span></Label>

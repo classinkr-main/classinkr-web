@@ -80,7 +80,7 @@ export function KeyUseCases() {
                                 imageSrc="/images/use-cases/generated/admin-dashboard-source-1.png"
                                 imageAlt="관리자 출결 대시보드 화면"
                                 imageObjectPosition="48% 42%"
-                                overlayImageSrc="/images/use-cases/generated/admin-dashboard-source-2.png"
+                                overlayImageSrc="/images/use-cases/generated/admin-dashboard-source-2.webp"
                                 overlayImageAlt="관리자 상세 분석 화면"
                                 overlayImageClassName="w-[40%] min-w-[8rem] right-[-2%] top-[4%] md:w-[42%] md:right-[-2%] md:top-[2%] rotate-[4deg]"
                                 overlayImageObjectPosition="50% 50%"

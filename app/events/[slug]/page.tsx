@@ -11,6 +11,8 @@ import {
   getCachedPublicEventBySlug,
   listCachedPublicEventSlugs,
 } from "@/lib/repositories/public-events"
+import { JsonLd } from "@/components/seo/JsonLd"
+import { createBreadcrumbJsonLd, createEventJsonLd, toAbsoluteUrl } from "@/lib/seo"
 
 export const revalidate = 3600
 
@@ -43,12 +45,15 @@ export async function generateMetadata({ params }: EventDetailPageProps): Promis
   const slug = decodeEventSlugParam(rawSlug)
   const event = await readPublicEventBySlug(slug)
   if (!event) return { title: "행사를 찾을 수 없습니다" }
+  const canonical = toAbsoluteUrl(`/events/${event.slug ?? slug}`)
   return {
     title: event.title,
     description: event.description ?? undefined,
+    alternates: { canonical },
     openGraph: {
       title: event.title,
       description: event.description ?? undefined,
+      url: canonical,
       ...(event.imageUrl ? { images: [{ url: event.imageUrl }] } : {}),
     },
   }
@@ -69,8 +74,28 @@ export default async function EventDetailPage({ params }: EventDetailPageProps) 
       ? defaultEventCtaHref
       : sanitizedCtaHref
 
+  const eventPath = `/events/${event.slug ?? slug}`
+
   return (
     <div className="min-h-screen bg-[#FAFAF8] text-[#111110]">
+      <JsonLd
+        data={[
+          createEventJsonLd({
+            path: eventPath,
+            name: event.title,
+            description: event.description ?? undefined,
+            startDate: event.startsAt,
+            endDate: event.endsAt ?? undefined,
+            locationName: event.location ?? undefined,
+            imageUrl: event.imageUrl ?? undefined,
+          }),
+          createBreadcrumbJsonLd([
+            { name: "홈", path: "/" },
+            { name: "행사·프로모션", path: "/events" },
+            { name: event.title, path: eventPath },
+          ]),
+        ]}
+      />
       {/* Header */}
       <section className="px-4 pb-10 pt-28 sm:px-6 md:pt-40">
         <div className="mx-auto max-w-[1100px]">

@@ -14,17 +14,24 @@ const supabaseWs = supabaseHost ? `wss://${supabaseHost}` : "wss://*.supabase.co
 const developmentScriptPolicy =
   process.env.NODE_ENV === "production" ? "" : " 'unsafe-eval'";
 
+// script-src의 'unsafe-inline'은 GTM·Meta Pixel의 인라인 부트스트랩 때문에 필요하다.
+// nonce 기반 CSP로 옮기면 모든 공개 페이지가 동적 렌더링으로 강등되어 ISR/SSG 캐싱을 잃으므로
+// (마케팅 사이트 특성상 손해가 더 큼) 의도적으로 유지한다. 외부 도메인 추가 시 용도를 주석으로 남길 것.
 const contentSecurityPolicy = [
   "default-src 'self'",
   "base-uri 'self'",
   "object-src 'none'",
   "frame-ancestors 'none'",
   "form-action 'self'",
+  // GTM/GA, Meta Pixel, 카카오(daumcdn), 채널톡, 토스페이먼츠 스크립트
   `script-src 'self' 'unsafe-inline'${developmentScriptPolicy} blob: https://www.googletagmanager.com https://www.google-analytics.com https://connect.facebook.net https://t1.daumcdn.net https://*.daumcdn.net https://cdn.channel.io https://js.tosspayments.com`,
   "style-src 'self' 'unsafe-inline' https://cdn.jsdelivr.net https://fonts.googleapis.com",
   "font-src 'self' data: https://cdn.jsdelivr.net https://fonts.gstatic.com",
+  // unsplash(블로그 이미지), Supabase Storage, 픽셀/지도/카카오 이미지
   `img-src 'self' data: blob: https://images.unsplash.com ${supabaseHttp} https://www.facebook.com https://*.kakao.com https://*.daumcdn.net https://www.googletagmanager.com https://maps.google.com https://www.google.com`,
+  // Supabase API/Realtime, GA 수집, 채널톡 웹소켓, 토스 결제
   `connect-src 'self' ${supabaseHttp} ${supabaseWs} https://www.google-analytics.com https://region1.google-analytics.com https://www.facebook.com https://*.kakao.com https://*.channel.io wss://*.channel.io https://*.tosspayments.com https://cdn.jsdelivr.net`,
+  // GTM 미리보기, 구글 지도 embed, 토스 결제창
   "frame-src 'self' https://www.googletagmanager.com https://maps.google.com https://www.google.com https://*.tosspayments.com https://*.toss.im",
   "media-src 'self' data: blob:",
   "worker-src 'self' blob:",

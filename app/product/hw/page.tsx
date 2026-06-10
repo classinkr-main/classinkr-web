@@ -12,20 +12,22 @@ import {
 } from "lucide-react"
 import Image from "next/image"
 import Link from "next/link"
+import dynamic from "next/dynamic"
 import { Fragment, useRef, useState } from "react"
 
-import OpeningStatement from "@/components/product/hw/OpeningStatement"
-import PainPointsV2 from "@/components/product/hw/PainPointsV2"
-import AllInOneStatement from "@/components/product/hw/AllInOneStatement"
-import BigBackdropImage from "@/components/product/hw/BigBackdropImage"
-import DesignDetails from "@/components/product/hw/DesignDetails"
-import LatencyProof from "@/components/product/hw/LatencyProof"
-import AICameraSection from "@/components/product/hw/AICameraSection"
-import SizeChooser from "@/components/product/hw/SizeChooser"
-import ValueAnchor from "@/components/product/hw/ValueAnchor"
-import ClassroomStudioSection from "@/components/product/hw/ClassroomStudioSection"
-import AfterClassSection from "@/components/product/hw/AfterClassSection"
-import OnboardingRoadmap from "@/components/product/hw/OnboardingRoadmap"
+// below-the-fold 섹션은 dynamic import로 메인 번들에서 분리 (SSR은 유지되어 초기 HTML 동일)
+const OpeningStatement = dynamic(() => import("@/components/product/hw/OpeningStatement"))
+const PainPointsV2 = dynamic(() => import("@/components/product/hw/PainPointsV2"))
+const AllInOneStatement = dynamic(() => import("@/components/product/hw/AllInOneStatement"))
+const BigBackdropImage = dynamic(() => import("@/components/product/hw/BigBackdropImage"))
+const DesignDetails = dynamic(() => import("@/components/product/hw/DesignDetails"))
+const LatencyProof = dynamic(() => import("@/components/product/hw/LatencyProof"))
+const AICameraSection = dynamic(() => import("@/components/product/hw/AICameraSection"))
+const SizeChooser = dynamic(() => import("@/components/product/hw/SizeChooser"))
+const ValueAnchor = dynamic(() => import("@/components/product/hw/ValueAnchor"))
+const ClassroomStudioSection = dynamic(() => import("@/components/product/hw/ClassroomStudioSection"))
+const AfterClassSection = dynamic(() => import("@/components/product/hw/AfterClassSection"))
+const OnboardingRoadmap = dynamic(() => import("@/components/product/hw/OnboardingRoadmap"))
 
 /* ── Animation helpers ───────────────────────────────────────────── */
 const fadeUp = {
@@ -276,7 +278,7 @@ type FeatureTab = {
 const featureTabs: FeatureTab[] = [
     {
         label: "판서",
-        image: "/images/product/hw/features/feature-writing.png",
+        image: "/images/product/hw/features/feature-writing.webp",
         imageAlt: "50페이지 판서 기능 시각화",
         imageFit: "contain",
         imagePanelClassName: "bg-[#05080C]",
@@ -292,7 +294,7 @@ const featureTabs: FeatureTab[] = [
     },
     {
         label: "디스플레이",
-        image: "/images/product/hw/features/feature-display.png",
+        image: "/images/product/hw/features/feature-display.webp",
         imageAlt: "클래스인 보드 디스플레이 화질 이미지",
         badge: "178° 광시야각",
         title: "어디서 봐도 선명한 화면",
@@ -304,7 +306,7 @@ const featureTabs: FeatureTab[] = [
     },
     {
         label: "인터랙티브 수업",
-        image: "/images/product/hw/features/feature-interactive.jpg",
+        image: "/images/product/hw/features/feature-interactive.webp",
         imageAlt: "인터랙티브 수업 현장 사진",
         badge: "30+ 수업 도구",
         title: "타이머부터 선착순 퀴즈까지, 생동감 있는 인터랙티브 수업",
@@ -316,7 +318,7 @@ const featureTabs: FeatureTab[] = [
     },
     {
         label: "AI 카메라",
-        image: "/images/product/hw/camera/camera-dual-premium-blended.png",
+        image: "/images/product/hw/camera/camera-dual-premium-blended.webp",
         imageAlt: "Classin Board AI 트래킹 카메라 클로즈업",
         imageFit: "contain",
         imagePanelClassName: "bg-[#050708]",
@@ -332,7 +334,7 @@ const featureTabs: FeatureTab[] = [
     },
     {
         label: "SW 생태계",
-        image: "/images/product/hw/features/feature-ecosystem.png",
+        image: "/images/product/hw/features/feature-ecosystem.webp",
         imageAlt: "클래스인 소프트웨어 생태계 학습 장면",
         badge: "LMS 완전 통합",
         title: "수업 이후 운영까지 이어지는 Classin 소프트웨어",
@@ -460,7 +462,7 @@ function ProductAnatomySection() {
                     {/* Side profile image */}
                     <motion.div {...fadeUp} className="rounded-3xl overflow-hidden shadow-xl bg-slate-50">
                         <Image
-                            src="/images/product/hw/board/board-side-profile.png"
+                            src="/images/product/hw/board/board-side-profile.webp"
                             alt="Classin Board 측면 슬림 프로파일 — 110mm"
                             width={800}
                             height={600}
@@ -703,19 +705,19 @@ const spaceScenarios = [
         model: "S110", size: '110"', badge: "FLAGSHIP",
         tag: "강당 · 대형 강의실",
         story: "300명이 앉은 강당에서도 맨 뒷자리가 선명합니다. 110인치 화면이 공간을 압도하며, 교사 한 명의 판서가 전석에 전달됩니다. 대규모 강의, 특강, 입시 설명회에 최적.",
-        image: `/images/product/hw/spaces/space-s110-hall.png?v=${spaceImageVersion}`,
+        image: `/images/product/hw/spaces/space-s110-hall.webp?v=${spaceImageVersion}`,
     },
     {
         model: "S86", size: '86"', badge: "BEST",
         tag: "일반 교실 · 회의실",
         story: "30명 담임반의 하루 6교시를 완주하는 기준 모델. 가장 많은 교실 환경에 최적화된 사이즈. 8배열 마이크가 교실 소음 속에서도 교사 음성을 또렷이 전달합니다.",
-        image: `/images/product/hw/spaces/space-s86-classroom.png?v=${spaceImageVersion}`,
+        image: `/images/product/hw/spaces/space-s86-classroom.webp?v=${spaceImageVersion}`,
     },
     {
         model: "S75", size: '75"', badge: "",
         tag: "세미나 · 중형 회의실",
         story: "20명 내외의 세미나실과 중형 회의실에 딱 맞는 사이즈. 임원 PT, 팀 회의, 교사 연수에서 화이트보드를 완전히 대체합니다.",
-        image: `/images/product/hw/spaces/space-s75-seminar.png?v=${spaceImageVersion}`,
+        image: `/images/product/hw/spaces/space-s75-seminar.webp?v=${spaceImageVersion}`,
     },
 ]
 
@@ -874,7 +876,7 @@ export default function ProductHWPage() {
                             className="mt-16 rounded-3xl overflow-hidden shadow-2xl"
                         >
                             <Image
-                                src="/images/product/hw/hero/hero-board-stand.png"
+                                src="/images/product/hw/hero/hero-board-stand.webp"
                                 alt="Classin Board S Series — 스탠드형 전자칠판"
                                 width={1200}
                                 height={800}
@@ -1009,7 +1011,7 @@ export default function ProductHWPage() {
                     <motion.div {...fadeUp} className="relative">
                         <div className="rounded-3xl overflow-hidden shadow-2xl">
                             <Image
-                                src="/images/product/hw/writing/writing-experience-classroom.png"
+                                src="/images/product/hw/writing/writing-experience-classroom.webp"
                                 alt="교사가 Classin Board에 수학 문제를 판서하는 모습"
                                 width={1661}
                                 height={947}
@@ -1051,7 +1053,7 @@ export default function ProductHWPage() {
                 <motion.div {...fadeUp} className="relative">
                     <div className="rounded-3xl overflow-hidden shadow-2xl">
                         <Image
-                            src="/images/product/hw/features/feature-display.png"
+                            src="/images/product/hw/features/feature-display.webp"
                             alt="Classin Board에 블랙홀 우주 영상이 선명하게 표시된 장면"
                             width={1536}
                             height={1024}
@@ -1127,7 +1129,7 @@ export default function ProductHWPage() {
                 eyebrow="교실의 경계를 넘어서"
                 statement={<>시간과 지역을 넘어서<br />교육의 손길이 닿을 수 있도록</>}
                 sub="Classin은 지역의 한계를 넘어서 교육의 표준화와 시스템화를 돕습니다."
-                image="/images/product/hw/spaces/space-classroom-real.png"
+                image="/images/product/hw/spaces/space-classroom-real.webp"
                 contentClassName="font-bold"
                 dark
             />
@@ -1206,7 +1208,7 @@ export default function ProductHWPage() {
                     {/* Board bezel detail hero image */}
                     <motion.div {...fadeUp} className="max-w-3xl mx-auto mb-14 rounded-3xl overflow-hidden shadow-2xl">
                         <Image
-                            src="/images/product/hw/board/board-bezel-detail.png?v=20260429-1834"
+                            src="/images/product/hw/board/board-bezel-detail.webp?v=20260429-1834"
                             alt="Classin Board 프리미엄 브러시드 메탈 베젤 디테일"
                             width={900}
                             height={500}

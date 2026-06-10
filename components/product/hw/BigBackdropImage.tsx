@@ -4,7 +4,7 @@ import Image from "next/image"
 import { useRef } from "react"
 import { motion, useScroll, useTransform } from "framer-motion"
 
-const bezelDetailImage = "/images/product/hw/board/board-bezel-detail.png?v=20260429-1834"
+const bezelDetailImage = "/images/product/hw/board/board-bezel-detail.webp?v=20260429-1834"
 
 export default function BigBackdropImage() {
   const sectionRef = useRef<HTMLElement>(null)

@@ -162,6 +162,78 @@ export function createFaqJsonLd(items: Array<{ question: string; answer: string 
   }
 }
 
+export function createArticleJsonLd({
+  path,
+  title,
+  description,
+  imageUrl,
+  datePublished,
+  dateModified,
+  authorName,
+}: {
+  path: string
+  title: string
+  description: string
+  imageUrl?: string
+  datePublished?: string
+  dateModified?: string
+  authorName?: string
+}): JsonLdNode {
+  return {
+    "@context": "https://schema.org",
+    "@type": "Article",
+    "@id": `${toAbsoluteUrl(path)}#article`,
+    mainEntityOfPage: toAbsoluteUrl(path),
+    headline: title,
+    description,
+    inLanguage: "ko-KR",
+    ...(imageUrl ? { image: toAbsoluteUrl(imageUrl) } : {}),
+    ...(datePublished ? { datePublished } : {}),
+    ...(dateModified ? { dateModified } : {}),
+    ...(authorName ? { author: { "@type": "Person", name: authorName } } : {}),
+    publisher: { "@id": ORGANIZATION_ID },
+  }
+}
+
+export function createEventJsonLd({
+  path,
+  name,
+  description,
+  startDate,
+  endDate,
+  locationName,
+  imageUrl,
+}: {
+  path: string
+  name: string
+  description?: string
+  startDate: string
+  endDate?: string
+  locationName?: string
+  imageUrl?: string
+}): JsonLdNode {
+  // 장소가 있으면 오프라인 행사, 없으면 온라인(웨비나 등)으로 표기
+  return {
+    "@context": "https://schema.org",
+    "@type": "Event",
+    "@id": `${toAbsoluteUrl(path)}#event`,
+    name,
+    url: toAbsoluteUrl(path),
+    ...(description ? { description } : {}),
+    startDate,
+    ...(endDate ? { endDate } : {}),
+    inLanguage: "ko-KR",
+    eventAttendanceMode: locationName
+      ? "https://schema.org/OfflineEventAttendanceMode"
+      : "https://schema.org/OnlineEventAttendanceMode",
+    location: locationName
+      ? { "@type": "Place", name: locationName, address: locationName }
+      : { "@type": "VirtualLocation", url: toAbsoluteUrl(path) },
+    ...(imageUrl ? { image: toAbsoluteUrl(imageUrl) } : {}),
+    organizer: { "@id": ORGANIZATION_ID },
+  }
+}
+
 export function createSoftwareProductJsonLd(): JsonLdNode {
   return {
     "@context": "https://schema.org",

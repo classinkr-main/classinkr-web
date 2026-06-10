@@ -31,7 +31,7 @@ export async function POST(req: NextRequest) {
     }
 
     const post = await createPost(body)
-    // 諛쒗뻾 ?곹깭硫?釉붾줈洹??섏씠吏 罹먯떆 利됱떆 臾댄슚??
+    // 발행 상태면 블로그 페이지 캐시를 즉시 무효화
     if (post.status === "published") {
       revalidatePath("/blog")
     }

@@ -12,6 +12,14 @@ import {
 } from "@/lib/repositories/blog"
 import { extractMarkdownHeadings } from "@/lib/blog-markdown"
 import { sanitizePublicUrl } from "@/lib/safe-public-url"
+import { JsonLd } from "@/components/seo/JsonLd"
+import {
+  createArticleJsonLd,
+  createBreadcrumbJsonLd,
+  toAbsoluteUrl,
+  DEFAULT_OG_IMAGE_PATH,
+  DEFAULT_TWITTER_IMAGE_PATH,
+} from "@/lib/seo"
 
 export const revalidate = 3600 // 1시간마다 재생성
 
@@ -31,21 +39,27 @@ export async function generateMetadata({
       description: "요청하신 블로그 글을 찾을 수 없습니다.",
     }
   }
+  // 어드민에서 입력한 SEO 전용 필드 우선, 없으면 본문 제목/요약 사용
+  const metaTitle = post.seoTitle?.trim() || post.title
+  const metaDescription = post.seoDescription?.trim() || post.excerpt
   const ogImage = post.heroImageUrl || post.imageUrl || undefined
+  const canonical = toAbsoluteUrl(`/blog/${post.slug}`)
   return {
-    title: post.title,
-    description: post.excerpt,
+    title: metaTitle,
+    description: metaDescription,
+    alternates: { canonical },
     openGraph: {
-      title: post.title,
-      description: post.excerpt,
+      title: metaTitle,
+      description: metaDescription,
       type: "article",
-      ...(ogImage ? { images: [{ url: ogImage }] } : {}),
+      url: canonical,
+      images: [{ url: ogImage ?? toAbsoluteUrl(DEFAULT_OG_IMAGE_PATH) }],
     },
     twitter: {
       card: "summary_large_image",
-      title: post.title,
-      description: post.excerpt,
-      ...(ogImage ? { images: [ogImage] } : {}),
+      title: metaTitle,
+      description: metaDescription,
+      images: [ogImage ?? toAbsoluteUrl(DEFAULT_TWITTER_IMAGE_PATH)],
     },
   }
 }
@@ -75,6 +89,24 @@ export default async function BlogDetailPage({
 
   return (
     <div className="min-h-screen bg-[#FAFAF8] text-[#111110]">
+      <JsonLd
+        data={[
+          createArticleJsonLd({
+            path: `/blog/${post.slug}`,
+            title: post.title,
+            description: post.excerpt,
+            imageUrl: post.heroImageUrl || post.imageUrl || undefined,
+            datePublished: post.publishedAt,
+            dateModified: post.updatedAt,
+            authorName: post.author,
+          }),
+          createBreadcrumbJsonLd([
+            { name: "홈", path: "/" },
+            { name: "블로그", path: "/blog" },
+            { name: post.title, path: `/blog/${post.slug}` },
+          ]),
+        ]}
+      />
       <section className="px-4 pb-10 pt-28 sm:px-6 md:pt-40">
         <div className="mx-auto max-w-[1200px]">
           <Link

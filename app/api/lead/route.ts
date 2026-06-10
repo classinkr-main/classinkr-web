@@ -1,15 +1,27 @@
 import { NextRequest, NextResponse } from "next/server"
 import { checkRateLimit, getClientIp } from "@/lib/server/rate-limit"
 import { submitLeadCapture } from "@/lib/server/lead-capture"
+import { isCrossOriginRequest } from "@/lib/server/same-origin"
 
 export const runtime = "nodejs"
 
 export async function POST(req: NextRequest) {
   try {
+    if (isCrossOriginRequest(req)) {
+      return NextResponse.json(
+        { ok: false, error: "허용되지 않은 요청 출처입니다." },
+        { status: 403 }
+      )
+    }
+
     const ip = getClientIp(req)
-    const { allowed } = checkRateLimit(ip, "lead", { windowMs: 60_000, max: 5 })
+    const { allowed, resetAt } = checkRateLimit(ip, "lead", { windowMs: 60_000, max: 5 })
     if (!allowed) {
-      return NextResponse.json({ error: "요청이 많습니다. 잠시 후 다시 시도해 주세요." }, { status: 429 })
+      const retryAfterSeconds = Math.max(1, Math.ceil((resetAt - Date.now()) / 1000))
+      return NextResponse.json(
+        { error: "요청이 많습니다. 잠시 후 다시 시도해 주세요." },
+        { status: 429, headers: { "Retry-After": String(retryAfterSeconds) } }
+      )
     }
 
     const body = await req.json().catch(() => null)
