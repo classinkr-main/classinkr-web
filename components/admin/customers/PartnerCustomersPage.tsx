@@ -1,6 +1,6 @@
 "use client"
 
-import { useCallback, useEffect, useState } from "react"
+import { useCallback, useEffect, useMemo, useState } from "react"
 import { AlertTriangle, CheckCircle2, Link2, Plus, RefreshCw, Search, ServerCog, StickyNote } from "lucide-react"
 
 import { CustomerDetailSlideOver } from "@/components/portal/CustomerDetailSlideOver"
@@ -101,6 +101,60 @@ const QUICK_FILTER_LABEL: Record<CustomerQuickFilter, string> = {
   review: "소스 검토",
 }
 
+const ATTENTION_ORDER = { high: 0, medium: 1, low: 2 } as const
+
+function needsSourceReview(item: CustomerListItem) {
+  const coverage = item.crm_coverage
+  return Boolean(
+    coverage &&
+      (coverage.status === "needs_review" ||
+        coverage.status === "error" ||
+        coverage.discrepancies.length > 0 ||
+        coverage.candidate_link_count > 0)
+  )
+}
+
+function matchesCustomerSearch(item: CustomerListItem, normalizedSearch: string) {
+  if (!normalizedSearch) return true
+  const { customer, crm_coverage } = item
+  const searchableValues = [
+    customer.name,
+    customer.contact_name,
+    customer.email,
+    customer.phone,
+    customer.business_number,
+    customer.campus_name,
+    customer.region_label,
+    customer.address,
+    customer.notes,
+    ...(crm_coverage?.warnings ?? []),
+    ...(crm_coverage?.source_links ?? []).flatMap((link) => [
+      link.source_label,
+      link.source_record_key,
+      link.source_system,
+    ]),
+    ...(crm_coverage?.external_records ?? []).flatMap((record) => [
+      record.display_name,
+      record.owner_name,
+      record.status,
+      record.object_api_key,
+    ]),
+  ]
+
+  return searchableValues.some(
+    (value) => typeof value === "string" && value.toLowerCase().includes(normalizedSearch)
+  )
+}
+
+function matchesCustomerQuickFilter(item: CustomerListItem, quickFilter: CustomerQuickFilter) {
+  if (quickFilter === "all") return true
+  if (quickFilter === "memo") return Boolean(item.customer.notes?.trim())
+  if (quickFilter === "attention") return item.insight?.attention_level === "high"
+  if (quickFilter === "outstanding") return (item.summary?.outstanding_amount ?? 0) > 0
+  if (quickFilter === "review") return needsSourceReview(item)
+  return true
+}
+
 type PartnerCustomersPageProps = {
   allowCreate?: boolean
   allowEdit?: boolean
@@ -184,88 +238,60 @@ export function PartnerCustomersPage({
     updateCustomerParam(null)
   }
 
+  const handleCustomerUpdated = useCallback((customer: Customer) => {
+    setCustomers((current) =>
+      current.map((item) =>
+        item.customer.id === customer.id
+          ? {
+              ...item,
+              customer: {
+                ...item.customer,
+                ...customer,
+              },
+            }
+          : item
+      )
+    )
+  }, [])
+
   const normalizedSearch = search.trim().toLowerCase()
-  const matchesSearch = (item: CustomerListItem) => {
-    if (!normalizedSearch) return true
-    const { customer, crm_coverage } = item
-    const searchableValues = [
-      customer.name,
-      customer.contact_name,
-      customer.email,
-      customer.phone,
-      customer.business_number,
-      customer.campus_name,
-      customer.region_label,
-      customer.address,
-      customer.notes,
-      ...(crm_coverage?.warnings ?? []),
-      ...(crm_coverage?.source_links ?? []).flatMap((link) => [
-        link.source_label,
-        link.source_record_key,
-        link.source_system,
-      ]),
-      ...(crm_coverage?.external_records ?? []).flatMap((record) => [
-        record.display_name,
-        record.owner_name,
-        record.status,
-        record.object_api_key,
-      ]),
-    ]
+  const quickFilterCounts = useMemo<Record<CustomerQuickFilter, number>>(
+    () => ({
+      all: customers.length,
+      memo: customers.filter((item) => Boolean(item.customer.notes?.trim())).length,
+      attention: customers.filter((item) => item.insight?.attention_level === "high").length,
+      outstanding: customers.filter((item) => (item.summary?.outstanding_amount ?? 0) > 0).length,
+      review: customers.filter(needsSourceReview).length,
+    }),
+    [customers]
+  )
 
-    return searchableValues.some((value) => value?.toLowerCase().includes(normalizedSearch))
-  }
+  const filtered = useMemo(
+    () =>
+      customers
+        .filter(
+          (item) =>
+            matchesCustomerSearch(item, normalizedSearch) &&
+            matchesCustomerQuickFilter(item, quickFilter)
+        )
+        .slice()
+        .sort((left, right) => {
+          const leftAttention = ATTENTION_ORDER[left.insight?.attention_level ?? "low"]
+          const rightAttention = ATTENTION_ORDER[right.insight?.attention_level ?? "low"]
+          if (leftAttention !== rightAttention) return leftAttention - rightAttention
 
-  const matchesQuickFilter = (item: CustomerListItem) => {
-    if (quickFilter === "all") return true
-    if (quickFilter === "memo") return Boolean(item.customer.notes?.trim())
-    if (quickFilter === "attention") return item.insight?.attention_level === "high"
-    if (quickFilter === "outstanding") return (item.summary?.outstanding_amount ?? 0) > 0
-    if (quickFilter === "review") {
-      const coverage = item.crm_coverage
-      return Boolean(
-        coverage &&
-          (coverage.status === "needs_review" ||
-            coverage.status === "error" ||
-            coverage.discrepancies.length > 0 ||
-            coverage.candidate_link_count > 0)
-      )
-    }
-    return true
-  }
+          const leftNext = left.insight?.next_event_at
+            ? new Date(left.insight.next_event_at).getTime()
+            : Number.POSITIVE_INFINITY
+          const rightNext = right.insight?.next_event_at
+            ? new Date(right.insight.next_event_at).getTime()
+            : Number.POSITIVE_INFINITY
+          if (leftNext !== rightNext) return leftNext - rightNext
 
-  const quickFilterCounts: Record<CustomerQuickFilter, number> = {
-    all: customers.length,
-    memo: customers.filter((item) => Boolean(item.customer.notes?.trim())).length,
-    attention: customers.filter((item) => item.insight?.attention_level === "high").length,
-    outstanding: customers.filter((item) => (item.summary?.outstanding_amount ?? 0) > 0).length,
-    review: customers.filter((item) => {
-      const coverage = item.crm_coverage
-      return Boolean(
-        coverage &&
-          (coverage.status === "needs_review" ||
-            coverage.status === "error" ||
-            coverage.discrepancies.length > 0 ||
-            coverage.candidate_link_count > 0)
-      )
-    }).length,
-  }
-
-  const filtered = customers.filter((item) => matchesSearch(item) && matchesQuickFilter(item)).slice().sort((left, right) => {
-    const attentionOrder = { high: 0, medium: 1, low: 2 }
-    const leftAttention = attentionOrder[left.insight?.attention_level ?? "low"]
-    const rightAttention = attentionOrder[right.insight?.attention_level ?? "low"]
-    if (leftAttention !== rightAttention) return leftAttention - rightAttention
-
-    const leftNext = left.insight?.next_event_at
-      ? new Date(left.insight.next_event_at).getTime()
-      : Number.POSITIVE_INFINITY
-    const rightNext = right.insight?.next_event_at
-      ? new Date(right.insight.next_event_at).getTime()
-      : Number.POSITIVE_INFINITY
-    if (leftNext !== rightNext) return leftNext - rightNext
-
-    return (right.summary?.active_deals ?? 0) - (left.summary?.active_deals ?? 0)
-  })
+          return (right.summary?.active_deals ?? 0) - (left.summary?.active_deals ?? 0)
+        }),
+    [customers, normalizedSearch, quickFilter]
+  )
 
   const wrapperClass = embedded
     ? ""
@@ -507,6 +533,7 @@ export function PartnerCustomersPage({
           customerId={detailId}
           fetchMode="admin"
           onClose={closeCustomerDetail}
+          onCustomerUpdated={handleCustomerUpdated}
           onEdit={allowEdit
             ? (customer) => {
                 closeCustomerDetail()

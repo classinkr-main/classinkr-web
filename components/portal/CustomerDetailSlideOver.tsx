@@ -1,6 +1,6 @@
 "use client";
 
-import { useEffect, useState } from "react";
+import { useEffect, useRef, useState } from "react";
 import {
   AlertTriangle,
   Check,
@@ -31,6 +31,7 @@ interface Props {
   customerId: string;
   onClose: () => void;
   onEdit?: (customer: Customer) => void;
+  onCustomerUpdated?: (customer: Customer) => void;
   fetchMode?: "portal" | "admin";
 }
 
@@ -146,6 +147,7 @@ export function CustomerDetailSlideOver({
   customerId,
   onClose,
   onEdit,
+  onCustomerUpdated,
   fetchMode = "portal",
 }: Props) {
   const [data, setData] = useState<CustomerDetailPayload | null>(null);
@@ -158,6 +160,7 @@ export function CustomerDetailSlideOver({
   const [noteSaved, setNoteSaved] = useState(false);
   const [noteError, setNoteError] = useState<string | null>(null);
   const [refreshNonce, setRefreshNonce] = useState(0);
+  const savedTimerRef = useRef<ReturnType<typeof setTimeout> | null>(null);
 
   useEffect(() => {
     let cancelled = false;
@@ -194,6 +197,13 @@ export function CustomerDetailSlideOver({
     };
   }, [customerId, fetchMode, refreshNonce]);
 
+  useEffect(
+    () => () => {
+      if (savedTimerRef.current) clearTimeout(savedTimerRef.current);
+    },
+    []
+  );
+
   const updateSourceLink = async (linkId: string, action: "confirm" | "reject") => {
     if (fetchMode !== "admin") return;
 
@@ -212,8 +222,15 @@ export function CustomerDetailSlideOver({
     }
   };
 
+  const handleNoteDraftChange = (value: string) => {
+    setNoteDraft(value);
+    if (noteError) setNoteError(null);
+    if (noteSaved) setNoteSaved(false);
+  };
+
   const saveCustomerNote = async () => {
-    if (!data || fetchMode !== "admin") return;
+    if (!data || fetchMode !== "admin" || savingNote) return;
+    if (noteDraft === (data.customer.notes ?? "")) return;
 
     setSavingNote(true);
     setNoteSaved(false);
@@ -236,9 +253,14 @@ export function CustomerDetailSlideOver({
             }
           : current
       );
+      onCustomerUpdated?.(result.customer);
       setNoteDraft(result.customer.notes ?? "");
       setNoteSaved(true);
-      setTimeout(() => setNoteSaved(false), 1800);
+      if (savedTimerRef.current) clearTimeout(savedTimerRef.current);
+      savedTimerRef.current = setTimeout(() => {
+        setNoteSaved(false);
+        savedTimerRef.current = null;
+      }, 1800);
     } catch (err) {
       setNoteError(err instanceof Error ? err.message : "고객 메모 저장에 실패했습니다.");
     } finally {
@@ -328,7 +350,7 @@ export function CustomerDetailSlideOver({
                 saving={savingNote}
                 saved={noteSaved}
                 error={noteError}
-                onDraftChange={setNoteDraft}
+                onDraftChange={handleNoteDraftChange}
                 onSave={() => void saveCustomerNote()}
               />
 

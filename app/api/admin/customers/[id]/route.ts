@@ -99,19 +99,23 @@ export async function PATCH(req: NextRequest, { params }: RouteContext) {
     }
 
     const customer = await updateCustomer(id, patch);
-    await logActivity({
-      partner_account_id: existing.partner_account_id,
-      customer_id: id,
-      deal_id: null,
-      actor_user_id: admin.userId ?? null,
-      actor_role: admin.role,
-      action_type: "update",
-      target_type: "customer",
-      target_id: id,
-      summary: "고객사 메모/정보 수정",
-      before_json: existing as unknown as Record<string, unknown>,
-      after_json: customer as unknown as Record<string, unknown>,
-    });
+    try {
+      await logActivity({
+        partner_account_id: existing.partner_account_id,
+        customer_id: id,
+        deal_id: null,
+        actor_user_id: admin.userId ?? null,
+        actor_role: admin.role,
+        action_type: "update",
+        target_type: "customer",
+        target_id: id,
+        summary: "고객사 메모/정보 수정",
+        before_json: existing as unknown as Record<string, unknown>,
+        after_json: customer as unknown as Record<string, unknown>,
+      });
+    } catch (activityError) {
+      console.warn("[PATCH /api/admin/customers/[id]] activity log failed", activityError);
+    }
 
     return NextResponse.json({ customer });
   } catch (error) {
