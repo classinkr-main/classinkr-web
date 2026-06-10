@@ -4,6 +4,26 @@
 범위: 공개 사이트 콘텐츠 3개 영역의 기능 디벨롭 + 최적화 기획.
 2026-06-10 공개 사이트 개선 커밋(이미지 WebP, JSON-LD, 리드 방어 등) 이후 시점 기준.
 
+## 진행 현황 (2026-06-10 1차 구현 완료)
+
+구현 완료: **B1**(블로그 Supabase 단일화), **B2**(어드민 인기글 위젯), **B3**(RSS 피드 `/blog/rss.xml`),
+**B5**(링크 복사·네이티브 공유 — Kakao SDK 대신 Web Share API 방식), **E1**(행사 인라인 신청 모달),
+**E2**(어드민 행사별 신청자 수), **E3**(.ics 다운로드 + 구글 캘린더 링크), **D2**(문서 Article/Breadcrumb JSON-LD + canonical),
+**D3**(문서 조회수 → 어드민 분석 "조회 상위"), **D6**(문서 하단 상담 CTA + contact topic 사전 선택),
+**D7**(`DOCS_REVIEW_STALE_DAYS` 환경변수화).
+
+**D1 (문서 Supabase 이관)**: [scripts/seed-docs.ts](../../scripts/seed-docs.ts)가 이미 완성·멱등 상태이며
+dry-run 검증 완료 (카테고리 7, 문서 54, 청크 327, 관계 174). **적용은 보류** — 운영 DB의 `docs_articles`에
+어드민이 직접 편집한 문서가 있으면 upsert가 정적 버전으로 덮어쓴다. 적용 런북:
+1. 운영 DB 확인: `select slug, status, updated_at from docs_articles order by updated_at desc limit 10;`
+   — 비어 있거나 시드 이력만 있으면 안전.
+2. `npx tsx scripts/seed-docs.ts --dry-run`으로 수량 확인 후 환경변수와 함께 본 실행.
+3. Vercel 프로드 env에 `USE_SUPABASE_DOCS=true` 설정 → 재배포 → /docs 동작 확인.
+4. 이후 lib/docs.ts의 콘텐츠 본문 제거(타입·경로 헬퍼만 유지).
+
+미착수(차기): B4(리드 마그넷 — blog_posts 컬럼+어드민 폼 필요), B6(OG 자동 생성 — edge 한글 폰트 번들 필요),
+B7, B8~B10, E4(리마인더 — vercel.json cron 추가 필요), E5(정원 — 마이그레이션 필요), E6~E7, D4~D5, D8~D9, C1~C3.
+
 ---
 
 ## 0. 현재 상태 요약 (기획 근거)

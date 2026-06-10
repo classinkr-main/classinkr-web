@@ -25,6 +25,8 @@ import {
   getRelatedDocsFromContent,
   resolveDocsRedirect,
 } from "@/lib/docs-content"
+import { JsonLd } from "@/components/seo/JsonLd"
+import { createArticleJsonLd, createBreadcrumbJsonLd, toAbsoluteUrl } from "@/lib/seo"
 
 import {
   formatDocDate,
@@ -69,6 +71,7 @@ export async function generateMetadata({
     title: `${doc.title} | Classin 가이드`,
     description: doc.description,
     keywords: doc.keywords,
+    alternates: { canonical: toAbsoluteUrl(getDocPath(doc)) },
     robots: isListed ? undefined : { index: false, follow: true },
     openGraph: {
       title: `${doc.title} | Classin 가이드`,
@@ -120,11 +123,31 @@ export default async function DocsArticlePage({
   const activePath = getDocPath(doc)
   const relatedDocs = getRelatedDocsFromContent(docsContent, doc, 3)
 
+  // 카테고리가 board(하드웨어)면 하드웨어 상담, 그 외는 기술 지원 상담으로 연결
+  const contactTopic = doc.category === "board" ? "하드웨어/설치/AS" : "계정/접속/기술 지원"
+  const contactHref = `/contact?topic=${encodeURIComponent(contactTopic)}#contact-form`
+
   return (
     <DocsSidebarLayout
       sidebar={<DocsSidebar groups={getDocsNavGroups(activePath, docsContent)} />}
       toc={<DocsTableOfContents items={toTocItems(doc)} />}
     >
+      <JsonLd
+        data={[
+          createArticleJsonLd({
+            path: activePath,
+            title: doc.title,
+            description: doc.description,
+            dateModified: doc.updatedAt,
+          }),
+          createBreadcrumbJsonLd([
+            { name: "홈", path: "/" },
+            { name: "가이드", path: "/docs" },
+            { name: category.title, path: getDocCategoryPath(doc.category) },
+            { name: doc.title, path: activePath },
+          ]),
+        ]}
+      />
       <Link
         href={getDocCategoryPath(doc.category)}
         className="mb-6 inline-flex origin-left items-center gap-2 text-sm font-medium text-[#1a1a1a]/45 transition-all duration-150 hover:text-[#084734] active:scale-[0.98]"
@@ -189,6 +212,25 @@ export default async function DocsArticlePage({
               category={doc.category}
               title={doc.title}
             />
+
+            <section className="border-t border-black/[0.08] pt-8">
+              <p className="text-xs font-bold uppercase tracking-[0.16em] text-[#084734]">
+                추가 지원
+              </p>
+              <h2 className="mt-2 text-xl font-black tracking-card text-[#111110]">
+                문서로 해결되지 않았나요?
+              </h2>
+              <p className="mt-3 max-w-3xl text-[15px] leading-7 text-[#615D59]">
+                현재 상황을 남겨주시면 담당 매니저가 확인 순서를 정리해 연락드립니다.
+              </p>
+              <Link
+                href={contactHref}
+                className="mt-4 inline-flex origin-left items-center gap-2 rounded-full bg-[#084734] px-5 py-2.5 text-sm font-bold text-white transition-all duration-150 hover:bg-[#065c41] active:scale-[0.98]"
+              >
+                상담 남기기
+                <ArrowRight className="h-4 w-4" />
+              </Link>
+            </section>
 
             <section className="border-t border-black/[0.08] pt-8">
               <p className="text-xs font-bold uppercase tracking-[0.16em] text-[#084734]">

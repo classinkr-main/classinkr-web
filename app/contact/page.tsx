@@ -15,6 +15,17 @@ import type { PublicEvent } from "@/lib/types/public-events"
 
 const EVENT_TOPICS = new Set(["행사 신청", "세미나 신청"])
 
+// ?topic= 쿼리로 사전 선택 가능한 문의 유형 (가이드 문서 CTA 등에서 사용)
+const VALID_CONTACT_TOPICS = new Set([
+    "도입 상담",
+    "수업 운영 상담",
+    "결제/영수증/계약",
+    "계정/접속/기술 지원",
+    "하드웨어/설치/AS",
+    "행사 신청",
+    "세미나 신청",
+])
+
 export default function ContactPage() {
     const kakaoChannelUrl = process.env.NEXT_PUBLIC_CONTACT_KAKAO_URL?.trim()
     const fastTrackHref = kakaoChannelUrl || "#contact-form"
@@ -43,7 +54,7 @@ export default function ContactPage() {
         if (eventParam) {
             setTopic(sourceParam === "seminar" ? "세미나 신청" : "행사 신청")
             setEventSlug(eventParam)
-        } else if (topicParam && EVENT_TOPICS.has(topicParam)) {
+        } else if (topicParam && VALID_CONTACT_TOPICS.has(topicParam)) {
             setTopic(topicParam)
         }
     }, [])

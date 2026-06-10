@@ -4,6 +4,7 @@ import Link from "next/link"
 import { notFound } from "next/navigation"
 import { ArrowRight, Clock } from "lucide-react"
 import BlogMarkdownRenderer from "@/components/blog/BlogMarkdownRenderer"
+import { ShareActions } from "@/components/blog/ShareActions"
 import { TrackedLink } from "@/components/TrackedLink"
 import {
   getPublishedPostBySlug,
@@ -152,6 +153,10 @@ export default async function BlogDetailPage({
                 <span>
                   {post.author} · {post.authorRole}
                 </span>
+              </div>
+
+              <div className="mt-6">
+                <ShareActions title={post.title} url={toAbsoluteUrl(`/blog/${post.slug}`)} />
               </div>
             </div>
 

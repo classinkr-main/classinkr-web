@@ -13,6 +13,8 @@ import {
 } from "@/lib/repositories/public-events"
 import { JsonLd } from "@/components/seo/JsonLd"
 import { createBreadcrumbJsonLd, createEventJsonLd, toAbsoluteUrl } from "@/lib/seo"
+import { EventSignupModal } from "@/components/events/EventSignupModal"
+import { CalendarPlus } from "lucide-react"
 
 export const revalidate = 3600
 
@@ -33,6 +35,32 @@ function decodeEventSlugParam(slug: string): string {
   } catch {
     return slug
   }
+}
+
+// ISO → 구글 캘린더 URL용 UTC 포맷 (YYYYMMDDTHHMMSSZ)
+function toCalendarUtc(iso: string): string {
+  return new Date(iso).toISOString().replace(/[-:]/g, "").replace(/\.\d{3}Z$/, "Z")
+}
+
+function buildGoogleCalendarUrl(event: {
+  title: string
+  description: string | null
+  startsAt: string
+  endsAt: string | null
+  location: string | null
+}, eventUrl: string): string {
+  const start = toCalendarUtc(event.startsAt)
+  const end = event.endsAt
+    ? toCalendarUtc(event.endsAt)
+    : toCalendarUtc(new Date(new Date(event.startsAt).getTime() + 2 * 60 * 60 * 1000).toISOString())
+  const params = new URLSearchParams({
+    action: "TEMPLATE",
+    text: event.title,
+    dates: `${start}/${end}`,
+    details: [event.description, eventUrl].filter(Boolean).join("\n"),
+    ...(event.location ? { location: event.location } : {}),
+  })
+  return `https://calendar.google.com/calendar/render?${params.toString()}`
 }
 
 export async function generateStaticParams() {
@@ -75,6 +103,11 @@ export default async function EventDetailPage({ params }: EventDetailPageProps) 
       : sanitizedCtaHref
 
   const eventPath = `/events/${event.slug ?? slug}`
+  // 어드민이 별도 신청 URL을 지정하지 않은 경우 인라인 신청 모달 사용 (페이지 이탈 없는 신청)
+  const usesInlineSignup = ctaHref === defaultEventCtaHref && Boolean(event.slug)
+  const googleCalendarUrl = buildGoogleCalendarUrl(event, toAbsoluteUrl(eventPath))
+  const ctaButtonClassName =
+    "mt-8 inline-flex items-center gap-2 rounded-full bg-[#111110] px-6 py-3 text-[14px] font-semibold text-white transition-colors hover:bg-emerald-700"
 
   return (
     <div className="min-h-screen bg-[#FAFAF8] text-[#111110]">
@@ -146,20 +179,54 @@ export default async function EventDetailPage({ params }: EventDetailPageProps) 
               </div>
 
               {ctaHref && event.status !== "마감" ? (
-                <TrackedLink
-                  href={ctaHref}
-                  ctaId="event_detail_hero_cta"
-                  tracking={{ event_slug: event.slug, event_id: event.id }}
-                  className="mt-8 inline-flex items-center gap-2 rounded-full bg-[#111110] px-6 py-3 text-[14px] font-semibold text-white transition-colors hover:bg-emerald-700"
-                >
-                  {event.ctaLabel}
-                  <ArrowRight className="h-4 w-4" />
-                </TrackedLink>
+                usesInlineSignup ? (
+                  <EventSignupModal
+                    eventSlug={event.slug ?? slug}
+                    eventTitle={event.title}
+                    trackingButton="event_detail_hero_cta"
+                  >
+                    <button type="button" className={ctaButtonClassName}>
+                      {event.ctaLabel}
+                      <ArrowRight className="h-4 w-4" />
+                    </button>
+                  </EventSignupModal>
+                ) : (
+                  <TrackedLink
+                    href={ctaHref}
+                    ctaId="event_detail_hero_cta"
+                    tracking={{ event_slug: event.slug, event_id: event.id }}
+                    className={ctaButtonClassName}
+                  >
+                    {event.ctaLabel}
+                    <ArrowRight className="h-4 w-4" />
+                  </TrackedLink>
+                )
               ) : event.status === "마감" ? (
                 <span className="mt-8 inline-flex items-center gap-2 rounded-full bg-[#f0f0ec] px-6 py-3 text-[14px] font-semibold text-[#1a1a1a]/40">
                   마감되었습니다
                 </span>
               ) : null}
+
+              {event.status !== "마감" && (
+                <div className="mt-4 flex flex-wrap items-center gap-3 text-[13px] text-[#1a1a1a]/45">
+                  <a
+                    href={`${eventPath}/calendar.ics`}
+                    className="inline-flex items-center gap-1.5 transition-colors hover:text-[#084734]"
+                  >
+                    <CalendarPlus className="h-4 w-4" />
+                    캘린더에 추가 (.ics)
+                  </a>
+                  <span aria-hidden="true">·</span>
+                  <a
+                    href={googleCalendarUrl}
+                    target="_blank"
+                    rel="noopener noreferrer"
+                    className="transition-colors hover:text-[#084734]"
+                  >
+                    구글 캘린더
+                  </a>
+                </div>
+              )}
             </div>
 
             {event.imageUrl && (
@@ -198,15 +265,31 @@ export default async function EventDetailPage({ params }: EventDetailPageProps) 
                 {event.title}
               </h2>
               <div className="mt-6">
-                <TrackedLink
-                  href={ctaHref}
-                  ctaId="event_detail_bottom_cta"
-                  tracking={{ event_slug: event.slug, event_id: event.id }}
-                  className="inline-flex items-center gap-2 rounded-full bg-white px-5 py-3 text-sm font-semibold text-[#111110] transition-transform hover:-translate-y-0.5"
-                >
-                  {event.ctaLabel}
-                  <ArrowRight className="h-4 w-4" />
-                </TrackedLink>
+                {usesInlineSignup ? (
+                  <EventSignupModal
+                    eventSlug={event.slug ?? slug}
+                    eventTitle={event.title}
+                    trackingButton="event_detail_bottom_cta"
+                  >
+                    <button
+                      type="button"
+                      className="inline-flex items-center gap-2 rounded-full bg-white px-5 py-3 text-sm font-semibold text-[#111110] transition-transform hover:-translate-y-0.5"
+                    >
+                      {event.ctaLabel}
+                      <ArrowRight className="h-4 w-4" />
+                    </button>
+                  </EventSignupModal>
+                ) : (
+                  <TrackedLink
+                    href={ctaHref}
+                    ctaId="event_detail_bottom_cta"
+                    tracking={{ event_slug: event.slug, event_id: event.id }}
+                    className="inline-flex items-center gap-2 rounded-full bg-white px-5 py-3 text-sm font-semibold text-[#111110] transition-transform hover:-translate-y-0.5"
+                  >
+                    {event.ctaLabel}
+                    <ArrowRight className="h-4 w-4" />
+                  </TrackedLink>
+                )}
               </div>
             </div>
           )}

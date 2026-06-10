@@ -91,6 +91,8 @@ export default function AdminEventsPage() {
 
   const [deletingId, setDeletingId] = useState<string | null>(null)
 
+  const [signupCounts, setSignupCounts] = useState<Record<string, number>>({})
+
   const fetchEvents = useCallback(async () => {
     setLoading(true)
     setError(null)
@@ -103,7 +105,21 @@ export default function AdminEventsPage() {
     }
   }, [])
 
+  const fetchSignupCounts = useCallback(async () => {
+    try {
+      const data = await adminFetchJsonCached<{ counts: Record<string, number> }>(
+        "/api/admin/events/signup-counts",
+        undefined,
+        { ttlMs: 60_000 }
+      )
+      setSignupCounts(data.counts ?? {})
+    } catch {
+      // 집계 실패는 목록 표시를 막지 않는다
+    }
+  }, [])
+
   useEffect(() => { fetchEvents() }, [fetchEvents])
+  useEffect(() => { fetchSignupCounts() }, [fetchSignupCounts])
 
   function openCreate() {
     setForm(DEFAULT_FORM)
@@ -262,6 +278,7 @@ export default function AdminEventsPage() {
                 <th className="px-4 py-3 font-medium">제목</th>
                 <th className="px-4 py-3 font-medium">카테고리</th>
                 <th className="px-4 py-3 font-medium">기간</th>
+                <th className="px-4 py-3 font-medium">신청</th>
                 <th className="px-4 py-3 font-medium">공개</th>
                 <th className="px-4 py-3 font-medium">상태</th>
                 <th className="px-4 py-3 font-medium">Highlight</th>
@@ -283,6 +300,13 @@ export default function AdminEventsPage() {
                   <td className="px-4 py-3 text-[#1a1a1a]/50">
                     {formatDate(event.startsAt)}
                     {event.endsAt ? ` ~ ${formatDate(event.endsAt)}` : ""}
+                  </td>
+                  <td className="px-4 py-3">
+                    {event.slug && (signupCounts[event.slug] ?? 0) > 0 ? (
+                      <span className="font-semibold text-[#084734]">{signupCounts[event.slug]}명</span>
+                    ) : (
+                      <span className="text-[#1a1a1a]/25">-</span>
+                    )}
                   </td>
                   <td className="px-4 py-3">
                     <span className={`rounded-full px-2 py-0.5 text-[11px] font-semibold ${

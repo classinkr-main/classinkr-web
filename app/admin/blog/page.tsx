@@ -32,6 +32,7 @@ import {
 import BlogPostTable from "@/components/admin/BlogPostTable"
 import BlogPostForm from "@/components/admin/BlogPostForm"
 import DeleteConfirmDialog from "@/components/admin/DeleteConfirmDialog"
+import TopViewedPosts from "@/components/admin/blog/TopViewedPosts"
 import { adminFetch, adminFetchJson, adminFetchJsonCached } from "@/lib/admin-client"
 import type { BlogPost, BlogPostInput } from "@/lib/blog-types"
 
@@ -396,6 +397,8 @@ export default function AdminBlogPage() {
                     )}
                 </div>
             </div>
+
+            {contentView === "blog" && <TopViewedPosts posts={posts} />}
 
             {contentView === "blog" && (
             <div className="mb-4 rounded-2xl border border-[#e8e8e4] bg-white px-4 py-4">
