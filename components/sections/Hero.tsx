@@ -103,7 +103,7 @@ export function Hero() {
                                 className="text-5xl md:text-7xl lg:text-[5.5rem] font-extrabold text-white mb-8 leading-[1.05] break-keep drop-shadow-[0_6px_28px_rgba(0,0,0,0.48)]"
                                 style={{ letterSpacing: '-2.125px' }}
                             >
-                                수업은 더욱 <span className="font-black animate-text-gradient inline-block pb-2">퀄리티</span> 있게<br className="hidden sm:block" />
+                                수업은 더욱 <span className="font-black animate-text-gradient inline-block pb-2">퀄리티</span> 있게<br className="hidden sm:block" />{" "}
                                 관리는 더욱 <span className="font-black animate-text-gradient inline-block pb-2">쉽고 편하게</span>
                             </motion.h1>
 

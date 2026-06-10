@@ -164,7 +164,7 @@ function ComparisonSection() {
                     <p className="text-sm font-semibold text-[#22A366] tracking-wider uppercase mb-3">Why Classin Board</p>
                     <h2 className="text-3xl md:text-4xl lg:text-5xl text-[#1a1a19] leading-tight">
                         도구를 바꾸는 게 아니라,
-                        <br className="hidden sm:block" />
+                        <br className="hidden sm:block" />{" "}
                         <span className="text-[#22A366]">교육의 방식</span>을 바꿉니다
                     </h2>
                 </motion.div>

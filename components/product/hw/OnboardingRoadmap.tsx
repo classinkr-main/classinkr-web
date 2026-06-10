@@ -67,7 +67,7 @@ export default function OnboardingRoadmap() {
                     </h2>
                     <p className="text-lg text-slate-400 mt-4 max-w-xl mx-auto">
                         단순한 기기 도입을 넘어 수업의 격을 바꿉니다.
-                        <br className="hidden sm:block" />
+                        <br className="hidden sm:block" />{" "}
                         전문 상담을 통해 학원 규모와 목적에 최적화된 솔루션을 제안해 드립니다.
                     </p>
                 </motion.div>

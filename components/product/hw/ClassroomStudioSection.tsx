@@ -66,7 +66,7 @@ export default function ClassroomStudioSection() {
           className="text-center text-lg md:text-xl text-[#615D59] max-w-2xl mx-auto mb-16 leading-relaxed"
         >
           수업이 끝나는 순간, 판서 노트와 수업 영상이 동시에 올라갑니다.
-          <br className="hidden sm:block" />
+          <br className="hidden sm:block" />{" "}
           필기 대신 수업에 집중하세요 — 기록은 시스템이 합니다.
         </motion.p>
 

@@ -867,7 +867,7 @@ function FutureVision2Section() {
                     </h2>
                     <p className="text-xl md:text-2xl text-slate-500 font-sans max-w-2xl mx-auto leading-relaxed">
                         더 많이 가르치면서 더 적게 소진되는 것.
-                        <br className="hidden md:block" />
+                        <br className="hidden md:block" />{" "}
                         그것이 Classin이 교사에게 드리는 약속입니다.
                     </p>
                 </motion.div>
@@ -1304,7 +1304,7 @@ function FullscreenQuoteSection() {
                     <div className="text-[#6EE7B7]/60 text-5xl font-sans mb-8 leading-none select-none">&ldquo;</div>
                     <blockquote className="text-2xl sm:text-3xl md:text-4xl font-sans text-white leading-[1.4] tracking-tight mb-10">
                         하이브리드 수업은 팬데믹의 임시방편이 아닙니다.
-                        <br className="hidden md:block" />
+                        <br className="hidden md:block" />{" "}
                         <span className="text-[#6EE7B7]">교육의 새로운 표준</span>이 될 것입니다.
                     </blockquote>
                     <div className="flex flex-col items-center gap-1">
@@ -1627,7 +1627,7 @@ export default function ProductPage() {
 
                             <p className="text-xl md:text-2xl text-white/78 leading-relaxed font-medium max-w-2xl mx-auto mb-8 drop-shadow-[0_2px_14px_rgba(0,0,0,0.35)]">
                                 30여 가지 수업 도구와 10가지 수업 활동으로
-                                <br className="hidden md:block" />
+                                <br className="hidden md:block" />{" "}
                                 교사와 학생이 함께 만들어가는 교육 전용 플랫폼.
                             </p>
 
@@ -1713,7 +1713,7 @@ export default function ProductPage() {
                         <EyebrowTag>Why Classin</EyebrowTag>
                         <h2 className="text-3xl md:text-4xl lg:text-5xl font-sans text-[#1a1a19] leading-tight">
                             회의용 도구로 수업하던 시대는
-                            <br className="hidden sm:block" />
+                            <br className="hidden sm:block" />{" "}
                             <span className="text-[#22A366]">끝났습니다</span>
                         </h2>
                     </motion.div>

@@ -50,7 +50,7 @@ export function Manifesto() {
                     transition={{ duration: 0.7, delay: 0.45 }}
                     className="text-xl md:text-2xl text-white/50 max-w-2xl mx-auto leading-relaxed font-light break-keep"
                 >
-                    에이스 강사의 수업 방식을 시스템으로 만들어,<br className="hidden md:block" />
+                    에이스 강사의 수업 방식을 시스템으로 만들어,<br className="hidden md:block" />{" "}
                     모든 반, 모든 지점에 그대로 적용합니다.
                 </motion.p>
 

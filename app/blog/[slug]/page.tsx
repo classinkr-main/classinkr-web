@@ -138,7 +138,8 @@ export default async function BlogDetailPage({
                 {post.title}
               </h1>
 
-              <p className="mt-5 max-w-3xl text-[16px] leading-7 text-[#1a1a1a]/55 sm:mt-6 md:text-[20px] md:leading-8">
+              {/* 모바일에서 발췌문이 첫 화면을 다 차지하지 않도록 3줄 제한 */}
+              <p className="mt-5 line-clamp-3 max-w-3xl text-[16px] leading-7 text-[#1a1a1a]/55 sm:mt-6 md:line-clamp-none md:text-[20px] md:leading-8">
                 {post.excerpt}
               </p>
 

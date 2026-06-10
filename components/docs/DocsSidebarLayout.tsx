@@ -102,9 +102,26 @@ export function DocsSidebarLayout({
         <section className={cn("pb-10 pt-28 md:pb-16 md:pt-32", className)}>
             <div className={cn("container grid gap-8", gridClassName)}>
                 {sidebar ? (
-                    <div className="lg:sticky lg:top-24 lg:self-start">
-                        {sidebar}
-                    </div>
+                    <>
+                        {/* 모바일: 본문이 먼저 보이도록 기본 접힘 상태의 목차 (no-JS details) */}
+                        <details className="group rounded-2xl border border-black/[0.08] bg-white px-4 py-3 lg:hidden">
+                            <summary className="flex cursor-pointer list-none items-center justify-between text-sm font-bold text-[#111110] [&::-webkit-details-marker]:hidden">
+                                가이드 목차 보기
+                                <svg
+                                    className="h-4 w-4 text-[#084734] transition-transform duration-200 group-open:rotate-180"
+                                    viewBox="0 0 16 16"
+                                    fill="none"
+                                    aria-hidden="true"
+                                >
+                                    <path d="M4 6l4 4 4-4" stroke="currentColor" strokeWidth="1.6" strokeLinecap="round" strokeLinejoin="round" />
+                                </svg>
+                            </summary>
+                            <div className="pt-4">{sidebar}</div>
+                        </details>
+                        <div className="hidden lg:sticky lg:top-24 lg:block lg:self-start">
+                            {sidebar}
+                        </div>
+                    </>
                 ) : null}
                 <main className="min-w-0">{children}</main>
                 {toc ? (

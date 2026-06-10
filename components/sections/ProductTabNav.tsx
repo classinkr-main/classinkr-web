@@ -14,7 +14,9 @@ export function ProductTabNav() {
     const pathname = usePathname()
 
     return (
-        <div className="md:hidden sticky top-[80px] z-40 bg-[#FAFAF8]/85 backdrop-blur-md border-b border-black/[0.06]">
+        <>
+        {/* 불투명도를 높여 스크롤 시 뒤로 비치는 섹션 제목이 지저분하게 겹쳐 보이지 않게 한다 */}
+        <div className="md:hidden sticky top-[80px] z-40 bg-[#FAFAF8]/95 backdrop-blur-md border-b border-black/[0.06]">
             <div className="container mx-auto px-4">
                 <div className="flex items-center gap-1 py-2.5">
                     {tabs.map((tab) => {
@@ -38,5 +40,6 @@ export function ProductTabNav() {
                 </div>
             </div>
         </div>
+        </>
     )
 }
