@@ -8,8 +8,11 @@ import {
   BarChart3,
   Bot,
   CheckCircle2,
+  ChevronDown,
+  ChevronUp,
   CircleAlert,
   Clock3,
+  Eye,
   ExternalLink,
   Highlighter,
   Image as ImageIcon,
@@ -26,9 +29,19 @@ import {
   Type,
   Upload,
   Wand2,
+  X,
 } from "lucide-react"
 
 import RichMarkdownEditor, { type RichMarkdownEditorHandle } from "@/components/admin/RichMarkdownEditor"
+import BlogMarkdownRenderer from "@/components/blog/BlogMarkdownRenderer"
+import {
+  DocsArticle,
+  DocsSidebar,
+  DocsTableOfContents,
+  type DocsArticleSection,
+  type DocsNavGroup,
+  type DocsTocItem,
+} from "@/components/docs"
 import { adminFetch, adminFetchJson, getAdminToken } from "@/lib/admin-client"
 import type { AdminDocsContentResponse } from "@/lib/admin-docs"
 import type {
@@ -36,6 +49,7 @@ import type {
   DocsArticleDetail,
   DocsArticleDifficulty,
   DocsArticleDocType,
+  DocsArticleDraftDetail,
   DocsArticleRelationDetail,
   DocsArticleProductArea,
   DocsArticleStatus,
@@ -62,6 +76,7 @@ interface ArticleOption {
   categoryId: string
   slug: string
   status: string
+  orderIndex: number
   publicPath: string
 }
 
@@ -75,11 +90,17 @@ interface VersionsResponse {
   warning?: string
 }
 
+interface DraftResponse {
+  draft: DocsArticleDraftDetail | null
+  warning?: string
+}
+
 interface EditorSupportState {
   articleOptions: ArticleOption[]
   relations: DocsArticleRelationDetail[]
   versions: DocsArticleVersionDetail[]
   analytics: DocsArticleAnalyticsDetail | null
+  draft: DocsArticleDraftDetail | null
   warning: string | null
 }
 
@@ -402,6 +423,15 @@ const SIDEBAR_TABS: { value: SidebarTab; label: string; mode: "all" | "create" |
   { value: "templates", label: "템플릿", mode: "create" },
 ]
 
+const CURRENT_PREVIEW_ARTICLE_ID = "__current-preview-article__"
+
+interface PreviewSidebarOrderItem {
+  id: string
+  title: string
+  orderIndex: number
+  current: boolean
+}
+
 function formSignature(form: FormState) {
   return JSON.stringify(form)
 }
@@ -541,6 +571,25 @@ function markdownToSections(markdown: string): StructuredDocSection[] {
 
   const intro = buildSection("개요", introLines)
   return intro ? [intro] : []
+}
+
+function toPreviewArticleSections(sections: StructuredDocSection[]): DocsArticleSection[] {
+  return sections.map((section, index) => ({
+    id: `preview-section-${index + 1}`,
+    title: section.heading,
+    body: section.body ? <BlogMarkdownRenderer markdown={section.body} /> : null,
+    checklist: section.steps?.map((step) => ({
+      label: step,
+      checked: true,
+    })),
+  }))
+}
+
+function toPreviewTocItems(sections: StructuredDocSection[]): DocsTocItem[] {
+  return sections.map((section, index) => ({
+    id: `preview-section-${index + 1}`,
+    title: section.heading,
+  }))
 }
 
 function buildContentJson(
@@ -712,6 +761,41 @@ function initialForm(
   }
 }
 
+function formWithDraftPayload(
+  base: FormState,
+  draftPayload: DocsArticleDraftDetail["draftPayload"]
+): FormState {
+  return {
+    ...base,
+    categoryId: draftPayload.categoryId ?? base.categoryId,
+    slug: draftPayload.slug ?? base.slug,
+    title: draftPayload.title ?? base.title,
+    description: draftPayload.description ?? base.description,
+    audience: draftPayload.audience ? toCsv(draftPayload.audience) : base.audience,
+    tagsCsv: draftPayload.tags ? toCsv(draftPayload.tags) : base.tagsCsv,
+    keywordsCsv: draftPayload.keywords ? toCsv(draftPayload.keywords) : base.keywordsCsv,
+    symptomsCsv: draftPayload.symptoms ? toCsv(draftPayload.symptoms) : base.symptomsCsv,
+    chatbotSummary:
+      draftPayload.chatbotSummary === null
+        ? ""
+        : draftPayload.chatbotSummary ?? base.chatbotSummary,
+    contentMarkdown: draftPayload.contentMarkdown ?? base.contentMarkdown,
+    productArea: draftPayload.productArea ?? base.productArea,
+    docType: draftPayload.docType ?? base.docType,
+    difficulty: draftPayload.difficulty ?? base.difficulty,
+    status: draftPayload.status ?? base.status,
+    visibility: draftPayload.visibility ?? base.visibility,
+    noindex: draftPayload.noindex ?? base.noindex,
+    featured: draftPayload.featured ?? base.featured,
+    orderIndex: draftPayload.orderIndex ?? base.orderIndex,
+    seoTitle: draftPayload.seoTitle === null ? "" : draftPayload.seoTitle ?? base.seoTitle,
+    seoDescription:
+      draftPayload.seoDescription === null
+        ? ""
+        : draftPayload.seoDescription ?? base.seoDescription,
+  }
+}
+
 function ToolbarButton({
   onClick,
   children,
@@ -736,6 +820,7 @@ function ToolbarButton({
 export default function DocsArticleEditor({ mode, categories, article }: Props) {
   const router = useRouter()
   const editorRef = useRef<RichMarkdownEditorHandle | null>(null)
+  const draftAppliedRef = useRef(false)
   const [form, setForm] = useState<FormState>(() =>
     initialForm(article, categories[0]?.id ?? "start")
   )
@@ -751,6 +836,7 @@ export default function DocsArticleEditor({ mode, categories, article }: Props) 
     relations: [],
     versions: [],
     analytics: null,
+    draft: null,
     warning: null,
   })
   const [supportLoading, setSupportLoading] = useState(mode === "edit")
@@ -759,6 +845,7 @@ export default function DocsArticleEditor({ mode, categories, article }: Props) 
   const [rollingBackVersionId, setRollingBackVersionId] = useState<string | null>(null)
   const [uploadingMedia, setUploadingMedia] = useState(false)
   const [snapshotNote, setSnapshotNote] = useState("Manual snapshot")
+  const [previewOpen, setPreviewOpen] = useState(false)
   const [activeSidebarTab, setActiveSidebarTab] = useState<SidebarTab>(
     mode === "create" ? "templates" : "publish"
   )
@@ -789,6 +876,98 @@ export default function DocsArticleEditor({ mode, categories, article }: Props) 
     () => markdownToSections(form.contentMarkdown),
     [form.contentMarkdown]
   )
+  const previewArticleSections = useMemo(
+    () => toPreviewArticleSections(previewSections),
+    [previewSections]
+  )
+  const previewTocItems = useMemo(
+    () => toPreviewTocItems(previewSections),
+    [previewSections]
+  )
+  const activeCategoryTitle = useMemo(
+    () => categories.find((category) => category.id === form.categoryId)?.title ?? form.categoryId,
+    [categories, form.categoryId]
+  )
+  const previewAudience = useMemo(() => fromCsv(form.audience).join(", "), [form.audience])
+  const currentPreviewArticleId = article?.id ?? CURRENT_PREVIEW_ARTICLE_ID
+  const previewSidebarOrderItems = useMemo<PreviewSidebarOrderItem[]>(() => {
+    const currentItem: PreviewSidebarOrderItem = {
+      id: currentPreviewArticleId,
+      title: form.title.trim() || "새 문서",
+      orderIndex: Number.isFinite(form.orderIndex) ? form.orderIndex : 100,
+      current: true,
+    }
+
+    return [
+      ...support.articleOptions
+        .filter((option) => option.categoryId === form.categoryId && option.id !== currentPreviewArticleId)
+        .map((option) => ({
+          id: option.id,
+          title: option.title,
+          orderIndex: option.orderIndex,
+          current: false,
+        })),
+      currentItem,
+    ].sort((left, right) => {
+      if (left.orderIndex !== right.orderIndex) return left.orderIndex - right.orderIndex
+      if (left.current !== right.current) return left.current ? -1 : 1
+      return left.title.localeCompare(right.title, "ko-KR")
+    })
+  }, [
+    currentPreviewArticleId,
+    form.categoryId,
+    form.orderIndex,
+    form.title,
+    support.articleOptions,
+  ])
+  const currentPreviewSidebarIndex = previewSidebarOrderItems.findIndex((item) => item.current)
+  const previewSidebarPosition = currentPreviewSidebarIndex >= 0 ? currentPreviewSidebarIndex + 1 : 1
+  const previewSidebarTotal = previewSidebarOrderItems.length
+  const canMovePreviewUp = currentPreviewSidebarIndex > 0
+  const canMovePreviewDown =
+    currentPreviewSidebarIndex >= 0 && currentPreviewSidebarIndex < previewSidebarOrderItems.length - 1
+  const previewNavGroups = useMemo<DocsNavGroup[]>(() => {
+    const currentHref = "#preview-current-doc"
+    const currentTitle = form.title.trim() || "새 문서"
+    const currentOrder = Number.isFinite(form.orderIndex) ? form.orderIndex : 100
+
+    return categories.map((category) => {
+      const links = support.articleOptions
+        .filter((option) => option.categoryId === category.id)
+        .map((option) => ({
+          title: option.title,
+          href: option.publicPath,
+          description: `순서 ${option.orderIndex}`,
+          isActive: false,
+          orderIndex: option.orderIndex,
+        }))
+
+      if (category.id === form.categoryId) {
+        links.push({
+          title: currentTitle,
+          href: currentHref,
+          description: `순서 ${currentOrder}`,
+          isActive: true,
+          orderIndex: currentOrder,
+        })
+      }
+
+      return {
+        title: category.title,
+        links: links
+          .sort((left, right) => {
+            if (left.orderIndex !== right.orderIndex) return left.orderIndex - right.orderIndex
+            return left.title.localeCompare(right.title, "ko-KR")
+          })
+          .map((link) => ({
+            title: link.title,
+            href: link.href,
+            description: link.description,
+            isActive: link.isActive,
+          })),
+      }
+    })
+  }, [categories, form.categoryId, form.orderIndex, form.title, support.articleOptions])
   const chatbotIncluded =
     form.status === "published" && form.visibility !== "internal" && !form.noindex
   const aiChecklist = useMemo(
@@ -818,20 +997,37 @@ export default function DocsArticleEditor({ mode, categories, article }: Props) 
   )
   const completedAiChecks = aiChecklist.filter((item) => item.complete).length
   const isDirty = useMemo(
-    () => mode === "create" || formSignature(form) !== formSignature(lastSavedForm),
-    [form, lastSavedForm, mode]
+    () => formSignature(form) !== formSignature(lastSavedForm),
+    [form, lastSavedForm]
   )
   const visibleSidebarTabs = useMemo(
     () => SIDEBAR_TABS.filter((tab) => tab.mode === "all" || tab.mode === mode),
     [mode]
   )
 
+  useEffect(() => {
+    if (!previewOpen) return
+
+    const previousOverflow = document.body.style.overflow
+    const handleKeyDown = (event: KeyboardEvent) => {
+      if (event.key === "Escape") setPreviewOpen(false)
+    }
+
+    document.body.style.overflow = "hidden"
+    window.addEventListener("keydown", handleKeyDown)
+
+    return () => {
+      document.body.style.overflow = previousOverflow
+      window.removeEventListener("keydown", handleKeyDown)
+    }
+  }, [previewOpen])
+
   const loadEditorSupport = useCallback(async () => {
     if (mode !== "edit" || !article) return
 
     setSupportLoading(true)
     try {
-      const [contentResult, relationsResult, versionsResult, analyticsResult] = await Promise.all([
+      const [contentResult, relationsResult, versionsResult, analyticsResult, draftResult] = await Promise.all([
         adminFetchJson<AdminDocsContentResponse>("/api/admin/docs").catch((err) => ({
           configured: false,
           status: "unconfigured",
@@ -862,14 +1058,29 @@ export default function DocsArticleEditor({ mode, categories, article }: Props) 
             warning: err instanceof Error ? err.message : "성과를 불러오지 못했습니다.",
           } as DocsArticleAnalyticsDetail & { warning?: string })
         ),
+        adminFetchJson<DraftResponse>(`/api/admin/docs/articles/${article.id}/draft`).catch((err) => ({
+          draft: null,
+          warning: err instanceof Error ? err.message : "작업 초안을 불러오지 못했습니다.",
+        })),
       ])
 
       const warnings = [
         ...(contentResult.warnings ?? []),
         relationsResult.warning,
         versionsResult.warning,
+        draftResult.warning,
         "warning" in analyticsResult ? analyticsResult.warning : null,
       ].filter((item): item is string => Boolean(item))
+
+      if (draftResult.draft && !draftAppliedRef.current) {
+        const draftForm = formWithDraftPayload(
+          initialForm(article, article.categoryId),
+          draftResult.draft.draftPayload
+        )
+        setForm(draftForm)
+        setLastSavedForm(draftForm)
+        draftAppliedRef.current = true
+      }
 
       setSupport({
         articleOptions: contentResult.articles
@@ -881,10 +1092,12 @@ export default function DocsArticleEditor({ mode, categories, article }: Props) 
             slug: item.slug,
             status: item.status,
             publicPath: item.publicPath,
+            orderIndex: item.orderIndex,
           })),
         relations: relationsResult.relations,
         versions: versionsResult.versions,
         analytics: analyticsResult,
+        draft: draftResult.draft,
         warning: warnings[0] ?? null,
       })
     } finally {
@@ -896,8 +1109,98 @@ export default function DocsArticleEditor({ mode, categories, article }: Props) 
     void loadEditorSupport()
   }, [loadEditorSupport])
 
+  useEffect(() => {
+    if (mode !== "create") return
+
+    let cancelled = false
+
+    adminFetchJson<AdminDocsContentResponse>("/api/admin/docs")
+      .then((contentResult) => {
+        if (cancelled) return
+
+        setSupport((previous) => ({
+          ...previous,
+          articleOptions: contentResult.articles.map((item) => ({
+            id: item.id,
+            title: item.title,
+            categoryId: item.categoryId,
+            slug: item.slug,
+            status: item.status,
+            publicPath: item.publicPath,
+            orderIndex: item.orderIndex,
+          })),
+          warning: previous.warning ?? contentResult.warnings[0] ?? null,
+        }))
+      })
+      .catch(() => null)
+
+    return () => {
+      cancelled = true
+    }
+  }, [mode])
+
+  useEffect(() => {
+    if (!isDirty) return
+
+    const handleBeforeUnload = (event: BeforeUnloadEvent) => {
+      event.preventDefault()
+      event.returnValue = ""
+    }
+
+    window.addEventListener("beforeunload", handleBeforeUnload)
+    return () => window.removeEventListener("beforeunload", handleBeforeUnload)
+  }, [isDirty])
+
   function update<K extends keyof FormState>(key: K, value: FormState[K]) {
     setForm((previous) => ({ ...previous, [key]: value }))
+  }
+
+  function getOrderIndexForPreviewPosition(
+    items: PreviewSidebarOrderItem[],
+    targetIndex: number
+  ) {
+    const previous = items[targetIndex - 1]
+    const next = items[targetIndex + 1]
+
+    if (previous && next) {
+      const gap = next.orderIndex - previous.orderIndex
+      if (gap > 1) return Math.floor(previous.orderIndex + gap / 2)
+      return (targetIndex + 1) * 10
+    }
+
+    if (previous) return previous.orderIndex + 10
+    if (next) return Math.max(0, next.orderIndex - 10)
+    return 100
+  }
+
+  function moveCurrentPreviewSidebarOrder(direction: "up" | "down") {
+    const currentIndex = previewSidebarOrderItems.findIndex((item) => item.current)
+    const targetIndex = direction === "up" ? currentIndex - 1 : currentIndex + 1
+
+    if (currentIndex < 0 || targetIndex < 0 || targetIndex >= previewSidebarOrderItems.length) {
+      return
+    }
+
+    const reordered = [...previewSidebarOrderItems]
+    const [currentItem] = reordered.splice(currentIndex, 1)
+    if (!currentItem) return
+    reordered.splice(targetIndex, 0, currentItem)
+
+    update("orderIndex", getOrderIndexForPreviewPosition(reordered, targetIndex))
+  }
+
+  function getLastPreviewOrderIndexForCategory(categoryId: string) {
+    return support.articleOptions
+      .filter((option) => option.categoryId === categoryId && option.id !== currentPreviewArticleId)
+      .reduce((max, option) => Math.max(max, option.orderIndex), 0)
+  }
+
+  function updateCategoryAndMoveToEnd(categoryId: string) {
+    setForm((previous) => ({
+      ...previous,
+      categoryId,
+      orderIndex: getLastPreviewOrderIndexForCategory(categoryId) + 10,
+    }))
   }
 
   function applySummaryDraft() {
@@ -937,6 +1240,7 @@ export default function DocsArticleEditor({ mode, categories, article }: Props) 
       productArea: template.productArea,
       docType: template.docType,
       difficulty: template.difficulty,
+      orderIndex: getLastPreviewOrderIndexForCategory(categoryId) + 10,
       status: "draft",
       visibility: "public",
       noindex: false,
@@ -1156,6 +1460,13 @@ export default function DocsArticleEditor({ mode, categories, article }: Props) 
     return null
   }
 
+  function validateDraft(next: FormState) {
+    if (next.slug.trim() && !/^[a-z0-9]+(?:-[a-z0-9]+)*$/.test(next.slug)) {
+      return "slug는 소문자·숫자·하이픈만 허용합니다."
+    }
+    return null
+  }
+
   async function reindexIfPublished(status: DocsArticleStatus) {
     if (status !== "published") return
 
@@ -1163,6 +1474,119 @@ export default function DocsArticleEditor({ mode, categories, article }: Props) 
       method: "POST",
       body: JSON.stringify(article?.id ? { articleId: article.id } : {}),
     }).catch(() => null)
+  }
+
+  async function saveDraft(overrides: Partial<FormState> = {}) {
+    setError(null)
+    setSavedMessage(null)
+    const next = { ...form, ...overrides }
+
+    if (mode === "create") {
+      await save({ ...overrides, status: "draft" })
+      return
+    }
+
+    if (!article) return
+
+    const validationError = validateDraft(next)
+    if (validationError) {
+      setError(validationError)
+      return
+    }
+
+    setSaving(true)
+    try {
+      const result = await adminFetchJson<DraftResponse>(
+        `/api/admin/docs/articles/${article.id}/draft`,
+        {
+          method: "PUT",
+          body: JSON.stringify(buildPayload(overrides)),
+        }
+      )
+      setSupport((previous) => ({ ...previous, draft: result.draft }))
+      setLastSavedForm(next)
+      setSavedMessage("작업 초안을 저장했습니다. 공개본은 아직 바뀌지 않았습니다.")
+      setTimeout(() => setSavedMessage(null), 3000)
+    } catch (error) {
+      setError(error instanceof Error ? error.message : "작업 초안을 저장하지 못했습니다.")
+    } finally {
+      setSaving(false)
+    }
+  }
+
+  async function publishDraft(overrides: Partial<FormState> = {}) {
+    setError(null)
+    setSavedMessage(null)
+    const next = { ...form, ...overrides }
+    const validationError = validate(next)
+    if (validationError) {
+      setError(validationError)
+      return
+    }
+
+    if (mode === "create") {
+      await save({ ...overrides, status: "published" })
+      return
+    }
+
+    if (!article) return
+
+    const confirmed = window.confirm(
+      "작업 초안을 공개본에 반영합니다. 저장 후 공개 /docs URL과 챗봇 인덱스가 최신화됩니다. 계속할까요?"
+    )
+    if (!confirmed) return
+
+    setSaving(true)
+    try {
+      await adminFetchJson<DraftResponse>(`/api/admin/docs/articles/${article.id}/draft`, {
+        method: "PUT",
+        body: JSON.stringify(buildPayload(overrides)),
+      })
+      const detail = await adminFetchJson<DocsArticleDetail>(
+        `/api/admin/docs/articles/${article.id}/draft/publish`,
+        { method: "POST" }
+      )
+      await reindexIfPublished(detail.status)
+      const savedForm = initialForm(detail, detail.categoryId)
+      setForm(savedForm)
+      setLastSavedForm(savedForm)
+      setSupport((previous) => ({ ...previous, draft: null }))
+      draftAppliedRef.current = true
+      setSavedMessage(
+        detail.status === "published" ? "공개본 반영 완료 · 검색 인덱스 반영" : "문서 반영 완료"
+      )
+      setTimeout(() => setSavedMessage(null), 3000)
+      router.refresh()
+    } catch (error) {
+      setError(error instanceof Error ? error.message : "공개본에 반영하지 못했습니다.")
+    } finally {
+      setSaving(false)
+    }
+  }
+
+  async function discardDraft() {
+    if (!article) return
+    if (!window.confirm("저장된 작업 초안을 삭제하고 현재 공개본 기준으로 되돌립니다. 계속할까요?")) {
+      return
+    }
+
+    setSaving(true)
+    setError(null)
+    try {
+      await adminFetchJson<{ ok: boolean }>(`/api/admin/docs/articles/${article.id}/draft`, {
+        method: "DELETE",
+      })
+      const liveForm = initialForm(article, article.categoryId)
+      setForm(liveForm)
+      setLastSavedForm(liveForm)
+      setSupport((previous) => ({ ...previous, draft: null }))
+      setSavedMessage("작업 초안을 삭제하고 공개본으로 되돌렸습니다.")
+      setTimeout(() => setSavedMessage(null), 3000)
+    } catch (error) {
+      setError(error instanceof Error ? error.message : "작업 초안을 삭제하지 못했습니다.")
+    } finally {
+      setSaving(false)
+    }
   }
 
   async function save(overrides: Partial<FormState> = {}) {
@@ -1292,26 +1716,67 @@ export default function DocsArticleEditor({ mode, categories, article }: Props) 
 
           <button
             type="button"
-            onClick={() => void save()}
+            onClick={() => void saveDraft()}
             disabled={saving}
             className="inline-flex items-center gap-1.5 rounded-lg border border-[#e8e8e4] bg-white px-3 py-2 text-[13px] font-medium text-[#111110] transition-colors hover:bg-[#f5f5f2] disabled:opacity-50"
           >
             <Save className="h-3.5 w-3.5" />
-            {saving ? "저장 중..." : form.status === "published" ? "현재 문서 저장" : "초안 저장"}
+            {saving ? "저장 중..." : mode === "edit" ? "임시 저장" : "초안 저장"}
           </button>
 
           <button
             type="button"
-            onClick={() => void save({ status: "published" })}
+            onClick={() =>
+              void publishDraft(
+                mode === "create" || form.status !== "published" ? { status: "published" } : {}
+              )
+            }
             disabled={saving}
             className="inline-flex items-center gap-1.5 rounded-lg bg-[#084734] px-3 py-2 text-[13px] font-medium text-white transition-colors hover:bg-[#065c41] disabled:opacity-50"
           >
-            {form.status === "published" ? "게시 상태로 저장" : "게시하기"}
+            {mode === "edit" && form.status === "published" ? "공개본에 반영" : "게시하기"}
           </button>
         </div>
       </div>
 
       <div className="mx-auto max-w-7xl px-6 py-8">
+        {mode === "edit" ? (
+          <div className="mb-6 rounded-2xl border border-[#DDEFE5] bg-[#F7FBF8] p-4">
+            <div className="flex flex-col gap-3 md:flex-row md:items-start md:justify-between">
+              <div>
+                <p className="text-[13px] font-semibold text-[#084734]">
+                  {support.draft ? "작업 초안 편집 중" : "공개본 보호 모드"}
+                </p>
+                <p className="mt-1 text-[12px] leading-relaxed text-[#1a1a1a]/55">
+                  임시 저장은 공개 문서를 바꾸지 않습니다. 최종 검수 후
+                  {" "}
+                  <span className="font-semibold text-[#111110]">공개본에 반영</span>
+                  을 눌러야 `/docs` 페이지와 검색 인덱스가 최신화됩니다.
+                </p>
+              </div>
+              {support.draft ? (
+                <div className="flex shrink-0 flex-wrap items-center gap-2">
+                  <span className="rounded-full border border-emerald-100 bg-white px-3 py-1 text-[12px] font-semibold text-[#084734]">
+                    임시 저장 {formatDateTime(support.draft.updatedAt)}
+                  </span>
+                  <button
+                    type="button"
+                    onClick={() => void discardDraft()}
+                    disabled={saving}
+                    className="inline-flex h-8 items-center justify-center rounded-lg border border-[#e8e8e4] bg-white px-2.5 text-[12px] font-semibold text-[#B85C33] transition-colors hover:bg-[#FEF3EE] disabled:cursor-not-allowed disabled:opacity-50"
+                  >
+                    초안 삭제
+                  </button>
+                </div>
+              ) : (
+                <span className="shrink-0 rounded-full border border-[#e8e8e4] bg-white px-3 py-1 text-[12px] font-semibold text-[#1a1a1a]/45">
+                  임시 저장 없음
+                </span>
+              )}
+            </div>
+          </div>
+        ) : null}
+
         <div className="grid gap-6 lg:grid-cols-[minmax(0,1fr)_320px] xl:grid-cols-[minmax(0,1fr)_360px]">
           <main className="space-y-6">
             <section className="space-y-4 rounded-2xl border border-[rgba(0,0,0,0.08)] bg-white p-6">
@@ -1356,7 +1821,7 @@ export default function DocsArticleEditor({ mode, categories, article }: Props) 
                   </label>
                   <select
                     value={form.categoryId}
-                    onChange={(event) => update("categoryId", event.target.value)}
+                    onChange={(event) => updateCategoryAndMoveToEnd(event.target.value)}
                     className="w-full rounded-lg border border-[rgba(0,0,0,0.12)] bg-white px-3 py-2 text-[13px] focus:border-[#111110]/30 focus:outline-none"
                   >
                     {categories.map((category) => (
@@ -1451,7 +1916,7 @@ export default function DocsArticleEditor({ mode, categories, article }: Props) 
             </section>
 
             <section className="rounded-2xl border border-[rgba(0,0,0,0.08)] bg-white p-6">
-              <div className="mb-4 flex flex-wrap items-center justify-between gap-3">
+              <div className="mb-4 space-y-3">
                 <div>
                   <h2 className="text-[13px] font-semibold uppercase tracking-wide text-[#1a1a1a]/40">
                     본문
@@ -1460,57 +1925,60 @@ export default function DocsArticleEditor({ mode, categories, article }: Props) 
                     Markdown 기반 · 공개 가이드 문서에 동일하게 렌더링됩니다
                   </p>
                 </div>
-                <div className="flex flex-wrap items-center gap-1.5">
-                  <ToolbarButton onClick={() => editorRef.current?.setHeading(2)}>H2</ToolbarButton>
-                  <ToolbarButton onClick={() => editorRef.current?.setHeading(3)}>H3</ToolbarButton>
-                  <span className="mx-0.5 h-4 w-px bg-[#e8e8e4]" aria-hidden="true" />
-                  <ToolbarButton onClick={() => editorRef.current?.toggleBold()} icon={<Type className="h-3 w-3" />}>
-                    굵게
-                  </ToolbarButton>
-                  <ToolbarButton onClick={() => editorRef.current?.toggleItalic()} icon={<Italic className="h-3 w-3" />}>
-                    기울이기
-                  </ToolbarButton>
-                  <ToolbarButton onClick={() => editorRef.current?.toggleHighlight()} icon={<Highlighter className="h-3 w-3" />}>
-                    강조색
-                  </ToolbarButton>
-                  <ToolbarButton onClick={() => editorRef.current?.wrapBrandColor()} icon={<Sparkles className="h-3 w-3" />}>
-                    브랜드색
-                  </ToolbarButton>
-                  <span className="mx-0.5 h-4 w-px bg-[#e8e8e4]" aria-hidden="true" />
-                  <ToolbarButton onClick={() => editorRef.current?.toggleBlockquote()} icon={<Quote className="h-3 w-3" />}>
-                    인용
-                  </ToolbarButton>
-                  <ToolbarButton onClick={() => editorRef.current?.toggleBulletList()} icon={<List className="h-3 w-3" />}>
-                    리스트
-                  </ToolbarButton>
-                  <ToolbarButton onClick={() => editorRef.current?.toggleOrderedList()} icon={<ListOrdered className="h-3 w-3" />}>
-                    번호
-                  </ToolbarButton>
-                  <span className="mx-0.5 h-4 w-px bg-[#e8e8e4]" aria-hidden="true" />
-                  <ToolbarButton onClick={() => editorRef.current?.insertLink()} icon={<Link2 className="h-3 w-3" />}>
-                    링크
-                  </ToolbarButton>
-                  <ToolbarButton onClick={() => editorRef.current?.insertImage()} icon={<ImageIcon className="h-3 w-3" />}>
-                    이미지
-                  </ToolbarButton>
-                  <label className="inline-flex cursor-pointer items-center gap-1 rounded-lg border border-[#e8e8e4] bg-white px-2 py-1.5 text-xs font-medium text-[#1a1a1a]/60 transition-colors duration-75 hover:border-[#1a1a1a]/20 hover:text-[#111110]">
-                    <Upload className="h-3 w-3" />
-                    {uploadingMedia ? "업로드 중" : "업로드"}
-                    <input
-                      type="file"
-                      accept="image/png,image/jpeg,image/webp,image/gif"
-                      disabled={uploadingMedia}
-                      className="sr-only"
-                      onChange={(event) => {
-                        const file = event.target.files?.[0]
-                        event.currentTarget.value = ""
-                        if (file) void uploadMedia(file)
-                      }}
-                    />
-                  </label>
-                  <ToolbarButton onClick={() => editorRef.current?.insertDivider()} icon={<Minus className="h-3 w-3" />}>
-                    구분선
-                  </ToolbarButton>
+                <div className="space-y-1.5">
+                  <div className="flex flex-wrap items-center gap-1.5">
+                    <ToolbarButton onClick={() => editorRef.current?.setHeading(2)}>H2</ToolbarButton>
+                    <ToolbarButton onClick={() => editorRef.current?.setHeading(3)}>H3</ToolbarButton>
+                    <span className="mx-0.5 h-4 w-px bg-[#e8e8e4]" aria-hidden="true" />
+                    <ToolbarButton onClick={() => editorRef.current?.toggleBold()} icon={<Type className="h-3 w-3" />}>
+                      굵게
+                    </ToolbarButton>
+                    <ToolbarButton onClick={() => editorRef.current?.toggleItalic()} icon={<Italic className="h-3 w-3" />}>
+                      기울이기
+                    </ToolbarButton>
+                    <ToolbarButton onClick={() => editorRef.current?.toggleHighlight()} icon={<Highlighter className="h-3 w-3" />}>
+                      강조색
+                    </ToolbarButton>
+                    <ToolbarButton onClick={() => editorRef.current?.wrapBrandColor()} icon={<Sparkles className="h-3 w-3" />}>
+                      브랜드색
+                    </ToolbarButton>
+                    <span className="mx-0.5 h-4 w-px bg-[#e8e8e4]" aria-hidden="true" />
+                    <ToolbarButton onClick={() => editorRef.current?.toggleBlockquote()} icon={<Quote className="h-3 w-3" />}>
+                      인용
+                    </ToolbarButton>
+                    <ToolbarButton onClick={() => editorRef.current?.toggleBulletList()} icon={<List className="h-3 w-3" />}>
+                      리스트
+                    </ToolbarButton>
+                    <ToolbarButton onClick={() => editorRef.current?.toggleOrderedList()} icon={<ListOrdered className="h-3 w-3" />}>
+                      번호
+                    </ToolbarButton>
+                  </div>
+                  <div className="flex flex-wrap items-center gap-1.5">
+                    <ToolbarButton onClick={() => editorRef.current?.insertLink()} icon={<Link2 className="h-3 w-3" />}>
+                      링크
+                    </ToolbarButton>
+                    <ToolbarButton onClick={() => editorRef.current?.insertImage()} icon={<ImageIcon className="h-3 w-3" />}>
+                      이미지
+                    </ToolbarButton>
+                    <label className="inline-flex cursor-pointer items-center gap-1 rounded-lg border border-[#e8e8e4] bg-white px-2 py-1.5 text-xs font-medium text-[#1a1a1a]/60 transition-colors duration-75 hover:border-[#1a1a1a]/20 hover:text-[#111110]">
+                      <Upload className="h-3 w-3" />
+                      {uploadingMedia ? "업로드 중" : "업로드"}
+                      <input
+                        type="file"
+                        accept="image/png,image/jpeg,image/webp,image/gif"
+                        disabled={uploadingMedia}
+                        className="sr-only"
+                        onChange={(event) => {
+                          const file = event.target.files?.[0]
+                          event.currentTarget.value = ""
+                          if (file) void uploadMedia(file)
+                        }}
+                      />
+                    </label>
+                    <ToolbarButton onClick={() => editorRef.current?.insertDivider()} icon={<Minus className="h-3 w-3" />}>
+                      구분선
+                    </ToolbarButton>
+                  </div>
                 </div>
               </div>
 
@@ -1533,39 +2001,27 @@ export default function DocsArticleEditor({ mode, categories, article }: Props) 
               </div>
 
               <div className="mt-5 rounded-xl border border-[#e8e8e4] bg-white p-4">
-                <div className="flex flex-wrap items-center justify-between gap-3">
+                <div className="flex flex-col gap-3 sm:flex-row sm:items-center sm:justify-between">
                   <div>
-                    <h3 className="text-[13px] font-semibold text-[#111110]">공개 섹션 미리보기</h3>
-                    <p className="mt-1 text-[11px] text-[#1a1a1a]/35">
-                      저장 시 공개 페이지와 챗봇 청킹에 반영되는 구조입니다.
+                    <h3 className="text-[13px] font-semibold text-[#111110]">사용자 화면 미리보기</h3>
+                    <p className="mt-1 text-[11px] leading-relaxed text-[#1a1a1a]/35">
+                      별도 창에서 공개 문서처럼 카테고리, 문서 순서, 본문 순서를 함께 확인합니다.
                     </p>
                   </div>
-                  <span className="rounded-full border border-[#e8e8e4] px-2.5 py-1 text-[11px] font-semibold text-[#1a1a1a]/45">
+                  <div className="flex shrink-0 items-center gap-2">
+                    <span className="rounded-full border border-[#e8e8e4] px-2.5 py-1 text-[11px] font-semibold text-[#1a1a1a]/45">
                     {previewSections.length}개 섹션 · {estimateReadMinutes(form.contentMarkdown)}분
-                  </span>
-                </div>
-
-                {previewSections.length === 0 ? (
-                  <p className="mt-4 text-[12px] text-[#1a1a1a]/35">
-                    본문에 섹션을 입력하면 미리보기가 표시됩니다.
-                  </p>
-                ) : (
-                  <div className="mt-4 divide-y divide-[#f0f0ec]">
-                    {previewSections.map((section, index) => (
-                      <div key={`${section.heading}:${index}`} className="py-3 first:pt-0 last:pb-0">
-                        <p className="text-[13px] font-semibold text-[#111110]">{section.heading}</p>
-                        <p className="mt-1 line-clamp-2 whitespace-pre-line text-[12px] leading-relaxed text-[#1a1a1a]/45">
-                          {section.body}
-                        </p>
-                        {section.steps?.length ? (
-                          <p className="mt-2 text-[11px] text-[#084734]">
-                            체크리스트 {section.steps.length}개
-                          </p>
-                        ) : null}
-                      </div>
-                    ))}
+                    </span>
+                    <button
+                      type="button"
+                      onClick={() => setPreviewOpen(true)}
+                      className="inline-flex h-9 items-center justify-center gap-1.5 rounded-lg bg-[#111110] px-3 text-[12px] font-semibold text-white transition-colors hover:bg-[#2a2a28]"
+                    >
+                      <Eye className="h-3.5 w-3.5" />
+                      미리보기 열기
+                    </button>
                   </div>
-                )}
+                </div>
               </div>
             </section>
 
@@ -1920,16 +2376,40 @@ export default function DocsArticleEditor({ mode, categories, article }: Props) 
                         ))}
                       </select>
                     </div>
-                    <div>
-                      <label className="mb-1.5 block text-[12px] font-medium text-[#1a1a1a]/50">
-                        정렬 순서 (낮을수록 위)
-                      </label>
-                      <input
-                        type="number"
-                        value={form.orderIndex}
-                        onChange={(event) => update("orderIndex", Number(event.target.value) || 0)}
-                        className="w-full rounded-lg border border-[rgba(0,0,0,0.12)] px-3 py-2 text-[13px] focus:border-[#111110]/30 focus:outline-none"
-                      />
+                    <div className="rounded-xl border border-[#e8e8e4] bg-[#FAFAF8] p-3">
+                      <div className="flex items-start justify-between gap-3">
+                        <div>
+                          <p className="text-[12px] font-semibold text-[#111110]">
+                            왼쪽 사이드 순서
+                          </p>
+                          <p className="mt-1 text-[11px] leading-relaxed text-[#1a1a1a]/38">
+                            공개 문서 왼쪽 카테고리 목록에서 보일 위치입니다.
+                          </p>
+                        </div>
+                        <span className="shrink-0 rounded-full border border-[#e8e8e4] bg-white px-2.5 py-1 text-[11px] font-bold text-[#111110]">
+                          {previewSidebarPosition}/{previewSidebarTotal}
+                        </span>
+                      </div>
+                      <div className="mt-3 grid grid-cols-2 gap-2">
+                        <button
+                          type="button"
+                          onClick={() => moveCurrentPreviewSidebarOrder("up")}
+                          disabled={!canMovePreviewUp}
+                          className="inline-flex h-9 items-center justify-center gap-1.5 rounded-lg border border-[#e8e8e4] bg-white text-[12px] font-semibold text-[#111110] transition-colors hover:bg-[#f5f5f2] disabled:cursor-not-allowed disabled:opacity-35"
+                        >
+                          <ChevronUp className="h-3.5 w-3.5" />
+                          위로
+                        </button>
+                        <button
+                          type="button"
+                          onClick={() => moveCurrentPreviewSidebarOrder("down")}
+                          disabled={!canMovePreviewDown}
+                          className="inline-flex h-9 items-center justify-center gap-1.5 rounded-lg border border-[#e8e8e4] bg-white text-[12px] font-semibold text-[#111110] transition-colors hover:bg-[#f5f5f2] disabled:cursor-not-allowed disabled:opacity-35"
+                        >
+                          <ChevronDown className="h-3.5 w-3.5" />
+                          아래로
+                        </button>
+                      </div>
                     </div>
                   </div>
 
@@ -2150,6 +2630,86 @@ export default function DocsArticleEditor({ mode, categories, article }: Props) 
           </aside>
         </div>
       </div>
+
+      {previewOpen ? (
+        <div
+          role="dialog"
+          aria-modal="true"
+          aria-label="사용자 화면 미리보기"
+          className="fixed inset-0 z-50 bg-[#111110]/55 p-3 backdrop-blur-sm sm:p-5"
+        >
+          <div className="mx-auto flex h-full max-w-[1440px] flex-col overflow-hidden rounded-2xl border border-black/[0.08] bg-[#FAFAF8] shadow-2xl">
+            <div className="flex flex-wrap items-center justify-between gap-3 border-b border-[#e8e8e4] bg-white px-4 py-3 sm:px-5">
+              <div className="min-w-0">
+                <p className="text-[11px] font-semibold uppercase tracking-[0.14em] text-[#084734]">
+                  User Preview
+                </p>
+                <div className="mt-1 flex min-w-0 flex-wrap items-center gap-2 text-[12px] text-[#1a1a1a]/45">
+                  <span className="truncate font-mono">{publicPath}</span>
+                  <span className="rounded-full border border-[#e8e8e4] px-2 py-0.5 font-semibold text-[#1a1a1a]/45">
+                    왼쪽 사이드 {previewSidebarPosition}/{previewSidebarTotal}
+                  </span>
+                </div>
+              </div>
+              <div className="flex items-center gap-2">
+                {mode === "edit" && article ? (
+                  <Link
+                    href={article.publicPath}
+                    target="_blank"
+                    className="inline-flex h-9 items-center justify-center gap-1.5 rounded-lg border border-[#e8e8e4] bg-white px-3 text-[12px] font-semibold text-[#111110] transition-colors hover:bg-[#f5f5f2]"
+                  >
+                    <ExternalLink className="h-3.5 w-3.5" />
+                    공개 페이지
+                  </Link>
+                ) : null}
+                <button
+                  type="button"
+                  onClick={() => setPreviewOpen(false)}
+                  className="inline-flex h-9 w-9 items-center justify-center rounded-lg border border-[#e8e8e4] bg-white text-[#1a1a1a]/55 transition-colors hover:bg-[#f5f5f2] hover:text-[#111110]"
+                >
+                  <X className="h-4 w-4" />
+                  <span className="sr-only">미리보기 닫기</span>
+                </button>
+              </div>
+            </div>
+
+            <div className="min-h-0 flex-1 overflow-y-auto">
+              <section className="px-4 py-6 sm:px-6 lg:px-8">
+                <div className="grid gap-8 lg:grid-cols-[240px_minmax(0,1fr)] xl:grid-cols-[260px_minmax(0,1fr)_220px]">
+                  <div className="lg:sticky lg:top-6 lg:self-start">
+                    <DocsSidebar groups={previewNavGroups} title="가이드" />
+                  </div>
+                  <main id="preview-current-doc" className="min-w-0">
+                    <DocsArticle
+                      eyebrow={activeCategoryTitle}
+                      title={form.title.trim() || "새 문서"}
+                      description={form.description.trim() || "문서 설명이 여기에 표시됩니다."}
+                      meta={
+                        <div className="flex flex-wrap items-center gap-4">
+                          <span className="inline-flex items-center gap-1.5">
+                            <Clock3 className="h-4 w-4" />
+                            {estimateReadMinutes(form.contentMarkdown)}분 읽기
+                          </span>
+                          {previewAudience ? <span>추천 대상: {previewAudience}</span> : null}
+                        </div>
+                      }
+                      sections={previewArticleSections}
+                    />
+                    {previewSections.length === 0 ? (
+                      <p className="mt-8 rounded-xl border border-dashed border-[#e8e8e4] bg-white px-4 py-8 text-center text-[13px] text-[#1a1a1a]/35">
+                        본문에 섹션을 입력하면 공개 문서 미리보기가 표시됩니다.
+                      </p>
+                    ) : null}
+                  </main>
+                  <div className="hidden xl:sticky xl:top-6 xl:block xl:self-start">
+                    <DocsTableOfContents items={previewTocItems} title="본문 순서" />
+                  </div>
+                </div>
+              </section>
+            </div>
+          </div>
+        </div>
+      ) : null}
     </div>
   )
 }

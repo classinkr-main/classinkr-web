@@ -15,6 +15,11 @@ const VALID_SOURCES = new Set<LeadSource>([
   "newsletter",
   "meta_lead_ads",
 ])
+const WECOM_LEAD_SOURCES = new Set<LeadSource>([
+  "demo_modal",
+  "contact_page",
+  "meta_lead_ads",
+])
 
 const EMAIL_REGEX = /^[^\s@]+@[^\s@]+\.[^\s@]+$/
 
@@ -45,6 +50,22 @@ function normalizeString(value: unknown) {
   if (typeof value !== "string") return undefined
   const trimmed = value.trim()
   return trimmed || undefined
+}
+
+function normalizeTrackingSlug(value: unknown) {
+  const normalized = normalizeString(value)
+  if (!normalized) return undefined
+  return normalized
+    .toLowerCase()
+    .replace(/[^a-z0-9_.:-]+/g, "-")
+    .replace(/^-+|-+$/g, "")
+    .slice(0, 120) || undefined
+}
+
+function inferLeadMagnet(value: string | undefined) {
+  if (!value) return undefined
+  const match = value.match(/(?:^|[:/])lead[_-]?magnet[:/]([a-z0-9_.:-]+)/i)
+  return normalizeTrackingSlug(match?.[1])
 }
 
 function normalizeEmail(value: unknown) {
@@ -102,6 +123,7 @@ export function buildLeadPayload(raw: unknown): LeadPayload {
     marketingConsent: body.marketingConsent === true,
     eventSlug: normalizeString(body.eventSlug),
     sourceDetail: normalizeString(body.sourceDetail ?? body.source_detail),
+    leadMagnet: normalizeTrackingSlug(body.leadMagnet ?? body.lead_magnet),
     utmSource: normalizeString(body.utmSource ?? body.utm_source),
     utmMedium: normalizeString(body.utmMedium ?? body.utm_medium),
     utmCampaign: normalizeString(body.utmCampaign ?? body.utm_campaign),
@@ -141,6 +163,8 @@ export function buildLeadPayload(raw: unknown): LeadPayload {
     throw new Error("뉴스레터 구독에는 이메일이 필요합니다.")
   }
 
+  payload.leadMagnet ??= inferLeadMagnet(payload.sourceDetail)
+
   return payload
 }
 
@@ -153,6 +177,7 @@ function buildLeadNotificationTitle(body: LeadPayload) {
 function buildLeadNotificationMessage(body: LeadPayload) {
   return [
     body.name,
+    body.org,
     body.role,
     body.size ? `예상 사용자 ${body.size}` : undefined,
     body.source,
@@ -175,9 +200,20 @@ export async function submitLeadCapture(raw: unknown): Promise<LeadSubmissionRes
       const savedLead = await saveLead({
         ...body,
         notes,
+        source_detail: body.sourceDetail,
+        lead_magnet: body.leadMagnet,
         utm_source: body.utmSource,
         utm_medium: body.utmMedium,
         utm_campaign: body.utmCampaign,
+        utm_term: body.utmTerm,
+        utm_content: body.utmContent,
+        gclid: body.gclid,
+        fbclid: body.fbclid,
+        msclkid: body.msclkid,
+        ttclid: body.ttclid,
+        landing_page: body.landingPage,
+        current_page: body.currentPage,
+        referrer: body.referrer,
       })
       savedLeadId = savedLead.id
       stored = true
@@ -242,6 +278,7 @@ export async function submitLeadCapture(raw: unknown): Promise<LeadSubmissionRes
           leadId: savedLeadId,
           source: body.source,
           sourceDetail: body.sourceDetail,
+          leadMagnet: body.leadMagnet,
           name: body.name,
           org: body.org,
           role: body.role,
@@ -251,10 +288,17 @@ export async function submitLeadCapture(raw: unknown): Promise<LeadSubmissionRes
           utmSource: body.utmSource,
           utmMedium: body.utmMedium,
           utmCampaign: body.utmCampaign,
+          utmTerm: body.utmTerm,
+          utmContent: body.utmContent,
+          gclid: body.gclid,
+          fbclid: body.fbclid,
+          msclkid: body.msclkid,
+          ttclid: body.ttclid,
           landingPage: body.landingPage,
           currentPage: body.currentPage,
           referrer: body.referrer,
         },
+        channels: WECOM_LEAD_SOURCES.has(body.source) ? ["wecom_webhook"] : undefined,
       }).catch((error) => {
         console.error("[lead-capture] notification emit failed:", error)
       })
@@ -347,6 +391,7 @@ async function sendToChannelTalk(data: LeadPayload, url?: string) {
     event: "new_lead",
     source: data.source,
     sourceDetail: data.sourceDetail,
+    leadMagnet: data.leadMagnet,
     name: data.name || data.email,
     org: data.org,
     phone: data.phone,
@@ -374,7 +419,7 @@ async function syncToSubscriberDB(data: LeadPayload) {
         : data.source === "meta_lead_ads"
           ? ["meta_lead_ads"]
           : data.source === "newsletter"
-            ? ["newsletter"]
+            ? ["newsletter", ...(data.leadMagnet ? ["lead_magnet", data.leadMagnet] : [])]
           : [],
       source: data.sourceDetail ?? data.source,
     })

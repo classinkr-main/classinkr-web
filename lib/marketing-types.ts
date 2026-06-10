@@ -113,6 +113,7 @@ export interface NewsletterSubscribeRequest {
   email: string
   name?: string
   source?: string
+  leadMagnet?: string
   tags?: string[]
 }
 

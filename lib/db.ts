@@ -36,9 +36,20 @@ export interface LeadRecord {
   status: LeadStatus
   branch?: string
   notes?: string
+  source_detail?: string
+  lead_magnet?: string
   utm_source?: string
   utm_medium?: string
   utm_campaign?: string
+  utm_term?: string
+  utm_content?: string
+  gclid?: string
+  fbclid?: string
+  msclkid?: string
+  ttclid?: string
+  landing_page?: string
+  current_page?: string
+  referrer?: string
 }
 
 export interface SiteSettings {

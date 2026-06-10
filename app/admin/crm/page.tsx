@@ -7,6 +7,7 @@ import {
   Phone, Mail, Building2, Users, Calendar,
   MessageSquare, Tag, Save, Loader2, Plus,
   PhoneCall, Bell, UserPlus, Link2, ExternalLink,
+  Clock, Search,
 } from "lucide-react"
 import { adminFetch, adminFetchJsonCached } from "@/lib/admin-client"
 import { Button } from "@/components/ui/button"
@@ -28,6 +29,8 @@ const STATUS_COLOR: Record<LeadStatus, string> = {
 const SOURCE_LABEL: Record<string, string> = {
   demo_modal: "데모 신청", contact_page: "문의", newsletter: "뉴스레터", meta_lead_ads: "Meta 리드",
 }
+const RESPONSE_TARGET_SOURCES = new Set(["demo_modal", "contact_page", "meta_lead_ads"])
+type LeadFilter = LeadStatus | "all" | "unresponded" | "unresponded_24h" | "unresponded_48h" | "unassigned"
 
 const LOG_TYPE_LABEL: Record<ContactLogType, string> = {
   call: "전화", sms: "문자", kakao: "카카오", email: "이메일",
@@ -103,8 +106,48 @@ function isActiveLead(status: LeadStatus) {
   return status !== "converted" && status !== "closed"
 }
 
+function isResponseTargetLead(lead: LeadRecord) {
+  return RESPONSE_TARGET_SOURCES.has(lead.source)
+}
+
+function isUnrespondedLead(lead: LeadRecord) {
+  return lead.status === "new" && isResponseTargetLead(lead)
+}
+
+function hoursBetween(from: string | Date, to: string | Date = new Date()) {
+  const fromDate = from instanceof Date ? from : new Date(from)
+  const toDate = to instanceof Date ? to : new Date(to)
+  const diff = toDate.getTime() - fromDate.getTime()
+  return Math.max(0, Math.floor(diff / 3_600_000))
+}
+
+function formatResponseAge(hours: number) {
+  if (hours < 24) return `${hours}시간`
+  const days = Math.floor(hours / 24)
+  const rest = hours % 24
+  return rest > 0 ? `${days}일 ${rest}시간` : `${days}일`
+}
+
 function getLeadOwner(lead: LeadRecord) {
   return lead.assigned_to?.trim() || "미배정"
+}
+
+function getLeadSourceDetail(lead: LeadRecord) {
+  return lead.source_detail?.trim() || ""
+}
+
+function getLeadMagnetLabel(value?: string) {
+  if (!value) return ""
+  return value
+    .split(/[-_:]+/)
+    .filter(Boolean)
+    .map((part) => part.slice(0, 1).toUpperCase() + part.slice(1))
+    .join(" ")
+}
+
+function getLeadDisplayName(lead?: LeadRecord) {
+  if (!lead) return "이 리드"
+  return lead.name?.trim() || lead.org?.trim() || lead.email?.trim() || lead.phone?.trim() || "이름 없는 리드"
 }
 
 // ─── 복사 버튼 ─────────────────────────────────────────────────
@@ -242,7 +285,7 @@ function LeadDrawer({
   onNotesChange: (id: string, notes: string) => Promise<void>
   onFollowUpChange: (id: string, date: string) => Promise<void>
   onAssignedToChange: (id: string, name: string) => Promise<void>
-  onDelete: (id: string) => void
+  onDelete: (id: string) => Promise<void> | void
   onAddLog: (entry: { type: ContactLogType; result?: ContactLogResult; notes?: string; contacted_by?: string }) => Promise<void>
   onDeleteLog: (logId: string) => Promise<void>
   onConvert: (lead: LeadRecord) => Promise<void>
@@ -261,10 +304,22 @@ function LeadDrawer({
   const [showLogForm, setShowLogForm] = useState(false)
   const [converting, setConverting] = useState(false)
   const score = calcScore(lead)
+  const unrespondedHours = isUnrespondedLead(lead) ? hoursBetween(lead.timestamp) : null
   const attributionItems = [
+    { label: "Source Detail", value: lead.source_detail },
+    { label: "Lead Magnet", value: getLeadMagnetLabel(lead.lead_magnet) || lead.lead_magnet },
     { label: "UTM Source", value: lead.utm_source },
     { label: "UTM Medium", value: lead.utm_medium },
     { label: "UTM Campaign", value: lead.utm_campaign },
+    { label: "UTM Term", value: lead.utm_term },
+    { label: "UTM Content", value: lead.utm_content },
+    { label: "GCLID", value: lead.gclid },
+    { label: "FBCLID", value: lead.fbclid },
+    { label: "MSCLKID", value: lead.msclkid },
+    { label: "TTCLID", value: lead.ttclid },
+    { label: "Landing Page", value: lead.landing_page },
+    { label: "Current Page", value: lead.current_page },
+    { label: "Referrer", value: lead.referrer },
   ].filter((item) => item.value)
 
   useEffect(() => {
@@ -312,6 +367,18 @@ function LeadDrawer({
               <span className="text-[11px] px-2 py-0.5 rounded-full bg-[#f0f0ec] text-[#1a1a1a]/50 font-medium">
                 {SOURCE_LABEL[lead.source] ?? lead.source}
               </span>
+              {unrespondedHours !== null && (
+                <span className={`inline-flex items-center gap-1 rounded-full px-2 py-0.5 text-[11px] font-medium ${
+                  unrespondedHours >= 48
+                    ? "bg-[#FEF3EE] text-[#B85C33]"
+                    : unrespondedHours >= 24
+                      ? "bg-yellow-50 text-yellow-700"
+                      : "bg-[#f0f0ec] text-[#1a1a1a]/50"
+                }`}>
+                  <Clock className="h-3 w-3" />
+                  미응대 {formatResponseAge(unrespondedHours)}
+                </span>
+              )}
               <ScoreBadge score={score} />
             </div>
           </div>
@@ -631,12 +698,17 @@ function LeadDrawer({
 export default function CrmPage() {
   const [leads, setLeads] = useState<LeadRecord[]>([])
   const [loading, setLoading] = useState(false)
-  const [filter, setFilter] = useState<LeadStatus | "all">("all")
+  const [filter, setFilter] = useState<LeadFilter>("all")
+  const [searchQuery, setSearchQuery] = useState("")
+  const [sourceDetailFilter, setSourceDetailFilter] = useState("all")
+  const [leadMagnetFilter, setLeadMagnetFilter] = useState("all")
   const [selected, setSelected] = useState<LeadRecord | null>(null)
   const [logs, setLogs] = useState<ContactLogRecord[]>([])
   const [logsLoading, setLogsLoading] = useState(false)
   const [toast, setToast] = useState<{ msg: string; type: "success" | "error" } | null>(null)
   const [events, setEvents] = useState<PublicEvent[]>([])
+  const [selectedLeadIds, setSelectedLeadIds] = useState<Set<string>>(() => new Set())
+  const [deletingIds, setDeletingIds] = useState<Set<string>>(() => new Set())
 
   useEffect(() => {
     let cancelled = false
@@ -800,23 +872,122 @@ export default function CrmPage() {
     }
   }
 
-  const handleDelete = async (id: string) => {
-    if (!confirm("이 리드를 삭제하시겠습니까?")) return
+  const handleDeleteMany = async (
+    ids: string[],
+    options?: { confirmMessage?: string; successMessage?: string }
+  ) => {
+    const uniqueIds = Array.from(new Set(ids)).filter(Boolean)
+    if (uniqueIds.length === 0) return
+
+    const confirmMessage =
+      options?.confirmMessage ??
+      `${uniqueIds.length}개 리드를 완전히 삭제할까요? 실수/스팸 리드 정리용이며 되돌릴 수 없습니다.`
+
+    if (!confirm(confirmMessage)) return
+
+    setDeletingIds((prev) => {
+      const next = new Set(prev)
+      uniqueIds.forEach((id) => next.add(id))
+      return next
+    })
+
     try {
-      const res = await adminFetch(`/api/admin/leads/${id}`, { method: "DELETE" })
-      await readAdminResponse(res, "리드를 삭제하지 못했습니다.")
-      setLeads((prev) => prev.filter((l) => l.id !== id))
-      setSelected(null)
-      showToast("리드가 삭제되었습니다.")
-    } catch (err) {
-      showToast(err instanceof Error ? err.message : "리드를 삭제하지 못했습니다.", "error")
+      const results = await Promise.allSettled(
+        uniqueIds.map(async (id) => {
+          const res = await adminFetch(`/api/admin/leads/${id}`, { method: "DELETE" })
+          await readAdminResponse<{ ok: true }>(res, "리드를 삭제하지 못했습니다.")
+          return id
+        })
+      )
+      const deletedIds = results
+        .filter((result): result is PromiseFulfilledResult<string> => result.status === "fulfilled")
+        .map((result) => result.value)
+      const failed = results.find((result): result is PromiseRejectedResult => result.status === "rejected")
+      const failedCount = uniqueIds.length - deletedIds.length
+
+      if (deletedIds.length > 0) {
+        const deletedIdSet = new Set(deletedIds)
+        setLeads((prev) => prev.filter((lead) => !deletedIdSet.has(lead.id)))
+        setSelected((prev) => (prev && deletedIdSet.has(prev.id) ? null : prev))
+        setSelectedLeadIds((prev) => {
+          const next = new Set(prev)
+          deletedIds.forEach((id) => next.delete(id))
+          return next
+        })
+      }
+
+      if (failedCount > 0) {
+        const message = failed?.reason instanceof Error ? failed.reason.message : "리드를 삭제하지 못했습니다."
+        showToast(
+          deletedIds.length > 0 ? `${deletedIds.length}개 삭제, ${failedCount}개 실패: ${message}` : message,
+          "error"
+        )
+        return
+      }
+
+      showToast(options?.successMessage ?? `${deletedIds.length}개 리드를 삭제했습니다.`)
+    } finally {
+      setDeletingIds((prev) => {
+        const next = new Set(prev)
+        uniqueIds.forEach((id) => next.delete(id))
+        return next
+      })
     }
   }
 
-  const today = toLocalDateKey(new Date())
-  const filtered = filter === "all" ? leads : leads.filter((l) => l.status === filter)
+  const handleDelete = async (id: string) => {
+    const lead = leads.find((item) => item.id === id)
+    await handleDeleteMany([id], {
+      confirmMessage: `"${getLeadDisplayName(lead)}" 리드를 완전히 삭제할까요? 연락 기록도 함께 정리되며 되돌릴 수 없습니다.`,
+      successMessage: "리드가 삭제되었습니다.",
+    })
+  }
+
+  const now = new Date()
+  const today = toLocalDateKey(now)
   const counts = leads.reduce((acc, l) => { acc[l.status] = (acc[l.status] ?? 0) + 1; return acc }, {} as Record<string, number>)
   const activeLeads = leads.filter((l) => isActiveLead(l.status))
+  const unrespondedLeads = leads.filter(isUnrespondedLead)
+  const unresponded24h = unrespondedLeads.filter((lead) => hoursBetween(lead.timestamp, now) >= 24)
+  const unresponded48h = unrespondedLeads.filter((lead) => hoursBetween(lead.timestamp, now) >= 48)
+  const unassignedLeads = activeLeads.filter((l) => !l.assigned_to?.trim())
+  const sourceDetailOptions = Array.from(
+    new Set(leads.map((lead) => getLeadSourceDetail(lead)).filter(Boolean))
+  ).sort((a, b) => a.localeCompare(b, "ko"))
+  const leadMagnetOptions = Array.from(
+    new Set(leads.map((lead) => lead.lead_magnet?.trim()).filter(Boolean) as string[])
+  ).sort((a, b) => a.localeCompare(b, "ko"))
+  const normalizedSearch = searchQuery.trim().toLowerCase()
+  const filtered = leads.filter((lead) => {
+    if (filter === "all") return true
+    if (filter === "unresponded") return isUnrespondedLead(lead)
+    if (filter === "unresponded_24h") return isUnrespondedLead(lead) && hoursBetween(lead.timestamp, now) >= 24
+    if (filter === "unresponded_48h") return isUnrespondedLead(lead) && hoursBetween(lead.timestamp, now) >= 48
+    if (filter === "unassigned") return isActiveLead(lead.status) && !lead.assigned_to?.trim()
+    return lead.status === filter
+  }).filter((lead) => {
+    if (sourceDetailFilter !== "all" && getLeadSourceDetail(lead) !== sourceDetailFilter) return false
+    if (leadMagnetFilter !== "all" && lead.lead_magnet !== leadMagnetFilter) return false
+    if (!normalizedSearch) return true
+
+    return [
+      lead.name,
+      lead.org,
+      lead.role,
+      lead.size,
+      lead.email,
+      lead.phone,
+      lead.message,
+      lead.source,
+      lead.source_detail,
+      lead.lead_magnet,
+      lead.utm_source,
+      lead.utm_medium,
+      lead.utm_campaign,
+    ]
+      .filter(Boolean)
+      .some((value) => String(value).toLowerCase().includes(normalizedSearch))
+  })
 
   const todayFollowUps = leads.filter((l) =>
     l.follow_up_at && toLocalDateKey(l.follow_up_at) === today && isActiveLead(l.status)
@@ -824,7 +995,6 @@ export default function CrmPage() {
   const overdueFollowUps = leads.filter((l) =>
     l.follow_up_at && toLocalDateKey(l.follow_up_at) < today && isActiveLead(l.status)
   )
-  const unassignedLeads = activeLeads.filter((l) => !l.assigned_to?.trim())
   const stalledLeads = activeLeads.filter((lead) => {
     const createdDays = daysBetween(lead.timestamp)
     const followUpKey = lead.follow_up_at ? toLocalDateKey(lead.follow_up_at) : null
@@ -849,17 +1019,61 @@ export default function CrmPage() {
   const ownerSummaries = Array.from(
     activeLeads.reduce((acc, lead) => {
       const owner = getLeadOwner(lead)
-      const current = acc.get(owner) ?? { owner, total: 0, newCount: 0, contactedCount: 0, overdueCount: 0, highScoreCount: 0 }
+      const current = acc.get(owner) ?? { owner, total: 0, newCount: 0, contactedCount: 0, unrespondedCount: 0, overdueCount: 0, highScoreCount: 0 }
       current.total += 1
       if (lead.status === "new") current.newCount += 1
       if (lead.status === "contacted") current.contactedCount += 1
+      if (isUnrespondedLead(lead)) current.unrespondedCount += 1
       if (lead.follow_up_at && toLocalDateKey(lead.follow_up_at) < today) current.overdueCount += 1
       if (calcScore(lead) >= 70) current.highScoreCount += 1
       acc.set(owner, current)
       return acc
-    }, new Map<string, { owner: string; total: number; newCount: number; contactedCount: number; overdueCount: number; highScoreCount: number }>())
+    }, new Map<string, { owner: string; total: number; newCount: number; contactedCount: number; unrespondedCount: number; overdueCount: number; highScoreCount: number }>())
       .values()
   ).sort((a, b) => b.total - a.total || b.overdueCount - a.overdueCount)
+  const filterCards: Array<{ key: LeadFilter; label: string; count: number }> = [
+    { key: "all", label: "전체", count: leads.length },
+    { key: "new", label: "신규", count: counts.new ?? 0 },
+    { key: "unresponded", label: "응대 전", count: unrespondedLeads.length },
+    { key: "unresponded_24h", label: "24h+", count: unresponded24h.length },
+    { key: "unresponded_48h", label: "48h+", count: unresponded48h.length },
+    { key: "unassigned", label: "미배정", count: unassignedLeads.length },
+    { key: "contacted", label: "연락중", count: counts.contacted ?? 0 },
+    { key: "converted", label: "전환", count: counts.converted ?? 0 },
+    { key: "closed", label: "종료", count: counts.closed ?? 0 },
+  ]
+  const pipelineCards: Array<{ label: string; value: number; tone: string; filterKey?: LeadFilter }> = [
+    { label: "신규 유입", value: counts.new ?? 0, tone: "text-[#111110]", filterKey: "new" },
+    { label: "응대 전", value: unrespondedLeads.length, tone: "text-[#B85C33]", filterKey: "unresponded" },
+    { label: "24h+", value: unresponded24h.length, tone: "text-yellow-700", filterKey: "unresponded_24h" },
+    { label: "48h+", value: unresponded48h.length, tone: "text-[#B85C33]", filterKey: "unresponded_48h" },
+    { label: "연락 진행", value: counts.contacted ?? 0, tone: "text-yellow-700", filterKey: "contacted" },
+    { label: "오늘 예정", value: todayFollowUps.length, tone: "text-[#084734]" },
+  ]
+  const filteredIds = filtered.map((lead) => lead.id)
+  const allFilteredSelected = filteredIds.length > 0 && filteredIds.every((id) => selectedLeadIds.has(id))
+  const selectedFilteredCount = filteredIds.filter((id) => selectedLeadIds.has(id)).length
+  const selectedDeleting = Array.from(selectedLeadIds).some((id) => deletingIds.has(id))
+
+  const handleToggleLeadSelection = (id: string, checked: boolean) => {
+    setSelectedLeadIds((prev) => {
+      const next = new Set(prev)
+      if (checked) next.add(id)
+      else next.delete(id)
+      return next
+    })
+  }
+
+  const handleToggleFilteredSelection = (checked: boolean) => {
+    setSelectedLeadIds((prev) => {
+      const next = new Set(prev)
+      filteredIds.forEach((id) => {
+        if (checked) next.add(id)
+        else next.delete(id)
+      })
+      return next
+    })
+  }
 
   return (
     <div>
@@ -886,18 +1100,19 @@ export default function CrmPage() {
               활성 {activeLeads.length}건
             </span>
           </div>
-          <div className="grid grid-cols-2 gap-3 sm:grid-cols-3 xl:grid-cols-5">
-            {[
-              { label: "신규 유입", value: counts.new ?? 0, tone: "text-[#111110]" },
-              { label: "연락 진행", value: counts.contacted ?? 0, tone: "text-yellow-700" },
-              { label: "오늘 예정", value: todayFollowUps.length, tone: "text-[#084734]" },
-              { label: "지연 리드", value: overdueFollowUps.length, tone: "text-[#B85C33]" },
-              { label: "미배정", value: unassignedLeads.length, tone: "text-[#1a1a1a]/60" },
-            ].map((item) => (
-              <div key={item.label} className="rounded-xl bg-[#fafaf8] px-3 py-3">
+          <div className="grid grid-cols-2 gap-3 sm:grid-cols-3 xl:grid-cols-6">
+            {pipelineCards.map((item) => (
+              <button
+                key={item.label}
+                type="button"
+                onClick={() => item.filterKey && setFilter(item.filterKey)}
+                className={`rounded-xl bg-[#fafaf8] px-3 py-3 text-left transition-colors ${
+                  item.filterKey ? "hover:bg-[#f0f0ec]" : "cursor-default"
+                }`}
+              >
                 <p className="text-[11px] font-medium text-[#1a1a1a]/40">{item.label}</p>
                 <p className={`mt-1 text-2xl font-bold ${item.tone}`}>{item.value}</p>
-              </div>
+              </button>
             ))}
           </div>
           <div className="mt-4 grid gap-2 sm:grid-cols-2">
@@ -943,6 +1158,7 @@ export default function CrmPage() {
                   </div>
                   <div className="mt-1.5 flex flex-wrap gap-2 text-[11px] text-[#1a1a1a]/40">
                     <span>신규 {owner.newCount}</span>
+                    {owner.unrespondedCount > 0 && <span className="font-medium text-[#B85C33]">응대 전 {owner.unrespondedCount}</span>}
                     <span>연락중 {owner.contactedCount}</span>
                     <span>고득점 {owner.highScoreCount}</span>
                     {owner.overdueCount > 0 && <span className="font-medium text-[#B85C33]">지연 {owner.overdueCount}</span>}
@@ -999,26 +1215,108 @@ export default function CrmPage() {
       )}
 
       {/* 필터 카운트 카드 */}
-      <div className="mb-6 grid grid-cols-2 gap-3 sm:grid-cols-3 lg:grid-cols-5">
-        {([
-          ["all", "전체", leads.length],
-          ["new", "신규", counts.new ?? 0],
-          ["contacted", "연락중", counts.contacted ?? 0],
-          ["converted", "전환", counts.converted ?? 0],
-          ["closed", "종료", counts.closed ?? 0],
-        ] as const).map(([key, label, count]) => (
+      <div className="mb-6 grid grid-cols-2 gap-3 sm:grid-cols-4 xl:grid-cols-9">
+        {filterCards.map((item) => (
           <button
-            key={key}
-            onClick={() => setFilter(key)}
+            key={item.key}
+            onClick={() => setFilter(item.key)}
             className={`min-h-[88px] rounded-xl border p-3 text-left transition-all sm:rounded-2xl sm:p-4 ${
-              filter === key ? "border-[#111110] bg-[#111110] text-white" : "border-[#e8e8e4] bg-white hover:border-[#c8c8c4] hover:shadow-sm"
+              filter === item.key ? "border-[#111110] bg-[#111110] text-white" : "border-[#e8e8e4] bg-white hover:border-[#c8c8c4] hover:shadow-sm"
             }`}
           >
-            <p className={`text-[11px] font-medium mb-1 ${filter === key ? "text-white/60" : "text-[#1a1a1a]/40"}`}>{label}</p>
-            <p className="text-2xl font-bold">{count}</p>
+            <p className={`text-[11px] font-medium mb-1 ${filter === item.key ? "text-white/60" : "text-[#1a1a1a]/40"}`}>{item.label}</p>
+            <p className="text-2xl font-bold">{item.count}</p>
           </button>
         ))}
       </div>
+
+      <div className="mb-4 rounded-2xl border border-[#e8e8e4] bg-white p-3">
+        <div className="grid gap-3 lg:grid-cols-[minmax(0,1fr)_240px_240px]">
+          <label className="relative block">
+            <Search className="pointer-events-none absolute left-3.5 top-1/2 h-4 w-4 -translate-y-1/2 text-[#1a1a1a]/25" />
+            <input
+              value={searchQuery}
+              onChange={(event) => setSearchQuery(event.target.value)}
+              placeholder="이름, 기관, 연락처, 세부 유입 검색"
+              className="h-11 w-full rounded-xl border border-[#e8e8e4] bg-[#fafaf8] pl-10 pr-3 text-[13px] text-[#111110] outline-none transition-colors placeholder:text-[#1a1a1a]/30 focus:border-[#c8c8c4] focus:bg-white"
+            />
+          </label>
+          <select
+            value={sourceDetailFilter}
+            onChange={(event) => setSourceDetailFilter(event.target.value)}
+            className="h-11 rounded-xl border border-[#e8e8e4] bg-[#fafaf8] px-3 text-[13px] text-[#111110] outline-none transition-colors focus:border-[#c8c8c4] focus:bg-white"
+          >
+            <option value="all">세부 유입 전체</option>
+            {sourceDetailOptions.map((sourceDetail) => (
+              <option key={sourceDetail} value={sourceDetail}>{sourceDetail}</option>
+            ))}
+          </select>
+          <select
+            value={leadMagnetFilter}
+            onChange={(event) => setLeadMagnetFilter(event.target.value)}
+            className="h-11 rounded-xl border border-[#e8e8e4] bg-[#fafaf8] px-3 text-[13px] text-[#111110] outline-none transition-colors focus:border-[#c8c8c4] focus:bg-white"
+          >
+            <option value="all">리드마그넷 전체</option>
+            {leadMagnetOptions.map((leadMagnet) => (
+              <option key={leadMagnet} value={leadMagnet}>{getLeadMagnetLabel(leadMagnet) || leadMagnet}</option>
+            ))}
+          </select>
+        </div>
+        {(sourceDetailFilter !== "all" || leadMagnetFilter !== "all" || searchQuery.trim()) && (
+          <div className="mt-3 flex items-center justify-between gap-3 text-[12px] text-[#1a1a1a]/45">
+            <span>현재 조건 {filtered.length}건</span>
+            <button
+              type="button"
+              onClick={() => {
+                setSearchQuery("")
+                setSourceDetailFilter("all")
+                setLeadMagnetFilter("all")
+              }}
+              className="font-medium text-[#084734] hover:text-[#063d2a]"
+            >
+              필터 초기화
+            </button>
+          </div>
+        )}
+      </div>
+
+      {selectedLeadIds.size > 0 && (
+        <div className="mb-4 flex flex-col gap-3 rounded-2xl border border-[#F6D5C5] bg-[#FEF8F5] px-4 py-3 sm:flex-row sm:items-center sm:justify-between">
+          <div>
+            <p className="text-[13px] font-semibold text-[#111110]">{selectedLeadIds.size}건 선택됨</p>
+            <p className="mt-0.5 text-[11px] text-[#1a1a1a]/45">
+              현재 목록에서 {selectedFilteredCount}건 선택 · 실수/스팸 리드는 완전 삭제됩니다.
+            </p>
+          </div>
+          <div className="flex flex-wrap gap-2">
+            {selectedFilteredCount < filtered.length && filtered.length > 0 ? (
+              <button
+                type="button"
+                onClick={() => handleToggleFilteredSelection(true)}
+                className="rounded-lg border border-[#e8e8e4] bg-white px-3 py-2 text-[12px] font-medium text-[#111110] transition-colors hover:border-[#c8c8c4]"
+              >
+                현재 목록 전체 선택
+              </button>
+            ) : null}
+            <button
+              type="button"
+              onClick={() => setSelectedLeadIds(new Set())}
+              className="rounded-lg border border-[#e8e8e4] bg-white px-3 py-2 text-[12px] font-medium text-[#1a1a1a]/55 transition-colors hover:border-[#c8c8c4] hover:text-[#111110]"
+            >
+              선택 해제
+            </button>
+            <button
+              type="button"
+              onClick={() => void handleDeleteMany(Array.from(selectedLeadIds))}
+              disabled={selectedDeleting}
+              className="inline-flex items-center gap-1.5 rounded-lg bg-[#B85C33] px-3 py-2 text-[12px] font-semibold text-white transition-colors hover:bg-[#9A4A27] disabled:cursor-not-allowed disabled:opacity-50"
+            >
+              {selectedDeleting ? <Loader2 className="h-3.5 w-3.5 animate-spin" /> : <Trash2 className="h-3.5 w-3.5" />}
+              선택 삭제
+            </button>
+          </div>
+        </div>
+      )}
 
       {/* 테이블 */}
       <div className="bg-white rounded-2xl border border-[#e8e8e4] overflow-hidden">
@@ -1034,17 +1332,37 @@ export default function CrmPage() {
               const isOverdue = Boolean(followUpDateKey && followUpDateKey < today && lead.status !== "converted" && lead.status !== "closed")
               const isTodayFollowUp = followUpDateKey === today
               const ageDays = daysBetween(lead.timestamp)
+              const unrespondedHours = isUnrespondedLead(lead) ? hoursBetween(lead.timestamp, now) : null
 
               return (
-                <button
+                <div
                   key={`mobile-${lead.id}`}
-                  type="button"
+                  role="button"
+                  tabIndex={0}
                   onClick={() => setSelected(lead)}
-                  className={`block w-full px-4 py-4 text-left transition-colors ${
+                  onKeyDown={(event) => {
+                    if (event.key === "Enter" || event.key === " ") {
+                      event.preventDefault()
+                      setSelected(lead)
+                    }
+                  }}
+                  className={`block w-full cursor-pointer px-4 py-4 text-left transition-colors ${
                     selected?.id === lead.id ? "bg-[#f0f0ec]" : "hover:bg-[#fafaf8]"
                   }`}
                 >
                   <div className="flex items-start justify-between gap-3">
+                    <label
+                      className="mt-0.5 flex h-8 w-8 shrink-0 items-center justify-center rounded-lg border border-[#e8e8e4] bg-white"
+                      onClick={(event) => event.stopPropagation()}
+                    >
+                      <input
+                        type="checkbox"
+                        checked={selectedLeadIds.has(lead.id)}
+                        onChange={(event) => handleToggleLeadSelection(lead.id, event.target.checked)}
+                        aria-label={`${getLeadDisplayName(lead)} 선택`}
+                        className="h-4 w-4 accent-[#084734]"
+                      />
+                    </label>
                     <div className="min-w-0 flex-1">
                       <div className="flex items-center gap-2">
                         <p className="truncate text-[14px] font-semibold text-[#111110]">
@@ -1056,15 +1374,52 @@ export default function CrmPage() {
                         {lead.org ?? lead.phone ?? lead.email ?? "-"}
                       </p>
                     </div>
-                    <span className={`shrink-0 rounded-full px-2 py-0.5 text-[11px] font-medium ${STATUS_COLOR[lead.status]}`}>
-                      {STATUS_LABEL[lead.status]}
-                    </span>
+                    <div className="flex shrink-0 items-center gap-2">
+                      <span className={`rounded-full px-2 py-0.5 text-[11px] font-medium ${STATUS_COLOR[lead.status]}`}>
+                        {STATUS_LABEL[lead.status]}
+                      </span>
+                      <button
+                        type="button"
+                        onClick={(event) => {
+                          event.stopPropagation()
+                          void handleDelete(lead.id)
+                        }}
+                        disabled={deletingIds.has(lead.id)}
+                        className="flex h-8 w-8 items-center justify-center rounded-lg border border-[#F6D5C5] bg-white text-[#B85C33] transition-colors hover:bg-[#FEF3EE] disabled:cursor-not-allowed disabled:opacity-50"
+                        aria-label={`${getLeadDisplayName(lead)} 삭제`}
+                        title="삭제"
+                      >
+                        {deletingIds.has(lead.id) ? <Loader2 className="h-3.5 w-3.5 animate-spin" /> : <Trash2 className="h-3.5 w-3.5" />}
+                      </button>
+                    </div>
                   </div>
 
                   <div className="mt-3 flex flex-wrap items-center gap-2 text-[11px] text-[#1a1a1a]/45">
                     <span className="rounded-md bg-[#f0f0ec] px-2 py-1">
                       {SOURCE_LABEL[lead.source] ?? lead.source}
                     </span>
+                    {lead.source_detail ? (
+                      <span className="rounded-md bg-[#ECFDF5] px-2 py-1 text-[#084734]">
+                        {lead.source_detail}
+                      </span>
+                    ) : null}
+                    {lead.lead_magnet ? (
+                      <span className="rounded-md bg-[#FFF9EB] px-2 py-1 text-[#8D6C1F]">
+                        {getLeadMagnetLabel(lead.lead_magnet)}
+                      </span>
+                    ) : null}
+                    {unrespondedHours !== null ? (
+                      <span className={`inline-flex items-center gap-1 rounded-md px-2 py-1 font-medium ${
+                        unrespondedHours >= 48
+                          ? "bg-[#FEF3EE] text-[#B85C33]"
+                          : unrespondedHours >= 24
+                            ? "bg-yellow-50 text-yellow-700"
+                            : "bg-[#f0f0ec] text-[#1a1a1a]/45"
+                      }`}>
+                        <Clock className="h-3 w-3" />
+                        미응대 {formatResponseAge(unrespondedHours)}
+                      </span>
+                    ) : null}
                     <span>
                       {new Date(lead.timestamp).toLocaleDateString("ko-KR", { month: "2-digit", day: "2-digit" })}
                     </span>
@@ -1102,17 +1457,28 @@ export default function CrmPage() {
                       </a>
                     ) : null}
                   </div>
-                </button>
+                </div>
               )
             })}
           </div>
           <div className="hidden overflow-x-auto sm:block">
-          <table className="min-w-[1040px] w-full text-[13px]">
+          <table className="min-w-[1240px] w-full text-[13px]">
             <thead>
               <tr className="border-b border-[#e8e8e4] bg-[#fafaf8]">
-                {["시간", "소스", "이름", "기관", "담당자", "연락처", "팔로업", "정체", "상태"].map((h) => (
+                <th className="w-12 px-5 py-3.5">
+                  <input
+                    type="checkbox"
+                    checked={allFilteredSelected}
+                    disabled={filtered.length === 0}
+                    onChange={(event) => handleToggleFilteredSelection(event.target.checked)}
+                    aria-label="현재 목록 전체 선택"
+                    className="h-4 w-4 accent-[#084734] disabled:opacity-30"
+                  />
+                </th>
+                {["시간", "응대", "소스", "이름", "기관", "담당자", "연락처", "팔로업", "정체", "상태"].map((h) => (
                   <th key={h} className="text-left px-5 py-3.5 font-medium text-[#1a1a1a]/40 whitespace-nowrap text-[12px]">{h}</th>
                 ))}
+                <th className="w-16 px-5 py-3.5 text-right text-[12px] font-medium text-[#1a1a1a]/40">관리</th>
               </tr>
             </thead>
             <tbody>
@@ -1121,6 +1487,7 @@ export default function CrmPage() {
                 const isOverdue = Boolean(followUpDateKey && followUpDateKey < today && lead.status !== "converted" && lead.status !== "closed")
                 const isTodayFollowUp = followUpDateKey === today
                 const ageDays = daysBetween(lead.timestamp)
+                const unrespondedHours = isUnrespondedLead(lead) ? hoursBetween(lead.timestamp, now) : null
                 return (
                   <tr
                     key={lead.id}
@@ -1129,13 +1496,56 @@ export default function CrmPage() {
                       selected?.id === lead.id ? "bg-[#f0f0ec]" : "hover:bg-[#fafaf8]"
                     }`}
                   >
+                    <td className="px-5 py-4">
+                      <input
+                        type="checkbox"
+                        checked={selectedLeadIds.has(lead.id)}
+                        onClick={(event) => event.stopPropagation()}
+                        onChange={(event) => handleToggleLeadSelection(lead.id, event.target.checked)}
+                        aria-label={`${getLeadDisplayName(lead)} 선택`}
+                        className="h-4 w-4 accent-[#084734]"
+                      />
+                    </td>
                     <td className="px-5 py-4 text-[#1a1a1a]/40 whitespace-nowrap text-[12px]">
                       {new Date(lead.timestamp).toLocaleDateString("ko-KR", { month: "2-digit", day: "2-digit", hour: "2-digit", minute: "2-digit" })}
                     </td>
+                    <td className="px-5 py-4 whitespace-nowrap text-[12px]">
+                      {unrespondedHours !== null ? (
+                        <span className={`inline-flex items-center gap-1 rounded-md px-2 py-0.5 font-medium ${
+                          unrespondedHours >= 48
+                            ? "bg-[#FEF3EE] text-[#B85C33]"
+                            : unrespondedHours >= 24
+                              ? "bg-yellow-50 text-yellow-700"
+                              : "bg-[#f0f0ec] text-[#1a1a1a]/45"
+                        }`}>
+                          <Clock className="h-3 w-3" />
+                          {formatResponseAge(unrespondedHours)}
+                        </span>
+                      ) : isResponseTargetLead(lead) ? (
+                        <span className="inline-flex items-center gap-1 rounded-md bg-[#ECFDF5] px-2 py-0.5 font-medium text-[#084734]">
+                          <Check className="h-3 w-3" />
+                          완료
+                        </span>
+                      ) : (
+                        <span className="text-[#1a1a1a]/25">—</span>
+                      )}
+                    </td>
                     <td className="px-5 py-4 whitespace-nowrap">
-                      <span className="px-2 py-0.5 rounded-md bg-[#f0f0ec] text-[#1a1a1a]/50 text-[11px]">
-                        {SOURCE_LABEL[lead.source] ?? lead.source}
-                      </span>
+                      <div className="flex max-w-[220px] flex-col items-start gap-1">
+                        <span className="px-2 py-0.5 rounded-md bg-[#f0f0ec] text-[#1a1a1a]/50 text-[11px]">
+                          {SOURCE_LABEL[lead.source] ?? lead.source}
+                        </span>
+                        {lead.source_detail ? (
+                          <span className="max-w-full truncate rounded-md bg-[#ECFDF5] px-2 py-0.5 text-[11px] font-medium text-[#084734]">
+                            {lead.source_detail}
+                          </span>
+                        ) : null}
+                        {lead.lead_magnet ? (
+                          <span className="max-w-full truncate rounded-md bg-[#FFF9EB] px-2 py-0.5 text-[11px] font-medium text-[#8D6C1F]">
+                            {getLeadMagnetLabel(lead.lead_magnet)}
+                          </span>
+                        ) : null}
+                      </div>
                     </td>
                     <td className="px-5 py-4 font-medium text-[#111110]">
                       <div className="flex items-center gap-1.5">
@@ -1185,6 +1595,21 @@ export default function CrmPage() {
                           <span className="w-1.5 h-1.5 rounded-full bg-[#1a1a1a]/20 shrink-0" title="메모 있음" />
                         )}
                       </div>
+                    </td>
+                    <td className="px-5 py-4 text-right">
+                      <button
+                        type="button"
+                        onClick={(event) => {
+                          event.stopPropagation()
+                          void handleDelete(lead.id)
+                        }}
+                        disabled={deletingIds.has(lead.id)}
+                        className="inline-flex h-8 w-8 items-center justify-center rounded-lg border border-[#F6D5C5] bg-white text-[#B85C33] transition-colors hover:bg-[#FEF3EE] disabled:cursor-not-allowed disabled:opacity-50"
+                        aria-label={`${getLeadDisplayName(lead)} 삭제`}
+                        title="삭제"
+                      >
+                        {deletingIds.has(lead.id) ? <Loader2 className="h-3.5 w-3.5 animate-spin" /> : <Trash2 className="h-3.5 w-3.5" />}
+                      </button>
                     </td>
                   </tr>
                 )

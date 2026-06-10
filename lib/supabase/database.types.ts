@@ -83,11 +83,22 @@ export interface Lead {
   branch: string | null;
   status: LeadStatus;
   notes: string | null;
+  source_detail: string | null;
+  lead_magnet: string | null;
   follow_up_at: string | null;
   assigned_to: string | null;
   utm_source: string | null;
   utm_medium: string | null;
   utm_campaign: string | null;
+  utm_term: string | null;
+  utm_content: string | null;
+  gclid: string | null;
+  fbclid: string | null;
+  msclkid: string | null;
+  ttclid: string | null;
+  landing_page: string | null;
+  current_page: string | null;
+  referrer: string | null;
   created_at: string;
   updated_at: string;
 }

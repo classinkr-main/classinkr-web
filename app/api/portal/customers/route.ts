@@ -22,13 +22,15 @@ const ADMIN_QUOTE_PARTNER_ACCOUNT_NAME = "Classin Direct Sales";
 async function getOrCreateAdminQuotePartnerAccountId(createdBy?: string | null) {
   const supabase = createSupabaseAdminClient();
 
-  const { data: existing, error: existingError } = await supabase
+  const { data: existingRows, error: existingError } = await supabase
     .from("partner_accounts")
     .select("id")
     .eq("name", ADMIN_QUOTE_PARTNER_ACCOUNT_NAME)
-    .maybeSingle();
+    .order("created_at", { ascending: true })
+    .limit(1);
 
   if (existingError) throw existingError;
+  const existing = existingRows?.[0];
   if (existing?.id) return existing.id as string;
 
   const { data: created, error: createError } = await supabase

@@ -192,16 +192,8 @@ export function QuoteEditor({ dealId }: Props) {
     e.preventDefault()
     if (!dealId) return
     setSaving(true)
+    setConvertError(null)
 
-    // 1. 견적 문서 생성
-    const docRes = await portalFetch("/api/portal/quotes", {
-      method: "POST",
-      body: JSON.stringify({ deal_id: dealId }),
-    })
-    if (!docRes.ok) { setSaving(false); return }
-    const { quote } = await docRes.json()
-
-    // 2. 견적 버전 생성 (라인 아이템 포함)
     const structured = items.map((item, idx) => ({
       sku: item.product_key, product_name: item.product_name,
       description: item.description, quantity: item.quantity,
@@ -209,25 +201,37 @@ export function QuoteEditor({ dealId }: Props) {
       amount: calcLineAmount(item), sort_order: idx,
     }))
 
-    await portalFetch(`/api/portal/quotes/${quote.id}/versions`, {
-      method: "POST",
-      body: JSON.stringify({
-        version_number: 1,
-        title: formTitle || "견적서",
-        structured_json: { items: structured, vat_surcharge: vatSurcharge },
-        subtotal,
-        discount_amount: 0,
-        tax_amount: vatAmount,
-        total_amount: totalAmount,
-        valid_until: formValidUntil || null,
-      }),
-    })
+    try {
+      const response = await portalFetch("/api/portal/quotes", {
+        method: "POST",
+        body: JSON.stringify({
+          deal_id: dealId,
+          title: formTitle || "견적서",
+          structured_json: { items: structured, vat_surcharge: vatSurcharge },
+          subtotal,
+          discount_amount: 0,
+          tax_amount: vatAmount,
+          total_amount: totalAmount,
+          valid_until: formValidUntil || null,
+        }),
+      })
+      const payload = (await response.json().catch(() => null)) as
+        | { error?: string; version?: unknown }
+        | null
 
-    setShowForm(false)
-    setSaving(false)
-    setSuccessMsg("견적서가 생성되었습니다.")
-    setTimeout(() => setSuccessMsg(null), 4000)
-    void load()
+      if (!response.ok || !payload?.version) {
+        throw new Error(payload?.error ?? "견적서 저장에 실패했습니다.")
+      }
+
+      setShowForm(false)
+      setSuccessMsg("견적서가 생성되었습니다.")
+      setTimeout(() => setSuccessMsg(null), 4000)
+      void load()
+    } catch (createError) {
+      setConvertError(createError instanceof Error ? createError.message : "견적서 저장에 실패했습니다.")
+    } finally {
+      setSaving(false)
+    }
   }
 
   async function handleConvert(quoteId: string) {

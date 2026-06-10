@@ -32,11 +32,22 @@ export interface LeadRecord {
   status: "new" | "contacted" | "converted" | "closed";
   branch?: string;
   notes?: string;
+  source_detail?: string;
+  lead_magnet?: string;
   follow_up_at?: string;
   assigned_to?: string;
   utm_source?: string;
   utm_medium?: string;
   utm_campaign?: string;
+  utm_term?: string;
+  utm_content?: string;
+  gclid?: string;
+  fbclid?: string;
+  msclkid?: string;
+  ttclid?: string;
+  landing_page?: string;
+  current_page?: string;
+  referrer?: string;
 }
 
 function supabaseToLegacy(row: Lead): LeadRecord {
@@ -54,11 +65,22 @@ function supabaseToLegacy(row: Lead): LeadRecord {
     status: row.status,
     branch: row.branch ?? undefined,
     notes: row.notes ?? undefined,
+    source_detail: row.source_detail ?? undefined,
+    lead_magnet: row.lead_magnet ?? undefined,
     follow_up_at: row.follow_up_at ?? undefined,
     assigned_to: row.assigned_to ?? undefined,
     utm_source: row.utm_source ?? undefined,
     utm_medium: row.utm_medium ?? undefined,
     utm_campaign: row.utm_campaign ?? undefined,
+    utm_term: row.utm_term ?? undefined,
+    utm_content: row.utm_content ?? undefined,
+    gclid: row.gclid ?? undefined,
+    fbclid: row.fbclid ?? undefined,
+    msclkid: row.msclkid ?? undefined,
+    ttclid: row.ttclid ?? undefined,
+    landing_page: row.landing_page ?? undefined,
+    current_page: row.current_page ?? undefined,
+    referrer: row.referrer ?? undefined,
   };
 }
 
@@ -122,11 +144,22 @@ export async function saveLead(
     branch: lead.branch ?? null,
     status: "new",
     notes: lead.notes ?? null,
+    source_detail: lead.source_detail ?? null,
+    lead_magnet: lead.lead_magnet ?? null,
     follow_up_at: null,
     assigned_to: null,
     utm_source: lead.utm_source ?? null,
     utm_medium: lead.utm_medium ?? null,
     utm_campaign: lead.utm_campaign ?? null,
+    utm_term: lead.utm_term ?? null,
+    utm_content: lead.utm_content ?? null,
+    gclid: lead.gclid ?? null,
+    fbclid: lead.fbclid ?? null,
+    msclkid: lead.msclkid ?? null,
+    ttclid: lead.ttclid ?? null,
+    landing_page: lead.landing_page ?? null,
+    current_page: lead.current_page ?? null,
+    referrer: lead.referrer ?? null,
   };
 
   const { data, error } = await supabase
@@ -155,6 +188,8 @@ export async function updateLead(
   const update: LeadUpdate = {};
   if (patch.status !== undefined) update.status = patch.status;
   if (patch.notes !== undefined) update.notes = patch.notes;
+  if (patch.source_detail !== undefined) update.source_detail = patch.source_detail;
+  if (patch.lead_magnet !== undefined) update.lead_magnet = patch.lead_magnet;
   if (patch.branch !== undefined) update.branch = patch.branch;
   if (patch.name !== undefined) update.name = patch.name;
   if (patch.email !== undefined) update.email = patch.email;
@@ -165,6 +200,15 @@ export async function updateLead(
   if (patch.utm_source !== undefined) update.utm_source = patch.utm_source;
   if (patch.utm_medium !== undefined) update.utm_medium = patch.utm_medium;
   if (patch.utm_campaign !== undefined) update.utm_campaign = patch.utm_campaign;
+  if (patch.utm_term !== undefined) update.utm_term = patch.utm_term;
+  if (patch.utm_content !== undefined) update.utm_content = patch.utm_content;
+  if (patch.gclid !== undefined) update.gclid = patch.gclid;
+  if (patch.fbclid !== undefined) update.fbclid = patch.fbclid;
+  if (patch.msclkid !== undefined) update.msclkid = patch.msclkid;
+  if (patch.ttclid !== undefined) update.ttclid = patch.ttclid;
+  if (patch.landing_page !== undefined) update.landing_page = patch.landing_page;
+  if (patch.current_page !== undefined) update.current_page = patch.current_page;
+  if (patch.referrer !== undefined) update.referrer = patch.referrer;
 
   const { data, error } = await supabase
     .from("leads")

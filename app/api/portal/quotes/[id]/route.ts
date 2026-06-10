@@ -7,7 +7,9 @@ import {
 import { authorizeForAccount } from "@/lib/portal/portal-authorize";
 import { getDeal } from "@/lib/portal/repositories/deals";
 import {
+  getLatestQuoteDocumentShare,
   getQuoteDocument,
+  getResolvableQuoteVersion,
   updateQuoteDocument,
 } from "@/lib/portal/repositories/quote-documents";
 import type { UpdateQuoteDocument } from "@/lib/supabase/database.types.v2";
@@ -57,6 +59,20 @@ export async function GET(
       if (!deal) return NextResponse.json({ error: "딜 없음" }, { status: 404 });
       const f = authorizeForAccount(ctx, deal.partner_account_id);
       if (f) return f;
+    }
+
+    if (req.nextUrl.searchParams.get("include") === "viewer") {
+      const deal = await getDeal(doc.deal_id);
+      const version = await getResolvableQuoteVersion(doc);
+      const share = version ? await getLatestQuoteDocumentShare(version.id) : null;
+
+      return NextResponse.json({
+        quote: doc,
+        document: doc,
+        version,
+        share,
+        deal,
+      });
     }
 
     return NextResponse.json({ quote: doc });

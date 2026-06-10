@@ -50,11 +50,221 @@ function uniqueRecipients(recipients: NotificationRecipientTarget[]) {
   })
 }
 
-function buildWecomText(input: EmitNotificationEventInput) {
+function normalizeWebhookValue(value: unknown) {
+  if (typeof value !== "string" && typeof value !== "number") return undefined
+  const normalized = String(value).replace(/\s+/g, " ").trim()
+  if (!normalized) return undefined
+  return normalized.length > 120 ? `${normalized.slice(0, 117)}...` : normalized
+}
+
+function getPayloadValue(
+  input: EmitNotificationEventInput,
+  key: string
+) {
+  return normalizeWebhookValue(input.payload?.[key])
+}
+
+function getLeadSourceLabel(source?: string) {
+  if (source === "meta_lead_ads") return "Meta 광고"
+  if (source === "newsletter") return "뉴스레터"
+  return "홈페이지"
+}
+
+function formatRouteUrl(routeUrl?: string) {
+  if (!routeUrl) return undefined
+
+  try {
+    const baseUrl = process.env.NEXT_PUBLIC_SITE_URL ?? "https://classin.ai.kr"
+    return new URL(routeUrl, baseUrl).toString()
+  } catch {
+    return routeUrl
+  }
+}
+
+function compactLines(lines: Array<string | undefined>) {
+  return lines.filter((line): line is string => line !== undefined)
+}
+
+function labeledLine(label: string, value?: string) {
+  return value ? `${label}: ${value}` : undefined
+}
+
+function countLabel(value?: string) {
+  return `${value ?? "0"}개`
+}
+
+function formatDigestDelta(value?: string) {
+  if (!value) return "0"
+  const delta = Number(value)
+  if (!Number.isFinite(delta) || delta === 0) return "0"
+  return delta > 0 ? `+${delta}` : String(delta)
+}
+
+function buildLeadCreatedWecomText(input: EmitNotificationEventInput) {
+  const source = getPayloadValue(input, "source")
+  const sourceLabel = getLeadSourceLabel(source)
+  const sourceDetail = getPayloadValue(input, "sourceDetail") ?? source
+
+  return compactLines([
+    `${sourceLabel}에 리드가 1개 들어왔습니다`,
+    "",
+    labeledLine("학원", getPayloadValue(input, "org")),
+    labeledLine("이름", getPayloadValue(input, "name")),
+    labeledLine("연락처", getPayloadValue(input, "phone")),
+    labeledLine("이메일", getPayloadValue(input, "email")),
+    labeledLine("경로", sourceDetail),
+    labeledLine("확인", formatRouteUrl(input.routeUrl)),
+  ]).join("\n")
+}
+
+function buildLeadAgeWecomText(input: EmitNotificationEventInput) {
+  const thresholdHours = input.eventType.endsWith("unresponded_48h") ? 48 : 24
+  const ageHours = getPayloadValue(input, "ageHours")
+  const leadName =
+    getPayloadValue(input, "org") ??
+    getPayloadValue(input, "name") ??
+    normalizeWebhookValue(input.sourceId)
+  const assignedTo = getPayloadValue(input, "assignedTo") ?? "미배정"
+  const sourceLabel = getLeadSourceLabel(getPayloadValue(input, "source"))
+
+  return compactLines([
+    `${sourceLabel} 리드가 ${thresholdHours}시간째 반응이 없습니다`,
+    "",
+    labeledLine("리드", leadName),
+    labeledLine("담당자", assignedTo),
+    labeledLine("경과", ageHours ? `${ageHours}시간` : undefined),
+    labeledLine("확인", formatRouteUrl(input.routeUrl)),
+  ]).join("\n")
+}
+
+function buildLeadAggregateWecomText(input: EmitNotificationEventInput) {
+  const count = getPayloadValue(input, "unrespondedCount")
+  const over24h = getPayloadValue(input, "over24h")
+  const over48h = getPayloadValue(input, "over48h")
+
+  return compactLines([
+    `홈페이지 미응답 리드가 ${count ?? "여러"}개 쌓였습니다`,
+    "",
+    labeledLine("24시간 초과", over24h ? `${over24h}개` : undefined),
+    labeledLine("48시간 초과", over48h ? `${over48h}개` : undefined),
+    input.message,
+    labeledLine("확인", formatRouteUrl(input.routeUrl)),
+  ]).join("\n")
+}
+
+function buildLeadDigestWecomCard(input: EmitNotificationEventInput) {
+  const period = getPayloadValue(input, "period") === "monthly" ? "monthly" : "weekly"
+  const routeUrl = formatRouteUrl(input.routeUrl) ?? "https://classin.ai.kr/admin/crm"
+  const totalLeads = getPayloadValue(input, "totalLeads") ?? "0"
+  const delta = formatDigestDelta(getPayloadValue(input, "deltaLeads"))
+  const unrespondedCount = getPayloadValue(input, "unrespondedCount")
+  const convertedCount = getPayloadValue(input, "convertedCount")
+  const topSourceLabel = getPayloadValue(input, "topSourceLabel") ?? "없음"
+  const topSourceCount = getPayloadValue(input, "topSourceCount")
+  const over24h = getPayloadValue(input, "over24h")
+  const over48h = getPayloadValue(input, "over48h")
+  const unassignedCount = getPayloadValue(input, "unassignedCount")
+  const periodLabel = getPayloadValue(input, "periodLabel")
+  const previousLabel = period === "monthly" ? "전월 대비" : "전주 대비"
+
+  return {
+    msgtype: "template_card",
+    template_card: {
+      card_type: "text_notice",
+      source: {
+        desc: "Classin CRM",
+        desc_color: 3,
+      },
+      main_title: {
+        title: input.title,
+        desc: periodLabel,
+      },
+      emphasis_content: {
+        title: totalLeads,
+        desc: "신규 리드",
+      },
+      sub_title_text: `${previousLabel} ${delta}개 / 미응답 ${countLabel(unrespondedCount)}`,
+      horizontal_content_list: [
+        {
+          keyname: "24시간 초과",
+          value: countLabel(over24h),
+        },
+        {
+          keyname: "48시간 초과",
+          value: countLabel(over48h),
+        },
+        {
+          keyname: "미배정",
+          value: countLabel(unassignedCount),
+        },
+        {
+          keyname: "전환",
+          value: countLabel(convertedCount),
+        },
+        {
+          keyname: "주요 경로",
+          value: topSourceCount
+            ? `${topSourceLabel} (${countLabel(topSourceCount)})`
+            : topSourceLabel,
+        },
+      ],
+      jump_list: [
+        {
+          type: 1,
+          title: "CRM 보기",
+          url: routeUrl,
+        },
+      ],
+      card_action: {
+        type: 1,
+        url: routeUrl,
+      },
+    },
+  }
+}
+
+function buildLeadWecomText(input: EmitNotificationEventInput) {
+  if (input.eventType === "lead.created") return buildLeadCreatedWecomText(input)
+
+  if (
+    input.eventType === "lead.unresponded_24h" ||
+    input.eventType === "lead.unresponded_48h"
+  ) {
+    return buildLeadAgeWecomText(input)
+  }
+
+  if (
+    input.eventType === "lead.unresponded_count_3" ||
+    input.eventType === "lead.unresponded_count_5"
+  ) {
+    return buildLeadAggregateWecomText(input)
+  }
+
+  return null
+}
+
+function buildWecomPayload(input: EmitNotificationEventInput) {
+  if (
+    input.eventType === "lead.digest.weekly" ||
+    input.eventType === "lead.digest.monthly"
+  ) {
+    return buildLeadDigestWecomCard(input)
+  }
+
+  const leadText = input.categoryTag === "lead" ? buildLeadWecomText(input) : null
+  if (leadText) {
+    return {
+      msgtype: "text",
+      text: {
+        content: leadText,
+      },
+    }
+  }
+
   const lines = [
     `[${input.severity?.toUpperCase() ?? "INFO"}] ${input.title}`,
     input.message,
-    input.routeUrl ? `Open: ${input.routeUrl}` : undefined,
+    input.routeUrl ? `Open: ${formatRouteUrl(input.routeUrl)}` : undefined,
   ].filter(Boolean)
 
   return {
@@ -70,7 +280,7 @@ function buildExternalPayload(
   input: EmitNotificationEventInput
 ) {
   if (channel === "wecom_webhook") {
-    return buildWecomText(input)
+    return buildWecomPayload(input)
   }
 
   return {

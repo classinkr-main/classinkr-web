@@ -2,6 +2,15 @@ import type { Metadata } from "next"
 import DOMPurify from "isomorphic-dompurify"
 
 import { ShareUnavailable } from "@/app/share/_components/ShareUnavailable"
+import QuoteDocumentPreview from "@/components/portal/quotes/QuoteDocumentPreview"
+import QuoteViewerActions from "@/components/portal/quotes/QuoteViewerActions"
+import { getQuoteDetailsFromStructuredJson } from "@/lib/portal/quote-details"
+import {
+  PUBLIC_QUOTE_VIEW_ACTION,
+  ensureQuoteInteractionLog,
+  summarizeQuoteInteractions,
+} from "@/lib/portal/repositories/activity"
+import { getDeal } from "@/lib/portal/repositories/deals"
 import { getPublicQuoteByToken } from "@/lib/portal/repositories/quote-documents"
 
 export const dynamic = "force-dynamic"
@@ -40,12 +49,51 @@ export default async function SharedQuotePage({ params }: PageProps) {
     return <ShareUnavailable variant="expired" documentLabel="견적서" expiresAt={result.expires_at} />
   }
 
-  const { document, version, customer_name } = result
+  const { share, document, version, customer_name } = result
   const validUntil = formatDate(version.valid_until)
+  const quoteDetails = getQuoteDetailsFromStructuredJson(version.structured_json, {
+    customerName: customer_name,
+    validUntil: version.valid_until,
+  })
+
+  const deal = await getDeal(document.deal_id).catch(() => null)
+  if (deal) {
+    await ensureQuoteInteractionLog({
+      partner_account_id: deal.partner_account_id,
+      customer_id: deal.customer_id,
+      deal_id: deal.id,
+      actor_user_id: null,
+      actor_role: "public",
+      action_type: PUBLIC_QUOTE_VIEW_ACTION,
+      target_type: "quote_document",
+      target_id: document.id,
+      summary: `견적서 ${document.quote_number} 고객 열람`,
+      before_json: null,
+      after_json: {
+        quote_number: document.quote_number,
+        version_id: version.id,
+        share_id: share.id,
+        token,
+      },
+      dedupeByVersion: version.id,
+      dedupeByShare: share.id,
+      dedupeByToken: token,
+      dedupeWindowMinutes: 5,
+    }).catch((error) => {
+      console.warn("[share/quote] view log skipped", error)
+    })
+  }
+
+  const interaction = await summarizeQuoteInteractions({
+    quote_document_id: document.id,
+    version_id: version.id,
+    share_id: share.id,
+    token,
+  }).catch(() => null)
 
   return (
-    <main className="min-h-screen bg-[#F6F5F4] px-4 py-10 sm:px-6 sm:py-16">
-      <article className="mx-auto max-w-3xl overflow-hidden rounded-2xl border border-black/8 bg-white shadow-sm">
+    <main className="min-h-screen bg-[#F6F5F4] px-4 py-10 print:bg-white print:px-0 print:py-0 sm:px-6 sm:py-16">
+      <article className="mx-auto max-w-3xl overflow-hidden rounded-2xl border border-black/8 bg-white shadow-sm print:max-w-none print:rounded-none print:border-0 print:shadow-none">
         <header className="border-b border-black/8 px-6 py-6 sm:px-10 sm:py-8">
           <div className="flex items-center justify-between gap-4">
             <span className="rounded-full bg-[#ECFDF5] px-3 py-1 text-xs font-medium text-[#084734]">견적서</span>
@@ -57,6 +105,12 @@ export default async function SharedQuotePage({ params }: PageProps) {
           {customer_name ? (
             <p className="mt-2 text-sm text-[#1a1a1a]/60">{customer_name} 귀하</p>
           ) : null}
+          <div className="mt-5">
+            <QuoteViewerActions
+              reviewEndpoint={`/api/share/quote/${token}/confirm`}
+              initialConfirmedAt={interaction?.reviewConfirmedAt ?? null}
+            />
+          </div>
         </header>
 
         <section className="grid gap-6 px-6 py-6 sm:grid-cols-2 sm:px-10 sm:py-8">
@@ -85,6 +139,14 @@ export default async function SharedQuotePage({ params }: PageProps) {
               dangerouslySetInnerHTML={{ __html: DOMPurify.sanitize(version.content_html) }}
             />
           </section>
+        ) : null}
+
+        {!version.content_html && quoteDetails ? (
+          <QuoteDocumentPreview
+            quote={quoteDetails}
+            documentNumber={document.quote_number}
+            title={version.title}
+          />
         ) : null}
 
         <footer className="border-t border-black/8 bg-[#F6F5F4] px-6 py-5 text-center text-xs text-[#1a1a1a]/50 sm:px-10">

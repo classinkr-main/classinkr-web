@@ -35,6 +35,8 @@ type ProductArea =
   | "partner"
 
 type DocType = "guide" | "manual" | "faq" | "troubleshooting" | "release_note" | "reference"
+type ArticleStatus = "draft" | "review" | "published" | "archived"
+type ArticleVisibility = "public" | "unlisted" | "internal"
 
 interface ArticleIdentity {
   id: string
@@ -122,9 +124,22 @@ function inferProductArea(doc: DocArticle): ProductArea {
 
 function inferDocType(doc: DocArticle): DocType {
   if (doc.slug.includes("update") || doc.tags.includes("업데이트")) return "release_note"
+  if (doc.tags.includes("운영 체크리스트") || doc.tags.includes("전자칠판 체크리스트")) return "guide"
   if (doc.category === "hardware" || doc.category === "board") return "reference"
   if (doc.category === "start") return "guide"
   return "manual"
+}
+
+function getArticleStatus(doc: DocArticle): ArticleStatus {
+  return doc.status ?? "published"
+}
+
+function getArticleVisibility(doc: DocArticle, status: ArticleStatus): ArticleVisibility {
+  return doc.visibility ?? (status === "published" ? "public" : "unlisted")
+}
+
+function getArticleNoindex(doc: DocArticle, status: ArticleStatus) {
+  return doc.noindex ?? status !== "published"
 }
 
 function inferSymptoms() {
@@ -170,40 +185,47 @@ function buildCategoryRows() {
 }
 
 function buildArticleRows() {
-  return docs.map((doc, index) => ({
-    category_id: doc.category,
-    slug: doc.slug,
-    title: doc.title,
-    description: doc.description,
-    audience: unique(doc.audience.split(",").map((item) => item.trim())),
-    product_area: inferProductArea(doc),
-    doc_type: inferDocType(doc),
-    difficulty: "beginner",
-    status: "published",
-    visibility: "public",
-    noindex: false,
-    featured: Boolean(doc.featured),
-    order_index: (docsCategories.find((category) => category.id === doc.category)?.order ?? 99) * 100 + index,
-    tags: doc.tags,
-    keywords: doc.keywords,
-    symptoms: inferSymptoms(),
-    chatbot_summary: doc.chatbotSummary,
-    content_markdown: docToMarkdown(doc),
-    content_json: {
-      source: "lib/docs.ts",
-      readMinutes: doc.readMinutes,
-      updatedAt: doc.updatedAt,
-      sections: doc.sections,
-      resources: doc.resources ?? [],
-      relatedSlugs: doc.relatedSlugs ?? [],
-    },
-    seo_title: `${doc.title} | ClassIn 가이드`,
-    seo_description: doc.description,
-    canonical_path: getDocPath(doc),
-    published_at: toDateTime(doc.updatedAt),
-    last_reviewed_at: toDateTime(doc.updatedAt),
-    updated_by: "seed-docs",
-  }))
+  return docs.map((doc, index) => {
+    const status = getArticleStatus(doc)
+    const visibility = getArticleVisibility(doc, status)
+    const noindex = getArticleNoindex(doc, status)
+    const reviewedAt = status === "published" ? toDateTime(doc.updatedAt) : null
+
+    return {
+      category_id: doc.category,
+      slug: doc.slug,
+      title: doc.title,
+      description: doc.description,
+      audience: unique(doc.audience.split(",").map((item) => item.trim())),
+      product_area: doc.productArea ?? inferProductArea(doc),
+      doc_type: doc.docType ?? inferDocType(doc),
+      difficulty: doc.difficulty ?? "beginner",
+      status,
+      visibility,
+      noindex,
+      featured: Boolean(doc.featured),
+      order_index: (docsCategories.find((category) => category.id === doc.category)?.order ?? 99) * 100 + index,
+      tags: doc.tags,
+      keywords: doc.keywords,
+      symptoms: inferSymptoms(),
+      chatbot_summary: doc.chatbotSummary,
+      content_markdown: docToMarkdown(doc),
+      content_json: {
+        source: "lib/docs.ts",
+        readMinutes: doc.readMinutes,
+        updatedAt: doc.updatedAt,
+        sections: doc.sections,
+        resources: doc.resources ?? [],
+        relatedSlugs: doc.relatedSlugs ?? [],
+      },
+      seo_title: `${doc.title} | ClassIn 가이드`,
+      seo_description: doc.description,
+      canonical_path: getDocPath(doc),
+      published_at: reviewedAt,
+      last_reviewed_at: reviewedAt,
+      updated_by: "seed-docs",
+    }
+  })
 }
 
 function buildVersionRows(articleMap: Map<string, ArticleIdentity>) {

@@ -99,11 +99,12 @@ export async function createQuoteDocumentVersion(
   if (error) throw error;
   const version = data as QuoteDocumentVersion;
 
-  // current_version_id 업데이트
-  await supabase
+  const { error: updateError } = await supabase
     .from("quote_documents")
     .update({ current_version_id: version.id })
     .eq("id", input.quote_document_id);
+
+  if (updateError) throw updateError;
 
   return version;
 }
@@ -129,7 +130,7 @@ export async function createQuoteDocumentShare(input: {
   return data as QuoteDocumentShare;
 }
 
-async function getResolvableQuoteVersion(document: QuoteDocument): Promise<QuoteDocumentVersion | null> {
+export async function getResolvableQuoteVersion(document: QuoteDocument): Promise<QuoteDocumentVersion | null> {
   const supabase = createSupabaseAdminClient();
 
   if (document.current_version_id) {
@@ -152,6 +153,23 @@ async function getResolvableQuoteVersion(document: QuoteDocument): Promise<Quote
 
   if (error || !data) return null;
   return data as QuoteDocumentVersion;
+}
+
+export async function getLatestQuoteDocumentShare(
+  versionId: string
+): Promise<QuoteDocumentShare | null> {
+  const supabase = createSupabaseAdminClient();
+
+  const { data, error } = await supabase
+    .from("quote_document_shares")
+    .select("*")
+    .eq("quote_document_version_id", versionId)
+    .order("created_at", { ascending: false })
+    .limit(1)
+    .maybeSingle();
+
+  if (error || !data) return null;
+  return data as QuoteDocumentShare;
 }
 
 export async function ensureQuoteDocumentShare(input: {

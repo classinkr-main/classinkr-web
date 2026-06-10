@@ -56,6 +56,7 @@ async function run() {
 
   for (const post of raw) {
     let slug = slugify(post.slug ?? post.title ?? "post");
+    const status = post.status?.toUpperCase() ?? "PUBLISHED";
 
     // 중복 slug 처리
     if (existingSlugs.has(slug) || slugCount[slug]) {
@@ -83,7 +84,7 @@ async function run() {
       image_url: post.imageUrl ?? null,
       hero_image_url: post.heroImageUrl ?? post.imageUrl ?? null,
       featured: post.featured ?? false,
-      status: post.status?.toUpperCase() ?? "PUBLISHED",
+      status,
       seo_title: post.seoTitle ?? null,
       seo_description: post.seoDescription ?? null,
       benefit_items: post.benefitItems ?? [],
@@ -92,7 +93,7 @@ async function run() {
       cta_url: post.cta?.buttonHref ?? null,
       cta_style: "primary",
       related_post_ids: [],
-      published_at: new Date().toISOString(),
+      published_at: status === "PUBLISHED" ? new Date().toISOString() : null,
       published_by: null,
       deleted_at: post.deletedAt ?? null,
     });

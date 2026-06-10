@@ -37,7 +37,7 @@ export function RouteTransition({
   const transition = transitionByTone[tone]
 
   return (
-    <AnimatePresence mode="wait">
+    <AnimatePresence initial={false} mode="wait">
       <motion.div
         key={pathname}
         className={className}

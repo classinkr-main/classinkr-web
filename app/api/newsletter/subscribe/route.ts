@@ -10,6 +10,21 @@ function normalizeNewsletterSource(value: unknown) {
   return /^[a-zA-Z0-9_.:-]+$/.test(source) ? source.slice(0, 80) : "newsletter"
 }
 
+function normalizeLeadMagnet(value: unknown) {
+  if (typeof value !== "string") return undefined
+  const leadMagnet = value
+    .trim()
+    .toLowerCase()
+    .replace(/[^a-z0-9_.:-]+/g, "-")
+    .replace(/^-+|-+$/g, "")
+  return leadMagnet ? leadMagnet.slice(0, 120) : undefined
+}
+
+function inferLeadMagnet(source: string) {
+  const match = source.match(/(?:^|[:/])lead[_-]?magnet[:/]([a-z0-9_.:-]+)/i)
+  return normalizeLeadMagnet(match?.[1])
+}
+
 export async function POST(req: NextRequest) {
   const ip = getClientIp(req)
   const { allowed } = checkRateLimit(ip, "newsletter", { windowMs: 60_000, max: 3 })
@@ -40,6 +55,7 @@ export async function POST(req: NextRequest) {
     const result = await submitLeadCapture({
       source: "newsletter",
       sourceDetail: source,
+      leadMagnet: normalizeLeadMagnet(body.leadMagnet) ?? inferLeadMagnet(source),
       name: body.name || email.split("@")[0],
       email,
       marketingConsent: true,

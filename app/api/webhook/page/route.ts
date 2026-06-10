@@ -86,6 +86,7 @@ function buildPageWebhookPayload(raw: unknown) {
     message: pickString(body.message, body.content, body.note),
     eventSlug: pickString(body.eventSlug, body.event_slug, body.event),
     sourceDetail: pickString(body.sourceDetail, body.source_detail, body.ctaId, body.cta_id),
+    leadMagnet: pickString(body.leadMagnet, body.lead_magnet),
     utmSource: pickString(body.utmSource, body.utm_source),
     utmMedium: pickString(body.utmMedium, body.utm_medium),
     utmCampaign: pickString(body.utmCampaign, body.utm_campaign),
