@@ -1,7 +1,7 @@
 "use client"
 
 import { useCallback, useEffect, useState } from "react"
-import { AlertTriangle, CheckCircle2, Link2, Plus, RefreshCw, Search, ServerCog } from "lucide-react"
+import { AlertTriangle, CheckCircle2, Link2, Plus, RefreshCw, Search, ServerCog, StickyNote } from "lucide-react"
 
 import { CustomerDetailSlideOver } from "@/components/portal/CustomerDetailSlideOver"
 import { CustomerForm } from "@/components/portal/crud/CustomerForm"
@@ -91,6 +91,16 @@ type CustomersResponse = {
   customers?: CustomerListItem[]
 }
 
+type CustomerQuickFilter = "all" | "memo" | "attention" | "outstanding" | "review"
+
+const QUICK_FILTER_LABEL: Record<CustomerQuickFilter, string> = {
+  all: "전체",
+  memo: "메모 있음",
+  attention: "즉시 확인",
+  outstanding: "미수 있음",
+  review: "소스 검토",
+}
+
 type PartnerCustomersPageProps = {
   allowCreate?: boolean
   allowEdit?: boolean
@@ -107,6 +117,7 @@ export function PartnerCustomersPage({
   const [customers, setCustomers] = useState<CustomerListItem[]>([])
   const [loading, setLoading] = useState(true)
   const [search, setSearch] = useState("")
+  const [quickFilter, setQuickFilter] = useState<CustomerQuickFilter>("all")
   const [showForm, setShowForm] = useState(false)
   const [editing, setEditing] = useState<Customer | null>(null)
   const [detailId, setDetailId] = useState<string | null>(null)
@@ -148,14 +159,98 @@ export function PartnerCustomersPage({
     }
   }, [])
 
-  const filtered = (search
-    ? customers.filter((item) =>
-        item.customer.name.includes(search) ||
-        item.customer.contact_name?.includes(search) ||
-        item.customer.region_label?.includes(search)
+  useEffect(() => {
+    const params = new URLSearchParams(window.location.search)
+    const query = params.get("q")
+    const customerId = params.get("customer")
+    if (query) setSearch(query)
+    if (customerId) setDetailId(customerId)
+  }, [])
+
+  const updateCustomerParam = (customerId: string | null) => {
+    const url = new URL(window.location.href)
+    if (customerId) url.searchParams.set("customer", customerId)
+    else url.searchParams.delete("customer")
+    window.history.replaceState(null, "", url)
+  }
+
+  const openCustomerDetail = (customerId: string) => {
+    setDetailId(customerId)
+    updateCustomerParam(customerId)
+  }
+
+  const closeCustomerDetail = () => {
+    setDetailId(null)
+    updateCustomerParam(null)
+  }
+
+  const normalizedSearch = search.trim().toLowerCase()
+  const matchesSearch = (item: CustomerListItem) => {
+    if (!normalizedSearch) return true
+    const { customer, crm_coverage } = item
+    const searchableValues = [
+      customer.name,
+      customer.contact_name,
+      customer.email,
+      customer.phone,
+      customer.business_number,
+      customer.campus_name,
+      customer.region_label,
+      customer.address,
+      customer.notes,
+      ...(crm_coverage?.warnings ?? []),
+      ...(crm_coverage?.source_links ?? []).flatMap((link) => [
+        link.source_label,
+        link.source_record_key,
+        link.source_system,
+      ]),
+      ...(crm_coverage?.external_records ?? []).flatMap((record) => [
+        record.display_name,
+        record.owner_name,
+        record.status,
+        record.object_api_key,
+      ]),
+    ]
+
+    return searchableValues.some((value) => value?.toLowerCase().includes(normalizedSearch))
+  }
+
+  const matchesQuickFilter = (item: CustomerListItem) => {
+    if (quickFilter === "all") return true
+    if (quickFilter === "memo") return Boolean(item.customer.notes?.trim())
+    if (quickFilter === "attention") return item.insight?.attention_level === "high"
+    if (quickFilter === "outstanding") return (item.summary?.outstanding_amount ?? 0) > 0
+    if (quickFilter === "review") {
+      const coverage = item.crm_coverage
+      return Boolean(
+        coverage &&
+          (coverage.status === "needs_review" ||
+            coverage.status === "error" ||
+            coverage.discrepancies.length > 0 ||
+            coverage.candidate_link_count > 0)
       )
-    : customers
-  ).slice().sort((left, right) => {
+    }
+    return true
+  }
+
+  const quickFilterCounts: Record<CustomerQuickFilter, number> = {
+    all: customers.length,
+    memo: customers.filter((item) => Boolean(item.customer.notes?.trim())).length,
+    attention: customers.filter((item) => item.insight?.attention_level === "high").length,
+    outstanding: customers.filter((item) => (item.summary?.outstanding_amount ?? 0) > 0).length,
+    review: customers.filter((item) => {
+      const coverage = item.crm_coverage
+      return Boolean(
+        coverage &&
+          (coverage.status === "needs_review" ||
+            coverage.status === "error" ||
+            coverage.discrepancies.length > 0 ||
+            coverage.candidate_link_count > 0)
+      )
+    }).length,
+  }
+
+  const filtered = customers.filter((item) => matchesSearch(item) && matchesQuickFilter(item)).slice().sort((left, right) => {
     const attentionOrder = { high: 0, medium: 1, low: 2 }
     const leftAttention = attentionOrder[left.insight?.attention_level ?? "low"]
     const rightAttention = attentionOrder[right.insight?.attention_level ?? "low"]
@@ -200,11 +295,31 @@ export function PartnerCustomersPage({
         <div className="relative">
           <Search className="absolute left-3 top-1/2 h-4 w-4 -translate-y-1/2 text-[#1a1a1a]/30" />
           <input
-            placeholder="기관명, 담당자, 지역 검색..."
+            placeholder="기관명, 담당자, 지역, 메모, CRM 후보 검색..."
             value={search}
             onChange={(event) => setSearch(event.target.value)}
             className="w-full rounded-xl border border-[#e8e8e4] py-2.5 pl-10 pr-4 text-sm focus:border-[#1a1a1a] focus:outline-none"
           />
+        </div>
+
+        <div className="admin-scroll-snap-x no-scrollbar -mt-3 flex gap-2 overflow-x-auto pb-1">
+          {(Object.keys(QUICK_FILTER_LABEL) as CustomerQuickFilter[]).map((filterKey) => (
+            <button
+              key={filterKey}
+              type="button"
+              onClick={() => setQuickFilter(filterKey)}
+              className={`inline-flex h-8 shrink-0 items-center gap-1.5 rounded-full border px-3 text-[12px] font-semibold transition-colors ${
+                quickFilter === filterKey
+                  ? "border-[#111110] bg-[#111110] text-white"
+                  : "border-[#e8e8e4] bg-white text-[#1a1a1a]/55 hover:border-[#c8c8c4] hover:text-[#111110]"
+              }`}
+            >
+              {QUICK_FILTER_LABEL[filterKey]}
+              <span className={quickFilter === filterKey ? "text-white/55" : "text-[#1a1a1a]/30"}>
+                {quickFilterCounts[filterKey]}
+              </span>
+            </button>
+          ))}
         </div>
 
         {loadError && !loading && (
@@ -245,7 +360,7 @@ export function PartnerCustomersPage({
                 key={customer.id}
                 type="button"
                 className="group rounded-xl border border-[#e8e8e4] bg-white p-4 text-left transition-all hover:border-[#1a1a1a]/30 hover:shadow-sm"
-                onClick={() => setDetailId(customer.id)}
+                onClick={() => openCustomerDetail(customer.id)}
               >
                 <div className="flex items-start justify-between gap-2">
                   <div className="min-w-0">
@@ -327,6 +442,18 @@ export function PartnerCustomersPage({
                   </div>
                 )}
 
+                {customer.notes?.trim() && (
+                  <div className="mt-3 rounded-lg border border-[#f0f0ec] bg-[#fcfcfb] px-3 py-2">
+                    <p className="flex items-center gap-1.5 text-[11px] font-semibold uppercase tracking-wide text-[#1a1a1a]/30">
+                      <StickyNote className="h-3 w-3" />
+                      메모
+                    </p>
+                    <p className="mt-1 line-clamp-2 text-xs leading-relaxed text-[#1a1a1a]/55">
+                      {customer.notes}
+                    </p>
+                  </div>
+                )}
+
                 <div className="mt-3 grid grid-cols-2 gap-2 text-xs">
                   <div className="rounded-lg border border-[#f0f0ec] bg-[#fcfcfb] px-3 py-2">
                     <p className="text-[#1a1a1a]/40">다음 일정</p>
@@ -379,10 +506,10 @@ export function PartnerCustomersPage({
           key={detailId}
           customerId={detailId}
           fetchMode="admin"
-          onClose={() => setDetailId(null)}
+          onClose={closeCustomerDetail}
           onEdit={allowEdit
             ? (customer) => {
-                setDetailId(null)
+                closeCustomerDetail()
                 setEditing(customer)
                 setShowForm(true)
               }

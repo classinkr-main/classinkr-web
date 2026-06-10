@@ -1,7 +1,21 @@
 "use client";
 
 import { useEffect, useState } from "react";
-import { AlertTriangle, CheckCircle2, Link2, Loader2, Mail, MapPin, Phone, ServerCog, User2, X } from "lucide-react";
+import {
+  AlertTriangle,
+  Check,
+  CheckCircle2,
+  Link2,
+  Loader2,
+  Mail,
+  MapPin,
+  Phone,
+  Save,
+  ServerCog,
+  StickyNote,
+  User2,
+  X,
+} from "lucide-react";
 
 import { adminFetchJson } from "@/lib/admin-client";
 import { portalFetch } from "@/lib/portal/portal-fetch";
@@ -124,6 +138,10 @@ type AdminCustomerDetailResponse = {
   customer?: CustomerDetailPayload;
 };
 
+type AdminCustomerPatchResponse = {
+  customer?: Customer;
+};
+
 export function CustomerDetailSlideOver({
   customerId,
   onClose,
@@ -135,6 +153,10 @@ export function CustomerDetailSlideOver({
   const [error, setError] = useState<string | null>(null);
   const [actionError, setActionError] = useState<string | null>(null);
   const [updatingLinkId, setUpdatingLinkId] = useState<string | null>(null);
+  const [noteDraft, setNoteDraft] = useState("");
+  const [savingNote, setSavingNote] = useState(false);
+  const [noteSaved, setNoteSaved] = useState(false);
+  const [noteError, setNoteError] = useState<string | null>(null);
   const [refreshNonce, setRefreshNonce] = useState(0);
 
   useEffect(() => {
@@ -154,7 +176,10 @@ export function CustomerDetailSlideOver({
 
     request
       .then((payload) => {
-        if (!cancelled) setData(payload);
+        if (!cancelled) {
+          setData(payload);
+          setNoteDraft(payload.customer.notes ?? "");
+        }
       })
       .catch((err) => {
         if (!cancelled)
@@ -186,6 +211,42 @@ export function CustomerDetailSlideOver({
       setUpdatingLinkId(null);
     }
   };
+
+  const saveCustomerNote = async () => {
+    if (!data || fetchMode !== "admin") return;
+
+    setSavingNote(true);
+    setNoteSaved(false);
+    setNoteError(null);
+    try {
+      const result = await adminFetchJson<AdminCustomerPatchResponse>(`/api/admin/customers/${customerId}`, {
+        method: "PATCH",
+        body: JSON.stringify({ notes: noteDraft.trim() || null }),
+      });
+      if (!result.customer) throw new Error("고객 메모 저장 결과가 없습니다.");
+
+      setData((current) =>
+        current
+          ? {
+              ...current,
+              customer: {
+                ...current.customer,
+                notes: result.customer?.notes ?? null,
+              },
+            }
+          : current
+      );
+      setNoteDraft(result.customer.notes ?? "");
+      setNoteSaved(true);
+      setTimeout(() => setNoteSaved(false), 1800);
+    } catch (err) {
+      setNoteError(err instanceof Error ? err.message : "고객 메모 저장에 실패했습니다.");
+    } finally {
+      setSavingNote(false);
+    }
+  };
+
+  const noteDirty = data ? noteDraft !== (data.customer.notes ?? "") : false;
 
   return (
     <div className="fixed inset-0 z-50 flex justify-end">
@@ -258,6 +319,19 @@ export function CustomerDetailSlideOver({
               {/* 연락처 정보 */}
               <ContactSection customer={data.customer} />
 
+              {/* 고객사 메모 */}
+              <CustomerNotesSection
+                notes={data.customer.notes}
+                draft={noteDraft}
+                canEdit={fetchMode === "admin"}
+                dirty={noteDirty}
+                saving={savingNote}
+                saved={noteSaved}
+                error={noteError}
+                onDraftChange={setNoteDraft}
+                onSave={() => void saveCustomerNote()}
+              />
+
               {/* CRM 소스 정합성 */}
               {data.crm_coverage && (
                 <CrmCoverageSection
@@ -287,15 +361,81 @@ export function CustomerDetailSlideOver({
                 <RecentActivitySection activity={data.recent_activity} />
               )}
 
-              {/* 메모 */}
-              {data.customer.notes && (
-                <NotesSection notes={data.customer.notes} />
-              )}
             </div>
           </>
         )}
       </div>
     </div>
+  );
+}
+
+function CustomerNotesSection({
+  notes,
+  draft,
+  canEdit,
+  dirty,
+  saving,
+  saved,
+  error,
+  onDraftChange,
+  onSave,
+}: {
+  notes: string | null;
+  draft: string;
+  canEdit: boolean;
+  dirty: boolean;
+  saving: boolean;
+  saved: boolean;
+  error: string | null;
+  onDraftChange: (value: string) => void;
+  onSave: () => void;
+}) {
+  if (!canEdit && !notes) return null;
+
+  return (
+    <section className="rounded-xl border border-[#e8e8e4] bg-white p-4">
+      <div className="mb-3 flex items-center justify-between gap-3">
+        <p className="inline-flex items-center gap-1.5 text-xs font-semibold uppercase tracking-widest text-[#1a1a1a]/30">
+          <StickyNote className="h-3.5 w-3.5" />
+          고객사 메모
+        </p>
+        {canEdit && (
+          <button
+            type="button"
+            onClick={onSave}
+            disabled={saving || !dirty}
+            className="inline-flex h-8 items-center gap-1.5 rounded-lg bg-[#111110] px-3 text-[12px] font-semibold text-white transition hover:bg-[#1a1a1a] disabled:cursor-not-allowed disabled:opacity-35"
+          >
+            {saving ? (
+              <Loader2 className="h-3.5 w-3.5 animate-spin" />
+            ) : saved ? (
+              <Check className="h-3.5 w-3.5" />
+            ) : (
+              <Save className="h-3.5 w-3.5" />
+            )}
+            {saving ? "저장 중" : saved ? "저장됨" : "저장"}
+          </button>
+        )}
+      </div>
+
+      {canEdit ? (
+        <textarea
+          value={draft}
+          onChange={(event) => onDraftChange(event.target.value)}
+          rows={4}
+          placeholder="고객사별 특이사항, 의사결정자, 다음 액션, 리스크를 남겨두세요."
+          className="w-full resize-none rounded-lg border border-[#e8e8e4] bg-[#fafaf8] px-3 py-2.5 text-sm leading-relaxed text-[#1a1a1a] outline-none transition focus:border-[#084734] focus:bg-white"
+        />
+      ) : (
+        <p className="whitespace-pre-wrap text-sm leading-relaxed text-[#1a1a1a]/70">{notes}</p>
+      )}
+
+      {error && (
+        <p className="mt-2 border-l-2 border-[#F3D6C8] bg-[#FEF3EE] py-2 pl-3 pr-2 text-xs text-[#B85C33]">
+          {error}
+        </p>
+      )}
+    </section>
   );
 }
 
@@ -819,17 +959,6 @@ function RecentCalendarSection({
           </li>
         ))}
       </ul>
-    </section>
-  );
-}
-
-function NotesSection({ notes }: { notes: string }) {
-  return (
-    <section className="rounded-xl border border-[#e8e8e4] bg-white p-4">
-      <p className={SECTION_HEADER}>메모</p>
-      <div className="rounded-lg bg-[#f5f5f2] p-3">
-        <p className="whitespace-pre-wrap text-sm text-[#1a1a1a]">{notes}</p>
-      </div>
     </section>
   );
 }
