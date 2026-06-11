@@ -128,6 +128,15 @@ function formatNumber(value: number) {
   return new Intl.NumberFormat("ko-KR").format(value)
 }
 
+// REV 시트·Neo CRM 스냅샷 금액은 위안화(CNY) — ¥ 만 단위 2자리.
+function formatCNY(value: number | null | undefined) {
+  const num = Number(value ?? 0)
+  if (Math.abs(num) >= 10_000) {
+    return `¥${(num / 10_000).toLocaleString("ko-KR", { minimumFractionDigits: 2, maximumFractionDigits: 2 })}만`
+  }
+  return `¥${num.toLocaleString("ko-KR")}`
+}
+
 function formatDate(value: string | null | undefined) {
   if (!value) return "-"
   const date = new Date(value)
@@ -619,7 +628,7 @@ export default function AdminCrmRevenuePage() {
             <FileSpreadsheet className="h-4 w-4 text-[#1a1a1a]/35" />
             <h2 className="text-[14px] font-semibold text-[#111110]">회사 시트 (REV) 내부 대조</h2>
             <span className="text-[11px] text-[#1a1a1a]/35">
-              계약 목표 총액 {formatCurrency(data.sheet.targetAmount)} · 진행{" "}
+              계약 목표 총액 {formatCNY(data.sheet.targetAmount)} · 진행{" "}
               {formatNumber(data.sheet.activeDealCount)}건/전체 {formatNumber(data.sheet.dealCount)}건 ·
               오류 체크용 병기 지표 (본사 CRM 매출과 합산하지 않음)
             </span>
@@ -627,27 +636,27 @@ export default function AdminCrmRevenuePage() {
           <div className="mt-2 grid gap-8 md:grid-cols-2 xl:grid-cols-5">
             <MetricCard
               label="매칭 완료 금액"
-              value={formatCurrency(data.sheet.linkedAmount)}
-              hint={`확정 link ${formatNumber(data.sheet.linkedDealCount)}건 · 미연결 ${formatCurrency(data.sheet.unlinkedAmount)}`}
+              value={formatCNY(data.sheet.linkedAmount)}
+              hint={`확정 link ${formatNumber(data.sheet.linkedDealCount)}건 · 미연결 ${formatCNY(data.sheet.unlinkedAmount)}`}
             />
             <MetricCard
               label="시트 확정 표시"
-              value={formatCurrency(data.sheet.confirmedAmount)}
+              value={formatCNY(data.sheet.confirmedAmount)}
               hint="주차 칸 빨간 글자(확정) 금액 누적 합계"
             />
             <MetricCard
               label="확정 임박 표시"
-              value={formatCurrency(data.sheet.highConfidenceAmount)}
+              value={formatCNY(data.sheet.highConfidenceAmount)}
               hint="주차 칸 파란 글자 — 높은 확률로 클로징 예정"
             />
             <MetricCard
               label="시트 예정 표시"
-              value={formatCurrency(data.sheet.expectedAmount)}
+              value={formatCNY(data.sheet.expectedAmount)}
               hint="당월~미래의 색 표시 없는 납부 스케줄 합계"
             />
             <MetricCard
               label="확정 전환 대기"
-              value={formatCurrency(data.sheet.unconfirmedPastAmount)}
+              value={formatCNY(data.sheet.unconfirmedPastAmount)}
               hint="지난달 이전 예정이었지만 아직 확정 표시가 없는 금액"
             />
           </div>
@@ -720,7 +729,7 @@ export default function AdminCrmRevenuePage() {
                         <p className="mt-1 text-[11px] text-[#1a1a1a]/35">{record.status ?? "-"}</p>
                       </td>
                       <td className="py-4 pr-4 text-right text-[12px] font-semibold text-[#111110]">
-                        {record.amount == null ? "-" : formatCurrency(record.amount)}
+                        {record.amount == null ? "-" : formatCNY(record.amount)}
                       </td>
                       <td className="py-4 pr-4 text-[12px] text-[#1a1a1a]/45">
                         {formatDate(record.occurredAt)}
@@ -1000,6 +1009,8 @@ export default function AdminCrmRevenuePage() {
                     ["시트 예상", point.sheetExpectedAmount, "bg-[#6EE7B7]"],
                   ].map(([label, amount, color]) => {
                     const numericAmount = Number(amount)
+                    // 시트 계열 금액은 CNY, 앱(견적/계약/입금/예상)은 KRW.
+                    const isSheetRow = String(label).startsWith("시트")
                     return (
                       <div key={label} className="grid grid-cols-[60px_minmax(0,1fr)_72px] items-center gap-2">
                         <span className="text-[11px] text-[#1a1a1a]/40">{label}</span>
@@ -1010,7 +1021,7 @@ export default function AdminCrmRevenuePage() {
                           />
                         </div>
                         <span className="text-right text-[11px] font-semibold text-[#111110]">
-                          {formatCurrency(numericAmount)}
+                          {isSheetRow ? formatCNY(numericAmount) : formatCurrency(numericAmount)}
                         </span>
                       </div>
                     )

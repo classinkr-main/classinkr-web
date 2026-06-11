@@ -79,14 +79,12 @@ const HIGH_CONFIDENCE_THRESHOLD = 0.9
 // 한 번에 그리는 행 수 상한 — 무한 스크롤/대량 렌더링 없이 필터로 좁혀 쓰는 UX.
 const MAX_VISIBLE_ROWS = 50
 
+// 매칭 인박스 금액(REV 시트·Neo CRM)은 전부 위안화(CNY) — ¥ 만 단위 2자리.
 function formatCurrency(value: number) {
-  if (Math.abs(value) >= 100_000_000) {
-    return `${(value / 100_000_000).toLocaleString("ko-KR", { maximumFractionDigits: 1 })}억`
-  }
   if (Math.abs(value) >= 10_000) {
-    return `${Math.round(value / 10_000).toLocaleString("ko-KR")}만`
+    return `¥${(value / 10_000).toLocaleString("ko-KR", { minimumFractionDigits: 2, maximumFractionDigits: 2 })}만`
   }
-  return value.toLocaleString("ko-KR")
+  return `¥${value.toLocaleString("ko-KR")}`
 }
 
 function formatNumber(value: number) {

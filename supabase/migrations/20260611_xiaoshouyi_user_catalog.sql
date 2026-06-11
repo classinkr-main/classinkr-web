@@ -23,7 +23,9 @@ VALUES
     ARRAY['id', 'name'],
     'id DESC',
     100,
-    20,
+    -- 100 pages: the HQ directory exceeds 2,000 users and `id DESC` puts older
+    -- Korea owner ids past the cutoff; 20 pages truncated the sync at exactly 2,000.
+    100,
     5,
     true,
     false,

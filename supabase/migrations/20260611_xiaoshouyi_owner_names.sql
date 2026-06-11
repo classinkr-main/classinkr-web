@@ -48,7 +48,9 @@ VALUES
   ('3637154579422025', 'Lee Wangchan (이왕찬)', '이왕찬', 'EEO03787', 'KR', false, '{"anchor_account":"과사람 국어관"}'::jsonb),
   ('3637136716307280', 'Park Han (박한)',       '박한',   'EEO03743', 'KR', false, '{"anchor_account":"KJ 영재센터","confidence":"inferred"}'::jsonb),
   ('3637139388521310', 'Minjae Kim (김민재)',   '김민재', 'EEO03644', 'KR', false, '{"anchor_deal":"케이원스포츠 / 필아트 / 킴스수학"}'::jsonb),
-  ('3637122367183714', '중국팀 (제외)',          NULL,     NULL,       'CN', true,  '{"reason":"china_revenue","sample_accounts":"중국 에듀원아카데미 / 리뉴젠 / 비바영어"}'::jsonb)
+  ('3637122367183714', '중국팀 (제외)',          NULL,     NULL,       'CN', true,  '{"reason":"china_revenue","sample_accounts":"중국 에듀원아카데미 / 리뉴젠 / 비바영어"}'::jsonb),
+  ('3637149069712202', '金美玲 (제외)',          NULL,     'EEO02475', 'CN', true,  '{"reason":"china_staff","source":"user_directory"}'::jsonb),
+  ('3637161934543690', '张鑫 (제외)',            NULL,     'EEO01227', 'CN', true,  '{"reason":"china_staff","source":"user_directory"}'::jsonb)
 ON CONFLICT (external_id) DO UPDATE SET
   display_name = EXCLUDED.display_name,
   korean_name = EXCLUDED.korean_name,

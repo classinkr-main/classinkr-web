@@ -8,7 +8,8 @@ type SupabaseAdminClient = ReturnType<typeof createSupabaseAdminClient>
 // `User` object provides id -> name; this builds that lookup. Falls back to an
 // empty map (callers keep the raw id) until the User object is synced.
 const XIAOSHOUYI_USER_OBJECT = "User"
-const USER_MAP_SCAN_LIMIT = 5000
+// HQ staff directory exceeds 2,000 users; keep headroom for a full sync.
+const USER_MAP_SCAN_LIMIT = 20000
 
 export async function getXiaoshouyiOwnerNameMap(sb: SupabaseAdminClient): Promise<Map<string, string>> {
   const map = new Map<string, string>()

@@ -5,14 +5,23 @@ import {
   AlertTriangle,
   Building2,
   CalendarClock,
+  ChevronDown,
+  ChevronRight,
+  ChevronUp,
   Loader2,
   RefreshCw,
   Search,
   Wallet,
+  X,
 } from "lucide-react"
 
 import { adminFetchJsonCached } from "@/lib/admin-client"
-import type { NeoCrmCustomerList, NeoCrmCustomerRow } from "@/lib/admin-crm-customers-neo"
+import type {
+  NeoCrmCustomerDetail,
+  NeoCrmCustomerList,
+  NeoCrmCustomerMoneyItem,
+  NeoCrmCustomerRow,
+} from "@/lib/admin-crm-customers-neo"
 
 type SortKey = "balance" | "expire" | "order" | "lastClass" | "name"
 
@@ -70,6 +79,177 @@ function ExpiryBadge({ expireAt }: { expireAt: string | null }) {
   return <span className="text-[12px] text-[#1a1a1a]/55">{formatDay(expireAt)}</span>
 }
 
+// 슬라이드오버 내부 돈 흐름 섹션 — 기본 5건, 더보기로 확장.
+function MoneySection({ title, items, emptyLabel }: { title: string; items: NeoCrmCustomerMoneyItem[]; emptyLabel: string }) {
+  const [expanded, setExpanded] = useState(false)
+  const visible = expanded ? items : items.slice(0, 5)
+
+  return (
+    <div className="rounded-xl border border-[#f0f0ec] p-3">
+      <div className="mb-2 flex items-center justify-between gap-2">
+        <h4 className="text-[13px] font-semibold text-[#111110]">{title}</h4>
+        <span className="text-[11px] text-[#1a1a1a]/35">{formatNumber(items.length)}건</span>
+      </div>
+      {items.length === 0 ? (
+        <p className="py-3 text-center text-[12px] text-[#1a1a1a]/30">{emptyLabel}</p>
+      ) : (
+        <div className="divide-y divide-[#f0f0ec]">
+          {visible.map((item) => (
+            <div key={item.id} className="grid grid-cols-[minmax(0,1fr)_96px] gap-2 py-2">
+              <div className="min-w-0">
+                <p className="truncate text-[12px] font-medium text-[#111110]">{item.title}</p>
+                <p className="truncate text-[11px] text-[#1a1a1a]/40">
+                  {item.ownerName}
+                  {item.status ? ` · ${item.status}` : ""}
+                </p>
+              </div>
+              <div className="text-right">
+                <p className="text-[12px] font-semibold text-[#111110]">
+                  {item.amount == null ? "-" : formatCNY(item.amount)}
+                </p>
+                <p className="text-[10px] text-[#1a1a1a]/35">{formatDay(item.occurredAt)}</p>
+              </div>
+            </div>
+          ))}
+          {items.length > 5 ? (
+            <button
+              type="button"
+              onClick={() => setExpanded((prev) => !prev)}
+              className="flex w-full items-center justify-center gap-1 pt-2 text-[12px] font-semibold text-[#1a1a1a]/45 transition-colors hover:text-[#111110]"
+            >
+              {expanded ? "접기" : `더보기 (${formatNumber(items.length - 5)})`}
+              {expanded ? <ChevronUp className="h-3.5 w-3.5" /> : <ChevronDown className="h-3.5 w-3.5" />}
+            </button>
+          ) : null}
+        </div>
+      )}
+    </div>
+  )
+}
+
+function CustomerDetailPanel({
+  accountId,
+  onClose,
+}: {
+  accountId: string
+  onClose: () => void
+}) {
+  const [detail, setDetail] = useState<NeoCrmCustomerDetail | null>(null)
+  const [loading, setLoading] = useState(true)
+  const [error, setError] = useState<string | null>(null)
+
+  // 패널은 accountId를 key로 리마운트되므로 초기 상태가 곧 리셋이다.
+  useEffect(() => {
+    let cancelled = false
+    adminFetchJsonCached<NeoCrmCustomerDetail>(`/api/admin/crm/customers-neo/${accountId}`, undefined, {
+      ttlMs: 60_000,
+    })
+      .then((next) => {
+        if (cancelled) return
+        setDetail(next)
+        if (!next.ok && next.error) setError(next.error)
+      })
+      .catch((err) => {
+        if (!cancelled) setError(err instanceof Error ? err.message : "고객 상세를 불러오지 못했습니다.")
+      })
+      .finally(() => {
+        if (!cancelled) setLoading(false)
+      })
+    return () => {
+      cancelled = true
+    }
+  }, [accountId])
+
+  useEffect(() => {
+    const onKey = (event: KeyboardEvent) => {
+      if (event.key === "Escape") onClose()
+    }
+    window.addEventListener("keydown", onKey)
+    return () => window.removeEventListener("keydown", onKey)
+  }, [onClose])
+
+  const account = detail?.account
+  const totalBalance = (detail?.eeoAccounts ?? []).reduce((sum, eeo) => sum + (eeo.balance ?? 0), 0)
+
+  return (
+    <div className="fixed inset-0 z-50 flex justify-end">
+      <button type="button" aria-label="닫기" onClick={onClose} className="absolute inset-0 bg-black/25" />
+      <aside className="relative flex h-full w-full max-w-[480px] flex-col overflow-y-auto bg-white shadow-2xl">
+        <div className="sticky top-0 z-10 border-b border-[#f0f0ec] bg-white px-5 py-4">
+          <div className="flex items-start justify-between gap-3">
+            <div className="min-w-0">
+              <p className="text-[11px] font-semibold uppercase tracking-wide text-[#1a1a1a]/30">Neo CRM Account</p>
+              <h3 className="mt-1 truncate text-[18px] font-bold text-[#111110]">
+                {account?.name ?? (loading ? "불러오는 중..." : "고객")}
+              </h3>
+              <p className="mt-1 text-[12px] text-[#1a1a1a]/45">
+                {account ? `${account.ownerName}${account.phone ? ` · ${account.phone}` : ""}` : ""}
+              </p>
+            </div>
+            <button
+              type="button"
+              onClick={onClose}
+              className="inline-flex h-8 w-8 shrink-0 items-center justify-center rounded-lg border border-[#e8e8e4] text-[#111110] transition-colors hover:bg-[#f5f5f2]"
+              aria-label="닫기"
+            >
+              <X className="h-4 w-4" />
+            </button>
+          </div>
+        </div>
+
+        <div className="flex flex-1 flex-col gap-3 px-5 py-4">
+          {error ? (
+            <p className="rounded-xl bg-[#FEF3EE] px-3 py-2 text-[12px] leading-relaxed text-[#B85C33]">{error}</p>
+          ) : null}
+
+          {loading && !detail ? (
+            <p className="py-16 text-center text-[13px] text-[#1a1a1a]/35">
+              <Loader2 className="mr-2 inline h-4 w-4 animate-spin" />
+              상세를 불러오는 중입니다.
+            </p>
+          ) : detail ? (
+            <>
+              <div className="rounded-xl border border-[#f0f0ec] p-3">
+                <div className="mb-2 flex items-center justify-between gap-2">
+                  <h4 className="text-[13px] font-semibold text-[#111110]">EEO 계정</h4>
+                  <span className="text-[12px] font-semibold text-[#084734]">잔액 {formatCNY(totalBalance)}</span>
+                </div>
+                {detail.eeoAccounts.length === 0 ? (
+                  <p className="py-3 text-center text-[12px] text-[#1a1a1a]/30">연결된 EEO 계정이 없습니다.</p>
+                ) : (
+                  <div className="divide-y divide-[#f0f0ec]">
+                    {detail.eeoAccounts.map((eeo) => (
+                      <div key={eeo.id} className="grid grid-cols-[minmax(0,1fr)_110px] gap-2 py-2">
+                        <div className="min-w-0">
+                          <p className="truncate text-[12px] font-medium text-[#111110]">{eeo.name}</p>
+                          <p className="truncate text-[11px] text-[#1a1a1a]/40">
+                            {eeo.uid ? `UID ${eeo.uid}` : "-"}
+                            {eeo.lastClassAt ? ` · 최근수업 ${formatDay(eeo.lastClassAt)}` : ""}
+                          </p>
+                        </div>
+                        <div className="flex flex-col items-end gap-1">
+                          <p className="text-[12px] font-semibold text-[#084734]">
+                            {eeo.balance == null ? "-" : formatCNY(eeo.balance)}
+                          </p>
+                          <ExpiryBadge expireAt={eeo.expireAt} />
+                        </div>
+                      </div>
+                    ))}
+                  </div>
+                )}
+              </div>
+
+              <MoneySection title="오더 (Opportunity)" items={detail.orders} emptyLabel="오더가 없습니다." />
+              <MoneySection title="수금 (Collection)" items={detail.collections} emptyLabel="수금 기록이 없습니다." />
+              <MoneySection title="성과 (SalesPerformance)" items={detail.performances} emptyLabel="성과 기록이 없습니다." />
+            </>
+          ) : null}
+        </div>
+      </aside>
+    </div>
+  )
+}
+
 function KpiTile({ icon, label, value, hint, tone = "text-[#111110]" }: { icon: React.ReactNode; label: string; value: string; hint: string; tone?: string }) {
   return (
     <div className="rounded-xl bg-[#fafaf8] px-3 py-3">
@@ -92,6 +272,7 @@ export default function NeoCrmCustomersClient() {
   const [sortKey, setSortKey] = useState<SortKey>("balance")
   const [expiringOnly, setExpiringOnly] = useState(false)
   const [visibleCount, setVisibleCount] = useState(PAGE_SIZE)
+  const [selectedAccountId, setSelectedAccountId] = useState<string | null>(null)
 
   const load = useCallback(async (options?: { force?: boolean }) => {
     setLoading(true)
@@ -290,9 +471,16 @@ export default function NeoCrmCustomersClient() {
               </tr>
             ) : (
               visibleRows.map((row: NeoCrmCustomerRow) => (
-                <tr key={row.accountId} className="align-top">
+                <tr
+                  key={row.accountId}
+                  onClick={() => setSelectedAccountId(row.accountId)}
+                  className="cursor-pointer align-top transition-colors hover:bg-[#fafaf8]"
+                >
                   <td className="py-4 pr-4">
-                    <p className="text-[13px] font-semibold text-[#111110]">{row.name}</p>
+                    <p className="flex items-center gap-1 text-[13px] font-semibold text-[#111110]">
+                      {row.name}
+                      <ChevronRight className="h-3.5 w-3.5 shrink-0 text-[#1a1a1a]/25" />
+                    </p>
                     <p className="mt-1 text-[11px] text-[#1a1a1a]/35">
                       {row.uid ? `UID ${row.uid}` : "EEO 미연결"}
                       {row.phone ? ` · ${row.phone}` : ""}
@@ -325,6 +513,14 @@ export default function NeoCrmCustomersClient() {
         >
           더보기 ({formatNumber(filtered.length - visibleRows.length)})
         </button>
+      ) : null}
+
+      {selectedAccountId ? (
+        <CustomerDetailPanel
+          key={selectedAccountId}
+          accountId={selectedAccountId}
+          onClose={() => setSelectedAccountId(null)}
+        />
       ) : null}
     </div>
   )
