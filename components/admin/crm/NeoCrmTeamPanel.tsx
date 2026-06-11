@@ -4,8 +4,10 @@ import { useCallback, useEffect, useMemo, useState } from "react"
 import Link from "next/link"
 import {
   Building2,
+  ChevronDown,
   ChevronLeft,
   ChevronRight,
+  ChevronUp,
   CircleDollarSign,
   ExternalLink,
   Loader2,
@@ -95,6 +97,7 @@ export default function NeoCrmTeamPanel() {
   const [error, setError] = useState<string | null>(null)
   const [ownerQuery, setOwnerQuery] = useState("")
   const [ownerSort, setOwnerSort] = useState<"amount" | "delta">("amount")
+  const [ordersExpanded, setOrdersExpanded] = useState(false)
 
   const load = useCallback(
     async (options?: { force?: boolean }) => {
@@ -372,7 +375,7 @@ export default function NeoCrmTeamPanel() {
               <p className="py-6 text-center text-[12px] text-[#1a1a1a]/30">이 기간 오더가 없습니다.</p>
             ) : (
               <div className="divide-y divide-[#f0f0ec]">
-                {(data?.order.recent ?? []).map((order) => (
+                {(ordersExpanded ? data?.order.recent ?? [] : (data?.order.recent ?? []).slice(0, 5)).map((order) => (
                   <div key={order.key} className="grid grid-cols-[minmax(0,1fr)_92px] gap-2 py-2">
                     <div className="min-w-0">
                       <p className="truncate text-[12px] font-semibold text-[#111110]">{order.customerName}</p>
@@ -389,6 +392,18 @@ export default function NeoCrmTeamPanel() {
                     </div>
                   </div>
                 ))}
+                {(data?.order.recent.length ?? 0) > 5 ? (
+                  <button
+                    type="button"
+                    onClick={() => setOrdersExpanded((prev) => !prev)}
+                    className="flex w-full items-center justify-center gap-1 pt-2 text-[12px] font-semibold text-[#1a1a1a]/45 transition-colors hover:text-[#111110]"
+                  >
+                    {ordersExpanded
+                      ? "접기"
+                      : `더보기 (${formatNumber((data?.order.recent.length ?? 0) - 5)})`}
+                    {ordersExpanded ? <ChevronUp className="h-3.5 w-3.5" /> : <ChevronDown className="h-3.5 w-3.5" />}
+                  </button>
+                ) : null}
               </div>
             )}
           </div>
