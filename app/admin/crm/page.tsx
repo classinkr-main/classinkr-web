@@ -342,6 +342,11 @@ function formatCurrency(value: number | null | undefined) {
   return amount.toLocaleString("ko-KR")
 }
 
+// 오더(Opportunity)는 달러($)로 기재된다 — 매출·수금(CNY)과 통화가 다름.
+function formatUSD(value: number | null | undefined) {
+  return `$${Number(value ?? 0).toLocaleString("en-US", { maximumFractionDigits: 2 })}`
+}
+
 function getCustomerLogKindLabel(kind: AdminCrmCustomerLogKind) {
   if (kind === "call") return "Call"
   if (kind === "visit") return "Visit"
@@ -445,7 +450,7 @@ function CrmOperationsDashboard({
               </p>
               <div className="mt-3 grid gap-2 text-[12px] text-[#1a1a1a]/45 sm:grid-cols-2">
                 <span>견적 {loadingValue ?? formatCurrency(revenue?.acceptedQuoteAmount)}</span>
-                <span>Opportunity {loadingValue ?? formatCurrency(neoCrm?.kpis.opportunityAmount)}</span>
+                <span>Opportunity {loadingValue ?? formatUSD(neoCrm?.kpis.opportunityAmount)}</span>
                 <span>Order {loadingValue ?? formatCurrency(revenue?.contractedAmount)}</span>
                 <span>Delivery {loadingValue ?? formatCurrency(revenue?.deliveryTotalAmount)}</span>
                 <span className={(revenue?.outstandingAmount ?? 0) > 0 ? "font-semibold text-[#B85C33]" : ""}>
@@ -465,8 +470,8 @@ function CrmOperationsDashboard({
               <CrmMetricTile
                 icon={<BarChart3 className="h-4 w-4" />}
                 label="Opportunity"
-                value={loadingValue ?? formatCurrency(neoCrm?.kpis.opportunityAmount)}
-                hint="한국팀 Neo CRM pipeline"
+                value={loadingValue ?? formatUSD(neoCrm?.kpis.opportunityAmount)}
+                hint="한국팀 Neo CRM pipeline · USD"
               />
               <CrmMetricTile
                 icon={<Handshake className="h-4 w-4" />}
