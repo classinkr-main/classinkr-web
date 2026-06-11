@@ -1,5 +1,9 @@
-import { PartnerCustomersPage } from "@/components/admin/customers/PartnerCustomersPage"
+import NeoCrmCustomersClient from "@/components/admin/crm/NeoCrmCustomersClient"
+
+export const metadata = {
+  title: "고객 | Admin CRM",
+}
 
 export default function AdminCrmPartnerCustomersPage() {
-  return <PartnerCustomersPage allowCreate allowEdit title="고객사" embedded />
+  return <NeoCrmCustomersClient />
 }
