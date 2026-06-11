@@ -44,3 +44,19 @@ export function resolveOwnerName(ownerId: string | null | undefined, ownerNames:
   if (!id) return "담당 미지정"
   return ownerNames.get(id) ?? id
 }
+
+// ownerIds flagged is_excluded (e.g. China team) — dropped from Korea team
+// revenue. Empty set until the owner-names table is applied/curated.
+export async function getExcludedXiaoshouyiOwnerIds(sb: SupabaseAdminClient): Promise<Set<string>> {
+  const set = new Set<string>()
+  const { data, error } = await sb
+    .from("crm_xiaoshouyi_owner_names")
+    .select("external_id")
+    .eq("is_excluded", true)
+    .limit(USER_MAP_SCAN_LIMIT)
+  if (error || !data) return set
+  for (const row of data as Array<{ external_id: string }>) {
+    if (row.external_id) set.add(String(row.external_id))
+  }
+  return set
+}

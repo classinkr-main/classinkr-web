@@ -5,7 +5,11 @@ import {
   isKoreaScopedExternalRecord,
   isKoreaTeamLabel,
 } from "@/lib/admin-crm-scope"
-import { getXiaoshouyiOwnerNameMap, resolveOwnerName } from "@/lib/external-crm/owner-names"
+import {
+  getExcludedXiaoshouyiOwnerIds,
+  getXiaoshouyiOwnerNameMap,
+  resolveOwnerName,
+} from "@/lib/external-crm/owner-names"
 import { createSupabaseAdminClient } from "@/lib/supabase/admin"
 
 export type NeoCrmGranularity = "week" | "month" | "quarter" | "year"
@@ -253,6 +257,7 @@ export async function getNeoCrmTeamReport(input: {
     leadsTotalResult,
     latestResult,
     ownerNames,
+    excludedOwnerIds,
   ] = await Promise.all([
     sb
       .from("branch_rev_deals")
@@ -295,6 +300,7 @@ export async function getNeoCrmTeamReport(input: {
       .order("synced_at", { ascending: false })
       .limit(1),
     getXiaoshouyiOwnerNameMap(sb),
+    getExcludedXiaoshouyiOwnerIds(sb),
   ])
 
   const blockingError =
@@ -313,6 +319,12 @@ export async function getNeoCrmTeamReport(input: {
   }>
   const koreaManagers = getKoreaTeamManagerSet(sheetRows)
 
+  // Korea team scope = scoped record AND owner not on the exclusion list
+  // (e.g. China team). resolves to "include all but excluded" under the
+  // Korea-only flag.
+  const isScoped = (row: { owner_name: string | null; payload: Record<string, unknown> | null }) =>
+    isKoreaScopedExternalRecord(row, koreaManagers) && !excludedOwnerIds.has(row.owner_name?.trim() ?? "")
+
   const isCurrent = (occurredAt: string | null) => (occurredAt ?? "") >= startIso
 
   // 목표치: REV 시트 기준. 기간이 덮는 월(monthKeys)의 한국팀 활성 행 예정액 합계.
@@ -329,9 +341,7 @@ export async function getNeoCrmTeamReport(input: {
       )
   }
 
-  const allSales = ((salesPerfResult.data ?? []) as ScopedOrderRecord[]).filter((row) =>
-    isKoreaScopedExternalRecord(row, koreaManagers)
-  )
+  const allSales = ((salesPerfResult.data ?? []) as ScopedOrderRecord[]).filter(isScoped)
   const salesRows = allSales.filter((row) => isCurrent(row.occurred_at))
   const prevSalesRows = allSales.filter((row) => !isCurrent(row.occurred_at))
 
@@ -377,9 +387,7 @@ export async function getNeoCrmTeamReport(input: {
     .sort((a, b) => b.amount - a.amount)
     .slice(0, TEAM_REVENUE_ROW_LIMIT)
 
-  const allOrders = ((opportunityResult.data ?? []) as ScopedOrderRecord[]).filter((row) =>
-    isKoreaScopedExternalRecord(row, koreaManagers)
-  )
+  const allOrders = ((opportunityResult.data ?? []) as ScopedOrderRecord[]).filter(isScoped)
   const orderRows = allOrders.filter((row) => isCurrent(row.occurred_at))
   const prevOrderRows = allOrders.filter((row) => !isCurrent(row.occurred_at))
   const orderAmount = orderRows.reduce((total, row) => total + (Number(row.amount) || 0), 0)
@@ -397,9 +405,7 @@ export async function getNeoCrmTeamReport(input: {
       occurredAt: row.occurred_at,
     }))
 
-  const allCollections = ((collectionResult.data ?? []) as ScopedAmountRecord[]).filter((row) =>
-    isKoreaScopedExternalRecord(row, koreaManagers)
-  )
+  const allCollections = ((collectionResult.data ?? []) as ScopedAmountRecord[]).filter(isScoped)
   const collectionRows = allCollections.filter((row) => isCurrent(row.occurred_at))
   const collectionAmount = collectionRows.reduce((total, row) => total + (Number(row.amount) || 0), 0)
   const prevCollectionAmount = allCollections
@@ -408,14 +414,14 @@ export async function getNeoCrmTeamReport(input: {
 
   const accountTotal = (
     (accountTotalResult.data ?? []) as Array<{ owner_name: string | null; payload: Record<string, unknown> | null }>
-  ).filter((row) => isKoreaScopedExternalRecord(row, koreaManagers)).length
+  ).filter(isScoped).length
   const accountWindow = (
     (accountWindowResult.error ? [] : accountWindowResult.data ?? []) as Array<{
       owner_name: string | null
       payload: Record<string, unknown> | null
       occurred_at: string | null
     }>
-  ).filter((row) => isKoreaScopedExternalRecord(row, koreaManagers))
+  ).filter(isScoped)
   const accountActiveInPeriod = accountWindow.filter((row) => isCurrent(row.occurred_at)).length
   const accountActivePrevious = accountWindow.filter((row) => !isCurrent(row.occurred_at)).length
 
