@@ -20,13 +20,18 @@ import {
 import { adminFetchJsonCached } from "@/lib/admin-client"
 import type { NeoCrmGranularity, NeoCrmTeamReport } from "@/lib/admin-crm-neo"
 
-// Neo CRM(Xiaoshouyi) 금액은 위안화(CNY). 만 단위 + 소수점 2자리로 표기.
+// 매출(SalesPerformance)·수금·잔액·목표는 위안화(CNY). 만 단위 + 소수점 2자리.
 function formatCurrency(value: number | null | undefined) {
   const num = Number(value ?? 0)
   if (Math.abs(num) >= 10_000) {
     return `¥${(num / 10_000).toLocaleString("ko-KR", { minimumFractionDigits: 2, maximumFractionDigits: 2 })}만`
   }
   return `¥${num.toLocaleString("ko-KR")}`
+}
+
+// 오더(Opportunity)는 달러($)로 기재된다 — 본사가 USD 주문을 위안화 매출로 인식.
+function formatUSD(value: number | null | undefined) {
+  return `$${Number(value ?? 0).toLocaleString("en-US", { maximumFractionDigits: 2 })}`
 }
 
 function formatNumber(value: number | null | undefined) {
@@ -87,7 +92,7 @@ function deltaTone(value: number) {
   return value > 0 ? "text-[#084734]" : value < 0 ? "text-[#B85C33]" : "text-[#1a1a1a]/40"
 }
 
-export default function NeoCrmTeamPanel() {
+export default function NeoCrmTeamPanel({ refreshKey = 0 }: { refreshKey?: number }) {
   const [granularity, setGranularity] = useState<NeoCrmGranularity>("month")
   const [offset, setOffset] = useState(0)
   const [data, setData] = useState<NeoCrmTeamReport | null>(null)
@@ -121,6 +126,11 @@ export default function NeoCrmTeamPanel() {
   useEffect(() => {
     void load()
   }, [load])
+
+  useEffect(() => {
+    if (refreshKey <= 0) return
+    void load({ force: true })
+  }, [load, refreshKey])
 
   const filteredOwners = useMemo(() => {
     const rows = (data?.revenue.byOwner ?? []).slice()
@@ -259,7 +269,7 @@ export default function NeoCrmTeamPanel() {
           icon={<ShoppingCart className="h-4 w-4" />}
           label="Order"
           value={loading && !data ? "..." : formatNumber(data?.order.count)}
-          hint={`금액 ${formatCurrency(data?.order.amount)} · 직전 ${formatNumber(
+          hint={`금액 ${formatUSD(data?.order.amount)} · 직전 ${formatNumber(
             data?.comparison.order.previousCount
           )}건`}
         />
@@ -384,7 +394,7 @@ export default function NeoCrmTeamPanel() {
                     </div>
                     <div className="text-right">
                       <p className="text-[12px] font-semibold text-[#111110]">
-                        {order.amount == null ? "-" : formatCurrency(order.amount)}
+                        {order.amount == null ? "-" : formatUSD(order.amount)}
                       </p>
                       <p className="text-[10px] text-[#1a1a1a]/35">{formatDate(order.occurredAt)}</p>
                     </div>

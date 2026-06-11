@@ -729,7 +729,11 @@ export default function AdminCrmRevenuePage() {
                         <p className="mt-1 text-[11px] text-[#1a1a1a]/35">{record.status ?? "-"}</p>
                       </td>
                       <td className="py-4 pr-4 text-right text-[12px] font-semibold text-[#111110]">
-                        {record.amount == null ? "-" : formatCNY(record.amount)}
+                        {record.amount == null
+                          ? "-"
+                          : record.objectApiKey === "opportunity"
+                            ? `$${record.amount.toLocaleString("en-US", { maximumFractionDigits: 2 })}`
+                            : formatCNY(record.amount)}
                       </td>
                       <td className="py-4 pr-4 text-[12px] text-[#1a1a1a]/45">
                         {formatDate(record.occurredAt)}

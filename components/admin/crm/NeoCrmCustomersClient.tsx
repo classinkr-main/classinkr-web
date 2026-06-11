@@ -35,12 +35,18 @@ const SORT_OPTIONS: Array<{ key: SortKey; label: string }> = [
 
 const PAGE_SIZE = 50
 
+// 매출·수금·잔액은 위안화(CNY).
 function formatCNY(value: number | null | undefined) {
   const num = Number(value ?? 0)
   if (Math.abs(num) >= 10_000) {
     return `¥${(num / 10_000).toLocaleString("ko-KR", { minimumFractionDigits: 2, maximumFractionDigits: 2 })}만`
   }
   return `¥${num.toLocaleString("ko-KR")}`
+}
+
+// 오더(Opportunity)는 달러($)로 기재된다.
+function formatUSD(value: number | null | undefined) {
+  return `$${Number(value ?? 0).toLocaleString("en-US", { maximumFractionDigits: 2 })}`
 }
 
 function formatNumber(value: number | null | undefined) {
@@ -80,7 +86,18 @@ function ExpiryBadge({ expireAt }: { expireAt: string | null }) {
 }
 
 // 슬라이드오버 내부 돈 흐름 섹션 — 기본 5건, 더보기로 확장.
-function MoneySection({ title, items, emptyLabel }: { title: string; items: NeoCrmCustomerMoneyItem[]; emptyLabel: string }) {
+// 오더는 USD, 수금/성과는 CNY라 섹션별 통화 포맷을 받는다.
+function MoneySection({
+  title,
+  items,
+  emptyLabel,
+  format,
+}: {
+  title: string
+  items: NeoCrmCustomerMoneyItem[]
+  emptyLabel: string
+  format: (value: number | null | undefined) => string
+}) {
   const [expanded, setExpanded] = useState(false)
   const visible = expanded ? items : items.slice(0, 5)
 
@@ -105,7 +122,7 @@ function MoneySection({ title, items, emptyLabel }: { title: string; items: NeoC
               </div>
               <div className="text-right">
                 <p className="text-[12px] font-semibold text-[#111110]">
-                  {item.amount == null ? "-" : formatCNY(item.amount)}
+                  {item.amount == null ? "-" : format(item.amount)}
                 </p>
                 <p className="text-[10px] text-[#1a1a1a]/35">{formatDay(item.occurredAt)}</p>
               </div>
@@ -239,9 +256,9 @@ function CustomerDetailPanel({
                 )}
               </div>
 
-              <MoneySection title="오더 (Opportunity)" items={detail.orders} emptyLabel="오더가 없습니다." />
-              <MoneySection title="수금 (Collection)" items={detail.collections} emptyLabel="수금 기록이 없습니다." />
-              <MoneySection title="성과 (SalesPerformance)" items={detail.performances} emptyLabel="성과 기록이 없습니다." />
+              <MoneySection title="오더 (Opportunity · USD)" items={detail.orders} emptyLabel="오더가 없습니다." format={formatUSD} />
+              <MoneySection title="수금 (Collection · CNY)" items={detail.collections} emptyLabel="수금 기록이 없습니다." format={formatCNY} />
+              <MoneySection title="성과 (SalesPerformance · CNY)" items={detail.performances} emptyLabel="성과 기록이 없습니다." format={formatCNY} />
             </>
           ) : null}
         </div>
@@ -389,8 +406,8 @@ export default function NeoCrmCustomersClient() {
         <KpiTile
           icon={<Wallet className="h-4 w-4" />}
           label="총 오더"
-          value={loading && !data ? "..." : formatCNY(summary?.totalOrderAmount)}
-          hint="Opportunity 금액 합 (CNY)"
+          value={loading && !data ? "..." : formatUSD(summary?.totalOrderAmount)}
+          hint="Opportunity 금액 합 (USD)"
         />
       </section>
 
@@ -495,7 +512,7 @@ export default function NeoCrmCustomersClient() {
                   </td>
                   <td className="py-4 pr-4 text-[12px] text-[#1a1a1a]/45">{formatDay(row.lastClassAt)}</td>
                   <td className="py-4 pl-4 text-right">
-                    <p className="text-[12px] font-semibold text-[#111110]">{formatCNY(row.orderAmount)}</p>
+                    <p className="text-[12px] font-semibold text-[#111110]">{formatUSD(row.orderAmount)}</p>
                     <p className="text-[11px] text-[#1a1a1a]/35">{formatNumber(row.orderCount)}건</p>
                   </td>
                 </tr>
