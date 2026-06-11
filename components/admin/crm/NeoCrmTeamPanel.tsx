@@ -20,15 +20,13 @@ import {
 import { adminFetchJsonCached } from "@/lib/admin-client"
 import type { NeoCrmGranularity, NeoCrmTeamReport } from "@/lib/admin-crm-neo"
 
+// Neo CRM(Xiaoshouyi) 금액은 위안화(CNY). 만 단위 + 소수점 2자리로 표기.
 function formatCurrency(value: number | null | undefined) {
   const num = Number(value ?? 0)
-  if (Math.abs(num) >= 100_000_000) {
-    return `${(num / 100_000_000).toLocaleString("ko-KR", { maximumFractionDigits: 1 })}억`
-  }
   if (Math.abs(num) >= 10_000) {
-    return `${Math.round(num / 10_000).toLocaleString("ko-KR")}만`
+    return `¥${(num / 10_000).toLocaleString("ko-KR", { minimumFractionDigits: 2, maximumFractionDigits: 2 })}만`
   }
-  return num.toLocaleString("ko-KR")
+  return `¥${num.toLocaleString("ko-KR")}`
 }
 
 function formatNumber(value: number | null | undefined) {
