@@ -5,9 +5,8 @@ import {
   isKoreaScopedExternalRecord,
   isKoreaTeamLabel,
 } from "@/lib/admin-crm-scope"
+import { getXiaoshouyiOwnerNameMap, resolveOwnerName } from "@/lib/external-crm/owner-names"
 import { createSupabaseAdminClient } from "@/lib/supabase/admin"
-
-type SupabaseAdminClient = ReturnType<typeof createSupabaseAdminClient>
 
 export type NeoCrmGranularity = "week" | "month" | "quarter" | "year"
 
@@ -102,35 +101,6 @@ const SHEET_INACTIVE_PATTERN = /취소|해지|드랍|드롭|중단|보류|cancel
 const PERIOD_SCAN_LIMIT = 5000
 const RECENT_ORDER_LIMIT = 12
 const TEAM_REVENUE_ROW_LIMIT = 50
-// Xiaoshouyi records store owner as a numeric ownerId, not a name. The synced
-// `User` object provides id -> name so we can label per-owner revenue.
-const XIAOSHOUYI_USER_OBJECT = "User"
-const USER_MAP_SCAN_LIMIT = 5000
-
-// external_id(=Xiaoshouyi user id) -> display name. Falls back to empty map
-// until the User object is synced; callers then keep the raw owner id.
-async function getXiaoshouyiOwnerNameMap(
-  sb: SupabaseAdminClient
-): Promise<Map<string, string>> {
-  const map = new Map<string, string>()
-  const { data, error } = await sb
-    .from("external_crm_records")
-    .select("external_id, display_name")
-    .eq("source_system", "xiaoshouyi")
-    .eq("object_api_key", XIAOSHOUYI_USER_OBJECT)
-    .limit(USER_MAP_SCAN_LIMIT)
-  if (error || !data) return map
-  for (const row of data as Array<{ external_id: string; display_name: string | null }>) {
-    if (row.external_id && row.display_name) map.set(String(row.external_id), row.display_name)
-  }
-  return map
-}
-
-function resolveOwnerName(ownerId: string | null | undefined, ownerNames: Map<string, string>) {
-  const id = ownerId?.trim() || ""
-  if (!id) return "담당 미지정"
-  return ownerNames.get(id) ?? id
-}
 
 function pad2(value: number) {
   return String(value).padStart(2, "0")

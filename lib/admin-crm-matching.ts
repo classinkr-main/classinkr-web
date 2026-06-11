@@ -3,6 +3,7 @@ import "server-only"
 import { getBranchRevSourceRecordKey, isPlaceholderCrmName } from "@/lib/crm-source-linking"
 import type { CrmSourceLinkStatus } from "@/lib/admin-crm-revenue-types"
 import { EXTERNAL_CRM_KOREA_ONLY, getKoreaTeamManagerSet, isKoreaScopedOwner, isKoreaTeamLabel } from "@/lib/admin-crm-scope"
+import { getXiaoshouyiOwnerNameMap, resolveOwnerName } from "@/lib/external-crm/owner-names"
 import { createSupabaseAdminClient } from "@/lib/supabase/admin"
 
 export type CrmMatchingSourceSystem = "branch_rev_sheet" | "xiaoshouyi" | "lead"
@@ -116,7 +117,7 @@ export async function getAdminCrmMatchingInbox(): Promise<AdminCrmMatchingInbox>
   const sb = createSupabaseAdminClient()
   const warnings: string[] = []
 
-  const [sheetResult, linksResult, accountsResult, customersResult, dealsResult] = await Promise.all([
+  const [sheetResult, linksResult, accountsResult, customersResult, dealsResult, ownerNames] = await Promise.all([
     sb
       .from("branch_rev_deals")
       .select("sheet_row, customer_name, team, manager, status, first_payment, contract_target, monthly_payments")
@@ -132,6 +133,7 @@ export async function getAdminCrmMatchingInbox(): Promise<AdminCrmMatchingInbox>
     sb.from("partner_accounts").select("id, name").limit(2000),
     sb.from("customers").select("id, name, campus_name").limit(2000),
     sb.from("deals").select("id, deal_code, title").limit(2000),
+    getXiaoshouyiOwnerNameMap(sb),
   ])
 
   if (sheetResult.error) warnings.push(`REV 시트 데이터를 읽지 못했습니다: ${sheetResult.error.message}`)
@@ -187,8 +189,14 @@ export async function getAdminCrmMatchingInbox(): Promise<AdminCrmMatchingInbox>
         link.normalized_name ??
         link.source_record_key,
       sourceDetail: `${link.source_object} · ${link.source_record_key.slice(0, 40)}`,
+      // Xiaoshouyi owner_name is a numeric ownerId — resolve to a person name.
       sourceOwner:
-        getMetadataString(link.metadata, "owner_name") ?? getMetadataString(link.metadata, "source_owner"),
+        sourceSystem === "xiaoshouyi"
+          ? resolveOwnerName(
+              getMetadataString(link.metadata, "owner_name") ?? getMetadataString(link.metadata, "source_owner"),
+              ownerNames
+            )
+          : getMetadataString(link.metadata, "owner_name") ?? getMetadataString(link.metadata, "source_owner"),
       sourceStatus: getMetadataString(link.metadata, "source_status"),
       amount: getMetadataNumber(link.metadata, "source_amount"),
       linkStatus: link.status,
