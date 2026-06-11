@@ -1,6 +1,6 @@
 import { NextRequest, NextResponse } from "next/server"
 
-import { syncXiaoshouyiSnapshots } from "@/lib/external-crm/xiaoshouyi-sync"
+import { runExternalCrmSyncChain } from "@/lib/external-crm/sync-chain"
 
 export async function GET(req: NextRequest) {
   const expected = process.env.CRON_SECRET
@@ -10,6 +10,11 @@ export async function GET(req: NextRequest) {
     return NextResponse.json({ error: "unauthorized" }, { status: 401 })
   }
 
-  const result = await syncXiaoshouyiSnapshots("cron")
-  return NextResponse.json(result, { status: result.ok ? 200 : result.skipped ? 409 : 500 })
+  const chain = await runExternalCrmSyncChain("cron")
+  const result = {
+    ...chain.sync,
+    candidates: chain.candidates ?? null,
+    candidatesError: chain.candidatesError ?? null,
+  }
+  return NextResponse.json(result, { status: chain.sync.ok ? 200 : chain.sync.skipped ? 409 : 500 })
 }

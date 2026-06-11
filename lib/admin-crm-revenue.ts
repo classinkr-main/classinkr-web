@@ -1,6 +1,6 @@
 import "server-only"
 
-import { getBranchRevSourceRecordKey } from "@/lib/crm-source-linking"
+import { getBranchRevSourceRecordKey, isPlaceholderCrmName } from "@/lib/crm-source-linking"
 import { createSupabaseAdminClient } from "@/lib/supabase/admin"
 import type {
   CrmRevenueDashboard,
@@ -1029,11 +1029,31 @@ export async function getAdminCrmRevenueDashboard(months = 6): Promise<CrmRevenu
     links.push(link)
     sourceLinksByKey.set(link.source_record_key, links)
   }
+  const confirmedSheetKeys = new Set(
+    sourceLinks
+      .filter((link) => link.status === "confirmed")
+      .map((link) => link.source_record_key)
+  )
+  // 확정 source link 기준으로 시트 금액을 매칭/미매칭으로 분리한다.
+  // 매칭된 금액만 앱 매출과 대조(dedupe)할 수 있고, 미매칭 금액이 "따로 노는" 잔량이다.
+  let sheetLinkedAmount = 0
+  let sheetUnlinkedAmount = 0
+  let sheetLinkedDealCount = 0
   const sheetMatches: CrmRevenueSheetMatchRow[] = []
 
   for (const deal of activeSheetDeals) {
     const recordKey = getBranchRevSourceRecordKey(deal)
     const links = sourceLinksByKey.get(recordKey) ?? []
+    const sheetDealAmount = getSheetDealAmount(deal)
+    // HW/SW/MKT 접두 임시 고객은 매칭 후순위라 linked/unlinked 분리 지표에서 제외한다.
+    if (!isPlaceholderCrmName(deal.customer_name)) {
+      if (confirmedSheetKeys.has(recordKey)) {
+        sheetLinkedAmount += sheetDealAmount
+        sheetLinkedDealCount += 1
+      } else {
+        sheetUnlinkedAmount += sheetDealAmount
+      }
+    }
     const redMap = deal.monthly_red ?? {}
     const confirmedMap = deal.monthly_confirmed ?? {}
     const highConfMap = deal.monthly_high_conf ?? {}
@@ -1123,15 +1143,15 @@ export async function getAdminCrmRevenueDashboard(months = 6): Promise<CrmRevenu
           unconfirmedPastAmount: sheetUnconfirmedPastAmount,
           dealCount: sheetDeals.length,
           activeDealCount: activeSheetDeals.length,
+          linkedDealCount: sheetLinkedDealCount,
+          linkedAmount: sheetLinkedAmount,
+          unlinkedAmount: sheetUnlinkedAmount,
         }
       : null
 
-  const confirmedSheetKeys = new Set(
-    sourceLinks
-      .filter((link) => link.status === "confirmed")
-      .map((link) => link.source_record_key)
-  )
-  const activeSheetKeys = new Set(activeSheetDeals.map((deal) => getBranchRevSourceRecordKey(deal)))
+  // 미매칭 카운트도 임시(placeholder) 고객을 제외한 실제 매칭 대상 기준으로 계산한다.
+  const matchableSheetDeals = activeSheetDeals.filter((deal) => !isPlaceholderCrmName(deal.customer_name))
+  const activeSheetKeys = new Set(matchableSheetDeals.map((deal) => getBranchRevSourceRecordKey(deal)))
   const activeConfirmedSheetKeys = new Set(
     Array.from(confirmedSheetKeys).filter((key) => activeSheetKeys.has(key))
   )
@@ -1144,7 +1164,7 @@ export async function getAdminCrmRevenueDashboard(months = 6): Promise<CrmRevenu
           rejectedLinks: sourceLinks.filter((link) => link.status === "rejected").length,
           staleLinks: sourceLinks.filter((link) => link.status === "stale").length,
           linkedSheetDealCount: activeConfirmedSheetKeys.size,
-          unmatchedSheetDealCount: Math.max(0, activeSheetDeals.length - activeConfirmedSheetKeys.size),
+          unmatchedSheetDealCount: Math.max(0, matchableSheetDeals.length - activeConfirmedSheetKeys.size),
           targetCustomerCount: new Set(
             sourceLinks
               .filter((link) => link.status === "confirmed" && link.target_type === "customer")

@@ -314,6 +314,29 @@ related:
 - live credential smoke 이후 retry delay/limit 운영값 조정.
 - update/create만 허용, delete 제외.
 
+### Phase 4. 매칭 자동화 및 매칭 인박스 (2026-06-10 반영)
+
+수동 1건씩 연결하던 매칭 운영을 자동화 티어 + 일괄 검수 동선으로 전환했다.
+
+- **자동 확정 티어**: 후보 생성기(`lib/repositories/crm-source-links.ts`)가 정책 조건을 만족하는 최상위 후보를 자동 확정한다.
+  - 조건: confidence ≥ `auto_confirm_min_confidence`(기본 0.92) AND 같은 target type의 2위 후보와 점수 차 ≥ `auto_confirm_min_gap`(기본 0.15).
+  - 모호하면(2위가 근접) 자동 확정하지 않고 검수 큐에 남긴다. admin이 rejected 처리한 pair는 다시 자동 확정하지 않는다.
+  - 자동 확정 대상 target type은 보수적으로 `customer`/`partner_account`만. deal 링크는 수동 전용.
+  - 정책은 `crm_source_priorities`의 `auto_confirm_enabled/min_confidence/min_gap` 컬럼으로 SQL 관리 (`20260611_crm_auto_confirm_policy.sql`). 기본 활성: `xiaoshouyi`, `branch_rev_sheet`. `lead`는 전환 플로우가 명시적이라 비활성.
+  - 자동 확정 row는 `confirmed_by = null` + `metadata.auto_confirmed = true`로 기록되고, 매칭 인박스에서 "되돌리기"로 재검수로 보낼 수 있다. alias 학습은 수동 확정과 동일하게 동작한다.
+- **싱크 체이닝**: `lib/external-crm/sync-chain.ts`가 Xiaoshouyi sync → 후보 생성/자동 확정 → admin 알림을 한 단위로 묶는다. manual 버튼과 cron이 같은 경로를 탄다. REV 시트 sync(`/api/admin/branch/sync`, `/api/cron/sync-branch`)도 성공 시 link 승계 + 후보 생성을 자동 실행한다.
+- **REV 링크 승계**: `reattachBranchRevConfirmedLinks()`가 full-replace 후 고아가 된 confirmed link를 `이름+첫납부+금액` fingerprint로 이동한 행에 승계한다. 0건/복수 매칭이면 stale 처리해 인박스에 노출한다.
+- **일괄 검수 API**: `PATCH /api/admin/crm/source-links/bulk` (ids ≤ 200, confirm/reject/stale).
+- **매칭 인박스 탭**: `/admin/crm/matching` 신설. Neo CRM/REV 시트/리드 링크를 소스·상태 필터, 체크박스 일괄 확정/제외, 고확신(90%↑) 일괄 확정, 자동 확정 되돌리기, REV 수동 검색 연결로 처리한다. `/admin/crm/revenue`의 매칭 표 2개는 인박스로 이동했고 revenue 탭에는 요약 + 딥링크만 남았다. 단건 액션은 전체 리페치 없이 로컬 상태만 갱신한다.
+- **시트 금액 dedupe 분리**: `CrmRevenueSheetSummary`에 `linkedAmount/unlinkedAmount/linkedDealCount`를 추가했다. 확정 link가 있는 시트 행 금액만 앱 매출과 대조 가능하고, 미연결 금액이 "따로 노는" 잔량으로 표시된다.
+- **sync 성능**: Xiaoshouyi sync가 `payload_hash` 비교로 무변경 레코드는 full upsert 대신 `last_seen_run_id/synced_at`만 경량 갱신한다. sync run metadata에 `rowsUnchanged` 기록.
+- **cron**: `vercel.json`에 `/api/cron/sync-external-crm` 일 1회(01:00 UTC) 등록. credential 미설정 시 기존대로 skipped no-op이라 안전하다.
+- **알림**: sync 체인 완료 시 신규 후보/자동 확정 건수를, 실패 시 실패 객체 목록을 admin notification(`crm.external_sync.*`)으로 발행한다.
+- **임시 고객 제외**: 시트의 `HW/SW/MKT` 접두 고객명은 임시 placeholder로 간주한다(`isPlaceholderCrmName`, 접두 뒤 구분자 필수 — `SW어학원` 같은 실제 상호는 매칭 대상 유지). 후보 생성/자동 확정/미매칭 KPI/매칭률에서 제외하고, 인박스에서는 `전체` 필터에서만 `임시` badge로 노출한다.
+- **목록 상한**: 매칭 인박스 테이블은 한 번에 최대 50행만 렌더한다(무한 스크롤 없음). 초과분은 건수만 안내하고 소스/상태 필터로 좁혀 처리한다. 일괄 액션도 표시된 행 기준으로만 동작한다.
+- **홈탭 Neo CRM 섹션**: `/admin/crm` 홈에 Neo CRM 스냅샷 기준 KPI(이번 달/30일 수금, Opportunity pipeline, account 수)와 최근 수금·성과(Collection__c/SalesPerformance__c) 고객 10건을 표시한다(`overview.neoCrm`). 스냅샷이 비었거나 schema 미적용이면 안내 문구로 degrade한다.
+- **partners 스키마 드리프트 수정**: `20260611_partners_workspace_columns.sql`이 코드가 읽는 `partners.channel/region/owner_name/owner_email/account_manager_name/tags` 컬럼을 idempotent하게 추가한다.
+
 ## 6. 남은 결정 사항
 
 | 결정 | 선택지 | 권장 |
@@ -340,6 +363,9 @@ related:
 - [ ] Supabase 운영 DB에 `crm_write_requests` guardrail migration 적용.
 - [ ] Supabase 운영 DB에 `crm_write_request_events`와 write retry state migration 적용.
 - [ ] Supabase 운영 DB에 `crm_source_priorities`, `crm_match_aliases`, `crm_xiaoshouyi_query_catalog` migration 적용.
+- [ ] Supabase 운영 DB에 `20260611_crm_auto_confirm_policy.sql` (auto-confirm 정책 컬럼) 적용. 미적용 시 자동 확정은 조용히 비활성으로 동작.
+- [ ] Supabase DB에 `20260611_partners_workspace_columns.sql` 적용. `partners.channel/region/owner_*/account_manager_name/tags`는 코드가 읽지만 기존 migration에 없던 컬럼이라(수동 추가된 DB만 동작), 미적용 환경은 "column partners.channel does not exist"로 JSON fallback이 뜬다.
+- [ ] 첫 자동 확정 배치 후 `/admin/crm/matching`에서 자동 확정 품질(오매칭률) 검수, 필요 시 `auto_confirm_min_confidence/min_gap` 상향.
 - [ ] `/api/admin/crm/mcp-context`가 source priority와 Xiaoshouyi query catalog를 secret 없이 반환하는지 확인.
 - [ ] 라이브 Xiaoshouyi snapshot 적재 후 고객사 상세의 `crm_coverage.external_records` 후보 품질과 false positive 기준 확인.
 - [ ] Xiaoshouyi pagination/cursor/stale marking을 live credential로 smoke test.

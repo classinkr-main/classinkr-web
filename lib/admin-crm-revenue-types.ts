@@ -46,6 +46,9 @@ export interface CrmRevenueSheetSummary {
   unconfirmedPastAmount: number
   dealCount: number
   activeDealCount: number
+  linkedDealCount: number
+  linkedAmount: number
+  unlinkedAmount: number
 }
 
 export type CrmSourceLinkStatus = "candidate" | "confirmed" | "rejected" | "stale"

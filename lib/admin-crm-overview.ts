@@ -2,6 +2,7 @@ import "server-only"
 
 import { getCrmDuplicatePreflightReport } from "@/lib/admin-crm-duplicate-preflight"
 import { getCrmSchemaContractReadiness } from "@/lib/admin-crm-schema-contract"
+import { getKoreaTeamManagerSet, isKoreaScopedExternalRecord } from "@/lib/admin-crm-scope"
 import { getXiaoshouyiSyncPreflight, getXiaoshouyiSyncSchemaReadiness } from "@/lib/external-crm/xiaoshouyi-sync"
 import { getXiaoshouyiWriteSchemaReadiness } from "@/lib/external-crm/xiaoshouyi-write"
 import { createSupabaseAdminClient } from "@/lib/supabase/admin"
@@ -97,6 +98,31 @@ export interface AdminCrmOverview {
     cancelled: number
     error: string | null
   }
+  neoCrm: AdminCrmNeoCrmOverview
+}
+
+export interface AdminCrmNeoCrmOrderItem {
+  key: string
+  objectApiKey: string
+  customerName: string
+  ownerName: string | null
+  status: string | null
+  amount: number | null
+  occurredAt: string | null
+}
+
+export interface AdminCrmNeoCrmOverview {
+  ok: boolean
+  error: string | null
+  latestSyncedAt: string | null
+  kpis: {
+    accountCount: number
+    opportunityAmount: number
+    collectionAmountMonth: number
+    collectionAmount30d: number
+    collectionCount30d: number
+  }
+  recentOrders: AdminCrmNeoCrmOrderItem[]
 }
 
 type SupabaseErrorLike = { code?: string; details?: string; hint?: string; message?: string } | null
@@ -702,6 +728,178 @@ function getOverallStatus(input: {
   return "ok"
 }
 
+const NEO_CRM_MONEY_OBJECTS = [
+  "opportunity",
+  "CollectionPlan__c",
+  "Collection__c",
+  "SalesPerformance__c",
+  "FinancialInformation__c",
+  "ShroffAccount__c",
+]
+const NEO_CRM_RECENT_ORDER_LIMIT = 10
+const NEO_CRM_RECENT_ORDER_SCAN_LIMIT = 200
+const NEO_CRM_AMOUNT_SCAN_LIMIT = 2000
+
+type NeoCrmScopedRecord = {
+  owner_name: string | null
+  payload: Record<string, unknown> | null
+}
+
+type NeoCrmAmountRecord = NeoCrmScopedRecord & {
+  amount: number | null
+  occurred_at?: string | null
+}
+
+function filterKoreaScopedNeoCrmRows<T extends NeoCrmScopedRecord>(rows: T[], koreaManagers: Set<string>) {
+  return rows.filter((row) => isKoreaScopedExternalRecord(row, koreaManagers))
+}
+
+async function getNeoCrmOverview(sb: SupabaseAdminClient): Promise<AdminCrmNeoCrmOverview> {
+  const empty: AdminCrmNeoCrmOverview = {
+    ok: false,
+    error: null,
+    latestSyncedAt: null,
+    kpis: {
+      accountCount: 0,
+      opportunityAmount: 0,
+      collectionAmountMonth: 0,
+      collectionAmount30d: 0,
+      collectionCount30d: 0,
+    },
+    recentOrders: [],
+  }
+
+  const now = new Date()
+  const monthStart = new Date(Date.UTC(now.getUTCFullYear(), now.getUTCMonth(), 1)).toISOString()
+  const thirtyDaysAgo = new Date(now.getTime() - 30 * 24 * 60 * 60 * 1000).toISOString()
+  const collectionSince = monthStart < thirtyDaysAgo ? monthStart : thirtyDaysAgo
+
+  const [teamManagerResult, accountResult, opportunityResult, collectionResult, recentOrdersResult, latestResult] =
+    await Promise.all([
+      sb
+        .from("branch_rev_deals")
+        .select("team, manager")
+        .limit(BUSINESS_QUERY_LIMIT),
+      sb
+        .from("external_crm_records")
+        .select("id, owner_name, payload")
+        .eq("source_system", "xiaoshouyi")
+        .eq("object_api_key", "account")
+        .eq("is_stale", false)
+        .limit(NEO_CRM_AMOUNT_SCAN_LIMIT),
+      sb
+        .from("external_crm_records")
+        .select("amount, owner_name, payload")
+        .eq("source_system", "xiaoshouyi")
+        .eq("object_api_key", "opportunity")
+        .eq("is_stale", false)
+        .limit(NEO_CRM_AMOUNT_SCAN_LIMIT),
+      sb
+        .from("external_crm_records")
+        .select("amount, occurred_at, owner_name, payload")
+        .eq("source_system", "xiaoshouyi")
+        .eq("object_api_key", "Collection__c")
+        .eq("is_stale", false)
+        .gte("occurred_at", collectionSince)
+        .order("occurred_at", { ascending: false, nullsFirst: false })
+        .limit(NEO_CRM_AMOUNT_SCAN_LIMIT),
+      sb
+        .from("external_crm_records")
+        .select("object_api_key, external_id, display_name, owner_name, status, amount, occurred_at, payload")
+        .eq("source_system", "xiaoshouyi")
+        .in("object_api_key", NEO_CRM_MONEY_OBJECTS)
+        .eq("is_stale", false)
+        .order("occurred_at", { ascending: false, nullsFirst: false })
+        .limit(NEO_CRM_RECENT_ORDER_SCAN_LIMIT),
+      sb
+        .from("external_crm_records")
+        .select("synced_at")
+        .eq("source_system", "xiaoshouyi")
+        .order("synced_at", { ascending: false })
+        .limit(1),
+    ])
+
+  const firstError =
+    accountResult.error ?? opportunityResult.error ?? collectionResult.error ?? recentOrdersResult.error
+  if (firstError) {
+    return { ...empty, error: formatLabeledSupabaseError("external_crm_records", firstError) }
+  }
+
+  const koreaManagers = getKoreaTeamManagerSet(
+    (teamManagerResult.error ? [] : teamManagerResult.data ?? []) as Array<{ team: string | null; manager: string | null }>
+  )
+  const accounts = filterKoreaScopedNeoCrmRows(
+    (accountResult.data ?? []) as Array<NeoCrmScopedRecord>,
+    koreaManagers
+  )
+  const opportunities = filterKoreaScopedNeoCrmRows(
+    (opportunityResult.data ?? []) as Array<NeoCrmAmountRecord>,
+    koreaManagers
+  )
+  const collections = filterKoreaScopedNeoCrmRows(
+    (collectionResult.data ?? []) as Array<NeoCrmAmountRecord>,
+    koreaManagers
+  )
+
+  const opportunityAmount = opportunities.reduce(
+    (total, row) => total + (Number(row.amount) || 0),
+    0
+  )
+
+  let collectionAmountMonth = 0
+  let collectionAmount30d = 0
+  let collectionCount30d = 0
+  for (const row of collections) {
+    const amount = Number(row.amount) || 0
+    const occurredAt = row.occurred_at ?? ""
+    if (occurredAt >= thirtyDaysAgo) {
+      collectionAmount30d += amount
+      collectionCount30d += 1
+    }
+    if (occurredAt >= monthStart) collectionAmountMonth += amount
+  }
+
+  const recentOrders: AdminCrmNeoCrmOrderItem[] = (
+    (recentOrdersResult.data ?? []) as Array<{
+      object_api_key: string
+      external_id: string
+      display_name: string | null
+      owner_name: string | null
+      status: string | null
+      amount: number | null
+      occurred_at: string | null
+      payload: Record<string, unknown> | null
+    }>
+  )
+    .filter((row) => isKoreaScopedExternalRecord(row, koreaManagers))
+    .slice(0, NEO_CRM_RECENT_ORDER_LIMIT)
+    .map((row) => ({
+      key: `${row.object_api_key}:${row.external_id}`,
+      objectApiKey: row.object_api_key,
+      customerName: row.display_name ?? row.external_id,
+      ownerName: row.owner_name,
+      status: row.status,
+      amount: row.amount,
+      occurredAt: row.occurred_at,
+    }))
+
+  const latestRow = latestResult.error ? null : latestResult.data?.[0]
+
+  return {
+    ok: true,
+    error: null,
+    latestSyncedAt: latestRow && typeof latestRow.synced_at === "string" ? latestRow.synced_at : null,
+    kpis: {
+      accountCount: accounts.length,
+      opportunityAmount,
+      collectionAmountMonth,
+      collectionAmount30d,
+      collectionCount30d,
+    },
+    recentOrders,
+  }
+}
+
 export async function getAdminCrmOverview(): Promise<AdminCrmOverview> {
   const sb = createSupabaseAdminClient()
 
@@ -717,6 +915,7 @@ export async function getAdminCrmOverview(): Promise<AdminCrmOverview> {
     latestRunResult,
     writeQueueCounts,
     business,
+    neoCrm,
   ] =
     await Promise.all([
       getXiaoshouyiSyncSchemaReadiness(),
@@ -744,6 +943,7 @@ export async function getAdminCrmOverview(): Promise<AdminCrmOverview> {
         .limit(1),
       getWriteQueueCounts(sb),
       getBusinessOverview(sb),
+      getNeoCrmOverview(sb),
     ])
 
   const schemaChecks = [
@@ -843,5 +1043,6 @@ export async function getAdminCrmOverview(): Promise<AdminCrmOverview> {
     sourceLinks,
     externalSnapshots,
     writeQueue,
+    neoCrm,
   }
 }

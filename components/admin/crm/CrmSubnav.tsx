@@ -3,45 +3,52 @@
 import Link from "next/link"
 import { usePathname } from "next/navigation"
 import type { ReactNode } from "react"
-import { Building2, CircleDollarSign, Handshake, LayoutDashboard, ListChecks } from "lucide-react"
+import { CircleDollarSign, Handshake, LayoutDashboard, Link2, PhoneCall, Target } from "lucide-react"
 
-type CrmTab = "home" | "partners" | "partnerPortal" | "partnerCustomers" | "revenue"
+type CrmTab = "home" | "partners" | "partnerPortal" | "partnerCustomers" | "matching" | "revenue"
 
 const CRM_TABS = [
   {
     key: "home",
     href: "/admin/crm",
-    label: "홈",
-    description: "매출, KPI, 고객 로그",
+    label: "Neo CRM",
+    description: "한국팀 매출·KPI",
     icon: <LayoutDashboard className="h-4 w-4" />,
-  },
-  {
-    key: "partners",
-    href: "/admin/crm/partners",
-    label: "운영 큐",
-    description: "계약, 설치, 정산, 이슈",
-    icon: <ListChecks className="h-4 w-4" />,
-  },
-  {
-    key: "partnerPortal",
-    href: "/admin/crm/partners/portal",
-    label: "거래/오더",
-    description: "파이프라인, 일정, 수납",
-    icon: <Handshake className="h-4 w-4" />,
-  },
-  {
-    key: "partnerCustomers",
-    href: "/admin/crm/partners/customers",
-    label: "고객사",
-    description: "기관, 캠퍼스, 활동",
-    icon: <Building2 className="h-4 w-4" />,
   },
   {
     key: "revenue",
     href: "/admin/crm/revenue",
-    label: "매출·정합성",
-    description: "Delivery, 시트, 소스",
+    label: "견적·매출",
+    description: "Quote, Opportunity",
     icon: <CircleDollarSign className="h-4 w-4" />,
+  },
+  {
+    key: "partnerPortal",
+    href: "/admin/crm/partners/portal",
+    label: "Order·Delivery",
+    description: "오더, 설치, 수납",
+    icon: <Handshake className="h-4 w-4" />,
+  },
+  {
+    key: "partners",
+    href: "/admin/crm/partners",
+    label: "KPI 운영",
+    description: "계약, 이슈, 팔로업",
+    icon: <Target className="h-4 w-4" />,
+  },
+  {
+    key: "partnerCustomers",
+    href: "/admin/crm/partners/customers",
+    label: "고객·후속",
+    description: "고객, 콜, 비짓",
+    icon: <PhoneCall className="h-4 w-4" />,
+  },
+  {
+    key: "matching",
+    href: "/admin/crm/matching",
+    label: "데이터 정합성",
+    description: "Neo CRM, 시트 연결",
+    icon: <Link2 className="h-4 w-4" />,
   },
 ] satisfies Array<{
   key: CrmTab
@@ -53,6 +60,7 @@ const CRM_TABS = [
 
 function resolveActiveTab(pathname: string | null): CrmTab | null {
   if (!pathname) return null
+  if (pathname === "/admin/crm/matching" || pathname.startsWith("/admin/crm/matching/")) return "matching"
   if (pathname === "/admin/crm/revenue" || pathname.startsWith("/admin/crm/revenue/")) return "revenue"
   if (pathname === "/admin/crm/partners/portal") return "partnerPortal"
   if (pathname === "/admin/crm/partners/customers") return "partnerCustomers"
@@ -66,7 +74,7 @@ export default function CrmSubnav({ active }: { active?: CrmTab } = {}) {
   const resolved = active ?? resolveActiveTab(pathname)
 
   return (
-    <div className="admin-scroll-snap-x no-scrollbar -mx-4 mb-6 flex gap-2 overflow-x-auto px-4 pb-2 sm:mx-0 sm:grid sm:grid-cols-2 sm:overflow-visible sm:px-0 sm:pb-0 lg:grid-cols-5">
+    <div className="admin-scroll-snap-x no-scrollbar -mx-4 mb-6 flex gap-2 overflow-x-auto px-4 pb-2 sm:mx-0 sm:grid sm:grid-cols-2 sm:overflow-visible sm:px-0 sm:pb-0 lg:grid-cols-3 xl:grid-cols-6">
       {CRM_TABS.map((tab) => {
         const isActive = resolved === tab.key
 

@@ -66,6 +66,7 @@ export interface ExternalCrmSyncObjectResult {
   status: "success" | "failed" | "skipped"
   rowsScanned: number
   rowsUpserted: number
+  rowsUnchanged?: number
   pagesScanned?: number
   staleMarked?: number
   cursorValue?: string
@@ -806,6 +807,7 @@ export async function syncXiaoshouyiSnapshots(trigger: ExternalCrmSyncTrigger = 
       const syncedAt = new Date().toISOString()
       let rowsScanned = 0
       let rowsUpserted = 0
+      let rowsUnchanged = 0
       let pagesScanned = 0
       let nextOffset = 0
       let truncated = false
@@ -825,13 +827,53 @@ export async function syncXiaoshouyiSnapshots(trigger: ExternalCrmSyncTrigger = 
           .filter((row): row is ExternalRecordRow => Boolean(row))
 
         if (rows.length > 0) {
-          const { data, error } = await sb
+          // Unchanged payloads only need their run marker refreshed; a full
+          // upsert per record makes sync cost scale with snapshot size
+          // instead of change volume.
+          const { data: existingRows, error: existingError } = await sb
             .from("external_crm_records")
-            .upsert(rows, { onConflict: "source_system,object_api_key,external_id" })
-            .select("id")
+            .select("external_id, payload_hash")
+            .eq("source_system", "xiaoshouyi")
+            .eq("object_api_key", object.objectApiKey)
+            .in(
+              "external_id",
+              rows.map((row) => row.external_id)
+            )
 
-          if (error) throw error
-          rowsUpserted += data?.length ?? rows.length
+          if (existingError) throw existingError
+
+          const existingHashes = new Map(
+            ((existingRows ?? []) as Array<{ external_id: string; payload_hash: string | null }>).map((row) => [
+              row.external_id,
+              row.payload_hash,
+            ])
+          )
+          const changedRows = rows.filter((row) => existingHashes.get(row.external_id) !== row.payload_hash)
+          const unchangedIds = rows
+            .filter((row) => existingHashes.get(row.external_id) === row.payload_hash)
+            .map((row) => row.external_id)
+
+          if (changedRows.length > 0) {
+            const { data, error } = await sb
+              .from("external_crm_records")
+              .upsert(changedRows, { onConflict: "source_system,object_api_key,external_id" })
+              .select("id")
+
+            if (error) throw error
+            rowsUpserted += data?.length ?? changedRows.length
+          }
+
+          if (unchangedIds.length > 0) {
+            const { error: touchError } = await sb
+              .from("external_crm_records")
+              .update({ last_seen_run_id: runId, synced_at: syncedAt, is_stale: false, stale_at: null })
+              .eq("source_system", "xiaoshouyi")
+              .eq("object_api_key", object.objectApiKey)
+              .in("external_id", unchangedIds)
+
+            if (touchError) throw touchError
+            rowsUnchanged += unchangedIds.length
+          }
         }
 
         if (records.length < pageSize) {
@@ -872,6 +914,7 @@ export async function syncXiaoshouyiSnapshots(trigger: ExternalCrmSyncTrigger = 
           pagesScanned,
           truncated,
           staleMarked,
+          rowsUnchanged,
           orderBy: object.orderBy ?? (object.fields.includes("updatedAt") ? "updatedAt DESC" : "id DESC"),
           whereClause: object.whereClause ?? null,
           catalogSource: object.catalogSource ?? "runtime",
@@ -883,6 +926,7 @@ export async function syncXiaoshouyiSnapshots(trigger: ExternalCrmSyncTrigger = 
         status: "success",
         rowsScanned,
         rowsUpserted,
+        rowsUnchanged,
         pagesScanned,
         staleMarked: staleMarked ?? undefined,
         cursorValue,

@@ -2,6 +2,7 @@ import "server-only"
 
 import {
   getBranchRevSourceRecordKey,
+  isPlaceholderCrmName,
   normalizeCrmName,
   normalizeCrmOwnerName,
   scoreCrmEntityMatch,
@@ -115,6 +116,7 @@ export interface GenerateBranchRevLinkCandidatesResult {
   generatedCandidates: number
   insertedCandidates: number
   skippedExisting: number
+  autoConfirmed: number
 }
 
 export interface GenerateExternalCrmLinkCandidatesResult {
@@ -122,6 +124,7 @@ export interface GenerateExternalCrmLinkCandidatesResult {
   generatedCandidates: number
   insertedCandidates: number
   skippedExisting: number
+  autoConfirmed: number
 }
 
 export interface GenerateLeadLinkCandidatesResult {
@@ -129,6 +132,7 @@ export interface GenerateLeadLinkCandidatesResult {
   generatedCandidates: number
   insertedCandidates: number
   skippedExisting: number
+  autoConfirmed: number
 }
 
 export interface GenerateAllCrmLinkCandidatesResult {
@@ -144,6 +148,30 @@ export interface CrmManualLinkTargetOption {
   targetType: CrmManualLinkTargetType
   targetId: string
   label: string
+  confidence: number
+  evidence: string[]
+}
+
+interface AutoConfirmPolicy {
+  enabled: boolean
+  minConfidence: number
+  minGap: number
+}
+
+interface ScoredLinkTarget {
+  targetType: "partner_account" | "customer" | "deal"
+  targetId: string
+  targetLabel: string
+  confidence: number
+  evidence: string[]
+  strategy: string
+}
+
+interface AutoConfirmDecision {
+  source_object: string
+  source_record_key: string
+  target_type: "partner_account" | "customer" | "deal"
+  target_id: string
   confidence: number
   evidence: string[]
 }
@@ -173,6 +201,20 @@ function buildCandidateKey(candidate: {
   target_id: string
 }) {
   return `${candidate.source_object ?? ""}:${candidate.source_record_key}:${candidate.target_type}:${candidate.target_id}`
+}
+
+const EMPTY_PAIR_SET: ReadonlySet<string> = new Set<string>()
+
+function buildRejectedPairsBySource(links: ExistingSourceLink[]) {
+  const rejected = new Map<string, Set<string>>()
+  for (const link of links) {
+    if (link.status !== "rejected") continue
+    const key = `${link.source_object}:${link.source_record_key}`
+    const pairs = rejected.get(key) ?? new Set<string>()
+    pairs.add(`${link.target_type}:${link.target_id}`)
+    rejected.set(key, pairs)
+  }
+  return rejected
 }
 
 function shouldKeepScoredMatch(match: { confidence: number; evidence?: string[] }) {
@@ -340,6 +382,131 @@ async function getCrmMatchAliases(): Promise<CrmMatchAliasInput[]> {
   return aliases
 }
 
+async function getAutoConfirmPolicies(): Promise<Record<string, AutoConfirmPolicy>> {
+  const sb = createSupabaseAdminClient()
+  const { data, error } = await sb
+    .from("crm_source_priorities")
+    .select("source_system, auto_confirm_enabled, auto_confirm_min_confidence, auto_confirm_min_gap")
+
+  // Policy columns may not exist yet (migration pending) — auto-confirm stays off.
+  if (error || !data) return {}
+
+  const policies: Record<string, AutoConfirmPolicy> = {}
+  for (const row of data as Array<{
+    source_system: string
+    auto_confirm_enabled: boolean | null
+    auto_confirm_min_confidence: number | null
+    auto_confirm_min_gap: number | null
+  }>) {
+    policies[row.source_system] = {
+      enabled: row.auto_confirm_enabled === true,
+      minConfidence: Number(row.auto_confirm_min_confidence ?? 0.92),
+      minGap: Number(row.auto_confirm_min_gap ?? 0.15),
+    }
+  }
+  return policies
+}
+
+// Auto-confirm only the top candidate of the first preferred target type whose
+// score clears the policy threshold. Ambiguity within that type (runner-up too
+// close) keeps the source in manual review instead of falling through to a
+// lower-priority type, because a close runner-up usually means duplicates.
+function pickAutoConfirmTarget(
+  targets: ScoredLinkTarget[],
+  policy: AutoConfirmPolicy | undefined,
+  typePreference: Array<"partner_account" | "customer" | "deal">,
+  rejectedPairKeys: ReadonlySet<string>
+): ScoredLinkTarget | null {
+  if (!policy?.enabled) return null
+
+  for (const type of typePreference) {
+    const typed = targets.filter((target) => target.targetType === type)
+    if (typed.length === 0) continue
+
+    const [top, second] = typed
+    if (top.confidence < policy.minConfidence) continue
+    if (second && top.confidence - second.confidence < policy.minGap) return null
+    if (rejectedPairKeys.has(`${top.targetType}:${top.targetId}`)) return null
+    return top
+  }
+
+  return null
+}
+
+async function applyAutoConfirmDecisions(
+  sourceSystem: "branch_rev_sheet" | "lead" | "xiaoshouyi",
+  decisions: AutoConfirmDecision[]
+): Promise<number> {
+  if (decisions.length === 0) return 0
+
+  const sb = createSupabaseAdminClient()
+  const now = new Date().toISOString()
+  let confirmed = 0
+
+  for (const decision of decisions) {
+    const { data: row, error: readError } = await sb
+      .from("crm_source_links")
+      .select("id, normalized_name, status, metadata")
+      .eq("source_system", sourceSystem)
+      .eq("source_object", decision.source_object)
+      .eq("source_record_key", decision.source_record_key)
+      .eq("target_type", decision.target_type)
+      .eq("target_id", decision.target_id)
+      .maybeSingle()
+
+    if (readError || !row) continue
+    if (row.status === "rejected" || row.status === "confirmed") continue
+
+    const { error: staleError } = await sb
+      .from("crm_source_links")
+      .update({ status: "stale", confirmed_by: null, confirmed_at: null })
+      .eq("source_system", sourceSystem)
+      .eq("source_object", decision.source_object)
+      .eq("source_record_key", decision.source_record_key)
+      .neq("id", row.id)
+      .in("status", ["candidate", "confirmed"])
+
+    if (staleError) continue
+
+    const metadata = {
+      ...((row.metadata as Record<string, unknown> | null) ?? {}),
+      auto_confirmed: true,
+      auto_confirmed_at: now,
+      auto_confirm_evidence: decision.evidence,
+    }
+
+    const { error: confirmError } = await sb
+      .from("crm_source_links")
+      .update({
+        status: "confirmed",
+        confirmed_by: null,
+        confirmed_at: now,
+        confidence: Number(decision.confidence.toFixed(4)),
+        metadata,
+      })
+      .eq("id", row.id)
+
+    if (confirmError) continue
+
+    confirmed += 1
+    await tryLearnAliasFromConfirmedLink(
+      {
+        id: row.id as string,
+        source_system: sourceSystem,
+        source_object: decision.source_object,
+        source_record_key: decision.source_record_key,
+        normalized_name: (row.normalized_name as string | null) ?? null,
+        target_type: decision.target_type,
+        target_id: decision.target_id,
+        metadata,
+      },
+      null
+    )
+  }
+
+  return confirmed
+}
+
 function scoreSourceTargetMatch(input: {
   sourceName: string
   sourceOwner?: string | null
@@ -396,7 +563,7 @@ async function findBranchRevSourceByKey(sourceRecordKey: string) {
 export async function generateBranchRevLinkCandidates(): Promise<GenerateBranchRevLinkCandidatesResult> {
   const sb = createSupabaseAdminClient()
 
-  const [sheetResult, partnerAccountsResult, customersResult, dealsResult, linksResult, aliases] = await Promise.all([
+  const [sheetResult, partnerAccountsResult, customersResult, dealsResult, linksResult, aliases, autoConfirmPolicies] = await Promise.all([
     sb
       .from("branch_rev_deals")
       .select("sheet_row, customer_name, team, manager, status, first_payment, contract_target")
@@ -420,6 +587,7 @@ export async function generateBranchRevLinkCandidates(): Promise<GenerateBranchR
       .eq("source_object", "branch_rev_deals")
       .limit(5000),
     getCrmMatchAliases(),
+    getAutoConfirmPolicies(),
   ])
 
   if (sheetResult.error) throw sheetResult.error
@@ -429,7 +597,10 @@ export async function generateBranchRevLinkCandidates(): Promise<GenerateBranchR
   if (linksResult.error) throw linksResult.error
 
   const sheetDeals = ((sheetResult.data ?? []) as BranchRevCandidateSource[]).filter(
-    (deal) => !SHEET_INACTIVE_PATTERN.test(deal.status ?? "")
+    (deal) =>
+      !SHEET_INACTIVE_PATTERN.test(deal.status ?? "") &&
+      // HW/SW/MKT 접두 임시 고객은 후순위 — 후보 생성/자동 확정 대상에서 제외
+      !isPlaceholderCrmName(deal.customer_name)
   )
   const partnerAccounts = (partnerAccountsResult.data ?? []) as PartnerAccountCandidateTarget[]
   const customers = (customersResult.data ?? []) as CustomerCandidateTarget[]
@@ -441,6 +612,9 @@ export async function generateBranchRevLinkCandidates(): Promise<GenerateBranchR
       .filter((link) => link.status === "confirmed")
       .map((link) => link.source_record_key)
   )
+  const rejectedPairsBySource = buildRejectedPairsBySource(existingLinks)
+  const autoConfirmPolicy = autoConfirmPolicies["branch_rev_sheet"]
+  const autoConfirmDecisions: AutoConfirmDecision[] = []
 
   const candidates: CandidateInsert[] = []
 
@@ -449,7 +623,7 @@ export async function generateBranchRevLinkCandidates(): Promise<GenerateBranchR
     if (existingConfirmedSources.has(sourceRecordKey)) continue
 
     const sourceOwner = source.manager ?? source.team
-    const scoredTargets = [
+    const rankedTargets: ScoredLinkTarget[] = [
       ...partnerAccounts.map((account) => {
         const targetLabel = buildSourceTargetLabel(account)
         const match = scoreSourceTargetMatch({
@@ -515,7 +689,24 @@ export async function generateBranchRevLinkCandidates(): Promise<GenerateBranchR
     ]
       .filter(shouldKeepScoredMatch)
       .sort((a, b) => b.confidence - a.confidence)
-      .slice(0, MAX_CANDIDATES_PER_SOURCE)
+
+    const scoredTargets = rankedTargets.slice(0, MAX_CANDIDATES_PER_SOURCE)
+    const autoTarget = pickAutoConfirmTarget(
+      rankedTargets,
+      autoConfirmPolicy,
+      ["customer", "partner_account"],
+      rejectedPairsBySource.get(`branch_rev_deals:${sourceRecordKey}`) ?? EMPTY_PAIR_SET
+    )
+    if (autoTarget) {
+      autoConfirmDecisions.push({
+        source_object: "branch_rev_deals",
+        source_record_key: sourceRecordKey,
+        target_type: autoTarget.targetType,
+        target_id: autoTarget.targetId,
+        confidence: autoTarget.confidence,
+        evidence: autoTarget.evidence,
+      })
+    }
 
     for (const target of scoredTargets) {
       candidates.push({
@@ -548,11 +739,14 @@ export async function generateBranchRevLinkCandidates(): Promise<GenerateBranchR
     if (error) throw error
   }
 
+  const autoConfirmed = await applyAutoConfirmDecisions("branch_rev_sheet", autoConfirmDecisions)
+
   return {
     scannedSheetDeals: sheetDeals.length,
     generatedCandidates: candidates.length,
     insertedCandidates: rowsToInsert.length,
     skippedExisting: candidates.length - rowsToInsert.length,
+    autoConfirmed,
   }
 }
 
@@ -575,7 +769,7 @@ export async function generateExternalCrmLinkCandidates(): Promise<GenerateExter
     return results.flatMap((result) => (result.data ?? []) as ExternalCrmRecordSource[])
   })
 
-  const [records, partnerAccountsResult, customersResult, dealsResult, linksResult, aliases] = await Promise.all([
+  const [records, partnerAccountsResult, customersResult, dealsResult, linksResult, aliases, autoConfirmPolicies] = await Promise.all([
     recordsPromise,
     sb
       .from("partner_accounts")
@@ -595,6 +789,7 @@ export async function generateExternalCrmLinkCandidates(): Promise<GenerateExter
       .eq("source_system", "xiaoshouyi")
       .limit(5000),
     getCrmMatchAliases(),
+    getAutoConfirmPolicies(),
   ])
 
   if (partnerAccountsResult.error) throw partnerAccountsResult.error
@@ -613,6 +808,9 @@ export async function generateExternalCrmLinkCandidates(): Promise<GenerateExter
       .filter((link) => link.status === "confirmed")
       .map((link) => `${link.source_object}:${link.source_record_key}`)
   )
+  const rejectedPairsBySource = buildRejectedPairsBySource(existingLinks)
+  const autoConfirmPolicy = autoConfirmPolicies["xiaoshouyi"]
+  const autoConfirmDecisions: AutoConfirmDecision[] = []
 
   const candidates: CandidateInsert[] = []
 
@@ -623,7 +821,7 @@ export async function generateExternalCrmLinkCandidates(): Promise<GenerateExter
     if (existingConfirmedSources.has(`${record.object_api_key}:${record.external_id}`)) continue
 
     const targetTypes = new Set(getExternalCrmTargetTypes(record.object_api_key))
-    const scoredTargets = [
+    const rankedTargets: ScoredLinkTarget[] = [
       ...(targetTypes.has("partner_account")
         ? partnerAccounts.map((account) => ({
             targetType: "partner_account" as const,
@@ -697,7 +895,26 @@ export async function generateExternalCrmLinkCandidates(): Promise<GenerateExter
     ]
       .filter(shouldKeepScoredMatch)
       .sort((a, b) => b.confidence - a.confidence)
-      .slice(0, MAX_CANDIDATES_PER_SOURCE)
+
+    const scoredTargets = rankedTargets.slice(0, MAX_CANDIDATES_PER_SOURCE)
+    // Auto-confirm stays conservative: customer/partner targets only — deal
+    // links from external record names are too ambiguous to confirm unattended.
+    const autoTarget = pickAutoConfirmTarget(
+      rankedTargets,
+      autoConfirmPolicy,
+      ["customer", "partner_account"],
+      rejectedPairsBySource.get(`${record.object_api_key}:${record.external_id}`) ?? EMPTY_PAIR_SET
+    )
+    if (autoTarget) {
+      autoConfirmDecisions.push({
+        source_object: record.object_api_key,
+        source_record_key: record.external_id,
+        target_type: autoTarget.targetType,
+        target_id: autoTarget.targetId,
+        confidence: autoTarget.confidence,
+        evidence: autoTarget.evidence,
+      })
+    }
 
     for (const target of scoredTargets) {
       candidates.push({
@@ -734,18 +951,21 @@ export async function generateExternalCrmLinkCandidates(): Promise<GenerateExter
     if (error) throw error
   }
 
+  const autoConfirmed = await applyAutoConfirmDecisions("xiaoshouyi", autoConfirmDecisions)
+
   return {
     scannedExternalRecords: activeRecords.length,
     generatedCandidates: candidates.length,
     insertedCandidates: rowsToInsert.length,
     skippedExisting: candidates.length - rowsToInsert.length,
+    autoConfirmed,
   }
 }
 
 export async function generateLeadLinkCandidates(): Promise<GenerateLeadLinkCandidatesResult> {
   const sb = createSupabaseAdminClient()
 
-  const [leadsResult, partnerAccountsResult, customersResult, dealsResult, linksResult, aliases] = await Promise.all([
+  const [leadsResult, partnerAccountsResult, customersResult, dealsResult, linksResult, aliases, autoConfirmPolicies] = await Promise.all([
     sb
       .from("leads")
       .select("id, name, org, phone, email, status, assigned_to, created_at")
@@ -770,6 +990,7 @@ export async function generateLeadLinkCandidates(): Promise<GenerateLeadLinkCand
       .eq("source_object", "leads")
       .limit(5000),
     getCrmMatchAliases(),
+    getAutoConfirmPolicies(),
   ])
 
   if (leadsResult.error) throw leadsResult.error
@@ -790,6 +1011,10 @@ export async function generateLeadLinkCandidates(): Promise<GenerateLeadLinkCand
       .map((link) => link.source_record_key)
   )
 
+  const rejectedPairsBySource = buildRejectedPairsBySource(existingLinks)
+  const autoConfirmPolicy = autoConfirmPolicies["lead"]
+  const autoConfirmDecisions: AutoConfirmDecision[] = []
+
   const candidates: CandidateInsert[] = []
 
   for (const lead of leads) {
@@ -798,7 +1023,7 @@ export async function generateLeadLinkCandidates(): Promise<GenerateLeadLinkCand
     const normalizedSourceLabel = normalizeCrmName(sourceLabel)
     if (normalizedSourceLabel.length < 2) continue
 
-    const scoredTargets = [
+    const rankedTargets: ScoredLinkTarget[] = [
       ...partnerAccounts.map((account) => {
         const targetLabel = buildSourceTargetLabel(account)
         const match = scoreSourceTargetMatch({
@@ -862,7 +1087,24 @@ export async function generateLeadLinkCandidates(): Promise<GenerateLeadLinkCand
     ]
       .filter(shouldKeepScoredMatch)
       .sort((a, b) => b.confidence - a.confidence)
-      .slice(0, MAX_CANDIDATES_PER_SOURCE)
+
+    const scoredTargets = rankedTargets.slice(0, MAX_CANDIDATES_PER_SOURCE)
+    const autoTarget = pickAutoConfirmTarget(
+      rankedTargets,
+      autoConfirmPolicy,
+      ["customer"],
+      rejectedPairsBySource.get(`leads:${lead.id}`) ?? EMPTY_PAIR_SET
+    )
+    if (autoTarget) {
+      autoConfirmDecisions.push({
+        source_object: "leads",
+        source_record_key: lead.id,
+        target_type: autoTarget.targetType,
+        target_id: autoTarget.targetId,
+        confidence: autoTarget.confidence,
+        evidence: autoTarget.evidence,
+      })
+    }
 
     for (const target of scoredTargets) {
       candidates.push({
@@ -899,11 +1141,14 @@ export async function generateLeadLinkCandidates(): Promise<GenerateLeadLinkCand
     if (error) throw error
   }
 
+  const autoConfirmed = await applyAutoConfirmDecisions("lead", autoConfirmDecisions)
+
   return {
     scannedLeads: leads.length,
     generatedCandidates: candidates.length,
     insertedCandidates: rowsToInsert.length,
     skippedExisting: candidates.length - rowsToInsert.length,
+    autoConfirmed,
   }
 }
 
@@ -1256,4 +1501,238 @@ export async function updateCrmSourceLinkStatus(
 
   if (error) throw error
   return data
+}
+
+export interface BulkUpdateCrmSourceLinksResult {
+  updated: number
+  failed: Array<{ id: string; error: string }>
+}
+
+const BULK_LINK_ACTION_LIMIT = 200
+
+export async function bulkUpdateCrmSourceLinkStatus(
+  ids: string[],
+  action: CrmSourceLinkAction,
+  actorUserId?: string | null
+): Promise<BulkUpdateCrmSourceLinksResult> {
+  const uniqueIds = Array.from(new Set(ids.filter((id) => typeof id === "string" && id.trim()))).slice(
+    0,
+    BULK_LINK_ACTION_LIMIT
+  )
+  const failed: Array<{ id: string; error: string }> = []
+  let updated = 0
+
+  for (const id of uniqueIds) {
+    try {
+      await updateCrmSourceLinkStatus(id, action, actorUserId)
+      updated += 1
+    } catch (error) {
+      failed.push({ id, error: error instanceof Error ? error.message : String(error) })
+    }
+  }
+
+  return { updated, failed }
+}
+
+export interface ReattachBranchRevLinksResult {
+  checkedConfirmedLinks: number
+  reattached: number
+  staled: number
+}
+
+interface ConfirmedBranchRevLinkRow {
+  id: string
+  source_record_key: string
+  target_type: string
+  target_id: string
+  normalized_name: string | null
+  metadata: Record<string, unknown> | null
+}
+
+function getBranchRevKeySuffix(key: string) {
+  return key.replace(/^rev:\d+:/, "")
+}
+
+// branch_rev_deals is full-replaced on every sheet sync, so a confirmed link's
+// source_record_key (which embeds sheet_row) can orphan when rows shift. This
+// pass migrates confirmed links to the moved row when the name+payment+amount
+// fingerprint still identifies exactly one row, and marks the rest stale for
+// the matching inbox.
+export async function reattachBranchRevConfirmedLinks(): Promise<ReattachBranchRevLinksResult> {
+  const sb = createSupabaseAdminClient()
+  const [sheetResult, linksResult] = await Promise.all([
+    sb
+      .from("branch_rev_deals")
+      .select("sheet_row, customer_name, team, manager, status, first_payment, contract_target")
+      .limit(1000),
+    sb
+      .from("crm_source_links")
+      .select("id, source_record_key, target_type, target_id, normalized_name, metadata")
+      .eq("source_system", "branch_rev_sheet")
+      .eq("source_object", "branch_rev_deals")
+      .eq("status", "confirmed")
+      .limit(2000),
+  ])
+
+  if (sheetResult.error) throw sheetResult.error
+  if (linksResult.error) throw linksResult.error
+
+  const currentKeys = new Set<string>()
+  const keysBySuffix = new Map<string, string[]>()
+  for (const deal of (sheetResult.data ?? []) as BranchRevCandidateSource[]) {
+    const key = getBranchRevSourceRecordKey(deal)
+    currentKeys.add(key)
+    const suffix = getBranchRevKeySuffix(key)
+    const list = keysBySuffix.get(suffix) ?? []
+    list.push(key)
+    keysBySuffix.set(suffix, list)
+  }
+
+  const links = (linksResult.data ?? []) as ConfirmedBranchRevLinkRow[]
+  const now = new Date().toISOString()
+  let reattached = 0
+  let staled = 0
+
+  for (const link of links) {
+    if (currentKeys.has(link.source_record_key)) continue
+
+    const suffix = getBranchRevKeySuffix(link.source_record_key)
+    const matches = keysBySuffix.get(suffix) ?? []
+
+    if (matches.length !== 1) {
+      const { error } = await sb
+        .from("crm_source_links")
+        .update({
+          status: "stale",
+          confirmed_by: null,
+          confirmed_at: null,
+          metadata: {
+            ...(link.metadata ?? {}),
+            reattach_failed: matches.length === 0 ? "row_removed" : "ambiguous_rows",
+            reattach_checked_at: now,
+          },
+        })
+        .eq("id", link.id)
+
+      if (!error) staled += 1
+      continue
+    }
+
+    const newKey = matches[0]
+    const newSheetRow = Number(newKey.match(/^rev:(\d+):/)?.[1] ?? Number.NaN)
+    const { data: rowsAtNewKey, error: rowsError } = await sb
+      .from("crm_source_links")
+      .select("id, status, target_type, target_id, metadata")
+      .eq("source_system", "branch_rev_sheet")
+      .eq("source_object", "branch_rev_deals")
+      .eq("source_record_key", newKey)
+
+    if (rowsError) continue
+
+    const existingRows = (rowsAtNewKey ?? []) as Array<{
+      id: string
+      status: string
+      target_type: string
+      target_id: string
+      metadata: Record<string, unknown> | null
+    }>
+
+    const confirmedAtNewKey = existingRows.find((row) => row.status === "confirmed")
+    if (confirmedAtNewKey) {
+      // The moved row already has its own confirmed link — retire the orphan.
+      const { error } = await sb
+        .from("crm_source_links")
+        .update({
+          status: "stale",
+          confirmed_by: null,
+          confirmed_at: null,
+          metadata: { ...(link.metadata ?? {}), reattach_failed: "new_row_already_confirmed", reattach_checked_at: now },
+        })
+        .eq("id", link.id)
+
+      if (!error) staled += 1
+      continue
+    }
+
+    const samePairRow = existingRows.find(
+      (row) => row.target_type === link.target_type && row.target_id === link.target_id
+    )
+
+    if (samePairRow) {
+      const { error: promoteError } = await sb
+        .from("crm_source_links")
+        .update({
+          status: "confirmed",
+          confirmed_at: now,
+          metadata: {
+            ...(samePairRow.metadata ?? {}),
+            reattached_at: now,
+            reattached_from: link.source_record_key,
+          },
+        })
+        .eq("id", samePairRow.id)
+
+      if (promoteError) continue
+
+      await sb
+        .from("crm_source_links")
+        .update({
+          status: "stale",
+          confirmed_by: null,
+          confirmed_at: null,
+          metadata: { ...(link.metadata ?? {}), reattach_moved_to: newKey, reattach_checked_at: now },
+        })
+        .eq("id", link.id)
+
+      reattached += 1
+      continue
+    }
+
+    const { error: moveError } = await sb
+      .from("crm_source_links")
+      .update({
+        source_record_key: newKey,
+        metadata: {
+          ...(link.metadata ?? {}),
+          sheet_row: Number.isNaN(newSheetRow) ? (link.metadata?.sheet_row ?? null) : newSheetRow,
+          reattached_at: now,
+          reattached_from: link.source_record_key,
+        },
+      })
+      .eq("id", link.id)
+
+    if (!moveError) reattached += 1
+  }
+
+  return { checkedConfirmedLinks: links.length, reattached, staled }
+}
+
+export interface BranchRevLinkMaintenanceResult {
+  reattach?: ReattachBranchRevLinksResult
+  reattachError?: string
+  candidates?: GenerateBranchRevLinkCandidatesResult
+  candidatesError?: string
+}
+
+// Run after every REV sheet sync: first migrate confirmed links onto moved
+// rows, then regenerate candidates (with auto-confirm) for whatever is left.
+// Failures are reported but never break the sheet sync itself.
+export async function runBranchRevLinkMaintenance(): Promise<BranchRevLinkMaintenanceResult> {
+  const result: BranchRevLinkMaintenanceResult = {}
+
+  try {
+    result.reattach = await reattachBranchRevConfirmedLinks()
+  } catch (error) {
+    result.reattachError = error instanceof Error ? error.message : String(error)
+    console.error("[crm-source-links] REV link reattach failed", error)
+  }
+
+  try {
+    result.candidates = await generateBranchRevLinkCandidates()
+  } catch (error) {
+    result.candidatesError = error instanceof Error ? error.message : String(error)
+    console.error("[crm-source-links] REV candidate generation failed", error)
+  }
+
+  return result
 }

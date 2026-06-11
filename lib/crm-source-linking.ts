@@ -51,6 +51,15 @@ const CRM_NAME_TOKEN_TRANSLATIONS: Array<[RegExp, string]> = [
   [/\bsw\b/gi, "소프트웨어"],
 ]
 
+// 시트에 임시로 넣어둔 placeholder 고객(HW/SW/MKT 접두) 판별.
+// "SW어학원"처럼 실제 상호가 hw/sw/mkt로 시작하는 경우는 제외해야 하므로
+// 접두 토큰 뒤에 구분자(공백·기호) 또는 문자열 끝을 요구한다.
+const CRM_PLACEHOLDER_NAME_PATTERN = /^\s*(hw|sw|mkt)(?=$|[\s\-_~·/(),.:])/i
+
+export function isPlaceholderCrmName(value: string | null | undefined) {
+  return CRM_PLACEHOLDER_NAME_PATTERN.test(value ?? "")
+}
+
 export function normalizeCrmName(value: string | null | undefined) {
   return (value ?? "")
     .normalize("NFKC")
