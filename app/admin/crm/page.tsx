@@ -8,7 +8,7 @@ import {
   MessageSquare, Tag, Save, Loader2, Plus,
   PhoneCall, Bell, UserPlus, Link2, ExternalLink,
   Clock, Search, Activity, AlertCircle, BarChart3,
-  CircleDollarSign, ClipboardList, FileText, Handshake,
+  CircleDollarSign, FileText, Handshake,
   MapPin, ReceiptText, Target,
 } from "lucide-react"
 import { adminFetch, adminFetchJsonCached } from "@/lib/admin-client"
@@ -210,6 +210,25 @@ interface AdminCrmOverview {
       latestActivityAt: string | null
       recent: AdminCrmCustomerLogItem[]
     }
+    upcomingThisWeek: {
+      count: number
+      items: Array<{
+        id: string
+        kind: "install" | "visit"
+        title: string
+        customerName: string | null
+        startsAt: string
+        href: string
+      }>
+    }
+    frequentCustomers: Array<{
+      customerId: string
+      customerName: string
+      contactCount: number
+      latestSummary: string | null
+      latestAt: string | null
+      href: string
+    }>
   }
   schema: {
     ok: number
@@ -408,40 +427,10 @@ function CrmOperationsDashboard({
   const logs = overview?.business.customerLogs.recent ?? []
   const businessWarning = error ?? overview?.business.error ?? overview?.business.warning ?? null
   const loadingValue = loading && !overview ? "..." : null
-  const priorityRows = [
-    {
-      rank: "01",
-      title: "견적 → Opportunity → Order → Delivery",
-      detail: "돈 흐름을 최우선으로 보고, 시트 금액은 보조 검증으로만 둠",
-      icon: <CircleDollarSign className="h-4 w-4" />,
-      tone: "text-[#084734]",
-    },
-    {
-      rank: "02",
-      title: "한국팀 Neo CRM",
-      detail: "매니저가 한국팀 소속으로 확인되는 외부 CRM 스냅샷만 집계",
-      icon: <Target className="h-4 w-4" />,
-      tone: "text-[#111110]",
-    },
-    {
-      rank: "03",
-      title: "고객·KPI",
-      detail: "고객 수, 활성 거래, 미수 리스크를 같은 화면에서 확인",
-      icon: <ClipboardList className="h-4 w-4" />,
-      tone: "text-sky-700",
-    },
-    {
-      rank: "04",
-      title: "후속 연락",
-      detail: "Phone call, Visit, 팔로업 지연은 고객 타임라인에서 추적",
-      icon: <AlertCircle className="h-4 w-4" />,
-      tone: "text-amber-700",
-    },
-  ]
 
   return (
     <>
-      <div className="mb-4 grid gap-3 xl:grid-cols-[1.35fr_0.85fr]">
+      <div className="mb-4">
         <section className="rounded-2xl border border-[#e8e8e4] bg-white p-4">
           <div className="flex flex-col gap-3 sm:flex-row sm:items-start sm:justify-between">
             <div>
@@ -511,30 +500,6 @@ function CrmOperationsDashboard({
               {businessWarning}
             </p>
           ) : null}
-        </section>
-
-        <section className="rounded-2xl border border-[#e8e8e4] bg-white p-4">
-          <div className="mb-4 flex items-center justify-between gap-3">
-            <div>
-              <p className="text-[11px] font-semibold uppercase tracking-wide text-[#1a1a1a]/30">Priority Rule</p>
-              <h2 className="mt-1 text-[17px] font-bold text-[#111110]">선정 기준</h2>
-            </div>
-            <span className="rounded-full bg-[#ECFDF5] px-3 py-1 text-[11px] font-semibold text-[#084734]">CRM 우선</span>
-          </div>
-          <div className="divide-y divide-[#f0f0ec]">
-            {priorityRows.map((row) => (
-              <div key={row.rank} className="flex gap-3 py-3 first:pt-0 last:pb-0">
-                <span className="mt-0.5 text-[11px] font-bold tabular-nums text-[#1a1a1a]/25">{row.rank}</span>
-                <span className={`mt-0.5 flex h-8 w-8 shrink-0 items-center justify-center rounded-lg bg-[#fafaf8] ${row.tone}`}>
-                  {row.icon}
-                </span>
-                <div className="min-w-0">
-                  <p className="text-[13px] font-semibold text-[#111110]">{row.title}</p>
-                  <p className="mt-0.5 text-[12px] leading-relaxed text-[#1a1a1a]/42">{row.detail}</p>
-                </div>
-              </div>
-            ))}
-          </div>
         </section>
       </div>
 
@@ -1677,6 +1642,120 @@ export default function CrmPage() {
         </div>
       </div>
 
+      {/* 지금 처리 — 오늘 우선순위 액션 밴드 (딥링크 점프) */}
+      <section className="mb-4 rounded-2xl border border-[#e8e8e4] bg-white p-4">
+        <div className="mb-4 flex items-center justify-between gap-3">
+          <div>
+            <p className="text-[11px] font-semibold uppercase tracking-wide text-[#1a1a1a]/30">Action Queue</p>
+            <h2 className="mt-1 text-[18px] font-bold text-[#111110]">지금 처리</h2>
+          </div>
+          <span className="rounded-full bg-[#f0f0ec] px-3 py-1 text-[12px] font-medium text-[#1a1a1a]/55">
+            오늘 우선순위
+          </span>
+        </div>
+
+        <div className="grid grid-cols-2 gap-3 lg:grid-cols-4">
+          <button
+            type="button"
+            onClick={() => {
+              setFilter("unresponded")
+              document.getElementById("lead-queue")?.scrollIntoView({ behavior: "smooth", block: "start" })
+            }}
+            className="group rounded-xl border border-[#e8e8e4] bg-[#fafaf8] p-3 text-left transition-colors hover:border-[#c8c8c4] hover:bg-white"
+          >
+            <div className="flex items-center gap-2">
+              <span className="flex h-7 w-7 items-center justify-center rounded-lg bg-white text-[#1a1a1a]/45 group-hover:text-[#111110]">
+                <PhoneCall className="h-4 w-4" />
+              </span>
+              <span className="text-[12px] font-medium text-[#1a1a1a]/55">미응답 리드</span>
+            </div>
+            <p className={`mt-2 text-[26px] font-bold leading-none ${unrespondedLeads.length > 0 ? "text-[#B85C33]" : "text-[#111110]"}`}>
+              {unrespondedLeads.length}
+            </p>
+            <p className="mt-1.5 text-[11px] text-[#1a1a1a]/40">48h 이상 {unresponded48h.length}건</p>
+          </button>
+
+          <button
+            type="button"
+            onClick={() => {
+              const target = document.getElementById("pipeline-risk") ?? document.getElementById("lead-queue")
+              target?.scrollIntoView({ behavior: "smooth", block: "start" })
+            }}
+            className="group rounded-xl border border-[#e8e8e4] bg-[#fafaf8] p-3 text-left transition-colors hover:border-[#c8c8c4] hover:bg-white"
+          >
+            <div className="flex items-center gap-2">
+              <span className="flex h-7 w-7 items-center justify-center rounded-lg bg-white text-[#1a1a1a]/45 group-hover:text-[#111110]">
+                <AlertCircle className="h-4 w-4" />
+              </span>
+              <span className="text-[12px] font-medium text-[#1a1a1a]/55">오버듀 팔로업</span>
+            </div>
+            <p className={`mt-2 text-[26px] font-bold leading-none ${overdueFollowUps.length > 0 ? "text-[#B85C33]" : "text-[#111110]"}`}>
+              {overdueFollowUps.length}
+            </p>
+            <p className="mt-1.5 text-[11px] text-[#1a1a1a]/40">오늘 예정 {todayFollowUps.length}건</p>
+          </button>
+
+          <Link
+            href="/admin/calendar"
+            className="group rounded-xl border border-[#e8e8e4] bg-[#fafaf8] p-3 text-left transition-colors hover:border-[#c8c8c4] hover:bg-white"
+          >
+            <div className="flex items-center gap-2">
+              <span className="flex h-7 w-7 items-center justify-center rounded-lg bg-white text-[#1a1a1a]/45 group-hover:text-[#111110]">
+                <Calendar className="h-4 w-4" />
+              </span>
+              <span className="text-[12px] font-medium text-[#1a1a1a]/55">이번 주 설치·방문</span>
+            </div>
+            <p className="mt-2 text-[26px] font-bold leading-none text-[#084734]">
+              {crmOverview?.business.upcomingThisWeek.count ?? 0}
+            </p>
+            <p className="mt-1.5 truncate text-[11px] text-[#1a1a1a]/40">
+              {crmOverview?.business.upcomingThisWeek.items[0]?.customerName
+                ? `다음 · ${crmOverview.business.upcomingThisWeek.items[0]?.customerName}`
+                : "예정 일정"}
+            </p>
+          </Link>
+
+          <button
+            type="button"
+            onClick={() => {
+              setFilter("converted")
+              document.getElementById("lead-queue")?.scrollIntoView({ behavior: "smooth", block: "start" })
+            }}
+            className="group rounded-xl border border-[#e8e8e4] bg-[#fafaf8] p-3 text-left transition-colors hover:border-[#c8c8c4] hover:bg-white"
+          >
+            <div className="flex items-center gap-2">
+              <span className="flex h-7 w-7 items-center justify-center rounded-lg bg-white text-[#1a1a1a]/45 group-hover:text-[#111110]">
+                <Target className="h-4 w-4" />
+              </span>
+              <span className="text-[12px] font-medium text-[#1a1a1a]/55">전환 고객</span>
+            </div>
+            <p className="mt-2 text-[26px] font-bold leading-none text-[#084734]">{counts.converted ?? 0}</p>
+            <p className="mt-1.5 text-[11px] text-[#1a1a1a]/40">누적 어카운트 전환</p>
+          </button>
+        </div>
+
+        {(crmOverview?.business.frequentCustomers.length ?? 0) > 0 ? (
+          <div className="mt-3 flex flex-col gap-2 rounded-xl bg-[#fafaf8] px-3 py-2.5 sm:flex-row sm:items-center sm:gap-3">
+            <span className="shrink-0 text-[11px] font-semibold text-[#1a1a1a]/40">자주 접촉 고객 · 14일</span>
+            <div className="no-scrollbar flex gap-2 overflow-x-auto">
+              {crmOverview?.business.frequentCustomers.map((customer) => (
+                <Link
+                  key={customer.customerId}
+                  href={customer.href}
+                  title={customer.latestSummary ?? undefined}
+                  className="flex shrink-0 items-center gap-1.5 rounded-lg border border-[#e8e8e4] bg-white px-2.5 py-1 text-[12px] text-[#111110] transition-colors hover:border-[#c8c8c4]"
+                >
+                  <span className="max-w-[140px] truncate font-medium">{customer.customerName}</span>
+                  <span className="rounded-full bg-[#f0f0ec] px-1.5 text-[11px] font-semibold tabular-nums text-[#1a1a1a]/55">
+                    {customer.contactCount}
+                  </span>
+                </Link>
+              ))}
+            </div>
+          </div>
+        ) : null}
+      </section>
+
       <NeoCrmTeamPanel />
 
       <CrmOperationsDashboard
@@ -1773,7 +1852,7 @@ export default function CrmPage() {
       </div>
 
       {pipelineRiskLeads.length > 0 && (
-        <div className="mb-6 rounded-2xl border border-[#F6D5C5] bg-[#FEF8F5] p-4">
+        <div id="pipeline-risk" className="mb-6 scroll-mt-24 rounded-2xl border border-[#F6D5C5] bg-[#FEF8F5] p-4">
           <div className="mb-3 flex flex-col gap-1 sm:flex-row sm:items-center sm:justify-between">
             <div>
               <p className="text-[11px] font-semibold uppercase tracking-wide text-[#B85C33]/70">Pipeline Risk</p>

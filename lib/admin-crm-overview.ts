@@ -27,6 +27,24 @@ export interface AdminCrmCustomerLogItem {
   href: string
 }
 
+export interface AdminCrmUpcomingEventItem {
+  id: string
+  kind: "install" | "visit"
+  title: string
+  customerName: string | null
+  startsAt: string
+  href: string
+}
+
+export interface AdminCrmFrequentCustomerItem {
+  customerId: string
+  customerName: string
+  contactCount: number
+  latestSummary: string | null
+  latestAt: string | null
+  href: string
+}
+
 export interface AdminCrmOverview {
   generatedAt: string
   overallStatus: AdminCrmOverviewStatus
@@ -54,6 +72,11 @@ export interface AdminCrmOverview {
       latestActivityAt: string | null
       recent: AdminCrmCustomerLogItem[]
     }
+    upcomingThisWeek: {
+      count: number
+      items: AdminCrmUpcomingEventItem[]
+    }
+    frequentCustomers: AdminCrmFrequentCustomerItem[]
   }
   schema: {
     ok: number
@@ -130,9 +153,25 @@ type SupabaseAdminClient = ReturnType<typeof createSupabaseAdminClient>
 
 const SOURCE_LINK_STATUSES = ["confirmed", "candidate", "rejected", "stale"] as const
 const WRITE_REQUEST_STATUSES = ["draft", "approved", "sent", "failed", "succeeded", "cancelled"] as const
+const EXTERNAL_CRM_OVERVIEW_OBJECTS = [
+  "User",
+  "account",
+  "contact",
+  "opportunity",
+  "ShroffAccount__c",
+  "Collection__c",
+  "SalesPerformance__c",
+  "CollectionPlan__c",
+  "FinancialInformation__c",
+  "ResourceInformation__c",
+] as const
 const BUSINESS_QUERY_LIMIT = 5000
 const RECENT_BUSINESS_LOG_LIMIT = 12
 const RECENT_ACTIVITY_DAYS = 7
+const UPCOMING_EVENT_DAYS = 7
+const FREQUENT_CUSTOMER_DAYS = 14
+const FREQUENT_ACTIVITY_SCAN_LIMIT = 2000
+const FREQUENT_CUSTOMER_LIMIT = 5
 
 interface BusinessPartnerAccountRow {
   id: string
@@ -354,7 +393,11 @@ function getCustomerLogHref(customerId: string | null, dealId: string | null) {
 }
 
 async function getBusinessOverview(sb: SupabaseAdminClient): Promise<AdminCrmOverview["business"]> {
-  const recentActivitySince = new Date(Date.now() - RECENT_ACTIVITY_DAYS * 86_400_000).toISOString()
+  const now = Date.now()
+  const recentActivitySince = new Date(now - RECENT_ACTIVITY_DAYS * 86_400_000).toISOString()
+  const upcomingFrom = new Date(now).toISOString()
+  const upcomingUntil = new Date(now + UPCOMING_EVENT_DAYS * 86_400_000).toISOString()
+  const frequentSince = new Date(now - FREQUENT_CUSTOMER_DAYS * 86_400_000).toISOString()
   const [
     accountResult,
     customerResult,
@@ -370,6 +413,8 @@ async function getBusinessOverview(sb: SupabaseAdminClient): Promise<AdminCrmOve
     paymentResult,
     receiptV2Result,
     calendarEventResult,
+    upcomingEventResult,
+    frequentActivityResult,
   ] = await Promise.all([
     sb
       .from("partner_accounts")
@@ -441,6 +486,20 @@ async function getBusinessOverview(sb: SupabaseAdminClient): Promise<AdminCrmOve
       .select("id, partner_account_id, customer_id, deal_id, source_type, title, status, starts_at, ends_at, created_at, updated_at")
       .order("starts_at", { ascending: false })
       .limit(RECENT_BUSINESS_LOG_LIMIT),
+    sb
+      .from("calendar_events")
+      .select("id, partner_account_id, customer_id, deal_id, source_type, title, status, starts_at")
+      .gte("starts_at", upcomingFrom)
+      .lte("starts_at", upcomingUntil)
+      .neq("status", "cancelled")
+      .order("starts_at", { ascending: true })
+      .limit(RECENT_BUSINESS_LOG_LIMIT * 2),
+    sb
+      .from("activity_logs")
+      .select("id, customer_id, deal_id, action_type, summary, created_at")
+      .gte("created_at", frequentSince)
+      .order("created_at", { ascending: false })
+      .limit(FREQUENT_ACTIVITY_SCAN_LIMIT),
   ])
 
   const errors = [
@@ -458,6 +517,8 @@ async function getBusinessOverview(sb: SupabaseAdminClient): Promise<AdminCrmOve
     formatLabeledSupabaseError("payments_v2", paymentResult.error),
     formatLabeledSupabaseError("receipts_v2", receiptV2Result.error),
     formatLabeledSupabaseError("calendar_events", calendarEventResult.error),
+    formatLabeledSupabaseError("calendar_events upcoming", upcomingEventResult.error),
+    formatLabeledSupabaseError("activity_logs frequency", frequentActivityResult.error),
   ].filter((message): message is string => Boolean(message))
 
   const accounts = rowsOrEmpty(accountResult.data as BusinessPartnerAccountRow[] | null)
@@ -601,6 +662,75 @@ async function getBusinessOverview(sb: SupabaseAdminClient): Promise<AdminCrmOve
     .sort((left, right) => new Date(right.occurredAt ?? 0).getTime() - new Date(left.occurredAt ?? 0).getTime())
     .slice(0, RECENT_BUSINESS_LOG_LIMIT)
 
+  const upcomingEventRows = rowsOrEmpty(
+    upcomingEventResult.data as Array<{
+      id: string
+      partner_account_id: string | null
+      customer_id: string | null
+      deal_id: string | null
+      source_type: string | null
+      title: string | null
+      status: string | null
+      starts_at: string
+    }> | null
+  )
+  const upcomingItems: AdminCrmUpcomingEventItem[] = upcomingEventRows.map((event) => {
+    const context = buildCustomerLogContext({
+      ...contextInput,
+      partnerAccountId: event.partner_account_id,
+      customerId: event.customer_id,
+      dealId: event.deal_id,
+    })
+    const haystack = `${event.source_type ?? ""} ${event.title ?? ""}`.toLowerCase()
+    const kind: AdminCrmUpcomingEventItem["kind"] = /install|설치|배송|delivery/.test(haystack) ? "install" : "visit"
+    return {
+      id: event.id,
+      kind,
+      title: event.title || "일정",
+      customerName: context.customerName ?? context.partnerAccountName,
+      startsAt: event.starts_at,
+      href: getCustomerLogHref(context.customerId, context.dealId),
+    }
+  })
+
+  const frequentActivityRows = rowsOrEmpty(
+    frequentActivityResult.data as Array<{
+      id: string
+      customer_id: string | null
+      deal_id: string | null
+      action_type: string | null
+      summary: string | null
+      created_at: string | null
+    }> | null
+  )
+  // Rows arrive newest-first, so the first sighting of a customer is their latest log.
+  const frequentMap = new Map<string, AdminCrmFrequentCustomerItem>()
+  for (const log of frequentActivityRows) {
+    const deal = log.deal_id ? dealById.get(log.deal_id) : undefined
+    const customerId = log.customer_id ?? deal?.customer_id ?? null
+    if (!customerId) continue
+    const existing = frequentMap.get(customerId)
+    if (existing) {
+      existing.contactCount += 1
+      continue
+    }
+    frequentMap.set(customerId, {
+      customerId,
+      customerName: getCustomerLabel(customerById.get(customerId)) ?? "고객 미지정",
+      contactCount: 1,
+      latestSummary: log.summary || log.action_type || null,
+      latestAt: log.created_at,
+      href: getCustomerLogHref(customerId, log.deal_id ?? deal?.id ?? null),
+    })
+  }
+  const frequentCustomers = Array.from(frequentMap.values())
+    .sort(
+      (a, b) =>
+        b.contactCount - a.contactCount ||
+        new Date(b.latestAt ?? 0).getTime() - new Date(a.latestAt ?? 0).getTime()
+    )
+    .slice(0, FREQUENT_CUSTOMER_LIMIT)
+
   const limitedSources: Array<{ label: string; count: number | null; loaded: number }> = [
     { label: "파트너 계정", count: accountResult.count, loaded: accounts.length },
     { label: "고객사", count: customerResult.count, loaded: customers.length },
@@ -650,6 +780,11 @@ async function getBusinessOverview(sb: SupabaseAdminClient): Promise<AdminCrmOve
       latestActivityAt: maxDate(recentLogs.map((log) => log.occurredAt)),
       recent: recentLogs,
     },
+    upcomingThisWeek: {
+      count: upcomingItems.length,
+      items: upcomingItems,
+    },
+    frequentCustomers,
   }
 }
 
@@ -692,6 +827,85 @@ async function getWriteQueueCounts(sb: SupabaseAdminClient) {
     ok: !error,
     ...statusCounts,
     error: error ? formatLabeledSupabaseError("crm_write_requests", error) : null,
+  }
+}
+
+async function getExternalSnapshotOverview(sb: SupabaseAdminClient): Promise<AdminCrmOverview["externalSnapshots"]> {
+  const [activeCountResults, staleCountResults, latestSyncedResults, latestRunResult] = await Promise.all([
+    Promise.all(
+      EXTERNAL_CRM_OVERVIEW_OBJECTS.map((objectApiKey) =>
+        sb
+          .from("external_crm_records")
+          .select("id", { count: "exact", head: true })
+          .eq("source_system", "xiaoshouyi")
+          .eq("object_api_key", objectApiKey)
+          .eq("is_stale", false)
+      )
+    ),
+    Promise.all(
+      EXTERNAL_CRM_OVERVIEW_OBJECTS.map((objectApiKey) =>
+        sb
+          .from("external_crm_records")
+          .select("id", { count: "exact", head: true })
+          .eq("source_system", "xiaoshouyi")
+          .eq("object_api_key", objectApiKey)
+          .eq("is_stale", true)
+      )
+    ),
+    Promise.all(
+      EXTERNAL_CRM_OVERVIEW_OBJECTS.map((objectApiKey) =>
+        sb
+          .from("external_crm_records")
+          .select("synced_at")
+          .eq("source_system", "xiaoshouyi")
+          .eq("object_api_key", objectApiKey)
+          .order("synced_at", { ascending: false })
+          .limit(1)
+      )
+    ),
+    sb
+      .from("external_crm_sync_runs")
+      .select("status, object_api_key, finished_at, started_at, error")
+      .eq("source_system", "xiaoshouyi")
+      .order("started_at", { ascending: false })
+      .limit(1),
+  ])
+
+  const latestRun = latestRunResult.error ? null : latestRunResult.data?.[0]
+  const latestRunFailed = latestRun && typeof latestRun.status === "string" && latestRun.status === "failed"
+  const latestRunError = latestRun && typeof latestRun.error === "string" && latestRun.error.trim()
+    ? latestRun.error.trim()
+    : null
+  const firstCountError = firstError([
+    ...activeCountResults.map((result) => result.error),
+    ...staleCountResults.map((result) => result.error),
+    ...latestSyncedResults.map((result) => result.error),
+    latestRunResult.error,
+  ])
+  const latestSyncedAt = maxDate([
+    latestRun && typeof latestRun.finished_at === "string" ? latestRun.finished_at : null,
+    ...latestSyncedResults.map((result) => {
+      const row = result.error ? null : result.data?.[0]
+      return row && typeof row.synced_at === "string" ? row.synced_at : null
+    }),
+  ])
+
+  return {
+    ok: !firstCountError && !latestRunFailed,
+    recordCount: activeCountResults.reduce((sum, result) => sum + (result.error ? 0 : result.count ?? 0), 0),
+    staleCount: staleCountResults.reduce((sum, result) => sum + (result.error ? 0 : result.count ?? 0), 0),
+    latestSyncedAt,
+    latestRunStatus: latestRun && typeof latestRun.status === "string" ? latestRun.status : null,
+    latestRunObject: latestRun && typeof latestRun.object_api_key === "string" ? latestRun.object_api_key : null,
+    error:
+      firstCountError || latestRunFailed
+        ? [
+            firstCountError ? formatLabeledSupabaseError("external_crm_records overview", firstCountError) : null,
+            latestRunFailed ? `external_crm_sync_runs latest failed${latestRunError ? `: ${latestRunError}` : ""}` : null,
+          ]
+            .filter((message): message is string => Boolean(message))
+            .join("; ")
+        : null,
   }
 }
 
@@ -802,9 +1016,7 @@ export async function getAdminCrmOverview(): Promise<AdminCrmOverview> {
     duplicatePreflight,
     syncPreflight,
     sourceLinkCounts,
-    externalRecordsResult,
-    staleRecordsResult,
-    latestRunResult,
+    externalSnapshots,
     writeQueueCounts,
     business,
     neoCrm,
@@ -816,23 +1028,7 @@ export async function getAdminCrmOverview(): Promise<AdminCrmOverview> {
       getCrmDuplicatePreflightReport(),
       Promise.resolve(getXiaoshouyiSyncPreflight()),
       getSourceLinkCounts(sb),
-      sb
-        .from("external_crm_records")
-        .select("id, synced_at", { count: "exact" })
-        .eq("source_system", "xiaoshouyi")
-        .order("synced_at", { ascending: false })
-        .limit(1),
-      sb
-        .from("external_crm_records")
-        .select("id", { count: "exact", head: true })
-        .eq("source_system", "xiaoshouyi")
-        .eq("is_stale", true),
-      sb
-        .from("external_crm_sync_runs")
-        .select("status, object_api_key, finished_at, started_at, error")
-        .eq("source_system", "xiaoshouyi")
-        .order("started_at", { ascending: false })
-        .limit(1),
+      getExternalSnapshotOverview(sb),
       getWriteQueueCounts(sb),
       getBusinessOverview(sb),
       getNeoCrmOverview(sb),
@@ -849,12 +1045,6 @@ export async function getAdminCrmOverview(): Promise<AdminCrmOverview> {
     })),
   ]
   const schemaBlocked = schemaChecks.filter((check) => !check.ok)
-  const externalRecord = externalRecordsResult.error ? null : externalRecordsResult.data?.[0]
-  const latestRun = latestRunResult.error ? null : latestRunResult.data?.[0]
-  const latestRunFailed = latestRun && typeof latestRun.status === "string" && latestRun.status === "failed"
-  const latestRunError = latestRun && typeof latestRun.error === "string" && latestRun.error.trim()
-    ? latestRun.error.trim()
-    : null
 
   const sourceLinks = {
     ok: sourceLinkCounts.ok,
@@ -864,31 +1054,6 @@ export async function getAdminCrmOverview(): Promise<AdminCrmOverview> {
     rejected: sourceLinkCounts.rejected,
     stale: sourceLinkCounts.stale,
     error: sourceLinkCounts.error,
-  }
-
-  const externalSnapshots = {
-    ok: !externalRecordsResult.error && !staleRecordsResult.error && !latestRunResult.error && !latestRunFailed,
-    recordCount: externalRecordsResult.error ? 0 : externalRecordsResult.count ?? 0,
-    staleCount: staleRecordsResult.error ? 0 : staleRecordsResult.count ?? 0,
-    latestSyncedAt:
-      externalRecord && typeof externalRecord.synced_at === "string"
-        ? externalRecord.synced_at
-        : latestRun && typeof latestRun.finished_at === "string"
-          ? latestRun.finished_at
-          : null,
-    latestRunStatus: latestRun && typeof latestRun.status === "string" ? latestRun.status : null,
-    latestRunObject: latestRun && typeof latestRun.object_api_key === "string" ? latestRun.object_api_key : null,
-    error:
-      externalRecordsResult.error || staleRecordsResult.error || latestRunResult.error || latestRunFailed
-        ? [
-            formatLabeledSupabaseError("external_crm_records latest", externalRecordsResult.error),
-            formatLabeledSupabaseError("external_crm_records stale", staleRecordsResult.error),
-            formatLabeledSupabaseError("external_crm_sync_runs latest", latestRunResult.error),
-            latestRunFailed ? `external_crm_sync_runs latest failed${latestRunError ? `: ${latestRunError}` : ""}` : null,
-          ]
-            .filter((message): message is string => Boolean(message))
-            .join("; ")
-        : null,
   }
 
   const writeQueue = {
