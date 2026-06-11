@@ -23,7 +23,10 @@ export async function getXiaoshouyiOwnerNameMap(sb: SupabaseAdminClient): Promis
       .eq("object_api_key", XIAOSHOUYI_USER_OBJECT)
       .limit(USER_MAP_SCAN_LIMIT),
     // 2) Curated overrides — win over the User directory; work without a sync.
-    sb.from("crm_xiaoshouyi_owner_names").select("external_id, display_name").limit(USER_MAP_SCAN_LIMIT),
+    sb
+      .from("crm_xiaoshouyi_owner_names")
+      .select("external_id, display_name, korean_name")
+      .limit(USER_MAP_SCAN_LIMIT),
   ])
 
   if (!userResult.error && userResult.data) {
@@ -32,8 +35,14 @@ export async function getXiaoshouyiOwnerNameMap(sb: SupabaseAdminClient): Promis
     }
   }
   if (!overrideResult.error && overrideResult.data) {
-    for (const row of overrideResult.data as Array<{ external_id: string; display_name: string | null }>) {
-      if (row.external_id && row.display_name) map.set(String(row.external_id), row.display_name)
+    // 담당자 표기는 한국 이름 우선(korean_name), 없으면 display_name으로 폴백.
+    for (const row of overrideResult.data as Array<{
+      external_id: string
+      display_name: string | null
+      korean_name: string | null
+    }>) {
+      const name = row.korean_name?.trim() || row.display_name
+      if (row.external_id && name) map.set(String(row.external_id), name)
     }
   }
 
