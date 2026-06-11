@@ -4,9 +4,10 @@ import {
   getKoreaTeamManagerSet,
   isKoreaScopedExternalRecord,
   isKoreaTeamLabel,
-  normalizeCrmScopeText,
 } from "@/lib/admin-crm-scope"
 import { createSupabaseAdminClient } from "@/lib/supabase/admin"
+
+type SupabaseAdminClient = ReturnType<typeof createSupabaseAdminClient>
 
 export type NeoCrmGranularity = "week" | "month" | "quarter" | "year"
 
@@ -101,6 +102,35 @@ const SHEET_INACTIVE_PATTERN = /취소|해지|드랍|드롭|중단|보류|cancel
 const PERIOD_SCAN_LIMIT = 5000
 const RECENT_ORDER_LIMIT = 12
 const TEAM_REVENUE_ROW_LIMIT = 50
+// Xiaoshouyi records store owner as a numeric ownerId, not a name. The synced
+// `User` object provides id -> name so we can label per-owner revenue.
+const XIAOSHOUYI_USER_OBJECT = "User"
+const USER_MAP_SCAN_LIMIT = 5000
+
+// external_id(=Xiaoshouyi user id) -> display name. Falls back to empty map
+// until the User object is synced; callers then keep the raw owner id.
+async function getXiaoshouyiOwnerNameMap(
+  sb: SupabaseAdminClient
+): Promise<Map<string, string>> {
+  const map = new Map<string, string>()
+  const { data, error } = await sb
+    .from("external_crm_records")
+    .select("external_id, display_name")
+    .eq("source_system", "xiaoshouyi")
+    .eq("object_api_key", XIAOSHOUYI_USER_OBJECT)
+    .limit(USER_MAP_SCAN_LIMIT)
+  if (error || !data) return map
+  for (const row of data as Array<{ external_id: string; display_name: string | null }>) {
+    if (row.external_id && row.display_name) map.set(String(row.external_id), row.display_name)
+  }
+  return map
+}
+
+function resolveOwnerName(ownerId: string | null | undefined, ownerNames: Map<string, string>) {
+  const id = ownerId?.trim() || ""
+  if (!id) return "담당 미지정"
+  return ownerNames.get(id) ?? id
+}
 
 function pad2(value: number) {
   return String(value).padStart(2, "0")
@@ -252,6 +282,7 @@ export async function getNeoCrmTeamReport(input: {
     leadsPrevResult,
     leadsTotalResult,
     latestResult,
+    ownerNames,
   ] = await Promise.all([
     sb
       .from("branch_rev_deals")
@@ -293,6 +324,7 @@ export async function getNeoCrmTeamReport(input: {
       .eq("source_system", "xiaoshouyi")
       .order("synced_at", { ascending: false })
       .limit(1),
+    getXiaoshouyiOwnerNameMap(sb),
   ])
 
   const blockingError =
@@ -333,6 +365,8 @@ export async function getNeoCrmTeamReport(input: {
   const salesRows = allSales.filter((row) => isCurrent(row.occurred_at))
   const prevSalesRows = allSales.filter((row) => !isCurrent(row.occurred_at))
 
+  // owner_name은 Xiaoshouyi ownerId(숫자)다. User 객체 맵으로 이름을 붙이고,
+  // 미동기화 시에는 id를 그대로 표시한다. 그룹 키는 안정적으로 ownerId를 쓴다.
   const revenueByOwner = new Map<string, { owner: string; amount: number; orderCount: number }>()
   const prevByOwner = new Map<string, number>()
   let teamTotal = 0
@@ -340,9 +374,12 @@ export async function getNeoCrmTeamReport(input: {
   for (const row of salesRows) {
     const amount = Number(row.amount) || 0
     teamTotal += amount
-    const owner = row.owner_name?.trim() || "담당 미지정"
-    const ownerKey = normalizeCrmScopeText(owner) || "unassigned"
-    const existing = revenueByOwner.get(ownerKey) ?? { owner, amount: 0, orderCount: 0 }
+    const ownerKey = row.owner_name?.trim() || "unassigned"
+    const existing = revenueByOwner.get(ownerKey) ?? {
+      owner: resolveOwnerName(row.owner_name, ownerNames),
+      amount: 0,
+      orderCount: 0,
+    }
     existing.amount += amount
     existing.orderCount += 1
     revenueByOwner.set(ownerKey, existing)
@@ -350,8 +387,7 @@ export async function getNeoCrmTeamReport(input: {
   for (const row of prevSalesRows) {
     const amount = Number(row.amount) || 0
     prevTeamTotal += amount
-    const owner = row.owner_name?.trim() || "담당 미지정"
-    const ownerKey = normalizeCrmScopeText(owner) || "unassigned"
+    const ownerKey = row.owner_name?.trim() || "unassigned"
     prevByOwner.set(ownerKey, (prevByOwner.get(ownerKey) ?? 0) + amount)
   }
 
@@ -385,7 +421,7 @@ export async function getNeoCrmTeamReport(input: {
     .map((row) => ({
       key: `${row.object_api_key}:${row.external_id}`,
       customerName: row.display_name ?? row.external_id,
-      ownerName: row.owner_name,
+      ownerName: row.owner_name ? resolveOwnerName(row.owner_name, ownerNames) : null,
       status: row.status,
       amount: row.amount,
       occurredAt: row.occurred_at,

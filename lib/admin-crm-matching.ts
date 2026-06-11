@@ -2,7 +2,7 @@ import "server-only"
 
 import { getBranchRevSourceRecordKey, isPlaceholderCrmName } from "@/lib/crm-source-linking"
 import type { CrmSourceLinkStatus } from "@/lib/admin-crm-revenue-types"
-import { getKoreaTeamManagerSet, isKoreaScopedOwner, isKoreaTeamLabel } from "@/lib/admin-crm-scope"
+import { EXTERNAL_CRM_KOREA_ONLY, getKoreaTeamManagerSet, isKoreaScopedOwner, isKoreaTeamLabel } from "@/lib/admin-crm-scope"
 import { createSupabaseAdminClient } from "@/lib/supabase/admin"
 
 export type CrmMatchingSourceSystem = "branch_rev_sheet" | "xiaoshouyi" | "lead"
@@ -285,6 +285,7 @@ export async function getAdminCrmMatchingInbox(): Promise<AdminCrmMatchingInbox>
     if (link.source_system !== "xiaoshouyi" && link.source_system !== "lead") continue
     if (
       link.source_system === "xiaoshouyi" &&
+      !EXTERNAL_CRM_KOREA_ONLY &&
       !isKoreaScopedOwner(
         getMetadataString(link.metadata, "owner_name") ?? getMetadataString(link.metadata, "source_owner"),
         koreaManagers
