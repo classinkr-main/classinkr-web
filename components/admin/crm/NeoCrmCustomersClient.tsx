@@ -8,7 +8,6 @@ import {
   ChevronDown,
   ChevronRight,
   ChevronUp,
-  Loader2,
   RefreshCw,
   Search,
   Wallet,
@@ -144,6 +143,17 @@ function MoneySection({
   )
 }
 
+type DetailTab = "eeo" | "orders" | "collections" | "performances"
+
+function SummaryChip({ label, value, tone = "text-[#111110]" }: { label: string; value: string; tone?: string }) {
+  return (
+    <div className="rounded-lg bg-[#fafaf8] px-2.5 py-1.5">
+      <p className="text-[10px] text-[#1a1a1a]/40">{label}</p>
+      <p className={`mt-0.5 text-[13px] font-bold tracking-[-0.02em] ${tone}`}>{value}</p>
+    </div>
+  )
+}
+
 function CustomerDetailPanel({
   accountId,
   onClose,
@@ -154,6 +164,7 @@ function CustomerDetailPanel({
   const [detail, setDetail] = useState<NeoCrmCustomerDetail | null>(null)
   const [loading, setLoading] = useState(true)
   const [error, setError] = useState<string | null>(null)
+  const [tab, setTab] = useState<DetailTab>("eeo")
 
   // 패널은 accountId를 key로 리마운트되므로 초기 상태가 곧 리셋이다.
   useEffect(() => {
@@ -186,7 +197,26 @@ function CustomerDetailPanel({
   }, [onClose])
 
   const account = detail?.account
-  const totalBalance = (detail?.eeoAccounts ?? []).reduce((sum, eeo) => sum + (eeo.balance ?? 0), 0)
+  const eeoAccounts = detail?.eeoAccounts ?? []
+  const totalBalance = eeoAccounts.reduce((sum, eeo) => sum + (eeo.balance ?? 0), 0)
+  const totalOrder = (detail?.orders ?? []).reduce((sum, item) => sum + (item.amount ?? 0), 0)
+  const totalPerformance = (detail?.performances ?? []).reduce((sum, item) => sum + (item.amount ?? 0), 0)
+  const earliestExpiry = eeoAccounts
+    .map((eeo) => eeo.expireAt)
+    .filter((value): value is string => Boolean(value))
+    .sort()[0]
+  const latestClass = eeoAccounts
+    .map((eeo) => eeo.lastClassAt)
+    .filter((value): value is string => Boolean(value))
+    .sort()
+    .at(-1)
+
+  const tabs: Array<{ key: DetailTab; label: string; count: number }> = [
+    { key: "eeo", label: "EEO", count: eeoAccounts.length },
+    { key: "orders", label: "오더", count: detail?.orders.length ?? 0 },
+    { key: "collections", label: "수금", count: detail?.collections.length ?? 0 },
+    { key: "performances", label: "성과", count: detail?.performances.length ?? 0 },
+  ]
 
   return (
     <div className="fixed inset-0 z-50 flex justify-end">
@@ -220,23 +250,58 @@ function CustomerDetailPanel({
           ) : null}
 
           {loading && !detail ? (
-            <p className="py-16 text-center text-[13px] text-[#1a1a1a]/35">
-              <Loader2 className="mr-2 inline h-4 w-4 animate-spin" />
-              상세를 불러오는 중입니다.
-            </p>
+            <div className="space-y-3">
+              <div className="grid grid-cols-2 gap-2 sm:grid-cols-4">
+                {Array.from({ length: 4 }).map((_, i) => (
+                  <div key={i} className="h-12 animate-pulse rounded-lg bg-[#f0f0ec]" />
+                ))}
+              </div>
+              <div className="h-9 animate-pulse rounded-lg bg-[#f0f0ec]" />
+              {Array.from({ length: 4 }).map((_, i) => (
+                <div key={i} className="h-12 animate-pulse rounded-xl bg-[#f5f5f2]" />
+              ))}
+            </div>
           ) : detail ? (
             <>
-              <div className="rounded-xl border border-[#f0f0ec] p-3">
-                <div className="mb-2 flex items-center justify-between gap-2">
-                  <h4 className="text-[13px] font-semibold text-[#111110]">EEO 계정</h4>
-                  <span className="text-[12px] font-semibold text-[#084734]">잔액 {formatCNY(totalBalance)}</span>
-                </div>
-                {detail.eeoAccounts.length === 0 ? (
-                  <p className="py-3 text-center text-[12px] text-[#1a1a1a]/30">연결된 EEO 계정이 없습니다.</p>
+              {/* 요약 칩 — 항상 노출 */}
+              <div className="grid grid-cols-2 gap-2 sm:grid-cols-4">
+                <SummaryChip label="잔액" value={formatCNY(totalBalance)} tone="text-[#084734]" />
+                <SummaryChip label="오더" value={formatUSD(totalOrder)} />
+                <SummaryChip label="성과" value={formatCNY(totalPerformance)} tone="text-[#084734]" />
+                <SummaryChip
+                  label="만료 / 최근수업"
+                  value={`${earliestExpiry ? formatDay(earliestExpiry) : "-"} / ${
+                    latestClass ? formatDay(latestClass) : "-"
+                  }`}
+                />
+              </div>
+
+              {/* 탭 — 한 번에 한 섹션만 */}
+              <div className="flex gap-1 rounded-lg bg-[#fafaf8] p-1">
+                {tabs.map((item) => (
+                  <button
+                    key={item.key}
+                    type="button"
+                    onClick={() => setTab(item.key)}
+                    className={`flex-1 rounded-md px-2 py-1.5 text-[12px] font-semibold transition-colors ${
+                      tab === item.key ? "bg-white text-[#111110] shadow-sm" : "text-[#1a1a1a]/50 hover:text-[#111110]"
+                    }`}
+                  >
+                    {item.label}
+                    <span className="ml-1 text-[11px] text-[#1a1a1a]/35">{item.count}</span>
+                  </button>
+                ))}
+              </div>
+
+              {tab === "eeo" ? (
+                eeoAccounts.length === 0 ? (
+                  <p className="rounded-xl border border-[#f0f0ec] py-8 text-center text-[12px] text-[#1a1a1a]/30">
+                    연결된 EEO 계정이 없습니다.
+                  </p>
                 ) : (
-                  <div className="divide-y divide-[#f0f0ec]">
-                    {detail.eeoAccounts.map((eeo) => (
-                      <div key={eeo.id} className="grid grid-cols-[minmax(0,1fr)_110px] gap-2 py-2">
+                  <div className="divide-y divide-[#f0f0ec] rounded-xl border border-[#f0f0ec] px-3">
+                    {eeoAccounts.map((eeo) => (
+                      <div key={eeo.id} className="grid grid-cols-[minmax(0,1fr)_110px] gap-2 py-2.5">
                         <div className="min-w-0">
                           <p className="truncate text-[12px] font-medium text-[#111110]">{eeo.name}</p>
                           <p className="truncate text-[11px] text-[#1a1a1a]/40">
@@ -253,12 +318,14 @@ function CustomerDetailPanel({
                       </div>
                     ))}
                   </div>
-                )}
-              </div>
-
-              <MoneySection title="오더 (Opportunity · USD)" items={detail.orders} emptyLabel="오더가 없습니다." format={formatUSD} />
-              <MoneySection title="수금 (Collection · CNY)" items={detail.collections} emptyLabel="수금 기록이 없습니다." format={formatCNY} />
-              <MoneySection title="성과 (SalesPerformance · CNY)" items={detail.performances} emptyLabel="성과 기록이 없습니다." format={formatCNY} />
+                )
+              ) : tab === "orders" ? (
+                <MoneySection title="오더 (Opportunity · USD)" items={detail.orders} emptyLabel="오더가 없습니다." format={formatUSD} />
+              ) : tab === "collections" ? (
+                <MoneySection title="수금 (Collection · CNY)" items={detail.collections} emptyLabel="수금 기록이 없습니다." format={formatCNY} />
+              ) : (
+                <MoneySection title="성과 (SalesPerformance · CNY)" items={detail.performances} emptyLabel="성과 기록이 없습니다." format={formatCNY} />
+              )}
             </>
           ) : null}
         </div>
@@ -474,15 +541,19 @@ export default function NeoCrmCustomersClient() {
           </thead>
           <tbody className="divide-y divide-[#f0f0ec]">
             {loading && !data ? (
-              <tr>
-                <td colSpan={6} className="py-16 text-center text-[13px] text-[#1a1a1a]/35">
-                  <Loader2 className="mr-2 inline h-4 w-4 animate-spin" />
-                  고객을 불러오는 중입니다.
-                </td>
-              </tr>
+              Array.from({ length: 8 }).map((_, i) => (
+                <tr key={`sk-${i}`}>
+                  {Array.from({ length: 6 }).map((__, j) => (
+                    <td key={j} className="py-4 pr-4">
+                      <div className="h-4 animate-pulse rounded bg-[#f0f0ec]" />
+                    </td>
+                  ))}
+                </tr>
+              ))
             ) : visibleRows.length === 0 ? (
               <tr>
                 <td colSpan={6} className="py-16 text-center text-[13px] text-[#1a1a1a]/35">
+                  <Building2 className="mx-auto mb-2 h-5 w-5 text-[#1a1a1a]/20" />
                   조건에 맞는 고객이 없습니다.
                 </td>
               </tr>
