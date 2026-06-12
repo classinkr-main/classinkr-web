@@ -295,6 +295,21 @@ function CrmOperationsDashboard({
               <p className="mt-2 text-4xl font-bold tracking-[-0.045em] text-[#084734] sm:text-[42px]">
                 {loadingValue ?? formatCurrency(revenue?.deliveryTotalAmount)}
               </p>
+              {/* 오더는 거의 확정 매출 — Delivery와 같은 급의 서브 히어로 (USD 네이티브) */}
+              <div className="mt-4 border-t border-[#084734]/10 pt-3">
+                <div className="flex items-center gap-2 text-[#084734]/70">
+                  <BarChart3 className="h-4 w-4" />
+                  <p className="text-[11px] font-semibold uppercase tracking-[0.16em]">오더 · 확정 임박 (USD)</p>
+                </div>
+                <p className="mt-1.5 flex flex-wrap items-end gap-x-2 gap-y-1">
+                  <span className="text-3xl font-bold tracking-[-0.04em] text-[#111110]">
+                    {loadingValue ?? formatUSD(neoKpis?.opportunityAmount)}
+                  </span>
+                  <span className="text-[12px] text-[#1a1a1a]/45">
+                    이번 달 {loadingValue ?? formatNumber(neoKpis?.opportunityCountMonth)}건
+                  </span>
+                </p>
+              </div>
               <div className="mt-3 grid gap-2 text-[12px] text-[#1a1a1a]/45 sm:grid-cols-2">
                 <span>견적 {loadingValue ?? formatCurrency(revenue?.acceptedQuoteAmount)}</span>
                 <span>Neo Sales {loadingValue ?? formatCurrency(neoKpis?.salesAmountMonth)}</span>
@@ -318,9 +333,10 @@ function CrmOperationsDashboard({
               />
               <CrmMetricTile
                 icon={<BarChart3 className="h-4 w-4" />}
-                label="Opportunity"
+                label="오더 (확정 임박)"
                 value={loadingValue ?? formatUSD(neoKpis?.opportunityAmount)}
-                hint="한국팀 Neo CRM pipeline · USD"
+                hint={`Opportunity ${loadingValue ?? formatNumber(neoKpis?.opportunityCountMonth)}건 · USD`}
+                tone="text-[#084734]"
               />
               <CrmMetricTile
                 icon={<TrendingUp className="h-4 w-4" />}

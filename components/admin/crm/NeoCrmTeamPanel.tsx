@@ -88,6 +88,11 @@ function formatSignedCurrency(value: number) {
   return `${sign}${formatCurrency(Math.abs(value))}`
 }
 
+function formatSignedUSD(value: number) {
+  const sign = value > 0 ? "+" : value < 0 ? "-" : ""
+  return `${sign}${formatUSD(Math.abs(value))}`
+}
+
 function deltaTone(value: number) {
   return value > 0 ? "text-[#084734]" : value < 0 ? "text-[#B85C33]" : "text-[#1a1a1a]/40"
 }
@@ -204,7 +209,8 @@ export default function NeoCrmTeamPanel({ refreshKey = 0 }: { refreshKey?: numbe
         </p>
       ) : null}
 
-      <div className="mt-5 rounded-2xl border border-[#084734]/15 bg-[#ECFDF5] p-5">
+      <div className="mt-5 grid gap-3 xl:grid-cols-[1.25fr_0.75fr]">
+      <div className="rounded-2xl border border-[#084734]/15 bg-[#ECFDF5] p-5">
         <div className="flex flex-col gap-4 lg:flex-row lg:items-end lg:justify-between">
           <div>
             <p className="text-[11px] font-semibold uppercase tracking-[0.14em] text-[#084734]/70">
@@ -257,6 +263,33 @@ export default function NeoCrmTeamPanel({ refreshKey = 0 }: { refreshKey?: numbe
         ) : null}
       </div>
 
+      {/* 오더는 거의 확정 매출 — 매출 달성과 같은 급의 co-hero로 노출 (USD 네이티브) */}
+      <div className="rounded-2xl border border-[#084734]/15 bg-white p-5">
+        <p className="text-[11px] font-semibold uppercase tracking-[0.14em] text-[#084734]/70">
+          오더 · 확정 임박 (Opportunity)
+        </p>
+        <div className="mt-1 flex flex-wrap items-end gap-x-3 gap-y-1">
+          <span className="text-4xl font-bold tracking-[-0.045em] text-[#111110] sm:text-[40px]">
+            {loading && !data ? "..." : formatUSD(data?.order.amount)}
+          </span>
+          <span className="text-[15px] font-semibold text-[#1a1a1a]/45">
+            {formatNumber(data?.order.count)}건
+          </span>
+        </div>
+        {data ? (
+          <p className="mt-2 text-[12px]">
+            <span className="text-[#1a1a1a]/40">직전 {data.comparison.previousLabel} 대비 </span>
+            <span className={`font-semibold ${deltaTone(data.order.amount - data.comparison.order.previousAmount)}`}>
+              {formatSignedUSD(data.order.amount - data.comparison.order.previousAmount)}
+            </span>
+          </p>
+        ) : null}
+        <p className="mt-3 text-[11px] leading-relaxed text-[#1a1a1a]/40">
+          USD 기재 · 본사 확정 매출(CNY) 인식 전 단계 — 매출과 같은 우선순위로 관리
+        </p>
+      </div>
+      </div>
+
       <div className="mt-4 grid gap-3 sm:grid-cols-2 xl:grid-cols-4">
         <KpiTile
           icon={<TrendingUp className="h-4 w-4" />}
@@ -267,11 +300,12 @@ export default function NeoCrmTeamPanel({ refreshKey = 0 }: { refreshKey?: numbe
         />
         <KpiTile
           icon={<ShoppingCart className="h-4 w-4" />}
-          label="Order"
-          value={loading && !data ? "..." : formatNumber(data?.order.count)}
-          hint={`금액 ${formatUSD(data?.order.amount)} · 직전 ${formatNumber(
-            data?.comparison.order.previousCount
-          )}건`}
+          label="오더 (확정 임박)"
+          value={loading && !data ? "..." : formatUSD(data?.order.amount)}
+          hint={`${formatNumber(data?.order.count)}건 · 직전 ${formatUSD(
+            data?.comparison.order.previousAmount
+          )}`}
+          tone="text-[#084734]"
         />
         <KpiTile
           icon={<Building2 className="h-4 w-4" />}
