@@ -220,7 +220,34 @@ function emptyReport(
   }
 }
 
-export async function getNeoCrmTeamReport(input: {
+// /admin/crm 홈은 overview(getNeoCrmOverview)와 NeoCrmTeamPanel(/api/admin/crm/neo)이
+// 같은 월 리포트를 거의 동시에 요청한다(각 ~12쿼리). 인스턴스 단위 short-TTL 메모로
+// 중복 계산과 동시 요청을 합친다. 실패 리포트는 캐시하지 않아 즉시 재시도된다.
+const REPORT_MEMO_TTL_MS = 30_000
+const reportMemo = new Map<string, { expiresAt: number; promise: Promise<NeoCrmTeamReport> }>()
+
+export function getNeoCrmTeamReport(input: {
+  granularity: NeoCrmGranularity
+  offset: number
+}): Promise<NeoCrmTeamReport> {
+  const key = `${input.granularity}:${input.offset}`
+  const cached = reportMemo.get(key)
+  if (cached && cached.expiresAt > Date.now()) return cached.promise
+
+  const promise = computeNeoCrmTeamReport(input)
+    .then((report) => {
+      if (!report.ok) reportMemo.delete(key)
+      return report
+    })
+    .catch((error) => {
+      reportMemo.delete(key)
+      throw error
+    })
+  reportMemo.set(key, { expiresAt: Date.now() + REPORT_MEMO_TTL_MS, promise })
+  return promise
+}
+
+async function computeNeoCrmTeamReport(input: {
   granularity: NeoCrmGranularity
   offset: number
 }): Promise<NeoCrmTeamReport> {

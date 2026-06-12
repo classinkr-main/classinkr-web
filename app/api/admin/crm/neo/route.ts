@@ -21,7 +21,9 @@ export async function GET(req: NextRequest) {
 
   try {
     const report = await getNeoCrmTeamReport({ granularity, offset })
-    return NextResponse.json(report)
+    const response = NextResponse.json(report)
+    response.headers.set("Cache-Control", "private, max-age=30, stale-while-revalidate=120")
+    return response
   } catch (error) {
     console.error("[GET /api/admin/crm/neo]", error)
     return NextResponse.json({ error: "Failed to load Neo CRM team report" }, { status: 500 })

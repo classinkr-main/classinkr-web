@@ -22,6 +22,10 @@
     },
     {
       "path": "/api/cron/sync-branch",
+      "schedule": "30 3 * * *"
+    },
+    {
+      "path": "/api/cron/sync-branch",
       "schedule": "0 8 * * *"
     },
     {
@@ -30,7 +34,19 @@
     },
     {
       "path": "/api/cron/sync-external-crm",
+      "schedule": "0 22 * * *"
+    },
+    {
+      "path": "/api/cron/sync-external-crm",
       "schedule": "0 1 * * *"
+    },
+    {
+      "path": "/api/cron/sync-external-crm",
+      "schedule": "0 4 * * *"
+    },
+    {
+      "path": "/api/cron/sync-external-crm",
+      "schedule": "0 7 * * *"
     }
   ]
 }

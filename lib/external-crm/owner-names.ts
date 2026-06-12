@@ -11,7 +11,23 @@ const XIAOSHOUYI_USER_OBJECT = "User"
 // HQ staff directory exceeds 2,000 users; keep headroom for a full sync.
 const USER_MAP_SCAN_LIMIT = 20000
 
-export async function getXiaoshouyiOwnerNameMap(sb: SupabaseAdminClient): Promise<Map<string, string>> {
+// 팀 리포트·매칭 인박스·계정 페이지가 같은 이름 맵을 반복 조회한다.
+// 이름은 거의 안 바뀌므로 인스턴스 단위 60s 메모로 중복 조회를 합친다.
+const OWNER_MAP_MEMO_TTL_MS = 60_000
+let ownerMapMemo: { expiresAt: number; promise: Promise<Map<string, string>> } | null = null
+
+export function getXiaoshouyiOwnerNameMap(sb: SupabaseAdminClient): Promise<Map<string, string>> {
+  if (ownerMapMemo && ownerMapMemo.expiresAt > Date.now()) return ownerMapMemo.promise
+
+  const promise = computeXiaoshouyiOwnerNameMap(sb).catch((error) => {
+    ownerMapMemo = null
+    throw error
+  })
+  ownerMapMemo = { expiresAt: Date.now() + OWNER_MAP_MEMO_TTL_MS, promise }
+  return promise
+}
+
+async function computeXiaoshouyiOwnerNameMap(sb: SupabaseAdminClient): Promise<Map<string, string>> {
   const map = new Map<string, string>()
 
   const [userResult, overrideResult] = await Promise.all([
