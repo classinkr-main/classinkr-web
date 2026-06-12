@@ -772,7 +772,7 @@ export default function AdminCrmRevenuePage() {
                 후보 생성
               </button>
               <Link
-                href="/admin/crm/partners/customers"
+                href="/admin/crm/customers/accounts"
                 className="inline-flex h-8 items-center gap-1 rounded-lg border border-[#e8e8e4] px-2.5 text-[12px] font-semibold text-[#111110] transition-colors hover:bg-[#f5f5f2]"
               >
                 고객사

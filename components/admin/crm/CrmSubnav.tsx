@@ -19,7 +19,7 @@ const PRIMARY_TABS = [
   },
   {
     key: "customers",
-    href: "/admin/crm/partners/customers",
+    href: "/admin/crm/customers/accounts",
     label: "고객",
     description: "콜·비짓·팔로업",
     icon: <PhoneCall className="h-4 w-4" />,
@@ -64,7 +64,12 @@ const DEALS_SUBTABS = [
 function resolveSection(pathname: string | null): CrmSection | null {
   if (!pathname) return null
   if (pathname === "/admin/crm/matching" || pathname.startsWith("/admin/crm/matching/")) return "sync"
-  if (pathname === "/admin/crm/partners/customers" || pathname.startsWith("/admin/crm/partners/customers/"))
+  if (
+    pathname === "/admin/crm/customers" ||
+    pathname.startsWith("/admin/crm/customers/") ||
+    pathname === "/admin/crm/partners/customers" ||
+    pathname.startsWith("/admin/crm/partners/customers/")
+  )
     return "customers"
   if (
     pathname === "/admin/crm/deals" ||
