@@ -372,7 +372,7 @@ export default function NeoCrmTeamPanel({ refreshKey = 0 }: { refreshKey?: numbe
                 <h3 className="text-[14px] font-semibold text-[#111110]">최근 오더</h3>
               </div>
               <Link
-                href="/admin/crm/partners/portal"
+                href="/admin/crm/deals/orders"
                 className="inline-flex items-center gap-1 text-[12px] font-semibold text-[#1a1a1a]/45 transition-colors hover:text-[#111110]"
               >
                 Order·Delivery

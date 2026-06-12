@@ -433,7 +433,7 @@ export default function MatchingInboxClient() {
             후보 생성
           </button>
           <Link
-            href="/admin/crm/revenue"
+            href="/admin/crm/deals"
             className="inline-flex h-9 items-center gap-1.5 rounded-lg border border-[#e8e8e4] bg-white px-3 text-[13px] font-semibold text-[#111110] transition-colors hover:bg-[#f5f5f2]"
           >
             매출·정합성

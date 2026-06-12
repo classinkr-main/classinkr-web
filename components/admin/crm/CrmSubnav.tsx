@@ -26,7 +26,7 @@ const PRIMARY_TABS = [
   },
   {
     key: "deals",
-    href: "/admin/crm/revenue",
+    href: "/admin/crm/deals",
     label: "Deals",
     description: "견적 → 수납",
     icon: <CircleDollarSign className="h-4 w-4" />,
@@ -56,9 +56,9 @@ const MAINTENANCE_TAB = {
 
 // Deals 섹션 안에서만 보이는 단계별 보조 탭 (견적→오더·설치→KPI).
 const DEALS_SUBTABS = [
-  { key: "revenue", href: "/admin/crm/revenue", label: "매출", icon: <CircleDollarSign className="h-3.5 w-3.5" /> },
-  { key: "orders", href: "/admin/crm/partners/portal", label: "오더·설치", icon: <Handshake className="h-3.5 w-3.5" /> },
-  { key: "kpi", href: "/admin/crm/partners", label: "KPI", icon: <Target className="h-3.5 w-3.5" /> },
+  { key: "revenue", href: "/admin/crm/deals", label: "매출", icon: <CircleDollarSign className="h-3.5 w-3.5" /> },
+  { key: "orders", href: "/admin/crm/deals/orders", label: "오더·설치", icon: <Handshake className="h-3.5 w-3.5" /> },
+  { key: "kpi", href: "/admin/crm/deals/kpi", label: "KPI", icon: <Target className="h-3.5 w-3.5" /> },
 ] satisfies Array<{ key: DealsSub; href: string; label: string; icon: ReactNode }>
 
 function resolveSection(pathname: string | null): CrmSection | null {
@@ -67,6 +67,8 @@ function resolveSection(pathname: string | null): CrmSection | null {
   if (pathname === "/admin/crm/partners/customers" || pathname.startsWith("/admin/crm/partners/customers/"))
     return "customers"
   if (
+    pathname === "/admin/crm/deals" ||
+    pathname.startsWith("/admin/crm/deals/") ||
     pathname === "/admin/crm/revenue" ||
     pathname.startsWith("/admin/crm/revenue/") ||
     pathname.startsWith("/admin/crm/partners")
@@ -78,9 +80,15 @@ function resolveSection(pathname: string | null): CrmSection | null {
 
 function resolveDealsSub(pathname: string | null): DealsSub | null {
   if (!pathname) return null
-  if (pathname === "/admin/crm/revenue" || pathname.startsWith("/admin/crm/revenue/")) return "revenue"
-  if (pathname === "/admin/crm/partners/portal") return "orders"
-  if (pathname.startsWith("/admin/crm/partners")) return "kpi"
+  if (pathname.startsWith("/admin/crm/deals/orders") || pathname === "/admin/crm/partners/portal") return "orders"
+  if (pathname.startsWith("/admin/crm/deals/kpi") || pathname.startsWith("/admin/crm/partners")) return "kpi"
+  if (
+    pathname === "/admin/crm/deals" ||
+    pathname.startsWith("/admin/crm/deals/") ||
+    pathname === "/admin/crm/revenue" ||
+    pathname.startsWith("/admin/crm/revenue/")
+  )
+    return "revenue"
   return null
 }
 

@@ -31,7 +31,7 @@ async function notifySyncOutcome(result: ExternalCrmSyncChainResult, trigger: "m
         message: `Xiaoshouyi 동기화 중 ${failedObjects.length}개 객체가 실패했습니다: ${failedObjects
           .map((object) => object.objectApiKey)
           .join(", ")}`,
-        routeUrl: "/admin/crm/revenue",
+        routeUrl: "/admin/crm/deals",
         source: "external_crm_sync",
         payload: { trigger, failedObjects: failedObjects.map((object) => object.objectApiKey) },
       })

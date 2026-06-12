@@ -182,7 +182,7 @@ const PAYMENT_METHOD_LABEL: Record<string, string> = {
 const DEFAULT_LINK_TARGETS: PortalLinkTargets = {
   calendar: "/admin/calendar",
   documents: "/admin/quotes",
-  workspace: "/admin/crm/partners",
+  workspace: "/admin/crm/deals/kpi",
 }
 
 /* ─── Demo Data ──────────────────────────────────────────────── */

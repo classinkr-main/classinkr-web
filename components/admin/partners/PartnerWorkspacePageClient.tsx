@@ -137,7 +137,7 @@ function formatDateLabel(value?: string) {
 }
 
 function makeQueueDetailHref(workspace: PartnerWorkspace, queueView: Exclude<QueueView, "all">) {
-  return `/admin/crm/partners/${workspace.partner.id}?tab=${QUEUE_DETAIL_TABS[queueView]}`
+  return `/admin/crm/deals/kpi/${workspace.partner.id}?tab=${QUEUE_DETAIL_TABS[queueView]}`
 }
 
 function buildInsight(workspace: PartnerWorkspace): WorkspaceInsight {
@@ -609,7 +609,7 @@ export default function PartnerWorkspacePageClient({
                       수정
                     </Button>
                     <Link
-                      href={`/admin/crm/partners/${workspace.partner.id}`}
+                      href={`/admin/crm/deals/kpi/${workspace.partner.id}`}
                       className="inline-flex items-center gap-1 rounded-full bg-[#111110] px-3 py-2 text-[12px] font-medium text-white transition-colors hover:bg-[#111110]/90"
                     >
                       워크스페이스 열기
@@ -720,7 +720,7 @@ export default function PartnerWorkspacePageClient({
                 <p className="mt-1">계약 대기 계정부터 열어 견적/계약 흐름을 바로 이어갑니다.</p>
                 {contractCandidate ? (
                   <Link
-                    href={`/admin/crm/partners/${contractCandidate.partner.id}?tab=deal-flow`}
+                    href={`/admin/crm/deals/kpi/${contractCandidate.partner.id}?tab=deal-flow`}
                     className="mt-3 inline-flex h-8 items-center gap-1 rounded-full bg-[#111110] px-3 text-[11px] font-medium text-white transition-colors hover:bg-[#111110]/90"
                   >
                     {contractCandidate.partner.name} 열기
@@ -738,7 +738,7 @@ export default function PartnerWorkspacePageClient({
                 <div className="mt-3 flex flex-wrap gap-2">
                   {fulfillmentCandidate ? (
                     <Link
-                      href={`/admin/crm/partners/${fulfillmentCandidate.partner.id}?tab=fulfillment`}
+                      href={`/admin/crm/deals/kpi/${fulfillmentCandidate.partner.id}?tab=fulfillment`}
                       className="inline-flex h-8 items-center gap-1 rounded-full border border-[#e8e8e4] bg-white px-3 text-[11px] font-medium text-[#111110] transition-colors hover:border-[#c8c8c4]"
                     >
                       설치 진행
@@ -746,7 +746,7 @@ export default function PartnerWorkspacePageClient({
                   ) : null}
                   {settlementCandidate ? (
                     <Link
-                      href={`/admin/crm/partners/${settlementCandidate.partner.id}?tab=documents`}
+                      href={`/admin/crm/deals/kpi/${settlementCandidate.partner.id}?tab=documents`}
                       className="inline-flex h-8 items-center gap-1 rounded-full border border-[#e8e8e4] bg-white px-3 text-[11px] font-medium text-[#111110] transition-colors hover:border-[#c8c8c4]"
                     >
                       정산 지연

@@ -1278,7 +1278,7 @@ export async function getAdminCrmRevenueDashboard(months = 6): Promise<CrmRevenu
         ownerName: customerNameById.get(deal.customer_id) ?? accountNameById.get(deal.partner_account_id) ?? "고객 미지정",
         amount: deal.outstanding_amount || Math.max(0, deal.contracted_amount - deal.paid_amount),
         reason: deal.payment_status === "paid" ? "정산 확인 필요" : "미수 또는 부분 수납",
-        href: `/admin/crm/partners/portal?deal=${deal.id}`,
+        href: `/admin/crm/deals/orders?deal=${deal.id}`,
       })),
     ...contracts
       .filter((contract) => contract.status !== "cancelled")
@@ -1340,7 +1340,7 @@ export async function getAdminCrmRevenueDashboard(months = 6): Promise<CrmRevenu
       status: `${deal.current_stage}/${deal.payment_status}`,
       amount: deal.expected_amount,
       occurredAt: deal.updated_at,
-      href: "/admin/crm/partners/portal",
+      href: "/admin/crm/deals/orders",
     })),
   ]
     .sort((a, b) => new Date(b.occurredAt ?? 0).getTime() - new Date(a.occurredAt ?? 0).getTime())

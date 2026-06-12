@@ -22,5 +22,5 @@ export default async function AdminPartnerDetailPage({
   }
 
   const queryString = query.toString()
-  redirect(`/admin/crm/partners/${id}${queryString ? `?${queryString}` : ""}`)
+  redirect(`/admin/crm/deals/kpi/${id}${queryString ? `?${queryString}` : ""}`)
 }
