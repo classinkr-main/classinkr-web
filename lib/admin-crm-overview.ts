@@ -1,8 +1,8 @@
 import "server-only"
 
 import { getCrmDuplicatePreflightReport } from "@/lib/admin-crm-duplicate-preflight"
+import { getNeoCrmTeamReport } from "@/lib/admin-crm-neo"
 import { getCrmSchemaContractReadiness } from "@/lib/admin-crm-schema-contract"
-import { getKoreaTeamManagerSet, isKoreaScopedExternalRecord } from "@/lib/admin-crm-scope"
 import { getXiaoshouyiSyncPreflight, getXiaoshouyiSyncSchemaReadiness } from "@/lib/external-crm/xiaoshouyi-sync"
 import { getXiaoshouyiWriteSchemaReadiness } from "@/lib/external-crm/xiaoshouyi-write"
 import { createSupabaseAdminClient } from "@/lib/supabase/admin"
@@ -140,8 +140,15 @@ export interface AdminCrmNeoCrmOverview {
   latestSyncedAt: string | null
   kpis: {
     accountCount: number
+    activeAccountCountMonth: number
+    salesAmountMonth: number
+    salesCountMonth: number
+    salesTargetAmountMonth: number | null
+    salesTargetRateMonth: number | null
     opportunityAmount: number
+    opportunityCountMonth: number
     collectionAmountMonth: number
+    collectionCountMonth: number
     collectionAmount30d: number
     collectionCount30d: number
   }
@@ -942,67 +949,66 @@ function getOverallStatus(input: {
   return "ok"
 }
 
-const NEO_CRM_AMOUNT_SCAN_LIMIT = 2000
-
-type NeoCrmScopedRecord = {
-  owner_name: string | null
-  payload: Record<string, unknown> | null
-}
-
-type NeoCrmAmountRecord = NeoCrmScopedRecord & {
-  amount: number | null
-  occurred_at?: string | null
-}
-
-function filterKoreaScopedNeoCrmRows<T extends NeoCrmScopedRecord>(rows: T[], koreaManagers: Set<string>) {
-  return rows.filter((row) => isKoreaScopedExternalRecord(row, koreaManagers))
-}
-
-async function getNeoCrmOverview(sb: SupabaseAdminClient): Promise<AdminCrmNeoCrmOverview> {
+async function getNeoCrmOverview(): Promise<AdminCrmNeoCrmOverview> {
   const empty: AdminCrmNeoCrmOverview = {
     ok: false,
     error: null,
     latestSyncedAt: null,
     kpis: {
       accountCount: 0,
+      activeAccountCountMonth: 0,
+      salesAmountMonth: 0,
+      salesCountMonth: 0,
+      salesTargetAmountMonth: null,
+      salesTargetRateMonth: null,
       opportunityAmount: 0,
+      opportunityCountMonth: 0,
       collectionAmountMonth: 0,
+      collectionCountMonth: 0,
       collectionAmount30d: 0,
       collectionCount30d: 0,
     },
     recentOrders: [],
   }
 
-  // The home dashboard only renders neoCrm.kpis.opportunityAmount; the full
-  // Korea-team Neo CRM view lives in NeoCrmTeamPanel (/api/admin/crm/neo).
-  // Keep this path cheap — just the opportunity pipeline total.
-  const [teamManagerResult, opportunityResult] = await Promise.all([
-    sb.from("branch_rev_deals").select("team, manager").limit(BUSINESS_QUERY_LIMIT),
-    sb
-      .from("external_crm_records")
-      .select("amount, owner_name, payload")
-      .eq("source_system", "xiaoshouyi")
-      .eq("object_api_key", "opportunity")
-      .eq("is_stale", false)
-      .limit(NEO_CRM_AMOUNT_SCAN_LIMIT),
-  ])
+  // CRM home reuses the same current-month Neo CRM report as NeoCrmTeamPanel
+  // so summary KPI tiles and the full panel stay on the same source and period.
+  try {
+    const report = await getNeoCrmTeamReport({ granularity: "month", offset: 0 })
 
-  if (opportunityResult.error) {
-    return { ...empty, error: formatLabeledSupabaseError("external_crm_records", opportunityResult.error) }
-  }
-
-  const koreaManagers = getKoreaTeamManagerSet(
-    (teamManagerResult.error ? [] : teamManagerResult.data ?? []) as Array<{ team: string | null; manager: string | null }>
-  )
-  const opportunityAmount = filterKoreaScopedNeoCrmRows(
-    (opportunityResult.data ?? []) as Array<NeoCrmAmountRecord>,
-    koreaManagers
-  ).reduce((total, row) => total + (Number(row.amount) || 0), 0)
-
-  return {
-    ...empty,
-    ok: true,
-    kpis: { ...empty.kpis, opportunityAmount },
+    return {
+      ok: report.ok,
+      error: report.error,
+      latestSyncedAt: report.latestSyncedAt,
+      kpis: {
+        accountCount: report.account.totalCount,
+        activeAccountCountMonth: report.account.activeInPeriodCount,
+        salesAmountMonth: report.revenue.teamTotal,
+        salesCountMonth: report.revenue.orderCount,
+        salesTargetAmountMonth: report.target.amount,
+        salesTargetRateMonth: report.target.rate,
+        opportunityAmount: report.order.amount,
+        opportunityCountMonth: report.order.count,
+        collectionAmountMonth: report.collection.amount,
+        collectionCountMonth: report.collection.count,
+        collectionAmount30d: report.collection.amount30d,
+        collectionCount30d: report.collection.count30d,
+      },
+      recentOrders: report.order.recent.map((order) => ({
+        key: order.key,
+        objectApiKey: "opportunity",
+        customerName: order.customerName,
+        ownerName: order.ownerName,
+        status: order.status,
+        amount: order.amount,
+        occurredAt: order.occurredAt,
+      })),
+    }
+  } catch (error) {
+    return {
+      ...empty,
+      error: error instanceof Error ? error.message : "Failed to load Neo CRM KPI summary",
+    }
   }
 }
 
@@ -1031,7 +1037,7 @@ export async function getAdminCrmOverview(): Promise<AdminCrmOverview> {
       getExternalSnapshotOverview(sb),
       getWriteQueueCounts(sb),
       getBusinessOverview(sb),
-      getNeoCrmOverview(sb),
+      getNeoCrmOverview(),
     ])
 
   const schemaChecks = [

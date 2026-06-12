@@ -70,6 +70,8 @@ export interface NeoCrmTeamReport {
   collection: {
     amount: number
     count: number
+    amount30d: number
+    count30d: number
   }
   leads: {
     totalCount: number
@@ -206,7 +208,7 @@ function emptyReport(
     revenue: { teamTotal: 0, orderCount: 0, contributorCount: 0, byOwner: [] },
     account: { totalCount: 0, activeInPeriodCount: 0 },
     order: { count: 0, amount: 0, recent: [] },
-    collection: { amount: 0, count: 0 },
+    collection: { amount: 0, count: 0, amount30d: 0, count30d: 0 },
     leads: { totalCount: 0, periodCount: 0, previousCount: 0 },
     comparison: {
       previousLabel,
@@ -408,6 +410,9 @@ export async function getNeoCrmTeamReport(input: {
   const allCollections = ((collectionResult.data ?? []) as ScopedAmountRecord[]).filter(isScoped)
   const collectionRows = allCollections.filter((row) => isCurrent(row.occurred_at))
   const collectionAmount = collectionRows.reduce((total, row) => total + (Number(row.amount) || 0), 0)
+  const thirtyDaysAgoIso = new Date(Date.now() - 30 * 86_400_000).toISOString()
+  const collectionRows30d = allCollections.filter((row) => (row.occurred_at ?? "") >= thirtyDaysAgoIso)
+  const collectionAmount30d = collectionRows30d.reduce((total, row) => total + (Number(row.amount) || 0), 0)
   const prevCollectionAmount = allCollections
     .filter((row) => !isCurrent(row.occurred_at))
     .reduce((total, row) => total + (Number(row.amount) || 0), 0)
@@ -463,6 +468,8 @@ export async function getNeoCrmTeamReport(input: {
     collection: {
       amount: collectionAmount,
       count: collectionRows.length,
+      amount30d: collectionAmount30d,
+      count30d: collectionRows30d.length,
     },
     leads: {
       totalCount: leadsTotalResult.error ? 0 : leadsTotalResult.count ?? 0,

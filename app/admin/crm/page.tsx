@@ -9,7 +9,7 @@ import {
   PhoneCall, Bell, UserPlus, Link2, ExternalLink,
   Clock, Search, Activity, AlertCircle, BarChart3,
   CircleDollarSign, FileText, Handshake,
-  MapPin, ReceiptText, Target,
+  MapPin, ReceiptText, Target, TrendingUp,
 } from "lucide-react"
 import { adminFetch, adminFetchJsonCached } from "@/lib/admin-client"
 import { Button } from "@/components/ui/button"
@@ -279,8 +279,15 @@ interface AdminCrmOverview {
     latestSyncedAt: string | null
     kpis: {
       accountCount: number
+      activeAccountCountMonth: number
+      salesAmountMonth: number
+      salesCountMonth: number
+      salesTargetAmountMonth: number | null
+      salesTargetRateMonth: number | null
       opportunityAmount: number
+      opportunityCountMonth: number
       collectionAmountMonth: number
+      collectionCountMonth: number
       collectionAmount30d: number
       collectionCount30d: number
     }
@@ -345,6 +352,11 @@ function formatCurrency(value: number | null | undefined) {
 // 오더(Opportunity)는 달러($)로 기재된다 — 매출·수금(CNY)과 통화가 다름.
 function formatUSD(value: number | null | undefined) {
   return `$${Number(value ?? 0).toLocaleString("en-US", { maximumFractionDigits: 2 })}`
+}
+
+function formatPercent(value: number | null | undefined) {
+  if (value == null) return "-"
+  return `${Math.round(value * 100)}%`
 }
 
 function getCustomerLogKindLabel(kind: AdminCrmCustomerLogKind) {
@@ -417,8 +429,10 @@ function CrmOperationsDashboard({
   const revenue = overview?.business.revenue
   const kpis = overview?.business.kpis
   const neoCrm = overview?.neoCrm ?? null
+  const neoKpis = neoCrm?.kpis
   const logs = overview?.business.customerLogs.recent ?? []
   const businessWarning = error ?? overview?.business.error ?? overview?.business.warning ?? null
+  const neoSyncWarning = neoCrm?.error ?? overview?.externalSnapshots.error ?? null
   const loadingValue = loading && !overview ? "..." : null
 
   return (
@@ -430,6 +444,9 @@ function CrmOperationsDashboard({
               <p className="text-[11px] font-semibold uppercase tracking-wide text-[#1a1a1a]/30">Neo CRM Korea Scope</p>
               <h2 className="mt-1 text-[18px] font-bold text-[#111110]">한국팀 돈 흐름 우선순위</h2>
             </div>
+            <span className="inline-flex h-9 items-center rounded-lg bg-[#fafaf8] px-3 text-[12px] font-semibold text-[#1a1a1a]/50">
+              Sync {formatOverviewDate(neoCrm?.latestSyncedAt ?? overview?.externalSnapshots.latestSyncedAt)}
+            </span>
             <Link
               href="/admin/crm/revenue"
               className="inline-flex h-9 items-center justify-center gap-1.5 rounded-lg border border-[#e8e8e4] bg-white px-3 text-[12px] font-semibold text-[#111110] transition-colors hover:bg-[#f5f5f2]"
@@ -450,9 +467,11 @@ function CrmOperationsDashboard({
               </p>
               <div className="mt-3 grid gap-2 text-[12px] text-[#1a1a1a]/45 sm:grid-cols-2">
                 <span>견적 {loadingValue ?? formatCurrency(revenue?.acceptedQuoteAmount)}</span>
-                <span>Opportunity {loadingValue ?? formatUSD(neoCrm?.kpis.opportunityAmount)}</span>
+                <span>Neo Sales {loadingValue ?? formatCurrency(neoKpis?.salesAmountMonth)}</span>
+                <span>Opportunity {loadingValue ?? formatUSD(neoKpis?.opportunityAmount)}</span>
                 <span>Order {loadingValue ?? formatCurrency(revenue?.contractedAmount)}</span>
                 <span>Delivery {loadingValue ?? formatCurrency(revenue?.deliveryTotalAmount)}</span>
+                <span>Collection {loadingValue ?? formatCurrency(neoKpis?.collectionAmountMonth)}</span>
                 <span className={(revenue?.outstandingAmount ?? 0) > 0 ? "font-semibold text-[#B85C33]" : ""}>
                   미수 {loadingValue ?? formatCurrency(revenue?.outstandingAmount)}
                 </span>
@@ -470,8 +489,29 @@ function CrmOperationsDashboard({
               <CrmMetricTile
                 icon={<BarChart3 className="h-4 w-4" />}
                 label="Opportunity"
-                value={loadingValue ?? formatUSD(neoCrm?.kpis.opportunityAmount)}
+                value={loadingValue ?? formatUSD(neoKpis?.opportunityAmount)}
                 hint="한국팀 Neo CRM pipeline · USD"
+              />
+              <CrmMetricTile
+                icon={<TrendingUp className="h-4 w-4" />}
+                label="Neo Sales"
+                value={loadingValue ?? formatCurrency(neoKpis?.salesAmountMonth)}
+                hint={`SalesPerformance ${loadingValue ?? formatNumber(neoKpis?.salesCountMonth)} records · target ${
+                  loadingValue ?? formatPercent(neoKpis?.salesTargetRateMonth)
+                }`}
+                tone="text-[#084734]"
+              />
+              <CrmMetricTile
+                icon={<ReceiptText className="h-4 w-4" />}
+                label="Collection"
+                value={loadingValue ?? formatCurrency(neoKpis?.collectionAmountMonth)}
+                hint={`Collection__c ${loadingValue ?? formatNumber(neoKpis?.collectionCountMonth)} records · current month`}
+              />
+              <CrmMetricTile
+                icon={<Building2 className="h-4 w-4" />}
+                label="Neo Account"
+                value={loadingValue ?? formatNumber(neoKpis?.accountCount)}
+                hint={`active this month ${loadingValue ?? formatNumber(neoKpis?.activeAccountCountMonth)} · snapshot account`}
               />
               <CrmMetricTile
                 icon={<Handshake className="h-4 w-4" />}
@@ -491,6 +531,11 @@ function CrmOperationsDashboard({
           {businessWarning ? (
             <p className="mt-4 rounded-xl bg-[#FEF3EE] px-3 py-2 text-[12px] leading-relaxed text-[#B85C33]">
               {businessWarning}
+            </p>
+          ) : null}
+          {neoSyncWarning ? (
+            <p className="mt-3 rounded-xl bg-[#FEF3EE] px-3 py-2 text-[12px] leading-relaxed text-[#B85C33]">
+              Neo CRM sync check: {neoSyncWarning}
             </p>
           ) : null}
         </section>
@@ -1123,6 +1168,7 @@ export default function CrmPage() {
   const [crmOverview, setCrmOverview] = useState<AdminCrmOverview | null>(null)
   const [crmOverviewLoading, setCrmOverviewLoading] = useState(false)
   const [crmOverviewError, setCrmOverviewError] = useState<string | null>(null)
+  const [neoCrmRefreshKey, setNeoCrmRefreshKey] = useState(0)
 
   useEffect(() => {
     let cancelled = false
@@ -1531,6 +1577,7 @@ export default function CrmPage() {
             onClick={() => {
               void fetchLeads({ force: true })
               void fetchCrmOverview({ force: true })
+              setNeoCrmRefreshKey((current) => current + 1)
             }}
             disabled={loading || crmOverviewLoading}
             className="w-full gap-1.5 sm:w-auto"
@@ -1654,7 +1701,7 @@ export default function CrmPage() {
         ) : null}
       </section>
 
-      <NeoCrmTeamPanel />
+      <NeoCrmTeamPanel refreshKey={neoCrmRefreshKey} />
 
       <CrmOperationsDashboard
         overview={crmOverview}
