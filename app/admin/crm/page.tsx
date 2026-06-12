@@ -448,7 +448,7 @@ function CrmOperationsDashboard({
               Sync {formatOverviewDate(neoCrm?.latestSyncedAt ?? overview?.externalSnapshots.latestSyncedAt)}
             </span>
             <Link
-              href="/admin/crm/revenue"
+              href="/admin/crm/deals"
               className="inline-flex h-9 items-center justify-center gap-1.5 rounded-lg border border-[#e8e8e4] bg-white px-3 text-[12px] font-semibold text-[#111110] transition-colors hover:bg-[#f5f5f2]"
             >
               매출 상세
@@ -586,7 +586,7 @@ function CrmOperationsDashboard({
               <h2 className="mt-1 text-[17px] font-bold text-[#111110]">최근 고객별 로그</h2>
             </div>
             <Link
-              href="/admin/crm/partners/customers"
+              href="/admin/crm/customers/accounts"
               className="inline-flex h-9 items-center justify-center gap-1.5 rounded-lg border border-[#e8e8e4] bg-white px-3 text-[12px] font-semibold text-[#111110] transition-colors hover:bg-[#f5f5f2]"
             >
               고객사 보기
@@ -1551,21 +1551,21 @@ export default function CrmPage() {
         </div>
         <div className="grid gap-2 sm:grid-cols-4 xl:flex xl:justify-end">
           <Link
-            href="/admin/crm/revenue"
+            href="/admin/crm/deals"
             className="inline-flex h-9 items-center justify-center gap-1.5 rounded-lg border border-[#e8e8e4] bg-white px-3 text-[12px] font-semibold text-[#111110] transition-colors hover:bg-[#f5f5f2]"
           >
             <CircleDollarSign className="h-3.5 w-3.5" />
             견적·매출
           </Link>
           <Link
-            href="/admin/crm/partners/portal"
+            href="/admin/crm/deals/orders"
             className="inline-flex h-9 items-center justify-center gap-1.5 rounded-lg border border-[#e8e8e4] bg-white px-3 text-[12px] font-semibold text-[#111110] transition-colors hover:bg-[#f5f5f2]"
           >
             <Handshake className="h-3.5 w-3.5" />
             Order·Delivery
           </Link>
           <Link
-            href="/admin/crm/partners/customers"
+            href="/admin/crm/customers/accounts"
             className="inline-flex h-9 items-center justify-center gap-1.5 rounded-lg border border-[#e8e8e4] bg-white px-3 text-[12px] font-semibold text-[#111110] transition-colors hover:bg-[#f5f5f2]"
           >
             <Building2 className="h-3.5 w-3.5" />

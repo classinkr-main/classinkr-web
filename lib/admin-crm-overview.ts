@@ -394,9 +394,9 @@ function buildCustomerLogContext(input: {
 }
 
 function getCustomerLogHref(customerId: string | null, dealId: string | null) {
-  if (dealId) return `/admin/crm/partners/portal?deal=${dealId}`
-  if (customerId) return `/admin/crm/partners/customers?customer=${customerId}`
-  return "/admin/crm/partners/customers"
+  if (dealId) return `/admin/crm/deals/orders?deal=${dealId}`
+  if (customerId) return `/admin/crm/customers/accounts?customer=${customerId}`
+  return "/admin/crm/customers/accounts"
 }
 
 async function getBusinessOverview(sb: SupabaseAdminClient): Promise<AdminCrmOverview["business"]> {
