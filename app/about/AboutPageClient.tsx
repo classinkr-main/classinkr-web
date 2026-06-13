@@ -326,6 +326,35 @@ export default function AboutPageClient({ offices, press, recentPosts }: Props) 
         </div>
       </section>
 
+      {/* ── Brand Film ─────────────────────────────────────── */}
+      <section className="py-20 px-6 bg-[#FFFFFF]">
+        <div className="max-w-[1100px] mx-auto">
+          <FadeUp>
+            <div className="relative aspect-video overflow-hidden rounded-[24px] border border-[rgba(0,0,0,0.08)] bg-black">
+              <video
+                className="h-full w-full object-cover"
+                src="/images/video/classin-brand.mp4"
+                poster="/images/video/classin-brand-poster.jpg"
+                autoPlay
+                muted
+                loop
+                playsInline
+                preload="metadata"
+              />
+              <div className="pointer-events-none absolute inset-0 bg-gradient-to-t from-black/55 via-transparent to-transparent" />
+              <div className="absolute bottom-0 left-0 right-0 p-7 sm:p-10">
+                <p className="mb-2 text-[12px] font-semibold uppercase tracking-[0.16em] text-white/70">
+                  Empower Education Online
+                </p>
+                <h2 className="text-[24px] sm:text-[32px] font-bold leading-[1.2] tracking-[-0.5px] text-white">
+                  교육이 있는 곳이라면, 어디든 클래스인
+                </h2>
+              </div>
+            </div>
+          </FadeUp>
+        </div>
+      </section>
+
       {/* ── Vision · Mission · Values ────────────────────────── */}
       <section className="py-28 px-6 bg-[#FFFFFF]">
         <div className="max-w-[1200px] mx-auto">
