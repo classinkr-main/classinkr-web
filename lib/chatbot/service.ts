@@ -664,19 +664,20 @@ async function persistExchange(
   response: Omit<ChatbotQueryResponse, "answerEventId" | "sessionId" | "handoffIntent">,
   meta: ChatbotRequestMeta,
   category: string,
-  intent: string
+  intent: string,
+  sessionId?: string
 ) {
   if (!hasSupabaseServerEnv()) return {}
 
   try {
     const supabase = createSupabaseAdminClient()
-    const sessionId = await ensureSession(input, meta)
-    if (!sessionId) return {}
+    const resolvedSessionId = sessionId || await ensureSession(input, meta)
+    if (!resolvedSessionId) return {}
 
     const { data: userMessage, error: userMessageError } = await supabase
       .from("chat_messages")
       .insert({
-        session_id: sessionId,
+        session_id: resolvedSessionId,
         role: "user",
         content: question.redacted,
         normalized_content: question.redacted,
@@ -691,7 +692,7 @@ async function persistExchange(
     const { data: assistantMessage, error: assistantMessageError } = await supabase
       .from("chat_messages")
       .insert({
-        session_id: sessionId,
+        session_id: resolvedSessionId,
         role: "assistant",
         content: response.answer,
         normalized_content: response.answer,
@@ -706,7 +707,7 @@ async function persistExchange(
     const { data: answerEvent, error: answerEventError } = await supabase
       .from("chatbot_answer_events")
       .insert({
-        session_id: sessionId,
+        session_id: resolvedSessionId,
         user_message_id: userMessage.id,
         assistant_message_id: assistantMessage.id,
         normalized_question: question.redacted,
@@ -869,13 +870,50 @@ function determineModelTier(category: string): ChatbotModelTier {
 
 // 검색 → 답변 구성 → Gemini 답변 생성까지의 코어. 영속화(persistExchange)는 포함하지 않는다.
 // handleChatbotQuery(실서비스)와 evaluateChatbotQuery(품질 평가)가 공유한다.
-async function buildChatbotCore(message: unknown): Promise<ChatbotCore> {
+async function buildChatbotCore(message: unknown, sessionId?: string): Promise<ChatbotCore> {
   const question = normalizeQuestion(message)
   const { sources, warning } = await searchKnowledgeSources(question)
   const category = detectCategory(question, sources)
   const intent = detectIntent(category)
   const handoffIntent = detectHandoffIntent(question, category)
   const response = composeAnswer(question, sources)
+
+  // 대화 기록 (History) 조회 및 가공
+  let history: { role: "user" | "model"; parts: { text: string }[] }[] = []
+  if (sessionId && hasSupabaseServerEnv()) {
+    try {
+      const supabase = createSupabaseAdminClient()
+      const { data, error } = await supabase
+        .from("chat_messages")
+        .select("role, content")
+        .eq("session_id", sessionId)
+        .order("created_at", { ascending: true })
+        .limit(10) // 최근 10개 메세지 (사용자 5, 어시스턴트 5)
+
+      if (!error && data) {
+        const mapped = data.map((msg) => ({
+          role: msg.role === "assistant" ? ("model" as const) : ("user" as const),
+          parts: [{ text: msg.content }],
+        }))
+
+        // 교차 대화 필터링 (user, model, user, model 순서 유지)
+        const cleanHistory = []
+        let expectedRole: "user" | "model" = "user"
+        for (const msg of mapped) {
+          if (msg.role === expectedRole) {
+            cleanHistory.push(msg)
+            expectedRole = expectedRole === "user" ? "model" : "user"
+          }
+        }
+        if (cleanHistory.length > 0 && cleanHistory[cleanHistory.length - 1].role === "user") {
+          cleanHistory.pop()
+        }
+        history = cleanHistory
+      }
+    } catch (e) {
+      console.warn("[chatbot] failed to load session history:", e)
+    }
+  }
 
   // 근거 문서가 있는 답변 모드에서만 Gemini로 답변 문장을 생성한다.
   // (handoff·clarifying·fallback 등 안전/에스컬레이션 경로는 템플릿 유지)
@@ -885,6 +923,7 @@ async function buildChatbotCore(message: unknown): Promise<ChatbotCore> {
       question: question.redacted,
       sources: response.sources,
       tier,
+      history,
     })
     if (llmAnswer) {
       const sourceLines = response.sources
@@ -901,14 +940,16 @@ export async function handleChatbotQuery(
   input: ChatbotQueryRequest,
   meta: ChatbotRequestMeta = {}
 ): Promise<ChatbotQueryResponse> {
-  const core = await buildChatbotCore(input.message)
+  const sessionId = await ensureSession(input, meta)
+  const core = await buildChatbotCore(input.message, sessionId)
   const persisted = await persistExchange(
     input,
     core.question,
     core.response,
     meta,
     core.category,
-    core.intent
+    core.intent,
+    sessionId
   )
 
   return {
