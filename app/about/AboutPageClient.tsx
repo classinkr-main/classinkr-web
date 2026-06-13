@@ -1004,7 +1004,7 @@ export default function AboutPageClient({ offices, press, recentPosts }: Props) 
         <div className="max-w-[720px] mx-auto text-center">
           <FadeUp>
             <h2 className="text-[36px] sm:text-[44px] font-bold text-[#111110] leading-[1.1] tracking-[-1.5px] mb-5">
-              클래스인과 함께<br />시작해보세요
+              Classin과 함께<br />시작해보세요
             </h2>
             <p className="text-[16px] text-[#615D59] leading-[1.65] mb-9">
               도입 방법부터 기관 맞춤 요금제까지,
