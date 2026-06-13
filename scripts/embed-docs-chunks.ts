@@ -23,7 +23,7 @@ import { createClient } from "@supabase/supabase-js"
 
 // 임베딩 호출은 self-contained (lib/chatbot/llm.ts 는 server-only 라 tsx 에서 import 불가).
 // 동작은 lib/chatbot/llm.ts 의 embedText(RETRIEVAL_DOCUMENT)와 동일하게 유지한다.
-const EMBED_MODEL = process.env.GEMINI_EMBED_MODEL || "text-embedding-004"
+const EMBED_MODEL = process.env.GEMINI_EMBED_MODEL || "gemini-embedding-001"
 const EMBED_DIM = 768
 const GEMINI_API_KEY = process.env.GEMINI_API_KEY
 
