@@ -4,7 +4,7 @@ import { motion } from "framer-motion"
 import { GraduationCap, Users, Building2, Globe2 } from "lucide-react"
 
 const SCALE = [
-  { value: "2억+", label: "누적 수업", icon: GraduationCap },
+  { value: "3,000만+", label: "월간 수업", icon: GraduationCap },
   { value: "5,000만+", label: "교사 · 학습자", icon: Users },
   { value: "6만+", label: "교육기관", icon: Building2 },
   { value: "160+", label: "서비스 국가", icon: Globe2 },
