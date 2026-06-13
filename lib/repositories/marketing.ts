@@ -22,17 +22,38 @@ const sb = () => createSupabaseAdminClient();
 
 /* ─── 구독자 ─────────────────────────────────────────────── */
 
-export async function getAllSubscribers(limit = 1000, offset = 0): Promise<SubRow[]> {
+export async function getAllSubscribers(
+  limit = 1000,
+  offset = 0,
+  filters?: { status?: string; tag?: string }
+): Promise<SubRow[]> {
   if (!USE_SUPABASE) {
     const { getAllSubscribers: jsonGet } = await import("@/lib/marketing-data");
-    return jsonGet();
+    let subscribers: SubRow[] = await jsonGet();
+    if (filters?.status) {
+      subscribers = subscribers.filter((s) => s.status === filters.status);
+    }
+    if (filters?.tag) {
+      const tag = filters.tag;
+      subscribers = subscribers.filter((s) => s.tags.includes(tag));
+    }
+    return subscribers;
   }
 
-  const { data, error } = await sb()
+  let query = sb()
     .from("newsletter_subscribers")
     .select("*")
     .order("created_at", { ascending: false })
     .range(offset, offset + limit - 1);
+
+  if (filters?.status) {
+    query = query.eq("status", filters.status);
+  }
+  if (filters?.tag) {
+    query = query.contains("tags", [filters.tag]);
+  }
+
+  const { data, error } = await query;
   if (error) throw new Error(`[marketing] 구독자 조회 실패: ${error.message}`);
   return (data ?? []).map(rowToSubscriber);
 }

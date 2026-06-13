@@ -632,6 +632,39 @@ function hashPayload(record: Record<string, unknown>) {
   return createHash("sha256").update(JSON.stringify(record)).digest("hex")
 }
 
+const FETCH_TIMEOUT_MS = 30_000
+const FETCH_RETRY_DELAYS_MS = [200, 800, 2000]
+
+// 외부 CRM API 호출 공통 래퍼 — 타임아웃 + 일시 오류(네트워크/429/5xx)에 지수 백오프 재시도.
+// 4xx는 자격/쿼리 문제라 재시도하지 않는다.
+async function fetchXiaoshouyi(url: string | URL, init: RequestInit): Promise<Response> {
+  let lastError: unknown = null
+
+  for (let attempt = 0; attempt <= FETCH_RETRY_DELAYS_MS.length; attempt++) {
+    if (attempt > 0) {
+      await new Promise((resolve) => setTimeout(resolve, FETCH_RETRY_DELAYS_MS[attempt - 1]))
+    }
+
+    try {
+      const response = await fetch(url, {
+        ...init,
+        signal: AbortSignal.timeout(FETCH_TIMEOUT_MS),
+      })
+      if (response.status === 429 || response.status >= 500) {
+        lastError = new Error(`Xiaoshouyi transient HTTP ${response.status}`)
+        continue
+      }
+      return response
+    } catch (error) {
+      lastError = error
+    }
+  }
+
+  throw lastError instanceof Error
+    ? lastError
+    : new Error(`Xiaoshouyi request failed: ${String(lastError)}`)
+}
+
 async function getAccessToken(config: XiaoshouyiConfig) {
   if (config.accessToken) return config.accessToken
   if (!config.clientId || !config.clientSecret || !config.username || !config.password) return null
@@ -644,7 +677,7 @@ async function getAccessToken(config: XiaoshouyiConfig) {
     password: config.password,
   })
 
-  const response = await fetch(`${config.baseUrl}/oauth2/token`, {
+  const response = await fetchXiaoshouyi(`${config.baseUrl}/oauth2/token`, {
     method: "POST",
     headers: { "Content-Type": "application/x-www-form-urlencoded" },
     body,
@@ -672,7 +705,7 @@ async function queryXiaoshouyiRecords(
   const url = new URL(`${config.baseUrl}/rest/data/v2/query`)
   url.searchParams.set("q", query)
 
-  const response = await fetch(url, {
+  const response = await fetchXiaoshouyi(url, {
     headers: {
       Authorization: `Bearer ${token}`,
       "Content-Type": "application/json",

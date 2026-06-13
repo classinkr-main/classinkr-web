@@ -12,6 +12,7 @@ import {
 } from "@/lib/google-calendar-sync"
 import { createSupabaseAdminClient } from "@/lib/supabase/admin"
 import { hasSupabaseBrowserEnv } from "@/lib/supabase/public-env"
+import { atomicWriteJsonSync } from "@/lib/atomic-write"
 
 const FILE = path.join(process.cwd(), "data", "calendar-events.json")
 
@@ -110,7 +111,7 @@ function read(): CalendarEvent[] {
 }
 
 function write(data: CalendarEvent[]) {
-  fs.writeFileSync(FILE, JSON.stringify(data, null, 2))
+  atomicWriteJsonSync(FILE, data)
 }
 
 function uid() {

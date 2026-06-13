@@ -444,9 +444,18 @@ async function assertBlogSlugAvailable(
 }
 
 async function findUuidByLegacyId(legacyId: number): Promise<string | null> {
-  const posts = await getAllPosts();
-  const found = posts.find((p) => p.id === legacyId);
-  return (found as BlogPost & { _uuid?: string })?._uuid ?? null;
+  // legacy number id = hashUuidToNumber(uuid) — id 컬럼만 받아 해시 매칭 (전체 글 로드 불필요)
+  const supabase = await createSupabaseServerClient();
+  const { data, error } = await supabase
+    .from("blog_posts")
+    .select("id")
+    .is("deleted_at", null);
+  if (error || !data) return null;
+
+  return (
+    (data as { id: string }[]).find((row) => hashUuidToNumber(row.id) === legacyId)?.id ??
+    null
+  );
 }
 
 async function createSupabaseBlogReadClient() {

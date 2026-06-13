@@ -3,6 +3,7 @@ import "server-only"
 import { emitNotificationEvent } from "@/lib/notifications/emit-event"
 import {
   getLeadAlertState,
+  listLeadAlertStates,
   markLeadAlertSent,
   type LeadAlertScope,
 } from "@/lib/repositories/lead-alert-states"
@@ -188,6 +189,15 @@ export async function scanLeadResponseAlerts(): Promise<LeadResponseAlertScanRes
   let skipped = 0
   const errors: string[] = []
 
+  // 리드별 개별 조회(N+1) 대신 알림 상태를 한 번에 로드
+  const leadAlertStates = await listLeadAlertStates({
+    scope: "lead",
+    subjectIds: unrespondedLeads.map((lead) => lead.id),
+  })
+  const sentAlertKeys = new Set(
+    leadAlertStates.map((state) => `${state.subjectId}:${state.alertKey}`)
+  )
+
   for (const lead of unrespondedLeads) {
     const ageHours = hoursSince(lead.timestamp, now)
     const alertKey: LeadResponseAlertKey | null =
@@ -199,13 +209,8 @@ export async function scanLeadResponseAlerts(): Promise<LeadResponseAlertScanRes
     }
 
     try {
-      const shouldSend = await shouldSendAlert({
-        scope: "lead",
-        subjectId: lead.id,
-        alertKey,
-      })
-
-      if (!shouldSend) {
+      // lead 스코프는 cooldown 없이 1회성 — 상태가 존재하면 이미 발송됨
+      if (sentAlertKeys.has(`${lead.id}:${alertKey}`)) {
         skipped += 1
         continue
       }

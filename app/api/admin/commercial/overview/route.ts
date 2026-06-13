@@ -22,7 +22,9 @@ export async function GET(req: NextRequest) {
 
   try {
     const overview = await getCommercialOverview(range);
-    return NextResponse.json({ overview, mode: "v2" });
+    const response = NextResponse.json({ overview, mode: "v2" });
+    response.headers.set("Cache-Control", "private, max-age=30, stale-while-revalidate=120");
+    return response;
   } catch (error) {
     console.warn("[GET /api/admin/commercial/overview] falling back", error);
 

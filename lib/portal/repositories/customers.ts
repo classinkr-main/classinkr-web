@@ -85,10 +85,6 @@ function compareIsoAsc(left: string, right: string) {
   return new Date(left).getTime() - new Date(right).getTime();
 }
 
-function compareIsoDesc(left: string, right: string) {
-  return new Date(right).getTime() - new Date(left).getTime();
-}
-
 function isOpenDeal(deal: Pick<DealListItem, "status">) {
   return deal.status !== "closed" && deal.status !== "cancelled";
 }
@@ -750,16 +746,13 @@ async function buildCustomerListDecorations(
     >
   >;
 
+  // 쿼리에서 updated_at desc로 정렬되어 오므로 고객별 push 순서가 그대로 최신순
   const dealsByCustomerId = new Map<string, CustomerDecorationDeal[]>();
   for (const deal of deals) {
     if (!customerIdSet.has(deal.customer_id)) continue;
     const items = dealsByCustomerId.get(deal.customer_id) ?? [];
     items.push(deal);
     dealsByCustomerId.set(deal.customer_id, items);
-  }
-
-  for (const items of dealsByCustomerId.values()) {
-    items.sort((left, right) => compareIsoDesc(left.updated_at, right.updated_at));
   }
 
   const recentActivityByCustomerId = new Map<string, string>();
@@ -909,6 +902,26 @@ export async function listAllCustomerListItems(
     ...(options.includeCrmCoverage
       ? { crm_coverage: crmCoverageMap.get(customer.id) ?? null }
       : {}),
+  }));
+}
+
+// 개요 화면처럼 insight/deal_previews가 필요 없는 호출자용 —
+// decoration 쿼리(거래·활동·일정 3회 왕복)를 건너뛴다.
+export async function listAllCustomerListItemsLite(): Promise<CustomerListItem[]> {
+  const [customers, summaries] = await Promise.all([
+    listCustomers(),
+    listCustomerDealSummaries(),
+  ]);
+
+  const summaryMap = new Map(
+    summaries.map((summary) => [summary.customer_id, summary])
+  );
+
+  return customers.map((customer) => ({
+    customer,
+    summary: summaryMap.get(customer.id) ?? null,
+    insight: null,
+    deal_previews: [],
   }));
 }
 

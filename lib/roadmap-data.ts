@@ -1,5 +1,6 @@
 import fs from "fs"
 import path from "path"
+import { atomicWriteJsonSync } from "@/lib/atomic-write"
 
 const ROADMAP_PATH = path.join(process.cwd(), "data", "roadmap.json")
 
@@ -28,7 +29,7 @@ function readRoadmap(): RoadmapItem[] {
 }
 
 function writeRoadmap(items: RoadmapItem[]) {
-  fs.writeFileSync(ROADMAP_PATH, JSON.stringify(items, null, 2))
+  atomicWriteJsonSync(ROADMAP_PATH, items)
 }
 
 export function getRoadmapItems() {

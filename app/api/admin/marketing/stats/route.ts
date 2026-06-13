@@ -61,12 +61,14 @@ export async function GET(req: NextRequest) {
       .slice(0, 10)
       .map(([tag, count]) => ({ tag, count }))
 
-    return NextResponse.json({
+    const response = NextResponse.json({
       subscribers: { total, active, unsubscribed, newThisMonth },
       campaigns: { total: campaigns.length, recentCampaigns },
       automation: { totalRules, activeRules, recentLogs },
       tagDistribution,
     })
+    response.headers.set("Cache-Control", "private, max-age=30, stale-while-revalidate=120")
+    return response
   } catch (err) {
     return NextResponse.json({ error: String(err) }, { status: 500 })
   }

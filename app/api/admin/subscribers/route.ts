@@ -15,14 +15,10 @@ export async function GET(req: NextRequest) {
   const statusFilter = searchParams.get("status")
   const tagFilter = searchParams.get("tag")
 
-  let subscribers = await getAllSubscribers()
-
-  if (statusFilter) {
-    subscribers = subscribers.filter((s) => s.status === statusFilter)
-  }
-  if (tagFilter) {
-    subscribers = subscribers.filter((s) => s.tags.includes(tagFilter))
-  }
+  const subscribers = await getAllSubscribers(1000, 0, {
+    status: statusFilter ?? undefined,
+    tag: tagFilter ?? undefined,
+  })
 
   return NextResponse.json({ subscribers, total: subscribers.length })
 }

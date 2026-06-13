@@ -99,7 +99,9 @@ export async function GET(req: NextRequest) {
       daily,
     }
 
-    return NextResponse.json(response)
+    const json = NextResponse.json(response)
+    json.headers.set("Cache-Control", "private, max-age=30, stale-while-revalidate=120")
+    return json
   } catch (error) {
     console.error("[GET /api/admin/event-counts]", error)
     return NextResponse.json({ error: "Failed to fetch events" }, { status: 500 })
