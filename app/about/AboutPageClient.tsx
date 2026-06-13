@@ -62,7 +62,7 @@ type Props = {
 /* ─── 정적 데이터 ──────────────────────────────────────────── */
 
 const STATS = [
-  { value: "2억+", label: "누적 수업 횟수", icon: GraduationCap },
+  { value: "3,000만+", label: "월간 수업", icon: GraduationCap },
   { value: "5,000만+", label: "교사 · 학습자", icon: Users },
   { value: "6만+", label: "교육기관", icon: Award },
   { value: "160+", label: "서비스 국가", icon: Globe2 },
@@ -90,9 +90,9 @@ const TIMELINE = [
     desc: "600명 이상의 개발자·엔지니어를 확보하며 플랫폼의 기술적 기반을 깊게 다졌습니다.",
   },
   {
-    year: "2020",
+    year: "2021",
     title: "글로벌 유니콘",
-    desc: "Hillhouse(GL벤처스)·Tencent·SIG로부터 2억 6,500만 달러 규모의 시리즈 C 투자를 유치하며 글로벌 에듀테크 유니콘으로 도약, 공교육 시장까지 영역을 확장했습니다.",
+    desc: "Tencent·Hillhouse·SIG 등의 투자로 누적 5억 달러 이상을 유치하며 시리즈 D 에듀테크 유니콘으로 도약, 공교육 시장까지 영역을 확장했습니다.",
   },
   {
     year: "2022",
@@ -684,6 +684,43 @@ export default function AboutPageClient({ offices, press, recentPosts }: Props) 
             <p className="text-center text-[13px] text-[#A39E98] mt-8">
               외 6만+ 교육기관
             </p>
+          </FadeUp>
+
+          <FadeUp delay={0.2}>
+            <div className="mt-20 pt-16 border-t border-[rgba(0,0,0,0.08)]">
+              <div className="text-center max-w-[600px] mx-auto mb-12">
+                <span className="text-[12px] font-semibold text-[#084734] tracking-[0.125px] uppercase mb-3 block">
+                  Partnership
+                </span>
+                <h3 className="text-[28px] sm:text-[34px] font-bold text-[#111110] leading-[1.15] tracking-[-1px] mb-4">
+                  함께 성장하는 파트너십
+                </h3>
+                <p className="text-[15px] text-[#615D59] leading-[1.65]">
+                  출판사·통신사·에듀테크·하드웨어 기업과 함께, 교육의 미래를 만들어 갑니다.
+                </p>
+              </div>
+              <div className="grid sm:grid-cols-3 gap-4">
+                {[
+                  { t: "채널 파트너", d: "출판사·통신사·에듀테크·하드웨어 기업과 지역 및 글로벌 단위로 협력합니다." },
+                  { t: "통합 파트너", d: "LTI·SDK·API 연동으로 클래스인을 기존 에듀테크 환경에 자연스럽게 통합합니다." },
+                  { t: "제휴 파트너", d: "크로스컬처 프로젝트를 통해 함께 시장을 넓혀가는 성장 파트너십입니다." },
+                ].map((p) => (
+                  <div key={p.t} className="h-full bg-[#F6F5F4] rounded-[16px] p-7">
+                    <h4 className="text-[17px] font-bold text-[#111110] mb-2.5">{p.t}</h4>
+                    <p className="text-[14px] text-[#615D59] leading-[1.6]">{p.d}</p>
+                  </div>
+                ))}
+              </div>
+              <div className="text-center mt-10">
+                <Link
+                  href="/contact"
+                  className="inline-flex items-center gap-1.5 bg-[#084734] text-white text-[14px] font-semibold rounded-full px-6 py-3 hover:bg-[#0a5a42] transition-colors"
+                >
+                  파트너십 문의하기
+                  <ArrowRight className="w-4 h-4" strokeWidth={2.2} />
+                </Link>
+              </div>
+            </div>
           </FadeUp>
         </div>
       </section>
