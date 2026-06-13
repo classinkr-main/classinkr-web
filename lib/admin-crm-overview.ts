@@ -179,6 +179,11 @@ const UPCOMING_EVENT_DAYS = 7
 const FREQUENT_CUSTOMER_DAYS = 14
 const FREQUENT_ACTIVITY_SCAN_LIMIT = 2000
 const FREQUENT_CUSTOMER_LIMIT = 5
+const BUSINESS_SNAPSHOT_RPC = "admin_crm_business_overview"
+const BUSINESS_SNAPSHOT_MAX_AGE_SECONDS = 60
+const BUSINESS_SNAPSHOT_MISSING_WARNING =
+  `${BUSINESS_SNAPSHOT_RPC} 함수가 없어 라이브 집계로 대체했습니다. ` +
+  "supabase/migrations/20260613_admin_crm_overview_snapshot.sql 적용이 필요합니다."
 
 interface BusinessPartnerAccountRow {
   id: string
@@ -399,7 +404,162 @@ function getCustomerLogHref(customerId: string | null, dealId: string | null) {
   return "/admin/crm/customers/accounts"
 }
 
+function isRecord(value: unknown): value is Record<string, unknown> {
+  return Boolean(value) && typeof value === "object" && !Array.isArray(value)
+}
+
+function toText(value: unknown, fallback = "") {
+  return typeof value === "string" && value ? value : fallback
+}
+
+function toTextOrNull(value: unknown) {
+  return typeof value === "string" && value ? value : null
+}
+
+function toFiniteNumber(value: unknown) {
+  const parsed = typeof value === "string" ? Number(value) : value
+  return typeof parsed === "number" && Number.isFinite(parsed) ? parsed : 0
+}
+
+function toNumberOrNull(value: unknown) {
+  if (value === null || value === undefined) return null
+  const parsed = typeof value === "string" ? Number(value) : value
+  return typeof parsed === "number" && Number.isFinite(parsed) ? parsed : null
+}
+
+const CUSTOMER_LOG_KINDS: readonly AdminCrmCustomerLogKind[] = ["call", "visit", "quote", "order", "payment", "activity"]
+
+function toCustomerLogKind(value: unknown): AdminCrmCustomerLogKind {
+  return CUSTOMER_LOG_KINDS.find((kind) => kind === value) ?? "activity"
+}
+
+function mapSnapshotCustomerLog(row: Record<string, unknown>): AdminCrmCustomerLogItem {
+  return {
+    id: toText(row.id),
+    kind: toCustomerLogKind(row.kind),
+    title: toText(row.title),
+    summary: toTextOrNull(row.summary),
+    status: toTextOrNull(row.status),
+    amount: toNumberOrNull(row.amount),
+    occurredAt: toTextOrNull(row.occurredAt),
+    customerId: toTextOrNull(row.customerId),
+    customerName: toTextOrNull(row.customerName),
+    partnerAccountId: toTextOrNull(row.partnerAccountId),
+    partnerAccountName: toTextOrNull(row.partnerAccountName),
+    dealId: toTextOrNull(row.dealId),
+    dealTitle: toTextOrNull(row.dealTitle),
+    href: toText(row.href, "/admin/crm/customers/accounts"),
+  }
+}
+
+function mapSnapshotUpcomingEvent(row: Record<string, unknown>): AdminCrmUpcomingEventItem {
+  return {
+    id: toText(row.id),
+    kind: row.kind === "install" ? "install" : "visit",
+    title: toText(row.title, "일정"),
+    customerName: toTextOrNull(row.customerName),
+    startsAt: toText(row.startsAt),
+    href: toText(row.href, "/admin/crm/customers/accounts"),
+  }
+}
+
+function mapSnapshotFrequentCustomer(row: Record<string, unknown>): AdminCrmFrequentCustomerItem {
+  return {
+    customerId: toText(row.customerId),
+    customerName: toText(row.customerName, "고객 미지정"),
+    contactCount: toFiniteNumber(row.contactCount),
+    latestSummary: toTextOrNull(row.latestSummary),
+    latestAt: toTextOrNull(row.latestAt),
+    href: toText(row.href, "/admin/crm/customers/accounts"),
+  }
+}
+
+function mapBusinessSnapshotPayload(payload: Record<string, unknown>): AdminCrmOverview["business"] {
+  const revenue = isRecord(payload.revenue) ? payload.revenue : {}
+  const kpis = isRecord(payload.kpis) ? payload.kpis : {}
+  const customerLogs = isRecord(payload.customerLogs) ? payload.customerLogs : {}
+  const upcoming = isRecord(payload.upcomingThisWeek) ? payload.upcomingThisWeek : {}
+
+  const recentLogs = (Array.isArray(customerLogs.recent) ? customerLogs.recent : [])
+    .filter(isRecord)
+    .map(mapSnapshotCustomerLog)
+  const upcomingItems = (Array.isArray(upcoming.items) ? upcoming.items : [])
+    .filter(isRecord)
+    .map(mapSnapshotUpcomingEvent)
+  const frequentCustomers = (Array.isArray(payload.frequentCustomers) ? payload.frequentCustomers : [])
+    .filter(isRecord)
+    .map(mapSnapshotFrequentCustomer)
+
+  return {
+    ok: true,
+    warning: null,
+    error: null,
+    revenue: {
+      deliveryTotalAmount: toFiniteNumber(revenue.deliveryTotalAmount),
+      contractedAmount: toFiniteNumber(revenue.contractedAmount),
+      paidAmount: toFiniteNumber(revenue.paidAmount),
+      outstandingAmount: toFiniteNumber(revenue.outstandingAmount),
+      expectedPipelineAmount: toFiniteNumber(revenue.expectedPipelineAmount),
+      acceptedQuoteAmount: toFiniteNumber(revenue.acceptedQuoteAmount),
+    },
+    kpis: {
+      partnerAccountCount: toFiniteNumber(kpis.partnerAccountCount),
+      customerCount: toFiniteNumber(kpis.customerCount),
+      activeDealCount: toFiniteNumber(kpis.activeDealCount),
+      paymentRiskCount: toFiniteNumber(kpis.paymentRiskCount),
+      quoteDocumentCount: toFiniteNumber(kpis.quoteDocumentCount),
+      recentActivityCount: toFiniteNumber(kpis.recentActivityCount),
+    },
+    customerLogs: {
+      latestActivityAt: toTextOrNull(customerLogs.latestActivityAt),
+      recent: recentLogs,
+    },
+    upcomingThisWeek: {
+      count: upcomingItems.length,
+      items: upcomingItems,
+    },
+    frequentCustomers,
+  }
+}
+
+function isMissingSnapshotInfraError(error: { code?: string; message?: string }) {
+  const code = error.code ?? ""
+  // PGRST202: PostgREST schema cache에 함수 없음 / 42883·42P01: 함수·테이블 미생성
+  if (code === "PGRST202" || code === "42883" || code === "42P01") return true
+  const message = error.message ?? ""
+  return message.includes(BUSINESS_SNAPSHOT_RPC) && /could not find|does not exist/i.test(message)
+}
+
 async function getBusinessOverview(sb: SupabaseAdminClient): Promise<AdminCrmOverview["business"]> {
+  let snapshotFailure: string | null = null
+
+  try {
+    const { data, error } = await sb.rpc(BUSINESS_SNAPSHOT_RPC, {
+      p_max_age_seconds: BUSINESS_SNAPSHOT_MAX_AGE_SECONDS,
+      p_force: false,
+    })
+    if (error) {
+      snapshotFailure = isMissingSnapshotInfraError(error)
+        ? BUSINESS_SNAPSHOT_MISSING_WARNING
+        : formatLabeledSupabaseError(BUSINESS_SNAPSHOT_RPC, error)
+    } else if (isRecord(data) && isRecord(data.payload)) {
+      return mapBusinessSnapshotPayload(data.payload)
+    } else {
+      snapshotFailure = `${BUSINESS_SNAPSHOT_RPC} returned an unexpected payload`
+    }
+  } catch (error) {
+    snapshotFailure =
+      error instanceof Error ? `${BUSINESS_SNAPSHOT_RPC}: ${error.message}` : `${BUSINESS_SNAPSHOT_RPC} call failed`
+  }
+
+  const business = await getBusinessOverviewLive(sb)
+  if (snapshotFailure) {
+    business.warning = business.warning ? `${snapshotFailure} · ${business.warning}` : snapshotFailure
+  }
+  return business
+}
+
+async function getBusinessOverviewLive(sb: SupabaseAdminClient): Promise<AdminCrmOverview["business"]> {
   const now = Date.now()
   const recentActivitySince = new Date(now - RECENT_ACTIVITY_DAYS * 86_400_000).toISOString()
   const upcomingFrom = new Date(now).toISOString()
