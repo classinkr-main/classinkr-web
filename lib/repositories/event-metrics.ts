@@ -8,6 +8,7 @@ import {
   DEFAULT_EVENT_METRICS,
   type EventMetrics,
 } from "@/lib/types/event-metrics"
+import { atomicWriteJsonSync } from "@/lib/atomic-write"
 
 const DATA_DIR = path.join(process.cwd(), "data")
 const FILE = "event-metrics.json"
@@ -25,7 +26,7 @@ function readStore(): Store {
 }
 
 function writeStore(store: Store) {
-  fs.writeFileSync(path.join(DATA_DIR, FILE), JSON.stringify(store, null, 2))
+  atomicWriteJsonSync(path.join(DATA_DIR, FILE), store)
 }
 
 export function getEventMetrics(eventId: string): EventMetrics {

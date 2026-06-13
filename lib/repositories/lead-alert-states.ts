@@ -63,6 +63,26 @@ export async function getLeadAlertState(input: {
   return data ? toRecord(data as LeadAlertStateRow) : null
 }
 
+export async function listLeadAlertStates(input: {
+  scope: LeadAlertScope
+  subjectIds: string[]
+}) {
+  if (input.subjectIds.length === 0) return []
+
+  const supabase = createSupabaseAdminClient()
+  const { data, error } = await supabase
+    .from("lead_alert_states")
+    .select("*")
+    .eq("scope", input.scope)
+    .in("subject_id", input.subjectIds)
+
+  if (error) {
+    throw new Error(`[lead-alert-states] 배치 조회 실패: ${error.message}`)
+  }
+
+  return ((data ?? []) as LeadAlertStateRow[]).map(toRecord)
+}
+
 export async function markLeadAlertSent(input: {
   scope: LeadAlertScope
   subjectId: string

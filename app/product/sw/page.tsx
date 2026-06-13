@@ -13,9 +13,13 @@ import {
 } from "lucide-react"
 import Link from "next/link"
 import Image from "next/image"
-import { useRef, useEffect, useState, useMemo, useCallback } from "react"
+import nextDynamic from "next/dynamic"
+import { useRef, useEffect, useState, useMemo, useCallback, useSyncExternalStore } from "react"
 
-import OnboardingRoadmap from "@/components/product/sw/OnboardingRoadmap"
+import { HeroVideoBackdrop } from "@/components/media/HeroVideoBackdrop"
+
+// below-the-fold 섹션은 dynamic import로 메인 번들에서 분리 (SSR은 유지되어 초기 HTML 동일)
+const OnboardingRoadmap = nextDynamic(() => import("@/components/product/sw/OnboardingRoadmap"))
 
 const CHECKOUT_ENABLED = process.env.NEXT_PUBLIC_SW_CHECKOUT_ENABLED === "true"
 const CHECKOUT_HREF = CHECKOUT_ENABLED ? "/checkout" : "/contact#contact-form"
@@ -29,8 +33,14 @@ const trackCheckoutClick = (location: string) => {
         trackEvent("click_cta", { button: location, page: "/product/sw", destination: "contact_form" })
     }
 }
+// SSR/hydration 불일치 없이 클라이언트 마운트 여부를 읽는다 (effect 내 setState 회피)
+const noopSubscribe = () => () => {}
+const useIsClient = () => useSyncExternalStore(noopSubscribe, () => true, () => false)
+
 const HERO_CLASSROOM_VIDEO_SRC = "/video/쿼드러닝 수업_클립1.mp4"
 const BLACKBOARD_VIDEO_SRC = "/video/클립2.mp4"
+// 640px 미만(폰)에서는 데이터 절약을 위해 영상 대신 포스터만 보여준다.
+const VIDEO_BACKDROP_MEDIA_QUERY = "(min-width: 640px) and (prefers-reduced-motion: no-preference)"
 
 const LESSON_TOOLS: {
     label: string
@@ -350,10 +360,22 @@ function formatParticleValue(value: number) {
     return value.toFixed(3).replace(/\.?0+$/, "")
 }
 
-function AmbientParticle({ x, size, duration, delayStart }: { x: number; size: number; duration: number; delayStart: number }) {
+function AmbientParticle({
+    x,
+    size,
+    duration,
+    delayStart,
+    className = "",
+}: {
+    x: number
+    size: number
+    duration: number
+    delayStart: number
+    className?: string
+}) {
     return (
         <motion.div
-            className="absolute rounded-full bg-green-300/15 pointer-events-none"
+            className={`absolute rounded-full bg-green-300/15 pointer-events-none ${className}`}
             style={{
                 left: `${formatParticleValue(x)}%`,
                 bottom: "-10%",
@@ -509,9 +531,7 @@ function FinalCTASection() {
     const [phase, setPhase] = useState(0)
     const [slotsDone, setSlotsDone] = useState(false)
     const [liveCount, setLiveCount] = useState(0)
-    const [particleCount] = useState(() =>
-        typeof window !== "undefined" && window.innerWidth < 640 ? 8 : 15
-    )
+    const particlesMounted = useIsClient()
 
     useMotionValueEvent(scrollYProgress, "change", (v) => {
         if (v >= 0.55 && phase < 3) setPhase(3)
@@ -530,7 +550,7 @@ function FinalCTASection() {
         return () => { clearTimeout(timeout); clearInterval(interval) }
     }, [slotsDone])
 
-    const particles = useMemo(() => createParticles(particleCount), [particleCount])
+    const particles = useMemo(() => createParticles(15), [])
 
     const handleLastSlotDone = useCallback(() => setSlotsDone(true), [])
     const displayDigits = useMemo(() => (1560000 + liveCount).toString().split(""), [liveCount])
@@ -543,7 +563,11 @@ function FinalCTASection() {
                 <motion.div className="absolute top-1/2 left-1/2 -translate-x-1/2 -translate-y-1/2 w-[900px] h-[700px] bg-gradient-radial from-green-200/30 via-green-100/10 to-transparent rounded-full blur-3xl" animate={{ x: [0, 30, -20, 0], y: [0, -20, 15, 0] }} transition={{ duration: 20, repeat: Infinity, ease: "easeInOut" }} />
             </motion.div>
             <motion.div className="absolute inset-0 pointer-events-none" initial={{ opacity: 0 }} animate={phase >= 1 ? { opacity: 1 } : {}} transition={{ duration: 1 }}>
-                {particles.map(({ key, ...rest }) => <AmbientParticle key={key} {...rest} />)}
+                {particlesMounted
+                    ? particles.map(({ key, ...rest }) => (
+                        <AmbientParticle key={key} className={key >= 8 ? "hidden sm:block" : ""} {...rest} />
+                    ))
+                    : null}
             </motion.div>
 
             <div className="container mx-auto px-4 text-center max-w-5xl relative z-10">
@@ -844,7 +868,7 @@ function FutureVision2Section() {
                     </h2>
                     <p className="text-xl md:text-2xl text-slate-500 font-sans max-w-2xl mx-auto leading-relaxed">
                         더 많이 가르치면서 더 적게 소진되는 것.
-                        <br className="hidden md:block" />
+                        <br className="hidden md:block" />{" "}
                         그것이 Classin이 교사에게 드리는 약속입니다.
                     </p>
                 </motion.div>
@@ -1041,7 +1065,7 @@ function HardwareTeaserSection() {
                         <div className="text-center">
                             <div className="relative aspect-video w-full overflow-hidden rounded-2xl border border-white/10 bg-white/5 shadow-[0_24px_70px_rgba(0,0,0,0.28)]">
                                 <Image
-                                    src="/images/smartroon.png"
+                                    src="/images/smartroon.webp"
                                     alt="Classin 소프트웨어와 연동되는 스마트 교실 구성"
                                     fill
                                     className="object-cover"
@@ -1281,7 +1305,7 @@ function FullscreenQuoteSection() {
                     <div className="text-[#6EE7B7]/60 text-5xl font-sans mb-8 leading-none select-none">&ldquo;</div>
                     <blockquote className="text-2xl sm:text-3xl md:text-4xl font-sans text-white leading-[1.4] tracking-tight mb-10">
                         하이브리드 수업은 팬데믹의 임시방편이 아닙니다.
-                        <br className="hidden md:block" />
+                        <br className="hidden md:block" />{" "}
                         <span className="text-[#6EE7B7]">교육의 새로운 표준</span>이 될 것입니다.
                     </blockquote>
                     <div className="flex flex-col items-center gap-1">
@@ -1578,15 +1602,13 @@ export default function ProductPage() {
                 HERO — "수업을, 더 수업답게"
             ================================================================ */}
             <section className="relative min-h-[720px] overflow-hidden bg-[#07110d] text-white sm:min-h-[700px] md:h-[calc(100svh-4rem)] md:min-h-[760px] md:max-h-[840px]">
-                <video
-                    className="absolute inset-0 h-full w-full object-cover"
+                <HeroVideoBackdrop
                     src={HERO_CLASSROOM_VIDEO_SRC}
-                    autoPlay
-                    muted
-                    loop
-                    playsInline
-                    preload="metadata"
-                    aria-hidden="true"
+                    posterSrc="/images/product/sw/two-way-blackboard.webp"
+                    className="absolute inset-0"
+                    priority
+                    loadStrategy="immediate"
+                    mediaQuery={VIDEO_BACKDROP_MEDIA_QUERY}
                 />
                 <div className="absolute inset-0 bg-[linear-gradient(180deg,rgba(3,10,8,0.70)_0%,rgba(3,10,8,0.42)_42%,rgba(3,10,8,0.78)_100%)] pointer-events-none" />
                 <div className="absolute inset-0 bg-[radial-gradient(circle_at_center,rgba(3,10,8,0.10)_0%,rgba(3,10,8,0.50)_78%)] pointer-events-none" />
@@ -1606,7 +1628,7 @@ export default function ProductPage() {
 
                             <p className="text-xl md:text-2xl text-white/78 leading-relaxed font-medium max-w-2xl mx-auto mb-8 drop-shadow-[0_2px_14px_rgba(0,0,0,0.35)]">
                                 30여 가지 수업 도구와 10가지 수업 활동으로
-                                <br className="hidden md:block" />
+                                <br className="hidden md:block" />{" "}
                                 교사와 학생이 함께 만들어가는 교육 전용 플랫폼.
                             </p>
 
@@ -1692,7 +1714,7 @@ export default function ProductPage() {
                         <EyebrowTag>Why Classin</EyebrowTag>
                         <h2 className="text-3xl md:text-4xl lg:text-5xl font-sans text-[#1a1a19] leading-tight">
                             회의용 도구로 수업하던 시대는
-                            <br className="hidden sm:block" />
+                            <br className="hidden sm:block" />{" "}
                             <span className="text-[#22A366]">끝났습니다</span>
                         </h2>
                     </motion.div>
@@ -1794,15 +1816,17 @@ export default function ProductPage() {
                         <div className="flex-1 w-full max-w-lg">
                             <motion.div {...fadeUp} className="relative">
                                 <div className="relative aspect-[3/2] overflow-hidden rounded-3xl border border-slate-200/80 bg-white shadow-[0_24px_60px_rgba(15,23,42,0.14)]">
-                                    <video
-                                        className="absolute inset-0 h-full w-full object-cover"
+                                    <HeroVideoBackdrop
                                         src={BLACKBOARD_VIDEO_SRC}
-                                        autoPlay
-                                        muted
-                                        loop
-                                        playsInline
-                                        preload="metadata"
-                                        aria-label="교사와 학생이 함께 참여하는 Classin 양방향 블랙보드 수업 장면"
+                                        posterSrc="/images/product/sw/two-way-blackboard.webp"
+                                        posterAlt="교사와 학생이 함께 참여하는 Classin 양방향 블랙보드 수업 장면"
+                                        className="absolute inset-0"
+                                        imageClassName="object-contain bg-[#eef4f0]"
+                                        videoClassName="scale-100 object-contain blur-0 bg-[#eef4f0]"
+                                        sizes="(min-width: 1024px) 512px, 100vw"
+                                        loadStrategy="in-view"
+                                        preload="auto"
+                                        mediaQuery={VIDEO_BACKDROP_MEDIA_QUERY}
                                     />
                                     <div className="absolute inset-0 bg-gradient-to-t from-[#084734]/18 via-transparent to-white/12" />
                                     <div className="absolute left-5 top-5 rounded-full border border-white/70 bg-white/88 px-3 py-1.5 text-xs font-semibold text-[#084734] shadow-[0_10px_30px_rgba(15,23,42,0.08)] backdrop-blur-sm">

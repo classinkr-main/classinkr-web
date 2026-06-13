@@ -1,11 +1,27 @@
 "use client";
 
-import { useEffect, useState } from "react";
-import { Mail, MapPin, Phone, User2, X } from "lucide-react";
+import { useEffect, useRef, useState } from "react";
+import {
+  AlertTriangle,
+  Check,
+  CheckCircle2,
+  Link2,
+  Loader2,
+  Mail,
+  MapPin,
+  Phone,
+  Save,
+  ServerCog,
+  StickyNote,
+  User2,
+  X,
+} from "lucide-react";
 
+import { adminFetchJson } from "@/lib/admin-client";
 import { portalFetch } from "@/lib/portal/portal-fetch";
 import type {
   Customer,
+  CustomerCrmCoverageStatus,
   CustomerDetailPayload,
   CustomerDealHistoryItem,
   DealStage,
@@ -15,6 +31,8 @@ interface Props {
   customerId: string;
   onClose: () => void;
   onEdit?: (customer: Customer) => void;
+  onCustomerUpdated?: (customer: Customer) => void;
+  fetchMode?: "portal" | "admin";
 }
 
 const STAGE_COLOR: Record<DealStage, string> = {
@@ -91,19 +109,80 @@ function calendarSourceTone(
 const SECTION_HEADER =
   "text-xs font-semibold uppercase tracking-widest text-[#1a1a1a]/30 mb-3";
 
-export function CustomerDetailSlideOver({ customerId, onClose, onEdit }: Props) {
+const CRM_COVERAGE_LABEL: Record<CustomerCrmCoverageStatus, string> = {
+  verified: "소스 확인",
+  needs_review: "검토 필요",
+  unmatched: "미매칭",
+  error: "조회 오류",
+};
+
+const CRM_COVERAGE_STYLE: Record<CustomerCrmCoverageStatus, string> = {
+  verified: "border-emerald-200 bg-emerald-50 text-emerald-700",
+  needs_review: "border-amber-200 bg-amber-50 text-amber-700",
+  unmatched: "border-[#e8e8e4] bg-[#f7f7f5] text-[#615D59]",
+  error: "border-[#F3D6C8] bg-[#FEF3EE] text-[#B85C33]",
+};
+
+const CRM_DISCREPANCY_STYLE = {
+  high: "border-[#F3D6C8] text-[#B85C33]",
+  medium: "border-amber-200 text-amber-700",
+  low: "border-[#e8e8e4] text-[#615D59]",
+} as const;
+
+function CrmCoverageIcon({ status }: { status: CustomerCrmCoverageStatus }) {
+  if (status === "verified") return <CheckCircle2 size={14} />;
+  if (status === "needs_review" || status === "error") return <AlertTriangle size={14} />;
+  return <Link2 size={14} />;
+}
+
+type AdminCustomerDetailResponse = {
+  customer?: CustomerDetailPayload;
+};
+
+type AdminCustomerPatchResponse = {
+  customer?: Customer;
+};
+
+export function CustomerDetailSlideOver({
+  customerId,
+  onClose,
+  onEdit,
+  onCustomerUpdated,
+  fetchMode = "portal",
+}: Props) {
   const [data, setData] = useState<CustomerDetailPayload | null>(null);
   const [loading, setLoading] = useState(true);
   const [error, setError] = useState<string | null>(null);
+  const [actionError, setActionError] = useState<string | null>(null);
+  const [updatingLinkId, setUpdatingLinkId] = useState<string | null>(null);
+  const [noteDraft, setNoteDraft] = useState("");
+  const [savingNote, setSavingNote] = useState(false);
+  const [noteSaved, setNoteSaved] = useState(false);
+  const [noteError, setNoteError] = useState<string | null>(null);
+  const [refreshNonce, setRefreshNonce] = useState(0);
+  const savedTimerRef = useRef<ReturnType<typeof setTimeout> | null>(null);
 
   useEffect(() => {
     let cancelled = false;
 
-    portalFetch(`/api/portal/customers/${customerId}`)
-      .then(async (res) => {
-        const json = await res.json().catch(() => null);
-        if (!res.ok) throw new Error(json?.error ?? "불러오기 실패");
-        if (!cancelled) setData(json as CustomerDetailPayload);
+    const request =
+      fetchMode === "admin"
+        ? adminFetchJson<AdminCustomerDetailResponse>(`/api/admin/customers/${customerId}`).then((json) => {
+            if (!json.customer) throw new Error("고객 상세를 찾을 수 없습니다");
+            return json.customer;
+          })
+        : portalFetch(`/api/portal/customers/${customerId}`).then(async (res) => {
+            const json = await res.json().catch(() => null);
+            if (!res.ok) throw new Error(json?.error ?? "불러오기 실패");
+            return json as CustomerDetailPayload;
+          });
+
+    request
+      .then((payload) => {
+        if (!cancelled) {
+          setData(payload);
+          setNoteDraft(payload.customer.notes ?? "");
+        }
       })
       .catch((err) => {
         if (!cancelled)
@@ -116,7 +195,80 @@ export function CustomerDetailSlideOver({ customerId, onClose, onEdit }: Props) 
     return () => {
       cancelled = true;
     };
-  }, [customerId]);
+  }, [customerId, fetchMode, refreshNonce]);
+
+  useEffect(
+    () => () => {
+      if (savedTimerRef.current) clearTimeout(savedTimerRef.current);
+    },
+    []
+  );
+
+  const updateSourceLink = async (linkId: string, action: "confirm" | "reject") => {
+    if (fetchMode !== "admin") return;
+
+    setUpdatingLinkId(linkId);
+    setActionError(null);
+    try {
+      await adminFetchJson(`/api/admin/crm/source-links/${linkId}`, {
+        method: "PATCH",
+        body: JSON.stringify({ action }),
+      });
+      setRefreshNonce((current) => current + 1);
+    } catch (err) {
+      setActionError(err instanceof Error ? err.message : "CRM source link 상태 변경에 실패했습니다.");
+    } finally {
+      setUpdatingLinkId(null);
+    }
+  };
+
+  const handleNoteDraftChange = (value: string) => {
+    setNoteDraft(value);
+    if (noteError) setNoteError(null);
+    if (noteSaved) setNoteSaved(false);
+  };
+
+  const saveCustomerNote = async () => {
+    if (!data || fetchMode !== "admin" || savingNote) return;
+    if (noteDraft === (data.customer.notes ?? "")) return;
+
+    setSavingNote(true);
+    setNoteSaved(false);
+    setNoteError(null);
+    try {
+      const result = await adminFetchJson<AdminCustomerPatchResponse>(`/api/admin/customers/${customerId}`, {
+        method: "PATCH",
+        body: JSON.stringify({ notes: noteDraft.trim() || null }),
+      });
+      if (!result.customer) throw new Error("고객 메모 저장 결과가 없습니다.");
+
+      setData((current) =>
+        current
+          ? {
+              ...current,
+              customer: {
+                ...current.customer,
+                notes: result.customer?.notes ?? null,
+              },
+            }
+          : current
+      );
+      onCustomerUpdated?.(result.customer);
+      setNoteDraft(result.customer.notes ?? "");
+      setNoteSaved(true);
+      if (savedTimerRef.current) clearTimeout(savedTimerRef.current);
+      savedTimerRef.current = setTimeout(() => {
+        setNoteSaved(false);
+        savedTimerRef.current = null;
+      }, 1800);
+    } catch (err) {
+      setNoteError(err instanceof Error ? err.message : "고객 메모 저장에 실패했습니다.");
+    } finally {
+      setSavingNote(false);
+    }
+  };
+
+  const noteDirty = data ? noteDraft !== (data.customer.notes ?? "") : false;
 
   return (
     <div className="fixed inset-0 z-50 flex justify-end">
@@ -189,6 +341,30 @@ export function CustomerDetailSlideOver({ customerId, onClose, onEdit }: Props) 
               {/* 연락처 정보 */}
               <ContactSection customer={data.customer} />
 
+              {/* 고객사 메모 */}
+              <CustomerNotesSection
+                notes={data.customer.notes}
+                draft={noteDraft}
+                canEdit={fetchMode === "admin"}
+                dirty={noteDirty}
+                saving={savingNote}
+                saved={noteSaved}
+                error={noteError}
+                onDraftChange={handleNoteDraftChange}
+                onSave={() => void saveCustomerNote()}
+              />
+
+              {/* CRM 소스 정합성 */}
+              {data.crm_coverage && (
+                <CrmCoverageSection
+                  coverage={data.crm_coverage}
+                  canManageLinks={fetchMode === "admin"}
+                  actionError={actionError}
+                  updatingLinkId={updatingLinkId}
+                  onUpdateSourceLink={(linkId, action) => void updateSourceLink(linkId, action)}
+                />
+              )}
+
               {/* 재무 현황 */}
               <FinancialSection summary={data.summary} />
 
@@ -207,15 +383,81 @@ export function CustomerDetailSlideOver({ customerId, onClose, onEdit }: Props) 
                 <RecentActivitySection activity={data.recent_activity} />
               )}
 
-              {/* 메모 */}
-              {data.customer.notes && (
-                <NotesSection notes={data.customer.notes} />
-              )}
             </div>
           </>
         )}
       </div>
     </div>
+  );
+}
+
+function CustomerNotesSection({
+  notes,
+  draft,
+  canEdit,
+  dirty,
+  saving,
+  saved,
+  error,
+  onDraftChange,
+  onSave,
+}: {
+  notes: string | null;
+  draft: string;
+  canEdit: boolean;
+  dirty: boolean;
+  saving: boolean;
+  saved: boolean;
+  error: string | null;
+  onDraftChange: (value: string) => void;
+  onSave: () => void;
+}) {
+  if (!canEdit && !notes) return null;
+
+  return (
+    <section className="rounded-xl border border-[#e8e8e4] bg-white p-4">
+      <div className="mb-3 flex items-center justify-between gap-3">
+        <p className="inline-flex items-center gap-1.5 text-xs font-semibold uppercase tracking-widest text-[#1a1a1a]/30">
+          <StickyNote className="h-3.5 w-3.5" />
+          고객사 메모
+        </p>
+        {canEdit && (
+          <button
+            type="button"
+            onClick={onSave}
+            disabled={saving || !dirty}
+            className="inline-flex h-8 items-center gap-1.5 rounded-lg bg-[#111110] px-3 text-[12px] font-semibold text-white transition hover:bg-[#1a1a1a] disabled:cursor-not-allowed disabled:opacity-35"
+          >
+            {saving ? (
+              <Loader2 className="h-3.5 w-3.5 animate-spin" />
+            ) : saved ? (
+              <Check className="h-3.5 w-3.5" />
+            ) : (
+              <Save className="h-3.5 w-3.5" />
+            )}
+            {saving ? "저장 중" : saved ? "저장됨" : "저장"}
+          </button>
+        )}
+      </div>
+
+      {canEdit ? (
+        <textarea
+          value={draft}
+          onChange={(event) => onDraftChange(event.target.value)}
+          rows={4}
+          placeholder="고객사별 특이사항, 의사결정자, 다음 액션, 리스크를 남겨두세요."
+          className="w-full resize-none rounded-lg border border-[#e8e8e4] bg-[#fafaf8] px-3 py-2.5 text-sm leading-relaxed text-[#1a1a1a] outline-none transition focus:border-[#084734] focus:bg-white"
+        />
+      ) : (
+        <p className="whitespace-pre-wrap text-sm leading-relaxed text-[#1a1a1a]/70">{notes}</p>
+      )}
+
+      {error && (
+        <p className="mt-2 border-l-2 border-[#F3D6C8] bg-[#FEF3EE] py-2 pl-3 pr-2 text-xs text-[#B85C33]">
+          {error}
+        </p>
+      )}
+    </section>
   );
 }
 
@@ -246,6 +488,206 @@ function ContactSection({ customer }: { customer: Customer }) {
           </li>
         ))}
       </ul>
+    </section>
+  );
+}
+
+function formatConfidence(value: number | null) {
+  if (value == null) return "-";
+  return `${Math.round(value * 100)}%`;
+}
+
+function CrmCoverageSection({
+  coverage,
+  canManageLinks = false,
+  actionError,
+  updatingLinkId,
+  onUpdateSourceLink,
+}: {
+  coverage: NonNullable<CustomerDetailPayload["crm_coverage"]>;
+  canManageLinks?: boolean;
+  actionError?: string | null;
+  updatingLinkId?: string | null;
+  onUpdateSourceLink?: (linkId: string, action: "confirm" | "reject") => void;
+}) {
+  return (
+    <section className="rounded-xl border border-[#e8e8e4] bg-white p-4">
+      <div className="mb-3 flex items-center justify-between gap-3">
+        <p className="text-xs font-semibold uppercase tracking-widest text-[#1a1a1a]/30">
+          CRM 소스 정합성
+        </p>
+        <span
+          className={`inline-flex shrink-0 items-center gap-1 rounded-full border px-2 py-0.5 text-[11px] font-medium ${CRM_COVERAGE_STYLE[coverage.status]}`}
+        >
+          <CrmCoverageIcon status={coverage.status} />
+          {CRM_COVERAGE_LABEL[coverage.status]}
+        </span>
+      </div>
+
+      <div className="grid grid-cols-2 gap-3 border-y border-[#f0f0ec] py-3 text-xs">
+        <div>
+          <p className="flex items-center gap-1 text-[#1a1a1a]/40">
+            <Link2 size={12} />
+            Source link
+          </p>
+          <p className="mt-1 font-semibold text-[#1a1a1a]">
+            확정 {coverage.confirmed_link_count} / 전체 {coverage.source_link_count}
+          </p>
+          <p className="mt-0.5 text-[11px] text-[#1a1a1a]/45">
+            후보 {coverage.candidate_link_count}건
+          </p>
+        </div>
+        <div>
+          <p className="flex items-center gap-1 text-[#1a1a1a]/40">
+            <ServerCog size={12} />
+            Xiaoshouyi
+          </p>
+          <p className="mt-1 font-semibold text-[#1a1a1a]">
+            후보 {coverage.external_match_count}건
+          </p>
+          <p className="mt-0.5 text-[11px] text-[#1a1a1a]/45">
+            sync {formatDate(coverage.last_external_synced_at)}
+          </p>
+        </div>
+      </div>
+
+      {coverage.warnings.length > 0 && (
+        <ul className="mt-3 space-y-1.5">
+          {coverage.warnings.slice(0, 3).map((warning) => (
+            <li key={warning} className="flex items-start gap-1.5 text-xs text-amber-700">
+              <AlertTriangle className="mt-0.5 h-3 w-3 shrink-0" />
+              <span>{warning}</span>
+            </li>
+          ))}
+        </ul>
+      )}
+
+      {actionError && (
+        <div className="mt-3 border-l-2 border-[#F3D6C8] bg-[#FEF3EE] py-2 pl-3 pr-2 text-xs text-[#B85C33]">
+          {actionError}
+        </div>
+      )}
+
+      {coverage.discrepancies.length > 0 && (
+        <div className="mt-4">
+          <p className="mb-2 text-[11px] font-semibold uppercase tracking-widest text-[#1a1a1a]/30">
+            검수할 차이
+          </p>
+          <ul className="space-y-2">
+            {coverage.discrepancies.slice(0, 4).map((item) => (
+              <li
+                key={item.id}
+                className={`border-l-2 bg-[#fcfcfb] py-2 pl-3 pr-2 text-xs ${CRM_DISCREPANCY_STYLE[item.severity]}`}
+              >
+                <div className="flex items-start justify-between gap-2">
+                  <div className="min-w-0">
+                    <p className="font-semibold text-[#1a1a1a]">{item.title}</p>
+                    <p className="mt-1 leading-relaxed text-[#1a1a1a]/50">{item.detail}</p>
+                    {item.source_label && (
+                      <p className="mt-1 truncate text-[11px] text-[#1a1a1a]/35">
+                        {item.source_label}
+                      </p>
+                    )}
+                  </div>
+                  <span className="shrink-0 rounded-full border border-current px-1.5 py-0.5 text-[10px] font-semibold">
+                    {item.severity === "high" ? "높음" : item.severity === "medium" ? "검토" : "참고"}
+                  </span>
+                </div>
+                {(item.internal_value || item.external_value) && (
+                  <div className="mt-2 grid grid-cols-2 gap-2 text-[11px]">
+                    <div>
+                      <p className="text-[#1a1a1a]/35">내부</p>
+                      <p className="mt-0.5 font-medium text-[#1a1a1a]">{item.internal_value ?? "-"}</p>
+                    </div>
+                    <div>
+                      <p className="text-[#1a1a1a]/35">외부/원천</p>
+                      <p className="mt-0.5 font-medium text-[#1a1a1a]">{item.external_value ?? "-"}</p>
+                    </div>
+                  </div>
+                )}
+              </li>
+            ))}
+          </ul>
+        </div>
+      )}
+
+      {coverage.source_links.length > 0 && (
+        <div className="mt-4">
+          <p className="mb-2 text-[11px] font-semibold uppercase tracking-widest text-[#1a1a1a]/30">
+            연결된 원천
+          </p>
+          <ul className="space-y-2">
+            {coverage.source_links.slice(0, 8).map((link) => (
+              <li key={link.id} className="rounded-lg border border-[#f0f0ec] bg-[#fcfcfb] px-3 py-2 text-xs">
+                <div className="flex items-center justify-between gap-2">
+                  <p className="min-w-0 truncate font-medium text-[#1a1a1a]">
+                    {link.source_label ?? link.source_record_key}
+                  </p>
+                  <span className="shrink-0 text-[#1a1a1a]/45">
+                    {formatConfidence(link.confidence)}
+                  </span>
+                </div>
+                <p className="mt-1 text-[11px] text-[#1a1a1a]/45">
+                  {link.source_system}/{link.source_object} · {link.status}
+                </p>
+                {canManageLinks && (link.status === "candidate" || link.status === "stale") && onUpdateSourceLink && (
+                  <div className="mt-2 flex justify-end gap-1.5">
+                    <button
+                      type="button"
+                      onClick={() => onUpdateSourceLink(link.id, "confirm")}
+                      disabled={updatingLinkId === link.id}
+                      className="inline-flex h-7 items-center gap-1 rounded-md border border-emerald-100 bg-emerald-50 px-2 text-[11px] font-semibold text-emerald-700 transition hover:bg-emerald-100 disabled:opacity-50"
+                    >
+                      {updatingLinkId === link.id ? (
+                        <Loader2 className="h-3 w-3 animate-spin" />
+                      ) : (
+                        <CheckCircle2 className="h-3 w-3" />
+                      )}
+                      확정
+                    </button>
+                    <button
+                      type="button"
+                      onClick={() => onUpdateSourceLink(link.id, "reject")}
+                      disabled={updatingLinkId === link.id}
+                      className="inline-flex h-7 items-center gap-1 rounded-md border border-[#F3D6C8] bg-[#FEF3EE] px-2 text-[11px] font-semibold text-[#B85C33] transition hover:bg-[#FBE8DD] disabled:opacity-50"
+                    >
+                      <X className="h-3 w-3" />
+                      제외
+                    </button>
+                  </div>
+                )}
+              </li>
+            ))}
+          </ul>
+        </div>
+      )}
+
+      {coverage.external_records.length > 0 && (
+        <div className="mt-4">
+          <p className="mb-2 text-[11px] font-semibold uppercase tracking-widest text-[#1a1a1a]/30">
+            외부 CRM 후보
+          </p>
+          <ul className="space-y-2">
+            {coverage.external_records.slice(0, 3).map((record) => (
+              <li key={record.id} className="rounded-lg border border-[#f0f0ec] bg-[#fcfcfb] px-3 py-2 text-xs">
+                <div className="flex items-center justify-between gap-2">
+                  <p className="min-w-0 truncate font-medium text-[#1a1a1a]">
+                    {record.display_name ?? record.external_id}
+                  </p>
+                  <span className="shrink-0 text-[#1a1a1a]/45">
+                    {formatConfidence(record.confidence)}
+                  </span>
+                </div>
+                <p className="mt-1 text-[11px] text-[#1a1a1a]/45">
+                  {record.object_api_key}
+                  {record.owner_name ? ` · ${record.owner_name}` : ""}
+                  {record.amount ? ` · ${formatKRW(record.amount)}` : ""}
+                </p>
+              </li>
+            ))}
+          </ul>
+        </div>
+      )}
     </section>
   );
 }
@@ -539,17 +981,6 @@ function RecentCalendarSection({
           </li>
         ))}
       </ul>
-    </section>
-  );
-}
-
-function NotesSection({ notes }: { notes: string }) {
-  return (
-    <section className="rounded-xl border border-[#e8e8e4] bg-white p-4">
-      <p className={SECTION_HEADER}>메모</p>
-      <div className="rounded-lg bg-[#f5f5f2] p-3">
-        <p className="whitespace-pre-wrap text-sm text-[#1a1a1a]">{notes}</p>
-      </div>
     </section>
   );
 }

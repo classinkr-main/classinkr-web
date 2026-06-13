@@ -77,10 +77,10 @@ const RULE_META: Record<string, {
   "DQ-10": {
     category: "crm",
     categoryLabel: "CRM",
-    source: "REV formatRuns · monthly_red",
+    source: "REV formatRuns · monthly_confirmed/high_conf",
     owner: "데이터 운영",
-    operatorHint: "빨간 셀 표시가 월별 납부 상태와 함께 추출되는지 확인하세요.",
-    devHint: "first_payment와 월별 납부값은 있지만 monthly_red key가 없는 딜을 탐지합니다.",
+    operatorHint: "주차 칸 글자색(빨강=확정, 파랑=임박)이 월별 납부 상태와 함께 추출되는지 확인하세요.",
+    devHint: "first_payment와 월별 납부값은 있지만 색 기반 금액(monthly_confirmed/monthly_high_conf)과 monthly_red가 모두 비어 있는 딜을 탐지합니다.",
   },
   "DQ-11": {
     category: "geo",

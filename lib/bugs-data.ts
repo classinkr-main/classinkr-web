@@ -1,5 +1,6 @@
 import fs from "fs"
 import path from "path"
+import { atomicWriteJsonSync } from "@/lib/atomic-write"
 
 const BUGS_PATH = path.join(process.cwd(), "data", "bugs.json")
 
@@ -23,7 +24,7 @@ function readBugs(): BugReport[] {
 }
 
 function writeBugs(bugs: BugReport[]) {
-  fs.writeFileSync(BUGS_PATH, JSON.stringify(bugs, null, 2))
+  atomicWriteJsonSync(BUGS_PATH, bugs)
 }
 
 export function getBugReports() {

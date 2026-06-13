@@ -4,6 +4,7 @@
  */
 import fs from "fs"
 import path from "path"
+import { atomicWriteJsonSync } from "@/lib/atomic-write"
 
 const FILE = path.join(process.cwd(), "data", "patch-notes.json")
 
@@ -33,7 +34,7 @@ function read(): PatchNote[] {
 }
 
 function write(data: PatchNote[]) {
-  fs.writeFileSync(FILE, JSON.stringify(data, null, 2))
+  atomicWriteJsonSync(FILE, data)
 }
 
 function uid() {

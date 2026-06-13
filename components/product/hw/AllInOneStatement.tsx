@@ -12,7 +12,7 @@ const capabilities = [
   "미러링 제공",
 ]
 
-const opsEnergyModuleImage = "/images/product/hw/ops/ops-glass-energy-module-black.png"
+const opsEnergyModuleImage = "/images/product/hw/ops/ops-glass-energy-module-black.webp"
 
 export default function AllInOneStatement() {
   return (

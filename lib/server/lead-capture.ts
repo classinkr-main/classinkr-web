@@ -21,7 +21,36 @@ const WECOM_LEAD_SOURCES = new Set<LeadSource>([
   "meta_lead_ads",
 ])
 
-const EMAIL_REGEX = /^[^\s@]+@[^\s@]+\.[^\s@]+$/
+// TLD 2자 이상 강제 — "a@b.c" 류 가짜 이메일 차단
+const EMAIL_REGEX = /^[^\s@]+@[^\s@]+\.[a-zA-Z]{2,}$/
+const EMAIL_MAX_LENGTH = 254
+
+// 봇이 채우는 숨김 honeypot 필드명 (클라이언트 폼의 숨김 input과 일치해야 함)
+const HONEYPOT_FIELD = "website"
+
+// 인스턴스별 메모리 기반 중복 제출 방지 — rate-limit과 동일한 한계(서버리스 인스턴스별 독립)로
+// 더블 클릭/봇 재시도 차단 용도. 더 강한 보장이 필요하면 Upstash Redis 사용.
+const DUPLICATE_WINDOW_MS = 60_000
+const recentSubmissions = new Map<string, number>()
+
+function isHoneypotTripped(raw: unknown) {
+  if (!raw || typeof raw !== "object") return false
+  const value = (raw as Record<string, unknown>)[HONEYPOT_FIELD]
+  return typeof value === "string" && value.trim().length > 0
+}
+
+function isDuplicateSubmission(body: LeadPayload) {
+  const contact = body.email ?? body.phone
+  if (!contact) return false
+  const key = `${body.source}:${contact}`
+  const now = Date.now()
+  for (const [staleKey, submittedAt] of recentSubmissions) {
+    if (now - submittedAt > DUPLICATE_WINDOW_MS) recentSubmissions.delete(staleKey)
+  }
+  const last = recentSubmissions.get(key)
+  recentSubmissions.set(key, now)
+  return last !== undefined && now - last < DUPLICATE_WINDOW_MS
+}
 
 export interface LeadSubmissionSuccess {
   ok: true
@@ -71,6 +100,7 @@ function inferLeadMagnet(value: string | undefined) {
 function normalizeEmail(value: unknown) {
   const email = normalizeString(value)?.toLowerCase()
   if (!email) return undefined
+  if (email.length > EMAIL_MAX_LENGTH) return null
   return EMAIL_REGEX.test(email) ? email : null
 }
 
@@ -188,7 +218,20 @@ function buildLeadNotificationMessage(body: LeadPayload) {
 
 export async function submitLeadCapture(raw: unknown): Promise<LeadSubmissionResult> {
   try {
+    // honeypot이 채워졌으면 봇으로 간주 — 저장·전달 없이 성공 응답(봇이 차단을 학습하지 못하도록)
+    if (isHoneypotTripped(raw)) {
+      console.warn("[lead-capture] honeypot tripped — dropping submission")
+      return { status: 200, body: { ok: true, stored: false, warnings: [] } }
+    }
+
     const body = buildLeadPayload(raw)
+
+    // 동일 연락처의 60초 내 재제출(더블 클릭/봇 재시도)은 저장 없이 성공 처리
+    if (isDuplicateSubmission(body)) {
+      console.warn(`[lead-capture] duplicate submission dropped (source=${body.source})`)
+      return { status: 200, body: { ok: true, stored: false, warnings: [] } }
+    }
+
     const settings = await getResolvedSettings()
     let stored = false
     let savedLeadId: string | undefined

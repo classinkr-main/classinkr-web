@@ -1,6 +1,6 @@
 "server-only";
 
-import { mkdir, readFile, writeFile } from "fs/promises";
+import { mkdir, readFile, rename, writeFile } from "fs/promises";
 import path from "path";
 
 import type { EmailCampaign, Subscriber } from "@/lib/marketing-types";
@@ -28,7 +28,10 @@ async function readJsonFile<T>(filePath: string, fallback: T): Promise<T> {
 
 async function writeJsonFile<T>(filePath: string, value: T) {
   await mkdir(DATA_DIR, { recursive: true });
-  await writeFile(filePath, `${JSON.stringify(value, null, 2)}\n`, "utf8");
+  // 임시 파일 + rename으로 원자적 교체 — 동시 쓰기 시 반쯤 쓰인 JSON 방지
+  const tmpPath = `${filePath}.${process.pid}.tmp`;
+  await writeFile(tmpPath, `${JSON.stringify(value, null, 2)}\n`, "utf8");
+  await rename(tmpPath, filePath);
 }
 
 function nextNumberId(items: Array<{ id: number }>) {

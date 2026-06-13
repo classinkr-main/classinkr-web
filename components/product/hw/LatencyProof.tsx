@@ -51,7 +51,7 @@ export default function LatencyProof() {
             </div>
 
             <Image
-              src="/images/product/hw/latency/touch-latency.png"
+              src="/images/product/hw/latency/touch-latency.webp"
               alt="클래스인 보드 터치 딜레이 시각화"
               fill
               sizes="(max-width: 768px) 100vw, 50vw"

@@ -8,6 +8,14 @@ export async function updateSupabaseSession(request: NextRequest) {
     return NextResponse.next({ request })
   }
 
+  // Supabase 인증 쿠키(sb-*)가 없는 익명 요청은 갱신할 세션이 없다.
+  const hasSupabaseAuthCookie = request.cookies
+    .getAll()
+    .some(({ name }) => name.startsWith("sb-"))
+  if (!hasSupabaseAuthCookie) {
+    return NextResponse.next({ request })
+  }
+
   const { url, publishableKey } = getSupabaseBrowserEnv()
   let response = NextResponse.next({ request })
 

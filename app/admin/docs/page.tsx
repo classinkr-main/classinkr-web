@@ -1348,6 +1348,38 @@ export default function AdminDocsPage() {
               )}
             </div>
           </div>
+
+          <div className="overflow-hidden rounded-2xl border border-[#e8e8e4] bg-white">
+            <div className="border-b border-[#e8e8e4] px-4 py-4">
+              <div className="flex items-center gap-2">
+                <BarChart3 className="h-4 w-4 text-[#1a1a1a]/35" />
+                <h2 className="text-[14px] font-semibold text-[#111110]">조회 상위</h2>
+              </div>
+            </div>
+            <div className="divide-y divide-[#f0f0ec]">
+              {(analytics?.topViewedDocs?.length ?? 0) === 0 ? (
+                <p className="px-4 py-8 text-center text-[13px] text-[#1a1a1a]/35">
+                  최근 30일 조회 데이터가 없습니다.
+                </p>
+              ) : (
+                analytics?.topViewedDocs?.map((item) => (
+                  <div key={item.path} className="flex items-start justify-between gap-4 px-4 py-3">
+                    <a
+                      href={item.path}
+                      target="_blank"
+                      rel="noopener noreferrer"
+                      className="min-w-0 text-[13px] font-semibold text-[#111110] hover:text-[#084734]"
+                    >
+                      <span className="line-clamp-1">{item.title}</span>
+                    </a>
+                    <span className="shrink-0 text-[13px] font-bold tabular-nums text-[#111110]">
+                      {formatNumber(item.count)}
+                    </span>
+                  </div>
+                ))
+              )}
+            </div>
+          </div>
         </aside>
       </section>
 

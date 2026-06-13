@@ -15,6 +15,17 @@ import type { PublicEvent } from "@/lib/types/public-events"
 
 const EVENT_TOPICS = new Set(["행사 신청", "세미나 신청"])
 
+// ?topic= 쿼리로 사전 선택 가능한 문의 유형 (가이드 문서 CTA 등에서 사용)
+const VALID_CONTACT_TOPICS = new Set([
+    "도입 상담",
+    "수업 운영 상담",
+    "결제/영수증/계약",
+    "계정/접속/기술 지원",
+    "하드웨어/설치/AS",
+    "행사 신청",
+    "세미나 신청",
+])
+
 export default function ContactPage() {
     const kakaoChannelUrl = process.env.NEXT_PUBLIC_CONTACT_KAKAO_URL?.trim()
     const fastTrackHref = kakaoChannelUrl || "#contact-form"
@@ -43,7 +54,7 @@ export default function ContactPage() {
         if (eventParam) {
             setTopic(sourceParam === "seminar" ? "세미나 신청" : "행사 신청")
             setEventSlug(eventParam)
-        } else if (topicParam && EVENT_TOPICS.has(topicParam)) {
+        } else if (topicParam && VALID_CONTACT_TOPICS.has(topicParam)) {
             setTopic(topicParam)
         }
     }, [])
@@ -129,6 +140,7 @@ export default function ContactPage() {
                 message,
                 marketingConsent: formData.get("marketing-consent") === "on",
                 eventSlug: selectedEvent?.slug ?? undefined,
+                website: (formData.get("website") as string) || undefined,
             })
 
             if (Array.isArray(data.warnings) && data.warnings.length > 0) {
@@ -282,6 +294,11 @@ export default function ContactPage() {
                                     </div>
                                 ) : (
                                 <form ref={formRef} onSubmit={handleSubmit} className="w-full space-y-6 md:space-y-8">
+                                {/* 스팸 봇 honeypot — 사용자에게 보이지 않으며 값이 채워지면 서버가 무시 */}
+                                <div aria-hidden="true" className="absolute -left-[9999px] top-0 h-px w-px overflow-hidden">
+                                    <label htmlFor="contact-website">Website</label>
+                                    <input id="contact-website" name="website" type="text" tabIndex={-1} autoComplete="off" />
+                                </div>
                                 <div className="w-full grid grid-cols-1 md:grid-cols-2 gap-4">
                                     <div className="space-y-3 w-full">
                                         <Label htmlFor="org-name" className="text-slate-700 font-bold ml-1">학원명 / 기관명 <span className="text-[#084734]">*</span></Label>

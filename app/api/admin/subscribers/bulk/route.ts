@@ -70,19 +70,18 @@ export async function PATCH(req: NextRequest) {
     return NextResponse.json({ error: fetchError.message }, { status: 500 })
   }
 
-  let updated = 0
-
-  for (const row of rows ?? []) {
-    const existingTags: string[] = Array.isArray(row.tags) ? row.tags : []
-    const mergedTags = Array.from(new Set([...existingTags, ...tags]))
-
-    const { error: updateError } = await sb
-      .from("newsletter_subscribers")
-      .update({ tags: mergedTags })
-      .eq("id", row.id)
-
-    if (!updateError) updated++
-  }
+  // 행마다 병합 결과가 달라 단일 UPDATE로 합칠 수 없음 — 병렬 실행으로 왕복 지연만 제거
+  const results = await Promise.all(
+    (rows ?? []).map((row) => {
+      const existingTags: string[] = Array.isArray(row.tags) ? row.tags : []
+      const mergedTags = Array.from(new Set([...existingTags, ...tags]))
+      return sb
+        .from("newsletter_subscribers")
+        .update({ tags: mergedTags })
+        .eq("id", row.id)
+    })
+  )
+  const updated = results.filter((r) => !r.error).length
 
   return NextResponse.json({ updated })
 }

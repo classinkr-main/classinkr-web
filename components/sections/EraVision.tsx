@@ -74,7 +74,7 @@ export function EraVision() {
                         className="text-lg md:text-xl text-[#615D59] max-w-2xl mx-auto leading-relaxed break-keep"
                     >
                         AI·클라우드·데이터가 모든 산업을 재편한 것처럼,
-                        교육도 예외가 아닙니다.<br className="hidden md:block" />
+                        교육도 예외가 아닙니다.<br className="hidden md:block" />{" "}
                         이제 학원은 기술을 써야만 살아남는 시대입니다.
                     </motion.p>
                 </div>

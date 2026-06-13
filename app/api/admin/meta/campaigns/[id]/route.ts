@@ -1,7 +1,7 @@
 import { NextRequest, NextResponse } from "next/server"
 
 import { verifyAdmin } from "@/lib/admin-auth"
-import { updateMetaCampaignStatus } from "@/lib/meta/marketing"
+import { MetaConfigError, updateMetaCampaignStatus } from "@/lib/meta/marketing"
 
 export async function PATCH(
   req: NextRequest,
@@ -25,6 +25,14 @@ export async function PATCH(
     await updateMetaCampaignStatus(id, status)
     return NextResponse.json({ ok: true, id, status })
   } catch (error) {
+    if (error instanceof MetaConfigError) {
+      console.warn(`[PATCH /api/admin/meta/campaigns/[id]] Meta 연동 미설정: ${error.message}`)
+      return NextResponse.json(
+        { ok: false, configured: false, error: "Meta 연동이 설정되지 않았습니다." },
+        { status: 503 }
+      )
+    }
+
     console.error("[PATCH /api/admin/meta/campaigns/[id]]", error)
     return NextResponse.json(
       {

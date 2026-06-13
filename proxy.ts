@@ -94,9 +94,48 @@ async function hasLegacyAdminSession(request: NextRequest, allowedRoles: Readonl
   }
 }
 
+// 페이지 이동마다 Supabase auth + admin_profiles 왕복을 줄이기 위해
+// 통과한 세션 체크 결과를 짧게 캐시한다. (권한 회수 반영 지연 최대 60초)
+const SUPABASE_ADMIN_SESSION_TTL_MS = 60_000
+const SUPABASE_ADMIN_SESSION_CACHE_MAX = 200
+const supabaseAdminSessionCache = new Map<string, number>()
+
+function getSupabaseSessionCacheKey(request: NextRequest, allowedRoles: ReadonlySet<string>) {
+  const authCookies = request.cookies
+    .getAll()
+    .filter(({ name }) => name.startsWith("sb-"))
+  if (authCookies.length === 0) return null
+
+  const cookieKey = authCookies
+    .map(({ name, value }) => `${name}=${value}`)
+    .sort()
+    .join(";")
+  return `${[...allowedRoles].sort().join(",")}|${cookieKey}`
+}
+
 async function hasSupabaseAdminSession(request: NextRequest, allowedRoles: ReadonlySet<string>) {
   if (!hasSupabaseBrowserEnv()) return false
 
+  const cacheKey = getSupabaseSessionCacheKey(request, allowedRoles)
+  if (!cacheKey) return false
+
+  const cachedUntil = supabaseAdminSessionCache.get(cacheKey)
+  if (cachedUntil && cachedUntil > Date.now()) return true
+
+  const allowed = await checkSupabaseAdminSession(request, allowedRoles)
+  if (allowed) {
+    if (supabaseAdminSessionCache.size >= SUPABASE_ADMIN_SESSION_CACHE_MAX) {
+      supabaseAdminSessionCache.clear()
+    }
+    supabaseAdminSessionCache.set(cacheKey, Date.now() + SUPABASE_ADMIN_SESSION_TTL_MS)
+  } else {
+    supabaseAdminSessionCache.delete(cacheKey)
+  }
+
+  return allowed
+}
+
+async function checkSupabaseAdminSession(request: NextRequest, allowedRoles: ReadonlySet<string>) {
   const { url, publishableKey } = getSupabaseBrowserEnv()
   const supabase = createServerClient(url, publishableKey, {
     cookies: {

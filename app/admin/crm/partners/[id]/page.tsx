@@ -1,33 +1,20 @@
-import { notFound } from "next/navigation"
+import { redirect } from "next/navigation"
 
-import CrmSubnav from "@/components/admin/crm/CrmSubnav"
-import PartnerWorkspaceDetailClient from "@/components/admin/partners/PartnerWorkspaceDetailClient"
-import { getPartnerWorkspaceData } from "@/lib/partners-data"
-
-interface AdminCrmPartnerDetailPageProps {
-  params: Promise<{ id: string }>
-}
-
-export default async function AdminCrmPartnerDetailPage({
+// 구경로 → Deals(KPI) 파트너 상세로 이동. ?tab= 등 쿼리 보존.
+export default async function AdminCrmPartnerDetailRedirect({
   params,
-}: AdminCrmPartnerDetailPageProps) {
+  searchParams,
+}: {
+  params: Promise<{ id: string }>
+  searchParams: Promise<Record<string, string | string[] | undefined>>
+}) {
   const { id } = await params
-  const { workspace, source, warning } = await getPartnerWorkspaceData(id)
-
-  if (!workspace) {
-    notFound()
+  const sp = await searchParams
+  const qs = new URLSearchParams()
+  for (const [key, value] of Object.entries(sp)) {
+    if (typeof value === "string") qs.set(key, value)
+    else if (Array.isArray(value)) value.forEach((item) => qs.append(key, item))
   }
-
-  return (
-    <>
-      <div className="px-4 pt-8 sm:px-6 lg:px-8 lg:pt-10">
-        <CrmSubnav active="partners" />
-      </div>
-      <PartnerWorkspaceDetailClient
-        initialWorkspace={workspace}
-        initialSource={source}
-        initialWarning={warning}
-      />
-    </>
-  )
+  const query = qs.toString()
+  redirect(`/admin/crm/deals/kpi/${id}${query ? `?${query}` : ""}`)
 }

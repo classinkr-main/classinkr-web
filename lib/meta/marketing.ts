@@ -2,6 +2,8 @@ import "server-only"
 
 import { createHmac } from "crypto"
 
+export class MetaConfigError extends Error {}
+
 export type MetaCampaignStatus = "ACTIVE" | "PAUSED" | "DELETED" | "ARCHIVED"
 
 export interface MetaAdAccountStatus {
@@ -214,7 +216,7 @@ interface MetaRequestOptions {
 
 function getRequiredEnv(key: string) {
   const value = process.env[key]?.trim()
-  if (!value) throw new Error(`Missing ${key}`)
+  if (!value) throw new MetaConfigError(`Missing ${key}`)
   return value
 }
 
@@ -237,7 +239,7 @@ function getAccessTokenCandidates(tokenKeys?: string[]): MetaAccessTokenCandidat
   })
 
   if (candidates.length === 0) {
-    throw new Error(`Missing ${keys.join(" or ")}`)
+    throw new MetaConfigError(`Missing ${keys.join(" or ")}`)
   }
 
   return candidates
@@ -430,7 +432,7 @@ async function resolveInstagramAccountId() {
   }
 
   const suffix = errors.length > 0 ? ` Last error: ${errors[errors.length - 1]}` : ""
-  throw new Error(
+  throw new MetaConfigError(
     `Missing META_INSTAGRAM_BUSINESS_ACCOUNT_ID. Set it directly, or configure META_PAGE_ID with a connected Instagram business account.${suffix}`
   )
 }

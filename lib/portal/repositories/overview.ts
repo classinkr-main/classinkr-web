@@ -21,7 +21,10 @@ import type {
   CommercialOverviewPayload,
   CommercialOverviewStageCount,
 } from "@/lib/portal/overview-types";
-import { listAllCustomerListItems } from "@/lib/portal/repositories/customers";
+import {
+  listAllCustomerListItems,
+  listAllCustomerListItemsLite,
+} from "@/lib/portal/repositories/customers";
 import { listDealListItems } from "@/lib/portal/repositories/deals";
 import {
   getLegacyCustomerDetail,
@@ -300,7 +303,8 @@ export async function getCommercialOverview(
 ): Promise<CommercialOverviewPayload> {
   const supabase = createSupabaseAdminClient();
   const [customers, deals, installations] = await Promise.all([
-    listAllCustomerListItems(),
+    // 개요 metrics는 customer/summary만 사용 — decoration 쿼리 생략
+    listAllCustomerListItemsLite(),
     listDealListItems(),
     supabase
       .from("installation_events")

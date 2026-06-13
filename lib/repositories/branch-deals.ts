@@ -12,6 +12,10 @@ export interface BranchRevDeal {
   contract_target: number | null
   monthly_payments: Record<string, number>
   monthly_red: Record<string, boolean>
+  // 주차 칸 글자색 기반 금액 분해(빨강=확정, 파랑=임박 90%+).
+  // 마이그레이션(rev_color_amounts) 적용 전 행에는 없을 수 있어 optional
+  monthly_confirmed?: Record<string, number> | null
+  monthly_high_conf?: Record<string, number> | null
   raw: Record<string, unknown>; synced_at: string
 }
 

@@ -255,7 +255,7 @@ const docs: DocArticle[] = [
         media: [
           {
             type: "image",
-            src: `${SOFTWARE_MEDIA_BASE}/two-way-blackboard.jpg`,
+            src: `${SOFTWARE_MEDIA_BASE}/two-way-blackboard.webp`,
             alt: "Classin 양방향 판서 수업 예시",
             caption: "교사와 학생이 같은 수업 화면 위에서 판서와 상호작용을 이어갈 수 있습니다.",
             width: 1440,
@@ -832,7 +832,7 @@ const docs: DocArticle[] = [
         media: [
           {
             type: "image",
-            src: `${HARDWARE_MEDIA_BASE}/features/feature-writing.png`,
+            src: `${HARDWARE_MEDIA_BASE}/features/feature-writing.webp`,
             alt: "Classin Board 판서 기능 시각화",
             caption: "판서 공간과 수업 자료가 Classin 수업 흐름 안에서 함께 관리됩니다.",
             width: 1440,
@@ -887,7 +887,7 @@ const docs: DocArticle[] = [
         media: [
           {
             type: "image",
-            src: `${HARDWARE_MEDIA_BASE}/camera/camera-dual-premium-blended.png`,
+            src: `${HARDWARE_MEDIA_BASE}/camera/camera-dual-premium-blended.webp`,
             alt: "Classin Board AI 카메라 이미지",
             caption: "AI 카메라는 교사 추적, 원격 송출, 수업 녹화 품질에 영향을 줍니다.",
             width: 1440,

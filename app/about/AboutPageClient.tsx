@@ -239,7 +239,7 @@ export default function AboutPageClient({ offices, press, recentPosts }: Props) 
           <FadeUp delay={0.16}>
             <p className="text-[18px] sm:text-[20px] text-[#615D59] leading-[1.6] max-w-[640px] mx-auto">
               2014년 설립 이래 EEO는 단 하나의 질문을 붙들고 있습니다.
-              <br className="hidden sm:block" />
+              <br className="hidden sm:block" />{" "}
               <em className="not-italic font-semibold text-[#111110]">
                 어떻게 하면 모든 학생이 좋은 수업을 받을 수 있을까?
               </em>

@@ -93,6 +93,7 @@ export function DemoModal({ children, trackingButton }: { children: React.ReactN
                 phone: formData.get("phone") as string,
                 message: message || undefined,
                 marketingConsent,
+                website: (formData.get("website") as string) || undefined,
             })
             setWarning(
                 Array.isArray(data.warnings) && data.warnings.length > 0
@@ -157,6 +158,11 @@ export function DemoModal({ children, trackingButton }: { children: React.ReactN
                             </DialogDescription>
                         </DialogHeader>
                         <form ref={formRef} onSubmit={handleSubmit} className="grid gap-5 px-8 py-7">
+                            {/* 스팸 봇 honeypot — 사용자에게 보이지 않으며 값이 채워지면 서버가 무시 */}
+                            <div aria-hidden="true" className="absolute -left-[9999px] top-0 h-px w-px overflow-hidden">
+                                <label htmlFor="demo-website">Website</label>
+                                <input id="demo-website" name="website" type="text" tabIndex={-1} autoComplete="off" />
+                            </div>
                             <div className={`grid gap-5 rounded-[24px] p-5 ${marketingSurfaceClassName}`}>
                                 <div className="grid gap-5 md:grid-cols-2">
                                     <div className="grid gap-2">

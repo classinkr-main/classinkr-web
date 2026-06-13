@@ -58,7 +58,7 @@ export default function AICameraSection() {
           className="-mx-6 md:-mx-10 lg:-mr-24"
         >
           <Image
-            src="/images/product/hw/camera/camera-dual-premium-blended.png"
+            src="/images/product/hw/camera/camera-dual-premium-blended.webp"
             alt="Classin Board AI 트래킹 카메라 클로즈업"
             width={1402}
             height={1122}

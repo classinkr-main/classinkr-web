@@ -18,13 +18,21 @@ export async function getReleases(): Promise<GithubRelease[]> {
     headers["Authorization"] = `Bearer ${process.env.GITHUB_TOKEN}`
   }
 
-  const res = await fetch(API, {
-    headers,
-    next: { revalidate: 3600 }, // 1시간 캐시
-  })
+  try {
+    const res = await fetch(API, {
+      headers,
+      next: { revalidate: 3600 }, // 1시간 캐시
+    })
 
-  if (!res.ok) return []
+    if (!res.ok) {
+      console.error(`[github] releases fetch failed: ${res.status} ${res.statusText}`)
+      return []
+    }
 
-  const data: GithubRelease[] = await res.json()
-  return data.filter((r) => !r.draft && !r.prerelease)
+    const data: GithubRelease[] = await res.json()
+    return data.filter((r) => !r.draft && !r.prerelease)
+  } catch (error) {
+    console.error("[github] releases fetch error:", error)
+    return []
+  }
 }

@@ -41,7 +41,7 @@ export function TestimonialWall() {
                             </div>
                             <h2 className="max-w-2xl text-3xl font-extrabold leading-tight text-[#111110] sm:text-4xl md:text-5xl break-keep">
                                 실제 원장님들의 말이
-                                <br className="hidden sm:block" />
+                                <br className="hidden sm:block" />{" "}
                                 가장 빠른 증거가 됩니다
                             </h2>
                             <p className="mt-5 max-w-2xl text-base leading-7 text-[#615D59] break-keep">

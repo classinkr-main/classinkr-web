@@ -1,6 +1,8 @@
 import type { Metadata } from "next"
+import Link from "next/link"
 import { getReleases } from "@/lib/github"
-import { ExternalLink, Tag, Calendar } from "lucide-react"
+import { getPublishedPostsForStaticSitemap } from "@/lib/repositories/blog"
+import { ExternalLink, Tag, Calendar, ArrowRight } from "lucide-react"
 import { createPublicMetadata } from "@/lib/seo"
 
 export const revalidate = 3600
@@ -66,6 +68,14 @@ function renderBody(body: string) {
 export default async function UpdatesPage() {
   const releases = await getReleases()
 
+  // 릴리즈가 아직 없으면 블로그 '제품 업데이트' 카테고리 글로 폴백 — 빈 페이지 노출 방지
+  const fallbackPosts =
+    releases.length === 0
+      ? (await getPublishedPostsForStaticSitemap().catch(() => []))
+          .filter((post) => post.category === "제품 업데이트")
+          .slice(0, 6)
+      : []
+
   return (
     <div className="min-h-screen bg-[#FAFAF8]">
       <div className="mx-auto max-w-[720px] px-4 pb-20 pt-28 sm:px-6 md:pb-24 md:pt-32">
@@ -81,8 +91,42 @@ export default async function UpdatesPage() {
           </p>
         </div>
 
-        {/* 릴리즈 없을 때 */}
-        {releases.length === 0 && (
+        {/* 릴리즈 없을 때: 블로그 '제품 업데이트' 글 폴백 → 둘 다 없으면 빈 상태 */}
+        {releases.length === 0 && fallbackPosts.length > 0 && (
+          <div className="space-y-4">
+            <p className="text-[13px] text-[#1a1a1a]/45">
+              정식 릴리즈 노트를 준비하고 있습니다. 최근 제품 업데이트 소식을 먼저 확인해 보세요.
+            </p>
+            {fallbackPosts.map((post) => (
+              <Link
+                key={post.slug}
+                href={`/blog/${post.slug}`}
+                className="group block rounded-2xl border border-[#e8e8e4] bg-white px-5 py-5 transition-colors hover:border-[#c8c8c4] sm:px-8 sm:py-6"
+              >
+                <div className="mb-2 flex flex-wrap items-center gap-2">
+                  <span className="flex items-center gap-1.5 rounded-lg bg-[#f0f7f4] px-2.5 py-1 text-[12px] font-bold text-[#084734]">
+                    <Tag className="h-3 w-3" />제품 업데이트
+                  </span>
+                  <span className="flex items-center gap-1 text-[12px] text-[#1a1a1a]/35">
+                    <Calendar className="h-3 w-3" />{post.date}
+                  </span>
+                </div>
+                <h2 className="mb-1.5 text-[17px] font-bold tracking-[-0.02em] text-[#111110]">
+                  {post.title}
+                </h2>
+                <p className="line-clamp-2 text-[14px] leading-relaxed text-[#1a1a1a]/55">
+                  {post.excerpt}
+                </p>
+                <span className="mt-3 inline-flex items-center gap-1 text-[12px] font-semibold text-[#084734]">
+                  자세히 보기
+                  <ArrowRight className="h-3 w-3 transition-transform group-hover:translate-x-0.5" />
+                </span>
+              </Link>
+            ))}
+          </div>
+        )}
+
+        {releases.length === 0 && fallbackPosts.length === 0 && (
           <div className="bg-white rounded-2xl border border-[#e8e8e4] px-8 py-16 text-center">
             <div className="w-12 h-12 rounded-2xl bg-[#f0f0ec] flex items-center justify-center mx-auto mb-4">
               <Tag className="w-5 h-5 text-[#1a1a1a]/30" />

@@ -1,5 +1,6 @@
 import { NextRequest, NextResponse } from "next/server"
 import { runAll } from "@/lib/branch/sync/run-all"
+import { runBranchRevLinkMaintenance } from "@/lib/repositories/crm-source-links"
 
 export async function GET(req: NextRequest) {
   const expected = process.env.CRON_SECRET
@@ -8,5 +9,6 @@ export async function GET(req: NextRequest) {
     return NextResponse.json({ error: "unauthorized" }, { status: 401 })
   }
   const result = await runAll({ trigger: "cron" })
-  return NextResponse.json(result)
+  const crmLinks = result.ok ? await runBranchRevLinkMaintenance() : undefined
+  return NextResponse.json({ ...result, crmLinks })
 }

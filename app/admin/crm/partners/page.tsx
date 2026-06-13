@@ -1,16 +1,6 @@
-import PartnerWorkspacePageClient from "@/components/admin/partners/PartnerWorkspacePageClient"
-import { listPartnerWorkspacesData } from "@/lib/partners-data"
+import { redirect } from "next/navigation"
 
-export const dynamic = "force-dynamic"
-
-export default async function AdminCrmPartnersPage() {
-  const { workspaces, source, warning } = await listPartnerWorkspacesData()
-
-  return (
-    <PartnerWorkspacePageClient
-      initialWorkspaces={workspaces}
-      initialSource={source}
-      initialWarning={warning}
-    />
-  )
+// 구경로 → Deals(KPI)로 이동. 북마크/외부 링크 보존용 redirect 스텁.
+export default function AdminCrmPartnersRedirect() {
+  redirect("/admin/crm/deals/kpi")
 }

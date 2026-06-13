@@ -11,6 +11,7 @@ export {
 import type { BlogPost, BlogPostInput } from "./blog-types"
 import { DEFAULT_BLOG_CTA } from "./blog-types"
 import { estimateReadTime, slugify } from "./blog-markdown"
+import { atomicWriteJsonSync } from "@/lib/atomic-write"
 
 const DATA_PATH = path.join(process.cwd(), "data", "blog-posts.json")
 
@@ -37,7 +38,7 @@ function readRawPosts(): RawBlogPost[] {
 }
 
 function writePosts(posts: BlogPost[]): void {
-  fs.writeFileSync(DATA_PATH, JSON.stringify(posts, null, 2), "utf-8")
+  atomicWriteJsonSync(DATA_PATH, posts)
 }
 
 function formatToday(): string {

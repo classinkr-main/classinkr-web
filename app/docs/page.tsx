@@ -102,7 +102,7 @@ export default async function DocsHomePage({ searchParams }: DocsHomePageProps) 
           </p>
           <h1 className="mt-4 text-[2.35rem] font-black leading-[1.08] tracking-display sm:text-4xl md:text-6xl">
             클래스인을
-            <br className="hidden md:block" />
+            <br className="hidden md:block" />{" "}
             만나보세요.
           </h1>
           <p className="mt-5 max-w-3xl text-lg leading-8 text-[#615D59]">

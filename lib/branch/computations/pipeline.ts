@@ -1,5 +1,6 @@
 import type { BranchRevDeal } from "@/lib/repositories/branch-deals"
 import { normalizeBranchMemberName } from "@/lib/branch/member-names"
+import { confirmedMonthAmount } from "@/lib/branch/computations/rev-confirmed"
 import { fiscalQuarter, fyOf, ymKey } from "@/lib/branch/fiscal"
 
 type RevenuePeriod = "M" | "Q" | "Y"
@@ -48,11 +49,9 @@ function inScope(ym: string, scope: RevenuePeriod, now: Date): boolean {
 }
 
 function revenueFromRev(d: BranchRevDeal, period?: RevenuePeriod, now = new Date()): number {
-  const hasRedFlags = Object.keys(d.monthly_red).length > 0
   return Object.entries(d.monthly_payments).reduce((sum, [ym, value]) => {
     if (period && !inScope(ym, period, now)) return sum
-    if (hasRedFlags && !d.monthly_red[ym]) return sum
-    return sum + Number(value)
+    return sum + confirmedMonthAmount(d, ym, Number(value))
   }, 0)
 }
 
@@ -68,11 +67,10 @@ export function listPipeline(deals: BranchRevDeal[], filter?: { team?: string; m
     return true
   }).map((d) => {
     const manager = normalizeBranchMemberName(d.manager)
-    const hasRedFlags = Object.keys(d.monthly_red).length > 0
-    const confirmed = Object.entries(d.monthly_payments).reduce((s, [ym, v]) => {
-      if (hasRedFlags && !d.monthly_red[ym]) return s
-      return s + Number(v)
-    }, 0)
+    const confirmed = Object.entries(d.monthly_payments).reduce(
+      (s, [ym, v]) => s + confirmedMonthAmount(d, ym, Number(v)),
+      0,
+    )
     return {
       id: d.id, customer: d.customer_name, manager, team: d.team,
       region: d.region, importance: d.importance, stage: stageOf(d),

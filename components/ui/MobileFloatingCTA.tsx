@@ -13,10 +13,20 @@ export function MobileFloatingCTA() {
     const [dismissed, setDismissed] = useState(false)
 
     useEffect(() => {
+        // 아래로 스크롤(콘텐츠 읽는 중)에는 숨기고, 위로 스크롤할 때만 표시 —
+        // 챗봇 버블과 함께 하단을 점유해 콘텐츠를 가리는 혼잡을 줄인다
+        let lastY = window.scrollY
         const handleScroll = () => {
-            if (!dismissed && window.scrollY > 300) {
+            const currentY = window.scrollY
+            const scrollingUp = currentY < lastY - 4
+            const scrollingDown = currentY > lastY + 4
+            lastY = currentY
+
+            if (currentY <= 300) {
+                setVisible(false)
+            } else if (scrollingUp && !dismissed) {
                 setVisible(true)
-            } else if (window.scrollY <= 300) {
+            } else if (scrollingDown) {
                 setVisible(false)
             }
         }

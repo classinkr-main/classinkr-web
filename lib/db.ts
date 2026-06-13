@@ -1,6 +1,7 @@
 import fs from "fs"
 import path from "path"
 
+import { atomicWriteJsonSync } from "@/lib/atomic-write"
 import {
   DEFAULT_NOTIFICATION_APPEARANCE,
   mergeNotificationAppearance,
@@ -17,7 +18,7 @@ function readJson<T>(file: string): T {
 
 function writeJson(file: string, data: unknown) {
   if (!fs.existsSync(DATA_DIR)) fs.mkdirSync(DATA_DIR, { recursive: true })
-  fs.writeFileSync(path.join(DATA_DIR, file), JSON.stringify(data, null, 2))
+  atomicWriteJsonSync(path.join(DATA_DIR, file), data)
 }
 
 export type LeadStatus = "new" | "contacted" | "converted" | "closed"

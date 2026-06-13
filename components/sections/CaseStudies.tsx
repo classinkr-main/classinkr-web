@@ -62,7 +62,7 @@ const cases: CaseStudy[] = [
         result: "실시간 판서와 수업 자료를 수업 흐름 안에 모아 복습 자료화와 보강 운영의 밀도를 높였습니다.",
         quote: "설명과 판서가 남으니 학생들이 수업 이후에도 같은 흐름으로 다시 따라올 수 있었습니다.",
         attribution: "원장",
-        photo: "/images/case-studies/daechi-sejeong.jpg",
+        photo: "/images/case-studies/daechi-sejeong.webp",
         photoAlt: "대치 세** 도입 사례 사진",
     },
     {

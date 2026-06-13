@@ -8,7 +8,7 @@ const sizes = [
   {
     inches: `75"`,
     heading: `75" — 콤팩트 강의실`,
-    imageSrc: "/images/product/hw/sizes/room-75.jpg",
+    imageSrc: "/images/product/hw/sizes/room-75.webp",
     imageAlt: '75인치 클래스인 보드 예시 공간',
     specs: [
       { label: "적정 인원", value: "20~30명" },
@@ -21,7 +21,7 @@ const sizes = [
   {
     inches: `86"`,
     heading: `86" — 표준 강의실`,
-    imageSrc: "/images/product/hw/sizes/room-86-jayescan.jpg",
+    imageSrc: "/images/product/hw/sizes/room-86-jayescan.webp",
     imageClassName: "object-cover scale-[1.22]",
     imageAlt: '86인치 클래스인 보드 수업 공간',
     specs: [

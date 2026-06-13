@@ -22,11 +22,17 @@ export async function GET(req: NextRequest) {
     }
 
     if (partnerAccountId) {
-      const customers = await listCustomerListItems(partnerAccountId);
+      const customers = await listCustomerListItems(partnerAccountId, {
+        includeCrmCoverage: true,
+        crmCoverageDepth: "summary",
+      });
       return NextResponse.json({ customers });
     }
 
-    const customers = await listAllCustomerListItems();
+    const customers = await listAllCustomerListItems({
+      includeCrmCoverage: true,
+      crmCoverageDepth: "summary",
+    });
     return NextResponse.json({ customers });
   } catch (error) {
     console.warn("[GET /api/admin/customers] falling back to legacy model", error);

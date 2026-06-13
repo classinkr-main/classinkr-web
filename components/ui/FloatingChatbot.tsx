@@ -79,7 +79,7 @@ const starterQuestions = [
     "결제, 영수증, 계정 문제를 상담받고 싶어요",
 ]
 
-const DEEP_CONSULTATION_ICON_SRC = "/images/chatbot/ai-deep-consultation.png"
+const DEEP_CONSULTATION_ICON_SRC = "/images/chatbot/ai-deep-consultation.webp"
 
 function shouldHideChatbot(pathname: string | null) {
     if (!pathname) return false

@@ -26,7 +26,7 @@ const CARDS = [
     body: "빛 반사로 인한 사각지대를 완벽히 잡았습니다. 창가 자리든 뒷자리든, 교실 어느 자리에서도 왜곡 없이 선명한 판서를 공유하며 수업의 몰입도를 극대화합니다.",
   },
   {
-    imageSrc: "/images/product/hw/details/bezel-closeup.png",
+    imageSrc: "/images/product/hw/details/bezel-closeup.webp",
     imageAlt: "클래스인 보드 베젤 클로즈업",
     imageFit: "cover",
     imagePadding: "",

@@ -1,4 +1,5 @@
 import type { BranchRevDeal } from "@/lib/repositories/branch-deals"
+import { dealHasColorData } from "@/lib/branch/computations/rev-confirmed"
 import type { DshOutput } from "@/lib/branch/parsers/dsh"
 import type { KpiRow } from "@/lib/branch/parsers/kpi"
 import type { SegRow } from "@/lib/branch/parsers/seg"
@@ -38,8 +39,10 @@ export function runDataQuality(inp: DqInputs): DqIssue[] {
   const unknown = allHw.filter((row) => !HW_PRODUCT_PATTERNS.some((p) => p.test(row.product))).map((r) => r.product)
   if (unknown.length) issues.push({ id: "DQ-9", severity: "warn", message: "HW 입출고 제품명 카탈로그 불일치", samples: [...new Set(unknown)].slice(0, 8) })
 
-  const noRed = inp.deals.filter((d) => d.first_payment && Object.values(d.monthly_payments).some((v) => v) && Object.keys(d.monthly_red).length === 0)
-  if (noRed.length) issues.push({ id: "DQ-10", severity: "error", message: "빨간 셀 추출 실패 의심 (formatRuns 비어 있음)", samples: noRed.slice(0,5).map((d) => d.customer_name) })
+  // 빨강(확정)·파랑(임박) 어느 색 데이터도 없으면 formatRuns 추출 실패를 의심한다.
+  // 파란 글자만 있는 행은 monthly_red가 비어 있어도 정상 추출이므로 제외.
+  const noColor = inp.deals.filter((d) => d.first_payment && Object.values(d.monthly_payments).some((v) => v) && !dealHasColorData(d))
+  if (noColor.length) issues.push({ id: "DQ-10", severity: "error", message: "색 셀 추출 실패 의심 (formatRuns 비어 있음)", samples: noColor.slice(0,5).map((d) => d.customer_name) })
 
   const segIdent = inp.seg.filter((s) => s.goal > 0 && s.goal === s.status).map((s) => s.region)
   if (segIdent.length) issues.push({ id: "DQ-11", severity: "info", message: "SEG 의 status==goal 지역 (히트맵 미사용 사유)", samples: segIdent })

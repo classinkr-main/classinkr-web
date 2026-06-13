@@ -1,14 +1,14 @@
 /**
- * Blog Repository — JSON ↔ Supabase 듀얼 모드
+ * Blog Repository — Supabase 전용
  *
- * 환경변수 USE_SUPABASE_BLOG=true 로 Supabase 전환
+ * 2026-06 듀얼 모드(JSON 폴백) 제거: data/blog-posts.json 은 읽기 전용 백업,
+ * lib/blog-data.ts 는 레거시 참조용으로만 남아 있다.
  * 기존 lib/blog-data.ts 의 함수 시그니처를 유지
  */
 
 import "server-only";
 
 import { createSupabaseServerClient } from "@/lib/supabase/server";
-import { hasSupabaseBrowserEnv } from "@/lib/supabase/public-env";
 import type { BlogPost as SupaBlogPost, BlogPostInsert, BlogPostUpdate } from "@/lib/supabase/database.types";
 import { sanitizePublicUrl } from "@/lib/safe-public-url";
 
@@ -18,12 +18,6 @@ export { CATEGORIES, BLOG_STATUS_OPTIONS, DEFAULT_BLOG_CTA } from "@/lib/blog-ty
 
 import { DEFAULT_BLOG_CTA, type BlogPost, type BlogPostInput } from "@/lib/blog-types";
 
-const BLOG_DATA_SOURCE = process.env.USE_SUPABASE_BLOG?.trim().toLowerCase();
-const USE_SUPABASE =
-  BLOG_DATA_SOURCE === "true" ||
-  (BLOG_DATA_SOURCE !== "false" &&
-    process.env.NODE_ENV === "production" &&
-    hasSupabaseBrowserEnv());
 const BLOG_SLUG_CONFLICT_MESSAGE = "이미 사용 중인 블로그 URL 슬러그입니다.";
 
 /* ─── Supabase Row ↔ 기존 BlogPost 변환 ─── */
@@ -117,10 +111,6 @@ const LIST_COLUMNS = [
 ].join(",")
 
 export async function getAllPosts(): Promise<BlogPost[]> {
-  if (!USE_SUPABASE) {
-    const mod = await import("@/lib/blog-data");
-    return mod.getAllPosts();
-  }
 
   const supabase = await createSupabaseServerClient();
   const { data, error } = await supabase
@@ -134,10 +124,6 @@ export async function getAllPosts(): Promise<BlogPost[]> {
 }
 
 export async function getPublishedPosts(): Promise<BlogPost[]> {
-  if (!USE_SUPABASE) {
-    const mod = await import("@/lib/blog-data");
-    return mod.getPublishedPosts();
-  }
 
   const supabase = await createSupabaseBlogReadClient();
   const { data, error } = await supabase
@@ -152,10 +138,6 @@ export async function getPublishedPosts(): Promise<BlogPost[]> {
 }
 
 export async function getPostBySlug(slug: string): Promise<BlogPost | null> {
-  if (!USE_SUPABASE) {
-    const mod = await import("@/lib/blog-data");
-    return (await mod.getPostBySlug(slug)) ?? null;
-  }
 
   const supabase = await createSupabaseServerClient();
   const { data, error } = await supabase
@@ -169,10 +151,6 @@ export async function getPostBySlug(slug: string): Promise<BlogPost | null> {
 }
 
 export async function getPublishedPostBySlug(slug: string): Promise<BlogPost | null> {
-  if (!USE_SUPABASE) {
-    const mod = await import("@/lib/blog-data");
-    return (await mod.getPublishedPostBySlug(slug)) ?? null;
-  }
 
   const supabase = await createSupabaseBlogReadClient();
   const { data, error } = await supabase
@@ -188,23 +166,25 @@ export async function getPublishedPostBySlug(slug: string): Promise<BlogPost | n
 }
 
 export async function getPostById(id: number): Promise<BlogPost | null> {
-  if (!USE_SUPABASE) {
-    const mod = await import("@/lib/blog-data");
-    return (await mod.getPostById(id)) ?? null;
-  }
 
-  // Supabase에서는 UUID로 검색해야 하므로 전체 검색 후 hash 매칭
-  // 실제로는 _uuid를 사용해야 하지만 호환성을 위해 유지
-  const summary = (await getAllPosts()).find((p) => p.id === id) as
-    | (BlogPost & { _uuid?: string })
-    | undefined;
-  if (!summary?._uuid) return null;
-
+  // Supabase에서는 UUID로 검색해야 하므로 uuid 목록만 받아 hash 매칭
+  // (legacy number id = hashUuidToNumber(uuid) 호환 유지)
   const supabase = await createSupabaseServerClient();
+  const { data: idRows, error: idError } = await supabase
+    .from("blog_posts")
+    .select("id")
+    .is("deleted_at", null);
+  if (idError || !idRows) return null;
+
+  const uuid = (idRows as { id: string }[]).find(
+    (row) => hashUuidToNumber(row.id) === id
+  )?.id;
+  if (!uuid) return null;
+
   const { data, error } = await supabase
     .from("blog_posts")
     .select("*")
-    .eq("id", summary._uuid)
+    .eq("id", uuid)
     .single();
 
   if (error || !data) return null;
@@ -214,10 +194,6 @@ export async function getPostById(id: number): Promise<BlogPost | null> {
 /* ─── CREATE ─── */
 
 export async function createPost(data: Partial<BlogPostInput>): Promise<BlogPost> {
-  if (!USE_SUPABASE) {
-    const mod = await import("@/lib/blog-data");
-    return mod.createPost(data);
-  }
 
   const supabase = await createSupabaseServerClient();
   const insert = legacyToSupabaseInsert(data);
@@ -242,10 +218,6 @@ export async function updatePost(
   data: Partial<BlogPostInput>,
   uuid?: string
 ): Promise<BlogPost | null> {
-  if (!USE_SUPABASE) {
-    const mod = await import("@/lib/blog-data");
-    return mod.updatePost(id, data);
-  }
 
   // Supabase에서는 UUID 사용
   const targetUuid = uuid ?? (await findUuidByLegacyId(id));
@@ -303,10 +275,6 @@ export async function updatePost(
 /* ─── DELETE (소프트 삭제) ─── */
 
 export async function trashPost(id: number, uuid?: string): Promise<boolean> {
-  if (!USE_SUPABASE) {
-    const mod = await import("@/lib/blog-data");
-    return mod.trashPost(id);
-  }
 
   const targetUuid = uuid ?? (await findUuidByLegacyId(id));
   if (!targetUuid) return false;
@@ -321,10 +289,6 @@ export async function trashPost(id: number, uuid?: string): Promise<boolean> {
 }
 
 export async function restorePost(id: number, uuid?: string): Promise<BlogPost | null> {
-  if (!USE_SUPABASE) {
-    const mod = await import("@/lib/blog-data");
-    return mod.restorePost(id);
-  }
 
   const targetUuid = uuid ?? (await findUuidByLegacyId(id));
   if (!targetUuid) return null;
@@ -342,10 +306,6 @@ export async function restorePost(id: number, uuid?: string): Promise<BlogPost |
 }
 
 export async function getTrashedPosts(): Promise<BlogPost[]> {
-  if (!USE_SUPABASE) {
-    const mod = await import("@/lib/blog-data");
-    return mod.getTrashedPosts();
-  }
 
   const supabase = await createSupabaseServerClient();
   const { data, error } = await supabase
@@ -359,10 +319,6 @@ export async function getTrashedPosts(): Promise<BlogPost[]> {
 }
 
 export async function permanentDeletePost(id: number, uuid?: string): Promise<boolean> {
-  if (!USE_SUPABASE) {
-    const mod = await import("@/lib/blog-data");
-    return mod.permanentDeletePost(id);
-  }
 
   const targetUuid = uuid ?? (await findUuidByLegacyId(id));
   if (!targetUuid) return false;
@@ -381,11 +337,6 @@ export async function permanentDeletePost(id: number, uuid?: string): Promise<bo
  * 일반 서버 컴포넌트는 getPublishedPosts() 사용
  */
 export async function getPublishedSlugsForStaticParams(): Promise<{ slug: string }[]> {
-  if (!USE_SUPABASE) {
-    const mod = await import("@/lib/blog-data");
-    const posts = await mod.getPublishedPosts();
-    return posts.map((p) => ({ slug: p.slug }));
-  }
   try {
     const { createSupabaseAdminClient } = await import("@/lib/supabase/admin");
     const supabase = createSupabaseAdminClient();
@@ -401,10 +352,6 @@ export async function getPublishedSlugsForStaticParams(): Promise<{ slug: string
 }
 
 export async function getPublishedPostsForStaticSitemap(): Promise<BlogPost[]> {
-  if (!USE_SUPABASE) {
-    const mod = await import("@/lib/blog-data");
-    return mod.getPublishedPosts();
-  }
 
   const { createSupabaseAdminClient } = await import("@/lib/supabase/admin");
   const supabase = createSupabaseAdminClient();
@@ -420,10 +367,6 @@ export async function getPublishedPostsForStaticSitemap(): Promise<BlogPost[]> {
 }
 
 export async function getRelatedPosts(post: BlogPost, limit = 3): Promise<BlogPost[]> {
-  if (!USE_SUPABASE) {
-    const mod = await import("@/lib/blog-data");
-    return mod.getRelatedPosts(post, limit);
-  }
 
   const posts = await getPublishedPosts();
   const selectedByIds = posts.filter(
@@ -501,9 +444,18 @@ async function assertBlogSlugAvailable(
 }
 
 async function findUuidByLegacyId(legacyId: number): Promise<string | null> {
-  const posts = await getAllPosts();
-  const found = posts.find((p) => p.id === legacyId);
-  return (found as BlogPost & { _uuid?: string })?._uuid ?? null;
+  // legacy number id = hashUuidToNumber(uuid) — id 컬럼만 받아 해시 매칭 (전체 글 로드 불필요)
+  const supabase = await createSupabaseServerClient();
+  const { data, error } = await supabase
+    .from("blog_posts")
+    .select("id")
+    .is("deleted_at", null);
+  if (error || !data) return null;
+
+  return (
+    (data as { id: string }[]).find((row) => hashUuidToNumber(row.id) === legacyId)?.id ??
+    null
+  );
 }
 
 async function createSupabaseBlogReadClient() {

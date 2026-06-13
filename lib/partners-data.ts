@@ -787,7 +787,10 @@ async function readLocalWorkspaces() {
 
 async function writeLocalWorkspaces(workspaces: PartnerWorkspace[]) {
   await fs.mkdir(path.dirname(LOCAL_FILE), { recursive: true })
-  await fs.writeFile(LOCAL_FILE, JSON.stringify(workspaces.map(normalizeWorkspace), null, 2), "utf-8")
+  // 임시 파일 + rename으로 원자적 교체 — 동시 쓰기 시 반쯤 쓰인 JSON 방지
+  const tmpPath = `${LOCAL_FILE}.${process.pid}.tmp`
+  await fs.writeFile(tmpPath, JSON.stringify(workspaces.map(normalizeWorkspace), null, 2), "utf-8")
+  await fs.rename(tmpPath, LOCAL_FILE)
 }
 
 async function querySupabasePartnerWorkspaces(partnerId?: string) {

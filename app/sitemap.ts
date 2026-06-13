@@ -3,6 +3,7 @@ import type { MetadataRoute } from "next"
 import { getDocCategoryPath, getDocPath } from "@/lib/docs"
 import { getDocsContent, listListedDocsFromContent } from "@/lib/docs-content"
 import { getPublishedPostsForStaticSitemap } from "@/lib/repositories/blog"
+import { listCachedPublicEvents } from "@/lib/repositories/public-events"
 import { SITE_URL } from "@/lib/seo"
 
 const staticRoutes: Array<{
@@ -16,6 +17,7 @@ const staticRoutes: Array<{
   { path: "/product", changeFrequency: "weekly", priority: 0.9, lastModified: "2026-05-20" },
   { path: "/product/sw", changeFrequency: "weekly", priority: 0.9, lastModified: "2026-05-20" },
   { path: "/product/hw", changeFrequency: "weekly", priority: 0.9, lastModified: "2026-05-20" },
+  { path: "/pricing", changeFrequency: "monthly", priority: 0.8, lastModified: "2026-06-10" },
   { path: "/contact", changeFrequency: "monthly", priority: 0.8, lastModified: "2026-04-01" },
   { path: "/privacy", changeFrequency: "yearly", priority: 0.5, lastModified: "2026-04-01" },
   { path: "/terms", changeFrequency: "yearly", priority: 0.5, lastModified: "2026-04-01" },
@@ -39,7 +41,7 @@ export default async function sitemap(): Promise<MetadataRoute.Sitemap> {
     priority: route.priority,
   }))
 
-  const [publishedPosts, docsContent] = await Promise.all([
+  const [publishedPosts, docsContent, publicEvents] = await Promise.all([
     getPublishedPostsForStaticSitemap().catch((error) => {
       console.error("[sitemap] failed to load published posts", error)
       return []
@@ -47,6 +49,10 @@ export default async function sitemap(): Promise<MetadataRoute.Sitemap> {
     getDocsContent().catch((error) => {
       console.error("[sitemap] failed to load docs content", error)
       return null
+    }),
+    listCachedPublicEvents().catch((error) => {
+      console.error("[sitemap] failed to load public events", error)
+      return []
     }),
   ])
 
@@ -57,8 +63,17 @@ export default async function sitemap(): Promise<MetadataRoute.Sitemap> {
     priority: post.featured ? 0.8 : 0.7,
   }))
 
+  const eventEntries: MetadataRoute.Sitemap = publicEvents
+    .filter((event) => Boolean(event.slug))
+    .map((event) => ({
+      url: toAbsoluteUrl(`/events/${event.slug}`),
+      lastModified: event.updatedAt ?? undefined,
+      changeFrequency: "weekly",
+      priority: 0.6,
+    }))
+
   if (!docsContent) {
-    return [...staticEntries, ...blogEntries]
+    return [...staticEntries, ...blogEntries, ...eventEntries]
   }
 
   const listedDocs = listListedDocsFromContent(docsContent)
@@ -76,5 +91,5 @@ export default async function sitemap(): Promise<MetadataRoute.Sitemap> {
     priority: doc.featured ? 0.8 : 0.65,
   }))
 
-  return [...staticEntries, ...blogEntries, ...docsCategoryEntries, ...docsArticleEntries]
+  return [...staticEntries, ...blogEntries, ...eventEntries, ...docsCategoryEntries, ...docsArticleEntries]
 }

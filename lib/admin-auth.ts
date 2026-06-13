@@ -263,11 +263,59 @@ function getLegacyAdminContext(req: NextRequest): VerifiedAdminContext | null {
   }
 }
 
+// Supabase 관리자 컨텍스트는 요청마다 auth + admin_profiles 왕복이 필요하므로
+// 동일 세션 쿠키에 대해 짧게 캐시한다. (권한 회수 반영 지연 최대 60초)
+const SUPABASE_ADMIN_CONTEXT_TTL_MS = 60_000
+const SUPABASE_ADMIN_CONTEXT_CACHE_MAX = 200
+const supabaseAdminContextCache = new Map<
+  string,
+  { context: VerifiedAdminContext; expiresAt: number }
+>()
+
+function getSupabaseAuthCookieKey(req: NextRequest): string | null {
+  const authCookies = req.cookies
+    .getAll()
+    .filter(({ name }) => name.startsWith("sb-"))
+  if (authCookies.length === 0) return null
+
+  return authCookies
+    .map(({ name, value }) => `${name}=${value}`)
+    .sort()
+    .join(";")
+}
+
 async function getSupabaseAdminContext(
   req: NextRequest
 ): Promise<VerifiedAdminContext | null> {
   if (!hasSupabaseBrowserEnv()) return null
 
+  const cacheKey = getSupabaseAuthCookieKey(req)
+  if (!cacheKey) return null
+
+  const cached = supabaseAdminContextCache.get(cacheKey)
+  if (cached && cached.expiresAt > Date.now()) {
+    return cached.context
+  }
+
+  const context = await fetchSupabaseAdminContext(req)
+  if (context) {
+    if (supabaseAdminContextCache.size >= SUPABASE_ADMIN_CONTEXT_CACHE_MAX) {
+      supabaseAdminContextCache.clear()
+    }
+    supabaseAdminContextCache.set(cacheKey, {
+      context,
+      expiresAt: Date.now() + SUPABASE_ADMIN_CONTEXT_TTL_MS,
+    })
+  } else {
+    supabaseAdminContextCache.delete(cacheKey)
+  }
+
+  return context
+}
+
+async function fetchSupabaseAdminContext(
+  req: NextRequest
+): Promise<VerifiedAdminContext | null> {
   const { url, publishableKey } = getSupabaseBrowserEnv()
   const supabase = createServerClient<Database>(url, publishableKey, {
     cookies: {

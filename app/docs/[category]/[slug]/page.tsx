@@ -25,6 +25,8 @@ import {
   getRelatedDocsFromContent,
   resolveDocsRedirect,
 } from "@/lib/docs-content"
+import { JsonLd } from "@/components/seo/JsonLd"
+import { createArticleJsonLd, createBreadcrumbJsonLd, toAbsoluteUrl } from "@/lib/seo"
 
 import {
   formatDocDate,
@@ -69,6 +71,7 @@ export async function generateMetadata({
     title: `${doc.title} | Classin 가이드`,
     description: doc.description,
     keywords: doc.keywords,
+    alternates: { canonical: toAbsoluteUrl(getDocPath(doc)) },
     robots: isListed ? undefined : { index: false, follow: true },
     openGraph: {
       title: `${doc.title} | Classin 가이드`,
@@ -120,11 +123,40 @@ export default async function DocsArticlePage({
   const activePath = getDocPath(doc)
   const relatedDocs = getRelatedDocsFromContent(docsContent, doc, 3)
 
+  // 같은 카테고리 내 이전/다음 문서 (설치 → 가입처럼 순서가 있는 가이드의 연속 동선)
+  const categoryDocs = docsContent.docs.filter(
+    (item) => item.category === doc.category && (item.visibility ?? "public") === "public"
+  )
+  const docIndex = categoryDocs.findIndex((item) => item.slug === doc.slug)
+  const prevDoc = docIndex > 0 ? categoryDocs[docIndex - 1] : null
+  const nextDoc =
+    docIndex >= 0 && docIndex < categoryDocs.length - 1 ? categoryDocs[docIndex + 1] : null
+
+  // 카테고리가 board(하드웨어)면 하드웨어 상담, 그 외는 기술 지원 상담으로 연결
+  const contactTopic = doc.category === "board" ? "하드웨어/설치/AS" : "계정/접속/기술 지원"
+  const contactHref = `/contact?topic=${encodeURIComponent(contactTopic)}#contact-form`
+
   return (
     <DocsSidebarLayout
       sidebar={<DocsSidebar groups={getDocsNavGroups(activePath, docsContent)} />}
       toc={<DocsTableOfContents items={toTocItems(doc)} />}
     >
+      <JsonLd
+        data={[
+          createArticleJsonLd({
+            path: activePath,
+            title: doc.title,
+            description: doc.description,
+            dateModified: doc.updatedAt,
+          }),
+          createBreadcrumbJsonLd([
+            { name: "홈", path: "/" },
+            { name: "가이드", path: "/docs" },
+            { name: category.title, path: getDocCategoryPath(doc.category) },
+            { name: doc.title, path: activePath },
+          ]),
+        ]}
+      />
       <Link
         href={getDocCategoryPath(doc.category)}
         className="mb-6 inline-flex origin-left items-center gap-2 text-sm font-medium text-[#1a1a1a]/45 transition-all duration-150 hover:text-[#084734] active:scale-[0.98]"
@@ -192,6 +224,25 @@ export default async function DocsArticlePage({
 
             <section className="border-t border-black/[0.08] pt-8">
               <p className="text-xs font-bold uppercase tracking-[0.16em] text-[#084734]">
+                추가 지원
+              </p>
+              <h2 className="mt-2 text-xl font-black tracking-card text-[#111110]">
+                문서로 해결되지 않았나요?
+              </h2>
+              <p className="mt-3 max-w-3xl text-[15px] leading-7 text-[#615D59]">
+                현재 상황을 남겨주시면 담당 매니저가 확인 순서를 정리해 연락드립니다.
+              </p>
+              <Link
+                href={contactHref}
+                className="mt-4 inline-flex origin-left items-center gap-2 rounded-full bg-[#084734] px-5 py-2.5 text-sm font-bold text-white transition-all duration-150 hover:bg-[#065c41] active:scale-[0.98]"
+              >
+                상담 남기기
+                <ArrowRight className="h-4 w-4" />
+              </Link>
+            </section>
+
+            <section className="border-t border-black/[0.08] pt-8">
+              <p className="text-xs font-bold uppercase tracking-[0.16em] text-[#084734]">
                 요약
               </p>
               <h2 className="mt-2 text-xl font-black tracking-card text-[#111110]">
@@ -217,6 +268,42 @@ export default async function DocsArticlePage({
                   클래스인 시작하기 보기 →
                 </Link>
               </section>
+            )}
+
+            {(prevDoc || nextDoc) && (
+              <nav
+                aria-label="이전/다음 문서"
+                className="grid gap-3 border-t border-black/[0.08] pt-8 sm:grid-cols-2"
+              >
+                {prevDoc ? (
+                  <Link
+                    href={getDocPath(prevDoc)}
+                    className="group rounded-2xl border border-black/[0.08] bg-white px-5 py-4 transition-colors hover:border-[#084734]/30"
+                  >
+                    <p className="text-[11px] font-bold uppercase tracking-[0.14em] text-[#1a1a1a]/35">
+                      ← 이전 문서
+                    </p>
+                    <p className="mt-1.5 text-[15px] font-bold text-[#111110] transition-colors group-hover:text-[#084734]">
+                      {prevDoc.title}
+                    </p>
+                  </Link>
+                ) : (
+                  <span aria-hidden="true" className="hidden sm:block" />
+                )}
+                {nextDoc ? (
+                  <Link
+                    href={getDocPath(nextDoc)}
+                    className="group rounded-2xl border border-black/[0.08] bg-white px-5 py-4 text-right transition-colors hover:border-[#084734]/30"
+                  >
+                    <p className="text-[11px] font-bold uppercase tracking-[0.14em] text-[#1a1a1a]/35">
+                      다음 문서 →
+                    </p>
+                    <p className="mt-1.5 text-[15px] font-bold text-[#111110] transition-colors group-hover:text-[#084734]">
+                      {nextDoc.title}
+                    </p>
+                  </Link>
+                ) : null}
+              </nav>
             )}
 
             {relatedDocs.length > 0 && (

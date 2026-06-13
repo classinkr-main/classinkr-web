@@ -99,6 +99,12 @@ export interface AdminDocsQuestionSummary {
   latestAt: string | null
 }
 
+export interface AdminDocsViewedDocSummary {
+  path: string
+  title: string
+  count: number
+}
+
 export interface AdminDocsAnalyticsResponse {
   configured: boolean
   status: "live" | "unconfigured"
@@ -106,6 +112,7 @@ export interface AdminDocsAnalyticsResponse {
   rangeDays: number
   summary: AdminDocsAnalyticsSummary
   topSearchQueries: AdminDocsSearchQuerySummary[]
+  topViewedDocs: AdminDocsViewedDocSummary[]
   recentFeedback: AdminDocsFeedbackSummary[]
   topChatbotQuestions: AdminDocsQuestionSummary[]
   warnings: string[]
@@ -301,7 +308,11 @@ function getPublicPath(article: Pick<DocsArticleRow, "category_id" | "slug">) {
   return `/docs/${article.category_id}/${article.slug}`
 }
 
-const REVIEW_STALE_DAYS = 60
+// 문서 검토 주기(일) — 초과 시 stale 플래그. DOCS_REVIEW_STALE_DAYS 환경변수로 조정
+const REVIEW_STALE_DAYS = (() => {
+  const parsed = Number(process.env.DOCS_REVIEW_STALE_DAYS)
+  return Number.isFinite(parsed) && parsed > 0 ? parsed : 60
+})()
 
 interface ArticleAiInput {
   status: string
@@ -648,6 +659,7 @@ export async function getAdminDocsAnalytics(
       rangeDays,
       summary: EMPTY_ANALYTICS_SUMMARY,
       topSearchQueries: [],
+      topViewedDocs: [],
       recentFeedback: [],
       topChatbotQuestions: [],
       warnings: ["Supabase 서버 환경 변수가 없어 분석 데이터를 빈 상태로 표시합니다."],
@@ -664,8 +676,9 @@ export async function getAdminDocsAnalytics(
     searchResult,
     chatbotAnswerResult,
     chatbotFeedbackResult,
+    pageViewResult,
   ] = await Promise.all([
-    supabase.from("docs_articles").select("id, title").limit(1000),
+    supabase.from("docs_articles").select("id, title, slug, category_id").limit(1000),
     supabase
       .from("docs_feedback")
       .select("id, article_id, helpful, reason, created_at")
@@ -690,6 +703,13 @@ export async function getAdminDocsAnalytics(
       .gte("created_at", sinceIso)
       .order("created_at", { ascending: false })
       .limit(500),
+    supabase
+      .from("client_events")
+      .select("page")
+      .eq("event_name", "page_view")
+      .like("page", "/docs/%")
+      .gte("created_at", sinceIso)
+      .limit(50000),
   ])
 
   if (articleResult.error) warnings.push(`docs_articles: ${articleResult.error.message}`)
@@ -700,12 +720,38 @@ export async function getAdminDocsAnalytics(
   }
   if (chatbotFeedbackResult.error) warnings.push(`chatbot_feedback: ${chatbotFeedbackResult.error.message}`)
 
-  const titleByArticleId = new Map(
-    (((articleResult.data ?? []) as Array<{ id: string; title: string }>)).map((article) => [
-      article.id,
-      article.title,
-    ])
+  if (pageViewResult.error) warnings.push(`client_events: ${pageViewResult.error.message}`)
+
+  const articleRows = (articleResult.data ?? []) as Array<{
+    id: string
+    title: string
+    slug: string
+    category_id: string
+  }>
+  const titleByArticleId = new Map(articleRows.map((article) => [article.id, article.title]))
+  const titleByPath = new Map(
+    articleRows.map((article) => [`/docs/${article.category_id}/${article.slug}`, article.title])
   )
+
+  // 문서별 조회수 집계 (client_events page_view)
+  const viewCounts = new Map<string, number>()
+  for (const row of (pageViewResult.error ? [] : pageViewResult.data ?? []) as Array<{ page: string | null }>) {
+    if (!row.page) continue
+    const normalized = row.page.split("?")[0]
+    viewCounts.set(normalized, (viewCounts.get(normalized) ?? 0) + 1)
+  }
+  const topViewedDocs: AdminDocsViewedDocSummary[] = [...viewCounts.entries()]
+    .map(([path, count]) => {
+      let decodedPath = path
+      try {
+        decodedPath = decodeURIComponent(path)
+      } catch {
+        // 그대로 사용
+      }
+      return { path, title: titleByPath.get(decodedPath) ?? decodedPath, count }
+    })
+    .sort((left, right) => right.count - left.count)
+    .slice(0, 8)
   const feedbackRows = (feedbackResult.error ? [] : feedbackResult.data ?? []) as DocsFeedbackRow[]
   const searchRows = (searchResult.error ? [] : searchResult.data ?? []) as DocsSearchEventRow[]
   const chatbotAnswerRows = (chatbotAnswerResult.error ? [] : chatbotAnswerResult.data ?? []) as ChatbotAnswerEventRow[]
@@ -771,6 +817,7 @@ export async function getAdminDocsAnalytics(
     topSearchQueries: Array.from(queryMap.values())
       .sort((left, right) => right.count - left.count)
       .slice(0, 8),
+    topViewedDocs,
     recentFeedback: feedbackRows.slice(0, 8).map((row) => ({
       id: row.id,
       articleId: row.article_id,

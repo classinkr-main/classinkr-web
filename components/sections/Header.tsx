@@ -7,7 +7,7 @@ import { usePathname } from "next/navigation"
 import { NewsletterModal } from "./NewsletterModal"
 import { TrackedLink } from "@/components/TrackedLink"
 import { cn } from "@/lib/utils"
-import { Menu, X, Monitor, Cpu } from "lucide-react"
+import { Menu, X, Pencil, Presentation } from "lucide-react"
 
 const navItems = [
     { name: "제품 소개", href: "/product" },
@@ -18,8 +18,8 @@ const navItems = [
 ]
 
 const productTabs = [
-    { name: "Classin 소프트웨어", href: "/product/sw", icon: Monitor },
-    { name: "Classin Board", href: "/product/hw", icon: Cpu },
+    { name: "Classin 소프트웨어", href: "/product/sw", icon: Pencil },
+    { name: "Classin Board", href: "/product/hw", icon: Presentation },
 ]
 
 export function Header() {
@@ -59,10 +59,9 @@ export function Header() {
                     <Image
                         src="/images/logo.png"
                         alt="Classin Logo"
-                        width={120}
-                        height={32}
+                        width={674}
+                        height={244}
                         className="h-7 md:h-8 w-auto object-contain"
-                        style={{ width: "auto" }}
                         priority
                     />
                 </Link>

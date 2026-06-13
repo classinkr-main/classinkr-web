@@ -1,5 +1,5 @@
 import type { FormattedCell } from "@/lib/branch/google-sheets"
-import { isRedBg } from "@/lib/branch/google-sheets"
+import { isBlueText, isRedBg, isRedText } from "@/lib/branch/google-sheets"
 
 export const REV_RANGE = "'2. REV'!A1:CF400"
 export const REV_COLS = {
@@ -25,6 +25,9 @@ export interface RevDealParsed {
   contract_target: number | null
   monthly_payments: Record<string, number>
   monthly_red: Record<string, boolean>
+  // 주차(w1~w5) 칸 글자색 기반 금액 분해. 빨강 = 확정, 파랑 = 클로징 임박(90%+)
+  monthly_confirmed: Record<string, number>
+  monthly_high_conf: Record<string, number>
   raw: Record<string, unknown>
 }
 
@@ -87,17 +90,20 @@ export function parseRev(grid: FormattedCell[][], opts?: { refFy?: number }): Re
   if (grid.length < 2) return []
   const refFy = opts?.refFy ?? new Date().getUTCFullYear()
   const headers = grid[1] ?? []
-  const monthMap: Array<{ idx: number; ym: string }> = []
+  // 헤더 구조: 월 합계 칸("4".."12","1".."3") 뒤에 그 달의 주차 칸(w1~w5)이 이어진다.
+  // 색 표시는 주차 칸에 들어가므로 월 블록 단위로 함께 읽는다. ("5w" 같은 오타 헤더도 허용)
+  const monthBlocks: Array<{ ym: string; totalIdx: number; weekIdxs: number[] }> = []
   for (let i = REV_COLS.monthlyStart; i < headers.length; i++) {
     const v = headers[i]?.value
     if (v == null) continue
     const s = String(v).trim()
-    // accept only "1".."12" (skip "w1"-"w5" weekly cols and other text)
-    if (!/^([1-9]|1[0-2])$/.test(s)) continue
-    const month = parseInt(s, 10)
-    const year = month >= 4 ? refFy : refFy + 1
-    const ym = `${year}-${String(month).padStart(2, "0")}`
-    monthMap.push({ idx: i, ym })
+    if (/^([1-9]|1[0-2])$/.test(s)) {
+      const month = parseInt(s, 10)
+      const year = month >= 4 ? refFy : refFy + 1
+      monthBlocks.push({ ym: `${year}-${String(month).padStart(2, "0")}`, totalIdx: i, weekIdxs: [] })
+    } else if (/^(w\d|\dw)$/i.test(s) && monthBlocks.length > 0) {
+      monthBlocks[monthBlocks.length - 1].weekIdxs.push(i)
+    }
   }
 
   const out: RevDealParsed[] = []
@@ -107,11 +113,37 @@ export function parseRev(grid: FormattedCell[][], opts?: { refFy?: number }): Re
     if (!customer) continue
     const monthly_payments: Record<string, number> = {}
     const monthly_red: Record<string, boolean> = {}
-    for (const { idx, ym } of monthMap) {
-      const cell = row[idx]; if (!cell) continue
-      const n = asNumber(cell.value)
-      if (n != null && n !== 0) monthly_payments[ym] = n
-      if (isRedBg(cell.bg)) monthly_red[ym] = true
+    const monthly_confirmed: Record<string, number> = {}
+    const monthly_high_conf: Record<string, number> = {}
+    for (const block of monthBlocks) {
+      const totalCell = row[block.totalIdx]
+      const total = asNumber(totalCell?.value)
+      let weekSum = 0
+      let confirmed = 0
+      let highConf = 0
+      for (const weekIdx of block.weekIdxs) {
+        const cell = row[weekIdx]; if (!cell) continue
+        const n = asNumber(cell.value)
+        if (n == null || n === 0) continue
+        weekSum += n
+        // 운영 규칙: 빨간 글자 = 확정 매출 (과거 배경색 표기 호환), 파란 글자 = 클로징 임박(90%+)
+        if (isRedText(cell.fg) || isRedBg(cell.bg)) confirmed += n
+        else if (isBlueText(cell.fg)) highConf += n
+      }
+      const monthTotal = total ?? (weekSum !== 0 ? weekSum : null)
+      if (monthTotal == null || monthTotal === 0) continue
+      monthly_payments[block.ym] = monthTotal
+      // 주차 입력 없이 월 합계 칸에만 적고 색을 칠한 행 호환
+      if (totalCell && (isRedText(totalCell.fg) || isRedBg(totalCell.bg))) {
+        confirmed = Math.max(confirmed, monthTotal)
+      } else if (totalCell && isBlueText(totalCell.fg) && confirmed === 0) {
+        highConf = Math.max(highConf, monthTotal)
+      }
+      if (confirmed > 0) {
+        monthly_confirmed[block.ym] = confirmed
+        monthly_red[block.ym] = true // 기존 브랜치 집계(boolean 기반) 호환 플래그
+      }
+      if (highConf > 0) monthly_high_conf[block.ym] = highConf
     }
     out.push({
       sheet_row: r + 1,
@@ -127,7 +159,7 @@ export function parseRev(grid: FormattedCell[][], opts?: { refFy?: number }): Re
       importance: asString(row[REV_COLS.importance]?.value),
       note: asString(row[REV_COLS.note]?.value),
       contract_target: asNumber(row[REV_COLS.contractTarget]?.value),
-      monthly_payments, monthly_red,
+      monthly_payments, monthly_red, monthly_confirmed, monthly_high_conf,
       raw: { row: row.map((c) => c?.value ?? null) },
     })
   }

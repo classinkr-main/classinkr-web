@@ -71,7 +71,8 @@ export function collectLeadAttribution(): LeadAttribution {
   return next
 }
 
-export async function submitLead(data: Omit<LeadPayload, "timestamp">) {
+// website는 스팸 봇 감지용 honeypot 필드 — 서버에서 채워진 제출을 무시한다
+export async function submitLead(data: Omit<LeadPayload, "timestamp"> & { website?: string }) {
   const res = await fetch("/api/lead", {
     method: "POST",
     headers: { "Content-Type": "application/json" },

@@ -1,12 +1,12 @@
 "use client"
 
-import { useCallback, useEffect, useState } from "react"
-import { Plus, RefreshCw, Search } from "lucide-react"
+import { useCallback, useEffect, useMemo, useState } from "react"
+import { AlertTriangle, CheckCircle2, Link2, Plus, RefreshCw, Search, ServerCog, StickyNote } from "lucide-react"
 
 import { CustomerDetailSlideOver } from "@/components/portal/CustomerDetailSlideOver"
 import { CustomerForm } from "@/components/portal/crud/CustomerForm"
 import { Button } from "@/components/ui/button"
-import { portalFetch } from "@/lib/portal/portal-fetch"
+import { adminFetchJson } from "@/lib/admin-client"
 import type { Customer, CustomerListItem } from "@/lib/portal/types"
 
 const STAGE_COLOR: Record<string, string> = {
@@ -50,6 +50,20 @@ const NEXT_EVENT_LABEL: Record<string, string> = {
   internal: "내부 일정",
 }
 
+const CRM_COVERAGE_LABEL = {
+  verified: "소스 확인",
+  needs_review: "검토 필요",
+  unmatched: "미매칭",
+  error: "조회 오류",
+} as const
+
+const CRM_COVERAGE_STYLE = {
+  verified: "border-emerald-200 bg-emerald-50 text-emerald-700",
+  needs_review: "border-amber-200 bg-amber-50 text-amber-700",
+  unmatched: "border-[#e8e8e4] bg-[#f7f7f5] text-[#615D59]",
+  error: "border-[#F3D6C8] bg-[#FEF3EE] text-[#B85C33]",
+} as const
+
 function formatDateLabel(value: string | null) {
   if (!value) return "미정"
   return new Date(value).toLocaleDateString("ko-KR", {
@@ -65,6 +79,80 @@ function formatRecentLabel(value: string | null) {
     month: "numeric",
     day: "numeric",
   })
+}
+
+function CrmCoverageIcon({ status }: { status: keyof typeof CRM_COVERAGE_LABEL }) {
+  if (status === "verified") return <CheckCircle2 className="h-3.5 w-3.5" />
+  if (status === "needs_review" || status === "error") return <AlertTriangle className="h-3.5 w-3.5" />
+  return <Link2 className="h-3.5 w-3.5" />
+}
+
+type CustomersResponse = {
+  customers?: CustomerListItem[]
+}
+
+type CustomerQuickFilter = "all" | "memo" | "attention" | "outstanding" | "review"
+
+const QUICK_FILTER_LABEL: Record<CustomerQuickFilter, string> = {
+  all: "전체",
+  memo: "메모 있음",
+  attention: "즉시 확인",
+  outstanding: "미수 있음",
+  review: "소스 검토",
+}
+
+const ATTENTION_ORDER = { high: 0, medium: 1, low: 2 } as const
+
+function needsSourceReview(item: CustomerListItem) {
+  const coverage = item.crm_coverage
+  return Boolean(
+    coverage &&
+      (coverage.status === "needs_review" ||
+        coverage.status === "error" ||
+        coverage.discrepancies.length > 0 ||
+        coverage.candidate_link_count > 0)
+  )
+}
+
+function matchesCustomerSearch(item: CustomerListItem, normalizedSearch: string) {
+  if (!normalizedSearch) return true
+  const { customer, crm_coverage } = item
+  const searchableValues = [
+    customer.name,
+    customer.contact_name,
+    customer.email,
+    customer.phone,
+    customer.business_number,
+    customer.campus_name,
+    customer.region_label,
+    customer.address,
+    customer.notes,
+    ...(crm_coverage?.warnings ?? []),
+    ...(crm_coverage?.source_links ?? []).flatMap((link) => [
+      link.source_label,
+      link.source_record_key,
+      link.source_system,
+    ]),
+    ...(crm_coverage?.external_records ?? []).flatMap((record) => [
+      record.display_name,
+      record.owner_name,
+      record.status,
+      record.object_api_key,
+    ]),
+  ]
+
+  return searchableValues.some(
+    (value) => typeof value === "string" && value.toLowerCase().includes(normalizedSearch)
+  )
+}
+
+function matchesCustomerQuickFilter(item: CustomerListItem, quickFilter: CustomerQuickFilter) {
+  if (quickFilter === "all") return true
+  if (quickFilter === "memo") return Boolean(item.customer.notes?.trim())
+  if (quickFilter === "attention") return item.insight?.attention_level === "high"
+  if (quickFilter === "outstanding") return (item.summary?.outstanding_amount ?? 0) > 0
+  if (quickFilter === "review") return needsSourceReview(item)
+  return true
 }
 
 type PartnerCustomersPageProps = {
@@ -83,32 +171,40 @@ export function PartnerCustomersPage({
   const [customers, setCustomers] = useState<CustomerListItem[]>([])
   const [loading, setLoading] = useState(true)
   const [search, setSearch] = useState("")
+  const [quickFilter, setQuickFilter] = useState<CustomerQuickFilter>("all")
   const [showForm, setShowForm] = useState(false)
   const [editing, setEditing] = useState<Customer | null>(null)
   const [detailId, setDetailId] = useState<string | null>(null)
+  const [loadError, setLoadError] = useState<string | null>(null)
 
   const load = useCallback(async (showSpinner = true) => {
     if (showSpinner) setLoading(true)
-    const res = await portalFetch("/api/portal/customers")
-    if (res.ok) {
-      const data = await res.json()
+    setLoadError(null)
+    try {
+      const data = await adminFetchJson<CustomersResponse>("/api/admin/customers")
       setCustomers(data.customers ?? [])
+    } catch (error) {
+      setLoadError(error instanceof Error ? error.message : "고객 목록을 불러오지 못했습니다.")
+    } finally {
+      setLoading(false)
     }
-    setLoading(false)
   }, [])
 
   useEffect(() => {
     let active = true
 
     async function initialLoad() {
-      const res = await portalFetch("/api/portal/customers")
-      if (!active) return
-      if (res.ok) {
-        const data = await res.json()
+      setLoadError(null)
+      try {
+        const data = await adminFetchJson<CustomersResponse>("/api/admin/customers")
         if (!active) return
         setCustomers(data.customers ?? [])
+      } catch (error) {
+        if (!active) return
+        setLoadError(error instanceof Error ? error.message : "고객 목록을 불러오지 못했습니다.")
+      } finally {
+        if (active) setLoading(false)
       }
-      setLoading(false)
     }
 
     void initialLoad()
@@ -117,29 +213,85 @@ export function PartnerCustomersPage({
     }
   }, [])
 
-  const filtered = (search
-    ? customers.filter((item) =>
-        item.customer.name.includes(search) ||
-        item.customer.contact_name?.includes(search) ||
-        item.customer.region_label?.includes(search)
+  useEffect(() => {
+    const params = new URLSearchParams(window.location.search)
+    const query = params.get("q")
+    const customerId = params.get("customer")
+    if (query) setSearch(query)
+    if (customerId) setDetailId(customerId)
+  }, [])
+
+  const updateCustomerParam = (customerId: string | null) => {
+    const url = new URL(window.location.href)
+    if (customerId) url.searchParams.set("customer", customerId)
+    else url.searchParams.delete("customer")
+    window.history.replaceState(null, "", url)
+  }
+
+  const openCustomerDetail = (customerId: string) => {
+    setDetailId(customerId)
+    updateCustomerParam(customerId)
+  }
+
+  const closeCustomerDetail = () => {
+    setDetailId(null)
+    updateCustomerParam(null)
+  }
+
+  const handleCustomerUpdated = useCallback((customer: Customer) => {
+    setCustomers((current) =>
+      current.map((item) =>
+        item.customer.id === customer.id
+          ? {
+              ...item,
+              customer: {
+                ...item.customer,
+                ...customer,
+              },
+            }
+          : item
       )
-    : customers
-  ).slice().sort((left, right) => {
-    const attentionOrder = { high: 0, medium: 1, low: 2 }
-    const leftAttention = attentionOrder[left.insight?.attention_level ?? "low"]
-    const rightAttention = attentionOrder[right.insight?.attention_level ?? "low"]
-    if (leftAttention !== rightAttention) return leftAttention - rightAttention
+    )
+  }, [])
 
-    const leftNext = left.insight?.next_event_at
-      ? new Date(left.insight.next_event_at).getTime()
-      : Number.POSITIVE_INFINITY
-    const rightNext = right.insight?.next_event_at
-      ? new Date(right.insight.next_event_at).getTime()
-      : Number.POSITIVE_INFINITY
-    if (leftNext !== rightNext) return leftNext - rightNext
+  const normalizedSearch = search.trim().toLowerCase()
+  const quickFilterCounts = useMemo<Record<CustomerQuickFilter, number>>(
+    () => ({
+      all: customers.length,
+      memo: customers.filter((item) => Boolean(item.customer.notes?.trim())).length,
+      attention: customers.filter((item) => item.insight?.attention_level === "high").length,
+      outstanding: customers.filter((item) => (item.summary?.outstanding_amount ?? 0) > 0).length,
+      review: customers.filter(needsSourceReview).length,
+    }),
+    [customers]
+  )
 
-    return (right.summary?.active_deals ?? 0) - (left.summary?.active_deals ?? 0)
-  })
+  const filtered = useMemo(
+    () =>
+      customers
+        .filter(
+          (item) =>
+            matchesCustomerSearch(item, normalizedSearch) &&
+            matchesCustomerQuickFilter(item, quickFilter)
+        )
+        .slice()
+        .sort((left, right) => {
+          const leftAttention = ATTENTION_ORDER[left.insight?.attention_level ?? "low"]
+          const rightAttention = ATTENTION_ORDER[right.insight?.attention_level ?? "low"]
+          if (leftAttention !== rightAttention) return leftAttention - rightAttention
+
+          const leftNext = left.insight?.next_event_at
+            ? new Date(left.insight.next_event_at).getTime()
+            : Number.POSITIVE_INFINITY
+          const rightNext = right.insight?.next_event_at
+            ? new Date(right.insight.next_event_at).getTime()
+            : Number.POSITIVE_INFINITY
+          if (leftNext !== rightNext) return leftNext - rightNext
+
+          return (right.summary?.active_deals ?? 0) - (left.summary?.active_deals ?? 0)
+        }),
+    [customers, normalizedSearch, quickFilter]
+  )
 
   const wrapperClass = embedded
     ? ""
@@ -169,12 +321,38 @@ export function PartnerCustomersPage({
         <div className="relative">
           <Search className="absolute left-3 top-1/2 h-4 w-4 -translate-y-1/2 text-[#1a1a1a]/30" />
           <input
-            placeholder="기관명, 담당자, 지역 검색..."
+            placeholder="기관명, 담당자, 지역, 메모, CRM 후보 검색..."
             value={search}
             onChange={(event) => setSearch(event.target.value)}
             className="w-full rounded-xl border border-[#e8e8e4] py-2.5 pl-10 pr-4 text-sm focus:border-[#1a1a1a] focus:outline-none"
           />
         </div>
+
+        <div className="admin-scroll-snap-x no-scrollbar -mt-3 flex gap-2 overflow-x-auto pb-1">
+          {(Object.keys(QUICK_FILTER_LABEL) as CustomerQuickFilter[]).map((filterKey) => (
+            <button
+              key={filterKey}
+              type="button"
+              onClick={() => setQuickFilter(filterKey)}
+              className={`inline-flex h-8 shrink-0 items-center gap-1.5 rounded-full border px-3 text-[12px] font-semibold transition-colors ${
+                quickFilter === filterKey
+                  ? "border-[#111110] bg-[#111110] text-white"
+                  : "border-[#e8e8e4] bg-white text-[#1a1a1a]/55 hover:border-[#c8c8c4] hover:text-[#111110]"
+              }`}
+            >
+              {QUICK_FILTER_LABEL[filterKey]}
+              <span className={quickFilter === filterKey ? "text-white/55" : "text-[#1a1a1a]/30"}>
+                {quickFilterCounts[filterKey]}
+              </span>
+            </button>
+          ))}
+        </div>
+
+        {loadError && !loading && (
+          <div className="rounded-lg border border-[#F3D6C8] bg-[#FEF3EE] px-4 py-3 text-sm text-[#B85C33]">
+            {loadError}
+          </div>
+        )}
 
         {loading ? (
           <div className="py-16 text-center text-sm text-[#1a1a1a]/40">불러오는 중...</div>
@@ -203,12 +381,12 @@ export function PartnerCustomersPage({
           )
         ) : (
           <div className="grid gap-3 sm:grid-cols-2 lg:grid-cols-3">
-            {filtered.map(({ customer, summary, insight, deal_previews }) => (
+            {filtered.map(({ customer, summary, insight, deal_previews, crm_coverage }) => (
               <button
                 key={customer.id}
                 type="button"
                 className="group rounded-xl border border-[#e8e8e4] bg-white p-4 text-left transition-all hover:border-[#1a1a1a]/30 hover:shadow-sm"
-                onClick={() => setDetailId(customer.id)}
+                onClick={() => openCustomerDetail(customer.id)}
               >
                 <div className="flex items-start justify-between gap-2">
                   <div className="min-w-0">
@@ -224,6 +402,18 @@ export function PartnerCustomersPage({
                 </div>
 
                 <div className="mt-3 flex flex-wrap items-center gap-2">
+                  {crm_coverage && (
+                    <span className={`inline-flex items-center gap-1 rounded-full border px-2 py-0.5 text-[11px] font-medium ${CRM_COVERAGE_STYLE[crm_coverage.status]}`}>
+                      <CrmCoverageIcon status={crm_coverage.status} />
+                      {CRM_COVERAGE_LABEL[crm_coverage.status]}
+                    </span>
+                  )}
+                  {crm_coverage && crm_coverage.discrepancies.length > 0 && (
+                    <span className="inline-flex items-center gap-1 rounded-full border border-amber-200 bg-amber-50 px-2 py-0.5 text-[11px] font-medium text-amber-700">
+                      <AlertTriangle className="h-3.5 w-3.5" />
+                      차이 {crm_coverage.discrepancies.length}
+                    </span>
+                  )}
                   {insight?.attention_level && (
                     <span className={`rounded-full border px-2 py-0.5 text-[11px] font-medium ${ATTENTION_STYLE[insight.attention_level]}`}>
                       {ATTENTION_LABEL[insight.attention_level]}
@@ -241,6 +431,25 @@ export function PartnerCustomersPage({
                   )}
                 </div>
 
+                {crm_coverage && (
+                  <div className="mt-3 flex flex-wrap items-center gap-x-4 gap-y-1 border-t border-[#f0f0ec] pt-3 text-xs text-[#1a1a1a]/50">
+                    <span className="inline-flex items-center gap-1">
+                      <Link2 className="h-3 w-3" />
+                      Source 확정
+                      <span className="font-medium text-[#1a1a1a]">
+                        {crm_coverage.confirmed_link_count}/{crm_coverage.source_link_count}
+                      </span>
+                    </span>
+                    <span className="inline-flex items-center gap-1">
+                      <ServerCog className="h-3 w-3" />
+                      외부 후보
+                      <span className="font-medium text-[#1a1a1a]">
+                        {crm_coverage.external_match_count}건
+                      </span>
+                    </span>
+                  </div>
+                )}
+
                 {deal_previews && deal_previews.length > 0 && (
                   <div className="mt-3 space-y-1.5">
                     {deal_previews.map((preview) => (
@@ -256,6 +465,18 @@ export function PartnerCustomersPage({
                         </p>
                       </div>
                     ))}
+                  </div>
+                )}
+
+                {customer.notes?.trim() && (
+                  <div className="mt-3 rounded-lg border border-[#f0f0ec] bg-[#fcfcfb] px-3 py-2">
+                    <p className="flex items-center gap-1.5 text-[11px] font-semibold uppercase tracking-wide text-[#1a1a1a]/30">
+                      <StickyNote className="h-3 w-3" />
+                      메모
+                    </p>
+                    <p className="mt-1 line-clamp-2 text-xs leading-relaxed text-[#1a1a1a]/55">
+                      {customer.notes}
+                    </p>
                   </div>
                 )}
 
@@ -310,10 +531,12 @@ export function PartnerCustomersPage({
         <CustomerDetailSlideOver
           key={detailId}
           customerId={detailId}
-          onClose={() => setDetailId(null)}
+          fetchMode="admin"
+          onClose={closeCustomerDetail}
+          onCustomerUpdated={handleCustomerUpdated}
           onEdit={allowEdit
             ? (customer) => {
-                setDetailId(null)
+                closeCustomerDetail()
                 setEditing(customer)
                 setShowForm(true)
               }
