@@ -26,7 +26,7 @@ const MAX_ANSWER_LENGTH = 1500
 // docs_ai_chunks.embedding 은 vector(1536). text-embedding-004 를 1536 차원으로
 // 잘라(MRL) 컬럼에 맞춘다.
 export const CHATBOT_EMBED_MODEL = process.env.GEMINI_EMBED_MODEL || "text-embedding-004"
-export const CHATBOT_EMBED_DIM = 1536
+export const CHATBOT_EMBED_DIM = 768
 export type EmbedTaskType = "RETRIEVAL_QUERY" | "RETRIEVAL_DOCUMENT"
 
 function resolveModel(tier: ChatbotModelTier = "basic") {
@@ -59,12 +59,14 @@ interface GenerateArgs {
   question: string
   sources: ChatbotSource[]
   tier?: ChatbotModelTier
+  history?: { role: "user" | "model"; parts: { text: string }[] }[]
 }
 
 export async function generateGeminiAnswer({
   question,
   sources,
   tier = "basic",
+  history,
 }: GenerateArgs): Promise<string | null> {
   if (!GEMINI_API_KEY || sources.length === 0 || !question.trim()) {
     return null
@@ -79,6 +81,10 @@ export async function generateGeminiAnswer({
 
   const prompt = `참고 문서:\n${context}\n\n고객 질문: ${question}\n\n위 참고 문서를 근거로 답변해줘.`
 
+  const contents = history && history.length > 0
+    ? [...history, { role: "user", parts: [{ text: prompt }] }]
+    : [{ role: "user", parts: [{ text: prompt }] }]
+
   const controller = new AbortController()
   const timeout = setTimeout(() => controller.abort(), GEMINI_TIMEOUT_MS)
 
@@ -91,7 +97,7 @@ export async function generateGeminiAnswer({
         signal: controller.signal,
         body: JSON.stringify({
           systemInstruction: { parts: [{ text: SYSTEM_INSTRUCTION }] },
-          contents: [{ role: "user", parts: [{ text: prompt }] }],
+          contents,
           generationConfig: {
             temperature: 0.3,
             topP: 0.9,
