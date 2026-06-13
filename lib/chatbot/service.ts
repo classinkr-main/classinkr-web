@@ -3,6 +3,7 @@ import "server-only"
 import { createSupabaseAdminClient } from "@/lib/supabase/admin"
 import { getDocPath, listDocs, type DocArticle } from "@/lib/docs"
 import { getDocsContent } from "@/lib/docs-content"
+import { generateGeminiAnswer, embedText } from "@/lib/chatbot/llm"
 
 const MAX_MESSAGE_LENGTH = 1000
 const MAX_FEEDBACK_COMMENT_LENGTH = 500
@@ -297,7 +298,7 @@ function buildStaticSources(question: NormalizedQuestion, docs: DocArticle[]): C
   ).slice(0, MAX_SOURCES)
 }
 
-async function searchSupabaseSources(question: NormalizedQuestion): Promise<ChatbotSource[]> {
+async function keywordSearchSupabaseSources(question: NormalizedQuestion): Promise<ChatbotSource[]> {
   if (!hasSupabaseServerEnv()) return []
 
   const likeTokens = question.tokens.map(sanitizeLikeToken).filter(Boolean).slice(0, 6)
@@ -364,6 +365,73 @@ async function searchSupabaseSources(question: NormalizedQuestion): Promise<Chat
     )
     return []
   }
+}
+
+const VECTOR_MATCH_COUNT = 8
+const VECTOR_SIMILARITY_FLOOR = 0.3
+
+interface MatchChunkRow {
+  id: string
+  article_id: string
+  heading: string | null
+  content: string
+  metadata: Record<string, unknown> | null
+  category_id: string
+  slug: string
+  title: string
+  canonical_path: string | null
+  similarity: number
+}
+
+// Gemini 임베딩 기반 시맨틱 검색. 키·임베딩이 없거나 결과가 없으면 [] → 키워드 검색으로 폴백.
+async function vectorSearchSupabaseSources(question: NormalizedQuestion): Promise<ChatbotSource[]> {
+  if (!hasSupabaseServerEnv()) return []
+
+  const embedding = await embedText(question.redacted, "RETRIEVAL_QUERY")
+  if (!embedding) return []
+
+  try {
+    const supabase = createSupabaseAdminClient()
+    const { data, error } = await supabase.rpc("match_docs_ai_chunks", {
+      // pgvector 컬럼/인자는 "[..]" 문자열로 넘긴다 (배열 직접 전달 시 Postgres 배열로 직렬화돼 거부됨).
+      query_embedding: JSON.stringify(embedding),
+      match_count: VECTOR_MATCH_COUNT,
+    })
+
+    if (error) {
+      console.warn("[chatbot] vector search failed:", error.message)
+      return []
+    }
+
+    const sources = ((data ?? []) as MatchChunkRow[])
+      .filter((row) => row.similarity >= VECTOR_SIMILARITY_FLOOR)
+      .map((row) => ({
+        articleId: row.article_id,
+        chunkId: row.id,
+        title: row.title,
+        heading: row.heading ?? undefined,
+        urlPath: row.canonical_path ?? `/docs/${row.category_id}/${row.slug}`,
+        category: row.category_id,
+        excerpt: compactText(row.content),
+        score: Math.max(1, row.similarity * 10),
+      }))
+      .sort((left, right) => right.score - left.score)
+
+    return dedupeSourcesByPath(sources).slice(0, MAX_SOURCES)
+  } catch (error) {
+    console.warn(
+      "[chatbot] vector search unavailable:",
+      error instanceof Error ? error.message : error
+    )
+    return []
+  }
+}
+
+// 벡터 검색 우선, 결과 없으면 키워드(ilike) 검색.
+async function searchSupabaseSources(question: NormalizedQuestion): Promise<ChatbotSource[]> {
+  const vectorSources = await vectorSearchSupabaseSources(question)
+  if (vectorSources.length > 0) return vectorSources
+  return keywordSearchSupabaseSources(question)
 }
 
 async function searchKnowledgeSources(
@@ -785,6 +853,22 @@ export async function handleChatbotQuery(
   const intent = detectIntent(category)
   const handoffIntent = detectHandoffIntent(question, category)
   const response = composeAnswer(question, sources)
+
+  // 근거 문서가 있는 답변 모드에서만 Gemini로 답변 문장을 생성한다.
+  // (handoff·clarifying·fallback 등 안전/에스컬레이션 경로는 템플릿 유지)
+  if (response.answerMode === "direct_answer" || response.answerMode === "doc_suggestion") {
+    const llmAnswer = await generateGeminiAnswer({
+      question: question.redacted,
+      sources: response.sources,
+    })
+    if (llmAnswer) {
+      const sourceLines = response.sources
+        .map((source, index) => `${index + 1}. ${source.title} (${source.urlPath})`)
+        .join("\n")
+      response.answer = `${llmAnswer}\n\n관련 문서:\n${sourceLines}`
+    }
+  }
+
   const persisted = await persistExchange(input, question, response, meta, category, intent)
 
   return {

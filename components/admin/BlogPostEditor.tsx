@@ -57,6 +57,7 @@ import {
   extractMarkdownHeadings,
   slugify,
 } from "@/lib/blog-markdown"
+import { leadMagnetOptions, getLeadMagnetStatusLabel } from "@/lib/lead-magnets"
 
 interface BlogPostEditorProps {
   mode: "create" | "edit"
@@ -303,10 +304,21 @@ function createEmptyDraft(): BlogPostInput {
     seoTitle: "",
     seoDescription: "",
     relatedPostIds: [],
+    leadMagnetSlug: "",
+    publishedAt: "",
     pageLayout: "standard",
     cta: { ...DEFAULT_BLOG_CTA },
     status: "draft",
   }
+}
+
+// ISO 문자열 ↔ datetime-local 입력값(로컬 시각, 타임존 없음) 변환
+function isoToLocalInput(iso?: string) {
+  if (!iso) return ""
+  const date = new Date(iso)
+  if (Number.isNaN(date.getTime())) return ""
+  const pad = (n: number) => String(n).padStart(2, "0")
+  return `${date.getFullYear()}-${pad(date.getMonth() + 1)}-${pad(date.getDate())}T${pad(date.getHours())}:${pad(date.getMinutes())}`
 }
 
 function getToken() {
@@ -1907,6 +1919,26 @@ export default function BlogPostEditor({
                       </div>
                     </div>
                     <div className="space-y-1.5">
+                      <Label htmlFor="publishedAt" className="text-[12px]">
+                        예약 발행 시각 (선택)
+                      </Label>
+                      <Input
+                        id="publishedAt"
+                        type="datetime-local"
+                        value={isoToLocalInput(form.publishedAt)}
+                        onChange={(event) =>
+                          updateForm(
+                            "publishedAt",
+                            event.target.value ? new Date(event.target.value).toISOString() : ""
+                          )
+                        }
+                      />
+                      <p className="text-[11px] leading-relaxed text-[#1a1a1a]/45">
+                        미래 시각으로 두면 발행 상태여도 그 시각 전까지 공개되지 않습니다.
+                        비우면 발행 즉시 공개됩니다.
+                      </p>
+                    </div>
+                    <div className="space-y-1.5">
                       <Label htmlFor="tags" className="text-[12px]">태그 (쉼표로 구분)</Label>
                       <Input
                         id="tags"
@@ -1921,6 +1953,28 @@ export default function BlogPostEditor({
                         }}
                         placeholder="Deep Dive, Guide, New Feature"
                       />
+                    </div>
+                    <div className="space-y-1.5">
+                      <Label htmlFor="leadMagnet" className="text-[12px]">
+                        리드 마그넷 (글 하단 자료 다운로드 블록)
+                      </Label>
+                      <select
+                        id="leadMagnet"
+                        value={form.leadMagnetSlug ?? ""}
+                        onChange={(event) => updateForm("leadMagnetSlug", event.target.value)}
+                        className="h-9 w-full rounded-xl border border-[#e8e8e4] bg-white px-3 text-sm outline-none focus:border-[#084734]"
+                      >
+                        <option value="">표시 안 함</option>
+                        {leadMagnetOptions.map((opt) => (
+                          <option key={opt.slug} value={opt.slug}>
+                            {opt.title} · {getLeadMagnetStatusLabel(opt.status)}
+                          </option>
+                        ))}
+                      </select>
+                      <p className="text-[11px] leading-relaxed text-[#1a1a1a]/45">
+                        선택하면 본문 하단에 이메일 수집 블록이 노출되고, 신청자는
+                        해당 마그넷 태그로 구독자 DB에 기록됩니다.
+                      </p>
                     </div>
                     <label className="flex cursor-pointer items-center gap-2.5 text-sm text-[#1a1a1a]/65">
                       <input

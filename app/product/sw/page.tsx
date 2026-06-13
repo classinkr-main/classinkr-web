@@ -3,6 +3,7 @@
 import { Button } from "@/components/ui/button"
 import { trackEvent } from "@/lib/analytics"
 import { BROCHURE_URL } from "@/lib/marketing-links"
+import { TESTIMONIALS } from "@/lib/testimonials"
 import { motion, useInView, useMotionValue, useTransform, useScroll, useMotionValueEvent, animate } from "framer-motion"
 import {
     Play, ArrowRight, Sparkles, Monitor, Layers, MousePointerClick,
@@ -409,62 +410,39 @@ type SoftwareTestimonial = {
     className?: string
 }
 
-const SOFTWARE_TESTIMONIALS: SoftwareTestimonial[] = [
-    {
-        name: "올***영어 원장",
-        role: "수능/내신 영어학원",
-        quote: "솔직히 클래스인이 없으면 학원 운영이 안 됩니다. 듣기·단어 자동채점만으로도 보조 강사 업무량과 학원 운영 인력 부담이 확 줄었어요.",
-        rating: 5,
-        gradient: "from-[#0FAE73] to-[#087A52]",
-        dark: true,
-        className: "lg:col-span-5",
-    },
-    {
-        name: "권** 대표",
-        role: "국어 전문 학원",
-        quote: "오프라인 수업이 신석기 문화라면, 기존 전자칠판은 청동기, 클래스인은 철기 문화에 가깝습니다. 광선검까지 진화하길 기대합니다.",
-        rating: 5,
-        gradient: "from-[#B950D7] to-[#7C3AED]",
-        className: "lg:col-span-4",
-        delay: 0.08,
-    },
-    {
-        name: "라**",
-        role: "강사 회원",
-        quote: "클래스인 덕분에 돈 벌면서 유학 공부할 수 있게 됐어요. 9월에 해외 의대 5학년으로 편입합니다.",
-        rating: 5,
-        gradient: "from-[#5B7CFA] to-[#3B5BDB]",
-        className: "lg:col-span-3",
-        delay: 0.12,
-    },
-    {
-        name: "천** 부원장",
-        role: "입시 학원",
-        quote: "진심으로 응대해 주시고 잘 케어해 주신 덕분에, 저희가 불편함 없이 쓰고 있다고 직원분들이 입을 모아 말합니다.",
-        rating: 5,
-        gradient: "from-[#4F5F73] to-[#283548]",
-        className: "lg:col-span-4",
-        delay: 0.16,
-    },
-    {
-        name: "고** 원장",
-        role: "어학원",
-        quote: "저도 열심히 활용해서, 우리 지역에서 클래스인의 전도사가 되어보겠습니다.",
-        rating: 5,
-        gradient: "from-[#0FC5A4] to-[#07926F]",
-        className: "lg:col-span-5",
-        delay: 0.2,
-    },
-    {
-        name: "김** 대표",
-        role: "국어 전문 학원",
-        quote: "덕분에 좋은 문물을 접했습니다. 감사합니다.",
-        rating: 5,
-        gradient: "from-[#F95D91] to-[#D6336C]",
-        className: "lg:col-span-3",
-        delay: 0.24,
-    },
+// 콘텐츠(이름·인용·평점)는 lib/testimonials.ts 단일 소스에서 가져오고,
+// 이 페이지는 표현(그래디언트·다크·그리드 배치·등장 딜레이)만 정의한다.
+type TestimonialPresentation = {
+    id: string
+    gradient: string
+    dark?: boolean
+    delay?: number
+    className?: string
+}
+
+const SOFTWARE_TESTIMONIAL_PRESENTATION: TestimonialPresentation[] = [
+    { id: "olm-eng-director", gradient: "from-[#0FAE73] to-[#087A52]", dark: true, className: "lg:col-span-5" },
+    { id: "imisook-korean-ceo", gradient: "from-[#B950D7] to-[#7C3AED]", className: "lg:col-span-4", delay: 0.08 },
+    { id: "rhino-tutor", gradient: "from-[#5B7CFA] to-[#3B5BDB]", className: "lg:col-span-3", delay: 0.12 },
+    { id: "yerim-edu", gradient: "from-[#4F5F73] to-[#283548]", className: "lg:col-span-4", delay: 0.16 },
+    { id: "jans-english", gradient: "from-[#0FC5A4] to-[#07926F]", className: "lg:col-span-5", delay: 0.2 },
+    { id: "barungeul-korean", gradient: "from-[#F95D91] to-[#D6336C]", className: "lg:col-span-3", delay: 0.24 },
 ]
+
+const SOFTWARE_TESTIMONIALS: SoftwareTestimonial[] = SOFTWARE_TESTIMONIAL_PRESENTATION.flatMap((presentation) => {
+    const source = TESTIMONIALS.find((item) => item.id === presentation.id)
+    if (!source) return []
+    return [{
+        name: source.role,
+        role: source.badge,
+        quote: source.quote,
+        rating: source.rating ?? 5,
+        gradient: presentation.gradient,
+        dark: presentation.dark,
+        delay: presentation.delay,
+        className: presentation.className,
+    }]
+})
 
 /* ── Testimonial Card ────────────────────────────────────────────── */
 function TestimonialCard({
