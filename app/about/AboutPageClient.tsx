@@ -451,49 +451,47 @@ export default function AboutPageClient({ offices, press, recentPosts }: Props) 
           </FadeUp>
 
           <div className="relative">
-            <div className="absolute left-[19px] top-2 bottom-2 w-px bg-[rgba(8,71,52,0.18)] hidden sm:block" />
+            <div className="absolute left-[20px] top-3 bottom-3 hidden w-px bg-gradient-to-b from-[#084734]/30 via-[#084734]/15 to-transparent sm:block" />
 
-            <div className="flex flex-col gap-0">
+            <div className="flex flex-col gap-5">
               {TIMELINE.map((item, i) => {
                 const isNow = item.year === "현재"
                 return (
-                  <FadeUp key={item.year} delay={i * 0.07}>
-                    <div className="flex gap-6 sm:gap-8 pb-10 last:pb-0">
-                      <div className="hidden sm:flex flex-col items-center shrink-0">
-                        <div
-                          className={`relative w-10 h-10 rounded-full flex items-center justify-center text-[11px] font-bold shrink-0 transition-transform ${
-                            isNow
-                              ? "bg-[#084734] text-white"
-                              : "bg-white border border-[rgba(8,71,52,0.18)] text-[#084734]"
-                          }`}
-                          style={
-                            isNow
-                              ? {
-                                  boxShadow:
-                                    "0 0 0 6px rgba(8,71,52,0.08), rgba(8,71,52,0.18) 0px 8px 20px",
-                                }
-                              : undefined
-                          }
-                        >
-                          {isNow ? "NOW" : item.year.slice(2)}
-                        </div>
+                  <FadeUp key={item.year} delay={i * 0.06}>
+                    <div className="group flex gap-5 sm:gap-8">
+                      <div className="hidden w-10 shrink-0 justify-center pt-7 sm:flex">
+                        <span className="relative flex">
+                          <span
+                            className={`block h-3.5 w-3.5 rounded-full transition-transform duration-300 group-hover:scale-125 ${
+                              isNow
+                                ? "bg-[#084734] ring-4 ring-[#084734]/15"
+                                : "border-2 border-[#084734]/40 bg-white"
+                            }`}
+                          />
+                          {isNow && (
+                            <span className="absolute inset-0 h-3.5 w-3.5 animate-ping rounded-full bg-[#084734]/40" />
+                          )}
+                        </span>
                       </div>
 
-                      <div className="pb-2 flex-1">
-                        <div className="flex items-baseline gap-3 mb-2">
-                          <span className="text-[13px] font-bold text-[#084734] sm:hidden">
-                            {item.year}
+                      <div
+                        className={`flex-1 rounded-[18px] border p-5 transition-all duration-300 group-hover:-translate-y-0.5 sm:p-6 ${
+                          isNow
+                            ? "border-[#084734]/20 bg-[#ECFDF5]"
+                            : "border-[rgba(0,0,0,0.08)] bg-white group-hover:border-[rgba(8,71,52,0.18)]"
+                        }`}
+                        style={{ boxShadow: "rgba(0,0,0,0.05) 0px 8px 24px, rgba(0,0,0,0.02) 0px 1px 4px" }}
+                      >
+                        <div className="mb-2 flex items-center gap-3">
+                          <span className="text-[26px] font-bold leading-none tracking-[-1px] text-[#084734] sm:text-[30px]">
+                            {isNow ? "NOW" : item.year}
                           </span>
-                          <span className="text-[18px] font-semibold text-[#111110] tracking-[-0.3px]">
+                          <span className="h-4 w-px bg-[rgba(0,0,0,0.12)]" />
+                          <h3 className="text-[18px] font-bold text-[#111110] tracking-[-0.3px]">
                             {item.title}
-                          </span>
-                          <span className="hidden sm:block text-[12px] font-medium text-[#A39E98]">
-                            {item.year}
-                          </span>
+                          </h3>
                         </div>
-                        <p className="text-[14px] text-[#615D59] leading-[1.7]">
-                          {item.desc}
-                        </p>
+                        <p className="text-[14px] text-[#615D59] leading-[1.7]">{item.desc}</p>
                       </div>
                     </div>
                   </FadeUp>
@@ -778,7 +776,7 @@ export default function AboutPageClient({ offices, press, recentPosts }: Props) 
                 <h3 className="text-[28px] sm:text-[34px] font-bold text-[#111110] leading-[1.15] tracking-[-1px] mb-4">
                   함께 성장하는 파트너십
                 </h3>
-                <p className="text-[15px] text-[#615D59] leading-[1.65]">
+                <p className="text-[16px] text-[#615D59] leading-[1.65]">
                   출판사·통신사·에듀테크·하드웨어 기업과 함께, 교육의 미래를 만들어 갑니다.
                 </p>
               </div>
@@ -793,8 +791,8 @@ export default function AboutPageClient({ offices, press, recentPosts }: Props) 
                       <Image src={p.img} alt={p.t} fill className="object-cover" sizes="(max-width: 640px) 100vw, 33vw" />
                     </div>
                     <div className="p-6">
-                      <h4 className="text-[17px] font-bold text-[#111110] mb-2">{p.t}</h4>
-                      <p className="text-[14px] text-[#615D59] leading-[1.6]">{p.d}</p>
+                      <h4 className="mb-2 text-[17px] font-bold tracking-[-0.3px] text-[#111110]">{p.t}</h4>
+                      <p className="text-[14px] leading-[1.65] text-[#615D59]">{p.d}</p>
                     </div>
                   </div>
                 ))}
