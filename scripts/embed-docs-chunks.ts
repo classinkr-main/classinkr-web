@@ -21,7 +21,36 @@
 
 import { createClient } from "@supabase/supabase-js"
 
-import { embedText, CHATBOT_EMBED_MODEL } from "../lib/chatbot/llm"
+// 임베딩 호출은 self-contained (lib/chatbot/llm.ts 는 server-only 라 tsx 에서 import 불가).
+// 동작은 lib/chatbot/llm.ts 의 embedText(RETRIEVAL_DOCUMENT)와 동일하게 유지한다.
+const EMBED_MODEL = process.env.GEMINI_EMBED_MODEL || "gemini-embedding-001"
+const EMBED_DIM = 1536
+const GEMINI_API_KEY = process.env.GEMINI_API_KEY
+
+async function embedText(text: string): Promise<number[] | null> {
+  if (!GEMINI_API_KEY || !text.trim()) return null
+  try {
+    const res = await fetch(
+      `https://generativelanguage.googleapis.com/v1beta/models/${EMBED_MODEL}:embedContent?key=${GEMINI_API_KEY}`,
+      {
+        method: "POST",
+        headers: { "Content-Type": "application/json" },
+        body: JSON.stringify({
+          model: `models/${EMBED_MODEL}`,
+          content: { parts: [{ text }] },
+          taskType: "RETRIEVAL_DOCUMENT",
+          outputDimensionality: EMBED_DIM,
+        }),
+      }
+    )
+    if (!res.ok) return null
+    const data = (await res.json()) as { embedding?: { values?: number[] } }
+    const values = data.embedding?.values
+    return Array.isArray(values) && values.length > 0 ? values : null
+  } catch {
+    return null
+  }
+}
 
 const args = new Set(process.argv.slice(2))
 const dryRun = args.has("--dry-run")
@@ -126,7 +155,7 @@ async function main() {
       cursor = row.id
 
       const text = `${row.heading ? `${row.heading}\n` : ""}${row.content}`.trim()
-      const values = await embedText(text, "RETRIEVAL_DOCUMENT")
+      const values = await embedText(text)
       await sleep(THROTTLE_MS)
 
       if (!values) {
@@ -140,7 +169,7 @@ async function main() {
         .update({
           // pgvector 컬럼은 "[..]" 문자열로 써야 한다 (배열 직접 전달 시 거부됨).
           embedding: JSON.stringify(values),
-          embedding_model: CHATBOT_EMBED_MODEL,
+          embedding_model: EMBED_MODEL,
           embedding_updated_at: new Date().toISOString(),
         })
         .eq("id", row.id)
@@ -167,7 +196,7 @@ async function main() {
   }
 
   console.log(
-    `[embed-docs] 완료 — 처리 ${processed}, 임베딩 ${embedded}, 건너뜀 ${skipped} (model: ${CHATBOT_EMBED_MODEL})`
+    `[embed-docs] 완료 — 처리 ${processed}, 임베딩 ${embedded}, 건너뜀 ${skipped} (model: ${EMBED_MODEL})`
   )
 }
 

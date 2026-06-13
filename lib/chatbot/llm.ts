@@ -11,20 +11,36 @@ import "server-only"
 
 import type { ChatbotSource } from "./service"
 
-// 챗봇은 저지연·고빈도라 fast 모델을 쓴다 (insights는 GEMINI_MODEL=pro 사용).
-const DEFAULT_FAST_MODEL = "gemini-2.5-flash"
+export type ChatbotModelTier = "basic" | "reasoning" | "advanced"
+
+// 챗봇 모델 티어별 기본 모델 설정
+const DEFAULT_FAST_MODEL = "gemini-3.5-flash"
+const DEFAULT_REASONING_MODEL = "gemini-2.0-flash-thinking-exp-01-21"
+const DEFAULT_ADVANCED_MODEL = "gemini-2.5-pro"
+
 const UNSUPPORTED_GEMINI_MODELS = new Set(["gemini-3.1-pro"])
 const GEMINI_API_KEY = process.env.GEMINI_API_KEY
 const GEMINI_TIMEOUT_MS = 8000
 const MAX_ANSWER_LENGTH = 1500
 
-// docs_ai_chunks.embedding 은 vector(1536). gemini-embedding-001 을 1536 차원으로
-// 잘라(MRL) 컬럼에 맞춘다. 코사인 유사도는 스케일 불변이라 정규화는 생략한다.
-export const CHATBOT_EMBED_MODEL = process.env.GEMINI_EMBED_MODEL || "gemini-embedding-001"
+// docs_ai_chunks.embedding 은 vector(1536). text-embedding-004 를 1536 차원으로
+// 잘라(MRL) 컬럼에 맞춘다.
+export const CHATBOT_EMBED_MODEL = process.env.GEMINI_EMBED_MODEL || "text-embedding-004"
 export const CHATBOT_EMBED_DIM = 1536
 export type EmbedTaskType = "RETRIEVAL_QUERY" | "RETRIEVAL_DOCUMENT"
 
-function resolveModel() {
+function resolveModel(tier: ChatbotModelTier = "basic") {
+  if (tier === "advanced") {
+    const configured = process.env.GEMINI_MODEL?.trim()
+    if (!configured || UNSUPPORTED_GEMINI_MODELS.has(configured)) return DEFAULT_ADVANCED_MODEL
+    return configured
+  }
+  if (tier === "reasoning") {
+    const configured = process.env.GEMINI_REASONING_MODEL?.trim()
+    if (!configured || UNSUPPORTED_GEMINI_MODELS.has(configured)) return DEFAULT_REASONING_MODEL
+    return configured
+  }
+  // basic
   const configured = process.env.GEMINI_FAST_MODEL?.trim()
   if (!configured || UNSUPPORTED_GEMINI_MODELS.has(configured)) return DEFAULT_FAST_MODEL
   return configured
@@ -42,11 +58,13 @@ interface GenerateArgs {
   /** PII 가 제거된 질문 텍스트 */
   question: string
   sources: ChatbotSource[]
+  tier?: ChatbotModelTier
 }
 
 export async function generateGeminiAnswer({
   question,
   sources,
+  tier = "basic",
 }: GenerateArgs): Promise<string | null> {
   if (!GEMINI_API_KEY || sources.length === 0 || !question.trim()) {
     return null
@@ -66,7 +84,7 @@ export async function generateGeminiAnswer({
 
   try {
     const res = await fetch(
-      `https://generativelanguage.googleapis.com/v1beta/models/${resolveModel()}:generateContent?key=${GEMINI_API_KEY}`,
+      `https://generativelanguage.googleapis.com/v1beta/models/${resolveModel(tier)}:generateContent?key=${GEMINI_API_KEY}`,
       {
         method: "POST",
         headers: { "Content-Type": "application/json" },

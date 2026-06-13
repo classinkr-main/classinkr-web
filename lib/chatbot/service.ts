@@ -3,7 +3,7 @@ import "server-only"
 import { createSupabaseAdminClient } from "@/lib/supabase/admin"
 import { getDocPath, listDocs, type DocArticle } from "@/lib/docs"
 import { getDocsContent } from "@/lib/docs-content"
-import { generateGeminiAnswer, embedText } from "@/lib/chatbot/llm"
+import { generateGeminiAnswer, embedText, type ChatbotModelTier } from "@/lib/chatbot/llm"
 
 const MAX_MESSAGE_LENGTH = 1000
 const MAX_FEEDBACK_COMMENT_LENGTH = 500
@@ -843,11 +843,34 @@ async function upsertQuestionCluster(
   }
 }
 
-export async function handleChatbotQuery(
-  input: ChatbotQueryRequest,
-  meta: ChatbotRequestMeta = {}
-): Promise<ChatbotQueryResponse> {
-  const question = normalizeQuestion(input.message)
+interface ChatbotCore {
+  question: NormalizedQuestion
+  response: ReturnType<typeof composeAnswer>
+  category: string
+  intent: ReturnType<typeof detectIntent>
+  handoffIntent: HandoffIntent
+  warning?: string
+}
+
+function determineModelTier(category: string): ChatbotModelTier {
+  // 문제 해결(troubleshooting) 및 하드웨어(hardware) 장애/설정은 추론 모델 적용
+  if (category === "troubleshooting" || category === "hardware") {
+    return "reasoning"
+  }
+  
+  // 결제(billing) 및 도입/상담(consultation) 등 비즈니스 중요 문의는 심화 모델 적용
+  if (category === "billing" || category === "consultation") {
+    return "advanced"
+  }
+
+  // 일반 안내, 온보딩, 교실 운영 등은 기본 모델 적용
+  return "basic"
+}
+
+// 검색 → 답변 구성 → Gemini 답변 생성까지의 코어. 영속화(persistExchange)는 포함하지 않는다.
+// handleChatbotQuery(실서비스)와 evaluateChatbotQuery(품질 평가)가 공유한다.
+async function buildChatbotCore(message: unknown): Promise<ChatbotCore> {
+  const question = normalizeQuestion(message)
   const { sources, warning } = await searchKnowledgeSources(question)
   const category = detectCategory(question, sources)
   const intent = detectIntent(category)
@@ -857,9 +880,11 @@ export async function handleChatbotQuery(
   // 근거 문서가 있는 답변 모드에서만 Gemini로 답변 문장을 생성한다.
   // (handoff·clarifying·fallback 등 안전/에스컬레이션 경로는 템플릿 유지)
   if (response.answerMode === "direct_answer" || response.answerMode === "doc_suggestion") {
+    const tier = determineModelTier(category)
     const llmAnswer = await generateGeminiAnswer({
       question: question.redacted,
       sources: response.sources,
+      tier,
     })
     if (llmAnswer) {
       const sourceLines = response.sources
@@ -869,13 +894,44 @@ export async function handleChatbotQuery(
     }
   }
 
-  const persisted = await persistExchange(input, question, response, meta, category, intent)
+  return { question, response, category, intent, handoffIntent, warning }
+}
+
+export async function handleChatbotQuery(
+  input: ChatbotQueryRequest,
+  meta: ChatbotRequestMeta = {}
+): Promise<ChatbotQueryResponse> {
+  const core = await buildChatbotCore(input.message)
+  const persisted = await persistExchange(
+    input,
+    core.question,
+    core.response,
+    meta,
+    core.category,
+    core.intent
+  )
 
   return {
-    ...response,
+    ...core.response,
     ...persisted,
-    handoffIntent,
-    warning,
+    handoffIntent: core.handoffIntent,
+    warning: core.warning,
+  }
+}
+
+/**
+ * 품질 평가용 진입점. 실제 검색·답변 파이프라인을 그대로 타되 분석 로그에 저장하지 않는다.
+ * 골든셋 평가([scripts/eval-chatbot.ts])가 분석 데이터를 오염시키지 않도록 한다.
+ */
+export async function evaluateChatbotQuery(
+  message: string
+): Promise<ChatbotQueryResponse & { detectedCategory: string }> {
+  const core = await buildChatbotCore(message)
+  return {
+    ...core.response,
+    handoffIntent: core.handoffIntent,
+    warning: core.warning,
+    detectedCategory: core.category,
   }
 }
 
