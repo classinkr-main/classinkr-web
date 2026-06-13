@@ -163,6 +163,14 @@ const PARTNERS = [
   { src: "/images/partners/canvas.png", alt: "Canvas", w: 353, h: 88 },
 ]
 
+const PRODUCT_LOGOS = [
+  { src: "/images/products/classin.png", alt: "ClassIn", w: 263, h: 77 },
+  { src: "/images/products/classin-x.png", alt: "ClassIn X", w: 289, h: 68 },
+  { src: "/images/products/teacherin.png", alt: "TeacherIn", w: 332, h: 80 },
+  { src: "/images/products/flowin.png", alt: "Flowin", w: 263, h: 84 },
+  { src: "/images/products/nobook.png", alt: "NOBOOK", w: 337, h: 83 },
+]
+
 /* ─── 애니메이션 헬퍼 ────────────────────────────────────────── */
 
 function FadeUp({
@@ -428,6 +436,44 @@ export default function AboutPageClient({ offices, press, recentPosts }: Props) 
                   <div className="text-[13px] text-[#615D59] leading-[1.6]">{v.desc}</div>
                 </div>
               ))}
+            </div>
+          </FadeUp>
+        </div>
+      </section>
+
+      {/* ── EEO 제품군 / Products ───────────────────────────── */}
+      <section className="py-28 px-6 bg-[#ECFDF5]">
+        <div className="max-w-[1000px] mx-auto">
+          <FadeUp>
+            <div className="text-center max-w-[640px] mx-auto mb-12">
+              <span className="text-[12px] font-semibold text-[#084734] tracking-[0.125px] uppercase mb-3 block">
+                Our Products
+              </span>
+              <h2 className="text-[36px] sm:text-[44px] font-bold text-[#111110] leading-[1.1] tracking-[-1.5px] mb-4">
+                하나의 미션, 다섯 개의 제품
+              </h2>
+              <p className="text-[16px] text-[#3F6B58] leading-[1.65]">
+                EEO는 수업·하드웨어·가상 실험·코스웨어까지, 교육의 모든 순간을 잇는 제품군을 만듭니다.
+              </p>
+            </div>
+          </FadeUp>
+          <FadeUp delay={0.08}>
+            <div
+              className="rounded-[20px] border border-[rgba(8,71,52,0.10)] bg-white p-8 sm:p-12"
+              style={{ boxShadow: "rgba(8,71,52,0.06) 0px 12px 36px" }}
+            >
+              <div className="grid grid-cols-2 items-center justify-items-center gap-x-6 gap-y-10 sm:grid-cols-3 lg:grid-cols-5">
+                {PRODUCT_LOGOS.map((p) => (
+                  <Image
+                    key={p.alt}
+                    src={p.src}
+                    alt={p.alt}
+                    width={p.w}
+                    height={p.h}
+                    className="h-7 w-auto sm:h-8"
+                  />
+                ))}
+              </div>
             </div>
           </FadeUp>
         </div>
