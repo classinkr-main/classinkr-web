@@ -62,9 +62,9 @@ type Props = {
 /* ─── 정적 데이터 ──────────────────────────────────────────── */
 
 const STATS = [
-  { value: "200억+", label: "누적 수업 횟수", icon: GraduationCap },
+  { value: "2억+", label: "누적 수업 횟수", icon: GraduationCap },
   { value: "5,000만+", label: "교사 · 학습자", icon: Users },
-  { value: "8만+", label: "파트너 교육기관", icon: Award },
+  { value: "6만+", label: "교육기관", icon: Award },
   { value: "160+", label: "서비스 국가", icon: Globe2 },
 ] as const
 
@@ -72,7 +72,7 @@ const TIMELINE = [
   {
     year: "2014",
     title: "창립",
-    desc: "EEO(Education Everywhere Online) 설립. 모든 학생에게 양질의 교육을 제공한다는 하나의 믿음으로 시작했습니다.",
+    desc: "EEO(Empower Education Online) 설립. 모든 학생에게 양질의 교육을 제공한다는 하나의 믿음으로 시작했습니다.",
   },
   {
     year: "2016",
@@ -90,14 +90,24 @@ const TIMELINE = [
     desc: "600명 이상의 개발자·엔지니어를 확보하며 플랫폼의 기술적 기반을 깊게 다졌습니다.",
   },
   {
-    year: "2021",
+    year: "2020",
     title: "글로벌 유니콘",
-    desc: "Tencent·Hillhouse·SIG의 투자를 유치하며 300억 달러 가치의 유니콘 기업으로 도약, 공교육 시장까지 영역을 확장했습니다.",
+    desc: "Hillhouse(GL벤처스)·Tencent·SIG로부터 2억 6,500만 달러 규모의 시리즈 C 투자를 유치하며 글로벌 에듀테크 유니콘으로 도약, 공교육 시장까지 영역을 확장했습니다.",
+  },
+  {
+    year: "2022",
+    title: "한국 진출",
+    desc: "한국 법인 이이오클래스인코리아를 설립하고, 국내 학원·교육기관을 위한 교육용 SaaS를 정식 출시했습니다.",
+  },
+  {
+    year: "2026",
+    title: "아시아 교육을 잇다",
+    desc: "한·중·일·베트남 교육자가 모인 「아시아 AI 교육 포럼」(부산)을 공동 주최하며 AI 시대의 교육을 함께 논의했습니다.",
   },
   {
     year: "현재",
     title: "세계와 연결된 교실",
-    desc: "160개국, 8만 개 기관, 5,000만 명이 넘는 교사와 학습자가 클래스인으로 수업합니다.",
+    desc: "160개국, 6만 개 기관, 5,000만 명이 넘는 교사와 학습자가 클래스인으로 수업합니다.",
   },
 ]
 
@@ -144,16 +154,18 @@ const VALUE_DETAILS = [
 ]
 
 const PARTNERS = [
-  "북경대학교",
-  "싱가포르 국립대학(NUS)",
-  "난양공과대학교",
-  "Cornell University",
-  "Australian National University",
-  "Waseda University",
-  "Oxford University Press",
-  "Pearson",
-  "Birkbeck University",
-  "Acadsoc",
+  {
+    group: "대학 · 연구",
+    items: ["북경대학교", "싱가포르 국립대학(NUS)", "난양공과대학(NTU)", "Cornell University", "Waseda University"],
+  },
+  {
+    group: "글로벌 교육기업",
+    items: ["New Oriental", "TAL Education", "British Council"],
+  },
+  {
+    group: "콘텐츠 · 출판",
+    items: ["Pearson", "Sony Global Education"],
+  },
 ]
 
 /* ─── 애니메이션 헬퍼 ────────────────────────────────────────── */
@@ -250,7 +262,7 @@ export default function AboutPageClient({ offices, press, recentPosts }: Props) 
             <div className="mt-10 flex flex-wrap items-center justify-center gap-2.5">
               {[
                 "2014년 설립",
-                "EEO Education Everywhere Online",
+                "EEO Empower Education Online",
                 "Tencent · Hillhouse 투자",
                 "전 세계 6개 지사",
               ].map((tag) => (
@@ -331,7 +343,7 @@ export default function AboutPageClient({ offices, press, recentPosts }: Props) 
                 교육을 바라보는<br />우리의 시선
               </h2>
               <p className="text-[16px] text-[#615D59] leading-[1.65]">
-                클래스인은 EEO(Education Everywhere Online)가 만든 교육용 SaaS 플랫폼입니다.
+                클래스인은 EEO(Empower Education Online)가 만든 교육용 SaaS 플랫폼입니다.
                 &lsquo;화상 수업 도구&rsquo;가 아닌 &lsquo;교실 경험 전체를 설계하는 플랫폼&rsquo;을 목표로 합니다.
               </p>
             </div>
@@ -551,6 +563,82 @@ export default function AboutPageClient({ offices, press, recentPosts }: Props) 
         </div>
       </section>
 
+      {/* ── 교육 포럼 / Thought Leadership ─────────────────────── */}
+      <section className="py-28 px-6 bg-[#ECFDF5]">
+        <div className="max-w-[1000px] mx-auto">
+          <FadeUp>
+            <div className="text-center max-w-[640px] mx-auto mb-12">
+              <span className="text-[12px] font-semibold text-[#084734] tracking-[0.125px] uppercase mb-3 block">
+                Thought Leadership
+              </span>
+              <h2 className="text-[36px] sm:text-[44px] font-bold text-[#111110] leading-[1.1] tracking-[-1.5px] mb-4">
+                아시아 교육의 흐름을 함께 만듭니다
+              </h2>
+              <p className="text-[16px] text-[#3F6B58] leading-[1.65]">
+                클래스인은 도구를 넘어, 교육의 방향을 함께 논의하는 자리를 만들어 갑니다.
+              </p>
+            </div>
+          </FadeUp>
+
+          <FadeUp delay={0.08}>
+            <div
+              className="bg-white rounded-[20px] border border-[rgba(8,71,52,0.10)] p-7 sm:p-10"
+              style={{ boxShadow: "rgba(8,71,52,0.08) 0px 16px 40px, rgba(8,71,52,0.04) 0px 4px 12px" }}
+            >
+              <div className="flex flex-col lg:flex-row lg:items-center gap-8 lg:gap-12">
+                <div className="flex-1">
+                  <div className="inline-flex items-center gap-1.5 bg-[#ECFDF5] text-[#084734] text-[12px] font-semibold rounded-full px-3 py-1.5 mb-5">
+                    <Sparkles className="w-3 h-3" strokeWidth={2.5} />
+                    2026 · 부산
+                  </div>
+                  <h3 className="text-[26px] sm:text-[30px] font-bold text-[#111110] leading-[1.2] tracking-[-0.6px] mb-3">
+                    2026 아시아 AI 교육 포럼
+                  </h3>
+                  <p className="text-[15px] text-[#615D59] leading-[1.7] mb-6">
+                    한·중·일·베트남 교육자가 한자리에 모여 <em className="not-italic font-semibold text-[#111110]">‘AI 시대의 아름다운 학습 공간’</em>을 논한 자리. 클래스인이 WP 과사람과 공동 주최하고, 공동창업자·CTO 허첸이 기조 세션을 맡았습니다.
+                  </p>
+                  <div className="flex flex-wrap gap-2 mb-7">
+                    {["한·중·일·베트남 4개국", "6개 세션", "공교육 × 사교육"].map((t) => (
+                      <span
+                        key={t}
+                        className="text-[12px] font-medium text-[#084734] bg-[#ECFDF5] rounded-full px-3 py-1.5"
+                      >
+                        {t}
+                      </span>
+                    ))}
+                  </div>
+                  <Link
+                    href="/blog/2026-asia-ai-education-forum-busan"
+                    className="inline-flex items-center gap-1.5 text-[14px] font-semibold text-[#084734] hover:gap-2.5 transition-all"
+                  >
+                    현장 리뷰 보기
+                    <ArrowUpRight className="w-4 h-4" strokeWidth={2.2} />
+                  </Link>
+                </div>
+
+                <div className="lg:w-[260px] shrink-0">
+                  <div className="grid grid-cols-2 gap-3">
+                    {[
+                      { k: "4", l: "참가국" },
+                      { k: "6", l: "세션" },
+                      { k: "공동", l: "주최" },
+                      { k: "CTO", l: "기조 발표" },
+                    ].map((s) => (
+                      <div key={s.l} className="bg-[#F6F5F4] rounded-[12px] px-4 py-5 text-center">
+                        <div className="text-[22px] font-bold text-[#084734] tracking-[-0.5px] leading-none mb-1.5">
+                          {s.k}
+                        </div>
+                        <div className="text-[12px] text-[#615D59] font-medium">{s.l}</div>
+                      </div>
+                    ))}
+                  </div>
+                </div>
+              </div>
+            </div>
+          </FadeUp>
+        </div>
+      </section>
+
       {/* ── 글로벌 파트너 ─────────────────────────────────────── */}
       <section className="py-28 px-6 bg-[#FFFFFF]">
         <div className="max-w-[1200px] mx-auto">
@@ -568,26 +656,33 @@ export default function AboutPageClient({ offices, press, recentPosts }: Props) 
             </div>
           </FadeUp>
 
-          <FadeUp delay={0.08}>
-            <div className="flex flex-wrap justify-center gap-3">
-              {PARTNERS.map((name) => (
-                <div
-                  key={name}
-                  className="bg-white rounded-full border border-[rgba(0,0,0,0.08)] px-5 py-2.5 text-[14px] font-medium text-[#111110]"
-                  style={{
-                    boxShadow:
-                      "rgba(0,0,0,0.04) 0px 4px 18px, rgba(0,0,0,0.027) 0px 2px 7.8px",
-                  }}
-                >
-                  {name}
+          <div className="mx-auto max-w-[920px] space-y-7">
+            {PARTNERS.map((grp, gi) => (
+              <FadeUp key={grp.group} delay={0.06 + gi * 0.06}>
+                <div className="flex flex-col gap-3 sm:flex-row sm:items-start sm:gap-8">
+                  <div className="shrink-0 pt-2 text-[12px] font-semibold uppercase tracking-[0.12em] text-[#084734] sm:w-36">
+                    {grp.group}
+                  </div>
+                  <div className="flex flex-wrap gap-2.5">
+                    {grp.items.map((name) => (
+                      <span
+                        key={name}
+                        className="inline-flex items-center gap-2 rounded-full border border-[rgba(0,0,0,0.08)] bg-white px-4 py-2 text-[14px] font-medium text-[#111110]"
+                        style={{ boxShadow: "rgba(0,0,0,0.04) 0px 4px 14px" }}
+                      >
+                        <span className="h-1.5 w-1.5 rounded-full bg-[#084734]/40" />
+                        {name}
+                      </span>
+                    ))}
+                  </div>
                 </div>
-              ))}
-            </div>
-          </FadeUp>
+              </FadeUp>
+            ))}
+          </div>
 
           <FadeUp delay={0.14}>
             <p className="text-center text-[13px] text-[#A39E98] mt-8">
-              외 80,000+ 교육기관
+              외 6만+ 교육기관
             </p>
           </FadeUp>
         </div>

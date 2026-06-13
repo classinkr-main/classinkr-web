@@ -1303,7 +1303,7 @@ function FullscreenQuoteSection() {
                     {[
                         { value: "287개", label: "하이브리드 수업 (2021 가을학기 단 한 학기)" },
                         { value: "160+", label: "협력 국가" },
-                        { value: "8만+", label: "글로벌 파트너 기관" },
+                        { value: "6만+", label: "교육기관" },
                     ].map((s) => (
                         <div key={s.label} className="text-center">
                             <div className="text-2xl sm:text-3xl font-sans font-bold tabular-nums text-white mb-1">{s.value}</div>

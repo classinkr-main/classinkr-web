@@ -5,6 +5,7 @@ import { EraVision } from "@/components/sections/EraVision"
 import { HomeEntitySummary } from "@/components/sections/HomeEntitySummary"
 import { ProblemCost } from "@/components/sections/ProblemCost"
 import { Manifesto } from "@/components/sections/Manifesto"
+import { GlobalScale } from "@/components/sections/GlobalScale"
 import dynamic from "next/dynamic"
 import { JsonLd } from "@/components/seo/JsonLd"
 import { createBreadcrumbJsonLd, createPublicMetadata, createWebPageJsonLd } from "@/lib/seo"
@@ -65,6 +66,7 @@ export default function LandingPage() {
       <ScienceBased />
       <SatisfyingClass />
       <CaseStudies />
+      <GlobalScale />
       <TestimonialWall />
       <Outcomes />
 
