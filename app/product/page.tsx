@@ -1,6 +1,6 @@
 import Link from "next/link"
 import Image from "next/image"
-import { ArrowRight, BookOpen, CheckCircle2, FlaskConical, Monitor, Pencil, Presentation } from "lucide-react"
+import { ArrowRight, CheckCircle2, Pencil, Presentation } from "lucide-react"
 
 import { JsonLd } from "@/components/seo/JsonLd"
 import { createBreadcrumbJsonLd, createPublicMetadata, createWebPageJsonLd } from "@/lib/seo"
@@ -36,7 +36,9 @@ const productFamily = [
   {
     name: "클래스인",
     en: "ClassIn",
-    icon: Monitor,
+    logo: "/images/products/classin.png",
+    lw: 263,
+    lh: 77,
     tag: "국내 제공",
     tone: "green",
     desc: "실시간 화상 수업과 LMS를 통합한 온·오프라인·하이브리드 교육 플랫폼.",
@@ -45,7 +47,9 @@ const productFamily = [
   {
     name: "클래스인 X",
     en: "ClassIn X",
-    icon: Presentation,
+    logo: "/images/products/classin-x.png",
+    lw: 289,
+    lh: 68,
     tag: "국내 제공",
     tone: "green",
     desc: "하이브리드 교실을 위한 인터랙티브 전자칠판·AI 카메라·마이크 하드웨어.",
@@ -54,7 +58,9 @@ const productFamily = [
   {
     name: "노북",
     en: "NOBOOK",
-    icon: FlaskConical,
+    logo: "/images/products/nobook.png",
+    lw: 337,
+    lh: 83,
     tag: "글로벌",
     tone: "neutral",
     desc: "물리·화학·생물 가상 실험(시뮬레이션) 도구.",
@@ -63,7 +69,9 @@ const productFamily = [
   {
     name: "티처인",
     en: "TeacherIn",
-    icon: BookOpen,
+    logo: "/images/products/teacherin.png",
+    lw: 332,
+    lh: 80,
     tag: "글로벌",
     tone: "neutral",
     desc: "교사가 커리큘럼·코스웨어를 함께 설계하고 공유하는 플랫폼.",
@@ -169,10 +177,14 @@ export default function ProductPage() {
                   key={product.en}
                   className="group rounded-lg border border-black/[0.08] bg-white p-6 transition-all hover:-translate-y-0.5 hover:border-[#084734]/20 hover:shadow-[0_14px_34px_rgba(17,17,16,0.07)]"
                 >
-                  <div className="flex items-start justify-between">
-                    <div className="inline-flex h-10 w-10 items-center justify-center rounded-[8px] bg-[#ECFDF5] text-[#084734] transition-colors group-hover:bg-[#084734] group-hover:text-white">
-                      <product.icon className="h-5 w-5" />
-                    </div>
+                  <div className="flex items-start justify-between gap-3">
+                    <Image
+                      src={product.logo}
+                      alt={product.en}
+                      width={product.lw}
+                      height={product.lh}
+                      className="h-[26px] w-auto"
+                    />
                     <span
                       className={`rounded-full px-2.5 py-1 text-[11px] font-bold ${
                         product.tone === "green"
@@ -183,10 +195,8 @@ export default function ProductPage() {
                       {product.tag}
                     </span>
                   </div>
-                  <h3 className="mt-5 text-lg font-black text-[#111110]">
-                    {product.name} <span className="ml-0.5 text-sm font-bold text-[#A39E98]">{product.en}</span>
-                  </h3>
-                  <p className="mt-2 text-sm leading-6 text-[#484540]">{product.desc}</p>
+                  <p className="mt-5 text-sm font-bold text-[#31302E]">{product.name}</p>
+                  <p className="mt-1.5 text-sm leading-6 text-[#484540]">{product.desc}</p>
                   <p className="mt-4 border-t border-black/[0.06] pt-3 text-xs font-semibold leading-5 text-[#615D59]">
                     {product.note}
                   </p>
