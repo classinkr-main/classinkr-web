@@ -154,18 +154,13 @@ const VALUE_DETAILS = [
 ]
 
 const PARTNERS = [
-  {
-    group: "대학 · 연구",
-    items: ["북경대학교", "싱가포르 국립대학(NUS)", "난양공과대학(NTU)", "Cornell University", "Waseda University"],
-  },
-  {
-    group: "글로벌 교육기업",
-    items: ["New Oriental", "TAL Education", "British Council"],
-  },
-  {
-    group: "콘텐츠 · 출판",
-    items: ["Pearson", "Sony Global Education"],
-  },
+  { src: "/images/partners/nus.png", alt: "National University of Singapore", w: 313, h: 144 },
+  { src: "/images/partners/sony-global-education.png", alt: "Sony Global Education", w: 212, h: 88 },
+  { src: "/images/partners/pearson.png", alt: "Pearson", w: 296, h: 88 },
+  { src: "/images/partners/british-council.png", alt: "British Council", w: 250, h: 88 },
+  { src: "/images/partners/d2l.png", alt: "D2L", w: 234, h: 88 },
+  { src: "/images/partners/udacity.png", alt: "Udacity", w: 452, h: 88 },
+  { src: "/images/partners/canvas.png", alt: "Canvas", w: 353, h: 88 },
 ]
 
 /* ─── 애니메이션 헬퍼 ────────────────────────────────────────── */
@@ -346,6 +341,18 @@ export default function AboutPageClient({ offices, press, recentPosts }: Props) 
                 클래스인은 EEO(Empower Education Online)가 만든 교육용 SaaS 플랫폼입니다.
                 &lsquo;화상 수업 도구&rsquo;가 아닌 &lsquo;교실 경험 전체를 설계하는 플랫폼&rsquo;을 목표로 합니다.
               </p>
+              <div className="mt-8 flex flex-col items-center gap-3">
+                <Image
+                  src="/images/brand/eeo-logo.png"
+                  alt="EEO — Empower Education Online"
+                  width={373}
+                  height={48}
+                  className="h-6 w-auto opacity-90"
+                />
+                <p className="text-[14px] font-medium text-[#084734]">
+                  Empowering the Future Through Transformative Learning
+                </p>
+              </div>
             </div>
           </FadeUp>
 
@@ -563,6 +570,63 @@ export default function AboutPageClient({ offices, press, recentPosts }: Props) 
         </div>
       </section>
 
+      {/* ── Our Culture ─────────────────────────────────────── */}
+      <section className="py-28 px-6 bg-[#F6F5F4]">
+        <div className="max-w-[1200px] mx-auto">
+          <FadeUp>
+            <div className="text-center max-w-[640px] mx-auto mb-14">
+              <span className="text-[12px] font-semibold text-[#084734] tracking-[0.125px] uppercase mb-3 block">
+                Our Culture
+              </span>
+              <h2 className="text-[36px] sm:text-[44px] font-bold text-[#111110] leading-[1.1] tracking-[-1.5px] mb-4">
+                우리가 일하는 방식
+              </h2>
+              <p className="text-[16px] text-[#615D59] leading-[1.65]">
+                좋은 교육이 삶을 바꾼다는 믿음으로, 사명을 좇고 끊임없이 혁신하며 함께 비범해집니다.
+              </p>
+            </div>
+          </FadeUp>
+
+          <div className="grid md:grid-cols-3 gap-5">
+            {[
+              {
+                img: "/images/culture/mission-driven.jpg",
+                en: "Be mission-driven",
+                t: "사명으로 움직인다",
+                d: "기술로 교육을 더 접근 가능하고, 확장 가능하며, 개인화된 것으로 만든다는 믿음으로 일합니다.",
+              },
+              {
+                img: "/images/culture/innovative.jpg",
+                en: "Stay innovative",
+                t: "끊임없이 혁신한다",
+                d: "업계를 새롭게 정의하는 에듀테크 기업으로서, 돌파구는 늘 우리 손에서 시작됩니다.",
+              },
+              {
+                img: "/images/culture/exceptional.jpg",
+                en: "Become exceptional",
+                t: "함께 비범해진다",
+                d: "크로스컬처 프로젝트와 기업가 정신으로, 세계와 호흡하는 인재로 성장합니다.",
+              },
+            ].map((c, i) => (
+              <FadeUp key={c.en} delay={i * 0.08}>
+                <div className="h-full overflow-hidden bg-white rounded-[16px] border border-[rgba(0,0,0,0.08)]">
+                  <div className="relative aspect-[4/3]">
+                    <Image src={c.img} alt={c.t} fill className="object-cover" sizes="(max-width: 768px) 100vw, 33vw" />
+                  </div>
+                  <div className="p-7">
+                    <div className="text-[11px] font-semibold text-[#084734] tracking-[0.12em] uppercase mb-2">
+                      {c.en}
+                    </div>
+                    <h3 className="text-[20px] font-bold text-[#111110] mb-2.5 tracking-[-0.3px]">{c.t}</h3>
+                    <p className="text-[14px] text-[#615D59] leading-[1.65]">{c.d}</p>
+                  </div>
+                </div>
+              </FadeUp>
+            ))}
+          </div>
+        </div>
+      </section>
+
       {/* ── 교육 포럼 / Thought Leadership ─────────────────────── */}
       <section className="py-28 px-6 bg-[#ECFDF5]">
         <div className="max-w-[1000px] mx-auto">
@@ -656,26 +720,16 @@ export default function AboutPageClient({ offices, press, recentPosts }: Props) 
             </div>
           </FadeUp>
 
-          <div className="mx-auto max-w-[920px] space-y-7">
-            {PARTNERS.map((grp, gi) => (
-              <FadeUp key={grp.group} delay={0.06 + gi * 0.06}>
-                <div className="flex flex-col gap-3 sm:flex-row sm:items-start sm:gap-8">
-                  <div className="shrink-0 pt-2 text-[12px] font-semibold uppercase tracking-[0.12em] text-[#084734] sm:w-36">
-                    {grp.group}
-                  </div>
-                  <div className="flex flex-wrap gap-2.5">
-                    {grp.items.map((name) => (
-                      <span
-                        key={name}
-                        className="inline-flex items-center gap-2 rounded-full border border-[rgba(0,0,0,0.08)] bg-white px-4 py-2 text-[14px] font-medium text-[#111110]"
-                        style={{ boxShadow: "rgba(0,0,0,0.04) 0px 4px 14px" }}
-                      >
-                        <span className="h-1.5 w-1.5 rounded-full bg-[#084734]/40" />
-                        {name}
-                      </span>
-                    ))}
-                  </div>
-                </div>
+          <div className="mx-auto grid max-w-[920px] grid-cols-2 items-center justify-items-center gap-x-8 gap-y-10 sm:grid-cols-4">
+            {PARTNERS.map((p, i) => (
+              <FadeUp key={p.src} delay={0.04 + i * 0.04}>
+                <Image
+                  src={p.src}
+                  alt={p.alt}
+                  width={p.w}
+                  height={p.h}
+                  className="h-7 w-auto object-contain opacity-70 grayscale transition hover:opacity-100 sm:h-8"
+                />
               </FadeUp>
             ))}
           </div>
@@ -701,13 +755,30 @@ export default function AboutPageClient({ offices, press, recentPosts }: Props) 
               </div>
               <div className="grid sm:grid-cols-3 gap-4">
                 {[
-                  { t: "채널 파트너", d: "출판사·통신사·에듀테크·하드웨어 기업과 지역 및 글로벌 단위로 협력합니다." },
-                  { t: "통합 파트너", d: "LTI·SDK·API 연동으로 클래스인을 기존 에듀테크 환경에 자연스럽게 통합합니다." },
-                  { t: "제휴 파트너", d: "크로스컬처 프로젝트를 통해 함께 시장을 넓혀가는 성장 파트너십입니다." },
+                  { t: "채널 파트너", img: "/images/partnership/channel.png", d: "출판사·통신사·에듀테크·하드웨어 기업과 지역 및 글로벌 단위로 협력합니다." },
+                  { t: "통합 파트너", img: "/images/partnership/integration.png", d: "LTI·SDK·API 연동으로 클래스인을 기존 에듀테크 환경에 자연스럽게 통합합니다." },
+                  { t: "제휴 파트너", img: "/images/partnership/affiliate.png", d: "크로스컬처 프로젝트를 통해 함께 시장을 넓혀가는 성장 파트너십입니다." },
                 ].map((p) => (
-                  <div key={p.t} className="h-full bg-[#F6F5F4] rounded-[16px] p-7">
-                    <h4 className="text-[17px] font-bold text-[#111110] mb-2.5">{p.t}</h4>
-                    <p className="text-[14px] text-[#615D59] leading-[1.6]">{p.d}</p>
+                  <div key={p.t} className="h-full overflow-hidden rounded-[16px] border border-[rgba(0,0,0,0.08)] bg-white">
+                    <div className="relative aspect-[4/3] bg-[#F6F5F4]">
+                      <Image src={p.img} alt={p.t} fill className="object-cover" sizes="(max-width: 640px) 100vw, 33vw" />
+                    </div>
+                    <div className="p-6">
+                      <h4 className="text-[17px] font-bold text-[#111110] mb-2">{p.t}</h4>
+                      <p className="text-[14px] text-[#615D59] leading-[1.6]">{p.d}</p>
+                    </div>
+                  </div>
+                ))}
+              </div>
+              <div className="mt-8 grid grid-cols-1 gap-3 text-center sm:grid-cols-3">
+                {[
+                  { t: "혁신적 솔루션", d: "세상의 학습 방식을 바꾸는 제품" },
+                  { t: "500+ 교육 전문 인력", d: "다양한 분야의 전문가 그룹" },
+                  { t: "검증된 글로벌 플랫폼", d: "160+ 개국이 신뢰하는 인프라" },
+                ].map((v) => (
+                  <div key={v.t} className="px-4 py-2">
+                    <div className="text-[15px] font-bold text-[#084734]">{v.t}</div>
+                    <div className="mt-1 text-[13px] text-[#615D59]">{v.d}</div>
                   </div>
                 ))}
               </div>

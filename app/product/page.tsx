@@ -1,4 +1,5 @@
 import Link from "next/link"
+import Image from "next/image"
 import { ArrowRight, BookOpen, CheckCircle2, FlaskConical, Monitor, Pencil, Presentation } from "lucide-react"
 
 import { JsonLd } from "@/components/seo/JsonLd"
@@ -153,7 +154,16 @@ export default function ProductPage() {
                 Classin 소프트웨어와 Classin Board는 아래 제품군 위에서 운영됩니다.
               </p>
             </div>
-            <div className="mt-10 grid gap-4 sm:grid-cols-2 lg:grid-cols-4">
+            <div className="mt-10 overflow-hidden rounded-lg border border-black/[0.08] bg-[#ECFDF5]">
+              <Image
+                src="/images/brand/eeo-family.png"
+                alt="EEO 제품군 — Classin · Classin X · TeacherIn · Flowin · NOBOOK"
+                width={3840}
+                height={1456}
+                className="h-auto w-full"
+              />
+            </div>
+            <div className="mt-4 grid gap-4 sm:grid-cols-2 lg:grid-cols-4">
               {productFamily.map((product) => (
                 <div
                   key={product.en}
