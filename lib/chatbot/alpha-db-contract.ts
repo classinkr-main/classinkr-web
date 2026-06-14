@@ -8,6 +8,13 @@ export interface AlphaDbTableProbe {
   minimumRows?: number
 }
 
+export interface AlphaDbRpcProbe {
+  functionName: string
+  label: string
+  args: Record<string, unknown>
+  migration: string
+}
+
 export interface AlphaDbProbeResult {
   table: string
   label: string
@@ -104,6 +111,22 @@ export const ALPHA_DB_TABLE_PROBES: AlphaDbTableProbe[] = [
     label: "문서 편집 draft",
     columns: ["article_id", "draft_payload", "change_note", "updated_by", "updated_at"],
     migration: "supabase/migrations/20260604_docs_article_drafts.sql",
+  },
+]
+
+function buildVectorProbeEmbedding(dimensions: number) {
+  return JSON.stringify(Array.from({ length: dimensions }, (_, index) => (index === 0 ? 1 : 0)))
+}
+
+export const ALPHA_DB_RPC_PROBES: AlphaDbRpcProbe[] = [
+  {
+    functionName: "match_docs_ai_chunks",
+    label: "문서 벡터 검색 RPC",
+    args: {
+      query_embedding: buildVectorProbeEmbedding(1536),
+      match_count: 1,
+    },
+    migration: "supabase/migrations/20260613_docs_chunk_vector_search.sql",
   },
 ]
 

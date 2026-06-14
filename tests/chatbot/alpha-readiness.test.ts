@@ -75,7 +75,7 @@ describe("chatbot alpha readiness", () => {
         "supabase/migrations/20260614_alpha_admin_base_schema.sql",
         "supabase/migrations/20260421_docs_center.sql",
         "supabase/migrations/20260604_docs_article_drafts.sql",
-        "supabase/migrations/20260613_docs_chunk_embedding_768.sql",
+        "supabase/migrations/20260613_docs_chunk_vector_search.sql",
       ])
     )
   })

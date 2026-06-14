@@ -15,7 +15,9 @@ describe("alpha DB check script", () => {
 
     const source = readFileSync(scriptPath, "utf8")
     expect(source).toContain("ALPHA_DB_TABLE_PROBES")
+    expect(source).toContain("ALPHA_DB_RPC_PROBES")
     expect(source).toContain("createClient")
+    expect(source).toContain(".rpc(probe.functionName")
     expect(source).toContain("summarizeAlphaDbProbeResults")
     expect(source).toContain("process.exitCode = 1")
   })

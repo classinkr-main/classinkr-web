@@ -11,8 +11,10 @@ describe("admin docs alpha readiness surface", () => {
 
     const source = readFileSync(routePath, "utf8")
     expect(source).toContain("verifyAdmin")
+    expect(source).toContain("ALPHA_DB_RPC_PROBES")
     expect(source).toContain("buildChatbotAlphaReadiness")
     expect(source).toContain("listDocGapBacklog")
+    expect(source).toContain(".rpc(probe.functionName")
     expect(source).toContain("docs_ai_chunks")
     expect(source).toContain("chatbot_recommended_questions")
   })

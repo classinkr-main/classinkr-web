@@ -2,6 +2,7 @@ import { NextRequest, NextResponse } from "next/server"
 
 import { verifyAdmin } from "@/lib/admin-auth"
 import { buildChatbotAlphaReadiness } from "@/lib/chatbot/alpha-readiness"
+import { ALPHA_DB_RPC_PROBES } from "@/lib/chatbot/alpha-db-contract"
 import { listDocGapBacklog } from "@/lib/chatbot/doc-gaps"
 import { createSupabaseAdminClient } from "@/lib/supabase/admin"
 
@@ -9,6 +10,8 @@ type CountQuery = PromiseLike<{
   count: number | null
   error: { message?: string } | null
 }>
+
+type SupabaseAdminClient = ReturnType<typeof createSupabaseAdminClient>
 
 function hasSupabaseServerEnv() {
   return Boolean(
@@ -26,6 +29,15 @@ async function readCount(label: string, query: CountQuery, warnings: string[]) {
     return 0
   }
   return result.count ?? 0
+}
+
+async function readRpcProbes(supabase: SupabaseAdminClient, warnings: string[]) {
+  await Promise.all(
+    ALPHA_DB_RPC_PROBES.map(async (probe) => {
+      const { error } = await supabase.rpc(probe.functionName, probe.args)
+      if (error) warnings.push(`${probe.functionName}: ${error.message ?? "rpc probe failed"}`)
+    })
+  )
 }
 
 export async function GET(req: NextRequest) {
@@ -92,6 +104,7 @@ export async function GET(req: NextRequest) {
     ])
 
     if (backlog.warning) warnings.push(`doc_gaps: ${backlog.warning}`)
+    await readRpcProbes(supabase, warnings)
 
     return NextResponse.json(
       buildChatbotAlphaReadiness({

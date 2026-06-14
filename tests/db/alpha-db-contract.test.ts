@@ -2,6 +2,7 @@ import { describe, expect, it } from "vitest"
 
 import {
   ALPHA_DB_MIGRATIONS,
+  ALPHA_DB_RPC_PROBES,
   ALPHA_DB_TABLE_PROBES,
   buildAlphaDbProbeSelect,
   summarizeAlphaDbProbeResults,
@@ -36,6 +37,21 @@ describe("alpha DB contract", () => {
         "question_clusters",
         "chatbot_recommended_questions",
         "docs_article_drafts",
+      ])
+    )
+  })
+
+  it("declares the vector search RPC required for retrieval readiness", () => {
+    expect(ALPHA_DB_RPC_PROBES).toEqual(
+      expect.arrayContaining([
+        expect.objectContaining({
+          functionName: "match_docs_ai_chunks",
+          migration: "supabase/migrations/20260613_docs_chunk_vector_search.sql",
+          args: expect.objectContaining({
+            match_count: 1,
+            query_embedding: expect.any(String),
+          }),
+        }),
       ])
     )
   })
