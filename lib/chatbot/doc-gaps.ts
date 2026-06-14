@@ -55,6 +55,29 @@ interface SearchEventRow {
   created_at: string
 }
 
+interface MappedClusterRow {
+  label: string | null
+  canonical_question: string | null
+}
+
+function normalizeGapQuery(value: string) {
+  return value.replace(/\s+/g, " ").trim().toLowerCase()
+}
+
+export function filterMappedZeroResultSearches(
+  searches: ZeroResultSearch[],
+  mappedQuestions: string[]
+) {
+  const mapped = new Set(
+    mappedQuestions
+      .map(normalizeGapQuery)
+      .filter(Boolean)
+  )
+
+  if (mapped.size === 0) return searches
+  return searches.filter((search) => !mapped.has(normalizeGapQuery(search.query)))
+}
+
 export async function listDocGapBacklog(options: { limit?: number } = {}): Promise<DocGapBacklog> {
   const limit = options.limit ?? 30
 
@@ -92,6 +115,14 @@ export async function listDocGapBacklog(options: { limit?: number } = {}): Promi
 
     if (eventError) throw new Error(eventError.message)
 
+    const { data: mappedRows, error: mappedError } = await supabase
+      .from("question_clusters")
+      .select("label, canonical_question")
+      .not("mapped_article_id", "is", null)
+      .limit(1000)
+
+    if (mappedError) throw new Error(mappedError.message)
+
     const counts = new Map<string, { count: number; lastSeenAt: string }>()
     for (const event of (eventRows ?? []) as SearchEventRow[]) {
       const query = (event.normalized_query ?? "").trim()
@@ -101,10 +132,17 @@ export async function listDocGapBacklog(options: { limit?: number } = {}): Promi
       else counts.set(query, { count: 1, lastSeenAt: event.created_at })
     }
 
-    const zeroResultSearches: ZeroResultSearch[] = [...counts.entries()]
+    const mappedQuestions = ((mappedRows ?? []) as MappedClusterRow[]).flatMap((row) => [
+      row.label ?? "",
+      row.canonical_question ?? "",
+    ])
+
+    const zeroResultCandidates: ZeroResultSearch[] = [...counts.entries()]
       .map(([query, value]) => ({ query, count: value.count, lastSeenAt: value.lastSeenAt }))
       .sort((left, right) => right.count - left.count)
       .slice(0, limit)
+
+    const zeroResultSearches = filterMappedZeroResultSearches(zeroResultCandidates, mappedQuestions)
 
     return { gapClusters, zeroResultSearches }
   } catch (error) {

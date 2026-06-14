@@ -1,6 +1,7 @@
 import { createServerClient } from "@supabase/ssr"
 import { NextResponse, type NextRequest } from "next/server"
 
+import { isAdminAuthBypassEnabled } from "@/lib/admin-env"
 import { updateSupabaseSession } from "@/lib/supabase/middleware"
 import { getSupabaseBrowserEnv, hasSupabaseBrowserEnv } from "@/lib/supabase/public-env"
 
@@ -181,6 +182,8 @@ export async function proxy(request: NextRequest) {
   if (!isProtectedAdminPath(request.nextUrl.pathname)) {
     return response
   }
+
+  if (isAdminAuthBypassEnabled()) return response
 
   const allowedRoles = getAllowedAdminPageRoles(request.nextUrl.pathname)
   if (await hasLegacyAdminSession(request, allowedRoles)) return response

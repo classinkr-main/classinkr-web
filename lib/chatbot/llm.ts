@@ -23,10 +23,10 @@ const GEMINI_API_KEY = process.env.GEMINI_API_KEY
 const GEMINI_TIMEOUT_MS = 8000
 const MAX_ANSWER_LENGTH = 1500
 
-// docs_ai_chunks.embedding 은 vector(768). 한국어 검색 품질을 위해 gemini-embedding-001 을
-// 768 차원(MRL)으로 받아 컬럼에 맞춘다. 코사인 유사도는 스케일 불변이라 정규화는 생략한다.
+// 운영 docs_ai_chunks.embedding 은 현재 vector(1536). 768 전환 migration을 적용한 환경은
+// GEMINI_EMBED_DIM=768로 맞춘다. 코사인 유사도는 스케일 불변이라 정규화는 생략한다.
 export const CHATBOT_EMBED_MODEL = process.env.GEMINI_EMBED_MODEL || "gemini-embedding-001"
-export const CHATBOT_EMBED_DIM = 768
+export const CHATBOT_EMBED_DIM = Number(process.env.GEMINI_EMBED_DIM ?? "1536")
 export type EmbedTaskType = "RETRIEVAL_QUERY" | "RETRIEVAL_DOCUMENT"
 
 function resolveModel(tier: ChatbotModelTier = "basic") {

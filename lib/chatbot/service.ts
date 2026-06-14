@@ -3,7 +3,15 @@ import "server-only"
 import { createSupabaseAdminClient } from "@/lib/supabase/admin"
 import { getDocPath, listDocs, type DocArticle } from "@/lib/docs"
 import { getDocsContent } from "@/lib/docs-content"
+import {
+  classifyChatbotQuestion,
+  type ChatbotIntent,
+} from "@/lib/chatbot/classification"
 import { generateGeminiAnswer, embedText, type ChatbotModelTier } from "@/lib/chatbot/llm"
+import {
+  buildClientVectorSources,
+  type VectorFallbackChunkRow,
+} from "@/lib/chatbot/vector-fallback"
 
 const MAX_MESSAGE_LENGTH = 1000
 const MAX_FEEDBACK_COMMENT_LENGTH = 500
@@ -369,6 +377,7 @@ async function keywordSearchSupabaseSources(question: NormalizedQuestion): Promi
 
 const VECTOR_MATCH_COUNT = 8
 const VECTOR_SIMILARITY_FLOOR = 0.3
+const CLIENT_VECTOR_SIMILARITY_FLOOR = 0.7
 
 interface MatchChunkRow {
   id: string
@@ -384,11 +393,8 @@ interface MatchChunkRow {
 }
 
 // Gemini 임베딩 기반 시맨틱 검색. 키·임베딩이 없거나 결과가 없으면 [] → 키워드 검색으로 폴백.
-async function vectorSearchSupabaseSources(question: NormalizedQuestion): Promise<ChatbotSource[]> {
+async function vectorSearchSupabaseSources(embedding: number[]): Promise<ChatbotSource[]> {
   if (!hasSupabaseServerEnv()) return []
-
-  const embedding = await embedText(question.redacted, "RETRIEVAL_QUERY")
-  if (!embedding) return []
 
   try {
     const supabase = createSupabaseAdminClient()
@@ -427,11 +433,61 @@ async function vectorSearchSupabaseSources(question: NormalizedQuestion): Promis
   }
 }
 
-// 벡터 검색 우선, 결과 없으면 키워드(ilike) 검색.
+async function clientVectorSearchSupabaseSources(embedding: number[]): Promise<ChatbotSource[]> {
+  if (!hasSupabaseServerEnv()) return []
+
+  try {
+    const supabase = createSupabaseAdminClient()
+    const { data, error } = await supabase
+      .from("docs_ai_chunks")
+      .select(
+        "id, article_id, heading, content, embedding, docs_articles!inner(id, category_id, slug, title, description, canonical_path, status, visibility, noindex)"
+      )
+      .eq("docs_articles.status", "published")
+      .in("docs_articles.visibility", ["public", "unlisted"])
+      .eq("docs_articles.noindex", false)
+      .not("embedding", "is", null)
+      .limit(500)
+
+    if (error) {
+      console.warn("[chatbot] client vector fallback failed:", error.message)
+      return []
+    }
+
+    return buildClientVectorSources(
+      embedding,
+      (data ?? []) as VectorFallbackChunkRow[],
+      {
+        maxSources: MAX_SOURCES,
+        similarityFloor: CLIENT_VECTOR_SIMILARITY_FLOOR,
+      }
+    )
+  } catch (error) {
+    console.warn(
+      "[chatbot] client vector fallback unavailable:",
+      error instanceof Error ? error.message : error
+    )
+    return []
+  }
+}
+
+// RPC 벡터 검색 우선, 정확 키워드 검색 이후 RPC 미적용 환경의 embedding 컬럼 fallback.
 async function searchSupabaseSources(question: NormalizedQuestion): Promise<ChatbotSource[]> {
-  const vectorSources = await vectorSearchSupabaseSources(question)
-  if (vectorSources.length > 0) return vectorSources
-  return keywordSearchSupabaseSources(question)
+  const embedding = await embedText(question.redacted, "RETRIEVAL_QUERY")
+  if (embedding) {
+    const vectorSources = await vectorSearchSupabaseSources(embedding)
+    if (vectorSources.length > 0) return vectorSources
+  }
+
+  const keywordSources = await keywordSearchSupabaseSources(question)
+  if (keywordSources.length > 0) return keywordSources
+
+  if (embedding) {
+    const clientVectorSources = await clientVectorSearchSupabaseSources(embedding)
+    if (clientVectorSources.length > 0) return clientVectorSources
+  }
+
+  return []
 }
 
 async function searchKnowledgeSources(
@@ -447,64 +503,6 @@ async function searchKnowledgeSources(
     warning: hasSupabaseServerEnv()
       ? "Supabase 문서 chunk 검색 결과가 없어 문서 원문 fallback을 사용했습니다."
       : "Supabase 환경변수가 없어 정적 문서 fallback을 사용했습니다.",
-  }
-}
-
-function detectCategory(question: NormalizedQuestion, sources: ChatbotSource[]) {
-  const text = `${question.redacted} ${sources.map((source) => source.category).join(" ")}`.toLowerCase()
-
-  if (/결제|요금|가격|견적|영수증|세금|세금계산서|입금|청구|구독|환불|정산/.test(text)) return "billing"
-  if (/하드웨어|전자칠판|보드|board|카메라|마이크|스피커|설치|납품|배송|as|a\/s|수리|고장/.test(text)) return "hardware"
-  if (/접속|로그인|계정|비밀번호|소리|오류|에러|안됨|안 돼|권한|장애|끊김|로딩/.test(text)) return "troubleshooting"
-  if (/도입|시작|초기|세팅|설정|초대|온보딩|첫 수업|준비|교육|전환/.test(text)) return "onboarding"
-  if (/수업|출결|출석|보강|교사|학생|학부모|집중|운영|관리|리포트|숙제|과제/.test(text)) return "classroom"
-  if (/상담|문의|데모|시연|컨설팅|연락|미팅|제안|상담사|담당자/.test(text)) return "consultation"
-
-  return sources[0]?.category ?? "general"
-}
-
-function detectHandoffIntent(question: NormalizedQuestion, category: string): HandoffIntent {
-  const text = question.redacted.toLowerCase()
-
-  if (
-    /컴플레인|불만|환불|취소|짜증|최악|별로|안됨|안 됨|안 되|장애|오류|에러|버그|끊김|느려|느리|기술\s*지원|이슈|고장|파손|계정|로그인|접속|소리|마이크|as|a\/s/.test(
-      text
-    )
-  ) {
-    return "support"
-  }
-
-  if (
-    /데모|시연|도입\s*문의|도입\s*상담|도입\s*검토|견적|요금|비용|플랜|가격\s*문의|영업|구매\s*상담|체험|사용해\s*보고|연락|미팅|제안/.test(
-      text
-    )
-  ) {
-    return "demo"
-  }
-
-  if (category === "billing" || category === "hardware" || category === "troubleshooting") {
-    return "support"
-  }
-
-  return "demo"
-}
-
-function detectIntent(category: string) {
-  switch (category) {
-    case "billing":
-      return "billing_support"
-    case "hardware":
-      return "hardware_support"
-    case "troubleshooting":
-      return "troubleshooting"
-    case "onboarding":
-      return "onboarding"
-    case "classroom":
-      return "classroom_consulting"
-    case "consultation":
-      return "sales_consulting"
-    default:
-      return "docs_lookup"
   }
 }
 
@@ -534,6 +532,8 @@ function getNextStepByCategory(category: string) {
       return "사용 중인 기기, 브라우저/앱, 오류가 발생한 화면을 알려주시면 해결 순서를 더 잘 잡을 수 있어요."
     case "onboarding":
       return "학생 수, 수업 방식, 희망 시작 시점을 알려주시면 도입 준비 순서를 맞춰드릴게요."
+    case "admin":
+      return "확인하려는 메뉴, 기관 권한, 저장·녹화 기준을 알려주시면 운영 설정 흐름으로 좁혀드릴게요."
     case "classroom":
       return "현재 수업 운영에서 가장 막히는 지점을 알려주시면 기능과 운영 방법을 함께 제안드릴게요."
     default:
@@ -541,10 +541,16 @@ function getNextStepByCategory(category: string) {
   }
 }
 
-function composeAnswer(question: NormalizedQuestion, sources: ChatbotSource[]): Omit<ChatbotQueryResponse, "answerEventId" | "sessionId" | "warning" | "handoffIntent"> {
+function composeAnswer(
+  question: NormalizedQuestion,
+  sources: ChatbotSource[],
+  category: string
+): Omit<ChatbotQueryResponse, "answerEventId" | "sessionId" | "warning" | "handoffIntent"> {
   if (sources.length === 0) {
     const needsConsultation = wantsHumanConsultation(question)
     const isVague = question.tokens.length < 2 && !needsConsultation
+    const needsSupportHandoff = ["billing", "hardware", "troubleshooting"].includes(category)
+    const needsHandoff = needsConsultation || needsSupportHandoff
 
     if (isVague) {
       return {
@@ -563,9 +569,11 @@ function composeAnswer(question: NormalizedQuestion, sources: ChatbotSource[]): 
       answer:
         needsConsultation
           ? "상담이 필요한 내용으로 확인했습니다. 학원 규모, 희망 도입 시점, 현재 운영에서 가장 해결하고 싶은 문제를 남겨주시면 담당자가 이어서 안내드릴게요."
-          : "확인 가능한 문서에서 바로 답을 찾지 못했습니다. 운영 환경이나 오류 상황을 조금 더 구체적으로 알려주시거나 상담으로 연결해 주세요.",
-      answerMode: needsConsultation ? "handoff" : "fallback",
-      confidence: needsConsultation ? 0.4 : 0.15,
+          : needsSupportHandoff
+            ? `확인 가능한 문서에서 바로 답을 찾지 못했습니다. 담당자가 안전하게 확인할 수 있도록 상담으로 이어드릴게요.\n\n다음 단계: ${getNextStepByCategory(category)}`
+            : "확인 가능한 문서에서 바로 답을 찾지 못했습니다. 운영 환경이나 오류 상황을 조금 더 구체적으로 알려주시거나 상담으로 연결해 주세요.",
+      answerMode: needsHandoff ? "handoff" : "fallback",
+      confidence: needsHandoff ? 0.4 : 0.15,
       needsHandoff: true,
       sources: [],
       suggestedQuestions: ["도입 상담을 받고 싶어요", "요금과 견적이 궁금해요", "계정이나 수업 접속 문제가 있어요"],
@@ -574,7 +582,6 @@ function composeAnswer(question: NormalizedQuestion, sources: ChatbotSource[]): 
   }
 
   const top = sources[0]
-  const category = detectCategory(question, sources)
   const confidence = Math.min(0.92, Math.max(0.35, 0.45 + top.score / 25))
   const lowConfidence = confidence < 0.58
   const sensitiveLowConfidence =
@@ -848,7 +855,7 @@ interface ChatbotCore {
   question: NormalizedQuestion
   response: ReturnType<typeof composeAnswer>
   category: string
-  intent: ReturnType<typeof detectIntent>
+  intent: ChatbotIntent
   handoffIntent: HandoffIntent
   warning?: string
 }
@@ -873,10 +880,11 @@ function determineModelTier(category: string): ChatbotModelTier {
 async function buildChatbotCore(message: unknown, sessionId?: string): Promise<ChatbotCore> {
   const question = normalizeQuestion(message)
   const { sources, warning } = await searchKnowledgeSources(question)
-  const category = detectCategory(question, sources)
-  const intent = detectIntent(category)
-  const handoffIntent = detectHandoffIntent(question, category)
-  const response = composeAnswer(question, sources)
+  const { category, intent, handoffIntent } = classifyChatbotQuestion(
+    question.redacted,
+    sources.map((source) => source.category)
+  )
+  const response = composeAnswer(question, sources, category)
 
   // 대화 기록 (History) 조회 및 가공
   let history: { role: "user" | "model"; parts: { text: string }[] }[] = []
