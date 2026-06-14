@@ -14,24 +14,47 @@
  * (e.g. after adding new docs). Pair with the migration
  * supabase/migrations/20260613_docs_chunk_vector_search.sql.
  *
- * Embeddings come from Gemini gemini-embedding-001 truncated to 1536 dims to match
- * the docs_ai_chunks.embedding column. The chatbot falls back to keyword search for
- * any chunk that is still null, so a partial run never breaks search.
+ * Embeddings come from Gemini gemini-embedding-001. The current production DB
+ * column is vector(1536); set GEMINI_EMBED_DIM=768 only after applying the 768
+ * migration. The chatbot falls back to keyword search for any chunk that is still
+ * null, so a partial run never breaks search.
  */
 
+import { existsSync, readFileSync } from "node:fs"
+import { join } from "node:path"
 import { createClient } from "@supabase/supabase-js"
+
+function loadEnvLocal() {
+  const envPath = join(process.cwd(), ".env.local")
+  if (!existsSync(envPath)) return
+
+  const envText = readFileSync(envPath, "utf8")
+  for (const line of envText.split(/\r?\n/)) {
+    const match = line.match(/^([A-Z_][A-Z0-9_]*)=(.*)$/)
+    if (!match) continue
+
+    let value = match[2].trim()
+    if ((value.startsWith('"') && value.endsWith('"')) || (value.startsWith("'") && value.endsWith("'"))) {
+      value = value.slice(1, -1)
+    }
+
+    if (!process.env[match[1]]) process.env[match[1]] = value
+  }
+}
+
+loadEnvLocal()
 
 // 임베딩 호출은 self-contained (lib/chatbot/llm.ts 는 server-only 라 tsx 에서 import 불가).
 // 동작은 lib/chatbot/llm.ts 의 embedText(RETRIEVAL_DOCUMENT)와 동일하게 유지한다.
 const EMBED_MODEL = process.env.GEMINI_EMBED_MODEL || "gemini-embedding-001"
-const EMBED_DIM = 768
-const GEMINI_API_KEY = process.env.GEMINI_API_KEY
+const EMBED_DIM = Number(process.env.GEMINI_EMBED_DIM ?? "1536")
 
 async function embedText(text: string): Promise<number[] | null> {
-  if (!GEMINI_API_KEY || !text.trim()) return null
+  const geminiApiKey = process.env.GEMINI_API_KEY
+  if (!geminiApiKey || !text.trim()) return null
   try {
     const res = await fetch(
-      `https://generativelanguage.googleapis.com/v1beta/models/${EMBED_MODEL}:embedContent?key=${GEMINI_API_KEY}`,
+      `https://generativelanguage.googleapis.com/v1beta/models/${EMBED_MODEL}:embedContent?key=${geminiApiKey}`,
       {
         method: "POST",
         headers: { "Content-Type": "application/json" },
