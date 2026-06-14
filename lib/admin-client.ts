@@ -38,6 +38,82 @@ interface AdminFetchCacheOptions {
 const memoryCache = new Map<string, AdminCacheEntry<unknown>>()
 const inflightRequests = new Map<string, Promise<unknown>>()
 
+// 변경(mutation) 직후에는 브라우저 HTTP 캐시(Cache-Control: max-age)를 우회해
+// 서버에서 최신 데이터를 다시 받아온다. 그 외에는 HTTP 캐시를 활용해 재방문을 빠르게 한다.
+// 무효화는 변경된 리소스 스코프에만 적용 — 블로그 저장이 CRM 캐시를 날리지 않게 한다.
+const BROWSER_CACHE_BYPASS_MS = 60_000
+const GLOBAL_CACHE_SCOPE = "*"
+
+// CRM 홈/오버뷰는 여러 원천(딜·견적·계약·영수증·HW·리드 등)을 합산하므로,
+// 그 원천이 바뀌면 CRM 집계 캐시도 함께 무효화한다.
+const CRM_AGGREGATE_SCOPE = "/api/admin/crm"
+const CRM_SOURCE_BASES = new Set([
+  "/api/admin/deals",
+  "/api/admin/quotes",
+  "/api/admin/contracts",
+  "/api/admin/receipts",
+  "/api/admin/hw-sales",
+  "/api/admin/leads",
+  "/api/admin/customers",
+  "/api/admin/teams",
+])
+
+// scope -> 마지막 변경 시각. 활성 스코프에 매칭되는 GET만 브라우저 캐시를 우회한다.
+const mutationScopeAt = new Map<string, number>()
+
+function resourceBaseFromUrl(url: string): string | null {
+  const match = url.match(/\/api\/admin\/[^/?#]+/)
+  return match ? match[0] : null
+}
+
+// 변경된 URL이 무효화해야 할 스코프 목록. 리소스를 알 수 없으면 안전하게 전체.
+function invalidationScopesForUrl(url: string): string[] {
+  const base = resourceBaseFromUrl(url)
+  if (!base) return [GLOBAL_CACHE_SCOPE]
+  const scopes = [base]
+  if (base.startsWith(CRM_AGGREGATE_SCOPE) || CRM_SOURCE_BASES.has(base)) {
+    scopes.push(CRM_AGGREGATE_SCOPE)
+  }
+  return scopes
+}
+
+function markAdminMutation(scopes: string[]) {
+  const now = Date.now()
+  for (const scope of scopes) mutationScopeAt.set(scope, now)
+}
+
+function shouldBypassBrowserCache(url: string) {
+  const now = Date.now()
+  let bypass = false
+  for (const [scope, ts] of mutationScopeAt) {
+    if (now - ts >= BROWSER_CACHE_BYPASS_MS) {
+      mutationScopeAt.delete(scope)
+      continue
+    }
+    if (scope === GLOBAL_CACHE_SCOPE || url.includes(scope)) bypass = true
+  }
+  return bypass
+}
+
+function clearCacheScopes(scopes: string[]) {
+  const global = scopes.includes(GLOBAL_CACHE_SCOPE)
+  const matches = (key: string) => global || scopes.some((scope) => key.includes(scope))
+
+  for (const key of Array.from(memoryCache.keys())) {
+    if (matches(key)) memoryCache.delete(key)
+  }
+  for (const key of Array.from(inflightRequests.keys())) {
+    if (matches(key)) inflightRequests.delete(key)
+  }
+
+  if (typeof window === "undefined") return
+  for (const key of Object.keys(sessionStorage)) {
+    if (key.startsWith(ADMIN_REQUEST_CACHE_PREFIX) && matches(key)) {
+      sessionStorage.removeItem(key)
+    }
+  }
+}
+
 function isGetRequest(init?: RequestInit) {
   return !init?.method || init.method.toUpperCase() === "GET"
 }
@@ -95,16 +171,8 @@ function readAdminCache<T>(cacheKey: string, allowExpired = false): AdminCacheEn
 }
 
 export function clearAdminRequestCache() {
-  memoryCache.clear()
-  inflightRequests.clear()
-
-  if (typeof window === "undefined") return
-
-  for (const key of Object.keys(sessionStorage)) {
-    if (key.startsWith(ADMIN_REQUEST_CACHE_PREFIX)) {
-      sessionStorage.removeItem(key)
-    }
-  }
+  clearCacheScopes([GLOBAL_CACHE_SCOPE])
+  markAdminMutation([GLOBAL_CACHE_SCOPE])
 }
 
 export function clearAdminSessionStorage() {
@@ -142,6 +210,9 @@ export async function adminFetch(input: string, init?: RequestInit) {
 
   const response = await fetch(input, {
     ...init,
+    ...(method === "GET" && !init?.cache && shouldBypassBrowserCache(input)
+      ? { cache: "no-cache" as RequestCache }
+      : {}),
     headers,
   })
 
@@ -154,7 +225,9 @@ export async function adminFetch(input: string, init?: RequestInit) {
   }
 
   if (response.ok && method !== "GET") {
-    clearAdminRequestCache()
+    const scopes = invalidationScopesForUrl(input)
+    clearCacheScopes(scopes)
+    markAdminMutation(scopes)
   }
 
   return response
@@ -195,7 +268,10 @@ export async function adminFetchJsonCached<T>(
     const inflight = inflightRequests.get(cacheKey)
     if (inflight) return inflight as Promise<T>
 
-    const request = adminFetchJson<T>(input, init)
+    const requestInit: RequestInit | undefined = options.force
+      ? { ...init, cache: "no-cache" }
+      : init
+    const request = adminFetchJson<T>(input, requestInit)
       .then((data) => {
         const entry: AdminCacheEntry<T> = {
           data,

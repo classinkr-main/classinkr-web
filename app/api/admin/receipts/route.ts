@@ -1,5 +1,6 @@
 import { NextRequest, NextResponse } from "next/server";
 import { verifyAdmin } from "@/lib/admin-auth";
+import { adminCachedJson } from "@/lib/admin-api-response";
 import { listReceipts, createReceipt, generateReceiptNumber } from "@/lib/repositories/receipts";
 
 export async function GET(req: NextRequest) {
@@ -9,7 +10,7 @@ export async function GET(req: NextRequest) {
     const contractId = req.nextUrl.searchParams.get("contract_id") ?? undefined;
     const partnerId = req.nextUrl.searchParams.get("partner_id") ?? undefined;
     const receipts = await listReceipts(contractId, partnerId);
-    return NextResponse.json({ receipts });
+    return adminCachedJson({ receipts });
   } catch (e) {
     console.error("[GET /api/admin/receipts]", e);
     return NextResponse.json({ error: "Failed to fetch receipts" }, { status: 500 });

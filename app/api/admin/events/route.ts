@@ -1,6 +1,7 @@
 import { NextRequest, NextResponse } from "next/server"
 import { revalidatePath, revalidateTag } from "next/cache"
 import { verifyAdmin } from "@/lib/admin-auth"
+import { adminCachedJson } from "@/lib/admin-api-response"
 import { getAllEventsForAdmin, createPublicEvent, PUBLIC_EVENTS_CACHE_TAG } from "@/lib/repositories/public-events"
 
 export async function GET(req: NextRequest) {
@@ -8,7 +9,7 @@ export async function GET(req: NextRequest) {
   if (err) return err
   try {
     const events = await getAllEventsForAdmin()
-    return NextResponse.json(events)
+    return adminCachedJson(events)
   } catch (error) {
     return NextResponse.json(
       { error: error instanceof Error ? error.message : "행사 목록 조회에 실패했습니다." },

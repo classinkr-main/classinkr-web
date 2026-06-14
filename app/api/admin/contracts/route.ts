@@ -1,5 +1,6 @@
 import { NextRequest, NextResponse } from "next/server";
 import { verifyAdmin } from "@/lib/admin-auth";
+import { adminCachedJson } from "@/lib/admin-api-response";
 import { listContracts, createContract, generateContractNumber } from "@/lib/repositories/contracts";
 
 export async function GET(req: NextRequest) {
@@ -8,7 +9,7 @@ export async function GET(req: NextRequest) {
   try {
     const partnerId = req.nextUrl.searchParams.get("partner_id") ?? undefined;
     const contracts = await listContracts(partnerId);
-    return NextResponse.json({ contracts });
+    return adminCachedJson({ contracts });
   } catch (e) {
     console.error("[GET /api/admin/contracts]", e);
     return NextResponse.json({ error: "Failed to fetch contracts" }, { status: 500 });

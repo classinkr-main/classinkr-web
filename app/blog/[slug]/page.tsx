@@ -8,6 +8,8 @@ import { ArticleImageLightbox } from "@/components/blog/ArticleImageLightbox"
 import { ReadingProgress } from "@/components/blog/ReadingProgress"
 import { ShareActions } from "@/components/blog/ShareActions"
 import { TrackedLink } from "@/components/TrackedLink"
+import { LeadMagnetGate } from "@/components/blog/LeadMagnetGate"
+import { getLeadMagnetBySlug } from "@/lib/lead-magnets"
 import { NEUTRAL_BLUR_DATA_URL } from "@/lib/image-blur"
 import {
   getPublishedPostBySlug,
@@ -21,8 +23,6 @@ import {
   createArticleJsonLd,
   createBreadcrumbJsonLd,
   toAbsoluteUrl,
-  DEFAULT_OG_IMAGE_PATH,
-  DEFAULT_TWITTER_IMAGE_PATH,
 } from "@/lib/seo"
 
 export const revalidate = 3600 // 1시간마다 재생성
@@ -46,7 +46,11 @@ export async function generateMetadata({
   // 어드민에서 입력한 SEO 전용 필드 우선, 없으면 본문 제목/요약 사용
   const metaTitle = post.seoTitle?.trim() || post.title
   const metaDescription = post.seoDescription?.trim() || post.excerpt
-  const ogImage = post.heroImageUrl || post.imageUrl || undefined
+  // 히어로/썸네일이 없으면 제목 기반 OG를 동적 생성한다.
+  const ogImage =
+    post.heroImageUrl ||
+    post.imageUrl ||
+    toAbsoluteUrl(`/api/og/blog/${encodeURIComponent(post.slug)}`)
   const canonical = toAbsoluteUrl(`/blog/${post.slug}`)
   return {
     title: metaTitle,
@@ -57,13 +61,13 @@ export async function generateMetadata({
       description: metaDescription,
       type: "article",
       url: canonical,
-      images: [{ url: ogImage ?? toAbsoluteUrl(DEFAULT_OG_IMAGE_PATH) }],
+      images: [{ url: ogImage }],
     },
     twitter: {
       card: "summary_large_image",
       title: metaTitle,
       description: metaDescription,
-      images: [ogImage ?? toAbsoluteUrl(DEFAULT_TWITTER_IMAGE_PATH)],
+      images: [ogImage],
     },
   }
 }
@@ -90,6 +94,7 @@ export default async function BlogDetailPage({
   const relatedPosts = await getRelatedPosts(post, 3)
   const benefits = post.benefitItems.filter(Boolean)
   const ctaHref = sanitizePublicUrl(post.cta.buttonHref, "")
+  const leadMagnet = getLeadMagnetBySlug(post.leadMagnetSlug)
 
   return (
     <div className="min-h-screen bg-[#FAFAF8] text-[#111110]">
@@ -283,6 +288,10 @@ export default async function BlogDetailPage({
             <div className="rounded-[24px] border border-[#e8e8e4] bg-white px-5 py-7 shadow-sm md:rounded-[36px] md:px-10 md:py-12">
               <BlogMarkdownRenderer markdown={post.contentMarkdown} />
             </div>
+
+            {leadMagnet && (
+              <LeadMagnetGate leadMagnet={leadMagnet} postSlug={post.slug} />
+            )}
 
             <div className="mt-8 rounded-[24px] border border-[#e8e8e4] bg-white p-5 shadow-sm md:mt-10 md:rounded-[32px] md:p-8">
               <div className="flex flex-col gap-6 md:flex-row md:items-center">

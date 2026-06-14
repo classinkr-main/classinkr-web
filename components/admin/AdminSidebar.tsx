@@ -19,6 +19,7 @@ import {
   Menu,
   Megaphone,
   MoreHorizontal,
+  Search,
   Settings,
   SquareChevronLeft,
   SquareChevronRight,
@@ -427,6 +428,26 @@ export default function AdminSidebar({ role, name, email }: Props) {
           </p>
         </div>
       )}
+
+      <div className={`border-b border-[#e8e8e4] py-3 ${effectiveCollapsed ? "px-2" : "px-4 sm:px-5"}`}>
+        <button
+          type="button"
+          onClick={() => window.dispatchEvent(new Event("admin:open-command-palette"))}
+          className={`flex items-center rounded-lg border border-[#e8e8e4] bg-[#fafaf8] text-[#1a1a1a]/45 transition-colors hover:border-[#c8c8c4] hover:text-[#111110] ${
+            effectiveCollapsed ? "mx-auto h-9 w-9 justify-center" : "w-full gap-2 px-2.5 py-2"
+          }`}
+          title="빠른 이동·검색 (⌘K)"
+          aria-label="빠른 이동·검색"
+        >
+          <Search className="h-4 w-4 shrink-0" />
+          {!effectiveCollapsed && (
+            <>
+              <span className="flex-1 text-left text-[12px]">빠른 이동·검색</span>
+              <kbd className="rounded bg-white px-1.5 py-0.5 text-[10px] font-medium text-[#1a1a1a]/35 shadow-sm">⌘K</kbd>
+            </>
+          )}
+        </button>
+      </div>
 
       <nav className={`flex-1 px-3 py-4 lg:overflow-y-auto ${effectiveCollapsed ? "lg:px-2" : ""}`}>
         {groupedNav.map(({ section, items }, groupIndex) => (

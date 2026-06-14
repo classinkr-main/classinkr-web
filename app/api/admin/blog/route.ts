@@ -2,6 +2,7 @@
 import { revalidatePath } from "next/cache"
 import { getAllPosts, createPost, getTrashedPosts } from "@/lib/repositories/blog"
 import { verifyAdmin } from "@/lib/admin-auth"
+import { adminCachedJson } from "@/lib/admin-api-response"
 
 export async function GET(req: NextRequest) {
   const authError = await verifyAdmin(req)
@@ -10,7 +11,7 @@ export async function GET(req: NextRequest) {
   try {
     const trash = req.nextUrl.searchParams.get("trash") === "1"
     const posts = trash ? await getTrashedPosts() : await getAllPosts()
-    return NextResponse.json({ posts })
+    return adminCachedJson({ posts })
   } catch {
     return NextResponse.json({ error: "Failed to read posts" }, { status: 500 })
   }

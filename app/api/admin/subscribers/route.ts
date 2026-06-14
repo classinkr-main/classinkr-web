@@ -1,5 +1,6 @@
 ﻿import { NextRequest, NextResponse } from "next/server"
 import { verifyAdmin } from "@/lib/admin-auth"
+import { adminCachedJson } from "@/lib/admin-api-response"
 import {
   getAllSubscribers,
   upsertSubscriber,
@@ -20,7 +21,7 @@ export async function GET(req: NextRequest) {
     tag: tagFilter ?? undefined,
   })
 
-  return NextResponse.json({ subscribers, total: subscribers.length })
+  return adminCachedJson({ subscribers, total: subscribers.length })
 }
 
 export async function POST(req: NextRequest) {

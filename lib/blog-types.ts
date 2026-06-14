@@ -1,4 +1,4 @@
-export type BlogPostStatus = "draft" | "published" | "archived"
+export type BlogPostStatus = "draft" | "review" | "published" | "archived"
 
 export interface BlogPostCTA {
   eyebrow: string
@@ -18,6 +18,7 @@ export const DEFAULT_BLOG_CTA: BlogPostCTA = {
 
 export const BLOG_STATUS_OPTIONS: { label: string; value: BlogPostStatus }[] = [
   { label: "초안 (Draft)", value: "draft" },
+  { label: "검수 (In Review)", value: "review" },
   { label: "발행됨 (Published)", value: "published" },
   { label: "보관됨 (Archived)", value: "archived" },
 ]
@@ -50,6 +51,8 @@ export interface BlogPost {
   seoTitle: string
   seoDescription: string
   relatedPostIds: number[]
+  /** 글 하단 게이트 블록으로 노출할 리드 마그넷 slug (lib/lead-magnets.ts) */
+  leadMagnetSlug?: string
   pageLayout: "standard" | "minimal"
   cta: BlogPostCTA
   status: BlogPostStatus

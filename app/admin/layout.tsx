@@ -4,6 +4,7 @@ import { useEffect, useState } from "react"
 import { usePathname, useRouter } from "next/navigation"
 
 import AdminSidebar from "@/components/admin/AdminSidebar"
+import AdminCommandPalette from "@/components/admin/AdminCommandPalette"
 import { RouteTransition } from "@/components/transitions/RouteTransition"
 import { clearAdminSessionStorage } from "@/lib/admin-client"
 import { isAdminAuthBypassEnabled } from "@/lib/admin-env"
@@ -182,6 +183,7 @@ export default function AdminLayout({ children }: { children: React.ReactNode })
           <RouteTransition tone="admin">{children}</RouteTransition>
         </div>
       </main>
+      <AdminCommandPalette />
     </div>
   )
 }

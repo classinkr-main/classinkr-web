@@ -144,7 +144,10 @@ const DEFAULT_OBJECTS: XiaoshouyiObjectConfig[] = [
     ownerFields: ["ownerName", "ownerId-label", "ownerId"],
     statusFields: ["saleStageId-label", "saleStageId", "status"],
     amountFields: ["money", "amount"],
-    occurredAtFields: ["closeDate", "updatedAt", "createdAt"],
+    // 오더(opportunity)의 occurred_at은 "들어온 시점"(createdAt) 기준으로 본다.
+    // closeDate는 예상 마감일이라 미래·null이 흔해, 그걸 쓰면 최근 생성된 오더가 기간 밖으로
+    // 빠져 "최근 오더"에서 사라진다. (매출/수금은 GetDate/ActualTime 등 확정 발생일을 쓰는 것과 다른 이유)
+    occurredAtFields: ["createdAt", "updatedAt", "closeDate"],
   },
   {
     objectApiKey: "ShroffAccount__c",

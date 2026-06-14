@@ -50,9 +50,10 @@ function supabaseToLegacy(row: SupaBlogPost): BlogPost & { _uuid: string } {
     contentMarkdown: row.content_markdown ?? "",
     seoTitle: row.seo_title ?? "",
     seoDescription: row.seo_description ?? "",
-    relatedPostIds: [],
+    relatedPostIds: (row.related_post_ids ?? []).map(hashUuidToNumber),
+    leadMagnetSlug: row.lead_magnet_slug ?? undefined,
     pageLayout: (row.page_layout ?? "standard") as "standard" | "minimal",
-    status: row.status.toLowerCase() as BlogPost["status"],
+    status: dbStatusToLegacy(row.status),
     deletedAt: row.deleted_at ?? undefined,
     cta: {
       eyebrow: "도입 문의",
@@ -82,7 +83,7 @@ function legacyToSupabaseInsert(data: Partial<BlogPostInput>): BlogPostInsert {
     image_url: data.imageUrl ?? null,
     hero_image_url: data.heroImageUrl ?? null,
     featured: data.featured ?? false,
-    status: (data.status?.toUpperCase() ?? "DRAFT") as SupaBlogPost["status"],
+    status: legacyStatusToDb(data.status),
     seo_title: data.seoTitle ?? null,
     seo_description: data.seoDescription ?? null,
     benefit_items: data.benefitItems ?? [],
@@ -91,8 +92,11 @@ function legacyToSupabaseInsert(data: Partial<BlogPostInput>): BlogPostInsert {
     cta_url: normalizeCtaHref(data.cta?.buttonHref),
     cta_style: "primary",
     related_post_ids: [],
+    lead_magnet_slug: data.leadMagnetSlug?.trim() || null,
     page_layout: data.pageLayout ?? "standard",
-    published_at: data.status === "published" ? new Date().toISOString() : null,
+    published_at:
+      normalizePublishedAt(data.publishedAt) ??
+      (data.status === "published" ? new Date().toISOString() : null),
     published_by: null,
     deleted_at: null,
   };
@@ -106,7 +110,7 @@ const LIST_COLUMNS = [
   "author_name", "author_role", "author_bio", "author_avatar_url",
   "read_time", "image_url", "hero_image_url", "featured", "status",
   "seo_title", "seo_description", "benefit_items", "target_reader",
-  "cta_text", "cta_url", "page_layout", "published_at", "updated_at", "created_at",
+  "cta_text", "cta_url", "page_layout", "lead_magnet_slug", "published_at", "updated_at", "created_at",
   "deleted_at",
 ].join(",")
 
@@ -131,6 +135,7 @@ export async function getPublishedPosts(): Promise<BlogPost[]> {
     .select(LIST_COLUMNS)
     .eq("status", "PUBLISHED")
     .is("deleted_at", null)
+    .or(publishedAtVisibleFilter())
     .order("published_at", { ascending: false });
 
   if (error) throw new Error(`[blog] 공개 글 조회 실패: ${error.message}`);
@@ -159,6 +164,7 @@ export async function getPublishedPostBySlug(slug: string): Promise<BlogPost | n
     .eq("slug", slug)
     .eq("status", "PUBLISHED")
     .is("deleted_at", null)
+    .or(publishedAtVisibleFilter())
     .single();
 
   if (error || !data) return null;
@@ -197,6 +203,7 @@ export async function createPost(data: Partial<BlogPostInput>): Promise<BlogPost
 
   const supabase = await createSupabaseServerClient();
   const insert = legacyToSupabaseInsert(data);
+  insert.related_post_ids = await resolveRelatedUuids(data.relatedPostIds);
   await assertBlogSlugAvailable(supabase, insert.slug);
 
   const { data: row, error } = await supabase
@@ -249,9 +256,16 @@ export async function updatePost(
     update.cta_url = normalizeCtaHref(data.cta.buttonHref);
   }
   if (data.pageLayout !== undefined) update.page_layout = data.pageLayout;
+  if (data.leadMagnetSlug !== undefined) update.lead_magnet_slug = data.leadMagnetSlug?.trim() || null;
+  if (data.relatedPostIds !== undefined) {
+    update.related_post_ids = await resolveRelatedUuids(data.relatedPostIds);
+  }
+  if (data.publishedAt !== undefined) {
+    update.published_at = normalizePublishedAt(data.publishedAt);
+  }
   if (data.status !== undefined) {
-    update.status = data.status.toUpperCase() as SupaBlogPost["status"];
-    if (data.status === "published" && !update.published_at) {
+    update.status = legacyStatusToDb(data.status);
+    if (data.status === "published" && update.published_at === undefined) {
       update.published_at = new Date().toISOString();
     }
   }
@@ -344,7 +358,8 @@ export async function getPublishedSlugsForStaticParams(): Promise<{ slug: string
       .from("blog_posts")
       .select("slug")
       .eq("status", "PUBLISHED")
-      .is("deleted_at", null);
+      .is("deleted_at", null)
+      .or(publishedAtVisibleFilter());
     return (data ?? []).map((row) => ({ slug: row.slug as string }));
   } catch {
     return [];
@@ -360,6 +375,7 @@ export async function getPublishedPostsForStaticSitemap(): Promise<BlogPost[]> {
     .select(LIST_COLUMNS)
     .eq("status", "PUBLISHED")
     .is("deleted_at", null)
+    .or(publishedAtVisibleFilter())
     .order("published_at", { ascending: false });
 
   if (error) throw new Error(`[blog] sitemap query failed: ${error.message}`);
@@ -384,6 +400,40 @@ export async function getRelatedPosts(post: BlogPost, limit = 3): Promise<BlogPo
 
 /* ─── Helpers ─── */
 
+
+// 레거시 status("review") ↔ DB enum("IN_REVIEW") 변환. 나머지는 대소문자만 다름.
+function dbStatusToLegacy(status: SupaBlogPost["status"]): BlogPost["status"] {
+  if (status === "IN_REVIEW") return "review";
+  return status.toLowerCase() as BlogPost["status"];
+}
+
+function legacyStatusToDb(status: BlogPost["status"] | undefined): SupaBlogPost["status"] {
+  if (status === "review") return "IN_REVIEW";
+  return (status?.toUpperCase() ?? "DRAFT") as SupaBlogPost["status"];
+}
+
+function normalizePublishedAt(value: string | null | undefined): string | null {
+  if (!value) return null;
+  const date = new Date(value);
+  return Number.isNaN(date.getTime()) ? null : date.toISOString();
+}
+
+// 어드민이 레거시 number id로 고른 관련 글을 DB 저장용 uuid 배열로 변환.
+async function resolveRelatedUuids(legacyIds: number[] | undefined): Promise<string[]> {
+  if (!legacyIds || legacyIds.length === 0) return [];
+  const posts = await getAllPosts();
+  const byLegacyId = new Map(
+    posts.map((post) => [post.id, (post as BlogPost & { _uuid?: string })._uuid])
+  );
+  return legacyIds
+    .map((id) => byLegacyId.get(id))
+    .filter((uuid): uuid is string => Boolean(uuid));
+}
+
+// 예약 발행: published_at 이 미래인 글은 숨긴다. (published_at 이 null 인 기존 글은 그대로 노출)
+function publishedAtVisibleFilter() {
+  return `published_at.is.null,published_at.lte.${new Date().toISOString()}`;
+}
 
 function hashUuidToNumber(uuid: string): number {
   // UUID → 안정적인 number ID (기존 UI 호환용)

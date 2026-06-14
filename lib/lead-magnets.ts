@@ -19,6 +19,11 @@ export interface LeadMagnet {
     body: string
     buttonLabel: string
   }
+  /**
+   * 구독 완료 후 바로 열람할 수 있는 자료 링크(Notion·PDF 등).
+   * 비어 있으면 "이메일로 보내드립니다" 안내로 대체된다.
+   */
+  resourceUrl?: string
   suggestedPlacements: readonly string[]
 }
 
@@ -46,6 +51,7 @@ export const leadMagnets = [
       body: "수업 운영, 상담, 학부모 커뮤니케이션, 매출 흐름을 한 장으로 점검할 수 있는 내부 검토용 체크리스트입니다.",
       buttonLabel: "체크리스트 미리보기",
     },
+    resourceUrl: "/resources/academy-system-checklist",
     suggestedPlacements: [
       "학원 운영 자동화 관련 블로그 본문 하단",
       "관리자용 CRM 리드 태그: 운영 개선 관심",
@@ -76,6 +82,7 @@ export const leadMagnets = [
       body: "수업 품질과 설치 리스크를 함께 검토할 수 있도록 만든 전자칠판 교실 구축 체크리스트입니다.",
       buttonLabel: "구축 체크리스트 보기",
     },
+    resourceUrl: "/resources/electronic-whiteboard-classroom-checklist",
     suggestedPlacements: [
       "Classin Board 제품 소개 페이지 중간 CTA",
       "전자칠판 비교 블로그의 제품 선택 섹션",
@@ -90,3 +97,16 @@ export function getLeadMagnetStatusLabel(status: LeadMagnetStatus) {
   if (status === "unlisted") return "링크 공개"
   return "초안"
 }
+
+/** slug로 리드 마그넷을 찾는다. 어드민이 글에 지정한 값을 공개 페이지에서 해석할 때 사용. */
+export function getLeadMagnetBySlug(slug: string | null | undefined): LeadMagnet | null {
+  if (!slug) return null
+  return leadMagnets.find((magnet) => magnet.slug === slug) ?? null
+}
+
+/** 어드민 글 편집기의 리드 마그넷 선택지 (slug + 라벨). */
+export const leadMagnetOptions = leadMagnets.map((magnet) => ({
+  slug: magnet.slug,
+  title: magnet.title,
+  status: magnet.status,
+})) satisfies readonly { slug: string; title: string; status: LeadMagnetStatus }[]

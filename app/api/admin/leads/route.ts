@@ -1,5 +1,6 @@
 ﻿import { NextRequest, NextResponse } from "next/server"
 import { verifyAdmin } from "@/lib/admin-auth"
+import { adminCachedJson } from "@/lib/admin-api-response"
 import { getLeads } from "@/lib/repositories/leads"
 
 export async function GET(req: NextRequest) {
@@ -8,7 +9,7 @@ export async function GET(req: NextRequest) {
 
   try {
     const leads = await getLeads()
-    return NextResponse.json({ leads })
+    return adminCachedJson({ leads })
   } catch (error) {
     console.error("[GET /api/admin/leads] error:", error)
     return NextResponse.json({ error: "Failed to fetch leads" }, { status: 500 })

@@ -3,6 +3,7 @@ import "server-only"
 import { createSupabaseAdminClient } from "@/lib/supabase/admin"
 import { getDocPath, listDocs, type DocArticle } from "@/lib/docs"
 import { getDocsContent } from "@/lib/docs-content"
+import { generateGeminiAnswer, embedText, type ChatbotModelTier } from "@/lib/chatbot/llm"
 
 const MAX_MESSAGE_LENGTH = 1000
 const MAX_FEEDBACK_COMMENT_LENGTH = 500
@@ -297,7 +298,7 @@ function buildStaticSources(question: NormalizedQuestion, docs: DocArticle[]): C
   ).slice(0, MAX_SOURCES)
 }
 
-async function searchSupabaseSources(question: NormalizedQuestion): Promise<ChatbotSource[]> {
+async function keywordSearchSupabaseSources(question: NormalizedQuestion): Promise<ChatbotSource[]> {
   if (!hasSupabaseServerEnv()) return []
 
   const likeTokens = question.tokens.map(sanitizeLikeToken).filter(Boolean).slice(0, 6)
@@ -364,6 +365,73 @@ async function searchSupabaseSources(question: NormalizedQuestion): Promise<Chat
     )
     return []
   }
+}
+
+const VECTOR_MATCH_COUNT = 8
+const VECTOR_SIMILARITY_FLOOR = 0.3
+
+interface MatchChunkRow {
+  id: string
+  article_id: string
+  heading: string | null
+  content: string
+  metadata: Record<string, unknown> | null
+  category_id: string
+  slug: string
+  title: string
+  canonical_path: string | null
+  similarity: number
+}
+
+// Gemini 임베딩 기반 시맨틱 검색. 키·임베딩이 없거나 결과가 없으면 [] → 키워드 검색으로 폴백.
+async function vectorSearchSupabaseSources(question: NormalizedQuestion): Promise<ChatbotSource[]> {
+  if (!hasSupabaseServerEnv()) return []
+
+  const embedding = await embedText(question.redacted, "RETRIEVAL_QUERY")
+  if (!embedding) return []
+
+  try {
+    const supabase = createSupabaseAdminClient()
+    const { data, error } = await supabase.rpc("match_docs_ai_chunks", {
+      // pgvector 컬럼/인자는 "[..]" 문자열로 넘긴다 (배열 직접 전달 시 Postgres 배열로 직렬화돼 거부됨).
+      query_embedding: JSON.stringify(embedding),
+      match_count: VECTOR_MATCH_COUNT,
+    })
+
+    if (error) {
+      console.warn("[chatbot] vector search failed:", error.message)
+      return []
+    }
+
+    const sources = ((data ?? []) as MatchChunkRow[])
+      .filter((row) => row.similarity >= VECTOR_SIMILARITY_FLOOR)
+      .map((row) => ({
+        articleId: row.article_id,
+        chunkId: row.id,
+        title: row.title,
+        heading: row.heading ?? undefined,
+        urlPath: row.canonical_path ?? `/docs/${row.category_id}/${row.slug}`,
+        category: row.category_id,
+        excerpt: compactText(row.content),
+        score: Math.max(1, row.similarity * 10),
+      }))
+      .sort((left, right) => right.score - left.score)
+
+    return dedupeSourcesByPath(sources).slice(0, MAX_SOURCES)
+  } catch (error) {
+    console.warn(
+      "[chatbot] vector search unavailable:",
+      error instanceof Error ? error.message : error
+    )
+    return []
+  }
+}
+
+// 벡터 검색 우선, 결과 없으면 키워드(ilike) 검색.
+async function searchSupabaseSources(question: NormalizedQuestion): Promise<ChatbotSource[]> {
+  const vectorSources = await vectorSearchSupabaseSources(question)
+  if (vectorSources.length > 0) return vectorSources
+  return keywordSearchSupabaseSources(question)
 }
 
 async function searchKnowledgeSources(
@@ -596,19 +664,20 @@ async function persistExchange(
   response: Omit<ChatbotQueryResponse, "answerEventId" | "sessionId" | "handoffIntent">,
   meta: ChatbotRequestMeta,
   category: string,
-  intent: string
+  intent: string,
+  sessionId?: string
 ) {
   if (!hasSupabaseServerEnv()) return {}
 
   try {
     const supabase = createSupabaseAdminClient()
-    const sessionId = await ensureSession(input, meta)
-    if (!sessionId) return {}
+    const resolvedSessionId = sessionId || await ensureSession(input, meta)
+    if (!resolvedSessionId) return {}
 
     const { data: userMessage, error: userMessageError } = await supabase
       .from("chat_messages")
       .insert({
-        session_id: sessionId,
+        session_id: resolvedSessionId,
         role: "user",
         content: question.redacted,
         normalized_content: question.redacted,
@@ -623,7 +692,7 @@ async function persistExchange(
     const { data: assistantMessage, error: assistantMessageError } = await supabase
       .from("chat_messages")
       .insert({
-        session_id: sessionId,
+        session_id: resolvedSessionId,
         role: "assistant",
         content: response.answer,
         normalized_content: response.answer,
@@ -638,7 +707,7 @@ async function persistExchange(
     const { data: answerEvent, error: answerEventError } = await supabase
       .from("chatbot_answer_events")
       .insert({
-        session_id: sessionId,
+        session_id: resolvedSessionId,
         user_message_id: userMessage.id,
         assistant_message_id: assistantMessage.id,
         normalized_question: question.redacted,
@@ -775,23 +844,135 @@ async function upsertQuestionCluster(
   }
 }
 
-export async function handleChatbotQuery(
-  input: ChatbotQueryRequest,
-  meta: ChatbotRequestMeta = {}
-): Promise<ChatbotQueryResponse> {
-  const question = normalizeQuestion(input.message)
+interface ChatbotCore {
+  question: NormalizedQuestion
+  response: ReturnType<typeof composeAnswer>
+  category: string
+  intent: ReturnType<typeof detectIntent>
+  handoffIntent: HandoffIntent
+  warning?: string
+}
+
+function determineModelTier(category: string): ChatbotModelTier {
+  // 문제 해결(troubleshooting) 및 하드웨어(hardware) 장애/설정은 추론 모델 적용
+  if (category === "troubleshooting" || category === "hardware") {
+    return "reasoning"
+  }
+  
+  // 결제(billing) 및 도입/상담(consultation) 등 비즈니스 중요 문의는 심화 모델 적용
+  if (category === "billing" || category === "consultation") {
+    return "advanced"
+  }
+
+  // 일반 안내, 온보딩, 교실 운영 등은 기본 모델 적용
+  return "basic"
+}
+
+// 검색 → 답변 구성 → Gemini 답변 생성까지의 코어. 영속화(persistExchange)는 포함하지 않는다.
+// handleChatbotQuery(실서비스)와 evaluateChatbotQuery(품질 평가)가 공유한다.
+async function buildChatbotCore(message: unknown, sessionId?: string): Promise<ChatbotCore> {
+  const question = normalizeQuestion(message)
   const { sources, warning } = await searchKnowledgeSources(question)
   const category = detectCategory(question, sources)
   const intent = detectIntent(category)
   const handoffIntent = detectHandoffIntent(question, category)
   const response = composeAnswer(question, sources)
-  const persisted = await persistExchange(input, question, response, meta, category, intent)
+
+  // 대화 기록 (History) 조회 및 가공
+  let history: { role: "user" | "model"; parts: { text: string }[] }[] = []
+  if (sessionId && hasSupabaseServerEnv()) {
+    try {
+      const supabase = createSupabaseAdminClient()
+      const { data, error } = await supabase
+        .from("chat_messages")
+        .select("role, content")
+        .eq("session_id", sessionId)
+        .order("created_at", { ascending: true })
+        .limit(10) // 최근 10개 메세지 (사용자 5, 어시스턴트 5)
+
+      if (!error && data) {
+        const mapped = data.map((msg) => ({
+          role: msg.role === "assistant" ? ("model" as const) : ("user" as const),
+          parts: [{ text: msg.content }],
+        }))
+
+        // 교차 대화 필터링 (user, model, user, model 순서 유지)
+        const cleanHistory = []
+        let expectedRole: "user" | "model" = "user"
+        for (const msg of mapped) {
+          if (msg.role === expectedRole) {
+            cleanHistory.push(msg)
+            expectedRole = expectedRole === "user" ? "model" : "user"
+          }
+        }
+        if (cleanHistory.length > 0 && cleanHistory[cleanHistory.length - 1].role === "user") {
+          cleanHistory.pop()
+        }
+        history = cleanHistory
+      }
+    } catch (e) {
+      console.warn("[chatbot] failed to load session history:", e)
+    }
+  }
+
+  // 근거 문서가 있는 답변 모드에서만 Gemini로 답변 문장을 생성한다.
+  // (handoff·clarifying·fallback 등 안전/에스컬레이션 경로는 템플릿 유지)
+  if (response.answerMode === "direct_answer" || response.answerMode === "doc_suggestion") {
+    const tier = determineModelTier(category)
+    const llmAnswer = await generateGeminiAnswer({
+      question: question.redacted,
+      sources: response.sources,
+      tier,
+      history,
+    })
+    if (llmAnswer) {
+      const sourceLines = response.sources
+        .map((source, index) => `${index + 1}. ${source.title} (${source.urlPath})`)
+        .join("\n")
+      response.answer = `${llmAnswer}\n\n관련 문서:\n${sourceLines}`
+    }
+  }
+
+  return { question, response, category, intent, handoffIntent, warning }
+}
+
+export async function handleChatbotQuery(
+  input: ChatbotQueryRequest,
+  meta: ChatbotRequestMeta = {}
+): Promise<ChatbotQueryResponse> {
+  const sessionId = await ensureSession(input, meta)
+  const core = await buildChatbotCore(input.message, sessionId)
+  const persisted = await persistExchange(
+    input,
+    core.question,
+    core.response,
+    meta,
+    core.category,
+    core.intent,
+    sessionId
+  )
 
   return {
-    ...response,
+    ...core.response,
     ...persisted,
-    handoffIntent,
-    warning,
+    handoffIntent: core.handoffIntent,
+    warning: core.warning,
+  }
+}
+
+/**
+ * 품질 평가용 진입점. 실제 검색·답변 파이프라인을 그대로 타되 분석 로그에 저장하지 않는다.
+ * 골든셋 평가([scripts/eval-chatbot.ts])가 분석 데이터를 오염시키지 않도록 한다.
+ */
+export async function evaluateChatbotQuery(
+  message: string
+): Promise<ChatbotQueryResponse & { detectedCategory: string }> {
+  const core = await buildChatbotCore(message)
+  return {
+    ...core.response,
+    handoffIntent: core.handoffIntent,
+    warning: core.warning,
+    detectedCategory: core.category,
   }
 }
 

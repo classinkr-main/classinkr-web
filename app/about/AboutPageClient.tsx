@@ -62,9 +62,9 @@ type Props = {
 /* ─── 정적 데이터 ──────────────────────────────────────────── */
 
 const STATS = [
-  { value: "200억+", label: "누적 수업 횟수", icon: GraduationCap },
+  { value: "3,000만+", label: "월간 수업", icon: GraduationCap },
   { value: "5,000만+", label: "교사 · 학습자", icon: Users },
-  { value: "8만+", label: "파트너 교육기관", icon: Award },
+  { value: "6만+", label: "교육기관", icon: Award },
   { value: "160+", label: "서비스 국가", icon: Globe2 },
 ] as const
 
@@ -72,7 +72,7 @@ const TIMELINE = [
   {
     year: "2014",
     title: "창립",
-    desc: "EEO(Education Everywhere Online) 설립. 모든 학생에게 양질의 교육을 제공한다는 하나의 믿음으로 시작했습니다.",
+    desc: "EEO(Empower Education Online) 설립. 모든 학생에게 양질의 교육을 제공한다는 하나의 믿음으로 시작했습니다.",
   },
   {
     year: "2016",
@@ -92,12 +92,22 @@ const TIMELINE = [
   {
     year: "2021",
     title: "글로벌 유니콘",
-    desc: "Tencent·Hillhouse·SIG의 투자를 유치하며 300억 달러 가치의 유니콘 기업으로 도약, 공교육 시장까지 영역을 확장했습니다.",
+    desc: "Tencent·Hillhouse·SIG 등의 투자로 누적 5억 달러 이상을 유치하며 시리즈 D 에듀테크 유니콘으로 도약, 공교육 시장까지 영역을 확장했습니다.",
+  },
+  {
+    year: "2022",
+    title: "한국 진출",
+    desc: "한국 법인 이이오클래스인코리아를 설립하고, 국내 학원·교육기관을 위한 교육용 SaaS를 정식 출시했습니다.",
+  },
+  {
+    year: "2026",
+    title: "아시아 교육을 잇다",
+    desc: "한·중·일·베트남 교육자가 모인 「아시아 AI 교육 포럼」(부산)을 공동 주최하며 AI 시대의 교육을 함께 논의했습니다.",
   },
   {
     year: "현재",
     title: "세계와 연결된 교실",
-    desc: "160개국, 8만 개 기관, 5,000만 명이 넘는 교사와 학습자가 클래스인으로 수업합니다.",
+    desc: "160개국, 6만 개 기관, 5,000만 명이 넘는 교사와 학습자가 클래스인으로 수업합니다.",
   },
 ]
 
@@ -144,16 +154,21 @@ const VALUE_DETAILS = [
 ]
 
 const PARTNERS = [
-  "북경대학교",
-  "싱가포르 국립대학(NUS)",
-  "난양공과대학교",
-  "Cornell University",
-  "Australian National University",
-  "Waseda University",
-  "Oxford University Press",
-  "Pearson",
-  "Birkbeck University",
-  "Acadsoc",
+  { src: "/images/partners/nus.png", alt: "National University of Singapore", w: 313, h: 144 },
+  { src: "/images/partners/sony-global-education.png", alt: "Sony Global Education", w: 212, h: 88 },
+  { src: "/images/partners/pearson.png", alt: "Pearson", w: 296, h: 88 },
+  { src: "/images/partners/british-council.png", alt: "British Council", w: 250, h: 88 },
+  { src: "/images/partners/d2l.png", alt: "D2L", w: 234, h: 88 },
+  { src: "/images/partners/udacity.png", alt: "Udacity", w: 452, h: 88 },
+  { src: "/images/partners/canvas.png", alt: "Canvas", w: 353, h: 88 },
+]
+
+const PRODUCT_LOGOS = [
+  { src: "/images/products/classin.png", alt: "ClassIn", w: 263, h: 77 },
+  { src: "/images/products/classin-x.png", alt: "ClassIn X", w: 289, h: 68 },
+  { src: "/images/products/teacherin.png", alt: "TeacherIn", w: 332, h: 80 },
+  { src: "/images/products/flowin.png", alt: "Flowin", w: 263, h: 84 },
+  { src: "/images/products/nobook.png", alt: "NOBOOK", w: 337, h: 83 },
 ]
 
 /* ─── 애니메이션 헬퍼 ────────────────────────────────────────── */
@@ -250,7 +265,7 @@ export default function AboutPageClient({ offices, press, recentPosts }: Props) 
             <div className="mt-10 flex flex-wrap items-center justify-center gap-2.5">
               {[
                 "2014년 설립",
-                "EEO Education Everywhere Online",
+                "EEO Empower Education Online",
                 "Tencent · Hillhouse 투자",
                 "전 세계 6개 지사",
               ].map((tag) => (
@@ -319,6 +334,35 @@ export default function AboutPageClient({ offices, press, recentPosts }: Props) 
         </div>
       </section>
 
+      {/* ── Brand Film ─────────────────────────────────────── */}
+      <section className="py-20 px-6 bg-[#FFFFFF]">
+        <div className="max-w-[1100px] mx-auto">
+          <FadeUp>
+            <div className="relative aspect-video overflow-hidden rounded-[24px] border border-[rgba(0,0,0,0.08)] bg-black">
+              <video
+                className="h-full w-full object-cover"
+                src="/images/video/classin-brand.mp4"
+                poster="/images/video/classin-brand-poster.jpg"
+                autoPlay
+                muted
+                loop
+                playsInline
+                preload="metadata"
+              />
+              <div className="pointer-events-none absolute inset-0 bg-gradient-to-t from-black/55 via-transparent to-transparent" />
+              <div className="absolute bottom-0 left-0 right-0 p-7 sm:p-10">
+                <p className="mb-2 text-[12px] font-semibold uppercase tracking-[0.16em] text-white/70">
+                  Empower Education Online
+                </p>
+                <h2 className="text-[24px] sm:text-[32px] font-bold leading-[1.2] tracking-[-0.5px] text-white">
+                  교육이 있는 곳이라면, 어디든 클래스인
+                </h2>
+              </div>
+            </div>
+          </FadeUp>
+        </div>
+      </section>
+
       {/* ── Vision · Mission · Values ────────────────────────── */}
       <section className="py-28 px-6 bg-[#FFFFFF]">
         <div className="max-w-[1200px] mx-auto">
@@ -331,9 +375,21 @@ export default function AboutPageClient({ offices, press, recentPosts }: Props) 
                 교육을 바라보는<br />우리의 시선
               </h2>
               <p className="text-[16px] text-[#615D59] leading-[1.65]">
-                클래스인은 EEO(Education Everywhere Online)가 만든 교육용 SaaS 플랫폼입니다.
+                클래스인은 EEO(Empower Education Online)가 만든 교육용 SaaS 플랫폼입니다.
                 &lsquo;화상 수업 도구&rsquo;가 아닌 &lsquo;교실 경험 전체를 설계하는 플랫폼&rsquo;을 목표로 합니다.
               </p>
+              <div className="mt-8 flex flex-col items-center gap-3">
+                <Image
+                  src="/images/brand/eeo-logo.png"
+                  alt="EEO — Empower Education Online"
+                  width={373}
+                  height={48}
+                  className="h-6 w-auto opacity-90"
+                />
+                <p className="text-[14px] font-medium text-[#084734]">
+                  Empowering the Future Through Transformative Learning
+                </p>
+              </div>
             </div>
           </FadeUp>
 
@@ -385,6 +441,44 @@ export default function AboutPageClient({ offices, press, recentPosts }: Props) 
         </div>
       </section>
 
+      {/* ── EEO 제품군 / Products ───────────────────────────── */}
+      <section className="py-28 px-6 bg-[#ECFDF5]">
+        <div className="max-w-[1000px] mx-auto">
+          <FadeUp>
+            <div className="text-center max-w-[640px] mx-auto mb-12">
+              <span className="text-[12px] font-semibold text-[#084734] tracking-[0.125px] uppercase mb-3 block">
+                Our Products
+              </span>
+              <h2 className="text-[36px] sm:text-[44px] font-bold text-[#111110] leading-[1.1] tracking-[-1.5px] mb-4">
+                하나의 미션, 다섯 개의 제품
+              </h2>
+              <p className="text-[16px] text-[#3F6B58] leading-[1.65]">
+                EEO는 수업·하드웨어·가상 실험·코스웨어까지, 교육의 모든 순간을 잇는 제품군을 만듭니다.
+              </p>
+            </div>
+          </FadeUp>
+          <FadeUp delay={0.08}>
+            <div
+              className="rounded-[20px] border border-[rgba(8,71,52,0.10)] bg-white p-8 sm:p-12"
+              style={{ boxShadow: "rgba(8,71,52,0.06) 0px 12px 36px" }}
+            >
+              <div className="grid grid-cols-2 items-center justify-items-center gap-x-6 gap-y-10 sm:grid-cols-3 lg:grid-cols-5">
+                {PRODUCT_LOGOS.map((p) => (
+                  <Image
+                    key={p.alt}
+                    src={p.src}
+                    alt={p.alt}
+                    width={p.w}
+                    height={p.h}
+                    className="h-7 w-auto sm:h-8"
+                  />
+                ))}
+              </div>
+            </div>
+          </FadeUp>
+        </div>
+      </section>
+
       {/* ── 성장 타임라인 ─────────────────────────────────────── */}
       <section className="py-28 px-6 bg-[#F6F5F4]">
         <div className="max-w-[860px] mx-auto">
@@ -403,49 +497,47 @@ export default function AboutPageClient({ offices, press, recentPosts }: Props) 
           </FadeUp>
 
           <div className="relative">
-            <div className="absolute left-[19px] top-2 bottom-2 w-px bg-[rgba(8,71,52,0.18)] hidden sm:block" />
+            <div className="absolute left-[20px] top-3 bottom-3 hidden w-px bg-gradient-to-b from-[#084734]/30 via-[#084734]/15 to-transparent sm:block" />
 
-            <div className="flex flex-col gap-0">
+            <div className="flex flex-col gap-5">
               {TIMELINE.map((item, i) => {
                 const isNow = item.year === "현재"
                 return (
-                  <FadeUp key={item.year} delay={i * 0.07}>
-                    <div className="flex gap-6 sm:gap-8 pb-10 last:pb-0">
-                      <div className="hidden sm:flex flex-col items-center shrink-0">
-                        <div
-                          className={`relative w-10 h-10 rounded-full flex items-center justify-center text-[11px] font-bold shrink-0 transition-transform ${
-                            isNow
-                              ? "bg-[#084734] text-white"
-                              : "bg-white border border-[rgba(8,71,52,0.18)] text-[#084734]"
-                          }`}
-                          style={
-                            isNow
-                              ? {
-                                  boxShadow:
-                                    "0 0 0 6px rgba(8,71,52,0.08), rgba(8,71,52,0.18) 0px 8px 20px",
-                                }
-                              : undefined
-                          }
-                        >
-                          {isNow ? "NOW" : item.year.slice(2)}
-                        </div>
+                  <FadeUp key={item.year} delay={i * 0.06}>
+                    <div className="group flex gap-5 sm:gap-8">
+                      <div className="hidden w-10 shrink-0 justify-center pt-7 sm:flex">
+                        <span className="relative flex">
+                          <span
+                            className={`block h-3.5 w-3.5 rounded-full transition-transform duration-300 group-hover:scale-125 ${
+                              isNow
+                                ? "bg-[#084734] ring-4 ring-[#084734]/15"
+                                : "border-2 border-[#084734]/40 bg-white"
+                            }`}
+                          />
+                          {isNow && (
+                            <span className="absolute inset-0 h-3.5 w-3.5 animate-ping rounded-full bg-[#084734]/40" />
+                          )}
+                        </span>
                       </div>
 
-                      <div className="pb-2 flex-1">
-                        <div className="flex items-baseline gap-3 mb-2">
-                          <span className="text-[13px] font-bold text-[#084734] sm:hidden">
-                            {item.year}
+                      <div
+                        className={`flex-1 rounded-[18px] border p-5 transition-all duration-300 group-hover:-translate-y-0.5 sm:p-6 ${
+                          isNow
+                            ? "border-[#084734]/20 bg-[#ECFDF5]"
+                            : "border-[rgba(0,0,0,0.08)] bg-white group-hover:border-[rgba(8,71,52,0.18)]"
+                        }`}
+                        style={{ boxShadow: "rgba(0,0,0,0.05) 0px 8px 24px, rgba(0,0,0,0.02) 0px 1px 4px" }}
+                      >
+                        <div className="mb-2 flex items-center gap-3">
+                          <span className="text-[26px] font-bold leading-none tracking-[-1px] text-[#084734] sm:text-[30px]">
+                            {isNow ? "NOW" : item.year}
                           </span>
-                          <span className="text-[18px] font-semibold text-[#111110] tracking-[-0.3px]">
+                          <span className="h-4 w-px bg-[rgba(0,0,0,0.12)]" />
+                          <h3 className="text-[18px] font-bold text-[#111110] tracking-[-0.3px]">
                             {item.title}
-                          </span>
-                          <span className="hidden sm:block text-[12px] font-medium text-[#A39E98]">
-                            {item.year}
-                          </span>
+                          </h3>
                         </div>
-                        <p className="text-[14px] text-[#615D59] leading-[1.7]">
-                          {item.desc}
-                        </p>
+                        <p className="text-[14px] text-[#615D59] leading-[1.7]">{item.desc}</p>
                       </div>
                     </div>
                   </FadeUp>
@@ -551,6 +643,139 @@ export default function AboutPageClient({ offices, press, recentPosts }: Props) 
         </div>
       </section>
 
+      {/* ── Our Culture ─────────────────────────────────────── */}
+      <section className="py-28 px-6 bg-[#F6F5F4]">
+        <div className="max-w-[1200px] mx-auto">
+          <FadeUp>
+            <div className="text-center max-w-[640px] mx-auto mb-14">
+              <span className="text-[12px] font-semibold text-[#084734] tracking-[0.125px] uppercase mb-3 block">
+                Our Culture
+              </span>
+              <h2 className="text-[36px] sm:text-[44px] font-bold text-[#111110] leading-[1.1] tracking-[-1.5px] mb-4">
+                우리가 일하는 방식
+              </h2>
+              <p className="text-[16px] text-[#615D59] leading-[1.65]">
+                좋은 교육이 삶을 바꾼다는 믿음으로, 사명을 좇고 끊임없이 혁신하며 함께 비범해집니다.
+              </p>
+            </div>
+          </FadeUp>
+
+          <div className="grid md:grid-cols-3 gap-5">
+            {[
+              {
+                img: "/images/culture/mission-driven.jpg",
+                en: "Be mission-driven",
+                t: "사명으로 움직인다",
+                d: "기술로 교육을 더 접근 가능하고, 확장 가능하며, 개인화된 것으로 만든다는 믿음으로 일합니다.",
+              },
+              {
+                img: "/images/culture/innovative.jpg",
+                en: "Stay innovative",
+                t: "끊임없이 혁신한다",
+                d: "업계를 새롭게 정의하는 에듀테크 기업으로서, 돌파구는 늘 우리 손에서 시작됩니다.",
+              },
+              {
+                img: "/images/culture/exceptional.jpg",
+                en: "Become exceptional",
+                t: "함께 비범해진다",
+                d: "크로스컬처 프로젝트와 기업가 정신으로, 세계와 호흡하는 인재로 성장합니다.",
+              },
+            ].map((c, i) => (
+              <FadeUp key={c.en} delay={i * 0.08}>
+                <div className="h-full overflow-hidden bg-white rounded-[16px] border border-[rgba(0,0,0,0.08)]">
+                  <div className="relative aspect-[4/3]">
+                    <Image src={c.img} alt={c.t} fill className="object-cover" sizes="(max-width: 768px) 100vw, 33vw" />
+                  </div>
+                  <div className="p-7">
+                    <div className="text-[11px] font-semibold text-[#084734] tracking-[0.12em] uppercase mb-2">
+                      {c.en}
+                    </div>
+                    <h3 className="text-[20px] font-bold text-[#111110] mb-2.5 tracking-[-0.3px]">{c.t}</h3>
+                    <p className="text-[14px] text-[#615D59] leading-[1.65]">{c.d}</p>
+                  </div>
+                </div>
+              </FadeUp>
+            ))}
+          </div>
+        </div>
+      </section>
+
+      {/* ── 교육 포럼 / Thought Leadership ─────────────────────── */}
+      <section className="py-28 px-6 bg-[#ECFDF5]">
+        <div className="max-w-[1000px] mx-auto">
+          <FadeUp>
+            <div className="text-center max-w-[640px] mx-auto mb-12">
+              <span className="text-[12px] font-semibold text-[#084734] tracking-[0.125px] uppercase mb-3 block">
+                Thought Leadership
+              </span>
+              <h2 className="text-[36px] sm:text-[44px] font-bold text-[#111110] leading-[1.1] tracking-[-1.5px] mb-4">
+                아시아 교육의 흐름을 함께 만듭니다
+              </h2>
+              <p className="text-[16px] text-[#3F6B58] leading-[1.65]">
+                클래스인은 도구를 넘어, 교육의 방향을 함께 논의하는 자리를 만들어 갑니다.
+              </p>
+            </div>
+          </FadeUp>
+
+          <FadeUp delay={0.08}>
+            <div
+              className="bg-white rounded-[20px] border border-[rgba(8,71,52,0.10)] p-7 sm:p-10"
+              style={{ boxShadow: "rgba(8,71,52,0.08) 0px 16px 40px, rgba(8,71,52,0.04) 0px 4px 12px" }}
+            >
+              <div className="flex flex-col lg:flex-row lg:items-center gap-8 lg:gap-12">
+                <div className="flex-1">
+                  <div className="inline-flex items-center gap-1.5 bg-[#ECFDF5] text-[#084734] text-[12px] font-semibold rounded-full px-3 py-1.5 mb-5">
+                    <Sparkles className="w-3 h-3" strokeWidth={2.5} />
+                    2026 · 부산
+                  </div>
+                  <h3 className="text-[26px] sm:text-[30px] font-bold text-[#111110] leading-[1.2] tracking-[-0.6px] mb-3">
+                    2026 아시아 AI 교육 포럼
+                  </h3>
+                  <p className="text-[15px] text-[#615D59] leading-[1.7] mb-6">
+                    한·중·일·베트남 교육자가 한자리에 모여 <em className="not-italic font-semibold text-[#111110]">‘AI 시대의 아름다운 학습 공간’</em>을 논한 자리. 클래스인이 WP 과사람과 공동 주최하고, 공동창업자·CTO 허첸이 기조 세션을 맡았습니다.
+                  </p>
+                  <div className="flex flex-wrap gap-2 mb-7">
+                    {["한·중·일·베트남 4개국", "6개 세션", "공교육 × 사교육"].map((t) => (
+                      <span
+                        key={t}
+                        className="text-[12px] font-medium text-[#084734] bg-[#ECFDF5] rounded-full px-3 py-1.5"
+                      >
+                        {t}
+                      </span>
+                    ))}
+                  </div>
+                  <Link
+                    href="/blog/2026-asia-ai-education-forum-busan"
+                    className="inline-flex items-center gap-1.5 text-[14px] font-semibold text-[#084734] hover:gap-2.5 transition-all"
+                  >
+                    현장 리뷰 보기
+                    <ArrowUpRight className="w-4 h-4" strokeWidth={2.2} />
+                  </Link>
+                </div>
+
+                <div className="lg:w-[260px] shrink-0">
+                  <div className="grid grid-cols-2 gap-3">
+                    {[
+                      { k: "4", l: "참가국" },
+                      { k: "6", l: "세션" },
+                      { k: "공동", l: "주최" },
+                      { k: "CTO", l: "기조 발표" },
+                    ].map((s) => (
+                      <div key={s.l} className="bg-[#F6F5F4] rounded-[12px] px-4 py-5 text-center">
+                        <div className="text-[22px] font-bold text-[#084734] tracking-[-0.5px] leading-none mb-1.5">
+                          {s.k}
+                        </div>
+                        <div className="text-[12px] text-[#615D59] font-medium">{s.l}</div>
+                      </div>
+                    ))}
+                  </div>
+                </div>
+              </div>
+            </div>
+          </FadeUp>
+        </div>
+      </section>
+
       {/* ── 글로벌 파트너 ─────────────────────────────────────── */}
       <section className="py-28 px-6 bg-[#FFFFFF]">
         <div className="max-w-[1200px] mx-auto">
@@ -568,27 +793,78 @@ export default function AboutPageClient({ offices, press, recentPosts }: Props) 
             </div>
           </FadeUp>
 
-          <FadeUp delay={0.08}>
-            <div className="flex flex-wrap justify-center gap-3">
-              {PARTNERS.map((name) => (
-                <div
-                  key={name}
-                  className="bg-white rounded-full border border-[rgba(0,0,0,0.08)] px-5 py-2.5 text-[14px] font-medium text-[#111110]"
-                  style={{
-                    boxShadow:
-                      "rgba(0,0,0,0.04) 0px 4px 18px, rgba(0,0,0,0.027) 0px 2px 7.8px",
-                  }}
-                >
-                  {name}
-                </div>
-              ))}
-            </div>
-          </FadeUp>
+          <div className="mx-auto grid max-w-[920px] grid-cols-2 items-center justify-items-center gap-x-8 gap-y-10 sm:grid-cols-4">
+            {PARTNERS.map((p, i) => (
+              <FadeUp key={p.src} delay={0.04 + i * 0.04}>
+                <Image
+                  src={p.src}
+                  alt={p.alt}
+                  width={p.w}
+                  height={p.h}
+                  className="h-7 w-auto object-contain opacity-70 grayscale transition hover:opacity-100 sm:h-8"
+                />
+              </FadeUp>
+            ))}
+          </div>
 
           <FadeUp delay={0.14}>
             <p className="text-center text-[13px] text-[#A39E98] mt-8">
-              외 80,000+ 교육기관
+              외 6만+ 교육기관
             </p>
+          </FadeUp>
+
+          <FadeUp delay={0.2}>
+            <div className="mt-20 pt-16 border-t border-[rgba(0,0,0,0.08)]">
+              <div className="text-center max-w-[600px] mx-auto mb-12">
+                <span className="text-[12px] font-semibold text-[#084734] tracking-[0.125px] uppercase mb-3 block">
+                  Partnership
+                </span>
+                <h3 className="text-[28px] sm:text-[34px] font-bold text-[#111110] leading-[1.15] tracking-[-1px] mb-4">
+                  함께 성장하는 파트너십
+                </h3>
+                <p className="text-[16px] text-[#615D59] leading-[1.65]">
+                  출판사·통신사·에듀테크·하드웨어 기업과 함께, 교육의 미래를 만들어 갑니다.
+                </p>
+              </div>
+              <div className="grid sm:grid-cols-3 gap-4">
+                {[
+                  { t: "채널 파트너", img: "/images/partnership/channel.png", d: "출판사·통신사·에듀테크·하드웨어 기업과 지역 및 글로벌 단위로 협력합니다." },
+                  { t: "통합 파트너", img: "/images/partnership/integration.png", d: "LTI·SDK·API 연동으로 클래스인을 기존 에듀테크 환경에 자연스럽게 통합합니다." },
+                  { t: "제휴 파트너", img: "/images/partnership/affiliate.png", d: "크로스컬처 프로젝트를 통해 함께 시장을 넓혀가는 성장 파트너십입니다." },
+                ].map((p) => (
+                  <div key={p.t} className="h-full overflow-hidden rounded-[16px] border border-[rgba(0,0,0,0.08)] bg-white">
+                    <div className="relative aspect-[4/3] bg-[#F6F5F4]">
+                      <Image src={p.img} alt={p.t} fill className="object-cover" sizes="(max-width: 640px) 100vw, 33vw" />
+                    </div>
+                    <div className="p-6">
+                      <h4 className="mb-2 text-[17px] font-bold tracking-[-0.3px] text-[#111110]">{p.t}</h4>
+                      <p className="text-[14px] leading-[1.65] text-[#615D59]">{p.d}</p>
+                    </div>
+                  </div>
+                ))}
+              </div>
+              <div className="mt-8 grid grid-cols-1 gap-3 text-center sm:grid-cols-3">
+                {[
+                  { t: "혁신적 솔루션", d: "세상의 학습 방식을 바꾸는 제품" },
+                  { t: "500+ 교육 전문 인력", d: "다양한 분야의 전문가 그룹" },
+                  { t: "검증된 글로벌 플랫폼", d: "160+ 개국이 신뢰하는 인프라" },
+                ].map((v) => (
+                  <div key={v.t} className="px-4 py-2">
+                    <div className="text-[15px] font-bold text-[#084734]">{v.t}</div>
+                    <div className="mt-1 text-[13px] text-[#615D59]">{v.d}</div>
+                  </div>
+                ))}
+              </div>
+              <div className="text-center mt-10">
+                <Link
+                  href="/contact"
+                  className="inline-flex items-center gap-1.5 bg-[#084734] text-white text-[14px] font-semibold rounded-full px-6 py-3 hover:bg-[#0a5a42] transition-colors"
+                >
+                  파트너십 문의하기
+                  <ArrowRight className="w-4 h-4" strokeWidth={2.2} />
+                </Link>
+              </div>
+            </div>
           </FadeUp>
         </div>
       </section>
@@ -774,7 +1050,7 @@ export default function AboutPageClient({ offices, press, recentPosts }: Props) 
         <div className="max-w-[720px] mx-auto text-center">
           <FadeUp>
             <h2 className="text-[36px] sm:text-[44px] font-bold text-[#111110] leading-[1.1] tracking-[-1.5px] mb-5">
-              클래스인과 함께<br />시작해보세요
+              Classin과 함께<br />시작해보세요
             </h2>
             <p className="text-[16px] text-[#615D59] leading-[1.65] mb-9">
               도입 방법부터 기관 맞춤 요금제까지,

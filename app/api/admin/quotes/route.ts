@@ -1,5 +1,6 @@
 import { NextRequest, NextResponse } from "next/server";
 import { verifyAdmin } from "@/lib/admin-auth";
+import { adminCachedJson } from "@/lib/admin-api-response";
 import { listQuotes, createQuote, generateQuoteNumber } from "@/lib/repositories/quotes";
 
 export async function GET(req: NextRequest) {
@@ -8,7 +9,7 @@ export async function GET(req: NextRequest) {
   try {
     const partnerId = req.nextUrl.searchParams.get("partner_id") ?? undefined;
     const quotes = await listQuotes(partnerId);
-    return NextResponse.json({ quotes });
+    return adminCachedJson({ quotes });
   } catch (e) {
     console.error("[GET /api/admin/quotes]", e);
     return NextResponse.json({ error: "Failed to fetch quotes" }, { status: 500 });
