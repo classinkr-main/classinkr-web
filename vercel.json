@@ -6,7 +6,7 @@
     },
     {
       "path": "/api/cron/lead-response-alerts",
-      "schedule": "0 * * * *"
+      "schedule": "0 10 * * *"
     },
     {
       "path": "/api/cron/lead-weekly-digest",
