@@ -6,6 +6,7 @@ import type { ReactNode } from "react"
 import { useEffect, useState } from "react"
 
 import { RouteTransition } from "@/components/transitions/RouteTransition"
+import { useConsent } from "@/lib/consent/useConsent"
 
 const ConditionalHeader = dynamic(() =>
   import("@/components/sections/ConditionalHeader").then((mod) => mod.ConditionalHeader)
@@ -37,6 +38,10 @@ const MetaPixelScript = dynamic(
   () => import("@/components/MetaPixelScript").then((mod) => mod.MetaPixelScript),
   { ssr: false }
 )
+const ConsentBanner = dynamic(
+  () => import("@/components/consent/ConsentBanner").then((mod) => mod.ConsentBanner),
+  { ssr: false }
+)
 
 function isInternalPath(pathname: string) {
   return (
@@ -49,6 +54,7 @@ function isInternalPath(pathname: string) {
 export function AppChrome({ children }: { children: ReactNode }) {
   const pathname = usePathname()
   const [readyPath, setReadyPath] = useState<string | null>(null)
+  const { choice: consentChoice } = useConsent()
   const showPublicChrome = !isInternalPath(pathname)
   const showAnalytics = showPublicChrome
 
@@ -81,11 +87,16 @@ export function AppChrome({ children }: { children: ReactNode }) {
       {showAnalytics ? (
         <>
           <GTMScript />
-          <MetaPixelScript />
-          <AnalyticsProviders />
           <PageViewTracker />
+          {consentChoice.marketing ? (
+            <>
+              <MetaPixelScript />
+              <AnalyticsProviders />
+            </>
+          ) : null}
         </>
       ) : null}
+      {showPublicChrome ? <ConsentBanner /> : null}
       {showPublicChrome && readyPath === pathname ? (
         <>
           <FloatingChatbot />

@@ -7,6 +7,7 @@ import Image from "next/image"
 import Link from "next/link"
 import { NewsletterSubscribe } from "./NewsletterSubscribe"
 import { TrackedLink } from "@/components/TrackedLink"
+import { CookieSettingsButton } from "@/components/consent/CookieSettingsButton"
 
 export function Footer() {
     return (
@@ -55,6 +56,7 @@ export function Footer() {
                             <li><Link href="/privacy" className="hover:text-white transition-colors">개인정보처리방침</Link></li>
                             <li><Link href="/terms" className="hover:text-white transition-colors">이용약관</Link></li>
                             <li><Link href="/data-deletion" className="hover:text-white transition-colors">데이터 삭제 안내</Link></li>
+                            <li><CookieSettingsButton className="hover:text-white transition-colors" /></li>
                         </ul>
                     </div>
                 </div>
