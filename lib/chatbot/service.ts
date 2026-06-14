@@ -5,10 +5,13 @@ import { getDocPath, listDocs, type DocArticle } from "@/lib/docs"
 import { getDocsContent } from "@/lib/docs-content"
 import {
   classifyChatbotQuestion,
-  detectChatbotCategory,
   type ChatbotIntent,
 } from "@/lib/chatbot/classification"
 import { generateGeminiAnswer, embedText, type ChatbotModelTier } from "@/lib/chatbot/llm"
+import {
+  buildClientVectorSources,
+  type VectorFallbackChunkRow,
+} from "@/lib/chatbot/vector-fallback"
 
 const MAX_MESSAGE_LENGTH = 1000
 const MAX_FEEDBACK_COMMENT_LENGTH = 500
@@ -374,6 +377,7 @@ async function keywordSearchSupabaseSources(question: NormalizedQuestion): Promi
 
 const VECTOR_MATCH_COUNT = 8
 const VECTOR_SIMILARITY_FLOOR = 0.3
+const CLIENT_VECTOR_SIMILARITY_FLOOR = 0.7
 
 interface MatchChunkRow {
   id: string
@@ -389,11 +393,8 @@ interface MatchChunkRow {
 }
 
 // Gemini 임베딩 기반 시맨틱 검색. 키·임베딩이 없거나 결과가 없으면 [] → 키워드 검색으로 폴백.
-async function vectorSearchSupabaseSources(question: NormalizedQuestion): Promise<ChatbotSource[]> {
+async function vectorSearchSupabaseSources(embedding: number[]): Promise<ChatbotSource[]> {
   if (!hasSupabaseServerEnv()) return []
-
-  const embedding = await embedText(question.redacted, "RETRIEVAL_QUERY")
-  if (!embedding) return []
 
   try {
     const supabase = createSupabaseAdminClient()
@@ -432,11 +433,61 @@ async function vectorSearchSupabaseSources(question: NormalizedQuestion): Promis
   }
 }
 
-// 벡터 검색 우선, 결과 없으면 키워드(ilike) 검색.
+async function clientVectorSearchSupabaseSources(embedding: number[]): Promise<ChatbotSource[]> {
+  if (!hasSupabaseServerEnv()) return []
+
+  try {
+    const supabase = createSupabaseAdminClient()
+    const { data, error } = await supabase
+      .from("docs_ai_chunks")
+      .select(
+        "id, article_id, heading, content, embedding, docs_articles!inner(id, category_id, slug, title, description, canonical_path, status, visibility, noindex)"
+      )
+      .eq("docs_articles.status", "published")
+      .in("docs_articles.visibility", ["public", "unlisted"])
+      .eq("docs_articles.noindex", false)
+      .not("embedding", "is", null)
+      .limit(500)
+
+    if (error) {
+      console.warn("[chatbot] client vector fallback failed:", error.message)
+      return []
+    }
+
+    return buildClientVectorSources(
+      embedding,
+      (data ?? []) as VectorFallbackChunkRow[],
+      {
+        maxSources: MAX_SOURCES,
+        similarityFloor: CLIENT_VECTOR_SIMILARITY_FLOOR,
+      }
+    )
+  } catch (error) {
+    console.warn(
+      "[chatbot] client vector fallback unavailable:",
+      error instanceof Error ? error.message : error
+    )
+    return []
+  }
+}
+
+// RPC 벡터 검색 우선, 정확 키워드 검색 이후 RPC 미적용 환경의 embedding 컬럼 fallback.
 async function searchSupabaseSources(question: NormalizedQuestion): Promise<ChatbotSource[]> {
-  const vectorSources = await vectorSearchSupabaseSources(question)
-  if (vectorSources.length > 0) return vectorSources
-  return keywordSearchSupabaseSources(question)
+  const embedding = await embedText(question.redacted, "RETRIEVAL_QUERY")
+  if (embedding) {
+    const vectorSources = await vectorSearchSupabaseSources(embedding)
+    if (vectorSources.length > 0) return vectorSources
+  }
+
+  const keywordSources = await keywordSearchSupabaseSources(question)
+  if (keywordSources.length > 0) return keywordSources
+
+  if (embedding) {
+    const clientVectorSources = await clientVectorSearchSupabaseSources(embedding)
+    if (clientVectorSources.length > 0) return clientVectorSources
+  }
+
+  return []
 }
 
 async function searchKnowledgeSources(
@@ -490,10 +541,16 @@ function getNextStepByCategory(category: string) {
   }
 }
 
-function composeAnswer(question: NormalizedQuestion, sources: ChatbotSource[]): Omit<ChatbotQueryResponse, "answerEventId" | "sessionId" | "warning" | "handoffIntent"> {
+function composeAnswer(
+  question: NormalizedQuestion,
+  sources: ChatbotSource[],
+  category: string
+): Omit<ChatbotQueryResponse, "answerEventId" | "sessionId" | "warning" | "handoffIntent"> {
   if (sources.length === 0) {
     const needsConsultation = wantsHumanConsultation(question)
     const isVague = question.tokens.length < 2 && !needsConsultation
+    const needsSupportHandoff = ["billing", "hardware", "troubleshooting"].includes(category)
+    const needsHandoff = needsConsultation || needsSupportHandoff
 
     if (isVague) {
       return {
@@ -512,9 +569,11 @@ function composeAnswer(question: NormalizedQuestion, sources: ChatbotSource[]): 
       answer:
         needsConsultation
           ? "상담이 필요한 내용으로 확인했습니다. 학원 규모, 희망 도입 시점, 현재 운영에서 가장 해결하고 싶은 문제를 남겨주시면 담당자가 이어서 안내드릴게요."
-          : "확인 가능한 문서에서 바로 답을 찾지 못했습니다. 운영 환경이나 오류 상황을 조금 더 구체적으로 알려주시거나 상담으로 연결해 주세요.",
-      answerMode: needsConsultation ? "handoff" : "fallback",
-      confidence: needsConsultation ? 0.4 : 0.15,
+          : needsSupportHandoff
+            ? `확인 가능한 문서에서 바로 답을 찾지 못했습니다. 담당자가 안전하게 확인할 수 있도록 상담으로 이어드릴게요.\n\n다음 단계: ${getNextStepByCategory(category)}`
+            : "확인 가능한 문서에서 바로 답을 찾지 못했습니다. 운영 환경이나 오류 상황을 조금 더 구체적으로 알려주시거나 상담으로 연결해 주세요.",
+      answerMode: needsHandoff ? "handoff" : "fallback",
+      confidence: needsHandoff ? 0.4 : 0.15,
       needsHandoff: true,
       sources: [],
       suggestedQuestions: ["도입 상담을 받고 싶어요", "요금과 견적이 궁금해요", "계정이나 수업 접속 문제가 있어요"],
@@ -523,7 +582,6 @@ function composeAnswer(question: NormalizedQuestion, sources: ChatbotSource[]): 
   }
 
   const top = sources[0]
-  const category = detectChatbotCategory(question.redacted, sources.map((source) => source.category))
   const confidence = Math.min(0.92, Math.max(0.35, 0.45 + top.score / 25))
   const lowConfidence = confidence < 0.58
   const sensitiveLowConfidence =
@@ -826,7 +884,7 @@ async function buildChatbotCore(message: unknown, sessionId?: string): Promise<C
     question.redacted,
     sources.map((source) => source.category)
   )
-  const response = composeAnswer(question, sources)
+  const response = composeAnswer(question, sources, category)
 
   // 대화 기록 (History) 조회 및 가공
   let history: { role: "user" | "model"; parts: { text: string }[] }[] = []
