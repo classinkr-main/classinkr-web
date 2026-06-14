@@ -221,6 +221,69 @@ function groupByOwner(
 const PERIOD_SCAN_LIMIT = 5000
 const RECENT_ORDER_LIMIT = 12
 const TEAM_REVENUE_ROW_LIMIT = 50
+const RECENT_ORDER_CANDIDATE_PAGE_SIZE = 1000
+const RECENT_ORDER_CANDIDATE_MAX_PAGES = 20
+const NEO_CRM_ORDER_DATE_FIELDS = [
+  "createdAt",
+  "created_at",
+  "CreatedAt",
+  "createTime",
+  "create_time",
+  "updatedAt",
+  "updated_at",
+  "UpdatedAt",
+  "closeDate",
+  "close_date",
+  "CloseDate",
+]
+
+function normalizeNeoCrmExternalDate(value: unknown): string | null {
+  if (value == null || value === "") return null
+  const numeric = typeof value === "number" ? value : /^\d+$/.test(String(value)) ? Number(value) : null
+  const date = numeric == null ? new Date(String(value)) : new Date(numeric)
+  return Number.isNaN(date.getTime()) ? null : date.toISOString()
+}
+
+export function resolveNeoCrmOrderOccurredAt(row: {
+  occurred_at: string | null
+  payload: Record<string, unknown> | null
+}) {
+  for (const key of NEO_CRM_ORDER_DATE_FIELDS) {
+    const value = normalizeNeoCrmExternalDate(row.payload?.[key])
+    if (value) return value
+  }
+  return normalizeNeoCrmExternalDate(row.occurred_at)
+}
+
+function isIsoWithinRange(value: string | null, startIso: string, endIso: string) {
+  if (!value) return false
+  return value >= startIso && value < endIso
+}
+
+async function listRecentOpportunityRows(sb: ReturnType<typeof createSupabaseAdminClient>) {
+  const rows: ScopedOrderRecord[] = []
+
+  for (let page = 0; page < RECENT_ORDER_CANDIDATE_MAX_PAGES; page += 1) {
+    const from = page * RECENT_ORDER_CANDIDATE_PAGE_SIZE
+    const to = from + RECENT_ORDER_CANDIDATE_PAGE_SIZE - 1
+    const result = await sb
+      .from("external_crm_records")
+      .select("owner_name, payload, amount, occurred_at, display_name, status, external_id, object_api_key")
+      .eq("source_system", "xiaoshouyi")
+      .eq("object_api_key", "opportunity")
+      .eq("is_stale", false)
+      .order("external_id", { ascending: true })
+      .range(from, to)
+
+    if (result.error) return { data: rows, error: result.error }
+
+    const pageRows = (result.data ?? []) as ScopedOrderRecord[]
+    rows.push(...pageRows)
+    if (pageRows.length < RECENT_ORDER_CANDIDATE_PAGE_SIZE) break
+  }
+
+  return { data: rows, error: null }
+}
 
 function pad2(value: number) {
   return String(value).padStart(2, "0")
@@ -397,6 +460,7 @@ async function computeNeoCrmTeamReport(input: {
     teamManagerResult,
     salesPerfResult,
     opportunityResult,
+    recentOpportunityResult,
     collectionResult,
     accountTotalResult,
     accountWindowResult,
@@ -415,6 +479,7 @@ async function computeNeoCrmTeamReport(input: {
       .limit(PERIOD_SCAN_LIMIT),
     moneyWindowSelect("SalesPerformance__c"),
     moneyWindowSelect("opportunity"),
+    listRecentOpportunityRows(sb),
     moneyWindowSelect("Collection__c"),
     sb
       .from("external_crm_records")
@@ -479,7 +544,7 @@ async function computeNeoCrmTeamReport(input: {
   const isScoped = (row: { owner_name: string | null; payload: Record<string, unknown> | null }) =>
     isKoreaScopedExternalRecord(row, koreaManagers) && !excludedOwnerIds.has(row.owner_name?.trim() ?? "")
 
-  const isCurrent = (occurredAt: string | null) => (occurredAt ?? "") >= startIso
+  const isCurrent = (occurredAt: string | null) => isIsoWithinRange(occurredAt, startIso, endIso)
 
   // MTD 페이스 비교: 진행 중인 기간(offset 0)은 "기간 시작 ~ 지금"까지만 찼으므로,
   // 직전 기간도 같은 경과 길이까지만 잘라 비교해야 공정하다(월초에 항상 -로 보이는 문제 제거).
@@ -494,7 +559,7 @@ async function computeNeoCrmTeamReport(input: {
   const prevPaceCutoffIso = new Date(prevPaceCutoffMs).toISOString()
   // 직전 기간 윈도우: [prevStart, prevPaceCutoff). allSales 쿼리가 prevStart부터 읽으므로
   // 상한만 적용하면 된다. (prevPaceCutoffIso <= startIso 보장)
-  const isPrevPace = (occurredAt: string | null) => (occurredAt ?? "") < prevPaceCutoffIso
+  const isPrevPace = (occurredAt: string | null) => isIsoWithinRange(occurredAt, windowStartIso, prevPaceCutoffIso)
 
   // REV 시트 한국팀 활성 행(취소/해지 제외). 월별 추이·목표·믹스·담당자 진행의 공통 소스.
   const koreaActiveRows = sheetRows.filter(
@@ -645,17 +710,20 @@ async function computeNeoCrmTeamReport(input: {
   const prevOrderRows = allOrders.filter((row) => isPrevPace(row.occurred_at))
   const orderAmount = orderRows.reduce((total, row) => total + (Number(row.amount) || 0), 0)
   const prevOrderAmount = prevOrderRows.reduce((total, row) => total + (Number(row.amount) || 0), 0)
-  const recentOrders: NeoCrmOrderItem[] = orderRows
-    .slice()
-    .sort((a, b) => (b.occurred_at ?? "").localeCompare(a.occurred_at ?? ""))
+  const recentOrderSourceRows = recentOpportunityResult.error ? [] : recentOpportunityResult.data
+  const recentOrders: NeoCrmOrderItem[] = recentOrderSourceRows
+    .filter(isScoped)
+    .map((row) => ({ row, occurredAt: resolveNeoCrmOrderOccurredAt(row) }))
+    .filter(({ occurredAt }) => isCurrent(occurredAt))
+    .sort((a, b) => (b.occurredAt ?? "").localeCompare(a.occurredAt ?? ""))
     .slice(0, RECENT_ORDER_LIMIT)
-    .map((row) => ({
+    .map(({ row, occurredAt }) => ({
       key: `${row.object_api_key}:${row.external_id}`,
       customerName: row.display_name ?? row.external_id,
       ownerName: row.owner_name ? resolveOwnerName(row.owner_name, ownerNames) : null,
       status: row.status,
       amount: row.amount,
-      occurredAt: row.occurred_at,
+      occurredAt,
     }))
 
   const allCollections = ((collectionResult.data ?? []) as ScopedAmountRecord[]).filter(isScoped)

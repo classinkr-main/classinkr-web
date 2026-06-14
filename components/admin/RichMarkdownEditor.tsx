@@ -1,6 +1,6 @@
 "use client"
 
-import { forwardRef, useEffect, useImperativeHandle, useRef, useState } from "react"
+import { forwardRef, useEffect, useImperativeHandle, useRef, useState, type DragEvent } from "react"
 import { useEditor, EditorContent, Extension } from "@tiptap/react"
 import { Plugin, PluginKey } from "@tiptap/pm/state"
 import { Decoration, DecorationSet } from "@tiptap/pm/view"
@@ -12,6 +12,10 @@ import Image from "@tiptap/extension-image"
 import { Markdown } from "tiptap-markdown"
 import { Image as ImageIcon, LayoutTemplate, Link2, Loader2, Sparkles, Upload, Wand2, X } from "lucide-react"
 import type { JSONContent, MarkdownParseHelpers, MarkdownParseResult, MarkdownToken } from "@tiptap/core"
+import {
+  LOCAL_IMAGE_ACCEPT,
+  normalizeLocalImageFiles,
+} from "@/lib/admin/local-image-upload"
 import { getAdminToken } from "@/lib/admin-client"
 
 // ProseMirror 플러그인: {{green:text}} 구문을 에디터에서 초록색으로 시각화
@@ -46,7 +50,6 @@ const GreenTextDecoration = Extension.create({
   },
 })
 
-const MAX_INLINE_IMAGE_BYTES = 5 * 1024 * 1024
 const IMAGE_WIDTH_PRESETS = [
   { label: "가득", value: "" },
   { label: "크게", value: "720" },
@@ -152,6 +155,7 @@ const RichMarkdownEditor = forwardRef<RichMarkdownEditorHandle, RichMarkdownEdit
     const [imageWidth, setImageWidth] = useState<(typeof IMAGE_WIDTH_PRESETS)[number]["value"]>("")
     const [imageError, setImageError] = useState("")
     const [uploadingImages, setUploadingImages] = useState(false)
+    const [draggingImages, setDraggingImages] = useState(false)
 
     const closeImageDialog = () => {
       setShowImageDialog(false)
@@ -203,25 +207,18 @@ const RichMarkdownEditor = forwardRef<RichMarkdownEditorHandle, RichMarkdownEdit
     }
 
     const handleFiles = async (files: FileList | File[]) => {
-      const imageFiles = Array.from(files)
-      if (imageFiles.length === 0) return
-
-      const badFile = imageFiles.find((file) => !file.type.startsWith("image/"))
-      if (badFile) {
-        setImageError(`${badFile.name}은 이미지 파일이 아닙니다.`)
+      const result = normalizeLocalImageFiles(Array.from(files))
+      if (!result.ok) {
+        setImageError(result.message)
         return
       }
-      const oversized = imageFiles.find((file) => file.size > MAX_INLINE_IMAGE_BYTES)
-      if (oversized) {
-        setImageError(`${oversized.name}은 5MB 이하로 올려주세요.`)
-        return
-      }
+      if (result.files.length === 0) return
 
       setUploadingImages(true)
       setImageError("")
       try {
         const uploaded: ImageInsertItem[] = []
-        for (const file of imageFiles) {
+        for (const file of result.files) {
           const src = await uploadFile(file)
           uploaded.push({
             src,
@@ -238,6 +235,47 @@ const RichMarkdownEditor = forwardRef<RichMarkdownEditorHandle, RichMarkdownEdit
         setUploadingImages(false)
         if (fileInputRef.current) fileInputRef.current.value = ""
       }
+    }
+
+    const hasDraggedFiles = (event: DragEvent<HTMLElement>) =>
+      Array.from(event.dataTransfer.types).includes("Files")
+
+    const saveDropSelection = (event: DragEvent<HTMLElement>) => {
+      const position = editor?.view.posAtCoords({
+        left: event.clientX,
+        top: event.clientY,
+      })
+      if (position) savedSelection.current = { from: position.pos, to: position.pos }
+    }
+
+    const handleEditorDragEnter = (event: DragEvent<HTMLDivElement>) => {
+      if (!imageUploadEndpoint || !hasDraggedFiles(event)) return
+      event.preventDefault()
+      setDraggingImages(true)
+    }
+
+    const handleEditorDragOver = (event: DragEvent<HTMLDivElement>) => {
+      if (!imageUploadEndpoint || !hasDraggedFiles(event)) return
+      event.preventDefault()
+      event.dataTransfer.dropEffect = "copy"
+      setDraggingImages(true)
+    }
+
+    const handleEditorDragLeave = (event: DragEvent<HTMLDivElement>) => {
+      const nextTarget = event.relatedTarget instanceof Node ? event.relatedTarget : null
+      if (nextTarget && event.currentTarget.contains(nextTarget)) return
+      setDraggingImages(false)
+    }
+
+    const handleEditorDrop = (event: DragEvent<HTMLDivElement>) => {
+      if (!imageUploadEndpoint) return
+      const files = Array.from(event.dataTransfer.files)
+      if (files.length === 0) return
+      event.preventDefault()
+      event.stopPropagation()
+      setDraggingImages(false)
+      saveDropSelection(event)
+      void handleFiles(files)
     }
 
     const editor = useEditor({
@@ -427,7 +465,7 @@ const RichMarkdownEditor = forwardRef<RichMarkdownEditorHandle, RichMarkdownEdit
                     <input
                       ref={fileInputRef}
                       type="file"
-                      accept="image/jpeg,image/png,image/webp,image/gif"
+                      accept={LOCAL_IMAGE_ACCEPT}
                       multiple
                       className="hidden"
                       onChange={(event) => {
@@ -524,9 +562,31 @@ const RichMarkdownEditor = forwardRef<RichMarkdownEditorHandle, RichMarkdownEdit
           </div>
         )}
 
-        <div className="min-h-[600px] rounded-2xl border border-[#e8e8e4] bg-[#fcfcfb] px-5 py-4 transition-colors focus-within:border-[#084734]">
+        <div
+          className={`relative min-h-[600px] rounded-2xl border bg-[#fcfcfb] px-5 py-4 transition-colors focus-within:border-[#084734] ${
+            draggingImages ? "border-[#084734]" : "border-[#e8e8e4]"
+          }`}
+          onDragEnter={handleEditorDragEnter}
+          onDragOver={handleEditorDragOver}
+          onDragLeave={handleEditorDragLeave}
+          onDrop={handleEditorDrop}
+        >
           <EditorContent editor={editor} />
+          {(draggingImages || uploadingImages) && (
+            <div className="pointer-events-none absolute inset-3 flex items-center justify-center rounded-xl border border-dashed border-[#084734]/40 bg-[#ECFDF5]/80 text-sm font-semibold text-[#084734]">
+              <span className="inline-flex items-center gap-2 rounded-lg bg-white px-3 py-2 shadow-sm">
+                {uploadingImages ? <Loader2 className="h-4 w-4 animate-spin" /> : <Upload className="h-4 w-4" />}
+                {uploadingImages ? "이미지 업로드 중..." : "이미지를 놓으면 본문에 삽입됩니다"}
+              </span>
+            </div>
+          )}
         </div>
+
+        {imageError && !showImageDialog && (
+          <div className="mt-2 rounded-xl border border-[#F6D5C5] bg-[#FEF3EE] px-3 py-2 text-[12px] text-[#B85C33]">
+            {imageError}
+          </div>
+        )}
 
         {/* B. 하단 미니 액션바 */}
         {hasQuickActions && (

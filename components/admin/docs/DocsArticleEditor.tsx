@@ -27,7 +27,6 @@ import {
   Sparkles,
   Trash2,
   Type,
-  Upload,
   Wand2,
   X,
 } from "lucide-react"
@@ -42,7 +41,7 @@ import {
   type DocsNavGroup,
   type DocsTocItem,
 } from "@/components/docs"
-import { adminFetch, adminFetchJson, getAdminToken } from "@/lib/admin-client"
+import { adminFetch, adminFetchJson } from "@/lib/admin-client"
 import type { AdminDocsContentResponse } from "@/lib/admin-docs"
 import type {
   DocsArticleAnalyticsDetail,
@@ -843,7 +842,6 @@ export default function DocsArticleEditor({ mode, categories, article }: Props) 
   const [relationsSaving, setRelationsSaving] = useState(false)
   const [snapshotting, setSnapshotting] = useState(false)
   const [rollingBackVersionId, setRollingBackVersionId] = useState<string | null>(null)
-  const [uploadingMedia, setUploadingMedia] = useState(false)
   const [snapshotNote, setSnapshotNote] = useState("Manual snapshot")
   const [previewOpen, setPreviewOpen] = useState(false)
   const [activeSidebarTab, setActiveSidebarTab] = useState<SidebarTab>(
@@ -1383,38 +1381,6 @@ export default function DocsArticleEditor({ mode, categories, article }: Props) 
       setError(error instanceof Error ? error.message : "롤백하지 못했습니다.")
     } finally {
       setRollingBackVersionId(null)
-    }
-  }
-
-  async function uploadMedia(file: File) {
-    if (file.size > 5 * 1024 * 1024) {
-      setError("이미지 파일은 5MB 이하만 업로드할 수 있습니다.")
-      return
-    }
-
-    setUploadingMedia(true)
-    setError(null)
-    try {
-      const formData = new FormData()
-      formData.append("file", file)
-      const response = await fetch("/api/admin/upload", {
-        method: "POST",
-        headers: { Authorization: `Bearer ${getAdminToken()}` },
-        body: formData,
-      })
-      const body = await response.json().catch(() => null)
-      if (!response.ok) throw new Error(body?.error ?? "업로드에 실패했습니다.")
-
-      const url = typeof body?.url === "string" ? body.url : ""
-      if (!url) throw new Error("업로드 URL을 받지 못했습니다.")
-      const alt = file.name.replace(/\.[^.]+$/, "")
-      editorRef.current?.insertMarkdown(`\n\n![${alt}](${url})\n\n`)
-      setSavedMessage("이미지를 본문에 삽입했습니다.")
-      setTimeout(() => setSavedMessage(null), 2500)
-    } catch (error) {
-      setError(error instanceof Error ? error.message : "업로드에 실패했습니다.")
-    } finally {
-      setUploadingMedia(false)
     }
   }
 
@@ -1960,21 +1926,6 @@ export default function DocsArticleEditor({ mode, categories, article }: Props) 
                     <ToolbarButton onClick={() => editorRef.current?.insertImage()} icon={<ImageIcon className="h-3 w-3" />}>
                       이미지
                     </ToolbarButton>
-                    <label className="inline-flex cursor-pointer items-center gap-1 rounded-lg border border-[#e8e8e4] bg-white px-2 py-1.5 text-xs font-medium text-[#1a1a1a]/60 transition-colors duration-75 hover:border-[#1a1a1a]/20 hover:text-[#111110]">
-                      <Upload className="h-3 w-3" />
-                      {uploadingMedia ? "업로드 중" : "업로드"}
-                      <input
-                        type="file"
-                        accept="image/png,image/jpeg,image/webp,image/gif"
-                        disabled={uploadingMedia}
-                        className="sr-only"
-                        onChange={(event) => {
-                          const file = event.target.files?.[0]
-                          event.currentTarget.value = ""
-                          if (file) void uploadMedia(file)
-                        }}
-                      />
-                    </label>
                     <ToolbarButton onClick={() => editorRef.current?.insertDivider()} icon={<Minus className="h-3 w-3" />}>
                       구분선
                     </ToolbarButton>
@@ -1987,6 +1938,7 @@ export default function DocsArticleEditor({ mode, categories, article }: Props) 
                 value={form.contentMarkdown}
                 onChange={(markdown) => update("contentMarkdown", markdown)}
                 placeholder="본문을 작성해주세요"
+                imageUploadEndpoint="/api/admin/upload"
                 onAiDraftClick={applyArticleDraft}
                 onSelectionOptimize={optimizeCurrentMarkdown}
               />
