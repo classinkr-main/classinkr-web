@@ -1,22 +1,16 @@
 "use client"
 
-import { useState, useEffect, useCallback } from "react"
-import { Plus, RefreshCw, Trash2, X, Download } from "lucide-react"
+import { useState, useEffect, useCallback, useMemo } from "react"
+import { Plus, RefreshCw, Trash2, X, Download, Search } from "lucide-react"
 import { Button } from "@/components/ui/button"
+import { adminFetch, adminFetchJsonCached } from "@/lib/admin-client"
+import { useUrlState } from "@/lib/use-url-state"
 import type { Receipt, Partner, PaymentMethod } from "@/lib/supabase/database.types"
 
 const METHOD_LABEL: Record<PaymentMethod, string> = {
   bank_transfer: "Bank Transfer",
   card: "Card",
   cash: "Cash",
-}
-
-function adminFetch(url: string, options?: RequestInit) {
-  const token = (typeof window !== "undefined" ? sessionStorage.getItem("admin_password") : null) ?? ""
-  return fetch(url, {
-    ...options,
-    headers: { "Content-Type": "application/json", Authorization: `Bearer ${token}`, ...options?.headers },
-  })
 }
 
 const EMPTY_FORM = {
@@ -41,33 +35,27 @@ export function ReceiptsPanel() {
   const [form, setForm] = useState(EMPTY_FORM)
   const [saving, setSaving] = useState(false)
 
+  const [query, setQuery] = useUrlState("receipt_q", "")
+
   const load = useCallback(async () => {
     setLoading(true)
-    const [rRes, pRes] = await Promise.all([adminFetch("/api/admin/receipts"), adminFetch("/api/admin/partners")])
-    if (rRes.ok) setReceipts((await rRes.json()).receipts ?? [])
-    if (pRes.ok) setPartners((await pRes.json()).partners ?? [])
-    setLoading(false)
+    try {
+      const [rData, pData] = await Promise.all([
+        adminFetchJsonCached<{ receipts?: Receipt[] }>("/api/admin/receipts"),
+        adminFetchJsonCached<{ partners?: Partner[] }>("/api/admin/partners"),
+      ])
+      setReceipts(rData.receipts ?? [])
+      setPartners(pData.partners ?? [])
+    } catch {
+      // 기존 데이터 유지 — 일시적 네트워크 오류 시 빈 화면 방지
+    } finally {
+      setLoading(false)
+    }
   }, [])
 
   useEffect(() => {
-    let alive = true
-
-    const initialize = async () => {
-      setLoading(true)
-      const [rRes, pRes] = await Promise.all([adminFetch("/api/admin/receipts"), adminFetch("/api/admin/partners")])
-
-      if (!alive) return
-      if (rRes.ok) setReceipts((await rRes.json()).receipts ?? [])
-      if (pRes.ok) setPartners((await pRes.json()).partners ?? [])
-      if (alive) setLoading(false)
-    }
-
-    void initialize()
-
-    return () => {
-      alive = false
-    }
-  }, [])
+    void load()
+  }, [load])
 
   function handleAmountChange(v: number) {
     const tax = Math.round(v * 0.1)
@@ -98,14 +86,31 @@ export function ReceiptsPanel() {
     load()
   }
 
-  const partnerName = (id: string) => partners.find((p) => p.id === id)?.name ?? id
+  const partnerName = useCallback(
+    (id: string) => partners.find((p) => p.id === id)?.name ?? id,
+    [partners]
+  )
+
+  const filtered = useMemo(() => {
+    const q = query.trim().toLowerCase()
+    if (!q) return receipts
+    return receipts.filter(
+      (r) =>
+        r.receipt_number.toLowerCase().includes(q) ||
+        partnerName(r.partner_id).toLowerCase().includes(q)
+    )
+  }, [receipts, query, partnerName])
 
   return (
     <div className="mx-auto max-w-5xl space-y-6 p-4 sm:p-6">
       <div className="flex flex-col gap-3 sm:flex-row sm:items-center sm:justify-between">
         <div>
           <h1 className="text-xl font-semibold text-[#1a1a1a]">Receipts</h1>
-          <p className="text-sm text-[#1a1a1a]/50 mt-0.5">{receipts.length} items</p>
+          <p className="text-sm text-[#1a1a1a]/50 mt-0.5">
+            {filtered.length === receipts.length
+              ? `${receipts.length} items`
+              : `${filtered.length} / ${receipts.length} items`}
+          </p>
         </div>
         <div className="flex gap-2">
           <Button variant="outline" size="sm" onClick={load} disabled={loading}>
@@ -118,15 +123,37 @@ export function ReceiptsPanel() {
         </div>
       </div>
 
+      <div className="relative w-full sm:max-w-xs">
+        <Search className="pointer-events-none absolute left-3 top-1/2 h-4 w-4 -translate-y-1/2 text-[#1a1a1a]/30" />
+        <input
+          type="search"
+          value={query}
+          onChange={(e) => setQuery(e.target.value)}
+          placeholder="번호 · 파트너 검색"
+          className="w-full rounded-lg border border-[#e8e8e4] bg-white py-2 pl-9 pr-3 text-sm text-[#1a1a1a] placeholder:text-[#1a1a1a]/30 focus:border-[#084734]/40 focus:outline-none"
+        />
+      </div>
+
       <div className="border border-[#e8e8e4] rounded-xl overflow-hidden bg-white">
         {loading ? (
           <div className="py-16 text-center text-sm text-[#1a1a1a]/40">Loading...</div>
         ) : receipts.length === 0 ? (
           <div className="py-16 text-center text-sm text-[#1a1a1a]/40">No receipts yet.</div>
+        ) : filtered.length === 0 ? (
+          <div className="py-16 text-center text-sm text-[#1a1a1a]/40">
+            <p>조건에 맞는 영수증이 없습니다.</p>
+            <button
+              type="button"
+              onClick={() => setQuery("")}
+              className="mt-2 text-xs font-medium text-[#084734] underline underline-offset-2"
+            >
+              검색 초기화
+            </button>
+          </div>
         ) : (
           <>
             <div className="divide-y divide-[#f0f0ec] md:hidden">
-              {receipts.map((r) => (
+              {filtered.map((r) => (
                 <div key={`mobile-${r.id}`} className="px-4 py-4">
                   <div className="flex items-start justify-between gap-3">
                     <div className="min-w-0">
@@ -183,7 +210,7 @@ export function ReceiptsPanel() {
                   </tr>
                 </thead>
                 <tbody>
-                  {receipts.map((r) => (
+                  {filtered.map((r) => (
                     <tr key={r.id} className="border-b border-[#f0f0ec] hover:bg-[#fafafa] transition-colors">
                       <td className="px-4 py-3 font-mono text-xs text-[#1a1a1a]/60">{r.receipt_number}</td>
                       <td className="px-4 py-3 text-[#1a1a1a]/70">{partnerName(r.partner_id)}</td>

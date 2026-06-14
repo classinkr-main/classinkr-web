@@ -1,8 +1,10 @@
 "use client"
 
-import { useState, useEffect, useCallback, useRef } from "react"
-import { RefreshCw, Trash2, X, PenLine, Copy, Check, Send } from "lucide-react"
+import { useState, useEffect, useCallback, useMemo, useRef } from "react"
+import { RefreshCw, Trash2, X, PenLine, Copy, Check, Send, Search } from "lucide-react"
 import { Button } from "@/components/ui/button"
+import { adminFetch, adminFetchJsonCached } from "@/lib/admin-client"
+import { useUrlState } from "@/lib/use-url-state"
 import type { Contract, ContractStatus, Partner } from "@/lib/supabase/database.types"
 
 const STATUS_LABEL: Record<ContractStatus, string> = {
@@ -23,13 +25,15 @@ const STATUS_COLOR: Record<ContractStatus, string> = {
   cancelled: "bg-[#FEF3EE] text-[#B85C33]",
 }
 
-function adminFetch(url: string, options?: RequestInit) {
-  const token = (typeof window !== "undefined" ? sessionStorage.getItem("admin_password") : null) ?? ""
-  return fetch(url, {
-    ...options,
-    headers: { "Content-Type": "application/json", Authorization: `Bearer ${token}`, ...options?.headers },
-  })
-}
+const STATUS_FILTERS: Array<ContractStatus | "all"> = [
+  "all",
+  "draft",
+  "sent",
+  "partner_signed",
+  "admin_signed",
+  "completed",
+  "cancelled",
+]
 
 function SignatureCanvas({ onSave }: { onSave: (dataUrl: string) => void }) {
   const canvasRef = useRef<HTMLCanvasElement>(null)
@@ -115,35 +119,52 @@ export function ContractsPanel() {
   const [showSign, setShowSign] = useState(false)
   const [signing, setSigning] = useState(false)
   const [copied, setCopied] = useState<string | null>(null)
+  const [query, setQuery] = useUrlState("contract_q", "")
+  const [statusFilter, setStatusFilter] = useUrlState("contract_status", "all")
 
   const load = useCallback(async () => {
     setLoading(true)
-    const [cRes, pRes] = await Promise.all([adminFetch("/api/admin/contracts"), adminFetch("/api/admin/partners")])
-    if (cRes.ok) setContracts((await cRes.json()).contracts ?? [])
-    if (pRes.ok) setPartners((await pRes.json()).partners ?? [])
-    setLoading(false)
+    try {
+      const [cData, pData] = await Promise.all([
+        adminFetchJsonCached<{ contracts?: Contract[] }>("/api/admin/contracts"),
+        adminFetchJsonCached<{ partners?: Partner[] }>("/api/admin/partners"),
+      ])
+      setContracts(cData.contracts ?? [])
+      setPartners(pData.partners ?? [])
+    } catch {
+      // 기존 데이터 유지 — 일시적 네트워크 오류 시 빈 화면 방지
+    } finally {
+      setLoading(false)
+    }
   }, [])
 
   useEffect(() => {
-    let alive = true
+    void load()
+  }, [load])
 
-    const initialize = async () => {
-      setLoading(true)
-      const [cRes, pRes] = await Promise.all([adminFetch("/api/admin/contracts"), adminFetch("/api/admin/partners")])
-      if (!alive) return
-      if (cRes.ok) setContracts((await cRes.json()).contracts ?? [])
-      if (pRes.ok) setPartners((await pRes.json()).partners ?? [])
-      if (alive) setLoading(false)
-    }
+  const partnerName = useCallback(
+    (id: string) => partners.find((p) => p.id === id)?.name ?? id,
+    [partners]
+  )
 
-    void initialize()
+  const statusCounts = useMemo(() => {
+    const counts = new Map<ContractStatus, number>()
+    for (const c of contracts) counts.set(c.status, (counts.get(c.status) ?? 0) + 1)
+    return counts
+  }, [contracts])
 
-    return () => {
-      alive = false
-    }
-  }, [])
-
-  const partnerName = (id: string) => partners.find((p) => p.id === id)?.name ?? id
+  const filtered = useMemo(() => {
+    const q = query.trim().toLowerCase()
+    return contracts.filter((c) => {
+      if (statusFilter !== "all" && c.status !== statusFilter) return false
+      if (!q) return true
+      return (
+        c.contract_number.toLowerCase().includes(q) ||
+        c.title.toLowerCase().includes(q) ||
+        partnerName(c.partner_id).toLowerCase().includes(q)
+      )
+    })
+  }, [contracts, query, statusFilter, partnerName])
 
   function copySignLink(contract: Contract) {
     const url = `${window.location.origin}/share/contract/${contract.sign_token}`
@@ -189,11 +210,49 @@ export function ContractsPanel() {
       <div className="flex flex-col gap-3 sm:flex-row sm:items-center sm:justify-between">
         <div>
           <h1 className="text-xl font-semibold text-[#1a1a1a]">Contracts</h1>
-          <p className="text-sm text-[#1a1a1a]/50 mt-0.5">{contracts.length} items</p>
+          <p className="text-sm text-[#1a1a1a]/50 mt-0.5">
+            {filtered.length === contracts.length
+              ? `${contracts.length} items`
+              : `${filtered.length} / ${contracts.length} items`}
+          </p>
         </div>
         <Button variant="outline" size="sm" onClick={load} disabled={loading}>
           <RefreshCw className={`w-4 h-4 ${loading ? "animate-spin" : ""}`} />
         </Button>
+      </div>
+
+      <div className="flex flex-col gap-3 sm:flex-row sm:items-center">
+        <div className="relative w-full sm:max-w-xs">
+          <Search className="pointer-events-none absolute left-3 top-1/2 h-4 w-4 -translate-y-1/2 text-[#1a1a1a]/30" />
+          <input
+            type="search"
+            value={query}
+            onChange={(e) => setQuery(e.target.value)}
+            placeholder="번호 · 제목 · 파트너 검색"
+            className="w-full rounded-lg border border-[#e8e8e4] bg-white py-2 pl-9 pr-3 text-sm text-[#1a1a1a] placeholder:text-[#1a1a1a]/30 focus:border-[#084734]/40 focus:outline-none"
+          />
+        </div>
+        <div className="flex flex-wrap items-center gap-1.5">
+          {STATUS_FILTERS.map((s) => {
+            const active = statusFilter === s
+            const count = s === "all" ? contracts.length : statusCounts.get(s) ?? 0
+            if (s !== "all" && count === 0) return null
+            return (
+              <button
+                key={s}
+                type="button"
+                onClick={() => setStatusFilter(s)}
+                className={`rounded-full border px-2.5 py-1 text-xs transition-colors ${
+                  active
+                    ? "border-[#084734] bg-[#ECFDF5] font-medium text-[#084734]"
+                    : "border-[#e8e8e4] bg-white text-[#1a1a1a]/55 hover:bg-[#f7f7f5]"
+                }`}
+              >
+                {s === "all" ? "All" : STATUS_LABEL[s]} {count}
+              </button>
+            )
+          })}
+        </div>
       </div>
 
       <div className="border border-[#e8e8e4] rounded-xl overflow-hidden bg-white">
@@ -201,10 +260,24 @@ export function ContractsPanel() {
           <div className="py-16 text-center text-sm text-[#1a1a1a]/40">Loading...</div>
         ) : contracts.length === 0 ? (
           <div className="py-16 text-center text-sm text-[#1a1a1a]/40">No contracts yet.</div>
+        ) : filtered.length === 0 ? (
+          <div className="py-16 text-center text-sm text-[#1a1a1a]/40">
+            <p>조건에 맞는 계약이 없습니다.</p>
+            <button
+              type="button"
+              onClick={() => {
+                setQuery("")
+                setStatusFilter("all")
+              }}
+              className="mt-2 text-xs font-medium text-[#084734] underline underline-offset-2"
+            >
+              필터 초기화
+            </button>
+          </div>
         ) : (
           <>
             <div className="divide-y divide-[#f0f0ec] md:hidden">
-              {contracts.map((c) => (
+              {filtered.map((c) => (
                 <div key={`mobile-${c.id}`} className="px-4 py-4">
                   <div className="flex items-start justify-between gap-3">
                     <div className="min-w-0">
@@ -284,7 +357,7 @@ export function ContractsPanel() {
                   </tr>
                 </thead>
                 <tbody>
-                  {contracts.map((c) => (
+                  {filtered.map((c) => (
                     <tr key={c.id} className="border-b border-[#f0f0ec] hover:bg-[#fafafa] transition-colors">
                       <td className="px-4 py-3 font-mono text-xs text-[#1a1a1a]/60">{c.contract_number}</td>
                       <td className="px-4 py-3 text-[#1a1a1a]/70">{partnerName(c.partner_id)}</td>

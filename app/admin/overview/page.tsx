@@ -10,8 +10,6 @@ import {
   Eye,
   AlertCircle,
   ArrowUpRight,
-  ArrowDownRight,
-  Minus,
   CalendarDays,
   ChevronRight,
   Link2,
@@ -31,6 +29,7 @@ import {
   CartesianGrid,
 } from "recharts"
 import { adminFetchJsonCached } from "@/lib/admin-client"
+import { StatCard } from "@/components/admin/StatCard"
 import type { LeadRecord, SiteSettings } from "@/lib/db"
 import type { CalendarEvent } from "@/lib/calendar-data"
 import type { BlogPost } from "@/lib/blog-types"
@@ -156,62 +155,6 @@ function KpiSkeleton() {
   )
 }
 
-interface KpiCardProps {
-  icon: React.ReactNode
-  label: string
-  value: string | number
-  sub?: string
-  trend?: { value: number; label: string }
-  accent?: string
-  iconColor?: string
-}
-
-function KpiCard({
-  icon,
-  label,
-  value,
-  sub,
-  trend,
-  accent = "bg-[#f0f0ec]",
-  iconColor = "text-[#1a1a1a]/50",
-}: KpiCardProps) {
-  const trendPositive = trend && trend.value > 0
-  const trendNeutral = trend && trend.value === 0
-  return (
-    <div className="bg-white rounded-2xl border border-[#e8e8e4] p-5 shadow-[0_1px_0_rgba(17,17,16,0.02)] transition-all hover:-translate-y-0.5 hover:border-[#c8c8c4] hover:shadow-[0_12px_30px_rgba(17,17,16,0.04)]">
-      <div className="flex items-start justify-between mb-3">
-        <div className={`inline-flex p-2 rounded-xl ${accent}`}>
-          <span className={iconColor}>{icon}</span>
-        </div>
-        {trend && (
-          <span
-            className={`flex items-center gap-0.5 text-[11px] font-medium px-1.5 py-0.5 rounded-full ${
-              trendNeutral
-                ? "text-[#1a1a1a]/40 bg-[#f0f0ec]"
-                : trendPositive
-                  ? "text-green-600 bg-green-50"
-                  : "text-[#B85C33] bg-[#FEF3EE]"
-            }`}
-          >
-            {trendNeutral ? (
-              <Minus className="w-3 h-3" />
-            ) : trendPositive ? (
-              <ArrowUpRight className="w-3 h-3" />
-            ) : (
-              <ArrowDownRight className="w-3 h-3" />
-            )}
-            {Math.abs(trend.value)}
-          </span>
-        )}
-      </div>
-      <p className="text-[11px] font-medium text-[#1a1a1a]/40 mb-1 uppercase tracking-wide">{label}</p>
-      <p className="text-[28px] font-bold text-[#111110] tracking-[-0.03em] leading-none">{value}</p>
-      {sub && <p className="text-[11px] text-[#1a1a1a]/40 mt-1.5">{sub}</p>}
-      {trend && <p className="text-[11px] text-[#1a1a1a]/30 mt-0.5">{trend.label}</p>}
-    </div>
-  )
-}
-
 function ChartTooltip({
   active,
   payload,
@@ -261,11 +204,13 @@ const CAMPAIGN_STATUS_COLOR: Record<EmailCampaign["status"], string> = {
 }
 const PUBLISH_STATUS_LABEL: Record<BlogPost["status"], string> = {
   draft: "초안",
+  review: "검수",
   published: "공개",
   archived: "보관",
 }
 const PUBLISH_STATUS_COLOR: Record<BlogPost["status"], string> = {
   draft: "bg-amber-50 text-amber-700",
+  review: "bg-sky-50 text-sky-700",
   published: "bg-green-50 text-green-700",
   archived: "bg-[#f0f0ec] text-[#1a1a1a]/40",
 }
@@ -294,18 +239,6 @@ interface InstagramOverviewDashboard {
     averageViews: number
     followerDelta: number
   }
-}
-
-function getLast7DayLabels() {
-  return Array.from({ length: 7 }, (_, i) => {
-    const d = new Date()
-    d.setDate(d.getDate() - (6 - i))
-    return d
-      .toLocaleDateString("ko-KR", { month: "numeric", day: "numeric" })
-      .replace(" ", "")
-      .replace("월 ", "/")
-      .replace("일", "")
-  })
 }
 
 function EmptyState({
@@ -367,6 +300,7 @@ export default function OverviewPage() {
   const [patchNotes, setPatchNotes] = useState<PatchNote[]>([])
   const [instagramDashboard, setInstagramDashboard] = useState<InstagramOverviewDashboard | null>(null)
   const [loading, setLoading] = useState(true)
+  const [chartRange, setChartRange] = useState<7 | 30>(7)
 
   useEffect(() => {
     let cancelled = false
@@ -466,15 +400,33 @@ export default function OverviewPage() {
   }).length
   const weekTrend = thisWeekLeads - lastWeekLeads
 
-  const dayLabels = getLast7DayLabels()
-  const chartData = dayLabels.map((label, i) => {
+  const monthStart = new Date(today.getFullYear(), today.getMonth(), 1)
+  const lastMonthStart = new Date(today.getFullYear(), today.getMonth() - 1, 1)
+  const thisMonthLeads = leads.filter((l) => new Date(l.timestamp) >= monthStart).length
+  const lastMonthLeads = leads.filter((l) => {
+    const d = new Date(l.timestamp)
+    return d >= lastMonthStart && d < monthStart
+  }).length
+  const monthTrend = thisMonthLeads - lastMonthLeads
+  const convertedThisMonth = leads.filter(
+    (l) => l.status === "converted" && new Date(l.timestamp) >= monthStart
+  ).length
+  const convertedLastMonth = leads.filter((l) => {
+    if (l.status !== "converted") return false
+    const d = new Date(l.timestamp)
+    return d >= lastMonthStart && d < monthStart
+  }).length
+  const convertedTrend = convertedThisMonth - convertedLastMonth
+
+  const chartData = Array.from({ length: chartRange }, (_, i) => {
     const d = new Date()
-    d.setDate(d.getDate() - (6 - i))
+    d.setDate(d.getDate() - (chartRange - 1 - i))
     return {
-      label,
+      label: `${d.getMonth() + 1}/${d.getDate()}`,
       count: leads.filter((l) => new Date(l.timestamp).toDateString() === d.toDateString()).length,
     }
   })
+  const chartTotal = chartData.reduce((sum, point) => sum + point.count, 0)
 
   const sourceMap: Record<string, number> = {}
   leads.forEach((l) => {
@@ -870,23 +822,33 @@ export default function OverviewPage() {
         </div>
       ) : (
         <div className="grid grid-cols-1 gap-4 sm:grid-cols-2 md:grid-cols-3 lg:grid-cols-4 xl:grid-cols-7 mb-8">
-          <KpiCard icon={<Users className="w-4 h-4" />} label="전체 리드" value={total} sub={`오늘 +${todayLeads}`} />
-          <KpiCard
+          <StatCard
+            icon={<Users className="w-4 h-4" />}
+            label="전체 리드"
+            value={total}
+            sub={`오늘 +${todayLeads} · 이번 달 ${thisMonthLeads}`}
+            trend={{ value: monthTrend, label: "지난달 대비" }}
+            href="/admin/crm"
+          />
+          <StatCard
             icon={<TrendingUp className="w-4 h-4" />}
             label="신규 리드"
             value={newLeads}
+            sub="미처리 문의"
             accent="bg-[#ECFDF5]"
             iconColor="text-[#084734]"
+            href="/admin/crm"
           />
-          <KpiCard
+          <StatCard
             icon={<CheckCircle2 className="w-4 h-4" />}
             label="전환율"
             value={`${convRate}%`}
-            sub={`전환 ${converted}건`}
+            sub={`전환 ${converted}건 · 이번 달 ${convertedThisMonth}건`}
+            trend={{ value: convertedTrend, label: "지난달 대비" }}
             accent="bg-green-50"
             iconColor="text-green-500"
           />
-          <KpiCard
+          <StatCard
             icon={<TrendingUp className="w-4 h-4" />}
             label="주간 유입"
             value={thisWeekLeads}
@@ -894,15 +856,16 @@ export default function OverviewPage() {
             accent="bg-[#F6F5F4]"
             iconColor="text-[#615D59]"
           />
-          <KpiCard
+          <StatCard
             icon={<Mail className="w-4 h-4" />}
             label="구독자"
             value={subscriberCount}
             sub="활성 구독자"
             accent="bg-orange-50"
             iconColor="text-orange-500"
+            href="/admin/campaigns"
           />
-          <KpiCard
+          <StatCard
             icon={<Eye className="w-4 h-4" />}
             label="인스타 조회수"
             value={instagramDashboard ? COMPACT_NUMBER.format(instagramViews) : "연결 필요"}
@@ -914,7 +877,7 @@ export default function OverviewPage() {
             accent="bg-[#FEF3EE]"
             iconColor="text-[#B85C33]"
           />
-          <KpiCard icon={<FileText className="w-4 h-4" />} label="블로그" value={blogPosts.length} sub="발행된 포스트" />
+          <StatCard icon={<FileText className="w-4 h-4" />} label="블로그" value={blogPosts.length} sub="발행된 포스트" href="/admin/blog" />
         </div>
       )}
 
@@ -923,19 +886,50 @@ export default function OverviewPage() {
           <div className="mb-5 flex items-start justify-between gap-4">
             <div>
               <p className="text-[14px] font-semibold text-[#111110]">홈페이지 유입 추이</p>
-              <p className="text-[11px] text-[#1a1a1a]/40 mt-0.5">최근 7일</p>
+              <p className="text-[11px] text-[#1a1a1a]/40 mt-0.5">
+                최근 {chartRange}일 · {chartTotal}건
+              </p>
             </div>
-            <span className="rounded-full bg-[#f0f0ec] px-2.5 py-1 text-[10px] font-medium text-[#1a1a1a]/50">
-              {total > 0 ? `${total}건 누적` : "데이터 대기"}
-            </span>
+            <div className="flex items-center gap-2">
+              <div className="flex rounded-lg border border-[#e8e8e4] bg-[#fafaf8] p-0.5">
+                {([7, 30] as const).map((range) => (
+                  <button
+                    key={range}
+                    type="button"
+                    onClick={() => setChartRange(range)}
+                    className={`rounded-md px-2 py-1 text-[10px] font-medium transition-colors ${
+                      chartRange === range
+                        ? "bg-white text-[#111110] shadow-[0_1px_2px_rgba(17,17,16,0.08)]"
+                        : "text-[#1a1a1a]/40 hover:text-[#1a1a1a]/70"
+                    }`}
+                  >
+                    {range}일
+                  </button>
+                ))}
+              </div>
+              <span className="rounded-full bg-[#f0f0ec] px-2.5 py-1 text-[10px] font-medium text-[#1a1a1a]/50">
+                {total > 0 ? `${total}건 누적` : "데이터 대기"}
+              </span>
+            </div>
           </div>
           {loading ? (
             <Skeleton className="h-[180px]" />
+          ) : chartTotal === 0 ? (
+            <div className="flex h-[180px] flex-col items-center justify-center rounded-xl border border-dashed border-[#ecece8] bg-[#fafaf8]">
+              <p className="text-[13px] font-medium text-[#1a1a1a]/50">최근 {chartRange}일 유입이 없습니다</p>
+              <p className="mt-1 text-[11px] text-[#1a1a1a]/35">문의가 들어오면 일별 추이가 표시됩니다.</p>
+            </div>
           ) : (
             <ResponsiveContainer width="100%" height={180}>
               <LineChart data={chartData} margin={{ top: 4, right: 4, bottom: 0, left: -20 }}>
                 <CartesianGrid strokeDasharray="3 3" stroke="#f0f0ec" vertical={false} />
-                <XAxis dataKey="label" tick={{ fontSize: 11, fill: "#1a1a1a", opacity: 0.4 }} axisLine={false} tickLine={false} />
+                <XAxis
+                  dataKey="label"
+                  tick={{ fontSize: 11, fill: "#1a1a1a", opacity: 0.4 }}
+                  axisLine={false}
+                  tickLine={false}
+                  minTickGap={24}
+                />
                 <YAxis tick={{ fontSize: 11, fill: "#1a1a1a", opacity: 0.4 }} axisLine={false} tickLine={false} allowDecimals={false} />
                 <Tooltip content={<ChartTooltip />} cursor={{ stroke: "#e8e8e4", strokeWidth: 1 }} />
                 <Line
@@ -943,7 +937,7 @@ export default function OverviewPage() {
                   dataKey="count"
                   stroke="#111110"
                   strokeWidth={2}
-                  dot={{ fill: "#111110", strokeWidth: 0, r: 3 }}
+                  dot={chartRange === 7 ? { fill: "#111110", strokeWidth: 0, r: 3 } : false}
                   activeDot={{ r: 5, fill: "#111110", strokeWidth: 0 }}
                 />
               </LineChart>

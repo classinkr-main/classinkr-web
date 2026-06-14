@@ -1,6 +1,7 @@
 import { NextRequest, NextResponse } from "next/server"
 
 import { verifyAdmin } from "@/lib/admin-auth"
+import { adminCachedJson } from "@/lib/admin-api-response"
 import { createEvent, getAllEvents, getEventsByMonth } from "@/lib/calendar-data"
 
 export async function GET(req: NextRequest) {
@@ -20,10 +21,10 @@ export async function GET(req: NextRequest) {
         return NextResponse.json({ error: "year/month 파라미터가 올바르지 않습니다." }, { status: 400 })
       }
 
-      return NextResponse.json(await getEventsByMonth(parsedYear, parsedMonth))
+      return adminCachedJson(await getEventsByMonth(parsedYear, parsedMonth))
     }
 
-    return NextResponse.json(await getAllEvents())
+    return adminCachedJson(await getAllEvents())
   } catch (error) {
     return NextResponse.json(
       { error: error instanceof Error ? error.message : "캘린더 조회에 실패했습니다." },

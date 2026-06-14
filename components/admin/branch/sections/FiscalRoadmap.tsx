@@ -11,6 +11,47 @@ function formatMoneyM(value: unknown) {
   return `¥${moneyMFormatter.format(amount / 1_000_000)}M`
 }
 
+interface RoadmapTooltipEntry {
+  dataKey?: string | number
+  name?: string
+  value?: number | string
+  color?: string
+}
+
+function RoadmapTooltip({
+  active,
+  payload,
+  label,
+}: {
+  active?: boolean
+  payload?: RoadmapTooltipEntry[]
+  label?: string
+}) {
+  if (!active || !payload?.length) return null
+  const goalEntry = payload.find((p) => p.dataKey === "goal")
+  const goal = typeof goalEntry?.value === "number" ? goalEntry.value : null
+  return (
+    <div className="rounded-xl border border-[#e8e8e4] bg-white px-3 py-2 text-[12px] shadow-lg">
+      <p className="mb-1 font-semibold text-[#111110]">{label}월</p>
+      {payload.map((entry) => {
+        const amount = typeof entry.value === "number" ? entry.value : Number(entry.value)
+        if (!Number.isFinite(amount)) return null
+        const showAttainment = entry.dataKey !== "goal" && goal != null && goal > 0
+        return (
+          <p key={String(entry.dataKey)} className="flex items-center gap-1.5">
+            <i className="h-2 w-2 rounded-full" style={{ backgroundColor: entry.color }} />
+            <span className="text-[#1a1a1a]/55">{entry.name}</span>
+            <span className="font-semibold text-[#111110]">{formatMoneyM(amount)}</span>
+            {showAttainment && (
+              <span className="text-[#1a1a1a]/40">목표의 {Math.round((amount / goal) * 100)}%</span>
+            )}
+          </p>
+        )
+      })}
+    </div>
+  )
+}
+
 function currentMonthKey() {
   const now = new Date()
   return `${now.getFullYear()}-${String(now.getMonth() + 1).padStart(2, "0")}`
@@ -56,7 +97,7 @@ export default function FiscalRoadmap({ data, loading, error }: { data: BranchMo
             <CartesianGrid strokeDasharray="3 3" stroke="#eee" />
             <XAxis dataKey="month" tick={{ fontSize: 11 }} />
             <YAxis width={72} tick={{ fontSize: 11 }} tickFormatter={formatMoneyM} />
-            <Tooltip formatter={(value) => formatMoneyM(value)} />
+            <Tooltip content={<RoadmapTooltip />} />
             <Line type="monotone" dataKey="goal" name="FY 목표" stroke="#888" strokeDasharray="4 4" dot={false} />
             <Line type="monotone" dataKey="revenue" name="확정 매출" stroke="#B43E3E" strokeWidth={2.5} dot={{ r: 3, fill: "#B43E3E" }} />
             <Line type="monotone" dataKey="trend" name="가능성 추세" stroke="#1E5DA8" strokeWidth={2.5} strokeDasharray="6 5" dot={false} />
