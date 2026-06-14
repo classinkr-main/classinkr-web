@@ -58,6 +58,7 @@ const NAV: NavItem[] = [
   { href: "/admin/lead-magnets", label: "리드마그넷", icon: <Magnet className="h-4 w-4" />, roles: STAFF_EDITOR, section: "growth", badge: "Preview" },
   { href: "/admin/events", label: "공개 행사", icon: <Globe className="h-4 w-4" />, roles: STAFF_ADMIN, section: "growth" },
   { href: "/admin/docs", label: "가이드 문서", icon: <BookOpen className="h-4 w-4" />, roles: STAFF_EDITOR, section: "growth" },
+  { href: "/admin/docs/gaps", label: "문서 보강 큐", icon: <Search className="h-4 w-4" />, roles: STAFF_EDITOR, section: "growth", badge: "Alpha" },
   { href: "/admin/branch", label: "지사 관리", icon: <Building2 className="h-4 w-4" />, roles: [...STAFF_ADMIN, "BRANCH"], section: "performance" },
   { href: "/admin/analytics", label: "Analytics", icon: <BarChart2 className="h-4 w-4" />, roles: [...ALL_STAFF, "BRANCH"], section: "performance" },
   { href: "/admin/settings", label: "Settings", icon: <Settings className="h-4 w-4" />, roles: STAFF_ADMIN, section: "system" },
@@ -89,6 +90,7 @@ const NAV_WARMUP_REQUESTS: Record<string, string[]> = {
   "/admin/blog": ["/api/admin/blog", "/api/admin/blog?trash=1"],
   "/admin/events": ["/api/admin/events"],
   "/admin/docs": ["/api/admin/docs", "/api/admin/docs/analytics?days=30"],
+  "/admin/docs/gaps": ["/api/admin/docs/alpha-readiness", "/api/admin/docs/gaps"],
   "/admin/branch": [
     "/api/admin/branch/summary?team=ALL&period=Q",
     "/api/admin/branch/kpi?team=ALL&period=Q",

@@ -10,6 +10,8 @@
     { "id": "trouble-screenshare", "question": "수업 중 화면 공유가 끊겨요", "expectCategory": "troubleshooting", "expectMode": ["direct_answer", "doc_suggestion", "handoff"] },
     { "id": "onboarding-start", "question": "처음 도입하려면 무엇부터 하면 되나요?", "expectCategory": "onboarding", "expectMode": ["direct_answer", "doc_suggestion", "handoff"] },
     { "id": "onboarding-invite", "question": "학생 계정은 어떻게 초대하나요?", "expectCategory": "onboarding", "expectMode": ["direct_answer", "doc_suggestion", "handoff"] },
+    { "id": "admin-recording-storage", "question": "수업 녹화 저장 용량과 스토리지는 관리자에서 어디서 확인하나요?", "expectCategory": "admin", "expectMode": ["direct_answer", "doc_suggestion", "handoff"] },
+    { "id": "admin-org-storage", "question": "기관 스토리지 사용량은 관리자에서 볼 수 있나요?", "expectCategory": "admin", "expectMode": ["direct_answer", "doc_suggestion", "handoff"] },
     { "id": "classroom-attendance", "question": "출결은 어디서 확인하나요?", "expectCategory": "classroom", "expectMode": ["direct_answer", "doc_suggestion", "handoff"] },
     { "id": "classroom-assignment", "question": "과제를 내주는 방법이 궁금해요", "expectCategory": "classroom", "expectMode": ["direct_answer", "doc_suggestion", "handoff"] },
     { "id": "classroom-course", "question": "새 코스는 어떻게 만드나요?", "expectCategory": "classroom", "expectMode": ["direct_answer", "doc_suggestion", "handoff"] },

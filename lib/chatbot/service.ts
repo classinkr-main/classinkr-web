@@ -3,6 +3,11 @@ import "server-only"
 import { createSupabaseAdminClient } from "@/lib/supabase/admin"
 import { getDocPath, listDocs, type DocArticle } from "@/lib/docs"
 import { getDocsContent } from "@/lib/docs-content"
+import {
+  classifyChatbotQuestion,
+  detectChatbotCategory,
+  type ChatbotIntent,
+} from "@/lib/chatbot/classification"
 import { generateGeminiAnswer, embedText, type ChatbotModelTier } from "@/lib/chatbot/llm"
 
 const MAX_MESSAGE_LENGTH = 1000
@@ -450,64 +455,6 @@ async function searchKnowledgeSources(
   }
 }
 
-function detectCategory(question: NormalizedQuestion, sources: ChatbotSource[]) {
-  const text = `${question.redacted} ${sources.map((source) => source.category).join(" ")}`.toLowerCase()
-
-  if (/결제|요금|가격|견적|영수증|세금|세금계산서|입금|청구|구독|환불|정산/.test(text)) return "billing"
-  if (/하드웨어|전자칠판|보드|board|카메라|마이크|스피커|설치|납품|배송|as|a\/s|수리|고장/.test(text)) return "hardware"
-  if (/접속|로그인|계정|비밀번호|소리|오류|에러|안됨|안 돼|권한|장애|끊김|로딩/.test(text)) return "troubleshooting"
-  if (/도입|시작|초기|세팅|설정|초대|온보딩|첫 수업|준비|교육|전환/.test(text)) return "onboarding"
-  if (/수업|출결|출석|보강|교사|학생|학부모|집중|운영|관리|리포트|숙제|과제/.test(text)) return "classroom"
-  if (/상담|문의|데모|시연|컨설팅|연락|미팅|제안|상담사|담당자/.test(text)) return "consultation"
-
-  return sources[0]?.category ?? "general"
-}
-
-function detectHandoffIntent(question: NormalizedQuestion, category: string): HandoffIntent {
-  const text = question.redacted.toLowerCase()
-
-  if (
-    /컴플레인|불만|환불|취소|짜증|최악|별로|안됨|안 됨|안 되|장애|오류|에러|버그|끊김|느려|느리|기술\s*지원|이슈|고장|파손|계정|로그인|접속|소리|마이크|as|a\/s/.test(
-      text
-    )
-  ) {
-    return "support"
-  }
-
-  if (
-    /데모|시연|도입\s*문의|도입\s*상담|도입\s*검토|견적|요금|비용|플랜|가격\s*문의|영업|구매\s*상담|체험|사용해\s*보고|연락|미팅|제안/.test(
-      text
-    )
-  ) {
-    return "demo"
-  }
-
-  if (category === "billing" || category === "hardware" || category === "troubleshooting") {
-    return "support"
-  }
-
-  return "demo"
-}
-
-function detectIntent(category: string) {
-  switch (category) {
-    case "billing":
-      return "billing_support"
-    case "hardware":
-      return "hardware_support"
-    case "troubleshooting":
-      return "troubleshooting"
-    case "onboarding":
-      return "onboarding"
-    case "classroom":
-      return "classroom_consulting"
-    case "consultation":
-      return "sales_consulting"
-    default:
-      return "docs_lookup"
-  }
-}
-
 function buildSuggestedQuestions(sources: ChatbotSource[]) {
   const suggestions = sources.map((source) =>
     source.heading && source.heading !== "요약"
@@ -534,6 +481,8 @@ function getNextStepByCategory(category: string) {
       return "사용 중인 기기, 브라우저/앱, 오류가 발생한 화면을 알려주시면 해결 순서를 더 잘 잡을 수 있어요."
     case "onboarding":
       return "학생 수, 수업 방식, 희망 시작 시점을 알려주시면 도입 준비 순서를 맞춰드릴게요."
+    case "admin":
+      return "확인하려는 메뉴, 기관 권한, 저장·녹화 기준을 알려주시면 운영 설정 흐름으로 좁혀드릴게요."
     case "classroom":
       return "현재 수업 운영에서 가장 막히는 지점을 알려주시면 기능과 운영 방법을 함께 제안드릴게요."
     default:
@@ -574,7 +523,7 @@ function composeAnswer(question: NormalizedQuestion, sources: ChatbotSource[]): 
   }
 
   const top = sources[0]
-  const category = detectCategory(question, sources)
+  const category = detectChatbotCategory(question.redacted, sources.map((source) => source.category))
   const confidence = Math.min(0.92, Math.max(0.35, 0.45 + top.score / 25))
   const lowConfidence = confidence < 0.58
   const sensitiveLowConfidence =
@@ -848,7 +797,7 @@ interface ChatbotCore {
   question: NormalizedQuestion
   response: ReturnType<typeof composeAnswer>
   category: string
-  intent: ReturnType<typeof detectIntent>
+  intent: ChatbotIntent
   handoffIntent: HandoffIntent
   warning?: string
 }
@@ -873,9 +822,10 @@ function determineModelTier(category: string): ChatbotModelTier {
 async function buildChatbotCore(message: unknown, sessionId?: string): Promise<ChatbotCore> {
   const question = normalizeQuestion(message)
   const { sources, warning } = await searchKnowledgeSources(question)
-  const category = detectCategory(question, sources)
-  const intent = detectIntent(category)
-  const handoffIntent = detectHandoffIntent(question, category)
+  const { category, intent, handoffIntent } = classifyChatbotQuestion(
+    question.redacted,
+    sources.map((source) => source.category)
+  )
   const response = composeAnswer(question, sources)
 
   // 대화 기록 (History) 조회 및 가공

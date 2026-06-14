@@ -52,6 +52,11 @@ CRM 운영 통합(`crm_source_links`, Xiaoshouyi snapshot, write-back 승인 큐
 - `leads` 테이블과 기본 index/policy
 - `update_updated_at()` 함수. 현재는 `20260407_notifications.sql`에서 제공된다.
 
+저장소 재현 기준:
+
+- `admin_profiles`, `leads`, `audit_logs`, `is_active_admin()`, `update_updated_at()`는 [20260614_alpha_admin_base_schema.sql](../../supabase/migrations/20260614_alpha_admin_base_schema.sql) 기준으로 재현한다.
+- `blog_posts` 기본 테이블은 [20260610_blog_posts_backfill_schema.sql](../../supabase/migrations/20260610_blog_posts_backfill_schema.sql) 기준으로 재현한다.
+
 ### 1-1. 견적 승인 상태 enum 보강
 
 파일: `supabase/migrations/20260608_quote_pending_approval_status.sql`
@@ -186,11 +191,21 @@ order by column_name;
 
 - `supabase/migrations/20260421_z_chatbot_analytics.sql`
 - `supabase/migrations/20260520_chatbot_recommended_questions.sql`
+- `supabase/migrations/20260614211500_chatbot_recommended_questions_alpha_seed.sql`
 
 확인 이유:
 
 - `/admin/docs`의 추천 질문, 질문 백로그, chatbot citation/feedback 집계에 필요하다.
 - 공개 문서 검색 인덱스 재생성 후 챗봇 후보 문서 품질을 점검할 때 필요하다.
+- 챗봇 알파 첫 화면은 starter 추천 질문이 4개 이상이어야 탐색 시작점이 충분하다.
+
+검증 명령:
+
+```bash
+npm run check:alpha-db
+```
+
+기대값: `chatbot_recommended_questions`가 `rows=4 / min 4` 이상이고 `Status: ok`.
 
 ### 2-3. 문서 작업 초안
 
@@ -286,17 +301,18 @@ select to_regclass('public.docs_article_drafts');
 
 ## 4. 배포 순서
 
-1. base migration으로 `admin_profiles`, `is_active_admin()`, `blog_posts`, `leads`가 migration 재현 가능한지 확인한다.
+1. base migration으로 `admin_profiles`, `is_active_admin()`, `leads`, `audit_logs`가 migration 재현 가능한지 확인한다.
 2. `20260407_notifications.sql` 또는 별도 migration으로 `update_updated_at()` 함수가 있는지 확인한다.
-3. 운영 DB에 `20260421_docs_center.sql` 이후 문서센터 관련 migration이 적용되어 있는지 확인한다.
-4. `20260604_docs_article_drafts.sql` 적용 여부를 확인한다.
-5. 블로그 unlisted/private가 필요하면 `blog_posts.visibility` migration을 적용한다.
-6. `20260404_partner_portal_v2_domain.sql`, `20260414_quote_approval_gate.sql` 적용 여부를 확인한다.
-7. `20260608_quote_pending_approval_status.sql`을 적용한다.
-8. `Classin Direct Sales` 계정 중복 여부를 확인하고 필요 시 정리한다.
-9. 리드 알림용 `follow_up_at`, `assigned_to` 컬럼/index를 보강한 뒤 `20260604_lead_response_alert_states.sql` 적용 여부를 확인한다.
-10. `USE_SUPABASE_DOCS=true`, `USE_SUPABASE_BLOG=true`, `USE_SUPABASE_LEADS=true` 운영 환경변수를 확인한다.
-11. `/admin/docs`, `/admin/blog`, Quick Quote 저장/공유/신규 고객 생성 smoke test를 실행한다.
+3. `20260610_blog_posts_backfill_schema.sql`로 `blog_posts`가 migration 재현 가능한지 확인한다.
+4. 운영 DB에 `20260421_docs_center.sql` 이후 문서센터 관련 migration이 적용되어 있는지 확인한다.
+5. `20260604_docs_article_drafts.sql` 적용 여부를 확인한다.
+6. 블로그 unlisted/private가 필요하면 `blog_posts.visibility` migration을 적용한다.
+7. `20260404_partner_portal_v2_domain.sql`, `20260414_quote_approval_gate.sql` 적용 여부를 확인한다.
+8. `20260608_quote_pending_approval_status.sql`을 적용한다.
+9. `Classin Direct Sales` 계정 중복 여부를 확인하고 필요 시 정리한다.
+10. 리드 알림용 `follow_up_at`, `assigned_to` 컬럼/index를 보강한 뒤 `20260604_lead_response_alert_states.sql` 적용 여부를 확인한다.
+11. `USE_SUPABASE_DOCS=true`, `USE_SUPABASE_BLOG=true`, `USE_SUPABASE_LEADS=true` 운영 환경변수를 확인한다.
+12. `/admin/docs`, `/admin/blog`, Quick Quote 저장/공유/신규 고객 생성 smoke test를 실행한다.
 
 ## 5. 배포 후 smoke test
 
