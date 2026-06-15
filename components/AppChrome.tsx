@@ -5,6 +5,7 @@ import { usePathname } from "next/navigation"
 import type { ReactNode } from "react"
 import { useEffect, useState } from "react"
 
+import { ConsentBanner } from "@/components/consent/ConsentBanner"
 import { RouteTransition } from "@/components/transitions/RouteTransition"
 import { useConsent } from "@/lib/consent/useConsent"
 
@@ -38,11 +39,6 @@ const MetaPixelScript = dynamic(
   () => import("@/components/MetaPixelScript").then((mod) => mod.MetaPixelScript),
   { ssr: false }
 )
-const ConsentBanner = dynamic(
-  () => import("@/components/consent/ConsentBanner").then((mod) => mod.ConsentBanner),
-  { ssr: false }
-)
-
 function isInternalPath(pathname: string) {
   return (
     pathname.startsWith("/admin") ||
