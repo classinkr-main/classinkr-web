@@ -9,13 +9,13 @@ import { ReadingProgress } from "@/components/blog/ReadingProgress"
 import { ShareActions } from "@/components/blog/ShareActions"
 import { TrackedLink } from "@/components/TrackedLink"
 import { LeadMagnetGate } from "@/components/blog/LeadMagnetGate"
-import { getLeadMagnetBySlug } from "@/lib/lead-magnets"
-import { NEUTRAL_BLUR_DATA_URL } from "@/lib/image-blur"
+import { SafeBlogImage } from "@/components/blog/SafeBlogImage"
 import {
   getPublishedPostBySlug,
   getRelatedPosts,
   getPublishedSlugsForStaticParams,
 } from "@/lib/repositories/blog"
+import { getLeadMagnetBySlugFromStore } from "@/lib/repositories/lead-magnets"
 import { extractMarkdownHeadings } from "@/lib/blog-markdown"
 import { sanitizePublicUrl } from "@/lib/safe-public-url"
 import { JsonLd } from "@/components/seo/JsonLd"
@@ -94,7 +94,7 @@ export default async function BlogDetailPage({
   const relatedPosts = await getRelatedPosts(post, 3)
   const benefits = post.benefitItems.filter(Boolean)
   const ctaHref = sanitizePublicUrl(post.cta.buttonHref, "")
-  const leadMagnet = getLeadMagnetBySlug(post.leadMagnetSlug)
+  const leadMagnet = await getLeadMagnetBySlugFromStore(post.leadMagnetSlug)
 
   return (
     <div className="min-h-screen bg-[#FAFAF8] text-[#111110]">
@@ -173,15 +173,14 @@ export default async function BlogDetailPage({
 
             <div className="overflow-hidden rounded-[24px] border border-[#e8e8e4] bg-white shadow-sm md:rounded-[32px]">
               <div className="relative aspect-[16/10] overflow-hidden">
-                <Image
+                <SafeBlogImage
                   src={post.heroImageUrl || post.imageUrl}
                   alt={post.heroImageAlt || post.thumbnailAlt || post.title}
                   fill
                   className="object-cover"
                   sizes="(min-width: 1024px) 420px, 100vw"
                   priority
-                  placeholder="blur"
-                  blurDataURL={NEUTRAL_BLUR_DATA_URL}
+                  fallbackIndex={post.id}
                 />
               </div>
             </div>
@@ -350,14 +349,13 @@ export default async function BlogDetailPage({
                       className="group overflow-hidden rounded-[28px] border border-[#e8e8e4] bg-white shadow-sm transition-transform hover:-translate-y-1"
                     >
                       <div className="relative aspect-[4/3] overflow-hidden">
-                        <Image
+                        <SafeBlogImage
                           src={relatedPost.imageUrl}
                           alt={relatedPost.thumbnailAlt || relatedPost.title}
                           fill
                           className="object-cover transition-transform duration-500 group-hover:scale-105"
                           sizes="(min-width: 1024px) 360px, (min-width: 768px) 33vw, 100vw"
-                          placeholder="blur"
-                          blurDataURL={NEUTRAL_BLUR_DATA_URL}
+                          fallbackIndex={relatedPost.id}
                         />
                       </div>
                       <div className="p-5">

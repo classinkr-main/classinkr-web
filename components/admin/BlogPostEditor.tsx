@@ -57,7 +57,11 @@ import {
   extractMarkdownHeadings,
   slugify,
 } from "@/lib/blog-markdown"
-import { leadMagnetOptions, getLeadMagnetStatusLabel } from "@/lib/lead-magnets"
+import {
+  getLeadMagnetGateLabel,
+  getLeadMagnetStatusLabel,
+  leadMagnetOptions,
+} from "@/lib/lead-magnets"
 
 interface BlogPostEditorProps {
   mode: "create" | "edit"
@@ -245,6 +249,7 @@ const BLOG_COVER_PREVIEWS = [
   { label: "추천 카드", ratio: "4:3", className: "aspect-[4/3]" },
   { label: "목록 썸네일", ratio: "16:11", className: "aspect-[16/11]" },
 ] as const
+type LeadMagnetOption = (typeof leadMagnetOptions)[number]
 
 function cloneSnapshot(snapshot: EditorSnapshot): EditorSnapshot {
   return {
@@ -392,6 +397,7 @@ export default function BlogPostEditor({
   const [lastSavedAt, setLastSavedAt] = useState<Date | null>(null)
   const [showInlineDraft, setShowInlineDraft] = useState(false)
   const [inlineDraftTopic, setInlineDraftTopic] = useState("")
+  const [leadOptions, setLeadOptions] = useState<readonly LeadMagnetOption[]>(leadMagnetOptions)
   const formRef = useRef(form)
   const tagsInputRef = useRef(tagsInput)
   const slugEditedRef = useRef(slugEdited)
@@ -413,6 +419,29 @@ export default function BlogPostEditor({
     const observer = new ResizeObserver(update)
     observer.observe(header)
     return () => observer.disconnect()
+  }, [])
+
+  useEffect(() => {
+    let ignore = false
+    adminFetch("/api/admin/lead-magnets")
+      .then((response) => (response.ok ? response.json() : null))
+      .then((data: { leadMagnets?: LeadMagnetOption[] } | null) => {
+        if (!ignore && Array.isArray(data?.leadMagnets)) {
+          setLeadOptions(
+            data.leadMagnets.map((item) => ({
+              slug: item.slug,
+              title: item.title,
+              status: item.status,
+              gate: item.gate,
+              published: item.published,
+            }))
+          )
+        }
+      })
+      .catch(() => undefined)
+    return () => {
+      ignore = true
+    }
   }, [])
 
   const draftStorageKey = `admin-blog-editor-${initialPost?.id ?? "new"}`
@@ -1965,9 +1994,10 @@ export default function BlogPostEditor({
                         className="h-9 w-full rounded-xl border border-[#e8e8e4] bg-white px-3 text-sm outline-none focus:border-[#084734]"
                       >
                         <option value="">표시 안 함</option>
-                        {leadMagnetOptions.map((opt) => (
+                        {leadOptions.map((opt) => (
                           <option key={opt.slug} value={opt.slug}>
-                            {opt.title} · {getLeadMagnetStatusLabel(opt.status)}
+                            {opt.title} · {getLeadMagnetGateLabel(opt.gate)} · {getLeadMagnetStatusLabel(opt.status)}
+                            {opt.published ? "" : " · 검토 중"}
                           </option>
                         ))}
                       </select>

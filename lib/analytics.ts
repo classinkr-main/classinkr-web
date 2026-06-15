@@ -7,6 +7,8 @@ export type EventNames =
   | "submit_demo_request"
   | "submit_newsletter"
   | "download_materials"
+  | "view_resource_card"
+  | "view_resource"
   | "view_demo_video"
   | "begin_checkout"
   | "purchase"
@@ -88,7 +90,7 @@ export const trackEvent = (eventName: EventNames, params?: AnalyticsParams) => {
       window.fbq("track", "CompleteRegistration", params)
     } else if (eventName === "purchase") {
       window.fbq("track", "Purchase", params)
-    } else if (eventName !== "page_view") {
+    } else if (eventName !== "page_view" && eventName !== "view_resource_card") {
       window.fbq("trackCustom", eventName, params)
     }
   }
@@ -104,6 +106,7 @@ export const trackEvent = (eventName: EventNames, params?: AnalyticsParams) => {
       break
     case "click_cta":
     case "download_materials":
+    case "view_resource":
     case "view_demo_video":
     case "begin_checkout":
       kakaoPixel.participate({ tag: eventName })

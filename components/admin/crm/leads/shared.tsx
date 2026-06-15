@@ -5,6 +5,7 @@ import { Check, Copy } from "lucide-react"
 
 import type { LeadRecord, LeadStatus } from "@/lib/repositories/leads"
 import type { ContactLogResult, ContactLogType } from "@/lib/repositories/contact-logs"
+import { getLeadMagnetTitle } from "@/lib/lead-magnets"
 
 // 리드 보드(/admin/crm/customers/leads)와 현황 액션 밴드(/admin/crm)가 같이 쓰는
 // 상수·계산 헬퍼·소형 UI. 리드 분류 규칙을 한 곳에서만 정의한다.
@@ -135,6 +136,8 @@ export function getLeadSourceDetail(lead: LeadRecord) {
 
 export function getLeadMagnetLabel(value?: string) {
   if (!value) return ""
+  const title = getLeadMagnetTitle(value)
+  if (title) return title
   return value
     .split(/[-_:]+/)
     .filter(Boolean)

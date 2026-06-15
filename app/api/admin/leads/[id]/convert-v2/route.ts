@@ -8,6 +8,7 @@ import type { Customer, Deal } from "@/lib/portal/types"
 import { getLeadById, updateLead, type LeadRecord } from "@/lib/repositories/leads"
 import { upsertConfirmedLeadCustomerLink } from "@/lib/repositories/crm-source-links"
 import { createSupabaseAdminClient } from "@/lib/supabase/admin"
+import { getLeadMagnetTitleFromStore } from "@/lib/repositories/lead-magnets"
 
 type RouteContext = {
   params: Promise<{ id: string }>
@@ -26,8 +27,10 @@ function getLeadCustomerName(lead: LeadRecord) {
   return lead.org?.trim() || lead.name?.trim() || lead.email?.trim() || lead.phone?.trim() || `리드 ${lead.id.slice(0, 8)}`
 }
 
-function getLeadMagnetLabel(value?: string) {
+async function getLeadMagnetLabel(value?: string) {
   if (!value) return ""
+  const title = await getLeadMagnetTitleFromStore(value)
+  if (title) return title
   return value
     .split(/[-_:]+/)
     .filter(Boolean)
@@ -35,14 +38,15 @@ function getLeadMagnetLabel(value?: string) {
     .join(" ")
 }
 
-function buildLeadConversionNotes(lead: LeadRecord) {
+async function buildLeadConversionNotes(lead: LeadRecord) {
+  const leadMagnetLabel = await getLeadMagnetLabel(lead.lead_magnet)
   const lines = [
     "[리드 전환]",
     `원본 리드 ID: ${lead.id}`,
     `유입일: ${new Date(lead.timestamp).toLocaleString("ko-KR")}`,
     `유입 경로: ${SOURCE_LABEL[lead.source] ?? lead.source}`,
     lead.source_detail ? `Source Detail: ${lead.source_detail}` : null,
-    lead.lead_magnet ? `Lead Magnet: ${getLeadMagnetLabel(lead.lead_magnet) || lead.lead_magnet}` : null,
+    lead.lead_magnet ? `Lead Magnet: ${leadMagnetLabel || lead.lead_magnet}` : null,
     lead.role ? `역할: ${lead.role}` : null,
     lead.size ? `규모: ${lead.size}` : null,
     lead.branch ? `지역/브랜치: ${lead.branch}` : null,
@@ -152,7 +156,7 @@ export async function POST(req: NextRequest, context: RouteContext) {
       return NextResponse.json({ error: "Lead is already converted" }, { status: 409 })
     }
 
-    const conversionNotes = buildLeadConversionNotes(lead)
+    const conversionNotes = await buildLeadConversionNotes(lead)
     const existingConversion = await findExistingLeadConversion(lead.id)
     const partnerAccountId =
       existingConversion.customer?.partner_account_id ??

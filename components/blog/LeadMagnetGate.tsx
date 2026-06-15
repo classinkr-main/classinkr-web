@@ -13,7 +13,12 @@ import { ArrowRight, CheckCircle2, Download, Loader2, Mail, Sparkles } from "luc
 import { Input } from "@/components/ui/input"
 import { Button } from "@/components/ui/button"
 import { trackEvent } from "@/lib/analytics"
-import type { LeadMagnet } from "@/lib/lead-magnets"
+import {
+  getLeadMagnetItemCount,
+  getLeadMagnetPublicGateLabel,
+  getLeadMagnetTierLabel,
+  type LeadMagnet,
+} from "@/lib/lead-magnets"
 
 interface Props {
   leadMagnet: LeadMagnet
@@ -27,7 +32,9 @@ export function LeadMagnetGate({ leadMagnet, postSlug }: Props) {
   const [submitted, setSubmitted] = useState(false)
   const [error, setError] = useState("")
 
-  const source = `blog_lead_magnet:${leadMagnet.slug}`
+  const source = leadMagnet.sourceDetail
+  const resourceUrl = leadMagnet.published ? leadMagnet.resourceUrl : undefined
+  const itemCount = getLeadMagnetItemCount(leadMagnet)
 
   const handleSubmit = async (e: React.FormEvent) => {
     e.preventDefault()
@@ -53,6 +60,7 @@ export function LeadMagnetGate({ leadMagnet, postSlug }: Props) {
           source: "blog_lead_magnet",
           lead_magnet: leadMagnet.slug,
           post_slug: postSlug,
+          gate: leadMagnet.gate,
         })
         setSubmitted(true)
       } else {
@@ -73,23 +81,38 @@ export function LeadMagnetGate({ leadMagnet, postSlug }: Props) {
         <div>
           <span className="inline-flex w-fit items-center gap-1.5 rounded-full border border-[#084734]/10 bg-white px-3.5 py-1 text-[11px] font-bold tracking-[0.04em] text-[#084734]">
             <Sparkles className="h-3 w-3" />
-            {leadMagnet.ctaCopy.eyebrow}
+            {leadMagnet.ctaCopy.eyebrow} · {getLeadMagnetPublicGateLabel(leadMagnet.gate)}
           </span>
           <h2 className="mt-4 text-[1.55rem] font-semibold leading-snug tracking-[-0.03em] text-[#111110] md:text-[1.9rem]">
             {leadMagnet.ctaCopy.title}
           </h2>
           <p className="mt-3 text-[15px] leading-7 text-[#1a1a1a]/65">
-            {leadMagnet.ctaCopy.body}
+            {leadMagnet.summary}
           </p>
 
+          <div className="mt-4 flex flex-wrap gap-2 text-[12px] font-semibold text-[#084734]">
+            <span className="rounded-full border border-[#084734]/10 bg-white px-3 py-1">
+              {itemCount}문항
+            </span>
+            <span className="rounded-full border border-[#084734]/10 bg-white px-3 py-1">
+              약 {leadMagnet.estimatedMinutes}분
+            </span>
+            <span className="rounded-full border border-[#084734]/10 bg-white px-3 py-1">
+              {leadMagnet.formatLabel}
+            </span>
+          </div>
+
           <ul className="mt-5 grid gap-2.5">
-            {leadMagnet.checklistBullets.slice(0, 4).map((bullet) => (
-              <li key={bullet} className="flex items-start gap-2.5 text-[14px] leading-6 text-[#1a1a1a]/75">
+            {leadMagnet.deliverables.slice(0, 4).map((item) => (
+              <li key={item} className="flex items-start gap-2.5 text-[14px] leading-6 text-[#1a1a1a]/75">
                 <CheckCircle2 className="mt-0.5 h-4 w-4 shrink-0 text-[#084734]" />
-                {bullet}
+                {item}
               </li>
             ))}
           </ul>
+          <p className="mt-5 text-[12px] font-semibold text-[#084734]/70">
+            {getLeadMagnetTierLabel(leadMagnet.tier)} 자료 · {getLeadMagnetPublicGateLabel(leadMagnet.gate)}
+          </p>
         </div>
 
         {/* 우측: 이메일 폼 / 완료 상태 */}
@@ -102,18 +125,18 @@ export function LeadMagnetGate({ leadMagnet, postSlug }: Props) {
               <div className="space-y-1">
                 <p className="text-lg font-bold text-[#111110]">신청이 완료되었습니다!</p>
                 <p className="text-sm leading-6 text-[#1a1a1a]/55">
-                  {leadMagnet.resourceUrl
+                  {resourceUrl
                     ? "아래 버튼을 눌러 자료를 바로 확인하세요."
                     : "입력하신 이메일로 자료를 보내드릴게요."}
                 </p>
               </div>
-              {leadMagnet.resourceUrl && (
+              {resourceUrl && (
                 <Button
                   asChild
                   className="h-11 w-full bg-[#084734] font-semibold text-white hover:bg-[#065c41]"
                 >
                   <a
-                    href={leadMagnet.resourceUrl}
+                    href={resourceUrl}
                     target="_blank"
                     rel="noopener noreferrer"
                     onClick={() =>
@@ -121,6 +144,7 @@ export function LeadMagnetGate({ leadMagnet, postSlug }: Props) {
                         source: "blog_lead_magnet",
                         lead_magnet: leadMagnet.slug,
                         post_slug: postSlug,
+                        gate: leadMagnet.gate,
                       })
                     }
                   >
