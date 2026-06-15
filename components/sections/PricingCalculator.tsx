@@ -1,419 +1,855 @@
 "use client"
 
 import * as React from "react"
+import {
+  AlertCircle,
+  CheckCircle2,
+  Clock3,
+  Database,
+  Info,
+  TimerReset,
+  Users,
+  Video,
+  WalletCards,
+} from "lucide-react"
+
 import { Slider } from "@/components/ui/slider"
-import { Info, Sparkles } from "lucide-react"
 
-// ── Border-draw entrance animation ─────────────────────────────────────────
-function AnimatedBorder({ containerRef }: { containerRef: React.RefObject<HTMLDivElement | null> }) {
-    const [dims, setDims] = React.useState<{ w: number; h: number } | null>(null)
+type Quality = "SD" | "HD" | "FHD"
+type RecordingMode = "none" | "single" | "dual"
+type SubscriptionTier = "Standard" | "Plus" | "Enterprise"
 
-    React.useEffect(() => {
-        const el = containerRef.current
-        if (!el) return
-        const measure = () => {
-            const { width, height } = el.getBoundingClientRect()
-            if (width > 0) setDims({ w: width, h: height })
-        }
-        measure()
-        // Fallback for SSR hydration delay
-        const t = setTimeout(measure, 80)
-        return () => clearTimeout(t)
-    }, [containerRef])
+const CNY_TO_KRW = 190
+const USD_TO_KRW = 1440
+const MIN_INITIAL_RECHARGE_CNY = 10_000
+const RECHARGE_STEP_CNY = 2_000
+const BUSINESS_FREE_STORAGE_GB = 30
+const BUSINESS_STORAGE_CNY_PER_GB = 3
+const BUSINESS_WEBLIVE_CNY_PER_GB = 3
 
-    if (!dims) return null
-
-    const rx = 40
-    const straight = 2 * (dims.w - 2 * rx + dims.h - 2 * rx)
-    const perimeter = straight + 2 * Math.PI * rx
-
-    return (
-        <svg
-            style={{
-                position: "absolute",
-                inset: 0,
-                width: "100%",
-                height: "100%",
-                pointerEvents: "none",
-                zIndex: 50,
-                overflow: "visible",
-            }}
-            xmlns="http://www.w3.org/2000/svg"
-            aria-hidden
-        >
-            <defs>
-                <linearGradient id="calc-border-grad" x1="0%" y1="0%" x2="100%" y2="100%">
-                    <stop offset="0%" stopColor="#084734" />
-                    <stop offset="50%" stopColor="#6EE7B7" />
-                    <stop offset="100%" stopColor="#CEF17B" />
-                </linearGradient>
-                <filter id="calc-border-glow">
-                    <feGaussianBlur stdDeviation="4" result="blur" />
-                    <feMerge><feMergeNode in="blur" /><feMergeNode in="SourceGraphic" /></feMerge>
-                </filter>
-            </defs>
-
-            {/* Glow layer — fades out after draw */}
-            <rect
-                x={2} y={2}
-                width={dims.w - 4} height={dims.h - 4}
-                rx={rx} ry={rx}
-                fill="none"
-                stroke="url(#calc-border-grad)"
-                strokeWidth={6}
-                filter="url(#calc-border-glow)"
-                style={{
-                    strokeDasharray: perimeter,
-                    strokeDashoffset: perimeter,
-                    ["--border-perimeter" as string]: `${perimeter}`,
-                    animation: `calculator-border-draw 1.4s cubic-bezier(0.4,0,0.2,1) 0.15s forwards, calculator-glow-fade 0.6s ease-in 1.7s forwards`,
-                    opacity: 0.6,
-                }}
-            />
-
-            {/* Sharp crisp border — stays briefly then fades */}
-            <rect
-                x={1} y={1}
-                width={dims.w - 2} height={dims.h - 2}
-                rx={rx} ry={rx}
-                fill="none"
-                stroke="url(#calc-border-grad)"
-                strokeWidth={2}
-                style={{
-                    strokeDasharray: perimeter,
-                    strokeDashoffset: perimeter,
-                    ["--border-perimeter" as string]: `${perimeter}`,
-                    animation: `calculator-border-draw 1.4s cubic-bezier(0.4,0,0.2,1) 0.15s forwards, calculator-glow-fade 0.5s ease-in 2s forwards`,
-                }}
-            />
-        </svg>
-    )
+const QUALITY_LABEL: Record<Quality, string> = {
+  SD: "SD",
+  HD: "HD",
+  FHD: "FHD",
 }
 
-const EXCHANGE_RATE_CASH = 200;
-const EXCHANGE_RATE_USD = 1440;
-const MIN_BUSINESS_CASH = 10000;
+const RECORDING_LABEL: Record<RecordingMode, string> = {
+  none: "사용 안 함",
+  single: "단일 녹화",
+  dual: "듀얼 녹화",
+}
+
+const RECORDING_RATE_CNY: Record<RecordingMode, number> = {
+  none: 0,
+  single: 2,
+  dual: 4,
+}
+
+const SUBSCRIPTION_TIERS: Record<
+  SubscriptionTier,
+  {
+    priceUsd: number
+    onStageMax: number
+    courseMax: number
+    lessonMaxMinutes: number
+    assistantMax: number
+    qualities: Quality[]
+    baseStorageGb: number
+    storagePerTeacherGb: number
+  }
+> = {
+  Standard: {
+    priceUsd: 99,
+    onStageMax: 6,
+    courseMax: 50,
+    lessonMaxMinutes: 240,
+    assistantMax: 1,
+    qualities: ["SD"],
+    baseStorageGb: 50,
+    storagePerTeacherGb: 10,
+  },
+  Plus: {
+    priceUsd: 199,
+    onStageMax: 12,
+    courseMax: 1000,
+    lessonMaxMinutes: 720,
+    assistantMax: 6,
+    qualities: ["SD", "HD"],
+    baseStorageGb: 500,
+    storagePerTeacherGb: 20,
+  },
+  Enterprise: {
+    priceUsd: 299,
+    onStageMax: 12,
+    courseMax: 2000,
+    lessonMaxMinutes: 1440,
+    assistantMax: 6,
+    qualities: ["SD", "HD", "FHD"],
+    baseStorageGb: 1024,
+    storagePerTeacherGb: 100,
+  },
+}
+
+function clampNumber(value: number, min: number, max: number) {
+  if (!Number.isFinite(value)) return min
+  return Math.min(max, Math.max(min, value))
+}
+
+function readNumber(value: string, min: number, max: number) {
+  return clampNumber(Number.parseFloat(value), min, max)
+}
+
+function roundUpToStep(value: number, step: number) {
+  if (value <= 0) return 0
+  return Math.ceil(value / step) * step
+}
+
+function formatNumber(value: number) {
+  return Math.round(value).toLocaleString("ko-KR")
+}
+
+function formatDecimal(value: number, digits = 1) {
+  return value.toLocaleString("ko-KR", {
+    maximumFractionDigits: digits,
+    minimumFractionDigits: value % 1 === 0 ? 0 : digits,
+  })
+}
+
+function formatMinutes(minutes: number) {
+  if (minutes === 0) return "0분"
+  if (minutes < 60) return `${minutes}분`
+  const hours = Math.floor(minutes / 60)
+  const rest = minutes % 60
+  return rest ? `${hours}시간 ${rest}분` : `${hours}시간`
+}
+
+function resolveBusinessClassRate({
+  onStageStudents,
+  quality,
+  hasDualCamera,
+}: {
+  onStageStudents: number
+  quality: Quality
+  hasDualCamera: boolean
+}) {
+  if (onStageStudents === 0) return { rate: 1, label: "1v0 기본" }
+  if (onStageStudents === 1 && hasDualCamera) return { rate: 8, label: "1v1 듀얼 카메라" }
+  if (onStageStudents === 1) {
+    if (quality === "FHD") return { rate: 8, label: "1v1 FHD" }
+    if (quality === "HD") return { rate: 4, label: "1v1 HD" }
+    return { rate: 2, label: "1v1 SD" }
+  }
+  if (quality === "FHD") return { rate: 20, label: "그룹 FHD" }
+  if (quality === "HD") return { rate: 12, label: "그룹 HD" }
+  return { rate: 4, label: "1v2-12 SD" }
+}
+
+function resolveAssistantRate(quality: Quality) {
+  if (quality === "FHD") return 20
+  if (quality === "HD") return 10
+  return 6
+}
+
+function resolveBillableMinutes(durationMinutes: number) {
+  if (durationMinutes <= 10) return 0
+  return Math.max(30, roundUpToStep(durationMinutes, 30))
+}
+
+function resolveSubscriptionTier({
+  onStageStudents,
+  courseStudents,
+  lessonMinutes,
+  quality,
+  assistantCount,
+  webLiveTrafficGb,
+  hasDualCamera,
+}: {
+  onStageStudents: number
+  courseStudents: number
+  lessonMinutes: number
+  quality: Quality
+  assistantCount: number
+  webLiveTrafficGb: number
+  hasDualCamera: boolean
+}) {
+  const reasons: string[] = []
+  let tier: SubscriptionTier = "Standard"
+
+  if (
+    onStageStudents > SUBSCRIPTION_TIERS.Standard.onStageMax ||
+    courseStudents > SUBSCRIPTION_TIERS.Standard.courseMax ||
+    lessonMinutes > SUBSCRIPTION_TIERS.Standard.lessonMaxMinutes ||
+    quality !== "SD" ||
+    assistantCount > SUBSCRIPTION_TIERS.Standard.assistantMax
+  ) {
+    tier = "Plus"
+  }
+
+  if (
+    onStageStudents > SUBSCRIPTION_TIERS.Plus.onStageMax ||
+    courseStudents > SUBSCRIPTION_TIERS.Plus.courseMax ||
+    lessonMinutes > SUBSCRIPTION_TIERS.Plus.lessonMaxMinutes ||
+    quality === "FHD" ||
+    webLiveTrafficGb > 0 ||
+    hasDualCamera
+  ) {
+    tier = "Enterprise"
+  }
+
+  const config = SUBSCRIPTION_TIERS[tier]
+  if (onStageStudents > config.onStageMax) reasons.push(`온스테이지 ${config.onStageMax}명 초과`)
+  if (courseStudents > config.courseMax) reasons.push(`코스 ${config.courseMax}명 초과`)
+  if (lessonMinutes > config.lessonMaxMinutes) reasons.push(`1회 ${formatMinutes(config.lessonMaxMinutes)} 초과`)
+  if (!config.qualities.includes(quality)) reasons.push(`${quality} 화질`)
+  if (assistantCount > config.assistantMax) reasons.push(`조교 ${config.assistantMax}명 초과`)
+  if (webLiveTrafficGb > 0 && tier === "Enterprise") reasons.push("웹라이브")
+  if (hasDualCamera && tier === "Enterprise") reasons.push("듀얼 카메라")
+
+  const outOfRange =
+    onStageStudents > SUBSCRIPTION_TIERS.Enterprise.onStageMax ||
+    courseStudents > SUBSCRIPTION_TIERS.Enterprise.courseMax ||
+    lessonMinutes > SUBSCRIPTION_TIERS.Enterprise.lessonMaxMinutes
+
+  return {
+    tier,
+    reasons,
+    outOfRange,
+    config,
+  }
+}
+
+function FieldGroup({
+  title,
+  description,
+  children,
+}: {
+  title: string
+  description?: string
+  children: React.ReactNode
+}) {
+  return (
+    <section className="space-y-5">
+      <div>
+        <h3 className="text-[17px] font-semibold tracking-tight text-[#111110]">{title}</h3>
+        {description ? (
+          <p className="mt-1 text-[13px] leading-5 text-[#615D59]">{description}</p>
+        ) : null}
+      </div>
+      {children}
+    </section>
+  )
+}
+
+function NumberInput({
+  id,
+  label,
+  value,
+  unit,
+  min,
+  max,
+  step = 1,
+  onChange,
+}: {
+  id: string
+  label: string
+  value: number
+  unit: string
+  min: number
+  max: number
+  step?: number
+  onChange: (value: number) => void
+}) {
+  return (
+    <label htmlFor={id} className="block space-y-2">
+      <span className="text-[13px] font-semibold text-[#31302E]">{label}</span>
+      <span className="relative block">
+        <input
+          id={id}
+          type="number"
+          min={min}
+          max={max}
+          step={step}
+          value={value}
+          onChange={(event) => onChange(readNumber(event.target.value, min, max))}
+          className="h-12 w-full rounded-lg border border-black/[0.08] bg-white px-3 pr-12 text-[15px] font-semibold text-[#111110] outline-none transition focus:border-[#084734] focus:ring-2 focus:ring-[#084734]/15"
+        />
+        <span className="pointer-events-none absolute right-3 top-1/2 -translate-y-1/2 text-[12px] font-semibold text-[#A39E98]">
+          {unit}
+        </span>
+      </span>
+    </label>
+  )
+}
+
+function SegmentButton({
+  active,
+  children,
+  onClick,
+}: {
+  active: boolean
+  children: React.ReactNode
+  onClick: () => void
+}) {
+  return (
+    <button
+      type="button"
+      onClick={onClick}
+      className={`rounded-lg border px-3 py-2 text-[13px] font-semibold transition ${
+        active
+          ? "border-[#084734] bg-[#ECFDF5] text-[#084734]"
+          : "border-black/[0.08] bg-white text-[#615D59] hover:border-black/[0.16] hover:text-[#111110]"
+      }`}
+    >
+      {children}
+    </button>
+  )
+}
+
+function BreakdownRow({
+  label,
+  detail,
+  amount,
+}: {
+  label: string
+  detail: string
+  amount: string
+}) {
+  return (
+    <div className="grid grid-cols-[1fr_auto] gap-3 border-b border-black/[0.06] py-3 last:border-b-0">
+      <div>
+        <p className="text-[13px] font-semibold text-[#111110]">{label}</p>
+        <p className="mt-0.5 text-[12px] leading-5 text-[#615D59]">{detail}</p>
+      </div>
+      <div className="text-right text-[13px] font-semibold text-[#111110]">{amount}</div>
+    </div>
+  )
+}
+
+function SummaryCard({
+  icon,
+  label,
+  value,
+  helper,
+  active = false,
+}: {
+  icon: React.ReactNode
+  label: string
+  value: string
+  helper: string
+  active?: boolean
+}) {
+  return (
+    <div
+      className={`rounded-lg border bg-white p-4 ${
+        active ? "border-[#084734] shadow-[0_16px_36px_rgba(8,71,52,0.10)]" : "border-black/[0.08]"
+      }`}
+    >
+      <div className="flex items-center gap-2 text-[12px] font-semibold text-[#615D59]">
+        <span className={active ? "text-[#084734]" : "text-[#A39E98]"}>{icon}</span>
+        {label}
+      </div>
+      <p className="mt-3 text-[24px] font-semibold tracking-tight text-[#111110]">{value}</p>
+      <p className="mt-1 text-[12px] leading-5 text-[#615D59]">{helper}</p>
+    </div>
+  )
+}
 
 export function PricingCalculator() {
-    const containerRef = React.useRef<HTMLDivElement>(null)
-    const [visible, setVisible] = React.useState(false)
-    const [isStudentHelpOpen, setIsStudentHelpOpen] = React.useState(false)
+  const [onStageStudents, setOnStageStudents] = React.useState([6])
+  const [connectedStudents, setConnectedStudents] = React.useState(80)
+  const [teachers, setTeachers] = React.useState([5])
+  const [courseStudents, setCourseStudents] = React.useState(80)
+  const [classCount, setClassCount] = React.useState(100)
+  const [classDurationMinutes, setClassDurationMinutes] = React.useState(60)
+  const [quality, setQuality] = React.useState<Quality>("SD")
+  const [assistantCount, setAssistantCount] = React.useState(0)
+  const [recordingMode, setRecordingMode] = React.useState<RecordingMode>("none")
+  const [hasDualCamera, setHasDualCamera] = React.useState(false)
+  const [storageGb, setStorageGb] = React.useState(30)
+  const [webLiveTrafficGb, setWebLiveTrafficGb] = React.useState(0)
+  const [isStudentHelpOpen, setIsStudentHelpOpen] = React.useState(false)
 
-    React.useEffect(() => {
-        // Tiny delay so the layout is painted before we measure & animate
-        const t = setTimeout(() => setVisible(true), 30)
-        return () => clearTimeout(t)
-    }, [])
+  const onStageStudentsNum = onStageStudents[0]
+  const effectiveOnStageStudentsNum = Math.min(onStageStudentsNum, connectedStudents)
+  const teachersNum = teachers[0]
 
-    const [students, setStudents] = React.useState([10]) // On-stage students
-    const [teachers, setTeachers] = React.useState([5])
-    const [classCount, setClassCount] = React.useState(100)
-    const [classDuration, setClassDuration] = React.useState(1)
-    const [quality, setQuality] = React.useState("SD")
-    const [hasRecord, setHasRecord] = React.useState(false)
-    const [hasAssistant, setHasAssistant] = React.useState(false)
-    const [hasWebLive, setHasWebLive] = React.useState(false)
-
-    const studentsNum = students[0]
-    const teachersNum = teachers[0]
-
-    const pricing = React.useMemo(() => {
-        const billedHoursPerClass = Math.ceil(classDuration / 0.5) * 0.5
-        const totalBilledHours = classCount * billedHoursPerClass
-
-        // [A] Business Model Calculation
-        let perUserCost = 0
-        if (studentsNum === 0) perUserCost = 1
-        else if (studentsNum === 1) {
-            if (quality === 'SD') perUserCost = 2
-            else if (quality === 'HD') perUserCost = 4
-            else if (quality === 'FHD') perUserCost = 8
-        } else {
-            if (quality === 'SD') perUserCost = 4
-            else if (quality === 'HD') perUserCost = 12
-            else if (quality === 'FHD') perUserCost = 20
-        }
-
-        const billedStudents = Math.min(studentsNum, 200)
-        const totalBilledUsers = billedStudents + 1
-
-        const classCashCost = perUserCost * totalBilledUsers * totalBilledHours
-
-        let assistantCashCost = 0
-        if (hasAssistant) {
-            let astCost = 6
-            if (quality === 'HD') astCost = 10
-            else if (quality === 'FHD') astCost = 20
-            assistantCashCost = astCost * totalBilledHours
-        }
-
-        let recordCashCost = 0
-        if (hasRecord) recordCashCost = 2 * totalBilledHours
-
-        const totalMonthlyCash = classCashCost + assistantCashCost + recordCashCost
-        let finalBusinessCash = totalMonthlyCash
-        let isMinCash = false
-        if (finalBusinessCash < MIN_BUSINESS_CASH) {
-            finalBusinessCash = MIN_BUSINESS_CASH
-            isMinCash = true
-        }
-        const totalBusinessKRW = finalBusinessCash * EXCHANGE_RATE_CASH
-
-        // [B] Subscription Model Calculation
-        let tier = 'Standard'
-        let subReasons: string[] = []
-
-        if (studentsNum > 50 || classDuration > 4 || quality === 'HD' || studentsNum > 6) {
-            tier = 'Plus'
-            if (studentsNum > 50) subReasons.push("온스테이지 50명 초과")
-            else if (studentsNum > 6) subReasons.push("1v6 인원 초과")
-            if (classDuration > 4) subReasons.push("4시간 초과")
-            if (quality === 'HD') subReasons.push("HD 화질")
-        }
-
-        if (studentsNum > 1000 || classDuration > 12 || quality === 'FHD' || hasWebLive) {
-            tier = 'Enterprise'
-            subReasons = []
-            if (studentsNum > 1000) subReasons.push("학생 1000명 이상")
-            if (classDuration > 12) subReasons.push("12시간 초과")
-            if (quality === 'FHD') subReasons.push("FHD 초고화질")
-            if (hasWebLive) subReasons.push("웹라이브 환경")
-        }
-
-        let usdPricePerTeacher = 99
-        if (tier === 'Plus') usdPricePerTeacher = 199
-        if (tier === 'Enterprise') usdPricePerTeacher = 299
-
-        const totalSubscriptionUSD = usdPricePerTeacher * teachersNum
-        const totalSubscriptionKRW = totalSubscriptionUSD * EXCHANGE_RATE_USD
-
-        return {
-            totalMonthlyCash, finalBusinessCash, isMinCash, totalBusinessKRW,
-            tier, subReasons, usdPricePerTeacher, totalSubscriptionUSD, totalSubscriptionKRW,
-            isBusinessRecom: totalBusinessKRW <= totalSubscriptionKRW,
-        }
-    }, [studentsNum, teachersNum, classCount, classDuration, quality, hasRecord, hasAssistant, hasWebLive])
-
-    const { totalMonthlyCash, finalBusinessCash, isMinCash, totalBusinessKRW, tier, subReasons, usdPricePerTeacher, totalSubscriptionUSD, totalSubscriptionKRW, isBusinessRecom } = pricing
-    const formatCurrency = (amt: number) => Math.round(amt).toLocaleString('ko-KR')
-
-    return (
-        <div
-            ref={containerRef}
-            className="w-full max-w-[68rem] mx-auto rounded-[2.5rem] bg-white shadow-[0_20px_50px_rgba(0,0,0,0.06)] border border-black/[0.06] overflow-hidden relative"
-        >
-            {/* Entrance border-draw animation — renders once dims are known */}
-            {visible && <AnimatedBorder containerRef={containerRef} />}
-
-            {/* Content fades in slightly after border starts drawing.
-                opacity:0 is the base; animation overrides it once visible=true. */}
-            <div
-                style={{
-                    opacity: 0,
-                    animation: visible
-                        ? "calculator-fade-in 0.9s cubic-bezier(0.4,0,0.2,1) 0.5s forwards"
-                        : "none",
-                }}
-            >
-
-            <div className="bg-white p-8 md:p-12 pb-6 md:pb-8 text-center relative z-10">
-                <h2 className="text-3xl md:text-4xl tracking-tight text-[#111110] font-extrabold mb-4" style={{ letterSpacing: '-0.03em' }}>월 예상 견적 최적화 계산기</h2>
-                <p className="text-[#615D59] text-[17px] max-w-xl mx-auto leading-relaxed">
-                    운영 패턴을 설정하시면 우리 학원에 가장 유리한 요금제를 <span className="font-semibold text-primary">원화(KRW) 기준</span>으로 명확하게 비교해 드립니다.
-                </p>
-            </div>
-
-            <div className="grid lg:grid-cols-[1.1fr_1fr] relative divide-y lg:divide-y-0 lg:divide-x divide-black/[0.06] border-t border-black/[0.06]">
-
-                {/* Left: Input Selection (Clean White Unified Layout) */}
-                <div className="p-8 md:p-12 space-y-12 bg-white">
-
-                    {/* Sliders Container */}
-                    <div className="space-y-10">
-                        {/* Student Slider (On-Stage) */}
-                        <div className="space-y-6">
-                            <div className="flex justify-between items-center">
-                                <details
-                                    className="relative flex items-center gap-2"
-                                    open={isStudentHelpOpen}
-                                    onToggle={(event) => setIsStudentHelpOpen(event.currentTarget.open)}
-                                    onMouseEnter={() => setIsStudentHelpOpen(true)}
-                                    onMouseLeave={() => setIsStudentHelpOpen(false)}
-                                >
-                                    <span className="text-[16px] font-bold text-[#111110]">학생 수 (온스테이지)</span>
-                                    <summary className="inline-flex h-6 w-6 list-none items-center justify-center rounded-full text-[#A39E98] transition-colors hover:text-primary focus:outline-none focus:ring-2 focus:ring-[#084734]/20 focus:ring-offset-2 focus:ring-offset-white [&::-webkit-details-marker]:hidden">
-                                        <span className="sr-only">학생 수 도움말 열기</span>
-                                        <Info className="w-[18px] h-[18px]" />
-                                    </summary>
-                                    <div
-                                        id="student-count-help"
-                                        role="tooltip"
-                                        className={`absolute left-0 top-[calc(100%+0.75rem)] w-[280px] sm:w-[320px] max-w-[calc(100vw-2rem)] bg-[#1C1B1A] text-white text-[13.5px] leading-relaxed p-4 rounded-xl shadow-xl transition-all z-50 ${
-                                            isStudentHelpOpen
-                                                ? "opacity-100 visible translate-y-0"
-                                                : "opacity-0 invisible translate-y-1"
-                                        }`}
-                                    >
-                                        <span className="font-bold text-amber-300 block mb-1.5 flex items-center gap-1.5">💡 온스테이지(1v@)란?</span>
-                                        전체 시청, 참가 인원이 아닌, 실제로 동시에 집중 비디오/오디오를 켜고 <b>화면에 띄워 소통하는 학생 수</b>를 말합니다. (예: 1v6, 1v12)
-                                    </div>
-                                </details>
-                                <div className="px-4 py-1.5 bg-primary/10 text-primary font-bold rounded-xl text-lg">
-                                    {studentsNum}명
-                                </div>
-                            </div>
-                            <Slider
-                                defaultValue={[10]} max={50} step={1} value={students}
-                                onValueChange={setStudents}
-                                className="py-4 cursor-pointer [&>span:first-child]:h-3 [&>span:first-child]:!bg-[#E5E5E0] [&_[role=slider]]:h-7 [&_[role=slider]]:w-7 [&_[role=slider]]:border-[4px] [&_[role=slider]]:border-primary [&_[role=slider]]:bg-white [&_[role=slider]]:shadow-md"
-                            />
-                        </div>
-
-                        {/* Teacher Slider */}
-                        <div className="space-y-6">
-                            <div className="flex justify-between items-center">
-                                <span className="text-[16px] font-bold text-[#111110]">필요 강사수 (아이디 수)</span>
-                                <div className="px-4 py-1.5 bg-[#F6F5F4] text-[#111110] font-bold rounded-xl text-lg">
-                                    {teachersNum}명
-                                </div>
-                            </div>
-                            <Slider
-                                defaultValue={[5]} max={100} step={1} value={teachers}
-                                onValueChange={setTeachers}
-                                className="py-4 cursor-pointer [&>span:first-child]:h-3 [&>span:first-child]:!bg-[#E5E5E0] [&_[role=slider]]:h-7 [&_[role=slider]]:w-7 [&_[role=slider]]:border-[4px] [&_[role=slider]]:border-primary [&_[role=slider]]:bg-white [&_[role=slider]]:shadow-md"
-                            />
-                        </div>
-                    </div>
-
-                    <hr className="border-black/[0.06]" />
-
-                    {/* General Limits Block */}
-                    <div className="space-y-8">
-                        <div className="grid grid-cols-2 gap-5">
-                            <div className="space-y-3">
-                                <label className="text-sm font-bold text-[#31302E] block">월 평균 수업 횟수</label>
-                                <div className="relative">
-                                    <input type="number" min="1" value={classCount} onChange={e => setClassCount(Number(e.target.value) || 1)} className="w-full h-[3.5rem] bg-white border border-black/[0.08] focus:border-[#084734] focus:ring-2 focus:ring-[#084734]/15 outline-none transition-all rounded-xl pl-4 pr-12 text-[#111110] font-bold" />
-                                    <span className="absolute right-8 top-1/2 -translate-y-1/2 text-[#A39E98] font-bold text-sm pointer-events-none bg-white pl-2">회</span>
-                                </div>
-                            </div>
-                            <div className="space-y-3">
-                                <label className="text-sm font-bold text-[#31302E] block">1회 평균 수업시간</label>
-                                <div className="relative">
-                                    <input type="number" min="0.5" step="0.5" value={classDuration} onChange={e => setClassDuration(Number(e.target.value) || 0)} className="w-full h-[3.5rem] bg-white border border-black/[0.08] focus:border-[#084734] focus:ring-2 focus:ring-[#084734]/15 outline-none transition-all rounded-xl pl-4 pr-14 text-[#111110] font-bold" />
-                                    <span className="absolute right-8 top-1/2 -translate-y-1/2 text-[#A39E98] font-bold text-sm pointer-events-none bg-white pl-2 text-right">시간</span>
-                                </div>
-                            </div>
-                        </div>
-
-                        <div className="space-y-3">
-                            <label className="text-sm font-bold text-[#31302E] block">최대 송출 화질 (선택)</label>
-                            <div className="relative">
-                                <select value={quality} onChange={e => setQuality(e.target.value)} className="w-full h-[3.5rem] bg-white border border-black/[0.08] focus:border-[#084734] focus:ring-2 focus:ring-[#084734]/15 outline-none transition-all rounded-xl px-4 pr-10 text-[#111110] font-bold appearance-none cursor-pointer">
-                                    <option value="SD">SD (표준 화질 - 권장)</option>
-                                    <option value="HD">HD (고화질)</option>
-                                    <option value="FHD">FHD (초고화질)</option>
-                                </select>
-                                <div className="absolute right-4 top-1/2 -translate-y-1/2 pointer-events-none text-[#A39E98]">
-                                    <svg width="14" height="14" viewBox="0 0 24 24" fill="none" stroke="currentColor" strokeWidth="3" strokeLinecap="round" strokeLinejoin="round"><path d="m6 9 6 6 6-6" /></svg>
-                                </div>
-                            </div>
-                        </div>
-
-                        <div className="space-y-3 pt-2">
-                            <label className="text-sm font-bold text-[#31302E] block mb-3">필요 추가 옵션</label>
-                            <div className="grid sm:grid-cols-2 gap-3">
-                                <label className={`flex items-start gap-3 p-4 border-2 rounded-[1.2rem] cursor-pointer transition-all select-none ${hasRecord ? 'border-primary bg-primary/5 shadow-[0_4px_12px_rgb(79,70,229,0.08)]' : 'border-black/[0.08] bg-white hover:border-black/[0.15]'}`}>
-                                    <input type="checkbox" checked={hasRecord} onChange={e => setHasRecord(e.target.checked)} className="mt-[2px] w-4 h-4 accent-primary" />
-                                    <span className={`text-[14px] font-bold ${hasRecord ? 'text-primary' : 'text-[#31302E]'}`}>클라우드 수업 녹화</span>
-                                </label>
-                                <label className={`flex items-start gap-3 p-4 border-2 rounded-[1.2rem] cursor-pointer transition-all select-none ${hasAssistant ? 'border-primary bg-primary/5 shadow-[0_4px_12px_rgb(79,70,229,0.08)]' : 'border-black/[0.08] bg-white hover:border-black/[0.15]'}`}>
-                                    <input type="checkbox" checked={hasAssistant} onChange={e => setHasAssistant(e.target.checked)} className="mt-[2px] w-4 h-4 accent-primary" />
-                                    <span className={`text-[14px] font-bold ${hasAssistant ? 'text-primary' : 'text-[#31302E]'}`}>조교 계정 동석</span>
-                                </label>
-                                <label className={`sm:col-span-2 flex items-start gap-3 p-4 border-2 rounded-[1.2rem] cursor-pointer transition-all select-none ${hasWebLive ? 'border-primary bg-primary/5 shadow-[0_4px_12px_rgb(79,70,229,0.08)]' : 'border-black/[0.08] bg-white hover:border-black/[0.15]'}`}>
-                                    <input type="checkbox" checked={hasWebLive} onChange={e => setHasWebLive(e.target.checked)} className="mt-[2px] w-4 h-4 accent-primary" />
-                                    <span className={`text-[14px] font-bold ${hasWebLive ? 'text-primary' : 'text-[#31302E]'}`}>웹 라이브 (대규모 외부 송출용)</span>
-                                </label>
-                            </div>
-                        </div>
-                    </div>
-                </div>
-
-                {/* Right: Results Comparison */}
-                <div className="p-8 md:p-12 bg-[#F6F5F4]/40 flex flex-col justify-center gap-7 relative z-10 w-full h-full">
-
-                    {/* Business Plan Result */}
-                    <div className={`relative rounded-[1.6rem] transition-all duration-500 w-full ${isBusinessRecom ? 'scale-[1.03] z-20' : 'opacity-85 z-10'}`}>
-                        {/* Glow Gradient Layer (Only active when recommended) */}
-                        {isBusinessRecom && (
-                            <div className="absolute -inset-[4px] bg-gradient-to-r from-[#084734] via-[#6EE7B7] to-[#065c41] rounded-[1.8rem] blur-[12px] opacity-40 animate-pulse"></div>
-                        )}
-                        <div className={`relative w-full h-full p-8 rounded-[1.5rem] bg-white border border-black/[0.08] transition-all duration-300 ${isBusinessRecom ? '!border-transparent shadow-xl' : 'shadow-sm'}`}>
-                            {isBusinessRecom && (
-                                <div className="absolute -top-3.5 right-6 bg-gradient-to-r from-[#084734] to-[#065c41] text-white text-[11.5px] uppercase tracking-wider font-extrabold px-4 py-1.5 rounded-full shadow-lg flex items-center gap-1.5">
-                                    <Sparkles className="w-3.5 h-3.5" /> BEST VALUE
-                                </div>
-                            )}
-                            <h4 className="text-xl font-extrabold text-[#111110] mb-4 tracking-tight">
-                                기본 충전형 (Business)
-                            </h4>
-                            <div className="text-[2.5rem] font-black text-[#111110] mb-2 truncate tracking-tight">
-                                {formatCurrency(totalBusinessKRW)}<span className="text-xl font-semibold text-[#A39E98] ml-1.5 font-sans">원 / 월</span>
-                            </div>
-                            {isMinCash && (
-                                <div className="inline-block bg-amber-50 border border-amber-200 text-amber-800 text-[11px] font-bold px-2 py-0.5 rounded uppercase tracking-wide mb-4">
-                                    기본 요금 10,000c 적용됨
-                                </div>
-                            )}
-
-                            <p className={`text-[13.5px] leading-relaxed mt-2 ${isBusinessRecom ? 'text-[#111110] font-bold' : 'text-[#615D59] font-medium'}`}>
-                                {isBusinessRecom
-                                    ? "✨ 소규모 수업부터 단기로 사용하여 쓰신 만큼만 정확히 과금되는 가장 매력적인 합리적 선택입니다!"
-                                    : "비교적 넉넉한 수업 환경을 구성할 경우 전체 예산 관리를 위해 다소 부담이 될 수 있으므로 정액형을 권합니다."}
-                            </p>
-                            <div className="mt-6 pt-4 border-t border-black/[0.06] text-[12px] text-[#A39E98] font-bold flex justify-between tracking-wide">
-                                <span>과금 산정량: {formatCurrency(totalMonthlyCash)}c</span>
-                                <span>결제 청구: {formatCurrency(finalBusinessCash)}c</span>
-                            </div>
-                        </div>
-                    </div>
-
-                    {/* Subscription Plan Result */}
-                    <div className={`relative rounded-[1.6rem] transition-all duration-500 w-full ${!isBusinessRecom ? 'scale-[1.03] z-20' : 'opacity-85 z-10'}`}>
-                        {/* Glow Gradient Layer (Only active when recommended) */}
-                        {!isBusinessRecom && (
-                            <div className="absolute -inset-[4px] bg-gradient-to-r from-[#084734] via-[#6EE7B7] to-[#065c41] rounded-[1.8rem] blur-[12px] opacity-40 animate-pulse"></div>
-                        )}
-                        <div className={`relative w-full h-full p-8 rounded-[1.5rem] bg-white border border-black/[0.08] transition-all duration-300 ${!isBusinessRecom ? '!border-transparent shadow-xl' : 'shadow-sm'}`}>
-                            {!isBusinessRecom && (
-                                <div className="absolute -top-3.5 right-6 bg-gradient-to-r from-[#084734] to-[#065c41] text-white text-[11.5px] uppercase tracking-wider font-extrabold px-4 py-1.5 rounded-full shadow-lg flex items-center gap-1.5">
-                                    <Sparkles className="w-3.5 h-3.5" /> BEST VALUE
-                                </div>
-                            )}
-                            <h4 className="text-xl font-extrabold text-[#111110] mb-4 tracking-tight flex items-center gap-2">
-                                무제한 구독형 <span className="text-[13px] px-2.5 py-1 bg-[#F6F5F4] text-[#615D59] rounded-lg ml-1 font-bold">{tier}</span>
-                            </h4>
-                            <div className="text-[2.5rem] font-black text-[#111110] mb-2 truncate tracking-tight">
-                                {formatCurrency(totalSubscriptionKRW)}<span className="text-xl font-semibold text-[#A39E98] ml-1.5 font-sans">원 / 월</span>
-                            </div>
-
-                            <p className={`text-[13.5px] leading-relaxed mt-4 pt-1 ${!isBusinessRecom ? 'text-[#111110] font-bold' : 'text-[#615D59] font-medium'}`}>
-                                {!isBusinessRecom
-                                    ? (subReasons.length > 0 ? `✨ 고급형 기능( ${subReasons.join(', ')} )이 자동 포함되어있으며, 추가 옵션 비용 걱정 없이 대규모 수업을 이어갈 수 있어 압도적으로 유리합니다!` : "✨ 마음 편하게 제약 없이 마음껏 수업을 개설할 수 있어, 장기적으로 무제한 정액제를 쓰시는 쪽이 압도적인 가성비를 자랑합니다!")
-                                    : "소규모, 안정기 이전의 경우 현재 쓰임새 대비 구독 고정비가 비교적 클 수 있으므로 효율적인 기본 충전형(Business)을 고려해 보세요."}
-                            </p>
-                            <div className="mt-6 pt-4 border-t border-black/[0.06] text-[12px] text-[#A39E98] font-bold flex justify-between tracking-wide">
-                                <span>계정당 1인: ${usdPricePerTeacher}</span>
-                                <span>월 총액: ${totalSubscriptionUSD}</span>
-                            </div>
-                        </div>
-                    </div>
-
-                </div>
-            </div>
-
-            </div> {/* end content fade wrapper */}
-        </div>
+  const pricing = React.useMemo(() => {
+    const billableMinutesPerClass = resolveBillableMinutes(classDurationMinutes)
+    const totalBillableHours = (classCount * billableMinutesPerClass) / 60
+    const billedStudents = Math.min(connectedStudents, 200)
+    const billedPeople = billedStudents + 1
+    const unbilledStudents = Math.max(connectedStudents - 200, 0)
+    const classRate = resolveBusinessClassRate({
+      onStageStudents: effectiveOnStageStudentsNum,
+      quality,
+      hasDualCamera,
+    })
+    const classCny = classRate.rate * billedPeople * totalBillableHours
+    const assistantRate = resolveAssistantRate(quality)
+    const assistantCny = assistantCount * assistantRate * totalBillableHours
+    const recordingRate = RECORDING_RATE_CNY[recordingMode]
+    const recordingCny = recordingRate * totalBillableHours
+    const storageOverageGb = Math.max(storageGb - BUSINESS_FREE_STORAGE_GB, 0)
+    const storageCny = storageOverageGb * BUSINESS_STORAGE_CNY_PER_GB
+    const webLiveCny = webLiveTrafficGb * BUSINESS_WEBLIVE_CNY_PER_GB
+    const totalBusinessCny = classCny + assistantCny + recordingCny + storageCny + webLiveCny
+    const initialRechargeCny = Math.max(
+      MIN_INITIAL_RECHARGE_CNY,
+      roundUpToStep(totalBusinessCny, RECHARGE_STEP_CNY)
     )
+
+    const subscription = resolveSubscriptionTier({
+      onStageStudents: effectiveOnStageStudentsNum,
+      courseStudents,
+      lessonMinutes: classDurationMinutes,
+      quality,
+      assistantCount,
+      webLiveTrafficGb,
+      hasDualCamera,
+    })
+    const subscriptionUsd = subscription.config.priceUsd * teachersNum
+    const subscriptionIncludedStorageGb =
+      subscription.config.baseStorageGb + subscription.config.storagePerTeacherGb * teachersNum
+    const subscriptionStorageOverageGb = Math.max(storageGb - subscriptionIncludedStorageGb, 0)
+    const businessKrw = totalBusinessCny * CNY_TO_KRW
+    const subscriptionKrw = subscriptionUsd * USD_TO_KRW
+    const recommendation = subscription.outOfRange
+      ? "consult"
+      : businessKrw <= subscriptionKrw
+        ? "business"
+        : "subscription"
+
+    return {
+      billableMinutesPerClass,
+      effectiveOnStageStudents: effectiveOnStageStudentsNum,
+      totalBillableHours,
+      billedStudents,
+      billedPeople,
+      unbilledStudents,
+      classRate,
+      classCny,
+      assistantRate,
+      assistantCny,
+      recordingRate,
+      recordingCny,
+      storageOverageGb,
+      storageCny,
+      webLiveCny,
+      totalBusinessCny,
+      initialRechargeCny,
+      businessKrw,
+      subscription,
+      subscriptionUsd,
+      subscriptionKrw,
+      subscriptionIncludedStorageGb,
+      subscriptionStorageOverageGb,
+      recommendation,
+    }
+  }, [
+    assistantCount,
+    classCount,
+    classDurationMinutes,
+    connectedStudents,
+    courseStudents,
+    effectiveOnStageStudentsNum,
+    hasDualCamera,
+    quality,
+    recordingMode,
+    storageGb,
+    teachersNum,
+    webLiveTrafficGb,
+  ])
+
+  const businessRecommended = pricing.recommendation === "business"
+  const subscriptionRecommended = pricing.recommendation === "subscription"
+
+  return (
+    <div className="mx-auto w-full max-w-6xl overflow-hidden rounded-xl border border-black/[0.08] bg-white shadow-[0_18px_52px_rgba(0,0,0,0.05)]">
+      <div className="border-b border-black/[0.08] bg-white px-5 py-6 sm:px-8 lg:px-10">
+        <div className="grid gap-6 lg:grid-cols-[1fr_0.9fr] lg:items-end">
+          <div>
+            <h2 className="text-[28px] font-semibold leading-tight tracking-tight text-[#111110] sm:text-[34px]">
+              월 예상 요금 시뮬레이터
+            </h2>
+            <p className="mt-3 max-w-2xl text-[15px] leading-7 text-[#615D59]">
+              온스테이지 인원은 수업 단가를 정하고, 수업 접속 학생 수는 과금 인원을 정합니다. 수업
+              시간은 10분 이하 무료, 이후 30분 단위로 청구됩니다.
+            </p>
+          </div>
+          <div className="rounded-lg border border-[#D1FAE5] bg-[#ECFDF5] p-4 text-[13px] leading-6 text-[#084734]">
+            <div className="flex gap-2">
+              <Info className="mt-0.5 h-4 w-4 shrink-0" aria-hidden="true" />
+              <p>
+                환율 가정: 1 CNY = {formatNumber(CNY_TO_KRW)}원, 1 USD ={" "}
+                {formatNumber(USD_TO_KRW)}원. 실제 결제 금액은 계약 및 결제일 환율에 따라 달라질 수
+                있습니다.
+              </p>
+            </div>
+          </div>
+        </div>
+      </div>
+
+      <div className="grid gap-0 lg:grid-cols-[minmax(0,1.05fr)_minmax(360px,0.95fr)]">
+        <div className="space-y-9 border-b border-black/[0.08] bg-white p-5 sm:p-8 lg:border-b-0 lg:border-r lg:p-10">
+          <FieldGroup
+            title="수업 구조"
+            description="온스테이지와 수업 접속 학생 수는 다른 값입니다. 온스테이지는 단가 기준이고, 접속 학생 수는 과금 인원 기준입니다."
+          >
+            <div className="space-y-7">
+              <div className="space-y-4">
+                <div className="flex items-center justify-between gap-4">
+                  <details
+                    className="relative"
+                    open={isStudentHelpOpen}
+                    onToggle={(event) => setIsStudentHelpOpen(event.currentTarget.open)}
+                    onMouseEnter={() => setIsStudentHelpOpen(true)}
+                    onMouseLeave={() => setIsStudentHelpOpen(false)}
+                  >
+                    <summary className="flex cursor-pointer list-none items-center gap-2 text-[13px] font-semibold text-[#31302E] outline-none focus-visible:ring-2 focus-visible:ring-[#084734]/20 [&::-webkit-details-marker]:hidden">
+                      온스테이지 학생 수
+                      <Info className="h-4 w-4 text-[#A39E98]" aria-hidden="true" />
+                    </summary>
+                    <div
+                      role="tooltip"
+                      className="absolute left-0 top-[calc(100%+0.65rem)] z-20 w-[280px] rounded-lg bg-[#31302E] p-4 text-[12px] leading-5 text-white shadow-xl"
+                    >
+                      한 수업에서 동시에 무대에 올라 비디오/오디오로 상호작용하는 학생 수입니다.
+                      최대 12명까지만 선택하며, 이 값은 Business 수업 단가와 구독형 플랜 범위 판단에
+                      사용됩니다.
+                    </div>
+                  </details>
+                  <span className="rounded-lg bg-[#ECFDF5] px-3 py-1.5 text-[18px] font-semibold text-[#084734]">
+                    {onStageStudentsNum}명
+                  </span>
+                </div>
+                <Slider
+                  aria-label="온스테이지 학생 수"
+                  max={12}
+                  step={1}
+                  value={onStageStudents}
+                  onValueChange={(value) => setOnStageStudents([Math.min(value[0] ?? 0, 12)])}
+                  className="py-3 [&>span:first-child]:h-2.5 [&>span:first-child]:!bg-[#E5E5E0] [&_[role=slider]]:h-6 [&_[role=slider]]:w-6 [&_[role=slider]]:border-[3px] [&_[role=slider]]:border-[#084734] [&_[role=slider]]:bg-white"
+                />
+                {onStageStudentsNum > connectedStudents ? (
+                  <p className="text-[12px] leading-5 text-[#615D59]">
+                    접속 학생 수보다 온스테이지 학생 수가 커서 계산에는{" "}
+                    {formatNumber(pricing.effectiveOnStageStudents)}명을 반영합니다.
+                  </p>
+                ) : null}
+              </div>
+
+              <NumberInput
+                id="connected-students"
+                label="수업 접속 학생 수"
+                value={connectedStudents}
+                min={0}
+                max={300}
+                unit="명"
+                onChange={setConnectedStudents}
+              />
+              <p className="text-[12px] leading-5 text-[#615D59]">
+                Business 수업 진행 과금은 접속 학생 {formatNumber(pricing.billedStudents)}명과 강사
+                1명을 기준으로 계산합니다.
+                {pricing.unbilledStudents > 0
+                  ? ` 학생 200명 초과 ${formatNumber(pricing.unbilledStudents)}명은 무료로 계산합니다.`
+                  : ""}
+              </p>
+
+              <div className="space-y-4">
+                <div className="flex items-center justify-between gap-4">
+                  <span className="text-[13px] font-semibold text-[#31302E]">강사 계정 수</span>
+                  <span className="rounded-lg bg-[#F6F5F4] px-3 py-1.5 text-[18px] font-semibold text-[#111110]">
+                    {teachersNum}명
+                  </span>
+                </div>
+                <Slider
+                  aria-label="강사 계정 수"
+                  max={50}
+                  min={1}
+                  step={1}
+                  value={teachers}
+                  onValueChange={setTeachers}
+                  className="py-3 [&>span:first-child]:h-2.5 [&>span:first-child]:!bg-[#E5E5E0] [&_[role=slider]]:h-6 [&_[role=slider]]:w-6 [&_[role=slider]]:border-[3px] [&_[role=slider]]:border-[#084734] [&_[role=slider]]:bg-white"
+                />
+              </div>
+
+              <NumberInput
+                id="course-students"
+                label="반/코스 전체 인원 (구독형 기준)"
+                value={courseStudents}
+                min={1}
+                max={3000}
+                unit="명"
+                onChange={setCourseStudents}
+              />
+            </div>
+          </FieldGroup>
+
+          <FieldGroup
+            title="수업량과 청구 시간"
+            description="Business는 실제 수업 시간이 아니라 청구 단위로 환산된 시간이 소모량에 반영됩니다."
+          >
+            <div className="grid gap-4 sm:grid-cols-2">
+              <NumberInput
+                id="class-count"
+                label="월 평균 수업 횟수"
+                value={classCount}
+                min={1}
+                max={5000}
+                unit="회"
+                onChange={setClassCount}
+              />
+              <NumberInput
+                id="class-duration"
+                label="1회 평균 수업 시간"
+                value={classDurationMinutes}
+                min={5}
+                max={1440}
+                step={5}
+                unit="분"
+                onChange={setClassDurationMinutes}
+              />
+            </div>
+
+            <div className="grid gap-3 sm:grid-cols-3">
+              {[30, 50, 60, 90, 120, 180].map((minutes) => (
+                <SegmentButton
+                  key={minutes}
+                  active={classDurationMinutes === minutes}
+                  onClick={() => setClassDurationMinutes(minutes)}
+                >
+                  {formatMinutes(minutes)}
+                </SegmentButton>
+              ))}
+            </div>
+
+            <div className="rounded-lg border border-black/[0.08] bg-[#F6F5F4] p-4">
+              <div className="flex items-start gap-3">
+                <TimerReset className="mt-0.5 h-4 w-4 text-[#084734]" aria-hidden="true" />
+                <div>
+                  <p className="text-[13px] font-semibold text-[#111110]">
+                    1회 {formatMinutes(classDurationMinutes)} → 청구 {formatMinutes(pricing.billableMinutesPerClass)}
+                  </p>
+                  <p className="mt-1 text-[12px] leading-5 text-[#615D59]">
+                    월 청구 수업 시간은 {formatDecimal(pricing.totalBillableHours)}시간입니다.
+                    {classDurationMinutes <= 10 ? " 10분 이하 수업은 청구되지 않습니다." : null}
+                  </p>
+                </div>
+              </div>
+            </div>
+          </FieldGroup>
+
+          <FieldGroup title="화질과 수업 옵션">
+            <div className="space-y-5">
+              <div className="grid gap-3 sm:grid-cols-3">
+                {(["SD", "HD", "FHD"] as Quality[]).map((item) => (
+                  <SegmentButton key={item} active={quality === item} onClick={() => setQuality(item)}>
+                    {QUALITY_LABEL[item]}
+                  </SegmentButton>
+                ))}
+              </div>
+
+              <div className="grid gap-4 sm:grid-cols-2">
+                <NumberInput
+                  id="assistant-count"
+                  label="동석 조교 수"
+                  value={assistantCount}
+                  min={0}
+                  max={6}
+                  unit="명"
+                  onChange={setAssistantCount}
+                />
+                <label className="flex min-h-12 items-center gap-3 rounded-lg border border-black/[0.08] bg-white px-3 py-3 text-[13px] font-semibold text-[#31302E]">
+                  <input
+                    type="checkbox"
+                    checked={hasDualCamera}
+                    onChange={(event) => setHasDualCamera(event.target.checked)}
+                    className="h-4 w-4 accent-[#084734]"
+                  />
+                  1v1 듀얼 카메라 사용
+                </label>
+              </div>
+
+              <div className="space-y-2">
+                <span className="text-[13px] font-semibold text-[#31302E]">수업 녹화</span>
+                <div className="grid gap-3 sm:grid-cols-3">
+                  {(["none", "single", "dual"] as RecordingMode[]).map((mode) => (
+                    <SegmentButton
+                      key={mode}
+                      active={recordingMode === mode}
+                      onClick={() => setRecordingMode(mode)}
+                    >
+                      {RECORDING_LABEL[mode]}
+                    </SegmentButton>
+                  ))}
+                </div>
+              </div>
+            </div>
+          </FieldGroup>
+
+          <FieldGroup
+            title="스토리지와 웹라이브 소모량"
+            description="Business는 30GB까지 무료이고 초과 스토리지와 웹라이브 트래픽은 별도 소모량으로 계산합니다."
+          >
+            <div className="grid gap-4 sm:grid-cols-2">
+              <NumberInput
+                id="storage-gb"
+                label="예상 스토리지 사용량"
+                value={storageGb}
+                min={0}
+                max={6000}
+                unit="GB"
+                onChange={setStorageGb}
+              />
+              <NumberInput
+                id="web-live-gb"
+                label="웹라이브 트래픽"
+                value={webLiveTrafficGb}
+                min={0}
+                max={6000}
+                unit="GB"
+                onChange={setWebLiveTrafficGb}
+              />
+            </div>
+          </FieldGroup>
+        </div>
+
+        <aside className="bg-[#F6F5F4] p-5 sm:p-8 lg:p-10">
+          <div className="sticky top-24 space-y-5">
+            <div className="grid gap-3">
+              <SummaryCard
+                icon={<WalletCards className="h-4 w-4" aria-hidden="true" />}
+                label="Business 월 소모량"
+                value={`${formatNumber(pricing.totalBusinessCny)} CNY`}
+                helper={`약 ${formatNumber(pricing.businessKrw)}원`}
+                active={businessRecommended}
+              />
+              <SummaryCard
+                icon={<Users className="h-4 w-4" aria-hidden="true" />}
+                label="Learning Space 월 구독료"
+                value={`$${formatNumber(pricing.subscriptionUsd)}`}
+                helper={`${pricing.subscription.tier} · 약 ${formatNumber(pricing.subscriptionKrw)}원`}
+                active={subscriptionRecommended}
+              />
+            </div>
+
+            <div className="rounded-lg border border-black/[0.08] bg-white p-5">
+              <div className="flex items-start gap-3">
+                {pricing.recommendation === "consult" ? (
+                  <AlertCircle className="mt-0.5 h-5 w-5 text-[#084734]" aria-hidden="true" />
+                ) : (
+                  <CheckCircle2 className="mt-0.5 h-5 w-5 text-[#084734]" aria-hidden="true" />
+                )}
+                <div>
+                  <p className="text-[15px] font-semibold text-[#111110]">
+                    {pricing.recommendation === "consult"
+                      ? "구독형 범위 확인 필요"
+                      : businessRecommended
+                        ? "현재 조건은 Business가 유리합니다"
+                        : "현재 조건은 구독형이 유리합니다"}
+                  </p>
+                  <p className="mt-2 text-[13px] leading-6 text-[#615D59]">
+                    {pricing.recommendation === "consult"
+                      ? "입력값이 구독형 Enterprise 표준 범위를 넘습니다. Business 소모량 기준으로 검토하되 최종 조건은 상담으로 확정해야 합니다."
+                      : businessRecommended
+                        ? "초기 충전은 최소 10,000 CNY부터 가능하지만, 월 예상 소모량은 사용한 만큼 차감되는 방식입니다."
+                        : "수업 시간이 많거나 고화질/부가 옵션이 포함될수록 정액형 구독이 예산 관리에 유리합니다."}
+                  </p>
+                </div>
+              </div>
+            </div>
+
+            <div className="rounded-lg border border-black/[0.08] bg-white p-5">
+              <div className="flex items-center gap-2">
+                <Clock3 className="h-4 w-4 text-[#084734]" aria-hidden="true" />
+                <h3 className="text-[15px] font-semibold text-[#111110]">Business 소모량 상세</h3>
+              </div>
+              <div className="mt-4">
+                <BreakdownRow
+                  label="수업 진행"
+                  detail={`${pricing.classRate.label} · ${pricing.classRate.rate} CNY x ${formatNumber(pricing.billedPeople)}명(접속 학생 ${formatNumber(pricing.billedStudents)}명 + 강사 1명) x ${formatDecimal(pricing.totalBillableHours)}시간`}
+                  amount={`${formatNumber(pricing.classCny)} CNY`}
+                />
+                <BreakdownRow
+                  label="조교 동석"
+                  detail={
+                    assistantCount > 0
+                      ? `${formatNumber(assistantCount)}명 x ${pricing.assistantRate} CNY x ${formatDecimal(pricing.totalBillableHours)}시간`
+                      : "선택 안 함"
+                  }
+                  amount={`${formatNumber(pricing.assistantCny)} CNY`}
+                />
+                <BreakdownRow
+                  label="수업 녹화"
+                  detail={
+                    recordingMode === "none"
+                      ? "선택 안 함"
+                      : `${RECORDING_LABEL[recordingMode]} · ${pricing.recordingRate} CNY x ${formatDecimal(pricing.totalBillableHours)}시간`
+                  }
+                  amount={`${formatNumber(pricing.recordingCny)} CNY`}
+                />
+                <BreakdownRow
+                  label="스토리지 초과"
+                  detail={`${BUSINESS_FREE_STORAGE_GB}GB 무료 · 초과 ${formatNumber(pricing.storageOverageGb)}GB`}
+                  amount={`${formatNumber(pricing.storageCny)} CNY`}
+                />
+                <BreakdownRow
+                  label="웹라이브 트래픽"
+                  detail={`${formatNumber(webLiveTrafficGb)}GB x ${BUSINESS_WEBLIVE_CNY_PER_GB} CNY`}
+                  amount={`${formatNumber(pricing.webLiveCny)} CNY`}
+                />
+              </div>
+              <div className="mt-4 rounded-lg bg-[#F6F5F4] p-4">
+                <p className="text-[12px] font-semibold text-[#615D59]">초기 충전 권장액</p>
+                <p className="mt-1 text-[22px] font-semibold tracking-tight text-[#111110]">
+                  {formatNumber(pricing.initialRechargeCny)} CNY
+                </p>
+                <p className="mt-1 text-[12px] leading-5 text-[#615D59]">
+                  최소 충전 10,000 CNY, 이후 2,000 CNY 단위 충전 기준입니다.
+                </p>
+              </div>
+            </div>
+
+            <div className="rounded-lg border border-black/[0.08] bg-white p-5">
+              <div className="flex items-center gap-2">
+                <Video className="h-4 w-4 text-[#084734]" aria-hidden="true" />
+                <h3 className="text-[15px] font-semibold text-[#111110]">구독형 판정</h3>
+              </div>
+              <div className="mt-4 grid gap-3 text-[13px] leading-6 text-[#615D59]">
+                <p>
+                  추천 플랜:{" "}
+                  <span className="font-semibold text-[#111110]">{pricing.subscription.tier}</span>
+                  {" · "}계정당 ${pricing.subscription.config.priceUsd}/월
+                </p>
+                <p>
+                  포함 스토리지:{" "}
+                  <span className="font-semibold text-[#111110]">
+                    {formatNumber(pricing.subscriptionIncludedStorageGb)}GB
+                  </span>
+                  {pricing.subscriptionStorageOverageGb > 0
+                    ? ` · 초과 ${formatNumber(pricing.subscriptionStorageOverageGb)}GB는 추가 구매 필요`
+                    : ""}
+                </p>
+                {pricing.subscription.reasons.length > 0 ? (
+                  <p>상향 사유: {pricing.subscription.reasons.join(", ")}</p>
+                ) : (
+                  <p>현재 조건은 Standard 범위에 들어옵니다.</p>
+                )}
+              </div>
+            </div>
+
+            <div className="rounded-lg border border-[#D1FAE5] bg-[#ECFDF5] p-4 text-[12px] leading-5 text-[#084734]">
+              <div className="flex gap-2">
+                <Database className="mt-0.5 h-4 w-4 shrink-0" aria-hidden="true" />
+                <p>
+                  스토리지에는 스크린샷, 녹화본, 판서 파일 등이 포함됩니다. Business 저장 데이터는
+                  수업일 기준 3개월 무료 보관 후 유료 청구될 수 있습니다.
+                </p>
+              </div>
+            </div>
+          </div>
+        </aside>
+      </div>
+    </div>
+  )
 }
