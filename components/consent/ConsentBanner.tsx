@@ -1,5 +1,6 @@
 "use client"
 
+import Image from "next/image"
 import Link from "next/link"
 import { X } from "lucide-react"
 import { useEffect, useState } from "react"
@@ -114,41 +115,52 @@ export function ConsentBanner() {
         </button>
 
         <div className="flex flex-col gap-3.5">
-          <div className="space-y-1.5">
-            <p className="text-[15px] font-bold text-[#111110]">쿠키 사용 동의</p>
-            <p className="text-[13px] leading-relaxed text-[#5b6660]">
-              사이트 운영에 필요한 쿠키를 사용합니다. 분석·마케팅 쿠키는 선택해 주신 경우에만 켜지며, 자세한 내용은{" "}
-              <Link
-                href="/privacy"
-                prefetch={false}
-                className="font-medium text-[#084734] underline underline-offset-2"
-              >
-                개인정보처리방침
-              </Link>
-              에서 확인하실 수 있습니다.
-            </p>
+          <div className="flex items-start gap-3">
+            <Image
+              src="/images/consent/cookie-crayon.png"
+              alt=""
+              width={48}
+              height={48}
+              aria-hidden="true"
+              className="mt-0.5 h-11 w-11 shrink-0 object-contain"
+            />
+            <div className="space-y-1.5">
+              <p className="text-[15px] font-bold text-[#111110]">쿠키를 조금만 사용할게요</p>
+              <p className="text-[13px] leading-relaxed text-[#5b6660]">
+                잠깐 양해 부탁드려요. 사이트가 잘 열리고 상담 신청이 매끄럽게 이어지도록 꼭 필요한 쿠키를 씁니다.
+                분석·마케팅 쿠키는 선택해 주신 경우에만 조심히 켤게요. 자세한 내용은{" "}
+                <Link
+                  href="/privacy"
+                  prefetch={false}
+                  className="font-medium text-[#084734] underline underline-offset-2"
+                >
+                  개인정보처리방침
+                </Link>
+                에서 확인하실 수 있습니다.
+              </p>
+            </div>
           </div>
 
           {showSettings ? (
             <div className="grid gap-2 rounded-lg bg-[#F6F5F4] p-3">
               <p className="px-1 text-[12px] leading-relaxed text-[#615D59]">
-                원하시는 항목만 편하게 선택해 주세요. 동의하지 않아도 사이트의 기본 기능은 그대로 이용하실 수 있습니다.
+                필요한 것만 가볍게 골라 주세요. 선택하지 않아도 사이트의 기본 기능은 그대로 이용할 수 있어요.
               </p>
               <ConsentRow
                 label="필수"
-                desc="보안, 페이지 이동, 상담 신청처럼 기본 기능을 안정적으로 제공하기 위해 필요해요. 이 항목은 항상 사용됩니다."
+                desc="보안, 페이지 이동, 상담 신청처럼 사이트가 제대로 움직이는 데 꼭 필요해요. 이 쿠키는 항상 켜져 있어요."
                 checked
                 disabled
               />
               <ConsentRow
                 label="분석"
-                desc="어떤 페이지가 도움이 되는지 살펴보고 사이트를 더 편하게 다듬는 데 사용해요."
+                desc="어떤 페이지가 도움이 됐는지 살펴보고, 덜 불편한 사이트로 다듬는 데 써요."
                 checked={draft.analytics}
                 onChange={(v) => setDraft((d) => ({ ...d, analytics: v }))}
               />
               <ConsentRow
                 label="마케팅"
-                desc="Meta·Kakao·Naver 등에서 광고 성과를 확인하고, 관심사에 맞는 안내를 보여드릴 때 사용해요."
+                desc="광고 성과를 확인하고, 관심 있어 보이는 안내를 더 알맞게 보여드릴 때 써요."
                 checked={draft.marketing}
                 onChange={(v) => setDraft((d) => ({ ...d, marketing: v }))}
               />
