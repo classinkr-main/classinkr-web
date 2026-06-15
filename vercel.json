@@ -47,6 +47,10 @@
     {
       "path": "/api/cron/sync-external-crm",
       "schedule": "0 7 * * *"
+    },
+    {
+      "path": "/api/cron/channel-talk-sync",
+      "schedule": "15 */6 * * *"
     }
   ]
 }

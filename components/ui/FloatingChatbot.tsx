@@ -19,7 +19,7 @@ import {
 } from "lucide-react"
 
 import { cn } from "@/lib/utils"
-import { openChannelTalk } from "@/lib/channel-talk"
+import { openChannelTalk, type ChannelTalkProfile } from "@/lib/channel-talk"
 
 type HandoffIntent = "demo" | "support"
 
@@ -92,6 +92,30 @@ function shouldUseDeepConsultationIcon(text: string) {
 
 function makeId() {
     return `${Date.now()}-${Math.random().toString(16).slice(2)}`
+}
+
+const HANDOFF_TRANSCRIPT_LIMIT = 6
+
+// 상담원 연결 시 최근 대화록·인텐트를 채널톡 프로필로 넘긴다 — 상담원이 맥락을 갖고 시작.
+function buildHandoffProfile(
+    messages: ChatMessage[],
+    triggerMessage: ChatMessage,
+    sessionId?: string,
+): ChannelTalkProfile {
+    const lastQuestion = [...messages].reverse().find((m) => m.role === "user")?.content
+    const transcript = messages
+        .slice(-HANDOFF_TRANSCRIPT_LIMIT)
+        .map((m) => `${m.role === "user" ? "고객" : "챗봇"}: ${m.content}`)
+        .join("\n")
+
+    const profile: ChannelTalkProfile = {
+        chatbotHandoff: true,
+        chatbotIntent: triggerMessage.handoffIntent ?? "support",
+    }
+    if (lastQuestion) profile.lastQuestion = lastQuestion.slice(0, 300)
+    if (transcript) profile.chatbotTranscript = transcript.slice(0, 1500)
+    if (sessionId) profile.chatbotSessionId = sessionId
+    return profile
 }
 
 function getAnonymousId() {
@@ -499,7 +523,9 @@ export function FloatingChatbot() {
                                                                     <button
                                                                         type="button"
                                                                         onClick={() => {
-                                                                            const opened = openChannelTalk()
+                                                                            const opened = openChannelTalk({
+                                                                                profile: buildHandoffProfile(messages, message, sessionId),
+                                                                            })
                                                                             if (!opened) {
                                                                                 window.location.href = "/contact"
                                                                             }

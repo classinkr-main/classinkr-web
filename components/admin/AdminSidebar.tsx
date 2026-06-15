@@ -18,6 +18,7 @@ import {
   Magnet,
   Menu,
   Megaphone,
+  MessageSquare,
   MoreHorizontal,
   Search,
   Settings,
@@ -51,6 +52,7 @@ const STAFF_EDITOR: SidebarRole[] = ["SUPER_ADMIN", "ADMIN", "EDITOR"]
 const NAV: NavItem[] = [
   { href: "/admin/overview", label: "Overview", icon: <LayoutDashboard className="h-4 w-4" />, roles: [...ALL_STAFF, "BRANCH"], section: "workspace" },
   { href: "/admin/crm", label: "CRM", icon: <Users className="h-4 w-4" />, roles: [...ALL_STAFF, "BRANCH"], section: "workspace" },
+  { href: "/admin/channel-talk", label: "채널톡 상담", icon: <MessageSquare className="h-4 w-4" />, roles: STAFF_ADMIN, section: "workspace", badge: "New" },
   { href: "/admin/calendar", label: "캘린더", icon: <CalendarDays className="h-4 w-4" />, roles: [...ALL_STAFF, "BRANCH"], section: "workspace" },
   { href: "/admin/quotes", label: "견적·문서", icon: <FileText className="h-4 w-4" />, roles: STAFF_ADMIN, section: "workspace" },
   { href: "/admin/campaigns", label: "캠페인", icon: <Megaphone className="h-4 w-4" />, roles: STAFF_ADMIN, section: "growth" },
@@ -77,6 +79,7 @@ const NAV_WARMUP_REQUESTS: Record<string, string[]> = {
     "/api/admin/patch-notes",
   ],
   "/admin/crm": ["/api/admin/leads", "/api/admin/events"],
+  "/admin/channel-talk": ["/api/admin/channel-talk", "/api/admin/channel-talk/mine"],
   "/admin/calendar": ["/api/admin/calendar"],
   "/admin/quotes": ["/api/admin/quotes"],
   "/admin/campaigns": [

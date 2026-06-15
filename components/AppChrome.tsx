@@ -42,6 +42,10 @@ const ConsentBanner = dynamic(
   () => import("@/components/consent/ConsentBanner").then((mod) => mod.ConsentBanner),
   { ssr: false }
 )
+const ChannelTalkLoader = dynamic(
+  () => import("@/components/ui/ChannelTalkLoader").then((mod) => mod.ChannelTalkLoader),
+  { ssr: false }
+)
 
 function isInternalPath(pathname: string) {
   return (
@@ -97,6 +101,7 @@ export function AppChrome({ children }: { children: ReactNode }) {
         </>
       ) : null}
       {showPublicChrome ? <ConsentBanner /> : null}
+      {showPublicChrome ? <ChannelTalkLoader /> : null}
       {showPublicChrome && readyPath === pathname ? (
         <>
           <FloatingChatbot />
