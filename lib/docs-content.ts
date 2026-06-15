@@ -57,6 +57,8 @@ const staticDocsContent: DocsContent = {
   docs: listStaticDocs(),
 }
 
+const PUBLISHED_DOC_STATUS_VALUES = ["published", "PUBLISHED"]
+
 function shouldUseSupabaseDocs() {
   return process.env.USE_SUPABASE_DOCS === "true"
 }
@@ -166,7 +168,7 @@ async function fetchDocsContentFromSupabase(): Promise<DocsContent> {
         .select(
           "id, category_id, slug, title, description, audience, tags, keywords, chatbot_summary, content_markdown, content_json, featured, visibility, noindex, last_reviewed_at, published_at, updated_at"
         )
-        .eq("status", "published")
+        .in("status", PUBLISHED_DOC_STATUS_VALUES)
         .in("visibility", ["public", "unlisted"])
         .order("order_index", { ascending: true }),
     ])

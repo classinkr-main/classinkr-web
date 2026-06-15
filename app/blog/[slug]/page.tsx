@@ -32,6 +32,24 @@ function decodeSlug(raw: string) {
   try { return decodeURIComponent(raw) } catch { return raw }
 }
 
+async function getOptionalRelatedPosts(post: NonNullable<Awaited<ReturnType<typeof getPublishedPostBySlug>>>) {
+  try {
+    return await getRelatedPosts(post, 3)
+  } catch (error) {
+    console.warn("[blog detail] related posts skipped:", error)
+    return []
+  }
+}
+
+async function getOptionalLeadMagnet(slug: string | null | undefined) {
+  try {
+    return await getLeadMagnetBySlugFromStore(slug)
+  } catch (error) {
+    console.warn("[blog detail] lead magnet skipped:", error)
+    return null
+  }
+}
+
 export async function generateMetadata({
   params,
 }: BlogDetailPageProps): Promise<Metadata> {
@@ -91,10 +109,12 @@ export default async function BlogDetailPage({
   }
 
   const headings = extractMarkdownHeadings(post.contentMarkdown)
-  const relatedPosts = await getRelatedPosts(post, 3)
+  const [relatedPosts, leadMagnet] = await Promise.all([
+    getOptionalRelatedPosts(post),
+    getOptionalLeadMagnet(post.leadMagnetSlug),
+  ])
   const benefits = post.benefitItems.filter(Boolean)
   const ctaHref = sanitizePublicUrl(post.cta.buttonHref, "")
-  const leadMagnet = await getLeadMagnetBySlugFromStore(post.leadMagnetSlug)
 
   return (
     <div className="min-h-screen bg-[#FAFAF8] text-[#111110]">

@@ -317,6 +317,30 @@ function createEmptyDraft(): BlogPostInput {
   }
 }
 
+function toEditablePostInput(post: BlogPost): BlogPostInput {
+  const input = { ...post } as BlogPostInput & { id?: number }
+  delete input.id
+  return {
+    ...input,
+    tags: [...post.tags],
+    benefitItems: [...post.benefitItems],
+    relatedPostIds: [...post.relatedPostIds],
+    cta: { ...post.cta },
+    publishedAt: post.publishedAt ?? "",
+  }
+}
+
+function shouldUseStoredDraft(savedDraft: BlogPostInput, initialPost?: BlogPost) {
+  if (!initialPost) return true
+  if (!savedDraft.updatedAt) return false
+
+  const savedUpdatedAt = new Date(savedDraft.updatedAt).getTime()
+  const serverUpdatedAt = initialPost.updatedAt ? new Date(initialPost.updatedAt).getTime() : NaN
+  if (Number.isNaN(savedUpdatedAt) || Number.isNaN(serverUpdatedAt)) return true
+
+  return serverUpdatedAt <= savedUpdatedAt
+}
+
 // ISO 문자열 ↔ datetime-local 입력값(로컬 시각, 타임존 없음) 변환
 function isoToLocalInput(iso?: string) {
   if (!iso) return ""
@@ -376,7 +400,7 @@ export default function BlogPostEditor({
 }: BlogPostEditorProps) {
   const router = useRouter()
   const editorRef = useRef<RichMarkdownEditorHandle | null>(null)
-  const initialForm = initialPost ? { ...initialPost } : createEmptyDraft()
+  const initialForm = initialPost ? toEditablePostInput(initialPost) : createEmptyDraft()
 
   const [form, setForm] = useState<BlogPostInput>(initialForm)
   const [tagsInput, setTagsInput] = useState(initialForm.tags.join(", "))
@@ -403,6 +427,7 @@ export default function BlogPostEditor({
   const slugEditedRef = useRef(slugEdited)
   const undoStackRef = useRef<EditorSnapshot[]>([])
   const redoStackRef = useRef<EditorSnapshot[]>([])
+  const skipNextAutosaveRef = useRef(false)
   const wrapperRef = useRef<HTMLDivElement>(null)
   const headerRef = useRef<HTMLElement>(null)
 
@@ -605,6 +630,10 @@ export default function BlogPostEditor({
     if (!rawDraft) return
     try {
       const savedDraft = JSON.parse(rawDraft) as BlogPostInput
+      if (!shouldUseStoredDraft(savedDraft, initialPost)) {
+        localStorage.removeItem(draftStorageKey)
+        return
+      }
       applySnapshot({
         form: savedDraft,
         tagsInput: savedDraft.tags.join(", "),
@@ -616,9 +645,15 @@ export default function BlogPostEditor({
     } catch {
       // Ignore malformed local drafts.
     }
-  }, [applySnapshot, draftStorageKey])
+  }, [applySnapshot, draftStorageKey, initialPost])
 
   useEffect(() => {
+    if (skipNextAutosaveRef.current) {
+      skipNextAutosaveRef.current = false
+      setDraftState("saved")
+      return
+    }
+
     setDraftState("dirty")
     const timer = window.setTimeout(() => {
       setDraftState("saving")
@@ -754,8 +789,18 @@ export default function BlogPostEditor({
         return
       }
       const data = (await response.json()) as { post: BlogPost }
+      const nextForm = toEditablePostInput(data.post)
+      skipNextAutosaveRef.current = true
+      applySnapshot({
+        form: nextForm,
+        tagsInput: nextForm.tags.join(", "),
+        slugEdited: Boolean(nextForm.slug),
+      })
+      undoStackRef.current = []
+      redoStackRef.current = []
       localStorage.removeItem(draftStorageKey)
       setDraftState("saved")
+      setLastSavedAt(new Date())
       setNotice(nextStatus === "published" ? "발행까지 완료했습니다." : "저장했습니다.")
       startTransition(() => {
         router.push(`/admin/blog/${data.post.id}/edit`)

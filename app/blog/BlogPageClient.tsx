@@ -3,12 +3,11 @@
 import { useState, useMemo } from "react"
 import { motion, AnimatePresence } from "framer-motion"
 import { ArrowRight, Clock, Search } from "lucide-react"
-import Image from "next/image"
 import Link from "next/link"
+import { SafeBlogImage } from "@/components/blog/SafeBlogImage"
 import { NewsletterSubscribe } from "@/components/sections/NewsletterSubscribe"
 import type { BlogPost } from "@/lib/blog-types"
 import { CATEGORIES } from "@/lib/blog-types"
-import { NEUTRAL_BLUR_DATA_URL } from "@/lib/image-blur"
 
 interface BlogPageClientProps {
     posts: BlogPost[]
@@ -96,7 +95,7 @@ export default function BlogPageClient({ posts }: BlogPageClientProps) {
                                         className={`group relative ${heroSpans[idx] ?? ""}`}
                                     >
                                         <article className={`relative ${isHero ? "h-[300px] md:h-[360px]" : "h-[200px]"} lg:h-full overflow-hidden rounded-2xl bg-[#f0f0ec] ring-1 ring-black/5 transition-all duration-500 ease-out group-hover:-translate-y-0.5 group-hover:ring-black/10 group-hover:shadow-[0_22px_55px_-25px_rgba(0,0,0,0.45)]`}>
-                                            <Image
+                                            <SafeBlogImage
                                                 src={post.imageUrl}
                                                 alt={post.title}
                                                 fill
@@ -104,8 +103,7 @@ export default function BlogPageClient({ posts }: BlogPageClientProps) {
                                                     ? "(max-width: 1024px) 100vw, 50vw"
                                                     : "(max-width: 1024px) 100vw, 50vw"}
                                                 className="object-cover transition-transform duration-700 ease-out group-hover:scale-[1.06]"
-                                                placeholder="blur"
-                                                blurDataURL={NEUTRAL_BLUR_DATA_URL}
+                                                fallbackIndex={post.id}
                                             />
                                             <div className="absolute inset-0 bg-gradient-to-t from-black/70 via-black/20 to-transparent transition-colors duration-500 group-hover:from-black/80" />
 
@@ -266,14 +264,13 @@ export default function BlogPageClient({ posts }: BlogPageClientProps) {
 
                                         {/* Right: Thumbnail */}
                                         <div className="relative w-full h-28 md:h-[110px] rounded-xl overflow-hidden bg-[#f0f0ec] shrink-0 order-first md:order-last">
-                                            <Image
+                                            <SafeBlogImage
                                                 src={post.imageUrl}
                                                 alt={post.title}
                                                 fill
                                                 sizes="(min-width: 768px) 180px, 100vw"
                                                 className="object-cover transition-transform duration-500 group-hover:scale-[1.04]"
-                                                placeholder="blur"
-                                                blurDataURL={NEUTRAL_BLUR_DATA_URL}
+                                                fallbackIndex={post.id}
                                             />
                                         </div>
                                     </article>

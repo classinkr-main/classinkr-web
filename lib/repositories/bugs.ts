@@ -3,14 +3,40 @@ import { createSupabaseAdminClient } from "@/lib/supabase/admin";
 
 export type { BugReport } from "@/lib/bugs-data";
 import type { BugReport } from "@/lib/bugs-data";
+import {
+  createBugReport as createJsonBugReport,
+  deleteBugReport as deleteJsonBugReport,
+  getBugReports as getJsonBugReports,
+  updateBugReport as updateJsonBugReport,
+} from "@/lib/bugs-data";
 
 const sb = () => createSupabaseAdminClient();
+const BUG_REPORTS_TABLE_MISSING_CODES = new Set(["42P01", "PGRST205"]);
+
+type SupabaseLikeError = {
+  code?: string;
+  message?: string;
+};
+
+function canUseJsonFallback(error: SupabaseLikeError | null) {
+  if (!error) return false;
+  if (error.code && BUG_REPORTS_TABLE_MISSING_CODES.has(error.code)) return true;
+  return /bug_reports|schema cache|relation .* does not exist/i.test(error.message ?? "");
+}
+
+function warnJsonFallback(action: string, error: SupabaseLikeError) {
+  console.warn(`[bugs] Supabase ${action} failed; using JSON fallback: ${error.message ?? error.code ?? "unknown error"}`);
+}
 
 export async function getBugReports(): Promise<BugReport[]> {
   const { data, error } = await sb()
     .from("bug_reports")
     .select("*")
     .order("created_at", { ascending: false });
+  if (error && canUseJsonFallback(error)) {
+    warnJsonFallback("read", error);
+    return getJsonBugReports();
+  }
   if (error) throw new Error(`[bugs] 조회 실패: ${error.message}`);
   return (data ?? []).map(rowToLegacy);
 }
@@ -32,6 +58,10 @@ export async function createBugReport(
     })
     .select()
     .single();
+  if (error && canUseJsonFallback(error)) {
+    warnJsonFallback("create", error);
+    return createJsonBugReport(data);
+  }
   if (error) throw new Error(`[bugs] 생성 실패: ${error.message}`);
   return rowToLegacy(row);
 }
@@ -54,12 +84,20 @@ export async function updateBugReport(
     .eq("id", id)
     .select()
     .single();
+  if (error && canUseJsonFallback(error)) {
+    warnJsonFallback("update", error);
+    return updateJsonBugReport(id, patch);
+  }
   if (error || !row) return null;
   return rowToLegacy(row);
 }
 
 export async function deleteBugReport(id: string): Promise<boolean> {
   const { error } = await sb().from("bug_reports").delete().eq("id", id);
+  if (error && canUseJsonFallback(error)) {
+    warnJsonFallback("delete", error);
+    return deleteJsonBugReport(id);
+  }
   return !error;
 }
 

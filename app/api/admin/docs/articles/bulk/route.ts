@@ -6,6 +6,7 @@ import {
   type DocsArticleStatus,
   type DocsArticleVisibility,
 } from "@/lib/repositories/docs-articles"
+import { revalidateDocsIndexPaths } from "../_revalidate"
 
 const ALLOWED_STATUS: DocsArticleStatus[] = ["draft", "review", "published", "archived"]
 const ALLOWED_VISIBILITY: DocsArticleVisibility[] = ["public", "unlisted", "internal"]
@@ -52,6 +53,7 @@ export async function PATCH(req: NextRequest) {
       noindex: typeof payload.noindex === "boolean" ? payload.noindex : undefined,
       updatedBy,
     })
+    revalidateDocsIndexPaths()
     return NextResponse.json(result)
   } catch (error) {
     const message = error instanceof Error ? error.message : "문서를 일괄 수정하지 못했습니다."
