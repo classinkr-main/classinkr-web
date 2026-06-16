@@ -53,6 +53,7 @@ function publicSettings(settings: SiteSettings): SiteSettings {
     channelTalkWebhookUrl: "",
     emailWebhookUrl: "",
     wecomOpsWebhookUrl: "",
+    wecomCsWebhookUrl: "",
     wecomCriticalWebhookUrl: "",
     kakaoAlimtalkWebhookUrl: "",
   }
@@ -77,6 +78,9 @@ function mergeResolvedSettings(settings: SiteSettings): SiteSettings {
     wecomOpsWebhookUrl:
       normalizeOptional(settings.wecomOpsWebhookUrl) ??
       normalizeOptional(process.env.WECOM_OPS_WEBHOOK_URL),
+    wecomCsWebhookUrl:
+      normalizeOptional(settings.wecomCsWebhookUrl) ??
+      normalizeOptional(process.env.WECOM_CS_WEBHOOK_URL),
     wecomCriticalWebhookUrl:
       normalizeOptional(settings.wecomCriticalWebhookUrl) ??
       normalizeOptional(process.env.WECOM_CRITICAL_WEBHOOK_URL),
@@ -165,6 +169,8 @@ export async function updateSettings(
       normalizeOptional(patch.emailWebhookUrl) ?? current.emailWebhookUrl,
     wecomOpsWebhookUrl:
       normalizeOptional(patch.wecomOpsWebhookUrl) ?? current.wecomOpsWebhookUrl,
+    wecomCsWebhookUrl:
+      normalizeOptional(patch.wecomCsWebhookUrl) ?? current.wecomCsWebhookUrl,
     wecomCriticalWebhookUrl:
       normalizeOptional(patch.wecomCriticalWebhookUrl) ??
       current.wecomCriticalWebhookUrl,
@@ -197,6 +203,7 @@ export async function updateSettings(
         channel_talk_webhook_url: next.channelTalkWebhookUrl ?? null,
         email_webhook_url: next.emailWebhookUrl ?? null,
         wecom_ops_webhook_url: next.wecomOpsWebhookUrl ?? null,
+        wecom_cs_webhook_url: next.wecomCsWebhookUrl ?? null,
         wecom_critical_webhook_url: next.wecomCriticalWebhookUrl ?? null,
         kakao_alimtalk_webhook_url: next.kakaoAlimtalkWebhookUrl ?? null,
         notification_digest_email_list: next.notificationDigestEmailList,
@@ -236,6 +243,7 @@ function rowToLegacy(row: any): SiteSettings {
     channelTalkWebhookUrl: row.channel_talk_webhook_url ?? undefined,
     emailWebhookUrl: row.email_webhook_url ?? undefined,
     wecomOpsWebhookUrl: row.wecom_ops_webhook_url ?? undefined,
+    wecomCsWebhookUrl: row.wecom_cs_webhook_url ?? undefined,
     wecomCriticalWebhookUrl: row.wecom_critical_webhook_url ?? undefined,
     kakaoAlimtalkWebhookUrl: row.kakao_alimtalk_webhook_url ?? undefined,
     notificationDigestEmailList: normalizeStringArray(

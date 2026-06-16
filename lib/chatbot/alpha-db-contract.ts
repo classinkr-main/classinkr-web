@@ -49,6 +49,7 @@ export const ALPHA_DB_MIGRATIONS = [
   "supabase/migrations/20260615_public_material_downloads.sql",
   "supabase/migrations/20260616_public_material_downloads_hardening.sql",
   "supabase/migrations/20260616_docs_chunk_vector_rpc_text_compat.sql",
+  "supabase/migrations/20260616_chatbot_channel_talk_handoffs.sql",
 ]
 
 export const ALPHA_DB_TABLE_PROBES: AlphaDbTableProbe[] = [
@@ -108,6 +109,12 @@ export const ALPHA_DB_TABLE_PROBES: AlphaDbTableProbe[] = [
     columns: ["id", "label", "prompt", "placement", "status", "order_index", "category", "mapped_article_id"],
     migration: "supabase/migrations/20260520_chatbot_recommended_questions.sql",
     minimumRows: 4,
+  },
+  {
+    table: "chatbot_channel_handoffs",
+    label: "채널톡 챗봇 상담 전환",
+    columns: ["id", "answer_event_id", "session_id", "channel_user_chat_id", "status", "payload"],
+    migration: "supabase/migrations/20260616_chatbot_channel_talk_handoffs.sql",
   },
   {
     table: "docs_article_drafts",

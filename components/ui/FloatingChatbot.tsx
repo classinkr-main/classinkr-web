@@ -19,7 +19,12 @@ import {
 } from "lucide-react"
 
 import { cn } from "@/lib/utils"
-import { openChannelTalk, type ChannelTalkProfile } from "@/lib/channel-talk"
+import {
+    buildChannelTalkMemberId,
+    getChannelTalkAnonymousId,
+    openChannelTalk,
+    type ChannelTalkProfile,
+} from "@/lib/channel-talk"
 import { CLASSIN_POSITIONING } from "@/lib/classin-positioning"
 
 type HandoffIntent = "demo" | "support"
@@ -61,6 +66,7 @@ interface ChatMessage {
     sources?: ChatbotSource[]
     suggestedQuestions?: string[]
     answerEventId?: string
+    confidence?: number
     needsHandoff?: boolean
     handoffIntent?: HandoffIntent
     showHandoffCTA?: boolean
@@ -94,6 +100,12 @@ function makeId() {
 }
 
 const HANDOFF_TRANSCRIPT_LIMIT = 6
+const thinkingSteps = [
+    "질문 의도 분류 중",
+    "문서와 지식 베이스 검색 중",
+    "근거 자료 정리 중",
+    "답변과 다음 단계 작성 중",
+]
 
 // 상담원 연결 시 최근 대화록·인텐트를 채널톡 프로필로 넘긴다 — 상담원이 맥락을 갖고 시작.
 function buildHandoffProfile(
@@ -115,18 +127,6 @@ function buildHandoffProfile(
     if (transcript) profile.chatbotTranscript = transcript.slice(0, 1500)
     if (sessionId) profile.chatbotSessionId = sessionId
     return profile
-}
-
-function getAnonymousId() {
-    if (typeof window === "undefined") return undefined
-
-    const key = "classinkr_chatbot_anonymous_id"
-    const existing = window.localStorage.getItem(key)
-    if (existing) return existing
-
-    const next = globalThis.crypto?.randomUUID?.() ?? makeId()
-    window.localStorage.setItem(key, next)
-    return next
 }
 
 function FeedbackButtons({
@@ -189,23 +189,69 @@ function SourceLinks({ sources }: { sources: ChatbotSource[] }) {
 
     return (
         <div className="mt-3 space-y-2">
-            {sources.map((source) => (
+            <p className="text-[11px] font-bold text-[#615D59]">근거 자료</p>
+            {sources.map((source, index) => (
                 <Link
-                    key={source.urlPath}
+                    key={`${source.urlPath}:${source.heading ?? index}`}
                     href={source.urlPath}
-                    className="group flex items-start gap-2 rounded-[8px] border border-black/[0.08] bg-[#FAFAF8] px-3 py-2 text-left transition-colors hover:border-[#084734]/25 hover:bg-[#ECFDF5]"
+                    className="group flex items-start gap-2 rounded-[8px] border border-black/[0.08] bg-[#FAFAF8] px-3 py-2.5 text-left transition-colors hover:border-[#084734]/25 hover:bg-[#ECFDF5]"
                 >
                     <FileText className="mt-0.5 h-4 w-4 shrink-0 text-[#084734]" />
                     <span className="min-w-0 flex-1">
-                        <span className="block truncate text-[13px] font-bold text-[#111110]">{source.title}</span>
+                        <span className="flex items-center gap-1.5">
+                            <span className="inline-flex h-4 min-w-4 items-center justify-center rounded-[4px] bg-[#084734]/10 px-1 text-[10px] font-bold text-[#084734]">
+                                {index + 1}
+                            </span>
+                            <span className="block truncate text-[13px] font-bold text-[#111110]">{source.title}</span>
+                        </span>
                         {source.heading ? (
                             <span className="mt-0.5 block truncate text-[12px] text-[#615D59]">{source.heading}</span>
                         ) : null}
+                        <span className="mt-1 block overflow-hidden text-[11px] leading-4 text-[#615D59] [display:-webkit-box] [-webkit-box-orient:vertical] [-webkit-line-clamp:2]">
+                            {source.excerpt}
+                        </span>
                     </span>
                     <ArrowUpRight className="mt-0.5 h-3.5 w-3.5 shrink-0 text-[#A39E98] transition-colors group-hover:text-[#084734]" />
                 </Link>
             ))}
         </div>
+    )
+}
+
+function ThinkingIndicator({
+    stepIndex,
+    shouldReduceMotion,
+}: {
+    stepIndex: number
+    shouldReduceMotion: boolean | null
+}) {
+    const activeStep = thinkingSteps[stepIndex % thinkingSteps.length]
+
+    return (
+        <motion.div
+            initial={shouldReduceMotion ? { opacity: 0 } : { opacity: 0, y: 8 }}
+            animate={shouldReduceMotion ? { opacity: 1 } : { opacity: 1, y: 0 }}
+            transition={{ duration: shouldReduceMotion ? 0.01 : 0.18, ease: "easeOut" }}
+            className="flex justify-start"
+        >
+            <div className="w-[min(86%,300px)] rounded-[12px] border border-black/[0.06] bg-white px-3.5 py-3 text-sm text-[#615D59] shadow-sm">
+                <div className="flex items-center gap-2">
+                    <Loader2 className="h-4 w-4 animate-spin text-[#084734]" />
+                    <span className="font-semibold text-[#111110]">{activeStep}</span>
+                </div>
+                <div className="mt-3 grid grid-cols-4 gap-1">
+                    {thinkingSteps.map((step, index) => (
+                        <span
+                            key={step}
+                            className={cn(
+                                "h-1 rounded-full bg-[#E5E5E0] transition-colors",
+                                index <= stepIndex % thinkingSteps.length && "bg-[#009060]"
+                            )}
+                        />
+                    ))}
+                </div>
+            </div>
+        </motion.div>
     )
 }
 
@@ -216,6 +262,7 @@ export function FloatingChatbot() {
     const [input, setInput] = useState("")
     const [sessionId, setSessionId] = useState<string | undefined>()
     const [isSending, setIsSending] = useState(false)
+    const [thinkingStepIndex, setThinkingStepIndex] = useState(0)
     const [error, setError] = useState<string | null>(null)
     const [isDeepConsultation, setIsDeepConsultation] = useState(false)
     const [unresolvedStreak, setUnresolvedStreak] = useState(0)
@@ -234,10 +281,23 @@ export function FloatingChatbot() {
     const hidden = shouldHideChatbot(pathname)
 
     const context = useMemo(
-        () => ({
-            channel: "web",
-            path: pathname,
-        }),
+        () => {
+            const pageUrl = typeof window === "undefined" ? undefined : window.location.href
+            const searchParams =
+                typeof window === "undefined" ? new URLSearchParams() : new URLSearchParams(window.location.search)
+            const utm = Object.fromEntries(
+                ["utm_source", "utm_medium", "utm_campaign", "utm_content", "utm_term"]
+                    .map((key) => [key, searchParams.get(key)] as const)
+                    .filter(([, value]) => Boolean(value))
+            )
+
+            return {
+                channel: "web",
+                path: pathname,
+                pageUrl,
+                utm,
+            }
+        },
         [pathname]
     )
 
@@ -297,6 +357,19 @@ export function FloatingChatbot() {
     }, [isOpen])
 
     useEffect(() => {
+        if (!isSending) {
+            setThinkingStepIndex(0)
+            return
+        }
+
+        const interval = window.setInterval(() => {
+            setThinkingStepIndex((current) => (current + 1) % thinkingSteps.length)
+        }, 1200)
+
+        return () => window.clearInterval(interval)
+    }, [isSending])
+
+    useEffect(() => {
         if (!isOpen) return
 
         const handleKeyDown = (event: KeyboardEvent) => {
@@ -315,6 +388,7 @@ export function FloatingChatbot() {
     async function sendQuestion(question: string) {
         const trimmed = question.trim()
         if (!trimmed || isSending) return
+        const anonymousId = getChannelTalkAnonymousId()
 
         if (shouldUseDeepConsultationIcon(trimmed)) {
             setIsDeepConsultation(true)
@@ -339,7 +413,7 @@ export function FloatingChatbot() {
                 body: JSON.stringify({
                     message: trimmed,
                     sessionId,
-                    anonymousId: getAnonymousId(),
+                    anonymousId,
                     context,
                 }),
             })
@@ -369,6 +443,7 @@ export function FloatingChatbot() {
                     sources: data.sources ?? [],
                     suggestedQuestions: data.suggestedQuestions ?? [],
                     answerEventId: data.answerEventId,
+                    confidence: data.confidence,
                     needsHandoff: data.needsHandoff,
                     handoffIntent: data.handoffIntent,
                     showHandoffCTA,
@@ -521,7 +596,11 @@ export function FloatingChatbot() {
                                                                     <button
                                                                         type="button"
                                                                         onClick={() => {
+                                                                            const anonymousId = getChannelTalkAnonymousId()
                                                                             const opened = openChannelTalk({
+                                                                                memberId: anonymousId
+                                                                                    ? buildChannelTalkMemberId(anonymousId)
+                                                                                    : undefined,
                                                                                 profile: buildHandoffProfile(messages, message, sessionId),
                                                                             })
                                                                             if (!opened) {
@@ -550,17 +629,7 @@ export function FloatingChatbot() {
                                 ))}
 
                                 {isSending ? (
-                                    <motion.div
-                                        initial={shouldReduceMotion ? { opacity: 0 } : { opacity: 0, y: 8 }}
-                                        animate={shouldReduceMotion ? { opacity: 1 } : { opacity: 1, y: 0 }}
-                                        transition={{ duration: shouldReduceMotion ? 0.01 : 0.18, ease: "easeOut" }}
-                                        className="flex justify-start"
-                                    >
-                                        <div className="inline-flex items-center gap-2 rounded-[12px] border border-black/[0.06] bg-white px-3.5 py-3 text-sm text-[#615D59] shadow-sm">
-                                            <Loader2 className="h-4 w-4 animate-spin text-[#084734]" />
-                                            상황에 맞는 답변을 찾고 있어요
-                                        </div>
-                                    </motion.div>
+                                    <ThinkingIndicator stepIndex={thinkingStepIndex} shouldReduceMotion={shouldReduceMotion} />
                                 ) : null}
                                 <div ref={bottomRef} />
                             </div>

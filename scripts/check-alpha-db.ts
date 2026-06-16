@@ -69,7 +69,8 @@ async function main() {
   for (const probe of ALPHA_DB_TABLE_PROBES) {
     const { count, error } = await supabase
       .from(probe.table)
-      .select(buildAlphaDbProbeSelect(probe), { count: "exact", head: true })
+      .select(buildAlphaDbProbeSelect(probe), { count: "exact" })
+      .limit(1)
 
     results.push({
       table: probe.table,

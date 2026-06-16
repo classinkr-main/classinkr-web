@@ -26,13 +26,24 @@ function verifySignature(raw: string, signature: string | null, secret: string):
   return timingSafeEqual(expectedBuffer, actualBuffer)
 }
 
+function firstNonEmpty(...values: Array<string | undefined>): string | undefined {
+  for (const value of values) {
+    const trimmed = value?.trim()
+    if (trimmed) return trimmed
+  }
+  return undefined
+}
+
 /**
  * 채널톡 인바운드 웹훅 — 고객 신규 메시지를 실시간 알림으로 연결한다.
- * 서명은 CHANNEL_WEBHOOK_SECRET 으로 HMAC-SHA256 검증한다(미설정 시 503).
+ * 서명은 CHANNEL_TALK_WEBHOOK_SECRET 으로 HMAC-SHA256 검증한다(미설정 시 503).
  * 전체 대화 본문은 크론/수동 동기화가 채우고, 여기서는 알림만 발행한다(저FS 부하).
  */
 export async function POST(req: NextRequest) {
-  const secret = process.env.CHANNEL_WEBHOOK_SECRET?.trim()
+  const secret = firstNonEmpty(
+    process.env.CHANNEL_TALK_WEBHOOK_SECRET,
+    process.env.CHANNEL_WEBHOOK_SECRET
+  )
   if (!secret) {
     return NextResponse.json({ error: "Webhook secret not configured." }, { status: 503 })
   }
@@ -71,6 +82,7 @@ export async function POST(req: NextRequest) {
       source: "channel_talk",
       sourceId: typeof entity?.chatId === "string" ? entity.chatId : undefined,
       payload: { chatId: entity?.chatId ?? null },
+      channels: ["wecom_cs_webhook"],
     }).catch((error) => {
       console.error("[webhook/channel-talk] notification emit failed:", error)
     })

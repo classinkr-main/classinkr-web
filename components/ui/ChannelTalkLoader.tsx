@@ -3,8 +3,11 @@
 import { useEffect } from "react"
 
 import {
+  buildChannelTalkMemberId,
   bootChannelTalk,
   CHANNEL_TALK_INTENT_EVENT,
+  getChannelTalkAnonymousId,
+  openChannelTalk,
   shutdownChannelTalk,
   type ChannelTalkBootOptions,
 } from "@/lib/channel-talk"
@@ -19,9 +22,14 @@ import { CONSENT_CHANGE_EVENT, currentChoice } from "@/lib/consent/consent"
  */
 export function ChannelTalkLoader() {
   useEffect(() => {
+    const bootOptions = (): Omit<ChannelTalkBootOptions, "force"> => {
+      const anonymousId = getChannelTalkAnonymousId()
+      return anonymousId ? { memberId: buildChannelTalkMemberId(anonymousId) } : {}
+    }
+
     const syncWithConsent = () => {
       if (currentChoice().marketing) {
-        bootChannelTalk()
+        bootChannelTalk(bootOptions())
       } else {
         shutdownChannelTalk()
       }
@@ -29,7 +37,7 @@ export function ChannelTalkLoader() {
 
     const onIntent = (event: Event) => {
       const detail = (event as CustomEvent<Omit<ChannelTalkBootOptions, "force">>).detail
-      bootChannelTalk({ force: true, ...detail })
+      openChannelTalk({ ...bootOptions(), ...(detail ?? {}) })
     }
 
     syncWithConsent()

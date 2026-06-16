@@ -173,8 +173,8 @@ export default function ChannelTalkPage() {
           <p>
             채널톡 Open API 키가 없어 인바운드 동기화가 비활성 상태입니다. 서버{" "}
             <code className="rounded bg-white px-1.5 py-0.5 font-mono text-[12px]">.env.local</code> 에{" "}
-            <code className="rounded bg-white px-1.5 py-0.5 font-mono text-[12px]">CHANNEL_ACCESS_KEY</code>{" "}
-            / <code className="rounded bg-white px-1.5 py-0.5 font-mono text-[12px]">CHANNEL_ACCESS_SECRET</code>{" "}
+            <code className="rounded bg-white px-1.5 py-0.5 font-mono text-[12px]">CHANNEL_TALK_ACCESS</code>{" "}
+            / <code className="rounded bg-white px-1.5 py-0.5 font-mono text-[12px]">CHANNEL_TALK_ACCESS_SECRET</code>{" "}
             를 추가하세요. (채널톡 &gt; 설정 &gt; 보안 &gt; API)
           </p>
         </div>

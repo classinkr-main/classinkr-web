@@ -13,10 +13,15 @@ import {
   buildClientVectorSources,
   type VectorFallbackChunkRow,
 } from "@/lib/chatbot/vector-fallback"
+import {
+  maybeCreateChannelTalkFeedbackHandoff,
+  maybeCreateChannelTalkHandoff,
+} from "@/lib/chatbot/channel-handoff"
 
 const MAX_MESSAGE_LENGTH = 1000
 const MAX_FEEDBACK_COMMENT_LENGTH = 500
-const MAX_SOURCES = 3
+const MAX_SOURCES = 4
+const MAX_SOURCES_PER_DOC = 1
 const UUID_RE = /^[0-9a-f]{8}-[0-9a-f]{4}-[1-5][0-9a-f]{3}-[89ab][0-9a-f]{3}-[0-9a-f]{12}$/i
 
 type AnswerMode =
@@ -258,25 +263,38 @@ function scoreText(question: NormalizedQuestion, source: Omit<ChatbotSource, "sc
   return score
 }
 
-function dedupeSourcesByPath(sources: ChatbotSource[]) {
-  const seen = new Set<string>()
-  const deduped: ChatbotSource[] = []
+function rerankSources(question: NormalizedQuestion, sources: ChatbotSource[]) {
+  return sources.map((source) => ({
+    ...source,
+    score: source.score + Math.min(35, scoreText(question, source) * 0.35),
+  }))
+}
 
-  for (const source of sources) {
-    if (seen.has(source.urlPath)) continue
-    seen.add(source.urlPath)
-    deduped.push(source)
+function selectDiverseSources(sources: ChatbotSource[], limit = MAX_SOURCES) {
+  const seenChunks = new Set<string>()
+  const perPath = new Map<string, number>()
+  const selected: ChatbotSource[] = []
+
+  for (const source of sources.sort((left, right) => right.score - left.score)) {
+    const chunkKey = source.chunkId ?? `${source.urlPath}:${source.heading ?? ""}`
+    if (seenChunks.has(chunkKey)) continue
+
+    const pathCount = perPath.get(source.urlPath) ?? 0
+    if (pathCount >= MAX_SOURCES_PER_DOC) continue
+
+    seenChunks.add(chunkKey)
+    perPath.set(source.urlPath, pathCount + 1)
+    selected.push(source)
+    if (selected.length >= limit) break
   }
 
-  return deduped
+  return selected
 }
 
 function mergePositioningSource(question: NormalizedQuestion, sources: ChatbotSource[]) {
   const positioningSource = buildPositioningSource(question)
-  if (!positioningSource) return sources
-  return dedupeSourcesByPath([positioningSource, ...sources])
-    .sort((left, right) => right.score - left.score)
-    .slice(0, MAX_SOURCES)
+  if (!positioningSource) return selectDiverseSources(rerankSources(question, sources))
+  return selectDiverseSources(rerankSources(question, [positioningSource, ...sources]))
 }
 
 function getDocCategory(doc: DocArticle) {
@@ -339,11 +357,11 @@ function buildStaticSources(question: NormalizedQuestion, docs: DocArticle[]): C
     ]
   })
 
-  return dedupeSourcesByPath(
+  return selectDiverseSources(
     sources
       .filter((source) => source.score > 0)
       .sort((left, right) => right.score - left.score)
-  ).slice(0, MAX_SOURCES)
+  )
 }
 
 async function keywordSearchSupabaseSources(question: NormalizedQuestion): Promise<ChatbotSource[]> {
@@ -405,7 +423,7 @@ async function keywordSearchSupabaseSources(question: NormalizedQuestion): Promi
       .filter((source): source is ChatbotSource => source != null)
       .sort((left, right) => right.score - left.score)
 
-    return dedupeSourcesByPath(sources).slice(0, MAX_SOURCES)
+    return selectDiverseSources(rerankSources(question, sources))
   } catch (error) {
     console.warn(
       "[chatbot] Supabase search unavailable:",
@@ -433,7 +451,10 @@ interface MatchChunkRow {
 }
 
 // Gemini 임베딩 기반 시맨틱 검색. 키·임베딩이 없거나 결과가 없으면 [] → 키워드 검색으로 폴백.
-async function vectorSearchSupabaseSources(embedding: number[]): Promise<ChatbotSource[]> {
+async function vectorSearchSupabaseSources(
+  question: NormalizedQuestion,
+  embedding: number[]
+): Promise<ChatbotSource[]> {
   if (!hasSupabaseServerEnv()) return []
 
   try {
@@ -463,7 +484,7 @@ async function vectorSearchSupabaseSources(embedding: number[]): Promise<Chatbot
       }))
       .sort((left, right) => right.score - left.score)
 
-    return dedupeSourcesByPath(sources).slice(0, MAX_SOURCES)
+    return selectDiverseSources(rerankSources(question, sources))
   } catch (error) {
     console.warn(
       "[chatbot] vector search unavailable:",
@@ -511,23 +532,23 @@ async function clientVectorSearchSupabaseSources(embedding: number[]): Promise<C
   }
 }
 
-// RPC 벡터 검색 우선, 정확 키워드 검색 이후 RPC 미적용 환경의 embedding 컬럼 fallback.
+// 벡터·키워드 후보를 함께 수집해 재랭킹한다. 벡터는 recall, 키워드는 정확 match를 보완한다.
 async function searchSupabaseSources(question: NormalizedQuestion): Promise<ChatbotSource[]> {
+  const keywordPromise = keywordSearchSupabaseSources(question)
   const embedding = await embedText(question.redacted, "RETRIEVAL_QUERY")
-  if (embedding) {
-    const vectorSources = await vectorSearchSupabaseSources(embedding)
-    if (vectorSources.length > 0) return vectorSources
-  }
+  const vectorSources = embedding ? await vectorSearchSupabaseSources(question, embedding) : []
+  const keywordSources = await keywordPromise
+  const combined = selectDiverseSources(
+    rerankSources(question, [...vectorSources, ...keywordSources])
+  )
 
-  const keywordSources = await keywordSearchSupabaseSources(question)
-  if (keywordSources.length > 0) return keywordSources
+  if (combined.length > 0) return combined
 
-  if (embedding) {
-    const clientVectorSources = await clientVectorSearchSupabaseSources(embedding)
-    if (clientVectorSources.length > 0) return clientVectorSources
-  }
+  if (!embedding) return []
 
-  return []
+  return selectDiverseSources(
+    rerankSources(question, await clientVectorSearchSupabaseSources(embedding))
+  )
 }
 
 async function searchKnowledgeSources(
@@ -590,6 +611,92 @@ function getNextStepByCategory(category: string) {
   }
 }
 
+function getStepCriteriaByCategory(category: string) {
+  switch (category) {
+    case "billing":
+      return {
+        steps: [
+          "결제 수단, 사업자 정보, 필요한 증빙 종류를 먼저 확인해 주세요.",
+          "견적·세금계산서·환불처럼 계정별 확인이 필요한 항목은 상담으로 넘겨 주세요.",
+        ],
+        success: "담당자가 결제/증빙 처리에 필요한 식별 정보와 요청 범위를 확인할 수 있으면 다음 단계로 넘어갈 수 있습니다.",
+      }
+    case "hardware":
+      return {
+        steps: [
+          "설치 장소, 대수, 스탠드/벽걸이 여부를 먼저 정리해 주세요.",
+          "카메라·마이크·전자칠판 문제는 증상 화면과 사용 기기를 함께 확인해 주세요.",
+        ],
+        success: "설치 조건이나 장애 증상이 구체화되면 견적/AS/설치 상담으로 바로 이어갈 수 있습니다.",
+      }
+    case "troubleshooting":
+      return {
+        steps: [
+          "발생 화면, 기기, 브라우저/앱, 계정 상태를 먼저 확인해 주세요.",
+          "반복 오류나 수업 영향이 있으면 상담으로 넘겨 담당자가 로그와 계정 상태를 함께 확인하게 해 주세요.",
+        ],
+        success: "재현 조건과 영향 범위가 확인되면 해결 순서를 정확히 잡을 수 있습니다.",
+      }
+    case "onboarding":
+      return {
+        steps: [
+          "대표 수업 1개를 기준으로 현재 운영 흐름과 막히는 지점을 정리해 주세요.",
+          "설치 교실, 희망 도입 시점, 기존 도구를 함께 놓고 90일 전환 순서를 잡아 주세요.",
+        ],
+        success: "도입 범위와 첫 수업 기준이 정해지면 세팅/교육/운영 전환 계획을 만들 수 있습니다.",
+      }
+    case "admin":
+      return {
+        steps: [
+          "관리자 권한 범위와 변경하려는 메뉴를 먼저 확인해 주세요.",
+          "코스·교사·학생·통계·API처럼 영향을 받는 운영 영역을 함께 점검해 주세요.",
+        ],
+        success: "설정 변경이 어떤 코스/수업/구성원에게 적용되는지 설명할 수 있으면 안전하게 진행할 수 있습니다.",
+      }
+    case "classroom":
+      return {
+        steps: [
+          "수업 전, 수업 중, 수업 후 중 어디에서 문제가 생기는지 먼저 나눠 주세요.",
+          "숙제·녹화·리포트·채팅처럼 연결된 학습 활동을 함께 확인해 주세요.",
+        ],
+        success: "막히는 수업 단계와 관련 기능이 특정되면 필요한 문서나 상담 흐름으로 좁힐 수 있습니다.",
+      }
+    default:
+      return {
+        steps: [
+          "질문의 목적이 도입, 운영, 계정/오류, 결제 중 어디에 가까운지 먼저 확인해 주세요.",
+          "관련 화면이나 현재 하고 싶은 작업을 한 문장 더 알려 주세요.",
+        ],
+        success: "상황과 목표가 분리되면 문서 답변 또는 상담 연결 중 알맞은 경로를 선택할 수 있습니다.",
+      }
+  }
+}
+
+function formatStructuredAnswer({
+  answerMode,
+  category,
+  top,
+}: {
+  answerMode: AnswerMode
+  category: string
+  top: ChatbotSource
+}) {
+  const criteria = getStepCriteriaByCategory(category)
+  const caution =
+    answerMode === "handoff"
+      ? "\n\n주의: 이 내용은 실제 계정, 계약, 장비 상태, 도입 조건에 따라 달라질 수 있어 상담으로 이어드리는 편이 안전합니다."
+      : ""
+
+  return [
+    `요약: "${top.title}"${top.heading ? ` (${top.heading})` : ""} 기준으로 보면 ${top.excerpt}`,
+    caution.trim(),
+    "권장 순서:",
+    ...criteria.steps.map((step, index) => `${index + 1}. ${step}`),
+    `확인 기준: ${criteria.success}`,
+    `다음 단계: ${getNextStepByCategory(category)}`,
+  ].filter(Boolean).join("\n\n")
+}
+
 function isUsableGeneratedAnswer(answer: string) {
   const trimmed = answer.trim()
   if (trimmed.length < 80) return false
@@ -621,13 +728,18 @@ function composeAnswer(
       }
     }
 
+    const fallbackCriteria = getStepCriteriaByCategory(category)
     return {
-      answer:
+      answer: [
         needsConsultation
-          ? "상담이 필요한 내용으로 확인했습니다. 학원 규모, 희망 도입 시점, 현재 운영에서 가장 해결하고 싶은 문제를 남겨주시면 담당자가 이어서 안내드릴게요."
+          ? "요약: 상담이 필요한 내용으로 확인했습니다."
           : needsSupportHandoff
-            ? `확인 가능한 문서에서 바로 답을 찾지 못했습니다. 담당자가 안전하게 확인할 수 있도록 상담으로 이어드릴게요.\n\n다음 단계: ${getNextStepByCategory(category)}`
-            : "확인 가능한 문서에서 바로 답을 찾지 못했습니다. 운영 환경이나 오류 상황을 조금 더 구체적으로 알려주시거나 상담으로 연결해 주세요.",
+            ? "요약: 확인 가능한 문서에서 바로 답을 찾지 못했습니다. 담당자가 안전하게 확인할 수 있도록 상담으로 이어드릴게요."
+            : "요약: 확인 가능한 문서에서 바로 답을 찾지 못했습니다. 운영 환경이나 오류 상황을 조금 더 구체적으로 알려주세요.",
+        "권장 순서:",
+        ...fallbackCriteria.steps.map((step, index) => `${index + 1}. ${step}`),
+        `확인 기준: ${fallbackCriteria.success}`,
+      ].join("\n\n"),
       answerMode: needsHandoff ? "handoff" : "fallback",
       confidence: needsHandoff ? 0.4 : 0.15,
       needsHandoff: true,
@@ -649,14 +761,7 @@ function composeAnswer(
       ? "direct_answer"
       : "doc_suggestion"
 
-  const sourceLines = sources
-    .map((source, index) => `${index + 1}. ${source.title} (${source.urlPath})`)
-    .join("\n")
-
-  const answer =
-    answerMode === "handoff"
-      ? `관련 기준은 찾았습니다. 다만 이 내용은 실제 계정, 계약, 장비 상태, 도입 조건에 따라 달라질 수 있어 상담으로 이어드리는 편이 안전합니다.\n\n문서 기준으로는 "${top.title}"${top.heading ? ` (${top.heading})` : ""}에서 이렇게 정리합니다. ${top.excerpt}\n\n다음 단계: ${getNextStepByCategory(category)}\n\n관련 문서:\n${sourceLines}`
-      : `문서 기준으로 먼저 정리드리면, "${top.title}"${top.heading ? ` (${top.heading})` : ""}는 이렇게 설명합니다. ${top.excerpt}\n\n다음 단계: ${getNextStepByCategory(category)}\n\n관련 문서:\n${sourceLines}`
+  const answer = formatStructuredAnswer({ answerMode, category, top })
 
   return {
     answer,
@@ -728,6 +833,7 @@ async function persistExchange(
   meta: ChatbotRequestMeta,
   category: string,
   intent: string,
+  handoffIntent: HandoffIntent,
   sessionId?: string
 ) {
   if (!hasSupabaseServerEnv()) return {}
@@ -814,13 +920,33 @@ async function persistExchange(
       normalized_query: question.redacted,
       result_count: response.sources.length,
       visitor_id: normalizeString(input.anonymousId) ?? null,
-      session_id: sessionId,
+      session_id: resolvedSessionId,
       source: "chatbot",
+    })
+
+    const context = getContextObject(input.context)
+    await maybeCreateChannelTalkHandoff({
+      answerEventId: answerEvent.id as string,
+      sessionId: resolvedSessionId,
+      anonymousId: normalizeString(input.anonymousId) ?? null,
+      referrer: meta.referrer ?? null,
+      pageUrl: normalizeString(context.pageUrl) ?? null,
+      path: normalizeString(context.path) ?? null,
+      question: question.redacted,
+      answer: response.answer,
+      answerMode: response.answerMode,
+      confidence: response.confidence,
+      unresolved: response.unresolved,
+      needsHandoff: response.needsHandoff,
+      detectedCategory: category,
+      detectedIntent: intent,
+      handoffIntent,
+      sources: response.sources,
     })
 
     return {
       answerEventId: answerEvent.id as string,
-      sessionId,
+      sessionId: resolvedSessionId,
     }
   } catch (error) {
     console.warn(
@@ -990,10 +1116,7 @@ async function buildChatbotCore(message: unknown, sessionId?: string): Promise<C
       history,
     })
     if (llmAnswer && isUsableGeneratedAnswer(llmAnswer)) {
-      const sourceLines = response.sources
-        .map((source, index) => `${index + 1}. ${source.title} (${source.urlPath})`)
-        .join("\n")
-      response.answer = `${llmAnswer}\n\n관련 문서:\n${sourceLines}`
+      response.answer = llmAnswer
     }
   }
 
@@ -1013,6 +1136,7 @@ export async function handleChatbotQuery(
     meta,
     core.category,
     core.intent,
+    core.handoffIntent,
     sessionId
   )
 
@@ -1089,6 +1213,11 @@ export async function saveChatbotFeedback(raw: unknown) {
   })
 
   if (error) throw new Error(error.message)
+
+  await maybeCreateChannelTalkFeedbackHandoff(answerEventId, {
+    rating,
+    comment: comment ? redactPii(comment.replace(/\s+/g, " ").trim()) : null,
+  })
 
   return { ok: true, stored: true }
 }

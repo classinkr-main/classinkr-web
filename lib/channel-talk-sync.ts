@@ -102,7 +102,7 @@ export async function syncChannelConversations(
       newConversations: 0,
       matchedLeads: 0,
       warning:
-        "채널톡 Open API 키가 없어 동기화를 건너뜁니다 (CHANNEL_ACCESS_KEY / CHANNEL_ACCESS_SECRET).",
+        "채널톡 Open API 키가 없어 동기화를 건너뜁니다 (CHANNEL_TALK_ACCESS / CHANNEL_TALK_ACCESS_SECRET).",
     }
   }
 
@@ -203,6 +203,7 @@ export async function syncChannelConversations(
       routeUrl: "/admin/channel-talk",
       source: "channel_talk",
       payload: { created: created.length, matchedLeads, fetchedChats: chats.length },
+      channels: ["wecom_cs_webhook"],
     }).catch((error) => {
       console.error("[channel-talk-sync] notification emit failed:", error)
     })

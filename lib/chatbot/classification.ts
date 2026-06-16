@@ -33,6 +33,9 @@ export function detectChatbotCategory(
   if (/결제|요금|가격|견적|영수증|세금|세금계산서|입금|청구|구독|환불|정산/.test(text)) {
     return "billing"
   }
+  if (/학원\s*시스템|시스템\s*os|수업\s*os|운영\s*os|zoom|줌|화상회의|뭐가\s*달라|차이|비교|기존\s*전자칠판|일반\s*전자칠판/.test(text)) {
+    return "onboarding"
+  }
   if (/하드웨어|전자칠판|보드|\bboard\b|카메라|마이크|스피커|\bops\b|스탠드|벽걸이|설치|납품|배송|\bas\b|a\/s|수리|고장|파손|s\d{2,3}\s*pro/.test(text)) {
     return "hardware"
   }
@@ -58,7 +61,7 @@ export function detectChatbotCategory(
   if (sourceCategories.includes("admin")) return "admin"
   if (sourceCategories.includes("hardware") || sourceCategories.includes("board")) return "hardware"
   if (sourceCategories.includes("software")) return "classroom"
-  if (sourceCategories.includes("start")) return "onboarding"
+  if (sourceCategories.includes("onboarding") || sourceCategories.includes("start")) return "onboarding"
 
   return "general"
 }

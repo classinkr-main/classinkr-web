@@ -1,7 +1,7 @@
 /**
  * 채널톡 Open API 클라이언트 (server-only).
  *
- * 인증: CHANNEL_ACCESS_KEY / CHANNEL_ACCESS_SECRET (채널톡 설정 > 보안 > API).
+ * 인증: CHANNEL_TALK_ACCESS / CHANNEL_TALK_ACCESS_SECRET (채널톡 설정 > 보안 > API).
  * 위젯용 NEXT_PUBLIC_CHANNEL_PLUGIN_KEY 와는 별개의 키다.
  * 미설정 시 isChannelApiConfigured()가 false를 반환하며, 호출은 ChannelApiError를 던진다.
  *
@@ -24,9 +24,20 @@ export class ChannelApiError extends Error {
   }
 }
 
+function firstNonEmpty(...values: Array<string | undefined>): string | undefined {
+  for (const value of values) {
+    const trimmed = value?.trim()
+    if (trimmed) return trimmed
+  }
+  return undefined
+}
+
 function getCredentials() {
-  const accessKey = process.env.CHANNEL_ACCESS_KEY?.trim()
-  const accessSecret = process.env.CHANNEL_ACCESS_SECRET?.trim()
+  const accessKey = firstNonEmpty(process.env.CHANNEL_TALK_ACCESS, process.env.CHANNEL_ACCESS_KEY)
+  const accessSecret = firstNonEmpty(
+    process.env.CHANNEL_TALK_ACCESS_SECRET,
+    process.env.CHANNEL_ACCESS_SECRET
+  )
   if (!accessKey || !accessSecret) return null
   return { accessKey, accessSecret }
 }
@@ -45,7 +56,7 @@ async function channelApiFetch<T>(path: string, request: ChannelApiRequest = {})
   const creds = getCredentials()
   if (!creds) {
     throw new ChannelApiError(
-      "채널톡 Open API 키가 설정되지 않았습니다 (CHANNEL_ACCESS_KEY / CHANNEL_ACCESS_SECRET).",
+      "채널톡 Open API 키가 설정되지 않았습니다 (CHANNEL_TALK_ACCESS / CHANNEL_TALK_ACCESS_SECRET).",
       0
     )
   }
@@ -100,8 +111,10 @@ export interface ChannelUserChat {
 
 export interface ChannelUser {
   id: string
+  memberId?: string
   name?: string
   profile?: Record<string, unknown> | null
+  tags?: string[]
 }
 
 export interface ChannelMessage {
@@ -117,6 +130,19 @@ export interface ListUserChatsResult {
   userChats: ChannelUserChat[]
   users: ChannelUser[]
   next?: string
+}
+
+export interface UpsertChannelUserInput {
+  memberId: string
+  profile?: Record<string, unknown>
+  profileOnce?: Record<string, unknown>
+  tags?: string[]
+  unsubscribeEmail?: boolean
+  unsubscribeTexting?: boolean
+}
+
+export interface CreateUserChatResult {
+  userChat: ChannelUserChat
 }
 
 /* ─── 엔드포인트 ─── */
@@ -161,17 +187,60 @@ export async function getUserChatMessages(
   return data.messages ?? []
 }
 
+/** memberId 기준으로 채널톡 User를 생성/갱신한다. */
+export async function upsertChannelUserByMemberId(input: UpsertChannelUserInput): Promise<ChannelUser> {
+  const body: Record<string, unknown> = {}
+  if (input.profile && Object.keys(input.profile).length > 0) body.profile = input.profile
+  if (input.profileOnce && Object.keys(input.profileOnce).length > 0) body.profileOnce = input.profileOnce
+  if (input.tags && input.tags.length > 0) body.tags = input.tags
+  if (typeof input.unsubscribeEmail === "boolean") body.unsubscribeEmail = input.unsubscribeEmail
+  if (typeof input.unsubscribeTexting === "boolean") body.unsubscribeTexting = input.unsubscribeTexting
+
+  const data = await channelApiFetch<{ user?: ChannelUser }>(
+    `/users/@${encodeURIComponent(input.memberId)}`,
+    {
+      method: "PUT",
+      body,
+    }
+  )
+
+  if (!data.user?.id) {
+    throw new ChannelApiError("채널톡 User upsert 응답에 user.id가 없습니다.", 0)
+  }
+
+  return data.user
+}
+
+/** 특정 User에 새 UserChat을 생성한다. */
+export async function createUserChat(userId: string): Promise<ChannelUserChat> {
+  const data = await channelApiFetch<CreateUserChatResult>(
+    `/users/${encodeURIComponent(userId)}/user-chats`,
+    { method: "POST" }
+  )
+
+  if (!data.userChat?.id) {
+    throw new ChannelApiError("채널톡 UserChat 생성 응답에 userChat.id가 없습니다.", 0)
+  }
+
+  return data.userChat
+}
+
 /** 봇 명의로 상담 대화에 메시지를 남긴다(예: 챗봇 컨텍스트 인계). */
 export async function writeUserChatMessage(
   userChatId: string,
   text: string,
   botName = "Classin Bot"
-): Promise<void> {
-  await channelApiFetch(`/user-chats/${encodeURIComponent(userChatId)}/messages`, {
-    method: "POST",
-    query: { botName },
-    body: { blocks: [{ type: "text", value: text }] },
-  })
+): Promise<ChannelMessage | null> {
+  const data = await channelApiFetch<{ message?: ChannelMessage }>(
+    `/user-chats/${encodeURIComponent(userChatId)}/messages`,
+    {
+      method: "POST",
+      query: { botName },
+      body: { blocks: [{ type: "text", value: text }] },
+    }
+  )
+
+  return data.message ?? null
 }
 
 /** 채널톡 user의 profile에서 email/phone을 추출한다(키 이름이 계정마다 다를 수 있어 방어적). */

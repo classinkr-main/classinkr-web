@@ -65,6 +65,7 @@ export interface SiteSettings {
   channelTalkWebhookUrl?: string
   emailWebhookUrl?: string
   wecomOpsWebhookUrl?: string
+  wecomCsWebhookUrl?: string
   wecomCriticalWebhookUrl?: string
   kakaoAlimtalkWebhookUrl?: string
   notificationDigestEmailList: string[]
@@ -83,6 +84,7 @@ export const DEFAULT_SITE_SETTINGS: SiteSettings = {
   channelTalkWebhookUrl: undefined,
   emailWebhookUrl: undefined,
   wecomOpsWebhookUrl: undefined,
+  wecomCsWebhookUrl: undefined,
   wecomCriticalWebhookUrl: undefined,
   kakaoAlimtalkWebhookUrl: undefined,
   notificationDigestEmailList: [],
@@ -108,6 +110,7 @@ function normalizeSettings(raw?: Partial<SiteSettings>): SiteSettings {
     channelTalkWebhookUrl: raw?.channelTalkWebhookUrl?.trim() || undefined,
     emailWebhookUrl: raw?.emailWebhookUrl?.trim() || undefined,
     wecomOpsWebhookUrl: raw?.wecomOpsWebhookUrl?.trim() || undefined,
+    wecomCsWebhookUrl: raw?.wecomCsWebhookUrl?.trim() || undefined,
     wecomCriticalWebhookUrl: raw?.wecomCriticalWebhookUrl?.trim() || undefined,
     kakaoAlimtalkWebhookUrl: raw?.kakaoAlimtalkWebhookUrl?.trim() || undefined,
     notificationDigestEmailList: normalizeStringArray(raw?.notificationDigestEmailList),

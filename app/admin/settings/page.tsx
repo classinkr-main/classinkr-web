@@ -457,7 +457,16 @@ const SECTION_FIELDS: Record<SettingsTab, SettingsKey[]> = {
   ],
   lead: ["demoFormEnabled", "blogSectionEnabled"],
   cta: [],
-  integrations: ["googleSheetWebhookUrl", "leadWebhookUrl", "channelTalkWebhookUrl", "emailWebhookUrl"],
+  integrations: [
+    "googleSheetWebhookUrl",
+    "leadWebhookUrl",
+    "channelTalkWebhookUrl",
+    "wecomOpsWebhookUrl",
+    "wecomCsWebhookUrl",
+    "wecomCriticalWebhookUrl",
+    "kakaoAlimtalkWebhookUrl",
+    "emailWebhookUrl",
+  ],
   notifications: ["notificationDigestEmailList", "notificationAppearance"],
   history: [],
 }
@@ -1252,6 +1261,14 @@ export default function SettingsPage() {
                   placeholder="https://qyapi.weixin.qq.com/cgi-bin/webhook/send?key=..."
                   value={settings.wecomOpsWebhookUrl ?? ""}
                   onChange={(v) => set({ wecomOpsWebhookUrl: v })}
+                  webhookType="wecom"
+                />
+                <WebhookRow
+                  label="WeCom CS Webhook"
+                  description="CS방 인바운드 리포트와 상담 관련 알림에 사용됩니다."
+                  placeholder="https://qyapi.weixin.qq.com/cgi-bin/webhook/send?key=..."
+                  value={settings.wecomCsWebhookUrl ?? ""}
+                  onChange={(v) => set({ wecomCsWebhookUrl: v })}
                   webhookType="wecom"
                 />
                 <WebhookRow

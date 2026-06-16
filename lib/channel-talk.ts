@@ -23,6 +23,7 @@ declare global {
     }
     ChannelIOInitialized?: boolean
     ChannelIOBooted?: boolean
+    __classinChannelIOBooted?: boolean
   }
 }
 
@@ -38,9 +39,42 @@ export interface ChannelTalkBootOptions {
 }
 
 export const CHANNEL_TALK_INTENT_EVENT = "classin:channel-talk-intent"
+const CHANNEL_TALK_ANONYMOUS_ID_KEY = "classinkr_chatbot_anonymous_id"
+
+function firstNonEmpty(...values: Array<string | undefined>) {
+  for (const value of values) {
+    const trimmed = value?.trim()
+    if (trimmed) return trimmed
+  }
+  return undefined
+}
+
+function getChannelPluginKey() {
+  return firstNonEmpty(
+    process.env.NEXT_PUBLIC_CHANNEL_PLUGIN_KEY,
+    process.env.NEXT_PUBLIC_CHANNEL_TALK_PLUGIN_KEY
+  )
+}
 
 export function isChannelTalkConfigured() {
-  return Boolean(process.env.NEXT_PUBLIC_CHANNEL_PLUGIN_KEY)
+  return Boolean(getChannelPluginKey())
+}
+
+export function buildChannelTalkMemberId(anonymousId: string) {
+  return `classin:web:${anonymousId}`.replace(/[^\w:.-]/g, "_").slice(0, 160)
+}
+
+export function getChannelTalkAnonymousId() {
+  if (typeof window === "undefined") return undefined
+
+  const existing = window.localStorage.getItem(CHANNEL_TALK_ANONYMOUS_ID_KEY)
+  if (existing) return existing
+
+  const next =
+    globalThis.crypto?.randomUUID?.() ??
+    `anon_${Date.now().toString(36)}_${Math.random().toString(36).slice(2, 10)}`
+  window.localStorage.setItem(CHANNEL_TALK_ANONYMOUS_ID_KEY, next)
+  return next
 }
 
 function ensureChannelTalkStub() {
@@ -63,7 +97,13 @@ function ensureChannelTalkStub() {
 }
 
 function loadChannelTalkScript() {
-  if (typeof document === "undefined" || window.ChannelIOInitialized) return
+  if (typeof document === "undefined") return
+  if (
+    window.ChannelIOInitialized ||
+    document.querySelector('script[src="https://cdn.channel.io/plugin/ch-plugin-web.js"]')
+  ) {
+    return
+  }
 
   window.ChannelIOInitialized = true
   const script = document.createElement("script")
@@ -81,7 +121,7 @@ function loadChannelTalkScript() {
 export function bootChannelTalk(options: ChannelTalkBootOptions = {}): boolean {
   if (typeof window === "undefined") return false
 
-  const pluginKey = process.env.NEXT_PUBLIC_CHANNEL_PLUGIN_KEY
+  const pluginKey = getChannelPluginKey()
   if (!pluginKey) return false
 
   // 동의 게이팅: 명시적 사용자 요청(force)이 아니면 마케팅 동의 필요.
@@ -92,7 +132,8 @@ export function bootChannelTalk(options: ChannelTalkBootOptions = {}): boolean {
 
   loadChannelTalkScript()
 
-  if (!window.ChannelIOBooted) {
+  if (!window.__classinChannelIOBooted) {
+    window.__classinChannelIOBooted = true
     window.ChannelIOBooted = true
     const bootConfig: Record<string, unknown> = {
       pluginKey,
@@ -123,9 +164,10 @@ export function openChannelTalk(options: Omit<ChannelTalkBootOptions, "force"> =
 /** 동의 철회 시 위젯과 쿠키를 내린다. */
 export function shutdownChannelTalk(): void {
   if (typeof window === "undefined" || typeof window.ChannelIO !== "function") return
-  if (!window.ChannelIOBooted) return
+  if (!window.__classinChannelIOBooted) return
 
   window.ChannelIO("shutdown")
+  window.__classinChannelIOBooted = false
   window.ChannelIOBooted = false
 }
 
