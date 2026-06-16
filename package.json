@@ -4,10 +4,12 @@
   "private": true,
   "scripts": {
     "dev": "next dev --port 3888",
+    "prebuild": "npm run check:vercel-crons",
     "build": "next build",
     "start": "next start",
     "lint": "eslint",
     "typecheck": "tsc --noEmit --incremental false",
+    "check:vercel-crons": "node scripts/check-vercel-crons.mjs",
     "check:alpha-db": "npx tsx scripts/check-alpha-db.ts",
     "sync:channel-docs": "npx tsx scripts/sync-channel-documents.ts"
   },
