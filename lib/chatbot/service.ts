@@ -3,6 +3,7 @@ import "server-only"
 import { createSupabaseAdminClient } from "@/lib/supabase/admin"
 import { getDocPath, listDocs, type DocArticle } from "@/lib/docs"
 import { getDocsContent } from "@/lib/docs-content"
+import { CLASSIN_POSITIONING } from "@/lib/classin-positioning"
 import {
   classifyChatbotQuestion,
   type ChatbotIntent,
@@ -169,6 +170,37 @@ function compactText(value: string, maxLength = 220) {
   return `${compacted.slice(0, maxLength).trim()}...`
 }
 
+function isPositioningQuestion(question: NormalizedQuestion) {
+  const text = question.redacted.toLowerCase()
+  return /학원\s*시스템|시스템\s*os|수업\s*os|운영\s*os|zoom|줌|화상회의|뭐가\s*달라|차이|비교|일반\s*전자칠판|기존\s*전자칠판|왜\s*전자칠판|edb|칠판\s*파일|가격\s*부담|비싸|api|sdk|연동|데이터\s*구독|도구.*흩어|녹화.*관리/.test(text)
+}
+
+function buildPositioningSource(question: NormalizedQuestion): ChatbotSource | null {
+  if (!isPositioningQuestion(question)) return null
+  const text = question.redacted.toLowerCase()
+  const isEdbQuestion = /edb|칠판\s*파일|교안/.test(text)
+  const isApiQuestion = /api|sdk|연동|데이터\s*구독|가상계정|수업\s*중계|코스\s*정보|수업\s*정보/.test(text)
+  const heading = isEdbQuestion
+    ? "EDB와 교안 표준화"
+    : isApiQuestion
+      ? "API와 정직한 연동 범위"
+      : "핵심 포지셔닝"
+  const excerpt = isEdbQuestion
+    ? CLASSIN_POSITIONING.edbSummary
+    : isApiQuestion
+      ? `${CLASSIN_POSITIONING.honestLimit} ${CLASSIN_POSITIONING.apiStages.join(" ")}`
+      : CLASSIN_POSITIONING.chatbot.identitySummary
+
+  return {
+    title: "Classin을 학원 시스템 OS로 이해하기",
+    heading,
+    urlPath: "/docs/start/academy-system-os-positioning",
+    category: "onboarding",
+    excerpt: compactText(excerpt),
+    score: 88,
+  }
+}
+
 function getMetadataStrings(metadata: Record<string, unknown> | null | undefined) {
   if (!metadata) return []
 
@@ -237,6 +269,14 @@ function dedupeSourcesByPath(sources: ChatbotSource[]) {
   }
 
   return deduped
+}
+
+function mergePositioningSource(question: NormalizedQuestion, sources: ChatbotSource[]) {
+  const positioningSource = buildPositioningSource(question)
+  if (!positioningSource) return sources
+  return dedupeSourcesByPath([positioningSource, ...sources])
+    .sort((left, right) => right.score - left.score)
+    .slice(0, MAX_SOURCES)
 }
 
 function getDocCategory(doc: DocArticle) {
@@ -494,12 +534,15 @@ async function searchKnowledgeSources(
   question: NormalizedQuestion
 ): Promise<{ sources: ChatbotSource[]; warning?: string }> {
   const supabaseSources = await searchSupabaseSources(question)
-  if (supabaseSources.length > 0) return { sources: supabaseSources, warning: undefined }
+  if (supabaseSources.length > 0) {
+    return { sources: mergePositioningSource(question, supabaseSources), warning: undefined }
+  }
 
   const fallbackDocs = await getFallbackDocs()
+  const staticSources = buildStaticSources(question, fallbackDocs)
 
   return {
-    sources: buildStaticSources(question, fallbackDocs),
+    sources: mergePositioningSource(question, staticSources),
     warning: hasSupabaseServerEnv()
       ? "Supabase 문서 chunk 검색 결과가 없어 문서 원문 fallback을 사용했습니다."
       : "Supabase 환경변수가 없어 정적 문서 fallback을 사용했습니다.",
@@ -513,7 +556,13 @@ function buildSuggestedQuestions(sources: ChatbotSource[]) {
       : `${source.title} 내용을 더 알려주세요`
   )
 
-  return Array.from(new Set([...suggestions, "담당자 상담으로 이어주세요"])).slice(0, 3)
+  return Array.from(
+    new Set([
+      ...suggestions,
+      ...CLASSIN_POSITIONING.chatbot.fallbackQuestions,
+      "담당자 상담으로 이어주세요",
+    ])
+  ).slice(0, 3)
 }
 
 function wantsHumanConsultation(question: NormalizedQuestion) {
@@ -527,18 +576,25 @@ function getNextStepByCategory(category: string) {
     case "billing":
       return "결제 수단, 사업자 정보, 필요한 증빙 종류를 함께 알려주시면 처리 경로를 더 정확히 안내할 수 있어요."
     case "hardware":
-      return "설치 장소, 장비 모델, 증상이나 필요한 수량을 알려주시면 확인 범위를 좁힐 수 있어요."
+      return "설치 장소, 희망 대수, 스탠드/벽걸이 여부, 기존 전자칠판 사용 경험을 알려주시면 Classin Board 패키지 범위를 좁힐 수 있어요."
     case "troubleshooting":
       return "사용 중인 기기, 브라우저/앱, 오류가 발생한 화면을 알려주시면 해결 순서를 더 잘 잡을 수 있어요."
     case "onboarding":
-      return "학생 수, 수업 방식, 희망 시작 시점을 알려주시면 도입 준비 순서를 맞춰드릴게요."
+      return "대표 수업 1개, 설치 예정 교실, 희망 도입 시점, 현재 쓰는 전자칠판·녹화·LMS 도구를 알려주시면 90일 도입 순서를 맞춰드릴게요."
     case "admin":
-      return "확인하려는 메뉴, 기관 권한, 저장·녹화 기준을 알려주시면 운영 설정 흐름으로 좁혀드릴게요."
+      return "관리자 권한 범위, 보고 싶은 수업 데이터, API 연동 여부, 결제·출석처럼 별도 시스템이 필요한 업무를 알려주시면 운영 설정 흐름으로 좁혀드릴게요."
     case "classroom":
       return "현재 수업 운영에서 가장 막히는 지점을 알려주시면 기능과 운영 방법을 함께 제안드릴게요."
     default:
       return "조금 더 구체적인 상황을 알려주시면 필요한 문서와 상담 경로를 이어서 안내드릴게요."
   }
+}
+
+function isUsableGeneratedAnswer(answer: string) {
+  const trimmed = answer.trim()
+  if (trimmed.length < 80) return false
+  if (/[,\u3131-\u314e]$/.test(trimmed)) return false
+  return /(?:[.!?]|\u3002|요|니다|습니다|합니다|세요)$/.test(trimmed)
 }
 
 function composeAnswer(
@@ -599,8 +655,8 @@ function composeAnswer(
 
   const answer =
     answerMode === "handoff"
-      ? `관련 기준은 찾았습니다. 다만 이 내용은 실제 계정, 계약, 장비 상태, 도입 조건에 따라 달라질 수 있어 상담으로 이어드리는 편이 안전합니다.\n\n문서 기준으로는 "${top.title}"${top.heading ? `의 ${top.heading}` : ""}에서 ${top.excerpt} 내용을 확인할 수 있습니다.\n\n다음 단계: ${getNextStepByCategory(category)}\n\n관련 문서:\n${sourceLines}`
-      : `문서 기준으로 먼저 정리드리면, "${top.title}"${top.heading ? `의 ${top.heading}` : ""}에서 ${top.excerpt} 내용을 확인할 수 있습니다.\n\n다음 단계: ${getNextStepByCategory(category)}\n\n관련 문서:\n${sourceLines}`
+      ? `관련 기준은 찾았습니다. 다만 이 내용은 실제 계정, 계약, 장비 상태, 도입 조건에 따라 달라질 수 있어 상담으로 이어드리는 편이 안전합니다.\n\n문서 기준으로는 "${top.title}"${top.heading ? ` (${top.heading})` : ""}에서 이렇게 정리합니다. ${top.excerpt}\n\n다음 단계: ${getNextStepByCategory(category)}\n\n관련 문서:\n${sourceLines}`
+      : `문서 기준으로 먼저 정리드리면, "${top.title}"${top.heading ? ` (${top.heading})` : ""}는 이렇게 설명합니다. ${top.excerpt}\n\n다음 단계: ${getNextStepByCategory(category)}\n\n관련 문서:\n${sourceLines}`
 
   return {
     answer,
@@ -933,7 +989,7 @@ async function buildChatbotCore(message: unknown, sessionId?: string): Promise<C
       tier,
       history,
     })
-    if (llmAnswer) {
+    if (llmAnswer && isUsableGeneratedAnswer(llmAnswer)) {
       const sourceLines = response.sources
         .map((source, index) => `${index + 1}. ${source.title} (${source.urlPath})`)
         .join("\n")

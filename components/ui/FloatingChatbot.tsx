@@ -20,6 +20,7 @@ import {
 
 import { cn } from "@/lib/utils"
 import { openChannelTalk } from "@/lib/channel-talk"
+import { CLASSIN_POSITIONING } from "@/lib/classin-positioning"
 
 type HandoffIntent = "demo" | "support"
 
@@ -74,9 +75,7 @@ const hiddenPathPrefixes = [
 ]
 
 const starterQuestions = [
-    "우리 학원에 맞는 도입 방식이 궁금해요",
-    "수업 중 집중도와 출석 관리를 개선하고 싶어요",
-    "결제, 영수증, 계정 문제를 상담받고 싶어요",
+    ...CLASSIN_POSITIONING.chatbot.starterQuestions,
 ]
 
 const DEEP_CONSULTATION_ICON_SRC = "/images/chatbot/ai-deep-consultation.webp"
@@ -203,8 +202,7 @@ export function FloatingChatbot() {
         {
             id: "welcome",
             role: "assistant",
-            content:
-                "안녕하세요. Classin 상담 가이드입니다. 운영 고민은 먼저 정리해드리고, 계정·결제·장애처럼 확인이 필요한 내용은 바로 상담으로 이어드릴게요.",
+            content: CLASSIN_POSITIONING.chatbot.welcome,
             suggestedQuestions: starterQuestions,
         },
     ])

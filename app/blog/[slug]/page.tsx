@@ -13,7 +13,6 @@ import { SafeBlogImage } from "@/components/blog/SafeBlogImage"
 import {
   getPublishedPostBySlug,
   getRelatedPosts,
-  getPublishedSlugsForStaticParams,
 } from "@/lib/repositories/blog"
 import { getLeadMagnetBySlugFromStore } from "@/lib/repositories/lead-magnets"
 import { extractMarkdownHeadings } from "@/lib/blog-markdown"
@@ -26,6 +25,7 @@ import {
 } from "@/lib/seo"
 
 export const revalidate = 3600 // 1시간마다 재생성
+export const dynamicParams = true
 
 // Next.js dynamic params arrive URL-encoded for non-ASCII paths; decode before DB lookup.
 function decodeSlug(raw: string) {
@@ -91,7 +91,9 @@ export async function generateMetadata({
 }
 
 export async function generateStaticParams() {
-  return getPublishedSlugsForStaticParams()
+  // Supabase 블로그 본문은 빌드 워커에서 전체 사전 생성하지 않고 ISR로 생성한다.
+  // 일부 외부 수집 글 렌더링 중 Next 정적 워커가 4GB 힙 한계에 닿는 것을 방지한다.
+  return []
 }
 
 interface BlogDetailPageProps {

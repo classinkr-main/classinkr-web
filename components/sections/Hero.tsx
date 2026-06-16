@@ -8,6 +8,7 @@ import { trackEvent } from "@/lib/analytics"
 import Image from "next/image"
 import { useRef } from "react"
 import { HeroVideoBackdrop } from "@/components/media/HeroVideoBackdrop"
+import { CLASSIN_POSITIONING } from "@/lib/classin-positioning"
 
 const HERO_VIDEO_MEDIA_QUERY = "(min-width: 768px) and (prefers-reduced-motion: no-preference)"
 
@@ -82,46 +83,34 @@ export function Hero() {
                 <div className="relative z-10 flex h-full items-center py-16 md:py-20">
                     <div className="container mx-auto px-4">
                         <div className="flex flex-col items-center text-center max-w-5xl mx-auto">
-                            <motion.div
-                                initial={{ opacity: 0, scale: 0.9, y: 10 }}
-                                animate={{ opacity: 1, scale: 1, y: 0 }}
-                                transition={{ duration: 0.6, ease: "easeOut" }}
-                            >
+                            <div className="hero-soft-enter hero-soft-enter-badge">
                                 <span className="inline-flex items-center gap-2.5 py-2 px-5 rounded-full bg-[#ECFDF5]/12 backdrop-blur-md border border-white/18 text-white text-sm md:text-base font-semibold mb-8 shadow-[0_12px_34px_rgba(0,0,0,0.18)]">
                                     <span className="relative flex h-2 w-2">
                                         <span className="absolute inline-flex h-full w-full animate-ping rounded-full bg-[#CEF17B]/45" />
                                         <span className="relative inline-flex h-2 w-2 rounded-full bg-[#CEF17B]" />
                                     </span>
-                                    <span className="tracking-[0.02em] drop-shadow-[0_1px_8px_rgba(0,0,0,0.45)]">기술 × 교육 — 새로운 시대의 학원 운영</span>
+                                    <span className="tracking-[0.02em] drop-shadow-[0_1px_8px_rgba(0,0,0,0.45)]">
+                                        {CLASSIN_POSITIONING.heroEyebrow}
+                                    </span>
                                 </span>
-                            </motion.div>
+                            </div>
 
-                            <motion.h1
-                                initial={{ opacity: 0, y: 30 }}
-                                animate={{ opacity: 1, y: 0 }}
-                                transition={{ duration: 0.7, delay: 0.1, ease: [0.21, 0.47, 0.32, 0.98] }}
-                                className="text-5xl md:text-7xl lg:text-[5.5rem] font-extrabold text-white mb-8 leading-[1.05] break-keep drop-shadow-[0_6px_28px_rgba(0,0,0,0.48)]"
+                            <h1
+                                className="hero-soft-enter hero-soft-enter-title text-5xl md:text-7xl lg:text-[5.5rem] font-extrabold text-white mb-8 leading-[1.05] break-keep drop-shadow-[0_6px_28px_rgba(0,0,0,0.48)]"
                                 style={{ letterSpacing: '-2.125px' }}
                             >
-                                수업은 더욱 <span className="font-black animate-text-gradient inline-block pb-2">퀄리티</span> 있게<br className="hidden sm:block" />{" "}
-                                관리는 더욱 <span className="font-black animate-text-gradient inline-block pb-2">쉽고 편하게</span>
-                            </motion.h1>
+                                전자칠판을 넘어<br className="hidden sm:block" />{" "}
+                                <span className="font-black animate-text-gradient inline-block pb-2">학원 시스템 OS</span>로
+                            </h1>
 
-                            <motion.p
-                                initial={{ opacity: 0, y: 20 }}
-                                animate={{ opacity: 1, y: 0 }}
-                                transition={{ duration: 0.7, delay: 0.2, ease: "easeOut" }}
-                                className="text-lg md:text-xl lg:text-2xl text-white/82 mb-12 max-w-3xl mx-auto leading-relaxed font-light break-keep drop-shadow-[0_3px_16px_rgba(0,0,0,0.42)]"
+                            <p
+                                className="hero-soft-enter hero-soft-enter-copy text-lg md:text-xl lg:text-2xl text-white/82 mb-12 max-w-3xl mx-auto leading-relaxed font-light break-keep drop-shadow-[0_3px_16px_rgba(0,0,0,0.42)]"
                             >
-                                수업을 시스템으로 만들면, 강사가 바뀌어도 품질이 유지됩니다. <br className="hidden md:block" />
-                                수업 준비부터 복습 관리까지, 하나의 플랫폼으로 완성하세요.
-                            </motion.p>
+                                {CLASSIN_POSITIONING.heroBody}
+                            </p>
 
-                            <motion.div
-                                initial={{ opacity: 0, y: 20 }}
-                                animate={{ opacity: 1, y: 0 }}
-                                transition={{ duration: 0.7, delay: 0.3, ease: "easeOut" }}
-                                className="flex flex-col sm:flex-row items-center gap-4 sm:gap-5 justify-center w-full px-4 sm:px-0 flex-wrap"
+                            <div
+                                className="hero-soft-enter hero-soft-enter-actions flex flex-col sm:flex-row items-center gap-4 sm:gap-5 justify-center w-full px-4 sm:px-0 flex-wrap"
                             >
                                 <DemoModal trackingButton="hero_demo">
                                     <Button size="lg" className="h-[3.5rem] px-8 text-[1.05rem] font-bold bg-[#084734] hover:bg-[#065c41] text-white rounded-2xl w-full sm:w-auto transition-all duration-300 hover:scale-[1.03] active:scale-[0.97]" style={{ boxShadow: 'rgba(8,71,52,0.2) 0px 4px 18px, rgba(8,71,52,0.1) 0px 2px 7px' }}>
@@ -130,10 +119,10 @@ export function Hero() {
                                 </DemoModal>
                                 <Button asChild variant="outline" className="h-12 px-7 text-base font-semibold bg-white/82 hover:bg-white text-[#111110] hover:text-[#111110] border border-white/60 rounded-2xl w-full sm:w-auto transition-all duration-300 shadow-[0_10px_26px_rgba(0,0,0,0.18)]">
                                     <Link href="/product/sw" onClick={() => trackEvent("click_cta", { button: "hero_product_tour" })}>
-                                        <span className="relative z-10">제품 둘러보기</span>
+                                        <span className="relative z-10">시스템 구조 보기</span>
                                     </Link>
                                 </Button>
-                            </motion.div>
+                            </div>
                         </div>
                     </div>
                 </div>
@@ -171,7 +160,6 @@ export function Hero() {
                                 alt="Classin Education Dashboard"
                                 width={1200}
                                 height={675}
-                                priority
                                 className="w-full h-auto object-cover rounded-xl relative z-10"
                             />
                             <div className="absolute inset-0 bg-gradient-to-t from-[#111110] via-transparent to-transparent opacity-60 z-20 pointer-events-none" />

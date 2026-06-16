@@ -10,6 +10,7 @@ import type {
   LeadMagnetGate,
   LeadMagnetScoreBand,
   LeadMagnetSection,
+  LeadMagnetSourceLink,
   LeadMagnetStatus,
   LeadMagnetTier,
 } from "@/lib/lead-magnets"
@@ -100,6 +101,18 @@ function normalizeActionPlan(value: unknown): LeadMagnetActionStep[] {
   }).filter((step) => step.day && step.title)
 }
 
+function normalizeSourceLinks(value: unknown): LeadMagnetSourceLink[] {
+  if (!Array.isArray(value)) return []
+  return value.map((raw) => {
+    const item = asRecord(raw)
+    return {
+      label: stringValue(item.label),
+      href: stringValue(item.href),
+      description: stringValue(item.description),
+    }
+  }).filter((link) => link.label && link.href)
+}
+
 export function normalizeLeadMagnet(input: unknown): LeadMagnet {
   const raw = asRecord(input)
   const title = stringValue(raw.title, "새 자료")
@@ -107,6 +120,7 @@ export function normalizeLeadMagnet(input: unknown): LeadMagnet {
   const sections = normalizeSections(raw.sections)
   const checklistBullets = stringArray(raw.checklistBullets)
   const sourceDetail = stringValue(raw.sourceDetail, `lead_magnet:${slug}`)
+  const salesPlaybook = asRecord(raw.salesPlaybook)
 
   return {
     slug,
@@ -130,6 +144,16 @@ export function normalizeLeadMagnet(input: unknown): LeadMagnet {
     actionPlan: normalizeActionPlan(raw.actionPlan),
     deliverables: stringArray(raw.deliverables),
     consultationPrep: stringArray(raw.consultationPrep),
+    sourceLinks: normalizeSourceLinks(raw.sourceLinks),
+    salesPlaybook: {
+      intentScore: Math.max(0, Math.min(40, numberValue(salesPlaybook.intentScore, 15))),
+      intentLabel: stringValue(salesPlaybook.intentLabel, "자료 관심 리드"),
+      ownerNote: stringValue(salesPlaybook.ownerNote),
+      firstResponse: stringValue(salesPlaybook.firstResponse),
+      qualificationQuestions: stringArray(salesPlaybook.qualificationQuestions),
+      followUpSequence: normalizeActionPlan(salesPlaybook.followUpSequence),
+      nextCtas: stringArray(salesPlaybook.nextCtas),
+    },
     ctaCopy: {
       eyebrow: stringValue(asRecord(raw.ctaCopy).eyebrow, "무료 자료"),
       title: stringValue(asRecord(raw.ctaCopy).title, title),
@@ -137,6 +161,7 @@ export function normalizeLeadMagnet(input: unknown): LeadMagnet {
       buttonLabel: stringValue(asRecord(raw.ctaCopy).buttonLabel, "자료 보기"),
     },
     resourceUrl: stringValue(raw.resourceUrl, `/resources/${slug}`),
+    storagePath: stringValue(raw.storagePath),
     suggestedPlacements: stringArray(raw.suggestedPlacements),
   }
 }

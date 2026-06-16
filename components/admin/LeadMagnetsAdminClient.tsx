@@ -38,11 +38,12 @@ import {
   type LeadMagnetGate,
   type LeadMagnetScoreBand,
   type LeadMagnetSection,
+  type LeadMagnetSourceLink,
   type LeadMagnetStatus,
   type LeadMagnetTier,
 } from "@/lib/lead-magnets"
 
-type EditorTab = "basic" | "copy" | "content" | "routing"
+type EditorTab = "basic" | "copy" | "content" | "sales" | "routing"
 
 const STATUS_OPTIONS: Array<{ value: LeadMagnetStatus; label: string }> = [
   { value: "draft", label: "초안" },
@@ -69,6 +70,7 @@ const EDITOR_TABS: Array<{ value: EditorTab; label: string }> = [
   { value: "basic", label: "기본" },
   { value: "copy", label: "카피" },
   { value: "content", label: "본문" },
+  { value: "sales", label: "세일즈" },
   { value: "routing", label: "추적·배치" },
 ]
 
@@ -167,6 +169,18 @@ function emptyLeadMagnet(): LeadMagnet {
     ],
     deliverables: [],
     consultationPrep: [],
+    sourceLinks: [],
+    salesPlaybook: {
+      intentScore: 15,
+      intentLabel: "자료 관심 리드",
+      ownerNote: "",
+      firstResponse: "",
+      qualificationQuestions: [],
+      followUpSequence: [
+        { day: "D+0", title: "첫 응대", tasks: ["자료 신청 맥락을 확인하고 상담 CTA를 제안합니다."] },
+      ],
+      nextCtas: [],
+    },
     ctaCopy: {
       eyebrow: "무료 자료",
       title: "새 자료를 확인하세요",
@@ -174,6 +188,7 @@ function emptyLeadMagnet(): LeadMagnet {
       buttonLabel: "자료 보기",
     },
     resourceUrl: `/resources/${slug}`,
+    storagePath: "",
     suggestedPlacements: [],
   }
 }
@@ -279,6 +294,22 @@ function textToActionPlan(value: string): LeadMagnetActionStep[] {
   return steps
 }
 
+function sourceLinksToText(sourceLinks: readonly LeadMagnetSourceLink[] | undefined) {
+  return (sourceLinks ?? [])
+    .map((link) => [link.label, link.href, link.description ?? ""].join(" | ").replace(/\s+\|\s+$/, ""))
+    .join("\n")
+}
+
+function textToSourceLinks(value: string): LeadMagnetSourceLink[] {
+  return value
+    .split("\n")
+    .map((line) => {
+      const [label, href, ...rest] = line.split("|").map((item) => item.trim())
+      return { label, href, description: rest.join(" | ") }
+    })
+    .filter((item) => item.label && item.href)
+}
+
 function selectValue<T extends string>(
   value: T,
   onChange: (value: T) => void,
@@ -344,7 +375,13 @@ function getOperationIssues(magnet: LeadMagnet) {
   if (magnet.scoreBands.length < 2) issues.push("점수 해석 구간을 2개 이상 준비하세요.")
   if (magnet.actionPlan.length < 3) issues.push("실행 플랜은 최소 3단계 이상이면 상담 전환에 유리합니다.")
   if (magnet.deliverables.length < 3) issues.push("포함 자료는 3개 이상 명확히 적어주세요.")
+  if (!magnet.salesPlaybook?.firstResponse?.trim()) issues.push("자료 신청 후 첫 응대 문구를 세일즈 탭에 적어두세요.")
+  if ((magnet.salesPlaybook?.followUpSequence?.length ?? 0) < 3) issues.push("후속 시퀀스는 최소 3단계 이상이면 리드 누수가 줄어듭니다.")
+  if ((magnet.sourceLinks?.length ?? 0) < 1) issues.push("자료 안 참고 링크를 1개 이상 연결해 다음 행동을 명확히 하세요.")
   if (!magnet.resourceUrl?.trim()) issues.push("신청 후 연결할 자료 URL이 비어 있습니다.")
+  if (magnet.gate === "login" && !magnet.storagePath?.trim()) {
+    issues.push("로그인 게이트 자료는 비공개 Storage 경로를 연결하는 것이 안전합니다.")
+  }
   if (magnet.sourceDetail !== `lead_magnet:${magnet.slug}`) {
     issues.push(`sourceDetail 기본값은 lead_magnet:${magnet.slug} 입니다.`)
   }
@@ -663,6 +700,14 @@ export default function LeadMagnetsAdminClient({ initialLeadMagnets }: Props) {
   const [actionPlanText, setActionPlanText] = useState(actionPlanToText(draft.actionPlan))
   const [deliverablesText, setDeliverablesText] = useState(arrayToText(draft.deliverables))
   const [consultationPrepText, setConsultationPrepText] = useState(arrayToText(draft.consultationPrep))
+  const [sourceLinksText, setSourceLinksText] = useState(sourceLinksToText(draft.sourceLinks))
+  const [qualificationQuestionsText, setQualificationQuestionsText] = useState(
+    arrayToText(draft.salesPlaybook?.qualificationQuestions)
+  )
+  const [followUpSequenceText, setFollowUpSequenceText] = useState(
+    actionPlanToText(draft.salesPlaybook?.followUpSequence ?? [])
+  )
+  const [nextCtasText, setNextCtasText] = useState(arrayToText(draft.salesPlaybook?.nextCtas))
   const [placementsText, setPlacementsText] = useState(arrayToText(draft.suggestedPlacements))
 
   const summaryMetrics = useMemo(() => {
@@ -715,6 +760,10 @@ export default function LeadMagnetsAdminClient({ initialLeadMagnets }: Props) {
     setActionPlanText(actionPlanToText(next.actionPlan))
     setDeliverablesText(arrayToText(next.deliverables))
     setConsultationPrepText(arrayToText(next.consultationPrep))
+    setSourceLinksText(sourceLinksToText(next.sourceLinks))
+    setQualificationQuestionsText(arrayToText(next.salesPlaybook?.qualificationQuestions))
+    setFollowUpSequenceText(actionPlanToText(next.salesPlaybook?.followUpSequence ?? []))
+    setNextCtasText(arrayToText(next.salesPlaybook?.nextCtas))
     setPlacementsText(arrayToText(next.suggestedPlacements))
   }
 
@@ -744,6 +793,23 @@ export default function LeadMagnetsAdminClient({ initialLeadMagnets }: Props) {
     setDraft((prev) => ({
       ...prev,
       ctaCopy: { ...prev.ctaCopy, [field]: value },
+    }))
+  }
+
+  function updateSalesPlaybook(patch: Partial<NonNullable<LeadMagnet["salesPlaybook"]>>) {
+    setDraft((prev) => ({
+      ...prev,
+      salesPlaybook: {
+        intentScore: 15,
+        intentLabel: "자료 관심 리드",
+        ownerNote: "",
+        firstResponse: "",
+        qualificationQuestions: [],
+        followUpSequence: [],
+        nextCtas: [],
+        ...prev.salesPlaybook,
+        ...patch,
+      },
     }))
   }
 
@@ -794,6 +860,16 @@ export default function LeadMagnetsAdminClient({ initialLeadMagnets }: Props) {
       actionPlan: textToActionPlan(actionPlanText),
       deliverables: textToArray(deliverablesText),
       consultationPrep: textToArray(consultationPrepText),
+      sourceLinks: textToSourceLinks(sourceLinksText),
+      salesPlaybook: {
+        intentScore: Math.max(0, Math.min(40, draft.salesPlaybook?.intentScore ?? 15)),
+        intentLabel: draft.salesPlaybook?.intentLabel?.trim() || "자료 관심 리드",
+        ownerNote: draft.salesPlaybook?.ownerNote?.trim() || "",
+        firstResponse: draft.salesPlaybook?.firstResponse?.trim() || "",
+        qualificationQuestions: textToArray(qualificationQuestionsText),
+        followUpSequence: textToActionPlan(followUpSequenceText),
+        nextCtas: textToArray(nextCtasText),
+      },
       suggestedPlacements: textToArray(placementsText),
       formatLabel:
         draft.formatLabel.trim() ||
@@ -955,6 +1031,12 @@ export default function LeadMagnetsAdminClient({ initialLeadMagnets }: Props) {
                 <span>{getLeadMagnetGateLabel(item.gate)}</span>
                 <span>·</span>
                 <span>{getLeadMagnetCategoryLabel(item.category)}</span>
+                {item.salesPlaybook?.intentScore ? (
+                  <>
+                    <span>·</span>
+                    <span>의도 +{item.salesPlaybook.intentScore}</span>
+                  </>
+                ) : null}
               </div>
             </button>
           ))}
@@ -1130,6 +1212,72 @@ export default function LeadMagnetsAdminClient({ initialLeadMagnets }: Props) {
             </div>
           )}
 
+          {tab === "sales" && (
+            <div className="grid gap-5 xl:grid-cols-2">
+              <Field label="리드 의도 점수" hint="CRM 리드 점수에 더해지는 자료 관심 점수입니다. 0~40 사이로 운영합니다.">
+                <Input
+                  type="number"
+                  min={0}
+                  max={40}
+                  value={draft.salesPlaybook?.intentScore ?? 15}
+                  onChange={(event) =>
+                    updateSalesPlaybook({
+                      intentScore: Math.max(0, Math.min(40, Number(event.target.value) || 0)),
+                    })
+                  }
+                />
+              </Field>
+              <Field label="의도 라벨">
+                <Input
+                  value={draft.salesPlaybook?.intentLabel ?? ""}
+                  onChange={(event) => updateSalesPlaybook({ intentLabel: event.target.value })}
+                />
+              </Field>
+              <Field label="담당자 메모" className="xl:col-span-2" hint="리드가 이 자료를 받았을 때 내부에서 어떻게 해석할지 적습니다.">
+                <Textarea
+                  rows={3}
+                  value={draft.salesPlaybook?.ownerNote ?? ""}
+                  onChange={(event) => updateSalesPlaybook({ ownerNote: event.target.value })}
+                />
+              </Field>
+              <Field label="첫 응대 문구" className="xl:col-span-2" hint="자료 신청 직후 전화·카카오·이메일 첫 문장으로 쓰는 문구입니다.">
+                <Textarea
+                  rows={3}
+                  value={draft.salesPlaybook?.firstResponse ?? ""}
+                  onChange={(event) => updateSalesPlaybook({ firstResponse: event.target.value })}
+                />
+              </Field>
+              <Field label="자격 확인 질문" hint="한 줄에 하나씩 입력합니다.">
+                <Textarea
+                  rows={7}
+                  value={qualificationQuestionsText}
+                  onChange={(event) => setQualificationQuestionsText(event.target.value)}
+                />
+              </Field>
+              <Field label="다음 CTA" hint="한 줄에 하나씩 입력합니다. 쇼룸, 상담, 비교표 회신 등 다음 행동을 적습니다.">
+                <Textarea
+                  rows={7}
+                  value={nextCtasText}
+                  onChange={(event) => setNextCtasText(event.target.value)}
+                />
+              </Field>
+              <Field label="빠른 후속 시퀀스" className="xl:col-span-2" hint="형식: ## D+0 5분 | 제목 / - 할 일">
+                <Textarea
+                  rows={10}
+                  value={followUpSequenceText}
+                  onChange={(event) => setFollowUpSequenceText(event.target.value)}
+                />
+              </Field>
+              <Field label="자료 안 참고 링크" className="xl:col-span-2" hint="형식: 라벨 | URL | 설명. 외부 픽셀 대신 내부 CTA와 공식 문서 링크를 넣습니다.">
+                <Textarea
+                  rows={6}
+                  value={sourceLinksText}
+                  onChange={(event) => setSourceLinksText(event.target.value)}
+                />
+              </Field>
+            </div>
+          )}
+
           {tab === "routing" && (
             <div className="grid gap-5 xl:grid-cols-2">
               <Field label="추적 SourceDetail" hint="CRM/구독자 source_detail에 남는 값입니다. 기본값은 lead_magnet:{slug}.">
@@ -1137,6 +1285,9 @@ export default function LeadMagnetsAdminClient({ initialLeadMagnets }: Props) {
               </Field>
               <Field label="자료 URL" hint="신청 완료 후 열리는 링크입니다. 보통 /resources/{slug}.">
                 <Input value={draft.resourceUrl ?? ""} onChange={(event) => updateDraft({ resourceUrl: event.target.value })} />
+              </Field>
+              <Field label="Storage 경로" hint="materials 버킷 안의 비공개 파일 경로입니다. 예: checklists/academy-system.pdf">
+                <Input value={draft.storagePath ?? ""} onChange={(event) => updateDraft({ storagePath: event.target.value })} />
               </Field>
               <div className="rounded-xl border border-black/[0.08] bg-[#F6F5F4] p-4 xl:col-span-2">
                 <div className="mb-3 flex items-center gap-2 font-bold text-[#111110]">

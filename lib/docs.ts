@@ -1,3 +1,5 @@
+import { CLASSIN_POSITIONING } from "@/lib/classin-positioning"
+
 export const DOC_CATEGORY_IDS = [
   "start",
   "software",
@@ -131,6 +133,105 @@ const SOFTWARE_MEDIA_BASE = "/images/product/sw"
 const HARDWARE_MEDIA_BASE = "/images/product/hw"
 
 const docs: DocArticle[] = [
+  {
+    slug: "academy-system-os-positioning",
+    category: "start",
+    title: "Classin을 학원 시스템 OS로 이해하기",
+    description: "Classin을 Zoom, 일반 전자칠판, LMS 중 하나와 비교하기 전에 학원 수업 운영 흐름 전체에서 이해할 수 있도록 정리했습니다.",
+    audience: "학원 원장, 관리자, 운영 책임자, 기관 도입 담당자",
+    updatedAt: "2026-06-16",
+    readMinutes: 7,
+    featured: true,
+    tags: ["학원 시스템 OS", "도입 상담", "전자칠판", "EDB", "녹화", "LMS", "관리자 데이터"],
+    keywords: [
+      "학원 시스템 OS",
+      "Classin 차이",
+      "Zoom과 차이",
+      "일반 전자칠판과 차이",
+      "EDB",
+      "수업 녹화",
+      "LMS",
+      "관리자 대시보드",
+      "API 연동",
+      "학원 도입",
+    ],
+    chatbotSummary: CLASSIN_POSITIONING.chatbot.identitySummary,
+    sections: [
+      {
+        heading: "한 문장으로 정의",
+        body: CLASSIN_POSITIONING.oneLine,
+        steps: [
+          "전자칠판만 바꾸는 프로젝트가 아니라 수업 운영 기준을 다시 세우는 프로젝트로 봅니다.",
+          "수업 준비, 판서, 녹화, 복습, 과제, 학생 관리, 관리자 데이터를 한 흐름으로 연결합니다.",
+          "강사 개인기와 외부 도구 조합에 의존하던 운영을 기관의 반복 가능한 기준으로 바꿉니다.",
+        ],
+      },
+      {
+        heading: "Zoom이나 일반 전자칠판과 다른 점",
+        body: CLASSIN_POSITIONING.coreNarrative,
+        steps: CLASSIN_POSITIONING.comparisonPoints.map((item) => `${item.label}: ${item.point}`),
+      },
+      {
+        heading: "한국 학원에서 현실적인 첫 도입 범위",
+        body: CLASSIN_POSITIONING.localReality,
+        steps: [
+          "첫 단계는 전자칠판, 수업 녹화, 수업 관리 중심으로 잡는 편이 현실적입니다.",
+          "대표 수업 1개와 대표 강사 1명을 정해 파일럿 교실을 먼저 만듭니다.",
+          "교사 온보딩은 EDB 교안 전환, 녹화와 복습 배포, LMS 숙제·시험 루틴 순서로 잡습니다.",
+          "온라인·하이브리드 전체 전환보다 오프라인 교실의 수업 품질 표준화부터 시작할 수 있습니다.",
+          "학생 개인 기기 활용은 학원 문화와 수업 방식에 따라 단계적으로 검토합니다.",
+        ],
+      },
+      {
+        heading: "EDB가 도입 설득에서 중요한 이유",
+        body: CLASSIN_POSITIONING.edbSummary,
+        steps: [
+          "우수 강사의 판서, 이미지 배치, 활동 구성을 수업 파일로 남길 수 있습니다.",
+          "수업마다 자료를 하나씩 다시 띄우거나 칠판을 지우는 시간을 줄일 수 있습니다.",
+          "교안 템플릿을 재사용하면 신규 강사 온보딩과 지점별 수업 표준화에 도움이 됩니다.",
+          "전자칠판, 녹화, LMS 운영과 함께 설계해야 실제 수업 후 복습 자산으로 이어집니다.",
+        ],
+      },
+      {
+        heading: "관리자가 봐야 하는 데이터",
+        body: CLASSIN_POSITIONING.adminDataSummary,
+        steps: [
+          "수업 시간, 출결과 참여, 수업 특이사항, 네트워크 상태를 운영 점검 기준으로 봅니다.",
+          "권한이 허용된 관리자 또는 교사 계정만 필요한 데이터에 접근하도록 설계합니다.",
+          "수업 녹화와 복습 자료가 정상적으로 남았는지 확인합니다.",
+          "감에 의존하던 강사 관리와 학생 관리를 반복 가능한 기준으로 바꿉니다.",
+        ],
+      },
+      {
+        heading: "정직하게 분리해야 하는 영역",
+        body: CLASSIN_POSITIONING.honestLimit,
+        steps: [
+          "결제와 정산은 학원별 운영 방식이 달라 별도 시스템과의 역할 분담을 먼저 정합니다.",
+          "오프라인 출석은 현장 장비와 운영 규칙에 따라 외부 시스템 또는 별도 프로세스가 필요할 수 있습니다.",
+          "고급 리포트와 자체 CRM 연계는 공식 API, 데이터 구독, 커스텀 대시보드 범위로 분리해 검토합니다.",
+          ...CLASSIN_POSITIONING.apiStages,
+        ],
+      },
+    ],
+    resources: [
+      {
+        label: "ClassIn EDB 파일 만들기 공식 가이드",
+        href: "https://www.classin.com/kr/how-to-create-edb-files/",
+        description: "EDB 파일의 개념과 제작 흐름을 확인할 수 있는 공식 자료입니다.",
+      },
+      {
+        label: "ClassIn API 공식 문서",
+        href: "https://docs.eeo.cn/api/en/",
+        description: "데이터 구독, 코스/수업 정보 조회, SDK 등 연동 범위를 확인할 때 참고합니다.",
+      },
+      {
+        label: "학원 시스템 OS 진단 체크리스트",
+        href: "/resources/academy-system-checklist",
+        description: "우리 학원이 Classin을 도입할 준비가 되었는지 점검하는 자료입니다.",
+      },
+    ],
+    relatedSlugs: ["software-overview", "board-overview", "admin-operation-standardization"],
+  },
   {
     slug: "software-overview",
     category: "software",

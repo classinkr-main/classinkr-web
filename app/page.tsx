@@ -9,13 +9,13 @@ import { GlobalScale } from "@/components/sections/GlobalScale"
 import dynamic from "next/dynamic"
 import { JsonLd } from "@/components/seo/JsonLd"
 import { createBreadcrumbJsonLd, createPublicMetadata, createWebPageJsonLd } from "@/lib/seo"
+import { CLASSIN_POSITIONING } from "@/lib/classin-positioning"
 
 export const metadata: Metadata = createPublicMetadata({
-  title: "학원 수업 운영 플랫폼",
-  description:
-    "Classin은 학원 수업, 과제, 출결, 복습 리포트, AI 자동채점, 전자칠판을 하나로 연결하는 학원 수업 운영 플랫폼입니다.",
+  title: "학원 시스템 OS",
+  description: CLASSIN_POSITIONING.metadataDescription,
   path: "/",
-  keywords: ["학원 관리 플랫폼", "AI 자동채점", "학부모 리포트", "전자칠판", "Classin"],
+  keywords: ["학원 시스템 OS", "학원 수업 운영", "전자칠판", "EDB", "Classin"],
 })
 
 const Outcomes = dynamic(() => import("@/components/sections/Outcomes").then(m => ({ default: m.Outcomes })))
@@ -36,9 +36,8 @@ export default function LandingPage() {
         data={[
           createWebPageJsonLd({
             path: "/",
-            name: "Classin 학원 수업 운영 플랫폼",
-            description:
-              "Classin은 학원 수업, 과제, 출결, 복습 리포트, AI 자동채점, 전자칠판을 하나로 연결하는 학원 수업 운영 플랫폼입니다.",
+            name: "Classin 학원 시스템 OS",
+            description: CLASSIN_POSITIONING.metadataDescription,
           }),
           createBreadcrumbJsonLd([{ name: "홈", path: "/" }]),
         ]}

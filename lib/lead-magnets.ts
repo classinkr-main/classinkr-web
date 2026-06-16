@@ -25,6 +25,22 @@ export interface LeadMagnetActionStep {
   tasks: readonly string[]
 }
 
+export interface LeadMagnetSourceLink {
+  label: string
+  href: string
+  description?: string
+}
+
+export interface LeadMagnetSalesPlaybook {
+  intentScore: number
+  intentLabel: string
+  ownerNote: string
+  firstResponse: string
+  qualificationQuestions: readonly string[]
+  followUpSequence: readonly LeadMagnetActionStep[]
+  nextCtas: readonly string[]
+}
+
 export interface LeadMagnet {
   slug: string
   title: string
@@ -47,6 +63,8 @@ export interface LeadMagnet {
   actionPlan: readonly LeadMagnetActionStep[]
   deliverables: readonly string[]
   consultationPrep: readonly string[]
+  sourceLinks?: readonly LeadMagnetSourceLink[]
+  salesPlaybook?: LeadMagnetSalesPlaybook
   ctaCopy: {
     eyebrow: string
     title: string
@@ -58,6 +76,12 @@ export interface LeadMagnet {
    * 비어 있으면 "이메일로 보내드립니다" 안내로 대체된다.
    */
   resourceUrl?: string
+  /**
+   * 비공개 Supabase Storage materials 버킷 안의 파일 경로.
+   * 값이 있으면 /api/materials/[slug]/download 가 단기 서명 URL을 발급한다.
+   * 비어 있으면 resourceUrl 로 폴백한다.
+   */
+  storagePath?: string
   suggestedPlacements: readonly string[]
 }
 
@@ -109,6 +133,12 @@ export function getLeadMagnetBySlug(slug: string | null | undefined): LeadMagnet
 
 export function getLeadMagnetTitle(slug: string | null | undefined) {
   return getLeadMagnetBySlug(slug)?.title ?? ""
+}
+
+export function getLeadMagnetIntentScore(slug: string | null | undefined) {
+  const magnet = getLeadMagnetBySlug(slug)
+  if (!magnet) return slug ? 12 : 0
+  return Math.max(0, Math.min(40, magnet.salesPlaybook?.intentScore ?? 15))
 }
 
 /** 어드민 글 편집기의 리드 마그넷 선택지 (slug + 라벨). */

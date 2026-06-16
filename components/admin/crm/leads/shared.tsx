@@ -5,7 +5,7 @@ import { Check, Copy } from "lucide-react"
 
 import type { LeadRecord, LeadStatus } from "@/lib/repositories/leads"
 import type { ContactLogResult, ContactLogType } from "@/lib/repositories/contact-logs"
-import { getLeadMagnetTitle } from "@/lib/lead-magnets"
+import { getLeadMagnetIntentScore, getLeadMagnetTitle } from "@/lib/lead-magnets"
 
 // 리드 보드(/admin/crm/customers/leads)와 현황 액션 밴드(/admin/crm)가 같이 쓰는
 // 상수·계산 헬퍼·소형 UI. 리드 분류 규칙을 한 곳에서만 정의한다.
@@ -50,6 +50,7 @@ export function calcScore(lead: LeadRecord): number {
   else if (lead.source === "contact_page") s += 25
   else if (lead.source === "meta_lead_ads") s += 25
   else if (lead.source === "newsletter")   s += 10
+  if (lead.lead_magnet) s += getLeadMagnetIntentScore(lead.lead_magnet)
   if (lead.phone) s += 20
   if (lead.email) s += 5
   if (lead.size) {

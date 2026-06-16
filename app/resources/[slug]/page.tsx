@@ -1,7 +1,7 @@
 import type { Metadata } from "next"
 import Link from "next/link"
 import { notFound } from "next/navigation"
-import { AlertTriangle, ArrowRight, CalendarDays, CheckCircle2, FileText, Sparkles } from "lucide-react"
+import { AlertTriangle, ArrowRight, CalendarDays, CheckCircle2, ExternalLink, FileText, Sparkles } from "lucide-react"
 import { TrackedLink } from "@/components/TrackedLink"
 import {
   getLeadMagnetCategoryLabel,
@@ -215,6 +215,47 @@ export default async function ResourcePage({ params }: ResourcePageProps) {
               </section>
             ) : null}
           </div>
+
+          {magnet.sourceLinks && magnet.sourceLinks.length > 0 ? (
+            <section className="mt-8 rounded-[16px] border border-black/[0.08] bg-white p-6 shadow-sm md:p-8">
+              <p className="text-[12px] font-bold uppercase tracking-[0.18em] text-[#084734]/60">
+                Reference Links
+              </p>
+              <h2 className="mt-3 text-2xl font-bold tracking-[-0.03em] text-[#111110]">
+                더 확인할 링크
+              </h2>
+              <div className="mt-5 grid gap-3">
+                {magnet.sourceLinks.map((link) => (
+                  <TrackedLink
+                    key={`${link.label}-${link.href}`}
+                    href={link.href}
+                    ctaId="resource_reference_link"
+                    tracking={{
+                      source: "resource_reference",
+                      lead_magnet: magnet.slug,
+                      gate: magnet.gate,
+                      destination: link.href,
+                    }}
+                    className="group rounded-[12px] border border-black/[0.08] p-4 transition-colors hover:bg-[#F6F5F4]"
+                  >
+                    <span className="flex items-center justify-between gap-3">
+                      <span>
+                        <span className="block text-sm font-bold text-[#111110] group-hover:text-[#084734]">
+                          {link.label}
+                        </span>
+                        {link.description ? (
+                          <span className="mt-1 block text-[13px] leading-6 text-[#615D59]">
+                            {link.description}
+                          </span>
+                        ) : null}
+                      </span>
+                      <ExternalLink className="h-4 w-4 shrink-0 text-[#084734]" />
+                    </span>
+                  </TrackedLink>
+                ))}
+              </div>
+            </section>
+          ) : null}
 
           <section className="mt-8 rounded-[16px] border border-black/[0.08] bg-white p-6 shadow-sm md:p-8">
             <p className="text-[12px] font-bold uppercase tracking-[0.18em] text-[#084734]/60">

@@ -9,6 +9,7 @@
 
 import "server-only"
 
+import { CLASSIN_POSITIONING, getClassinPositioningContext } from "@/lib/classin-positioning"
 import type { ChatbotSource } from "./service"
 
 export type ChatbotModelTier = "basic" | "reasoning" | "advanced"
@@ -48,9 +49,14 @@ function resolveModel(tier: ChatbotModelTier = "basic") {
 
 const SYSTEM_INSTRUCTION = [
   "너는 Classin(학원·교육기관용 수업/운영 솔루션)의 고객 상담 가이드야.",
+  `제품 정체성은 '${CLASSIN_POSITIONING.categoryName}'이다.`,
+  getClassinPositioningContext(),
+  `답변 원칙: ${CLASSIN_POSITIONING.chatbot.answerPrinciples.join(" ")}`,
   "아래 '참고 문서'에 담긴 내용만 근거로 한국어로 간결하게(2~4문장) 답해.",
   "문서에 없는 내용은 추측하거나 지어내지 말고, 정확한 확인이 필요하면 상담 연결을 권해.",
   "가격·계약·장비 상태·도입 조건처럼 계정마다 달라지는 내용은 단정하지 마.",
+  "Zoom, 일반 전자칠판, LMS와의 비교 질문은 기능표보다 수업 운영 흐름 차이로 설명해.",
+  "결제, 오프라인 출석, 고급 리포트는 기본 제공처럼 말하지 말고 필요 시 API·외부 시스템·커스텀 리포트 범위로 분리해.",
   "답변에는 문서 번호나 URL을 나열하지 말고 자연스러운 문장으로만 답해. 출처는 시스템이 따로 덧붙인다.",
 ].join(" ")
 
