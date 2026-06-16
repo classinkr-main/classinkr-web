@@ -39,6 +39,11 @@ const MetaPixelScript = dynamic(
   () => import("@/components/MetaPixelScript").then((mod) => mod.MetaPixelScript),
   { ssr: false }
 )
+const ChannelTalkLoader = dynamic(
+  () => import("@/components/ui/ChannelTalkLoader").then((mod) => mod.ChannelTalkLoader),
+  { ssr: false }
+)
+
 function isInternalPath(pathname: string) {
   return (
     pathname.startsWith("/admin") ||
@@ -93,6 +98,7 @@ export function AppChrome({ children }: { children: ReactNode }) {
         </>
       ) : null}
       {showPublicChrome ? <ConsentBanner /> : null}
+      {showPublicChrome ? <ChannelTalkLoader /> : null}
       {showPublicChrome && readyPath === pathname ? (
         <>
           <FloatingChatbot />
