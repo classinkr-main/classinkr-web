@@ -50,7 +50,7 @@
     },
     {
       "path": "/api/cron/channel-talk-sync",
-      "schedule": "15 */6 * * *"
+      "schedule": "15 0 * * *"
     }
   ]
 }
