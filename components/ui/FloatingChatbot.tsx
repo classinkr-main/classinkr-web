@@ -9,6 +9,7 @@ import {
     ArrowUpRight,
     Bot,
     Check,
+    Copy,
     FileText,
     Loader2,
     MessageCircle,
@@ -127,6 +128,138 @@ function buildHandoffProfile(
     if (transcript) profile.chatbotTranscript = transcript.slice(0, 1500)
     if (sessionId) profile.chatbotSessionId = sessionId
     return profile
+}
+
+function buildConsultationDraft(
+    messages: ChatMessage[],
+    triggerMessage: ChatMessage,
+) {
+    const lastQuestion = [...messages].reverse().find((m) => m.role === "user")?.content
+    const intentLine =
+        triggerMessage.handoffIntent === "support"
+            ? "계정/결제/장비 상태 확인이 필요한 문의입니다."
+            : "도입 방식과 운영 흐름 상담이 필요한 문의입니다."
+    const answerSummary = triggerMessage.content
+        .replace(/\s+/g, " ")
+        .replace(/^요약:\s*/i, "")
+        .slice(0, 260)
+        .trim()
+
+    return [
+        "Classin 상담 요청드립니다.",
+        intentLine,
+        lastQuestion ? `질문: ${lastQuestion}` : null,
+        answerSummary ? `챗봇 확인 내용: ${answerSummary}` : null,
+    ].filter(Boolean).join("\n")
+}
+
+function AssistantMeta({ message }: { message: ChatMessage }) {
+    const sourceCount = message.sources?.length ?? 0
+    const labels = [
+        sourceCount > 0 ? `문서 ${sourceCount}개 기반` : null,
+        message.showHandoffCTA ? "상담 권장" : null,
+    ].filter((label): label is string => Boolean(label))
+
+    if (labels.length === 0) return null
+
+    return (
+        <div className="mb-2 flex flex-wrap gap-1.5">
+            {labels.map((label) => (
+                <span
+                    key={label}
+                    className={cn(
+                        "inline-flex h-6 items-center rounded-[6px] px-2 text-[11px] font-bold",
+                        label === "상담 권장"
+                            ? "bg-[#ECFDF5] text-[#084734]"
+                            : "bg-[#F6F5F4] text-[#615D59]"
+                    )}
+                >
+                    {label}
+                </span>
+            ))}
+        </div>
+    )
+}
+
+function ConsultationBridge({
+    messages,
+    message,
+    sessionId,
+}: {
+    messages: ChatMessage[]
+    message: ChatMessage
+    sessionId?: string
+}) {
+    const [state, setState] = useState<"idle" | "opened" | "copied" | "failed">("idle")
+    const draft = useMemo(
+        () => buildConsultationDraft(messages, message),
+        [messages, message]
+    )
+    const intentLabel = message.handoffIntent === "support" ? "실시간 상담 연결" : "도입 상담 남기기"
+
+    function openConsultation() {
+        const anonymousId = getChannelTalkAnonymousId()
+        const opened = openChannelTalk({
+            memberId: anonymousId ? buildChannelTalkMemberId(anonymousId) : undefined,
+            profile: buildHandoffProfile(messages, message, sessionId),
+        })
+
+        setState(opened ? "opened" : "failed")
+    }
+
+    async function copyDraft() {
+        try {
+            await navigator.clipboard.writeText(draft)
+            setState("copied")
+        } catch {
+            setState("failed")
+        }
+    }
+
+    return (
+        <div className="mt-3 border-t border-black/[0.06] pt-3">
+            <div className="flex items-center gap-2 text-[12px] font-bold text-[#084734]">
+                <MessageCircle className="h-4 w-4" />
+                상담 연결
+            </div>
+            <div className="mt-2 rounded-[8px] bg-[#F6F5F4] px-3 py-2 text-[12px] leading-5 text-[#3B3835]">
+                <p className="whitespace-pre-line break-keep">{draft}</p>
+            </div>
+            <div className="mt-3 flex flex-wrap items-center gap-2">
+                <button
+                    type="button"
+                    onClick={openConsultation}
+                    className="inline-flex h-9 items-center justify-center gap-1.5 rounded-[6px] bg-[#009060] px-3 text-xs font-bold text-white transition-colors hover:bg-[#007A52]"
+                >
+                    <MessageCircle className="h-3.5 w-3.5" />
+                    {intentLabel}
+                </button>
+                <button
+                    type="button"
+                    onClick={() => void copyDraft()}
+                    className="inline-flex h-9 items-center justify-center gap-1.5 rounded-[6px] border border-black/[0.08] bg-white px-3 text-xs font-bold text-[#111110] transition-colors hover:bg-[#ECFDF5]"
+                >
+                    {state === "copied" ? <Check className="h-3.5 w-3.5" /> : <Copy className="h-3.5 w-3.5" />}
+                    요약 복사
+                </button>
+                <Link
+                    href="/contact"
+                    className="inline-flex h-9 items-center justify-center rounded-[6px] px-2 text-xs font-bold text-[#615D59] transition-colors hover:bg-[#F6F5F4] hover:text-[#084734]"
+                >
+                    문의폼
+                </Link>
+            </div>
+            {state !== "idle" ? (
+                <p className="mt-2 text-[11px] leading-4 text-[#615D59]">
+                    {state === "opened"
+                        ? "상담창이 열렸어요. 문의를 보내면 담당자가 이어서 확인합니다."
+                        : state === "copied"
+                            ? "요약을 복사했어요."
+                            : "상담창을 열 수 없으면 문의폼으로 남겨주세요."}
+                </p>
+            ) : null}
+        </div>
+    )
 }
 
 function FeedbackButtons({
@@ -570,6 +703,7 @@ export function FloatingChatbot() {
                                                     : "border border-black/[0.06] bg-white text-[#111110] shadow-sm"
                                             )}
                                         >
+                                            {message.role === "assistant" ? <AssistantMeta message={message} /> : null}
                                             <p className="whitespace-pre-line break-keep">{message.content}</p>
                                             {message.role === "assistant" ? (
                                                 <>
@@ -588,39 +722,13 @@ export function FloatingChatbot() {
                                                             ))}
                                                         </div>
                                                     ) : null}
-                                                    {message.answerEventId || message.showHandoffCTA ? (
+                                                    {message.answerEventId ? (
                                                         <div className="mt-3 flex flex-wrap items-center justify-between gap-2">
-                                                            {message.answerEventId ? <FeedbackButtons answerEventId={message.answerEventId} sessionId={sessionId} /> : <span />}
-                                                            {message.showHandoffCTA ? (
-                                                                message.handoffIntent === "support" ? (
-                                                                    <button
-                                                                        type="button"
-                                                                        onClick={() => {
-                                                                            const anonymousId = getChannelTalkAnonymousId()
-                                                                            const opened = openChannelTalk({
-                                                                                memberId: anonymousId
-                                                                                    ? buildChannelTalkMemberId(anonymousId)
-                                                                                    : undefined,
-                                                                                profile: buildHandoffProfile(messages, message, sessionId),
-                                                                            })
-                                                                            if (!opened) {
-                                                                                window.location.href = "/contact"
-                                                                            }
-                                                                        }}
-                                                                        className="inline-flex h-8 items-center justify-center rounded-[6px] bg-[#009060] px-3 text-xs font-bold text-white transition-colors hover:bg-[#007A52]"
-                                                                    >
-                                                                        실시간 상담 연결
-                                                                    </button>
-                                                                ) : (
-                                                                    <Link
-                                                                        href="/contact"
-                                                                        className="inline-flex h-8 items-center justify-center rounded-[6px] bg-[#009060] px-3 text-xs font-bold text-white transition-colors hover:bg-[#007A52]"
-                                                                    >
-                                                                        도입 상담 남기기
-                                                                    </Link>
-                                                                )
-                                                            ) : null}
+                                                            <FeedbackButtons answerEventId={message.answerEventId} sessionId={sessionId} />
                                                         </div>
+                                                    ) : null}
+                                                    {message.showHandoffCTA ? (
+                                                        <ConsultationBridge messages={messages} message={message} sessionId={sessionId} />
                                                     ) : null}
                                                 </>
                                             ) : null}
