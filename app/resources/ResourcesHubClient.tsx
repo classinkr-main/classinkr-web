@@ -309,6 +309,17 @@ export function ResourcesHubClient({ resources }: Props) {
                       </li>
                     ))}
                   </ul>
+                  <p className="mt-4 text-[12px] font-bold uppercase tracking-[0.14em] text-[#A39E98]">
+                    주요 점검
+                  </p>
+                  <ul className="mt-3 space-y-2">
+                    {resource.checklistBullets.slice(0, 2).map((item) => (
+                      <li key={item} className="flex gap-2 text-[13px] leading-6 text-[#615D59]">
+                        <CheckCircle2 className="mt-1 h-4 w-4 shrink-0 text-[#084734]" />
+                        <span>{item}</span>
+                      </li>
+                    ))}
+                  </ul>
                 </div>
 
                 <div className="mt-6 border-t border-black/[0.08] pt-5">
