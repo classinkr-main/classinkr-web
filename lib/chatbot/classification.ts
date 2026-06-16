@@ -51,7 +51,7 @@ export function detectChatbotCategory(
   if (/api|sdk|연동|데이터\s*구독|가상계정|수업\s*중계|코스\s*정보|수업\s*정보/.test(text)) {
     return "admin"
   }
-  if (/수업|edb|칠판\s*파일|출결|출석|보강|교사|학생|학부모|집중|운영|관리|리포트|숙제|과제|복습|녹화|lms/.test(text)) {
+  if (/수업|edb|칠판\s*파일|출결|출석|보강|교사|학생|학부모|집중|운영|관리|리포트|숙제|과제|복습|녹화|lms|온스테이지|스테이지|하이브리드|개인\s*칠판|현장\s*녹화|수업\s*녹화|다시보기|트래킹\s*뷰|byod/.test(text)) {
     return "classroom"
   }
   if (/상담|문의|데모|시연|컨설팅|연락|미팅|제안|상담사|담당자/.test(text)) {
@@ -60,7 +60,14 @@ export function detectChatbotCategory(
 
   if (sourceCategories.includes("admin")) return "admin"
   if (sourceCategories.includes("hardware") || sourceCategories.includes("board")) return "hardware"
-  if (sourceCategories.includes("software")) return "classroom"
+  if (
+    sourceCategories.includes("software") ||
+    sourceCategories.includes("teacher") ||
+    sourceCategories.includes("student") ||
+    sourceCategories.includes("classroom")
+  ) {
+    return "classroom"
+  }
   if (sourceCategories.includes("onboarding") || sourceCategories.includes("start")) return "onboarding"
 
   return "general"

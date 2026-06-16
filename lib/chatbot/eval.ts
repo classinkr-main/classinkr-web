@@ -160,6 +160,9 @@ export async function runGoldenEval(
     const isCategoryMatch = result.detectedCategory === testCase.expectCategory
     const isModeOk = testCase.expectMode.includes(result.answerMode)
     const hasSources = result.sources.length > 0
+    const isExpectedPathOk =
+      !testCase.expectPathIncludes ||
+      result.sources.some((source) => source.urlPath.includes(testCase.expectPathIncludes ?? ""))
 
     if (isCategoryMatch) categoryMatch += 1
     if (isModeOk) modeOk += 1
@@ -184,6 +187,7 @@ export async function runGoldenEval(
     const flags: string[] = []
     if (!isCategoryMatch) flags.push(`category:${result.detectedCategory}≠${testCase.expectCategory}`)
     if (!isModeOk) flags.push(`mode:${result.answerMode}`)
+    if (!isExpectedPathOk) flags.push(`sourcePath:${testCase.expectPathIncludes}`)
     if (judgement?.hallucinated) flags.push("hallucinated")
     if (judgement && !judgement.faithful) flags.push("unfaithful")
     if (flags.length > 0) {

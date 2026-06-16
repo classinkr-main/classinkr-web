@@ -297,10 +297,18 @@ function mergePositioningSource(question: NormalizedQuestion, sources: ChatbotSo
   return selectDiverseSources(rerankSources(question, [positioningSource, ...sources]))
 }
 
-function getDocCategory(doc: DocArticle) {
-  if (doc.category === "start") return "onboarding"
-  if (doc.category === "board") return "hardware"
+function getSourceCategoryFromDocCategory(category: string) {
+  if (category === "start") return "onboarding"
+  if (category === "hardware" || category === "board") return "hardware"
+  if (category === "admin") return "admin"
+  if (category === "software" || category === "teacher" || category === "student") {
+    return "classroom"
+  }
   return "guide"
+}
+
+function getDocCategory(doc: DocArticle) {
+  return getSourceCategoryFromDocCategory(doc.category)
 }
 
 function getFallbackDocsFromStatic() {
@@ -405,7 +413,7 @@ async function keywordSearchSupabaseSources(question: NormalizedQuestion): Promi
           title: article.title,
           heading: row.heading ?? undefined,
           urlPath: article.canonical_path ?? `/docs/${article.category_id}/${article.slug}`,
-          category: article.category_id,
+          category: getSourceCategoryFromDocCategory(article.category_id),
           excerpt: compactText(row.content),
         }
 
@@ -478,7 +486,7 @@ async function vectorSearchSupabaseSources(
         title: row.title,
         heading: row.heading ?? undefined,
         urlPath: row.canonical_path ?? `/docs/${row.category_id}/${row.slug}`,
-        category: row.category_id,
+        category: getSourceCategoryFromDocCategory(row.category_id),
         excerpt: compactText(row.content),
         score: Math.max(1, row.similarity * 10),
       }))
