@@ -1,5 +1,5 @@
 import { KAKAO_PIXEL_ID } from "@/lib/analytics-config"
-import { currentChoice } from "@/lib/consent/consent"
+import { currentChoice, getAnonymousId } from "@/lib/consent/consent"
 
 export type EventNames =
   | "page_view"
@@ -44,6 +44,7 @@ const sendInternalTracking = (eventName: EventNames, params?: AnalyticsParams) =
     const payload = JSON.stringify({
       event: eventName,
       page: window.location.pathname,
+      anonymousId: getAnonymousId(),
       params: params ?? {},
     })
     fetch("/api/track/event", {

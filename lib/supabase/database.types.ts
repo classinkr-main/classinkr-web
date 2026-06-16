@@ -104,6 +104,51 @@ export interface Lead {
   updated_at: string;
 }
 
+export type MaterialGateType = "open" | "email" | "login";
+
+export interface UserProfile {
+  id: string;
+  email: string | null;
+  name: string | null;
+  org: string | null;
+  role: string | null;
+  phone: string | null;
+  provider: string | null;
+  provider_id: string | null;
+  marketing_consent: boolean;
+  lead_id: string | null;
+  created_at: string;
+  updated_at: string;
+}
+
+export interface MaterialDownload {
+  id: string;
+  material_slug: string;
+  user_id: string | null;
+  lead_id: string | null;
+  anonymous_id: string | null;
+  gate_type: MaterialGateType;
+  source: string | null;
+  post_slug: string | null;
+  destination_url: string | null;
+  created_at: string;
+}
+
+export interface ClientEvent {
+  id: string;
+  event_name: string;
+  button: string | null;
+  page: string | null;
+  params: Record<string, unknown>;
+  referrer: string | null;
+  user_agent: string | null;
+  anonymous_id: string | null;
+  lead_id: string | null;
+  user_id: string | null;
+  session_id: string | null;
+  created_at: string;
+}
+
 export type ContactLogType = "call" | "sms" | "kakao" | "email";
 export type ContactLogResult = "answered" | "no_answer" | "callback" | "meeting_set";
 
@@ -393,6 +438,21 @@ export type LeadInsert = Omit<Lead, "id" | "created_at" | "updated_at"> & {
   updated_at?: string;
 };
 
+export type UserProfileInsert = Omit<UserProfile, "created_at" | "updated_at"> & {
+  created_at?: string;
+  updated_at?: string;
+};
+
+export type MaterialDownloadInsert = Omit<MaterialDownload, "id" | "created_at"> & {
+  id?: string;
+  created_at?: string;
+};
+
+export type ClientEventInsert = Omit<ClientEvent, "id" | "created_at"> & {
+  id?: string;
+  created_at?: string;
+};
+
 export type AuditLogInsert = Omit<AuditLog, "id" | "created_at"> & {
   id?: string;
   created_at?: string;
@@ -407,6 +467,9 @@ export type BlogPostUpdate = Partial<
   Omit<BlogPost, "id" | "created_at">
 >;
 export type LeadUpdate = Partial<Omit<Lead, "id" | "created_at">>;
+export type UserProfileUpdate = Partial<Omit<UserProfile, "id" | "created_at">>;
+export type MaterialDownloadUpdate = Partial<Omit<MaterialDownload, "id" | "created_at">>;
+export type ClientEventUpdate = Partial<Omit<ClientEvent, "id" | "created_at">>;
 
 export type LeadContactLogInsert = Omit<LeadContactLog, "id"> & { id?: string };
 export type LeadContactLogUpdate = Partial<Omit<LeadContactLog, "id">>;
@@ -460,6 +523,21 @@ export interface Database {
         Row: Lead;
         Insert: LeadInsert;
         Update: LeadUpdate;
+      };
+      user_profiles: {
+        Row: UserProfile;
+        Insert: UserProfileInsert;
+        Update: UserProfileUpdate;
+      };
+      material_downloads: {
+        Row: MaterialDownload;
+        Insert: MaterialDownloadInsert;
+        Update: MaterialDownloadUpdate;
+      };
+      client_events: {
+        Row: ClientEvent;
+        Insert: ClientEventInsert;
+        Update: ClientEventUpdate;
       };
       audit_logs: {
         Row: AuditLog;

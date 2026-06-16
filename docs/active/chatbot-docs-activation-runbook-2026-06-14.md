@@ -13,6 +13,7 @@
 - `docs_ai_chunks`가 비어 있음 → 챗봇은 현재 정적 [lib/docs.ts](../../lib/docs.ts) 폴백만 사용.
 - 프로드 `GEMINI_API_KEY` 설정 여부 미확인 → 미설정이면 사용자에겐 템플릿 답변만 나감.
 - 임베딩 백필 미실행 → 시맨틱 검색은 키워드로 폴백.
+- `match_docs_ai_chunks` RPC는 Supabase JS 호출 형태에 맞춰 text 오버로드까지 적용되어야 한다.
 
 구현된 조각:
 - 답변 생성/검색: [lib/chatbot/service.ts](../../lib/chatbot/service.ts), [lib/chatbot/llm.ts](../../lib/chatbot/llm.ts)
@@ -48,6 +49,8 @@
   - [ ] [20260614_alpha_admin_base_schema.sql](../../supabase/migrations/20260614_alpha_admin_base_schema.sql) 적용 상태(관리자/리드/audit base)
   - [ ] [20260421_docs_center.sql](../../supabase/migrations/20260421_docs_center.sql) 적용 상태(문서센터 테이블)
   - [ ] [20260421_z_chatbot_analytics.sql](../../supabase/migrations/20260421_z_chatbot_analytics.sql), [20260520_chatbot_recommended_questions.sql](../../supabase/migrations/20260520_chatbot_recommended_questions.sql), [20260614211500_chatbot_recommended_questions_alpha_seed.sql](../../supabase/migrations/20260614211500_chatbot_recommended_questions_alpha_seed.sql), [20260604_docs_article_drafts.sql](../../supabase/migrations/20260604_docs_article_drafts.sql) 적용 상태
+  - [ ] [20260615_public_material_downloads.sql](../../supabase/migrations/20260615_public_material_downloads.sql) 적용 상태(자료 다운로드/공개 사용자/식별 이벤트)
+  - [ ] [20260616_public_material_downloads_hardening.sql](../../supabase/migrations/20260616_public_material_downloads_hardening.sql) 적용 상태(이미 20260615를 적용한 운영 DB 보강)
   - [ ] `npm run check:alpha-db` → `Status: ok` 확인
 
 - [ ] **1. 문서 시드** — `docs_articles` + `docs_ai_chunks` 채우기 (임베딩은 아직 null)
@@ -57,22 +60,30 @@
 
 - [ ] **2. 벡터 검색 마이그레이션 적용**
   - [ ] [20260613_docs_chunk_vector_search.sql](../../supabase/migrations/20260613_docs_chunk_vector_search.sql)
+  - [ ] [20260616_docs_chunk_vector_rpc_text_compat.sql](../../supabase/migrations/20260616_docs_chunk_vector_rpc_text_compat.sql)
+  - [ ] 적용 후 PostgREST schema cache 새로고침
   - 참고: [20260613_docs_chunk_embedding_768.sql](../../supabase/migrations/20260613_docs_chunk_embedding_768.sql)은 선택적 768 전환용이다. 이 DDL을 실제 DB에 적용한 뒤에만 `GEMINI_EMBED_DIM=768`로 바꾼다.
 
-- [ ] **3. 임베딩 백필** (gemini-embedding-001, 1536d)
+- [ ] **3. 자료 다운로드 DB/Storage 연결**
+  - [ ] Supabase Storage `materials` 버킷 생성 상태 확인(마이그레이션에서 private bucket으로 보정)
+  - [ ] 파일형 자료는 Storage에 업로드 후 리드 마그넷 `storagePath`를 채운다. 비어 있으면 기존 `/resources/[slug]` 상세 페이지로 폴백한다.
+  - [ ] Google/Naver 공개 로그인 env 확인: `NEXT_PUBLIC_SUPABASE_URL`, `NEXT_PUBLIC_SUPABASE_PUBLISHABLE_KEY`, `NAVER_CLIENT_ID`, `NAVER_CLIENT_SECRET`
+  - [ ] 다운로드 API 확인: `POST /api/materials/{slug}/download` → `material_downloads`, `client_events(download_materials)` 기록
+
+- [ ] **4. 임베딩 백필** (gemini-embedding-001, 1536d)
   - [ ] `… npx tsx scripts/embed-docs-chunks.ts --dry-run` (대상 수)
   - [ ] `GEMINI_API_KEY=… NEXT_PUBLIC_SUPABASE_URL=… SUPABASE_SERVICE_ROLE_KEY=… npx tsx scripts/embed-docs-chunks.ts`
   - [ ] 검증: `select count(*) from docs_ai_chunks where embedding is not null;`
 
-- [ ] **4. baseline 측정**
+- [ ] **5. baseline 측정**
   - [ ] `/admin/docs/gaps` → "평가 실행" (또는 `POST /api/admin/chatbot/eval` body `{"judge":true}`)
   - [ ] 카테고리 적중 / 출처 확보 / 환각률 기록
   - [ ] `/admin/docs/gaps` → 갭 질문에서 "AI 초안 생성" → "초안을 문서로 저장" → 편집 화면에서 검수
 
-- [ ] **5. 눈으로 확인**
+- [ ] **6. 눈으로 확인**
   - [ ] 챗봇에 골든셋 질문(예: "세금계산서 발급되나요?") → 답이 docs 출처로 나오는지
 
-각 단계가 푸는 것: **1** = 폴백 탈출(DB 문서 답변) · **3** = 키워드→시맨틱 승급 · **4** = 개선 기준선.
+각 단계가 푸는 것: **1** = 폴백 탈출(DB 문서 답변) · **3** = 자료 다운로드/식별 기록 · **4** = 키워드→시맨틱 승급 · **5** = 개선 기준선.
 
 ---
 
@@ -108,6 +119,7 @@ baseline 측정 후 우선순위 재조정. 현재 후보:
 | 품질 평가 | `POST /api/admin/chatbot/eval` |
 | 문서 보강 큐 | `GET /api/admin/docs/gaps` |
 | AI 초안 생성 | `POST /api/admin/docs/gaps/draft` → 관리자 화면에서 `POST /api/admin/docs/articles`로 draft 문서 저장 |
-| 검색 RPC | `match_docs_ai_chunks(vector(1536), int)` |
+| 검색 RPC | `match_docs_ai_chunks(text, int)` runtime 호환 오버로드 + `match_docs_ai_chunks(vector, int)` |
+| 자료 다운로드 | `POST /api/materials/{slug}/download`, `material_downloads`, `user_profiles`, `client_events` 식별 컬럼 |
 | 백필 | [scripts/embed-docs-chunks.ts](../../scripts/embed-docs-chunks.ts) |
 | 시드 | [scripts/seed-docs.ts](../../scripts/seed-docs.ts) |

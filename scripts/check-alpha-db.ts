@@ -14,6 +14,7 @@ import { createClient } from "@supabase/supabase-js"
 
 import {
   ALPHA_DB_MIGRATIONS,
+  ALPHA_DB_RPC_PROBES,
   ALPHA_DB_TABLE_PROBES,
   buildAlphaDbProbeSelect,
   summarizeAlphaDbProbeResults,
@@ -76,6 +77,18 @@ async function main() {
       count: error ? null : count ?? 0,
       error: error?.message ?? null,
       minimumRows: probe.minimumRows,
+      migration: probe.migration,
+    })
+  }
+
+  for (const probe of ALPHA_DB_RPC_PROBES) {
+    const { error } = await supabase.rpc(probe.functionName, probe.args)
+
+    results.push({
+      table: probe.functionName,
+      label: probe.label,
+      count: error ? null : 1,
+      error: error?.message ?? null,
       migration: probe.migration,
     })
   }

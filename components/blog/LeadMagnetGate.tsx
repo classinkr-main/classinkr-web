@@ -3,13 +3,14 @@
  *
  * 어드민이 글에 지정한 리드 마그넷(lib/lead-magnets.ts)을 본문 하단에 노출한다.
  * 이메일 입력 → /api/newsletter/subscribe (source: blog_lead_magnet:<slug>, leadMagnet 태그)
- * → 구독자 DB에 마그넷 태그가 남고, resourceUrl이 있으면 즉시 열람 버튼을 띄운다.
+ * → /api/materials/[slug]/download 를 통해 자료 열람과 material_downloads 기록을 처리한다.
  */
 
 "use client"
 
 import { useState } from "react"
 import { ArrowRight, CheckCircle2, Download, Loader2, Mail, Sparkles } from "lucide-react"
+import { PublicLoginDialog } from "@/components/auth/PublicLoginDialog"
 import { Input } from "@/components/ui/input"
 import { Button } from "@/components/ui/button"
 import { trackEvent } from "@/lib/analytics"
@@ -19,6 +20,7 @@ import {
   getLeadMagnetTierLabel,
   type LeadMagnet,
 } from "@/lib/lead-magnets"
+import { MaterialDownloadError, requestMaterialDownload } from "@/lib/materials-client"
 
 interface Props {
   leadMagnet: LeadMagnet
@@ -29,12 +31,14 @@ interface Props {
 export function LeadMagnetGate({ leadMagnet, postSlug }: Props) {
   const [email, setEmail] = useState("")
   const [loading, setLoading] = useState(false)
+  const [downloading, setDownloading] = useState(false)
+  const [loginDialogOpen, setLoginDialogOpen] = useState(false)
   const [submitted, setSubmitted] = useState(false)
   const [error, setError] = useState("")
 
   const source = leadMagnet.sourceDetail
-  const resourceUrl = leadMagnet.published ? leadMagnet.resourceUrl : undefined
   const itemCount = getLeadMagnetItemCount(leadMagnet)
+  const usesEmailGate = leadMagnet.gate === "email"
 
   const handleSubmit = async (e: React.FormEvent) => {
     e.preventDefault()
@@ -73,8 +77,44 @@ export function LeadMagnetGate({ leadMagnet, postSlug }: Props) {
     }
   }
 
+  const handleDownload = async () => {
+    if (downloading || !leadMagnet.published) return
+
+    setDownloading(true)
+    setError("")
+    try {
+      const result = await requestMaterialDownload({
+        slug: leadMagnet.slug,
+        email: submitted ? email : undefined,
+        source: "blog_lead_magnet",
+        postSlug,
+      })
+      window.location.assign(result.url)
+    } catch (downloadError) {
+      if (
+        downloadError instanceof MaterialDownloadError &&
+        downloadError.code === "login_required"
+      ) {
+        setLoginDialogOpen(true)
+      } else {
+        setError(
+          downloadError instanceof Error
+            ? downloadError.message
+            : "자료를 열지 못했습니다."
+        )
+      }
+    } finally {
+      setDownloading(false)
+    }
+  }
+
   return (
     <section className="mt-10 overflow-hidden rounded-[24px] border border-[#dcebd9] bg-[#ECFDF5] shadow-sm md:mt-12 md:rounded-[32px]">
+      <PublicLoginDialog
+        open={loginDialogOpen}
+        onOpenChange={setLoginDialogOpen}
+        title="로그인 후 자료 받기"
+      />
       <div className="h-1 w-full bg-gradient-to-r from-[#084734] via-[#6EE7B7] to-[#084734]" />
       <div className="grid gap-7 p-6 md:grid-cols-[minmax(0,1fr)_360px] md:items-center md:gap-10 md:p-10">
         {/* 좌측: 자료 소개 + 체크리스트 미리보기 */}
@@ -117,42 +157,35 @@ export function LeadMagnetGate({ leadMagnet, postSlug }: Props) {
 
         {/* 우측: 이메일 폼 / 완료 상태 */}
         <div className="rounded-[20px] border border-black/[0.06] bg-white p-5 shadow-sm md:p-6">
-          {submitted ? (
+          {submitted || !usesEmailGate ? (
             <div className="flex flex-col items-center gap-4 py-2 text-center">
               <div className="flex h-14 w-14 items-center justify-center rounded-full bg-[#ECFDF5]">
                 <CheckCircle2 className="h-7 w-7 text-[#084734]" />
               </div>
               <div className="space-y-1">
-                <p className="text-lg font-bold text-[#111110]">신청이 완료되었습니다!</p>
+                <p className="text-lg font-bold text-[#111110]">
+                  {submitted ? "신청이 완료되었습니다!" : getLeadMagnetPublicGateLabel(leadMagnet.gate)}
+                </p>
                 <p className="text-sm leading-6 text-[#1a1a1a]/55">
-                  {resourceUrl
+                  {leadMagnet.published
                     ? "아래 버튼을 눌러 자료를 바로 확인하세요."
-                    : "입력하신 이메일로 자료를 보내드릴게요."}
+                    : "자료 공개 준비가 끝나면 이메일로 안내드릴게요."}
                 </p>
               </div>
-              {resourceUrl && (
-                <Button
-                  asChild
-                  className="h-11 w-full bg-[#084734] font-semibold text-white hover:bg-[#065c41]"
-                >
-                  <a
-                    href={resourceUrl}
-                    target="_blank"
-                    rel="noopener noreferrer"
-                    onClick={() =>
-                      trackEvent("download_materials", {
-                        source: "blog_lead_magnet",
-                        lead_magnet: leadMagnet.slug,
-                        post_slug: postSlug,
-                        gate: leadMagnet.gate,
-                      })
-                    }
-                  >
-                    <Download className="mr-2 h-4 w-4" />
-                    자료 받기
-                  </a>
-                </Button>
-              )}
+              <Button
+                type="button"
+                disabled={!leadMagnet.published || downloading}
+                onClick={() => void handleDownload()}
+                className="h-11 w-full bg-[#084734] font-semibold text-white hover:bg-[#065c41]"
+              >
+                {downloading ? (
+                  <Loader2 className="h-4 w-4 animate-spin" />
+                ) : (
+                  <Download className="h-4 w-4" />
+                )}
+                자료 받기
+              </Button>
+              {error && <p className="text-sm text-[#B85C33]">{error}</p>}
             </div>
           ) : (
             <form onSubmit={handleSubmit} className="space-y-3">

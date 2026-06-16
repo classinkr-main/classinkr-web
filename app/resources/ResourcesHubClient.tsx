@@ -1,9 +1,9 @@
 "use client"
 
-import Link from "next/link"
 import { useEffect, useMemo, useRef, useState } from "react"
 import { ArrowRight, CheckCircle2, Clock, Download, FileText, Loader2, Mail } from "lucide-react"
 
+import { PublicLoginDialog } from "@/components/auth/PublicLoginDialog"
 import { Button } from "@/components/ui/button"
 import { Input } from "@/components/ui/input"
 import { trackEvent } from "@/lib/analytics"
@@ -15,6 +15,7 @@ import {
   type LeadMagnet,
   type LeadMagnetCategory,
 } from "@/lib/lead-magnets"
+import { MaterialDownloadError, requestMaterialDownload } from "@/lib/materials-client"
 
 type ResourceFilter = "all" | LeadMagnetCategory
 
@@ -49,6 +50,8 @@ export function ResourcesHubClient({ resources }: Props) {
   const [states, setStates] = useState<Record<string, SubmitState>>(() =>
     getInitialSubmitState(resources)
   )
+  const [downloadingSlug, setDownloadingSlug] = useState<string | null>(null)
+  const [loginDialogOpen, setLoginDialogOpen] = useState(false)
   const cardRefs = useRef(new Map<string, HTMLElement>())
   const trackedImpressionsRef = useRef(new Set<string>())
 
@@ -150,8 +153,47 @@ export function ResourcesHubClient({ resources }: Props) {
     }
   }
 
+  const download = async (resource: LeadMagnet, email?: string) => {
+    if (downloadingSlug) return
+
+    setDownloadingSlug(resource.slug)
+    try {
+      const result = await requestMaterialDownload({
+        slug: resource.slug,
+        email,
+        source: "resources_hub",
+      })
+      window.location.assign(result.url)
+    } catch (downloadError) {
+      if (
+        downloadError instanceof MaterialDownloadError &&
+        downloadError.code === "login_required"
+      ) {
+        setLoginDialogOpen(true)
+      } else {
+        setStates((prev) => ({
+          ...prev,
+          [resource.slug]: {
+            status: "error",
+            message:
+              downloadError instanceof Error
+                ? downloadError.message
+                : "자료를 열지 못했습니다.",
+          },
+        }))
+      }
+    } finally {
+      setDownloadingSlug(null)
+    }
+  }
+
   return (
     <div className="min-h-screen bg-[#FAFAF8] pb-20 pt-28 text-[#111110] md:pb-24 md:pt-36">
+      <PublicLoginDialog
+        open={loginDialogOpen}
+        onOpenChange={setLoginDialogOpen}
+        title="로그인 후 자료 받기"
+      />
       <section className="container">
         <div className="grid gap-10 lg:grid-cols-[minmax(0,1fr)_340px] lg:items-end">
           <div>
@@ -178,7 +220,7 @@ export function ResourcesHubClient({ resources }: Props) {
               </p>
               <p className="flex gap-2">
                 <CheckCircle2 className="mt-1 h-4 w-4 shrink-0 text-[#084734]" />
-                일반 자료는 이메일로, 심화 자료는 추후 로그인 기반으로 제공합니다.
+                일반 자료는 이메일로, 심화 자료는 로그인 후 제공합니다.
               </p>
             </div>
           </div>
@@ -207,7 +249,7 @@ export function ResourcesHubClient({ resources }: Props) {
           {visibleResources.map((resource) => {
             const state = states[resource.slug] ?? { status: "idle" }
             const isPublished = resource.published
-            const resourceUrl = isPublished ? resource.resourceUrl : undefined
+            const isDownloading = downloadingSlug === resource.slug
             const itemCount = getLeadMagnetItemCount(resource)
 
             return (
@@ -275,21 +317,19 @@ export function ResourcesHubClient({ resources }: Props) {
                       <Clock className="h-4 w-4" />
                       준비 중
                     </div>
-                  ) : state.status === "done" && resourceUrl ? (
-                    <Button asChild className="h-11 w-full">
-                      <Link
-                        href={resourceUrl}
-                        onClick={() =>
-                          trackEvent("download_materials", {
-                            source: "resources_hub",
-                            lead_magnet: resource.slug,
-                            gate: resource.gate,
-                          })
-                        }
-                      >
+                  ) : state.status === "done" ? (
+                    <Button
+                      type="button"
+                      className="h-11 w-full"
+                      disabled={isDownloading}
+                      onClick={() => void download(resource, emails[resource.slug])}
+                    >
+                      {isDownloading ? (
+                        <Loader2 className="h-4 w-4 animate-spin" />
+                      ) : (
                         <Download className="h-4 w-4" />
-                        자료 보기
-                      </Link>
+                      )}
+                      자료 보기
                     </Button>
                   ) : resource.gate === "email" ? (
                     <form
@@ -326,23 +366,23 @@ export function ResourcesHubClient({ resources }: Props) {
                         )}
                       </Button>
                     </form>
-                  ) : resourceUrl ? (
-                    <Button asChild className="h-11 w-full">
-                      <Link
-                        href={resourceUrl}
-                        onClick={() =>
-                          trackEvent("download_materials", {
-                            source: "resources_hub",
-                            lead_magnet: resource.slug,
-                            gate: resource.gate,
-                          })
-                        }
-                      >
-                        {getLeadMagnetPublicGateLabel(resource.gate)}
-                        <ArrowRight className="h-4 w-4" />
-                      </Link>
+                  ) : (
+                    <Button
+                      type="button"
+                      className="h-11 w-full"
+                      disabled={isDownloading}
+                      onClick={() => void download(resource)}
+                    >
+                      {isDownloading ? (
+                        <Loader2 className="h-4 w-4 animate-spin" />
+                      ) : (
+                        <>
+                          {getLeadMagnetPublicGateLabel(resource.gate)}
+                          <ArrowRight className="h-4 w-4" />
+                        </>
+                      )}
                     </Button>
-                  ) : null}
+                  )}
 
                   {state.status === "error" ? (
                     <p className="mt-2 text-[12px] leading-5 text-[#B85C33]">{state.message}</p>

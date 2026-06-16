@@ -46,6 +46,9 @@ export const ALPHA_DB_MIGRATIONS = [
   "supabase/migrations/20260614211500_chatbot_recommended_questions_alpha_seed.sql",
   "supabase/migrations/20260604_docs_article_drafts.sql",
   "supabase/migrations/20260613_docs_chunk_vector_search.sql",
+  "supabase/migrations/20260615_public_material_downloads.sql",
+  "supabase/migrations/20260616_public_material_downloads_hardening.sql",
+  "supabase/migrations/20260616_docs_chunk_vector_rpc_text_compat.sql",
 ]
 
 export const ALPHA_DB_TABLE_PROBES: AlphaDbTableProbe[] = [
@@ -64,7 +67,7 @@ export const ALPHA_DB_TABLE_PROBES: AlphaDbTableProbe[] = [
   {
     table: "audit_logs",
     label: "운영 감사 로그",
-    columns: ["id", "actor_user_id", "action", "resource_type", "resource_id", "metadata"],
+    columns: ["id", "actor_user_id", "action", "target_type", "target_id", "payload"],
     migration: "supabase/migrations/20260614_alpha_admin_base_schema.sql",
   },
   {
@@ -112,6 +115,24 @@ export const ALPHA_DB_TABLE_PROBES: AlphaDbTableProbe[] = [
     columns: ["article_id", "draft_payload", "change_note", "updated_by", "updated_at"],
     migration: "supabase/migrations/20260604_docs_article_drafts.sql",
   },
+  {
+    table: "client_events",
+    label: "웹 이벤트 식별자",
+    columns: ["id", "event_name", "anonymous_id", "lead_id", "user_id", "session_id", "created_at"],
+    migration: "supabase/migrations/20260615_public_material_downloads.sql",
+  },
+  {
+    table: "user_profiles",
+    label: "공개 사용자 프로필",
+    columns: ["id", "email", "provider", "provider_id", "lead_id", "created_at"],
+    migration: "supabase/migrations/20260615_public_material_downloads.sql",
+  },
+  {
+    table: "material_downloads",
+    label: "자료 다운로드 감사 로그",
+    columns: ["id", "material_slug", "user_id", "lead_id", "anonymous_id", "gate_type", "created_at"],
+    migration: "supabase/migrations/20260615_public_material_downloads.sql",
+  },
 ]
 
 function buildVectorProbeEmbedding(dimensions: number) {
@@ -126,7 +147,7 @@ export const ALPHA_DB_RPC_PROBES: AlphaDbRpcProbe[] = [
       query_embedding: buildVectorProbeEmbedding(1536),
       match_count: 1,
     },
-    migration: "supabase/migrations/20260613_docs_chunk_vector_search.sql",
+    migration: "supabase/migrations/20260616_docs_chunk_vector_rpc_text_compat.sql",
   },
 ]
 

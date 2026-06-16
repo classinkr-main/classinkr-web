@@ -48,6 +48,7 @@ const PII_PATTERNS = [
 interface TrackEventBody {
   event?: string
   page?: string
+  anonymousId?: string | null
   params?: Record<string, string | number | boolean | null | undefined>
 }
 
@@ -85,6 +86,8 @@ export async function POST(req: NextRequest) {
 
   const referrer = redactPii(req.headers.get("referer") ?? "").slice(0, 500) || null
   const userAgent = redactPii(req.headers.get("user-agent") ?? "").slice(0, 500) || null
+  const anonymousId =
+    typeof body.anonymousId === "string" ? body.anonymousId.slice(0, 100) : null
 
   try {
     const sb = createSupabaseAdminClient()
@@ -95,6 +98,7 @@ export async function POST(req: NextRequest) {
       params,
       referrer,
       user_agent: userAgent,
+      anonymous_id: anonymousId,
     })
     if (error) {
       console.warn("[track/event] client_events insert failed:", error.message)
