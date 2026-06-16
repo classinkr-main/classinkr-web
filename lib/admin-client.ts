@@ -245,6 +245,14 @@ export async function adminFetchJson<T>(input: string, init?: RequestInit) {
   return data as T
 }
 
+export function getCachedAdminJson<T>(
+  input: string,
+  options: { cacheKey?: string; allowExpired?: boolean } = {}
+) {
+  const cacheKey = getAdminRequestCacheKey(input, undefined, options.cacheKey)
+  return readAdminCache<T>(cacheKey, options.allowExpired ?? true)?.data ?? null
+}
+
 export async function adminFetchJsonCached<T>(
   input: string,
   init?: RequestInit,

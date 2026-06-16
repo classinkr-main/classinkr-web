@@ -10,6 +10,9 @@ const supabaseHost = (() => {
 })();
 
 const supabaseHttp = supabaseHost ? `https://${supabaseHost}` : "https://*.supabase.co";
+const supabaseImageSources = supabaseHost
+  ? `https://${supabaseHost} https://*.supabase.co`
+  : "https://*.supabase.co";
 const supabaseWs = supabaseHost ? `wss://${supabaseHost}` : "wss://*.supabase.co";
 const developmentScriptPolicy =
   process.env.NODE_ENV === "production" ? "" : " 'unsafe-eval'";
@@ -28,7 +31,7 @@ const contentSecurityPolicy = [
   "style-src 'self' 'unsafe-inline' https://cdn.jsdelivr.net https://fonts.googleapis.com",
   "font-src 'self' data: https://cdn.jsdelivr.net https://fonts.gstatic.com",
   // unsplash(블로그 이미지), Supabase Storage, 픽셀/지도/카카오 이미지
-  `img-src 'self' data: blob: https://images.unsplash.com ${supabaseHttp} https://www.facebook.com https://*.kakao.com https://*.daumcdn.net https://www.googletagmanager.com https://maps.google.com https://www.google.com`,
+  `img-src 'self' data: blob: https://images.unsplash.com ${supabaseImageSources} https://www.facebook.com https://*.kakao.com https://*.daumcdn.net https://www.googletagmanager.com https://maps.google.com https://www.google.com`,
   // Supabase API/Realtime, GA 수집, 채널톡 웹소켓, 토스 결제
   `connect-src 'self' ${supabaseHttp} ${supabaseWs} https://www.google-analytics.com https://region1.google-analytics.com https://www.facebook.com https://*.kakao.com https://*.channel.io wss://*.channel.io https://*.tosspayments.com https://cdn.jsdelivr.net`,
   // GTM 미리보기, 구글 지도 embed, 토스 결제창
@@ -68,6 +71,11 @@ const nextConfig: NextConfig = {
       {
         protocol: "https",
         hostname: "images.unsplash.com",
+      },
+      {
+        protocol: "https",
+        hostname: "**.supabase.co",
+        pathname: "/storage/v1/object/**",
       },
       ...(supabaseHost
         ? [

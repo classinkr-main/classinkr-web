@@ -72,6 +72,12 @@ export interface AdminCrmOverview {
       latestActivityAt: string | null
       recent: AdminCrmCustomerLogItem[]
     }
+    snapshot: {
+      source: "db_snapshot" | "live_query"
+      refreshedAt: string | null
+      stale: boolean
+      maxAgeSeconds: number
+    }
     upcomingThisWeek: {
       count: number
       items: AdminCrmUpcomingEventItem[]
@@ -143,8 +149,6 @@ export interface AdminCrmNeoCrmOverview {
     activeAccountCountMonth: number
     salesAmountMonth: number
     salesCountMonth: number
-    salesTargetAmountMonth: number | null
-    salesTargetRateMonth: number | null
     opportunityAmount: number
     opportunityCountMonth: number
     collectionAmountMonth: number
@@ -180,7 +184,7 @@ const FREQUENT_CUSTOMER_DAYS = 14
 const FREQUENT_ACTIVITY_SCAN_LIMIT = 2000
 const FREQUENT_CUSTOMER_LIMIT = 5
 const BUSINESS_SNAPSHOT_RPC = "admin_crm_business_overview"
-const BUSINESS_SNAPSHOT_MAX_AGE_SECONDS = 60
+const BUSINESS_SNAPSHOT_MAX_AGE_SECONDS = 300
 const BUSINESS_SNAPSHOT_MISSING_WARNING =
   `${BUSINESS_SNAPSHOT_RPC} 함수가 없어 라이브 집계로 대체했습니다. ` +
   "supabase/migrations/20260613_admin_crm_overview_snapshot.sql 적용이 필요합니다."
@@ -514,6 +518,12 @@ function mapBusinessSnapshotPayload(payload: Record<string, unknown>): AdminCrmO
       latestActivityAt: toTextOrNull(customerLogs.latestActivityAt),
       recent: recentLogs,
     },
+    snapshot: {
+      source: "db_snapshot",
+      refreshedAt: null,
+      stale: false,
+      maxAgeSeconds: BUSINESS_SNAPSHOT_MAX_AGE_SECONDS,
+    },
     upcomingThisWeek: {
       count: upcomingItems.length,
       items: upcomingItems,
@@ -530,20 +540,30 @@ function isMissingSnapshotInfraError(error: { code?: string; message?: string })
   return message.includes(BUSINESS_SNAPSHOT_RPC) && /could not find|does not exist/i.test(message)
 }
 
-async function getBusinessOverview(sb: SupabaseAdminClient): Promise<AdminCrmOverview["business"]> {
+async function getBusinessOverview(
+  sb: SupabaseAdminClient,
+  options: { force?: boolean } = {}
+): Promise<AdminCrmOverview["business"]> {
   let snapshotFailure: string | null = null
 
   try {
     const { data, error } = await sb.rpc(BUSINESS_SNAPSHOT_RPC, {
       p_max_age_seconds: BUSINESS_SNAPSHOT_MAX_AGE_SECONDS,
-      p_force: false,
+      p_force: options.force ?? false,
     })
     if (error) {
       snapshotFailure = isMissingSnapshotInfraError(error)
         ? BUSINESS_SNAPSHOT_MISSING_WARNING
         : formatLabeledSupabaseError(BUSINESS_SNAPSHOT_RPC, error)
     } else if (isRecord(data) && isRecord(data.payload)) {
-      return mapBusinessSnapshotPayload(data.payload)
+      const business = mapBusinessSnapshotPayload(data.payload)
+      business.snapshot = {
+        source: "db_snapshot",
+        refreshedAt: toTextOrNull(data.refreshedAt),
+        stale: data.stale === true,
+        maxAgeSeconds: BUSINESS_SNAPSHOT_MAX_AGE_SECONDS,
+      }
+      return business
     } else {
       snapshotFailure = `${BUSINESS_SNAPSHOT_RPC} returned an unexpected payload`
     }
@@ -553,6 +573,12 @@ async function getBusinessOverview(sb: SupabaseAdminClient): Promise<AdminCrmOve
   }
 
   const business = await getBusinessOverviewLive(sb)
+  business.snapshot = {
+    source: "live_query",
+    refreshedAt: new Date().toISOString(),
+    stale: false,
+    maxAgeSeconds: 0,
+  }
   if (snapshotFailure) {
     business.warning = business.warning ? `${snapshotFailure} · ${business.warning}` : snapshotFailure
   }
@@ -947,6 +973,12 @@ async function getBusinessOverviewLive(sb: SupabaseAdminClient): Promise<AdminCr
       latestActivityAt: maxDate(recentLogs.map((log) => log.occurredAt)),
       recent: recentLogs,
     },
+    snapshot: {
+      source: "live_query",
+      refreshedAt: new Date().toISOString(),
+      stale: false,
+      maxAgeSeconds: 0,
+    },
     upcomingThisWeek: {
       count: upcomingItems.length,
       items: upcomingItems,
@@ -1109,7 +1141,7 @@ function getOverallStatus(input: {
   return "ok"
 }
 
-async function getNeoCrmOverview(): Promise<AdminCrmNeoCrmOverview> {
+async function getNeoCrmOverview(options: { force?: boolean } = {}): Promise<AdminCrmNeoCrmOverview> {
   const empty: AdminCrmNeoCrmOverview = {
     ok: false,
     error: null,
@@ -1119,8 +1151,6 @@ async function getNeoCrmOverview(): Promise<AdminCrmNeoCrmOverview> {
       activeAccountCountMonth: 0,
       salesAmountMonth: 0,
       salesCountMonth: 0,
-      salesTargetAmountMonth: null,
-      salesTargetRateMonth: null,
       opportunityAmount: 0,
       opportunityCountMonth: 0,
       collectionAmountMonth: 0,
@@ -1134,7 +1164,7 @@ async function getNeoCrmOverview(): Promise<AdminCrmNeoCrmOverview> {
   // CRM home reuses the same current-month Neo CRM report as NeoCrmTeamPanel
   // so summary KPI tiles and the full panel stay on the same source and period.
   try {
-    const report = await getNeoCrmTeamReport({ granularity: "month", offset: 0 })
+    const report = await getNeoCrmTeamReport({ granularity: "month", offset: 0, force: options.force })
 
     return {
       ok: report.ok,
@@ -1145,8 +1175,6 @@ async function getNeoCrmOverview(): Promise<AdminCrmNeoCrmOverview> {
         activeAccountCountMonth: report.account.activeInPeriodCount,
         salesAmountMonth: report.revenue.teamTotal,
         salesCountMonth: report.revenue.orderCount,
-        salesTargetAmountMonth: report.target.amount,
-        salesTargetRateMonth: report.target.rate,
         opportunityAmount: report.order.amount,
         opportunityCountMonth: report.order.count,
         collectionAmountMonth: report.collection.amount,
@@ -1172,7 +1200,7 @@ async function getNeoCrmOverview(): Promise<AdminCrmNeoCrmOverview> {
   }
 }
 
-export async function getAdminCrmOverview(): Promise<AdminCrmOverview> {
+export async function getAdminCrmOverview(options: { force?: boolean } = {}): Promise<AdminCrmOverview> {
   const sb = createSupabaseAdminClient()
 
   const [
@@ -1196,8 +1224,8 @@ export async function getAdminCrmOverview(): Promise<AdminCrmOverview> {
       getSourceLinkCounts(sb),
       getExternalSnapshotOverview(sb),
       getWriteQueueCounts(sb),
-      getBusinessOverview(sb),
-      getNeoCrmOverview(),
+      getBusinessOverview(sb, { force: options.force }),
+      getNeoCrmOverview({ force: options.force }),
     ])
 
   const schemaChecks = [

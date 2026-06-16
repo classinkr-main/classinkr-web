@@ -3,16 +3,12 @@ import "server-only"
 import {
   getKoreaTeamManagerSet,
   isKoreaScopedExternalRecord,
-  isKoreaTeamLabel,
 } from "@/lib/admin-crm-scope"
 import {
   getExcludedXiaoshouyiOwnerIds,
   getXiaoshouyiOwnerNameMap,
   resolveOwnerName,
 } from "@/lib/external-crm/owner-names"
-import { confirmedMonthAmount } from "@/lib/branch/computations/rev-confirmed"
-import { normalizeBranchMemberName } from "@/lib/branch/member-names"
-import type { BranchRevDeal } from "@/lib/repositories/branch-deals"
 import { createSupabaseAdminClient } from "@/lib/supabase/admin"
 import { getFxRates } from "@/lib/billing/fx"
 
@@ -34,34 +30,6 @@ export interface NeoCrmOwnerBreakdownRow {
   owner: string
   amount: number
   count: number
-}
-
-// REV 시트 기준 장르(HW/SW × 신규/갱신)별 목표·확정 매출. 월 키가 있는 기간(월/분기/년)만 산출.
-export interface NeoCrmMixSegment {
-  key: "sw_new" | "sw_renew" | "hw_new" | "hw_renew" | "other"
-  label: string
-  target: number
-  confirmed: number
-  rate: number | null
-  dealCount: number
-}
-
-// REV 시트 기준 담당자별 목표 대비 확정 매출.
-export interface NeoCrmManagerProgressRow {
-  manager: string
-  target: number
-  confirmed: number
-  rate: number | null
-  dealCount: number
-}
-
-// REV 시트 기준 월별 목표 vs 확정 매출 추이(회계연도 전체). 선택 기간과 무관하게 항상 산출.
-export interface NeoCrmMonthlyPoint {
-  monthKey: string // "2026-04"
-  label: string // "26.04"
-  target: number
-  confirmed: number
-  rate: number | null
 }
 
 export interface NeoCrmOrderItem {
@@ -86,21 +54,6 @@ export interface NeoCrmTeamReport {
     endIso: string
     canGoNext: boolean
   }
-  target: {
-    // REV 시트 기준 해당 기간 목표 매출. 시트는 월 단위라 month granularity에서만 산출한다.
-    amount: number | null
-    achievement: number
-    rate: number | null
-    basis: "rev_sheet_month" | "none"
-  }
-  // 장르 믹스·담당자별 진행은 모두 REV 시트(목표=monthly_payments, 확정=monthly_confirmed) 기준.
-  mix: {
-    basis: "rev_sheet_month" | "none"
-    segments: NeoCrmMixSegment[]
-  }
-  managerProgress: NeoCrmManagerProgressRow[]
-  // 회계연도 월별 목표 vs 확정 추이(REV 시트). 선택 기간과 무관하게 항상 채운다.
-  monthlySeries: NeoCrmMonthlyPoint[]
   revenue: {
     teamTotal: number
     orderCount: number
@@ -157,46 +110,6 @@ interface ScopedOrderRecord extends ScopedAmountRecord {
 }
 
 const KST_OFFSET_MS = 9 * 60 * 60 * 1000
-const SHEET_INACTIVE_PATTERN = /취소|해지|드랍|드롭|중단|보류|cancel|drop|lost/i
-
-// 장르 분류 — app/api/admin/branch/summary/route.ts의 classifyCategory/classifyStatusType과 동일 규칙.
-const HW_PATTERN = /IFP|OPS|S1|T1|카메라|모니터|hardware|HW\b/i
-const SW_PATTERN = /SW\b|software|소프트웨어|구독|subscription|classin|클래스인|annual|license|라이선스/i
-
-function classifySheetCategory(productVersion: string | null): "Hardware" | "Software" | null {
-  const v = (productVersion ?? "").trim()
-  if (!v) return null
-  if (HW_PATTERN.test(v)) return "Hardware"
-  if (SW_PATTERN.test(v)) return "Software"
-  return null
-}
-
-function classifySheetStatusType(status: string | null): "New" | "Renew" | null {
-  const v = (status ?? "").trim().toLowerCase()
-  if (v === "new" || v === "신규") return "New"
-  if (v === "renew" || v === "갱신") return "Renew"
-  return null
-}
-
-function mixSegmentKey(
-  category: "Hardware" | "Software" | null,
-  statusType: "New" | "Renew" | null
-): NeoCrmMixSegment["key"] {
-  if (category === "Software" && statusType === "New") return "sw_new"
-  if (category === "Software" && statusType === "Renew") return "sw_renew"
-  if (category === "Hardware" && statusType === "New") return "hw_new"
-  if (category === "Hardware" && statusType === "Renew") return "hw_renew"
-  return "other"
-}
-
-const MIX_SEGMENT_LABEL: Record<NeoCrmMixSegment["key"], string> = {
-  sw_new: "SW 신규",
-  sw_renew: "SW 갱신",
-  hw_new: "HW 신규",
-  hw_renew: "HW 갱신",
-  other: "미분류",
-}
-const MIX_SEGMENT_ORDER: NeoCrmMixSegment["key"][] = ["sw_new", "sw_renew", "hw_new", "hw_renew", "other"]
 
 function groupByOwner(
   rows: ScopedAmountRecord[],
@@ -293,14 +206,6 @@ interface PeriodBounds {
   start: Date
   end: Date
   label: string
-  // 기간이 덮는 월 키 목록(REV 시트 월별 목표 합산용). 주 단위는 시트 월 목표를
-  // 안전하게 쪼갤 수 없으므로 null.
-  monthKeys: string[] | null
-}
-
-function monthKeyFromIndex(year: number, monthIndex: number) {
-  const d = new Date(Date.UTC(year, monthIndex, 1))
-  return `${d.getUTCFullYear()}-${pad2(d.getUTCMonth() + 1)}`
 }
 
 // Period boundaries are computed in KST (UTC+9) so a Korea team dashboard groups
@@ -319,7 +224,6 @@ function resolvePeriodBounds(granularity: NeoCrmGranularity, offset: number): Pe
       start,
       end,
       label: `${ld.getUTCFullYear()}년 ${pad2(ld.getUTCMonth() + 1)}월`,
-      monthKeys: [monthKeyFromIndex(ld.getUTCFullYear(), ld.getUTCMonth())],
     }
   }
 
@@ -329,16 +233,14 @@ function resolvePeriodBounds(granularity: NeoCrmGranularity, offset: number): Pe
     const end = new Date(Date.UTC(year, startMonth + 3, 1) - KST_OFFSET_MS)
     const sd = new Date(Date.UTC(year, startMonth, 1))
     const quarter = Math.floor(sd.getUTCMonth() / 3) + 1
-    const monthKeys = [0, 1, 2].map((i) => monthKeyFromIndex(sd.getUTCFullYear(), sd.getUTCMonth() + i))
-    return { start, end, label: `${sd.getUTCFullYear()} ${quarter}분기`, monthKeys }
+    return { start, end, label: `${sd.getUTCFullYear()} ${quarter}분기` }
   }
 
   if (granularity === "year") {
     const yy = year + offset
     const start = new Date(Date.UTC(yy, 0, 1) - KST_OFFSET_MS)
     const end = new Date(Date.UTC(yy + 1, 0, 1) - KST_OFFSET_MS)
-    const monthKeys = Array.from({ length: 12 }, (_, i) => monthKeyFromIndex(yy, i))
-    return { start, end, label: `${yy}년`, monthKeys }
+    return { start, end, label: `${yy}년` }
   }
 
   // week — ISO week, Monday start, in KST.
@@ -356,7 +258,6 @@ function resolvePeriodBounds(granularity: NeoCrmGranularity, offset: number): Pe
     label: `${pad2(startLabel.getUTCMonth() + 1)}.${pad2(startLabel.getUTCDate())} ~ ${pad2(
       endLabel.getUTCMonth() + 1
     )}.${pad2(endLabel.getUTCDate())}`,
-    monthKeys: null,
   }
 }
 
@@ -382,10 +283,6 @@ function emptyReport(
       endIso: bounds.end.toISOString(),
       canGoNext: offset < 0,
     },
-    target: { amount: null, achievement: 0, rate: null, basis: "none" },
-    mix: { basis: "none", segments: [] },
-    managerProgress: [],
-    monthlySeries: [],
     revenue: { teamTotal: 0, orderCount: 0, contributorCount: 0, byOwner: [] },
     account: { totalCount: 0, activeInPeriodCount: 0 },
     order: { count: 0, amount: 0, recent: [], byOwner: [] },
@@ -405,16 +302,17 @@ function emptyReport(
 // /admin/crm 홈은 overview(getNeoCrmOverview)와 NeoCrmTeamPanel(/api/admin/crm/neo)이
 // 같은 월 리포트를 거의 동시에 요청한다(각 ~12쿼리). 인스턴스 단위 short-TTL 메모로
 // 중복 계산과 동시 요청을 합친다. 실패 리포트는 캐시하지 않아 즉시 재시도된다.
-const REPORT_MEMO_TTL_MS = 30_000
+const REPORT_MEMO_TTL_MS = 120_000
 const reportMemo = new Map<string, { expiresAt: number; promise: Promise<NeoCrmTeamReport> }>()
 
 export function getNeoCrmTeamReport(input: {
   granularity: NeoCrmGranularity
   offset: number
+  force?: boolean
 }): Promise<NeoCrmTeamReport> {
   const key = `${input.granularity}:${input.offset}`
   const cached = reportMemo.get(key)
-  if (cached && cached.expiresAt > Date.now()) return cached.promise
+  if (!input.force && cached && cached.expiresAt > Date.now()) return cached.promise
 
   const promise = computeNeoCrmTeamReport(input)
     .then((report) => {
@@ -473,9 +371,7 @@ async function computeNeoCrmTeamReport(input: {
   ] = await Promise.all([
     sb
       .from("branch_rev_deals")
-      .select(
-        "team, manager, status, monthly_payments, contract_target, product_version, monthly_confirmed, monthly_red, monthly_high_conf"
-      )
+      .select("team, manager")
       .limit(PERIOD_SCAN_LIMIT),
     moneyWindowSelect("SalesPerformance__c"),
     moneyWindowSelect("opportunity"),
@@ -528,13 +424,6 @@ async function computeNeoCrmTeamReport(input: {
   const sheetRows = (teamManagerResult.error ? [] : teamManagerResult.data ?? []) as Array<{
     team: string | null
     manager: string | null
-    status: string | null
-    monthly_payments: Record<string, number> | null
-    contract_target: number | null
-    product_version: string | null
-    monthly_confirmed: Record<string, number> | null
-    monthly_red: Record<string, boolean> | null
-    monthly_high_conf: Record<string, number> | null
   }>
   const koreaManagers = getKoreaTeamManagerSet(sheetRows)
 
@@ -560,104 +449,6 @@ async function computeNeoCrmTeamReport(input: {
   // 직전 기간 윈도우: [prevStart, prevPaceCutoff). allSales 쿼리가 prevStart부터 읽으므로
   // 상한만 적용하면 된다. (prevPaceCutoffIso <= startIso 보장)
   const isPrevPace = (occurredAt: string | null) => isIsoWithinRange(occurredAt, windowStartIso, prevPaceCutoffIso)
-
-  // REV 시트 한국팀 활성 행(취소/해지 제외). 월별 추이·목표·믹스·담당자 진행의 공통 소스.
-  const koreaActiveRows = sheetRows.filter(
-    (row) => isKoreaTeamLabel(row.team) && !SHEET_INACTIVE_PATTERN.test(row.status ?? "")
-  )
-
-  // 월별 목표 vs 확정 추이(회계연도 전체) — 시트에 등장하는 모든 월 키를 모아 정렬.
-  // 선택 기간과 무관하게 항상 산출(스크린샷의 "수금목표-월도" 표/차트 재현).
-  const monthlyAcc = new Map<string, { target: number; confirmed: number }>()
-  for (const row of koreaActiveRows) {
-    for (const [key, value] of Object.entries(row.monthly_payments ?? {})) {
-      if (!/^\d{4}-\d{2}$/.test(key)) continue
-      const monthTotal = Number(value) || 0
-      const acc = monthlyAcc.get(key) ?? { target: 0, confirmed: 0 }
-      acc.target += monthTotal
-      acc.confirmed += confirmedMonthAmount(row as unknown as BranchRevDeal, key, monthTotal)
-      monthlyAcc.set(key, acc)
-    }
-  }
-  const monthlySeries: NeoCrmMonthlyPoint[] = Array.from(monthlyAcc.entries())
-    .sort((a, b) => a[0].localeCompare(b[0]))
-    .map(([monthKey, acc]) => ({
-      monthKey,
-      label: `${monthKey.slice(2, 4)}.${monthKey.slice(5, 7)}`,
-      target: acc.target,
-      confirmed: acc.confirmed,
-      rate: acc.target > 0 ? acc.confirmed / acc.target : null,
-    }))
-
-  // 목표치: REV 시트 기준. 기간이 덮는 월(monthKeys)의 한국팀 활성 행 예정액 합계.
-  // 주 단위는 시트 월 목표를 안전하게 쪼갤 수 없어 null(달성치만 표시).
-  let targetAmount: number | null = null
-  const mixSegments: NeoCrmMixSegment[] = []
-  const managerProgress: NeoCrmManagerProgressRow[] = []
-  if (bounds.monthKeys) {
-    const monthKeys = bounds.monthKeys
-    targetAmount = koreaActiveRows.reduce(
-      (total, row) =>
-        total + monthKeys.reduce((sub, key) => sub + (Number(row.monthly_payments?.[key]) || 0), 0),
-      0
-    )
-
-    // 장르 믹스 + 담당자별 진행: 목표=monthly_payments, 확정=monthly_confirmed(색 규칙).
-    const segmentAcc = new Map<
-      NeoCrmMixSegment["key"],
-      { target: number; confirmed: number; dealCount: number }
-    >()
-    const managerAcc = new Map<string, { target: number; confirmed: number; dealCount: number }>()
-    for (const row of koreaActiveRows) {
-      let rowTarget = 0
-      let rowConfirmed = 0
-      for (const key of monthKeys) {
-        const monthTotal = Number(row.monthly_payments?.[key]) || 0
-        rowTarget += monthTotal
-        // confirmedMonthAmount는 monthly_confirmed/red/high_conf만 읽는다.
-        rowConfirmed += confirmedMonthAmount(row as unknown as BranchRevDeal, key, monthTotal)
-      }
-      if (rowTarget === 0 && rowConfirmed === 0) continue
-
-      const segKey = mixSegmentKey(classifySheetCategory(row.product_version), classifySheetStatusType(row.status))
-      const seg = segmentAcc.get(segKey) ?? { target: 0, confirmed: 0, dealCount: 0 }
-      seg.target += rowTarget
-      seg.confirmed += rowConfirmed
-      seg.dealCount += 1
-      segmentAcc.set(segKey, seg)
-
-      const managerName = normalizeBranchMemberName(row.manager) ?? "미지정"
-      const mgr = managerAcc.get(managerName) ?? { target: 0, confirmed: 0, dealCount: 0 }
-      mgr.target += rowTarget
-      mgr.confirmed += rowConfirmed
-      mgr.dealCount += 1
-      managerAcc.set(managerName, mgr)
-    }
-
-    for (const key of MIX_SEGMENT_ORDER) {
-      const seg = segmentAcc.get(key)
-      if (!seg) continue
-      mixSegments.push({
-        key,
-        label: MIX_SEGMENT_LABEL[key],
-        target: seg.target,
-        confirmed: seg.confirmed,
-        rate: seg.target > 0 ? seg.confirmed / seg.target : null,
-        dealCount: seg.dealCount,
-      })
-    }
-    managerProgress.push(
-      ...Array.from(managerAcc.entries())
-        .map(([manager, acc]) => ({
-          manager,
-          target: acc.target,
-          confirmed: acc.confirmed,
-          rate: acc.target > 0 ? acc.confirmed / acc.target : null,
-          dealCount: acc.dealCount,
-        }))
-        .sort((a, b) => b.target - a.target)
-    )
-  }
 
   const allSales = ((salesPerfResult.data ?? []) as ScopedOrderRecord[]).filter(isScoped)
   const salesRows = allSales.filter((row) => isCurrent(row.occurred_at))
@@ -766,18 +557,6 @@ async function computeNeoCrmTeamReport(input: {
       endIso,
       canGoNext: offset < 0,
     },
-    target: {
-      amount: targetAmount,
-      achievement: teamTotal,
-      rate: targetAmount && targetAmount > 0 ? teamTotal / targetAmount : null,
-      basis: targetAmount != null ? "rev_sheet_month" : "none",
-    },
-    mix: {
-      basis: bounds.monthKeys ? "rev_sheet_month" : "none",
-      segments: mixSegments,
-    },
-    managerProgress,
-    monthlySeries,
     revenue: {
       teamTotal,
       orderCount: salesRows.length,

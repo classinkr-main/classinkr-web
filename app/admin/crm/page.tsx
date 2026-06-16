@@ -8,23 +8,43 @@ import {
   CircleDollarSign, FileText, Handshake,
   MapPin, ReceiptText, Target, TrendingUp,
 } from "lucide-react"
-import { adminFetchJsonCached } from "@/lib/admin-client"
+import { adminFetchJsonCached, getCachedAdminJson } from "@/lib/admin-client"
 import { Button } from "@/components/ui/button"
 import NeoCrmTeamPanel from "@/components/admin/crm/NeoCrmTeamPanel"
-import type { LeadRecord } from "@/lib/repositories/leads"
-import {
-  Toast,
-  hoursBetween,
-  isActiveLead,
-  isUnrespondedLead,
-  toLocalDateKey,
-} from "@/components/admin/crm/leads/shared"
+import { Toast } from "@/components/admin/crm/leads/shared"
 
 // 현황 = 한국팀 아침 지휘대. 액션 밴드(딥링크) + Neo CRM 팀 패널 + 돈 흐름 요약만.
 // 리드 관리 보드 전체는 /admin/crm/customers/leads (LeadsBoardClient)로 이동했다.
 
+const CRM_ACTION_KPIS_URL = "/api/admin/crm/action-kpis"
+const CRM_OVERVIEW_URL = "/api/admin/crm/overview"
+const CRM_BRANCH_KPI_MONTH = getKstMonthKey(new Date())
+const CRM_BRANCH_KPI_URL = `/api/admin/branch/kpi?team=ALL&period=M&month=${CRM_BRANCH_KPI_MONTH}`
+const CRM_HOME_TTL_MS = 120_000
+const CRM_HOME_STALE_WHILE_REVALIDATE_MS = 10 * 60_000
+
 type CrmOverviewStatus = "ok" | "warning" | "blocked"
 type AdminCrmCustomerLogKind = "call" | "visit" | "quote" | "order" | "payment" | "activity"
+type BranchKpiMetricKey = "LD" | "ACC" | "OPP" | "SOL" | "VST"
+
+interface LeadActionKpis {
+  total: number
+  byStatus: Record<"new" | "contacted" | "converted" | "closed", number>
+  unrespondedCount: number
+  unresponded48hCount: number
+  todayFollowUpCount: number
+  overdueFollowUpCount: number
+}
+
+interface BranchKpiMemberRow {
+  member: string
+  team: string | null
+  kpi: Record<BranchKpiMetricKey, { goal: number; actual: number }>
+}
+
+interface BranchKpiResponse {
+  members: BranchKpiMemberRow[]
+}
 
 interface AdminCrmCustomerLogItem {
   id: string
@@ -69,6 +89,12 @@ interface AdminCrmOverview {
     customerLogs: {
       latestActivityAt: string | null
       recent: AdminCrmCustomerLogItem[]
+    }
+    snapshot: {
+      source: "db_snapshot" | "live_query"
+      refreshedAt: string | null
+      stale: boolean
+      maxAgeSeconds: number
     }
     upcomingThisWeek: {
       count: number
@@ -142,8 +168,6 @@ interface AdminCrmOverview {
       activeAccountCountMonth: number
       salesAmountMonth: number
       salesCountMonth: number
-      salesTargetAmountMonth: number | null
-      salesTargetRateMonth: number | null
       opportunityAmount: number
       opportunityCountMonth: number
       collectionAmountMonth: number
@@ -161,6 +185,11 @@ interface AdminCrmOverview {
       occurredAt: string | null
     }>
   }
+}
+
+function getKstMonthKey(date: Date) {
+  const kst = new Date(date.getTime() + 9 * 60 * 60 * 1000)
+  return `${kst.getUTCFullYear()}-${String(kst.getUTCMonth() + 1).padStart(2, "0")}`
 }
 
 function formatOverviewDate(value: string | null | undefined) {
@@ -193,6 +222,10 @@ function formatUSD(value: number | null | undefined) {
 function formatPercent(value: number | null | undefined) {
   if (value == null) return "-"
   return `${Math.round(value * 100)}%`
+}
+
+function formatKpiActual(value: number | null | undefined) {
+  return Number(value ?? 0).toLocaleString("ko-KR", { maximumFractionDigits: 2 })
 }
 
 function getCustomerLogKindLabel(kind: AdminCrmCustomerLogKind) {
@@ -244,6 +277,155 @@ function CrmMetricTile({
       <p className={`mt-2 text-2xl font-bold tracking-[-0.035em] ${tone}`}>{value}</p>
       <p className="mt-1 text-[12px] leading-relaxed text-[#1a1a1a]/42">{hint}</p>
     </div>
+  )
+}
+
+function CrmMeasurementTile({
+  icon,
+  label,
+  value,
+  hint,
+  tone = "text-[#111110]",
+}: {
+  icon: ReactNode
+  label: string
+  value: string
+  hint: string
+  tone?: string
+}) {
+  return (
+    <div className="rounded-xl bg-[#fafaf8] px-3 py-3">
+      <div className="flex items-center gap-1.5 text-[#1a1a1a]/40">
+        {icon}
+        <p className="text-[11px] font-semibold uppercase tracking-[0.1em]">{label}</p>
+      </div>
+      <p className={`mt-2 text-[22px] font-bold leading-none tracking-[-0.03em] ${tone}`}>{value}</p>
+      <p className="mt-1.5 text-[11px] leading-relaxed text-[#1a1a1a]/42">{hint}</p>
+    </div>
+  )
+}
+
+function aggregateBranchKpi(data: BranchKpiResponse | null, metric: BranchKpiMetricKey) {
+  const rows = data?.members ?? []
+  return rows.reduce(
+    (total, row) => {
+      const value = row.kpi?.[metric]
+      total.actual += Number(value?.actual ?? 0)
+      total.goal += Number(value?.goal ?? 0)
+      return total
+    },
+    { actual: 0, goal: 0 }
+  )
+}
+
+const BRANCH_KPI_DEFS: Array<{
+  key: BranchKpiMetricKey
+  label: string
+  hintLabel: string
+  icon: ReactNode
+}> = [
+  { key: "LD", label: "Lead", hintLabel: "잠재고객", icon: <PhoneCall className="h-4 w-4" /> },
+  { key: "ACC", label: "Account", hintLabel: "고객", icon: <Building2 className="h-4 w-4" /> },
+  { key: "OPP", label: "Opportunity", hintLabel: "상기", icon: <BarChart3 className="h-4 w-4" /> },
+  { key: "SOL", label: "Solution", hintLabel: "솔루션", icon: <Activity className="h-4 w-4" /> },
+  { key: "VST", label: "Visit", hintLabel: "방문", icon: <MapPin className="h-4 w-4" /> },
+]
+
+function CrmNeoKpis({
+  overview,
+  branchKpis,
+  loading,
+  branchError,
+  compact = false,
+}: {
+  overview: AdminCrmOverview | null
+  branchKpis: BranchKpiResponse | null
+  loading: boolean
+  branchError: string | null
+  compact?: boolean
+}) {
+  const loadingValue = loading && !overview ? "..." : null
+  const neoCrm = overview?.neoCrm ?? null
+  const neoKpis = neoCrm?.kpis
+
+  const content = (
+    <>
+      <div className="mb-3 flex flex-col gap-3 sm:flex-row sm:items-start sm:justify-between">
+        <div>
+          <p className="text-[11px] font-semibold uppercase tracking-wide text-[#1a1a1a]/30">Neo CRM KPI</p>
+          <h2 className="mt-1 text-[17px] font-bold text-[#111110]">지사관리식 KPI</h2>
+          <p className="mt-1 text-[12px] text-[#1a1a1a]/40">
+            {CRM_BRANCH_KPI_MONTH} · Neo CRM에 찍힌 완료량 기준 · 기준/완료/달성률
+          </p>
+        </div>
+        <span className="inline-flex h-8 items-center rounded-full bg-[#ECFDF5] px-3 text-[12px] font-semibold text-[#084734]">
+          Sync {formatOverviewDate(neoCrm?.latestSyncedAt)}
+        </span>
+      </div>
+
+      <div className="grid gap-3 sm:grid-cols-2 xl:grid-cols-4">
+        <CrmMeasurementTile
+          icon={<CircleDollarSign className="h-4 w-4" />}
+          label="SalesPerformance"
+          value={loadingValue ?? formatCurrency(neoKpis?.salesAmountMonth)}
+          hint={`완료 ${formatNumber(neoKpis?.salesCountMonth)}건 · Neo CRM 실제 매출`}
+          tone="text-[#084734]"
+        />
+        <CrmMeasurementTile
+          icon={<BarChart3 className="h-4 w-4" />}
+          label="Opportunity"
+          value={loadingValue ?? formatUSD(neoKpis?.opportunityAmount)}
+          hint={`상기 완료량 ${formatNumber(neoKpis?.opportunityCountMonth)}건 · Neo CRM 원표기`}
+          tone="text-[#084734]"
+        />
+        <CrmMeasurementTile
+          icon={<Building2 className="h-4 w-4" />}
+          label="Account"
+          value={loadingValue ?? formatNumber(neoKpis?.activeAccountCountMonth)}
+          hint={`고객 완료량 · 전체 ${formatNumber(neoKpis?.accountCount)}개`}
+          tone="text-[#111110]"
+        />
+        <CrmMeasurementTile
+          icon={<ReceiptText className="h-4 w-4" />}
+          label="Collection"
+          value={loadingValue ?? formatCurrency(neoKpis?.collectionAmountMonth)}
+          hint={`수금 완료량 ${formatNumber(neoKpis?.collectionCountMonth)}건 · 30일 ${formatCurrency(
+            neoKpis?.collectionAmount30d
+          )}`}
+          tone="text-[#111110]"
+        />
+      </div>
+
+      <div className="mt-3 grid gap-3 sm:grid-cols-2 xl:grid-cols-5">
+        {BRANCH_KPI_DEFS.map((item) => {
+          const totals = aggregateBranchKpi(branchKpis, item.key)
+          const rate = totals.goal > 0 ? totals.actual / totals.goal : null
+          return (
+            <CrmMeasurementTile
+              key={item.key}
+              icon={item.icon}
+              label={item.label}
+              value={branchError ? "-" : loading && !branchKpis ? "..." : formatKpiActual(totals.actual)}
+              hint={
+                branchError ??
+                `${item.hintLabel} 완료량 · KPI 기준 ${formatKpiActual(totals.goal)} · 달성률 ${formatPercent(rate)}`
+              }
+              tone={rate == null || rate >= 0.7 ? "text-[#084734]" : "text-[#B85C33]"}
+            />
+          )
+        })}
+      </div>
+    </>
+  )
+
+  if (compact) {
+    return <div className="mt-4 border-t border-[#f0f0ec] pt-4">{content}</div>
+  }
+
+  return (
+    <section className="mb-4 rounded-2xl border border-[#e8e8e4] bg-white p-4">
+      {content}
+    </section>
   )
 }
 
@@ -342,9 +524,7 @@ function CrmOperationsDashboard({
                 icon={<TrendingUp className="h-4 w-4" />}
                 label="Neo Sales"
                 value={loadingValue ?? formatCurrency(neoKpis?.salesAmountMonth)}
-                hint={`SalesPerformance ${loadingValue ?? formatNumber(neoKpis?.salesCountMonth)} records · target ${
-                  loadingValue ?? formatPercent(neoKpis?.salesTargetRateMonth)
-                }`}
+                hint={`SalesPerformance ${loadingValue ?? formatNumber(neoKpis?.salesCountMonth)} records · actual`}
                 tone="text-[#084734]"
               />
               <CrmMetricTile
@@ -474,40 +654,64 @@ function CrmOperationsDashboard({
 
 // ─── 메인 페이지 ───────────────────────────────────────────────
 export default function CrmPage() {
-  const [leads, setLeads] = useState<LeadRecord[]>([])
-  const [loading, setLoading] = useState(false)
+  const [leadKpis, setLeadKpis] = useState<LeadActionKpis | null>(null)
+  const [leadKpisLoading, setLeadKpisLoading] = useState(true)
+  const [, setLeadKpisError] = useState<string | null>(null)
   const [toast, setToast] = useState<{ msg: string; type: "success" | "error" } | null>(null)
   const [crmOverview, setCrmOverview] = useState<AdminCrmOverview | null>(null)
-  const [crmOverviewLoading, setCrmOverviewLoading] = useState(false)
+  const [crmOverviewLoading, setCrmOverviewLoading] = useState(true)
   const [crmOverviewError, setCrmOverviewError] = useState<string | null>(null)
+  const [branchKpis, setBranchKpis] = useState<BranchKpiResponse | null>(null)
+  const [branchKpisLoading, setBranchKpisLoading] = useState(true)
+  const [branchKpisError, setBranchKpisError] = useState<string | null>(null)
   const [neoCrmRefreshKey, setNeoCrmRefreshKey] = useState(0)
 
-  const showToast = (msg: string, type: "success" | "error" = "success") => {
+  const showToast = useCallback((msg: string, type: "success" | "error" = "success") => {
     setToast({ msg, type })
     setTimeout(() => setToast(null), 3000)
-  }
-
-  // 리드는 액션 밴드 카운트용으로만 읽는다 — 관리는 /admin/crm/customers/leads.
-  const fetchLeads = useCallback(async (options?: { force?: boolean }) => {
-    setLoading(true)
-    try {
-      const data = await adminFetchJsonCached<{ leads: LeadRecord[] }>("/api/admin/leads", undefined, {
-        ttlMs: 45_000,
-        force: options?.force,
-      })
-      setLeads(data.leads)
-    } catch (err) {
-      showToast(err instanceof Error ? err.message : "리드를 불러오지 못했습니다.", "error")
-    } finally { setLoading(false) }
   }, [])
 
+  const fetchLeadKpis = useCallback(async (options?: { force?: boolean }) => {
+    const requestUrl = options?.force ? `${CRM_ACTION_KPIS_URL}?force=1` : CRM_ACTION_KPIS_URL
+    const hasCached = Boolean(
+      getCachedAdminJson<{ leads: LeadActionKpis }>(CRM_ACTION_KPIS_URL, {
+        cacheKey: CRM_ACTION_KPIS_URL,
+      })
+    )
+    setLeadKpisLoading(options?.force || !hasCached)
+    setLeadKpisError(null)
+    try {
+      const data = await adminFetchJsonCached<{ leads: LeadActionKpis }>(requestUrl, undefined, {
+        cacheKey: CRM_ACTION_KPIS_URL,
+        ttlMs: CRM_HOME_TTL_MS,
+        force: options?.force,
+        staleWhileRevalidateMs: CRM_HOME_STALE_WHILE_REVALIDATE_MS,
+      })
+      setLeadKpis(data.leads)
+    } catch (err) {
+      const message = err instanceof Error ? err.message : "CRM 리드 KPI를 불러오지 못했습니다."
+      setLeadKpisError(message)
+      showToast(message, "error")
+    } finally {
+      setLeadKpisLoading(false)
+    }
+  }, [showToast])
+
   const fetchCrmOverview = useCallback(async (options?: { force?: boolean }) => {
-    setCrmOverviewLoading(true)
+    const requestUrl = options?.force ? `${CRM_OVERVIEW_URL}?force=1` : CRM_OVERVIEW_URL
+    const hasCached = Boolean(
+      getCachedAdminJson<AdminCrmOverview>(CRM_OVERVIEW_URL, {
+        cacheKey: CRM_OVERVIEW_URL,
+      })
+    )
+    setCrmOverviewLoading(options?.force || !hasCached)
     setCrmOverviewError(null)
     try {
-      const data = await adminFetchJsonCached<AdminCrmOverview>("/api/admin/crm/overview", undefined, {
-        ttlMs: 60_000,
+      const data = await adminFetchJsonCached<AdminCrmOverview>(requestUrl, undefined, {
+        cacheKey: CRM_OVERVIEW_URL,
+        ttlMs: CRM_HOME_TTL_MS,
         force: options?.force,
+        staleWhileRevalidateMs: CRM_HOME_STALE_WHILE_REVALIDATE_MS,
       })
       setCrmOverview(data)
     } catch (err) {
@@ -517,22 +721,36 @@ export default function CrmPage() {
     }
   }, [])
 
-  useEffect(() => {
-    void fetchLeads()
-    void fetchCrmOverview()
-  }, [fetchLeads, fetchCrmOverview])
+  const fetchBranchKpis = useCallback(async (options?: { force?: boolean }) => {
+    const hasCached = Boolean(
+      getCachedAdminJson<BranchKpiResponse>(CRM_BRANCH_KPI_URL, {
+        cacheKey: CRM_BRANCH_KPI_URL,
+      })
+    )
+    setBranchKpisLoading(options?.force || !hasCached)
+    setBranchKpisError(null)
+    try {
+      const data = await adminFetchJsonCached<BranchKpiResponse>(CRM_BRANCH_KPI_URL, undefined, {
+        cacheKey: CRM_BRANCH_KPI_URL,
+        ttlMs: CRM_HOME_TTL_MS,
+        force: options?.force,
+        staleWhileRevalidateMs: CRM_HOME_STALE_WHILE_REVALIDATE_MS,
+      })
+      setBranchKpis(data)
+    } catch (err) {
+      setBranchKpisError(err instanceof Error ? err.message : "지사관리 KPI를 불러오지 못했습니다.")
+    } finally {
+      setBranchKpisLoading(false)
+    }
+  }, [])
 
-  const now = new Date()
-  const today = toLocalDateKey(now)
-  const counts = leads.reduce((acc, l) => { acc[l.status] = (acc[l.status] ?? 0) + 1; return acc }, {} as Record<string, number>)
-  const unrespondedLeads = leads.filter(isUnrespondedLead)
-  const unresponded48h = unrespondedLeads.filter((lead) => hoursBetween(lead.timestamp, now) >= 48)
-  const todayFollowUps = leads.filter((l) =>
-    l.follow_up_at && toLocalDateKey(l.follow_up_at) === today && isActiveLead(l.status)
-  )
-  const overdueFollowUps = leads.filter((l) =>
-    l.follow_up_at && toLocalDateKey(l.follow_up_at) < today && isActiveLead(l.status)
-  )
+  useEffect(() => {
+    void fetchLeadKpis()
+    void fetchCrmOverview()
+    void fetchBranchKpis()
+  }, [fetchLeadKpis, fetchCrmOverview, fetchBranchKpis])
+
+  const pageRefreshing = leadKpisLoading || crmOverviewLoading || branchKpisLoading
 
   return (
     <div>
@@ -569,17 +787,31 @@ export default function CrmPage() {
             variant="outline"
             size="sm"
             onClick={() => {
-              void fetchLeads({ force: true })
+              void fetchLeadKpis({ force: true })
               void fetchCrmOverview({ force: true })
+              void fetchBranchKpis({ force: true })
               setNeoCrmRefreshKey((current) => current + 1)
             }}
-            disabled={loading || crmOverviewLoading}
+            disabled={pageRefreshing}
             className="w-full gap-1.5 sm:w-auto"
           >
-            <RefreshCw className={`w-4 h-4 ${loading || crmOverviewLoading ? "animate-spin" : ""}`} />새로고침
+            <RefreshCw className={`w-4 h-4 ${pageRefreshing ? "animate-spin" : ""}`} />새로고침
           </Button>
         </div>
       </div>
+
+      <NeoCrmTeamPanel
+        refreshKey={neoCrmRefreshKey}
+        topKpiSlot={
+          <CrmNeoKpis
+            overview={crmOverview}
+            branchKpis={branchKpis}
+            loading={pageRefreshing}
+            branchError={branchKpisError}
+            compact
+          />
+        }
+      />
 
       {/* 지금 처리 — 오늘 우선순위 액션 밴드 (리드 보드 딥링크) */}
       <section className="mb-4 rounded-2xl border border-[#e8e8e4] bg-white p-4">
@@ -604,10 +836,12 @@ export default function CrmPage() {
               </span>
               <span className="text-[12px] font-medium text-[#1a1a1a]/55">미응답 리드</span>
             </div>
-            <p className={`mt-2 text-[26px] font-bold leading-none ${unrespondedLeads.length > 0 ? "text-[#B85C33]" : "text-[#111110]"}`}>
-              {unrespondedLeads.length}
+            <p className={`mt-2 text-[26px] font-bold leading-none ${(leadKpis?.unrespondedCount ?? 0) > 0 ? "text-[#B85C33]" : "text-[#111110]"}`}>
+              {leadKpisLoading && !leadKpis ? "..." : formatNumber(leadKpis?.unrespondedCount)}
             </p>
-            <p className="mt-1.5 text-[11px] text-[#1a1a1a]/40">48h 이상 {unresponded48h.length}건</p>
+            <p className="mt-1.5 text-[11px] text-[#1a1a1a]/40">
+              48h 이상 {leadKpisLoading && !leadKpis ? "..." : formatNumber(leadKpis?.unresponded48hCount)}건
+            </p>
           </Link>
 
           <Link
@@ -620,10 +854,12 @@ export default function CrmPage() {
               </span>
               <span className="text-[12px] font-medium text-[#1a1a1a]/55">오버듀 팔로업</span>
             </div>
-            <p className={`mt-2 text-[26px] font-bold leading-none ${overdueFollowUps.length > 0 ? "text-[#B85C33]" : "text-[#111110]"}`}>
-              {overdueFollowUps.length}
+            <p className={`mt-2 text-[26px] font-bold leading-none ${(leadKpis?.overdueFollowUpCount ?? 0) > 0 ? "text-[#B85C33]" : "text-[#111110]"}`}>
+              {leadKpisLoading && !leadKpis ? "..." : formatNumber(leadKpis?.overdueFollowUpCount)}
             </p>
-            <p className="mt-1.5 text-[11px] text-[#1a1a1a]/40">오늘 예정 {todayFollowUps.length}건</p>
+            <p className="mt-1.5 text-[11px] text-[#1a1a1a]/40">
+              오늘 예정 {leadKpisLoading && !leadKpis ? "..." : formatNumber(leadKpis?.todayFollowUpCount)}건
+            </p>
           </Link>
 
           <Link
@@ -656,7 +892,9 @@ export default function CrmPage() {
               </span>
               <span className="text-[12px] font-medium text-[#1a1a1a]/55">전환 고객</span>
             </div>
-            <p className="mt-2 text-[26px] font-bold leading-none text-[#084734]">{counts.converted ?? 0}</p>
+            <p className="mt-2 text-[26px] font-bold leading-none text-[#084734]">
+              {leadKpisLoading && !leadKpis ? "..." : formatNumber(leadKpis?.byStatus.converted)}
+            </p>
             <p className="mt-1.5 text-[11px] text-[#1a1a1a]/40">누적 어카운트 전환</p>
           </Link>
         </div>
@@ -682,8 +920,6 @@ export default function CrmPage() {
           </div>
         ) : null}
       </section>
-
-      <NeoCrmTeamPanel refreshKey={neoCrmRefreshKey} />
 
       <CrmOperationsDashboard
         overview={crmOverview}

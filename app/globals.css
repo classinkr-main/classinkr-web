@@ -134,9 +134,51 @@
   animation: loading-soft-enter 0.42s cubic-bezier(0.22, 1, 0.36, 1) both;
 }
 
+@keyframes hero-soft-enter {
+  from {
+    opacity: 0.001;
+    transform: translate3d(0, var(--hero-enter-y, 12px), 0);
+  }
+
+  to {
+    opacity: 1;
+    transform: translate3d(0, 0, 0);
+  }
+}
+
+.hero-soft-enter {
+  animation: hero-soft-enter var(--hero-enter-duration, 520ms) cubic-bezier(0.22, 1, 0.36, 1) both;
+  animation-delay: var(--hero-enter-delay, 0ms);
+  will-change: opacity, transform;
+}
+
+.hero-soft-enter-badge {
+  --hero-enter-y: 8px;
+  --hero-enter-duration: 420ms;
+}
+
+.hero-soft-enter-title {
+  --hero-enter-y: 14px;
+  --hero-enter-delay: 50ms;
+  --hero-enter-duration: 560ms;
+}
+
+.hero-soft-enter-copy {
+  --hero-enter-y: 10px;
+  --hero-enter-delay: 90ms;
+  --hero-enter-duration: 560ms;
+}
+
+.hero-soft-enter-actions {
+  --hero-enter-y: 10px;
+  --hero-enter-delay: 120ms;
+  --hero-enter-duration: 520ms;
+}
+
 @media (prefers-reduced-motion: reduce) {
   .admin-loading-progress,
   .loading-soft-enter,
+  .hero-soft-enter,
   .animate-shimmer {
     animation: none !important;
   }

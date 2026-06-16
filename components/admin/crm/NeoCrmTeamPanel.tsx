@@ -1,17 +1,7 @@
 "use client"
 
-import { useCallback, useEffect, useMemo, useState } from "react"
+import { useCallback, useEffect, useMemo, useRef, useState, type ReactNode } from "react"
 import Link from "next/link"
-import {
-  Bar,
-  CartesianGrid,
-  ComposedChart,
-  Line,
-  ResponsiveContainer,
-  Tooltip,
-  XAxis,
-  YAxis,
-} from "recharts"
 import {
   Building2,
   ChevronDown,
@@ -20,20 +10,24 @@ import {
   ChevronUp,
   CircleDollarSign,
   ExternalLink,
-  LayoutGrid,
-  LineChart as LineChartIcon,
   Loader2,
   ShoppingCart,
-  Target,
   TrendingUp,
   Users,
   Wallet,
 } from "lucide-react"
 
-import { adminFetchJsonCached } from "@/lib/admin-client"
-import type { NeoCrmGranularity, NeoCrmMonthlyPoint, NeoCrmTeamReport } from "@/lib/admin-crm-neo"
+import { adminFetchJsonCached, getCachedAdminJson } from "@/lib/admin-client"
+import type { NeoCrmGranularity, NeoCrmTeamReport } from "@/lib/admin-crm-neo"
 
-// 매출(SalesPerformance)·수금·잔액·목표는 위안화(CNY). 만 단위 + 소수점 2자리.
+const NEO_CRM_CACHE_TTL_MS = 120_000
+const NEO_CRM_STALE_WHILE_REVALIDATE_MS = 10 * 60_000
+
+function getNeoCrmUrl(granularity: NeoCrmGranularity, offset: number) {
+  return `/api/admin/crm/neo?granularity=${granularity}&offset=${offset}`
+}
+
+// 매출(SalesPerformance)·수금·잔액은 위안화(CNY). 만 단위 + 소수점 2자리.
 function formatCurrency(value: number | null | undefined) {
   const num = Number(value ?? 0)
   if (Math.abs(num) >= 10_000) {
@@ -71,52 +65,6 @@ function formatDate(value: string | null | undefined) {
 
 function formatPercent(value: number) {
   return `${Math.round(value * 100)}%`
-}
-
-// 차트 축용 축약 통화(만 단위). 예: 350759 → "35만"
-function formatCurrencyCompact(value: number) {
-  if (Math.abs(value) >= 10_000) return `${Math.round(value / 10_000)}만`
-  return String(Math.round(value))
-}
-
-function MonthlyTrendTooltip({
-  active,
-  payload,
-  label,
-}: {
-  active?: boolean
-  payload?: Array<{ dataKey?: string | number; value?: number; color?: string; payload?: NeoCrmMonthlyPoint }>
-  label?: string
-}) {
-  if (!active || !payload?.length) return null
-  const point = payload[0]?.payload
-  return (
-    <div className="rounded-xl border border-[#e8e8e4] bg-white px-3 py-2 text-[12px] shadow-lg">
-      <p className="mb-1 font-semibold text-[#111110]">{label}</p>
-      <p className="flex items-center justify-between gap-3">
-        <span className="text-[#1a1a1a]/45">목표</span>
-        <span className="font-semibold text-[#111110]">{formatCurrency(point?.target)}</span>
-      </p>
-      <p className="flex items-center justify-between gap-3">
-        <span className="text-[#084734]/70">확정</span>
-        <span className="font-semibold text-[#084734]">{formatCurrency(point?.confirmed)}</span>
-      </p>
-      {point?.rate != null ? (
-        <p className="mt-0.5 text-right text-[11px] text-[#1a1a1a]/45">달성 {formatPercent(point.rate)}</p>
-      ) : null}
-    </div>
-  )
-}
-
-// 달성률 색상 — 히어로 게이지와 동일 기준 (100%+ 녹색, 70%+ 황색, 미만 주황).
-function rateTone(rate: number | null) {
-  if (rate == null) return "text-[#1a1a1a]/40"
-  return rate >= 1 ? "text-[#084734]" : rate >= 0.7 ? "text-[#8D6C1F]" : "text-[#B85C33]"
-}
-
-function rateBarColor(rate: number | null) {
-  if (rate == null) return "bg-[#c8c8c4]"
-  return rate >= 1 ? "bg-[#084734]" : rate >= 0.7 ? "bg-[#B9962E]" : "bg-[#B85C33]"
 }
 
 function KpiTile({
@@ -160,10 +108,17 @@ function deltaTone(value: number) {
   return value > 0 ? "text-[#084734]" : value < 0 ? "text-[#B85C33]" : "text-[#1a1a1a]/40"
 }
 
-export default function NeoCrmTeamPanel({ refreshKey = 0 }: { refreshKey?: number }) {
+export default function NeoCrmTeamPanel({
+  refreshKey = 0,
+  topKpiSlot,
+}: {
+  refreshKey?: number
+  topKpiSlot?: ReactNode
+}) {
   const [granularity, setGranularity] = useState<NeoCrmGranularity>("month")
   const [offset, setOffset] = useState(0)
   const [data, setData] = useState<NeoCrmTeamReport | null>(null)
+  const dataRef = useRef<NeoCrmTeamReport | null>(data)
   const [loading, setLoading] = useState(true)
   const [error, setError] = useState<string | null>(null)
   const [ownerQuery, setOwnerQuery] = useState("")
@@ -172,15 +127,36 @@ export default function NeoCrmTeamPanel({ refreshKey = 0 }: { refreshKey?: numbe
 
   const load = useCallback(
     async (options?: { force?: boolean }) => {
-      setLoading(true)
+      const baseUrl = getNeoCrmUrl(granularity, offset)
+      const requestUrl = options?.force ? `${baseUrl}&force=1` : baseUrl
+      const cachedReport = getCachedAdminJson<NeoCrmTeamReport>(baseUrl, {
+        cacheKey: baseUrl,
+      })
+      if (cachedReport && !options?.force) {
+        setData(cachedReport)
+        dataRef.current = cachedReport
+      }
+      const showingRequestedPeriod =
+        dataRef.current?.granularity === granularity && dataRef.current?.offset === offset
+      if (!cachedReport && !showingRequestedPeriod) {
+        setData(null)
+        dataRef.current = null
+      }
+      setLoading(Boolean(options?.force || (!cachedReport && !showingRequestedPeriod)))
       setError(null)
       try {
         const next = await adminFetchJsonCached<NeoCrmTeamReport>(
-          `/api/admin/crm/neo?granularity=${granularity}&offset=${offset}`,
+          requestUrl,
           undefined,
-          { ttlMs: 30_000, force: options?.force }
+          {
+            cacheKey: baseUrl,
+            ttlMs: NEO_CRM_CACHE_TTL_MS,
+            force: options?.force,
+            staleWhileRevalidateMs: NEO_CRM_STALE_WHILE_REVALIDATE_MS,
+          }
         )
         setData(next)
+        dataRef.current = next
         if (!next.ok && next.error) setError(next.error)
       } catch (err) {
         setError(err instanceof Error ? err.message : "Neo CRM 데이터를 불러오지 못했습니다.")
@@ -190,6 +166,10 @@ export default function NeoCrmTeamPanel({ refreshKey = 0 }: { refreshKey?: numbe
     },
     [granularity, offset]
   )
+
+  useEffect(() => {
+    dataRef.current = data
+  }, [data])
 
   useEffect(() => {
     void load()
@@ -289,19 +269,15 @@ export default function NeoCrmTeamPanel({ refreshKey = 0 }: { refreshKey?: numbe
         <div className="flex flex-col gap-4 lg:flex-row lg:items-end lg:justify-between">
           <div>
             <p className="text-[11px] font-semibold uppercase tracking-[0.14em] text-[#084734]/70">
-              한국팀 매출 달성 (SalesPerformance)
+              한국팀 매출 실적 (SalesPerformance)
             </p>
             <div className="mt-1 flex flex-wrap items-end gap-x-3 gap-y-1">
               <span className="text-4xl font-bold tracking-[-0.045em] text-[#084734] sm:text-[44px]">
-                {loading && !data ? "..." : formatCurrency(data?.target.achievement)}
+                {loading && !data ? "..." : formatCurrency(data?.revenue.teamTotal)}
               </span>
-              {data?.target.amount != null ? (
-                <span className="text-[15px] font-semibold text-[#084734]/55">
-                  / 목표 {formatCurrency(data.target.amount)}
-                </span>
-              ) : (
-                <span className="text-[12px] font-medium text-[#084734]/45">주간 목표는 시트에 없음 (월 단위)</span>
-              )}
+              <span className="text-[15px] font-semibold text-[#084734]/55">
+                {loading && !data ? "" : `${formatNumber(data?.revenue.orderCount)}건`}
+              </span>
             </div>
             {data ? (
               <p className="mt-2 text-[12px]">
@@ -318,27 +294,13 @@ export default function NeoCrmTeamPanel({ refreshKey = 0 }: { refreshKey?: numbe
               </p>
             ) : null}
           </div>
-          {data?.target.rate != null ? (
-            <div className="text-left lg:text-right">
-              <span
-                className={`text-3xl font-bold tracking-[-0.04em] ${
-                  data.target.rate >= 1 ? "text-[#084734]" : data.target.rate >= 0.7 ? "text-[#8D6C1F]" : "text-[#B85C33]"
-                }`}
-              >
-                {formatPercent(data.target.rate)}
-              </span>
-              <p className="text-[11px] text-[#084734]/55">목표 달성률</p>
-            </div>
-          ) : null}
-        </div>
-        {data?.target.amount != null ? (
-          <div className="mt-4 h-3 overflow-hidden rounded-full bg-white/70">
-            <div
-              className={`h-full rounded-full ${(data.target.rate ?? 0) >= 1 ? "bg-[#084734]" : "bg-[#0a6b4d]"}`}
-              style={{ width: `${Math.min(100, Math.max(2, (data.target.rate ?? 0) * 100))}%` }}
-            />
+          <div className="text-left lg:text-right">
+            <span className="text-3xl font-bold tracking-[-0.04em] text-[#084734]">
+              {loading && !data ? "..." : formatNumber(data?.revenue.contributorCount)}
+            </span>
+            <p className="text-[11px] text-[#084734]/55">담당자</p>
           </div>
-        ) : null}
+        </div>
       </div>
 
       {/* 오더는 거의 확정 매출 — 매출 달성과 같은 급의 co-hero로 노출 (CNY 환산 주 표기) */}
@@ -409,109 +371,7 @@ export default function NeoCrmTeamPanel({ refreshKey = 0 }: { refreshKey?: numbe
         />
       </div>
 
-      {/* 월별 목표 달성 추이 — REV 시트 기준 회계연도 전체 (선택 기간과 무관) */}
-      <div className="mt-4 rounded-xl border border-[#f0f0ec] p-4">
-        <div className="mb-3 flex items-center justify-between gap-3">
-          <div className="flex items-center gap-2">
-            <LineChartIcon className="h-4 w-4 text-[#084734]" />
-            <h3 className="text-[14px] font-semibold text-[#111110]">월별 목표 달성 추이</h3>
-          </div>
-          <span className="text-[11px] text-[#1a1a1a]/35">회계연도 · 목표 대비 확정 매출</span>
-        </div>
-        {(data?.monthlySeries.length ?? 0) === 0 ? (
-          <p className="py-8 text-center text-[12px] text-[#1a1a1a]/35">
-            {loading && !data ? "집계 중입니다." : "REV 시트 월별 데이터가 없습니다."}
-          </p>
-        ) : (
-          <>
-            <ResponsiveContainer width="100%" height={220}>
-              <ComposedChart data={data?.monthlySeries ?? []} margin={{ top: 8, right: 8, bottom: 0, left: -8 }}>
-                <CartesianGrid strokeDasharray="3 3" stroke="#f0f0ec" vertical={false} />
-                <XAxis dataKey="label" tick={{ fontSize: 11, fill: "#1a1a1a", opacity: 0.45 }} axisLine={false} tickLine={false} minTickGap={8} />
-                <YAxis
-                  yAxisId="amount"
-                  tick={{ fontSize: 11, fill: "#1a1a1a", opacity: 0.45 }}
-                  axisLine={false}
-                  tickLine={false}
-                  tickFormatter={(v) => formatCurrencyCompact(Number(v))}
-                />
-                <YAxis
-                  yAxisId="rate"
-                  orientation="right"
-                  domain={[0, (max: number) => Math.max(1, max)]}
-                  tick={{ fontSize: 11, fill: "#1a1a1a", opacity: 0.35 }}
-                  axisLine={false}
-                  tickLine={false}
-                  tickFormatter={(v) => `${Math.round(Number(v) * 100)}%`}
-                />
-                <Tooltip content={<MonthlyTrendTooltip />} cursor={{ fill: "rgba(8,71,52,0.04)" }} />
-                <Bar yAxisId="amount" dataKey="target" name="목표" fill="#e2e1dc" radius={[3, 3, 0, 0]} maxBarSize={26} />
-                <Bar yAxisId="amount" dataKey="confirmed" name="확정" fill="#084734" radius={[3, 3, 0, 0]} maxBarSize={26} />
-                <Line
-                  yAxisId="rate"
-                  type="monotone"
-                  dataKey="rate"
-                  name="달성률"
-                  stroke="#B9962E"
-                  strokeWidth={2}
-                  dot={{ r: 2.5, fill: "#B9962E", strokeWidth: 0 }}
-                  connectNulls
-                />
-              </ComposedChart>
-            </ResponsiveContainer>
-            <div className="mt-2 flex flex-wrap items-center gap-x-4 gap-y-1 text-[11px] text-[#1a1a1a]/45">
-              <span className="inline-flex items-center gap-1.5"><i className="h-2.5 w-2.5 rounded-sm bg-[#e2e1dc]" /> 목표</span>
-              <span className="inline-flex items-center gap-1.5"><i className="h-2.5 w-2.5 rounded-sm bg-[#084734]" /> 확정 매출</span>
-              <span className="inline-flex items-center gap-1.5"><i className="h-0.5 w-4 bg-[#B9962E]" /> 달성률(우축)</span>
-            </div>
-          </>
-        )}
-      </div>
-
-      {/* 장르 믹스 — REV 시트 기준 HW/SW × 신규/갱신 목표 대비 확정 매출 */}
-      <div className="mt-4 rounded-xl border border-[#f0f0ec] p-4">
-        <div className="mb-3 flex items-center justify-between gap-3">
-          <div className="flex items-center gap-2">
-            <LayoutGrid className="h-4 w-4 text-[#084734]" />
-            <h3 className="text-[14px] font-semibold text-[#111110]">장르별 목표 달성</h3>
-          </div>
-          <span className="text-[11px] text-[#1a1a1a]/35">REV 시트 · 목표=예정액, 확정=빨간 글자</span>
-        </div>
-        {data?.mix.basis === "none" ? (
-          <p className="py-4 text-center text-[12px] text-[#1a1a1a]/35">
-            주 단위에서는 시트 월 목표를 분해할 수 없습니다 — 월/분기/년에서 표시됩니다.
-          </p>
-        ) : (data?.mix.segments.length ?? 0) === 0 ? (
-          <p className="py-4 text-center text-[12px] text-[#1a1a1a]/35">
-            {loading && !data ? "집계 중입니다." : "이 기간 REV 시트 목표·확정 데이터가 없습니다."}
-          </p>
-        ) : (
-          <div className="grid gap-3 sm:grid-cols-2 xl:grid-cols-4">
-            {(data?.mix.segments ?? []).map((segment) => (
-              <div key={segment.key} className="rounded-xl bg-[#fafaf8] px-3 py-3">
-                <div className="flex items-baseline justify-between gap-2">
-                  <p className="text-[12px] font-semibold text-[#111110]">{segment.label}</p>
-                  <span className={`text-[16px] font-bold tracking-[-0.02em] ${rateTone(segment.rate)}`}>
-                    {segment.rate == null ? "-" : formatPercent(segment.rate)}
-                  </span>
-                </div>
-                <div className="mt-2 h-2 overflow-hidden rounded-full bg-[#ecece8]">
-                  <div
-                    className={`h-full rounded-full ${rateBarColor(segment.rate)}`}
-                    style={{ width: `${Math.min(100, Math.max(segment.confirmed > 0 ? 2 : 0, (segment.rate ?? 0) * 100))}%` }}
-                  />
-                </div>
-                <p className="mt-2 text-[11px] text-[#1a1a1a]/45">
-                  확정 <span className="font-semibold text-[#111110]">{formatCurrency(segment.confirmed)}</span>
-                  {" / 목표 "}
-                  {formatCurrency(segment.target)}
-                </p>
-                <p className="mt-0.5 text-[10px] text-[#1a1a1a]/30">딜 {formatNumber(segment.dealCount)}건</p>
-              </div>
-            ))}
-          </div>
-        )}
-      </div>
+      {topKpiSlot}
 
       <div className="mt-5 grid gap-4 xl:grid-cols-[1.2fr_0.8fr]">
         <div className="flex flex-col gap-4">
@@ -596,52 +456,6 @@ export default function NeoCrmTeamPanel({ refreshKey = 0 }: { refreshKey?: numbe
                 <span className="text-[12px] font-semibold text-[#1a1a1a]/55">팀 전체</span>
                 <span className="text-[15px] font-bold text-[#084734]">{formatCurrency(data?.revenue.teamTotal)}</span>
               </div>
-            </div>
-          )}
-        </div>
-
-        {/* 담당자별 목표 달성 — REV 시트 기준(목표·확정). CRM 매출과 소스가 달라 별도 카드로 둔다. */}
-        <div className="rounded-xl border border-[#f0f0ec] p-4">
-          <div className="mb-3 flex items-center justify-between gap-3">
-            <div className="flex items-center gap-2">
-              <Target className="h-4 w-4 text-[#084734]" />
-              <h3 className="text-[14px] font-semibold text-[#111110]">담당자별 목표 달성 (REV 시트)</h3>
-            </div>
-            <span className="text-[11px] text-[#1a1a1a]/35">확정 / 목표</span>
-          </div>
-          {data?.mix.basis === "none" ? (
-            <p className="py-6 text-center text-[12px] text-[#1a1a1a]/35">
-              주 단위에서는 시트 월 목표를 분해할 수 없습니다 — 월/분기/년에서 표시됩니다.
-            </p>
-          ) : (data?.managerProgress.length ?? 0) === 0 ? (
-            <p className="py-6 text-center text-[12px] text-[#1a1a1a]/35">
-              {loading && !data ? "집계 중입니다." : "이 기간 담당자별 시트 데이터가 없습니다."}
-            </p>
-          ) : (
-            <div className="space-y-2.5">
-              {(data?.managerProgress ?? []).map((row) => (
-                <div key={row.manager} className="grid grid-cols-[120px_minmax(0,1fr)_150px] items-center gap-3">
-                  <div className="min-w-0">
-                    <p className="truncate text-[13px] font-semibold text-[#111110]">{row.manager}</p>
-                    <p className="text-[11px] text-[#1a1a1a]/40">딜 {formatNumber(row.dealCount)}건</p>
-                  </div>
-                  <div className="h-2 overflow-hidden rounded-full bg-[#f0f0ec]">
-                    <div
-                      className={`h-full rounded-full ${rateBarColor(row.rate)}`}
-                      style={{ width: `${Math.min(100, Math.max(row.confirmed > 0 ? 2 : 0, (row.rate ?? 0) * 100))}%` }}
-                    />
-                  </div>
-                  <div className="text-right">
-                    <p className="text-[13px] font-bold text-[#111110]">
-                      {formatCurrency(row.confirmed)}
-                      <span className="font-medium text-[#1a1a1a]/40"> / {formatCurrency(row.target)}</span>
-                    </p>
-                    <p className={`text-[11px] font-semibold ${rateTone(row.rate)}`}>
-                      {row.rate == null ? "목표 없음" : formatPercent(row.rate)}
-                    </p>
-                  </div>
-                </div>
-              ))}
             </div>
           )}
         </div>
