@@ -124,7 +124,11 @@ export function extractMarkdownHeadings(markdown: string): BlogHeading[] {
 }
 
 function renderImage(line: string) {
-  const match = line.trim().match(/^!\[(.*?)\]\((\S+?)(?:\s+["']([^"']*)["'])?\)$/)
+  const match = line
+    .trim()
+    .replace(/\\+$/g, "")
+    .trim()
+    .match(/^!\[(.*?)\]\((\S+?)(?:\s+["']([^"']*)["'])?\)$/)
   if (!match) return null
 
   const [, alt, url, rawTitle] = match
@@ -252,6 +256,14 @@ export function renderMarkdownToHtml(markdown: string) {
       }
       paragraphLines.push(lines[index].trim())
       index += 1
+    }
+
+    if (paragraphLines.length === 0) {
+      html.push(
+        `<p class="mt-5 text-[17px] leading-8 text-[#2f2f2b]">${renderInline(trimmed)}</p>`
+      )
+      index += 1
+      continue
     }
 
     html.push(

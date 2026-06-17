@@ -4,6 +4,15 @@ import { getAllPosts, createPost, getTrashedPosts } from "@/lib/repositories/blo
 import { verifyAdmin } from "@/lib/admin-auth"
 import { adminCachedJson } from "@/lib/admin-api-response"
 
+function revalidatePublicBlogSurfaces(slug?: string) {
+  revalidatePath("/blog")
+  revalidatePath("/blog/rss.xml")
+  revalidatePath("/sitemap.xml")
+  revalidatePath("/updates")
+  revalidatePath("/about")
+  if (slug) revalidatePath(`/blog/${slug}`)
+}
+
 export async function GET(req: NextRequest) {
   const authError = await verifyAdmin(req)
   if (authError) return authError
@@ -34,7 +43,7 @@ export async function POST(req: NextRequest) {
     const post = await createPost(body)
     // 발행 상태면 블로그 페이지 캐시를 즉시 무효화
     if (post.status === "published") {
-      revalidatePath("/blog")
+      revalidatePublicBlogSurfaces(post.slug)
     }
     return NextResponse.json({ post }, { status: 201 })
   } catch (error) {

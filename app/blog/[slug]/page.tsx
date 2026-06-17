@@ -1,7 +1,7 @@
 import type { Metadata } from "next"
 import Image from "next/image"
 import Link from "next/link"
-import { notFound } from "next/navigation"
+import { notFound, permanentRedirect } from "next/navigation"
 import { ArrowRight, Clock } from "lucide-react"
 import BlogMarkdownRenderer from "@/components/blog/BlogMarkdownRenderer"
 import { ArticleImageLightbox } from "@/components/blog/ArticleImageLightbox"
@@ -16,6 +16,7 @@ import {
 } from "@/lib/repositories/blog"
 import { getLeadMagnetBySlugFromStore } from "@/lib/repositories/lead-magnets"
 import { extractMarkdownHeadings } from "@/lib/blog-markdown"
+import { getBlogSlugRedirect, getCanonicalBlogSlug } from "@/lib/blog-slug-redirects"
 import { sanitizePublicUrl } from "@/lib/safe-public-url"
 import { JsonLd } from "@/components/seo/JsonLd"
 import {
@@ -54,7 +55,8 @@ export async function generateMetadata({
   params,
 }: BlogDetailPageProps): Promise<Metadata> {
   const { slug } = await params
-  const post = await getPublishedPostBySlug(decodeSlug(slug))
+  const canonicalSlug = getCanonicalBlogSlug(decodeSlug(slug))
+  const post = await getPublishedPostBySlug(canonicalSlug)
   if (!post) {
     return {
       title: "글을 찾을 수 없습니다",
@@ -104,7 +106,13 @@ export default async function BlogDetailPage({
   params,
 }: BlogDetailPageProps) {
   const { slug } = await params
-  const post = await getPublishedPostBySlug(decodeSlug(slug))
+  const decodedSlug = decodeSlug(slug)
+  const redirectSlug = getBlogSlugRedirect(decodedSlug)
+  if (redirectSlug) {
+    permanentRedirect(`/blog/${encodeURIComponent(redirectSlug)}`)
+  }
+
+  const post = await getPublishedPostBySlug(decodedSlug)
 
   if (!post) {
     notFound()

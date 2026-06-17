@@ -170,17 +170,27 @@ export async function getPostBySlug(slug: string): Promise<BlogPost | null> {
 export async function getPublishedPostBySlug(slug: string): Promise<BlogPost | null> {
 
   const supabase = await createSupabaseBlogReadClient();
-  const { data, error } = await supabase
-    .from("blog_posts")
-    .select("*")
-    .eq("slug", slug)
-    .in("status", PUBLISHED_STATUS_VALUES)
-    .is("deleted_at", null)
-    .or(publishedAtVisibleFilter())
-    .single();
+  const timeout = createBlogQueryTimeout();
+  try {
+    const { data, error } = await supabase
+      .from("blog_posts")
+      .select("*")
+      .eq("slug", slug)
+      .in("status", PUBLISHED_STATUS_VALUES)
+      .is("deleted_at", null)
+      .or(publishedAtVisibleFilter())
+      .abortSignal(timeout.signal)
+      .maybeSingle();
 
-  if (error || !data) return null;
-  return supabaseToLegacy(data as SupaBlogPost);
+    if (error && isAbortError(error)) {
+      console.warn(`[blog] 공개 글 상세 조회 timeout after ${PUBLIC_BLOG_QUERY_TIMEOUT_MS}ms`);
+      return null;
+    }
+    if (error || !data) return null;
+    return supabaseToLegacy(data as SupaBlogPost);
+  } finally {
+    timeout.clear();
+  }
 }
 
 export async function getPostById(id: number): Promise<BlogPost | null> {

@@ -119,6 +119,15 @@ const nextConfig: NextConfig = {
       },
     ];
   },
+  async redirects() {
+    return [
+      {
+        source: "/blog/2026-asia-ai-education-forum-busan",
+        destination: "/blog/2026-asia-ai-education-forum-in-busan",
+        permanent: true,
+      },
+    ];
+  },
 };
 
 export default nextConfig;
