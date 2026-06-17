@@ -105,12 +105,12 @@ export function AppChrome({ children }: { children: ReactNode }) {
       ) : null}
       {showPublicChrome ? <ConsentBanner /> : null}
       {showPublicChrome ? <ChannelTalkLoader /> : null}
-      {showPublicChrome && readyPath === pathname ? (
-        <>
-          <FloatingChatbot />
-          <MobileFloatingCTA />
-        </>
-      ) : null}
+      {/* 챗봇은 첫 idle 마운트 이후 계속 떠 있게 유지한다 — readyPath는 한 번
+          채워지면 null로 되돌아가지 않으므로, 소프트 내비게이션 중에도 언마운트되지
+          않아 대화·열림 상태가 보존된다. MobileFloatingCTA는 기존대로 페이지마다
+          재평가한다. */}
+      {showPublicChrome && readyPath !== null ? <FloatingChatbot /> : null}
+      {showPublicChrome && readyPath === pathname ? <MobileFloatingCTA /> : null}
     </>
   )
 }

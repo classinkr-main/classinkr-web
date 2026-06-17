@@ -555,12 +555,9 @@ export function FloatingChatbot() {
         [pathname]
     )
 
-    useEffect(() => {
-        if (hidden) {
-            setIsOpen(false)
-        }
-    }, [hidden])
-
+    // hidden이어도 isOpen은 강제로 닫지 않는다 — 숨김 페이지(/pricing 등)를 잠깐
+    // 거쳐도 창이 영구히 닫히지 않고, 다시 보이는 페이지로 오면 이전 열림 상태로
+    // 복귀한다. 시각적 숨김은 아래 `if (hidden) return null`이 담당한다.
     useEffect(() => {
         if (hidden) return
 
