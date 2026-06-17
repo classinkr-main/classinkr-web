@@ -26,6 +26,14 @@ function verifySignature(raw: string, signature: string | null, secret: string):
   return timingSafeEqual(expectedBuffer, actualBuffer)
 }
 
+function safeEquals(actual: string | null | undefined, expected: string | null | undefined): boolean {
+  if (!actual || !expected) return false
+  const actualBuffer = Buffer.from(actual)
+  const expectedBuffer = Buffer.from(expected)
+  if (actualBuffer.length !== expectedBuffer.length) return false
+  return timingSafeEqual(actualBuffer, expectedBuffer)
+}
+
 function firstNonEmpty(...values: Array<string | undefined>): string | undefined {
   for (const value of values) {
     const trimmed = value?.trim()
@@ -34,23 +42,40 @@ function firstNonEmpty(...values: Array<string | undefined>): string | undefined
   return undefined
 }
 
+function verifyUrlToken(req: NextRequest, expectedToken?: string): boolean {
+  if (!expectedToken) return false
+  const token = firstNonEmpty(
+    req.nextUrl.searchParams.get("token") ?? undefined,
+    req.headers.get("x-webhook-token") ?? undefined
+  )
+  return safeEquals(token, expectedToken)
+}
+
 /**
  * 채널톡 인바운드 웹훅 — 고객 신규 메시지를 실시간 알림으로 연결한다.
- * 서명은 CHANNEL_TALK_WEBHOOK_SECRET 으로 HMAC-SHA256 검증한다(미설정 시 503).
+ * 채널톡 일반 Webhook은 custom header를 넣을 수 없어 URL token을 우선 지원한다.
+ * HMAC 서명을 제공하는 통합은 CHANNEL_TALK_WEBHOOK_SECRET으로도 검증할 수 있다.
  * 전체 대화 본문은 크론/수동 동기화가 채우고, 여기서는 알림만 발행한다(저FS 부하).
  */
 export async function POST(req: NextRequest) {
+  const urlToken = firstNonEmpty(
+    process.env.CHANNEL_TALK_WEBHOOK_URL_TOKEN,
+    process.env.CHANNEL_WEBHOOK_URL_TOKEN
+  )
   const secret = firstNonEmpty(
     process.env.CHANNEL_TALK_WEBHOOK_SECRET,
     process.env.CHANNEL_WEBHOOK_SECRET
   )
-  if (!secret) {
-    return NextResponse.json({ error: "Webhook secret not configured." }, { status: 503 })
+  if (!urlToken && !secret) {
+    return NextResponse.json({ error: "Webhook auth not configured." }, { status: 503 })
   }
 
   const raw = await req.text()
-  if (!verifySignature(raw, req.headers.get("x-signature"), secret)) {
-    return NextResponse.json({ error: "Invalid signature." }, { status: 401 })
+  const isAuthorized =
+    verifyUrlToken(req, urlToken) ||
+    (secret ? verifySignature(raw, req.headers.get("x-signature"), secret) : false)
+  if (!isAuthorized) {
+    return NextResponse.json({ error: "Invalid webhook authentication." }, { status: 401 })
   }
 
   let payload: ChannelWebhookPayload

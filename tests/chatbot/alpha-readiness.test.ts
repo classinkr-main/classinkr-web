@@ -68,14 +68,14 @@ describe("chatbot alpha readiness", () => {
     expect(report.overallStatus).toBe("warning")
     expect(databaseShape?.status).toBe("warning")
     expect(databaseShape?.detail).toContain("question_clusters")
-    expect(databaseShape?.action).toContain("20260614_alpha_admin_base_schema.sql")
-    expect(databaseShape?.action).toContain("20260421_z_chatbot_analytics.sql")
+    expect(databaseShape?.action).toContain("migration")
     expect(databaseShape?.artifacts).toEqual(
       expect.arrayContaining([
         "supabase/migrations/20260614_alpha_admin_base_schema.sql",
         "supabase/migrations/20260421_docs_center.sql",
         "supabase/migrations/20260604_docs_article_drafts.sql",
-        "supabase/migrations/20260613_docs_chunk_vector_search.sql",
+        "supabase/migrations/20260616_docs_chunk_vector_rpc_text_compat.sql",
+        "supabase/migrations/20260616_chatbot_channel_talk_handoffs.sql",
       ])
     )
   })

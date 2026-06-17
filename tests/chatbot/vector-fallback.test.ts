@@ -79,7 +79,7 @@ describe("chatbot client vector fallback", () => {
       urlPath: "/docs/billing/tax-invoice",
       category: "billing",
     })
-    expect(sources[0].score).toBeCloseTo(10)
+    expect(sources[0].score).toBeCloseTo(80)
   })
 
   it("is wired into the chatbot service after the RPC vector search path", () => {

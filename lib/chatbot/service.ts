@@ -326,7 +326,8 @@ function buildStaticDocSource(
   slug: string,
   heading: string,
   excerpt: string,
-  score = 250
+  score = 250,
+  sourceCategory?: string
 ): ChatbotSource | null {
   const doc = listDocs().find((candidate) => candidate.category === category && candidate.slug === slug)
   if (!doc) return null
@@ -335,7 +336,7 @@ function buildStaticDocSource(
     title: doc.title,
     heading,
     urlPath: getDocPath(doc),
-    category: getSourceCategoryFromDocCategory(doc.category),
+    category: sourceCategory ?? getSourceCategoryFromDocCategory(doc.category),
     excerpt: compactText(excerpt || doc.chatbotSummary || doc.description),
     score,
   }
@@ -346,6 +347,18 @@ function buildCuratedSources(question: NormalizedQuestion) {
   const sources: ChatbotSource[] = []
   const positioningSource = buildPositioningSource(question)
   if (positioningSource) sources.push(positioningSource)
+
+  if (/세금\s*계산서|세금계산서|영수증|증빙|청구서|계산서\s*발급/.test(text)) {
+    const source = buildStaticDocSource(
+      "admin",
+      "billing-upgrade",
+      "영수증과 결제 증빙 확인",
+      "세금계산서, 영수증, 결제 증빙은 학원 계정의 결제 상태와 계약 조건에 따라 확인이 필요합니다. 결제 완료 내역과 사업자 정보를 준비한 뒤 담당자에게 증빙 발급 가능 여부를 확인하세요.",
+      285,
+      "billing"
+    )
+    if (source) sources.push(source)
+  }
 
   if (/수업\s*(정보|데이터).*api|api.*(수업|데이터|연동)|데이터\s*구독|자체\s*관리\s*시스템/.test(text)) {
     const source = buildStaticDocSource(
