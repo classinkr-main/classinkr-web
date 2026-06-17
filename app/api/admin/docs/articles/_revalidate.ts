@@ -10,10 +10,11 @@ type RevalidatableDocsArticle =
 export function revalidateDocsIndexPaths() {
   revalidatePath("/docs")
   revalidatePath("/docs/search")
+  revalidatePath("/sitemap.xml")
 }
 
 export function revalidateDocsArticlePaths(...articles: RevalidatableDocsArticle[]) {
-  const paths = new Set<string>(["/docs", "/docs/search"])
+  const paths = new Set<string>(["/docs", "/docs/search", "/sitemap.xml"])
 
   for (const article of articles) {
     if (!article) continue

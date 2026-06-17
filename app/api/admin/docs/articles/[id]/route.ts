@@ -14,6 +14,7 @@ import {
   type DocsArticlePatchInput,
 } from "@/lib/repositories/docs-articles"
 import { revalidateDocsArticlePaths } from "../_revalidate"
+import { validateDocsArticlePatchForPublish } from "../_payload"
 
 const ALLOWED_STATUS: DocsArticleStatus[] = ["draft", "review", "published", "archived"]
 const ALLOWED_VISIBILITY: DocsArticleVisibility[] = ["public", "unlisted", "internal"]
@@ -155,6 +156,9 @@ export async function PATCH(
   try {
     const existing = await getDocsArticleById(id)
     if (!existing) return NextResponse.json({ error: "문서를 찾을 수 없습니다." }, { status: 404 })
+
+    const validationError = validateDocsArticlePatchForPublish(patch, existing)
+    if (validationError) return NextResponse.json({ error: validationError }, { status: 400 })
 
     const detail = await patchDocsArticle(id, patch)
     if (!detail) return NextResponse.json({ error: "문서를 찾을 수 없습니다." }, { status: 404 })

@@ -25,6 +25,11 @@ import {
   LOCAL_IMAGE_ACCEPT,
   normalizeLocalImageFiles,
 } from "@/lib/admin/local-image-upload"
+import {
+  normalizePublicImageUrl,
+  TEMP_ATTACHMENT_IMAGE_ERROR,
+  UNSAFE_IMAGE_URL_ERROR,
+} from "@/lib/admin/public-content-validation"
 import { getAdminToken } from "@/lib/admin-client"
 
 // ProseMirror 플러그인: {{green:text}} 구문을 에디터에서 초록색으로 시각화
@@ -319,7 +324,7 @@ const RichMarkdownEditor = forwardRef<RichMarkdownEditorHandle, RichMarkdownEdit
       if (hasAttachmentImageReference(html) || hasAttachmentImageReference(text)) {
         event.preventDefault()
         event.stopPropagation()
-        setImageError("클립보드의 임시 이미지 주소는 공개 문서에서 표시할 수 없습니다. 이미지를 다시 복사해 붙여넣거나 파일 업로드로 삽입해주세요.")
+        setImageError(TEMP_ATTACHMENT_IMAGE_ERROR)
       }
     }
 
@@ -551,9 +556,9 @@ const RichMarkdownEditor = forwardRef<RichMarkdownEditorHandle, RichMarkdownEdit
                   <button
                     type="button"
                     onClick={() => {
-                      const src = imageUrl.trim()
+                      const src = normalizePublicImageUrl(imageUrl)
                       if (!src) {
-                        setImageError("이미지 URL을 입력해주세요.")
+                        setImageError(imageUrl.trim() ? UNSAFE_IMAGE_URL_ERROR : "이미지 URL을 입력해주세요.")
                         return
                       }
                       insertImages([{ src, alt: imageAlt.trim(), width: selectedWidth() }])

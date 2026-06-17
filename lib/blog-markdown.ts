@@ -105,6 +105,13 @@ function parseImageTitle(rawTitle: string | undefined) {
   return { title: cleanTitle, width }
 }
 
+function normalizeMarkdownBlockBoundaries(markdown: string) {
+  return markdown
+    .replace(/\r\n/g, "\n")
+    .replace(/(\]\([^)]+\))(?=!\[)/g, "$1\n")
+    .replace(/(\]\([^)]+\))(?=#{2,3}\s)/g, "$1\n")
+}
+
 export function extractMarkdownHeadings(markdown: string): BlogHeading[] {
   return markdown
     .split(/\r?\n/)
@@ -124,28 +131,39 @@ export function extractMarkdownHeadings(markdown: string): BlogHeading[] {
 }
 
 function renderImage(line: string) {
-  const match = line
+  const source = line
     .trim()
     .replace(/\\+$/g, "")
     .trim()
-    .match(/^!\[(.*?)\]\((\S+?)(?:\s+["']([^"']*)["'])?\)$/)
-  if (!match) return null
+  const imagePattern = /!\[(.*?)\]\(([^)\s]+)(?:\s+["']([^"']*)["'])?\)/g
+  const figures: string[] = []
+  let cursor = 0
 
-  const [, alt, url, rawTitle] = match
-  const { title, width } = parseImageTitle(rawTitle)
-  const figureStyle = width
-    ? ` style="max-width:${width}px;width:100%;margin-left:auto;margin-right:auto"`
-    : ""
-  return `
-    <figure class="my-8 overflow-hidden rounded-3xl border border-[#e8e8e4] bg-white"${figureStyle}>
-      <img src="${sanitizePublicUrlForHtmlAttribute(url)}" alt="${escapeHtml(alt)}" loading="lazy" decoding="async" class="h-auto w-full object-cover" />
-      ${alt || title ? `<figcaption class="border-t border-[#e8e8e4] px-5 py-3 text-sm text-[#1a1a1a]/45">${escapeHtml(alt || title)}</figcaption>` : ""}
-    </figure>
-  `
+  for (const match of source.matchAll(imagePattern)) {
+    const matchStart = match.index ?? 0
+    const gap = source.slice(cursor, matchStart)
+    if (gap.trim()) return null
+
+    const [, alt, url, rawTitle] = match
+    const { title, width } = parseImageTitle(rawTitle)
+    const figureStyle = width
+      ? ` style="max-width:${width}px;width:100%;margin-left:auto;margin-right:auto"`
+      : ""
+    figures.push(`
+      <figure class="my-8 overflow-hidden rounded-3xl border border-[#e8e8e4] bg-white"${figureStyle}>
+        <img src="${sanitizePublicUrlForHtmlAttribute(url)}" alt="${escapeHtml(alt)}" loading="lazy" decoding="async" class="h-auto w-full object-cover" />
+        ${alt || title ? `<figcaption class="border-t border-[#e8e8e4] px-5 py-3 text-sm text-[#1a1a1a]/45">${escapeHtml(alt || title)}</figcaption>` : ""}
+      </figure>
+    `)
+    cursor = matchStart + match[0].length
+  }
+
+  if (figures.length === 0 || source.slice(cursor).trim()) return null
+  return figures.join("\n")
 }
 
 export function renderMarkdownToHtml(markdown: string) {
-  const lines = markdown.replace(/\r\n/g, "\n").split("\n")
+  const lines = normalizeMarkdownBlockBoundaries(markdown).split("\n")
   const html: string[] = []
   let index = 0
 

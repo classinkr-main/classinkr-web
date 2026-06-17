@@ -18,4 +18,25 @@ describe("renderMarkdownToHtml", () => {
     expect(html).toContain("![broken image")
     expect(html).toContain("다음 문단")
   })
+
+  it("renders adjacent images as separate figures", () => {
+    const html = renderMarkdownToHtml(
+      "![first](https://classin.ai.kr/first.png)![second](https://classin.ai.kr/second.png)"
+    )
+
+    expect(html.match(/<figure/g)).toHaveLength(2)
+    expect(html).toContain('src="https://classin.ai.kr/first.png"')
+    expect(html).toContain('src="https://classin.ai.kr/second.png"')
+    expect(html).not.toContain("first.png)![second]")
+  })
+
+  it("keeps headings when they are pasted directly after an image", () => {
+    const html = renderMarkdownToHtml(
+      "![first](https://classin.ai.kr/first.png)## 다음 섹션"
+    )
+
+    expect(html).toContain("<figure")
+    expect(html).toContain('id="다음-섹션"')
+    expect(html).toContain("다음 섹션")
+  })
 })

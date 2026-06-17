@@ -2,6 +2,7 @@
 import { revalidatePath } from "next/cache"
 import { updatePost, trashPost, permanentDeletePost, restorePost } from "@/lib/repositories/blog"
 import { verifyAdmin } from "@/lib/admin-auth"
+import { validatePublicMarkdownContent } from "@/lib/admin/public-content-validation"
 
 function revalidatePublicBlogSurfaces(slug?: string) {
   revalidatePath("/blog")
@@ -41,6 +42,11 @@ export async function PUT(
       if (!post) return NextResponse.json({ error: "Post not found" }, { status: 404 })
       revalidatePublicBlogSurfaces(post.slug)
       return NextResponse.json({ post })
+    }
+
+    const contentError = validatePublicMarkdownContent(body.contentMarkdown)
+    if (contentError) {
+      return NextResponse.json({ error: contentError }, { status: 400 })
     }
 
     const post = await updatePost(numId ?? 0, body, uuid)

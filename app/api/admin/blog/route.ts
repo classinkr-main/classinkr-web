@@ -3,6 +3,7 @@ import { revalidatePath } from "next/cache"
 import { getAllPosts, createPost, getTrashedPosts } from "@/lib/repositories/blog"
 import { verifyAdmin } from "@/lib/admin-auth"
 import { adminCachedJson } from "@/lib/admin-api-response"
+import { validatePublicMarkdownContent } from "@/lib/admin/public-content-validation"
 
 function revalidatePublicBlogSurfaces(slug?: string) {
   revalidatePath("/blog")
@@ -38,6 +39,11 @@ export async function POST(req: NextRequest) {
         { error: "title, excerpt, category are required" },
         { status: 400 }
       )
+    }
+
+    const contentError = validatePublicMarkdownContent(body.contentMarkdown)
+    if (contentError) {
+      return NextResponse.json({ error: contentError }, { status: 400 })
     }
 
     const post = await createPost(body)

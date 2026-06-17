@@ -7,7 +7,7 @@ import {
   getDocsArticleDraft,
   upsertDocsArticleDraft,
 } from "@/lib/repositories/docs-articles"
-import { normalizeDocsArticlePatchPayload } from "../../_payload"
+import { normalizeDocsArticlePatchPayload, validateDocsArticlePatchContent } from "../../_payload"
 
 interface RouteContext {
   params: Promise<{ id: string }>
@@ -54,6 +54,8 @@ export async function PUT(req: NextRequest, context: RouteContext) {
       { status: 400 }
     )
   }
+  const contentError = validateDocsArticlePatchContent(draftPayload)
+  if (contentError) return NextResponse.json({ error: contentError }, { status: 400 })
 
   try {
     const draft = await upsertDocsArticleDraft({

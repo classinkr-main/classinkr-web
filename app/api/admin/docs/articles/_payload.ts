@@ -6,6 +6,7 @@ import type {
   DocsArticleStatus,
   DocsArticleVisibility,
 } from "@/lib/repositories/docs-articles"
+import { validatePublicMarkdownContent } from "@/lib/admin/public-content-validation"
 
 const ALLOWED_STATUS: DocsArticleStatus[] = ["draft", "review", "published", "archived"]
 const ALLOWED_VISIBILITY: DocsArticleVisibility[] = ["public", "unlisted", "internal"]
@@ -117,6 +118,7 @@ export function validateDocsArticlePatchForPublish(
   const categoryId = patch.categoryId ?? fallback.categoryId
   const status = patch.status ?? fallback.status
   const contentMarkdown = patch.contentMarkdown ?? fallback.contentMarkdown
+  const contentError = validateDocsArticlePatchContent(patch)
 
   if (!title.trim()) return "제목은 필수입니다."
   if (!description.trim()) return "설명은 필수입니다."
@@ -126,6 +128,11 @@ export function validateDocsArticlePatchForPublish(
   }
   if (!categoryId) return "카테고리를 선택하세요."
   if (status === "published" && !contentMarkdown.trim()) return "게시 문서는 본문이 필요합니다."
+  if (contentError) return contentError
 
   return null
+}
+
+export function validateDocsArticlePatchContent(patch: DocsArticlePatchInput): string | null {
+  return validatePublicMarkdownContent(patch.contentMarkdown)
 }
