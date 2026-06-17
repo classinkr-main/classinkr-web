@@ -1,6 +1,7 @@
 import { describe, expect, it } from "vitest"
 
 import {
+  hasAttachmentImageReference,
   MAX_LOCAL_IMAGE_BYTES,
   normalizeLocalImageFiles,
 } from "@/lib/admin/local-image-upload"
@@ -43,5 +44,12 @@ describe("admin docs local image uploads", () => {
       ok: false,
       message: "large.png은 5MB 이하로 올려주세요.",
     })
+  })
+
+  it("detects temporary attachment image references from clipboard HTML and markdown", () => {
+    expect(hasAttachmentImageReference('<img src="attachment:abc:image.png">')).toBe(true)
+    expect(hasAttachmentImageReference("![image](attachment:abc:image.png)")).toBe(true)
+    expect(hasAttachmentImageReference("attachment:abc is mentioned as plain text")).toBe(false)
+    expect(hasAttachmentImageReference("![image](/docs/files/image.png)")).toBe(false)
   })
 })

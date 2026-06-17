@@ -1,6 +1,12 @@
 import { CLASSIN_POSITIONING } from "@/lib/classin-positioning"
 
 export const DOC_CATEGORY_IDS = [
+  "quick-start",
+  "guides",
+  "manual",
+  "help",
+  "troubleshooting",
+  "updates",
   "start",
   "software",
   "admin",
@@ -81,6 +87,10 @@ export interface DocArticle {
   docType?: DocArticleDocType
   productArea?: DocArticleProductArea
   difficulty?: DocArticleDifficulty
+}
+
+export function isDocCategoryId(value: string): value is DocCategoryId {
+  return (DOC_CATEGORY_IDS as readonly string[]).includes(value)
 }
 
 export const docsCategories: DocCategory[] = [

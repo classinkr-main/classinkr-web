@@ -123,7 +123,7 @@ export function buildClientVectorSources(
         urlPath: article.canonical_path ?? `/docs/${article.category_id}/${article.slug}`,
         category: article.category_id,
         excerpt: compactText(row.content),
-        score: Math.max(1, similarity * 10),
+        score: Math.max(1, similarity * 80),
       }
     })
     .filter((source): source is ClientVectorSource => source != null)

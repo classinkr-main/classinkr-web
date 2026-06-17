@@ -9,6 +9,9 @@ export const ALLOWED_LOCAL_IMAGE_TYPES = [
 
 export const LOCAL_IMAGE_ACCEPT = ALLOWED_LOCAL_IMAGE_TYPES.join(",")
 
+const ATTACHMENT_IMAGE_REFERENCE_PATTERN =
+  /(?:<img\b[^>]*\bsrc=["']\s*attachment:|!\[[^\]]*]\(\s*attachment:)/i
+
 export interface LocalImageFileLike {
   name: string
   type: string
@@ -42,4 +45,8 @@ export function normalizeLocalImageFiles<T extends LocalImageFileLike>(
   }
 
   return { ok: true, files: imageFiles }
+}
+
+export function hasAttachmentImageReference(value: string) {
+  return ATTACHMENT_IMAGE_REFERENCE_PATTERN.test(value)
 }

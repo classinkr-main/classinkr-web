@@ -5,6 +5,7 @@ import {
   GraduationCap,
   LifeBuoy,
   MonitorSpeaker,
+  BookOpen,
   Presentation,
   Rocket,
   ShieldCheck,
@@ -37,7 +38,13 @@ const staticDocsContent: DocsContent = {
   docs: listDocs(),
 }
 
-const categoryIcons: Record<DocCategoryId, LucideIcon> = {
+const categoryIcons: Partial<Record<DocCategoryId, LucideIcon>> = {
+  "quick-start": Rocket,
+  guides: BookOpen,
+  manual: ClipboardList,
+  help: LifeBuoy,
+  troubleshooting: LifeBuoy,
+  updates: Sparkles,
   start: Rocket,
   software: Sparkles,
   admin: ShieldCheck,
@@ -47,7 +54,13 @@ const categoryIcons: Record<DocCategoryId, LucideIcon> = {
   board: Wrench,
 }
 
-const categoryEyebrows: Record<DocCategoryId, string> = {
+const categoryEyebrows: Partial<Record<DocCategoryId, string>> = {
+  "quick-start": "Quick Start",
+  guides: "Guide",
+  manual: "Manual",
+  help: "Help",
+  troubleshooting: "Troubleshooting",
+  updates: "Updates",
   start: "Start Here",
   software: "Software",
   admin: "Admin",
@@ -104,7 +117,17 @@ export function DocsCategoryIcon({
 }) {
   switch (categoryId) {
     case "start":
+    case "quick-start":
       return <Rocket className={className} aria-hidden />
+    case "guides":
+      return <BookOpen className={className} aria-hidden />
+    case "manual":
+      return <ClipboardList className={className} aria-hidden />
+    case "help":
+    case "troubleshooting":
+      return <LifeBuoy className={className} aria-hidden />
+    case "updates":
+      return <Sparkles className={className} aria-hidden />
     case "software":
       return <Sparkles className={className} aria-hidden />
     case "admin":
@@ -152,7 +175,7 @@ export function toCategoryCard(
     title: category.title,
     description: category.description,
     href: getDocCategoryPath(category.id),
-    eyebrow: categoryEyebrows[category.id],
+    eyebrow: categoryEyebrows[category.id] ?? category.title,
     icon: categoryIcons[category.id],
     articles: articles.map((doc) => ({
       title: doc.title,

@@ -1,6 +1,14 @@
 "use client"
 
-import { forwardRef, useEffect, useImperativeHandle, useRef, useState, type DragEvent } from "react"
+import {
+  forwardRef,
+  useEffect,
+  useImperativeHandle,
+  useRef,
+  useState,
+  type ClipboardEvent,
+  type DragEvent,
+} from "react"
 import { useEditor, EditorContent, Extension } from "@tiptap/react"
 import { Plugin, PluginKey } from "@tiptap/pm/state"
 import { Decoration, DecorationSet } from "@tiptap/pm/view"
@@ -13,6 +21,7 @@ import { Markdown } from "tiptap-markdown"
 import { Image as ImageIcon, LayoutTemplate, Link2, Loader2, Sparkles, Upload, Wand2, X } from "lucide-react"
 import type { JSONContent, MarkdownParseHelpers, MarkdownParseResult, MarkdownToken } from "@tiptap/core"
 import {
+  hasAttachmentImageReference,
   LOCAL_IMAGE_ACCEPT,
   normalizeLocalImageFiles,
 } from "@/lib/admin/local-image-upload"
@@ -59,6 +68,17 @@ const IMAGE_WIDTH_PRESETS = [
 
 type SavedSelection = { from: number; to: number }
 type ImageInsertItem = { src: string; alt: string; width?: number }
+
+function getClipboardImageFiles(dataTransfer: DataTransfer) {
+  const itemFiles = Array.from(dataTransfer.items ?? [])
+    .filter((item) => item.kind === "file")
+    .map((item) => item.getAsFile())
+    .filter((file): file is File => Boolean(file && file.type.startsWith("image/")))
+
+  if (itemFiles.length > 0) return itemFiles
+
+  return Array.from(dataTransfer.files ?? []).filter((file) => file.type.startsWith("image/"))
+}
 
 function escapeMarkdown(value: string) {
   return value.replace(/\\/g, "\\\\").replace(/"/g, '\\"').replace(/\]/g, "\\]")
@@ -220,9 +240,10 @@ const RichMarkdownEditor = forwardRef<RichMarkdownEditorHandle, RichMarkdownEdit
         const uploaded: ImageInsertItem[] = []
         for (const file of result.files) {
           const src = await uploadFile(file)
+          const filename = file.name || `clipboard-image-${uploaded.length + 1}`
           uploaded.push({
             src,
-            alt: imageAlt.trim() || file.name.replace(/\.[^.]+$/, ""),
+            alt: imageAlt.trim() || filename.replace(/\.[^.]+$/, ""),
             width: selectedWidth(),
           })
         }
@@ -278,10 +299,34 @@ const RichMarkdownEditor = forwardRef<RichMarkdownEditorHandle, RichMarkdownEdit
       void handleFiles(files)
     }
 
+    const handleEditorPaste = (event: ClipboardEvent<HTMLDivElement>) => {
+      if (!imageUploadEndpoint) return
+
+      const files = getClipboardImageFiles(event.clipboardData)
+      if (files.length > 0) {
+        event.preventDefault()
+        event.stopPropagation()
+        if (editor) {
+          const { from, to } = editor.state.selection
+          savedSelection.current = { from, to }
+        }
+        void handleFiles(files)
+        return
+      }
+
+      const html = event.clipboardData.getData("text/html")
+      const text = event.clipboardData.getData("text/plain")
+      if (hasAttachmentImageReference(html) || hasAttachmentImageReference(text)) {
+        event.preventDefault()
+        event.stopPropagation()
+        setImageError("클립보드의 임시 이미지 주소는 공개 문서에서 표시할 수 없습니다. 이미지를 다시 복사해 붙여넣거나 파일 업로드로 삽입해주세요.")
+      }
+    }
+
     const editor = useEditor({
       immediatelyRender: false,
       extensions: [
-        StarterKit,
+        StarterKit.configure({ link: false }),
         Highlight.configure({ multicolor: false }),
         Link.configure({ openOnClick: false }),
         ResizableMarkdownImage.configure({
@@ -570,6 +615,7 @@ const RichMarkdownEditor = forwardRef<RichMarkdownEditorHandle, RichMarkdownEdit
           onDragOver={handleEditorDragOver}
           onDragLeave={handleEditorDragLeave}
           onDrop={handleEditorDrop}
+          onPaste={handleEditorPaste}
         >
           <EditorContent editor={editor} />
           {(draggingImages || uploadingImages) && (

@@ -5,6 +5,7 @@ import { useRouter } from "next/navigation"
 import { Loader2, Sparkles, RefreshCw, ClipboardCopy, Check } from "lucide-react"
 import { adminFetchJson } from "@/lib/admin-client"
 import { buildDocDraftArticlePayload } from "@/lib/chatbot/doc-draft-article"
+import { cn } from "@/lib/utils"
 
 interface GapCluster {
   id: string
@@ -48,7 +49,11 @@ interface CreatedArticle {
 
 interface EvalReport {
   total: number
+  durationMs: number
   deterministic: {
+    categoryMatch: number
+    modeOk: number
+    withSources: number
     categoryMatchRate: number
     modeOkRate: number
     sourceRate: number
@@ -58,9 +63,74 @@ interface EvalReport {
     judged: number
     faithfulRate: number | null
     hallucinationRate: number | null
+    addressesRate: number | null
     avgScore: number | null
   }
-  failures: { id: string; flags: string[] }[]
+  failures: {
+    id: string
+    question: string
+    detectedCategory: string
+    expectCategory: string
+    answerMode: string
+    flags: string[]
+  }[]
+}
+
+interface ChatbotQuestionStat {
+  clusterId: string
+  questionLabel: string
+  category: string | null
+  questionCount: number
+  unresolvedCount: number
+  handoffCount: number
+  directAnswerCount: number
+  avgConfidence: number | null
+  regressionCandidate?: boolean
+}
+
+interface ChatbotDistributionItem {
+  key: string
+  count: number
+  rate: number
+}
+
+interface ChatbotStats {
+  range: { from: string; to: string | null }
+  totals: {
+    questionCount: number
+    unresolvedCount: number
+    handoffCount: number
+    directAnswerCount: number
+  }
+  topQuestions: ChatbotQuestionStat[]
+  unresolvedQuestions: ChatbotQuestionStat[]
+  feedbackStats: {
+    detected_category: string | null
+    question_label: string
+    feedback_count: number
+    helpful_count: number
+    not_helpful_count: number
+  }[]
+  latency: {
+    avgMs: number | null
+    p95Ms: number | null
+    sampleCount: number
+  }
+  answerModes: ChatbotDistributionItem[]
+  categories: ChatbotDistributionItem[]
+  channelHandoffs: {
+    total: number
+    sent: number
+    pending: number
+    failed: number
+    skipped: number
+    support: number
+    demo: number
+    statuses: ChatbotDistributionItem[]
+    intents: ChatbotDistributionItem[]
+  }
+  avgConfidence: number | null
+  warning?: string
 }
 
 type AlphaReadinessStatus = "ok" | "warning" | "blocked"
@@ -98,6 +168,24 @@ function pct(value: number | null | undefined) {
   return `${Math.round(value * 100)}%`
 }
 
+function ms(value: number | null | undefined) {
+  if (value == null) return "—"
+  if (value >= 1000) return `${(value / 1000).toFixed(1)}초`
+  return `${value}ms`
+}
+
+function markStatsRegressionCandidate(stats: ChatbotStats | null, clusterId: string, enabled: boolean) {
+  if (!stats) return stats
+  const markItem = (item: ChatbotQuestionStat) =>
+    item.clusterId === clusterId ? { ...item, regressionCandidate: enabled } : item
+
+  return {
+    ...stats,
+    topQuestions: stats.topQuestions.map(markItem),
+    unresolvedQuestions: stats.unresolvedQuestions.map(markItem),
+  }
+}
+
 export default function DocsGapsPage() {
   const router = useRouter()
   const [backlog, setBacklog] = useState<Backlog | null>(null)
@@ -110,10 +198,13 @@ export default function DocsGapsPage() {
   const [savingDraftArticle, setSavingDraftArticle] = useState(false)
   const [copied, setCopied] = useState(false)
 
-  const [evalRunning, setEvalRunning] = useState(false)
+  const [evalRunningMode, setEvalRunningMode] = useState<"fast" | "judge" | null>(null)
   const [evalReport, setEvalReport] = useState<EvalReport | null>(null)
   const [readiness, setReadiness] = useState<AlphaReadinessReport | null>(null)
   const [readinessLoading, setReadinessLoading] = useState(true)
+  const [chatbotStats, setChatbotStats] = useState<ChatbotStats | null>(null)
+  const [chatbotStatsLoading, setChatbotStatsLoading] = useState(true)
+  const [promotingClusterId, setPromotingClusterId] = useState<string | null>(null)
 
   const loadBacklog = useCallback(async () => {
     setLoading(true)
@@ -140,10 +231,23 @@ export default function DocsGapsPage() {
     }
   }, [])
 
+  const loadChatbotStats = useCallback(async () => {
+    setChatbotStatsLoading(true)
+    try {
+      const data = await adminFetchJson<ChatbotStats>("/api/admin/chatbot/stats")
+      setChatbotStats(data)
+    } catch (e) {
+      setError(e instanceof Error ? e.message : "챗봇 질문 패턴을 불러오지 못했습니다.")
+    } finally {
+      setChatbotStatsLoading(false)
+    }
+  }, [])
+
   const refreshAll = useCallback(() => {
     void loadBacklog()
     void loadReadiness()
-  }, [loadBacklog, loadReadiness])
+    void loadChatbotStats()
+  }, [loadBacklog, loadChatbotStats, loadReadiness])
 
   useEffect(() => {
     refreshAll()
@@ -172,18 +276,53 @@ export default function DocsGapsPage() {
     }
   }
 
-  const runEval = async () => {
-    setEvalRunning(true)
+  const runEval = async (judge: boolean) => {
+    setEvalRunningMode(judge ? "judge" : "fast")
     try {
       const data = await adminFetchJson<EvalReport>("/api/admin/chatbot/eval", {
         method: "POST",
-        body: JSON.stringify({ judge: true }),
+        body: JSON.stringify({ judge }),
       })
       setEvalReport(data)
     } catch (e) {
       setError(e instanceof Error ? e.message : "품질 평가 실행에 실패했습니다.")
     } finally {
-      setEvalRunning(false)
+      setEvalRunningMode(null)
+    }
+  }
+
+  const setRegressionCandidate = async (
+    item: ChatbotQuestionStat,
+    mode: "volume" | "risk",
+    enabled: boolean
+  ) => {
+    if (!item.clusterId || item.clusterId === "unclustered") return
+
+    setPromotingClusterId(item.clusterId)
+    setError("")
+    try {
+      const expectedModes =
+        mode === "risk" || item.handoffCount > 0 || item.unresolvedCount > 0
+          ? ["handoff"]
+          : ["direct_answer", "doc_suggestion", "handoff"]
+
+      await adminFetchJson(`/api/admin/chatbot/questions/${item.clusterId}`, {
+        method: "PATCH",
+        body: JSON.stringify({
+          regressionCandidate: {
+            enabled,
+            expectedCategory: item.category ?? "general",
+            expectedModes,
+            reason: mode === "risk" ? "admin_unresolved_pattern" : "admin_frequent_pattern",
+          },
+        }),
+      })
+
+      setChatbotStats((current) => markStatsRegressionCandidate(current, item.clusterId, enabled))
+    } catch (e) {
+      setError(e instanceof Error ? e.message : "회귀 후보 상태를 변경하지 못했습니다.")
+    } finally {
+      setPromotingClusterId(null)
     }
   }
 
@@ -255,44 +394,98 @@ export default function DocsGapsPage() {
 
       <AlphaReadinessPanel report={readiness} loading={readinessLoading} onRefresh={loadReadiness} />
 
+      <QuestionPatternPanel
+        stats={chatbotStats}
+        loading={chatbotStatsLoading}
+        promotingClusterId={promotingClusterId}
+        onRefresh={loadChatbotStats}
+        onSetRegressionCandidate={setRegressionCandidate}
+      />
+
       {/* 품질 평가 */}
       <section className="mt-6 rounded-[20px] border border-black/[0.08] bg-white p-5">
         <div className="flex flex-wrap items-center justify-between gap-3">
           <div>
             <h2 className="text-base font-semibold">챗봇 품질 평가</h2>
-            <p className="mt-1 text-sm text-[#615D59]">골든셋을 실제 파이프라인에 돌려 baseline을 측정합니다.</p>
+            <p className="mt-1 text-sm text-[#615D59]">
+              골든셋을 실제 파이프라인에 돌려 회귀 여부와 출처 품질을 확인합니다.
+            </p>
           </div>
-          <button
-            type="button"
-            onClick={runEval}
-            disabled={evalRunning}
-            className="inline-flex items-center gap-2 rounded-full bg-[#084734] px-4 py-2 text-sm font-semibold text-white transition-colors hover:bg-[#065c41] disabled:opacity-60"
-          >
-            {evalRunning ? <Loader2 className="h-4 w-4 animate-spin" /> : null}
-            평가 실행
-          </button>
+          <div className="flex flex-wrap gap-2">
+            <button
+              type="button"
+              onClick={() => runEval(false)}
+              disabled={evalRunningMode != null}
+              className="inline-flex items-center gap-2 rounded-full border border-[#084734]/15 bg-white px-4 py-2 text-sm font-semibold text-[#084734] transition-colors hover:bg-[#ECFDF5] disabled:opacity-60"
+            >
+              {evalRunningMode === "fast" ? <Loader2 className="h-4 w-4 animate-spin" /> : null}
+              빠른 회귀 평가
+            </button>
+            <button
+              type="button"
+              onClick={() => runEval(true)}
+              disabled={evalRunningMode != null}
+              className="inline-flex items-center gap-2 rounded-full bg-[#084734] px-4 py-2 text-sm font-semibold text-white transition-colors hover:bg-[#065c41] disabled:opacity-60"
+            >
+              {evalRunningMode === "judge" ? <Loader2 className="h-4 w-4 animate-spin" /> : null}
+              심판 포함 평가
+            </button>
+          </div>
         </div>
 
         {evalReport && (
-          <div className="mt-4 grid grid-cols-2 gap-3 sm:grid-cols-4">
-            <Metric label="카테고리 적중" value={pct(evalReport.deterministic.categoryMatchRate)} />
-            <Metric label="모드 적합" value={pct(evalReport.deterministic.modeOkRate)} />
-            <Metric label="출처 확보" value={pct(evalReport.deterministic.sourceRate)} />
-            <Metric
-              label={evalReport.judge.enabled ? "근거 충실 (심판)" : "심판 비활성"}
-              value={evalReport.judge.enabled ? pct(evalReport.judge.faithfulRate) : "—"}
-            />
-            {evalReport.judge.enabled && (
-              <>
-                <Metric label="환각" value={pct(evalReport.judge.hallucinationRate)} />
-                <Metric
-                  label="평균 점수"
-                  value={evalReport.judge.avgScore != null ? `${evalReport.judge.avgScore.toFixed(2)}/5` : "—"}
-                />
-              </>
+          <>
+            <div className="mt-4 grid grid-cols-2 gap-3 sm:grid-cols-4">
+              <Metric
+                label="카테고리 적중"
+                value={`${pct(evalReport.deterministic.categoryMatchRate)} · ${evalReport.deterministic.categoryMatch}/${evalReport.total}`}
+              />
+              <Metric
+                label="모드 적합"
+                value={`${pct(evalReport.deterministic.modeOkRate)} · ${evalReport.deterministic.modeOk}/${evalReport.total}`}
+              />
+              <Metric
+                label="출처 확보"
+                value={`${pct(evalReport.deterministic.sourceRate)} · ${evalReport.deterministic.withSources}/${evalReport.total}`}
+              />
+              <Metric
+                label={evalReport.judge.enabled ? "근거 충실 (심판)" : "심판 비활성"}
+                value={evalReport.judge.enabled ? pct(evalReport.judge.faithfulRate) : "—"}
+              />
+              {evalReport.judge.enabled && (
+                <>
+                  <Metric label="환각" value={pct(evalReport.judge.hallucinationRate)} />
+                  <Metric label="질문 충족" value={pct(evalReport.judge.addressesRate)} />
+                  <Metric
+                    label="평균 점수"
+                    value={evalReport.judge.avgScore != null ? `${evalReport.judge.avgScore.toFixed(2)}/5` : "—"}
+                  />
+                </>
+              )}
+              <Metric label="케이스" value={`${evalReport.total}개`} />
+              <Metric label="평가 시간" value={ms(evalReport.durationMs)} />
+            </div>
+
+            {evalReport.failures.length > 0 ? (
+              <div className="mt-4 rounded-[14px] border border-[#B85C33]/20 bg-[#FBEAE2] p-3">
+                <p className="text-sm font-semibold text-[#B85C33]">
+                  회귀 확인 필요 {evalReport.failures.length}건
+                </p>
+                <ul className="mt-2 space-y-2">
+                  {evalReport.failures.slice(0, 5).map((failure) => (
+                    <li key={failure.id} className="text-[12px] leading-5 text-[#615D59]">
+                      <span className="font-semibold text-[#111110]">{failure.question}</span>
+                      <span> · {failure.flags.join(", ")}</span>
+                    </li>
+                  ))}
+                </ul>
+              </div>
+            ) : (
+              <p className="mt-4 rounded-[14px] border border-[#084734]/15 bg-[#ECFDF5] px-3 py-2 text-sm font-semibold text-[#084734]">
+                회귀 실패 없음
+              </p>
             )}
-            <Metric label="케이스" value={`${evalReport.total}개`} />
-          </div>
+          </>
         )}
       </section>
 
@@ -402,6 +595,108 @@ export default function DocsGapsPage() {
   )
 }
 
+function QuestionPatternPanel({
+  stats,
+  loading,
+  promotingClusterId,
+  onRefresh,
+  onSetRegressionCandidate,
+}: {
+  stats: ChatbotStats | null
+  loading: boolean
+  promotingClusterId: string | null
+  onRefresh: () => void
+  onSetRegressionCandidate: (item: ChatbotQuestionStat, mode: "volume" | "risk", enabled: boolean) => void
+}) {
+  const totals = stats?.totals ?? {
+    questionCount: 0,
+    unresolvedCount: 0,
+    handoffCount: 0,
+    directAnswerCount: 0,
+  }
+  const questionCount = totals.questionCount || 0
+  const unresolvedRate = questionCount === 0 ? 0 : totals.unresolvedCount / questionCount
+  const handoffRate = questionCount === 0 ? 0 : totals.handoffCount / questionCount
+  const directAnswerRate = questionCount === 0 ? 0 : totals.directAnswerCount / questionCount
+
+  return (
+    <section className="mt-6 rounded-[20px] border border-black/[0.08] bg-white p-5">
+      <div className="flex flex-wrap items-start justify-between gap-3">
+        <div>
+          <h2 className="text-base font-semibold">챗봇 질문 패턴 분석</h2>
+          <p className="mt-1 text-sm text-[#615D59]">
+            최근 30일 질문 흐름, 미해결 패턴, 상담 연결 신호, 답변 속도를 같이 봅니다.
+          </p>
+        </div>
+        <button
+          type="button"
+          onClick={onRefresh}
+          disabled={loading}
+          className="inline-flex items-center gap-1.5 rounded-full border border-[#084734]/15 bg-white px-3 py-1.5 text-[12px] font-semibold text-[#084734] transition-colors hover:bg-[#F6F5F4] disabled:opacity-60"
+        >
+          {loading ? <Loader2 className="h-3.5 w-3.5 animate-spin" /> : <RefreshCw className="h-3.5 w-3.5" />}
+          패턴 새로고침
+        </button>
+      </div>
+
+      {stats?.warning && (
+        <p className="mt-3 rounded-[12px] border border-[#B85C33]/20 bg-[#FBEAE2] px-3 py-2 text-[12px] text-[#B85C33]">
+          {stats.warning}
+        </p>
+      )}
+
+      <div className="mt-4 grid grid-cols-2 gap-3 md:grid-cols-4">
+        <Metric label="질문" value={`${totals.questionCount}건`} />
+        <Metric label="미해결" value={`${totals.unresolvedCount}건 · ${pct(unresolvedRate)}`} />
+        <Metric label="상담 연결" value={`${totals.handoffCount}건 · ${pct(handoffRate)}`} />
+        <Metric label="직접 답변" value={`${totals.directAnswerCount}건 · ${pct(directAnswerRate)}`} />
+        <Metric label="평균 응답" value={ms(stats?.latency.avgMs)} />
+        <Metric label="평균 신뢰도" value={pct(stats?.avgConfidence)} />
+        <Metric
+          label="채널톡 전송"
+          value={`${stats?.channelHandoffs?.sent ?? 0}/${stats?.channelHandoffs?.total ?? 0}`}
+        />
+        <Metric label="전송 실패" value={`${stats?.channelHandoffs?.failed ?? 0}건`} />
+      </div>
+
+      <div className="mt-4 grid gap-4 lg:grid-cols-[1.2fr_0.8fr]">
+        <QuestionStatList
+          title="반복 질문"
+          description="자주 들어오는 질문은 문서/추천 질문/온보딩 UX 후보입니다."
+          items={stats?.topQuestions ?? []}
+          emptyText={loading ? "질문 패턴을 불러오는 중입니다." : "아직 반복 질문이 없습니다."}
+          mode="volume"
+          promotingClusterId={promotingClusterId}
+          onSetRegressionCandidate={onSetRegressionCandidate}
+        />
+        <div className="grid gap-4">
+          <DistributionList title="답변 모드" items={stats?.answerModes ?? []} labeler={answerModeLabel} />
+          <DistributionList title="카테고리" items={stats?.categories ?? []} labeler={categoryLabel} />
+        </div>
+      </div>
+
+      <div className="mt-4 grid gap-4 lg:grid-cols-2">
+        <QuestionStatList
+          title="미해결/상담 연결 후보"
+          description="원장 문의, 컴플레인, 장애 흐름은 우선적으로 보강합니다."
+          items={stats?.unresolvedQuestions ?? []}
+          emptyText={loading ? "미해결 패턴을 불러오는 중입니다." : "최근 미해결 질문이 없습니다."}
+          mode="risk"
+          promotingClusterId={promotingClusterId}
+          onSetRegressionCandidate={onSetRegressionCandidate}
+        />
+        <FeedbackList items={stats?.feedbackStats ?? []} loading={loading} />
+      </div>
+
+      {stats?.latency.sampleCount ? (
+        <p className="mt-3 text-[11px] text-[#615D59]">
+          응답 속도 표본 {stats.latency.sampleCount}건 · p95 {ms(stats.latency.p95Ms)}
+        </p>
+      ) : null}
+    </section>
+  )
+}
+
 function AlphaReadinessPanel({
   report,
   loading,
@@ -506,6 +801,213 @@ function getReadinessStatusMeta(status: AlphaReadinessStatus) {
     return { label: "확인 필요", badgeClass: "bg-[#FFF7ED] text-[#B85C33]" }
   }
   return { label: "막힘", badgeClass: "bg-[#FBEAE2] text-[#B85C33]" }
+}
+
+function answerModeLabel(key: string) {
+  const labels: Record<string, string> = {
+    direct_answer: "직접 답변",
+    doc_suggestion: "문서 제안",
+    clarifying_question: "추가 질문",
+    handoff: "상담 연결",
+    fallback: "fallback",
+    unknown: "알 수 없음",
+  }
+  return labels[key] ?? key
+}
+
+function categoryLabel(key: string) {
+  const labels: Record<string, string> = {
+    onboarding: "온보딩",
+    classroom: "수업 운영",
+    troubleshooting: "문제 해결",
+    hardware: "하드웨어",
+    billing: "결제",
+    admin: "관리자",
+    consultation: "상담",
+    general: "일반",
+    uncategorized: "미분류",
+  }
+  return labels[key] ?? key
+}
+
+function questionPriority(item: ChatbotQuestionStat, mode: "volume" | "risk") {
+  const unresolvedRate = item.questionCount === 0 ? 0 : item.unresolvedCount / item.questionCount
+  const handoffRate = item.questionCount === 0 ? 0 : item.handoffCount / item.questionCount
+
+  if (mode === "risk" || item.unresolvedCount >= 3 || handoffRate >= 0.5) {
+    return {
+      label: "높음",
+      className: "bg-[#FBEAE2] text-[#B85C33]",
+    }
+  }
+  if (item.questionCount >= 5 || unresolvedRate >= 0.25 || (item.avgConfidence ?? 1) < 0.65) {
+    return {
+      label: "중간",
+      className: "bg-[#FFF7ED] text-[#B85C33]",
+    }
+  }
+  return {
+    label: "관찰",
+    className: "bg-[#F6F5F4] text-[#615D59]",
+  }
+}
+
+function recommendedPatternAction(item: ChatbotQuestionStat, mode: "volume" | "risk") {
+  if (mode === "risk" || item.handoffCount > 0) return "상담 흐름 점검"
+  if (item.unresolvedCount > 0) return "문서 보강"
+  if ((item.avgConfidence ?? 1) < 0.7) return "근거 품질 점검"
+  if (item.questionCount >= 5) return "FAQ/추천 질문 반영"
+  return "계속 관찰"
+}
+
+function QuestionStatList({
+  title,
+  description,
+  items,
+  emptyText,
+  mode,
+  promotingClusterId,
+  onSetRegressionCandidate,
+}: {
+  title: string
+  description: string
+  items: ChatbotQuestionStat[]
+  emptyText: string
+  mode: "volume" | "risk"
+  promotingClusterId: string | null
+  onSetRegressionCandidate: (item: ChatbotQuestionStat, mode: "volume" | "risk", enabled: boolean) => void
+}) {
+  return (
+    <div className="rounded-[16px] border border-black/[0.06] bg-[#FAFAF8] p-4">
+      <div>
+        <h3 className="text-sm font-semibold text-[#111110]">{title}</h3>
+        <p className="mt-1 text-[12px] leading-5 text-[#615D59]">{description}</p>
+      </div>
+      <ul className="mt-3 space-y-2.5">
+        {items.slice(0, 6).map((item) => {
+          const canPromote = item.clusterId && item.clusterId !== "unclustered"
+          const promoting = promotingClusterId === item.clusterId
+          const priority = questionPriority(item, mode)
+          const action = recommendedPatternAction(item, mode)
+
+          return (
+          <li key={`${title}:${item.questionLabel}`} className="rounded-[12px] border border-black/[0.06] bg-white p-3">
+            <div className="flex items-start justify-between gap-3">
+              <p className="text-sm font-semibold leading-5 text-[#111110]">{item.questionLabel}</p>
+              {canPromote ? (
+                <button
+                  type="button"
+                  onClick={() => onSetRegressionCandidate(item, mode, !item.regressionCandidate)}
+                  disabled={promoting}
+                  className={cn(
+                    "inline-flex h-7 shrink-0 items-center gap-1.5 rounded-[6px] border px-2 text-[11px] font-bold transition-colors disabled:cursor-default",
+                    item.regressionCandidate
+                      ? "border-[#084734]/15 bg-[#ECFDF5] text-[#084734]"
+                      : "border-black/[0.08] bg-white text-[#615D59] hover:border-[#084734]/25 hover:bg-[#ECFDF5] hover:text-[#084734]"
+                  )}
+                >
+                  {promoting ? <Loader2 className="h-3 w-3 animate-spin" /> : item.regressionCandidate ? <Check className="h-3 w-3" /> : <Sparkles className="h-3 w-3" />}
+                  {item.regressionCandidate ? "후보 해제" : "회귀 후보"}
+                </button>
+              ) : null}
+            </div>
+            <div className="mt-2 flex flex-wrap items-center gap-1.5">
+              <span className={cn("rounded-full px-2 py-0.5 text-[11px] font-bold", priority.className)}>
+                우선순위 {priority.label}
+              </span>
+              <span className="rounded-full bg-[#ECFDF5] px-2 py-0.5 text-[11px] font-bold text-[#084734]">
+                {action}
+              </span>
+            </div>
+            <div className="mt-1.5 flex flex-wrap items-center gap-2 text-[12px] text-[#615D59]">
+              {item.category && <span>{categoryLabel(item.category)}</span>}
+              <span>질문 {item.questionCount}건</span>
+              {mode === "risk" ? (
+                <>
+                  <span>미해결 {item.unresolvedCount}건</span>
+                  <span>상담 {item.handoffCount}건</span>
+                </>
+              ) : (
+                <>
+                  <span>직접 답변 {item.directAnswerCount}건</span>
+                  <span>신뢰도 {pct(item.avgConfidence)}</span>
+                </>
+              )}
+            </div>
+          </li>
+          )
+        })}
+        {items.length === 0 && <li className="text-sm text-[#615D59]">{emptyText}</li>}
+      </ul>
+    </div>
+  )
+}
+
+function DistributionList({
+  title,
+  items,
+  labeler,
+}: {
+  title: string
+  items: ChatbotDistributionItem[]
+  labeler: (key: string) => string
+}) {
+  return (
+    <div className="rounded-[16px] border border-black/[0.06] bg-[#FAFAF8] p-4">
+      <h3 className="text-sm font-semibold text-[#111110]">{title}</h3>
+      <ul className="mt-3 space-y-2">
+        {items.slice(0, 5).map((item) => (
+          <li key={`${title}:${item.key}`} className="flex items-center justify-between gap-3 text-[12px]">
+            <span className="truncate text-[#615D59]">{labeler(item.key)}</span>
+            <span className="shrink-0 font-semibold tabular-nums text-[#111110]">
+              {item.count} · {pct(item.rate)}
+            </span>
+          </li>
+        ))}
+        {items.length === 0 && <li className="text-sm text-[#615D59]">아직 집계 데이터가 없습니다.</li>}
+      </ul>
+    </div>
+  )
+}
+
+function FeedbackList({
+  items,
+  loading,
+}: {
+  items: ChatbotStats["feedbackStats"]
+  loading: boolean
+}) {
+  const sorted = [...items]
+    .filter((item) => Number(item.not_helpful_count ?? 0) > 0 || Number(item.feedback_count ?? 0) > 0)
+    .sort((left, right) => Number(right.not_helpful_count ?? 0) - Number(left.not_helpful_count ?? 0))
+    .slice(0, 6)
+
+  return (
+    <div className="rounded-[16px] border border-black/[0.06] bg-[#FAFAF8] p-4">
+      <h3 className="text-sm font-semibold text-[#111110]">피드백 확인 후보</h3>
+      <p className="mt-1 text-[12px] leading-5 text-[#615D59]">
+        도움이 안 됐다는 피드백은 회귀 테스트와 문서 보강 케이스로 올립니다.
+      </p>
+      <ul className="mt-3 space-y-2.5">
+        {sorted.map((item) => (
+          <li key={`${item.detected_category ?? "none"}:${item.question_label}`} className="rounded-[12px] border border-black/[0.06] bg-white p-3">
+            <p className="text-sm font-semibold leading-5 text-[#111110]">{item.question_label}</p>
+            <div className="mt-1.5 flex flex-wrap items-center gap-2 text-[12px] text-[#615D59]">
+              {item.detected_category && <span>{categoryLabel(item.detected_category)}</span>}
+              <span>피드백 {item.feedback_count}건</span>
+              <span>도움됨 {item.helpful_count}건</span>
+              <span>아쉬움 {item.not_helpful_count}건</span>
+            </div>
+          </li>
+        ))}
+        {sorted.length === 0 && (
+          <li className="text-sm text-[#615D59]">
+            {loading ? "피드백을 불러오는 중입니다." : "최근 확인할 피드백이 없습니다."}
+          </li>
+        )}
+      </ul>
+    </div>
+  )
 }
 
 function Metric({ label, value }: { label: string; value: string }) {

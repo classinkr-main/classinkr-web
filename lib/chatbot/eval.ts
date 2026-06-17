@@ -15,7 +15,7 @@ import "server-only"
 import fs from "node:fs"
 import path from "node:path"
 
-import { evaluateChatbotQuery } from "./service"
+import { evaluateChatbotQuery, listChatbotRegressionEvalCases } from "./service"
 
 const JUDGE_MODEL = process.env.GEMINI_FAST_MODEL?.trim() || "gemini-3.5-flash"
 const GEMINI_API_KEY = process.env.GEMINI_API_KEY
@@ -27,6 +27,7 @@ interface GoldenCase {
   expectCategory: string
   expectMode: string[]
   expectPathIncludes?: string
+  expectHeadingIncludes?: string
 }
 
 interface Judgement {
@@ -47,6 +48,7 @@ export interface GoldenEvalFailure {
 
 export interface GoldenEvalReport {
   total: number
+  durationMs: number
   deterministic: {
     categoryMatch: number
     modeOk: number
@@ -64,6 +66,18 @@ export interface GoldenEvalReport {
     avgScore: number | null
   }
   failures: GoldenEvalFailure[]
+}
+
+interface GoldenEvalCaseResult {
+  categoryMatch: number
+  modeOk: number
+  withSources: number
+  judged: number
+  faithfulHits: number
+  hallucinations: number
+  addressesHits: number
+  scoreSum: number
+  failure: GoldenEvalFailure | null
 }
 
 function loadGoldenCases(): GoldenCase[] {
@@ -138,90 +152,165 @@ async function judge(
   }
 }
 
-export async function runGoldenEval(
-  options: { judge?: boolean; limit?: number } = {}
-): Promise<GoldenEvalReport> {
-  const useJudge = options.judge !== false && Boolean(GEMINI_API_KEY)
-  const allCases = loadGoldenCases()
-  const cases = options.limit ? allCases.slice(0, options.limit) : allCases
+async function mapWithConcurrency<T, R>(
+  items: T[],
+  concurrency: number,
+  mapper: (item: T) => Promise<R>
+) {
+  const results = new Array<R>(items.length)
+  let nextIndex = 0
 
-  let categoryMatch = 0
-  let modeOk = 0
-  let withSources = 0
+  async function worker() {
+    while (nextIndex < items.length) {
+      const index = nextIndex
+      nextIndex += 1
+      results[index] = await mapper(items[index])
+    }
+  }
+
+  await Promise.all(
+    Array.from({ length: Math.min(Math.max(1, concurrency), items.length) }, () => worker())
+  )
+  return results
+}
+
+async function evaluateGoldenCase(
+  testCase: GoldenCase,
+  useJudge: boolean
+): Promise<GoldenEvalCaseResult> {
+  const result = await evaluateChatbotQuery(testCase.question, { generateAnswer: useJudge })
+  const isCategoryMatch = result.detectedCategory === testCase.expectCategory
+  const isModeOk = testCase.expectMode.includes(result.answerMode)
+  const hasSources = result.sources.length > 0
+  const isExpectedPathOk =
+    !testCase.expectPathIncludes ||
+    result.sources.some((source) => source.urlPath.includes(testCase.expectPathIncludes ?? ""))
+  const isExpectedHeadingOk =
+    !testCase.expectHeadingIncludes ||
+    result.sources.some((source) => (source.heading ?? "").includes(testCase.expectHeadingIncludes ?? ""))
+
   let judged = 0
   let faithfulHits = 0
   let hallucinations = 0
   let addressesHits = 0
   let scoreSum = 0
-  const failures: GoldenEvalFailure[] = []
+  let judgement: Judgement | null = null
 
-  for (const testCase of cases) {
-    const result = await evaluateChatbotQuery(testCase.question)
-    const isCategoryMatch = result.detectedCategory === testCase.expectCategory
-    const isModeOk = testCase.expectMode.includes(result.answerMode)
-    const hasSources = result.sources.length > 0
-    const isExpectedPathOk =
-      !testCase.expectPathIncludes ||
-      result.sources.some((source) => source.urlPath.includes(testCase.expectPathIncludes ?? ""))
-
-    if (isCategoryMatch) categoryMatch += 1
-    if (isModeOk) modeOk += 1
-    if (hasSources) withSources += 1
-
-    let judgement: Judgement | null = null
-    if (useJudge && ANSWER_MODES.has(result.answerMode) && hasSources) {
-      judgement = await judge(
-        testCase.question,
-        result.answer,
-        result.sources.map((source) => ({ title: source.title, excerpt: source.excerpt }))
-      )
-      if (judgement) {
-        judged += 1
-        if (judgement.faithful) faithfulHits += 1
-        if (judgement.hallucinated) hallucinations += 1
-        if (judgement.addresses) addressesHits += 1
-        scoreSum += judgement.score
-      }
-    }
-
-    const flags: string[] = []
-    if (!isCategoryMatch) flags.push(`category:${result.detectedCategory}≠${testCase.expectCategory}`)
-    if (!isModeOk) flags.push(`mode:${result.answerMode}`)
-    if (!isExpectedPathOk) flags.push(`sourcePath:${testCase.expectPathIncludes}`)
-    if (judgement?.hallucinated) flags.push("hallucinated")
-    if (judgement && !judgement.faithful) flags.push("unfaithful")
-    if (flags.length > 0) {
-      failures.push({
-        id: testCase.id,
-        question: testCase.question,
-        detectedCategory: result.detectedCategory,
-        expectCategory: testCase.expectCategory,
-        answerMode: result.answerMode,
-        flags,
-      })
+  if (useJudge && ANSWER_MODES.has(result.answerMode) && hasSources) {
+    judgement = await judge(
+      testCase.question,
+      result.answer,
+      result.sources.map((source) => ({ title: source.title, excerpt: source.excerpt }))
+    )
+    if (judgement) {
+      judged = 1
+      if (judgement.faithful) faithfulHits = 1
+      if (judgement.hallucinated) hallucinations = 1
+      if (judgement.addresses) addressesHits = 1
+      scoreSum = judgement.score
     }
   }
+
+  const flags: string[] = []
+  if (!isCategoryMatch) flags.push(`category:${result.detectedCategory}≠${testCase.expectCategory}`)
+  if (!isModeOk) flags.push(`mode:${result.answerMode}`)
+  if (!isExpectedPathOk) flags.push(`sourcePath:${testCase.expectPathIncludes}`)
+  if (!isExpectedHeadingOk) flags.push(`sourceHeading:${testCase.expectHeadingIncludes}`)
+  if (judgement?.hallucinated) flags.push("hallucinated")
+  if (judgement && !judgement.faithful) flags.push("unfaithful")
+
+  return {
+    categoryMatch: isCategoryMatch ? 1 : 0,
+    modeOk: isModeOk ? 1 : 0,
+    withSources: hasSources ? 1 : 0,
+    judged,
+    faithfulHits,
+    hallucinations,
+    addressesHits,
+    scoreSum,
+    failure:
+      flags.length > 0
+        ? {
+            id: testCase.id,
+            question: testCase.question,
+            detectedCategory: result.detectedCategory,
+            expectCategory: testCase.expectCategory,
+            answerMode: result.answerMode,
+            flags,
+          }
+        : null,
+  }
+}
+
+export async function runGoldenEval(
+  options: { judge?: boolean; limit?: number } = {}
+): Promise<GoldenEvalReport> {
+  const startedAt = Date.now()
+  const useJudge = options.judge !== false && Boolean(GEMINI_API_KEY)
+  const allCases = loadGoldenCases()
+  const dbCases = await listChatbotRegressionEvalCases()
+  const casesById = new Map<string, GoldenCase>()
+
+  for (const testCase of [...allCases, ...dbCases]) {
+    if (!testCase) continue
+    casesById.set(testCase.id, testCase)
+  }
+
+  const cases = options.limit
+    ? Array.from(casesById.values()).slice(0, options.limit)
+    : Array.from(casesById.values())
+  const results = await mapWithConcurrency(
+    cases,
+    useJudge ? 1 : 4,
+    (testCase) => evaluateGoldenCase(testCase, useJudge)
+  )
+  const totals = results.reduce(
+    (acc, result) => ({
+      categoryMatch: acc.categoryMatch + result.categoryMatch,
+      modeOk: acc.modeOk + result.modeOk,
+      withSources: acc.withSources + result.withSources,
+      judged: acc.judged + result.judged,
+      faithfulHits: acc.faithfulHits + result.faithfulHits,
+      hallucinations: acc.hallucinations + result.hallucinations,
+      addressesHits: acc.addressesHits + result.addressesHits,
+      scoreSum: acc.scoreSum + result.scoreSum,
+    }),
+    {
+      categoryMatch: 0,
+      modeOk: 0,
+      withSources: 0,
+      judged: 0,
+      faithfulHits: 0,
+      hallucinations: 0,
+      addressesHits: 0,
+      scoreSum: 0,
+    }
+  )
+  const failures = results
+    .map((result) => result.failure)
+    .filter((failure): failure is GoldenEvalFailure => Boolean(failure))
 
   const total = cases.length
   const rate = (value: number) => (total === 0 ? 0 : value / total)
 
   return {
     total,
+    durationMs: Date.now() - startedAt,
     deterministic: {
-      categoryMatch,
-      modeOk,
-      withSources,
-      categoryMatchRate: rate(categoryMatch),
-      modeOkRate: rate(modeOk),
-      sourceRate: rate(withSources),
+      categoryMatch: totals.categoryMatch,
+      modeOk: totals.modeOk,
+      withSources: totals.withSources,
+      categoryMatchRate: rate(totals.categoryMatch),
+      modeOkRate: rate(totals.modeOk),
+      sourceRate: rate(totals.withSources),
     },
     judge: {
       enabled: useJudge,
-      judged,
-      faithfulRate: judged === 0 ? null : faithfulHits / judged,
-      hallucinationRate: judged === 0 ? null : hallucinations / judged,
-      addressesRate: judged === 0 ? null : addressesHits / judged,
-      avgScore: judged === 0 ? null : scoreSum / judged,
+      judged: totals.judged,
+      faithfulRate: totals.judged === 0 ? null : totals.faithfulHits / totals.judged,
+      hallucinationRate: totals.judged === 0 ? null : totals.hallucinations / totals.judged,
+      addressesRate: totals.judged === 0 ? null : totals.addressesHits / totals.judged,
+      avgScore: totals.judged === 0 ? null : totals.scoreSum / totals.judged,
     },
     failures,
   }

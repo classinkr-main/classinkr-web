@@ -22,7 +22,13 @@ const MAX_MESSAGE_LENGTH = 1000
 const MAX_FEEDBACK_COMMENT_LENGTH = 500
 const MAX_SOURCES = 4
 const MAX_SOURCES_PER_DOC = 1
+const MAX_RETRIEVAL_CANDIDATES = 24
+const MAX_RETRIEVAL_CANDIDATES_PER_DOC = 3
+const RETRIEVAL_CACHE_TTL_MS = 5 * 60 * 1000
+const RETRIEVAL_CACHE_MAX = 200
+const RETRIEVAL_CACHE_VERSION = "rag-rerank-20260617-v2"
 const UUID_RE = /^[0-9a-f]{8}-[0-9a-f]{4}-[1-5][0-9a-f]{3}-[89ab][0-9a-f]{3}-[0-9a-f]{12}$/i
+const CHAT_SESSION_CHANNELS = new Set(["web", "admin_preview", "partner_portal", "manual_import"])
 
 type AnswerMode =
   | "direct_answer"
@@ -78,6 +84,12 @@ interface NormalizedQuestion {
   tokens: string[]
 }
 
+interface KnowledgeSearchResult {
+  sources: ChatbotSource[]
+  warning?: string
+  cacheHit?: boolean
+}
+
 interface SupabaseDocsArticle {
   id: string
   category_id: string
@@ -96,6 +108,32 @@ interface SupabaseChunkRow {
   metadata: Record<string, unknown> | null
   docs_articles: SupabaseDocsArticle | SupabaseDocsArticle[] | null
 }
+
+const QUERY_EXPANSIONS: Record<string, string[]> = {
+  as: ["a/s", "수리", "고장", "하드웨어"],
+  "a/s": ["as", "수리", "고장", "하드웨어"],
+  결제: ["영수증", "세금계산서", "증빙", "청구", "정산"],
+  견적: ["도입", "비용", "가격", "요금", "플랜"],
+  계정: ["로그인", "접속", "비밀번호", "권한"],
+  과제: ["숙제", "학습", "복습"],
+  녹화: ["다시보기", "playback", "라이브", "저장"],
+  도입: ["온보딩", "시작", "세팅", "교육", "전환"],
+  로그인: ["계정", "접속", "비밀번호", "권한"],
+  보드: ["전자칠판", "classin board", "하드웨어", "설치"],
+  비용: ["가격", "요금", "견적", "플랜"],
+  세금계산서: ["영수증", "증빙", "결제", "사업자"],
+  수업: ["교실", "classroom", "녹화", "과제", "출결"],
+  숙제: ["과제", "학습", "복습"],
+  오류: ["에러", "장애", "안됨", "문제"],
+  요금: ["가격", "비용", "견적", "플랜"],
+  영수증: ["세금계산서", "증빙", "결제", "사업자"],
+  전자칠판: ["보드", "classin board", "하드웨어", "설치"],
+  접속: ["로그인", "계정", "비밀번호", "권한"],
+  출결: ["출석", "수업", "관리"],
+  출석: ["출결", "수업", "관리"],
+}
+
+const retrievalCache = new Map<string, { expiresAt: number; value: KnowledgeSearchResult }>()
 
 export class ChatbotInputError extends Error {
   status = 400
@@ -137,6 +175,64 @@ function tokenize(value: string) {
   )
 }
 
+function getRetrievalTokens(question: NormalizedQuestion) {
+  const expanded = question.tokens.flatMap((token) => QUERY_EXPANSIONS[token] ?? [])
+  return Array.from(new Set([...question.tokens, ...expanded.flatMap(tokenize)])).slice(0, 24)
+}
+
+function getExpansionTokens(question: NormalizedQuestion) {
+  const base = new Set(question.tokens)
+  return getRetrievalTokens(question).filter((token) => !base.has(token))
+}
+
+function buildRetrievalQueryText(question: NormalizedQuestion) {
+  const expansion = getExpansionTokens(question)
+  return expansion.length > 0
+    ? `${question.redacted} ${expansion.join(" ")}`
+    : question.redacted
+}
+
+function getRetrievalCacheKey(question: NormalizedQuestion) {
+  const backend = hasSupabaseServerEnv() ? "supabase" : "static"
+  return `${RETRIEVAL_CACHE_VERSION}:${backend}:${buildRetrievalQueryText(question).toLowerCase()}`
+}
+
+function getCachedRetrieval(question: NormalizedQuestion): KnowledgeSearchResult | null {
+  const key = getRetrievalCacheKey(question)
+  const cached = retrievalCache.get(key)
+  if (!cached) return null
+  if (cached.expiresAt <= Date.now()) {
+    retrievalCache.delete(key)
+    return null
+  }
+
+  return {
+    ...cached.value,
+    sources: cached.value.sources.map((source) => ({ ...source })),
+    cacheHit: true,
+  }
+}
+
+function setCachedRetrieval(question: NormalizedQuestion, value: KnowledgeSearchResult) {
+  const key = getRetrievalCacheKey(question)
+  if (retrievalCache.size >= RETRIEVAL_CACHE_MAX) {
+    const firstKey = retrievalCache.keys().next().value
+    if (firstKey) retrievalCache.delete(firstKey)
+  }
+  retrievalCache.set(key, {
+    expiresAt: Date.now() + RETRIEVAL_CACHE_TTL_MS,
+    value: {
+      ...value,
+      sources: value.sources.map((source) => ({ ...source })),
+      cacheHit: false,
+    },
+  })
+}
+
+function elapsedSince(startedAt: number) {
+  return Math.max(0, Date.now() - startedAt)
+}
+
 function normalizeQuestion(raw: unknown): NormalizedQuestion {
   const original = normalizeString(raw)
   if (!original) {
@@ -160,6 +256,10 @@ function normalizeQuestion(raw: unknown): NormalizedQuestion {
   }
 }
 
+function isGreetingOnly(question: NormalizedQuestion) {
+  return /^(안녕|안녕하세요|하이|hello|hi)[.!?\s]*$/i.test(question.normalized)
+}
+
 function sanitizeLikeToken(token: string) {
   return token.replace(/[%_,()]/g, "").slice(0, 40)
 }
@@ -180,11 +280,26 @@ function isPositioningQuestion(question: NormalizedQuestion) {
   return /학원\s*시스템|시스템\s*os|수업\s*os|운영\s*os|zoom|줌|화상회의|뭐가\s*달라|차이|비교|일반\s*전자칠판|기존\s*전자칠판|왜\s*전자칠판|edb|칠판\s*파일|가격\s*부담|비싸|api|sdk|연동|데이터\s*구독|도구.*흩어|녹화.*관리/.test(text)
 }
 
+function isApiIntegrationQuestion(question: NormalizedQuestion) {
+  const text = question.redacted.toLowerCase()
+  return /api|sdk|연동|데이터\s*구독|가상계정|수업\s*중계|코스\s*정보|수업\s*정보|crm|lms/.test(text)
+}
+
+function isComparisonQuestion(question: NormalizedQuestion) {
+  const text = question.redacted.toLowerCase()
+  return /zoom|줌|화상회의|뭐가\s*달라|차이|비교|일반\s*전자칠판|기존\s*전자칠판/.test(text)
+}
+
+function isApiSource(source: Pick<ChatbotSource, "title" | "heading" | "excerpt" | "category">) {
+  const text = `${source.title} ${source.heading ?? ""} ${source.excerpt} ${source.category}`.toLowerCase()
+  return /api|sdk|데이터\s*활용|api\s*도킹|연동\s*범위|crm|학사관리/.test(text)
+}
+
 function buildPositioningSource(question: NormalizedQuestion): ChatbotSource | null {
   if (!isPositioningQuestion(question)) return null
   const text = question.redacted.toLowerCase()
   const isEdbQuestion = /edb|칠판\s*파일|교안/.test(text)
-  const isApiQuestion = /api|sdk|연동|데이터\s*구독|가상계정|수업\s*중계|코스\s*정보|수업\s*정보/.test(text)
+  const isApiQuestion = isApiIntegrationQuestion(question)
   const heading = isEdbQuestion
     ? "EDB와 교안 표준화"
     : isApiQuestion
@@ -202,8 +317,81 @@ function buildPositioningSource(question: NormalizedQuestion): ChatbotSource | n
     urlPath: "/docs/start/academy-system-os-positioning",
     category: "onboarding",
     excerpt: compactText(excerpt),
-    score: 88,
+    score: 260,
   }
+}
+
+function buildStaticDocSource(
+  category: DocArticle["category"],
+  slug: string,
+  heading: string,
+  excerpt: string,
+  score = 250
+): ChatbotSource | null {
+  const doc = listDocs().find((candidate) => candidate.category === category && candidate.slug === slug)
+  if (!doc) return null
+
+  return {
+    title: doc.title,
+    heading,
+    urlPath: getDocPath(doc),
+    category: getSourceCategoryFromDocCategory(doc.category),
+    excerpt: compactText(excerpt || doc.chatbotSummary || doc.description),
+    score,
+  }
+}
+
+function buildCuratedSources(question: NormalizedQuestion) {
+  const text = question.redacted.toLowerCase()
+  const sources: ChatbotSource[] = []
+  const positioningSource = buildPositioningSource(question)
+  if (positioningSource) sources.push(positioningSource)
+
+  if (/수업\s*(정보|데이터).*api|api.*(수업|데이터|연동)|데이터\s*구독|자체\s*관리\s*시스템/.test(text)) {
+    const source = buildStaticDocSource(
+      "start",
+      "academy-system-os-positioning",
+      "API와 정직한 연동 범위",
+      `${CLASSIN_POSITIONING.honestLimit} ${CLASSIN_POSITIONING.apiStages.join(" ")}`,
+      280
+    )
+    if (source) sources.push(source)
+  }
+
+  if (/수업\s*녹화.*현장\s*녹화|현장\s*녹화|온스테이지|하이브리드\s*수업|개인\s*칠판|트래킹\s*뷰/.test(text)) {
+    const source = buildStaticDocSource(
+      "teacher",
+      "lesson-option-concepts",
+      "수업 옵션 개념",
+      "수업 녹화, 현장 녹화, 온스테이지, 학생 자동 온스테이지, 하이브리드 수업, 개인 칠판은 수업 운영 목적에 따라 구분해 설정합니다.",
+      280
+    )
+    if (source) sources.push(source)
+  }
+
+  if (/omr|오엠알|녹화\s*수업.*(시청|제한|플레이바|횟수)|일일\s*과제|요일\s*반복|ai\s*(자동\s*)?(채점|출제)|자동\s*채점/.test(text)) {
+    const source = buildStaticDocSource(
+      "teacher",
+      "course-activities",
+      "학습 활동 추가",
+      "수업, 숙제, 시험, 녹화 수업, 일일 과제, OMR 카드, AI 활동은 코스의 활동 게시 흐름에서 추가하고 제출/채점/시청 옵션을 설정합니다.",
+      280
+    )
+    if (source) sources.push(source)
+  }
+
+  if (/관리자.*(api\s*도킹|라이브\s*&?\s*플레이백|자동\s*동기화)|api\s*도킹|관리자\s*콘솔.*(코스|학생).*동기화/.test(text)) {
+    const source = buildStaticDocSource(
+      "admin",
+      "admin-operation-standardization",
+      "관리자 운영 표준화",
+      "관리자 콘솔의 코스, 학생, 웹 라이브와 플레이백, API 도킹은 운영 표준과 권한 범위를 분리해 확인해야 합니다.",
+      280
+    )
+    if (source) sources.push(source)
+  }
+
+  return sources
 }
 
 function getMetadataStrings(metadata: Record<string, unknown> | null | undefined) {
@@ -226,33 +414,39 @@ function scoreText(question: NormalizedQuestion, source: Omit<ChatbotSource, "sc
   let score = 0
   let matchesAll = true
 
-  for (const token of question.tokens) {
+  const scoreToken = (token: string, weight = 1) => {
     let tokenMatched = false
 
     if (haystacks.title.includes(token)) {
-      score += 15
+      score += 15 * weight
       tokenMatched = true
     }
     if (haystacks.heading.includes(token)) {
-      score += 10
+      score += 10 * weight
       tokenMatched = true
     }
     if (haystacks.excerpt.includes(token)) {
-      score += 5
+      score += 5 * weight
       tokenMatched = true
     }
     if (haystacks.category.includes(token)) {
-      score += 2
+      score += 2 * weight
       tokenMatched = true
     }
     if (haystacks.extras.includes(token)) {
-      score += 8
+      score += 8 * weight
       tokenMatched = true
     }
 
-    if (!tokenMatched) {
-      matchesAll = false
-    }
+    return tokenMatched
+  }
+
+  for (const token of question.tokens) {
+    if (!scoreToken(token)) matchesAll = false
+  }
+
+  for (const token of getExpansionTokens(question)) {
+    scoreToken(token, 0.45)
   }
 
   // Bonus for matching all tokens (AND-match gets high priority)
@@ -264,23 +458,57 @@ function scoreText(question: NormalizedQuestion, source: Omit<ChatbotSource, "sc
 }
 
 function rerankSources(question: NormalizedQuestion, sources: ChatbotSource[]) {
-  return sources.map((source) => ({
-    ...source,
-    score: source.score + Math.min(35, scoreText(question, source) * 0.35),
-  }))
+  const suppressApiForComparison =
+    isComparisonQuestion(question) && !isApiIntegrationQuestion(question)
+
+  return sources.map((source) => {
+    const apiPenalty = suppressApiForComparison && isApiSource(source) ? 140 : 0
+    const positioningBonus =
+      isComparisonQuestion(question) &&
+      source.urlPath.includes("/docs/start/academy-system-os-positioning")
+        ? 45
+        : 0
+
+    return {
+      ...source,
+      score: source.score + Math.min(35, scoreText(question, source) * 0.35) + positioningBonus - apiPenalty,
+    }
+  })
 }
 
-function selectDiverseSources(sources: ChatbotSource[], limit = MAX_SOURCES) {
+function mergeScoredSources(sources: ChatbotSource[]) {
+  const merged = new Map<string, ChatbotSource>()
+
+  for (const source of sources) {
+    const key = source.chunkId ?? `${source.urlPath}:${source.heading ?? ""}`
+    const existing = merged.get(key)
+    if (!existing) {
+      merged.set(key, { ...source })
+      continue
+    }
+
+    existing.score = Math.max(existing.score, source.score) + Math.min(20, source.score * 0.2)
+  }
+
+  return Array.from(merged.values())
+}
+
+function selectDiverseSources(
+  sources: ChatbotSource[],
+  limit = MAX_SOURCES,
+  maxSourcesPerDoc = MAX_SOURCES_PER_DOC
+) {
   const seenChunks = new Set<string>()
   const perPath = new Map<string, number>()
   const selected: ChatbotSource[] = []
 
   for (const source of sources.sort((left, right) => right.score - left.score)) {
+    if (source.score <= 0) continue
     const chunkKey = source.chunkId ?? `${source.urlPath}:${source.heading ?? ""}`
     if (seenChunks.has(chunkKey)) continue
 
     const pathCount = perPath.get(source.urlPath) ?? 0
-    if (pathCount >= MAX_SOURCES_PER_DOC) continue
+    if (pathCount >= maxSourcesPerDoc) continue
 
     seenChunks.add(chunkKey)
     perPath.set(source.urlPath, pathCount + 1)
@@ -291,10 +519,10 @@ function selectDiverseSources(sources: ChatbotSource[], limit = MAX_SOURCES) {
   return selected
 }
 
-function mergePositioningSource(question: NormalizedQuestion, sources: ChatbotSource[]) {
-  const positioningSource = buildPositioningSource(question)
-  if (!positioningSource) return selectDiverseSources(rerankSources(question, sources))
-  return selectDiverseSources(rerankSources(question, [positioningSource, ...sources]))
+function mergeCuratedSources(question: NormalizedQuestion, sources: ChatbotSource[]) {
+  const curatedSources = buildCuratedSources(question)
+  if (curatedSources.length === 0) return selectDiverseSources(rerankSources(question, sources))
+  return selectDiverseSources(rerankSources(question, mergeScoredSources([...curatedSources, ...sources])))
 }
 
 function getSourceCategoryFromDocCategory(category: string) {
@@ -375,7 +603,7 @@ function buildStaticSources(question: NormalizedQuestion, docs: DocArticle[]): C
 async function keywordSearchSupabaseSources(question: NormalizedQuestion): Promise<ChatbotSource[]> {
   if (!hasSupabaseServerEnv()) return []
 
-  const likeTokens = question.tokens.map(sanitizeLikeToken).filter(Boolean).slice(0, 6)
+  const likeTokens = getRetrievalTokens(question).map(sanitizeLikeToken).filter(Boolean).slice(0, 10)
   if (likeTokens.length === 0) return []
 
   const orFilter = likeTokens
@@ -393,7 +621,7 @@ async function keywordSearchSupabaseSources(question: NormalizedQuestion): Promi
       .in("docs_articles.visibility", ["public", "unlisted"])
       .eq("docs_articles.noindex", false)
       .or(orFilter)
-      .limit(30)
+      .limit(MAX_RETRIEVAL_CANDIDATES * 2)
 
     if (error) {
       console.warn("[chatbot] docs chunk search failed:", error.message)
@@ -431,7 +659,11 @@ async function keywordSearchSupabaseSources(question: NormalizedQuestion): Promi
       .filter((source): source is ChatbotSource => source != null)
       .sort((left, right) => right.score - left.score)
 
-    return selectDiverseSources(rerankSources(question, sources))
+    return selectDiverseSources(
+      rerankSources(question, sources),
+      MAX_RETRIEVAL_CANDIDATES,
+      MAX_RETRIEVAL_CANDIDATES_PER_DOC
+    )
   } catch (error) {
     console.warn(
       "[chatbot] Supabase search unavailable:",
@@ -441,8 +673,8 @@ async function keywordSearchSupabaseSources(question: NormalizedQuestion): Promi
   }
 }
 
-const VECTOR_MATCH_COUNT = 8
-const VECTOR_SIMILARITY_FLOOR = 0.3
+const VECTOR_MATCH_COUNT = MAX_RETRIEVAL_CANDIDATES
+const VECTOR_SIMILARITY_FLOOR = 0.28
 const CLIENT_VECTOR_SIMILARITY_FLOOR = 0.7
 
 interface MatchChunkRow {
@@ -488,11 +720,15 @@ async function vectorSearchSupabaseSources(
         urlPath: row.canonical_path ?? `/docs/${row.category_id}/${row.slug}`,
         category: getSourceCategoryFromDocCategory(row.category_id),
         excerpt: compactText(row.content),
-        score: Math.max(1, row.similarity * 10),
+        score: Math.max(1, row.similarity * 80),
       }))
       .sort((left, right) => right.score - left.score)
 
-    return selectDiverseSources(rerankSources(question, sources))
+    return selectDiverseSources(
+      rerankSources(question, sources),
+      MAX_RETRIEVAL_CANDIDATES,
+      MAX_RETRIEVAL_CANDIDATES_PER_DOC
+    )
   } catch (error) {
     console.warn(
       "[chatbot] vector search unavailable:",
@@ -527,7 +763,7 @@ async function clientVectorSearchSupabaseSources(embedding: number[]): Promise<C
       embedding,
       (data ?? []) as VectorFallbackChunkRow[],
       {
-        maxSources: MAX_SOURCES,
+        maxSources: MAX_RETRIEVAL_CANDIDATES,
         similarityFloor: CLIENT_VECTOR_SIMILARITY_FLOOR,
       }
     )
@@ -543,11 +779,11 @@ async function clientVectorSearchSupabaseSources(embedding: number[]): Promise<C
 // 벡터·키워드 후보를 함께 수집해 재랭킹한다. 벡터는 recall, 키워드는 정확 match를 보완한다.
 async function searchSupabaseSources(question: NormalizedQuestion): Promise<ChatbotSource[]> {
   const keywordPromise = keywordSearchSupabaseSources(question)
-  const embedding = await embedText(question.redacted, "RETRIEVAL_QUERY")
+  const embedding = await embedText(buildRetrievalQueryText(question), "RETRIEVAL_QUERY")
   const vectorSources = embedding ? await vectorSearchSupabaseSources(question, embedding) : []
   const keywordSources = await keywordPromise
   const combined = selectDiverseSources(
-    rerankSources(question, [...vectorSources, ...keywordSources])
+    rerankSources(question, mergeScoredSources([...vectorSources, ...keywordSources]))
   )
 
   if (combined.length > 0) return combined
@@ -561,21 +797,28 @@ async function searchSupabaseSources(question: NormalizedQuestion): Promise<Chat
 
 async function searchKnowledgeSources(
   question: NormalizedQuestion
-): Promise<{ sources: ChatbotSource[]; warning?: string }> {
+): Promise<KnowledgeSearchResult> {
+  const cached = getCachedRetrieval(question)
+  if (cached) return cached
+
   const supabaseSources = await searchSupabaseSources(question)
   if (supabaseSources.length > 0) {
-    return { sources: mergePositioningSource(question, supabaseSources), warning: undefined }
+    const result = { sources: mergeCuratedSources(question, supabaseSources), warning: undefined }
+    setCachedRetrieval(question, result)
+    return result
   }
 
   const fallbackDocs = await getFallbackDocs()
   const staticSources = buildStaticSources(question, fallbackDocs)
 
-  return {
-    sources: mergePositioningSource(question, staticSources),
+  const result = {
+    sources: mergeCuratedSources(question, staticSources),
     warning: hasSupabaseServerEnv()
       ? "Supabase 문서 chunk 검색 결과가 없어 문서 원문 fallback을 사용했습니다."
       : "Supabase 환경변수가 없어 정적 문서 fallback을 사용했습니다.",
   }
+  setCachedRetrieval(question, result)
+  return result
 }
 
 function buildSuggestedQuestions(sources: ChatbotSource[]) {
@@ -793,6 +1036,11 @@ function getContextObject(value: unknown) {
     : {}
 }
 
+function normalizeChatSessionChannel(value: unknown) {
+  const channel = normalizeString(value)
+  return channel && CHAT_SESSION_CHANNELS.has(channel) ? channel : "web"
+}
+
 async function ensureSession(
   input: ChatbotQueryRequest,
   meta: ChatbotRequestMeta
@@ -817,7 +1065,7 @@ async function ensureSession(
   const { data, error } = await supabase
     .from("chat_sessions")
     .insert({
-      channel: normalizeString(context.channel) ?? "web",
+      channel: normalizeChatSessionChannel(context.channel),
       anonymous_id: normalizeString(input.anonymousId) ?? null,
       user_agent: meta.userAgent ?? null,
       referrer: meta.referrer ?? null,
@@ -842,6 +1090,7 @@ async function persistExchange(
   category: string,
   intent: string,
   handoffIntent: HandoffIntent,
+  latencyMs?: number,
   sessionId?: string
 ) {
   if (!hasSupabaseServerEnv()) return {}
@@ -893,6 +1142,7 @@ async function persistExchange(
         answer_mode: response.answerMode,
         confidence: response.confidence,
         unresolved: response.unresolved,
+        latency_ms: latencyMs ?? null,
       })
       .select("id")
       .single()
@@ -910,47 +1160,59 @@ async function persistExchange(
       }))
       .filter((citation) => citation.article_id || citation.chunk_id)
 
-    if (citations.length > 0) {
-      const { error } = await supabase.from("chatbot_answer_citations").insert(citations)
-      if (error) console.warn("[chatbot] failed to store citations:", error.message)
-    }
-
-    await upsertQuestionCluster(
-      supabase,
-      answerEvent.id as string,
-      question,
-      response,
-      category
-    )
-
-    await supabase.from("docs_search_events").insert({
-      query: question.redacted,
-      normalized_query: question.redacted,
-      result_count: response.sources.length,
-      visitor_id: normalizeString(input.anonymousId) ?? null,
-      session_id: resolvedSessionId,
-      source: "chatbot",
-    })
-
     const context = getContextObject(input.context)
-    await maybeCreateChannelTalkHandoff({
-      answerEventId: answerEvent.id as string,
-      sessionId: resolvedSessionId,
-      anonymousId: normalizeString(input.anonymousId) ?? null,
-      referrer: meta.referrer ?? null,
-      pageUrl: normalizeString(context.pageUrl) ?? null,
-      path: normalizeString(context.path) ?? null,
-      question: question.redacted,
-      answer: response.answer,
-      answerMode: response.answerMode,
-      confidence: response.confidence,
-      unresolved: response.unresolved,
-      needsHandoff: response.needsHandoff,
-      detectedCategory: category,
-      detectedIntent: intent,
-      handoffIntent,
-      sources: response.sources,
-    })
+    const sideEffects = [
+      citations.length > 0
+        ? supabase.from("chatbot_answer_citations").insert(citations).then(({ error }) => {
+            if (error) throw error
+          })
+        : Promise.resolve(),
+      upsertQuestionCluster(
+        supabase,
+        answerEvent.id as string,
+        question,
+        response,
+        category
+      ),
+      supabase.from("docs_search_events").insert({
+        query: question.redacted,
+        normalized_query: buildRetrievalQueryText(question),
+        result_count: response.sources.length,
+        visitor_id: normalizeString(input.anonymousId) ?? null,
+        session_id: resolvedSessionId,
+        source: "chatbot",
+      }).then(({ error }) => {
+        if (error) throw error
+      }),
+      maybeCreateChannelTalkHandoff({
+        answerEventId: answerEvent.id as string,
+        sessionId: resolvedSessionId,
+        anonymousId: normalizeString(input.anonymousId) ?? null,
+        referrer: meta.referrer ?? null,
+        pageUrl: normalizeString(context.pageUrl) ?? null,
+        path: normalizeString(context.path) ?? null,
+        question: question.redacted,
+        answer: response.answer,
+        answerMode: response.answerMode,
+        confidence: response.confidence,
+        unresolved: response.unresolved,
+        needsHandoff: response.needsHandoff,
+        detectedCategory: category,
+        detectedIntent: intent,
+        handoffIntent,
+        sources: response.sources,
+      }),
+    ]
+
+    const sideEffectResults = await Promise.allSettled(sideEffects)
+    for (const result of sideEffectResults) {
+      if (result.status === "rejected") {
+        console.warn(
+          "[chatbot] failed to persist exchange side effect:",
+          result.reason instanceof Error ? result.reason.message : result.reason
+        )
+      }
+    }
 
     return {
       answerEventId: answerEvent.id as string,
@@ -1048,6 +1310,13 @@ interface ChatbotCore {
   intent: ChatbotIntent
   handoffIntent: HandoffIntent
   warning?: string
+  latencyMs: number
+  retrievalCacheHit?: boolean
+}
+
+interface BuildChatbotCoreOptions {
+  sessionId?: string
+  generateAnswer?: boolean
 }
 
 function determineModelTier(category: string): ChatbotModelTier {
@@ -1065,11 +1334,47 @@ function determineModelTier(category: string): ChatbotModelTier {
   return "basic"
 }
 
-// 검색 → 답변 구성 → Gemini 답변 생성까지의 코어. 영속화(persistExchange)는 포함하지 않는다.
+function shouldUseFastStructuredAnswer(
+  response: Omit<ChatbotQueryResponse, "answerEventId" | "sessionId" | "warning" | "handoffIntent">
+) {
+  const top = response.sources[0]
+  if (!top) return false
+  if (response.answerMode !== "direct_answer" && response.answerMode !== "doc_suggestion") return false
+
+  // Scores above this threshold come from curated sources, not ordinary vector hits.
+  // They are already structured and grounded, so skipping LLM rewriting materially lowers latency.
+  return response.confidence >= 0.9 && top.score >= 240
+}
+
+// 검색 → 답변 구성 → 필요 시 Gemini 답변 생성까지의 코어. 영속화(persistExchange)는 포함하지 않는다.
 // handleChatbotQuery(실서비스)와 evaluateChatbotQuery(품질 평가)가 공유한다.
-async function buildChatbotCore(message: unknown, sessionId?: string): Promise<ChatbotCore> {
+async function buildChatbotCore(
+  message: unknown,
+  options: BuildChatbotCoreOptions = {}
+): Promise<ChatbotCore> {
+  const startedAt = Date.now()
+  const shouldGenerateAnswer = options.generateAnswer !== false
   const question = normalizeQuestion(message)
-  const { sources, warning } = await searchKnowledgeSources(question)
+  if (isGreetingOnly(question)) {
+    return {
+      question,
+      response: {
+        answer:
+          "안녕하세요. 도입 상담, 수업 운영, 계정/오류, 결제/영수증 중 어떤 내용이 필요한지 알려주시면 바로 이어서 안내드릴게요.",
+        answerMode: "clarifying_question",
+        confidence: 0.3,
+        needsHandoff: false,
+        sources: [],
+        suggestedQuestions: ["도입 상담을 받고 싶어요", "수업 운영 문제를 해결하고 싶어요", "결제나 영수증 문의가 있어요"],
+        unresolved: true,
+      },
+      category: "general",
+      intent: "docs_lookup",
+      handoffIntent: "demo",
+      latencyMs: elapsedSince(startedAt),
+    }
+  }
+  const { sources, warning, cacheHit } = await searchKnowledgeSources(question)
   const { category, intent, handoffIntent } = classifyChatbotQuestion(
     question.redacted,
     sources.map((source) => source.category)
@@ -1078,13 +1383,13 @@ async function buildChatbotCore(message: unknown, sessionId?: string): Promise<C
 
   // 대화 기록 (History) 조회 및 가공
   let history: { role: "user" | "model"; parts: { text: string }[] }[] = []
-  if (sessionId && hasSupabaseServerEnv()) {
+  if (shouldGenerateAnswer && options.sessionId && hasSupabaseServerEnv()) {
     try {
       const supabase = createSupabaseAdminClient()
       const { data, error } = await supabase
         .from("chat_messages")
         .select("role, content")
-        .eq("session_id", sessionId)
+        .eq("session_id", options.sessionId)
         .order("created_at", { ascending: true })
         .limit(10) // 최근 10개 메세지 (사용자 5, 어시스턴트 5)
 
@@ -1115,7 +1420,11 @@ async function buildChatbotCore(message: unknown, sessionId?: string): Promise<C
 
   // 근거 문서가 있는 답변 모드에서만 Gemini로 답변 문장을 생성한다.
   // (handoff·clarifying·fallback 등 안전/에스컬레이션 경로는 템플릿 유지)
-  if (response.answerMode === "direct_answer" || response.answerMode === "doc_suggestion") {
+  if (
+    shouldGenerateAnswer &&
+    !shouldUseFastStructuredAnswer(response) &&
+    (response.answerMode === "direct_answer" || response.answerMode === "doc_suggestion")
+  ) {
     const tier = determineModelTier(category)
     const llmAnswer = await generateGeminiAnswer({
       question: question.redacted,
@@ -1128,7 +1437,16 @@ async function buildChatbotCore(message: unknown, sessionId?: string): Promise<C
     }
   }
 
-  return { question, response, category, intent, handoffIntent, warning }
+  return {
+    question,
+    response,
+    category,
+    intent,
+    handoffIntent,
+    warning,
+    latencyMs: elapsedSince(startedAt),
+    retrievalCacheHit: cacheHit,
+  }
 }
 
 export async function handleChatbotQuery(
@@ -1136,7 +1454,7 @@ export async function handleChatbotQuery(
   meta: ChatbotRequestMeta = {}
 ): Promise<ChatbotQueryResponse> {
   const sessionId = await ensureSession(input, meta)
-  const core = await buildChatbotCore(input.message, sessionId)
+  const core = await buildChatbotCore(input.message, { sessionId })
   const persisted = await persistExchange(
     input,
     core.question,
@@ -1145,6 +1463,7 @@ export async function handleChatbotQuery(
     core.category,
     core.intent,
     core.handoffIntent,
+    core.latencyMs,
     sessionId
   )
 
@@ -1161,9 +1480,10 @@ export async function handleChatbotQuery(
  * 골든셋 평가([scripts/eval-chatbot.ts])가 분석 데이터를 오염시키지 않도록 한다.
  */
 export async function evaluateChatbotQuery(
-  message: string
+  message: string,
+  options: { generateAnswer?: boolean } = {}
 ): Promise<ChatbotQueryResponse & { detectedCategory: string }> {
-  const core = await buildChatbotCore(message)
+  const core = await buildChatbotCore(message, { generateAnswer: options.generateAnswer })
   return {
     ...core.response,
     handoffIntent: core.handoffIntent,
@@ -1261,8 +1581,113 @@ interface FeedbackStatsRow {
   not_helpful_count: number
 }
 
-function aggregateQuestionRows(rows: DailyStatsRow[]) {
+interface AnswerEventStatsRow {
+  detected_category: string | null
+  answer_mode: string | null
+  confidence: number | null
+  latency_ms: number | null
+}
+
+interface ChannelHandoffStatsRow {
+  status: string | null
+  payload: Record<string, unknown> | null
+}
+
+interface QuestionClusterMetadataRow {
+  id: string
+  metadata: Record<string, unknown> | null
+}
+
+interface QuestionClusterEvalRow {
+  id: string
+  label: string
+  canonical_question: string
+  category: string | null
+  metadata: Record<string, unknown> | null
+}
+
+const EVAL_ANSWER_MODES = new Set([
+  "direct_answer",
+  "doc_suggestion",
+  "clarifying_question",
+  "handoff",
+  "fallback",
+])
+
+function normalizeExpectedModes(value: unknown) {
+  const values = Array.isArray(value) ? value : typeof value === "string" ? [value] : []
+  const modes = values
+    .map((item) => normalizeString(item))
+    .filter((item): item is string => Boolean(item && EVAL_ANSWER_MODES.has(item)))
+
+  return modes.length > 0 ? Array.from(new Set(modes)) : undefined
+}
+
+function getRegressionCandidateMetadata(metadata: Record<string, unknown> | null | undefined) {
+  const candidate = getContextObject(metadata?.regressionCandidate)
+  return candidate.enabled === true ? candidate : null
+}
+
+function averageMetric(values: number[]) {
+  if (values.length === 0) return null
+  return Math.round(values.reduce((sum, value) => sum + value, 0) / values.length)
+}
+
+function averageRatio(values: number[]) {
+  if (values.length === 0) return null
+  return Number((values.reduce((sum, value) => sum + value, 0) / values.length).toFixed(4))
+}
+
+function percentileMetric(values: number[], percentile: number) {
+  if (values.length === 0) return null
+  const sorted = [...values].sort((left, right) => left - right)
+  const index = Math.min(sorted.length - 1, Math.max(0, Math.ceil(sorted.length * percentile) - 1))
+  return sorted[index]
+}
+
+function summarizeDistribution(values: string[]) {
+  const total = values.length
+  const counts = new Map<string, number>()
+
+  for (const value of values) {
+    counts.set(value, (counts.get(value) ?? 0) + 1)
+  }
+
+  return Array.from(counts.entries())
+    .map(([key, count]) => ({
+      key,
+      count,
+      rate: total === 0 ? 0 : Number((count / total).toFixed(4)),
+    }))
+    .sort((left, right) => right.count - left.count)
+}
+
+function summarizeChannelHandoffs(rows: ChannelHandoffStatsRow[]) {
+  const statuses = summarizeDistribution(rows.map((row) => row.status ?? "unknown"))
+  const statusCount = (status: string) =>
+    statuses.find((item) => item.key === status)?.count ?? 0
+  const intents = summarizeDistribution(
+    rows.map((row) => normalizeString(getContextObject(row.payload).handoffIntent) ?? "unknown")
+  )
+  const intentCount = (intent: string) =>
+    intents.find((item) => item.key === intent)?.count ?? 0
+
+  return {
+    total: rows.length,
+    sent: statusCount("sent"),
+    pending: statusCount("pending"),
+    failed: statusCount("failed"),
+    skipped: statusCount("skipped"),
+    support: intentCount("support"),
+    demo: intentCount("demo"),
+    statuses,
+    intents,
+  }
+}
+
+function aggregateQuestionRows(rows: DailyStatsRow[], regressionCandidateClusterIds = new Set<string>()) {
   const map = new Map<string, {
+    clusterId: string
     questionLabel: string
     category: string | null
     questionCount: number
@@ -1276,6 +1701,7 @@ function aggregateQuestionRows(rows: DailyStatsRow[]) {
   for (const row of rows) {
     const key = `${row.cluster_id}:${row.question_label}`
     const current = map.get(key) ?? {
+      clusterId: row.cluster_id,
       questionLabel: row.question_label,
       category: row.detected_category,
       questionCount: 0,
@@ -1300,6 +1726,7 @@ function aggregateQuestionRows(rows: DailyStatsRow[]) {
   }
 
   return Array.from(map.values()).map((item) => ({
+    clusterId: item.clusterId,
     questionLabel: item.questionLabel,
     category: item.category,
     questionCount: item.questionCount,
@@ -1310,6 +1737,7 @@ function aggregateQuestionRows(rows: DailyStatsRow[]) {
       item.confidenceRows > 0
         ? Number((item.confidenceTotal / item.confidenceRows).toFixed(4))
         : null,
+    regressionCandidate: regressionCandidateClusterIds.has(item.clusterId),
   }))
 }
 
@@ -1329,6 +1757,15 @@ export async function getChatbotStats(params: URLSearchParams) {
       topQuestions: [],
       unresolvedQuestions: [],
       feedbackStats: [],
+      latency: {
+        avgMs: null,
+        p95Ms: null,
+        sampleCount: 0,
+      },
+      answerModes: [],
+      categories: [],
+      channelHandoffs: summarizeChannelHandoffs([]),
+      avgConfidence: null,
       warning: "Supabase 환경변수가 없어 챗봇 통계를 조회하지 않았습니다.",
     }
   }
@@ -1342,21 +1779,76 @@ export async function getChatbotStats(params: URLSearchParams) {
 
   if (to) dailyQuery = dailyQuery.lte("day", to)
 
-  const [{ data: dailyRows, error: dailyError }, { data: feedbackRows, error: feedbackError }] =
-    await Promise.all([
-      dailyQuery,
-      supabase
-        .from("v_chatbot_feedback_stats")
-        .select("*")
-        .order("feedback_count", { ascending: false })
-        .limit(50),
-    ])
+  let answerQuery = supabase
+    .from("chatbot_answer_events")
+    .select("detected_category, answer_mode, confidence, latency_ms")
+    .gte("created_at", `${from}T00:00:00.000Z`)
+    .order("created_at", { ascending: false })
+    .limit(1000)
+
+  if (to) answerQuery = answerQuery.lte("created_at", `${to}T23:59:59.999Z`)
+
+  const [
+    { data: dailyRows, error: dailyError },
+    { data: feedbackRows, error: feedbackError },
+    { data: answerRows, error: answerError },
+  ] = await Promise.all([
+    dailyQuery,
+    supabase
+      .from("v_chatbot_feedback_stats")
+      .select("*")
+      .order("feedback_count", { ascending: false })
+      .limit(50),
+    answerQuery,
+  ])
 
   if (dailyError) throw new Error(dailyError.message)
   if (feedbackError) throw new Error(feedbackError.message)
+  if (answerError) throw new Error(answerError.message)
 
   const rows = (dailyRows ?? []) as DailyStatsRow[]
-  const aggregated = aggregateQuestionRows(rows)
+  const answerEventRows = (answerRows ?? []) as AnswerEventStatsRow[]
+  let handoffRows: ChannelHandoffStatsRow[] = []
+
+  try {
+    let handoffQuery = supabase
+      .from("chatbot_channel_handoffs")
+      .select("status, payload")
+      .gte("created_at", `${from}T00:00:00.000Z`)
+      .order("created_at", { ascending: false })
+      .limit(1000)
+
+    if (to) handoffQuery = handoffQuery.lte("created_at", `${to}T23:59:59.999Z`)
+
+    const { data, error } = await handoffQuery
+    if (error) throw new Error(error.message)
+    handoffRows = (data ?? []) as ChannelHandoffStatsRow[]
+  } catch (error) {
+    console.warn(
+      "[chatbot] failed to load channel handoff stats:",
+      error instanceof Error ? error.message : error
+    )
+  }
+
+  const clusterIds = Array.from(new Set(rows.map((row) => row.cluster_id).filter((id) => UUID_RE.test(id))))
+  const regressionCandidateClusterIds = new Set<string>()
+
+  if (clusterIds.length > 0) {
+    const { data: clusterRows, error: clusterError } = await supabase
+      .from("question_clusters")
+      .select("id, metadata")
+      .in("id", clusterIds)
+
+    if (clusterError) throw new Error(clusterError.message)
+
+    for (const row of (clusterRows ?? []) as QuestionClusterMetadataRow[]) {
+      if (getRegressionCandidateMetadata(row.metadata)) {
+        regressionCandidateClusterIds.add(row.id)
+      }
+    }
+  }
+
+  const aggregated = aggregateQuestionRows(rows, regressionCandidateClusterIds)
   const totals = aggregated.reduce(
     (acc, item) => ({
       questionCount: acc.questionCount + item.questionCount,
@@ -1371,6 +1863,12 @@ export async function getChatbotStats(params: URLSearchParams) {
       directAnswerCount: 0,
     }
   )
+  const latencies = answerEventRows
+    .map((row) => Number(row.latency_ms))
+    .filter((value) => Number.isFinite(value) && value > 0)
+  const confidences = answerEventRows
+    .map((row) => Number(row.confidence))
+    .filter((value) => Number.isFinite(value) && value >= 0)
 
   return {
     range: { from, to: to ?? null },
@@ -1383,6 +1881,19 @@ export async function getChatbotStats(params: URLSearchParams) {
       .sort((left, right) => right.unresolvedCount - left.unresolvedCount)
       .slice(0, 10),
     feedbackStats: ((feedbackRows ?? []) as FeedbackStatsRow[]).slice(0, 20),
+    latency: {
+      avgMs: averageMetric(latencies),
+      p95Ms: percentileMetric(latencies, 0.95),
+      sampleCount: latencies.length,
+    },
+    answerModes: summarizeDistribution(
+      answerEventRows.map((row) => row.answer_mode ?? "unknown")
+    ),
+    categories: summarizeDistribution(
+      answerEventRows.map((row) => row.detected_category ?? "uncategorized")
+    ),
+    channelHandoffs: summarizeChannelHandoffs(handoffRows),
+    avgConfidence: averageRatio(confidences),
   }
 }
 
@@ -1446,6 +1957,7 @@ export async function updateQuestionCluster(id: string, raw: unknown) {
   const status = normalizeString(body.status)
   const mappedArticleId = normalizeOptionalUuid(body.mappedArticleId)
   const mappedChunkId = normalizeOptionalUuid(body.mappedChunkId)
+  const hasRegressionCandidatePatch = Object.prototype.hasOwnProperty.call(body, "regressionCandidate")
 
   const patch: Record<string, unknown> = {}
 
@@ -1473,11 +1985,56 @@ export async function updateQuestionCluster(id: string, raw: unknown) {
     patch.mapped_chunk_id = mappedChunkId ?? null
   }
 
+  const supabase = createSupabaseAdminClient()
+
+  if (hasRegressionCandidatePatch) {
+    const regressionCandidateInput = getContextObject(body.regressionCandidate)
+    const { data: current, error: currentError } = await supabase
+      .from("question_clusters")
+      .select("canonical_question, category, metadata")
+      .eq("id", id)
+      .single()
+
+    if (currentError) throw new Error(currentError.message)
+
+    const currentMetadata = getContextObject(current?.metadata)
+    const enabled =
+      typeof regressionCandidateInput.enabled === "boolean"
+        ? regressionCandidateInput.enabled
+        : true
+
+    if (enabled) {
+      currentMetadata.regressionCandidate = {
+        enabled: true,
+        expectedCategory:
+          normalizeString(regressionCandidateInput.expectedCategory) ??
+          category ??
+          normalizeString(current?.category) ??
+          "general",
+        expectedModes: normalizeExpectedModes(regressionCandidateInput.expectedModes) ?? [
+          "direct_answer",
+          "doc_suggestion",
+          "handoff",
+        ],
+        expectedPathIncludes: normalizeString(regressionCandidateInput.expectedPathIncludes) ?? null,
+        reason: normalizeString(regressionCandidateInput.reason) ?? "admin_pattern_analysis",
+        addedAt: new Date().toISOString(),
+      }
+    } else {
+      currentMetadata.regressionCandidate = {
+        ...getContextObject(currentMetadata.regressionCandidate),
+        enabled: false,
+        disabledAt: new Date().toISOString(),
+      }
+    }
+
+    patch.metadata = currentMetadata
+  }
+
   if (Object.keys(patch).length === 0) {
     throw new ChatbotInputError("수정할 필드가 없습니다.")
   }
 
-  const supabase = createSupabaseAdminClient()
   const { data, error } = await supabase
     .from("question_clusters")
     .update(patch)
@@ -1490,4 +2047,54 @@ export async function updateQuestionCluster(id: string, raw: unknown) {
   if (error) throw new Error(error.message)
 
   return { cluster: data }
+}
+
+export async function listChatbotRegressionEvalCases(limit = 50) {
+  if (!hasSupabaseServerEnv()) return []
+
+  try {
+    const supabase = createSupabaseAdminClient()
+    const { data, error } = await supabase
+      .from("question_clusters")
+      .select("id, label, canonical_question, category, metadata")
+      .order("updated_at", { ascending: false })
+      .limit(Math.min(200, Math.max(1, limit * 4)))
+
+    if (error) throw new Error(error.message)
+
+    return ((data ?? []) as QuestionClusterEvalRow[])
+      .map((row) => {
+        const candidate = getRegressionCandidateMetadata(row.metadata)
+        if (!candidate) return null
+
+        return {
+          id: `db:${row.id}`,
+          question: row.canonical_question || row.label,
+          expectCategory:
+            normalizeString(candidate.expectedCategory) ??
+            normalizeString(row.category) ??
+            "general",
+          expectMode: normalizeExpectedModes(candidate.expectedModes) ?? [
+            "direct_answer",
+            "doc_suggestion",
+            "handoff",
+          ],
+          expectPathIncludes: normalizeString(candidate.expectedPathIncludes),
+        }
+      })
+      .filter((item): item is {
+        id: string
+        question: string
+        expectCategory: string
+        expectMode: string[]
+        expectPathIncludes: string | undefined
+      } => Boolean(item?.question))
+      .slice(0, limit)
+  } catch (error) {
+    console.warn(
+      "[chatbot] failed to load regression eval candidates:",
+      error instanceof Error ? error.message : error
+    )
+    return []
+  }
 }

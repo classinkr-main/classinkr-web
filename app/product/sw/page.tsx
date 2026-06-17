@@ -18,6 +18,7 @@ import nextDynamic from "next/dynamic"
 import { useRef, useEffect, useState, useMemo, useCallback, useSyncExternalStore } from "react"
 
 import { HeroVideoBackdrop } from "@/components/media/HeroVideoBackdrop"
+import { KeyUseCases } from "@/components/sections/KeyUseCases"
 
 // below-the-fold 섹션은 dynamic import로 메인 번들에서 분리 (SSR은 유지되어 초기 HTML 동일)
 const OnboardingRoadmap = nextDynamic(() => import("@/components/product/sw/OnboardingRoadmap"))
@@ -1678,6 +1679,8 @@ export default function ProductPage() {
                     </div>
                 </div>
             </section>
+
+            <KeyUseCases defaultValue="comms" />
 
             <ImpactTextSection />
 

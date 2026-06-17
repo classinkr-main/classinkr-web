@@ -33,4 +33,20 @@ describe("chatbot classification", () => {
     expect(result.intent).toBe("billing_support")
     expect(result.handoffIntent).toBe("support")
   })
+
+  it("keeps complaint and refund questions on the support path even when they say 문의", () => {
+    const result = classifyChatbotQuestion("환불 문의 때문에 너무 불만이에요")
+
+    expect(result.category).toBe("billing")
+    expect(result.intent).toBe("billing_support")
+    expect(result.handoffIntent).toBe("support")
+  })
+
+  it("keeps explicit demo requests on the demo consultation path", () => {
+    const result = classifyChatbotQuestion("도입 상담 신청하고 싶어요")
+
+    expect(result.category).toBe("consultation")
+    expect(result.intent).toBe("sales_consulting")
+    expect(result.handoffIntent).toBe("demo")
+  })
 })

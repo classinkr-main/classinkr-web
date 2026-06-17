@@ -2,9 +2,9 @@ import "server-only"
 
 import { createSupabaseAdminClient } from "@/lib/supabase/admin"
 import {
-  DOC_CATEGORY_IDS,
   docsCategories as staticDocsCategories,
   getDocPath,
+  isDocCategoryId,
   listDocs as listStaticDocs,
   type DocArticle,
   type DocCategory,
@@ -13,6 +13,7 @@ import {
   type DocResource,
   type DocSection,
 } from "@/lib/docs"
+import { sanitizePublicUrl } from "@/lib/safe-public-url"
 
 export interface DocsContent {
   categories: DocCategory[]
@@ -63,41 +64,55 @@ function shouldUseSupabaseDocs() {
   return process.env.USE_SUPABASE_DOCS === "true"
 }
 
-function isDocCategoryId(value: string): value is DocCategoryId {
-  return (DOC_CATEGORY_IDS as readonly string[]).includes(value)
-}
-
-function isDocSection(value: unknown): value is DocSection {
-  if (!value || typeof value !== "object") return false
+function toSafeDocSection(value: unknown): DocSection | null {
+  if (!value || typeof value !== "object") return null
 
   const section = value as Partial<DocSection>
   const hasValidSteps =
     section.steps === undefined ||
     (Array.isArray(section.steps) && section.steps.every((step) => typeof step === "string"))
-  const hasValidMedia =
-    section.media === undefined ||
-    (Array.isArray(section.media) && section.media.every(isDocMedia))
+  if (typeof section.heading !== "string" || typeof section.body !== "string" || !hasValidSteps) {
+    return null
+  }
 
-  return (
-    typeof section.heading === "string" &&
-    typeof section.body === "string" &&
-    hasValidSteps &&
-    hasValidMedia
-  )
+  const media = Array.isArray(section.media)
+    ? section.media.map(toSafeDocMedia).filter((item): item is DocMedia => Boolean(item))
+    : []
+
+  return {
+    heading: section.heading,
+    body: section.body,
+    ...(section.steps ? { steps: section.steps } : {}),
+    ...(media.length > 0 ? { media } : {}),
+  }
 }
 
-function isDocMedia(value: unknown): value is DocMedia {
-  if (!value || typeof value !== "object") return false
+function toSafeDocMedia(value: unknown): DocMedia | null {
+  if (!value || typeof value !== "object") return null
 
   const media = value as Partial<DocMedia>
-  return (
-    (media.type === "image" || media.type === "video") &&
-    typeof media.src === "string" &&
-    typeof media.alt === "string" &&
-    (media.caption === undefined || typeof media.caption === "string") &&
-    (media.width === undefined || typeof media.width === "number") &&
-    (media.height === undefined || typeof media.height === "number")
-  )
+  if (
+    (media.type !== "image" && media.type !== "video") ||
+    typeof media.src !== "string" ||
+    typeof media.alt !== "string" ||
+    (media.caption !== undefined && typeof media.caption !== "string") ||
+    (media.width !== undefined && typeof media.width !== "number") ||
+    (media.height !== undefined && typeof media.height !== "number")
+  ) {
+    return null
+  }
+
+  const safeSrc = sanitizePublicUrl(media.src, "")
+  if (!safeSrc) return null
+
+  return {
+    type: media.type,
+    src: safeSrc,
+    alt: media.alt,
+    ...(media.caption ? { caption: media.caption } : {}),
+    ...(media.width ? { width: media.width } : {}),
+    ...(media.height ? { height: media.height } : {}),
+  }
 }
 
 function isDocResource(value: unknown): value is DocResource {
@@ -129,8 +144,11 @@ function getReadMinutes(contentJson: Record<string, unknown>, markdown: string |
 
 function getSections(contentJson: Record<string, unknown>, fallbackBody: string): DocSection[] {
   const sections = contentJson.sections
-  if (Array.isArray(sections) && sections.every(isDocSection)) {
-    return sections
+  if (Array.isArray(sections)) {
+    const safeSections = sections
+      .map(toSafeDocSection)
+      .filter((section): section is DocSection => Boolean(section))
+    if (safeSections.length > 0) return safeSections
   }
 
   return [

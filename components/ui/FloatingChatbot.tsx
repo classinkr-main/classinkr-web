@@ -153,6 +153,16 @@ function buildConsultationDraft(
     ].filter(Boolean).join("\n")
 }
 
+function getHandoffTopic(intent?: HandoffIntent) {
+    return intent === "demo" ? "도입 상담" : "계정/접속/기술 지원"
+}
+
+function formatActionMessage(intent: HandoffIntent, draftLineCount: number) {
+    return draftLineCount >= 3
+        ? `${getHandoffTopic(intent)} 전용 상담 흐름으로 바로 연결해요.`
+        : `${getHandoffTopic(intent)} 상담을 연결하고 담당자가 바로 이어서 확인할게요.`
+}
+
 function AssistantMeta({ message }: { message: ChatMessage }) {
     const sourceCount = message.sources?.length ?? 0
     const labels = [
@@ -191,28 +201,60 @@ function ConsultationBridge({
     sessionId?: string
 }) {
     const [state, setState] = useState<"idle" | "opened" | "copied" | "failed">("idle")
+    const [toast, setToast] = useState<{
+        type: "info" | "success" | "error"
+        text: string
+    } | null>(null)
     const draft = useMemo(
         () => buildConsultationDraft(messages, message),
         [messages, message]
     )
     const intentLabel = message.handoffIntent === "support" ? "실시간 상담 연결" : "도입 상담 남기기"
+    const draftLineCount = draft.split("\n").length
+    const topic = getHandoffTopic(message.handoffIntent)
+    const contactHref = `/contact?${new URLSearchParams({
+        source: "chatbot",
+        topic,
+        prefill: draft,
+    }).toString()}`
 
     function openConsultation() {
         const anonymousId = getChannelTalkAnonymousId()
+        setToast({
+            type: "info",
+            text: "상담창을 여는 중입니다.",
+        })
         const opened = openChannelTalk({
             memberId: anonymousId ? buildChannelTalkMemberId(anonymousId) : undefined,
             profile: buildHandoffProfile(messages, message, sessionId),
         })
 
         setState(opened ? "opened" : "failed")
+        setToast({
+            type: opened ? "success" : "error",
+            text: opened
+                ? "상담창이 열렸어요. 지금 남긴 내용으로 빠르게 확인할 수 있어요."
+                : "상담창 열기 실패: 브라우저 제약이나 인증 상태를 확인한 뒤 문의폼으로 이동해 주세요.",
+        })
     }
 
     async function copyDraft() {
         try {
+            if (!navigator?.clipboard?.writeText) {
+                throw new Error("clipboard_not_supported")
+            }
             await navigator.clipboard.writeText(draft)
             setState("copied")
+            setToast({
+                type: "success",
+                text: "요약을 복사했어요. 문의폼에 붙여 넣으면 그대로 제출됩니다.",
+            })
         } catch {
             setState("failed")
+            setToast({
+                type: "error",
+                text: "요약 복사에 실패했어요. 문의폼으로 이동해 수동으로 붙여 넣어 주세요.",
+            })
         }
     }
 
@@ -222,6 +264,9 @@ function ConsultationBridge({
                 <MessageCircle className="h-4 w-4" />
                 상담 연결
             </div>
+            <p className="mt-1 text-[11px] leading-4 text-[#615D59]">
+                {formatActionMessage(message.handoffIntent ?? "support", draftLineCount)}
+            </p>
             <div className="mt-2 rounded-[8px] bg-[#F6F5F4] px-3 py-2 text-[12px] leading-5 text-[#3B3835]">
                 <p className="whitespace-pre-line break-keep">{draft}</p>
             </div>
@@ -243,12 +288,22 @@ function ConsultationBridge({
                     요약 복사
                 </button>
                 <Link
-                    href="/contact"
+                    href={contactHref}
                     className="inline-flex h-9 items-center justify-center rounded-[6px] px-2 text-xs font-bold text-[#615D59] transition-colors hover:bg-[#F6F5F4] hover:text-[#084734]"
                 >
-                    문의폼
+                    문의폼으로 이어서 남기기
                 </Link>
             </div>
+            {toast ? (
+                <p
+                    className={cn(
+                        "mt-2 text-[11px] leading-4",
+                        toast.type === "error" ? "text-[#7A2A13]" : "text-[#615D59]"
+                    )}
+                >
+                    {toast.text}
+                </p>
+            ) : null}
             {state !== "idle" ? (
                 <p className="mt-2 text-[11px] leading-4 text-[#615D59]">
                     {state === "opened"
@@ -314,6 +369,68 @@ function FeedbackButtons({
                 <ThumbsDown className="h-4 w-4" />
             </button>
         </div>
+    )
+}
+
+function formatSourceUrl(urlPath: string, origin: string) {
+    if (!origin) return urlPath
+    try {
+        return new URL(urlPath, origin).toString()
+    } catch {
+        return urlPath
+    }
+}
+
+function buildAnswerShareText(message: ChatMessage) {
+    const origin = typeof window === "undefined" ? "" : window.location.origin
+    const lines = [message.content.trim()]
+
+    if ((message.sources?.length ?? 0) > 0) {
+        lines.push(
+            "",
+            "근거 자료:",
+            ...(message.sources ?? []).map((source, index) => {
+                const heading = source.heading ? ` - ${source.heading}` : ""
+                return `${index + 1}. ${source.title}${heading}\n${formatSourceUrl(source.urlPath, origin)}`
+            })
+        )
+    }
+
+    return lines.join("\n")
+}
+
+function AnswerCopyButton({ message }: { message: ChatMessage }) {
+    const [state, setState] = useState<"idle" | "copied" | "failed">("idle")
+
+    async function copyAnswer() {
+        try {
+            if (!navigator?.clipboard?.writeText) {
+                throw new Error("clipboard_not_supported")
+            }
+            await navigator.clipboard.writeText(buildAnswerShareText(message))
+            setState("copied")
+            window.setTimeout(() => setState("idle"), 1800)
+        } catch {
+            setState("failed")
+            window.setTimeout(() => setState("idle"), 1800)
+        }
+    }
+
+    return (
+        <button
+            type="button"
+            onClick={() => void copyAnswer()}
+            className={cn(
+                "inline-flex h-8 items-center justify-center gap-1.5 rounded-[6px] border border-black/[0.08] bg-white px-2.5 text-[11px] font-bold text-[#615D59] transition-colors hover:bg-[#ECFDF5] hover:text-[#084734]",
+                state === "copied" && "border-[#084734]/25 bg-[#ECFDF5] text-[#084734]",
+                state === "failed" && "border-[#B85C33]/20 bg-[#FBEAE2] text-[#7A2A13]"
+            )}
+            aria-label="답변과 링크 복사"
+            title="답변과 링크 복사"
+        >
+            {state === "copied" ? <Check className="h-3.5 w-3.5" /> : <Copy className="h-3.5 w-3.5" />}
+            {state === "copied" ? "복사됨" : state === "failed" ? "실패" : "답변+링크"}
+        </button>
     )
 }
 
@@ -722,9 +839,12 @@ export function FloatingChatbot() {
                                                             ))}
                                                         </div>
                                                     ) : null}
-                                                    {message.answerEventId ? (
+                                                    {message.answerEventId || (message.sources?.length ?? 0) > 0 || message.showHandoffCTA ? (
                                                         <div className="mt-3 flex flex-wrap items-center justify-between gap-2">
-                                                            <FeedbackButtons answerEventId={message.answerEventId} sessionId={sessionId} />
+                                                            <AnswerCopyButton message={message} />
+                                                            {message.answerEventId ? (
+                                                                <FeedbackButtons answerEventId={message.answerEventId} sessionId={sessionId} />
+                                                            ) : null}
                                                         </div>
                                                     ) : null}
                                                     {message.showHandoffCTA ? (

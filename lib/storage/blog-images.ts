@@ -6,6 +6,12 @@ import { validateImageFile } from "@/lib/server/image-validation"
 const ALLOWED_TYPES = ["image/jpeg", "image/png", "image/webp", "image/gif"] as const
 const MAX_SIZE = 5 * 1024 * 1024
 const BUCKET = "blog-images"
+const EXTENSION_BY_TYPE: Record<(typeof ALLOWED_TYPES)[number], string> = {
+  "image/jpeg": "jpg",
+  "image/png": "png",
+  "image/webp": "webp",
+  "image/gif": "gif",
+}
 
 export type BlogImageUploadError =
   | { kind: "missing" }
@@ -27,7 +33,11 @@ export async function uploadBlogImage(file: File): Promise<BlogImageUploadResult
   })
   if (!validated.ok) return { ok: false, error: { kind: validated.error } }
 
-  const ext = file.name.split(".").pop() ?? "jpg"
+  const rawExt = file.name.toLowerCase().match(/\.([a-z0-9]+)$/)?.[1]
+  const ext =
+    rawExt && /^[a-z0-9]+$/.test(rawExt)
+      ? rawExt
+      : EXTENSION_BY_TYPE[file.type as (typeof ALLOWED_TYPES)[number]] ?? "jpg"
   const filename = `${Date.now()}-${Math.random().toString(36).slice(2)}.${ext}`
 
   const supabase = createSupabaseAdminClient()

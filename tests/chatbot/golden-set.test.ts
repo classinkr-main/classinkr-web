@@ -7,6 +7,7 @@ interface GoldenCase {
   id: string
   question: string
   expectCategory: string
+  expectHeadingIncludes?: string
 }
 
 describe("chatbot golden set coverage", () => {
@@ -25,5 +26,12 @@ describe("chatbot golden set coverage", () => {
     expect(adminCases.length).toBeGreaterThanOrEqual(2)
     expect(adminCases.some((testCase) => testCase.question.includes("녹화 저장"))).toBe(true)
     expect(adminCases.some((testCase) => testCase.question.includes("스토리지"))).toBe(true)
+  })
+
+  it("locks the Zoom comparison case to the core positioning source heading", () => {
+    const zoomCase = cases.find((testCase) => testCase.id === "identity-zoom-difference")
+
+    expect(zoomCase?.expectCategory).toBe("onboarding")
+    expect(zoomCase?.expectHeadingIncludes).toBe("핵심 포지셔닝")
   })
 })
