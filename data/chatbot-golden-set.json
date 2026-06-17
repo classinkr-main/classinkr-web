@@ -35,6 +35,17 @@
     { "id": "consult-demo", "question": "데모를 한번 보고 싶어요", "expectCategory": "consultation", "expectMode": ["handoff", "doc_suggestion"] },
     { "id": "consult-contact", "question": "도입 상담을 받아보고 싶습니다", "expectCategory": "consultation", "expectMode": ["handoff", "doc_suggestion"] },
     { "id": "software-ai", "question": "AI 자동 채점 기능이 있나요?", "expectCategory": "classroom", "expectMode": ["direct_answer", "doc_suggestion", "handoff"] },
-    { "id": "vague-greeting", "question": "안녕하세요", "expectCategory": "general", "expectMode": ["clarifying_question", "fallback"] }
+    { "id": "vague-greeting", "question": "안녕하세요", "expectCategory": "general", "expectMode": ["clarifying_question", "fallback"] },
+    { "id": "stories-subject", "question": "우리 같은 국어학원 도입 사례 있어요?", "expectCategory": "onboarding", "expectMode": ["direct_answer", "doc_suggestion", "handoff"], "expectPathIncludes": "/docs/start/customer-stories" },
+    { "id": "stories-reviews", "question": "다른 학원 도입 후기 궁금해요", "expectCategory": "onboarding", "expectMode": ["direct_answer", "doc_suggestion", "handoff"], "expectPathIncludes": "/docs/start/customer-stories" },
+    { "id": "stories-similar", "question": "비슷한 학원 도입 사례 보여주세요", "expectCategory": "onboarding", "expectMode": ["direct_answer", "doc_suggestion", "handoff"], "expectPathIncludes": "/docs/start/customer-stories" },
+    { "id": "why-need-pains", "question": "도입 전 흔한 고민이 뭐가 있나요?", "expectCategory": "onboarding", "expectMode": ["direct_answer", "doc_suggestion", "handoff"], "expectPathIncludes": "/docs/start/why-classin-needs" },
+    { "id": "value-cost-included", "question": "견적 구성이 어떻게 되나요?", "expectCategory": "billing", "expectMode": ["direct_answer", "doc_suggestion", "handoff"], "expectPathIncludes": "/docs/start/value-and-cost-framing" },
+    { "id": "value-cost-breakdown", "question": "도입 견적 구성 알려주세요", "expectCategory": "billing", "expectMode": ["direct_answer", "doc_suggestion", "handoff"], "expectPathIncludes": "/docs/start/value-and-cost-framing" },
+    { "id": "adoption-firststep", "question": "도입하면 뭐부터 해야 하나요?", "expectCategory": "onboarding", "expectMode": ["direct_answer", "doc_suggestion", "handoff"], "expectPathIncludes": "/docs/start/adoption-journey-90days" },
+    { "id": "adoption-howlong", "question": "도입까지 얼마나 걸려요?", "expectCategory": "onboarding", "expectMode": ["direct_answer", "doc_suggestion", "handoff"], "expectPathIncludes": "/docs/start/adoption-journey-90days" },
+    { "id": "adoption-order", "question": "클래스인 도입 순서가 궁금해요", "expectCategory": "onboarding", "expectMode": ["direct_answer", "doc_suggestion", "handoff"], "expectPathIncludes": "/docs/start/adoption-journey-90days" },
+    { "id": "app-capabilities", "question": "클래스인 앱으로 뭘 할 수 있어요?", "expectCategory": "classroom", "expectMode": ["direct_answer", "doc_suggestion", "handoff"], "expectPathIncludes": "/docs/software/app-capabilities-map" },
+    { "id": "app-capabilities-all", "question": "클래스인 기능 전체 알려줘", "expectCategory": "classroom", "expectMode": ["direct_answer", "doc_suggestion", "handoff"], "expectPathIncludes": "/docs/software/app-capabilities-map" }
   ]
 }

@@ -153,12 +153,15 @@
 5. **채널톡 vs 수기 문서 중복**: 회원가입/유료전환/학생초대/채팅·할일 등 기존 doc과 채널톡판이 중복. 슬러그가 달라 충돌은 없고, 채널톡판은 스크린샷 포함 강점. 리랭커의 doc당 1개·총 2개 다양성 선택으로 완화. 향후 정책은 감사 문서에 메모.
 6. **B3/value 문서 visibility**: 가격 민감성 때문에 `unlisted`(챗봇·상담 참고용, 공개 색인 제외) 기본. 공개 원하면 `public`으로 승격.
 
-## 검증 기준 (완료 정의)
+## 검증 기준 (완료 정의) — 2026-06-17 완료
 
-- [ ] 신규 5개 DocArticle이 `lib/docs.ts`에 추가되고 슬러그 유일·카테고리 유효
-- [ ] 마스터 감사 문서 작성
-- [ ] 채널톡 7건 정제 동기화 + 임베딩 완료
-- [ ] 골든셋 신규 케이스 통과(classification + rag-relevance + quality-regression)
-- [ ] `npx eslint app components lib --max-warnings=0` 통과
-- [ ] `npm run build` 통과
-- [ ] Supabase 적재·임베딩으로 신규 콘텐츠 실검색 활성화
+- [x] 신규 5개 DocArticle이 `lib/docs.ts`에 추가되고 슬러그 유일·카테고리 유효 (56→61)
+- [x] 마스터 감사 문서 작성 (`docs/active/chatbot-knowledge-base-audit-2026-06-17.md`)
+- [x] ~~채널톡 7건 정제 동기화~~ → **재정의**: 채널톡은 오늘자 전수 크롤(~57문서)로 **이미 적재·임베딩 완료** 상태였음. 좁히면 reconcile 퇴행이라 그대로 유지(동기화 재실행 안 함).
+- [x] 골든셋 신규 케이스 통과 — +12 케이스, gate test +5, `vitest run tests/chatbot` 48/48
+- [x] `npx eslint app components lib --max-warnings=0` 통과
+- [x] `npm run build` 통과 (61 docs 프리렌더)
+- [x] Supabase 적재·임베딩으로 신규 콘텐츠 실검색 활성화 (5 articles / 48 chunks / 48 embeddings)
+
+> 후속 후보(가치 판단): "왜 필요?"·"줌이면?"·"비싸?" 등은 기존 curated positioning 라우트가 가로채 신규 B2/B3가 1순위가 안 됨. 신규 doc으로 보내려면 `buildCuratedSources()`/도메인 키워드 보강 필요. 상세는 감사 문서 §8-1.
+> 대기 입력: 회사 소개서(외부 자료) — 받으면 별도 DocArticle 또는 B-시리즈에 흡수.
