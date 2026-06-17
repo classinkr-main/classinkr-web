@@ -403,6 +403,10 @@ function orderedLineValue(line: string) {
     return line.match(/^\d+[\.)]\s+(.+)$/)?.[1]?.trim()
 }
 
+function bulletLineValue(line: string) {
+    return line.match(/^[-•]\s+(.+)$/)?.[1]?.trim()
+}
+
 function MessageContent({ content, role }: { content: string; role: ChatMessage["role"] }) {
     const visibleContent = role === "assistant" ? sanitizeVisibleAssistantText(content) : content
     const blocks = visibleContent
@@ -427,6 +431,7 @@ function MessageContent({ content, role }: { content: string; role: ChatMessage[
                     .filter(Boolean)
                     .filter((line) => !/^(권장 순서|확인 기준):\s*$/i.test(line))
                 const orderedItems = lines.map(orderedLineValue)
+                const bulletItems = lines.map(bulletLineValue)
 
                 if (orderedItems.length > 0 && orderedItems.every(Boolean)) {
                     return (
@@ -435,6 +440,16 @@ function MessageContent({ content, role }: { content: string; role: ChatMessage[
                                 <li key={`${index}:${item}`}>{item}</li>
                             ))}
                         </ol>
+                    )
+                }
+
+                if (bulletItems.length > 0 && bulletItems.every(Boolean)) {
+                    return (
+                        <ul key={`${blockIndex}:${block}`} className="ml-4 list-disc space-y-1">
+                            {bulletItems.map((item, index) => (
+                                <li key={`${index}:${item}`}>{item}</li>
+                            ))}
+                        </ul>
                     )
                 }
 

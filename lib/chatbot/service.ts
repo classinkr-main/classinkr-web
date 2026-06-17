@@ -309,11 +309,21 @@ const IDENTITY_RE =
 const IDENTITY_EXCLUSION_RE =
   /가격|요금|견적|결제|환불|취소|영수증|세금|계산서|청구|구독|하드웨어|전자칠판|클래스인\s*보드|classin\s*board|\bboard\b|설치|납품|배송|\bas\b|a\/s|수리|고장|파손|오류|에러|안됨|안\s*돼|로그인|계정|비밀번호|접속|권한|장애|끊김/
 
+// 명시적 보드 단어(전자칠판/보드/칠판/모델명)는 무조건 하드웨어 타깃으로 본다.
 const HARDWARE_TARGET_RE =
-  /classin\s*board|클래스인\s*보드|classin.*하드웨어|클래스인.*하드웨어|전자칠판|하드웨어|\bboard\b|보드|s65|s75|s86|s98|s110|bs65|bs75|bs86|bscp98|bs110/i
+  /classin\s*board|클래스인\s*보드|classin.*하드웨어|클래스인.*하드웨어|전자칠판|하드웨어|\bboard\b|보드|칠판|s65|s75|s86|s98|s110|bs65|bs75|bs86|bscp98|bs110/i
 
-const HARDWARE_BOARD_LINEUP_RE =
-  /classin\s*board|클래스인\s*보드|클래스인.*칠판|전자칠판|\bboard\b|보드|s65|s75|s86|s98|s110|bs65|bs75|bs86|bscp98|bs110/i
+// 모델·사이즈처럼 일반적인 제품 단어는 결제/계정 같은 다른 도메인 신호가 없을 때만 보드 질문으로 본다.
+const GENERIC_PRODUCT_RE = /모델|라인업|사이즈|인치|크기/i
+
+const NON_HARDWARE_CONTEXT_RE =
+  /결제|요금|가격|견적|영수증|세금|청구|구독|환불|정산|로그인|비밀번호|아이디|계정|출결|출석|숙제|과제|리포트|메타버스|아바타|채점|출제/i
+
+// 짧은 "어떤 모델 있어?"류 질문도 보드 라인업으로 인식시키되, 다른 도메인 단어가 섞이면 제외한다.
+function isBoardTargeted(text: string) {
+  if (HARDWARE_TARGET_RE.test(text)) return true
+  return GENERIC_PRODUCT_RE.test(text) && !NON_HARDWARE_CONTEXT_RE.test(text)
+}
 
 const HARDWARE_BOARD_LINEUP_INTENT_RE =
   /어떤|뭐|무엇|종류|라인업|모델|추천|있지|있어|고르|선택|구성|제품/i
@@ -321,8 +331,9 @@ const HARDWARE_BOARD_LINEUP_INTENT_RE =
 const SOFTWARE_BOARD_FEATURE_RE =
   /개인\s*칠판|보조\s*칠판|ai\s*칠판|칠판\s*파일|edb|판서\s*도구|매직펜|업데이트|릴리즈|버전|6\.0/i
 
+// 상세 사양을 콕 집어 묻는 신호. 모델·라인업·추천 같은 '넓은 라인업' 단어는 여기서 제외한다.
 const HARDWARE_SPECS_RE =
-  /스펙|사양|규격|모델|라인업|크기|인치|해상도|화면|ops|터치|주사율|밝기|시야각|마이크|스피커|무선|nfc|무게|중량|소비\s*전력|전력|유리|인증|부속|비교|추천/i
+  /스펙|사양|규격|크기|사이즈|인치|해상도|화면|ops|터치|주사율|밝기|시야각|마이크|스피커|무선|nfc|무게|중량|소비\s*전력|전력|유리|인증|부속|비교/i
 
 const HARDWARE_TROUBLE_RE =
   /안\s*(켜|켜져|켜지|나와|나오|보여|보이|됨|돼)|꺼져|꺼짐|켜지지|나오지|보이지|먹통|고장|수리|\bas\b|a\/s|오류|에러|문제|장애|전원|검은\s*화면|화면이\s*안|화면\s*(꺼짐|안|나오지|나옴|안\s*나)|소리\s*안|터치\s*안|끊김|끊겨|깜빡|연기|냄새|액체|파손|깨짐|금감|감전|화재/i
@@ -371,7 +382,7 @@ function isIdentityQuestion(question: NormalizedQuestion) {
 function isHardwareSpecsQuestion(question: NormalizedQuestion) {
   const text = question.redacted.toLowerCase()
   return (
-    HARDWARE_TARGET_RE.test(text) &&
+    isBoardTargeted(text) &&
     HARDWARE_SPECS_RE.test(text) &&
     !HARDWARE_TROUBLE_RE.test(text) &&
     !isHardwareUnconfirmedDetailQuestion(question)
@@ -381,22 +392,24 @@ function isHardwareSpecsQuestion(question: NormalizedQuestion) {
 function isHardwareBoardLineupQuestion(question: NormalizedQuestion) {
   const text = question.redacted.toLowerCase()
   return (
-    HARDWARE_BOARD_LINEUP_RE.test(text) &&
+    isBoardTargeted(text) &&
     HARDWARE_BOARD_LINEUP_INTENT_RE.test(text) &&
     !SOFTWARE_BOARD_FEATURE_RE.test(text) &&
     !HARDWARE_TROUBLE_RE.test(text) &&
-    !isHardwareUnconfirmedDetailQuestion(question)
+    !isHardwareUnconfirmedDetailQuestion(question) &&
+    // 사양을 콕 집어 물으면(예: '사이즈') 넓은 라인업 대신 상세 사양 답변으로 보낸다.
+    !HARDWARE_SPECS_RE.test(text)
   )
 }
 
 function isHardwareTroubleQuestion(question: NormalizedQuestion) {
   const text = question.redacted.toLowerCase()
-  return HARDWARE_TARGET_RE.test(text) && HARDWARE_TROUBLE_RE.test(text)
+  return isBoardTargeted(text) && HARDWARE_TROUBLE_RE.test(text)
 }
 
 function isHardwareUnconfirmedDetailQuestion(question: NormalizedQuestion) {
   const text = question.redacted.toLowerCase()
-  return HARDWARE_TARGET_RE.test(text) && HARDWARE_UNCONFIRMED_DETAIL_RE.test(text) && !HARDWARE_TROUBLE_RE.test(text)
+  return isBoardTargeted(text) && HARDWARE_UNCONFIRMED_DETAIL_RE.test(text) && !HARDWARE_TROUBLE_RE.test(text)
 }
 
 function isLoginTroubleQuestion(question: NormalizedQuestion) {
@@ -1145,7 +1158,7 @@ function isDomainRelatedQuestion(question: NormalizedQuestion, category: string)
   if (category !== "general") return true
 
   const text = question.redacted.toLowerCase()
-  return /classin|클래스인|학원|수업|교실|학생|교사|강사|원장|전자칠판|하드웨어|보드|board|ops|카메라|마이크|미러링|edb|lms|녹화|복습|과제|운영|도입|관리자|온라인|화상|교안|토론|플립러닝|하이브리드/.test(text)
+  return /classin|클래스인|학원|수업|교실|학생|교사|강사|원장|전자칠판|칠판|하드웨어|보드|board|모델|사이즈|크기|인치|라인업|ops|카메라|마이크|미러링|edb|lms|녹화|복습|과제|운영|도입|관리자|온라인|화상|교안|토론|플립러닝|하이브리드/.test(text)
 }
 
 function isSensitiveOrAccountSpecificQuestion(question: NormalizedQuestion, category: string) {
@@ -1263,67 +1276,70 @@ function getConciseNextStep(category: string) {
 
 function getComparisonAnswer(top: ChatbotSource) {
   return [
-    "Classin은 Zoom이나 일반 전자칠판보다 '수업 운영 흐름'에 초점이 있습니다.",
-    "Zoom은 회의 중심이고 Classin은 판서, 녹화, 복습, LMS를 연결합니다. 일반 전자칠판은 화면/판서 중심인 경우가 많고, Classin은 EDB 교안과 관리자 데이터까지 이어집니다.",
+    "네, 좋은 질문이에요. Classin은 Zoom이나 일반 전자칠판과 달리 '수업 운영 흐름' 전체에 초점이 있어요.",
+    "Zoom이 회의 중심이라면 Classin은 판서·녹화·복습·LMS를 하나로 연결하고,\n일반 전자칠판이 화면·판서에 머무는 것과 달리 EDB 교안과 관리자 데이터까지 이어줘요.",
     top.heading === "핵심 포지셔닝"
-      ? "Zoom, 전자칠판, LMS 중 어떤 기준으로 비교 중인지 알려주시면 그 부분만 더 좁혀드릴게요."
+      ? "Zoom, 전자칠판, LMS 중 어떤 기준으로 비교 중이신지 알려주시면 그 부분만 더 좁혀드릴게요."
       : null,
   ].filter(Boolean).join("\n\n")
 }
 
 function getIdentityAnswer() {
   return [
-    "Classin은 학원 수업을 준비, 진행, 녹화, 복습, 과제/LMS, 관리자 데이터까지 한 흐름으로 묶는 수업 운영 솔루션입니다.",
-    "쉽게 말하면 Zoom처럼 수업을 여는 도구에 그치지 않고, 전자칠판, EDB 교안, 녹화, 복습, 관리자 운영까지 연결해 수업 품질을 표준화하는 시스템에 가깝습니다.",
-    "전자칠판, 온라인 수업, LMS/관리자 기능 중 어떤 기준으로 궁금하신지 알려주시면 그 부분만 더 좁혀드릴게요.",
+    "네, Classin이 어떤 서비스인지 궁금하시군요.",
+    "Classin은 학원 수업을 준비·진행·녹화·복습·과제(LMS)·관리자 데이터까지 한 흐름으로 묶는 수업 운영 솔루션이에요.",
+    "쉽게 말해 Zoom처럼 수업만 여는 도구가 아니라, 전자칠판·EDB 교안·녹화·복습·관리자 운영까지 연결해 수업 품질을 표준화하는 시스템에 가까워요.",
+    "전자칠판, 온라인 수업, LMS/관리자 중 어떤 쪽이 궁금하신지 알려주시면 그 부분만 콕 짚어 정리해드릴게요.",
   ].join("\n\n")
 }
 
 function getHardwareSpecsAnswer() {
   return [
-    "Classin Board 스펙은 모델별로 보되, 공통 기준은 4K 해상도, 16:9 화면, 178도 시야각, 밝기 350cd/m² 이상, 50점 적외선 터치, Android 11과 탈착식 OPS입니다.",
-    "주요 모델은 S75, S86, S98 Pro, S110입니다. S75는 75인치·54kg·315W, S86은 86인치·69.5kg·390W, S98 Pro는 98인치·89kg·740W·NFC 지원, S110은 110인치·137kg·850W·120Hz가 핵심 차이입니다.",
-    "교실 크기, 맨 뒷자리 시야, 이동형 스탠드/벽걸이, 카메라·마이크 필요 여부를 기준으로 모델을 좁히면 됩니다. S65 상세 사양은 현재 규격서 확인이 필요합니다.",
+    "네, Classin Board 사양 정리해드릴게요.",
+    "공통 기준은 4K · 16:9 · 178도 시야각 · 밝기 350cd/m² 이상 · 50점 적외선 터치 · Android 11 · 탈착식 OPS예요.",
+    "모델별 핵심 차이예요.",
+    "- S75 — 75인치 · 54kg · 315W\n- S86 — 86인치 · 69.5kg · 390W\n- S98 Pro — 98인치 · 89kg · 740W · NFC\n- S110 — 110인치 · 137kg · 850W · 120Hz",
+    "교실 크기랑 설치 방식만 알려주시면 어느 모델이 맞을지 같이 좁혀드릴게요. S65는 상세 규격 확인이 필요해요.",
   ].join("\n\n")
 }
 
 function getHardwareBoardLineupAnswer() {
   return [
-    "클래스인 칠판은 보통 Classin Board 전자칠판 라인업을 말합니다.",
-    "주요 모델은 S75, S86, S98 Pro, S110이고, 일반 강의실은 75·86인치부터, 큰 강의실이나 설명회 공간은 98·110인치 쪽을 먼저 봅니다.",
-    "교실 크기, 맨 뒷자리 시야, 이동형 스탠드/벽걸이, 카메라·마이크 필요 여부를 알려주시면 맞는 모델 범위를 좁혀드릴게요.",
+    "네, 전자칠판 모델 보고 계시는군요.",
+    "Classin Board는 S75 · S86 · S98 Pro · S110 네 가지예요.\n일반 강의실은 75·86인치, 대형 강의실·설명회는 98·110인치를 많이 보세요.",
+    "교실 크기나 설치 방식만 알려주시면 딱 맞는 모델로 좁혀드릴게요. 사양이나 가격도 바로 정리해드릴까요?",
   ].join("\n\n")
 }
 
 function getHardwareTroubleAnswer() {
   return [
-    "전자칠판 화면이 안 나오면 먼저 전원 문제인지, 입력 소스 문제인지 나눠서 확인하세요.",
-    "전원 플러그와 멀티탭, 오른쪽 측면 하단 전원 버튼, 대기 모드를 확인한 뒤 입력(소스) 메뉴에서 OPS 또는 연결한 HDMI가 선택되어 있는지 봅니다. HDMI 사용 중이면 케이블과 노트북의 화면 출력 설정도 함께 확인하세요.",
-    "연기, 냄새, 액체 유입, 파손이 있으면 바로 전원을 분리하고 A/S로 넘기는 게 안전합니다. 계속 안 나오면 모델명, 전원 LED 상태, 현재 입력 소스를 알려주시면 다음 조치로 좁혀드릴게요.",
+    "전자칠판 화면이 안 나오면 먼저 전원 문제인지, 입력 소스 문제인지 나눠서 보면 빨라요.",
+    "전원 플러그·멀티탭, 오른쪽 측면 하단 전원 버튼, 대기 모드를 확인하고,\n입력(소스) 메뉴에서 OPS 또는 연결한 HDMI가 선택돼 있는지 보세요. HDMI라면 케이블과 노트북 화면 출력 설정도 함께요.",
+    "혹시 연기·냄새·액체 유입·파손이 있으면 바로 전원을 분리하고 A/S로 넘기는 게 안전해요. 계속 안 나오면 모델명·전원 LED 상태·현재 입력 소스를 알려주시면 다음 조치로 좁혀드릴게요.",
   ].join("\n\n")
 }
 
 function getHardwareUnconfirmedDetailAnswer() {
   return [
-    "현재 정리된 Classin Board 공개 스펙에서는 색상, 마감, 보증 기간 같은 세부 옵션을 확정해서 안내하기 어렵습니다.",
-    "확정된 기준은 S75, S86, S98 Pro, S110의 화면 크기, 4K 해상도, 터치, OPS, 무게, 소비전력 같은 핵심 사양입니다.",
-    "색상·마감·보증은 공급 시점, 재고, 계약 조건에 따라 달라질 수 있으니 필요한 옵션명을 알려주시면 확인해야 할 항목만 짧게 정리해드릴게요.",
+    "아, 그 부분은 지금 공개된 Classin Board 스펙만으로는 색상·마감·보증 기간 같은 세부 옵션을 확정해서 안내하기 어렵습니다.",
+    "대신 확정된 기준은 S75 · S86 · S98 Pro · S110의 화면 크기, 4K 해상도, 터치, OPS, 무게, 소비전력 같은 핵심 사양이에요.",
+    "세부 옵션은 공급 시점·재고·계약 조건에 따라 달라질 수 있어서, 필요한 옵션명을 알려주시면 확인해야 할 항목만 짧게 정리해드릴게요.",
   ].join("\n\n")
 }
 
 function getLoginTroubleAnswer() {
   return [
-    "로그인이 안 될 때는 먼저 아이디가 이메일인지 휴대폰 번호인지 확인하고, 비밀번호 재설정을 시도해 보세요.",
-    "PC에서는 로그인 화면 하단의 [비밀번호 변경], 모바일에서는 [비밀번호를 잊으셨나요?]에서 인증코드를 받아 새 비밀번호로 다시 로그인합니다.",
-    "인증코드가 오지 않거나 계정이 기관에 묶여 있다면 사용 기기, 아이디 종류, 오류 문구를 알려주시면 다음 조치로 좁혀드릴게요.",
+    "로그인이 안 되시는군요. 먼저 아이디가 이메일인지 휴대폰 번호인지 확인하고, 비밀번호 재설정부터 해보세요.",
+    "PC는 로그인 화면 하단 [비밀번호 변경], 모바일은 [비밀번호를 잊으셨나요?]에서\n인증코드를 받아 새 비밀번호로 다시 로그인하시면 돼요.",
+    "인증코드가 안 오거나 계정이 기관에 묶여 있다면, 사용 기기·아이디 종류·오류 문구를 알려주시면 다음 조치로 좁혀드릴게요.",
   ].join("\n\n")
 }
 
 function getWebLiveBillingAnswer() {
   return [
-    "웹 라이브는 모든 요금제에서 기본 제공된다고 보면 안 됩니다.",
-    "구독형에서는 Enterprise, 충전형에서는 Business Consumption 조건에서 사용하는 기능으로 안내되며, 실제 적용 여부와 비용은 계약/요금제 기준을 확인해야 합니다.",
-    "앱 설치 없이 웹 링크로 설명회나 강연을 보여주는 용도라면, 먼저 현재 요금제와 라이브+플레이백 필요 여부를 확인하면 됩니다.",
+    "웹 라이브는 모든 요금제에서 기본 제공된다고 보기는 어려워요.",
+    "구독형은 Enterprise, 충전형은 Business Consumption 조건에서 쓰는 기능으로 안내되고, 실제 적용 여부와 비용은 계약·요금제 기준을 확인해야 해요.",
+    "앱 설치 없이 웹 링크로 설명회·강연을 보여주려는 거라면, 먼저 지금 요금제와 라이브+플레이백 필요 여부부터 확인하면 됩니다.",
   ].join("\n\n")
 }
 

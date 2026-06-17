@@ -31,6 +31,33 @@ describe("chatbot quality regressions", () => {
     }
   })
 
+  it("answers short board questions instead of deflecting", async () => {
+    disableExternalChatbotServices()
+
+    // 넓은 질문: 짧은 라인업 답변
+    const lineup = await evaluateChatbotQuery("어떤 모델 있어?", { generateAnswer: false })
+    expect(lineup.detectedCategory).toBe("hardware")
+    expect(lineup.answerMode).toBe("direct_answer")
+    expect(lineup.answer).toContain("S75")
+    expect(lineup.answer).not.toContain("지금 바로 확정")
+
+    // 사양어(사이즈)가 섞이면 상세 사양 답변
+    const specs = await evaluateChatbotQuery("어떤 칠판 있어, 사이즈", { generateAnswer: false })
+    expect(specs.detectedCategory).toBe("hardware")
+    expect(specs.answerMode).toBe("direct_answer")
+    expect(specs.answer).toContain("S110")
+    expect(specs.answer).not.toContain("지금 바로 확정")
+  })
+
+  it("does not treat unrelated 모델/사이즈 questions as board questions", async () => {
+    disableExternalChatbotServices()
+
+    // 결제 컨텍스트가 섞인 '모델'은 보드 라인업으로 보지 않는다
+    const billing = await evaluateChatbotQuery("결제 모델이 어떻게 되나요?", { generateAnswer: false })
+    expect(billing.detectedCategory).toBe("billing")
+    expect(billing.answer).not.toContain("S75")
+  })
+
   it("keeps login trouble on account recovery guidance", async () => {
     disableExternalChatbotServices()
 
