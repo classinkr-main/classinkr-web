@@ -61,7 +61,40 @@ const staticDocsContent: DocsContent = {
 const PUBLISHED_DOC_STATUS_VALUES = ["published", "PUBLISHED"]
 
 function shouldUseSupabaseDocs() {
-  return process.env.USE_SUPABASE_DOCS === "true"
+  const mode = process.env.USE_SUPABASE_DOCS?.trim().toLowerCase()
+  if (mode === "false") return false
+  if (mode === "true") return true
+
+  return Boolean(
+    process.env.SUPABASE_SECRET_KEY?.trim() || process.env.SUPABASE_SERVICE_ROLE_KEY?.trim()
+  )
+}
+
+function mergeDocsContent(base: DocsContent, incoming: DocsContent): DocsContent {
+  const categoriesById = new Map(base.categories.map((category) => [category.id, category]))
+  for (const category of incoming.categories) {
+    categoriesById.set(category.id, category)
+  }
+
+  const docsByPath = new Map(base.docs.map((doc) => [getDocPath(doc), doc]))
+  for (const doc of incoming.docs) {
+    docsByPath.set(getDocPath(doc), doc)
+  }
+
+  const categories = Array.from(categoriesById.values()).sort((left, right) => {
+    if (left.order !== right.order) return left.order - right.order
+    return left.title.localeCompare(right.title, "ko-KR")
+  })
+
+  const orderByCategory = new Map(categories.map((category) => [category.id, category.order]))
+  const docs = Array.from(docsByPath.values()).sort((left, right) => {
+    const leftOrder = orderByCategory.get(left.category) ?? 999
+    const rightOrder = orderByCategory.get(right.category) ?? 999
+    if (leftOrder !== rightOrder) return leftOrder - rightOrder
+    return right.updatedAt.localeCompare(left.updatedAt)
+  })
+
+  return { categories, docs }
 }
 
 function toSafeDocSection(value: unknown): DocSection | null {
@@ -264,7 +297,7 @@ export async function getDocsContent(): Promise<DocsContent> {
   }
 
   try {
-    return await fetchDocsContentFromSupabase()
+    return mergeDocsContent(staticDocsContent, await fetchDocsContentFromSupabase())
   } catch (error) {
     console.warn(
       "Falling back to static docs content:",
