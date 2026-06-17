@@ -437,12 +437,16 @@ function isWebLiveBillingQuestion(question: NormalizedQuestion) {
 }
 
 // 가격/요금 정보성 질문. 웹라이브·환불·세금계산서는 각자 핸들러가 있으니 제외한다.
-const PRICING_INFO_RE = /요금|가격|비용|얼마|금액|가격대/i
+const PRICING_MONEY_RE = /요금|가격|비용|금액|가격대/i
+const PRICING_INFO_RE = /요금|가격|비용|금액|가격대|얼마/i
 const PRICING_EXCLUDE_RE = /환불|취소|세금|계산서|영수증|청구|정산|미납|연체/i
+// "얼마나 걸려요"(기간)는 가격이 아니다 — 돈 단어가 없으면 가격에서 뺀다.
+const PRICING_DURATION_RE = /얼마나?\s*(걸리|걸려|걸릴|오래|소요|기간|시간|일|주|개월)/i
 function isPricingInfoQuestion(question: NormalizedQuestion) {
   const text = question.redacted.toLowerCase()
   if (PRICING_EXCLUDE_RE.test(text)) return false
   if (isWebLiveBillingQuestion(question)) return false
+  if (!PRICING_MONEY_RE.test(text) && PRICING_DURATION_RE.test(text)) return false
   return PRICING_INFO_RE.test(text)
 }
 
@@ -600,6 +604,42 @@ function buildCuratedSources(question: NormalizedQuestion) {
       "웹 라이브 & 플레이백은 앱 설치 없이 웹 링크로 수업을 생중계하고 플레이백을 제공하는 기능입니다. 사용 가능 요금제와 과금 방식은 구독/충전제 조건에 따라 달라지므로 모든 요금제 기본 제공으로 안내하면 안 됩니다.",
       300,
       "billing"
+    )
+    if (source) sources.push(source)
+  }
+
+  if (isPricingInfoQuestion(question)) {
+    const source = buildStaticDocSource(
+      "start",
+      "value-and-cost-framing",
+      "요금·견적 구성 안내",
+      "클래스인 비용은 고정가표가 아니라 전자칠판+OPS, 카메라·스탠드/벽걸이 구성, 소프트웨어 사용 범위, 설치·온보딩까지 묶어 구성 기준으로 산정합니다. 정확한 금액은 학원 규모와 구성에 따라 달라집니다.",
+      295,
+      "billing"
+    )
+    if (source) sources.push(source)
+  }
+
+  if (isInstallFormQuestion(question)) {
+    const source = buildStaticDocSource(
+      "hardware",
+      "board-install-readiness",
+      "설치 형태와 현장 점검",
+      "Classin Board는 이동형 스탠드와 벽걸이 모두 설치할 수 있고, 교실 이동 필요·공간·벽면 보강·시야 거리에 따라 고릅니다. 전원·네트워크·벽면 상태는 현장 실측에서 먼저 확인합니다.",
+      300,
+      "hardware"
+    )
+    if (source) sources.push(source)
+  }
+
+  if (isCoreFeatureYesNoQuestion(question)) {
+    const source = buildStaticDocSource(
+      "software",
+      "app-capabilities-map",
+      "수업 기능 사용 안내",
+      "녹화, 출결, 숙제·과제, 복습, 시험·퀴즈, 화면 공유·미러링, 판서는 클래스인 수업 운영 흐름에 포함되는 기능입니다. 정확한 설정 위치와 범위는 화면 기준으로 안내합니다.",
+      295,
+      "classroom"
     )
     if (source) sources.push(source)
   }
@@ -829,7 +869,10 @@ function mergeCuratedSources(question: NormalizedQuestion, sources: ChatbotSourc
     isHardwareTroubleQuestion(question) ||
     isHardwareUnconfirmedDetailQuestion(question) ||
     isWebLiveBillingQuestion(question) ||
-    isLoginTroubleQuestion(question)
+    isLoginTroubleQuestion(question) ||
+    isPricingInfoQuestion(question) ||
+    isInstallFormQuestion(question) ||
+    isCoreFeatureYesNoQuestion(question)
   ) {
     return selectDiverseSources(rerankSources(question, curatedSources), 1)
   }
@@ -1133,6 +1176,9 @@ async function searchKnowledgeSources(
     isHardwareUnconfirmedDetailQuestion(question) ||
     isWebLiveBillingQuestion(question) ||
     isLoginTroubleQuestion(question) ||
+    isPricingInfoQuestion(question) ||
+    isInstallFormQuestion(question) ||
+    isCoreFeatureYesNoQuestion(question) ||
     ((isComparisonQuestion(question) || isIdentityQuestion(question)) && !isApiIntegrationQuestion(question))
   ) {
     const curatedSources = buildCuratedSources(question)
@@ -1400,6 +1446,42 @@ function getWebLiveBillingAnswer() {
   ].join("\n\n")
 }
 
+function getPricingAnswer() {
+  return [
+    "네, 요금은 고정가표보다 '구성 기준'으로 보시는 게 정확해요.",
+    "보통 이렇게 묶여요.",
+    "- 전자칠판 + OPS(윈도우 컴퓨팅)\n- 카메라·마이크·스탠드/벽걸이 구성\n- 소프트웨어 사용 범위(녹화·LMS 등)\n- 설치·온보딩",
+    "교실 수랑 원하는 구성만 알려주시면 견적 범위를 잡아드리거나 담당자 상담으로 바로 이어드릴게요.",
+  ].join("\n\n")
+}
+
+function getInstallFormAnswer() {
+  return [
+    "네, 설치는 이동형 스탠드와 벽걸이 둘 다 가능해요.",
+    "고르실 때 기준이에요.",
+    "- 교실 간 이동이 필요하면 → 이동형 스탠드\n- 자리가 고정이고 공간을 아끼려면 → 벽걸이(벽면 보강 확인)",
+    "전원·네트워크·벽면 상태·시야 거리는 현장 실측에서 먼저 확인해요. 교실 환경만 알려주시면 맞는 설치 형태로 안내해드릴게요.",
+  ].join("\n\n")
+}
+
+function getCoreFeatureYesNoAnswer(question: NormalizedQuestion) {
+  const text = question.redacted.toLowerCase()
+  const lead = /녹화|다시\s*보기/.test(text)
+    ? "네, 수업 녹화는 클래스인 기본 흐름에 있어요. 수업을 녹화해 복습·결석 보강용으로 다시 보여줄 수 있고, 영상은 자동으로 정리돼요."
+    : /출결|출석/.test(text)
+      ? "네, 출결은 클래스인에서 확인·관리할 수 있어요. 수업 참여 기록을 바탕으로 정리하고 관리자에서 모아 볼 수 있어요."
+      : /숙제|과제/.test(text)
+        ? "네, 과제(숙제)는 클래스인에서 낼 수 있어요. 한 번 제출받는 숙제와 요일 반복형 일일 과제로 나눠 운영할 수 있어요."
+        : /복습/.test(text)
+          ? "네, 복습은 녹화 영상과 수업 자료로 이어져요. 수업이 끝나면 영상·판서가 복습용으로 정리돼 학생이 다시 볼 수 있어요."
+          : /시험|퀴즈/.test(text)
+            ? "네, 시험·퀴즈 활동을 만들 수 있어요. 객관식·선착순 퀴즈, 시험 활동 등을 수업이나 코스에 추가할 수 있어요."
+            : /화면\s*공유|미러링/.test(text)
+              ? "네, 화면 공유와 미러링 모두 수업 중 도구로 지원돼요. 자료 화면을 공유하거나 기기 화면을 보드에 미러링할 수 있어요."
+              : "네, 판서는 클래스인 핵심 기능이에요. 보드에서 한 판서를 저장·공유하고 복습 자료(EDB 교안)로 이어갈 수 있어요."
+  return [lead, "정확한 설정 위치나 운영 방법은 화면 기준으로 더 짚어드릴까요?"].join("\n\n")
+}
+
 function formatConsumerAnswer({
   answerMode,
   category,
@@ -1438,12 +1520,23 @@ function formatConsumerAnswer({
   if (isIdentityQuestion(question) && top.urlPath.includes("/docs/start/academy-system-os-positioning")) {
     return getIdentityAnswer()
   }
+  if (isPricingInfoQuestion(question) && top.heading === "요금·견적 구성 안내") {
+    return getPricingAnswer()
+  }
+  if (isInstallFormQuestion(question) && top.heading === "설치 형태와 현장 점검") {
+    return getInstallFormAnswer()
+  }
+  if (isCoreFeatureYesNoQuestion(question) && top.heading === "수업 기능 사용 안내") {
+    return getCoreFeatureYesNoAnswer(question)
+  }
 
   const caution =
     answerMode === "handoff"
       ? "이 내용은 실제 계정, 계약, 장비 상태, 도입 조건에 따라 달라질 수 있어 상담으로 확인하는 편이 안전합니다."
       : ""
-  const heading = top.heading && top.heading !== "요약" ? `${top.heading}: ` : ""
+  // 문서 섹션의 메타성 제목(예: "이 문서는 지도입니다")이 답변 앞에 새지 않게 거른다.
+  const isMetaHeading = /^이\s*문서|지도입니다|^목차|개요만\s*보기/.test(top.heading ?? "")
+  const heading = top.heading && top.heading !== "요약" && !isMetaHeading ? `${top.heading}: ` : ""
   const summary = `${heading}${top.excerpt}`
   const nextStep = getConciseNextStep(category)
 
