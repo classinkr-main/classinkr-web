@@ -41,11 +41,14 @@ describe("chatbot quality regressions", () => {
     expect(lineup.answer).toContain("S75")
     expect(lineup.answer).not.toContain("지금 바로 확정")
 
-    // 사양어(사이즈)가 섞이면 상세 사양 답변
+    // 사양어(사이즈)가 섞이면 상세 사양 답변 — 단, 대형 신호가 없으면 표준(75/86) 답변
     const specs = await evaluateChatbotQuery("어떤 칠판 있어, 사이즈", { generateAnswer: false })
     expect(specs.detectedCategory).toBe("hardware")
     expect(specs.answerMode).toBe("direct_answer")
-    expect(specs.answer).toContain("S110")
+    expect(specs.answer).toContain("S75")
+    expect(specs.answer).toContain("S86")
+    expect(specs.answer).toContain("표준")
+    expect(specs.answer).not.toContain("S110")
     expect(specs.answer).not.toContain("지금 바로 확정")
   })
 

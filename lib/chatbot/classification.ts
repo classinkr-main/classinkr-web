@@ -54,7 +54,7 @@ export function detectChatbotCategory(
   if (/온스테이지|스테이지|하이브리드|개인\s*칠판|현장\s*(녹화|카메라)|수업\s*녹화|녹화\s*수업|트래킹\s*뷰|byod|omr|오엠알|학습\s*자료|일일\s*과제|ai\s*(출제|채점)|문제\s*은행|플레이바|시청\s*(가능\s*)?횟수|저작권\s*보호|scorm|따라읽기|받아쓰기|외워말하기/.test(text)) {
     return "classroom"
   }
-  if (/하드웨어|전자칠판|클래스인\s*보드|classin\s*board|\bboard\b|보드|칠판|모델|라인업|사이즈|인치|카메라|마이크|스피커|\bops\b|스탠드|벽걸이|설치|납품|배송|\bas\b|a\/s|수리|고장|파손|s\d{2,3}\s*pro/.test(text)) {
+  if (/하드웨어|전자칠판|클래스인\s*보드|classin\s*board|\bboard\b|보드|칠판|모델|라인업|사이즈|인치|카메라|마이크|스피커|\bops\b|스탠드|벽걸이|설치|납품|배송|\bas\b|a\/s|수리|고장|파손|s\d{2,3}\s*pro|s\s*(?:65|75|86|98|110)\b/.test(text)) {
     return "hardware"
   }
   if (/접속|로그인|계정|비밀번호|소리|오류|에러|안됨|안 돼|안 되|권한|장애|끊김|로딩/.test(text)) {

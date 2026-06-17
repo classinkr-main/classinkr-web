@@ -46,6 +46,10 @@
     { "id": "adoption-howlong", "question": "도입까지 얼마나 걸려요?", "expectCategory": "onboarding", "expectMode": ["direct_answer", "doc_suggestion", "handoff"], "expectPathIncludes": "/docs/start/adoption-journey-90days" },
     { "id": "adoption-order", "question": "클래스인 도입 순서가 궁금해요", "expectCategory": "onboarding", "expectMode": ["direct_answer", "doc_suggestion", "handoff"], "expectPathIncludes": "/docs/start/adoption-journey-90days" },
     { "id": "app-capabilities", "question": "클래스인 앱으로 뭘 할 수 있어요?", "expectCategory": "classroom", "expectMode": ["direct_answer", "doc_suggestion", "handoff"], "expectPathIncludes": "/docs/software/app-capabilities-map" },
-    { "id": "app-capabilities-all", "question": "클래스인 기능 전체 알려줘", "expectCategory": "classroom", "expectMode": ["direct_answer", "doc_suggestion", "handoff"], "expectPathIncludes": "/docs/software/app-capabilities-map" }
+    { "id": "app-capabilities-all", "question": "클래스인 기능 전체 알려줘", "expectCategory": "classroom", "expectMode": ["direct_answer", "doc_suggestion", "handoff"], "expectPathIncludes": "/docs/software/app-capabilities-map" },
+    { "id": "faq-price-howmuch", "question": "클래스인 가격 얼마예요?", "expectCategory": "billing", "expectMode": ["doc_suggestion", "direct_answer", "handoff"], "expectPathIncludes": "/docs/start/value-and-cost-framing" },
+    { "id": "faq-size", "question": "전자칠판 사이즈 어떻게 돼요?", "expectCategory": "hardware", "expectMode": ["direct_answer", "doc_suggestion", "handoff"], "expectPathIncludes": "/docs/hardware/board-lineup-specs", "expectHeadingIncludes": "Classin Board 스펙 요약" },
+    { "id": "faq-cs-offline-attendance", "question": "오프라인 출석도 클래스인에서 되나요?", "expectCategory": "classroom", "expectMode": ["fallback", "clarifying_question", "doc_suggestion", "direct_answer"] },
+    { "id": "faq-feature-recording", "question": "수업 녹화 기능 있어요?", "expectCategory": "classroom", "expectMode": ["direct_answer", "doc_suggestion", "handoff"], "expectPathIncludes": "/docs/software/app-capabilities-map" }
   ]
 }

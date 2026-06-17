@@ -335,6 +335,10 @@ const SOFTWARE_BOARD_FEATURE_RE =
 const HARDWARE_SPECS_RE =
   /스펙|사양|규격|크기|사이즈|인치|해상도|화면|ops|터치|주사율|밝기|시야각|마이크|스피커|무선|nfc|무게|중량|소비\s*전력|전력|유리|인증|부속|비교/i
 
+// 대형 공간·특정 대형 모델을 명시적으로 물을 때만 98/110을 공개한다.
+const HARDWARE_BIG_MODEL_RE =
+  /s\s*98|s98|s\s*110|s110|98\s*인치|110\s*인치|대형|큰\s*(강의실|화면|교실|공간|곳|거|것|모델|사이즈)|제일\s*큰|가장\s*큰|강당|설명회|넓은\s*(강의실|교실|공간)/i
+
 const HARDWARE_TROUBLE_RE =
   /안\s*(켜|켜져|켜지|나와|나오|보여|보이|됨|돼)|꺼져|꺼짐|켜지지|나오지|보이지|먹통|고장|수리|\bas\b|a\/s|오류|에러|문제|장애|전원|검은\s*화면|화면이\s*안|화면\s*(꺼짐|안|나오지|나옴|안\s*나)|소리\s*안|터치\s*안|끊김|끊겨|깜빡|연기|냄새|액체|파손|깨짐|금감|감전|화재/i
 
@@ -346,6 +350,11 @@ const HARDWARE_SPECS_EXCERPT =
 
 const HARDWARE_BOARD_LINEUP_EXCERPT =
   "Classin 칠판은 보통 Classin Board 전자칠판 라인업을 뜻합니다. 현재 안내 가능한 주요 모델은 S75, S86, S98 Pro, S110이며, 교실 크기와 맨 뒷자리 시야, 이동형 스탠드/벽걸이, 카메라·마이크 필요 여부로 고릅니다. 75·86인치는 일반 강의실, 98·110인치는 대형 강의실이나 설명회 공간에 더 잘 맞습니다. S65는 라인업에는 있으나 상세 규격 확인이 필요합니다."
+
+const HARDWARE_BOARD_LINEUP_STANDARD_EXCERPT =
+  "Classin Board 전자칠판은 보통 75인치(S75)와 86인치(S86)를 표준으로 가장 많이 선택합니다. 일반 강의실 대부분은 이 두 모델로 시작하며, 학생 수와 맨 뒷자리 시야, 이동형 스탠드/벽걸이, 카메라·마이크 필요 여부로 고릅니다. 대형 강의실·강당·설명회처럼 더 큰 공간이라면 추가 라인업도 있으니 상담에서 공간에 맞춰 안내해 드립니다."
+const HARDWARE_SPECS_STANDARD_EXCERPT =
+  "Classin Board는 75인치(S75)와 86인치(S86)가 표준 모델입니다. 두 모델 모두 4K(3840×2160) 해상도, 16:9 화면, 178도 시야각, 밝기 350cd/m² 이상, 50점 적외선 터치, 탈착식 OPS, Wi-Fi ax/BT5.0, 2×15W 스피커를 기준으로 봅니다. 더 큰 공간을 위한 추가 라인업은 상담에서 공간·예산에 맞춰 안내해 드립니다."
 
 const HARDWARE_TROUBLE_EXCERPT =
   "전자칠판 화면이 안 나오면 전원 플러그와 멀티탭, 오른쪽 측면 하단 전원 버튼, 대기 모드, 입력 소스(OPS/HDMI), HDMI 케이블과 외부 기기 화면 출력을 순서대로 확인합니다. 연기, 냄새, 액체 유입, 파손이 있으면 전원을 분리하고 A/S로 연결합니다."
@@ -425,6 +434,39 @@ function isLiveClassTroubleQuestion(question: NormalizedQuestion) {
 function isWebLiveBillingQuestion(question: NormalizedQuestion) {
   const text = question.redacted.toLowerCase()
   return /웹\s*라이브|web\s*live|라이브\s*&?\s*플레이백/.test(text) && /요금|요금제|플랜|비용|가격|가능|되나요|지원/.test(text)
+}
+
+// 가격/요금 정보성 질문. 웹라이브·환불·세금계산서는 각자 핸들러가 있으니 제외한다.
+const PRICING_INFO_RE = /요금|가격|비용|얼마|금액|가격대/i
+const PRICING_EXCLUDE_RE = /환불|취소|세금|계산서|영수증|청구|정산|미납|연체/i
+function isPricingInfoQuestion(question: NormalizedQuestion) {
+  const text = question.redacted.toLowerCase()
+  if (PRICING_EXCLUDE_RE.test(text)) return false
+  if (isWebLiveBillingQuestion(question)) return false
+  return PRICING_INFO_RE.test(text)
+}
+
+// 설치 형태(스탠드/벽걸이)와 설치 가능/기간. 하드웨어 장애와는 분리한다.
+const INSTALL_FORM_RE = /스탠드|벽걸이|벽\s*부착|벽\s*설치|이동형|거치(대|형)?/i
+const INSTALL_HW_CONTEXT_RE = /전자칠판|클래스인\s*보드|classin\s*board|\bboard\b|보드|칠판|하드웨어|교실|벽면|s\s*(?:65|75|86|98|110)\b/i
+const INSTALL_INTENT_RE = /가능|돼|되나|될까|할\s*수|하나요|해야|방식|유형|형태|환경|기간|일정|얼마|어떻게|어디/i
+function isInstallFormQuestion(question: NormalizedQuestion) {
+  const text = question.redacted.toLowerCase()
+  if (HARDWARE_TROUBLE_RE.test(text)) return false
+  if (INSTALL_FORM_RE.test(text)) return true
+  return /설치/.test(text) && INSTALL_HW_CONTEXT_RE.test(text) && INSTALL_INTENT_RE.test(text)
+}
+
+// 핵심 기능 yes/no — 문서에 명확히 있는 기능만. 약한 영역(결제/정산/학부모 자동 알림/고급 리포트)·AI 채점은 제외해 과장하지 않는다.
+const CORE_FEATURE_RE = /녹화|다시\s*보기|출결|출석|숙제|과제|복습|시험|퀴즈|화면\s*공유|미러링|판서/i
+const FEATURE_YESNO_RE = /되나요|되나|돼요|돼나요|되니|되는지|가능(해|한가요|할까요|해요|함|한지)?|있나요|있어요|있는지|지원(\s*(해|하나요|되나요|됨|함))?/i
+const FEATURE_WEAK_AREA_RE = /결제|수납|정산|환불|학부모\s*(알림|문자|푸시|메시지)|자동\s*(수납|정산|알림)|고급\s*리포트|성적\s*분석|ai\s*(채점|출제)/i
+function isCoreFeatureYesNoQuestion(question: NormalizedQuestion) {
+  const text = question.redacted.toLowerCase()
+  if (FEATURE_WEAK_AREA_RE.test(text)) return false
+  if (HARDWARE_TROUBLE_RE.test(text) || isLiveClassTroubleQuestion(question)) return false
+  if (isComparisonQuestion(question)) return false
+  return CORE_FEATURE_RE.test(text) && FEATURE_YESNO_RE.test(text)
 }
 
 function isApiSource(source: Pick<ChatbotSource, "title" | "heading" | "excerpt" | "category">) {
@@ -507,7 +549,7 @@ function buildCuratedSources(question: NormalizedQuestion) {
       "hardware",
       "board-lineup-specs",
       "Classin Board 모델 선택",
-      HARDWARE_BOARD_LINEUP_EXCERPT,
+      HARDWARE_BIG_MODEL_RE.test(text) ? HARDWARE_BOARD_LINEUP_EXCERPT : HARDWARE_BOARD_LINEUP_STANDARD_EXCERPT,
       315,
       "hardware"
     )
@@ -519,7 +561,7 @@ function buildCuratedSources(question: NormalizedQuestion) {
       "hardware",
       "board-lineup-specs",
       "Classin Board 스펙 요약",
-      HARDWARE_SPECS_EXCERPT,
+      HARDWARE_BIG_MODEL_RE.test(text) ? HARDWARE_SPECS_EXCERPT : HARDWARE_SPECS_STANDARD_EXCERPT,
       310,
       "hardware"
     )
@@ -1293,7 +1335,15 @@ function getIdentityAnswer() {
   ].join("\n\n")
 }
 
-function getHardwareSpecsAnswer() {
+function getHardwareSpecsAnswer(revealBig: boolean) {
+  if (!revealBig) {
+    return [
+      "네, Classin Board 사양 정리해드릴게요.",
+      "표준 모델은 75인치(S75)와 86인치(S86)예요. 공통 기준은 4K · 16:9 · 178도 시야각 · 밝기 350cd/m² 이상 · 50점 적외선 터치 · Android 11 · 탈착식 OPS입니다.",
+      "- S75 — 75인치 · 54kg · 315W\n- S86 — 86인치 · 69.5kg · 390W",
+      "더 큰 공간을 위한 추가 라인업은 교실 크기랑 설치 방식만 알려주시면 상담에서 맞춰 안내해 드릴게요.",
+    ].join("\n\n")
+  }
   return [
     "네, Classin Board 사양 정리해드릴게요.",
     "공통 기준은 4K · 16:9 · 178도 시야각 · 밝기 350cd/m² 이상 · 50점 적외선 터치 · Android 11 · 탈착식 OPS예요.",
@@ -1303,7 +1353,14 @@ function getHardwareSpecsAnswer() {
   ].join("\n\n")
 }
 
-function getHardwareBoardLineupAnswer() {
+function getHardwareBoardLineupAnswer(revealBig: boolean) {
+  if (!revealBig) {
+    return [
+      "네, 전자칠판 모델 보고 계시는군요.",
+      "Classin Board는 보통 75인치(S75)와 86인치(S86)를 표준으로 가장 많이 선택해요. 일반 강의실은 이 두 모델로 시작하면 충분한 경우가 많습니다.",
+      "대형 강의실·강당·설명회처럼 더 큰 공간이라면 추가 라인업도 있으니, 교실 크기랑 설치 방식만 알려주시면 상담에서 딱 맞는 모델로 좁혀드릴게요.",
+    ].join("\n\n")
+  }
   return [
     "네, 전자칠판 모델 보고 계시는군요.",
     "Classin Board는 S75 · S86 · S98 Pro · S110 네 가지예요.\n일반 강의실은 75·86인치, 대형 강의실·설명회는 98·110인치를 많이 보세요.",
@@ -1370,10 +1427,10 @@ function formatConsumerAnswer({
     return getHardwareTroubleAnswer()
   }
   if (isHardwareBoardLineupQuestion(question) && top.urlPath.includes("/docs/hardware/board-lineup-specs")) {
-    return getHardwareBoardLineupAnswer()
+    return getHardwareBoardLineupAnswer(HARDWARE_BIG_MODEL_RE.test(question.redacted.toLowerCase()))
   }
   if (isHardwareSpecsQuestion(question) && top.urlPath.includes("/docs/hardware/board-lineup-specs")) {
-    return getHardwareSpecsAnswer()
+    return getHardwareSpecsAnswer(HARDWARE_BIG_MODEL_RE.test(question.redacted.toLowerCase()))
   }
   if (isComparisonQuestion(question) && top.urlPath.includes("/docs/start/academy-system-os-positioning")) {
     return getComparisonAnswer(top)

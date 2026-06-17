@@ -109,7 +109,8 @@ describe("chatbot RAG source relevance", () => {
       })
       expect(result.sources).toHaveLength(1)
       expect(result.answer).toContain("4K")
-      expect(result.answer).toContain("S98 Pro")
+      expect(result.answer).toContain("S86")
+      expect(result.answer).not.toContain("S98 Pro")
       expect(result.answer).not.toContain("6.0.7")
       expect(result.answer).not.toContain("교사 온보딩")
     }
