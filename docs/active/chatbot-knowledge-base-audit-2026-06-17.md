@@ -3,6 +3,7 @@
 연계 문서:
 - [docs/superpowers/specs/2026-06-17-chatbot-knowledge-base-expansion-design.md](../superpowers/specs/2026-06-17-chatbot-knowledge-base-expansion-design.md) — 이 작업의 설계(백본)
 - [docs/active/channel-docs-sync-2026-06-17.md](./channel-docs-sync-2026-06-17.md) — 채널톡 동기화 런북
+- [docs/active/classin-korea-positioning-guidelines.md](./classin-korea-positioning-guidelines.md) — 한국 시장 포지셔닝·콘텐츠 SSOT(이 작업의 정렬 기준)
 - [docs/active/chatbot-docs-activation-runbook-2026-06-14.md](./chatbot-docs-activation-runbook-2026-06-14.md) — 챗봇 docs 활성화 런북
 
 > 목적: "클래스인 관련 콘텐츠가 무엇이 / 어디에 / 챗봇이 검색 가능한 형태로 있는가"를 한 장에 정리한다. 빈 곳과 애매한 곳을 드러내고, 새 콘텐츠 추가 절차를 고정한다.
@@ -170,3 +171,10 @@ npx tsx scripts/embed-docs-chunks.ts
 3. "무슨 기능 있어?", "효과 언제?" 같은 **도메인 키워드 없는** 질문 → `isDomainRelatedQuestion` 필터로 `general`/`fallback` 처리(검색 전 차단).
 
 → 위 질문들을 신규 doc으로 라우팅하려면 `buildCuratedSources()`/도메인 키워드 사전 보강이 후속 작업 후보. 단, "왜 필요?"에 포지셔닝 doc이 답하는 것도 타당하므로 변경은 가치 판단 사안.
+
+### 8-2. 포지셔닝 가이드라인 정렬 (2026-06-17 추가)
+
+[classin-korea-positioning-guidelines.md](./classin-korea-positioning-guidelines.md)(한국 시장 포지셔닝·콘텐츠 SSOT)에 맞춰 신규 5종을 정렬:
+- **단정 표현 제거**: `customer-stories`의 "국내 300여 기관" 문구 삭제 — 가이드라인 §3/§11(확인 전 기관·보드 수 단정 금지) 준수.
+- **CTA를 가이드라인 §9 리드마그넷 맵에 연결**: 가격→`academy-resource-reduction-calculator`, 도입여정→`classin-90-day-adoption-roadmap`, API→`academy-data-automation-brief`, 비교→`academy-software-selection-worksheet`, 사례/첫방문→`academy-system-checklist`.
+- 재시드·재임베딩 완료(5 articles / 48 chunks). 7종 리드마그넷은 [data/lead-magnets.json](../../data/lead-magnets.json)에 모두 존재.
