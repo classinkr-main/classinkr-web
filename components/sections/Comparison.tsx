@@ -7,34 +7,34 @@ import { DemoModal } from "./DemoModal"
 
 const rows = [
     {
-        feature: "교사 행정 업무 시간",
-        traditional: "교사당 주 10시간 이상",
-        eduscale: "2시간 미만 — AI가 처리",
+        feature: "제품을 보는 기준",
+        traditional: "화상회의, 전자칠판, LMS를 각각 따로 비교",
+        eduscale: "수업 전·중·후 운영 흐름을 하나의 시스템으로 설계",
     },
     {
-        feature: "성과 가시성",
-        traditional: "학기 말 성적표만 제공",
-        eduscale: "모든 이해관계자를 위한 실시간 대시보드",
+        feature: "수업 자료와 판서",
+        traditional: "자료를 매번 열고, 판서는 별도로 저장하거나 정리",
+        eduscale: "EDB 교안으로 판서·이미지·텍스트를 다시 불러와 활용",
     },
     {
-        feature: "신규 지점 확장",
-        traditional: "지점당 수개월의 수동 세팅",
-        eduscale: "48시간 이내 새 지점 배포",
+        feature: "전자칠판 활용",
+        traditional: "안드로이드 보드, 외장 PC, HDMI, 별도 녹화 프로그램 조합",
+        eduscale: "윈도우 기반 OPS와 Classin 소프트웨어가 같은 수업 환경에서 작동",
     },
     {
-        feature: "학부모 소통",
-        traditional: "수동 이메일, 일관성 부족",
-        eduscale: "자동 주간 리포트, 수고 제로",
+        feature: "수업 후 관리",
+        traditional: "녹화, 과제, 복습 배포, 학생 관리가 도구별로 분리",
+        eduscale: "녹화, LMS, 복습 자료, 관리자 데이터가 수업 기준으로 연결",
     },
     {
-        feature: "신규 교사 온보딩",
-        traditional: "적응 기간 3개월 이상",
-        eduscale: "표준화된 플레이북 — 며칠 내 투입",
+        feature: "관리자 관점",
+        traditional: "선생님 보고와 감에 의존해 수업 상태를 파악",
+        eduscale: "권한, 수업 시간, 특이사항, 네트워크 상태 등 운영 데이터를 확인",
     },
     {
-        feature: "수업 품질 일관성",
-        traditional: "개별 교사 역량에 의존",
-        eduscale: "전 지점 통합 커리큘럼 적용",
+        feature: "한계와 연동",
+        traditional: "한 제품이 모든 학원 업무를 해결한다고 기대",
+        eduscale: "결제·오프라인 출석·고급 리포트는 필요 시 API/외부 시스템으로 분리",
     },
 ]
 
@@ -45,13 +45,13 @@ export function Comparison() {
                 <div className="text-center max-w-3xl mx-auto mb-14">
                     <span className="inline-flex items-center gap-2 py-1.5 px-4 rounded-full bg-gradient-to-r from-[#ECFDF5] to-[#D1FAE5]/60 text-[#084734] text-[13px] font-semibold mb-4 border border-[#084734]/8 shadow-[0_2px_8px_rgba(8,71,52,0.06)] tracking-[0.02em]">
                         <span className="w-1 h-1 rounded-full bg-[#084734]/60" />
-                        Zoom·구글 클래스룸과 무엇이 다른가요?
+                        Zoom·전자칠판·LMS와 무엇이 다른가요?
                     </span>
                     <h2 className="text-3xl font-bold text-[#111110] sm:text-4xl mb-4 break-keep" style={{ letterSpacing: '-1px' }}>
-                        회의 도구가 아닌, 수업 전용 플랫폼
+                        한 기능의 대체재가 아니라, 학원 시스템 OS
                     </h2>
                     <p className="text-lg text-[#615D59] break-keep">
-                        Classin은 처음부터 교실 수업을 위해 설계되었습니다. 차이는 명확합니다.
+                        Classin은 화상수업이나 전자칠판 하나만 바꾸는 제품이 아니라 수업 준비, 진행, 녹화, 복습, 관리 데이터를 연결하는 구조입니다.
                     </p>
                 </div>
 

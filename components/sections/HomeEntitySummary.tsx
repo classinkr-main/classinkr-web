@@ -1,15 +1,17 @@
+import { CLASSIN_POSITIONING } from "@/lib/classin-positioning"
+
 const summaryItems = [
   {
     term: "대상",
-    description: "학원, 교습소, 어학원, 입시 학원처럼 반복 수업과 과제 관리를 표준화해야 하는 교육기관",
+    description: CLASSIN_POSITIONING.primaryAudience,
   },
   {
-    term: "핵심 기능",
-    description: "실시간 수업, 과제·테스트, AI 자동채점, 복습 리포트, 학부모 소통, 관리자 대시보드",
+    term: "핵심 흐름",
+    description: "전자칠판, EDB 교안, 녹화, LMS, 학생 관리, 관리자 대시보드를 한 수업 흐름으로 연결",
   },
   {
-    term: "하드웨어 연동",
-    description: "Classin Board 전자칠판과 연결해 판서, 수업 영상, AI 카메라 녹화, 복습 자료 공유를 한 흐름으로 관리",
+    term: "정직한 범위",
+    description: "수업 운영은 Classin 안에서 표준화하고 결제·오프라인 출석·고급 리포트는 필요 시 연동으로 설계",
   },
 ]
 
@@ -21,13 +23,13 @@ export function HomeEntitySummary() {
           <div>
             <p className="text-xs font-bold uppercase tracking-[0.16em] text-[#084734]">Classin Overview</p>
             <h2 id="classin-summary-title" className="mt-3 text-2xl font-black leading-tight text-[#111110] md:text-4xl">
-              Classin은 학원 수업 운영 플랫폼입니다
+              Classin은 학원 시스템 OS입니다
             </h2>
           </div>
           <div>
             <p className="text-base leading-8 text-[#484540] md:text-lg">
-              Classin은 수업 준비, 실시간 수업, 과제 제출, AI 자동채점, 복습 리포트, 학부모 소통을 하나로 연결해
-              강사 개인 역량에만 의존하던 수업 운영을 시스템으로 바꾸는 플랫폼입니다.
+              {CLASSIN_POSITIONING.oneLine} 강사 개인기, 엑셀, 메신저, 별도 녹화 도구에 흩어진 운영을
+              기관의 기준과 데이터로 바꾸는 것이 핵심입니다.
             </p>
             <dl className="mt-8 grid gap-4 sm:grid-cols-3">
               {summaryItems.map((item) => (

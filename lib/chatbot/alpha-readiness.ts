@@ -169,8 +169,7 @@ function buildDatabaseShapeCheck(hasSupabaseEnv: boolean, warnings: string[]): C
     label: "챗봇 DB 스키마",
     status: "warning",
     detail: warnings.slice(0, 3).join(" · "),
-    action:
-      "20260614_alpha_admin_base_schema.sql부터 20260421_z_chatbot_analytics.sql까지 문서/챗봇 migration 적용 상태 확인",
+    action: "아래 migration 목록을 운영 DB에 적용한 뒤 PostgREST schema cache를 새로고침",
     artifacts: ALPHA_DB_MIGRATIONS,
   }
 }

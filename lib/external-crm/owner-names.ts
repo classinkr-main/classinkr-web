@@ -1,6 +1,7 @@
 import "server-only"
 
 import { createSupabaseAdminClient } from "@/lib/supabase/admin"
+import { fetchSupabasePages } from "@/lib/supabase/pagination"
 
 type SupabaseAdminClient = ReturnType<typeof createSupabaseAdminClient>
 
@@ -32,31 +33,39 @@ async function computeXiaoshouyiOwnerNameMap(sb: SupabaseAdminClient): Promise<M
 
   const [userResult, overrideResult] = await Promise.all([
     // 1) Auto: synced User directory (present after the User object syncs).
-    sb
-      .from("external_crm_records")
-      .select("external_id, display_name")
-      .eq("source_system", "xiaoshouyi")
-      .eq("object_api_key", XIAOSHOUYI_USER_OBJECT)
-      .limit(USER_MAP_SCAN_LIMIT),
+    fetchSupabasePages<{ external_id: string; display_name: string | null }>({
+      maxRows: USER_MAP_SCAN_LIMIT,
+      fetchPage: (from, to) =>
+        sb
+          .from("external_crm_records")
+          .select("external_id, display_name")
+          .eq("source_system", "xiaoshouyi")
+          .eq("object_api_key", XIAOSHOUYI_USER_OBJECT)
+          .range(from, to),
+    }),
     // 2) Curated overrides — win over the User directory; work without a sync.
-    sb
-      .from("crm_xiaoshouyi_owner_names")
-      .select("external_id, display_name, korean_name")
-      .limit(USER_MAP_SCAN_LIMIT),
+    fetchSupabasePages<{
+      external_id: string
+      display_name: string | null
+      korean_name: string | null
+    }>({
+      maxRows: USER_MAP_SCAN_LIMIT,
+      fetchPage: (from, to) =>
+        sb
+          .from("crm_xiaoshouyi_owner_names")
+          .select("external_id, display_name, korean_name")
+          .range(from, to),
+    }),
   ])
 
   if (!userResult.error && userResult.data) {
-    for (const row of userResult.data as Array<{ external_id: string; display_name: string | null }>) {
+    for (const row of userResult.data) {
       if (row.external_id && row.display_name) map.set(String(row.external_id), row.display_name)
     }
   }
   if (!overrideResult.error && overrideResult.data) {
     // 담당자 표기는 한국 이름 우선(korean_name), 없으면 display_name으로 폴백.
-    for (const row of overrideResult.data as Array<{
-      external_id: string
-      display_name: string | null
-      korean_name: string | null
-    }>) {
+    for (const row of overrideResult.data) {
       const name = row.korean_name?.trim() || row.display_name
       if (row.external_id && name) map.set(String(row.external_id), name)
     }
@@ -75,13 +84,17 @@ export function resolveOwnerName(ownerId: string | null | undefined, ownerNames:
 // revenue. Empty set until the owner-names table is applied/curated.
 export async function getExcludedXiaoshouyiOwnerIds(sb: SupabaseAdminClient): Promise<Set<string>> {
   const set = new Set<string>()
-  const { data, error } = await sb
-    .from("crm_xiaoshouyi_owner_names")
-    .select("external_id")
-    .eq("is_excluded", true)
-    .limit(USER_MAP_SCAN_LIMIT)
+  const { data, error } = await fetchSupabasePages<{ external_id: string }>({
+    maxRows: USER_MAP_SCAN_LIMIT,
+    fetchPage: (from, to) =>
+      sb
+        .from("crm_xiaoshouyi_owner_names")
+        .select("external_id")
+        .eq("is_excluded", true)
+        .range(from, to),
+  })
   if (error || !data) return set
-  for (const row of data as Array<{ external_id: string }>) {
+  for (const row of data) {
     if (row.external_id) set.add(String(row.external_id))
   }
   return set

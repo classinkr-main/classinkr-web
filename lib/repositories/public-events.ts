@@ -41,9 +41,24 @@ interface PublicEventSlugRow {
 }
 
 const PUBLICATION_STATUSES = new Set<EventPublicationStatus>(["draft", "published"])
+const PUBLISHED_PUBLICATION_STATUS_VALUES = ["published", "PUBLISHED"]
+const PUBLIC_EVENT_QUERY_TIMEOUT_MS = 6_000
 
 function logPublicEventReadFailure(context: string, error: unknown): void {
   console.error(`[public-events] ${context}`, error)
+}
+
+function createPublicEventQueryTimeout() {
+  const controller = new AbortController()
+  const timer = setTimeout(() => controller.abort(), PUBLIC_EVENT_QUERY_TIMEOUT_MS)
+  return {
+    signal: controller.signal,
+    clear: () => clearTimeout(timer),
+  }
+}
+
+function isAbortError(error: { code?: string; message?: string } | null | undefined) {
+  return /AbortError|aborted|timeout/i.test(error?.message ?? "") || error?.code === "ABORT_ERR"
 }
 
 function computeStatus(row: PublicEventRow): EventStatus {
@@ -55,8 +70,9 @@ function computeStatus(row: PublicEventRow): EventStatus {
 }
 
 function normalizePublicationStatus(value: string | null | undefined): EventPublicationStatus {
-  return PUBLICATION_STATUSES.has(value as EventPublicationStatus)
-    ? (value as EventPublicationStatus)
+  const normalized = typeof value === "string" ? value.toLowerCase() : value
+  return PUBLICATION_STATUSES.has(normalized as EventPublicationStatus)
+    ? (normalized as EventPublicationStatus)
     : "published"
 }
 
@@ -165,46 +181,84 @@ function rowToEvent(row: PublicEventRow): PublicEvent {
 
 export async function listPublicEvents(): Promise<PublicEvent[]> {
   const supabase = createSupabaseAdminClient()
-  const { data, error } = await supabase
-    .from("public_events")
-    .select("*")
-    .eq("publication_status", "published")
-    .order("starts_at", { ascending: false })
-  if (isMissingPublicationStatusColumn(error)) {
-    const legacy = await supabase
+  const timeout = createPublicEventQueryTimeout()
+  try {
+    const { data, error } = await supabase
       .from("public_events")
       .select("*")
+      .in("publication_status", PUBLISHED_PUBLICATION_STATUS_VALUES)
       .order("starts_at", { ascending: false })
-    if (legacy.error) throw legacy.error
-    return (legacy.data as PublicEventRow[]).map(rowToEvent)
+      .abortSignal(timeout.signal)
+    if (error && isAbortError(error)) {
+      console.warn(
+        `[public-events] 공개 행사 목록 조회 timeout after ${PUBLIC_EVENT_QUERY_TIMEOUT_MS}ms`
+      )
+      return []
+    }
+    if (isMissingPublicationStatusColumn(error)) {
+      const legacy = await supabase
+        .from("public_events")
+        .select("*")
+        .order("starts_at", { ascending: false })
+        .abortSignal(timeout.signal)
+      if (legacy.error && isAbortError(legacy.error)) {
+        console.warn(
+          `[public-events] legacy 행사 목록 조회 timeout after ${PUBLIC_EVENT_QUERY_TIMEOUT_MS}ms`
+        )
+        return []
+      }
+      if (legacy.error) throw legacy.error
+      return (legacy.data as PublicEventRow[]).map(rowToEvent)
+    }
+    if (error) throw error
+    return (data as PublicEventRow[]).map(rowToEvent)
+  } finally {
+    timeout.clear()
   }
-  if (error) throw error
-  return (data as PublicEventRow[]).map(rowToEvent)
 }
 
 export async function listPublicEventSlugs(): Promise<string[]> {
   const supabase = createSupabaseAdminClient()
-  const { data, error } = await supabase
-    .from("public_events")
-    .select("slug")
-    .eq("publication_status", "published")
-    .not("slug", "is", null)
-    .order("starts_at", { ascending: false })
-  if (isMissingPublicationStatusColumn(error)) {
-    const legacy = await supabase
+  const timeout = createPublicEventQueryTimeout()
+  try {
+    const { data, error } = await supabase
       .from("public_events")
       .select("slug")
+      .in("publication_status", PUBLISHED_PUBLICATION_STATUS_VALUES)
       .not("slug", "is", null)
       .order("starts_at", { ascending: false })
-    if (legacy.error) throw legacy.error
-    return (legacy.data as PublicEventSlugRow[])
+      .abortSignal(timeout.signal)
+    if (error && isAbortError(error)) {
+      console.warn(
+        `[public-events] 공개 행사 slug 조회 timeout after ${PUBLIC_EVENT_QUERY_TIMEOUT_MS}ms`
+      )
+      return []
+    }
+    if (isMissingPublicationStatusColumn(error)) {
+      const legacy = await supabase
+        .from("public_events")
+        .select("slug")
+        .not("slug", "is", null)
+        .order("starts_at", { ascending: false })
+        .abortSignal(timeout.signal)
+      if (legacy.error && isAbortError(legacy.error)) {
+        console.warn(
+          `[public-events] legacy 행사 slug 조회 timeout after ${PUBLIC_EVENT_QUERY_TIMEOUT_MS}ms`
+        )
+        return []
+      }
+      if (legacy.error) throw legacy.error
+      return (legacy.data as PublicEventSlugRow[])
+        .map((row) => row.slug)
+        .filter((slug): slug is string => Boolean(slug))
+    }
+    if (error) throw error
+    return (data as PublicEventSlugRow[])
       .map((row) => row.slug)
       .filter((slug): slug is string => Boolean(slug))
+  } finally {
+    timeout.clear()
   }
-  if (error) throw error
-  return (data as PublicEventSlugRow[])
-    .map((row) => row.slug)
-    .filter((slug): slug is string => Boolean(slug))
 }
 
 export const listCachedPublicEvents = unstable_cache(
@@ -344,29 +398,48 @@ export async function updatePublicEvent(
 
 export async function getPublicEventBySlug(slug: string): Promise<PublicEvent | null> {
   const supabase = createSupabaseAdminClient()
-  const { data, error } = await supabase
-    .from("public_events")
-    .select("*")
-    .eq("slug", slug)
-    .eq("publication_status", "published")
-    .single()
-  if (isMissingPublicationStatusColumn(error)) {
-    const legacy = await supabase
+  const timeout = createPublicEventQueryTimeout()
+  try {
+    const { data, error } = await supabase
       .from("public_events")
       .select("*")
       .eq("slug", slug)
+      .in("publication_status", PUBLISHED_PUBLICATION_STATUS_VALUES)
+      .abortSignal(timeout.signal)
       .single()
-    if (legacy.error) {
-      if (legacy.error.code === "PGRST116") return null
-      throw legacy.error
+    if (error && isAbortError(error)) {
+      console.warn(
+        `[public-events] 공개 행사 상세 조회 timeout after ${PUBLIC_EVENT_QUERY_TIMEOUT_MS}ms`
+      )
+      return null
     }
-    return rowToEvent(legacy.data as PublicEventRow)
+    if (isMissingPublicationStatusColumn(error)) {
+      const legacy = await supabase
+        .from("public_events")
+        .select("*")
+        .eq("slug", slug)
+        .abortSignal(timeout.signal)
+        .single()
+      if (legacy.error && isAbortError(legacy.error)) {
+        console.warn(
+          `[public-events] legacy 행사 상세 조회 timeout after ${PUBLIC_EVENT_QUERY_TIMEOUT_MS}ms`
+        )
+        return null
+      }
+      if (legacy.error) {
+        if (legacy.error.code === "PGRST116") return null
+        throw legacy.error
+      }
+      return rowToEvent(legacy.data as PublicEventRow)
+    }
+    if (error) {
+      if (error.code === "PGRST116") return null
+      throw error
+    }
+    return rowToEvent(data as PublicEventRow)
+  } finally {
+    timeout.clear()
   }
-  if (error) {
-    if (error.code === "PGRST116") return null
-    throw error
-  }
-  return rowToEvent(data as PublicEventRow)
 }
 
 export const getCachedPublicEventBySlug = unstable_cache(

@@ -745,7 +745,7 @@ export default function AboutPageClient({ offices, press, recentPosts }: Props) 
                     ))}
                   </div>
                   <Link
-                    href="/blog/2026-asia-ai-education-forum-busan"
+                    href="/blog/2026-asia-ai-education-forum-in-busan"
                     className="inline-flex items-center gap-1.5 text-[14px] font-semibold text-[#084734] hover:gap-2.5 transition-all"
                   >
                     현장 리뷰 보기

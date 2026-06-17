@@ -8,7 +8,7 @@ export async function GET(req: NextRequest) {
   if (err) return err
 
   try {
-    const overview = await getAdminCrmOverview()
+    const overview = await getAdminCrmOverview({ force: req.nextUrl.searchParams.has("force") })
     const response = NextResponse.json(overview)
     response.headers.set("Cache-Control", "private, max-age=30, stale-while-revalidate=120")
     return response

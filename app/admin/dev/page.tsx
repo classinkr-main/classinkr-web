@@ -113,15 +113,27 @@ function RefreshBtn({ onClick, refreshing }: { onClick: () => void; refreshing: 
 
 // ─── Constants ───────────────────────────────────────────
 const TABS = [
-  { id: "roadmap", label: "로드맵" },
-  { id: "bugs", label: "버그 리포트" },
-  { id: "dataQuality", label: "데이터 품질" },
-  { id: "patchnotes", label: "패치노트" },
-  { id: "architecture", label: "시스템 구조" },
-  { id: "gitlog", label: "배포 이력" },
+  { id: "roadmap", label: "로드맵", description: "버전별 개발 계획과 기능 진행률을 관리합니다." },
+  { id: "bugs", label: "버그 리포트", description: "오픈 이슈, 심각도, 담당자와 처리 상태를 추적합니다." },
+  { id: "dataQuality", label: "데이터 품질", description: "KR Team 데이터 동기화와 품질 규칙 결과를 점검합니다." },
+  { id: "patchnotes", label: "패치노트", description: "공개/초안 릴리스 노트와 변경사항을 관리합니다." },
+  { id: "architecture", label: "시스템 구조", description: "프론트엔드, 데이터 레이어, 외부 연동 구조를 확인합니다." },
+  { id: "gitlog", label: "배포 이력", description: "최근 커밋, 브랜치 참조, 변경량을 빠르게 확인합니다." },
 ] as const
 
 type Tab = typeof TABS[number]["id"]
+
+const DEFAULT_TAB: Tab = "roadmap"
+
+function isDevTab(value: string | null): value is Tab {
+  return TABS.some((tab) => tab.id === value)
+}
+
+function readDevTabFromLocation(): Tab {
+  if (typeof window === "undefined") return DEFAULT_TAB
+  const tab = new URLSearchParams(window.location.search).get("tab")
+  return isDevTab(tab) ? tab : DEFAULT_TAB
+}
 
 const SEVERITY_CONFIG = {
   critical: { label: "Critical", bg: "bg-[#FEF3EE] text-[#9A4A27] border-[#F6D5C5]" },
@@ -1348,11 +1360,20 @@ function GitLogTab({ token }: { token: string }) {
 // ─── Main Dev Page ────────────────────────────────────────
 export default function DevPage() {
   const router = useRouter()
-  const [tab, setTab] = useState<Tab>("roadmap")
+  const [tab, setTab] = useState<Tab>(DEFAULT_TAB)
   const [token, setToken] = useState("")
   const [userName, setUserName] = useState("팀원")
   const [role, setRole] = useState("")
   const [openBugCount, setOpenBugCount] = useState(0)
+  const activeTab = TABS.find((item) => item.id === tab) ?? TABS[0]
+
+  const selectTab = useCallback((nextTab: Tab) => {
+    setTab(nextTab)
+    if (typeof window === "undefined") return
+    const url = new URL(window.location.href)
+    url.searchParams.set("tab", nextTab)
+    window.history.replaceState(null, "", `${url.pathname}${url.search}${url.hash}`)
+  }, [])
 
   useEffect(() => {
     // dev 환경 자동 스킵
@@ -1371,6 +1392,13 @@ export default function DevPage() {
     })
     if (!t) router.replace("/admin/login")
   }, [router])
+
+  useEffect(() => {
+    queueMicrotask(() => setTab(readDevTabFromLocation()))
+    const handlePopState = () => setTab(readDevTabFromLocation())
+    window.addEventListener("popstate", handlePopState)
+    return () => window.removeEventListener("popstate", handlePopState)
+  }, [])
 
   if (!token) return null
 
@@ -1399,34 +1427,51 @@ export default function DevPage() {
       </div>
 
       {/* Tabs */}
-      <div className="flex gap-1 bg-[#f0f0ec] p-1 rounded-xl mb-6 w-fit">
+      <div
+        className="mb-4 grid gap-1 rounded-2xl border border-[#e8e8e4] bg-[#f0f0ec] p-1 sm:grid-cols-2 lg:grid-cols-6"
+        role="tablist"
+        aria-label="Dev Mode sections"
+      >
         {TABS.map((t) => (
           <button
             key={t.id}
-            onClick={() => setTab(t.id)}
-            className={`relative px-4 py-2 text-[13px] font-medium rounded-lg transition-colors ${
+            id={`dev-tab-${t.id}`}
+            type="button"
+            role="tab"
+            aria-selected={tab === t.id}
+            aria-controls={`dev-panel-${t.id}`}
+            onClick={() => selectTab(t.id)}
+            className={`relative min-h-11 rounded-xl px-3 py-2 text-left text-[13px] font-semibold transition-colors ${
               tab === t.id
                 ? "bg-white text-[#111110] shadow-sm"
-                : "text-[#1a1a1a]/50 hover:text-[#111110]"
+                : "text-[#1a1a1a]/50 hover:bg-white/45 hover:text-[#111110]"
             }`}
           >
             {t.label}
             {t.id === "bugs" && openBugCount > 0 && (
-              <span className="absolute -top-1 -right-1 w-4 h-4 bg-[#B85C33] text-white text-[9px] font-bold rounded-full flex items-center justify-center">
+              <span className="absolute -top-1 -right-1 flex h-4 w-4 items-center justify-center rounded-full bg-[#B85C33] text-[9px] font-bold text-white">
                 {openBugCount > 9 ? "9+" : openBugCount}
               </span>
             )}
           </button>
         ))}
       </div>
+      <div className="mb-6 rounded-xl border border-[#e8e8e4] bg-white px-4 py-3">
+        <p className="text-[11px] font-semibold uppercase tracking-[0.14em] text-[#084734]/60">
+          {activeTab.label}
+        </p>
+        <p className="mt-1 text-[13px] leading-5 text-[#615D59]">{activeTab.description}</p>
+      </div>
 
       {/* Tab Content */}
-      {tab === "roadmap" && <RoadmapTab token={token} />}
-      {tab === "bugs" && <BugsTab token={token} userName={userName} onCountChange={setOpenBugCount} />}
-      {tab === "dataQuality" && <DataQualityPanel mode="dev" />}
-      {tab === "patchnotes" && <PatchNotesTab token={token} />}
-      {tab === "architecture" && <ArchitectureTab />}
-      {tab === "gitlog" && <GitLogTab token={token} />}
+      <section id={`dev-panel-${tab}`} role="tabpanel" aria-labelledby={`dev-tab-${tab}`}>
+        {tab === "roadmap" && <RoadmapTab token={token} />}
+        {tab === "bugs" && <BugsTab token={token} userName={userName} onCountChange={setOpenBugCount} />}
+        {tab === "dataQuality" && <DataQualityPanel mode="dev" />}
+        {tab === "patchnotes" && <PatchNotesTab token={token} />}
+        {tab === "architecture" && <ArchitectureTab />}
+        {tab === "gitlog" && <GitLogTab token={token} />}
+      </section>
     </div>
   )
 }

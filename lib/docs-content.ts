@@ -2,9 +2,9 @@ import "server-only"
 
 import { createSupabaseAdminClient } from "@/lib/supabase/admin"
 import {
-  DOC_CATEGORY_IDS,
   docsCategories as staticDocsCategories,
   getDocPath,
+  isDocCategoryId,
   listDocs as listStaticDocs,
   type DocArticle,
   type DocCategory,
@@ -13,6 +13,7 @@ import {
   type DocResource,
   type DocSection,
 } from "@/lib/docs"
+import { sanitizePublicUrl } from "@/lib/safe-public-url"
 
 export interface DocsContent {
   categories: DocCategory[]
@@ -57,45 +58,94 @@ const staticDocsContent: DocsContent = {
   docs: listStaticDocs(),
 }
 
+const PUBLISHED_DOC_STATUS_VALUES = ["published", "PUBLISHED"]
+
 function shouldUseSupabaseDocs() {
-  return process.env.USE_SUPABASE_DOCS === "true"
+  const mode = process.env.USE_SUPABASE_DOCS?.trim().toLowerCase()
+  if (mode === "false") return false
+  if (mode === "true") return true
+
+  return Boolean(
+    process.env.SUPABASE_SECRET_KEY?.trim() || process.env.SUPABASE_SERVICE_ROLE_KEY?.trim()
+  )
 }
 
-function isDocCategoryId(value: string): value is DocCategoryId {
-  return (DOC_CATEGORY_IDS as readonly string[]).includes(value)
+function mergeDocsContent(base: DocsContent, incoming: DocsContent): DocsContent {
+  const categoriesById = new Map(base.categories.map((category) => [category.id, category]))
+  for (const category of incoming.categories) {
+    categoriesById.set(category.id, category)
+  }
+
+  const docsByPath = new Map(base.docs.map((doc) => [getDocPath(doc), doc]))
+  for (const doc of incoming.docs) {
+    docsByPath.set(getDocPath(doc), doc)
+  }
+
+  const categories = Array.from(categoriesById.values()).sort((left, right) => {
+    if (left.order !== right.order) return left.order - right.order
+    return left.title.localeCompare(right.title, "ko-KR")
+  })
+
+  const orderByCategory = new Map(categories.map((category) => [category.id, category.order]))
+  const docs = Array.from(docsByPath.values()).sort((left, right) => {
+    const leftOrder = orderByCategory.get(left.category) ?? 999
+    const rightOrder = orderByCategory.get(right.category) ?? 999
+    if (leftOrder !== rightOrder) return leftOrder - rightOrder
+    return right.updatedAt.localeCompare(left.updatedAt)
+  })
+
+  return { categories, docs }
 }
 
-function isDocSection(value: unknown): value is DocSection {
-  if (!value || typeof value !== "object") return false
+function toSafeDocSection(value: unknown): DocSection | null {
+  if (!value || typeof value !== "object") return null
 
   const section = value as Partial<DocSection>
   const hasValidSteps =
     section.steps === undefined ||
     (Array.isArray(section.steps) && section.steps.every((step) => typeof step === "string"))
-  const hasValidMedia =
-    section.media === undefined ||
-    (Array.isArray(section.media) && section.media.every(isDocMedia))
+  if (typeof section.heading !== "string" || typeof section.body !== "string" || !hasValidSteps) {
+    return null
+  }
 
-  return (
-    typeof section.heading === "string" &&
-    typeof section.body === "string" &&
-    hasValidSteps &&
-    hasValidMedia
-  )
+  const media = Array.isArray(section.media)
+    ? section.media.map(toSafeDocMedia).filter((item): item is DocMedia => Boolean(item))
+    : []
+
+  return {
+    heading: section.heading,
+    body: section.body,
+    ...(section.steps ? { steps: section.steps } : {}),
+    ...(media.length > 0 ? { media } : {}),
+  }
 }
 
-function isDocMedia(value: unknown): value is DocMedia {
-  if (!value || typeof value !== "object") return false
+function toSafeDocMedia(value: unknown): DocMedia | null {
+  if (!value || typeof value !== "object") return null
 
   const media = value as Partial<DocMedia>
-  return (
-    (media.type === "image" || media.type === "video") &&
-    typeof media.src === "string" &&
-    typeof media.alt === "string" &&
-    (media.caption === undefined || typeof media.caption === "string") &&
-    (media.width === undefined || typeof media.width === "number") &&
-    (media.height === undefined || typeof media.height === "number")
-  )
+  if (
+    (media.type !== "image" && media.type !== "video") ||
+    typeof media.src !== "string" ||
+    typeof media.alt !== "string" ||
+    (media.caption !== undefined && typeof media.caption !== "string") ||
+    (media.width !== undefined && typeof media.width !== "number") ||
+    (media.height !== undefined && typeof media.height !== "number")
+  ) {
+    return null
+  }
+
+  const safeSrc = sanitizePublicUrl(media.src, "")
+  if (!safeSrc) return null
+
+  return {
+    type: media.type,
+    src: safeSrc,
+    alt: media.alt,
+    ...(media.caption ? { caption: media.caption } : {}),
+    ...(media.width ? { width: media.width } : {}),
+    ...(media.height ? { height: media.height } : {}),
+  }
 }
 
 function isDocResource(value: unknown): value is DocResource {
@@ -127,8 +177,11 @@ function getReadMinutes(contentJson: Record<string, unknown>, markdown: string |
 
 function getSections(contentJson: Record<string, unknown>, fallbackBody: string): DocSection[] {
   const sections = contentJson.sections
-  if (Array.isArray(sections) && sections.every(isDocSection)) {
-    return sections
+  if (Array.isArray(sections)) {
+    const safeSections = sections
+      .map(toSafeDocSection)
+      .filter((section): section is DocSection => Boolean(section))
+    if (safeSections.length > 0) return safeSections
   }
 
   return [
@@ -166,7 +219,7 @@ async function fetchDocsContentFromSupabase(): Promise<DocsContent> {
         .select(
           "id, category_id, slug, title, description, audience, tags, keywords, chatbot_summary, content_markdown, content_json, featured, visibility, noindex, last_reviewed_at, published_at, updated_at"
         )
-        .eq("status", "published")
+        .in("status", PUBLISHED_DOC_STATUS_VALUES)
         .in("visibility", ["public", "unlisted"])
         .order("order_index", { ascending: true }),
     ])
@@ -244,7 +297,7 @@ export async function getDocsContent(): Promise<DocsContent> {
   }
 
   try {
-    return await fetchDocsContentFromSupabase()
+    return mergeDocsContent(staticDocsContent, await fetchDocsContentFromSupabase())
   } catch (error) {
     console.warn(
       "Falling back to static docs content:",

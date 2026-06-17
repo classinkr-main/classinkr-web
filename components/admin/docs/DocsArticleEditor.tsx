@@ -1,6 +1,6 @@
 "use client"
 
-import { useCallback, useEffect, useMemo, useRef, useState, type ReactNode } from "react"
+import { useCallback, useEffect, useMemo, useRef, useState, type ChangeEvent, type ReactNode } from "react"
 import Link from "next/link"
 import { useRouter } from "next/navigation"
 import {
@@ -12,6 +12,7 @@ import {
   ChevronUp,
   CircleAlert,
   Clock3,
+  Download,
   Eye,
   ExternalLink,
   Highlighter,
@@ -42,7 +43,7 @@ import {
   type DocsNavGroup,
   type DocsTocItem,
 } from "@/components/docs"
-import { adminFetch, adminFetchJson, getAdminToken } from "@/lib/admin-client"
+import { adminFetch, adminFetchJson } from "@/lib/admin-client"
 import type { AdminDocsContentResponse } from "@/lib/admin-docs"
 import type {
   DocsArticleAnalyticsDetail,
@@ -424,6 +425,12 @@ const SIDEBAR_TABS: { value: SidebarTab; label: string; mode: "all" | "create" |
 ]
 
 const CURRENT_PREVIEW_ARTICLE_ID = "__current-preview-article__"
+const MARKDOWN_IMPORT_MAX_BYTES = 1024 * 1024
+const STATUS_VALUES = STATUS_OPTIONS.map((option) => option.value)
+const VISIBILITY_VALUES = VISIBILITY_OPTIONS.map((option) => option.value)
+const DOC_TYPE_VALUES = DOC_TYPE_OPTIONS.map((option) => option.value)
+const PRODUCT_AREA_VALUES = PRODUCT_AREA_OPTIONS.map((option) => option.value)
+const DIFFICULTY_VALUES = DIFFICULTY_OPTIONS.map((option) => option.value)
 
 interface PreviewSidebarOrderItem {
   id: string
@@ -431,6 +438,8 @@ interface PreviewSidebarOrderItem {
   orderIndex: number
   current: boolean
 }
+
+type FrontMatterValue = string | number | boolean | null | FrontMatterValue[]
 
 function formSignature(form: FormState) {
   return JSON.stringify(form)
@@ -447,13 +456,188 @@ function fromCsv(value: string): string[] {
     .filter(Boolean)
 }
 
+function parseInlineArray(value: string): FrontMatterValue[] | null {
+  const trimmed = value.trim()
+  if (!trimmed.startsWith("[") || !trimmed.endsWith("]")) return null
+
+  try {
+    const parsed = JSON.parse(trimmed) as unknown
+    if (Array.isArray(parsed)) return parsed as FrontMatterValue[]
+  } catch {
+    // YAML also permits simple inline arrays such as [운영, 체크리스트].
+  }
+
+  return trimmed
+    .slice(1, -1)
+    .split(",")
+    .map((item) => parseFrontMatterScalar(item))
+}
+
+function toCsvFromUnknown(value: unknown) {
+  if (Array.isArray(value)) {
+    return value
+      .map((item) => (typeof item === "string" ? item.trim() : String(item ?? "").trim()))
+      .filter(Boolean)
+      .join(", ")
+  }
+
+  if (typeof value !== "string") return ""
+  const inlineArray = parseInlineArray(value)
+  if (inlineArray) return toCsvFromUnknown(inlineArray)
+  return value.trim()
+}
+
+function getStringField(metadata: Record<string, unknown>, key: string) {
+  const value = metadata[key]
+  return typeof value === "string" ? value.trim() : undefined
+}
+
+function getCsvField(metadata: Record<string, unknown>, key: string) {
+  if (!Object.prototype.hasOwnProperty.call(metadata, key)) return undefined
+  return toCsvFromUnknown(metadata[key])
+}
+
+function getBooleanField(metadata: Record<string, unknown>, key: string) {
+  return typeof metadata[key] === "boolean" ? metadata[key] : undefined
+}
+
+function getNumberField(metadata: Record<string, unknown>, key: string) {
+  const value = metadata[key]
+  return typeof value === "number" && Number.isFinite(value) ? value : undefined
+}
+
+function getOptionField<T extends string>(
+  metadata: Record<string, unknown>,
+  key: string,
+  options: readonly T[]
+) {
+  const value = getStringField(metadata, key)
+  return value && options.includes(value as T) ? (value as T) : undefined
+}
+
 function slugify(value: string) {
   return value
     .toLowerCase()
-    .replace(/\s+/g, "-")
+    .replace(/[\s_]+/g, "-")
     .replace(/[^a-z0-9-]/g, "")
     .replace(/-+/g, "-")
     .replace(/^-|-$/g, "")
+}
+
+function titleFromMarkdown(markdown: string) {
+  return markdown.match(/^#\s+(.+)$/m)?.[1]?.trim()
+}
+
+function titleFromFilename(filename: string) {
+  return filename.replace(/\.(md|markdown)$/i, "").replace(/[-_]+/g, " ").trim()
+}
+
+function mdFilename(form: Pick<FormState, "slug" | "title">) {
+  const candidate = form.slug.trim() || slugify(form.title) || "classin-guide"
+  return `${candidate}.md`
+}
+
+function fallbackImportSlug(filenameTitle: string) {
+  return slugify(filenameTitle) || makeTemplateSlug("imported-doc")
+}
+
+function parseFrontMatterScalar(value: string): FrontMatterValue {
+  const trimmed = value.trim()
+  if (!trimmed) return ""
+  const inlineArray = parseInlineArray(trimmed)
+  if (inlineArray) return inlineArray
+  if (trimmed === "true") return true
+  if (trimmed === "false") return false
+  if (trimmed === "null") return null
+  if (/^-?\d+(?:\.\d+)?$/.test(trimmed)) return Number(trimmed)
+  if (trimmed.startsWith("\"") && trimmed.endsWith("\"")) {
+    try {
+      return JSON.parse(trimmed) as FrontMatterValue
+    } catch {
+      return trimmed.slice(1, -1)
+    }
+  }
+  if (trimmed.startsWith("'") && trimmed.endsWith("'")) {
+    return trimmed.slice(1, -1).replace(/''/g, "'")
+  }
+  return trimmed
+}
+
+function parseMarkdownFrontMatter(markdown: string) {
+  const normalized = markdown.replace(/\r\n/g, "\n")
+  const match = normalized.match(/^---\n([\s\S]*?)\n---(?:\n|$)/)
+  if (!match?.[1]) return { metadata: {}, body: normalized.trim() }
+
+  const metadata: Record<string, unknown> = {}
+  let activeArrayKey: string | null = null
+
+  for (const line of match[1].split("\n")) {
+    const arrayItem = line.match(/^\s*-\s+(.*)$/)
+    if (arrayItem?.[1] && activeArrayKey) {
+      const current = metadata[activeArrayKey]
+      metadata[activeArrayKey] = [
+        ...(Array.isArray(current) ? current : []),
+        parseFrontMatterScalar(arrayItem[1]),
+      ]
+      continue
+    }
+
+    const field = line.match(/^([A-Za-z][A-Za-z0-9_-]*):(?:\s*(.*))?$/)
+    if (!field?.[1]) {
+      activeArrayKey = null
+      continue
+    }
+
+    const [, key, rawValue = ""] = field
+    if (rawValue.trim()) {
+      metadata[key] = parseFrontMatterScalar(rawValue)
+      activeArrayKey = null
+    } else {
+      metadata[key] = []
+      activeArrayKey = key
+    }
+  }
+
+  return {
+    metadata,
+    body: normalized.slice(match[0].length).trim(),
+  }
+}
+
+function frontMatterLine(key: string, value: unknown) {
+  if (typeof value === "boolean" || typeof value === "number") return `${key}: ${value}`
+  return `${key}: ${JSON.stringify(value ?? "")}`
+}
+
+function frontMatterArray(key: string, values: string[]) {
+  if (values.length === 0) return `${key}:`
+  return [`${key}:`, ...values.map((value) => `  - ${JSON.stringify(value)}`)].join("\n")
+}
+
+function buildMarkdownExport(form: FormState) {
+  const frontMatter = [
+    frontMatterLine("title", form.title),
+    frontMatterLine("description", form.description),
+    frontMatterLine("slug", form.slug),
+    frontMatterLine("categoryId", form.categoryId),
+    frontMatterLine("status", form.status),
+    frontMatterLine("visibility", form.visibility),
+    frontMatterLine("docType", form.docType),
+    frontMatterLine("productArea", form.productArea),
+    frontMatterLine("difficulty", form.difficulty),
+    frontMatterArray("audience", fromCsv(form.audience)),
+    frontMatterArray("tags", fromCsv(form.tagsCsv)),
+    frontMatterArray("keywords", fromCsv(form.keywordsCsv)),
+    frontMatterArray("symptoms", fromCsv(form.symptomsCsv)),
+    frontMatterLine("chatbotSummary", form.chatbotSummary),
+    frontMatterLine("seoTitle", form.seoTitle),
+    frontMatterLine("seoDescription", form.seoDescription),
+    frontMatterLine("noindex", form.noindex),
+    frontMatterLine("featured", form.featured),
+    frontMatterLine("orderIndex", form.orderIndex),
+  ].join("\n")
+
+  return `---\n${frontMatter}\n---\n\n${form.contentMarkdown.trim()}\n`
 }
 
 function getOptionLabel<T extends { value: string; label: string }>(options: T[], value: string) {
@@ -820,6 +1004,7 @@ function ToolbarButton({
 export default function DocsArticleEditor({ mode, categories, article }: Props) {
   const router = useRouter()
   const editorRef = useRef<RichMarkdownEditorHandle | null>(null)
+  const markdownFileInputRef = useRef<HTMLInputElement | null>(null)
   const draftAppliedRef = useRef(false)
   const [form, setForm] = useState<FormState>(() =>
     initialForm(article, categories[0]?.id ?? "start")
@@ -843,7 +1028,6 @@ export default function DocsArticleEditor({ mode, categories, article }: Props) 
   const [relationsSaving, setRelationsSaving] = useState(false)
   const [snapshotting, setSnapshotting] = useState(false)
   const [rollingBackVersionId, setRollingBackVersionId] = useState<string | null>(null)
-  const [uploadingMedia, setUploadingMedia] = useState(false)
   const [snapshotNote, setSnapshotNote] = useState("Manual snapshot")
   const [previewOpen, setPreviewOpen] = useState(false)
   const [activeSidebarTab, setActiveSidebarTab] = useState<SidebarTab>(
@@ -1270,6 +1454,132 @@ export default function DocsArticleEditor({ mode, categories, article }: Props) 
     update("contentMarkdown", optimizeMarkdown(form.contentMarkdown))
   }
 
+  async function importMarkdownFile(file: File) {
+    setError(null)
+    setSavedMessage(null)
+
+    const filename = file.name.trim()
+    if (!/\.(md|markdown)$/i.test(filename)) {
+      setError("Markdown 파일(.md, .markdown)만 가져올 수 있습니다.")
+      return
+    }
+
+    if (file.size > MARKDOWN_IMPORT_MAX_BYTES) {
+      setError("1MB 이하의 Markdown 파일만 가져올 수 있습니다.")
+      return
+    }
+
+    if (
+      form.contentMarkdown.trim() &&
+      !window.confirm("현재 본문을 가져온 Markdown 파일로 덮어씁니다. 계속할까요?")
+    ) {
+      return
+    }
+
+    try {
+      const raw = await file.text()
+      const { metadata, body } = parseMarkdownFrontMatter(raw)
+      const contentMarkdown = optimizeMarkdown(body)
+
+      if (!contentMarkdown) {
+        setError("가져온 Markdown 파일에 본문이 없습니다.")
+        return
+      }
+
+      const hasMetadata = Object.keys(metadata).length > 0
+      const importedTitle = getStringField(metadata, "title") ?? titleFromMarkdown(contentMarkdown)
+      const filenameTitle = titleFromFilename(filename)
+      const importedSlug = slugify(getStringField(metadata, "slug") ?? filenameTitle) || fallbackImportSlug(filenameTitle)
+      const importedCategoryId = getStringField(metadata, "categoryId")
+      const categoryId =
+        importedCategoryId && categories.some((category) => category.id === importedCategoryId)
+          ? importedCategoryId
+          : undefined
+
+      setForm((previous) => ({
+        ...previous,
+        contentMarkdown,
+        title:
+          (hasMetadata ? importedTitle : previous.title || importedTitle || filenameTitle) ??
+          previous.title,
+        description:
+          (hasMetadata ? getStringField(metadata, "description") : undefined) ??
+          previous.description,
+        slug:
+          (hasMetadata ? importedSlug : previous.slug || importedSlug) ??
+          previous.slug,
+        categoryId: categoryId ?? previous.categoryId,
+        audience:
+          (hasMetadata ? getCsvField(metadata, "audience") : undefined) ??
+          previous.audience,
+        tagsCsv:
+          (hasMetadata ? getCsvField(metadata, "tags") : undefined) ??
+          previous.tagsCsv,
+        keywordsCsv:
+          (hasMetadata ? getCsvField(metadata, "keywords") : undefined) ??
+          previous.keywordsCsv,
+        symptomsCsv:
+          (hasMetadata ? getCsvField(metadata, "symptoms") : undefined) ??
+          previous.symptomsCsv,
+        chatbotSummary:
+          (hasMetadata ? getStringField(metadata, "chatbotSummary") : undefined) ??
+          previous.chatbotSummary,
+        productArea:
+          getOptionField<DocsArticleProductArea>(metadata, "productArea", PRODUCT_AREA_VALUES) ??
+          previous.productArea,
+        docType:
+          getOptionField<DocsArticleDocType>(metadata, "docType", DOC_TYPE_VALUES) ??
+          previous.docType,
+        difficulty:
+          getOptionField<DocsArticleDifficulty>(metadata, "difficulty", DIFFICULTY_VALUES) ??
+          previous.difficulty,
+        status:
+          getOptionField<DocsArticleStatus>(metadata, "status", STATUS_VALUES) ??
+          previous.status,
+        visibility:
+          getOptionField<DocsArticleVisibility>(metadata, "visibility", VISIBILITY_VALUES) ??
+          previous.visibility,
+        noindex: getBooleanField(metadata, "noindex") ?? previous.noindex,
+        featured: getBooleanField(metadata, "featured") ?? previous.featured,
+        orderIndex: getNumberField(metadata, "orderIndex") ?? previous.orderIndex,
+        seoTitle:
+          (hasMetadata ? getStringField(metadata, "seoTitle") : undefined) ??
+          previous.seoTitle,
+        seoDescription:
+          (hasMetadata ? getStringField(metadata, "seoDescription") : undefined) ??
+          previous.seoDescription,
+      }))
+      setSavedMessage("Markdown 파일을 가져왔습니다. 저장 전 미리보기를 확인하세요.")
+      setTimeout(() => setSavedMessage(null), 2500)
+    } catch (error) {
+      setError(error instanceof Error ? error.message : "Markdown 파일을 가져오지 못했습니다.")
+    }
+  }
+
+  function handleMarkdownFileChange(event: ChangeEvent<HTMLInputElement>) {
+    const file = event.target.files?.[0]
+    event.target.value = ""
+    if (!file) return
+    void importMarkdownFile(file)
+  }
+
+  function exportMarkdownFile() {
+    setError(null)
+    const blob = new Blob([buildMarkdownExport(form)], {
+      type: "text/markdown;charset=utf-8",
+    })
+    const url = URL.createObjectURL(blob)
+    const anchor = document.createElement("a")
+    anchor.href = url
+    anchor.download = mdFilename(form)
+    document.body.appendChild(anchor)
+    anchor.click()
+    anchor.remove()
+    window.setTimeout(() => URL.revokeObjectURL(url), 1000)
+    setSavedMessage("Markdown 파일을 내보냈습니다.")
+    setTimeout(() => setSavedMessage(null), 2500)
+  }
+
   function updateRelation<K extends keyof DocsArticleRelationDetail>(
     index: number,
     key: K,
@@ -1383,38 +1693,6 @@ export default function DocsArticleEditor({ mode, categories, article }: Props) 
       setError(error instanceof Error ? error.message : "롤백하지 못했습니다.")
     } finally {
       setRollingBackVersionId(null)
-    }
-  }
-
-  async function uploadMedia(file: File) {
-    if (file.size > 5 * 1024 * 1024) {
-      setError("이미지 파일은 5MB 이하만 업로드할 수 있습니다.")
-      return
-    }
-
-    setUploadingMedia(true)
-    setError(null)
-    try {
-      const formData = new FormData()
-      formData.append("file", file)
-      const response = await fetch("/api/admin/upload", {
-        method: "POST",
-        headers: { Authorization: `Bearer ${getAdminToken()}` },
-        body: formData,
-      })
-      const body = await response.json().catch(() => null)
-      if (!response.ok) throw new Error(body?.error ?? "업로드에 실패했습니다.")
-
-      const url = typeof body?.url === "string" ? body.url : ""
-      if (!url) throw new Error("업로드 URL을 받지 못했습니다.")
-      const alt = file.name.replace(/\.[^.]+$/, "")
-      editorRef.current?.insertMarkdown(`\n\n![${alt}](${url})\n\n`)
-      setSavedMessage("이미지를 본문에 삽입했습니다.")
-      setTimeout(() => setSavedMessage(null), 2500)
-    } catch (error) {
-      setError(error instanceof Error ? error.message : "업로드에 실패했습니다.")
-    } finally {
-      setUploadingMedia(false)
     }
   }
 
@@ -1960,25 +2238,30 @@ export default function DocsArticleEditor({ mode, categories, article }: Props) 
                     <ToolbarButton onClick={() => editorRef.current?.insertImage()} icon={<ImageIcon className="h-3 w-3" />}>
                       이미지
                     </ToolbarButton>
-                    <label className="inline-flex cursor-pointer items-center gap-1 rounded-lg border border-[#e8e8e4] bg-white px-2 py-1.5 text-xs font-medium text-[#1a1a1a]/60 transition-colors duration-75 hover:border-[#1a1a1a]/20 hover:text-[#111110]">
-                      <Upload className="h-3 w-3" />
-                      {uploadingMedia ? "업로드 중" : "업로드"}
-                      <input
-                        type="file"
-                        accept="image/png,image/jpeg,image/webp,image/gif"
-                        disabled={uploadingMedia}
-                        className="sr-only"
-                        onChange={(event) => {
-                          const file = event.target.files?.[0]
-                          event.currentTarget.value = ""
-                          if (file) void uploadMedia(file)
-                        }}
-                      />
-                    </label>
                     <ToolbarButton onClick={() => editorRef.current?.insertDivider()} icon={<Minus className="h-3 w-3" />}>
                       구분선
                     </ToolbarButton>
+                    <span className="mx-0.5 h-4 w-px bg-[#e8e8e4]" aria-hidden="true" />
+                    <ToolbarButton
+                      onClick={() => markdownFileInputRef.current?.click()}
+                      icon={<Upload className="h-3 w-3" />}
+                    >
+                      MD 가져오기
+                    </ToolbarButton>
+                    <ToolbarButton
+                      onClick={exportMarkdownFile}
+                      icon={<Download className="h-3 w-3" />}
+                    >
+                      MD 내보내기
+                    </ToolbarButton>
                   </div>
+                  <input
+                    ref={markdownFileInputRef}
+                    type="file"
+                    accept=".md,.markdown,text/markdown"
+                    className="hidden"
+                    onChange={handleMarkdownFileChange}
+                  />
                 </div>
               </div>
 
@@ -1987,6 +2270,7 @@ export default function DocsArticleEditor({ mode, categories, article }: Props) 
                 value={form.contentMarkdown}
                 onChange={(markdown) => update("contentMarkdown", markdown)}
                 placeholder="본문을 작성해주세요"
+                imageUploadEndpoint="/api/admin/upload"
                 onAiDraftClick={applyArticleDraft}
                 onSelectionOptimize={optimizeCurrentMarkdown}
               />

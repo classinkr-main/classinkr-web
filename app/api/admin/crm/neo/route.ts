@@ -18,9 +18,10 @@ export async function GET(req: NextRequest) {
   const granularity = parseGranularity(searchParams.get("granularity"))
   const rawOffset = Number(searchParams.get("offset") ?? "0")
   const offset = Number.isFinite(rawOffset) ? Math.max(-MAX_OFFSET_BACK, Math.min(0, Math.trunc(rawOffset))) : 0
+  const force = searchParams.has("force")
 
   try {
-    const report = await getNeoCrmTeamReport({ granularity, offset })
+    const report = await getNeoCrmTeamReport({ granularity, offset, force })
     const response = NextResponse.json(report)
     response.headers.set("Cache-Control", "private, max-age=30, stale-while-revalidate=120")
     return response

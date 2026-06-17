@@ -1,13 +1,12 @@
 import { NextResponse } from "next/server"
 
 import { createSupabaseAdminClient } from "@/lib/supabase/admin"
+import { CLASSIN_POSITIONING } from "@/lib/classin-positioning"
 
 export const dynamic = "force-dynamic"
 
 const fallbackQuestions = [
-    "우리 학원에 맞는 도입 방식이 궁금해요",
-    "수업 중 집중도와 출석 관리를 개선하고 싶어요",
-    "결제, 영수증, 계정 문제를 상담받고 싶어요",
+    ...CLASSIN_POSITIONING.chatbot.starterQuestions,
 ]
 
 interface RecommendedQuestionRow {

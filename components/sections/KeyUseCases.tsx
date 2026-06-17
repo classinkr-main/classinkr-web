@@ -6,7 +6,9 @@ import { Card } from "@/components/ui/card"
 import { Check } from "lucide-react"
 import { motion } from "framer-motion"
 
-export function KeyUseCases() {
+type UseCaseTab = "classes" | "homework" | "admin" | "comms"
+
+export function KeyUseCases({ defaultValue = "classes" }: { defaultValue?: UseCaseTab } = {}) {
     return (
         <section id="use-cases" className="py-16 md:py-24 bg-[#F6F5F4]">
             <div className="container mx-auto">
@@ -19,7 +21,7 @@ export function KeyUseCases() {
                     </p>
                 </div>
 
-                <Tabs defaultValue="classes" className="w-full max-w-6xl mx-auto">
+                <Tabs defaultValue={defaultValue} className="w-full max-w-6xl mx-auto">
                     <div className="flex justify-center mb-12 px-4">
                         <TabsList className="grid w-full max-w-3xl grid-cols-2 sm:grid-cols-2 md:grid-cols-4 h-auto p-1.5 bg-[rgba(0,0,0,0.06)] rounded-2xl gap-1">
                             <TabsTrigger value="classes" className="py-3 text-base md:text-lg font-bold rounded-xl data-[state=active]:bg-white data-[state=active]:shadow-sm data-[state=active]:text-[#111110] text-[#A39E98] transition-all">인터랙티브 수업</TabsTrigger>

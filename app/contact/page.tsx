@@ -36,6 +36,7 @@ export default function ContactPage() {
     const [shake, setShake] = useState(false)
     const [topic, setTopic] = useState("")
     const [eventSlug, setEventSlug] = useState("")
+    const [message, setMessage] = useState("")
     const [events, setEvents] = useState<PublicEvent[]>([])
     const [eventsLoaded, setEventsLoaded] = useState(false)
     const formRef = useRef<HTMLFormElement>(null)
@@ -50,12 +51,17 @@ export default function ContactPage() {
         const eventParam = params.get("event")?.trim()
         const sourceParam = params.get("source")?.trim()
         const topicParam = params.get("topic")?.trim()
+        const prefillParam = params.get("prefill")?.trim()
 
         if (eventParam) {
             setTopic(sourceParam === "seminar" ? "세미나 신청" : "행사 신청")
             setEventSlug(eventParam)
         } else if (topicParam && VALID_CONTACT_TOPICS.has(topicParam)) {
             setTopic(topicParam)
+        }
+
+        if (prefillParam) {
+            setMessage(prefillParam)
         }
     }, [])
 
@@ -91,6 +97,7 @@ export default function ContactPage() {
         setNotice("")
         setTopic("")
         setEventSlug("")
+        setMessage("")
         formRef.current?.reset()
     }
 
@@ -384,6 +391,8 @@ export default function ContactPage() {
                                     <textarea
                                         className={`w-full resize-none rounded-xl border border-slate-200 bg-white px-4 py-4 text-base focus:outline-none focus:ring-2 focus:ring-[#084734] focus:border-transparent transition-all shadow-sm min-h-[110px]${shake ? " animate-shake" : ""}`}
                                         placeholder="현재 상황, 원하는 상담 결과, 급한 일정이 있다면 함께 적어주세요."
+                                        value={message}
+                                        onChange={(e) => setMessage(e.target.value)}
                                         id="message"
                                         name="message"
                                         required

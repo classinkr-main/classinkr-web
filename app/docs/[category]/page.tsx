@@ -5,7 +5,7 @@ import { ArrowRight, Search } from "lucide-react"
 
 import {
   docsCategories,
-  type DocCategoryId,
+  isDocCategoryId,
 } from "@/lib/docs"
 import {
   getDocCategoryFromContent,
@@ -20,10 +20,6 @@ import { SearchHighlight } from "@/components/ui/SearchHighlight"
 interface DocsCategoryPageProps {
   params: Promise<{ category: string }>
   searchParams?: Promise<{ q?: string }>
-}
-
-function isDocCategoryId(category: string): category is DocCategoryId {
-  return docsCategories.some((item) => item.id === category)
 }
 
 export function generateStaticParams() {

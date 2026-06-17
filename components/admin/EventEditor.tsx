@@ -101,6 +101,24 @@ const DEFAULT_FORM: FormState = {
   publicationStatus: "draft",
 }
 
+function eventToForm(event: PublicEvent | undefined): FormState {
+  return {
+    title: event?.title ?? DEFAULT_FORM.title,
+    slug: event?.slug ?? DEFAULT_FORM.slug,
+    description: event?.description ?? DEFAULT_FORM.description,
+    category: event?.category ?? DEFAULT_FORM.category,
+    tag: event?.tag ?? DEFAULT_FORM.tag,
+    startsAt: toLocalDatetime(event?.startsAt ?? null),
+    endsAt: toLocalDatetime(event?.endsAt ?? null),
+    location: event?.location ?? DEFAULT_FORM.location,
+    ctaLabel: event?.ctaLabel ?? DEFAULT_FORM.ctaLabel,
+    ctaHref: event?.ctaHref ?? DEFAULT_FORM.ctaHref,
+    highlight: event?.highlight ?? DEFAULT_FORM.highlight,
+    statusOverride: (event?.statusOverride as StatusOverrideOption | null) ?? DEFAULT_FORM.statusOverride,
+    publicationStatus: event?.publicationStatus ?? DEFAULT_FORM.publicationStatus,
+  }
+}
+
 function toLocalDatetime(iso: string | null): string {
   if (!iso) return ""
   const d = new Date(iso)
@@ -146,26 +164,14 @@ export default function EventEditor({ event, mode }: EventEditorProps) {
   const editorRef = useRef<RichMarkdownEditorHandle>(null)
   const fileInputRef = useRef<HTMLInputElement>(null)
   const isFirstRenderRef = useRef(true)
+  const skipNextDirtyRef = useRef(false)
   const isCreate = mode === "create" || !event
 
-  const [form, setForm] = useState<FormState>({
-    title: event?.title ?? DEFAULT_FORM.title,
-    slug: event?.slug ?? DEFAULT_FORM.slug,
-    description: event?.description ?? DEFAULT_FORM.description,
-    category: event?.category ?? DEFAULT_FORM.category,
-    tag: event?.tag ?? DEFAULT_FORM.tag,
-    startsAt: toLocalDatetime(event?.startsAt ?? null),
-    endsAt: toLocalDatetime(event?.endsAt ?? null),
-    location: event?.location ?? DEFAULT_FORM.location,
-    ctaLabel: event?.ctaLabel ?? DEFAULT_FORM.ctaLabel,
-    ctaHref: event?.ctaHref ?? DEFAULT_FORM.ctaHref,
-    highlight: event?.highlight ?? DEFAULT_FORM.highlight,
-    statusOverride: (event?.statusOverride as StatusOverrideOption | null) ?? DEFAULT_FORM.statusOverride,
-    publicationStatus: event?.publicationStatus ?? DEFAULT_FORM.publicationStatus,
-  })
+  const [form, setForm] = useState<FormState>(() => eventToForm(event))
   const [content, setContent] = useState(event?.contentMarkdown ?? "")
   const [imagePath, setImagePath] = useState<string | null>(event?.imagePath ?? null)
   const [imagePreview, setImagePreview] = useState<string | null>(event?.imageUrl ?? null)
+  const [savedPublicSlug, setSavedPublicSlug] = useState<string | null>(event?.slug ?? null)
   const [imageFile, setImageFile] = useState<File | null>(null)
   const [saving, setSaving] = useState(false)
   const [saveError, setSaveError] = useState<string | null>(null)
@@ -177,6 +183,10 @@ export default function EventEditor({ event, mode }: EventEditorProps) {
   useEffect(() => {
     if (isFirstRenderRef.current) {
       isFirstRenderRef.current = false
+      return
+    }
+    if (skipNextDirtyRef.current) {
+      skipNextDirtyRef.current = false
       return
     }
     setDraftState("dirty")
@@ -250,6 +260,12 @@ export default function EventEditor({ event, mode }: EventEditorProps) {
       })
       if (!res.ok) throw new Error(await res.text())
       const savedEvent = (await res.json()) as PublicEvent
+      skipNextDirtyRef.current = true
+      setForm(eventToForm(savedEvent))
+      setContent(savedEvent.contentMarkdown ?? "")
+      setImagePath(savedEvent.imagePath ?? null)
+      setImagePreview(savedEvent.imageUrl ?? null)
+      setSavedPublicSlug(savedEvent.slug ?? null)
       setDraftState("saved")
       setLastSavedAt(new Date())
       if (isCreate) {
@@ -441,9 +457,9 @@ export default function EventEditor({ event, mode }: EventEditorProps) {
           </div>
 
           <div className="flex shrink-0 items-center gap-1">
-            {!isCreate && event?.slug && (
+            {!isCreate && savedPublicSlug && (
               <Button variant="ghost" size="sm" asChild className="h-8">
-                <Link href={`/events/${event.slug}`} target="_blank">
+                <Link href={`/events/${savedPublicSlug}`} target="_blank">
                   실제 페이지 →
                 </Link>
               </Button>

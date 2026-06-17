@@ -9,29 +9,29 @@ const steps = [
     {
         id: 1,
         phase: "수업 전",
-        title: "커리큘럼 표준화",
+        title: "EDB 교안 표준화",
         icon: BookOpen,
-        headline: "에이스 강사의 수업 방식을 템플릿으로",
-        desc: "잘 가르치는 강사의 수업 계획을 그대로 시스템화합니다. 누가 들어와도 같은 품질의 수업이 가능하고, 신규 강사 온보딩이 며칠로 줄어듭니다.",
-        points: ["수업 계획 템플릿 라이브러리", "전 지점 커리큘럼 공유", "강사별 수업 표준 편차 추적"],
+        headline: "우수 강사의 판서와 자료를 다시 쓰는 수업 파일로",
+        desc: "EDB는 판서, 이미지, 텍스트가 살아 있는 Classin 칠판 파일입니다. 최대 50페이지 칠판과 함께 쓰면 매번 지우고 다시 띄우는 대신 교안을 불러와 바로 수업을 시작할 수 있습니다.",
+        points: ["EDB 교안 템플릿", "수업 자료와 판서 흐름 재사용", "신규 강사 온보딩 기준"],
     },
     {
         id: 2,
         phase: "수업 중",
-        title: "양방향 수업",
+        title: "보드와 수업 연결",
         icon: Zap,
-        headline: "학생이 화면에서 직접 풀고, 선생님이 실시간 확인",
-        desc: "단순히 영상만 보는 수업이 아닙니다. 학생이 전자칠판에서 직접 문제를 풀고, 교사는 전체 학생의 이해도를 한눈에 파악합니다.",
-        points: ["실시간 학생 화면 모니터링", "인터랙티브 화이트보드", "즉석 퀴즈 및 반응 수집"],
+        headline: "전자칠판, 카메라, OPS, 소프트웨어가 따로 놀지 않게",
+        desc: "일반 전자칠판처럼 화면과 판서만 보는 것이 아니라, Classin Board의 OPS와 수업 소프트웨어가 같은 환경에서 돌아갑니다. 판서, 수업 진행, 학생 참여, 녹화 흐름을 한 교실 안에서 이어갑니다.",
+        points: ["윈도우 기반 OPS", "전자칠판과 Classin 수업 연동", "수업 녹화와 참여 도구"],
     },
     {
         id: 3,
         phase: "수업 후",
-        title: "자동 복습 관리",
+        title: "녹화와 관리자 데이터",
         icon: RefreshCw,
-        headline: "에빙하우스 망각곡선 기반 자동 복습 발송",
-        desc: "수업이 끝난 뒤가 진짜 시작입니다. 복습 콘텐츠가 자동으로 발송되고, 학부모에게는 수업 결과와 복습 완료 여부가 리포트로 전달됩니다.",
-        points: ["자동 복습 알림 및 콘텐츠 발송", "학부모 주간 리포트 자동 생성", "학습 정착률 분석 대시보드"],
+        headline: "수업이 끝난 뒤에도 기록과 관리가 남습니다",
+        desc: "녹화, 복습 자료, LMS 과제, 관리자 대시보드가 연결되면 선생님 기억과 수작업에만 의존하지 않아도 됩니다. 수업 시간, 특이사항, 네트워크 상태, 권한과 데이터 흐름을 기준으로 운영을 점검합니다.",
+        points: ["자동 녹화와 복습 운영", "LMS 숙제·시험 루틴", "관리자 대시보드와 권한 관리"],
     },
 ]
 
@@ -58,13 +58,13 @@ export function SolutionOverview() {
                 <div className="text-center max-w-3xl mx-auto mb-16 px-4">
                     <span className="inline-flex items-center gap-2 py-1.5 px-4 rounded-full bg-gradient-to-r from-[#ECFDF5] to-[#D1FAE5]/60 text-[#084734] text-[13px] font-semibold mb-4 border border-[#084734]/8 shadow-[0_2px_8px_rgba(8,71,52,0.06)] tracking-[0.02em]">
                         <span className="w-1 h-1 rounded-full bg-[#084734]/60" />
-                        핵심 기능 3가지
+                        학원 시스템 OS의 3단계
                     </span>
                     <h2 className="text-3xl md:text-5xl lg:text-[3.5rem] font-black text-[#111110] mb-4 leading-[1.1] break-keep" style={{ letterSpacing: '-1.25px' }}>
-                        수업 전 · 중 · 후, 전 과정을 시스템으로
+                        수업 전 · 중 · 후, 흩어진 도구를 하나의 운영 흐름으로
                     </h2>
                     <p className="text-lg text-[#615D59] break-keep">
-                        준비부터 복습 관리까지. 학원 운영의 전체 사이클을 하나로 연결합니다.
+                        전자칠판 구매가 끝이 아닙니다. 교안, 녹화, LMS, 관리자 데이터까지 이어져야 실제 운영 리소스가 줄어듭니다.
                     </p>
                 </div>
 

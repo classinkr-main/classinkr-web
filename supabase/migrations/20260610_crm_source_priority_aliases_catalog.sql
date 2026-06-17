@@ -247,7 +247,7 @@ VALUES
     20,
     30,
     'Opportunity/pipeline records.',
-    '{"displayNameFields":["opportunityName","name"],"ownerFields":["ownerName","ownerId-label","ownerId"],"statusFields":["saleStageId-label","saleStageId","status"],"amountFields":["money","amount"],"occurredAtFields":["closeDate","updatedAt","createdAt"]}'::jsonb
+    '{"displayNameFields":["opportunityName","name"],"ownerFields":["ownerName","ownerId-label","ownerId"],"statusFields":["saleStageId-label","saleStageId","status"],"amountFields":["money","amount"],"occurredAtFields":["createdAt","updatedAt","closeDate"]}'::jsonb
   ),
   (
     'ShroffAccount__c',

@@ -11,13 +11,7 @@ import {
   DocsSidebarLayout,
   DocsTableOfContents,
 } from "@/components/docs"
-import {
-  docsCategories,
-  getDocCategoryPath,
-  getDocPath,
-  listDocs,
-  type DocCategoryId,
-} from "@/lib/docs"
+import { getDocCategoryPath, getDocPath, isDocCategoryId, listDocs } from "@/lib/docs"
 import {
   getDocCategoryFromContent,
   getDocFromContent,
@@ -38,10 +32,6 @@ import {
 
 interface DocsArticlePageProps {
   params: Promise<{ category: string; slug: string }>
-}
-
-function isDocCategoryId(category: string): category is DocCategoryId {
-  return docsCategories.some((item) => item.id === category)
 }
 
 export function generateStaticParams() {

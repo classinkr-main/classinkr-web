@@ -1121,9 +1121,9 @@ export default function AnalyticsPage() {
               />
               <InsightCard
                 eyebrow="다운로드"
-                title="asset_id 연결 필요"
-                description="자료 다운로드 CTA는 아직 Analytics에 직접 잡히지 않습니다."
-                tone="warning"
+                title="자료별 식별자 확인"
+                description="자료실·블로그 다운로드는 download_materials에 lead_magnet과 gate가 함께 기록됩니다."
+                tone="info"
               />
               <InsightCard
                 eyebrow="콘텐츠 기여"
@@ -1561,9 +1561,9 @@ export default function AnalyticsPage() {
                 </p>
               </div>
               <div className="rounded-2xl border border-[#e8e8e4] bg-[#fafaf8] p-4">
-                <p className="text-[12px] font-medium text-[#111110]">2. 다운로드 이벤트 연결</p>
+                <p className="text-[12px] font-medium text-[#111110]">2. 다운로드 식별자 정리</p>
                 <p className="mt-1 text-[12px] leading-relaxed text-[#1a1a1a]/45">
-                  자료 다운로드 CTA마다 asset_id를 붙여 download_materials를 보내면 콘텐츠 기여 분석이 쉬워집니다.
+                  자료실·블로그는 lead_magnet, 브로셔 파일 CTA는 asset_id를 유지하면 콘텐츠 기여 분석이 쉬워집니다.
                 </p>
               </div>
               <div className="rounded-2xl border border-[#e8e8e4] bg-[#fafaf8] p-4">

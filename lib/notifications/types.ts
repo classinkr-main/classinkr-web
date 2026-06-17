@@ -33,6 +33,7 @@ export const NOTIFICATION_SCOPES = [
 export const NOTIFICATION_CHANNELS = [
   "in_app",
   "wecom_webhook",
+  "wecom_cs_webhook",
   "channel_talk_webhook",
   "kakao_alimtalk",
   "email",

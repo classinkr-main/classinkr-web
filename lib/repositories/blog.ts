@@ -19,6 +19,8 @@ export { CATEGORIES, BLOG_STATUS_OPTIONS, DEFAULT_BLOG_CTA } from "@/lib/blog-ty
 import { DEFAULT_BLOG_CTA, type BlogPost, type BlogPostInput } from "@/lib/blog-types";
 
 const BLOG_SLUG_CONFLICT_MESSAGE = "이미 사용 중인 블로그 URL 슬러그입니다.";
+const PUBLISHED_STATUS_VALUES = ["PUBLISHED", "published"] as unknown as SupaBlogPost["status"][];
+const PUBLIC_BLOG_QUERY_TIMEOUT_MS = 6_000;
 
 /* ─── Supabase Row ↔ 기존 BlogPost 변환 ─── */
 
@@ -130,16 +132,26 @@ export async function getAllPosts(): Promise<BlogPost[]> {
 export async function getPublishedPosts(): Promise<BlogPost[]> {
 
   const supabase = await createSupabaseBlogReadClient();
-  const { data, error } = await supabase
-    .from("blog_posts")
-    .select(LIST_COLUMNS)
-    .eq("status", "PUBLISHED")
-    .is("deleted_at", null)
-    .or(publishedAtVisibleFilter())
-    .order("published_at", { ascending: false });
+  const timeout = createBlogQueryTimeout();
+  try {
+    const { data, error } = await supabase
+      .from("blog_posts")
+      .select(LIST_COLUMNS)
+      .in("status", PUBLISHED_STATUS_VALUES)
+      .is("deleted_at", null)
+      .or(publishedAtVisibleFilter())
+      .order("published_at", { ascending: false })
+      .abortSignal(timeout.signal);
 
-  if (error) throw new Error(`[blog] 공개 글 조회 실패: ${error.message}`);
-  return (data as unknown as SupaBlogPost[]).map(supabaseToLegacy);
+    if (error && isAbortError(error)) {
+      console.warn(`[blog] 공개 글 조회 timeout after ${PUBLIC_BLOG_QUERY_TIMEOUT_MS}ms`);
+      return [];
+    }
+    if (error) throw new Error(`[blog] 공개 글 조회 실패: ${error.message}`);
+    return (data as unknown as SupaBlogPost[]).map(supabaseToLegacy);
+  } finally {
+    timeout.clear();
+  }
 }
 
 export async function getPostBySlug(slug: string): Promise<BlogPost | null> {
@@ -158,17 +170,27 @@ export async function getPostBySlug(slug: string): Promise<BlogPost | null> {
 export async function getPublishedPostBySlug(slug: string): Promise<BlogPost | null> {
 
   const supabase = await createSupabaseBlogReadClient();
-  const { data, error } = await supabase
-    .from("blog_posts")
-    .select("*")
-    .eq("slug", slug)
-    .eq("status", "PUBLISHED")
-    .is("deleted_at", null)
-    .or(publishedAtVisibleFilter())
-    .single();
+  const timeout = createBlogQueryTimeout();
+  try {
+    const { data, error } = await supabase
+      .from("blog_posts")
+      .select("*")
+      .eq("slug", slug)
+      .in("status", PUBLISHED_STATUS_VALUES)
+      .is("deleted_at", null)
+      .or(publishedAtVisibleFilter())
+      .abortSignal(timeout.signal)
+      .maybeSingle();
 
-  if (error || !data) return null;
-  return supabaseToLegacy(data as SupaBlogPost);
+    if (error && isAbortError(error)) {
+      console.warn(`[blog] 공개 글 상세 조회 timeout after ${PUBLIC_BLOG_QUERY_TIMEOUT_MS}ms`);
+      return null;
+    }
+    if (error || !data) return null;
+    return supabaseToLegacy(data as SupaBlogPost);
+  } finally {
+    timeout.clear();
+  }
 }
 
 export async function getPostById(id: number): Promise<BlogPost | null> {
@@ -354,13 +376,19 @@ export async function getPublishedSlugsForStaticParams(): Promise<{ slug: string
   try {
     const { createSupabaseAdminClient } = await import("@/lib/supabase/admin");
     const supabase = createSupabaseAdminClient();
-    const { data } = await supabase
-      .from("blog_posts")
-      .select("slug")
-      .eq("status", "PUBLISHED")
-      .is("deleted_at", null)
-      .or(publishedAtVisibleFilter());
-    return (data ?? []).map((row) => ({ slug: row.slug as string }));
+    const timeout = createBlogQueryTimeout();
+    try {
+      const { data } = await supabase
+        .from("blog_posts")
+        .select("slug")
+        .in("status", PUBLISHED_STATUS_VALUES)
+        .is("deleted_at", null)
+        .or(publishedAtVisibleFilter())
+        .abortSignal(timeout.signal);
+      return (data ?? []).map((row) => ({ slug: row.slug as string }));
+    } finally {
+      timeout.clear();
+    }
   } catch {
     return [];
   }
@@ -370,16 +398,22 @@ export async function getPublishedPostsForStaticSitemap(): Promise<BlogPost[]> {
 
   const { createSupabaseAdminClient } = await import("@/lib/supabase/admin");
   const supabase = createSupabaseAdminClient();
-  const { data, error } = await supabase
-    .from("blog_posts")
-    .select(LIST_COLUMNS)
-    .eq("status", "PUBLISHED")
-    .is("deleted_at", null)
-    .or(publishedAtVisibleFilter())
-    .order("published_at", { ascending: false });
+  const timeout = createBlogQueryTimeout();
+  try {
+    const { data, error } = await supabase
+      .from("blog_posts")
+      .select(LIST_COLUMNS)
+      .in("status", PUBLISHED_STATUS_VALUES)
+      .is("deleted_at", null)
+      .or(publishedAtVisibleFilter())
+      .order("published_at", { ascending: false })
+      .abortSignal(timeout.signal);
 
-  if (error) throw new Error(`[blog] sitemap query failed: ${error.message}`);
-  return (data as unknown as SupaBlogPost[]).map(supabaseToLegacy);
+    if (error) throw new Error(`[blog] sitemap query failed: ${error.message}`);
+    return (data as unknown as SupaBlogPost[]).map(supabaseToLegacy);
+  } finally {
+    timeout.clear();
+  }
 }
 
 export async function getRelatedPosts(post: BlogPost, limit = 3): Promise<BlogPost[]> {
@@ -402,9 +436,12 @@ export async function getRelatedPosts(post: BlogPost, limit = 3): Promise<BlogPo
 
 
 // 레거시 status("review") ↔ DB enum("IN_REVIEW") 변환. 나머지는 대소문자만 다름.
-function dbStatusToLegacy(status: SupaBlogPost["status"]): BlogPost["status"] {
-  if (status === "IN_REVIEW") return "review";
-  return status.toLowerCase() as BlogPost["status"];
+function dbStatusToLegacy(status: SupaBlogPost["status"] | string | null | undefined): BlogPost["status"] {
+  const normalized = String(status ?? "DRAFT").toUpperCase();
+  if (normalized === "IN_REVIEW") return "review";
+  if (normalized === "PUBLISHED") return "published";
+  if (normalized === "ARCHIVED") return "archived";
+  return "draft";
 }
 
 function legacyStatusToDb(status: BlogPost["status"] | undefined): SupaBlogPost["status"] {
@@ -433,6 +470,19 @@ async function resolveRelatedUuids(legacyIds: number[] | undefined): Promise<str
 // 예약 발행: published_at 이 미래인 글은 숨긴다. (published_at 이 null 인 기존 글은 그대로 노출)
 function publishedAtVisibleFilter() {
   return `published_at.is.null,published_at.lte.${new Date().toISOString()}`;
+}
+
+function createBlogQueryTimeout() {
+  const controller = new AbortController();
+  const timer = setTimeout(() => controller.abort(), PUBLIC_BLOG_QUERY_TIMEOUT_MS);
+  return {
+    signal: controller.signal,
+    clear: () => clearTimeout(timer),
+  };
+}
+
+function isAbortError(error: { code?: string; message?: string } | null | undefined) {
+  return /AbortError|aborted|timeout/i.test(error?.message ?? "") || error?.code === "ABORT_ERR";
 }
 
 function hashUuidToNumber(uuid: string): number {

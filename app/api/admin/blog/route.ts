@@ -3,6 +3,16 @@ import { revalidatePath } from "next/cache"
 import { getAllPosts, createPost, getTrashedPosts } from "@/lib/repositories/blog"
 import { verifyAdmin } from "@/lib/admin-auth"
 import { adminCachedJson } from "@/lib/admin-api-response"
+import { validatePublicMarkdownContent } from "@/lib/admin/public-content-validation"
+
+function revalidatePublicBlogSurfaces(slug?: string) {
+  revalidatePath("/blog")
+  revalidatePath("/blog/rss.xml")
+  revalidatePath("/sitemap.xml")
+  revalidatePath("/updates")
+  revalidatePath("/about")
+  if (slug) revalidatePath(`/blog/${slug}`)
+}
 
 export async function GET(req: NextRequest) {
   const authError = await verifyAdmin(req)
@@ -31,10 +41,15 @@ export async function POST(req: NextRequest) {
       )
     }
 
+    const contentError = validatePublicMarkdownContent(body.contentMarkdown)
+    if (contentError) {
+      return NextResponse.json({ error: contentError }, { status: 400 })
+    }
+
     const post = await createPost(body)
     // 발행 상태면 블로그 페이지 캐시를 즉시 무효화
     if (post.status === "published") {
-      revalidatePath("/blog")
+      revalidatePublicBlogSurfaces(post.slug)
     }
     return NextResponse.json({ post }, { status: 201 })
   } catch (error) {

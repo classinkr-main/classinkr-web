@@ -187,10 +187,10 @@ export default function BranchDashboardClient() {
                 <ChevronLeft className="h-3 w-3" /> 분석
               </span>
               <span className="opacity-50">›</span>
-              <span>지사 관리</span>
+              <span>KR Team</span>
             </div>
             <h1 className="mt-2 text-[28px] font-bold leading-tight tracking-[-0.02em] text-[#111110] sm:text-[30px]">
-              지사 관리
+              KR Team
             </h1>
             <p className="mt-2 max-w-[720px] text-[13px] leading-relaxed text-[#615D59]">
               KR 지사의 전체 매출 흐름과 BD · MKT · CSM 팀의 실적, 재고, 일정과 행사를 한 화면에서 확인합니다.

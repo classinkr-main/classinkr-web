@@ -11,6 +11,7 @@ interface TrackedLinkProps
   extends Omit<AnchorHTMLAttributes<HTMLAnchorElement>, "href" | "onClick"> {
   href: string
   ctaId: string
+  prefetch?: boolean | null
   tracking?: Record<string, TrackingValue>
   children: ReactNode
   onClick?: (event: MouseEvent<HTMLAnchorElement>) => void

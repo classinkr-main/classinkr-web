@@ -57,7 +57,11 @@ import {
   extractMarkdownHeadings,
   slugify,
 } from "@/lib/blog-markdown"
-import { leadMagnetOptions, getLeadMagnetStatusLabel } from "@/lib/lead-magnets"
+import {
+  getLeadMagnetGateLabel,
+  getLeadMagnetStatusLabel,
+  leadMagnetOptions,
+} from "@/lib/lead-magnets"
 
 interface BlogPostEditorProps {
   mode: "create" | "edit"
@@ -245,6 +249,7 @@ const BLOG_COVER_PREVIEWS = [
   { label: "추천 카드", ratio: "4:3", className: "aspect-[4/3]" },
   { label: "목록 썸네일", ratio: "16:11", className: "aspect-[16/11]" },
 ] as const
+type LeadMagnetOption = (typeof leadMagnetOptions)[number]
 
 function cloneSnapshot(snapshot: EditorSnapshot): EditorSnapshot {
   return {
@@ -312,6 +317,30 @@ function createEmptyDraft(): BlogPostInput {
   }
 }
 
+function toEditablePostInput(post: BlogPost): BlogPostInput {
+  const input = { ...post } as BlogPostInput & { id?: number }
+  delete input.id
+  return {
+    ...input,
+    tags: [...post.tags],
+    benefitItems: [...post.benefitItems],
+    relatedPostIds: [...post.relatedPostIds],
+    cta: { ...post.cta },
+    publishedAt: post.publishedAt ?? "",
+  }
+}
+
+function shouldUseStoredDraft(savedDraft: BlogPostInput, initialPost?: BlogPost) {
+  if (!initialPost) return true
+  if (!savedDraft.updatedAt) return false
+
+  const savedUpdatedAt = new Date(savedDraft.updatedAt).getTime()
+  const serverUpdatedAt = initialPost.updatedAt ? new Date(initialPost.updatedAt).getTime() : NaN
+  if (Number.isNaN(savedUpdatedAt) || Number.isNaN(serverUpdatedAt)) return true
+
+  return serverUpdatedAt <= savedUpdatedAt
+}
+
 // ISO 문자열 ↔ datetime-local 입력값(로컬 시각, 타임존 없음) 변환
 function isoToLocalInput(iso?: string) {
   if (!iso) return ""
@@ -371,7 +400,7 @@ export default function BlogPostEditor({
 }: BlogPostEditorProps) {
   const router = useRouter()
   const editorRef = useRef<RichMarkdownEditorHandle | null>(null)
-  const initialForm = initialPost ? { ...initialPost } : createEmptyDraft()
+  const initialForm = initialPost ? toEditablePostInput(initialPost) : createEmptyDraft()
 
   const [form, setForm] = useState<BlogPostInput>(initialForm)
   const [tagsInput, setTagsInput] = useState(initialForm.tags.join(", "))
@@ -392,11 +421,13 @@ export default function BlogPostEditor({
   const [lastSavedAt, setLastSavedAt] = useState<Date | null>(null)
   const [showInlineDraft, setShowInlineDraft] = useState(false)
   const [inlineDraftTopic, setInlineDraftTopic] = useState("")
+  const [leadOptions, setLeadOptions] = useState<readonly LeadMagnetOption[]>(leadMagnetOptions)
   const formRef = useRef(form)
   const tagsInputRef = useRef(tagsInput)
   const slugEditedRef = useRef(slugEdited)
   const undoStackRef = useRef<EditorSnapshot[]>([])
   const redoStackRef = useRef<EditorSnapshot[]>([])
+  const skipNextAutosaveRef = useRef(false)
   const wrapperRef = useRef<HTMLDivElement>(null)
   const headerRef = useRef<HTMLElement>(null)
 
@@ -413,6 +444,29 @@ export default function BlogPostEditor({
     const observer = new ResizeObserver(update)
     observer.observe(header)
     return () => observer.disconnect()
+  }, [])
+
+  useEffect(() => {
+    let ignore = false
+    adminFetch("/api/admin/lead-magnets")
+      .then((response) => (response.ok ? response.json() : null))
+      .then((data: { leadMagnets?: LeadMagnetOption[] } | null) => {
+        if (!ignore && Array.isArray(data?.leadMagnets)) {
+          setLeadOptions(
+            data.leadMagnets.map((item) => ({
+              slug: item.slug,
+              title: item.title,
+              status: item.status,
+              gate: item.gate,
+              published: item.published,
+            }))
+          )
+        }
+      })
+      .catch(() => undefined)
+    return () => {
+      ignore = true
+    }
   }, [])
 
   const draftStorageKey = `admin-blog-editor-${initialPost?.id ?? "new"}`
@@ -576,6 +630,10 @@ export default function BlogPostEditor({
     if (!rawDraft) return
     try {
       const savedDraft = JSON.parse(rawDraft) as BlogPostInput
+      if (!shouldUseStoredDraft(savedDraft, initialPost)) {
+        localStorage.removeItem(draftStorageKey)
+        return
+      }
       applySnapshot({
         form: savedDraft,
         tagsInput: savedDraft.tags.join(", "),
@@ -587,9 +645,15 @@ export default function BlogPostEditor({
     } catch {
       // Ignore malformed local drafts.
     }
-  }, [applySnapshot, draftStorageKey])
+  }, [applySnapshot, draftStorageKey, initialPost])
 
   useEffect(() => {
+    if (skipNextAutosaveRef.current) {
+      skipNextAutosaveRef.current = false
+      setDraftState("saved")
+      return
+    }
+
     setDraftState("dirty")
     const timer = window.setTimeout(() => {
       setDraftState("saving")
@@ -725,8 +789,18 @@ export default function BlogPostEditor({
         return
       }
       const data = (await response.json()) as { post: BlogPost }
+      const nextForm = toEditablePostInput(data.post)
+      skipNextAutosaveRef.current = true
+      applySnapshot({
+        form: nextForm,
+        tagsInput: nextForm.tags.join(", "),
+        slugEdited: Boolean(nextForm.slug),
+      })
+      undoStackRef.current = []
+      redoStackRef.current = []
       localStorage.removeItem(draftStorageKey)
       setDraftState("saved")
+      setLastSavedAt(new Date())
       setNotice(nextStatus === "published" ? "발행까지 완료했습니다." : "저장했습니다.")
       startTransition(() => {
         router.push(`/admin/blog/${data.post.id}/edit`)
@@ -1965,9 +2039,10 @@ export default function BlogPostEditor({
                         className="h-9 w-full rounded-xl border border-[#e8e8e4] bg-white px-3 text-sm outline-none focus:border-[#084734]"
                       >
                         <option value="">표시 안 함</option>
-                        {leadMagnetOptions.map((opt) => (
+                        {leadOptions.map((opt) => (
                           <option key={opt.slug} value={opt.slug}>
-                            {opt.title} · {getLeadMagnetStatusLabel(opt.status)}
+                            {opt.title} · {getLeadMagnetGateLabel(opt.gate)} · {getLeadMagnetStatusLabel(opt.status)}
+                            {opt.published ? "" : " · 검토 중"}
                           </option>
                         ))}
                       </select>

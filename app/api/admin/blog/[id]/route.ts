@@ -2,6 +2,16 @@
 import { revalidatePath } from "next/cache"
 import { updatePost, trashPost, permanentDeletePost, restorePost } from "@/lib/repositories/blog"
 import { verifyAdmin } from "@/lib/admin-auth"
+import { validatePublicMarkdownContent } from "@/lib/admin/public-content-validation"
+
+function revalidatePublicBlogSurfaces(slug?: string) {
+  revalidatePath("/blog")
+  revalidatePath("/blog/rss.xml")
+  revalidatePath("/sitemap.xml")
+  revalidatePath("/updates")
+  revalidatePath("/about")
+  if (slug) revalidatePath(`/blog/${slug}`)
+}
 
 // id 파라미터는 UUID 또는 레거시 numericId 모두 허용
 function parsePostId(id: string): { uuid?: string; numId?: number } {
@@ -30,15 +40,19 @@ export async function PUT(
     if (body.restore === true) {
       const post = await restorePost(numId ?? 0, uuid)
       if (!post) return NextResponse.json({ error: "Post not found" }, { status: 404 })
-      revalidatePath("/blog")
+      revalidatePublicBlogSurfaces(post.slug)
       return NextResponse.json({ post })
+    }
+
+    const contentError = validatePublicMarkdownContent(body.contentMarkdown)
+    if (contentError) {
+      return NextResponse.json({ error: contentError }, { status: 400 })
     }
 
     const post = await updatePost(numId ?? 0, body, uuid)
     if (!post) return NextResponse.json({ error: "Post not found" }, { status: 404 })
     // 발행/비공개 전환 또는 콘텐츠 변경 시 블로그 캐시 무효화
-    revalidatePath("/blog")
-    revalidatePath(`/blog/${post.slug}`)
+    revalidatePublicBlogSurfaces(post.slug)
     return NextResponse.json({ post })
   } catch (error) {
     return NextResponse.json(
@@ -68,7 +82,7 @@ export async function DELETE(
       : await trashPost(numId ?? 0, uuid)
 
     if (!ok) return NextResponse.json({ error: "Post not found" }, { status: 404 })
-    revalidatePath("/blog")
+    revalidatePublicBlogSurfaces()
     return NextResponse.json({ ok: true })
   } catch {
     return NextResponse.json({ error: "Failed to delete post" }, { status: 500 })

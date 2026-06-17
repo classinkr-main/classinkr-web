@@ -100,6 +100,7 @@ export default function DataDeletionPage() {
             "Meta에서 제공된 앱 범위 사용자 식별자와 연결 정보",
             "Classin 서비스에 저장된 Meta 접근 토큰 또는 권한 연결 기록",
             "사용자가 연결한 페이지, 광고 자산, 비즈니스 자산과 관련된 연동 메타데이터",
+            "공개 사용자 로그인 프로필(user_profiles), 자료 다운로드 기록(material_downloads), 사용자 또는 리드와 연결된 웹사이트 이벤트(client_events)",
             "삭제 요청 대상과 직접 연결된 상담, 마케팅, 지원 기록 중 보관 의무가 없는 정보",
           ]}
         />

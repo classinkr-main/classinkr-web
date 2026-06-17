@@ -10,6 +10,8 @@ import {
   type DocsArticleVisibility,
   type DocsArticleDifficulty,
 } from "@/lib/repositories/docs-articles"
+import { revalidateDocsArticlePaths } from "./_revalidate"
+import { validateDocsArticlePatchForPublish } from "./_payload"
 
 const ALLOWED_STATUS: DocsArticleStatus[] = ["draft", "review", "published", "archived"]
 const ALLOWED_VISIBILITY: DocsArticleVisibility[] = ["public", "unlisted", "internal"]
@@ -130,8 +132,30 @@ export async function POST(req: NextRequest) {
     updatedBy,
   }
 
+  const status = input.status ?? "draft"
+  const validationError = validateDocsArticlePatchForPublish(
+    {
+      categoryId,
+      slug,
+      title,
+      description,
+      status: input.status,
+      contentMarkdown: input.contentMarkdown,
+    },
+    {
+      categoryId,
+      slug,
+      title,
+      description,
+      status,
+      contentMarkdown: input.contentMarkdown ?? "",
+    }
+  )
+  if (validationError) return NextResponse.json({ error: validationError }, { status: 400 })
+
   try {
     const detail = await createDocsArticle(input)
+    revalidateDocsArticlePaths(detail)
     return NextResponse.json(detail, { status: 201 })
   } catch (error) {
     const message = error instanceof Error ? error.message : "문서 생성에 실패했습니다."

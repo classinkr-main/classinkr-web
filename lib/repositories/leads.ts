@@ -14,6 +14,8 @@ import type { Lead, LeadInsert, LeadUpdate } from "@/lib/supabase/database.types
 export type { LeadStatus } from "@/lib/supabase/database.types";
 
 const USE_SUPABASE = process.env.USE_SUPABASE_LEADS === "true";
+const RESPONSE_TARGET_SOURCES = ["demo_modal", "contact_page", "meta_lead_ads"] as const;
+const ACTIVE_LEAD_STATUSES = ["new", "contacted"] as const;
 
 /* ─── 기존 LeadRecord ↔ Supabase Lead 변환 ─── */
 
@@ -48,6 +50,47 @@ export interface LeadRecord {
   landing_page?: string;
   current_page?: string;
   referrer?: string;
+}
+
+export interface LeadActionStats {
+  total: number;
+  byStatus: Record<LeadRecord["status"], number>;
+  unrespondedCount: number;
+  unresponded48hCount: number;
+  todayFollowUpCount: number;
+  overdueFollowUpCount: number;
+}
+
+function toLocalDateKey(value: string | Date) {
+  const date = value instanceof Date ? value : new Date(value);
+  return new Date(date.getTime() - date.getTimezoneOffset() * 60_000)
+    .toISOString()
+    .slice(0, 10);
+}
+
+function getLocalDayBounds(value: Date) {
+  const [year, month, day] = toLocalDateKey(value).split("-").map(Number);
+  const start = new Date(year, month - 1, day);
+  const end = new Date(year, month - 1, day + 1);
+  return { start, end };
+}
+
+function isActiveLeadStatus(status: LeadRecord["status"]) {
+  return status !== "converted" && status !== "closed";
+}
+
+function isResponseTargetSource(source: string) {
+  return RESPONSE_TARGET_SOURCES.includes(source as (typeof RESPONSE_TARGET_SOURCES)[number]);
+}
+
+function isUnrespondedLeadRecord(lead: LeadRecord) {
+  return lead.status === "new" && isResponseTargetSource(lead.source);
+}
+
+function getSupabaseCountError(
+  results: Array<{ error: { message?: string } | null }>
+) {
+  return results.find((result) => result.error)?.error ?? null;
 }
 
 function supabaseToLegacy(row: Lead): LeadRecord {
@@ -257,12 +300,12 @@ export async function getLeadStats() {
 
   const [totalRes, newRes, contactedRes, convertedRes, closedRes, todayRes] =
     await Promise.all([
-      supabase.from("leads").select("*", { count: "exact", head: true }),
-      supabase.from("leads").select("*", { count: "exact", head: true }).eq("status", "new"),
-      supabase.from("leads").select("*", { count: "exact", head: true }).eq("status", "contacted"),
-      supabase.from("leads").select("*", { count: "exact", head: true }).eq("status", "converted"),
-      supabase.from("leads").select("*", { count: "exact", head: true }).eq("status", "closed"),
-      supabase.from("leads").select("*", { count: "exact", head: true }).gte("created_at", `${today}T00:00:00Z`),
+      supabase.from("leads").select("id", { count: "exact", head: true }),
+      supabase.from("leads").select("id", { count: "exact", head: true }).eq("status", "new"),
+      supabase.from("leads").select("id", { count: "exact", head: true }).eq("status", "contacted"),
+      supabase.from("leads").select("id", { count: "exact", head: true }).eq("status", "converted"),
+      supabase.from("leads").select("id", { count: "exact", head: true }).eq("status", "closed"),
+      supabase.from("leads").select("id", { count: "exact", head: true }).gte("created_at", `${today}T00:00:00Z`),
     ]);
 
   return {
@@ -274,5 +317,109 @@ export async function getLeadStats() {
       closed: closedRes.count ?? 0,
     },
     todayCount: todayRes.count ?? 0,
+  };
+}
+
+export async function getLeadActionStats(now = new Date()): Promise<LeadActionStats> {
+  if (!USE_SUPABASE) {
+    const leads = await getLeads();
+    const today = toLocalDateKey(now);
+    const cutoff48h = now.getTime() - 48 * 3_600_000;
+    const stats: LeadActionStats = {
+      total: leads.length,
+      byStatus: { new: 0, contacted: 0, converted: 0, closed: 0 },
+      unrespondedCount: 0,
+      unresponded48hCount: 0,
+      todayFollowUpCount: 0,
+      overdueFollowUpCount: 0,
+    };
+
+    for (const lead of leads) {
+      stats.byStatus[lead.status] += 1;
+      if (isUnrespondedLeadRecord(lead)) {
+        stats.unrespondedCount += 1;
+        if (new Date(lead.timestamp).getTime() <= cutoff48h) {
+          stats.unresponded48hCount += 1;
+        }
+      }
+
+      if (!lead.follow_up_at || !isActiveLeadStatus(lead.status)) continue;
+      const followUpDate = toLocalDateKey(lead.follow_up_at);
+      if (followUpDate === today) stats.todayFollowUpCount += 1;
+      if (followUpDate < today) stats.overdueFollowUpCount += 1;
+    }
+
+    return stats;
+  }
+
+  const supabase = createSupabaseAdminClient();
+  const { start, end } = getLocalDayBounds(now);
+  const cutoff48h = new Date(now.getTime() - 48 * 3_600_000).toISOString();
+
+  const [
+    totalRes,
+    newRes,
+    contactedRes,
+    convertedRes,
+    closedRes,
+    unrespondedRes,
+    unresponded48hRes,
+    todayFollowUpRes,
+    overdueFollowUpRes,
+  ] = await Promise.all([
+    supabase.from("leads").select("id", { count: "exact", head: true }),
+    supabase.from("leads").select("id", { count: "exact", head: true }).eq("status", "new"),
+    supabase.from("leads").select("id", { count: "exact", head: true }).eq("status", "contacted"),
+    supabase.from("leads").select("id", { count: "exact", head: true }).eq("status", "converted"),
+    supabase.from("leads").select("id", { count: "exact", head: true }).eq("status", "closed"),
+    supabase
+      .from("leads")
+      .select("id", { count: "exact", head: true })
+      .eq("status", "new")
+      .in("source", [...RESPONSE_TARGET_SOURCES]),
+    supabase
+      .from("leads")
+      .select("id", { count: "exact", head: true })
+      .eq("status", "new")
+      .in("source", [...RESPONSE_TARGET_SOURCES])
+      .lte("created_at", cutoff48h),
+    supabase
+      .from("leads")
+      .select("id", { count: "exact", head: true })
+      .in("status", [...ACTIVE_LEAD_STATUSES])
+      .gte("follow_up_at", start.toISOString())
+      .lt("follow_up_at", end.toISOString()),
+    supabase
+      .from("leads")
+      .select("id", { count: "exact", head: true })
+      .in("status", [...ACTIVE_LEAD_STATUSES])
+      .lt("follow_up_at", start.toISOString()),
+  ]);
+
+  const error = getSupabaseCountError([
+    totalRes,
+    newRes,
+    contactedRes,
+    convertedRes,
+    closedRes,
+    unrespondedRes,
+    unresponded48hRes,
+    todayFollowUpRes,
+    overdueFollowUpRes,
+  ]);
+  if (error) throw new Error(`[leads] KPI 조회 실패: ${error.message ?? "unknown database error"}`);
+
+  return {
+    total: totalRes.count ?? 0,
+    byStatus: {
+      new: newRes.count ?? 0,
+      contacted: contactedRes.count ?? 0,
+      converted: convertedRes.count ?? 0,
+      closed: closedRes.count ?? 0,
+    },
+    unrespondedCount: unrespondedRes.count ?? 0,
+    unresponded48hCount: unresponded48hRes.count ?? 0,
+    todayFollowUpCount: todayFollowUpRes.count ?? 0,
+    overdueFollowUpCount: overdueFollowUpRes.count ?? 0,
   };
 }

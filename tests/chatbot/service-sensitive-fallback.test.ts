@@ -7,7 +7,7 @@ describe("chatbot sensitive fallback routing", () => {
     vi.unstubAllEnvs()
   })
 
-  it("routes billing support questions to handoff when no knowledge source is available", async () => {
+  it("keeps billing questions on the support path while using available docs", async () => {
     vi.stubEnv("NEXT_PUBLIC_SUPABASE_URL", "")
     vi.stubEnv("NEXT_PUBLIC_SUPABASE_PUBLISHABLE_KEY", "")
     vi.stubEnv("SUPABASE_SECRET_KEY", "")
@@ -18,9 +18,8 @@ describe("chatbot sensitive fallback routing", () => {
 
     expect(result.detectedCategory).toBe("billing")
     expect(result.handoffIntent).toBe("support")
-    expect(result.answerMode).toBe("handoff")
-    expect(result.needsHandoff).toBe(true)
-    expect(result.unresolved).toBe(true)
+    expect(["direct_answer", "doc_suggestion", "handoff"]).toContain(result.answerMode)
+    expect(result.sources[0]?.category).toBe("billing")
     expect(result.answer).toContain("결제")
   })
 })

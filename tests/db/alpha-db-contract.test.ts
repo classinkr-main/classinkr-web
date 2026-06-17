@@ -46,7 +46,7 @@ describe("alpha DB contract", () => {
       expect.arrayContaining([
         expect.objectContaining({
           functionName: "match_docs_ai_chunks",
-          migration: "supabase/migrations/20260613_docs_chunk_vector_search.sql",
+          migration: "supabase/migrations/20260616_docs_chunk_vector_rpc_text_compat.sql",
           args: expect.objectContaining({
             match_count: 1,
             query_embedding: expect.any(String),

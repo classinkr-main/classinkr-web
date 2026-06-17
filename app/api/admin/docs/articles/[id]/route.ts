@@ -13,6 +13,8 @@ import {
   type DocsArticleDifficulty,
   type DocsArticlePatchInput,
 } from "@/lib/repositories/docs-articles"
+import { revalidateDocsArticlePaths } from "../_revalidate"
+import { validateDocsArticlePatchForPublish } from "../_payload"
 
 const ALLOWED_STATUS: DocsArticleStatus[] = ["draft", "review", "published", "archived"]
 const ALLOWED_VISIBILITY: DocsArticleVisibility[] = ["public", "unlisted", "internal"]
@@ -155,6 +157,9 @@ export async function PATCH(
     const existing = await getDocsArticleById(id)
     if (!existing) return NextResponse.json({ error: "문서를 찾을 수 없습니다." }, { status: 404 })
 
+    const validationError = validateDocsArticlePatchForPublish(patch, existing)
+    if (validationError) return NextResponse.json({ error: validationError }, { status: 400 })
+
     const detail = await patchDocsArticle(id, patch)
     if (!detail) return NextResponse.json({ error: "문서를 찾을 수 없습니다." }, { status: 404 })
 
@@ -171,6 +176,7 @@ export async function PATCH(
       })
     }
 
+    revalidateDocsArticlePaths(existing, detail)
     return NextResponse.json(detail)
   } catch (error) {
     const message = error instanceof Error ? error.message : "문서 수정에 실패했습니다."
@@ -195,6 +201,7 @@ export async function DELETE(
     if (!existing) return NextResponse.json({ error: "문서를 찾을 수 없습니다." }, { status: 404 })
 
     await deleteDocsArticle(id)
+    revalidateDocsArticlePaths(existing)
     return NextResponse.json({ ok: true })
   } catch (error) {
     const message = error instanceof Error ? error.message : "문서 삭제에 실패했습니다."

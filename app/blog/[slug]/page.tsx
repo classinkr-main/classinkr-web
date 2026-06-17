@@ -1,7 +1,7 @@
 import type { Metadata } from "next"
 import Image from "next/image"
 import Link from "next/link"
-import { notFound } from "next/navigation"
+import { notFound, permanentRedirect } from "next/navigation"
 import { ArrowRight, Clock } from "lucide-react"
 import BlogMarkdownRenderer from "@/components/blog/BlogMarkdownRenderer"
 import { ArticleImageLightbox } from "@/components/blog/ArticleImageLightbox"
@@ -9,14 +9,14 @@ import { ReadingProgress } from "@/components/blog/ReadingProgress"
 import { ShareActions } from "@/components/blog/ShareActions"
 import { TrackedLink } from "@/components/TrackedLink"
 import { LeadMagnetGate } from "@/components/blog/LeadMagnetGate"
-import { getLeadMagnetBySlug } from "@/lib/lead-magnets"
-import { NEUTRAL_BLUR_DATA_URL } from "@/lib/image-blur"
+import { SafeBlogImage } from "@/components/blog/SafeBlogImage"
 import {
   getPublishedPostBySlug,
   getRelatedPosts,
-  getPublishedSlugsForStaticParams,
 } from "@/lib/repositories/blog"
+import { getLeadMagnetBySlugFromStore } from "@/lib/repositories/lead-magnets"
 import { extractMarkdownHeadings } from "@/lib/blog-markdown"
+import { getBlogSlugRedirect, getCanonicalBlogSlug } from "@/lib/blog-slug-redirects"
 import { sanitizePublicUrl } from "@/lib/safe-public-url"
 import { JsonLd } from "@/components/seo/JsonLd"
 import {
@@ -26,17 +26,37 @@ import {
 } from "@/lib/seo"
 
 export const revalidate = 3600 // 1시간마다 재생성
+export const dynamicParams = true
 
 // Next.js dynamic params arrive URL-encoded for non-ASCII paths; decode before DB lookup.
 function decodeSlug(raw: string) {
   try { return decodeURIComponent(raw) } catch { return raw }
 }
 
+async function getOptionalRelatedPosts(post: NonNullable<Awaited<ReturnType<typeof getPublishedPostBySlug>>>) {
+  try {
+    return await getRelatedPosts(post, 3)
+  } catch (error) {
+    console.warn("[blog detail] related posts skipped:", error)
+    return []
+  }
+}
+
+async function getOptionalLeadMagnet(slug: string | null | undefined) {
+  try {
+    return await getLeadMagnetBySlugFromStore(slug)
+  } catch (error) {
+    console.warn("[blog detail] lead magnet skipped:", error)
+    return null
+  }
+}
+
 export async function generateMetadata({
   params,
 }: BlogDetailPageProps): Promise<Metadata> {
   const { slug } = await params
-  const post = await getPublishedPostBySlug(decodeSlug(slug))
+  const canonicalSlug = getCanonicalBlogSlug(decodeSlug(slug))
+  const post = await getPublishedPostBySlug(canonicalSlug)
   if (!post) {
     return {
       title: "글을 찾을 수 없습니다",
@@ -73,7 +93,9 @@ export async function generateMetadata({
 }
 
 export async function generateStaticParams() {
-  return getPublishedSlugsForStaticParams()
+  // Supabase 블로그 본문은 빌드 워커에서 전체 사전 생성하지 않고 ISR로 생성한다.
+  // 일부 외부 수집 글 렌더링 중 Next 정적 워커가 4GB 힙 한계에 닿는 것을 방지한다.
+  return []
 }
 
 interface BlogDetailPageProps {
@@ -84,17 +106,25 @@ export default async function BlogDetailPage({
   params,
 }: BlogDetailPageProps) {
   const { slug } = await params
-  const post = await getPublishedPostBySlug(decodeSlug(slug))
+  const decodedSlug = decodeSlug(slug)
+  const redirectSlug = getBlogSlugRedirect(decodedSlug)
+  if (redirectSlug) {
+    permanentRedirect(`/blog/${encodeURIComponent(redirectSlug)}`)
+  }
+
+  const post = await getPublishedPostBySlug(decodedSlug)
 
   if (!post) {
     notFound()
   }
 
   const headings = extractMarkdownHeadings(post.contentMarkdown)
-  const relatedPosts = await getRelatedPosts(post, 3)
+  const [relatedPosts, leadMagnet] = await Promise.all([
+    getOptionalRelatedPosts(post),
+    getOptionalLeadMagnet(post.leadMagnetSlug),
+  ])
   const benefits = post.benefitItems.filter(Boolean)
   const ctaHref = sanitizePublicUrl(post.cta.buttonHref, "")
-  const leadMagnet = getLeadMagnetBySlug(post.leadMagnetSlug)
 
   return (
     <div className="min-h-screen bg-[#FAFAF8] text-[#111110]">
@@ -173,15 +203,14 @@ export default async function BlogDetailPage({
 
             <div className="overflow-hidden rounded-[24px] border border-[#e8e8e4] bg-white shadow-sm md:rounded-[32px]">
               <div className="relative aspect-[16/10] overflow-hidden">
-                <Image
+                <SafeBlogImage
                   src={post.heroImageUrl || post.imageUrl}
                   alt={post.heroImageAlt || post.thumbnailAlt || post.title}
                   fill
                   className="object-cover"
                   sizes="(min-width: 1024px) 420px, 100vw"
                   priority
-                  placeholder="blur"
-                  blurDataURL={NEUTRAL_BLUR_DATA_URL}
+                  fallbackIndex={post.id}
                 />
               </div>
             </div>
@@ -350,14 +379,13 @@ export default async function BlogDetailPage({
                       className="group overflow-hidden rounded-[28px] border border-[#e8e8e4] bg-white shadow-sm transition-transform hover:-translate-y-1"
                     >
                       <div className="relative aspect-[4/3] overflow-hidden">
-                        <Image
+                        <SafeBlogImage
                           src={relatedPost.imageUrl}
                           alt={relatedPost.thumbnailAlt || relatedPost.title}
                           fill
                           className="object-cover transition-transform duration-500 group-hover:scale-105"
                           sizes="(min-width: 1024px) 360px, (min-width: 768px) 33vw, 100vw"
-                          placeholder="blur"
-                          blurDataURL={NEUTRAL_BLUR_DATA_URL}
+                          fallbackIndex={relatedPost.id}
                         />
                       </div>
                       <div className="p-5">

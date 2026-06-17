@@ -9,16 +9,20 @@ const ALLOWED_EVENTS = new Set([
   "submit_demo_request",
   "submit_newsletter",
   "download_materials",
+  "view_resource_card",
+  "view_resource",
   "view_demo_video",
   "begin_checkout",
 ])
 
 const ALLOWED_PARAM_KEYS: Record<string, Set<string>> = {
   page_view: new Set(["path", "title", "referrer"]),
-  click_cta: new Set(["button", "page", "destination", "model"]),
+  click_cta: new Set(["button", "page", "destination", "model", "source", "lead_magnet", "gate"]),
   submit_demo_request: new Set(["source", "lead_id", "stored", "event_slug"]),
-  submit_newsletter: new Set(["source"]),
-  download_materials: new Set(["asset_id", "page"]),
+  submit_newsletter: new Set(["source", "lead_magnet", "post_slug", "gate"]),
+  download_materials: new Set(["asset_id", "page", "source", "lead_magnet", "post_slug", "gate"]),
+  view_resource_card: new Set(["source", "lead_magnet", "gate", "tier", "category"]),
+  view_resource: new Set(["source", "lead_magnet", "gate", "tier", "category"]),
   view_demo_video: new Set(["button", "page"]),
   begin_checkout: new Set([
     "button",
@@ -44,6 +48,7 @@ const PII_PATTERNS = [
 interface TrackEventBody {
   event?: string
   page?: string
+  anonymousId?: string | null
   params?: Record<string, string | number | boolean | null | undefined>
 }
 
@@ -81,6 +86,8 @@ export async function POST(req: NextRequest) {
 
   const referrer = redactPii(req.headers.get("referer") ?? "").slice(0, 500) || null
   const userAgent = redactPii(req.headers.get("user-agent") ?? "").slice(0, 500) || null
+  const anonymousId =
+    typeof body.anonymousId === "string" ? body.anonymousId.slice(0, 100) : null
 
   try {
     const sb = createSupabaseAdminClient()
@@ -91,6 +98,7 @@ export async function POST(req: NextRequest) {
       params,
       referrer,
       user_agent: userAgent,
+      anonymous_id: anonymousId,
     })
     if (error) {
       console.warn("[track/event] client_events insert failed:", error.message)

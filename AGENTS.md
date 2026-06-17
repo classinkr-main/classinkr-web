@@ -29,6 +29,15 @@ npm run build
 
 현재 저장소에서는 위 두 명령을 기본 품질 게이트로 본다.
 
+## 배포 / Cron 안전 규칙
+
+- Vercel 플랜은 명시 확인 전까지 Hobby 기준으로 본다.
+- `vercel.json`의 각 cron expression은 하루 1회 이하만 허용한다.
+  - 금지 예: `*/5 * * * *`, `0 */6 * * *`, `0 9,18 * * *`
+  - 허용 예: `15 0 * * *`, `0 4 * * 4`, `0 0 1 * *`
+- sub-daily 실행이 필요하면 `vercel.json`에 직접 추가하지 말고 외부 스케줄러, 큐, 또는 Vercel Pro 전환을 먼저 확정한다.
+- `vercel.json`을 수정한 뒤에는 반드시 `npm run check:vercel-crons`를 실행한다. `npm run build` 전에도 자동 실행된다.
+
 ## UI 작업 시 필수 체크
 
 - 색상: [DESIGN.md](DESIGN.md) 팔레트만 사용

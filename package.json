@@ -4,11 +4,14 @@
   "private": true,
   "scripts": {
     "dev": "next dev --port 3888",
+    "prebuild": "npm run check:vercel-crons",
     "build": "next build",
     "start": "next start",
     "lint": "eslint",
     "typecheck": "tsc --noEmit --incremental false",
-    "check:alpha-db": "npx tsx scripts/check-alpha-db.ts"
+    "check:vercel-crons": "node scripts/check-vercel-crons.mjs",
+    "check:alpha-db": "npx tsx scripts/check-alpha-db.ts",
+    "sync:channel-docs": "npx tsx scripts/sync-channel-documents.ts"
   },
   "dependencies": {
     "@google/generative-ai": "^0.24.1",

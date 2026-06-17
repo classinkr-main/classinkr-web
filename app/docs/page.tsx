@@ -29,7 +29,7 @@ interface DocsHomePageProps {
   searchParams?: Promise<{ q?: string }>
 }
 
-const categoryLauncherCopy: Record<DocCategoryId, { scope: string; summary: string }> = {
+const categoryLauncherCopy: Partial<Record<DocCategoryId, { scope: string; summary: string }>> = {
   start: {
     scope: "처음 시작",
     summary: "설치, 회원 가입, 비밀번호 변경을 빠르게 확인합니다.",
@@ -71,13 +71,17 @@ export default async function DocsHomePage({ searchParams }: DocsHomePageProps) 
   const docsContent = await getDocsContent()
   const categoryCards = docsContent.categories.map((category) => {
     const articleCount = docsContent.docs.filter((doc) => doc.category === category.id && (doc.visibility ?? "public") === "public" && !doc.noindex).length
+    const launcherCopy = categoryLauncherCopy[category.id] ?? {
+      scope: "가이드",
+      summary: category.description,
+    }
 
     return {
       ...category,
       href: getDocCategoryPath(category.id),
       articleCount,
       Icon: getCategoryIcon(category.id),
-      launcherCopy: categoryLauncherCopy[category.id],
+      launcherCopy,
     }
   })
   const featuredArticles = docsContent.docs

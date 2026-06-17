@@ -1,4 +1,6 @@
 import { NextRequest, NextResponse } from "next/server"
+import { ANONYMOUS_ID_COOKIE } from "@/lib/consent/consent"
+import { stitchIdentity } from "@/lib/identity/stitch"
 import { checkRateLimit, getClientIp } from "@/lib/server/rate-limit"
 import type { NewsletterSubscribeRequest } from "@/lib/marketing-types"
 import { submitLeadCapture } from "@/lib/server/lead-capture"
@@ -60,6 +62,16 @@ export async function POST(req: NextRequest) {
       email,
       marketingConsent: true,
     })
+
+    if (result.body.ok && result.body.leadId) {
+      void stitchIdentity({
+        anonymousId: req.cookies.get(ANONYMOUS_ID_COOKIE)?.value ?? null,
+        leadId: result.body.leadId,
+        email,
+      }).catch((error) => {
+        console.warn("[newsletter/subscribe] identify failed:", error)
+      })
+    }
 
     return NextResponse.json(result.body, { status: result.status })
   } catch {

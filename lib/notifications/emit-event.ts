@@ -156,16 +156,21 @@ function buildLeadDigestWecomCard(input: EmitNotificationEventInput) {
   const period = getPayloadValue(input, "period") === "monthly" ? "monthly" : "weekly"
   const routeUrl = formatRouteUrl(input.routeUrl) ?? "https://classin.ai.kr/admin/crm"
   const totalLeads = getPayloadValue(input, "totalLeads") ?? "0"
+  const contactPageLeadCount = getPayloadValue(input, "contactPageLeadCount")
+  const demoModalLeadCount = getPayloadValue(input, "demoModalLeadCount")
+  const channelTalkInquiryCount = getPayloadValue(input, "channelTalkInquiryCount")
+  const chatbotHandoffCount = getPayloadValue(input, "chatbotHandoffCount")
+  const chatbotHandoffSentCount = getPayloadValue(input, "chatbotHandoffSentCount")
   const delta = formatDigestDelta(getPayloadValue(input, "deltaLeads"))
   const unrespondedCount = getPayloadValue(input, "unrespondedCount")
   const convertedCount = getPayloadValue(input, "convertedCount")
   const topSourceLabel = getPayloadValue(input, "topSourceLabel") ?? "없음"
   const topSourceCount = getPayloadValue(input, "topSourceCount")
-  const over24h = getPayloadValue(input, "over24h")
-  const over48h = getPayloadValue(input, "over48h")
-  const unassignedCount = getPayloadValue(input, "unassignedCount")
   const periodLabel = getPayloadValue(input, "periodLabel")
   const previousLabel = period === "monthly" ? "전월 대비" : "전주 대비"
+  const handoffLabel = chatbotHandoffCount
+    ? `${countLabel(chatbotHandoffSentCount)} / ${countLabel(chatbotHandoffCount)}`
+    : countLabel(chatbotHandoffSentCount)
 
   return {
     msgtype: "template_card",
@@ -186,16 +191,20 @@ function buildLeadDigestWecomCard(input: EmitNotificationEventInput) {
       sub_title_text: `${previousLabel} ${delta}개 / 미응답 ${countLabel(unrespondedCount)}`,
       horizontal_content_list: [
         {
-          keyname: "24시간 초과",
-          value: countLabel(over24h),
+          keyname: "홈페이지 문의",
+          value: countLabel(contactPageLeadCount),
         },
         {
-          keyname: "48시간 초과",
-          value: countLabel(over48h),
+          keyname: "데모 신청",
+          value: countLabel(demoModalLeadCount),
         },
         {
-          keyname: "미배정",
-          value: countLabel(unassignedCount),
+          keyname: "채널톡 문의",
+          value: countLabel(channelTalkInquiryCount),
+        },
+        {
+          keyname: "챗봇→채널톡",
+          value: handoffLabel,
         },
         {
           keyname: "전환",
@@ -243,12 +252,60 @@ function buildLeadWecomText(input: EmitNotificationEventInput) {
   return null
 }
 
+function buildCsNoticeWecomText(input: EmitNotificationEventInput) {
+  if (input.eventType === "channel_talk.message") {
+    return compactLines([
+      "CS 알림: 채널톡 새 상담 메시지가 도착했습니다.",
+      "",
+      input.message,
+      labeledLine("채팅 ID", getPayloadValue(input, "chatId")),
+      labeledLine("확인", formatRouteUrl(input.routeUrl)),
+    ]).join("\n")
+  }
+
+  if (input.eventType === "channel_talk.synced") {
+    return compactLines([
+      "CS 알림: 채널톡 신규 상담이 동기화되었습니다.",
+      "",
+      labeledLine("신규 상담", countLabel(getPayloadValue(input, "created"))),
+      labeledLine("CRM 매칭", countLabel(getPayloadValue(input, "matchedLeads"))),
+      labeledLine("확인", formatRouteUrl(input.routeUrl)),
+    ]).join("\n")
+  }
+
+  if (input.eventType === "chatbot.channel_talk_handoff") {
+    return compactLines([
+      "CS 알림: 긴급 상담 요청이 채널톡으로 넘어왔습니다.",
+      "",
+      labeledLine("상담 목적", getPayloadValue(input, "handoffIntent")),
+      labeledLine("문의 유형", getPayloadValue(input, "detectedCategory")),
+      labeledLine("답변 모드", getPayloadValue(input, "answerMode")),
+      labeledLine("질문", getPayloadValue(input, "question")),
+      labeledLine("확인", formatRouteUrl(input.routeUrl)),
+    ]).join("\n")
+  }
+
+  return null
+}
+
 function buildWecomPayload(input: EmitNotificationEventInput) {
   if (
     input.eventType === "lead.digest.weekly" ||
     input.eventType === "lead.digest.monthly"
   ) {
     return buildLeadDigestWecomCard(input)
+  }
+
+  const csNoticeText = input.source === "channel_talk" || input.source === "chatbot"
+    ? buildCsNoticeWecomText(input)
+    : null
+  if (csNoticeText) {
+    return {
+      msgtype: "text",
+      text: {
+        content: csNoticeText,
+      },
+    }
   }
 
   const leadText = input.categoryTag === "lead" ? buildLeadWecomText(input) : null
@@ -279,7 +336,7 @@ function buildExternalPayload(
   channel: Exclude<NotificationChannel, "in_app">,
   input: EmitNotificationEventInput
 ) {
-  if (channel === "wecom_webhook") {
+  if (channel === "wecom_webhook" || channel === "wecom_cs_webhook") {
     return buildWecomPayload(input)
   }
 
@@ -306,6 +363,10 @@ function getWebhookUrl(
     return severity === "critical"
       ? settings.wecomCriticalWebhookUrl ?? settings.wecomOpsWebhookUrl
       : settings.wecomOpsWebhookUrl ?? settings.wecomCriticalWebhookUrl
+  }
+
+  if (channel === "wecom_cs_webhook") {
+    return settings.wecomCsWebhookUrl
   }
 
   if (channel === "channel_talk_webhook") {

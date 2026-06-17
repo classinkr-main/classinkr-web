@@ -1,4 +1,5 @@
 import { KAKAO_PIXEL_ID } from "@/lib/analytics-config"
+import { currentChoice, getAnonymousId } from "@/lib/consent/consent"
 
 export type EventNames =
   | "page_view"
@@ -6,6 +7,8 @@ export type EventNames =
   | "submit_demo_request"
   | "submit_newsletter"
   | "download_materials"
+  | "view_resource_card"
+  | "view_resource"
   | "view_demo_video"
   | "begin_checkout"
   | "purchase"
@@ -41,6 +44,7 @@ const sendInternalTracking = (eventName: EventNames, params?: AnalyticsParams) =
     const payload = JSON.stringify({
       event: eventName,
       page: window.location.pathname,
+      anonymousId: getAnonymousId(),
       params: params ?? {},
     })
     fetch("/api/track/event", {
@@ -57,6 +61,8 @@ const sendInternalTracking = (eventName: EventNames, params?: AnalyticsParams) =
 export const trackEvent = (eventName: EventNames, params?: AnalyticsParams) => {
   if (typeof window === "undefined") return
 
+  const consent = currentChoice()
+
   try {
     window.dataLayer = window.dataLayer || []
     window.dataLayer.push({
@@ -67,25 +73,30 @@ export const trackEvent = (eventName: EventNames, params?: AnalyticsParams) => {
     // Some embedded/webview contexts lock the Window object; continue with other transports.
   }
 
-  sendInternalTracking(eventName, params)
+  // 내부 분석 적재는 분석 동의가 있을 때만 (옵트인)
+  if (consent.analytics) {
+    sendInternalTracking(eventName, params)
+  }
 
+  // gtag 이벤트는 항상 푸시 — 발화 여부는 Consent Mode v2 상태가 결정한다.
   if (window.gtag) {
     window.gtag("event", eventName, params)
   }
 
-  if (window.fbq) {
+  // 마케팅 픽셀(Meta·Kakao)은 마케팅 동의가 있을 때만 발화
+  if (consent.marketing && window.fbq) {
     if (eventName === "submit_demo_request") {
       window.fbq("track", "Lead", params)
     } else if (eventName === "submit_newsletter") {
       window.fbq("track", "CompleteRegistration", params)
     } else if (eventName === "purchase") {
       window.fbq("track", "Purchase", params)
-    } else if (eventName !== "page_view") {
+    } else if (eventName !== "page_view" && eventName !== "view_resource_card") {
       window.fbq("trackCustom", eventName, params)
     }
   }
 
-  if (!window.kakaoPixel || !KAKAO_PIXEL_ID) return
+  if (!consent.marketing || !window.kakaoPixel || !KAKAO_PIXEL_ID) return
 
   const kakaoPixel = window.kakaoPixel(KAKAO_PIXEL_ID)
 
@@ -96,6 +107,7 @@ export const trackEvent = (eventName: EventNames, params?: AnalyticsParams) => {
       break
     case "click_cta":
     case "download_materials":
+    case "view_resource":
     case "view_demo_video":
     case "begin_checkout":
       kakaoPixel.participate({ tag: eventName })

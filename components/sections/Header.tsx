@@ -4,7 +4,6 @@ import * as React from "react"
 import Image from "next/image"
 import Link from "next/link"
 import { usePathname } from "next/navigation"
-import { NewsletterModal } from "./NewsletterModal"
 import { TrackedLink } from "@/components/TrackedLink"
 import { cn } from "@/lib/utils"
 import { Menu, X, Pencil, Presentation } from "lucide-react"
@@ -55,7 +54,7 @@ export function Header() {
             )}
         >
             <div className="container relative z-10 mx-auto flex items-center justify-between gap-4">
-                <Link href="/" className="flex items-center gap-2">
+                <Link href="/" prefetch={false} className="flex items-center gap-2">
                     <Image
                         src="/images/logo.png"
                         alt="Classin Logo"
@@ -96,6 +95,7 @@ export function Header() {
                             <div key={item.name} className="relative group w-full md:w-auto">
                                 <Link
                                     href={item.href}
+                                    prefetch={false}
                                     onClick={() => setIsMobileMenuOpen(false)}
                                     className={cn(
                                         "flex min-h-11 items-center justify-between rounded-[8px] px-3 text-[15px] font-semibold transition-colors md:min-h-0 md:rounded-none md:px-0",
@@ -114,6 +114,7 @@ export function Header() {
                                                 <Link
                                                     key={tab.href}
                                                     href={tab.href}
+                                                    prefetch={false}
                                                     onClick={() => setIsMobileMenuOpen(false)}
                                                     className={cn(
                                                         "inline-flex min-h-11 items-center justify-center gap-2 whitespace-nowrap rounded-[8px] border px-3 text-sm font-semibold transition-colors",
@@ -138,6 +139,7 @@ export function Header() {
                                                     <Link
                                                         key={tab.href}
                                                         href={tab.href}
+                                                        prefetch={false}
                                                         className={cn(
                                                             "inline-flex items-center gap-2 px-4 py-3 rounded-xl text-sm font-semibold transition-all whitespace-nowrap",
                                                             isTabActive
@@ -158,6 +160,7 @@ export function Header() {
                             <Link
                                 key={item.name}
                                 href={item.href}
+                                prefetch={false}
                                 onClick={() => setIsMobileMenuOpen(false)}
                                 className={cn(
                                     "flex min-h-11 w-full items-center rounded-[8px] px-3 text-[15px] font-semibold transition-colors md:min-h-0 md:w-auto md:rounded-none md:px-0",
@@ -172,23 +175,18 @@ export function Header() {
                     })}
                     {isMobileMenuOpen ? (
                         <div className="mt-3 grid gap-2 border-t border-black/[0.08] pt-4 md:hidden">
-                            <NewsletterModal
-                                source="gnb_mobile_materials"
-                                badge="무료 구독"
-                                title="교육 인사이트 받아보기"
-                                description="Classin의 최신 교육 트렌드, 제품 업데이트, 행사 정보를 이메일로 받아보세요."
-                                benefits={[
-                                    "월 1~2회 학원 운영 인사이트 레터",
-                                    "신기능 · 업데이트 소식 우선 공지",
-                                    "Classin 주최 행사 · 웨비나 초대",
-                                ]}
+                            <TrackedLink
+                                href="/resources"
+                                prefetch={false}
+                                ctaId="gnb_mobile_resources"
+                                onClick={() => setIsMobileMenuOpen(false)}
+                                className="flex min-h-11 w-full items-center justify-center rounded-[8px] border border-black/[0.08] bg-white px-4 text-[15px] font-semibold text-[#615D59] transition-colors hover:bg-[#F6F5F4]"
                             >
-                                <button type="button" className="flex min-h-11 w-full items-center justify-center rounded-[8px] border border-black/[0.08] bg-white px-4 text-[15px] font-semibold text-[#615D59]">
-                                    자료 받아보기
-                                </button>
-                            </NewsletterModal>
+                                자료 받아보기
+                            </TrackedLink>
                             <TrackedLink
                                 href="/contact"
+                                prefetch={false}
                                 ctaId="gnb_mobile_contact"
                                 onClick={() => setIsMobileMenuOpen(false)}
                                 className="inline-flex min-h-11 w-full items-center justify-center rounded-[8px] bg-[#009060] px-4 text-[15px] font-semibold text-white shadow-sm transition-colors hover:bg-[#007A52]"
@@ -200,23 +198,17 @@ export function Header() {
                 </nav>
 
                 <div className="hidden md:flex items-center gap-4">
-                    <NewsletterModal
-                        source="gnb_materials"
-                        badge="무료 구독"
-                        title="교육 인사이트 받아보기"
-                        description="Classin의 최신 교육 트렌드, 제품 업데이트, 행사 정보를 이메일로 받아보세요."
-                        benefits={[
-                            "월 1~2회 학원 운영 인사이트 레터",
-                            "신기능 · 업데이트 소식 우선 공지",
-                            "Classin 주최 행사 · 웨비나 초대",
-                        ]}
+                    <TrackedLink
+                        href="/resources"
+                        prefetch={false}
+                        ctaId="gnb_resources"
+                        className="hidden font-semibold text-[15px] text-[#615D59] transition-colors hover:text-[#084734] md:flex"
                     >
-                        <button type="button" className="hidden md:flex font-semibold transition-colors text-[15px] cursor-pointer bg-transparent border-none p-0 text-[#615D59] hover:text-[#084734]">
-                            자료 받아보기
-                        </button>
-                    </NewsletterModal>
+                        자료 받아보기
+                    </TrackedLink>
                     <TrackedLink
                         href="/contact"
+                        prefetch={false}
                         ctaId="gnb_contact"
                         className="inline-flex items-center justify-center whitespace-nowrap rounded-[6px] bg-[#009060] px-5 py-2 text-[15px] font-semibold text-white shadow-sm transition-all hover:bg-[#007A52] active:scale-[0.97]"
                     >

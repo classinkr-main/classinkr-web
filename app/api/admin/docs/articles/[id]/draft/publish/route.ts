@@ -8,6 +8,7 @@ import {
   upsertDocsRedirect,
 } from "@/lib/repositories/docs-articles"
 import { validateDocsArticlePatchForPublish } from "../../../_payload"
+import { revalidateDocsArticlePaths } from "../../../_revalidate"
 
 interface RouteContext {
   params: Promise<{ id: string }>
@@ -48,6 +49,7 @@ export async function POST(req: NextRequest, context: RouteContext) {
       })
     }
 
+    revalidateDocsArticlePaths(existing, detail)
     return NextResponse.json(detail)
   } catch (error) {
     const message = error instanceof Error ? error.message : "작업 초안을 공개본에 반영하지 못했습니다."

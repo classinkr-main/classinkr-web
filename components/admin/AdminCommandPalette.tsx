@@ -28,7 +28,7 @@ const COMMANDS: Command[] = [
   { group: "성장", label: "새 행사 등록", href: "/admin/events/new", keywords: "새 행사 등록 new event" },
   { group: "성장", label: "가이드 문서", href: "/admin/docs", keywords: "가이드 문서 docs guide" },
   { group: "성장", label: "문서 보강 큐", href: "/admin/docs/gaps", keywords: "챗봇 질문 보강 큐 gaps faq 문서 검색 초안" },
-  { group: "분석", label: "지사 관리", href: "/admin/branch", keywords: "지사 브랜치 branch 매출" },
+  { group: "분석", label: "KR Team", href: "/admin/branch", keywords: "지사 브랜치 branch kr team 매출" },
   { group: "분석", label: "Analytics", href: "/admin/analytics", keywords: "analytics 분석 통계" },
   { group: "시스템", label: "Settings", href: "/admin/settings", keywords: "설정 settings 환경" },
   { group: "시스템", label: "회원 관리", href: "/admin/users", keywords: "회원 사용자 users 권한" },
