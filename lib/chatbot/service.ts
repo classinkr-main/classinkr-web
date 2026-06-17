@@ -826,13 +826,24 @@ function mergeScoredSources(sources: ChatbotSource[]) {
   return Array.from(merged.values())
 }
 
-function selectDiverseSources(
+// 같은 주제를 다룬 서로 다른 문서(예: 채널톡 동기화본 ↔ 기존 큐레이션본)가 동시에 노출되는 것을
+// 막기 위한 정규화 키. 보수적으로 '정확히 일치'할 때만 같은 주제로 본다(서로 다른 주제를 잘못 병합하지 않도록).
+function normalizeTopicTitle(title: string): string {
+  return title
+    .toLowerCase()
+    .replace(/[\s()（）[\]·,./\-_~&]+/g, "")
+    .replace(/작성중|작업중|관리자|가이드/g, "")
+    .trim()
+}
+
+export function selectDiverseSources(
   sources: ChatbotSource[],
   limit = MAX_SOURCES,
   maxSourcesPerDoc = MAX_SOURCES_PER_DOC
 ) {
   const seenChunks = new Set<string>()
   const perPath = new Map<string, number>()
+  const topicOwner = new Map<string, string>()
   const selected: ChatbotSource[] = []
 
   for (const source of sources.sort((left, right) => right.score - left.score)) {
@@ -840,9 +851,18 @@ function selectDiverseSources(
     const chunkKey = source.chunkId ?? `${source.urlPath}:${source.heading ?? ""}`
     if (seenChunks.has(chunkKey)) continue
 
+    // 주제 중복 제거: 같은 주제를 다른 문서가 이미 선점했으면 건너뛴다. 점수 내림차순 순회라
+    // 질의에 더 적합한(유사도 높은) 출처가 그 주제를 차지하고, 중복 사본은 제외된다.
+    const topicKey = normalizeTopicTitle(source.title)
+    if (topicKey) {
+      const owner = topicOwner.get(topicKey)
+      if (owner && owner !== source.urlPath) continue
+    }
+
     const pathCount = perPath.get(source.urlPath) ?? 0
     if (pathCount >= maxSourcesPerDoc) continue
 
+    if (topicKey && !topicOwner.has(topicKey)) topicOwner.set(topicKey, source.urlPath)
     seenChunks.add(chunkKey)
     perPath.set(source.urlPath, pathCount + 1)
     selected.push(source)
@@ -1374,9 +1394,8 @@ function getComparisonAnswer(top: ChatbotSource) {
 
 function getIdentityAnswer() {
   return [
-    "네, Classin이 어떤 서비스인지 궁금하시군요.",
-    "Classin은 학원 수업을 준비·진행·녹화·복습·과제(LMS)·관리자 데이터까지 한 흐름으로 묶는 수업 운영 솔루션이에요.",
-    "쉽게 말해 Zoom처럼 수업만 여는 도구가 아니라, 전자칠판·EDB 교안·녹화·복습·관리자 운영까지 연결해 수업 품질을 표준화하는 시스템에 가까워요.",
+    "네, Classin은 학원 수업을 준비·진행·녹화·복습·과제(LMS)·관리자 데이터까지 한 흐름으로 묶는 수업 운영 솔루션이에요.",
+    "쉽게 말해 Zoom처럼 수업만 여는 도구가 아니라, 전자칠판·EDB 교안·녹화·관리자 운영까지 연결해 수업 품질을 표준화하는 시스템에 가까워요.",
     "전자칠판, 온라인 수업, LMS/관리자 중 어떤 쪽이 궁금하신지 알려주시면 그 부분만 콕 짚어 정리해드릴게요.",
   ].join("\n\n")
 }
@@ -1448,19 +1467,17 @@ function getWebLiveBillingAnswer() {
 
 function getPricingAnswer() {
   return [
-    "네, 요금은 고정가표보다 '구성 기준'으로 보시는 게 정확해요.",
-    "보통 이렇게 묶여요.",
+    "네, 요금은 고정가표보다 '구성 기준'으로 봐요. 보통 이렇게 묶여요.",
     "- 전자칠판 + OPS(윈도우 컴퓨팅)\n- 카메라·마이크·스탠드/벽걸이 구성\n- 소프트웨어 사용 범위(녹화·LMS 등)\n- 설치·온보딩",
-    "교실 수랑 원하는 구성만 알려주시면 견적 범위를 잡아드리거나 담당자 상담으로 바로 이어드릴게요.",
+    "교실 수랑 원하는 구성만 알려주시면 견적 범위를 잡아드릴게요.",
   ].join("\n\n")
 }
 
 function getInstallFormAnswer() {
   return [
-    "네, 설치는 이동형 스탠드와 벽걸이 둘 다 가능해요.",
-    "고르실 때 기준이에요.",
+    "네, 설치는 이동형 스탠드와 벽걸이 둘 다 가능해요. 이렇게 고르시면 돼요.",
     "- 교실 간 이동이 필요하면 → 이동형 스탠드\n- 자리가 고정이고 공간을 아끼려면 → 벽걸이(벽면 보강 확인)",
-    "전원·네트워크·벽면 상태·시야 거리는 현장 실측에서 먼저 확인해요. 교실 환경만 알려주시면 맞는 설치 형태로 안내해드릴게요.",
+    "전원·네트워크·벽면 상태는 현장 실측에서 먼저 확인해요. 교실 환경만 알려주시면 맞는 형태로 안내해드릴게요.",
   ].join("\n\n")
 }
 
@@ -1479,7 +1496,7 @@ function getCoreFeatureYesNoAnswer(question: NormalizedQuestion) {
             : /화면\s*공유|미러링/.test(text)
               ? "네, 화면 공유와 미러링 모두 수업 중 도구로 지원돼요. 자료 화면을 공유하거나 기기 화면을 보드에 미러링할 수 있어요."
               : "네, 판서는 클래스인 핵심 기능이에요. 보드에서 한 판서를 저장·공유하고 복습 자료(EDB 교안)로 이어갈 수 있어요."
-  return [lead, "정확한 설정 위치나 운영 방법은 화면 기준으로 더 짚어드릴까요?"].join("\n\n")
+  return `${lead} 자세한 설정 위치는 화면 기준으로 안내해드릴게요.`
 }
 
 function formatConsumerAnswer({

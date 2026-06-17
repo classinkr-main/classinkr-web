@@ -100,11 +100,6 @@ function makeId() {
 }
 
 const HANDOFF_TRANSCRIPT_LIMIT = 6
-const thinkingSteps = [
-    "질문 확인 중",
-    "관련 내용 확인 중",
-    "짧게 정리 중",
-]
 
 // 상담원 연결 시 최근 대화록·인텐트를 채널톡 프로필로 넘긴다 — 상담원이 맥락을 갖고 시작.
 function buildHandoffProfile(
@@ -499,14 +494,10 @@ function AnswerCopyButton({ message }: { message: ChatMessage }) {
 }
 
 function ThinkingIndicator({
-    stepIndex,
     shouldReduceMotion,
 }: {
-    stepIndex: number
     shouldReduceMotion: boolean | null
 }) {
-    const activeStep = thinkingSteps[stepIndex % thinkingSteps.length]
-
     return (
         <motion.div
             initial={shouldReduceMotion ? { opacity: 0 } : { opacity: 0, y: 8 }}
@@ -514,11 +505,30 @@ function ThinkingIndicator({
             transition={{ duration: shouldReduceMotion ? 0.01 : 0.18, ease: "easeOut" }}
             className="flex justify-start"
         >
-            <div className="w-[min(86%,260px)] rounded-[12px] border border-black/[0.06] bg-white px-3.5 py-2.5 text-sm text-[#615D59] shadow-sm">
-                <div className="flex items-center gap-2">
-                    <Loader2 className="h-4 w-4 animate-spin text-[#084734]" />
-                    <span className="font-semibold text-[#111110]">{activeStep}</span>
+            <div
+                role="status"
+                aria-live="polite"
+                className="inline-flex items-center gap-2 rounded-[12px] border border-black/[0.06] bg-white px-3.5 py-2.5 shadow-sm"
+            >
+                <div className="flex items-center gap-1" aria-hidden>
+                    {[0, 1, 2].map((index) => (
+                        <motion.span
+                            key={index}
+                            className="h-1.5 w-1.5 rounded-full bg-[#084734]"
+                            animate={
+                                shouldReduceMotion
+                                    ? { opacity: 0.5 }
+                                    : { y: [0, -4, 0], opacity: [0.35, 1, 0.35] }
+                            }
+                            transition={
+                                shouldReduceMotion
+                                    ? undefined
+                                    : { duration: 1.1, repeat: Infinity, ease: "easeInOut", delay: index * 0.15 }
+                            }
+                        />
+                    ))}
                 </div>
+                <span className="text-sm text-[#615D59]">답변 작성 중</span>
             </div>
         </motion.div>
     )
@@ -531,7 +541,6 @@ export function FloatingChatbot() {
     const [input, setInput] = useState("")
     const [sessionId, setSessionId] = useState<string | undefined>()
     const [isSending, setIsSending] = useState(false)
-    const [thinkingStepIndex, setThinkingStepIndex] = useState(0)
     const [error, setError] = useState<string | null>(null)
     const [isDeepConsultation, setIsDeepConsultation] = useState(false)
     const [unresolvedStreak, setUnresolvedStreak] = useState(0)
@@ -622,18 +631,6 @@ export function FloatingChatbot() {
         return () => window.cancelAnimationFrame(frame)
     }, [isOpen])
 
-    useEffect(() => {
-        if (!isSending) {
-            setThinkingStepIndex(0)
-            return
-        }
-
-        const interval = window.setInterval(() => {
-            setThinkingStepIndex((current) => (current + 1) % thinkingSteps.length)
-        }, 900)
-
-        return () => window.clearInterval(interval)
-    }, [isSending])
 
     useEffect(() => {
         if (!isOpen) return
@@ -883,7 +880,7 @@ export function FloatingChatbot() {
                                 ))}
 
                                 {isSending ? (
-                                    <ThinkingIndicator stepIndex={thinkingStepIndex} shouldReduceMotion={shouldReduceMotion} />
+                                    <ThinkingIndicator shouldReduceMotion={shouldReduceMotion} />
                                 ) : null}
                                 <div ref={bottomRef} />
                             </div>
