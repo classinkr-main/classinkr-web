@@ -174,6 +174,11 @@ Classin을 만능 학원 관리 프로그램처럼 말하지 않는다.
 | `academy-resource-reduction-calculator` | 가격 부담 리드에게 줄어드는 강사 리소스와 반복 업무 시간을 숫자로 보게 한다. |
 | `academy-admin-dashboard-template` | 원장·실장·관리자에게 주간 운영 지표와 권한 기준을 제안한다. |
 | `academy-data-automation-brief` | API·리포트·자동화 니즈가 있는 고급 리드에게 원장 언어의 설계 브리프를 제공한다. |
+| `showroom-demo-readiness-kit` | 쇼룸/온라인 데모 직전 리드에게 대표 수업 자료, 현장 확인 장면, 파일럿 판단 기준을 준비시킨다. |
+| `teacher-edb-onboarding-sop-kit` | 강사 교체·지점 확장·수업 품질 편차 리드에게 EDB 교안 자산화와 첫 주 온보딩 SOP를 제안한다. |
+| `classroom-install-av-readiness-checklist` | 전자칠판 설치 고의도 리드에게 교실, 전원, 네트워크, 카메라·마이크, 안전 조건을 정리하게 한다. |
+| `parent-replay-retention-script-kit` | 녹화·LMS 기록을 결석 보강, 복습 독려, 학부모 상담 문구로 바꿔 학부모 체감 가치를 만든다. |
+| `academy-case-match-brief` | "우리 같은 학원 사례"를 묻는 리드에게 과목·규모·운영 병목 기준의 사례 매칭 질문을 받는다. |
 
 ### 챗봇
 
@@ -208,6 +213,11 @@ CTA는 구매 압박보다 다음 판단을 돕는 쪽으로 설계한다.
 | 전자칠판 비교 중 | 전자칠판 구매 전 교실 시스템 체크리스트, 하드웨어 상담 |
 | 가격 부담 | 강사 리소스 절감 계산 워크시트, 견적 구성 가이드 |
 | 도입 의향 있음 | 90일 파일럿 로드맵, 목동 쇼룸 상담 |
+| 쇼룸/데모 직전 | 목동 쇼룸 데모 준비 키트, 대표 수업 자료 준비 안내 |
+| 강사 표준화 고민 | 강사 온보딩·EDB 교안 표준화 SOP |
+| 설치/AV 고민 | 전자칠판·카메라·마이크 설치 현장 체크리스트 |
+| 복습·보강·상담 고민 | 학부모 상담·복습/보강 스크립트 키트 |
+| 유사 사례 요청 | 우리 학원 맞춤 도입 사례 매칭 브리프 |
 | 관리자 운영 고민 | 관리자 데이터·권한 운영 점검표 |
 | API·자동화 니즈 | 학원 데이터·API 자동화 설계 브리프, 공식 API 문서 |
 
@@ -232,6 +242,11 @@ CTA는 구매 압박보다 다음 판단을 돕는 쪽으로 설계한다.
 - `academy-admin-dashboard-template`: 원장/실장 운영 관리 리드
 - `academy-data-automation-brief`: API·자동화 고의도 리드
 - `classin-90-day-adoption-roadmap`: 일정 구체화 리드
+- `showroom-demo-readiness-kit`: 쇼룸/데모 고의도 리드
+- `teacher-edb-onboarding-sop-kit`: 강사 표준화/EDB 온보딩 리드
+- `classroom-install-av-readiness-checklist`: 설치/하드웨어 고의도 리드
+- `parent-replay-retention-script-kit`: 상담/복습 운영 리드
+- `academy-case-match-brief`: 사례 탐색 리드
 
 ## 11. 문장 규칙
 
