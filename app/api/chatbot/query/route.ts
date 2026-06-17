@@ -3,6 +3,8 @@ import { NextRequest, NextResponse } from "next/server"
 import { ChatbotInputError, handleChatbotQuery } from "@/lib/chatbot/service"
 import { checkRateLimit, getClientIp } from "@/lib/server/rate-limit"
 
+const CHATBOT_ROUTE_TIMEOUT_MS = 10_000
+
 export async function POST(req: NextRequest) {
   const ip = getClientIp(req)
   const { allowed } = checkRateLimit(ip, "chatbot-query", {
@@ -16,10 +18,15 @@ export async function POST(req: NextRequest) {
 
   try {
     const body = await req.json()
-    const result = await handleChatbotQuery(body, {
-      userAgent: req.headers.get("user-agent"),
-      referrer: req.headers.get("referer"),
-    })
+    const result = await Promise.race([
+      handleChatbotQuery(body, {
+        userAgent: req.headers.get("user-agent"),
+        referrer: req.headers.get("referer"),
+      }),
+      new Promise<never>((_, reject) => {
+        setTimeout(() => reject(new Error("chatbot_timeout")), CHATBOT_ROUTE_TIMEOUT_MS)
+      }),
+    ])
 
     return NextResponse.json(result)
   } catch (error) {
@@ -29,7 +36,12 @@ export async function POST(req: NextRequest) {
 
     console.error("[POST /api/chatbot/query] error:", error)
     return NextResponse.json(
-      { error: "답변을 준비하지 못했습니다. 잠시 후 다시 시도하거나 상담으로 남겨주세요." },
+      {
+        error:
+          error instanceof Error && error.message === "chatbot_timeout"
+            ? "응답이 지연되고 있습니다. 잠깐 후 다시 시도해 주세요."
+            : "답변을 준비하지 못했습니다. 잠시 후 다시 시도해 주세요.",
+      },
       { status: 500 }
     )
   }

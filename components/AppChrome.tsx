@@ -64,14 +64,20 @@ export function AppChrome({ children }: { children: ReactNode }) {
       requestIdleCallback?: (callback: () => void, options?: { timeout: number }) => number
       cancelIdleCallback?: (handle: number) => void
     }
+    const fallbackTimeout = window.setTimeout(() => setReadyPath(pathname), 1800)
 
     if (w.requestIdleCallback) {
-      const handle = w.requestIdleCallback(() => setReadyPath(pathname), { timeout: 1800 })
-      return () => w.cancelIdleCallback?.(handle)
+      const handle = w.requestIdleCallback(() => {
+        window.clearTimeout(fallbackTimeout)
+        setReadyPath(pathname)
+      }, { timeout: 1800 })
+      return () => {
+        window.clearTimeout(fallbackTimeout)
+        w.cancelIdleCallback?.(handle)
+      }
     }
 
-    const timeout = window.setTimeout(() => setReadyPath(pathname), 1200)
-    return () => window.clearTimeout(timeout)
+    return () => window.clearTimeout(fallbackTimeout)
   }, [pathname])
 
   return (

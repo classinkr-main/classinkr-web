@@ -36,6 +36,12 @@ export interface ChannelTalkBootOptions {
   memberId?: string
   /** 상담원에게 넘길 프로필 필드(마지막 질문, 챗봇 인텐트, 대화 요약 등). */
   profile?: ChannelTalkProfile
+  /** 새 상담 입력창에 미리 넣을 메시지. 사용자가 전송해야 상담 수신함에 고객 메시지로 들어간다. */
+  draftMessage?: string
+  /** 새 UserChat이 생성될 때 붙일 상담 단위 프로필. */
+  chatProfile?: ChannelTalkProfile
+  /** setPage에 남길 페이지명. 없으면 현재 URL을 사용한다. */
+  page?: string
 }
 
 export const CHANNEL_TALK_INTENT_EVENT = "classin:channel-talk-intent"
@@ -152,10 +158,26 @@ export function bootChannelTalk(options: ChannelTalkBootOptions = {}): boolean {
   return true
 }
 
-/** 사용자가 직접 상담을 요청 → force로 부트하고 메신저를 연다. */
+function currentPageName() {
+  if (typeof window === "undefined") return undefined
+  return window.location.href || window.location.pathname || undefined
+}
+
+/** 사용자가 직접 상담을 요청 → force로 부트하고 메신저/새 상담을 연다. */
 export function openChannelTalk(options: Omit<ChannelTalkBootOptions, "force"> = {}): boolean {
   if (!bootChannelTalk({ ...options, force: true })) return false
   if (typeof window === "undefined" || typeof window.ChannelIO !== "function") return false
+
+  if (options.chatProfile) {
+    window.ChannelIO("setPage", options.page ?? currentPageName() ?? "classin-chatbot", options.chatProfile)
+  }
+
+  const draftMessage = options.draftMessage?.trim()
+  if (draftMessage) {
+    // Channel Talk SDK: openChat(undefined, message)는 새 상담 입력창에 초안을 채운다.
+    window.ChannelIO("openChat", undefined, draftMessage)
+    return true
+  }
 
   window.ChannelIO("showMessenger")
   return true

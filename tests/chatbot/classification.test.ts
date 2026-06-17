@@ -49,4 +49,54 @@ describe("chatbot classification", () => {
     expect(result.intent).toBe("sales_consulting")
     expect(result.handoffIntent).toBe("demo")
   })
+
+  it("recognizes casual difference questions as onboarding comparison", () => {
+    const questions = [
+      "클래스인 뭐가 다른거에요?",
+      "클래스인은 뭐가 다른가요?",
+      "클래스인이 다른 서비스랑 다른 점은 뭐예요?",
+      "클래스인 차별점 알려주세요",
+    ]
+
+    for (const question of questions) {
+      const result = classifyChatbotQuestion(question)
+
+      expect(result.category).toBe("onboarding")
+      expect(result.intent).toBe("onboarding")
+      expect(result.handoffIntent).toBe("demo")
+    }
+  })
+
+  it("recognizes product identity questions as onboarding", () => {
+    const questions = [
+      "클래스인이 뭐야?",
+      "클래스인 뭐예요?",
+      "Classin은 어떤 서비스인가요?",
+      "클래스인 소개해줘",
+    ]
+
+    for (const question of questions) {
+      const result = classifyChatbotQuestion(question)
+
+      expect(result.category).toBe("onboarding")
+      expect(result.intent).toBe("onboarding")
+      expect(result.handoffIntent).toBe("demo")
+    }
+  })
+
+  it("classifies hardware spec questions as hardware", () => {
+    const questions = [
+      "클래스인 하드웨어 스펙",
+      "전자칠판 스펙 알려줘",
+      "Classin Board S86 사양 알려줘",
+      "S98 Pro 규격이 어떻게 돼?",
+    ]
+
+    for (const question of questions) {
+      const result = classifyChatbotQuestion(question)
+
+      expect(result.category).toBe("hardware")
+      expect(result.intent).toBe("hardware_support")
+    }
+  })
 })

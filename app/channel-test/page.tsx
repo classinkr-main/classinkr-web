@@ -23,15 +23,18 @@ export default function ChannelTalkTestPage() {
         lastQuestion: TEST_MESSAGE,
         lastPage: window.location.href,
       },
+      chatProfile: {
+        chatbotHandoff: true,
+        chatbotSessionId: TEST_SESSION_ID,
+        chatbotCategory: "billing",
+        chatbotIntent: "billing_support",
+        chatbotHandoffIntent: "support",
+        lastQuestion: TEST_MESSAGE,
+      },
+      draftMessage: TEST_MESSAGE,
     })
 
     if (!opened) return
-
-    const timer = window.setTimeout(() => {
-      window.ChannelIO?.("openChat", undefined, TEST_MESSAGE)
-    }, 2500)
-
-    return () => window.clearTimeout(timer)
   }, [])
 
   return (

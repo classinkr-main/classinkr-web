@@ -1,16 +1,24 @@
 /**
- * Import selected Channel Talk Documents articles into the local docs center.
+ * Channel Talk(채널톡) 헬프센터 문서를 로컬 문서센터(docs_articles + docs_ai_chunks)로 동기화한다.
+ * 텍스트뿐 아니라 이미지/표/첨부파일/콜아웃을 마크다운으로 보존한다(구조화 body 블록 우선,
+ * bodyHtml 이미지 보강). 이렇게 들어온 문서는 챗봇 RAG와 관리자 가이드가 함께 참조한다.
  *
- * By default, imports all published articles visible to the configured Documents API key.
- * The numeric IDs in desk.channel.io knowledge URLs are Desk-internal IDs and may not match
- * Documents Open API article IDs; use --ids only with IDs returned by Documents Open API.
+ * 기본 동작(전수 크롤):
+ *   - 내용이 있는 모든 문서를 받는다(채널 draft 포함). 빈 "작성중" 스텁과 테스트/샘플 페이지는 제외.
+ *   - 채널에서 published 인 글만 visibility 를 --public 으로 공개 승격할 수 있고, draft 는 항상 unlisted.
+ *   - 전수 크롤 시, 이번 세트에 없는 과거 자동 동기화 문서는 archived 로 reconcile(수기 편집본 제외).
  *
  * Usage:
- *   npx tsx scripts/sync-channel-documents.ts --dry-run
- *   npx tsx scripts/sync-channel-documents.ts
- *   npx tsx scripts/sync-channel-documents.ts --ids 44553,701155 --language ko
- *   npx tsx scripts/sync-channel-documents.ts --include-unpublished
- *   npx tsx scripts/sync-channel-documents.ts --strict
+ *   npx tsx scripts/sync-channel-documents.ts --dry-run            # 미리보기(쓰기 없음)
+ *   npx tsx scripts/sync-channel-documents.ts --dry-run --dump     # 추출 마크다운 전문 출력
+ *   npx tsx scripts/sync-channel-documents.ts                      # 전수 크롤 + reconcile
+ *   npx tsx scripts/sync-channel-documents.ts --published-only     # 채널 published 상태만
+ *   npx tsx scripts/sync-channel-documents.ts --public             # published 글을 공개 문서로
+ *   npx tsx scripts/sync-channel-documents.ts --ids 44553,701155   # 특정 문서만(reconcile 안 함)
+ *   npx tsx scripts/sync-channel-documents.ts --strict             # fetch 실패 시 중단
+ *
+ * 채널의 desk.channel.io knowledge URL 숫자 ID 는 Desk 내부 ID 라 Documents Open API ID 와
+ * 다를 수 있다. --ids 는 Documents Open API 가 돌려준 ID 로만 사용한다.
  *
  * Required for fetching:
  *   CHANNEL_DOCS_ACCESS / CHANNEL_DOCS_ACCESS_SECRET
@@ -29,7 +37,6 @@ import { createClient } from "@supabase/supabase-js"
 
 const DOCUMENT_API_BASE = "https://document-api.channel.io/open/v1"
 const DEFAULT_LANGUAGE = "ko"
-const DEFAULT_STATE = "published"
 const CATEGORY_ID = "admin"
 const CATEGORY_TITLE = "[관리자] 사용 가이드"
 const CATEGORY_DESCRIPTION = "기관(학원) 관리자를 위한 대시보드 전반의 사용 방법을 안내합니다."
@@ -37,6 +44,8 @@ const UPDATED_BY = "sync-channel-documents"
 const MAX_CHUNK_CHARS = 1800
 const FETCH_SPACING_MS = 150
 const FETCH_RETRY_DELAYS_MS = [500, 1000, 2000]
+// 본문이 이보다 짧으면 "작성중" 빈 스텁으로 보고 동기화에서 제외한다.
+const MIN_BODY_CHARS = 24
 
 type DocsStatus = "draft" | "review" | "published" | "archived"
 type DocsVisibility = "public" | "unlisted" | "internal"
@@ -51,6 +60,8 @@ interface ChannelArticle {
   state?: string
   body?: unknown
   bodyHtml?: string
+  coverImageUrl?: string
+  topicIds?: string[]
   updatedAt?: number
   publishedAt?: number
   website?: {
@@ -77,6 +88,7 @@ interface NormalizedChannelDocument {
   contentJson: Record<string, unknown>
   tags: string[]
   keywords: string[]
+  channelState: string | null
   updatedAt: string
   publishedAt: string | null
 }
@@ -141,6 +153,8 @@ const args = process.argv.slice(2)
 const dryRun = args.includes("--dry-run")
 const skipChunks = args.includes("--skip-chunks")
 const strictFetch = args.includes("--strict")
+// 기본은 unlisted(챗봇 RAG + 관리자 가이드에서 사용, 공개 색인 제외). --public 으로 공개 문서로 승격.
+const DOC_VISIBILITY: DocsVisibility = args.includes("--public") ? "public" : "unlisted"
 
 function argValue(name: string): string | undefined {
   const index = args.indexOf(name)
@@ -321,6 +335,17 @@ function htmlToMarkdown(html: string) {
     .replace(/<h([1-6])[^>]*>([\s\S]*?)<\/h\1>/gi, (_, level: string, content: string) => {
       return `\n\n${"#".repeat(Number(level))} ${cleanInlineHtml(content)}\n\n`
     })
+    // 이미지/영상 임베드 보존 — 사용자가 요구한 "텍스트·이미지·영상 전수 크롤링".
+    .replace(/<img\b[^>]*?\balt=["']([^"']*)["'][^>]*?\bsrc=["']([^"']+)["'][^>]*?>/gi, (_, alt: string, src: string) => `\n\n![${cleanInlineHtml(alt)}](${src})\n\n`)
+    .replace(/<img\b[^>]*?\bsrc=["']([^"']+)["'][^>]*?>/gi, (_, src: string) => `\n\n![](${src})\n\n`)
+    .replace(/<iframe\b[^>]*?\bsrc=["']([^"']+)["'][^>]*?>[\s\S]*?<\/iframe>/gi, (_, src: string) => `\n\n[영상/임베드 보기](${src})\n\n`)
+    .replace(/<video\b[^>]*?\bsrc=["']([^"']+)["'][^>]*?>[\s\S]*?<\/video>/gi, (_, src: string) => `\n\n[영상 보기](${src})\n\n`)
+    .replace(/<source\b[^>]*?\bsrc=["']([^"']+)["'][^>]*?>/gi, (_, src: string) => `\n\n[영상 보기](${src})\n\n`)
+    .replace(/<figcaption[^>]*>([\s\S]*?)<\/figcaption>/gi, (_, content: string) => {
+      const caption = cleanInlineHtml(content)
+      return caption ? `\n\n_${caption}_\n\n` : "\n\n"
+    })
+    .replace(/<\/figure>/gi, "\n\n")
     .replace(/<a\b[^>]*href=["']([^"']+)["'][^>]*>([\s\S]*?)<\/a>/gi, (_, href: string, text: string) => {
       const label = cleanInlineHtml(text)
       return label ? `[${label}](${href})` : href
@@ -336,6 +361,38 @@ function htmlToMarkdown(html: string) {
     .trim()
 }
 
+function applyInlineMarks(text: string, marks: unknown): string {
+  if (!text || !Array.isArray(marks)) return text
+  let out = text
+  let href: string | undefined
+  let bold = false
+  let italic = false
+  let code = false
+  for (const mark of marks) {
+    if (!mark || typeof mark !== "object") continue
+    const node = mark as Record<string, unknown>
+    const markAttrs = node.attrs && typeof node.attrs === "object" ? (node.attrs as Record<string, unknown>) : {}
+    if (node.type === "bold") bold = true
+    else if (node.type === "italic") italic = true
+    else if (node.type === "inlineCode") code = true
+    else if (node.type === "hyperlink") {
+      const url =
+        typeof markAttrs.href === "string" ? markAttrs.href : typeof markAttrs.url === "string" ? markAttrs.url : undefined
+      if (url) href = url
+    }
+  }
+  if (code) out = `\`${out}\``
+  if (bold) out = `**${out}**`
+  if (italic) out = `_${out}_`
+  if (href) out = `[${out}](${href})`
+  return out
+}
+
+function emojiToText(name: string) {
+  return `:${name}:`
+}
+
+/** 마크(굵게/링크 등)를 무시한 순수 텍스트 — 설명/제목/이미지 alt 용. */
 function inlineToText(value: unknown): string {
   if (typeof value === "string") return value
   if (!value || typeof value !== "object") return ""
@@ -344,15 +401,58 @@ function inlineToText(value: unknown): string {
   const attrs = item.attrs && typeof item.attrs === "object" ? item.attrs as Record<string, unknown> : {}
   const text = typeof attrs.text === "string" ? attrs.text : ""
 
-  if (item.type === "emoji" && typeof attrs.name === "string") return attrs.name
+  if (item.type === "emoji" && typeof attrs.name === "string") return emojiToText(attrs.name)
   if (text) return text
 
   if (Array.isArray(item.content)) return item.content.map(inlineToText).join("")
   return ""
 }
 
+/** 마크(굵게/기울임/코드/링크)를 마크다운으로 적용한 인라인 — 본문 단락/표/리스트 용. */
+function inlineToMarkdown(value: unknown): string {
+  if (typeof value === "string") return value
+  if (!value || typeof value !== "object") return ""
+
+  const item = value as Record<string, unknown>
+  const attrs = item.attrs && typeof item.attrs === "object" ? item.attrs as Record<string, unknown> : {}
+  const text = typeof attrs.text === "string" ? attrs.text : ""
+
+  if (item.type === "emoji" && typeof attrs.name === "string") return emojiToText(attrs.name)
+  if (text) return applyInlineMarks(text, item.marks)
+
+  if (Array.isArray(item.content)) return item.content.map(inlineToMarkdown).join("")
+  return ""
+}
+
+/** 표 셀 1개를 한 줄 텍스트로 — 줄바꿈 제거 + 파이프 이스케이프. */
+function renderTableCell(cell: unknown): string {
+  const inner = blocksToMarkdown(Array.isArray((cell as Record<string, unknown>)?.content) ? (cell as Record<string, unknown>).content : cell)
+  return inner.replace(/\s*\n+\s*/g, " ").replace(/\|/g, "\\|").trim()
+}
+
+function tableToMarkdown(block: Record<string, unknown>): string {
+  const rows = Array.isArray(block.content) ? block.content : []
+  const matrix: string[][] = []
+  for (const row of rows) {
+    if (!row || typeof row !== "object") continue
+    const cells = Array.isArray((row as Record<string, unknown>).content)
+      ? ((row as Record<string, unknown>).content as unknown[])
+      : []
+    matrix.push(cells.map(renderTableCell))
+  }
+  if (matrix.length === 0) return ""
+  const cols = Math.max(...matrix.map((r) => r.length))
+  const pad = (r: string[]) => Array.from({ length: cols }, (_, i) => r[i] ?? "")
+  const header = pad(matrix[0])
+  return [
+    `| ${header.join(" | ")} |`,
+    `| ${header.map(() => "---").join(" | ")} |`,
+    ...matrix.slice(1).map((r) => `| ${pad(r).join(" | ")} |`),
+  ].join("\n")
+}
+
 function blocksToMarkdown(value: unknown, depth = 0): string {
-  if (depth > 8 || value == null) return ""
+  if (depth > 10 || value == null) return ""
   if (typeof value === "string") return value
   if (Array.isArray(value)) {
     return value.map((item) => blocksToMarkdown(item, depth + 1)).filter(Boolean).join("\n\n")
@@ -364,25 +464,60 @@ function blocksToMarkdown(value: unknown, depth = 0): string {
   const attrs = block.attrs && typeof block.attrs === "object" ? block.attrs as Record<string, unknown> : {}
   const content = Array.isArray(block.content) ? block.content : []
 
-  if (type === "heading") {
-    const level = typeof attrs.level === "number" ? Math.min(Math.max(attrs.level, 1), 6) : 2
-    return `${"#".repeat(level)} ${content.map(inlineToText).join("").trim()}`
+  switch (type) {
+    case "heading": {
+      const level = typeof attrs.level === "number" ? Math.min(Math.max(attrs.level, 1), 6) : 2
+      return `${"#".repeat(level)} ${content.map(inlineToText).join("").trim()}`
+    }
+    case "text":
+    case "paragraph":
+      return content.map(inlineToMarkdown).join("").trim()
+    case "code":
+      return ["```", content.map(inlineToText).join("\n"), "```"].join("\n")
+    case "image": {
+      const src = typeof attrs.src === "string" ? attrs.src : ""
+      if (!src) return ""
+      const alt = typeof attrs.alt === "string" ? attrs.alt.replace(/[[\]]/g, "") : ""
+      return `![${alt}](${src})`
+    }
+    case "file": {
+      const src = typeof attrs.src === "string" ? attrs.src : ""
+      if (!src) return ""
+      // 파일명 안의 대괄호는 마크다운 링크 텍스트를 깨뜨리므로 제거한다.
+      const rawName = typeof attrs.name === "string" && attrs.name ? attrs.name : "첨부파일"
+      const name = rawName.replace(/[[\]]/g, "").trim() || "첨부파일"
+      return `[📎 ${name}](${src})`
+    }
+    case "webPage": {
+      const url =
+        typeof attrs.url === "string" ? attrs.url : typeof attrs.src === "string" ? attrs.src : typeof attrs.href === "string" ? attrs.href : ""
+      if (!url) return content.map((item) => blocksToMarkdown(item, depth + 1)).filter(Boolean).join("\n")
+      const label = typeof attrs.title === "string" && attrs.title ? attrs.title : url
+      return `[${label}](${url})`
+    }
+    case "divider":
+      return "---"
+    case "callout":
+    case "blockquote": {
+      const inner = content.map((item) => blocksToMarkdown(item, depth + 1)).filter(Boolean).join("\n")
+      return inner
+        .split("\n")
+        .map((line) => `> ${line}`.trimEnd())
+        .join("\n")
+    }
+    case "table":
+      return tableToMarkdown(block)
+    case "bullets":
+    case "orderedList":
+      return content.map((item, index) => {
+        const text = blocksToMarkdown(item, depth + 1).replace(/\n/g, "\n  ")
+        return type === "orderedList" ? `${index + 1}. ${text}` : `- ${text}`
+      }).join("\n")
+    case "listItem":
+      return content.map((item) => blocksToMarkdown(item, depth + 1)).filter(Boolean).join("\n")
+    default:
+      return content.map((item) => blocksToMarkdown(item, depth + 1)).filter(Boolean).join("\n\n")
   }
-  if (type === "text") return content.map(inlineToText).join("").trim()
-  if (type === "code") return ["```", content.map(inlineToText).join("\n"), "```"].join("\n")
-  if (type === "image" && typeof attrs.src === "string") {
-    const alt = typeof attrs.alt === "string" ? attrs.alt : ""
-    return `![${alt}](${attrs.src})`
-  }
-  if (type === "bullets" || type === "orderedList") {
-    return content.map((item, index) => {
-      const text = blocksToMarkdown(item, depth + 1).replace(/\n/g, "\n  ")
-      return type === "orderedList" ? `${index + 1}. ${text}` : `- ${text}`
-    }).join("\n")
-  }
-  if (type === "listItem") return content.map((item) => blocksToMarkdown(item, depth + 1)).join("\n")
-
-  return content.map((item) => blocksToMarkdown(item, depth + 1)).filter(Boolean).join("\n\n")
 }
 
 function compactText(value: string, max = 220) {
@@ -396,14 +531,41 @@ function toIso(ms?: number) {
   return new Date(ms).toISOString()
 }
 
+/** Channel CDN 미디어의 안정 식별자(usermedia/revisions 해시)로 중복 이미지를 판정한다. */
+function mediaKey(src: string): string {
+  const match = src.match(/([a-f0-9]{16,})/i)
+  return match ? match[1].toLowerCase() : src.trim()
+}
+
 function getArticleBodyMarkdown(article: ChannelArticle) {
-  if (typeof article.bodyHtml === "string" && article.bodyHtml.trim()) {
-    return htmlToMarkdown(article.bodyHtml)
+  // 구조화된 body 블록을 우선 사용한다(이미지 alt·표·파일·콜아웃을 정확히 보존).
+  let body = blocksToMarkdown(article.body).trim()
+
+  if (!body && typeof article.bodyHtml === "string" && article.bodyHtml.trim()) {
+    body = htmlToMarkdown(article.bodyHtml)
   }
 
-  const fromBlocks = blocksToMarkdown(article.body)
-  if (fromBlocks.trim()) return fromBlocks.trim()
+  // 블록에서 누락된 bodyHtml '콘텐츠' 이미지를 보강 — 이모지/아이콘 자산은 제외(노이즈).
+  if (typeof article.bodyHtml === "string" && article.bodyHtml.includes("<img")) {
+    const present = new Set([...body.matchAll(/!\[[^\]]*\]\(([^)]+)\)/g)].map((m) => mediaKey(m[1])))
+    const missing: string[] = []
+    for (const match of article.bodyHtml.matchAll(/<img\b[^>]*?\bsrc=["']([^"']+)["']/gi)) {
+      const src = match[1]
+      if (/\/(asset|emoji|icons?)\//i.test(src)) continue
+      const key = mediaKey(src)
+      if (present.has(key)) continue
+      present.add(key)
+      missing.push(src)
+    }
+    if (missing.length) {
+      body = `${body}\n\n${missing.map((src) => `![](${src})`).join("\n\n")}`.trim()
+    }
+  }
 
+  // 인접한 굵게 런이 만든 빈 강조(****)를 정리한다.
+  body = body.replace(/\*\*\*\*/g, "").trim()
+
+  if (body) return body
   return [article.summary, article.subtitle].filter(Boolean).join("\n\n").trim()
 }
 
@@ -434,9 +596,38 @@ function unique(values: string[]) {
   return Array.from(new Set(values.map((value) => value.trim()).filter(Boolean)))
 }
 
+/**
+ * 채널 자동생성/날짜코드 제목을 사람이 읽을 수 있는 제목으로 보정한다.
+ *  - "260407_코스 탈퇴 규정" → "코스 탈퇴 규정" (날짜코드 접두어 제거)
+ *  - "한국어20260323_1109" → 본문 첫 제목/굵게/번호항목에서 추출 (실패 시 원제목 유지)
+ */
+function deriveTitle(rawTitle: string, bodyMarkdown: string): string {
+  const title = rawTitle.trim()
+
+  const prefixStripped = title.replace(/^\d{6,}_+\s*/, "").trim()
+  if (prefixStripped && prefixStripped !== title && prefixStripped.length >= 2) {
+    return prefixStripped
+  }
+
+  if (/^(한국어|영어|english|korean)?\s*\d{6,}/i.test(title)) {
+    const candidate =
+      bodyMarkdown.match(/^#{1,3}\s+(.+)$/m)?.[1] ??
+      bodyMarkdown.match(/\*\*\s*(?:\d+\.\s*)?([^*]{2,})\*\*/)?.[1] ??
+      bodyMarkdown.match(/^\s*\d+\.\s+(.+)$/m)?.[1]
+    const clean = candidate
+      ?.replace(/^[ⅠⅡⅢⅣⅤⅥⅦⅧⅨⅩ\dIVX]+[.．]\s*/, "")
+      .replace(/[*`#]/g, "")
+      .trim()
+    if (clean && clean.length >= 2 && !/^\d+$/.test(clean)) return clean.slice(0, 80)
+  }
+
+  return title
+}
+
 function normalizeChannelArticle(articleId: string, article: ChannelArticle): NormalizedChannelDocument {
-  const title = article.title?.trim() || article.name?.trim() || `Channel Talk 지식 문서 ${articleId}`
   const bodyMarkdown = getArticleBodyMarkdown(article)
+  const rawTitle = article.title?.trim() || article.name?.trim() || `Channel Talk 지식 문서 ${articleId}`
+  const title = deriveTitle(rawTitle, bodyMarkdown)
   const description = compactText(article.summary || article.subtitle || bodyMarkdown || title)
   const updatedAt = toIso(article.updatedAt)
   const publishedAt = typeof article.publishedAt === "number" ? toIso(article.publishedAt) : null
@@ -444,20 +635,31 @@ function normalizeChannelArticle(articleId: string, article: ChannelArticle): No
     article.website?.url ||
     `https://desk.channel.io/#/channels/103209/alf-customer/knowledge/document/${articleId}`
   const slug = `channel-talk-document-${articleId}`
+  // 제목 토큰을 키워드로 풀어 키워드 폴백 검색이 제품 용어(수업/코스/성적 등)에 걸리게 한다.
+  const titleTokens = title
+    .split(/[\s&·,/()[\]]+/)
+    .map((token) => token.trim())
+    .filter((token) => token.length >= 2)
   const keywords = unique([
-    "채널톡",
-    "Channel Talk",
-    "ALF",
-    "지식베이스",
-    "도큐먼트",
-    "Documents",
+    ...titleTokens,
     title,
-    articleId,
+    "ClassIn",
+    "클래스인",
+    "사용 가이드",
+    "사용법",
+    "헬프센터",
   ])
-  const tags = ["채널톡", "ALF", "지식베이스", "상담 자동화"]
+  const tags = ["ClassIn 가이드", "사용법", "헬프센터"]
+  const coverImage =
+    typeof article.coverImageUrl === "string" && article.coverImageUrl.trim()
+      ? article.coverImageUrl.trim()
+      : null
+  const imageCount = (bodyMarkdown.match(/!\[[^\]]*\]\([^)]+\)/g) ?? []).length + (coverImage ? 1 : 0)
+  const fileCount = (bodyMarkdown.match(/\[📎[^\]]*\]\([^)]+\)/g) ?? []).length
   const sections = markdownToSections(bodyMarkdown)
   const contentMarkdown = [
     `# ${title}`,
+    coverImage ? `![${title}](${coverImage})` : "",
     description,
     `원문: ${sourceUrl}`,
     bodyMarkdown,
@@ -476,6 +678,10 @@ function normalizeChannelArticle(articleId: string, article: ChannelArticle): No
       channelDocumentSlug: article.slug ?? null,
       channelDocumentState: article.state ?? null,
       sourceUrl,
+      coverImage,
+      imageCount,
+      fileCount,
+      topicIds: Array.isArray(article.topicIds) ? article.topicIds : [],
       fetchedAt: new Date().toISOString(),
       updatedAt,
       publishedAt,
@@ -483,6 +689,7 @@ function normalizeChannelArticle(articleId: string, article: ChannelArticle): No
     },
     tags,
     keywords,
+    channelState: article.state ?? null,
     updatedAt,
     publishedAt,
   }
@@ -494,12 +701,13 @@ function buildArticleRow(doc: NormalizedChannelDocument, index: number): Article
     slug: doc.slug,
     title: doc.title,
     description: doc.description,
-    audience: ["운영팀", "상담 담당자", "관리자", "챗봇 운영자"],
+    audience: ["관리자", "교사", "운영팀"],
     product_area: "admin",
     doc_type: "reference",
     difficulty: "intermediate",
     status: "published",
-    visibility: "unlisted",
+    // 채널에서 published 인 글만 --public 으로 공개 승격 가능. draft/unpublished 는 항상 unlisted.
+    visibility: doc.channelState === "published" ? DOC_VISIBILITY : "unlisted",
     noindex: false,
     featured: false,
     order_index: 3500 + index,
@@ -594,6 +802,17 @@ async function fetchTargetDocuments(articleIds: string[], language: string) {
   for (const articleId of articleIds) {
     try {
       const article = await fetchChannelArticle(articleId, language)
+      const title = article.title?.trim() || article.name?.trim() || articleId
+      const bodyMarkdown = getArticleBodyMarkdown(article).trim()
+      if (bodyMarkdown.length < MIN_BODY_CHARS) {
+        console.warn(`[channel-docs] skipped ${articleId} (작성중/빈 본문: "${title}")`)
+        continue
+      }
+      // 명시적 테스트/샘플 페이지는 챗봇 답변 품질을 위해 제외(정확히 일치할 때만 — 보수적).
+      if (/^(테스트|test|샘플|sample)$/.test(title.toLowerCase().replace(/\s+/g, ""))) {
+        console.warn(`[channel-docs] skipped ${articleId} (테스트/샘플 페이지: "${title}")`)
+        continue
+      }
       documents.push(normalizeChannelArticle(articleId, article))
     } catch (error) {
       if (strictFetch) throw error
@@ -606,7 +825,7 @@ async function fetchTargetDocuments(articleIds: string[], language: string) {
   return documents
 }
 
-async function syncToSupabase(documents: NormalizedChannelDocument[]) {
+async function syncToSupabase(documents: NormalizedChannelDocument[], reconcile: boolean) {
   const { url, serviceRoleKey } = getSupabaseEnv()
   const supabase = createClient(url, serviceRoleKey, {
     auth: { autoRefreshToken: false, persistSession: false },
@@ -719,10 +938,51 @@ async function syncToSupabase(documents: NormalizedChannelDocument[]) {
     }
   }
 
+  // 정합성 reconcile — 전수 크롤 시, 이번 세트에 없는 과거 자동 동기화 문서(삭제·비공개·빈 스텁 등)를
+  // archived 로 내려 챗봇 RAG/문서센터에서 제외하고 그 청크를 정리한다. 관리자 수기 편집본은 건드리지 않는다.
+  let archivedStale = 0
+  if (reconcile) {
+    const currentSlugs = new Set(rows.map((row) => row.slug))
+    const { data: managedRows, error: managedError } = await supabase
+      .from("docs_articles")
+      .select("id, slug")
+      .eq("category_id", CATEGORY_ID)
+      .like("slug", "channel-talk-document-%")
+      .eq("updated_by", UPDATED_BY)
+      .neq("status", "archived")
+    if (managedError) throw managedError
+
+    const staleIds = ((managedRows ?? []) as Array<{ id: string; slug: string }>)
+      .filter((row) => !currentSlugs.has(row.slug))
+      .map((row) => row.id)
+
+    if (staleIds.length > 0) {
+      const { error: deleteStaleChunksError } = await supabase
+        .from("docs_ai_chunks")
+        .delete()
+        .in("article_id", staleIds)
+      if (deleteStaleChunksError) throw deleteStaleChunksError
+
+      const { error: archiveError } = await supabase
+        .from("docs_articles")
+        .update({
+          status: "archived",
+          visibility: "internal",
+          noindex: true,
+          last_reviewed_at: now,
+          updated_by: UPDATED_BY,
+        })
+        .in("id", staleIds)
+      if (archiveError) throw archiveError
+      archivedStale = staleIds.length
+    }
+  }
+
   return {
     articleCount: identities.length,
     insertedVersions,
     chunkCount,
+    archivedStale,
   }
 }
 
@@ -731,21 +991,27 @@ async function main() {
 
   const language = argValue("--language") ?? DEFAULT_LANGUAGE
   const idsArg = argValue("--ids")
-  const includeUnpublished = args.includes("--include-unpublished")
-  const stateArg = argValue("--state")
-  const listState =
-    includeUnpublished || stateArg === "all" ? undefined : stateArg ?? DEFAULT_STATE
+  // 기본은 내용이 있는 모든 문서(초안 포함)를 크롤 — 빈 스텁/테스트는 fetch 단계에서 제외.
+  // --published-only 로 채널에서 published 상태인 글만 좁힐 수 있다.
+  const publishedOnly = args.includes("--published-only")
 
   let ids = (idsArg ?? "")
     .split(",")
     .map((id) => id.trim())
     .filter(Boolean)
 
-  if (ids.length === 0) {
-    const articles = await listChannelArticles(language, listState)
-    ids = unique(articles.map((article) => article.id ?? ""))
+  // 특정 id 지정이 없을 때만 전수 크롤 + 정합성 reconcile 을 수행한다.
+  const fullCrawl = ids.length === 0
+
+  if (fullCrawl) {
+    // Documents Open API의 state 쿼리 파라미터는 신뢰할 수 없어(draft까지 반환) 전체를 받아 클라이언트에서 거른다.
+    const articles = await listChannelArticles(language, undefined)
+    const selected = publishedOnly
+      ? articles.filter((article) => (article.state ?? "") === "published")
+      : articles
+    ids = unique(selected.map((article) => article.id ?? ""))
     console.log(
-      `[channel-docs] listed ${ids.length} ${listState ?? "all"} article(s) from Channel Documents`
+      `[channel-docs] listed ${articles.length} article(s); selected ${ids.length} (${publishedOnly ? "published only" : "all states, content-bearing"})`
     )
   }
 
@@ -758,15 +1024,23 @@ async function main() {
   }
 
   if (dryRun) {
+    if (args.includes("--dump")) {
+      for (const doc of documents) {
+        const meta = doc.contentJson as { imageCount?: number; fileCount?: number }
+        console.log(`\n===== ${doc.slug} (images:${meta.imageCount ?? 0} files:${meta.fileCount ?? 0}) =====`)
+        console.log(doc.contentMarkdown)
+      }
+    }
     console.log("[channel-docs] --dry-run: Supabase write skipped.")
     return
   }
 
-  const result = await syncToSupabase(documents)
+  const result = await syncToSupabase(documents, fullCrawl)
   console.log("[channel-docs] sync complete")
   console.log(`- articles: ${result.articleCount}`)
   console.log(`- versions: ${result.insertedVersions}`)
   console.log(`- chunks: ${result.chunkCount}`)
+  console.log(`- archived stale: ${result.archivedStale}`)
   console.log("[channel-docs] next: run scripts/embed-docs-chunks.ts to backfill embeddings.")
 }
 

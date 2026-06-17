@@ -6,11 +6,9 @@ import Link from "next/link"
 import { usePathname } from "next/navigation"
 import { AnimatePresence, motion, useReducedMotion } from "framer-motion"
 import {
-    ArrowUpRight,
     Bot,
     Check,
     Copy,
-    FileText,
     Loader2,
     MessageCircle,
     Send,
@@ -30,7 +28,8 @@ import { CLASSIN_POSITIONING } from "@/lib/classin-positioning"
 
 type HandoffIntent = "demo" | "support"
 
-const UNRESOLVED_STREAK_THRESHOLD = 2
+const UNRESOLVED_STREAK_THRESHOLD = 3
+const CHATBOT_REQUEST_TIMEOUT_MS = 9_000
 
 interface ChatbotSource {
     title: string
@@ -93,7 +92,7 @@ function shouldHideChatbot(pathname: string | null) {
 }
 
 function shouldUseDeepConsultationIcon(text: string) {
-    return /상담|컨설팅|도입|문의|견적|문제|장애|오류|AS|A\/S/i.test(text)
+    return /상담|컨설팅|도입\s*(상담|문의|검토)|견적|담당자|시연|데모|장애|오류|AS|A\/S/i.test(text)
 }
 
 function makeId() {
@@ -102,10 +101,9 @@ function makeId() {
 
 const HANDOFF_TRANSCRIPT_LIMIT = 6
 const thinkingSteps = [
-    "질문 의도 분류 중",
-    "문서와 지식 베이스 검색 중",
-    "근거 자료 정리 중",
-    "답변과 다음 단계 작성 중",
+    "질문 확인 중",
+    "관련 내용 확인 중",
+    "짧게 정리 중",
 ]
 
 // 상담원 연결 시 최근 대화록·인텐트를 채널톡 프로필로 넘긴다 — 상담원이 맥락을 갖고 시작.
@@ -164,9 +162,7 @@ function formatActionMessage(intent: HandoffIntent, draftLineCount: number) {
 }
 
 function AssistantMeta({ message }: { message: ChatMessage }) {
-    const sourceCount = message.sources?.length ?? 0
     const labels = [
-        sourceCount > 0 ? `문서 ${sourceCount}개 기반` : null,
         message.showHandoffCTA ? "상담 권장" : null,
     ].filter((label): label is string => Boolean(label))
 
@@ -220,20 +216,23 @@ function ConsultationBridge({
 
     function openConsultation() {
         const anonymousId = getChannelTalkAnonymousId()
+        const profile = buildHandoffProfile(messages, message, sessionId)
         setToast({
             type: "info",
             text: "상담창을 여는 중입니다.",
         })
         const opened = openChannelTalk({
             memberId: anonymousId ? buildChannelTalkMemberId(anonymousId) : undefined,
-            profile: buildHandoffProfile(messages, message, sessionId),
+            profile,
+            chatProfile: profile,
+            draftMessage: draft,
         })
 
         setState(opened ? "opened" : "failed")
         setToast({
             type: opened ? "success" : "error",
             text: opened
-                ? "상담창이 열렸어요. 지금 남긴 내용으로 빠르게 확인할 수 있어요."
+                ? "상담창에 요약이 입력됐어요. 전송하면 담당자가 바로 이어서 확인합니다."
                 : "상담창 열기 실패: 브라우저 제약이나 인증 상태를 확인한 뒤 문의폼으로 이동해 주세요.",
         })
     }
@@ -268,13 +267,13 @@ function ConsultationBridge({
                 {formatActionMessage(message.handoffIntent ?? "support", draftLineCount)}
             </p>
             <div className="mt-2 rounded-[8px] bg-[#F6F5F4] px-3 py-2 text-[12px] leading-5 text-[#3B3835]">
-                <p className="whitespace-pre-line break-keep">{draft}</p>
+                <p className="whitespace-pre-line [overflow-wrap:anywhere]">{draft}</p>
             </div>
             <div className="mt-3 flex flex-wrap items-center gap-2">
                 <button
                     type="button"
                     onClick={openConsultation}
-                    className="inline-flex h-9 items-center justify-center gap-1.5 rounded-[6px] bg-[#009060] px-3 text-xs font-bold text-white transition-colors hover:bg-[#007A52]"
+                    className="inline-flex h-9 items-center justify-center gap-1.5 rounded-[6px] bg-[#084734] px-3 text-xs font-bold text-white transition-colors hover:bg-[#065c41]"
                 >
                     <MessageCircle className="h-3.5 w-3.5" />
                     {intentLabel}
@@ -307,7 +306,7 @@ function ConsultationBridge({
             {state !== "idle" ? (
                 <p className="mt-2 text-[11px] leading-4 text-[#615D59]">
                     {state === "opened"
-                        ? "상담창이 열렸어요. 문의를 보내면 담당자가 이어서 확인합니다."
+                        ? "상담창이 열렸어요. 입력된 요약을 전송하면 채널톡 상담 수신함으로 이어집니다."
                         : state === "copied"
                             ? "요약을 복사했어요."
                             : "상담창을 열 수 없으면 문의폼으로 남겨주세요."}
@@ -329,14 +328,18 @@ function FeedbackButtons({
     async function sendFeedback(rating: "helpful" | "not_helpful") {
         setState(rating)
 
-        if (!answerEventId) return
+        if (!answerEventId || !sessionId) {
+            setState("failed")
+            return
+        }
 
         try {
-            await fetch("/api/chatbot/feedback", {
+            const response = await fetch("/api/chatbot/feedback", {
                 method: "POST",
                 headers: { "Content-Type": "application/json" },
                 body: JSON.stringify({ answerEventId, sessionId, rating }),
             })
+            if (!response.ok) setState("failed")
         } catch {
             setState("failed")
         }
@@ -372,31 +375,77 @@ function FeedbackButtons({
     )
 }
 
-function formatSourceUrl(urlPath: string, origin: string) {
-    if (!origin) return urlPath
-    try {
-        return new URL(urlPath, origin).toString()
-    } catch {
-        return urlPath
-    }
+function buildAnswerShareText(message: ChatMessage) {
+    return sanitizeVisibleAssistantText(message.content)
 }
 
-function buildAnswerShareText(message: ChatMessage) {
-    const origin = typeof window === "undefined" ? "" : window.location.origin
-    const lines = [message.content.trim()]
+function sanitizeVisibleAssistantText(value: string) {
+    return value
+        .replace(/!\[[^\]]*]\([^)]*\)/g, "")
+        .replace(/\[([^\]]+)]\((?:https?:\/\/|\/)[^)]+\)/g, "$1")
+        .replace(/https?:\/\/[^\s)]+/g, "")
+        .replace(/(?:\/docs|\/images|\/resources)\/[^\s)]+/g, "")
+        .replace(/\[image[_\-\s]?\d*]/gi, "")
+        .replace(/^\s*(?:출처|참고\s*문서|근거\s*자료|문서\s*보기)\s*:.*$/gim, "")
+        .replace(/[^\S\r\n]{2,}/g, " ")
+        .replace(/[ \t]+\n/g, "\n")
+        .replace(/\n{3,}/g, "\n\n")
+        .trim()
+}
 
-    if ((message.sources?.length ?? 0) > 0) {
-        lines.push(
-            "",
-            "근거 자료:",
-            ...(message.sources ?? []).map((source, index) => {
-                const heading = source.heading ? ` - ${source.heading}` : ""
-                return `${index + 1}. ${source.title}${heading}\n${formatSourceUrl(source.urlPath, origin)}`
-            })
-        )
-    }
+function cleanMessageLine(line: string) {
+    return line
+        .replace(/^(요약|다음 단계|확인 기준|주의):\s*/i, "")
+        .trim()
+}
 
-    return lines.join("\n")
+function orderedLineValue(line: string) {
+    return line.match(/^\d+[\.)]\s+(.+)$/)?.[1]?.trim()
+}
+
+function MessageContent({ content, role }: { content: string; role: ChatMessage["role"] }) {
+    const visibleContent = role === "assistant" ? sanitizeVisibleAssistantText(content) : content
+    const blocks = visibleContent
+        .trim()
+        .split(/\n{2,}/)
+        .map((block) => block.trim())
+        .filter(Boolean)
+
+    if (blocks.length === 0) return null
+
+    return (
+        <div
+            className={cn(
+                "space-y-2 whitespace-pre-wrap text-sm leading-6 [overflow-wrap:anywhere]",
+                role === "assistant" ? "text-[#111110]" : "text-white"
+            )}
+        >
+            {blocks.map((block, blockIndex) => {
+                const lines = block
+                    .split("\n")
+                    .map((line) => line.trim())
+                    .filter(Boolean)
+                    .filter((line) => !/^(권장 순서|확인 기준):\s*$/i.test(line))
+                const orderedItems = lines.map(orderedLineValue)
+
+                if (orderedItems.length > 0 && orderedItems.every(Boolean)) {
+                    return (
+                        <ol key={`${blockIndex}:${block}`} className="ml-4 list-decimal space-y-1">
+                            {orderedItems.map((item, index) => (
+                                <li key={`${index}:${item}`}>{item}</li>
+                            ))}
+                        </ol>
+                    )
+                }
+
+                return (
+                    <p key={`${blockIndex}:${block}`}>
+                        {lines.map(cleanMessageLine).filter(Boolean).join("\n")}
+                    </p>
+                )
+            })}
+        </div>
+    )
 }
 
 function AnswerCopyButton({ message }: { message: ChatMessage }) {
@@ -425,46 +474,12 @@ function AnswerCopyButton({ message }: { message: ChatMessage }) {
                 state === "copied" && "border-[#084734]/25 bg-[#ECFDF5] text-[#084734]",
                 state === "failed" && "border-[#B85C33]/20 bg-[#FBEAE2] text-[#7A2A13]"
             )}
-            aria-label="답변과 링크 복사"
-            title="답변과 링크 복사"
+            aria-label="답변 복사"
+            title="답변 복사"
         >
             {state === "copied" ? <Check className="h-3.5 w-3.5" /> : <Copy className="h-3.5 w-3.5" />}
-            {state === "copied" ? "복사됨" : state === "failed" ? "실패" : "답변+링크"}
+            {state === "copied" ? "복사됨" : state === "failed" ? "실패" : "답변 복사"}
         </button>
-    )
-}
-
-function SourceLinks({ sources }: { sources: ChatbotSource[] }) {
-    if (sources.length === 0) return null
-
-    return (
-        <div className="mt-3 space-y-2">
-            <p className="text-[11px] font-bold text-[#615D59]">근거 자료</p>
-            {sources.map((source, index) => (
-                <Link
-                    key={`${source.urlPath}:${source.heading ?? index}`}
-                    href={source.urlPath}
-                    className="group flex items-start gap-2 rounded-[8px] border border-black/[0.08] bg-[#FAFAF8] px-3 py-2.5 text-left transition-colors hover:border-[#084734]/25 hover:bg-[#ECFDF5]"
-                >
-                    <FileText className="mt-0.5 h-4 w-4 shrink-0 text-[#084734]" />
-                    <span className="min-w-0 flex-1">
-                        <span className="flex items-center gap-1.5">
-                            <span className="inline-flex h-4 min-w-4 items-center justify-center rounded-[4px] bg-[#084734]/10 px-1 text-[10px] font-bold text-[#084734]">
-                                {index + 1}
-                            </span>
-                            <span className="block truncate text-[13px] font-bold text-[#111110]">{source.title}</span>
-                        </span>
-                        {source.heading ? (
-                            <span className="mt-0.5 block truncate text-[12px] text-[#615D59]">{source.heading}</span>
-                        ) : null}
-                        <span className="mt-1 block overflow-hidden text-[11px] leading-4 text-[#615D59] [display:-webkit-box] [-webkit-box-orient:vertical] [-webkit-line-clamp:2]">
-                            {source.excerpt}
-                        </span>
-                    </span>
-                    <ArrowUpRight className="mt-0.5 h-3.5 w-3.5 shrink-0 text-[#A39E98] transition-colors group-hover:text-[#084734]" />
-                </Link>
-            ))}
-        </div>
     )
 }
 
@@ -484,21 +499,10 @@ function ThinkingIndicator({
             transition={{ duration: shouldReduceMotion ? 0.01 : 0.18, ease: "easeOut" }}
             className="flex justify-start"
         >
-            <div className="w-[min(86%,300px)] rounded-[12px] border border-black/[0.06] bg-white px-3.5 py-3 text-sm text-[#615D59] shadow-sm">
+            <div className="w-[min(86%,260px)] rounded-[12px] border border-black/[0.06] bg-white px-3.5 py-2.5 text-sm text-[#615D59] shadow-sm">
                 <div className="flex items-center gap-2">
                     <Loader2 className="h-4 w-4 animate-spin text-[#084734]" />
                     <span className="font-semibold text-[#111110]">{activeStep}</span>
-                </div>
-                <div className="mt-3 grid grid-cols-4 gap-1">
-                    {thinkingSteps.map((step, index) => (
-                        <span
-                            key={step}
-                            className={cn(
-                                "h-1 rounded-full bg-[#E5E5E0] transition-colors",
-                                index <= stepIndex % thinkingSteps.length && "bg-[#009060]"
-                            )}
-                        />
-                    ))}
                 </div>
             </div>
         </motion.div>
@@ -614,7 +618,7 @@ export function FloatingChatbot() {
 
         const interval = window.setInterval(() => {
             setThinkingStepIndex((current) => (current + 1) % thinkingSteps.length)
-        }, 1200)
+        }, 900)
 
         return () => window.clearInterval(interval)
     }, [isSending])
@@ -656,10 +660,14 @@ export function FloatingChatbot() {
 
         setMessages((current) => [...current, userMessage])
 
+        let timeoutId: number | undefined
         try {
+            const controller = new AbortController()
+            timeoutId = window.setTimeout(() => controller.abort(), CHATBOT_REQUEST_TIMEOUT_MS)
             const response = await fetch("/api/chatbot/query", {
                 method: "POST",
                 headers: { "Content-Type": "application/json" },
+                signal: controller.signal,
                 body: JSON.stringify({
                     message: trimmed,
                     sessionId,
@@ -668,10 +676,14 @@ export function FloatingChatbot() {
                 }),
             })
 
-            const data = (await response.json()) as Partial<ChatbotQueryResponse> & { error?: string }
+            const data = (await response.json().catch(() => ({}))) as Partial<ChatbotQueryResponse> & { error?: string }
 
             if (!response.ok) {
-                throw new Error(data.error ?? "답변을 가져오지 못했습니다.")
+                throw new Error(
+                    response.status === 429
+                        ? data.error ?? "질문이 잠시 많이 들어왔습니다. 잠깐 후 다시 시도해 주세요."
+                        : data.error ?? "답변을 가져오지 못했습니다."
+                )
             }
 
             setSessionId(data.sessionId ?? sessionId)
@@ -682,15 +694,15 @@ export function FloatingChatbot() {
             const nextStreak = data.unresolved ? unresolvedStreak + 1 : 0
             setUnresolvedStreak(nextStreak)
 
-            const showHandoffCTA = Boolean(data.needsHandoff) || nextStreak >= UNRESOLVED_STREAK_THRESHOLD
+            const showHandoffCTA = Boolean(data.needsHandoff)
 
             setMessages((current) => [
                 ...current,
                 {
                     id: makeId(),
                     role: "assistant",
-                    content: data.answer ?? "확인 가능한 답변을 찾지 못했습니다.",
-                    sources: data.sources ?? [],
+                    content: sanitizeVisibleAssistantText(data.answer ?? "확인 가능한 답변을 찾지 못했습니다."),
+                    sources: [],
                     suggestedQuestions: data.suggestedQuestions ?? [],
                     answerEventId: data.answerEventId,
                     confidence: data.confidence,
@@ -700,12 +712,12 @@ export function FloatingChatbot() {
                 },
             ])
 
-            if (showHandoffCTA && nextStreak >= UNRESOLVED_STREAK_THRESHOLD && !data.needsHandoff) {
+            if (nextStreak >= UNRESOLVED_STREAK_THRESHOLD && !data.needsHandoff) {
                 const intent = data.handoffIntent ?? "demo"
                 const nudge =
                     intent === "support"
-                        ? "정확한 확인이 필요한 내용으로 보여요. 상담으로 연결하면 계정, 결제, 장비 상태까지 함께 확인해드릴게요."
-                        : "상황에 맞춘 도입 상담이 더 빠를 수 있어요. 학원 규모와 원하는 운영 방식에 맞춰 다음 단계를 안내해드릴게요."
+                        ? "정확한 확인을 위해 오류 화면, 사용 기기, 발생 시점을 한 문장으로 알려주세요."
+                        : "도입, 수업 운영, 계정/오류, 결제 중 어느 쪽인지 알려주시면 더 짧게 좁혀드릴게요."
                 setMessages((current) => [
                     ...current,
                     {
@@ -713,30 +725,33 @@ export function FloatingChatbot() {
                         role: "assistant",
                         content: nudge,
                         suggestedQuestions: [],
-                        needsHandoff: true,
+                        needsHandoff: false,
                         handoffIntent: intent,
-                        showHandoffCTA: true,
+                        showHandoffCTA: false,
                     },
                 ])
             }
 
             requestAnimationFrame(() => bottomRef.current?.scrollIntoView({ behavior: "smooth" }))
         } catch (err) {
-            setError(err instanceof Error ? err.message : "챗봇 응답 중 오류가 발생했습니다.")
-            setIsDeepConsultation(true)
+            const isAbort = err instanceof DOMException && err.name === "AbortError"
+            setError(isAbort ? "응답이 지연되고 있습니다. 잠깐 후 다시 시도해 주세요." : err instanceof Error ? err.message : "챗봇 응답 중 오류가 발생했습니다.")
             setMessages((current) => [
                 ...current,
                 {
                     id: makeId(),
                     role: "assistant",
-                    content: "지금은 답변을 불러오지 못했습니다. 급한 문의라면 상담으로 남겨주세요. 담당자가 상황을 확인해 이어서 안내드릴게요.",
-                    suggestedQuestions: [],
-                    needsHandoff: true,
-                    handoffIntent: "demo",
-                    showHandoffCTA: true,
+                    content: isAbort
+                        ? "응답이 지연되고 있어요. 질문을 조금 짧게 다시 보내거나 잠깐 후 재시도해 주세요."
+                        : "지금은 답변을 불러오지 못했습니다. 잠깐 후 다시 시도해 주세요.",
+                    suggestedQuestions: ["질문을 짧게 다시 보낼게요"],
+                    needsHandoff: false,
+                    handoffIntent: "support",
+                    showHandoffCTA: false,
                 },
             ])
         } finally {
+            if (timeoutId) window.clearTimeout(timeoutId)
             setIsSending(false)
         }
     }
@@ -754,7 +769,7 @@ export function FloatingChatbot() {
     }
 
     return (
-        <div className="fixed inset-x-4 bottom-[calc(5.5rem+env(safe-area-inset-bottom))] z-50 flex flex-col items-end md:inset-x-auto md:bottom-6 md:right-6">
+        <div className="fixed inset-x-0 bottom-0 z-50 flex flex-col items-end px-3 pb-[calc(1rem+env(safe-area-inset-bottom))] md:inset-x-auto md:bottom-6 md:right-6 md:px-0 md:pb-0">
             <AnimatePresence>
                 {isOpen && (
                     <motion.div
@@ -766,9 +781,9 @@ export function FloatingChatbot() {
                         animate={shouldReduceMotion ? { opacity: 1 } : { opacity: 1, y: 0, scale: 1 }}
                         exit={shouldReduceMotion ? { opacity: 0 } : { opacity: 0, y: 16, scale: 0.98 }}
                         transition={{ duration: shouldReduceMotion ? 0.01 : 0.18 }}
-                        className="mb-4 flex h-[min(560px,calc(100svh-8.5rem))] w-full max-w-[390px] flex-col overflow-hidden rounded-[16px] border border-black/[0.08] bg-white shadow-[rgba(0,0,0,0.10)_0px_20px_60px,rgba(0,0,0,0.05)_0px_8px_20px]"
+                        className="mb-3 flex h-[min(620px,calc(100svh-6rem))] w-full max-w-none flex-col overflow-hidden rounded-[16px] border border-black/[0.08] bg-white shadow-[rgba(0,0,0,0.10)_0px_20px_60px,rgba(0,0,0,0.05)_0px_8px_20px] md:mb-4 md:h-[min(560px,calc(100svh-8.5rem))] md:max-w-[390px]"
                     >
-                        <div className="flex items-center justify-between bg-[#009060] px-5 py-4 text-white">
+                        <div className="flex items-center justify-between bg-[#084734] px-5 py-4 text-white">
                             <div className="flex min-w-0 items-center gap-3">
                                 <div className="relative flex h-10 w-10 shrink-0 items-center justify-center overflow-hidden rounded-[8px] bg-white/12">
                                     {isDeepConsultation ? (
@@ -814,20 +829,19 @@ export function FloatingChatbot() {
                                     >
                                         <div
                                             className={cn(
-                                                "max-w-[86%] rounded-[12px] px-3.5 py-3 text-sm leading-6",
+                                                "max-w-[90%] rounded-[12px] px-3.5 py-3 text-sm leading-6 md:max-w-[86%]",
                                                 message.role === "user"
-                                                    ? "bg-[#009060] text-white"
+                                                    ? "bg-[#084734] text-white"
                                                     : "border border-black/[0.06] bg-white text-[#111110] shadow-sm"
                                             )}
                                         >
                                             {message.role === "assistant" ? <AssistantMeta message={message} /> : null}
-                                            <p className="whitespace-pre-line break-keep">{message.content}</p>
+                                            <MessageContent content={message.content} role={message.role} />
                                             {message.role === "assistant" ? (
                                                 <>
-                                                    <SourceLinks sources={message.sources ?? []} />
                                                     {(message.suggestedQuestions?.length ?? 0) > 0 ? (
                                                         <div className="mt-3 grid gap-2">
-                                                            {message.suggestedQuestions?.map((question) => (
+                                                            {message.suggestedQuestions?.slice(0, 1).map((question) => (
                                                                 <button
                                                                     key={question}
                                                                     type="button"
@@ -839,7 +853,7 @@ export function FloatingChatbot() {
                                                             ))}
                                                         </div>
                                                     ) : null}
-                                                    {message.answerEventId || (message.sources?.length ?? 0) > 0 || message.showHandoffCTA ? (
+                                                    {message.answerEventId || message.showHandoffCTA ? (
                                                         <div className="mt-3 flex flex-wrap items-center justify-between gap-2">
                                                             <AnswerCopyButton message={message} />
                                                             {message.answerEventId ? (
@@ -876,20 +890,20 @@ export function FloatingChatbot() {
                                     value={input}
                                     onChange={(event) => setInput(event.target.value)}
                                     onKeyDown={(event) => {
-                                        if (event.key === "Enter" && !event.shiftKey) {
+                                        if (event.key === "Enter" && !event.shiftKey && !event.nativeEvent.isComposing) {
                                             event.preventDefault()
                                             void sendQuestion(input)
                                         }
                                     }}
                                     rows={1}
                                     maxLength={1000}
-                                    placeholder="상담받고 싶은 내용을 입력하세요"
+                                    placeholder="질문을 짧게 입력해 주세요"
                                     className="min-h-10 max-h-28 flex-1 resize-none rounded-[8px] border border-[#E5E5E0] bg-white px-3 py-2 text-sm leading-6 text-[#111110] placeholder:text-[#A39E98] focus-visible:border-[#084734] focus-visible:outline-none focus-visible:ring-2 focus-visible:ring-[#084734]/20"
                                 />
                                 <button
                                     type="submit"
                                     disabled={isSending || !input.trim()}
-                                    className="inline-flex h-10 w-10 shrink-0 items-center justify-center rounded-[8px] bg-[#009060] text-white transition-colors hover:bg-[#007A52] disabled:cursor-not-allowed disabled:opacity-40"
+                                    className="inline-flex h-10 w-10 shrink-0 items-center justify-center rounded-[8px] bg-[#084734] text-white transition-colors hover:bg-[#065c41] disabled:cursor-not-allowed disabled:opacity-40"
                                     aria-label="질문 보내기"
                                 >
                                     {isSending ? <Loader2 className="h-4 w-4 animate-spin" /> : <Send className="h-4 w-4" />}
@@ -906,7 +920,7 @@ export function FloatingChatbot() {
                 whileHover={shouldReduceMotion ? undefined : { scale: 1.04 }}
                 whileTap={shouldReduceMotion ? undefined : { scale: 0.96 }}
                 onClick={() => setIsOpen((current) => !current)}
-                className="relative flex h-14 w-14 items-center justify-center overflow-hidden rounded-full bg-[#009060] text-white shadow-[0_10px_30px_rgba(0,144,96,0.32)] transition-colors hover:bg-[#007A52] focus:outline-none focus:ring-4 focus:ring-[#009060]/20 md:h-16 md:w-16"
+                className="relative flex h-14 w-14 items-center justify-center overflow-hidden rounded-full bg-[#084734] text-white shadow-[0_10px_30px_rgba(8,71,52,0.32)] transition-colors hover:bg-[#065c41] focus:outline-none focus:ring-4 focus:ring-[#084734]/20 md:h-16 md:w-16"
                 aria-label={isOpen ? "챗봇 닫기" : "챗봇 열기"}
                 aria-expanded={isOpen}
                 aria-controls="classin-chatbot-dialog"

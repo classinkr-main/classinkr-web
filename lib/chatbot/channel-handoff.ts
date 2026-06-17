@@ -217,7 +217,12 @@ function handoffReasons(candidate: ChannelTalkHandoffCandidate, forceReason?: st
 function shouldSend(candidate: ChannelTalkHandoffCandidate, forceReason?: string) {
   if (!isEnabled()) return false
   if (handoffMode() === "all") return true
-  return handoffReasons(candidate, forceReason).length > 0
+  if (forceReason) return true
+  return (
+    candidate.needsHandoff ||
+    candidate.answerMode === "handoff" ||
+    questionRequiresHandoff(candidate.question)
+  )
 }
 
 function sourceLines(sources: HandoffSource[]) {

@@ -8,7 +8,12 @@ import {
   classifyChatbotQuestion,
   type ChatbotIntent,
 } from "@/lib/chatbot/classification"
-import { generateGeminiAnswer, embedText, type ChatbotModelTier } from "@/lib/chatbot/llm"
+import {
+  generateGeminiFinalAnswer,
+  embedText,
+  sanitizePublicAnswerText,
+  type ChatbotModelTier,
+} from "@/lib/chatbot/llm"
 import {
   buildClientVectorSources,
   type VectorFallbackChunkRow,
@@ -20,15 +25,17 @@ import {
 
 const MAX_MESSAGE_LENGTH = 1000
 const MAX_FEEDBACK_COMMENT_LENGTH = 500
-const MAX_SOURCES = 4
+const MAX_SOURCES = 2
 const MAX_SOURCES_PER_DOC = 1
 const MAX_RETRIEVAL_CANDIDATES = 24
 const MAX_RETRIEVAL_CANDIDATES_PER_DOC = 3
+const MIN_DIRECT_SOURCE_SCORE = 18
 const RETRIEVAL_CACHE_TTL_MS = 5 * 60 * 1000
 const RETRIEVAL_CACHE_MAX = 200
-const RETRIEVAL_CACHE_VERSION = "rag-rerank-20260617-v2"
+const RETRIEVAL_CACHE_VERSION = "rag-rerank-20260617-v3"
 const UUID_RE = /^[0-9a-f]{8}-[0-9a-f]{4}-[1-5][0-9a-f]{3}-[89ab][0-9a-f]{3}-[0-9a-f]{12}$/i
 const CHAT_SESSION_CHANNELS = new Set(["web", "admin_preview", "partner_portal", "manual_import"])
+const PROGRESSIVE_MODEL_TIERS: ChatbotModelTier[] = ["basic", "reasoning", "advanced"]
 
 type AnswerMode =
   | "direct_answer"
@@ -131,6 +138,9 @@ const QUERY_EXPANSIONS: Record<string, string[]> = {
   접속: ["로그인", "계정", "비밀번호", "권한"],
   출결: ["출석", "수업", "관리"],
   출석: ["출결", "수업", "관리"],
+  차이: ["비교", "다른점", "차별점", "zoom", "전자칠판"],
+  차별점: ["차이", "비교", "다른점", "운영", "시스템"],
+  장점: ["차별점", "차이", "비교", "운영", "시스템"],
 }
 
 const retrievalCache = new Map<string, { expiresAt: number; value: KnowledgeSearchResult }>()
@@ -169,7 +179,7 @@ function tokenize(value: string) {
         .replace(/[^\p{L}\p{N}\s-]/gu, " ")
         .split(/\s+/)
         .map((token) => token.trim())
-        .filter((token) => token.length >= 2 || (token.length === 1 && /[\uac00-\ud7a3\u3130-\u318f\u4e00-\u9fff\u3040-\u30ff]/.test(token)))
+        .filter((token) => token.length >= 2)
         .slice(0, 12)
     )
   )
@@ -275,9 +285,72 @@ function compactText(value: string, maxLength = 220) {
   return `${compacted.slice(0, maxLength).trim()}...`
 }
 
+function isWeakBrandToken(token: string) {
+  return /^(classin|클래스인)(은|는|이|가|을|를|과|와|도|의|으로|로|에서|에게|에는|에는요)?$/i.test(token)
+}
+
+function isWeakQueryToken(token: string) {
+  return /^(가능|가능해|가능한가요|되나요|돼요|되요|알려|알려줘|문의|문의드립니다|궁금|궁금해|어때|어떻게|오늘|내일|추천|해주세요|해줘)$/i.test(token)
+}
+
+function getScoringTokens(question: NormalizedQuestion) {
+  return question.tokens.filter((token) => !isWeakBrandToken(token) && !isWeakQueryToken(token))
+}
+
+const POSITIONING_RE =
+  /학원\s*시스템|시스템\s*os|수업\s*os|운영\s*os|zoom|줌|화상회의|뭐가\s*(달라|다른)|무엇이\s*다르|어떻게\s*다른|다른\s*(점|가요|건가요|거|것|부분|서비스)|차이|비교|차별|차별점|장점|왜\s*(써|쓰|필요|도입)|일반\s*전자칠판|기존\s*전자칠판|왜\s*전자칠판|edb|칠판\s*파일|가격\s*부담|비싸|api|sdk|연동|데이터\s*구독|도구.*흩어|녹화.*관리/
+
+const COMPARISON_RE =
+  /zoom|줌|화상회의|뭐가\s*(달라|다른)|무엇이\s*다르|어떻게\s*다른|다른\s*(점|가요|건가요|거|것|부분|서비스)|차이|비교|차별|차별점|장점|왜\s*(써|쓰|필요|도입)|일반\s*전자칠판|기존\s*전자칠판/
+
+const IDENTITY_RE =
+  /(classin|클래스인).*(뭐야|뭐예요|뭐에요|무엇|뭔가요|뭔데|뭐임|뭐\s*하는|어떤\s*(서비스|제품|솔루션|도구|플랫폼)|소개|설명)|(뭐야|뭐예요|뭐에요|무엇|뭔가요|뭔데|뭐임|뭐\s*하는|어떤\s*(서비스|제품|솔루션|도구|플랫폼)|소개|설명).*(classin|클래스인)/
+
+const IDENTITY_EXCLUSION_RE =
+  /가격|요금|견적|결제|환불|취소|영수증|세금|계산서|청구|구독|하드웨어|전자칠판|클래스인\s*보드|classin\s*board|\bboard\b|설치|납품|배송|\bas\b|a\/s|수리|고장|파손|오류|에러|안됨|안\s*돼|로그인|계정|비밀번호|접속|권한|장애|끊김/
+
+const HARDWARE_TARGET_RE =
+  /classin\s*board|클래스인\s*보드|classin.*하드웨어|클래스인.*하드웨어|전자칠판|하드웨어|\bboard\b|보드|s65|s75|s86|s98|s110|bs65|bs75|bs86|bscp98|bs110/i
+
+const HARDWARE_BOARD_LINEUP_RE =
+  /classin\s*board|클래스인\s*보드|클래스인.*칠판|전자칠판|\bboard\b|보드|s65|s75|s86|s98|s110|bs65|bs75|bs86|bscp98|bs110/i
+
+const HARDWARE_BOARD_LINEUP_INTENT_RE =
+  /어떤|뭐|무엇|종류|라인업|모델|추천|있지|있어|고르|선택|구성|제품/i
+
+const SOFTWARE_BOARD_FEATURE_RE =
+  /개인\s*칠판|보조\s*칠판|ai\s*칠판|칠판\s*파일|edb|판서\s*도구|매직펜|업데이트|릴리즈|버전|6\.0/i
+
+const HARDWARE_SPECS_RE =
+  /스펙|사양|규격|모델|라인업|크기|인치|해상도|화면|ops|터치|주사율|밝기|시야각|마이크|스피커|무선|nfc|무게|중량|소비\s*전력|전력|유리|인증|부속|비교|추천/i
+
+const HARDWARE_TROUBLE_RE =
+  /안\s*(켜|켜져|켜지|나와|나오|보여|보이|됨|돼)|꺼져|꺼짐|켜지지|나오지|보이지|먹통|고장|수리|\bas\b|a\/s|오류|에러|문제|장애|전원|검은\s*화면|화면이\s*안|화면\s*(꺼짐|안|나오지|나옴|안\s*나)|소리\s*안|터치\s*안|끊김|끊겨|깜빡|연기|냄새|액체|파손|깨짐|금감|감전|화재/i
+
+const HARDWARE_UNCONFIRMED_DETAIL_RE =
+  /색상|색깔|컬러|마감|화이트|블랙|검정|흰색|보증\s*기간|보증기간|무상\s*(as|a\/s|수리)|유상\s*(as|a\/s|수리)|원산지|제조사/i
+
+const HARDWARE_SPECS_EXCERPT =
+  "Classin Board는 모델별로 S75, S86, S98 Pro, S110 사양을 우선 확인합니다. 공통으로 4K 해상도, 16:9 화면, 178도 시야각, 밝기 350cd/m² 이상, 50점 적외선 터치, Android 11과 탈착식 OPS, Wi-Fi ax/BT5.0, 2×15W 스피커를 기준으로 봅니다. 주요 차이는 화면 크기, 주사율, OPS 구성, 마이크 기재 여부, 무게와 소비전력입니다. S65는 라인업에는 있으나 현재 상세 규격서 확인이 필요합니다."
+
+const HARDWARE_BOARD_LINEUP_EXCERPT =
+  "Classin 칠판은 보통 Classin Board 전자칠판 라인업을 뜻합니다. 현재 안내 가능한 주요 모델은 S75, S86, S98 Pro, S110이며, 교실 크기와 맨 뒷자리 시야, 이동형 스탠드/벽걸이, 카메라·마이크 필요 여부로 고릅니다. 75·86인치는 일반 강의실, 98·110인치는 대형 강의실이나 설명회 공간에 더 잘 맞습니다. S65는 라인업에는 있으나 상세 규격 확인이 필요합니다."
+
+const HARDWARE_TROUBLE_EXCERPT =
+  "전자칠판 화면이 안 나오면 전원 플러그와 멀티탭, 오른쪽 측면 하단 전원 버튼, 대기 모드, 입력 소스(OPS/HDMI), HDMI 케이블과 외부 기기 화면 출력을 순서대로 확인합니다. 연기, 냄새, 액체 유입, 파손이 있으면 전원을 분리하고 A/S로 연결합니다."
+
+const HARDWARE_UNCONFIRMED_DETAIL_EXCERPT =
+  "공개 스펙 기준으로는 모델별 화면 크기, OPS, 터치, 전력 같은 핵심 사양을 우선 안내할 수 있습니다. 색상, 마감, 보증 기간, 제조·재고 조건처럼 공급 조건에 따라 달라질 수 있는 세부 옵션은 최신 견적·납품 기준 확인이 필요합니다."
+
+const LOGIN_TROUBLE_RE =
+  /로그인|접속|비밀번호|패스워드|인증\s*코드|인증코드|아이디|계정.*(안|오류|에러|문제)|안\s*(들어가|돼|됨|되|됩니다)|재설정/i
+
+const LIVE_CLASS_TROUBLE_RE =
+  /수업.*(나감|튕김|튕겨|끊김|끊겨|입장\s*안|접속\s*안)|화면\s*공유.*(끊김|끊겨|오류|에러|안\s*됨|안\s*돼)|소리.*(안\s*들|끊김|끊겨)|마이크.*(안\s*됨|안\s*돼|끊김)/i
+
 function isPositioningQuestion(question: NormalizedQuestion) {
   const text = question.redacted.toLowerCase()
-  return /학원\s*시스템|시스템\s*os|수업\s*os|운영\s*os|zoom|줌|화상회의|뭐가\s*달라|차이|비교|일반\s*전자칠판|기존\s*전자칠판|왜\s*전자칠판|edb|칠판\s*파일|가격\s*부담|비싸|api|sdk|연동|데이터\s*구독|도구.*흩어|녹화.*관리/.test(text)
+  return POSITIONING_RE.test(text) || isIdentityQuestion(question)
 }
 
 function isApiIntegrationQuestion(question: NormalizedQuestion) {
@@ -287,7 +360,58 @@ function isApiIntegrationQuestion(question: NormalizedQuestion) {
 
 function isComparisonQuestion(question: NormalizedQuestion) {
   const text = question.redacted.toLowerCase()
-  return /zoom|줌|화상회의|뭐가\s*달라|차이|비교|일반\s*전자칠판|기존\s*전자칠판/.test(text)
+  return COMPARISON_RE.test(text)
+}
+
+function isIdentityQuestion(question: NormalizedQuestion) {
+  const text = question.redacted.toLowerCase()
+  return IDENTITY_RE.test(text) && !IDENTITY_EXCLUSION_RE.test(text)
+}
+
+function isHardwareSpecsQuestion(question: NormalizedQuestion) {
+  const text = question.redacted.toLowerCase()
+  return (
+    HARDWARE_TARGET_RE.test(text) &&
+    HARDWARE_SPECS_RE.test(text) &&
+    !HARDWARE_TROUBLE_RE.test(text) &&
+    !isHardwareUnconfirmedDetailQuestion(question)
+  )
+}
+
+function isHardwareBoardLineupQuestion(question: NormalizedQuestion) {
+  const text = question.redacted.toLowerCase()
+  return (
+    HARDWARE_BOARD_LINEUP_RE.test(text) &&
+    HARDWARE_BOARD_LINEUP_INTENT_RE.test(text) &&
+    !SOFTWARE_BOARD_FEATURE_RE.test(text) &&
+    !HARDWARE_TROUBLE_RE.test(text) &&
+    !isHardwareUnconfirmedDetailQuestion(question)
+  )
+}
+
+function isHardwareTroubleQuestion(question: NormalizedQuestion) {
+  const text = question.redacted.toLowerCase()
+  return HARDWARE_TARGET_RE.test(text) && HARDWARE_TROUBLE_RE.test(text)
+}
+
+function isHardwareUnconfirmedDetailQuestion(question: NormalizedQuestion) {
+  const text = question.redacted.toLowerCase()
+  return HARDWARE_TARGET_RE.test(text) && HARDWARE_UNCONFIRMED_DETAIL_RE.test(text) && !HARDWARE_TROUBLE_RE.test(text)
+}
+
+function isLoginTroubleQuestion(question: NormalizedQuestion) {
+  const text = question.redacted.toLowerCase()
+  return LOGIN_TROUBLE_RE.test(text)
+}
+
+function isLiveClassTroubleQuestion(question: NormalizedQuestion) {
+  const text = question.redacted.toLowerCase()
+  return LIVE_CLASS_TROUBLE_RE.test(text)
+}
+
+function isWebLiveBillingQuestion(question: NormalizedQuestion) {
+  const text = question.redacted.toLowerCase()
+  return /웹\s*라이브|web\s*live|라이브\s*&?\s*플레이백/.test(text) && /요금|요금제|플랜|비용|가격|가능|되나요|지원/.test(text)
 }
 
 function isApiSource(source: Pick<ChatbotSource, "title" | "heading" | "excerpt" | "category">) {
@@ -300,16 +424,21 @@ function buildPositioningSource(question: NormalizedQuestion): ChatbotSource | n
   const text = question.redacted.toLowerCase()
   const isEdbQuestion = /edb|칠판\s*파일|교안/.test(text)
   const isApiQuestion = isApiIntegrationQuestion(question)
+  const isIdentity = isIdentityQuestion(question) && !isComparisonQuestion(question)
   const heading = isEdbQuestion
     ? "EDB와 교안 표준화"
     : isApiQuestion
       ? "API와 정직한 연동 범위"
-      : "핵심 포지셔닝"
+      : isIdentity
+        ? "Classin 한 줄 소개"
+        : "핵심 포지셔닝"
   const excerpt = isEdbQuestion
     ? CLASSIN_POSITIONING.edbSummary
     : isApiQuestion
       ? `${CLASSIN_POSITIONING.honestLimit} ${CLASSIN_POSITIONING.apiStages.join(" ")}`
-      : CLASSIN_POSITIONING.chatbot.identitySummary
+      : isIdentity
+        ? `${CLASSIN_POSITIONING.oneLine} ${CLASSIN_POSITIONING.localReality}`
+        : CLASSIN_POSITIONING.chatbot.identitySummary
 
   return {
     title: "Classin을 학원 시스템 OS로 이해하기",
@@ -317,7 +446,7 @@ function buildPositioningSource(question: NormalizedQuestion): ChatbotSource | n
     urlPath: "/docs/start/academy-system-os-positioning",
     category: "onboarding",
     excerpt: compactText(excerpt),
-    score: 260,
+    score: isIdentity ? 270 : 260,
   }
 }
 
@@ -347,6 +476,78 @@ function buildCuratedSources(question: NormalizedQuestion) {
   const sources: ChatbotSource[] = []
   const positioningSource = buildPositioningSource(question)
   if (positioningSource) sources.push(positioningSource)
+
+  if (isHardwareUnconfirmedDetailQuestion(question)) {
+    const source = buildStaticDocSource(
+      "hardware",
+      "board-lineup-specs",
+      "확인 필요한 하드웨어 세부 옵션",
+      HARDWARE_UNCONFIRMED_DETAIL_EXCERPT,
+      300,
+      "hardware"
+    )
+    if (source) sources.push(source)
+  }
+
+  if (isHardwareBoardLineupQuestion(question)) {
+    const source = buildStaticDocSource(
+      "hardware",
+      "board-lineup-specs",
+      "Classin Board 모델 선택",
+      HARDWARE_BOARD_LINEUP_EXCERPT,
+      315,
+      "hardware"
+    )
+    if (source) sources.push(source)
+  }
+
+  if (isHardwareSpecsQuestion(question)) {
+    const source = buildStaticDocSource(
+      "hardware",
+      "board-lineup-specs",
+      "Classin Board 스펙 요약",
+      HARDWARE_SPECS_EXCERPT,
+      310,
+      "hardware"
+    )
+    if (source) sources.push(source)
+  }
+
+  if (isHardwareTroubleQuestion(question)) {
+    const source = buildStaticDocSource(
+      "hardware",
+      "board-basic-operation",
+      "화면/전원 기본 점검",
+      HARDWARE_TROUBLE_EXCERPT,
+      305,
+      "hardware"
+    )
+    if (source) sources.push(source)
+  }
+
+  if (isLoginTroubleQuestion(question)) {
+    const source = buildStaticDocSource(
+      "start",
+      "password-change-pc",
+      "로그인/비밀번호 기본 점검",
+      "로그인이 안 될 때는 아이디가 이메일/휴대폰 중 무엇인지 확인하고, PC 로그인 화면 하단의 비밀번호 변경에서 인증코드를 받아 새 비밀번호로 다시 로그인합니다. 인증코드 수신이 어렵다면 공식 채팅으로 인증코드를 요청할 수 있습니다.",
+      305,
+      "troubleshooting"
+    )
+    if (source) sources.push(source)
+  }
+
+  if (isWebLiveBillingQuestion(question)) {
+    const source = buildStaticDocSource(
+      "teacher",
+      "lesson-web-live",
+      "웹 라이브 요금과 사용 조건",
+      "웹 라이브 & 플레이백은 앱 설치 없이 웹 링크로 수업을 생중계하고 플레이백을 제공하는 기능입니다. 사용 가능 요금제와 과금 방식은 구독/충전제 조건에 따라 달라지므로 모든 요금제 기본 제공으로 안내하면 안 됩니다.",
+      300,
+      "billing"
+    )
+    if (source) sources.push(source)
+  }
 
   if (/세금\s*계산서|세금계산서|영수증|증빙|청구서|계산서\s*발급/.test(text)) {
     const source = buildStaticDocSource(
@@ -454,7 +655,11 @@ function scoreText(question: NormalizedQuestion, source: Omit<ChatbotSource, "sc
     return tokenMatched
   }
 
-  for (const token of question.tokens) {
+  const scoringTokens = getScoringTokens(question)
+
+  if (scoringTokens.length === 0) return 0
+
+  for (const token of scoringTokens) {
     if (!scoreToken(token)) matchesAll = false
   }
 
@@ -463,7 +668,7 @@ function scoreText(question: NormalizedQuestion, source: Omit<ChatbotSource, "sc
   }
 
   // Bonus for matching all tokens (AND-match gets high priority)
-  if (matchesAll && question.tokens.length > 1) {
+  if (matchesAll && scoringTokens.length > 1) {
     score += 50
   }
 
@@ -473,18 +678,38 @@ function scoreText(question: NormalizedQuestion, source: Omit<ChatbotSource, "sc
 function rerankSources(question: NormalizedQuestion, sources: ChatbotSource[]) {
   const suppressApiForComparison =
     isComparisonQuestion(question) && !isApiIntegrationQuestion(question)
+  const prioritizePositioning =
+    (isComparisonQuestion(question) || isIdentityQuestion(question)) &&
+    !isApiIntegrationQuestion(question)
+  const expectedCategory = classifyChatbotQuestion(question.redacted).category
 
   return sources.map((source) => {
     const apiPenalty = suppressApiForComparison && isApiSource(source) ? 140 : 0
     const positioningBonus =
-      isComparisonQuestion(question) &&
-      source.urlPath.includes("/docs/start/academy-system-os-positioning")
+      prioritizePositioning && source.urlPath.includes("/docs/start/academy-system-os-positioning")
         ? 45
+        : 0
+    const categoryBonus =
+      expectedCategory !== "general" && expectedCategory !== "consultation" && source.category === expectedCategory
+        ? 18
+        : 0
+    const categoryPenalty =
+      expectedCategory !== "general" &&
+      expectedCategory !== "consultation" &&
+      source.category !== expectedCategory &&
+      source.category !== "guide"
+        ? 18
         : 0
 
     return {
       ...source,
-      score: source.score + Math.min(35, scoreText(question, source) * 0.35) + positioningBonus - apiPenalty,
+      score:
+        source.score +
+        Math.min(35, scoreText(question, source) * 0.35) +
+        positioningBonus +
+        categoryBonus -
+        apiPenalty -
+        categoryPenalty,
     }
   })
 }
@@ -535,6 +760,25 @@ function selectDiverseSources(
 function mergeCuratedSources(question: NormalizedQuestion, sources: ChatbotSource[]) {
   const curatedSources = buildCuratedSources(question)
   if (curatedSources.length === 0) return selectDiverseSources(rerankSources(question, sources))
+
+  if (
+    (isComparisonQuestion(question) || isIdentityQuestion(question)) &&
+    !isApiIntegrationQuestion(question)
+  ) {
+    return selectDiverseSources(rerankSources(question, curatedSources), 1)
+  }
+
+  if (
+    isHardwareSpecsQuestion(question) ||
+    isHardwareBoardLineupQuestion(question) ||
+    isHardwareTroubleQuestion(question) ||
+    isHardwareUnconfirmedDetailQuestion(question) ||
+    isWebLiveBillingQuestion(question) ||
+    isLoginTroubleQuestion(question)
+  ) {
+    return selectDiverseSources(rerankSources(question, curatedSources), 1)
+  }
+
   return selectDiverseSources(rerankSources(question, mergeScoredSources([...curatedSources, ...sources])))
 }
 
@@ -814,6 +1058,39 @@ async function searchKnowledgeSources(
   const cached = getCachedRetrieval(question)
   if (cached) return cached
 
+  const initialCategory = classifyChatbotQuestion(question.redacted).category
+  if (initialCategory === "general" && !isDomainRelatedQuestion(question, "general")) {
+    const result = { sources: [], warning: undefined }
+    setCachedRetrieval(question, result)
+    return result
+  }
+
+  if (isLiveClassTroubleQuestion(question)) {
+    const result = { sources: [], warning: undefined }
+    setCachedRetrieval(question, result)
+    return result
+  }
+
+  if (
+    isHardwareSpecsQuestion(question) ||
+    isHardwareBoardLineupQuestion(question) ||
+    isHardwareTroubleQuestion(question) ||
+    isHardwareUnconfirmedDetailQuestion(question) ||
+    isWebLiveBillingQuestion(question) ||
+    isLoginTroubleQuestion(question) ||
+    ((isComparisonQuestion(question) || isIdentityQuestion(question)) && !isApiIntegrationQuestion(question))
+  ) {
+    const curatedSources = buildCuratedSources(question)
+    if (curatedSources.length > 0) {
+      const result = {
+        sources: selectDiverseSources(rerankSources(question, curatedSources), 1),
+        warning: undefined,
+      }
+      setCachedRetrieval(question, result)
+      return result
+    }
+  }
+
   const supabaseSources = await searchSupabaseSources(question)
   if (supabaseSources.length > 0) {
     const result = { sources: mergeCuratedSources(question, supabaseSources), warning: undefined }
@@ -834,45 +1111,74 @@ async function searchKnowledgeSources(
   return result
 }
 
-function buildSuggestedQuestions(sources: ChatbotSource[]) {
-  const suggestions = sources.map((source) =>
-    source.heading && source.heading !== "요약"
-      ? `${source.heading} 내용을 더 알려주세요`
-      : `${source.title} 내용을 더 알려주세요`
-  )
-
+function buildSuggestedQuestions(category: string) {
+  const categorySuggestions: Record<string, string[]> = {
+    billing: ["요금과 견적 기준이 궁금해요", "세금계산서나 영수증 발급이 궁금해요"],
+    hardware: ["전자칠판 설치 범위를 알고 싶어요", "장비 문제를 상담으로 확인하고 싶어요"],
+    troubleshooting: ["계정이나 접속 문제를 해결하고 싶어요", "수업 중 오류 상황을 설명할게요"],
+    onboarding: ["우리 학원 도입 순서를 잡고 싶어요", "Zoom/전자칠판과 차이를 더 알고 싶어요"],
+    admin: ["관리자 대시보드에서 볼 수 있는 데이터를 알려주세요", "API 연동 범위를 알고 싶어요"],
+    classroom: ["수업 녹화와 복습 흐름을 알고 싶어요", "과제/시험 운영 방법이 궁금해요"],
+  }
   return Array.from(
     new Set([
-      ...suggestions,
-      ...CLASSIN_POSITIONING.chatbot.fallbackQuestions,
+      ...(categorySuggestions[category] ?? []),
       "담당자 상담으로 이어주세요",
     ])
   ).slice(0, 3)
 }
 
 function wantsHumanConsultation(question: NormalizedQuestion) {
-  return /상담|문의|연락|견적|데모|시연|미팅|제안|담당자|통화|구매|도입\s*검토|도입\s*상담/.test(
-    question.redacted.toLowerCase()
-  )
+  if (isHardwareSpecsQuestion(question)) return false
+  if (isHardwareBoardLineupQuestion(question)) return false
+
+  const text = question.redacted.toLowerCase()
+  const explicitHandoff =
+    /상담|연락|견적|데모|시연|미팅|제안|담당자|통화|구매|도입\s*검토|도입\s*상담/.test(text)
+  const contextualInquiry =
+    /문의/.test(text) && /담당자|상담|연락|전화|통화|견적|구매|도입|시연|데모/.test(text)
+
+  return explicitHandoff || contextualInquiry
 }
 
-function getNextStepByCategory(category: string) {
-  switch (category) {
-    case "billing":
-      return "결제 수단, 사업자 정보, 필요한 증빙 종류를 함께 알려주시면 처리 경로를 더 정확히 안내할 수 있어요."
-    case "hardware":
-      return "설치 장소, 희망 대수, 스탠드/벽걸이 여부, 기존 전자칠판 사용 경험을 알려주시면 Classin Board 패키지 범위를 좁힐 수 있어요."
-    case "troubleshooting":
-      return "사용 중인 기기, 브라우저/앱, 오류가 발생한 화면을 알려주시면 해결 순서를 더 잘 잡을 수 있어요."
-    case "onboarding":
-      return "대표 수업 1개, 설치 예정 교실, 희망 도입 시점, 현재 쓰는 전자칠판·녹화·LMS 도구를 알려주시면 90일 도입 순서를 맞춰드릴게요."
-    case "admin":
-      return "관리자 권한 범위, 보고 싶은 수업 데이터, API 연동 여부, 결제·출석처럼 별도 시스템이 필요한 업무를 알려주시면 운영 설정 흐름으로 좁혀드릴게요."
-    case "classroom":
-      return "현재 수업 운영에서 가장 막히는 지점을 알려주시면 기능과 운영 방법을 함께 제안드릴게요."
-    default:
-      return "조금 더 구체적인 상황을 알려주시면 필요한 문서와 상담 경로를 이어서 안내드릴게요."
+function isDomainRelatedQuestion(question: NormalizedQuestion, category: string) {
+  if (category !== "general") return true
+
+  const text = question.redacted.toLowerCase()
+  return /classin|클래스인|학원|수업|교실|학생|교사|강사|원장|전자칠판|하드웨어|보드|board|ops|카메라|마이크|미러링|edb|lms|녹화|복습|과제|운영|도입|관리자|온라인|화상|교안|토론|플립러닝|하이브리드/.test(text)
+}
+
+function isSensitiveOrAccountSpecificQuestion(question: NormalizedQuestion, category: string) {
+  const text = question.redacted.toLowerCase()
+  if (category === "billing" || category === "troubleshooting" || category === "consultation") {
+    return true
   }
+
+  return /가격|요금|견적|계약|환불|취소|결제|영수증|세금|계산서|청구|구독|개인정보|보안|법적|저작권|\bas\b|a\/s|수리|고장|파손|장애|오류|에러|안됨|안\s*돼|안\s*켜|꺼져|끊김|로그인|계정|비밀번호|접속|권한|설치\s*(가능|불가|조건|일정|시간)|벽걸이|스탠드|전원|접지|연기|냄새|액체|누수|분해|감전|화재|무게|중량|소비\s*전력|정확한\s*사양|재고/.test(text)
+}
+
+function shouldUseInferredAnswerFallback(
+  response: Omit<ChatbotQueryResponse, "answerEventId" | "sessionId" | "warning" | "handoffIntent">,
+  question: NormalizedQuestion,
+  category: string
+) {
+  const topScore = response.sources[0]?.score ?? 0
+  const hasNoUsableSource =
+    response.sources.length === 0 ||
+    (response.answerMode === "doc_suggestion" && topScore < MIN_DIRECT_SOURCE_SCORE)
+
+  if (!hasNoUsableSource) return false
+  if (
+    response.answerMode !== "fallback" &&
+    response.answerMode !== "clarifying_question" &&
+    response.answerMode !== "doc_suggestion"
+  ) {
+    return false
+  }
+  if (wantsHumanConsultation(question)) return false
+  if (isSensitiveOrAccountSpecificQuestion(question, category)) return false
+  if (question.tokens.length < 2) return false
+  return isDomainRelatedQuestion(question, category)
 }
 
 function getStepCriteriaByCategory(category: string) {
@@ -936,36 +1242,170 @@ function getStepCriteriaByCategory(category: string) {
   }
 }
 
-function formatStructuredAnswer({
+function getConciseNextStep(category: string) {
+  switch (category) {
+    case "billing":
+      return "계정별 조건이 달라질 수 있어요. 결제 수단, 사업자 정보, 필요한 증빙 종류를 알려주시면 더 정확히 이어드릴게요."
+    case "hardware":
+      return "설치 장소, 희망 대수, 스탠드/벽걸이 여부를 알려주시면 패키지 범위를 좁혀드릴게요."
+    case "troubleshooting":
+      return "오류 화면, 사용 기기, 앱/브라우저, 발생 시점을 알려주시면 해결 순서를 더 정확히 잡을 수 있어요."
+    case "onboarding":
+      return "현재 쓰는 전자칠판, 녹화, LMS 도구와 도입 희망 시점을 알려주시면 90일 도입 순서로 좁혀드릴게요."
+    case "admin":
+      return "보고 싶은 데이터와 관리자 권한 범위를 알려주시면 설정/연동 흐름으로 정리해드릴게요."
+    case "classroom":
+      return "수업 전, 수업 중, 수업 후 중 어디가 가장 불편한지 알려주시면 기능 기준으로 좁혀드릴게요."
+    default:
+      return "원하시면 도입, 수업 운영, 계정/오류, 결제 중 어느 쪽인지부터 빠르게 좁혀드릴게요."
+  }
+}
+
+function getComparisonAnswer(top: ChatbotSource) {
+  return [
+    "Classin은 Zoom이나 일반 전자칠판보다 '수업 운영 흐름'에 초점이 있습니다.",
+    "Zoom은 회의 중심이고 Classin은 판서, 녹화, 복습, LMS를 연결합니다. 일반 전자칠판은 화면/판서 중심인 경우가 많고, Classin은 EDB 교안과 관리자 데이터까지 이어집니다.",
+    top.heading === "핵심 포지셔닝"
+      ? "Zoom, 전자칠판, LMS 중 어떤 기준으로 비교 중인지 알려주시면 그 부분만 더 좁혀드릴게요."
+      : null,
+  ].filter(Boolean).join("\n\n")
+}
+
+function getIdentityAnswer() {
+  return [
+    "Classin은 학원 수업을 준비, 진행, 녹화, 복습, 과제/LMS, 관리자 데이터까지 한 흐름으로 묶는 수업 운영 솔루션입니다.",
+    "쉽게 말하면 Zoom처럼 수업을 여는 도구에 그치지 않고, 전자칠판, EDB 교안, 녹화, 복습, 관리자 운영까지 연결해 수업 품질을 표준화하는 시스템에 가깝습니다.",
+    "전자칠판, 온라인 수업, LMS/관리자 기능 중 어떤 기준으로 궁금하신지 알려주시면 그 부분만 더 좁혀드릴게요.",
+  ].join("\n\n")
+}
+
+function getHardwareSpecsAnswer() {
+  return [
+    "Classin Board 스펙은 모델별로 보되, 공통 기준은 4K 해상도, 16:9 화면, 178도 시야각, 밝기 350cd/m² 이상, 50점 적외선 터치, Android 11과 탈착식 OPS입니다.",
+    "주요 모델은 S75, S86, S98 Pro, S110입니다. S75는 75인치·54kg·315W, S86은 86인치·69.5kg·390W, S98 Pro는 98인치·89kg·740W·NFC 지원, S110은 110인치·137kg·850W·120Hz가 핵심 차이입니다.",
+    "교실 크기, 맨 뒷자리 시야, 이동형 스탠드/벽걸이, 카메라·마이크 필요 여부를 기준으로 모델을 좁히면 됩니다. S65 상세 사양은 현재 규격서 확인이 필요합니다.",
+  ].join("\n\n")
+}
+
+function getHardwareBoardLineupAnswer() {
+  return [
+    "클래스인 칠판은 보통 Classin Board 전자칠판 라인업을 말합니다.",
+    "주요 모델은 S75, S86, S98 Pro, S110이고, 일반 강의실은 75·86인치부터, 큰 강의실이나 설명회 공간은 98·110인치 쪽을 먼저 봅니다.",
+    "교실 크기, 맨 뒷자리 시야, 이동형 스탠드/벽걸이, 카메라·마이크 필요 여부를 알려주시면 맞는 모델 범위를 좁혀드릴게요.",
+  ].join("\n\n")
+}
+
+function getHardwareTroubleAnswer() {
+  return [
+    "전자칠판 화면이 안 나오면 먼저 전원 문제인지, 입력 소스 문제인지 나눠서 확인하세요.",
+    "전원 플러그와 멀티탭, 오른쪽 측면 하단 전원 버튼, 대기 모드를 확인한 뒤 입력(소스) 메뉴에서 OPS 또는 연결한 HDMI가 선택되어 있는지 봅니다. HDMI 사용 중이면 케이블과 노트북의 화면 출력 설정도 함께 확인하세요.",
+    "연기, 냄새, 액체 유입, 파손이 있으면 바로 전원을 분리하고 A/S로 넘기는 게 안전합니다. 계속 안 나오면 모델명, 전원 LED 상태, 현재 입력 소스를 알려주시면 다음 조치로 좁혀드릴게요.",
+  ].join("\n\n")
+}
+
+function getHardwareUnconfirmedDetailAnswer() {
+  return [
+    "현재 정리된 Classin Board 공개 스펙에서는 색상, 마감, 보증 기간 같은 세부 옵션을 확정해서 안내하기 어렵습니다.",
+    "확정된 기준은 S75, S86, S98 Pro, S110의 화면 크기, 4K 해상도, 터치, OPS, 무게, 소비전력 같은 핵심 사양입니다.",
+    "색상·마감·보증은 공급 시점, 재고, 계약 조건에 따라 달라질 수 있으니 필요한 옵션명을 알려주시면 확인해야 할 항목만 짧게 정리해드릴게요.",
+  ].join("\n\n")
+}
+
+function getLoginTroubleAnswer() {
+  return [
+    "로그인이 안 될 때는 먼저 아이디가 이메일인지 휴대폰 번호인지 확인하고, 비밀번호 재설정을 시도해 보세요.",
+    "PC에서는 로그인 화면 하단의 [비밀번호 변경], 모바일에서는 [비밀번호를 잊으셨나요?]에서 인증코드를 받아 새 비밀번호로 다시 로그인합니다.",
+    "인증코드가 오지 않거나 계정이 기관에 묶여 있다면 사용 기기, 아이디 종류, 오류 문구를 알려주시면 다음 조치로 좁혀드릴게요.",
+  ].join("\n\n")
+}
+
+function getWebLiveBillingAnswer() {
+  return [
+    "웹 라이브는 모든 요금제에서 기본 제공된다고 보면 안 됩니다.",
+    "구독형에서는 Enterprise, 충전형에서는 Business Consumption 조건에서 사용하는 기능으로 안내되며, 실제 적용 여부와 비용은 계약/요금제 기준을 확인해야 합니다.",
+    "앱 설치 없이 웹 링크로 설명회나 강연을 보여주는 용도라면, 먼저 현재 요금제와 라이브+플레이백 필요 여부를 확인하면 됩니다.",
+  ].join("\n\n")
+}
+
+function formatConsumerAnswer({
   answerMode,
   category,
+  question,
   top,
 }: {
   answerMode: AnswerMode
   category: string
+  question: NormalizedQuestion
   top: ChatbotSource
 }) {
-  const criteria = getStepCriteriaByCategory(category)
+  if (
+    isHardwareUnconfirmedDetailQuestion(question) &&
+    top.urlPath.includes("/docs/hardware/board-lineup-specs")
+  ) {
+    return getHardwareUnconfirmedDetailAnswer()
+  }
+  if (isLoginTroubleQuestion(question) && top.heading === "로그인/비밀번호 기본 점검") {
+    return getLoginTroubleAnswer()
+  }
+  if (top.heading === "웹 라이브 요금과 사용 조건") {
+    return getWebLiveBillingAnswer()
+  }
+  if (isHardwareTroubleQuestion(question) && top.urlPath.includes("/docs/hardware/board-basic-operation")) {
+    return getHardwareTroubleAnswer()
+  }
+  if (isHardwareBoardLineupQuestion(question) && top.urlPath.includes("/docs/hardware/board-lineup-specs")) {
+    return getHardwareBoardLineupAnswer()
+  }
+  if (isHardwareSpecsQuestion(question) && top.urlPath.includes("/docs/hardware/board-lineup-specs")) {
+    return getHardwareSpecsAnswer()
+  }
+  if (isComparisonQuestion(question) && top.urlPath.includes("/docs/start/academy-system-os-positioning")) {
+    return getComparisonAnswer(top)
+  }
+  if (isIdentityQuestion(question) && top.urlPath.includes("/docs/start/academy-system-os-positioning")) {
+    return getIdentityAnswer()
+  }
+
   const caution =
     answerMode === "handoff"
-      ? "\n\n주의: 이 내용은 실제 계정, 계약, 장비 상태, 도입 조건에 따라 달라질 수 있어 상담으로 이어드리는 편이 안전합니다."
+      ? "이 내용은 실제 계정, 계약, 장비 상태, 도입 조건에 따라 달라질 수 있어 상담으로 확인하는 편이 안전합니다."
       : ""
+  const heading = top.heading && top.heading !== "요약" ? `${top.heading}: ` : ""
+  const summary = `${heading}${top.excerpt}`
+  const nextStep = getConciseNextStep(category)
 
   return [
-    `요약: "${top.title}"${top.heading ? ` (${top.heading})` : ""} 기준으로 보면 ${top.excerpt}`,
-    caution.trim(),
-    "권장 순서:",
-    ...criteria.steps.map((step, index) => `${index + 1}. ${step}`),
-    `확인 기준: ${criteria.success}`,
-    `다음 단계: ${getNextStepByCategory(category)}`,
+    summary,
+    caution,
+    `다음으로는 ${nextStep}`,
   ].filter(Boolean).join("\n\n")
 }
 
 function isUsableGeneratedAnswer(answer: string) {
   const trimmed = answer.trim()
-  if (trimmed.length < 80) return false
+  if (trimmed.length < 24) return false
   if (/[,\u3131-\u314e]$/.test(trimmed)) return false
+  if (!hasConcreteClassinAnchor(trimmed)) return false
+  if (isVagueGeneratedAnswer(trimmed)) return false
   return /(?:[.!?]|\u3002|요|니다|습니다|합니다|세요)$/.test(trimmed)
+}
+
+function hasConcreteClassinAnchor(answer: string) {
+  return /classin|클래스인|전자칠판|보드|수업|교실|녹화|복습|lms|edb|관리자|학생|교사|강사|과제|출결|도입|운영|판서/i.test(answer)
+}
+
+function isVagueGeneratedAnswer(answer: string) {
+  const normalized = answer.replace(/\s+/g, " ").trim()
+  const vaguePatterns = [
+    /상황에\s*따라\s*다릅니다\.?$/i,
+    /도움이\s*될\s*수\s*있습니다\.?$/i,
+    /효과적으로\s*활용할\s*수\s*있습니다\.?$/i,
+    /자세한\s*내용은\s*(담당자|상담|문의)/i,
+    /문의해\s*주시면\s*(안내|답변)/i,
+    /최적의\s*(솔루션|방법)/i,
+  ]
+
+  return vaguePatterns.some((pattern) => pattern.test(normalized))
 }
 
 function composeAnswer(
@@ -976,13 +1416,12 @@ function composeAnswer(
   if (sources.length === 0) {
     const needsConsultation = wantsHumanConsultation(question)
     const isVague = question.tokens.length < 2 && !needsConsultation
-    const needsSupportHandoff = ["billing", "hardware", "troubleshooting"].includes(category)
-    const needsHandoff = needsConsultation || needsSupportHandoff
+    const needsHandoff = needsConsultation
 
     if (isVague) {
       return {
         answer:
-          "상황을 조금만 더 알려주시면 더 정확히 안내드릴 수 있어요. 예를 들어 도입 상담, 수업 운영, 결제/영수증, 계정 오류 중 어떤 내용인지 적어주세요.",
+          "무엇을 도와드릴까요?\n\n도입 상담, 수업 운영, 계정/오류, 결제/영수증 중 하나로 물어보시면 바로 안내드릴게요.",
         answerMode: "clarifying_question",
         confidence: 0.25,
         needsHandoff: false,
@@ -996,17 +1435,17 @@ function composeAnswer(
     return {
       answer: [
         needsConsultation
-          ? "요약: 상담이 필요한 내용으로 확인했습니다."
-          : needsSupportHandoff
-            ? "요약: 확인 가능한 문서에서 바로 답을 찾지 못했습니다. 담당자가 안전하게 확인할 수 있도록 상담으로 이어드릴게요."
-            : "요약: 확인 가능한 문서에서 바로 답을 찾지 못했습니다. 운영 환경이나 오류 상황을 조금 더 구체적으로 알려주세요.",
-        "권장 순서:",
-        ...fallbackCriteria.steps.map((step, index) => `${index + 1}. ${step}`),
-        `확인 기준: ${fallbackCriteria.success}`,
+          ? "상담이 필요한 내용으로 확인했습니다."
+          : category === "troubleshooting"
+            ? "원인을 바로 단정하기보다 상황을 조금만 더 좁히는 게 좋겠습니다."
+            : category === "billing" || category === "hardware"
+              ? "계약, 결제, 장비 상태에 따라 달라질 수 있어 지금은 확정해서 말하기 어렵습니다."
+            : "지금 바로 확정하기 어려워요. 현재 상황을 한 문장만 더 알려주세요.",
+        fallbackCriteria.steps.slice(0, 2).map((step, index) => `${index + 1}. ${step}`).join("\n"),
       ].join("\n\n"),
       answerMode: needsHandoff ? "handoff" : "fallback",
       confidence: needsHandoff ? 0.4 : 0.15,
-      needsHandoff: true,
+      needsHandoff,
       sources: [],
       suggestedQuestions: ["도입 상담을 받고 싶어요", "요금과 견적이 궁금해요", "계정이나 수업 접속 문제가 있어요"],
       unresolved: true,
@@ -1014,18 +1453,17 @@ function composeAnswer(
   }
 
   const top = sources[0]
-  const confidence = Math.min(0.92, Math.max(0.35, 0.45 + top.score / 25))
-  const lowConfidence = confidence < 0.58
-  const sensitiveLowConfidence =
-    lowConfidence && ["billing", "hardware", "troubleshooting"].includes(category)
+  const confidence = top.score >= 240
+    ? 0.9
+    : Math.min(0.84, Math.max(0.35, 0.45 + top.score / 80))
   const explicitConsultation = wantsHumanConsultation(question)
-  const answerMode: AnswerMode = explicitConsultation || sensitiveLowConfidence
+  const answerMode: AnswerMode = explicitConsultation
     ? "handoff"
-    : top.score >= 4
+    : top.score >= MIN_DIRECT_SOURCE_SCORE
       ? "direct_answer"
       : "doc_suggestion"
 
-  const answer = formatStructuredAnswer({ answerMode, category, top })
+  const answer = formatConsumerAnswer({ answerMode, category, question, top })
 
   return {
     answer,
@@ -1033,7 +1471,7 @@ function composeAnswer(
     confidence,
     needsHandoff: answerMode === "handoff",
     sources,
-    suggestedQuestions: buildSuggestedQuestions(sources),
+    suggestedQuestions: buildSuggestedQuestions(category),
     unresolved: answerMode === "handoff" || answerMode === "doc_suggestion",
   }
 }
@@ -1056,12 +1494,13 @@ function normalizeChatSessionChannel(value: unknown) {
 
 async function ensureSession(
   input: ChatbotQueryRequest,
-  meta: ChatbotRequestMeta
+  meta: ChatbotRequestMeta,
+  sessionId?: string
 ) {
   if (!hasSupabaseServerEnv()) return undefined
 
   const supabase = createSupabaseAdminClient()
-  const requestedSessionId = normalizeOptionalUuid(input.sessionId)
+  const requestedSessionId = sessionId ?? normalizeOptionalUuid(input.sessionId)
 
   if (requestedSessionId) {
     const { data } = await supabase
@@ -1075,19 +1514,24 @@ async function ensureSession(
 
   const context = getContextObject(input.context)
   const utm = getContextObject(context.utm)
+  const sessionInsert: Record<string, unknown> = {
+    channel: normalizeChatSessionChannel(context.channel),
+    anonymous_id: normalizeString(input.anonymousId) ?? null,
+    user_agent: meta.userAgent ?? null,
+    referrer: meta.referrer ?? null,
+    utm,
+  }
+
+  if (requestedSessionId) sessionInsert.id = requestedSessionId
+
   const { data, error } = await supabase
     .from("chat_sessions")
-    .insert({
-      channel: normalizeChatSessionChannel(context.channel),
-      anonymous_id: normalizeString(input.anonymousId) ?? null,
-      user_agent: meta.userAgent ?? null,
-      referrer: meta.referrer ?? null,
-      utm,
-    })
+    .insert(sessionInsert)
     .select("id")
     .single()
 
   if (error) {
+    if (requestedSessionId && error.code === "23505") return requestedSessionId
     console.warn("[chatbot] failed to create session:", error.message)
     return undefined
   }
@@ -1104,13 +1548,14 @@ async function persistExchange(
   intent: string,
   handoffIntent: HandoffIntent,
   latencyMs?: number,
-  sessionId?: string
+  sessionId?: string,
+  answerEventId?: string
 ) {
   if (!hasSupabaseServerEnv()) return {}
 
   try {
     const supabase = createSupabaseAdminClient()
-    const resolvedSessionId = sessionId || await ensureSession(input, meta)
+    const resolvedSessionId = await ensureSession(input, meta, sessionId)
     if (!resolvedSessionId) return {}
 
     const { data: userMessage, error: userMessageError } = await supabase
@@ -1143,20 +1588,24 @@ async function persistExchange(
 
     if (assistantMessageError) throw assistantMessageError
 
+    const answerEventInsert: Record<string, unknown> = {
+      session_id: resolvedSessionId,
+      user_message_id: userMessage.id,
+      assistant_message_id: assistantMessage.id,
+      normalized_question: question.redacted,
+      detected_intent: intent,
+      detected_category: category,
+      answer_mode: response.answerMode,
+      confidence: response.confidence,
+      unresolved: response.unresolved,
+      latency_ms: latencyMs ?? null,
+    }
+
+    if (answerEventId) answerEventInsert.id = answerEventId
+
     const { data: answerEvent, error: answerEventError } = await supabase
       .from("chatbot_answer_events")
-      .insert({
-        session_id: resolvedSessionId,
-        user_message_id: userMessage.id,
-        assistant_message_id: assistantMessage.id,
-        normalized_question: question.redacted,
-        detected_intent: intent,
-        detected_category: category,
-        answer_mode: response.answerMode,
-        confidence: response.confidence,
-        unresolved: response.unresolved,
-        latency_ms: latencyMs ?? null,
-      })
+      .insert(answerEventInsert)
       .select("id")
       .single()
 
@@ -1217,15 +1666,16 @@ async function persistExchange(
       }),
     ]
 
-    const sideEffectResults = await Promise.allSettled(sideEffects)
-    for (const result of sideEffectResults) {
-      if (result.status === "rejected") {
-        console.warn(
-          "[chatbot] failed to persist exchange side effect:",
-          result.reason instanceof Error ? result.reason.message : result.reason
-        )
+    void Promise.allSettled(sideEffects).then((sideEffectResults) => {
+      for (const result of sideEffectResults) {
+        if (result.status === "rejected") {
+          console.warn(
+            "[chatbot] failed to persist exchange side effect:",
+            result.reason instanceof Error ? result.reason.message : result.reason
+          )
+        }
       }
-    }
+    })
 
     return {
       answerEventId: answerEvent.id as string,
@@ -1332,31 +1782,77 @@ interface BuildChatbotCoreOptions {
   generateAnswer?: boolean
 }
 
-function determineModelTier(category: string): ChatbotModelTier {
-  // 문제 해결(troubleshooting) 및 하드웨어(hardware) 장애/설정은 추론 모델 적용
-  if (category === "troubleshooting" || category === "hardware") {
-    return "reasoning"
-  }
-  
-  // 결제(billing) 및 도입/상담(consultation) 등 비즈니스 중요 문의는 심화 모델 적용
-  if (category === "billing" || category === "consultation") {
-    return "advanced"
-  }
-
-  // 일반 안내, 온보딩, 교실 운영 등은 기본 모델 적용
+function determineModelTier(): ChatbotModelTier {
+  // Public chat starts from the cheapest fast model. The caller escalates to
+  // deeper tiers only when the fast response is missing or unusable.
   return "basic"
 }
 
-function shouldUseFastStructuredAnswer(
+function getEnabledModelTiers() {
+  const startTier = determineModelTier()
+  const startIndex = Math.max(0, PROGRESSIVE_MODEL_TIERS.indexOf(startTier))
+  const tiers = PROGRESSIVE_MODEL_TIERS.slice(startIndex)
+  return process.env.CHATBOT_ENABLE_DEEP_FALLBACK === "1" ? tiers : tiers.slice(0, 1)
+}
+
+async function generateUsableAnswerWithProgressiveModels(
+  generate: (tier: ChatbotModelTier) => Promise<string | null>
+) {
+  const tiers = getEnabledModelTiers()
+
+  for (const tier of tiers) {
+    const answer = await generate(tier)
+    const sanitized = answer ? sanitizePublicAnswerText(answer) : null
+    if (sanitized && isUsableGeneratedAnswer(sanitized)) return sanitized
+  }
+
+  return null
+}
+
+function shouldUseAiFinalAnswer(
+  response: Omit<ChatbotQueryResponse, "answerEventId" | "sessionId" | "warning" | "handoffIntent">,
+  question: NormalizedQuestion,
+  category: string
+) {
+  if (category === "general" && !isDomainRelatedQuestion(question, category)) return false
+  if (response.answerMode === "clarifying_question" && question.tokens.length < 2) return false
+  return true
+}
+
+function applyGeneratedFinalAnswer(
+  response: Omit<ChatbotQueryResponse, "answerEventId" | "sessionId" | "warning" | "handoffIntent">,
+  question: NormalizedQuestion,
+  category: string,
+  answer: string
+) {
+  const wasRecoverableFallback = shouldUseInferredAnswerFallback(response, question, category)
+  response.answer = sanitizePublicAnswerText(answer)
+
+  if (response.answerMode === "handoff") {
+    response.unresolved = true
+    response.needsHandoff = true
+    response.confidence = Math.max(response.confidence, 0.5)
+    return
+  }
+
+  if (response.answerMode === "doc_suggestion" || wasRecoverableFallback) {
+    response.answerMode = "direct_answer"
+    response.unresolved = false
+    response.needsHandoff = false
+    response.confidence = Math.max(response.confidence, response.sources.length > 0 ? 0.72 : 0.55)
+    response.suggestedQuestions = buildSuggestedQuestions(category)
+  }
+}
+
+function finalizeAnswer(
   response: Omit<ChatbotQueryResponse, "answerEventId" | "sessionId" | "warning" | "handoffIntent">
 ) {
-  const top = response.sources[0]
-  if (!top) return false
-  if (response.answerMode !== "direct_answer" && response.answerMode !== "doc_suggestion") return false
+  response.answer = sanitizePublicAnswerText(response.answer)
+}
 
-  // Scores above this threshold come from curated sources, not ordinary vector hits.
-  // They are already structured and grounded, so skipping LLM rewriting materially lowers latency.
-  return response.confidence >= 0.9 && top.score >= 240
+function shouldExposeSources(input: ChatbotQueryRequest) {
+  const context = getContextObject(input.context)
+  return process.env.CHATBOT_SHOW_SOURCES === "1" || context.showSources === true
 }
 
 // 검색 → 답변 구성 → 필요 시 Gemini 답변 생성까지의 코어. 영속화(persistExchange)는 포함하지 않는다.
@@ -1388,9 +1884,10 @@ async function buildChatbotCore(
     }
   }
   const { sources, warning, cacheHit } = await searchKnowledgeSources(question)
+  const classificationSources = sources.filter((source) => source.score >= MIN_DIRECT_SOURCE_SCORE)
   const { category, intent, handoffIntent } = classifyChatbotQuestion(
     question.redacted,
-    sources.map((source) => source.category)
+    classificationSources.map((source) => source.category)
   )
   const response = composeAnswer(question, sources, category)
 
@@ -1431,24 +1928,24 @@ async function buildChatbotCore(
     }
   }
 
-  // 근거 문서가 있는 답변 모드에서만 Gemini로 답변 문장을 생성한다.
-  // (handoff·clarifying·fallback 등 안전/에스컬레이션 경로는 템플릿 유지)
-  if (
-    shouldGenerateAnswer &&
-    !shouldUseFastStructuredAnswer(response) &&
-    (response.answerMode === "direct_answer" || response.answerMode === "doc_suggestion")
-  ) {
-    const tier = determineModelTier(category)
-    const llmAnswer = await generateGeminiAnswer({
-      question: question.redacted,
-      sources: response.sources,
-      tier,
-      history,
-    })
-    if (llmAnswer && isUsableGeneratedAnswer(llmAnswer)) {
-      response.answer = llmAnswer
+  if (shouldGenerateAnswer && shouldUseAiFinalAnswer(response, question, category)) {
+    const finalAnswer = await generateUsableAnswerWithProgressiveModels((tier) =>
+      generateGeminiFinalAnswer({
+        question: question.redacted,
+        category,
+        answerMode: response.answerMode,
+        draftAnswer: response.answer,
+        sources: response.sources,
+        tier,
+        history,
+      })
+    )
+    if (finalAnswer) {
+      applyGeneratedFinalAnswer(response, question, category, finalAnswer)
     }
   }
+
+  finalizeAnswer(response)
 
   return {
     question,
@@ -1466,9 +1963,12 @@ export async function handleChatbotQuery(
   input: ChatbotQueryRequest,
   meta: ChatbotRequestMeta = {}
 ): Promise<ChatbotQueryResponse> {
-  const sessionId = await ensureSession(input, meta)
-  const core = await buildChatbotCore(input.message, { sessionId })
-  const persisted = await persistExchange(
+  const requestedSessionId = normalizeOptionalUuid(input.sessionId)
+  const sessionId = requestedSessionId ?? (hasSupabaseServerEnv() ? crypto.randomUUID() : undefined)
+  const answerEventId = hasSupabaseServerEnv() ? crypto.randomUUID() : undefined
+  const core = await buildChatbotCore(input.message, { sessionId: requestedSessionId })
+
+  void persistExchange(
     input,
     core.question,
     core.response,
@@ -1477,20 +1977,23 @@ export async function handleChatbotQuery(
     core.intent,
     core.handoffIntent,
     core.latencyMs,
-    sessionId
+    sessionId,
+    answerEventId
   )
 
   return {
     ...core.response,
-    ...persisted,
+    answerEventId,
+    sessionId,
     handoffIntent: core.handoffIntent,
+    sources: shouldExposeSources(input) ? core.response.sources : [],
     warning: core.warning,
   }
 }
 
 /**
  * 품질 평가용 진입점. 실제 검색·답변 파이프라인을 그대로 타되 분석 로그에 저장하지 않는다.
- * 골든셋 평가([scripts/eval-chatbot.ts])가 분석 데이터를 오염시키지 않도록 한다.
+ * 골든셋 평가(lib/chatbot/eval.ts)가 분석 데이터를 오염시키지 않도록 한다.
  */
 export async function evaluateChatbotQuery(
   message: string,

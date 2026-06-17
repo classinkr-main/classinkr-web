@@ -13,6 +13,9 @@
  */
 
 import crypto from "node:crypto"
+import { existsSync, readFileSync } from "node:fs"
+import { join } from "node:path"
+
 import { createClient } from "@supabase/supabase-js"
 
 import {
@@ -64,17 +67,50 @@ interface ChunkRow {
   embedding_updated_at: string | null
 }
 
+function loadEnvLocal() {
+  const envPath = join(process.cwd(), ".env.local")
+  if (!existsSync(envPath)) return
+  for (const line of readFileSync(envPath, "utf8").split(/\r?\n/)) {
+    const match = line.match(/^([A-Z_][A-Z0-9_]*)=(.*)$/)
+    if (!match) continue
+    let value = match[2].trim()
+    if ((value.startsWith('"') && value.endsWith('"')) || (value.startsWith("'") && value.endsWith("'"))) {
+      value = value.slice(1, -1)
+    }
+    if (!process.env[match[1]]) process.env[match[1]] = value
+  }
+}
+
+loadEnvLocal()
+
 const args = new Set(process.argv.slice(2))
 const dryRun = args.has("--dry-run")
 const skipChunks = args.has("--skip-chunks")
 const skipVersions = args.has("--skip-versions")
 
-const docs = listDocs()
+const allDocs = listDocs()
+
+function parseSlugFilter(): Set<string> | null {
+  const argv = process.argv.slice(2)
+  const index = argv.indexOf("--slugs")
+  if (index === -1) return null
+  const raw = argv[index + 1] ?? ""
+  const set = new Set(raw.split(",").map((value) => value.trim()).filter(Boolean))
+  return set.size > 0 ? set : null
+}
+
+// --slugs 로 일부 문서만 재시드(수기 편집본을 덮어쓰지 않도록). 정합성 검증은 전체로 하고 쓰기만 좁힌다.
+const slugFilter = parseSlugFilter()
+const docs = slugFilter ? allDocs.filter((doc) => slugFilter.has(doc.slug)) : allDocs
+
+if (slugFilter && docs.length === 0) {
+  throw new Error(`--slugs 와 일치하는 문서가 없습니다: ${Array.from(slugFilter).join(", ")}`)
+}
 
 function validateStaticDocs() {
   const slugs = new Set<string>()
 
-  for (const doc of docs) {
+  for (const doc of allDocs) {
     if (slugs.has(doc.slug)) {
       throw new Error(`Duplicate docs slug: ${doc.slug}`)
     }
@@ -82,7 +118,7 @@ function validateStaticDocs() {
     slugs.add(doc.slug)
   }
 
-  for (const doc of docs) {
+  for (const doc of allDocs) {
     for (const relatedSlug of doc.relatedSlugs ?? []) {
       if (!slugs.has(relatedSlug)) {
         throw new Error(`Missing related docs slug: ${doc.slug} -> ${relatedSlug}`)
