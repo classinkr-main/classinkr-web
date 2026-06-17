@@ -10,6 +10,7 @@ import {
   resolveOwnerName,
 } from "@/lib/external-crm/owner-names"
 import { createSupabaseAdminClient } from "@/lib/supabase/admin"
+import { fetchSupabasePages } from "@/lib/supabase/pagination"
 import { getFxRates } from "@/lib/billing/fx"
 
 export type NeoCrmGranularity = "week" | "month" | "quarter" | "year"
@@ -198,6 +199,33 @@ async function listRecentOpportunityRows(sb: ReturnType<typeof createSupabaseAdm
   return { data: rows, error: null }
 }
 
+function fetchExternalCrmPages<T>(
+  sb: SupabaseAdminClient,
+  input: {
+    objectApiKey: string
+    select: string
+    startIso?: string
+    endIso?: string
+  }
+) {
+  return fetchSupabasePages<T>({
+    maxRows: PERIOD_SCAN_LIMIT,
+    fetchPage: (from, to) => {
+      let query = sb
+        .from("external_crm_records")
+        .select(input.select)
+        .eq("source_system", "xiaoshouyi")
+        .eq("object_api_key", input.objectApiKey)
+        .eq("is_stale", false)
+
+      if (input.startIso) query = query.gte("occurred_at", input.startIso)
+      if (input.endIso) query = query.lt("occurred_at", input.endIso)
+
+      return query.range(from, to)
+    },
+  })
+}
+
 function pad2(value: number) {
   return String(value).padStart(2, "0")
 }
@@ -262,6 +290,7 @@ function resolvePeriodBounds(granularity: NeoCrmGranularity, offset: number): Pe
 }
 
 const VALID_GRANULARITIES: NeoCrmGranularity[] = ["week", "month", "quarter", "year"]
+type SupabaseAdminClient = ReturnType<typeof createSupabaseAdminClient>
 
 function emptyReport(
   granularity: NeoCrmGranularity,
@@ -344,15 +373,12 @@ async function computeNeoCrmTeamReport(input: {
   const sb = createSupabaseAdminClient()
 
   const moneyWindowSelect = (objectApiKey: string) =>
-    sb
-      .from("external_crm_records")
-      .select("owner_name, payload, amount, occurred_at, display_name, status, external_id, object_api_key")
-      .eq("source_system", "xiaoshouyi")
-      .eq("object_api_key", objectApiKey)
-      .eq("is_stale", false)
-      .gte("occurred_at", windowStartIso)
-      .lt("occurred_at", endIso)
-      .limit(PERIOD_SCAN_LIMIT)
+    fetchExternalCrmPages<ScopedOrderRecord>(sb, {
+      objectApiKey,
+      select: "owner_name, payload, amount, occurred_at, display_name, status, external_id, object_api_key",
+      startIso: windowStartIso,
+      endIso,
+    })
 
   const [
     teamManagerResult,
@@ -369,30 +395,28 @@ async function computeNeoCrmTeamReport(input: {
     ownerNames,
     excludedOwnerIds,
   ] = await Promise.all([
-    sb
-      .from("branch_rev_deals")
-      .select("team, manager")
-      .limit(PERIOD_SCAN_LIMIT),
+    fetchSupabasePages<{ team: string | null; manager: string | null }>({
+      maxRows: PERIOD_SCAN_LIMIT,
+      fetchPage: (from, to) =>
+        sb
+          .from("branch_rev_deals")
+          .select("team, manager")
+          .range(from, to),
+    }),
     moneyWindowSelect("SalesPerformance__c"),
     moneyWindowSelect("opportunity"),
     listRecentOpportunityRows(sb),
     moneyWindowSelect("Collection__c"),
-    sb
-      .from("external_crm_records")
-      .select("owner_name, payload")
-      .eq("source_system", "xiaoshouyi")
-      .eq("object_api_key", "account")
-      .eq("is_stale", false)
-      .limit(PERIOD_SCAN_LIMIT),
-    sb
-      .from("external_crm_records")
-      .select("owner_name, payload, occurred_at")
-      .eq("source_system", "xiaoshouyi")
-      .eq("object_api_key", "account")
-      .eq("is_stale", false)
-      .gte("occurred_at", windowStartIso)
-      .lt("occurred_at", endIso)
-      .limit(PERIOD_SCAN_LIMIT),
+    fetchExternalCrmPages<ScopedAmountRecord>(sb, {
+      objectApiKey: "account",
+      select: "owner_name, payload, amount, occurred_at",
+    }),
+    fetchExternalCrmPages<ScopedAmountRecord>(sb, {
+      objectApiKey: "account",
+      select: "owner_name, payload, amount, occurred_at",
+      startIso: windowStartIso,
+      endIso,
+    }),
     sb
       .from("leads")
       .select("id", { count: "exact", head: true })

@@ -1,6 +1,7 @@
 import "server-only"
 
 import { createSupabaseAdminClient } from "@/lib/supabase/admin"
+import { fetchSupabasePages, type SupabaseQueryError } from "@/lib/supabase/pagination"
 
 export type CrmDuplicatePreflightStatus = "ok" | "warning" | "blocked"
 
@@ -17,7 +18,7 @@ export interface CrmDuplicatePreflightReport {
   checks: CrmDuplicatePreflightCheck[]
 }
 
-type SupabaseErrorLike = { code?: string; details?: string; hint?: string; message?: string } | null
+type SupabaseErrorLike = SupabaseQueryError
 
 const DUPLICATE_SCAN_LIMIT = 5000
 const DUPLICATE_ACTION =
@@ -90,48 +91,77 @@ function buildDuplicateCheck(input: {
 
 export async function getCrmDuplicatePreflightReport(): Promise<CrmDuplicatePreflightReport> {
   const sb = createSupabaseAdminClient()
-  const [externalRecords, sourceCandidates, confirmedSources] = await Promise.all([
+  const [
+    externalRows,
+    externalCount,
+    sourceCandidateRows,
+    sourceCandidateCount,
+    confirmedSourceRows,
+    confirmedSourceCount,
+  ] = await Promise.all([
+    fetchSupabasePages<Record<string, unknown>>({
+      maxRows: DUPLICATE_SCAN_LIMIT,
+      fetchPage: (from, to) =>
+        sb
+          .from("external_crm_records")
+          .select("source_system, object_api_key, external_id")
+          .order("synced_at", { ascending: false })
+          .range(from, to),
+    }),
     sb
       .from("external_crm_records")
-      .select("source_system, object_api_key, external_id", { count: "exact" })
-      .order("synced_at", { ascending: false })
-      .limit(DUPLICATE_SCAN_LIMIT),
+      .select("id", { count: "exact", head: true }),
+    fetchSupabasePages<Record<string, unknown>>({
+      maxRows: DUPLICATE_SCAN_LIMIT,
+      fetchPage: (from, to) =>
+        sb
+          .from("crm_source_links")
+          .select("source_system, source_object, source_record_key, target_type, target_id")
+          .order("updated_at", { ascending: false })
+          .range(from, to),
+    }),
     sb
       .from("crm_source_links")
-      .select("source_system, source_object, source_record_key, target_type, target_id", { count: "exact" })
-      .order("updated_at", { ascending: false })
-      .limit(DUPLICATE_SCAN_LIMIT),
+      .select("id", { count: "exact", head: true }),
+    fetchSupabasePages<Record<string, unknown>>({
+      maxRows: DUPLICATE_SCAN_LIMIT,
+      fetchPage: (from, to) =>
+        sb
+          .from("crm_source_links")
+          .select("source_system, source_object, source_record_key")
+          .eq("status", "confirmed")
+          .order("updated_at", { ascending: false })
+          .range(from, to),
+    }),
     sb
       .from("crm_source_links")
-      .select("source_system, source_object, source_record_key", { count: "exact" })
+      .select("id", { count: "exact", head: true })
       .eq("status", "confirmed")
-      .order("updated_at", { ascending: false })
-      .limit(DUPLICATE_SCAN_LIMIT),
   ])
 
   const checks = [
     buildDuplicateCheck({
       key: "external_crm_records_duplicate_keys",
       label: "External CRM snapshot duplicate keys",
-      error: externalRecords.error,
-      rows: (externalRecords.data ?? []) as Record<string, unknown>[],
-      count: externalRecords.count,
+      error: externalRows.error ?? externalCount.error,
+      rows: externalRows.data,
+      count: externalCount.count,
       fields: ["source_system", "object_api_key", "external_id"],
     }),
     buildDuplicateCheck({
       key: "crm_source_links_duplicate_candidates",
       label: "CRM source-link duplicate candidates",
-      error: sourceCandidates.error,
-      rows: (sourceCandidates.data ?? []) as Record<string, unknown>[],
-      count: sourceCandidates.count,
+      error: sourceCandidateRows.error ?? sourceCandidateCount.error,
+      rows: sourceCandidateRows.data,
+      count: sourceCandidateCount.count,
       fields: ["source_system", "source_object", "source_record_key", "target_type", "target_id"],
     }),
     buildDuplicateCheck({
       key: "crm_source_links_duplicate_confirmed_sources",
       label: "CRM source-link duplicate confirmed sources",
-      error: confirmedSources.error,
-      rows: (confirmedSources.data ?? []) as Record<string, unknown>[],
-      count: confirmedSources.count,
+      error: confirmedSourceRows.error ?? confirmedSourceCount.error,
+      rows: confirmedSourceRows.data,
+      count: confirmedSourceCount.count,
       fields: ["source_system", "source_object", "source_record_key"],
     }),
   ]

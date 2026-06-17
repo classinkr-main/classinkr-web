@@ -6,6 +6,7 @@ import {
   resolveOwnerName,
 } from "@/lib/external-crm/owner-names"
 import { createSupabaseAdminClient } from "@/lib/supabase/admin"
+import { fetchSupabasePages } from "@/lib/supabase/pagination"
 
 export interface NeoCrmCustomerRow {
   accountId: string
@@ -101,6 +102,8 @@ interface OpportunityRecord {
 const SCAN_LIMIT = 5000
 const EXPIRING_SOON_DAYS = 60
 
+type SupabaseAdminClient = ReturnType<typeof createSupabaseAdminClient>
+
 function toIso(value: unknown): string | null {
   if (value == null || value === "") return null
   const numeric = typeof value === "number" ? value : /^\d+$/.test(String(value)) ? Number(value) : null
@@ -138,27 +141,13 @@ export async function getNeoCrmCustomers(): Promise<NeoCrmCustomerList> {
 
   const [accountResult, shroffResult, opportunityResult, ownerNames, excludedOwnerIds, latestResult] =
     await Promise.all([
-      sb
-        .from("external_crm_records")
-        .select("external_id, display_name, owner_name, occurred_at, payload")
-        .eq("source_system", "xiaoshouyi")
-        .eq("object_api_key", "account")
-        .eq("is_stale", false)
-        .limit(SCAN_LIMIT),
-      sb
-        .from("external_crm_records")
-        .select("payload")
-        .eq("source_system", "xiaoshouyi")
-        .eq("object_api_key", "ShroffAccount__c")
-        .eq("is_stale", false)
-        .limit(SCAN_LIMIT),
-      sb
-        .from("external_crm_records")
-        .select("amount, payload")
-        .eq("source_system", "xiaoshouyi")
-        .eq("object_api_key", "opportunity")
-        .eq("is_stale", false)
-        .limit(SCAN_LIMIT),
+      fetchExternalCrmRows<AccountRecord>(
+        sb,
+        "account",
+        "external_id, display_name, owner_name, occurred_at, payload"
+      ),
+      fetchExternalCrmRows<ShroffRecord>(sb, "ShroffAccount__c", "payload"),
+      fetchExternalCrmRows<OpportunityRecord>(sb, "opportunity", "amount, payload"),
       getXiaoshouyiOwnerNameMap(sb),
       getExcludedXiaoshouyiOwnerIds(sb),
       sb
@@ -278,6 +267,26 @@ export async function getNeoCrmCustomers(): Promise<NeoCrmCustomerList> {
     owners,
     rows,
   }
+}
+
+function fetchExternalCrmRows<T>(
+  sb: SupabaseAdminClient,
+  objectApiKey: string,
+  select: string
+) {
+  return fetchSupabasePages<T>({
+    maxRows: SCAN_LIMIT,
+    fetchPage: async (from, to) => {
+      const { data, error, count } = await sb
+        .from("external_crm_records")
+        .select(select)
+        .eq("source_system", "xiaoshouyi")
+        .eq("object_api_key", objectApiKey)
+        .eq("is_stale", false)
+        .range(from, to)
+      return { data, error, count }
+    },
+  })
 }
 
 interface MoneyRecordRow {
