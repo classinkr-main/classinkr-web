@@ -1,6 +1,7 @@
 "use client"
 
-import { useEffect, useState } from "react"
+import { useEffect, useMemo, useState } from "react"
+import dynamic from "next/dynamic"
 import {
   Users,
   TrendingUp,
@@ -16,18 +17,6 @@ import {
   Send,
   ShieldAlert,
 } from "lucide-react"
-import {
-  LineChart,
-  Line,
-  PieChart,
-  Pie,
-  Cell,
-  XAxis,
-  YAxis,
-  Tooltip,
-  ResponsiveContainer,
-  CartesianGrid,
-} from "recharts"
 import { adminFetchJsonCached } from "@/lib/admin-client"
 import { StatCard } from "@/components/admin/StatCard"
 import type { LeadRecord, SiteSettings } from "@/lib/db"
@@ -155,25 +144,17 @@ function KpiSkeleton() {
   )
 }
 
-function ChartTooltip({
-  active,
-  payload,
-  label,
-}: {
-  active?: boolean
-  payload?: { value: number }[]
-  label?: string
-}) {
-  if (!active || !payload?.length) return null
-  return (
-    <div className="bg-[#111110] text-white text-[12px] px-3 py-2 rounded-xl shadow-xl">
-      <p className="text-white/50 mb-0.5">{label}</p>
-      <p className="font-bold">{payload[0].value}건</p>
-    </div>
-  )
-}
-
 const DONUT_COLORS = ["#111110", "#4b8cf7", "#22c55e"]
+
+// Recharts는 무거우므로 KPI 카드가 먼저 그려진 뒤 차트만 지연 로드한다.
+const LeadTrendChart = dynamic(
+  () => import("@/components/admin/overview/OverviewCharts").then((m) => m.LeadTrendChart),
+  { ssr: false, loading: () => <Skeleton className="h-[180px]" /> }
+)
+const SourcePie = dynamic(
+  () => import("@/components/admin/overview/OverviewCharts").then((m) => m.SourcePie),
+  { ssr: false, loading: () => <Skeleton className="h-[140px]" /> }
+)
 const SOURCE_LABEL: Record<string, string> = {
   demo_modal: "데모 신청",
   contact_page: "문의",
@@ -335,8 +316,8 @@ export default function OverviewPage() {
         bugsData,
         patchNotesData,
       ] = await Promise.all([
-        fetchJson<{ leads: LeadRecord[] }>("/api/admin/leads"),
-        fetchJson<{ subscribers: unknown[]; total: number }>("/api/admin/subscribers"),
+        fetchJson<{ leads: LeadRecord[] }>("/api/admin/leads?scope=dashboard"),
+        fetchJson<{ subscribers: unknown[]; total: number }>("/api/admin/subscribers?count=1"),
         fetchJson<{ posts: BlogPost[] }>("/api/admin/blog"),
         fetchJson<{ campaigns: EmailCampaign[] }>("/api/admin/email"),
         Promise.all(
@@ -377,128 +358,223 @@ export default function OverviewPage() {
     }
   }, [])
 
-  const total = leads.length
-  const newLeads = leads.filter((l) => l.status === "new").length
-  const contactedLeads = leads.filter((l) => l.status === "contacted").length
-  const converted = leads.filter((l) => l.status === "converted").length
-  const closedLeads = leads.filter((l) => l.status === "closed").length
-  const activePipelineLeads = newLeads + contactedLeads
-  const convRate = total > 0 ? Math.round((converted / total) * 100) : 0
+  // 리드 파생값을 단일 패스로 집계하고 useMemo로 캐싱한다.
+  // (기존엔 렌더마다 status별 filter + 날짜 파싱을 15회+ 반복)
+  const leadAgg = useMemo(() => {
+    const now = new Date()
+    const todayStr = now.toDateString()
+    const weekAgo = new Date(now)
+    weekAgo.setDate(now.getDate() - 7)
+    const twoWeeksAgo = new Date(now)
+    twoWeeksAgo.setDate(now.getDate() - 14)
+    const monthStart = new Date(now.getFullYear(), now.getMonth(), 1)
+    const lastMonthStart = new Date(now.getFullYear(), now.getMonth() - 1, 1)
+    const weekAgoT = weekAgo.getTime()
+    const twoWeeksAgoT = twoWeeksAgo.getTime()
+    const monthStartT = monthStart.getTime()
+    const lastMonthStartT = lastMonthStart.getTime()
 
-  const today = new Date()
-  const todayStr = today.toDateString()
-  const weekAgo = new Date(today)
-  weekAgo.setDate(today.getDate() - 7)
-  const twoWeeksAgo = new Date(today)
-  twoWeeksAgo.setDate(today.getDate() - 14)
+    let newLeads = 0
+    let contactedLeads = 0
+    let converted = 0
+    let closedLeads = 0
+    let todayLeads = 0
+    let thisWeekLeads = 0
+    let lastWeekLeads = 0
+    let thisMonthLeads = 0
+    let lastMonthLeads = 0
+    let convertedThisMonth = 0
+    let convertedLastMonth = 0
+    const sourceMap: Record<string, number> = {}
+    const branchMap: Record<string, number> = {}
+    const dayCount: Record<string, number> = {}
 
-  const todayLeads = leads.filter((l) => new Date(l.timestamp).toDateString() === todayStr).length
-  const thisWeekLeads = leads.filter((l) => new Date(l.timestamp) >= weekAgo).length
-  const lastWeekLeads = leads.filter((l) => {
-    const d = new Date(l.timestamp)
-    return d >= twoWeeksAgo && d < weekAgo
-  }).length
-  const weekTrend = thisWeekLeads - lastWeekLeads
+    for (const l of leads) {
+      if (l.status === "new") newLeads++
+      else if (l.status === "contacted") contactedLeads++
+      else if (l.status === "converted") converted++
+      else if (l.status === "closed") closedLeads++
 
-  const monthStart = new Date(today.getFullYear(), today.getMonth(), 1)
-  const lastMonthStart = new Date(today.getFullYear(), today.getMonth() - 1, 1)
-  const thisMonthLeads = leads.filter((l) => new Date(l.timestamp) >= monthStart).length
-  const lastMonthLeads = leads.filter((l) => {
-    const d = new Date(l.timestamp)
-    return d >= lastMonthStart && d < monthStart
-  }).length
-  const monthTrend = thisMonthLeads - lastMonthLeads
-  const convertedThisMonth = leads.filter(
-    (l) => l.status === "converted" && new Date(l.timestamp) >= monthStart
-  ).length
-  const convertedLastMonth = leads.filter((l) => {
-    if (l.status !== "converted") return false
-    const d = new Date(l.timestamp)
-    return d >= lastMonthStart && d < monthStart
-  }).length
-  const convertedTrend = convertedThisMonth - convertedLastMonth
-
-  const chartData = Array.from({ length: chartRange }, (_, i) => {
-    const d = new Date()
-    d.setDate(d.getDate() - (chartRange - 1 - i))
-    return {
-      label: `${d.getMonth() + 1}/${d.getDate()}`,
-      count: leads.filter((l) => new Date(l.timestamp).toDateString() === d.toDateString()).length,
-    }
-  })
-  const chartTotal = chartData.reduce((sum, point) => sum + point.count, 0)
-
-  const sourceMap: Record<string, number> = {}
-  leads.forEach((l) => {
-    sourceMap[l.source] = (sourceMap[l.source] ?? 0) + 1
-  })
-  const pieData = Object.entries(sourceMap).map(([key, value]) => ({
-    name: SOURCE_LABEL[key] ?? key,
-    value,
-  }))
-
-  const recentLeads = [...leads].sort((a, b) => scoreDate(b.timestamp) - scoreDate(a.timestamp)).slice(0, 6)
-  const draftBlogPosts = blogPosts.filter((post) => post.status === "draft").length
-  const publishedBlogPosts = blogPosts.filter((post) => post.status === "published")
-  const publishedPostsWithCta = publishedBlogPosts.filter((post) => {
-    const cta = post.cta
-    return Boolean(cta?.title?.trim() && cta?.buttonLabel?.trim() && cta?.buttonHref?.trim())
-  }).length
-  const ctaCoverage = publishedBlogPosts.length > 0 ? Math.round((publishedPostsWithCta / publishedBlogPosts.length) * 100) : 0
-  const recentPosts = [...blogPosts]
-    .sort((a, b) => scoreDate(b.updatedAt ?? b.publishedAt) - scoreDate(a.updatedAt ?? a.publishedAt))
-    .slice(0, 4)
-  const recentCampaigns = [...campaigns]
-    .sort((a, b) => scoreDate(b.sentAt ?? b.createdAt) - scoreDate(a.sentAt ?? a.createdAt))
-    .slice(0, 4)
-  const failedCampaigns = [...campaigns]
-    .filter((campaign) => campaign.status === "failed")
-    .sort((a, b) => scoreDate(b.sentAt ?? b.createdAt) - scoreDate(a.sentAt ?? a.createdAt))
-  const upcomingEvents = [...calendarEvents]
-    .filter((event) => isWithinNextDays(event.date, 7))
-    .sort((a, b) => a.date.localeCompare(b.date) || (a.time ?? "").localeCompare(b.time ?? ""))
-    .slice(0, 5)
-  const openBugs = [...bugs]
-    .filter((bug) => bug.status === "open" || bug.status === "in-progress")
-    .sort((a, b) => {
-      const severityOrder: Record<BugReport["severity"], number> = {
-        critical: 4,
-        high: 3,
-        medium: 2,
-        low: 1,
+      const t = new Date(l.timestamp).getTime()
+      if (!Number.isNaN(t)) {
+        const key = new Date(t).toDateString()
+        dayCount[key] = (dayCount[key] ?? 0) + 1
+        if (key === todayStr) todayLeads++
+        if (t >= weekAgoT) thisWeekLeads++
+        else if (t >= twoWeeksAgoT) lastWeekLeads++
+        if (t >= monthStartT) {
+          thisMonthLeads++
+          if (l.status === "converted") convertedThisMonth++
+        } else if (t >= lastMonthStartT) {
+          lastMonthLeads++
+          if (l.status === "converted") convertedLastMonth++
+        }
       }
-      return (
-        severityOrder[b.severity] - severityOrder[a.severity] ||
-        scoreDate(b.updatedAt) - scoreDate(a.updatedAt)
-      )
-    })
-    .slice(0, 4)
-  const draftCampaigns = campaigns.filter((campaign) => campaign.status === "draft")
-  const sentCampaigns = campaigns.filter((campaign) => campaign.status === "sent")
-  const latestPatchNote = [...patchNotes].sort((a, b) => scoreDate(b.date) - scoreDate(a.date))[0]
-  const latestFailedCampaign = failedCampaigns[0]
-  const nextUpcomingEvent = upcomingEvents[0]
-  const criticalOpenBugs = openBugs.filter((bug) => bug.severity === "critical" || bug.severity === "high")
-  const publishedPostsWithoutCta = Math.max(0, publishedBlogPosts.length - publishedPostsWithCta)
+
+      sourceMap[l.source] = (sourceMap[l.source] ?? 0) + 1
+      const branch = l.branch?.trim()
+      if (branch) branchMap[branch] = (branchMap[branch] ?? 0) + 1
+    }
+
+    const total = leads.length
+    const pieData = Object.entries(sourceMap).map(([key, value]) => ({
+      name: SOURCE_LABEL[key] ?? key,
+      value,
+    }))
+    const recentLeads = [...leads]
+      .sort((a, b) => scoreDate(b.timestamp) - scoreDate(a.timestamp))
+      .slice(0, 6)
+    const topBranch = Object.entries(branchMap).sort((a, b) => b[1] - a[1])[0]
+
+    return {
+      total,
+      newLeads,
+      contactedLeads,
+      converted,
+      closedLeads,
+      activePipelineLeads: newLeads + contactedLeads,
+      convRate: total > 0 ? Math.round((converted / total) * 100) : 0,
+      todayLeads,
+      thisWeekLeads,
+      weekTrend: thisWeekLeads - lastWeekLeads,
+      thisMonthLeads,
+      monthTrend: thisMonthLeads - lastMonthLeads,
+      convertedThisMonth,
+      convertedTrend: convertedThisMonth - convertedLastMonth,
+      pieData,
+      recentLeads,
+      dayCount,
+      topBranch,
+    }
+  }, [leads])
+
+  const {
+    total,
+    newLeads,
+    contactedLeads,
+    converted,
+    closedLeads,
+    activePipelineLeads,
+    convRate,
+    todayLeads,
+    thisWeekLeads,
+    weekTrend,
+    thisMonthLeads,
+    monthTrend,
+    convertedThisMonth,
+    convertedTrend,
+    pieData,
+    recentLeads,
+    topBranch,
+  } = leadAgg
+
+  const chartData = useMemo(
+    () =>
+      Array.from({ length: chartRange }, (_, i) => {
+        const d = new Date()
+        d.setDate(d.getDate() - (chartRange - 1 - i))
+        return {
+          label: `${d.getMonth() + 1}/${d.getDate()}`,
+          count: leadAgg.dayCount[d.toDateString()] ?? 0,
+        }
+      }),
+    [leadAgg, chartRange]
+  )
+  const chartTotal = useMemo(() => chartData.reduce((sum, point) => sum + point.count, 0), [chartData])
+
+  const {
+    draftBlogPosts,
+    publishedBlogPosts,
+    ctaCoverage,
+    recentPosts,
+    publishedPostsWithoutCta,
+  } = useMemo(() => {
+    const draftBlogPosts = blogPosts.filter((post) => post.status === "draft").length
+    const publishedBlogPosts = blogPosts.filter((post) => post.status === "published")
+    const publishedPostsWithCta = publishedBlogPosts.filter((post) => {
+      const cta = post.cta
+      return Boolean(cta?.title?.trim() && cta?.buttonLabel?.trim() && cta?.buttonHref?.trim())
+    }).length
+    const ctaCoverage =
+      publishedBlogPosts.length > 0 ? Math.round((publishedPostsWithCta / publishedBlogPosts.length) * 100) : 0
+    const recentPosts = [...blogPosts]
+      .sort((a, b) => scoreDate(b.updatedAt ?? b.publishedAt) - scoreDate(a.updatedAt ?? a.publishedAt))
+      .slice(0, 4)
+    return {
+      draftBlogPosts,
+      publishedBlogPosts,
+      ctaCoverage,
+      recentPosts,
+      publishedPostsWithoutCta: Math.max(0, publishedBlogPosts.length - publishedPostsWithCta),
+    }
+  }, [blogPosts])
+
+  const { recentCampaigns, failedCampaigns, draftCampaigns, sentCampaigns, latestFailedCampaign } = useMemo(() => {
+    const recentCampaigns = [...campaigns]
+      .sort((a, b) => scoreDate(b.sentAt ?? b.createdAt) - scoreDate(a.sentAt ?? a.createdAt))
+      .slice(0, 4)
+    const failedCampaigns = [...campaigns]
+      .filter((campaign) => campaign.status === "failed")
+      .sort((a, b) => scoreDate(b.sentAt ?? b.createdAt) - scoreDate(a.sentAt ?? a.createdAt))
+    return {
+      recentCampaigns,
+      failedCampaigns,
+      draftCampaigns: campaigns.filter((campaign) => campaign.status === "draft"),
+      sentCampaigns: campaigns.filter((campaign) => campaign.status === "sent"),
+      latestFailedCampaign: failedCampaigns[0],
+    }
+  }, [campaigns])
+
+  const { upcomingEvents, activeAssigneeCount, unassignedEventCount, busiestAssignee, nextUpcomingEvent } = useMemo(() => {
+    const upcomingEvents = [...calendarEvents]
+      .filter((event) => isWithinNextDays(event.date, 7))
+      .sort((a, b) => a.date.localeCompare(b.date) || (a.time ?? "").localeCompare(b.time ?? ""))
+      .slice(0, 5)
+    const assigneeMap = upcomingEvents.reduce<Record<string, number>>((acc, event) => {
+      event.assignees?.forEach((assignee) => {
+        acc[assignee] = (acc[assignee] ?? 0) + 1
+      })
+      return acc
+    }, {})
+    return {
+      upcomingEvents,
+      activeAssigneeCount: Object.keys(assigneeMap).length,
+      unassignedEventCount: upcomingEvents.filter((event) => !event.assignees?.length).length,
+      busiestAssignee: Object.entries(assigneeMap).sort((a, b) => b[1] - a[1])[0],
+      nextUpcomingEvent: upcomingEvents[0],
+    }
+  }, [calendarEvents])
+
+  const { openBugs, criticalOpenBugs } = useMemo(() => {
+    const openBugs = [...bugs]
+      .filter((bug) => bug.status === "open" || bug.status === "in-progress")
+      .sort((a, b) => {
+        const severityOrder: Record<BugReport["severity"], number> = {
+          critical: 4,
+          high: 3,
+          medium: 2,
+          low: 1,
+        }
+        return (
+          severityOrder[b.severity] - severityOrder[a.severity] ||
+          scoreDate(b.updatedAt) - scoreDate(a.updatedAt)
+        )
+      })
+      .slice(0, 4)
+    return {
+      openBugs,
+      criticalOpenBugs: openBugs.filter((bug) => bug.severity === "critical" || bug.severity === "high"),
+    }
+  }, [bugs])
+
+  const latestPatchNote = useMemo(
+    () => [...patchNotes].sort((a, b) => scoreDate(b.date) - scoreDate(a.date))[0],
+    [patchNotes]
+  )
+
   const instagramViews = instagramDashboard?.summary.totalViews ?? 0
   const instagramMediaCount = instagramDashboard?.summary.mediaCount ?? 0
   const instagramAverageViews = instagramDashboard?.summary.averageViews ?? 0
-  const assigneeMap = upcomingEvents.reduce<Record<string, number>>((acc, event) => {
-    event.assignees?.forEach((assignee) => {
-      acc[assignee] = (acc[assignee] ?? 0) + 1
-    })
-    return acc
-  }, {})
-  const activeAssigneeCount = Object.keys(assigneeMap).length
-  const unassignedEventCount = upcomingEvents.filter((event) => !event.assignees?.length).length
-  const busiestAssignee = Object.entries(assigneeMap).sort((a, b) => b[1] - a[1])[0]
-  const branchMap = leads.reduce<Record<string, number>>((acc, lead) => {
-    const branch = lead.branch?.trim()
-    if (!branch) return acc
-    acc[branch] = (acc[branch] ?? 0) + 1
-    return acc
-  }, {})
-  const topBranch = Object.entries(branchMap).sort((a, b) => b[1] - a[1])[0]
 
   const connections = [
     {
@@ -920,28 +996,7 @@ export default function OverviewPage() {
               <p className="mt-1 text-[11px] text-[#1a1a1a]/35">문의가 들어오면 일별 추이가 표시됩니다.</p>
             </div>
           ) : (
-            <ResponsiveContainer width="100%" height={180}>
-              <LineChart data={chartData} margin={{ top: 4, right: 4, bottom: 0, left: -20 }}>
-                <CartesianGrid strokeDasharray="3 3" stroke="#f0f0ec" vertical={false} />
-                <XAxis
-                  dataKey="label"
-                  tick={{ fontSize: 11, fill: "#1a1a1a", opacity: 0.4 }}
-                  axisLine={false}
-                  tickLine={false}
-                  minTickGap={24}
-                />
-                <YAxis tick={{ fontSize: 11, fill: "#1a1a1a", opacity: 0.4 }} axisLine={false} tickLine={false} allowDecimals={false} />
-                <Tooltip content={<ChartTooltip />} cursor={{ stroke: "#e8e8e4", strokeWidth: 1 }} />
-                <Line
-                  type="monotone"
-                  dataKey="count"
-                  stroke="#111110"
-                  strokeWidth={2}
-                  dot={chartRange === 7 ? { fill: "#111110", strokeWidth: 0, r: 3 } : false}
-                  activeDot={{ r: 5, fill: "#111110", strokeWidth: 0 }}
-                />
-              </LineChart>
-            </ResponsiveContainer>
+            <LeadTrendChart data={chartData} range={chartRange} />
           )}
         </div>
 
@@ -956,19 +1011,7 @@ export default function OverviewPage() {
             <div className="flex items-center justify-center h-[180px] text-[12px] text-[#1a1a1a]/30">데이터 없음</div>
           ) : (
             <>
-              <ResponsiveContainer width="100%" height={140}>
-                <PieChart>
-                  <Pie data={pieData} cx="50%" cy="50%" innerRadius={40} outerRadius={65} dataKey="value" strokeWidth={0}>
-                    {pieData.map((_, i) => (
-                      <Cell key={i} fill={DONUT_COLORS[i % DONUT_COLORS.length]} />
-                    ))}
-                  </Pie>
-                  <Tooltip
-                    formatter={(v) => [`${v ?? 0}건`, ""]}
-                    contentStyle={{ border: "none", borderRadius: 12, background: "#111110", color: "#fff", fontSize: 12 }}
-                  />
-                </PieChart>
-              </ResponsiveContainer>
+              <SourcePie data={pieData} colors={DONUT_COLORS} />
               <div className="space-y-1.5 mt-2">
                 {pieData.map((d, i) => (
                   <div key={i} className="flex items-center justify-between">

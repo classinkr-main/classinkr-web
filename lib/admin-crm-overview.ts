@@ -987,7 +987,31 @@ async function getBusinessOverviewLive(sb: SupabaseAdminClient): Promise<AdminCr
   }
 }
 
+type StatusCountRow = { status: string | null; cnt: number | string | null }
+
+function statusCountMap(data: unknown): Map<string, number> | null {
+  if (!Array.isArray(data)) return null
+  const map = new Map<string, number>()
+  for (const row of data as StatusCountRow[]) {
+    if (!row || typeof row.status !== "string") continue
+    map.set(row.status, Number(row.cnt) || 0)
+  }
+  return map
+}
+
 async function getSourceLinkCounts(sb: SupabaseAdminClient) {
+  // 단일 GROUP BY RPC 우선. 미적용/실패 시 상태별 COUNT(1+N 쿼리)로 폴백한다.
+  const grouped = await sb.rpc("admin_crm_source_link_status_counts")
+  const byStatus = grouped.error ? null : statusCountMap(grouped.data)
+  if (byStatus) {
+    const statusCounts = Object.fromEntries(
+      SOURCE_LINK_STATUSES.map((status) => [status, byStatus.get(status) ?? 0])
+    ) as Record<(typeof SOURCE_LINK_STATUSES)[number], number>
+    let total = 0
+    for (const value of byStatus.values()) total += value
+    return { ok: true, total, ...statusCounts, error: null }
+  }
+
   const [totalResult, ...statusResults] = await Promise.all([
     sb.from("crm_source_links").select("id", { count: "exact", head: true }),
     ...SOURCE_LINK_STATUSES.map((status) =>
@@ -1008,6 +1032,16 @@ async function getSourceLinkCounts(sb: SupabaseAdminClient) {
 }
 
 async function getWriteQueueCounts(sb: SupabaseAdminClient) {
+  // 단일 GROUP BY RPC 우선. 미적용/실패 시 상태별 COUNT(N 쿼리)로 폴백한다.
+  const grouped = await sb.rpc("admin_crm_write_request_status_counts")
+  const byStatus = grouped.error ? null : statusCountMap(grouped.data)
+  if (byStatus) {
+    const statusCounts = Object.fromEntries(
+      WRITE_REQUEST_STATUSES.map((status) => [status, byStatus.get(status) ?? 0])
+    ) as Record<(typeof WRITE_REQUEST_STATUSES)[number], number>
+    return { ok: true, ...statusCounts, error: null }
+  }
+
   const statusResults = await Promise.all(
     WRITE_REQUEST_STATUSES.map((status) =>
       sb

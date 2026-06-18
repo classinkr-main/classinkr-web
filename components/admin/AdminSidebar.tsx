@@ -70,8 +70,9 @@ const NAV: NavItem[] = [
 
 const NAV_WARMUP_REQUESTS: Record<string, string[]> = {
   "/admin/overview": [
-    "/api/admin/leads",
-    "/api/admin/subscribers",
+    // overview 페이지가 실제 호출하는 URL과 캐시 키를 맞춰야 hover-warm이 적중한다.
+    "/api/admin/leads?scope=dashboard",
+    "/api/admin/subscribers?count=1",
     "/api/admin/blog",
     "/api/admin/email",
     "/api/admin/calendar",

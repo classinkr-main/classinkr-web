@@ -58,6 +58,44 @@ export async function getAllSubscribers(
   return (data ?? []).map(rowToSubscriber);
 }
 
+/**
+ * 구독자 수만 필요할 때(대시보드 KPI 등) 행을 받아오지 않고 count만 조회한다.
+ * 기존 getAllSubscribers(1000)는 최대 1000행을 전송 + length로 셌으나,
+ * 이쪽은 head:true로 페이로드 0 + 1000 초과 구독자도 정확히 집계한다.
+ */
+export async function countSubscribers(filters?: {
+  status?: string;
+  tag?: string;
+}): Promise<number> {
+  if (!USE_SUPABASE) {
+    const { getAllSubscribers: jsonGet } = await import("@/lib/marketing-data");
+    let subscribers: SubRow[] = await jsonGet();
+    if (filters?.status) {
+      subscribers = subscribers.filter((s) => s.status === filters.status);
+    }
+    if (filters?.tag) {
+      const tag = filters.tag;
+      subscribers = subscribers.filter((s) => s.tags.includes(tag));
+    }
+    return subscribers.length;
+  }
+
+  let query = sb()
+    .from("newsletter_subscribers")
+    .select("id", { count: "exact", head: true });
+
+  if (filters?.status) {
+    query = query.eq("status", filters.status);
+  }
+  if (filters?.tag) {
+    query = query.contains("tags", [filters.tag]);
+  }
+
+  const { count, error } = await query;
+  if (error) throw new Error(`[marketing] 구독자 수 조회 실패: ${error.message}`);
+  return count ?? 0;
+}
+
 export async function getSubscriberByEmail(
   email: string
 ): Promise<SubRow | undefined> {

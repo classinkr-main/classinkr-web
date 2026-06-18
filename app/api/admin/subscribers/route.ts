@@ -3,6 +3,7 @@ import { verifyAdmin } from "@/lib/admin-auth"
 import { adminCachedJson } from "@/lib/admin-api-response"
 import {
   getAllSubscribers,
+  countSubscribers,
   upsertSubscriber,
   deleteSubscriber,
 } from "@/lib/repositories/marketing"
@@ -15,6 +16,15 @@ export async function GET(req: NextRequest) {
   const { searchParams } = new URL(req.url)
   const statusFilter = searchParams.get("status")
   const tagFilter = searchParams.get("tag")
+
+  // ?count=1 은 행을 전송하지 않고 총 구독자 수만 반환한다.(대시보드 KPI용)
+  if (searchParams.get("count") === "1") {
+    const total = await countSubscribers({
+      status: statusFilter ?? undefined,
+      tag: tagFilter ?? undefined,
+    })
+    return adminCachedJson({ subscribers: [], total })
+  }
 
   const subscribers = await getAllSubscribers(1000, 0, {
     status: statusFilter ?? undefined,
