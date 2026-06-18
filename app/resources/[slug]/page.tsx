@@ -1,7 +1,14 @@
 import type { Metadata } from "next"
 import Link from "next/link"
 import { notFound } from "next/navigation"
-import { AlertTriangle, ArrowRight, CalendarDays, CheckCircle2, ExternalLink, FileText, Sparkles } from "lucide-react"
+import {
+  AlertTriangle,
+  ArrowRight,
+  CalendarDays,
+  CheckCircle2,
+  ExternalLink,
+  FileText,
+} from "lucide-react"
 import { TrackedLink } from "@/components/TrackedLink"
 import {
   getLeadMagnetCategoryLabel,
@@ -13,9 +20,10 @@ import {
   getLeadMagnetBySlugFromStore,
   getPublishedLeadMagnets,
 } from "@/lib/repositories/lead-magnets"
+import { ResourceDownloadForm } from "./ResourceDownloadForm"
 import { ResourceViewTracker } from "./ResourceViewTracker"
 
-// 구독 완료 후 열람하는 자료 — 검색 노출 대신 게이트 블록 링크로만 접근.
+// 자료 다운로드 랜딩 — PDF 파일이 연결되면 같은 폼 흐름에서 서명 URL로 전환된다.
 export const revalidate = 86400
 
 interface ResourcePageProps {
@@ -49,12 +57,26 @@ export default async function ResourcePage({ params }: ResourcePageProps) {
   }
 
   const itemCount = getLeadMagnetItemCount(magnet)
+  const pdfGuide = magnet.pdfGuide
+  const relatedMagnets = pdfGuide?.relatedMagnets?.length
+    ? (await getPublishedLeadMagnets()).filter((item) =>
+        pdfGuide.relatedMagnets.includes(item.slug)
+      )
+    : []
+  const downloadResource = {
+    slug: magnet.slug,
+    title: magnet.title,
+    gate: magnet.gate,
+    estimatedMinutes: magnet.estimatedMinutes,
+    itemCount,
+    hasPdfFile: Boolean(magnet.storagePath?.trim() || magnet.resourceUrl?.endsWith(".pdf")),
+  }
 
   return (
     <div className="min-h-screen bg-[#FAFAF8] text-[#111110]">
       <ResourceViewTracker leadMagnet={magnet} />
       <section className="px-4 pb-16 pt-28 sm:px-6 md:pt-36">
-        <div className="mx-auto max-w-[920px]">
+        <div className="mx-auto max-w-[1120px]">
           <Link
             href="/resources"
             className="mb-8 inline-flex items-center gap-2 text-sm text-[#1a1a1a]/45 transition-colors hover:text-[#084734]"
@@ -63,46 +85,113 @@ export default async function ResourcePage({ params }: ResourcePageProps) {
             자료실로 돌아가기
           </Link>
 
-          {/* 헤더 카드 */}
-          <div className="overflow-hidden rounded-[24px] border border-[#dcebd9] bg-[#ECFDF5] shadow-sm md:rounded-[32px]">
-            <div className="h-1 w-full bg-gradient-to-r from-[#084734] via-[#6EE7B7] to-[#084734]" />
-            <div className="p-6 md:p-10">
-              <span className="inline-flex w-fit items-center gap-1.5 rounded-full border border-[#084734]/10 bg-white px-3.5 py-1 text-[11px] font-bold tracking-[0.04em] text-[#084734]">
-                <Sparkles className="h-3 w-3" />
-                {magnet.ctaCopy.eyebrow}
-              </span>
-              <h1 className="mt-4 text-[1.85rem] font-bold leading-[1.12] tracking-[-0.04em] text-[#111110] md:text-[2.6rem]">
-                {magnet.title}
-              </h1>
-              <p className="mt-4 max-w-2xl text-[15px] leading-7 text-[#1a1a1a]/65 md:text-[17px]">
-                {magnet.summary}
-              </p>
-              <div className="mt-5 flex flex-wrap gap-2 text-[12px] font-semibold text-[#084734]">
-                <span className="rounded-full border border-[#084734]/10 bg-white px-3 py-1">
-                  {getLeadMagnetPublicGateLabel(magnet.gate)}
-                </span>
-                <span className="rounded-full border border-[#084734]/10 bg-white px-3 py-1">
-                  {getLeadMagnetTierLabel(magnet.tier)} 자료
-                </span>
-                <span className="rounded-full border border-[#084734]/10 bg-white px-3 py-1">
-                  {getLeadMagnetCategoryLabel(magnet.category)}
-                </span>
-                <span className="rounded-full border border-[#084734]/10 bg-white px-3 py-1">
-                  {itemCount}문항
-                </span>
-                <span className="rounded-full border border-[#084734]/10 bg-white px-3 py-1">
-                  약 {magnet.estimatedMinutes}분
-                </span>
+          <div className="grid gap-6 lg:grid-cols-[minmax(0,1fr)_380px] lg:items-start">
+            {/* 헤더 카드 */}
+            <div className="overflow-hidden border border-black/[0.08] bg-white shadow-[0_10px_28px_rgba(17,17,16,0.04)]">
+              <div className="h-1 w-full bg-[#084734]" />
+              <div className="p-6 md:p-10">
+                <h1 className="mt-4 text-[1.85rem] font-bold leading-[1.12] tracking-[-0.04em] text-[#111110] md:text-[2.6rem]">
+                  {magnet.title}
+                </h1>
+                <p className="mt-4 max-w-2xl text-[15px] leading-7 text-[#615D59] md:text-[17px]">
+                  {pdfGuide?.subtitle ?? magnet.summary}
+                </p>
+                <p className="mt-3 max-w-2xl text-[14px] leading-7 text-[#31302E]">
+                  {pdfGuide?.outcome ?? magnet.summary}
+                </p>
+                <div className="mt-6 flex flex-wrap gap-x-4 gap-y-2 text-[13px] font-semibold text-[#615D59]">
+                  <span>
+                    {getLeadMagnetPublicGateLabel(magnet.gate)}
+                  </span>
+                  <span>
+                    {getLeadMagnetTierLabel(magnet.tier)} 자료
+                  </span>
+                  <span>
+                    {getLeadMagnetCategoryLabel(magnet.category)}
+                  </span>
+                  <span>
+                    {itemCount}문항
+                  </span>
+                  <span>
+                    PDF 자료
+                  </span>
+                </div>
+                <div className="mt-6 grid gap-4 border-t border-black/[0.08] pt-5 md:grid-cols-[minmax(0,1fr)_minmax(0,1fr)]">
+                  <div>
+                    <p className="text-[11px] font-bold uppercase tracking-[0.16em] text-[#A39E98]">
+                      자료 구성
+                    </p>
+                    <p className="mt-1 text-sm font-semibold leading-6 text-[#31302E]">
+                      {magnet.formatLabel}
+                    </p>
+                  </div>
+                  <div>
+                    <p className="text-[11px] font-bold uppercase tracking-[0.16em] text-[#A39E98]">
+                      추천 대상
+                    </p>
+                    <p className="mt-1 text-sm font-semibold leading-6 text-[#31302E]">
+                      {magnet.audience}
+                    </p>
+                  </div>
+                </div>
               </div>
-              <p className="mt-4 text-sm font-semibold text-[#084734]/70">
-                {magnet.formatLabel}
-              </p>
-              <p className="mt-2 text-sm text-[#084734]/70">추천 대상: {magnet.audience}</p>
             </div>
+
+            <ResourceDownloadForm resource={downloadResource} />
           </div>
 
+          {pdfGuide ? (
+            <section className="mt-8 border border-black/[0.08] bg-white p-6 md:p-8">
+              <h2 className="text-2xl font-bold tracking-[-0.03em] text-[#111110]">
+                PDF를 이렇게 사용하세요
+              </h2>
+              <p className="mt-3 max-w-3xl text-[14px] leading-7 text-[#615D59]">
+                {pdfGuide.expertNote}
+              </p>
+              <div className="mt-7 grid gap-6 lg:grid-cols-3">
+                <div>
+                  <p className="text-[12px] font-bold uppercase tracking-[0.16em] text-[#084734]">
+                    언제 유용한가
+                  </p>
+                  <ul className="mt-3 space-y-3">
+                    {pdfGuide.bestUsedWhen.map((item) => (
+                      <li key={item} className="border-l border-black/[0.08] pl-3 text-[14px] leading-6 text-[#615D59]">
+                        {item}
+                      </li>
+                    ))}
+                  </ul>
+                </div>
+                <div>
+                  <p className="text-[12px] font-bold uppercase tracking-[0.16em] text-[#084734]">
+                    사용 순서
+                  </p>
+                  <ol className="mt-3 space-y-3">
+                    {pdfGuide.howToUse.map((item, index) => (
+                      <li key={item} className="grid grid-cols-[24px_minmax(0,1fr)] gap-2 text-[14px] leading-6 text-[#615D59]">
+                        <span className="font-bold text-[#111110]">{index + 1}</span>
+                        <span>{item}</span>
+                      </li>
+                    ))}
+                  </ol>
+                </div>
+                <div>
+                  <p className="text-[12px] font-bold uppercase tracking-[0.16em] text-[#084734]">
+                    상담 질문
+                  </p>
+                  <ul className="mt-3 space-y-3">
+                    {pdfGuide.discussionPrompts.map((item) => (
+                      <li key={item} className="text-[14px] leading-6 text-[#615D59]">
+                        {item}
+                      </li>
+                    ))}
+                  </ul>
+                </div>
+              </div>
+            </section>
+          ) : null}
+
           <div className="mt-8 grid gap-4 md:grid-cols-2">
-            <section className="rounded-[16px] border border-black/[0.08] bg-white p-6 shadow-sm">
+            <section className="border border-black/[0.08] bg-white p-6">
               <div className="mb-4 flex items-center gap-2 text-sm font-bold text-[#111110]">
                 <FileText className="h-4 w-4 text-[#084734]" />
                 이 자료에 포함된 것
@@ -117,7 +206,7 @@ export default async function ResourcePage({ params }: ResourcePageProps) {
               </ul>
             </section>
 
-            <section className="rounded-[16px] border border-black/[0.08] bg-white p-6 shadow-sm">
+            <section className="border border-black/[0.08] bg-white p-6">
               <div className="mb-4 flex items-center gap-2 text-sm font-bold text-[#111110]">
                 <CalendarDays className="h-4 w-4 text-[#084734]" />
                 상담 전에 준비하면 좋은 자료
@@ -133,23 +222,33 @@ export default async function ResourcePage({ params }: ResourcePageProps) {
             </section>
           </div>
 
-          <section className="mt-8 rounded-[16px] border border-black/[0.08] bg-white p-6 shadow-sm md:p-8">
+          <section
+            id="resource-checklist"
+            className="mt-8 scroll-mt-28 border border-black/[0.08] bg-white p-6 md:p-8"
+          >
             <p className="text-[12px] font-bold uppercase tracking-[0.18em] text-[#084734]/60">
-              Checklist
+              전체 문항
             </p>
             <h2 className="mt-3 text-2xl font-bold tracking-[-0.03em] text-[#111110]">
               전체 점검 문항
             </h2>
-            <p className="mt-2 text-[14px] leading-6 text-[#615D59]">
-              각 문항에 대해 현재 상태가 안정적이면 1점, 아니면 0점으로 표시하세요.
-              총점보다 낮게 나온 영역이 먼저 손볼 운영 병목입니다.
-            </p>
+            <div className="mt-3 max-w-3xl space-y-2 text-[14px] leading-7 text-[#615D59]">
+              <p>
+                각 문항은 현재 상태가 안정적이면 1점, 불안정하거나 확인이 필요하면 0점으로
+                표시하세요. 1점/0점 기준으로 단순하게 표시하고, 애매한 항목은 억지로 긍정
+                처리하지 않는 편이 좋습니다.
+              </p>
+              <p>
+                총점 자체보다 낮게 나온 영역을 보세요. 그 영역이 먼저 손볼 운영 병목이고,
+                ClassIn 상담에서 가장 먼저 검증해야 할 장면입니다.
+              </p>
+            </div>
 
             <div className="mt-8 space-y-8">
               {magnet.sections.map((section, sectionIndex) => (
                 <div key={section.title}>
                   <div className="flex items-start gap-3">
-                    <span className="flex h-8 w-8 shrink-0 items-center justify-center rounded-full bg-[#ECFDF5] text-sm font-bold text-[#084734]">
+                    <span className="shrink-0 border-l-2 border-[#084734] pl-2 pt-0.5 text-sm font-bold text-[#084734]">
                       {sectionIndex + 1}
                     </span>
                     <div>
@@ -177,9 +276,9 @@ export default async function ResourcePage({ params }: ResourcePageProps) {
           </section>
 
           <div className="mt-8 grid gap-4 lg:grid-cols-[minmax(0,1fr)_320px]">
-            <section className="rounded-[16px] border border-black/[0.08] bg-white p-6 shadow-sm md:p-8">
+            <section className="border border-black/[0.08] bg-white p-6 md:p-8">
               <p className="text-[12px] font-bold uppercase tracking-[0.18em] text-[#084734]/60">
-                Score
+                점수 해석
               </p>
               <h2 className="mt-3 text-2xl font-bold tracking-[-0.03em] text-[#111110]">
                 점수 해석
@@ -200,7 +299,7 @@ export default async function ResourcePage({ params }: ResourcePageProps) {
             </section>
 
             {magnet.redFlags && magnet.redFlags.length > 0 ? (
-              <section className="rounded-[16px] border border-black/[0.08] bg-[#F6F5F4] p-6 shadow-sm">
+              <section className="border border-black/[0.08] bg-[#F6F5F4] p-6">
                 <div className="mb-4 flex items-center gap-2 text-sm font-bold text-[#111110]">
                   <AlertTriangle className="h-4 w-4 text-[#B85C33]" />
                   재검토 신호
@@ -217,9 +316,9 @@ export default async function ResourcePage({ params }: ResourcePageProps) {
           </div>
 
           {magnet.sourceLinks && magnet.sourceLinks.length > 0 ? (
-            <section className="mt-8 rounded-[16px] border border-black/[0.08] bg-white p-6 shadow-sm md:p-8">
+            <section className="mt-8 border border-black/[0.08] bg-white p-6 md:p-8">
               <p className="text-[12px] font-bold uppercase tracking-[0.18em] text-[#084734]/60">
-                Reference Links
+                참고 링크
               </p>
               <h2 className="mt-3 text-2xl font-bold tracking-[-0.03em] text-[#111110]">
                 더 확인할 링크
@@ -236,7 +335,7 @@ export default async function ResourcePage({ params }: ResourcePageProps) {
                       gate: magnet.gate,
                       destination: link.href,
                     }}
-                    className="group rounded-[12px] border border-black/[0.08] p-4 transition-colors hover:bg-[#F6F5F4]"
+                    className="group border border-black/[0.08] p-4 transition-colors hover:bg-[#F6F5F4]"
                   >
                     <span className="flex items-center justify-between gap-3">
                       <span>
@@ -257,16 +356,68 @@ export default async function ResourcePage({ params }: ResourcePageProps) {
             </section>
           ) : null}
 
-          <section className="mt-8 rounded-[16px] border border-black/[0.08] bg-white p-6 shadow-sm md:p-8">
+          {relatedMagnets.length > 0 || pdfGuide?.consultationCtas?.length ? (
+            <section className="mt-8 border border-black/[0.08] bg-white p-6 md:p-8">
+              <h2 className="text-2xl font-bold tracking-[-0.03em] text-[#111110]">
+                다음에 함께 보면 좋은 자료
+              </h2>
+              <div className="mt-5 grid gap-3 md:grid-cols-2">
+                {relatedMagnets.map((item) => (
+                  <TrackedLink
+                    key={item.slug}
+                    href={`/resources/${item.slug}#download`}
+                    ctaId="resource_related_magnet"
+                    tracking={{
+                      source: "resource_related",
+                      lead_magnet: magnet.slug,
+                      destination: item.slug,
+                    }}
+                    className="group border border-black/[0.08] p-4 transition-colors hover:border-[#084734]/25"
+                  >
+                    <span className="block text-sm font-bold text-[#111110] group-hover:text-[#084734]">
+                      {item.title}
+                    </span>
+                    <span className="mt-1 block text-[13px] leading-6 text-[#615D59]">
+                      {item.pdfGuide?.outcome ?? item.summary}
+                    </span>
+                  </TrackedLink>
+                ))}
+                {pdfGuide?.consultationCtas.map((cta) => (
+                  <TrackedLink
+                    key={`${cta.label}-${cta.href}`}
+                    href={cta.href}
+                    ctaId="resource_pdf_consultation_cta"
+                    tracking={{
+                      source: "resource_pdf_cta",
+                      lead_magnet: magnet.slug,
+                      destination: cta.href,
+                    }}
+                    className="group border border-[#084734]/20 bg-[#084734] p-4 text-white transition-colors hover:bg-[#065c41]"
+                  >
+                    <span className="block text-sm font-bold">
+                      {cta.label}
+                    </span>
+                    {cta.description ? (
+                      <span className="mt-1 block text-[13px] leading-6 text-white/70">
+                        {cta.description}
+                      </span>
+                    ) : null}
+                  </TrackedLink>
+                ))}
+              </div>
+            </section>
+          ) : null}
+
+          <section className="mt-8 border border-black/[0.08] bg-white p-6 md:p-8">
             <p className="text-[12px] font-bold uppercase tracking-[0.18em] text-[#084734]/60">
-              Action Plan
+              실행 플랜
             </p>
             <h2 className="mt-3 text-2xl font-bold tracking-[-0.03em] text-[#111110]">
               7일 실행 플랜
             </h2>
             <div className="mt-6 grid gap-4 md:grid-cols-2">
               {magnet.actionPlan.map((step) => (
-                <div key={step.day} className="rounded-[12px] border border-black/[0.08] p-5">
+                <div key={step.day} className="border border-black/[0.08] bg-[#FAFAF8] p-5">
                   <p className="text-[12px] font-bold uppercase tracking-[0.14em] text-[#084734]/65">
                     {step.day}
                   </p>
@@ -285,13 +436,13 @@ export default async function ResourcePage({ params }: ResourcePageProps) {
           </section>
 
           {/* 상담 CTA */}
-          <div className="mt-8 overflow-hidden rounded-[16px] bg-[#111110] p-6 text-white shadow-sm md:p-10">
+          <div className="mt-8 border border-black/[0.08] bg-[#111110] p-6 text-white md:p-10">
             <h2 className="text-[1.6rem] font-semibold tracking-[-0.03em] md:text-[2rem]">
-              점검 결과, 함께 보완해 드릴까요?
+              점검 결과를 상담 질문으로 바꿔 드릴까요?
             </h2>
             <p className="mt-3 max-w-xl text-[15px] leading-7 text-white/60">
-              체크리스트에서 막히는 항목이 있다면 우리 학원 상황에 맞춰 무료로 진단해
-              드립니다.
+              체크리스트에서 낮게 나온 영역을 알려주시면 우리 학원 상황에 맞춰 쇼룸에서 볼
+              장면, 데모 질문, 견적 확인 범위를 함께 정리해 드립니다.
             </p>
             <TrackedLink
               href="/contact#contact-form"
@@ -301,7 +452,7 @@ export default async function ResourcePage({ params }: ResourcePageProps) {
                 lead_magnet: magnet.slug,
                 gate: magnet.gate,
               }}
-              className="mt-6 inline-flex items-center gap-2 rounded-full bg-white px-5 py-3 text-sm font-semibold text-[#111110] transition-transform hover:-translate-y-0.5"
+              className="mt-6 inline-flex items-center gap-2 rounded-[6px] bg-white px-5 py-3 text-sm font-semibold text-[#111110] transition-transform hover:-translate-y-0.5"
             >
               무료 상담 신청하기
               <ArrowRight className="h-4 w-4" />

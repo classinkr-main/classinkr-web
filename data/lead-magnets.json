@@ -9,7 +9,7 @@
     "category": "operations",
     "published": true,
     "sourceDetail": "lead_magnet:academy-system-checklist",
-    "summary": "수업, 녹화, 교안, 과제, 학생 관리, 권한, 데이터가 흩어져 있는지 점검하고 우리 학원이 ClassIn을 단순 전자칠판이 아니라 수업 시스템 OS로 도입할 준비가 되었는지 진단합니다.",
+    "summary": "수업 자료, 판서, 녹화, 과제, 학생 관리가 어디서 끊기는지 먼저 보게 하는 원장용 진단표입니다. ClassIn을 전자칠판 단품이 아니라 수업 전후 운영을 묶는 학원 시스템 OS로 검토해야 하는 이유를 46문항으로 정리합니다.",
     "formatLabel": "46문항 진단표 + 점수 해석 + 7일 운영 정리 플랜",
     "estimatedMinutes": 18,
     "blogTone": "학원 운영이 선생님 개인기, 엑셀, 메신저, 별도 녹화 도구에 흩어질 때 생기는 리소스 낭비를 짚고 ClassIn을 학원 수업 OS라는 관점으로 설명합니다.",
@@ -278,14 +278,51 @@
       "body": "수업, 녹화, EDB 교안, LMS, 관리자 대시보드, 권한까지 46문항으로 점검하는 원장용 진단 자료입니다.",
       "buttonLabel": "46문항으로 운영 누수 찾기"
     },
-    "resourceUrl": "/resources/academy-system-checklist",
+    "resourceUrl": "/materials/lead-magnets/academy-system-checklist.pdf",
     "suggestedPlacements": [
       "홈페이지 자료실 상단 대표 자료",
       "학원 운영 자동화 블로그 본문 하단",
       "ClassIn 소개/가이드 페이지 중간 CTA",
       "상담 후속 이메일의 첫 번째 자료",
       "CRM 리드 태그: 운영 통합 관심"
-    ]
+    ],
+    "pdfGuide": {
+      "subtitle": "전자칠판 단품 비교 전에 학원 운영 흐름을 먼저 진단하는 기본 자료",
+      "outcome": "수업 준비, 판서, 녹화, 과제, 관리자 확인이 어디서 끊기는지 한 장의 우선순위로 정리합니다.",
+      "bestUsedWhen": [
+        "전자칠판, LMS, 녹화 도구가 따로 움직여 운영 손이 많이 갈 때",
+        "ClassIn을 단순 화상수업 도구가 아니라 학원 시스템 OS로 검토하고 싶을 때",
+        "원장, 실장, 대표 강사가 같은 기준으로 도입 필요성을 논의해야 할 때"
+      ],
+      "howToUse": [
+        "각 문항을 1점/0점으로 빠르게 표시하고 애매한 항목은 0점으로 둡니다.",
+        "낮게 나온 영역을 사람, 도구, 권한, 데이터 문제로 나눕니다.",
+        "가장 불안한 항목 3개를 골라 쇼룸이나 상담에서 확인할 질문으로 바꿉니다."
+      ],
+      "discussionPrompts": [
+        "현재 가장 많은 시간이 반복되는 수업 전후 업무는 무엇인가요?",
+        "수업 기록, 녹화, 과제, 보강 안내 중 누가 마지막 책임을 지고 있나요?",
+        "도입 첫 90일에 반드시 줄이고 싶은 운영 병목은 무엇인가요?"
+      ],
+      "relatedMagnets": [
+        "academy-resource-reduction-calculator",
+        "classin-90-day-adoption-roadmap",
+        "showroom-demo-readiness-kit"
+      ],
+      "consultationCtas": [
+        {
+          "label": "Classin 도입 상담에서 결과 해석하기",
+          "href": "/contact#contact-form",
+          "description": "체크 결과를 바탕으로 쇼룸, 데모, 견적 확인 범위를 정리합니다."
+        },
+        {
+          "label": "목동 쇼룸 데모 준비 키트 보기",
+          "href": "/resources/showroom-demo-readiness-kit#download",
+          "description": "대표 수업 자료를 가져와 실제 EDB, 판서, 녹화 흐름을 확인합니다."
+        }
+      ],
+      "expertNote": "점수가 낮다는 것은 도입 실패 신호가 아니라 설계해야 할 운영 지점이 보인다는 뜻입니다. 상담에서는 낮은 영역부터 보여주는 편이 가장 빠릅니다."
+    }
   },
   {
     "slug": "electronic-whiteboard-classroom-checklist",
@@ -297,7 +334,7 @@
     "category": "hardware",
     "published": true,
     "sourceDetail": "lead_magnet:electronic-whiteboard-classroom-checklist",
-    "summary": "전자칠판을 큰 화면 장비로만 비교하지 않고 OPS, 윈도우 기반 컴퓨팅, 카메라, 스탠드/벽걸이, 녹화, EDB 교안, 소프트웨어 충전제까지 한 번에 점검합니다.",
+    "summary": "전자칠판을 화면 크기와 가격만으로 고르면 설치 후 녹화, 카메라, 파일 관리에서 다시 비용이 생깁니다. OPS, 윈도우 기반 수업 환경, 카메라·마이크, EDB 교안, 녹화 흐름까지 구매 전에 한 번에 점검합니다.",
     "formatLabel": "49문항 구축 체크리스트 + 레드 플래그 + 패키지 검토 플랜",
     "estimatedMinutes": 20,
     "blogTone": "기존 안드로이드 기반 전자칠판이나 외장 노트북/HDMI/별도 녹화 프로그램 조합이 만드는 불확실성을 짚고 ClassIn Board를 수업 운영 장비로 설명합니다.",
@@ -566,14 +603,51 @@
       "body": "OPS, 윈도우 기반, EDB, 녹화, 카메라, 설치 방식, 소프트웨어 충전제까지 49문항으로 비교하는 구축 체크리스트입니다.",
       "buttonLabel": "교실 시스템 기준으로 점검하기"
     },
-    "resourceUrl": "/resources/electronic-whiteboard-classroom-checklist",
+    "resourceUrl": "/materials/lead-magnets/electronic-whiteboard-classroom-checklist.pdf",
     "suggestedPlacements": [
       "ClassIn Board 제품 소개 페이지 중간 CTA",
       "전자칠판 비교 블로그의 제품 선택 섹션",
       "하드웨어 견적 상담 신청 전 단계",
       "설치 일정 안내 이메일의 사전 준비 자료",
       "CRM 리드 태그: 하드웨어 구축 고의도"
-    ]
+    ],
+    "pdfGuide": {
+      "subtitle": "전자칠판을 화면 크기와 가격이 아니라 교실 시스템 기준으로 고르는 체크리스트",
+      "outcome": "OPS, 카메라, 마이크, 설치, 녹화, 판서 저장까지 구매 전 놓치기 쉬운 비용과 리스크를 줄입니다.",
+      "bestUsedWhen": [
+        "전자칠판 견적을 비교 중이지만 실제 설치 후 운영이 걱정될 때",
+        "외장 PC, HDMI, 별도 녹화 프로그램 의존을 줄이고 싶을 때",
+        "교실 사진과 환경을 기준으로 상담을 준비해야 할 때"
+      ],
+      "howToUse": [
+        "설치 예정 교실 사진과 좌석 배치를 옆에 두고 문항을 표시합니다.",
+        "안 되는 항목은 장비 스펙 문제가 아니라 추가 비용 또는 운영 리스크로 적습니다.",
+        "견적 요청 전에 카메라, 마이크, 스탠드/벽걸이, OPS 포함 범위를 따로 체크합니다."
+      ],
+      "discussionPrompts": [
+        "교실에서 가장 먼 자리에서도 판서와 자료가 충분히 보이나요?",
+        "녹화 파일이 수업 후 자동으로 정리되는 흐름이 있나요?",
+        "설치 후 강사가 매번 해야 하는 세팅은 몇 단계인가요?"
+      ],
+      "relatedMagnets": [
+        "classroom-install-av-readiness-checklist",
+        "showroom-demo-readiness-kit",
+        "academy-system-checklist"
+      ],
+      "consultationCtas": [
+        {
+          "label": "Classin 도입 상담에서 결과 해석하기",
+          "href": "/contact#contact-form",
+          "description": "체크 결과를 바탕으로 쇼룸, 데모, 견적 확인 범위를 정리합니다."
+        },
+        {
+          "label": "목동 쇼룸 데모 준비 키트 보기",
+          "href": "/resources/showroom-demo-readiness-kit#download",
+          "description": "대표 수업 자료를 가져와 실제 EDB, 판서, 녹화 흐름을 확인합니다."
+        }
+      ],
+      "expertNote": "전자칠판은 구매일보다 설치 후 첫 한 달이 더 중요합니다. 장비 자체보다 수업 시작부터 복습 배포까지 이어지는 흐름을 기준으로 보세요."
+    }
   },
   {
     "slug": "academy-software-selection-worksheet",
@@ -585,7 +659,7 @@
     "category": "software",
     "published": true,
     "sourceDetail": "lead_magnet:academy-software-selection-worksheet",
-    "summary": "Zoom, 기존 전자칠판, LMS, 학원 관리 프로그램과 ClassIn을 기능표가 아니라 실제 수업 운영 흐름, 데이터, API, 약한 영역까지 정직하게 비교합니다.",
+    "summary": "Zoom, 일반 전자칠판, LMS, 학원 관리 프로그램을 같은 기능표에 놓고 비교하면 중요한 운영 차이를 놓치기 쉽습니다. 이 워크시트는 수업 전 준비, 판서, 녹화, 복습, 관리자 데이터와 별도 연동이 필요한 영역을 정직하게 나눕니다.",
     "formatLabel": "42문항 비교표 + 한계/연동 기준 + 의사결정 질문",
     "estimatedMinutes": 18,
     "blogTone": "ClassIn을 잘 모르는 원장이 흔히 묻는 'Zoom이랑 뭐가 달라요?', '기존 전자칠판이랑 뭐가 달라요?'에 대해 하드웨어와 소프트웨어가 함께 작동하는 운영 구조로 답합니다.",
@@ -842,14 +916,46 @@
       "body": "수업 운영 흐름, 데이터, API, 약한 영역까지 42문항으로 비교하는 원장용 도입 워크시트입니다.",
       "buttonLabel": "대체/연동 범위 정리하기"
     },
-    "resourceUrl": "/resources/academy-software-selection-worksheet",
+    "resourceUrl": "/materials/lead-magnets/academy-software-selection-worksheet.pdf",
     "suggestedPlacements": [
       "ClassIn 소프트웨어 제품 소개 페이지 CTA",
       "Zoom/전자칠판 비교 블로그 하단",
       "도입 문의 전 셀프 진단 자료",
       "상담 후 후보 솔루션 비교 이메일",
       "CRM 리드 태그: 비교 검토"
-    ]
+    ],
+    "pdfGuide": {
+      "subtitle": "Zoom, 전자칠판, LMS를 기능명이 아니라 운영 흐름으로 비교하는 워크시트",
+      "outcome": "수업 전 준비부터 관리자 데이터까지 어떤 도구가 맡고, 어디서 별도 연동이 필요한지 분리합니다.",
+      "bestUsedWhen": [
+        "여러 도구를 비교 중이지만 기능표만으로 판단이 어려울 때",
+        "기존 Zoom, 전자칠판, LMS를 유지할지 ClassIn으로 묶을지 논의할 때",
+        "도구별 장단점을 내부 회의용 언어로 정리해야 할 때"
+      ],
+      "howToUse": [
+        "비교 대상을 기능명보다 수업 전, 수업 중, 수업 후, 관리자 확인 단계로 나눕니다.",
+        "각 단계마다 현재 도구가 해결하는 일과 남기는 일을 따로 적습니다.",
+        "ClassIn으로 묶을 영역과 외부 시스템으로 남길 영역을 구분합니다."
+      ],
+      "discussionPrompts": [
+        "지금 도구를 유지하면 계속 수동으로 이어 붙여야 하는 업무는 무엇인가요?",
+        "학생과 학부모가 체감하는 차이는 어느 단계에서 생기나요?",
+        "관리자가 매주 확인해야 하지만 지금 늦게 알게 되는 데이터는 무엇인가요?"
+      ],
+      "relatedMagnets": [
+        "academy-system-checklist",
+        "academy-admin-dashboard-template",
+        "academy-data-automation-brief"
+      ],
+      "consultationCtas": [
+        {
+          "label": "Classin 도입 상담에서 결과 해석하기",
+          "href": "/contact#contact-form",
+          "description": "체크 결과를 바탕으로 쇼룸, 데모, 견적 확인 범위를 정리합니다."
+        }
+      ],
+      "expertNote": "좋은 비교표는 기능이 많은 쪽을 고르는 표가 아닙니다. 우리 학원의 운영 흐름을 덜 끊는 쪽을 찾는 표입니다."
+    }
   },
   {
     "slug": "classin-90-day-adoption-roadmap",
@@ -861,7 +967,7 @@
     "category": "operations",
     "published": true,
     "sourceDetail": "lead_magnet:classin-90-day-adoption-roadmap",
-    "summary": "한국 학원에서 현실적으로 많이 쓰는 전자칠판, 녹화, 수업 관리 중심의 표준 도입 흐름을 90일 안에 설계합니다. 파일럿 교실, 교사 온보딩, EDB 교안, LMS, 관리자 데이터까지 단계별로 정리합니다.",
+    "summary": "ClassIn 도입은 장비 설치일보다 첫 90일 운영 설계가 더 중요합니다. 파일럿 교실 선정, 교사 온보딩, EDB 교안 전환, 녹화·복습 루틴, 관리자 데이터 확인까지 한국 학원 기준으로 단계별 정착 순서를 잡습니다.",
     "formatLabel": "36문항 도입 준비표 + 30/60/90일 실행 로드맵",
     "estimatedMinutes": 20,
     "blogTone": "평균 3개월 정도 걸리는 ClassIn 도입을 더 빠르게 정착시키기 위해 처음부터 모든 기능을 쓰려 하지 않고, 현장 학원에서 가장 많이 쓰는 전자칠판+녹화+수업 관리 모델부터 시작하게 합니다.",
@@ -1130,14 +1236,51 @@
       "body": "전자칠판, EDB, 녹화, LMS, 관리자 데이터까지 한국 학원 기준으로 30/60/90일 실행 순서를 정리한 로드맵입니다.",
       "buttonLabel": "첫 파일럿 일정 잡기"
     },
-    "resourceUrl": "/resources/classin-90-day-adoption-roadmap",
+    "resourceUrl": "/materials/lead-magnets/classin-90-day-adoption-roadmap.pdf",
     "suggestedPlacements": [
       "자료실 심화 자료 카드",
       "도입 문의 완료 후 후속 이메일",
       "전자칠판 체크리스트 다운로드 후 D+3 후속 자료",
       "상담 중 일정이 구체화된 리드에게 전달",
       "CRM 리드 태그: 도입 일정 구체화"
-    ]
+    ],
+    "pdfGuide": {
+      "subtitle": "첫 교실 파일럿부터 확장 판단까지 90일 도입 순서를 잡는 로드맵",
+      "outcome": "설치일 중심이 아니라 대표 수업, 강사 온보딩, 녹화/복습 루틴, 관리자 확인 기준을 단계별로 정합니다.",
+      "bestUsedWhen": [
+        "도입 의사는 있지만 어디서부터 시작해야 할지 막막할 때",
+        "첫 파일럿 교실과 대표 강사를 정해야 할 때",
+        "도입 후 3개월 안에 내부 설득 자료가 필요할 때"
+      ],
+      "howToUse": [
+        "첫 30일은 범위를 좁히고 대표 수업 하나를 안정화하는 데 집중합니다.",
+        "60일에는 강사 루틴과 학생 복습 흐름을 표준화합니다.",
+        "90일에는 확장 여부를 데이터, 리소스 절감, 수업 품질 기준으로 판단합니다."
+      ],
+      "discussionPrompts": [
+        "첫 파일럿으로 가장 적합한 과목과 강사는 누구인가요?",
+        "도입 30일 안에 반드시 보여야 하는 변화는 무엇인가요?",
+        "확장 판단에 사용할 지표를 누가, 얼마나 자주 확인하나요?"
+      ],
+      "relatedMagnets": [
+        "teacher-edb-onboarding-sop-kit",
+        "academy-admin-dashboard-template",
+        "showroom-demo-readiness-kit"
+      ],
+      "consultationCtas": [
+        {
+          "label": "Classin 도입 상담에서 결과 해석하기",
+          "href": "/contact#contact-form",
+          "description": "체크 결과를 바탕으로 쇼룸, 데모, 견적 확인 범위를 정리합니다."
+        },
+        {
+          "label": "목동 쇼룸 데모 준비 키트 보기",
+          "href": "/resources/showroom-demo-readiness-kit#download",
+          "description": "대표 수업 자료를 가져와 실제 EDB, 판서, 녹화 흐름을 확인합니다."
+        }
+      ],
+      "expertNote": "처음부터 전 지점 확장을 목표로 잡으면 현장 저항이 커집니다. 첫 90일은 성공 사례 하나를 만드는 기간으로 설계하세요."
+    }
   },
   {
     "slug": "academy-resource-reduction-calculator",
@@ -1149,7 +1292,7 @@
     "category": "operations",
     "published": true,
     "sourceDetail": "lead_magnet:academy-resource-reduction-calculator",
-    "summary": "ClassIn 도입 효과를 '좋은 장비'가 아니라 강사 준비 시간, 녹화 배포 시간, 보강 안내, 학생 관리, 학부모 상담 준비 시간이 얼마나 줄어드는지로 계산합니다.",
+    "summary": "도입비가 비싸 보일 때는 장비 가격보다 줄어드는 반복 업무 시간을 먼저 봐야 합니다. 수업 준비, 녹화 배포, 보강 안내, 과제 후속, 학부모 상담 준비 시간이 얼마나 줄어드는지 원장 언어로 계산합니다.",
     "formatLabel": "36문항 리소스 절감 계산표 + ROI 질문 + 상담용 숫자 정리",
     "estimatedMinutes": 20,
     "blogTone": "가격이 부담스럽다는 원장에게 장비 단가가 아니라 선생님 리소스, 수업 품질 표준화, 보강/복습 제공률, 상담 근거 축적으로 판단하게 돕습니다.",
@@ -1393,14 +1536,46 @@
       "body": "수업 준비, 녹화 배포, 보강 안내, 상담 준비 시간을 기준으로 ClassIn 도입 효과를 계산하는 원장용 워크시트입니다.",
       "buttonLabel": "절감 시간 계산하기"
     },
-    "resourceUrl": "/resources/academy-resource-reduction-calculator",
+    "resourceUrl": "/materials/lead-magnets/academy-resource-reduction-calculator.pdf",
     "suggestedPlacements": [
       "가격/견적 문의 리드 후속 자료",
       "전자칠판 체크리스트 다운로드 후 D+1 자료",
       "상담 중 가격 부담이 확인된 리드",
       "홈페이지 하단 ROI CTA",
       "CRM 리드 태그: ROI/가격 방어"
-    ]
+    ],
+    "pdfGuide": {
+      "subtitle": "도입비를 반복 업무 절감 시간으로 다시 계산하는 ROI 워크시트",
+      "outcome": "수업 준비, 녹화 배포, 보강 안내, 과제 후속, 상담 준비 시간을 숫자로 바꿔 도입 판단에 씁니다.",
+      "bestUsedWhen": [
+        "가격이 비싸 보이지만 실제 줄어드는 업무 시간이 궁금할 때",
+        "강사와 운영팀의 반복 업무를 원장 언어로 설명해야 할 때",
+        "견적 상담 전에 ROI 질문을 준비하고 싶을 때"
+      ],
+      "howToUse": [
+        "대표 강사 1명의 주간 반복 업무를 먼저 계산합니다.",
+        "줄일 수 있는 업무와 줄이면 안 되는 업무를 분리합니다.",
+        "절감 시간을 비용이 아니라 수업 품질, 보강, 상담 여력으로 다시 해석합니다."
+      ],
+      "discussionPrompts": [
+        "매주 가장 많이 반복되는 수동 업무는 몇 시간인가요?",
+        "그 시간이 줄면 강사는 어떤 수업 품질 활동에 시간을 쓸 수 있나요?",
+        "운영팀이 직접 링크를 만들고 안내하는 업무는 얼마나 남아 있나요?"
+      ],
+      "relatedMagnets": [
+        "academy-system-checklist",
+        "classin-90-day-adoption-roadmap",
+        "academy-admin-dashboard-template"
+      ],
+      "consultationCtas": [
+        {
+          "label": "Classin 도입 상담에서 결과 해석하기",
+          "href": "/contact#contact-form",
+          "description": "체크 결과를 바탕으로 쇼룸, 데모, 견적 확인 범위를 정리합니다."
+        }
+      ],
+      "expertNote": "ROI는 장비 가격을 낮추는 논리가 아니라 반복 업무를 줄여 더 중요한 교육 활동에 시간을 돌리는 논리입니다."
+    }
   },
   {
     "slug": "academy-admin-dashboard-template",
@@ -1412,7 +1587,7 @@
     "category": "operations",
     "published": true,
     "sourceDetail": "lead_magnet:academy-admin-dashboard-template",
-    "summary": "수업 시간, 특이사항, 네트워크 상태, 녹화/복습 제공률, 과제/LMS 상태, 보강 대상, 상담 준비 지표를 원장이 매주 볼 수 있는 운영 대시보드 항목으로 정리합니다.",
+    "summary": "원장이 매주 봐야 할 것은 많은 숫자가 아니라 수업 품질을 흔드는 신호입니다. 수업 시간, 특이사항, 네트워크, 녹화·복습 제공률, LMS 과제 상태, 보강 대상을 주간 운영 회의에서 바로 쓸 지표로 정리합니다.",
     "formatLabel": "38문항 주간 대시보드 템플릿 + 권한/회의 운영표",
     "estimatedMinutes": 18,
     "blogTone": "원장이 강사 보고나 학부모 불만이 들어온 뒤에야 문제를 아는 상황을 줄이고, ClassIn 관리자 데이터로 수업 품질을 선제적으로 보는 관점을 제안합니다.",
@@ -1658,14 +1833,46 @@
       "body": "수업 시간, 특이사항, 네트워크, 녹화/복습, LMS 상태를 주간 운영 회의로 연결하는 대시보드 템플릿입니다.",
       "buttonLabel": "관리자 기준 점검하기"
     },
-    "resourceUrl": "/resources/academy-admin-dashboard-template",
+    "resourceUrl": "/materials/lead-magnets/academy-admin-dashboard-template.pdf",
     "suggestedPlacements": [
       "학원 시스템 OS 진단표 다운로드 후 후속 자료",
       "관리자/데이터 관련 상담 리드",
       "원장 대상 블로그 하단 CTA",
       "ClassIn 관리자 기능 설명 페이지 CTA",
       "CRM 리드 태그: 관리자 데이터 운영"
-    ]
+    ],
+    "pdfGuide": {
+      "subtitle": "원장과 실장이 매주 봐야 할 수업 운영 신호를 정리하는 대시보드 템플릿",
+      "outcome": "수업 시간, 특이사항, 녹화/복습 제공률, 과제 상태, 권한 기준을 주간 회의용 지표로 바꿉니다.",
+      "bestUsedWhen": [
+        "운영 보고가 말이나 메신저에 의존하고 있을 때",
+        "원장이 수업 품질 문제를 늦게 알게 될 때",
+        "관리자 권한과 데이터 접근 기준을 정리해야 할 때"
+      ],
+      "howToUse": [
+        "현재 주간 회의에서 실제로 보는 숫자와 안 보는 숫자를 나눕니다.",
+        "각 지표에 책임자와 확인 주기를 붙입니다.",
+        "ClassIn 상담에서 어떤 데이터가 자동으로 보이고 어떤 것은 연동이 필요한지 확인합니다."
+      ],
+      "discussionPrompts": [
+        "원장이 매주 직접 확인해야 하는 수업 품질 신호는 무엇인가요?",
+        "특이사항, 결석, 보강, 과제 미제출은 누가 언제 확인하나요?",
+        "관리자와 강사의 데이터 접근 권한은 어디까지 달라야 하나요?"
+      ],
+      "relatedMagnets": [
+        "academy-data-automation-brief",
+        "classin-pre-adoption-questions-checklist",
+        "academy-system-checklist"
+      ],
+      "consultationCtas": [
+        {
+          "label": "Classin 도입 상담에서 결과 해석하기",
+          "href": "/contact#contact-form",
+          "description": "체크 결과를 바탕으로 쇼룸, 데모, 견적 확인 범위를 정리합니다."
+        }
+      ],
+      "expertNote": "대시보드는 숫자를 많이 보여주는 화면이 아니라 원장이 늦게 알면 안 되는 신호를 먼저 보여주는 운영 장치입니다."
+    }
   },
   {
     "slug": "academy-data-automation-brief",
@@ -1677,7 +1884,7 @@
     "category": "software",
     "published": true,
     "sourceDetail": "lead_magnet:academy-data-automation-brief",
-    "summary": "ClassIn 수업 데이터, 앱 푸시, 코스/수업 정보, 관리자 대시보드, 자체 리포트/API 연동 후보를 원장 관점에서 정리합니다. 기술 문서를 읽기 전에 우리 학원이 어떤 데이터를 왜 가져와야 하는지 먼저 결정하는 설계 브리프입니다.",
+    "summary": "API 문서를 바로 펼치기 전에 자동화할 업무부터 정해야 실패가 줄어듭니다. ClassIn 수업 데이터, 앱 푸시, 코스·수업 정보, 자체 리포트 후보를 원장·운영팀 언어로 정리하고 개발 상담 전에 확인할 범위를 나눕니다.",
     "formatLabel": "42문항 데이터 자동화 브리프 + API 단계표 + 리포트 설계 질문",
     "estimatedMinutes": 22,
     "blogTone": "AI와 데이터 자동화에 관심은 있지만 무엇부터 연결해야 할지 모르는 원장에게, ClassIn API를 개발 문서가 아니라 학원 운영 병목을 줄이는 설계 선택지로 설명합니다.",
@@ -1926,14 +2133,46 @@
       "body": "공식 API 문서를 읽기 전에, 우리 학원의 수업 데이터와 운영 자동화 후보를 42문항으로 정리하는 원장용 브리프입니다.",
       "buttonLabel": "자동화 후보 1개 정리하기"
     },
-    "resourceUrl": "/resources/academy-data-automation-brief",
+    "resourceUrl": "/materials/lead-magnets/academy-data-automation-brief.pdf",
     "suggestedPlacements": [
       "자료실 심화 자료 카드",
       "ClassIn 비교 도입 워크시트 다운로드 후 D+3 후속 자료",
       "API/연동 문의가 들어온 상담 리드",
       "대형 학원 또는 지점 확장 리드에게 전달",
       "CRM 리드 태그: 데이터/API 자동화 고의도"
-    ]
+    ],
+    "pdfGuide": {
+      "subtitle": "API와 자동화 상담 전에 업무 요구를 원장 언어로 정리하는 설계 브리프",
+      "outcome": "앱 푸시, 수업 데이터, 리포트, 자체 시스템 연동 후보를 개발 상담 전에 분리합니다.",
+      "bestUsedWhen": [
+        "자체 CRM, 리포트, 알림 자동화와 연결하고 싶을 때",
+        "API 문서를 보기 전에 자동화할 업무 범위를 정해야 할 때",
+        "개발팀 또는 외주사와 상담할 질문을 준비할 때"
+      ],
+      "howToUse": [
+        "먼저 자동화할 업무를 안내, 조회, 리포트, 연동으로 나눕니다.",
+        "각 업무마다 데이터 출처, 호출 주체, 개인정보 동의 범위를 적습니다.",
+        "공식 API 문서 확인이 필요한 항목과 상담으로 충분한 항목을 분리합니다."
+      ],
+      "discussionPrompts": [
+        "어떤 데이터를 어떤 시스템으로 옮기고 싶나요?",
+        "자동화 결과를 원장, 운영팀, 강사 중 누가 사용하나요?",
+        "개발과 운영 책임은 내부, 외주, ClassIn 상담 중 어디에 있나요?"
+      ],
+      "relatedMagnets": [
+        "academy-admin-dashboard-template",
+        "classin-pre-adoption-questions-checklist",
+        "classin-90-day-adoption-roadmap"
+      ],
+      "consultationCtas": [
+        {
+          "label": "Classin 도입 상담에서 결과 해석하기",
+          "href": "/contact#contact-form",
+          "description": "체크 결과를 바탕으로 쇼룸, 데모, 견적 확인 범위를 정리합니다."
+        }
+      ],
+      "expertNote": "API 상담은 기술 가능성보다 업무 정의가 먼저입니다. 어떤 문제를 줄일지 모호하면 연동 범위도 계속 커집니다."
+    }
   },
   {
     "slug": "showroom-demo-readiness-kit",
@@ -1945,7 +2184,7 @@
     "category": "operations",
     "published": true,
     "sourceDetail": "lead_magnet:showroom-demo-readiness-kit",
-    "summary": "목동 쇼룸이나 온라인 데모에서 막연히 제품 설명만 듣지 않고, 우리 학원 대표 수업 자료로 EDB, 전자칠판 판서, 녹화, 복습, LMS, 관리자 데이터를 한 번에 검증하도록 준비 질문과 의사결정표를 정리합니다.",
+    "summary": "좋은 데모는 제품 설명을 많이 듣는 자리가 아니라 우리 학원 수업이 실제로 어떻게 바뀌는지 확인하는 자리입니다. 대표 수업 자료로 EDB, 판서, 녹화, 복습, LMS, 관리자 데이터를 검증하도록 질문과 의사결정표를 준비합니다.",
     "formatLabel": "32문항 쇼룸 데모 준비표 + 의사결정 체크시트",
     "estimatedMinutes": 14,
     "blogTone": "Classin을 처음 보는 원장이 제품 설명을 듣는 사람이 아니라, 자기 학원 수업 한 편을 기준으로 도입 가능성을 판단하는 사람으로 전환되게 합니다.",
@@ -2168,14 +2407,46 @@
       "body": "대표 수업 자료로 EDB, 판서, 녹화, LMS, 관리자 데이터를 확인하는 32문항 데모 준비 키트입니다.",
       "buttonLabel": "쇼룸 데모 준비하기"
     },
-    "resourceUrl": "/resources/showroom-demo-readiness-kit",
+    "resourceUrl": "/materials/lead-magnets/showroom-demo-readiness-kit.pdf",
     "suggestedPlacements": [
       "도입 문의 버튼 근처 고의도 CTA",
       "가격/견적 가이드 하단",
       "90일 파일럿 로드맵 다운로드 후 후속 자료",
       "쇼룸 방문 전 자동 발송 자료",
       "CRM 리드 태그: 쇼룸/데모 고의도"
-    ]
+    ],
+    "pdfGuide": {
+      "subtitle": "쇼룸과 온라인 데모에서 우리 학원 수업 흐름을 실제로 검증하는 준비 키트",
+      "outcome": "대표 수업 자료, 확인 장면, 의사결정 기준을 준비해 제품 설명이 아니라 우리 학원 기준의 데모로 만듭니다.",
+      "bestUsedWhen": [
+        "목동 쇼룸 또는 온라인 데모를 앞두고 있을 때",
+        "제품 설명보다 우리 수업 자료로 확인하고 싶을 때",
+        "데모 후 내부 의사결정 메모를 남겨야 할 때"
+      ],
+      "howToUse": [
+        "대표 수업 교안 하나와 현재 녹화/복습 배포 방식을 준비합니다.",
+        "데모에서 반드시 확인할 장면 3개를 정합니다.",
+        "데모 후 바로 파일럿 여부를 판단할 기준을 체크합니다."
+      ],
+      "discussionPrompts": [
+        "데모에서 꼭 재현해야 할 실제 수업 장면은 무엇인가요?",
+        "현재 수업 후 가장 번거로운 후속 업무는 무엇인가요?",
+        "데모를 본 뒤 누가 어떤 기준으로 도입 여부를 결정하나요?"
+      ],
+      "relatedMagnets": [
+        "academy-system-checklist",
+        "classin-90-day-adoption-roadmap",
+        "classroom-install-av-readiness-checklist"
+      ],
+      "consultationCtas": [
+        {
+          "label": "Classin 도입 상담에서 결과 해석하기",
+          "href": "/contact#contact-form",
+          "description": "체크 결과를 바탕으로 쇼룸, 데모, 견적 확인 범위를 정리합니다."
+        }
+      ],
+      "expertNote": "좋은 데모는 기능을 많이 보는 자리가 아니라 우리 학원의 대표 수업이 얼마나 덜 끊기는지 확인하는 자리입니다."
+    }
   },
   {
     "slug": "teacher-edb-onboarding-sop-kit",
@@ -2187,7 +2458,7 @@
     "category": "operations",
     "published": true,
     "sourceDetail": "lead_magnet:teacher-edb-onboarding-sop-kit",
-    "summary": "우수 강사의 수업 흐름을 개인 파일에 가두지 않고 EDB 교안, 50페이지 칠판, 녹화, LMS 운영 기준으로 옮겨 신규 강사와 다른 반에서도 재사용할 수 있게 만드는 표준화 SOP입니다.",
+    "summary": "에이스 강사의 수업이 개인 파일과 기억에만 남아 있으면 강사 교체와 지점 확장 때 품질 편차가 커집니다. EDB 교안, 50페이지 칠판, 녹화, LMS 운영 기준으로 수업 흐름을 학원 자산화하는 SOP입니다.",
     "formatLabel": "40문항 강사 온보딩 SOP + EDB 교안 전환표",
     "estimatedMinutes": 20,
     "blogTone": "에이스 강사 한 명에게 의존하는 학원의 불안을 짚고, 좋은 수업을 학원 자산으로 남기는 전환을 제안합니다.",
@@ -2424,14 +2695,46 @@
       "body": "EDB 교안, 녹화, LMS, 권한 회수까지 신규 강사가 따라 할 수 있게 만드는 40문항 온보딩 SOP입니다.",
       "buttonLabel": "강사 온보딩 SOP 받기"
     },
-    "resourceUrl": "/resources/teacher-edb-onboarding-sop-kit",
+    "resourceUrl": "/materials/lead-magnets/teacher-edb-onboarding-sop-kit.pdf",
     "suggestedPlacements": [
       "강사 온보딩 가이드 하단",
       "EDB 공식 가이드 연결 CTA",
       "수업 품질 표준화 블로그 CTA",
       "지점 확장 또는 강사 교체 상담 리드",
       "CRM 리드 태그: 강사 표준화/EDB"
-    ]
+    ],
+    "pdfGuide": {
+      "subtitle": "우수 강사의 수업 흐름을 EDB 교안과 온보딩 기준으로 자산화하는 SOP",
+      "outcome": "개인 파일과 기억에 의존하던 수업을 교안, 판서, 녹화, 복습 루틴으로 표준화합니다.",
+      "bestUsedWhen": [
+        "신규 강사 온보딩 시간이 길거나 수업 편차가 클 때",
+        "우수 강사의 자료를 지점과 반에 재사용하고 싶을 때",
+        "EDB 교안 전환 기준을 내부 SOP로 만들고 싶을 때"
+      ],
+      "howToUse": [
+        "우수 강사 교안 1~3개를 골라 공통 흐름을 표시합니다.",
+        "EDB로 전환할 자료와 기존 PDF/PPT로 둘 자료를 나눕니다.",
+        "신규 강사가 첫 주에 따라 할 체크리스트와 검수 기준을 만듭니다."
+      ],
+      "discussionPrompts": [
+        "신규 강사가 가장 많이 막히는 수업 준비 단계는 무엇인가요?",
+        "우수 강사의 판서와 설명 중 반드시 남겨야 할 장면은 무엇인가요?",
+        "수업 표준화를 강사 통제가 아니라 품질 지원으로 설명하려면 어떤 문장이 필요할까요?"
+      ],
+      "relatedMagnets": [
+        "classin-90-day-adoption-roadmap",
+        "academy-system-checklist",
+        "parent-replay-retention-script-kit"
+      ],
+      "consultationCtas": [
+        {
+          "label": "Classin 도입 상담에서 결과 해석하기",
+          "href": "/contact#contact-form",
+          "description": "체크 결과를 바탕으로 쇼룸, 데모, 견적 확인 범위를 정리합니다."
+        }
+      ],
+      "expertNote": "강사 표준화는 강사의 개성을 없애는 일이 아닙니다. 반복 준비를 줄이고 좋은 수업 흐름을 기관 자산으로 남기는 일입니다."
+    }
   },
   {
     "slug": "classroom-install-av-readiness-checklist",
@@ -2443,7 +2746,7 @@
     "category": "hardware",
     "published": true,
     "sourceDetail": "lead_magnet:classroom-install-av-readiness-checklist",
-    "summary": "전자칠판을 주문하기 전에 교실 크기, 벽면/스탠드, 전원·네트워크, 카메라·마이크, 녹화 품질, 안전 점검을 한 번에 확인해 설치 후 다시 손보는 비용을 줄이는 현장 체크리스트입니다.",
+    "summary": "전자칠판은 주문 전보다 설치 후 문제가 더 비쌀 수 있습니다. 교실 크기, 벽면·스탠드, 전원·네트워크, 카메라·마이크, 녹화 품질, 안전 조건을 미리 확인해 재설치와 재세팅 리스크를 줄입니다.",
     "formatLabel": "44문항 설치/AV 현장 점검표 + 상담 준비 리스트",
     "estimatedMinutes": 18,
     "blogTone": "전자칠판은 화면 크기보다 설치 후 매일 수업이 안정적으로 돌아가는지가 중요하다는 관점으로, 숨은 설치 리스크를 먼저 드러냅니다.",
@@ -2685,14 +2988,51 @@
       "body": "교실 크기, 벽걸이/스탠드, 전원·네트워크, 카메라·마이크까지 44문항으로 확인하는 설치 현장 체크리스트입니다.",
       "buttonLabel": "설치 조건 점검하기"
     },
-    "resourceUrl": "/resources/classroom-install-av-readiness-checklist",
+    "resourceUrl": "/materials/lead-magnets/classroom-install-av-readiness-checklist.pdf",
     "suggestedPlacements": [
       "하드웨어 제품 페이지 CTA",
       "전자칠판 구축 체크리스트 후속 자료",
       "설치/모델 문의가 들어온 리드",
       "견적 상담 전 자동 발송",
       "CRM 리드 태그: 설치/하드웨어 고의도"
-    ]
+    ],
+    "pdfGuide": {
+      "subtitle": "전자칠판, 카메라, 마이크 설치 전에 현장 리스크를 줄이는 체크리스트",
+      "outcome": "교실 크기, 벽면, 전원, 네트워크, 카메라/마이크, 안전 조건을 견적 전 확인 항목으로 정리합니다.",
+      "bestUsedWhen": [
+        "전자칠판 설치 견적을 앞두고 교실 조건을 정리해야 할 때",
+        "카메라, 마이크, 스탠드, 벽걸이 구성에서 빠지는 항목이 걱정될 때",
+        "재설치와 재세팅 비용을 줄이고 싶을 때"
+      ],
+      "howToUse": [
+        "설치 희망 교실 사진, 치수, 좌석 수를 먼저 준비합니다.",
+        "전원, 네트워크, 벽면, 동선을 체크하고 모호한 항목은 현장 확인으로 표시합니다.",
+        "견적 상담에서 장비 단품과 설치/세팅/안전 범위를 따로 확인합니다."
+      ],
+      "discussionPrompts": [
+        "현재 교실에서 화면, 카메라, 음향 문제가 가장 자주 생기는 지점은 어디인가요?",
+        "벽걸이와 이동형 중 운영 동선에 맞는 방식은 무엇인가요?",
+        "설치 후 첫 수업 전에 누가 어떤 테스트를 해야 하나요?"
+      ],
+      "relatedMagnets": [
+        "electronic-whiteboard-classroom-checklist",
+        "showroom-demo-readiness-kit",
+        "classin-pre-adoption-questions-checklist"
+      ],
+      "consultationCtas": [
+        {
+          "label": "Classin 도입 상담에서 결과 해석하기",
+          "href": "/contact#contact-form",
+          "description": "체크 결과를 바탕으로 쇼룸, 데모, 견적 확인 범위를 정리합니다."
+        },
+        {
+          "label": "목동 쇼룸 데모 준비 키트 보기",
+          "href": "/resources/showroom-demo-readiness-kit#download",
+          "description": "대표 수업 자료를 가져와 실제 EDB, 판서, 녹화 흐름을 확인합니다."
+        }
+      ],
+      "expertNote": "설치 자료는 사진이 가장 강합니다. 말로 설명하기 어려운 교실 조건은 사진과 좌석 배치로 보여주는 편이 빠릅니다."
+    }
   },
   {
     "slug": "parent-replay-retention-script-kit",
@@ -2704,7 +3044,7 @@
     "category": "operations",
     "published": true,
     "sourceDetail": "lead_magnet:parent-replay-retention-script-kit",
-    "summary": "녹화와 LMS 기록을 단순 다시보기 링크로 끝내지 않고, 결석 보강 안내, 복습 독려, 과제 미제출 후속, 학부모 상담 근거로 바꾸는 커뮤니케이션 스크립트와 운영 체크리스트입니다.",
+    "summary": "녹화 링크를 보내는 것만으로는 학부모가 수업 품질을 체감하기 어렵습니다. 결석 보강, 복습 독려, 과제 미제출 후속, 학부모 상담 근거까지 이어지는 메시지와 운영 체크리스트로 바꿉니다.",
     "formatLabel": "34문항 상담/복습 운영표 + 메시지 스크립트",
     "estimatedMinutes": 15,
     "blogTone": "학부모가 체감하는 가치는 새 장비보다 결석해도 관리받는다, 복습이 남는다, 상담 때 근거가 있다는 안심에서 나온다는 관점으로 씁니다.",
@@ -2929,14 +3269,46 @@
       "body": "결석, 복습, 과제 미제출, 상담 전 기록 확인을 34문항과 메시지 스크립트로 정리한 운영 키트입니다.",
       "buttonLabel": "상담 스크립트 받기"
     },
-    "resourceUrl": "/resources/parent-replay-retention-script-kit",
+    "resourceUrl": "/materials/lead-magnets/parent-replay-retention-script-kit.pdf",
     "suggestedPlacements": [
       "학부모 상담/복습 관련 블로그 CTA",
       "관리자 데이터 점검표 후속 자료",
       "LMS/녹화 수업 가이드 하단",
       "결석/보강 문의 리드에게 전달",
       "CRM 리드 태그: 상담/복습 운영"
-    ]
+    ],
+    "pdfGuide": {
+      "subtitle": "녹화와 복습 자료를 학부모 체감 가치로 바꾸는 메시지/운영 키트",
+      "outcome": "결석 보강, 복습 독려, 과제 미제출 후속, 상담 근거를 메시지와 운영 체크리스트로 연결합니다.",
+      "bestUsedWhen": [
+        "녹화 링크를 보내도 학부모 체감이 낮을 때",
+        "결석 보강과 복습 안내가 매번 수동으로 반복될 때",
+        "상담에서 수업 기록을 더 설득력 있게 쓰고 싶을 때"
+      ],
+      "howToUse": [
+        "현재 쓰는 결석, 복습, 과제 안내 문구를 모읍니다.",
+        "녹화/판서/PDF 자료가 학생과 학부모에게 전달되는 시점을 표시합니다.",
+        "상황별 메시지를 복사 문구로 만들고 담당자와 발송 기준을 정합니다."
+      ],
+      "discussionPrompts": [
+        "학부모가 수업 품질을 가장 명확히 체감하는 순간은 언제인가요?",
+        "결석 학생에게 보내는 안내는 누가 언제 작성하나요?",
+        "상담에서 녹화와 과제 기록을 어떤 근거로 보여줄 수 있나요?"
+      ],
+      "relatedMagnets": [
+        "teacher-edb-onboarding-sop-kit",
+        "academy-admin-dashboard-template",
+        "academy-system-checklist"
+      ],
+      "consultationCtas": [
+        {
+          "label": "Classin 도입 상담에서 결과 해석하기",
+          "href": "/contact#contact-form",
+          "description": "체크 결과를 바탕으로 쇼룸, 데모, 견적 확인 범위를 정리합니다."
+        }
+      ],
+      "expertNote": "복습 자료의 가치는 링크 자체가 아니라 학부모가 “수업 후 관리가 되고 있다”고 느끼는 운영 흐름에서 나옵니다."
+    }
   },
   {
     "slug": "academy-case-match-brief",
@@ -2948,7 +3320,7 @@
     "category": "case-study",
     "published": true,
     "sourceDetail": "lead_magnet:academy-case-match-brief",
-    "summary": "과목, 학원 규모, 오프라인/온라인 비중, 전자칠판 사용 경험, 강사 리소스 문제를 기준으로 우리 학원과 가장 가까운 Classin 도입 사례를 찾기 위한 질문지입니다.",
+    "summary": "남의 성공 사례보다 우리 학원과 조건이 비슷한 사례가 설득력이 큽니다. 과목, 규모, 오프라인·온라인 비중, 전자칠판 경험, 강사 리소스 병목을 기준으로 맞춤 사례를 요청할 수 있게 정리합니다.",
     "formatLabel": "28문항 사례 매칭 브리프 + 상담 질문지",
     "estimatedMinutes": 12,
     "blogTone": "막연한 성공 사례보다 우리 같은 학원도 될까라는 불안을 정확히 받아주고, 유사 사례를 찾기 위한 질문으로 리드를 상담으로 넘깁니다.",
@@ -3168,14 +3540,46 @@
       "body": "과목, 규모, 운영 병목을 기준으로 가까운 Classin 도입 사례를 찾기 위한 28문항 브리프입니다.",
       "buttonLabel": "맞춤 사례 찾기"
     },
-    "resourceUrl": "/resources/academy-case-match-brief",
+    "resourceUrl": "/materials/lead-magnets/academy-case-match-brief.pdf",
     "suggestedPlacements": [
       "사례 섹션 CTA",
       "도입 고민/왜 필요한가 가이드 하단",
       "첫 방문자 신뢰 형성용 자료",
       "상담 전 사례 요청 리드에게 전달",
       "CRM 리드 태그: 사례 탐색"
-    ]
+    ],
+    "pdfGuide": {
+      "subtitle": "우리 학원과 조건이 비슷한 도입 사례를 요청하기 위한 매칭 브리프",
+      "outcome": "과목, 규모, 수업 형태, 전자칠판 경험, 강사 리소스 병목을 기준으로 필요한 사례를 명확히 요청합니다.",
+      "bestUsedWhen": [
+        "일반 성공 사례보다 우리와 비슷한 조건의 사례가 필요할 때",
+        "내부 의사결정자가 “비슷한 학원도 쓰는지”를 물을 때",
+        "상담 전에 우리 학원의 운영 프로필을 정리하고 싶을 때"
+      ],
+      "howToUse": [
+        "과목, 규모, 지점 수, 수업 형태를 먼저 적습니다.",
+        "현재 가장 큰 병목을 강사 리소스, 장비, 데이터, 학부모 커뮤니케이션으로 분류합니다.",
+        "상담에서 요청할 사례 조건을 3개 이하로 줄입니다."
+      ],
+      "discussionPrompts": [
+        "우리 학원과 반드시 비슷해야 하는 조건은 과목, 규모, 지점, 수업 형태 중 무엇인가요?",
+        "성공 사례에서 가장 확인하고 싶은 변화는 무엇인가요?",
+        "사례를 본 뒤 내부에서 어떤 의사결정 자료가 필요하나요?"
+      ],
+      "relatedMagnets": [
+        "showroom-demo-readiness-kit",
+        "classin-90-day-adoption-roadmap",
+        "academy-resource-reduction-calculator"
+      ],
+      "consultationCtas": [
+        {
+          "label": "Classin 도입 상담에서 결과 해석하기",
+          "href": "/contact#contact-form",
+          "description": "체크 결과를 바탕으로 쇼룸, 데모, 견적 확인 범위를 정리합니다."
+        }
+      ],
+      "expertNote": "좋은 사례 요청은 “유명한 학원 사례”가 아니라 우리 학원과 의사결정 조건이 닮은 사례를 찾는 질문에서 시작합니다."
+    }
   },
   {
     "slug": "classin-pre-adoption-questions-checklist",
@@ -3187,7 +3591,7 @@
     "category": "operations",
     "published": true,
     "sourceDetail": "lead_magnet:classin-pre-adoption-questions-checklist",
-    "summary": "관리자 권한, 녹화 저장, 스토리지, 개인정보, 서버, OPS, 오프라인 칠판 사용처럼 상담 전에 꼭 확인해야 할 22가지 질문을 답변 가능, 확인 필요, 다음 행동 기준으로 정리하는 고의도 의사결정 자료입니다.",
+    "summary": "도입 직전에는 기능 호기심보다 리스크 제거가 중요합니다. 관리자 권한, 녹화 저장, 스토리지, 개인정보, 서버, OPS, 오프라인 칠판 사용 등 22가지 질문을 즉답 가능, 확인 필요, 쇼룸 검증 항목으로 나눕니다.",
     "formatLabel": "22문항 의사결정 질문표",
     "estimatedMinutes": 12,
     "blogTone": "도입을 미루는 불안감을 기능 설명이 아니라 쇼룸, 정책 확인, 견적, 파일럿으로 이어지는 검증 질문으로 바꾸는 실무형 톤.",
@@ -3476,7 +3880,7 @@
       "body": "관리자 권한, 녹화, 스토리지, 개인정보, 서버, OPS, 오프라인 칠판 질문을 상담용 우선순위로 정리해 쇼룸·데모·견적 상담으로 이어갑니다.",
       "buttonLabel": "상담 질문표 받기"
     },
-    "resourceUrl": "/resources/classin-pre-adoption-questions-checklist",
+    "resourceUrl": "/materials/lead-magnets/classin-pre-adoption-questions-checklist.pdf",
     "suggestedPlacements": [
       "도입 상담 직전 CTA",
       "가격/견적 가이드 하단",
@@ -3486,6 +3890,43 @@
       "상담 폼 제출 후 자동 후속 이메일",
       "도입 상담 완료 후 내부 공유 자료",
       "CRM 리드 태그: 도입 전 고의도 검토"
-    ]
+    ],
+    "pdfGuide": {
+      "subtitle": "도입 직전 권한, 녹화, 스토리지, 개인정보, 서버, 견적 리스크를 정리하는 질문지",
+      "outcome": "즉답 가능한 항목, 정책 확인이 필요한 항목, 쇼룸에서 검증할 항목을 분리합니다.",
+      "bestUsedWhen": [
+        "도입 의향은 있지만 계약 전 불안한 항목이 많을 때",
+        "관리자 권한, 녹화 저장, 개인정보, 서버 위치를 정확히 확인해야 할 때",
+        "상담 전에 내부 질문을 하나의 문서로 정리해야 할 때"
+      ],
+      "howToUse": [
+        "22개 질문을 즉답, 확인 필요, 쇼룸 검증, 견적 반영으로 나눕니다.",
+        "정책성 질문은 추정으로 답하지 말고 담당자 확인 항목으로 표시합니다.",
+        "가장 불안한 질문 3개를 먼저 상담 요청 메시지에 포함합니다."
+      ],
+      "discussionPrompts": [
+        "계약 전 반드시 문서로 확인해야 하는 항목은 무엇인가요?",
+        "쇼룸에서 실제 화면으로 검증해야 하는 장면은 무엇인가요?",
+        "가격과 견적 범위에서 장비, 소프트웨어, 설치, 온보딩을 어떻게 나눠 봐야 하나요?"
+      ],
+      "relatedMagnets": [
+        "classin-90-day-adoption-roadmap",
+        "academy-admin-dashboard-template",
+        "classroom-install-av-readiness-checklist"
+      ],
+      "consultationCtas": [
+        {
+          "label": "Classin 도입 상담에서 결과 해석하기",
+          "href": "/contact#contact-form",
+          "description": "체크 결과를 바탕으로 쇼룸, 데모, 견적 확인 범위를 정리합니다."
+        },
+        {
+          "label": "목동 쇼룸 데모 준비 키트 보기",
+          "href": "/resources/showroom-demo-readiness-kit#download",
+          "description": "대표 수업 자료를 가져와 실제 EDB, 판서, 녹화 흐름을 확인합니다."
+        }
+      ],
+      "expertNote": "도입 직전 질문은 의심이 아니라 좋은 구매 과정입니다. 확인 필요 항목을 숨기지 않고 분리할수록 상담 신뢰도가 올라갑니다."
+    }
   }
 ]

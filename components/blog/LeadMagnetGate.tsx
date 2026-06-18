@@ -9,7 +9,7 @@
 "use client"
 
 import { useState } from "react"
-import { ArrowRight, CheckCircle2, Download, Loader2, Mail, Sparkles } from "lucide-react"
+import { ArrowRight, CheckCircle2, Download, FileText, Loader2, Mail } from "lucide-react"
 import { PublicLoginDialog } from "@/components/auth/PublicLoginDialog"
 import { Input } from "@/components/ui/input"
 import { Button } from "@/components/ui/button"
@@ -109,37 +109,31 @@ export function LeadMagnetGate({ leadMagnet, postSlug }: Props) {
   }
 
   return (
-    <section className="mt-10 overflow-hidden rounded-[24px] border border-[#dcebd9] bg-[#ECFDF5] shadow-sm md:mt-12 md:rounded-[32px]">
+    <section className="mt-10 border border-black/[0.08] bg-white md:mt-12">
       <PublicLoginDialog
         open={loginDialogOpen}
         onOpenChange={setLoginDialogOpen}
         title="로그인 후 자료 받기"
       />
-      <div className="h-1 w-full bg-gradient-to-r from-[#084734] via-[#6EE7B7] to-[#084734]" />
+      <div className="h-1 w-full bg-[#084734]" />
       <div className="grid gap-7 p-6 md:grid-cols-[minmax(0,1fr)_360px] md:items-center md:gap-10 md:p-10">
         {/* 좌측: 자료 소개 + 체크리스트 미리보기 */}
         <div>
-          <span className="inline-flex w-fit items-center gap-1.5 rounded-full border border-[#084734]/10 bg-white px-3.5 py-1 text-[11px] font-bold tracking-[0.04em] text-[#084734]">
-            <Sparkles className="h-3 w-3" />
+          <span className="inline-flex w-fit items-center gap-2 text-[12px] font-bold uppercase tracking-[0.16em] text-[#084734]">
+            <FileText className="h-3.5 w-3.5" />
             {leadMagnet.ctaCopy.eyebrow} · {getLeadMagnetPublicGateLabel(leadMagnet.gate)}
           </span>
-          <h2 className="mt-4 text-[1.55rem] font-semibold leading-snug tracking-[-0.03em] text-[#111110] md:text-[1.9rem]">
+          <h2 className="mt-4 text-[1.55rem] font-bold leading-snug tracking-[-0.03em] text-[#111110] md:text-[1.9rem]">
             {leadMagnet.ctaCopy.title}
           </h2>
           <p className="mt-3 text-[15px] leading-7 text-[#1a1a1a]/65">
             {leadMagnet.summary}
           </p>
 
-          <div className="mt-4 flex flex-wrap gap-2 text-[12px] font-semibold text-[#084734]">
-            <span className="rounded-full border border-[#084734]/10 bg-white px-3 py-1">
-              {itemCount}문항
-            </span>
-            <span className="rounded-full border border-[#084734]/10 bg-white px-3 py-1">
-              약 {leadMagnet.estimatedMinutes}분
-            </span>
-            <span className="rounded-full border border-[#084734]/10 bg-white px-3 py-1">
-              {leadMagnet.formatLabel}
-            </span>
+          <div className="mt-4 flex flex-wrap gap-x-4 gap-y-1 text-[12px] font-semibold text-[#615D59]">
+            <span>{itemCount}문항</span>
+            <span>약 {leadMagnet.estimatedMinutes}분</span>
+            <span>{leadMagnet.formatLabel}</span>
           </div>
 
           <ul className="mt-5 grid gap-2.5">
@@ -156,10 +150,10 @@ export function LeadMagnetGate({ leadMagnet, postSlug }: Props) {
         </div>
 
         {/* 우측: 이메일 폼 / 완료 상태 */}
-        <div className="rounded-[20px] border border-black/[0.06] bg-white p-5 shadow-sm md:p-6">
+        <div className="border border-black/[0.08] bg-[#FAFAF8] p-5 md:p-6">
           {submitted || !usesEmailGate ? (
             <div className="flex flex-col items-center gap-4 py-2 text-center">
-              <div className="flex h-14 w-14 items-center justify-center rounded-full bg-[#ECFDF5]">
+              <div className="flex h-12 w-12 items-center justify-center border border-black/[0.08] bg-white">
                 <CheckCircle2 className="h-7 w-7 text-[#084734]" />
               </div>
               <div className="space-y-1">
@@ -176,7 +170,7 @@ export function LeadMagnetGate({ leadMagnet, postSlug }: Props) {
                 type="button"
                 disabled={!leadMagnet.published || downloading}
                 onClick={() => void handleDownload()}
-                className="h-11 w-full bg-[#084734] font-semibold text-white hover:bg-[#065c41]"
+                className="h-11 w-full rounded-[6px] bg-[#084734] font-semibold text-white hover:bg-[#065c41]"
               >
                 {downloading ? (
                   <Loader2 className="h-4 w-4 animate-spin" />
@@ -190,7 +184,7 @@ export function LeadMagnetGate({ leadMagnet, postSlug }: Props) {
           ) : (
             <form onSubmit={handleSubmit} className="space-y-3">
               <p className="text-sm font-semibold text-[#111110]">
-                이메일로 자료를 받아보세요
+                PDF로 자료 받기
               </p>
               <div className="relative">
                 <Mail className="absolute left-3 top-1/2 h-4 w-4 -translate-y-1/2 text-[#A39E98]" />
@@ -200,7 +194,7 @@ export function LeadMagnetGate({ leadMagnet, postSlug }: Props) {
                   onChange={(e) => setEmail(e.target.value)}
                   placeholder="이메일을 입력해주세요"
                   required
-                  className="h-11 border-black/[0.08] pl-10 focus-visible:border-[#084734]/50 focus-visible:ring-[#084734]/10"
+                  className="h-11 rounded-[6px] border-black/[0.08] pl-10 focus-visible:border-[#084734]/50 focus-visible:ring-[#084734]/10"
                 />
               </div>
 
@@ -209,7 +203,7 @@ export function LeadMagnetGate({ leadMagnet, postSlug }: Props) {
               <Button
                 type="submit"
                 disabled={loading}
-                className="h-11 w-full bg-[#084734] font-semibold text-white hover:bg-[#065c41]"
+                className="h-11 w-full rounded-[6px] bg-[#084734] font-semibold text-white hover:bg-[#065c41]"
               >
                 {loading ? (
                   <Loader2 className="h-4 w-4 animate-spin" />
