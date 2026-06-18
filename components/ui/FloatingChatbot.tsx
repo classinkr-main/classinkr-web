@@ -421,7 +421,7 @@ function MessageContent({ content, role }: { content: string; role: ChatMessage[
     return (
         <div
             className={cn(
-                "space-y-2 whitespace-pre-wrap text-sm leading-6 [overflow-wrap:anywhere]",
+                "space-y-2.5 whitespace-pre-wrap text-sm leading-6 [overflow-wrap:anywhere]",
                 role === "assistant" ? "text-[#111110]" : "text-white"
             )}
         >
@@ -436,7 +436,7 @@ function MessageContent({ content, role }: { content: string; role: ChatMessage[
 
                 if (orderedItems.length > 0 && orderedItems.every(Boolean)) {
                     return (
-                        <ol key={`${blockIndex}:${block}`} className="ml-4 list-decimal space-y-1">
+                        <ol key={`${blockIndex}:${block}`} className="ml-4 list-decimal space-y-1.5 marker:text-[#0e5038]">
                             {orderedItems.map((item, index) => (
                                 <li key={`${index}:${item}`}>{item}</li>
                             ))}
@@ -446,7 +446,7 @@ function MessageContent({ content, role }: { content: string; role: ChatMessage[
 
                 if (bulletItems.length > 0 && bulletItems.every(Boolean)) {
                     return (
-                        <ul key={`${blockIndex}:${block}`} className="ml-4 list-disc space-y-1">
+                        <ul key={`${blockIndex}:${block}`} className="ml-4 list-disc space-y-1.5 marker:text-[#0e5038]">
                             {bulletItems.map((item, index) => (
                                 <li key={`${index}:${item}`}>{item}</li>
                             ))}
