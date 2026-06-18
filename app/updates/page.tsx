@@ -2,7 +2,12 @@ import type { Metadata } from "next"
 import Link from "next/link"
 import { getReleases } from "@/lib/github"
 import { getPublishedPostsForStaticSitemap } from "@/lib/repositories/blog"
-import { ExternalLink, Tag, Calendar, ArrowRight } from "lucide-react"
+import {
+  getDocPathFromContent,
+  getDocsByCategoryFromContent,
+  getDocsContent,
+} from "@/lib/docs-content"
+import { ExternalLink, Tag, Calendar, ArrowRight, BookOpen } from "lucide-react"
 import { createPublicMetadata } from "@/lib/seo"
 
 export const revalidate = 3600
@@ -66,7 +71,20 @@ function renderBody(body: string) {
 }
 
 export default async function UpdatesPage() {
-  const releases = await getReleases()
+  const [releases, docsContent] = await Promise.all([
+    getReleases(),
+    getDocsContent().catch((error) => {
+      console.warn(
+        "[updates] docs content fetch failed:",
+        error instanceof Error ? error.message : error
+      )
+      return null
+    }),
+  ])
+
+  const updateDocs = docsContent
+    ? getDocsByCategoryFromContent(docsContent, "updates").slice(0, 6)
+    : []
 
   // 릴리즈가 아직 없으면 블로그 '제품 업데이트' 카테고리 글로 폴백 — 빈 페이지 노출 방지
   const fallbackPosts =
@@ -91,9 +109,66 @@ export default async function UpdatesPage() {
           </p>
         </div>
 
-        {/* 릴리즈 없을 때: 블로그 '제품 업데이트' 글 폴백 → 둘 다 없으면 빈 상태 */}
+        {updateDocs.length > 0 && (
+          <section className="mb-10">
+            <div className="mb-4 flex flex-col gap-2 sm:flex-row sm:items-end sm:justify-between">
+              <div>
+                <p className="text-[12px] font-semibold uppercase tracking-[0.16em] text-[#084734]">
+                  Docs
+                </p>
+                <h2 className="mt-1 text-[20px] font-bold tracking-[-0.02em] text-[#111110]">
+                  최근 업데이트 문서
+                </h2>
+              </div>
+              <Link
+                href="/docs/updates"
+                className="inline-flex items-center gap-1 text-[12px] font-semibold text-[#084734] transition-colors hover:text-[#065c41]"
+              >
+                전체 보기
+                <ArrowRight className="h-3.5 w-3.5" aria-hidden />
+              </Link>
+            </div>
+            <div className="space-y-3">
+              {updateDocs.map((doc, idx) => (
+                <Link
+                  key={`${doc.category}-${doc.slug}`}
+                  href={getDocPathFromContent(doc)}
+                  className="group block rounded-2xl border border-black/[0.08] bg-white px-5 py-5 transition-colors hover:border-[#084734]/20 sm:px-6"
+                >
+                  <div className="mb-2 flex flex-wrap items-center gap-2">
+                    <span className="inline-flex items-center gap-1.5 rounded-lg bg-[#ECFDF5] px-2.5 py-1 text-[12px] font-bold text-[#084734]">
+                      <BookOpen className="h-3 w-3" aria-hidden />
+                      업데이트 문서
+                    </span>
+                    <span className="inline-flex items-center gap-1 text-[12px] text-[#1a1a1a]/40">
+                      <Calendar className="h-3 w-3" aria-hidden />
+                      {formatDate(doc.updatedAt)}
+                    </span>
+                    {idx === 0 && (
+                      <span className="rounded-full bg-[#084734] px-2 py-0.5 text-[10px] font-bold uppercase tracking-wide text-white">
+                        Latest
+                      </span>
+                    )}
+                  </div>
+                  <h3 className="text-[17px] font-bold tracking-[-0.02em] text-[#111110]">
+                    {doc.title}
+                  </h3>
+                  <p className="mt-1.5 line-clamp-2 text-[14px] leading-relaxed text-[#1a1a1a]/55">
+                    {doc.description}
+                  </p>
+                  <span className="mt-3 inline-flex items-center gap-1 text-[12px] font-semibold text-[#084734]">
+                    문서 보기
+                    <ArrowRight className="h-3 w-3 transition-transform group-hover:translate-x-0.5" />
+                  </span>
+                </Link>
+              ))}
+            </div>
+          </section>
+        )}
+
+        {/* 릴리즈 없을 때: 블로그 '제품 업데이트' 글 폴백 */}
         {releases.length === 0 && fallbackPosts.length > 0 && (
-          <div className="space-y-4">
+          <section className="mb-10 space-y-4">
             <p className="text-[13px] text-[#1a1a1a]/45">
               정식 릴리즈 노트를 준비하고 있습니다. 최근 제품 업데이트 소식을 먼저 확인해 보세요.
             </p>
@@ -123,10 +198,10 @@ export default async function UpdatesPage() {
                 </span>
               </Link>
             ))}
-          </div>
+          </section>
         )}
 
-        {releases.length === 0 && fallbackPosts.length === 0 && (
+        {releases.length === 0 && fallbackPosts.length === 0 && updateDocs.length === 0 && (
           <div className="bg-white rounded-2xl border border-[#e8e8e4] px-8 py-16 text-center">
             <div className="w-12 h-12 rounded-2xl bg-[#f0f0ec] flex items-center justify-center mx-auto mb-4">
               <Tag className="w-5 h-5 text-[#1a1a1a]/30" />
@@ -137,53 +212,65 @@ export default async function UpdatesPage() {
         )}
 
         {/* 릴리즈 목록 */}
-        <div className="space-y-6">
-          {releases.map((release, idx) => (
-            <div
-              key={release.id}
-              className="relative rounded-2xl border border-[#e8e8e4] bg-white px-5 py-6 transition-colors hover:border-[#c8c8c4] sm:px-8 sm:py-7"
-            >
-              {/* 최신 뱃지 */}
-              {idx === 0 && (
-                <span className="mb-3 inline-flex rounded-full bg-[#084734] px-2 py-0.5 text-[10px] font-bold uppercase tracking-wide text-white sm:absolute sm:right-6 sm:top-5 sm:mb-0">
-                  Latest
-                </span>
-              )}
-
-              {/* 태그 + 날짜 */}
-              <div className="mb-3 flex flex-wrap items-center gap-2 sm:gap-3">
-                <span className="flex items-center gap-1.5 text-[12px] font-bold text-[#084734] bg-[#f0f7f4] px-2.5 py-1 rounded-lg">
-                  <Tag className="w-3 h-3" />{release.tag_name}
-                </span>
-                <span className="flex items-center gap-1 text-[12px] text-[#1a1a1a]/35">
-                  <Calendar className="w-3 h-3" />{formatDate(release.published_at)}
-                </span>
-              </div>
-
-              {/* 제목 */}
-              <h2 className="text-[18px] font-bold text-[#111110] tracking-[-0.02em] mb-4">
-                {release.name || release.tag_name}
+        {releases.length > 0 && (
+          <section>
+            <div className="mb-4">
+              <p className="text-[12px] font-semibold uppercase tracking-[0.16em] text-[#084734]">
+                Release Notes
+              </p>
+              <h2 className="mt-1 text-[20px] font-bold tracking-[-0.02em] text-[#111110]">
+                릴리즈 노트
               </h2>
-
-              {/* 본문 */}
-              {release.body && (
-                <div className="border-t border-[#f0f0ec] pt-4">
-                  {renderBody(release.body)}
-                </div>
-              )}
-
-              {/* GitHub 링크 */}
-              <a
-                href={release.html_url}
-                target="_blank"
-                rel="noopener noreferrer"
-                className="inline-flex items-center gap-1.5 mt-5 text-[12px] text-[#1a1a1a]/35 hover:text-[#084734] transition-colors"
-              >
-                <ExternalLink className="w-3 h-3" />GitHub에서 보기
-              </a>
             </div>
-          ))}
-        </div>
+            <div className="space-y-6">
+              {releases.map((release, idx) => (
+                <div
+                  key={release.id}
+                  className="relative rounded-2xl border border-[#e8e8e4] bg-white px-5 py-6 transition-colors hover:border-[#c8c8c4] sm:px-8 sm:py-7"
+                >
+                  {/* 최신 뱃지 */}
+                  {idx === 0 && (
+                    <span className="mb-3 inline-flex rounded-full bg-[#084734] px-2 py-0.5 text-[10px] font-bold uppercase tracking-wide text-white sm:absolute sm:right-6 sm:top-5 sm:mb-0">
+                      Latest
+                    </span>
+                  )}
+
+                  {/* 태그 + 날짜 */}
+                  <div className="mb-3 flex flex-wrap items-center gap-2 sm:gap-3">
+                    <span className="flex items-center gap-1.5 text-[12px] font-bold text-[#084734] bg-[#f0f7f4] px-2.5 py-1 rounded-lg">
+                      <Tag className="w-3 h-3" />{release.tag_name}
+                    </span>
+                    <span className="flex items-center gap-1 text-[12px] text-[#1a1a1a]/35">
+                      <Calendar className="w-3 h-3" />{formatDate(release.published_at)}
+                    </span>
+                  </div>
+
+                  {/* 제목 */}
+                  <h2 className="text-[18px] font-bold text-[#111110] tracking-[-0.02em] mb-4">
+                    {release.name || release.tag_name}
+                  </h2>
+
+                  {/* 본문 */}
+                  {release.body && (
+                    <div className="border-t border-[#f0f0ec] pt-4">
+                      {renderBody(release.body)}
+                    </div>
+                  )}
+
+                  {/* GitHub 링크 */}
+                  <a
+                    href={release.html_url}
+                    target="_blank"
+                    rel="noopener noreferrer"
+                    className="inline-flex items-center gap-1.5 mt-5 text-[12px] text-[#1a1a1a]/35 hover:text-[#084734] transition-colors"
+                  >
+                    <ExternalLink className="w-3 h-3" />GitHub에서 보기
+                  </a>
+                </div>
+              ))}
+            </div>
+          </section>
+        )}
 
       </div>
     </div>

@@ -1,8 +1,8 @@
 "use client"
 
-import { useCallback, useEffect, useMemo, useState } from "react"
+import { Suspense, useCallback, useEffect, useMemo, useState } from "react"
 import Link from "next/link"
-import { useRouter } from "next/navigation"
+import { useRouter, useSearchParams } from "next/navigation"
 import {
   AlertCircle,
   BarChart3,
@@ -22,12 +22,13 @@ import {
   Plus,
   RefreshCw,
   Search,
+  Sparkles,
   ThumbsUp,
   X,
 } from "lucide-react"
 
 import DocsCategoryManager from "@/components/admin/docs/DocsCategoryManager"
-import DocsQuestionClusterBacklog from "@/components/admin/docs/DocsQuestionClusterBacklog"
+import DocsGapsPanel from "@/components/admin/docs/DocsGapsPanel"
 import DocsRecommendedQuestionsManager from "@/components/admin/docs/DocsRecommendedQuestionsManager"
 import DocsRedirectManager from "@/components/admin/docs/DocsRedirectManager"
 import { adminFetch, adminFetchJson, adminFetchJsonCached } from "@/lib/admin-client"
@@ -166,7 +167,7 @@ const DOCS_TABS = [
   { value: "recommended", label: "추천 질문", icon: MessageSquareText },
   { value: "categories", label: "카테고리", icon: FolderTree },
   { value: "redirects", label: "리디렉트", icon: ExternalLink },
-  { value: "backlog", label: "질문 백로그", icon: Bot },
+  { value: "gaps", label: "보강 큐", icon: Sparkles },
 ] as const
 
 type DocsTab = (typeof DOCS_TABS)[number]["value"]
@@ -285,8 +286,9 @@ function getArticleOrderMeta(
   }
 }
 
-export default function AdminDocsPage() {
+function AdminDocsPageContent() {
   const router = useRouter()
+  const searchParams = useSearchParams()
   const [content, setContent] = useState<AdminDocsContentResponse | null>(null)
   const [analytics, setAnalytics] = useState<AdminDocsAnalyticsResponse | null>(null)
   const [loading, setLoading] = useState(true)
@@ -337,6 +339,13 @@ export default function AdminDocsPage() {
   useEffect(() => {
     void load()
   }, [load])
+
+  const tabParam = searchParams.get("tab")
+  useEffect(() => {
+    if (tabParam && DOCS_TABS.some((item) => item.value === tabParam)) {
+      setActiveTab(tabParam as DocsTab)
+    }
+  }, [tabParam])
 
   useEffect(() => {
     try {
@@ -1441,9 +1450,9 @@ export default function AdminDocsPage() {
         </section>
       ) : null}
 
-      {activeTab === "backlog" ? (
+      {activeTab === "gaps" ? (
         <section className="mb-8">
-          <DocsQuestionClusterBacklog />
+          <DocsGapsPanel />
         </section>
       ) : null}
 
@@ -1514,5 +1523,13 @@ export default function AdminDocsPage() {
         </div>
       ) : null}
     </div>
+  )
+}
+
+export default function AdminDocsPage() {
+  return (
+    <Suspense fallback={null}>
+      <AdminDocsPageContent />
+    </Suspense>
   )
 }

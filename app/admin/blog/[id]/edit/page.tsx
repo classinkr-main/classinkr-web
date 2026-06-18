@@ -10,7 +10,7 @@ export default async function AdminBlogEditPage({
   params,
 }: AdminBlogEditPageProps) {
   const { id } = await params
-  const post = await getPostById(Number(id))
+  const post = await getPostById(id)
   const posts = await getAllPosts()
 
   if (!post) {

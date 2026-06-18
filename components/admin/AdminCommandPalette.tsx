@@ -11,6 +11,11 @@ interface Command {
   keywords?: string
 }
 
+interface AdminCommandPaletteProps {
+  open: boolean
+  onClose: () => void
+}
+
 // 어드민 전역 이동·검색 대상. 사이드바 상단 항목 + 자주 가는 하위 라우트 + 빠른 작업.
 const COMMANDS: Command[] = [
   { group: "운영", label: "Overview", href: "/admin/overview", keywords: "홈 대시보드 overview home" },
@@ -35,9 +40,8 @@ const COMMANDS: Command[] = [
   { group: "시스템", label: "Dev Mode", href: "/admin/dev", keywords: "개발 dev 버그 패치노트 roadmap" },
 ]
 
-export default function AdminCommandPalette() {
+export default function AdminCommandPalette({ open, onClose }: AdminCommandPaletteProps) {
   const router = useRouter()
-  const [open, setOpen] = useState(false)
   const [query, setQuery] = useState("")
   const [selected, setSelected] = useState(0)
   const inputRef = useRef<HTMLInputElement>(null)
@@ -50,24 +54,6 @@ export default function AdminCommandPalette() {
     )
   }, [query])
 
-  // Cmd/Ctrl+K 토글 (어디서든). 입력 중에도 동작.
-  // 사이드바 검색 버튼 등에서 커스텀 이벤트로도 열 수 있다(발견성).
-  useEffect(() => {
-    const onKeyDown = (event: KeyboardEvent) => {
-      if ((event.metaKey || event.ctrlKey) && event.key.toLowerCase() === "k") {
-        event.preventDefault()
-        setOpen((prev) => !prev)
-      }
-    }
-    const onOpenEvent = () => setOpen(true)
-    window.addEventListener("keydown", onKeyDown)
-    window.addEventListener("admin:open-command-palette", onOpenEvent)
-    return () => {
-      window.removeEventListener("keydown", onKeyDown)
-      window.removeEventListener("admin:open-command-palette", onOpenEvent)
-    }
-  }, [])
-
   // 열릴 때 입력 포커스(DOM 사이드 이펙트만 — 상태 초기화는 닫을 때 수행).
   useEffect(() => {
     if (!open) return
@@ -77,10 +63,10 @@ export default function AdminCommandPalette() {
 
   // 닫을 때 검색어·선택을 초기화해 다음 열기는 항상 깨끗한 상태로 시작한다.
   const close = useCallback(() => {
-    setOpen(false)
     setQuery("")
     setSelected(0)
-  }, [])
+    onClose()
+  }, [onClose])
 
   const go = useCallback(
     (href: string) => {

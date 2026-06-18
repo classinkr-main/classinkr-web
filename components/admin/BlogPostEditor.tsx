@@ -64,6 +64,7 @@ import {
   leadMagnetOptions,
 } from "@/lib/lead-magnets"
 import { sanitizePublicImageUrl } from "@/lib/safe-public-url"
+import { adminFetch, getAdminToken } from "@/lib/admin-client"
 
 interface BlogPostEditorProps {
   mode: "create" | "edit"
@@ -354,21 +355,6 @@ function isoToLocalInput(iso?: string) {
   if (Number.isNaN(date.getTime())) return ""
   const pad = (n: number) => String(n).padStart(2, "0")
   return `${date.getFullYear()}-${pad(date.getMonth() + 1)}-${pad(date.getDate())}T${pad(date.getHours())}:${pad(date.getMinutes())}`
-}
-
-function getToken() {
-  return sessionStorage.getItem("admin_password") ?? ""
-}
-
-function adminFetch(url: string, options?: RequestInit) {
-  return fetch(url, {
-    ...options,
-    headers: {
-      "Content-Type": "application/json",
-      Authorization: `Bearer ${getToken()}`,
-      ...options?.headers,
-    },
-  })
 }
 
 function parseTags(value: string) {
@@ -759,7 +745,10 @@ export default function BlogPostEditor({
     }))
   }
 
-  const buildPayload = (nextStatus?: BlogPostStatus): BlogPostInput => {
+  const buildPayload = (
+    nextStatus?: BlogPostStatus,
+    options: { publishNow?: boolean } = {}
+  ): BlogPostInput => {
     const parsedTags = parseTags(tagsInput)
     const finalTitle = form.title.trim()
     const finalExcerpt = form.excerpt.trim()
@@ -789,6 +778,10 @@ export default function BlogPostEditor({
         buttonLabel: form.cta.buttonLabel.trim() || DEFAULT_BLOG_CTA.buttonLabel,
         buttonHref: form.cta.buttonHref.trim() || DEFAULT_BLOG_CTA.buttonHref,
       },
+      publishedAt:
+        options.publishNow && nextStatus === "published"
+          ? new Date().toISOString()
+          : form.publishedAt,
       status: nextStatus ?? form.status,
     }
   }
@@ -804,7 +797,7 @@ export default function BlogPostEditor({
       formData.append("file", file)
       const res = await fetch("/api/admin/upload", {
         method: "POST",
-        headers: { Authorization: `Bearer ${getToken()}` },
+        headers: { Authorization: `Bearer ${getAdminToken()}` },
         body: formData,
       })
       if (!res.ok) {
@@ -823,8 +816,11 @@ export default function BlogPostEditor({
     }
   }
 
-  const handleSubmit = async (nextStatus?: BlogPostStatus) => {
-    const payload = buildPayload(nextStatus)
+  const handleSubmit = async (
+    nextStatus?: BlogPostStatus,
+    options: { publishNow?: boolean } = {}
+  ) => {
+    const payload = buildPayload(nextStatus, options)
     if (!payload.title || !payload.excerpt || !payload.category) {
       setNotice("제목, 요약, 카테고리는 꼭 입력해주세요.")
       return
@@ -836,7 +832,8 @@ export default function BlogPostEditor({
     setIsSubmitting(true)
     setNotice("")
     try {
-      const url = initialPost ? `/api/admin/blog/${initialPost.id}` : "/api/admin/blog"
+      const postId = initialPost?._uuid ?? initialPost?.id
+      const url = postId ? `/api/admin/blog/${postId}` : "/api/admin/blog"
       const method = initialPost ? "PUT" : "POST"
       const response = await adminFetch(url, { method, body: JSON.stringify(payload) })
       if (response.status === 401) { startTransition(() => router.replace("/admin/login")); return }
@@ -859,8 +856,9 @@ export default function BlogPostEditor({
       setDraftState("saved")
       setLastSavedAt(new Date())
       setNotice(nextStatus === "published" ? "발행까지 완료했습니다." : "저장했습니다.")
+      const savedPostId = data.post._uuid ?? data.post.id
       startTransition(() => {
-        router.push(`/admin/blog/${data.post.id}/edit`)
+        router.push(`/admin/blog/${savedPostId}/edit`)
         router.refresh()
       })
     } catch {
@@ -1568,7 +1566,7 @@ export default function BlogPostEditor({
               {isSubmitting ? <Loader2 className="mr-1.5 h-3.5 w-3.5 animate-spin" /> : <Save className="mr-1.5 h-3.5 w-3.5" />}
               저장
             </Button>
-            <Button size="sm" onClick={() => handleSubmit("published")} disabled={isSubmitting}
+            <Button size="sm" onClick={() => handleSubmit("published", { publishNow: true })} disabled={isSubmitting}
               className="bg-[#084734] hover:bg-[#084734]/90 text-white active:scale-[0.97] transition-all duration-75">
               {isSubmitting ? <Loader2 className="mr-1.5 h-3.5 w-3.5 animate-spin" /> : <Sparkles className="mr-1.5 h-3.5 w-3.5" />}
               발행
@@ -2131,7 +2129,7 @@ export default function BlogPostEditor({
                       />
                       <FieldHint>
                         미래 시각으로 두면 발행 상태여도 그 시각 전까지 공개되지 않습니다.
-                        비우면 발행 즉시 공개됩니다.
+                        상단 발행 버튼은 이 값을 현재 시각으로 바꿔 즉시 공개합니다.
                       </FieldHint>
                     </div>
                     <div className="space-y-1.5">

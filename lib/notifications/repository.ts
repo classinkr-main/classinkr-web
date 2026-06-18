@@ -244,8 +244,35 @@ export async function listNotificationsForRecipients(
 export async function countUnreadNotificationsForRecipients(
   selectors: NotificationRecipientTarget[]
 ) {
-  const ids = await listNotificationIdsForRecipients(selectors, "unread")
-  return ids.length
+  if (!selectors.length) return 0
+
+  const uniqueSelectors = Array.from(
+    new Map(
+      selectors.map((selector) => [
+        `${selector.recipientType}:${selector.recipientId}`,
+        selector,
+      ])
+    ).values()
+  )
+
+  const counts = await Promise.all(
+    uniqueSelectors.map(async (selector) => {
+      const { count, error } = await sb()
+        .from("notifications")
+        .select("id", { count: "exact", head: true })
+        .eq("recipient_type", selector.recipientType)
+        .eq("recipient_id", selector.recipientId)
+        .eq("status", "unread")
+
+      if (error) {
+        throw new Error(`[notifications] count unread failed: ${error.message}`)
+      }
+
+      return count ?? 0
+    })
+  )
+
+  return counts.reduce((total, count) => total + count, 0)
 }
 
 export async function markAllNotificationsReadForRecipients(

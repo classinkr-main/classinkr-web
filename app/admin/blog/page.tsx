@@ -228,7 +228,7 @@ export default function AdminBlogPage() {
     }
 
     const handleEdit = (post: BlogPost) => {
-        router.push(`/admin/blog/${post.id}/edit`)
+        router.push(`/admin/blog/${post._uuid ?? post.id}/edit`)
     }
 
     const handleSave = async (data: Partial<BlogPostInput>) => {

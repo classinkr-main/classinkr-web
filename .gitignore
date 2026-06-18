@@ -54,3 +54,4 @@ tmp_audit/
 .superpowers/
 scripts/_insight-input.json
 scripts/_insight-output.json
+data/channel-conversations.local.json

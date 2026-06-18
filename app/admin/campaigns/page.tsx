@@ -2,6 +2,7 @@
 
 import { useCallback, useEffect, useMemo, useState, useSyncExternalStore } from "react"
 import Link from "next/link"
+import dynamic from "next/dynamic"
 import {
   Activity,
   AlertCircle,
@@ -22,7 +23,6 @@ import {
   X,
   Trash2,
 } from "lucide-react"
-import AdminMarketingPage from "../marketing/page"
 import {
   Bar,
   BarChart,
@@ -50,6 +50,15 @@ import {
 } from "@/lib/types/event-metrics"
 
 // ─── helpers ──────────────────────────────────────────────────────────────────
+
+const AdminMarketingPage = dynamic(() => import("../marketing/page"), {
+  ssr: false,
+  loading: () => (
+    <div className="rounded-2xl border border-[#e8e8e4] bg-white p-8 text-center text-sm text-[#1a1a1a]/45">
+      이메일 캠페인 도구를 불러오는 중...
+    </div>
+  ),
+})
 
 const KRW = new Intl.NumberFormat("ko-KR")
 const KRW_CURRENCY = new Intl.NumberFormat("ko-KR", {
@@ -103,27 +112,30 @@ function formatRange(startsAt: string, endsAt: string | null) {
   return `${sLabel} ~ ${eLabel}`
 }
 
-function leadsInRange(leads: LeadRecord[], start: string, end: string | null): LeadRecord[] {
-  const startMs = new Date(start).getTime()
-  const endMs = end ? new Date(end).getTime() : Date.now()
-  return leads.filter((l) => {
-    const t = new Date(l.timestamp).getTime()
-    return t >= startMs && t <= endMs
-  })
-}
-
 // ─── attribution: 행사 ↔ 리드 ──────────────────────────────────────────────────
 //   1) source/notes 필드에 event:<id> 또는 event:<slug> 토큰이 있으면 우선 매칭
 //   2) 그 외에는 행사 기간 내 발생한 리드를 보조 집계로 사용
-function attributedLeads(leads: LeadRecord[], event: PublicEvent): LeadRecord[] {
+type EventLeadStats = { attributed: number; during: number }
+type LeadLookupRow = { haystack: string; timestampMs: number }
+
+function countEventLeadStats(leads: LeadLookupRow[], event: PublicEvent): EventLeadStats {
   const tokenId = `event:${event.id}`.toLowerCase()
   const tokenSlug = event.slug ? `event:${event.slug}`.toLowerCase() : null
-  return leads.filter((l) => {
-    const haystack = `${l.source ?? ""} ${l.notes ?? ""}`.toLowerCase()
-    if (haystack.includes(tokenId)) return true
-    if (tokenSlug && haystack.includes(tokenSlug)) return true
-    return false
-  })
+  const startMs = new Date(event.startsAt).getTime()
+  const endMs = event.endsAt ? new Date(event.endsAt).getTime() : Date.now()
+  let attributed = 0
+  let during = 0
+
+  for (const lead of leads) {
+    if (lead.haystack.includes(tokenId) || (tokenSlug && lead.haystack.includes(tokenSlug))) {
+      attributed += 1
+    }
+    if (lead.timestampMs >= startMs && lead.timestampMs <= endMs) {
+      during += 1
+    }
+  }
+
+  return { attributed, during }
 }
 
 function buildFunnel(
@@ -1406,6 +1418,23 @@ export default function AdminCampaignsPage() {
     [events, period]
   )
 
+  const leadLookupRows = useMemo<LeadLookupRow[]>(
+    () =>
+      leads.map((lead) => ({
+        haystack: `${lead.source ?? ""} ${lead.notes ?? ""}`.toLowerCase(),
+        timestampMs: new Date(lead.timestamp).getTime(),
+      })),
+    [leads]
+  )
+
+  const eventLeadStats = useMemo(() => {
+    const stats = new Map<string, EventLeadStats>()
+    for (const event of filtered) {
+      stats.set(event.id, countEventLeadStats(leadLookupRows, event))
+    }
+    return stats
+  }, [filtered, leadLookupRows])
+
   // 집계 (전체 KPI)
   const aggregate = useMemo(() => {
     let totalSpend = 0
@@ -1428,8 +1457,9 @@ export default function AdminCampaignsPage() {
         eventId: ev.id,
         updatedAt: "",
       }
-      const attributed = attributedLeads(leads, ev).length
-      const during = leadsInRange(leads, ev.startsAt, ev.endsAt).length
+      const leadStats = eventLeadStats.get(ev.id) ?? { attributed: 0, during: 0 }
+      const attributed = leadStats.attributed
+      const during = leadStats.during
       const funnel = buildFunnel(ev, metrics, attributed, during)
       const econ = computeEconomics(funnel, metrics)
       totalSpend += econ.adSpendTotal
@@ -1456,7 +1486,7 @@ export default function AdminCampaignsPage() {
       attendanceToDealRate,
       channelTotals,
     }
-  }, [filtered, leads, metricsMap])
+  }, [eventLeadStats, filtered, metricsMap])
 
   const channelChartData = useMemo(
     () =>
@@ -1480,8 +1510,9 @@ export default function AdminCampaignsPage() {
             eventId: ev.id,
             updatedAt: "",
           }
-          const attributed = attributedLeads(leads, ev).length
-          const during = leadsInRange(leads, ev.startsAt, ev.endsAt).length
+          const leadStats = eventLeadStats.get(ev.id) ?? { attributed: 0, during: 0 }
+          const attributed = leadStats.attributed
+          const during = leadStats.during
           const funnel = buildFunnel(ev, metrics, attributed, during)
           return {
             name: ev.title.length > 14 ? ev.title.slice(0, 13) + "…" : ev.title,
@@ -1492,7 +1523,7 @@ export default function AdminCampaignsPage() {
           }
         })
         .slice(0, 10),
-    [filtered, leads, metricsMap]
+    [eventLeadStats, filtered, metricsMap]
   )
 
   const showFilterRow = activeTab === "summary" || activeTab === "events"
@@ -1824,15 +1855,14 @@ export default function AdminCampaignsPage() {
                   eventId: event.id,
                   updatedAt: "",
                 }
-                const attributedCount = attributedLeads(leads, event).length
-                const duringCount = leadsInRange(leads, event.startsAt, event.endsAt).length
+                const leadStats = eventLeadStats.get(event.id) ?? { attributed: 0, during: 0 }
                 return (
                   <EventFunnelCard
                     key={event.id}
                     event={event}
                     metrics={metrics}
-                    attributedLeadCount={attributedCount}
-                    duringLeadCount={duringCount}
+                    attributedLeadCount={leadStats.attributed}
+                    duringLeadCount={leadStats.during}
                     onEdit={() => setEditing(event)}
                   />
                 )

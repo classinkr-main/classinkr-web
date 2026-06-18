@@ -34,7 +34,7 @@ import { hasSupabaseBrowserEnv } from "@/lib/supabase/public-env"
 import AdminNotificationsBell from "./AdminNotificationsBell"
 
 type SidebarRole = "SUPER_ADMIN" | "ADMIN" | "EDITOR" | "VIEWER" | "BRANCH" | "PARTNER"
-type SidebarSection = "workspace" | "growth" | "performance" | "system"
+type SidebarSection = "home" | "sales" | "marketing" | "cs" | "performance" | "system"
 
 interface NavItem {
   href: string
@@ -50,17 +50,16 @@ const STAFF_ADMIN: SidebarRole[]  = ["SUPER_ADMIN", "ADMIN"]
 const STAFF_EDITOR: SidebarRole[] = ["SUPER_ADMIN", "ADMIN", "EDITOR"]
 
 const NAV: NavItem[] = [
-  { href: "/admin/overview", label: "Overview", icon: <LayoutDashboard className="h-4 w-4" />, roles: [...ALL_STAFF, "BRANCH"], section: "workspace" },
-  { href: "/admin/crm", label: "CRM", icon: <Users className="h-4 w-4" />, roles: [...ALL_STAFF, "BRANCH"], section: "workspace" },
-  { href: "/admin/channel-talk", label: "채널톡 상담", icon: <MessageSquare className="h-4 w-4" />, roles: STAFF_ADMIN, section: "workspace", badge: "New" },
-  { href: "/admin/calendar", label: "캘린더", icon: <CalendarDays className="h-4 w-4" />, roles: [...ALL_STAFF, "BRANCH"], section: "workspace" },
-  { href: "/admin/quotes", label: "견적·문서", icon: <FileText className="h-4 w-4" />, roles: STAFF_ADMIN, section: "workspace" },
-  { href: "/admin/campaigns", label: "캠페인", icon: <Megaphone className="h-4 w-4" />, roles: STAFF_ADMIN, section: "growth" },
-  { href: "/admin/blog", label: "콘텐츠", icon: <FileText className="h-4 w-4" />, roles: STAFF_EDITOR, section: "growth" },
-  { href: "/admin/lead-magnets", label: "리드마그넷", icon: <Magnet className="h-4 w-4" />, roles: STAFF_EDITOR, section: "growth", badge: "Preview" },
-  { href: "/admin/events", label: "공개 행사", icon: <Globe className="h-4 w-4" />, roles: STAFF_ADMIN, section: "growth" },
-  { href: "/admin/docs", label: "가이드 문서", icon: <BookOpen className="h-4 w-4" />, roles: STAFF_EDITOR, section: "growth" },
-  { href: "/admin/docs/gaps", label: "문서 보강 큐", icon: <Search className="h-4 w-4" />, roles: STAFF_EDITOR, section: "growth", badge: "Alpha" },
+  { href: "/admin/overview", label: "Overview", icon: <LayoutDashboard className="h-4 w-4" />, roles: [...ALL_STAFF, "BRANCH"], section: "home" },
+  { href: "/admin/crm", label: "CRM", icon: <Users className="h-4 w-4" />, roles: [...ALL_STAFF, "BRANCH"], section: "sales" },
+  { href: "/admin/calendar", label: "캘린더", icon: <CalendarDays className="h-4 w-4" />, roles: [...ALL_STAFF, "BRANCH"], section: "sales" },
+  { href: "/admin/quotes", label: "견적·문서", icon: <FileText className="h-4 w-4" />, roles: STAFF_ADMIN, section: "sales" },
+  { href: "/admin/campaigns", label: "캠페인", icon: <Megaphone className="h-4 w-4" />, roles: STAFF_ADMIN, section: "marketing" },
+  { href: "/admin/blog", label: "콘텐츠", icon: <FileText className="h-4 w-4" />, roles: STAFF_EDITOR, section: "marketing" },
+  { href: "/admin/events", label: "공개 행사", icon: <Globe className="h-4 w-4" />, roles: STAFF_ADMIN, section: "marketing" },
+  { href: "/admin/lead-magnets", label: "리드마그넷", icon: <Magnet className="h-4 w-4" />, roles: STAFF_EDITOR, section: "marketing", badge: "Preview" },
+  { href: "/admin/channel-talk", label: "채널톡 상담", icon: <MessageSquare className="h-4 w-4" />, roles: STAFF_ADMIN, section: "cs", badge: "New" },
+  { href: "/admin/docs", label: "가이드 문서", icon: <BookOpen className="h-4 w-4" />, roles: STAFF_EDITOR, section: "cs" },
   { href: "/admin/branch", label: "KR Team", icon: <Building2 className="h-4 w-4" />, roles: [...STAFF_ADMIN, "BRANCH"], section: "performance" },
   { href: "/admin/analytics", label: "Analytics", icon: <BarChart2 className="h-4 w-4" />, roles: [...ALL_STAFF, "BRANCH"], section: "performance" },
   { href: "/admin/settings", label: "Settings", icon: <Settings className="h-4 w-4" />, roles: STAFF_ADMIN, section: "system" },
@@ -98,7 +97,6 @@ const NAV_WARMUP_REQUESTS: Record<string, string[]> = {
   "/admin/blog": ["/api/admin/blog", "/api/admin/blog?trash=1"],
   "/admin/events": ["/api/admin/events"],
   "/admin/docs": ["/api/admin/docs", "/api/admin/docs/analytics?days=30"],
-  "/admin/docs/gaps": ["/api/admin/docs/alpha-readiness", "/api/admin/docs/gaps"],
   "/admin/branch": [
     "/api/admin/branch/summary?team=ALL&period=Q",
     "/api/admin/branch/kpi?team=ALL&period=Q",
@@ -118,11 +116,20 @@ const NAV_WARMUP_REQUESTS: Record<string, string[]> = {
 }
 
 const SECTION_META: Record<SidebarSection, { label: string; description: string }> = {
-  workspace: { label: "운영", description: "팀 현황과 세일즈 진행 관리" },
-  growth: { label: "성장", description: "캠페인, 콘텐츠, 전환 관리" },
+  home: { label: "홈", description: "오늘 먼저 볼 운영 허브" },
+  sales: { label: "세일즈팀", description: "CRM, 일정, 견적·문서" },
+  marketing: { label: "마케팅팀", description: "캠페인, 콘텐츠, 행사, 리드마그넷" },
+  cs: { label: "CS팀", description: "상담, 고객 질문, 가이드 문서" },
   performance: { label: "분석", description: "성과, 매출, 지점 운영 확인" },
   system: { label: "시스템", description: "권한, 설정, 감사, 개발 도구" },
 }
+
+const MOBILE_PRIMARY_HREFS = [
+  "/admin/overview",
+  "/admin/crm",
+  "/admin/campaigns",
+  "/admin/channel-talk",
+] as const
 
 const ROLE_LABEL: Record<SidebarRole, string> = {
   SUPER_ADMIN: "최고 관리자",
@@ -157,6 +164,7 @@ export default function AdminSidebar({ role, name, email }: Props) {
   const router = useRouter()
   const prefetchedHrefs = useRef(new Set<string>())
   const warmedHrefs = useRef(new Set<string>())
+  const warmupTimerRef = useRef<number | null>(null)
   const [collapsed, setCollapsed] = useState(() => {
     if (typeof window === "undefined") return false
     return localStorage.getItem("admin_sidebar_collapsed") === "true"
@@ -204,9 +212,9 @@ export default function AdminSidebar({ role, name, email }: Props) {
   )
   const isNavActive = (href: string) => pathname === href || pathname.startsWith(`${href}/`)
   const currentNavItem = visibleNav.find((item) => isNavActive(item.href)) ?? visibleNav[0]
-  const mobilePrimaryNav = visibleNav
-    .filter((item) => item.section === "workspace")
-    .slice(0, 4)
+  const mobilePrimaryNav = MOBILE_PRIMARY_HREFS
+    .map((href) => visibleNav.find((item) => item.href === href))
+    .filter((item): item is NavItem => Boolean(item))
   const mobileBottomColumns = Math.min(mobilePrimaryNav.length + 1, 5)
   const groupedNav = (Object.keys(SECTION_META) as SidebarSection[]).map((section) => ({
     section,
@@ -234,6 +242,27 @@ export default function AdminSidebar({ role, name, email }: Props) {
       void warmAdminRequestCache(url, { ttlMs: 60_000 })
     }
   }, [prefetchAdminRoute])
+
+  const scheduleWarmAdminTab = useCallback((href: string) => {
+    prefetchAdminRoute(href)
+
+    if (warmupTimerRef.current !== null) {
+      window.clearTimeout(warmupTimerRef.current)
+    }
+
+    warmupTimerRef.current = window.setTimeout(() => {
+      warmAdminTab(href)
+      warmupTimerRef.current = null
+    }, 180)
+  }, [prefetchAdminRoute, warmAdminTab])
+
+  const cancelWarmAdminTab = useCallback(() => {
+    if (warmupTimerRef.current === null) return
+    window.clearTimeout(warmupTimerRef.current)
+    warmupTimerRef.current = null
+  }, [])
+
+  useEffect(() => () => cancelWarmAdminTab(), [cancelWarmAdminTab])
 
   useEffect(() => {
     const run = () => {
@@ -323,7 +352,8 @@ export default function AdminSidebar({ role, name, email }: Props) {
                         key={`mobile-${item.href}`}
                         href={item.href}
                         onFocus={() => warmAdminTab(item.href)}
-                        onMouseEnter={() => warmAdminTab(item.href)}
+                        onMouseEnter={() => scheduleWarmAdminTab(item.href)}
+                        onMouseLeave={cancelWarmAdminTab}
                         onTouchStart={() => warmAdminTab(item.href)}
                         onClick={() => {
                           warmAdminTab(item.href)
@@ -380,7 +410,8 @@ export default function AdminSidebar({ role, name, email }: Props) {
               key={`bottom-${item.href}`}
               href={item.href}
               onFocus={() => warmAdminTab(item.href)}
-              onMouseEnter={() => warmAdminTab(item.href)}
+              onMouseEnter={() => scheduleWarmAdminTab(item.href)}
+              onMouseLeave={cancelWarmAdminTab}
               onTouchStart={() => warmAdminTab(item.href)}
               className={`flex min-h-[52px] flex-col items-center justify-center gap-1 rounded-md px-1 text-[10px] font-medium leading-none transition-colors ${
                 isActive
@@ -482,7 +513,8 @@ export default function AdminSidebar({ role, name, email }: Props) {
                     href={item.href}
                     title={effectiveCollapsed ? item.label : undefined}
                     onFocus={() => warmAdminTab(item.href)}
-                    onMouseEnter={() => warmAdminTab(item.href)}
+                    onMouseEnter={() => scheduleWarmAdminTab(item.href)}
+                    onMouseLeave={cancelWarmAdminTab}
                     onTouchStart={() => warmAdminTab(item.href)}
                     className={`group flex items-center gap-2.5 rounded-lg text-[13px] font-medium transition-colors ${
                       effectiveCollapsed ? "justify-center px-2 py-2.5" : "px-3 py-2"
@@ -526,7 +558,8 @@ export default function AdminSidebar({ role, name, email }: Props) {
                   key={`quick-${item.href}`}
                   href={item.href}
                   onFocus={() => warmAdminTab(item.href)}
-                  onMouseEnter={() => warmAdminTab(item.href)}
+                  onMouseEnter={() => scheduleWarmAdminTab(item.href)}
+                  onMouseLeave={cancelWarmAdminTab}
                   onTouchStart={() => warmAdminTab(item.href)}
                   className="inline-flex shrink-0 items-center rounded-md border border-[#e8e8e4] bg-white px-2 py-1 text-[11px] text-[#1a1a1a]/55 transition-colors hover:border-[#c8c8c4] hover:text-[#111110]"
                 >

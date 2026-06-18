@@ -33,7 +33,7 @@ export default function AdminNotificationsBell({ placement = "floating" }: BellP
   const router = useRouter()
   const panelRef = useRef<HTMLDivElement | null>(null)
   const [open, setOpen] = useState(false)
-  const [loading, setLoading] = useState(true)
+  const [loading, setLoading] = useState(false)
   const [busy, setBusy] = useState(false)
   const [items, setItems] = useState<NotificationInboxItem[]>([])
   const [unreadCount, setUnreadCount] = useState(0)
@@ -59,15 +59,42 @@ export default function AdminNotificationsBell({ placement = "floating" }: BellP
     }
   }, [])
 
+  const loadUnreadCount = useCallback(async () => {
+    try {
+      const data = await adminFetchJson<{ unreadCount: number }>(
+        "/api/admin/notifications?countOnly=1"
+      )
+      setUnreadCount(data.unreadCount)
+    } catch (error) {
+      console.error("[admin notifications] count failed", error)
+    }
+  }, [])
+
   useEffect(() => {
-    void load()
+    void loadUnreadCount()
 
     const timer = window.setInterval(() => {
-      void load(true)
+      if (document.hidden) return
+      if (open) void load(true)
+      else void loadUnreadCount()
     }, 60_000)
 
     return () => window.clearInterval(timer)
-  }, [load])
+  }, [load, loadUnreadCount, open])
+
+  useEffect(() => {
+    if (!open) return
+    void load()
+  }, [load, open])
+
+  useEffect(() => {
+    const handleVisibilityChange = () => {
+      if (!document.hidden) void loadUnreadCount()
+    }
+
+    document.addEventListener("visibilitychange", handleVisibilityChange)
+    return () => document.removeEventListener("visibilitychange", handleVisibilityChange)
+  }, [loadUnreadCount])
 
   useEffect(() => {
     function handlePointerDown(event: MouseEvent) {

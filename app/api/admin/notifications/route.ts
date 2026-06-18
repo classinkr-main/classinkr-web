@@ -14,7 +14,13 @@ export async function GET(req: NextRequest) {
 
   const rawLimit = Number.parseInt(req.nextUrl.searchParams.get("limit") ?? "20", 10)
   const limit = Number.isFinite(rawLimit) ? rawLimit : 20
+  const countOnly = req.nextUrl.searchParams.get("countOnly") === "1"
   const selectors = getAdminRecipientSelectors(admin)
+  if (countOnly) {
+    const unreadCount = await countUnreadNotificationsForRecipients(selectors)
+    return NextResponse.json({ unreadCount })
+  }
+
   const [items, unreadCount] = await Promise.all([
     listNotificationsForRecipients(selectors, { limit }),
     countUnreadNotificationsForRecipients(selectors),
