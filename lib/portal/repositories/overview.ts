@@ -302,10 +302,13 @@ export async function getCommercialOverview(
   range: CommercialOverviewRange = "today"
 ): Promise<CommercialOverviewPayload> {
   const supabase = createSupabaseAdminClient();
+  const now = new Date();
+  const { start, end } = getRangeBounds(range, now);
   const [customers, deals, installations] = await Promise.all([
     // 개요 metrics는 customer/summary만 사용 — decoration 쿼리 생략
     listAllCustomerListItemsLite(),
-    listDealListItems(),
+    // P3: deal 목록을 날짜 윈도우로 좁혀 가져온다(전체 deal 전송 방지). 아래에서 동일 기준으로 한 번 더 거른다.
+    listDealListItems({ updatedFrom: start.toISOString(), updatedTo: end.toISOString() }),
     supabase
       .from("installation_events")
       .select("*")
@@ -318,7 +321,6 @@ export async function getCommercialOverview(
   }
 
   const installationRows = (installations.data ?? []) as InstallationEvent[];
-  const now = new Date();
   const filteredCustomers = filterCustomersByRange(customers, range, now);
   const filteredDeals = deals.filter((deal) => isWithinRange(deal.updated_at, range, now));
   const filteredInstallationRows = installationRows.filter((item) =>
@@ -328,6 +330,23 @@ export async function getCommercialOverview(
     customers.map((item) => [item.customer.id, item.customer.name])
   );
   const dealTitleById = new Map(deals.map((deal) => [deal.id, deal.title]));
+  // P3: 날짜 윈도우 밖 deal에 걸린 (윈도우 내) 설치 일정의 제목만 보강한다.
+  const missingTitleIds = [
+    ...new Set(
+      filteredInstallationRows
+        .map((item) => item.deal_id)
+        .filter((id): id is string => Boolean(id) && !dealTitleById.has(id))
+    ),
+  ];
+  if (missingTitleIds.length > 0) {
+    const { data: titleRows } = await supabase
+      .from("deals")
+      .select("id, title")
+      .in("id", missingTitleIds);
+    for (const row of (titleRows ?? []) as Array<{ id: string; title: string }>) {
+      dealTitleById.set(row.id, row.title);
+    }
+  }
   const installationsByDealId = installationRows.reduce((map, item) => {
     const items = map.get(item.deal_id) ?? [];
     items.push(item);

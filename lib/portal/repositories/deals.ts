@@ -35,6 +35,10 @@ type ListDealsFilters = {
   customerId?: string;
   stage?: DealStage;
   status?: DealStatus;
+  /** updated_at >= this ISO timestamp (commercial overview date window) */
+  updatedFrom?: string;
+  /** updated_at <= this ISO timestamp */
+  updatedTo?: string;
 };
 
 export async function listDeals(filters: ListDealsFilters = {}): Promise<Deal[]> {
@@ -69,6 +73,8 @@ export async function listDealListItems(
   if (filters.customerId) query = query.eq("customer_id", filters.customerId);
   if (filters.stage) query = query.eq("current_stage", filters.stage);
   if (filters.status) query = query.eq("status", filters.status);
+  if (filters.updatedFrom) query = query.gte("updated_at", filters.updatedFrom);
+  if (filters.updatedTo) query = query.lte("updated_at", filters.updatedTo);
 
   const { data, error } = await query;
   if (error) throw error;
