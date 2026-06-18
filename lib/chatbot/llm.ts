@@ -19,17 +19,16 @@ import type { ChatbotSource } from "./service"
 export type ChatbotModelTier = "basic" | "reasoning" | "advanced"
 
 // 챗봇 모델 티어별 기본 모델 설정.
-// 주의: 아래 모델은 Gemini API v1beta 에서 실제 응답 확인된 값만 사용한다(2026-06 검증).
-// gemini-3.1-pro(404), gemini-2.0-flash*(404), gemini-1.5-*(404)는
-// 답변 LLM 재작성을 조용히 실패시켜 raw 청크가 그대로 노출되는 원인이 됐다.
-// gemini-3.5-flash: 사용자 결정(2026-06-18)으로 기본 fast 모델로 사용. 과거 503 관찰 이력이 있으니
-// 무음 실패(raw 청크 노출)가 재발하면 2.5-flash 폴백을 다시 검토할 것.
-const DEFAULT_FAST_MODEL = "gemini-3.5-flash"
+// 주의: 아래 모델은 Gemini API v1beta 에서 실제 응답 확인된 값만 사용한다(2026-06-18 재검증).
+// 실측: gemini-3.5-flash 는 6/6 연속 503(상시 과부하), gemini-3.1-pro·2.0-flash*·1.5-* 는 404 →
+// 답변 LLM 재작성을 무음 실패시켜 raw 청크가 그대로 노출됐다. 6/6 성공하는 gemini-2.5-flash 를 fast 로 둔다.
+const DEFAULT_FAST_MODEL = "gemini-2.5-flash"
 const DEFAULT_REASONING_MODEL = "gemini-2.5-pro"
 const DEFAULT_ADVANCED_MODEL = "gemini-2.5-pro"
 
-// 설정값으로 들어오면 무시하고 위 기본값으로 폴백할 모델(미지원/폐기).
+// 설정값으로 들어오면 무시하고 위 기본값으로 폴백할 모델(미지원/폐기/상시 503).
 const UNSUPPORTED_GEMINI_MODELS = new Set([
+  "gemini-3.5-flash",
   "gemini-3.1-pro",
   "gemini-2.0-flash",
   "gemini-2.0-flash-thinking-exp-01-21",
