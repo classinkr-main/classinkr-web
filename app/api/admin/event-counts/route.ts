@@ -29,6 +29,23 @@ export async function GET(req: NextRequest) {
 
   try {
     const sb = createSupabaseAdminClient()
+
+    // Fast path: SQL aggregate (admin_event_counts). Falls back to the row scan
+    // below if the function isn't present yet (pre-migration), so it's non-breaking.
+    const agg = await sb.rpc("admin_event_counts", { since_ts: since })
+    if (!agg.error && agg.data) {
+      const d = agg.data as Omit<EventCountsResponse, "rangeDays">
+      const json = NextResponse.json({
+        rangeDays,
+        total: d.total ?? 0,
+        byEvent: d.byEvent ?? [],
+        byButton: d.byButton ?? [],
+        daily: d.daily ?? [],
+      })
+      json.headers.set("Cache-Control", "private, max-age=30, stale-while-revalidate=120")
+      return json
+    }
+
     const { data, error } = await sb
       .from("client_events")
       .select("event_name, button, page, created_at")
