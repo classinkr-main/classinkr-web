@@ -18,16 +18,16 @@ import type { ChatbotSource } from "./service"
 
 export type ChatbotModelTier = "basic" | "reasoning" | "advanced"
 
-// 챗봇 모델 티어별 기본 모델 설정.
-// 측정상 gemini-3.5-flash 는 6/6 연속 503 관찰됐으나, 사용자 결정(2026-06-18 재요청)으로 fast 기본을 3.5-flash 로 둔다.
-// gemini-3.1-pro·2.0-flash*·1.5-* 는 404. 503 재발 시 답변 LLM 무음 실패(raw 청크 노출)이므로 gemini-2.5-flash 로 즉시 폴백할 것.
+// 챗봇 모델 티어별 기본 모델 설정 (사용자 결정 2026-06-18).
+// fast(basic): gemini-3.5-flash. 측정상 6/6 503 관찰 이력 있으나 사용자 요청으로 유지(503 재발 시 2.5-flash 폴백 검토).
+// reasoning·advanced(심화·심각 상담): gemini-3.1-pro 우선, 호출 에러 시 gemini-2.5-pro 로 자동 폴백(resolveModelChain).
 const DEFAULT_FAST_MODEL = "gemini-3.5-flash"
-const DEFAULT_REASONING_MODEL = "gemini-2.5-pro"
-const DEFAULT_ADVANCED_MODEL = "gemini-2.5-pro"
+const DEFAULT_REASONING_MODEL = "gemini-3.1-pro"
+const DEFAULT_ADVANCED_MODEL = "gemini-3.1-pro"
+const DEEP_FALLBACK_MODEL = "gemini-2.5-pro"
 
 // 설정값으로 들어오면 무시하고 위 기본값으로 폴백할 모델(미지원/폐기/상시 503).
 const UNSUPPORTED_GEMINI_MODELS = new Set([
-  "gemini-3.1-pro",
   "gemini-2.0-flash",
   "gemini-2.0-flash-thinking-exp-01-21",
   "gemini-1.5-flash",
@@ -59,6 +59,16 @@ function resolveModel(tier: ChatbotModelTier = "basic") {
   const configured = process.env.GEMINI_FAST_MODEL?.trim()
   if (!configured || UNSUPPORTED_GEMINI_MODELS.has(configured)) return DEFAULT_FAST_MODEL
   return configured
+}
+
+// 티어별 프라이머리 + 에러 폴백 모델 체인. 심화·심각 상담(reasoning·advanced)은
+// 프라이머리(기본 gemini-3.1-pro) 호출이 실패하면 gemini-2.5-pro 로 자동 폴백한다.
+function resolveModelChain(tier: ChatbotModelTier): string[] {
+  const primary = resolveModel(tier)
+  if (tier === "reasoning" || tier === "advanced") {
+    return Array.from(new Set([primary, DEEP_FALLBACK_MODEL]))
+  }
+  return [primary]
 }
 
 function getGeminiApiKey() {
@@ -182,53 +192,60 @@ async function requestGeminiContent({
   const apiKey = getGeminiApiKey()
   if (!apiKey) return null
 
-  const controller = new AbortController()
-  const timeout = setTimeout(() => controller.abort(), GEMINI_TIMEOUT_MS)
+  const models = resolveModelChain(tier)
+  const requestBody = JSON.stringify({
+    systemInstruction: { parts: [{ text: systemInstruction }] },
+    contents,
+    generationConfig: {
+      temperature,
+      topP: 0.9,
+      // gemini-2.5-* 는 thinking 모델 — thinking 이 켜지면 출력 토큰을 먼저 소진해 본문이 잘린다.
+      // 답변 다듬기에는 추론이 필요 없으므로 thinking 을 끄고 본문에 토큰을 모두 쓴다.
+      maxOutputTokens: 600,
+      thinkingConfig: { thinkingBudget: 0 },
+    },
+  })
 
-  try {
-    const res = await fetch(
-      `https://generativelanguage.googleapis.com/v1beta/models/${resolveModel(tier)}:generateContent?key=${apiKey}`,
-      {
-        method: "POST",
-        headers: { "Content-Type": "application/json" },
-        signal: controller.signal,
-        body: JSON.stringify({
-          systemInstruction: { parts: [{ text: systemInstruction }] },
-          contents,
-          generationConfig: {
-            temperature,
-            topP: 0.9,
-            // gemini-2.5-* 는 thinking 모델 — thinking 이 켜지면 출력 토큰을 먼저 소진해
-            // maxOutputTokens:256 안에서 본문이 잘리고(finishReason MAX_TOKENS) 빈 텍스트가 반환된다.
-            // 답변 다듬기에는 추론이 필요 없으므로 thinking 을 끄고 본문에 토큰을 모두 쓴다.
-            maxOutputTokens: 600,
-            thinkingConfig: { thinkingBudget: 0 },
-          },
-        }),
+  // 프라이머리 모델이 실패(non-ok/타임아웃/네트워크/빈 응답)하면 다음 폴백 모델로 순차 시도한다.
+  for (const model of models) {
+    const controller = new AbortController()
+    const timeout = setTimeout(() => controller.abort(), GEMINI_TIMEOUT_MS)
+
+    try {
+      const res = await fetch(
+        `https://generativelanguage.googleapis.com/v1beta/models/${model}:generateContent?key=${apiKey}`,
+        {
+          method: "POST",
+          headers: { "Content-Type": "application/json" },
+          signal: controller.signal,
+          body: requestBody,
+        }
+      )
+
+      if (!res.ok) continue
+
+      const data = (await res.json()) as {
+        candidates?: { content?: { parts?: { text?: string }[] } }[]
       }
-    )
 
-    if (!res.ok) return null
+      const text = data.candidates?.[0]?.content?.parts
+        ?.map((part) => part.text ?? "")
+        .join("")
+        .trim()
 
-    const data = (await res.json()) as {
-      candidates?: { content?: { parts?: { text?: string }[] } }[]
+      if (!text) continue
+      const sanitized = sanitizePublicAnswerText(text)
+      if (!sanitized) continue
+      return sanitized.slice(0, MAX_ANSWER_LENGTH)
+    } catch {
+      // 타임아웃·네트워크·파싱 오류 → 다음 폴백 모델 시도
+      continue
+    } finally {
+      clearTimeout(timeout)
     }
-
-    const text = data.candidates?.[0]?.content?.parts
-      ?.map((part) => part.text ?? "")
-      .join("")
-      .trim()
-
-    if (!text) return null
-    const sanitized = sanitizePublicAnswerText(text)
-    if (!sanitized) return null
-    return sanitized.slice(0, MAX_ANSWER_LENGTH)
-  } catch {
-    // 타임아웃·네트워크·파싱 오류 → 폴백
-    return null
-  } finally {
-    clearTimeout(timeout)
   }
+
+  return null
 }
 
 export async function generateGeminiAnswer({
