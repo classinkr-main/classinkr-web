@@ -44,6 +44,7 @@ export const ALPHA_DB_MIGRATIONS = [
   "supabase/migrations/20260421_z_chatbot_analytics.sql",
   "supabase/migrations/20260520_chatbot_recommended_questions.sql",
   "supabase/migrations/20260614211500_chatbot_recommended_questions_alpha_seed.sql",
+  "supabase/migrations/20260618_chatbot_recommended_questions_positive_flow.sql",
   "supabase/migrations/20260604_docs_article_drafts.sql",
   "supabase/migrations/20260613_docs_chunk_vector_search.sql",
   "supabase/migrations/20260615_public_material_downloads.sql",

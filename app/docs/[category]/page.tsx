@@ -16,6 +16,7 @@ import {
 
 import { toArticleSummary, scoreDocsArticle } from "../_utils"
 import { SearchHighlight } from "@/components/ui/SearchHighlight"
+import { DocsSearchLogger } from "@/components/docs/DocsSearchLogger"
 
 interface DocsCategoryPageProps {
   params: Promise<{ category: string }>
@@ -100,6 +101,7 @@ export default async function DocsCategoryPage({
 
   return (
     <div className="min-h-screen bg-[#FAFAF8] pt-28 pb-24 text-[#111110] md:pt-36">
+      {query && <DocsSearchLogger query={query} resultCount={filteredDocs.length} />}
       <section className="container">
         <Link
           href="/docs"
@@ -126,6 +128,7 @@ export default async function DocsCategoryPage({
           <input
             name="q"
             defaultValue={q ?? ""}
+            aria-label={`${category.title} 검색`}
             placeholder="이 주제에서 궁금한 내용 검색"
             className="min-w-0 flex-1 bg-transparent text-base outline-none placeholder:text-[#A39E98]"
           />

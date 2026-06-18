@@ -13,6 +13,8 @@
   - Classin Home 공개 사이트의 현재 기준 PRD
 - [active/classin-korea-positioning-guidelines.md](./active/classin-korea-positioning-guidelines.md)
   - 한국 학원 시장용 Classin 정체성, 메시지, 리드마그넷, 챗봇 답변, CTA 기준
+- [active/classin-pre-adoption-question-matrix-2026-06-18.md](./active/classin-pre-adoption-question-matrix-2026-06-18.md)
+  - 도입 전 22가지 질문의 답변 가능 범위, 확인 필요 항목, 상담·챗봇·리드마그넷 반영 기준
 - [active/partner-portal-master-spec.md](./active/partner-portal-master-spec.md)
   - 파트너 포털의 현재 기준 제품 스펙
 - [active/architecture-schema-erd.md](./active/architecture-schema-erd.md)
@@ -46,6 +48,8 @@
   - 문서센터 콘텐츠 작성 순서, 공개/보류 기준, 운영 가이드 우선순위
 - [active/classin-korea-positioning-guidelines.md](./active/classin-korea-positioning-guidelines.md)
   - 홈페이지, 블로그, 가이드, 자료실, 챗봇, 상담 CTA에 적용하는 Classin 한국 시장 포지셔닝 기준
+- [active/classin-pre-adoption-question-matrix-2026-06-18.md](./active/classin-pre-adoption-question-matrix-2026-06-18.md)
+  - 실제 도입 전 질문 리스트를 상담 대응과 자료실 콘텐츠로 전환하는 기준
 - [active/classin-board-s-series-safe-manual-guidelines.md](./active/classin-board-s-series-safe-manual-guidelines.md)
   - 하드웨어 안전 안내와 기본 매뉴얼 답변의 한국어 기준
 - [active/chatbot-knowledgebase-faq-analytics-plan.md](./active/chatbot-knowledgebase-faq-analytics-plan.md)

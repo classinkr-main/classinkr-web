@@ -42,6 +42,9 @@ interface DocsArticleRow {
   featured: boolean
   visibility: "public" | "unlisted" | "internal"
   noindex: boolean
+  seo_title: string | null
+  seo_description: string | null
+  canonical_path: string | null
   last_reviewed_at: string | null
   published_at: string | null
   updated_at: string
@@ -217,7 +220,7 @@ async function fetchDocsContentFromSupabase(): Promise<DocsContent> {
       supabase
         .from("docs_articles")
         .select(
-          "id, category_id, slug, title, description, audience, tags, keywords, chatbot_summary, content_markdown, content_json, featured, visibility, noindex, last_reviewed_at, published_at, updated_at"
+          "id, category_id, slug, title, description, audience, tags, keywords, chatbot_summary, content_markdown, content_json, featured, visibility, noindex, seo_title, seo_description, canonical_path, last_reviewed_at, published_at, updated_at"
         )
         .in("status", PUBLISHED_DOC_STATUS_VALUES)
         .in("visibility", ["public", "unlisted"])
@@ -279,6 +282,9 @@ async function fetchDocsContentFromSupabase(): Promise<DocsContent> {
       featured: row.featured,
       visibility: row.visibility,
       noindex: row.noindex,
+      seoTitle: row.seo_title ?? undefined,
+      seoDescription: row.seo_description ?? undefined,
+      canonicalPath: row.canonical_path ?? undefined,
       tags: row.tags ?? [],
       keywords: row.keywords ?? [],
       chatbotSummary: row.chatbot_summary ?? row.description,

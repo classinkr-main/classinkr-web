@@ -31,6 +31,7 @@ import BlogMarkdownRenderer from "@/components/blog/BlogMarkdownRenderer"
 import RichMarkdownEditor, { type RichMarkdownEditorHandle } from "@/components/admin/RichMarkdownEditor"
 import { getAdminToken } from "@/lib/admin-client"
 import { extractMarkdownHeadings } from "@/lib/blog-markdown"
+import { computePublicEventStatus } from "@/lib/public-event-dates"
 import type { PublicEvent, EventCategory, EventPublicationStatus, EventStatus } from "@/lib/types/public-events"
 import { EVENT_CATEGORIES } from "@/lib/types/public-events"
 
@@ -285,12 +286,7 @@ export default function EventEditor({ event, mode }: EventEditorProps) {
   const previewStatus: EventStatus = (() => {
     if (form.statusOverride !== "auto") return form.statusOverride
     if (!form.startsAt) return "예정"
-    const now = new Date()
-    const starts = new Date(form.startsAt)
-    const ends = form.endsAt ? new Date(form.endsAt) : null
-    if (now < starts) return "예정"
-    if (ends && now > ends) return "마감"
-    return "진행 중"
+    return computePublicEventStatus(form.startsAt, form.endsAt || null, null)
   })()
 
   const indicatorClass =
@@ -803,6 +799,9 @@ export default function EventEditor({ event, mode }: EventEditorProps) {
                   onChange={(e) => setForm({ ...form, endsAt: e.target.value })}
                   className="w-full rounded-lg border border-[rgba(0,0,0,0.12)] px-3 py-2 text-[13px] focus:border-[#111110]/30 focus:outline-none"
                 />
+                <p className="mt-1.5 text-[11px] leading-5 text-[#615D59]">
+                  비워두면 공개 상태 계산과 캘린더 추가에서는 시작 후 2시간을 기본 종료 시각으로 봅니다.
+                </p>
               </div>
               <div>
                 <label className="mb-1.5 block text-[12px] font-medium text-[#1a1a1a]/50">장소</label>

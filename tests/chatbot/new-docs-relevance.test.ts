@@ -92,4 +92,16 @@ describe("chatbot new-docs RAG source relevance", () => {
       expect(result.sources[0]?.urlPath).toBe("/docs/start/value-and-cost-framing")
     }
   })
+
+  it("surfaces the pre-adoption FAQ for explicit 22-question adoption checks", async () => {
+    disableExternalChatbotServices()
+
+    const result = await evaluateChatbotQuery("ClassIn 도입 전에 꼭 확인해야 할 22가지 질문이 뭐예요?", {
+      generateAnswer: false,
+    })
+
+    expect(result.detectedCategory).toBe("onboarding")
+    expect(result.answerMode).toBe("direct_answer")
+    expect(result.sources[0]?.urlPath).toBe("/docs/start/pre-adoption-faq-22-questions")
+  })
 })

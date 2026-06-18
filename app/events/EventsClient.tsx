@@ -2,50 +2,70 @@
 
 import { useState, useMemo } from "react"
 import { motion, AnimatePresence } from "framer-motion"
-import { Calendar, MapPin, Tag, ArrowRight, Search } from "lucide-react"
+import { Calendar, MapPin, Tag, ArrowRight, Search, X } from "lucide-react"
 import Image from "next/image"
 import Link from "next/link"
 import type { PublicEvent, EventStatus } from "@/lib/types/public-events"
+import { formatPublicEventDate } from "@/lib/public-event-dates"
 
 const CATEGORIES = ["전체", "웨비나", "오프라인 행사", "프로모션", "얼리버드", "파트너십"] as const
-
-function formatKoreanDate(iso: string): string {
-  const d = new Date(iso)
-  return `${d.getFullYear()}. ${String(d.getMonth() + 1).padStart(2, "0")}. ${String(d.getDate()).padStart(2, "0")}`
-}
+const LOCATION_SEARCH_ALIASES = [
+  ["busan", "부산"],
+  ["gwangju", "광주"],
+  ["gwang-ju", "광주"],
+  ["seoul", "서울"],
+  ["incheon", "인천"],
+  ["daegu", "대구"],
+  ["daejeon", "대전"],
+] as const
 
 function StatusBadge({ status }: { status: EventStatus }) {
   const styles: Record<EventStatus, string> = {
-    "진행 중": "text-emerald-600",
-    "예정": "text-[#084734]",
-    "마감": "text-[#1a1a1a]/30",
+    "진행 중": "border-[#D1FAE5] bg-[#ECFDF5] text-[#084734]",
+    "예정": "border-[#D1FAE5] bg-white text-[#084734]",
+    "마감": "border-black/[0.08] bg-[#F6F5F4] text-[#615D59]",
   }
   return (
-    <span className={`text-[11px] font-semibold ${styles[status]}`}>
+    <span className={`inline-flex items-center rounded-full border px-2.5 py-1 text-[11px] font-semibold ${styles[status]}`}>
       {status}
     </span>
   )
+}
+
+function getEventSearchText(event: PublicEvent) {
+  const baseText = [
+    event.title,
+    event.description ?? "",
+    event.category,
+    event.tag ?? "",
+    event.location ?? "",
+    event.status,
+  ].join(" ")
+  const lowerBaseText = baseText.toLowerCase()
+  const aliases = LOCATION_SEARCH_ALIASES
+    .filter(([english]) => lowerBaseText.includes(english))
+    .map(([, korean]) => korean)
+
+  return [baseText, ...aliases].join(" ").toLowerCase()
 }
 
 export default function EventsClient({ events }: { events: PublicEvent[] }) {
   const [activeCategory, setActiveCategory] = useState("전체")
   const [searchQuery, setSearchQuery] = useState("")
   const [hoveredId, setHoveredId] = useState<string | null>(null)
+  const normalizedQuery = searchQuery.trim().toLowerCase()
 
   const filtered = useMemo(() => {
     let list = activeCategory === "전체"
       ? events
       : events.filter((e) => e.category === activeCategory)
-    if (searchQuery.trim()) {
-      const q = searchQuery.toLowerCase()
-      list = list.filter(
-        (e) =>
-          e.title.toLowerCase().includes(q) ||
-          (e.description ?? "").toLowerCase().includes(q)
-      )
+    if (normalizedQuery) {
+      list = list.filter((event) => {
+        return getEventSearchText(event).includes(normalizedQuery)
+      })
     }
     return list
-  }, [activeCategory, searchQuery, events])
+  }, [activeCategory, normalizedQuery, events])
 
   const highlighted = filtered.filter((e) => e.highlight)
   const featuredEvent = highlighted[0] ?? null
@@ -54,6 +74,12 @@ export default function EventsClient({ events }: { events: PublicEvent[] }) {
 
   const activeCount = events.filter((e) => e.status === "진행 중").length
   const upcomingCount = events.filter((e) => e.status === "예정").length
+  const hasActiveFilters = activeCategory !== "전체" || normalizedQuery.length > 0
+  const resetFilters = () => {
+    setActiveCategory("전체")
+    setSearchQuery("")
+    setHoveredId(null)
+  }
 
   return (
     <div className="min-h-screen bg-[#FAFAF8] text-[#1a1a1a] selection:bg-emerald-100 selection:text-emerald-900">
@@ -127,6 +153,7 @@ export default function EventsClient({ events }: { events: PublicEvent[] }) {
                             fill
                             className="object-contain p-4 drop-shadow-[0_18px_35px_rgba(0,0,0,0.35)] sm:p-6"
                             sizes="(min-width: 1024px) 560px, 100vw"
+                            loading="eager"
                           />
                         </>
                       ) : (
@@ -150,8 +177,8 @@ export default function EventsClient({ events }: { events: PublicEvent[] }) {
                           <div className="flex flex-wrap items-center gap-4 text-[12px] text-white/40 mb-6">
                             <span className="flex items-center gap-1.5">
                               <Calendar className="w-3.5 h-3.5" />
-                              {formatKoreanDate(event.startsAt)}
-                              {event.endsAt ? ` ~ ${formatKoreanDate(event.endsAt)}` : ""}
+                              {formatPublicEventDate(event.startsAt)}
+                              {event.endsAt ? ` ~ ${formatPublicEventDate(event.endsAt)}` : ""}
                             </span>
                             {event.location && (
                               <span className="flex items-center gap-1.5">
@@ -188,17 +215,22 @@ export default function EventsClient({ events }: { events: PublicEvent[] }) {
           transition={{ duration: 0.4, delay: 0.2 }}
           className="flex flex-col sm:flex-row sm:items-center sm:justify-between gap-4 pb-5 border-b border-[#e8e8e4]"
         >
-          <div className="-mx-1 flex items-center gap-1.5 overflow-x-auto px-1 pb-1 no-scrollbar">
+          <div className="-mx-1 flex items-center gap-1.5 overflow-x-auto px-1 pb-1 no-scrollbar" role="group" aria-label="행사 카테고리 필터">
             {CATEGORIES.map((cat) => {
               const isActive = activeCategory === cat
               return (
                 <button
+                  type="button"
                   key={cat}
-                  onClick={() => setActiveCategory(cat)}
-                  className={`shrink-0 px-3.5 py-1.5 rounded-full text-[13px] font-medium transition-all duration-200 ${
+                  aria-pressed={isActive}
+                  onClick={() => {
+                    setActiveCategory(cat)
+                    setHoveredId(null)
+                  }}
+                  className={`min-h-11 shrink-0 rounded-full px-4 py-2 text-[13px] font-medium transition-all duration-200 focus-visible:outline-none focus-visible:ring-2 focus-visible:ring-[#084734] focus-visible:ring-offset-2 focus-visible:ring-offset-[#FAFAF8] ${
                     isActive
-                      ? "bg-[#111110] text-white"
-                      : "text-[#1a1a1a]/40 hover:text-[#1a1a1a]/70 hover:bg-[#f0f0ec]"
+                      ? "bg-[#084734] text-white shadow-[0_6px_16px_rgba(8,71,52,0.14)]"
+                      : "text-[#615D59] hover:bg-[#ECFDF5] hover:text-[#084734]"
                   }`}
                 >
                   {cat}
@@ -210,18 +242,31 @@ export default function EventsClient({ events }: { events: PublicEvent[] }) {
             <Search className="absolute left-3 top-1/2 -translate-y-1/2 w-4 h-4 text-[#1a1a1a]/20" />
             <input
               type="text"
-              placeholder="검색"
+              aria-label="행사와 프로모션 검색"
+              placeholder="행사명, 지역, 상태 검색"
               value={searchQuery}
               onChange={(e) => setSearchQuery(e.target.value)}
-              className="w-full sm:w-52 pl-9 pr-3 py-2 bg-transparent border border-[#e8e8e4] rounded-lg text-[13px] text-[#1a1a1a] placeholder:text-[#1a1a1a]/25 focus:outline-none focus:border-[#1a1a1a]/20 transition-colors"
+              className="min-h-11 w-full rounded-lg border border-black/[0.08] bg-white/60 py-2 pl-9 pr-9 text-[13px] text-[#1a1a1a] transition-colors placeholder:text-[#A39E98] focus:border-[#084734]/45 focus:outline-none focus:ring-2 focus:ring-[#084734]/10 sm:w-64"
             />
+            {searchQuery ? (
+              <button
+                type="button"
+                aria-label="행사 검색어 지우기"
+                onClick={() => setSearchQuery("")}
+                className="absolute right-2 top-1/2 flex h-7 w-7 -translate-y-1/2 items-center justify-center rounded-full text-[#A39E98] transition-colors hover:bg-[#F6F5F4] hover:text-[#084734] focus-visible:outline-none focus-visible:ring-2 focus-visible:ring-[#084734]"
+              >
+                <X className="h-3.5 w-3.5" aria-hidden />
+              </button>
+            ) : null}
           </div>
         </motion.div>
         <div className="flex items-center justify-between pt-4 pb-2">
           <span className="text-[12px] text-[#1a1a1a]/30 font-medium">
-            {rest.length}개의 행사·프로모션
+            {normalizedQuery
+              ? `검색 결과 ${filtered.length}개의 행사·프로모션`
+              : `${activeCategory === "전체" ? "전체" : activeCategory} ${filtered.length}개의 행사·프로모션`}
           </span>
-          <span className="text-[12px] text-[#1a1a1a]/25">최신순</span>
+          <span className="text-[12px] text-[#1a1a1a]/25">{hasActiveFilters ? "필터 적용" : "최신순"}</span>
         </div>
       </section>
 
@@ -259,8 +304,8 @@ export default function EventsClient({ events }: { events: PublicEvent[] }) {
                     <div className="flex flex-wrap items-center gap-3 mt-1.5">
                       <span className="text-[11px] text-[#1a1a1a]/30 flex items-center gap-1">
                         <Calendar className="w-3 h-3" />
-                        {formatKoreanDate(event.startsAt)}
-                        {event.endsAt ? ` ~ ${formatKoreanDate(event.endsAt)}` : ""}
+                        {formatPublicEventDate(event.startsAt)}
+                        {event.endsAt ? ` ~ ${formatPublicEventDate(event.endsAt)}` : ""}
                       </span>
                       {event.location && (
                         <>
@@ -330,8 +375,33 @@ export default function EventsClient({ events }: { events: PublicEvent[] }) {
             <div className="w-12 h-12 bg-[#f0f0ec] rounded-xl flex items-center justify-center mx-auto mb-4">
               <Search className="w-5 h-5 text-[#1a1a1a]/20" />
             </div>
-            <h3 className="text-base font-semibold text-[#111110] mb-1">검색 결과가 없습니다</h3>
-            <p className="text-[13px] text-[#1a1a1a]/30">다른 키워드나 카테고리를 선택해 보세요.</p>
+            <h3 className="text-base font-semibold text-[#111110] mb-1">
+              {events.length === 0 ? "현재 공개된 행사·프로모션이 없습니다" : "검색 결과가 없습니다"}
+            </h3>
+            <p className="text-[13px] text-[#1a1a1a]/45">
+              {events.length === 0
+                ? "새로운 웨비나와 프로모션은 준비되는 대로 안내하겠습니다."
+                : "다른 키워드나 카테고리를 선택해 보세요."}
+            </p>
+            <div className="mt-5 flex flex-col items-center justify-center gap-2 sm:flex-row">
+              {hasActiveFilters ? (
+                <button
+                  type="button"
+                  onClick={resetFilters}
+                  className="inline-flex h-10 items-center justify-center rounded-[6px] bg-[#084734] px-4 text-sm font-semibold text-white transition-colors hover:bg-[#065c41] focus-visible:outline-none focus-visible:ring-2 focus-visible:ring-[#084734] focus-visible:ring-offset-2 focus-visible:ring-offset-[#FAFAF8]"
+                >
+                  전체 행사 보기
+                </button>
+              ) : null}
+              {events.length === 0 ? (
+                <Link
+                  href="/contact?topic=events#contact-form"
+                  className="inline-flex h-10 items-center justify-center rounded-[6px] border border-black/[0.08] bg-white px-4 text-sm font-semibold text-[#111110] transition-colors hover:bg-[#F6F5F4] focus-visible:outline-none focus-visible:ring-2 focus-visible:ring-[#084734] focus-visible:ring-offset-2 focus-visible:ring-offset-[#FAFAF8]"
+                >
+                  행사 문의하기
+                </Link>
+              ) : null}
+            </div>
           </motion.div>
         )}
       </section>

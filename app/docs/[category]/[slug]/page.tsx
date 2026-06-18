@@ -55,23 +55,26 @@ export async function generateMetadata({
     }
   }
 
-  const isListed = (doc.visibility ?? "public") === "public" && !doc.noindex
+  const shouldIndex = !doc.noindex
+  const metaTitle = doc.seoTitle?.trim() || `${doc.title} | Classin 가이드`
+  const metaDescription = doc.seoDescription?.trim() || doc.description
+  const canonicalPath = doc.canonicalPath?.trim() || getDocPath(doc)
 
   return {
-    title: `${doc.title} | Classin 가이드`,
-    description: doc.description,
+    title: metaTitle,
+    description: metaDescription,
     keywords: doc.keywords,
-    alternates: { canonical: toAbsoluteUrl(getDocPath(doc)) },
-    robots: isListed ? undefined : { index: false, follow: true },
+    alternates: { canonical: toAbsoluteUrl(canonicalPath) },
+    robots: shouldIndex ? undefined : { index: false, follow: true },
     openGraph: {
-      title: `${doc.title} | Classin 가이드`,
-      description: doc.description,
+      title: metaTitle,
+      description: metaDescription,
       type: "article",
     },
     twitter: {
       card: "summary_large_image",
-      title: `${doc.title} | Classin 가이드`,
-      description: doc.description,
+      title: metaTitle,
+      description: metaDescription,
     },
   }
 }

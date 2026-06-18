@@ -799,6 +799,9 @@ function shouldCreateVersion(existing: ExistingArticle | undefined, next: Articl
 
 async function fetchTargetDocuments(articleIds: string[], language: string) {
   const documents: NormalizedChannelDocument[] = []
+  // 의도적 스킵(빈 본문/테스트)이 아니라 '가져오기 자체가 실패'한 건수.
+  // 일시적 API 오류로 일부가 빠진 채 reconcile 하면 멀쩡한 문서가 archive 될 수 있어 별도로 센다.
+  let fetchFailures = 0
   for (const articleId of articleIds) {
     try {
       const article = await fetchChannelArticle(articleId, language)
@@ -816,13 +819,14 @@ async function fetchTargetDocuments(articleIds: string[], language: string) {
       documents.push(normalizeChannelArticle(articleId, article))
     } catch (error) {
       if (strictFetch) throw error
+      fetchFailures += 1
       const message = error instanceof Error ? error.message : String(error)
-      console.warn(`[channel-docs] skipped ${articleId}: ${message}`)
+      console.warn(`[channel-docs] fetch failed ${articleId}: ${message}`)
     } finally {
       await sleep(FETCH_SPACING_MS)
     }
   }
-  return documents
+  return { documents, fetchFailures }
 }
 
 async function syncToSupabase(documents: NormalizedChannelDocument[], reconcile: boolean) {
@@ -1017,7 +1021,7 @@ async function main() {
 
   if (ids.length === 0) throw new Error("No article IDs provided.")
 
-  const documents = await fetchTargetDocuments(ids, language)
+  const { documents, fetchFailures } = await fetchTargetDocuments(ids, language)
   console.log(`[channel-docs] fetched ${documents.length} document(s)`)
   for (const doc of documents) {
     console.log(`- ${doc.articleId}: ${doc.title} (${doc.contentMarkdown.length} chars)`)
@@ -1035,7 +1039,16 @@ async function main() {
     return
   }
 
-  const result = await syncToSupabase(documents, fullCrawl)
+  // 전수 크롤에서 가져오기 실패가 하나라도 있으면 reconcile(미포함 문서 archive)을 건너뛴다.
+  // 일시적 Channel API 오류로 멀쩡한 문서가 RAG에서 빠지는 사고를 막는다(--strict 면 이미 위에서 중단됨).
+  const reconcile = fullCrawl && fetchFailures === 0
+  if (fullCrawl && fetchFailures > 0) {
+    console.warn(
+      `[channel-docs] reconcile 건너뜀 — fetch 실패 ${fetchFailures}건(부분 크롤). 전체 성공 시에만 stale archive. (--strict 로 강제 중단 가능)`
+    )
+  }
+
+  const result = await syncToSupabase(documents, reconcile)
   console.log("[channel-docs] sync complete")
   console.log(`- articles: ${result.articleCount}`)
   console.log(`- versions: ${result.insertedVersions}`)

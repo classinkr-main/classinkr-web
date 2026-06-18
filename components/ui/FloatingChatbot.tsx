@@ -30,6 +30,8 @@ type HandoffIntent = "demo" | "support"
 
 const UNRESOLVED_STREAK_THRESHOLD = 3
 const CHATBOT_REQUEST_TIMEOUT_MS = 9_000
+const STARTER_SUGGESTION_LIMIT = 4
+const FOLLOW_UP_SUGGESTION_LIMIT = 3
 
 interface ChatbotSource {
     title: string
@@ -82,7 +84,7 @@ const hiddenPathPrefixes = [
 
 const starterQuestions = [
     ...CLASSIN_POSITIONING.chatbot.starterQuestions,
-]
+].slice(0, STARTER_SUGGESTION_LIMIT)
 
 const DEEP_CONSULTATION_ICON_SRC = "/images/chatbot/ai-deep-consultation.webp"
 
@@ -97,6 +99,10 @@ function shouldUseDeepConsultationIcon(text: string) {
 
 function makeId() {
     return `${Date.now()}-${Math.random().toString(16).slice(2)}`
+}
+
+function getSuggestionLimit(message: ChatMessage) {
+    return message.id === "welcome" ? STARTER_SUGGESTION_LIMIT : FOLLOW_UP_SUGGESTION_LIMIT
 }
 
 const HANDOFF_TRANSCRIPT_LIMIT = 6
@@ -599,7 +605,7 @@ export function FloatingChatbot() {
                         .filter((question): question is string => typeof question === "string")
                         .map((question) => question.trim())
                         .filter(Boolean)
-                        .slice(0, 3)
+                        .slice(0, STARTER_SUGGESTION_LIMIT)
                     : []
 
                 if (questions.length === 0) return
@@ -790,11 +796,11 @@ export function FloatingChatbot() {
                         animate={shouldReduceMotion ? { opacity: 1 } : { opacity: 1, y: 0, scale: 1 }}
                         exit={shouldReduceMotion ? { opacity: 0 } : { opacity: 0, y: 16, scale: 0.98 }}
                         transition={{ duration: shouldReduceMotion ? 0.01 : 0.18 }}
-                        className="mb-3 flex h-[min(620px,calc(100svh-6rem))] w-full max-w-none flex-col overflow-hidden rounded-[16px] border border-black/[0.08] bg-white shadow-[rgba(0,0,0,0.10)_0px_20px_60px,rgba(0,0,0,0.05)_0px_8px_20px] md:mb-4 md:h-[min(560px,calc(100svh-8.5rem))] md:max-w-[390px]"
+                        className="mb-3 flex h-[min(620px,calc(100svh-6rem))] w-full max-w-none flex-col overflow-hidden rounded-[20px] border border-black/[0.08] bg-white shadow-[0_30px_60px_rgba(8,71,52,0.12),0_14px_30px_rgba(0,0,0,0.06),0_4px_10px_rgba(0,0,0,0.04),0_1px_3px_rgba(0,0,0,0.03)] md:mb-4 md:h-[min(560px,calc(100svh-8.5rem))] md:max-w-[390px]"
                     >
-                        <div className="flex items-center justify-between bg-[#084734] px-5 py-4 text-white">
+                        <div className="flex items-center justify-between border-b border-white/10 bg-gradient-to-br from-[#0c5d44] to-[#084734] px-5 py-4 text-white">
                             <div className="flex min-w-0 items-center gap-3">
-                                <div className="relative flex h-10 w-10 shrink-0 items-center justify-center overflow-hidden rounded-[8px] bg-white/12">
+                                <div className="relative flex h-10 w-10 shrink-0 items-center justify-center overflow-hidden rounded-[9px] border border-white/20 bg-white/15">
                                     {isDeepConsultation ? (
                                         <Image
                                             src={DEEP_CONSULTATION_ICON_SRC}
@@ -809,7 +815,15 @@ export function FloatingChatbot() {
                                     )}
                                 </div>
                                 <div className="min-w-0">
-                                    <h2 id="classin-chatbot-title" className="truncate text-[15px] font-bold">Classin 상담 가이드</h2>
+                                    <div className="flex items-center gap-1.5">
+                                        <h2 id="classin-chatbot-title" className="truncate text-[15px] font-bold">Classin 상담 가이드</h2>
+                                        <motion.span
+                                            aria-hidden
+                                            className="h-1.5 w-1.5 shrink-0 rounded-full bg-[#6EE7B7] shadow-[0_0_0_2px_rgba(110,231,183,0.25)]"
+                                            animate={shouldReduceMotion ? undefined : { opacity: [1, 0.4, 1] }}
+                                            transition={shouldReduceMotion ? undefined : { duration: 2.6, repeat: Infinity, ease: "easeInOut" }}
+                                        />
+                                    </div>
                                     <p className="mt-0.5 truncate text-xs text-white/70">운영·도입·CS 빠른 상담</p>
                                 </div>
                             </div>
@@ -823,14 +837,14 @@ export function FloatingChatbot() {
                             </button>
                         </div>
 
-                        <div className="flex-1 overflow-y-auto bg-[#F6F5F4]/55 px-4 py-4">
+                        <div className="flex-1 overflow-y-auto bg-gradient-to-b from-[#F6F5F4] to-white px-4 py-4">
                             <div className="space-y-4">
                                 {messages.map((message) => (
                                     <motion.div
                                         key={message.id}
-                                        initial={shouldReduceMotion ? { opacity: 0 } : { opacity: 0, y: 10 }}
-                                        animate={shouldReduceMotion ? { opacity: 1 } : { opacity: 1, y: 0 }}
-                                        transition={{ duration: shouldReduceMotion ? 0.01 : 0.22, ease: "easeOut" }}
+                                        initial={shouldReduceMotion ? { opacity: 0 } : { opacity: 0, y: 10, scale: 0.98 }}
+                                        animate={shouldReduceMotion ? { opacity: 1 } : { opacity: 1, y: 0, scale: 1 }}
+                                        transition={{ duration: shouldReduceMotion ? 0.01 : 0.28, ease: [0.22, 1, 0.36, 1] }}
                                         className={cn(
                                             "flex",
                                             message.role === "user" ? "justify-end" : "justify-start"
@@ -838,10 +852,10 @@ export function FloatingChatbot() {
                                     >
                                         <div
                                             className={cn(
-                                                "max-w-[90%] rounded-[12px] px-3.5 py-3 text-sm leading-6 md:max-w-[86%]",
+                                                "max-w-[90%] rounded-[14px] px-3.5 py-3 text-sm leading-6 md:max-w-[86%]",
                                                 message.role === "user"
-                                                    ? "bg-[#084734] text-white"
-                                                    : "border border-black/[0.06] bg-white text-[#111110] shadow-sm"
+                                                    ? "rounded-br-[4px] bg-gradient-to-br from-[#0c5d44] to-[#084734] text-white shadow-[0_3px_10px_rgba(8,71,52,0.20)]"
+                                                    : "rounded-bl-[4px] border border-black/[0.06] bg-white text-[#111110] shadow-[0_3px_8px_rgba(0,0,0,0.05),0_1px_2px_rgba(0,0,0,0.03)]"
                                             )}
                                         >
                                             {message.role === "assistant" ? <AssistantMeta message={message} /> : null}
@@ -850,14 +864,15 @@ export function FloatingChatbot() {
                                                 <>
                                                     {(message.suggestedQuestions?.length ?? 0) > 0 ? (
                                                         <div className="mt-3 grid gap-2">
-                                                            {message.suggestedQuestions?.slice(0, 1).map((question) => (
+                                                            {message.suggestedQuestions?.slice(0, getSuggestionLimit(message)).map((question) => (
                                                                 <button
                                                                     key={question}
                                                                     type="button"
                                                                     onClick={() => sendQuestion(question)}
-                                                                    className="rounded-[8px] border border-[#084734]/15 bg-[#FAFAF8] px-3 py-2 text-left text-[12px] font-semibold leading-5 text-[#111110] transition-colors hover:border-[#084734]/35 hover:bg-[#ECFDF5]"
+                                                                    className="flex w-full items-center justify-between gap-2 whitespace-normal break-keep rounded-[10px] border border-[#084734]/15 bg-[#ECFDF5] px-3 py-2 text-left text-[12px] font-semibold leading-5 text-[#084734] transition-colors hover:border-[#084734]/35 hover:bg-[#D1FAE5]"
                                                                 >
-                                                                    {question}
+                                                                    <span>{question}</span>
+                                                                    <svg viewBox="0 0 24 24" fill="none" stroke="currentColor" strokeWidth={2} strokeLinecap="round" strokeLinejoin="round" aria-hidden="true" className="h-3.5 w-3.5 shrink-0 text-[#084734]/70"><path d="M7 17 17 7" /><path d="M7 7h10v10" /></svg>
                                                                 </button>
                                                             ))}
                                                         </div>
@@ -892,7 +907,7 @@ export function FloatingChatbot() {
                             </div>
                         ) : null}
 
-                        <form onSubmit={handleSubmit} className="border-t border-black/[0.06] bg-white p-3">
+                        <form onSubmit={handleSubmit} className="border-t border-black/[0.06] bg-white/80 p-3 backdrop-blur-md">
                             <div className="flex items-end gap-2">
                                 <textarea
                                     ref={inputRef}
@@ -907,12 +922,12 @@ export function FloatingChatbot() {
                                     rows={1}
                                     maxLength={1000}
                                     placeholder="질문을 짧게 입력해 주세요"
-                                    className="min-h-10 max-h-28 flex-1 resize-none rounded-[8px] border border-[#E5E5E0] bg-white px-3 py-2 text-sm leading-6 text-[#111110] placeholder:text-[#A39E98] focus-visible:border-[#084734] focus-visible:outline-none focus-visible:ring-2 focus-visible:ring-[#084734]/20"
+                                    className="min-h-10 max-h-28 flex-1 resize-none rounded-[10px] border border-[#E5E5E0] bg-white px-3 py-2 text-sm leading-6 text-[#111110] placeholder:text-[#A39E98] focus-visible:border-[#084734] focus-visible:outline-none focus-visible:ring-2 focus-visible:ring-[#084734]/20"
                                 />
                                 <button
                                     type="submit"
                                     disabled={isSending || !input.trim()}
-                                    className="inline-flex h-10 w-10 shrink-0 items-center justify-center rounded-[8px] bg-[#084734] text-white transition-colors hover:bg-[#065c41] disabled:cursor-not-allowed disabled:opacity-40"
+                                    className="inline-flex h-10 w-10 shrink-0 items-center justify-center rounded-[10px] bg-gradient-to-br from-[#0c5d44] to-[#084734] text-white shadow-[0_4px_12px_rgba(8,71,52,0.28)] transition-all hover:from-[#0e6a4e] hover:to-[#065c41] disabled:cursor-not-allowed disabled:opacity-40 disabled:shadow-none"
                                     aria-label="질문 보내기"
                                 >
                                     {isSending ? <Loader2 className="h-4 w-4 animate-spin" /> : <Send className="h-4 w-4" />}
@@ -923,32 +938,43 @@ export function FloatingChatbot() {
                 )}
             </AnimatePresence>
 
-            <motion.button
-                ref={triggerRef}
-                type="button"
-                whileHover={shouldReduceMotion ? undefined : { scale: 1.04 }}
-                whileTap={shouldReduceMotion ? undefined : { scale: 0.96 }}
-                onClick={() => setIsOpen((current) => !current)}
-                className="relative flex h-14 w-14 items-center justify-center overflow-hidden rounded-full bg-[#084734] text-white shadow-[0_10px_30px_rgba(8,71,52,0.32)] transition-colors hover:bg-[#065c41] focus:outline-none focus:ring-4 focus:ring-[#084734]/20 md:h-16 md:w-16"
-                aria-label={isOpen ? "챗봇 닫기" : "챗봇 열기"}
-                aria-expanded={isOpen}
-                aria-controls="classin-chatbot-dialog"
-            >
-                {isOpen ? (
-                    <X className="h-6 w-6" />
-                ) : isDeepConsultation ? (
-                    <Image
-                        src={DEEP_CONSULTATION_ICON_SRC}
-                        alt=""
-                        fill
-                        className="object-cover"
-                        sizes="64px"
+            <div className="relative flex h-14 w-14 items-center justify-center md:h-16 md:w-16">
+                {!isOpen && !shouldReduceMotion ? (
+                    <motion.span
                         aria-hidden
+                        className="pointer-events-none absolute inset-0 rounded-full bg-[#084734]"
+                        initial={{ scale: 1, opacity: 0.22 }}
+                        animate={{ scale: [1, 1.45], opacity: [0.22, 0] }}
+                        transition={{ duration: 2.8, repeat: Infinity, repeatDelay: 1.8, ease: "easeOut" }}
                     />
-                ) : (
-                    <MessageCircle className="h-6 w-6" />
-                )}
-            </motion.button>
+                ) : null}
+                <motion.button
+                    ref={triggerRef}
+                    type="button"
+                    whileHover={shouldReduceMotion ? undefined : { scale: 1.04 }}
+                    whileTap={shouldReduceMotion ? undefined : { scale: 0.96 }}
+                    onClick={() => setIsOpen((current) => !current)}
+                    className="relative flex h-14 w-14 items-center justify-center overflow-hidden rounded-full bg-gradient-to-br from-[#0c5d44] to-[#084734] text-white shadow-[0_12px_28px_rgba(8,71,52,0.34),0_4px_10px_rgba(0,0,0,0.12)] transition-all hover:from-[#0e6a4e] hover:to-[#065c41] focus:outline-none focus:ring-4 focus:ring-[#084734]/20 md:h-16 md:w-16"
+                    aria-label={isOpen ? "챗봇 닫기" : "챗봇 열기"}
+                    aria-expanded={isOpen}
+                    aria-controls="classin-chatbot-dialog"
+                >
+                    {isOpen ? (
+                        <X className="h-6 w-6" />
+                    ) : isDeepConsultation ? (
+                        <Image
+                            src={DEEP_CONSULTATION_ICON_SRC}
+                            alt=""
+                            fill
+                            className="object-cover"
+                            sizes="64px"
+                            aria-hidden
+                        />
+                    ) : (
+                        <MessageCircle className="h-6 w-6" />
+                    )}
+                </motion.button>
+            </div>
         </div>
     )
 }

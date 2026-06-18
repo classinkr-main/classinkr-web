@@ -189,7 +189,7 @@ export function Header() {
                                 prefetch={false}
                                 ctaId="gnb_mobile_contact"
                                 onClick={() => setIsMobileMenuOpen(false)}
-                                className="inline-flex min-h-11 w-full items-center justify-center rounded-[8px] bg-[#009060] px-4 text-[15px] font-semibold text-white shadow-sm transition-colors hover:bg-[#007A52]"
+                                className="inline-flex min-h-11 w-full items-center justify-center rounded-[8px] bg-[#084734] px-4 text-[15px] font-semibold text-white shadow-sm transition-colors hover:bg-[#065c41]"
                             >
                                 도입 문의
                             </TrackedLink>
@@ -210,7 +210,7 @@ export function Header() {
                         href="/contact"
                         prefetch={false}
                         ctaId="gnb_contact"
-                        className="inline-flex items-center justify-center whitespace-nowrap rounded-[6px] bg-[#009060] px-5 py-2 text-[15px] font-semibold text-white shadow-sm transition-all hover:bg-[#007A52] active:scale-[0.97]"
+                        className="inline-flex items-center justify-center whitespace-nowrap rounded-[6px] bg-[#084734] px-5 py-2 text-[15px] font-semibold text-white shadow-sm transition-all hover:bg-[#065c41] active:scale-[0.97]"
                     >
                         도입 문의
                     </TrackedLink>

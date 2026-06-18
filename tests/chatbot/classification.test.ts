@@ -84,6 +84,14 @@ describe("chatbot classification", () => {
     }
   })
 
+  it("classifies signup questions as onboarding", () => {
+    const result = classifyChatbotQuestion("회원가입할 때 전화번호나 이메일만 있으면 되나요?")
+
+    expect(result.category).toBe("onboarding")
+    expect(result.intent).toBe("onboarding")
+    expect(result.handoffIntent).toBe("demo")
+  })
+
   it("classifies hardware spec questions as hardware", () => {
     const questions = [
       "클래스인 하드웨어 스펙",

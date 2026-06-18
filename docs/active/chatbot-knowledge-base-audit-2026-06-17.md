@@ -27,7 +27,7 @@
 | 고객 후기 | [lib/testimonials.ts](../../lib/testimonials.ts) | **7개** | 아니오(코드 전용) → B1의 원천 |
 | 케이스 스터디 | [components/sections/CaseStudies.tsx](../../components/sections/CaseStudies.tsx) | **7개** | 아니오(컴포넌트 전용) → B1의 원천 |
 | 제품/페르소나/니즈 | [docs/active/prd.md](./prd.md) | 페르소나·문제정의 | 아니오(문서 전용) → B2의 원천 |
-| 진단 리드마그넷 | [data/lead-magnets.json](../../data/lead-magnets.json) | 리드마그넷 7종(설계 인용: 46·49문항 진단 + red flags) | 아니오(데이터 전용) → B2/B4의 원천, 별도 트랙 |
+| 진단 리드마그넷 | [data/lead-magnets.json](../../data/lead-magnets.json) | 리드마그넷 13종(2026-06-18 기준, 도입 전 22가지 질문 체크리스트 포함) | 아니오(데이터 전용) → B2/B4와 신규 도입 전 FAQ의 원천, 별도 트랙 |
 | SW 기능 인벤토리(SSOT) | [docs/active/classin-software-feature-inventory.md](./classin-software-feature-inventory.md) | 기능 정의 + 금지어 목록 | 아니오(문서 전용) → B5의 원천 |
 | 제품 템플릿 | [lib/product-templates.ts](../../lib/product-templates.ts) | 견적 구성 요소 | 아니오(코드 전용) → B3의 원천 |
 | 요금제 데이터 | [lib/billing/plans.ts](../../lib/billing/plans.ts) | 플랜 정의 | 아니오(코드 전용) → B3의 원천 |
@@ -177,4 +177,11 @@ npx tsx scripts/embed-docs-chunks.ts
 [classin-korea-positioning-guidelines.md](./classin-korea-positioning-guidelines.md)(한국 시장 포지셔닝·콘텐츠 SSOT)에 맞춰 신규 5종을 정렬:
 - **단정 표현 제거**: `customer-stories`의 "국내 300여 기관" 문구 삭제 — 가이드라인 §3/§11(확인 전 기관·보드 수 단정 금지) 준수.
 - **CTA를 가이드라인 §9 리드마그넷 맵에 연결**: 가격→`academy-resource-reduction-calculator`, 도입여정→`classin-90-day-adoption-roadmap`, API→`academy-data-automation-brief`, 비교→`academy-software-selection-worksheet`, 사례/첫방문→`academy-system-checklist`.
-- 재시드·재임베딩 완료(5 articles / 48 chunks). 7종 리드마그넷은 [data/lead-magnets.json](../../data/lead-magnets.json)에 모두 존재.
+- 재시드·재임베딩 완료(5 articles / 48 chunks). 당시 기준 리드마그넷은 [data/lead-magnets.json](../../data/lead-magnets.json)에 모두 존재.
+
+### 8-3. 도입 전 22가지 질문 반영 (2026-06-18 추가)
+
+- **신규 DocArticle 1종 추가**: `pre-adoption-faq-22-questions` — 관리자 권한, 녹화 저장, 스토리지, 개인정보, 서버, OPS, 오프라인 칠판 사용을 답변 가능/확인 필요 범위로 분리하고, 상담 흐름은 리스크 3개 선정 → 즉답/확인 필요 분리 → 쇼룸 검증 → 견적 범위 → 90일 파일럿으로 잡는다. [lib/docs.ts](../../lib/docs.ts) 현재 기준 공개 문서 집합에 포함된다.
+- **신규 리드마그넷 1종 추가**: `classin-pre-adoption-questions-checklist` — 실제 상담 전 질문 22개를 이메일 게이트 심화 자료로 전환하고, 자료 역할을 "22문항 의사결정 질문표"로 둔다. [data/lead-magnets.json](../../data/lead-magnets.json) 기준 리드마그넷 12 → **13종**.
+- **기준 문서 추가**: [classin-pre-adoption-question-matrix-2026-06-18.md](./classin-pre-adoption-question-matrix-2026-06-18.md) — 질문별 답변 가능 범위, 공개 답변 기준, 내부 확인 필요 항목, CRM 태그, 후속 메시지 흐름을 고정한다.
+- **사용자 확인 반영**: 수업 녹화/현장 녹화 저장·관리는 관리자 또는 권한 받은 계정 기준으로 가능, 회원가입 정보는 전화번호 또는 이메일 기준.

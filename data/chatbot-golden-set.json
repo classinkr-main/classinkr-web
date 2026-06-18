@@ -50,6 +50,12 @@
     { "id": "faq-price-howmuch", "question": "클래스인 가격 얼마예요?", "expectCategory": "billing", "expectMode": ["doc_suggestion", "direct_answer", "handoff"], "expectPathIncludes": "/docs/start/value-and-cost-framing" },
     { "id": "faq-size", "question": "전자칠판 사이즈 어떻게 돼요?", "expectCategory": "hardware", "expectMode": ["direct_answer", "doc_suggestion", "handoff"], "expectPathIncludes": "/docs/hardware/board-lineup-specs", "expectHeadingIncludes": "Classin Board 스펙 요약" },
     { "id": "faq-cs-offline-attendance", "question": "오프라인 출석도 클래스인에서 되나요?", "expectCategory": "classroom", "expectMode": ["fallback", "clarifying_question", "doc_suggestion", "direct_answer"] },
-    { "id": "faq-feature-recording", "question": "수업 녹화 기능 있어요?", "expectCategory": "classroom", "expectMode": ["direct_answer", "doc_suggestion", "handoff"], "expectPathIncludes": "/docs/software/app-capabilities-map" }
+    { "id": "faq-feature-recording", "question": "수업 녹화 기능 있어요?", "expectCategory": "classroom", "expectMode": ["direct_answer", "doc_suggestion", "handoff"], "expectPathIncludes": "/docs/software/app-capabilities-map" },
+    { "id": "pre-adoption-questions", "question": "ClassIn 도입 전에 꼭 확인해야 할 22가지 질문이 뭐예요?", "expectCategory": "onboarding", "expectMode": ["direct_answer", "doc_suggestion", "handoff"], "expectPathIncludes": "/docs/start/pre-adoption-faq-22-questions" },
+    { "id": "pre-adoption-recording-permission", "question": "수업 녹화와 현장 녹화는 누가 저장 관리할 수 있나요?", "expectCategory": "classroom", "expectMode": ["direct_answer", "doc_suggestion", "handoff"] },
+    { "id": "pre-adoption-signup-info", "question": "회원가입할 때 전화번호나 이메일만 있으면 되나요?", "expectCategory": "onboarding", "expectMode": ["direct_answer", "doc_suggestion", "handoff"] },
+    { "id": "pre-adoption-offline-board", "question": "오프라인에서도 칠판 필기는 사용할 수 있나요?", "expectCategory": "hardware", "expectMode": ["direct_answer", "doc_suggestion", "handoff"] },
+    { "id": "company-intro", "question": "클래스인 회사 소개해줘", "expectCategory": "onboarding", "expectMode": ["direct_answer", "doc_suggestion", "handoff"], "expectPathIncludes": "/docs/start/company-overview" },
+    { "id": "company-products", "question": "클래스인 제품 라인이 어떻게 되나요?", "expectCategory": "onboarding", "expectMode": ["direct_answer", "doc_suggestion", "handoff"], "expectPathIncludes": "/docs/start/company-overview" }
   ]
 }

@@ -32,7 +32,7 @@ const MAX_RETRIEVAL_CANDIDATES_PER_DOC = 3
 const MIN_DIRECT_SOURCE_SCORE = 18
 const RETRIEVAL_CACHE_TTL_MS = 5 * 60 * 1000
 const RETRIEVAL_CACHE_MAX = 200
-const RETRIEVAL_CACHE_VERSION = "rag-rerank-20260617-v3"
+const RETRIEVAL_CACHE_VERSION = "rag-rerank-20260618-v4"
 const UUID_RE = /^[0-9a-f]{8}-[0-9a-f]{4}-[1-5][0-9a-f]{3}-[89ab][0-9a-f]{3}-[0-9a-f]{12}$/i
 const CHAT_SESSION_CHANNELS = new Set(["web", "admin_preview", "partner_portal", "manual_import"])
 const PROGRESSIVE_MODEL_TIERS: ChatbotModelTier[] = ["basic", "reasoning", "advanced"]
@@ -168,6 +168,7 @@ function redactPii(value: string) {
   return value
     .replace(/[A-Z0-9._%+-]+@[A-Z0-9.-]+\.[A-Z]{2,}/gi, "[email]")
     .replace(/\b\d{3}[-\s]?\d{2}[-\s]?\d{5}\b/g, "[business_number]")
+    .replace(/\b(?:\d[ -]?){13,19}\b/g, "[payment_number]")
     .replace(/\b\d{2,3}[-.\s]?\d{3,4}[-.\s]?\d{4}\b/g, "[phone]")
 }
 
@@ -248,7 +249,7 @@ interface CachedAnswerEntry {
   warning?: string
 }
 
-const ANSWER_CACHE_VERSION = "answer-20260618-v1"
+const ANSWER_CACHE_VERSION = "answer-20260618-v3"
 const ANSWER_CACHE_TTL_MS = 5 * 60 * 1000
 const ANSWER_CACHE_MAX = 200
 const answerCache = new Map<string, { expiresAt: number; value: CachedAnswerEntry }>()
@@ -322,6 +323,130 @@ function isGreetingOnly(question: NormalizedQuestion) {
   return /^(안녕|안녕하세요|하이|hello|hi)[.!?\s]*$/i.test(question.normalized)
 }
 
+const ACADEMY_PAYMENT_ACTION_RE = /결제|수납|납부|정산|pg|카드\s*결제|가상\s*계좌|계좌\s*이체/i
+const ACADEMY_PAYMENT_SUBJECT_RE =
+  /학원\s*결제|학원비|원비|수강료|수업료|회비|학생.{0,8}(결제|납부|수납)|학부모.{0,8}(결제|납부|수납)|수납.{0,8}(관리|자동|처리|기능|시스템)|정산.{0,8}(관리|자동|처리|기능|시스템)|pg|결제\s*(기능|모듈|시스템)|자동\s*(결제|수납|정산)/i
+const CAPABILITY_REQUEST_RE =
+  /되나요|돼요|가능|지원|제공|처리|관리|기능|자동|연동|만들|추가|하려고|하고\s*싶|쓸\s*수|사용할\s*수/i
+
+const PROMPT_OR_SECURITY_ABUSE_RE =
+  /sql\s*injection|sqli|union\s+select|drop\s+table|or\s+1\s*=\s*1|information_schema|xp_cmdshell|xss|csrf|ssrf|rce|프롬프트\s*인젝션|시스템\s*프롬프트|개발자\s*메시지|내부\s*(?:프롬프트|규칙|지시)|(?:이전|위|앞선).{0,12}(?:지시|규칙|프롬프트).{0,12}(?:무시|잊어|삭제)|보안.{0,12}(?:뚫|우회|공격)|취약점.{0,12}(?:공격|악용|우회)|해킹.{0,12}(?:방법|공격|뚫|탈취|우회)|(?:비밀번호|토큰|api\s*key|관리자).{0,12}(?:탈취|훔|우회|크랙)/i
+const CRIMINAL_ABUSE_RE =
+  /(?:범죄|불법|사기|피싱|스미싱|절도|도둑|마약|폭탄|무기|살인|폭행).{0,18}(?:방법|하는\s*법|계획|도와|만들|제조|우회|탈취|공격|훔|숨기|피하)|(?:방법|하는\s*법|계획).{0,18}(?:범죄|불법|사기|피싱|스미싱|절도|마약|폭탄|무기|살인|폭행)/i
+const TOKEN_WASTE_RE =
+  /토큰.{0,12}(?:낭비|소모|다\s*써|태워)|(?:무한|계속).{0,8}반복|(?:1000|10000|10,000|만\s*번).{0,12}(?:반복|써|출력)|(?:반복|출력).{0,12}(?:1000|10000|10,000|만\s*번)/i
+
+function isUnsupportedAcademyPaymentFeatureQuestion(question: NormalizedQuestion) {
+  const text = question.redacted.toLowerCase()
+  return (
+    ACADEMY_PAYMENT_ACTION_RE.test(text) &&
+    ACADEMY_PAYMENT_SUBJECT_RE.test(text) &&
+    CAPABILITY_REQUEST_RE.test(text)
+  )
+}
+
+function buildPolicyGuardResponse(question: NormalizedQuestion): {
+  response: Omit<ChatbotQueryResponse, "answerEventId" | "sessionId" | "warning" | "handoffIntent">
+  category: string
+  intent: ChatbotIntent
+  handoffIntent: HandoffIntent
+} | null {
+  const text = question.redacted.toLowerCase()
+
+  if (isUnsupportedAcademyPaymentFeatureQuestion(question)) {
+    return {
+      response: {
+        answer: [
+          "학원 결제 기능은 제공하지 않습니다.",
+          "Classin은 수업, 전자칠판, 녹화, EDB, LMS, 관리자 데이터를 중심으로 쓰는 학원 시스템 OS이고, 학원비 결제·수납·정산은 기존 학원 관리 시스템이나 별도 결제/정산 연동 범위로 분리해 설계하는 편이 맞습니다.",
+          "요금/견적은 전자칠판, OPS, 카메라, 스탠드/벽걸이, 소프트웨어, 설치·온보딩 구성 기준으로 안내할 수 있어요.",
+        ].join("\n\n"),
+        answerMode: "direct_answer",
+        confidence: 0.96,
+        needsHandoff: false,
+        sources: [],
+        suggestedQuestions: [
+          "요금/견적은 어떤 항목으로 구성되나요?",
+          "기존 학원 관리 시스템과 연동 범위가 궁금해요",
+          "수업 운영 기능을 보고 싶어요",
+        ],
+        unresolved: false,
+      },
+      category: "billing",
+      intent: "billing_support",
+      handoffIntent: "demo",
+    }
+  }
+
+  if (PROMPT_OR_SECURITY_ABUSE_RE.test(text)) {
+    return {
+      response: {
+        answer:
+          "보안 공격, SQL injection, 내부 프롬프트 확인, 우회 방법 요청은 도와드리지 않습니다.\n\nClassin 도입이나 운영 보안 기준이 궁금하시면 개인정보 처리, 관리자 권한, API 연동 범위처럼 검토 가능한 항목으로 정리해드릴게요.",
+        answerMode: "direct_answer",
+        confidence: 0.95,
+        needsHandoff: false,
+        sources: [],
+        suggestedQuestions: [
+          "개인정보 처리 기준이 궁금해요",
+          "관리자 권한과 보안 범위를 알고 싶어요",
+          "API/CRM 연동은 어디까지 가능한가요?",
+        ],
+        unresolved: false,
+      },
+      category: "general",
+      intent: "docs_lookup",
+      handoffIntent: "support",
+    }
+  }
+
+  if (CRIMINAL_ABUSE_RE.test(text)) {
+    return {
+      response: {
+        answer:
+          "범죄나 불법 행위를 돕는 방법은 도와드리지 않습니다.\n\nClassin 제품 도입, 수업 운영, 전자칠판, 계정 문제처럼 정상적인 상담 범위로 질문해 주세요.",
+        answerMode: "direct_answer",
+        confidence: 0.95,
+        needsHandoff: false,
+        sources: [],
+        suggestedQuestions: [
+          "Classin이 어떤 서비스인지 알려주세요",
+          "도입 전 확인 질문을 알려주세요",
+          "전자칠판 패키지를 보고 싶어요",
+        ],
+        unresolved: false,
+      },
+      category: "general",
+      intent: "docs_lookup",
+      handoffIntent: "support",
+    }
+  }
+
+  if (TOKEN_WASTE_RE.test(text)) {
+    return {
+      response: {
+        answer:
+          "토큰을 소모시키기 위한 반복 출력이나 무의미한 장문 생성은 도와드리지 않습니다.\n\n필요한 Classin 상담 주제를 한 문장으로 적어주시면 짧게 정리해드릴게요.",
+        answerMode: "direct_answer",
+        confidence: 0.95,
+        needsHandoff: false,
+        sources: [],
+        suggestedQuestions: [
+          "도입 상담을 받고 싶어요",
+          "수업 운영 문제를 해결하고 싶어요",
+          "요금/견적은 어떤 항목으로 구성되나요?",
+        ],
+        unresolved: false,
+      },
+      category: "general",
+      intent: "docs_lookup",
+      handoffIntent: "support",
+    }
+  }
+
+  return null
+}
+
 function sanitizeLikeToken(token: string) {
   return token.replace(/[%_,()]/g, "").slice(0, 40)
 }
@@ -351,6 +476,9 @@ function getScoringTokens(question: NormalizedQuestion) {
 
 const POSITIONING_RE =
   /학원\s*시스템|시스템\s*os|수업\s*os|운영\s*os|zoom|줌|화상회의|뭐가\s*(달라|다른)|무엇이\s*다르|어떻게\s*다른|다른\s*(점|가요|건가요|거|것|부분|서비스)|차이|비교|차별|차별점|장점|왜\s*(써|쓰|필요|도입)|일반\s*전자칠판|기존\s*전자칠판|왜\s*전자칠판|edb|칠판\s*파일|가격\s*부담|비싸|api|sdk|연동|데이터\s*구독|도구.*흩어|녹화.*관리/
+
+const PRE_ADOPTION_CHECK_RE =
+  /도입\s*전.*(22|질문|체크리스트|확인)|22\s*가지\s*질문|22.*도입|구매\s*전.*(질문|체크리스트|확인)|상담\s*전.*(질문|체크리스트|확인)/
 
 const COMPARISON_RE =
   /zoom|줌|화상회의|뭐가\s*(달라|다른)|무엇이\s*다르|어떻게\s*다른|다른\s*(점|가요|건가요|거|것|부분|서비스)|차이|비교|차별|차별점|장점|왜\s*(써|쓰|필요|도입)|일반\s*전자칠판|기존\s*전자칠판/
@@ -423,6 +551,11 @@ const LIVE_CLASS_TROUBLE_RE =
 function isPositioningQuestion(question: NormalizedQuestion) {
   const text = question.redacted.toLowerCase()
   return POSITIONING_RE.test(text) || isIdentityQuestion(question)
+}
+
+function isPreAdoptionCheckQuestion(question: NormalizedQuestion) {
+  const text = question.redacted.toLowerCase()
+  return PRE_ADOPTION_CHECK_RE.test(text)
 }
 
 function isApiIntegrationQuestion(question: NormalizedQuestion) {
@@ -587,6 +720,18 @@ function buildCuratedSources(question: NormalizedQuestion) {
   const sources: ChatbotSource[] = []
   const positioningSource = buildPositioningSource(question)
   if (positioningSource) sources.push(positioningSource)
+
+  if (isPreAdoptionCheckQuestion(question)) {
+    const source = buildStaticDocSource(
+      "start",
+      "pre-adoption-faq-22-questions",
+      "도입 전 22가지 질문",
+      "ClassIn 도입 전에는 관리자 권한, 녹화 저장, 스토리지, 개인정보, 서버, OPS, 오프라인 칠판 사용을 답변 가능 범위와 확인 필요 범위로 나누어 점검합니다.",
+      335,
+      "onboarding"
+    )
+    if (source) sources.push(source)
+  }
 
   if (isHardwareUnconfirmedDetailQuestion(question)) {
     const source = buildStaticDocSource(
@@ -1101,7 +1246,10 @@ async function keywordSearchSupabaseSources(question: NormalizedQuestion): Promi
 }
 
 const VECTOR_MATCH_COUNT = MAX_RETRIEVAL_CANDIDATES
-const VECTOR_SIMILARITY_FLOOR = 0.28
+// 골든셋 56개 질의 측정(2026-06-18): 정답 문서 top-1 유사도 min 0.675 / median 0.766.
+// 0.28 은 노이즈 대역(0.28~0.6)을 자신있는 direct_answer 로 승격시켰다. 0.5 는 그 노이즈를
+// 전부 걸러내면서도 골든셋 적중을 0건도 잃지 않는다(최저 정답 0.675 대비 0.175 마진).
+const VECTOR_SIMILARITY_FLOOR = 0.5
 const CLIENT_VECTOR_SIMILARITY_FLOOR = 0.7
 
 interface MatchChunkRow {
@@ -1286,12 +1434,41 @@ async function searchKnowledgeSources(
 
 function buildSuggestedQuestions(category: string) {
   const categorySuggestions: Record<string, string[]> = {
-    billing: ["요금과 견적 기준이 궁금해요", "세금계산서나 영수증 발급이 궁금해요"],
-    hardware: ["전자칠판 설치 범위를 알고 싶어요", "장비 문제를 상담으로 확인하고 싶어요"],
-    troubleshooting: ["계정이나 접속 문제를 해결하고 싶어요", "수업 중 오류 상황을 설명할게요"],
-    onboarding: ["우리 학원 도입 순서를 잡고 싶어요", "Zoom/전자칠판과 차이를 더 알고 싶어요"],
-    admin: ["관리자 대시보드에서 볼 수 있는 데이터를 알려주세요", "API 연동 범위를 알고 싶어요"],
-    classroom: ["수업 녹화와 복습 흐름을 알고 싶어요", "과제/시험 운영 방법이 궁금해요"],
+    billing: [
+      "요금/견적은 어떤 항목으로 구성되나요?",
+      "전자칠판 포함 패키지 범위를 알고 싶어요",
+      "세금계산서나 영수증 발급이 궁금해요",
+    ],
+    hardware: [
+      "75/86인치 중 어떤 모델이 맞나요?",
+      "스탠드형과 벽걸이 설치 차이를 알고 싶어요",
+      "전자칠판 설치 전 체크할 것을 알려주세요",
+    ],
+    troubleshooting: [
+      "로그인/비밀번호 문제를 해결하고 싶어요",
+      "수업 중 끊김 상황을 정리하고 싶어요",
+      "전자칠판 화면이 안 나올 때 점검 순서를 알려주세요",
+    ],
+    onboarding: [
+      "우리 학원 90일 도입 순서를 잡고 싶어요",
+      "도입 전 확인해야 할 질문을 알려주세요",
+      "Zoom/전자칠판과 차이를 더 알고 싶어요",
+    ],
+    admin: [
+      "관리자 대시보드에서 볼 수 있는 데이터를 알려주세요",
+      "API/CRM 연동은 어디까지 가능한가요?",
+      "녹화 저장/스토리지 관리를 알고 싶어요",
+    ],
+    classroom: [
+      "수업 녹화와 복습 흐름을 알고 싶어요",
+      "과제/시험 운영 방법이 궁금해요",
+      "EDB 교안 재사용 방법을 알려주세요",
+    ],
+    general: [
+      "Classin이 어떤 서비스인지 알려주세요",
+      "도입 전 확인 질문을 알려주세요",
+      "전자칠판 패키지를 보고 싶어요",
+    ],
   }
   return Array.from(
     new Set([
@@ -1605,7 +1782,16 @@ function formatConsumerAnswer({
       : ""
   // 문서 섹션의 메타성 제목(예: "이 문서는 지도입니다")이 답변 앞에 새지 않게 거른다.
   const isMetaHeading = /^이\s*문서|지도입니다|^목차|개요만\s*보기/.test(top.heading ?? "")
-  const heading = top.heading && top.heading !== "요약" && !isMetaHeading ? `${top.heading}: ` : ""
+  const headingText = top.heading?.trim() ?? ""
+  // 청크 본문이 이미 제목 문구로 시작하면(동기화 단계에서 heading 이 content 에도 포함됨)
+  // 제목을 또 앞에 붙이지 않는다 — "유료 계정 전환: 유료 계정 전환 …" 같은 제목 메아리 방지.
+  const normalizedExcerpt = top.excerpt.replace(/\s+/g, " ").trim().toLowerCase()
+  const excerptStartsWithHeading =
+    headingText.length > 0 && normalizedExcerpt.startsWith(headingText.replace(/\s+/g, " ").toLowerCase())
+  const heading =
+    headingText && headingText !== "요약" && !isMetaHeading && !excerptStartsWithHeading
+      ? `${headingText}: `
+      : ""
   const summary = `${heading}${top.excerpt}`
   const nextStep = getConciseNextStep(category)
 
@@ -1661,7 +1847,11 @@ function composeAnswer(
         confidence: 0.25,
         needsHandoff: false,
         sources: [],
-        suggestedQuestions: ["도입 상담을 받고 싶어요", "수업 운영 문제를 해결하고 싶어요", "결제나 영수증 문의가 있어요"],
+        suggestedQuestions: [
+          "도입 전 확인 질문을 알려주세요",
+          "수업 운영 문제를 해결하고 싶어요",
+          "요금/견적은 어떤 항목으로 구성되나요?",
+        ],
         unresolved: true,
       }
     }
@@ -1682,7 +1872,11 @@ function composeAnswer(
       confidence: needsHandoff ? 0.4 : 0.15,
       needsHandoff,
       sources: [],
-      suggestedQuestions: ["도입 상담을 받고 싶어요", "요금과 견적이 궁금해요", "계정이나 수업 접속 문제가 있어요"],
+      suggestedQuestions: [
+        "도입 전 확인 질문을 알려주세요",
+        "요금/견적은 어떤 항목으로 구성되나요?",
+        "계정이나 수업 접속 문제가 있어요",
+      ],
       unresolved: true,
     }
   }
@@ -2167,7 +2361,11 @@ async function buildChatbotCore(
         confidence: 0.3,
         needsHandoff: false,
         sources: [],
-        suggestedQuestions: ["도입 상담을 받고 싶어요", "수업 운영 문제를 해결하고 싶어요", "결제나 영수증 문의가 있어요"],
+        suggestedQuestions: [
+          "도입 전 확인 질문을 알려주세요",
+          "수업 운영 문제를 해결하고 싶어요",
+          "요금/견적은 어떤 항목으로 구성되나요?",
+        ],
         unresolved: true,
       },
       category: "general",
@@ -2176,6 +2374,19 @@ async function buildChatbotCore(
       latencyMs: elapsedSince(startedAt),
     }
   }
+
+  const policyGuard = buildPolicyGuardResponse(question)
+  if (policyGuard) {
+    return {
+      question,
+      response: policyGuard.response,
+      category: policyGuard.category,
+      intent: policyGuard.intent,
+      handoffIntent: policyGuard.handoffIntent,
+      latencyMs: elapsedSince(startedAt),
+    }
+  }
+
   // 세션(대화 이력)이 없는 동일 질문은 캐시된 답변으로 즉시 응답 — 검색·Gemini를 통째로 건너뛴다.
   if (shouldGenerateAnswer && !options.sessionId) {
     const cached = getCachedAnswer(question)

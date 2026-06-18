@@ -5,6 +5,7 @@ import { ArrowRight, Search } from "lucide-react"
 import { getDocCategoryPath, type DocCategoryId } from "@/lib/docs"
 import { getDocsContent } from "@/lib/docs-content"
 import { SearchHighlight } from "@/components/ui/SearchHighlight"
+import { DocsSearchLogger } from "@/components/docs/DocsSearchLogger"
 
 import {
   getCategoryIcon,
@@ -14,7 +15,7 @@ import {
 } from "./_utils"
 
 export const metadata: Metadata = {
-  title: "Classin 가이드 | Classin",
+  title: "Classin 가이드",
   description:
     "Classin을 처음 살펴보거나 사용 중인 학원이 도입 준비, 수업 운영, 문제 해결 방법을 한곳에서 확인할 수 있습니다.",
   openGraph: {
@@ -99,6 +100,7 @@ export default async function DocsHomePage({ searchParams }: DocsHomePageProps) 
 
   return (
     <div className="min-h-screen bg-[#FAFAF8] pb-20 pt-28 text-[#111110] md:pb-24 md:pt-36">
+      {query && <DocsSearchLogger query={query} resultCount={filteredDocs.length} />}
       <section className="container">
         <div className="max-w-4xl">
           <p className="text-sm font-semibold uppercase tracking-[0.16em] text-[#084734]">
@@ -114,11 +116,12 @@ export default async function DocsHomePage({ searchParams }: DocsHomePageProps) 
           </p>
         </div>
 
-        <form action="/docs" method="get" className="mt-9 flex max-w-2xl items-center gap-3 border-b border-black/[0.08] pb-4 md:mt-10">
+        <form id="docs-search" action="/docs" method="get" className="mt-9 flex max-w-2xl items-center gap-3 border-b border-black/[0.08] pb-4 md:mt-10">
           <Search className="h-4 w-4 shrink-0 text-[#A39E98]" aria-hidden />
           <input
             name="q"
             defaultValue={q ?? ""}
+            aria-label="가이드 전체 검색"
             placeholder="궁금한 기능, 수업 준비, 문제 상황 검색"
             className="min-w-0 flex-1 bg-transparent text-base outline-none placeholder:text-[#A39E98]"
           />
