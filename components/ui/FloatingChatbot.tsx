@@ -798,7 +798,7 @@ export function FloatingChatbot() {
                         transition={{ duration: shouldReduceMotion ? 0.01 : 0.18 }}
                         className="mb-3 flex h-[min(620px,calc(100svh-6rem))] w-full max-w-none flex-col overflow-hidden rounded-[20px] border border-black/[0.08] bg-white shadow-[0_30px_60px_rgba(8,71,52,0.12),0_14px_30px_rgba(0,0,0,0.06),0_4px_10px_rgba(0,0,0,0.04),0_1px_3px_rgba(0,0,0,0.03)] md:mb-4 md:h-[min(560px,calc(100svh-8.5rem))] md:max-w-[390px]"
                     >
-                        <div className="flex items-center justify-between border-b border-white/10 bg-gradient-to-br from-[#0c5d44] to-[#084734] px-5 py-4 text-white">
+                        <div className="flex items-center justify-between border-b border-white/[0.08] bg-[#2b2926] px-5 py-4 text-white">
                             <div className="flex min-w-0 items-center gap-3">
                                 <div className="relative flex h-10 w-10 shrink-0 items-center justify-center overflow-hidden rounded-[9px] border border-white/20 bg-white/15">
                                     {isDeepConsultation ? (
@@ -811,7 +811,7 @@ export function FloatingChatbot() {
                                             aria-hidden
                                         />
                                     ) : (
-                                        <Bot className="h-5 w-5" />
+                                        <Bot className="h-5 w-5 text-[#6EE7B7]" />
                                     )}
                                 </div>
                                 <div className="min-w-0">
@@ -854,7 +854,7 @@ export function FloatingChatbot() {
                                             className={cn(
                                                 "max-w-[90%] rounded-[14px] px-3.5 py-3 text-sm leading-6 md:max-w-[86%]",
                                                 message.role === "user"
-                                                    ? "rounded-br-[4px] bg-gradient-to-br from-[#0c5d44] to-[#084734] text-white shadow-[0_3px_10px_rgba(8,71,52,0.20)]"
+                                                    ? "rounded-br-[4px] bg-[#0e5038] text-white shadow-[0_3px_10px_rgba(8,71,52,0.18)]"
                                                     : "rounded-bl-[4px] border border-black/[0.06] bg-white text-[#111110] shadow-[0_3px_8px_rgba(0,0,0,0.05),0_1px_2px_rgba(0,0,0,0.03)]"
                                             )}
                                         >
@@ -869,10 +869,10 @@ export function FloatingChatbot() {
                                                                     key={question}
                                                                     type="button"
                                                                     onClick={() => sendQuestion(question)}
-                                                                    className="flex w-full items-center justify-between gap-2 whitespace-normal break-keep rounded-[10px] border border-[#084734]/15 bg-[#ECFDF5] px-3 py-2 text-left text-[12px] font-semibold leading-5 text-[#084734] transition-colors hover:border-[#084734]/35 hover:bg-[#D1FAE5]"
+                                                                    className="flex w-full items-center justify-between gap-2 whitespace-normal break-keep rounded-full border border-[#0e5038]/40 bg-transparent px-3.5 py-2 text-left text-[12px] font-semibold leading-5 text-[#0e5038] transition-colors hover:border-[#0e5038]/60 hover:bg-[#ECFDF5]"
                                                                 >
                                                                     <span>{question}</span>
-                                                                    <svg viewBox="0 0 24 24" fill="none" stroke="currentColor" strokeWidth={2} strokeLinecap="round" strokeLinejoin="round" aria-hidden="true" className="h-3.5 w-3.5 shrink-0 text-[#084734]/70"><path d="M7 17 17 7" /><path d="M7 7h10v10" /></svg>
+                                                                    <svg viewBox="0 0 24 24" fill="none" stroke="currentColor" strokeWidth={2} strokeLinecap="round" strokeLinejoin="round" aria-hidden="true" className="h-3.5 w-3.5 shrink-0"><path d="M5 12h14" /><path d="m12 5 7 7-7 7" /></svg>
                                                                 </button>
                                                             ))}
                                                         </div>
@@ -927,7 +927,7 @@ export function FloatingChatbot() {
                                 <button
                                     type="submit"
                                     disabled={isSending || !input.trim()}
-                                    className="inline-flex h-10 w-10 shrink-0 items-center justify-center rounded-[10px] bg-gradient-to-br from-[#0c5d44] to-[#084734] text-white shadow-[0_4px_12px_rgba(8,71,52,0.28)] transition-all hover:from-[#0e6a4e] hover:to-[#065c41] disabled:cursor-not-allowed disabled:opacity-40 disabled:shadow-none"
+                                    className="inline-flex h-10 w-10 shrink-0 items-center justify-center rounded-[10px] bg-[#0e5038] text-white shadow-[0_4px_12px_rgba(8,71,52,0.24)] transition-colors hover:bg-[#0f5a40] disabled:cursor-not-allowed disabled:opacity-40 disabled:shadow-none"
                                     aria-label="질문 보내기"
                                 >
                                     {isSending ? <Loader2 className="h-4 w-4 animate-spin" /> : <Send className="h-4 w-4" />}
@@ -942,10 +942,11 @@ export function FloatingChatbot() {
                 {!isOpen && !shouldReduceMotion ? (
                     <motion.span
                         aria-hidden
-                        className="pointer-events-none absolute inset-0 rounded-full bg-[#084734]"
-                        initial={{ scale: 1, opacity: 0.22 }}
-                        animate={{ scale: [1, 1.45], opacity: [0.22, 0] }}
-                        transition={{ duration: 2.8, repeat: Infinity, repeatDelay: 1.8, ease: "easeOut" }}
+                        className="pointer-events-none absolute -inset-2 rounded-full"
+                        style={{ background: "radial-gradient(circle, rgba(14,80,56,0.28) 0%, rgba(14,80,56,0.10) 45%, rgba(14,80,56,0) 72%)" }}
+                        initial={{ scale: 0.85, opacity: 0.55 }}
+                        animate={{ scale: [0.85, 1.75], opacity: [0.55, 0] }}
+                        transition={{ duration: 3.8, repeat: Infinity, repeatDelay: 1.2, ease: "easeOut" }}
                     />
                 ) : null}
                 <motion.button
@@ -954,7 +955,7 @@ export function FloatingChatbot() {
                     whileHover={shouldReduceMotion ? undefined : { scale: 1.04 }}
                     whileTap={shouldReduceMotion ? undefined : { scale: 0.96 }}
                     onClick={() => setIsOpen((current) => !current)}
-                    className="relative flex h-14 w-14 items-center justify-center overflow-hidden rounded-full bg-gradient-to-br from-[#0c5d44] to-[#084734] text-white shadow-[0_12px_28px_rgba(8,71,52,0.34),0_4px_10px_rgba(0,0,0,0.12)] transition-all hover:from-[#0e6a4e] hover:to-[#065c41] focus:outline-none focus:ring-4 focus:ring-[#084734]/20 md:h-16 md:w-16"
+                    className="relative flex h-14 w-14 items-center justify-center overflow-hidden rounded-full bg-[#0e5038] text-white shadow-[0_12px_28px_rgba(8,71,52,0.30),0_4px_10px_rgba(0,0,0,0.12)] transition-colors hover:bg-[#0f5a40] focus:outline-none focus:ring-4 focus:ring-[#084734]/20 md:h-16 md:w-16"
                     aria-label={isOpen ? "챗봇 닫기" : "챗봇 열기"}
                     aria-expanded={isOpen}
                     aria-controls="classin-chatbot-dialog"
