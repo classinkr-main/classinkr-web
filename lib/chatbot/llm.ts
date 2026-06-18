@@ -18,12 +18,14 @@ import type { ChatbotSource } from "./service"
 
 export type ChatbotModelTier = "basic" | "reasoning" | "advanced"
 
-// 챗봇 모델 티어별 기본 모델 설정 (사용자 결정 2026-06-18).
-// fast(basic): gemini-3.5-flash. 측정상 6/6 503 관찰 이력 있으나 사용자 요청으로 유지(503 재발 시 2.5-flash 폴백 검토).
-// reasoning·advanced(심화·심각 상담): gemini-3.1-pro 우선, 호출 에러 시 gemini-2.5-pro 로 자동 폴백(resolveModelChain).
+// 챗봇 모델 티어별 기본 모델 설정 (사용자 결정 2026-06-18, ListModels 실측 반영).
+// 최신 모델 우선 + 호출 실패 시 안정 모델 자동 폴백(resolveModelChain).
+// 실측(이 키): 3.5-flash 5/6 503(과부하), 3.1-pro 는 없는 이름→정식은 gemini-3.1-pro-preview, 2.5-flash 6/6 OK.
+// fast(basic): gemini-3.5-flash → 폴백 gemini-2.5-flash. deep(reasoning·advanced): gemini-3.1-pro-preview → 폴백 gemini-2.5-pro.
 const DEFAULT_FAST_MODEL = "gemini-3.5-flash"
-const DEFAULT_REASONING_MODEL = "gemini-3.1-pro"
-const DEFAULT_ADVANCED_MODEL = "gemini-3.1-pro"
+const DEFAULT_REASONING_MODEL = "gemini-3.1-pro-preview"
+const DEFAULT_ADVANCED_MODEL = "gemini-3.1-pro-preview"
+const FAST_FALLBACK_MODEL = "gemini-2.5-flash"
 const DEEP_FALLBACK_MODEL = "gemini-2.5-pro"
 
 // 설정값으로 들어오면 무시하고 위 기본값으로 폴백할 모델(미지원/폐기/상시 503).
@@ -61,14 +63,12 @@ function resolveModel(tier: ChatbotModelTier = "basic") {
   return configured
 }
 
-// 티어별 프라이머리 + 에러 폴백 모델 체인. 심화·심각 상담(reasoning·advanced)은
-// 프라이머리(기본 gemini-3.1-pro) 호출이 실패하면 gemini-2.5-pro 로 자동 폴백한다.
+// 티어별 프라이머리 + 에러 폴백 모델 체인. 프라이머리 호출이 실패하면 안정 모델로 자동 폴백한다.
+// deep(reasoning·advanced): gemini-3.1-pro-preview → gemini-2.5-pro. fast(basic): gemini-3.5-flash → gemini-2.5-flash.
 function resolveModelChain(tier: ChatbotModelTier): string[] {
   const primary = resolveModel(tier)
-  if (tier === "reasoning" || tier === "advanced") {
-    return Array.from(new Set([primary, DEEP_FALLBACK_MODEL]))
-  }
-  return [primary]
+  const fallback = tier === "reasoning" || tier === "advanced" ? DEEP_FALLBACK_MODEL : FAST_FALLBACK_MODEL
+  return Array.from(new Set([primary, fallback]))
 }
 
 function getGeminiApiKey() {
@@ -193,18 +193,18 @@ async function requestGeminiContent({
   if (!apiKey) return null
 
   const models = resolveModelChain(tier)
-  const requestBody = JSON.stringify({
-    systemInstruction: { parts: [{ text: systemInstruction }] },
-    contents,
-    generationConfig: {
-      temperature,
-      topP: 0.9,
-      // gemini-2.5-* 는 thinking 모델 — thinking 이 켜지면 출력 토큰을 먼저 소진해 본문이 잘린다.
-      // 답변 다듬기에는 추론이 필요 없으므로 thinking 을 끄고 본문에 토큰을 모두 쓴다.
-      maxOutputTokens: 600,
-      thinkingConfig: { thinkingBudget: 0 },
-    },
-  })
+  // 모델별 generationConfig. flash 계열은 thinking 을 꺼 본문 토큰을 확보하고(2.5-flash 토큰 소진 방지),
+  // pro 계열(2.5-pro·3.x-pro-preview)은 thinking 필수라 budget:0 을 보내면 400 → thinking 켠 채 출력 여유를 둔다.
+  const buildBody = (model: string) => {
+    const isFlash = /flash/i.test(model)
+    return JSON.stringify({
+      systemInstruction: { parts: [{ text: systemInstruction }] },
+      contents,
+      generationConfig: isFlash
+        ? { temperature, topP: 0.9, maxOutputTokens: 600, thinkingConfig: { thinkingBudget: 0 } }
+        : { temperature, topP: 0.9, maxOutputTokens: 2048 },
+    })
+  }
 
   // 프라이머리 모델이 실패(non-ok/타임아웃/네트워크/빈 응답)하면 다음 폴백 모델로 순차 시도한다.
   for (const model of models) {
@@ -218,7 +218,7 @@ async function requestGeminiContent({
           method: "POST",
           headers: { "Content-Type": "application/json" },
           signal: controller.signal,
-          body: requestBody,
+          body: buildBody(model),
         }
       )
 
