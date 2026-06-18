@@ -177,7 +177,7 @@ describe("chatbot RAG source relevance", () => {
     expect(result.unresolved).toBe(false)
     expect(result.answer).toContain("플립러닝")
     expect(fetchMock).toHaveBeenCalledWith(
-      expect.stringContaining("/models/gemini-2.5-flash:generateContent?key=test-gemini-key"),
+      expect.stringContaining("/models/gemini-3.5-flash:generateContent?key=test-gemini-key"),
       expect.objectContaining({
         method: "POST",
       })
@@ -239,7 +239,7 @@ describe("chatbot RAG source relevance", () => {
     expect(result.answerMode).toBe("direct_answer")
     expect(result.answer).toContain("토론식 수업")
     expect(generationCalls).toHaveLength(2)
-    expect(generationCalls[0][0]).toContain("/models/gemini-2.5-flash:generateContent")
+    expect(generationCalls[0][0]).toContain("/models/gemini-3.5-flash:generateContent")
     expect(generationCalls[1][0]).toContain("/models/gemini-test-reasoning:generateContent")
   })
 
