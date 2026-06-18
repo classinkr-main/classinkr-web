@@ -669,7 +669,7 @@ export default function EventEditor({ event, mode }: EventEditorProps) {
                       <div className="mt-2 space-y-1.5 text-[11px] leading-5 text-[#084734]/75">
                         <p>**굵게** · *기울임* · ==강조==</p>
                         <p>{"{{green:브랜드색}} · [링크](url)"}</p>
-                        <p>![설명](이미지URL) · {">"} 인용</p>
+                        <p>![설명](/images/example.png) · {">"} 인용</p>
                       </div>
                     </div>
                   </div>

@@ -43,6 +43,7 @@ import { Input } from "@/components/ui/input"
 import { Label } from "@/components/ui/label"
 import { Tabs, TabsContent, TabsList, TabsTrigger } from "@/components/ui/tabs"
 import BlogMarkdownRenderer from "@/components/blog/BlogMarkdownRenderer"
+import { SafeBlogImage } from "@/components/blog/SafeBlogImage"
 import RichMarkdownEditor, { type RichMarkdownEditorHandle } from "@/components/admin/RichMarkdownEditor"
 import {
   BLOG_STATUS_OPTIONS,
@@ -62,6 +63,7 @@ import {
   getLeadMagnetStatusLabel,
   leadMagnetOptions,
 } from "@/lib/lead-magnets"
+import { sanitizePublicImageUrl } from "@/lib/safe-public-url"
 
 interface BlogPostEditorProps {
   mode: "create" | "edit"
@@ -137,7 +139,7 @@ const DEFAULT_TEMPLATES: BlogTemplate[] = [
     name: "사례 연구",
     savedAt: "2024-01-01T00:00:00.000Z",
     data: {
-      category: "사례",
+      category: "성공 사례",
       targetReader: "비슷한 문제를 겪고 있는 학원 운영자",
       benefitItems: [
         "실제 현장 사례를 통해 문제 해결 과정을 구체적으로 파악할 수 있습니다.",
@@ -189,7 +191,7 @@ const DEFAULT_TEMPLATES: BlogTemplate[] = [
     name: "기능·제품 소개",
     savedAt: "2024-01-01T00:00:00.000Z",
     data: {
-      category: "제품",
+      category: "제품 업데이트",
       targetReader: "새로운 기능을 도입하려는 학원 담당자",
       benefitItems: [
         "기능의 핵심 가치와 어떤 문제를 해결하는지 명확하게 파악할 수 있습니다.",
@@ -210,9 +212,7 @@ const DEFAULT_TEMPLATES: BlogTemplate[] = [
         "",
         "### 기능 2",
         "",
-        "스크린샷이나 예시가 있으면 여기에 추가해주세요.",
-        "",
-        "![기능 설명 이미지](이미지URL)",
+        "스크린샷이나 예시가 있으면 업로드한 뒤 여기에 삽입해주세요.",
         "",
         "### 기능 3",
         "",
@@ -473,6 +473,8 @@ export default function BlogPostEditor({
   const filteredPosts = allPosts.filter((post) => post.id !== initialPost?.id)
   const computedReadTime = estimateReadTime(form.contentMarkdown)
   const coverPreviewUrl = form.heroImageUrl || form.imageUrl
+  const authorAvatarSrc = sanitizePublicImageUrl(form.authorAvatarUrl, "")
+  const authorInitial = form.author.trim().slice(0, 1) || "C"
   const headings = useMemo(
     () => extractMarkdownHeadings(form.contentMarkdown),
     [form.contentMarkdown]
@@ -727,6 +729,7 @@ export default function BlogPostEditor({
       authorBio:
         form.authorBio.trim() ||
         `${form.author.trim() || "Classin 팀"}은 교육 운영과 전환 경험을 정리합니다.`,
+      authorAvatarUrl: authorAvatarSrc,
       seoTitle: form.seoTitle.trim() || finalTitle,
       seoDescription: form.seoDescription.trim() || finalExcerpt,
       cta: {
@@ -774,6 +777,10 @@ export default function BlogPostEditor({
     const payload = buildPayload(nextStatus)
     if (!payload.title || !payload.excerpt || !payload.category) {
       setNotice("제목, 요약, 카테고리는 꼭 입력해주세요.")
+      return
+    }
+    if ((form.authorAvatarUrl ?? "").trim() && !authorAvatarSrc) {
+      setNotice("작성자 아바타는 사이트 내부 경로, Supabase Storage, Unsplash 이미지만 사용할 수 있습니다.")
       return
     }
     setIsSubmitting(true)
@@ -1395,11 +1402,18 @@ export default function BlogPostEditor({
                     <div className="mt-10 rounded-[32px] border border-[#e8e8e4] bg-white p-6 shadow-sm md:p-8">
                       <div className="flex flex-col gap-6 md:flex-row md:items-center">
                         <div className="relative h-16 w-16 shrink-0 overflow-hidden rounded-full bg-[#f0f0ec]">
-                          {form.authorAvatarUrl ? (
-                            <Image src={form.authorAvatarUrl} alt={form.author} fill className="object-cover" sizes="64px" unoptimized />
+                          {authorAvatarSrc ? (
+                            <SafeBlogImage
+                              src={authorAvatarSrc}
+                              alt={form.author}
+                              fill
+                              className="object-cover"
+                              sizes="64px"
+                              fallbackIndex={initialPost?.id ?? 0}
+                            />
                           ) : (
                             <div className="flex h-full items-center justify-center text-lg font-semibold text-[#084734]">
-                              {form.author.slice(0, 1)}
+                              {authorInitial}
                             </div>
                           )}
                         </div>
@@ -1851,7 +1865,7 @@ export default function BlogPostEditor({
                       <div className="mt-2 space-y-1.5 text-[11px] leading-5 text-[#084734]/75">
                         <p>**굵게** · *기울임* · ==강조==</p>
                         <p>{"{{green:브랜드색}} · [링크](url)"}</p>
-                        <p>![설명](이미지URL) · {">"} 인용</p>
+                        <p>![설명](/images/example.png) · {">"} 인용</p>
                       </div>
                     </div>
                   </div>
@@ -2176,18 +2190,26 @@ export default function BlogPostEditor({
                     {form.authorAvatarUrl && (
                       <div className="flex items-center gap-3 rounded-xl border border-[#e8e8e4] bg-[#fcfcfb] p-3">
                         <div className="relative h-14 w-14 shrink-0 overflow-hidden rounded-full bg-[#f0f0ec]">
-                          <Image
-                            src={form.authorAvatarUrl}
-                            alt={`${form.author || "작성자"} 아바타 미리보기`}
-                            fill
-                            className="object-cover"
-                            sizes="56px"
-                            unoptimized
-                          />
+                          {authorAvatarSrc ? (
+                            <SafeBlogImage
+                              src={authorAvatarSrc}
+                              alt={`${form.author || "작성자"} 아바타 미리보기`}
+                              fill
+                              className="object-cover"
+                              sizes="56px"
+                              fallbackIndex={initialPost?.id ?? 0}
+                            />
+                          ) : (
+                            <div className="flex h-full items-center justify-center text-base font-semibold text-[#084734]">
+                              {authorInitial}
+                            </div>
+                          )}
                         </div>
                         <div className="min-w-0">
                           <p className="text-[12px] font-medium text-[#111110]">작성자 공개 프로필</p>
-                          <p className="text-[11px] text-[#1a1a1a]/35">1:1 원형 크롭</p>
+                          <p className={`text-[11px] ${authorAvatarSrc ? "text-[#1a1a1a]/35" : "text-[#B85C33]"}`}>
+                            {authorAvatarSrc ? "1:1 원형 크롭" : "표시할 수 없는 이미지 URL입니다."}
+                          </p>
                         </div>
                       </div>
                     )}

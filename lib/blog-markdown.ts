@@ -1,4 +1,8 @@
-import { sanitizePublicUrlForHtmlAttribute } from "./safe-public-url"
+import {
+  sanitizePublicImageUrl,
+  sanitizePublicImageUrlForHtmlAttribute,
+  sanitizePublicUrlForHtmlAttribute,
+} from "./safe-public-url"
 
 export interface BlogHeading {
   id: string
@@ -25,6 +29,17 @@ export function slugify(value: string) {
     .replace(/^-|-$/g, "")
 
   return normalized || "untitled-post"
+}
+
+function createUniqueSlugger() {
+  const counts = new Map<string, number>()
+
+  return (value: string) => {
+    const base = slugify(value)
+    const nextCount = (counts.get(base) ?? 0) + 1
+    counts.set(base, nextCount)
+    return nextCount === 1 ? base : `${base}-${nextCount}`
+  }
 }
 
 export function stripMarkdown(markdown: string) {
@@ -113,6 +128,8 @@ function normalizeMarkdownBlockBoundaries(markdown: string) {
 }
 
 export function extractMarkdownHeadings(markdown: string): BlogHeading[] {
+  const uniqueSlug = createUniqueSlugger()
+
   return markdown
     .split(/\r?\n/)
     .map((line) => {
@@ -122,7 +139,7 @@ export function extractMarkdownHeadings(markdown: string): BlogHeading[] {
       const level = match[1].length as 2 | 3
       const text = match[2].trim()
       return {
-        id: slugify(text),
+        id: uniqueSlug(text),
         text,
         level,
       } satisfies BlogHeading
@@ -145,13 +162,15 @@ function renderImage(line: string) {
     if (gap.trim()) return null
 
     const [, alt, url, rawTitle] = match
+    if (!sanitizePublicImageUrl(url, "")) return null
+
     const { title, width } = parseImageTitle(rawTitle)
     const figureStyle = width
       ? ` style="max-width:${width}px;width:100%;margin-left:auto;margin-right:auto"`
       : ""
     figures.push(`
       <figure class="my-8 overflow-hidden rounded-3xl border border-[#e8e8e4] bg-white"${figureStyle}>
-        <img src="${sanitizePublicUrlForHtmlAttribute(url)}" alt="${escapeHtml(alt)}" loading="lazy" decoding="async" class="h-auto w-full object-cover" />
+        <img src="${sanitizePublicImageUrlForHtmlAttribute(url)}" alt="${escapeHtml(alt)}" loading="lazy" decoding="async" class="h-auto w-full object-cover" />
         ${alt || title ? `<figcaption class="border-t border-[#e8e8e4] px-5 py-3 text-sm text-[#1a1a1a]/45">${escapeHtml(alt || title)}</figcaption>` : ""}
       </figure>
     `)
@@ -162,10 +181,98 @@ function renderImage(line: string) {
   return figures.join("\n")
 }
 
+type TableAlignment = "left" | "center" | "right"
+
+function splitMarkdownTableRow(line: string) {
+  const trimmed = line.trim()
+  if (!trimmed.includes("|")) return null
+
+  const cells = trimmed
+    .replace(/^\|/, "")
+    .replace(/\|$/, "")
+    .split("|")
+    .map((cell) => cell.trim())
+
+  return cells.length >= 2 ? cells : null
+}
+
+function parseMarkdownTableDivider(line: string, expectedCells: number) {
+  const cells = splitMarkdownTableRow(line)
+  if (!cells || cells.length !== expectedCells) return null
+
+  const alignments: TableAlignment[] = []
+  for (const cell of cells) {
+    const compact = cell.replace(/\s+/g, "")
+    if (!/^:?-{3,}:?$/.test(compact)) return null
+    if (compact.startsWith(":") && compact.endsWith(":")) {
+      alignments.push("center")
+    } else if (compact.endsWith(":")) {
+      alignments.push("right")
+    } else {
+      alignments.push("left")
+    }
+  }
+
+  return alignments
+}
+
+function isMarkdownTableStart(lines: string[], index: number) {
+  const header = splitMarkdownTableRow(lines[index] ?? "")
+  if (!header) return false
+  return Boolean(parseMarkdownTableDivider(lines[index + 1] ?? "", header.length))
+}
+
+function tableAlignmentClass(alignment: TableAlignment) {
+  if (alignment === "center") return "text-center"
+  if (alignment === "right") return "text-right"
+  return "text-left"
+}
+
+function renderMarkdownTable(lines: string[], index: number) {
+  const header = splitMarkdownTableRow(lines[index] ?? "")
+  if (!header) return null
+
+  const alignments = parseMarkdownTableDivider(lines[index + 1] ?? "", header.length)
+  if (!alignments) return null
+
+  const rows: string[][] = []
+  let cursor = index + 2
+  while (cursor < lines.length) {
+    const row = splitMarkdownTableRow(lines[cursor])
+    if (!row || row.length !== header.length) break
+    rows.push(row)
+    cursor += 1
+  }
+
+  const headerHtml = header
+    .map(
+      (cell, cellIndex) =>
+        `<th scope="col" class="whitespace-nowrap border-b border-[#e8e8e4] bg-[#F6F5F4] px-4 py-3 text-[13px] font-semibold text-[#111110] ${tableAlignmentClass(alignments[cellIndex])}">${renderInline(cell)}</th>`
+    )
+    .join("")
+  const bodyHtml = rows
+    .map(
+      (row) =>
+        `<tr>${row
+          .map(
+            (cell, cellIndex) =>
+              `<td class="border-t border-[#e8e8e4] px-4 py-3 text-[14px] leading-6 text-[#2f2f2b] ${tableAlignmentClass(alignments[cellIndex])}">${renderInline(cell)}</td>`
+          )
+          .join("")}</tr>`
+    )
+    .join("")
+
+  return {
+    html: `<div class="my-8 overflow-x-auto rounded-2xl border border-[#e8e8e4] bg-white"><table class="w-full min-w-[520px] border-collapse"><thead><tr>${headerHtml}</tr></thead><tbody>${bodyHtml}</tbody></table></div>`,
+    nextIndex: cursor,
+  }
+}
+
 export function renderMarkdownToHtml(markdown: string) {
   const lines = normalizeMarkdownBlockBoundaries(markdown).split("\n")
   const html: string[] = []
   let index = 0
+  const uniqueSlug = createUniqueSlugger()
 
   while (index < lines.length) {
     const line = lines[index]
@@ -197,11 +304,18 @@ export function renderMarkdownToHtml(markdown: string) {
       continue
     }
 
+    const table = renderMarkdownTable(lines, index)
+    if (table) {
+      html.push(table.html)
+      index = table.nextIndex
+      continue
+    }
+
     const headingMatch = trimmed.match(/^(##|###)\s+(.*)$/)
     if (headingMatch) {
       const level = headingMatch[1].length
       const text = headingMatch[2].trim()
-      const id = slugify(text)
+      const id = uniqueSlug(text)
       html.push(
         `<h${level} id="${id}" class="${level === 2 ? "scroll-mt-32 mt-14 text-3xl font-bold tracking-[-0.03em] text-[#111110]" : "scroll-mt-32 mt-10 text-2xl font-semibold tracking-[-0.02em] text-[#111110]"}">${renderInline(text)}</h${level}>`
       )
@@ -266,6 +380,7 @@ export function renderMarkdownToHtml(markdown: string) {
         /^!\[/.test(current) ||
         /^(##|###)\s+/.test(current) ||
         current === "---" ||
+        isMarkdownTableStart(lines, index) ||
         /^>\s?/.test(current) ||
         /^(-|\*)\s+/.test(current) ||
         /^\d+\.\s+/.test(current)
@@ -278,7 +393,7 @@ export function renderMarkdownToHtml(markdown: string) {
 
     if (paragraphLines.length === 0) {
       html.push(
-        `<p class="mt-5 text-[17px] leading-8 text-[#2f2f2b]">${renderInline(trimmed)}</p>`
+        `<p class="mt-5 text-[17px] leading-8 text-[#2f2f2b]">${/^!\[/.test(trimmed) ? escapeHtml(trimmed) : renderInline(trimmed)}</p>`
       )
       index += 1
       continue
