@@ -239,6 +239,58 @@ function setCachedRetrieval(question: NormalizedQuestion, value: KnowledgeSearch
   })
 }
 
+// 답변 레벨 캐시 — 세션(대화 이력)이 없는 동일 질문은 검색·Gemini를 통째로 건너뛴다.
+interface CachedAnswerEntry {
+  response: ReturnType<typeof composeAnswer>
+  category: string
+  intent: ChatbotIntent
+  handoffIntent: HandoffIntent
+  warning?: string
+}
+
+const ANSWER_CACHE_VERSION = "answer-20260618-v1"
+const ANSWER_CACHE_TTL_MS = 5 * 60 * 1000
+const ANSWER_CACHE_MAX = 200
+const answerCache = new Map<string, { expiresAt: number; value: CachedAnswerEntry }>()
+
+function getAnswerCacheKey(question: NormalizedQuestion) {
+  const backend = hasSupabaseServerEnv() ? "supabase" : "static"
+  return `${ANSWER_CACHE_VERSION}:${backend}:${buildRetrievalQueryText(question).toLowerCase()}`
+}
+
+function cloneCachedAnswer(value: CachedAnswerEntry): CachedAnswerEntry {
+  return {
+    ...value,
+    response: {
+      ...value.response,
+      sources: value.response.sources.map((source) => ({ ...source })),
+      suggestedQuestions: [...value.response.suggestedQuestions],
+    },
+  }
+}
+
+function getCachedAnswer(question: NormalizedQuestion): CachedAnswerEntry | null {
+  const key = getAnswerCacheKey(question)
+  const cached = answerCache.get(key)
+  if (!cached) return null
+  if (cached.expiresAt <= Date.now()) {
+    answerCache.delete(key)
+    return null
+  }
+  return cloneCachedAnswer(cached.value)
+}
+
+function setCachedAnswer(question: NormalizedQuestion, value: CachedAnswerEntry) {
+  if (answerCache.size >= ANSWER_CACHE_MAX) {
+    const firstKey = answerCache.keys().next().value
+    if (firstKey) answerCache.delete(firstKey)
+  }
+  answerCache.set(getAnswerCacheKey(question), {
+    expiresAt: Date.now() + ANSWER_CACHE_TTL_MS,
+    value: cloneCachedAnswer(value),
+  })
+}
+
 function elapsedSince(startedAt: number) {
   return Math.max(0, Date.now() - startedAt)
 }
@@ -1992,6 +2044,22 @@ async function generateUsableAnswerWithProgressiveModels(
   return null
 }
 
+// 이미 손으로 다듬은 큐레이션 템플릿 직답은 Gemini 재작성을 건너뛴다(즉시 응답·드리프트 방지).
+function isCuratedTemplateQuestion(question: NormalizedQuestion) {
+  return (
+    isHardwareSpecsQuestion(question) ||
+    isHardwareBoardLineupQuestion(question) ||
+    isHardwareTroubleQuestion(question) ||
+    isHardwareUnconfirmedDetailQuestion(question) ||
+    isLoginTroubleQuestion(question) ||
+    isWebLiveBillingQuestion(question) ||
+    isPricingInfoQuestion(question) ||
+    isInstallFormQuestion(question) ||
+    isCoreFeatureYesNoQuestion(question) ||
+    ((isComparisonQuestion(question) || isIdentityQuestion(question)) && !isApiIntegrationQuestion(question))
+  )
+}
+
 function shouldUseAiFinalAnswer(
   response: Omit<ChatbotQueryResponse, "answerEventId" | "sessionId" | "warning" | "handoffIntent">,
   question: NormalizedQuestion,
@@ -1999,6 +2067,8 @@ function shouldUseAiFinalAnswer(
 ) {
   if (category === "general" && !isDomainRelatedQuestion(question, category)) return false
   if (response.answerMode === "clarifying_question" && question.tokens.length < 2) return false
+  // 큐레이션 직답은 이미 최종본 — Gemini 재작성(0.8~4.5s)을 건너뛰고 그대로 내보낸다.
+  if (response.answerMode === "direct_answer" && isCuratedTemplateQuestion(question)) return false
   return true
 }
 
@@ -2038,6 +2108,46 @@ function shouldExposeSources(input: ChatbotQueryRequest) {
   return process.env.CHATBOT_SHOW_SOURCES === "1" || context.showSources === true
 }
 
+// 세션 대화 이력 로드 — 검색과 병렬로 돌릴 수 있게 분리. 실패해도 빈 배열로 안전 폴백.
+async function loadSessionHistory(
+  sessionId: string
+): Promise<{ role: "user" | "model"; parts: { text: string }[] }[]> {
+  if (!hasSupabaseServerEnv()) return []
+  try {
+    const supabase = createSupabaseAdminClient()
+    const { data, error } = await supabase
+      .from("chat_messages")
+      .select("role, content")
+      .eq("session_id", sessionId)
+      .order("created_at", { ascending: true })
+      .limit(10) // 최근 10개 메세지 (사용자 5, 어시스턴트 5)
+
+    if (error || !data) return []
+
+    const mapped = data.map((msg) => ({
+      role: msg.role === "assistant" ? ("model" as const) : ("user" as const),
+      parts: [{ text: msg.content }],
+    }))
+
+    // 교차 대화 필터링 (user, model, user, model 순서 유지)
+    const cleanHistory: { role: "user" | "model"; parts: { text: string }[] }[] = []
+    let expectedRole: "user" | "model" = "user"
+    for (const msg of mapped) {
+      if (msg.role === expectedRole) {
+        cleanHistory.push(msg)
+        expectedRole = expectedRole === "user" ? "model" : "user"
+      }
+    }
+    if (cleanHistory.length > 0 && cleanHistory[cleanHistory.length - 1].role === "user") {
+      cleanHistory.pop()
+    }
+    return cleanHistory
+  } catch (e) {
+    console.warn("[chatbot] failed to load session history:", e)
+    return []
+  }
+}
+
 // 검색 → 답변 구성 → 필요 시 Gemini 답변 생성까지의 코어. 영속화(persistExchange)는 포함하지 않는다.
 // handleChatbotQuery(실서비스)와 evaluateChatbotQuery(품질 평가)가 공유한다.
 async function buildChatbotCore(
@@ -2066,6 +2176,29 @@ async function buildChatbotCore(
       latencyMs: elapsedSince(startedAt),
     }
   }
+  // 세션(대화 이력)이 없는 동일 질문은 캐시된 답변으로 즉시 응답 — 검색·Gemini를 통째로 건너뛴다.
+  if (shouldGenerateAnswer && !options.sessionId) {
+    const cached = getCachedAnswer(question)
+    if (cached) {
+      return {
+        question,
+        response: cached.response,
+        category: cached.category,
+        intent: cached.intent,
+        handoffIntent: cached.handoffIntent,
+        warning: cached.warning,
+        latencyMs: elapsedSince(startedAt),
+        retrievalCacheHit: true,
+      }
+    }
+  }
+
+  // history는 검색·분류와 무관하므로 검색과 병렬로 시작해 두고 Gemini 직전에만 await한다.
+  const historyPromise: Promise<{ role: "user" | "model"; parts: { text: string }[] }[]> =
+    shouldGenerateAnswer && options.sessionId
+      ? loadSessionHistory(options.sessionId)
+      : Promise.resolve([])
+
   const { sources, warning, cacheHit } = await searchKnowledgeSources(question)
   const classificationSources = sources.filter((source) => source.score >= MIN_DIRECT_SOURCE_SCORE)
   const { category, intent, handoffIntent } = classifyChatbotQuestion(
@@ -2074,44 +2207,8 @@ async function buildChatbotCore(
   )
   const response = composeAnswer(question, sources, category)
 
-  // 대화 기록 (History) 조회 및 가공
-  let history: { role: "user" | "model"; parts: { text: string }[] }[] = []
-  if (shouldGenerateAnswer && options.sessionId && hasSupabaseServerEnv()) {
-    try {
-      const supabase = createSupabaseAdminClient()
-      const { data, error } = await supabase
-        .from("chat_messages")
-        .select("role, content")
-        .eq("session_id", options.sessionId)
-        .order("created_at", { ascending: true })
-        .limit(10) // 최근 10개 메세지 (사용자 5, 어시스턴트 5)
-
-      if (!error && data) {
-        const mapped = data.map((msg) => ({
-          role: msg.role === "assistant" ? ("model" as const) : ("user" as const),
-          parts: [{ text: msg.content }],
-        }))
-
-        // 교차 대화 필터링 (user, model, user, model 순서 유지)
-        const cleanHistory = []
-        let expectedRole: "user" | "model" = "user"
-        for (const msg of mapped) {
-          if (msg.role === expectedRole) {
-            cleanHistory.push(msg)
-            expectedRole = expectedRole === "user" ? "model" : "user"
-          }
-        }
-        if (cleanHistory.length > 0 && cleanHistory[cleanHistory.length - 1].role === "user") {
-          cleanHistory.pop()
-        }
-        history = cleanHistory
-      }
-    } catch (e) {
-      console.warn("[chatbot] failed to load session history:", e)
-    }
-  }
-
   if (shouldGenerateAnswer && shouldUseAiFinalAnswer(response, question, category)) {
+    const history = await historyPromise
     const finalAnswer = await generateUsableAnswerWithProgressiveModels((tier) =>
       generateGeminiFinalAnswer({
         question: question.redacted,
@@ -2129,6 +2226,11 @@ async function buildChatbotCore(
   }
 
   finalizeAnswer(response)
+
+  // 세션(이력)이 없는 질문만 캐시 — 이력에 의존한 답이 캐시에 섞이지 않게.
+  if (shouldGenerateAnswer && !options.sessionId) {
+    setCachedAnswer(question, { response, category, intent, handoffIntent, warning })
+  }
 
   return {
     question,

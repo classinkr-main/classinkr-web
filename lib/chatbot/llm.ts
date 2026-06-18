@@ -25,6 +25,8 @@ const DEFAULT_ADVANCED_MODEL = "gemini-2.5-pro"
 
 const UNSUPPORTED_GEMINI_MODELS = new Set(["gemini-3.1-pro"])
 const GEMINI_TIMEOUT_MS = 4500
+// 임베딩은 보통 150~400ms — 생성용 4.5s를 그대로 쓰면 느린 호출이 요청 예산을 잡아먹는다.
+const EMBED_TIMEOUT_MS = 2000
 const MAX_ANSWER_LENGTH = 520
 
 // 운영 docs_ai_chunks.embedding 은 현재 vector(1536). 768 전환 migration을 적용한 환경은
@@ -314,7 +316,7 @@ export async function embedText(
   if (!apiKey || !text.trim()) return null
 
   const controller = new AbortController()
-  const timeout = setTimeout(() => controller.abort(), GEMINI_TIMEOUT_MS)
+  const timeout = setTimeout(() => controller.abort(), EMBED_TIMEOUT_MS)
 
   try {
     const res = await fetch(
