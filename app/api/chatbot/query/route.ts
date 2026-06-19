@@ -17,7 +17,11 @@ export async function POST(req: NextRequest) {
   }
 
   try {
-    const body = await req.json()
+    const body: unknown = await req.json()
+    if (!body || typeof body !== "object" || Array.isArray(body)) {
+      throw new ChatbotInputError("요청 형식이 올바르지 않습니다.")
+    }
+
     const result = await Promise.race([
       handleChatbotQuery(body, {
         userAgent: req.headers.get("user-agent"),
@@ -34,15 +38,19 @@ export async function POST(req: NextRequest) {
       return NextResponse.json({ error: error.message }, { status: error.status })
     }
 
+    if (error instanceof SyntaxError) {
+      return NextResponse.json({ error: "요청 JSON을 읽지 못했습니다." }, { status: 400 })
+    }
+
     console.error("[POST /api/chatbot/query] error:", error)
+    const isTimeout = error instanceof Error && error.message === "chatbot_timeout"
     return NextResponse.json(
       {
-        error:
-          error instanceof Error && error.message === "chatbot_timeout"
-            ? "응답이 지연되고 있습니다. 잠깐 후 다시 시도해 주세요."
-            : "답변을 준비하지 못했습니다. 잠시 후 다시 시도해 주세요.",
+        error: isTimeout
+          ? "응답이 지연되고 있습니다. 잠깐 후 다시 시도해 주세요."
+          : "답변을 준비하지 못했습니다. 잠시 후 다시 시도해 주세요.",
       },
-      { status: 500 }
+      { status: isTimeout ? 504 : 500 }
     )
   }
 }

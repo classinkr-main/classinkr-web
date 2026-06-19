@@ -30,6 +30,8 @@ const MAX_SOURCES_PER_DOC = 1
 const MAX_RETRIEVAL_CANDIDATES = 24
 const MAX_RETRIEVAL_CANDIDATES_PER_DOC = 3
 const MIN_DIRECT_SOURCE_SCORE = 18
+const DEFAULT_KNOWLEDGE_SEARCH_TIMEOUT_MS = 2_800
+const DEFAULT_FINAL_ANSWER_TIMEOUT_MS = 4_200
 const RETRIEVAL_CACHE_TTL_MS = 5 * 60 * 1000
 const RETRIEVAL_CACHE_MAX = 200
 const RETRIEVAL_CACHE_VERSION = "rag-rerank-20260618-v4"
@@ -294,6 +296,45 @@ function setCachedAnswer(question: NormalizedQuestion, value: CachedAnswerEntry)
 
 function elapsedSince(startedAt: number) {
   return Math.max(0, Date.now() - startedAt)
+}
+
+function getPositiveIntegerEnv(name: string, fallback: number) {
+  const value = Number(process.env[name])
+  return Number.isFinite(value) && value > 0 ? value : fallback
+}
+
+function getKnowledgeSearchTimeoutMs() {
+  return getPositiveIntegerEnv("CHATBOT_KNOWLEDGE_SEARCH_TIMEOUT_MS", DEFAULT_KNOWLEDGE_SEARCH_TIMEOUT_MS)
+}
+
+function getFinalAnswerTimeoutMs() {
+  return getPositiveIntegerEnv("CHATBOT_FINAL_ANSWER_TIMEOUT_MS", DEFAULT_FINAL_ANSWER_TIMEOUT_MS)
+}
+
+async function withTimeoutFallback<T>({
+  promise,
+  timeoutMs,
+  fallback,
+  onTimeout,
+}: {
+  promise: Promise<T>
+  timeoutMs: number
+  fallback: () => T
+  onTimeout: () => void
+}) {
+  let timeoutId: ReturnType<typeof setTimeout> | undefined
+  const timeoutPromise = new Promise<T>((resolve) => {
+    timeoutId = setTimeout(() => {
+      onTimeout()
+      resolve(fallback())
+    }, timeoutMs)
+  })
+
+  try {
+    return await Promise.race([promise, timeoutPromise])
+  } finally {
+    if (timeoutId) clearTimeout(timeoutId)
+  }
 }
 
 function normalizeQuestion(raw: unknown): NormalizedQuestion {
@@ -1619,6 +1660,27 @@ async function searchKnowledgeSources(
   return result
 }
 
+function getTimedOutKnowledgeFallback(question: NormalizedQuestion): KnowledgeSearchResult {
+  const staticSources = buildStaticSources(question, getFallbackDocsFromStatic())
+  const result = {
+    sources: mergeCuratedSources(question, staticSources),
+    warning: "문서 검색 응답이 지연되어 정적 문서 fallback을 사용했습니다.",
+  }
+  setCachedRetrieval(question, result)
+  return result
+}
+
+function searchKnowledgeSourcesWithinBudget(question: NormalizedQuestion) {
+  return withTimeoutFallback({
+    promise: searchKnowledgeSources(question),
+    timeoutMs: getKnowledgeSearchTimeoutMs(),
+    fallback: () => getTimedOutKnowledgeFallback(question),
+    onTimeout: () => {
+      console.warn("[chatbot] knowledge search timed out; using static fallback.")
+    },
+  })
+}
+
 function buildSuggestedQuestions(category: string) {
   const categorySuggestions: Record<string, string[]> = {
     billing: [
@@ -2811,7 +2873,7 @@ async function buildChatbotCore(
       ? loadSessionHistory(options.sessionId)
       : Promise.resolve([])
 
-  const { sources, warning, cacheHit } = await searchKnowledgeSources(question)
+  const { sources, warning, cacheHit } = await searchKnowledgeSourcesWithinBudget(question)
   const classificationSources = sources.filter((source) => source.score >= MIN_DIRECT_SOURCE_SCORE)
   const { category, intent, handoffIntent } = classifyChatbotQuestion(
     question.redacted,
@@ -2821,17 +2883,24 @@ async function buildChatbotCore(
 
   if (shouldGenerateAnswer && shouldUseAiFinalAnswer(response, question, category)) {
     const history = await historyPromise
-    const finalAnswer = await generateUsableAnswerWithProgressiveModels((tier) =>
-      generateGeminiFinalAnswer({
-        question: question.redacted,
-        category,
-        answerMode: response.answerMode,
-        draftAnswer: response.answer,
-        sources: response.sources,
-        tier,
-        history,
-      })
-    )
+    const finalAnswer = await withTimeoutFallback({
+      promise: generateUsableAnswerWithProgressiveModels((tier) =>
+        generateGeminiFinalAnswer({
+          question: question.redacted,
+          category,
+          answerMode: response.answerMode,
+          draftAnswer: response.answer,
+          sources: response.sources,
+          tier,
+          history,
+        })
+      ),
+      timeoutMs: getFinalAnswerTimeoutMs(),
+      fallback: () => null,
+      onTimeout: () => {
+        console.warn("[chatbot] final answer generation timed out; using deterministic draft.")
+      },
+    })
     if (finalAnswer) {
       applyGeneratedFinalAnswer(response, question, category, finalAnswer)
     }

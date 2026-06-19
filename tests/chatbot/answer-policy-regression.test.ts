@@ -19,6 +19,7 @@ function enableMockGemini() {
 
 describe("chatbot public answer policy", () => {
   afterEach(() => {
+    vi.restoreAllMocks()
     vi.unstubAllGlobals()
     vi.unstubAllEnvs()
   })
@@ -77,6 +78,46 @@ describe("chatbot public answer policy", () => {
 
     expect(first.answer).toBe(second.answer)
     expect(generationCount).toBe(1) // 두 번째는 답변 캐시 적중 → Gemini 재호출 없음
+  })
+
+  it("falls back to the deterministic draft when final Gemini generation is slow", async () => {
+    disableExternalChatbotServices()
+    enableMockGemini()
+    vi.stubEnv("CHATBOT_FINAL_ANSWER_TIMEOUT_MS", "1")
+    const warnSpy = vi.spyOn(console, "warn").mockImplementation(() => {})
+
+    const fetchMock = vi.fn(
+      () =>
+        new Promise<Response>((resolve) => {
+          setTimeout(() => {
+            resolve({
+              ok: true,
+              json: async () => ({
+                candidates: [
+                  {
+                    content: {
+                      parts: [{ text: "느린 Gemini 답변이 최종 응답을 막으면 안 됨" }],
+                    },
+                  },
+                ],
+              }),
+            } as Response)
+          }, 20)
+        })
+    )
+    vi.stubGlobal("fetch", fetchMock)
+
+    const result = await evaluateChatbotQuery("클래스인으로 플립러닝 수업 설계도 가능해?")
+
+    expect(result.answer.length).toBeGreaterThan(24)
+    expect(result.answer).not.toContain("느린 Gemini")
+    expect(warnSpy).toHaveBeenCalledWith(
+      "[chatbot] final answer generation timed out; using deterministic draft."
+    )
+    expect(fetchMock).toHaveBeenCalledWith(
+      expect.stringContaining(":generateContent"),
+      expect.objectContaining({ method: "POST" })
+    )
   })
 
   it("answers casual board lineup questions without update-doc or image-link leakage", async () => {
