@@ -1,7 +1,6 @@
 ﻿import { NextRequest, NextResponse } from "next/server"
-import * as dns from "dns/promises"
-import * as net from "net"
 import { verifyAdmin } from "@/lib/admin-auth"
+import { postJson, validateWebhookTarget } from "@/lib/server/post-json"
 
 const DUMMY_PAYLOAD = {
   source: "demo_modal",
@@ -15,103 +14,19 @@ const DUMMY_PAYLOAD = {
   _test: true,
 }
 
-function isPrivateIpv4(address: string) {
-  const parts = address.split(".").map((part) => Number(part))
-  if (
-    parts.length !== 4 ||
-    parts.some((part) => !Number.isInteger(part) || part < 0 || part > 255)
-  ) {
-    return true
-  }
+const VALIDATION_MESSAGES = new Map([
+  ["Webhook URLs must use HTTPS.", "Webhook tests only allow HTTPS URLs."],
+  ["Webhook URLs cannot include credentials.", "URLs containing credentials are not allowed."],
+  ["Local webhook targets are not allowed.", "Localhost targets are not allowed."],
+  ["Private IP webhook targets are not allowed.", "Private IP targets are not allowed."],
+  [
+    "Webhook targets that resolve to private networks are not allowed.",
+    "Hosts that resolve to private networks are not allowed.",
+  ],
+])
 
-  const [a, b] = parts
-  return (
-    a === 0 ||
-    a === 10 ||
-    a === 127 ||
-    (a === 169 && b === 254) ||
-    (a === 172 && b >= 16 && b <= 31) ||
-    (a === 192 && b === 168) ||
-    (a === 100 && b >= 64 && b <= 127) ||
-    a >= 224
-  )
-}
-
-function isPrivateIpv6(address: string) {
-  const normalized = address.toLowerCase()
-  return (
-    normalized === "::1" ||
-    normalized === "::" ||
-    normalized.startsWith("fc") ||
-    normalized.startsWith("fd") ||
-    normalized.startsWith("fe8") ||
-    normalized.startsWith("fe9") ||
-    normalized.startsWith("fea") ||
-    normalized.startsWith("feb") ||
-    normalized.startsWith("ff")
-  )
-}
-
-function normalizeIpv4MappedIpv6(address: string) {
-  const normalized = address.toLowerCase().replace(/^\[|\]$/g, "")
-  const dotted = normalized.match(/^::ffff:(\d{1,3}(?:\.\d{1,3}){3})$/)
-  if (dotted) return dotted[1]
-
-  const hex = normalized.match(/^::ffff:([0-9a-f]{1,4}):([0-9a-f]{1,4})$/)
-  if (!hex) return null
-
-  const high = Number.parseInt(hex[1], 16)
-  const low = Number.parseInt(hex[2], 16)
-  if (!Number.isInteger(high) || !Number.isInteger(low)) return null
-
-  return [
-    (high >> 8) & 0xff,
-    high & 0xff,
-    (low >> 8) & 0xff,
-    low & 0xff,
-  ].join(".")
-}
-
-function isPrivateAddress(address: string) {
-  const mappedIpv4 = normalizeIpv4MappedIpv6(address)
-  if (mappedIpv4) return isPrivateIpv4(mappedIpv4)
-
-  const version = net.isIP(address)
-  if (version === 4) return isPrivateIpv4(address)
-  if (version === 6) return isPrivateIpv6(address)
-  return true
-}
-
-async function validateWebhookTarget(rawUrl: string) {
-  const parsed = new URL(rawUrl)
-
-  if (parsed.protocol !== "https:") {
-    return "Webhook tests only allow HTTPS URLs."
-  }
-
-  if (parsed.username || parsed.password) {
-    return "URLs containing credentials are not allowed."
-  }
-
-  const hostname = parsed.hostname.toLowerCase()
-  if (
-    hostname === "localhost" ||
-    hostname.endsWith(".localhost") ||
-    hostname.endsWith(".local")
-  ) {
-    return "Localhost targets are not allowed."
-  }
-
-  if (net.isIP(hostname) && isPrivateAddress(hostname)) {
-    return "Private IP targets are not allowed."
-  }
-
-  const lookups = await dns.lookup(hostname, { all: true })
-  if (lookups.some((entry) => isPrivateAddress(entry.address))) {
-    return "Hosts that resolve to private networks are not allowed."
-  }
-
-  return null
+function getTestWebhookValidationMessage(message: string) {
+  return VALIDATION_MESSAGES.get(message) ?? message
 }
 
 export async function POST(req: NextRequest) {
@@ -127,7 +42,10 @@ export async function POST(req: NextRequest) {
   try {
     const validationError = await validateWebhookTarget(url)
     if (validationError) {
-      return NextResponse.json({ ok: false, message: validationError }, { status: 400 })
+      return NextResponse.json(
+        { ok: false, message: getTestWebhookValidationMessage(validationError) },
+        { status: 400 }
+      )
     }
 
     let body: Record<string, unknown> = DUMMY_PAYLOAD
@@ -169,13 +87,7 @@ export async function POST(req: NextRequest) {
       }
     }
 
-    const res = await fetch(url, {
-      method: "POST",
-      headers: { "Content-Type": "application/json" },
-      body: JSON.stringify(body),
-      signal: AbortSignal.timeout(8000),
-      redirect: "manual",
-    })
+    const res = await postJson(url, body)
 
     if (res.ok) {
       return NextResponse.json({

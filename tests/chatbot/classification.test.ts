@@ -107,4 +107,12 @@ describe("chatbot classification", () => {
       expect(result.intent).toBe("hardware_support")
     }
   })
+
+  it("classifies pre-adoption policy risk questions without falling back to general", () => {
+    expect(detectChatbotCategory("콘텐츠 소유권은 어디에 있나요?")).toBe("admin")
+    expect(detectChatbotCategory("메인 서버는 어디에 있나요?")).toBe("admin")
+    expect(detectChatbotCategory("개인정보 처리 방식은 어떻게 관리되나요?")).toBe("admin")
+    expect(detectChatbotCategory("서비스는 언제까지 사용할 수 있나요?")).toBe("onboarding")
+    expect(detectChatbotCategory("전용 펜 팁 파손되면 어디서 구매하나요?")).toBe("hardware")
+  })
 })

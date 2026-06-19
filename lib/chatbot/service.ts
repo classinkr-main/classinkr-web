@@ -479,6 +479,25 @@ const POSITIONING_RE =
 
 const PRE_ADOPTION_CHECK_RE =
   /도입\s*전.*(22|질문|체크리스트|확인)|22\s*가지\s*질문|22.*도입|구매\s*전.*(질문|체크리스트|확인)|상담\s*전.*(질문|체크리스트|확인)/
+const PRE_ADOPTION_RECORDING_PERMISSION_RE =
+  /(수업\s*녹화|현장\s*녹화|녹화).{0,18}(누가|권한|관리|저장|확인|볼|다운로드)|(누가|권한).{0,18}(수업\s*녹화|현장\s*녹화|녹화)/i
+const PRE_ADOPTION_SIGNUP_INFO_RE =
+  /(회원\s*가입|가입).{0,20}(개인정보|전화번호|이메일|메일|휴대폰|핸드폰|정보|뭐|무엇)|(개인정보|전화번호|이메일|메일|휴대폰|핸드폰).{0,20}(회원\s*가입|가입)/i
+const PRE_ADOPTION_OFFLINE_BOARD_RE =
+  /(오프라인|인터넷\s*없|네트워크\s*없|와이파이\s*없).{0,18}(칠판|판서|전자칠판|보드)|(칠판|판서|전자칠판|보드).{0,18}(오프라인|인터넷\s*없|네트워크\s*없|와이파이\s*없)/i
+const PRE_ADOPTION_POLICY_CONFIRM_RE =
+  /무료\s*관리자|유료\s*관리자|관리자.{0,12}(권한|무료|유료)|유료\s*전환|사용\s*기간|계약\s*기간|언제까지\s*(사용|쓸)|정기\s*결제|결제.{0,10}포함|포함\s*항목|콘텐츠\s*소유권|소유권|개인정보\s*(처리|보관|관리|방침)|서버(?:는|가|의)?\s*(위치|지역|어디)|메인\s*서버(?:는|가|의)?\s*(위치|지역|어디)?|스토리지.{0,12}(용량|단가|추가|가격)|클라우드.{0,12}(용량|저장|단가|추가)|저장\s*(용량|공간)|펜\s*팁|전용\s*펜|소모품.{0,12}(가격|구매|재고)|팁.{0,12}(가격|구매|재고)/i
+const PRE_ADOPTION_HARDWARE_CONDITIONAL_RE =
+  /카메라.{0,18}(화각|추적|트래킹|조정|전경|클로즈업)|마이크.{0,18}(성능|외부|세팅|설정|가능)|외부\s*(pc|컴퓨터|노트북)|따로\s*(pc|컴퓨터|노트북)|ops|컴퓨터.{0,12}(연결|따로|없이)/i
+const GOOGLE_CLASSROOM_RE =
+  /구글\s*클래스룸|google\s*classroom|수업반\s*생성|반\s*(생성|개설).{0,12}(100|백|대형)|100\s*개.{0,8}반|자료\s*업로드|과제\s*점수|과제\s*체크/i
+const SITE_ENTRY_INTEGRATION_RE =
+  /사이트.{0,24}(입장|버튼|적용|연동)|입장\s*버튼.{0,24}(classin|클래스인|수업)|자사\s*사이트|홈페이지.{0,24}(수업|입장|연동)/i
+const S65_QUOTE_RE = /s\s*65|s65|65\s*인치/i
+const BOARD_ONLY_OR_PLATFORM_RE =
+  /전자칠판만|보드만|단품\s*(판매|구매)|플랫폼.{0,12}(내장|내재)|내장된\s*전자칠판|전자칠판.{0,18}(플랫폼|소프트웨어)/i
+const CAMERA_CONFLICT_RE =
+  /카메라.{0,18}(안\s*켜|꺼|꺼져|권한|한\s*명|한명|1명|문제|오류)|(한\s*명|한명|1명).{0,18}카메라/i
 
 const COMPARISON_RE =
   /zoom|줌|화상회의|뭐가\s*(달라|다른)|무엇이\s*다르|어떻게\s*다른|다른\s*(점|가요|건가요|거|것|부분|서비스)|차이|비교|차별|차별점|장점|왜\s*(써|쓰|필요|도입)|일반\s*전자칠판|기존\s*전자칠판/
@@ -556,6 +575,57 @@ function isPositioningQuestion(question: NormalizedQuestion) {
 function isPreAdoptionCheckQuestion(question: NormalizedQuestion) {
   const text = question.redacted.toLowerCase()
   return PRE_ADOPTION_CHECK_RE.test(text)
+}
+
+function isPreAdoptionRecordingPermissionQuestion(question: NormalizedQuestion) {
+  return PRE_ADOPTION_RECORDING_PERMISSION_RE.test(question.redacted)
+}
+
+function isPreAdoptionSignupInfoQuestion(question: NormalizedQuestion) {
+  return PRE_ADOPTION_SIGNUP_INFO_RE.test(question.redacted)
+}
+
+function isPreAdoptionOfflineBoardQuestion(question: NormalizedQuestion) {
+  return PRE_ADOPTION_OFFLINE_BOARD_RE.test(question.redacted)
+}
+
+function isPreAdoptionPolicyConfirmQuestion(question: NormalizedQuestion) {
+  return PRE_ADOPTION_POLICY_CONFIRM_RE.test(question.redacted)
+}
+
+function isPreAdoptionHardwareConditionalQuestion(question: NormalizedQuestion) {
+  return PRE_ADOPTION_HARDWARE_CONDITIONAL_RE.test(question.redacted)
+}
+
+function isPreAdoptionSpecificQuestion(question: NormalizedQuestion) {
+  return (
+    isPreAdoptionRecordingPermissionQuestion(question) ||
+    isPreAdoptionSignupInfoQuestion(question) ||
+    isPreAdoptionOfflineBoardQuestion(question) ||
+    isPreAdoptionPolicyConfirmQuestion(question) ||
+    isPreAdoptionHardwareConditionalQuestion(question)
+  )
+}
+
+function isGoogleClassroomQuestion(question: NormalizedQuestion) {
+  return GOOGLE_CLASSROOM_RE.test(question.redacted)
+}
+
+function isSiteEntryIntegrationQuestion(question: NormalizedQuestion) {
+  return SITE_ENTRY_INTEGRATION_RE.test(question.redacted)
+}
+
+function isS65QuoteQuestion(question: NormalizedQuestion) {
+  const text = question.redacted.toLowerCase()
+  return S65_QUOTE_RE.test(text) && /견적|가격|비용|구매|판매|가능|있나요|받을/i.test(text)
+}
+
+function isBoardOnlyOrPlatformQuestion(question: NormalizedQuestion) {
+  return BOARD_ONLY_OR_PLATFORM_RE.test(question.redacted)
+}
+
+function isCameraConflictQuestion(question: NormalizedQuestion) {
+  return CAMERA_CONFLICT_RE.test(question.redacted)
 }
 
 function isApiIntegrationQuestion(question: NormalizedQuestion) {
@@ -715,6 +785,48 @@ function buildStaticDocSource(
   }
 }
 
+function getPreAdoptionSourceCategory(question: NormalizedQuestion) {
+  const text = question.redacted.toLowerCase()
+  if (/요금|가격|비용|견적|결제|정기|단가|유료|환불|계약/.test(text)) return "billing"
+  if (/카메라|마이크|ops|외부\s*(pc|컴퓨터|노트북)|오프라인|칠판|판서|보드|펜|소모품/.test(text)) return "hardware"
+  if (/녹화|현장\s*녹화|수업\s*녹화|과제|숙제|시험|출결|출석/.test(text)) return "classroom"
+  if (/회원\s*가입|가입|도입|교육|온보딩|언제까지|사용\s*기간/.test(text)) return "onboarding"
+  return "admin"
+}
+
+function buildPreAdoptionSpecificSource(question: NormalizedQuestion): ChatbotSource | null {
+  if (!isPreAdoptionSpecificQuestion(question)) return null
+
+  const heading = isPreAdoptionRecordingPermissionQuestion(question)
+    ? "녹화 저장과 권한 기준"
+    : isPreAdoptionSignupInfoQuestion(question)
+      ? "가입과 개인정보"
+      : isPreAdoptionOfflineBoardQuestion(question)
+        ? "오프라인 칠판 사용"
+        : isPreAdoptionHardwareConditionalQuestion(question)
+          ? "하드웨어 조건부 확인 항목"
+          : "확인 필요한 정책·계약 항목"
+
+  const excerpt = isPreAdoptionRecordingPermissionQuestion(question)
+    ? "수업 녹화와 현장 녹화는 목적이 다르며, 녹화 기능과 카메라 구성이 설정된 경우 관리자 또는 권한 받은 계정이 계약·권한 범위 안에서 확인합니다."
+    : isPreAdoptionSignupInfoQuestion(question)
+      ? "학생·교사 계정은 기관 안내 또는 API 연동 방식에 따라 전화번호 또는 이메일 기반으로 등록·초대할 수 있는지 확인합니다. 개인정보 처리 방식과 보관 기준은 공식 개인정보처리방침과 기관 권한 정책에 맞춰 확인해야 합니다."
+      : isPreAdoptionOfflineBoardQuestion(question)
+        ? "기본 칠판 필기는 오프라인에서도 사용할 수 있습니다. 다만 클라우드 동기화, 온라인 수업, 녹화 업로드, LMS 배포는 네트워크가 필요합니다."
+        : isPreAdoptionHardwareConditionalQuestion(question)
+          ? "카메라·마이크·OPS·외부 PC 연결은 기능 가능성과 설치 조건을 분리해 봅니다. T1/S1 카메라, 외부 마이크, HDMI 연결, OPS 포함 여부는 모델·견적·교실 환경 기준으로 확인합니다."
+          : "무료/유료 관리자 권한, 유료 전환, 사용 기간, 정기 결제 포함 항목, 콘텐츠 소유권, 개인정보 처리, 서버 위치, 스토리지 용량·단가, 펜 팁 가격은 최신 계약·정책·공급 조건 기준으로 확인해야 합니다."
+
+  return buildStaticDocSource(
+    "start",
+    "pre-adoption-faq-22-questions",
+    heading,
+    excerpt,
+    330,
+    getPreAdoptionSourceCategory(question)
+  )
+}
+
 function buildCuratedSources(question: NormalizedQuestion) {
   const text = question.redacted.toLowerCase()
   const sources: ChatbotSource[] = []
@@ -729,6 +841,69 @@ function buildCuratedSources(question: NormalizedQuestion) {
       "ClassIn 도입 전에는 관리자 권한, 녹화 저장, 스토리지, 개인정보, 서버, OPS, 오프라인 칠판 사용을 답변 가능 범위와 확인 필요 범위로 나누어 점검합니다.",
       335,
       "onboarding"
+    )
+    if (source) sources.push(source)
+  }
+
+  const preAdoptionSpecificSource = buildPreAdoptionSpecificSource(question)
+  if (preAdoptionSpecificSource) sources.push(preAdoptionSpecificSource)
+
+  if (isGoogleClassroomQuestion(question)) {
+    const source = buildStaticDocSource(
+      "software",
+      "app-capabilities-map",
+      "LMS와 과제 운영 범위",
+      "ClassIn은 코스·수업 생성, 학생 초대, 수업 자료 업로드, 과제·시험, 성적·리포트 같은 LMS 흐름을 지원합니다. 다만 Google Classroom을 완전히 대체할 수 있는지는 현재 운영 방식, 반 수, 학생 수, 필요한 연동과 권한 기준을 놓고 확인해야 합니다.",
+      320,
+      "classroom"
+    )
+    if (source) sources.push(source)
+  }
+
+  if (isSiteEntryIntegrationQuestion(question)) {
+    const source = buildStaticDocSource(
+      "admin",
+      "admin-operation-standardization",
+      "사이트 입장 버튼 연동 확인",
+      "자사 사이트의 입장 버튼에서 ClassIn 수업으로 연결하려면 링크, 로그인, 권한, 수업 생성 방식, API 또는 운영 자동화 범위를 분리해 설계해야 합니다. 계약 없이 바로 되는 기본 기능처럼 단정하면 안 됩니다.",
+      318,
+      "admin"
+    )
+    if (source) sources.push(source)
+  }
+
+  if (isS65QuoteQuestion(question)) {
+    const source = buildStaticDocSource(
+      "hardware",
+      "board-lineup-specs",
+      "S65 견적 확인 필요",
+      "S65는 라인업에는 있으나 현재 상세 규격서 확인이 필요합니다. 공개 안내는 S75·S86을 표준 모델로 먼저 잡고, S65 견적 가능 여부·재고·사양·가격은 최신 공급 조건으로 확인해야 합니다.",
+      325,
+      "hardware"
+    )
+    if (source) sources.push(source)
+  }
+
+  if (isBoardOnlyOrPlatformQuestion(question)) {
+    const source = buildStaticDocSource(
+      "hardware",
+      "board-overview",
+      "전자칠판 단품과 시스템 구성",
+      "Classin Board는 단순 터치 모니터가 아니라 OPS와 ClassIn 소프트웨어, 판서, 녹화, EDB, LMS 흐름을 함께 보는 수업 시스템입니다. 전자칠판 단품 판매나 보드만 구매 가능 여부는 견적·공급 조건으로 확인해야 합니다.",
+      322,
+      "hardware"
+    )
+    if (source) sources.push(source)
+  }
+
+  if (isCameraConflictQuestion(question)) {
+    const source = buildStaticDocSource(
+      "teacher",
+      "lesson-option-concepts",
+      "수업 카메라 충돌 점검",
+      "같은 수업에서 일부 사용자만 카메라가 켜지지 않으면 계정 역할, 온스테이지 설정, 기기 카메라 권한, 같은 기기 중복 접속 여부, 브라우저·앱 권한을 순서대로 확인합니다.",
+      320,
+      "troubleshooting"
     )
     if (source) sources.push(source)
   }
@@ -1089,7 +1264,13 @@ function mergeCuratedSources(question: NormalizedQuestion, sources: ChatbotSourc
     isLoginTroubleQuestion(question) ||
     isPricingInfoQuestion(question) ||
     isInstallFormQuestion(question) ||
-    isCoreFeatureYesNoQuestion(question)
+    isCoreFeatureYesNoQuestion(question) ||
+    isPreAdoptionSpecificQuestion(question) ||
+    isGoogleClassroomQuestion(question) ||
+    isSiteEntryIntegrationQuestion(question) ||
+    isS65QuoteQuestion(question) ||
+    isBoardOnlyOrPlatformQuestion(question) ||
+    isCameraConflictQuestion(question)
   ) {
     return selectDiverseSources(rerankSources(question, curatedSources), 1)
   }
@@ -1399,6 +1580,12 @@ async function searchKnowledgeSources(
     isPricingInfoQuestion(question) ||
     isInstallFormQuestion(question) ||
     isCoreFeatureYesNoQuestion(question) ||
+    isPreAdoptionSpecificQuestion(question) ||
+    isGoogleClassroomQuestion(question) ||
+    isSiteEntryIntegrationQuestion(question) ||
+    isS65QuoteQuestion(question) ||
+    isBoardOnlyOrPlatformQuestion(question) ||
+    isCameraConflictQuestion(question) ||
     ((isComparisonQuestion(question) || isIdentityQuestion(question)) && !isApiIntegrationQuestion(question))
   ) {
     const curatedSources = buildCuratedSources(question)
@@ -1710,6 +1897,177 @@ function getInstallFormAnswer() {
   ].join("\n\n")
 }
 
+function getPreAdoptionOverviewAnswer() {
+  return [
+    "ClassIn 도입 전 22가지 질문은 기능표라기보다 리스크 점검표로 보는 게 좋습니다.",
+    "바로 답할 수 있는 항목은 웹 기반 관리자 콘솔, 리포트, 온보딩, 녹화 관리 권한, 과제, 전화번호 또는 이메일 가입, OPS 구성, 오프라인 칠판 필기예요.",
+    "무료/유료 권한, 계약 기간, 정기 결제 포함 항목, 스토리지 용량·단가, 콘텐츠 소유권, 개인정보 처리, 서버 위치, 펜 팁 가격은 최신 계약·정책 확인 항목으로 분리해 상담에서 확인하는 게 안전합니다.",
+  ].join("\n\n")
+}
+
+function getRecordingPermissionAnswer() {
+  return [
+    "수업 녹화와 현장 녹화는 목적이 달라서 먼저 구분해서 봐야 해요.",
+    "수업 녹화는 ClassIn 수업 안의 화면·판서·자료 중심이고, 현장 녹화는 카메라 구성이 설정된 경우 교실 뷰나 트래킹 뷰를 다룹니다.",
+    "저장·확인·다운로드는 관리자 또는 권한 받은 계정이 계약·기관 설정 범위 안에서 관리하는 기준으로 안내해야 합니다. 실제 권한 범위는 현재 계정과 계약 조건으로 확인하는 게 맞습니다.",
+  ].join("\n\n")
+}
+
+function getSignupInfoAnswer() {
+  return [
+    "회원가입은 전화번호 또는 이메일 기반으로 안내할 수 있습니다.",
+    "인증 후 비밀번호와 기본 프로필을 설정하고, 기관 안내에 따라 학생·교사 계정을 코스나 수업에 연결합니다.",
+    "다만 개인정보 처리 방식, 보관 기준, 접근 권한은 공식 개인정보처리방침과 기관 권한 정책 기준으로 확인해야 합니다. 학생 학습 데이터와 마케팅 추적 데이터도 섞어 설명하지 않는 게 원칙입니다.",
+  ].join("\n\n")
+}
+
+function getOfflineBoardAnswer() {
+  return [
+    "네, 기본 칠판 필기는 오프라인 상태에서도 사용할 수 있습니다.",
+    "다만 클라우드 동기화, 온라인 수업, 녹화 업로드, LMS 배포, 학생에게 자료를 공유하는 흐름은 네트워크가 필요해요.",
+    "데모에서는 OPS 단독 구동, 오프라인 판서, 다시 온라인 연결 후 동기화가 필요한 기능을 나눠 확인하는 게 좋습니다.",
+  ].join("\n\n")
+}
+
+function getHardwareConditionalPreAdoptionAnswer(question: NormalizedQuestion) {
+  const text = question.redacted.toLowerCase()
+  if (/카메라/.test(text)) {
+    return [
+      "카메라 화각·추적·조정은 가능 여부와 현장 조건을 나눠 봐야 합니다.",
+      "T1/S1 같은 구성은 교사 추적, 전경, 클로즈업, CMS 설정을 지원하지만 교실 크기, 설치 위치, 네트워크, 모델 구성에 따라 달라집니다.",
+      "데모나 실측 때 교사 이동 범위, 맨 뒷자리 시야, 녹화·송출 목적을 같이 확인하면 맞는 카메라 구성을 좁힐 수 있어요.",
+    ].join("\n\n")
+  }
+
+  if (/마이크/.test(text)) {
+    return [
+      "마이크는 교실 크기와 하이브리드 수업 여부에 따라 구성이 달라집니다.",
+      "보드 내장 마이크로 충분한 교실도 있지만, 대형 교실이나 온라인 송출이 중요한 경우에는 DT2 Pro 같은 외부 마이크 구성을 검토합니다.",
+      "수음 범위, 천장 높이, 배경 소음, 스피커 구성은 설치 상담에서 같이 확인하는 게 안전합니다.",
+    ].join("\n\n")
+  }
+
+  return [
+    "OPS 포함 구성에서는 외장 PC 없이 ClassIn 수업 환경을 구동할 수 있습니다.",
+    "다만 실제 OPS 포함 여부와 스펙은 모델·견적 기준으로 확인해야 하고, 필요하면 HDMI 등으로 외부 PC나 노트북 연결도 검토할 수 있어요.",
+    "교실에서 외장 PC를 꼭 써야 하는 프로그램이 있는지, 보드 단독으로 충분한지 데모에서 나눠 확인하는 게 좋습니다.",
+  ].join("\n\n")
+}
+
+function getPolicyConfirmationAnswer(question: NormalizedQuestion) {
+  const text = question.redacted.toLowerCase()
+
+  if (/서버|데이터\s*(처리|보관|지역)/.test(text)) {
+    return [
+      "서버 위치나 데이터 처리 지역은 추정으로 답하면 안 되는 항목입니다.",
+      "공식 정책, 계약 조건, 개인정보 처리 기준으로 확인해야 하고, 상담에서는 어떤 데이터가 어디에 저장·처리되는지 확인 요청 항목으로 분리하는 게 맞습니다.",
+      "도입 검토 중이라면 서버 위치, 데이터 처리 지역, 보관·삭제 기준을 한 묶음으로 담당자에게 확인하세요.",
+    ].join("\n\n")
+  }
+
+  if (/콘텐츠\s*소유권|소유권|저작권/.test(text)) {
+    return [
+      "콘텐츠 소유권은 약관·계약 기준으로 확인해야 하는 항목입니다.",
+      "공개 답변에서는 기관 자료와 접근 권한을 분리 관리한다고 안내하고, 소유권과 서비스 제공을 위한 이용 권한은 최신 계약·정책으로 확인하는 게 안전합니다.",
+      "상담에서는 녹화본, EDB 교안, 업로드 자료, 공유 드라이브 자료를 각각 누가 볼 수 있고 어떻게 보관되는지 함께 확인하세요.",
+    ].join("\n\n")
+  }
+
+  if (/스토리지|클라우드|저장\s*(용량|공간)|용량|단가|추가/.test(text)) {
+    return [
+      "스토리지는 사용량 확인과 계약 조건을 나눠 봐야 합니다.",
+      "관리자는 권한 범위 안에서 녹화본, 스크린샷, 칠판 파일, 공유 드라이브 등 스토리지 사용량을 확인할 수 있습니다.",
+      "기본 제공 용량, 추가 용량, 1GB당 단가, 장기 보관 조건은 최신 계약 기준으로 확인해야 하므로 숫자를 단정하지 않는 게 맞습니다.",
+    ].join("\n\n")
+  }
+
+  if (/무료|유료|권한|전환/.test(text)) {
+    return [
+      "관리자 권한은 기능 목록과 과금 정책을 분리해서 봐야 합니다.",
+      "관리자 콘솔에는 기관 관리, 스토리지, 학습 관리, 관리자 기능, 결제, 계정 정보 같은 영역이 있지만 무료/유료 권한 차이와 향후 유료 전환 여부는 계약·계정 정책 확인이 필요합니다.",
+      "상담에서는 현재 계정 기준으로 누가 어떤 메뉴를 볼 수 있는지, 추가 관리자 계정이 필요한지부터 확인하세요.",
+    ].join("\n\n")
+  }
+
+  if (/언제까지|사용\s*기간|계약\s*기간/.test(text)) {
+    return [
+      "사용 기간은 계약 기간, 계정 상태, 스토리지 보관 정책을 나눠 확인해야 합니다.",
+      "서비스를 언제까지 쓸 수 있는지와 녹화·자료가 언제까지 보관되는지는 서로 다른 질문일 수 있어요.",
+      "상담에서는 계약 만료일, 계정 접근 가능 기간, 녹화본·자료 보관 기간을 각각 확인하는 게 안전합니다.",
+    ].join("\n\n")
+  }
+
+  if (/정기\s*결제|결제.{0,10}포함|포함\s*항목/.test(text)) {
+    return [
+      "정기 결제나 견적 포함 항목은 고정 답변보다 구성 기준으로 확인해야 합니다.",
+      "보통 전자칠판, OPS, 카메라·마이크, 스탠드/벽걸이, 소프트웨어, 설치, 온보딩 범위를 함께 놓고 봅니다.",
+      "정확히 무엇이 포함되는지는 학원 규모, 교실 수, 장비 구성, 계약 조건에 따라 달라져서 상담에서 견적 범위로 확인하는 게 맞습니다.",
+    ].join("\n\n")
+  }
+
+  if (/펜|소모품|팁/.test(text)) {
+    return [
+      "전용 펜 팁이나 소모품은 구매 가능 여부, 재고, 가격을 최신 공급 조건으로 확인해야 합니다.",
+      "공개 답변에서 금액을 단정하지 말고, 모델명과 필요한 수량을 기준으로 구매 경로와 단가를 확인 요청하는 게 안전합니다.",
+      "파손이 잦다면 여분 보관 위치와 교실별 관리 기준도 함께 정해두세요.",
+    ].join("\n\n")
+  }
+
+  if (/개인정보/.test(text)) {
+    return [
+      "개인정보 처리 방식은 공식 개인정보처리방침과 기관 권한 정책 기준으로 확인해야 합니다.",
+      "가입에 필요한 전화번호 또는 이메일 같은 정보와, 수업 참여·녹화·학습 데이터 접근 권한은 분리해서 설명해야 해요.",
+      "상담에서는 보관 기준, 접근 권한, 삭제 요청 절차, 학원 내부 동의 절차를 함께 확인하세요.",
+    ].join("\n\n")
+  }
+
+  return [
+    "이 항목은 최신 계약·정책 확인이 필요한 질문입니다.",
+    "공개 답변에서는 가능한 기능과 확인 필요 범위를 분리하고, 금액·서버·소유권·권한처럼 조건이 바뀔 수 있는 내용은 단정하지 않는 게 맞습니다.",
+    "상담에서는 현재 계정, 계약 조건, 필요한 장비 구성, 보관·권한 기준을 같이 확인하세요.",
+  ].join("\n\n")
+}
+
+function getGoogleClassroomAnswer() {
+  return [
+    "Google Classroom을 대체할 수 있는지는 현재 쓰는 기능을 나눠 봐야 합니다.",
+    "ClassIn은 코스·수업 생성, 학생 초대, 자료 업로드, 과제·시험, 성적·리포트 같은 LMS 흐름을 운영할 수 있어요. 실시간 수업을 Zoom으로 계속 쓰더라도 과제와 자료 운영부터 검토할 수 있습니다.",
+    "다만 100개 이상 반, 반별 최대 인원, 일괄 생성, 기존 계정 연동은 기관 설정·요금제·API 범위 확인이 필요합니다. 현재 반 수, 학생 수, 필요한 자료/과제 흐름을 알려주시면 검토 항목으로 정리해드릴게요.",
+  ].join("\n\n")
+}
+
+function getSiteEntryIntegrationAnswer() {
+  return [
+    "자사 사이트의 입장 버튼에서 ClassIn 수업으로 연결하는 건 가능성은 열어두되, 기본 제공 기능처럼 단정하면 안 됩니다.",
+    "수업 링크, 로그인 방식, 학생 권한, 수업 생성 주체, 반복 시간표, API 또는 운영 자동화 범위를 같이 봐야 해요.",
+    "현재 사이트에서 회원 인증을 어떻게 하고 있는지, 수업이 매번 수동 생성인지 반복 일정인지, 충전형/구독형 중 어떤 계약을 검토 중인지 알려주시면 연동 확인 항목으로 좁혀드릴게요.",
+  ].join("\n\n")
+}
+
+function getS65QuoteAnswer() {
+  return [
+    "65인치 모델은 견적 전에 최신 공급 조건 확인이 필요합니다.",
+    "현재 공개 스펙 기준으로는 S75와 S86을 표준 모델로 먼저 안내하고, S65는 라인업에는 있으나 상세 규격서·재고·가격을 단정하지 않습니다.",
+    "65인치가 꼭 필요한 이유가 교실 크기인지, 예산인지, 설치 공간인지 알려주시면 S65 가능 여부와 75인치 대안까지 같이 확인하는 쪽으로 안내할게요.",
+  ].join("\n\n")
+}
+
+function getBoardOnlyOrPlatformAnswer() {
+  return [
+    "Classin Board는 단순 전자칠판이라기보다 OPS와 ClassIn 소프트웨어가 연결된 수업 시스템으로 보는 게 맞습니다.",
+    "보드 위에서 판서, EDB 교안, 녹화, LMS, 복습 자료 흐름을 함께 쓰는 구조라서 '전자칠판만 단품 구매'나 '플랫폼만 내장 여부'는 견적·공급 조건으로 확인해야 해요.",
+    "원하시는 게 순수 전자칠판 구매인지, 보드에서 ClassIn 수업 플랫폼까지 쓰려는 것인지 알려주시면 구성 범위를 나눠드릴게요.",
+  ].join("\n\n")
+}
+
+function getCameraConflictAnswer() {
+  return [
+    "두 명이 같은 수업에 들어왔는데 한 명만 카메라가 켜진다면, 먼저 계정과 기기 권한을 나눠 확인해야 합니다.",
+    "계정 역할, 온스테이지 또는 카메라 설정, 브라우저·앱의 카메라 권한, 같은 기기 중복 접속 여부, 다른 앱이 카메라를 점유하고 있는지 순서대로 보세요.",
+    "수업 진행에 영향이 있으면 계정 종류, 사용 기기, 앱/브라우저, 오류 화면을 받아 기술지원으로 넘기는 게 안전합니다.",
+  ].join("\n\n")
+}
+
 function getCoreFeatureYesNoAnswer(question: NormalizedQuestion) {
   const text = question.redacted.toLowerCase()
   const lead = /녹화|다시\s*보기/.test(text)
@@ -1771,6 +2129,42 @@ function formatConsumerAnswer({
   }
   if (isInstallFormQuestion(question) && top.heading === "설치 형태와 현장 점검") {
     return getInstallFormAnswer()
+  }
+  if (top.heading === "녹화 저장과 권한 기준") {
+    return getRecordingPermissionAnswer()
+  }
+  if (top.heading === "가입과 개인정보") {
+    return getSignupInfoAnswer()
+  }
+  if (top.heading === "오프라인 칠판 사용") {
+    return getOfflineBoardAnswer()
+  }
+  if (top.heading === "하드웨어 조건부 확인 항목") {
+    return getHardwareConditionalPreAdoptionAnswer(question)
+  }
+  if (top.heading === "확인 필요한 정책·계약 항목") {
+    return getPolicyConfirmationAnswer(question)
+  }
+  if (top.heading === "LMS와 과제 운영 범위") {
+    return getGoogleClassroomAnswer()
+  }
+  if (top.heading === "사이트 입장 버튼 연동 확인") {
+    return getSiteEntryIntegrationAnswer()
+  }
+  if (top.heading === "S65 견적 확인 필요") {
+    return getS65QuoteAnswer()
+  }
+  if (top.heading === "전자칠판 단품과 시스템 구성") {
+    return getBoardOnlyOrPlatformAnswer()
+  }
+  if (top.heading === "수업 카메라 충돌 점검") {
+    return getCameraConflictAnswer()
+  }
+  if (
+    isPreAdoptionCheckQuestion(question) &&
+    top.urlPath.includes("/docs/start/pre-adoption-faq-22-questions")
+  ) {
+    return getPreAdoptionOverviewAnswer()
   }
   if (isCoreFeatureYesNoQuestion(question) && top.heading === "수업 기능 사용 안내") {
     return getCoreFeatureYesNoAnswer(question)
@@ -2250,6 +2644,13 @@ function isCuratedTemplateQuestion(question: NormalizedQuestion) {
     isPricingInfoQuestion(question) ||
     isInstallFormQuestion(question) ||
     isCoreFeatureYesNoQuestion(question) ||
+    isPreAdoptionSpecificQuestion(question) ||
+    isPreAdoptionCheckQuestion(question) ||
+    isGoogleClassroomQuestion(question) ||
+    isSiteEntryIntegrationQuestion(question) ||
+    isS65QuoteQuestion(question) ||
+    isBoardOnlyOrPlatformQuestion(question) ||
+    isCameraConflictQuestion(question) ||
     ((isComparisonQuestion(question) || isIdentityQuestion(question)) && !isApiIntegrationQuestion(question))
   )
 }

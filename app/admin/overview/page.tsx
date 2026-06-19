@@ -19,7 +19,7 @@ import {
 } from "lucide-react"
 import { adminFetchJsonCached } from "@/lib/admin-client"
 import { StatCard } from "@/components/admin/StatCard"
-import type { LeadRecord, SiteSettings } from "@/lib/db"
+import type { LeadRecord, SiteSettings } from "@/lib/site-settings-types"
 import type { CalendarEvent } from "@/lib/calendar-data"
 import type { BlogPost } from "@/lib/blog-types"
 import type { EmailCampaign } from "@/lib/marketing-types"

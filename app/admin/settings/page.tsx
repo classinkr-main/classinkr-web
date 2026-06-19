@@ -2,6 +2,7 @@
 
 import { useState, useEffect, useCallback, useMemo } from "react"
 import type { ReactNode } from "react"
+import dynamic from "next/dynamic"
 import {
   Save,
   CheckCircle2,
@@ -24,6 +25,11 @@ import {
 
 import { NotificationIcon } from "@/components/notifications/NotificationIcon"
 import { adminFetch, adminFetchJson, adminFetchJsonCached } from "@/lib/admin-client"
+import {
+  ADMIN_INTEGRATION_SECTION_KEYS,
+  type AdminIntegrationSection as IntegrationSection,
+  type AdminIntegrationStatusResponse as IntegrationStatusResponse,
+} from "@/lib/admin-integrations/types"
 import { resolveNotificationPresentation } from "@/lib/notifications/presentation"
 import {
   DEFAULT_NOTIFICATION_APPEARANCE,
@@ -39,13 +45,34 @@ import {
   type NotificationType,
 } from "@/lib/notifications/types"
 import { NOTIFICATION_TONE_STYLES } from "@/lib/notifications/ui"
-import type { SiteSettings } from "@/lib/db"
+import type { SiteSettings } from "@/lib/site-settings-types"
 import { Button } from "@/components/ui/button"
 import { Input } from "@/components/ui/input"
+import { useUrlState } from "@/lib/use-url-state"
 import { cn } from "@/lib/utils"
 
 type ToastState = { msg: string; type: "success" | "error" } | null
 type WebhookStatus = "idle" | "testing" | "success" | "error"
+
+const IntegrationControlPanel = dynamic(
+  () => import("@/components/admin/settings/IntegrationControlPanel").then((mod) => mod.IntegrationControlPanel),
+  {
+    ssr: false,
+    loading: () => (
+      <section className="overflow-hidden rounded-2xl border border-[#e8e8e4] bg-white">
+        <div className="border-b border-[#e8e8e4] px-4 py-4 sm:px-6 sm:py-5">
+          <div className="h-4 w-28 animate-pulse rounded-full bg-[#f0f0ec]" />
+          <div className="mt-2 h-3 w-64 max-w-full animate-pulse rounded-full bg-[#f5f5f2]" />
+        </div>
+        <div className="grid gap-2 px-4 py-4 sm:px-6 sm:py-5 md:grid-cols-4">
+          {["status", "api", "connectors", "webhooks"].map((item) => (
+            <div key={item} className="h-[76px] rounded-2xl border border-[#e8e8e4] bg-[#fafaf8]" />
+          ))}
+        </div>
+      </section>
+    ),
+  }
+)
 
 function splitEmails(value: string) {
   return [...new Set(
@@ -446,6 +473,10 @@ const NAV_ITEMS: Array<{
   },
 ]
 
+function isIntegrationSection(value: string): value is IntegrationSection {
+  return (ADMIN_INTEGRATION_SECTION_KEYS as readonly string[]).includes(value)
+}
+
 const SECTION_FIELDS: Record<SettingsTab, SettingsKey[]> = {
   general: [
     "demoFormEnabled",
@@ -538,6 +569,8 @@ function EmptyHint({
 }
 
 export default function SettingsPage() {
+  const [tabParam, setTabParam] = useUrlState("tab", "general")
+  const [integrationSectionParam, setIntegrationSectionParam] = useUrlState("section", "status")
   const [settings, setSettings] = useState<SiteSettings | null>(null)
   const [initialSettings, setInitialSettings] = useState<SiteSettings | null>(null)
   const [digestInput, setDigestInput] = useState("")
@@ -545,9 +578,26 @@ export default function SettingsPage() {
   const [loadError, setLoadError] = useState<string | null>(null)
   const [saving, setSaving] = useState(false)
   const [toast, setToast] = useState<ToastState>(null)
-  const [activeTab, setActiveTab] = useState<SettingsTab>("general")
+  const [integrationStatus, setIntegrationStatus] = useState<IntegrationStatusResponse | null>(null)
+  const [integrationStatusLoading, setIntegrationStatusLoading] = useState(false)
+  const [integrationStatusError, setIntegrationStatusError] = useState<string | null>(null)
   const [lastSavedAt, setLastSavedAt] = useState<Date | null>(null)
   const [currentOrigin, setCurrentOrigin] = useState("")
+  const activeTab = NAV_ITEMS.some((item) => item.key === tabParam)
+    ? (tabParam as SettingsTab)
+    : "general"
+  const activeIntegrationSection = isIntegrationSection(integrationSectionParam)
+    ? (integrationSectionParam as IntegrationSection)
+    : "status"
+
+  const setActiveTab = (tab: SettingsTab) => {
+    setTabParam(tab)
+  }
+
+  const setActiveIntegrationSection = (section: IntegrationSection) => {
+    setIntegrationSectionParam(section)
+    if (activeTab !== "integrations") setTabParam("integrations")
+  }
 
   const showToast = (msg: string, type: "success" | "error" = "success") => {
     setToast({ msg, type })
@@ -575,9 +625,35 @@ export default function SettingsPage() {
     }
   }, [])
 
+  const loadIntegrationStatus = useCallback(async (force = false) => {
+    setIntegrationStatusLoading(true)
+    setIntegrationStatusError(null)
+
+    try {
+      const data = await adminFetchJsonCached<IntegrationStatusResponse>(
+        "/api/admin/settings/integrations/status",
+        undefined,
+        { ttlMs: 30_000, force }
+      )
+      setIntegrationStatus(data)
+    } catch (error) {
+      setIntegrationStatusError(
+        error instanceof Error ? error.message : "연동 상태를 불러오지 못했습니다."
+      )
+    } finally {
+      setIntegrationStatusLoading(false)
+    }
+  }, [])
+
   useEffect(() => {
     void loadSettings()
   }, [loadSettings])
+
+  useEffect(() => {
+    if (activeTab !== "integrations") return
+    if (integrationStatus || integrationStatusLoading) return
+    void loadIntegrationStatus()
+  }, [activeTab, integrationStatus, integrationStatusLoading, loadIntegrationStatus])
 
   useEffect(() => {
     if (typeof window === "undefined") return
@@ -804,6 +880,9 @@ export default function SettingsPage() {
       const savedSettings = { ...settings, notificationDigestEmailList: splitEmails(digestInput) }
       setInitialSettings(savedSettings as SiteSettings)
       setLastSavedAt(new Date())
+      if (activeTab === "integrations") {
+        void loadIntegrationStatus(true)
+      }
     } catch (error) {
       showToast(
         error instanceof Error ? error.message : "Failed to save settings.",
@@ -1139,7 +1218,14 @@ export default function SettingsPage() {
           )}
 
           {activeTab === "integrations" && (
-            <>
+            <IntegrationControlPanel
+              active={activeIntegrationSection}
+              onChange={setActiveIntegrationSection}
+              status={integrationStatus}
+              loading={integrationStatusLoading}
+              error={integrationStatusError}
+              onRefresh={() => void loadIntegrationStatus(true)}
+            >
               <PanelCard
                 title="페이지 폼 웹훅"
                 description="문의하기와 외부 랜딩페이지 데모 신청을 홈페이지 리드 파이프라인으로 바로 연결합니다."
@@ -1296,7 +1382,7 @@ export default function SettingsPage() {
                   webhookType="email"
                 />
               </PanelCard>
-            </>
+            </IntegrationControlPanel>
           )}
 
           {activeTab === "notifications" && (

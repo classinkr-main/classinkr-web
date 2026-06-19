@@ -511,3 +511,374 @@
 ## 12. 한 줄 결론
 
 `admin/settings`는 "모든 것을 수정하는 만능 페이지"가 아니라, 운영자가 배포 없이 비즈니스 핵심 설정을 안전하게 바꾸는 도메인형 제어판으로 설계하는 것이 가장 적합하다.
+
+## 13. 2026-06-19 보강: 연동 상태, API 키, 커넥터, 웹훅
+
+기준 시점: 2026-06-19
+
+문서 목적: 현재 구현된 `/admin/settings`와 실제 연동 코드를 기준으로, `외부 연동` 영역을 어떻게 확장할지 정의한다.
+
+적용 범위: 기획 및 구현 가이드. 실제 API 키 값, 비밀번호 예시, 로컬 절대경로는 문서에 남기지 않는다.
+
+### 13-1. 현재 코드 기준 상태
+
+현재 `/admin/settings`는 이미 단일 페이지 내부 탭 방식으로 구현되어 있다.
+
+- 화면: [app/admin/settings/page.tsx](../../app/admin/settings/page.tsx)
+- 관리자 전역 네비게이션: [components/admin/AdminSidebar.tsx](../../components/admin/AdminSidebar.tsx)
+- Settings API: [app/api/admin/settings/route.ts](../../app/api/admin/settings/route.ts)
+- Webhook 테스트 API: [app/api/admin/settings/test-webhook/route.ts](../../app/api/admin/settings/test-webhook/route.ts)
+- 설정 저장소: [lib/repositories/settings.ts](../../lib/repositories/settings.ts)
+- 설정 타입: [lib/db.ts](../../lib/db.ts)
+
+현재 탭은 `일반`, `리드·폼`, `CTA`, `외부 연동`, `알림`, `변경 이력`이다. `외부 연동` 탭에는 이미 아래 기능이 있다.
+
+- 페이지 폼 웹훅 URL 복사: `/api/webhook/page`
+- fetch 예시와 payload 예시 복사
+- Google Sheet, 범용 리드, 채널톡, WeCom, 카카오 알림톡, 이메일 Webhook URL 입력
+- URL 테스트 버튼
+
+중요한 현재 동작:
+
+- `GET /api/admin/settings`는 웹훅 URL 원문을 빈 문자열로 마스킹한다.
+- `PATCH /api/admin/settings`는 웹훅 값을 검증한 뒤 저장한다.
+- 빈 문자열 PATCH는 기존 값을 유지하므로, 삭제/초기화는 별도 액션이 필요하다.
+
+### 13-2. 설계 결론
+
+`외부 연동`은 하나의 긴 입력 폼이 아니라 아래 4개 하위 탭으로 나누는 것이 맞다.
+
+1. `연동 상태`
+2. `API 키`
+3. `커넥터 기능`
+4. `웹훅 링크`
+
+핵심 원칙은 "secret 관리 화면"이 아니라 "서버가 판정한 연결 상태 + write-only 교체 입력"이다.
+
+- 클라이언트에는 API 키, 토큰, 웹훅 전체 URL 원문을 내려주지 않는다.
+- 화면은 `configured`, `source`, `lastCheckedAt`, `lastSuccessAt`, `lastErrorSummary`만 표시한다.
+- 입력은 replace-only로 동작한다. 저장 후 input은 비워지고 "설정됨" 상태만 남긴다.
+- DB 저장이 필요한 secret은 `site_settings` 평문 컬럼에 섞지 않고 별도 암호화 저장소를 쓴다.
+- env에 있는 secret은 Settings에서 원문 편집하지 않고 상태 확인과 테스트만 제공한다.
+
+### 13-3. 하위 탭 상세
+
+#### 연동 상태
+
+목적: 운영자가 "무엇이 연결되어 있고, 무엇이 막혀 있는지"를 한 화면에서 본다.
+
+표시 항목:
+
+- Supabase DB/Auth/Storage
+- Page Form Webhook
+- Lead Outbound Webhooks
+- Notification Webhooks
+- Channel Talk
+- Email Provider
+- Google Service Account
+- Branch Sheet Sync
+- Gemini / Google AI
+- Meta Marketing / Lead Ads
+- Client Analytics Pixels
+- Toss Payments
+- FX Rate
+- Xiaoshouyi / Neo CRM
+- CRM Writeback
+- Partner Portal APIs
+
+상태 모델:
+
+```ts
+type IntegrationStatus = {
+  key: string
+  label: string
+  category: "core" | "lead" | "notification" | "marketing" | "crm" | "billing" | "portal" | "ops"
+  configured: boolean
+  source: "env" | "db" | "mixed" | "not_configured"
+  health: "ok" | "warning" | "error" | "unknown"
+  lastCheckedAt?: string
+  lastSuccessAt?: string
+  lastErrorSummary?: string
+  requiredKeys: string[]
+  docsHref?: string
+  adminHref?: string
+}
+```
+
+UI 상태:
+
+- `ok`: 연결됨
+- `warning`: 일부 기능 제한
+- `error`: 최근 테스트 실패 또는 API 오류
+- `not_configured`: 필수 env/secret 없음
+- `unknown`: 아직 테스트하지 않음
+
+#### API 키
+
+목적: API 키 원문을 보여주지 않고, 설정 여부와 교체 흐름만 제공한다.
+
+우선 표시 대상:
+
+- `GEMINI_API_KEY`
+- `CHANNEL_TALK_ACCESS`, `CHANNEL_TALK_ACCESS_SECRET`
+- `META_ACCESS_TOKEN`, `META_PAGE_ACCESS_TOKEN`, `META_CAPI_ACCESS_TOKEN`
+- `META_APP_SECRET`
+- `GOOGLE_SERVICE_ACCOUNT_EMAIL`, `GOOGLE_PRIVATE_KEY`
+- `RESEND_API_KEY`
+- `TOSS_SECRET_KEY`
+- `PAGE_WEBHOOK_SECRET`
+- `CRON_SECRET`
+
+화면 정책:
+
+- env 기반 secret은 `env에서 설정됨`으로만 표시한다.
+- DB override가 필요한 secret만 `교체` 버튼을 제공한다.
+- 저장 성공 후 입력값을 즉시 지우고 `configured=true` 상태만 다시 로드한다.
+- 삭제는 `DELETE` 액션으로만 제공한다. 빈 문자열 저장으로 삭제하지 않는다.
+- secret 변경은 `SUPER_ADMIN`만 허용하는 것을 기본값으로 한다.
+
+금지:
+
+- API 키 원문 재표시
+- 부분 마스킹된 secret 표시
+- secret 포함 URL을 링크로 열기
+- secret 원문을 audit log, notification payload, console log, sessionStorage/localStorage에 저장
+
+#### 커넥터 기능
+
+목적: "키가 있다"가 아니라 "어떤 기능을 쓸 수 있는지"를 기능 단위로 보여준다.
+
+카드 예시:
+
+| 커넥터 | 기능 | 연결 기준 | 바로가기 |
+| --- | --- | --- | --- |
+| Channel Talk | 상담 동기화, 인바운드 알림, CRM 리드 매칭 | Open API key + inbound webhook auth | `/admin/channel-talk` |
+| Meta | Instagram/캠페인 조회, Lead Ads webhook | access token + app secret + verify token | `/admin/blog`, `/admin/campaigns` |
+| Gemini | 블로그 AI, 마케팅 AI, 챗봇/문서 보강, 지점 인사이트 | `GEMINI_API_KEY` | `/admin/docs`, `/admin/branch` |
+| Google | Sheets, Calendar, Gmail/Service Account | service account + 대상 ID | `/admin/calendar`, `/admin/branch` |
+| Neo CRM | 외부 CRM sync, writeback queue | base URL + auth credential | `/admin/crm` |
+| Toss | SW checkout 결제 승인 | widget key + secret key | `/admin/software-quote-codes` |
+| Notifications | WeCom, Kakao, Email fallback | channel webhook 설정 | `/admin/settings` |
+
+각 커넥터 카드 구성:
+
+- 상태 배지
+- 필요한 설정 키 목록
+- 현재 활성 기능
+- 최근 테스트 결과
+- 최근 성공/실패 시각
+- 관련 관리자 화면 링크
+- 테스트 버튼
+
+#### 웹훅 링크
+
+목적: 들어오는 웹훅과 나가는 웹훅을 구분하고, 안전하게 복사/테스트한다.
+
+Inbound:
+
+- `/api/webhook/page`
+- `/api/webhook/channel-talk`
+- `/api/meta/webhook`
+
+Outbound:
+
+- Google Sheet Webhook
+- Generic Lead Webhook
+- Channel Talk Webhook
+- WeCom ops / CS / critical
+- Kakao Alimtalk Webhook
+- Email Webhook
+
+표시 정책:
+
+- inbound URL은 secret query/token 없이 base path를 우선 보여준다.
+- 토큰이 필요한 URL은 전체 URL을 만들지 않고 "토큰 설정됨" 상태만 보여준다.
+- outbound URL은 저장 후 원문을 비운다.
+- 테스트 요청은 서버에서만 수행하고, 실패 메시지는 민감 문자열을 제거한다.
+
+### 13-4. 필요한 API 계약
+
+신규 API는 기존 `/api/admin/settings`와 분리한다. 일반 설정 PATCH에 secret 교체를 섞지 않는다.
+
+```text
+GET    /api/admin/settings/integrations/status
+POST   /api/admin/settings/integrations/:key/test
+PATCH  /api/admin/settings/integrations/:key/secret
+DELETE /api/admin/settings/integrations/:key/secret
+GET    /api/admin/settings/integrations/audit
+```
+
+권한:
+
+- status 조회: `SUPER_ADMIN`, `ADMIN`
+- test 실행: `SUPER_ADMIN`, `ADMIN`
+- secret 교체/삭제: `SUPER_ADMIN`
+- audit 조회: `SUPER_ADMIN`, `ADMIN`
+
+구현 기준:
+
+- 모든 route는 [lib/admin-auth.ts](../../lib/admin-auth.ts)의 `verifyAdmin()` 또는 `requireVerifiedAdminContext()`를 사용한다.
+- secret 교체/삭제는 `requireVerifiedAdminContext(req, ["SUPER_ADMIN"])` 기준을 우선 검토한다.
+- data access는 `lib/repositories/` 아래에 둔다.
+- 웹훅 target 검증은 [lib/server/post-json.ts](../../lib/server/post-json.ts)의 `validateWebhookTarget()`로 통일한다.
+
+응답 예시:
+
+```json
+{
+  "items": [
+    {
+      "key": "channel_talk",
+      "label": "Channel Talk",
+      "configured": true,
+      "source": "env",
+      "health": "ok",
+      "requiredKeys": ["CHANNEL_TALK_ACCESS", "CHANNEL_TALK_ACCESS_SECRET"],
+      "lastCheckedAt": "2026-06-19T00:00:00.000Z",
+      "lastSuccessAt": "2026-06-19T00:00:00.000Z"
+    }
+  ]
+}
+```
+
+### 13-5. 저장 구조 제안
+
+기존 `site_settings`는 일반 운영 설정과 webhook URL fallback에 유지한다. 새 고위험 secret은 별도 저장소로 분리한다.
+
+#### `admin_integration_status_events`
+
+연동 테스트 결과와 헬스체크 결과를 저장한다.
+
+| 컬럼 | 타입 | 설명 |
+| --- | --- | --- |
+| `id` | uuid | PK |
+| `integration_key` | text | 커넥터 키 |
+| `event_type` | text | `test`, `health_check`, `delivery_failure` |
+| `status` | text | `ok`, `warning`, `error` |
+| `summary` | text | 민감값 없는 요약 |
+| `http_status` | int | 외부 응답 코드 |
+| `latency_ms` | int | 응답 시간 |
+| `created_by` | uuid | 실행자 |
+| `created_at` | timestamptz | 생성 시각 |
+
+#### `admin_setting_secrets`
+
+DB override가 꼭 필요한 secret만 저장한다. Supabase Vault나 KMS를 사용할 수 있으면 이 테이블보다 우선한다.
+
+| 컬럼 | 타입 | 설명 |
+| --- | --- | --- |
+| `id` | uuid | PK |
+| `key` | text | secret 식별자 |
+| `encrypted_value` | text | 암호화된 값 |
+| `source` | text | `db` |
+| `updated_by` | uuid | 수정자 |
+| `updated_at` | timestamptz | 수정 시각 |
+| `rotated_at` | timestamptz | 최근 교체 시각 |
+
+보안 규칙:
+
+- RLS enable
+- service role 외 직접 읽기 금지
+- API 응답에는 `encrypted_value` 포함 금지
+- audit에는 `key`, `source`, `changed=true`만 기록
+
+### 13-6. 현재 코드에서 바로 재사용할 상태 신호
+
+| 영역 | 코드 | 재사용 가능한 신호 |
+| --- | --- | --- |
+| Settings redaction | [lib/repositories/settings.ts](../../lib/repositories/settings.ts) | public response에서 민감 URL 제거 |
+| Webhook target validation | [lib/server/post-json.ts](../../lib/server/post-json.ts) | HTTPS, credential, private network 차단 |
+| Channel Talk sync | [app/api/admin/channel-talk/sync/route.ts](../../app/api/admin/channel-talk/sync/route.ts) | `configured`, `ok`, `lastSyncedAt`, warning |
+| Meta status | [app/api/admin/meta/status/route.ts](../../app/api/admin/meta/status/route.ts) | account check, configured error |
+| CRM readiness | [app/api/admin/crm/readiness/route.ts](../../app/api/admin/crm/readiness/route.ts) | CRM 운영 readiness |
+| External CRM sync | [app/api/admin/crm/external-sync/route.ts](../../app/api/admin/crm/external-sync/route.ts) | preflight, sync result |
+| Docs AI readiness | [app/api/admin/docs/alpha-readiness/route.ts](../../app/api/admin/docs/alpha-readiness/route.ts) | Supabase/Gemini/doc chunks 상태 |
+| Notification delivery | [lib/notifications/emit-event.ts](../../lib/notifications/emit-event.ts) | 채널별 전송 실패와 fallback |
+| Audit log | [lib/auth/audit.ts](../../lib/auth/audit.ts) | 관리자 행위 감사 기록 |
+
+### 13-7. 크론 / 운영 스케줄 표시
+
+Settings 안에 `운영 스케줄` 요약을 추가하면 좋다. 단, cron 자체를 이 화면에서 직접 수정하지는 않는다.
+
+표시 항목:
+
+- cron path
+- schedule
+- 인증 방식: `x-vercel-cron`, `CRON_SECRET`, 또는 둘 다
+- 마지막 실행 상태
+- 최근 실패 요약
+- Hobby 플랜 안전성 경고
+
+현재 repo 운영 규칙상 Vercel 플랜은 명시 확인 전까지 Hobby 기준으로 본다. sub-daily 실행이 필요하면 `vercel.json`에 직접 추가하지 않고 외부 스케줄러, 큐, 또는 Vercel Pro 전환을 먼저 확정해야 한다.
+
+현재 `vercel.json`에는 같은 route가 여러 번 등록된 항목이 있다.
+
+- `/api/cron/sync-branch`: 하루 3회
+- `/api/cron/sync-external-crm`: 하루 4회
+
+이 문서는 설정 탭 기획이므로 `vercel.json`을 수정하지 않는다. 다만 Settings의 운영 스케줄 탭에서는 위 상태를 `Hobby 기준 확인 필요`로 표시해야 한다.
+
+### 13-8. 구현 순서
+
+#### P0: 읽기 전용 상태 대시보드
+
+1. `GET /api/admin/settings/integrations/status` 추가
+2. `app/admin/settings/page.tsx`의 `외부 연동` 탭을 하위 탭 구조로 분리
+3. `연동 상태` 카드 목록 추가
+4. 기존 웹훅 입력/테스트 UI는 `웹훅 링크` 하위 탭으로 이동
+5. `?tab=integrations&section=status` URL 상태 지원
+
+검증:
+
+```bash
+npx eslint app components lib --max-warnings=0
+npm run build
+```
+
+#### P1: 테스트와 최근 결과 저장
+
+1. `POST /api/admin/settings/integrations/:key/test` 추가
+2. `admin_integration_status_events` migration 추가
+3. 최근 성공/실패 시각 표시
+4. `notification_delivery_logs`, CRM sync 결과, branch sync 결과를 status API에 요약
+5. `app/api/admin/settings/test-webhook/route.ts`의 중복 target 검증을 공통 유틸로 정리
+
+검증:
+
+```bash
+npx eslint app components lib --max-warnings=0
+npm run build
+```
+
+#### P2: write-only secret 교체
+
+1. secret 저장소 설계 확정: Supabase Vault/KMS 우선, 없으면 `admin_setting_secrets`
+2. `PATCH /api/admin/settings/integrations/:key/secret` 추가
+3. `DELETE /api/admin/settings/integrations/:key/secret` 추가
+4. `SUPER_ADMIN` 권한 제한
+5. 저장 성공 후 input 즉시 초기화
+6. secret rotation audit 추가
+
+검증:
+
+```bash
+npx eslint app components lib --max-warnings=0
+npm run build
+```
+
+### 13-9. 수용 기준
+
+- Settings 화면에서 secret 원문이 렌더링되지 않는다.
+- API 응답에 API key, token, webhook 전체 URL 원문이 포함되지 않는다.
+- 저장 후 입력한 secret 값이 React state, sessionStorage, localStorage에 남지 않는다.
+- env 기반 secret은 `env에서 설정됨`으로만 표시한다.
+- DB override secret은 `설정됨`, `교체`, `삭제` 액션만 제공한다.
+- `연동 상태`는 최소 `configured`, `source`, `health`, `lastCheckedAt`을 표시한다.
+- 웹훅 URL 테스트는 private network, localhost, credential 포함 URL을 차단한다.
+- secret 교체/삭제는 감사 로그에 남기되 값은 기록하지 않는다.
+- `?tab=integrations&section=webhooks` 같은 deep link로 특정 하위 탭을 열 수 있다.
+- `npm run check:vercel-crons`와 `npm run build`가 cron 안전성 문제를 명확히 드러낸다.
+
+### 13-10. 한 줄 결론
+
+어드민 설정의 연동 영역은 "키를 보여주고 수정하는 페이지"가 아니라, "민감값은 숨긴 채 연결 가능 여부, 기능 활성도, 웹훅 링크, 운영 스케줄 리스크를 확인하고 필요한 경우 write-only로 교체하는 통합 제어판"으로 가야 한다.

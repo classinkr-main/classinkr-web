@@ -196,4 +196,119 @@ describe("chatbot quality regressions", () => {
     expect(result.answer).not.toContain("환불 가능합니다")
     expect(result.answer).not.toContain("환불 불가")
   })
+
+  it("answers pre-adoption policy risks without guessing contract or legal facts", async () => {
+    disableExternalChatbotServices()
+
+    const cases = [
+      {
+        question: "서버는 어디에 있나요? 데이터가 중국으로 가나요?",
+        expected: ["추정으로 답하면 안", "공식 정책", "계약"],
+        forbidden: ["중국입니다", "한국입니다"],
+      },
+      {
+        question: "콘텐츠 소유권은 학원에 있나요?",
+        expected: ["약관", "계약", "확인"],
+        forbidden: ["학원에 있습니다", "ClassIn에 있습니다"],
+      },
+      {
+        question: "기본 스토리지 용량과 추가 단가는 얼마인가요?",
+        expected: ["최신 계약", "숫자를 단정하지"],
+        forbidden: ["30GB", "500GB", "무제한"],
+      },
+      {
+        question: "무료 관리자와 유료 관리자 권한 차이가 뭔가요?",
+        expected: ["계약", "계정 정책", "확인"],
+        forbidden: ["무료 관리자는 모두 가능", "유료 전환 없습니다"],
+      },
+      {
+        question: "전용 펜 팁 가격과 구매처 알려주세요",
+        expected: ["최신 공급 조건", "금액을 단정하지"],
+        forbidden: ["무료", "원입니다"],
+      },
+    ]
+
+    for (const testCase of cases) {
+      const result = await evaluateChatbotQuery(testCase.question, { generateAnswer: false })
+
+      expect(result.sources[0]).toMatchObject({
+        heading: "확인 필요한 정책·계약 항목",
+        urlPath: "/docs/start/pre-adoption-faq-22-questions",
+      })
+      for (const expected of testCase.expected) expect(result.answer).toContain(expected)
+      for (const forbidden of testCase.forbidden) expect(result.answer).not.toContain(forbidden)
+    }
+  })
+
+  it("answers pre-adoption operational questions with permission and condition boundaries", async () => {
+    disableExternalChatbotServices()
+
+    const recording = await evaluateChatbotQuery("수업 녹화와 현장 녹화는 누가 저장 관리할 수 있나요?", {
+      generateAnswer: false,
+    })
+    expect(recording.detectedCategory).toBe("classroom")
+    expect(recording.sources[0]?.heading).toBe("녹화 저장과 권한 기준")
+    expect(recording.answer).toContain("관리자 또는 권한 받은 계정")
+
+    const signup = await evaluateChatbotQuery("회원가입 때 개인정보 뭐 필요해요?", {
+      generateAnswer: false,
+    })
+    expect(signup.detectedCategory).toBe("onboarding")
+    expect(signup.sources[0]?.heading).toBe("가입과 개인정보")
+    expect(signup.answer).toContain("전화번호 또는 이메일")
+    expect(signup.answer).toContain("개인정보처리방침")
+
+    const offline = await evaluateChatbotQuery("오프라인 상태에서 칠판 필기 되나요?", {
+      generateAnswer: false,
+    })
+    expect(offline.detectedCategory).toBe("hardware")
+    expect(offline.sources[0]?.heading).toBe("오프라인 칠판 사용")
+    expect(offline.answer).toContain("오프라인 상태에서도")
+    expect(offline.answer).toContain("네트워크가 필요")
+  })
+
+  it("covers ChannelTalk-derived buyer and support questions", async () => {
+    disableExternalChatbotServices()
+
+    const classroom = await evaluateChatbotQuery(
+      "구글클래스룸을 대체할 수 있나요? 100개 반 운영 가능한가요?",
+      { generateAnswer: false }
+    )
+    expect(classroom.detectedCategory).toBe("classroom")
+    expect(classroom.sources[0]?.heading).toBe("LMS와 과제 운영 범위")
+    expect(classroom.answer).toContain("100개 이상 반")
+    expect(classroom.answer).toContain("확인이 필요")
+
+    const site = await evaluateChatbotQuery(
+      "우리 사이트 입장 버튼에서 ClassIn 수업으로 바로 들어가게 할 수 있나요?",
+      { generateAnswer: false }
+    )
+    expect(site.detectedCategory).toBe("admin")
+    expect(site.sources[0]?.heading).toBe("사이트 입장 버튼 연동 확인")
+    expect(site.answer).toContain("기본 제공 기능처럼 단정하면 안 됩니다")
+
+    const s65 = await evaluateChatbotQuery("65인치 견적 받을 수 있나요?", {
+      generateAnswer: false,
+    })
+    expect(s65.sources[0]?.heading).toBe("S65 견적 확인 필요")
+    expect(s65.answerMode).toBe("handoff")
+    expect(s65.answer).toContain("상세 규격서")
+    expect(s65.answer).not.toContain("265W")
+
+    const boardOnly = await evaluateChatbotQuery("전자칠판만 따로 판매하시기도 하나요?", {
+      generateAnswer: false,
+    })
+    expect(boardOnly.sources[0]?.heading).toBe("전자칠판 단품과 시스템 구성")
+    expect(boardOnly.answer).toContain("단품 구매")
+    expect(boardOnly.answer).toContain("견적·공급 조건")
+
+    const camera = await evaluateChatbotQuery(
+      "두 명이 한 반에 들어왔는데 카메라는 한 명만 켜져요",
+      { generateAnswer: false }
+    )
+    expect(camera.detectedCategory).toBe("troubleshooting")
+    expect(camera.sources[0]?.heading).toBe("수업 카메라 충돌 점검")
+    expect(camera.answer).toContain("계정 역할")
+    expect(camera.answer).toContain("카메라 권한")
+  })
 })

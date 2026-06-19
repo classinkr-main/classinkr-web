@@ -14,9 +14,9 @@ import {
 import { useConsent } from "@/lib/consent/useConsent"
 
 const primaryBtn =
-  "inline-flex h-9 items-center justify-center rounded-md bg-[#084734] px-4 text-[13px] font-bold text-white transition-colors hover:bg-[#065c41]"
+  "inline-flex h-8 min-w-0 items-center justify-center rounded-md bg-[#084734] px-2 text-[12px] font-bold text-white transition-colors hover:bg-[#065c41] sm:h-9 sm:px-4 sm:text-[13px]"
 const ghostBtn =
-  "inline-flex h-9 items-center justify-center rounded-md border border-black/[0.08] bg-white px-4 text-[13px] font-semibold text-[#3f4a44] transition-colors hover:bg-[#F6F5F4]"
+  "inline-flex h-8 min-w-0 items-center justify-center rounded-md border border-black/[0.08] bg-white px-2 text-[12px] font-semibold text-[#3f4a44] transition-colors hover:bg-[#F6F5F4] sm:h-9 sm:px-4 sm:text-[13px]"
 
 function ConsentRow({
   label,
@@ -32,7 +32,7 @@ function ConsentRow({
   onChange?: (value: boolean) => void
 }) {
   return (
-    <label className="flex cursor-pointer items-start gap-3 rounded-md bg-white px-3 py-2.5">
+    <label className="flex cursor-pointer items-start gap-2.5 rounded-md bg-white px-2.5 py-2 sm:gap-3 sm:px-3 sm:py-2.5">
       <input
         type="checkbox"
         checked={checked}
@@ -42,7 +42,7 @@ function ConsentRow({
       />
       <span className="flex flex-col">
         <span className="text-[13px] font-semibold text-[#111110]">{label}</span>
-        <span className="text-[12px] leading-snug text-[#6b756f]">{desc}</span>
+        <span className="text-[11.5px] leading-snug text-[#6b756f] sm:text-[12px]">{desc}</span>
       </span>
     </label>
   )
@@ -103,7 +103,7 @@ export function ConsentBanner() {
       aria-label="쿠키 사용 동의"
       className="fixed bottom-3 left-3 right-3 z-[70] sm:bottom-6 sm:left-6 sm:right-auto"
     >
-      <div className="relative w-full max-w-[400px] rounded-lg border border-black/[0.08] bg-white p-4 pr-12 shadow-[0_8px_30px_rgba(0,0,0,0.12)] sm:p-5 sm:pr-12">
+      <div className="relative max-h-[calc(100dvh-24px)] w-full max-w-[360px] overflow-y-auto rounded-lg border border-black/[0.08] bg-white p-3 pr-10 shadow-[0_8px_30px_rgba(0,0,0,0.12)] sm:max-w-[400px] sm:p-5 sm:pr-12">
         <button
           type="button"
           onClick={dismiss}
@@ -114,21 +114,21 @@ export function ConsentBanner() {
           <X className="h-4 w-4" aria-hidden="true" />
         </button>
 
-        <div className="flex flex-col gap-3.5">
-          <div className="flex items-start gap-3">
+        <div className="flex flex-col gap-3 sm:gap-3.5">
+          <div className="flex items-start gap-2.5 sm:gap-3">
             <Image
               src="/images/consent/cookie-crayon.png"
               alt=""
               width={48}
               height={48}
               aria-hidden="true"
-              className="mt-0.5 h-11 w-11 shrink-0 object-contain"
+              className="mt-0.5 h-9 w-9 shrink-0 object-contain sm:h-11 sm:w-11"
             />
             <div className="space-y-1.5">
-              <p className="text-[15px] font-bold text-[#111110]">쿠키를 조금만 사용할게요</p>
-              <p className="text-[13px] leading-relaxed text-[#5b6660]">
-                잠깐 양해 부탁드려요. 사이트가 잘 열리고 상담 신청이 매끄럽게 이어지도록 꼭 필요한 쿠키를 씁니다.
-                분석·마케팅 쿠키는 선택해 주신 경우에만 조심히 켤게요. 자세한 내용은{" "}
+              <p className="text-[14px] font-bold text-[#111110] sm:text-[15px]">쿠키를 조금만 사용할게요</p>
+              <p className="text-[12px] leading-5 text-[#5b6660] sm:text-[13px] sm:leading-relaxed">
+                잠깐 양해 부탁드려요. 사이트가 잘 움직이도록 필요한 쿠키를 씁니다. 선택 쿠키는 허락해 주신 경우에만 켤게요.
+                자세한 내용은{" "}
                 <Link
                   href="/privacy"
                   prefetch={false}
@@ -142,46 +142,49 @@ export function ConsentBanner() {
           </div>
 
           {showSettings ? (
-            <div className="grid gap-2 rounded-lg bg-[#F6F5F4] p-3">
-              <p className="px-1 text-[12px] leading-relaxed text-[#615D59]">
-                필요한 것만 가볍게 골라 주세요. 선택하지 않아도 사이트의 기본 기능은 그대로 이용할 수 있어요.
+            <div className="grid gap-1.5 rounded-lg bg-[#F6F5F4] p-2.5 sm:gap-2 sm:p-3">
+              <p className="px-1 text-[11.5px] leading-5 text-[#615D59] sm:text-[12px] sm:leading-relaxed">
+                필요한 것만 골라 주세요. 선택하지 않아도 기본 기능은 그대로 이용할 수 있어요.
               </p>
               <ConsentRow
                 label="필수"
-                desc="보안, 페이지 이동, 상담 신청처럼 사이트가 제대로 움직이는 데 꼭 필요해요. 이 쿠키는 항상 켜져 있어요."
+                desc="보안, 페이지 이동, 상담 신청처럼 꼭 필요한 쿠키예요. 항상 켜져 있어요."
                 checked
                 disabled
               />
               <ConsentRow
                 label="분석"
-                desc="어떤 페이지가 도움이 됐는지 살펴보고, 덜 불편한 사이트로 다듬는 데 써요."
+                desc="도움이 된 페이지를 살펴보고 사이트를 다듬는 데 써요."
                 checked={draft.analytics}
                 onChange={(v) => setDraft((d) => ({ ...d, analytics: v }))}
               />
               <ConsentRow
                 label="마케팅"
-                desc="광고 성과를 확인하고, 관심 있어 보이는 안내를 더 알맞게 보여드릴 때 써요."
+                desc="광고 성과 확인과 관심사에 맞는 안내에 써요."
                 checked={draft.marketing}
                 onChange={(v) => setDraft((d) => ({ ...d, marketing: v }))}
               />
             </div>
           ) : null}
 
-          <div className="flex flex-col gap-2 sm:flex-row sm:flex-wrap sm:justify-end">
+          <div className="flex flex-row gap-1.5 sm:flex-wrap sm:justify-end sm:gap-2">
             {showSettings ? (
-              <button type="button" onClick={saveSelected} className={primaryBtn}>
+              <button type="button" onClick={saveSelected} className={`${primaryBtn} flex-1 sm:flex-none`}>
                 선택 저장
               </button>
             ) : (
               <>
-                <button type="button" onClick={openSettings} className={ghostBtn}>
-                  상세 설정
+                <button type="button" onClick={openSettings} className={`${ghostBtn} flex-1 sm:flex-none`}>
+                  <span className="sm:hidden">상세설정</span>
+                  <span className="hidden sm:inline">상세 설정</span>
                 </button>
-                <button type="button" onClick={rejectAll} className={ghostBtn}>
-                  필수만 사용
+                <button type="button" onClick={rejectAll} className={`${ghostBtn} flex-1 sm:flex-none`}>
+                  <span className="sm:hidden">필수</span>
+                  <span className="hidden sm:inline">필수만 사용</span>
                 </button>
-                <button type="button" onClick={acceptAll} className={primaryBtn}>
-                  모두 동의
+                <button type="button" onClick={acceptAll} className={`${primaryBtn} flex-1 sm:flex-none`}>
+                  <span className="sm:hidden">모두동의</span>
+                  <span className="hidden sm:inline">모두 동의</span>
                 </button>
               </>
             )}

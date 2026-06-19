@@ -34,4 +34,32 @@ describe("chatbot golden set coverage", () => {
     expect(zoomCase?.expectCategory).toBe("onboarding")
     expect(zoomCase?.expectHeadingIncludes).toBe("핵심 포지셔닝")
   })
+
+  it("locks policy-critical pre-adoption questions to the checked FAQ source", () => {
+    const ids = [
+      "pre-adoption-server-location",
+      "pre-adoption-privacy-processing",
+      "pre-adoption-content-ownership",
+      "pre-adoption-storage-quota-price",
+      "pre-adoption-admin-rights",
+      "pre-adoption-pen-tip",
+    ]
+
+    for (const id of ids) {
+      const testCase = cases.find((candidate) => candidate.id === id)
+
+      expect(testCase?.expectHeadingIncludes).toBe("확인 필요한 정책·계약 항목")
+    }
+  })
+
+  it("covers ChannelTalk-derived buyer and support questions", () => {
+    const ids = new Set(cases.map((testCase) => testCase.id))
+
+    expect(ids).toContain("channel-google-classroom-scale")
+    expect(ids).toContain("channel-site-entry-button")
+    expect(ids).toContain("channel-s65-quote")
+    expect(ids).toContain("channel-board-only-sale")
+    expect(ids).toContain("channel-platform-in-board")
+    expect(ids).toContain("channel-camera-one-user")
+  })
 })

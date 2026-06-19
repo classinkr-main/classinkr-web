@@ -57,7 +57,7 @@ const NAV: NavItem[] = [
   { href: "/admin/campaigns", label: "캠페인", icon: <Megaphone className="h-4 w-4" />, roles: STAFF_ADMIN, section: "marketing" },
   { href: "/admin/blog", label: "콘텐츠", icon: <FileText className="h-4 w-4" />, roles: STAFF_EDITOR, section: "marketing" },
   { href: "/admin/events", label: "공개 행사", icon: <Globe className="h-4 w-4" />, roles: STAFF_ADMIN, section: "marketing" },
-  { href: "/admin/lead-magnets", label: "리드마그넷", icon: <Magnet className="h-4 w-4" />, roles: STAFF_EDITOR, section: "marketing", badge: "Preview" },
+  { href: "/admin/lead-magnets", label: "리드마그넷", icon: <Magnet className="h-4 w-4" />, roles: STAFF_EDITOR, section: "cs", badge: "Preview" },
   { href: "/admin/channel-talk", label: "채널톡 상담", icon: <MessageSquare className="h-4 w-4" />, roles: STAFF_ADMIN, section: "cs", badge: "New" },
   { href: "/admin/docs", label: "가이드 문서", icon: <BookOpen className="h-4 w-4" />, roles: STAFF_EDITOR, section: "cs" },
   { href: "/admin/branch", label: "KR Team", icon: <Building2 className="h-4 w-4" />, roles: [...STAFF_ADMIN, "BRANCH"], section: "performance" },
@@ -117,9 +117,9 @@ const NAV_WARMUP_REQUESTS: Record<string, string[]> = {
 
 const SECTION_META: Record<SidebarSection, { label: string; description: string }> = {
   home: { label: "홈", description: "오늘 먼저 볼 운영 허브" },
-  sales: { label: "세일즈팀", description: "CRM, 일정, 견적·문서" },
-  marketing: { label: "마케팅팀", description: "캠페인, 콘텐츠, 행사, 리드마그넷" },
-  cs: { label: "CS팀", description: "상담, 고객 질문, 가이드 문서" },
+  sales: { label: "고객 관리", description: "CRM, 일정, 견적·문서" },
+  marketing: { label: "마케팅 운영", description: "캠페인, 콘텐츠, 공개 행사" },
+  cs: { label: "고객 지원", description: "상담, 가이드 문서, 리드마그넷" },
   performance: { label: "분석", description: "성과, 매출, 지점 운영 확인" },
   system: { label: "시스템", description: "권한, 설정, 감사, 개발 도구" },
 }
