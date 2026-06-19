@@ -1,4 +1,7 @@
-import { KAKAO_PIXEL_ID } from "@/lib/analytics-config"
+import {
+  GOOGLE_ADS_ID,
+  KAKAO_PIXEL_ID,
+} from "@/lib/analytics-config"
 import { currentChoice, getAnonymousId } from "@/lib/consent/consent"
 
 export type EventNames =
@@ -24,7 +27,11 @@ interface KakaoPixelClient {
 
 declare global {
   interface Window {
-    gtag?: (command: "event", eventName: EventNames, params?: AnalyticsParams) => void
+    gtag?: (
+      command: "event",
+      eventName: EventNames | "conversion",
+      params?: AnalyticsParams
+    ) => void
     fbq?: (
       command: "track" | "trackCustom",
       eventName: string,
@@ -115,4 +122,21 @@ export const trackEvent = (eventName: EventNames, params?: AnalyticsParams) => {
     default:
       break
   }
+}
+
+/**
+ * Google Ads 전환 이벤트 발화. `label`은 Google Ads 전환 액션의 전환 라벨이며,
+ * send_to = `${GOOGLE_ADS_ID}/${label}` 형태로 전송된다. 라벨이 없으면 아무 것도 하지 않는다.
+ * 실제 발화 여부는 Consent Mode v2(ad_storage) 상태가 결정한다.
+ */
+export const trackAdsConversion = (
+  label: string | null | undefined,
+  params?: AnalyticsParams
+) => {
+  if (typeof window === "undefined" || !label || !window.gtag) return
+
+  window.gtag("event", "conversion", {
+    send_to: `${GOOGLE_ADS_ID}/${label}`,
+    ...(params ?? {}),
+  })
 }
