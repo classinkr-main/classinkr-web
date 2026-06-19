@@ -14,6 +14,15 @@ function getConfiguredAnalyticsId(value: string | undefined) {
 export const GTM_ID =
   getConfiguredAnalyticsId(process.env.NEXT_PUBLIC_GTM_ID)
 
+// Google Ads 글로벌 태그 ID (gtag.js). 전 페이지 공통 로드.
+export const GOOGLE_ADS_ID = "AW-18252550128"
+
+// "도입문의 제출" 전환 액션 라벨. Google Ads에서 전환 액션 생성 시 발급되는 값
+// (send_to = `${GOOGLE_ADS_ID}/${LABEL}`). 미설정 시 전환 이벤트는 발송되지 않음.
+export const GOOGLE_ADS_DEMO_CONVERSION_LABEL = getConfiguredAnalyticsId(
+  process.env.NEXT_PUBLIC_GOOGLE_ADS_DEMO_CONVERSION_LABEL
+)
+
 export const META_PIXEL_ID =
   getConfiguredAnalyticsId(process.env.NEXT_PUBLIC_META_PIXEL_ID)
 
