@@ -2,6 +2,10 @@
 
 import React, { useEffect, useState, useCallback } from "react"
 import type { PatchNote, PatchChange, ChangeType, NoteStatus } from "@/lib/patch-notes-data"
+import type {
+  AdminIntegrationStatusResponse,
+  AdminIntegrationHealth,
+} from "@/lib/admin-integrations/types"
 import { useRouter } from "next/navigation"
 import DataQualityPanel from "@/components/admin/branch/sections/DataQualityPanel"
 
@@ -111,6 +115,31 @@ function RefreshBtn({ onClick, refreshing }: { onClick: () => void; refreshing: 
   )
 }
 
+// ─── Toast / Notify ──────────────────────────────────────
+type ToastKind = "success" | "error"
+type Notify = (msg: string, type?: ToastKind) => void
+
+function DevToast({ msg, type }: { msg: string; type: ToastKind }) {
+  return (
+    <div
+      role="status"
+      aria-live="polite"
+      className={`fixed bottom-6 right-6 z-50 flex items-center gap-2 rounded-xl px-4 py-3 text-[13px] font-medium shadow-xl ${
+        type === "success" ? "bg-[#111110] text-white" : "bg-[#B85C33] text-white"
+      }`}
+    >
+      <svg className="h-4 w-4 shrink-0" fill="none" viewBox="0 0 24 24" stroke="currentColor" strokeWidth={2}>
+        {type === "success" ? (
+          <path strokeLinecap="round" strokeLinejoin="round" d="M5 13l4 4L19 7" />
+        ) : (
+          <path strokeLinecap="round" strokeLinejoin="round" d="M12 9v4m0 4h.01M10.29 3.86L1.82 18a2 2 0 001.71 3h16.94a2 2 0 001.71-3L13.71 3.86a2 2 0 00-3.42 0z" />
+        )}
+      </svg>
+      {msg}
+    </div>
+  )
+}
+
 // ─── Constants ───────────────────────────────────────────
 const TABS = [
   { id: "roadmap", label: "로드맵", description: "버전별 개발 계획과 기능 진행률을 관리합니다." },
@@ -170,7 +199,7 @@ const EMPTY_VER_FORM = {
   targetDate: "",
 }
 
-function RoadmapTab({ token }: { token: string }) {
+function RoadmapTab({ token, notify }: { token: string; notify: Notify }) {
   const [versions, setVersions] = useState<RoadmapVersion[]>([])
   const [loading, setLoading] = useState(true)
   const [refreshing, setRefreshing] = useState(false)
@@ -229,33 +258,49 @@ function RoadmapTab({ token }: { token: string }) {
   const handleSubmit = async (e: React.FormEvent) => {
     e.preventDefault()
     setSubmitting(true)
-    if (editId) {
-      await fetch("/api/admin/roadmap", { method: "PATCH", headers, body: JSON.stringify({ id: editId, ...form }) })
-    } else {
-      await fetch("/api/admin/roadmap", { method: "POST", headers, body: JSON.stringify({ ...form, features: [] }) })
+    try {
+      const res = editId
+        ? await fetch("/api/admin/roadmap", { method: "PATCH", headers, body: JSON.stringify({ id: editId, ...form }) })
+        : await fetch("/api/admin/roadmap", { method: "POST", headers, body: JSON.stringify({ ...form, features: [] }) })
+      if (!res.ok) throw new Error(`HTTP ${res.status}`)
+      setShowForm(false); setEditId(null)
+      notify(editId ? "버전을 수정했습니다." : "버전을 추가했습니다.")
+      load(true)
+    } catch {
+      notify("버전 저장에 실패했습니다. 다시 시도해 주세요.", "error")
+    } finally {
+      setSubmitting(false)
     }
-    setSubmitting(false); setShowForm(false); setEditId(null); load()
+  }
+
+  const persistFeatures = async (ver: RoadmapVersion, updated: RoadmapFeature[], failMsg: string) => {
+    const prev = ver.features
+    setVersions((list) => list.map((v) => v.id === ver.id ? { ...v, features: updated } : v))
+    try {
+      const res = await fetch("/api/admin/roadmap", { method: "PATCH", headers, body: JSON.stringify({ id: ver.id, features: updated }) })
+      if (!res.ok) throw new Error(`HTTP ${res.status}`)
+    } catch {
+      setVersions((list) => list.map((v) => v.id === ver.id ? { ...v, features: prev } : v))
+      notify(failMsg, "error")
+    }
   }
 
   const updateFeatureStatus = async (ver: RoadmapVersion, featId: string, status: RoadmapFeature["status"]) => {
     const updated = ver.features.map((f) => f.id === featId ? { ...f, status } : f)
-    setVersions((prev) => prev.map((v) => v.id === ver.id ? { ...v, features: updated } : v))
-    await fetch("/api/admin/roadmap", { method: "PATCH", headers, body: JSON.stringify({ id: ver.id, features: updated }) })
+    await persistFeatures(ver, updated, "기능 상태 변경을 저장하지 못했습니다.")
   }
 
   const deleteFeat = async (ver: RoadmapVersion, featId: string) => {
     const updated = ver.features.filter((f) => f.id !== featId)
-    setVersions((prev) => prev.map((v) => v.id === ver.id ? { ...v, features: updated } : v))
-    await fetch("/api/admin/roadmap", { method: "PATCH", headers, body: JSON.stringify({ id: ver.id, features: updated }) })
+    await persistFeatures(ver, updated, "기능 삭제를 저장하지 못했습니다.")
   }
 
   const addFeat = async (ver: RoadmapVersion) => {
     if (!featForm.title.trim()) return
     const newFeat: RoadmapFeature = { id: uid("f"), title: featForm.title.trim(), status: featForm.status, assignee: featForm.assignee.trim() }
     const updated = [...ver.features, newFeat]
-    setVersions((prev) => prev.map((v) => v.id === ver.id ? { ...v, features: updated } : v))
     setAddingFeat(null); setFeatForm({ title: "", status: "planned", assignee: "" })
-    await fetch("/api/admin/roadmap", { method: "PATCH", headers, body: JSON.stringify({ id: ver.id, features: updated }) })
+    await persistFeatures(ver, updated, "기능 추가를 저장하지 못했습니다.")
   }
 
   if (loading) return <div className="text-center py-12 text-[#1a1a1a]/40 text-[13px]">로드맵 로딩중...</div>
@@ -453,7 +498,7 @@ function RoadmapTab({ token }: { token: string }) {
 }
 
 // ─── Bug Report Tab ───────────────────────────────────────
-function BugsTab({ token, userName, onCountChange }: { token: string; userName: string; onCountChange?: (n: number) => void }) {
+function BugsTab({ token, userName, notify, onCountChange }: { token: string; userName: string; notify: Notify; onCountChange?: (n: number) => void }) {
   const [bugs, setBugs] = useState<BugReport[]>([])
   const [loading, setLoading] = useState(true)
   const [statusFilter, setStatusFilter] = useState<"all" | BugReport["status"]>("all")
@@ -498,28 +543,60 @@ function BugsTab({ token, userName, onCountChange }: { token: string; userName: 
   const handleSubmit = async (e: React.FormEvent) => {
     e.preventDefault()
     setSubmitting(true)
-    await fetch("/api/admin/bugs", {
-      method: "POST",
-      headers: { "Content-Type": "application/json", Authorization: `Bearer ${token}` },
-      body: JSON.stringify({ ...form, tags: form.tags.split(",").map((t) => t.trim()).filter(Boolean), reporter: userName }),
-    })
-    setForm({ title: "", description: "", severity: "medium", environment: "", tags: "", assignee: "" })
-    setShowForm(false); setSubmitting(false); load()
+    try {
+      const res = await fetch("/api/admin/bugs", {
+        method: "POST",
+        headers: { "Content-Type": "application/json", Authorization: `Bearer ${token}` },
+        body: JSON.stringify({ ...form, tags: form.tags.split(",").map((t) => t.trim()).filter(Boolean), reporter: userName }),
+      })
+      if (!res.ok) throw new Error(`HTTP ${res.status}`)
+      setForm({ title: "", description: "", severity: "medium", environment: "", tags: "", assignee: "" })
+      setShowForm(false)
+      notify("버그 리포트를 등록했습니다.")
+      load(true)
+    } catch {
+      notify("버그 등록에 실패했습니다. 다시 시도해 주세요.", "error")
+    } finally {
+      setSubmitting(false)
+    }
   }
 
   const updateStatus = async (id: string, status: BugReport["status"]) => {
-    setBugs((prev) => prev.map((b) => b.id === id ? { ...b, status } : b))
-    await fetch(`/api/admin/bugs/${id}`, {
-      method: "PATCH",
-      headers: { "Content-Type": "application/json", Authorization: `Bearer ${token}` },
-      body: JSON.stringify({ status }),
-    })
+    const prev = bugs
+    const next = bugs.map((b) => b.id === id ? { ...b, status } : b)
+    setBugs(next)
+    onCountChange?.(next.filter((b) => b.status === "open").length)
+    try {
+      const res = await fetch(`/api/admin/bugs/${id}`, {
+        method: "PATCH",
+        headers: { "Content-Type": "application/json", Authorization: `Bearer ${token}` },
+        body: JSON.stringify({ status }),
+      })
+      if (!res.ok) throw new Error(`HTTP ${res.status}`)
+      setCache("dev_cache_bugs", next)
+    } catch {
+      setBugs(prev)
+      onCountChange?.(prev.filter((b) => b.status === "open").length)
+      notify("상태 변경을 저장하지 못했습니다.", "error")
+    }
   }
 
   const deleteBug = async (id: string) => {
-    await fetch(`/api/admin/bugs/${id}`, { method: "DELETE", headers: { Authorization: `Bearer ${token}` } })
-    setBugs((prev) => prev.filter((b) => b.id !== id))
+    const prev = bugs
+    const next = bugs.filter((b) => b.id !== id)
+    setBugs(next)
     setDeleteConfirm(null)
+    onCountChange?.(next.filter((b) => b.status === "open").length)
+    try {
+      const res = await fetch(`/api/admin/bugs/${id}`, { method: "DELETE", headers: { Authorization: `Bearer ${token}` } })
+      if (!res.ok) throw new Error(`HTTP ${res.status}`)
+      setCache("dev_cache_bugs", next)
+      notify("버그 리포트를 삭제했습니다.")
+    } catch {
+      setBugs(prev)
+      onCountChange?.(prev.filter((b) => b.status === "open").length)
+      notify("버그 삭제를 저장하지 못했습니다.", "error")
+    }
   }
 
   const filtered = bugs
@@ -690,7 +767,7 @@ const EMPTY_FORM = {
   changes: [] as PatchChange[],
 }
 
-function PatchNotesTab({ token }: { token: string }) {
+function PatchNotesTab({ token, notify }: { token: string; notify: Notify }) {
   const [notes, setNotes] = React.useState<PatchNote[]>([])
   const [loading, setLoading] = React.useState(true)
   const [showForm, setShowForm] = React.useState(false)
@@ -770,32 +847,53 @@ function PatchNotesTab({ token }: { token: string }) {
   const handleSubmit = async (e: React.FormEvent) => {
     e.preventDefault()
     setSubmitting(true)
-    if (editId) {
-      await fetch(`/api/admin/patch-notes/${editId}`, {
-        method: "PATCH", headers, body: JSON.stringify(form),
-      })
-    } else {
-      await fetch("/api/admin/patch-notes", {
-        method: "POST", headers, body: JSON.stringify(form),
-      })
+    try {
+      const res = editId
+        ? await fetch(`/api/admin/patch-notes/${editId}`, { method: "PATCH", headers, body: JSON.stringify(form) })
+        : await fetch("/api/admin/patch-notes", { method: "POST", headers, body: JSON.stringify(form) })
+      if (!res.ok) throw new Error(`HTTP ${res.status}`)
+      notify(editId ? "패치노트를 수정했습니다." : "패치노트를 등록했습니다.")
+      closeForm()
+      load(true)
+    } catch {
+      notify("패치노트 저장에 실패했습니다. 다시 시도해 주세요.", "error")
+    } finally {
+      setSubmitting(false)
     }
-    setSubmitting(false)
-    closeForm()
-    load()
   }
 
   const toggleStatus = async (note: PatchNote) => {
     const next: NoteStatus = note.status === "draft" ? "published" : "draft"
-    await fetch(`/api/admin/patch-notes/${note.id}`, {
-      method: "PATCH", headers, body: JSON.stringify({ status: next }),
-    })
-    setNotes((prev) => prev.map((n) => n.id === note.id ? { ...n, status: next } : n))
+    const prev = notes
+    const updated = notes.map((n) => n.id === note.id ? { ...n, status: next } : n)
+    setNotes(updated)
+    try {
+      const res = await fetch(`/api/admin/patch-notes/${note.id}`, {
+        method: "PATCH", headers, body: JSON.stringify({ status: next }),
+      })
+      if (!res.ok) throw new Error(`HTTP ${res.status}`)
+      setCache("dev_cache_patchnotes", updated)
+      notify(next === "published" ? "발행 처리했습니다." : "초안으로 되돌렸습니다.")
+    } catch {
+      setNotes(prev)
+      notify("상태 변경을 저장하지 못했습니다.", "error")
+    }
   }
 
   const handleDelete = async (id: string) => {
     if (!confirm("패치노트를 삭제할까요?")) return
-    await fetch(`/api/admin/patch-notes/${id}`, { method: "DELETE", headers: { Authorization: `Bearer ${token}` } })
-    setNotes((prev) => prev.filter((n) => n.id !== id))
+    const prev = notes
+    const next = notes.filter((n) => n.id !== id)
+    setNotes(next)
+    try {
+      const res = await fetch(`/api/admin/patch-notes/${id}`, { method: "DELETE", headers: { Authorization: `Bearer ${token}` } })
+      if (!res.ok) throw new Error(`HTTP ${res.status}`)
+      setCache("dev_cache_patchnotes", next)
+      notify("패치노트를 삭제했습니다.")
+    } catch {
+      setNotes(prev)
+      notify("패치노트 삭제를 저장하지 못했습니다.", "error")
+    }
   }
 
   if (loading) return <div className="text-center py-12 text-gray-400">로딩 중...</div>
@@ -1101,7 +1199,65 @@ function PatchNotesTab({ token }: { token: string }) {
 }
 
 // ─── Architecture Tab ─────────────────────────────────────
-function ArchitectureTab() {
+const HEALTH_TONE: Record<AdminIntegrationHealth, { label: string; dot: string; chip: string }> = {
+  ok:      { label: "정상",   dot: "bg-emerald-500", chip: "bg-emerald-50 text-emerald-700 border-emerald-200" },
+  warning: { label: "주의",   dot: "bg-amber-500",   chip: "bg-amber-50 text-amber-700 border-amber-200" },
+  error:   { label: "오류",   dot: "bg-rose-500",    chip: "bg-rose-50 text-rose-700 border-rose-200" },
+  unknown: { label: "미확인", dot: "bg-[#d0d0cc]",   chip: "bg-[#f0f0ec] text-[#615D59] border-[#e8e8e4]" },
+}
+
+const INTEGRATION_SOURCE_LABEL: Record<string, string> = {
+  env: "환경변수",
+  db: "DB 설정",
+  mixed: "환경변수 + DB",
+  not_configured: "미설정",
+}
+
+function getSupabaseHost(): string | null {
+  const url = process.env.NEXT_PUBLIC_SUPABASE_URL?.trim()
+  if (!url) return null
+  try {
+    return new URL(url).host
+  } catch {
+    return url
+  }
+}
+
+function ArchitectureTab({ token }: { token: string }) {
+  const [status, setStatus] = useState<AdminIntegrationStatusResponse | null>(null)
+  const [loading, setLoading] = useState(true)
+  const [refreshing, setRefreshing] = useState(false)
+  const [statusError, setStatusError] = useState("")
+
+  const loadStatus = useCallback(async (force = false) => {
+    if (!force) {
+      const cached = getCached<AdminIntegrationStatusResponse>("dev_cache_integrations")
+      if (cached) { setStatus(cached); setLoading(false); return }
+    }
+    if (force) setRefreshing(true)
+    try {
+      const r = await fetch("/api/admin/settings/integrations/status", {
+        headers: { Authorization: `Bearer ${token}` },
+      })
+      if (!r.ok) throw new Error(`HTTP ${r.status}`)
+      const data = (await r.json()) as AdminIntegrationStatusResponse
+      setStatus(data)
+      setCache("dev_cache_integrations", data)
+      setStatusError("")
+    } catch {
+      setStatusError("연동 상태를 불러오지 못했습니다.")
+    } finally {
+      setLoading(false)
+      setRefreshing(false)
+    }
+  }, [token])
+
+  useEffect(() => { loadStatus() }, [loadStatus])
+
+  const supabaseHost = getSupabaseHost()
+  const items = status?.items ?? []
+  const configuredCount = items.filter((item) => item.configured).length
+
   const sections = [
     {
       title: "Frontend (Next.js 16 App Router)",
@@ -1136,33 +1292,77 @@ function ArchitectureTab() {
       ],
     },
     {
-      title: "외부 연동",
-      color: "bg-[#F6F5F4] border-[#e8e8e4]",
-      headerColor: "bg-[#e8e8e4]",
-      items: [
-        { name: "Google Sheets", desc: "리드 데이터 동기화 (GOOGLE_SHEET_WEBHOOK_URL)" },
-        { name: "ChannelTalk", desc: "리드 이벤트 알림 (CHANNEL_TALK_WEBHOOK_URL)" },
-        { name: "n8n / Make", desc: "외부 자동화 트리거 (LEAD_WEBHOOK_URL)" },
-        { name: "Gemini API", desc: "블로그 에디터 AI 콘텐츠 변환 (GEMINI_API_KEY)" },
-      ],
-    },
-    {
       title: "인프라 & 배포",
       color: "bg-slate-50 border-slate-200",
       headerColor: "bg-slate-100",
       items: [
-        { name: "Vercel", desc: "Next.js 배포 — 자동 프리뷰 브랜치, Edge Runtime" },
-        { name: "Supabase", desc: "PostgreSQL + Storage — kfoaodkgvhvmfrankeyu.supabase.co" },
-        { name: "GitHub", desc: "classinkr-main/Classin_Home — codex/backend2-admin-blog-design 기준 브랜치" },
+        { name: "Vercel", desc: "Next.js 배포 — Git 푸시 시 프리뷰 생성, 프로덕션 승격" },
+        { name: "Supabase", desc: `PostgreSQL + Storage — ${supabaseHost ?? "NEXT_PUBLIC_SUPABASE_URL 미설정"}` },
+        { name: "GitHub", desc: "소스 저장소 — 푸시 시 Vercel 자동 빌드·배포 트리거" },
       ],
     },
   ]
 
   return (
     <div className="space-y-4">
-      <div className="bg-[#f0f0ec] border border-[#e8e8e4] rounded-xl p-4 text-[12px] text-[#1a1a1a]/55">
-        <strong className="text-[#111110]">시스템 구조 문서</strong> — Supabase 백엔드 전환 완료 기준 (2026-03-)
+      <div className="flex flex-wrap items-center justify-between gap-2 bg-[#f0f0ec] border border-[#e8e8e4] rounded-xl p-4 text-[12px] text-[#1a1a1a]/55">
+        <span>
+          <strong className="text-[#111110]">시스템 구조</strong> — Supabase(PostgreSQL) 백엔드 운영 중. 아래 연동 상태는 실시간으로 조회합니다.
+        </span>
+        {status?.generatedAt && (
+          <span className="text-[11px] text-[#1a1a1a]/35">상태 조회 {fmtDate(status.generatedAt)} {new Date(status.generatedAt).toLocaleTimeString("ko-KR", { hour: "2-digit", minute: "2-digit" })}</span>
+        )}
       </div>
+
+      {/* Live 연동 상태 */}
+      <div className="bg-white rounded-xl border border-[#e8e8e4] overflow-hidden">
+        <div className="flex items-center justify-between gap-3 px-5 py-3 border-b border-[#e8e8e4]">
+          <div className="flex items-center gap-2">
+            <h3 className="text-[13px] font-semibold text-[#111110]">연동 상태</h3>
+            {!loading && !statusError && (
+              <span className="text-[11px] text-[#1a1a1a]/40">연결 {configuredCount} / {items.length}</span>
+            )}
+          </div>
+          <RefreshBtn onClick={() => loadStatus(true)} refreshing={refreshing} />
+        </div>
+        <div className="p-4">
+          {loading ? (
+            <div className="grid gap-2 sm:grid-cols-2">
+              {[0, 1, 2, 3].map((i) => (
+                <div key={i} className="h-[58px] rounded-xl border border-[#e8e8e4] bg-[#fafaf8] animate-pulse" />
+              ))}
+            </div>
+          ) : statusError ? (
+            <div className="rounded-lg border border-[#F6D5C5] bg-[#FEF3EE] px-4 py-3 text-[12px] text-[#B85C33]">
+              {statusError}
+            </div>
+          ) : items.length === 0 ? (
+            <p className="text-[12px] text-[#1a1a1a]/40 py-2">표시할 연동 항목이 없습니다.</p>
+          ) : (
+            <div className="grid gap-2 sm:grid-cols-2">
+              {items.map((item) => {
+                const tone = HEALTH_TONE[item.health] ?? HEALTH_TONE.unknown
+                return (
+                  <div key={item.key} className="flex items-start gap-3 rounded-xl border border-[#e8e8e4] bg-[#fafaf8] px-3 py-2.5">
+                    <span className={`mt-1.5 h-2 w-2 shrink-0 rounded-full ${tone.dot}`} />
+                    <div className="min-w-0 flex-1">
+                      <div className="flex items-center gap-1.5">
+                        <span className="text-[12px] font-medium text-[#111110] truncate">{item.label}</span>
+                        <span className={`shrink-0 rounded-full border px-1.5 py-0.5 text-[9px] font-medium ${tone.chip}`}>{tone.label}</span>
+                      </div>
+                      <p className="mt-0.5 text-[11px] text-[#1a1a1a]/45">
+                        {item.configured ? (INTEGRATION_SOURCE_LABEL[item.source] ?? item.source) : "미설정"}
+                        {item.lastErrorSummary ? ` · ${item.lastErrorSummary}` : ""}
+                      </p>
+                    </div>
+                  </div>
+                )
+              })}
+            </div>
+          )}
+        </div>
+      </div>
+
       {sections.map((section) => (
         <div key={section.title} className={`rounded-xl border ${section.color} overflow-hidden`}>
           <div className={`px-5 py-3 ${section.headerColor}`}>
@@ -1365,7 +1565,13 @@ export default function DevPage() {
   const [userName, setUserName] = useState("팀원")
   const [role, setRole] = useState("")
   const [openBugCount, setOpenBugCount] = useState(0)
+  const [toast, setToast] = useState<{ msg: string; type: ToastKind } | null>(null)
   const activeTab = TABS.find((item) => item.id === tab) ?? TABS[0]
+
+  const notify = useCallback<Notify>((msg, type = "success") => {
+    setToast({ msg, type })
+    window.setTimeout(() => setToast(null), 3200)
+  }, [])
 
   const selectTab = useCallback((nextTab: Tab) => {
     setTab(nextTab)
@@ -1465,13 +1671,15 @@ export default function DevPage() {
 
       {/* Tab Content */}
       <section id={`dev-panel-${tab}`} role="tabpanel" aria-labelledby={`dev-tab-${tab}`}>
-        {tab === "roadmap" && <RoadmapTab token={token} />}
-        {tab === "bugs" && <BugsTab token={token} userName={userName} onCountChange={setOpenBugCount} />}
+        {tab === "roadmap" && <RoadmapTab token={token} notify={notify} />}
+        {tab === "bugs" && <BugsTab token={token} userName={userName} notify={notify} onCountChange={setOpenBugCount} />}
         {tab === "dataQuality" && <DataQualityPanel mode="dev" />}
-        {tab === "patchnotes" && <PatchNotesTab token={token} />}
-        {tab === "architecture" && <ArchitectureTab />}
+        {tab === "patchnotes" && <PatchNotesTab token={token} notify={notify} />}
+        {tab === "architecture" && <ArchitectureTab token={token} />}
         {tab === "gitlog" && <GitLogTab token={token} />}
       </section>
+
+      {toast && <DevToast msg={toast.msg} type={toast.type} />}
     </div>
   )
 }
