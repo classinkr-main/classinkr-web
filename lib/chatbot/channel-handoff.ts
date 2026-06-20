@@ -218,9 +218,14 @@ function shouldSend(candidate: ChannelTalkHandoffCandidate, forceReason?: string
   if (!isEnabled()) return false
   if (handoffMode() === "all") return true
   if (forceReason) return true
+  const supportLikeCategory = categoryRequiresHandoff(candidate.detectedCategory)
+  const supportLikeIntent = intentRequiresHandoff(candidate.detectedIntent)
   return (
     candidate.needsHandoff ||
     candidate.answerMode === "handoff" ||
+    (candidate.answerMode === "fallback" && supportLikeCategory) ||
+    (candidate.unresolved && supportLikeCategory) ||
+    (candidate.confidence < minConfidence() && supportLikeIntent) ||
     questionRequiresHandoff(candidate.question)
   )
 }

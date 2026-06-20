@@ -80,18 +80,28 @@ describe("chatbot quality regressions", () => {
     expect(result.answer).not.toContain("전자칠판")
   })
 
-  it("does not invent direct fixes for live-class instability without a focused source", async () => {
+  it("answers live-class instability with safe focused troubleshooting steps", async () => {
     disableExternalChatbotServices()
-    const questions = ["학생이 수업에서 계속 나가요", "수업 중 화면 공유가 계속 끊겨요"]
+    const questions = [
+      "학생이 수업에서 계속 나가요",
+      "수업 중 화면 공유가 계속 끊겨요",
+      "수업 중 소리가 안 들려요",
+      "마이크가 안 돼요",
+    ]
 
     for (const question of questions) {
       const result = await evaluateChatbotQuery(question, { generateAnswer: false })
 
       expect(result.detectedCategory).toBe("troubleshooting")
-      expect(result.answerMode).not.toBe("direct_answer")
+      expect(result.answerMode).toBe("direct_answer")
       expect(result.needsHandoff).toBe(false)
-      expect(result.sources).toHaveLength(0)
-      expect(result.answer).toContain("상황")
+      expect(result.sources[0]).toMatchObject({
+        heading: "수업 중 끊김·소리·마이크 기본 점검",
+        urlPath: "/docs/teacher/classroom-basic-setup",
+      })
+      expect(result.answer).toContain("장비 테스트")
+      expect(result.answer).toContain("오류")
+      expect(result.answer).not.toContain("계정 상태를 확인했습니다")
     }
   })
 

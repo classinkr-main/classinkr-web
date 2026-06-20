@@ -606,7 +606,9 @@ const LOGIN_TROUBLE_RE =
   /로그인|접속|비밀번호|패스워드|인증\s*코드|인증코드|아이디|계정.*(안|오류|에러|문제)|안\s*(들어가|돼|됨|되|됩니다)|재설정/i
 
 const LIVE_CLASS_TROUBLE_RE =
-  /수업.*(나감|튕김|튕겨|끊김|끊겨|입장\s*안|접속\s*안)|화면\s*공유.*(끊김|끊겨|오류|에러|안\s*됨|안\s*돼)|소리.*(안\s*들|끊김|끊겨)|마이크.*(안\s*됨|안\s*돼|끊김)/i
+  /수업.*(나가|나감|튕김|튕겨|끊김|끊겨|입장\s*안|접속\s*안)|화면\s*공유.*(끊김|끊겨|오류|에러|안\s*됨|안\s*돼)|소리.*(안\s*들|끊김|끊겨)|마이크.*(안\s*됨|안\s*돼|끊김)/i
+const PARENT_REPORT_OR_NOTIFICATION_RE =
+  /학부모.{0,18}(알림|문자|메시지|푸시|리포트|보고서|상담|피드백)|(?:알림|문자|메시지|푸시|리포트|보고서|상담|피드백).{0,18}학부모/i
 
 function isPositioningQuestion(question: NormalizedQuestion) {
   const text = question.redacted.toLowerCase()
@@ -727,6 +729,10 @@ function isLiveClassTroubleQuestion(question: NormalizedQuestion) {
   return LIVE_CLASS_TROUBLE_RE.test(text)
 }
 
+function isParentReportOrNotificationQuestion(question: NormalizedQuestion) {
+  return PARENT_REPORT_OR_NOTIFICATION_RE.test(question.redacted)
+}
+
 function isWebLiveBillingQuestion(question: NormalizedQuestion) {
   const text = question.redacted.toLowerCase()
   return /웹\s*라이브|web\s*live|라이브\s*&?\s*플레이백/.test(text) && /요금|요금제|플랜|비용|가격|가능|되나요|지원/.test(text)
@@ -738,12 +744,32 @@ const PRICING_INFO_RE = /요금|가격|비용|금액|가격대|얼마/i
 const PRICING_EXCLUDE_RE = /환불|취소|세금|계산서|영수증|청구|정산|미납|연체/i
 // "얼마나 걸려요"(기간)는 가격이 아니다 — 돈 단어가 없으면 가격에서 뺀다.
 const PRICING_DURATION_RE = /얼마나?\s*(걸리|걸려|걸릴|오래|소요|기간|시간|일|주|개월)/i
+const SOFTWARE_ONLY_BUYER_RE =
+  /소프트웨어만|프로그램만|앱만|하드웨어\s*없이|전자칠판\s*없이|보드\s*없이|계정당|계정\s*당|플랜|standard|plus|enterprise/i
+const SUBSCRIPTION_OR_CONSUMPTION_RE =
+  /구독형|충전형|충전제|subscription|consumption|사용량\s*기준|월\s*구독|월구독/i
+const TRIAL_OR_PILOT_RE =
+  /무료\s*체험|체험판|무료\s*사용|trial|파일럿|pilot|데모.{0,12}(무료|체험)|먼저\s*써/i
 function isPricingInfoQuestion(question: NormalizedQuestion) {
   const text = question.redacted.toLowerCase()
   if (PRICING_EXCLUDE_RE.test(text)) return false
   if (isWebLiveBillingQuestion(question)) return false
   if (!PRICING_MONEY_RE.test(text) && PRICING_DURATION_RE.test(text)) return false
   return PRICING_INFO_RE.test(text)
+}
+
+function isSoftwarePricingQuestion(question: NormalizedQuestion) {
+  const text = question.redacted.toLowerCase()
+  return (
+    SOFTWARE_ONLY_BUYER_RE.test(text) ||
+    SUBSCRIPTION_OR_CONSUMPTION_RE.test(text) ||
+    (isPricingInfoQuestion(question) &&
+      /소프트웨어|앱|계정|플랜|구독|충전|standard|plus|enterprise/.test(text))
+  )
+}
+
+function isTrialOrPilotQuestion(question: NormalizedQuestion) {
+  return TRIAL_OR_PILOT_RE.test(question.redacted.toLowerCase())
 }
 
 // 설치 형태(스탠드/벽걸이)와 설치 가능/기간. 하드웨어 장애와는 분리한다.
@@ -1009,6 +1035,18 @@ function buildCuratedSources(question: NormalizedQuestion) {
     if (source) sources.push(source)
   }
 
+  if (isLiveClassTroubleQuestion(question)) {
+    const source = buildStaticDocSource(
+      "teacher",
+      "classroom-basic-setup",
+      "수업 중 끊김·소리·마이크 기본 점검",
+      "수업 중 화면 공유, 소리, 마이크, 접속이 불안정하면 먼저 앱/브라우저와 기기 권한, 카메라·마이크·스피커 장비 테스트, 네트워크와 수업 입장 시점을 나눠 확인합니다. 반복되면 오류 문구와 기기 정보를 받아 기술지원으로 넘깁니다.",
+      310,
+      "troubleshooting"
+    )
+    if (source) sources.push(source)
+  }
+
   if (isWebLiveBillingQuestion(question)) {
     const source = buildStaticDocSource(
       "teacher",
@@ -1022,13 +1060,52 @@ function buildCuratedSources(question: NormalizedQuestion) {
   }
 
   if (isPricingInfoQuestion(question)) {
+    const isSoftwarePricing = isSoftwarePricingQuestion(question)
     const source = buildStaticDocSource(
       "start",
       "value-and-cost-framing",
-      "요금·견적 구성 안내",
-      "클래스인 비용은 고정가표가 아니라 전자칠판+OPS, 카메라·스탠드/벽걸이 구성, 소프트웨어 사용 범위, 설치·온보딩까지 묶어 구성 기준으로 산정합니다. 정확한 금액은 학원 규모와 구성에 따라 달라집니다.",
+      isSoftwarePricing ? "소프트웨어 요금과 플랜 안내" : "요금·견적 구성 안내",
+      isSoftwarePricing
+        ? "소프트웨어는 운영 규모에 따라 Standard, Plus, Enterprise처럼 단계가 나뉘고, 구독형·충전형 조건은 기능 범위와 계약에 따라 달라질 수 있습니다. 정확한 금액과 조건은 계정 수, 코스 규모, 필요한 기능 기준으로 확인합니다."
+        : "클래스인 비용은 고정가표가 아니라 전자칠판+OPS, 카메라·스탠드/벽걸이 구성, 소프트웨어 사용 범위, 설치·온보딩까지 묶어 구성 기준으로 산정합니다. 정확한 금액은 학원 규모와 구성에 따라 달라집니다.",
       295,
       "billing"
+    )
+    if (source) sources.push(source)
+  }
+
+  if (isSoftwarePricingQuestion(question) && !isPricingInfoQuestion(question)) {
+    const source = buildStaticDocSource(
+      "start",
+      "value-and-cost-framing",
+      "소프트웨어 요금과 플랜 안내",
+      "소프트웨어만 검토할 때는 하드웨어 견적과 분리해 계정 수, 코스 규모, 필요한 기능, 구독형·충전형 조건을 먼저 확인합니다. 정확한 금액과 계약 조건은 견적 상담에서 확정합니다.",
+      296,
+      "billing"
+    )
+    if (source) sources.push(source)
+  }
+
+  if (isTrialOrPilotQuestion(question)) {
+    const source = buildStaticDocSource(
+      "start",
+      "adoption-journey-90days",
+      "체험·파일럿 확인",
+      "무료 체험 여부를 단정하기보다 목동 쇼룸, 온라인 데모, 대표 수업 파일럿 범위로 확인합니다. 첫 교실, 대표 강사, EDB 교안, 녹화·복습 루틴을 정하면 30/60/90일 기준으로 도입 판단을 할 수 있습니다.",
+      296,
+      "onboarding"
+    )
+    if (source) sources.push(source)
+  }
+
+  if (isParentReportOrNotificationQuestion(question)) {
+    const source = buildStaticDocSource(
+      "software",
+      "admin-monitoring-analytics",
+      "학부모 리포트·알림 확인",
+      "Classin 안에서는 출결, 과제, 성적, 복습, 학습 보고서처럼 학부모 상담에 활용할 데이터를 확인할 수 있습니다. 다만 학부모 자동 문자·푸시·상담 리포트 발송은 기본 제공처럼 단정하지 않고 SMS 알림, API, 외부 학원관리 시스템 연동 범위로 확인합니다.",
+      296,
+      "admin"
     )
     if (source) sources.push(source)
   }
@@ -1304,8 +1381,12 @@ function mergeCuratedSources(question: NormalizedQuestion, sources: ChatbotSourc
     isWebLiveBillingQuestion(question) ||
     isLoginTroubleQuestion(question) ||
     isPricingInfoQuestion(question) ||
+    isSoftwarePricingQuestion(question) ||
+    isTrialOrPilotQuestion(question) ||
     isInstallFormQuestion(question) ||
     isCoreFeatureYesNoQuestion(question) ||
+    isLiveClassTroubleQuestion(question) ||
+    isParentReportOrNotificationQuestion(question) ||
     isPreAdoptionSpecificQuestion(question) ||
     isGoogleClassroomQuestion(question) ||
     isSiteEntryIntegrationQuestion(question) ||
@@ -1605,12 +1686,6 @@ async function searchKnowledgeSources(
     return result
   }
 
-  if (isLiveClassTroubleQuestion(question)) {
-    const result = { sources: [], warning: undefined }
-    setCachedRetrieval(question, result)
-    return result
-  }
-
   if (
     isHardwareSpecsQuestion(question) ||
     isHardwareBoardLineupQuestion(question) ||
@@ -1619,8 +1694,12 @@ async function searchKnowledgeSources(
     isWebLiveBillingQuestion(question) ||
     isLoginTroubleQuestion(question) ||
     isPricingInfoQuestion(question) ||
+    isSoftwarePricingQuestion(question) ||
+    isTrialOrPilotQuestion(question) ||
     isInstallFormQuestion(question) ||
     isCoreFeatureYesNoQuestion(question) ||
+    isLiveClassTroubleQuestion(question) ||
+    isParentReportOrNotificationQuestion(question) ||
     isPreAdoptionSpecificQuestion(question) ||
     isGoogleClassroomQuestion(question) ||
     isSiteEntryIntegrationQuestion(question) ||
@@ -1744,7 +1823,7 @@ function isDomainRelatedQuestion(question: NormalizedQuestion, category: string)
   if (category !== "general") return true
 
   const text = question.redacted.toLowerCase()
-  return /classin|클래스인|학원|수업|교실|학생|교사|강사|원장|전자칠판|칠판|하드웨어|보드|board|모델|사이즈|크기|인치|라인업|ops|카메라|마이크|미러링|edb|lms|녹화|복습|과제|운영|도입|관리자|온라인|화상|교안|토론|플립러닝|하이브리드/.test(text)
+  return /classin|클래스인|학원|수업|교실|학생|교사|강사|원장|전자칠판|칠판|하드웨어|보드|board|모델|사이즈|크기|인치|라인업|ops|카메라|마이크|미러링|edb|lms|녹화|복습|과제|운영|도입|관리자|온라인|화상|교안|토론|플립러닝|하이브리드|소프트웨어|프로그램|앱|플랜|구독형|충전형|체험|파일럿|학부모|리포트|보고서|문자|알림/.test(text)
 }
 
 function isSensitiveOrAccountSpecificQuestion(question: NormalizedQuestion, category: string) {
@@ -1935,6 +2014,14 @@ function getLoginTroubleAnswer() {
   ].join("\n\n")
 }
 
+function getLiveClassTroubleAnswer() {
+  return [
+    "수업 중 끊김이나 소리·마이크 문제는 먼저 기기 문제인지, 권한 문제인지, 네트워크 문제인지 나눠 보면 빨라요.",
+    "1. 사용 중인 앱/브라우저와 기기를 확인하고 최신 상태로 다시 입장해 보세요.\n2. 입장 전 장비 테스트에서 카메라·마이크·스피커 입력/출력 장치를 다시 선택해 주세요.\n3. 같은 시간대 반복 끊김이면 네트워크 상태, 수업 입장 시점, 오류 문구를 함께 기록해 주세요.",
+    "반복되면 사용 기기, 앱/브라우저, 오류 화면, 발생 시간을 알려주시면 기술지원 확인 항목으로 바로 좁혀드릴게요.",
+  ].join("\n\n")
+}
+
 function getWebLiveBillingAnswer() {
   return [
     "웹 라이브는 모든 요금제에서 기본 제공된다고 보기는 어려워요.",
@@ -1948,6 +2035,30 @@ function getPricingAnswer() {
     "네, 요금은 고정가표보다 '구성 기준'으로 봐요. 보통 이렇게 묶여요.",
     "- 전자칠판 + OPS(윈도우 컴퓨팅)\n- 카메라·마이크·스탠드/벽걸이 구성\n- 소프트웨어 사용 범위(녹화·LMS 등)\n- 설치·온보딩",
     "교실 수랑 원하는 구성만 알려주시면 견적 범위를 잡아드릴게요.",
+  ].join("\n\n")
+}
+
+function getSoftwarePricingAnswer() {
+  return [
+    "소프트웨어만 검토하시는 경우에는 전자칠판 패키지와 분리해서 계정 수와 운영 규모 기준으로 보면 됩니다.",
+    "Standard, Plus, Enterprise처럼 필요한 기능과 팀 규모에 따라 단계가 나뉘고, 구독형·충전형 조건은 사용 기능과 계약 방식에 따라 달라질 수 있어요.",
+    "정확한 금액은 단정하지 않고, 강사 수·학생 수·코스 규모·필요 기능을 기준으로 견적에서 확인하는 게 안전합니다.",
+  ].join("\n\n")
+}
+
+function getTrialOrPilotAnswer() {
+  return [
+    "무료 체험 가능 여부를 여기서 단정하기보다는 데모와 파일럿 범위로 확인하는 게 안전합니다.",
+    "보통은 목동 쇼룸이나 온라인 데모에서 대표 수업 흐름을 먼저 보고, 첫 교실·대표 강사·EDB 교안·녹화/복습 루틴을 정해 30/60/90일 기준으로 판단합니다.",
+    "원하시면 현재 수업 방식 기준으로 데모에서 꼭 볼 장면 3가지를 먼저 정리해드릴게요.",
+  ].join("\n\n")
+}
+
+function getParentReportOrNotificationAnswer() {
+  return [
+    "학부모 커뮤니케이션은 'Classin 안에서 확인할 수 있는 데이터'와 '자동 발송'을 나눠 봐야 합니다.",
+    "출결, 과제, 성적, 복습 기록, 학습 보고서처럼 상담에 쓸 데이터는 권한 범위 안에서 확인할 수 있어요. 다만 학부모 문자·푸시·상담 리포트가 자동 발송된다고 기본 기능처럼 단정하면 안 됩니다.",
+    "자동 알림이 필요하면 SMS 알림, API, 외부 학원관리 시스템 연동 범위로 따로 확인하는 게 맞습니다.",
   ].join("\n\n")
 }
 
@@ -2168,6 +2279,9 @@ function formatConsumerAnswer({
   if (isLoginTroubleQuestion(question) && top.heading === "로그인/비밀번호 기본 점검") {
     return getLoginTroubleAnswer()
   }
+  if (isLiveClassTroubleQuestion(question) && top.heading === "수업 중 끊김·소리·마이크 기본 점검") {
+    return getLiveClassTroubleAnswer()
+  }
   if (top.heading === "웹 라이브 요금과 사용 조건") {
     return getWebLiveBillingAnswer()
   }
@@ -2188,6 +2302,15 @@ function formatConsumerAnswer({
   }
   if (isPricingInfoQuestion(question) && top.heading === "요금·견적 구성 안내") {
     return getPricingAnswer()
+  }
+  if (top.heading === "소프트웨어 요금과 플랜 안내") {
+    return getSoftwarePricingAnswer()
+  }
+  if (top.heading === "체험·파일럿 확인") {
+    return getTrialOrPilotAnswer()
+  }
+  if (top.heading === "학부모 리포트·알림 확인") {
+    return getParentReportOrNotificationAnswer()
   }
   if (isInstallFormQuestion(question) && top.heading === "설치 형태와 현장 점검") {
     return getInstallFormAnswer()
@@ -2702,10 +2825,14 @@ function isCuratedTemplateQuestion(question: NormalizedQuestion) {
     isHardwareTroubleQuestion(question) ||
     isHardwareUnconfirmedDetailQuestion(question) ||
     isLoginTroubleQuestion(question) ||
+    isLiveClassTroubleQuestion(question) ||
     isWebLiveBillingQuestion(question) ||
     isPricingInfoQuestion(question) ||
+    isSoftwarePricingQuestion(question) ||
+    isTrialOrPilotQuestion(question) ||
     isInstallFormQuestion(question) ||
     isCoreFeatureYesNoQuestion(question) ||
+    isParentReportOrNotificationQuestion(question) ||
     isPreAdoptionSpecificQuestion(question) ||
     isPreAdoptionCheckQuestion(question) ||
     isGoogleClassroomQuestion(question) ||
@@ -2765,6 +2892,29 @@ function shouldExposeSources(input: ChatbotQueryRequest) {
   return process.env.CHATBOT_SHOW_SOURCES === "1" || context.showSources === true
 }
 
+export function normalizeSessionHistoryForGemini(
+  rows: Array<{ role: string; content: string }>
+): { role: "user" | "model"; parts: { text: string }[] }[] {
+  const mapped = rows.map((msg) => ({
+    role: msg.role === "assistant" ? ("model" as const) : ("user" as const),
+    parts: [{ text: msg.content }],
+  }))
+
+  // 교차 대화 필터링 (user, model, user, model 순서 유지)
+  const cleanHistory: { role: "user" | "model"; parts: { text: string }[] }[] = []
+  let expectedRole: "user" | "model" = "user"
+  for (const msg of mapped) {
+    if (msg.role === expectedRole) {
+      cleanHistory.push(msg)
+      expectedRole = expectedRole === "user" ? "model" : "user"
+    }
+  }
+  if (cleanHistory.length > 0 && cleanHistory[cleanHistory.length - 1].role === "user") {
+    cleanHistory.pop()
+  }
+  return cleanHistory
+}
+
 // 세션 대화 이력 로드 — 검색과 병렬로 돌릴 수 있게 분리. 실패해도 빈 배열로 안전 폴백.
 async function loadSessionHistory(
   sessionId: string
@@ -2776,29 +2926,12 @@ async function loadSessionHistory(
       .from("chat_messages")
       .select("role, content")
       .eq("session_id", sessionId)
-      .order("created_at", { ascending: true })
+      .order("created_at", { ascending: false })
       .limit(10) // 최근 10개 메세지 (사용자 5, 어시스턴트 5)
 
     if (error || !data) return []
 
-    const mapped = data.map((msg) => ({
-      role: msg.role === "assistant" ? ("model" as const) : ("user" as const),
-      parts: [{ text: msg.content }],
-    }))
-
-    // 교차 대화 필터링 (user, model, user, model 순서 유지)
-    const cleanHistory: { role: "user" | "model"; parts: { text: string }[] }[] = []
-    let expectedRole: "user" | "model" = "user"
-    for (const msg of mapped) {
-      if (msg.role === expectedRole) {
-        cleanHistory.push(msg)
-        expectedRole = expectedRole === "user" ? "model" : "user"
-      }
-    }
-    if (cleanHistory.length > 0 && cleanHistory[cleanHistory.length - 1].role === "user") {
-      cleanHistory.pop()
-    }
-    return cleanHistory
+    return normalizeSessionHistoryForGemini([...data].reverse())
   } catch (e) {
     console.warn("[chatbot] failed to load session history:", e)
     return []

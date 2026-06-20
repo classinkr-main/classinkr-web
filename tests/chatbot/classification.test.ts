@@ -115,4 +115,11 @@ describe("chatbot classification", () => {
     expect(detectChatbotCategory("서비스는 언제까지 사용할 수 있나요?")).toBe("onboarding")
     expect(detectChatbotCategory("전용 펜 팁 파손되면 어디서 구매하나요?")).toBe("hardware")
   })
+
+  it("classifies software pricing, trial, and parent report questions before general fallback", () => {
+    expect(detectChatbotCategory("소프트웨어만 쓸 수 있나요?")).toBe("billing")
+    expect(detectChatbotCategory("구독형이랑 충전형 차이가 뭐예요?")).toBe("billing")
+    expect(detectChatbotCategory("무료 체험 있나요?")).toBe("onboarding")
+    expect(detectChatbotCategory("학부모 알림 문자도 자동으로 가나요?")).toBe("admin")
+  })
 })

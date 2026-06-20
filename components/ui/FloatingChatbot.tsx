@@ -9,8 +9,10 @@ import {
     Bot,
     Check,
     Copy,
+    ExternalLink,
     Loader2,
     MessageCircle,
+    RotateCcw,
     Send,
     ThumbsDown,
     ThumbsUp,
@@ -72,6 +74,7 @@ interface ChatMessage {
     needsHandoff?: boolean
     handoffIntent?: HandoffIntent
     showHandoffCTA?: boolean
+    retryQuestion?: string
 }
 
 const hiddenPathPrefixes = [
@@ -499,6 +502,34 @@ function AnswerCopyButton({ message }: { message: ChatMessage }) {
     )
 }
 
+function SourceLinks({ sources }: { sources?: ChatbotSource[] }) {
+    const visibleSources = sources?.slice(0, 2) ?? []
+    if (visibleSources.length === 0) return null
+
+    return (
+        <div className="mt-3 space-y-1.5 border-t border-black/[0.06] pt-3">
+            <div className="text-[11px] font-bold text-[#615D59]">참고한 가이드</div>
+            {visibleSources.map((source) => (
+                <Link
+                    key={`${source.urlPath}:${source.heading ?? source.title}`}
+                    href={source.urlPath}
+                    className="block rounded-[8px] border border-black/[0.08] bg-[#F6F5F4] px-3 py-2 text-left transition-colors hover:bg-[#ECFDF5] focus-visible:outline-none focus-visible:ring-2 focus-visible:ring-[#084734]/25"
+                >
+                    <span className="flex items-start justify-between gap-2 text-[12px] font-bold leading-5 text-[#111110]">
+                        <span>{source.title}</span>
+                        <ExternalLink className="mt-0.5 h-3.5 w-3.5 shrink-0 text-[#084734]" aria-hidden />
+                    </span>
+                    {source.heading ? (
+                        <span className="mt-0.5 block text-[11px] leading-4 text-[#615D59]">
+                            {source.heading}
+                        </span>
+                    ) : null}
+                </Link>
+            ))}
+        </div>
+    )
+}
+
 function ThinkingIndicator({
     shouldReduceMotion,
 }: {
@@ -580,6 +611,7 @@ export function FloatingChatbot() {
                 path: pathname,
                 pageUrl,
                 utm,
+                showSources: true,
             }
         },
         [pathname]
@@ -631,11 +663,22 @@ export function FloatingChatbot() {
         if (!isOpen) return
 
         const frame = window.requestAnimationFrame(() => {
+            const shouldAutofocus = window.matchMedia("(hover: hover) and (pointer: fine)").matches
+            if (!shouldAutofocus) return
             inputRef.current?.focus()
         })
 
         return () => window.cancelAnimationFrame(frame)
     }, [isOpen])
+
+    useEffect(() => {
+        if (!isOpen) return
+        const frame = window.requestAnimationFrame(() => {
+            bottomRef.current?.scrollIntoView({ behavior: shouldReduceMotion ? "auto" : "smooth" })
+        })
+
+        return () => window.cancelAnimationFrame(frame)
+    }, [isOpen, isSending, messages.length, shouldReduceMotion])
 
 
     useEffect(() => {
@@ -717,7 +760,7 @@ export function FloatingChatbot() {
                     id: makeId(),
                     role: "assistant",
                     content: sanitizeVisibleAssistantText(data.answer ?? "확인 가능한 답변을 찾지 못했습니다."),
-                    sources: [],
+                    sources: data.sources ?? [],
                     suggestedQuestions: data.suggestedQuestions ?? [],
                     answerEventId: data.answerEventId,
                     confidence: data.confidence,
@@ -747,7 +790,6 @@ export function FloatingChatbot() {
                 ])
             }
 
-            requestAnimationFrame(() => bottomRef.current?.scrollIntoView({ behavior: "smooth" }))
         } catch (err) {
             const isAbort = err instanceof DOMException && err.name === "AbortError"
             setError(isAbort ? "응답이 지연되고 있습니다. 잠깐 후 다시 시도해 주세요." : err instanceof Error ? err.message : "챗봇 응답 중 오류가 발생했습니다.")
@@ -757,12 +799,13 @@ export function FloatingChatbot() {
                     id: makeId(),
                     role: "assistant",
                     content: isAbort
-                        ? "응답이 지연되고 있어요. 질문을 조금 짧게 다시 보내거나 잠깐 후 재시도해 주세요."
-                        : "지금은 답변을 불러오지 못했습니다. 잠깐 후 다시 시도해 주세요.",
-                    suggestedQuestions: ["질문을 짧게 다시 보낼게요"],
+                        ? "응답이 지연되고 있어요. 같은 질문을 다시 시도하거나 질문을 조금 더 짧게 보내주세요."
+                        : "지금은 답변을 불러오지 못했습니다. 같은 질문을 다시 시도할 수 있어요.",
+                    suggestedQuestions: [],
                     needsHandoff: false,
                     handoffIntent: "support",
                     showHandoffCTA: false,
+                    retryQuestion: trimmed,
                 },
             ])
         } finally {
@@ -837,7 +880,12 @@ export function FloatingChatbot() {
                             </button>
                         </div>
 
-                        <div className="flex-1 overflow-y-auto bg-gradient-to-b from-[#F6F5F4] to-white px-4 py-4">
+                        <div
+                            className="flex-1 overflow-y-auto bg-gradient-to-b from-[#F6F5F4] to-white px-4 py-4"
+                            role="log"
+                            aria-live="polite"
+                            aria-relevant="additions"
+                        >
                             <div className="space-y-4">
                                 {messages.map((message) => (
                                     <motion.div
@@ -862,14 +910,29 @@ export function FloatingChatbot() {
                                             <MessageContent content={message.content} role={message.role} />
                                             {message.role === "assistant" ? (
                                                 <>
+                                                    <SourceLinks sources={message.sources} />
+                                                    {message.retryQuestion ? (
+                                                        <div className="mt-3">
+                                                            <button
+                                                                type="button"
+                                                                onClick={() => void sendQuestion(message.retryQuestion ?? "")}
+                                                                disabled={isSending}
+                                                                className="inline-flex h-9 items-center justify-center gap-1.5 rounded-[6px] border border-[#084734]/20 bg-[#ECFDF5] px-3 text-xs font-bold text-[#084734] transition-colors hover:bg-[#D1FAE5] disabled:cursor-not-allowed disabled:opacity-50 focus-visible:outline-none focus-visible:ring-2 focus-visible:ring-[#084734]/25"
+                                                            >
+                                                                <RotateCcw className="h-3.5 w-3.5" aria-hidden />
+                                                                다시 시도
+                                                            </button>
+                                                        </div>
+                                                    ) : null}
                                                     {(message.suggestedQuestions?.length ?? 0) > 0 ? (
                                                         <div className="mt-3 grid gap-2">
                                                             {message.suggestedQuestions?.slice(0, getSuggestionLimit(message)).map((question) => (
                                                                 <button
                                                                     key={question}
                                                                     type="button"
+                                                                    disabled={isSending}
                                                                     onClick={() => sendQuestion(question)}
-                                                                    className="flex w-full items-center justify-between gap-2 whitespace-normal break-keep rounded-full border border-[#0e5038]/40 bg-transparent px-3.5 py-2 text-left text-[12px] font-semibold leading-5 text-[#0e5038] transition-colors hover:border-[#0e5038]/60 hover:bg-[#ECFDF5]"
+                                                                    className="flex w-full items-center justify-between gap-2 whitespace-normal break-keep rounded-full border border-[#0e5038]/40 bg-transparent px-3.5 py-2 text-left text-[12px] font-semibold leading-5 text-[#0e5038] transition-colors hover:border-[#0e5038]/60 hover:bg-[#ECFDF5] disabled:cursor-not-allowed disabled:opacity-50 focus-visible:outline-none focus-visible:ring-2 focus-visible:ring-[#084734]/25"
                                                                 >
                                                                     <span>{question}</span>
                                                                     <svg viewBox="0 0 24 24" fill="none" stroke="currentColor" strokeWidth={2} strokeLinecap="round" strokeLinejoin="round" aria-hidden="true" className="h-3.5 w-3.5 shrink-0"><path d="M5 12h14" /><path d="m12 5 7 7-7 7" /></svg>
@@ -902,8 +965,8 @@ export function FloatingChatbot() {
                         </div>
 
                         {error ? (
-                            <div className="border-t border-black/[0.06] bg-amber-50 px-4 py-2 text-xs font-medium text-amber-900">
-                                {error}
+                            <div className="flex items-center justify-between gap-3 border-t border-black/[0.06] bg-[#F6F5F4] px-4 py-2 text-xs font-medium text-[#7A2A13]">
+                                <span>{error}</span>
                             </div>
                         ) : null}
 
@@ -922,6 +985,7 @@ export function FloatingChatbot() {
                                     rows={1}
                                     maxLength={1000}
                                     placeholder="질문을 짧게 입력해 주세요"
+                                    aria-label="챗봇 질문 입력"
                                     className="min-h-10 max-h-28 flex-1 resize-none rounded-[10px] border border-[#E5E5E0] bg-white px-3 py-2 text-sm leading-6 text-[#111110] placeholder:text-[#A39E98] focus-visible:border-[#084734] focus-visible:outline-none focus-visible:ring-2 focus-visible:ring-[#084734]/20"
                                 />
                                 <button
