@@ -10,6 +10,8 @@ import {
 } from "@/lib/chatbot/classification"
 import {
   generateGeminiFinalAnswer,
+  streamGeminiFinalAnswer,
+  clampAnswerToLength,
   embedText,
   sanitizePublicAnswerText,
   type ChatbotModelTier,
@@ -32,6 +34,8 @@ const MAX_RETRIEVAL_CANDIDATES_PER_DOC = 3
 const MIN_DIRECT_SOURCE_SCORE = 18
 const DEFAULT_KNOWLEDGE_SEARCH_TIMEOUT_MS = 2_800
 const DEFAULT_FINAL_ANSWER_TIMEOUT_MS = 4_200
+// 스트리밍은 첫 토큰이 일찍 보여 체감 지연이 낮으므로 본문 완성까지 조금 더 기다린다.
+const DEFAULT_FINAL_ANSWER_STREAM_TIMEOUT_MS = 6_000
 const RETRIEVAL_CACHE_TTL_MS = 5 * 60 * 1000
 const RETRIEVAL_CACHE_MAX = 200
 const RETRIEVAL_CACHE_VERSION = "rag-rerank-20260618-v4"
@@ -309,6 +313,10 @@ function getKnowledgeSearchTimeoutMs() {
 
 function getFinalAnswerTimeoutMs() {
   return getPositiveIntegerEnv("CHATBOT_FINAL_ANSWER_TIMEOUT_MS", DEFAULT_FINAL_ANSWER_TIMEOUT_MS)
+}
+
+function getFinalAnswerStreamTimeoutMs() {
+  return getPositiveIntegerEnv("CHATBOT_FINAL_ANSWER_STREAM_TIMEOUT_MS", DEFAULT_FINAL_ANSWER_STREAM_TIMEOUT_MS)
 }
 
 async function withTimeoutFallback<T>({
@@ -2259,6 +2267,31 @@ function getCoreFeatureYesNoAnswer(question: NormalizedQuestion) {
   return `${lead} 자세한 설정 위치는 화면 기준으로 안내해드릴게요.`
 }
 
+// 문서 발췌를 최대 maxSentences 문장까지만 남긴다. 문장 종결(. ! ? 。)이 없으면 빈 문자열을 반환해
+// 호출부가 원문을 그대로 쓰도록 한다.
+function trimToSentences(text: string, maxSentences: number): string {
+  const parts = text.match(/[^.!?。]*[.!?。]/g)
+  if (!parts || parts.length === 0) return ""
+  return parts.slice(0, maxSentences).join("").trim()
+}
+
+// doc_suggestion 직답(주로 LLM 재작성이 실패·타임아웃했을 때의 폴백)에서 "제목: 발췌" 식 차가운
+// 문서 덤프 대신 부드러운 도입부 + 다듬은 발췌로 답한다. direct_answer/handoff 경로는 건드리지 않는다.
+export function buildDocSuggestionSummary(
+  excerpt: string,
+  headingText: string,
+  options: { isMetaHeading: boolean; excerptStartsWithHeading: boolean }
+): string {
+  const trimmedExcerpt = trimToSentences(excerpt, 2) || excerpt.trim()
+  const showHeading =
+    headingText.length > 0 &&
+    headingText !== "요약" &&
+    !options.isMetaHeading &&
+    !options.excerptStartsWithHeading
+  const body = showHeading ? `${headingText}: ${trimmedExcerpt}` : trimmedExcerpt
+  return `관련 안내를 정리해드리면,\n${body}`
+}
+
 function formatConsumerAnswer({
   answerMode,
   category,
@@ -2371,7 +2404,11 @@ function formatConsumerAnswer({
     headingText && headingText !== "요약" && !isMetaHeading && !excerptStartsWithHeading
       ? `${headingText}: `
       : ""
-  const summary = `${heading}${top.excerpt}`
+  // doc_suggestion(약한 출처) 폴백만 따뜻하게 재구성한다. direct_answer/handoff 는 기존 그대로 둔다.
+  const summary =
+    answerMode === "doc_suggestion"
+      ? buildDocSuggestionSummary(top.excerpt, headingText, { isMetaHeading, excerptStartsWithHeading })
+      : `${heading}${top.excerpt}`
   const nextStep = getConciseNextStep(category)
 
   return [
@@ -3105,6 +3142,191 @@ export async function evaluateChatbotQuery(
     warning: core.warning,
     detectedCategory: core.category,
   }
+}
+
+export interface ChatbotStreamMeta {
+  answerMode: AnswerMode
+  confidence: number
+  needsHandoff: boolean
+  unresolved: boolean
+  handoffIntent: HandoffIntent
+  sources: ChatbotSource[]
+  suggestedQuestions: string[]
+  sessionId?: string
+  answerEventId?: string
+  warning?: string
+}
+
+export type ChatbotStreamEvent =
+  | { type: "delta"; text: string }
+  | { type: "replace"; answer: string }
+  | { type: "meta"; meta: ChatbotStreamMeta }
+  | { type: "error"; error: string }
+
+// 스트리밍 미리보기에서 단어 중간을 내보내지 않도록, 정제된 텍스트의 마지막 공백/개행 경계 위치를
+// 돌려준다(그 인덱스까지만 안전하게 flush). 경계가 없으면 0 → 아직 아무것도 내보내지 않는다.
+export function lastSafeBoundary(text: string): number {
+  const match = text.match(/[\s\S]*\s/)
+  return match ? match[0].length : 0
+}
+
+// Gemini 답변을 토큰 단위로 스트리밍하면서 정제된 델타를 emit 하고, 완성된 답변에 길이클램프+사용성
+// 게이트를 적용해 response 에 반영한다. 사용 가능한 AI 답변을 만들었으면 true, 아니면 false(=결정형 초안 유지).
+// tier 는 basic 고정(딥 폴백은 비스트리밍 기본과 동일하게 opt-in 유지).
+async function streamAndApplyFinalAnswer({
+  question,
+  category,
+  response,
+  historyPromise,
+  emit,
+}: {
+  question: NormalizedQuestion
+  category: string
+  response: Omit<ChatbotQueryResponse, "answerEventId" | "sessionId" | "warning" | "handoffIntent">
+  historyPromise: Promise<{ role: "user" | "model"; parts: { text: string }[] }[]>
+  emit: (event: ChatbotStreamEvent) => void
+}): Promise<boolean> {
+  const history = await historyPromise
+  let raw = ""
+  let emittedLen = 0
+
+  const onChunk = (chunk: string) => {
+    raw += chunk
+    const sanitized = sanitizePublicAnswerText(raw)
+    const safeEnd = lastSafeBoundary(sanitized)
+    if (safeEnd > emittedLen) {
+      emit({ type: "delta", text: sanitized.slice(emittedLen, safeEnd) })
+      emittedLen = safeEnd
+    }
+  }
+
+  await withTimeoutFallback({
+    promise: (async () => {
+      for await (const chunk of streamGeminiFinalAnswer({
+        question: question.redacted,
+        category,
+        answerMode: response.answerMode,
+        draftAnswer: response.answer,
+        sources: response.sources,
+        tier: "basic",
+        history,
+      })) {
+        onChunk(chunk)
+      }
+      return true
+    })(),
+    timeoutMs: getFinalAnswerStreamTimeoutMs(),
+    fallback: () => false,
+    onTimeout: () => console.warn("[chatbot] streaming final answer timed out; using deterministic draft."),
+  })
+
+  const finalAnswer = clampAnswerToLength(sanitizePublicAnswerText(raw))
+  if (!finalAnswer || !isUsableGeneratedAnswer(finalAnswer)) {
+    return false
+  }
+  applyGeneratedFinalAnswer(response, question, category, finalAnswer)
+  return true
+}
+
+/**
+ * 스트리밍 진입점. handleChatbotQuery 와 동일한 검색·분류·결정형 초안 파이프라인(buildChatbotCore)을
+ * 재사용하되, Gemini 최종 답변만 토큰 스트리밍으로 내보낸다.
+ * 와이어 프로토콜(NDJSON): delta(텍스트 추가) → replace(정제된 최종본 확정) → meta(출처/제안/세션 등).
+ * 모든 안전 게이트(정제·길이클램프·사용성 판정·결정형 폴백)는 비스트리밍 경로와 동일하게 유지한다.
+ */
+export async function streamChatbotQuery(
+  input: ChatbotQueryRequest,
+  meta: ChatbotRequestMeta,
+  emit: (event: ChatbotStreamEvent) => void
+): Promise<void> {
+  const startedAt = Date.now()
+  const requestedSessionId = normalizeOptionalUuid(input.sessionId)
+  const sessionId = requestedSessionId ?? (hasSupabaseServerEnv() ? crypto.randomUUID() : undefined)
+  const answerEventId = hasSupabaseServerEnv() ? crypto.randomUUID() : undefined
+
+  const emitMeta = (
+    response: Omit<ChatbotQueryResponse, "answerEventId" | "sessionId" | "warning" | "handoffIntent">,
+    handoffIntent: HandoffIntent,
+    warning?: string
+  ) => {
+    emit({
+      type: "meta",
+      meta: {
+        answerMode: response.answerMode,
+        confidence: response.confidence,
+        needsHandoff: response.needsHandoff,
+        unresolved: response.unresolved,
+        handoffIntent,
+        sources: shouldExposeSources(input) ? response.sources : [],
+        suggestedQuestions: response.suggestedQuestions,
+        sessionId,
+        answerEventId,
+        warning,
+      },
+    })
+  }
+
+  // 세션이 없는(보통 첫 턴) 동일 질문은 캐시된 답변을 즉시 확정해 검색·생성을 통째로 건너뛴다.
+  if (!requestedSessionId) {
+    const cachedQuestion = normalizeQuestion(input.message)
+    const cached = getCachedAnswer(cachedQuestion)
+    if (cached) {
+      emit({ type: "replace", answer: cached.response.answer })
+      emitMeta(cached.response, cached.handoffIntent, cached.warning)
+      void persistExchange(
+        input,
+        cachedQuestion,
+        cached.response,
+        meta,
+        cached.category,
+        cached.intent,
+        cached.handoffIntent,
+        elapsedSince(startedAt),
+        sessionId,
+        answerEventId
+      )
+      return
+    }
+  }
+
+  // 이력은 검색·분류와 무관하므로 검색과 병렬로 시작해 두고 스트리밍 직전에만 await 한다.
+  const historyPromise = requestedSessionId ? loadSessionHistory(requestedSessionId) : Promise.resolve([])
+
+  // 검색·분류·결정형 초안까지는 기존 코어를 그대로 재사용(중복 방지). Gemini 호출만 스트리밍으로 대체.
+  const core = await buildChatbotCore(input.message, { generateAnswer: false })
+  const { question, response, category, intent, handoffIntent, warning } = core
+
+  // 인사·정책 가드 응답은 buildChatbotCore 가 조기 반환한 '최종 답변'이다(정책 가드는 보안 거절 등).
+  // 이 경우 AI 재작성을 적용하면 안 된다 — handleChatbotQuery 의 조기 반환 의미와 동일하게 맞춘다.
+  const isShortCircuited = isGreetingOnly(question) || Boolean(buildPolicyGuardResponse(question))
+  if (!isShortCircuited && shouldUseAiFinalAnswer(response, question, category)) {
+    await streamAndApplyFinalAnswer({ question, category, response, historyPromise, emit })
+  }
+
+  finalizeAnswer(response)
+
+  // 스트림 델타가 끝난 뒤(또는 AI 미사용 시) 정제된 최종본을 권위 있는 replace 로 확정한다.
+  emit({ type: "replace", answer: response.answer })
+
+  // no-session 질문만 캐시(이력 의존 답이 캐시에 섞이지 않게) — handleChatbotQuery 와 동일 규칙.
+  if (!requestedSessionId) {
+    setCachedAnswer(question, { response, category, intent, handoffIntent, warning })
+  }
+
+  emitMeta(response, handoffIntent, warning)
+
+  void persistExchange(
+    input,
+    question,
+    response,
+    meta,
+    category,
+    intent,
+    handoffIntent,
+    elapsedSince(startedAt),
+    sessionId,
+    answerEventId
+  )
 }
 
 export async function saveChatbotFeedback(raw: unknown) {

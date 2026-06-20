@@ -122,4 +122,22 @@ describe("chatbot classification", () => {
     expect(detectChatbotCategory("무료 체험 있나요?")).toBe("onboarding")
     expect(detectChatbotCategory("학부모 알림 문자도 자동으로 가나요?")).toBe("admin")
   })
+
+  it("treats bare management verbs as classroom operations, not the admin console", () => {
+    expect(detectChatbotCategory("수업 관리 어떻게 하나요?")).toBe("classroom")
+    expect(detectChatbotCategory("학생 관리 기능 있나요?")).toBe("classroom")
+    expect(detectChatbotCategory("교사 관리 화면 알려줘")).toBe("classroom")
+    expect(detectChatbotCategory("코스 관리 어떻게 해요?")).toBe("classroom")
+    // 명시적 관리자 신호가 함께 있으면 여전히 admin 으로 본다.
+    expect(detectChatbotCategory("관리자 콘솔에서 수업 관리 어떻게 하나요?")).toBe("admin")
+    expect(detectChatbotCategory("기관 관리 메뉴는 어디 있어요?")).toBe("admin")
+  })
+
+  it("routes API/integration-framed identity questions to the admin (API) path", () => {
+    expect(detectChatbotCategory("API 연동으로 클래스인이 뭐 하는지 알려줘")).toBe("admin")
+    expect(detectChatbotCategory("CRM 연동 되나요?")).toBe("admin")
+    // API/연동 신호가 없는 순수 정체성 질문은 그대로 온보딩으로 남는다.
+    expect(detectChatbotCategory("클래스인이 뭐야?")).toBe("onboarding")
+    expect(detectChatbotCategory("Classin은 어떤 서비스인가요?")).toBe("onboarding")
+  })
 })

@@ -44,20 +44,6 @@ interface ChatbotSource {
     score: number
 }
 
-interface ChatbotQueryResponse {
-    answer: string
-    answerMode: "direct_answer" | "doc_suggestion" | "clarifying_question" | "handoff" | "fallback"
-    answerEventId?: string
-    confidence: number
-    needsHandoff: boolean
-    handoffIntent?: HandoffIntent
-    sessionId?: string
-    sources: ChatbotSource[]
-    suggestedQuestions: string[]
-    unresolved: boolean
-    warning?: string
-}
-
 interface ChatbotStarterQuestionsResponse {
     questions?: unknown
     warning?: string
@@ -76,6 +62,27 @@ interface ChatMessage {
     showHandoffCTA?: boolean
     retryQuestion?: string
 }
+
+// /api/chatbot/query/stream 의 NDJSON 이벤트(서버 ChatbotStreamEvent 와 구조 일치).
+// server-only 모듈을 클라이언트에서 import 하지 않기 위해 형태만 로컬에 둔다.
+interface ChatbotStreamMeta {
+    answerMode?: string
+    confidence?: number
+    needsHandoff?: boolean
+    unresolved?: boolean
+    handoffIntent?: HandoffIntent
+    sources?: ChatbotSource[]
+    suggestedQuestions?: string[]
+    sessionId?: string
+    answerEventId?: string
+    warning?: string
+}
+
+type ChatbotStreamEvent =
+    | { type: "delta"; text: string }
+    | { type: "replace"; answer: string }
+    | { type: "meta"; meta: ChatbotStreamMeta }
+    | { type: "error"; error: string }
 
 const hiddenPathPrefixes = [
     "/admin",
@@ -102,6 +109,17 @@ function shouldUseDeepConsultationIcon(text: string) {
 
 function makeId() {
     return `${Date.now()}-${Math.random().toString(16).slice(2)}`
+}
+
+// NDJSON 한 줄을 스트림 이벤트로 파싱한다. 빈 줄·깨진 JSON 은 null(무시).
+function parseStreamEvent(line: string): ChatbotStreamEvent | null {
+    const trimmed = line.trim()
+    if (!trimmed) return null
+    try {
+        return JSON.parse(trimmed) as ChatbotStreamEvent
+    } catch {
+        return null
+    }
 }
 
 function getSuggestionLimit(message: ChatMessage) {
@@ -390,6 +408,8 @@ function sanitizeVisibleAssistantText(value: string) {
         .replace(/https?:\/\/[^\s)]+/g, "")
         .replace(/(?:\/docs|\/images|\/resources)\/[^\s)]+/g, "")
         .replace(/\[image[_\-\s]?\d*]/gi, "")
+        // 제품 톤은 마크다운을 쓰지 않는다. 모델이 가끔 흘리는 **굵게** 표시는 평문으로 정리한다.
+        .replace(/\*\*(.+?)\*\*/g, "$1")
         .replace(/^\s*(?:출처|참고\s*문서|근거\s*자료|문서\s*보기)\s*:.*$/gim, "")
         .replace(/[^\S\r\n]{2,}/g, " ")
         .replace(/[ \t]+\n/g, "\n")
@@ -454,6 +474,32 @@ function MessageContent({ content, role }: { content: string; role: ChatMessage[
                                 <li key={`${index}:${item}`}>{item}</li>
                             ))}
                         </ul>
+                    )
+                }
+
+                // 리드 문장 + 뒤따르는 불릿 목록(예: "보통 이렇게 묶여요.\n- A\n- B")은
+                // 리드 줄을 문단으로, 나머지를 불릿 리스트로 분리해 렌더링한다. 불릿이 섞인 본문에서
+                // 날 대시("- ")가 그대로 보이던 문제를 막는다. 불릿 뒤에 다시 평문이 오는 혼합 블록은
+                // 오인 렌더를 피하려 이 분기에서 처리하지 않고 아래 <p> 로 보낸다.
+                const firstBulletIndex = lines.findIndex((line) => bulletLineValue(line) !== undefined)
+                if (
+                    firstBulletIndex > 0 &&
+                    lines.slice(firstBulletIndex).every((line) => bulletLineValue(line) !== undefined)
+                ) {
+                    const leadLines = lines.slice(0, firstBulletIndex).map(cleanMessageLine).filter(Boolean)
+                    const trailingBullets = lines
+                        .slice(firstBulletIndex)
+                        .map(bulletLineValue)
+                        .filter((value): value is string => Boolean(value))
+                    return (
+                        <div key={`${blockIndex}:${block}`} className="space-y-1.5">
+                            {leadLines.length > 0 && <p>{leadLines.join("\n")}</p>}
+                            <ul className="ml-4 list-disc space-y-1.5 marker:text-[#0e5038]">
+                                {trailingBullets.map((item, index) => (
+                                    <li key={`${index}:${item}`}>{item}</li>
+                                ))}
+                            </ul>
+                        </div>
                     )
                 }
 
@@ -578,6 +624,7 @@ export function FloatingChatbot() {
     const [input, setInput] = useState("")
     const [sessionId, setSessionId] = useState<string | undefined>()
     const [isSending, setIsSending] = useState(false)
+    const [isStreaming, setIsStreaming] = useState(false)
     const [error, setError] = useState<string | null>(null)
     const [isDeepConsultation, setIsDeepConsultation] = useState(false)
     const [unresolvedStreak, setUnresolvedStreak] = useState(0)
@@ -709,6 +756,7 @@ export function FloatingChatbot() {
         setInput("")
         setError(null)
         setIsSending(true)
+        setIsStreaming(false)
 
         const userMessage: ChatMessage = {
             id: makeId(),
@@ -718,11 +766,26 @@ export function FloatingChatbot() {
 
         setMessages((current) => [...current, userMessage])
 
+        // 첫 토큰이 오면 그때 어시스턴트 말풍선을 만든다(그 전까지는 ThinkingIndicator 가 보인다).
+        let assistantId: string | null = null
+        const ensureAssistant = () => {
+            if (assistantId) return assistantId
+            const id = makeId()
+            assistantId = id
+            setIsStreaming(true)
+            setMessages((current) => [...current, { id, role: "assistant", content: "" }])
+            return id
+        }
+        const updateAssistant = (updater: (message: ChatMessage) => ChatMessage) => {
+            const id = ensureAssistant()
+            setMessages((current) => current.map((message) => (message.id === id ? updater(message) : message)))
+        }
+
         let timeoutId: number | undefined
         try {
             const controller = new AbortController()
             timeoutId = window.setTimeout(() => controller.abort(), CHATBOT_REQUEST_TIMEOUT_MS)
-            const response = await fetch("/api/chatbot/query", {
+            const response = await fetch("/api/chatbot/query/stream", {
                 method: "POST",
                 headers: { "Content-Type": "application/json" },
                 signal: controller.signal,
@@ -734,9 +797,8 @@ export function FloatingChatbot() {
                 }),
             })
 
-            const data = (await response.json().catch(() => ({}))) as Partial<ChatbotQueryResponse> & { error?: string }
-
-            if (!response.ok) {
+            if (!response.ok || !response.body) {
+                const data = (await response.json().catch(() => ({}))) as { error?: string }
                 throw new Error(
                     response.status === 429
                         ? data.error ?? "질문이 잠시 많이 들어왔습니다. 잠깐 후 다시 시도해 주세요."
@@ -744,73 +806,122 @@ export function FloatingChatbot() {
                 )
             }
 
-            setSessionId(data.sessionId ?? sessionId)
-            if (data.answerMode === "handoff" || data.needsHandoff) {
-                setIsDeepConsultation(true)
+            const handleEvent = (event: ChatbotStreamEvent) => {
+                if (event.type === "delta") {
+                    updateAssistant((message) => ({ ...message, content: message.content + event.text }))
+                    return
+                }
+                if (event.type === "replace") {
+                    updateAssistant((message) => ({ ...message, content: event.answer }))
+                    return
+                }
+                if (event.type === "error") {
+                    throw new Error(event.error)
+                }
+                // meta
+                const meta = event.meta
+                setSessionId(meta.sessionId ?? sessionId)
+                if (meta.needsHandoff || meta.answerMode === "handoff") {
+                    setIsDeepConsultation(true)
+                }
+                const nextStreak = meta.unresolved ? unresolvedStreak + 1 : 0
+                setUnresolvedStreak(nextStreak)
+                updateAssistant((message) => ({
+                    ...message,
+                    sources: meta.sources ?? [],
+                    suggestedQuestions: meta.suggestedQuestions ?? [],
+                    answerEventId: meta.answerEventId,
+                    confidence: meta.confidence,
+                    needsHandoff: meta.needsHandoff,
+                    handoffIntent: meta.handoffIntent,
+                    showHandoffCTA: Boolean(meta.needsHandoff),
+                }))
+
+                if (nextStreak >= UNRESOLVED_STREAK_THRESHOLD && !meta.needsHandoff) {
+                    const intent = meta.handoffIntent ?? "demo"
+                    const nudge =
+                        intent === "support"
+                            ? "정확한 확인을 위해 오류 화면, 사용 기기, 발생 시점을 한 문장으로 알려주세요."
+                            : "도입, 수업 운영, 계정/오류, 결제 중 어느 쪽인지 알려주시면 더 짧게 좁혀드릴게요."
+                    setMessages((current) => [
+                        ...current,
+                        {
+                            id: makeId(),
+                            role: "assistant",
+                            content: nudge,
+                            suggestedQuestions: [],
+                            needsHandoff: false,
+                            handoffIntent: intent,
+                            showHandoffCTA: false,
+                        },
+                    ])
+                }
             }
 
-            const nextStreak = data.unresolved ? unresolvedStreak + 1 : 0
-            setUnresolvedStreak(nextStreak)
+            const reader = response.body.getReader()
+            const decoder = new TextDecoder()
+            let buffer = ""
 
-            const showHandoffCTA = Boolean(data.needsHandoff)
+            while (true) {
+                const { value, done } = await reader.read()
+                if (done) break
+                // 데이터가 흐르는 동안에는 유휴 타임아웃을 리셋해 긴 응답이 중간에 끊기지 않게 한다.
+                if (timeoutId) window.clearTimeout(timeoutId)
+                timeoutId = window.setTimeout(() => controller.abort(), CHATBOT_REQUEST_TIMEOUT_MS)
+                buffer += decoder.decode(value, { stream: true })
 
-            setMessages((current) => [
-                ...current,
-                {
-                    id: makeId(),
-                    role: "assistant",
-                    content: sanitizeVisibleAssistantText(data.answer ?? "확인 가능한 답변을 찾지 못했습니다."),
-                    sources: data.sources ?? [],
-                    suggestedQuestions: data.suggestedQuestions ?? [],
-                    answerEventId: data.answerEventId,
-                    confidence: data.confidence,
-                    needsHandoff: data.needsHandoff,
-                    handoffIntent: data.handoffIntent,
-                    showHandoffCTA,
-                },
-            ])
+                let newlineIndex: number
+                while ((newlineIndex = buffer.indexOf("\n")) >= 0) {
+                    const line = buffer.slice(0, newlineIndex).trim()
+                    buffer = buffer.slice(newlineIndex + 1)
+                    // 파싱은 따로 감싸 깨진 JSON 라인만 무시하고, 이벤트 처리(특히 error 이벤트의 throw)는
+                    // 바깥 catch 로 전파시킨다.
+                    const event = parseStreamEvent(line)
+                    if (event) handleEvent(event)
+                }
+            }
 
-            if (nextStreak >= UNRESOLVED_STREAK_THRESHOLD && !data.needsHandoff) {
-                const intent = data.handoffIntent ?? "demo"
-                const nudge =
-                    intent === "support"
-                        ? "정확한 확인을 위해 오류 화면, 사용 기기, 발생 시점을 한 문장으로 알려주세요."
-                        : "도입, 수업 운영, 계정/오류, 결제 중 어느 쪽인지 알려주시면 더 짧게 좁혀드릴게요."
+            const event = parseStreamEvent(buffer)
+            if (event) handleEvent(event)
+
+            // 어떤 콘텐츠도 받지 못했으면 안내 문구로 마무리한다.
+            if (!assistantId) {
                 setMessages((current) => [
                     ...current,
                     {
                         id: makeId(),
                         role: "assistant",
-                        content: nudge,
+                        content: "확인 가능한 답변을 찾지 못했습니다.",
                         suggestedQuestions: [],
-                        needsHandoff: false,
-                        handoffIntent: intent,
-                        showHandoffCTA: false,
                     },
                 ])
             }
-
         } catch (err) {
             const isAbort = err instanceof DOMException && err.name === "AbortError"
             setError(isAbort ? "응답이 지연되고 있습니다. 잠깐 후 다시 시도해 주세요." : err instanceof Error ? err.message : "챗봇 응답 중 오류가 발생했습니다.")
-            setMessages((current) => [
-                ...current,
-                {
-                    id: makeId(),
-                    role: "assistant",
-                    content: isAbort
-                        ? "응답이 지연되고 있어요. 같은 질문을 다시 시도하거나 질문을 조금 더 짧게 보내주세요."
-                        : "지금은 답변을 불러오지 못했습니다. 같은 질문을 다시 시도할 수 있어요.",
-                    suggestedQuestions: [],
-                    needsHandoff: false,
-                    handoffIntent: "support",
-                    showHandoffCTA: false,
-                    retryQuestion: trimmed,
-                },
-            ])
+            const errorContent = isAbort
+                ? "응답이 지연되고 있어요. 같은 질문을 다시 시도하거나 질문을 조금 더 짧게 보내주세요."
+                : "지금은 답변을 불러오지 못했습니다. 같은 질문을 다시 시도할 수 있어요."
+            const errorMessage: ChatMessage = {
+                id: assistantId ?? makeId(),
+                role: "assistant",
+                content: errorContent,
+                sources: [],
+                suggestedQuestions: [],
+                needsHandoff: false,
+                handoffIntent: "support",
+                showHandoffCTA: false,
+                retryQuestion: trimmed,
+            }
+            setMessages((current) =>
+                assistantId
+                    ? current.map((message) => (message.id === assistantId ? errorMessage : message))
+                    : [...current, errorMessage]
+            )
         } finally {
             if (timeoutId) window.clearTimeout(timeoutId)
             setIsSending(false)
+            setIsStreaming(false)
         }
     }
 
@@ -957,7 +1068,7 @@ export function FloatingChatbot() {
                                     </motion.div>
                                 ))}
 
-                                {isSending ? (
+                                {isSending && !isStreaming ? (
                                     <ThinkingIndicator shouldReduceMotion={shouldReduceMotion} />
                                 ) : null}
                                 <div ref={bottomRef} />

@@ -36,6 +36,9 @@ const UNSUPPORTED_GEMINI_MODELS = new Set([
   "gemini-1.5-pro",
 ])
 const GEMINI_TIMEOUT_MS = 4500
+// 스트리밍은 첫 토큰이 빨리 와 사용자가 빈 화면을 보지 않으므로, 본문을 끝까지 받을 여유를 더 준다.
+// 검색(≤2.8s) + 스트림(≤6s) ≈ 9s 안쪽으로 라우트 예산을 지킨다.
+const GEMINI_STREAM_TIMEOUT_MS = 6000
 // 임베딩은 보통 150~400ms — 생성용 4.5s를 그대로 쓰면 느린 호출이 요청 예산을 잡아먹는다.
 const EMBED_TIMEOUT_MS = 2000
 const MAX_ANSWER_LENGTH = 520
@@ -102,7 +105,7 @@ const FINAL_SYSTEM_INSTRUCTION = [
   "문서가 부족해도 도입, 수업 운영, 제품 소개처럼 안전한 범위는 합리적으로 유추해 답해.",
   "다만 가격, 계약, 환불, 계정, 장애, 설치 가능 여부, 장비 상태는 확정하지 말고 확인할 정보와 다음 행동을 짧게 안내해.",
   "클래스인 칠판, 보드, 전자칠판 종류를 묻는 질문은 Classin Board 라인업과 교실 규모 기준으로 답해. AI 칠판, AI 채점, 릴리즈노트와 혼동하지 마.",
-  "넓은 질문은 2~3문장으로, 사양·상세 질문은 '- ' 불릿으로 정리하되 길어도 450자 안팎으로 끝내.",
+  "넓은 질문은 2~3문장으로, 사양·상세 질문은 '- ' 불릿으로 정리하되, 본문은 500자 안팎을 넘기지 말고 반드시 완결된 문장으로 끝내.",
 ].join("\n")
 
 const RAG_SYSTEM_INSTRUCTION = [
@@ -159,6 +162,32 @@ export function sanitizePublicAnswerText(value: string) {
     .trim()
 }
 
+/**
+ * 답변 길이 상한(MAX_ANSWER_LENGTH)을 지키되 단어·문장 중간에서 끊지 않는다.
+ * - 상한 이하면 그대로 반환한다.
+ * - 넘으면 상한 안쪽 마지막 문장 끝(.!? 。 또는 한국어 종결 '다.'/'요.'/'니다'/'습니다'/'세요')에서 자른다.
+ * - 종결 경계가 상한의 60% 미만으로 너무 앞이면 마지막 공백에서, 그것도 없으면 상한에서 자른다.
+ *
+ * 이전에는 `slice(0, MAX_ANSWER_LENGTH)` 로 코드포인트를 그대로 잘라 문장 중간에서 끊겼고,
+ * 그 결과 호출부(service.ts isUsableGeneratedAnswer)의 종결 검사에 걸려 멀쩡한 긴 답변이
+ * 통째로 버려지고 결정형 초안으로 폴백되는 품질 저하가 있었다. 이를 막는다.
+ */
+export function clampAnswerToLength(text: string, max = MAX_ANSWER_LENGTH): string {
+  const trimmed = text.trim()
+  if (trimmed.length <= max) return trimmed
+
+  const window = trimmed.slice(0, max)
+  const sentenceMatch = window.match(/^[\s\S]*(?:[.!?。]|니다\.?|습니다\.?|합니다\.?|세요\.?|요\.|다\.)/)
+  if (sentenceMatch && sentenceMatch[0].trim().length >= max * 0.6) {
+    return sentenceMatch[0].trim()
+  }
+
+  const lastSpace = window.lastIndexOf(" ")
+  if (lastSpace >= max * 0.6) return window.slice(0, lastSpace).trim()
+
+  return window.trim()
+}
+
 function sanitizeInternalContextText(value: string) {
   return sanitizePublicAnswerText(value)
     .replace(/^#+\s*/gm, "")
@@ -177,6 +206,24 @@ function formatInternalContext(sources: ChatbotSource[] = []) {
     .join("\n\n")
 }
 
+// 모델별 generationConfig. flash 계열은 thinking 을 꺼 본문 토큰을 확보하고(2.5-flash 토큰 소진 방지),
+// pro 계열(2.5-pro·3.x-pro-preview)은 thinking 필수라 budget:0 을 보내면 400 → thinking 켠 채 출력 여유를 둔다.
+function buildGeminiBody(
+  model: string,
+  systemInstruction: string,
+  contents: { role: "user" | "model"; parts: { text: string }[] }[],
+  temperature: number
+) {
+  const isFlash = /flash/i.test(model)
+  return JSON.stringify({
+    systemInstruction: { parts: [{ text: systemInstruction }] },
+    contents,
+    generationConfig: isFlash
+      ? { temperature, topP: 0.9, maxOutputTokens: 600, thinkingConfig: { thinkingBudget: 0 } }
+      : { temperature, topP: 0.9, maxOutputTokens: 2048 },
+  })
+}
+
 async function requestGeminiContent({
   systemInstruction,
   contents,
@@ -192,18 +239,6 @@ async function requestGeminiContent({
   if (!apiKey) return null
 
   const models = resolveModelChain(tier)
-  // 모델별 generationConfig. flash 계열은 thinking 을 꺼 본문 토큰을 확보하고(2.5-flash 토큰 소진 방지),
-  // pro 계열(2.5-pro·3.x-pro-preview)은 thinking 필수라 budget:0 을 보내면 400 → thinking 켠 채 출력 여유를 둔다.
-  const buildBody = (model: string) => {
-    const isFlash = /flash/i.test(model)
-    return JSON.stringify({
-      systemInstruction: { parts: [{ text: systemInstruction }] },
-      contents,
-      generationConfig: isFlash
-        ? { temperature, topP: 0.9, maxOutputTokens: 600, thinkingConfig: { thinkingBudget: 0 } }
-        : { temperature, topP: 0.9, maxOutputTokens: 2048 },
-    })
-  }
 
   // 프라이머리 모델이 실패(non-ok/타임아웃/네트워크/빈 응답)하면 다음 폴백 모델로 순차 시도한다.
   for (const model of models) {
@@ -217,7 +252,7 @@ async function requestGeminiContent({
           method: "POST",
           headers: { "Content-Type": "application/json" },
           signal: controller.signal,
-          body: buildBody(model),
+          body: buildGeminiBody(model, systemInstruction, contents, temperature),
         }
       )
 
@@ -235,7 +270,7 @@ async function requestGeminiContent({
       if (!text) continue
       const sanitized = sanitizePublicAnswerText(text)
       if (!sanitized) continue
-      return sanitized.slice(0, MAX_ANSWER_LENGTH)
+      return clampAnswerToLength(sanitized)
     } catch {
       // 타임아웃·네트워크·파싱 오류 → 다음 폴백 모델 시도
       continue
@@ -301,6 +336,123 @@ export async function generateGeminiFinalAnswer({
     : [userContent]
 
   return requestGeminiContent({
+    systemInstruction: FINAL_SYSTEM_INSTRUCTION,
+    contents,
+    tier,
+    temperature: 0.25,
+  })
+}
+
+/**
+ * Gemini 스트리밍 생성기. `:streamGenerateContent?alt=sse` 의 SSE(`data: {...}`) 청크를 파싱해
+ * 텍스트 델타를 순서대로 yield 한다. 키가 없거나 모델 호출이 실패하면 아무것도 내보내지 않는다.
+ * 한 모델이 토큰을 하나도 못 내면 다음 폴백 모델을 시도한다(이미 토큰을 냈으면 그대로 종료).
+ */
+async function* streamGeminiContent({
+  systemInstruction,
+  contents,
+  tier,
+  temperature,
+}: {
+  systemInstruction: string
+  contents: { role: "user" | "model"; parts: { text: string }[] }[]
+  tier: ChatbotModelTier
+  temperature: number
+}): AsyncGenerator<string> {
+  const apiKey = getGeminiApiKey()
+  if (!apiKey) return
+
+  for (const model of resolveModelChain(tier)) {
+    const controller = new AbortController()
+    const timeout = setTimeout(() => controller.abort(), GEMINI_STREAM_TIMEOUT_MS)
+    let emittedAny = false
+
+    try {
+      const res = await fetch(
+        `https://generativelanguage.googleapis.com/v1beta/models/${model}:streamGenerateContent?alt=sse&key=${apiKey}`,
+        {
+          method: "POST",
+          headers: { "Content-Type": "application/json" },
+          signal: controller.signal,
+          body: buildGeminiBody(model, systemInstruction, contents, temperature),
+        }
+      )
+
+      if (!res.ok || !res.body) continue
+
+      const reader = res.body.getReader()
+      const decoder = new TextDecoder()
+      let buffer = ""
+
+      while (true) {
+        const { value, done } = await reader.read()
+        if (done) break
+        buffer += decoder.decode(value, { stream: true })
+
+        let newlineIndex: number
+        while ((newlineIndex = buffer.indexOf("\n")) >= 0) {
+          const line = buffer.slice(0, newlineIndex).trim()
+          buffer = buffer.slice(newlineIndex + 1)
+          if (!line.startsWith("data:")) continue
+          const payload = line.slice(5).trim()
+          if (!payload || payload === "[DONE]") continue
+          try {
+            const data = JSON.parse(payload) as {
+              candidates?: { content?: { parts?: { text?: string }[] } }[]
+            }
+            const text = data.candidates?.[0]?.content?.parts
+              ?.map((part) => part.text ?? "")
+              .join("")
+            if (text) {
+              emittedAny = true
+              yield text
+            }
+          } catch {
+            // 부분 JSON 라인 — 무시하고 다음 청크에서 재시도된다.
+          }
+        }
+      }
+
+      if (emittedAny) return
+    } catch {
+      // 타임아웃·네트워크·파싱 오류 → 토큰을 냈으면 종료, 아니면 다음 폴백 모델 시도
+      if (emittedAny) return
+      continue
+    } finally {
+      clearTimeout(timeout)
+    }
+  }
+}
+
+/**
+ * generateGeminiFinalAnswer 의 스트리밍 버전. 동일한 프롬프트·시스템 지시·내부 컨텍스트를 쓰되
+ * 답변 텍스트를 델타로 yield 한다. 호출부(service.ts)가 누적·정제·길이클램프·사용성 게이트를 적용한다.
+ */
+export async function* streamGeminiFinalAnswer({
+  question,
+  category,
+  answerMode,
+  draftAnswer,
+  sources = [],
+  tier = "basic",
+  history,
+}: FinalGenerateArgs): AsyncGenerator<string> {
+  if (!getGeminiApiKey() || !question.trim()) return
+
+  const context = formatInternalContext(sources)
+  const prompt = [
+    `분류: ${category}`,
+    `현재 응답 모드: ${answerMode}`,
+    context ? `내부 검증 정보(사용자에게 직접 언급 금지):\n${context}` : "내부 검증 정보: 없음",
+    `안전 초안(필요하면 고쳐 쓰기):\n${sanitizeInternalContextText(draftAnswer)}`,
+    `고객 질문: ${question}`,
+    "최종 고객 답변만 작성해줘. 문서, 출처, URL, 이미지 경로는 쓰지 마.",
+  ].join("\n\n")
+
+  const userContent = { role: "user" as const, parts: [{ text: prompt }] }
+  const contents = history && history.length > 0 ? [...history, userContent] : [userContent]
+
+  yield* streamGeminiContent({
     systemInstruction: FINAL_SYSTEM_INSTRUCTION,
     contents,
     tier,
