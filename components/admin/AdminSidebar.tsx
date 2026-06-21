@@ -199,7 +199,7 @@ export default function AdminSidebar({ role, name, email }: Props) {
       await supabase.auth.signOut()
     }
 
-    await fetch("/api/admin/auth", { method: "DELETE" }).catch(() => null)
+    await fetch("/api/admin/auth/logout", { method: "POST" }).catch(() => null)
 
     router.replace("/admin/login")
     router.refresh()
