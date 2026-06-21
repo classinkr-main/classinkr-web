@@ -7,6 +7,7 @@ import {
   Cell,
   Pie,
   PieChart,
+  ReferenceLine,
   ResponsiveContainer,
   Tooltip,
   XAxis,
@@ -47,6 +48,52 @@ export function EventFunnelCompareChart({
         <Bar dataKey="신청" fill="#1a73e8" radius={[4, 4, 0, 0]} />
         <Bar dataKey="참석" fill="#084734" radius={[4, 4, 0, 0]} />
         <Bar dataKey="딜" fill="#B85C33" radius={[4, 4, 0, 0]} />
+      </BarChart>
+    </ResponsiveContainer>
+  )
+}
+
+export function EventRoiChart({
+  data,
+}: {
+  data: Array<{ name: string; roi: number }>
+}) {
+  return (
+    <ResponsiveContainer width="100%" height="100%">
+      <BarChart data={data} layout="vertical" margin={{ left: 4, right: 12, top: 4, bottom: 4 }}>
+        <CartesianGrid stroke="#f0f0ec" horizontal={false} />
+        <XAxis
+          type="number"
+          domain={["auto", "auto"]}
+          unit="%"
+          fontSize={11}
+          stroke="#84827a"
+          tickLine={false}
+        />
+        <YAxis
+          type="category"
+          dataKey="name"
+          width={88}
+          fontSize={11}
+          stroke="#84827a"
+          tickLine={false}
+        />
+        <Tooltip
+          formatter={(value: number) => [`${value}%`, "ROI"]}
+          contentStyle={{
+            backgroundColor: "#111110",
+            border: "none",
+            borderRadius: 12,
+            color: "white",
+            fontSize: 12,
+          }}
+        />
+        <ReferenceLine x={0} stroke="#c8c8c4" strokeDasharray="4 4" />
+        <Bar dataKey="roi" radius={[0, 4, 4, 0]} maxBarSize={22}>
+          {data.map((entry) => (
+            <Cell key={entry.name} fill={entry.roi >= 0 ? "#084734" : "#B85C33"} />
+          ))}
+        </Bar>
       </BarChart>
     </ResponsiveContainer>
   )

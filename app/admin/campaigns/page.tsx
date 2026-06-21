@@ -24,6 +24,9 @@ import {
   Trash2,
 } from "lucide-react"
 import AdminTabs from "@/components/admin/AdminTabs"
+import { ChannelHubCards } from "@/components/admin/campaigns/ChannelHubCards"
+import EmailHubPanel from "@/components/admin/campaigns/EmailHubPanel"
+import type { EmailHubStats } from "@/components/admin/campaigns/EmailHubPanel"
 import { adminFetchJson, adminFetchJsonCached } from "@/lib/admin-client"
 import { useUrlState } from "@/lib/use-url-state"
 import type { LeadRecord } from "@/lib/db"
@@ -41,14 +44,6 @@ import {
 
 // ─── helpers ──────────────────────────────────────────────────────────────────
 
-const AdminMarketingPage = dynamic(() => import("../marketing/page"), {
-  ssr: false,
-  loading: () => (
-    <div className="rounded-2xl border border-[#e8e8e4] bg-white p-8 text-center text-sm text-[#1a1a1a]/45">
-      이메일 캠페인 도구를 불러오는 중...
-    </div>
-  ),
-})
 
 function ChartSkeleton({ className = "h-[260px]" }: { className?: string }) {
   return <div className={`${className} rounded-xl bg-[#f0f0ec]`} />
@@ -62,6 +57,11 @@ const EventFunnelCompareChart = dynamic(
 const ChannelSpendPieChart = dynamic(
   () => import("@/components/admin/campaigns/CampaignCharts").then((m) => m.ChannelSpendPieChart),
   { ssr: false, loading: () => <ChartSkeleton className="h-[180px]" /> }
+)
+
+const EventRoiChart = dynamic(
+  () => import("@/components/admin/campaigns/CampaignCharts").then((m) => m.EventRoiChart),
+  { ssr: false, loading: () => <ChartSkeleton className="h-[200px]" /> }
 )
 
 const KRW = new Intl.NumberFormat("ko-KR")
@@ -216,6 +216,23 @@ interface MetaCampaignDashboard {
     cpc: number | null
     cpm: number | null
   }
+}
+
+interface MarketingStatsData {
+  subscribers: { total: number; active: number; unsubscribed: number; newThisMonth: number }
+  campaigns: {
+    total: number
+    recentCampaigns: Array<{
+      id: string | number
+      subject: string
+      sentAt: string | null
+      recipientCount: number
+      status: "draft" | "sent" | "failed"
+      tags: string[]
+    }>
+  }
+  automation: { totalRules: number; activeRules: number }
+  tagDistribution: Array<{ tag: string; count: number }>
 }
 
 // ─── period filter ────────────────────────────────────────────────────────────
@@ -379,7 +396,7 @@ function MetaCampaignPanel({
       <div className="grid gap-3 sm:grid-cols-2 lg:grid-cols-4">
         <KpiCard icon={<Wallet className="w-3.5 h-3.5" />} label="Meta 광고비" value={loading && !dashboard ? "..." : money(summary?.spend, currency)} hint={`${datePreset} 기준`} />
         <KpiCard icon={<Target className="w-3.5 h-3.5" />} label="노출 / 전체 클릭" value={loading && !dashboard ? "..." : `${compact.format(summary?.impressions ?? 0)} / ${compact.format(summary?.clicks ?? 0)}`} hint={`CTR ${summary?.ctr != null ? summary.ctr.toFixed(2) + "%" : "—"}`} />
-        <KpiCard icon={<Users className="w-3.5 h-3.5" />} label="리드" value={loading && !dashboard ? "..." : KRW.format(summary?.leads ?? 0)} hint={`CPC ${summary?.cpc != null ? money(summary.cpc, currency) : "—"}`} tone="success" />
+        <KpiCard icon={<Users className="w-3.5 h-3.5" />} label="리드" value={loading && !dashboard ? "..." : KRW.format(summary?.leads ?? 0)} hint={`CPL ${summary && summary.leads > 0 ? money(summary.spend / summary.leads, currency) : "—"}`} tone="success" />
         <KpiCard icon={<Activity className="w-3.5 h-3.5" />} label="캠페인 상태" value={loading && !dashboard ? "..." : `${summary?.activeCount ?? 0} 활성`} hint={`일시중지 ${summary?.pausedCount ?? 0} · 전체 ${summary?.campaignCount ?? 0}`} />
       </div>
 
@@ -415,6 +432,7 @@ function MetaCampaignPanel({
                   <th className="px-4 py-3 text-right font-semibold">노출</th>
                   <th className="px-4 py-3 text-right font-semibold">전체 클릭</th>
                   <th className="px-4 py-3 text-right font-semibold">리드</th>
+                  <th className="px-4 py-3 text-right font-semibold">CPL</th>
                   <th className="px-4 py-3 text-right font-semibold">관리</th>
                 </tr>
               </thead>
@@ -437,6 +455,15 @@ function MetaCampaignPanel({
                       <td className="px-4 py-3 text-right tabular-nums text-[#111110]">{KRW.format(campaign.insights.impressions)}</td>
                       <td className="px-4 py-3 text-right tabular-nums text-[#111110]">{KRW.format(campaign.insights.clicks)}</td>
                       <td className="px-4 py-3 text-right tabular-nums text-[#111110]">{KRW.format(campaign.insights.leads)}</td>
+                      <td className="px-4 py-3 text-right tabular-nums">
+                        {campaign.insights.leads > 0 ? (
+                          <span className="font-semibold text-[#084734]">
+                            {money(campaign.insights.spend / campaign.insights.leads, currency)}
+                          </span>
+                        ) : (
+                          <span className="text-[#1a1a1a]/30">—</span>
+                        )}
+                      </td>
                       <td className="px-4 py-3 text-right">
                         <button
                           type="button"
@@ -562,7 +589,7 @@ function MetaLiveSummary({
               {KRW.format(summary?.leads ?? 0)}
             </p>
             <p className="mt-1 text-[11px] text-[#1a1a1a]/40">
-              CPC {summary?.cpc != null ? money(summary.cpc, currency) : "—"}
+              CPL {summary && summary.leads > 0 ? money(summary.spend / summary.leads, currency) : "—"}
             </p>
           </div>
           <div>
@@ -1334,6 +1361,8 @@ export default function AdminCampaignsPage() {
   const [metaError, setMetaError] = useState<string | null>(null)
   const [metaDatePreset, setMetaDatePreset] = useState<MetaDatePreset>("last_30d")
   const [metaUpdatingId, setMetaUpdatingId] = useState<string | null>(null)
+  const [emailStats, setEmailStats] = useState<MarketingStatsData | null>(null)
+  const [eventSort, setEventSort] = useState<"date" | "leads" | "deals" | "roi">("date")
   const activeTab: CampaignTab = CAMPAIGN_TABS.some((tab) => tab.id === tabParam)
     ? (tabParam as CampaignTab)
     : "summary"
@@ -1388,11 +1417,29 @@ export default function AdminCampaignsPage() {
     }
   }, [metaDatePreset])
 
+  const loadEmailStats = useCallback(async () => {
+    try {
+      const data = await adminFetchJsonCached<MarketingStatsData>("/api/admin/marketing/stats", undefined, {
+        ttlMs: 60_000,
+        staleIfError: true,
+      })
+      setEmailStats(data)
+    } catch {
+      // supplementary — silent failure is acceptable
+    }
+  }, [])
+
   useEffect(() => {
     if (activeTab === "summary" || activeTab === "meta") {
       loadMeta()
     }
   }, [activeTab, loadMeta])
+
+  useEffect(() => {
+    if (activeTab === "summary" || activeTab === "email") {
+      void loadEmailStats()
+    }
+  }, [activeTab, loadEmailStats])
 
   const toggleMetaCampaignStatus = useCallback(
     async (campaign: MetaCampaignRow) => {
@@ -1508,6 +1555,55 @@ export default function AdminCampaignsPage() {
     [aggregate.channelTotals]
   )
 
+  const sortedEvents = useMemo(() => {
+    if (eventSort === "leads") {
+      return [...filtered].sort((a, b) => {
+        const aS = eventLeadStats.get(a.id) ?? { attributed: 0, during: 0 }
+        const bS = eventLeadStats.get(b.id) ?? { attributed: 0, during: 0 }
+        return (bS.attributed > 0 ? bS.attributed : bS.during) - (aS.attributed > 0 ? aS.attributed : aS.during)
+      })
+    }
+    if (eventSort === "deals") {
+      return [...filtered].sort((a, b) => {
+        const aM = metricsMap[a.id] ?? DEFAULT_EVENT_METRICS
+        const bM = metricsMap[b.id] ?? DEFAULT_EVENT_METRICS
+        return (bM.dealsCount ?? 0) - (aM.dealsCount ?? 0)
+      })
+    }
+    if (eventSort === "roi") {
+      return [...filtered].sort((a, b) => {
+        const aM = metricsMap[a.id] ?? { ...DEFAULT_EVENT_METRICS, eventId: a.id, updatedAt: "" }
+        const bM = metricsMap[b.id] ?? { ...DEFAULT_EVENT_METRICS, eventId: b.id, updatedAt: "" }
+        const aS = eventLeadStats.get(a.id) ?? { attributed: 0, during: 0 }
+        const bS = eventLeadStats.get(b.id) ?? { attributed: 0, during: 0 }
+        const aEcon = computeEconomics(buildFunnel(a, aM, aS.attributed, aS.during), aM)
+        const bEcon = computeEconomics(buildFunnel(b, bM, bS.attributed, bS.during), bM)
+        if (aEcon.roi === null) return 1
+        if (bEcon.roi === null) return -1
+        return bEcon.roi - aEcon.roi
+      })
+    }
+    return [...filtered].sort((a, b) => new Date(b.startsAt).getTime() - new Date(a.startsAt).getTime())
+  }, [filtered, eventSort, eventLeadStats, metricsMap])
+
+  const roiChartData = useMemo(
+    () =>
+      filtered
+        .map((ev) => {
+          const metrics = metricsMap[ev.id] ?? { ...DEFAULT_EVENT_METRICS, eventId: ev.id, updatedAt: "" }
+          const leadStats = eventLeadStats.get(ev.id) ?? { attributed: 0, during: 0 }
+          const funnel = buildFunnel(ev, metrics, leadStats.attributed, leadStats.during)
+          const econ = computeEconomics(funnel, metrics)
+          return {
+            name: ev.title.length > 12 ? ev.title.slice(0, 11) + "…" : ev.title,
+            roi: econ.roi,
+          }
+        })
+        .filter((d): d is { name: string; roi: number } => d.roi !== null)
+        .slice(0, 8),
+    [eventLeadStats, filtered, metricsMap]
+  )
+
   const compareChartData = useMemo(
     () =>
       filtered
@@ -1532,6 +1628,103 @@ export default function AdminCampaignsPage() {
         .slice(0, 10),
     [eventLeadStats, filtered, metricsMap]
   )
+
+  const channelEmailStats = emailStats
+    ? {
+        totalSubscribers: emailStats.subscribers.total,
+        activeSubscribers: emailStats.subscribers.active,
+        sentCampaigns: emailStats.campaigns.recentCampaigns.filter((c) => c.status === "sent").length,
+        newThisMonth: emailStats.subscribers.newThisMonth,
+      }
+    : null
+
+  const hubEmailStats: EmailHubStats | null = emailStats
+    ? {
+        totalSubscribers: emailStats.subscribers.total,
+        activeSubscribers: emailStats.subscribers.active,
+        unsubscribed: emailStats.subscribers.unsubscribed,
+        sentCampaigns: emailStats.campaigns.recentCampaigns.filter((c) => c.status === "sent").length,
+        totalCampaigns: emailStats.campaigns.total,
+        newThisMonth: emailStats.subscribers.newThisMonth,
+        recentCampaigns: emailStats.campaigns.recentCampaigns,
+      }
+    : null
+
+  const recommendedActions = (() => {
+    if (loading) return []
+    const actions: Array<{
+      id: string
+      tone: "warn" | "info" | "success"
+      title: string
+      detail: string
+      tabTarget?: CampaignTab
+    }> = []
+
+    if (aggregate.totalLeads === 0) {
+      actions.push({
+        id: "no-leads",
+        tone: "info",
+        title: "아직 집계된 리드가 없습니다",
+        detail: "행사에 성과를 입력하거나 Meta 광고를 연결하면 리드 집계가 시작됩니다.",
+        tabTarget: "events",
+      })
+    }
+
+    if (aggregate.overallRoi !== null && aggregate.overallRoi < 0) {
+      actions.push({
+        id: "negative-roi",
+        tone: "warn",
+        title: `누적 ROI ${aggregate.overallRoi}% — 광고비 점검 필요`,
+        detail: "매출보다 광고비가 높습니다. 채널별 효율을 확인하고 전환율이 낮은 채널을 조정하세요.",
+        tabTarget: "meta",
+      })
+    }
+
+    const upcomingEvent = events.find((ev) => {
+      const start = new Date(ev.startsAt).getTime()
+      const now = Date.now()
+      return ev.status === "예정" && start > now && start - now < 14 * 24 * 3600 * 1000
+    })
+    if (upcomingEvent) {
+      actions.push({
+        id: `upcoming-${upcomingEvent.id}`,
+        tone: "info",
+        title: `"${upcomingEvent.title}" — 14일 이내 시작 예정`,
+        detail: "행사 퍼널을 준비하고 이메일 사전 안내 발송을 계획하세요.",
+        tabTarget: "events",
+      })
+    }
+
+    if (
+      emailStats &&
+      emailStats.subscribers.active > 10 &&
+      emailStats.campaigns.recentCampaigns.filter((c) => c.status === "sent").length === 0
+    ) {
+      actions.push({
+        id: "email-gap",
+        tone: "info",
+        title: `이메일 구독자 ${emailStats.subscribers.active}명 — 발송 이력 없음`,
+        detail: "구독자가 있지만 캠페인이 발송되지 않았습니다. 이메일 탭에서 첫 발송을 시작하세요.",
+        tabTarget: "email",
+      })
+    }
+
+    if (
+      aggregate.totalLeads > 0 &&
+      aggregate.overallRoi !== null &&
+      aggregate.overallRoi >= 0 &&
+      actions.length === 0
+    ) {
+      actions.push({
+        id: "all-good",
+        tone: "success",
+        title: "전반적인 마케팅 성과가 양호합니다",
+        detail: `ROI ${aggregate.overallRoi}% · 총 리드 ${KRW.format(aggregate.totalLeads)}건 · 딜 ${KRW.format(aggregate.totalDeals)}건`,
+      })
+    }
+
+    return actions.slice(0, 4)
+  })()
 
   const showFilterRow = activeTab === "summary" || activeTab === "events"
   const refreshLoading =
@@ -1634,8 +1827,8 @@ export default function AdminCampaignsPage() {
 
       {/* Tab content */}
       {activeTab === "email" ? (
-        <div className="bg-[#FAFAF8]">
-          <AdminMarketingPage />
+        <div className="px-4 pt-6 sm:px-6 lg:px-9">
+          <EmailHubPanel stats={hubEmailStats} />
         </div>
       ) : activeTab === "meta" ? (
         <div className="px-4 pt-6 sm:px-6 lg:px-9">
@@ -1660,6 +1853,15 @@ export default function AdminCampaignsPage() {
 
       {activeTab === "summary" && (
         <>
+      <ChannelHubCards
+        aggregate={aggregate}
+        metaDashboard={metaDashboard}
+        emailStats={channelEmailStats}
+        loading={loading}
+        metaLoading={metaLoading}
+        onGoTo={(tab) => setTabParam(tab)}
+      />
+
       <MetaLiveSummary
         dashboard={metaDashboard}
         loading={metaLoading}
@@ -1770,14 +1972,93 @@ export default function AdminCampaignsPage() {
           )}
         </div>
       </div>
+
+      {/* 행사별 ROI 비교 */}
+      {roiChartData.length > 0 && (
+        <div className="mb-5 rounded-2xl border border-[#e8e8e4] bg-white p-4 sm:p-5">
+          <div className="mb-3 flex items-center justify-between">
+            <div>
+              <h2 className="text-[14px] font-semibold text-[#111110]">행사별 ROI 비교</h2>
+              <p className="mt-0.5 text-[11px] text-[#1a1a1a]/40">
+                수익 ÷ 총광고비 · 녹색=흑자 · 주황=적자
+              </p>
+            </div>
+          </div>
+          <div className="h-[200px] w-full">
+            <EventRoiChart data={roiChartData} />
+          </div>
+        </div>
+      )}
+
+      {/* 추천 액션 */}
+      {recommendedActions.length > 0 && (
+        <div className="mb-5">
+          <h2 className="mb-2 text-[13px] font-semibold text-[#111110]">추천 액션</h2>
+          <div className="grid gap-2 sm:grid-cols-2">
+            {recommendedActions.map((action) => {
+              const toneClass =
+                action.tone === "success"
+                  ? "border-emerald-100 bg-[#ECFDF5]"
+                  : action.tone === "warn"
+                    ? "border-amber-100 bg-amber-50"
+                    : "border-[#e8e8e4] bg-white"
+              const titleClass =
+                action.tone === "success"
+                  ? "text-[#084734]"
+                  : action.tone === "warn"
+                    ? "text-amber-700"
+                    : "text-[#111110]"
+              const detailClass =
+                action.tone === "success"
+                  ? "text-[#084734]/60"
+                  : action.tone === "warn"
+                    ? "text-amber-600/80"
+                    : "text-[#1a1a1a]/45"
+              return (
+                <button
+                  key={action.id}
+                  type="button"
+                  onClick={action.tabTarget ? () => setTabParam(action.tabTarget!) : undefined}
+                  disabled={!action.tabTarget}
+                  className={`w-full rounded-2xl border px-4 py-3 text-left transition-opacity ${toneClass} ${action.tabTarget ? "hover:opacity-80 cursor-pointer" : "cursor-default"}`}
+                >
+                  <p className={`text-[12px] font-semibold ${titleClass}`}>{action.title}</p>
+                  <p className={`mt-0.5 text-[11px] leading-relaxed ${detailClass}`}>{action.detail}</p>
+                </button>
+              )
+            })}
+          </div>
+        </div>
+      )}
         </>
       )}
 
       {activeTab === "events" && (
         <>
-          <div className="mb-3 flex items-center justify-between">
-            <h2 className="text-[15px] font-semibold text-[#111110]">행사별 퍼널 상세</h2>
+          <div className="mb-3 flex flex-wrap items-center gap-2">
+            <h2 className="flex-1 text-[15px] font-semibold text-[#111110]">행사별 퍼널 상세</h2>
+            {/* sort control */}
+            <div className="flex items-center gap-1 rounded-xl border border-[#e8e8e4] bg-[#fafaf8] p-0.5">
+              {(["date", "leads", "deals", "roi"] as const).map((s) => {
+                const label = { date: "날짜", leads: "리드", deals: "딜", roi: "ROI" }[s]
+                return (
+                  <button
+                    key={s}
+                    type="button"
+                    onClick={() => setEventSort(s)}
+                    className={`rounded-lg px-2.5 py-1 text-[11px] font-semibold transition ${
+                      eventSort === s
+                        ? "bg-white text-[#111110] shadow-sm"
+                        : "text-[#1a1a1a]/45 hover:text-[#111110]"
+                    }`}
+                  >
+                    {label}
+                  </button>
+                )
+              })}
+            </div>
             <button
+              type="button"
               onClick={() => {
                 setPeriod((p) => (p === "all" ? "active" : "all"))
               }}
@@ -1792,7 +2073,7 @@ export default function AdminCampaignsPage() {
             <div className="rounded-2xl border border-dashed border-[#e8e8e4] bg-[#fafaf8] py-16 text-center text-[13px] text-[#1a1a1a]/30">
               불러오는 중...
             </div>
-          ) : filtered.length === 0 ? (
+          ) : sortedEvents.length === 0 ? (
             <div className="rounded-2xl border border-dashed border-[#e8e8e4] bg-[#fafaf8] py-12 text-center">
               <p className="text-[14px] font-medium text-[#111110]">표시할 행사가 없습니다</p>
               <p className="mx-auto mt-1 max-w-md text-[12px] text-[#1a1a1a]/40">
@@ -1801,7 +2082,7 @@ export default function AdminCampaignsPage() {
             </div>
           ) : (
             <div className="space-y-3">
-              {filtered.map((event) => {
+              {sortedEvents.map((event) => {
                 const metrics = metricsMap[event.id] ?? {
                   ...DEFAULT_EVENT_METRICS,
                   eventId: event.id,
