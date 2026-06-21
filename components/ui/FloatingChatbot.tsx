@@ -35,6 +35,7 @@ const UNRESOLVED_STREAK_THRESHOLD = 3
 const CHATBOT_REQUEST_TIMEOUT_MS = 14_000
 const STARTER_SUGGESTION_LIMIT = 4
 const FOLLOW_UP_SUGGESTION_LIMIT = 3
+const ANSWER_SCROLL_TOP_OFFSET_PX = 32
 
 interface ChatbotSource {
     title: string
@@ -630,6 +631,8 @@ export function FloatingChatbot() {
     const [isDeepConsultation, setIsDeepConsultation] = useState(false)
     const [unresolvedStreak, setUnresolvedStreak] = useState(0)
     const bottomRef = useRef<HTMLDivElement | null>(null)
+    const messagesContainerRef = useRef<HTMLDivElement | null>(null)
+    const pendingAssistantScrollIdRef = useRef<string | null>(null)
     const inputRef = useRef<HTMLTextAreaElement | null>(null)
     const triggerRef = useRef<HTMLButtonElement | null>(null)
     const [messages, setMessages] = useState<ChatMessage[]>([
@@ -726,7 +729,27 @@ export function FloatingChatbot() {
         })
 
         return () => window.cancelAnimationFrame(frame)
-    }, [isOpen, isSending, messages.length, shouldReduceMotion])
+    }, [isOpen, shouldReduceMotion])
+
+    useEffect(() => {
+        if (!isOpen) return
+        const messageId = pendingAssistantScrollIdRef.current
+        if (!messageId) return
+
+        const container = messagesContainerRef.current
+        const message = container?.querySelector<HTMLElement>(`[data-chat-message-id="${messageId}"]`)
+        if (!container || !message) return
+
+        const containerRect = container.getBoundingClientRect()
+        const messageRect = message.getBoundingClientRect()
+        const nextTop = container.scrollTop + messageRect.top - containerRect.top - ANSWER_SCROLL_TOP_OFFSET_PX
+
+        container.scrollTop = Math.max(0, nextTop)
+        const alignedTop = message.getBoundingClientRect().top - container.getBoundingClientRect().top
+        if (!isSending || alignedTop <= ANSWER_SCROLL_TOP_OFFSET_PX + 2) {
+            pendingAssistantScrollIdRef.current = null
+        }
+    }, [isOpen, isSending, messages, shouldReduceMotion])
 
 
     useEffect(() => {
@@ -773,6 +796,7 @@ export function FloatingChatbot() {
             if (assistantId) return assistantId
             const id = makeId()
             assistantId = id
+            pendingAssistantScrollIdRef.current = id
             setIsStreaming(true)
             setMessages((current) => [...current, { id, role: "assistant", content: "" }])
             return id
@@ -887,10 +911,12 @@ export function FloatingChatbot() {
 
             // 어떤 콘텐츠도 받지 못했으면 안내 문구로 마무리한다.
             if (!assistantId) {
+                const fallbackId = makeId()
+                pendingAssistantScrollIdRef.current = fallbackId
                 setMessages((current) => [
                     ...current,
                     {
-                        id: makeId(),
+                        id: fallbackId,
                         role: "assistant",
                         content: "확인 가능한 답변을 찾지 못했습니다.",
                         suggestedQuestions: [],
@@ -903,8 +929,12 @@ export function FloatingChatbot() {
             const errorContent = isAbort
                 ? "응답이 지연되고 있어요. 같은 질문을 다시 시도하거나 질문을 조금 더 짧게 보내주세요."
                 : "지금은 답변을 불러오지 못했습니다. 같은 질문을 다시 시도할 수 있어요."
+            const errorMessageId = assistantId ?? makeId()
+            if (!assistantId) {
+                pendingAssistantScrollIdRef.current = errorMessageId
+            }
             const errorMessage: ChatMessage = {
-                id: assistantId ?? makeId(),
+                id: errorMessageId,
                 role: "assistant",
                 content: errorContent,
                 sources: [],
@@ -1019,6 +1049,7 @@ export function FloatingChatbot() {
                             </div>
 
                             <div
+                                ref={messagesContainerRef}
                                 className="min-h-0 flex-1 overflow-y-auto px-3.5 py-4 [scrollbar-color:rgba(8,71,52,0.28)_transparent] [scrollbar-gutter:stable] [scrollbar-width:thin] md:px-4 [&::-webkit-scrollbar]:w-1.5 [&::-webkit-scrollbar-thumb]:rounded-full [&::-webkit-scrollbar-thumb]:bg-[#084734]/25 [&::-webkit-scrollbar-track]:bg-transparent"
                                 role="log"
                                 aria-live="polite"
@@ -1028,6 +1059,7 @@ export function FloatingChatbot() {
                                     {messages.map((message) => (
                                         <motion.div
                                             key={message.id}
+                                            data-chat-message-id={message.id}
                                             initial={shouldReduceMotion ? { opacity: 0 } : { opacity: 0, y: 10, scale: 0.98 }}
                                             animate={shouldReduceMotion ? { opacity: 1 } : { opacity: 1, y: 0, scale: 1 }}
                                             transition={{ duration: shouldReduceMotion ? 0.01 : 0.28, ease: [0.22, 1, 0.36, 1] }}
