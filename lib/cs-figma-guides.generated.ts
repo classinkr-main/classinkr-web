@@ -5,8 +5,8 @@ import type { CsFigmaGuide } from "@/lib/cs-figma-guides"
 
 export const CS_FIGMA_DIGEST_GUIDES = [
   {
-    "slug": "cs-figma-digest-22",
-    "docSlug": "cs-figma-digest-22",
+    "slug": "cs-figma-digest-24",
+    "docSlug": "cs-figma-digest-24",
     "docCategory": "start",
     "category": "onboarding",
     "title": "클래스인 코스 입장 ~ 현장 녹화 확인 (IFP)",
@@ -74,11 +74,11 @@ export const CS_FIGMA_DIGEST_GUIDES = [
     "sourceImageFiles": [
       "12/17 실시간 수업 생성 ~ 현장 녹화 확인(IFP).png"
     ],
-    "sourceDigestLineHint": "docs/active/cs-figma-board-digest-2026-06-21.md:22"
+    "sourceDigestLineHint": "docs/active/cs-figma-board-digest-2026-06-21.md:24"
   },
   {
-    "slug": "cs-figma-digest-47",
-    "docSlug": "cs-figma-digest-47",
+    "slug": "cs-figma-digest-49",
+    "docSlug": "cs-figma-digest-49",
     "docCategory": "teacher",
     "category": "classroom",
     "title": "클래스인 코스 입장 ~ 현장 녹화 확인 (PC)",
@@ -146,73 +146,11 @@ export const CS_FIGMA_DIGEST_GUIDES = [
     "sourceImageFiles": [
       "12/17 실시간 수업 생성 ~ 현장 녹화 확인(PC).png"
     ],
-    "sourceDigestLineHint": "docs/active/cs-figma-board-digest-2026-06-21.md:47"
+    "sourceDigestLineHint": "docs/active/cs-figma-board-digest-2026-06-21.md:49"
   },
   {
-    "slug": "cs-figma-digest-75",
-    "docSlug": "cs-figma-digest-75",
-    "docCategory": "teacher",
-    "category": "classroom",
-    "title": "AI Board — 학생 답안 상세 / AI 채점 결과",
-    "audience": "교사",
-    "summary": "클래스인 'AI Board'(AI 보드) 화면의 학생 답안 상세 및 AI 채점 결과를 보여주는 원본 UI 스크린샷입니다. O/X(참/거짓) 문항에 대해 학생이 제출한 답안과 AI가 자동 채점한 결과, 세부 분석, 종합 피드백이 함께 표시됩니다. 별도의 안내 문구나 단계별 설명 없이 실제 채점 결과 화면만 캡처되어 있습니다.",
-    "keywords": [
-      "AI Board — 학생 답안 상세 / AI 채점 결과",
-      "녹화/현장수업",
-      "전자칠판(IFP)",
-      "AI Board",
-      "답안 제출이 마감되었습니다",
-      "거짓",
-      "답이 틀렸습니다.",
-      "학생 답안 상세",
-      "AI 채점 결과",
-      "Frame 29"
-    ],
-    "steps": [
-      "AI Board — 학생 답안 상세 / AI 채점 결과 원본 화면을 확인합니다.",
-      "다크 테마의 'AI Board' 윈도우 창. 우상단에 최소화/최대화/닫기 버튼이 있음 / 상단 중앙: 시계 아이콘과 함께 '답안 제출이 마감되었습니다' 알림 배지 / 좌상단 학생 정보 영역: 회색 원형 프로필 아이콘 옆에 'kgc*ver.com' 계정, '제출 시간: 2026. 6."
-    ],
-    "deepDive": [
-      {
-        "level": "1단계",
-        "title": "순서 그대로 안내",
-        "body": "Figma CS 캡처의 단계 텍스트를 우선 순서로 사용합니다.",
-        "checks": [
-          "AI Board — 학생 답안 상세 / AI 채점 결과 원본 화면을 확인합니다.",
-          "다크 테마의 'AI Board' 윈도우 창. 우상단에 최소화/최대화/닫기 버튼이 있음 / 상단 중앙: 시계 아이콘과 함께 '답안 제출이 마감되었습니다' 알림 배지 / 좌상단 학생 정보 영역: 회색 원형 프로필 아이콘..."
-        ]
-      },
-      {
-        "level": "2단계",
-        "title": "화면 기준 확인",
-        "body": "다크 테마의 'AI Board' 윈도우 창. 우상단에 최소화/최대화/닫기 버튼이 있음 / 상단 중앙: 시계 아이콘과 함께 '답안 제출이 마감되었습니다' 알림 배지 / 좌상단 학생 정보 영역: 회색 원형 프로필 아이콘 옆에 'kgc*ver.com' 계정, '제출 시간: 2026. 6. 16.",
-        "checks": [
-          "다크 테마의 'AI Board' 윈도우 창. 우상단에 최소화/최대화/닫기 버튼이 있음",
-          "상단 중앙: 시계 아이콘과 함께 '답안 제출이 마감되었습니다' 알림 배지",
-          "좌상단 학생 정보 영역: 회색 원형 프로필 아이콘 옆에 'kgc*ver.com' 계정, '제출 시간: 2026. 6. 16. 오후 1:00:11'",
-          "우상단 통계: '1:01 소요 시간', '0 성적'"
-        ]
-      },
-      {
-        "level": "3단계",
-        "title": "CS 주의사항과 원본 캡처",
-        "body": "원본 캡처 파일과 주의/팁을 함께 확인합니다. 원본 캡처: Frame 29.png",
-        "checks": [
-          "상단 중앙에 '답안 제출이 마감되었습니다' 알림(시계 아이콘 포함)이 표시되어 제출이 종료된 상태임을 나타냄",
-          "'참'(O) 보기는 빨간 테두리로 강조되어 학생이 선택한 오답임을 표시하고, 우측에 라디오 선택 표시가 되어 있음",
-          "'거짓'(F) 보기는 초록 테두리로 강조되어 정답임을 표시함",
-          "AI 채점 결과는 '답이 틀렸습니다.'로 오답 처리됨"
-        ]
-      }
-    ],
-    "sourceImageFiles": [
-      "Frame 29.png"
-    ],
-    "sourceDigestLineHint": "docs/active/cs-figma-board-digest-2026-06-21.md:75"
-  },
-  {
-    "slug": "cs-figma-digest-89",
-    "docSlug": "cs-figma-digest-89",
+    "slug": "cs-figma-digest-77",
+    "docSlug": "cs-figma-digest-77",
     "docCategory": "teacher",
     "category": "classroom",
     "title": "AI Board",
@@ -271,11 +209,11 @@ export const CS_FIGMA_DIGEST_GUIDES = [
     "sourceImageFiles": [
       "Frame 30.png"
     ],
-    "sourceDigestLineHint": "docs/active/cs-figma-board-digest-2026-06-21.md:89"
+    "sourceDigestLineHint": "docs/active/cs-figma-board-digest-2026-06-21.md:77"
   },
   {
-    "slug": "cs-figma-digest-103",
-    "docSlug": "cs-figma-digest-103",
+    "slug": "cs-figma-digest-91",
+    "docSlug": "cs-figma-digest-91",
     "docCategory": "teacher",
     "category": "classroom",
     "title": "테스트",
@@ -324,11 +262,11 @@ export const CS_FIGMA_DIGEST_GUIDES = [
     "sourceImageFiles": [
       "Frame 7.png"
     ],
-    "sourceDigestLineHint": "docs/active/cs-figma-board-digest-2026-06-21.md:103"
+    "sourceDigestLineHint": "docs/active/cs-figma-board-digest-2026-06-21.md:91"
   },
   {
-    "slug": "cs-figma-digest-118",
-    "docSlug": "cs-figma-digest-118",
+    "slug": "cs-figma-digest-106",
+    "docSlug": "cs-figma-digest-106",
     "docCategory": "teacher",
     "category": "classroom",
     "title": "New Course (클래스인 PC 앱 과정/수업 상세 화면)",
@@ -388,11 +326,11 @@ export const CS_FIGMA_DIGEST_GUIDES = [
     "sourceImageFiles": [
       "Group 19.png"
     ],
-    "sourceDigestLineHint": "docs/active/cs-figma-board-digest-2026-06-21.md:118"
+    "sourceDigestLineHint": "docs/active/cs-figma-board-digest-2026-06-21.md:106"
   },
   {
-    "slug": "cs-figma-digest-132",
-    "docSlug": "cs-figma-digest-132",
+    "slug": "cs-figma-digest-120",
+    "docSlug": "cs-figma-digest-120",
     "docCategory": "teacher",
     "category": "classroom",
     "title": "Q : 1문단의 흐름이 어떻게 진행되나요?",
@@ -460,11 +398,11 @@ export const CS_FIGMA_DIGEST_GUIDES = [
     "sourceImageFiles": [
       "image 215.png"
     ],
-    "sourceDigestLineHint": "docs/active/cs-figma-board-digest-2026-06-21.md:132"
+    "sourceDigestLineHint": "docs/active/cs-figma-board-digest-2026-06-21.md:120"
   },
   {
-    "slug": "cs-figma-digest-157",
-    "docSlug": "cs-figma-digest-157",
+    "slug": "cs-figma-digest-145",
+    "docSlug": "cs-figma-digest-145",
     "docCategory": "admin",
     "category": "admin",
     "title": "대시보드 수업 내용 다운로드 및 공유",
@@ -530,11 +468,11 @@ export const CS_FIGMA_DIGEST_GUIDES = [
     "sourceImageFiles": [
       "대시보드 수업 내용 다운로드 및 공유"
     ],
-    "sourceDigestLineHint": "docs/active/cs-figma-board-digest-2026-06-21.md:157"
+    "sourceDigestLineHint": "docs/active/cs-figma-board-digest-2026-06-21.md:145"
   },
   {
-    "slug": "cs-figma-digest-185",
-    "docSlug": "cs-figma-digest-185",
+    "slug": "cs-figma-digest-173",
+    "docSlug": "cs-figma-digest-173",
     "docCategory": "admin",
     "category": "admin",
     "title": "코스 관리 / 수업 녹화 데이터",
@@ -550,13 +488,12 @@ export const CS_FIGMA_DIGEST_GUIDES = [
       "코스 관리",
       "상태",
       "종료됨",
-      "시작되지 않음",
       "대시보드 수업 내용 다운로드 및 공유_코스별"
     ],
     "steps": [
       "관리자 대시보드에서 좌측 메뉴의 [코스 관리]를 클릭한 후, 수업 녹화를 확인할 코스의 이름을 클릭해 주세요. (코스 목록에서 코스 이름 열을 클릭)",
       "코스 상세 화면에서 우측 상단의 [상태] 필터를 클릭하고 모든 수업 옵션을 선택해 주세요. (기본 옵션은 '종료됨' 상태가 미선택되어 있어 종료된 수업이 보이지 않도록 설정되어 있습니다.)",
-      "수업 녹화를 확인할 수업의 [관리] 버튼을 클릭한 후, 펼쳐진 메뉴에서 [수업 녹화 데이터]를 클릭해 주세요. (관리 메뉴: 수업 복사 / 수업 모니터링 데이터 / 수업 데이터 / 챕 라이브 및 다시 보기 관리 / 수업 녹화 데이터 / 학습 보고서)",
+      "수업 녹화를 확인할 수업의 [관리] 버튼을 클릭한 후, 펼쳐진 메뉴에서 [수업 녹화 데이터]를 클릭해 주세요. (관리 메뉴: 수업 복사 / 수업 모니터링 데이터 / 수업 데이터 / 웹 라이브 및 다시 보기 관리 / 수업 녹화 데이터 / 학습 보고서)",
       "[수업 녹화 데이터] 페이지에서 해당 영상 행 우측의 [다운로드]를 클릭해서 수업 녹화를 확인(저장)할 수 있습니다.",
       "수업 녹화 페이지 상단의 링크를 공유하거나 저장해 다운로드 없이도 수업 녹화 확인이 가능하며, 영상 플레이어 우측 하단 점 세 개(설정) 버튼 → [다운로드]를 클릭해 수업 녹화 파일을 저장할 수 있습니다."
     ],
@@ -568,17 +505,17 @@ export const CS_FIGMA_DIGEST_GUIDES = [
         "checks": [
           "관리자 대시보드에서 좌측 메뉴의 [코스 관리]를 클릭한 후, 수업 녹화를 확인할 코스의 이름을 클릭해 주세요. (코스 목록에서 코스 이름 열을 클릭)",
           "코스 상세 화면에서 우측 상단의 [상태] 필터를 클릭하고 모든 수업 옵션을 선택해 주세요. (기본 옵션은 '종료됨' 상태가 미선택되어 있어 종료된 수업이 보이지 않도록 설정되어 있습니다.)",
-          "수업 녹화를 확인할 수업의 [관리] 버튼을 클릭한 후, 펼쳐진 메뉴에서 [수업 녹화 데이터]를 클릭해 주세요. (관리 메뉴: 수업 복사 / 수업 모니터링 데이터 / 수업 데이터 / 챕 라이브 및 다시 보기 관리 /...",
+          "수업 녹화를 확인할 수업의 [관리] 버튼을 클릭한 후, 펼쳐진 메뉴에서 [수업 녹화 데이터]를 클릭해 주세요. (관리 메뉴: 수업 복사 / 수업 모니터링 데이터 / 수업 데이터 / 웹 라이브 및 다시 보기 관리 /...",
           "[수업 녹화 데이터] 페이지에서 해당 영상 행 우측의 [다운로드]를 클릭해서 수업 녹화를 확인(저장)할 수 있습니다."
         ]
       },
       {
         "level": "2단계",
         "title": "화면 기준 확인",
-        "body": "스크린샷 1: ClassIn 관리자 대시보드의 '코스 관리' 목록 화면. 좌측 네비게이션의 [코스 관리] 메뉴가 빨간 박스로 강조되어 있고, 코스 목록(187개)의 '코스 이름' 열 두 번째 항목이 빨간 박스 + 빨간 화살표로 강조되어 클릭 대상임을 표시.",
+        "body": "스크린샷 1: ClassIn 관리자 대시보드의 '코스 관리' 목록 화면. 좌측 네비게이션의 [코스 관리] 메뉴가 빨간 박스로 강조되어 있고, 코스 목록(코스 (187)개)의 '코스 이름' 열 두 번째 항목이 빨간 박스 + 빨간 화살표로 강조되어 클릭 대상임을 표시.",
         "checks": [
-          "스크린샷 1: ClassIn 관리자 대시보드의 '코스 관리' 목록 화면. 좌측 네비게이션의 [코스 관리] 메뉴가 빨간 박스로 강조되어 있고, 코스 목록(187개)의 '코스 이름' 열 두 번째 항목이 빨간 박스 + 빨...",
-          "스크린샷 2: 코스 상세(수업 목록) 화면 상단의 필터 영역. 우측 상단 [상태] 드롭다운에 '시작되지 않음 x +3' 칩이 표시되어 일부 상태만 선택된 기본 설정 상태를 보여주며, 이를 모든 수업으로 변경하라는 안...",
+          "스크린샷 1: ClassIn 관리자 대시보드의 '코스 관리' 목록 화면. 좌측 네비게이션의 [코스 관리] 메뉴가 빨간 박스로 강조되어 있고, 코스 목록(코스 (187)개)의 '코스 이름' 열 두 번째 항목이 빨간 박...",
+          "스크린샷 2: 코스 상세(수업 목록) 화면 상단의 필터 영역. 우측 상단 [상태] 드롭다운에 '시작되지 않음 × +2' 칩이 표시되어 일부 상태만 선택된 기본 설정 상태를 보여주며, 이를 모든 수업으로 변경하라는 안...",
           "스크린샷 3: 수업 목록 우측 [관리] 버튼을 클릭해 펼쳐진 드롭다운 메뉴. 항목은 위에서부터 수업 복사",
           "수업 모니터링 데이터"
         ]
@@ -588,8 +525,8 @@ export const CS_FIGMA_DIGEST_GUIDES = [
         "title": "CS 주의사항과 원본 캡처",
         "body": "원본 캡처 파일과 주의/팁을 함께 확인합니다. 원본 캡처: 대시보드 수업 내용 다운로드 및 공유_코스별",
         "checks": [
-          "상태(필터) 기본값이 '시작되지 않음' 등으로 되어 있고 '종료됨'이 미선택 상태라, 이미 종료된 수업은 기본 화면에서 보이지 않으므로 반드시 상태 필터에서 모든 수업 옵션을 선택해야 종료된 수업의 녹화를 찾을 수...",
-          "수업 녹화 데이터 페이지 상단에 원본 녹화 총 시간, 원본 파일 총 용량, 업로드된 동영상 총 길이/총 크기 등 영상 메타 정보가 표시된다.",
+          "상태(필터) 기본값에서 '종료됨'이 미선택 상태라, 이미 종료된 수업은 기본 화면에서 보이지 않으므로 반드시 상태 필터에서 모든 수업 옵션을 선택해야 종료된 수업의 녹화를 찾을 수 있다.",
+          "수업 녹화 데이터 페이지 상단에 수업 이름, 원본 녹화 총 시간(1시02분46초), 원본 파일 총 용량(252.34MB), 업로드된 동영상 총 길이(0초), 업로드된 동영상 파일 총 크기(0.",
           "안내문: '로컬로 저장하려면 [다운로드] 버튼을 마우스 오른쪽 버튼으로 클릭하고 다른 이름으로 저장.. 을 선택하십시오.' (페이지 내 회색 안내 텍스트)",
           "다운로드 외에도 페이지 상단 링크 공유/저장만으로 녹화 확인이 가능해 별도 다운로드 없이 열람할 수 있다."
         ]
@@ -598,11 +535,11 @@ export const CS_FIGMA_DIGEST_GUIDES = [
     "sourceImageFiles": [
       "대시보드 수업 내용 다운로드 및 공유_코스별"
     ],
-    "sourceDigestLineHint": "docs/active/cs-figma-board-digest-2026-06-21.md:185"
+    "sourceDigestLineHint": "docs/active/cs-figma-board-digest-2026-06-21.md:173"
   },
   {
-    "slug": "cs-figma-digest-206",
-    "docSlug": "cs-figma-digest-206",
+    "slug": "cs-figma-digest-194",
+    "docSlug": "cs-figma-digest-194",
     "docCategory": "start",
     "category": "onboarding",
     "title": "클래스인 '현장 녹화' 카메라 설정",
@@ -656,7 +593,7 @@ export const CS_FIGMA_DIGEST_GUIDES = [
       {
         "level": "3단계",
         "title": "CS 주의사항과 원본 캡처",
-        "body": "원본 캡처 파일과 주의/팁을 함께 확인합니다. 원본 캡처: 두드림 - 로컬 녹화/녹화수업 업로드.png",
+        "body": "원본 캡처 파일과 주의/팁을 함께 확인합니다. 원본 캡처: 학원A - 로컬 녹화/녹화수업 업로드.png",
         "checks": [
           "문서 제목(이미지 상단 헤딩): '클래스인 현장 녹화 카메라 설정'. 파일/레이어명은 '녹화수업 업로드'로 제목과 다름.",
           "현장 녹화 활성화 알림(팝업) 전문: '이 수업은 현장 녹화가 활성화 되어있습니다. 녹화 화면 범위는 현재 크기 교실 창, 녹화 요소(음성)는 소프트웨어 사운드, 녹화 화질은 전부 고화질(1920*1080)으로 설정...",
@@ -666,13 +603,13 @@ export const CS_FIGMA_DIGEST_GUIDES = [
       }
     ],
     "sourceImageFiles": [
-      "두드림 - 로컬 녹화/녹화수업 업로드.png"
+      "학원A - 로컬 녹화/녹화수업 업로드.png"
     ],
-    "sourceDigestLineHint": "docs/active/cs-figma-board-digest-2026-06-21.md:206"
+    "sourceDigestLineHint": "docs/active/cs-figma-board-digest-2026-06-21.md:194"
   },
   {
-    "slug": "cs-figma-digest-232",
-    "docSlug": "cs-figma-digest-232",
+    "slug": "cs-figma-digest-220",
+    "docSlug": "cs-figma-digest-220",
     "docCategory": "teacher",
     "category": "classroom",
     "title": "클래스인 '현장 녹화' 카메라 설정",
@@ -726,7 +663,7 @@ export const CS_FIGMA_DIGEST_GUIDES = [
       {
         "level": "3단계",
         "title": "CS 주의사항과 원본 캡처",
-        "body": "원본 캡처 파일과 주의/팁을 함께 확인합니다. 원본 캡처: 두드림 - 수업개설/녹화 활성화/카메라 세팅",
+        "body": "원본 캡처 파일과 주의/팁을 함께 확인합니다. 원본 캡처: 학원A - 수업개설/녹화 활성화/카메라 세팅",
         "checks": [
           "수업 개설 시 권장 옵션(하이라이트로 강조): 학생 카메라 띄우지 않는 경우 → 온스테이지 인원수 1V0 / 녹화설정 → ClassIn 수업 녹화, 현장 녹화 / 스테이지 표시 → OFF",
           "입장 가능 시점: 학생 10분 전, 선생님 20분 전",
@@ -736,13 +673,13 @@ export const CS_FIGMA_DIGEST_GUIDES = [
       }
     ],
     "sourceImageFiles": [
-      "두드림 - 수업개설/녹화 활성화/카메라 세팅"
+      "학원A - 수업개설/녹화 활성화/카메라 세팅"
     ],
-    "sourceDigestLineHint": "docs/active/cs-figma-board-digest-2026-06-21.md:232"
+    "sourceDigestLineHint": "docs/active/cs-figma-board-digest-2026-06-21.md:220"
   },
   {
-    "slug": "cs-figma-digest-257",
-    "docSlug": "cs-figma-digest-257",
+    "slug": "cs-figma-digest-245",
+    "docSlug": "cs-figma-digest-245",
     "docCategory": "start",
     "category": "onboarding",
     "title": "클래스인 [로컬 녹화] 후 [녹화 수업] 생성하기",
@@ -800,7 +737,7 @@ export const CS_FIGMA_DIGEST_GUIDES = [
       {
         "level": "3단계",
         "title": "CS 주의사항과 원본 캡처",
-        "body": "원본 캡처 파일과 주의/팁을 함께 확인합니다. 원본 캡처: 두드림 _ 클래스인 [로컬 녹화] 후 [녹화 수업] 생성하기.png",
+        "body": "원본 캡처 파일과 주의/팁을 함께 확인합니다. 원본 캡처: 학원A _ 클래스인 [로컬 녹화] 후 [녹화 수업] 생성하기.png",
         "checks": [
           "로컬 녹화는 교실 화면과 사운드를 함께 녹화함.",
           "녹화 파일 형식은 'mp4'로 저장.",
@@ -810,18 +747,18 @@ export const CS_FIGMA_DIGEST_GUIDES = [
       }
     ],
     "sourceImageFiles": [
-      "두드림 _ 클래스인 [로컬 녹화] 후 [녹화 수업] 생성하기.png"
+      "학원A _ 클래스인 [로컬 녹화] 후 [녹화 수업] 생성하기.png"
     ],
-    "sourceDigestLineHint": "docs/active/cs-figma-board-digest-2026-06-21.md:257"
+    "sourceDigestLineHint": "docs/active/cs-figma-board-digest-2026-06-21.md:245"
   },
   {
-    "slug": "cs-figma-digest-286",
-    "docSlug": "cs-figma-digest-286",
+    "slug": "cs-figma-digest-274",
+    "docSlug": "cs-figma-digest-274",
     "docCategory": "start",
     "category": "onboarding",
     "title": "클래스인 코스 입장 ~ 카메라 녹화 확인",
     "audience": "선생님(강사)",
-    "summary": "두드림 학원용 ClassIn(클래스인) 가이드. PC 클래스인 앱에서 코스에 입장해 실시간 \"수업\"을 새로 만들고, 수업 시간·옵션(ClassIn 수업 녹화 = 칠판 화면 녹화, 현장 녹화 = 카메라 녹화)을 설정한 뒤 수업에 입장하기까지, 그리고 전자칠판(IFP)에서 녹화 옵션이 활성화되었을 때 화면에 뜨는 알림을 처리하고 현장 녹화 카메라를 선택해 \"바로 녹화하기\"로 녹화를 시작하는 전 과정을 8단계로 설명한다. 정상 녹화 시 화면 하단에 초록색 아이콘이 등장한다는 점을 강조한다.",
+    "summary": "학원A 학원용 ClassIn(클래스인) 가이드. PC 클래스인 앱에서 코스에 입장해 실시간 \"수업\"을 새로 만들고, 수업 시간·옵션(ClassIn 수업 녹화 = 칠판 화면 녹화, 현장 녹화 = 카메라 녹화)을 설정한 뒤 수업에 입장하기까지, 그리고 전자칠판(IFP)에서 녹화 옵션이 활성화되었을 때 화면에 뜨는 알림을 처리하고 현장 녹화 카메라를 선택해 \"바로 녹화하기\"로 녹화를 시작하는 전 과정을 8단계로 설명한다. 정상 녹화 시 화면 하단에 초록색 아이콘이 등장한다는 점을 강조한다.",
     "keywords": [
       "클래스인 코스 입장 ~ 카메라 녹화 확인",
       "녹화/현장수업",
@@ -872,7 +809,7 @@ export const CS_FIGMA_DIGEST_GUIDES = [
       {
         "level": "3단계",
         "title": "CS 주의사항과 원본 캡처",
-        "body": "원본 캡처 파일과 주의/팁을 함께 확인합니다. 원본 캡처: 두드림_클래스인_코스_입장_카메라_녹화_확인",
+        "body": "원본 캡처 파일과 주의/팁을 함께 확인합니다. 원본 캡처: 학원A_클래스인_코스_입장_카메라_녹화_확인",
         "checks": [
           "4단계 노란색 강조 문구: \"(ClassIn 수업 녹화 : 칠판 화면 녹화, 현장 녹화 : 카메라 녹화)\" — 두 가지 녹화 옵션의 의미를 구분해 안내.",
           "5단계 부연: 학생은 수업 시작 10분 전부터 입장 가능, 선생님은 미리 들어가 수업을 준비할 수 있음.",
@@ -882,13 +819,13 @@ export const CS_FIGMA_DIGEST_GUIDES = [
       }
     ],
     "sourceImageFiles": [
-      "두드림_클래스인_코스_입장_카메라_녹화_확인"
+      "학원A_클래스인_코스_입장_카메라_녹화_확인"
     ],
-    "sourceDigestLineHint": "docs/active/cs-figma-board-digest-2026-06-21.md:286"
+    "sourceDigestLineHint": "docs/active/cs-figma-board-digest-2026-06-21.md:274"
   },
   {
-    "slug": "cs-figma-digest-311",
-    "docSlug": "cs-figma-digest-311",
+    "slug": "cs-figma-digest-299",
+    "docSlug": "cs-figma-digest-299",
     "docCategory": "start",
     "category": "onboarding",
     "title": "클래스인 '현장 녹화' 카메라 설정",
@@ -956,80 +893,11 @@ export const CS_FIGMA_DIGEST_GUIDES = [
     "sourceImageFiles": [
       "미지원교육 - 현장 녹화 확인"
     ],
-    "sourceDigestLineHint": "docs/active/cs-figma-board-digest-2026-06-21.md:311"
+    "sourceDigestLineHint": "docs/active/cs-figma-board-digest-2026-06-21.md:299"
   },
   {
-    "slug": "cs-figma-digest-340",
-    "docSlug": "cs-figma-digest-340",
-    "docCategory": "teacher",
-    "category": "classroom",
-    "title": "수업중 링크 자료 사용/브라우저 즐겨찾기",
-    "audience": "교사",
-    "summary": "클래스인(ClassIn) 수업 중 [수업도구]의 [브라우저] 기능에서 자주 쓰는 사이트(유튜브 링크 등)를 즐겨찾기(내 컬렉션)에 등록해 두는 방법 안내. 수업 전 미리 즐겨찾기를 해두면, 실제 수업 때 [수업 도구] - [브라우저]로 들어가 링크 복사 없이 바로 접속할 수 있다. 유튜브 영상 재생 시 [사운드 공유] 버튼을 반드시 초록색으로 활성화해야 학생에게 소리가 전달된다는 점을 강조한다.",
-    "keywords": [
-      "수업중 링크 자료 사용/브라우저 즐겨찾기",
-      "녹화/현장수업",
-      "PC",
-      "수업도구",
-      "브라우저",
-      "수업 도구",
-      "사운드 공유",
-      "칠판",
-      "내 컬렉션",
-      "수업중 링크 자료 사용",
-      "브라우저 즐겨찾기"
-    ],
-    "steps": [
-      "클래스인 메인 화면 좌측 사이드바에서 [칠판]을 클릭한다.",
-      "수업(칠판) 화면 우측의 서류 모양 아이콘 [수업도구]를 클릭한 후, 도구 목록에서 [브라우저] 기능을 누른다.",
-      "브라우저 상단의 검색창(URL 주소창)에 원하는 유튜브 링크를 붙여넣어 검색(접속)한다.",
-      "유튜브 영상 재생 시 우측 [사운드 공유] 버튼을 반드시 초록색으로 활성화한다.",
-      "브라우저 상단 우측의 별(★) 모양 아이콘을 눌러 현재 페이지를 즐겨찾기에 추가한다.",
-      "추가된 사이트는 브라우저의 [내 컬렉션] 영역에 저장되며, 실제 수업 때 [수업 도구] - [브라우저]로 들어가면 미리 즐겨찾기 해놓은 사이트를 링크 복사 없이 바로 접속할 수 있다."
-    ],
-    "deepDive": [
-      {
-        "level": "1단계",
-        "title": "순서 그대로 안내",
-        "body": "Figma CS 캡처의 단계 텍스트를 우선 순서로 사용합니다.",
-        "checks": [
-          "클래스인 메인 화면 좌측 사이드바에서 [칠판]을 클릭한다.",
-          "수업(칠판) 화면 우측의 서류 모양 아이콘 [수업도구]를 클릭한 후, 도구 목록에서 [브라우저] 기능을 누른다.",
-          "브라우저 상단의 검색창(URL 주소창)에 원하는 유튜브 링크를 붙여넣어 검색(접속)한다.",
-          "유튜브 영상 재생 시 우측 [사운드 공유] 버튼을 반드시 초록색으로 활성화한다."
-        ]
-      },
-      {
-        "level": "2단계",
-        "title": "화면 기준 확인",
-        "body": "클래스인 PC 메인 대시보드 화면. 좌측 사이드바 메뉴 중 [칠판] 항목이 빨간 박스로 강조되어 있고, 화면 중앙의 강의 썸네일 영역에서 좌측 [칠판] 메뉴로 향하는 빨간 화살표가 그려져 있다. 우측에는 최근 알림 목록이 보인다. / 수업용 검은색 칠판(WELCOME TO EEO CLASS 문구) 화면.",
-        "checks": [
-          "클래스인 PC 메인 대시보드 화면. 좌측 사이드바 메뉴 중 [칠판] 항목이 빨간 박스로 강조되어 있고, 화면 중앙의 강의 썸네일 영역에서 좌측 [칠판] 메뉴로 향하는 빨간 화살표가 그려져 있다.",
-          "수업용 검은색 칠판(WELCOME TO EEO CLASS 문구) 화면. 우측 도구 막대에서 서류 모양 [수업도구] 아이콘으로 향하는 빨간 화살표가 있고, 펼쳐진 수업도구 팝업 메뉴 안에서 [브라우저](지구본 아이콘)...",
-          "수업 중 브라우저 도구 화면. [내 컬렉션]에 ClassIn: One..., NAVER, Google, YouTube, 모바일 기기..., 클래스인 X 퀴...",
-          "브라우저 상단 바 확대 화면. 우측에 초록색 별(★) 모양 즐겨찾기 아이콘이 빨간 박스로 강조되고 그 아래에서 위로 향하는 빨간 화살표가 있으며, 옆에는 초록색으로 켜진 [사운드 공유] 토글이 보인다."
-        ]
-      },
-      {
-        "level": "3단계",
-        "title": "CS 주의사항과 원본 캡처",
-        "body": "원본 캡처 파일과 주의/팁을 함께 확인합니다. 원본 캡처: 수업중 링크 자료 사용/브라우저 즐겨찾기",
-        "checks": [
-          "[사운드 공유] 버튼을 반드시 초록색으로 활성화해야 학생에게 영상 소리가 전달된다.",
-          "즐겨찾기(★) 아이콘은 브라우저 창 우측 상단, [사운드 공유] 토글 옆에 위치하며 추가 시 초록색 별로 표시된다.",
-          "즐겨찾기한 사이트들은 [내 컬렉션]에 모이며(예: ClassIn: One..., NAVER, Google, YouTube, 모바일 기기..., 클래스인 X 퀴...",
-          "수업 전에 미리 즐겨찾기를 등록해 두는 것이 핵심이다."
-        ]
-      }
-    ],
-    "sourceImageFiles": [
-      "수업중 링크 자료 사용/브라우저 즐겨찾기"
-    ],
-    "sourceDigestLineHint": "docs/active/cs-figma-board-digest-2026-06-21.md:340"
-  },
-  {
-    "slug": "cs-figma-digest-361",
-    "docSlug": "cs-figma-digest-361",
+    "slug": "cs-figma-digest-328",
+    "docSlug": "cs-figma-digest-328",
     "docCategory": "teacher",
     "category": "classroom",
     "title": "코스 학습 활동 다른 코스/과정에 복사하기",
@@ -1082,7 +950,7 @@ export const CS_FIGMA_DIGEST_GUIDES = [
       {
         "level": "3단계",
         "title": "CS 주의사항과 원본 캡처",
-        "body": "원본 캡처 파일과 주의/팁을 함께 확인합니다. 원본 캡처: 에스키학원_코스 학습 활동 다른 코스/과정에 복사하기",
+        "body": "원본 캡처 파일과 주의/팁을 함께 확인합니다. 원본 캡처: 학원D_코스 학습 활동 다른 코스/과정에 복사하기",
         "checks": [
           "1번 스크린샷의 '...' (점 세 개) 메뉴 항목은 위에서부터 편집 / 활동 종료 / 작업 복사 / 삭제 순이며, '작업 복사'가 빨간 박스로 강조되고 빨간 화살표가 이를 가리킨다.",
           "3번 스크린샷의 코스 선택 다이얼로그 하단에는 '선택된 코스 2개, 학생 총 7명'이 표시되며, 빨간 화살표가 우측 하단의 녹색 [확인] 버튼(빨간 박스)을 가리킨다.",
@@ -1092,13 +960,13 @@ export const CS_FIGMA_DIGEST_GUIDES = [
       }
     ],
     "sourceImageFiles": [
-      "에스키학원_코스 학습 활동 다른 코스/과정에 복사하기"
+      "학원D_코스 학습 활동 다른 코스/과정에 복사하기"
     ],
-    "sourceDigestLineHint": "docs/active/cs-figma-board-digest-2026-06-21.md:361"
+    "sourceDigestLineHint": "docs/active/cs-figma-board-digest-2026-06-21.md:328"
   },
   {
-    "slug": "cs-figma-digest-383",
-    "docSlug": "cs-figma-digest-383",
+    "slug": "cs-figma-digest-350",
+    "docSlug": "cs-figma-digest-350",
     "docCategory": "admin",
     "category": "admin",
     "title": "웹 라이브 생성 방법 (대시보드)",
@@ -1164,39 +1032,39 @@ export const CS_FIGMA_DIGEST_GUIDES = [
     "sourceImageFiles": [
       "웹 라이브 사용 방법 안내(대시보드)"
     ],
-    "sourceDigestLineHint": "docs/active/cs-figma-board-digest-2026-06-21.md:383"
+    "sourceDigestLineHint": "docs/active/cs-figma-board-digest-2026-06-21.md:350"
   },
   {
-    "slug": "cs-figma-digest-409",
-    "docSlug": "cs-figma-digest-409",
-    "docCategory": "teacher",
-    "category": "classroom",
+    "slug": "cs-figma-digest-376",
+    "docSlug": "cs-figma-digest-376",
+    "docCategory": "start",
+    "category": "onboarding",
     "title": "웹 라이브 생성 방법 (앱)",
     "audience": "강사/관리자",
-    "summary": "ClassIn 앱(PC 데스크톱 앱)에서 '웹 라이브'(온라인 실시간 송출) 수업을 생성하고 운영하는 방법을 단계별로 안내하는 CS 가이드. 앱에서 코스 생성 → [새로 만들기]로 수업 생성 → '웹 라이브 기능'(시청 가능형) 녹화 옵션을 최소 1개 활성화 → 게시글 게시 → 생성된 수업의 점 세개(설정)에서 생방송 리플레이/수업 링크·코스 다시보기 링크 확보 → 수업 링크를 통해 학생이 온라인 수업 참관·다시보기 → 강사는 수업 도구의 [실시간 채팅]으로 라이브 시청자와 소통하는 흐름을 스크린샷과 빨간 박스/화살표 주석으로 보여준다. 마지막에 실시간 채팅 창은 학생에게 보이지 않고 녹화에도 포함되지 않는다는 주의사항을 포함한다.",
+    "summary": "ClassIn 앱(PC 데스크톱 앱)에서 '웹 라이브'(웹에서 로그인 없이 시청 가능한 실시간/다시보기 송출) 수업을 생성·운영하는 방법을 단계별로 안내하는 CS 가이드. 앱 로그인 → 코스 생성·입장 → 우측 상단 [새로 만들기]로 수업 생성 → '수업 새로 만들기' 팝업에서 녹화 옵션(ClassIn 수업 녹화 등)을 최소 1개 활성화하고 [라이브] 기능을 선택 → [게시(등록)] → 생성된 수업의 점 세개(설정)에서 '생방송 리플레이(웹 라이브)' 링크와 '코스 다시보기' 링크 확보 → 수업 링크로 학생이 온라인 수업 참관·다시보기 → 강사는 [수업 도구] → [실시간 채팅]으로 웹 라이브 시청자와 소통하는 흐름을 스크린샷과 빨간 박스·화살표 주석으로 보여준다. 마지막에 실시간 채팅 창은 학생에게 보이지 않고 녹화에도 포함되지 않는다는 주의사항을 포함한다.",
     "keywords": [
       "웹 라이브 생성 방법 (앱)",
       "녹화/현장수업",
-      "혼합",
+      "앱(PC)",
       "웹 라이브",
       "새로 만들기",
-      "웹 라이브 기능",
-      "실시간 채팅",
+      "수업 새로 만들기",
       "라이브",
-      "게시",
+      "게시(등록)",
+      "생방송 리플레이(웹 라이브)",
+      "코스 다시보기",
       "수업 도구",
-      "온스테이지 인원 수",
-      "수업 녹화 옵션: ClassIn 수업 녹화"
+      "실시간 채팅"
     ],
     "steps": [
       "클래스인 앱에 로그인하신 후, 수업을 진행할 코스를 생성하거나 입장해 주세요.",
       "우측 상단의 [새로 만들기]를 클릭한 후, 눌러서 수업을 생성해 주세요.",
-      "웹 라이브 기능을 사용하려면 녹화 옵션을 활성화 해야 합니다. 녹화 옵션을 최소 1개 활성화한 후, 하단의 [라이브] 기능을 선택해 주세요. (플레이어 + 캡쳐 방식이 로그인 없이 다시보기 시청 가능한 링크 생성)",
+      "웹 라이브 기능을 사용하려면 녹화 옵션을 활성화 해야 합니다. 녹화 옵션을 최소 1개 활성화한 후, 하단의 [라이브] 기능을 선택해 주세요. (플레이백 : 웹에서 로그인 없이 다시보기 시청 가능한 링크 생성)",
       "수업 세부 내역을 확인한 후, 우측 하단의 [게시]를 클릭해서 수업을 게시해 주세요.",
-      "앱에서 새로 생성한 수업의 점 세개(설정)를 클릭하면 생방송 리플레이(로그인 필요없는 수업 링크), 코스 다시보기(로그인 필요없는 수업 다시보기) 링크 확인이 가능합니다.",
+      "앱에서 새로 생성한 수업의 점 세개(설정)를 클릭하면 생방송 리플레이(로그인 필요없는 수업 링크), 코스 다시보기(모든 수업 다시보기 링크) 확인이 가능합니다.",
       "수업 링크를 클릭할 경우, 상단 화면과 같은 공간에서 온라인 수업 참관 또는 수업 다시보기가 가능합니다.",
       "웹 라이브 링크에서 사용자가 채팅을 남길 경우, 우측 상단에 해당 사용자의 메세지를 확인할 수 있습니다.",
-      "강사는 수업 중 [수업 도구] → [실시간 채팅]을 클릭해 웹 라이브 링크에 참가한 작성자와 소통이 가능합니다."
+      "강사는 수업 중 [수업 도구] → [실시간 채팅]을 클릭해 웹 라이브 링크에 참가한 학생들과 소통이 가능합니다."
     ],
     "deepDive": [
       {
@@ -1206,7 +1074,7 @@ export const CS_FIGMA_DIGEST_GUIDES = [
         "checks": [
           "클래스인 앱에 로그인하신 후, 수업을 진행할 코스를 생성하거나 입장해 주세요.",
           "우측 상단의 [새로 만들기]를 클릭한 후, 눌러서 수업을 생성해 주세요.",
-          "웹 라이브 기능을 사용하려면 녹화 옵션을 활성화 해야 합니다. 녹화 옵션을 최소 1개 활성화한 후, 하단의 [라이브] 기능을 선택해 주세요. (플레이어 + 캡쳐 방식이 로그인 없이 다시보기 시청 가능한 링크 생성)",
+          "웹 라이브 기능을 사용하려면 녹화 옵션을 활성화 해야 합니다. 녹화 옵션을 최소 1개 활성화한 후, 하단의 [라이브] 기능을 선택해 주세요. (플레이백 : 웹에서 로그인 없이 다시보기 시청 가능한 링크 생성)",
           "수업 세부 내역을 확인한 후, 우측 하단의 [게시]를 클릭해서 수업을 게시해 주세요."
         ]
       },
@@ -1217,8 +1085,8 @@ export const CS_FIGMA_DIGEST_GUIDES = [
         "checks": [
           "밴드1: ClassIn 앱 코스/갤러리 화면 스크린샷. 좌측 코스 썸네일 그리드(컬러 그라데이션 카드들)와 우측 채팅/공지 패널. 한 썸네일에 빨간 박스 강조. 캡션: 코스 생성·입장 안내.",
           "밴드1 하단: 'Main Course' 코스 내부 화면. 좌측 수업 목록, 중앙 수업 상세, 우측 패널. 우측 상단 [새로 만들기] 영역으로 향하는 빨간 화살표와 중앙 빨간 박스 주석.",
-          "밴드2 상단: '녹화 수업 설정(Main Course)' 설정 팝업 스크린샷. 좌측에 온스테이지 인원 수, 우측에 여러 토글 스위치(초록색)와 'AI 기반 언어 교육' 옵션 카드.",
-          "밴드2 중단: '녹화 수업 새로 만들기' 다이얼로그. 제목 입력란, 텍스트 에디터 툴바, 첨부 영역, 우측에 '현재 시간 시작/마감일 없음' 등 설정. 우측 하단 [게시] 버튼으로 향하는 빨간 화살표."
+          "밴드2 상단: '수업 새로 만들기' 팝업(제목 '클래스인 실험실-Main Course-131'). 좌측에 시작 시간·수업 시간·교사·조교·학생·과정 선택·단원, 우측에 토글들(스테이지 표시/학생 자동 온스테이지/온스...",
+          "밴드2 중단: 수업 생성 다이얼로그(제목 입력란, '+ 단원' 영역, 'Teacherin에서 AI 강의 가져오기'·'다른 코스에서 가져오기' 버튼). 우측 하단 [게시] 버튼으로 향하는 빨간 화살표."
         ]
       },
       {
@@ -1227,25 +1095,25 @@ export const CS_FIGMA_DIGEST_GUIDES = [
         "body": "원본 캡처 파일과 주의/팁을 함께 확인합니다. 원본 캡처: 웹 라이브 사용 방법 안내(앱)",
         "checks": [
           "주의: 실시간 채팅 창은 학생들에게 보이지 않으며, 수업 녹화에도 포함되지 않습니다. 학생들에게 전달이 필요할 경우 캡쳐 기능을 활용해 주세요.",
-          "녹화 옵션은 최소 1개 이상 활성화해야 웹 라이브(라이브) 기능을 사용할 수 있다.",
-          "수업 도구 패널 항목(한글 라벨): 기하도형, 스톱워치, 트로피 순위, 비디오 갤러리, 선착순 퀴즈, 타이머, 주사위, 랜덤 선택, 그룹 토론, 공동 작업, 물리 실험, 화학 실험, 수업 자료, 보조 카메라, VNC...",
-          "수업 세부 설정 화면에 '온스테이지 인원 수', '수업 녹화 옵션: ClassIn 수업 녹화', 'AI 기반 언어 교육 / AI 기반 중국어 교육(따라읽기·받아쓰기·외워말하기)' 등의 옵션이 보인다."
+          "녹화 옵션을 최소 1개 이상 활성화해야 웹 라이브([라이브]) 기능을 사용할 수 있다.",
+          "'수업 새로 만들기' 팝업 우측 옵션 패널의 토글: 스테이지 표시, 학생 자동 온스테이지, 온스테이지 인원 수(1V2), 하이브리드 수업, ClassIn 수업 녹화, 현장 녹화.",
+          "녹화 옵션 영역 아래에는 'AI 강의 분석 (NEW)' 토글이 있으며, 설명은 'ClassIn AI 연구소가 제공하며, 수업 녹화 영상을 기반으로 교사의 수업을 분석합니다."
         ]
       }
     ],
     "sourceImageFiles": [
       "웹 라이브 사용 방법 안내(앱)"
     ],
-    "sourceDigestLineHint": "docs/active/cs-figma-board-digest-2026-06-21.md:409"
+    "sourceDigestLineHint": "docs/active/cs-figma-board-digest-2026-06-21.md:376"
   },
   {
-    "slug": "cs-figma-digest-433",
-    "docSlug": "cs-figma-digest-433",
+    "slug": "cs-figma-digest-401",
+    "docSlug": "cs-figma-digest-401",
     "docCategory": "teacher",
     "category": "classroom",
     "title": "클래스인 '마이크' 설정",
     "audience": "강사/학원 운영자 (현장 녹화 진행자)",
-    "summary": "유튜엠(현장 녹화) 환경에서 클래스인의 카메라/마이크를 설정하고, 마이크 on/off 상태를 확인·전환하는 방법을 안내하는 CS 가이드. 우측 상단 톱니바퀴(설정)에서 녹화 카메라를 선택해 \"바로 녹화하기\"를 누르는 흐름, 마이크가 꺼져 있을 때 뜨는 \"소리 없음\" 경고와 '알림 설정' 버튼, 설정 패널의 마이크 드롭다운(사용 안 함 → 원하는 마이크 선택), 하단 독(dock)의 마이크/카메라 아이콘으로 빠르게 ON/OFF 하는 방법, 그리고 우측 톱니바퀴를 눌러 나오는 설정 화면에서 마이크/카메라를 선택하는 방법을 단계별 스크린샷과 함께 설명한다.",
+    "summary": "학원B(현장 녹화) 환경에서 클래스인의 카메라/마이크를 설정하고, 마이크 on/off 상태를 확인·전환하는 방법을 안내하는 CS 가이드. 우측 상단 톱니바퀴(설정)에서 녹화 카메라를 선택해 \"바로 녹화하기\"를 누르는 흐름, 마이크가 꺼져 있을 때 뜨는 \"소리 없음\" 경고와 '알림 설정' 버튼, 설정 패널의 마이크 드롭다운(사용 안 함 → 원하는 마이크 선택), 하단 독(dock)의 마이크/카메라 아이콘으로 빠르게 ON/OFF 하는 방법, 그리고 우측 톱니바퀴를 눌러 나오는 설정 화면에서 마이크/카메라를 선택하는 방법을 단계별 스크린샷과 함께 설명한다.",
     "keywords": [
       "클래스인 '마이크' 설정",
       "녹화/현장수업",
@@ -1294,7 +1162,7 @@ export const CS_FIGMA_DIGEST_GUIDES = [
       {
         "level": "3단계",
         "title": "CS 주의사항과 원본 캡처",
-        "body": "원본 캡처 파일과 주의/팁을 함께 확인합니다. 원본 캡처: 유튜엠 - 현장 녹화 / 마이크 on·off",
+        "body": "원본 캡처 파일과 주의/팁을 함께 확인합니다. 원본 캡처: 학원B - 현장 녹화 / 마이크 on·off",
         "checks": [
           "빨간 화살표/빨간 박스 강조: 첫 화면에서 녹화 미리보기 우측 상단의 설정(톱니) 버튼을 가리키는 빨간 화살표.",
           "카메라 선택 드롭다운(빨간 박스) 목록: 'Integrated Camera'(선택됨), 'TranScreen Camera', 'Integrated Camera', 'CamIn Virtual Camera', '사용 안...",
@@ -1304,13 +1172,13 @@ export const CS_FIGMA_DIGEST_GUIDES = [
       }
     ],
     "sourceImageFiles": [
-      "유튜엠 - 현장 녹화 / 마이크 on·off"
+      "학원B - 현장 녹화 / 마이크 on·off"
     ],
-    "sourceDigestLineHint": "docs/active/cs-figma-board-digest-2026-06-21.md:433"
+    "sourceDigestLineHint": "docs/active/cs-figma-board-digest-2026-06-21.md:401"
   },
   {
-    "slug": "cs-figma-digest-458",
-    "docSlug": "cs-figma-digest-458",
+    "slug": "cs-figma-digest-426",
+    "docSlug": "cs-figma-digest-426",
     "docCategory": "teacher",
     "category": "classroom",
     "title": "임시 수업 가이드",
@@ -1372,11 +1240,11 @@ export const CS_FIGMA_DIGEST_GUIDES = [
     "sourceImageFiles": [
       "임시 수업 가이드"
     ],
-    "sourceDigestLineHint": "docs/active/cs-figma-board-digest-2026-06-21.md:458"
+    "sourceDigestLineHint": "docs/active/cs-figma-board-digest-2026-06-21.md:426"
   },
   {
-    "slug": "cs-figma-digest-481",
-    "docSlug": "cs-figma-digest-481",
+    "slug": "cs-figma-digest-449",
+    "docSlug": "cs-figma-digest-449",
     "docCategory": "start",
     "category": "onboarding",
     "title": "클래스인 전자칠판 내 [로컬 녹화] 기능 안내",
@@ -1442,16 +1310,16 @@ export const CS_FIGMA_DIGEST_GUIDES = [
     "sourceImageFiles": [
       "전자칠판_로컬 녹화 기능 안내"
     ],
-    "sourceDigestLineHint": "docs/active/cs-figma-board-digest-2026-06-21.md:481"
+    "sourceDigestLineHint": "docs/active/cs-figma-board-digest-2026-06-21.md:449"
   },
   {
-    "slug": "cs-figma-digest-505",
-    "docSlug": "cs-figma-digest-505",
+    "slug": "cs-figma-digest-473",
+    "docSlug": "cs-figma-digest-473",
     "docCategory": "start",
     "category": "onboarding",
     "title": "클래스인 '현장 녹화' 카메라 설정",
-    "audience": "학원(진수학) 강사/운영자 — 현장(오프라인) 수업을 클래스인 '현장 녹화' 기능으로 녹화하려는 사용자",
-    "summary": "진수학 학원용 가이드로, 클래스인의 '현장 녹화(현장 수업 녹화)' 기능을 설정하는 전체 절차를 다룬다. 수업 생성 시 교실 설정(온스테이지 인원수 1V0, ClassIn 수업 녹화·현장 녹화 ON, 스테이지 표시 OFF)을 잡고 수업을 등록·입장한 뒤, 입장 시 뜨는 녹화 활성화 알림을 확인하고, 입장 후에는 PC와 전자칠판(IFP) 각각에서 녹화할 카메라를 선택해 '바로 녹화하기'로 녹화를 시작하는 방법을 PC/전자칠판 두 환경으로 나눠 설명한다. 정상 녹화 시 우측 상단(PC) 또는 하단 캠코더(전자칠판)에 초록색 아이콘이 표시되는 것으로 확인한다.",
+    "audience": "학원(학원C) 강사/운영자 — 현장(오프라인) 수업을 클래스인 '현장 녹화' 기능으로 녹화하려는 사용자",
+    "summary": "학원C 학원용 가이드로, 클래스인의 '현장 녹화(현장 수업 녹화)' 기능을 설정하는 전체 절차를 다룬다. 수업 생성 시 교실 설정(온스테이지 인원수 1V0, ClassIn 수업 녹화·현장 녹화 ON, 스테이지 표시 OFF)을 잡고 수업을 등록·입장한 뒤, 입장 시 뜨는 녹화 활성화 알림을 확인하고, 입장 후에는 PC와 전자칠판(IFP) 각각에서 녹화할 카메라를 선택해 '바로 녹화하기'로 녹화를 시작하는 방법을 PC/전자칠판 두 환경으로 나눠 설명한다. 정상 녹화 시 우측 상단(PC) 또는 하단 캠코더(전자칠판)에 초록색 아이콘이 표시되는 것으로 확인한다.",
     "keywords": [
       "클래스인 '현장 녹화' 카메라 설정",
       "녹화/현장수업",
@@ -1502,7 +1370,7 @@ export const CS_FIGMA_DIGEST_GUIDES = [
       {
         "level": "3단계",
         "title": "CS 주의사항과 원본 캡처",
-        "body": "원본 캡처 파일과 주의/팁을 함께 확인합니다. 원본 캡처: 진수학 - 현장 녹화 확인",
+        "body": "원본 캡처 파일과 주의/팁을 함께 확인합니다. 원본 캡처: 학원C - 현장 녹화 확인",
         "checks": [
           "가이드는 < PC >와 < 전자칠판 > 두 섹션(파란색 헤더)으로 나뉘며, 입장 이후 녹화 카메라를 선택하는 방법이 각 환경별로 따로 안내된다.",
           "교실 설정 권장값(노란색 하이라이트): 학생 카메라를 띄우지 않는 현장 녹화의 경우 온스테이지 인원수 1V0, 녹화설정은 'ClassIn 수업 녹화'와 '현장 녹화' 모두 사용, 스테이지 표시는 OFF.",
@@ -1512,13 +1380,13 @@ export const CS_FIGMA_DIGEST_GUIDES = [
       }
     ],
     "sourceImageFiles": [
-      "진수학 - 현장 녹화 확인"
+      "학원C - 현장 녹화 확인"
     ],
-    "sourceDigestLineHint": "docs/active/cs-figma-board-digest-2026-06-21.md:505"
+    "sourceDigestLineHint": "docs/active/cs-figma-board-digest-2026-06-21.md:473"
   },
   {
-    "slug": "cs-figma-digest-532",
-    "docSlug": "cs-figma-digest-532",
+    "slug": "cs-figma-digest-500",
+    "docSlug": "cs-figma-digest-500",
     "docCategory": "teacher",
     "category": "classroom",
     "title": "판서 생성 & 불러오기",
@@ -1583,16 +1451,16 @@ export const CS_FIGMA_DIGEST_GUIDES = [
     "sourceImageFiles": [
       "판서 생성 & 불러오기"
     ],
-    "sourceDigestLineHint": "docs/active/cs-figma-board-digest-2026-06-21.md:532"
+    "sourceDigestLineHint": "docs/active/cs-figma-board-digest-2026-06-21.md:500"
   },
   {
-    "slug": "cs-figma-digest-555",
-    "docSlug": "cs-figma-digest-555",
+    "slug": "cs-figma-digest-523",
+    "docSlug": "cs-figma-digest-523",
     "docCategory": "admin",
     "category": "admin",
     "title": "수업 녹화 데이터",
     "audience": "학원 관리자/CS 담당자 (관리자 대시보드에서 하위계정 수업 녹화본을 다운로드하려는 사용자)",
-    "summary": "클래스인 관리자 대시보드(웹)에서 하위계정(교사)의 수업 녹화본을 찾아 PC로 다운로드하는 방법을 6장의 스크린샷으로 안내하는 가이드. 구글에서 \"클래스인\" 검색 → 클래스인 홈페이지(classin.com) 접속 → 로그인 → 관리자 대시보드의 \"수업 관리\" 진입 → 해당 수업 행의 \"조작\" 메뉴에서 \"수업 녹화 데이터\" 선택 → \"수업 녹화 데이터\" 화면의 \"다운로드\"로 저장하는 전체 동선을 다룬다. 예시 기관은 \"세정학원(메인 계정)\"이며, 예시 수업은 \"대수 개념 올데이-New Course-20\", 녹화 파일은 \"클립 1\"(2분18초, 15.62MB). 녹화 영상 재생 시 음소거 상태 안내 토스트와 플레이어 우하단 더보기(⋮) 버튼도 보여준다.",
+    "summary": "클래스인 관리자 대시보드(웹)에서 하위계정(교사)의 수업 녹화본을 찾아 PC로 다운로드하는 방법을 6장의 스크린샷으로 안내하는 가이드. 구글에서 \"클래스인\" 검색 → 클래스인 홈페이지(classin.com) 접속 → 로그인 → 관리자 대시보드의 \"수업 관리\" 진입 → 해당 수업 행의 \"조작\" 메뉴에서 \"수업 녹화 데이터\" 선택 → \"수업 녹화 데이터\" 화면의 \"다운로드\"로 저장하는 전체 동선을 다룬다. 예시 기관은 \"학원K(메인 계정)\"이며, 예시 수업은 \"대수 개념 올데이-New Course-20\", 녹화 파일은 \"클립 1\"(2분18초, 15.62MB). 녹화 영상 재생 시 음소거 상태 안내 토스트와 플레이어 우하단 더보기(⋮) 버튼도 보여준다.",
     "keywords": [
       "수업 녹화 데이터",
       "녹화/현장수업",
@@ -1601,7 +1469,7 @@ export const CS_FIGMA_DIGEST_GUIDES = [
       "수업 관리",
       "조작",
       "다운로드",
-      "세정학원(메인 계정)",
+      "학원K(메인 계정)",
       "대수 개념 올데이-New Course-20",
       "클립 1",
       "올인원 하이브리드 학습 플랫폼 클래스인",
@@ -1656,11 +1524,11 @@ export const CS_FIGMA_DIGEST_GUIDES = [
     "sourceImageFiles": [
       "하위계정 녹화본 다운로드"
     ],
-    "sourceDigestLineHint": "docs/active/cs-figma-board-digest-2026-06-21.md:555"
+    "sourceDigestLineHint": "docs/active/cs-figma-board-digest-2026-06-21.md:523"
   },
   {
-    "slug": "cs-figma-digest-589",
-    "docSlug": "cs-figma-digest-589",
+    "slug": "cs-figma-digest-557",
+    "docSlug": "cs-figma-digest-557",
     "docCategory": "teacher",
     "category": "classroom",
     "title": "AI Board — 답안 현황 / 트로피 수여",
@@ -1726,11 +1594,11 @@ export const CS_FIGMA_DIGEST_GUIDES = [
     "sourceImageFiles": [
       "Frame 31.png"
     ],
-    "sourceDigestLineHint": "docs/active/cs-figma-board-digest-2026-06-21.md:589"
+    "sourceDigestLineHint": "docs/active/cs-figma-board-digest-2026-06-21.md:557"
   },
   {
-    "slug": "cs-figma-digest-610",
-    "docSlug": "cs-figma-digest-610",
+    "slug": "cs-figma-digest-578",
+    "docSlug": "cs-figma-digest-578",
     "docCategory": "start",
     "category": "onboarding",
     "title": "AI 스피킹 미제출자에게 알림 전달하기 (홈 → 코스 → AI 스피킹 → 미제출 → 알림 전달)",
@@ -1796,11 +1664,11 @@ export const CS_FIGMA_DIGEST_GUIDES = [
     "sourceImageFiles": [
       "Group 4.png"
     ],
-    "sourceDigestLineHint": "docs/active/cs-figma-board-digest-2026-06-21.md:610"
+    "sourceDigestLineHint": "docs/active/cs-figma-board-digest-2026-06-21.md:578"
   },
   {
-    "slug": "cs-figma-digest-635",
-    "docSlug": "cs-figma-digest-635",
+    "slug": "cs-figma-digest-603",
+    "docSlug": "cs-figma-digest-603",
     "docCategory": "admin",
     "category": "admin",
     "title": "교실 스크린샷 / 학생 수 도표 / 출석·시간줄 (수업 상세 모니터링 대시보드)",
@@ -1860,11 +1728,11 @@ export const CS_FIGMA_DIGEST_GUIDES = [
     "sourceImageFiles": [
       "Group 5.png"
     ],
-    "sourceDigestLineHint": "docs/active/cs-figma-board-digest-2026-06-21.md:635"
+    "sourceDigestLineHint": "docs/active/cs-figma-board-digest-2026-06-21.md:603"
   },
   {
-    "slug": "cs-figma-digest-650",
-    "docSlug": "cs-figma-digest-650",
+    "slug": "cs-figma-digest-618",
+    "docSlug": "cs-figma-digest-618",
     "docCategory": "admin",
     "category": "admin",
     "title": "답안 현황 (대시보드 통계 화면)",
@@ -1924,11 +1792,11 @@ export const CS_FIGMA_DIGEST_GUIDES = [
     "sourceImageFiles": [
       "image 6.png"
     ],
-    "sourceDigestLineHint": "docs/active/cs-figma-board-digest-2026-06-21.md:650"
+    "sourceDigestLineHint": "docs/active/cs-figma-board-digest-2026-06-21.md:618"
   },
   {
-    "slug": "cs-figma-digest-665",
-    "docSlug": "cs-figma-digest-665",
+    "slug": "cs-figma-digest-633",
+    "docSlug": "cs-figma-digest-633",
     "docCategory": "admin",
     "category": "admin",
     "title": "클래스인 관리자 대시보드에서 계정 세부 사용 내역 확인 방법",
@@ -1992,37 +1860,37 @@ export const CS_FIGMA_DIGEST_GUIDES = [
     "sourceImageFiles": [
       "관리자 대시보드 현재 수업 진행"
     ],
-    "sourceDigestLineHint": "docs/active/cs-figma-board-digest-2026-06-21.md:665"
+    "sourceDigestLineHint": "docs/active/cs-figma-board-digest-2026-06-21.md:633"
   },
   {
-    "slug": "cs-figma-digest-687",
-    "docSlug": "cs-figma-digest-687",
+    "slug": "cs-figma-digest-655",
+    "docSlug": "cs-figma-digest-655",
     "docCategory": "admin",
     "category": "admin",
     "title": "1. 수업 삭제 방법",
     "audience": "관리자",
-    "summary": "ClassIn 관리자 대시보드의 [수업 리소스] 화면에서 수업 데이터(녹화/스크린샷/업로드 동영상/질문 내용·수업자료)를 삭제하는 방법을 안내하는 CS 가이드. 좌측 [수업 리소스] 메뉴 진입 → 삭제할 수업 체크 → \"모든 수업 데이터 삭제하기\" 클릭 → 알림(확인) 창에서 삭제 수량 확인 후 [확인] 클릭의 순서로 진행한다. 삭제 시 복구 불가 경고가 강조되며, 보호 잠금이 해제된 수업에만 적용된다는 점, 정상 삭제 시 수업 다시보기 스크린샷으로 확인 가능하다는 점이 함께 설명된다.",
+    "summary": "ClassIn 관리자 대시보드의 [수업 리소스] 화면에서 수업 데이터(수업 스크린샷/녹화 동영상/업로드 동영상/질판 내용 및 수업자료)를 삭제하는 방법을 안내하는 CS 가이드. 좌측 [수업 리소스] 메뉴 진입 → 삭제할 수업 체크 → \"모든 수업 데이터 삭제하기\" 클릭 → '알림' 확인 창에서 삭제 수량을 확인한 후 [확인] 클릭의 순서로 진행한다. 삭제 후 복구 불가 경고가 강조되며, 보호 잠금이 해제된 수업에만 적용된다는 점, 정상 삭제 시 수업 다시보기 창의 스크린샷으로 확인 가능하다는 점이 함께 설명된다.",
     "keywords": [
       "1. 수업 삭제 방법",
       "대시보드관리",
       "대시보드(웹)",
       "수업 리소스",
       "모든 수업 데이터 삭제하기",
-      "확인",
-      "수업 시간",
-      "검색",
-      "태그",
-      "보호 잠금",
       "알림",
-      "취소"
+      "확인",
+      "스토리지",
+      "검색",
+      "수업 시간",
+      "태그",
+      "보호 잠금"
     ],
     "steps": [
-      "좌측 사이드바에서 [수업 리소스] 메뉴를 클릭한다. (스토리지 그룹 내 메뉴, 빨간 박스로 강조)",
-      "수업 리소스 목록에서 삭제할 수업의 번호 옆 체크박스를 선택(체크)한다. 필요 시 상단 '수업 시간' 날짜 범위 필터(예: 2026-01-16 ~ 2026-04-16)와 '검색', '태그', '보호 잠금' 조건으로 대상 수업을 추린다.",
-      "상단 버튼 영역에서 \"모든 수업 데이터 삭제하기\"(녹색 강조 버튼)를 클릭한다.",
+      "좌측 사이드바 '스토리지' 그룹에서 [수업 리소스] 메뉴를 클릭한다. (빨간 박스로 강조)",
+      "수업 리소스 목록에서 삭제할 수업의 번호 옆 체크박스를 선택(체크)한다. (첫 번째 행 체크박스가 빨간 박스+화살표로 강조됨) 필요 시 상단 '검색'(수업 이름/코스 이름), '수업 시간' 날짜 범위 필터(예: 2026-01-16 ~ 2026-04-16), '태그', '보호 잠금' 조건으로 대상 수업을 추린다.",
+      "상단 버튼 영역에서 \"모든 수업 데이터 삭제하기\"(녹색 버튼, 빨간 박스+화살표로 강조)를 클릭한다.",
       "'알림' 확인 창이 뜨면 안내 내용을 다시 확인하고, 삭제할 수업 수량이 맞는지 확인한다.",
-      "수량과 내용이 맞으면 알림 창의 [확인](녹색 버튼)을 클릭하여 삭제를 완료한다. (취소하려면 [취소] 클릭)",
-      "정상적으로 삭제된 경우, 수업 다시보기 창에서 안내된 것과 같은 스크린샷으로 삭제 여부를 확인할 수 있다."
+      "수량과 내용이 맞으면 알림 창의 [확인](녹색 버튼, 빨간 박스로 강조)을 클릭하여 삭제를 완료한다. (취소하려면 [취소] 클릭)",
+      "정상적으로 삭제된 경우, 수업 다시보기 창에서 예시와 같은 스크린샷으로 삭제 여부를 확인할 수 있다."
     ],
     "deepDive": [
       {
@@ -2030,19 +1898,19 @@ export const CS_FIGMA_DIGEST_GUIDES = [
         "title": "순서 그대로 안내",
         "body": "Figma CS 캡처의 단계 텍스트를 우선 순서로 사용합니다.",
         "checks": [
-          "좌측 사이드바에서 [수업 리소스] 메뉴를 클릭한다. (스토리지 그룹 내 메뉴, 빨간 박스로 강조)",
-          "수업 리소스 목록에서 삭제할 수업의 번호 옆 체크박스를 선택(체크)한다. 필요 시 상단 '수업 시간' 날짜 범위 필터(예: 2026-01-16 ~ 2026-04-16)와 '검색', '태그', '보호 잠금' 조건으로...",
-          "상단 버튼 영역에서 \"모든 수업 데이터 삭제하기\"(녹색 강조 버튼)를 클릭한다.",
+          "좌측 사이드바 '스토리지' 그룹에서 [수업 리소스] 메뉴를 클릭한다. (빨간 박스로 강조)",
+          "수업 리소스 목록에서 삭제할 수업의 번호 옆 체크박스를 선택(체크)한다. (첫 번째 행 체크박스가 빨간 박스+화살표로 강조됨) 필요 시 상단 '검색'(수업 이름/코스 이름), '수업 시간' 날짜 범위 필터(예: 20...",
+          "상단 버튼 영역에서 \"모든 수업 데이터 삭제하기\"(녹색 버튼, 빨간 박스+화살표로 강조)를 클릭한다.",
           "'알림' 확인 창이 뜨면 안내 내용을 다시 확인하고, 삭제할 수업 수량이 맞는지 확인한다."
         ]
       },
       {
         "level": "2단계",
         "title": "화면 기준 확인",
-        "body": "[상단 패널] ClassIn 관리자 대시보드 '수업 리소스' 목록 화면. 좌측 사이드바(기관 관리/스토리지/학습 관리 메뉴)에서 '수업 리소스' 항목이 빨간 박스로 강조됨. 상단에 검색·수업 시간 날짜 필터(빨간 박스)·태그·보호 잠금 필터와 '모든 수업 데이터 삭제하기' 녹색 버튼(빨간 박스)이 있음.",
+        "body": "[상단 패널] ClassIn 관리자 대시보드 '수업 리소스' 목록 화면. 상단 녹색 헤더 우측에 '메인 계정' 배지 + 'EEO-TEST-MINJAE KIM' + '한국어'가 보인다. 좌측 사이드바(기관 관리/스토리지/학습 관리/관리자 기능 메뉴)에서 '수업 리소스' 항목이 빨간 박스로 강조됨.",
         "checks": [
-          "[상단 패널] ClassIn 관리자 대시보드 '수업 리소스' 목록 화면. 좌측 사이드바(기관 관리/스토리지/학습 관리 메뉴)에서 '수업 리소스' 항목이 빨간 박스로 강조됨.",
-          "[하단 패널] 동일한 '수업 리소스' 화면 위에 '알림' 확인 모달이 떠 있음. 모달에는 보호 잠금/복구 불가 경고(빨간 글씨)와 '취소'·'확인' 버튼이 있고 녹색 [확인] 버튼이 빨간 박스로 강조됨."
+          "[상단 패널] ClassIn 관리자 대시보드 '수업 리소스' 목록 화면. 상단 녹색 헤더 우측에 '메인 계정' 배지 + 'EEO-TEST-MINJAE KIM' + '한국어'가 보인다.",
+          "[하단 패널] 동일한 '수업 리소스' 화면 위에 '알림' 확인 모달이 떠 있음. 모달에는 보호 잠금 안내와 복구 불가 경고(빨간 글씨), '취소'·'확인' 버튼이 있고 녹색 [확인] 버튼이 빨간 박스로 강조됨."
         ]
       },
       {
@@ -2050,28 +1918,28 @@ export const CS_FIGMA_DIGEST_GUIDES = [
         "title": "CS 주의사항과 원본 캡처",
         "body": "원본 캡처 파일과 주의/팁을 함께 확인합니다. 원본 캡처: 수업 삭제 방법",
         "checks": [
-          "[캡션1] 좌측 [수업 리소스]를 클릭한 후, 삭제할 수업을 체크한 후 \"모든 수업 데이터 삭제하기\"를 클릭해 주세요",
+          "[캡션1] 좌측 [수업 리소스]를 클릭한 후, 삭제할 수업을 체크한 후\"모든 수업 데이터 삭제하기\"를 클릭해 주세요",
           "[캡션2] 알림창의 내용을 다시 확인한 후, 삭제할 수업 수량이 맞는지 확인한 후 [확인]을 클릭해 주세요.",
-          "[알림 창 본문] '이 작업은 보호 잠금이 해제된 수업에만 적용됩니다. 선택하신 1개 수업 중 1개 수업만 보호 잠금이 해제되어 있습니다.'",
-          "[알림 창 경고(빨간색)] '삭제 후 복구할 수 없으며 삭제된 동영상은 더 이상 재생할 수 없습니다. 사진, 동영상, 질문 내용 및 수업자료를 삭제하시겠습니까?'"
+          "[상단 녹색 헤더] 우측에 계정 정보 표시: '메인 계정' 배지 + 계정명 'EEO-TEST-MINJAE KIM' + 언어 '한국어'.",
+          "[알림 창 본문] '이 작업은 보호 잠금이 해제된 수업에만 적용됩니다. 선택하신 1개 수업 중 1개 수업만 보호 잠금이 해제되어 있습니다.'"
         ]
       }
     ],
     "sourceImageFiles": [
       "수업 삭제 방법"
     ],
-    "sourceDigestLineHint": "docs/active/cs-figma-board-digest-2026-06-21.md:687"
+    "sourceDigestLineHint": "docs/active/cs-figma-board-digest-2026-06-21.md:655"
   },
   {
-    "slug": "cs-figma-digest-716",
-    "docSlug": "cs-figma-digest-716",
+    "slug": "cs-figma-digest-689",
+    "docSlug": "cs-figma-digest-689",
     "docCategory": "admin",
     "category": "admin",
-    "title": "EL어학원 OMR CS",
+    "title": "학원F OMR CS",
     "audience": "CS팀",
-    "summary": "EL어학원 대상 CS 가이드로, 이미 진행 중인 OMR 카드 활동의 답안/설명 공개 시점을 변경하는 방법을 안내한다. Main Course의 OMR 카드 활동을 \"편집\"으로 연 뒤, OMR 카드 편집 화면의 \"고급 설정\"을 펼쳐 [답안 및 설명 공개] 옵션을 \"채점 후 공개\"로 바꾸도록 하는 두 단계 절차다. 학생이 제출 직후가 아니라 채점이 끝난 후에만 정답과 해설을 볼 수 있게 만드는 것이 목적이다.",
+    "summary": "학원F 대상 CS 가이드로, 이미 진행 중인 OMR 카드 활동의 답안/설명 공개 시점을 변경하는 방법을 안내한다. Main Course의 OMR 카드 활동을 \"편집\"으로 연 뒤, OMR 카드 편집 화면의 \"고급 설정\"을 펼쳐 [답안 및 설명 공개] 옵션을 \"채점 후 공개\"로 바꾸도록 하는 두 단계 절차다. 학생이 제출 직후가 아니라 채점이 끝난 후에만 정답과 해설을 볼 수 있게 만드는 것이 목적이다.",
     "keywords": [
-      "EL어학원 OMR CS",
+      "학원F OMR CS",
       "설정/옵션",
       "대시보드(웹)",
       "편집",
@@ -2082,7 +1950,7 @@ export const CS_FIGMA_DIGEST_GUIDES = [
       "확인",
       "축소 ^",
       "빈칸 문제 직접 채점",
-      "0114 EL어학원 OMR CS"
+      "0114 학원F OMR CS"
     ],
     "steps": [
       "현재 진행 중인 OMR 카드 활동 우측의 점 세개(설정) 아이콘을 클릭한다.",
@@ -2118,7 +1986,7 @@ export const CS_FIGMA_DIGEST_GUIDES = [
       {
         "level": "3단계",
         "title": "CS 주의사항과 원본 캡처",
-        "body": "원본 캡처 파일과 주의/팁을 함께 확인합니다. 원본 캡처: 0114 EL어학원 OMR CS.png",
+        "body": "원본 캡처 파일과 주의/팁을 함께 확인합니다. 원본 캡처: 0114 학원F OMR CS.png",
         "checks": [
           "빨간 박스 강조: 첫 화면에서 OMR 카드 활동 행의 점 세개(...) 메뉴와 그 안의 \"편집\" 항목이 빨간 박스로 표시되어 있다.",
           "빨간 화살표/박스 강조: 편집 화면 우측 패널의 \"고급 설정\" 옆 [축소 ^] 버튼이 빨간 박스로, 그쪽을 가리키는 빨간 화살표가 함께 표시되어 있다.",
@@ -2128,13 +1996,13 @@ export const CS_FIGMA_DIGEST_GUIDES = [
       }
     ],
     "sourceImageFiles": [
-      "0114 EL어학원 OMR CS.png"
+      "0114 학원F OMR CS.png"
     ],
-    "sourceDigestLineHint": "docs/active/cs-figma-board-digest-2026-06-21.md:716"
+    "sourceDigestLineHint": "docs/active/cs-figma-board-digest-2026-06-21.md:689"
   },
   {
-    "slug": "cs-figma-digest-740",
-    "docSlug": "cs-figma-digest-740",
+    "slug": "cs-figma-digest-713",
+    "docSlug": "cs-figma-digest-713",
     "docCategory": "admin",
     "category": "admin",
     "title": "코스 종료/클래스 탈퇴 (코스 설정)",
@@ -2195,11 +2063,11 @@ export const CS_FIGMA_DIGEST_GUIDES = [
     "sourceImageFiles": [
       "4 1.png"
     ],
-    "sourceDigestLineHint": "docs/active/cs-figma-board-digest-2026-06-21.md:740"
+    "sourceDigestLineHint": "docs/active/cs-figma-board-digest-2026-06-21.md:713"
   },
   {
-    "slug": "cs-figma-digest-759",
-    "docSlug": "cs-figma-digest-759",
+    "slug": "cs-figma-digest-732",
+    "docSlug": "cs-figma-digest-732",
     "docCategory": "admin",
     "category": "admin",
     "title": "Classin AI 비활성화 안내",
@@ -2263,11 +2131,11 @@ export const CS_FIGMA_DIGEST_GUIDES = [
     "sourceImageFiles": [
       "AI 기능 비활성화-1.png"
     ],
-    "sourceDigestLineHint": "docs/active/cs-figma-board-digest-2026-06-21.md:759"
+    "sourceDigestLineHint": "docs/active/cs-figma-board-digest-2026-06-21.md:732"
   },
   {
-    "slug": "cs-figma-digest-784",
-    "docSlug": "cs-figma-digest-784",
+    "slug": "cs-figma-digest-757",
+    "docSlug": "cs-figma-digest-757",
     "docCategory": "admin",
     "category": "admin",
     "title": "Classin AI 비활성화 안내",
@@ -2329,11 +2197,11 @@ export const CS_FIGMA_DIGEST_GUIDES = [
     "sourceImageFiles": [
       "AI 기능 비활성화-2.png"
     ],
-    "sourceDigestLineHint": "docs/active/cs-figma-board-digest-2026-06-21.md:784"
+    "sourceDigestLineHint": "docs/active/cs-figma-board-digest-2026-06-21.md:757"
   },
   {
-    "slug": "cs-figma-digest-805",
-    "docSlug": "cs-figma-digest-805",
+    "slug": "cs-figma-digest-778",
+    "docSlug": "cs-figma-digest-778",
     "docCategory": "admin",
     "category": "admin",
     "title": "Classin AI 비활성화 안내",
@@ -2397,11 +2265,11 @@ export const CS_FIGMA_DIGEST_GUIDES = [
     "sourceImageFiles": [
       "AI 기능 비활성화.png"
     ],
-    "sourceDigestLineHint": "docs/active/cs-figma-board-digest-2026-06-21.md:805"
+    "sourceDigestLineHint": "docs/active/cs-figma-board-digest-2026-06-21.md:778"
   },
   {
-    "slug": "cs-figma-digest-830",
-    "docSlug": "cs-figma-digest-830",
+    "slug": "cs-figma-digest-803",
+    "docSlug": "cs-figma-digest-803",
     "docCategory": "admin",
     "category": "admin",
     "title": "코스 설정",
@@ -2460,11 +2328,11 @@ export const CS_FIGMA_DIGEST_GUIDES = [
     "sourceImageFiles": [
       "Frame 2.png"
     ],
-    "sourceDigestLineHint": "docs/active/cs-figma-board-digest-2026-06-21.md:830"
+    "sourceDigestLineHint": "docs/active/cs-figma-board-digest-2026-06-21.md:803"
   },
   {
-    "slug": "cs-figma-digest-844",
-    "docSlug": "cs-figma-digest-844",
+    "slug": "cs-figma-digest-817",
+    "docSlug": "cs-figma-digest-817",
     "docCategory": "admin",
     "category": "admin",
     "title": "코스 설정",
@@ -2484,7 +2352,7 @@ export const CS_FIGMA_DIGEST_GUIDES = [
     ],
     "steps": [
       "코스 설정 원본 화면을 확인합니다.",
-      "상단: 모바일 상태바(12:01, 5G, 배터리 69%) 아래 뒤로가기(<) 화살표와 '코스 설정' 헤더. 그 아래 파란색 '리즈스쿨' 코스 아이콘과 흐림 처리된 코스명, 'EEO-TEST-LIZ' 식별자, 우측 더보기(>) 화살표. / '코스 멤버' 행 — 우측에 '2명 >'."
+      "상단: 모바일 상태바(12:01, 5G, 배터리 69%) 아래 뒤로가기(<) 화살표와 '코스 설정' 헤더. 그 아래 파란색 '학원L' 코스 아이콘과 흐림 처리된 코스명, 'EEO-TEST-LIZ' 식별자, 우측 더보기(>) 화살표. / '코스 멤버' 행 — 우측에 '2명 >'."
     ],
     "deepDive": [
       {
@@ -2493,15 +2361,15 @@ export const CS_FIGMA_DIGEST_GUIDES = [
         "body": "Figma CS 캡처의 단계 텍스트를 우선 순서로 사용합니다.",
         "checks": [
           "코스 설정 원본 화면을 확인합니다.",
-          "상단: 모바일 상태바(12:01, 5G, 배터리 69%) 아래 뒤로가기(<) 화살표와 '코스 설정' 헤더. 그 아래 파란색 '리즈스쿨' 코스 아이콘과 흐림 처리된 코스명, 'EEO-TEST-LIZ' 식별자, 우측 더..."
+          "상단: 모바일 상태바(12:01, 5G, 배터리 69%) 아래 뒤로가기(<) 화살표와 '코스 설정' 헤더. 그 아래 파란색 '학원L' 코스 아이콘과 흐림 처리된 코스명, 'EEO-TEST-LIZ' 식별자, 우측 더보..."
         ]
       },
       {
         "level": "2단계",
         "title": "화면 기준 확인",
-        "body": "상단: 모바일 상태바(12:01, 5G, 배터리 69%) 아래 뒤로가기(<) 화살표와 '코스 설정' 헤더. 그 아래 파란색 '리즈스쿨' 코스 아이콘과 흐림 처리된 코스명, 'EEO-TEST-LIZ' 식별자, 우측 더보기(>) 화살표. / '코스 멤버' 행 — 우측에 '2명 >'.",
+        "body": "상단: 모바일 상태바(12:01, 5G, 배터리 69%) 아래 뒤로가기(<) 화살표와 '코스 설정' 헤더. 그 아래 파란색 '학원L' 코스 아이콘과 흐림 처리된 코스명, 'EEO-TEST-LIZ' 식별자, 우측 더보기(>) 화살표. / '코스 멤버' 행 — 우측에 '2명 >'. 아래에 멤버 아바타(학생 사진 1개), '학' 배지 아바타, 그리고 멤버 추가(+) / 멤버 제거(−) 원형 버튼.",
         "checks": [
-          "상단: 모바일 상태바(12:01, 5G, 배터리 69%) 아래 뒤로가기(<) 화살표와 '코스 설정' 헤더. 그 아래 파란색 '리즈스쿨' 코스 아이콘과 흐림 처리된 코스명, 'EEO-TEST-LIZ' 식별자, 우측 더...",
+          "상단: 모바일 상태바(12:01, 5G, 배터리 69%) 아래 뒤로가기(<) 화살표와 '코스 설정' 헤더. 그 아래 파란색 '학원L' 코스 아이콘과 흐림 처리된 코스명, 'EEO-TEST-LIZ' 식별자, 우측 더보...",
           "'코스 멤버' 행 — 우측에 '2명 >'. 아래에 멤버 아바타(학생 사진 1개), '학' 배지 아바타, 그리고 멤버 추가(+)",
           "멤버 제거(−) 원형 버튼.",
           "설정 메뉴 리스트: '코스 QR 코드 및 링크 >', '코스 소개 — 설정되지 않음 >', '코스 별칭 — 설정되지 않음 >'."
@@ -2522,11 +2390,11 @@ export const CS_FIGMA_DIGEST_GUIDES = [
     "sourceImageFiles": [
       "Frame 4.png"
     ],
-    "sourceDigestLineHint": "docs/active/cs-figma-board-digest-2026-06-21.md:844"
+    "sourceDigestLineHint": "docs/active/cs-figma-board-digest-2026-06-21.md:817"
   },
   {
-    "slug": "cs-figma-digest-858",
-    "docSlug": "cs-figma-digest-858",
+    "slug": "cs-figma-digest-831",
+    "docSlug": "cs-figma-digest-831",
     "docCategory": "admin",
     "category": "admin",
     "title": "코스 설정",
@@ -2586,11 +2454,11 @@ export const CS_FIGMA_DIGEST_GUIDES = [
     "sourceImageFiles": [
       "Frame 5.png"
     ],
-    "sourceDigestLineHint": "docs/active/cs-figma-board-digest-2026-06-21.md:858"
+    "sourceDigestLineHint": "docs/active/cs-figma-board-digest-2026-06-21.md:831"
   },
   {
-    "slug": "cs-figma-digest-873",
-    "docSlug": "cs-figma-digest-873",
+    "slug": "cs-figma-digest-846",
+    "docSlug": "cs-figma-digest-846",
     "docCategory": "admin",
     "category": "admin",
     "title": "코스 설정",
@@ -2646,11 +2514,11 @@ export const CS_FIGMA_DIGEST_GUIDES = [
     "sourceImageFiles": [
       "Frame 8.png"
     ],
-    "sourceDigestLineHint": "docs/active/cs-figma-board-digest-2026-06-21.md:873"
+    "sourceDigestLineHint": "docs/active/cs-figma-board-digest-2026-06-21.md:846"
   },
   {
-    "slug": "cs-figma-digest-886",
-    "docSlug": "cs-figma-digest-886",
+    "slug": "cs-figma-digest-859",
+    "docSlug": "cs-figma-digest-859",
     "docCategory": "admin",
     "category": "admin",
     "title": "코스 멤버 삭제하기 (모바일 앱)",
@@ -2716,11 +2584,11 @@ export const CS_FIGMA_DIGEST_GUIDES = [
     "sourceImageFiles": [
       "Group 3.png"
     ],
-    "sourceDigestLineHint": "docs/active/cs-figma-board-digest-2026-06-21.md:886"
+    "sourceDigestLineHint": "docs/active/cs-figma-board-digest-2026-06-21.md:859"
   },
   {
-    "slug": "cs-figma-digest-908",
-    "docSlug": "cs-figma-digest-908",
+    "slug": "cs-figma-digest-881",
+    "docSlug": "cs-figma-digest-881",
     "docCategory": "admin",
     "category": "admin",
     "title": "내부 비밀번호 재설정",
@@ -2784,11 +2652,11 @@ export const CS_FIGMA_DIGEST_GUIDES = [
     "sourceImageFiles": [
       "UniVPN 설정법.png"
     ],
-    "sourceDigestLineHint": "docs/active/cs-figma-board-digest-2026-06-21.md:908"
+    "sourceDigestLineHint": "docs/active/cs-figma-board-digest-2026-06-21.md:881"
   },
   {
-    "slug": "cs-figma-digest-931",
-    "docSlug": "cs-figma-digest-931",
+    "slug": "cs-figma-digest-904",
+    "docSlug": "cs-figma-digest-904",
     "docCategory": "admin",
     "category": "admin",
     "title": "Classin 로그인 화면 (Classin Board)",
@@ -2848,11 +2716,11 @@ export const CS_FIGMA_DIGEST_GUIDES = [
     "sourceImageFiles": [
       "image 68.png"
     ],
-    "sourceDigestLineHint": "docs/active/cs-figma-board-digest-2026-06-21.md:931"
+    "sourceDigestLineHint": "docs/active/cs-figma-board-digest-2026-06-21.md:904"
   },
   {
-    "slug": "cs-figma-digest-946",
-    "docSlug": "cs-figma-digest-946",
+    "slug": "cs-figma-digest-919",
+    "docSlug": "cs-figma-digest-919",
     "docCategory": "admin",
     "category": "admin",
     "title": "클래스인 관리자 대시보드에서 하위 계정 설정 방법",
@@ -2914,11 +2782,11 @@ export const CS_FIGMA_DIGEST_GUIDES = [
     "sourceImageFiles": [
       "관리자 대시보드 현재 수업 진행-1"
     ],
-    "sourceDigestLineHint": "docs/active/cs-figma-board-digest-2026-06-21.md:946"
+    "sourceDigestLineHint": "docs/active/cs-figma-board-digest-2026-06-21.md:919"
   },
   {
-    "slug": "cs-figma-digest-967",
-    "docSlug": "cs-figma-digest-967",
+    "slug": "cs-figma-digest-940",
+    "docSlug": "cs-figma-digest-940",
     "docCategory": "admin",
     "category": "admin",
     "title": "기관 공유 드라이브 접근 권한 부여",
@@ -2964,7 +2832,7 @@ export const CS_FIGMA_DIGEST_GUIDES = [
           "스크린샷 1: ClassIn 기관 관리 웹 대시보드의 공유 드라이브 화면. 좌측 사이드바에 홈",
           "기관 관리(코스 관리, 수업 관리, 공개 수업, 교사, 학생)",
           "스토리지(공유 드라이브가 강조 표시) 메뉴가 있고, 본문에 '공유 드라이브 만들기' 버튼과 공유 드라이브 테스트·테스트 드라이브 등 파일 목록이 보인다. 우측 상단에 '5.",
-          "스크린샷 2: '2025classin에듀메어 구성원 관리' 다이얼로그(우측 상단 X 닫기 버튼). '구성원 및 권한' 섹션, 검색 아이콘이 있고 우측의 '+구성원 초대' 버튼이 빨간 박스로 강조되어 있다."
+          "스크린샷 2: '학원M 구성원 관리' 다이얼로그(우측 상단 X 닫기 버튼). '구성원 및 권한' 섹션, 검색 아이콘이 있고 우측의 '+구성원 초대' 버튼이 빨간 박스로 강조되어 있다."
         ]
       },
       {
@@ -2982,11 +2850,11 @@ export const CS_FIGMA_DIGEST_GUIDES = [
     "sourceImageFiles": [
       "기관 공유 드라이브 접근 권한 부여 (수업 활용, 저장 X)"
     ],
-    "sourceDigestLineHint": "docs/active/cs-figma-board-digest-2026-06-21.md:967"
+    "sourceDigestLineHint": "docs/active/cs-figma-board-digest-2026-06-21.md:940"
   },
   {
-    "slug": "cs-figma-digest-988",
-    "docSlug": "cs-figma-digest-988",
+    "slug": "cs-figma-digest-961",
+    "docSlug": "cs-figma-digest-961",
     "docCategory": "admin",
     "category": "admin",
     "title": "기관 공유 드라이브 접근 권한 부여 (수업 활용, 저장 X)",
@@ -3050,35 +2918,36 @@ export const CS_FIGMA_DIGEST_GUIDES = [
     "sourceImageFiles": [
       "기관 공유 드라이브 접근 권한 부여 (수업 활용, 저장 X)-1.png"
     ],
-    "sourceDigestLineHint": "docs/active/cs-figma-board-digest-2026-06-21.md:988"
+    "sourceDigestLineHint": "docs/active/cs-figma-board-digest-2026-06-21.md:961"
   },
   {
-    "slug": "cs-figma-digest-1009",
-    "docSlug": "cs-figma-digest-1009",
+    "slug": "cs-figma-digest-982",
+    "docSlug": "cs-figma-digest-982",
     "docCategory": "admin",
     "category": "admin",
     "title": "2. 다시보기 유효 기간 설정",
     "audience": "관리자",
-    "summary": "클래스인 관리자 대시보드에서 코스별 \"다시보기(녹화 영상 재시청) 유효 기간\"을 설정하는 방법 안내. 관리자 페이지 좌측 [코스 관리]에서 옵션을 설정할 코스를 선택한 뒤, 코스 [설정] 화면의 \"다시 보기 유효 기간\" 항목에서 기간 유형을 지정하고, 하단 [설정 저장하기]로 저장한다. 유효 기간 유형은 두 가지(고정 유효 기간 / 수업 종료 후 X일 동안 유효)로 제공된다.",
+    "summary": "클래스인 관리자 대시보드에서 코스별 \"다시 보기 유효 기간\"을 설정하는 방법 안내. 관리자 페이지 좌측 [기관 관리]의 [코스 관리]에서 옵션을 설정할 코스를 선택한 뒤, 코스 [설정] 화면의 \"다시 보기 유효 기간\" 항목에서 기간 유형을 지정하고, 화면 하단의 [설정 저장하기] 버튼으로 저장한다. 유효 기간 유형은 두 가지(1. 고정 유효 기간 / 2. 수업 종료 후 X일 동안 유효)로 제공된다.",
     "keywords": [
       "2. 다시보기 유효 기간 설정",
       "설정/옵션",
       "대시보드(웹)",
-      "다시보기(녹화 영상 재시청) 유효 기간",
+      "다시 보기 유효 기간",
+      "기관 관리",
       "코스 관리",
       "설정",
-      "다시 보기 유효 기간",
       "설정 저장하기",
-      "다시보기 유효 기간",
+      "고정 유효 기간",
+      "수업 종료 후 X일 동안 유효",
       "시청 횟수 제한",
       "다시보기 유효기간 설정"
     ],
     "steps": [
-      "관리자 페이지의 좌측에서 [코스 관리]를 클릭한다.",
-      "옵션을 설정할 코스를 선택한 다음, 코스 [설정] 항목(탭) 화면으로 들어간다.",
+      "관리자 페이지의 좌측에서 [코스 관리]를 클릭한 후, 옵션을 설정할 코스를 선택한 다음, 해당 코스의 [설정] 항목 화면으로 들어가 [다시 보기 유효 기간]을 설정한다.",
       "코스 설정 화면에서 \"다시 보기 유효 기간\" 항목을 찾는다.",
-      "원하는 유효 기간 유형을 선택해 [다시보기 유효 기간]을 설정한다. — (1) 고정 유효 기간: 특정 일자까지만 다시 보기를 활성화한다. (이후에는 다시 보기 비활성화) / (2) 수업 종료 후 X일 동안 유효: 수업 종료 후 설정한 일자 동안 다시 보기를 활성화한다. (이후에는 다시 보기 비활성화)",
-      "옵션을 정상적으로 설정한 후, 화면 하단의 [설정 저장하기] 버튼을 눌러서 코스 설정을 저장한다."
+      "원하는 유효 기간 유형을 선택해 다시 보기 유효 기간을 설정한다. — 1. 고정 유효 기간: 특정 일자까지만 다시 보기를 활성화 합니다 (이후에는 다시 보기 비활성화). / 2. 수업 종료 후 X일 동안 유효: 수업 종료 후 설정한 일자 동안 다시 보기를 활성화 합니다 (이후에는 다시 보기 비활성화).",
+      "옵션을 정상적으로 설정한 후, 화면 하단의 [설정 저장하기] 버튼을 눌러서 코스 설정을 저장한다.",
+      "변경된 설정은 새로고침 또는 재로그인 시점에 갱신된다."
     ],
     "deepDive": [
       {
@@ -3086,20 +2955,20 @@ export const CS_FIGMA_DIGEST_GUIDES = [
         "title": "순서 그대로 안내",
         "body": "Figma CS 캡처의 단계 텍스트를 우선 순서로 사용합니다.",
         "checks": [
-          "관리자 페이지의 좌측에서 [코스 관리]를 클릭한다.",
-          "옵션을 설정할 코스를 선택한 다음, 코스 [설정] 항목(탭) 화면으로 들어간다.",
+          "관리자 페이지의 좌측에서 [코스 관리]를 클릭한 후, 옵션을 설정할 코스를 선택한 다음, 해당 코스의 [설정] 항목 화면으로 들어가 [다시 보기 유효 기간]을 설정한다.",
           "코스 설정 화면에서 \"다시 보기 유효 기간\" 항목을 찾는다.",
-          "원하는 유효 기간 유형을 선택해 [다시보기 유효 기간]을 설정한다. — (1) 고정 유효 기간: 특정 일자까지만 다시 보기를 활성화한다. (이후에는 다시 보기 비활성화) / (2) 수업 종료 후 X일 동안 유효: 수..."
+          "원하는 유효 기간 유형을 선택해 다시 보기 유효 기간을 설정한다. — 1. 고정 유효 기간: 특정 일자까지만 다시 보기를 활성화 합니다 (이후에는 다시 보기 비활성화). / 2.",
+          "옵션을 정상적으로 설정한 후, 화면 하단의 [설정 저장하기] 버튼을 눌러서 코스 설정을 저장한다."
         ]
       },
       {
         "level": "2단계",
         "title": "화면 기준 확인",
-        "body": "상단 스크린샷: 클래스인 관리자 대시보드의 코스 [설정] 화면. 좌측에 홈·가공 관리(코스 관리/수업 관리/숙제 관리/교사/학생), 스토리지, 학습 관리, 관리자 기능, 경제, 개정 정보 등의 메뉴 트리가 있고, 우측에 코스 커버 이미지·코스 소개·코스 내 프라이빗 리소스·고정 설정 선택·코스 태그·코스 유효 기간 등 설정 폼이 표시된다.",
+        "body": "상단 스크린샷: 클래스인 관리자 대시보드의 코스 [설정] 화면. 좌측 메뉴 트리는 홈, [기관 관리](코스 관리/수업 관리/공개 수업/교사/학생), [스토리지](데이터 개요/공유 드라이브/문제 은행/수업 리소스/코스 데이터/리소스 센터), [학습 관리](라이브&플레이백 등) 순으로 구성되며, [코스 관리]가 빨간 박스로 강조되어 있다.",
         "checks": [
-          "상단 스크린샷: 클래스인 관리자 대시보드의 코스 [설정] 화면. 좌측에 홈·가공 관리(코스 관리/수업 관리/숙제 관리/교사/학생), 스토리지, 학습 관리, 관리자 기능, 경제, 개정 정보 등의 메뉴 트리가 있고, 우...",
+          "상단 스크린샷: 클래스인 관리자 대시보드의 코스 [설정] 화면. 좌측 메뉴 트리는 홈, [기관 관리](코스 관리/수업 관리/공개 수업/교사/학생), [스토리지](데이터 개요/공유 드라이브/문제 은행/수업 리소스/코스...",
           "2. 수업 종료 후 X일 동안 유효)으로 연결된다.",
-          "하단 스크린샷: 같은 코스 설정 화면의 아래쪽. '다시 보기 유효 기간' 행(고정 유효 기간 일자·수업 종료 후 일수 입력)이 빨간 박스로 강조되고, 그 아래 고급 설정/게시판 설정/에이전트 설정 체크박스 목록을 지..."
+          "하단 스크린샷: 같은 코스 설정 화면의 가장 아래쪽. 코스 자료 열람 허용·코스 업데이트 표시 허용·임시 교실 입장 허용(교사/학생)·게시판 설정(학생/교사 글 편집 허용, 학생 AI 기능 사용 허용)·에이전트 설정..."
         ]
       },
       {
@@ -3107,26 +2976,26 @@ export const CS_FIGMA_DIGEST_GUIDES = [
         "title": "CS 주의사항과 원본 캡처",
         "body": "원본 캡처 파일과 주의/팁을 함께 확인합니다. 원본 캡처: 다시보기 유효기간 설정",
         "checks": [
-          "빨간 박스 강조: 코스 [설정] 화면의 \"다시 보기 유효 기간\" 설정 행(고정 유효 기간 일자 입력 / 수업 종료 후 X일 입력)이 표시되어 있다.",
-          "빨간 박스 강조: 화면 최하단의 [설정 저장하기] 버튼.",
           "유효 기간 유형 1 — 고정 유효 기간: 특정 일자까지만 다시 보기를 활성화 합니다 (이후에는 다시 보기 비활성화).",
-          "유효 기간 유형 2 — 수업 종료 후 X일 동안 유효: 수업 종료 후 설정한 일자 동안 다시 보기를 활성화 합니다. (이후에는 다시 보기 비활성화)."
+          "유효 기간 유형 2 — 수업 종료 후 X일 동안 유효: 수업 종료 후 설정한 일자 동안 다시 보기를 활성화 합니다 (이후에는 다시 보기 비활성화).",
+          "안내 문구: 변경된 설정은 새로고침 또는 재로그인 시점에 갱신됩니다.",
+          "상단 스크린샷의 코스 [설정] 화면에서 \"다시 보기 유효 기간\" 행에는 '고정 유효 기간'(일자 입력)과 '수업 종료 후 X일 동안 유효'(일수 입력) 두 라디오 옵션이 있으며, 빨간 화살표가 이 행에서 우측의 번호..."
         ]
       }
     ],
     "sourceImageFiles": [
       "다시보기 유효기간 설정"
     ],
-    "sourceDigestLineHint": "docs/active/cs-figma-board-digest-2026-06-21.md:1009"
+    "sourceDigestLineHint": "docs/active/cs-figma-board-digest-2026-06-21.md:982"
   },
   {
-    "slug": "cs-figma-digest-1031",
-    "docSlug": "cs-figma-digest-1031",
+    "slug": "cs-figma-digest-1004",
+    "docSlug": "cs-figma-digest-1004",
     "docCategory": "admin",
     "category": "admin",
     "title": "대시보드 수업 교사 설졍 & 삭제",
     "audience": "학원 관리자/기관 담당자",
-    "summary": "ClassIn 대시보드(웹)에서 코스의 \"수업 교사\"를 일괄 변경하고 기존 교사를 삭제하는 방법을 안내하는 가이드. 코스 상세 화면의 [학습 활동] 탭에서 모든 수업을 일괄 선택해 [대량 작업] > [수업 교사 설정하기]로 새 강사를 지정하고, 이후 [구성원] 탭에서 기존 교사를 [교사 삭제]로 제거하는 흐름을 4장의 스크린샷과 단계별 캡션으로 설명한다. 예시 계정은 EEO-TEST-MINJAE KIM(메인 계정)이며, 새 강사로 Minjae_sub 2를 지정하고 기존 교사 영란T를 삭제하는 시나리오. 별도의 경고/주의 문구는 없으며, 빨간 박스와 화살표로 클릭 위치를 강조한다.",
+    "summary": "ClassIn 대시보드(웹)에서 코스의 \"수업 교사\"를 일괄 변경하고 기존 교사를 삭제하는 방법을 안내하는 가이드. 코스 상세 화면의 [학습 활동] 탭에서 모든 수업을 일괄 선택해 [대량 작업] > [수업 교사 설정하기]로 새 강사를 지정하고, 이후 [구성원] 탭에서 기존 교사를 [교사 삭제]로 제거하는 흐름을 4장의 스크린샷과 단계별 캡션으로 설명한다. 예시 계정은 EEO-TEST-MINJAE KIM(메인 계정)이며, 새 강사로 Minjae_sub 2를 지정하고 기존 교사 [교사명]를 삭제하는 시나리오. 별도의 경고/주의 문구는 없으며, 빨간 박스와 화살표로 클릭 위치를 강조한다.",
     "keywords": [
       "대시보드 수업 교사 설졍 & 삭제",
       "설정/옵션",
@@ -3137,9 +3006,9 @@ export const CS_FIGMA_DIGEST_GUIDES = [
       "수업 교사 설정하기",
       "구성원",
       "교사 삭제",
+      "교사명",
       "구성원 목록에서 선택하기",
-      "교사 목록에서 선택",
-      "교사 추가"
+      "교사 목록에서 선택"
     ],
     "steps": [
       "[학습 활동] 탭(상단 메뉴: 학습 활동 / 시간표 / 구성원 / 설정)을 클릭한다. — 빨간 박스로 [학습 활동] 탭 강조",
@@ -3148,7 +3017,7 @@ export const CS_FIGMA_DIGEST_GUIDES = [
       "열린 [대량 작업] 드롭다운 메뉴에서 [수업 교사 설정하기]를 클릭한다. — 빨간 박스 + 화살표로 [수업 교사 설정하기] 항목 강조 (메뉴 항목: 단원 설정 / 수업 시작일 설정 / 수업 시작 시간 설정 / 수업 진행 시간 설정 / 수업 교사 설정하기 / 조교 설정 / 좌석 설정 / 온 스테이지 인원 수 설정 / 수업 녹화·웹 라이브·다시 보기 설정 / 드라이브 설정 / 수업 일괄 게시 / 수업 일괄 삭제 / 수업 일정 변경)",
       "[수업 교사 설정하기] 팝업에서 [구성원 목록에서 선택하기] 탭(또는 [교사 목록에서 선택] 탭)을 통해 방금 추가한 새로운 강사(예: Minjae_sub 2)를 라디오 버튼으로 선택한다. — 선택된 강사 Minjae_sub 2가 빨간 박스로 강조됨. 필요 시 좌측 하단 [교사 추가] 버튼으로 교사를 추가할 수 있음(빨간 박스 강조)",
       "선택을 마친 뒤 팝업 우측 하단의 [확인] 버튼을 클릭해 수업 교사 변경을 완료한다. (취소 버튼으로 닫을 수도 있음)",
-      "상단의 [구성원] 탭을 클릭한다. — 빨간 박스로 [구성원] 탭 강조. '교사' 섹션에 교사 카드(Minjae_sub 2, 교사로 설정, 영란T 등)가 표시됨",
+      "상단의 [구성원] 탭을 클릭한다. — 빨간 박스로 [구성원] 탭 강조. '교사' 섹션에 교사 카드(Minjae_sub 2, 교사로 설정, [교사명] 등)가 표시됨",
       "기존 교사 카드 하단의 점 세 개(⋮) 메뉴를 클릭한다.",
       "[교사 삭제]를 눌러 기존 교사를 삭제하면 담임 교사와 수업 교사 변경이 모두 완료된다."
     ],
@@ -3171,7 +3040,7 @@ export const CS_FIGMA_DIGEST_GUIDES = [
         "checks": [
           "스크린샷1 (상단): ClassIn 대시보드 코스 상세 화면 - '실시간 수업용 코스'의 [학습 활동] 탭(빨간 박스, 활성). 상단 우측에 '메인 계정 EEO-TEST-MINJAE KIM'.",
           "스크린샷2 (중단): 같은 화면 위에 '수업 교사 설정하기' 모달 팝업이 열린 상태. 탭 [구성원 목록에서 선택하기](활성)/[교사 목록에서 선택], 검색창(이름/휴대폰 번호/이메일), '구성원 (2)명' 목록에 M...",
-          "스크린샷3 (하단): [구성원] 탭(빨간 박스, 활성)으로 전환된 화면. 상단 메뉴 학습 활동/시간표/구성원/설정. '교사' 섹션에 교사 카드 3개(Minjae_sub 2, '교사로 설정' 카드, 영란T)가 가로로...",
+          "스크린샷3 (하단): [구성원] 탭(빨간 박스, 활성)으로 전환된 화면. 상단 메뉴 학습 활동/시간표/구성원/설정. '교사' 섹션에 교사 카드 3개(Minjae_sub 2, '교사로 설정' 카드, [교사명])가 가로...",
           "스크린샷4 영역(최하단 밴드): 추가 스크린샷 없이 캡션 텍스트만 있고 나머지는 여백. 가이드의 마지막 안내문(교사 삭제 단계)으로 마무리됨."
         ]
       },
@@ -3190,11 +3059,11 @@ export const CS_FIGMA_DIGEST_GUIDES = [
     "sourceImageFiles": [
       "대시보드 수업 교사 설정 & 삭제"
     ],
-    "sourceDigestLineHint": "docs/active/cs-figma-board-digest-2026-06-21.md:1031"
+    "sourceDigestLineHint": "docs/active/cs-figma-board-digest-2026-06-21.md:1004"
   },
   {
-    "slug": "cs-figma-digest-1062",
-    "docSlug": "cs-figma-digest-1062",
+    "slug": "cs-figma-digest-1035",
+    "docSlug": "cs-figma-digest-1035",
     "docCategory": "admin",
     "category": "admin",
     "title": "코스를 기존 교사에서 다른 교사로 변경해야 할 경우, 아래 내용을 따라와 주세요!",
@@ -3240,7 +3109,7 @@ export const CS_FIGMA_DIGEST_GUIDES = [
           "[코스 관리] 화면 스크린샷: 좌측 사이드바에서 '코스 관리'가 빨간 박스로 강조됨. 코스 목록(154개)이 표 형태로 표시되며, 첫 번째 코스 '실시간 수업용 코스'의 코스 이름이 빨간 박스로 강조되고 화살표가 가...",
           "코스 [구성원] 탭 화면 스크린샷: 상단 탭 메뉴 중 '구성원'이 빨간 박스로 강조되고, 교사 영역의 '교사로 설정'(톱니바퀴 아이콘) 카드가 빨간 점선 박스로 강조됨.",
           "'교사로 설정' 모달 스크린샷: 교사 목록(16명)에서 'Minjae_sub 2' 항목이 빨간 박스로 강조되어 체크되어 있고, 우측에 선택된 'Minjae_sub 2",
-          "kgcpg@naver.com' 계정이 표시됨. 좌하단의 '교사 추가' 버튼과 우하단의 '확인' 버튼이 각각 빨간 박스로 강조됨."
+          "[이메일]' 계정이 표시됨. 좌하단의 '교사 추가' 버튼과 우하단의 '확인' 버튼이 각각 빨간 박스로 강조됨."
         ]
       },
       {
@@ -3251,40 +3120,40 @@ export const CS_FIGMA_DIGEST_GUIDES = [
           "'교사로 설정' 모달에서는 교사 목록(예: 교사 16명)에서 등록할 계정의 체크박스를 선택(예: Minjae_sub 2)하면 우측에 선택된 계정이 표시됨",
           "교사 추가 입력 폼에는 국가번호(+86 등) 선택, 전화번호/이메일 입력, 이름 입력(0/50자) 필드가 있으며 '교사 대리 등록' 체크박스가 있음",
           "교사 계정 카드의 점 세 개(...) 메뉴에는 '교사 삭제'와 '담임 교사로 설정' 항목이 있음",
-          "코스 구성원 화면에는 교사 영역(예: 영란T, Minjae_sub 2)과 수강생(0/300), 청강생(0/20) 정보가 표시됨"
+          "코스 구성원 화면에는 교사 영역(예: [교사명], Minjae_sub 2)과 수강생(0/300), 청강생(0/20) 정보가 표시됨"
         ]
       }
     ],
     "sourceImageFiles": [
       "대시보드에서 교사 변경.png"
     ],
-    "sourceDigestLineHint": "docs/active/cs-figma-board-digest-2026-06-21.md:1062"
+    "sourceDigestLineHint": "docs/active/cs-figma-board-digest-2026-06-21.md:1035"
   },
   {
-    "slug": "cs-figma-digest-1081",
-    "docSlug": "cs-figma-digest-1081",
+    "slug": "cs-figma-digest-1054",
+    "docSlug": "cs-figma-digest-1054",
     "docCategory": "admin",
     "category": "admin",
     "title": "새로 들어온 학생도 수업 다시보기 시청",
     "audience": "관리자",
-    "summary": "코스에 새로 가입된(나중에 들어온) 학생도 이전 수업의 다시보기 영상을 시청할 수 있도록 설정하는 방법을 안내하는 가이드. ClassIn PC 앱에서 프로필을 클릭해 관리자용 대시보드(웹)에 접속한 뒤, [계정 정보] > [일반 설정] > \"수업 다시보기\" 탭으로 이동하여 \"2. 수업 다시보기 권한에 대한 고급 설정\"의 '코스에 새로 가입된 학생이 이전 수업의 다시보기 시청을 허용합니다' 옵션을 활성화한다. 단, 이 옵션은 활성화 시점에 생성되어 있는 코스에만, 그리고 코스에 새로 가입하는 학생에게만 적용되며, 기존 학생은 코스 탈퇴 후 재입장해야 변경된 옵션이 적용된다.",
+    "summary": "코스에 새로 가입된(나중에 들어온) 학생도 이전 수업의 다시보기 영상을 시청할 수 있도록 설정하는 방법을 안내하는 가이드. ClassIn PC 앱의 '계정 및 설정' 팝업에서 우측 '관리자용 대시보드' 버튼을 눌러 관리자용 대시보드(웹)에 접속한 뒤, 좌측 [계정 정보] > '일반 설정'으로 이동하고 상단 '수업 다시보기' 탭을 연다. '2. 수업 다시보기 권한에 대한 고급 설정' 영역에서 '코스에 새로 가입된 학생이 이전 수업의 다시보기 시청을 허용합니다' 옵션을 활성화한다. 이 옵션이 활성화되면 새로 코스에 가입된 학생은 과거 수업의 '정규 학생(결석 상태)'으로 처리되어 과거 수업의 다시보기 영상을 시청할 수 있다(비활성화 시에는 '전출생'으로 처리되어 시청 불가). 해당 옵션은 '활성화 시점'에 생성되어 있는 모든 코스에 적용되고, 코스에 새로 가입한 학생에게만 적용되며, 기존 학생은 코스 탈퇴 후 재입장해야 변경된 옵션이 적용된다.",
     "keywords": [
       "새로 들어온 학생도 수업 다시보기 시청",
       "설정/옵션",
       "혼합",
+      "계정 및 설정",
+      "관리자용 대시보드",
       "계정 정보",
       "일반 설정",
       "수업 다시보기",
       "2. 수업 다시보기 권한에 대한 고급 설정",
       "코스에 새로 가입된 학생이 이전 수업의 다시보기 시청을 허용합니다",
-      "관리자용 대시보드",
-      "안내",
-      "활성화 시점",
-      "코스 정규 학생과 교사의 수업 다시보기에 영향을 주지 않도록, 위의"
+      "정규 학생(결석 상태)",
+      "전출생"
     ],
     "steps": [
-      "ClassIn PC 앱에서 프로필을 클릭해 관리자용 대시보드(웹)에 접속해 주세요. (계정 및 설정 팝업에서 우측 '관리자용 대시보드' 버튼 클릭)",
-      "관리자용 대시보드의 좌측 옵션에서 [계정 정보] 영역의 '일반 설정'을 클릭해 주세요.",
+      "ClassIn PC 앱에서 프로필을 클릭해 관리자용 대시보드(웹)에 접속해 주세요. ('계정 및 설정' 팝업 우측 상단의 '관리자용 대시보드' 버튼 클릭)",
+      "관리자용 대시보드 좌측 옵션에서 [계정 정보] 영역의 '일반 설정'을 클릭해 주세요.",
       "일반 설정 상단 탭에서 '수업 다시보기' 탭을 클릭해 주세요.",
       "'2. 수업 다시보기 권한에 대한 고급 설정' 영역의 '코스에 새로 가입된 학생이 이전 수업의 다시보기 시청을 허용합니다' 옵션을 활성화(토글 ON)해 주세요."
     ],
@@ -3294,8 +3163,8 @@ export const CS_FIGMA_DIGEST_GUIDES = [
         "title": "순서 그대로 안내",
         "body": "Figma CS 캡처의 단계 텍스트를 우선 순서로 사용합니다.",
         "checks": [
-          "ClassIn PC 앱에서 프로필을 클릭해 관리자용 대시보드(웹)에 접속해 주세요. (계정 및 설정 팝업에서 우측 '관리자용 대시보드' 버튼 클릭)",
-          "관리자용 대시보드의 좌측 옵션에서 [계정 정보] 영역의 '일반 설정'을 클릭해 주세요.",
+          "ClassIn PC 앱에서 프로필을 클릭해 관리자용 대시보드(웹)에 접속해 주세요. ('계정 및 설정' 팝업 우측 상단의 '관리자용 대시보드' 버튼 클릭)",
+          "관리자용 대시보드 좌측 옵션에서 [계정 정보] 영역의 '일반 설정'을 클릭해 주세요.",
           "일반 설정 상단 탭에서 '수업 다시보기' 탭을 클릭해 주세요.",
           "'2. 수업 다시보기 권한에 대한 고급 설정' 영역의 '코스에 새로 가입된 학생이 이전 수업의 다시보기 시청을 허용합니다' 옵션을 활성화(토글 ON)해 주세요."
         ]
@@ -3307,8 +3176,7 @@ export const CS_FIGMA_DIGEST_GUIDES = [
         "checks": [
           "[1번 스크린샷] ClassIn PC 데스크톱 앱 화면. '계정 및 설정' 팝업이 떠 있으며 상단에 'Classin_Hope' 계정명과 잔액(₩34.00), 사용량(48.16G/30G)이 표시됨.",
           "[2번 스크린샷] 관리자용 대시보드(웹)의 공지/콘텐츠 목록 화면. 상단에 계정 잔액 ₩79.00, Business 버전, 통계 숫자(184, 22, 104) 표시.",
-          "[3번 스크린샷] 관리자용 대시보드 '일반 설정' 페이지. 상단 녹색 헤더 아래 탭 줄이 있고 '수업 다시보기' 탭이 빨간 박스와 빨간 화살표로 강조됨. 본문 '1.",
-          "[4번 스크린샷] 관리자용 대시보드 좌측 사이드바 일부 확대 화면(결제 영역 위쪽, 일반 설정/숙제 센터/권한 구성 등 메뉴). '일반 설정' 항목이 빨간 박스와 빨간 화살표로 강조됨."
+          "[3번 스크린샷] 관리자용 대시보드 '일반 설정' 페이지 (수업 다시보기 탭). 상단 탭 줄에서 '수업 다시보기' 탭이 빨간 박스와 빨간 화살표로 강조됨. 본문에 '1."
         ]
       },
       {
@@ -3316,25 +3184,94 @@ export const CS_FIGMA_DIGEST_GUIDES = [
         "title": "CS 주의사항과 원본 캡처",
         "body": "원본 캡처 파일과 주의/팁을 함께 확인합니다. 원본 캡처: 새로 들어온 학생도 수업 다시보기 시청",
         "checks": [
-          "[안내] 해당 옵션은 '활성화 시점'에 생성되어 있는 모든 코스에 적용됩니다.",
+          "[안내] 해당 옵션은 \"활성화 시점\"에 생성 되어 있는 모든 코스에 적용 됩니다.",
           "[안내] 코스에 새로 가입한 학생에게만 해당 옵션이 적용됩니다.",
-          "[안내] 기존 학생은 코스 탈퇴 후 재입장해야 변경된 옵션이 적용됩니다.",
-          "화면 내 안내문: '코스 정규 학생과 교사의 수업 다시보기에 영향을 주지 않도록, 위의 \"코스 정규 학생과 교사의 수업 다시보기 설정\"을 반드시 활성화해 주세요.' (빨간색 경고 문구)"
+          "[안내] 기존 학생은 코스 탈퇴 후 재입장해야 변경된 옵션에 적용됩니다.",
+          "섹션 2 상단 빨간색 경고 문구: '(학생의 수업 다시보기에 영향을 주지 않도록, 위의 \"코스 정규 학생과 교사의 수업 다시보기 설정\"을 반드시 활성화해 주세요.)'"
         ]
       }
     ],
     "sourceImageFiles": [
       "새로 들어온 학생도 수업 다시보기 시청"
     ],
+    "sourceDigestLineHint": "docs/active/cs-figma-board-digest-2026-06-21.md:1054"
+  },
+  {
+    "slug": "cs-figma-digest-1081",
+    "docSlug": "cs-figma-digest-1081",
+    "docCategory": "admin",
+    "category": "admin",
+    "title": "수업중 링크 자료 사용/브라우저 즐겨찾기",
+    "audience": "교사",
+    "summary": "클래스인(ClassIn) 수업 중 [수업도구]의 [브라우저] 기능에서 자주 쓰는 사이트(유튜브 링크 등)를 즐겨찾기(내 컬렉션)에 등록해 두는 방법 안내. 수업 전 미리 즐겨찾기를 해두면, 실제 수업 때 [수업 도구] - [브라우저]로 들어가 링크 복사 없이 바로 접속할 수 있다. 유튜브 영상 재생 시 [사운드 공유] 버튼을 반드시 초록색으로 활성화해야 학생에게 소리가 전달된다는 점을 강조한다.",
+    "keywords": [
+      "수업중 링크 자료 사용/브라우저 즐겨찾기",
+      "설정/옵션",
+      "PC",
+      "수업도구",
+      "브라우저",
+      "수업 도구",
+      "사운드 공유",
+      "칠판",
+      "내 컬렉션",
+      "수업중 링크 자료 사용",
+      "브라우저 즐겨찾기"
+    ],
+    "steps": [
+      "클래스인 메인 화면 좌측 사이드바에서 [칠판]을 클릭한다.",
+      "수업(칠판) 화면 우측의 서류 모양 아이콘 [수업도구]를 클릭한 후, 도구 목록에서 [브라우저] 기능을 누른다.",
+      "브라우저 상단의 검색창(URL 주소창)에 원하는 유튜브 링크를 붙여넣어 검색(접속)한다.",
+      "유튜브 영상 재생 시 우측 [사운드 공유] 버튼을 반드시 초록색으로 활성화한다.",
+      "브라우저 상단 우측의 별(★) 모양 아이콘을 눌러 현재 페이지를 즐겨찾기에 추가한다.",
+      "추가된 사이트는 브라우저의 [내 컬렉션] 영역에 저장되며, 실제 수업 때 [수업 도구] - [브라우저]로 들어가면 미리 즐겨찾기 해놓은 사이트를 링크 복사 없이 바로 접속할 수 있다."
+    ],
+    "deepDive": [
+      {
+        "level": "1단계",
+        "title": "순서 그대로 안내",
+        "body": "Figma CS 캡처의 단계 텍스트를 우선 순서로 사용합니다.",
+        "checks": [
+          "클래스인 메인 화면 좌측 사이드바에서 [칠판]을 클릭한다.",
+          "수업(칠판) 화면 우측의 서류 모양 아이콘 [수업도구]를 클릭한 후, 도구 목록에서 [브라우저] 기능을 누른다.",
+          "브라우저 상단의 검색창(URL 주소창)에 원하는 유튜브 링크를 붙여넣어 검색(접속)한다.",
+          "유튜브 영상 재생 시 우측 [사운드 공유] 버튼을 반드시 초록색으로 활성화한다."
+        ]
+      },
+      {
+        "level": "2단계",
+        "title": "화면 기준 확인",
+        "body": "클래스인 PC 메인 대시보드 화면. 좌측 사이드바 메뉴 중 [칠판] 항목이 빨간 박스로 강조되어 있고, 화면 중앙의 강의 썸네일 영역에서 좌측 [칠판] 메뉴로 향하는 빨간 화살표가 그려져 있다. 우측에는 최근 알림 목록이 보인다. / 수업용 검은색 칠판(WELCOME TO EEO CLASS 문구) 화면.",
+        "checks": [
+          "클래스인 PC 메인 대시보드 화면. 좌측 사이드바 메뉴 중 [칠판] 항목이 빨간 박스로 강조되어 있고, 화면 중앙의 강의 썸네일 영역에서 좌측 [칠판] 메뉴로 향하는 빨간 화살표가 그려져 있다.",
+          "수업용 검은색 칠판(WELCOME TO EEO CLASS 문구) 화면. 우측 도구 막대에서 서류 모양 [수업도구] 아이콘으로 향하는 빨간 화살표가 있고, 펼쳐진 수업도구 팝업 메뉴 안에서 [브라우저](지구본 아이콘)...",
+          "수업 중 브라우저 도구 화면. [내 컬렉션]에 ClassIn: One..., NAVER, Google, YouTube, 모바일 기기..., 클래스인 X 퀴...",
+          "브라우저 상단 바 확대 화면. 우측에 초록색 별(★) 모양 즐겨찾기 아이콘이 빨간 박스로 강조되고 그 아래에서 위로 향하는 빨간 화살표가 있으며, 옆에는 초록색으로 켜진 [사운드 공유] 토글이 보인다."
+        ]
+      },
+      {
+        "level": "3단계",
+        "title": "CS 주의사항과 원본 캡처",
+        "body": "원본 캡처 파일과 주의/팁을 함께 확인합니다. 원본 캡처: 수업중 링크 자료 사용/브라우저 즐겨찾기",
+        "checks": [
+          "[사운드 공유] 버튼을 반드시 초록색으로 활성화해야 학생에게 영상 소리가 전달된다.",
+          "즐겨찾기(★) 아이콘은 브라우저 창 우측 상단, [사운드 공유] 토글 옆에 위치하며 추가 시 초록색 별로 표시된다.",
+          "즐겨찾기한 사이트들은 [내 컬렉션]에 모이며(예: ClassIn: One..., NAVER, Google, YouTube, 모바일 기기..., 클래스인 X 퀴...",
+          "수업 전에 미리 즐겨찾기를 등록해 두는 것이 핵심이다."
+        ]
+      }
+    ],
+    "sourceImageFiles": [
+      "수업중 링크 자료 사용/브라우저 즐겨찾기"
+    ],
     "sourceDigestLineHint": "docs/active/cs-figma-board-digest-2026-06-21.md:1081"
   },
   {
-    "slug": "cs-figma-digest-1104",
-    "docSlug": "cs-figma-digest-1104",
+    "slug": "cs-figma-digest-1102",
+    "docSlug": "cs-figma-digest-1102",
     "docCategory": "admin",
     "category": "admin",
     "title": "학생 닉네임 동기화 & 추가 안내 가이드",
-    "audience": "학원 관리자/교사 (익산 유튜엠 CS용)",
+    "audience": "학원 관리자/교사 (학원B CS용)",
     "summary": "클래스인 대시보드의 \"클래스 닉네임 설정 동기화\" 옵션을 켜서, 코스에 새로 들어오는 학생의 코스 닉네임을 클래스인 가입 시 등록한 실제 이름과 자동으로 동일하게 맞추는 방법 가이드. 대시보드 접속 → 계정 정보 > 일반 설정 → 클래스 설정 탭에서 닉네임 동기화 토글을 활성화하는 절차를 설명하고, 기존 학생을 동기화하려면 코스 탈퇴 후 재등록이 필요함을 안내한다. 또한 학생/사용자가 모바일과 PC에서 직접 닉네임(실제 본명)을 변경하는 방법을 스크린샷으로 보여준다.",
     "keywords": [
       "학생 닉네임 동기화 & 추가 안내 가이드",
@@ -3386,7 +3323,7 @@ export const CS_FIGMA_DIGEST_GUIDES = [
       {
         "level": "3단계",
         "title": "CS 주의사항과 원본 캡처",
-        "body": "원본 캡처 파일과 주의/팁을 함께 확인합니다. 원본 캡처: 익산 유튜엠 닉네임 동기화",
+        "body": "원본 캡처 파일과 주의/팁을 함께 확인합니다. 원본 캡처: 학원B 닉네임 동기화",
         "checks": [
           "타이틀(이미지 상단): \"학생 닉네임 동기화 & 추가 안내 가이드\"",
           "캡션1: \"*대시보드에 접속한 후, \\\"계정 정보\\\"의 '일반 설정을 클릭해 주세요.\"",
@@ -3396,13 +3333,13 @@ export const CS_FIGMA_DIGEST_GUIDES = [
       }
     ],
     "sourceImageFiles": [
-      "익산 유튜엠 닉네임 동기화"
+      "학원B 닉네임 동기화"
     ],
-    "sourceDigestLineHint": "docs/active/cs-figma-board-digest-2026-06-21.md:1104"
+    "sourceDigestLineHint": "docs/active/cs-figma-board-digest-2026-06-21.md:1102"
   },
   {
-    "slug": "cs-figma-digest-1133",
-    "docSlug": "cs-figma-digest-1133",
+    "slug": "cs-figma-digest-1131",
+    "docSlug": "cs-figma-digest-1131",
     "docCategory": "admin",
     "category": "admin",
     "title": "코스 내 닉네임 변경 옵션 활성/비활성화",
@@ -3464,11 +3401,11 @@ export const CS_FIGMA_DIGEST_GUIDES = [
     "sourceImageFiles": [
       "코스 내 닉네임 변경 옵션 활성/비활성화"
     ],
-    "sourceDigestLineHint": "docs/active/cs-figma-board-digest-2026-06-21.md:1133"
+    "sourceDigestLineHint": "docs/active/cs-figma-board-digest-2026-06-21.md:1131"
   },
   {
-    "slug": "cs-figma-digest-1153",
-    "docSlug": "cs-figma-digest-1153",
+    "slug": "cs-figma-digest-1151",
+    "docSlug": "cs-figma-digest-1151",
     "docCategory": "admin",
     "category": "admin",
     "title": "코스 내 수업 온스테이지 옵션 변경",
@@ -3532,11 +3469,11 @@ export const CS_FIGMA_DIGEST_GUIDES = [
     "sourceImageFiles": [
       "코스 내 수업 온스테이지 옵션 변경"
     ],
-    "sourceDigestLineHint": "docs/active/cs-figma-board-digest-2026-06-21.md:1153"
+    "sourceDigestLineHint": "docs/active/cs-figma-board-digest-2026-06-21.md:1151"
   },
   {
-    "slug": "cs-figma-digest-1176",
-    "docSlug": "cs-figma-digest-1176",
+    "slug": "cs-figma-digest-1174",
+    "docSlug": "cs-figma-digest-1174",
     "docCategory": "admin",
     "category": "admin",
     "title": "코스 내 수업 온스테이지 옵션 변경 (대량)",
@@ -3601,11 +3538,11 @@ export const CS_FIGMA_DIGEST_GUIDES = [
     "sourceImageFiles": [
       "코스 내 수업 온스테이지 옵션 변경 (대량)"
     ],
-    "sourceDigestLineHint": "docs/active/cs-figma-board-digest-2026-06-21.md:1176"
+    "sourceDigestLineHint": "docs/active/cs-figma-board-digest-2026-06-21.md:1174"
   },
   {
-    "slug": "cs-figma-digest-1197",
-    "docSlug": "cs-figma-digest-1197",
+    "slug": "cs-figma-digest-1195",
+    "docSlug": "cs-figma-digest-1195",
     "docCategory": "admin",
     "category": "admin",
     "title": "코스 내 초대 활성화(QR, Link 등)",
@@ -3664,11 +3601,11 @@ export const CS_FIGMA_DIGEST_GUIDES = [
     "sourceImageFiles": [
       "코스 내 초대 활성화(QR, Link 등)"
     ],
-    "sourceDigestLineHint": "docs/active/cs-figma-board-digest-2026-06-21.md:1197"
+    "sourceDigestLineHint": "docs/active/cs-figma-board-digest-2026-06-21.md:1195"
   },
   {
-    "slug": "cs-figma-digest-1215",
-    "docSlug": "cs-figma-digest-1215",
+    "slug": "cs-figma-digest-1213",
+    "docSlug": "cs-figma-digest-1213",
     "docCategory": "admin",
     "category": "admin",
     "title": "클래스인 교실 내 카메라/ 마이크 설정 확인",
@@ -3737,15 +3674,15 @@ export const CS_FIGMA_DIGEST_GUIDES = [
     "sourceImageFiles": [
       "클래스인 교실 내 카메라/마이크 설정 확인 (PC)"
     ],
-    "sourceDigestLineHint": "docs/active/cs-figma-board-digest-2026-06-21.md:1215"
+    "sourceDigestLineHint": "docs/active/cs-figma-board-digest-2026-06-21.md:1213"
   },
   {
-    "slug": "cs-figma-digest-1241",
-    "docSlug": "cs-figma-digest-1241",
+    "slug": "cs-figma-digest-1239",
+    "docSlug": "cs-figma-digest-1239",
     "docCategory": "admin",
     "category": "admin",
     "title": "클래스인 교실 내 카메라/ 마이크 설정 확인",
-    "audience": "학원(모나르떼) CS 대응용 — 교실 내 카메라/마이크 설정을 확인·변경하려는 교사/운영자",
+    "audience": "학원(학원E) CS 대응용 — 교실 내 카메라/마이크 설정을 확인·변경하려는 교사/운영자",
     "summary": "클래스인 교실 화면에서 카메라/마이크 설정을 확인하고 변경하는 방법을 안내하는 PC용 CS 가이드. 우측 상단 아이콘 또는 하단 \"설정\"을 통해 설정 창에 진입한 뒤, 마이크 설정(사용할 마이크 선택, 사운드 바 작동 확인, 스피커, 배경 소음 감소/음악 모드 등)과 카메라 설정(사용할 카메라 선택, 미리 보기 및 기기 목록 확인, 카메라 드롭다운에서 장치 선택)을 점검하는 절차를 스크린샷과 함께 보여준다.",
     "keywords": [
       "클래스인 교실 내 카메라/ 마이크 설정 확인",
@@ -3796,7 +3733,7 @@ export const CS_FIGMA_DIGEST_GUIDES = [
       {
         "level": "3단계",
         "title": "CS 주의사항과 원본 캡처",
-        "body": "원본 캡처 파일과 주의/팁을 함께 확인합니다. 원본 캡처: 클래스인 마이크 활성화/비활성화(모나르떼)",
+        "body": "원본 캡처 파일과 주의/팁을 함께 확인합니다. 원본 캡처: 클래스인 마이크 활성화/비활성화(학원E)",
         "checks": [
           "빨간 박스 강조: PC 교실 화면 우측 상단의 옵션 아이콘 영역 및 하단 '설정' 버튼.",
           "마이크 설정 창의 빨간 박스 강조: 마이크 선택 드롭다운(마이크(Realtek(R) Audio))과 '시험' 버튼, 그 아래 입력 레벨 사운드 바.",
@@ -3806,38 +3743,39 @@ export const CS_FIGMA_DIGEST_GUIDES = [
       }
     ],
     "sourceImageFiles": [
-      "클래스인 마이크 활성화/비활성화(모나르떼)"
+      "클래스인 마이크 활성화/비활성화(학원E)"
     ],
-    "sourceDigestLineHint": "docs/active/cs-figma-board-digest-2026-06-21.md:1241"
+    "sourceDigestLineHint": "docs/active/cs-figma-board-digest-2026-06-21.md:1239"
   },
   {
-    "slug": "cs-figma-digest-1268",
-    "docSlug": "cs-figma-digest-1268",
+    "slug": "cs-figma-digest-1266",
+    "docSlug": "cs-figma-digest-1266",
     "docCategory": "admin",
     "category": "admin",
-    "title": "클래스인 교실 내 카메라/ 마이크 설정 확인",
-    "audience": "전자칠판으로 클래스인 수업을 진행하는 학원 교사/운영자 (마이크·카메라 입력 장치를 점검하거나 현장 녹화를 설정하려는 사용자)",
-    "summary": "전자칠판에서 클래스인 교실에 입장한 상태로 카메라/마이크 입력 장치를 확인하고 설정하는 방법을 안내하는 가이드. 우측 하단 톱니바퀴(설정) 아이콘에서 설정 화면을 열어 마이크와 카메라를 선택하고, 마이크 사운드 바가 초록색으로 움직이는지로 동작을 확인하며, 현재 연결된 카메라가 기기 목록에 체크되어 있는지 확인한다. 마지막으로 '현장 녹화 설정 옵션'이 활성화된 경우 녹화할 카메라를 묻는 알림이 뜨므로, 톱니바퀴(설정)에서 녹화할 카메라를 선택한 뒤 '바로 녹화하기'를 눌러 녹화를 시작하는 방법(정상 시 하단 초록색 아이콘 등장)을 다룬다.",
+    "title": "전자칠판 클래스인 교실에서 마이크 활성화/비활성화 및 카메라 설정 확인",
+    "audience": "전자칠판으로 클래스인 수업을 진행하는 학원 교사/운영자 (수업 중 마이크·카메라 입력 장치를 점검하거나 현장 녹화를 설정하려는 사용자)",
+    "summary": "전자칠판에서 클래스인 교실에 입장한 상태로 마이크의 활성화/비활성화 상태와 카메라 입력 장치를 확인·설정하는 방법을 안내하는 가이드. 교실 화면 중앙의 장치 카드에서 마이크가 '사용 안 함'(비활성화) 상태로 표시될 수 있으며, 카메라는 'Integrated Ca…', 스피커는 '시스템 기본'으로 표시된다. 우측 하단 톱니바퀴(설정) 아이콘에서 설정 창을 열어 사용할 마이크(예: 마이크(Realtek(R) Audio))를 선택하고, 사운드 바가 초록색으로 움직이는지로 동작을 확인하며, 카메라 설정에서 현재 연결된 카메라(T1-Tracking)가 기기 목록에 체크되어 있는지 확인한다. 마지막으로 현장 녹화 옵션이 활성화된 경우 녹화할 카메라를 묻는 알림이 뜨므로, 녹화할 카메라를 선택한 뒤 '바로 녹화하기'를 눌러 녹화를 시작하는 방법(정상 시 하단 작업표시줄에 초록색 아이콘 등장)을 다룬다.",
     "keywords": [
-      "클래스인 교실 내 카메라/ 마이크 설정 확인",
+      "전자칠판 클래스인 교실에서 마이크 활성화/비활성화 및 카메라 설정 확인",
       "설정/옵션",
       "전자칠판(IFP)",
-      "현장 녹화 설정 옵션",
+      "사용 안 함",
+      "Integrated Ca…",
+      "시스템 기본",
       "바로 녹화하기",
       "마이크 설정",
       "시험",
       "자동 마이크 볼륨 조정",
       "카메라 설정",
-      "현장 녹화 설정 옵션 활성화 시",
-      "시스템 기본",
-      "설정 더 보기"
+      "현장 녹화 설정 옵션 활성화 시"
     ],
     "steps": [
-      "우측의 톱니바퀴를 눌러 나오는 설정 화면에서 마이크/ 카메라를 선택해주세요. (전자칠판 클래스인 교실 화면 하단의 톱니바퀴(설정) 아이콘 클릭)",
-      "[마이크 설정] 사용하기 원하는 마이크를 선택해주세요. (예: 마이크(Realtek(R) Audio))",
+      "전자칠판 클래스인 교실 화면에서 장치 카드 상태를 확인합니다. 마이크 카드가 '사용 안 함'(비활성화)으로 표시될 수 있으며, 카메라 카드는 'Integrated Ca…', 스피커 카드는 '시스템 기본'으로 표시됩니다.",
+      "우측의 톱니바퀴(설정) 아이콘을 눌러 나오는 설정 화면에서 마이크/카메라를 선택해 주세요.",
+      "[마이크 설정] 사용하기 원하는 마이크를 선택해 주세요. (예: 마이크(Realtek(R) Audio))",
       "마이크가 정상 동작하는지 확인: 하단의 사운드 바가 초록색으로 움직이는지 확인해 주세요. ('시험' 버튼으로 테스트 가능, '자동 마이크 볼륨 조정' 옵션 있음)",
-      "[카메라 설정] 사용하길 원하는 카메라를 선택해주세요.",
-      "현재 연결된 카메라 화면과 이름을 기기 목록에서 체크해 주세요.",
+      "[카메라 설정] 사용하길 원하는 카메라를 선택해 주세요.",
+      "현재 연결된 카메라 화면과 이름(T1-Tracking)을 기기 목록에서 체크해 주세요.",
       "[현장 녹화 설정 옵션 활성화 시] 현장 녹화 옵션을 활성화 했을 경우, 녹화할 카메라를 묻는 알림이 등장합니다.",
       "상단의 톱니바퀴(설정)을 클릭해 녹화할 카메라를 선택한 후, \"바로 녹화하기\"를 클릭해 주세요. (정상적으로 녹화 시 하단에 초록색 아이콘 등장)"
     ],
@@ -3847,21 +3785,21 @@ export const CS_FIGMA_DIGEST_GUIDES = [
         "title": "순서 그대로 안내",
         "body": "Figma CS 캡처의 단계 텍스트를 우선 순서로 사용합니다.",
         "checks": [
-          "우측의 톱니바퀴를 눌러 나오는 설정 화면에서 마이크/ 카메라를 선택해주세요. (전자칠판 클래스인 교실 화면 하단의 톱니바퀴(설정) 아이콘 클릭)",
-          "[마이크 설정] 사용하기 원하는 마이크를 선택해주세요. (예: 마이크(Realtek(R) Audio))",
-          "마이크가 정상 동작하는지 확인: 하단의 사운드 바가 초록색으로 움직이는지 확인해 주세요. ('시험' 버튼으로 테스트 가능, '자동 마이크 볼륨 조정' 옵션 있음)",
-          "[카메라 설정] 사용하길 원하는 카메라를 선택해주세요."
+          "전자칠판 클래스인 교실 화면에서 장치 카드 상태를 확인합니다. 마이크 카드가 '사용 안 함'(비활성화)으로 표시될 수 있으며, 카메라 카드는 'Integrated Ca…', 스피커 카드는 '시스템 기본'으로 표시됩니...",
+          "우측의 톱니바퀴(설정) 아이콘을 눌러 나오는 설정 화면에서 마이크/카메라를 선택해 주세요.",
+          "[마이크 설정] 사용하기 원하는 마이크를 선택해 주세요. (예: 마이크(Realtek(R) Audio))",
+          "마이크가 정상 동작하는지 확인: 하단의 사운드 바가 초록색으로 움직이는지 확인해 주세요. ('시험' 버튼으로 테스트 가능, '자동 마이크 볼륨 조정' 옵션 있음)"
         ]
       },
       {
         "level": "2단계",
         "title": "화면 기준 확인",
-        "body": "[전자칠판] 클래스인 교실 화면 스크린샷: 상단에 'Test Course_0909 - 1', '코스 ID 2340547' 표기. 화면 중앙에 스피커·마이크·카메라(Integrated Ca…) 설정 카드들이 있고 마이크/카메라 영역이 빨간 박스로 강조됨.",
+        "body": "[전자칠판] 클래스인 교실 화면 스크린샷: 우측 상단에 '슬라이드하여 수업 종료하기' 버튼. 화면 중앙에 스피커·마이크·카메라 장치 설정 카드가 있고, 마이크 카드는 '마이크 / 사용 안 함', 카메라 카드는 '카메라 / Integrated Ca…', 스피커 카드는 '시스템 기본'으로 표시됨. 마이크/카메라 카드가 빨간 박스로 강조됨.",
         "checks": [
-          "[전자칠판] 클래스인 교실 화면 스크린샷: 상단에 'Test Course_0909 - 1', '코스 ID 2340547' 표기. 화면 중앙에 스피커·마이크·카메라(Integrated Ca…) 설정 카드들이 있고 마이...",
-          "[마이크 설정] 다크 테마 설정 창 스크린샷: 좌측 메뉴(일반/카메라/마이크/가상 배경/교실 배경), '마이크' 섹션에 '마이크(Realtek(R) Audio)' 드롭다운과 '시험' 버튼(빨간 박스 강조), 그 아래...",
-          "[카메라 설정] 전자칠판을 실제로 촬영한 사진: 화면에 클래스인 카메라/장치 설정 창이 떠 있고, 좌측 메뉴에서 카메라 항목이 빨간 박스로 강조됨.",
-          "[현장 녹화 설정 옵션 활성화 시] 전자칠판을 촬영한 사진: 화면 상단에 작은 카메라 미리보기 썸네일(빨간 박스 강조), 중앙에 사람이 나오는 카메라 화면과 녹색 버튼, 우측에 녹화할 카메라 선택 패널(빨간 박스 강..."
+          "[전자칠판] 클래스인 교실 화면 스크린샷: 우측 상단에 '슬라이드하여 수업 종료하기' 버튼. 화면 중앙에 스피커·마이크·카메라 장치 설정 카드가 있고, 마이크 카드는 '마이크",
+          "사용 안 함', 카메라 카드는 '카메라",
+          "Integrated Ca…', 스피커 카드는 '시스템 기본'으로 표시됨. 마이크/카메라 카드가 빨간 박스로 강조됨. 하단 독(dock)에 Classin, 파일, 수업 도구, LMS 등 앱 아이콘이 있고 우측 끝 톱니...",
+          "[마이크 설정] 다크 테마 설정 창 스크린샷: 좌측 메뉴(일반/카메라/마이크/가상 배경/교실 배경), '마이크' 섹션에 '마이크(Realtek(R) Audio)' 드롭다운과 '시험' 버튼(빨간 박스 강조), 그 아래..."
         ]
       },
       {
@@ -3869,21 +3807,21 @@ export const CS_FIGMA_DIGEST_GUIDES = [
         "title": "CS 주의사항과 원본 캡처",
         "body": "원본 캡처 파일과 주의/팁을 함께 확인합니다. 원본 캡처: 클래스인 마이크 활성화/비활성화(전자칠판)",
         "checks": [
-          "마이크 정상 동작 확인 기준: 하단 사운드 바가 초록색으로 움직여야 함.",
+          "교실 화면 장치 카드에서 마이크가 '사용 안 함'으로 표시되면 마이크가 비활성화된 상태이므로, 설정에서 사용할 마이크를 선택해 활성화해야 함.",
+          "마이크 정상 동작 확인 기준: 설정 창 하단 사운드 바가 초록색으로 움직여야 함.",
           "스피커 설정도 같은 화면에서 가능('시스템 기본' 선택, '시험' 버튼 제공).",
-          "'설정 더 보기'에 '배경 소음 감소(일반 상황용)' 체크 옵션과 '음악 모드(음악 수업용)' 옵션이 있음.",
-          "카메라 설정 시 현재 연결된 카메라의 미리보기 화면과 이름이 기기 목록에 표시되며, 사용 중인 항목이 체크되어 있어야 함."
+          "'설정 더 보기'에 '배경 소음 감소(일반 상황용)' 체크 옵션(체크됨)과 '음악 모드(음악 수업용)' 옵션(체크 해제)이 있음."
         ]
       }
     ],
     "sourceImageFiles": [
       "클래스인 마이크 활성화/비활성화(전자칠판)"
     ],
-    "sourceDigestLineHint": "docs/active/cs-figma-board-digest-2026-06-21.md:1268"
+    "sourceDigestLineHint": "docs/active/cs-figma-board-digest-2026-06-21.md:1266"
   },
   {
-    "slug": "cs-figma-digest-1292",
-    "docSlug": "cs-figma-digest-1292",
+    "slug": "cs-figma-digest-1294",
+    "docSlug": "cs-figma-digest-1294",
     "docCategory": "admin",
     "category": "admin",
     "title": "클래스인 스토리지 삭제 안내",
@@ -3953,11 +3891,11 @@ export const CS_FIGMA_DIGEST_GUIDES = [
     "sourceImageFiles": [
       "클래스인 스토리지 삭제 안내"
     ],
-    "sourceDigestLineHint": "docs/active/cs-figma-board-digest-2026-06-21.md:1292"
+    "sourceDigestLineHint": "docs/active/cs-figma-board-digest-2026-06-21.md:1294"
   },
   {
-    "slug": "cs-figma-digest-1325",
-    "docSlug": "cs-figma-digest-1325",
+    "slug": "cs-figma-digest-1327",
+    "docSlug": "cs-figma-digest-1327",
     "docCategory": "admin",
     "category": "admin",
     "title": "학생 대리 등록 & 코스 입장",
@@ -4023,11 +3961,11 @@ export const CS_FIGMA_DIGEST_GUIDES = [
     "sourceImageFiles": [
       "클래스인 학생 대리등록 & 코스 입장"
     ],
-    "sourceDigestLineHint": "docs/active/cs-figma-board-digest-2026-06-21.md:1325"
+    "sourceDigestLineHint": "docs/active/cs-figma-board-digest-2026-06-21.md:1327"
   },
   {
-    "slug": "cs-figma-digest-1355",
-    "docSlug": "cs-figma-digest-1355",
+    "slug": "cs-figma-digest-1357",
+    "docSlug": "cs-figma-digest-1357",
     "docCategory": "teacher",
     "category": "troubleshooting",
     "title": "수업 정보 (종료됨)",
@@ -4083,11 +4021,11 @@ export const CS_FIGMA_DIGEST_GUIDES = [
     "sourceImageFiles": [
       "Group 18.png"
     ],
-    "sourceDigestLineHint": "docs/active/cs-figma-board-digest-2026-06-21.md:1355"
+    "sourceDigestLineHint": "docs/active/cs-figma-board-digest-2026-06-21.md:1357"
   },
   {
-    "slug": "cs-figma-digest-1368",
-    "docSlug": "cs-figma-digest-1368",
+    "slug": "cs-figma-digest-1370",
+    "docSlug": "cs-figma-digest-1370",
     "docCategory": "teacher",
     "category": "troubleshooting",
     "title": "수업 상세 (출석 현황 · 학생 수 도표 · 시간축 타임라인)",
@@ -4147,11 +4085,11 @@ export const CS_FIGMA_DIGEST_GUIDES = [
     "sourceImageFiles": [
       "Group 6.png"
     ],
-    "sourceDigestLineHint": "docs/active/cs-figma-board-digest-2026-06-21.md:1368"
+    "sourceDigestLineHint": "docs/active/cs-figma-board-digest-2026-06-21.md:1370"
   },
   {
-    "slug": "cs-figma-digest-1383",
-    "docSlug": "cs-figma-digest-1383",
+    "slug": "cs-figma-digest-1385",
+    "docSlug": "cs-figma-digest-1385",
     "docCategory": "teacher",
     "category": "troubleshooting",
     "title": "사용자 정보 — 수업 상세 / 네트워크·녹화 기록 조회 화면",
@@ -4211,11 +4149,11 @@ export const CS_FIGMA_DIGEST_GUIDES = [
     "sourceImageFiles": [
       "Group 7.png"
     ],
-    "sourceDigestLineHint": "docs/active/cs-figma-board-digest-2026-06-21.md:1383"
+    "sourceDigestLineHint": "docs/active/cs-figma-board-digest-2026-06-21.md:1385"
   },
   {
-    "slug": "cs-figma-digest-1400",
-    "docSlug": "cs-figma-digest-1400",
+    "slug": "cs-figma-digest-1402",
+    "docSlug": "cs-figma-digest-1402",
     "docCategory": "teacher",
     "category": "troubleshooting",
     "title": "사용자 정보 (Classin 관리자 — 사용자 수업 이력/품질 진단 화면)",
@@ -4284,11 +4222,11 @@ export const CS_FIGMA_DIGEST_GUIDES = [
     "sourceImageFiles": [
       "Group 8.png"
     ],
-    "sourceDigestLineHint": "docs/active/cs-figma-board-digest-2026-06-21.md:1400"
+    "sourceDigestLineHint": "docs/active/cs-figma-board-digest-2026-06-21.md:1402"
   },
   {
-    "slug": "cs-figma-digest-1425",
-    "docSlug": "cs-figma-digest-1425",
+    "slug": "cs-figma-digest-1427",
+    "docSlug": "cs-figma-digest-1427",
     "docCategory": "teacher",
     "category": "troubleshooting",
     "title": "PC 데이터 로그 보고",
@@ -4351,11 +4289,11 @@ export const CS_FIGMA_DIGEST_GUIDES = [
     "sourceImageFiles": [
       "PC 데이터 로그 보고.png"
     ],
-    "sourceDigestLineHint": "docs/active/cs-figma-board-digest-2026-06-21.md:1425"
+    "sourceDigestLineHint": "docs/active/cs-figma-board-digest-2026-06-21.md:1427"
   },
   {
-    "slug": "cs-figma-digest-1444",
-    "docSlug": "cs-figma-digest-1444",
+    "slug": "cs-figma-digest-1446",
+    "docSlug": "cs-figma-digest-1446",
     "docCategory": "student",
     "category": "troubleshooting",
     "title": "나의 참여 내역 (수업 시청/참여 내역 화면)",
@@ -4415,11 +4353,11 @@ export const CS_FIGMA_DIGEST_GUIDES = [
     "sourceImageFiles": [
       "image 72.png"
     ],
-    "sourceDigestLineHint": "docs/active/cs-figma-board-digest-2026-06-21.md:1444"
+    "sourceDigestLineHint": "docs/active/cs-figma-board-digest-2026-06-21.md:1446"
   },
   {
-    "slug": "cs-figma-digest-1460",
-    "docSlug": "cs-figma-digest-1460",
+    "slug": "cs-figma-digest-1462",
+    "docSlug": "cs-figma-digest-1462",
     "docCategory": "student",
     "category": "troubleshooting",
     "title": "학습 보고서 (Learning Report)",
@@ -4479,11 +4417,11 @@ export const CS_FIGMA_DIGEST_GUIDES = [
     "sourceImageFiles": [
       "image 74.png"
     ],
-    "sourceDigestLineHint": "docs/active/cs-figma-board-digest-2026-06-21.md:1460"
+    "sourceDigestLineHint": "docs/active/cs-figma-board-digest-2026-06-21.md:1462"
   },
   {
-    "slug": "cs-figma-digest-1475",
-    "docSlug": "cs-figma-digest-1475",
+    "slug": "cs-figma-digest-1477",
+    "docSlug": "cs-figma-digest-1477",
     "docCategory": "teacher",
     "category": "troubleshooting",
     "title": "학습 보고서 (Attendance / Blackboard Notes)",
@@ -4543,11 +4481,11 @@ export const CS_FIGMA_DIGEST_GUIDES = [
     "sourceImageFiles": [
       "image 75.png"
     ],
-    "sourceDigestLineHint": "docs/active/cs-figma-board-digest-2026-06-21.md:1475"
+    "sourceDigestLineHint": "docs/active/cs-figma-board-digest-2026-06-21.md:1477"
   },
   {
-    "slug": "cs-figma-digest-1490",
-    "docSlug": "cs-figma-digest-1490",
+    "slug": "cs-figma-digest-1492",
+    "docSlug": "cs-figma-digest-1492",
     "docCategory": "teacher",
     "category": "troubleshooting",
     "title": "데이터 확인 안내",
@@ -4613,11 +4551,11 @@ export const CS_FIGMA_DIGEST_GUIDES = [
     "sourceImageFiles": [
       "데이터 확인 안내"
     ],
-    "sourceDigestLineHint": "docs/active/cs-figma-board-digest-2026-06-21.md:1490"
+    "sourceDigestLineHint": "docs/active/cs-figma-board-digest-2026-06-21.md:1492"
   },
   {
-    "slug": "cs-figma-digest-1514",
-    "docSlug": "cs-figma-digest-1514",
+    "slug": "cs-figma-digest-1516",
+    "docSlug": "cs-figma-digest-1516",
     "docCategory": "teacher",
     "category": "troubleshooting",
     "title": "전자칠판 데이터 로그 보고",
@@ -4659,7 +4597,7 @@ export const CS_FIGMA_DIGEST_GUIDES = [
         "body": "사진 1 (실물 촬영): 학원 벽에 설치된 클래스인 전자칠판(IFP)을 정면에서 찍은 사진. 화면은 어두운 보라/남색 바탕이며 하단에 작업표시줄(도크) 아이콘들이 보임. 도크 좌측의 프로필/원형 아이콘이 빨간 박스로 강조되고 빨간 화살표가 가리키고 있음 — 1단계에서 클릭할 '프로필 이미지' 위치. / 스크린샷 2: 클래스인 PC/전자칠판 앱의 콘텐츠·수업 목록 메인 화면.",
         "checks": [
           "사진 1 (실물 촬영): 학원 벽에 설치된 클래스인 전자칠판(IFP)을 정면에서 찍은 사진. 화면은 어두운 보라/남색 바탕이며 하단에 작업표시줄(도크) 아이콘들이 보임.",
-          "스크린샷 2: 클래스인 PC/전자칠판 앱의 콘텐츠·수업 목록 메인 화면. 상단 검색바, 좌측 사이드바(나의 클래스/콘텐츠 등), 중앙에 썸네일 카드 그리드(우주, 등대, megastudy, CoreLink Readi...",
+          "스크린샷 2: 클래스인 PC/전자칠판 앱의 콘텐츠·수업 목록 메인 화면. 상단 검색바, 좌측 사이드바(나의 클래스/콘텐츠 등), 중앙에 썸네일 카드 그리드(우주, 등대, 학원P, CoreLink Reading, Gl...",
           "스크린샷 3: 메인 화면 위에 '계정 및 설정' 모달 창이 열린 상태. 모달 좌측 메뉴에서 '시스템 설정'이 빨간 박스로 강조·선택되어 있고, 우측 패널에는 고화질 화면 지원·터치스크린 키보드 자동 호출 토글, '하..."
         ]
       },
@@ -4678,32 +4616,32 @@ export const CS_FIGMA_DIGEST_GUIDES = [
     "sourceImageFiles": [
       "전자칠판 데이터 로그 보고"
     ],
-    "sourceDigestLineHint": "docs/active/cs-figma-board-digest-2026-06-21.md:1514"
+    "sourceDigestLineHint": "docs/active/cs-figma-board-digest-2026-06-21.md:1516"
   },
   {
-    "slug": "cs-figma-digest-1533",
-    "docSlug": "cs-figma-digest-1533",
+    "slug": "cs-figma-digest-1535",
+    "docSlug": "cs-figma-digest-1535",
     "docCategory": "teacher",
     "category": "troubleshooting",
     "title": "전자칠판 에러 안내 ~4/23",
     "audience": "CS 담당자/학원 선생님(전자칠판 사용자)",
-    "summary": "2026/4/23 신규 업데이트 이후 일부 계정에서 수업 중 \"Windows\" 버튼을 누르면 자연 발리 현상으로 바탕화면(검은 화면)으로 빠지는 에러가 발생할 수 있음을 안내하는 가이드. 해당 오류 발생 시 클래스인(Classin) 앱에서 [프로필 이미지] → [시스템 설정] → 스크롤 후 [소프트웨어 로그 보고]의 [보고하기]를 눌러 로그를 전송해 달라는 절차를 설명한다. 업데이트가 전개되는 수업 시 해당 기능 사용을 지양해 달라는 협조 요청을 포함한다.",
+    "summary": "현재 일부 계정에서 수업 중 \"Windows\" 버튼을 눌러 바탕화면으로 이용할 경우, 수업 네트워크 및 연결 기기에 지연 및 튕김 현상이 발생하는 오류가 확인되었음을 안내하는 가이드. 해당 오류는 4/23 신규 업데이트에서 개선될 예정이며, 그 전까지는 수업 시 해당 기능 사용을 지양해 달라는 협조 요청을 포함한다. 오류 로그 전송을 위해 클래스인(Classin) 앱 좌측 하단의 [프로필 이미지] → [계정 및 설정] → [시스템 설정]으로 이동한 뒤, 스크롤을 내려 [소프트웨어 로그 보고]의 [보고하기]를 눌러 로그를 전송해 달라는 절차를 설명한다.",
     "keywords": [
       "전자칠판 에러 안내 ~4/23",
       "데이터/로그",
       "혼합",
       "Windows",
       "프로필 이미지",
+      "계정 및 설정",
       "시스템 설정",
       "소프트웨어 로그 보고",
       "보고하기",
-      "계정 및 설정",
       "빨간 박스/화살표",
-      "전체 안내 문구",
+      "전체 안내 문구 — 이미지 배너 원문",
       "현재 일부 계정에서 수업 중"
     ],
     "steps": [
-      "현재 일부 계정에서 수업 중 \"Windows\" 버튼을 누르면 바탕화면(검은 화면)으로 빠지는 현상이 발생할 수 있으므로, 업데이트가 전개되는 수업 시 해당 기능 사용을 지양해 주세요.",
+      "현재 일부 계정에서 수업 중 \"Windows\" 버튼을 눌러 바탕화면으로 이용할 경우, 수업 네트워크 및 연결 기기에 지연 및 튕김 현상이 발생하는 오류가 확인되었습니다. 해당 오류는 4/23 신규 업데이트에서 개선될 예정이므로, 해당 업데이트 전까지는 수업 시 해당 기능 사용을 지양해 주세요.",
       "오류 로그 전송: 클래스인(Classin) 화면 좌측 하단의 [프로필 이미지]를 클릭해 주세요.",
       "[계정 및 설정] 창에서 \"시스템 설정\"을 클릭한 후, 스크롤을 내려 \"소프트웨어 로그 보고\"에서 [보고하기]를 클릭해 주세요."
     ],
@@ -4713,7 +4651,7 @@ export const CS_FIGMA_DIGEST_GUIDES = [
         "title": "순서 그대로 안내",
         "body": "Figma CS 캡처의 단계 텍스트를 우선 순서로 사용합니다.",
         "checks": [
-          "현재 일부 계정에서 수업 중 \"Windows\" 버튼을 누르면 바탕화면(검은 화면)으로 빠지는 현상이 발생할 수 있으므로, 업데이트가 전개되는 수업 시 해당 기능 사용을 지양해 주세요.",
+          "현재 일부 계정에서 수업 중 \"Windows\" 버튼을 눌러 바탕화면으로 이용할 경우, 수업 네트워크 및 연결 기기에 지연 및 튕김 현상이 발생하는 오류가 확인되었습니다.",
           "오류 로그 전송: 클래스인(Classin) 화면 좌측 하단의 [프로필 이미지]를 클릭해 주세요.",
           "[계정 및 설정] 창에서 \"시스템 설정\"을 클릭한 후, 스크롤을 내려 \"소프트웨어 로그 보고\"에서 [보고하기]를 클릭해 주세요."
         ]
@@ -4721,10 +4659,10 @@ export const CS_FIGMA_DIGEST_GUIDES = [
       {
         "level": "2단계",
         "title": "화면 기준 확인",
-        "body": "사진 1 (실물 촬영): 학원 벽에 설치된 ClassIn 전자칠판(IFP). 화면은 검은/어두운 바탕화면 상태이며 하단에 앱 도크형 툴바가 떠 있음. 도크 좌측 첫 버튼에 빨간 박스, 그 위로 빨간 화살표. 칠판 하단에 'Classin' 로고가 보임. / 스크린샷 2: 클래스인(Classin) 데스크톱 앱의 콘텐츠/배경화면 그리드 목록 화면.",
+        "body": "사진 1 (실물 촬영): 학원 벽에 설치된 ClassIn 전자칠판(IFP). 화면은 어두운 바탕화면 상태이며 하단에 앱 도크형 툴바가 떠 있음. 도크 좌측 'Windows' 버튼에 빨간 박스, 아래로 빨간 화살표. 칠판 하단 베젤에 'Classin' 로고가 보임. / 스크린샷 2: 클래스인(Classin) 데스크톱 앱의 콘텐츠/배경화면 그리드 목록 화면.",
         "checks": [
-          "사진 1 (실물 촬영): 학원 벽에 설치된 ClassIn 전자칠판(IFP). 화면은 검은/어두운 바탕화면 상태이며 하단에 앱 도크형 툴바가 떠 있음. 도크 좌측 첫 버튼에 빨간 박스, 그 위로 빨간 화살표.",
-          "스크린샷 2: 클래스인(Classin) 데스크톱 앱의 콘텐츠/배경화면 그리드 목록 화면. 상단 검색바, 좌측 사이드바 메뉴, 다수의 썸네일 카드가 그리드로 배열됨.",
+          "사진 1 (실물 촬영): 학원 벽에 설치된 ClassIn 전자칠판(IFP). 화면은 어두운 바탕화면 상태이며 하단에 앱 도크형 툴바가 떠 있음. 도크 좌측 'Windows' 버튼에 빨간 박스, 아래로 빨간 화살표.",
+          "스크린샷 2: 클래스인(Classin) 데스크톱 앱의 콘텐츠/배경화면 그리드 목록 화면. 상단 검색바, 좌측 사이드바 메뉴, 다수의 썸네일 카드가 그리드로 배열됨. 우측에는 수업/예약 리스트가 있음.",
           "스크린샷 3: 같은 앱 위에 '계정 및 설정' 모달 창이 열린 상태. 좌측 메뉴에서 '시스템 설정'이 빨간 박스로 강조되고, 우측 설정 항목들(고화질 화면 지원, 청소년 모드, 레지스트리 복구, 하드웨어 드라이버 복..."
         ]
       },
@@ -4733,46 +4671,46 @@ export const CS_FIGMA_DIGEST_GUIDES = [
         "title": "CS 주의사항과 원본 캡처",
         "body": "원본 캡처 파일과 주의/팁을 함께 확인합니다. 원본 캡처: 전자칠판 에러 안내 ~4/23",
         "checks": [
-          "[빨간 박스/화살표] 첫 번째 사진: 전자칠판 화면 하단 툴바의 'Windows' 관련 버튼(좌측 첫 버튼)에 빨간 박스가 표시되어 있고, 위로 빨간 화살표가 가리킴.",
-          "[전체 안내 문구] \"현재 일부 계정에서 수업 중 'Windows' 버튼을 눌러 바탕화면으로 이용할 경우, 수업 네트워크 및 연결 기기에 자연 발리 현상이 발생하는 오류가 확인되었습니다.",
-          "[빨간 화살표] 두 번째 스크린샷: 클래스인 콘텐츠 목록 화면 좌측 하단을 가리키는 빨간 화살표 — '프로필 이미지' 위치 안내.",
-          "[빨간 박스] 세 번째 스크린샷(계정 및 설정 창): 좌측 메뉴의 '시스템 설정' 항목에 빨간 박스 표시."
+          "[빨간 박스/화살표] 첫 번째 사진: 전자칠판 화면 하단 도크형 툴바의 좌측 'Windows' 버튼에 빨간 박스가 표시되어 있고, 아래에서 위로 빨간 화살표가 가리킴.",
+          "[전체 안내 문구 — 이미지 배너 원문] \"현재 일부 계정에서 수업 중 'Windows' 버튼을 눌러 바탕화면으로 이용할 경우, 수업 네트워크 및 연결 기기에 지연 및 튕김 현상이 발생하는 오류가 확인되었습니다.",
+          "[영향 범위] 오류는 '수업 네트워크 및 연결 기기'에서 '지연 및 튕김' 현상으로 나타남.",
+          "[빨간 박스] 두 번째 스크린샷: 클래스인 콘텐츠 목록 화면 좌측 하단의 프로필 영역(사용자명 'Minjae Kim')에 빨간 박스가 표시되고, 위에서 아래로 향하는 빨간 화살표가 가리킴 — '프로필 이미지' 위치..."
         ]
       }
     ],
     "sourceImageFiles": [
       "전자칠판 에러 안내 ~4/23"
     ],
-    "sourceDigestLineHint": "docs/active/cs-figma-board-digest-2026-06-21.md:1533"
+    "sourceDigestLineHint": "docs/active/cs-figma-board-digest-2026-06-21.md:1535"
   },
   {
-    "slug": "cs-figma-digest-1555",
-    "docSlug": "cs-figma-digest-1555",
+    "slug": "cs-figma-digest-1558",
+    "docSlug": "cs-figma-digest-1558",
     "docCategory": "teacher",
     "category": "troubleshooting",
     "title": "대시보드 내에서 수업 다시보기 확인 방법 안내",
     "audience": "관리자/교사 (학원 관리자)",
-    "summary": "ClassIn 관리자 대시보드에서 학생의 수업 다시보기(녹화 영상) 시청 기록을 확인하는 방법 안내. 학습 관리 > 학습 데이터 > 수업 데이터로 진입한 뒤, 학습 분석 탭에서 수업/학생을 선택하고, '표 사용자 정의 지표'에서 '수업 다시보기' 옵션을 활성화하면 시청 횟수와 실제 시청 시간 등을 표로 확인할 수 있다.",
+    "summary": "ClassIn 관리자 대시보드에서 학생의 수업 다시보기(녹화 영상) 시청 기록을 확인하는 방법 안내. 학습 관리 > 학습 데이터로 진입한 뒤 해당 수업의 [수업 데이터]를 열고, '학습 분석'에서 수업/학생을 선택하고 '표 사용자 정의 지표'에서 '수업 다시보기' 옵션을 활성화하면 유효 시청 횟수, 실제 시청 시간, 동영상 시간을 표로 확인할 수 있다. 유효 시청 횟수는 10분 이상 시청 시 기록된다.",
     "keywords": [
       "대시보드 내에서 수업 다시보기 확인 방법 안내",
       "데이터/로그",
       "대시보드(웹)",
+      "수업 데이터",
+      "학습 분석",
       "표 사용자 정의 지표",
       "수업 다시보기",
       "학습 관리",
       "학습 데이터",
-      "수업 데이터",
-      "학습 분석",
       "수업 선택",
       "학생 선택",
       "확인"
     ],
     "steps": [
       "관리자 대시보드 좌측 메뉴의 [학습 관리] 하단에서 [학습 데이터]를 클릭한 후, 학습 데이터를 확인할 수업에서 [수업 데이터]를 클릭해 주세요.",
-      "좌측 상단의 [학습 분석] 탭을 클릭해 학생의 학습 데이터를 확인해 주세요.",
+      "좌측 상단의 [학습 분석]을 클릭해 학생의 학습 데이터를 확인해 주세요.",
       "[수업 선택]에서 데이터를 확인할 수업, [학생 선택]에서 데이터를 확인할 학생을 선택해 주세요.",
       "[표 사용자 정의 지표]를 클릭해 확인할 옵션값을 선택한 후, [확인]을 클릭해 주세요. (학생의 영상 다시보기 진도를 확인해야 할 경우, '수업 다시보기'를 선택해 주세요.)",
-      "우측 [수업 다시보기] 항목에서 시청 횟수, 실제 시청 시간 등을 확인할 수 있습니다."
+      "우측 [수업 다시보기] 항목에서 유효 시청 횟수, 실제 시청 시간 등을 확인할 수 있습니다."
     ],
     "deepDive": [
       {
@@ -4781,7 +4719,7 @@ export const CS_FIGMA_DIGEST_GUIDES = [
         "body": "Figma CS 캡처의 단계 텍스트를 우선 순서로 사용합니다.",
         "checks": [
           "관리자 대시보드 좌측 메뉴의 [학습 관리] 하단에서 [학습 데이터]를 클릭한 후, 학습 데이터를 확인할 수업에서 [수업 데이터]를 클릭해 주세요.",
-          "좌측 상단의 [학습 분석] 탭을 클릭해 학생의 학습 데이터를 확인해 주세요.",
+          "좌측 상단의 [학습 분석]을 클릭해 학생의 학습 데이터를 확인해 주세요.",
           "[수업 선택]에서 데이터를 확인할 수업, [학생 선택]에서 데이터를 확인할 학생을 선택해 주세요.",
           "[표 사용자 정의 지표]를 클릭해 확인할 옵션값을 선택한 후, [확인]을 클릭해 주세요. (학생의 영상 다시보기 진도를 확인해야 할 경우, '수업 다시보기'를 선택해 주세요.)"
         ]
@@ -4789,12 +4727,12 @@ export const CS_FIGMA_DIGEST_GUIDES = [
       {
         "level": "2단계",
         "title": "화면 기준 확인",
-        "body": "[화면 1] ClassIn 관리자 대시보드 '학습 데이터' 목록 화면. 좌측 사이드바에 기관 관리/스토리지/학습 관리(학습 데이터·교사 개설·과제 관리)/관리자 기능 메뉴가 있고 '학습 데이터'가 빨간 박스로 강조됨. 우측 표에는 수업 목록(번호·수업 이름·코스·상태(종료됨)·수업 시작일·수업 시작 시간·수업 진행 시간·강의 보고서·학습 보고서·태그·관리)이 나열됨.",
+        "body": "[화면 1] ClassIn 관리자 대시보드 '학습 데이터' 목록 화면. 좌측 사이드바에 홈 / 기관 관리(코스 관리·수업 관리·공개 수업·교사·학생) / 스토리지(데이터 개요·공유 드라이브·문제 은행·수업 리소스·코스 데이터·리소스 센터) / 학습 관리(라이브&플레이백·학습 데이터·교사 개발·숙제 관리·시험 관리) / 관리자 기능(수업 모니터링·사용자 정보 …) 메뉴가 있고, 학습 관리 하위...",
         "checks": [
-          "[화면 1] ClassIn 관리자 대시보드 '학습 데이터' 목록 화면. 좌측 사이드바에 기관 관리/스토리지/학습 관리(학습 데이터·교사 개설·과제 관리)/관리자 기능 메뉴가 있고 '학습 데이터'가 빨간 박스로 강조됨...",
-          "코스 데이터' 드롭다운이 펼쳐진 모습(빨간 박스 강조).",
-          "[화면 2] '수업 데이터' 상세의 '학습 분석' 화면. 상단에 코스 이름·수업 진도·코스 유효 기간 정보. '수업 분석",
-          "학습 분석' 탭 중 '학습 분석'이 선택되어 있고, 그 아래 빈 라인/막대 차트 영역이 표시됨."
+          "[화면 1] ClassIn 관리자 대시보드 '학습 데이터' 목록 화면. 좌측 사이드바에 홈",
+          "기관 관리(코스 관리·수업 관리·공개 수업·교사·학생)",
+          "스토리지(데이터 개요·공유 드라이브·문제 은행·수업 리소스·코스 데이터·리소스 센터)",
+          "학습 관리(라이브&플레이백·학습 데이터·교사 개발·숙제 관리·시험 관리)"
         ]
       },
       {
@@ -4802,21 +4740,21 @@ export const CS_FIGMA_DIGEST_GUIDES = [
         "title": "CS 주의사항과 원본 캡처",
         "body": "원본 캡처 파일과 주의/팁을 함께 확인합니다. 원본 캡처: 학생 다시보기 기록 확인_대시보드",
         "checks": [
-          "'표 사용자 정의 지표' 드롭다운에는 학생 데이터(실제 수업 기간 / 학생 출결 / 교사 평가 / 학생 평가 / 수업 다시보기), 고실 관리(발언 / on·off 스테이지 / 제거), 수업 참여(상주기 / 손 들기...",
+          "'표 사용자 정의 지표' 드롭다운에는 학생 데이터(실제 수업 기간 / 학생 출결 / 교사 평가 / 학생 평가 / 수업 다시보기), 교실 관리(발언 / on·off 스테이지 / 제거), 수업 참여(상주기 / 손 들기...",
           "드롭다운 상단에 [모두 선택] 체크박스와 '시스템 기본값 복원' 링크가 있다.",
           "수업 다시보기 영상 시청 기록 확인이 목적이므로 '수업 다시보기' 옵션을 반드시 체크해야 한다.",
-          "표의 '수업 다시보기' 컬럼에서는 시청 횟수(예: 0회)와 실제 시청 시간(예: 11분17초, 4초, 7분07초, --:--:-- 등)을 함께 확인할 수 있다."
+          "표의 '수업 다시보기' 컬럼은 세 개의 하위 컬럼('유효 시청 횟수' / '실제 시청 시간' / '동영상 시간')으로 구성되며, 유효 시청 횟수(예: 0), 실제 시청 시간(예: --:--:--, 11분17초, 4초..."
         ]
       }
     ],
     "sourceImageFiles": [
       "학생 다시보기 기록 확인_대시보드"
     ],
-    "sourceDigestLineHint": "docs/active/cs-figma-board-digest-2026-06-21.md:1555"
+    "sourceDigestLineHint": "docs/active/cs-figma-board-digest-2026-06-21.md:1558"
   },
   {
-    "slug": "cs-figma-digest-1579",
-    "docSlug": "cs-figma-digest-1579",
+    "slug": "cs-figma-digest-1582",
+    "docSlug": "cs-figma-digest-1582",
     "docCategory": "start",
     "category": "onboarding",
     "title": "PDF 다운로드",
@@ -4832,7 +4770,7 @@ export const CS_FIGMA_DIGEST_GUIDES = [
     ],
     "steps": [
       "수업이 종료된 후 (약 15분 이내) 생성된 [칠판 내용 및 수업자료] 탭을 확인합니다. (수업 종료 후 코스/수업 목록에서 해당 수업 항목을 열고 상단 탭 메뉴에서 '칠판 내용 및 수업자료' 탭을 선택)",
-      "수업자료 화면 하단에 판서가 포함된 PDF 자료(주석이 달린 수업 자료)를 확인할 수 있습니다. 예: [2023년 예상] 곡란중학교_기말 영어_20260206104305.pdf",
+      "수업자료 화면 하단에 판서가 포함된 PDF 자료(주석이 달린 수업 자료)를 확인할 수 있습니다. 예: [2023년 예상] 학원J_기말 영어_20260206104305.pdf",
       "다운로드가 필요한 경우, 우측 상단의 링크 연결(공유) 아이콘을 클릭해 주세요. (수업 판서 영역 상단의 위챗/클래스인/링크 아이콘 중 링크 모양 아이콘 클릭)",
       "새롭게 뜬 인터넷 창(share.classin.com 공유 페이지) 하단에서 해당 PDF를 클릭해 주세요. (주석이 달린 수업 자료 항목의 PDF 파일을 클릭)",
       "브라우저 PDF 뷰어가 열리면 우측 상단의 다운로드 아이콘을 클릭해 해당 PDF를 저장할 수 있습니다."
@@ -4844,7 +4782,7 @@ export const CS_FIGMA_DIGEST_GUIDES = [
         "body": "Figma CS 캡처의 단계 텍스트를 우선 순서로 사용합니다.",
         "checks": [
           "수업이 종료된 후 (약 15분 이내) 생성된 [칠판 내용 및 수업자료] 탭을 확인합니다. (수업 종료 후 코스/수업 목록에서 해당 수업 항목을 열고 상단 탭 메뉴에서 '칠판 내용 및 수업자료' 탭을 선택)",
-          "수업자료 화면 하단에 판서가 포함된 PDF 자료(주석이 달린 수업 자료)를 확인할 수 있습니다. 예: [2023년 예상] 곡란중학교_기말 영어_20260206104305.pdf",
+          "수업자료 화면 하단에 판서가 포함된 PDF 자료(주석이 달린 수업 자료)를 확인할 수 있습니다. 예: [2023년 예상] 학원J_기말 영어_20260206104305.pdf",
           "다운로드가 필요한 경우, 우측 상단의 링크 연결(공유) 아이콘을 클릭해 주세요. (수업 판서 영역 상단의 위챗/클래스인/링크 아이콘 중 링크 모양 아이콘 클릭)",
           "새롭게 뜬 인터넷 창(share.classin.com 공유 페이지) 하단에서 해당 PDF를 클릭해 주세요. (주석이 달린 수업 자료 항목의 PDF 파일을 클릭)"
         ]
@@ -4868,18 +4806,18 @@ export const CS_FIGMA_DIGEST_GUIDES = [
           "수업자료(칠판 내용 및 수업자료) 탭은 수업이 종료된 후 약 15분 이내에 생성됩니다. 종료 직후 바로 보이지 않을 수 있으니 잠시 기다린 후 확인하세요.",
           "다운로드 대상 PDF는 판서(주석)가 포함된 '주석이 달린 수업 자료'입니다.",
           "다운로드 절차는 클래스인 앱 내 직접 저장이 아니라, 링크 연결 아이콘 → 공유 페이지(share.classin.com) → 새 브라우저 창에서 PDF 열기 → 브라우저 뷰어의 다운로드 아이콘 순으로 진행됩니다.",
-          "예시 파일명: [2023년 예상] 곡란중학교_기말 영어_20260206104305.pdf"
+          "예시 파일명: [2023년 예상] 학원J_기말 영어_20260206104305.pdf"
         ]
       }
     ],
     "sourceImageFiles": [
       "PDF 다운로드.png"
     ],
-    "sourceDigestLineHint": "docs/active/cs-figma-board-digest-2026-06-21.md:1579"
+    "sourceDigestLineHint": "docs/active/cs-figma-board-digest-2026-06-21.md:1582"
   },
   {
-    "slug": "cs-figma-digest-1599",
-    "docSlug": "cs-figma-digest-1599",
+    "slug": "cs-figma-digest-1602",
+    "docSlug": "cs-figma-digest-1602",
     "docCategory": "start",
     "category": "onboarding",
     "title": "Windows용 클래스인",
@@ -4938,11 +4876,11 @@ export const CS_FIGMA_DIGEST_GUIDES = [
     "sourceImageFiles": [
       "image 61.png"
     ],
-    "sourceDigestLineHint": "docs/active/cs-figma-board-digest-2026-06-21.md:1599"
+    "sourceDigestLineHint": "docs/active/cs-figma-board-digest-2026-06-21.md:1602"
   },
   {
-    "slug": "cs-figma-digest-1620",
-    "docSlug": "cs-figma-digest-1620",
+    "slug": "cs-figma-digest-1623",
+    "docSlug": "cs-figma-digest-1623",
     "docCategory": "teacher",
     "category": "troubleshooting",
     "title": "ClassIn Windows 클라이언트 다운로드 — '다른 이름으로 저장' 대화상자",
@@ -5007,11 +4945,11 @@ export const CS_FIGMA_DIGEST_GUIDES = [
     "sourceImageFiles": [
       "image 62.png"
     ],
-    "sourceDigestLineHint": "docs/active/cs-figma-board-digest-2026-06-21.md:1620"
+    "sourceDigestLineHint": "docs/active/cs-figma-board-digest-2026-06-21.md:1623"
   },
   {
-    "slug": "cs-figma-digest-1641",
-    "docSlug": "cs-figma-digest-1641",
+    "slug": "cs-figma-digest-1644",
+    "docSlug": "cs-figma-digest-1644",
     "docCategory": "teacher",
     "category": "troubleshooting",
     "title": "Windows용 클래스인 (다운로드 | 클래스인)",
@@ -5067,101 +5005,36 @@ export const CS_FIGMA_DIGEST_GUIDES = [
     "sourceImageFiles": [
       "image 63.png"
     ],
-    "sourceDigestLineHint": "docs/active/cs-figma-board-digest-2026-06-21.md:1641"
+    "sourceDigestLineHint": "docs/active/cs-figma-board-digest-2026-06-21.md:1644"
   },
   {
-    "slug": "cs-figma-digest-1655",
-    "docSlug": "cs-figma-digest-1655",
+    "slug": "cs-figma-digest-1658",
+    "docSlug": "cs-figma-digest-1658",
     "docCategory": "teacher",
     "category": "troubleshooting",
-    "title": "Windows용 클래스인 (다운로드 | 클래스인)",
-    "audience": "전체 (학원/교사/관리자/학생 등 클래스인 PC 설치 대상자)",
-    "summary": "클래스인 공식 웹사이트의 Windows용 데스크톱 앱 다운로드 페이지(classin.com/kr/download/) 화면 캡처이다. 페이지 위에 '언어 선택' 모달 창이 떠 있고, 화면 하단에는 쿠키 사용 동의 배너가 표시되어 있다. 안내 문구나 빨간 박스/화살표 같은 별도의 단계 설명 주석은 없는 순수 UI 스크린샷으로, Windows 7 이상에서 사용 가능한 클래스인 앱을 다운로드 버튼으로 내려받는 화면을 보여준다.",
-    "keywords": [
-      "Windows용 클래스인 (다운로드 | 클래스인)",
-      "업데이트/캐시/설치",
-      "PC",
-      "언어 선택",
-      "(쿠키 정책은 링크). 우측에",
-      "버튼.",
-      "모달:",
-      "로고와",
-      "라벨,",
-      "가 선택된 드롭다운, 그리고",
-      "(초록 버튼) /",
-      "(회색 버튼) 버튼이 있다. 버튼 라벨의 띄어쓰기("
-    ],
-    "steps": [
-      "Windows용 클래스인 (다운로드 | 클래스인) 원본 화면을 확인합니다.",
-      "전체 화면: Chrome 브라우저로 클래스인 다운로드 페이지(classin.com/kr/download/)를 연 모습. 상단에 'Classin' 로고와 GNB 메뉴(제품 소개, 솔루션, 리소스, 요금제, 다운로드)가 있고 우측에 '한국어 / 로그인 / 상담 요청하기' 버튼이 있다."
-    ],
-    "deepDive": [
-      {
-        "level": "1단계",
-        "title": "순서 그대로 안내",
-        "body": "Figma CS 캡처의 단계 텍스트를 우선 순서로 사용합니다.",
-        "checks": [
-          "Windows용 클래스인 (다운로드 | 클래스인) 원본 화면을 확인합니다.",
-          "전체 화면: Chrome 브라우저로 클래스인 다운로드 페이지(classin.com/kr/download/)를 연 모습. 상단에 'Classin' 로고와 GNB 메뉴(제품 소개, 솔루션, 리소스, 요금제, 다운로드)가..."
-        ]
-      },
-      {
-        "level": "2단계",
-        "title": "화면 기준 확인",
-        "body": "전체 화면: Chrome 브라우저로 클래스인 다운로드 페이지(classin.com/kr/download/)를 연 모습. 상단에 'Classin' 로고와 GNB 메뉴(제품 소개, 솔루션, 리소스, 요금제, 다운로드)가 있고 우측에 '한국어 / 로그인 / 상담 요청하기' 버튼이 있다.",
-        "checks": [
-          "전체 화면: Chrome 브라우저로 클래스인 다운로드 페이지(classin.com/kr/download/)를 연 모습. 상단에 'Classin' 로고와 GNB 메뉴(제품 소개, 솔루션, 리소스, 요금제, 다운로드)가...",
-          "로그인",
-          "상담 요청하기' 버튼이 있다.",
-          "왼쪽 본문 영역: 큰 제목 'Windows용 클래스인'(모달에 일부 가림), 부제 '하이브리드 교육과 학습을 위한 올인원 솔루션', 'Windows 7 이상에서 사용 가능' 안내, 그리고 초록색 '다운로드' 버튼."
-        ]
-      },
-      {
-        "level": "3단계",
-        "title": "CS 주의사항과 원본 캡처",
-        "body": "원본 캡처 파일과 주의/팁을 함께 확인합니다. 원본 캡처: image 64.png",
-        "checks": [
-          "하단 쿠키 배너 문구: 'ClassIn은 당사의 사이트를 운영하는 데 꼭 필요한 쿠키 및 유사 기술을 사용합니다. 또한 당사와 파트너사는 사용자의 당사 사이트 사용을 분석하고 사이트 방문을 맞춤화 및 향상하여, 보다...",
-          "'언어 선택' 모달: 'Classin' 로고와 '언어 선택' 라벨, '한국어'가 선택된 드롭다운, 그리고 '확인 하 다.'(초록 버튼) / '취소 하 다.'(회색 버튼) 버튼이 있다.",
-          "지원 사양 안내: 'Windows 7 이상에서 사용 가능'.",
-          "브라우저 탭 제목은 '다운로드 | 클래스인', 주소창 URL은 classin.com/kr/download/ 이다(Chrome 브라우저, 게스트 프로필)."
-        ]
-      }
-    ],
-    "sourceImageFiles": [
-      "image 64.png"
-    ],
-    "sourceDigestLineHint": "docs/active/cs-figma-board-digest-2026-06-21.md:1655"
-  },
-  {
-    "slug": "cs-figma-digest-1669",
-    "docSlug": "cs-figma-digest-1669",
-    "docCategory": "teacher",
-    "category": "troubleshooting",
-    "title": "Windows용 클래스인 다운로드 / 설치하기",
+    "title": "Windows용 클래스인 다운로드 / 설치하기 페이지",
     "audience": "교사/학원",
-    "summary": "클래스인(ClassIn) PC 다운로드 페이지(classin.com/kr/download)의 스크린샷 가이드입니다. 페이지 중앙에 AI Agents 소개 모달이 떠 있으며, 그 안의 초록색 \"설치하기\" 버튼이 분홍/보라색 화살표 주석으로 강조되어 있어 클래스인 설치 프로그램을 받는 위치를 안내합니다. 하단에는 쿠키 동의 배너가 함께 노출됩니다.",
+    "summary": "클래스인(ClassIn) PC 다운로드 페이지(classin.com/kr/download)의 스크린샷 가이드입니다. 페이지 중앙에 'AI Agents — Your smart team of teaching support' 마케팅 모달이 떠 있고, 그 안에 'AgentIn Agents Store' 봇 카드 목록과 초록색 '설치하기' 버튼, 그 오른쪽에 '사용자 지정 설치' 버튼이 보입니다. 모달의 AI 봇 카드를 가리키는 두 개의 곡선 화살표 주석(분홍/보라색, 초록색)이 추가되어 있습니다. 하단에는 약관 동의 문구와 쿠키 동의 배너가 함께 노출됩니다.",
     "keywords": [
-      "Windows용 클래스인 다운로드 / 설치하기",
+      "Windows용 클래스인 다운로드 / 설치하기 페이지",
       "업데이트/캐시/설치",
       "PC",
-      "설치하기",
+      "마케팅 모달이 떠 있고, 그 안에",
+      "봇 카드 목록과 초록색",
+      "버튼, 그 오른쪽에",
       "다운로드 | 클래스인",
       "Windows용",
-      "안내 모달을 확인한다. 모달 우측 하단(또는 좌측의",
-      "버튼)에서 초록색",
-      "동의 항목을 확인한다. 필요 시",
-      "으로 설치 옵션을 변경할 수 있다. 하단의 쿠키 배너에서는",
-      "을 선택하거나 닫기(x)로 닫을 수 있다. 중앙 모달의 초록색",
-      "(밑줄 링크). 쿠키 배너 안내문:"
+      "다운로드",
+      "안내 모달과 그 안의",
+      "설치하기",
+      "사용자 지정 설치"
     ],
     "steps": [
-      "Chrome 브라우저에서 주소창에 classin.com/kr/download 로 접속한다 (탭 제목: '다운로드 | 클래스인').",
-      "페이지 상단의 'Windows용' 다운로드 영역과 중앙에 뜬 'AI Agents — Your smart team of teaching support' 안내 모달을 확인한다.",
-      "모달 우측 하단(또는 좌측의 '다운로드' 버튼)에서 초록색 '설치하기' 버튼을 클릭하여 클래스인 설치 파일을 받는다. (분홍/보라색 화살표가 이 '설치하기' 버튼을 가리키고 있다.)",
-      "설치 진행 전, '다음의 약관들에 동의합니다 — 사용자 프로토콜, 프라이버시 정책 과 어린이 프라이버시 정책' 동의 항목을 확인한다.",
-      "필요 시 '사용자 지정 설정'으로 설치 옵션을 변경할 수 있다.",
-      "하단의 쿠키 배너에서는 '모든 쿠키 허용'을 선택하거나 닫기(x)로 닫을 수 있다."
+      "Chrome 브라우저 주소창에 classin.com/kr/download 로 접속한다 (탭 제목: '다운로드 | 클래스인').",
+      "왼쪽 본문의 'Windows용' 대형 헤드라인과 그 아래 초록색 '다운로드' 버튼을 확인한다.",
+      "화면 중앙에 뜬 'AI Agents — Your smart team of teaching support' 안내 모달과 그 안의 'AgentIn Agents Store' 봇 카드 목록을 확인한다.",
+      "클래스인 설치 파일을 받으려면 모달 안의 초록색 '설치하기' 버튼을 클릭한다. (설치 옵션을 바꾸려면 그 오른쪽의 '사용자 지정 설치' 버튼을 사용한다.)",
+      "모달은 우측 상단의 X 버튼으로 닫을 수 있다."
     ],
     "deepDive": [
       {
@@ -5169,10 +5042,10 @@ export const CS_FIGMA_DIGEST_GUIDES = [
         "title": "순서 그대로 안내",
         "body": "Figma CS 캡처의 단계 텍스트를 우선 순서로 사용합니다.",
         "checks": [
-          "Chrome 브라우저에서 주소창에 classin.com/kr/download 로 접속한다 (탭 제목: '다운로드 | 클래스인').",
-          "페이지 상단의 'Windows용' 다운로드 영역과 중앙에 뜬 'AI Agents — Your smart team of teaching support' 안내 모달을 확인한다.",
-          "모달 우측 하단(또는 좌측의 '다운로드' 버튼)에서 초록색 '설치하기' 버튼을 클릭하여 클래스인 설치 파일을 받는다. (분홍/보라색 화살표가 이 '설치하기' 버튼을 가리키고 있다.)",
-          "설치 진행 전, '다음의 약관들에 동의합니다 — 사용자 프로토콜, 프라이버시 정책 과 어린이 프라이버시 정책' 동의 항목을 확인한다."
+          "Chrome 브라우저 주소창에 classin.com/kr/download 로 접속한다 (탭 제목: '다운로드 | 클래스인').",
+          "왼쪽 본문의 'Windows용' 대형 헤드라인과 그 아래 초록색 '다운로드' 버튼을 확인한다.",
+          "화면 중앙에 뜬 'AI Agents — Your smart team of teaching support' 안내 모달과 그 안의 'AgentIn Agents Store' 봇 카드 목록을 확인한다.",
+          "클래스인 설치 파일을 받으려면 모달 안의 초록색 '설치하기' 버튼을 클릭한다. (설치 옵션을 바꾸려면 그 오른쪽의 '사용자 지정 설치' 버튼을 사용한다.)"
         ]
       },
       {
@@ -5183,7 +5056,7 @@ export const CS_FIGMA_DIGEST_GUIDES = [
           "Chrome 브라우저 전체 화면 스크린샷. 주소창에 classin.com/kr/download, 탭 제목 '다운로드 | 클래스인'.",
           "좌측: Classin 로고와 상단 내비게이션(제품 소개/솔루션/리소스/요금제/다운로드), 그 아래 'Windows용' 대형 헤드라인과 초록색 '다운로드' 버튼.",
           "중앙: 흰색 'AI Agents' 소개 모달 — 상단 'AI Agents",
-          "Your smart team of teaching support', AgentIn Agents Store UI(Space Explorer Bot, Class Q&A, Interactive Classroom, Home..."
+          "Your smart team of teaching support', 우측 상단 X 닫기 버튼, 'AgentIn Agents Store' 봇 카드 UI(Space Explorer Bot, Class Q&A, Inter..."
         ]
       },
       {
@@ -5191,21 +5064,21 @@ export const CS_FIGMA_DIGEST_GUIDES = [
         "title": "CS 주의사항과 원본 캡처",
         "body": "원본 캡처 파일과 주의/팁을 함께 확인합니다. 원본 캡처: image 65.png",
         "checks": [
-          "중앙 모달의 초록색 '설치하기' 버튼이 분홍/보라색 곡선 화살표 주석으로 강조되어 있음 — 사용자가 클릭해야 할 핵심 위치.",
-          "약관 동의 문구: '다음의 약관들에 동의합니다 사용자 프로토콜, 프라이버시 정책 과 어린이 프라이버시 정책' (밑줄 링크).",
-          "쿠키 배너 안내문: 'ClassIn은 당사의 사이트를 운영하는 데 꼭 필요한 쿠키 및 유사 기술을 사용합니다. 또한 당사와 파트너사는 사용자의 당사 사이트 사용을 분석하고 사이트 방문을 맞춤화 및 향상하여, 보다 관...",
-          "상단 헤더 메뉴: 제품 소개 / 솔루션 / 리소스 / 요금제 / 다운로드, 우측에 한국어 · 로그인 · '상담 요청하기' 버튼."
+          "모달 안에는 AI 봇 카드를 가리키는 두 개의 곡선 화살표 주석이 있다. (1) 분홍/보라색 화살표 — 모달 왼쪽 아래의 'Aristotle' 봇 카드를 가리킨다.",
+          "모달 봇 카드 목록(AgentIn Agents Store): Space Explorer Bot, Class Q&A, Interactive Classroom, Homework Review, Courseware Assi...",
+          "약관 동의 문구(체크박스 옆): '다음의 약관들에 동의합니다 사용자 프로토콜, 프라이버시 정책 과 어린이 프라이버시 정책' (밑줄 링크).",
+          "하단 쿠키 배너 안내문: 'ClassIn은 당사의 사이트를 운영하는 데 꼭 필요한 쿠키 및 유사 기술을 사용합니다. 또한 당사와 파트너사는 사용자의 당사 사이트 사용을 분석하고 사이트 방문을 맞춤화 및 향상하여, 보..."
         ]
       }
     ],
     "sourceImageFiles": [
       "image 65.png"
     ],
-    "sourceDigestLineHint": "docs/active/cs-figma-board-digest-2026-06-21.md:1669"
+    "sourceDigestLineHint": "docs/active/cs-figma-board-digest-2026-06-21.md:1658"
   },
   {
-    "slug": "cs-figma-digest-1691",
-    "docSlug": "cs-figma-digest-1691",
+    "slug": "cs-figma-digest-1679",
+    "docSlug": "cs-figma-digest-1679",
     "docCategory": "teacher",
     "category": "troubleshooting",
     "title": "Windows용 (다운로드 | 클래스인 — classin.com/kr/download/)",
@@ -5265,11 +5138,11 @@ export const CS_FIGMA_DIGEST_GUIDES = [
     "sourceImageFiles": [
       "image 66.png"
     ],
-    "sourceDigestLineHint": "docs/active/cs-figma-board-digest-2026-06-21.md:1691"
+    "sourceDigestLineHint": "docs/active/cs-figma-board-digest-2026-06-21.md:1679"
   },
   {
-    "slug": "cs-figma-digest-1707",
-    "docSlug": "cs-figma-digest-1707",
+    "slug": "cs-figma-digest-1695",
+    "docSlug": "cs-figma-digest-1695",
     "docCategory": "teacher",
     "category": "troubleshooting",
     "title": "Windows용 (다운로드 | 클래스인 — classin.com/kr/download)",
@@ -5335,11 +5208,11 @@ export const CS_FIGMA_DIGEST_GUIDES = [
     "sourceImageFiles": [
       "image 67.png"
     ],
-    "sourceDigestLineHint": "docs/active/cs-figma-board-digest-2026-06-21.md:1707"
+    "sourceDigestLineHint": "docs/active/cs-figma-board-digest-2026-06-21.md:1695"
   },
   {
-    "slug": "cs-figma-digest-1731",
-    "docSlug": "cs-figma-digest-1731",
+    "slug": "cs-figma-digest-1719",
+    "docSlug": "cs-figma-digest-1719",
     "docCategory": "teacher",
     "category": "troubleshooting",
     "title": "안드로이드 기기 업데이트(Playstore) / iOS 기기 업데이트 확인 (Appstore)",
@@ -5405,11 +5278,11 @@ export const CS_FIGMA_DIGEST_GUIDES = [
     "sourceImageFiles": [
       "모바일 기기 업데이트"
     ],
-    "sourceDigestLineHint": "docs/active/cs-figma-board-digest-2026-06-21.md:1731"
+    "sourceDigestLineHint": "docs/active/cs-figma-board-digest-2026-06-21.md:1719"
   },
   {
-    "slug": "cs-figma-digest-1753",
-    "docSlug": "cs-figma-digest-1753",
+    "slug": "cs-figma-digest-1741",
+    "docSlug": "cs-figma-digest-1741",
     "docCategory": "teacher",
     "category": "troubleshooting",
     "title": "안드로이드 기기 업데이트(Playstore) / 안드로이드 기기 업데이트 확인 (클래스인)",
@@ -5475,11 +5348,11 @@ export const CS_FIGMA_DIGEST_GUIDES = [
     "sourceImageFiles": [
       "안드로이드 기기 업데이트 & 확인"
     ],
-    "sourceDigestLineHint": "docs/active/cs-figma-board-digest-2026-06-21.md:1753"
+    "sourceDigestLineHint": "docs/active/cs-figma-board-digest-2026-06-21.md:1741"
   },
   {
-    "slug": "cs-figma-digest-1776",
-    "docSlug": "cs-figma-digest-1776",
+    "slug": "cs-figma-digest-1764",
+    "docSlug": "cs-figma-digest-1764",
     "docCategory": "teacher",
     "category": "troubleshooting",
     "title": "Classin 업데이트 가이드",
@@ -5547,11 +5420,11 @@ export const CS_FIGMA_DIGEST_GUIDES = [
     "sourceImageFiles": [
       "클래스인 업데이트 가이드(PC,전자칠판)"
     ],
-    "sourceDigestLineHint": "docs/active/cs-figma-board-digest-2026-06-21.md:1776"
+    "sourceDigestLineHint": "docs/active/cs-figma-board-digest-2026-06-21.md:1764"
   },
   {
-    "slug": "cs-figma-digest-1801",
-    "docSlug": "cs-figma-digest-1801",
+    "slug": "cs-figma-digest-1789",
+    "docSlug": "cs-figma-digest-1789",
     "docCategory": "teacher",
     "category": "troubleshooting",
     "title": "Classin 업데이트 가이드",
@@ -5618,11 +5491,11 @@ export const CS_FIGMA_DIGEST_GUIDES = [
     "sourceImageFiles": [
       "클래스인 업데이트 가이드(PC,전자칠판)-1"
     ],
-    "sourceDigestLineHint": "docs/active/cs-figma-board-digest-2026-06-21.md:1801"
+    "sourceDigestLineHint": "docs/active/cs-figma-board-digest-2026-06-21.md:1789"
   },
   {
-    "slug": "cs-figma-digest-1825",
-    "docSlug": "cs-figma-digest-1825",
+    "slug": "cs-figma-digest-1813",
+    "docSlug": "cs-figma-digest-1813",
     "docCategory": "teacher",
     "category": "troubleshooting",
     "title": "클래스인 업데이트 (모바일) / 클래스인 캐시 삭제 (모바일)",
@@ -5688,11 +5561,11 @@ export const CS_FIGMA_DIGEST_GUIDES = [
     "sourceImageFiles": [
       "클래스인 캐시 삭제/업데이트 (Mobile)"
     ],
-    "sourceDigestLineHint": "docs/active/cs-figma-board-digest-2026-06-21.md:1825"
+    "sourceDigestLineHint": "docs/active/cs-figma-board-digest-2026-06-21.md:1813"
   },
   {
-    "slug": "cs-figma-digest-1852",
-    "docSlug": "cs-figma-digest-1852",
+    "slug": "cs-figma-digest-1840",
+    "docSlug": "cs-figma-digest-1840",
     "docCategory": "teacher",
     "category": "troubleshooting",
     "title": "클래스인 캐시 삭제/업데이트 (PC)",
@@ -5757,11 +5630,11 @@ export const CS_FIGMA_DIGEST_GUIDES = [
     "sourceImageFiles": [
       "클래스인 캐시 삭제/업데이트 (PC)"
     ],
-    "sourceDigestLineHint": "docs/active/cs-figma-board-digest-2026-06-21.md:1852"
+    "sourceDigestLineHint": "docs/active/cs-figma-board-digest-2026-06-21.md:1840"
   },
   {
-    "slug": "cs-figma-digest-1875",
-    "docSlug": "cs-figma-digest-1875",
+    "slug": "cs-figma-digest-1863",
+    "docSlug": "cs-figma-digest-1863",
     "docCategory": "teacher",
     "category": "troubleshooting",
     "title": "클래스인X 삭제/재설치 (전자칠판)",
@@ -5834,11 +5707,11 @@ export const CS_FIGMA_DIGEST_GUIDES = [
     "sourceImageFiles": [
       "클래스인X 삭제/재설치 (전자칠판)"
     ],
-    "sourceDigestLineHint": "docs/active/cs-figma-board-digest-2026-06-21.md:1875"
+    "sourceDigestLineHint": "docs/active/cs-figma-board-digest-2026-06-21.md:1863"
   },
   {
-    "slug": "cs-figma-digest-1907",
-    "docSlug": "cs-figma-digest-1907",
+    "slug": "cs-figma-digest-1895",
+    "docSlug": "cs-figma-digest-1895",
     "docCategory": "admin",
     "category": "admin",
     "title": "Classin 기관 관리자 홈 — 계정 잔액 충전 위치 (충전 버튼 강조)",
@@ -5879,9 +5752,9 @@ export const CS_FIGMA_DIGEST_GUIDES = [
       {
         "level": "2단계",
         "title": "화면 기준 확인",
-        "body": "전체 화면: ClassIn 기관 관리자 웹 대시보드 '홈'. 상단에 녹색 헤더(좌측 'Classin' 로고, 우측에 '메인 계정 | SNT 에듀 V', 프로필 아바타, '한국어' 언어 선택)가 있다.",
+        "body": "전체 화면: ClassIn 기관 관리자 웹 대시보드 '홈'. 상단에 녹색 헤더(좌측 'Classin' 로고, 우측에 '메인 계정 | 학원N V', 프로필 아바타, '한국어' 언어 선택)가 있다.",
         "checks": [
-          "전체 화면: ClassIn 기관 관리자 웹 대시보드 '홈'. 상단에 녹색 헤더(좌측 'Classin' 로고, 우측에 '메인 계정 | SNT 에듀 V', 프로필 아바타, '한국어' 언어 선택)가 있다.",
+          "전체 화면: ClassIn 기관 관리자 웹 대시보드 '홈'. 상단에 녹색 헤더(좌측 'Classin' 로고, 우측에 '메인 계정 | 학원N V', 프로필 아바타, '한국어' 언어 선택)가 있다.",
           "좌측 사이드바 메뉴: 홈",
           "기관 관리(코스 관리, 수업 관리, 공개 수업, 교사, 학생)",
           "스토리지(데이터 개요, 공유 드라이브, 문제 은행, 수업 리소스, 코스 데이터, 리소스 센터)"
@@ -5902,11 +5775,11 @@ export const CS_FIGMA_DIGEST_GUIDES = [
     "sourceImageFiles": [
       "image 7.png"
     ],
-    "sourceDigestLineHint": "docs/active/cs-figma-board-digest-2026-06-21.md:1907"
+    "sourceDigestLineHint": "docs/active/cs-figma-board-digest-2026-06-21.md:1895"
   },
   {
-    "slug": "cs-figma-digest-1926",
-    "docSlug": "cs-figma-digest-1926",
+    "slug": "cs-figma-digest-1914",
+    "docSlug": "cs-figma-digest-1914",
     "docCategory": "admin",
     "category": "admin",
     "title": "충전",
@@ -5948,10 +5821,10 @@ export const CS_FIGMA_DIGEST_GUIDES = [
       {
         "level": "2단계",
         "title": "화면 기준 확인",
-        "body": "ClassIn 관리자 대시보드의 \"충전\" 페이지 전체 스크린샷. 상단에 Classin 로고와 초록색 헤더, 우측에 '메인 계정 / SNT 에듀', 사용자 아바타, '한국어' 언어 선택이 있음. / 제목 영역: '충전' 헤더와 '계정: +82 1053667037' (계정 식별 전화번호) 표시.",
+        "body": "ClassIn 관리자 대시보드의 \"충전\" 페이지 전체 스크린샷. 상단에 Classin 로고와 초록색 헤더, 우측에 '메인 계정 / 학원N', 사용자 아바타, '한국어' 언어 선택이 있음. / 제목 영역: '충전' 헤더와 '계정: +82 1053667037' (계정 식별 전화번호) 표시. / 탭 영역: '온라인 결제'(주황색 추천 배지) 탭이 활성화되어 있고, 옆에 '공적 자금으로 이체' 탭.",
         "checks": [
           "ClassIn 관리자 대시보드의 \"충전\" 페이지 전체 스크린샷. 상단에 Classin 로고와 초록색 헤더, 우측에 '메인 계정",
-          "SNT 에듀', 사용자 아바타, '한국어' 언어 선택이 있음.",
+          "학원N', 사용자 아바타, '한국어' 언어 선택이 있음.",
           "제목 영역: '충전' 헤더와 '계정: +82 1053667037' (계정 식별 전화번호) 표시.",
           "탭 영역: '온라인 결제'(주황색 추천 배지) 탭이 활성화되어 있고, 옆에 '공적 자금으로 이체' 탭."
         ]
@@ -5971,11 +5844,11 @@ export const CS_FIGMA_DIGEST_GUIDES = [
     "sourceImageFiles": [
       "image 8.png"
     ],
-    "sourceDigestLineHint": "docs/active/cs-figma-board-digest-2026-06-21.md:1926"
+    "sourceDigestLineHint": "docs/active/cs-figma-board-digest-2026-06-21.md:1914"
   },
   {
-    "slug": "cs-figma-digest-1948",
-    "docSlug": "cs-figma-digest-1948",
+    "slug": "cs-figma-digest-1936",
+    "docSlug": "cs-figma-digest-1936",
     "docCategory": "admin",
     "category": "admin",
     "title": "결제 수단 선택 (Airwallex 결제 페이지)",
@@ -6043,11 +5916,11 @@ export const CS_FIGMA_DIGEST_GUIDES = [
     "sourceImageFiles": [
       "image 9.png"
     ],
-    "sourceDigestLineHint": "docs/active/cs-figma-board-digest-2026-06-21.md:1948"
+    "sourceDigestLineHint": "docs/active/cs-figma-board-digest-2026-06-21.md:1936"
   },
   {
-    "slug": "cs-figma-digest-1972",
-    "docSlug": "cs-figma-digest-1972",
+    "slug": "cs-figma-digest-1960",
+    "docSlug": "cs-figma-digest-1960",
     "docCategory": "admin",
     "category": "admin",
     "title": "클래스인 앱 → 관리자 대시보드 충전 방법 안내",
@@ -6114,11 +5987,11 @@ export const CS_FIGMA_DIGEST_GUIDES = [
     "sourceImageFiles": [
       "충전 방법 안내.png"
     ],
-    "sourceDigestLineHint": "docs/active/cs-figma-board-digest-2026-06-21.md:1972"
+    "sourceDigestLineHint": "docs/active/cs-figma-board-digest-2026-06-21.md:1960"
   },
   {
-    "slug": "cs-figma-digest-2000",
-    "docSlug": "cs-figma-digest-2000",
+    "slug": "cs-figma-digest-1988",
+    "docSlug": "cs-figma-digest-1988",
     "docCategory": "teacher",
     "category": "classroom",
     "title": "Crowdin UI 가이드",
@@ -6186,11 +6059,11 @@ export const CS_FIGMA_DIGEST_GUIDES = [
     "sourceImageFiles": [
       "Crowdin UI 가이드.png"
     ],
-    "sourceDigestLineHint": "docs/active/cs-figma-board-digest-2026-06-21.md:2000"
+    "sourceDigestLineHint": "docs/active/cs-figma-board-digest-2026-06-21.md:1988"
   },
   {
-    "slug": "cs-figma-digest-2029",
-    "docSlug": "cs-figma-digest-2029",
+    "slug": "cs-figma-digest-2017",
+    "docSlug": "cs-figma-digest-2017",
     "docCategory": "teacher",
     "category": "classroom",
     "title": "Crowdin UI 가이드 — 작업 과정 (EEO ClassIn / Korean / All Strings)",
@@ -6250,11 +6123,11 @@ export const CS_FIGMA_DIGEST_GUIDES = [
     "sourceImageFiles": [
       "Crowdin UI 가이드_작업 과정.png"
     ],
-    "sourceDigestLineHint": "docs/active/cs-figma-board-digest-2026-06-21.md:2029"
+    "sourceDigestLineHint": "docs/active/cs-figma-board-digest-2026-06-21.md:2017"
   },
   {
-    "slug": "cs-figma-digest-2046",
-    "docSlug": "cs-figma-digest-2046",
+    "slug": "cs-figma-digest-2034",
+    "docSlug": "cs-figma-digest-2034",
     "docCategory": "teacher",
     "category": "classroom",
     "title": "시험 문제 대량 업로드 + 시험 추가",
@@ -6271,8 +6144,8 @@ export const CS_FIGMA_DIGEST_GUIDES = [
       "워드 템플릿 다운로드",
       "템플릿 업로드",
       "다음",
-      "확인",
-      "내 문제 은행"
+      "시험 문제 편집",
+      "확인"
     ],
     "steps": [
       "코스로 이동한 후, [새로 만들기]를 클릭한 후 \"시험\"을 선택해 주세요.",
@@ -6280,7 +6153,7 @@ export const CS_FIGMA_DIGEST_GUIDES = [
       "[템플릿 다운로드]를 선택한 후, \"워드 템플릿 다운로드\"를 클릭해 템플릿을 다운로드합니다.",
       "워드 파일에 문제를 기록한 후, \"템플릿 업로드\"를 눌러 업로드 해 주세요. (입력란에 텍스트를 붙여 넣거나 Word/Excel 문서를 드래그하여 넣을 수도 있습니다.)",
       "문제가 모두 업로드된 후, 하단의 [다음]을 클릭합니다.",
-      "문제 인식이 실패했거나 미확인된 문제가 있는지 확인한 후, 우측 하단의 [확인]을 클릭해서 시험 문제 대량 추가를 완료해 주세요.",
+      "'시험 문제 편집' 단계에서 문제 인식이 실패했거나 미확인된 문제가 있는지 확인한 후, 우측 하단의 [확인]을 클릭해서 시험 문제 대량 추가를 완료해 주세요.",
       "(대량 추가로 생성한 문제를 추후에도 사용하고 싶으실 경우, 좌측 하단의 [내 문제 은행] 에도 저장하기 옵션을 활성화해 주세요.)",
       "시험 문제의 세부 설정(점수 설정, 성적 카테고리, 게시 설정, 교사, 과정 선택 등)을 확인합니다.",
       "설정 확인 후, 우측 하단의 [게시]를 눌러서 시험을 게시해 주세요."
@@ -6300,12 +6173,12 @@ export const CS_FIGMA_DIGEST_GUIDES = [
       {
         "level": "2단계",
         "title": "화면 기준 확인",
-        "body": "[1] 클래스인 코스 화면 전체 스크린샷. 좌측 코스 목록, 가운데 시험/콘텐츠 영역에 빨간 화살표가 [새로 만들기]→'시험' 선택 위치를 가리킴. / [2] '새 시험 추가' 모달. 상단에 [...행에서 불러오기], [+시험 문제 추가], [+시험 문제 대량 추가] 버튼이 있고 '시험 문제 대량 추가' 버튼이 빨간 박스로 강조됨.",
+        "body": "[1] 클래스인 코스 화면 전체 스크린샷. 가운데 '작업 항목 추가하기' 패널에서 빨간 화살표와 빨간 박스가 [새로 만들기]→'시험' 선택 위치를 가리킴. / [2] '새 시험 추가' 모달. 상단에 [+문제 은행에서 불러오기], [+시험 문제 추가], [+시험 문제 대량 추가] 버튼이 있고 '시험 문제 대량 추가' 버튼이 빨간 박스로 강조됨.",
         "checks": [
-          "[1] 클래스인 코스 화면 전체 스크린샷. 좌측 코스 목록, 가운데 시험/콘텐츠 영역에 빨간 화살표가 [새로 만들기]→'시험' 선택 위치를 가리킴.",
-          "[2] '새 시험 추가' 모달. 상단에 [...행에서 불러오기], [+시험 문제 추가], [+시험 문제 대량 추가] 버튼이 있고 '시험 문제 대량 추가' 버튼이 빨간 박스로 강조됨.",
+          "[1] 클래스인 코스 화면 전체 스크린샷. 가운데 '작업 항목 추가하기' 패널에서 빨간 화살표와 빨간 박스가 [새로 만들기]→'시험' 선택 위치를 가리킴.",
+          "[2] '새 시험 추가' 모달. 상단에 [+문제 은행에서 불러오기], [+시험 문제 추가], [+시험 문제 대량 추가] 버튼이 있고 '시험 문제 대량 추가' 버튼이 빨간 박스로 강조됨.",
           "[3] '시험 문제 대량 추가' 모달 1단계(시험 문제 업로드). 우측 상단 [입력 설명], [템플릿 다운로드], [템플릿 업로드] 중 '템플릿 업로드'가 빨간 박스로 강조되고, '템플릿 다운로드' 드롭다운에 '워드...",
-          "[4] 업로드 후 문제가 채워진 입력란 스크린샷. 이차함수·유리수 문제 등이 보기(A~E), Answer, Explanation과 함께 표시됨. 우측 하단 [다음] 버튼을 가리키는 빨간 화살표."
+          "[4] 업로드 후 문제가 채워진 입력란 스크린샷. 이차함수·유리수 문제 등이 보기(A~E), Answer, Explanation과 함께 표시됨. 우측 하단 [다음] 버튼(초록)을 가리키는 빨간 화살표."
         ]
       },
       {
@@ -6313,26 +6186,26 @@ export const CS_FIGMA_DIGEST_GUIDES = [
         "title": "CS 주의사항과 원본 캡처",
         "body": "원본 캡처 파일과 주의/팁을 함께 확인합니다. 원본 캡처: EDX 파일 가이드.png",
         "checks": [
-          "문제 인식 상태는 각 문제 우측에서 '문제 인식 성공'(초록) / '문제 인식 실패'(빨강) 표시로 확인할 수 있으므로, 확인 전 인식 실패·미확인 문제를 반드시 점검해야 합니다.",
+          "'시험 문제 편집'(2단계) 화면 상단 범례는 '문제 입력란'(초록 아이콘) / '문제 인식 실패'(빨강 아이콘) / '미확인 문제'(회색 아이콘) 세 가지 상태와 '문제 만드는 방법' 도움말 링크로 구성되어 있어,...",
+          "'시험 문제 편집' 화면 우측에는 '시험 문제 (전체 10 문제)' 라벨과 1~10 번호 칩으로 된 문제 내비게이터가 있으며, 인식된 문제는 초록색 번호 칩으로 표시됩니다.",
           "(빨간 박스 강조) [내 문제 은행] 에도 저장하기 옵션: 대량 추가로 생성한 문제를 추후에도 사용하고 싶을 경우 이 옵션을 활성화하라는 안내.",
-          "(빨간 박스 강조) 템플릿 다운로드 메뉴에는 '워드 템플릿 다운로드'와 '엑셀 템플릿 다운로드' 두 가지가 있으며, 가이드는 워드 템플릿 사용을 안내함.",
-          "업로드 후 편집 화면에서 각 문제별로 점수 입력, 위로/아래로 이동, 삭제, 더보기(…) 가 가능함."
+          "(빨간 박스 강조) 템플릿 다운로드 메뉴에는 '워드 템플릿 다운로드'와 '엑셀 템플릿 다운로드' 두 가지가 있으며, 가이드는 워드 템플릿 사용을 안내함."
         ]
       }
     ],
     "sourceImageFiles": [
       "EDX 파일 가이드.png"
     ],
-    "sourceDigestLineHint": "docs/active/cs-figma-board-digest-2026-06-21.md:2046"
+    "sourceDigestLineHint": "docs/active/cs-figma-board-digest-2026-06-21.md:2034"
   },
   {
-    "slug": "cs-figma-digest-2072",
-    "docSlug": "cs-figma-digest-2072",
+    "slug": "cs-figma-digest-2061",
+    "docSlug": "cs-figma-digest-2061",
     "docCategory": "admin",
     "category": "admin",
     "title": "EDX 파일 생성 & 사용법",
     "audience": "교사",
-    "summary": "클래스인(Classin) 드라이브에서 EDX 파일을 생성하고 수업 중에 사용하는 방법을 안내하는 가이드입니다. EDX는 웹사이트 주소를 입력해 만드는 수업 전용 인터랙티브 파일로, 교사가 교실에서 파일을 열면 별도의 권한 부여 없이도 학생들이 해당 웹페이지를 직접 조작할 수 있습니다. 드라이브에서의 파일 생성 → 이름/URL 입력 → 수업 중 클라우드 드라이브 아이콘으로 실행 및 연습 시작까지의 전체 흐름을 3단계 스크린샷으로 보여줍니다.",
+    "summary": "클래스인(Classin) 드라이브에서 EDX 파일을 생성하고 수업 중에 사용하는 방법을 안내하는 가이드입니다. EDX는 브라우저 형태의 수업 전용 인터랙티브 파일로, 웹사이트 주소를 입력해 교사가 교실에서 파일을 열면 별도의 권한 없이도 학생이 해당 웹페이지를 직접 조작할 수 있습니다. 단, EDX 파일 자체는 편집이 불가능하며 새로 만들어야 합니다. 드라이브에서 파일 생성 → 이름/URL 입력 → 수업 중 우측 클라우드 드라이브 아이콘으로 실행 및 연습 시작까지의 전체 흐름을 3단계 스크린샷으로 보여줍니다.",
     "keywords": [
       "EDX 파일 생성 & 사용법",
       "가이드/툴",
@@ -6341,18 +6214,18 @@ export const CS_FIGMA_DIGEST_GUIDES = [
       "새로 만들기",
       "EDX",
       "새 EDX 만들기",
+      "이름",
+      "URL 주소",
       "만들기",
-      "EDX 파일은 편집이 가능합니다. 새로운 파일을 생성해 주세요.",
-      "파일 이름을 입력해 주세요.",
-      "URL 주소를 입력해 주세요.",
-      "클라우드 드라이브"
+      "EDX 파일은 편집이 불가능합니다. 새로운 파일을 생성해 주세요",
+      "파일 이름을 입력해 주세요"
     ],
     "steps": [
-      "클래스인 메인 페이지의 [드라이브]를 클릭한 후, [새로 만들기] → [EDX]를 클릭해 주세요. (드라이브 화면 왼쪽 메뉴에서 드라이브 진입 후, 상단 [새로 만들기] 드롭다운에서 수업 준비 패키지/판서/숙제/온라인 PPT(NEW)/협업 문서/EDU/EDX 목록 중 EDX를 선택)",
-      "'새 EDX 만들기' 창에서 이름과 URL 주소를 입력한 후 [만들기]를 클릭해 주세요. (창 안내문: 'EDX 파일은 편집이 가능합니다. 새로운 파일을 생성해 주세요.' / 이름 입력란: '파일 이름을 입력해 주세요.' / URL 주소 입력란: 'URL 주소를 입력해 주세요.')",
-      "이제 드라이브에 EDX 파일이 생성되었습니다. (예: EDXTest.edx)",
-      "수업이 시작된 후, 우측 [클라우드 드라이브] 아이콘을 클릭해서 EDX 파일을 실행해 주세요.",
-      "[연습 시작]을 클릭하면 각 학생들이 EDX 파일 페이지를 스스로 조작합니다. 수업 중에는 [연습 시작] / [연습 종료]로 학생 조작을 제어할 수 있습니다.",
+      "클래스인 메인 페이지의 [드라이브]를 클릭한 후, [새로 만들기] → [EDX]를 클릭해 주세요. (왼쪽 기본 사이드바: 홈/채팅/할일/캘린더/드라이브/미러링 — '드라이브'가 빨간 박스로 강조됨. 드라이브 진입 후 상단 [새로 만들기] 드롭다운에서 EDX 선택)",
+      "'새 EDX 만들기' 창에서 [이름]과 [URL 주소]를 입력한 후 [만들기]를 클릭해 주세요. (창 안내문: 'EDX 파일은 편집이 불가능합니다. 새로운 파일을 생성해 주세요' / 이름 입력란: '파일 이름을 입력해 주세요' / URL 주소 입력란: 'URL 주소를 입력해 주세요')",
+      "이제 드라이브에 EDX 파일이 생성되었습니다. (업로드 성공 토스트에 'EDXTest.edx'와 'EDUTest.edu' 두 파일이 '내 드라이브'로 28/28 업로드 완료로 표시됨)",
+      "수업이 시작된 후, 우측 세로 툴바의 [클라우드 드라이브] 아이콘을 클릭해서 EDX 파일을 실행해 주세요.",
+      "[연습 시작]을 클릭하면 각 학생들이 EDX 파일 페이지를 스스로 조작합니다. 수업 중에는 [연습 시작]/[연습 종료]로 학생 조작을 제어할 수 있습니다.",
       "선생님은 각 학생의 페이지를 확인하고, 학생 페이지를 조작할 수 있습니다."
     ],
     "deepDive": [
@@ -6361,20 +6234,20 @@ export const CS_FIGMA_DIGEST_GUIDES = [
         "title": "순서 그대로 안내",
         "body": "Figma CS 캡처의 단계 텍스트를 우선 순서로 사용합니다.",
         "checks": [
-          "클래스인 메인 페이지의 [드라이브]를 클릭한 후, [새로 만들기] → [EDX]를 클릭해 주세요. (드라이브 화면 왼쪽 메뉴에서 드라이브 진입 후, 상단 [새로 만들기] 드롭다운에서 수업 준비 패키지/판서/숙제/온라...",
-          "'새 EDX 만들기' 창에서 이름과 URL 주소를 입력한 후 [만들기]를 클릭해 주세요. (창 안내문: 'EDX 파일은 편집이 가능합니다. 새로운 파일을 생성해 주세요.",
-          "이제 드라이브에 EDX 파일이 생성되었습니다. (예: EDXTest.edx)",
-          "수업이 시작된 후, 우측 [클라우드 드라이브] 아이콘을 클릭해서 EDX 파일을 실행해 주세요."
+          "클래스인 메인 페이지의 [드라이브]를 클릭한 후, [새로 만들기] → [EDX]를 클릭해 주세요. (왼쪽 기본 사이드바: 홈/채팅/할일/캘린더/드라이브/미러링 — '드라이브'가 빨간 박스로 강조됨.",
+          "'새 EDX 만들기' 창에서 [이름]과 [URL 주소]를 입력한 후 [만들기]를 클릭해 주세요. (창 안내문: 'EDX 파일은 편집이 불가능합니다.",
+          "이제 드라이브에 EDX 파일이 생성되었습니다. (업로드 성공 토스트에 'EDXTest.edx'와 'EDUTest.edu' 두 파일이 '내 드라이브'로 28/28 업로드 완료로 표시됨)",
+          "수업이 시작된 후, 우측 세로 툴바의 [클라우드 드라이브] 아이콘을 클릭해서 EDX 파일을 실행해 주세요."
         ]
       },
       {
         "level": "2단계",
         "title": "화면 기준 확인",
-        "body": "스크린샷 1 (PC 드라이브 화면): 클래스인 드라이브 화면. 왼쪽 사이드바에 홈/채팅/할일/캘린더/드라이브/질문/미러링 메뉴가 있고 '드라이브' 항목이 빨간 박스로 강조됨. 상단의 [새로 만들기] 버튼도 빨간 박스로 강조되고, 클릭 시 펼쳐진 드롭다운(수업 준비 패키지, 판서, 숙제, 온라인 PPT(NEW), 협업 문서, EDU, EDX)에서 맨 아래 [EDX] 항목이 빨간 박스로 강조됨.",
+        "body": "스크린샷 1 (PC 드라이브 화면): 클래스인 드라이브 화면. 맨 왼쪽 기본 사이드바에 홈/채팅/할일/캘린더/드라이브/미러링 메뉴가 있고 '드라이브' 항목이 빨간 박스로 강조됨. 그 오른쪽 중앙 내비게이션 열에는 최근 열람한 문서/내 드라이브/공유 드라이브/리소스 센터/리소스 라이브러리/문제 은행/Teacherin/Flowin/Camin/Nobook/Google Drive가 표시됨.",
         "checks": [
-          "스크린샷 1 (PC 드라이브 화면): 클래스인 드라이브 화면. 왼쪽 사이드바에 홈/채팅/할일/캘린더/드라이브/질문/미러링 메뉴가 있고 '드라이브' 항목이 빨간 박스로 강조됨.",
-          "스크린샷 2 (새 EDX 만들기 모달): 드라이브 위에 '새 EDX 만들기' 팝업이 떠 있음. 안내문 'EDX 파일은 편집이 가능합니다. 새로운 파일을 생성해 주세요.",
-          "스크린샷 3 (수업 중 화면 + 클라우드 드라이브 실행): 분홍색 점선 프레임 안에 수업 화면이 합성됨. 학생 영상(예: Minjae Kim, Joon Park 참가자 목록 — 빨간 박스 강조, 빨간 화살표 표시)과..."
+          "스크린샷 1 (PC 드라이브 화면): 클래스인 드라이브 화면. 맨 왼쪽 기본 사이드바에 홈/채팅/할일/캘린더/드라이브/미러링 메뉴가 있고 '드라이브' 항목이 빨간 박스로 강조됨.",
+          "스크린샷 2 (새 EDX 만들기 모달): 드라이브 위에 '새 EDX 만들기' 팝업이 떠 있음. 안내문 'EDX 파일은 편집이 불가능합니다. 새로운 파일을 생성해 주세요', [이름] 입력란('파일 이름을 입력해 주세요...",
+          "스크린샷 3 (수업 중 화면 + 클라우드 드라이브 실행): 분홍색 점선 프레임 안에 수업 화면이 합성됨. 라이나생명 광고가 포함된 네이버풍 웹페이지(EDX로 연 웹사이트)가 보이고, 상단 주소창 옆 참가자 선택 드롭..."
         ]
       },
       {
@@ -6382,21 +6255,21 @@ export const CS_FIGMA_DIGEST_GUIDES = [
         "title": "CS 주의사항과 원본 캡처",
         "body": "원본 캡처 파일과 주의/팁을 함께 확인합니다. 원본 캡처: EDX 파일 생성 & 사용법.png",
         "checks": [
-          "EDX 안내 툴팁(모달 내): 'EDX는 브라우저 형태의 수업 전용 인터랙티브 파일로, 웹사이트 주소를 입력해 교사가 교실에서 파일을 열면 별도의 권한 없이도 학생이 웹페이지를 조작할 수 있습니다.",
-          "EDX 파일은 편집이 가능하며, 새로 만들 때 이름과 URL 주소 두 가지를 반드시 입력해야 함",
-          "수업 화면에서 EDX 파일 실행은 우측 세로 툴바의 [클라우드 드라이브] 아이콘을 통해 진행함",
-          "[연습 시작] 상태에서만 학생이 페이지를 스스로 조작할 수 있고, 선생님은 각 학생 페이지를 실시간으로 확인·조작 가능함"
+          "EDX 안내 툴팁(모달 상단 검은색 말풍선): 'EDX는 브라우저 형태의 수업 전용 인터랙티브 파일로, 웹사이트 주소를 입력해 교사가 교실에서 파일을 열면 별도의 권한 없이도 학생이 웹페이지를 조작할 수 있습니다.",
+          "EDX 파일은 편집이 불가능하며, 필요 시 새로 만들어야 함. 새로 만들 때 [이름]과 [URL 주소] 두 가지를 입력함.",
+          "수업 화면에서 EDX 파일 실행은 우측 세로 툴바 맨 위의 [클라우드 드라이브] 아이콘을 통해 진행함.",
+          "[연습 시작] 상태에서 학생이 페이지를 스스로 조작할 수 있고, [연습 종료]로 종료함. 선생님은 각 학생 페이지를 확인·조작할 수 있음."
         ]
       }
     ],
     "sourceImageFiles": [
       "EDX 파일 생성 & 사용법.png"
     ],
-    "sourceDigestLineHint": "docs/active/cs-figma-board-digest-2026-06-21.md:2072"
+    "sourceDigestLineHint": "docs/active/cs-figma-board-digest-2026-06-21.md:2061"
   },
   {
-    "slug": "cs-figma-digest-2093",
-    "docSlug": "cs-figma-digest-2093",
+    "slug": "cs-figma-digest-2083",
+    "docSlug": "cs-figma-digest-2083",
     "docCategory": "student",
     "category": "onboarding",
     "title": "QR 코드 스캔으로 코스 가입하기",
@@ -6459,11 +6332,11 @@ export const CS_FIGMA_DIGEST_GUIDES = [
     "sourceImageFiles": [
       "Frame 24.png"
     ],
-    "sourceDigestLineHint": "docs/active/cs-figma-board-digest-2026-06-21.md:2093"
+    "sourceDigestLineHint": "docs/active/cs-figma-board-digest-2026-06-21.md:2083"
   },
   {
-    "slug": "cs-figma-digest-2113",
-    "docSlug": "cs-figma-digest-2113",
+    "slug": "cs-figma-digest-2103",
+    "docSlug": "cs-figma-digest-2103",
     "docCategory": "teacher",
     "category": "classroom",
     "title": "숙제 제출 완료(학생 페이지) / 숙제 미제출(학생 페이지) / 숙제 제출 페이지(선생님 화면_PC)",
@@ -6522,11 +6395,11 @@ export const CS_FIGMA_DIGEST_GUIDES = [
     "sourceImageFiles": [
       "Frame 27.png"
     ],
-    "sourceDigestLineHint": "docs/active/cs-figma-board-digest-2026-06-21.md:2113"
+    "sourceDigestLineHint": "docs/active/cs-figma-board-digest-2026-06-21.md:2103"
   },
   {
-    "slug": "cs-figma-digest-2125",
-    "docSlug": "cs-figma-digest-2125",
+    "slug": "cs-figma-digest-2115",
+    "docSlug": "cs-figma-digest-2115",
     "docCategory": "student",
     "category": "classroom",
     "title": "6/16 (화) 따라읽기",
@@ -6594,11 +6467,11 @@ export const CS_FIGMA_DIGEST_GUIDES = [
     "sourceImageFiles": [
       "image 12.png"
     ],
-    "sourceDigestLineHint": "docs/active/cs-figma-board-digest-2026-06-21.md:2125"
+    "sourceDigestLineHint": "docs/active/cs-figma-board-digest-2026-06-21.md:2115"
   },
   {
-    "slug": "cs-figma-digest-2150",
-    "docSlug": "cs-figma-digest-2150",
+    "slug": "cs-figma-digest-2140",
+    "docSlug": "cs-figma-digest-2140",
     "docCategory": "start",
     "category": "onboarding",
     "title": "로그인 (Classin)",
@@ -6663,11 +6536,11 @@ export const CS_FIGMA_DIGEST_GUIDES = [
     "sourceImageFiles": [
       "image 69.png"
     ],
-    "sourceDigestLineHint": "docs/active/cs-figma-board-digest-2026-06-21.md:2150"
+    "sourceDigestLineHint": "docs/active/cs-figma-board-digest-2026-06-21.md:2140"
   },
   {
-    "slug": "cs-figma-digest-2171",
-    "docSlug": "cs-figma-digest-2171",
+    "slug": "cs-figma-digest-2161",
+    "docSlug": "cs-figma-digest-2161",
     "docCategory": "start",
     "category": "onboarding",
     "title": "시험 문제 대량 업로드 + 시험 추가",
@@ -6737,11 +6610,11 @@ export const CS_FIGMA_DIGEST_GUIDES = [
     "sourceImageFiles": [
       "문제 은행 가이드"
     ],
-    "sourceDigestLineHint": "docs/active/cs-figma-board-digest-2026-06-21.md:2171"
+    "sourceDigestLineHint": "docs/active/cs-figma-board-digest-2026-06-21.md:2161"
   },
   {
-    "slug": "cs-figma-digest-2200",
-    "docSlug": "cs-figma-digest-2200",
+    "slug": "cs-figma-digest-2190",
+    "docSlug": "cs-figma-digest-2190",
     "docCategory": "teacher",
     "category": "classroom",
     "title": "비디오 갤러리",
@@ -6810,28 +6683,29 @@ export const CS_FIGMA_DIGEST_GUIDES = [
     "sourceImageFiles": [
       "비디오 갤러리 기능 안내"
     ],
-    "sourceDigestLineHint": "docs/active/cs-figma-board-digest-2026-06-21.md:2200"
+    "sourceDigestLineHint": "docs/active/cs-figma-board-digest-2026-06-21.md:2190"
   },
   {
-    "slug": "cs-figma-digest-2227",
-    "docSlug": "cs-figma-digest-2227",
+    "slug": "cs-figma-digest-2217",
+    "docSlug": "cs-figma-digest-2217",
     "docCategory": "student",
     "category": "onboarding",
     "title": "숙제 업로드_모바일",
     "audience": "학생",
-    "summary": "클래스인(ClassIn) 모바일 앱에서 학생이 숙제(과제)를 업로드/제출하는 방법을 4개의 스크린샷과 캡션으로 안내하는 CS 가이드. 코스 선택 → 숙제 확인 후 [제출하기] → 화면 중간의 [제출하기]로 제출 시작 → 화면 하단의 사진 아이콘으로 사진 첨부 순서로 진행한다. 제목 외 별도의 빨간 박스 주석(이미지 강조)으로 클릭/터치할 위치를 표시하고 있으며, 별도의 경고 문구는 없다.",
+    "summary": "클래스인(ClassIn) 모바일 앱에서 학생이 숙제(과제)를 업로드/제출하는 방법을 4개의 스크린샷과 캡션으로 안내하는 CS 가이드. 코스 선택 → 코스 내 목록에서 숙제 항목을 확인 후 [제출하기] → 숙제 상세에서 '나의 숙제'의 녹색 [제출하기]로 제출 시작 → 제출 작성 화면 하단의 사진 아이콘으로 사진 첨부 순서로 진행한다. 각 스크린샷은 클릭/터치할 위치를 빨간 박스 주석으로 강조하며, 별도의 경고 문구는 없다.",
     "keywords": [
       "숙제 업로드_모바일",
       "가이드/툴",
       "모바일",
       "제출하기",
+      "나의 숙제",
+      "클래스인 실험실",
+      "숙제 03/20 금요일",
+      "~합니다",
       "Main Course",
       "클래스인 실험실-Main Course-120",
-      "숙제 03/20 금요일",
       "Minjae",
-      "초안 저장",
-      "숙제 제출",
-      "숙제 내용 불러오기"
+      "Minjae Kim"
     ],
     "steps": [
       "숙제를 업로드할 코스를 선택합니다.",
@@ -6854,12 +6728,12 @@ export const CS_FIGMA_DIGEST_GUIDES = [
       {
         "level": "2단계",
         "title": "화면 기준 확인",
-        "body": "스크린샷 1 (좌상단): 클래스인 모바일 앱 홈 화면. 상단 탭 '모든 코스/교시/학생', '진행중 29' 표시. 코스 카드 그리드(루브릭_클래스인 성적표 산출 테스트용 코스, 클래스인 실험실, Text message error test class, 무료 수업 안내 예시반 테스트용 코스, LMS 테스트 코스 등)가 나열됨. '클래스인 실험실' 코스 카드에 빨간 박스로 강조.",
+        "body": "스크린샷 1 (좌상단): 클래스인 모바일 앱 홈 화면. 상단에 '홈', 검색·추가(+) 아이콘, 탭 '모든 코스/교시/학생', '진행중 29' 표시.",
         "checks": [
-          "스크린샷 1 (좌상단): 클래스인 모바일 앱 홈 화면. 상단 탭 '모든 코스/교시/학생', '진행중 29' 표시. 코스 카드 그리드(루브릭_클래스인 성적표 산출 테스트용 코스, 클래스인 실험실, Text messag...",
-          "스크린샷 2 (우상단): 코스 상세(Main Course) 화면. 수업/자료 목록에 '클래스인 실험실-Main Course-120', '숙제 03/20 금요일' 항목이 보이고, 각 항목 우측에 '자료 확인'",
-          "'제출하기' 버튼. '숙제 03/20 금요일' 행의 우측 [제출하기] 버튼에 빨간 박스 강조. 하단 탭(목록/숙제 등) 표시. 캡션: '숙제를 확인한 후, [제출하기]를 클릭합니다.'.",
-          "스크린샷 3 (좌하단): 숙제 상세 화면 '숙제 03/20 금요일'(진행 중). 작성자 Minjae, 기간 3/20 09:42~3/20 23:59, 점수 100, 본문 'ddd'."
+          "스크린샷 1 (좌상단): 클래스인 모바일 앱 홈 화면. 상단에 '홈', 검색·추가(+) 아이콘, 탭 '모든 코스/교시/학생', '진행중 29' 표시.",
+          "채팅(뱃지 43)",
+          "할 일(뱃지 99+)",
+          "캘린더"
         ]
       },
       {
@@ -6867,9 +6741,9 @@ export const CS_FIGMA_DIGEST_GUIDES = [
         "title": "CS 주의사항과 원본 캡처",
         "body": "원본 캡처 파일과 주의/팁을 함께 확인합니다. 원본 캡처: 숙제 업로드_모바일",
         "checks": [
-          "각 스크린샷에는 클릭/터치 위치를 강조하는 빨간 테두리 박스 주석이 표시되어 있다(1번: 코스 썸네일, 2번: 우측 [제출하기] 버튼, 3번: 녹색 [제출하기] 버튼, 4번: 하단 첨부 아이콘 툴바).",
+          "각 스크린샷에는 클릭/터치 위치를 강조하는 빨간 테두리 박스 주석이 표시되어 있다(1번: '클래스인 실험실' 코스 카드, 2번: '숙제 03/20 금요일' 행 우측 [제출하기] 버튼, 3번: '나의 숙제' 영역의 녹...",
           "별도의 경고/주의 문구(빨간 경고 텍스트)는 없다.",
-          "캡션 표기 흔들림: 1·2번 캡션은 ~합니다. 형식, 3·4번 캡션은 중앙 정렬의 큰 문장 형식으로 스타일이 약간 다르다.",
+          "캡션 표기 흔들림: 1·2번 캡션은 '~합니다' 형식, 3·4번 캡션은 중앙 정렬의 큰 문장 형식으로 스타일이 약간 다르다.",
           "마지막 단계의 첨부 툴바 아이콘은 좌→우로 사진(이미지), 음성(마이크), 폴더(파일), 동영상(카메라), 링크 순으로 보인다."
         ]
       }
@@ -6877,11 +6751,11 @@ export const CS_FIGMA_DIGEST_GUIDES = [
     "sourceImageFiles": [
       "숙제 업로드_모바일"
     ],
-    "sourceDigestLineHint": "docs/active/cs-figma-board-digest-2026-06-21.md:2227"
+    "sourceDigestLineHint": "docs/active/cs-figma-board-digest-2026-06-21.md:2217"
   },
   {
-    "slug": "cs-figma-digest-2251",
-    "docSlug": "cs-figma-digest-2251",
+    "slug": "cs-figma-digest-2242",
+    "docSlug": "cs-figma-digest-2242",
     "docCategory": "teacher",
     "category": "classroom",
     "title": "New Course",
@@ -6939,11 +6813,11 @@ export const CS_FIGMA_DIGEST_GUIDES = [
     "sourceImageFiles": [
       "Frame 1.png"
     ],
-    "sourceDigestLineHint": "docs/active/cs-figma-board-digest-2026-06-21.md:2251"
+    "sourceDigestLineHint": "docs/active/cs-figma-board-digest-2026-06-21.md:2242"
   },
   {
-    "slug": "cs-figma-digest-2265",
-    "docSlug": "cs-figma-digest-2265",
+    "slug": "cs-figma-digest-2256",
+    "docSlug": "cs-figma-digest-2256",
     "docCategory": "teacher",
     "category": "troubleshooting",
     "title": "(빈 이미지 — 내용 없음)",
@@ -6993,11 +6867,73 @@ export const CS_FIGMA_DIGEST_GUIDES = [
     "sourceImageFiles": [
       "Frame 25.png"
     ],
-    "sourceDigestLineHint": "docs/active/cs-figma-board-digest-2026-06-21.md:2265"
+    "sourceDigestLineHint": "docs/active/cs-figma-board-digest-2026-06-21.md:2256"
   },
   {
-    "slug": "cs-figma-digest-2278",
-    "docSlug": "cs-figma-digest-2278",
+    "slug": "cs-figma-digest-2269",
+    "docSlug": "cs-figma-digest-2269",
+    "docCategory": "teacher",
+    "category": "classroom",
+    "title": "AI Board — 학생 답안 상세 / AI 채점 결과",
+    "audience": "교사",
+    "summary": "클래스인 'AI Board'(AI 보드) 화면의 학생 답안 상세 및 AI 채점 결과를 보여주는 원본 UI 스크린샷입니다. O/X(참/거짓) 문항에 대해 학생이 제출한 답안과 AI가 자동 채점한 결과, 세부 분석, 종합 피드백이 함께 표시됩니다. 별도의 안내 문구나 단계별 설명 없이 실제 채점 결과 화면만 캡처되어 있습니다.",
+    "keywords": [
+      "AI Board — 학생 답안 상세 / AI 채점 결과",
+      "기타",
+      "전자칠판(IFP)",
+      "AI Board",
+      "답안 제출이 마감되었습니다",
+      "거짓",
+      "답이 틀렸습니다.",
+      "학생 답안 상세",
+      "AI 채점 결과",
+      "Frame 29"
+    ],
+    "steps": [
+      "AI Board — 학생 답안 상세 / AI 채점 결과 원본 화면을 확인합니다.",
+      "다크 테마의 'AI Board' 윈도우 창. 우상단에 최소화/최대화/닫기 버튼이 있음 / 상단 중앙: 시계 아이콘과 함께 '답안 제출이 마감되었습니다' 알림 배지 / 좌상단 학생 정보 영역: 회색 원형 프로필 아이콘 옆에 'kgc*ver.com' 계정, '제출 시간: 2026. 6."
+    ],
+    "deepDive": [
+      {
+        "level": "1단계",
+        "title": "순서 그대로 안내",
+        "body": "Figma CS 캡처의 단계 텍스트를 우선 순서로 사용합니다.",
+        "checks": [
+          "AI Board — 학생 답안 상세 / AI 채점 결과 원본 화면을 확인합니다.",
+          "다크 테마의 'AI Board' 윈도우 창. 우상단에 최소화/최대화/닫기 버튼이 있음 / 상단 중앙: 시계 아이콘과 함께 '답안 제출이 마감되었습니다' 알림 배지 / 좌상단 학생 정보 영역: 회색 원형 프로필 아이콘..."
+        ]
+      },
+      {
+        "level": "2단계",
+        "title": "화면 기준 확인",
+        "body": "다크 테마의 'AI Board' 윈도우 창. 우상단에 최소화/최대화/닫기 버튼이 있음 / 상단 중앙: 시계 아이콘과 함께 '답안 제출이 마감되었습니다' 알림 배지 / 좌상단 학생 정보 영역: 회색 원형 프로필 아이콘 옆에 'kgc*ver.com' 계정, '제출 시간: 2026. 6. 16.",
+        "checks": [
+          "다크 테마의 'AI Board' 윈도우 창. 우상단에 최소화/최대화/닫기 버튼이 있음",
+          "상단 중앙: 시계 아이콘과 함께 '답안 제출이 마감되었습니다' 알림 배지",
+          "좌상단 학생 정보 영역: 회색 원형 프로필 아이콘 옆에 'kgc*ver.com' 계정, '제출 시간: 2026. 6. 16. 오후 1:00:11'",
+          "우상단 통계: '1:01 소요 시간', '0 성적'"
+        ]
+      },
+      {
+        "level": "3단계",
+        "title": "CS 주의사항과 원본 캡처",
+        "body": "원본 캡처 파일과 주의/팁을 함께 확인합니다. 원본 캡처: Frame 29.png",
+        "checks": [
+          "상단 중앙에 '답안 제출이 마감되었습니다' 알림(시계 아이콘 포함)이 표시되어 제출이 종료된 상태임을 나타냄",
+          "'참'(O) 보기는 빨간 테두리로 강조되어 학생이 선택한 오답임을 표시하고, 우측에 라디오 선택 표시가 되어 있음",
+          "'거짓'(F) 보기는 초록 테두리로 강조되어 정답임을 표시함",
+          "AI 채점 결과는 '답이 틀렸습니다.'로 오답 처리됨"
+        ]
+      }
+    ],
+    "sourceImageFiles": [
+      "Frame 29.png"
+    ],
+    "sourceDigestLineHint": "docs/active/cs-figma-board-digest-2026-06-21.md:2269"
+  },
+  {
+    "slug": "cs-figma-digest-2283",
+    "docSlug": "cs-figma-digest-2283",
     "docCategory": "teacher",
     "category": "classroom",
     "title": "New Course",
@@ -7024,9 +6960,9 @@ export const CS_FIGMA_DIGEST_GUIDES = [
       {
         "level": "2단계",
         "title": "화면 기준 확인",
-        "body": "상단 우주 배경의 코스 커버 이미지. 좌측 상단에 뒤로가기 화살표, 우측 상단에 공유 아이콘. 배너 안에 파란색 리즈노을 모양의 클래스 아이콘과 블러 처리된 코스명 박스, 우측에 다음 화살표 / 코스 제목 영역 New Course 라는 큰 제목.",
+        "body": "상단 우주 배경의 코스 커버 이미지. 좌측 상단에 뒤로가기 화살표, 우측 상단에 공유 아이콘. 배너 안에 파란색 학원L노을 모양의 클래스 아이콘과 블러 처리된 코스명 박스, 우측에 다음 화살표 / 코스 제목 영역 New Course 라는 큰 제목.",
         "checks": [
-          "상단 우주 배경의 코스 커버 이미지. 좌측 상단에 뒤로가기 화살표, 우측 상단에 공유 아이콘. 배너 안에 파란색 리즈노을 모양의 클래스 아이콘과 블러 처리된 코스명 박스, 우측에 다음 화살표",
+          "상단 우주 배경의 코스 커버 이미지. 좌측 상단에 뒤로가기 화살표, 우측 상단에 공유 아이콘. 배너 안에 파란색 학원L노을 모양의 클래스 아이콘과 블러 처리된 코스명 박스, 우측에 다음 화살표",
           "코스 제목 영역 New Course 라는 큰 제목. 그 아래 수업 칩 버튼과 우측으로 정렬, 필터 슬라이더, 리본 뱃지, 검색 돋보기 아이콘 줄",
           "두 개의 추가 배너 버튼 하늘색 수업 계획 추가하기, 보라색 학습 계획 추가하기",
           "수업 일정 카드 1 사람 아이콘, 블러 처리된 수업 제목, 수업 종료됨 회색 태그, 7월9일 수 11시40분 시작 12분, Classin Liz 출석 1의 1. 우측 하단에 영상 리포트 과제 아이콘"
@@ -7045,11 +6981,11 @@ export const CS_FIGMA_DIGEST_GUIDES = [
     "sourceImageFiles": [
       "Frame 3.png"
     ],
-    "sourceDigestLineHint": "docs/active/cs-figma-board-digest-2026-06-21.md:2278"
+    "sourceDigestLineHint": "docs/active/cs-figma-board-digest-2026-06-21.md:2283"
   },
   {
-    "slug": "cs-figma-digest-2292",
-    "docSlug": "cs-figma-digest-2292",
+    "slug": "cs-figma-digest-2297",
+    "docSlug": "cs-figma-digest-2297",
     "docCategory": "student",
     "category": "classroom",
     "title": "올인원 하이브리드 학습 플랫폼 클래스인",
@@ -7107,11 +7043,11 @@ export const CS_FIGMA_DIGEST_GUIDES = [
     "sourceImageFiles": [
       "image 60.png"
     ],
-    "sourceDigestLineHint": "docs/active/cs-figma-board-digest-2026-06-21.md:2292"
+    "sourceDigestLineHint": "docs/active/cs-figma-board-digest-2026-06-21.md:2297"
   },
   {
-    "slug": "cs-figma-digest-2306",
-    "docSlug": "cs-figma-digest-2306",
+    "slug": "cs-figma-digest-2311",
+    "docSlug": "cs-figma-digest-2311",
     "docCategory": "student",
     "category": "onboarding",
     "title": "Classin 홈 (학생 대시보드 화면)",
@@ -7171,11 +7107,11 @@ export const CS_FIGMA_DIGEST_GUIDES = [
     "sourceImageFiles": [
       "image 70.png"
     ],
-    "sourceDigestLineHint": "docs/active/cs-figma-board-digest-2026-06-21.md:2306"
+    "sourceDigestLineHint": "docs/active/cs-figma-board-digest-2026-06-21.md:2311"
   },
   {
-    "slug": "cs-figma-digest-2319",
-    "docSlug": "cs-figma-digest-2319",
+    "slug": "cs-figma-digest-2324",
+    "docSlug": "cs-figma-digest-2324",
     "docCategory": "teacher",
     "category": "classroom",
     "title": "학습 보고서",
@@ -7229,6 +7165,70 @@ export const CS_FIGMA_DIGEST_GUIDES = [
     "sourceImageFiles": [
       "image 76.png"
     ],
-    "sourceDigestLineHint": "docs/active/cs-figma-board-digest-2026-06-21.md:2319"
+    "sourceDigestLineHint": "docs/active/cs-figma-board-digest-2026-06-21.md:2324"
+  },
+  {
+    "slug": "cs-figma-digest-2340",
+    "docSlug": "cs-figma-digest-2340",
+    "docCategory": "teacher",
+    "category": "troubleshooting",
+    "title": "Windows용 클래스인 (다운로드 | 클래스인)",
+    "audience": "전체 (학원/교사/관리자/학생 등 클래스인 PC 설치 대상자)",
+    "summary": "클래스인 공식 웹사이트의 Windows용 데스크톱 앱 다운로드 페이지(classin.com/kr/download/) 화면 캡처이다. 페이지 위에 '언어 선택' 모달 창이 떠 있고, 화면 하단에는 쿠키 사용 동의 배너가 표시되어 있다. 오른쪽 배경에는 생물 '혈액(Blood)' 수업 화이트보드를 보여주는 디바이스 목업이 깔려 있다. 안내 문구나 빨간 박스/화살표 같은 별도의 단계 설명 주석은 없는 순수 UI 스크린샷으로, Windows 7 이상에서 사용 가능한 클래스인 앱을 다운로드 버튼으로 내려받는 화면을 보여준다.",
+    "keywords": [
+      "Windows용 클래스인 (다운로드 | 클래스인)",
+      "다운로드/설치",
+      "PC",
+      "언어 선택",
+      "혈액(Blood)",
+      "(쿠키 정책은 링크). 우측에 초록색",
+      "버튼이 있고, 배너 우측 상단에는 작은 X(닫기) 버튼이 있다.",
+      "모달:",
+      "표기와",
+      "라벨,",
+      "가 선택된 드롭다운, 그리고",
+      "(초록 버튼) /"
+    ],
+    "steps": [
+      "Windows용 클래스인 (다운로드 | 클래스인) 원본 화면을 확인합니다.",
+      "전체 화면: Chrome 브라우저로 클래스인 다운로드 페이지(classin.com/kr/download/)를 연 모습. 상단에 'Classin' 로고와 GNB 메뉴(제품 소개, 솔루션, 리소스, 요금제, 다운로드)가 있고 우측에 '한국어 / 로그인 / 상담 요청하기' 버튼이 있다."
+    ],
+    "deepDive": [
+      {
+        "level": "1단계",
+        "title": "순서 그대로 안내",
+        "body": "Figma CS 캡처의 단계 텍스트를 우선 순서로 사용합니다.",
+        "checks": [
+          "Windows용 클래스인 (다운로드 | 클래스인) 원본 화면을 확인합니다.",
+          "전체 화면: Chrome 브라우저로 클래스인 다운로드 페이지(classin.com/kr/download/)를 연 모습. 상단에 'Classin' 로고와 GNB 메뉴(제품 소개, 솔루션, 리소스, 요금제, 다운로드)가..."
+        ]
+      },
+      {
+        "level": "2단계",
+        "title": "화면 기준 확인",
+        "body": "전체 화면: Chrome 브라우저로 클래스인 다운로드 페이지(classin.com/kr/download/)를 연 모습. 상단에 'Classin' 로고와 GNB 메뉴(제품 소개, 솔루션, 리소스, 요금제, 다운로드)가 있고 우측에 '한국어 / 로그인 / 상담 요청하기' 버튼이 있다.",
+        "checks": [
+          "전체 화면: Chrome 브라우저로 클래스인 다운로드 페이지(classin.com/kr/download/)를 연 모습. 상단에 'Classin' 로고와 GNB 메뉴(제품 소개, 솔루션, 리소스, 요금제, 다운로드)가...",
+          "로그인",
+          "상담 요청하기' 버튼이 있다.",
+          "왼쪽 본문 영역: 큰 제목 'Windows용 클래스인'(모달에 일부 가림), 부제 '하이브리드 교육과 학습을 위한 올인원 솔루션', 'Windows 7 이상에서 사용 가능' 안내, 그리고 초록색 '다운로드' 버튼."
+        ]
+      },
+      {
+        "level": "3단계",
+        "title": "CS 주의사항과 원본 캡처",
+        "body": "원본 캡처 파일과 주의/팁을 함께 확인합니다. 원본 캡처: image 64.png",
+        "checks": [
+          "하단 쿠키 배너 문구: 'ClassIn은 당사의 사이트를 운영하는 데 꼭 필요한 쿠키 및 유사 기술을 사용합니다. 또한 당사와 파트너사는 사용자의 당사 사이트 사용을 분석하고 사이트 방문을 맞춤화 및 향상하여, 보다...",
+          "'언어 선택' 모달: 'ClassIn' 표기와 '언어 선택' 라벨, '한국어'가 선택된 드롭다운, 그리고 '확인 하 다.'(초록 버튼) / '취소 하 다.'(회색 버튼) 버튼이 있다.",
+          "지원 사양 안내: 'Windows 7 이상에서 사용 가능'.",
+          "브라우저 탭 제목은 '다운로드 | 클래스인', 주소창 URL은 classin.com/kr/download/ 이다(Chrome 브라우저, 게스트 프로필)."
+        ]
+      }
+    ],
+    "sourceImageFiles": [
+      "image 64.png"
+    ],
+    "sourceDigestLineHint": "docs/active/cs-figma-board-digest-2026-06-21.md:2340"
   }
 ] satisfies CsFigmaGuide[]
