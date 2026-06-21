@@ -58,6 +58,7 @@ export function AppChrome({ children }: { children: ReactNode }) {
   const { choice: consentChoice } = useConsent()
   const showPublicChrome = !isInternalPath(pathname)
   const showAnalytics = showPublicChrome
+  const showMobileFloatingCta = showPublicChrome && !pathname.startsWith("/l/")
 
   useEffect(() => {
     const w = window as Window & {
@@ -110,7 +111,7 @@ export function AppChrome({ children }: { children: ReactNode }) {
           않아 대화·열림 상태가 보존된다. MobileFloatingCTA는 기존대로 페이지마다
           재평가한다. */}
       {showPublicChrome && readyPath !== null ? <FloatingChatbot /> : null}
-      {showPublicChrome && readyPath === pathname ? <MobileFloatingCTA /> : null}
+      {showMobileFloatingCta && readyPath === pathname ? <MobileFloatingCTA /> : null}
     </>
   )
 }
