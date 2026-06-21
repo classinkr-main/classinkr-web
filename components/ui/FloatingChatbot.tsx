@@ -6,6 +6,7 @@ import Link from "next/link"
 import { usePathname } from "next/navigation"
 import { AnimatePresence, motion, useReducedMotion } from "framer-motion"
 import {
+    ArrowRight,
     Bot,
     Check,
     Copy,
@@ -196,10 +197,10 @@ function AssistantMeta({ message }: { message: ChatMessage }) {
                 <span
                     key={label}
                     className={cn(
-                        "inline-flex h-6 items-center rounded-[6px] px-2 text-[11px] font-bold",
+                        "inline-flex h-6 items-center rounded-full border px-2.5 text-[11px] font-bold",
                         label === "상담 권장"
-                            ? "bg-[#ECFDF5] text-[#084734]"
-                            : "bg-[#F6F5F4] text-[#615D59]"
+                            ? "border-[#084734]/10 bg-[#ECFDF5]/80 text-[#084734]"
+                            : "border-black/[0.06] bg-white/70 text-[#615D59]"
                     )}
                 >
                     {label}
@@ -280,7 +281,7 @@ function ConsultationBridge({
     }
 
     return (
-        <div className="mt-3 border-t border-black/[0.06] pt-3">
+        <div className="mt-3 border-t border-[#084734]/10 pt-3">
             <div className="flex items-center gap-2 text-[12px] font-bold text-[#084734]">
                 <MessageCircle className="h-4 w-4" />
                 상담 연결
@@ -288,14 +289,14 @@ function ConsultationBridge({
             <p className="mt-1 text-[11px] leading-4 text-[#615D59]">
                 {formatActionMessage(message.handoffIntent ?? "support", draftLineCount)}
             </p>
-            <div className="mt-2 rounded-[8px] bg-[#F6F5F4] px-3 py-2 text-[12px] leading-5 text-[#3B3835]">
+            <div className="mt-2 rounded-[12px] border border-white/70 bg-[#ECFDF5]/45 px-3 py-2 text-[12px] leading-5 text-[#3B3835] shadow-[inset_0_1px_0_rgba(255,255,255,0.65)]">
                 <p className="whitespace-pre-line [overflow-wrap:anywhere]">{draft}</p>
             </div>
             <div className="mt-3 flex flex-wrap items-center gap-2">
                 <button
                     type="button"
                     onClick={openConsultation}
-                    className="inline-flex h-9 items-center justify-center gap-1.5 rounded-[6px] bg-[#084734] px-3 text-xs font-bold text-white transition-colors hover:bg-[#065c41]"
+                    className="inline-flex h-9 items-center justify-center gap-1.5 rounded-[8px] bg-[#084734] px-3 text-xs font-bold text-white shadow-[0_6px_14px_rgba(8,71,52,0.18)] transition-colors hover:bg-[#065c41]"
                 >
                     <MessageCircle className="h-3.5 w-3.5" />
                     {intentLabel}
@@ -303,14 +304,14 @@ function ConsultationBridge({
                 <button
                     type="button"
                     onClick={() => void copyDraft()}
-                    className="inline-flex h-9 items-center justify-center gap-1.5 rounded-[6px] border border-black/[0.08] bg-white px-3 text-xs font-bold text-[#111110] transition-colors hover:bg-[#ECFDF5]"
+                    className="inline-flex h-9 items-center justify-center gap-1.5 rounded-[8px] border border-white/70 bg-white/70 px-3 text-xs font-bold text-[#111110] transition-colors hover:bg-[#ECFDF5]"
                 >
                     {state === "copied" ? <Check className="h-3.5 w-3.5" /> : <Copy className="h-3.5 w-3.5" />}
                     요약 복사
                 </button>
                 <Link
                     href={contactHref}
-                    className="inline-flex h-9 items-center justify-center rounded-[6px] px-2 text-xs font-bold text-[#615D59] transition-colors hover:bg-[#F6F5F4] hover:text-[#084734]"
+                    className="inline-flex h-9 items-center justify-center rounded-[8px] px-2 text-xs font-bold text-[#615D59] transition-colors hover:bg-white/70 hover:text-[#084734]"
                 >
                     문의폼으로 이어서 남기기
                 </Link>
@@ -373,7 +374,7 @@ function FeedbackButtons({
                 type="button"
                 onClick={() => sendFeedback("helpful")}
                 className={cn(
-                    "inline-flex h-8 w-8 items-center justify-center rounded-[6px] border border-black/[0.08] bg-white text-[#615D59] transition-colors hover:text-[#084734]",
+                    "inline-flex h-8 w-8 items-center justify-center rounded-[8px] border border-white/70 bg-white/70 text-[#615D59] transition-colors hover:bg-[#ECFDF5] hover:text-[#084734]",
                     state === "helpful" && "border-[#084734]/25 bg-[#ECFDF5] text-[#084734]"
                 )}
                 aria-label="도움됨"
@@ -385,7 +386,7 @@ function FeedbackButtons({
                 type="button"
                 onClick={() => sendFeedback("not_helpful")}
                 className={cn(
-                    "inline-flex h-8 w-8 items-center justify-center rounded-[6px] border border-black/[0.08] bg-white text-[#615D59] transition-colors hover:text-[#084734]",
+                    "inline-flex h-8 w-8 items-center justify-center rounded-[8px] border border-white/70 bg-white/70 text-[#615D59] transition-colors hover:bg-[#ECFDF5] hover:text-[#084734]",
                     state === "not_helpful" && "border-[#084734]/25 bg-[#ECFDF5] text-[#084734]"
                 )}
                 aria-label="도움 안 됨"
@@ -535,7 +536,7 @@ function AnswerCopyButton({ message }: { message: ChatMessage }) {
             type="button"
             onClick={() => void copyAnswer()}
             className={cn(
-                "inline-flex h-8 items-center justify-center gap-1.5 rounded-[6px] border border-black/[0.08] bg-white px-2.5 text-[11px] font-bold text-[#615D59] transition-colors hover:bg-[#ECFDF5] hover:text-[#084734]",
+                "inline-flex h-8 items-center justify-center gap-1.5 rounded-[8px] border border-white/70 bg-white/70 px-2.5 text-[11px] font-bold text-[#615D59] transition-colors hover:bg-[#ECFDF5] hover:text-[#084734]",
                 state === "copied" && "border-[#084734]/25 bg-[#ECFDF5] text-[#084734]",
                 state === "failed" && "border-[#B85C33]/20 bg-[#FBEAE2] text-[#7A2A13]"
             )}
@@ -553,13 +554,13 @@ function SourceLinks({ sources }: { sources?: ChatbotSource[] }) {
     if (visibleSources.length === 0) return null
 
     return (
-        <div className="mt-3 space-y-1.5 border-t border-black/[0.06] pt-3">
+        <div className="mt-3 space-y-1.5 border-t border-[#084734]/10 pt-3">
             <div className="text-[11px] font-bold text-[#615D59]">참고한 가이드</div>
             {visibleSources.map((source) => (
                 <Link
                     key={`${source.urlPath}:${source.heading ?? source.title}`}
                     href={source.urlPath}
-                    className="block rounded-[8px] border border-black/[0.08] bg-[#F6F5F4] px-3 py-2 text-left transition-colors hover:bg-[#ECFDF5] focus-visible:outline-none focus-visible:ring-2 focus-visible:ring-[#084734]/25"
+                    className="block rounded-[12px] border border-white/70 bg-white/60 px-3 py-2 text-left shadow-[inset_0_1px_0_rgba(255,255,255,0.60)] transition-colors hover:bg-[#ECFDF5]/90 focus-visible:outline-none focus-visible:ring-2 focus-visible:ring-[#084734]/25"
                 >
                     <span className="flex items-start justify-between gap-2 text-[12px] font-bold leading-5 text-[#111110]">
                         <span>{source.title}</span>
@@ -591,7 +592,7 @@ function ThinkingIndicator({
             <div
                 role="status"
                 aria-live="polite"
-                className="inline-flex items-center gap-2 rounded-[12px] border border-black/[0.06] bg-white px-3.5 py-2.5 shadow-sm"
+                className="inline-flex items-center gap-2 rounded-[14px] border border-white/70 bg-white/70 px-3.5 py-2.5 shadow-[0_10px_22px_rgba(49,48,46,0.07),inset_0_1px_0_rgba(255,255,255,0.65)] backdrop-blur-xl"
             >
                 <div className="flex items-center gap-1" aria-hidden>
                     {[0, 1, 2].map((index) => (
@@ -946,169 +947,196 @@ export function FloatingChatbot() {
                         role="dialog"
                         aria-modal="false"
                         aria-labelledby="classin-chatbot-title"
-                        initial={shouldReduceMotion ? { opacity: 0 } : { opacity: 0, y: 16, scale: 0.98 }}
-                        animate={shouldReduceMotion ? { opacity: 1 } : { opacity: 1, y: 0, scale: 1 }}
-                        exit={shouldReduceMotion ? { opacity: 0 } : { opacity: 0, y: 16, scale: 0.98 }}
-                        transition={{ duration: shouldReduceMotion ? 0.01 : 0.18 }}
-                        className="mb-3 flex h-[min(620px,calc(100svh-6rem))] w-full max-w-none flex-col overflow-hidden rounded-[20px] border border-black/[0.08] bg-white shadow-[0_30px_60px_rgba(8,71,52,0.12),0_14px_30px_rgba(0,0,0,0.06),0_4px_10px_rgba(0,0,0,0.04),0_1px_3px_rgba(0,0,0,0.03)] md:mb-4 md:h-[min(560px,calc(100svh-8.5rem))] md:max-w-[390px]"
+                        initial={
+                            shouldReduceMotion
+                                ? { opacity: 0 }
+                                : { opacity: 0, y: 24, scale: 0.94, filter: "blur(10px)" }
+                        }
+                        animate={
+                            shouldReduceMotion
+                                ? { opacity: 1 }
+                                : { opacity: 1, y: 0, scale: 1, filter: "blur(0px)" }
+                        }
+                        exit={
+                            shouldReduceMotion
+                                ? { opacity: 0 }
+                                : { opacity: 0, y: 18, scale: 0.96, filter: "blur(8px)" }
+                        }
+                        transition={
+                            shouldReduceMotion
+                                ? { duration: 0.01 }
+                                : { type: "spring", stiffness: 380, damping: 32, mass: 0.9 }
+                        }
+                        className="relative mb-3 flex h-[min(680px,calc(100svh-5.5rem))] w-full max-w-none overflow-hidden rounded-[26px] border border-white/60 bg-[linear-gradient(152deg,rgba(255,255,255,0.88)_0%,rgba(236,253,245,0.76)_50%,rgba(246,245,244,0.82)_100%)] text-[#111110] shadow-[0_34px_80px_rgba(8,71,52,0.18),0_18px_42px_rgba(49,48,46,0.10),0_4px_12px_rgba(0,0,0,0.05),inset_0_1px_0_rgba(255,255,255,0.72)] backdrop-blur-2xl md:mb-4 md:h-[min(640px,calc(100svh-8rem))] md:w-[424px] md:max-w-[424px]"
                     >
-                        <div className="flex items-center justify-between border-b border-white/[0.08] bg-[#2b2926] px-5 py-4 text-white">
-                            <div className="flex min-w-0 items-center gap-3">
-                                <div className="relative flex h-10 w-10 shrink-0 items-center justify-center overflow-hidden rounded-[9px] border border-white/20 bg-white/15">
-                                    {isDeepConsultation ? (
-                                        <Image
-                                            src={DEEP_CONSULTATION_ICON_SRC}
-                                            alt=""
-                                            fill
-                                            className="object-cover"
-                                            sizes="40px"
-                                            aria-hidden
-                                        />
-                                    ) : (
-                                        <Bot className="h-5 w-5 text-[#6EE7B7]" />
-                                    )}
-                                </div>
-                                <div className="min-w-0">
-                                    <div className="flex items-center gap-1.5">
-                                        <h2 id="classin-chatbot-title" className="truncate text-[15px] font-bold">Classin 상담 가이드</h2>
-                                        <motion.span
-                                            aria-hidden
-                                            className="h-1.5 w-1.5 shrink-0 rounded-full bg-[#6EE7B7] shadow-[0_0_0_2px_rgba(110,231,183,0.25)]"
-                                            animate={shouldReduceMotion ? undefined : { opacity: [1, 0.4, 1] }}
-                                            transition={shouldReduceMotion ? undefined : { duration: 2.6, repeat: Infinity, ease: "easeInOut" }}
-                                        />
-                                    </div>
-                                    <p className="mt-0.5 truncate text-xs text-white/70">운영·도입·CS 빠른 상담</p>
-                                </div>
-                            </div>
-                            <button
-                                type="button"
-                                onClick={closeChatbot}
-                                className="inline-flex h-8 w-8 items-center justify-center rounded-[6px] text-white/75 transition-colors hover:bg-white/10 hover:text-white"
-                                aria-label="챗봇 닫기"
-                            >
-                                <X className="h-5 w-5" />
-                            </button>
-                        </div>
+                        <div className="pointer-events-none absolute inset-0 bg-[linear-gradient(180deg,rgba(255,255,255,0.48)_0%,rgba(255,255,255,0.12)_42%,rgba(8,71,52,0.06)_100%)]" aria-hidden />
+                        <div className="pointer-events-none absolute inset-x-5 top-0 h-px bg-white/80" aria-hidden />
 
-                        <div
-                            className="flex-1 overflow-y-auto bg-gradient-to-b from-[#F6F5F4] to-white px-4 py-4"
-                            role="log"
-                            aria-live="polite"
-                            aria-relevant="additions"
-                        >
-                            <div className="space-y-4">
-                                {messages.map((message) => (
-                                    <motion.div
-                                        key={message.id}
-                                        initial={shouldReduceMotion ? { opacity: 0 } : { opacity: 0, y: 10, scale: 0.98 }}
-                                        animate={shouldReduceMotion ? { opacity: 1 } : { opacity: 1, y: 0, scale: 1 }}
-                                        transition={{ duration: shouldReduceMotion ? 0.01 : 0.28, ease: [0.22, 1, 0.36, 1] }}
-                                        className={cn(
-                                            "flex",
-                                            message.role === "user" ? "justify-end" : "justify-start"
+                        <div className="relative flex min-h-0 w-full flex-col">
+                            <div className="flex items-center justify-between border-b border-white/50 bg-white/20 px-4 py-3.5 backdrop-blur-xl">
+                                <div className="flex min-w-0 items-center gap-3">
+                                    <div className="relative flex h-11 w-11 shrink-0 items-center justify-center overflow-hidden rounded-[14px] border border-white/70 bg-[linear-gradient(145deg,rgba(255,255,255,0.82),rgba(209,250,229,0.50))] shadow-[0_10px_26px_rgba(8,71,52,0.12),inset_0_1px_0_rgba(255,255,255,0.80)]">
+                                        {isDeepConsultation ? (
+                                            <>
+                                                <Image
+                                                    src={DEEP_CONSULTATION_ICON_SRC}
+                                                    alt=""
+                                                    fill
+                                                    className="object-cover opacity-95"
+                                                    sizes="44px"
+                                                    aria-hidden
+                                                />
+                                                <span className="absolute inset-0 bg-[#ECFDF5]/20 mix-blend-soft-light" aria-hidden />
+                                            </>
+                                        ) : (
+                                            <>
+                                                <span className="absolute inset-1 rounded-[10px] bg-[#ECFDF5]/80" aria-hidden />
+                                                <Bot className="relative h-5 w-5 text-[#084734]" />
+                                            </>
                                         )}
-                                    >
-                                        <div
-                                            className={cn(
-                                                "max-w-[90%] rounded-[14px] px-3.5 py-3 text-sm leading-6 md:max-w-[86%]",
-                                                message.role === "user"
-                                                    ? "rounded-br-[4px] bg-[#0e5038] text-white shadow-[0_3px_10px_rgba(8,71,52,0.18)]"
-                                                    : "rounded-bl-[4px] border border-black/[0.06] bg-white text-[#111110] shadow-[0_3px_8px_rgba(0,0,0,0.05),0_1px_2px_rgba(0,0,0,0.03)]"
-                                            )}
-                                        >
-                                            {message.role === "assistant" ? <AssistantMeta message={message} /> : null}
-                                            <MessageContent content={message.content} role={message.role} />
-                                            {message.role === "assistant" ? (
-                                                <>
-                                                    <SourceLinks sources={message.sources} />
-                                                    {message.retryQuestion ? (
-                                                        <div className="mt-3">
-                                                            <button
-                                                                type="button"
-                                                                onClick={() => void sendQuestion(message.retryQuestion ?? "")}
-                                                                disabled={isSending}
-                                                                className="inline-flex h-9 items-center justify-center gap-1.5 rounded-[6px] border border-[#084734]/20 bg-[#ECFDF5] px-3 text-xs font-bold text-[#084734] transition-colors hover:bg-[#D1FAE5] disabled:cursor-not-allowed disabled:opacity-50 focus-visible:outline-none focus-visible:ring-2 focus-visible:ring-[#084734]/25"
-                                                            >
-                                                                <RotateCcw className="h-3.5 w-3.5" aria-hidden />
-                                                                다시 시도
-                                                            </button>
-                                                        </div>
-                                                    ) : null}
-                                                    {(message.suggestedQuestions?.length ?? 0) > 0 ? (
-                                                        <div className="mt-3 grid gap-2">
-                                                            {message.suggestedQuestions?.slice(0, getSuggestionLimit(message)).map((question) => (
-                                                                <button
-                                                                    key={question}
-                                                                    type="button"
-                                                                    disabled={isSending}
-                                                                    onClick={() => sendQuestion(question)}
-                                                                    className="flex w-full items-center justify-between gap-2 whitespace-normal break-keep rounded-full border border-[#0e5038]/40 bg-transparent px-3.5 py-2 text-left text-[12px] font-semibold leading-5 text-[#0e5038] transition-colors hover:border-[#0e5038]/60 hover:bg-[#ECFDF5] disabled:cursor-not-allowed disabled:opacity-50 focus-visible:outline-none focus-visible:ring-2 focus-visible:ring-[#084734]/25"
-                                                                >
-                                                                    <span>{question}</span>
-                                                                    <svg viewBox="0 0 24 24" fill="none" stroke="currentColor" strokeWidth={2} strokeLinecap="round" strokeLinejoin="round" aria-hidden="true" className="h-3.5 w-3.5 shrink-0"><path d="M5 12h14" /><path d="m12 5 7 7-7 7" /></svg>
-                                                                </button>
-                                                            ))}
-                                                        </div>
-                                                    ) : null}
-                                                    {message.answerEventId || message.showHandoffCTA ? (
-                                                        <div className="mt-3 flex flex-wrap items-center justify-between gap-2">
-                                                            <AnswerCopyButton message={message} />
-                                                            {message.answerEventId ? (
-                                                                <FeedbackButtons answerEventId={message.answerEventId} sessionId={sessionId} />
-                                                            ) : null}
-                                                        </div>
-                                                    ) : null}
-                                                    {message.showHandoffCTA ? (
-                                                        <ConsultationBridge messages={messages} message={message} sessionId={sessionId} />
-                                                    ) : null}
-                                                </>
-                                            ) : null}
+                                    </div>
+                                    <div className="min-w-0">
+                                        <div className="flex items-center gap-1.5">
+                                            <h2 id="classin-chatbot-title" className="truncate text-[15px] font-bold text-[#111110]">Classin 상담 가이드</h2>
+                                            <motion.span
+                                                aria-hidden
+                                                className="h-2 w-2 shrink-0 rounded-full bg-[#084734] shadow-[0_0_0_3px_rgba(8,71,52,0.12),0_0_14px_rgba(8,71,52,0.32)]"
+                                                animate={shouldReduceMotion ? undefined : { opacity: [1, 0.45, 1], scale: [1, 0.82, 1] }}
+                                                transition={shouldReduceMotion ? undefined : { duration: 2.6, repeat: Infinity, ease: "easeInOut" }}
+                                            />
                                         </div>
-                                    </motion.div>
-                                ))}
-
-                                {isSending && !isStreaming ? (
-                                    <ThinkingIndicator shouldReduceMotion={shouldReduceMotion} />
-                                ) : null}
-                                <div ref={bottomRef} />
-                            </div>
-                        </div>
-
-                        {error ? (
-                            <div className="flex items-center justify-between gap-3 border-t border-black/[0.06] bg-[#F6F5F4] px-4 py-2 text-xs font-medium text-[#7A2A13]">
-                                <span>{error}</span>
-                            </div>
-                        ) : null}
-
-                        <form onSubmit={handleSubmit} className="border-t border-black/[0.06] bg-white/80 p-3 backdrop-blur-md">
-                            <div className="flex items-end gap-2">
-                                <textarea
-                                    ref={inputRef}
-                                    value={input}
-                                    onChange={(event) => setInput(event.target.value)}
-                                    onKeyDown={(event) => {
-                                        if (event.key === "Enter" && !event.shiftKey && !event.nativeEvent.isComposing) {
-                                            event.preventDefault()
-                                            void sendQuestion(input)
-                                        }
-                                    }}
-                                    rows={1}
-                                    maxLength={1000}
-                                    placeholder="질문을 짧게 입력해 주세요"
-                                    aria-label="챗봇 질문 입력"
-                                    className="min-h-10 max-h-28 flex-1 resize-none rounded-[10px] border border-[#E5E5E0] bg-white px-3 py-2 text-sm leading-6 text-[#111110] placeholder:text-[#A39E98] focus-visible:border-[#084734] focus-visible:outline-none focus-visible:ring-2 focus-visible:ring-[#084734]/20"
-                                />
+                                        <p className="mt-0.5 truncate text-xs font-medium text-[#615D59]">운영·도입·CS 상담</p>
+                                    </div>
+                                </div>
                                 <button
-                                    type="submit"
-                                    disabled={isSending || !input.trim()}
-                                    className="inline-flex h-10 w-10 shrink-0 items-center justify-center rounded-[10px] bg-[#0e5038] text-white shadow-[0_4px_12px_rgba(8,71,52,0.24)] transition-colors hover:bg-[#0f5a40] disabled:cursor-not-allowed disabled:opacity-40 disabled:shadow-none"
-                                    aria-label="질문 보내기"
+                                    type="button"
+                                    onClick={closeChatbot}
+                                    className="inline-flex h-9 w-9 items-center justify-center rounded-full border border-white/60 bg-white/35 text-[#615D59] shadow-[inset_0_1px_0_rgba(255,255,255,0.60)] transition-colors hover:bg-white/70 hover:text-[#084734] focus-visible:outline-none focus-visible:ring-2 focus-visible:ring-[#084734]/25"
+                                    aria-label="챗봇 닫기"
                                 >
-                                    {isSending ? <Loader2 className="h-4 w-4 animate-spin" /> : <Send className="h-4 w-4" />}
+                                    <X className="h-5 w-5" />
                                 </button>
                             </div>
-                        </form>
+
+                            <div
+                                className="min-h-0 flex-1 overflow-y-auto px-3.5 py-4 [scrollbar-color:rgba(8,71,52,0.28)_transparent] [scrollbar-gutter:stable] [scrollbar-width:thin] md:px-4 [&::-webkit-scrollbar]:w-1.5 [&::-webkit-scrollbar-thumb]:rounded-full [&::-webkit-scrollbar-thumb]:bg-[#084734]/25 [&::-webkit-scrollbar-track]:bg-transparent"
+                                role="log"
+                                aria-live="polite"
+                                aria-relevant="additions"
+                            >
+                                <div className="space-y-4">
+                                    {messages.map((message) => (
+                                        <motion.div
+                                            key={message.id}
+                                            initial={shouldReduceMotion ? { opacity: 0 } : { opacity: 0, y: 10, scale: 0.98 }}
+                                            animate={shouldReduceMotion ? { opacity: 1 } : { opacity: 1, y: 0, scale: 1 }}
+                                            transition={{ duration: shouldReduceMotion ? 0.01 : 0.28, ease: [0.22, 1, 0.36, 1] }}
+                                            className={cn(
+                                                "flex",
+                                                message.role === "user" ? "justify-end" : "justify-start"
+                                            )}
+                                        >
+                                            <div
+                                                className={cn(
+                                                    "max-w-[92%] rounded-[18px] px-3.5 py-3 text-sm leading-6 backdrop-blur-xl md:max-w-[84%]",
+                                                    message.role === "user"
+                                                        ? "rounded-br-[6px] bg-[linear-gradient(145deg,#084734,#0A5A40)] text-white shadow-[0_12px_26px_rgba(8,71,52,0.22),0_3px_8px_rgba(8,71,52,0.16)] ring-1 ring-white/20"
+                                                        : "rounded-bl-[6px] border border-white/70 bg-white/75 text-[#111110] shadow-[0_12px_30px_rgba(49,48,46,0.08),0_2px_6px_rgba(0,0,0,0.04)]"
+                                                )}
+                                            >
+                                                {message.role === "assistant" ? <AssistantMeta message={message} /> : null}
+                                                <MessageContent content={message.content} role={message.role} />
+                                                {message.role === "assistant" ? (
+                                                    <>
+                                                        <SourceLinks sources={message.sources} />
+                                                        {message.retryQuestion ? (
+                                                            <div className="mt-3">
+                                                                <button
+                                                                    type="button"
+                                                                    onClick={() => void sendQuestion(message.retryQuestion ?? "")}
+                                                                    disabled={isSending}
+                                                                    className="inline-flex h-9 items-center justify-center gap-1.5 rounded-[8px] border border-[#084734]/20 bg-[#ECFDF5]/80 px-3 text-xs font-bold text-[#084734] transition-colors hover:bg-[#D1FAE5] disabled:cursor-not-allowed disabled:opacity-50 focus-visible:outline-none focus-visible:ring-2 focus-visible:ring-[#084734]/25"
+                                                                >
+                                                                    <RotateCcw className="h-3.5 w-3.5" aria-hidden />
+                                                                    다시 시도
+                                                                </button>
+                                                            </div>
+                                                        ) : null}
+                                                        {(message.suggestedQuestions?.length ?? 0) > 0 ? (
+                                                            <div className="mt-3 grid gap-2">
+                                                                {message.suggestedQuestions?.slice(0, getSuggestionLimit(message)).map((question) => (
+                                                                    <button
+                                                                        key={question}
+                                                                        type="button"
+                                                                        disabled={isSending}
+                                                                        onClick={() => sendQuestion(question)}
+                                                                        className="flex w-full items-center justify-between gap-2 whitespace-normal break-keep rounded-[12px] border border-[#084734]/15 bg-white/60 px-3.5 py-2.5 text-left text-[12px] font-semibold leading-5 text-[#084734] shadow-[inset_0_1px_0_rgba(255,255,255,0.60)] transition-colors hover:border-[#084734]/30 hover:bg-[#ECFDF5]/90 disabled:cursor-not-allowed disabled:opacity-50 focus-visible:outline-none focus-visible:ring-2 focus-visible:ring-[#084734]/25"
+                                                                    >
+                                                                        <span>{question}</span>
+                                                                        <ArrowRight className="h-3.5 w-3.5 shrink-0" aria-hidden />
+                                                                    </button>
+                                                                ))}
+                                                            </div>
+                                                        ) : null}
+                                                        {message.answerEventId || message.showHandoffCTA ? (
+                                                            <div className="mt-3 flex flex-wrap items-center justify-between gap-2">
+                                                                <AnswerCopyButton message={message} />
+                                                                {message.answerEventId ? (
+                                                                    <FeedbackButtons answerEventId={message.answerEventId} sessionId={sessionId} />
+                                                                ) : null}
+                                                            </div>
+                                                        ) : null}
+                                                        {message.showHandoffCTA ? (
+                                                            <ConsultationBridge messages={messages} message={message} sessionId={sessionId} />
+                                                        ) : null}
+                                                    </>
+                                                ) : null}
+                                            </div>
+                                        </motion.div>
+                                    ))}
+
+                                    {isSending && !isStreaming ? (
+                                        <ThinkingIndicator shouldReduceMotion={shouldReduceMotion} />
+                                    ) : null}
+                                    <div ref={bottomRef} />
+                                </div>
+                            </div>
+
+                            {error ? (
+                                <div className="flex items-center justify-between gap-3 border-t border-white/50 bg-[#FBEAE2]/70 px-4 py-2 text-xs font-medium text-[#7A2A13] backdrop-blur-xl">
+                                    <span>{error}</span>
+                                </div>
+                            ) : null}
+
+                            <form onSubmit={handleSubmit} className="border-t border-white/50 bg-white/25 p-3.5 backdrop-blur-xl">
+                                <div className="flex items-end gap-2 rounded-[16px] border border-white/70 bg-white/60 p-1.5 shadow-[0_10px_26px_rgba(49,48,46,0.06),inset_0_1px_0_rgba(255,255,255,0.75)] transition-colors focus-within:border-[#084734]/30 focus-within:bg-white/80">
+                                    <textarea
+                                        ref={inputRef}
+                                        value={input}
+                                        onChange={(event) => setInput(event.target.value)}
+                                        onKeyDown={(event) => {
+                                            if (event.key === "Enter" && !event.shiftKey && !event.nativeEvent.isComposing) {
+                                                event.preventDefault()
+                                                void sendQuestion(input)
+                                            }
+                                        }}
+                                        rows={1}
+                                        maxLength={1000}
+                                        placeholder="질문을 짧게 입력해 주세요"
+                                        aria-label="챗봇 질문 입력"
+                                        className="min-h-11 max-h-28 flex-1 resize-none rounded-[12px] border-0 bg-transparent px-3 py-2.5 text-[15px] leading-6 text-[#111110] placeholder:text-[#A39E98] focus-visible:outline-none"
+                                    />
+                                    <button
+                                        type="submit"
+                                        disabled={isSending || !input.trim()}
+                                        className="inline-flex h-11 w-11 shrink-0 items-center justify-center rounded-[12px] bg-[#084734] text-white shadow-[0_8px_18px_rgba(8,71,52,0.25),inset_0_1px_0_rgba(255,255,255,0.16)] transition-colors hover:bg-[#065c41] disabled:cursor-not-allowed disabled:opacity-40 disabled:shadow-none focus-visible:outline-none focus-visible:ring-2 focus-visible:ring-[#084734]/25"
+                                        aria-label="질문 보내기"
+                                    >
+                                        {isSending ? <Loader2 className="h-4 w-4 animate-spin" /> : <Send className="h-4 w-4" />}
+                                    </button>
+                                </div>
+                            </form>
+                        </div>
                     </motion.div>
                 )}
             </AnimatePresence>
@@ -1117,10 +1145,9 @@ export function FloatingChatbot() {
                 {!isOpen && !shouldReduceMotion ? (
                     <motion.span
                         aria-hidden
-                        className="pointer-events-none absolute -inset-2 rounded-full"
-                        style={{ background: "radial-gradient(circle, rgba(14,80,56,0.28) 0%, rgba(14,80,56,0.10) 45%, rgba(14,80,56,0) 72%)" }}
+                        className="pointer-events-none absolute -inset-2 rounded-full border border-[#084734]/25"
                         initial={{ scale: 0.85, opacity: 0.55 }}
-                        animate={{ scale: [0.85, 1.75], opacity: [0.55, 0] }}
+                        animate={{ scale: [0.85, 1.65], opacity: [0.55, 0] }}
                         transition={{ duration: 3.8, repeat: Infinity, repeatDelay: 1.2, ease: "easeOut" }}
                     />
                 ) : null}
@@ -1130,7 +1157,7 @@ export function FloatingChatbot() {
                     whileHover={shouldReduceMotion ? undefined : { scale: 1.04 }}
                     whileTap={shouldReduceMotion ? undefined : { scale: 0.96 }}
                     onClick={() => setIsOpen((current) => !current)}
-                    className="relative flex h-14 w-14 items-center justify-center overflow-hidden rounded-full bg-[#0e5038] text-white shadow-[0_12px_28px_rgba(8,71,52,0.30),0_4px_10px_rgba(0,0,0,0.12)] transition-colors hover:bg-[#0f5a40] focus:outline-none focus:ring-4 focus:ring-[#084734]/20 md:h-16 md:w-16"
+                    className="relative flex h-14 w-14 items-center justify-center overflow-hidden rounded-full border border-white/60 bg-[linear-gradient(145deg,#084734,#065c41)] text-white shadow-[0_18px_34px_rgba(8,71,52,0.30),0_6px_14px_rgba(0,0,0,0.12),inset_0_1px_0_rgba(255,255,255,0.18)] transition-colors hover:bg-[#065c41] focus:outline-none focus:ring-4 focus:ring-[#084734]/20 md:h-16 md:w-16"
                     aria-label={isOpen ? "챗봇 닫기" : "챗봇 열기"}
                     aria-expanded={isOpen}
                     aria-controls="classin-chatbot-dialog"
@@ -1138,14 +1165,17 @@ export function FloatingChatbot() {
                     {isOpen ? (
                         <X className="h-6 w-6" />
                     ) : isDeepConsultation ? (
-                        <Image
-                            src={DEEP_CONSULTATION_ICON_SRC}
-                            alt=""
-                            fill
-                            className="object-cover"
-                            sizes="64px"
-                            aria-hidden
-                        />
+                        <>
+                            <Image
+                                src={DEEP_CONSULTATION_ICON_SRC}
+                                alt=""
+                                fill
+                                className="object-cover"
+                                sizes="64px"
+                                aria-hidden
+                            />
+                            <span className="absolute inset-0 bg-[#084734]/20 mix-blend-multiply" aria-hidden />
+                        </>
                     ) : (
                         <MessageCircle className="h-6 w-6" />
                     )}
