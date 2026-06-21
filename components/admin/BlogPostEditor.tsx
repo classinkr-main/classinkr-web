@@ -492,6 +492,14 @@ export default function BlogPostEditor({
     { label: "카테고리", done: Boolean(form.category.trim()) },
   ]
   const requiredDone = requiredItems.filter((item) => item.done).length
+  const contentCharacterCount = form.contentMarkdown.trim().length
+  const blogStatusLabel = BLOG_STATUS_OPTIONS.find((option) => option.value === form.status)?.label ?? form.status
+  const blogStatusTone =
+    form.status === "published"
+      ? "border-emerald-100 bg-emerald-50 text-[#084734]"
+      : form.status === "draft"
+      ? "border-amber-100 bg-amber-50 text-amber-700"
+      : "border-[#e8e8e4] bg-white text-[#615D59]"
   const headings = useMemo(
     () => extractMarkdownHeadings(form.contentMarkdown),
     [form.contentMarkdown]
@@ -1496,7 +1504,7 @@ export default function BlogPostEditor({
 
       {/* ── Sticky header ── */}
       <header ref={headerRef} className="sticky top-0 z-20 border-b border-[#e8e8e4] bg-[#FAFAF8]/95 backdrop-blur">
-        <div className="flex items-center justify-between gap-4 px-6 py-3">
+        <div className="flex flex-col gap-3 px-6 py-3 sm:flex-row sm:items-center sm:justify-between sm:gap-4">
           <div className="flex min-w-0 items-center gap-3">
             <Button variant="ghost" size="sm" asChild className="shrink-0">
               <Link href="/admin/blog">
@@ -1530,7 +1538,7 @@ export default function BlogPostEditor({
             </div>
           </div>
 
-          <div className="flex shrink-0 items-center gap-1">
+          <div className="flex min-w-0 shrink-0 items-center gap-1 overflow-x-auto pb-1 sm:overflow-visible sm:pb-0">
             <Button
               variant="ghost" size="sm"
               onClick={handleUndo}
@@ -1605,6 +1613,59 @@ export default function BlogPostEditor({
 
         {/* Left: content */}
         <section className="min-w-0 space-y-5">
+          <div className="rounded-[24px] border border-[#e8e8e4] bg-white p-4 shadow-sm md:p-5">
+            <div className="grid gap-3 md:grid-cols-4">
+              <div className="rounded-xl border border-[#dcebd9] bg-[#ECFDF5] p-4">
+                <p className="text-[11px] font-semibold uppercase tracking-[0.14em] text-[#084734]/75">필수 입력</p>
+                <p className="mt-2 text-2xl font-bold tabular-nums text-[#084734]">{requiredDone}/{requiredItems.length}</p>
+                <div className="mt-3 flex flex-wrap gap-1.5">
+                  {requiredItems.map((item) => (
+                    <span
+                      key={item.label}
+                      className={`rounded-full px-2 py-0.5 text-[10px] font-semibold ${
+                        item.done ? "bg-[#084734] text-white" : "border border-[#F6D5C5] bg-white text-[#B85C33]"
+                      }`}
+                    >
+                      {item.label}
+                    </span>
+                  ))}
+                </div>
+              </div>
+              <div
+                className="rounded-xl border p-4"
+                style={{ borderColor: seoAnalysis.scoreBorder, backgroundColor: seoAnalysis.scoreBg }}
+              >
+                <p className="text-[11px] font-semibold uppercase tracking-[0.14em]" style={{ color: seoAnalysis.scoreColor }}>
+                  SEO 점수
+                </p>
+                <p className="mt-2 text-2xl font-bold tabular-nums" style={{ color: seoAnalysis.scoreColor }}>
+                  {seoAnalysis.score}
+                </p>
+                <p className="mt-1 text-[12px]" style={{ color: seoAnalysis.scoreColor }}>
+                  {seoAnalysis.scoreLabel}
+                </p>
+              </div>
+              <div className="rounded-xl border border-[#e8e8e4] bg-[#FAFAF8] p-4">
+                <p className="text-[11px] font-semibold uppercase tracking-[0.14em] text-[#615D59]">본문 구조</p>
+                <p className="mt-2 text-2xl font-bold tabular-nums text-[#111110]">{headings.length}개</p>
+                <p className="mt-1 text-[12px] text-[#615D59]">
+                  {computedReadTime} · {contentCharacterCount.toLocaleString("ko-KR")}자
+                </p>
+              </div>
+              <div className={`rounded-xl border p-4 ${blogStatusTone}`}>
+                <p className="text-[11px] font-semibold uppercase tracking-[0.14em] opacity-75">발행 상태</p>
+                <p className="mt-2 text-2xl font-bold">{blogStatusLabel}</p>
+                <button
+                  type="button"
+                  onClick={() => setShowPreview(true)}
+                  className="mt-3 inline-flex h-8 items-center gap-1.5 rounded-lg bg-white px-2.5 text-[12px] font-semibold text-[#111110] shadow-sm transition-colors hover:bg-[#F6F5F4]"
+                >
+                  <Eye className="h-3.5 w-3.5" />
+                  미리보기
+                </button>
+              </div>
+            </div>
+          </div>
 
           {/* 기본 정보 */}
           <div className="rounded-[24px] border border-[#e8e8e4] bg-white p-6 shadow-sm">
@@ -1780,16 +1841,35 @@ export default function BlogPostEditor({
             </div>
 
             <Tabs defaultValue="write">
-              <TabsList className="mb-4 bg-[#f5f5f2]">
-                <TabsTrigger value="write">작성</TabsTrigger>
-                <TabsTrigger value="preview">
-                  <Eye className="mr-1.5 h-3.5 w-3.5" />
-                  미리보기
-                </TabsTrigger>
-              </TabsList>
+              <div className="mb-4 flex flex-col gap-3 rounded-2xl border border-[#e8e8e4] bg-[#FAFAF8] p-3 sm:flex-row sm:items-center sm:justify-between">
+                <div className="flex flex-wrap gap-2 text-[12px] text-[#615D59]">
+                  <span className="rounded-full bg-white px-3 py-1 font-semibold text-[#111110]">
+                    {contentCharacterCount.toLocaleString("ko-KR")}자
+                  </span>
+                  <span className="rounded-full bg-white px-3 py-1 font-semibold text-[#111110]">
+                    목차 {headings.length}개
+                  </span>
+                  <span className="rounded-full bg-white px-3 py-1 font-semibold text-[#111110]">
+                    {computedReadTime}
+                  </span>
+                  <span
+                    className="rounded-full border px-3 py-1 font-semibold"
+                    style={{ borderColor: seoAnalysis.scoreBorder, backgroundColor: seoAnalysis.scoreBg, color: seoAnalysis.scoreColor }}
+                  >
+                    SEO {seoAnalysis.score}
+                  </span>
+                </div>
+                <TabsList className="bg-white">
+                  <TabsTrigger value="write">작성</TabsTrigger>
+                  <TabsTrigger value="preview">
+                    <Eye className="mr-1.5 h-3.5 w-3.5" />
+                    미리보기
+                  </TabsTrigger>
+                </TabsList>
+              </div>
 
               <TabsContent value="write" className="mt-0">
-                <div className="grid gap-4 lg:grid-cols-[minmax(0,1fr)_220px]">
+                <div className="grid gap-4 xl:grid-cols-[minmax(0,1fr)_260px]">
                   <RichMarkdownEditor
                     ref={editorRef}
                     value={form.contentMarkdown}
@@ -1801,6 +1881,21 @@ export default function BlogPostEditor({
                     onSelectionOptimize={(text) => handleAiAction("optimize", undefined, text || undefined)}
                   />
                   <div className="space-y-4 rounded-2xl border border-[#e8e8e4] bg-[#fcfcfb] p-4">
+                    <div className="grid grid-cols-3 gap-2">
+                      {[
+                        { label: "필수", value: `${requiredDone}/${requiredItems.length}` },
+                        { label: "SEO", value: `${seoAnalysis.score}` },
+                        { label: "목차", value: `${headings.length}` },
+                      ].map((item) => (
+                        <div key={item.label} className="rounded-xl bg-white px-2.5 py-2 text-center">
+                          <p className="text-[10px] font-semibold uppercase tracking-[0.12em] text-[#1a1a1a]/35">{item.label}</p>
+                          <p className="mt-1 text-[14px] font-bold tabular-nums text-[#111110]">{item.value}</p>
+                        </div>
+                      ))}
+                    </div>
+
+                    <div className="h-px bg-[#e8e8e4]" />
+
                     {/* 자동 목차 */}
                     <div>
                       <p className="text-sm font-semibold text-[#111110]">자동 목차</p>
@@ -1981,10 +2076,10 @@ export default function BlogPostEditor({
         </section>
 
         {/* Right: tabbed sidebar */}
-        <aside>
-          <div className="sticky top-[var(--editor-header-h)] max-h-[calc(100dvh_-_var(--editor-header-h))] overflow-y-auto pb-6">
+        <aside className="self-start">
+          <div className="pb-6 lg:pr-1">
             <Tabs defaultValue="settings" className="w-full">
-              <div className="sticky top-0 z-10 bg-[#FAFAF8] pb-3">
+              <div className="z-10 bg-[#FAFAF8] pb-3">
                 <TabsList className="grid w-full grid-cols-3">
                   <TabsTrigger value="settings">설정</TabsTrigger>
                   <TabsTrigger value="seo" className="gap-1.5">
@@ -2112,27 +2207,6 @@ export default function BlogPostEditor({
                       </div>
                     </div>
                     <div className="space-y-1.5">
-                      <Label htmlFor="publishedAt" className="text-[12px]">
-                        예약 발행 시각
-                        <FieldBadge />
-                      </Label>
-                      <Input
-                        id="publishedAt"
-                        type="datetime-local"
-                        value={isoToLocalInput(form.publishedAt)}
-                        onChange={(event) =>
-                          updateForm(
-                            "publishedAt",
-                            event.target.value ? new Date(event.target.value).toISOString() : ""
-                          )
-                        }
-                      />
-                      <FieldHint>
-                        미래 시각으로 두면 발행 상태여도 그 시각 전까지 공개되지 않습니다.
-                        상단 발행 버튼은 이 값을 현재 시각으로 바꿔 즉시 공개합니다.
-                      </FieldHint>
-                    </div>
-                    <div className="space-y-1.5">
                       <Label htmlFor="tags" className="text-[12px]">
                         키워드/태그
                         <FieldBadge />
@@ -2192,6 +2266,75 @@ export default function BlogPostEditor({
                       />
                       목록 상단 Featured로 노출
                     </label>
+                  </div>
+                </div>
+
+                {/* 고급 설정 */}
+                <div className="rounded-[20px] border border-[#e8e8e4] bg-white p-5 shadow-sm">
+                  <div className="mb-3.5 flex items-start justify-between gap-3">
+                    <div>
+                      <p className="text-sm font-semibold text-[#111110]">고급 설정</p>
+                      <p className="mt-1 text-[12px] leading-5 text-[#1a1a1a]/45">
+                        공개일을 직접 보정하거나 미래 예약 발행 시각을 지정합니다.
+                      </p>
+                    </div>
+                    <span className="shrink-0 rounded-full border border-[#e8e8e4] bg-[#FAFAF8] px-2.5 py-1 text-[11px] font-semibold text-[#1a1a1a]/45">
+                      선택
+                    </span>
+                  </div>
+
+                  <div className="space-y-2">
+                    <div className="flex items-center justify-between gap-3">
+                      <Label htmlFor="advanced-published-at" className="text-[12px]">
+                        발행 날짜
+                        <FieldBadge />
+                      </Label>
+                      {form.publishedAt ? (
+                        <button
+                          type="button"
+                          onClick={() => updateForm("publishedAt", "")}
+                          className="text-[11px] font-semibold text-[#1a1a1a]/35 transition-colors hover:text-[#B85C33]"
+                        >
+                          비우기
+                        </button>
+                      ) : null}
+                    </div>
+                    <Input
+                      id="advanced-published-at"
+                      type="datetime-local"
+                      value={isoToLocalInput(form.publishedAt)}
+                      onChange={(event) =>
+                        updateForm(
+                          "publishedAt",
+                          event.target.value ? new Date(event.target.value).toISOString() : ""
+                        )
+                      }
+                      className="h-10 rounded-xl"
+                    />
+                    <div className="grid grid-cols-2 gap-2">
+                      <button
+                        type="button"
+                        onClick={() => updateForm("publishedAt", new Date().toISOString())}
+                        className="inline-flex h-9 items-center justify-center rounded-lg border border-[#e8e8e4] bg-white px-3 text-[12px] font-semibold text-[#111110] transition-colors hover:bg-[#F6F5F4]"
+                      >
+                        지금으로 설정
+                      </button>
+                      <button
+                        type="button"
+                        onClick={() => {
+                          if (!initialPost?.publishedAt) return
+                          updateForm("publishedAt", initialPost.publishedAt)
+                        }}
+                        disabled={!initialPost?.publishedAt}
+                        className="inline-flex h-9 items-center justify-center rounded-lg border border-[#e8e8e4] bg-white px-3 text-[12px] font-semibold text-[#111110] transition-colors hover:bg-[#F6F5F4] disabled:cursor-not-allowed disabled:opacity-35"
+                      >
+                        기존 날짜 복원
+                      </button>
+                    </div>
+                    <FieldHint>
+                      과거 시각은 공개 화면의 발행일로 쓰이고, 미래 시각은 발행 상태여도 그 시각 전까지 숨깁니다.
+                      상단 발행 버튼은 지금 즉시 공개하는 용도라 현재 시각으로 덮어씁니다.
+                    </FieldHint>
                   </div>
                 </div>
 

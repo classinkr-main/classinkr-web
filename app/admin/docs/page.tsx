@@ -2,7 +2,7 @@
 
 import { Suspense, useCallback, useEffect, useMemo, useState } from "react"
 import Link from "next/link"
-import { useRouter, useSearchParams } from "next/navigation"
+import { useRouter } from "next/navigation"
 import {
   AlertCircle,
   BarChart3,
@@ -31,12 +31,14 @@ import DocsCategoryManager from "@/components/admin/docs/DocsCategoryManager"
 import DocsGapsPanel from "@/components/admin/docs/DocsGapsPanel"
 import DocsRecommendedQuestionsManager from "@/components/admin/docs/DocsRecommendedQuestionsManager"
 import DocsRedirectManager from "@/components/admin/docs/DocsRedirectManager"
+import AdminTabs from "@/components/admin/AdminTabs"
 import { adminFetch, adminFetchJson, adminFetchJsonCached } from "@/lib/admin-client"
 import type {
   AdminDocsAnalyticsResponse,
   AdminDocsArticleSummary,
   AdminDocsContentResponse,
 } from "@/lib/admin-docs"
+import { useUrlState } from "@/lib/use-url-state"
 
 interface ReindexResult {
   configured: boolean
@@ -288,7 +290,7 @@ function getArticleOrderMeta(
 
 function AdminDocsPageContent() {
   const router = useRouter()
-  const searchParams = useSearchParams()
+  const [tabParam, setTabParam] = useUrlState("tab", "documents")
   const [content, setContent] = useState<AdminDocsContentResponse | null>(null)
   const [analytics, setAnalytics] = useState<AdminDocsAnalyticsResponse | null>(null)
   const [loading, setLoading] = useState(true)
@@ -313,9 +315,11 @@ function AdminDocsPageContent() {
   const [bulkFeatured, setBulkFeatured] = useState("unchanged")
   const [bulkSaving, setBulkSaving] = useState(false)
   const [savedViews, setSavedViews] = useState<SavedDocsView[]>([])
-  const [activeTab, setActiveTab] = useState<DocsTab>("documents")
   const [editingArticleId, setEditingArticleId] = useState<string | null>(null)
   const [inlineDraft, setInlineDraft] = useState<InlineArticleDraft | null>(null)
+  const activeTab: DocsTab = DOCS_TABS.some((item) => item.value === tabParam)
+    ? (tabParam as DocsTab)
+    : "documents"
 
   const load = useCallback(async () => {
     setLoading(true)
@@ -339,13 +343,6 @@ function AdminDocsPageContent() {
   useEffect(() => {
     void load()
   }, [load])
-
-  const tabParam = searchParams.get("tab")
-  useEffect(() => {
-    if (tabParam && DOCS_TABS.some((item) => item.value === tabParam)) {
-      setActiveTab(tabParam as DocsTab)
-    }
-  }, [tabParam])
 
   useEffect(() => {
     try {
@@ -854,31 +851,20 @@ function AdminDocsPageContent() {
         />
       </section>
 
-      <div className="mb-6 overflow-x-auto" role="tablist" aria-label="문서 관리 섹션">
-        <div className="inline-flex min-w-full rounded-xl border border-[#e8e8e4] bg-white p-1 sm:min-w-0">
-          {DOCS_TABS.map((tab) => {
-            const Icon = tab.icon
-            const isActive = activeTab === tab.value
-            return (
-              <button
-                key={tab.value}
-                type="button"
-                role="tab"
-                aria-selected={isActive}
-                onClick={() => setActiveTab(tab.value)}
-                className={`inline-flex h-10 flex-1 items-center justify-center gap-2 rounded-lg px-3 text-[13px] font-semibold transition-colors sm:flex-none ${
-                  isActive
-                    ? "bg-[#111110] text-white"
-                    : "text-[#1a1a1a]/45 hover:bg-[#f5f5f2] hover:text-[#111110]"
-                }`}
-              >
-                <Icon className="h-4 w-4" />
-                <span className="whitespace-nowrap">{tab.label}</span>
-              </button>
-            )
-          })}
-        </div>
-      </div>
+      <AdminTabs
+        className="mb-6"
+        label="문서 관리 섹션"
+        items={DOCS_TABS.map((tab) => {
+          const Icon = tab.icon
+          return {
+            value: tab.value,
+            label: tab.label,
+            icon: <Icon className="h-4 w-4" />,
+          }
+        })}
+        value={activeTab}
+        onValueChange={setTabParam}
+      />
 
       {activeTab === "documents" ? (
         <>

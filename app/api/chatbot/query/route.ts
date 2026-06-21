@@ -3,7 +3,7 @@ import { NextRequest, NextResponse } from "next/server"
 import { ChatbotInputError, handleChatbotQuery } from "@/lib/chatbot/service"
 import { checkRateLimit, getClientIp } from "@/lib/server/rate-limit"
 
-const CHATBOT_ROUTE_TIMEOUT_MS = 10_000
+const CHATBOT_ROUTE_TIMEOUT_MS = 13_000
 
 export async function POST(req: NextRequest) {
   const ip = getClientIp(req)

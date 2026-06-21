@@ -4,10 +4,12 @@ import {
   forwardRef,
   useEffect,
   useImperativeHandle,
+  useMemo,
   useRef,
   useState,
   type ClipboardEvent,
   type DragEvent,
+  type KeyboardEvent,
 } from "react"
 import { useEditor, EditorContent, Extension } from "@tiptap/react"
 import { Plugin, PluginKey } from "@tiptap/pm/state"
@@ -20,6 +22,11 @@ import Image from "@tiptap/extension-image"
 import { Markdown } from "tiptap-markdown"
 import { Image as ImageIcon, LayoutTemplate, Link2, Loader2, Sparkles, Upload, Wand2, X } from "lucide-react"
 import type { JSONContent, MarkdownParseHelpers, MarkdownParseResult, MarkdownToken } from "@tiptap/core"
+import {
+  buildSlashCommandMarkdown,
+  filterSlashCommands,
+  type SlashCommand,
+} from "@/lib/admin/docs-editor-usability"
 import {
   hasAttachmentImageReference,
   LOCAL_IMAGE_ACCEPT,
@@ -181,6 +188,17 @@ const RichMarkdownEditor = forwardRef<RichMarkdownEditorHandle, RichMarkdownEdit
     const [imageError, setImageError] = useState("")
     const [uploadingImages, setUploadingImages] = useState(false)
     const [draggingImages, setDraggingImages] = useState(false)
+    const [slashMenu, setSlashMenu] = useState<{ query: string; range: SavedSelection } | null>(null)
+    const [slashIndex, setSlashIndex] = useState(0)
+    const slashQuery = slashMenu?.query ?? ""
+    const slashCommands = useMemo(
+      () => (slashMenu ? filterSlashCommands(slashQuery).slice(0, 6) : []),
+      [slashMenu, slashQuery]
+    )
+
+    useEffect(() => {
+      setSlashIndex(0)
+    }, [slashQuery])
 
     const closeImageDialog = () => {
       setShowImageDialog(false)
@@ -328,6 +346,117 @@ const RichMarkdownEditor = forwardRef<RichMarkdownEditorHandle, RichMarkdownEdit
       }
     }
 
+    const canOpenSlashMenu = () => {
+      if (!editor) return false
+      const { from, to } = editor.state.selection
+      if (from !== to) return false
+      const previousText = editor.state.doc.textBetween(Math.max(0, from - 1), from, "\n", "\n")
+      return previousText === "" || /\s/.test(previousText)
+    }
+
+    const closeSlashMenuAsText = (suffix = "") => {
+      if (!editor || !slashMenu) {
+        setSlashMenu(null)
+        return
+      }
+      editor
+        .chain()
+        .focus()
+        .setTextSelection(slashMenu.range)
+        .insertContent(`/${slashMenu.query}${suffix}`)
+        .run()
+      setSlashMenu(null)
+    }
+
+    const runSlashCommand = (command: SlashCommand) => {
+      if (!editor || !slashMenu) return
+      const chain = editor.chain().focus().setTextSelection(slashMenu.range)
+      setSlashMenu(null)
+
+      if (command.id === "image") {
+        savedSelection.current = slashMenu.range
+        setImageError("")
+        setShowImageDialog(true)
+        return
+      }
+
+      if (command.id === "h2" || command.id === "h3") {
+        chain
+          .insertContent([
+            {
+              type: "heading",
+              attrs: { level: command.id === "h2" ? 2 : 3 },
+              content: [{ type: "text", text: command.id === "h2" ? "새 섹션" : "세부 항목" }],
+            },
+            { type: "paragraph" },
+          ])
+          .run()
+        return
+      }
+
+      if (command.id === "divider") {
+        chain.setHorizontalRule().run()
+        return
+      }
+
+      chain.insertContent(buildSlashCommandMarkdown(command.id)).run()
+    }
+
+    const handleEditorKeyDown = (event: KeyboardEvent<HTMLDivElement>) => {
+      if (!editor || event.metaKey || event.ctrlKey || event.altKey) return
+
+      if (slashMenu) {
+        if (event.key === "ArrowDown") {
+          event.preventDefault()
+          setSlashIndex((current) => (slashCommands.length === 0 ? 0 : (current + 1) % slashCommands.length))
+          return
+        }
+        if (event.key === "ArrowUp") {
+          event.preventDefault()
+          setSlashIndex((current) =>
+            slashCommands.length === 0 ? 0 : (current - 1 + slashCommands.length) % slashCommands.length
+          )
+          return
+        }
+        if (event.key === "Enter" || event.key === "Tab") {
+          event.preventDefault()
+          const command = slashCommands[Math.min(slashIndex, slashCommands.length - 1)]
+          if (command) runSlashCommand(command)
+          return
+        }
+        if (event.key === "Escape") {
+          event.preventDefault()
+          closeSlashMenuAsText()
+          return
+        }
+        if (event.key === "Backspace") {
+          event.preventDefault()
+          if (!slashMenu.query) {
+            setSlashMenu(null)
+            return
+          }
+          setSlashMenu({ ...slashMenu, query: slashMenu.query.slice(0, -1) })
+          return
+        }
+        if (event.key === " ") {
+          event.preventDefault()
+          closeSlashMenuAsText(" ")
+          return
+        }
+        if (event.key.length === 1) {
+          event.preventDefault()
+          setSlashMenu({ ...slashMenu, query: `${slashMenu.query}${event.key}` })
+        }
+        return
+      }
+
+      if (event.key === "/" && canOpenSlashMenu()) {
+        event.preventDefault()
+        const { from, to } = editor.state.selection
+        setSlashMenu({ query: "", range: { from, to } })
+      }
+    }
+
     const editor = useEditor({
       immediatelyRender: false,
       extensions: [
@@ -454,6 +583,53 @@ const RichMarkdownEditor = forwardRef<RichMarkdownEditorHandle, RichMarkdownEdit
 
     return (
       <div className="relative">
+        {slashMenu && (
+          <div className="absolute left-5 top-5 z-30 w-[min(340px,calc(100%-40px))] overflow-hidden rounded-xl border border-[#e8e8e4] bg-white shadow-xl">
+            <div className="flex items-center justify-between border-b border-[#f0f0ec] px-3 py-2">
+              <span className="text-[11px] font-semibold uppercase tracking-[0.12em] text-[#1a1a1a]/45">
+                / 명령
+              </span>
+              <span className="font-mono text-[11px] text-[#084734]">
+                {slashQuery ? `/${slashQuery}` : "/"}
+              </span>
+            </div>
+            <div className="max-h-72 overflow-y-auto p-1.5">
+              {slashCommands.length === 0 ? (
+                <div className="px-3 py-4 text-center text-[12px] text-[#1a1a1a]/35">
+                  일치하는 명령이 없습니다
+                </div>
+              ) : (
+                slashCommands.map((command, index) => {
+                  const active = index === Math.min(slashIndex, slashCommands.length - 1)
+                  return (
+                    <button
+                      key={command.id}
+                      type="button"
+                      onMouseDown={(event) => event.preventDefault()}
+                      onClick={() => runSlashCommand(command)}
+                      className={`flex w-full items-start gap-3 rounded-lg px-3 py-2.5 text-left transition-colors ${
+                        active ? "bg-[#ECFDF5] text-[#084734]" : "text-[#111110] hover:bg-[#F6F5F4]"
+                      }`}
+                    >
+                      <span className={`mt-0.5 flex h-6 w-6 shrink-0 items-center justify-center rounded-md border text-[11px] font-bold ${
+                        active ? "border-[#084734]/25 bg-white" : "border-[#e8e8e4] bg-[#FAFAF8]"
+                      }`}>
+                        {command.id === "image" ? <ImageIcon className="h-3.5 w-3.5" /> : command.label.slice(0, 1)}
+                      </span>
+                      <span className="min-w-0 flex-1">
+                        <span className="block text-[13px] font-semibold">{command.label}</span>
+                        <span className="mt-0.5 block text-[11px] leading-4 text-[#1a1a1a]/45">
+                          {command.description}
+                        </span>
+                      </span>
+                    </button>
+                  )
+                })
+              )}
+            </div>
+          </div>
+        )}
+
         {showImageDialog && (
           <div className="fixed inset-0 z-50 flex items-center justify-center bg-black/30 px-4">
             <div className="w-full max-w-[520px] rounded-2xl border border-[#e8e8e4] bg-white p-5 shadow-2xl">
@@ -621,6 +797,7 @@ const RichMarkdownEditor = forwardRef<RichMarkdownEditorHandle, RichMarkdownEdit
           onDragLeave={handleEditorDragLeave}
           onDrop={handleEditorDrop}
           onPaste={handleEditorPaste}
+          onKeyDown={handleEditorKeyDown}
         >
           <EditorContent editor={editor} />
           {(draggingImages || uploadingImages) && (

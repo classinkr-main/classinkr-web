@@ -108,6 +108,14 @@ describe("chatbot classification", () => {
     }
   })
 
+  it("classifies Korean-pronounced EDB questions as classroom questions", () => {
+    const result = classifyChatbotQuestion("이디비가 뭐야?")
+
+    expect(result.category).toBe("classroom")
+    expect(result.intent).toBe("classroom_consulting")
+    expect(result.handoffIntent).toBe("demo")
+  })
+
   it("classifies pre-adoption policy risk questions without falling back to general", () => {
     expect(detectChatbotCategory("콘텐츠 소유권은 어디에 있나요?")).toBe("admin")
     expect(detectChatbotCategory("메인 서버는 어디에 있나요?")).toBe("admin")

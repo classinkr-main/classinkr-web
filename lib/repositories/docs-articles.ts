@@ -142,6 +142,7 @@ export interface DocsArticleCreateInput {
   contentJson?: Record<string, unknown>
   seoTitle?: string | null
   seoDescription?: string | null
+  publishedAt?: string | null
   updatedBy?: string | null
 }
 
@@ -325,6 +326,12 @@ function nextVersionNumber(latest: number | null | undefined) {
   return (latest ?? 0) + 1
 }
 
+function normalizePublishedAt(value: string | null | undefined): string | null {
+  if (!value) return null
+  const date = new Date(value)
+  return Number.isNaN(date.getTime()) ? null : date.toISOString()
+}
+
 export async function listDocsCategories(): Promise<DocsCategoryDetail[]> {
   const supabase = createSupabaseAdminClient()
   const { data, error } = await supabase
@@ -441,7 +448,7 @@ export async function createDocsArticle(
     seo_title: input.seoTitle ?? null,
     seo_description: input.seoDescription ?? null,
     canonical_path: `/docs/${input.categoryId}/${input.slug}`,
-    published_at: status === "published" ? now : null,
+    published_at: normalizePublishedAt(input.publishedAt) ?? (status === "published" ? now : null),
     last_reviewed_at: status === "published" ? now : null,
     updated_by: input.updatedBy ?? null,
     created_by: input.updatedBy ?? null,
@@ -493,6 +500,7 @@ export async function patchDocsArticle(
   if (patch.contentJson !== undefined) dbPatch.content_json = patch.contentJson
   if (patch.seoTitle !== undefined) dbPatch.seo_title = patch.seoTitle
   if (patch.seoDescription !== undefined) dbPatch.seo_description = patch.seoDescription
+  if (patch.publishedAt !== undefined) dbPatch.published_at = normalizePublishedAt(patch.publishedAt)
   if (patch.updatedBy !== undefined) dbPatch.updated_by = patch.updatedBy
 
   const nextCategoryId = patch.categoryId ?? existing.categoryId
@@ -513,7 +521,7 @@ export async function patchDocsArticle(
   }
 
   if (willPublish) {
-    dbPatch.published_at = now
+    if (patch.publishedAt === undefined) dbPatch.published_at = now
     dbPatch.last_reviewed_at = now
   }
 

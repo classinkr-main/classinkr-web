@@ -5,8 +5,10 @@ import { usePathname, useRouter } from "next/navigation"
 import type { ReactNode } from "react"
 import { useCallback, useEffect, useMemo, useRef, useState } from "react"
 import {
+  Activity,
   BarChart2,
   BookOpen,
+  Bot,
   Building2,
   CalendarDays,
   ChevronRight,
@@ -55,13 +57,16 @@ const NAV: NavItem[] = [
   { href: "/admin/calendar", label: "캘린더", icon: <CalendarDays className="h-4 w-4" />, roles: [...ALL_STAFF, "BRANCH"], section: "sales" },
   { href: "/admin/quotes", label: "견적·문서", icon: <FileText className="h-4 w-4" />, roles: STAFF_ADMIN, section: "sales" },
   { href: "/admin/campaigns", label: "캠페인", icon: <Megaphone className="h-4 w-4" />, roles: STAFF_ADMIN, section: "marketing" },
+  { href: "/admin/materials", label: "자료 퍼널", icon: <Magnet className="h-4 w-4" />, roles: STAFF_EDITOR, section: "marketing", badge: "New" },
   { href: "/admin/blog", label: "콘텐츠", icon: <FileText className="h-4 w-4" />, roles: STAFF_EDITOR, section: "marketing" },
   { href: "/admin/events", label: "공개 행사", icon: <Globe className="h-4 w-4" />, roles: STAFF_ADMIN, section: "marketing" },
   { href: "/admin/lead-magnets", label: "리드마그넷", icon: <Magnet className="h-4 w-4" />, roles: STAFF_EDITOR, section: "cs", badge: "Preview" },
   { href: "/admin/channel-talk", label: "채널톡 상담", icon: <MessageSquare className="h-4 w-4" />, roles: STAFF_ADMIN, section: "cs", badge: "New" },
+  { href: "/admin/chatbot", label: "챗봇 운영", icon: <Bot className="h-4 w-4" />, roles: STAFF_EDITOR, section: "cs", badge: "Ops" },
   { href: "/admin/docs", label: "가이드 문서", icon: <BookOpen className="h-4 w-4" />, roles: STAFF_EDITOR, section: "cs" },
   { href: "/admin/branch", label: "KR Team", icon: <Building2 className="h-4 w-4" />, roles: [...STAFF_ADMIN, "BRANCH"], section: "performance" },
   { href: "/admin/analytics", label: "Analytics", icon: <BarChart2 className="h-4 w-4" />, roles: [...ALL_STAFF, "BRANCH"], section: "performance" },
+  { href: "/admin/ops", label: "Ops Health", icon: <Activity className="h-4 w-4" />, roles: STAFF_ADMIN, section: "system", badge: "New" },
   { href: "/admin/settings", label: "Settings", icon: <Settings className="h-4 w-4" />, roles: STAFF_ADMIN, section: "system" },
   { href: "/admin/users", label: "회원 관리", icon: <UserCog className="h-4 w-4" />, roles: STAFF_ADMIN, section: "system" },
   { href: "/admin/dev", label: "Dev Mode", icon: <Code2 className="h-4 w-4" />, roles: STAFF_ADMIN, section: "system", badge: "Beta" },
@@ -94,8 +99,18 @@ const NAV_WARMUP_REQUESTS: Record<string, string[]> = {
     "/api/admin/event-metrics",
     "/api/admin/meta/campaigns?datePreset=last_30d&limit=50",
   ],
+  "/admin/materials": [
+    "/api/admin/lead-magnets",
+    "/api/admin/lead-magnets/metrics?days=30",
+  ],
   "/admin/blog": ["/api/admin/blog", "/api/admin/blog?trash=1"],
   "/admin/events": ["/api/admin/events"],
+  "/admin/chatbot": [
+    "/api/admin/chatbot/stats",
+    "/api/admin/chatbot/questions?limit=10",
+    "/api/admin/docs/analytics?days=30",
+    "/api/admin/docs/alpha-readiness",
+  ],
   "/admin/docs": ["/api/admin/docs", "/api/admin/docs/analytics?days=30"],
   "/admin/branch": [
     "/api/admin/branch/summary?team=ALL&period=Q",
@@ -109,6 +124,11 @@ const NAV_WARMUP_REQUESTS: Record<string, string[]> = {
     "/api/admin/events",
     "/api/admin/event-metrics",
     "/api/admin/event-counts?range=30",
+  ],
+  "/admin/ops": [
+    "/api/admin/settings/integrations/status",
+    "/api/admin/automation/rules",
+    "/api/admin/automation/logs",
   ],
   "/admin/settings": ["/api/admin/settings"],
   "/admin/users": ["/api/admin/users"],
@@ -127,8 +147,8 @@ const SECTION_META: Record<SidebarSection, { label: string; description: string 
 const MOBILE_PRIMARY_HREFS = [
   "/admin/overview",
   "/admin/crm",
-  "/admin/campaigns",
-  "/admin/channel-talk",
+  "/admin/materials",
+  "/admin/chatbot",
 ] as const
 
 const ROLE_LABEL: Record<SidebarRole, string> = {

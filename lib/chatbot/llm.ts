@@ -38,11 +38,11 @@ const UNSUPPORTED_GEMINI_MODELS = new Set([
   "gemini-1.5-flash",
   "gemini-1.5-pro",
 ])
-// 전체 최종 답변 예산(기본 4.2s) 안에서 primary 실패 후 fallback까지 시도할 수 있어야 한다.
-const GEMINI_TIMEOUT_MS = 2000
+// 전체 최종 답변 예산(기본 6s) 안에서 primary 실패 후 fallback까지 시도할 수 있어야 한다.
+const GEMINI_TIMEOUT_MS = 2500
 // 스트리밍은 첫 토큰이 빨리 와 사용자가 빈 화면을 보지 않으므로, 본문을 끝까지 받을 여유를 더 준다.
-// 검색(≤2.8s) + 스트림(≤6s) ≈ 9s 안쪽으로 라우트 예산을 지킨다.
-const GEMINI_STREAM_TIMEOUT_MS = 6000
+// 검색(≤2.8s) + 스트림(≤8s) ≈ 11s 안쪽으로 라우트 예산을 지킨다.
+const GEMINI_STREAM_TIMEOUT_MS = 8000
 // 임베딩은 보통 150~400ms — 생성용 4.5s를 그대로 쓰면 느린 호출이 요청 예산을 잡아먹는다.
 const EMBED_TIMEOUT_MS = 2000
 const MAX_ANSWER_LENGTH = 520

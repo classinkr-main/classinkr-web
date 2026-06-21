@@ -32,7 +32,7 @@ import { CLASSIN_POSITIONING } from "@/lib/classin-positioning"
 type HandoffIntent = "demo" | "support"
 
 const UNRESOLVED_STREAK_THRESHOLD = 3
-const CHATBOT_REQUEST_TIMEOUT_MS = 9_000
+const CHATBOT_REQUEST_TIMEOUT_MS = 14_000
 const STARTER_SUGGESTION_LIMIT = 4
 const FOLLOW_UP_SUGGESTION_LIMIT = 3
 

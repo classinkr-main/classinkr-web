@@ -39,9 +39,9 @@ const MAX_RETRIEVAL_CANDIDATES = 24
 const MAX_RETRIEVAL_CANDIDATES_PER_DOC = 3
 const MIN_DIRECT_SOURCE_SCORE = 18
 const DEFAULT_KNOWLEDGE_SEARCH_TIMEOUT_MS = 2_800
-const DEFAULT_FINAL_ANSWER_TIMEOUT_MS = 4_200
+const DEFAULT_FINAL_ANSWER_TIMEOUT_MS = 6_000
 // 스트리밍은 첫 토큰이 일찍 보여 체감 지연이 낮으므로 본문 완성까지 조금 더 기다린다.
-const DEFAULT_FINAL_ANSWER_STREAM_TIMEOUT_MS = 6_000
+const DEFAULT_FINAL_ANSWER_STREAM_TIMEOUT_MS = 8_000
 const RETRIEVAL_CACHE_TTL_MS = 5 * 60 * 1000
 const RETRIEVAL_CACHE_MAX = 200
 const RETRIEVAL_CACHE_VERSION = "rag-rerank-20260618-v4"
@@ -131,6 +131,7 @@ interface SupabaseChunkRow {
 const QUERY_EXPANSIONS: Record<string, string[]> = {
   as: ["a/s", "수리", "고장", "하드웨어"],
   "a/s": ["as", "수리", "고장", "하드웨어"],
+  이디비: ["edb", "칠판", "교안", "판서"],
   결제: ["영수증", "세금계산서", "증빙", "청구", "정산"],
   견적: ["도입", "비용", "가격", "요금", "플랜"],
   계정: ["로그인", "접속", "비밀번호", "권한"],
@@ -261,7 +262,7 @@ interface CachedAnswerEntry {
   warning?: string
 }
 
-const ANSWER_CACHE_VERSION = "answer-20260618-v3"
+const ANSWER_CACHE_VERSION = "answer-20260621-v4"
 const ANSWER_CACHE_TTL_MS = 5 * 60 * 1000
 const ANSWER_CACHE_MAX = 200
 const answerCache = new Map<string, { expiresAt: number; value: CachedAnswerEntry }>()
@@ -385,7 +386,7 @@ const CAPABILITY_REQUEST_RE =
   /되나요|돼요|가능|지원|제공|처리|관리|기능|자동|연동|만들|추가|하려고|하고\s*싶|쓸\s*수|사용할\s*수/i
 
 const PROMPT_OR_SECURITY_ABUSE_RE =
-  /sql\s*injection|sqli|union\s+select|drop\s+table|or\s+1\s*=\s*1|information_schema|xp_cmdshell|xss|csrf|ssrf|rce|프롬프트\s*인젝션|시스템\s*프롬프트|개발자\s*메시지|내부\s*(?:프롬프트|규칙|지시)|(?:이전|위|앞선).{0,12}(?:지시|규칙|프롬프트).{0,12}(?:무시|잊어|삭제)|보안.{0,12}(?:뚫|우회|공격)|취약점.{0,12}(?:공격|악용|우회)|해킹.{0,12}(?:방법|공격|뚫|탈취|우회)|(?:비밀번호|토큰|api\s*key|관리자).{0,12}(?:탈취|훔|우회|크랙)/i
+  /sql\s*injection|sqli|union\s+select|drop\s+table|or\s+1\s*=\s*1|information_schema|xp_cmdshell|xss|csrf|ssrf|rce|프롬프트\s*인젝션|system\s*prompt|developer\s*(?:message|instruction)|시스템\s*프롬프트|개발자\s*메시지|내부\s*(?:프롬프트|규칙|지시)|(?:프롬프트|prompt|지시문).{0,16}(?:보여|출력|공개|알려|노출|그대로)|(?:보여|출력|공개|알려|노출).{0,16}(?:프롬프트|prompt|지시문)|(?:이전|위|앞선).{0,12}(?:지시|규칙|프롬프트).{0,12}(?:무시|잊어|삭제)|보안.{0,12}(?:뚫|우회|공격)|취약점.{0,12}(?:공격|악용|우회)|해킹.{0,12}(?:방법|공격|뚫|탈취|우회)|(?:비밀번호|토큰|api\s*key|관리자).{0,12}(?:탈취|훔|우회|크랙)/i
 const CRIMINAL_ABUSE_RE =
   /(?:범죄|불법|사기|피싱|스미싱|절도|도둑|마약|폭탄|무기|살인|폭행).{0,18}(?:방법|하는\s*법|계획|도와|만들|제조|우회|탈취|공격|훔|숨기|피하)|(?:방법|하는\s*법|계획).{0,18}(?:범죄|불법|사기|피싱|스미싱|절도|마약|폭탄|무기|살인|폭행)/i
 const TOKEN_WASTE_RE =
@@ -529,8 +530,9 @@ function getScoringTokens(question: NormalizedQuestion) {
   return question.tokens.filter((token) => !isWeakBrandToken(token) && !isWeakQueryToken(token))
 }
 
+const EDB_QUERY_RE = /edb|이\s*디\s*비/i
 const POSITIONING_RE =
-  /학원\s*시스템|시스템\s*os|수업\s*os|운영\s*os|zoom|줌|화상회의|뭐가\s*(달라|다른)|무엇이\s*다르|어떻게\s*다른|다른\s*(점|가요|건가요|거|것|부분|서비스)|차이|비교|차별|차별점|장점|왜\s*(써|쓰|필요|도입)|일반\s*전자칠판|기존\s*전자칠판|왜\s*전자칠판|edb|칠판\s*파일|가격\s*부담|비싸|api|sdk|연동|데이터\s*구독|도구.*흩어|녹화.*관리/
+  /학원\s*시스템|시스템\s*os|수업\s*os|운영\s*os|zoom|줌|화상회의|뭐가\s*(달라|다른)|무엇이\s*다르|어떻게\s*다른|다른\s*(점|가요|건가요|거|것|부분|서비스)|차이|비교|차별|차별점|장점|왜\s*(써|쓰|필요|도입)|일반\s*전자칠판|기존\s*전자칠판|왜\s*전자칠판|edb|이\s*디\s*비|칠판\s*파일|가격\s*부담|비싸|api|sdk|연동|데이터\s*구독|도구.*흩어|녹화.*관리/
 
 const PRE_ADOPTION_CHECK_RE =
   /도입\s*전.*(22|질문|체크리스트|확인)|22\s*가지\s*질문|22.*도입|구매\s*전.*(질문|체크리스트|확인)|상담\s*전.*(질문|체크리스트|확인)/
@@ -583,7 +585,7 @@ const HARDWARE_BOARD_LINEUP_INTENT_RE =
   /어떤|뭐|무엇|종류|라인업|모델|추천|있지|있어|고르|선택|구성|제품/i
 
 const SOFTWARE_BOARD_FEATURE_RE =
-  /개인\s*칠판|보조\s*칠판|ai\s*칠판|칠판\s*파일|edb|판서\s*도구|매직펜|업데이트|릴리즈|버전|6\.0/i
+  /개인\s*칠판|보조\s*칠판|ai\s*칠판|칠판\s*파일|edb|이\s*디\s*비|판서\s*도구|매직펜|업데이트|릴리즈|버전|6\.0/i
 
 // 상세 사양을 콕 집어 묻는 신호. 모델·라인업·추천 같은 '넓은 라인업' 단어는 여기서 제외한다.
 const HARDWARE_SPECS_RE =
@@ -817,7 +819,7 @@ function isApiSource(source: Pick<ChatbotSource, "title" | "heading" | "excerpt"
 function buildPositioningSource(question: NormalizedQuestion): ChatbotSource | null {
   if (!isPositioningQuestion(question)) return null
   const text = question.redacted.toLowerCase()
-  const isEdbQuestion = /edb|칠판\s*파일|교안/.test(text)
+  const isEdbQuestion = EDB_QUERY_RE.test(text) || /칠판\s*파일|교안/.test(text)
   const isApiQuestion = isApiIntegrationQuestion(question)
   const isIdentity = isIdentityQuestion(question) && !isComparisonQuestion(question)
   const heading = isEdbQuestion
@@ -1820,24 +1822,54 @@ function buildSuggestedQuestions(category: string) {
   ).slice(0, 3)
 }
 
-function wantsHumanConsultation(question: NormalizedQuestion) {
+function wantsImmediateHumanHandoff(question: NormalizedQuestion) {
   if (isHardwareSpecsQuestion(question)) return false
   if (isHardwareBoardLineupQuestion(question)) return false
 
   const text = question.redacted.toLowerCase()
   const explicitHandoff =
-    /상담|연락|견적|데모|시연|미팅|제안|담당자|통화|구매|도입\s*검토|도입\s*상담/.test(text)
+    /상담\s*(?:받|받고|하고|하고\s*싶|할래|신청|연결|이어|부탁|필요|문의|원해|원함)|상담받|상담할래|상담하고\s*싶|상담\s*(?:원|사)|담당자.{0,10}(?:상담|연결|연락|통화|배정|문의)|매니저.{0,10}(?:상담|연결|연락|통화|문의)|(?:상담|연결|연락|통화|문의).{0,10}(?:담당자|매니저)|전담\s*매니저|연락\s*(?:주세요|받고|하고|원해|원함|가능)|전화\s*(?:주세요|받고|하고|원해|원함|가능)|통화\s*(?:하고|원해|원함|가능)|미팅\s*(?:잡|하고|원해|원함)|데모\s*(?:신청|보고|연결|원해|원함)|시연\s*(?:신청|보고|연결|원해|원함)|구매\s*상담|도입\s*(?:상담|문의|검토)/.test(text)
   const contextualInquiry =
-    /문의/.test(text) && /담당자|상담|연락|전화|통화|견적|구매|도입|시연|데모/.test(text)
+    /문의/.test(text) && /담당자|매니저|연락|전화|통화|구매|도입|시연|데모/.test(text)
 
   return explicitHandoff || contextualInquiry
+}
+
+function wantsHumanConsultation(question: NormalizedQuestion) {
+  if (wantsImmediateHumanHandoff(question)) return true
+
+  const text = question.redacted.toLowerCase()
+  return /견적|데모|시연|미팅|제안|구매|도입\s*검토|도입\s*상담/.test(text)
+}
+
+function buildImmediateHandoffResponse(
+  category: string,
+  handoffIntent: HandoffIntent
+): Omit<ChatbotQueryResponse, "answerEventId" | "sessionId" | "warning" | "handoffIntent"> {
+  const isSupport = handoffIntent === "support"
+  return {
+    answer: [
+      isSupport
+        ? "상담 연결이 필요한 내용으로 확인했습니다."
+        : "담당자 상담으로 이어드릴게요.",
+      isSupport
+        ? "담당자가 바로 확인할 수 있게 계정/오류 화면, 결제 상태, 장비 증상처럼 현재 상황을 함께 남겨주세요."
+        : "담당자가 도입 목적, 희망 일정, 수업 운영 방식부터 빠르게 확인할 수 있게 연결 정보를 남겨주세요.",
+    ].join("\n\n"),
+    answerMode: "handoff",
+    confidence: 0.72,
+    needsHandoff: true,
+    sources: [],
+    suggestedQuestions: buildSuggestedQuestions(category),
+    unresolved: true,
+  }
 }
 
 function isDomainRelatedQuestion(question: NormalizedQuestion, category: string) {
   if (category !== "general") return true
 
   const text = question.redacted.toLowerCase()
-  return /classin|클래스인|학원|수업|교실|학생|교사|강사|원장|전자칠판|칠판|하드웨어|보드|board|모델|사이즈|크기|인치|라인업|ops|카메라|마이크|미러링|edb|lms|녹화|복습|과제|운영|도입|관리자|온라인|화상|교안|토론|플립러닝|하이브리드|소프트웨어|프로그램|앱|플랜|구독형|충전형|체험|파일럿|학부모|리포트|보고서|문자|알림/.test(text)
+  return /classin|클래스인|학원|수업|교실|학생|교사|강사|원장|전자칠판|칠판|하드웨어|보드|board|모델|사이즈|크기|인치|라인업|ops|카메라|마이크|미러링|edb|이\s*디\s*비|lms|녹화|복습|과제|운영|도입|관리자|온라인|화상|교안|토론|플립러닝|하이브리드|소프트웨어|프로그램|앱|플랜|구독형|충전형|체험|파일럿|학부모|리포트|보고서|문자|알림/.test(text)
 }
 
 function isSensitiveOrAccountSpecificQuestion(question: NormalizedQuestion, category: string) {
@@ -1968,6 +2000,14 @@ function getIdentityAnswer() {
     "네, Classin은 학원 수업을 준비·진행·녹화·복습·과제(LMS)·관리자 데이터까지 한 흐름으로 묶는 수업 운영 솔루션이에요.",
     "쉽게 말해 Zoom처럼 수업만 여는 도구가 아니라, 전자칠판·EDB 교안·녹화·관리자 운영까지 연결해 수업 품질을 표준화하는 시스템에 가까워요.",
     "전자칠판, 온라인 수업, LMS/관리자 중 어떤 쪽이 궁금하신지 알려주시면 그 부분만 콕 짚어 정리해드릴게요.",
+  ].join("\n\n")
+}
+
+function getEdbAnswer() {
+  return [
+    "EDB, 이디비는 Classin에서 쓰는 칠판 파일이에요.",
+    "판서, 이미지, 텍스트를 상호작용 가능한 상태로 저장해 두고 다시 불러올 수 있어서, 선생님이 만든 교안이나 활동 자료를 다음 수업에서도 그대로 재사용할 수 있습니다.",
+    "쉽게 말하면 한 번 만든 칠판 수업 자료를 파일처럼 저장하고, 불러오고, 공유하는 구조예요.",
   ].join("\n\n")
 }
 
@@ -2336,6 +2376,9 @@ function formatConsumerAnswer({
   if (isComparisonQuestion(question) && top.urlPath.includes("/docs/start/academy-system-os-positioning")) {
     return getComparisonAnswer(top)
   }
+  if (top.heading === "EDB와 교안 표준화") {
+    return getEdbAnswer()
+  }
   if (isIdentityQuestion(question) && top.urlPath.includes("/docs/start/academy-system-os-positioning")) {
     return getIdentityAnswer()
   }
@@ -2434,7 +2477,7 @@ function isUsableGeneratedAnswer(answer: string) {
 }
 
 function hasConcreteClassinAnchor(answer: string) {
-  return /classin|클래스인|전자칠판|보드|수업|교실|녹화|복습|lms|edb|관리자|학생|교사|강사|과제|출결|도입|운영|판서/i.test(answer)
+  return /classin|클래스인|전자칠판|보드|수업|교실|녹화|복습|lms|edb|이\s*디\s*비|관리자|학생|교사|강사|과제|출결|도입|운영|판서/i.test(answer)
 }
 
 function isVagueGeneratedAnswer(answer: string) {
@@ -2893,6 +2936,7 @@ function shouldUseAiFinalAnswer(
   category: string
 ) {
   if (category === "general" && !isDomainRelatedQuestion(question, category)) return false
+  if (wantsImmediateHumanHandoff(question)) return false
   if (response.answerMode === "clarifying_question" && question.tokens.length < 2) return false
   if (response.answerMode === "direct_answer" && isCsFigmaGuideResponse(response)) return false
   // 큐레이션 직답은 이미 최종본 — Gemini 재작성(0.8~4.5s)을 건너뛰고 그대로 내보낸다.
@@ -3029,6 +3073,18 @@ async function buildChatbotCore(
       category: policyGuard.category,
       intent: policyGuard.intent,
       handoffIntent: policyGuard.handoffIntent,
+      latencyMs: elapsedSince(startedAt),
+    }
+  }
+
+  if (wantsImmediateHumanHandoff(question)) {
+    const { category, intent, handoffIntent } = classifyChatbotQuestion(question.redacted)
+    return {
+      question,
+      response: buildImmediateHandoffResponse(category, handoffIntent),
+      category,
+      intent,
+      handoffIntent,
       latencyMs: elapsedSince(startedAt),
     }
   }
