@@ -27,6 +27,19 @@ import AdminTabs from "@/components/admin/AdminTabs"
 import { ChannelHubCards } from "@/components/admin/campaigns/ChannelHubCards"
 import EmailHubPanel from "@/components/admin/campaigns/EmailHubPanel"
 import type { EmailHubStats } from "@/components/admin/campaigns/EmailHubPanel"
+import { InsightsBanner } from "@/components/admin/campaigns/InsightsBanner"
+import type { Insight } from "@/components/admin/campaigns/InsightsBanner"
+import { GoalProgressPanel } from "@/components/admin/campaigns/GoalProgressPanel"
+import type { GoalEventRow } from "@/components/admin/campaigns/GoalProgressPanel"
+import { FunnelWaterfall } from "@/components/admin/campaigns/FunnelWaterfall"
+import type { FunnelStage as WaterfallStage } from "@/components/admin/campaigns/FunnelWaterfall"
+import { TopPerformersTable } from "@/components/admin/campaigns/TopPerformersTable"
+import type { PerformerRow } from "@/components/admin/campaigns/TopPerformersTable"
+import { CampaignExportButton } from "@/components/admin/campaigns/CampaignExportButton"
+import type { ExportColumn } from "@/components/admin/campaigns/CampaignExportButton"
+import type { TrendPoint } from "@/components/admin/campaigns/CampaignTrendChart"
+import type { ChannelEfficiencyRow } from "@/components/admin/campaigns/ChannelEfficiencyChart"
+import type { MetaPerfRow } from "@/components/admin/campaigns/MetaPerformanceCharts"
 import { adminFetchJson, adminFetchJsonCached } from "@/lib/admin-client"
 import { useUrlState } from "@/lib/use-url-state"
 import type { LeadRecord } from "@/lib/db"
@@ -62,6 +75,21 @@ const ChannelSpendPieChart = dynamic(
 const EventRoiChart = dynamic(
   () => import("@/components/admin/campaigns/CampaignCharts").then((m) => m.EventRoiChart),
   { ssr: false, loading: () => <ChartSkeleton className="h-[200px]" /> }
+)
+
+const CampaignTrendChart = dynamic(
+  () => import("@/components/admin/campaigns/CampaignTrendChart").then((m) => m.CampaignTrendChart),
+  { ssr: false, loading: () => <ChartSkeleton className="h-[240px]" /> }
+)
+
+const ChannelEfficiencyChart = dynamic(
+  () => import("@/components/admin/campaigns/ChannelEfficiencyChart").then((m) => m.ChannelEfficiencyChart),
+  { ssr: false, loading: () => <ChartSkeleton className="h-[220px]" /> }
+)
+
+const MetaPerformanceCharts = dynamic(
+  () => import("@/components/admin/campaigns/MetaPerformanceCharts").then((m) => m.MetaPerformanceCharts),
+  { ssr: false, loading: () => <ChartSkeleton className="h-[260px]" /> }
 )
 
 const KRW = new Intl.NumberFormat("ko-KR")
@@ -1650,6 +1678,293 @@ export default function AdminCampaignsPage() {
       }
     : null
 
+  // 행사별 funnel+economics 단일 소스 — 아래 모든 파생값이 여기서 읽어 일관성 유지
+  const perEventEcon = useMemo(() => {
+    return filtered.map((ev) => {
+      const metrics: EventMetrics =
+        metricsMap[ev.id] ?? { ...DEFAULT_EVENT_METRICS, eventId: ev.id, updatedAt: "" }
+      const leadStats = eventLeadStats.get(ev.id) ?? { attributed: 0, during: 0 }
+      const funnel = buildFunnel(ev, metrics, leadStats.attributed, leadStats.during)
+      const econ = computeEconomics(funnel, metrics)
+      return { event: ev, metrics, funnel, econ }
+    })
+  }, [filtered, metricsMap, eventLeadStats])
+
+  // 월별 추이 (YYYY-MM)
+  const trendData = useMemo<TrendPoint[]>(() => {
+    const buckets = new Map<string, { leads: number; revenue: number; spend: number }>()
+    for (const { event, funnel, econ } of perEventEcon) {
+      const d = new Date(event.startsAt)
+      if (Number.isNaN(d.getTime())) continue
+      const key = `${d.getFullYear()}-${String(d.getMonth() + 1).padStart(2, "0")}`
+      const bucket = buckets.get(key) ?? { leads: 0, revenue: 0, spend: 0 }
+      bucket.leads += funnel.leads
+      bucket.revenue += econ.revenue
+      bucket.spend += econ.adSpendTotal
+      buckets.set(key, bucket)
+    }
+    return [...buckets.entries()]
+      .sort(([a], [b]) => (a < b ? -1 : a > b ? 1 : 0))
+      .map(([month, v]) => ({ month, leads: v.leads, revenue: v.revenue, spend: v.spend }))
+  }, [perEventEcon])
+
+  // 채널별 효율 — 광고비는 채널 합산, 리드는 행사 내 광고비 비중으로 안분(추정)
+  const channelEfficiencyData = useMemo<ChannelEfficiencyRow[]>(() => {
+    const spendByChannel: Record<AdChannel, number> = {
+      google: 0, meta: 0, naver: 0, kakao: 0, youtube: 0, offline: 0, other: 0,
+    }
+    const leadsByChannel: Record<AdChannel, number> = {
+      google: 0, meta: 0, naver: 0, kakao: 0, youtube: 0, offline: 0, other: 0,
+    }
+    for (const { metrics, funnel } of perEventEcon) {
+      const entries = metrics.adSpendEntries
+      const eventSpend = entries.reduce((sum, e) => sum + e.amount, 0)
+      for (const e of entries) spendByChannel[e.channel] += e.amount
+      if (eventSpend > 0 && funnel.leads > 0) {
+        for (const e of entries) {
+          leadsByChannel[e.channel] += funnel.leads * (e.amount / eventSpend)
+        }
+      }
+    }
+    return (Object.keys(AD_CHANNEL_LABEL) as AdChannel[])
+      .filter((channel) => spendByChannel[channel] > 0)
+      .map((channel) => {
+        const spend = spendByChannel[channel]
+        const leads = leadsByChannel[channel]
+        const cpl = leads > 0 ? Math.round(spend / leads) : null
+        return {
+          channel,
+          label: AD_CHANNEL_LABEL[channel],
+          color: AD_CHANNEL_COLOR[channel],
+          spend,
+          leads: Math.round(leads),
+          cpl,
+        }
+      })
+  }, [perEventEcon])
+
+  // 목표 달성 (targetLeads / targetRevenue 보유 행사만)
+  const goalData = useMemo(() => {
+    let targetLeads = 0
+    let actualLeads = 0
+    let targetRevenue = 0
+    let actualRevenue = 0
+    const perEvent: GoalEventRow[] = []
+    for (const { event, metrics, funnel, econ } of perEventEcon) {
+      const hasLeadTarget = metrics.targetLeads != null && metrics.targetLeads > 0
+      const hasRevTarget = metrics.targetRevenue != null && metrics.targetRevenue > 0
+      if (!hasLeadTarget && !hasRevTarget) continue
+      if (hasLeadTarget) {
+        targetLeads += metrics.targetLeads as number
+        actualLeads += funnel.leads
+      }
+      if (hasRevTarget) {
+        targetRevenue += metrics.targetRevenue as number
+        actualRevenue += econ.revenue
+      }
+      perEvent.push({
+        id: event.id,
+        title: event.title,
+        targetLeads: hasLeadTarget ? metrics.targetLeads : null,
+        actualLeads: funnel.leads,
+        targetRevenue: hasRevTarget ? metrics.targetRevenue : null,
+        actualRevenue: econ.revenue,
+      })
+    }
+    return {
+      leads: { target: targetLeads, actual: actualLeads },
+      revenue: { target: targetRevenue, actual: actualRevenue },
+      perEvent,
+    }
+  }, [perEventEcon])
+
+  // 리더보드 행 (컴포넌트가 자체 정렬·top8)
+  const performerRows = useMemo<PerformerRow[]>(() => {
+    return perEventEcon.map(({ event, funnel, econ }) => ({
+      id: event.id,
+      title: event.title,
+      leads: funnel.leads,
+      deals: funnel.deals,
+      revenue: econ.revenue,
+      spend: econ.adSpendTotal,
+      roi: econ.roi,
+      cpl: econ.cpl,
+    }))
+  }, [perEventEcon])
+
+  // 요약 탭 집계 퍼널 (단계별 합산)
+  const summaryFunnelStages = useMemo<WaterfallStage[]>(() => {
+    let impressions = 0, leads = 0, applications = 0, qualifiedLeads = 0, attendees = 0, deals = 0
+    for (const { funnel } of perEventEcon) {
+      impressions += funnel.impressions
+      leads += funnel.leads
+      applications += funnel.applications
+      qualifiedLeads += funnel.qualifiedLeads
+      attendees += funnel.attendees
+      deals += funnel.deals
+    }
+    return [
+      { key: "impressions", label: "노출", value: impressions, color: "#84827a" },
+      { key: "leads", label: "리드", value: leads, color: "#1a73e8" },
+      { key: "applications", label: "신청", value: applications, color: "#0866FF" },
+      { key: "qualifiedLeads", label: "유효 리드", value: qualifiedLeads, color: "#084734" },
+      { key: "attendees", label: "참석", value: attendees, color: "#084734" },
+      { key: "deals", label: "딜", value: deals, color: "#B85C33" },
+    ]
+  }, [perEventEcon])
+
+  // 자동 인사이트
+  const summaryInsights = useMemo<Insight[]>(() => {
+    if (loading) return []
+    const out: Insight[] = []
+    if (aggregate.overallRoi != null) {
+      out.push({
+        id: "roi",
+        tone: aggregate.overallRoi >= 0 ? "positive" : "warning",
+        icon: aggregate.overallRoi >= 0 ? "trend" : "alert",
+        title: `누적 ROI ${aggregate.overallRoi}%`,
+        body:
+          aggregate.overallRoi >= 0
+            ? `매출 ${won(aggregate.totalRevenue)} · 광고비 ${won(aggregate.totalSpend)}`
+            : "매출보다 광고비가 큽니다. 채널별 효율을 점검하세요.",
+      })
+    }
+    const cplRanked = channelEfficiencyData.filter((r) => r.cpl != null)
+    if (cplRanked.length > 0) {
+      const best = cplRanked.reduce((a, b) => ((a.cpl as number) <= (b.cpl as number) ? a : b))
+      out.push({
+        id: "best-channel",
+        tone: "positive",
+        icon: "spark",
+        title: `최고 효율 채널 · ${best.label}`,
+        body: `CPL ${won(best.cpl)} · 광고비 ${won(best.spend)}`,
+      })
+    }
+    const bestRoiEvent = perEventEcon
+      .filter((e) => e.econ.roi != null)
+      .sort((a, b) => (b.econ.roi as number) - (a.econ.roi as number))[0]
+    if (bestRoiEvent) {
+      out.push({
+        id: "best-event",
+        tone: "neutral",
+        icon: "target",
+        title: `최고 ROI 행사 · ${bestRoiEvent.event.title}`,
+        body: `ROI ${bestRoiEvent.econ.roi}% · 리드 ${KRW.format(bestRoiEvent.funnel.leads)}건`,
+      })
+    }
+    if (aggregate.avgCpl != null) {
+      out.push({
+        id: "avg-cpl",
+        tone: "neutral",
+        icon: "trend",
+        title: `평균 CPL ${won(aggregate.avgCpl)}`,
+        body: `총 리드 ${KRW.format(aggregate.totalLeads)}건 · 딜 ${KRW.format(aggregate.totalDeals)}건`,
+      })
+    }
+    if (
+      emailStats &&
+      emailStats.subscribers.active > 10 &&
+      emailStats.campaigns.recentCampaigns.filter((c) => c.status === "sent").length === 0
+    ) {
+      out.push({
+        id: "email-gap",
+        tone: "warning",
+        icon: "alert",
+        title: `이메일 구독자 ${emailStats.subscribers.active}명 · 발송 이력 없음`,
+        body: "이메일 탭에서 첫 캠페인을 발송하세요.",
+      })
+    }
+    return out
+  }, [loading, aggregate, channelEfficiencyData, perEventEcon, emailStats])
+
+  // Meta 차트용 행
+  const metaPerfRows = useMemo<MetaPerfRow[]>(() => {
+    const campaigns = metaDashboard?.campaigns ?? []
+    return campaigns.map((c) => ({
+      id: c.id,
+      name: c.name,
+      spend: c.insights.spend,
+      leads: c.insights.leads,
+      clicks: c.insights.clicks,
+      impressions: c.insights.impressions,
+      ctr: c.insights.ctr,
+      cpc: c.insights.cpc,
+      cpl: c.insights.leads > 0 ? c.insights.spend / c.insights.leads : null,
+      status: c.effectiveStatus ?? c.status,
+    }))
+  }, [metaDashboard])
+
+  // CSV 내보내기 — 행사
+  const eventExport = useMemo(() => {
+    const columns: ExportColumn[] = [
+      { key: "title", label: "행사" },
+      { key: "status", label: "상태" },
+      { key: "startsAt", label: "시작일" },
+      { key: "leads", label: "리드" },
+      { key: "applications", label: "신청" },
+      { key: "attendees", label: "참석" },
+      { key: "deals", label: "딜" },
+      { key: "spend", label: "광고비(원)" },
+      { key: "revenue", label: "매출(원)" },
+      { key: "cpl", label: "CPL(원)" },
+      { key: "roi", label: "ROI(%)" },
+    ]
+    const econById = new Map(perEventEcon.map((e) => [e.event.id, e]))
+    const rows: Array<Record<string, string | number | null>> = sortedEvents.map((ev) => {
+      const e =
+        econById.get(ev.id) ??
+        (() => {
+          const metrics: EventMetrics =
+            metricsMap[ev.id] ?? { ...DEFAULT_EVENT_METRICS, eventId: ev.id, updatedAt: "" }
+          const ls = eventLeadStats.get(ev.id) ?? { attributed: 0, during: 0 }
+          const funnel = buildFunnel(ev, metrics, ls.attributed, ls.during)
+          return { event: ev, metrics, funnel, econ: computeEconomics(funnel, metrics) }
+        })()
+      return {
+        title: ev.title,
+        status: ev.status,
+        startsAt: ev.startsAt.slice(0, 10),
+        leads: e.funnel.leads,
+        applications: e.funnel.applications,
+        attendees: e.funnel.attendees,
+        deals: e.funnel.deals,
+        spend: e.econ.adSpendTotal,
+        revenue: e.econ.revenue,
+        cpl: e.econ.cpl,
+        roi: e.econ.roi,
+      }
+    })
+    return { columns, rows }
+  }, [perEventEcon, sortedEvents, metricsMap, eventLeadStats])
+
+  // CSV 내보내기 — Meta
+  const metaExport = useMemo(() => {
+    const columns: ExportColumn[] = [
+      { key: "name", label: "캠페인" },
+      { key: "status", label: "상태" },
+      { key: "spend", label: "광고비" },
+      { key: "impressions", label: "노출" },
+      { key: "clicks", label: "클릭" },
+      { key: "leads", label: "리드" },
+      { key: "ctr", label: "CTR(%)" },
+      { key: "cpc", label: "CPC" },
+      { key: "cpl", label: "CPL" },
+    ]
+    const campaigns = metaDashboard?.campaigns ?? []
+    const rows: Array<Record<string, string | number | null>> = campaigns.map((c) => ({
+      name: c.name,
+      status: c.effectiveStatus ?? c.status,
+      spend: c.insights.spend,
+      impressions: c.insights.impressions,
+      clicks: c.insights.clicks,
+      leads: c.insights.leads,
+      ctr: c.insights.ctr,
+      cpc: c.insights.cpc,
+      cpl: c.insights.leads > 0 ? Math.round(c.insights.spend / c.insights.leads) : null,
+    }))
+    return { columns, rows }
+  }, [metaDashboard])
+
   const recommendedActions = (() => {
     if (loading) return []
     const actions: Array<{
@@ -1832,6 +2147,15 @@ export default function AdminCampaignsPage() {
         </div>
       ) : activeTab === "meta" ? (
         <div className="px-4 pt-6 sm:px-6 lg:px-9">
+          <div className="mb-4 flex items-center justify-end">
+            <CampaignExportButton
+              columns={metaExport.columns}
+              rows={metaExport.rows}
+              filename="meta-campaigns"
+              label="Meta CSV"
+              disabled={metaLoading}
+            />
+          </div>
           <MetaCampaignPanel
             dashboard={metaDashboard}
             loading={metaLoading}
@@ -1842,6 +2166,11 @@ export default function AdminCampaignsPage() {
             onRefresh={loadMeta}
             onToggleStatus={toggleMetaCampaignStatus}
           />
+          {metaPerfRows.length > 0 && (
+            <div className="mt-5">
+              <MetaPerformanceCharts rows={metaPerfRows} currency={metaDashboard?.account.currency ?? "USD"} />
+            </div>
+          )}
         </div>
       ) : (
         <div className="px-4 pt-6 sm:px-6 lg:px-9">
@@ -1910,6 +2239,13 @@ export default function AdminCampaignsPage() {
         />
       </div>
 
+      {/* 자동 인사이트 */}
+      {summaryInsights.length > 0 && (
+        <div className="mb-5">
+          <InsightsBanner insights={summaryInsights} />
+        </div>
+      )}
+
       <div className="mb-5 grid gap-3 lg:grid-cols-3">
         <ConversionFocusCard
           label="전환 초점"
@@ -1934,6 +2270,16 @@ export default function AdminCampaignsPage() {
       {/* timeline */}
       <div className="mb-5">
         <TimelineRow events={filtered} />
+      </div>
+
+      {/* 집계 퍼널 + 목표 달성 */}
+      <div className="mb-5 grid gap-4 lg:grid-cols-2">
+        <FunnelWaterfall stages={summaryFunnelStages} />
+        <GoalProgressPanel
+          leads={goalData.leads}
+          revenue={goalData.revenue}
+          perEvent={goalData.perEvent}
+        />
       </div>
 
       {/* charts */}
@@ -1973,6 +2319,16 @@ export default function AdminCampaignsPage() {
         </div>
       </div>
 
+      {/* 채널별 효율 (CPL) */}
+      {channelEfficiencyData.length > 0 && (
+        <div className="mb-5">
+          <ChannelEfficiencyChart data={channelEfficiencyData} />
+          <p className="mt-1.5 px-1 text-[10.5px] leading-relaxed text-[#1a1a1a]/35">
+            * 채널별 리드는 행사별 광고비 비중으로 안분한 추정치입니다. 채널 단위 리드 태깅이 없어 실제값과 차이가 있을 수 있습니다.
+          </p>
+        </div>
+      )}
+
       {/* 행사별 ROI 비교 */}
       {roiChartData.length > 0 && (
         <div className="mb-5 rounded-2xl border border-[#e8e8e4] bg-white p-4 sm:p-5">
@@ -1987,6 +2343,13 @@ export default function AdminCampaignsPage() {
           <div className="h-[200px] w-full">
             <EventRoiChart data={roiChartData} />
           </div>
+        </div>
+      )}
+
+      {/* 월별 추이 */}
+      {trendData.length > 0 && (
+        <div className="mb-5">
+          <CampaignTrendChart data={trendData} />
         </div>
       )}
 
@@ -2030,6 +2393,11 @@ export default function AdminCampaignsPage() {
           </div>
         </div>
       )}
+
+      {/* 성과 리더보드 */}
+      <div className="mb-5">
+        <TopPerformersTable rows={performerRows} />
+      </div>
         </>
       )}
 
@@ -2067,6 +2435,13 @@ export default function AdminCampaignsPage() {
               {period === "all" ? <ChevronLeft className="w-3.5 h-3.5" /> : <ChevronRight className="w-3.5 h-3.5" />}
               {period === "all" ? "축소" : "전체 기간 보기"}
             </button>
+            <CampaignExportButton
+              columns={eventExport.columns}
+              rows={eventExport.rows}
+              filename="campaign-events"
+              label="행사 CSV"
+              disabled={loading}
+            />
           </div>
 
           {loading ? (

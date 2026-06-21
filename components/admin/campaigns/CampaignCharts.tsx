@@ -79,7 +79,10 @@ export function EventRoiChart({
           tickLine={false}
         />
         <Tooltip
-          formatter={(value: number) => [`${value}%`, "ROI"]}
+          formatter={(value: number | string | undefined) => {
+            const n = typeof value === "number" ? value : Number(value ?? 0)
+            return [`${n}%`, "ROI"] as [string, string]
+          }}
           contentStyle={{
             backgroundColor: "#111110",
             border: "none",
