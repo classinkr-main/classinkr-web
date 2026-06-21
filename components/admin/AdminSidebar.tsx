@@ -438,11 +438,11 @@ export default function AdminSidebar({ role, name, email }: Props) {
     </nav>
 
     <aside
-      className={`hidden shrink-0 flex-col border-r border-[#e8e8e4] bg-white lg:sticky lg:top-0 lg:flex lg:min-h-screen ${
+      className={`hidden shrink-0 flex-col border-r border-[#e8e8e4] bg-white lg:sticky lg:top-0 lg:flex lg:h-[100dvh] lg:min-h-0 ${
         effectiveCollapsed ? "lg:w-16" : "lg:w-60"
       }`}
     >
-      <div className="flex items-center gap-1 border-b border-[#e8e8e4] px-4 py-4 sm:px-5 lg:pt-6 lg:pb-4">
+      <div className="flex shrink-0 items-center gap-1 border-b border-[#e8e8e4] px-4 py-4 sm:px-5 lg:pt-6 lg:pb-4">
         {!effectiveCollapsed && (
           <div className="flex-1">
             <p className="mb-0.5 text-[11px] font-medium uppercase tracking-widest text-[#1a1a1a]/30">Classin</p>
@@ -462,7 +462,7 @@ export default function AdminSidebar({ role, name, email }: Props) {
       </div>
 
       {!effectiveCollapsed && (
-        <div className="border-b border-[#e8e8e4] px-4 py-3 sm:px-5">
+        <div className="shrink-0 border-b border-[#e8e8e4] px-4 py-3 sm:px-5">
           <p className="text-[12px] font-medium text-[#111110]">{name}</p>
           <p className="text-[11px] text-[#1a1a1a]/40">
             {ROLE_LABEL[normalizedRole]}{email ? ` - ${email}` : ""}
@@ -470,7 +470,7 @@ export default function AdminSidebar({ role, name, email }: Props) {
         </div>
       )}
 
-      <div className={`border-b border-[#e8e8e4] py-3 ${effectiveCollapsed ? "px-2" : "px-4 sm:px-5"}`}>
+      <div className={`shrink-0 border-b border-[#e8e8e4] py-3 ${effectiveCollapsed ? "px-2" : "px-4 sm:px-5"}`}>
         <button
           type="button"
           onClick={() => window.dispatchEvent(new Event("admin:open-command-palette"))}
@@ -490,7 +490,7 @@ export default function AdminSidebar({ role, name, email }: Props) {
         </button>
       </div>
 
-      <nav className={`flex-1 px-3 py-4 lg:overflow-y-auto ${effectiveCollapsed ? "lg:px-2" : ""}`}>
+      <nav className={`min-h-0 flex-1 px-3 py-4 lg:overflow-y-auto ${effectiveCollapsed ? "lg:px-2" : ""}`}>
         {groupedNav.map(({ section, items }, groupIndex) => (
           <div key={section} className={groupIndex === 0 ? "" : "mt-5 border-t border-[#f0f0ec] pt-4"}>
             {!effectiveCollapsed && (
@@ -549,7 +549,7 @@ export default function AdminSidebar({ role, name, email }: Props) {
       </nav>
 
       {!effectiveCollapsed && (
-        <div className="px-3 pb-3">
+        <div className="shrink-0 px-3 pb-3">
           <div className="mb-3 rounded-xl border border-[#e8e8e4] bg-[#fafaf8] px-3 py-3">
             <p className="text-[11px] font-medium text-[#111110]">오늘 빠른 이동</p>
             <div className="mt-2 flex flex-nowrap gap-1.5 overflow-x-auto pb-1">
@@ -571,7 +571,7 @@ export default function AdminSidebar({ role, name, email }: Props) {
         </div>
       )}
 
-      <div className={`pb-5 ${effectiveCollapsed ? "px-2 lg:px-2" : "px-3"}`}>
+      <div className={`shrink-0 pb-5 ${effectiveCollapsed ? "px-2 lg:px-2" : "px-3"}`}>
         <button
           onClick={handleLogout}
           title={effectiveCollapsed ? "로그아웃" : undefined}
