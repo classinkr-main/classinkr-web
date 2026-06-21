@@ -29,6 +29,7 @@ import {
   findCsFigmaGuideForQuestion,
   formatCsFigmaGuideAnswer,
   getCsFigmaGuideDocPath,
+  isCsFigmaSymptomQuestion,
 } from "@/lib/cs-figma-guides"
 
 const MAX_MESSAGE_LENGTH = 1000
@@ -3095,12 +3096,17 @@ async function buildChatbotCore(
       csFigmaGuide.category,
       csFigmaGuide.docCategory,
     ])
+    // 증상형 질문이면 how-to 단계와 함께 상담 연결을 제안한다(자가해결 + 안전망).
+    const isSymptom = isCsFigmaSymptomQuestion(question.redacted)
+    const guideAnswer = isSymptom
+      ? `${formatCsFigmaGuideAnswer(csFigmaGuide)}\n\n위 순서로도 해결되지 않으면 담당자 상담으로 연결해 드릴 수 있어요.`
+      : formatCsFigmaGuideAnswer(csFigmaGuide)
     return {
       question,
       response: {
-        answer: formatCsFigmaGuideAnswer(csFigmaGuide),
+        answer: guideAnswer,
         answerMode: "direct_answer",
-        confidence: 0.88,
+        confidence: isSymptom ? 0.82 : 0.88,
         needsHandoff: false,
         sources: [
           {
@@ -3117,7 +3123,7 @@ async function buildChatbotCore(
       },
       category,
       intent,
-      handoffIntent,
+      handoffIntent: isSymptom ? "support" : handoffIntent,
       latencyMs: elapsedSince(startedAt),
     }
   }

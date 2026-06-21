@@ -1,4 +1,5 @@
 import { CS_FIGMA_DIGEST_GUIDES } from "@/lib/cs-figma-guides.generated"
+import { CS_FIGMA_GUIDE_ALIASES } from "@/lib/cs-figma-guide-aliases"
 
 export type CsFigmaGuideCategory = "classroom" | "admin" | "troubleshooting" | "onboarding"
 export type CsFigmaGuideDocCategory = "teacher" | "admin" | "student" | "start"
@@ -383,31 +384,36 @@ function normalizeGuideText(value: string) {
     .trim()
 }
 
+// 한국어 조사 제거 — "마이크가"→"마이크", "옵션을"→"옵션"처럼 토큰이 haystack과 매칭되도록 한다.
+const JOSA_SUFFIX_PATTERN =
+  /(으로서|으로써|에서는|에게서|으로|에서|에게|한테|까지|부터|이나|라도|마저|조차|이라|에는|에도|보다|처럼|만큼|을|를|이|가|은|는|와|과|의|도|만|로|나|랑|에|께)$/
+function stripJosa(token: string) {
+  const stripped = token.replace(JOSA_SUFFIX_PATTERN, "")
+  return stripped.length >= 2 ? stripped : token
+}
+
 function normalizeGuideTitleAliases(title: string) {
   const normalizedTitle = normalizeGuideText(title)
   const titleWithoutLeadingNumber = normalizedTitle.replace(/^\d+\s+/, "")
   return [...new Set([normalizedTitle, titleWithoutLeadingNumber])].filter(Boolean)
 }
 
-function guideHaystack(guide: CsFigmaGuide) {
-  return normalizeGuideText([
-    guide.title,
-    guide.summary,
-    guide.keywords.join(" "),
-    guide.steps.join(" "),
-  ].join(" "))
-}
-
 const CURATED_CS_FIGMA_GUIDE_SLUGS = new Set(CURATED_CS_FIGMA_GUIDES.map((guide) => guide.slug))
 
-const CS_FIGMA_GUIDE_INDEX = CS_FIGMA_GUIDES.map((guide) => ({
-  guide,
-  haystack: guideHaystack(guide),
-  isCurated: CURATED_CS_FIGMA_GUIDE_SLUGS.has(guide.slug),
-  normalizedKeywords: guide.keywords.map(normalizeGuideText).filter(Boolean),
-  normalizedTitle: normalizeGuideText(guide.title),
-  normalizedTitleAliases: normalizeGuideTitleAliases(guide.title),
-}))
+const CS_FIGMA_GUIDE_INDEX = CS_FIGMA_GUIDES.map((guide) => {
+  const aliasKeywords = CS_FIGMA_GUIDE_ALIASES[guide.slug] ?? []
+  const allKeywords = aliasKeywords.length > 0 ? [...guide.keywords, ...aliasKeywords] : guide.keywords
+  return {
+    guide,
+    haystack: normalizeGuideText(
+      [guide.title, guide.summary, allKeywords.join(" "), guide.steps.join(" ")].join(" ")
+    ),
+    isCurated: CURATED_CS_FIGMA_GUIDE_SLUGS.has(guide.slug),
+    normalizedKeywords: allKeywords.map(normalizeGuideText).filter(Boolean),
+    normalizedTitle: normalizeGuideText(guide.title),
+    normalizedTitleAliases: normalizeGuideTitleAliases(guide.title),
+  }
+})
 
 const PROCEDURE_INTENT_PATTERN =
   /어떻게|방법|순서|가이드|하는 법|어디|어느|위치|설정|업로드|다운로드|제출|삭제|업데이트|클릭|누르|선택|켜|끄|만들|생성|추가|확인|비활성화|활성화|첨부|바꾸|변경|등록|스캔|초대|가입/
@@ -669,12 +675,17 @@ export function findCsFigmaGuideForQuestion(question: string): CsFigmaGuide | nu
   ) {
     return null
   }
-  if (TROUBLE_SYMPTOM_PATTERN.test(normalized) && knownIntentSlug !== "web-live-create") return null
+  // 증상형 질문("안 돼요/안 켜져요/오류")도 관련 how-to 가이드로 매칭하되, 답변에서 상담 연결을 함께 제안한다.
+  const hasSymptomIntent = TROUBLE_SYMPTOM_PATTERN.test(normalized)
 
   const tokens = [...new Set(
     normalized
       .split(" ")
       .filter((token) => token.length >= 2 && !TOKEN_STOPWORDS.has(token))
+      .flatMap((token) => {
+        const stripped = stripJosa(token)
+        return stripped !== token && !TOKEN_STOPWORDS.has(stripped) ? [token, stripped] : [token]
+      })
   )]
   const scored = CS_FIGMA_GUIDE_INDEX.filter(isDirectAnswerEligibleGuide).map(({ guide, haystack, isCurated, normalizedKeywords, normalizedTitleAliases }) => {
     let score = 0
@@ -691,7 +702,7 @@ export function findCsFigmaGuideForQuestion(question: string): CsFigmaGuide | nu
       if (isStrongGuideKeyword(normalizedKeyword)) {
         score += 12
         strongKeywordHits += 1
-      } else if (hasProcedureIntent) {
+      } else if (hasProcedureIntent || hasSymptomIntent) {
         score += 4
         weakKeywordHits += 1
       }
@@ -705,7 +716,7 @@ export function findCsFigmaGuideForQuestion(question: string): CsFigmaGuide | nu
     }
     score += Math.min(tokenHits, 6)
 
-    if (hasProcedureIntent) score += 4
+    if (hasProcedureIntent || hasSymptomIntent) score += 4
     if (isCurated && (titleMatched || strongKeywordHits > 0 || tokenHits >= 1)) score += 8
     const inviteActivationMatched = hasInviteActivationIntent && isQrInviteActivationGuide(haystack)
     if (hasInviteActivationIntent) {
@@ -734,17 +745,25 @@ export function findCsFigmaGuideForQuestion(question: string): CsFigmaGuide | nu
 
   const top = scored[0]
   if (!top || top.score < 16) return null
-  if (!hasProcedureIntent && !knownIntentSlug) return null
+  if (!hasProcedureIntent && !hasSymptomIntent && !knownIntentSlug) return null
   if (
     !top.titleMatched &&
     top.strongKeywordHits === 0 &&
     top.weakKeywordHits < 2 &&
     !top.inviteActivationMatched &&
-    !top.knownIntentMatched
+    !top.knownIntentMatched &&
+    top.tokenHits < 3
   ) {
     return null
   }
   return top.guide
+}
+
+// 증상형 질문 여부 — service에서 fast-path 답변에 상담 연결 제안을 붙일지 판단할 때 사용한다.
+export function isCsFigmaSymptomQuestion(question: string) {
+  const normalized = normalizeGuideText(question)
+  if (!normalized) return false
+  return TROUBLE_SYMPTOM_PATTERN.test(normalized)
 }
 
 function escapeRegExp(value: string) {
