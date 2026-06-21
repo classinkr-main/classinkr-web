@@ -16,9 +16,9 @@ function disableExternalChatbotServices() {
   vi.stubEnv("GEMINI_API_KEY", "")
 }
 
-async function collectStream(message: string): Promise<ChatbotStreamEvent[]> {
+async function collectStream(message: string, context?: Record<string, unknown>): Promise<ChatbotStreamEvent[]> {
   const events: ChatbotStreamEvent[] = []
-  await streamChatbotQuery({ message }, {}, (event) => events.push(event))
+  await streamChatbotQuery({ message, context }, {}, (event) => events.push(event))
   return events
 }
 
@@ -77,5 +77,24 @@ describe("streamChatbotQuery", () => {
 
     // 정책 가드/결정형 답변이 스트리밍 경로에서도 그대로 유지된다.
     expect(answer).toBe(nonStream.answer)
+  })
+
+  it("streams CS Figma guide answers without external AI rewriting", async () => {
+    vi.stubEnv("NEXT_PUBLIC_SUPABASE_URL", "")
+    vi.stubEnv("NEXT_PUBLIC_SUPABASE_PUBLISHABLE_KEY", "")
+    vi.stubEnv("SUPABASE_SECRET_KEY", "")
+    vi.stubEnv("SUPABASE_SERVICE_ROLE_KEY", "")
+    vi.stubEnv("GEMINI_API_KEY", "gemini-key")
+    const fetchMock = vi.spyOn(globalThis, "fetch").mockRejectedValue(new Error("external fetch should not run"))
+
+    const events = await collectStream("현장 녹화 카메라 설정 어떻게 해요?", { showSources: true })
+    const answer = lastReplace(events)
+    const meta = metaOf(events)
+
+    expect(answer).toContain("1. 수업을 진행할 코스에 입장합니다.")
+    expect(meta?.answerMode).toBe("direct_answer")
+    expect(meta?.sources[0]?.heading).toBe("Figma CS 캡처 기준 3단계 안내")
+    expect(events.some((event) => event.type === "delta")).toBe(false)
+    expect(fetchMock).not.toHaveBeenCalled()
   })
 })

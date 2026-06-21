@@ -1,10 +1,11 @@
 import { CLASSIN_POSITIONING } from "@/lib/classin-positioning"
 
-export type PublicFaqCategoryKey = "software" | "hardware"
+export type PublicFaqCategoryKey = "software" | "hardware" | "usage"
 
 export type PublicFaqItem = {
   question: string
   answer: string
+  guideHref?: string
 }
 
 export type PublicFaqCategory = {
@@ -120,6 +121,41 @@ export const PUBLIC_FAQ_CATEGORIES: PublicFaqCategory[] = [
         question: "도입 후 A/S와 운영 지원은 어떻게 진행되나요?",
         answer:
           "설치 이후에도 원격 지원과 유지보수를 이어가며, 필요한 경우 출장 A/S까지 연결합니다. 처음 도입할 때만 잘 되는 장비가 아니라, 매일 수업에서 안정적으로 쓰일 수 있도록 지원 체계를 함께 제공합니다.",
+      },
+    ],
+  },
+  {
+    key: "usage",
+    label: "사용법",
+    eyebrow: "CS Guide FAQ",
+    title: "실제 CS 캡처 순서로 보는 사용법",
+    description:
+      "Figma `CS용 캡쳐 모음`에서 정리한 화면 순서와 버튼명을 기준으로, 현장에서 바로 묻는 사용법을 짧게 정리했습니다.",
+    highlights: ["현장 녹화", "QR 초대", "숙제 제출"],
+    items: [
+      {
+        question: "현장 녹화 카메라는 어떤 순서로 설정하나요?",
+        answer:
+          "코스에서 새 수업을 만들고 학습 활동 유형을 수업으로 선택합니다. 수업 옵션에서 온스테이지 인원수를 1V0으로 설정하고 현장 녹화 토글을 켠 뒤 등록합니다. 교실 입장 전 카메라·마이크·스피커를 확인하고, 현장 녹화 알림에서 확인을 누른 다음 톱니바퀴 설정에서 녹화할 카메라를 선택해 바로 녹화하기를 누릅니다.",
+        guideHref: "/docs/teacher/cs-field-recording-camera-setup",
+      },
+      {
+        question: "코스 QR 초대 링크는 어디서 활성화하나요?",
+        answer:
+          "PC 코스 화면 좌측 상단의 코스 이름을 클릭한 뒤 코스 설정으로 들어갑니다. 코스 설정 페이지에서 코스 관리를 선택하고, 코스 관리 안의 코스 가입 허용 옵션을 활성화합니다. 이후 학생에게 QR 또는 초대 링크를 전달하면 코스 가입 안내가 가능합니다.",
+        guideHref: "/docs/admin/cs-figma-digest-1197",
+      },
+      {
+        question: "학생이 모바일에서 숙제를 사진으로 업로드하려면 어떻게 하나요?",
+        answer:
+          "학생은 모바일 앱에서 해당 코스를 선택하고 숙제 활동을 엽니다. 제출하기를 눌러 제출 작성을 시작한 뒤 화면 하단 사진 아이콘으로 촬영본이나 앨범 이미지를 첨부합니다. 첨부 미리보기와 제출 완료 상태까지 확인해야 합니다.",
+        guideHref: "/docs/student/cs-homework-upload-mobile",
+      },
+      {
+        question: "시험 문제를 대량 업로드하려면 어떤 순서로 진행하나요?",
+        answer:
+          "코스에서 새로 만들기를 누르고 시험을 선택합니다. 새 시험 추가 화면에서 시험 문제 대량 추가를 클릭한 뒤 워드 또는 엑셀 템플릿을 내려받아 형식에 맞게 작성합니다. 템플릿 업로드 후 문제 인식 결과를 확인하고 실패 항목을 수정한 다음, 필요하면 내 문제 은행 저장을 체크하고 게시합니다.",
+        guideHref: "/docs/teacher/cs-bulk-exam-upload",
       },
     ],
   },

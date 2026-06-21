@@ -177,11 +177,164 @@ describe("chatbot RAG source relevance", () => {
     expect(result.unresolved).toBe(false)
     expect(result.answer).toContain("플립러닝")
     expect(fetchMock).toHaveBeenCalledWith(
-      expect.stringContaining("/models/gemini-3.5-flash:generateContent?key=test-gemini-key"),
+      expect.stringContaining("/models/gemini-2.5-flash:generateContent?key=test-gemini-key"),
       expect.objectContaining({
         method: "POST",
       })
     )
+    const generationCall = fetchMock.mock.calls.find(([url]) =>
+      String(url).includes(":generateContent")
+    )
+    const body = JSON.parse(String(generationCall?.[1]?.body))
+    expect(body.generationConfig.thinkingConfig).toEqual({ thinkingBudget: 0 })
+  })
+
+  it("ignores unsupported configured fast Gemini models and uses the stable default", async () => {
+    disableExternalChatbotServices()
+    vi.stubEnv("GEMINI_API_KEY", "test-gemini-key")
+    vi.stubEnv("GEMINI_FAST_MODEL", "gemini-2.0-flash")
+
+    const fetchMock = vi.fn().mockResolvedValue({
+      ok: true,
+      json: async () => ({
+        candidates: [
+          {
+            content: {
+              parts: [
+                {
+                  text:
+                    "가능합니다. Classin은 프로젝트형 수업에서도 자료 공유, 수업 진행, 녹화 복습 흐름을 함께 운영할 수 있습니다.",
+                },
+              ],
+            },
+          },
+        ],
+      }),
+    })
+    vi.stubGlobal("fetch", fetchMock)
+
+    const result = await evaluateChatbotQuery("클래스인으로 프로젝트형 수업도 가능해?")
+    const generationCalls = fetchMock.mock.calls.filter(([url]) =>
+      String(url).includes(":generateContent")
+    )
+
+    expect(result.answerMode).toBe("direct_answer")
+    expect(result.answer).toContain("프로젝트형 수업")
+    expect(generationCalls).toHaveLength(1)
+    expect(generationCalls[0][0]).toContain("/models/gemini-2.5-flash:generateContent")
+    expect(generationCalls[0][0]).not.toContain("gemini-2.0-flash")
+  })
+
+  it("falls back to stable Gemini after a configured primary returns empty output", async () => {
+    disableExternalChatbotServices()
+    vi.stubEnv("GEMINI_API_KEY", "test-gemini-key")
+    vi.stubEnv("GEMINI_FAST_MODEL", "gemini-3.5-flash")
+
+    let generationCount = 0
+    const fetchMock = vi.fn(async (url: string | URL | Request, _init?: RequestInit) => {
+      if (!String(url).includes(":generateContent")) {
+        return {
+          ok: true,
+          json: async () => ({}),
+        }
+      }
+
+      generationCount += 1
+      if (generationCount === 1) {
+        return {
+          ok: true,
+          json: async () => ({ candidates: [] }),
+        }
+      }
+
+      return {
+        ok: true,
+        json: async () => ({
+          candidates: [
+            {
+              content: {
+                parts: [
+                  {
+                    text:
+                      "가능합니다. Classin은 세미나형 수업에서도 자료 공유, 판서, 녹화 복습 흐름을 묶어 운영할 수 있습니다.",
+                  },
+                ],
+              },
+            },
+          ],
+        }),
+      }
+    })
+    vi.stubGlobal("fetch", fetchMock)
+
+    const result = await evaluateChatbotQuery("클래스인으로 세미나형 수업 운영 가능해?")
+    const generationCalls = fetchMock.mock.calls.filter(([url]) =>
+      String(url).includes(":generateContent")
+    )
+
+    expect(result.answerMode).toBe("direct_answer")
+    expect(result.answer).toContain("세미나형 수업")
+    expect(generationCalls).toHaveLength(2)
+    expect(generationCalls[0][0]).toContain("/models/gemini-3.5-flash:generateContent")
+    expect(generationCalls[1][0]).toContain("/models/gemini-2.5-flash:generateContent")
+    const primaryBody = JSON.parse(String(generationCalls[0][1]?.body))
+    expect(primaryBody.generationConfig.thinkingConfig).toEqual({ thinkingLevel: "minimal" })
+  })
+
+  it("falls back to stable Gemini after a configured primary returns malformed JSON", async () => {
+    disableExternalChatbotServices()
+    vi.stubEnv("GEMINI_API_KEY", "test-gemini-key")
+    vi.stubEnv("GEMINI_FAST_MODEL", "gemini-3.5-flash")
+
+    let generationCount = 0
+    const fetchMock = vi.fn(async (url: string | URL | Request, _init?: RequestInit) => {
+      if (!String(url).includes(":generateContent")) {
+        return {
+          ok: true,
+          json: async () => ({}),
+        }
+      }
+
+      generationCount += 1
+      if (generationCount === 1) {
+        return {
+          ok: true,
+          json: async () => {
+            throw new SyntaxError("bad gemini json")
+          },
+        }
+      }
+
+      return {
+        ok: true,
+        json: async () => ({
+          candidates: [
+            {
+              content: {
+                parts: [
+                  {
+                    text:
+                      "가능합니다. Classin은 논술형 수업에서도 자료 공유, 첨삭 흐름, 녹화 복습을 함께 운영할 수 있습니다.",
+                  },
+                ],
+              },
+            },
+          ],
+        }),
+      }
+    })
+    vi.stubGlobal("fetch", fetchMock)
+
+    const result = await evaluateChatbotQuery("클래스인으로 논술형 수업 운영 가능해?")
+    const generationCalls = fetchMock.mock.calls.filter(([url]) =>
+      String(url).includes(":generateContent")
+    )
+
+    expect(result.answerMode).toBe("direct_answer")
+    expect(result.answer).toContain("논술형 수업")
+    expect(generationCalls).toHaveLength(2)
+    expect(generationCalls[0][0]).toContain("/models/gemini-3.5-flash:generateContent")
+    expect(generationCalls[1][0]).toContain("/models/gemini-2.5-flash:generateContent")
   })
 
   it("escalates from fast Gemini to a deeper tier only when the fast answer is unusable", async () => {
@@ -193,7 +346,7 @@ describe("chatbot RAG source relevance", () => {
     vi.stubEnv("CHATBOT_ENABLE_DEEP_FALLBACK", "1")
 
     let generationCount = 0
-    const fetchMock = vi.fn(async (url: string | URL | Request) => {
+    const fetchMock = vi.fn(async (url: string | URL | Request, _init?: RequestInit) => {
       if (String(url).includes(":embedContent")) {
         return {
           ok: true,
@@ -239,7 +392,7 @@ describe("chatbot RAG source relevance", () => {
     expect(result.answerMode).toBe("direct_answer")
     expect(result.answer).toContain("토론식 수업")
     expect(generationCalls).toHaveLength(2)
-    expect(generationCalls[0][0]).toContain("/models/gemini-3.5-flash:generateContent")
+    expect(generationCalls[0][0]).toContain("/models/gemini-2.5-flash:generateContent")
     expect(generationCalls[1][0]).toContain("/models/gemini-test-reasoning:generateContent")
   })
 

@@ -7,9 +7,9 @@ import { createBreadcrumbJsonLd, createFaqJsonLd, createPublicMetadata, createWe
 
 export const metadata = createPublicMetadata({
   title: "자주 묻는 질문",
-  description: "Classin 소프트웨어와 Classin Board 도입, 기능, 요금제, 설치, 운영 지원에 대한 자주 묻는 질문과 답변입니다.",
+  description: "Classin 소프트웨어와 Classin Board 도입, 기능, 요금제, 설치, 운영 지원, 사용법에 대한 자주 묻는 질문과 답변입니다.",
   path: "/faq",
-  keywords: ["Classin FAQ", "Classin 도입", "Classin 요금제", "Classin Board 설치"],
+  keywords: ["Classin FAQ", "Classin 도입", "Classin 요금제", "Classin Board 설치", "Classin 사용법"],
 })
 
 export default function FAQPage() {
@@ -20,7 +20,7 @@ export default function FAQPage() {
           createWebPageJsonLd({
             path: "/faq",
             name: "Classin 자주 묻는 질문",
-            description: "Classin 소프트웨어와 Classin Board 도입, 기능, 요금제, 설치, 운영 지원에 대한 질문과 답변입니다.",
+            description: "Classin 소프트웨어와 Classin Board 도입, 기능, 요금제, 설치, 운영 지원, 사용법에 대한 질문과 답변입니다.",
           }),
           createBreadcrumbJsonLd([
             { name: "홈", path: "/" },

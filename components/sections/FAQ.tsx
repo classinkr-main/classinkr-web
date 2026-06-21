@@ -1,5 +1,7 @@
 "use client"
 
+import Link from "next/link"
+
 import { Accordion, AccordionContent, AccordionItem, AccordionTrigger } from "@/components/ui/accordion"
 import { Tabs, TabsContent, TabsList, TabsTrigger } from "@/components/ui/tabs"
 import { PUBLIC_FAQ_CATEGORIES } from "@/lib/public-faq"
@@ -13,7 +15,7 @@ export function FAQ() {
                         자주 묻는 <br className="hidden md:block" />질문
                     </h2>
                     <p className="mt-6 text-lg text-[#615D59] font-medium break-keep">
-                        소프트웨어와 하드웨어를 나눠 <br className="hidden lg:block" />가장 많이 여쭤보시는 질문에 답변해 드립니다.
+                        소프트웨어, 하드웨어, 사용법을 나눠 <br className="hidden lg:block" />가장 많이 여쭤보시는 질문에 답변해 드립니다.
                         <br /><br />
                         추가 문의사항이 있으시다면 언제든 솔루션 문의를 남겨주세요.
                     </p>
@@ -65,6 +67,16 @@ export function FAQ() {
                                             </AccordionTrigger>
                                             <AccordionContent className="text-[#615D59] text-lg leading-relaxed pb-8 break-keep">
                                                 {faq.answer}
+                                                {faq.guideHref ? (
+                                                    <div className="mt-5">
+                                                        <Link
+                                                            href={faq.guideHref}
+                                                            className="inline-flex items-center rounded-full border border-[rgba(0,0,0,0.08)] bg-[#F6F5F4] px-4 py-2 text-sm font-semibold text-[#084734] transition-colors hover:bg-[#ECFDF5]"
+                                                        >
+                                                            3단계 가이드 보기
+                                                        </Link>
+                                                    </div>
+                                                ) : null}
                                             </AccordionContent>
                                         </AccordionItem>
                                     ))}

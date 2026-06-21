@@ -120,6 +120,51 @@ describe("chatbot public answer policy", () => {
     )
   })
 
+  it("sends final-generation prompts with public constraints and safe-draft guardrails", async () => {
+    disableExternalChatbotServices()
+    enableMockGemini()
+
+    const fetchMock = vi.fn().mockResolvedValue({
+      ok: true,
+      json: async () => ({
+        candidates: [
+          {
+            content: {
+              parts: [
+                {
+                  text:
+                    "가능합니다. Classin은 소크라틱 세미나 수업에서도 질문, 판서, 녹화 복습 흐름을 함께 운영할 수 있습니다.",
+                },
+              ],
+            },
+          },
+        ],
+      }),
+    })
+    vi.stubGlobal("fetch", fetchMock)
+
+    await evaluateChatbotQuery("클래스인으로 소크라틱 세미나 수업 운영 가능해?")
+    const generationCall = fetchMock.mock.calls.find(([url]) =>
+      String(url).includes(":generateContent")
+    )
+    expect(generationCall).toBeDefined()
+
+    const body = JSON.parse(String(generationCall?.[1]?.body))
+    const systemInstruction = body.systemInstruction.parts[0].text as string
+    const prompt = body.contents.at(-1).parts[0].text as string
+
+    expect(systemInstruction).toContain("답변은 먼저 상태를 정하고 쓴다")
+    expect(systemInstruction).toContain("근거가 없는 기능명")
+    expect(systemInstruction).toContain("안전 초안의 미지원")
+    expect(systemInstruction).toContain("대화 이력은 맥락 참고용")
+    expect(prompt).toContain("분류:")
+    expect(prompt).toContain("현재 응답 모드:")
+    expect(prompt).toContain("안전 초안(제약 조건")
+    expect(prompt).toContain("고객 질문:")
+    expect(prompt).toContain("문서, 출처, URL, 이미지 경로는 쓰지 마")
+    expect(prompt).toContain("가능/지원/기본 제공으로 완화하지 마")
+  })
+
   it("answers casual board lineup questions without update-doc or image-link leakage", async () => {
     disableExternalChatbotServices()
     enableMockGemini()

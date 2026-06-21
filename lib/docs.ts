@@ -1,4 +1,6 @@
 import { CLASSIN_POSITIONING } from "@/lib/classin-positioning"
+import { buildCsFigmaMediaForGuide } from "@/lib/cs-figma-assets"
+import { CS_FIGMA_GUIDES, type CsFigmaGuide } from "@/lib/cs-figma-guides"
 
 export const DOC_CATEGORY_IDS = [
   "quick-start",
@@ -145,7 +147,84 @@ const CLASSIN_607_MEDIA_BASE = "/docs/files/classin-607-update"
 const SOFTWARE_MEDIA_BASE = "/images/product/sw"
 const HARDWARE_MEDIA_BASE = "/images/product/hw"
 
+export function buildCsFigmaDocArticle(
+  guide: CsFigmaGuide,
+  assetPaths?: readonly string[]
+): DocArticle {
+  const media = buildCsFigmaMediaForGuide(guide, assetPaths)
+  const linkedSourceFiles = new Set(
+    media.map((item) => item.caption.replace(/^Figma 원본 캡처:\s*/, ""))
+  )
+  const missingSourceFiles = guide.sourceImageFiles.filter((file) => !linkedSourceFiles.has(file))
+  const captureSteps = [
+    "이 문서는 Figma `CS용 캡쳐 모음` 전수 추출 문서에서 사용 순서와 화면 주석을 정리한 가이드입니다.",
+    media.length === guide.sourceImageFiles.length && guide.sourceImageFiles.length > 0
+      ? `필요한 Figma 원본 캡처 ${media.length}개가 이 가이드에 모두 연결되어 있습니다.`
+      : media.length > 0
+        ? `연결된 Figma 원본 캡처 ${media.length}개를 먼저 확인하고, 누락된 이미지는 asset requirements 문서 기준으로 추가합니다.`
+        : "실제 이미지 파일은 아직 레포에 저장되어 있지 않으므로 현재는 원본 캡처 파일명을 함께 표시합니다.",
+    missingSourceFiles.length > 0
+      ? `아직 연결되지 않은 원본 캡처: ${missingSourceFiles.join(", ")}`
+      : "챗봇과 문서 가이드는 연결된 원본 캡처와 동일한 순서를 기준으로 안내합니다.",
+  ]
+
+  return {
+    slug: guide.docSlug,
+    category: guide.docCategory,
+    title: guide.title,
+    description: guide.summary,
+    audience: guide.audience,
+    updatedAt: "2026-06-21",
+    readMinutes: Math.max(3, Math.ceil((guide.steps.length + guide.deepDive.length * 3) / 4)),
+    featured: false,
+    tags: ["CS 캡처", "Figma", "사용법", guide.category],
+    keywords: [
+      guide.title,
+      ...guide.keywords,
+      ...guide.sourceImageFiles,
+      "CS 캡처",
+      "Figma 보드",
+      "순서 안내",
+      "3단계 심화",
+    ],
+    chatbotSummary: guide.summary,
+    sections: [
+      {
+        heading: "Figma CS 캡처 기준",
+        body: `${guide.summary}\n\n원본 캡처 파일: ${guide.sourceImageFiles.join(", ")}\n\n출처 메모: ${guide.sourceDigestLineHint}`,
+        steps: captureSteps,
+        ...(media.length > 0 ? { media } : {}),
+      },
+      {
+        heading: "순서별 안내",
+        body: "사용자에게 안내할 때는 아래 순서를 그대로 따라가면 됩니다. 챗봇도 같은 순서를 우선 사용합니다.",
+        steps: guide.steps,
+      },
+      ...guide.deepDive.map((item) => ({
+        heading: `${item.level} — ${item.title}`,
+        body: item.body,
+        steps: item.checks,
+      })),
+    ],
+    relatedSlugs: ["app-capabilities-map", "classroom-basic-setup", "course-activities"],
+    status: "published",
+    visibility: "unlisted",
+    noindex: true,
+    docType: "manual",
+    productArea:
+      guide.category === "admin"
+        ? "admin"
+        : guide.category === "onboarding"
+          ? "onboarding"
+          : "classroom",
+    difficulty: guide.deepDive.length >= 3 ? "intermediate" : "beginner",
+  }
+}
+
+const csFigmaDocs: DocArticle[] = CS_FIGMA_GUIDES.map((guide) => buildCsFigmaDocArticle(guide))
+
 const docs: DocArticle[] = [
+  ...csFigmaDocs,
   {
     slug: "academy-system-os-positioning",
     category: "start",

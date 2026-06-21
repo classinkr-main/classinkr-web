@@ -24,6 +24,12 @@ import {
   maybeCreateChannelTalkFeedbackHandoff,
   maybeCreateChannelTalkHandoff,
 } from "@/lib/chatbot/channel-handoff"
+import {
+  buildCsFigmaGuideSuggestedQuestions,
+  findCsFigmaGuideForQuestion,
+  formatCsFigmaGuideAnswer,
+  getCsFigmaGuideDocPath,
+} from "@/lib/cs-figma-guides"
 
 const MAX_MESSAGE_LENGTH = 1000
 const MAX_FEEDBACK_COMMENT_LENGTH = 500
@@ -1873,7 +1879,7 @@ function getStepCriteriaByCategory(category: string) {
       return {
         steps: [
           "결제 수단, 사업자 정보, 필요한 증빙 종류를 먼저 확인해 주세요.",
-          "견적·세금계산서·환불처럼 계정별 확인이 필요한 항목은 상담으로 넘겨 주세요.",
+          "견적·세금계산서·환불처럼 계정별 확인이 필요한 항목은 담당자 확인이 필요합니다.",
         ],
         success: "담당자가 결제/증빙 처리에 필요한 식별 정보와 요청 범위를 확인할 수 있으면 다음 단계로 넘어갈 수 있습니다.",
       }
@@ -1889,7 +1895,7 @@ function getStepCriteriaByCategory(category: string) {
       return {
         steps: [
           "발생 화면, 기기, 브라우저/앱, 계정 상태를 먼저 확인해 주세요.",
-          "반복 오류나 수업 영향이 있으면 상담으로 넘겨 담당자가 로그와 계정 상태를 함께 확인하게 해 주세요.",
+          "반복 오류나 수업 영향이 있으면 담당자가 로그와 계정 상태를 함께 확인해야 합니다.",
         ],
         success: "재현 조건과 영향 범위가 확인되면 해결 순서를 정확히 잡을 수 있습니다.",
       }
@@ -2888,6 +2894,7 @@ function shouldUseAiFinalAnswer(
 ) {
   if (category === "general" && !isDomainRelatedQuestion(question, category)) return false
   if (response.answerMode === "clarifying_question" && question.tokens.length < 2) return false
+  if (response.answerMode === "direct_answer" && isCsFigmaGuideResponse(response)) return false
   // 큐레이션 직답은 이미 최종본 — Gemini 재작성(0.8~4.5s)을 건너뛰고 그대로 내보낸다.
   if (response.answerMode === "direct_answer" && isCuratedTemplateQuestion(question)) return false
   return true
@@ -2927,6 +2934,12 @@ function finalizeAnswer(
 function shouldExposeSources(input: ChatbotQueryRequest) {
   const context = getContextObject(input.context)
   return process.env.CHATBOT_SHOW_SOURCES === "1" || context.showSources === true
+}
+
+function isCsFigmaGuideResponse(
+  response: Omit<ChatbotQueryResponse, "answerEventId" | "sessionId" | "warning" | "handoffIntent">
+) {
+  return response.sources.some((source) => source.heading === "Figma CS 캡처 기준 3단계 안내")
 }
 
 export function normalizeSessionHistoryForGemini(
@@ -3016,6 +3029,39 @@ async function buildChatbotCore(
       category: policyGuard.category,
       intent: policyGuard.intent,
       handoffIntent: policyGuard.handoffIntent,
+      latencyMs: elapsedSince(startedAt),
+    }
+  }
+
+  const csFigmaGuide = findCsFigmaGuideForQuestion(question.redacted)
+  if (csFigmaGuide) {
+    const { category, intent, handoffIntent } = classifyChatbotQuestion(question.redacted, [
+      csFigmaGuide.category,
+      csFigmaGuide.docCategory,
+    ])
+    return {
+      question,
+      response: {
+        answer: formatCsFigmaGuideAnswer(csFigmaGuide),
+        answerMode: "direct_answer",
+        confidence: 0.88,
+        needsHandoff: false,
+        sources: [
+          {
+            title: csFigmaGuide.title,
+            heading: "Figma CS 캡처 기준 3단계 안내",
+            urlPath: getCsFigmaGuideDocPath(csFigmaGuide),
+            category: csFigmaGuide.category,
+            excerpt: csFigmaGuide.summary,
+            score: 420,
+          },
+        ],
+        suggestedQuestions: buildCsFigmaGuideSuggestedQuestions(csFigmaGuide),
+        unresolved: false,
+      },
+      category,
+      intent,
+      handoffIntent,
       latencyMs: elapsedSince(startedAt),
     }
   }
