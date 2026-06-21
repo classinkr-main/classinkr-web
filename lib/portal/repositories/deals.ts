@@ -31,6 +31,7 @@ import type {
 } from "@/lib/portal/types";
 
 type ListDealsFilters = {
+  dealId?: string;
   partnerAccountId?: string;
   customerId?: string;
   stage?: DealStage;
@@ -50,6 +51,7 @@ export async function listDeals(filters: ListDealsFilters = {}): Promise<Deal[]>
     .order("updated_at", { ascending: false });
 
   if (filters.partnerAccountId) query = query.eq("partner_account_id", filters.partnerAccountId);
+  if (filters.dealId) query = query.eq("id", filters.dealId);
   if (filters.customerId) query = query.eq("customer_id", filters.customerId);
   if (filters.stage) query = query.eq("current_stage", filters.stage);
   if (filters.status) query = query.eq("status", filters.status);
@@ -70,6 +72,7 @@ export async function listDealListItems(
     .order("updated_at", { ascending: false });
 
   if (filters.partnerAccountId) query = query.eq("partner_account_id", filters.partnerAccountId);
+  if (filters.dealId) query = query.eq("id", filters.dealId);
   if (filters.customerId) query = query.eq("customer_id", filters.customerId);
   if (filters.stage) query = query.eq("current_stage", filters.stage);
   if (filters.status) query = query.eq("status", filters.status);

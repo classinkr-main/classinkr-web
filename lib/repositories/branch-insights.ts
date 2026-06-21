@@ -8,6 +8,10 @@ export interface BranchInsight {
   one_liner: string | null; next_actions: NextAction[]
   raw_response: unknown; input_digest: string | null
 }
+export type BranchInsightHistoryItem = Pick<
+  BranchInsight,
+  "id" | "fiscal_period" | "generated_at" | "one_liner" | "next_actions"
+>
 
 export async function getLatestInsight(team: TeamScope): Promise<BranchInsight | null> {
   const sb = createSupabaseAdminClient()
@@ -31,10 +35,13 @@ export async function insertInsight(row: Omit<BranchInsight, "id" | "generated_a
   if (error) throw error
   return data as BranchInsight
 }
-export async function listInsightHistory(team: TeamScope, limit = 10): Promise<BranchInsight[]> {
+export async function listInsightHistory(team: TeamScope, limit = 10): Promise<BranchInsightHistoryItem[]> {
   const sb = createSupabaseAdminClient()
   const { data, error } = await sb.from("branch_dashboard_insights")
-    .select("*").eq("team", team).order("generated_at", { ascending: false }).limit(limit)
+    .select("id,fiscal_period,generated_at,one_liner,next_actions")
+    .eq("team", team)
+    .order("generated_at", { ascending: false })
+    .limit(limit)
   if (error) throw error
-  return (data ?? []) as BranchInsight[]
+  return (data ?? []) as BranchInsightHistoryItem[]
 }

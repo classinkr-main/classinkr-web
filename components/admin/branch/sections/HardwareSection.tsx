@@ -10,12 +10,9 @@ interface StockRow {
   sheet_stock: number
   low: boolean
 }
-interface SalesRow { fiscal_year: number; fiscal_month: number; product: string; quantity: number }
 interface RecentInstall { customer: string; quantity: number; date: string | null }
 interface HardwareResponse {
   stock: StockRow[]
-  sales_monthly: SalesRow[]
-  progress: Record<string, number>
   recent_installs?: RecentInstall[]
 }
 

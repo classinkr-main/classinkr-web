@@ -23,19 +23,9 @@ import {
   X,
   Trash2,
 } from "lucide-react"
-import {
-  Bar,
-  BarChart,
-  CartesianGrid,
-  Cell,
-  Pie,
-  PieChart,
-  ResponsiveContainer,
-  Tooltip,
-  XAxis,
-  YAxis,
-} from "recharts"
+import AdminTabs from "@/components/admin/AdminTabs"
 import { adminFetchJson, adminFetchJsonCached } from "@/lib/admin-client"
+import { useUrlState } from "@/lib/use-url-state"
 import type { LeadRecord } from "@/lib/db"
 import type { PublicEvent, EventStatus } from "@/lib/types/public-events"
 import {
@@ -59,6 +49,20 @@ const AdminMarketingPage = dynamic(() => import("../marketing/page"), {
     </div>
   ),
 })
+
+function ChartSkeleton({ className = "h-[260px]" }: { className?: string }) {
+  return <div className={`${className} rounded-xl bg-[#f0f0ec]`} />
+}
+
+const EventFunnelCompareChart = dynamic(
+  () => import("@/components/admin/campaigns/CampaignCharts").then((m) => m.EventFunnelCompareChart),
+  { ssr: false, loading: () => <ChartSkeleton /> }
+)
+
+const ChannelSpendPieChart = dynamic(
+  () => import("@/components/admin/campaigns/CampaignCharts").then((m) => m.ChannelSpendPieChart),
+  { ssr: false, loading: () => <ChartSkeleton className="h-[180px]" /> }
+)
 
 const KRW = new Intl.NumberFormat("ko-KR")
 const KRW_CURRENCY = new Intl.NumberFormat("ko-KR", {
@@ -1317,6 +1321,7 @@ function NumInput({
 // ─── main page ────────────────────────────────────────────────────────────────
 
 export default function AdminCampaignsPage() {
+  const [tabParam, setTabParam] = useUrlState("tab", "summary")
   const [events, setEvents] = useState<PublicEvent[]>([])
   const [leads, setLeads] = useState<LeadRecord[]>([])
   const [metricsMap, setMetricsMap] = useState<Record<string, EventMetrics>>({})
@@ -1324,12 +1329,14 @@ export default function AdminCampaignsPage() {
   const [error, setError] = useState<string | null>(null)
   const [period, setPeriod] = useState<Period>("all")
   const [editing, setEditing] = useState<PublicEvent | null>(null)
-  const [activeTab, setActiveTab] = useState<CampaignTab>("summary")
   const [metaDashboard, setMetaDashboard] = useState<MetaCampaignDashboard | null>(null)
   const [metaLoading, setMetaLoading] = useState(false)
   const [metaError, setMetaError] = useState<string | null>(null)
   const [metaDatePreset, setMetaDatePreset] = useState<MetaDatePreset>("last_30d")
   const [metaUpdatingId, setMetaUpdatingId] = useState<string | null>(null)
+  const activeTab: CampaignTab = CAMPAIGN_TABS.some((tab) => tab.id === tabParam)
+    ? (tabParam as CampaignTab)
+    : "summary"
 
   const load = useCallback(async ({ force = false }: { force?: boolean } = {}) => {
     setLoading(true)
@@ -1605,35 +1612,24 @@ export default function AdminCampaignsPage() {
 
       {/* Sub-tabs — branch admin 스타일 */}
       <div className="border-b border-[rgba(0,0,0,0.08)] bg-[#EBE8E2] px-2 sm:px-4 lg:px-9">
-        <div className="admin-scroll-snap-x no-scrollbar -mb-px flex flex-nowrap gap-0 overflow-x-auto" role="tablist" aria-label="캠페인 보기">
-          {CAMPAIGN_TABS.map((tab) => {
-            const active = activeTab === tab.id
-            return (
-              <button
-                key={tab.id}
-                type="button"
-                role="tab"
-                aria-selected={active}
-                onClick={() => setActiveTab(tab.id)}
-                className={`relative mt-1 flex shrink-0 flex-col items-start gap-0.5 rounded-t-lg px-4 py-2.5 text-left transition sm:px-5 sm:py-3 ${
-                  active
-                    ? "bg-[#FAFAF8] text-[#111110]"
-                    : "bg-transparent text-[#615D59] hover:text-[#111110]"
-                }`}
-              >
-                <span className="whitespace-nowrap text-[13px] font-bold tracking-[-0.01em] inline-flex items-center gap-1.5">
-                  {tab.id === "meta" && <Activity className="w-3 h-3" />}
-                  {tab.id === "email" && <Mail className="w-3 h-3" />}
-                  {tab.label}
-                </span>
-                <span className="hidden whitespace-nowrap text-[10.5px] font-medium text-[#615D59] min-[420px]:block">{tab.sub}</span>
-                {active && (
-                  <span className="absolute inset-x-3 -bottom-px h-[2.5px] rounded-sm bg-[#084734]" />
-                )}
-              </button>
-            )
-          })}
-        </div>
+        <AdminTabs
+          className="-mb-px py-2"
+          label="캠페인 보기"
+          variant="subtle"
+          items={CAMPAIGN_TABS.map((tab) => ({
+            value: tab.id,
+            label: tab.label,
+            description: tab.sub,
+            icon:
+              tab.id === "meta" ? (
+                <Activity className="h-3.5 w-3.5" />
+              ) : tab.id === "email" ? (
+                <Mail className="h-3.5 w-3.5" />
+              ) : undefined,
+          }))}
+          value={activeTab}
+          onValueChange={setTabParam}
+        />
       </div>
 
       {/* Tab content */}
@@ -1669,7 +1665,7 @@ export default function AdminCampaignsPage() {
         loading={metaLoading}
         error={metaError}
         datePreset={metaDatePreset}
-        onOpenMeta={() => setActiveTab("meta")}
+        onOpenMeta={() => setTabParam("meta")}
         onRefresh={loadMeta}
       />
 
@@ -1746,26 +1742,7 @@ export default function AdminCampaignsPage() {
             <p className="py-12 text-center text-[12px] text-[#1a1a1a]/30">표시할 데이터가 없습니다.</p>
           ) : (
             <div className="h-[260px] w-full">
-              <ResponsiveContainer width="100%" height="100%">
-                <BarChart data={compareChartData}>
-                  <CartesianGrid stroke="#f0f0ec" vertical={false} />
-                  <XAxis dataKey="name" fontSize={11} stroke="#84827a" />
-                  <YAxis fontSize={11} stroke="#84827a" />
-                  <Tooltip
-                    contentStyle={{
-                      backgroundColor: "#111110",
-                      border: "none",
-                      borderRadius: 12,
-                      color: "white",
-                      fontSize: 12,
-                    }}
-                  />
-                  <Bar dataKey="리드" fill="#84827a" radius={[4, 4, 0, 0]} />
-                  <Bar dataKey="신청" fill="#1a73e8" radius={[4, 4, 0, 0]} />
-                  <Bar dataKey="참석" fill="#084734" radius={[4, 4, 0, 0]} />
-                  <Bar dataKey="딜" fill="#B85C33" radius={[4, 4, 0, 0]} />
-                </BarChart>
-              </ResponsiveContainer>
+              <EventFunnelCompareChart data={compareChartData} />
             </div>
           )}
         </div>
@@ -1776,32 +1753,7 @@ export default function AdminCampaignsPage() {
           ) : (
             <>
               <div className="h-[180px] w-full">
-                <ResponsiveContainer width="100%" height="100%">
-                  <PieChart>
-                    <Pie
-                      data={channelChartData}
-                      dataKey="value"
-                      nameKey="name"
-                      innerRadius={45}
-                      outerRadius={75}
-                      paddingAngle={2}
-                    >
-                      {channelChartData.map((entry) => (
-                        <Cell key={entry.channel} fill={entry.color} />
-                      ))}
-                    </Pie>
-                    <Tooltip
-                      formatter={(v: number | undefined) => won(v ?? 0)}
-                      contentStyle={{
-                        backgroundColor: "#111110",
-                        border: "none",
-                        borderRadius: 12,
-                        color: "white",
-                        fontSize: 12,
-                      }}
-                    />
-                  </PieChart>
-                </ResponsiveContainer>
+                <ChannelSpendPieChart data={channelChartData} />
               </div>
               <div className="mt-2 space-y-1">
                 {channelChartData.map((entry) => (

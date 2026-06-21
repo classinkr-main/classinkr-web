@@ -1,5 +1,6 @@
 import { NextRequest, NextResponse } from "next/server"
 import { verifyAdmin } from "@/lib/admin-auth"
+import { adminCachedJson } from "@/lib/admin-api-response"
 import { unstable_cache } from "next/cache"
 import { readRangeWithFormat, envSheetId } from "@/lib/branch/google-sheets"
 import { parseDsh, DSH_RANGE } from "@/lib/branch/parsers/dsh"
@@ -30,7 +31,7 @@ export async function GET(req: NextRequest) {
       readDsh(), readSeg(), readKpi(), listBranchRevDeals(), listHwInbound(), listHwOutbound(), listHwStock(),
     ])
     const issues = runDataQuality({ deals, dsh, kpi, seg, hwInbound, hwOutbound, hwStock })
-    return NextResponse.json({
+    return adminCachedJson({
       issues,
       checkedAt: new Date().toISOString(),
       ruleCount: DATA_QUALITY_RULE_COUNT,

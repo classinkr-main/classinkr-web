@@ -1,6 +1,9 @@
 import "server-only"
 
-import { getCrmDuplicatePreflightReport } from "@/lib/admin-crm-duplicate-preflight"
+import {
+  getCachedCrmDuplicatePreflightReport,
+  getCrmDuplicatePreflightReport,
+} from "@/lib/admin-crm-duplicate-preflight"
 import { getNeoCrmTeamReport } from "@/lib/admin-crm-neo"
 import { getCrmSchemaContractReadiness } from "@/lib/admin-crm-schema-contract"
 import { getXiaoshouyiSyncPreflight, getXiaoshouyiSyncSchemaReadiness } from "@/lib/external-crm/xiaoshouyi-sync"
@@ -1241,7 +1244,7 @@ export async function getAdminCrmOverview(options: { force?: boolean } = {}): Pr
       getXiaoshouyiSyncSchemaReadiness(),
       getXiaoshouyiWriteSchemaReadiness(),
       getCrmSchemaContractReadiness(),
-      getCrmDuplicatePreflightReport(),
+      options.force ? getCrmDuplicatePreflightReport() : getCachedCrmDuplicatePreflightReport(),
       Promise.resolve(getXiaoshouyiSyncPreflight()),
       getSourceLinkCounts(sb),
       getExternalSnapshotOverview(sb),

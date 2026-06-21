@@ -1,5 +1,6 @@
 import "server-only"
 
+import { unstable_cache } from "next/cache"
 import { createSupabaseAdminClient } from "@/lib/supabase/admin"
 import { fetchSupabasePages, type SupabaseQueryError } from "@/lib/supabase/pagination"
 
@@ -171,3 +172,9 @@ export async function getCrmDuplicatePreflightReport(): Promise<CrmDuplicatePref
     checks,
   }
 }
+
+export const getCachedCrmDuplicatePreflightReport = unstable_cache(
+  getCrmDuplicatePreflightReport,
+  ["crm-duplicate-preflight"],
+  { revalidate: 300, tags: ["crm-duplicate-preflight"] },
+)
