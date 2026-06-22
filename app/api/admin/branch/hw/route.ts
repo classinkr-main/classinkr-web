@@ -1,6 +1,7 @@
 import { NextRequest, NextResponse } from "next/server"
 import { BRANCH_READ_ADMIN_API_ROLES, verifyAdmin } from "@/lib/admin-auth"
-import { listHwInbound, listHwOutbound, listHwStock, listHwSalesMonthly } from "@/lib/repositories/branch-hw"
+import { adminCachedJson } from "@/lib/admin-api-response"
+import { listHwInbound, listHwOutbound, listHwStock } from "@/lib/repositories/branch-hw"
 
 const HW_PATTERNS: Array<{ key: string; match: RegExp; threshold: number; thresholdSheet: number }> = [
   { key: "IFP86",  match: /86[""]?\s*IFP/i, threshold: 2, thresholdSheet: 5 },
@@ -15,8 +16,8 @@ const HW_PATTERNS: Array<{ key: string; match: RegExp; threshold: number; thresh
 export async function GET(req: NextRequest) {
   const err = await verifyAdmin(req, BRANCH_READ_ADMIN_API_ROLES); if (err) return err
   try {
-    const [inbound, outbound, stock, sales] = await Promise.all([
-      listHwInbound(), listHwOutbound(), listHwStock(), listHwSalesMonthly(),
+    const [inbound, outbound, stock] = await Promise.all([
+      listHwInbound(), listHwOutbound(), listHwStock(),
     ])
     // 출고 시트의 "예정" 행(배송 예정 등)은 아직 창고에 있는 물량이다.
     // 실재고(장부) = 입고 − 완료된 출고, 가용 재고 = 실재고 − 출고 예정.
@@ -40,11 +41,6 @@ export async function GET(req: NextRequest) {
         low: (hasIoLedger && available <= p.threshold) || fromSheet <= p.thresholdSheet,
       }
     })
-    const progress = outbound.reduce<Record<string, number>>((acc, r) => {
-      const k = r.progress ?? "미정"
-      acc[k] = (acc[k] ?? 0) + r.quantity
-      return acc
-    }, {})
     const installRows = outbound.filter((r) => (r.progress ?? "").includes("설치"))
     const byCustomer = new Map<string, { quantity: number; latest: string | null }>()
     for (const r of installRows) {
@@ -64,7 +60,7 @@ export async function GET(req: NextRequest) {
         return b.quantity - a.quantity
       })
       .slice(0, 8)
-    return NextResponse.json({ stock: stockByPattern, sales_monthly: sales, progress, recent_installs })
+    return adminCachedJson({ stock: stockByPattern, recent_installs })
   } catch (e) {
     return NextResponse.json({ error: String(e) }, { status: 500 })
   }

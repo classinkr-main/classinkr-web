@@ -68,6 +68,20 @@ describe("chatbot new-docs RAG source relevance", () => {
     }
   })
 
+  it("treats Korean-pronounced EDB as the EDB classroom concept", async () => {
+    disableExternalChatbotServices()
+
+    const result = await evaluateChatbotQuery("이디비가 뭐야?", { generateAnswer: false })
+
+    expect(result.detectedCategory).toBe("classroom")
+    expect(result.answerMode).toBe("direct_answer")
+    expect(result.sources[0]?.urlPath).toBe("/docs/start/academy-system-os-positioning")
+    expect(result.sources[0]?.heading).toBe("EDB와 교안 표준화")
+    expect(result.answer).toContain("EDB")
+    expect(result.answer).toContain("이디비")
+    expect(result.answer).not.toContain("지금 바로 확정하기 어려워요")
+  })
+
   it("surfaces the why-classin-needs doc for adoption-objection questions", async () => {
     disableExternalChatbotServices()
 
@@ -91,5 +105,17 @@ describe("chatbot new-docs RAG source relevance", () => {
       expect(result.detectedCategory).toBe("billing")
       expect(result.sources[0]?.urlPath).toBe("/docs/start/value-and-cost-framing")
     }
+  })
+
+  it("surfaces the pre-adoption FAQ for explicit 22-question adoption checks", async () => {
+    disableExternalChatbotServices()
+
+    const result = await evaluateChatbotQuery("ClassIn 도입 전에 꼭 확인해야 할 22가지 질문이 뭐예요?", {
+      generateAnswer: false,
+    })
+
+    expect(result.detectedCategory).toBe("onboarding")
+    expect(result.answerMode).toBe("direct_answer")
+    expect(result.sources[0]?.urlPath).toBe("/docs/start/pre-adoption-faq-22-questions")
   })
 })

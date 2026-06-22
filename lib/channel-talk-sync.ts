@@ -18,6 +18,9 @@ import {
 } from "@/lib/channel-talk-api"
 import { emitNotificationEvent } from "@/lib/notifications/emit-event"
 import {
+  getConversation,
+  getConversationStats,
+  getLastConversationSyncAt,
   upsertConversations,
   type ChannelConversationAuthor,
   type ChannelConversationMessage,
@@ -28,6 +31,11 @@ import { getLeads, type LeadRecord } from "@/lib/repositories/leads"
 
 const DEFAULT_SYNC_LIMIT = 25
 const MESSAGES_PER_CHAT = 50
+const DEFAULT_RECENT_SYNC_TTL_MS = 2 * 60_000
+const ACTIVE_SYNC_STALE_MS = 10 * 60_000
+let activeSync:
+  | { promise: Promise<ChannelSyncResult>; startedAt: number }
+  | null = null
 
 function normalizePhone(value?: string): string | undefined {
   if (!value) return undefined
@@ -83,15 +91,50 @@ function matchLead(index: LeadMatchIndex, email?: string, phone?: string): LeadR
 export interface ChannelSyncResult {
   ok: boolean
   configured: boolean
+  cached?: boolean
+  locked?: boolean
   fetchedChats: number
   upserted: number
   newConversations: number
   matchedLeads: number
+  lastSyncedAt?: string | null
+  messageFetches?: number
+  reusedTranscripts?: number
   warning?: string
 }
 
 export async function syncChannelConversations(
-  options: { limit?: number; state?: string } = {}
+  options: { force?: boolean; limit?: number; recentSyncTtlMs?: number; state?: string } = {}
+): Promise<ChannelSyncResult> {
+  if (activeSync && Date.now() - activeSync.startedAt < ACTIVE_SYNC_STALE_MS) {
+    return {
+      ok: true,
+      configured: true,
+      cached: true,
+      locked: true,
+      fetchedChats: 0,
+      upserted: 0,
+      newConversations: 0,
+      matchedLeads: getConversationStats().matchedLeads,
+      lastSyncedAt: getLastConversationSyncAt(),
+      messageFetches: 0,
+      reusedTranscripts: 0,
+      warning: "이미 채널톡 동기화가 진행 중입니다. 완료 후 최신 상담 목록을 다시 확인하세요.",
+    }
+  }
+
+  const promise = runChannelConversationSync(options)
+  activeSync = { promise, startedAt: Date.now() }
+
+  try {
+    return await promise
+  } finally {
+    if (activeSync?.promise === promise) activeSync = null
+  }
+}
+
+async function runChannelConversationSync(
+  options: { force?: boolean; limit?: number; recentSyncTtlMs?: number; state?: string } = {}
 ): Promise<ChannelSyncResult> {
   if (!isChannelApiConfigured()) {
     return {
@@ -103,6 +146,28 @@ export async function syncChannelConversations(
       matchedLeads: 0,
       warning:
         "채널톡 Open API 키가 없어 동기화를 건너뜁니다 (CHANNEL_TALK_ACCESS / CHANNEL_TALK_ACCESS_SECRET).",
+    }
+  }
+
+  const lastSyncedAt = getLastConversationSyncAt()
+  const recentSyncTtlMs = options.recentSyncTtlMs ?? DEFAULT_RECENT_SYNC_TTL_MS
+  if (!options.force && lastSyncedAt && recentSyncTtlMs > 0) {
+    const lastSyncedMs = new Date(lastSyncedAt).getTime()
+    if (Number.isFinite(lastSyncedMs) && Date.now() - lastSyncedMs < recentSyncTtlMs) {
+      const stats = getConversationStats()
+      return {
+        ok: true,
+        configured: true,
+        cached: true,
+        fetchedChats: 0,
+        upserted: 0,
+        newConversations: 0,
+        matchedLeads: stats.matchedLeads,
+        lastSyncedAt,
+        messageFetches: 0,
+        reusedTranscripts: 0,
+        warning: "최근 동기화 결과를 사용했습니다. 잠시 후 다시 시도하거나 강제 동기화로 갱신하세요.",
+      }
     }
   }
 
@@ -139,26 +204,45 @@ export async function syncChannelConversations(
   const syncedAt = new Date().toISOString()
   const records: ChannelConversationRecord[] = []
   let matchedLeads = 0
+  let messageFetches = 0
+  let reusedTranscripts = 0
 
   for (const chat of chats) {
-    let messages: ChannelMessage[] = []
-    try {
-      messages = await getUserChatMessages(chat.id, {
-        limit: MESSAGES_PER_CHAT,
-        sortOrder: "asc",
-      })
-    } catch {
-      // 개별 대화 메시지 실패는 건너뛰고 메타데이터만 저장한다.
-    }
+    const existing = getConversation(chat.id)
+    const lastTranscriptMessageId = existing?.transcript.at(-1)?.id
+    const canReuseTranscript =
+      Boolean(existing?.transcript.length) &&
+      Boolean(chat.frontMessageId) &&
+      chat.frontMessageId === lastTranscriptMessageId
 
-    const transcript: ChannelConversationMessage[] = messages
-      .filter((message) => typeof message.plainText === "string" && message.plainText.trim())
-      .map((message) => ({
-        id: message.id,
-        author: authorOf(message),
-        text: (message.plainText ?? "").trim(),
-        at: toIso(message.createdAt) ?? syncedAt,
-      }))
+    let transcript: ChannelConversationMessage[] = []
+    if (canReuseTranscript && existing) {
+      transcript = existing.transcript
+      reusedTranscripts += 1
+    } else {
+      let messages: ChannelMessage[] = []
+      try {
+        messages = await getUserChatMessages(chat.id, {
+          limit: MESSAGES_PER_CHAT,
+          sortOrder: "asc",
+        })
+        messageFetches += 1
+      } catch {
+        // 개별 대화 메시지 실패는 건너뛰고 기존 transcript가 있으면 재사용한다.
+        transcript = existing?.transcript ?? []
+      }
+
+      if (messages.length > 0) {
+        transcript = messages
+          .filter((message) => typeof message.plainText === "string" && message.plainText.trim())
+          .map((message) => ({
+            id: message.id,
+            author: authorOf(message),
+            text: (message.plainText ?? "").trim(),
+            at: toIso(message.createdAt) ?? syncedAt,
+          }))
+      }
+    }
 
     const user = chat.userId ? userById.get(chat.userId) : undefined
     const contact = extractUserContact(user)
@@ -216,5 +300,8 @@ export async function syncChannelConversations(
     upserted,
     newConversations: created.length,
     matchedLeads,
+    lastSyncedAt: syncedAt,
+    messageFetches,
+    reusedTranscripts,
   }
 }

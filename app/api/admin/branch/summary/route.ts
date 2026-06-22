@@ -1,5 +1,6 @@
 import { NextRequest, NextResponse } from "next/server"
 import { BRANCH_READ_ADMIN_API_ROLES, verifyAdmin } from "@/lib/admin-auth"
+import { adminCachedJson } from "@/lib/admin-api-response"
 import { unstable_cache } from "next/cache"
 import { readRangeWithFormat, envSheetId, getSheetModifiedTime } from "@/lib/branch/google-sheets"
 import { parseDsh, DSH_RANGE } from "@/lib/branch/parsers/dsh"
@@ -381,7 +382,7 @@ export async function GET(req: NextRequest) {
       },
     }
 
-    return NextResponse.json({
+    return adminCachedJson({
       team, period,
       revenue, bottleneck: bottle, closing,
       events_30d: { count: events30.length, regions: new Set(events30.map((e) => e.location ?? "")).size },

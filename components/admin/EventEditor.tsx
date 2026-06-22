@@ -31,6 +31,7 @@ import BlogMarkdownRenderer from "@/components/blog/BlogMarkdownRenderer"
 import RichMarkdownEditor, { type RichMarkdownEditorHandle } from "@/components/admin/RichMarkdownEditor"
 import { getAdminToken } from "@/lib/admin-client"
 import { extractMarkdownHeadings } from "@/lib/blog-markdown"
+import { computePublicEventStatus } from "@/lib/public-event-dates"
 import type { PublicEvent, EventCategory, EventPublicationStatus, EventStatus } from "@/lib/types/public-events"
 import { EVENT_CATEGORIES } from "@/lib/types/public-events"
 
@@ -285,12 +286,7 @@ export default function EventEditor({ event, mode }: EventEditorProps) {
   const previewStatus: EventStatus = (() => {
     if (form.statusOverride !== "auto") return form.statusOverride
     if (!form.startsAt) return "예정"
-    const now = new Date()
-    const starts = new Date(form.startsAt)
-    const ends = form.endsAt ? new Date(form.endsAt) : null
-    if (now < starts) return "예정"
-    if (ends && now > ends) return "마감"
-    return "진행 중"
+    return computePublicEventStatus(form.startsAt, form.endsAt || null, null)
   })()
 
   const indicatorClass =
@@ -308,6 +304,24 @@ export default function EventEditor({ event, mode }: EventEditorProps) {
       : lastSavedAt
       ? `${String(lastSavedAt.getHours()).padStart(2, "0")}:${String(lastSavedAt.getMinutes()).padStart(2, "0")} 저장됨`
       : "저장됨"
+
+  const requiredItems = [
+    { label: "제목", done: Boolean(form.title.trim()) },
+    { label: "카테고리", done: Boolean(form.category) },
+    { label: "시작일시", done: Boolean(form.startsAt) },
+  ]
+  const requiredDone = requiredItems.filter((item) => item.done).length
+  const contentCharacterCount = content.trim().length
+  const eventStatusTone =
+    previewStatus === "마감"
+      ? "border-[#F6D5C5] bg-[#FEF3EE] text-[#B85C33]"
+      : previewStatus === "진행 중"
+      ? "border-emerald-100 bg-emerald-50 text-[#084734]"
+      : "border-[#e8e8e4] bg-white text-[#615D59]"
+  const publicationTone =
+    form.publicationStatus === "published"
+      ? "border-emerald-100 bg-emerald-50 text-[#084734]"
+      : "border-amber-100 bg-amber-50 text-amber-700"
 
   return (
     <div className="min-h-screen bg-[#FAFAF8]">
@@ -502,95 +516,208 @@ export default function EventEditor({ event, mode }: EventEditorProps) {
 
         {/* Left: thumbnail + content */}
         <section className="min-w-0 space-y-5">
-          {/* Thumbnail */}
-          <div className="rounded-[24px] border border-[#e8e8e4] bg-white p-6 shadow-sm">
-            <div className="mb-3 flex items-center justify-between">
-              <h2 className="text-[13px] font-semibold uppercase tracking-wide text-[#1a1a1a]/40">섬네일 이미지</h2>
-              {imagePreview && (
-                <button
-                  type="button"
-                  onClick={handleRemoveImage}
-                  className="inline-flex items-center gap-1 text-[12px] text-[#1a1a1a]/35 transition-colors hover:text-red-600"
-                >
-                  <X className="h-3.5 w-3.5" />
-                  이미지 제거
-                </button>
-              )}
-            </div>
-
-            <div
-              onClick={() => fileInputRef.current?.click()}
-              className="group relative cursor-pointer overflow-hidden rounded-xl border-2 border-dashed border-[rgba(0,0,0,0.10)] transition-colors hover:border-[#084734]/40"
-            >
-              {imagePreview ? (
-                <div className="relative mx-auto aspect-[4/5] w-full max-w-[380px] bg-[#f7f7f4]">
-                  <Image
-                    src={imagePreview}
-                    alt="섬네일 미리보기"
-                    fill
-                    className="object-contain p-4"
-                    sizes="(min-width: 1024px) 380px, 100vw"
-                    unoptimized
-                  />
-                  <div className="absolute inset-0 flex items-center justify-center bg-black/0 transition-colors group-hover:bg-black/25">
-                    <div className="flex items-center gap-2 rounded-lg bg-white/90 px-4 py-2 text-[13px] font-medium text-[#111110] opacity-0 shadow transition-opacity group-hover:opacity-100">
-                      <Upload className="h-4 w-4" />
-                      이미지 교체
-                    </div>
+          <div className="rounded-[24px] border border-[#e8e8e4] bg-white p-5 shadow-sm md:p-6">
+            <div className="grid gap-6 xl:grid-cols-[minmax(0,1fr)_300px]">
+              <div className="min-w-0">
+                <div className="flex flex-col gap-4 border-b border-[#e8e8e4] pb-5 lg:flex-row lg:items-start lg:justify-between">
+                  <div className="min-w-0">
+                    <p className="text-[12px] font-semibold uppercase tracking-[0.18em] text-[#084734]">
+                      행사 개요
+                    </p>
+                    <h2 className="mt-2 text-xl font-bold tracking-[-0.03em] text-[#111110]">
+                      {form.title.trim() || "제목과 일정을 먼저 채우세요"}
+                    </h2>
+                    <p className="mt-2 max-w-2xl text-[13px] leading-6 text-[#615D59]">
+                      목록 카드, 상세 페이지, 캘린더 노출에 같이 쓰이는 핵심 정보입니다.
+                    </p>
+                  </div>
+                  <div className="grid min-w-[220px] gap-2 sm:grid-cols-3 lg:grid-cols-1">
+                    <span className="inline-flex items-center justify-between gap-2 rounded-xl border border-[#dcebd9] bg-[#ECFDF5] px-3 py-2 text-[12px] font-semibold text-[#084734]">
+                      필수 입력 <strong className="tabular-nums">{requiredDone}/{requiredItems.length}</strong>
+                    </span>
+                    <span className={`inline-flex items-center justify-between gap-2 rounded-xl border px-3 py-2 text-[12px] font-semibold ${publicationTone}`}>
+                      공개 상태 <strong>{form.publicationStatus === "published" ? "공개" : "초안"}</strong>
+                    </span>
+                    <span className={`inline-flex items-center justify-between gap-2 rounded-xl border px-3 py-2 text-[12px] font-semibold ${eventStatusTone}`}>
+                      행사 상태 <strong>{previewStatus}</strong>
+                    </span>
                   </div>
                 </div>
-              ) : (
-                <div className="flex flex-col items-center justify-center gap-3 py-14 text-[#1a1a1a]/30">
-                  <ImageIcon className="h-10 w-10" />
-                  <div className="text-center">
-                    <p className="text-[13px] font-medium text-[#1a1a1a]/50">클릭하여 이미지 업로드</p>
-                    <p className="mt-0.5 text-[11px]">JPG, PNG, WebP, GIF · 최대 5MB</p>
-                  </div>
-                </div>
-              )}
-            </div>
 
-            {imagePreview && (
-              <div className="mt-4 rounded-xl border border-[#e8e8e4] bg-[#fcfcfb] p-3">
-                <p className="mb-2.5 text-[11px] font-semibold uppercase tracking-wider text-[#1a1a1a]/35">
-                  공개 화면 포스터 미리보기
-                </p>
-                <div className="grid grid-cols-3 gap-2">
-                  {EVENT_POSTER_PREVIEWS.map((preview) => (
-                    <div key={preview.label} className="min-w-0">
-                      <div className={`relative overflow-hidden rounded-lg bg-white ring-1 ring-[#e8e8e4] ${preview.className}`}>
-                        <Image
-                          src={imagePreview}
-                          alt={`${preview.label} 미리보기`}
-                          fill
-                          className="object-contain p-1.5"
-                          sizes="(min-width: 1024px) 110px, 33vw"
-                          unoptimized
-                        />
-                      </div>
-                      <p className="mt-1 truncate text-[10px] font-medium text-[#1a1a1a]/45">
-                        {preview.label}
-                      </p>
-                      <p className="text-[10px] text-[#1a1a1a]/28">{preview.ratio}</p>
+                <div className="mt-5 grid gap-4 xl:grid-cols-[minmax(0,1fr)_240px]">
+                  <div className="space-y-2">
+                    <div className="flex items-center justify-between">
+                      <label className="block text-[12px] font-medium text-[#1a1a1a]/50">제목 *</label>
+                      <span className={`text-[11px] tabular-nums ${
+                        form.title.length > 60 ? "text-[#B85C33]" :
+                        form.title.length >= 30 ? "text-emerald-600" :
+                        "text-[#1a1a1a]/30"
+                      }`}>
+                        {form.title.length} / 60
+                      </span>
                     </div>
-                  ))}
+                    <input
+                      type="text"
+                      value={form.title}
+                      onChange={(e) => setForm({ ...form, title: e.target.value })}
+                      placeholder="행사 제목"
+                      className="h-11 w-full rounded-xl border border-[#e8e8e4] bg-white px-4 text-[15px] outline-none transition-all duration-150 placeholder:text-[#1a1a1a]/25 hover:border-[#D8D8D2] focus:border-[#084734] focus:ring-2 focus:ring-[#084734]/10"
+                    />
+                  </div>
+
+                  <div className="space-y-2">
+                    <label className="block text-[12px] font-medium text-[#1a1a1a]/50">슬러그 (URL)</label>
+                    <div className="flex h-11 items-center gap-1 rounded-xl border border-[#e8e8e4] bg-white px-3 transition-all duration-150 focus-within:border-[#084734] focus-within:ring-2 focus-within:ring-[#084734]/10">
+                      <span className="shrink-0 text-[12px] text-[#1a1a1a]/35">/events/</span>
+                      <input
+                        type="text"
+                        value={form.slug}
+                        onChange={(e) => setForm({ ...form, slug: e.target.value })}
+                        placeholder="자동 생성"
+                        className="min-w-0 flex-1 bg-transparent text-[13px] outline-none placeholder:text-[#1a1a1a]/25"
+                      />
+                    </div>
+                  </div>
+
+                  <div className="space-y-2 xl:col-span-2">
+                    <div className="flex items-center justify-between">
+                      <label className="block text-[12px] font-medium text-[#1a1a1a]/50">설명 (목록 표시용)</label>
+                      <span className={`text-[11px] tabular-nums ${
+                        form.description.length > 160 ? "text-[#B85C33]" :
+                        form.description.length >= 80 ? "text-emerald-600" :
+                        "text-[#1a1a1a]/30"
+                      }`}>
+                        {form.description.length} / 160
+                      </span>
+                    </div>
+                    <textarea
+                      value={form.description}
+                      onChange={(e) => setForm({ ...form, description: e.target.value })}
+                      placeholder="행사 목록 카드에 보여지는 짧은 설명"
+                      rows={3}
+                      className="w-full resize-none rounded-xl border border-[#e8e8e4] bg-white px-4 py-3 text-sm leading-6 outline-none transition-all duration-150 placeholder:text-[#1a1a1a]/25 hover:border-[#D8D8D2] focus:border-[#084734] focus:ring-2 focus:ring-[#084734]/10"
+                    />
+                  </div>
+
+                  <div className="grid gap-4 xl:col-span-2 sm:grid-cols-2">
+                    <div className="space-y-2">
+                      <label className="block text-[12px] font-medium text-[#1a1a1a]/50">카테고리 *</label>
+                      <select
+                        value={form.category}
+                        onChange={(e) => setForm({ ...form, category: e.target.value as EventCategory })}
+                        className="h-11 w-full rounded-xl border border-[#e8e8e4] bg-white px-3 text-sm outline-none transition-all duration-150 hover:border-[#D8D8D2] focus:border-[#084734] focus:ring-2 focus:ring-[#084734]/10"
+                      >
+                        {EVENT_CATEGORIES.map((c) => (
+                          <option key={c} value={c}>{c}</option>
+                        ))}
+                      </select>
+                    </div>
+
+                    <div className="space-y-2">
+                      <label className="block text-[12px] font-medium text-[#1a1a1a]/50">태그</label>
+                      <input
+                        type="text"
+                        value={form.tag}
+                        onChange={(e) => setForm({ ...form, tag: e.target.value })}
+                        placeholder="예: HOT, 한정 100개"
+                        className="h-11 w-full rounded-xl border border-[#e8e8e4] bg-white px-4 text-sm outline-none transition-all duration-150 placeholder:text-[#1a1a1a]/25 hover:border-[#D8D8D2] focus:border-[#084734] focus:ring-2 focus:ring-[#084734]/10"
+                      />
+                    </div>
+                  </div>
                 </div>
               </div>
-            )}
 
-            <input
-              ref={fileInputRef}
-              type="file"
-              accept="image/jpeg,image/png,image/webp,image/gif"
-              onChange={handleFileChange}
-              className="hidden"
-            />
+              {/* Thumbnail */}
+              <div className="min-w-0 space-y-3 border-t border-[#e8e8e4] pt-5 xl:border-l xl:border-t-0 xl:pl-5 xl:pt-0">
+                <div className="flex items-center justify-between gap-3">
+                  <h2 className="text-[13px] font-semibold uppercase tracking-wide text-[#1a1a1a]/40">섬네일 이미지</h2>
+                  {imagePreview && (
+                    <button
+                      type="button"
+                      onClick={handleRemoveImage}
+                      className="inline-flex items-center gap-1 text-[12px] text-[#1a1a1a]/35 transition-colors hover:text-red-600"
+                    >
+                      <X className="h-3.5 w-3.5" />
+                      이미지 제거
+                    </button>
+                  )}
+                </div>
 
-            {imageFile && (
-              <p className="mt-2 text-[12px] text-[#084734]/70">
-                {imageFile.name} — 저장 시 업로드됩니다.
-              </p>
-            )}
+                <div
+                  onClick={() => fileInputRef.current?.click()}
+                  className="group relative cursor-pointer overflow-hidden rounded-xl border-2 border-dashed border-[rgba(0,0,0,0.10)] transition-colors hover:border-[#084734]/40"
+                >
+                  {imagePreview ? (
+                    <div className="relative aspect-[4/3] w-full bg-[#f7f7f4]">
+                      <Image
+                        src={imagePreview}
+                        alt="섬네일 미리보기"
+                        fill
+                        className="object-contain p-3"
+                        sizes="(min-width: 1280px) 280px, 100vw"
+                        unoptimized
+                      />
+                      <div className="absolute inset-0 flex items-center justify-center bg-black/0 transition-colors group-hover:bg-black/25">
+                        <div className="flex items-center gap-2 rounded-lg bg-white/90 px-4 py-2 text-[13px] font-medium text-[#111110] opacity-0 shadow transition-opacity group-hover:opacity-100">
+                          <Upload className="h-4 w-4" />
+                          이미지 교체
+                        </div>
+                      </div>
+                    </div>
+                  ) : (
+                    <div className="flex flex-col items-center justify-center gap-3 py-10 text-[#1a1a1a]/30">
+                      <ImageIcon className="h-9 w-9" />
+                      <div className="text-center">
+                        <p className="text-[13px] font-medium text-[#1a1a1a]/50">클릭하여 이미지 업로드</p>
+                        <p className="mt-0.5 text-[11px]">JPG, PNG, WebP, GIF · 최대 5MB</p>
+                      </div>
+                    </div>
+                  )}
+                </div>
+
+                {imagePreview && (
+                  <div className="rounded-xl border border-[#e8e8e4] bg-[#fcfcfb] p-3">
+                    <p className="mb-2.5 text-[11px] font-semibold uppercase tracking-wider text-[#1a1a1a]/35">
+                      공개 화면 포스터 미리보기
+                    </p>
+                    <div className="grid grid-cols-3 gap-2">
+                      {EVENT_POSTER_PREVIEWS.map((preview) => (
+                        <div key={preview.label} className="min-w-0">
+                          <div className={`relative overflow-hidden rounded-lg bg-white ring-1 ring-[#e8e8e4] ${preview.className}`}>
+                            <Image
+                              src={imagePreview}
+                              alt={`${preview.label} 미리보기`}
+                              fill
+                              className="object-contain p-1.5"
+                              sizes="(min-width: 1280px) 80px, 33vw"
+                              unoptimized
+                            />
+                          </div>
+                          <p className="mt-1 truncate text-[10px] font-medium text-[#1a1a1a]/45">
+                            {preview.label}
+                          </p>
+                          <p className="text-[10px] text-[#1a1a1a]/28">{preview.ratio}</p>
+                        </div>
+                      ))}
+                    </div>
+                  </div>
+                )}
+
+                <input
+                  ref={fileInputRef}
+                  type="file"
+                  accept="image/jpeg,image/png,image/webp,image/gif"
+                  onChange={handleFileChange}
+                  className="hidden"
+                />
+
+                {imageFile && (
+                  <p className="text-[12px] text-[#084734]/70">
+                    {imageFile.name} — 저장 시 업로드됩니다.
+                  </p>
+                )}
+              </div>
+            </div>
           </div>
 
           {/* Content */}
@@ -622,16 +749,29 @@ export default function EventEditor({ event, mode }: EventEditorProps) {
             </div>
 
             <Tabs defaultValue="write">
-              <TabsList className="mb-4 bg-[#f5f5f2]">
-                <TabsTrigger value="write">작성</TabsTrigger>
-                <TabsTrigger value="preview">
-                  <Eye className="mr-1.5 h-3.5 w-3.5" />
-                  미리보기
-                </TabsTrigger>
-              </TabsList>
+              <div className="mb-4 flex flex-col gap-3 rounded-2xl border border-[#e8e8e4] bg-[#FAFAF8] p-3 sm:flex-row sm:items-center sm:justify-between">
+                <div className="flex flex-wrap gap-2 text-[12px] text-[#615D59]">
+                  <span className="rounded-full bg-white px-3 py-1 font-semibold text-[#111110]">
+                    {contentCharacterCount.toLocaleString("ko-KR")}자
+                  </span>
+                  <span className="rounded-full bg-white px-3 py-1 font-semibold text-[#111110]">
+                    목차 {headings.length}개
+                  </span>
+                  <span className={`rounded-full border px-3 py-1 font-semibold ${imagePreview ? "border-emerald-100 bg-emerald-50 text-[#084734]" : "border-amber-100 bg-amber-50 text-amber-700"}`}>
+                    {imagePreview ? "포스터 준비됨" : "포스터 필요"}
+                  </span>
+                </div>
+                <TabsList className="bg-white">
+                  <TabsTrigger value="write">작성</TabsTrigger>
+                  <TabsTrigger value="preview">
+                    <Eye className="mr-1.5 h-3.5 w-3.5" />
+                    미리보기
+                  </TabsTrigger>
+                </TabsList>
+              </div>
 
               <TabsContent value="write" className="mt-0">
-                <div className="grid gap-4 lg:grid-cols-[minmax(0,1fr)_220px]">
+                <div className="grid gap-4 xl:grid-cols-[minmax(0,1fr)_260px]">
                   <RichMarkdownEditor
                     ref={editorRef}
                     value={content}
@@ -673,7 +813,7 @@ export default function EventEditor({ event, mode }: EventEditorProps) {
                       <div className="mt-2 space-y-1.5 text-[11px] leading-5 text-[#084734]/75">
                         <p>**굵게** · *기울임* · ==강조==</p>
                         <p>{"{{green:브랜드색}} · [링크](url)"}</p>
-                        <p>![설명](이미지URL) · {">"} 인용</p>
+                        <p>![설명](/images/example.png) · {">"} 인용</p>
                       </div>
                     </div>
                   </div>
@@ -695,93 +835,7 @@ export default function EventEditor({ event, mode }: EventEditorProps) {
 
         {/* Right: settings sidebar */}
         <aside className="self-start">
-          <div className="sticky top-[68px] space-y-5 pb-10">
-            {/* Basic info */}
-            <div className="rounded-[24px] border border-[#e8e8e4] bg-white p-5 shadow-sm space-y-4">
-              <h2 className="text-[13px] font-semibold uppercase tracking-wide text-[#1a1a1a]/40">기본 정보</h2>
-
-              <div>
-                <div className="mb-1.5 flex items-center justify-between">
-                  <label className="block text-[12px] font-medium text-[#1a1a1a]/50">제목 *</label>
-                  <span className={`text-[11px] tabular-nums ${
-                    form.title.length > 60 ? "text-[#B85C33]" :
-                    form.title.length >= 30 ? "text-emerald-600" :
-                    "text-[#1a1a1a]/30"
-                  }`}>
-                    {form.title.length} / 60
-                  </span>
-                </div>
-                <input
-                  type="text"
-                  value={form.title}
-                  onChange={(e) => setForm({ ...form, title: e.target.value })}
-                  placeholder="행사 제목"
-                  className="w-full rounded-lg border border-[rgba(0,0,0,0.12)] px-3 py-2 text-[13px] focus:border-[#111110]/30 focus:outline-none"
-                />
-              </div>
-
-              <div>
-                <label className="mb-1.5 block text-[12px] font-medium text-[#1a1a1a]/50">슬러그 (URL)</label>
-                <div className="flex items-center gap-1 rounded-lg border border-[rgba(0,0,0,0.12)] bg-white px-2 py-1.5 focus-within:border-[#111110]/30">
-                  <span className="shrink-0 text-[12px] text-[#1a1a1a]/35">/events/</span>
-                  <input
-                    type="text"
-                    value={form.slug}
-                    onChange={(e) => setForm({ ...form, slug: e.target.value })}
-                    placeholder="비워두면 제목 기반으로 자동 생성"
-                    className="min-w-0 flex-1 bg-transparent text-[13px] focus:outline-none"
-                  />
-                </div>
-                <p className="mt-1 text-[11px] text-[#1a1a1a]/35">
-                  카드 클릭 시 이동하는 상세 페이지 주소입니다. 비워두고 저장하면 자동 생성돼요.
-                </p>
-              </div>
-
-              <div>
-                <label className="mb-1.5 block text-[12px] font-medium text-[#1a1a1a]/50">카테고리 *</label>
-                <select
-                  value={form.category}
-                  onChange={(e) => setForm({ ...form, category: e.target.value as EventCategory })}
-                  className="w-full rounded-lg border border-[rgba(0,0,0,0.12)] bg-white px-3 py-2 text-[13px] focus:border-[#111110]/30 focus:outline-none"
-                >
-                  {EVENT_CATEGORIES.map((c) => (
-                    <option key={c} value={c}>{c}</option>
-                  ))}
-                </select>
-              </div>
-
-              <div>
-                <label className="mb-1.5 block text-[12px] font-medium text-[#1a1a1a]/50">태그</label>
-                <input
-                  type="text"
-                  value={form.tag}
-                  onChange={(e) => setForm({ ...form, tag: e.target.value })}
-                  placeholder="예: HOT, 한정 100개"
-                  className="w-full rounded-lg border border-[rgba(0,0,0,0.12)] px-3 py-2 text-[13px] focus:border-[#111110]/30 focus:outline-none"
-                />
-              </div>
-
-              <div>
-                <div className="mb-1.5 flex items-center justify-between">
-                  <label className="block text-[12px] font-medium text-[#1a1a1a]/50">설명 (목록 표시용)</label>
-                  <span className={`text-[11px] tabular-nums ${
-                    form.description.length > 160 ? "text-[#B85C33]" :
-                    form.description.length >= 80 ? "text-emerald-600" :
-                    "text-[#1a1a1a]/30"
-                  }`}>
-                    {form.description.length} / 160
-                  </span>
-                </div>
-                <textarea
-                  value={form.description}
-                  onChange={(e) => setForm({ ...form, description: e.target.value })}
-                  placeholder="행사 목록 카드에 보여지는 짧은 설명"
-                  rows={3}
-                  className="w-full resize-none rounded-lg border border-[rgba(0,0,0,0.12)] px-3 py-2 text-[13px] focus:border-[#111110]/30 focus:outline-none"
-                />
-              </div>
-            </div>
-
+          <div className="space-y-5 pb-10 lg:pr-1">
             {/* Schedule */}
             <div className="rounded-[24px] border border-[#e8e8e4] bg-white p-5 shadow-sm space-y-4">
               <h2 className="text-[13px] font-semibold uppercase tracking-wide text-[#1a1a1a]/40">일정 · 장소</h2>
@@ -803,6 +857,9 @@ export default function EventEditor({ event, mode }: EventEditorProps) {
                   onChange={(e) => setForm({ ...form, endsAt: e.target.value })}
                   className="w-full rounded-lg border border-[rgba(0,0,0,0.12)] px-3 py-2 text-[13px] focus:border-[#111110]/30 focus:outline-none"
                 />
+                <p className="mt-1.5 text-[11px] leading-5 text-[#615D59]">
+                  비워두면 공개 상태 계산과 캘린더 추가에서는 시작 후 2시간을 기본 종료 시각으로 봅니다.
+                </p>
               </div>
               <div>
                 <label className="mb-1.5 block text-[12px] font-medium text-[#1a1a1a]/50">장소</label>

@@ -1,22 +1,39 @@
 import type { Metadata } from "next"
 
-import { ResourcesHubClient } from "./ResourcesHubClient"
+import { ResourcesHubClient, type ResourceHubItem } from "./ResourcesHubClient"
 import { createBreadcrumbJsonLd, createPublicMetadata, createWebPageJsonLd } from "@/lib/seo"
 import { JsonLd } from "@/components/seo/JsonLd"
-import { getAllLeadMagnets } from "@/lib/repositories/lead-magnets"
+import {
+  getLeadMagnetCategoryLabel,
+  getLeadMagnetItemCount,
+  getLeadMagnetTierLabel,
+} from "@/lib/lead-magnets"
+import { getPublishedLeadMagnets } from "@/lib/repositories/lead-magnets"
 
 export const revalidate = 3600
 
 export const metadata: Metadata = createPublicMetadata({
-  title: "무료 자료",
+  title: "자료 받아보기",
   description:
-    "Classin 도입을 검토하는 학원이 운영 누수, 전자칠판 구축, 쇼룸 데모, 강사 온보딩, 복습 상담, ROI, 관리자 데이터, API 자동화 자료를 한곳에서 확인할 수 있는 자료실입니다.",
+    "Classin 도입 전 검토에 필요한 학원 운영, 전자칠판, 수업 시스템 PDF 자료를 받아보세요.",
   path: "/resources",
-  keywords: ["Classin 자료", "학원 운영 체크리스트", "전자칠판 체크리스트", "Classin API", "학원 ROI", "쇼룸 데모", "강사 온보딩", "도입 가이드"],
+  keywords: ["Classin 자료", "Classin PDF", "학원 운영 자료", "전자칠판 체크리스트", "학원 시스템 도입"],
 })
 
 export default async function ResourcesPage() {
-  const leadMagnets = await getAllLeadMagnets()
+  const magnets = await getPublishedLeadMagnets()
+  const resources: ResourceHubItem[] = magnets.map((magnet) => ({
+    slug: magnet.slug,
+    title: magnet.title,
+    summary: magnet.summary,
+    subtitle: magnet.pdfGuide?.subtitle ?? magnet.summary,
+    outcome: magnet.pdfGuide?.outcome ?? magnet.summary,
+    categoryLabel: getLeadMagnetCategoryLabel(magnet.category),
+    tierLabel: getLeadMagnetTierLabel(magnet.tier),
+    formatLabel: magnet.formatLabel,
+    estimatedMinutes: magnet.estimatedMinutes,
+    itemCount: getLeadMagnetItemCount(magnet),
+  }))
 
   return (
     <>
@@ -24,17 +41,17 @@ export default async function ResourcesPage() {
         data={[
           createWebPageJsonLd({
             path: "/resources",
-            name: "Classin 무료 자료",
+            name: "Classin 자료 받아보기",
             description:
-              "Classin 도입을 검토하는 학원이 운영 누수, 교실 구축, 쇼룸 데모, 강사 온보딩, 복습 상담, ROI, 관리자 데이터, API 자동화 자료를 확인할 수 있는 자료실입니다.",
+              "Classin 도입 전 검토에 필요한 학원 운영, 전자칠판, 수업 시스템 PDF 자료를 받아보세요.",
           }),
           createBreadcrumbJsonLd([
             { name: "홈", path: "/" },
-            { name: "무료 자료", path: "/resources" },
+            { name: "자료 받아보기", path: "/resources" },
           ]),
         ]}
       />
-      <ResourcesHubClient resources={leadMagnets} />
+      <ResourcesHubClient resources={resources} />
     </>
   )
 }

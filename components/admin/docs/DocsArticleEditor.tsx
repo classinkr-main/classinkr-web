@@ -15,6 +15,7 @@ import {
   Download,
   Eye,
   ExternalLink,
+  HelpCircle,
   Highlighter,
   Image as ImageIcon,
   Italic,
@@ -45,6 +46,7 @@ import {
 } from "@/components/docs"
 import { adminFetch, adminFetchJson } from "@/lib/admin-client"
 import type { AdminDocsContentResponse } from "@/lib/admin-docs"
+import { getDocsEditorHelp } from "@/lib/admin/docs-editor-usability"
 import type {
   DocsArticleAnalyticsDetail,
   DocsArticleDetail,
@@ -407,6 +409,7 @@ interface FormState {
   docType: DocsArticleDocType
   difficulty: DocsArticleDifficulty
   status: DocsArticleStatus
+  publishedAt: string
   visibility: DocsArticleVisibility
   noindex: boolean
   featured: boolean
@@ -876,6 +879,20 @@ function optimizeMarkdown(markdown: string) {
     .trim()
 }
 
+function isoToLocalDatetimeInput(value: string | null | undefined) {
+  if (!value) return ""
+  const date = new Date(value)
+  if (Number.isNaN(date.getTime())) return ""
+  const offsetMs = date.getTimezoneOffset() * 60_000
+  return new Date(date.getTime() - offsetMs).toISOString().slice(0, 16)
+}
+
+function localDatetimeInputToIso(value: string) {
+  if (!value) return ""
+  const date = new Date(value)
+  return Number.isNaN(date.getTime()) ? "" : date.toISOString()
+}
+
 function formatDateTime(value: string | null | undefined) {
   if (!value) return "-"
   const date = new Date(value)
@@ -912,6 +929,7 @@ function initialForm(
       docType: "guide",
       difficulty: "beginner",
       status: "draft",
+      publishedAt: "",
       visibility: "public",
       noindex: false,
       featured: false,
@@ -936,6 +954,7 @@ function initialForm(
     docType: article.docType,
     difficulty: article.difficulty,
     status: article.status,
+    publishedAt: article.publishedAt ?? "",
     visibility: article.visibility,
     noindex: article.noindex,
     featured: article.featured,
@@ -968,6 +987,10 @@ function formWithDraftPayload(
     docType: draftPayload.docType ?? base.docType,
     difficulty: draftPayload.difficulty ?? base.difficulty,
     status: draftPayload.status ?? base.status,
+    publishedAt:
+      draftPayload.publishedAt === null
+        ? ""
+        : draftPayload.publishedAt ?? base.publishedAt,
     visibility: draftPayload.visibility ?? base.visibility,
     noindex: draftPayload.noindex ?? base.noindex,
     featured: draftPayload.featured ?? base.featured,
@@ -998,6 +1021,50 @@ function ToolbarButton({
       {icon}
       <span>{children}</span>
     </button>
+  )
+}
+
+function HelpTip({ term }: { term: string }) {
+  const help = getDocsEditorHelp(term)
+  if (!help) return null
+
+  return (
+    <span className="group relative inline-flex">
+      <button
+        type="button"
+        aria-label={`${help.title} 도움말`}
+        className="inline-flex h-5 w-5 items-center justify-center rounded-full text-[#1a1a1a]/30 transition-colors hover:bg-[#F6F5F4] hover:text-[#084734] focus:bg-[#F6F5F4] focus:text-[#084734] focus:outline-none"
+      >
+        <HelpCircle className="h-3.5 w-3.5" />
+      </button>
+      <span
+        role="tooltip"
+        className="pointer-events-none absolute left-0 top-6 z-40 hidden w-64 rounded-lg border border-[#e8e8e4] bg-white p-3 text-left shadow-xl group-hover:block group-focus-within:block"
+      >
+        <span className="block text-[12px] font-semibold text-[#111110]">{help.title}</span>
+        <span className="mt-1 block text-[11px] leading-5 text-[#615D59]">{help.description}</span>
+      </span>
+    </span>
+  )
+}
+
+function FieldLabel({
+  children,
+  helpTerm,
+  required = false,
+}: {
+  children: ReactNode
+  helpTerm?: string
+  required?: boolean
+}) {
+  return (
+    <div className="mb-1.5 flex items-center gap-1.5">
+      <span className="text-[12px] font-medium text-[#1a1a1a]/50">
+        {children}
+        {required ? " *" : null}
+      </span>
+      {helpTerm ? <HelpTip term={helpTerm} /> : null}
+    </div>
   )
 }
 
@@ -1184,6 +1251,21 @@ export default function DocsArticleEditor({ mode, categories, article }: Props) 
     () => formSignature(form) !== formSignature(lastSavedForm),
     [form, lastSavedForm]
   )
+  const requiredItems = [
+    { label: "제목", done: Boolean(form.title.trim()) },
+    { label: "설명", done: Boolean(form.description.trim()) },
+    { label: "카테고리", done: Boolean(form.categoryId) },
+    { label: "본문", done: form.contentMarkdown.trim().length >= 120 },
+  ]
+  const requiredDone = requiredItems.filter((item) => item.done).length
+  const contentCharacterCount = form.contentMarkdown.trim().length
+  const publishTone =
+    form.status === "published"
+      ? "border-emerald-100 bg-emerald-50 text-[#084734]"
+      : form.status === "review"
+      ? "border-amber-100 bg-amber-50 text-amber-700"
+      : "border-[#e8e8e4] bg-white text-[#615D59]"
+  const publishLabel = getOptionLabel(STATUS_OPTIONS, form.status)
   const visibleSidebarTabs = useMemo(
     () => SIDEBAR_TABS.filter((tab) => tab.mode === "all" || tab.mode === mode),
     [mode]
@@ -1715,6 +1797,7 @@ export default function DocsArticleEditor({ mode, categories, article }: Props) 
       docType: next.docType,
       difficulty: next.difficulty,
       status: next.status,
+      publishedAt: next.publishedAt || (article?.publishedAt ? null : undefined),
       visibility: next.visibility,
       noindex: next.noindex,
       featured: next.featured,
@@ -2055,6 +2138,53 @@ export default function DocsArticleEditor({ mode, categories, article }: Props) 
           </div>
         ) : null}
 
+        <section className="mb-6 rounded-2xl border border-[rgba(0,0,0,0.08)] bg-white p-4 shadow-sm md:p-5">
+          <div className="grid gap-3 md:grid-cols-4">
+            <div className="rounded-xl border border-[#dcebd9] bg-[#ECFDF5] p-4">
+              <p className="text-[11px] font-semibold uppercase tracking-[0.14em] text-[#084734]/75">필수 입력</p>
+              <p className="mt-2 text-2xl font-bold tabular-nums text-[#084734]">{requiredDone}/{requiredItems.length}</p>
+              <div className="mt-3 flex flex-wrap gap-1.5">
+                {requiredItems.map((item) => (
+                  <span
+                    key={item.label}
+                    className={`rounded-full px-2 py-0.5 text-[10px] font-semibold ${
+                      item.done ? "bg-[#084734] text-white" : "border border-[#F6D5C5] bg-white text-[#B85C33]"
+                    }`}
+                  >
+                    {item.label}
+                  </span>
+                ))}
+              </div>
+            </div>
+            <div className="rounded-xl border border-[#e8e8e4] bg-[#FAFAF8] p-4">
+              <p className="text-[11px] font-semibold uppercase tracking-[0.14em] text-[#615D59]">본문 구조</p>
+              <p className="mt-2 text-2xl font-bold tabular-nums text-[#111110]">{previewSections.length}개</p>
+              <p className="mt-1 text-[12px] text-[#615D59]">
+                {estimateReadMinutes(form.contentMarkdown)}분 읽기 · {contentCharacterCount.toLocaleString("ko-KR")}자
+              </p>
+            </div>
+            <div className="rounded-xl border border-[#e8e8e4] bg-[#FAFAF8] p-4">
+              <p className="text-[11px] font-semibold uppercase tracking-[0.14em] text-[#615D59]">챗봇 준비</p>
+              <p className="mt-2 text-2xl font-bold tabular-nums text-[#111110]">{completedAiChecks}/{aiChecklist.length}</p>
+              <p className="mt-1 text-[12px] text-[#615D59]">
+                검색 메타와 본문 청킹 상태를 같이 봅니다.
+              </p>
+            </div>
+            <div className={`rounded-xl border p-4 ${publishTone}`}>
+              <p className="text-[11px] font-semibold uppercase tracking-[0.14em] opacity-75">게시 상태</p>
+              <p className="mt-2 text-2xl font-bold">{publishLabel}</p>
+              <button
+                type="button"
+                onClick={() => setPreviewOpen(true)}
+                className="mt-3 inline-flex h-8 items-center gap-1.5 rounded-lg bg-white px-2.5 text-[12px] font-semibold text-[#111110] shadow-sm transition-colors hover:bg-[#F6F5F4]"
+              >
+                <Eye className="h-3.5 w-3.5" />
+                미리보기
+              </button>
+            </div>
+          </div>
+        </section>
+
         <div className="grid gap-6 lg:grid-cols-[minmax(0,1fr)_320px] xl:grid-cols-[minmax(0,1fr)_360px]">
           <main className="space-y-6">
             <section className="space-y-4 rounded-2xl border border-[rgba(0,0,0,0.08)] bg-white p-6">
@@ -2110,9 +2240,9 @@ export default function DocsArticleEditor({ mode, categories, article }: Props) 
                   </select>
                 </div>
                 <div>
-                  <label className="mb-1.5 block text-[12px] font-medium text-[#1a1a1a]/50">
-                    slug *
-                  </label>
+                  <FieldLabel helpTerm="slug" required>
+                    URL 주소(slug)
+                  </FieldLabel>
                   <input
                     type="text"
                     value={form.slug}
@@ -2139,9 +2269,9 @@ export default function DocsArticleEditor({ mode, categories, article }: Props) 
 
               <div className="grid gap-4 sm:grid-cols-3">
                 <div>
-                  <label className="mb-1.5 block text-[12px] font-medium text-[#1a1a1a]/50">
+                  <FieldLabel helpTerm="docType">
                     문서 유형
-                  </label>
+                  </FieldLabel>
                   <select
                     value={form.docType}
                     onChange={(event) => update("docType", event.target.value as DocsArticleDocType)}
@@ -2155,9 +2285,9 @@ export default function DocsArticleEditor({ mode, categories, article }: Props) 
                   </select>
                 </div>
                 <div>
-                  <label className="mb-1.5 block text-[12px] font-medium text-[#1a1a1a]/50">
+                  <FieldLabel helpTerm="productArea">
                     제품 영역
-                  </label>
+                  </FieldLabel>
                   <select
                     value={form.productArea}
                     onChange={(event) =>
@@ -2195,13 +2325,26 @@ export default function DocsArticleEditor({ mode, categories, article }: Props) 
 
             <section className="rounded-2xl border border-[rgba(0,0,0,0.08)] bg-white p-6">
               <div className="mb-4 space-y-3">
-                <div>
-                  <h2 className="text-[13px] font-semibold uppercase tracking-wide text-[#1a1a1a]/40">
-                    본문
-                  </h2>
-                  <p className="mt-1 text-[11px] text-[#1a1a1a]/35">
-                    Markdown 기반 · 공개 가이드 문서에 동일하게 렌더링됩니다
-                  </p>
+                <div className="flex flex-col gap-3 sm:flex-row sm:items-start sm:justify-between">
+                  <div>
+                    <h2 className="text-[13px] font-semibold uppercase tracking-wide text-[#1a1a1a]/40">
+                      본문 작성
+                    </h2>
+                    <p className="mt-1 text-[11px] text-[#1a1a1a]/35">
+                      Markdown 기반 · 공개 가이드 문서에 동일하게 렌더링됩니다
+                    </p>
+                  </div>
+                  <div className="flex flex-wrap gap-2 text-[12px] text-[#615D59]">
+                    <span className="rounded-full bg-[#F6F5F4] px-3 py-1 font-semibold text-[#111110]">
+                      {contentCharacterCount.toLocaleString("ko-KR")}자
+                    </span>
+                    <span className="rounded-full bg-[#F6F5F4] px-3 py-1 font-semibold text-[#111110]">
+                      {previewSections.length}개 섹션
+                    </span>
+                    <span className="rounded-full bg-[#F6F5F4] px-3 py-1 font-semibold text-[#111110]">
+                      {estimateReadMinutes(form.contentMarkdown)}분
+                    </span>
+                  </div>
                 </div>
                 <div className="space-y-1.5">
                   <div className="flex flex-wrap items-center gap-1.5">
@@ -2265,45 +2408,75 @@ export default function DocsArticleEditor({ mode, categories, article }: Props) 
                 </div>
               </div>
 
-              <RichMarkdownEditor
-                ref={editorRef}
-                value={form.contentMarkdown}
-                onChange={(markdown) => update("contentMarkdown", markdown)}
-                placeholder="본문을 작성해주세요"
-                imageUploadEndpoint="/api/admin/upload"
-                onAiDraftClick={applyArticleDraft}
-                onSelectionOptimize={optimizeCurrentMarkdown}
-              />
+              <div className="grid gap-4 xl:grid-cols-[minmax(0,1fr)_260px]">
+                <RichMarkdownEditor
+                  ref={editorRef}
+                  value={form.contentMarkdown}
+                  onChange={(markdown) => update("contentMarkdown", markdown)}
+                  placeholder="본문을 작성해주세요"
+                  imageUploadEndpoint="/api/admin/upload"
+                  onAiDraftClick={applyArticleDraft}
+                  onSelectionOptimize={optimizeCurrentMarkdown}
+                />
 
-              <div className="mt-3 rounded-xl border border-emerald-100 bg-emerald-50/60 p-3.5">
-                <p className="text-[12px] font-semibold text-[#084734]">문법 팁</p>
-                <div className="mt-2 space-y-1.5 text-[11px] leading-5 text-[#084734]/75">
-                  <p>**굵게** · *기울임* · ==강조==</p>
-                  <p>{"{{green:브랜드색}} · [링크](url)"}</p>
-                  <p>![설명](이미지URL) · {">"} 인용</p>
-                </div>
-              </div>
-
-              <div className="mt-5 rounded-xl border border-[#e8e8e4] bg-white p-4">
-                <div className="flex flex-col gap-3 sm:flex-row sm:items-center sm:justify-between">
+                <div className="space-y-4 rounded-2xl border border-[#e8e8e4] bg-[#fcfcfb] p-4">
                   <div>
-                    <h3 className="text-[13px] font-semibold text-[#111110]">사용자 화면 미리보기</h3>
-                    <p className="mt-1 text-[11px] leading-relaxed text-[#1a1a1a]/35">
-                      별도 창에서 공개 문서처럼 카테고리, 문서 순서, 본문 순서를 함께 확인합니다.
+                    <p className="text-sm font-semibold text-[#111110]">문서 구조</p>
+                    <p className="mt-1 text-[11px] leading-5 text-[#1a1a1a]/40">
+                      ## 헤딩이 공개 문서 본문 순서와 챗봇 청킹 기준이 됩니다.
                     </p>
                   </div>
-                  <div className="flex shrink-0 items-center gap-2">
-                    <span className="rounded-full border border-[#e8e8e4] px-2.5 py-1 text-[11px] font-semibold text-[#1a1a1a]/45">
-                    {previewSections.length}개 섹션 · {estimateReadMinutes(form.contentMarkdown)}분
-                    </span>
+                  <div className="max-h-44 space-y-1.5 overflow-y-auto pr-1">
+                    {previewTocItems.length === 0 ? (
+                      <p className="text-[12px] text-[#1a1a1a]/30">
+                        ## 소제목을 추가하면 섹션 목록이 생성됩니다.
+                      </p>
+                    ) : (
+                      previewTocItems.map((item, index) => (
+                        <div key={item.id} className="rounded-lg bg-white px-3 py-2 text-[12px] text-[#1a1a1a]/60">
+                          <span className="mr-2 font-semibold tabular-nums text-[#084734]">{index + 1}</span>
+                          {item.title}
+                        </div>
+                      ))
+                    )}
+                  </div>
+
+                  <div className="h-px bg-[#e8e8e4]" />
+
+                  <div className="grid gap-2">
+                    <button
+                      type="button"
+                      onClick={() => markdownFileInputRef.current?.click()}
+                      className="inline-flex h-9 items-center justify-center gap-1.5 rounded-lg border border-[#e8e8e4] bg-white text-[12px] font-semibold text-[#111110] transition-colors hover:bg-[#F6F5F4]"
+                    >
+                      <Upload className="h-3.5 w-3.5" />
+                      MD 가져오기
+                    </button>
+                    <button
+                      type="button"
+                      onClick={exportMarkdownFile}
+                      className="inline-flex h-9 items-center justify-center gap-1.5 rounded-lg border border-[#e8e8e4] bg-white text-[12px] font-semibold text-[#111110] transition-colors hover:bg-[#F6F5F4]"
+                    >
+                      <Download className="h-3.5 w-3.5" />
+                      MD 내보내기
+                    </button>
                     <button
                       type="button"
                       onClick={() => setPreviewOpen(true)}
-                      className="inline-flex h-9 items-center justify-center gap-1.5 rounded-lg bg-[#111110] px-3 text-[12px] font-semibold text-white transition-colors hover:bg-[#2a2a28]"
+                      className="inline-flex h-9 items-center justify-center gap-1.5 rounded-lg bg-[#111110] text-[12px] font-semibold text-white transition-colors hover:bg-[#2a2a28]"
                     >
                       <Eye className="h-3.5 w-3.5" />
-                      미리보기 열기
+                      사용자 화면 보기
                     </button>
+                  </div>
+
+                  <div className="rounded-xl border border-emerald-100 bg-emerald-50/60 p-3.5">
+                    <p className="text-[12px] font-semibold text-[#084734]">문법 팁</p>
+                    <div className="mt-2 space-y-1.5 text-[11px] leading-5 text-[#084734]/75">
+                      <p>**굵게** · *기울임* · ==강조==</p>
+                      <p>{"{{green:브랜드색}} · [링크](url)"}</p>
+                      <p>![설명](/images/example.png) · {">"} 인용</p>
+                    </div>
                   </div>
                 </div>
               </div>
@@ -2429,9 +2602,9 @@ export default function DocsArticleEditor({ mode, categories, article }: Props) 
                   />
                 </div>
                 <div>
-                  <label className="mb-1.5 block text-[12px] font-medium text-[#1a1a1a]/50">
+                  <FieldLabel helpTerm="keywords">
                     검색 키워드 (쉼표 구분)
-                  </label>
+                  </FieldLabel>
                   <input
                     type="text"
                     value={form.keywordsCsv}
@@ -2455,9 +2628,9 @@ export default function DocsArticleEditor({ mode, categories, article }: Props) 
               </div>
 
               <div>
-                <label className="mb-1.5 block text-[12px] font-medium text-[#1a1a1a]/50">
+                <FieldLabel helpTerm="chatbotSummary">
                   챗봇 요약
-                </label>
+                </FieldLabel>
                 <textarea
                   value={form.chatbotSummary}
                   onChange={(event) => update("chatbotSummary", event.target.value)}
@@ -2567,7 +2740,7 @@ export default function DocsArticleEditor({ mode, categories, article }: Props) 
 
           </main>
 
-          <aside className="lg:sticky lg:top-20 lg:self-start">
+          <aside className="lg:self-start lg:pr-1">
             <section className="rounded-2xl border border-[rgba(0,0,0,0.08)] bg-white p-4">
               <div className="rounded-xl bg-[#FAFAF8] p-1">
                 <div
@@ -2617,9 +2790,9 @@ export default function DocsArticleEditor({ mode, categories, article }: Props) 
                   </div>
 
                   <div>
-                    <label className="mb-1.5 block text-[12px] font-medium text-[#1a1a1a]/50">
+                    <FieldLabel helpTerm="status">
                       상태
-                    </label>
+                    </FieldLabel>
                     <div className="flex flex-wrap gap-2">
                       {STATUS_OPTIONS.map((option) => {
                         const active = form.status === option.value
@@ -2643,9 +2816,9 @@ export default function DocsArticleEditor({ mode, categories, article }: Props) 
 
                   <div className="grid gap-4">
                     <div>
-                      <label className="mb-1.5 block text-[12px] font-medium text-[#1a1a1a]/50">
+                      <FieldLabel helpTerm="visibility">
                         가시성
-                      </label>
+                      </FieldLabel>
                       <select
                         value={form.visibility}
                         onChange={(event) =>
@@ -2663,9 +2836,12 @@ export default function DocsArticleEditor({ mode, categories, article }: Props) 
                     <div className="rounded-xl border border-[#e8e8e4] bg-[#FAFAF8] p-3">
                       <div className="flex items-start justify-between gap-3">
                         <div>
-                          <p className="text-[12px] font-semibold text-[#111110]">
-                            왼쪽 사이드 순서
-                          </p>
+                          <div className="flex items-center gap-1.5">
+                            <p className="text-[12px] font-semibold text-[#111110]">
+                              왼쪽 사이드 순서
+                            </p>
+                            <HelpTip term="orderIndex" />
+                          </div>
                           <p className="mt-1 text-[11px] leading-relaxed text-[#1a1a1a]/38">
                             공개 문서 왼쪽 카테고리 목록에서 보일 위치입니다.
                           </p>
@@ -2697,32 +2873,103 @@ export default function DocsArticleEditor({ mode, categories, article }: Props) 
                     </div>
                   </div>
 
+                  <div className="rounded-xl border border-[#e8e8e4] bg-white p-4">
+                    <div className="mb-3 flex items-start justify-between gap-3">
+                      <div>
+                        <p className="text-[12px] font-semibold text-[#111110]">고급 설정</p>
+                        <p className="mt-1 text-[11px] leading-5 text-[#1a1a1a]/38">
+                          게시일 표시와 정렬 기준을 직접 보정합니다.
+                        </p>
+                      </div>
+                      <span className="shrink-0 rounded-full border border-[#e8e8e4] bg-[#FAFAF8] px-2.5 py-1 text-[11px] font-semibold text-[#1a1a1a]/45">
+                        선택
+                      </span>
+                    </div>
+                    <div className="space-y-2">
+                      <div className="flex items-center justify-between gap-3">
+                        <label
+                          htmlFor="docs-published-at"
+                          className="mb-1.5 text-[12px] font-medium text-[#1a1a1a]/50"
+                        >
+                          발행 날짜
+                        </label>
+                        {form.publishedAt ? (
+                          <button
+                            type="button"
+                            onClick={() => update("publishedAt", "")}
+                            className="mb-1.5 text-[11px] font-semibold text-[#1a1a1a]/35 transition-colors hover:text-[#B85C33]"
+                          >
+                            비우기
+                          </button>
+                        ) : null}
+                      </div>
+                      <input
+                        id="docs-published-at"
+                        type="datetime-local"
+                        value={isoToLocalDatetimeInput(form.publishedAt)}
+                        onChange={(event) =>
+                          update("publishedAt", localDatetimeInputToIso(event.target.value))
+                        }
+                        className="w-full rounded-lg border border-[rgba(0,0,0,0.12)] px-3 py-2 text-[13px] focus:border-[#111110]/30 focus:outline-none"
+                      />
+                      <div className="grid grid-cols-2 gap-2">
+                        <button
+                          type="button"
+                          onClick={() => update("publishedAt", new Date().toISOString())}
+                          className="inline-flex h-9 items-center justify-center rounded-lg border border-[#e8e8e4] bg-white px-3 text-[12px] font-semibold text-[#111110] transition-colors hover:bg-[#F6F5F4]"
+                        >
+                          지금으로 설정
+                        </button>
+                        <button
+                          type="button"
+                          onClick={() => {
+                            if (!article?.publishedAt) return
+                            update("publishedAt", article.publishedAt)
+                          }}
+                          disabled={!article?.publishedAt}
+                          className="inline-flex h-9 items-center justify-center rounded-lg border border-[#e8e8e4] bg-white px-3 text-[12px] font-semibold text-[#111110] transition-colors hover:bg-[#F6F5F4] disabled:cursor-not-allowed disabled:opacity-35"
+                        >
+                          기존 날짜 복원
+                        </button>
+                      </div>
+                      <p className="text-[11px] leading-5 text-[#1a1a1a]/35">
+                        새 문서를 게시할 때 비워두면 저장 시각이 자동 기록됩니다.
+                      </p>
+                    </div>
+                  </div>
+
                   <div className="grid gap-3 rounded-xl bg-[#FAFAF8] p-3">
-                    <label className="inline-flex items-center gap-2 text-[13px] text-[#1a1a1a]/60">
-                      <input
-                        type="checkbox"
-                        checked={form.featured}
-                        onChange={(event) => update("featured", event.target.checked)}
-                        className="h-4 w-4 rounded border-[rgba(0,0,0,0.15)]"
-                      />
-                      대표 문서
-                    </label>
-                    <label className="inline-flex items-center gap-2 text-[13px] text-[#1a1a1a]/60">
-                      <input
-                        type="checkbox"
-                        checked={form.noindex}
-                        onChange={(event) => update("noindex", event.target.checked)}
-                        className="h-4 w-4 rounded border-[rgba(0,0,0,0.15)]"
-                      />
-                      검색 엔진 색인 제외
-                    </label>
+                    <div className="flex items-center justify-between gap-2">
+                      <label className="inline-flex items-center gap-2 text-[13px] text-[#1a1a1a]/60">
+                        <input
+                          type="checkbox"
+                          checked={form.featured}
+                          onChange={(event) => update("featured", event.target.checked)}
+                          className="h-4 w-4 rounded border-[rgba(0,0,0,0.15)]"
+                        />
+                        대표 문서
+                      </label>
+                      <HelpTip term="featured" />
+                    </div>
+                    <div className="flex items-center justify-between gap-2">
+                      <label className="inline-flex items-center gap-2 text-[13px] text-[#1a1a1a]/60">
+                        <input
+                          type="checkbox"
+                          checked={form.noindex}
+                          onChange={(event) => update("noindex", event.target.checked)}
+                          className="h-4 w-4 rounded border-[rgba(0,0,0,0.15)]"
+                        />
+                        검색 엔진 색인 제외
+                      </label>
+                      <HelpTip term="noindex" />
+                    </div>
                   </div>
 
                   <div className="grid gap-4 border-t border-[#f0f0ec] pt-4">
                     <div>
-                      <label className="mb-1.5 block text-[12px] font-medium text-[#1a1a1a]/50">
+                      <FieldLabel helpTerm="seo">
                         SEO 제목
-                      </label>
+                      </FieldLabel>
                       <input
                         type="text"
                         value={form.seoTitle}
@@ -2732,9 +2979,9 @@ export default function DocsArticleEditor({ mode, categories, article }: Props) 
                       />
                     </div>
                     <div>
-                      <label className="mb-1.5 block text-[12px] font-medium text-[#1a1a1a]/50">
+                      <FieldLabel helpTerm="seo">
                         SEO 설명
-                      </label>
+                      </FieldLabel>
                       <input
                         type="text"
                         value={form.seoDescription}
@@ -2748,7 +2995,7 @@ export default function DocsArticleEditor({ mode, categories, article }: Props) 
                   {mode === "edit" && article ? (
                     <div className="grid gap-2 rounded-xl bg-[#FAFAF8] px-4 py-3 text-[12px] text-[#1a1a1a]/45">
                       <span>
-                        게시일: {article.publishedAt ? new Date(article.publishedAt).toLocaleString("ko-KR") : "-"}
+                        게시일: {formatDateTime(form.publishedAt)}
                       </span>
                       <span>
                         최근 검수: {article.lastReviewedAt ? new Date(article.lastReviewedAt).toLocaleString("ko-KR") : "-"}

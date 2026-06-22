@@ -3,6 +3,7 @@ import { NextRequest, NextResponse } from "next/server"
 import { verifyAdmin } from "@/lib/admin-auth"
 import { adminCachedJson } from "@/lib/admin-api-response"
 import { createEvent, getAllEvents, getEventsByMonth } from "@/lib/calendar-data"
+import { validateCalendarEventPayload } from "@/lib/calendar-event-validation"
 
 export async function GET(req: NextRequest) {
   const err = await verifyAdmin(req)
@@ -38,11 +39,9 @@ export async function POST(req: NextRequest) {
   if (err) return err
 
   const body = await req.json()
-  if (!body.title || !body.date || !body.type) {
-    return NextResponse.json(
-      { error: "title, date, type는 필수입니다." },
-      { status: 400 }
-    )
+  const validationError = validateCalendarEventPayload(body, { requireRequiredFields: true })
+  if (validationError) {
+    return NextResponse.json({ error: validationError }, { status: 400 })
   }
 
   const event = await createEvent({

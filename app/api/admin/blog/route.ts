@@ -1,6 +1,6 @@
 ﻿import { NextRequest, NextResponse } from "next/server"
 import { revalidatePath } from "next/cache"
-import { getAllPosts, createPost, getTrashedPosts } from "@/lib/repositories/blog"
+import { createPost, getAllPosts, getTrashedPosts, isBlogSlugConflictError } from "@/lib/repositories/blog"
 import { verifyAdmin } from "@/lib/admin-auth"
 import { adminCachedJson } from "@/lib/admin-api-response"
 import { validatePublicMarkdownContent } from "@/lib/admin/public-content-validation"
@@ -53,9 +53,10 @@ export async function POST(req: NextRequest) {
     }
     return NextResponse.json({ post }, { status: 201 })
   } catch (error) {
+    const isConflict = isBlogSlugConflictError(error)
     return NextResponse.json(
       { error: error instanceof Error ? error.message : "Failed to create post" },
-      { status: 500 }
+      { status: isConflict ? 409 : 500 }
     )
   }
 }

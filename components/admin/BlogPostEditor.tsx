@@ -43,6 +43,7 @@ import { Input } from "@/components/ui/input"
 import { Label } from "@/components/ui/label"
 import { Tabs, TabsContent, TabsList, TabsTrigger } from "@/components/ui/tabs"
 import BlogMarkdownRenderer from "@/components/blog/BlogMarkdownRenderer"
+import { SafeBlogImage } from "@/components/blog/SafeBlogImage"
 import RichMarkdownEditor, { type RichMarkdownEditorHandle } from "@/components/admin/RichMarkdownEditor"
 import {
   BLOG_STATUS_OPTIONS,
@@ -62,6 +63,8 @@ import {
   getLeadMagnetStatusLabel,
   leadMagnetOptions,
 } from "@/lib/lead-magnets"
+import { sanitizePublicImageUrl } from "@/lib/safe-public-url"
+import { adminFetch, getAdminToken } from "@/lib/admin-client"
 
 interface BlogPostEditorProps {
   mode: "create" | "edit"
@@ -137,7 +140,7 @@ const DEFAULT_TEMPLATES: BlogTemplate[] = [
     name: "사례 연구",
     savedAt: "2024-01-01T00:00:00.000Z",
     data: {
-      category: "사례",
+      category: "성공 사례",
       targetReader: "비슷한 문제를 겪고 있는 학원 운영자",
       benefitItems: [
         "실제 현장 사례를 통해 문제 해결 과정을 구체적으로 파악할 수 있습니다.",
@@ -189,7 +192,7 @@ const DEFAULT_TEMPLATES: BlogTemplate[] = [
     name: "기능·제품 소개",
     savedAt: "2024-01-01T00:00:00.000Z",
     data: {
-      category: "제품",
+      category: "제품 업데이트",
       targetReader: "새로운 기능을 도입하려는 학원 담당자",
       benefitItems: [
         "기능의 핵심 가치와 어떤 문제를 해결하는지 명확하게 파악할 수 있습니다.",
@@ -210,9 +213,7 @@ const DEFAULT_TEMPLATES: BlogTemplate[] = [
         "",
         "### 기능 2",
         "",
-        "스크린샷이나 예시가 있으면 여기에 추가해주세요.",
-        "",
-        "![기능 설명 이미지](이미지URL)",
+        "스크린샷이나 예시가 있으면 업로드한 뒤 여기에 삽입해주세요.",
         "",
         "### 기능 3",
         "",
@@ -244,6 +245,12 @@ type EditorSnapshot = {
 
 const HISTORY_LIMIT = 50
 const MAX_IMAGE_UPLOAD_BYTES = 5 * 1024 * 1024
+const SOFT_INPUT_CLASS =
+  "shadow-[0_1px_2px_rgba(17,17,16,0.04)] transition-all duration-150 hover:border-[#D8D8D2] hover:shadow-[0_3px_10px_rgba(17,17,16,0.05)] focus:border-[#084734] focus:ring-2 focus:ring-[#084734]/10 focus:shadow-[0_0_0_3px_rgba(8,71,52,0.05)]"
+const SOFT_TEXTAREA_CLASS =
+  `w-full resize-none rounded-xl border border-[#e8e8e4] bg-white px-4 py-3 text-sm outline-none placeholder:text-[#1a1a1a]/25 ${SOFT_INPUT_CLASS}`
+const SOFT_SELECT_CLASS =
+  `w-full rounded-xl border border-[#e8e8e4] bg-white px-3 text-sm outline-none ${SOFT_INPUT_CLASS}`
 const BLOG_COVER_PREVIEWS = [
   { label: "상세 히어로", ratio: "16:10", className: "aspect-[16/10]" },
   { label: "추천 카드", ratio: "4:3", className: "aspect-[4/3]" },
@@ -350,21 +357,6 @@ function isoToLocalInput(iso?: string) {
   return `${date.getFullYear()}-${pad(date.getMonth() + 1)}-${pad(date.getDate())}T${pad(date.getHours())}:${pad(date.getMinutes())}`
 }
 
-function getToken() {
-  return sessionStorage.getItem("admin_password") ?? ""
-}
-
-function adminFetch(url: string, options?: RequestInit) {
-  return fetch(url, {
-    ...options,
-    headers: {
-      "Content-Type": "application/json",
-      Authorization: `Bearer ${getToken()}`,
-      ...options?.headers,
-    },
-  })
-}
-
 function parseTags(value: string) {
   return value
     .split(",")
@@ -391,6 +383,24 @@ function ToolbarButton({
       <span>{children}</span>
     </button>
   )
+}
+
+function FieldBadge({ required }: { required?: boolean }) {
+  return (
+    <span
+      className={`ml-2 inline-flex h-5 items-center rounded-full px-2 text-[10px] font-semibold ${
+        required
+          ? "border border-[#F6D5C5] bg-[#FEF3EE] text-[#B85C33]"
+          : "border border-[#e8e8e4] bg-[#F6F5F4] text-[#615D59]"
+      }`}
+    >
+      {required ? "필수" : "선택"}
+    </span>
+  )
+}
+
+function FieldHint({ children }: { children: ReactNode }) {
+  return <p className="text-[11px] leading-relaxed text-[#1a1a1a]/40">{children}</p>
 }
 
 export default function BlogPostEditor({
@@ -473,6 +483,23 @@ export default function BlogPostEditor({
   const filteredPosts = allPosts.filter((post) => post.id !== initialPost?.id)
   const computedReadTime = estimateReadTime(form.contentMarkdown)
   const coverPreviewUrl = form.heroImageUrl || form.imageUrl
+  const authorAvatarSrc = sanitizePublicImageUrl(form.authorAvatarUrl, "")
+  const authorInitial = form.author.trim().slice(0, 1) || "C"
+  const tagKeywords = useMemo(() => parseTags(tagsInput), [tagsInput])
+  const requiredItems = [
+    { label: "제목", done: Boolean(form.title.trim()) },
+    { label: "요약", done: Boolean(form.excerpt.trim()) },
+    { label: "카테고리", done: Boolean(form.category.trim()) },
+  ]
+  const requiredDone = requiredItems.filter((item) => item.done).length
+  const contentCharacterCount = form.contentMarkdown.trim().length
+  const blogStatusLabel = BLOG_STATUS_OPTIONS.find((option) => option.value === form.status)?.label ?? form.status
+  const blogStatusTone =
+    form.status === "published"
+      ? "border-emerald-100 bg-emerald-50 text-[#084734]"
+      : form.status === "draft"
+      ? "border-amber-100 bg-amber-50 text-amber-700"
+      : "border-[#e8e8e4] bg-white text-[#615D59]"
   const headings = useMemo(
     () => extractMarkdownHeadings(form.contentMarkdown),
     [form.contentMarkdown]
@@ -488,6 +515,7 @@ export default function BlogPostEditor({
     const hasImage = Boolean(form.imageUrl.trim() || form.heroImageUrl.trim())
     const hasSlug = Boolean(form.slug.trim())
     const hasExcerpt = form.excerpt.trim().length >= 30
+    const hasKeyword = tagKeywords.length > 0
 
     const checks = [
       {
@@ -526,6 +554,12 @@ export default function BlogPostEditor({
         detail: form.excerpt.trim().length > 0 ? `${form.excerpt.trim().length}자` : "미입력",
         ok: hasExcerpt,
       },
+      {
+        id: "keyword",
+        label: "키워드/태그",
+        detail: hasKeyword ? `${tagKeywords.length}개` : "없음",
+        ok: hasKeyword,
+      },
     ]
 
     const passed = checks.filter((c) => c.ok).length
@@ -536,7 +570,7 @@ export default function BlogPostEditor({
     const scoreBorder = score >= 80 ? "#bbf7d0" : score >= 50 ? "#fde68a" : "#fecaca"
 
     return { score, checks, scoreLabel, scoreColor, scoreBg, scoreBorder, effectiveTitle, effectiveDesc }
-  }, [form, headings])
+  }, [form, headings, tagKeywords.length])
 
   useEffect(() => {
     formRef.current = form
@@ -695,6 +729,18 @@ export default function BlogPostEditor({
     }))
   }
 
+  const updateTagsInput = useCallback(
+    (value: string) => {
+      const parsed = parseTags(value)
+      updateEditor((snapshot) => ({
+        ...snapshot,
+        tagsInput: value,
+        form: { ...snapshot.form, tags: parsed, tag: parsed[0] || "" },
+      }))
+    },
+    [updateEditor]
+  )
+
   const toggleRelatedPost = (postId: number) => {
     updateEditor((snapshot) => ({
       ...snapshot,
@@ -707,7 +753,10 @@ export default function BlogPostEditor({
     }))
   }
 
-  const buildPayload = (nextStatus?: BlogPostStatus): BlogPostInput => {
+  const buildPayload = (
+    nextStatus?: BlogPostStatus,
+    options: { publishNow?: boolean } = {}
+  ): BlogPostInput => {
     const parsedTags = parseTags(tagsInput)
     const finalTitle = form.title.trim()
     const finalExcerpt = form.excerpt.trim()
@@ -727,6 +776,7 @@ export default function BlogPostEditor({
       authorBio:
         form.authorBio.trim() ||
         `${form.author.trim() || "Classin 팀"}은 교육 운영과 전환 경험을 정리합니다.`,
+      authorAvatarUrl: authorAvatarSrc,
       seoTitle: form.seoTitle.trim() || finalTitle,
       seoDescription: form.seoDescription.trim() || finalExcerpt,
       cta: {
@@ -736,6 +786,10 @@ export default function BlogPostEditor({
         buttonLabel: form.cta.buttonLabel.trim() || DEFAULT_BLOG_CTA.buttonLabel,
         buttonHref: form.cta.buttonHref.trim() || DEFAULT_BLOG_CTA.buttonHref,
       },
+      publishedAt:
+        options.publishNow && nextStatus === "published"
+          ? new Date().toISOString()
+          : form.publishedAt,
       status: nextStatus ?? form.status,
     }
   }
@@ -751,7 +805,7 @@ export default function BlogPostEditor({
       formData.append("file", file)
       const res = await fetch("/api/admin/upload", {
         method: "POST",
-        headers: { Authorization: `Bearer ${getToken()}` },
+        headers: { Authorization: `Bearer ${getAdminToken()}` },
         body: formData,
       })
       if (!res.ok) {
@@ -770,16 +824,24 @@ export default function BlogPostEditor({
     }
   }
 
-  const handleSubmit = async (nextStatus?: BlogPostStatus) => {
-    const payload = buildPayload(nextStatus)
+  const handleSubmit = async (
+    nextStatus?: BlogPostStatus,
+    options: { publishNow?: boolean } = {}
+  ) => {
+    const payload = buildPayload(nextStatus, options)
     if (!payload.title || !payload.excerpt || !payload.category) {
       setNotice("제목, 요약, 카테고리는 꼭 입력해주세요.")
+      return
+    }
+    if ((form.authorAvatarUrl ?? "").trim() && !authorAvatarSrc) {
+      setNotice("작성자 아바타는 사이트 내부 경로, Supabase Storage, Unsplash 이미지만 사용할 수 있습니다.")
       return
     }
     setIsSubmitting(true)
     setNotice("")
     try {
-      const url = initialPost ? `/api/admin/blog/${initialPost.id}` : "/api/admin/blog"
+      const postId = initialPost?._uuid ?? initialPost?.id
+      const url = postId ? `/api/admin/blog/${postId}` : "/api/admin/blog"
       const method = initialPost ? "PUT" : "POST"
       const response = await adminFetch(url, { method, body: JSON.stringify(payload) })
       if (response.status === 401) { startTransition(() => router.replace("/admin/login")); return }
@@ -802,8 +864,9 @@ export default function BlogPostEditor({
       setDraftState("saved")
       setLastSavedAt(new Date())
       setNotice(nextStatus === "published" ? "발행까지 완료했습니다." : "저장했습니다.")
+      const savedPostId = data.post._uuid ?? data.post.id
       startTransition(() => {
-        router.push(`/admin/blog/${data.post.id}/edit`)
+        router.push(`/admin/blog/${savedPostId}/edit`)
         router.refresh()
       })
     } catch {
@@ -1395,11 +1458,18 @@ export default function BlogPostEditor({
                     <div className="mt-10 rounded-[32px] border border-[#e8e8e4] bg-white p-6 shadow-sm md:p-8">
                       <div className="flex flex-col gap-6 md:flex-row md:items-center">
                         <div className="relative h-16 w-16 shrink-0 overflow-hidden rounded-full bg-[#f0f0ec]">
-                          {form.authorAvatarUrl ? (
-                            <Image src={form.authorAvatarUrl} alt={form.author} fill className="object-cover" sizes="64px" unoptimized />
+                          {authorAvatarSrc ? (
+                            <SafeBlogImage
+                              src={authorAvatarSrc}
+                              alt={form.author}
+                              fill
+                              className="object-cover"
+                              sizes="64px"
+                              fallbackIndex={initialPost?.id ?? 0}
+                            />
                           ) : (
                             <div className="flex h-full items-center justify-center text-lg font-semibold text-[#084734]">
-                              {form.author.slice(0, 1)}
+                              {authorInitial}
                             </div>
                           )}
                         </div>
@@ -1434,7 +1504,7 @@ export default function BlogPostEditor({
 
       {/* ── Sticky header ── */}
       <header ref={headerRef} className="sticky top-0 z-20 border-b border-[#e8e8e4] bg-[#FAFAF8]/95 backdrop-blur">
-        <div className="flex items-center justify-between gap-4 px-6 py-3">
+        <div className="flex flex-col gap-3 px-6 py-3 sm:flex-row sm:items-center sm:justify-between sm:gap-4">
           <div className="flex min-w-0 items-center gap-3">
             <Button variant="ghost" size="sm" asChild className="shrink-0">
               <Link href="/admin/blog">
@@ -1468,7 +1538,7 @@ export default function BlogPostEditor({
             </div>
           </div>
 
-          <div className="flex shrink-0 items-center gap-1">
+          <div className="flex min-w-0 shrink-0 items-center gap-1 overflow-x-auto pb-1 sm:overflow-visible sm:pb-0">
             <Button
               variant="ghost" size="sm"
               onClick={handleUndo}
@@ -1504,7 +1574,7 @@ export default function BlogPostEditor({
               {isSubmitting ? <Loader2 className="mr-1.5 h-3.5 w-3.5 animate-spin" /> : <Save className="mr-1.5 h-3.5 w-3.5" />}
               저장
             </Button>
-            <Button size="sm" onClick={() => handleSubmit("published")} disabled={isSubmitting}
+            <Button size="sm" onClick={() => handleSubmit("published", { publishNow: true })} disabled={isSubmitting}
               className="bg-[#084734] hover:bg-[#084734]/90 text-white active:scale-[0.97] transition-all duration-75">
               {isSubmitting ? <Loader2 className="mr-1.5 h-3.5 w-3.5 animate-spin" /> : <Sparkles className="mr-1.5 h-3.5 w-3.5" />}
               발행
@@ -1515,9 +1585,22 @@ export default function BlogPostEditor({
         {notice && (() => {
           const isError = /문제|오류|필수|입력/.test(notice)
           return (
-            <div className={`flex items-center justify-between border-t px-6 py-2 ${isError ? "border-[#F6D5C5] bg-[#FEF3EE]" : "border-emerald-100 bg-emerald-50"}`}>
-              <span className={`text-[13px] ${isError ? "text-[#B85C33]" : "text-emerald-800"}`}>{notice}</span>
-              <button type="button" onClick={() => setNotice("")} className={`${isError ? "text-[#B85C33] hover:text-[#9A4A27]" : "text-emerald-500 hover:text-emerald-800"}`}>
+            <div
+              role="status"
+              className={`flex animate-in items-center justify-between gap-3 border-t px-6 py-2.5 shadow-[0_8px_22px_rgba(17,17,16,0.05)] fade-in-0 slide-in-from-top-1 duration-200 ${
+                isError ? "border-[#F6D5C5] bg-[#FEF3EE]" : "border-emerald-100 bg-emerald-50"
+              }`}
+            >
+              <span className={`inline-flex items-center gap-2 text-[13px] ${isError ? "text-[#B85C33]" : "text-emerald-800"}`}>
+                {isError ? <X className="h-3.5 w-3.5" /> : <Check className="h-3.5 w-3.5" />}
+                {notice}
+              </span>
+              <button
+                type="button"
+                aria-label="알림 닫기"
+                onClick={() => setNotice("")}
+                className={`${isError ? "text-[#B85C33] hover:text-[#9A4A27]" : "text-emerald-500 hover:text-emerald-800"}`}
+              >
                 <X className="h-3.5 w-3.5" />
               </button>
             </div>
@@ -1530,13 +1613,94 @@ export default function BlogPostEditor({
 
         {/* Left: content */}
         <section className="min-w-0 space-y-5">
+          <div className="rounded-[24px] border border-[#e8e8e4] bg-white p-4 shadow-sm md:p-5">
+            <div className="grid gap-3 md:grid-cols-4">
+              <div className="rounded-xl border border-[#dcebd9] bg-[#ECFDF5] p-4">
+                <p className="text-[11px] font-semibold uppercase tracking-[0.14em] text-[#084734]/75">필수 입력</p>
+                <p className="mt-2 text-2xl font-bold tabular-nums text-[#084734]">{requiredDone}/{requiredItems.length}</p>
+                <div className="mt-3 flex flex-wrap gap-1.5">
+                  {requiredItems.map((item) => (
+                    <span
+                      key={item.label}
+                      className={`rounded-full px-2 py-0.5 text-[10px] font-semibold ${
+                        item.done ? "bg-[#084734] text-white" : "border border-[#F6D5C5] bg-white text-[#B85C33]"
+                      }`}
+                    >
+                      {item.label}
+                    </span>
+                  ))}
+                </div>
+              </div>
+              <div
+                className="rounded-xl border p-4"
+                style={{ borderColor: seoAnalysis.scoreBorder, backgroundColor: seoAnalysis.scoreBg }}
+              >
+                <p className="text-[11px] font-semibold uppercase tracking-[0.14em]" style={{ color: seoAnalysis.scoreColor }}>
+                  SEO 점수
+                </p>
+                <p className="mt-2 text-2xl font-bold tabular-nums" style={{ color: seoAnalysis.scoreColor }}>
+                  {seoAnalysis.score}
+                </p>
+                <p className="mt-1 text-[12px]" style={{ color: seoAnalysis.scoreColor }}>
+                  {seoAnalysis.scoreLabel}
+                </p>
+              </div>
+              <div className="rounded-xl border border-[#e8e8e4] bg-[#FAFAF8] p-4">
+                <p className="text-[11px] font-semibold uppercase tracking-[0.14em] text-[#615D59]">본문 구조</p>
+                <p className="mt-2 text-2xl font-bold tabular-nums text-[#111110]">{headings.length}개</p>
+                <p className="mt-1 text-[12px] text-[#615D59]">
+                  {computedReadTime} · {contentCharacterCount.toLocaleString("ko-KR")}자
+                </p>
+              </div>
+              <div className={`rounded-xl border p-4 ${blogStatusTone}`}>
+                <p className="text-[11px] font-semibold uppercase tracking-[0.14em] opacity-75">발행 상태</p>
+                <p className="mt-2 text-2xl font-bold">{blogStatusLabel}</p>
+                <button
+                  type="button"
+                  onClick={() => setShowPreview(true)}
+                  className="mt-3 inline-flex h-8 items-center gap-1.5 rounded-lg bg-white px-2.5 text-[12px] font-semibold text-[#111110] shadow-sm transition-colors hover:bg-[#F6F5F4]"
+                >
+                  <Eye className="h-3.5 w-3.5" />
+                  미리보기
+                </button>
+              </div>
+            </div>
+          </div>
 
           {/* 기본 정보 */}
           <div className="rounded-[24px] border border-[#e8e8e4] bg-white p-6 shadow-sm">
+            <div className="mb-5 flex flex-col gap-3 border-b border-[#e8e8e4] pb-4 sm:flex-row sm:items-center sm:justify-between">
+              <div>
+                <p className="text-sm font-semibold text-[#111110]">기본 정보</p>
+                <p className="mt-0.5 text-[12px] text-[#1a1a1a]/40">
+                  필수 입력을 채우면 저장과 발행 흐름이 안정적으로 진행됩니다.
+                </p>
+              </div>
+              <div className="flex flex-wrap items-center gap-1.5">
+                <span className="rounded-full border border-[#dcebd9] bg-[#ECFDF5] px-3 py-1 text-[12px] font-semibold text-[#084734]">
+                  필수 {requiredDone}/{requiredItems.length}
+                </span>
+                {requiredItems.map((item) => (
+                  <span
+                    key={item.label}
+                    className={`rounded-full px-2.5 py-1 text-[11px] ${
+                      item.done
+                        ? "bg-[#084734] text-white"
+                        : "border border-[#F6D5C5] bg-[#FEF3EE] text-[#B85C33]"
+                    }`}
+                  >
+                    {item.label}
+                  </span>
+                ))}
+              </div>
+            </div>
             <div className="space-y-4">
               <div className="space-y-2">
                 <div className="flex items-center justify-between">
-                  <Label htmlFor="title">제목</Label>
+                  <Label htmlFor="title">
+                    제목
+                    <FieldBadge required />
+                  </Label>
                   <span className={`text-[11px] tabular-nums ${
                     form.title.length > 60 ? "text-[#B85C33]" :
                     form.title.length >= 30 ? "text-emerald-600" :
@@ -1561,14 +1725,18 @@ export default function BlogPostEditor({
                     }))
                   }}
                   placeholder="독자가 클릭하고 싶어지는 제목을 적어주세요"
-                  className="text-[15px]"
+                  className="h-11 rounded-xl text-[15px]"
                 />
+                <FieldHint>검색과 공유 카드에 노출됩니다. 권장 길이는 30-60자입니다.</FieldHint>
               </div>
 
               <div className="grid gap-4 md:grid-cols-[minmax(0,1fr)_240px]">
                 <div className="space-y-2">
                   <div className="flex items-center justify-between">
-                    <Label htmlFor="excerpt">한 줄 요약</Label>
+                    <Label htmlFor="excerpt">
+                      한 줄 요약
+                      <FieldBadge required />
+                    </Label>
                     <span className={`text-[11px] tabular-nums ${
                       form.excerpt.length > 160 ? "text-[#B85C33]" :
                       form.excerpt.length >= 80 ? "text-emerald-600" :
@@ -1583,11 +1751,15 @@ export default function BlogPostEditor({
                     value={form.excerpt}
                     onChange={(event) => updateForm("excerpt", event.target.value)}
                     placeholder="글을 읽기 전에 핵심 메시지를 한 번에 파악할 수 있도록 적어주세요"
-                    className="w-full min-h-[88px] resize-none rounded-xl border border-[#e8e8e4] bg-white px-4 py-3 text-sm outline-none transition-colors focus:border-[#084734]"
+                    className={`min-h-[88px] ${SOFT_TEXTAREA_CLASS}`}
                   />
+                  <FieldHint>목록 카드, 검색 설명, SEO 설명의 기본값으로 재사용됩니다.</FieldHint>
                 </div>
                 <div className="space-y-2">
-                  <Label htmlFor="slug">URL 슬러그</Label>
+                  <Label htmlFor="slug">
+                    URL 슬러그
+                    <FieldBadge />
+                  </Label>
                   <Input
                     id="slug"
                     value={form.slug}
@@ -1599,10 +1771,9 @@ export default function BlogPostEditor({
                       }))
                     }}
                     placeholder="blog-v2-guide"
+                    className="h-11 rounded-xl"
                   />
-                  <p className="text-[11px] text-[#1a1a1a]/35">
-                    /blog/{form.slug || "your-slug"}
-                  </p>
+                  <FieldHint>/blog/{form.slug || "your-slug"}</FieldHint>
                 </div>
               </div>
             </div>
@@ -1612,7 +1783,10 @@ export default function BlogPostEditor({
           <div className="rounded-[24px] border border-[#e8e8e4] bg-white p-6 shadow-sm">
             <div className="mb-4 flex items-center justify-between">
               <div>
-                <p className="text-sm font-semibold text-[#111110]">이 글을 읽으면 좋은 점</p>
+                <p className="text-sm font-semibold text-[#111110]">
+                  이 글을 읽으면 좋은 점
+                  <FieldBadge />
+                </p>
                 <p className="mt-0.5 text-[12px] text-[#1a1a1a]/40">상세 페이지 상단에 노출되는 포인트</p>
               </div>
               <span className="rounded-full bg-[#f5f6f1] px-3 py-1 text-[12px] text-[#084734]">최대 3개</span>
@@ -1667,16 +1841,35 @@ export default function BlogPostEditor({
             </div>
 
             <Tabs defaultValue="write">
-              <TabsList className="mb-4 bg-[#f5f5f2]">
-                <TabsTrigger value="write">작성</TabsTrigger>
-                <TabsTrigger value="preview">
-                  <Eye className="mr-1.5 h-3.5 w-3.5" />
-                  미리보기
-                </TabsTrigger>
-              </TabsList>
+              <div className="mb-4 flex flex-col gap-3 rounded-2xl border border-[#e8e8e4] bg-[#FAFAF8] p-3 sm:flex-row sm:items-center sm:justify-between">
+                <div className="flex flex-wrap gap-2 text-[12px] text-[#615D59]">
+                  <span className="rounded-full bg-white px-3 py-1 font-semibold text-[#111110]">
+                    {contentCharacterCount.toLocaleString("ko-KR")}자
+                  </span>
+                  <span className="rounded-full bg-white px-3 py-1 font-semibold text-[#111110]">
+                    목차 {headings.length}개
+                  </span>
+                  <span className="rounded-full bg-white px-3 py-1 font-semibold text-[#111110]">
+                    {computedReadTime}
+                  </span>
+                  <span
+                    className="rounded-full border px-3 py-1 font-semibold"
+                    style={{ borderColor: seoAnalysis.scoreBorder, backgroundColor: seoAnalysis.scoreBg, color: seoAnalysis.scoreColor }}
+                  >
+                    SEO {seoAnalysis.score}
+                  </span>
+                </div>
+                <TabsList className="bg-white">
+                  <TabsTrigger value="write">작성</TabsTrigger>
+                  <TabsTrigger value="preview">
+                    <Eye className="mr-1.5 h-3.5 w-3.5" />
+                    미리보기
+                  </TabsTrigger>
+                </TabsList>
+              </div>
 
               <TabsContent value="write" className="mt-0">
-                <div className="grid gap-4 lg:grid-cols-[minmax(0,1fr)_220px]">
+                <div className="grid gap-4 xl:grid-cols-[minmax(0,1fr)_260px]">
                   <RichMarkdownEditor
                     ref={editorRef}
                     value={form.contentMarkdown}
@@ -1688,6 +1881,21 @@ export default function BlogPostEditor({
                     onSelectionOptimize={(text) => handleAiAction("optimize", undefined, text || undefined)}
                   />
                   <div className="space-y-4 rounded-2xl border border-[#e8e8e4] bg-[#fcfcfb] p-4">
+                    <div className="grid grid-cols-3 gap-2">
+                      {[
+                        { label: "필수", value: `${requiredDone}/${requiredItems.length}` },
+                        { label: "SEO", value: `${seoAnalysis.score}` },
+                        { label: "목차", value: `${headings.length}` },
+                      ].map((item) => (
+                        <div key={item.label} className="rounded-xl bg-white px-2.5 py-2 text-center">
+                          <p className="text-[10px] font-semibold uppercase tracking-[0.12em] text-[#1a1a1a]/35">{item.label}</p>
+                          <p className="mt-1 text-[14px] font-bold tabular-nums text-[#111110]">{item.value}</p>
+                        </div>
+                      ))}
+                    </div>
+
+                    <div className="h-px bg-[#e8e8e4]" />
+
                     {/* 자동 목차 */}
                     <div>
                       <p className="text-sm font-semibold text-[#111110]">자동 목차</p>
@@ -1851,7 +2059,7 @@ export default function BlogPostEditor({
                       <div className="mt-2 space-y-1.5 text-[11px] leading-5 text-[#084734]/75">
                         <p>**굵게** · *기울임* · ==강조==</p>
                         <p>{"{{green:브랜드색}} · [링크](url)"}</p>
-                        <p>![설명](이미지URL) · {">"} 인용</p>
+                        <p>![설명](/images/example.png) · {">"} 인용</p>
                       </div>
                     </div>
                   </div>
@@ -1868,10 +2076,10 @@ export default function BlogPostEditor({
         </section>
 
         {/* Right: tabbed sidebar */}
-        <aside>
-          <div className="sticky top-[var(--editor-header-h)] max-h-[calc(100dvh_-_var(--editor-header-h))] overflow-y-auto pb-6">
+        <aside className="self-start">
+          <div className="pb-6 lg:pr-1">
             <Tabs defaultValue="settings" className="w-full">
-              <div className="sticky top-0 z-10 bg-[#FAFAF8] pb-3">
+              <div className="z-10 bg-[#FAFAF8] pb-3">
                 <TabsList className="grid w-full grid-cols-3">
                   <TabsTrigger value="settings">설정</TabsTrigger>
                   <TabsTrigger value="seo" className="gap-1.5">
@@ -1966,12 +2174,15 @@ export default function BlogPostEditor({
                   <div className="space-y-3">
                     <div className="grid grid-cols-2 gap-2">
                       <div className="space-y-1.5">
-                        <Label htmlFor="status" className="text-[12px]">상태</Label>
+                        <Label htmlFor="status" className="text-[12px]">
+                          상태
+                          <FieldBadge required />
+                        </Label>
                         <select
                           id="status"
                           value={form.status}
                           onChange={(event) => updateForm("status", event.target.value as BlogPostStatus)}
-                          className="h-9 w-full rounded-xl border border-[#e8e8e4] bg-white px-3 text-sm outline-none focus:border-[#084734]"
+                          className={`h-9 ${SOFT_SELECT_CLASS}`}
                         >
                           {BLOG_STATUS_OPTIONS.map((opt) => (
                             <option key={opt.value} value={opt.value}>{opt.label}</option>
@@ -1979,12 +2190,15 @@ export default function BlogPostEditor({
                         </select>
                       </div>
                       <div className="space-y-1.5">
-                        <Label htmlFor="category" className="text-[12px]">카테고리</Label>
+                        <Label htmlFor="category" className="text-[12px]">
+                          카테고리
+                          <FieldBadge required />
+                        </Label>
                         <select
                           id="category"
                           value={form.category}
                           onChange={(event) => updateForm("category", event.target.value)}
-                          className="h-9 w-full rounded-xl border border-[#e8e8e4] bg-white px-3 text-sm outline-none focus:border-[#084734]"
+                          className={`h-9 ${SOFT_SELECT_CLASS}`}
                         >
                           {CATEGORIES.filter((c) => c !== "전체").map((c) => (
                             <option key={c} value={c}>{c}</option>
@@ -1993,50 +2207,42 @@ export default function BlogPostEditor({
                       </div>
                     </div>
                     <div className="space-y-1.5">
-                      <Label htmlFor="publishedAt" className="text-[12px]">
-                        예약 발행 시각 (선택)
+                      <Label htmlFor="tags" className="text-[12px]">
+                        키워드/태그
+                        <FieldBadge />
                       </Label>
-                      <Input
-                        id="publishedAt"
-                        type="datetime-local"
-                        value={isoToLocalInput(form.publishedAt)}
-                        onChange={(event) =>
-                          updateForm(
-                            "publishedAt",
-                            event.target.value ? new Date(event.target.value).toISOString() : ""
-                          )
-                        }
-                      />
-                      <p className="text-[11px] leading-relaxed text-[#1a1a1a]/45">
-                        미래 시각으로 두면 발행 상태여도 그 시각 전까지 공개되지 않습니다.
-                        비우면 발행 즉시 공개됩니다.
-                      </p>
-                    </div>
-                    <div className="space-y-1.5">
-                      <Label htmlFor="tags" className="text-[12px]">태그 (쉼표로 구분)</Label>
                       <Input
                         id="tags"
                         value={tagsInput}
-                        onChange={(event) => {
-                          const parsed = parseTags(event.target.value)
-                          updateEditor((snapshot) => ({
-                            ...snapshot,
-                            tagsInput: event.target.value,
-                            form: { ...snapshot.form, tags: parsed, tag: parsed[0] || "" },
-                          }))
-                        }}
-                        placeholder="Deep Dive, Guide, New Feature"
+                        onChange={(event) => updateTagsInput(event.target.value)}
+                        placeholder="AI 교육, 학원 운영, 상담 전환"
+                        className="h-10 rounded-xl"
                       />
+                      {tagKeywords.length > 0 ? (
+                        <div className="flex flex-wrap gap-1.5 pt-1">
+                          {tagKeywords.slice(0, 8).map((tag) => (
+                            <span
+                              key={tag}
+                              className="animate-in rounded-full border border-[#dcebd9] bg-[#ECFDF5] px-2.5 py-1 text-[11px] font-medium text-[#084734] fade-in-0 zoom-in-95 duration-150"
+                            >
+                              #{tag}
+                            </span>
+                          ))}
+                        </div>
+                      ) : (
+                        <FieldHint>쉼표로 구분하면 SEO 체크와 목록 필터에 바로 반영됩니다.</FieldHint>
+                      )}
                     </div>
                     <div className="space-y-1.5">
                       <Label htmlFor="leadMagnet" className="text-[12px]">
                         리드 마그넷 (글 하단 자료 다운로드 블록)
+                        <FieldBadge />
                       </Label>
                       <select
                         id="leadMagnet"
                         value={form.leadMagnetSlug ?? ""}
                         onChange={(event) => updateForm("leadMagnetSlug", event.target.value)}
-                        className="h-9 w-full rounded-xl border border-[#e8e8e4] bg-white px-3 text-sm outline-none focus:border-[#084734]"
+                        className={`h-9 ${SOFT_SELECT_CLASS}`}
                       >
                         <option value="">표시 안 함</option>
                         {leadOptions.map((opt) => (
@@ -2046,10 +2252,10 @@ export default function BlogPostEditor({
                           </option>
                         ))}
                       </select>
-                      <p className="text-[11px] leading-relaxed text-[#1a1a1a]/45">
+                      <FieldHint>
                         선택하면 본문 하단에 이메일 수집 블록이 노출되고, 신청자는
                         해당 마그넷 태그로 구독자 DB에 기록됩니다.
-                      </p>
+                      </FieldHint>
                     </div>
                     <label className="flex cursor-pointer items-center gap-2.5 text-sm text-[#1a1a1a]/65">
                       <input
@@ -2060,6 +2266,75 @@ export default function BlogPostEditor({
                       />
                       목록 상단 Featured로 노출
                     </label>
+                  </div>
+                </div>
+
+                {/* 고급 설정 */}
+                <div className="rounded-[20px] border border-[#e8e8e4] bg-white p-5 shadow-sm">
+                  <div className="mb-3.5 flex items-start justify-between gap-3">
+                    <div>
+                      <p className="text-sm font-semibold text-[#111110]">고급 설정</p>
+                      <p className="mt-1 text-[12px] leading-5 text-[#1a1a1a]/45">
+                        공개일을 직접 보정하거나 미래 예약 발행 시각을 지정합니다.
+                      </p>
+                    </div>
+                    <span className="shrink-0 rounded-full border border-[#e8e8e4] bg-[#FAFAF8] px-2.5 py-1 text-[11px] font-semibold text-[#1a1a1a]/45">
+                      선택
+                    </span>
+                  </div>
+
+                  <div className="space-y-2">
+                    <div className="flex items-center justify-between gap-3">
+                      <Label htmlFor="advanced-published-at" className="text-[12px]">
+                        발행 날짜
+                        <FieldBadge />
+                      </Label>
+                      {form.publishedAt ? (
+                        <button
+                          type="button"
+                          onClick={() => updateForm("publishedAt", "")}
+                          className="text-[11px] font-semibold text-[#1a1a1a]/35 transition-colors hover:text-[#B85C33]"
+                        >
+                          비우기
+                        </button>
+                      ) : null}
+                    </div>
+                    <Input
+                      id="advanced-published-at"
+                      type="datetime-local"
+                      value={isoToLocalInput(form.publishedAt)}
+                      onChange={(event) =>
+                        updateForm(
+                          "publishedAt",
+                          event.target.value ? new Date(event.target.value).toISOString() : ""
+                        )
+                      }
+                      className="h-10 rounded-xl"
+                    />
+                    <div className="grid grid-cols-2 gap-2">
+                      <button
+                        type="button"
+                        onClick={() => updateForm("publishedAt", new Date().toISOString())}
+                        className="inline-flex h-9 items-center justify-center rounded-lg border border-[#e8e8e4] bg-white px-3 text-[12px] font-semibold text-[#111110] transition-colors hover:bg-[#F6F5F4]"
+                      >
+                        지금으로 설정
+                      </button>
+                      <button
+                        type="button"
+                        onClick={() => {
+                          if (!initialPost?.publishedAt) return
+                          updateForm("publishedAt", initialPost.publishedAt)
+                        }}
+                        disabled={!initialPost?.publishedAt}
+                        className="inline-flex h-9 items-center justify-center rounded-lg border border-[#e8e8e4] bg-white px-3 text-[12px] font-semibold text-[#111110] transition-colors hover:bg-[#F6F5F4] disabled:cursor-not-allowed disabled:opacity-35"
+                      >
+                        기존 날짜 복원
+                      </button>
+                    </div>
+                    <FieldHint>
+                      과거 시각은 공개 화면의 발행일로 쓰이고, 미래 시각은 발행 상태여도 그 시각 전까지 숨깁니다.
+                      상단 발행 버튼은 지금 즉시 공개하는 용도라 현재 시각으로 덮어씁니다.
+                    </FieldHint>
                   </div>
                 </div>
 
@@ -2176,18 +2451,26 @@ export default function BlogPostEditor({
                     {form.authorAvatarUrl && (
                       <div className="flex items-center gap-3 rounded-xl border border-[#e8e8e4] bg-[#fcfcfb] p-3">
                         <div className="relative h-14 w-14 shrink-0 overflow-hidden rounded-full bg-[#f0f0ec]">
-                          <Image
-                            src={form.authorAvatarUrl}
-                            alt={`${form.author || "작성자"} 아바타 미리보기`}
-                            fill
-                            className="object-cover"
-                            sizes="56px"
-                            unoptimized
-                          />
+                          {authorAvatarSrc ? (
+                            <SafeBlogImage
+                              src={authorAvatarSrc}
+                              alt={`${form.author || "작성자"} 아바타 미리보기`}
+                              fill
+                              className="object-cover"
+                              sizes="56px"
+                              fallbackIndex={initialPost?.id ?? 0}
+                            />
+                          ) : (
+                            <div className="flex h-full items-center justify-center text-base font-semibold text-[#084734]">
+                              {authorInitial}
+                            </div>
+                          )}
                         </div>
                         <div className="min-w-0">
                           <p className="text-[12px] font-medium text-[#111110]">작성자 공개 프로필</p>
-                          <p className="text-[11px] text-[#1a1a1a]/35">1:1 원형 크롭</p>
+                          <p className={`text-[11px] ${authorAvatarSrc ? "text-[#1a1a1a]/35" : "text-[#B85C33]"}`}>
+                            {authorAvatarSrc ? "1:1 원형 크롭" : "표시할 수 없는 이미지 URL입니다."}
+                          </p>
                         </div>
                       </div>
                     )}
@@ -2196,7 +2479,7 @@ export default function BlogPostEditor({
                       value={form.authorBio}
                       onChange={(event) => updateForm("authorBio", event.target.value)}
                       placeholder="작성자 소개"
-                      className="w-full min-h-[80px] resize-none rounded-xl border border-[#e8e8e4] bg-white px-4 py-3 text-sm outline-none transition-colors focus:border-[#084734]"
+                      className={`min-h-[80px] ${SOFT_TEXTAREA_CLASS}`}
                     />
                   </div>
                 </div>
@@ -2245,7 +2528,7 @@ export default function BlogPostEditor({
                       value={form.cta.description}
                       onChange={(event) => updateCta("description", event.target.value)}
                       placeholder="CTA 설명"
-                      className="w-full min-h-[80px] resize-none rounded-xl border border-[#e8e8e4] bg-white px-4 py-3 text-sm outline-none transition-colors focus:border-[#084734]"
+                      className={`min-h-[80px] ${SOFT_TEXTAREA_CLASS}`}
                     />
                     <div className="grid grid-cols-2 gap-2">
                       <Input
@@ -2268,7 +2551,7 @@ export default function BlogPostEditor({
 
                 {/* Score card */}
                 <div
-                  className="rounded-[20px] border p-5 shadow-sm"
+                  className="rounded-[20px] border p-5 shadow-sm transition-all duration-200"
                   style={{ borderColor: seoAnalysis.scoreBorder, backgroundColor: seoAnalysis.scoreBg }}
                 >
                   <div className="flex items-center gap-4">
@@ -2346,7 +2629,7 @@ export default function BlogPostEditor({
                   <p className="mb-3.5 text-sm font-semibold text-[#111110]">SEO 체크리스트</p>
                   <div className="space-y-3">
                     {seoAnalysis.checks.map((check) => (
-                      <div key={check.id} className="flex items-start gap-3 transition-colors duration-100">
+                      <div key={check.id} className="flex items-start gap-3 rounded-xl px-2 py-1.5 transition-all duration-150 hover:bg-[#F6F5F4]">
                         <div className={`mt-0.5 flex h-5 w-5 shrink-0 items-center justify-center rounded-full ${
                           check.ok ? "bg-emerald-100" : "bg-[#FEF3EE]"
                         }`}>
@@ -2386,7 +2669,10 @@ export default function BlogPostEditor({
                   <div className="space-y-3">
                     <div className="space-y-1.5">
                       <div className="flex items-center justify-between">
-                        <Label className="text-[12px]">SEO 제목</Label>
+                        <Label className="text-[12px]">
+                          SEO 제목
+                          <FieldBadge />
+                        </Label>
                         <span className={`text-[11px] tabular-nums ${
                           form.seoTitle.length > 60 ? "text-[#B85C33]" :
                           form.seoTitle.length >= 30 ? "text-emerald-600" :
@@ -2399,11 +2685,16 @@ export default function BlogPostEditor({
                         value={form.seoTitle}
                         onChange={(event) => updateForm("seoTitle", event.target.value)}
                         placeholder={form.title || "SEO 제목 (비워두면 제목으로 대체)"}
+                        className="h-10 rounded-xl"
                       />
+                      <FieldHint>비우면 기본 제목을 사용합니다. 검색 결과에서는 짧고 구체적인 문장이 좋습니다.</FieldHint>
                     </div>
                     <div className="space-y-1.5">
                       <div className="flex items-center justify-between">
-                        <Label className="text-[12px]">메타 설명</Label>
+                        <Label className="text-[12px]">
+                          메타 설명
+                          <FieldBadge />
+                        </Label>
                         <span className={`text-[11px] tabular-nums ${
                           form.seoDescription.length > 160 ? "text-[#B85C33]" :
                           form.seoDescription.length >= 120 ? "text-emerald-600" :
@@ -2417,8 +2708,43 @@ export default function BlogPostEditor({
                         value={form.seoDescription}
                         onChange={(event) => updateForm("seoDescription", event.target.value)}
                         placeholder={form.excerpt || "검색 결과에 보일 설명 (비워두면 요약문으로 대체)"}
-                        className="w-full min-h-[100px] resize-none rounded-xl border border-[#e8e8e4] bg-white px-4 py-3 text-sm outline-none transition-colors focus:border-[#084734]"
+                        className={`min-h-[100px] ${SOFT_TEXTAREA_CLASS}`}
                       />
+                      <FieldHint>비우면 한 줄 요약을 사용합니다. 권장 길이는 120-160자입니다.</FieldHint>
+                    </div>
+                    <div className="space-y-1.5 rounded-2xl border border-[#e8e8e4] bg-[#fcfcfb] p-3">
+                      <div className="flex items-center justify-between gap-3">
+                        <Label htmlFor="seo-keywords" className="text-[12px]">
+                          검색 키워드
+                          <FieldBadge />
+                        </Label>
+                        <span className={`text-[11px] tabular-nums ${tagKeywords.length > 0 ? "text-emerald-600" : "text-[#B85C33]"}`}>
+                          {tagKeywords.length}개
+                        </span>
+                      </div>
+                      <Input
+                        id="seo-keywords"
+                        value={tagsInput}
+                        onChange={(event) => updateTagsInput(event.target.value)}
+                        placeholder="학원 운영, AI 교육, 클래스인"
+                        className="h-10 rounded-xl"
+                      />
+                      <div className="flex min-h-7 flex-wrap gap-1.5 pt-1">
+                        {tagKeywords.length > 0 ? (
+                          tagKeywords.slice(0, 10).map((tag) => (
+                            <span
+                              key={tag}
+                              className="animate-in rounded-full border border-[#dcebd9] bg-white px-2.5 py-1 text-[11px] font-medium text-[#084734] shadow-[0_1px_2px_rgba(8,71,52,0.05)] fade-in-0 zoom-in-95 duration-150"
+                            >
+                              #{tag}
+                            </span>
+                          ))
+                        ) : (
+                          <span className="text-[11px] text-[#1a1a1a]/35">
+                            키워드를 1개 이상 넣으면 SEO 체크리스트가 통과됩니다.
+                          </span>
+                        )}
+                      </div>
                     </div>
                   </div>
                 </div>
@@ -2441,7 +2767,7 @@ export default function BlogPostEditor({
                         placeholder="예: 학원 운영 효율화 방법, 학부모 소통 노하우…"
                         value={draftInput.topic}
                         onChange={(e) => setDraftInput((prev) => ({ ...prev, topic: e.target.value }))}
-                        className="mt-1.5 w-full rounded-xl border border-[#e8e8e4] bg-white px-3 py-2 text-sm outline-none transition-colors focus:border-[#084734] placeholder:text-[#1a1a1a]/25"
+                        className={`mt-1.5 px-3 py-2 placeholder:text-[#1a1a1a]/25 ${SOFT_SELECT_CLASS}`}
                       />
                     </div>
                     <div className="grid grid-cols-2 gap-2.5">
@@ -2450,7 +2776,7 @@ export default function BlogPostEditor({
                         <select
                           value={draftInput.tone}
                           onChange={(e) => setDraftInput((prev) => ({ ...prev, tone: e.target.value }))}
-                          className="mt-1.5 w-full rounded-xl border border-[#e8e8e4] bg-white px-3 py-2 text-sm outline-none transition-colors focus:border-[#084734] appearance-none"
+                          className={`mt-1.5 px-3 py-2 appearance-none ${SOFT_SELECT_CLASS}`}
                         >
                           <option value="전문적">전문적</option>
                           <option value="친근한">친근한</option>
@@ -2464,7 +2790,7 @@ export default function BlogPostEditor({
                         <select
                           value={draftInput.length}
                           onChange={(e) => setDraftInput((prev) => ({ ...prev, length: e.target.value }))}
-                          className="mt-1.5 w-full rounded-xl border border-[#e8e8e4] bg-white px-3 py-2 text-sm outline-none transition-colors focus:border-[#084734] appearance-none"
+                          className={`mt-1.5 px-3 py-2 appearance-none ${SOFT_SELECT_CLASS}`}
                         >
                           <option value="short">짧게 (~500자)</option>
                           <option value="medium">보통 (~1200자)</option>
@@ -2482,7 +2808,7 @@ export default function BlogPostEditor({
                         placeholder={"세부 내용, 통계, 링크, 핵심 포인트 등을 자유롭게 붙여넣으세요.\n예) 클래스인 사용 학원 85%가 출석 관리 시간 50% 단축\nhttps://example.com/article"}
                         value={draftInput.reference}
                         onChange={(e) => setDraftInput((prev) => ({ ...prev, reference: e.target.value }))}
-                        className="mt-1.5 w-full resize-none rounded-xl border border-[#e8e8e4] bg-white px-3 py-2 text-sm outline-none transition-colors focus:border-[#084734] placeholder:text-[#1a1a1a]/25 leading-relaxed"
+                        className={`mt-1.5 min-h-[112px] px-3 py-2 leading-relaxed placeholder:text-[#1a1a1a]/25 ${SOFT_TEXTAREA_CLASS}`}
                       />
                     </div>
                     <button

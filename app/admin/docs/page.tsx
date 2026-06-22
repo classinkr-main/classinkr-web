@@ -1,6 +1,6 @@
 "use client"
 
-import { useCallback, useEffect, useMemo, useState } from "react"
+import { Suspense, useCallback, useEffect, useMemo, useState } from "react"
 import Link from "next/link"
 import { useRouter } from "next/navigation"
 import {
@@ -22,20 +22,23 @@ import {
   Plus,
   RefreshCw,
   Search,
+  Sparkles,
   ThumbsUp,
   X,
 } from "lucide-react"
 
 import DocsCategoryManager from "@/components/admin/docs/DocsCategoryManager"
-import DocsQuestionClusterBacklog from "@/components/admin/docs/DocsQuestionClusterBacklog"
+import DocsGapsPanel from "@/components/admin/docs/DocsGapsPanel"
 import DocsRecommendedQuestionsManager from "@/components/admin/docs/DocsRecommendedQuestionsManager"
 import DocsRedirectManager from "@/components/admin/docs/DocsRedirectManager"
+import AdminTabs from "@/components/admin/AdminTabs"
 import { adminFetch, adminFetchJson, adminFetchJsonCached } from "@/lib/admin-client"
 import type {
   AdminDocsAnalyticsResponse,
   AdminDocsArticleSummary,
   AdminDocsContentResponse,
 } from "@/lib/admin-docs"
+import { useUrlState } from "@/lib/use-url-state"
 
 interface ReindexResult {
   configured: boolean
@@ -166,7 +169,7 @@ const DOCS_TABS = [
   { value: "recommended", label: "추천 질문", icon: MessageSquareText },
   { value: "categories", label: "카테고리", icon: FolderTree },
   { value: "redirects", label: "리디렉트", icon: ExternalLink },
-  { value: "backlog", label: "질문 백로그", icon: Bot },
+  { value: "gaps", label: "보강 큐", icon: Sparkles },
 ] as const
 
 type DocsTab = (typeof DOCS_TABS)[number]["value"]
@@ -285,8 +288,9 @@ function getArticleOrderMeta(
   }
 }
 
-export default function AdminDocsPage() {
+function AdminDocsPageContent() {
   const router = useRouter()
+  const [tabParam, setTabParam] = useUrlState("tab", "documents")
   const [content, setContent] = useState<AdminDocsContentResponse | null>(null)
   const [analytics, setAnalytics] = useState<AdminDocsAnalyticsResponse | null>(null)
   const [loading, setLoading] = useState(true)
@@ -311,9 +315,11 @@ export default function AdminDocsPage() {
   const [bulkFeatured, setBulkFeatured] = useState("unchanged")
   const [bulkSaving, setBulkSaving] = useState(false)
   const [savedViews, setSavedViews] = useState<SavedDocsView[]>([])
-  const [activeTab, setActiveTab] = useState<DocsTab>("documents")
   const [editingArticleId, setEditingArticleId] = useState<string | null>(null)
   const [inlineDraft, setInlineDraft] = useState<InlineArticleDraft | null>(null)
+  const activeTab: DocsTab = DOCS_TABS.some((item) => item.value === tabParam)
+    ? (tabParam as DocsTab)
+    : "documents"
 
   const load = useCallback(async () => {
     setLoading(true)
@@ -845,31 +851,20 @@ export default function AdminDocsPage() {
         />
       </section>
 
-      <div className="mb-6 overflow-x-auto" role="tablist" aria-label="문서 관리 섹션">
-        <div className="inline-flex min-w-full rounded-xl border border-[#e8e8e4] bg-white p-1 sm:min-w-0">
-          {DOCS_TABS.map((tab) => {
-            const Icon = tab.icon
-            const isActive = activeTab === tab.value
-            return (
-              <button
-                key={tab.value}
-                type="button"
-                role="tab"
-                aria-selected={isActive}
-                onClick={() => setActiveTab(tab.value)}
-                className={`inline-flex h-10 flex-1 items-center justify-center gap-2 rounded-lg px-3 text-[13px] font-semibold transition-colors sm:flex-none ${
-                  isActive
-                    ? "bg-[#111110] text-white"
-                    : "text-[#1a1a1a]/45 hover:bg-[#f5f5f2] hover:text-[#111110]"
-                }`}
-              >
-                <Icon className="h-4 w-4" />
-                <span className="whitespace-nowrap">{tab.label}</span>
-              </button>
-            )
-          })}
-        </div>
-      </div>
+      <AdminTabs
+        className="mb-6"
+        label="문서 관리 섹션"
+        items={DOCS_TABS.map((tab) => {
+          const Icon = tab.icon
+          return {
+            value: tab.value,
+            label: tab.label,
+            icon: <Icon className="h-4 w-4" />,
+          }
+        })}
+        value={activeTab}
+        onValueChange={setTabParam}
+      />
 
       {activeTab === "documents" ? (
         <>
@@ -1441,9 +1436,9 @@ export default function AdminDocsPage() {
         </section>
       ) : null}
 
-      {activeTab === "backlog" ? (
+      {activeTab === "gaps" ? (
         <section className="mb-8">
-          <DocsQuestionClusterBacklog />
+          <DocsGapsPanel />
         </section>
       ) : null}
 
@@ -1514,5 +1509,13 @@ export default function AdminDocsPage() {
         </div>
       ) : null}
     </div>
+  )
+}
+
+export default function AdminDocsPage() {
+  return (
+    <Suspense fallback={null}>
+      <AdminDocsPageContent />
+    </Suspense>
   )
 }

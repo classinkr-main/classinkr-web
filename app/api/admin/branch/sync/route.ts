@@ -2,6 +2,8 @@ import { NextRequest, NextResponse } from "next/server"
 import { revalidateTag } from "next/cache"
 import { verifyAdmin } from "@/lib/admin-auth"
 import { runAll } from "@/lib/branch/sync/run-all"
+import { BRANCH_HW_CACHE_TAG } from "@/lib/repositories/branch-hw"
+import { BRANCH_REV_DEALS_CACHE_TAG } from "@/lib/repositories/branch-deals"
 import { runBranchRevLinkMaintenance } from "@/lib/repositories/crm-source-links"
 
 export async function POST(req: NextRequest) {
@@ -14,7 +16,10 @@ export async function POST(req: NextRequest) {
   const effectiveSources = sources.length ? sources : ["rev", "hw"]
   const result = await runAll({ trigger: "manual", sources: sources.length ? sources : undefined })
   if (result.ok) {
-    for (const tag of ["branch-dsh", "branch-seg", "branch-kpi"]) {
+    const cacheTags = ["branch-dsh", "branch-seg", "branch-kpi"]
+    if (effectiveSources.includes("rev")) cacheTags.push(BRANCH_REV_DEALS_CACHE_TAG)
+    if (effectiveSources.includes("hw")) cacheTags.push(BRANCH_HW_CACHE_TAG)
+    for (const tag of cacheTags) {
       revalidateTag(tag, "max")
     }
     const crmLinks = effectiveSources.includes("rev") ? await runBranchRevLinkMaintenance() : undefined

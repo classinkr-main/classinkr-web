@@ -145,6 +145,27 @@ export async function getLeads(): Promise<LeadRecord[]> {
   return (data as Lead[]).map(supabaseToLegacy);
 }
 
+/**
+ * 대시보드 전용 경량 조회 — message/notes/utm_* 등 무거운 컬럼을 제외하고
+ * 화면에서 실제로 쓰는 필드만 가져온다. (overview 페이로드 축소용)
+ * supabaseToLegacy는 미선택 컬럼을 `?? undefined`로 처리하므로 그대로 재사용 가능.
+ */
+export async function getDashboardLeads(): Promise<LeadRecord[]> {
+  if (!USE_SUPABASE) {
+    const { getLeads: jsonGetLeads } = await import("@/lib/db");
+    return jsonGetLeads();
+  }
+
+  const supabase = createSupabaseAdminClient();
+  const { data, error } = await supabase
+    .from("leads")
+    .select("id, source, name, org, email, status, branch, created_at")
+    .order("created_at", { ascending: false });
+
+  if (error) throw new Error(`[leads] 대시보드 조회 실패: ${error.message}`);
+  return (data as Lead[]).map(supabaseToLegacy);
+}
+
 export async function getLeadById(id: string): Promise<LeadRecord | null> {
   if (!USE_SUPABASE) {
     const { getLeads: jsonGetLeads } = await import("@/lib/db");

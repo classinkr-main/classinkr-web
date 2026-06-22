@@ -3,6 +3,7 @@
 import { useEffect, useState } from "react"
 import Image, { type ImageProps } from "next/image"
 import { NEUTRAL_BLUR_DATA_URL } from "@/lib/image-blur"
+import { sanitizePublicImageUrl } from "@/lib/safe-public-url"
 
 const FALLBACK_BLOG_IMAGES = [
   "/images/blog/thumb-01.png",
@@ -19,10 +20,6 @@ const FALLBACK_BLOG_IMAGES = [
   "/images/blog/thumb-12.png",
 ]
 
-const SAFE_IMAGE_PROTOCOLS = new Set(["https:"])
-const SAFE_REMOTE_IMAGE_HOSTS = new Set(["images.unsplash.com"])
-const DISALLOWED_IMAGE_SRC_CHARS = /[\u0000-\u001F\u007F\s\\]/
-
 type SafeBlogImageProps = Omit<
   ImageProps,
   "src" | "alt" | "placeholder" | "blurDataURL" | "onError"
@@ -37,32 +34,8 @@ function getFallbackBlogImage(index = 0) {
   return FALLBACK_BLOG_IMAGES[normalizedIndex]
 }
 
-function isAllowedRemoteImageHost(hostname: string) {
-  return (
-    SAFE_REMOTE_IMAGE_HOSTS.has(hostname) ||
-    hostname === "supabase.co" ||
-    hostname.endsWith(".supabase.co")
-  )
-}
-
 function normalizeBlogImageSrc(src: string | null | undefined, fallbackSrc: string) {
-  const trimmed = typeof src === "string" ? src.trim() : ""
-  if (!trimmed || DISALLOWED_IMAGE_SRC_CHARS.test(trimmed)) return fallbackSrc
-
-  if (trimmed.startsWith("/")) {
-    return trimmed.startsWith("//") ? fallbackSrc : trimmed
-  }
-
-  try {
-    const parsed = new URL(trimmed)
-    if (SAFE_IMAGE_PROTOCOLS.has(parsed.protocol) && isAllowedRemoteImageHost(parsed.hostname)) {
-      return parsed.toString()
-    }
-  } catch {
-    return fallbackSrc
-  }
-
-  return fallbackSrc
+  return sanitizePublicImageUrl(src, fallbackSrc)
 }
 
 function shouldBypassImageOptimizer(src: string) {

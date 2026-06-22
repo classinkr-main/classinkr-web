@@ -2,6 +2,7 @@
 
 import { unstable_cache } from "next/cache"
 import { createSupabaseAdminClient } from "@/lib/supabase/admin"
+import { computePublicEventStatus } from "@/lib/public-event-dates"
 import { sanitizePublicUrl } from "@/lib/safe-public-url"
 import type {
   EventCategory,
@@ -62,11 +63,7 @@ function isAbortError(error: { code?: string; message?: string } | null | undefi
 }
 
 function computeStatus(row: PublicEventRow): EventStatus {
-  if (row.status_override) return row.status_override as EventStatus
-  const now = new Date()
-  if (now < new Date(row.starts_at)) return "예정"
-  if (!row.ends_at || now <= new Date(row.ends_at)) return "진행 중"
-  return "마감"
+  return computePublicEventStatus(row.starts_at, row.ends_at, row.status_override)
 }
 
 function normalizePublicationStatus(value: string | null | undefined): EventPublicationStatus {

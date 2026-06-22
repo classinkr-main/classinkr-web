@@ -69,11 +69,14 @@ async function notifySyncOutcome(result: ExternalCrmSyncChainResult, trigger: "m
 
 // Sync → candidate generation → auto-confirm → admin notification, as one
 // unit so manual button and cron behave identically.
-export async function runExternalCrmSyncChain(trigger: "manual" | "cron"): Promise<ExternalCrmSyncChainResult> {
-  const sync = await syncXiaoshouyiSnapshots(trigger)
+export async function runExternalCrmSyncChain(
+  trigger: "manual" | "cron",
+  options: { force?: boolean; recentSyncTtlMs?: number } = {}
+): Promise<ExternalCrmSyncChainResult> {
+  const sync = await syncXiaoshouyiSnapshots(trigger, options)
   const result: ExternalCrmSyncChainResult = { sync }
 
-  if (sync.ok && !sync.skipped) {
+  if (sync.ok && !sync.skipped && !sync.cached) {
     try {
       result.candidates = await generateExternalCrmLinkCandidates()
     } catch (error) {

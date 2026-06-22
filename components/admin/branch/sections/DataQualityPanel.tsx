@@ -130,6 +130,7 @@ const FILTERS: Array<{ id: FilterId; label: string }> = [
   { id: "all", label: "전체" },
   { id: "error", label: "위험" },
   { id: "warn", label: "주의" },
+  { id: "info", label: "참고" },
   { id: "crm", label: "CRM" },
   { id: "hw", label: "HW" },
   { id: "kpi", label: "KPI" },

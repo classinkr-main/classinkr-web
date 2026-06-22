@@ -10,6 +10,8 @@ import {
 } from "@/lib/chatbot/classification"
 import {
   generateGeminiFinalAnswer,
+  streamGeminiFinalAnswer,
+  clampAnswerToLength,
   embedText,
   sanitizePublicAnswerText,
   type ChatbotModelTier,
@@ -22,6 +24,13 @@ import {
   maybeCreateChannelTalkFeedbackHandoff,
   maybeCreateChannelTalkHandoff,
 } from "@/lib/chatbot/channel-handoff"
+import {
+  buildCsFigmaGuideSuggestedQuestions,
+  findCsFigmaGuideForQuestion,
+  formatCsFigmaGuideAnswer,
+  getCsFigmaGuideDocPath,
+  isCsFigmaSymptomQuestion,
+} from "@/lib/cs-figma-guides"
 
 const MAX_MESSAGE_LENGTH = 1000
 const MAX_FEEDBACK_COMMENT_LENGTH = 500
@@ -30,9 +39,13 @@ const MAX_SOURCES_PER_DOC = 1
 const MAX_RETRIEVAL_CANDIDATES = 24
 const MAX_RETRIEVAL_CANDIDATES_PER_DOC = 3
 const MIN_DIRECT_SOURCE_SCORE = 18
+const DEFAULT_KNOWLEDGE_SEARCH_TIMEOUT_MS = 2_800
+const DEFAULT_FINAL_ANSWER_TIMEOUT_MS = 6_000
+// 스트리밍은 첫 토큰이 일찍 보여 체감 지연이 낮으므로 본문 완성까지 조금 더 기다린다.
+const DEFAULT_FINAL_ANSWER_STREAM_TIMEOUT_MS = 8_000
 const RETRIEVAL_CACHE_TTL_MS = 5 * 60 * 1000
 const RETRIEVAL_CACHE_MAX = 200
-const RETRIEVAL_CACHE_VERSION = "rag-rerank-20260617-v3"
+const RETRIEVAL_CACHE_VERSION = "rag-rerank-20260618-v4"
 const UUID_RE = /^[0-9a-f]{8}-[0-9a-f]{4}-[1-5][0-9a-f]{3}-[89ab][0-9a-f]{3}-[0-9a-f]{12}$/i
 const CHAT_SESSION_CHANNELS = new Set(["web", "admin_preview", "partner_portal", "manual_import"])
 const PROGRESSIVE_MODEL_TIERS: ChatbotModelTier[] = ["basic", "reasoning", "advanced"]
@@ -119,6 +132,7 @@ interface SupabaseChunkRow {
 const QUERY_EXPANSIONS: Record<string, string[]> = {
   as: ["a/s", "수리", "고장", "하드웨어"],
   "a/s": ["as", "수리", "고장", "하드웨어"],
+  이디비: ["edb", "칠판", "교안", "판서"],
   결제: ["영수증", "세금계산서", "증빙", "청구", "정산"],
   견적: ["도입", "비용", "가격", "요금", "플랜"],
   계정: ["로그인", "접속", "비밀번호", "권한"],
@@ -168,6 +182,7 @@ function redactPii(value: string) {
   return value
     .replace(/[A-Z0-9._%+-]+@[A-Z0-9.-]+\.[A-Z]{2,}/gi, "[email]")
     .replace(/\b\d{3}[-\s]?\d{2}[-\s]?\d{5}\b/g, "[business_number]")
+    .replace(/\b(?:\d[ -]?){13,19}\b/g, "[payment_number]")
     .replace(/\b\d{2,3}[-.\s]?\d{3,4}[-.\s]?\d{4}\b/g, "[phone]")
 }
 
@@ -239,8 +254,103 @@ function setCachedRetrieval(question: NormalizedQuestion, value: KnowledgeSearch
   })
 }
 
+// 답변 레벨 캐시 — 세션(대화 이력)이 없는 동일 질문은 검색·Gemini를 통째로 건너뛴다.
+interface CachedAnswerEntry {
+  response: ReturnType<typeof composeAnswer>
+  category: string
+  intent: ChatbotIntent
+  handoffIntent: HandoffIntent
+  warning?: string
+}
+
+const ANSWER_CACHE_VERSION = "answer-20260621-v4"
+const ANSWER_CACHE_TTL_MS = 5 * 60 * 1000
+const ANSWER_CACHE_MAX = 200
+const answerCache = new Map<string, { expiresAt: number; value: CachedAnswerEntry }>()
+
+function getAnswerCacheKey(question: NormalizedQuestion) {
+  const backend = hasSupabaseServerEnv() ? "supabase" : "static"
+  return `${ANSWER_CACHE_VERSION}:${backend}:${buildRetrievalQueryText(question).toLowerCase()}`
+}
+
+function cloneCachedAnswer(value: CachedAnswerEntry): CachedAnswerEntry {
+  return {
+    ...value,
+    response: {
+      ...value.response,
+      sources: value.response.sources.map((source) => ({ ...source })),
+      suggestedQuestions: [...value.response.suggestedQuestions],
+    },
+  }
+}
+
+function getCachedAnswer(question: NormalizedQuestion): CachedAnswerEntry | null {
+  const key = getAnswerCacheKey(question)
+  const cached = answerCache.get(key)
+  if (!cached) return null
+  if (cached.expiresAt <= Date.now()) {
+    answerCache.delete(key)
+    return null
+  }
+  return cloneCachedAnswer(cached.value)
+}
+
+function setCachedAnswer(question: NormalizedQuestion, value: CachedAnswerEntry) {
+  if (answerCache.size >= ANSWER_CACHE_MAX) {
+    const firstKey = answerCache.keys().next().value
+    if (firstKey) answerCache.delete(firstKey)
+  }
+  answerCache.set(getAnswerCacheKey(question), {
+    expiresAt: Date.now() + ANSWER_CACHE_TTL_MS,
+    value: cloneCachedAnswer(value),
+  })
+}
+
 function elapsedSince(startedAt: number) {
   return Math.max(0, Date.now() - startedAt)
+}
+
+function getPositiveIntegerEnv(name: string, fallback: number) {
+  const value = Number(process.env[name])
+  return Number.isFinite(value) && value > 0 ? value : fallback
+}
+
+function getKnowledgeSearchTimeoutMs() {
+  return getPositiveIntegerEnv("CHATBOT_KNOWLEDGE_SEARCH_TIMEOUT_MS", DEFAULT_KNOWLEDGE_SEARCH_TIMEOUT_MS)
+}
+
+function getFinalAnswerTimeoutMs() {
+  return getPositiveIntegerEnv("CHATBOT_FINAL_ANSWER_TIMEOUT_MS", DEFAULT_FINAL_ANSWER_TIMEOUT_MS)
+}
+
+function getFinalAnswerStreamTimeoutMs() {
+  return getPositiveIntegerEnv("CHATBOT_FINAL_ANSWER_STREAM_TIMEOUT_MS", DEFAULT_FINAL_ANSWER_STREAM_TIMEOUT_MS)
+}
+
+async function withTimeoutFallback<T>({
+  promise,
+  timeoutMs,
+  fallback,
+  onTimeout,
+}: {
+  promise: Promise<T>
+  timeoutMs: number
+  fallback: () => T
+  onTimeout: () => void
+}) {
+  let timeoutId: ReturnType<typeof setTimeout> | undefined
+  const timeoutPromise = new Promise<T>((resolve) => {
+    timeoutId = setTimeout(() => {
+      onTimeout()
+      resolve(fallback())
+    }, timeoutMs)
+  })
+
+  try {
+    return await Promise.race([promise, timeoutPromise])
+  } finally {
+    if (timeoutId) clearTimeout(timeoutId)
+  }
 }
 
 function normalizeQuestion(raw: unknown): NormalizedQuestion {
@@ -270,6 +380,130 @@ function isGreetingOnly(question: NormalizedQuestion) {
   return /^(안녕|안녕하세요|하이|hello|hi)[.!?\s]*$/i.test(question.normalized)
 }
 
+const ACADEMY_PAYMENT_ACTION_RE = /결제|수납|납부|정산|pg|카드\s*결제|가상\s*계좌|계좌\s*이체/i
+const ACADEMY_PAYMENT_SUBJECT_RE =
+  /학원\s*결제|학원비|원비|수강료|수업료|회비|학생.{0,8}(결제|납부|수납)|학부모.{0,8}(결제|납부|수납)|수납.{0,8}(관리|자동|처리|기능|시스템)|정산.{0,8}(관리|자동|처리|기능|시스템)|pg|결제\s*(기능|모듈|시스템)|자동\s*(결제|수납|정산)/i
+const CAPABILITY_REQUEST_RE =
+  /되나요|돼요|가능|지원|제공|처리|관리|기능|자동|연동|만들|추가|하려고|하고\s*싶|쓸\s*수|사용할\s*수/i
+
+const PROMPT_OR_SECURITY_ABUSE_RE =
+  /sql\s*injection|sqli|union\s+select|drop\s+table|or\s+1\s*=\s*1|information_schema|xp_cmdshell|xss|csrf|ssrf|rce|프롬프트\s*인젝션|system\s*prompt|developer\s*(?:message|instruction)|시스템\s*프롬프트|개발자\s*메시지|내부\s*(?:프롬프트|규칙|지시)|(?:프롬프트|prompt|지시문).{0,16}(?:보여|출력|공개|알려|노출|그대로)|(?:보여|출력|공개|알려|노출).{0,16}(?:프롬프트|prompt|지시문)|(?:이전|위|앞선).{0,12}(?:지시|규칙|프롬프트).{0,12}(?:무시|잊어|삭제)|보안.{0,12}(?:뚫|우회|공격)|취약점.{0,12}(?:공격|악용|우회)|해킹.{0,12}(?:방법|공격|뚫|탈취|우회)|(?:비밀번호|토큰|api\s*key|관리자).{0,12}(?:탈취|훔|우회|크랙)/i
+const CRIMINAL_ABUSE_RE =
+  /(?:범죄|불법|사기|피싱|스미싱|절도|도둑|마약|폭탄|무기|살인|폭행).{0,18}(?:방법|하는\s*법|계획|도와|만들|제조|우회|탈취|공격|훔|숨기|피하)|(?:방법|하는\s*법|계획).{0,18}(?:범죄|불법|사기|피싱|스미싱|절도|마약|폭탄|무기|살인|폭행)/i
+const TOKEN_WASTE_RE =
+  /토큰.{0,12}(?:낭비|소모|다\s*써|태워)|(?:무한|계속).{0,8}반복|(?:1000|10000|10,000|만\s*번).{0,12}(?:반복|써|출력)|(?:반복|출력).{0,12}(?:1000|10000|10,000|만\s*번)/i
+
+function isUnsupportedAcademyPaymentFeatureQuestion(question: NormalizedQuestion) {
+  const text = question.redacted.toLowerCase()
+  return (
+    ACADEMY_PAYMENT_ACTION_RE.test(text) &&
+    ACADEMY_PAYMENT_SUBJECT_RE.test(text) &&
+    CAPABILITY_REQUEST_RE.test(text)
+  )
+}
+
+function buildPolicyGuardResponse(question: NormalizedQuestion): {
+  response: Omit<ChatbotQueryResponse, "answerEventId" | "sessionId" | "warning" | "handoffIntent">
+  category: string
+  intent: ChatbotIntent
+  handoffIntent: HandoffIntent
+} | null {
+  const text = question.redacted.toLowerCase()
+
+  if (isUnsupportedAcademyPaymentFeatureQuestion(question)) {
+    return {
+      response: {
+        answer: [
+          "학원 결제 기능은 제공하지 않습니다.",
+          "Classin은 수업, 전자칠판, 녹화, EDB, LMS, 관리자 데이터를 중심으로 쓰는 학원 시스템 OS이고, 학원비 결제·수납·정산은 기존 학원 관리 시스템이나 별도 결제/정산 연동 범위로 분리해 설계하는 편이 맞습니다.",
+          "요금/견적은 전자칠판, OPS, 카메라, 스탠드/벽걸이, 소프트웨어, 설치·온보딩 구성 기준으로 안내할 수 있어요.",
+        ].join("\n\n"),
+        answerMode: "direct_answer",
+        confidence: 0.96,
+        needsHandoff: false,
+        sources: [],
+        suggestedQuestions: [
+          "요금/견적은 어떤 항목으로 구성되나요?",
+          "기존 학원 관리 시스템과 연동 범위가 궁금해요",
+          "수업 운영 기능을 보고 싶어요",
+        ],
+        unresolved: false,
+      },
+      category: "billing",
+      intent: "billing_support",
+      handoffIntent: "demo",
+    }
+  }
+
+  if (PROMPT_OR_SECURITY_ABUSE_RE.test(text)) {
+    return {
+      response: {
+        answer:
+          "보안 공격, SQL injection, 내부 프롬프트 확인, 우회 방법 요청은 도와드리지 않습니다.\n\nClassin 도입이나 운영 보안 기준이 궁금하시면 개인정보 처리, 관리자 권한, API 연동 범위처럼 검토 가능한 항목으로 정리해드릴게요.",
+        answerMode: "direct_answer",
+        confidence: 0.95,
+        needsHandoff: false,
+        sources: [],
+        suggestedQuestions: [
+          "개인정보 처리 기준이 궁금해요",
+          "관리자 권한과 보안 범위를 알고 싶어요",
+          "API/CRM 연동은 어디까지 가능한가요?",
+        ],
+        unresolved: false,
+      },
+      category: "general",
+      intent: "docs_lookup",
+      handoffIntent: "support",
+    }
+  }
+
+  if (CRIMINAL_ABUSE_RE.test(text)) {
+    return {
+      response: {
+        answer:
+          "범죄나 불법 행위를 돕는 방법은 도와드리지 않습니다.\n\nClassin 제품 도입, 수업 운영, 전자칠판, 계정 문제처럼 정상적인 상담 범위로 질문해 주세요.",
+        answerMode: "direct_answer",
+        confidence: 0.95,
+        needsHandoff: false,
+        sources: [],
+        suggestedQuestions: [
+          "Classin이 어떤 서비스인지 알려주세요",
+          "도입 전 확인 질문을 알려주세요",
+          "전자칠판 패키지를 보고 싶어요",
+        ],
+        unresolved: false,
+      },
+      category: "general",
+      intent: "docs_lookup",
+      handoffIntent: "support",
+    }
+  }
+
+  if (TOKEN_WASTE_RE.test(text)) {
+    return {
+      response: {
+        answer:
+          "토큰을 소모시키기 위한 반복 출력이나 무의미한 장문 생성은 도와드리지 않습니다.\n\n필요한 Classin 상담 주제를 한 문장으로 적어주시면 짧게 정리해드릴게요.",
+        answerMode: "direct_answer",
+        confidence: 0.95,
+        needsHandoff: false,
+        sources: [],
+        suggestedQuestions: [
+          "도입 상담을 받고 싶어요",
+          "수업 운영 문제를 해결하고 싶어요",
+          "요금/견적은 어떤 항목으로 구성되나요?",
+        ],
+        unresolved: false,
+      },
+      category: "general",
+      intent: "docs_lookup",
+      handoffIntent: "support",
+    }
+  }
+
+  return null
+}
+
 function sanitizeLikeToken(token: string) {
   return token.replace(/[%_,()]/g, "").slice(0, 40)
 }
@@ -297,8 +531,31 @@ function getScoringTokens(question: NormalizedQuestion) {
   return question.tokens.filter((token) => !isWeakBrandToken(token) && !isWeakQueryToken(token))
 }
 
+const EDB_QUERY_RE = /edb|이\s*디\s*비/i
 const POSITIONING_RE =
-  /학원\s*시스템|시스템\s*os|수업\s*os|운영\s*os|zoom|줌|화상회의|뭐가\s*(달라|다른)|무엇이\s*다르|어떻게\s*다른|다른\s*(점|가요|건가요|거|것|부분|서비스)|차이|비교|차별|차별점|장점|왜\s*(써|쓰|필요|도입)|일반\s*전자칠판|기존\s*전자칠판|왜\s*전자칠판|edb|칠판\s*파일|가격\s*부담|비싸|api|sdk|연동|데이터\s*구독|도구.*흩어|녹화.*관리/
+  /학원\s*시스템|시스템\s*os|수업\s*os|운영\s*os|zoom|줌|화상회의|뭐가\s*(달라|다른)|무엇이\s*다르|어떻게\s*다른|다른\s*(점|가요|건가요|거|것|부분|서비스)|차이|비교|차별|차별점|장점|왜\s*(써|쓰|필요|도입)|일반\s*전자칠판|기존\s*전자칠판|왜\s*전자칠판|edb|이\s*디\s*비|칠판\s*파일|가격\s*부담|비싸|api|sdk|연동|데이터\s*구독|도구.*흩어|녹화.*관리/
+
+const PRE_ADOPTION_CHECK_RE =
+  /도입\s*전.*(22|질문|체크리스트|확인)|22\s*가지\s*질문|22.*도입|구매\s*전.*(질문|체크리스트|확인)|상담\s*전.*(질문|체크리스트|확인)/
+const PRE_ADOPTION_RECORDING_PERMISSION_RE =
+  /(수업\s*녹화|현장\s*녹화|녹화).{0,18}(누가|권한|관리|저장|확인|볼|다운로드)|(누가|권한).{0,18}(수업\s*녹화|현장\s*녹화|녹화)/i
+const PRE_ADOPTION_SIGNUP_INFO_RE =
+  /(회원\s*가입|가입).{0,20}(개인정보|전화번호|이메일|메일|휴대폰|핸드폰|정보|뭐|무엇)|(개인정보|전화번호|이메일|메일|휴대폰|핸드폰).{0,20}(회원\s*가입|가입)/i
+const PRE_ADOPTION_OFFLINE_BOARD_RE =
+  /(오프라인|인터넷\s*없|네트워크\s*없|와이파이\s*없).{0,18}(칠판|판서|전자칠판|보드)|(칠판|판서|전자칠판|보드).{0,18}(오프라인|인터넷\s*없|네트워크\s*없|와이파이\s*없)/i
+const PRE_ADOPTION_POLICY_CONFIRM_RE =
+  /무료\s*관리자|유료\s*관리자|관리자.{0,12}(권한|무료|유료)|유료\s*전환|사용\s*기간|계약\s*기간|언제까지\s*(사용|쓸)|정기\s*결제|결제.{0,10}포함|포함\s*항목|콘텐츠\s*소유권|소유권|개인정보\s*(처리|보관|관리|방침)|서버(?:는|가|의)?\s*(위치|지역|어디)|메인\s*서버(?:는|가|의)?\s*(위치|지역|어디)?|스토리지.{0,12}(용량|단가|추가|가격)|클라우드.{0,12}(용량|저장|단가|추가)|저장\s*(용량|공간)|펜\s*팁|전용\s*펜|소모품.{0,12}(가격|구매|재고)|팁.{0,12}(가격|구매|재고)/i
+const PRE_ADOPTION_HARDWARE_CONDITIONAL_RE =
+  /카메라.{0,18}(화각|추적|트래킹|조정|전경|클로즈업)|마이크.{0,18}(성능|외부|세팅|설정|가능)|외부\s*(pc|컴퓨터|노트북)|따로\s*(pc|컴퓨터|노트북)|ops|컴퓨터.{0,12}(연결|따로|없이)/i
+const GOOGLE_CLASSROOM_RE =
+  /구글\s*클래스룸|google\s*classroom|수업반\s*생성|반\s*(생성|개설).{0,12}(100|백|대형)|100\s*개.{0,8}반|자료\s*업로드|과제\s*점수|과제\s*체크/i
+const SITE_ENTRY_INTEGRATION_RE =
+  /사이트.{0,24}(입장|버튼|적용|연동)|입장\s*버튼.{0,24}(classin|클래스인|수업)|자사\s*사이트|홈페이지.{0,24}(수업|입장|연동)/i
+const S65_QUOTE_RE = /s\s*65|s65|65\s*인치/i
+const BOARD_ONLY_OR_PLATFORM_RE =
+  /전자칠판만|보드만|단품\s*(판매|구매)|플랫폼.{0,12}(내장|내재)|내장된\s*전자칠판|전자칠판.{0,18}(플랫폼|소프트웨어)/i
+const CAMERA_CONFLICT_RE =
+  /카메라.{0,18}(안\s*켜|꺼|꺼져|권한|한\s*명|한명|1명|문제|오류)|(한\s*명|한명|1명).{0,18}카메라/i
 
 const COMPARISON_RE =
   /zoom|줌|화상회의|뭐가\s*(달라|다른)|무엇이\s*다르|어떻게\s*다른|다른\s*(점|가요|건가요|거|것|부분|서비스)|차이|비교|차별|차별점|장점|왜\s*(써|쓰|필요|도입)|일반\s*전자칠판|기존\s*전자칠판/
@@ -329,7 +586,7 @@ const HARDWARE_BOARD_LINEUP_INTENT_RE =
   /어떤|뭐|무엇|종류|라인업|모델|추천|있지|있어|고르|선택|구성|제품/i
 
 const SOFTWARE_BOARD_FEATURE_RE =
-  /개인\s*칠판|보조\s*칠판|ai\s*칠판|칠판\s*파일|edb|판서\s*도구|매직펜|업데이트|릴리즈|버전|6\.0/i
+  /개인\s*칠판|보조\s*칠판|ai\s*칠판|칠판\s*파일|edb|이\s*디\s*비|판서\s*도구|매직펜|업데이트|릴리즈|버전|6\.0/i
 
 // 상세 사양을 콕 집어 묻는 신호. 모델·라인업·추천 같은 '넓은 라인업' 단어는 여기서 제외한다.
 const HARDWARE_SPECS_RE =
@@ -366,11 +623,69 @@ const LOGIN_TROUBLE_RE =
   /로그인|접속|비밀번호|패스워드|인증\s*코드|인증코드|아이디|계정.*(안|오류|에러|문제)|안\s*(들어가|돼|됨|되|됩니다)|재설정/i
 
 const LIVE_CLASS_TROUBLE_RE =
-  /수업.*(나감|튕김|튕겨|끊김|끊겨|입장\s*안|접속\s*안)|화면\s*공유.*(끊김|끊겨|오류|에러|안\s*됨|안\s*돼)|소리.*(안\s*들|끊김|끊겨)|마이크.*(안\s*됨|안\s*돼|끊김)/i
+  /수업.*(나가|나감|튕김|튕겨|끊김|끊겨|입장\s*안|접속\s*안)|화면\s*공유.*(끊김|끊겨|오류|에러|안\s*됨|안\s*돼)|소리.*(안\s*들|끊김|끊겨)|마이크.*(안\s*됨|안\s*돼|끊김)/i
+const PARENT_REPORT_OR_NOTIFICATION_RE =
+  /학부모.{0,18}(알림|문자|메시지|푸시|리포트|보고서|상담|피드백)|(?:알림|문자|메시지|푸시|리포트|보고서|상담|피드백).{0,18}학부모/i
 
 function isPositioningQuestion(question: NormalizedQuestion) {
   const text = question.redacted.toLowerCase()
   return POSITIONING_RE.test(text) || isIdentityQuestion(question)
+}
+
+function isPreAdoptionCheckQuestion(question: NormalizedQuestion) {
+  const text = question.redacted.toLowerCase()
+  return PRE_ADOPTION_CHECK_RE.test(text)
+}
+
+function isPreAdoptionRecordingPermissionQuestion(question: NormalizedQuestion) {
+  return PRE_ADOPTION_RECORDING_PERMISSION_RE.test(question.redacted)
+}
+
+function isPreAdoptionSignupInfoQuestion(question: NormalizedQuestion) {
+  return PRE_ADOPTION_SIGNUP_INFO_RE.test(question.redacted)
+}
+
+function isPreAdoptionOfflineBoardQuestion(question: NormalizedQuestion) {
+  return PRE_ADOPTION_OFFLINE_BOARD_RE.test(question.redacted)
+}
+
+function isPreAdoptionPolicyConfirmQuestion(question: NormalizedQuestion) {
+  return PRE_ADOPTION_POLICY_CONFIRM_RE.test(question.redacted)
+}
+
+function isPreAdoptionHardwareConditionalQuestion(question: NormalizedQuestion) {
+  return PRE_ADOPTION_HARDWARE_CONDITIONAL_RE.test(question.redacted)
+}
+
+function isPreAdoptionSpecificQuestion(question: NormalizedQuestion) {
+  return (
+    isPreAdoptionRecordingPermissionQuestion(question) ||
+    isPreAdoptionSignupInfoQuestion(question) ||
+    isPreAdoptionOfflineBoardQuestion(question) ||
+    isPreAdoptionPolicyConfirmQuestion(question) ||
+    isPreAdoptionHardwareConditionalQuestion(question)
+  )
+}
+
+function isGoogleClassroomQuestion(question: NormalizedQuestion) {
+  return GOOGLE_CLASSROOM_RE.test(question.redacted)
+}
+
+function isSiteEntryIntegrationQuestion(question: NormalizedQuestion) {
+  return SITE_ENTRY_INTEGRATION_RE.test(question.redacted)
+}
+
+function isS65QuoteQuestion(question: NormalizedQuestion) {
+  const text = question.redacted.toLowerCase()
+  return S65_QUOTE_RE.test(text) && /견적|가격|비용|구매|판매|가능|있나요|받을/i.test(text)
+}
+
+function isBoardOnlyOrPlatformQuestion(question: NormalizedQuestion) {
+  return BOARD_ONLY_OR_PLATFORM_RE.test(question.redacted)
+}
+
+function isCameraConflictQuestion(question: NormalizedQuestion) {
+  return CAMERA_CONFLICT_RE.test(question.redacted)
 }
 
 function isApiIntegrationQuestion(question: NormalizedQuestion) {
@@ -431,6 +746,10 @@ function isLiveClassTroubleQuestion(question: NormalizedQuestion) {
   return LIVE_CLASS_TROUBLE_RE.test(text)
 }
 
+function isParentReportOrNotificationQuestion(question: NormalizedQuestion) {
+  return PARENT_REPORT_OR_NOTIFICATION_RE.test(question.redacted)
+}
+
 function isWebLiveBillingQuestion(question: NormalizedQuestion) {
   const text = question.redacted.toLowerCase()
   return /웹\s*라이브|web\s*live|라이브\s*&?\s*플레이백/.test(text) && /요금|요금제|플랜|비용|가격|가능|되나요|지원/.test(text)
@@ -442,12 +761,32 @@ const PRICING_INFO_RE = /요금|가격|비용|금액|가격대|얼마/i
 const PRICING_EXCLUDE_RE = /환불|취소|세금|계산서|영수증|청구|정산|미납|연체/i
 // "얼마나 걸려요"(기간)는 가격이 아니다 — 돈 단어가 없으면 가격에서 뺀다.
 const PRICING_DURATION_RE = /얼마나?\s*(걸리|걸려|걸릴|오래|소요|기간|시간|일|주|개월)/i
+const SOFTWARE_ONLY_BUYER_RE =
+  /소프트웨어만|프로그램만|앱만|하드웨어\s*없이|전자칠판\s*없이|보드\s*없이|계정당|계정\s*당|플랜|standard|plus|enterprise/i
+const SUBSCRIPTION_OR_CONSUMPTION_RE =
+  /구독형|충전형|충전제|subscription|consumption|사용량\s*기준|월\s*구독|월구독/i
+const TRIAL_OR_PILOT_RE =
+  /무료\s*체험|체험판|무료\s*사용|trial|파일럿|pilot|데모.{0,12}(무료|체험)|먼저\s*써/i
 function isPricingInfoQuestion(question: NormalizedQuestion) {
   const text = question.redacted.toLowerCase()
   if (PRICING_EXCLUDE_RE.test(text)) return false
   if (isWebLiveBillingQuestion(question)) return false
   if (!PRICING_MONEY_RE.test(text) && PRICING_DURATION_RE.test(text)) return false
   return PRICING_INFO_RE.test(text)
+}
+
+function isSoftwarePricingQuestion(question: NormalizedQuestion) {
+  const text = question.redacted.toLowerCase()
+  return (
+    SOFTWARE_ONLY_BUYER_RE.test(text) ||
+    SUBSCRIPTION_OR_CONSUMPTION_RE.test(text) ||
+    (isPricingInfoQuestion(question) &&
+      /소프트웨어|앱|계정|플랜|구독|충전|standard|plus|enterprise/.test(text))
+  )
+}
+
+function isTrialOrPilotQuestion(question: NormalizedQuestion) {
+  return TRIAL_OR_PILOT_RE.test(question.redacted.toLowerCase())
 }
 
 // 설치 형태(스탠드/벽걸이)와 설치 가능/기간. 하드웨어 장애와는 분리한다.
@@ -481,7 +820,7 @@ function isApiSource(source: Pick<ChatbotSource, "title" | "heading" | "excerpt"
 function buildPositioningSource(question: NormalizedQuestion): ChatbotSource | null {
   if (!isPositioningQuestion(question)) return null
   const text = question.redacted.toLowerCase()
-  const isEdbQuestion = /edb|칠판\s*파일|교안/.test(text)
+  const isEdbQuestion = EDB_QUERY_RE.test(text) || /칠판\s*파일|교안/.test(text)
   const isApiQuestion = isApiIntegrationQuestion(question)
   const isIdentity = isIdentityQuestion(question) && !isComparisonQuestion(question)
   const heading = isEdbQuestion
@@ -530,11 +869,128 @@ function buildStaticDocSource(
   }
 }
 
+function getPreAdoptionSourceCategory(question: NormalizedQuestion) {
+  const text = question.redacted.toLowerCase()
+  if (/요금|가격|비용|견적|결제|정기|단가|유료|환불|계약/.test(text)) return "billing"
+  if (/카메라|마이크|ops|외부\s*(pc|컴퓨터|노트북)|오프라인|칠판|판서|보드|펜|소모품/.test(text)) return "hardware"
+  if (/녹화|현장\s*녹화|수업\s*녹화|과제|숙제|시험|출결|출석/.test(text)) return "classroom"
+  if (/회원\s*가입|가입|도입|교육|온보딩|언제까지|사용\s*기간/.test(text)) return "onboarding"
+  return "admin"
+}
+
+function buildPreAdoptionSpecificSource(question: NormalizedQuestion): ChatbotSource | null {
+  if (!isPreAdoptionSpecificQuestion(question)) return null
+
+  const heading = isPreAdoptionRecordingPermissionQuestion(question)
+    ? "녹화 저장과 권한 기준"
+    : isPreAdoptionSignupInfoQuestion(question)
+      ? "가입과 개인정보"
+      : isPreAdoptionOfflineBoardQuestion(question)
+        ? "오프라인 칠판 사용"
+        : isPreAdoptionHardwareConditionalQuestion(question)
+          ? "하드웨어 조건부 확인 항목"
+          : "확인 필요한 정책·계약 항목"
+
+  const excerpt = isPreAdoptionRecordingPermissionQuestion(question)
+    ? "수업 녹화와 현장 녹화는 목적이 다르며, 녹화 기능과 카메라 구성이 설정된 경우 관리자 또는 권한 받은 계정이 계약·권한 범위 안에서 확인합니다."
+    : isPreAdoptionSignupInfoQuestion(question)
+      ? "학생·교사 계정은 기관 안내 또는 API 연동 방식에 따라 전화번호 또는 이메일 기반으로 등록·초대할 수 있는지 확인합니다. 개인정보 처리 방식과 보관 기준은 공식 개인정보처리방침과 기관 권한 정책에 맞춰 확인해야 합니다."
+      : isPreAdoptionOfflineBoardQuestion(question)
+        ? "기본 칠판 필기는 오프라인에서도 사용할 수 있습니다. 다만 클라우드 동기화, 온라인 수업, 녹화 업로드, LMS 배포는 네트워크가 필요합니다."
+        : isPreAdoptionHardwareConditionalQuestion(question)
+          ? "카메라·마이크·OPS·외부 PC 연결은 기능 가능성과 설치 조건을 분리해 봅니다. T1/S1 카메라, 외부 마이크, HDMI 연결, OPS 포함 여부는 모델·견적·교실 환경 기준으로 확인합니다."
+          : "무료/유료 관리자 권한, 유료 전환, 사용 기간, 정기 결제 포함 항목, 콘텐츠 소유권, 개인정보 처리, 서버 위치, 스토리지 용량·단가, 펜 팁 가격은 최신 계약·정책·공급 조건 기준으로 확인해야 합니다."
+
+  return buildStaticDocSource(
+    "start",
+    "pre-adoption-faq-22-questions",
+    heading,
+    excerpt,
+    330,
+    getPreAdoptionSourceCategory(question)
+  )
+}
+
 function buildCuratedSources(question: NormalizedQuestion) {
   const text = question.redacted.toLowerCase()
   const sources: ChatbotSource[] = []
   const positioningSource = buildPositioningSource(question)
   if (positioningSource) sources.push(positioningSource)
+
+  if (isPreAdoptionCheckQuestion(question)) {
+    const source = buildStaticDocSource(
+      "start",
+      "pre-adoption-faq-22-questions",
+      "도입 전 22가지 질문",
+      "ClassIn 도입 전에는 관리자 권한, 녹화 저장, 스토리지, 개인정보, 서버, OPS, 오프라인 칠판 사용을 답변 가능 범위와 확인 필요 범위로 나누어 점검합니다.",
+      335,
+      "onboarding"
+    )
+    if (source) sources.push(source)
+  }
+
+  const preAdoptionSpecificSource = buildPreAdoptionSpecificSource(question)
+  if (preAdoptionSpecificSource) sources.push(preAdoptionSpecificSource)
+
+  if (isGoogleClassroomQuestion(question)) {
+    const source = buildStaticDocSource(
+      "software",
+      "app-capabilities-map",
+      "LMS와 과제 운영 범위",
+      "ClassIn은 코스·수업 생성, 학생 초대, 수업 자료 업로드, 과제·시험, 성적·리포트 같은 LMS 흐름을 지원합니다. 다만 Google Classroom을 완전히 대체할 수 있는지는 현재 운영 방식, 반 수, 학생 수, 필요한 연동과 권한 기준을 놓고 확인해야 합니다.",
+      320,
+      "classroom"
+    )
+    if (source) sources.push(source)
+  }
+
+  if (isSiteEntryIntegrationQuestion(question)) {
+    const source = buildStaticDocSource(
+      "admin",
+      "admin-operation-standardization",
+      "사이트 입장 버튼 연동 확인",
+      "자사 사이트의 입장 버튼에서 ClassIn 수업으로 연결하려면 링크, 로그인, 권한, 수업 생성 방식, API 또는 운영 자동화 범위를 분리해 설계해야 합니다. 계약 없이 바로 되는 기본 기능처럼 단정하면 안 됩니다.",
+      318,
+      "admin"
+    )
+    if (source) sources.push(source)
+  }
+
+  if (isS65QuoteQuestion(question)) {
+    const source = buildStaticDocSource(
+      "hardware",
+      "board-lineup-specs",
+      "S65 견적 확인 필요",
+      "S65는 라인업에는 있으나 현재 상세 규격서 확인이 필요합니다. 공개 안내는 S75·S86을 표준 모델로 먼저 잡고, S65 견적 가능 여부·재고·사양·가격은 최신 공급 조건으로 확인해야 합니다.",
+      325,
+      "hardware"
+    )
+    if (source) sources.push(source)
+  }
+
+  if (isBoardOnlyOrPlatformQuestion(question)) {
+    const source = buildStaticDocSource(
+      "hardware",
+      "board-overview",
+      "전자칠판 단품과 시스템 구성",
+      "Classin Board는 단순 터치 모니터가 아니라 OPS와 ClassIn 소프트웨어, 판서, 녹화, EDB, LMS 흐름을 함께 보는 수업 시스템입니다. 전자칠판 단품 판매나 보드만 구매 가능 여부는 견적·공급 조건으로 확인해야 합니다.",
+      322,
+      "hardware"
+    )
+    if (source) sources.push(source)
+  }
+
+  if (isCameraConflictQuestion(question)) {
+    const source = buildStaticDocSource(
+      "teacher",
+      "lesson-option-concepts",
+      "수업 카메라 충돌 점검",
+      "같은 수업에서 일부 사용자만 카메라가 켜지지 않으면 계정 역할, 온스테이지 설정, 기기 카메라 권한, 같은 기기 중복 접속 여부, 브라우저·앱 권한을 순서대로 확인합니다.",
+      320,
+      "troubleshooting"
+    )
+    if (source) sources.push(source)
+  }
 
   if (isHardwareUnconfirmedDetailQuestion(question)) {
     const source = buildStaticDocSource(
@@ -596,6 +1052,18 @@ function buildCuratedSources(question: NormalizedQuestion) {
     if (source) sources.push(source)
   }
 
+  if (isLiveClassTroubleQuestion(question)) {
+    const source = buildStaticDocSource(
+      "teacher",
+      "classroom-basic-setup",
+      "수업 중 끊김·소리·마이크 기본 점검",
+      "수업 중 화면 공유, 소리, 마이크, 접속이 불안정하면 먼저 앱/브라우저와 기기 권한, 카메라·마이크·스피커 장비 테스트, 네트워크와 수업 입장 시점을 나눠 확인합니다. 반복되면 오류 문구와 기기 정보를 받아 기술지원으로 넘깁니다.",
+      310,
+      "troubleshooting"
+    )
+    if (source) sources.push(source)
+  }
+
   if (isWebLiveBillingQuestion(question)) {
     const source = buildStaticDocSource(
       "teacher",
@@ -609,13 +1077,52 @@ function buildCuratedSources(question: NormalizedQuestion) {
   }
 
   if (isPricingInfoQuestion(question)) {
+    const isSoftwarePricing = isSoftwarePricingQuestion(question)
     const source = buildStaticDocSource(
       "start",
       "value-and-cost-framing",
-      "요금·견적 구성 안내",
-      "클래스인 비용은 고정가표가 아니라 전자칠판+OPS, 카메라·스탠드/벽걸이 구성, 소프트웨어 사용 범위, 설치·온보딩까지 묶어 구성 기준으로 산정합니다. 정확한 금액은 학원 규모와 구성에 따라 달라집니다.",
+      isSoftwarePricing ? "소프트웨어 요금과 플랜 안내" : "요금·견적 구성 안내",
+      isSoftwarePricing
+        ? "소프트웨어는 운영 규모에 따라 Standard, Plus, Enterprise처럼 단계가 나뉘고, 구독형·충전형 조건은 기능 범위와 계약에 따라 달라질 수 있습니다. 정확한 금액과 조건은 계정 수, 코스 규모, 필요한 기능 기준으로 확인합니다."
+        : "클래스인 비용은 고정가표가 아니라 전자칠판+OPS, 카메라·스탠드/벽걸이 구성, 소프트웨어 사용 범위, 설치·온보딩까지 묶어 구성 기준으로 산정합니다. 정확한 금액은 학원 규모와 구성에 따라 달라집니다.",
       295,
       "billing"
+    )
+    if (source) sources.push(source)
+  }
+
+  if (isSoftwarePricingQuestion(question) && !isPricingInfoQuestion(question)) {
+    const source = buildStaticDocSource(
+      "start",
+      "value-and-cost-framing",
+      "소프트웨어 요금과 플랜 안내",
+      "소프트웨어만 검토할 때는 하드웨어 견적과 분리해 계정 수, 코스 규모, 필요한 기능, 구독형·충전형 조건을 먼저 확인합니다. 정확한 금액과 계약 조건은 견적 상담에서 확정합니다.",
+      296,
+      "billing"
+    )
+    if (source) sources.push(source)
+  }
+
+  if (isTrialOrPilotQuestion(question)) {
+    const source = buildStaticDocSource(
+      "start",
+      "adoption-journey-90days",
+      "체험·파일럿 확인",
+      "무료 체험 여부를 단정하기보다 목동 쇼룸, 온라인 데모, 대표 수업 파일럿 범위로 확인합니다. 첫 교실, 대표 강사, EDB 교안, 녹화·복습 루틴을 정하면 30/60/90일 기준으로 도입 판단을 할 수 있습니다.",
+      296,
+      "onboarding"
+    )
+    if (source) sources.push(source)
+  }
+
+  if (isParentReportOrNotificationQuestion(question)) {
+    const source = buildStaticDocSource(
+      "software",
+      "admin-monitoring-analytics",
+      "학부모 리포트·알림 확인",
+      "Classin 안에서는 출결, 과제, 성적, 복습, 학습 보고서처럼 학부모 상담에 활용할 데이터를 확인할 수 있습니다. 다만 학부모 자동 문자·푸시·상담 리포트 발송은 기본 제공처럼 단정하지 않고 SMS 알림, API, 외부 학원관리 시스템 연동 범위로 확인합니다.",
+      296,
+      "admin"
     )
     if (source) sources.push(source)
   }
@@ -891,8 +1398,18 @@ function mergeCuratedSources(question: NormalizedQuestion, sources: ChatbotSourc
     isWebLiveBillingQuestion(question) ||
     isLoginTroubleQuestion(question) ||
     isPricingInfoQuestion(question) ||
+    isSoftwarePricingQuestion(question) ||
+    isTrialOrPilotQuestion(question) ||
     isInstallFormQuestion(question) ||
-    isCoreFeatureYesNoQuestion(question)
+    isCoreFeatureYesNoQuestion(question) ||
+    isLiveClassTroubleQuestion(question) ||
+    isParentReportOrNotificationQuestion(question) ||
+    isPreAdoptionSpecificQuestion(question) ||
+    isGoogleClassroomQuestion(question) ||
+    isSiteEntryIntegrationQuestion(question) ||
+    isS65QuoteQuestion(question) ||
+    isBoardOnlyOrPlatformQuestion(question) ||
+    isCameraConflictQuestion(question)
   ) {
     return selectDiverseSources(rerankSources(question, curatedSources), 1)
   }
@@ -1049,7 +1566,10 @@ async function keywordSearchSupabaseSources(question: NormalizedQuestion): Promi
 }
 
 const VECTOR_MATCH_COUNT = MAX_RETRIEVAL_CANDIDATES
-const VECTOR_SIMILARITY_FLOOR = 0.28
+// 골든셋 56개 질의 측정(2026-06-18): 정답 문서 top-1 유사도 min 0.675 / median 0.766.
+// 0.28 은 노이즈 대역(0.28~0.6)을 자신있는 direct_answer 로 승격시켰다. 0.5 는 그 노이즈를
+// 전부 걸러내면서도 골든셋 적중을 0건도 잃지 않는다(최저 정답 0.675 대비 0.175 마진).
+const VECTOR_SIMILARITY_FLOOR = 0.5
 const CLIENT_VECTOR_SIMILARITY_FLOOR = 0.7
 
 interface MatchChunkRow {
@@ -1183,12 +1703,6 @@ async function searchKnowledgeSources(
     return result
   }
 
-  if (isLiveClassTroubleQuestion(question)) {
-    const result = { sources: [], warning: undefined }
-    setCachedRetrieval(question, result)
-    return result
-  }
-
   if (
     isHardwareSpecsQuestion(question) ||
     isHardwareBoardLineupQuestion(question) ||
@@ -1197,8 +1711,18 @@ async function searchKnowledgeSources(
     isWebLiveBillingQuestion(question) ||
     isLoginTroubleQuestion(question) ||
     isPricingInfoQuestion(question) ||
+    isSoftwarePricingQuestion(question) ||
+    isTrialOrPilotQuestion(question) ||
     isInstallFormQuestion(question) ||
     isCoreFeatureYesNoQuestion(question) ||
+    isLiveClassTroubleQuestion(question) ||
+    isParentReportOrNotificationQuestion(question) ||
+    isPreAdoptionSpecificQuestion(question) ||
+    isGoogleClassroomQuestion(question) ||
+    isSiteEntryIntegrationQuestion(question) ||
+    isS65QuoteQuestion(question) ||
+    isBoardOnlyOrPlatformQuestion(question) ||
+    isCameraConflictQuestion(question) ||
     ((isComparisonQuestion(question) || isIdentityQuestion(question)) && !isApiIntegrationQuestion(question))
   ) {
     const curatedSources = buildCuratedSources(question)
@@ -1232,14 +1756,64 @@ async function searchKnowledgeSources(
   return result
 }
 
+function getTimedOutKnowledgeFallback(question: NormalizedQuestion): KnowledgeSearchResult {
+  const staticSources = buildStaticSources(question, getFallbackDocsFromStatic())
+  const result = {
+    sources: mergeCuratedSources(question, staticSources),
+    warning: "문서 검색 응답이 지연되어 정적 문서 fallback을 사용했습니다.",
+  }
+  setCachedRetrieval(question, result)
+  return result
+}
+
+function searchKnowledgeSourcesWithinBudget(question: NormalizedQuestion) {
+  return withTimeoutFallback({
+    promise: searchKnowledgeSources(question),
+    timeoutMs: getKnowledgeSearchTimeoutMs(),
+    fallback: () => getTimedOutKnowledgeFallback(question),
+    onTimeout: () => {
+      console.warn("[chatbot] knowledge search timed out; using static fallback.")
+    },
+  })
+}
+
 function buildSuggestedQuestions(category: string) {
   const categorySuggestions: Record<string, string[]> = {
-    billing: ["요금과 견적 기준이 궁금해요", "세금계산서나 영수증 발급이 궁금해요"],
-    hardware: ["전자칠판 설치 범위를 알고 싶어요", "장비 문제를 상담으로 확인하고 싶어요"],
-    troubleshooting: ["계정이나 접속 문제를 해결하고 싶어요", "수업 중 오류 상황을 설명할게요"],
-    onboarding: ["우리 학원 도입 순서를 잡고 싶어요", "Zoom/전자칠판과 차이를 더 알고 싶어요"],
-    admin: ["관리자 대시보드에서 볼 수 있는 데이터를 알려주세요", "API 연동 범위를 알고 싶어요"],
-    classroom: ["수업 녹화와 복습 흐름을 알고 싶어요", "과제/시험 운영 방법이 궁금해요"],
+    billing: [
+      "요금/견적은 어떤 항목으로 구성되나요?",
+      "전자칠판 포함 패키지 범위를 알고 싶어요",
+      "세금계산서나 영수증 발급이 궁금해요",
+    ],
+    hardware: [
+      "75/86인치 중 어떤 모델이 맞나요?",
+      "스탠드형과 벽걸이 설치 차이를 알고 싶어요",
+      "전자칠판 설치 전 체크할 것을 알려주세요",
+    ],
+    troubleshooting: [
+      "로그인/비밀번호 문제를 해결하고 싶어요",
+      "수업 중 끊김 상황을 정리하고 싶어요",
+      "전자칠판 화면이 안 나올 때 점검 순서를 알려주세요",
+    ],
+    onboarding: [
+      "우리 학원 90일 도입 순서를 잡고 싶어요",
+      "도입 전 확인해야 할 질문을 알려주세요",
+      "Zoom/전자칠판과 차이를 더 알고 싶어요",
+    ],
+    admin: [
+      "관리자 대시보드에서 볼 수 있는 데이터를 알려주세요",
+      "API/CRM 연동은 어디까지 가능한가요?",
+      "녹화 저장/스토리지 관리를 알고 싶어요",
+    ],
+    classroom: [
+      "수업 녹화와 복습 흐름을 알고 싶어요",
+      "과제/시험 운영 방법이 궁금해요",
+      "EDB 교안 재사용 방법을 알려주세요",
+    ],
+    general: [
+      "Classin이 어떤 서비스인지 알려주세요",
+      "도입 전 확인 질문을 알려주세요",
+      "전자칠판 패키지를 보고 싶어요",
+    ],
   }
   return Array.from(
     new Set([
@@ -1249,24 +1823,54 @@ function buildSuggestedQuestions(category: string) {
   ).slice(0, 3)
 }
 
-function wantsHumanConsultation(question: NormalizedQuestion) {
+function wantsImmediateHumanHandoff(question: NormalizedQuestion) {
   if (isHardwareSpecsQuestion(question)) return false
   if (isHardwareBoardLineupQuestion(question)) return false
 
   const text = question.redacted.toLowerCase()
   const explicitHandoff =
-    /상담|연락|견적|데모|시연|미팅|제안|담당자|통화|구매|도입\s*검토|도입\s*상담/.test(text)
+    /상담\s*(?:받|받고|하고|하고\s*싶|할래|신청|연결|이어|부탁|필요|문의|원해|원함)|상담받|상담할래|상담하고\s*싶|상담\s*(?:원|사)|담당자.{0,10}(?:상담|연결|연락|통화|배정|문의)|매니저.{0,10}(?:상담|연결|연락|통화|문의)|(?:상담|연결|연락|통화|문의).{0,10}(?:담당자|매니저)|전담\s*매니저|연락\s*(?:주세요|받고|하고|원해|원함|가능)|전화\s*(?:주세요|받고|하고|원해|원함|가능)|통화\s*(?:하고|원해|원함|가능)|미팅\s*(?:잡|하고|원해|원함)|데모\s*(?:신청|보고|연결|원해|원함)|시연\s*(?:신청|보고|연결|원해|원함)|구매\s*상담|도입\s*(?:상담|문의|검토)/.test(text)
   const contextualInquiry =
-    /문의/.test(text) && /담당자|상담|연락|전화|통화|견적|구매|도입|시연|데모/.test(text)
+    /문의/.test(text) && /담당자|매니저|연락|전화|통화|구매|도입|시연|데모/.test(text)
 
   return explicitHandoff || contextualInquiry
+}
+
+function wantsHumanConsultation(question: NormalizedQuestion) {
+  if (wantsImmediateHumanHandoff(question)) return true
+
+  const text = question.redacted.toLowerCase()
+  return /견적|데모|시연|미팅|제안|구매|도입\s*검토|도입\s*상담/.test(text)
+}
+
+function buildImmediateHandoffResponse(
+  category: string,
+  handoffIntent: HandoffIntent
+): Omit<ChatbotQueryResponse, "answerEventId" | "sessionId" | "warning" | "handoffIntent"> {
+  const isSupport = handoffIntent === "support"
+  return {
+    answer: [
+      isSupport
+        ? "상담 연결이 필요한 내용으로 확인했습니다."
+        : "담당자 상담으로 이어드릴게요.",
+      isSupport
+        ? "담당자가 바로 확인할 수 있게 계정/오류 화면, 결제 상태, 장비 증상처럼 현재 상황을 함께 남겨주세요."
+        : "담당자가 도입 목적, 희망 일정, 수업 운영 방식부터 빠르게 확인할 수 있게 연결 정보를 남겨주세요.",
+    ].join("\n\n"),
+    answerMode: "handoff",
+    confidence: 0.72,
+    needsHandoff: true,
+    sources: [],
+    suggestedQuestions: buildSuggestedQuestions(category),
+    unresolved: true,
+  }
 }
 
 function isDomainRelatedQuestion(question: NormalizedQuestion, category: string) {
   if (category !== "general") return true
 
   const text = question.redacted.toLowerCase()
-  return /classin|클래스인|학원|수업|교실|학생|교사|강사|원장|전자칠판|칠판|하드웨어|보드|board|모델|사이즈|크기|인치|라인업|ops|카메라|마이크|미러링|edb|lms|녹화|복습|과제|운영|도입|관리자|온라인|화상|교안|토론|플립러닝|하이브리드/.test(text)
+  return /classin|클래스인|학원|수업|교실|학생|교사|강사|원장|전자칠판|칠판|하드웨어|보드|board|모델|사이즈|크기|인치|라인업|ops|카메라|마이크|미러링|edb|이\s*디\s*비|lms|녹화|복습|과제|운영|도입|관리자|온라인|화상|교안|토론|플립러닝|하이브리드|소프트웨어|프로그램|앱|플랜|구독형|충전형|체험|파일럿|학부모|리포트|보고서|문자|알림/.test(text)
 }
 
 function isSensitiveOrAccountSpecificQuestion(question: NormalizedQuestion, category: string) {
@@ -1308,7 +1912,7 @@ function getStepCriteriaByCategory(category: string) {
       return {
         steps: [
           "결제 수단, 사업자 정보, 필요한 증빙 종류를 먼저 확인해 주세요.",
-          "견적·세금계산서·환불처럼 계정별 확인이 필요한 항목은 상담으로 넘겨 주세요.",
+          "견적·세금계산서·환불처럼 계정별 확인이 필요한 항목은 담당자 확인이 필요합니다.",
         ],
         success: "담당자가 결제/증빙 처리에 필요한 식별 정보와 요청 범위를 확인할 수 있으면 다음 단계로 넘어갈 수 있습니다.",
       }
@@ -1324,7 +1928,7 @@ function getStepCriteriaByCategory(category: string) {
       return {
         steps: [
           "발생 화면, 기기, 브라우저/앱, 계정 상태를 먼저 확인해 주세요.",
-          "반복 오류나 수업 영향이 있으면 상담으로 넘겨 담당자가 로그와 계정 상태를 함께 확인하게 해 주세요.",
+          "반복 오류나 수업 영향이 있으면 담당자가 로그와 계정 상태를 함께 확인해야 합니다.",
         ],
         success: "재현 조건과 영향 범위가 확인되면 해결 순서를 정확히 잡을 수 있습니다.",
       }
@@ -1400,6 +2004,14 @@ function getIdentityAnswer() {
   ].join("\n\n")
 }
 
+function getEdbAnswer() {
+  return [
+    "EDB, 이디비는 Classin에서 쓰는 칠판 파일이에요.",
+    "판서, 이미지, 텍스트를 상호작용 가능한 상태로 저장해 두고 다시 불러올 수 있어서, 선생님이 만든 교안이나 활동 자료를 다음 수업에서도 그대로 재사용할 수 있습니다.",
+    "쉽게 말하면 한 번 만든 칠판 수업 자료를 파일처럼 저장하고, 불러오고, 공유하는 구조예요.",
+  ].join("\n\n")
+}
+
 function getHardwareSpecsAnswer(revealBig: boolean) {
   if (!revealBig) {
     return [
@@ -1457,6 +2069,14 @@ function getLoginTroubleAnswer() {
   ].join("\n\n")
 }
 
+function getLiveClassTroubleAnswer() {
+  return [
+    "수업 중 끊김이나 소리·마이크 문제는 먼저 기기 문제인지, 권한 문제인지, 네트워크 문제인지 나눠 보면 빨라요.",
+    "1. 사용 중인 앱/브라우저와 기기를 확인하고 최신 상태로 다시 입장해 보세요.\n2. 입장 전 장비 테스트에서 카메라·마이크·스피커 입력/출력 장치를 다시 선택해 주세요.\n3. 같은 시간대 반복 끊김이면 네트워크 상태, 수업 입장 시점, 오류 문구를 함께 기록해 주세요.",
+    "반복되면 사용 기기, 앱/브라우저, 오류 화면, 발생 시간을 알려주시면 기술지원 확인 항목으로 바로 좁혀드릴게요.",
+  ].join("\n\n")
+}
+
 function getWebLiveBillingAnswer() {
   return [
     "웹 라이브는 모든 요금제에서 기본 제공된다고 보기는 어려워요.",
@@ -1473,11 +2093,206 @@ function getPricingAnswer() {
   ].join("\n\n")
 }
 
+function getSoftwarePricingAnswer() {
+  return [
+    "소프트웨어만 검토하시는 경우에는 전자칠판 패키지와 분리해서 계정 수와 운영 규모 기준으로 보면 됩니다.",
+    "Standard, Plus, Enterprise처럼 필요한 기능과 팀 규모에 따라 단계가 나뉘고, 구독형·충전형 조건은 사용 기능과 계약 방식에 따라 달라질 수 있어요.",
+    "정확한 금액은 단정하지 않고, 강사 수·학생 수·코스 규모·필요 기능을 기준으로 견적에서 확인하는 게 안전합니다.",
+  ].join("\n\n")
+}
+
+function getTrialOrPilotAnswer() {
+  return [
+    "무료 체험 가능 여부를 여기서 단정하기보다는 데모와 파일럿 범위로 확인하는 게 안전합니다.",
+    "보통은 목동 쇼룸이나 온라인 데모에서 대표 수업 흐름을 먼저 보고, 첫 교실·대표 강사·EDB 교안·녹화/복습 루틴을 정해 30/60/90일 기준으로 판단합니다.",
+    "원하시면 현재 수업 방식 기준으로 데모에서 꼭 볼 장면 3가지를 먼저 정리해드릴게요.",
+  ].join("\n\n")
+}
+
+function getParentReportOrNotificationAnswer() {
+  return [
+    "학부모 커뮤니케이션은 'Classin 안에서 확인할 수 있는 데이터'와 '자동 발송'을 나눠 봐야 합니다.",
+    "출결, 과제, 성적, 복습 기록, 학습 보고서처럼 상담에 쓸 데이터는 권한 범위 안에서 확인할 수 있어요. 다만 학부모 문자·푸시·상담 리포트가 자동 발송된다고 기본 기능처럼 단정하면 안 됩니다.",
+    "자동 알림이 필요하면 SMS 알림, API, 외부 학원관리 시스템 연동 범위로 따로 확인하는 게 맞습니다.",
+  ].join("\n\n")
+}
+
 function getInstallFormAnswer() {
   return [
     "네, 설치는 이동형 스탠드와 벽걸이 둘 다 가능해요. 이렇게 고르시면 돼요.",
     "- 교실 간 이동이 필요하면 → 이동형 스탠드\n- 자리가 고정이고 공간을 아끼려면 → 벽걸이(벽면 보강 확인)",
     "전원·네트워크·벽면 상태는 현장 실측에서 먼저 확인해요. 교실 환경만 알려주시면 맞는 형태로 안내해드릴게요.",
+  ].join("\n\n")
+}
+
+function getPreAdoptionOverviewAnswer() {
+  return [
+    "ClassIn 도입 전 22가지 질문은 기능표라기보다 리스크 점검표로 보는 게 좋습니다.",
+    "바로 답할 수 있는 항목은 웹 기반 관리자 콘솔, 리포트, 온보딩, 녹화 관리 권한, 과제, 전화번호 또는 이메일 가입, OPS 구성, 오프라인 칠판 필기예요.",
+    "무료/유료 권한, 계약 기간, 정기 결제 포함 항목, 스토리지 용량·단가, 콘텐츠 소유권, 개인정보 처리, 서버 위치, 펜 팁 가격은 최신 계약·정책 확인 항목으로 분리해 상담에서 확인하는 게 안전합니다.",
+  ].join("\n\n")
+}
+
+function getRecordingPermissionAnswer() {
+  return [
+    "수업 녹화와 현장 녹화는 목적이 달라서 먼저 구분해서 봐야 해요.",
+    "수업 녹화는 ClassIn 수업 안의 화면·판서·자료 중심이고, 현장 녹화는 카메라 구성이 설정된 경우 교실 뷰나 트래킹 뷰를 다룹니다.",
+    "저장·확인·다운로드는 관리자 또는 권한 받은 계정이 계약·기관 설정 범위 안에서 관리하는 기준으로 안내해야 합니다. 실제 권한 범위는 현재 계정과 계약 조건으로 확인하는 게 맞습니다.",
+  ].join("\n\n")
+}
+
+function getSignupInfoAnswer() {
+  return [
+    "회원가입은 전화번호 또는 이메일 기반으로 안내할 수 있습니다.",
+    "인증 후 비밀번호와 기본 프로필을 설정하고, 기관 안내에 따라 학생·교사 계정을 코스나 수업에 연결합니다.",
+    "다만 개인정보 처리 방식, 보관 기준, 접근 권한은 공식 개인정보처리방침과 기관 권한 정책 기준으로 확인해야 합니다. 학생 학습 데이터와 마케팅 추적 데이터도 섞어 설명하지 않는 게 원칙입니다.",
+  ].join("\n\n")
+}
+
+function getOfflineBoardAnswer() {
+  return [
+    "네, 기본 칠판 필기는 오프라인 상태에서도 사용할 수 있습니다.",
+    "다만 클라우드 동기화, 온라인 수업, 녹화 업로드, LMS 배포, 학생에게 자료를 공유하는 흐름은 네트워크가 필요해요.",
+    "데모에서는 OPS 단독 구동, 오프라인 판서, 다시 온라인 연결 후 동기화가 필요한 기능을 나눠 확인하는 게 좋습니다.",
+  ].join("\n\n")
+}
+
+function getHardwareConditionalPreAdoptionAnswer(question: NormalizedQuestion) {
+  const text = question.redacted.toLowerCase()
+  if (/카메라/.test(text)) {
+    return [
+      "카메라 화각·추적·조정은 가능 여부와 현장 조건을 나눠 봐야 합니다.",
+      "T1/S1 같은 구성은 교사 추적, 전경, 클로즈업, CMS 설정을 지원하지만 교실 크기, 설치 위치, 네트워크, 모델 구성에 따라 달라집니다.",
+      "데모나 실측 때 교사 이동 범위, 맨 뒷자리 시야, 녹화·송출 목적을 같이 확인하면 맞는 카메라 구성을 좁힐 수 있어요.",
+    ].join("\n\n")
+  }
+
+  if (/마이크/.test(text)) {
+    return [
+      "마이크는 교실 크기와 하이브리드 수업 여부에 따라 구성이 달라집니다.",
+      "보드 내장 마이크로 충분한 교실도 있지만, 대형 교실이나 온라인 송출이 중요한 경우에는 DT2 Pro 같은 외부 마이크 구성을 검토합니다.",
+      "수음 범위, 천장 높이, 배경 소음, 스피커 구성은 설치 상담에서 같이 확인하는 게 안전합니다.",
+    ].join("\n\n")
+  }
+
+  return [
+    "OPS 포함 구성에서는 외장 PC 없이 ClassIn 수업 환경을 구동할 수 있습니다.",
+    "다만 실제 OPS 포함 여부와 스펙은 모델·견적 기준으로 확인해야 하고, 필요하면 HDMI 등으로 외부 PC나 노트북 연결도 검토할 수 있어요.",
+    "교실에서 외장 PC를 꼭 써야 하는 프로그램이 있는지, 보드 단독으로 충분한지 데모에서 나눠 확인하는 게 좋습니다.",
+  ].join("\n\n")
+}
+
+function getPolicyConfirmationAnswer(question: NormalizedQuestion) {
+  const text = question.redacted.toLowerCase()
+
+  if (/서버|데이터\s*(처리|보관|지역)/.test(text)) {
+    return [
+      "서버 위치나 데이터 처리 지역은 추정으로 답하면 안 되는 항목입니다.",
+      "공식 정책, 계약 조건, 개인정보 처리 기준으로 확인해야 하고, 상담에서는 어떤 데이터가 어디에 저장·처리되는지 확인 요청 항목으로 분리하는 게 맞습니다.",
+      "도입 검토 중이라면 서버 위치, 데이터 처리 지역, 보관·삭제 기준을 한 묶음으로 담당자에게 확인하세요.",
+    ].join("\n\n")
+  }
+
+  if (/콘텐츠\s*소유권|소유권|저작권/.test(text)) {
+    return [
+      "콘텐츠 소유권은 약관·계약 기준으로 확인해야 하는 항목입니다.",
+      "공개 답변에서는 기관 자료와 접근 권한을 분리 관리한다고 안내하고, 소유권과 서비스 제공을 위한 이용 권한은 최신 계약·정책으로 확인하는 게 안전합니다.",
+      "상담에서는 녹화본, EDB 교안, 업로드 자료, 공유 드라이브 자료를 각각 누가 볼 수 있고 어떻게 보관되는지 함께 확인하세요.",
+    ].join("\n\n")
+  }
+
+  if (/스토리지|클라우드|저장\s*(용량|공간)|용량|단가|추가/.test(text)) {
+    return [
+      "스토리지는 사용량 확인과 계약 조건을 나눠 봐야 합니다.",
+      "관리자는 권한 범위 안에서 녹화본, 스크린샷, 칠판 파일, 공유 드라이브 등 스토리지 사용량을 확인할 수 있습니다.",
+      "기본 제공 용량, 추가 용량, 1GB당 단가, 장기 보관 조건은 최신 계약 기준으로 확인해야 하므로 숫자를 단정하지 않는 게 맞습니다.",
+    ].join("\n\n")
+  }
+
+  if (/무료|유료|권한|전환/.test(text)) {
+    return [
+      "관리자 권한은 기능 목록과 과금 정책을 분리해서 봐야 합니다.",
+      "관리자 콘솔에는 기관 관리, 스토리지, 학습 관리, 관리자 기능, 결제, 계정 정보 같은 영역이 있지만 무료/유료 권한 차이와 향후 유료 전환 여부는 계약·계정 정책 확인이 필요합니다.",
+      "상담에서는 현재 계정 기준으로 누가 어떤 메뉴를 볼 수 있는지, 추가 관리자 계정이 필요한지부터 확인하세요.",
+    ].join("\n\n")
+  }
+
+  if (/언제까지|사용\s*기간|계약\s*기간/.test(text)) {
+    return [
+      "사용 기간은 계약 기간, 계정 상태, 스토리지 보관 정책을 나눠 확인해야 합니다.",
+      "서비스를 언제까지 쓸 수 있는지와 녹화·자료가 언제까지 보관되는지는 서로 다른 질문일 수 있어요.",
+      "상담에서는 계약 만료일, 계정 접근 가능 기간, 녹화본·자료 보관 기간을 각각 확인하는 게 안전합니다.",
+    ].join("\n\n")
+  }
+
+  if (/정기\s*결제|결제.{0,10}포함|포함\s*항목/.test(text)) {
+    return [
+      "정기 결제나 견적 포함 항목은 고정 답변보다 구성 기준으로 확인해야 합니다.",
+      "보통 전자칠판, OPS, 카메라·마이크, 스탠드/벽걸이, 소프트웨어, 설치, 온보딩 범위를 함께 놓고 봅니다.",
+      "정확히 무엇이 포함되는지는 학원 규모, 교실 수, 장비 구성, 계약 조건에 따라 달라져서 상담에서 견적 범위로 확인하는 게 맞습니다.",
+    ].join("\n\n")
+  }
+
+  if (/펜|소모품|팁/.test(text)) {
+    return [
+      "전용 펜 팁이나 소모품은 구매 가능 여부, 재고, 가격을 최신 공급 조건으로 확인해야 합니다.",
+      "공개 답변에서 금액을 단정하지 말고, 모델명과 필요한 수량을 기준으로 구매 경로와 단가를 확인 요청하는 게 안전합니다.",
+      "파손이 잦다면 여분 보관 위치와 교실별 관리 기준도 함께 정해두세요.",
+    ].join("\n\n")
+  }
+
+  if (/개인정보/.test(text)) {
+    return [
+      "개인정보 처리 방식은 공식 개인정보처리방침과 기관 권한 정책 기준으로 확인해야 합니다.",
+      "가입에 필요한 전화번호 또는 이메일 같은 정보와, 수업 참여·녹화·학습 데이터 접근 권한은 분리해서 설명해야 해요.",
+      "상담에서는 보관 기준, 접근 권한, 삭제 요청 절차, 학원 내부 동의 절차를 함께 확인하세요.",
+    ].join("\n\n")
+  }
+
+  return [
+    "이 항목은 최신 계약·정책 확인이 필요한 질문입니다.",
+    "공개 답변에서는 가능한 기능과 확인 필요 범위를 분리하고, 금액·서버·소유권·권한처럼 조건이 바뀔 수 있는 내용은 단정하지 않는 게 맞습니다.",
+    "상담에서는 현재 계정, 계약 조건, 필요한 장비 구성, 보관·권한 기준을 같이 확인하세요.",
+  ].join("\n\n")
+}
+
+function getGoogleClassroomAnswer() {
+  return [
+    "Google Classroom을 대체할 수 있는지는 현재 쓰는 기능을 나눠 봐야 합니다.",
+    "ClassIn은 코스·수업 생성, 학생 초대, 자료 업로드, 과제·시험, 성적·리포트 같은 LMS 흐름을 운영할 수 있어요. 실시간 수업을 Zoom으로 계속 쓰더라도 과제와 자료 운영부터 검토할 수 있습니다.",
+    "다만 100개 이상 반, 반별 최대 인원, 일괄 생성, 기존 계정 연동은 기관 설정·요금제·API 범위 확인이 필요합니다. 현재 반 수, 학생 수, 필요한 자료/과제 흐름을 알려주시면 검토 항목으로 정리해드릴게요.",
+  ].join("\n\n")
+}
+
+function getSiteEntryIntegrationAnswer() {
+  return [
+    "자사 사이트의 입장 버튼에서 ClassIn 수업으로 연결하는 건 가능성은 열어두되, 기본 제공 기능처럼 단정하면 안 됩니다.",
+    "수업 링크, 로그인 방식, 학생 권한, 수업 생성 주체, 반복 시간표, API 또는 운영 자동화 범위를 같이 봐야 해요.",
+    "현재 사이트에서 회원 인증을 어떻게 하고 있는지, 수업이 매번 수동 생성인지 반복 일정인지, 충전형/구독형 중 어떤 계약을 검토 중인지 알려주시면 연동 확인 항목으로 좁혀드릴게요.",
+  ].join("\n\n")
+}
+
+function getS65QuoteAnswer() {
+  return [
+    "65인치 모델은 견적 전에 최신 공급 조건 확인이 필요합니다.",
+    "현재 공개 스펙 기준으로는 S75와 S86을 표준 모델로 먼저 안내하고, S65는 라인업에는 있으나 상세 규격서·재고·가격을 단정하지 않습니다.",
+    "65인치가 꼭 필요한 이유가 교실 크기인지, 예산인지, 설치 공간인지 알려주시면 S65 가능 여부와 75인치 대안까지 같이 확인하는 쪽으로 안내할게요.",
+  ].join("\n\n")
+}
+
+function getBoardOnlyOrPlatformAnswer() {
+  return [
+    "Classin Board는 단순 전자칠판이라기보다 OPS와 ClassIn 소프트웨어가 연결된 수업 시스템으로 보는 게 맞습니다.",
+    "보드 위에서 판서, EDB 교안, 녹화, LMS, 복습 자료 흐름을 함께 쓰는 구조라서 '전자칠판만 단품 구매'나 '플랫폼만 내장 여부'는 견적·공급 조건으로 확인해야 해요.",
+    "원하시는 게 순수 전자칠판 구매인지, 보드에서 ClassIn 수업 플랫폼까지 쓰려는 것인지 알려주시면 구성 범위를 나눠드릴게요.",
+  ].join("\n\n")
+}
+
+function getCameraConflictAnswer() {
+  return [
+    "두 명이 같은 수업에 들어왔는데 한 명만 카메라가 켜진다면, 먼저 계정과 기기 권한을 나눠 확인해야 합니다.",
+    "계정 역할, 온스테이지 또는 카메라 설정, 브라우저·앱의 카메라 권한, 같은 기기 중복 접속 여부, 다른 앱이 카메라를 점유하고 있는지 순서대로 보세요.",
+    "수업 진행에 영향이 있으면 계정 종류, 사용 기기, 앱/브라우저, 오류 화면을 받아 기술지원으로 넘기는 게 안전합니다.",
   ].join("\n\n")
 }
 
@@ -1497,6 +2312,31 @@ function getCoreFeatureYesNoAnswer(question: NormalizedQuestion) {
               ? "네, 화면 공유와 미러링 모두 수업 중 도구로 지원돼요. 자료 화면을 공유하거나 기기 화면을 보드에 미러링할 수 있어요."
               : "네, 판서는 클래스인 핵심 기능이에요. 보드에서 한 판서를 저장·공유하고 복습 자료(EDB 교안)로 이어갈 수 있어요."
   return `${lead} 자세한 설정 위치는 화면 기준으로 안내해드릴게요.`
+}
+
+// 문서 발췌를 최대 maxSentences 문장까지만 남긴다. 문장 종결(. ! ? 。)이 없으면 빈 문자열을 반환해
+// 호출부가 원문을 그대로 쓰도록 한다.
+function trimToSentences(text: string, maxSentences: number): string {
+  const parts = text.match(/[^.!?。]*[.!?。]/g)
+  if (!parts || parts.length === 0) return ""
+  return parts.slice(0, maxSentences).join("").trim()
+}
+
+// doc_suggestion 직답(주로 LLM 재작성이 실패·타임아웃했을 때의 폴백)에서 "제목: 발췌" 식 차가운
+// 문서 덤프 대신 부드러운 도입부 + 다듬은 발췌로 답한다. direct_answer/handoff 경로는 건드리지 않는다.
+export function buildDocSuggestionSummary(
+  excerpt: string,
+  headingText: string,
+  options: { isMetaHeading: boolean; excerptStartsWithHeading: boolean }
+): string {
+  const trimmedExcerpt = trimToSentences(excerpt, 2) || excerpt.trim()
+  const showHeading =
+    headingText.length > 0 &&
+    headingText !== "요약" &&
+    !options.isMetaHeading &&
+    !options.excerptStartsWithHeading
+  const body = showHeading ? `${headingText}: ${trimmedExcerpt}` : trimmedExcerpt
+  return `관련 안내를 정리해드리면,\n${body}`
 }
 
 function formatConsumerAnswer({
@@ -1519,6 +2359,9 @@ function formatConsumerAnswer({
   if (isLoginTroubleQuestion(question) && top.heading === "로그인/비밀번호 기본 점검") {
     return getLoginTroubleAnswer()
   }
+  if (isLiveClassTroubleQuestion(question) && top.heading === "수업 중 끊김·소리·마이크 기본 점검") {
+    return getLiveClassTroubleAnswer()
+  }
   if (top.heading === "웹 라이브 요금과 사용 조건") {
     return getWebLiveBillingAnswer()
   }
@@ -1534,14 +2377,62 @@ function formatConsumerAnswer({
   if (isComparisonQuestion(question) && top.urlPath.includes("/docs/start/academy-system-os-positioning")) {
     return getComparisonAnswer(top)
   }
+  if (top.heading === "EDB와 교안 표준화") {
+    return getEdbAnswer()
+  }
   if (isIdentityQuestion(question) && top.urlPath.includes("/docs/start/academy-system-os-positioning")) {
     return getIdentityAnswer()
   }
   if (isPricingInfoQuestion(question) && top.heading === "요금·견적 구성 안내") {
     return getPricingAnswer()
   }
+  if (top.heading === "소프트웨어 요금과 플랜 안내") {
+    return getSoftwarePricingAnswer()
+  }
+  if (top.heading === "체험·파일럿 확인") {
+    return getTrialOrPilotAnswer()
+  }
+  if (top.heading === "학부모 리포트·알림 확인") {
+    return getParentReportOrNotificationAnswer()
+  }
   if (isInstallFormQuestion(question) && top.heading === "설치 형태와 현장 점검") {
     return getInstallFormAnswer()
+  }
+  if (top.heading === "녹화 저장과 권한 기준") {
+    return getRecordingPermissionAnswer()
+  }
+  if (top.heading === "가입과 개인정보") {
+    return getSignupInfoAnswer()
+  }
+  if (top.heading === "오프라인 칠판 사용") {
+    return getOfflineBoardAnswer()
+  }
+  if (top.heading === "하드웨어 조건부 확인 항목") {
+    return getHardwareConditionalPreAdoptionAnswer(question)
+  }
+  if (top.heading === "확인 필요한 정책·계약 항목") {
+    return getPolicyConfirmationAnswer(question)
+  }
+  if (top.heading === "LMS와 과제 운영 범위") {
+    return getGoogleClassroomAnswer()
+  }
+  if (top.heading === "사이트 입장 버튼 연동 확인") {
+    return getSiteEntryIntegrationAnswer()
+  }
+  if (top.heading === "S65 견적 확인 필요") {
+    return getS65QuoteAnswer()
+  }
+  if (top.heading === "전자칠판 단품과 시스템 구성") {
+    return getBoardOnlyOrPlatformAnswer()
+  }
+  if (top.heading === "수업 카메라 충돌 점검") {
+    return getCameraConflictAnswer()
+  }
+  if (
+    isPreAdoptionCheckQuestion(question) &&
+    top.urlPath.includes("/docs/start/pre-adoption-faq-22-questions")
+  ) {
+    return getPreAdoptionOverviewAnswer()
   }
   if (isCoreFeatureYesNoQuestion(question) && top.heading === "수업 기능 사용 안내") {
     return getCoreFeatureYesNoAnswer(question)
@@ -1553,8 +2444,21 @@ function formatConsumerAnswer({
       : ""
   // 문서 섹션의 메타성 제목(예: "이 문서는 지도입니다")이 답변 앞에 새지 않게 거른다.
   const isMetaHeading = /^이\s*문서|지도입니다|^목차|개요만\s*보기/.test(top.heading ?? "")
-  const heading = top.heading && top.heading !== "요약" && !isMetaHeading ? `${top.heading}: ` : ""
-  const summary = `${heading}${top.excerpt}`
+  const headingText = top.heading?.trim() ?? ""
+  // 청크 본문이 이미 제목 문구로 시작하면(동기화 단계에서 heading 이 content 에도 포함됨)
+  // 제목을 또 앞에 붙이지 않는다 — "유료 계정 전환: 유료 계정 전환 …" 같은 제목 메아리 방지.
+  const normalizedExcerpt = top.excerpt.replace(/\s+/g, " ").trim().toLowerCase()
+  const excerptStartsWithHeading =
+    headingText.length > 0 && normalizedExcerpt.startsWith(headingText.replace(/\s+/g, " ").toLowerCase())
+  const heading =
+    headingText && headingText !== "요약" && !isMetaHeading && !excerptStartsWithHeading
+      ? `${headingText}: `
+      : ""
+  // doc_suggestion(약한 출처) 폴백만 따뜻하게 재구성한다. direct_answer/handoff 는 기존 그대로 둔다.
+  const summary =
+    answerMode === "doc_suggestion"
+      ? buildDocSuggestionSummary(top.excerpt, headingText, { isMetaHeading, excerptStartsWithHeading })
+      : `${heading}${top.excerpt}`
   const nextStep = getConciseNextStep(category)
 
   return [
@@ -1574,7 +2478,7 @@ function isUsableGeneratedAnswer(answer: string) {
 }
 
 function hasConcreteClassinAnchor(answer: string) {
-  return /classin|클래스인|전자칠판|보드|수업|교실|녹화|복습|lms|edb|관리자|학생|교사|강사|과제|출결|도입|운영|판서/i.test(answer)
+  return /classin|클래스인|전자칠판|보드|수업|교실|녹화|복습|lms|edb|이\s*디\s*비|관리자|학생|교사|강사|과제|출결|도입|운영|판서/i.test(answer)
 }
 
 function isVagueGeneratedAnswer(answer: string) {
@@ -1609,7 +2513,11 @@ function composeAnswer(
         confidence: 0.25,
         needsHandoff: false,
         sources: [],
-        suggestedQuestions: ["도입 상담을 받고 싶어요", "수업 운영 문제를 해결하고 싶어요", "결제나 영수증 문의가 있어요"],
+        suggestedQuestions: [
+          "도입 전 확인 질문을 알려주세요",
+          "수업 운영 문제를 해결하고 싶어요",
+          "요금/견적은 어떤 항목으로 구성되나요?",
+        ],
         unresolved: true,
       }
     }
@@ -1630,7 +2538,11 @@ function composeAnswer(
       confidence: needsHandoff ? 0.4 : 0.15,
       needsHandoff,
       sources: [],
-      suggestedQuestions: ["도입 상담을 받고 싶어요", "요금과 견적이 궁금해요", "계정이나 수업 접속 문제가 있어요"],
+      suggestedQuestions: [
+        "도입 전 확인 질문을 알려주세요",
+        "요금/견적은 어떤 항목으로 구성되나요?",
+        "계정이나 수업 접속 문제가 있어요",
+      ],
       unresolved: true,
     }
   }
@@ -1992,13 +2904,44 @@ async function generateUsableAnswerWithProgressiveModels(
   return null
 }
 
+// 이미 손으로 다듬은 큐레이션 템플릿 직답은 Gemini 재작성을 건너뛴다(즉시 응답·드리프트 방지).
+function isCuratedTemplateQuestion(question: NormalizedQuestion) {
+  return (
+    isHardwareSpecsQuestion(question) ||
+    isHardwareBoardLineupQuestion(question) ||
+    isHardwareTroubleQuestion(question) ||
+    isHardwareUnconfirmedDetailQuestion(question) ||
+    isLoginTroubleQuestion(question) ||
+    isLiveClassTroubleQuestion(question) ||
+    isWebLiveBillingQuestion(question) ||
+    isPricingInfoQuestion(question) ||
+    isSoftwarePricingQuestion(question) ||
+    isTrialOrPilotQuestion(question) ||
+    isInstallFormQuestion(question) ||
+    isCoreFeatureYesNoQuestion(question) ||
+    isParentReportOrNotificationQuestion(question) ||
+    isPreAdoptionSpecificQuestion(question) ||
+    isPreAdoptionCheckQuestion(question) ||
+    isGoogleClassroomQuestion(question) ||
+    isSiteEntryIntegrationQuestion(question) ||
+    isS65QuoteQuestion(question) ||
+    isBoardOnlyOrPlatformQuestion(question) ||
+    isCameraConflictQuestion(question) ||
+    ((isComparisonQuestion(question) || isIdentityQuestion(question)) && !isApiIntegrationQuestion(question))
+  )
+}
+
 function shouldUseAiFinalAnswer(
   response: Omit<ChatbotQueryResponse, "answerEventId" | "sessionId" | "warning" | "handoffIntent">,
   question: NormalizedQuestion,
   category: string
 ) {
   if (category === "general" && !isDomainRelatedQuestion(question, category)) return false
+  if (wantsImmediateHumanHandoff(question)) return false
   if (response.answerMode === "clarifying_question" && question.tokens.length < 2) return false
+  if (response.answerMode === "direct_answer" && isCsFigmaGuideResponse(response)) return false
+  // 큐레이션 직답은 이미 최종본 — Gemini 재작성(0.8~4.5s)을 건너뛰고 그대로 내보낸다.
+  if (response.answerMode === "direct_answer" && isCuratedTemplateQuestion(question)) return false
   return true
 }
 
@@ -2038,6 +2981,58 @@ function shouldExposeSources(input: ChatbotQueryRequest) {
   return process.env.CHATBOT_SHOW_SOURCES === "1" || context.showSources === true
 }
 
+function isCsFigmaGuideResponse(
+  response: Omit<ChatbotQueryResponse, "answerEventId" | "sessionId" | "warning" | "handoffIntent">
+) {
+  return response.sources.some((source) => source.heading === "Figma CS 캡처 기준 3단계 안내")
+}
+
+export function normalizeSessionHistoryForGemini(
+  rows: Array<{ role: string; content: string }>
+): { role: "user" | "model"; parts: { text: string }[] }[] {
+  const mapped = rows.map((msg) => ({
+    role: msg.role === "assistant" ? ("model" as const) : ("user" as const),
+    parts: [{ text: msg.content }],
+  }))
+
+  // 교차 대화 필터링 (user, model, user, model 순서 유지)
+  const cleanHistory: { role: "user" | "model"; parts: { text: string }[] }[] = []
+  let expectedRole: "user" | "model" = "user"
+  for (const msg of mapped) {
+    if (msg.role === expectedRole) {
+      cleanHistory.push(msg)
+      expectedRole = expectedRole === "user" ? "model" : "user"
+    }
+  }
+  if (cleanHistory.length > 0 && cleanHistory[cleanHistory.length - 1].role === "user") {
+    cleanHistory.pop()
+  }
+  return cleanHistory
+}
+
+// 세션 대화 이력 로드 — 검색과 병렬로 돌릴 수 있게 분리. 실패해도 빈 배열로 안전 폴백.
+async function loadSessionHistory(
+  sessionId: string
+): Promise<{ role: "user" | "model"; parts: { text: string }[] }[]> {
+  if (!hasSupabaseServerEnv()) return []
+  try {
+    const supabase = createSupabaseAdminClient()
+    const { data, error } = await supabase
+      .from("chat_messages")
+      .select("role, content")
+      .eq("session_id", sessionId)
+      .order("created_at", { ascending: false })
+      .limit(10) // 최근 10개 메세지 (사용자 5, 어시스턴트 5)
+
+    if (error || !data) return []
+
+    return normalizeSessionHistoryForGemini([...data].reverse())
+  } catch (e) {
+    console.warn("[chatbot] failed to load session history:", e)
+    return []
+  }
+}
+
 // 검색 → 답변 구성 → 필요 시 Gemini 답변 생성까지의 코어. 영속화(persistExchange)는 포함하지 않는다.
 // handleChatbotQuery(실서비스)와 evaluateChatbotQuery(품질 평가)가 공유한다.
 async function buildChatbotCore(
@@ -2057,7 +3052,11 @@ async function buildChatbotCore(
         confidence: 0.3,
         needsHandoff: false,
         sources: [],
-        suggestedQuestions: ["도입 상담을 받고 싶어요", "수업 운영 문제를 해결하고 싶어요", "결제나 영수증 문의가 있어요"],
+        suggestedQuestions: [
+          "도입 전 확인 질문을 알려주세요",
+          "수업 운영 문제를 해결하고 싶어요",
+          "요금/견적은 어떤 항목으로 구성되나요?",
+        ],
         unresolved: true,
       },
       category: "general",
@@ -2066,7 +3065,93 @@ async function buildChatbotCore(
       latencyMs: elapsedSince(startedAt),
     }
   }
-  const { sources, warning, cacheHit } = await searchKnowledgeSources(question)
+
+  const policyGuard = buildPolicyGuardResponse(question)
+  if (policyGuard) {
+    return {
+      question,
+      response: policyGuard.response,
+      category: policyGuard.category,
+      intent: policyGuard.intent,
+      handoffIntent: policyGuard.handoffIntent,
+      latencyMs: elapsedSince(startedAt),
+    }
+  }
+
+  if (wantsImmediateHumanHandoff(question)) {
+    const { category, intent, handoffIntent } = classifyChatbotQuestion(question.redacted)
+    return {
+      question,
+      response: buildImmediateHandoffResponse(category, handoffIntent),
+      category,
+      intent,
+      handoffIntent,
+      latencyMs: elapsedSince(startedAt),
+    }
+  }
+
+  const csFigmaGuide = findCsFigmaGuideForQuestion(question.redacted)
+  if (csFigmaGuide) {
+    const { category, intent, handoffIntent } = classifyChatbotQuestion(question.redacted, [
+      csFigmaGuide.category,
+      csFigmaGuide.docCategory,
+    ])
+    // 증상형 질문이면 how-to 단계와 함께 상담 연결을 제안한다(자가해결 + 안전망).
+    const isSymptom = isCsFigmaSymptomQuestion(question.redacted)
+    const guideAnswer = isSymptom
+      ? `${formatCsFigmaGuideAnswer(csFigmaGuide)}\n\n위 순서로도 해결되지 않으면 담당자 상담으로 연결해 드릴 수 있어요.`
+      : formatCsFigmaGuideAnswer(csFigmaGuide)
+    return {
+      question,
+      response: {
+        answer: guideAnswer,
+        answerMode: "direct_answer",
+        confidence: isSymptom ? 0.82 : 0.88,
+        needsHandoff: false,
+        sources: [
+          {
+            title: csFigmaGuide.title,
+            heading: "Figma CS 캡처 기준 3단계 안내",
+            urlPath: getCsFigmaGuideDocPath(csFigmaGuide),
+            category: csFigmaGuide.category,
+            excerpt: csFigmaGuide.summary,
+            score: 420,
+          },
+        ],
+        suggestedQuestions: buildCsFigmaGuideSuggestedQuestions(csFigmaGuide),
+        unresolved: false,
+      },
+      category,
+      intent,
+      handoffIntent: isSymptom ? "support" : handoffIntent,
+      latencyMs: elapsedSince(startedAt),
+    }
+  }
+
+  // 세션(대화 이력)이 없는 동일 질문은 캐시된 답변으로 즉시 응답 — 검색·Gemini를 통째로 건너뛴다.
+  if (shouldGenerateAnswer && !options.sessionId) {
+    const cached = getCachedAnswer(question)
+    if (cached) {
+      return {
+        question,
+        response: cached.response,
+        category: cached.category,
+        intent: cached.intent,
+        handoffIntent: cached.handoffIntent,
+        warning: cached.warning,
+        latencyMs: elapsedSince(startedAt),
+        retrievalCacheHit: true,
+      }
+    }
+  }
+
+  // history는 검색·분류와 무관하므로 검색과 병렬로 시작해 두고 Gemini 직전에만 await한다.
+  const historyPromise: Promise<{ role: "user" | "model"; parts: { text: string }[] }[]> =
+    shouldGenerateAnswer && options.sessionId
+      ? loadSessionHistory(options.sessionId)
+      : Promise.resolve([])
+
+  const { sources, warning, cacheHit } = await searchKnowledgeSourcesWithinBudget(question)
   const classificationSources = sources.filter((source) => source.score >= MIN_DIRECT_SOURCE_SCORE)
   const { category, intent, handoffIntent } = classifyChatbotQuestion(
     question.redacted,
@@ -2074,61 +3159,37 @@ async function buildChatbotCore(
   )
   const response = composeAnswer(question, sources, category)
 
-  // 대화 기록 (History) 조회 및 가공
-  let history: { role: "user" | "model"; parts: { text: string }[] }[] = []
-  if (shouldGenerateAnswer && options.sessionId && hasSupabaseServerEnv()) {
-    try {
-      const supabase = createSupabaseAdminClient()
-      const { data, error } = await supabase
-        .from("chat_messages")
-        .select("role, content")
-        .eq("session_id", options.sessionId)
-        .order("created_at", { ascending: true })
-        .limit(10) // 최근 10개 메세지 (사용자 5, 어시스턴트 5)
-
-      if (!error && data) {
-        const mapped = data.map((msg) => ({
-          role: msg.role === "assistant" ? ("model" as const) : ("user" as const),
-          parts: [{ text: msg.content }],
-        }))
-
-        // 교차 대화 필터링 (user, model, user, model 순서 유지)
-        const cleanHistory = []
-        let expectedRole: "user" | "model" = "user"
-        for (const msg of mapped) {
-          if (msg.role === expectedRole) {
-            cleanHistory.push(msg)
-            expectedRole = expectedRole === "user" ? "model" : "user"
-          }
-        }
-        if (cleanHistory.length > 0 && cleanHistory[cleanHistory.length - 1].role === "user") {
-          cleanHistory.pop()
-        }
-        history = cleanHistory
-      }
-    } catch (e) {
-      console.warn("[chatbot] failed to load session history:", e)
-    }
-  }
-
   if (shouldGenerateAnswer && shouldUseAiFinalAnswer(response, question, category)) {
-    const finalAnswer = await generateUsableAnswerWithProgressiveModels((tier) =>
-      generateGeminiFinalAnswer({
-        question: question.redacted,
-        category,
-        answerMode: response.answerMode,
-        draftAnswer: response.answer,
-        sources: response.sources,
-        tier,
-        history,
-      })
-    )
+    const history = await historyPromise
+    const finalAnswer = await withTimeoutFallback({
+      promise: generateUsableAnswerWithProgressiveModels((tier) =>
+        generateGeminiFinalAnswer({
+          question: question.redacted,
+          category,
+          answerMode: response.answerMode,
+          draftAnswer: response.answer,
+          sources: response.sources,
+          tier,
+          history,
+        })
+      ),
+      timeoutMs: getFinalAnswerTimeoutMs(),
+      fallback: () => null,
+      onTimeout: () => {
+        console.warn("[chatbot] final answer generation timed out; using deterministic draft.")
+      },
+    })
     if (finalAnswer) {
       applyGeneratedFinalAnswer(response, question, category, finalAnswer)
     }
   }
 
   finalizeAnswer(response)
+
+  // 세션(이력)이 없는 질문만 캐시 — 이력에 의존한 답이 캐시에 섞이지 않게.
+  if (shouldGenerateAnswer && !options.sessionId) {
+    setCachedAnswer(question, { response, category, intent, handoffIntent, warning })
+  }
 
   return {
     question,
@@ -2189,6 +3250,191 @@ export async function evaluateChatbotQuery(
     warning: core.warning,
     detectedCategory: core.category,
   }
+}
+
+export interface ChatbotStreamMeta {
+  answerMode: AnswerMode
+  confidence: number
+  needsHandoff: boolean
+  unresolved: boolean
+  handoffIntent: HandoffIntent
+  sources: ChatbotSource[]
+  suggestedQuestions: string[]
+  sessionId?: string
+  answerEventId?: string
+  warning?: string
+}
+
+export type ChatbotStreamEvent =
+  | { type: "delta"; text: string }
+  | { type: "replace"; answer: string }
+  | { type: "meta"; meta: ChatbotStreamMeta }
+  | { type: "error"; error: string }
+
+// 스트리밍 미리보기에서 단어 중간을 내보내지 않도록, 정제된 텍스트의 마지막 공백/개행 경계 위치를
+// 돌려준다(그 인덱스까지만 안전하게 flush). 경계가 없으면 0 → 아직 아무것도 내보내지 않는다.
+export function lastSafeBoundary(text: string): number {
+  const match = text.match(/[\s\S]*\s/)
+  return match ? match[0].length : 0
+}
+
+// Gemini 답변을 토큰 단위로 스트리밍하면서 정제된 델타를 emit 하고, 완성된 답변에 길이클램프+사용성
+// 게이트를 적용해 response 에 반영한다. 사용 가능한 AI 답변을 만들었으면 true, 아니면 false(=결정형 초안 유지).
+// tier 는 basic 고정(딥 폴백은 비스트리밍 기본과 동일하게 opt-in 유지).
+async function streamAndApplyFinalAnswer({
+  question,
+  category,
+  response,
+  historyPromise,
+  emit,
+}: {
+  question: NormalizedQuestion
+  category: string
+  response: Omit<ChatbotQueryResponse, "answerEventId" | "sessionId" | "warning" | "handoffIntent">
+  historyPromise: Promise<{ role: "user" | "model"; parts: { text: string }[] }[]>
+  emit: (event: ChatbotStreamEvent) => void
+}): Promise<boolean> {
+  const history = await historyPromise
+  let raw = ""
+  let emittedLen = 0
+
+  const onChunk = (chunk: string) => {
+    raw += chunk
+    const sanitized = sanitizePublicAnswerText(raw)
+    const safeEnd = lastSafeBoundary(sanitized)
+    if (safeEnd > emittedLen) {
+      emit({ type: "delta", text: sanitized.slice(emittedLen, safeEnd) })
+      emittedLen = safeEnd
+    }
+  }
+
+  await withTimeoutFallback({
+    promise: (async () => {
+      for await (const chunk of streamGeminiFinalAnswer({
+        question: question.redacted,
+        category,
+        answerMode: response.answerMode,
+        draftAnswer: response.answer,
+        sources: response.sources,
+        tier: "basic",
+        history,
+      })) {
+        onChunk(chunk)
+      }
+      return true
+    })(),
+    timeoutMs: getFinalAnswerStreamTimeoutMs(),
+    fallback: () => false,
+    onTimeout: () => console.warn("[chatbot] streaming final answer timed out; using deterministic draft."),
+  })
+
+  const finalAnswer = clampAnswerToLength(sanitizePublicAnswerText(raw))
+  if (!finalAnswer || !isUsableGeneratedAnswer(finalAnswer)) {
+    return false
+  }
+  applyGeneratedFinalAnswer(response, question, category, finalAnswer)
+  return true
+}
+
+/**
+ * 스트리밍 진입점. handleChatbotQuery 와 동일한 검색·분류·결정형 초안 파이프라인(buildChatbotCore)을
+ * 재사용하되, Gemini 최종 답변만 토큰 스트리밍으로 내보낸다.
+ * 와이어 프로토콜(NDJSON): delta(텍스트 추가) → replace(정제된 최종본 확정) → meta(출처/제안/세션 등).
+ * 모든 안전 게이트(정제·길이클램프·사용성 판정·결정형 폴백)는 비스트리밍 경로와 동일하게 유지한다.
+ */
+export async function streamChatbotQuery(
+  input: ChatbotQueryRequest,
+  meta: ChatbotRequestMeta,
+  emit: (event: ChatbotStreamEvent) => void
+): Promise<void> {
+  const startedAt = Date.now()
+  const requestedSessionId = normalizeOptionalUuid(input.sessionId)
+  const sessionId = requestedSessionId ?? (hasSupabaseServerEnv() ? crypto.randomUUID() : undefined)
+  const answerEventId = hasSupabaseServerEnv() ? crypto.randomUUID() : undefined
+
+  const emitMeta = (
+    response: Omit<ChatbotQueryResponse, "answerEventId" | "sessionId" | "warning" | "handoffIntent">,
+    handoffIntent: HandoffIntent,
+    warning?: string
+  ) => {
+    emit({
+      type: "meta",
+      meta: {
+        answerMode: response.answerMode,
+        confidence: response.confidence,
+        needsHandoff: response.needsHandoff,
+        unresolved: response.unresolved,
+        handoffIntent,
+        sources: shouldExposeSources(input) ? response.sources : [],
+        suggestedQuestions: response.suggestedQuestions,
+        sessionId,
+        answerEventId,
+        warning,
+      },
+    })
+  }
+
+  // 세션이 없는(보통 첫 턴) 동일 질문은 캐시된 답변을 즉시 확정해 검색·생성을 통째로 건너뛴다.
+  if (!requestedSessionId) {
+    const cachedQuestion = normalizeQuestion(input.message)
+    const cached = getCachedAnswer(cachedQuestion)
+    if (cached) {
+      emit({ type: "replace", answer: cached.response.answer })
+      emitMeta(cached.response, cached.handoffIntent, cached.warning)
+      void persistExchange(
+        input,
+        cachedQuestion,
+        cached.response,
+        meta,
+        cached.category,
+        cached.intent,
+        cached.handoffIntent,
+        elapsedSince(startedAt),
+        sessionId,
+        answerEventId
+      )
+      return
+    }
+  }
+
+  // 이력은 검색·분류와 무관하므로 검색과 병렬로 시작해 두고 스트리밍 직전에만 await 한다.
+  const historyPromise = requestedSessionId ? loadSessionHistory(requestedSessionId) : Promise.resolve([])
+
+  // 검색·분류·결정형 초안까지는 기존 코어를 그대로 재사용(중복 방지). Gemini 호출만 스트리밍으로 대체.
+  const core = await buildChatbotCore(input.message, { generateAnswer: false })
+  const { question, response, category, intent, handoffIntent, warning } = core
+
+  // 인사·정책 가드 응답은 buildChatbotCore 가 조기 반환한 '최종 답변'이다(정책 가드는 보안 거절 등).
+  // 이 경우 AI 재작성을 적용하면 안 된다 — handleChatbotQuery 의 조기 반환 의미와 동일하게 맞춘다.
+  const isShortCircuited = isGreetingOnly(question) || Boolean(buildPolicyGuardResponse(question))
+  if (!isShortCircuited && shouldUseAiFinalAnswer(response, question, category)) {
+    await streamAndApplyFinalAnswer({ question, category, response, historyPromise, emit })
+  }
+
+  finalizeAnswer(response)
+
+  // 스트림 델타가 끝난 뒤(또는 AI 미사용 시) 정제된 최종본을 권위 있는 replace 로 확정한다.
+  emit({ type: "replace", answer: response.answer })
+
+  // no-session 질문만 캐시(이력 의존 답이 캐시에 섞이지 않게) — handleChatbotQuery 와 동일 규칙.
+  if (!requestedSessionId) {
+    setCachedAnswer(question, { response, category, intent, handoffIntent, warning })
+  }
+
+  emitMeta(response, handoffIntent, warning)
+
+  void persistExchange(
+    input,
+    question,
+    response,
+    meta,
+    category,
+    intent,
+    handoffIntent,
+    elapsedSince(startedAt),
+    sessionId,
+    answerEventId
+  )
 }
 
 export async function saveChatbotFeedback(raw: unknown) {

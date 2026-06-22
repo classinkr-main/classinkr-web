@@ -7,7 +7,7 @@ import { DocsSearchLogger } from "@/components/docs/DocsSearchLogger"
 import { getAllDocsSummaries, scoreDocsArticle } from "../_utils"
 
 export const metadata: Metadata = {
-  title: "가이드 검색 | Classin",
+  title: "가이드 검색",
   description: "Classin 가이드 문서를 검색하세요.",
   // 검색 결과 페이지는 색인하지 않는다 (중복/얕은 콘텐츠 방지).
   robots: { index: false, follow: true },
@@ -58,6 +58,7 @@ export default async function DocsSearchPage({ searchParams }: DocsSearchPagePro
               name="q"
               defaultValue={query}
               autoFocus
+              aria-label="가이드 전체 검색"
               placeholder="궁금한 기능, 수업 준비, 문제 상황 검색"
               className="min-w-0 flex-1 bg-transparent text-base outline-none placeholder:text-[#A39E98]"
             />

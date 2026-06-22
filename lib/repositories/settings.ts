@@ -2,12 +2,12 @@ import "server-only"
 
 import {
   DEFAULT_SITE_SETTINGS,
-  type SiteSettings,
 } from "@/lib/db"
 import { mergeNotificationAppearance } from "@/lib/notifications/types"
+import type { SiteSettings } from "@/lib/site-settings-types"
 import { createSupabaseAdminClient } from "@/lib/supabase/admin"
 
-export type { SiteSettings } from "@/lib/db"
+export type { SiteSettings } from "@/lib/site-settings-types"
 
 const sb = () => createSupabaseAdminClient()
 const SETTINGS_CACHE_TTL_MS = 30_000

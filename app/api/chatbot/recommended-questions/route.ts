@@ -5,9 +5,18 @@ import { CLASSIN_POSITIONING } from "@/lib/classin-positioning"
 
 export const dynamic = "force-dynamic"
 
+const STARTER_QUESTION_LIMIT = 4
+
 const fallbackQuestions = [
     ...CLASSIN_POSITIONING.chatbot.starterQuestions,
-]
+].slice(0, STARTER_QUESTION_LIMIT)
+
+const legacyStarterQuestionMap = new Map([
+    ["우리 학원에 맞는 도입 방식이 궁금해요", "Classin이 Zoom이나 일반 전자칠판과 뭐가 다른가요?"],
+    ["수업 중 집중도와 출석 관리를 개선하고 싶어요", "우리 학원 90일 도입 순서를 어떻게 잡으면 좋을까요?"],
+    ["결제, 영수증, 계정 문제를 상담받고 싶어요", "전자칠판·녹화·EDB·LMS를 수업 흐름으로 쓰는 방법이 궁금해요"],
+    ["전자칠판 설치나 A/S는 어떻게 진행되나요?", "요금/견적은 어떤 항목으로 구성되나요?"],
+])
 
 interface RecommendedQuestionRow {
     prompt: string | null
@@ -29,6 +38,17 @@ function fallbackResponse(warning: string) {
     })
 }
 
+function normalizeQuestions(questions: Array<string | null | undefined>) {
+    return Array.from(
+        new Set(
+            questions
+                .map((question) => question?.trim())
+                .map((question) => question ? legacyStarterQuestionMap.get(question) ?? question : question)
+                .filter((question): question is string => Boolean(question))
+        )
+    ).slice(0, STARTER_QUESTION_LIMIT)
+}
+
 export async function GET() {
     if (!hasSupabaseServerEnv()) {
         return fallbackResponse("Supabase 환경변수가 없어 기본 질문을 반환했습니다.")
@@ -43,14 +63,14 @@ export async function GET() {
             .eq("status", "published")
             .order("order_index", { ascending: true })
             .order("updated_at", { ascending: false })
-            .limit(3)
+            .limit(STARTER_QUESTION_LIMIT)
 
         if (error) throw error
 
-        const questions = (data ?? [])
-            .map((question) => (question as RecommendedQuestionRow).prompt?.trim())
-            .filter((question): question is string => Boolean(question))
-            .slice(0, 3)
+        const dbQuestions = (data ?? []).map(
+            (question) => (question as RecommendedQuestionRow).prompt
+        )
+        const questions = normalizeQuestions([...dbQuestions, ...fallbackQuestions])
 
         if (questions.length === 0) {
             return fallbackResponse("게시된 추천 질문이 없어 기본 질문을 반환했습니다.")

@@ -56,9 +56,14 @@ interface FaqSuggestion {
 interface SyncResult {
   ok: boolean
   configured: boolean
+  cached?: boolean
+  locked?: boolean
   fetchedChats: number
   newConversations: number
   matchedLeads: number
+  lastSyncedAt?: string | null
+  messageFetches?: number
+  reusedTranscripts?: number
   warning?: string
 }
 
@@ -95,13 +100,12 @@ export default function ChannelTalkPage() {
   const [loading, setLoading] = useState(true)
   const [syncing, setSyncing] = useState(false)
   const [notice, setNotice] = useState<string | null>(null)
+  const [loadError, setLoadError] = useState<string | null>(null)
 
   const load = useCallback(async (force = false) => {
+    setLoadError(null)
     const [main, mined] = await Promise.allSettled([
-      adminFetchJsonCached<ChannelData>("/api/admin/channel-talk", undefined, {
-        ttlMs: 30_000,
-        force,
-      }),
+      adminFetchJson<ChannelData>("/api/admin/channel-talk", { cache: "no-cache" }),
       adminFetchJsonCached<{ suggestions?: FaqSuggestion[] }>(
         "/api/admin/channel-talk/mine",
         undefined,
@@ -109,6 +113,7 @@ export default function ChannelTalkPage() {
       ),
     ])
     if (main.status === "fulfilled") setData(main.value)
+    else setLoadError(main.reason instanceof Error ? main.reason.message : "상담 데이터를 불러오지 못했습니다.")
     if (mined.status === "fulfilled") setSuggestions(mined.value.suggestions ?? [])
   }, [])
 
@@ -116,21 +121,33 @@ export default function ChannelTalkPage() {
     load().finally(() => setLoading(false))
   }, [load])
 
-  async function runSync() {
+  const isUnconfigured = data?.configured === false
+
+  async function runSync(force = false) {
+    if (isUnconfigured) {
+      setNotice("채널톡 Open API 키 설정 후 동기화할 수 있습니다.")
+      return
+    }
+
     setSyncing(true)
     setNotice(null)
     try {
       const result = await adminFetchJson<SyncResult>("/api/admin/channel-talk/sync", {
         method: "POST",
-        body: JSON.stringify({ limit: 50 }),
+        body: JSON.stringify({ force, limit: 50 }),
       })
       if (!result.configured) {
         setNotice(result.warning ?? "채널톡 Open API 키가 설정되지 않았습니다.")
       } else if (!result.ok) {
         setNotice(result.warning ?? "동기화에 실패했습니다.")
+      } else if (result.cached) {
+        setNotice(
+          result.warning ??
+            `최근 동기화 결과를 사용했습니다. 마지막 동기화: ${formatWhen(result.lastSyncedAt ?? undefined)}`
+        )
       } else {
         setNotice(
-          `동기화 완료 · 대화 ${result.fetchedChats}건 · 신규 ${result.newConversations}건 · CRM 매칭 ${result.matchedLeads}건`
+          `동기화 완료 · 대화 ${result.fetchedChats}건 · 신규 ${result.newConversations}건 · CRM 매칭 ${result.matchedLeads}건 · 메시지 요청 ${result.messageFetches ?? result.fetchedChats}건 · 재사용 ${result.reusedTranscripts ?? 0}건`
         )
       }
       await load(true)
@@ -156,18 +173,30 @@ export default function ChannelTalkPage() {
             상담 대화를 CRM 리드와 매칭하고, 자주 묻는 질문을 챗봇 학습 후보로 끌어옵니다.
           </p>
         </div>
-        <button
-          type="button"
-          onClick={runSync}
-          disabled={syncing}
-          className="inline-flex h-10 items-center gap-2 rounded-lg bg-[#111110] px-4 text-[13px] font-semibold text-white transition-colors hover:bg-[#2a2a28] disabled:opacity-50"
-        >
-          <RefreshCw className={`h-4 w-4 ${syncing ? "animate-spin" : ""}`} />
-          {syncing ? "동기화 중…" : "지금 동기화"}
-        </button>
+        <div className="flex flex-wrap items-center gap-2">
+          <button
+            type="button"
+            onClick={() => void runSync()}
+            disabled={syncing || loading || isUnconfigured}
+            title={isUnconfigured ? "채널톡 Open API 키 설정 후 동기화할 수 있습니다." : undefined}
+            className="inline-flex h-10 items-center gap-2 rounded-lg bg-[#111110] px-4 text-[13px] font-semibold text-white transition-colors hover:bg-[#2a2a28] disabled:opacity-50"
+          >
+            <RefreshCw className={`h-4 w-4 ${syncing ? "animate-spin" : ""}`} />
+            {syncing ? "동기화 중…" : isUnconfigured ? "설정 필요" : "지금 동기화"}
+          </button>
+          <button
+            type="button"
+            onClick={() => void runSync(true)}
+            disabled={syncing || loading || isUnconfigured}
+            className="inline-flex h-10 items-center gap-2 rounded-lg border border-[#e8e8e4] bg-white px-3 text-[13px] font-semibold text-[#111110] transition-colors hover:bg-[#f5f5f2] disabled:opacity-50"
+          >
+            <RefreshCw className="h-4 w-4" />
+            강제 갱신
+          </button>
+        </div>
       </div>
 
-      {data && !data.configured ? (
+      {isUnconfigured ? (
         <div className="mb-6 flex items-start gap-3 rounded-xl bg-[#FEF3EE] px-4 py-3.5 text-[13px] text-[#B85C33]">
           <Info className="mt-0.5 h-4 w-4 shrink-0" />
           <p>
@@ -177,6 +206,13 @@ export default function ChannelTalkPage() {
             / <code className="rounded bg-white px-1.5 py-0.5 font-mono text-[12px]">CHANNEL_TALK_ACCESS_SECRET</code>{" "}
             를 추가하세요. (채널톡 &gt; 설정 &gt; 보안 &gt; API)
           </p>
+        </div>
+      ) : null}
+
+      {loadError ? (
+        <div className="mb-6 flex items-start gap-3 rounded-xl bg-[#FEF3EE] px-4 py-3.5 text-[13px] text-[#B85C33]">
+          <Info className="mt-0.5 h-4 w-4 shrink-0" />
+          <p>상담 데이터를 불러오지 못했습니다. {loadError}</p>
         </div>
       ) : null}
 
@@ -217,15 +253,15 @@ export default function ChannelTalkPage() {
               label="FAQ 후보"
               value={suggestions.length}
               sub="챗봇 미커버 질문"
-              accent="bg-[#EEF2FF]"
-              iconColor="text-[#3730A3]"
+              accent="bg-[#ECFDF5]"
+              iconColor="text-[#084734]"
             />
           </div>
 
           {suggestions.length > 0 ? (
             <section className="overflow-hidden rounded-2xl border border-[#e8e8e4] bg-white">
               <div className="flex items-center gap-2 border-b border-[#e8e8e4] px-5 py-4">
-                <Sparkles className="h-4 w-4 text-[#3730A3]" />
+                <Sparkles className="h-4 w-4 text-[#084734]" />
                 <h2 className="text-[13px] font-semibold text-[#111110]">챗봇 학습 후보 (FAQ 플라이휠)</h2>
                 <span className="ml-auto text-[12px] text-[#1a1a1a]/40">{suggestions.length}건</span>
               </div>
@@ -243,7 +279,7 @@ export default function ChannelTalkPage() {
                         최근 질문 {formatWhen(suggestion.lastAskedAt)}
                       </p>
                     </div>
-                    <span className="shrink-0 rounded-full bg-[#EEF2FF] px-2.5 py-1 text-[11px] font-semibold text-[#3730A3]">
+                    <span className="shrink-0 rounded-full bg-[#ECFDF5] px-2.5 py-1 text-[11px] font-semibold text-[#084734]">
                       {suggestion.count}회
                     </span>
                   </li>
@@ -266,7 +302,11 @@ export default function ChannelTalkPage() {
 
             {conversations.length === 0 ? (
               <p className="px-5 py-10 text-center text-[13px] text-[#1a1a1a]/30">
-                동기화된 상담이 없습니다. 우측 상단 “지금 동기화”를 눌러 채널톡에서 가져오세요.
+                {isUnconfigured
+                  ? "채널톡 Open API 키 설정 후 상담을 동기화할 수 있습니다."
+                  : loadError
+                    ? "상담 데이터를 불러오지 못했습니다. 잠시 뒤 다시 시도하세요."
+                    : "동기화된 상담이 없습니다. 우측 상단 “지금 동기화”를 눌러 채널톡에서 가져오세요."}
               </p>
             ) : (
               <ul>

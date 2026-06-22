@@ -1,5 +1,6 @@
 "use client"
 
+import dynamic from "next/dynamic"
 import { useEffect, useState } from "react"
 import {
   AlertCircle,
@@ -17,22 +18,9 @@ import {
   Send,
   Users,
 } from "lucide-react"
-import {
-  Bar,
-  BarChart,
-  CartesianGrid,
-  Cell,
-  ComposedChart,
-  Line,
-  LineChart,
-  Pie,
-  PieChart,
-  ResponsiveContainer,
-  Tooltip,
-  XAxis,
-  YAxis,
-} from "recharts"
+import AdminTabs from "@/components/admin/AdminTabs"
 import { adminFetchJsonCached } from "@/lib/admin-client"
+import { useUrlState } from "@/lib/use-url-state"
 import type { LeadRecord } from "@/lib/db"
 import type { BlogPost } from "@/lib/blog-types"
 import type { EmailCampaign, Subscriber } from "@/lib/marketing-types"
@@ -45,6 +33,15 @@ import {
 } from "@/lib/types/event-metrics"
 
 type AnalyticsTab = "leads" | "sources" | "content" | "campaigns" | "events" | "tracking"
+
+const ANALYTICS_TABS: Array<{ key: AnalyticsTab; label: string }> = [
+  { key: "leads", label: "리드" },
+  { key: "sources", label: "소스" },
+  { key: "content", label: "콘텐츠" },
+  { key: "campaigns", label: "이메일 캠페인" },
+  { key: "events", label: "행사 퍼널" },
+  { key: "tracking", label: "추적 현황" },
+]
 
 interface ClientEventCounts {
   rangeDays: number
@@ -246,29 +243,6 @@ function TableEmpty({ message }: { message: string }) {
   return <p className="py-8 text-center text-[12px] text-[#1a1a1a]/30">{message}</p>
 }
 
-function ChartTooltip({
-  active,
-  payload,
-  label,
-  suffix = "건",
-}: {
-  active?: boolean
-  payload?: Array<{ value?: number }>
-  label?: string
-  suffix?: string
-}) {
-  if (!active || !payload?.length) return null
-  return (
-    <div className="rounded-xl bg-[#111110] px-3 py-2 text-[12px] text-white shadow-xl">
-      <p className="mb-0.5 text-white/50">{label}</p>
-      <p className="font-bold">
-        {payload[0]?.value ?? 0}
-        {suffix}
-      </p>
-    </div>
-  )
-}
-
 const SOURCE_LABEL: Record<string, string> = {
   demo_modal: "데모 신청",
   contact_page: "문의",
@@ -310,8 +284,41 @@ const CAMPAIGN_STATUS_COLOR: Record<EmailCampaign["status"], string> = {
 
 const CHART_COLORS = ["#111110", "#084734", "#065c41", "#f59e0b", "#B85C33"]
 
+function ChartSkeleton({ className = "h-[220px]" }: { className?: string }) {
+  return <div className={`${className} rounded-xl bg-[#f0f0ec]`} />
+}
+
+const LeadTrendChart = dynamic(
+  () => import("@/components/admin/analytics/AnalyticsCharts").then((m) => m.LeadTrendChart),
+  { ssr: false, loading: () => <ChartSkeleton /> }
+)
+const DistributionPieChart = dynamic(
+  () => import("@/components/admin/analytics/AnalyticsCharts").then((m) => m.DistributionPieChart),
+  { ssr: false, loading: () => <ChartSkeleton className="h-[180px] w-[180px]" /> }
+)
+const SourceLeadBarChart = dynamic(
+  () => import("@/components/admin/analytics/AnalyticsCharts").then((m) => m.SourceLeadBarChart),
+  { ssr: false, loading: () => <ChartSkeleton className="h-[260px]" /> }
+)
+const CategoryBarChart = dynamic(
+  () => import("@/components/admin/analytics/AnalyticsCharts").then((m) => m.CategoryBarChart),
+  { ssr: false, loading: () => <ChartSkeleton className="h-[240px]" /> }
+)
+const EventCompareChart = dynamic(
+  () => import("@/components/admin/analytics/AnalyticsCharts").then((m) => m.EventCompareChart),
+  { ssr: false, loading: () => <ChartSkeleton className="h-[300px]" /> }
+)
+const EventEconomicsChart = dynamic(
+  () => import("@/components/admin/analytics/AnalyticsCharts").then((m) => m.EventEconomicsChart),
+  { ssr: false, loading: () => <ChartSkeleton className="h-[300px]" /> }
+)
+const DailyEventCountsChart = dynamic(
+  () => import("@/components/admin/analytics/AnalyticsCharts").then((m) => m.DailyEventCountsChart),
+  { ssr: false, loading: () => <ChartSkeleton className="h-56" /> }
+)
+
 export default function AnalyticsPage() {
-  const [activeTab, setActiveTab] = useState<AnalyticsTab>("leads")
+  const [tabParam, setTabParam] = useUrlState("tab", "leads")
   const [range, setRange] = useState<7 | 14 | 30>(30)
   const [loading, setLoading] = useState(true)
   const [leads, setLeads] = useState<LeadRecord[]>([])
@@ -321,6 +328,9 @@ export default function AnalyticsPage() {
   const [publicEvents, setPublicEvents] = useState<PublicEvent[]>([])
   const [eventMetricsMap, setEventMetricsMap] = useState<Record<string, EventMetrics>>({})
   const [clientEventCounts, setClientEventCounts] = useState<ClientEventCounts | null>(null)
+  const activeTab: AnalyticsTab = ANALYTICS_TABS.some((tab) => tab.key === tabParam)
+    ? (tabParam as AnalyticsTab)
+    : "leads"
 
   useEffect(() => {
     let cancelled = false
@@ -328,7 +338,7 @@ export default function AnalyticsPage() {
     const load = async () => {
       setLoading(true)
 
-      const [leadData, subscriberData, campaignData, blogData, eventData, metricsData, clientEventsData] =
+      const [leadData, subscriberData, campaignData, blogData, eventData, metricsData] =
         await Promise.all([
           fetchJson<{ leads: LeadRecord[] }>("/api/admin/leads"),
           fetchJson<{ subscribers: Subscriber[] }>("/api/admin/subscribers"),
@@ -336,7 +346,6 @@ export default function AnalyticsPage() {
           fetchJson<{ posts: BlogPost[] }>("/api/admin/blog"),
           fetchJson<PublicEvent[]>("/api/admin/events"),
           fetchJson<{ metrics: Record<string, EventMetrics> }>("/api/admin/event-metrics"),
-          fetchJson<ClientEventCounts>(`/api/admin/event-counts?range=${range}`),
         ])
 
       if (cancelled) return
@@ -347,12 +356,23 @@ export default function AnalyticsPage() {
       setPosts(blogData?.posts ?? [])
       setPublicEvents(Array.isArray(eventData) ? eventData : [])
       setEventMetricsMap(metricsData?.metrics ?? {})
-      setClientEventCounts(clientEventsData ?? null)
       setLoading(false)
     }
 
     load().finally(() => {
       if (!cancelled) setLoading(false)
+    })
+
+    return () => {
+      cancelled = true
+    }
+  }, [])
+
+  useEffect(() => {
+    let cancelled = false
+
+    void fetchJson<ClientEventCounts>(`/api/admin/event-counts?range=${range}`).then((data) => {
+      if (!cancelled) setClientEventCounts(data ?? null)
     })
 
     return () => {
@@ -577,15 +597,6 @@ export default function AnalyticsPage() {
         ? `${SOURCE_LABEL[dominantSource.source] ?? dominantSource.source} 경로가 현재 가장 큰 유입원이며, 전체 전환율은 ${conversionRate}%입니다.`
         : `최근 ${range}일 리드는 ${currentLeadCount}건이며 전환 리드는 ${convertedLeads.length}건입니다.`
 
-  const tabButtons: Array<{ key: AnalyticsTab; label: string }> = [
-    { key: "leads", label: "리드" },
-    { key: "sources", label: "소스" },
-    { key: "content", label: "콘텐츠" },
-    { key: "campaigns", label: "이메일 캠페인" },
-    { key: "events", label: "행사 퍼널" },
-    { key: "tracking", label: "추적 현황" },
-  ]
-
   // ─── 행사 퍼널 데이터 (events tab) ────────────────────────────────────────
   const eventTabNowMs = today.getTime()
   const eventFunnelRows = publicEvents.map((event) => {
@@ -760,24 +771,13 @@ export default function AnalyticsPage() {
         </div>
       </div>
 
-      <div className="mb-6 rounded-2xl border border-[#e8e8e4] bg-white p-4">
-        <div className="admin-scroll-snap-x no-scrollbar flex gap-2 overflow-x-auto pb-1">
-          {tabButtons.map((tab) => {
-            const active = activeTab === tab.key
-            return (
-              <button
-                key={tab.key}
-                onClick={() => setActiveTab(tab.key)}
-                className={`whitespace-nowrap rounded-lg px-3 py-2 text-[13px] font-medium transition-colors ${
-                  active ? "bg-[#111110] text-white" : "text-[#1a1a1a]/55 hover:bg-[#f5f5f2] hover:text-[#111110]"
-                }`}
-              >
-                {tab.label}
-              </button>
-            )
-          })}
-        </div>
-      </div>
+      <AdminTabs
+        className="mb-6"
+        label="Analytics 보기"
+        items={ANALYTICS_TABS.map((tab) => ({ value: tab.key, label: tab.label }))}
+        value={activeTab}
+        onValueChange={setTabParam}
+      />
 
       {activeTab === "leads" && (
         <div className="space-y-6">
@@ -841,15 +841,7 @@ export default function AnalyticsPage() {
                   }
                 />
               ) : (
-                <ResponsiveContainer width="100%" height={220}>
-                  <LineChart data={leadsByDay} margin={{ top: 4, right: 8, bottom: 0, left: -24 }}>
-                    <CartesianGrid strokeDasharray="3 3" stroke="#f0f0ec" vertical={false} />
-                    <XAxis dataKey="label" tick={{ fontSize: 11, fill: "#1a1a1a60" }} tickLine={false} axisLine={false} interval={range === 7 ? 0 : range === 14 ? 1 : 4} />
-                    <YAxis tick={{ fontSize: 11, fill: "#1a1a1a60" }} tickLine={false} axisLine={false} allowDecimals={false} />
-                    <Tooltip content={<ChartTooltip />} cursor={{ stroke: "#e8e8e4", strokeWidth: 1 }} />
-                    <Line type="monotone" dataKey="count" stroke="#111110" strokeWidth={2} dot={false} activeDot={{ r: 4, fill: "#111110" }} />
-                  </LineChart>
-                </ResponsiveContainer>
+                <LeadTrendChart data={leadsByDay} range={range} />
               )}
             </Panel>
 
@@ -864,16 +856,7 @@ export default function AnalyticsPage() {
                 <TableEmpty message="상태 분포를 계산할 리드가 없습니다." />
               ) : (
                 <div className="flex items-center gap-6">
-                  <ResponsiveContainer width={180} height={180}>
-                    <PieChart>
-                      <Pie data={statusData} dataKey="value" cx="50%" cy="50%" innerRadius={44} outerRadius={68} paddingAngle={3}>
-                        {statusData.map((_, index) => (
-                          <Cell key={index} fill={CHART_COLORS[index % CHART_COLORS.length]} />
-                        ))}
-                      </Pie>
-                      <Tooltip content={<ChartTooltip suffix="건" />} />
-                    </PieChart>
-                  </ResponsiveContainer>
+                  <DistributionPieChart data={statusData} colors={CHART_COLORS} />
                   <ul className="flex-1 space-y-2">
                     {statusData.map((item, index) => (
                       <li key={item.name} className="flex items-center gap-2 text-[12px]">
@@ -944,15 +927,7 @@ export default function AnalyticsPage() {
               ) : sourceRows.length === 0 ? (
                 <TableEmpty message="아직 유입 소스를 비교할 데이터가 없습니다." />
               ) : (
-                <ResponsiveContainer width="100%" height={260}>
-                  <BarChart data={sourceRows} margin={{ top: 4, right: 8, bottom: 0, left: -24 }}>
-                    <CartesianGrid strokeDasharray="3 3" stroke="#f0f0ec" vertical={false} />
-                    <XAxis dataKey="label" tick={{ fontSize: 11, fill: "#1a1a1a60" }} tickLine={false} axisLine={false} />
-                    <YAxis tick={{ fontSize: 11, fill: "#1a1a1a60" }} tickLine={false} axisLine={false} allowDecimals={false} />
-                    <Tooltip content={<ChartTooltip />} />
-                    <Bar dataKey="leadCount" fill="#111110" radius={[5, 5, 0, 0]} />
-                  </BarChart>
-                </ResponsiveContainer>
+                <SourceLeadBarChart data={sourceRows} />
               )}
             </Panel>
 
@@ -1046,15 +1021,7 @@ export default function AnalyticsPage() {
               ) : categoryData.length === 0 ? (
                 <TableEmpty message="분석할 공개 콘텐츠가 없습니다." />
               ) : (
-                <ResponsiveContainer width="100%" height={240}>
-                  <BarChart data={categoryData} margin={{ top: 4, right: 8, bottom: 0, left: -24 }}>
-                    <CartesianGrid strokeDasharray="3 3" stroke="#f0f0ec" vertical={false} />
-                    <XAxis dataKey="name" tick={{ fontSize: 11, fill: "#1a1a1a60" }} tickLine={false} axisLine={false} />
-                    <YAxis tick={{ fontSize: 11, fill: "#1a1a1a60" }} tickLine={false} axisLine={false} allowDecimals={false} />
-                    <Tooltip content={<ChartTooltip />} />
-                    <Bar dataKey="count" fill="#111110" radius={[5, 5, 0, 0]} />
-                  </BarChart>
-                </ResponsiveContainer>
+                <CategoryBarChart data={categoryData} />
               )}
             </Panel>
 
@@ -1167,16 +1134,7 @@ export default function AnalyticsPage() {
                 />
               ) : (
                 <div className="flex items-center gap-6">
-                  <ResponsiveContainer width={180} height={180}>
-                    <PieChart>
-                      <Pie data={campaignStatusData} dataKey="value" cx="50%" cy="50%" innerRadius={44} outerRadius={68} paddingAngle={3}>
-                        {campaignStatusData.map((_, index) => (
-                          <Cell key={index} fill={CHART_COLORS[index % CHART_COLORS.length]} />
-                        ))}
-                      </Pie>
-                      <Tooltip content={<ChartTooltip />} />
-                    </PieChart>
-                  </ResponsiveContainer>
+                  <DistributionPieChart data={campaignStatusData} colors={CHART_COLORS} />
                   <ul className="flex-1 space-y-2">
                     {campaignStatusData.map((item, index) => (
                       <li key={item.name} className="flex items-center gap-2 text-[12px]">
@@ -1319,26 +1277,7 @@ export default function AnalyticsPage() {
               />
             ) : (
               <div className="h-[300px] w-full">
-                <ResponsiveContainer width="100%" height="100%">
-                  <BarChart data={eventCompareData}>
-                    <CartesianGrid stroke="#f0f0ec" vertical={false} />
-                    <XAxis dataKey="name" fontSize={11} stroke="#84827a" />
-                    <YAxis fontSize={11} stroke="#84827a" />
-                    <Tooltip
-                      contentStyle={{
-                        backgroundColor: "#111110",
-                        border: "none",
-                        borderRadius: 12,
-                        color: "white",
-                        fontSize: 12,
-                      }}
-                    />
-                    <Bar dataKey="리드" fill="#84827a" radius={[4, 4, 0, 0]} />
-                    <Bar dataKey="신청" fill="#1a73e8" radius={[4, 4, 0, 0]} />
-                    <Bar dataKey="참석" fill="#084734" radius={[4, 4, 0, 0]} />
-                    <Bar dataKey="딜" fill="#B85C33" radius={[4, 4, 0, 0]} />
-                  </BarChart>
-                </ResponsiveContainer>
+                <EventCompareChart data={eventCompareData} />
               </div>
             )}
           </Panel>
@@ -1351,26 +1290,7 @@ export default function AnalyticsPage() {
               <TableEmpty message="광고비 입력이 있는 행사가 없습니다." />
             ) : (
               <div className="h-[300px] w-full">
-                <ResponsiveContainer width="100%" height="100%">
-                  <ComposedChart data={eventEconomicsData}>
-                    <CartesianGrid stroke="#f0f0ec" vertical={false} />
-                    <XAxis dataKey="name" fontSize={11} stroke="#84827a" />
-                    <YAxis yAxisId="left" fontSize={11} stroke="#84827a" />
-                    <YAxis yAxisId="right" orientation="right" fontSize={11} stroke="#84827a" />
-                    <Tooltip
-                      contentStyle={{
-                        backgroundColor: "#111110",
-                        border: "none",
-                        borderRadius: 12,
-                        color: "white",
-                        fontSize: 12,
-                      }}
-                    />
-                    <Bar yAxisId="left" dataKey="광고비(천원)" fill="#B85C33" radius={[4, 4, 0, 0]} />
-                    <Bar yAxisId="left" dataKey="매출(천원)" fill="#084734" radius={[4, 4, 0, 0]} />
-                    <Line yAxisId="right" type="monotone" dataKey="ROI" stroke="#111110" strokeWidth={2} dot={{ r: 3 }} />
-                  </ComposedChart>
-                </ResponsiveContainer>
+                <EventEconomicsChart data={eventEconomicsData} />
               </div>
             )}
           </Panel>
@@ -1472,15 +1392,7 @@ export default function AnalyticsPage() {
           >
             {clientEventCounts && clientEventCounts.daily.length > 0 ? (
               <div className="h-56 w-full">
-                <ResponsiveContainer width="100%" height="100%">
-                  <BarChart data={clientEventCounts.daily} margin={{ top: 8, right: 12, left: -8, bottom: 0 }}>
-                    <CartesianGrid strokeDasharray="3 3" stroke="#e8e8e4" />
-                    <XAxis dataKey="date" tick={{ fontSize: 11, fill: "#1a1a1a99" }} tickFormatter={(d: string) => d.slice(5)} />
-                    <YAxis tick={{ fontSize: 11, fill: "#1a1a1a99" }} allowDecimals={false} />
-                    <Tooltip />
-                    <Bar dataKey="count" fill="#084734" radius={[4, 4, 0, 0]} />
-                  </BarChart>
-                </ResponsiveContainer>
+                <DailyEventCountsChart data={clientEventCounts.daily} />
               </div>
             ) : (
               <p className="text-[13px] text-[#1a1a1a]/45">

@@ -14,7 +14,18 @@ import path from "path"
 import { atomicWriteJsonSync } from "@/lib/atomic-write"
 
 const DATA_DIR = path.join(process.cwd(), "data")
-const FILE = "channel-conversations.json"
+const TRACKED_FILE = "channel-conversations.json"
+const LOCAL_DEV_FILE = "channel-conversations.local.json"
+
+function getDataFile() {
+  const configured = process.env.CHANNEL_TALK_CONVERSATIONS_FILE?.trim()
+  if (configured) return configured
+  return process.env.NODE_ENV === "development" ? LOCAL_DEV_FILE : TRACKED_FILE
+}
+
+function getDataPath() {
+  return path.join(DATA_DIR, getDataFile())
+}
 
 export type ChannelConversationAuthor = "customer" | "agent" | "bot"
 export type ChannelConversationState = "opened" | "closed" | "snoozed" | "unknown"
@@ -49,7 +60,7 @@ export interface ChannelConversationRecord {
 }
 
 function readAll(): ChannelConversationRecord[] {
-  const target = path.join(DATA_DIR, FILE)
+  const target = getDataPath()
   try {
     if (!fs.existsSync(target)) return []
     const parsed = JSON.parse(fs.readFileSync(target, "utf8"))
@@ -61,7 +72,7 @@ function readAll(): ChannelConversationRecord[] {
 
 function writeAll(records: ChannelConversationRecord[]) {
   if (!fs.existsSync(DATA_DIR)) fs.mkdirSync(DATA_DIR, { recursive: true })
-  atomicWriteJsonSync(path.join(DATA_DIR, FILE), records)
+  atomicWriteJsonSync(getDataPath(), records)
 }
 
 export function getConversations(): ChannelConversationRecord[] {
@@ -143,4 +154,15 @@ export function getConversationStats(): ChannelConversationStats {
     unmatched: records.length - matchedLeads,
     last7Days,
   }
+}
+
+export function getLastConversationSyncAt(): string | null {
+  let latestMs = 0
+
+  for (const record of readAll()) {
+    const syncedMs = record.syncedAt ? new Date(record.syncedAt).getTime() : 0
+    if (Number.isFinite(syncedMs) && syncedMs > latestMs) latestMs = syncedMs
+  }
+
+  return latestMs > 0 ? new Date(latestMs).toISOString() : null
 }

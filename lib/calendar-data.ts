@@ -13,6 +13,10 @@ import {
 import { createSupabaseAdminClient } from "@/lib/supabase/admin"
 import { hasSupabaseBrowserEnv } from "@/lib/supabase/public-env"
 import { atomicWriteJsonSync } from "@/lib/atomic-write"
+import {
+  getEffectivePublicEventEndIso,
+  getPublicEventDatePart,
+} from "@/lib/public-event-dates"
 
 const FILE = path.join(process.cwd(), "data", "calendar-events.json")
 
@@ -388,8 +392,8 @@ async function getPublicEventsAsCalendarEvents(): Promise<CalendarEvent[]> {
     return (data as PublicEventCalendarRow[]).map((row) => ({
       id: row.id,
       title: row.title,
-      date: row.starts_at.slice(0, 10),
-      endDate: row.ends_at ? row.ends_at.slice(0, 10) : undefined,
+      date: getPublicEventDatePart(row.starts_at),
+      endDate: getPublicEventDatePart(getEffectivePublicEventEndIso(row.starts_at, row.ends_at) ?? row.starts_at),
       type: "launch" as EventType,
       source: "event" as EventSource,
       sourceLabel: "공개 행사",

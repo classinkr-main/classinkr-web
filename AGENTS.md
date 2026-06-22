@@ -20,6 +20,14 @@
 - 데이터 접근은 `lib/repositories/` 또는 `lib/partner-portal/repositories/`로 모은다.
 - 일부 기능은 여전히 `data/*.json` 또는 듀얼 모드 저장소를 통해 폴백한다.
 
+## 챗봇 API 운영 규칙
+
+- 공개 챗봇 `app/api/chatbot/query`는 느린 RAG/LLM 호출이 있어도 500으로 끊기지 않아야 한다.
+- `lib/chatbot/service.ts`의 문서 검색, 벡터 검색, Gemini 생성 경로는 짧은 시간 예산과 deterministic fallback을 유지한다.
+- `CHATBOT_KNOWLEDGE_SEARCH_TIMEOUT_MS`, `CHATBOT_FINAL_ANSWER_TIMEOUT_MS`를 늘릴 때는 `CHATBOT_ROUTE_TIMEOUT_MS`와 클라이언트 timeout도 함께 검토한다.
+- 잘못된 JSON/body shape는 500이 아니라 400 계열로 처리한다.
+- 챗봇 DB/RPC 계약을 건드리면 `npm run check:alpha-db`를 함께 실행한다.
+
 ## 검증 기준
 
 ```bash

@@ -7,6 +7,11 @@ import type { ActivityLog } from "@/lib/portal/types";
 export const PUBLIC_QUOTE_VIEW_ACTION = "public_quote_view";
 export const PUBLIC_QUOTE_REVIEW_ACTION = "public_quote_review_confirmed";
 export const PUBLIC_QUOTE_ACCEPT_ACTION = "public_quote_accepted";
+export const QUOTE_INTERACTION_ACTIONS = [
+  PUBLIC_QUOTE_VIEW_ACTION,
+  PUBLIC_QUOTE_REVIEW_ACTION,
+  PUBLIC_QUOTE_ACCEPT_ACTION,
+] as const;
 
 type QuoteInteractionRecord = {
   version_id?: string | null;
@@ -73,11 +78,7 @@ export async function listQuoteInteractionLogs(input: {
     .select("*")
     .eq("target_type", "quote_document")
     .eq("target_id", input.quote_document_id)
-    .in("action_type", [
-      PUBLIC_QUOTE_VIEW_ACTION,
-      PUBLIC_QUOTE_REVIEW_ACTION,
-      PUBLIC_QUOTE_ACCEPT_ACTION,
-    ])
+    .in("action_type", [...QUOTE_INTERACTION_ACTIONS])
     .order("created_at", { ascending: false })
     .limit(input.limit ?? 200);
 
@@ -85,20 +86,19 @@ export async function listQuoteInteractionLogs(input: {
   return (data ?? []) as ActivityLog[];
 }
 
-export async function summarizeQuoteInteractions(input: {
-  quote_document_id: string;
-  version_id?: string | null;
-  share_id?: string | null;
-  token?: string | null;
-}): Promise<QuoteInteractionSummary> {
-  const logs = await listQuoteInteractionLogs({
-    quote_document_id: input.quote_document_id,
-  });
+export function summarizeQuoteInteractionLogs(
+  logs: ActivityLog[],
+  target: {
+    version_id?: string | null;
+    share_id?: string | null;
+    token?: string | null;
+  }
+): QuoteInteractionSummary {
   const matchedLogs = logs.filter((log) =>
     matchesInteractionTarget(log, {
-      version_id: input.version_id ?? null,
-      share_id: input.share_id ?? null,
-      token: input.token ?? null,
+      version_id: target.version_id ?? null,
+      share_id: target.share_id ?? null,
+      token: target.token ?? null,
     })
   );
 
@@ -120,6 +120,18 @@ export async function summarizeQuoteInteractions(input: {
     acceptedVersionId: readString(acceptedPayload.version_id),
     acceptedShareId: readString(acceptedPayload.share_id),
   };
+}
+
+export async function summarizeQuoteInteractions(input: {
+  quote_document_id: string;
+  version_id?: string | null;
+  share_id?: string | null;
+  token?: string | null;
+}): Promise<QuoteInteractionSummary> {
+  const logs = await listQuoteInteractionLogs({
+    quote_document_id: input.quote_document_id,
+  });
+  return summarizeQuoteInteractionLogs(logs, input);
 }
 
 export async function getLatestAcceptedQuoteInteraction(input: {

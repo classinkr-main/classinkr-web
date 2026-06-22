@@ -1,5 +1,6 @@
 import { NextRequest, NextResponse } from "next/server"
 import { BRANCH_READ_ADMIN_API_ROLES, verifyAdmin } from "@/lib/admin-auth"
+import { adminCachedJson } from "@/lib/admin-api-response"
 import { unstable_cache } from "next/cache"
 import { readRangeWithFormat, envSheetId } from "@/lib/branch/google-sheets"
 import { parseDsh, DSH_RANGE } from "@/lib/branch/parsers/dsh"
@@ -47,11 +48,19 @@ export async function GET(req: NextRequest) {
     const teams = team === "ALL" ? ["BD", "MKT", "CSM"] : [team]
     const [dsh, kpiBlocks, deals] = await Promise.all([readDsh(fyOf(now)), readKpiBlocks(), listBranchRevDeals({ team })])
     const kpiRows = selectKpiRows(kpiBlocks, period, now)
+    const kpiRowsByMember = new Map(kpiRows.map((row) => [row.member, row]))
+    const dealsByManager = new Map<string, typeof deals>()
+    for (const deal of deals) {
+      if (!deal.manager) continue
+      const managerDeals = dealsByManager.get(deal.manager)
+      if (managerDeals) managerDeals.push(deal)
+      else dealsByManager.set(deal.manager, [deal])
+    }
     const teamSummaries = teams.map((t) => ({ team: t, ...teamPacing(dsh, t, period, now) }))
     const members = listMembersByTeam(dsh, team).map((member) => {
       const pace = memberPacing(dsh, member, period, now)
-      const memberDeals = deals.filter((d) => d.manager === member)
-      const kpiRow = kpiRows.find((r) => r.member === member)
+      const memberDeals = dealsByManager.get(member) ?? []
+      const kpiRow = kpiRowsByMember.get(member)
       const kpi = Object.fromEntries(
         KPI_METRICS.map((metric) => [metric, kpiRow?.pairs[metric] ?? { goal: 0, actual: 0 }]),
       )
@@ -72,7 +81,7 @@ export async function GET(req: NextRequest) {
         kpi,
       }
     })
-    return NextResponse.json({ teams: teamSummaries, members })
+    return adminCachedJson({ teams: teamSummaries, members })
   } catch (e) {
     return NextResponse.json({ error: String(e) }, { status: 500 })
   }

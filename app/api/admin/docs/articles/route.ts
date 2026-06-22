@@ -54,6 +54,11 @@ function pickString(value: unknown): string | undefined {
   return typeof value === "string" ? value : undefined
 }
 
+function pickNullableString(value: unknown): string | null | undefined {
+  if (value === null) return null
+  return pickString(value)
+}
+
 function pickBoolean(value: unknown): boolean | undefined {
   return typeof value === "boolean" ? value : undefined
 }
@@ -129,6 +134,7 @@ export async function POST(req: NextRequest) {
     contentJson: pickJson(payload.contentJson),
     seoTitle: pickString(payload.seoTitle) ?? null,
     seoDescription: pickString(payload.seoDescription) ?? null,
+    publishedAt: pickNullableString(payload.publishedAt) ?? null,
     updatedBy,
   }
 

@@ -75,9 +75,12 @@ export interface ExternalCrmSyncObjectResult {
 
 export interface ExternalCrmSyncResult {
   ok: boolean
+  cached?: boolean
+  locked?: boolean
   skipped?: boolean
   objects: ExternalCrmSyncObjectResult[]
   error?: string
+  lastSyncedAt?: string
 }
 
 export interface ExternalCrmSyncPreflightObject {
@@ -120,6 +123,7 @@ export interface ExternalCrmSyncSchemaReadiness {
 const DEFAULT_SYNC_PAGE_SIZE = 100
 const DEFAULT_SYNC_MAX_PAGES = 20
 const MAX_SYNC_PAGE_SIZE = 100
+const ACTIVE_SYNC_STALE_MS = 30 * 60_000
 
 const DEFAULT_OBJECTS: XiaoshouyiObjectConfig[] = [
   {
@@ -802,7 +806,107 @@ async function finishRun(
   if (error) throw error
 }
 
-export async function syncXiaoshouyiSnapshots(trigger: ExternalCrmSyncTrigger = "manual"): Promise<ExternalCrmSyncResult> {
+async function getRecentSuccessfulSyncReuse(
+  objects: XiaoshouyiObjectConfig[],
+  ttlMs: number
+): Promise<ExternalCrmSyncResult | null> {
+  if (ttlMs <= 0 || objects.length === 0) return null
+
+  const objectKeys = [...new Set(objects.map((object) => object.objectApiKey))]
+  const since = new Date(Date.now() - ttlMs).toISOString()
+  const sb = createSupabaseAdminClient()
+  const { data, error } = await sb
+    .from("external_crm_sync_runs")
+    .select("object_api_key, finished_at, rows_scanned, rows_upserted, cursor_value, metadata")
+    .eq("source_system", "xiaoshouyi")
+    .eq("status", "success")
+    .in("object_api_key", objectKeys)
+    .gte("finished_at", since)
+    .order("finished_at", { ascending: false })
+
+  if (error || !data?.length) return null
+
+  const latestByObject = new Map<string, Record<string, unknown>>()
+  for (const row of data as Record<string, unknown>[]) {
+    const objectApiKey = typeof row.object_api_key === "string" ? row.object_api_key : null
+    if (objectApiKey && !latestByObject.has(objectApiKey)) {
+      latestByObject.set(objectApiKey, row)
+    }
+  }
+
+  if (!objectKeys.every((key) => latestByObject.has(key))) return null
+
+  const finishedTimes = Array.from(latestByObject.values())
+    .map((row) => (typeof row.finished_at === "string" ? new Date(row.finished_at).getTime() : 0))
+    .filter((time) => Number.isFinite(time) && time > 0)
+  const lastSyncedAt = finishedTimes.length > 0
+    ? new Date(Math.max(...finishedTimes)).toISOString()
+    : undefined
+
+  return {
+    ok: true,
+    cached: true,
+    skipped: true,
+    error: "최근 외부 CRM 동기화 결과를 사용했습니다.",
+    lastSyncedAt,
+    objects: objectKeys.map((objectApiKey) => {
+      const row = latestByObject.get(objectApiKey)
+      return {
+        objectApiKey,
+        status: "skipped",
+        rowsScanned: Number(row?.rows_scanned ?? 0),
+        rowsUpserted: Number(row?.rows_upserted ?? 0),
+        cursorValue: typeof row?.cursor_value === "string" ? row.cursor_value : undefined,
+        error: "recent-sync-cache",
+      }
+    }),
+  }
+}
+
+async function getActiveSyncRunReuse(): Promise<ExternalCrmSyncResult | null> {
+  const since = new Date(Date.now() - ACTIVE_SYNC_STALE_MS).toISOString()
+  const sb = createSupabaseAdminClient()
+  const { data, error } = await sb
+    .from("external_crm_sync_runs")
+    .select("object_api_key, started_at, rows_scanned, rows_upserted")
+    .eq("source_system", "xiaoshouyi")
+    .eq("status", "running")
+    .gte("started_at", since)
+    .order("started_at", { ascending: false })
+    .limit(1)
+    .maybeSingle()
+
+  if (error || !data) return null
+
+  const objectApiKey = String(data.object_api_key ?? "all")
+  const startedAt =
+    typeof data.started_at === "string"
+      ? data.started_at
+      : new Date().toISOString()
+
+  return {
+    ok: true,
+    cached: true,
+    locked: true,
+    skipped: true,
+    error: "이미 외부 CRM 동기화가 진행 중입니다.",
+    lastSyncedAt: startedAt,
+    objects: [
+      {
+        objectApiKey,
+        status: "skipped",
+        rowsScanned: Number(data.rows_scanned ?? 0),
+        rowsUpserted: Number(data.rows_upserted ?? 0),
+        error: "sync-in-progress",
+      },
+    ],
+  }
+}
+
+export async function syncXiaoshouyiSnapshots(
+  trigger: ExternalCrmSyncTrigger = "manual",
+  options: { force?: boolean; recentSyncTtlMs?: number } = {}
+): Promise<ExternalCrmSyncResult> {
   const schema = await getXiaoshouyiSyncSchemaReadiness()
   if (!schema.ok) {
     const message = `Xiaoshouyi sync schema is not ready: ${schema.error ?? "unknown schema issue"}`
@@ -813,6 +917,9 @@ export async function syncXiaoshouyiSnapshots(trigger: ExternalCrmSyncTrigger = 
       objects: [{ objectApiKey: "all", status: "skipped", rowsScanned: 0, rowsUpserted: 0, error: message }],
     }
   }
+
+  const active = await getActiveSyncRunReuse()
+  if (active) return active
 
   const config = getXiaoshouyiConfig()
   if (!config) {
@@ -836,6 +943,10 @@ export async function syncXiaoshouyiSnapshots(trigger: ExternalCrmSyncTrigger = 
 
   const results: ExternalCrmSyncObjectResult[] = []
   const runtimeObjects = await getRuntimeSelectedObjects()
+  if (!options.force) {
+    const recent = await getRecentSuccessfulSyncReuse(runtimeObjects, options.recentSyncTtlMs ?? 0)
+    if (recent) return recent
+  }
 
   for (const object of runtimeObjects) {
     const runId = await createRun(object.objectApiKey, trigger)

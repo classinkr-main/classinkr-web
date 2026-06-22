@@ -1,5 +1,6 @@
 import { NextRequest, NextResponse } from "next/server"
 import { BRANCH_READ_ADMIN_API_ROLES, verifyAdmin } from "@/lib/admin-auth"
+import { adminCachedJson } from "@/lib/admin-api-response"
 import { listBranchRevDeals } from "@/lib/repositories/branch-deals"
 import { listRevRevenue } from "@/lib/branch/computations/pipeline"
 import { resolvePeriodDate } from "@/lib/branch/fiscal"
@@ -38,7 +39,7 @@ export async function GET(req: NextRequest) {
       manager: url.searchParams.get("manager") ?? undefined,
       region: url.searchParams.get("region") ?? undefined,
     }, period && periodDate ? { period, now: periodDate } : undefined)
-    return NextResponse.json({ rows })
+    return adminCachedJson({ rows })
   } catch (e) {
     return NextResponse.json({ error: String(e) }, { status: 500 })
   }

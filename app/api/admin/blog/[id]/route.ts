@@ -1,6 +1,12 @@
 ﻿import { NextRequest, NextResponse } from "next/server"
 import { revalidatePath } from "next/cache"
-import { updatePost, trashPost, permanentDeletePost, restorePost } from "@/lib/repositories/blog"
+import {
+  isBlogSlugConflictError,
+  permanentDeletePost,
+  restorePost,
+  trashPost,
+  updatePost,
+} from "@/lib/repositories/blog"
 import { verifyAdmin } from "@/lib/admin-auth"
 import { validatePublicMarkdownContent } from "@/lib/admin/public-content-validation"
 
@@ -55,9 +61,10 @@ export async function PUT(
     revalidatePublicBlogSurfaces(post.slug)
     return NextResponse.json({ post })
   } catch (error) {
+    const isConflict = isBlogSlugConflictError(error)
     return NextResponse.json(
       { error: error instanceof Error ? error.message : "Failed to update post" },
-      { status: 500 }
+      { status: isConflict ? 409 : 500 }
     )
   }
 }

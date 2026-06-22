@@ -1,5 +1,4 @@
 import type { Metadata } from "next"
-import Image from "next/image"
 import Link from "next/link"
 import { notFound, permanentRedirect } from "next/navigation"
 import { ArrowRight, Clock } from "lucide-react"
@@ -17,7 +16,7 @@ import {
 import { getLeadMagnetBySlugFromStore } from "@/lib/repositories/lead-magnets"
 import { extractMarkdownHeadings } from "@/lib/blog-markdown"
 import { getBlogSlugRedirect, getCanonicalBlogSlug } from "@/lib/blog-slug-redirects"
-import { sanitizePublicUrl } from "@/lib/safe-public-url"
+import { sanitizePublicImageUrl, sanitizePublicUrl } from "@/lib/safe-public-url"
 import { JsonLd } from "@/components/seo/JsonLd"
 import {
   createArticleJsonLd,
@@ -125,6 +124,8 @@ export default async function BlogDetailPage({
   ])
   const benefits = post.benefitItems.filter(Boolean)
   const ctaHref = sanitizePublicUrl(post.cta.buttonHref, "")
+  const authorAvatarSrc = sanitizePublicImageUrl(post.authorAvatarUrl, "")
+  const authorInitial = post.author.trim().slice(0, 1) || "C"
 
   return (
     <div className="min-h-screen bg-[#FAFAF8] text-[#111110]">
@@ -325,17 +326,18 @@ export default async function BlogDetailPage({
             <div className="mt-8 rounded-[24px] border border-[#e8e8e4] bg-white p-5 shadow-sm md:mt-10 md:rounded-[32px] md:p-8">
               <div className="flex flex-col gap-6 md:flex-row md:items-center">
                 <div className="relative h-16 w-16 shrink-0 overflow-hidden rounded-full bg-[#f0f0ec]">
-                  {post.authorAvatarUrl ? (
-                    <Image
-                      src={post.authorAvatarUrl}
+                  {authorAvatarSrc ? (
+                    <SafeBlogImage
+                      src={authorAvatarSrc}
                       alt={post.author}
                       fill
                       className="object-cover"
                       sizes="64px"
+                      fallbackIndex={post.id}
                     />
                   ) : (
                     <div className="flex h-full items-center justify-center text-lg font-semibold text-[#084734]">
-                      {post.author.slice(0, 1)}
+                      {authorInitial}
                     </div>
                   )}
                 </div>

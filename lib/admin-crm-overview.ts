@@ -1,6 +1,9 @@
 import "server-only"
 
-import { getCrmDuplicatePreflightReport } from "@/lib/admin-crm-duplicate-preflight"
+import {
+  getCachedCrmDuplicatePreflightReport,
+  getCrmDuplicatePreflightReport,
+} from "@/lib/admin-crm-duplicate-preflight"
 import { getNeoCrmTeamReport } from "@/lib/admin-crm-neo"
 import { getCrmSchemaContractReadiness } from "@/lib/admin-crm-schema-contract"
 import { getXiaoshouyiSyncPreflight, getXiaoshouyiSyncSchemaReadiness } from "@/lib/external-crm/xiaoshouyi-sync"
@@ -987,7 +990,31 @@ async function getBusinessOverviewLive(sb: SupabaseAdminClient): Promise<AdminCr
   }
 }
 
+type StatusCountRow = { status: string | null; cnt: number | string | null }
+
+function statusCountMap(data: unknown): Map<string, number> | null {
+  if (!Array.isArray(data)) return null
+  const map = new Map<string, number>()
+  for (const row of data as StatusCountRow[]) {
+    if (!row || typeof row.status !== "string") continue
+    map.set(row.status, Number(row.cnt) || 0)
+  }
+  return map
+}
+
 async function getSourceLinkCounts(sb: SupabaseAdminClient) {
+  // 단일 GROUP BY RPC 우선. 미적용/실패 시 상태별 COUNT(1+N 쿼리)로 폴백한다.
+  const grouped = await sb.rpc("admin_crm_source_link_status_counts")
+  const byStatus = grouped.error ? null : statusCountMap(grouped.data)
+  if (byStatus) {
+    const statusCounts = Object.fromEntries(
+      SOURCE_LINK_STATUSES.map((status) => [status, byStatus.get(status) ?? 0])
+    ) as Record<(typeof SOURCE_LINK_STATUSES)[number], number>
+    let total = 0
+    for (const value of byStatus.values()) total += value
+    return { ok: true, total, ...statusCounts, error: null }
+  }
+
   const [totalResult, ...statusResults] = await Promise.all([
     sb.from("crm_source_links").select("id", { count: "exact", head: true }),
     ...SOURCE_LINK_STATUSES.map((status) =>
@@ -1008,6 +1035,16 @@ async function getSourceLinkCounts(sb: SupabaseAdminClient) {
 }
 
 async function getWriteQueueCounts(sb: SupabaseAdminClient) {
+  // 단일 GROUP BY RPC 우선. 미적용/실패 시 상태별 COUNT(N 쿼리)로 폴백한다.
+  const grouped = await sb.rpc("admin_crm_write_request_status_counts")
+  const byStatus = grouped.error ? null : statusCountMap(grouped.data)
+  if (byStatus) {
+    const statusCounts = Object.fromEntries(
+      WRITE_REQUEST_STATUSES.map((status) => [status, byStatus.get(status) ?? 0])
+    ) as Record<(typeof WRITE_REQUEST_STATUSES)[number], number>
+    return { ok: true, ...statusCounts, error: null }
+  }
+
   const statusResults = await Promise.all(
     WRITE_REQUEST_STATUSES.map((status) =>
       sb
@@ -1030,38 +1067,28 @@ async function getWriteQueueCounts(sb: SupabaseAdminClient) {
 }
 
 async function getExternalSnapshotOverview(sb: SupabaseAdminClient): Promise<AdminCrmOverview["externalSnapshots"]> {
-  const [activeCountResults, staleCountResults, latestSyncedResults, latestRunResult] = await Promise.all([
-    Promise.all(
-      EXTERNAL_CRM_OVERVIEW_OBJECTS.map((objectApiKey) =>
-        sb
-          .from("external_crm_records")
-          .select("id", { count: "exact", head: true })
-          .eq("source_system", "xiaoshouyi")
-          .eq("object_api_key", objectApiKey)
-          .eq("is_stale", false)
-      )
-    ),
-    Promise.all(
-      EXTERNAL_CRM_OVERVIEW_OBJECTS.map((objectApiKey) =>
-        sb
-          .from("external_crm_records")
-          .select("id", { count: "exact", head: true })
-          .eq("source_system", "xiaoshouyi")
-          .eq("object_api_key", objectApiKey)
-          .eq("is_stale", true)
-      )
-    ),
-    Promise.all(
-      EXTERNAL_CRM_OVERVIEW_OBJECTS.map((objectApiKey) =>
-        sb
-          .from("external_crm_records")
-          .select("synced_at")
-          .eq("source_system", "xiaoshouyi")
-          .eq("object_api_key", objectApiKey)
-          .order("synced_at", { ascending: false })
-          .limit(1)
-      )
-    ),
+  // P4: 개요는 객체별 합계·최댓값만 쓰므로 3×N 라운드트립을 4개 쿼리로 합친다(의미 동일).
+  const objectKeys = [...EXTERNAL_CRM_OVERVIEW_OBJECTS]
+  const [activeCountResult, staleCountResult, latestSyncedResult, latestRunResult] = await Promise.all([
+    sb
+      .from("external_crm_records")
+      .select("id", { count: "exact", head: true })
+      .eq("source_system", "xiaoshouyi")
+      .in("object_api_key", objectKeys)
+      .eq("is_stale", false),
+    sb
+      .from("external_crm_records")
+      .select("id", { count: "exact", head: true })
+      .eq("source_system", "xiaoshouyi")
+      .in("object_api_key", objectKeys)
+      .eq("is_stale", true),
+    sb
+      .from("external_crm_records")
+      .select("synced_at")
+      .eq("source_system", "xiaoshouyi")
+      .in("object_api_key", objectKeys)
+      .order("synced_at", { ascending: false })
+      .limit(1),
     sb
       .from("external_crm_sync_runs")
       .select("status, object_api_key, finished_at, started_at, error")
@@ -1076,23 +1103,21 @@ async function getExternalSnapshotOverview(sb: SupabaseAdminClient): Promise<Adm
     ? latestRun.error.trim()
     : null
   const firstCountError = firstError([
-    ...activeCountResults.map((result) => result.error),
-    ...staleCountResults.map((result) => result.error),
-    ...latestSyncedResults.map((result) => result.error),
+    activeCountResult.error,
+    staleCountResult.error,
+    latestSyncedResult.error,
     latestRunResult.error,
   ])
+  const latestSyncedRow = latestSyncedResult.error ? null : latestSyncedResult.data?.[0]
   const latestSyncedAt = maxDate([
     latestRun && typeof latestRun.finished_at === "string" ? latestRun.finished_at : null,
-    ...latestSyncedResults.map((result) => {
-      const row = result.error ? null : result.data?.[0]
-      return row && typeof row.synced_at === "string" ? row.synced_at : null
-    }),
+    latestSyncedRow && typeof latestSyncedRow.synced_at === "string" ? latestSyncedRow.synced_at : null,
   ])
 
   return {
     ok: !firstCountError && !latestRunFailed,
-    recordCount: activeCountResults.reduce((sum, result) => sum + (result.error ? 0 : result.count ?? 0), 0),
-    staleCount: staleCountResults.reduce((sum, result) => sum + (result.error ? 0 : result.count ?? 0), 0),
+    recordCount: activeCountResult.error ? 0 : activeCountResult.count ?? 0,
+    staleCount: staleCountResult.error ? 0 : staleCountResult.count ?? 0,
     latestSyncedAt,
     latestRunStatus: latestRun && typeof latestRun.status === "string" ? latestRun.status : null,
     latestRunObject: latestRun && typeof latestRun.object_api_key === "string" ? latestRun.object_api_key : null,
@@ -1219,7 +1244,7 @@ export async function getAdminCrmOverview(options: { force?: boolean } = {}): Pr
       getXiaoshouyiSyncSchemaReadiness(),
       getXiaoshouyiWriteSchemaReadiness(),
       getCrmSchemaContractReadiness(),
-      getCrmDuplicatePreflightReport(),
+      options.force ? getCrmDuplicatePreflightReport() : getCachedCrmDuplicatePreflightReport(),
       Promise.resolve(getXiaoshouyiSyncPreflight()),
       getSourceLinkCounts(sb),
       getExternalSnapshotOverview(sb),

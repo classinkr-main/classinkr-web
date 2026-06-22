@@ -82,4 +82,61 @@ describe("chatbot FAQ curation (gap fills)", () => {
     // '얼마나 걸려요'(기간)는 가격이 아니므로 요금 구성 답이 나오면 안 된다.
     expect(result.sources[0]?.heading).not.toBe("요금·견적 구성 안내")
   })
+
+  it("separates software-only and subscription pricing from hardware package quotes", async () => {
+    disableExternalChatbotServices()
+
+    const questions = [
+      "소프트웨어만 쓸 수 있나요?",
+      "구독형이랑 충전형 차이가 뭐예요?",
+      "계정당 플랜 비용은 어떻게 봐야 해요?",
+    ]
+
+    for (const question of questions) {
+      const result = await evaluateChatbotQuery(question, { generateAnswer: false })
+
+      expect(result.detectedCategory).toBe("billing")
+      expect(result.answerMode).toBe("direct_answer")
+      expect(result.sources[0]?.heading).toBe("소프트웨어 요금과 플랜 안내")
+      expect(result.answer).toContain("계정")
+      expect(result.answer).toContain("정확한 금액")
+      expect(result.answer).not.toContain("전자칠판 + OPS")
+      expect(result.answer).not.toContain("원입니다")
+    }
+  })
+
+  it("handles trial and pilot questions without promising free access", async () => {
+    disableExternalChatbotServices()
+
+    const result = await evaluateChatbotQuery("무료 체험 있나요?", { generateAnswer: false })
+
+    expect(result.detectedCategory).toBe("onboarding")
+    expect(result.answerMode).toBe("direct_answer")
+    expect(result.sources[0]?.heading).toBe("체험·파일럿 확인")
+    expect(result.answer).toContain("단정")
+    expect(result.answer).toContain("데모")
+    expect(result.answer).not.toContain("무료 체험 가능합니다")
+  })
+
+  it("answers parent report and notification questions without overclaiming auto-send", async () => {
+    disableExternalChatbotServices()
+
+    const questions = [
+      "학부모 알림 문자도 자동으로 가나요?",
+      "수업 끝나면 학부모한테 리포트 보내줄 수 있어요?",
+    ]
+
+    for (const question of questions) {
+      const result = await evaluateChatbotQuery(question, { generateAnswer: false })
+
+      expect(result.detectedCategory).toBe("admin")
+      expect(result.answerMode).toBe("direct_answer")
+      expect(result.sources[0]?.heading).toBe("학부모 리포트·알림 확인")
+      expect(result.answer).toContain("자동 발송")
+      expect(result.answer).toContain("단정하면 안")
+      expect(result.answer).toContain("SMS")
+      expect(result.answer).not.toContain("자동 발송 기본 제공")
+      expect(result.answer).not.toContain("자동으로 전송됩니다")
+    }
+  })
 })

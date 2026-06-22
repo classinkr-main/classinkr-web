@@ -8,7 +8,7 @@
 
 import "server-only";
 
-import { createSupabaseServerClient } from "@/lib/supabase/server";
+import { createSupabaseAdminClient } from "@/lib/supabase/admin";
 import type { BlogPost as SupaBlogPost, BlogPostInsert, BlogPostUpdate } from "@/lib/supabase/database.types";
 import { sanitizePublicUrl } from "@/lib/safe-public-url";
 
@@ -21,6 +21,11 @@ import { DEFAULT_BLOG_CTA, type BlogPost, type BlogPostInput } from "@/lib/blog-
 const BLOG_SLUG_CONFLICT_MESSAGE = "이미 사용 중인 블로그 URL 슬러그입니다.";
 const PUBLISHED_STATUS_VALUES = ["PUBLISHED", "published"] as unknown as SupaBlogPost["status"][];
 const PUBLIC_BLOG_QUERY_TIMEOUT_MS = 6_000;
+type BlogSupabaseClient = ReturnType<typeof createSupabaseAdminClient>;
+
+export function isBlogSlugConflictError(error: unknown) {
+  return error instanceof Error && error.message === BLOG_SLUG_CONFLICT_MESSAGE;
+}
 
 /* ─── Supabase Row ↔ 기존 BlogPost 변환 ─── */
 
@@ -118,7 +123,7 @@ const LIST_COLUMNS = [
 
 export async function getAllPosts(): Promise<BlogPost[]> {
 
-  const supabase = await createSupabaseServerClient();
+  const supabase = createSupabaseAdminClient();
   const { data, error } = await supabase
     .from("blog_posts")
     .select(LIST_COLUMNS)
@@ -156,7 +161,7 @@ export async function getPublishedPosts(): Promise<BlogPost[]> {
 
 export async function getPostBySlug(slug: string): Promise<BlogPost | null> {
 
-  const supabase = await createSupabaseServerClient();
+  const supabase = createSupabaseAdminClient();
   const { data, error } = await supabase
     .from("blog_posts")
     .select("*")
@@ -193,20 +198,15 @@ export async function getPublishedPostBySlug(slug: string): Promise<BlogPost | n
   }
 }
 
-export async function getPostById(id: number): Promise<BlogPost | null> {
+export async function getPostById(id: number | string): Promise<BlogPost | null> {
 
   // Supabase에서는 UUID로 검색해야 하므로 uuid 목록만 받아 hash 매칭
   // (legacy number id = hashUuidToNumber(uuid) 호환 유지)
-  const supabase = await createSupabaseServerClient();
-  const { data: idRows, error: idError } = await supabase
-    .from("blog_posts")
-    .select("id")
-    .is("deleted_at", null);
-  if (idError || !idRows) return null;
-
-  const uuid = (idRows as { id: string }[]).find(
-    (row) => hashUuidToNumber(row.id) === id
-  )?.id;
+  const supabase = createSupabaseAdminClient();
+  const uuid =
+    typeof id === "string" && isUuidLike(id)
+      ? id
+      : await findUuidByLegacyId(Number(id), supabase);
   if (!uuid) return null;
 
   const { data, error } = await supabase
@@ -223,9 +223,9 @@ export async function getPostById(id: number): Promise<BlogPost | null> {
 
 export async function createPost(data: Partial<BlogPostInput>): Promise<BlogPost> {
 
-  const supabase = await createSupabaseServerClient();
+  const supabase = createSupabaseAdminClient();
   const insert = legacyToSupabaseInsert(data);
-  insert.related_post_ids = await resolveRelatedUuids(data.relatedPostIds);
+  insert.related_post_ids = await resolveRelatedUuids(data.relatedPostIds, supabase);
   await assertBlogSlugAvailable(supabase, insert.slug);
 
   const { data: row, error } = await supabase
@@ -249,10 +249,9 @@ export async function updatePost(
 ): Promise<BlogPost | null> {
 
   // Supabase에서는 UUID 사용
-  const targetUuid = uuid ?? (await findUuidByLegacyId(id));
+  const supabase = createSupabaseAdminClient();
+  const targetUuid = uuid ?? (await findUuidByLegacyId(id, supabase));
   if (!targetUuid) return null;
-
-  const supabase = await createSupabaseServerClient();
 
   const update: BlogPostUpdate = {};
   if (data.title !== undefined) update.title = data.title;
@@ -280,7 +279,7 @@ export async function updatePost(
   if (data.pageLayout !== undefined) update.page_layout = data.pageLayout;
   if (data.leadMagnetSlug !== undefined) update.lead_magnet_slug = data.leadMagnetSlug?.trim() || null;
   if (data.relatedPostIds !== undefined) {
-    update.related_post_ids = await resolveRelatedUuids(data.relatedPostIds);
+    update.related_post_ids = await resolveRelatedUuids(data.relatedPostIds, supabase);
   }
   if (data.publishedAt !== undefined) {
     update.published_at = normalizePublishedAt(data.publishedAt);
@@ -312,10 +311,10 @@ export async function updatePost(
 
 export async function trashPost(id: number, uuid?: string): Promise<boolean> {
 
-  const targetUuid = uuid ?? (await findUuidByLegacyId(id));
+  const supabase = createSupabaseAdminClient();
+  const targetUuid = uuid ?? (await findUuidByLegacyId(id, supabase));
   if (!targetUuid) return false;
 
-  const supabase = await createSupabaseServerClient();
   const { error } = await supabase
     .from("blog_posts")
     .update({ deleted_at: new Date().toISOString() })
@@ -326,10 +325,10 @@ export async function trashPost(id: number, uuid?: string): Promise<boolean> {
 
 export async function restorePost(id: number, uuid?: string): Promise<BlogPost | null> {
 
-  const targetUuid = uuid ?? (await findUuidByLegacyId(id));
+  const supabase = createSupabaseAdminClient();
+  const targetUuid = uuid ?? (await findUuidByLegacyId(id, supabase));
   if (!targetUuid) return null;
 
-  const supabase = await createSupabaseServerClient();
   const { data: row, error } = await supabase
     .from("blog_posts")
     .update({ deleted_at: null })
@@ -343,7 +342,7 @@ export async function restorePost(id: number, uuid?: string): Promise<BlogPost |
 
 export async function getTrashedPosts(): Promise<BlogPost[]> {
 
-  const supabase = await createSupabaseServerClient();
+  const supabase = createSupabaseAdminClient();
   const { data, error } = await supabase
     .from("blog_posts")
     .select(LIST_COLUMNS)
@@ -356,10 +355,10 @@ export async function getTrashedPosts(): Promise<BlogPost[]> {
 
 export async function permanentDeletePost(id: number, uuid?: string): Promise<boolean> {
 
-  const targetUuid = uuid ?? (await findUuidByLegacyId(id));
+  const supabase = createSupabaseAdminClient();
+  const targetUuid = uuid ?? (await findUuidByLegacyId(id, supabase));
   if (!targetUuid) return false;
 
-  const supabase = await createSupabaseServerClient();
   const { error } = await supabase
     .from("blog_posts")
     .delete()
@@ -374,7 +373,6 @@ export async function permanentDeletePost(id: number, uuid?: string): Promise<bo
  */
 export async function getPublishedSlugsForStaticParams(): Promise<{ slug: string }[]> {
   try {
-    const { createSupabaseAdminClient } = await import("@/lib/supabase/admin");
     const supabase = createSupabaseAdminClient();
     const timeout = createBlogQueryTimeout();
     try {
@@ -396,7 +394,6 @@ export async function getPublishedSlugsForStaticParams(): Promise<{ slug: string
 
 export async function getPublishedPostsForStaticSitemap(): Promise<BlogPost[]> {
 
-  const { createSupabaseAdminClient } = await import("@/lib/supabase/admin");
   const supabase = createSupabaseAdminClient();
   const timeout = createBlogQueryTimeout();
   try {
@@ -456,11 +453,19 @@ function normalizePublishedAt(value: string | null | undefined): string | null {
 }
 
 // 어드민이 레거시 number id로 고른 관련 글을 DB 저장용 uuid 배열로 변환.
-async function resolveRelatedUuids(legacyIds: number[] | undefined): Promise<string[]> {
+async function resolveRelatedUuids(
+  legacyIds: number[] | undefined,
+  supabase: BlogSupabaseClient
+): Promise<string[]> {
   if (!legacyIds || legacyIds.length === 0) return [];
-  const posts = await getAllPosts();
+  const { data, error } = await supabase
+    .from("blog_posts")
+    .select("id")
+    .is("deleted_at", null);
+  if (error || !data) return [];
+
   const byLegacyId = new Map(
-    posts.map((post) => [post.id, (post as BlogPost & { _uuid?: string })._uuid])
+    (data as { id: string }[]).map((row) => [hashUuidToNumber(row.id), row.id])
   );
   return legacyIds
     .map((id) => byLegacyId.get(id))
@@ -531,7 +536,7 @@ function isUniqueViolation(error: { code?: string } | null | undefined): boolean
 }
 
 async function assertBlogSlugAvailable(
-  supabase: Awaited<ReturnType<typeof createSupabaseServerClient>>,
+  supabase: BlogSupabaseClient,
   slug: string,
   exceptId?: string
 ): Promise<void> {
@@ -543,9 +548,16 @@ async function assertBlogSlugAvailable(
   if (data && data.length > 0) throw new Error(BLOG_SLUG_CONFLICT_MESSAGE);
 }
 
-async function findUuidByLegacyId(legacyId: number): Promise<string | null> {
+function isUuidLike(value: string) {
+  return /^[0-9a-f]{8}-[0-9a-f]{4}-[1-5][0-9a-f]{3}-[89ab][0-9a-f]{3}-[0-9a-f]{12}$/i.test(value);
+}
+
+async function findUuidByLegacyId(
+  legacyId: number,
+  supabase: BlogSupabaseClient = createSupabaseAdminClient()
+): Promise<string | null> {
+  if (!Number.isFinite(legacyId)) return null;
   // legacy number id = hashUuidToNumber(uuid) — id 컬럼만 받아 해시 매칭 (전체 글 로드 불필요)
-  const supabase = await createSupabaseServerClient();
   const { data, error } = await supabase
     .from("blog_posts")
     .select("id")
@@ -559,6 +571,5 @@ async function findUuidByLegacyId(legacyId: number): Promise<string | null> {
 }
 
 async function createSupabaseBlogReadClient() {
-  const { createSupabaseAdminClient } = await import("@/lib/supabase/admin");
   return createSupabaseAdminClient();
 }

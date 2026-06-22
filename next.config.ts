@@ -14,6 +14,13 @@ const supabaseImageSources = supabaseHost
   ? `https://${supabaseHost} https://*.supabase.co`
   : "https://*.supabase.co";
 const supabaseWs = supabaseHost ? `wss://${supabaseHost}` : "wss://*.supabase.co";
+const siteOrigin = (() => {
+  try {
+    return new URL(process.env.NEXT_PUBLIC_SITE_URL ?? "https://classin.ai.kr");
+  } catch {
+    return new URL("https://classin.ai.kr");
+  }
+})();
 const developmentScriptPolicy =
   process.env.NODE_ENV === "production" ? "" : " 'unsafe-eval'";
 
@@ -77,6 +84,11 @@ const nextConfig: NextConfig = {
         hostname: "**.supabase.co",
         pathname: "/storage/v1/object/**",
       },
+      {
+        protocol: siteOrigin.protocol.replace(":", "") as "http" | "https",
+        hostname: siteOrigin.hostname,
+        ...(siteOrigin.port ? { port: siteOrigin.port } : {}),
+      },
       ...(supabaseHost
         ? [
             {
@@ -88,7 +100,7 @@ const nextConfig: NextConfig = {
     ],
   },
   experimental: {
-    optimizePackageImports: ["framer-motion"],
+    optimizePackageImports: ["framer-motion", "lucide-react"],
   },
   async headers() {
     return [

@@ -2,7 +2,7 @@
 
 import { useState, useMemo } from "react"
 import { motion, AnimatePresence } from "framer-motion"
-import { ArrowRight, Clock, Search } from "lucide-react"
+import { ArrowRight, Clock, Search, X } from "lucide-react"
 import Link from "next/link"
 import { SafeBlogImage } from "@/components/blog/SafeBlogImage"
 import { NewsletterSubscribe } from "@/components/sections/NewsletterSubscribe"
@@ -17,22 +17,28 @@ export default function BlogPageClient({ posts }: BlogPageClientProps) {
     const [activeCategory, setActiveCategory] = useState("전체")
     const [searchQuery, setSearchQuery] = useState("")
     const [hoveredListId, setHoveredListId] = useState<number | null>(null)
+    const normalizedQuery = searchQuery.trim().toLowerCase()
 
     const filteredPosts = useMemo(() => {
         let filtered = activeCategory === "전체"
             ? posts
             : posts.filter(post => post.category === activeCategory)
 
-        if (searchQuery.trim()) {
-            const q = searchQuery.toLowerCase()
-            filtered = filtered.filter(post =>
-                post.title.toLowerCase().includes(q) ||
-                post.excerpt.toLowerCase().includes(q) ||
-                post.author.toLowerCase().includes(q)
-            )
+        if (normalizedQuery) {
+            filtered = filtered.filter((post) => {
+                const searchable = [
+                    post.title,
+                    post.excerpt,
+                    post.author,
+                    post.category,
+                    post.tag,
+                    ...post.tags,
+                ].join(" ").toLowerCase()
+                return searchable.includes(normalizedQuery)
+            })
         }
         return filtered
-    }, [posts, activeCategory, searchQuery])
+    }, [posts, activeCategory, normalizedQuery])
 
     // Gallery: top 3 (1 hero + 2 stacked)
     const galleryPosts = filteredPosts.filter(p => p.featured).slice(0, 3)
@@ -45,6 +51,12 @@ export default function BlogPageClient({ posts }: BlogPageClientProps) {
     const listPosts = filteredPosts.filter(p => !galleryIds.has(p.id))
 
     const isAnyListHovered = hoveredListId !== null
+    const hasActiveFilters = activeCategory !== "전체" || normalizedQuery.length > 0
+    const resetFilters = () => {
+        setActiveCategory("전체")
+        setSearchQuery("")
+        setHoveredListId(null)
+    }
 
     return (
         <div className="min-h-screen bg-[#FAFAF8] text-[#1a1a1a] selection:bg-emerald-100 selection:text-emerald-900">
@@ -161,17 +173,22 @@ export default function BlogPageClient({ posts }: BlogPageClientProps) {
                     className="flex flex-col sm:flex-row sm:items-center sm:justify-between gap-4 pb-5 border-b border-[#e8e8e4]"
                 >
                     {/* Categories */}
-                    <div className="-mx-1 flex items-center gap-1.5 overflow-x-auto px-1 pb-1 no-scrollbar">
+                    <div className="-mx-1 flex items-center gap-1.5 overflow-x-auto px-1 pb-1 no-scrollbar" role="group" aria-label="블로그 카테고리 필터">
                         {CATEGORIES.map((cat) => {
                             const isActive = activeCategory === cat
                             return (
                                 <button
+                                    type="button"
                                     key={cat}
-                                    onClick={() => setActiveCategory(cat)}
-                                    className={`shrink-0 px-3.5 py-1.5 rounded-full text-[13px] font-medium transition-all duration-200 ${
+                                    aria-pressed={isActive}
+                                    onClick={() => {
+                                        setActiveCategory(cat)
+                                        setHoveredListId(null)
+                                    }}
+                                    className={`min-h-11 shrink-0 rounded-full px-4 py-2 text-[13px] font-medium transition-all duration-200 focus-visible:outline-none focus-visible:ring-2 focus-visible:ring-[#084734] focus-visible:ring-offset-2 focus-visible:ring-offset-[#FAFAF8] ${
                                         isActive
-                                            ? "bg-[#111110] text-white"
-                                            : "text-[#1a1a1a]/40 hover:text-[#1a1a1a]/70 hover:bg-[#f0f0ec]"
+                                            ? "bg-[#084734] text-white shadow-[0_6px_16px_rgba(8,71,52,0.14)]"
+                                            : "text-[#615D59] hover:bg-[#ECFDF5] hover:text-[#084734]"
                                     }`}
                                 >
                                     {cat}
@@ -185,21 +202,34 @@ export default function BlogPageClient({ posts }: BlogPageClientProps) {
                         <Search className="absolute left-3 top-1/2 -translate-y-1/2 w-4 h-4 text-[#1a1a1a]/20" />
                         <input
                             type="text"
-                            placeholder="검색"
+                            aria-label="블로그 글 검색"
+                            placeholder="제목, 주제, 작성자 검색"
                             value={searchQuery}
                             onChange={(e) => setSearchQuery(e.target.value)}
-                            className="w-full sm:w-52 pl-9 pr-3 py-2 bg-transparent border border-[#e8e8e4] rounded-lg text-[13px] text-[#1a1a1a] placeholder:text-[#1a1a1a]/25 focus:outline-none focus:border-[#1a1a1a]/20 transition-colors"
+                            className="min-h-11 w-full rounded-lg border border-black/[0.08] bg-white/60 py-2 pl-9 pr-9 text-[13px] text-[#1a1a1a] transition-colors placeholder:text-[#A39E98] focus:border-[#084734]/45 focus:outline-none focus:ring-2 focus:ring-[#084734]/10 sm:w-64"
                         />
+                        {searchQuery ? (
+                            <button
+                                type="button"
+                                aria-label="블로그 검색어 지우기"
+                                onClick={() => setSearchQuery("")}
+                                className="absolute right-2 top-1/2 flex h-7 w-7 -translate-y-1/2 items-center justify-center rounded-full text-[#A39E98] transition-colors hover:bg-[#F6F5F4] hover:text-[#084734] focus-visible:outline-none focus-visible:ring-2 focus-visible:ring-[#084734]"
+                            >
+                                <X className="h-3.5 w-3.5" aria-hidden />
+                            </button>
+                        ) : null}
                     </div>
                 </motion.div>
 
                 {/* Count */}
                 <div className="flex items-center justify-between pt-4 pb-2">
                     <span className="text-[12px] text-[#1a1a1a]/30 font-medium">
-                        {listPosts.length}개의 아티클
+                        {normalizedQuery
+                            ? `검색 결과 ${filteredPosts.length}개의 아티클`
+                            : `${activeCategory === "전체" ? "전체" : activeCategory} ${filteredPosts.length}개의 아티클`}
                     </span>
                     <span className="text-[12px] text-[#1a1a1a]/25">
-                        최신순
+                        {hasActiveFilters ? "필터 적용" : "최신순"}
                     </span>
                 </div>
             </section>
@@ -292,6 +322,15 @@ export default function BlogPageClient({ posts }: BlogPageClientProps) {
                         </div>
                         <h3 className="text-base font-semibold text-[#111110] mb-1">검색 결과가 없습니다</h3>
                         <p className="text-[13px] text-[#1a1a1a]/30">다른 키워드나 카테고리를 선택해 보세요.</p>
+                        {hasActiveFilters ? (
+                            <button
+                                type="button"
+                                onClick={resetFilters}
+                                className="mt-5 inline-flex h-10 items-center justify-center rounded-[6px] bg-[#084734] px-4 text-sm font-semibold text-white transition-colors hover:bg-[#065c41] focus-visible:outline-none focus-visible:ring-2 focus-visible:ring-[#084734] focus-visible:ring-offset-2 focus-visible:ring-offset-[#FAFAF8]"
+                            >
+                                전체 글 보기
+                            </button>
+                        ) : null}
                     </motion.div>
                 )}
             </section>

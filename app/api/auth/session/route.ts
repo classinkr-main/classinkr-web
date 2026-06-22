@@ -1,7 +1,7 @@
 import { NextResponse } from "next/server"
 
 import { getPublicUserContext } from "@/lib/auth/public-user"
-import { createSupabaseServerClient } from "@/lib/supabase/server"
+import { signOutPublicSession } from "@/lib/auth/session-logout"
 
 export async function GET() {
   const context = await getPublicUserContext()
@@ -21,7 +21,5 @@ export async function GET() {
 }
 
 export async function DELETE() {
-  const supabase = await createSupabaseServerClient()
-  await supabase.auth.signOut()
-  return NextResponse.json({ ok: true })
+  return signOutPublicSession()
 }

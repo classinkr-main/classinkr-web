@@ -555,18 +555,31 @@ export async function listAdminDocsContent(): Promise<AdminDocsContentResponse> 
     const aiChunkCounts = new Map<string, number>()
     const articleIds = rows.map((article) => article.id)
     if (articleIds.length > 0) {
-      const { data: chunkRows, error: chunkError } = await supabase
-        .from("docs_ai_chunks")
-        .select("article_id")
+      // P5: prefer the per-article count view; fall back to the row scan pre-migration.
+      const counted = await supabase
+        .from("v_docs_ai_chunk_counts")
+        .select("article_id, chunk_count")
         .in("article_id", articleIds)
-        .limit(5000)
 
-      if (chunkError) {
-        warnings.push(`docs_ai_chunks: ${chunkError.message}`)
+      if (!counted.error && counted.data) {
+        for (const row of counted.data as Array<{ article_id: string | null; chunk_count: number }>) {
+          if (!row.article_id) continue
+          aiChunkCounts.set(row.article_id, Number(row.chunk_count) || 0)
+        }
       } else {
-        for (const chunk of (chunkRows ?? []) as Array<{ article_id: string | null }>) {
-          if (!chunk.article_id) continue
-          aiChunkCounts.set(chunk.article_id, (aiChunkCounts.get(chunk.article_id) ?? 0) + 1)
+        const { data: chunkRows, error: chunkError } = await supabase
+          .from("docs_ai_chunks")
+          .select("article_id")
+          .in("article_id", articleIds)
+          .limit(5000)
+
+        if (chunkError) {
+          warnings.push(`docs_ai_chunks: ${chunkError.message}`)
+        } else {
+          for (const chunk of (chunkRows ?? []) as Array<{ article_id: string | null }>) {
+            if (!chunk.article_id) continue
+            aiChunkCounts.set(chunk.article_id, (aiChunkCounts.get(chunk.article_id) ?? 0) + 1)
+          }
         }
       }
     }
@@ -703,13 +716,31 @@ export async function getAdminDocsAnalytics(
       .gte("created_at", sinceIso)
       .order("created_at", { ascending: false })
       .limit(500),
-    supabase
-      .from("client_events")
-      .select("page")
-      .eq("event_name", "page_view")
-      .like("page", "/docs/%")
-      .gte("created_at", sinceIso)
-      .limit(50000),
+    (async () => {
+      // P1: prefer the SQL aggregate; fall back to the row scan pre-migration.
+      const agg = await supabase.rpc("admin_docs_page_view_counts", { since_ts: sinceIso })
+      if (!agg.error && Array.isArray(agg.data)) {
+        return { data: agg.data as Array<{ page: string | null; views: number }>, error: null }
+      }
+      const scan = await supabase
+        .from("client_events")
+        .select("page")
+        .eq("event_name", "page_view")
+        .like("page", "/docs/%")
+        .gte("created_at", sinceIso)
+        .limit(50000)
+      if (scan.error) return { data: null, error: scan.error }
+      const counts = new Map<string, number>()
+      for (const row of (scan.data ?? []) as Array<{ page: string | null }>) {
+        if (!row.page) continue
+        const normalized = row.page.split("?")[0]
+        counts.set(normalized, (counts.get(normalized) ?? 0) + 1)
+      }
+      return {
+        data: [...counts.entries()].map(([page, views]) => ({ page, views })),
+        error: null,
+      }
+    })(),
   ])
 
   if (articleResult.error) warnings.push(`docs_articles: ${articleResult.error.message}`)
@@ -733,12 +764,12 @@ export async function getAdminDocsAnalytics(
     articleRows.map((article) => [`/docs/${article.category_id}/${article.slug}`, article.title])
   )
 
-  // 문서별 조회수 집계 (client_events page_view)
+  // 문서별 조회수 집계 (SQL 집계 또는 폴백 스캔에서 {page, views}로 정규화됨)
   const viewCounts = new Map<string, number>()
-  for (const row of (pageViewResult.error ? [] : pageViewResult.data ?? []) as Array<{ page: string | null }>) {
+  for (const row of (pageViewResult.error ? [] : pageViewResult.data ?? []) as Array<{ page: string | null; views: number }>) {
     if (!row.page) continue
     const normalized = row.page.split("?")[0]
-    viewCounts.set(normalized, (viewCounts.get(normalized) ?? 0) + 1)
+    viewCounts.set(normalized, (viewCounts.get(normalized) ?? 0) + (Number(row.views) || 0))
   }
   const topViewedDocs: AdminDocsViewedDocSummary[] = [...viewCounts.entries()]
     .map(([path, count]) => {

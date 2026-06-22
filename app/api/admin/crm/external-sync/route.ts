@@ -16,7 +16,22 @@ export async function POST(req: NextRequest) {
   if (err) return err
 
   try {
-    const chain = await runExternalCrmSyncChain("manual")
+    let force = false
+    let recentSyncTtlMs = 5 * 60_000
+    try {
+      const body = (await req.json()) as {
+        force?: unknown
+        recentSyncTtlMs?: unknown
+      }
+      force = body.force === true
+      if (typeof body.recentSyncTtlMs === "number" && Number.isFinite(body.recentSyncTtlMs)) {
+        recentSyncTtlMs = Math.min(Math.max(Math.trunc(body.recentSyncTtlMs), 0), 30 * 60_000)
+      }
+    } catch {
+      // 본문 없음 — 최근 성공 sync 재사용 기본값 사용
+    }
+
+    const chain = await runExternalCrmSyncChain("manual", { force, recentSyncTtlMs })
     const result = {
       ...chain.sync,
       candidates: chain.candidates ?? null,

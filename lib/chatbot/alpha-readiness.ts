@@ -258,6 +258,6 @@ function buildGapBacklogCheck(unresolvedGapCount: number, zeroResultSearchCount:
     label: "문서 보강 큐",
     status: "warning",
     detail: `미매핑 질문 ${unresolvedGapCount}개, 결과 없는 검색어 ${zeroResultSearchCount}개가 남아 있습니다.`,
-    action: "/admin/docs/gaps에서 초안을 만들고 게시 또는 무시 처리",
+    action: "문서 센터 > 보강 큐 탭에서 초안을 만들고 게시 또는 무시 처리",
   }
 }

@@ -8,6 +8,7 @@ import type {
   LeadMagnetActionStep,
   LeadMagnetCategory,
   LeadMagnetGate,
+  LeadMagnetPdfGuide,
   LeadMagnetScoreBand,
   LeadMagnetSection,
   LeadMagnetSourceLink,
@@ -113,6 +114,21 @@ function normalizeSourceLinks(value: unknown): LeadMagnetSourceLink[] {
   }).filter((link) => link.label && link.href)
 }
 
+function normalizePdfGuide(value: unknown): LeadMagnetPdfGuide | undefined {
+  const raw = asRecord(value)
+  if (Object.keys(raw).length === 0) return undefined
+  return {
+    subtitle: stringValue(raw.subtitle),
+    outcome: stringValue(raw.outcome),
+    bestUsedWhen: stringArray(raw.bestUsedWhen),
+    howToUse: stringArray(raw.howToUse),
+    discussionPrompts: stringArray(raw.discussionPrompts),
+    relatedMagnets: stringArray(raw.relatedMagnets),
+    consultationCtas: normalizeSourceLinks(raw.consultationCtas),
+    expertNote: stringValue(raw.expertNote),
+  }
+}
+
 export function normalizeLeadMagnet(input: unknown): LeadMagnet {
   const raw = asRecord(input)
   const title = stringValue(raw.title, "새 자료")
@@ -145,6 +161,7 @@ export function normalizeLeadMagnet(input: unknown): LeadMagnet {
     deliverables: stringArray(raw.deliverables),
     consultationPrep: stringArray(raw.consultationPrep),
     sourceLinks: normalizeSourceLinks(raw.sourceLinks),
+    pdfGuide: normalizePdfGuide(raw.pdfGuide),
     salesPlaybook: {
       intentScore: Math.max(0, Math.min(40, numberValue(salesPlaybook.intentScore, 15))),
       intentLabel: stringValue(salesPlaybook.intentLabel, "자료 관심 리드"),

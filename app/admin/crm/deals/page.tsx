@@ -66,8 +66,11 @@ const WRITE_MAX_ATTEMPTS = 3
 
 interface ExternalCrmSyncResult {
   ok: boolean
+  cached?: boolean
+  locked?: boolean
   skipped?: boolean
   error?: string
+  lastSyncedAt?: string
   objects?: Array<{
     objectApiKey: string
     status: "success" | "failed" | "skipped"
@@ -333,10 +336,12 @@ export default function AdminCrmRevenuePage() {
   const [checkingReadiness, setCheckingReadiness] = useState(false)
   const [readiness, setReadiness] = useState<CrmReadinessReport | null>(null)
   const [error, setError] = useState<string | null>(null)
+  const [syncNotice, setSyncNotice] = useState<string | null>(null)
 
   const load = useCallback(async (options?: { force?: boolean }) => {
     setLoading(true)
     setError(null)
+    setSyncNotice(null)
     try {
       const next = await adminFetchJsonCached<CrmRevenueDashboard>(`/api/admin/crm/revenue?months=${months}`, undefined, {
         ttlMs: 30_000,
@@ -386,9 +391,10 @@ export default function AdminCrmRevenuePage() {
     }
   }, [load])
 
-  const syncExternalCrm = useCallback(async () => {
+  const syncExternalCrm = useCallback(async (force = false) => {
     setSyncingExternal(true)
     setError(null)
+    setSyncNotice(null)
     try {
       const readinessReport = await adminFetchJson<CrmReadinessReport>(`/api/admin/crm/readiness`)
       setReadiness(readinessReport)
@@ -408,9 +414,20 @@ export default function AdminCrmRevenuePage() {
         return
       }
 
-      const result = await adminFetchJson<ExternalCrmSyncResult>(`/api/admin/crm/external-sync`, { method: "POST" })
+      const result = await adminFetchJson<ExternalCrmSyncResult>(`/api/admin/crm/external-sync`, {
+        method: "POST",
+        body: JSON.stringify({ force }),
+      })
       await load({ force: true })
-      if (result.skipped) {
+      if (result.locked) {
+        setSyncNotice(result.error ?? "이미 외부 CRM 동기화가 진행 중입니다.")
+      } else if (result.cached) {
+        setSyncNotice(
+          result.lastSyncedAt
+            ? `최근 외부 CRM 동기화 결과를 사용했습니다. 마지막 동기화: ${new Date(result.lastSyncedAt).toLocaleString("ko-KR")}`
+            : "최근 외부 CRM 동기화 결과를 사용했습니다."
+        )
+      } else if (result.skipped) {
         const reason = result.error ?? result.objects?.find((item) => item.error)?.error
         setError(reason ? `외부 CRM 동기화 skipped: ${reason}` : "외부 CRM credential 미설정으로 동기화를 건너뛰었습니다.")
       }
@@ -540,6 +557,15 @@ export default function AdminCrmRevenuePage() {
           </button>
           <button
             type="button"
+            onClick={() => void syncExternalCrm(true)}
+            disabled={syncingExternal || loading}
+            className="inline-flex h-9 items-center gap-2 rounded-lg border border-[#e8e8e4] bg-white px-3 text-[13px] font-semibold text-[#111110] transition-colors hover:bg-[#f5f5f2] disabled:opacity-50"
+          >
+            <RotateCcw className="h-4 w-4" />
+            강제 CRM
+          </button>
+          <button
+            type="button"
             onClick={() => void syncSheet()}
             disabled={syncing || loading}
             className="inline-flex h-9 items-center gap-2 rounded-lg border border-[#e8e8e4] bg-white px-3 text-[13px] font-semibold text-[#111110] transition-colors hover:bg-[#f5f5f2] disabled:opacity-50"
@@ -553,6 +579,12 @@ export default function AdminCrmRevenuePage() {
           </button>
         </div>
       </div>
+
+      {syncNotice ? (
+        <div className="mb-6 border-l-2 border-[#D6EFE5] pl-3 text-[13px] text-[#084734]">
+          {syncNotice}
+        </div>
+      ) : null}
 
       {error ? (
         <div className="mb-6 border-l-2 border-[#F6D5C5] pl-3 text-[13px] text-[#B85C33]">

@@ -18,16 +18,15 @@ import { EventAlertSignup } from "@/components/events/EventAlertSignup"
 import { EventSignupModal } from "@/components/events/EventSignupModal"
 import { NEUTRAL_BLUR_DATA_URL } from "@/lib/image-blur"
 import { CalendarPlus } from "lucide-react"
+import {
+  formatPublicEventDate,
+  getEffectivePublicEventEndIso,
+} from "@/lib/public-event-dates"
 
 export const revalidate = 3600
 
 interface EventDetailPageProps {
   params: Promise<{ slug: string }>
-}
-
-function formatKoreanDate(iso: string): string {
-  const d = new Date(iso)
-  return `${d.getFullYear()}. ${String(d.getMonth() + 1).padStart(2, "0")}. ${String(d.getDate()).padStart(2, "0")}`
 }
 
 const readPublicEventBySlug = cache((slug: string) => getCachedPublicEventBySlug(slug))
@@ -53,9 +52,8 @@ function buildGoogleCalendarUrl(event: {
   location: string | null
 }, eventUrl: string): string {
   const start = toCalendarUtc(event.startsAt)
-  const end = event.endsAt
-    ? toCalendarUtc(event.endsAt)
-    : toCalendarUtc(new Date(new Date(event.startsAt).getTime() + 2 * 60 * 60 * 1000).toISOString())
+  const effectiveEnd = getEffectivePublicEventEndIso(event.startsAt, event.endsAt)
+  const end = effectiveEnd ? toCalendarUtc(effectiveEnd) : start
   const params = new URLSearchParams({
     action: "TEMPLATE",
     text: event.title,
@@ -178,8 +176,8 @@ export default async function EventDetailPage({ params }: EventDetailPageProps) 
               <div className="mt-7 flex flex-wrap items-center gap-x-4 gap-y-2 text-[13px] text-[#1a1a1a]/40">
                 <span className="inline-flex items-center gap-1.5">
                   <Calendar className="h-4 w-4" />
-                  {formatKoreanDate(event.startsAt)}
-                  {event.endsAt ? ` ~ ${formatKoreanDate(event.endsAt)}` : ""}
+                  {formatPublicEventDate(event.startsAt)}
+                  {event.endsAt ? ` ~ ${formatPublicEventDate(event.endsAt)}` : ""}
                 </span>
                 {event.location && (
                   <span className="inline-flex items-center gap-1.5">
@@ -302,7 +300,7 @@ export default async function EventDetailPage({ params }: EventDetailPageProps) 
                           {item.title}
                         </p>
                         <p className="mt-2 text-[12px] text-[#1a1a1a]/40">
-                          {formatKoreanDate(item.startsAt)}
+                          {formatPublicEventDate(item.startsAt)}
                         </p>
                       </Link>
                     ))}

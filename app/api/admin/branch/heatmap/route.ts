@@ -1,5 +1,6 @@
 import { NextRequest, NextResponse } from "next/server"
 import { BRANCH_READ_ADMIN_API_ROLES, verifyAdmin } from "@/lib/admin-auth"
+import { adminCachedJson } from "@/lib/admin-api-response"
 import { listBranchRevDeals } from "@/lib/repositories/branch-deals"
 import { computeHeatmap } from "@/lib/branch/computations/heatmap"
 import { resolvePeriodDate } from "@/lib/branch/fiscal"
@@ -32,7 +33,7 @@ export async function GET(req: NextRequest) {
   try {
     const deals = await listBranchRevDeals({ team })
     const rows = computeHeatmap(deals, period, periodDate, team)
-    return NextResponse.json({ rows })
+    return adminCachedJson({ rows })
   } catch (e) {
     return NextResponse.json({ error: String(e) }, { status: 500 })
   }

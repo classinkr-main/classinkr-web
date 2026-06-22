@@ -1,6 +1,10 @@
 import "server-only"
+import { unstable_cache, revalidateTag } from "next/cache"
 import { createSupabaseAdminClient } from "@/lib/supabase/admin"
 import { normalizeBranchMemberName } from "@/lib/branch/member-names"
+
+export const BRANCH_REV_DEALS_CACHE_TAG = "branch-rev-deals"
+const BRANCH_REV_DEALS_REVALIDATE_SECONDS = 60
 
 export interface BranchRevDeal {
   id: string; sheet_row: number
@@ -19,16 +23,55 @@ export interface BranchRevDeal {
   raw: Record<string, unknown>; synced_at: string
 }
 
-export async function listBranchRevDeals(filter?: { team?: string }): Promise<BranchRevDeal[]> {
-  const sb = createSupabaseAdminClient()
-  let q = sb.from("branch_rev_deals").select("*")
-  if (filter?.team && filter.team !== "ALL") q = q.eq("team", filter.team)
-  const { data, error } = await q
-  if (error) throw error
-  return ((data ?? []) as BranchRevDeal[]).map((deal) => ({
+type BranchRevDealListRow = Omit<BranchRevDeal, "raw"> & {
+  raw?: Record<string, unknown> | null
+}
+
+const BRANCH_REV_DEAL_LIST_COLUMNS = [
+  "id",
+  "sheet_row",
+  "customer_name",
+  "branch_contact",
+  "team",
+  "manager",
+  "deal_type",
+  "status",
+  "first_payment",
+  "product_version",
+  "region",
+  "importance",
+  "note",
+  "contract_target",
+  "monthly_payments",
+  "monthly_red",
+  "monthly_confirmed",
+  "monthly_high_conf",
+  "synced_at",
+].join(", ")
+
+function normalizeDealRow(deal: BranchRevDealListRow): BranchRevDeal {
+  return {
     ...deal,
     manager: normalizeBranchMemberName(deal.manager),
-  }))
+    raw: deal.raw ?? {},
+  }
+}
+
+const listCachedBranchRevDeals = unstable_cache(
+  async (team: string): Promise<BranchRevDeal[]> => {
+    const sb = createSupabaseAdminClient()
+    let q = sb.from("branch_rev_deals").select(BRANCH_REV_DEAL_LIST_COLUMNS)
+    if (team !== "ALL") q = q.eq("team", team)
+    const { data, error } = await q
+    if (error) throw error
+    return ((data ?? []) as unknown as BranchRevDealListRow[]).map(normalizeDealRow)
+  },
+  [BRANCH_REV_DEALS_CACHE_TAG],
+  { revalidate: BRANCH_REV_DEALS_REVALIDATE_SECONDS, tags: [BRANCH_REV_DEALS_CACHE_TAG] },
+)
+
+export async function listBranchRevDeals(filter?: { team?: string }): Promise<BranchRevDeal[]> {
+  return listCachedBranchRevDeals(filter?.team && filter.team !== "ALL" ? filter.team : "ALL")
 }
 
 export async function getBranchRevDeal(id: string): Promise<BranchRevDeal | null> {
@@ -44,5 +87,6 @@ export async function replaceBranchRevDeals(rows: unknown[]): Promise<number> {
   const sb = createSupabaseAdminClient()
   const { error } = await sb.rpc("replace_branch_rev_deals", { rows })
   if (error) throw error
+  revalidateTag(BRANCH_REV_DEALS_CACHE_TAG, "max")
   return rows.length
 }
