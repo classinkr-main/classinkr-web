@@ -14,6 +14,8 @@ import type { Lead, LeadInsert, LeadUpdate } from "@/lib/supabase/database.types
 export type { LeadStatus } from "@/lib/supabase/database.types";
 
 const USE_SUPABASE = process.env.USE_SUPABASE_LEADS === "true";
+const IS_PRODUCTION_RUNTIME =
+  process.env.NODE_ENV === "production" || process.env.VERCEL_ENV === "production";
 const RESPONSE_TARGET_SOURCES = ["demo_modal", "contact_page", "meta_lead_ads"] as const;
 const ACTIVE_LEAD_STATUSES = ["new", "contacted"] as const;
 
@@ -92,6 +94,12 @@ function getSupabaseCountError(
   results: Array<{ error: { message?: string } | null }>
 ) {
   return results.find((result) => result.error)?.error ?? null;
+}
+
+function assertDurableLeadStorage() {
+  if (!USE_SUPABASE && IS_PRODUCTION_RUNTIME) {
+    throw new Error("[leads] production lead capture requires USE_SUPABASE_LEADS=true");
+  }
 }
 
 function supabaseToLegacy(row: Lead): LeadRecord {
@@ -189,6 +197,8 @@ export async function getLeadById(id: string): Promise<LeadRecord | null> {
 export async function saveLead(
   lead: Omit<LeadRecord, "id" | "status">
 ): Promise<LeadRecord> {
+  assertDurableLeadStorage();
+
   if (!USE_SUPABASE) {
     const { saveLead: jsonSaveLead } = await import("@/lib/db");
     return jsonSaveLead(lead);

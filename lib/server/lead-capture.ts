@@ -49,7 +49,14 @@ function isHoneypotTripped(raw: unknown) {
 
 function getSubmissionKey(body: LeadPayload) {
   const contact = body.email ?? body.phone
-  return contact ? `${body.source}:${contact}` : null
+  if (!contact) return null
+
+  const context = body.eventSlug ?? body.leadMagnet ?? body.sourceDetail ?? "general"
+  return [
+    body.source,
+    context.trim().toLowerCase(),
+    contact.trim().toLowerCase(),
+  ].join(":")
 }
 
 function pruneRecentSubmissions(now = Date.now()) {
@@ -345,10 +352,6 @@ export async function submitLeadCapture(raw: unknown): Promise<LeadSubmissionRes
       })
     }
 
-    const deliveryCount = results.filter(
-      (result) => result.status === "fulfilled"
-    ).length
-
     if (stored) {
       void emitNotificationEvent({
         eventType: "lead.created",
@@ -420,13 +423,13 @@ export async function submitLeadCapture(raw: unknown): Promise<LeadSubmissionRes
       })
     }
 
-    if (!stored && deliveryCount === 0) {
+    if (!stored) {
       clearSubmission(submissionKey)
       return {
         status: 502,
         body: {
           ok: false,
-          error: "상담 요청 저장과 전달이 모두 실패했습니다.",
+          error: "상담 요청을 어드민에 저장하지 못했습니다. 잠시 후 다시 시도해 주세요.",
           details: storageError ? [storageError, ...errors] : errors,
         },
       }

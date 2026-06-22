@@ -73,6 +73,7 @@ function main() {
   }
 
   const failures = [];
+  const dailyRunsByPath = new Map();
 
   for (const cron of crons) {
     const cronPath = cron?.path;
@@ -105,6 +106,11 @@ function main() {
             "Vercel Hobby deployments require each cron expression to be daily-or-less"
         );
       }
+
+      dailyRunsByPath.set(
+        cronPath,
+        (dailyRunsByPath.get(cronPath) ?? 0) + runsPerMatchingDay
+      );
     } catch (error) {
       failures.push(`${cronPath}: ${error.message}`);
     }
@@ -112,6 +118,15 @@ function main() {
     const routeFile = routeFileForCronPath(cronPath);
     if (!existsSync(routeFile)) {
       failures.push(`${cronPath}: missing route file ${routeFile}`);
+    }
+  }
+
+  for (const [cronPath, runsPerMatchingDay] of dailyRunsByPath.entries()) {
+    if (runsPerMatchingDay > MAX_DAILY_RUNS_PER_CRON) {
+      failures.push(
+        `${cronPath}: configured ${runsPerMatchingDay} total runs on a matching day across duplicate entries; ` +
+          "use one daily-or-less cron entry per path, or move sub-daily scheduling outside vercel.json"
+      );
     }
   }
 

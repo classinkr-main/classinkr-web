@@ -621,8 +621,11 @@ export default function LeadsBoardClient() {
     setLoading(true)
     try {
       const data = await adminFetchJsonCached<{ leads: LeadRecord[] }>("/api/admin/leads", undefined, {
-        ttlMs: 45_000,
+        ttlMs: 0,
         force: options?.force,
+        persist: false,
+        staleIfError: false,
+        staleWhileRevalidateMs: 0,
       })
       setLeads(data.leads)
     } catch (err) {

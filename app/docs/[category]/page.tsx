@@ -18,6 +18,8 @@ import { toArticleSummary, scoreDocsArticle } from "../_utils"
 import { SearchHighlight } from "@/components/ui/SearchHighlight"
 import { DocsSearchLogger } from "@/components/docs/DocsSearchLogger"
 
+const DOCS_CONTACT_HREF = `/contact?topic=${encodeURIComponent("계정/접속/기술 지원")}&prefill=${encodeURIComponent("가이드에서 찾지 못한 내용을 문의하고 싶습니다.")}#contact-form`
+
 interface DocsCategoryPageProps {
   params: Promise<{ category: string }>
   searchParams?: Promise<{ q?: string }>
@@ -192,7 +194,7 @@ export default async function DocsCategoryPage({
                   <ArrowRight className="h-4 w-4" aria-hidden />
                 </Link>
                 <Link
-                  href="/contact?topic=docs#contact-form"
+                  href={DOCS_CONTACT_HREF}
                   className="inline-flex h-10 items-center justify-center rounded-[6px] border border-black/[0.08] bg-white px-4 text-sm font-semibold text-[#111110] transition-colors hover:bg-[#F6F5F4]"
                 >
                   상담 남기기

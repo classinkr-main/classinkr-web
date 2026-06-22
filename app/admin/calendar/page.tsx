@@ -38,6 +38,7 @@ const SOURCE_FILTERS: { value: "all" | EventSource; label: string }[] = [
   { value: "calendar", label: "팀 일정" },
   { value: "partner", label: "파트너 일정" },
   { value: "event", label: "공개 행사" },
+  { value: "notion", label: "마케팅(노션)" },
 ]
 
 function getTypeStyle(type: EventType) {
@@ -390,6 +391,7 @@ export default function AdminCalendarPage() {
   const totalPartnerEvents = events.filter((event) => getEventSource(event) === "partner").length
   const totalTeamEvents = events.filter((event) => getEventSource(event) === "calendar").length
   const totalPublicEvents = events.filter((event) => getEventSource(event) === "event").length
+  const totalNotionEvents = events.filter((event) => getEventSource(event) === "notion").length
 
   return (
     <div className="px-4 pt-6 pb-24 sm:px-6 sm:pt-8 lg:px-8 lg:pt-10 lg:pb-20">
@@ -399,7 +401,7 @@ export default function AdminCalendarPage() {
           <p className="text-[11px] font-medium text-[#1a1a1a]/30 uppercase tracking-widest mb-1">Admin</p>
           <h1 className="text-2xl font-bold text-[#111110] tracking-[-0.02em]">운영 캘린더</h1>
           <p className="mt-2 text-[13px] leading-6 text-[#1a1a1a]/50">
-            팀 일정과 파트너 운영 일정, 공개 행사를 함께 보되 외부 소스 일정은 읽기 전용으로 표시합니다.
+            팀 일정과 파트너 운영 일정, 공개 행사, 마케팅(노션) 캘린더를 함께 보되 외부 소스 일정은 읽기 전용으로 표시합니다.
           </p>
         </div>
         <Button size="sm" onClick={() => openCreate()} className="w-full sm:w-auto">
@@ -428,6 +430,9 @@ export default function AdminCalendarPage() {
         </span>
         <span className="text-[#1a1a1a]/40">
           공개 행사 <span className="font-semibold text-[#111110]">{totalPublicEvents}개</span>
+        </span>
+        <span className="text-[#1a1a1a]/40">
+          마케팅(노션) <span className="font-semibold text-[#111110]">{totalNotionEvents}개</span>
         </span>
         {EVENT_TYPES.slice(0, 4).map((t) => {
           const cnt = visibleEvents.filter(e => e.type === t.value).length
@@ -558,16 +563,20 @@ export default function AdminCalendarPage() {
                   <div className="hidden space-y-0.5 overflow-hidden sm:block">
                     {dayEvents.slice(0, 3).map((ev) => {
                       const style = getTypeStyle(ev.type)
-                      const isPartnerEvent = getEventSource(ev) === "partner"
+                      const evSource = getEventSource(ev)
+                      const sourceBadge = evSource === "partner" ? "P" : evSource === "notion" ? "M" : null
                       return (
                         <div
                           key={ev.id}
                           className={`flex items-center gap-1 px-1.5 py-0.5 rounded text-[10px] font-medium truncate border ${style.bg} ${style.color}`}
                         >
                           <span className={`w-1.5 h-1.5 rounded-full shrink-0 ${style.dot}`} />
-                          {isPartnerEvent && (
-                            <span className="rounded bg-white/80 px-1 py-0 text-[9px] font-semibold text-[#111110]/70">
-                              P
+                          {sourceBadge && (
+                            <span
+                              title={evSource === "notion" ? "마케팅(노션)" : "파트너"}
+                              className="rounded bg-white/80 px-1 py-0 text-[9px] font-semibold text-[#111110]/70"
+                            >
+                              {sourceBadge}
                             </span>
                           )}
                           <span className="truncate">{ev.title}</span>
@@ -615,11 +624,19 @@ export default function AdminCalendarPage() {
                     const style = getTypeStyle(ev.type)
                     const source = getEventSource(ev)
                     const isExternalReadonly = Boolean(ev.readonly)
-                    const actionLabel = source === "event" ? "행사 관리 열기" : "파트너 열기"
+                    const isExternalHref = Boolean(ev.href && ev.href.startsWith("http"))
+                    const actionLabel =
+                      source === "event"
+                        ? "행사 관리 열기"
+                        : source === "notion"
+                          ? "노션에서 열기"
+                          : "파트너 열기"
                     const readonlyHelp =
                       source === "event"
                         ? "공개 행사는 행사 관리에서 수정합니다."
-                        : "파트너 일정은 파트너 운영 상세에서 수정합니다."
+                        : source === "notion"
+                          ? "마케팅 캘린더는 노션에서 수정합니다."
+                          : "파트너 일정은 파트너 운영 상세에서 수정합니다."
                     return (
                       <div key={ev.id} className="px-4 py-3">
                         <div className="flex items-start justify-between gap-2 mb-1.5">
@@ -643,13 +660,22 @@ export default function AdminCalendarPage() {
                             </div>
                           </div>
                           <div className="flex items-center gap-1 shrink-0">
-                            {isExternalReadonly && ev.href ? (
-                              <Link
-                                href={ev.href}
-                                className="rounded-lg border border-[#e8e8e4] px-2.5 py-1 text-[11px] font-medium text-[#1a1a1a]/55 transition-colors hover:border-[#111110]/20 hover:text-[#111110]"
-                              >
-                                {actionLabel}
-                              </Link>
+                            {isExternalReadonly ? (
+                              ev.href ? (
+                                <Link
+                                  href={ev.href}
+                                  target={isExternalHref ? "_blank" : undefined}
+                                  rel={isExternalHref ? "noopener noreferrer" : undefined}
+                                  aria-label={isExternalHref ? `${actionLabel} (새 탭에서 열림)` : undefined}
+                                  className="rounded-lg border border-[#e8e8e4] px-2.5 py-1 text-[11px] font-medium text-[#1a1a1a]/55 transition-colors hover:border-[#111110]/20 hover:text-[#111110]"
+                                >
+                                  {actionLabel}
+                                </Link>
+                              ) : (
+                                <span className="rounded-lg border border-[#e8e8e4] px-2.5 py-1 text-[11px] font-medium text-[#1a1a1a]/40">
+                                  읽기 전용
+                                </span>
+                              )
                             ) : (
                               <>
                                 <button

@@ -9,6 +9,7 @@ import type { PublicEvent, EventStatus } from "@/lib/types/public-events"
 import { formatPublicEventDate } from "@/lib/public-event-dates"
 
 const CATEGORIES = ["전체", "웨비나", "오프라인 행사", "프로모션", "얼리버드", "파트너십"] as const
+const EVENTS_CONTACT_HREF = `/contact?topic=${encodeURIComponent("도입 상담")}&prefill=${encodeURIComponent("행사/프로모션 관련 문의입니다.")}#contact-form`
 const LOCATION_SEARCH_ALIASES = [
   ["busan", "부산"],
   ["gwangju", "광주"],
@@ -395,7 +396,7 @@ export default function EventsClient({ events }: { events: PublicEvent[] }) {
               ) : null}
               {events.length === 0 ? (
                 <Link
-                  href="/contact?topic=events#contact-form"
+                  href={EVENTS_CONTACT_HREF}
                   className="inline-flex h-10 items-center justify-center rounded-[6px] border border-black/[0.08] bg-white px-4 text-sm font-semibold text-[#111110] transition-colors hover:bg-[#F6F5F4] focus-visible:outline-none focus-visible:ring-2 focus-visible:ring-[#084734] focus-visible:ring-offset-2 focus-visible:ring-offset-[#FAFAF8]"
                 >
                   행사 문의하기

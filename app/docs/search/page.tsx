@@ -6,6 +6,8 @@ import { SearchHighlight } from "@/components/ui/SearchHighlight"
 import { DocsSearchLogger } from "@/components/docs/DocsSearchLogger"
 import { getAllDocsSummaries, scoreDocsArticle } from "../_utils"
 
+const DOCS_CONTACT_HREF = `/contact?topic=${encodeURIComponent("계정/접속/기술 지원")}&prefill=${encodeURIComponent("가이드에서 찾지 못한 내용을 문의하고 싶습니다.")}#contact-form`
+
 export const metadata: Metadata = {
   title: "가이드 검색",
   description: "Classin 가이드 문서를 검색하세요.",
@@ -90,7 +92,7 @@ export default async function DocsSearchPage({ searchParams }: DocsSearchPagePro
                 가이드 보강 우선순위에 반영됩니다.
               </p>
               <Link
-                href="/contact?topic=docs#contact-form"
+                href={DOCS_CONTACT_HREF}
                 className="mt-4 inline-flex items-center gap-2 rounded-full bg-[#084734] px-4 py-2.5 text-sm font-semibold text-white transition-transform hover:-translate-y-0.5"
               >
                 상담 남기기

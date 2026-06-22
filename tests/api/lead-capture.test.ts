@@ -8,11 +8,24 @@ const baseLead = {
   message: "문의 테스트",
 }
 
-async function loadLeadCapture() {
+async function loadLeadCapture(options?: {
+  settings?: {
+    googleSheetWebhookUrl?: string
+    leadWebhookUrl?: string
+    channelTalkWebhookUrl?: string
+  }
+}) {
   vi.resetModules()
 
   const saveLead = vi.fn()
   const emitNotificationEvent = vi.fn().mockResolvedValue(undefined)
+  const postJson = vi.fn().mockResolvedValue({ ok: true, status: 200 })
+  const settings = {
+    googleSheetWebhookUrl: "",
+    leadWebhookUrl: "",
+    channelTalkWebhookUrl: "",
+    ...options?.settings,
+  }
 
   vi.doMock("@/lib/automation-engine", () => ({
     triggerOnSubmitRules: vi.fn().mockResolvedValue(undefined),
@@ -27,15 +40,14 @@ async function loadLeadCapture() {
     upsertSubscriber: vi.fn().mockResolvedValue(undefined),
   }))
   vi.doMock("@/lib/repositories/settings", () => ({
-    getResolvedSettings: vi.fn().mockResolvedValue({
-      googleSheetWebhookUrl: "",
-      leadWebhookUrl: "",
-      channelTalkWebhookUrl: "",
-    }),
+    getResolvedSettings: vi.fn().mockResolvedValue(settings),
+  }))
+  vi.doMock("@/lib/server/post-json", () => ({
+    postJson,
   }))
 
   const leadCapture = await import("@/lib/server/lead-capture")
-  return { ...leadCapture, saveLead, emitNotificationEvent }
+  return { ...leadCapture, saveLead, emitNotificationEvent, postJson }
 }
 
 describe("submitLeadCapture duplicate handling", () => {
@@ -56,6 +68,25 @@ describe("submitLeadCapture duplicate handling", () => {
     expect(saveLead).toHaveBeenCalledTimes(2)
   })
 
+  it("does not report success when storage fails even if external delivery succeeds", async () => {
+    const { submitLeadCapture, saveLead, postJson } = await loadLeadCapture({
+      settings: { leadWebhookUrl: "https://example.com/lead-webhook" },
+    })
+    saveLead.mockRejectedValue(new Error("database unavailable"))
+
+    const first = await submitLeadCapture(baseLead)
+    const second = await submitLeadCapture(baseLead)
+
+    expect(first.status).toBe(502)
+    expect(first.body).toMatchObject({
+      ok: false,
+      error: "상담 요청을 어드민에 저장하지 못했습니다. 잠시 후 다시 시도해 주세요.",
+    })
+    expect(second.status).toBe(502)
+    expect(saveLead).toHaveBeenCalledTimes(2)
+    expect(postJson).toHaveBeenCalledTimes(2)
+  })
+
   it("drops duplicates only after a lead has been accepted", async () => {
     const { submitLeadCapture, saveLead } = await loadLeadCapture()
     saveLead.mockResolvedValue({ id: "lead-1" })
@@ -68,6 +99,30 @@ describe("submitLeadCapture duplicate handling", () => {
     expect(second.status).toBe(200)
     expect(second.body).toMatchObject({ ok: true, stored: false })
     expect(saveLead).toHaveBeenCalledTimes(1)
+  })
+
+  it("does not collapse different lead-magnet submissions from the same email", async () => {
+    const { submitLeadCapture, saveLead } = await loadLeadCapture()
+    saveLead
+      .mockResolvedValueOnce({ id: "lead-resource-a" })
+      .mockResolvedValueOnce({ id: "lead-resource-b" })
+
+    const first = await submitLeadCapture({
+      source: "newsletter",
+      email: "ops@example.com",
+      sourceDetail: "resource_pdf_download:resource-a",
+      leadMagnet: "resource-a",
+    })
+    const second = await submitLeadCapture({
+      source: "newsletter",
+      email: "ops@example.com",
+      sourceDetail: "resource_pdf_download:resource-b",
+      leadMagnet: "resource-b",
+    })
+
+    expect(first.body).toMatchObject({ ok: true, stored: true, leadId: "lead-resource-a" })
+    expect(second.body).toMatchObject({ ok: true, stored: true, leadId: "lead-resource-b" })
+    expect(saveLead).toHaveBeenCalledTimes(2)
   })
 
   it("reports an in-flight duplicate without pretending the lead was accepted", async () => {

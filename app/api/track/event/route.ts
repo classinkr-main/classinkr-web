@@ -17,7 +17,18 @@ const ALLOWED_EVENTS = new Set([
 
 const ALLOWED_PARAM_KEYS: Record<string, Set<string>> = {
   page_view: new Set(["path", "title", "referrer"]),
-  click_cta: new Set(["button", "page", "destination", "model", "source", "lead_magnet", "gate"]),
+  click_cta: new Set([
+    "button",
+    "page",
+    "destination",
+    "model",
+    "source",
+    "lead_magnet",
+    "gate",
+    "slug",
+    "event_slug",
+    "event_id",
+  ]),
   submit_demo_request: new Set(["source", "lead_id", "stored", "event_slug"]),
   submit_newsletter: new Set(["source", "lead_magnet", "post_slug", "gate"]),
   download_materials: new Set(["asset_id", "page", "source", "lead_magnet", "post_slug", "gate"]),

@@ -17,11 +17,12 @@ import {
   getEffectivePublicEventEndIso,
   getPublicEventDatePart,
 } from "@/lib/public-event-dates"
+import { getNotionMarketingCalendarEvents } from "@/lib/notion-marketing-calendar"
 
 const FILE = path.join(process.cwd(), "data", "calendar-events.json")
 
 export type EventType = "team" | "deadline" | "meeting" | "launch" | "holiday" | "other"
-export type EventSource = "calendar" | "partner" | "event"
+export type EventSource = "calendar" | "partner" | "event" | "notion"
 
 export interface CalendarEvent {
   id: string
@@ -408,20 +409,22 @@ async function getPublicEventsAsCalendarEvents(): Promise<CalendarEvent[]> {
 }
 
 export async function getAllEvents(): Promise<CalendarEvent[]> {
-  const [partnerEvents, publicEvents] = await Promise.all([
+  const [partnerEvents, publicEvents, notionEvents] = await Promise.all([
     getPartnerCalendarEvents(),
     getPublicEventsAsCalendarEvents(),
+    getNotionMarketingCalendarEvents(),
   ])
-  return [...getStoredEvents(), ...partnerEvents, ...publicEvents].sort(compareEvents)
+  return [...getStoredEvents(), ...partnerEvents, ...publicEvents, ...notionEvents].sort(compareEvents)
 }
 
 export async function getEventsByMonth(year: number, month: number): Promise<CalendarEvent[]> {
-  const [partnerEvents, publicEvents] = await Promise.all([
+  const [partnerEvents, publicEvents, notionEvents] = await Promise.all([
     getPartnerCalendarEvents({ year, month }),
     getPublicEventsAsCalendarEvents(),
+    getNotionMarketingCalendarEvents({ year, month }),
   ])
   const prefix = `${year}-${String(month).padStart(2, "0")}`
-  return [...getStoredEvents(), ...partnerEvents, ...publicEvents]
+  return [...getStoredEvents(), ...partnerEvents, ...publicEvents, ...notionEvents]
     .filter((event) => isEventVisibleInMonth(event, year, month) || event.date.startsWith(prefix))
     .sort(compareEvents)
 }
