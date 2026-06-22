@@ -28,6 +28,15 @@
 - 잘못된 JSON/body shape는 500이 아니라 400 계열로 처리한다.
 - 챗봇 DB/RPC 계약을 건드리면 `npm run check:alpha-db`를 함께 실행한다.
 
+## 리드 제출 / 컨택 폼 운영 규칙
+
+- 공개 리드 제출 `app/api/lead`는 저장 실패를 성공으로 숨기지 않는다.
+- `lib/server/lead-capture.ts`의 중복 제출 방지는 `pending`과 `accepted` 상태를 구분한다.
+- 같은 연락처의 재제출을 성공 중복으로 처리하는 시점은 Supabase 저장 또는 외부 전달 중 하나 이상이 성공한 뒤여야 한다.
+- 저장과 전달이 모두 실패한 요청은 중복 캐시에 남기지 말고 즉시 재시도 가능해야 한다.
+- 리드 저장/전달 흐름을 바꾸면 `npx vitest run tests/api/lead-capture.test.ts`를 함께 실행한다.
+- 마케팅/채널톡 스크립트 도메인을 추가할 때는 `next.config.ts`의 CSP를 directive별로 갱신하고 `/contact` 응답 헤더를 확인한다.
+
 ## 검증 기준
 
 ```bash

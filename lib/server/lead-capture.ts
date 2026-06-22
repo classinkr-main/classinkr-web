@@ -31,7 +31,15 @@ const HONEYPOT_FIELD = "website"
 // 인스턴스별 메모리 기반 중복 제출 방지 — rate-limit과 동일한 한계(서버리스 인스턴스별 독립)로
 // 더블 클릭/봇 재시도 차단 용도. 더 강한 보장이 필요하면 Upstash Redis 사용.
 const DUPLICATE_WINDOW_MS = 60_000
-const recentSubmissions = new Map<string, number>()
+type RecentSubmissionStatus = "pending" | "accepted"
+
+const recentSubmissions = new Map<
+  string,
+  {
+    status: RecentSubmissionStatus
+    updatedAt: number
+  }
+>()
 
 function isHoneypotTripped(raw: unknown) {
   if (!raw || typeof raw !== "object") return false
@@ -39,17 +47,33 @@ function isHoneypotTripped(raw: unknown) {
   return typeof value === "string" && value.trim().length > 0
 }
 
-function isDuplicateSubmission(body: LeadPayload) {
+function getSubmissionKey(body: LeadPayload) {
   const contact = body.email ?? body.phone
-  if (!contact) return false
-  const key = `${body.source}:${contact}`
-  const now = Date.now()
-  for (const [staleKey, submittedAt] of recentSubmissions) {
-    if (now - submittedAt > DUPLICATE_WINDOW_MS) recentSubmissions.delete(staleKey)
+  return contact ? `${body.source}:${contact}` : null
+}
+
+function pruneRecentSubmissions(now = Date.now()) {
+  for (const [staleKey, submission] of recentSubmissions) {
+    if (now - submission.updatedAt > DUPLICATE_WINDOW_MS) {
+      recentSubmissions.delete(staleKey)
+    }
   }
-  const last = recentSubmissions.get(key)
-  recentSubmissions.set(key, now)
-  return last !== undefined && now - last < DUPLICATE_WINDOW_MS
+}
+
+function getRecentSubmissionStatus(key: string) {
+  pruneRecentSubmissions()
+  return recentSubmissions.get(key)?.status ?? null
+}
+
+function markSubmission(key: string, status: RecentSubmissionStatus) {
+  recentSubmissions.set(key, {
+    status,
+    updatedAt: Date.now(),
+  })
+}
+
+function clearSubmission(key: string | null) {
+  if (key) recentSubmissions.delete(key)
 }
 
 export interface LeadSubmissionSuccess {
@@ -217,6 +241,8 @@ function buildLeadNotificationMessage(body: LeadPayload) {
 }
 
 export async function submitLeadCapture(raw: unknown): Promise<LeadSubmissionResult> {
+  let submissionKey: string | null = null
+
   try {
     // honeypot이 채워졌으면 봇으로 간주 — 저장·전달 없이 성공 응답(봇이 차단을 학습하지 못하도록)
     if (isHoneypotTripped(raw)) {
@@ -225,11 +251,29 @@ export async function submitLeadCapture(raw: unknown): Promise<LeadSubmissionRes
     }
 
     const body = buildLeadPayload(raw)
+    submissionKey = getSubmissionKey(body)
 
-    // 동일 연락처의 60초 내 재제출(더블 클릭/봇 재시도)은 저장 없이 성공 처리
-    if (isDuplicateSubmission(body)) {
-      console.warn(`[lead-capture] duplicate submission dropped (source=${body.source})`)
-      return { status: 200, body: { ok: true, stored: false, warnings: [] } }
+    // 동일 연락처의 60초 내 재제출은 성공적으로 접수된 요청만 중복 성공 처리한다.
+    // 실패한 요청은 즉시 재시도할 수 있어야 하므로 pending 상태와 accepted 상태를 분리한다.
+    if (submissionKey) {
+      const recentStatus = getRecentSubmissionStatus(submissionKey)
+
+      if (recentStatus === "accepted") {
+        console.warn(`[lead-capture] duplicate submission dropped (source=${body.source})`)
+        return { status: 200, body: { ok: true, stored: false, warnings: [] } }
+      }
+
+      if (recentStatus === "pending") {
+        return {
+          status: 409,
+          body: {
+            ok: false,
+            error: "상담 요청을 접수 중입니다. 잠시만 기다려 주세요.",
+          },
+        }
+      }
+
+      markSubmission(submissionKey, "pending")
     }
 
     const settings = await getResolvedSettings()
@@ -377,6 +421,7 @@ export async function submitLeadCapture(raw: unknown): Promise<LeadSubmissionRes
     }
 
     if (!stored && deliveryCount === 0) {
+      clearSubmission(submissionKey)
       return {
         status: 502,
         body: {
@@ -386,6 +431,8 @@ export async function submitLeadCapture(raw: unknown): Promise<LeadSubmissionRes
         },
       }
     }
+
+    if (submissionKey) markSubmission(submissionKey, "accepted")
 
     return {
       status: 200,
@@ -397,6 +444,7 @@ export async function submitLeadCapture(raw: unknown): Promise<LeadSubmissionRes
       },
     }
   } catch (error) {
+    clearSubmission(submissionKey)
     return {
       status: 400,
       body: {

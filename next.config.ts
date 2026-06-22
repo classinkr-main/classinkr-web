@@ -23,6 +23,15 @@ const siteOrigin = (() => {
 })();
 const developmentScriptPolicy =
   process.env.NODE_ENV === "production" ? "" : " 'unsafe-eval'";
+const googleAdsSources = [
+  "https://www.google.com",
+  "https://www.google.co.kr",
+  "https://googleads.g.doubleclick.net",
+  "https://ad.doubleclick.net",
+  "https://www.googleadservices.com",
+  "https://pagead2.googlesyndication.com",
+  "https://stats.g.doubleclick.net",
+].join(" ");
 
 // script-src의 'unsafe-inline'은 GTM·Meta Pixel의 인라인 부트스트랩 때문에 필요하다.
 // nonce 기반 CSP로 옮기면 모든 공개 페이지가 동적 렌더링으로 강등되어 ISR/SSG 캐싱을 잃으므로
@@ -38,12 +47,12 @@ const contentSecurityPolicy = [
   "style-src 'self' 'unsafe-inline' https://cdn.jsdelivr.net https://fonts.googleapis.com",
   "font-src 'self' data: https://cdn.jsdelivr.net https://fonts.gstatic.com",
   // unsplash(블로그 이미지), Supabase Storage, 픽셀/지도/카카오/Google Ads 이미지
-  `img-src 'self' data: blob: https://images.unsplash.com ${supabaseImageSources} https://www.facebook.com https://*.kakao.com https://*.daumcdn.net https://www.googletagmanager.com https://maps.google.com https://www.google.com https://googleads.g.doubleclick.net https://www.googleadservices.com`,
+  `img-src 'self' data: blob: https://images.unsplash.com ${supabaseImageSources} https://www.facebook.com https://*.kakao.com https://*.daumcdn.net https://www.googletagmanager.com https://maps.google.com ${googleAdsSources}`,
   // Supabase API/Realtime, GA/Google Ads 수집, 채널톡 웹소켓, 토스 결제
-  `connect-src 'self' ${supabaseHttp} ${supabaseWs} https://www.google-analytics.com https://region1.google-analytics.com https://www.google.com https://googleads.g.doubleclick.net https://www.googleadservices.com https://www.facebook.com https://*.kakao.com https://*.channel.io wss://*.channel.io https://*.tosspayments.com https://cdn.jsdelivr.net`,
+  `connect-src 'self' ${supabaseHttp} ${supabaseWs} https://www.google-analytics.com https://region1.google-analytics.com ${googleAdsSources} https://www.facebook.com https://*.kakao.com https://*.channel.io wss://*.channel.io https://*.tosspayments.com https://cdn.jsdelivr.net`,
   // GTM 미리보기, 구글 지도 embed, 토스 결제창
   "frame-src 'self' https://www.googletagmanager.com https://maps.google.com https://www.google.com https://*.tosspayments.com https://*.toss.im",
-  "media-src 'self' data: blob:",
+  "media-src 'self' data: blob: https://cdn.channel.io",
   "worker-src 'self' blob:",
   "upgrade-insecure-requests",
 ].join("; ");
