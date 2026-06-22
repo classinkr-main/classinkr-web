@@ -15,6 +15,11 @@ export type EventNames =
   | "view_demo_video"
   | "begin_checkout"
   | "purchase"
+  | "chatbot_teaser_shown"
+  | "chatbot_teaser_clicked"
+  | "chatbot_teaser_dismissed"
+  | "chatbot_opened"
+  | "chatbot_first_question"
 
 type AnalyticsParamValue = string | number | boolean | null | undefined
 type AnalyticsParams = Record<string, AnalyticsParamValue>
