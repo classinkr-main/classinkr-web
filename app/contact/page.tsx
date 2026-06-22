@@ -461,7 +461,7 @@ export default function ContactPage() {
                                     </div>
                                     <div>
                                         <h4 className="font-bold text-slate-900 mb-0.5 text-sm">이메일 문의</h4>
-                                        <a href="mailto:support@classin.com" className="text-slate-600 font-medium hover:text-[#084734] transition-colors">support@classin.com</a>
+                                        <a href="mailto:classinkr@classin.com" className="text-slate-600 font-medium hover:text-[#084734] transition-colors">classinkr@classin.com</a>
                                         <p className="text-sm text-slate-500 mt-1">답변 평균 대기 시간: 2시간 이내</p>
                                     </div>
                                 </div>
