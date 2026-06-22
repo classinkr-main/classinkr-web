@@ -5,10 +5,18 @@ import { NextRequest, NextResponse } from "next/server"
 const LANDING_SLUGS: Record<string, string> = {
   enterprise: "enterprise",
   bigs: "enterprise",
+  landing_bigs: "enterprise",
+  "landing-bigs": "enterprise",
   managed: "managed",
   medium: "managed",
+  landing_medium: "managed",
+  "landing-medium": "managed",
   kids: "kids",
+  landing_kids: "kids",
+  "landing-kids": "kids",
   online: "online",
+  landing_online: "online",
+  "landing-online": "online",
 }
 
 export const runtime = "nodejs"
