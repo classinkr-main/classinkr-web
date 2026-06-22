@@ -18,7 +18,7 @@ export const metadata: Metadata = {
     path: "/",
     keywords: ["학원 시스템 OS", "학원 수업 운영", "전자칠판", "EDB", "Classin"],
   }),
-  title: { absolute: "Classin — 학원 시스템 OS" },
+  title: { absolute: "Classin | 학원 시스템 OS" },
 }
 
 const Outcomes = dynamic(() => import("@/components/sections/Outcomes").then(m => ({ default: m.Outcomes })))
