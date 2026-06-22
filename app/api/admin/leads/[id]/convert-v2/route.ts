@@ -212,6 +212,7 @@ export async function POST(req: NextRequest, context: RouteContext) {
         closed_at: null,
         notes: conversionNotes,
         created_by: admin.userId ?? null,
+        owner_id: admin.userId ?? null,
       })
 
     if (!existingConversion.deal) {

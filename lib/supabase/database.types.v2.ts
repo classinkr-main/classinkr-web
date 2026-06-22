@@ -141,6 +141,7 @@ export interface DealRow {
   closed_at: string | null;
   notes: string | null;
   created_by: string | null;
+  owner_id: string | null;
   created_at: string;
   updated_at: string;
 }

@@ -56,6 +56,7 @@ const NAV: NavItem[] = [
   { href: "/admin/crm", label: "CRM", icon: <Users className="h-4 w-4" />, roles: [...ALL_STAFF, "BRANCH"], section: "sales" },
   { href: "/admin/calendar", label: "캘린더", icon: <CalendarDays className="h-4 w-4" />, roles: [...ALL_STAFF, "BRANCH"], section: "sales" },
   { href: "/admin/quotes", label: "견적·문서", icon: <FileText className="h-4 w-4" />, roles: STAFF_ADMIN, section: "sales" },
+  { href: "/admin/commercial/board", label: "딜 파이프라인", icon: <LayoutDashboard className="h-4 w-4" />, roles: STAFF_ADMIN, section: "sales", badge: "New" },
   { href: "/admin/campaigns", label: "캠페인", icon: <Megaphone className="h-4 w-4" />, roles: STAFF_ADMIN, section: "marketing" },
   { href: "/admin/materials", label: "자료 퍼널", icon: <Magnet className="h-4 w-4" />, roles: STAFF_EDITOR, section: "marketing", badge: "New" },
   { href: "/admin/blog", label: "콘텐츠", icon: <FileText className="h-4 w-4" />, roles: STAFF_EDITOR, section: "marketing" },
