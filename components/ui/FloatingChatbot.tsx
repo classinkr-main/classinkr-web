@@ -785,9 +785,7 @@ export function FloatingChatbot() {
             const detail = (event as CustomEvent<ChatbotOpenDetail>).detail
             openSourceRef.current = detail?.source ?? "cta"
             if (detail?.prefill) setInput(detail.prefill)
-            if (detail?.intent === "demo" || detail?.intent === "support") {
-                if (detail.intent === "support") setIsDeepConsultation(true)
-            }
+            if (detail?.intent === "support") setIsDeepConsultation(true)
             setIsOpen(true)
         }
         window.addEventListener(CHATBOT_OPEN_EVENT, handler)
@@ -806,7 +804,6 @@ export function FloatingChatbot() {
             teaserShownTrackedRef.current = true
             trackEvent("chatbot_teaser_shown", { path: pathname })
         }
-        if (!chatbotTeaser.show) teaserShownTrackedRef.current = false
     }, [chatbotTeaser.show, pathname])
 
     if (hidden) return null
@@ -1225,6 +1222,7 @@ export function FloatingChatbot() {
             <AnimatePresence>
                 {!isOpen && chatbotTeaser.show ? (
                     <ChatbotTeaser
+                        key="teaser"
                         text={chatbotTeaser.text}
                         onOpen={() => {
                             trackEvent("chatbot_teaser_clicked", { path: pathname })

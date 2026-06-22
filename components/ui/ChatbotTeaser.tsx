@@ -27,7 +27,7 @@ export function ChatbotTeaser({
             <button
                 type="button"
                 onClick={onOpen}
-                className="flex-1 text-left text-[12.5px] font-medium leading-snug text-[#3B3835] focus-visible:outline-none"
+                className="flex-1 rounded-[8px] text-left text-[12.5px] font-medium leading-snug text-[#3B3835] focus-visible:outline-none focus-visible:ring-2 focus-visible:ring-[#084734]/25"
             >
                 {text}
             </button>

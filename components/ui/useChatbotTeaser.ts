@@ -90,6 +90,14 @@ export function useChatbotTeaser({
         return () => window.clearInterval(interval)
     }, [isEligible])
 
+    // 비-eligible 페이지로 이동하면 노출을 감춘다(세션당 1회 정책상 재노출은 없음).
+    useEffect(() => {
+        if (!isEligible) {
+            // eslint-disable-next-line react-hooks/set-state-in-effect
+            setShow(false)
+        }
+    }, [isEligible])
+
     const dismiss = useCallback(() => {
         const next = { ...stateRef.current, dismissed: true }
         stateRef.current = next
