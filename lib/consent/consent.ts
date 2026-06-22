@@ -1,5 +1,5 @@
 /**
- * 쿠키 동의(옵트인) + Google Consent Mode v2 공용 유틸 (브라우저 전용).
+ * 쿠키 동의(옵트인) + Google Consent Mode v2 공용 유틸.
  * 기획: docs/active/lead-funnel-consent-auth-scoring-plan-2026-06-14.md (D3, WS1)
  *
  * React 훅은 lib/consent/useConsent.ts 참고.
@@ -31,7 +31,7 @@ export const CONSENT_POLICY_VERSION =
   process.env.NEXT_PUBLIC_CONSENT_POLICY_VERSION?.trim() || "2026-06-14"
 
 /** 13개월 (KR PIPA / EU 권고 상한) */
-const COOKIE_MAX_AGE = 60 * 60 * 24 * 391
+export const CONSENT_COOKIE_MAX_AGE = 60 * 60 * 24 * 391
 
 export const DENIED_CHOICE: ConsentChoice = { analytics: false, marketing: false }
 export const GRANTED_CHOICE: ConsentChoice = { analytics: true, marketing: true }
@@ -45,12 +45,6 @@ function readCookie(name: string): string | null {
   const escaped = name.replace(/[.*+?^${}()|[\]\\]/g, "\\$&")
   const match = document.cookie.match(new RegExp("(?:^|; )" + escaped + "=([^;]*)"))
   return match ? decodeURIComponent(match[1]) : null
-}
-
-function writeCookie(name: string, value: string, maxAge: number) {
-  if (!isBrowser()) return
-  const secure = window.location.protocol === "https:" ? "; Secure" : ""
-  document.cookie = `${name}=${encodeURIComponent(value)}; Path=/; Max-Age=${maxAge}; SameSite=Lax${secure}`
 }
 
 /** 쿠키 원문(raw 문자열)을 읽는다 — useSyncExternalStore 스냅샷용(참조 안정성). */
@@ -103,54 +97,47 @@ export function applyConsentMode(choice: ConsentChoice) {
   })
 }
 
-/** 동의를 저장하고 Consent Mode 갱신 + 이벤트 발행 + 서버 감사로그 기록. */
-export function saveConsent(choice: ConsentChoice): ConsentRecord {
-  const record: ConsentRecord = {
-    v: CONSENT_POLICY_VERSION,
-    analytics: choice.analytics,
-    marketing: choice.marketing,
-    ts: Date.now(),
+interface ConsentSaveResponse {
+  ok?: boolean
+  record?: ConsentRecord
+}
+
+/** 동의를 서버에 저장하고, 서버 Set-Cookie 반영 후 Consent Mode + 이벤트를 갱신한다. */
+export async function saveConsent(choice: ConsentChoice): Promise<ConsentRecord> {
+  const response = await fetch("/api/consent", {
+    method: "POST",
+    headers: { "Content-Type": "application/json" },
+    credentials: "same-origin",
+    body: JSON.stringify({
+      analytics: choice.analytics,
+      marketing: choice.marketing,
+      policy_version: CONSENT_POLICY_VERSION,
+      anonymous_id: readAnonymousId(),
+    }),
+  })
+
+  const data = (await response.json().catch(() => null)) as ConsentSaveResponse | null
+  if (!response.ok || data?.ok !== true || !data.record) {
+    throw new Error("Failed to save cookie consent.")
   }
-  writeCookie(CONSENT_COOKIE, JSON.stringify(record), COOKIE_MAX_AGE)
-  applyConsentMode(choice)
+
+  const record = data.record
+  applyConsentMode(record)
   if (isBrowser()) {
     window.dispatchEvent(new CustomEvent(CONSENT_CHANGE_EVENT, { detail: record }))
-    void logConsent(record)
   }
   return record
 }
 
-async function logConsent(record: ConsentRecord) {
-  try {
-    await fetch("/api/consent", {
-      method: "POST",
-      headers: { "Content-Type": "application/json" },
-      body: JSON.stringify({
-        analytics: record.analytics,
-        marketing: record.marketing,
-        policy_version: record.v,
-        anonymous_id: getAnonymousId(),
-      }),
-      keepalive: true,
-    })
-  } catch {
-    // 감사로그 실패는 UX를 막지 않는다
-  }
+export function readAnonymousId(): string | null {
+  return readCookie(ANONYMOUS_ID_COOKIE)
 }
 
 /**
  * 익명 식별자(cln_aid). 트래킹/신원 결합용.
- * 분석 동의가 있을 때만 생성 — 동의 전에는 트래킹 쿠키를 심지 않는다.
+ * 서버가 분석 동의 저장 시 발급한다. 클라이언트에서는 읽기만 한다.
  */
 export function getAnonymousId(): string | null {
-  if (!isBrowser()) return null
-  const existing = readCookie(ANONYMOUS_ID_COOKIE)
-  if (existing) return existing
   if (!currentChoice().analytics) return null
-  const id =
-    typeof crypto !== "undefined" && "randomUUID" in crypto
-      ? crypto.randomUUID()
-      : `aid_${Date.now().toString(36)}${Math.random().toString(36).slice(2, 10)}`
-  writeCookie(ANONYMOUS_ID_COOKIE, id, COOKIE_MAX_AGE)
-  return id
+  return readAnonymousId()
 }

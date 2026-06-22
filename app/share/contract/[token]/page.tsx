@@ -1,7 +1,7 @@
 import type { Metadata } from "next"
-import DOMPurify from "isomorphic-dompurify"
 
 import { ShareUnavailable } from "@/app/share/_components/ShareUnavailable"
+import { sanitizeMarketingHtml } from "@/lib/sanitize-html"
 import { getContractByToken } from "@/lib/repositories/contracts"
 
 export const dynamic = "force-dynamic"
@@ -81,7 +81,7 @@ export default async function SharedContractPage({ params }: PageProps) {
           <section className="border-t border-black/8 px-6 py-6 sm:px-10 sm:py-8">
             <div
               className="prose prose-sm max-w-none text-[#1a1a1a]/85"
-              dangerouslySetInnerHTML={{ __html: DOMPurify.sanitize(contract.content_html) }}
+              dangerouslySetInnerHTML={{ __html: sanitizeMarketingHtml(contract.content_html) }}
             />
           </section>
         ) : null}

@@ -58,6 +58,7 @@ export function ConsentBanner() {
   const [forceOpen, setForceOpen] = useState(false)
   const [dismissed, setDismissed] = useState(false)
   const [showSettings, setShowSettings] = useState(false)
+  const [saving, setSaving] = useState(false)
   const [draft, setDraft] = useState<ConsentChoice>(DENIED_CHOICE)
 
   // 푸터 "쿠키 설정"에서 재오픈 (이벤트 콜백 내 setState — effect 본문 아님)
@@ -80,17 +81,17 @@ export function ConsentBanner() {
     setDismissed(true)
     setShowSettings(false)
   }
-  const acceptAll = () => {
-    save(GRANTED_CHOICE)
-    dismiss()
-  }
-  const rejectAll = () => {
-    save(DENIED_CHOICE)
-    dismiss()
-  }
-  const saveSelected = () => {
-    save(draft)
-    dismiss()
+  const commitChoice = async (nextChoice: ConsentChoice) => {
+    if (saving) return
+    setSaving(true)
+    try {
+      await save(nextChoice)
+      dismiss()
+    } catch (error) {
+      console.warn("[consent] failed to save consent:", error)
+    } finally {
+      setSaving(false)
+    }
   }
   const openSettings = () => {
     setDraft({ analytics: choice.analytics, marketing: choice.marketing })
@@ -169,20 +170,40 @@ export function ConsentBanner() {
 
           <div className="flex flex-row gap-1.5 sm:flex-wrap sm:justify-end sm:gap-2">
             {showSettings ? (
-              <button type="button" onClick={saveSelected} className={`${primaryBtn} flex-1 sm:flex-none`}>
+              <button
+                type="button"
+                onClick={() => void commitChoice(draft)}
+                disabled={saving}
+                className={`${primaryBtn} flex-1 disabled:opacity-50 sm:flex-none`}
+              >
                 선택 저장
               </button>
             ) : (
               <>
-                <button type="button" onClick={openSettings} className={`${ghostBtn} flex-1 sm:flex-none`}>
+                <button
+                  type="button"
+                  onClick={openSettings}
+                  disabled={saving}
+                  className={`${ghostBtn} flex-1 disabled:opacity-50 sm:flex-none`}
+                >
                   <span className="sm:hidden">상세설정</span>
                   <span className="hidden sm:inline">상세 설정</span>
                 </button>
-                <button type="button" onClick={rejectAll} className={`${ghostBtn} flex-1 sm:flex-none`}>
+                <button
+                  type="button"
+                  onClick={() => void commitChoice(DENIED_CHOICE)}
+                  disabled={saving}
+                  className={`${ghostBtn} flex-1 disabled:opacity-50 sm:flex-none`}
+                >
                   <span className="sm:hidden">필수</span>
                   <span className="hidden sm:inline">필수만 사용</span>
                 </button>
-                <button type="button" onClick={acceptAll} className={`${primaryBtn} flex-1 sm:flex-none`}>
+                <button
+                  type="button"
+                  onClick={() => void commitChoice(GRANTED_CHOICE)}
+                  disabled={saving}
+                  className={`${primaryBtn} flex-1 disabled:opacity-50 sm:flex-none`}
+                >
                   <span className="sm:hidden">모두동의</span>
                   <span className="hidden sm:inline">모두 동의</span>
                 </button>

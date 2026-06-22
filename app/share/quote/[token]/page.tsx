@@ -1,5 +1,4 @@
 import type { Metadata } from "next"
-import DOMPurify from "isomorphic-dompurify"
 
 import { ShareUnavailable } from "@/app/share/_components/ShareUnavailable"
 import QuoteDocumentPreview from "@/components/portal/quotes/QuoteDocumentPreview"
@@ -12,6 +11,7 @@ import {
 } from "@/lib/portal/repositories/activity"
 import { getDeal } from "@/lib/portal/repositories/deals"
 import { getPublicQuoteByToken } from "@/lib/portal/repositories/quote-documents"
+import { sanitizeMarketingHtml } from "@/lib/sanitize-html"
 
 export const dynamic = "force-dynamic"
 
@@ -136,7 +136,7 @@ export default async function SharedQuotePage({ params }: PageProps) {
           <section className="border-t border-black/8 px-6 py-6 sm:px-10 sm:py-8">
             <div
               className="prose prose-sm max-w-none text-[#1a1a1a]/85"
-              dangerouslySetInnerHTML={{ __html: DOMPurify.sanitize(version.content_html) }}
+              dangerouslySetInnerHTML={{ __html: sanitizeMarketingHtml(version.content_html) }}
             />
           </section>
         ) : null}

@@ -19,7 +19,7 @@ export interface UseConsentResult {
   choice: ConsentChoice
   /** 사용자가 동의/거부 결정을 내렸는지 */
   decided: boolean
-  save: (choice: ConsentChoice) => void
+  save: (choice: ConsentChoice) => Promise<ConsentRecord>
 }
 
 function subscribe(onChange: () => void): () => void {
@@ -42,7 +42,7 @@ export function useConsent(): UseConsentResult {
   const record = useMemo(() => parseConsent(raw || null), [raw])
 
   const save = useCallback((choice: ConsentChoice) => {
-    saveConsent(choice)
+    return saveConsent(choice)
   }, [])
 
   return {
