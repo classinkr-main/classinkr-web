@@ -28,6 +28,16 @@ import {
     type ChannelTalkProfile,
 } from "@/lib/channel-talk"
 import { CLASSIN_POSITIONING } from "@/lib/classin-positioning"
+import { trackEvent } from "@/lib/analytics"
+import { resolvePageContext, mergeStarters } from "@/lib/chatbot/page-context"
+import {
+    CHATBOT_OPEN_EVENT,
+    openChatbot,
+    type ChatbotOpenDetail,
+    type ChatbotOpenSource,
+} from "@/lib/chatbot/open-chatbot"
+import { ChatbotTeaser } from "@/components/ui/ChatbotTeaser"
+import { useChatbotTeaser } from "@/components/ui/useChatbotTeaser"
 
 type HandoffIntent = "demo" | "support"
 
@@ -93,10 +103,6 @@ const hiddenPathPrefixes = [
     "/pricing",
     "/receipt",
 ]
-
-const starterQuestions = [
-    ...CLASSIN_POSITIONING.chatbot.starterQuestions,
-].slice(0, STARTER_SUGGESTION_LIMIT)
 
 const DEEP_CONSULTATION_ICON_SRC = "/images/chatbot/ai-deep-consultation.webp"
 
@@ -635,16 +641,23 @@ export function FloatingChatbot() {
     const pendingAssistantScrollIdRef = useRef<string | null>(null)
     const inputRef = useRef<HTMLTextAreaElement | null>(null)
     const triggerRef = useRef<HTMLButtonElement | null>(null)
-    const [messages, setMessages] = useState<ChatMessage[]>([
+    const [messages, setMessages] = useState<ChatMessage[]>(() => [
         {
             id: "welcome",
             role: "assistant",
             content: CLASSIN_POSITIONING.chatbot.welcome,
-            suggestedQuestions: starterQuestions,
+            suggestedQuestions: resolvePageContext(pathname).starters.slice(0, STARTER_SUGGESTION_LIMIT),
         },
     ])
 
     const hidden = shouldHideChatbot(pathname)
+
+    const pageContext = useMemo(() => resolvePageContext(pathname), [pathname])
+    const chatbotTeaser = useChatbotTeaser({ pathname, isOpen })
+    const openSourceRef = useRef<ChatbotOpenSource>("button")
+    const wasOpenRef = useRef(false)
+    const firstQuestionSentRef = useRef(false)
+    const teaserShownTrackedRef = useRef(false)
 
     const context = useMemo(
         () => {
@@ -691,12 +704,13 @@ export function FloatingChatbot() {
                         .slice(0, STARTER_SUGGESTION_LIMIT)
                     : []
 
-                if (questions.length === 0) return
+                const merged = mergeStarters(pageContext.starters, questions, STARTER_SUGGESTION_LIMIT)
+                if (merged.length === 0) return
 
                 setMessages((current) =>
                     current.map((message) =>
                         message.id === "welcome"
-                            ? { ...message, suggestedQuestions: questions }
+                            ? { ...message, suggestedQuestions: merged }
                             : message
                     )
                 )
@@ -708,7 +722,7 @@ export function FloatingChatbot() {
         void loadStarterQuestions()
 
         return () => controller.abort()
-    }, [hidden])
+    }, [hidden, pageContext])
 
     useEffect(() => {
         if (!isOpen) return
@@ -766,11 +780,46 @@ export function FloatingChatbot() {
         return () => document.removeEventListener("keydown", handleKeyDown)
     }, [isOpen])
 
+    useEffect(() => {
+        const handler = (event: Event) => {
+            const detail = (event as CustomEvent<ChatbotOpenDetail>).detail
+            openSourceRef.current = detail?.source ?? "cta"
+            if (detail?.prefill) setInput(detail.prefill)
+            if (detail?.intent === "demo" || detail?.intent === "support") {
+                if (detail.intent === "support") setIsDeepConsultation(true)
+            }
+            setIsOpen(true)
+        }
+        window.addEventListener(CHATBOT_OPEN_EVENT, handler)
+        return () => window.removeEventListener(CHATBOT_OPEN_EVENT, handler)
+    }, [])
+
+    useEffect(() => {
+        if (isOpen && !wasOpenRef.current) {
+            trackEvent("chatbot_opened", { source: openSourceRef.current })
+        }
+        wasOpenRef.current = isOpen
+    }, [isOpen])
+
+    useEffect(() => {
+        if (chatbotTeaser.show && !teaserShownTrackedRef.current) {
+            teaserShownTrackedRef.current = true
+            trackEvent("chatbot_teaser_shown", { path: pathname })
+        }
+        if (!chatbotTeaser.show) teaserShownTrackedRef.current = false
+    }, [chatbotTeaser.show, pathname])
+
     if (hidden) return null
 
     async function sendQuestion(question: string) {
         const trimmed = question.trim()
         if (!trimmed || isSending) return
+
+        if (!firstQuestionSentRef.current) {
+            firstQuestionSentRef.current = true
+            trackEvent("chatbot_first_question", { path: pathname })
+        }
+
         const anonymousId = getChannelTalkAnonymousId()
 
         if (shouldUseDeepConsultationIcon(trimmed)) {
@@ -1173,6 +1222,26 @@ export function FloatingChatbot() {
                 )}
             </AnimatePresence>
 
+            <AnimatePresence>
+                {!isOpen && chatbotTeaser.show ? (
+                    <ChatbotTeaser
+                        text={chatbotTeaser.text}
+                        onOpen={() => {
+                            trackEvent("chatbot_teaser_clicked", { path: pathname })
+                            chatbotTeaser.markClicked()
+                            openChatbot({
+                                source: "teaser",
+                                prefill: chatbotTeaser.leadQuestion,
+                                intent: chatbotTeaser.intent,
+                            })
+                        }}
+                        onDismiss={() => {
+                            trackEvent("chatbot_teaser_dismissed", { path: pathname })
+                            chatbotTeaser.dismiss()
+                        }}
+                    />
+                ) : null}
+            </AnimatePresence>
             <div className="relative flex h-14 w-14 items-center justify-center md:h-16 md:w-16">
                 {!isOpen && !shouldReduceMotion ? (
                     <motion.span
@@ -1188,7 +1257,10 @@ export function FloatingChatbot() {
                     type="button"
                     whileHover={shouldReduceMotion ? undefined : { scale: 1.04 }}
                     whileTap={shouldReduceMotion ? undefined : { scale: 0.96 }}
-                    onClick={() => setIsOpen((current) => !current)}
+                    onClick={() => {
+                        openSourceRef.current = "button"
+                        setIsOpen((current) => !current)
+                    }}
                     className="relative flex h-14 w-14 items-center justify-center overflow-hidden rounded-full border border-[#084734]/15 bg-[#ECFDF5]/85 text-[#084734] shadow-none backdrop-blur-xl transition-colors hover:border-[#084734]/20 hover:bg-[#DDF8ED]/90 focus:outline-none focus:ring-4 focus:ring-[#084734]/20 md:h-16 md:w-16"
                     aria-label={isOpen ? "챗봇 닫기" : "챗봇 열기"}
                     aria-expanded={isOpen}
