@@ -21,6 +21,7 @@ export function Footer() {
                             width={674}
                             height={244}
                             className="h-7 w-auto mb-4 object-contain"
+                            loading="eager"
                         />
                         <p className="mb-4">다음 세대를 위한 교육 품질 표준화.</p>
                         {/* [NOTE-25] 뉴스레터 구독 영역 */}

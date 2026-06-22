@@ -1177,9 +1177,9 @@ export function FloatingChatbot() {
                 {!isOpen && !shouldReduceMotion ? (
                     <motion.span
                         aria-hidden
-                        className="pointer-events-none absolute -inset-2 rounded-full border border-[#084734]/25"
-                        initial={{ scale: 0.85, opacity: 0.55 }}
-                        animate={{ scale: [0.85, 1.65], opacity: [0.55, 0] }}
+                        className="pointer-events-none absolute inset-0 rounded-full bg-[#A7F3D0]/25 blur-lg"
+                        initial={{ scale: 0.96, opacity: 0.38 }}
+                        animate={{ scale: [0.96, 1.22], opacity: [0.38, 0] }}
                         transition={{ duration: 3.8, repeat: Infinity, repeatDelay: 1.2, ease: "easeOut" }}
                     />
                 ) : null}
@@ -1189,13 +1189,17 @@ export function FloatingChatbot() {
                     whileHover={shouldReduceMotion ? undefined : { scale: 1.04 }}
                     whileTap={shouldReduceMotion ? undefined : { scale: 0.96 }}
                     onClick={() => setIsOpen((current) => !current)}
-                    className="relative flex h-14 w-14 items-center justify-center overflow-hidden rounded-full border border-white/60 bg-[linear-gradient(145deg,#084734,#065c41)] text-white shadow-[0_18px_34px_rgba(8,71,52,0.30),0_6px_14px_rgba(0,0,0,0.12),inset_0_1px_0_rgba(255,255,255,0.18)] transition-colors hover:bg-[#065c41] focus:outline-none focus:ring-4 focus:ring-[#084734]/20 md:h-16 md:w-16"
+                    className="relative flex h-14 w-14 items-center justify-center overflow-hidden rounded-full border border-[#084734]/15 bg-[#ECFDF5]/85 text-[#084734] shadow-none backdrop-blur-xl transition-colors hover:border-[#084734]/20 hover:bg-[#DDF8ED]/90 focus:outline-none focus:ring-4 focus:ring-[#084734]/20 md:h-16 md:w-16"
                     aria-label={isOpen ? "챗봇 닫기" : "챗봇 열기"}
                     aria-expanded={isOpen}
                     aria-controls="classin-chatbot-dialog"
                 >
+                    <span
+                        aria-hidden
+                        className="pointer-events-none absolute inset-px rounded-full bg-white/20"
+                    />
                     {isOpen ? (
-                        <X className="h-6 w-6" />
+                        <X className="relative h-6 w-6" />
                     ) : isDeepConsultation ? (
                         <>
                             <Image
@@ -1209,7 +1213,7 @@ export function FloatingChatbot() {
                             <span className="absolute inset-0 bg-[#084734]/20 mix-blend-multiply" aria-hidden />
                         </>
                     ) : (
-                        <MessageCircle className="h-6 w-6" />
+                        <MessageCircle className="relative h-6 w-6" />
                     )}
                 </motion.button>
             </div>

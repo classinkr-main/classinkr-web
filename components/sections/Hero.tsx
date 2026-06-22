@@ -21,6 +21,7 @@ export function Hero() {
                         src="/video/home-hero.mp4"
                         posterSrc="/images/hero-dashboard.webp"
                         className="h-full w-full"
+                        sizes="(min-width: 768px) 100vw, 0px"
                         priority
                         loadStrategy="idle"
                         mediaQuery={HERO_VIDEO_MEDIA_QUERY}
