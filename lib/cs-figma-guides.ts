@@ -1,5 +1,6 @@
 import { CS_FIGMA_DIGEST_GUIDES } from "@/lib/cs-figma-guides.generated"
 import { CS_FIGMA_GUIDE_ALIASES } from "@/lib/cs-figma-guide-aliases"
+import { getCsFigmaEnrichment } from "@/lib/cs-figma-enrichments"
 
 export type CsFigmaGuideCategory = "classroom" | "admin" | "troubleshooting" | "onboarding"
 export type CsFigmaGuideDocCategory = "teacher" | "admin" | "student" | "start"
@@ -792,20 +793,77 @@ function compactGuideAnswerText(value: string, hiddenTerms: string[], maxLength 
   return `${sanitized.slice(0, maxLength - 3).trim()}...`
 }
 
+// 단계/팁 텍스트에서 화면 주석("(…빨간 박스/화살표/표시…)"), 예시 식별자("예: 1026165787"),
+// 전화/계정 숫자, 피그마/캡처 표현을 제거해 소비자용으로 정리한다.
+export function sanitizeGuideStep(value: string, hiddenTerms: string[] = []) {
+  const sanitized = sanitizeGuideAnswerText(value, hiddenTerms)
+    .replace(/\([^)]*(?:빨간|박스|화살표|주석|강조)[^)]*표시[^)]*\)/g, "")
+    .replace(/\([^)]*(?:빨간\s*박스|화살표|주석|강조|표시)[^)]*\)/g, "")
+    .replace(/[,，]?\s*예\s*[:：]\s*[\d\s-]{3,}/g, "")
+    .replace(/\d{7,}/g, "")
+    .replace(/Figma\s*CS\s*캡처\s*보드/gi, "안내 화면")
+    .replace(/Figma\s*CS\s*캡처/gi, "안내 화면")
+    .replace(/CS\s*캡처/gi, "안내 화면")
+    .replace(/Figma\s*(?:보드|캡처|캡쳐)/gi, "안내 화면")
+    .replace(/원본\s*캡처/gi, "안내 화면")
+    .replace(/\bFigma\b/gi, "안내 화면")
+    .replace(/\(\s*[,，]?\s*\)/g, "")
+    .replace(/\s+([.,)])/g, "$1")
+    .replace(/\s{2,}/g, " ")
+    .trim()
+  return sanitized
+}
+
+// enrichment 단계 본문(마크다운)을 챗봇 한 줄용 평문으로 평탄화한다.
+function flattenEnrichmentBody(body: string, hiddenTerms: string[] = []) {
+  const plain = body
+    .replace(/\*\*/g, "")
+    .split("\n")
+    .map((line) => line.replace(/^[-*]\s*/, "").trim())
+    .filter(Boolean)
+    .join(" ")
+  return sanitizeGuideStep(plain, hiddenTerms)
+}
+
 export function formatCsFigmaGuideAnswer(guide: CsFigmaGuide) {
   const hiddenTerms = guide.sourceImageFiles
-  const stepLines = guide.steps.map((step, index) => `${index + 1}. ${sanitizeGuideAnswerText(step, hiddenTerms)}`)
-  const deepDiveLines = guide.deepDive.map((item) => {
-    const title = sanitizeGuideAnswerText(item.title, hiddenTerms).replace(/원본 캡처/g, "화면 확인")
-    const checks = item.checks.slice(0, 2).map((check) => compactGuideAnswerText(check, hiddenTerms, 88)).join(" / ")
-    return `- ${item.level} ${title}: ${checks}`
-  })
+  const enrichment = getCsFigmaEnrichment(guide.docSlug)
+
+  // 소비자용 보강이 있으면 문서 페이지와 동일한 정리된 단계/톤을 그대로 쓴다.
+  if (enrichment) {
+    const stepLines = enrichment.stages.map((stage, index) => {
+      const title = stage.title.replace(/^\d+\.\s*/, "").trim()
+      const body = flattenEnrichmentBody(stage.body, hiddenTerms)
+      return body ? `${index + 1}. ${title} — ${body}` : `${index + 1}. ${title}`
+    })
+    const blocks = [enrichment.intro, stepLines.join("\n")]
+    if (enrichment.tips && enrichment.tips.length > 0) {
+      const tipLines = enrichment.tips.map((tip) => `- ${flattenEnrichmentBody(tip, hiddenTerms)}`)
+      blocks.push(`알아두면 좋은 점\n${tipLines.join("\n")}`)
+    }
+    return blocks.join("\n\n")
+  }
+
+  const stepLines = guide.steps.map((step, index) => `${index + 1}. ${sanitizeGuideStep(step, hiddenTerms)}`)
+  const deepDiveLines = guide.deepDive
+    .filter((item) => !/순서\s*그대로\s*안내/.test(item.title))
+    .map((item) => {
+      const title = sanitizeGuideStep(item.title, hiddenTerms)
+      const checks = item.checks
+        .slice(0, 2)
+        .map((check) => compactGuideAnswerText(sanitizeGuideStep(check, hiddenTerms), hiddenTerms, 88))
+        .filter(Boolean)
+        .join(" / ")
+      return `- ${item.level} ${title}${checks ? `: ${checks}` : ""}`
+    })
 
   return [
-    `Figma CS 캡처 보드 기준으로는 아래 순서입니다.`,
+    "아래 순서대로 진행하시면 됩니다.",
     stepLines.join("\n"),
-    `확인 포인트\n${deepDiveLines.join("\n")}`,
-  ].join("\n\n")
+    deepDiveLines.length > 0 ? `확인 포인트\n${deepDiveLines.join("\n")}` : "",
+  ]
+    .filter(Boolean)
+    .join("\n\n")
 }
 
 const SUGGESTION_KEYWORD_BLOCKLIST = new Set([

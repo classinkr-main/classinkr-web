@@ -7,6 +7,7 @@ import {
   DocsArticle,
   DocsArticleCard,
   DocsArticleFeedback,
+  DocsPrintButton,
   DocsSidebar,
   DocsSidebarLayout,
   DocsTableOfContents,
@@ -159,6 +160,7 @@ export default async function DocsArticlePage({
       </Link>
 
       <DocsArticle
+        className="print-only-article"
         eyebrow={category.title}
         title={doc.title}
         description={doc.description}
@@ -178,6 +180,21 @@ export default async function DocsArticlePage({
         sections={toArticleSections(doc)}
         footer={
           <div className="space-y-10">
+            <section className="border-t border-black/[0.08] pt-8 print:hidden">
+              <p className="text-xs font-bold uppercase tracking-[0.16em] text-[#084734]">
+                저장 / 인쇄
+              </p>
+              <h2 className="mt-2 text-xl font-black tracking-card text-[#111110]">
+                저장해 두고 보기
+              </h2>
+              <p className="mt-3 max-w-3xl text-[15px] leading-7 text-[#615D59]">
+                필요할 때 다시 볼 수 있게 이 안내를 PDF로 저장하거나 인쇄하세요.
+              </p>
+              <div className="mt-4">
+                <DocsPrintButton />
+              </div>
+            </section>
+
             {doc.resources && doc.resources.length > 0 && (
               <section className="border-t border-black/[0.08] pt-8">
                 <p className="text-xs font-bold uppercase tracking-[0.16em] text-[#084734]">
@@ -208,14 +225,16 @@ export default async function DocsArticlePage({
               </section>
             )}
 
-            <DocsArticleFeedback
-              articlePath={activePath}
-              articleSlug={doc.slug}
-              category={doc.category}
-              title={doc.title}
-            />
+            <div className="print:hidden">
+              <DocsArticleFeedback
+                articlePath={activePath}
+                articleSlug={doc.slug}
+                category={doc.category}
+                title={doc.title}
+              />
+            </div>
 
-            <section className="border-t border-black/[0.08] pt-8">
+            <section className="border-t border-black/[0.08] pt-8 print:hidden">
               <p className="text-xs font-bold uppercase tracking-[0.16em] text-[#084734]">
                 추가 지원
               </p>
@@ -247,7 +266,7 @@ export default async function DocsArticlePage({
             </section>
 
             {doc.category !== "start" && (
-              <section className="border-t border-black/[0.08] pt-8">
+              <section className="border-t border-black/[0.08] pt-8 print:hidden">
                 <p className="text-xs font-bold uppercase tracking-[0.16em] text-[#084734]">
                   도움 필요
                 </p>
@@ -266,7 +285,7 @@ export default async function DocsArticlePage({
             {(prevDoc || nextDoc) && (
               <nav
                 aria-label="이전/다음 문서"
-                className="grid gap-3 border-t border-black/[0.08] pt-8 sm:grid-cols-2"
+                className="grid gap-3 border-t border-black/[0.08] pt-8 sm:grid-cols-2 print:hidden"
               >
                 {prevDoc ? (
                   <Link
@@ -300,7 +319,7 @@ export default async function DocsArticlePage({
             )}
 
             {relatedDocs.length > 0 && (
-              <section className="border-t border-black/[0.08] pt-8">
+              <section className="border-t border-black/[0.08] pt-8 print:hidden">
                 <p className="text-sm font-bold uppercase tracking-[0.14em] text-[#084734]">
                   함께 보기
                 </p>

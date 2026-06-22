@@ -1,6 +1,7 @@
 import { CLASSIN_POSITIONING } from "@/lib/classin-positioning"
 import { buildCsFigmaMediaForGuide } from "@/lib/cs-figma-assets"
-import { CS_FIGMA_GUIDES, type CsFigmaGuide } from "@/lib/cs-figma-guides"
+import { CS_FIGMA_GUIDES, sanitizeGuideStep, type CsFigmaGuide } from "@/lib/cs-figma-guides"
+import { getCsFigmaEnrichment } from "@/lib/cs-figma-enrichments"
 
 export const DOC_CATEGORY_IDS = [
   "quick-start",
@@ -147,77 +148,164 @@ const CLASSIN_607_MEDIA_BASE = "/docs/files/classin-607-update"
 const SOFTWARE_MEDIA_BASE = "/images/product/sw"
 const HARDWARE_MEDIA_BASE = "/images/product/hw"
 
+// 생성된 CS 가이드 텍스트에서 내부 운영 표현(피그마/원본 캡처/CS 캡처/파일 목록)을 소비자용 중립 표현으로 정리한다.
+function sanitizeCsFigmaText(value: string): string {
+  return value
+    .replace(/원본\s*캡처\s*:\s*[^.\n]*\.?/g, "")
+    .replace(/출처\s*메모\s*:\s*[^.\n]*\.?/g, "")
+    .replace(/Figma\s*['"`]?CS용\s*캡쳐\s*모음['"`]?\s*전수\s*추출\s*문서/gi, "공식 안내 화면")
+    .replace(/Figma\s*CS\s*캡처(?:\s*보드)?/gi, "안내 화면")
+    .replace(/CS\s*캡처(?:\s*보드)?/gi, "안내 화면")
+    .replace(/Figma\s*(?:보드|캡처|캡쳐)/gi, "안내 화면")
+    .replace(/원본\s*캡처/gi, "안내 화면")
+    .replace(/\bFigma\b/gi, "안내 화면")
+    .replace(/(\d+)\s*장의\s*스크린샷으로\s*안내하는\s*가이드/g, "화면을 순서대로 안내하는 가이드")
+    .replace(/[ \t]{2,}/g, " ")
+    .trim()
+}
+
+// 키워드/메타에서 내부 예시 식별자(예: "학원K(메인 계정)", "대수 개념 올데이-New Course-20",
+// "클립 1", 전화/계정 ID 숫자)를 걸러 개인정보·내부 표현이 새지 않게 한다.
+const CS_FIGMA_PII_KEYWORD_RE = /메인\s*계정|학원[A-Z]\b|New\s*Course|클립\s*\d|\d{8,}/i
+
+function scrubCsFigmaKeywords(keywords: string[]): string[] {
+  return Array.from(
+    new Set(
+      keywords
+        .map((keyword) => sanitizeCsFigmaText(keyword))
+        .filter((keyword) => keyword.length > 0 && !CS_FIGMA_PII_KEYWORD_RE.test(keyword))
+    )
+  )
+}
+
+const CS_FIGMA_RELATED_SLUGS = ["app-capabilities-map", "classroom-basic-setup", "course-activities"]
+
+function getCsFigmaProductArea(guide: CsFigmaGuide): DocArticleProductArea {
+  return guide.category === "admin"
+    ? "admin"
+    : guide.category === "onboarding"
+      ? "onboarding"
+      : "classroom"
+}
+
 export function buildCsFigmaDocArticle(
   guide: CsFigmaGuide,
   assetPaths?: readonly string[]
 ): DocArticle {
+  const enrichment = getCsFigmaEnrichment(guide.docSlug)
+  const baseTags = ["사용 가이드", "사용법", guide.category]
+  const baseKeywords = scrubCsFigmaKeywords([
+    guide.title,
+    ...guide.keywords,
+    ...guide.sourceImageFiles,
+    "사용법",
+    "순서 안내",
+  ])
+  const baseMeta = {
+    slug: guide.docSlug,
+    category: guide.docCategory,
+    audience: guide.audience,
+    updatedAt: "2026-06-21",
+    featured: false,
+    tags: baseTags,
+    keywords: baseKeywords,
+    relatedSlugs: CS_FIGMA_RELATED_SLUGS,
+    status: "published" as const,
+    visibility: "unlisted" as const,
+    noindex: true,
+    docType: "manual" as const,
+    productArea: getCsFigmaProductArea(guide),
+    difficulty: "beginner" as const,
+  }
+
+  // 소비자용 보강이 있는 문서: 합성 캡처 대신 단계별 화면을 각 단계 옆에 배치한다.
+  if (enrichment) {
+    const stageSections: DocSection[] = enrichment.stages.map((stage) => ({
+      heading: stage.title,
+      body: stage.body,
+      ...(stage.image
+        ? {
+            media: [
+              {
+                type: "image" as const,
+                src: stage.image,
+                alt: stage.imageAlt ?? stage.title,
+                caption: "",
+                ...(stage.width ? { width: stage.width } : {}),
+                ...(stage.height ? { height: stage.height } : {}),
+              },
+            ],
+          }
+        : {}),
+    }))
+
+    const sections: DocSection[] = []
+    if (enrichment.heroImage) {
+      sections.push({
+        heading: "한눈에 보기",
+        body: "전체 단계를 한 화면에 담은 안내입니다. 아래에서 단계별로 자세히 설명합니다.",
+        media: [
+          {
+            type: "image" as const,
+            src: enrichment.heroImage.src,
+            alt: enrichment.heroImage.alt ?? enrichment.title ?? guide.title,
+            caption: "",
+          },
+        ],
+      })
+    }
+    sections.push(...stageSections)
+    if (enrichment.tips && enrichment.tips.length > 0) {
+      sections.push({ heading: "알아두면 좋은 점", body: "", steps: enrichment.tips })
+    }
+
+    return {
+      ...baseMeta,
+      title: enrichment.title ?? guide.title,
+      description: enrichment.intro,
+      readMinutes: Math.max(3, Math.ceil(enrichment.stages.length * 0.7)),
+      chatbotSummary: enrichment.intro,
+      sections,
+      ...(enrichment.downloadImage
+        ? {
+            resources: [
+              {
+                label: enrichment.downloadImage.label,
+                href: enrichment.downloadImage.src,
+                description: enrichment.downloadImage.description,
+              },
+            ],
+          }
+        : {}),
+    }
+  }
+
+  // 보강이 없는 문서: 피그마/캡처 표현을 제거한 기본 구성으로 자동 정리한다.
   const media = buildCsFigmaMediaForGuide(guide, assetPaths)
-  const linkedSourceFiles = new Set(
-    media.map((item) => item.caption.replace(/^Figma 원본 캡처:\s*/, ""))
-  )
-  const missingSourceFiles = guide.sourceImageFiles.filter((file) => !linkedSourceFiles.has(file))
-  const captureSteps = [
-    "이 문서는 Figma `CS용 캡쳐 모음` 전수 추출 문서에서 사용 순서와 화면 주석을 정리한 가이드입니다.",
-    media.length === guide.sourceImageFiles.length && guide.sourceImageFiles.length > 0
-      ? `필요한 Figma 원본 캡처 ${media.length}개가 이 가이드에 모두 연결되어 있습니다.`
-      : media.length > 0
-        ? `연결된 Figma 원본 캡처 ${media.length}개를 먼저 확인하고, 누락된 이미지는 asset requirements 문서 기준으로 추가합니다.`
-        : "실제 이미지 파일은 아직 레포에 저장되어 있지 않으므로 현재는 원본 캡처 파일명을 함께 표시합니다.",
-    missingSourceFiles.length > 0
-      ? `아직 연결되지 않은 원본 캡처: ${missingSourceFiles.join(", ")}`
-      : "챗봇과 문서 가이드는 연결된 원본 캡처와 동일한 순서를 기준으로 안내합니다.",
+  const sections: DocSection[] = [
+    {
+      heading: "순서대로 따라 하기",
+      body: "아래 순서대로 따라 하시면 됩니다.",
+      steps: guide.steps.map((step) => sanitizeGuideStep(step)).filter(Boolean),
+      ...(media.length > 0 ? { media } : {}),
+    },
+    ...guide.deepDive
+      // 위 "순서대로 따라 하기"와 중복되는 단계 안내 레벨은 제외한다.
+      .filter((item) => !/순서\s*그대로\s*안내/.test(item.title))
+      .map((item) => ({
+        heading: sanitizeCsFigmaText(item.title),
+        body: sanitizeCsFigmaText(item.body),
+        steps: item.checks.map(sanitizeCsFigmaText).filter(Boolean),
+      })),
   ]
 
   return {
-    slug: guide.docSlug,
-    category: guide.docCategory,
+    ...baseMeta,
     title: guide.title,
-    description: guide.summary,
-    audience: guide.audience,
-    updatedAt: "2026-06-21",
+    description: sanitizeCsFigmaText(guide.summary),
     readMinutes: Math.max(3, Math.ceil((guide.steps.length + guide.deepDive.length * 3) / 4)),
-    featured: false,
-    tags: ["CS 캡처", "Figma", "사용법", guide.category],
-    keywords: [
-      guide.title,
-      ...guide.keywords,
-      ...guide.sourceImageFiles,
-      "CS 캡처",
-      "Figma 보드",
-      "순서 안내",
-      "3단계 심화",
-    ],
-    chatbotSummary: guide.summary,
-    sections: [
-      {
-        heading: "Figma CS 캡처 기준",
-        body: `${guide.summary}\n\n원본 캡처 파일: ${guide.sourceImageFiles.join(", ")}\n\n출처 메모: ${guide.sourceDigestLineHint}`,
-        steps: captureSteps,
-        ...(media.length > 0 ? { media } : {}),
-      },
-      {
-        heading: "순서별 안내",
-        body: "사용자에게 안내할 때는 아래 순서를 그대로 따라가면 됩니다. 챗봇도 같은 순서를 우선 사용합니다.",
-        steps: guide.steps,
-      },
-      ...guide.deepDive.map((item) => ({
-        heading: `${item.level} — ${item.title}`,
-        body: item.body,
-        steps: item.checks,
-      })),
-    ],
-    relatedSlugs: ["app-capabilities-map", "classroom-basic-setup", "course-activities"],
-    status: "published",
-    visibility: "unlisted",
-    noindex: true,
-    docType: "manual",
-    productArea:
-      guide.category === "admin"
-        ? "admin"
-        : guide.category === "onboarding"
-          ? "onboarding"
-          : "classroom",
-    difficulty: guide.deepDive.length >= 3 ? "intermediate" : "beginner",
+    chatbotSummary: sanitizeCsFigmaText(guide.summary),
+    sections,
   }
 }
 

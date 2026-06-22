@@ -163,8 +163,8 @@ export function buildCsFigmaMediaForGuide(
     media.push({
       type: "image",
       src,
-      alt: `${guide.title} 원본 캡처 - ${sourceImageFile}`,
-      caption: `Figma 원본 캡처: ${sourceImageFile}`,
+      alt: `${guide.title} 안내 화면`,
+      caption: "",
     })
   }
 

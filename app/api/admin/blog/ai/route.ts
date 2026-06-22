@@ -90,24 +90,22 @@ Keep lines spoken naturally and concise.
 
 function buildOptimizePrompt(title: string, content: string, category: string) {
   return `
-You are a Korean SEO editor.
-Review the following blog post and suggest specific improvements.
+You are a Korean blog editor and SEO copy editor.
+Rewrite the following blog post body into a polished, publish-ready Korean markdown article.
 
 Title: ${title}
 Category: ${category}
 Content:
 ${content}
 
-Output format:
-- 3 improved title options
-- primary keyword
-- 3-5 secondary keywords
-- structure improvements
-- improved opening paragraph
-- internal linking opportunities
-- meta description
-
-Write all recommendations in Korean.
+Hard requirements:
+- Return only the revised markdown body. Do not include explanations, checklists, title options, meta descriptions, or wrapping code fences.
+- Preserve every markdown image, HTML media block, iframe, video, figure, and any [[CLASSIN_MEDIA_N]] placeholder exactly as provided.
+- Keep existing media in the same order and near its original surrounding section.
+- Do not invent, remove, rewrite, or replace image URLs, filenames, alt text, embeds, or media placeholders.
+- Improve Korean grammar, flow, headings, paragraph rhythm, clarity, and SEO readability.
+- Keep the article's original intent, facts, product names, and CTA direction.
+- Write everything in Korean.
 `.trim()
 }
 

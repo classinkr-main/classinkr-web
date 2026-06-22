@@ -15,6 +15,11 @@ import { useToast } from "@/components/ui/toast"
 import type { PublicEvent } from "@/lib/types/public-events"
 
 const EVENT_TOPICS = new Set(["행사 신청", "세미나 신청"])
+const PHONE_ALLOWED_INPUT_PATTERN = /^[\d\s-]*$/
+const PHONE_REJECT_ANIMATION_MS = 220
+const PHONE_REQUIRED_MESSAGE = "연락처를 입력해주세요."
+const PHONE_INVALID_CHARACTER_MESSAGE = "숫자와 하이픈만 입력할 수 있어요."
+const PHONE_TOO_LONG_MESSAGE = "전화번호는 최대 11자리까지 입력할 수 있어요."
 
 // ?topic= 쿼리로 사전 선택 가능한 문의 유형 (가이드 문서 CTA 등에서 사용)
 const VALID_CONTACT_TOPICS = new Set([
@@ -27,6 +32,37 @@ const VALID_CONTACT_TOPICS = new Set([
     "세미나 신청",
 ])
 
+function getPhoneDigits(value: string) {
+    return value.replace(/\D/g, "")
+}
+
+function formatPhoneNumber(value: string) {
+    const digits = getPhoneDigits(value).slice(0, 11)
+    if (digits.startsWith("02")) {
+        if (digits.length <= 2) return digits
+        if (digits.length <= 6) return `${digits.slice(0, 2)}-${digits.slice(2)}`
+        return `${digits.slice(0, 2)}-${digits.slice(2, -4)}-${digits.slice(-4)}`
+    }
+
+    if (digits.length <= 3) return digits
+    if (digits.length <= 7) return `${digits.slice(0, 3)}-${digits.slice(3)}`
+    return `${digits.slice(0, 3)}-${digits.slice(3, -4)}-${digits.slice(-4)}`
+}
+
+function getPhoneValidationMessage(value: string) {
+    const digits = getPhoneDigits(value)
+    if (!digits) return PHONE_REQUIRED_MESSAGE
+    if (digits.startsWith("02")) {
+        return digits.length === 9 || digits.length === 10
+            ? ""
+            : "전화번호는 02-000-0000 또는 02-0000-0000 형식으로 입력해주세요."
+    }
+
+    return /^0\d{9,10}$/.test(digits)
+        ? ""
+        : "연락처는 0으로 시작하는 10~11자리 숫자로 입력해주세요."
+}
+
 export default function ContactPage() {
     const kakaoChannelUrl = process.env.NEXT_PUBLIC_CONTACT_KAKAO_URL?.trim()
     const fastTrackHref = kakaoChannelUrl || "#contact-form"
@@ -35,14 +71,20 @@ export default function ContactPage() {
     const [error, setError] = useState("")
     const [notice, setNotice] = useState("")
     const [shake, setShake] = useState(false)
+    const [phone, setPhone] = useState("")
+    const [phoneError, setPhoneError] = useState("")
+    const [phoneRejected, setPhoneRejected] = useState(false)
     const [topic, setTopic] = useState("")
     const [eventSlug, setEventSlug] = useState("")
     const [message, setMessage] = useState("")
     const [events, setEvents] = useState<PublicEvent[]>([])
     const [eventsLoaded, setEventsLoaded] = useState(false)
     const formRef = useRef<HTMLFormElement>(null)
+    const formShakeTimerRef = useRef<number | null>(null)
+    const phoneRejectTimerRef = useRef<number | null>(null)
     const toast = useToast()
     const errorMessageId = error ? "contact-form-error" : undefined
+    const phoneErrorMessageId = phoneError ? "contact-phone-error" : undefined
 
     const showEventPicker = EVENT_TOPICS.has(topic)
     const eventPickerCategory = topic === "세미나 신청" ? "웨비나" : null
@@ -86,6 +128,17 @@ export default function ContactPage() {
         }
     }, [showEventPicker, eventsLoaded])
 
+    useEffect(() => {
+        return () => {
+            if (formShakeTimerRef.current !== null) {
+                window.clearTimeout(formShakeTimerRef.current)
+            }
+            if (phoneRejectTimerRef.current !== null) {
+                window.clearTimeout(phoneRejectTimerRef.current)
+            }
+        }
+    }, [])
+
     const availableEvents = useMemo(() => {
         const filtered = events.filter((e) => e.status !== "마감" && e.slug)
         if (!eventPickerCategory) return filtered
@@ -96,6 +149,13 @@ export default function ContactPage() {
         setSubmitted(false)
         setError("")
         setNotice("")
+        setPhone("")
+        setPhoneError("")
+        setPhoneRejected(false)
+        if (phoneRejectTimerRef.current !== null) {
+            window.clearTimeout(phoneRejectTimerRef.current)
+            phoneRejectTimerRef.current = null
+        }
         setTopic("")
         setEventSlug("")
         setMessage("")
@@ -103,8 +163,44 @@ export default function ContactPage() {
     }
 
     const triggerShake = () => {
+        if (formShakeTimerRef.current !== null) {
+            window.clearTimeout(formShakeTimerRef.current)
+        }
         setShake(true)
-        setTimeout(() => setShake(false), 200)
+        formShakeTimerRef.current = window.setTimeout(() => {
+            setShake(false)
+            formShakeTimerRef.current = null
+        }, 200)
+    }
+
+    const rejectPhoneInput = (message: string) => {
+        if (phoneRejectTimerRef.current !== null) {
+            window.clearTimeout(phoneRejectTimerRef.current)
+        }
+        setPhoneError(message)
+        setPhoneRejected(true)
+        phoneRejectTimerRef.current = window.setTimeout(() => {
+            setPhoneRejected(false)
+            phoneRejectTimerRef.current = null
+        }, PHONE_REJECT_ANIMATION_MS)
+    }
+
+    const handlePhoneChange = (e: React.ChangeEvent<HTMLInputElement>) => {
+        const nextValue = e.target.value
+        const nextDigits = getPhoneDigits(nextValue)
+
+        if (!PHONE_ALLOWED_INPUT_PATTERN.test(nextValue)) {
+            rejectPhoneInput(PHONE_INVALID_CHARACTER_MESSAGE)
+            return
+        }
+
+        if (nextDigits.length > 11) {
+            rejectPhoneInput(PHONE_TOO_LONG_MESSAGE)
+            return
+        }
+
+        setPhone(formatPhoneNumber(nextValue))
+        setPhoneError("")
     }
 
     const handleSubmit = async (e: React.FormEvent<HTMLFormElement>) => {
@@ -112,6 +208,7 @@ export default function ContactPage() {
         setLoading(true)
         setError("")
         setNotice("")
+        setPhoneError("")
 
         const form = e.currentTarget
         const formData = new FormData(form)
@@ -130,6 +227,13 @@ export default function ContactPage() {
                 return
             }
 
+            const phoneValidationMessage = getPhoneValidationMessage(phone)
+            if (phoneValidationMessage) {
+                rejectPhoneInput(phoneValidationMessage)
+                setLoading(false)
+                return
+            }
+
             const message = [
                 topicValue ? `문의 유형: ${topicValue}` : undefined,
                 selectedEvent ? `신청 행사: ${selectedEvent.title}` : undefined,
@@ -143,7 +247,7 @@ export default function ContactPage() {
                 sourceDetail: topicValue,
                 org: formData.get("org-name") as string,
                 name: formData.get("name") as string,
-                phone: formData.get("phone") as string,
+                phone,
                 email: (formData.get("email") as string) || undefined,
                 message,
                 marketingConsent: formData.get("marketing-consent") === "on",
@@ -324,7 +428,29 @@ export default function ContactPage() {
                                 <div className="w-full grid grid-cols-1 md:grid-cols-2 gap-4">
                                     <div className="space-y-3 w-full">
                                         <Label htmlFor="phone" className="text-slate-700 font-bold ml-1">연락처 <span className="text-[#084734]">*</span></Label>
-                                        <Input id="phone" name="phone" placeholder="010-0000-0000" type="tel" required aria-invalid={!!error} aria-describedby={errorMessageId} className={`w-full bg-white border-slate-200 focus-visible:ring-[#084734] h-11 rounded-xl shadow-sm text-base${shake ? " animate-shake" : ""}`} />
+                                        <Input
+                                            id="phone"
+                                            name="phone"
+                                            placeholder="010-0000-0000"
+                                            type="tel"
+                                            inputMode="numeric"
+                                            autoComplete="tel-national"
+                                            required
+                                            value={phone}
+                                            onChange={handlePhoneChange}
+                                            onInvalid={(event) => {
+                                                event.preventDefault()
+                                                rejectPhoneInput(PHONE_REQUIRED_MESSAGE)
+                                            }}
+                                            aria-invalid={!!phoneError || !!error}
+                                            aria-describedby={phoneErrorMessageId ?? errorMessageId}
+                                            className={`w-full bg-white h-11 rounded-xl shadow-sm text-base transition-colors ${phoneError ? "border-red-300 text-red-900 focus-visible:ring-red-500" : "border-slate-200 focus-visible:ring-[#084734]"}${shake || phoneRejected ? " animate-shake" : ""}`}
+                                        />
+                                        {phoneError && (
+                                            <p id="contact-phone-error" role="alert" aria-live="polite" className="px-1 text-sm font-medium text-red-600">
+                                                {phoneError}
+                                            </p>
+                                        )}
                                     </div>
                                     <div className="space-y-3 w-full">
                                         <Label htmlFor="email" className="text-slate-700 font-bold ml-1">이메일 (선택)</Label>

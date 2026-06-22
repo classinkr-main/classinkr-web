@@ -236,11 +236,15 @@ const DEFAULT_TEMPLATES: BlogTemplate[] = [
     },
   },
 ]
-type AiState = { action: AiAction; status: "loading" | "streaming" | "done" | "error"; result: string; topic?: string; tone?: string; length?: string; reference?: string }
+type AiState = { action: AiAction; status: "loading" | "streaming" | "done" | "error"; result: string; topic?: string; tone?: string; length?: string; reference?: string; autoApplied?: boolean }
 type EditorSnapshot = {
   form: BlogPostInput
   tagsInput: string
   slugEdited: boolean
+}
+type AiMediaReplacement = {
+  token: string
+  value: string
 }
 
 const HISTORY_LIMIT = 50
@@ -257,6 +261,53 @@ const BLOG_COVER_PREVIEWS = [
   { label: "목록 썸네일", ratio: "16:11", className: "aspect-[16/11]" },
 ] as const
 type LeadMagnetOption = (typeof leadMagnetOptions)[number]
+
+function escapeRegExp(value: string) {
+  return value.replace(/[.*+?^${}()|[\]\\]/g, "\\$&")
+}
+
+function protectAiMedia(content: string) {
+  const replacements: AiMediaReplacement[] = []
+  let protectedContent = content
+  const protect = (pattern: RegExp) => {
+    protectedContent = protectedContent.replace(pattern, (value) => {
+      const token = `[[CLASSIN_MEDIA_${replacements.length + 1}]]`
+      replacements.push({ token, value })
+      return token
+    })
+  }
+
+  protect(/<figure\b[\s\S]*?<\/figure>/gi)
+  protect(/<picture\b[\s\S]*?<\/picture>/gi)
+  protect(/<video\b[\s\S]*?<\/video>/gi)
+  protect(/<iframe\b[\s\S]*?<\/iframe>/gi)
+  protect(/<img\b[^>]*>/gi)
+  protect(/!\[[^\]\n]*\]\([^\n)]*\)/g)
+
+  return { content: protectedContent, replacements }
+}
+
+function normalizeAiMarkdownResult(result: string) {
+  const trimmed = result.trim()
+  const fenced = trimmed.match(/^```(?:markdown|md)?\s*\n([\s\S]*?)\n```$/i)
+  return (fenced?.[1] ?? trimmed).trim()
+}
+
+function restoreAiMedia(content: string, replacements: AiMediaReplacement[]) {
+  let restored = content
+  replacements.forEach(({ token, value }) => {
+    const escaped = escapeRegExp(token)
+    restored = restored.replace(new RegExp(`\`${escaped}\``, "g"), value)
+    restored = restored.replace(new RegExp(escaped, "g"), value)
+  })
+
+  const missingMedia = replacements
+    .map(({ value }) => value)
+    .filter((value) => !restored.includes(value))
+
+  if (missingMedia.length === 0) return restored
+  return `${restored.trimEnd()}\n\n${missingMedia.join("\n\n")}`.trim()
+}
 
 function cloneSnapshot(snapshot: EditorSnapshot): EditorSnapshot {
   return {
@@ -878,13 +929,17 @@ export default function BlogPostEditor({
 
   const handleAiAction = async (action: AiAction, params?: { topic: string; tone: string; length: string; reference?: string }, contentOverride?: string) => {
     setAiState({ action, status: "loading", result: "", ...(params ?? {}) })
+    const sourceContent = contentOverride ?? form.contentMarkdown
+    const mediaGuard = action === "optimize" ? protectAiMedia(sourceContent) : null
+    const requestContent = mediaGuard?.content ?? sourceContent
+    const shouldAutoApplyOptimize = action === "optimize" && contentOverride === undefined
     try {
       const res = await adminFetch("/api/admin/blog/ai", {
         method: "POST",
         body: JSON.stringify(
           action === "draft" && params
             ? { action, category: form.category, topic: params.topic, tone: params.tone, length: params.length, reference: params.reference ?? "" }
-            : { action, title: form.title, content: contentOverride ?? form.contentMarkdown, category: form.category }
+            : { action, title: form.title, content: requestContent, category: form.category }
         ),
       })
       if (res.status === 401) {
@@ -907,16 +962,30 @@ export default function BlogPostEditor({
         })
         return
       }
-      setAiState({ action, status: "streaming", result: "" })
+      setAiState({ action, status: "streaming", result: "", ...(params ?? {}) })
       const reader = res.body.getReader()
       const decoder = new TextDecoder()
+      let streamedResult = ""
       while (true) {
         const { done, value } = await reader.read()
         if (done) break
         const chunk = decoder.decode(value, { stream: true })
+        streamedResult += chunk
         setAiState((prev) => prev ? { ...prev, result: prev.result + chunk } : null)
       }
-      setAiState((prev) => prev ? { ...prev, status: "done" } : null)
+      const finalResult =
+        action === "optimize" && mediaGuard
+          ? restoreAiMedia(normalizeAiMarkdownResult(streamedResult), mediaGuard.replacements)
+          : streamedResult
+      if (shouldAutoApplyOptimize && finalResult.trim()) {
+        updateForm("contentMarkdown", finalResult)
+        setNotice(
+          mediaGuard?.replacements.length
+            ? "AI 다듬기를 본문에 바로 적용했습니다. 기존 이미지와 미디어 블록은 유지했습니다."
+            : "AI 다듬기를 본문에 바로 적용했습니다."
+        )
+      }
+      setAiState((prev) => prev ? { ...prev, status: "done", result: finalResult, autoApplied: shouldAutoApplyOptimize } : null)
     } catch {
       setAiState({
         action,
@@ -930,7 +999,7 @@ export default function BlogPostEditor({
   const AI_LABELS: Record<AiAction, string> = {
     "card-news": "카드뉴스 생성",
     "reels": "릴스 스크립트",
-    "optimize": "블로그 최적화",
+    "optimize": "본문 다듬기",
     "draft": "초안 생성",
   }
 
@@ -1255,7 +1324,7 @@ export default function BlogPostEditor({
               {(aiState.status === "loading") && (
                 <div className="flex flex-col items-center justify-center gap-3 py-16 text-[#1a1a1a]/40">
                   <Loader2 className="h-8 w-8 animate-spin" />
-                  <p className="text-sm">Claude가 분석 중입니다…</p>
+                  <p className="text-sm">AI가 분석 중입니다…</p>
                 </div>
               )}
               {(aiState.status === "streaming" || aiState.status === "done") && (
@@ -1305,6 +1374,12 @@ export default function BlogPostEditor({
                       <Check className="mr-1.5 h-3.5 w-3.5" />
                       에디터에 적용
                     </Button>
+                  ) : aiState.action === "optimize" ? (
+                    <p className="text-[12px] text-[#1a1a1a]/40">
+                      {aiState.autoApplied
+                        ? "본문에 바로 적용했습니다. 기존 이미지는 유지됩니다."
+                        : "선택 구간 결과를 복사해서 필요한 위치에 반영해보세요."}
+                    </p>
                   ) : (
                     <p className="text-[12px] text-[#1a1a1a]/40">결과를 복사해서 활용해보세요.</p>
                   )}
@@ -2829,7 +2904,7 @@ export default function BlogPostEditor({
                 <div className="rounded-[20px] border border-[#e8e8e4] bg-white p-5 shadow-sm">
                   <p className="text-sm font-semibold text-[#111110]">AI 콘텐츠 변환</p>
                   <p className="mt-1 text-[12px] text-[#1a1a1a]/45">
-                    블로그 내용을 다양한 포맷으로 자동 변환합니다.
+                    블로그 내용을 다듬거나 다양한 포맷으로 자동 변환합니다.
                   </p>
                   <div className="mt-4 space-y-2.5">
 
@@ -2851,8 +2926,8 @@ export default function BlogPostEditor({
                         },
                         {
                           action: "optimize" as AiAction,
-                          label: "블로그 최적화",
-                          desc: "제목 개선 · SEO 키워드 · 구조 재편 제안",
+                          label: "본문 다듬기",
+                          desc: "기존 이미지 유지 · 문장과 구조를 다듬어 바로 적용",
                           icon: <Wand2 className="h-[18px] w-[18px] text-emerald-600" />,
                           bg: "bg-emerald-50",
                         },

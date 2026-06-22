@@ -787,6 +787,21 @@
 
   /* 불필요 UI 숨김 — Tailwind print:hidden이 처리 */
 
+  /* 문서 가이드: 사이드바·목차·사이트 헤더/푸터를 숨기고 본문만 인쇄 */
+  .print-only-article,
+  .print-only-article * {
+    visibility: visible;
+  }
+  body:has(.print-only-article) > * {
+    visibility: hidden;
+  }
+  body:has(.print-only-article) .print-only-article {
+    position: absolute;
+    left: 0;
+    top: 0;
+    width: 100%;
+  }
+
   /* 여백 */
   @page { margin: 12mm 10mm; }
 }

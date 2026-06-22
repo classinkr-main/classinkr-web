@@ -30,7 +30,12 @@ import {
   formatCsFigmaGuideAnswer,
   getCsFigmaGuideDocPath,
   isCsFigmaSymptomQuestion,
+  sanitizeGuideStep,
 } from "@/lib/cs-figma-guides"
+import { getCsFigmaEnrichment } from "@/lib/cs-figma-enrichments"
+
+// CS 사용 가이드 직답의 출처 식별용 내부 헤딩(피그마/CS 표현 미노출)
+const CS_FIGMA_GUIDE_SOURCE_HEADING = "사용 순서 안내"
 
 const MAX_MESSAGE_LENGTH = 1000
 const MAX_FEEDBACK_COMMENT_LENGTH = 500
@@ -263,7 +268,7 @@ interface CachedAnswerEntry {
   warning?: string
 }
 
-const ANSWER_CACHE_VERSION = "answer-20260621-v4"
+const ANSWER_CACHE_VERSION = "answer-20260622-v5"
 const ANSWER_CACHE_TTL_MS = 5 * 60 * 1000
 const ANSWER_CACHE_MAX = 200
 const answerCache = new Map<string, { expiresAt: number; value: CachedAnswerEntry }>()
@@ -2984,7 +2989,7 @@ function shouldExposeSources(input: ChatbotQueryRequest) {
 function isCsFigmaGuideResponse(
   response: Omit<ChatbotQueryResponse, "answerEventId" | "sessionId" | "warning" | "handoffIntent">
 ) {
-  return response.sources.some((source) => source.heading === "Figma CS 캡처 기준 3단계 안내")
+  return response.sources.some((source) => source.heading === CS_FIGMA_GUIDE_SOURCE_HEADING)
 }
 
 export function normalizeSessionHistoryForGemini(
@@ -3111,10 +3116,12 @@ async function buildChatbotCore(
         sources: [
           {
             title: csFigmaGuide.title,
-            heading: "Figma CS 캡처 기준 3단계 안내",
+            heading: CS_FIGMA_GUIDE_SOURCE_HEADING,
             urlPath: getCsFigmaGuideDocPath(csFigmaGuide),
             category: csFigmaGuide.category,
-            excerpt: csFigmaGuide.summary,
+            excerpt:
+              getCsFigmaEnrichment(csFigmaGuide.docSlug)?.intro ??
+              sanitizeGuideStep(csFigmaGuide.summary),
             score: 420,
           },
         ],
