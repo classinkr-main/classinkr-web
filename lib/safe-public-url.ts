@@ -3,7 +3,7 @@ const SAFE_PUBLIC_IMAGE_PROTOCOLS = new Set(["https:"])
 const DISALLOWED_PUBLIC_URL_CHARS = /[\u0000-\u001F\u007F\s\\]/
 
 function getConfiguredSiteImageHosts() {
-  const hosts = new Set(["classin.ai.kr"])
+  const hosts = new Set(["classin.co.kr", "classin.ai.kr"])
   const siteUrl = process.env.NEXT_PUBLIC_SITE_URL
   if (!siteUrl) return hosts
 

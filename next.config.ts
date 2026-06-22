@@ -16,9 +16,9 @@ const supabaseImageSources = supabaseHost
 const supabaseWs = supabaseHost ? `wss://${supabaseHost}` : "wss://*.supabase.co";
 const siteOrigin = (() => {
   try {
-    return new URL(process.env.NEXT_PUBLIC_SITE_URL ?? "https://classin.ai.kr");
+    return new URL(process.env.NEXT_PUBLIC_SITE_URL ?? "https://classin.co.kr");
   } catch {
-    return new URL("https://classin.ai.kr");
+    return new URL("https://classin.co.kr");
   }
 })();
 const developmentScriptPolicy =
@@ -33,14 +33,14 @@ const contentSecurityPolicy = [
   "object-src 'none'",
   "frame-ancestors 'none'",
   "form-action 'self'",
-  // GTM/GA, Meta Pixel, 카카오(daumcdn), 채널톡, 토스페이먼츠 스크립트
-  `script-src 'self' 'unsafe-inline'${developmentScriptPolicy} blob: https://www.googletagmanager.com https://www.google-analytics.com https://connect.facebook.net https://t1.daumcdn.net https://*.daumcdn.net https://cdn.channel.io https://js.tosspayments.com`,
+  // GTM/GA, Google Ads 전환, Meta Pixel, 카카오(daumcdn), 채널톡, 토스페이먼츠 스크립트
+  `script-src 'self' 'unsafe-inline'${developmentScriptPolicy} blob: https://www.googletagmanager.com https://www.google-analytics.com https://googleads.g.doubleclick.net https://www.googleadservices.com https://connect.facebook.net https://t1.daumcdn.net https://*.daumcdn.net https://cdn.channel.io https://js.tosspayments.com`,
   "style-src 'self' 'unsafe-inline' https://cdn.jsdelivr.net https://fonts.googleapis.com",
   "font-src 'self' data: https://cdn.jsdelivr.net https://fonts.gstatic.com",
-  // unsplash(블로그 이미지), Supabase Storage, 픽셀/지도/카카오 이미지
-  `img-src 'self' data: blob: https://images.unsplash.com ${supabaseImageSources} https://www.facebook.com https://*.kakao.com https://*.daumcdn.net https://www.googletagmanager.com https://maps.google.com https://www.google.com`,
-  // Supabase API/Realtime, GA 수집, 채널톡 웹소켓, 토스 결제
-  `connect-src 'self' ${supabaseHttp} ${supabaseWs} https://www.google-analytics.com https://region1.google-analytics.com https://www.facebook.com https://*.kakao.com https://*.channel.io wss://*.channel.io https://*.tosspayments.com https://cdn.jsdelivr.net`,
+  // unsplash(블로그 이미지), Supabase Storage, 픽셀/지도/카카오/Google Ads 이미지
+  `img-src 'self' data: blob: https://images.unsplash.com ${supabaseImageSources} https://www.facebook.com https://*.kakao.com https://*.daumcdn.net https://www.googletagmanager.com https://maps.google.com https://www.google.com https://googleads.g.doubleclick.net https://www.googleadservices.com`,
+  // Supabase API/Realtime, GA/Google Ads 수집, 채널톡 웹소켓, 토스 결제
+  `connect-src 'self' ${supabaseHttp} ${supabaseWs} https://www.google-analytics.com https://region1.google-analytics.com https://www.google.com https://googleads.g.doubleclick.net https://www.googleadservices.com https://www.facebook.com https://*.kakao.com https://*.channel.io wss://*.channel.io https://*.tosspayments.com https://cdn.jsdelivr.net`,
   // GTM 미리보기, 구글 지도 embed, 토스 결제창
   "frame-src 'self' https://www.googletagmanager.com https://maps.google.com https://www.google.com https://*.tosspayments.com https://*.toss.im",
   "media-src 'self' data: blob:",

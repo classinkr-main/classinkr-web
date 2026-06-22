@@ -33,6 +33,10 @@ const PageViewTracker = dynamic(
   () => import("@/components/PageViewTracker").then((mod) => mod.PageViewTracker),
   { ssr: false }
 )
+const GoogleAdsScript = dynamic(
+  () => import("@/components/GoogleAdsScript").then((mod) => mod.GoogleAdsScript),
+  { ssr: false }
+)
 const GTMScript = dynamic(
   () => import("@/components/GTMScript").then((mod) => mod.GTMScript),
   { ssr: false }
@@ -118,6 +122,7 @@ export function AppChrome({ children }: { children: ReactNode }) {
         )}
       </main>
       {showPublicChrome ? <ConditionalFooter /> : null}
+      <GoogleAdsScript />
       {showAnalytics ? (
         <>
           <GTMScript />

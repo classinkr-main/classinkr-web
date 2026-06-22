@@ -74,7 +74,7 @@ function formatRouteUrl(routeUrl?: string) {
   if (!routeUrl) return undefined
 
   try {
-    const baseUrl = process.env.NEXT_PUBLIC_SITE_URL ?? "https://classin.ai.kr"
+    const baseUrl = process.env.NEXT_PUBLIC_SITE_URL ?? "https://classin.co.kr"
     return new URL(routeUrl, baseUrl).toString()
   } catch {
     return routeUrl
@@ -154,7 +154,7 @@ function buildLeadAggregateWecomText(input: EmitNotificationEventInput) {
 
 function buildLeadDigestWecomCard(input: EmitNotificationEventInput) {
   const period = getPayloadValue(input, "period") === "monthly" ? "monthly" : "weekly"
-  const routeUrl = formatRouteUrl(input.routeUrl) ?? "https://classin.ai.kr/admin/crm"
+  const routeUrl = formatRouteUrl(input.routeUrl) ?? "https://classin.co.kr/admin/crm"
   const totalLeads = getPayloadValue(input, "totalLeads") ?? "0"
   const contactPageLeadCount = getPayloadValue(input, "contactPageLeadCount")
   const demoModalLeadCount = getPayloadValue(input, "demoModalLeadCount")

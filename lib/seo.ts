@@ -1,6 +1,6 @@
 import type { Metadata } from "next"
 
-export const SITE_URL = (process.env.NEXT_PUBLIC_SITE_URL ?? "https://classin.ai.kr").replace(/\/$/, "")
+export const SITE_URL = (process.env.NEXT_PUBLIC_SITE_URL ?? "https://classin.co.kr").replace(/\/$/, "")
 export const SITE_NAME = "Classin"
 export const DEFAULT_SITE_TITLE = "Classin — 학원 운영의 새로운 기준"
 export const DEFAULT_OG_IMAGE_PATH = "/opengraph-image"
