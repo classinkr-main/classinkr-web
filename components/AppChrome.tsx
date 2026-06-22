@@ -2,10 +2,8 @@
 
 import dynamic from "next/dynamic"
 import { usePathname } from "next/navigation"
-import type { ReactNode } from "react"
-import { useEffect, useState } from "react"
+import { Component, useEffect, useState, type ReactNode } from "react"
 
-import { ConsentBanner } from "@/components/consent/ConsentBanner"
 import { RouteTransition } from "@/components/transitions/RouteTransition"
 import { useConsent } from "@/lib/consent/useConsent"
 
@@ -14,6 +12,10 @@ const ConditionalHeader = dynamic(() =>
 )
 const ConditionalFooter = dynamic(() =>
   import("@/components/sections/ConditionalFooter").then((mod) => mod.ConditionalFooter)
+)
+const ConsentBanner = dynamic(
+  () => import("@/components/consent/ConsentBanner").then((mod) => mod.ConsentBanner),
+  { ssr: false }
 )
 const FloatingChatbot = dynamic(
   () => import("@/components/ui/FloatingChatbot").then((mod) => mod.FloatingChatbot),
@@ -44,12 +46,36 @@ const ChannelTalkLoader = dynamic(
   { ssr: false }
 )
 
+const PUBLIC_WIDGET_IDLE_TIMEOUT_MS = 2800
+
 function isInternalPath(pathname: string) {
   return (
     pathname.startsWith("/admin") ||
     pathname.startsWith("/checkout") ||
     pathname.startsWith("/receipt")
   )
+}
+
+class PublicWidgetBoundary extends Component<
+  { children: ReactNode; resetKey: string },
+  { hasError: boolean }
+> {
+  state = { hasError: false }
+
+  static getDerivedStateFromError() {
+    return { hasError: true }
+  }
+
+  componentDidUpdate(previousProps: { resetKey: string }) {
+    if (previousProps.resetKey !== this.props.resetKey && this.state.hasError) {
+      this.setState({ hasError: false })
+    }
+  }
+
+  render() {
+    if (this.state.hasError) return null
+    return this.props.children
+  }
 }
 
 export function AppChrome({ children }: { children: ReactNode }) {
@@ -65,13 +91,13 @@ export function AppChrome({ children }: { children: ReactNode }) {
       requestIdleCallback?: (callback: () => void, options?: { timeout: number }) => number
       cancelIdleCallback?: (handle: number) => void
     }
-    const fallbackTimeout = window.setTimeout(() => setReadyPath(pathname), 1800)
+    const fallbackTimeout = window.setTimeout(() => setReadyPath(pathname), PUBLIC_WIDGET_IDLE_TIMEOUT_MS)
 
     if (w.requestIdleCallback) {
       const handle = w.requestIdleCallback(() => {
         window.clearTimeout(fallbackTimeout)
         setReadyPath(pathname)
-      }, { timeout: 1800 })
+      }, { timeout: PUBLIC_WIDGET_IDLE_TIMEOUT_MS })
       return () => {
         window.clearTimeout(fallbackTimeout)
         w.cancelIdleCallback?.(handle)
@@ -110,8 +136,16 @@ export function AppChrome({ children }: { children: ReactNode }) {
           채워지면 null로 되돌아가지 않으므로, 소프트 내비게이션 중에도 언마운트되지
           않아 대화·열림 상태가 보존된다. MobileFloatingCTA는 기존대로 페이지마다
           재평가한다. */}
-      {showPublicChrome && readyPath !== null ? <FloatingChatbot /> : null}
-      {showMobileFloatingCta && readyPath === pathname ? <MobileFloatingCTA /> : null}
+      {showPublicChrome && readyPath !== null ? (
+        <PublicWidgetBoundary resetKey={`chatbot:${readyPath}`}>
+          <FloatingChatbot />
+        </PublicWidgetBoundary>
+      ) : null}
+      {showMobileFloatingCta && readyPath === pathname ? (
+        <PublicWidgetBoundary resetKey={`mobile-cta:${pathname}`}>
+          <MobileFloatingCTA />
+        </PublicWidgetBoundary>
+      ) : null}
     </>
   )
 }

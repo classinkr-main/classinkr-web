@@ -142,9 +142,8 @@ export function HeroVideoBackdrop({
       {renderVideo ? (
         <video
           className={cn(
-            "absolute inset-0 h-full w-full object-cover transition-[opacity,transform,filter] duration-[1400ms] ease-[cubic-bezier(0.16,1,0.3,1)]",
-            !isVideoReady && "scale-[1.025] opacity-0 blur-[3px]",
-            isVideoReady && "scale-100 opacity-100",
+            "absolute inset-0 h-full w-full object-cover opacity-0 transition-opacity duration-700 ease-out",
+            isVideoReady && "opacity-100",
             videoClassName
           )}
           src={src}

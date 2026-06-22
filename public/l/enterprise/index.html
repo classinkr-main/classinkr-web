@@ -1,0 +1,3851 @@
+<!doctype html>
+<html lang="ko">
+<head>
+  <meta charset="utf-8" />
+  <meta name="viewport" content="width=device-width, initial-scale=1" />
+  <title>다지점 학원 수업 운영을 본사 기준으로 묶습니다 | ClassIn Korea</title>
+  <meta name="description" content="프랜차이즈와 다지점 학원을 위한 ClassIn 학원 시스템 OS 랜딩. EDB 교안, 수업 녹화, 복습, LMS, 관리자 데이터를 본사 기준으로 연결합니다." />
+  <meta property="og:title" content="다지점 학원 수업 운영을 본사 기준으로 묶습니다 | ClassIn Korea" />
+  <meta property="og:description" content="프랜차이즈와 다지점 학원을 위한 ClassIn 학원 시스템 OS 랜딩. EDB 교안, 수업 녹화, 복습, LMS, 관리자 데이터를 본사 기준으로 연결합니다." />
+  <meta property="og:type" content="website" />
+  <style>
+    :root {
+      color-scheme: light;
+      --classin-green: #084734;
+      --classin-green-hover: #065c41;
+      --green-surface: #ECFDF5;
+      --green-muted: #6EE7B7;
+      --page-bg: #FAFAF8;
+      --warm-bg: #F6F5F4;
+      --text: #111110;
+      --muted: #615D59;
+      --muted-soft: #A39E98;
+      --border: rgba(0,0,0,0.08);
+      --shadow: rgba(0,0,0,0.04) 0px 4px 18px, rgba(0,0,0,0.027) 0px 2px 7.8px, rgba(0,0,0,0.02) 0px 0.8px 2.9px, rgba(0,0,0,0.01) 0px 0.175px 1px;
+      --font: Inter, Pretendard, -apple-system, BlinkMacSystemFont, "Segoe UI", Helvetica, Arial, sans-serif;
+    }
+
+    * { box-sizing: border-box; }
+    html { scroll-behavior: smooth; }
+    body {
+      margin: 0;
+      background: var(--page-bg);
+      color: var(--text);
+      font-family: var(--font);
+      -webkit-font-smoothing: antialiased;
+      text-rendering: optimizeLegibility;
+    }
+    body.locked { overflow: hidden; }
+    a { color: inherit; text-decoration: none; }
+    img { display: block; max-width: 100%; }
+    button, input, textarea, select {
+      font: inherit;
+    }
+    .segment-page {
+      min-height: 100vh;
+      background: var(--page-bg);
+      overflow-x: hidden;
+    }
+    .site-nav {
+      position: absolute;
+      top: 0;
+      left: 0;
+      right: 0;
+      z-index: 20;
+      border-bottom: 1px solid var(--border);
+      background: rgba(250,250,248,0.9);
+      backdrop-filter: blur(18px);
+    }
+    .nav-inner {
+      width: min(1160px, calc(100% - 40px));
+      margin: 0 auto;
+      min-height: 64px;
+      display: flex;
+      align-items: center;
+      justify-content: space-between;
+      gap: 20px;
+    }
+    .brand {
+      display: inline-flex;
+      align-items: center;
+      gap: 10px;
+      min-width: 128px;
+    }
+    .brand img {
+      width: 112px;
+      height: auto;
+      border-radius: 0;
+    }
+    .nav-links {
+      display: flex;
+      align-items: center;
+      gap: 24px;
+      color: var(--muted);
+      font-size: 14px;
+      font-weight: 600;
+    }
+    .nav-links a:hover { color: var(--classin-green); }
+    .nav-cta {
+      display: inline-flex;
+      align-items: center;
+      justify-content: center;
+      min-height: 38px;
+      padding: 8px 18px;
+      border-radius: 6px;
+      background: var(--classin-green);
+      color: #fff;
+      font-size: 14px;
+      font-weight: 700;
+      transition: transform 180ms ease, background 180ms ease;
+    }
+    .nav-cta:hover { background: var(--classin-green-hover); }
+    .nav-cta:active { transform: scale(0.97); }
+    .hero {
+      min-height: 86vh;
+      display: flex;
+      align-items: center;
+      padding: 84px 0 72px;
+      background:
+        linear-gradient(180deg, rgba(236,253,245,0.82) 0%, rgba(250,250,248,0) 38%),
+        var(--page-bg);
+    }
+    .variant-enterprise .hero,
+    .variant-online .hero {
+      background:
+        linear-gradient(180deg, rgba(8,71,52,0.08) 0%, rgba(17,17,16,0) 44%),
+        #111110;
+      color: #F6F5F4;
+    }
+    .variant-online .hero {
+      min-height: 82vh;
+      padding: 82px 0 58px;
+      background:
+        radial-gradient(ellipse 72% 58% at 88% 12%, rgba(20,184,116,0.18), transparent 62%),
+        linear-gradient(180deg, rgba(236,253,245,0.96) 0%, rgba(255,255,255,0.92) 48%, rgba(246,245,244,0.92) 100%),
+        #fff;
+      color: var(--text);
+    }
+    .variant-managed .site-nav {
+      display: none;
+    }
+    .variant-managed .hero {
+      position: relative;
+      min-height: 100vh;
+      overflow: hidden;
+      padding: 116px 0 84px;
+      background:
+        linear-gradient(120deg, rgba(1,10,5,0.98) 0%, rgba(7,26,16,0.98) 42%, rgba(8,71,52,0.86) 100%),
+        #010a05;
+      color: #F6F5F4;
+    }
+    .variant-managed .hero::before {
+      content: "";
+      position: absolute;
+      inset: 0;
+      pointer-events: none;
+      opacity: 0.34;
+      background:
+        linear-gradient(90deg, rgba(255,255,255,0.035) 1px, transparent 1px),
+        linear-gradient(0deg, rgba(255,255,255,0.025) 1px, transparent 1px);
+      background-size: 76px 76px;
+      mask-image: linear-gradient(90deg, rgba(0,0,0,0.82), rgba(0,0,0,0.2) 78%, transparent);
+    }
+    .variant-managed .hero::after {
+      content: "";
+      position: absolute;
+      inset: 0;
+      pointer-events: none;
+      background:
+        linear-gradient(152deg, transparent 0 24%, rgba(110,231,183,0.08) 24.2%, transparent 24.7% 52%, rgba(110,231,183,0.05) 52.2%, transparent 52.8%),
+        linear-gradient(180deg, transparent 70%, rgba(1,10,5,0.5));
+    }
+    .hero-grid {
+      width: min(1160px, calc(100% - 40px));
+      margin: 0 auto;
+      display: grid;
+      grid-template-columns: minmax(0, 1.02fr) minmax(360px, 0.98fr);
+      gap: 52px;
+      align-items: center;
+    }
+    .variant-managed .hero-grid {
+      position: relative;
+      z-index: 1;
+      width: min(1140px, calc(100% - 40px));
+      grid-template-columns: minmax(0, 0.98fr) minmax(360px, 0.72fr);
+      gap: 64px;
+    }
+    .variant-online .hero-grid {
+      width: min(1180px, calc(100% - 40px));
+      grid-template-columns: minmax(0, 0.9fr) minmax(430px, 1.1fr);
+      gap: 58px;
+    }
+    .segment-label {
+      margin: 0 0 22px;
+      color: var(--classin-green);
+      font-size: 13px;
+      font-weight: 700;
+      line-height: 1.5;
+    }
+    .variant-enterprise .segment-label,
+    .variant-online .segment-label {
+      color: var(--green-muted);
+    }
+    .variant-online .segment-label {
+      color: var(--classin-green);
+    }
+    .variant-managed .segment-label {
+      color: var(--green-muted);
+      font-size: 14px;
+      font-weight: 780;
+      letter-spacing: 0.12em;
+    }
+    h1, h2, h3, p { margin-top: 0; }
+    h1, h2, h3 {
+      word-break: keep-all;
+      overflow-wrap: break-word;
+    }
+    h1 {
+      max-width: 780px;
+      margin-bottom: 24px;
+      color: inherit;
+      font-size: clamp(44px, 6.2vw, 76px);
+      font-weight: 760;
+      letter-spacing: 0;
+      line-height: 1.02;
+    }
+    .variant-online h1 {
+      max-width: 680px;
+      font-size: clamp(40px, 5.1vw, 66px);
+      line-height: 1.07;
+    }
+    .variant-online h1 span {
+      display: block;
+    }
+    .variant-managed h1 {
+      max-width: 720px;
+      margin-bottom: 32px;
+      font-size: clamp(56px, 7.2vw, 96px);
+      line-height: 0.98;
+      font-weight: 860;
+    }
+    .variant-managed h1 span {
+      display: block;
+    }
+    .variant-managed .managed-accent-line {
+      color: #10B981;
+    }
+    .hero-copy {
+      max-width: 680px;
+      margin-bottom: 32px;
+      color: rgba(17,17,16,0.66);
+      font-size: clamp(17px, 2vw, 20px);
+      line-height: 1.72;
+      font-weight: 500;
+    }
+    .variant-enterprise .hero-copy,
+    .variant-online .hero-copy {
+      color: rgba(246,245,244,0.72);
+    }
+    .variant-online .hero-copy {
+      max-width: 650px;
+      color: rgba(17,17,16,0.68);
+    }
+    .variant-managed .hero-copy {
+      max-width: 650px;
+      color: rgba(246,245,244,0.66);
+      font-size: clamp(18px, 2vw, 21px);
+      line-height: 1.82;
+    }
+    .hero-actions,
+    .cta-row {
+      display: flex;
+      flex-wrap: wrap;
+      gap: 12px;
+      align-items: center;
+    }
+    .btn {
+      display: inline-flex;
+      align-items: center;
+      justify-content: center;
+      min-height: 46px;
+      padding: 10px 20px;
+      border-radius: 6px;
+      border: 1px solid transparent;
+      font-size: 15px;
+      font-weight: 760;
+      transition: transform 180ms ease, border-color 180ms ease, background 180ms ease;
+    }
+    .btn.primary {
+      background: var(--classin-green);
+      color: #fff;
+    }
+    .btn.primary:hover { background: var(--classin-green-hover); }
+    .btn.secondary {
+      border-color: var(--border);
+      background: rgba(255,255,255,0.72);
+      color: var(--text);
+    }
+    .variant-enterprise .btn.secondary,
+    .variant-online .btn.secondary {
+      border-color: rgba(255,255,255,0.12);
+      background: rgba(255,255,255,0.06);
+      color: #F6F5F4;
+    }
+    .variant-online .btn.secondary {
+      border-color: rgba(8,71,52,0.16);
+      background: rgba(255,255,255,0.78);
+      color: var(--text);
+    }
+    .variant-managed .btn.primary {
+      background: #0D6E4B;
+      box-shadow: 0 0 34px rgba(16,185,129,0.2);
+    }
+    .variant-managed .btn.secondary {
+      border-color: rgba(110,231,183,0.18);
+      background: rgba(255,255,255,0.055);
+      color: #F6F5F4;
+    }
+    .btn:hover { transform: translateY(-1px); }
+    .btn:active { transform: scale(0.97); }
+    .proof-strip {
+      display: grid;
+      grid-template-columns: repeat(3, minmax(0, 1fr));
+      gap: 10px;
+      padding: 0;
+      margin: 34px 0 0;
+      list-style: none;
+    }
+    .proof-strip li {
+      min-height: 96px;
+      padding: 16px;
+      border: 1px solid var(--border);
+      border-radius: 12px;
+      background: rgba(255,255,255,0.66);
+    }
+    .variant-enterprise .proof-strip li,
+    .variant-online .proof-strip li {
+      border-color: rgba(255,255,255,0.08);
+      background: rgba(255,255,255,0.045);
+    }
+    .proof-strip span,
+    .proof-strip small {
+      display: block;
+      color: var(--muted);
+      font-size: 12px;
+      line-height: 1.45;
+      font-weight: 650;
+    }
+    .variant-enterprise .proof-strip span,
+    .variant-enterprise .proof-strip small,
+    .variant-online .proof-strip span,
+    .variant-online .proof-strip small {
+      color: rgba(246,245,244,0.56);
+    }
+    .proof-strip strong {
+      display: block;
+      margin: 8px 0 4px;
+      color: var(--text);
+      font-size: 22px;
+      line-height: 1.1;
+      letter-spacing: 0;
+    }
+    .variant-enterprise .proof-strip strong,
+    .variant-online .proof-strip strong {
+      color: #fff;
+    }
+    .variant-online .proof-strip li {
+      border-color: rgba(8,71,52,0.12);
+      background: rgba(255,255,255,0.78);
+      box-shadow: 0 10px 28px rgba(8,71,52,0.08);
+    }
+    .variant-managed .proof-strip {
+      display: none;
+    }
+    .variant-managed .proof-strip li {
+      border-color: rgba(110,231,183,0.18);
+      background: rgba(255,255,255,0.045);
+      box-shadow: none;
+    }
+    .variant-online .proof-strip span,
+    .variant-online .proof-strip small {
+      color: rgba(17,17,16,0.54);
+    }
+    .variant-online .proof-strip strong {
+      color: var(--text);
+    }
+    .variant-managed .proof-strip span,
+    .variant-managed .proof-strip small {
+      color: rgba(246,245,244,0.54);
+    }
+    .variant-managed .proof-strip strong {
+      color: #fff;
+    }
+    .hero-visual {
+      position: relative;
+      margin: 0;
+    }
+    .product-frame {
+      overflow: hidden;
+      border: 1px solid var(--border);
+      border-radius: 16px;
+      background: #fff;
+      box-shadow: var(--shadow);
+    }
+    .variant-enterprise .product-frame,
+    .variant-online .product-frame {
+      border-color: rgba(255,255,255,0.1);
+      background: #181816;
+      box-shadow: 0 22px 70px rgba(0,0,0,0.32);
+    }
+    .variant-online .hero .product-frame {
+      border-color: rgba(8,71,52,0.12);
+      background: rgba(255,255,255,0.88);
+      box-shadow: 0 24px 70px rgba(8,71,52,0.16);
+    }
+    .product-frame img {
+      width: 100%;
+      min-height: 280px;
+      max-height: 420px;
+      object-fit: cover;
+      border-radius: 0;
+      filter: saturate(0.96);
+    }
+    .variant-online .online-hero-gif {
+      display: block;
+      min-height: 360px;
+      max-height: none;
+      aspect-ratio: 16 / 9;
+      object-fit: cover;
+      object-position: center;
+      border-radius: 12px;
+      filter: saturate(1.04) brightness(1.02);
+    }
+    .variant-kids .product-frame img {
+      object-fit: contain;
+      padding: 34px;
+      background: #ECFDF5;
+    }
+    .dashboard-frame {
+      padding: 18px;
+      background:
+        linear-gradient(145deg, rgba(110,231,183,0.12), rgba(255,255,255,0.03) 34%, rgba(0,0,0,0.12)),
+        #181816;
+    }
+    .dashboard-shell {
+      display: grid;
+      gap: 14px;
+      min-height: 380px;
+    }
+    .dashboard-top {
+      display: flex;
+      align-items: center;
+      justify-content: space-between;
+      gap: 14px;
+      padding: 12px 14px;
+      border: 1px solid rgba(255,255,255,0.08);
+      border-radius: 10px;
+      background: rgba(255,255,255,0.04);
+    }
+    .dashboard-top strong {
+      color: #fff;
+      font-size: 14px;
+      line-height: 1.35;
+    }
+    .dashboard-top span {
+      color: var(--green-muted);
+      font-size: 12px;
+      font-weight: 800;
+      letter-spacing: 0.08em;
+    }
+    .dashboard-grid {
+      display: grid;
+      grid-template-columns: 0.86fr 1.14fr;
+      gap: 14px;
+    }
+    .branch-list,
+    .chart-panel,
+    .timeline-panel {
+      border: 1px solid rgba(255,255,255,0.08);
+      border-radius: 12px;
+      background: rgba(255,255,255,0.045);
+    }
+    .branch-list {
+      display: grid;
+      gap: 10px;
+      padding: 14px;
+    }
+    .branch-row {
+      display: flex;
+      justify-content: space-between;
+      align-items: center;
+      gap: 12px;
+      padding: 12px;
+      border-radius: 8px;
+      background: rgba(255,255,255,0.045);
+    }
+    .branch-row strong,
+    .chart-panel strong,
+    .timeline-panel strong {
+      color: #fff;
+      font-size: 13px;
+      line-height: 1.4;
+    }
+    .branch-row span,
+    .chart-panel span,
+    .timeline-panel span {
+      color: rgba(246,245,244,0.56);
+      font-size: 11px;
+      line-height: 1.4;
+    }
+    .status-dot {
+      width: 9px;
+      height: 9px;
+      border-radius: 50%;
+      background: var(--green-muted);
+      box-shadow: 0 0 0 4px rgba(110,231,183,0.12);
+      flex: 0 0 auto;
+    }
+    .chart-panel {
+      padding: 16px;
+      display: grid;
+      gap: 16px;
+    }
+    .chart-bars {
+      height: 160px;
+      display: flex;
+      align-items: end;
+      gap: 10px;
+      padding: 12px;
+      border-radius: 10px;
+      background: rgba(0,0,0,0.16);
+    }
+    .chart-bars i {
+      flex: 1;
+      min-width: 18px;
+      border-radius: 5px 5px 2px 2px;
+      background: linear-gradient(180deg, var(--green-muted), var(--classin-green));
+      opacity: 0.9;
+    }
+    .timeline-panel {
+      display: grid;
+      grid-template-columns: repeat(3, minmax(0, 1fr));
+      gap: 10px;
+      padding: 14px;
+    }
+    .timeline-item {
+      padding: 12px;
+      border-radius: 8px;
+      background: rgba(255,255,255,0.045);
+    }
+    .online-frame {
+      position: relative;
+      padding: 12px;
+      background:
+        linear-gradient(145deg, rgba(236,253,245,0.9), rgba(255,255,255,0.98) 54%, rgba(20,184,116,0.08)),
+        #fff;
+    }
+    .online-gif-stage {
+      position: relative;
+      overflow: hidden;
+      border-radius: 12px;
+      background: #ECFDF5;
+    }
+    .online-live-badge,
+    .online-gif-note {
+      position: absolute;
+      display: inline-flex;
+      align-items: center;
+      border: 1px solid rgba(255,255,255,0.62);
+      border-radius: 999px;
+      background: rgba(255,255,255,0.82);
+      color: var(--text);
+      box-shadow: 0 12px 32px rgba(8,71,52,0.14);
+      backdrop-filter: blur(14px);
+    }
+    .online-live-badge {
+      top: 16px;
+      left: 16px;
+      gap: 8px;
+      padding: 8px 12px;
+      font-size: 11px;
+      font-weight: 820;
+      line-height: 1.2;
+      letter-spacing: 0.08em;
+    }
+    .online-live-badge i {
+      width: 8px;
+      height: 8px;
+      border-radius: 50%;
+      background: var(--classin-green);
+      box-shadow: 0 0 0 5px rgba(20,184,116,0.14);
+    }
+    .online-gif-note {
+      right: 16px;
+      bottom: 16px;
+      max-width: min(380px, calc(100% - 32px));
+      padding: 10px 14px;
+      color: rgba(17,17,16,0.72);
+      font-size: 13px;
+      font-weight: 760;
+      line-height: 1.45;
+    }
+    .online-classroom {
+      display: grid;
+      grid-template-columns: minmax(0, 1.4fr) minmax(150px, 0.6fr);
+      gap: 14px;
+      min-height: 380px;
+    }
+    .online-board,
+    .online-video-tile {
+      border: 1px solid rgba(255,255,255,0.09);
+      border-radius: 14px;
+      background: rgba(255,255,255,0.045);
+    }
+    .online-board {
+      display: grid;
+      grid-template-rows: auto 1fr;
+      overflow: hidden;
+    }
+    .online-board-top {
+      display: flex;
+      justify-content: space-between;
+      align-items: center;
+      gap: 12px;
+      padding: 14px 16px;
+      border-bottom: 1px solid rgba(255,255,255,0.08);
+    }
+    .online-board-top strong {
+      color: #fff;
+      font-size: 14px;
+    }
+    .online-board-top span {
+      color: var(--green-muted);
+      font-size: 11px;
+      font-weight: 820;
+      letter-spacing: 0.08em;
+    }
+    .online-board-canvas {
+      position: relative;
+      min-height: 280px;
+      margin: 16px;
+      border-radius: 12px;
+      background:
+        linear-gradient(90deg, rgba(255,255,255,0.045) 1px, transparent 1px),
+        linear-gradient(0deg, rgba(255,255,255,0.045) 1px, transparent 1px),
+        rgba(236,253,245,0.08);
+      background-size: 28px 28px;
+    }
+    .online-board-canvas::before,
+    .online-board-canvas::after {
+      content: "";
+      position: absolute;
+      border-radius: 999px;
+      background: var(--green-muted);
+    }
+    .online-board-canvas::before {
+      width: 58%;
+      height: 4px;
+      left: 12%;
+      top: 34%;
+      transform: rotate(-8deg);
+      opacity: 0.9;
+    }
+    .online-board-canvas::after {
+      width: 34%;
+      height: 4px;
+      left: 20%;
+      top: 56%;
+      transform: rotate(7deg);
+      opacity: 0.55;
+    }
+    .online-board-canvas i {
+      position: absolute;
+      width: 52px;
+      height: 52px;
+      border: 1px solid rgba(110,231,183,0.42);
+      border-radius: 50%;
+    }
+    .online-board-canvas i:nth-child(1) { left: 14%; top: 14%; }
+    .online-board-canvas i:nth-child(2) { right: 18%; top: 42%; }
+    .online-board-canvas i:nth-child(3) { left: 48%; bottom: 12%; }
+    .online-side {
+      display: grid;
+      gap: 14px;
+    }
+    .online-video-tile {
+      display: flex;
+      flex-direction: column;
+      justify-content: end;
+      min-height: 180px;
+      padding: 16px;
+      background:
+        linear-gradient(180deg, rgba(110,231,183,0.16), rgba(255,255,255,0.04));
+    }
+    .online-video-tile.muted {
+      background:
+        linear-gradient(180deg, rgba(255,255,255,0.09), rgba(255,255,255,0.035));
+    }
+    .online-video-tile span {
+      color: var(--green-muted);
+      font-size: 12px;
+      font-weight: 820;
+      line-height: 1.4;
+    }
+    .online-video-tile strong {
+      margin-top: 8px;
+      color: #fff;
+      font-size: 16px;
+      line-height: 1.36;
+    }
+    .os-panel {
+      padding: 18px;
+      display: grid;
+      grid-template-columns: 1fr 1fr;
+      gap: 10px;
+      border-top: 1px solid var(--border);
+      background: #fff;
+    }
+    .variant-enterprise .os-panel,
+    .variant-online .os-panel {
+      border-color: rgba(255,255,255,0.08);
+      background: #111110;
+    }
+    .os-cell {
+      padding: 14px;
+      border: 1px solid var(--border);
+      border-radius: 8px;
+      background: var(--warm-bg);
+    }
+    .variant-enterprise .os-cell,
+    .variant-online .os-cell {
+      border-color: rgba(255,255,255,0.08);
+      background: rgba(255,255,255,0.04);
+    }
+    .os-cell span {
+      display: block;
+      color: var(--classin-green);
+      font-size: 12px;
+      font-weight: 760;
+      line-height: 1.3;
+    }
+    .variant-enterprise .os-cell span,
+    .variant-online .os-cell span {
+      color: var(--green-muted);
+    }
+    .os-cell strong {
+      display: block;
+      margin-top: 6px;
+      color: var(--text);
+      font-size: 14px;
+      line-height: 1.45;
+    }
+    .variant-enterprise .os-cell strong,
+    .variant-online .os-cell strong {
+      color: #fff;
+    }
+    .variant-online .hero .os-panel {
+      border-color: rgba(8,71,52,0.1);
+      background: rgba(255,255,255,0.86);
+    }
+    .variant-online .hero .os-cell {
+      border-color: rgba(8,71,52,0.1);
+      background: rgba(236,253,245,0.62);
+    }
+    .variant-online .hero .os-cell span {
+      color: var(--classin-green);
+    }
+    .variant-online .hero .os-cell strong {
+      color: var(--text);
+    }
+    .managed-journey-nav {
+      position: fixed;
+      z-index: 30;
+      right: 28px;
+      top: 50%;
+      display: flex;
+      flex-direction: column;
+      align-items: flex-end;
+      gap: 0;
+      transform: translateY(-50%);
+      pointer-events: none;
+    }
+    .managed-journey-line {
+      position: absolute;
+      right: 11px;
+      top: 0;
+      bottom: 30px;
+      width: 1px;
+      background: rgba(255,255,255,0.34);
+      overflow: hidden;
+    }
+    .managed-journey-line span {
+      display: block;
+      width: 100%;
+      height: 0;
+      background: #10B981;
+      transition: height 240ms ease;
+    }
+    .managed-journey-nav a {
+      position: relative;
+      z-index: 1;
+      display: flex;
+      align-items: center;
+      gap: 12px;
+      min-height: 44px;
+      color: rgba(246,245,244,0.42);
+      font-size: 11px;
+      font-weight: 760;
+      line-height: 1.3;
+      pointer-events: auto;
+    }
+    .managed-journey-nav a span {
+      max-width: 160px;
+      opacity: 0;
+      transform: translateX(8px);
+      transition: opacity 180ms ease, transform 180ms ease, color 180ms ease;
+      white-space: nowrap;
+    }
+    .managed-journey-nav a:hover span {
+      opacity: 1;
+      transform: translateX(0);
+      color: #10B981;
+    }
+    .managed-journey-nav a i {
+      width: 23px;
+      height: 23px;
+      border: 2px solid rgba(246,245,244,0.62);
+      border-radius: 50%;
+      background: rgba(246,245,244,0.92);
+      box-shadow: 0 0 0 3px rgba(1,10,5,0.28);
+    }
+    .managed-journey-nav a.is-active i {
+      border-color: #10B981;
+      background: #0D6E4B;
+      box-shadow: inset 0 0 0 6px #10B981, 0 0 0 5px rgba(16,185,129,0.12);
+    }
+    .managed-journey-nav strong {
+      margin-top: 10px;
+      margin-right: 2px;
+      color: rgba(246,245,244,0.58);
+      font-size: 10px;
+      line-height: 1;
+    }
+    .managed-frame {
+      padding: 16px;
+      border-color: rgba(110,231,183,0.16);
+      background:
+        linear-gradient(145deg, rgba(255,255,255,0.08), rgba(255,255,255,0.025)),
+        rgba(1,10,5,0.72);
+      box-shadow: 0 24px 90px rgba(0,0,0,0.34);
+      width: 100%;
+      max-width: 430px;
+      margin-left: auto;
+    }
+    .managed-hero-board {
+      display: grid;
+      gap: 12px;
+    }
+    .managed-board-top {
+      display: flex;
+      justify-content: space-between;
+      gap: 12px;
+      align-items: center;
+      padding: 12px 14px;
+      border: 1px solid rgba(255,255,255,0.1);
+      border-radius: 10px;
+      background: rgba(255,255,255,0.045);
+    }
+    .managed-board-top strong {
+      color: #fff;
+      font-size: 14px;
+      line-height: 1.35;
+    }
+    .managed-board-top span,
+    .managed-board-cards span,
+    .managed-board-rail span {
+      color: var(--green-muted);
+      font-size: 11px;
+      font-weight: 820;
+      letter-spacing: 0.08em;
+      line-height: 1.3;
+    }
+    .managed-board-main {
+      display: grid;
+      grid-template-columns: minmax(0, 1fr) 86px;
+      gap: 12px;
+    }
+    .managed-board-main figure {
+      overflow: hidden;
+      min-height: 220px;
+      margin: 0;
+      border: 1px solid rgba(255,255,255,0.1);
+      border-radius: 12px;
+      background: rgba(255,255,255,0.045);
+    }
+    .managed-board-main img {
+      width: 100%;
+      height: 100%;
+      min-height: 220px;
+      object-fit: cover;
+      object-position: center;
+      filter: saturate(0.96) brightness(0.78);
+    }
+    .managed-board-rail {
+      display: grid;
+      gap: 8px;
+    }
+    .managed-board-rail span {
+      display: grid;
+      place-items: center;
+      min-height: 44px;
+      border: 1px solid rgba(255,255,255,0.1);
+      border-radius: 10px;
+      background: rgba(255,255,255,0.045);
+      color: rgba(246,245,244,0.46);
+    }
+    .managed-board-rail span.is-active {
+      color: #fff;
+      background: rgba(16,185,129,0.2);
+      border-color: rgba(110,231,183,0.28);
+    }
+    .managed-board-cards {
+      display: grid;
+      grid-template-columns: repeat(3, minmax(0, 1fr));
+      gap: 10px;
+    }
+    .managed-board-cards div {
+      min-height: 74px;
+      padding: 14px;
+      border: 1px solid rgba(255,255,255,0.1);
+      border-radius: 10px;
+      background: rgba(255,255,255,0.045);
+    }
+    .managed-board-cards strong {
+      display: block;
+      margin-top: 8px;
+      color: #fff;
+      font-size: 13px;
+      line-height: 1.42;
+    }
+    .variant-managed .hero .os-panel {
+      padding: 12px;
+      border-color: rgba(255,255,255,0.1);
+      background: rgba(1,10,5,0.62);
+    }
+    .variant-managed .hero .os-cell {
+      padding: 10px;
+      border-color: rgba(255,255,255,0.1);
+      background: rgba(255,255,255,0.045);
+    }
+    .variant-managed .hero .os-cell span {
+      color: var(--green-muted);
+    }
+    .variant-managed .hero .os-cell strong {
+      color: #fff;
+    }
+    .section {
+      padding: 96px 0;
+    }
+    .section.alt { background: var(--warm-bg); }
+    .section.green { background: var(--green-surface); }
+    .section.dark {
+      background: #111110;
+      color: #F6F5F4;
+    }
+    .section-inner {
+      width: min(1160px, calc(100% - 40px));
+      margin: 0 auto;
+    }
+    .section-head {
+      max-width: 760px;
+      margin-bottom: 42px;
+    }
+    .section-kicker {
+      margin-bottom: 14px;
+      color: var(--classin-green);
+      font-size: 13px;
+      font-weight: 760;
+      line-height: 1.45;
+    }
+    .section.dark .section-kicker { color: var(--green-muted); }
+    h2 {
+      margin-bottom: 16px;
+      color: inherit;
+      font-size: clamp(34px, 4vw, 52px);
+      line-height: 1.08;
+      font-weight: 760;
+      letter-spacing: 0;
+    }
+    .section-head p,
+    .section-intro {
+      color: var(--muted);
+      font-size: 17px;
+      line-height: 1.8;
+    }
+    .section.dark .section-head p,
+    .section.dark .section-intro {
+      color: rgba(246,245,244,0.68);
+    }
+    .fit-grid {
+      display: grid;
+      grid-template-columns: minmax(0, 0.84fr) minmax(0, 1.16fr);
+      gap: 48px;
+      align-items: start;
+    }
+    .fit-list {
+      display: grid;
+      gap: 14px;
+      padding: 0;
+      margin: 0;
+      list-style: none;
+    }
+    .fit-list li {
+      display: grid;
+      grid-template-columns: 18px 1fr;
+      gap: 12px;
+      align-items: start;
+      padding: 17px 18px;
+      border: 1px solid var(--border);
+      border-radius: 12px;
+      background: #fff;
+      box-shadow: rgba(0,0,0,0.02) 0 4px 14px;
+    }
+    .fit-list li span {
+      width: 10px;
+      height: 10px;
+      margin-top: 8px;
+      border-radius: 50%;
+      background: var(--classin-green);
+    }
+    .fit-list p {
+      margin: 0;
+      color: rgba(17,17,16,0.76);
+      font-size: 15px;
+      line-height: 1.72;
+      font-weight: 560;
+    }
+    .decision-grid {
+      display: grid;
+      grid-template-columns: repeat(3, minmax(0, 1fr));
+      gap: 18px;
+    }
+    .decision-card {
+      min-height: 320px;
+      padding: 24px;
+      border: 1px solid rgba(8,71,52,0.16);
+      border-radius: 12px;
+      background: #fff;
+      box-shadow: var(--shadow);
+    }
+    .decision-card h3 {
+      margin-bottom: 22px;
+      color: var(--text);
+      font-size: 22px;
+      line-height: 1.32;
+      letter-spacing: 0;
+    }
+    .decision-card div + div {
+      margin-top: 18px;
+      padding-top: 18px;
+      border-top: 1px solid var(--border);
+    }
+    .decision-card strong {
+      display: block;
+      margin-bottom: 7px;
+      color: var(--classin-green);
+      font-size: 12px;
+      line-height: 1.35;
+      font-weight: 800;
+    }
+    .decision-card p {
+      margin: 0;
+      color: var(--muted);
+      font-size: 14px;
+      line-height: 1.72;
+    }
+    .story-panel {
+      display: grid;
+      grid-template-columns: minmax(0, 0.9fr) minmax(380px, 1.1fr);
+      gap: 56px;
+      align-items: stretch;
+    }
+    .story-copy {
+      display: flex;
+      flex-direction: column;
+      justify-content: center;
+    }
+    .story-copy h2 {
+      max-width: 760px;
+    }
+    .story-copy p {
+      color: var(--muted);
+      font-size: 17px;
+      line-height: 1.86;
+    }
+    .story-copy p + p {
+      margin-top: 18px;
+    }
+    .story-scene {
+      position: relative;
+      overflow: hidden;
+      padding: 34px;
+      border: 1px solid rgba(8,71,52,0.14);
+      border-radius: 18px;
+      background:
+        linear-gradient(145deg, rgba(236,253,245,0.72), rgba(255,255,255,0.86)),
+        #fff;
+      box-shadow: var(--shadow);
+    }
+    .variant-enterprise .story-scene,
+    .variant-online .story-scene {
+      border-color: rgba(255,255,255,0.1);
+      background:
+        radial-gradient(ellipse 80% 70% at 100% 0%, rgba(110,231,183,0.12), transparent 58%),
+        rgba(255,255,255,0.045);
+      box-shadow: none;
+    }
+    .story-scene > span {
+      display: block;
+      margin-bottom: 12px;
+      color: var(--classin-green);
+      font-size: 12px;
+      font-weight: 820;
+      line-height: 1.4;
+    }
+    .variant-enterprise .story-scene > span,
+    .variant-online .story-scene > span {
+      color: var(--green-muted);
+    }
+    .story-scene h3 {
+      margin: 0 0 14px;
+      color: var(--text);
+      font-size: 28px;
+      line-height: 1.24;
+      letter-spacing: 0;
+    }
+    .variant-enterprise .story-scene h3,
+    .variant-online .story-scene h3 {
+      color: #fff;
+    }
+    .story-scene > p {
+      margin: 0 0 26px;
+      color: var(--muted);
+      font-size: 15px;
+      line-height: 1.8;
+    }
+    .variant-enterprise .story-scene > p,
+    .variant-online .story-scene > p {
+      color: rgba(246,245,244,0.66);
+    }
+    .story-scene ol {
+      display: grid;
+      gap: 12px;
+      padding: 0;
+      margin: 0;
+      list-style: none;
+    }
+    .story-scene li {
+      padding: 17px 18px;
+      border: 1px solid var(--border);
+      border-radius: 12px;
+      background: rgba(255,255,255,0.76);
+    }
+    .variant-enterprise .story-scene li,
+    .variant-online .story-scene li {
+      border-color: rgba(255,255,255,0.09);
+      background: rgba(255,255,255,0.045);
+    }
+    .story-scene li strong {
+      display: block;
+      margin-bottom: 7px;
+      color: var(--classin-green);
+      font-size: 12px;
+      font-weight: 820;
+    }
+    .variant-enterprise .story-scene li strong,
+    .variant-online .story-scene li strong {
+      color: var(--green-muted);
+    }
+    .story-scene li h4 {
+      margin: 0 0 6px;
+      color: var(--text);
+      font-size: 17px;
+      line-height: 1.38;
+    }
+    .variant-enterprise .story-scene li h4,
+    .variant-online .story-scene li h4 {
+      color: #fff;
+    }
+    .story-scene li p {
+      margin: 0;
+      color: var(--muted);
+      font-size: 14px;
+      line-height: 1.7;
+    }
+    .variant-enterprise .story-scene li p,
+    .variant-online .story-scene li p {
+      color: rgba(246,245,244,0.62);
+    }
+    .advantage-grid {
+      display: grid;
+      grid-template-columns: repeat(4, minmax(0, 1fr));
+      gap: 14px;
+    }
+    .advantage-card {
+      min-height: 252px;
+      padding: 24px;
+      border: 1px solid var(--border);
+      border-radius: 14px;
+      background: #fff;
+      box-shadow: var(--shadow);
+    }
+    .section.dark .advantage-card {
+      border-color: rgba(255,255,255,0.09);
+      background: rgba(255,255,255,0.045);
+      box-shadow: none;
+    }
+    .advantage-card span,
+    .target-card span {
+      display: block;
+      margin-bottom: 14px;
+      color: var(--classin-green);
+      font-size: 12px;
+      font-weight: 820;
+      line-height: 1.4;
+    }
+    .section.dark .advantage-card span,
+    .section.dark .target-card span {
+      color: var(--green-muted);
+    }
+    .advantage-card h3 {
+      margin: 0 0 12px;
+      color: inherit;
+      font-size: 20px;
+      line-height: 1.34;
+      letter-spacing: 0;
+    }
+    .advantage-card p {
+      margin: 0;
+      color: var(--muted);
+      font-size: 14px;
+      line-height: 1.76;
+    }
+    .section.dark .advantage-card p {
+      color: rgba(246,245,244,0.64);
+    }
+    .operation-scene-grid {
+      display: grid;
+      grid-template-columns: repeat(3, minmax(0, 1fr));
+      gap: 16px;
+    }
+    .operation-scene-card {
+      min-height: 250px;
+      padding: 26px;
+      border: 1px solid rgba(8,71,52,0.14);
+      border-radius: 14px;
+      background:
+        linear-gradient(180deg, rgba(255,255,255,0.88), rgba(255,255,255,0.7)),
+        var(--surface);
+      box-shadow: var(--shadow);
+    }
+    .section.dark .operation-scene-card {
+      border-color: rgba(255,255,255,0.1);
+      background:
+        linear-gradient(180deg, rgba(255,255,255,0.07), rgba(255,255,255,0.035)),
+        rgba(255,255,255,0.03);
+      box-shadow: none;
+    }
+    .operation-scene-card span {
+      display: block;
+      margin-bottom: 24px;
+      color: var(--classin-green);
+      font-size: 12px;
+      font-weight: 820;
+    }
+    .section.dark .operation-scene-card span {
+      color: var(--green-muted);
+    }
+    .operation-scene-card h3 {
+      margin: 0 0 12px;
+      color: inherit;
+      font-size: 23px;
+      line-height: 1.3;
+      letter-spacing: 0;
+    }
+    .operation-scene-card p {
+      margin: 0;
+      color: var(--muted);
+      font-size: 14px;
+      line-height: 1.76;
+    }
+    .section.dark .operation-scene-card p {
+      color: rgba(246,245,244,0.64);
+    }
+    .narrative-list {
+      display: grid;
+      gap: 18px;
+    }
+    .narrative-chapter {
+      display: grid;
+      grid-template-columns: minmax(0, 1fr) minmax(220px, 0.42fr);
+      gap: 28px;
+      padding: 28px;
+      border: 1px solid rgba(8,71,52,0.14);
+      border-radius: 14px;
+      background: rgba(255,255,255,0.78);
+      box-shadow: var(--shadow);
+    }
+    .section.dark .narrative-chapter {
+      border-color: rgba(255,255,255,0.09);
+      background: rgba(255,255,255,0.045);
+      box-shadow: none;
+    }
+    .narrative-chapter span,
+    .evidence-row > span,
+    .stakeholder-note span {
+      display: block;
+      margin-bottom: 14px;
+      color: var(--classin-green);
+      font-size: 12px;
+      font-weight: 820;
+      line-height: 1.4;
+    }
+    .section.dark .narrative-chapter span,
+    .section.dark .evidence-row > span,
+    .section.dark .stakeholder-note span {
+      color: var(--green-muted);
+    }
+    .narrative-chapter h3 {
+      margin: 0 0 14px;
+      color: inherit;
+      font-size: 28px;
+      line-height: 1.24;
+      letter-spacing: 0;
+    }
+    .narrative-chapter p {
+      margin: 0;
+      color: var(--muted);
+      font-size: 15px;
+      line-height: 1.86;
+    }
+    .section.dark .narrative-chapter p {
+      color: rgba(246,245,244,0.66);
+    }
+    .narrative-chapter ul {
+      display: grid;
+      gap: 10px;
+      align-content: start;
+      padding: 0;
+      margin: 0;
+      list-style: none;
+    }
+    .narrative-chapter li {
+      padding: 12px 14px;
+      border: 1px solid rgba(8,71,52,0.12);
+      border-radius: 999px;
+      color: var(--text);
+      background: rgba(236,253,245,0.68);
+      font-size: 13px;
+      font-weight: 760;
+      line-height: 1.4;
+    }
+    .section.dark .narrative-chapter li {
+      border-color: rgba(255,255,255,0.1);
+      color: #fff;
+      background: rgba(110,231,183,0.08);
+    }
+    .evidence-stack {
+      display: grid;
+      gap: 14px;
+    }
+    .evidence-row {
+      display: grid;
+      grid-template-columns: 150px minmax(0, 1fr);
+      gap: 24px;
+      align-items: start;
+      padding: 24px 0;
+      border-bottom: 1px solid var(--border);
+    }
+    .section.dark .evidence-row {
+      border-color: rgba(255,255,255,0.09);
+    }
+    .evidence-row h3 {
+      margin: 0 0 8px;
+      color: inherit;
+      font-size: 24px;
+      line-height: 1.3;
+      letter-spacing: 0;
+    }
+    .evidence-row p {
+      margin: 0;
+      color: var(--muted);
+      font-size: 15px;
+      line-height: 1.78;
+    }
+    .section.dark .evidence-row p {
+      color: rgba(246,245,244,0.64);
+    }
+    .stakeholder-grid {
+      display: grid;
+      grid-template-columns: repeat(5, minmax(0, 1fr));
+      gap: 12px;
+    }
+    .stakeholder-note {
+      min-height: 236px;
+      padding: 22px;
+      border: 1px solid var(--border);
+      border-radius: 14px;
+      background: #fff;
+      box-shadow: var(--shadow);
+    }
+    .section.dark .stakeholder-note {
+      border-color: rgba(255,255,255,0.09);
+      background: rgba(255,255,255,0.045);
+      box-shadow: none;
+    }
+    .stakeholder-note h3 {
+      margin: 0 0 12px;
+      color: inherit;
+      font-size: 19px;
+      line-height: 1.34;
+      letter-spacing: 0;
+    }
+    .stakeholder-note p {
+      margin: 0;
+      color: var(--muted);
+      font-size: 14px;
+      line-height: 1.74;
+    }
+    .section.dark .stakeholder-note p {
+      color: rgba(246,245,244,0.64);
+    }
+    .campaign-line-grid {
+      display: grid;
+      grid-template-columns: repeat(3, minmax(0, 1fr));
+      gap: 16px;
+    }
+    .campaign-line {
+      min-height: 248px;
+      padding: 28px;
+      border: 1px solid rgba(8,71,52,0.16);
+      border-radius: 14px;
+      background:
+        linear-gradient(180deg, rgba(236,253,245,0.92), rgba(255,255,255,0.76));
+      box-shadow: var(--shadow);
+    }
+    .section.dark .campaign-line {
+      border-color: rgba(110,231,183,0.18);
+      background:
+        linear-gradient(180deg, rgba(110,231,183,0.1), rgba(255,255,255,0.035));
+      box-shadow: none;
+    }
+    .campaign-line h3 {
+      margin: 0 0 14px;
+      color: inherit;
+      font-size: 26px;
+      line-height: 1.24;
+      letter-spacing: 0;
+    }
+    .campaign-line p {
+      margin: 0 0 22px;
+      color: var(--muted);
+      font-size: 15px;
+      line-height: 1.78;
+    }
+    .section.dark .campaign-line p {
+      color: rgba(246,245,244,0.64);
+    }
+    .campaign-line strong {
+      color: var(--classin-green);
+      font-size: 14px;
+      line-height: 1.4;
+    }
+    .section.dark .campaign-line strong {
+      color: var(--green-muted);
+    }
+    .deep-dive-grid {
+      display: grid;
+      grid-template-columns: repeat(5, minmax(0, 1fr));
+      gap: 12px;
+    }
+    .deep-dive-card {
+      min-height: 268px;
+      padding: 22px;
+      border: 1px solid rgba(8,71,52,0.14);
+      border-radius: 14px;
+      background: #fff;
+      box-shadow: var(--shadow);
+    }
+    .section.dark .deep-dive-card {
+      border-color: rgba(255,255,255,0.09);
+      background: rgba(255,255,255,0.045);
+      box-shadow: none;
+    }
+    .deep-dive-card span,
+    .comparison-row span {
+      display: block;
+      margin-bottom: 14px;
+      color: var(--classin-green);
+      font-size: 12px;
+      font-weight: 820;
+      line-height: 1.4;
+    }
+    .section.dark .deep-dive-card span,
+    .section.dark .comparison-row span {
+      color: var(--green-muted);
+    }
+    .deep-dive-card h3 {
+      margin: 0 0 12px;
+      color: inherit;
+      font-size: 20px;
+      line-height: 1.32;
+      letter-spacing: 0;
+    }
+    .deep-dive-card p {
+      margin: 0;
+      color: var(--muted);
+      font-size: 14px;
+      line-height: 1.72;
+    }
+    .section.dark .deep-dive-card p {
+      color: rgba(246,245,244,0.64);
+    }
+    .comparison-stack {
+      display: grid;
+      gap: 12px;
+    }
+    .comparison-row {
+      display: grid;
+      grid-template-columns: repeat(2, minmax(0, 1fr));
+      gap: 14px;
+    }
+    .comparison-row > div {
+      min-height: 156px;
+      padding: 22px;
+      border: 1px solid var(--border);
+      border-radius: 14px;
+      background: rgba(255,255,255,0.76);
+    }
+    .comparison-row > div:last-child {
+      border-color: rgba(8,71,52,0.18);
+      background: rgba(236,253,245,0.72);
+    }
+    .section.dark .comparison-row > div {
+      border-color: rgba(255,255,255,0.09);
+      background: rgba(255,255,255,0.045);
+    }
+    .section.dark .comparison-row > div:last-child {
+      border-color: rgba(110,231,183,0.18);
+      background: rgba(110,231,183,0.08);
+    }
+    .comparison-row p {
+      margin: 0;
+      color: var(--muted);
+      font-size: 15px;
+      line-height: 1.76;
+    }
+    .section.dark .comparison-row p {
+      color: rgba(246,245,244,0.66);
+    }
+    .target-copy-grid {
+      display: grid;
+      grid-template-columns: repeat(2, minmax(0, 1fr));
+      gap: 16px;
+    }
+    .target-card {
+      min-height: 210px;
+      padding: 26px;
+      border: 1px solid rgba(8,71,52,0.15);
+      border-radius: 14px;
+      background: rgba(255,255,255,0.74);
+    }
+    .section.dark .target-card {
+      border-color: rgba(255,255,255,0.09);
+      background: rgba(255,255,255,0.045);
+    }
+    .target-card h3 {
+      margin: 0 0 12px;
+      color: inherit;
+      font-size: 23px;
+      line-height: 1.32;
+      letter-spacing: 0;
+    }
+    .target-card p {
+      margin: 0;
+      color: var(--muted);
+      font-size: 14px;
+      line-height: 1.76;
+    }
+    .section.dark .target-card p {
+      color: rgba(246,245,244,0.64);
+    }
+    .card-grid {
+      display: grid;
+      grid-template-columns: repeat(3, minmax(0, 1fr));
+      gap: 18px;
+    }
+    .segment-card {
+      min-height: 220px;
+      padding: 24px;
+      border: 1px solid var(--border);
+      border-radius: 12px;
+      background: #fff;
+      box-shadow: var(--shadow);
+    }
+    .section.dark .segment-card {
+      border-color: rgba(255,255,255,0.09);
+      background: rgba(255,255,255,0.045);
+      box-shadow: none;
+    }
+    .segment-card h3 {
+      margin-bottom: 12px;
+      color: inherit;
+      font-size: 21px;
+      line-height: 1.3;
+      letter-spacing: 0;
+    }
+    .segment-card p {
+      margin: 0;
+      color: var(--muted);
+      font-size: 15px;
+      line-height: 1.75;
+    }
+    .section.dark .segment-card p {
+      color: rgba(246,245,244,0.64);
+    }
+    .flow-list {
+      display: grid;
+      grid-template-columns: repeat(5, minmax(0, 1fr));
+      gap: 10px;
+      padding: 0;
+      margin: 0;
+      list-style: none;
+    }
+    .flow-step {
+      min-height: 236px;
+      padding: 22px 18px;
+      border: 1px solid rgba(8,71,52,0.14);
+      border-radius: 12px;
+      background: rgba(255,255,255,0.72);
+    }
+    .flow-step span {
+      display: inline-flex;
+      margin-bottom: 28px;
+      color: var(--classin-green);
+      font-size: 13px;
+      font-weight: 800;
+    }
+    .flow-step h3 {
+      margin-bottom: 10px;
+      color: var(--text);
+      font-size: 18px;
+      line-height: 1.35;
+      letter-spacing: 0;
+    }
+    .flow-step p {
+      margin: 0;
+      color: var(--muted);
+      font-size: 14px;
+      line-height: 1.7;
+    }
+    .resource-grid {
+      display: grid;
+      grid-template-columns: repeat(3, minmax(0, 1fr));
+      gap: 16px;
+    }
+    .resource-card {
+      display: block;
+      padding: 24px;
+      min-height: 184px;
+      border: 1px solid rgba(8,71,52,0.16);
+      border-radius: 12px;
+      background: #fff;
+      transition: transform 180ms ease, border-color 180ms ease, box-shadow 180ms ease;
+    }
+    .resource-card:hover {
+      transform: translateY(-2px);
+      border-color: rgba(8,71,52,0.34);
+      box-shadow: var(--shadow);
+    }
+    .resource-card strong {
+      display: block;
+      margin-bottom: 12px;
+      color: var(--classin-green);
+      font-size: 19px;
+      line-height: 1.35;
+      letter-spacing: 0;
+    }
+    .resource-card span {
+      display: block;
+      color: var(--muted);
+      font-size: 14px;
+      line-height: 1.7;
+    }
+    .faq-grid {
+      display: grid;
+      grid-template-columns: repeat(3, minmax(0, 1fr));
+      gap: 18px;
+    }
+    .faq-card {
+      min-height: 238px;
+      padding: 24px;
+      border: 1px solid var(--border);
+      border-radius: 12px;
+      background: #fff;
+      box-shadow: rgba(0,0,0,0.02) 0 4px 14px;
+    }
+    .faq-card h3 {
+      margin: 0 0 12px;
+      color: var(--text);
+      font-size: 19px;
+      line-height: 1.36;
+      letter-spacing: 0;
+    }
+    .faq-card p {
+      margin: 0;
+      color: var(--muted);
+      font-size: 14px;
+      line-height: 1.76;
+    }
+    .roadmap-grid {
+      display: grid;
+      grid-template-columns: repeat(3, minmax(0, 1fr));
+      gap: 18px;
+    }
+    .roadmap-card {
+      padding: 28px;
+      border: 1px solid var(--border);
+      border-radius: 16px;
+      background: #fff;
+      box-shadow: var(--shadow);
+    }
+    .roadmap-card span {
+      display: inline-flex;
+      align-items: center;
+      min-height: 28px;
+      padding: 4px 10px;
+      border-radius: 9999px;
+      background: var(--green-surface);
+      color: var(--classin-green);
+      font-size: 12px;
+      font-weight: 760;
+    }
+    .roadmap-card h3 {
+      margin: 18px 0 10px;
+      color: var(--text);
+      font-size: 21px;
+      line-height: 1.35;
+      letter-spacing: 0;
+    }
+    .roadmap-card p {
+      margin: 0;
+      color: var(--muted);
+      font-size: 15px;
+      line-height: 1.72;
+    }
+    .managed-roadmap {
+      position: relative;
+      overflow: hidden;
+      padding: 48px 0 20px;
+    }
+    .managed-roadmap-wave {
+      position: absolute;
+      inset: 20px 0 auto;
+      width: 100%;
+      height: 150px;
+      color: rgba(8,71,52,0.28);
+      pointer-events: none;
+    }
+    .managed-roadmap-wave path {
+      fill: none;
+      stroke: currentColor;
+      stroke-width: 3;
+      stroke-linecap: round;
+      stroke-dasharray: 10 12;
+    }
+    .managed-roadmap-wave path + path {
+      opacity: 0.38;
+      stroke-width: 2;
+    }
+    .managed-roadmap-track {
+      position: relative;
+      display: grid;
+      grid-template-columns: repeat(3, minmax(0, 1fr));
+      gap: 18px;
+      align-items: start;
+    }
+    .managed-roadmap-node {
+      position: relative;
+      min-height: 246px;
+      padding: 28px;
+      border: 1px solid var(--border);
+      border-radius: 18px;
+      background: rgba(255,255,255,0.9);
+      box-shadow: var(--shadow);
+    }
+    .managed-roadmap-node:nth-child(2) { margin-top: 46px; }
+    .managed-roadmap-node span,
+    .managed-roadmap-node small {
+      display: inline-flex;
+      color: var(--classin-green);
+      font-size: 12px;
+      font-weight: 800;
+      line-height: 1.4;
+    }
+    .managed-roadmap-node h3 {
+      margin: 18px 0 10px;
+      color: var(--text);
+      font-size: 21px;
+      line-height: 1.35;
+      letter-spacing: 0;
+    }
+    .managed-roadmap-node p {
+      margin: 0 0 22px;
+      color: var(--muted);
+      font-size: 15px;
+      line-height: 1.72;
+    }
+    .managed-roadmap-footnote {
+      max-width: 680px;
+      margin: 34px auto 0;
+      color: var(--muted);
+      font-size: 15px;
+      line-height: 1.72;
+      text-align: center;
+    }
+    .managed-three-section {
+      position: relative;
+      overflow: hidden;
+      background:
+        linear-gradient(160deg, #0D2B1E 0%, #071A10 54%, #020F08 100%);
+      color: #F6F5F4;
+    }
+    .managed-three-section::after {
+      content: "";
+      position: absolute;
+      left: -8%;
+      right: -8%;
+      bottom: -54px;
+      height: 110px;
+      border-radius: 50% 50% 0 0;
+      background: var(--warm-bg);
+      pointer-events: none;
+    }
+    .managed-three-copy {
+      position: relative;
+      z-index: 1;
+      max-width: 720px;
+      margin-bottom: 44px;
+    }
+    .managed-pill {
+      display: inline-flex;
+      margin-bottom: 18px;
+      padding: 7px 14px;
+      border: 1px solid rgba(110,231,183,0.22);
+      border-radius: 999px;
+      color: var(--green-muted);
+      background: rgba(110,231,183,0.08);
+      font-size: 12px;
+      font-weight: 820;
+      line-height: 1.35;
+    }
+    .managed-three-copy h2 span {
+      color: #10B981;
+    }
+    .managed-three-copy p {
+      max-width: 640px;
+      margin: 0;
+      color: rgba(246,245,244,0.72);
+      font-size: 19px;
+      line-height: 1.78;
+      font-weight: 540;
+    }
+    .managed-three-grid {
+      position: relative;
+      z-index: 1;
+      display: grid;
+      grid-template-columns: repeat(3, minmax(0, 1fr));
+      gap: 18px;
+      padding-bottom: 24px;
+    }
+    .managed-three-card {
+      min-height: 300px;
+      padding: 26px;
+      border: 1px solid rgba(110,231,183,0.18);
+      border-radius: 16px;
+      background:
+        linear-gradient(180deg, rgba(255,255,255,0.07), rgba(255,255,255,0.032));
+      box-shadow: 0 28px 80px rgba(0,0,0,0.22);
+    }
+    .managed-three-icon {
+      display: grid;
+      place-items: center;
+      width: 58px;
+      height: 58px;
+      margin-bottom: 22px;
+      border-radius: 18px;
+      background: linear-gradient(135deg, #084734, #10B981);
+      color: #fff;
+      font-size: 14px;
+      font-weight: 860;
+      box-shadow: 0 14px 34px rgba(16,185,129,0.16);
+    }
+    .managed-three-card span {
+      display: block;
+      margin-bottom: 12px;
+      color: var(--green-muted);
+      font-size: 12px;
+      font-weight: 820;
+      line-height: 1.35;
+    }
+    .managed-three-card h3 {
+      margin: 0 0 14px;
+      color: #fff;
+      font-size: 23px;
+      line-height: 1.3;
+      letter-spacing: 0;
+    }
+    .managed-three-card p {
+      margin: 0;
+      color: rgba(246,245,244,0.64);
+      font-size: 15px;
+      line-height: 1.78;
+    }
+    .managed-simulation-section {
+      overflow: hidden;
+      background:
+        radial-gradient(ellipse 80% 62% at 80% 0%, rgba(110,231,183,0.14) 0%, rgba(17,17,16,0) 60%),
+        #111110;
+      color: #F6F5F4;
+    }
+    .managed-simulation-section .section-kicker { color: var(--green-muted); }
+    .managed-simulation-section .section-head p { color: rgba(246,245,244,0.66); }
+    .managed-simulation-shell {
+      margin-top: 44px;
+    }
+    .managed-simulation-rail {
+      display: grid;
+      grid-template-columns: repeat(4, minmax(0, 1fr));
+      gap: 10px;
+      margin-bottom: 18px;
+    }
+    .managed-simulation-rail button {
+      display: grid;
+      grid-template-columns: 1fr auto;
+      gap: 12px;
+      align-items: center;
+      min-height: 58px;
+      padding: 12px 14px;
+      border: 1px solid rgba(255,255,255,0.1);
+      border-radius: 12px;
+      background: rgba(255,255,255,0.045);
+      color: rgba(246,245,244,0.56);
+      cursor: pointer;
+      text-align: left;
+      transition: border-color 180ms ease, background 180ms ease, transform 180ms ease;
+    }
+    .managed-simulation-rail button:hover,
+    .managed-simulation-rail button.is-active {
+      border-color: rgba(110,231,183,0.34);
+      background: rgba(110,231,183,0.1);
+      transform: translateY(-1px);
+    }
+    .managed-simulation-rail button:focus {
+      outline: none;
+    }
+    .managed-simulation-rail button:focus-visible {
+      box-shadow: 0 0 0 2px rgba(110,231,183,0.42);
+    }
+    .managed-simulation-rail button span {
+      color: inherit;
+      font-size: 12px;
+      font-weight: 820;
+      line-height: 1.35;
+    }
+    .managed-simulation-rail button strong {
+      color: rgba(246,245,244,0.24);
+      font-size: 20px;
+      line-height: 1;
+    }
+    .managed-simulation-rail button.is-active strong {
+      color: var(--green-muted);
+    }
+    .managed-simulation-panels {
+      position: relative;
+    }
+    .managed-simulation-step {
+      display: none;
+      grid-template-columns: minmax(0, 0.9fr) minmax(320px, 0.72fr);
+      gap: 28px;
+      align-items: stretch;
+      min-height: 420px;
+      padding: 28px;
+      border: 1px solid rgba(110,231,183,0.18);
+      border-radius: 16px;
+      background: rgba(255,255,255,0.045);
+      box-shadow: 0 22px 70px rgba(0,0,0,0.26);
+    }
+    .managed-simulation-step.is-active {
+      display: grid;
+    }
+    .managed-simulation-copy {
+      display: flex;
+      flex-direction: column;
+      justify-content: center;
+    }
+    .managed-simulation-copy span {
+      display: inline-flex;
+      margin-bottom: 24px;
+      color: var(--green-muted);
+      font-size: 12px;
+      font-weight: 800;
+      line-height: 1.4;
+    }
+    .managed-simulation-copy h3 {
+      margin: 0 0 16px;
+      color: #fff;
+      font-size: clamp(30px, 3vw, 44px);
+      line-height: 1.12;
+      letter-spacing: 0;
+    }
+    .managed-simulation-copy p {
+      margin: 0 0 22px;
+      color: rgba(246,245,244,0.68);
+      font-size: 17px;
+      line-height: 1.78;
+    }
+    .managed-simulation-copy em {
+      display: block;
+      max-width: 560px;
+      padding: 16px 18px;
+      border-left: 3px solid var(--green-muted);
+      border-radius: 12px;
+      background: rgba(110,231,183,0.08);
+      color: var(--green-muted);
+      font-size: 14px;
+      font-style: normal;
+      line-height: 1.68;
+    }
+    .managed-simulation-step figure {
+      overflow: hidden;
+      min-height: 320px;
+      margin: 0;
+      border: 1px solid rgba(255,255,255,0.1);
+      border-radius: 14px;
+      background: rgba(236,253,245,0.08);
+    }
+    .managed-simulation-step figure img {
+      width: 100%;
+      height: 100%;
+      min-height: 320px;
+      object-fit: cover;
+      object-position: center;
+      filter: saturate(1.02);
+    }
+    .managed-simulation-note {
+      max-width: 720px;
+      margin: 28px auto 0;
+      color: rgba(246,245,244,0.62);
+      font-size: 15px;
+      line-height: 1.7;
+      text-align: center;
+    }
+    .online-loop-section,
+    .online-five-section {
+      background: #fff;
+      color: var(--text);
+    }
+    .online-loop-section .section-kicker,
+    .online-five-section .section-kicker {
+      color: var(--classin-green);
+    }
+    .online-loop-section .section-head p,
+    .online-five-section .section-head p {
+      color: var(--muted);
+    }
+    .online-leak-grid {
+      position: relative;
+      display: grid;
+      gap: 16px;
+      margin-top: 44px;
+      padding-left: 36px;
+    }
+    .online-leak-grid::before {
+      content: "";
+      position: absolute;
+      left: 12px;
+      top: 0;
+      bottom: 0;
+      border-left: 1px dashed rgba(8,71,52,0.18);
+    }
+    .online-leak-card {
+      position: relative;
+      display: grid;
+      grid-template-columns: minmax(0, 0.9fr) minmax(280px, 0.74fr);
+      gap: 24px;
+      align-items: stretch;
+      padding: 26px;
+      border: 1px solid rgba(8,71,52,0.1);
+      border-radius: 12px;
+      background: rgba(255,255,255,0.82);
+      box-shadow: 0 14px 40px rgba(8,71,52,0.08);
+    }
+    .online-leak-card::before {
+      content: "";
+      position: absolute;
+      left: -29px;
+      top: 32px;
+      width: 10px;
+      height: 10px;
+      border-radius: 50%;
+      background: var(--classin-green);
+      box-shadow: 0 0 0 6px rgba(20,184,116,0.12);
+    }
+    .online-leak-card span {
+      display: block;
+      margin-bottom: 12px;
+      color: rgba(17,17,16,0.48);
+      font-size: 12px;
+      font-weight: 800;
+      letter-spacing: 0.08em;
+      text-transform: uppercase;
+    }
+    .online-leak-card h3 {
+      margin: 0 0 12px;
+      color: var(--classin-green);
+      font-size: 25px;
+      line-height: 1.25;
+      letter-spacing: 0;
+    }
+    .online-leak-card p {
+      margin: 0 0 18px;
+      color: var(--muted);
+      font-size: 15px;
+      line-height: 1.72;
+    }
+    .online-leak-card strong {
+      display: block;
+      padding-top: 16px;
+      border-top: 1px solid rgba(8,71,52,0.1);
+      color: var(--text);
+      font-size: 14px;
+      line-height: 1.55;
+    }
+    .online-leak-media {
+      position: relative;
+      overflow: hidden;
+      min-height: 210px;
+      margin: 0;
+      border: 1px solid rgba(8,71,52,0.1);
+      border-radius: 10px;
+      background: #ECFDF5;
+    }
+    .online-leak-media img {
+      width: 100%;
+      height: 100%;
+      min-height: 210px;
+      object-fit: cover;
+      object-position: center;
+      display: block;
+    }
+    .online-leak-media figcaption {
+      position: absolute;
+      left: 12px;
+      right: 12px;
+      bottom: 12px;
+      padding: 9px 12px;
+      border: 1px solid rgba(255,255,255,0.58);
+      border-radius: 999px;
+      background: rgba(255,255,255,0.84);
+      color: rgba(17,17,16,0.7);
+      font-size: 12px;
+      font-weight: 760;
+      line-height: 1.35;
+      backdrop-filter: blur(12px);
+    }
+    .online-asset-board {
+      display: grid;
+      grid-template-columns: minmax(0, 1.18fr) minmax(0, 0.82fr);
+      gap: 14px;
+      margin-top: 22px;
+    }
+    .online-asset-card {
+      position: relative;
+      overflow: hidden;
+      min-height: 210px;
+      margin: 0;
+      border: 1px solid rgba(8,71,52,0.1);
+      border-radius: 14px;
+      background: #ECFDF5;
+      box-shadow: 0 14px 34px rgba(8,71,52,0.08);
+    }
+    .online-asset-card.featured {
+      grid-row: span 3;
+      min-height: 520px;
+    }
+    .online-asset-card img {
+      width: 100%;
+      height: 100%;
+      min-height: inherit;
+      object-fit: cover;
+      object-position: center;
+      display: block;
+    }
+    .online-asset-card figcaption {
+      position: absolute;
+      left: 14px;
+      right: 14px;
+      bottom: 14px;
+      padding: 12px 14px;
+      border: 1px solid rgba(255,255,255,0.62);
+      border-radius: 10px;
+      background: rgba(255,255,255,0.86);
+      backdrop-filter: blur(14px);
+    }
+    .online-asset-card figcaption span {
+      display: block;
+      margin-bottom: 4px;
+      color: var(--classin-green);
+      font-size: 11px;
+      font-weight: 820;
+      letter-spacing: 0.08em;
+      line-height: 1.3;
+      text-transform: uppercase;
+    }
+    .online-asset-card figcaption strong {
+      display: block;
+      color: var(--text);
+      font-size: 15px;
+      line-height: 1.35;
+    }
+    .online-five-section {
+      background:
+        radial-gradient(ellipse 80% 70% at 50% 0%, rgba(20,184,116,0.12) 0%, rgba(236,253,245,0) 58%),
+        #ECFDF5;
+    }
+    .online-five-timeline {
+      display: grid;
+      grid-template-columns: repeat(5, minmax(0, 1fr));
+      gap: 10px;
+      margin-top: 44px;
+      border-top: 1px solid rgba(8,71,52,0.14);
+    }
+    .online-five-step {
+      position: relative;
+      padding: 28px 16px 0;
+    }
+    .online-five-step img {
+      width: 100%;
+      height: 116px;
+      margin-bottom: 16px;
+      border: 1px solid rgba(8,71,52,0.1);
+      border-radius: 10px;
+      object-fit: cover;
+      object-position: center;
+      background: #fff;
+      box-shadow: 0 10px 28px rgba(8,71,52,0.08);
+      display: block;
+    }
+    .online-five-step::before {
+      content: "";
+      position: absolute;
+      left: 16px;
+      top: -6px;
+      width: 12px;
+      height: 12px;
+      border-radius: 50%;
+      background: var(--classin-green);
+      box-shadow: 0 0 0 5px #ECFDF5;
+    }
+    .online-five-step span {
+      display: block;
+      margin-bottom: 12px;
+      color: var(--classin-green);
+      font-family: Georgia, "Times New Roman", serif;
+      font-size: 24px;
+      line-height: 1;
+    }
+    .online-five-step h3 {
+      margin: 0 0 10px;
+      color: var(--text);
+      font-size: 18px;
+      line-height: 1.35;
+      letter-spacing: 0;
+    }
+    .online-five-step p {
+      margin: 0;
+      color: var(--muted);
+      font-size: 13px;
+      line-height: 1.7;
+    }
+    .enterprise-risk-section {
+      background:
+        radial-gradient(ellipse 80% 60% at 82% 10%, rgba(110,231,183,0.16) 0%, rgba(17,17,16,0) 64%),
+        #111110;
+      color: #F6F5F4;
+    }
+    .enterprise-risk-section .section-kicker { color: var(--green-muted); }
+    .enterprise-risk-section .section-head p { color: rgba(246,245,244,0.64); }
+    .enterprise-risk-grid {
+      display: grid;
+      grid-template-columns: repeat(3, minmax(0, 1fr));
+      gap: 16px;
+      margin-top: 44px;
+    }
+    .enterprise-risk-card {
+      min-height: 250px;
+      padding: 26px;
+      border: 1px solid rgba(255,255,255,0.1);
+      border-radius: 16px;
+      background: rgba(255,255,255,0.045);
+    }
+    .enterprise-risk-card span {
+      display: block;
+      margin-bottom: 26px;
+      color: var(--green-muted);
+      font-size: 32px;
+      font-weight: 800;
+      line-height: 1;
+    }
+    .enterprise-risk-card h3 {
+      margin: 0 0 12px;
+      color: #fff;
+      font-size: 22px;
+      line-height: 1.32;
+      letter-spacing: 0;
+    }
+    .enterprise-risk-card p {
+      margin: 0;
+      color: rgba(246,245,244,0.62);
+      font-size: 15px;
+      line-height: 1.72;
+    }
+    .loss-preview {
+      display: grid;
+      grid-template-columns: minmax(0, 0.9fr) minmax(0, 1.1fr);
+      gap: 24px;
+      align-items: center;
+      margin-top: 24px;
+      padding: 24px;
+      border: 1px solid rgba(110,231,183,0.18);
+      border-radius: 16px;
+      background: rgba(110,231,183,0.06);
+    }
+    .loss-preview span,
+    .loss-preview strong {
+      display: block;
+    }
+    .loss-preview span {
+      margin-bottom: 8px;
+      color: rgba(246,245,244,0.52);
+      font-size: 12px;
+      font-weight: 800;
+      text-transform: uppercase;
+    }
+    .loss-preview strong {
+      color: var(--green-muted);
+      font-size: 22px;
+      line-height: 1.35;
+      letter-spacing: 0;
+    }
+    .loss-preview p {
+      margin: 0;
+      color: rgba(246,245,244,0.62);
+      font-size: 14px;
+      line-height: 1.7;
+    }
+    .limits-box {
+      display: grid;
+      grid-template-columns: minmax(0, 0.78fr) minmax(0, 1.22fr);
+      gap: 44px;
+      align-items: start;
+      padding: 34px;
+      border: 1px solid var(--border);
+      border-radius: 16px;
+      background: #fff;
+      box-shadow: var(--shadow);
+    }
+    .limits-box h2 {
+      margin: 0;
+      font-size: clamp(28px, 3vw, 42px);
+    }
+    .limits-box ul {
+      display: grid;
+      gap: 12px;
+      padding: 0;
+      margin: 0;
+      list-style: none;
+      color: var(--muted);
+      font-size: 15px;
+      line-height: 1.72;
+    }
+    .limits-box li {
+      padding-left: 18px;
+      position: relative;
+    }
+    .limits-box li::before {
+      content: "";
+      position: absolute;
+      left: 0;
+      top: 0.75em;
+      width: 6px;
+      height: 6px;
+      border-radius: 50%;
+      background: var(--classin-green);
+    }
+    .final-section {
+      padding: 96px 0;
+      background: #111110;
+      color: #F6F5F4;
+    }
+    .final-grid {
+      width: min(1160px, calc(100% - 40px));
+      margin: 0 auto;
+      display: grid;
+      grid-template-columns: minmax(0, 0.82fr) minmax(360px, 1fr);
+      gap: 56px;
+      align-items: start;
+    }
+    .final-copy p {
+      color: rgba(246,245,244,0.68);
+      font-size: 17px;
+      line-height: 1.78;
+    }
+    .contact-form {
+      padding: 28px;
+      border: 1px solid rgba(255,255,255,0.1);
+      border-radius: 16px;
+      background: rgba(255,255,255,0.055);
+    }
+    .form-grid {
+      display: grid;
+      grid-template-columns: 1fr 1fr;
+      gap: 14px;
+    }
+    .field {
+      display: grid;
+      gap: 7px;
+    }
+    .field.full { grid-column: 1 / -1; }
+    .field label {
+      color: rgba(246,245,244,0.78);
+      font-size: 13px;
+      font-weight: 720;
+      line-height: 1.45;
+    }
+    .field input,
+    .field select,
+    .field textarea {
+      width: 100%;
+      border: 1px solid rgba(255,255,255,0.14);
+      border-radius: 8px;
+      background: rgba(255,255,255,0.08);
+      color: #fff;
+      outline: none;
+      padding: 12px 13px;
+      font-size: 15px;
+      line-height: 1.45;
+    }
+    .field textarea {
+      min-height: 116px;
+      resize: vertical;
+    }
+    .field select option {
+      color: #111110;
+    }
+    .field input:focus,
+    .field select:focus,
+    .field textarea:focus {
+      border-color: var(--green-muted);
+      box-shadow: 0 0 0 2px rgba(110,231,183,0.16);
+    }
+    .field input::placeholder,
+    .field textarea::placeholder {
+      color: rgba(246,245,244,0.38);
+    }
+    .consent {
+      display: flex;
+      gap: 10px;
+      align-items: flex-start;
+      margin: 16px 0 20px;
+      color: rgba(246,245,244,0.58);
+      font-size: 12px;
+      line-height: 1.6;
+    }
+    .consent input {
+      width: 16px;
+      height: 16px;
+      margin-top: 2px;
+      accent-color: var(--classin-green);
+    }
+    .form-status {
+      min-height: 20px;
+      margin-top: 14px;
+      color: rgba(246,245,244,0.72);
+      font-size: 13px;
+      line-height: 1.5;
+    }
+    .form-status.success { color: #6EE7B7; }
+    .form-status.error { color: #FCA5A5; }
+    .sr-only {
+      position: absolute;
+      width: 1px;
+      height: 1px;
+      padding: 0;
+      margin: -1px;
+      overflow: hidden;
+      clip: rect(0, 0, 0, 0);
+      white-space: nowrap;
+      border: 0;
+    }
+    .footer {
+      border-top: 1px solid rgba(255,255,255,0.08);
+      background: #111110;
+      color: rgba(246,245,244,0.48);
+      padding: 28px 0;
+      font-size: 13px;
+    }
+    .footer-inner {
+      width: min(1160px, calc(100% - 40px));
+      margin: 0 auto;
+      display: flex;
+      justify-content: space-between;
+      gap: 20px;
+      flex-wrap: wrap;
+    }
+    @media (max-width: 1180px) {
+      .managed-journey-nav {
+        display: none;
+      }
+      .advantage-grid {
+        grid-template-columns: repeat(2, minmax(0, 1fr));
+      }
+      .stakeholder-grid {
+        grid-template-columns: repeat(2, minmax(0, 1fr));
+      }
+      .deep-dive-grid {
+        grid-template-columns: repeat(2, minmax(0, 1fr));
+      }
+    }
+    @media (max-width: 980px) {
+      .nav-links { display: none; }
+      .hero-grid,
+      .fit-grid,
+      .story-panel,
+      .limits-box,
+      .final-grid {
+        grid-template-columns: 1fr;
+      }
+      .variant-managed .hero-grid {
+        grid-template-columns: 1fr;
+        gap: 40px;
+      }
+      .hero { min-height: auto; padding-top: 64px; }
+      .card-grid,
+      .advantage-grid,
+      .decision-grid,
+      .faq-grid,
+      .resource-grid,
+      .operation-scene-grid,
+      .narrative-chapter,
+      .stakeholder-grid,
+      .campaign-line-grid,
+      .deep-dive-grid,
+      .comparison-row,
+      .roadmap-grid,
+      .managed-three-grid,
+      .managed-roadmap-track,
+      .managed-simulation-rail,
+      .managed-simulation-step,
+      .managed-board-main,
+      .managed-board-cards,
+      .online-five-timeline,
+      .enterprise-risk-grid,
+      .loss-preview,
+      .target-copy-grid {
+        grid-template-columns: 1fr;
+      }
+      .variant-online .hero-grid {
+        grid-template-columns: 1fr;
+        gap: 34px;
+      }
+      .online-leak-card,
+      .online-asset-board {
+        grid-template-columns: 1fr;
+      }
+      .online-asset-card.featured {
+        grid-row: auto;
+        min-height: 360px;
+      }
+      .managed-roadmap-node:nth-child(2) { margin-top: 0; }
+      .managed-roadmap-wave { display: none; }
+      .managed-roadmap-track {
+        position: relative;
+        padding-left: 28px;
+      }
+      .managed-roadmap-track::before {
+        content: "";
+        position: absolute;
+        left: 8px;
+        top: 12px;
+        bottom: 12px;
+        width: 1px;
+        background: linear-gradient(180deg, var(--classin-green), rgba(8,71,52,0.16));
+      }
+      .managed-roadmap-node::before {
+        content: "";
+        position: absolute;
+        left: -25px;
+        top: 32px;
+        width: 10px;
+        height: 10px;
+        border-radius: 50%;
+        background: var(--classin-green);
+        box-shadow: 0 0 0 6px rgba(8,71,52,0.1);
+      }
+      .managed-simulation-step {
+        min-height: auto;
+      }
+      .online-five-timeline {
+        gap: 20px;
+        border-top: 0;
+      }
+      .online-five-step {
+        padding: 0 0 0 28px;
+      }
+      .online-five-step img {
+        height: 190px;
+      }
+      .online-five-step::before {
+        left: 0;
+        top: 9px;
+        box-shadow: 0 0 0 5px #ECFDF5;
+      }
+      .evidence-row {
+        grid-template-columns: 1fr;
+        gap: 8px;
+      }
+      .flow-list {
+        grid-template-columns: 1fr 1fr;
+      }
+      .dashboard-grid,
+      .timeline-panel,
+      .online-classroom {
+        grid-template-columns: 1fr;
+      }
+    }
+    @media (max-width: 640px) {
+      .nav-inner,
+      .section-inner,
+      .hero-grid,
+      .final-grid,
+      .footer-inner {
+        width: min(100% - 28px, 1160px);
+      }
+      .nav-inner { min-height: 58px; }
+      .brand img { width: 96px; }
+      .nav-cta { min-height: 34px; padding: 8px 12px; font-size: 13px; }
+      .hero { padding: 82px 0 52px; }
+      .variant-managed .hero { padding: 78px 0 56px; }
+      .variant-online .hero { padding: 78px 0 48px; }
+      h1 { font-size: clamp(38px, 12vw, 52px); line-height: 1.08; }
+      .variant-managed h1 {
+        font-size: clamp(38px, 10.8vw, 46px);
+        line-height: 1.06;
+      }
+      .variant-online h1 { font-size: clamp(36px, 10.4vw, 48px); line-height: 1.1; }
+      h2 { font-size: clamp(30px, 9vw, 40px); }
+      .hero-copy { font-size: 16px; line-height: 1.68; }
+      .variant-managed .hero-copy {
+        max-width: 330px;
+        overflow-wrap: anywhere;
+      }
+      .variant-managed .hero-actions {
+        align-items: stretch;
+        flex-direction: column;
+      }
+      .variant-managed .hero-actions .btn {
+        width: 100%;
+      }
+      .variant-managed .managed-frame {
+        max-width: 100%;
+        margin-left: 0;
+      }
+      .variant-managed .managed-board-top {
+        min-width: 0;
+      }
+      .variant-managed .managed-board-top span {
+        display: none;
+      }
+      .proof-strip,
+      .flow-list,
+      .form-grid {
+        grid-template-columns: 1fr;
+      }
+      .variant-online .proof-strip {
+        grid-template-columns: repeat(3, minmax(0, 1fr));
+        gap: 8px;
+        margin-top: 28px;
+      }
+      .variant-online .proof-strip li {
+        min-height: 86px;
+        padding: 12px;
+      }
+      .variant-online .proof-strip span,
+      .variant-online .proof-strip small {
+        font-size: 10px;
+      }
+      .variant-online .proof-strip strong {
+        font-size: 18px;
+      }
+      .online-leak-grid {
+        padding-left: 22px;
+      }
+      .online-leak-grid::before {
+        left: 7px;
+      }
+      .online-leak-card {
+        gap: 18px;
+        padding: 18px;
+      }
+      .online-leak-card::before {
+        left: -20px;
+      }
+      .online-leak-media,
+      .online-leak-media img {
+        min-height: 190px;
+      }
+      .online-asset-card,
+      .online-asset-card.featured {
+        min-height: 240px;
+      }
+      .online-asset-card figcaption,
+      .online-leak-media figcaption {
+        left: 10px;
+        right: 10px;
+        bottom: 10px;
+        border-radius: 8px;
+      }
+      .section,
+      .final-section {
+        padding: 70px 0;
+      }
+      .product-frame img { min-height: 220px; }
+      .managed-board-main figure,
+      .managed-board-main img,
+      .managed-simulation-step figure,
+      .managed-simulation-step figure img {
+        min-height: 220px;
+      }
+      .variant-online .online-hero-gif {
+        min-height: 220px;
+        aspect-ratio: 4 / 3;
+      }
+      .online-live-badge {
+        top: 12px;
+        left: 12px;
+        padding: 7px 10px;
+        font-size: 10px;
+      }
+      .online-gif-note { display: none; }
+      .os-panel { grid-template-columns: 1fr; }
+      .contact-form,
+      .limits-box {
+        padding: 22px;
+      }
+    }
+    @media (prefers-reduced-motion: reduce) {
+      *, *::before, *::after {
+        scroll-behavior: auto !important;
+        transition-duration: 0.001ms !important;
+        animation-duration: 0.001ms !important;
+      }
+    }
+  </style>
+</head>
+<body>
+  <div class="segment-page variant-enterprise">
+    <nav class="site-nav" aria-label="랜딩 페이지">
+      <div class="nav-inner">
+        <a class="brand" href="/">
+          <img src="/images/products/classin.png" alt="ClassIn" />
+        </a>
+        <div class="nav-links">
+          <a href="#fit">대상</a>
+          <a href="#story">스토리</a>
+          <a href="#decision">도입 질문</a>
+          <a href="#flow">운영 흐름</a>
+          <a href="#resources">자료</a>
+          <a href="#roadmap">도입 순서</a>
+        </div>
+        <a class="nav-cta" href="#segment-lead-form">상담 신청</a>
+      </div>
+    </nav>
+
+
+
+    <header class="hero">
+      <div class="hero-grid">
+        <div>
+          <p class="segment-label">프랜차이즈·다지점 학원 본사, 교육운영팀, 지역/지점 관리자</p>
+          <h1>지점이 늘어도 수업 기준은 하나로 유지되어야 합니다.</h1>
+          <p class="hero-copy">ClassIn은 EDB 교안, 전자칠판 수업, 녹화·복습, LMS, 관리자 데이터를 한 흐름으로 묶어 본사가 지점별 수업 품질과 운영 리스크를 권한 기준으로 확인하도록 돕는 학원 시스템 OS입니다.</p>
+          <div class="hero-actions">
+            <a class="btn primary" href="#segment-lead-form">다지점 운영 진단 신청</a>
+            <a class="btn secondary" href="/resources/academy-admin-dashboard-template">관리자 데이터 점검표 보기</a>
+          </div>
+          <ul class="proof-strip" aria-label="세그먼트 핵심 판단 기준">
+
+        <li>
+          <span>운영 초점</span>
+          <strong>본사 기준</strong>
+          <small>교안·권한·수업 흐름</small>
+        </li>
+        <li>
+          <span>관리 단위</span>
+          <strong>지점·반·강사</strong>
+          <small>권한 기준으로 분리</small>
+        </li>
+        <li>
+          <span>도입 판단</span>
+          <strong>90일 파일럿</strong>
+          <small>범위와 일정부터 설계</small>
+        </li>
+          </ul>
+        </div>
+        <figure class="hero-visual">
+
+          <div class="product-frame dashboard-frame" aria-label="ClassIn 본사 운영 대시보드 예시">
+            <div class="dashboard-shell">
+              <div class="dashboard-top">
+                <strong>ClassIn HQ Operations</strong>
+                <span>LIVE CLASS FLOW</span>
+              </div>
+              <div class="dashboard-grid">
+                <div class="branch-list">
+
+                    <div class="branch-row">
+                      <div>
+                        <strong>목동 본원</strong>
+                        <span>EDB 교안 · 녹화 제공 정상</span>
+                      </div>
+                      <i class="status-dot" aria-hidden="true"></i>
+                    </div>
+
+                    <div class="branch-row">
+                      <div>
+                        <strong>대치 캠퍼스</strong>
+                        <span>EDB 교안 · 녹화 제공 정상</span>
+                      </div>
+                      <i class="status-dot" aria-hidden="true"></i>
+                    </div>
+
+                    <div class="branch-row">
+                      <div>
+                        <strong>분당 캠퍼스</strong>
+                        <span>EDB 교안 · 녹화 제공 정상</span>
+                      </div>
+                      <i class="status-dot" aria-hidden="true"></i>
+                    </div>
+
+                </div>
+                <div class="chart-panel">
+                  <div>
+                    <strong>수업 운영 흐름</strong>
+                    <span>준비 → 판서 → 녹화 → 복습 → 관리자 확인</span>
+                  </div>
+                  <div class="chart-bars" aria-hidden="true">
+                    <i style="height:46%"></i>
+                    <i style="height:68%"></i>
+                    <i style="height:58%"></i>
+                    <i style="height:82%"></i>
+                    <i style="height:74%"></i>
+                    <i style="height:92%"></i>
+                  </div>
+                </div>
+              </div>
+              <div class="timeline-panel">
+                <div class="timeline-item">
+                  <strong>EDB 배포</strong>
+                  <span>본사 기준 교안</span>
+                </div>
+                <div class="timeline-item">
+                  <strong>수업 기록</strong>
+                  <span>녹화·복습 제공</span>
+                </div>
+                <div class="timeline-item">
+                  <strong>권한 점검</strong>
+                  <span>지점·강사 분리</span>
+                </div>
+              </div>
+            </div>
+            <div class="os-panel" aria-label="ClassIn OS 구성">
+              <div class="os-cell"><span>PREP</span><strong>수업 준비와 EDB 교안</strong></div>
+              <div class="os-cell"><span>LIVE</span><strong>판서·활동·녹화</strong></div>
+              <div class="os-cell"><span>AFTER</span><strong>복습·과제·시험</strong></div>
+              <div class="os-cell"><span>ADMIN</span><strong>관리자 데이터와 권한</strong></div>
+            </div>
+          </div>
+        </figure>
+      </div>
+    </header>
+
+    <main>
+
+      <section class="section enterprise-risk-section dark">
+        <div class="section-inner">
+          <div class="section-head">
+            <p class="section-kicker">Hidden Cost & Transition Risk</p>
+            <h2>지점이 늘수록 새는 비용과 전환 리스크를 먼저 계산합니다</h2>
+            <p>기능 소개 전에 본사 의사결정자가 두려워하는 비용과 전환 실패 가능성을 먼저 다룹니다.</p>
+          </div>
+          <div class="enterprise-risk-grid">
+
+                  <article class="enterprise-risk-card">
+                    <span>01</span>
+                    <h3>월간 운영 손실을 먼저 추정</h3>
+                    <p>지점 수, 강사 수, 반 수가 늘 때 수기 취합·대조·누락 위험이 어디서 커지는지 상담 전에 숫자 언어로 정리합니다.</p>
+                  </article>
+                  <article class="enterprise-risk-card">
+                    <span>02</span>
+                    <h3>전환 실패 리스크를 분리</h3>
+                    <p>데이터 이관, 강사 단체 온보딩, 지점별 단계 롤아웃을 따로 설계해 한 번에 전 지점을 갈아엎는 부담을 줄입니다.</p>
+                  </article>
+                  <article class="enterprise-risk-card">
+                    <span>03</span>
+                    <h3>파일럿 후 전 지점 확장</h3>
+                    <p>대표 지점에서 교안, 권한, 녹화·복습, 관리자 지표를 검증한 뒤 본사 기준으로 확대합니다.</p>
+                  </article>
+          </div>
+          <div class="loss-preview">
+            <div>
+              <span>월간 추정 손실</span>
+              <strong>지점×취합 4h + 강사×관리 0.8h + 반×대조 0.3h</strong>
+            </div>
+            <p>실제 수치는 상담에서 학원 규모와 기존 도구 기준으로 다시 계산합니다. 공개 페이지에서는 과장된 절감률 대신 계산 가정과 확인 범위를 먼저 보여줍니다.</p>
+          </div>
+        </div>
+      </section>
+
+      <section class="section alt" id="fit">
+        <div class="section-inner fit-grid">
+          <div class="section-head">
+            <p class="section-kicker">적합한 학원</p>
+            <h2>지점이 늘며 수업 기준이 흔들리기 시작한 본사</h2>
+            <p>프랜차이즈·다지점 학원에서 교안 배포, 수업 품질, 녹화·복습 제공, 권한 관리, 신규 지점 온보딩이 지점마다 달라진다면 먼저 맞습니다.</p>
+          </div>
+          <ul class="fit-list">
+
+        <li>
+          <span aria-hidden="true"></span>
+          <p>지점마다 수업 자료와 진도 기준이 달라지는 본사</p>
+        </li>
+        <li>
+          <span aria-hidden="true"></span>
+          <p>강사 교체 때 교안, 녹화, 학생 기록이 끊기는 학원</p>
+        </li>
+        <li>
+          <span aria-hidden="true"></span>
+          <p>지점 수업 품질과 복습 제공 상태를 보고서로만 확인하는 운영팀</p>
+        </li>
+        <li>
+          <span aria-hidden="true"></span>
+          <p>원장, 지점장, 강사, 보조의 접근 권한을 분리해야 하는 조직</p>
+        </li>
+          </ul>
+        </div>
+      </section>
+
+      <section class="section dark" id="story">
+        <div class="section-inner">
+
+        <div class="story-panel">
+          <div class="story-copy">
+            <p class="section-kicker">Enterprise Story</p>
+            <h2>작을 때는 넘어가던 문제가, 지점이 늘면 본사 리스크가 됩니다.</h2>
+            <p>한두 지점일 때는 전화와 메신저, 엑셀 보고로도 버틸 수 있습니다. 하지만 지점이 늘고 강사가 바뀌고 커리큘럼이 세분화되면, 본사는 더 이상 현장을 감으로 관리할 수 없습니다.</p>
+            <p>그래서 ClassIn은 본사 교안, 권한, 녹화·복습, 관리자 확인을 한 흐름으로 묶어 지점 확장 속도보다 먼저 수업 기준을 고정합니다.</p>
+          </div>
+          <div class="story-scene">
+            <span>월요일 오전의 운영팀</span>
+            <h3>본사 운영팀은 오늘도 세 가지 질문을 동시에 받습니다.</h3>
+            <p>A지점은 녹화 링크가 늦었고, B지점은 신규 강사가 다른 교안으로 수업했고, C지점은 학부모가 지난 진도 기준을 묻습니다. 문제는 각각 달라 보이지만 뿌리는 같습니다. 본사 기준이 지점 수업 안으로 내려가지 못한 것입니다.</p>
+            <ol>
+
+                    <li>
+                      <strong>Before</strong>
+                      <h4>지점마다 다른 방식</h4>
+                      <p>교안은 본사에 있지만 실제 수업 자료는 강사 개인 저장소, 지점 메신저, 별도 드라이브로 흩어집니다.</p>
+                    </li>
+                    <li>
+                      <strong>Turning Point</strong>
+                      <h4>수업 기준을 시스템으로 고정</h4>
+                      <p>EDB 교안, 권한, 녹화·복습 제공 흐름을 먼저 잡으면 본사의 기준이 실제 수업 장면으로 내려갑니다.</p>
+                    </li>
+                    <li>
+                      <strong>After</strong>
+                      <h4>확장은 복제가 됩니다</h4>
+                      <p>신규 지점과 신규 강사는 처음부터 같은 수업 구조에서 출발하고, 본사는 예외와 리스크를 더 빨리 확인합니다.</p>
+                    </li>
+            </ol>
+          </div>
+        </div>
+        </div>
+      </section>
+
+      <section class="section dark">
+        <div class="section-inner">
+          <div class="section-head">
+            <p class="section-kicker">운영 장면</p>
+            <h2>본사가 매주 확인해야 하는 장면들</h2>
+            <p>대형·다지점 운영자는 기능보다 지점 편차, 권한, 신규 지점 확장 리스크를 먼저 봅니다. ClassIn은 이 장면들을 본사 운영 언어로 정리합니다.</p>
+          </div>
+          <div class="operation-scene-grid">
+
+        <article class="operation-scene-card">
+          <span>본사 운영회의</span>
+          <h3>지점별 진도와 복습 제공 상태를 같은 기준으로 봅니다.</h3>
+          <p>회의 때마다 지점장에게 다시 묻는 대신, EDB 배포 여부와 녹화·복습 제공 흐름을 한 기준으로 확인합니다.</p>
+        </article>
+        <article class="operation-scene-card">
+          <span>권한 설계</span>
+          <h3>대표, 지점장, 강사가 보는 화면이 달라집니다.</h3>
+          <p>본사는 전체 운영 리스크를 보고, 지점장은 자기 지점의 실행을 보고, 강사는 수업에 필요한 범위에 집중하도록 나눕니다.</p>
+        </article>
+        <article class="operation-scene-card">
+          <span>신규 지점 오픈</span>
+          <h3>잘하던 지점의 수업 흐름을 복제합니다.</h3>
+          <p>우수 강사의 판서와 진행 순서를 신규 지점 온보딩 자료로 옮겨, 확장이 매번 새로 만드는 일이 되지 않게 합니다.</p>
+        </article>
+          </div>
+        </div>
+      </section>
+
+      <section class="section alt" id="journey">
+        <div class="section-inner">
+          <div class="section-head">
+            <p class="section-kicker">본사 운영 흐름</p>
+            <h2>본사 기준이 지점 수업으로 내려갈 때 리스크가 줄어듭니다</h2>
+            <p>작을 때는 현장 감각으로 해결되던 문제가 지점이 늘면 본사 리스크가 됩니다. ClassIn은 기준 배포, 권한, 데이터, 온보딩을 한 흐름으로 묶습니다.</p>
+          </div>
+          <div class="narrative-list">
+
+        <article class="narrative-chapter">
+          <div>
+            <span>Chapter 01</span>
+            <h3>본사 기준은 문서가 아니라 수업 장면 안에 있어야 합니다</h3>
+            <p>프랜차이즈와 다지점 학원은 이미 커리큘럼 문서, 강사 매뉴얼, 지점 운영 규정을 갖고 있습니다. 그런데 실제 수업에서는 강사의 개인 자료, 지점별 메신저, 별도 드라이브가 다시 기준이 됩니다. 본사 기준이 파일함에만 남으면 지점 수업은 결국 현장 판단으로 흩어집니다.</p>
+          </div>
+          <ul>
+            <li>EDB 교안 배포 기준</li><li>수업 전 준비 체크</li><li>녹화·복습 제공 루틴</li>
+          </ul>
+        </article>
+        <article class="narrative-chapter">
+          <div>
+            <span>Chapter 02</span>
+            <h3>우수 강사의 수업은 브랜드 자산으로 복제되어야 합니다</h3>
+            <p>대형 학원의 가장 큰 손실은 좋은 강사의 노하우가 개인의 감각으로만 남는 것입니다. 판서 순서, 질문 타이밍, 예시 이미지, 오답 설명 방식이 EDB와 녹화로 남으면 강사 교체와 신규 지점 오픈 때 같은 품질의 출발선을 만들 수 있습니다.</p>
+          </div>
+          <ul>
+            <li>대표 강의 흐름 저장</li><li>신규 강사 온보딩</li><li>지점 확장 전 샘플 수업</li>
+          </ul>
+        </article>
+        <article class="narrative-chapter">
+          <div>
+            <span>Chapter 03</span>
+            <h3>권한이 흐릿하면 데이터도 리스크가 됩니다</h3>
+            <p>본사, 지점장, 강사, 보조가 같은 정보를 보는 구조는 편해 보이지만 오래가면 리스크가 됩니다. 대형 운영자는 누가 어떤 수업 기록을 보고, 어떤 복습 자료를 제공하며, 어떤 예외를 처리하는지 권한 단위로 나눠야 합니다.</p>
+          </div>
+          <ul>
+            <li>본사 전체 가시성</li><li>지점별 실행 권한</li><li>강사별 수업 범위</li>
+          </ul>
+        </article>
+        <article class="narrative-chapter">
+          <div>
+            <span>Chapter 04</span>
+            <h3>데이터는 감시가 아니라 예외를 빨리 찾는 언어입니다</h3>
+            <p>운영 데이터의 목적은 현장을 몰아세우는 것이 아니라 늦게 알면 커지는 문제를 조기에 발견하는 것입니다. 녹화가 누락된 반, 복습 안내가 늦은 지점, 신규 강사가 기준과 다르게 진행한 수업을 빠르게 찾을수록 학부모 대응과 내부 코칭이 쉬워집니다.</p>
+          </div>
+          <ul>
+            <li>수업 상태 확인</li><li>예외 대응</li><li>지점별 코칭 포인트</li>
+          </ul>
+        </article>
+        <article class="narrative-chapter">
+          <div>
+            <span>Chapter 05</span>
+            <h3>90일 파일럿은 확장 전 리허설입니다</h3>
+            <p>대형 조직은 한 번에 전 지점을 바꾸기 어렵습니다. 대표 지점, 대표 과목, 대표 강사군을 정해 30일은 수업 흐름, 60일은 권한과 복습, 90일은 본사 리포트 기준을 확인하면 전면 도입의 리스크를 줄일 수 있습니다.</p>
+          </div>
+          <ul>
+            <li>대표 지점 파일럿</li><li>권한 설계 검증</li><li>전 지점 확장 기준</li>
+          </ul>
+        </article>
+          </div>
+        </div>
+      </section>
+
+      <section class="section" id="decision">
+        <div class="section-inner">
+          <div class="section-head">
+            <p class="section-kicker">도입 전 질문</p>
+            <h2>본사 운영팀이 먼저 확인하는 질문에 답합니다</h2>
+            <p>지점별 편차가 보이는지, 권한을 나눌 수 있는지, 기존 자료와 신규 지점을 어떻게 옮길지부터 판단합니다.</p>
+          </div>
+          <div class="decision-grid">
+
+        <article class="decision-card">
+          <h3>본사 기준이 지점 수업까지 내려가나요?</h3>
+          <div>
+            <strong>원하는 것</strong>
+            <p>지점마다 달라지는 교안, 진도, 녹화·복습 제공 상태를 같은 운영 기준으로 보고 싶습니다.</p>
+          </div>
+          <div>
+            <strong>반응하는 증거</strong>
+            <p>본사 EDB 배포, 지점·반·강사 단위 권한, 녹화·복습 제공 상태를 한 흐름으로 확인하는 구조에 반응합니다.</p>
+          </div>
+        </article>
+        <article class="decision-card">
+          <h3>강사 교체가 생겨도 수업 품질이 유지되나요?</h3>
+          <div>
+            <strong>원하는 것</strong>
+            <p>우수 강사의 판서와 질문 흐름이 개인 자료가 아니라 기관 자산으로 남기를 원합니다.</p>
+          </div>
+          <div>
+            <strong>반응하는 증거</strong>
+            <p>EDB 교안 자산화, 강사 온보딩 SOP, 대표 지점 90일 파일럿처럼 확장 전에 검증하는 증거를 좋아합니다.</p>
+          </div>
+        </article>
+        <article class="decision-card">
+          <h3>권한·데이터·정책 리스크를 어떻게 분리하나요?</h3>
+          <div>
+            <strong>원하는 것</strong>
+            <p>본사, 지점장, 강사, 보조가 보는 정보를 다르게 통제하고 싶습니다.</p>
+          </div>
+          <div>
+            <strong>반응하는 증거</strong>
+            <p>권한 받은 관리자 기준의 대시보드와 스토리지·녹화·개인정보 확인 항목을 단정하지 않고 분리하는 설명이 신뢰를 만듭니다.</p>
+          </div>
+        </article>
+          </div>
+        </div>
+      </section>
+
+      <section class="section">
+        <div class="section-inner">
+          <div class="section-head">
+            <p class="section-kicker">운영 리스크</p>
+            <h2>문제는 규모가 아니라 기준이 전달되는 방식입니다</h2>
+            <p>본사의 좋은 교안과 수업 기준도 지점에서 다르게 실행되면 품질 편차, 학부모 대응, 신규 지점 온보딩 리스크로 돌아옵니다.</p>
+          </div>
+          <div class="card-grid">
+
+        <article class="segment-card">
+          <h3>지점별 수업 기준이 흩어집니다</h3>
+          <p>본사 교안이 있어도 현장에서는 파일, 메신저, 개인 저장소로 다시 갈라집니다.</p>
+        </article>
+        <article class="segment-card">
+          <h3>강사 변경이 곧 품질 리스크가 됩니다</h3>
+          <p>우수 강사의 판서 흐름과 수업 기록이 개인 역량에 남으면 지점 확장 속도가 느려집니다.</p>
+        </article>
+        <article class="segment-card">
+          <h3>본사는 늦게 알게 됩니다</h3>
+          <p>녹화 제공, 보강, 수업 특이사항, 네트워크 이슈를 늦게 알수록 학부모 대응도 늦어집니다.</p>
+        </article>
+          </div>
+        </div>
+      </section>
+
+      <section class="section alt">
+        <div class="section-inner">
+          <div class="section-head">
+            <p class="section-kicker">선택 이유</p>
+            <h2>본사 기준을 지점 수업으로 남기는 구조</h2>
+            <p>ClassIn은 기능 수보다 지점별 수업 흐름, 복습 제공, 예외 상황, 권한 기준을 본사가 확인할 수 있게 만드는 운영 구조에 초점을 둡니다.</p>
+          </div>
+          <div class="advantage-grid">
+
+        <article class="advantage-card">
+          <span>HQ Control</span>
+          <h3>본사 기준을 수업 현장까지 전달</h3>
+          <p>표준 교안과 수업 흐름을 지점별 재해석에 맡기지 않고, 수업 전 준비부터 복습 제공까지 같은 구조로 유지합니다.</p>
+        </article>
+        <article class="advantage-card">
+          <span>Brand Asset</span>
+          <h3>우수 강사의 노하우를 기관 자산화</h3>
+          <p>판서, 이미지 배치, 문제 풀이 순서를 EDB와 녹화로 남겨 강사 교체와 신규 지점 온보딩에 재사용합니다.</p>
+        </article>
+        <article class="advantage-card">
+          <span>Visibility</span>
+          <h3>늦은 보고가 아니라 운영 가시성</h3>
+          <p>수업 진행, 녹화·복습 제공, 특이사항을 권한 있는 관리자가 같은 기준으로 확인하게 만듭니다.</p>
+        </article>
+        <article class="advantage-card">
+          <span>Governance</span>
+          <h3>권한과 리스크를 분리</h3>
+          <p>본사, 지점장, 강사, 보조가 같은 시스템을 쓰더라도 접근 범위를 다르게 설계해 운영 리스크를 줄입니다.</p>
+        </article>
+          </div>
+        </div>
+      </section>
+
+      <section class="section">
+        <div class="section-inner">
+          <div class="section-head">
+            <p class="section-kicker">본사 판단 근거</p>
+            <h2>임원 회의와 운영 회의에서 바로 확인할 증거</h2>
+            <p>전환 비용, 지점 편차, 우수 강사 자산화, 권한 구조, 신규 지점 확장을 본사 의사결정 언어로 분리했습니다.</p>
+          </div>
+          <div class="evidence-stack">
+
+        <article class="evidence-row">
+          <span>운영 증거</span>
+          <div>
+            <h3>본사 교안이 실제 수업에 쓰였는지 확인합니다</h3>
+            <p>배포한 EDB가 어떤 지점과 반에서 쓰였는지, 수업 후 녹화와 복습 제공까지 이어졌는지 확인하는 기준을 둡니다.</p>
+          </div>
+        </article>
+        <article class="evidence-row">
+          <span>품질 증거</span>
+          <div>
+            <h3>강사 개인 역량을 학원 자산으로 남깁니다</h3>
+            <p>우수 강사의 판서, 설명 흐름, 예시 자료를 다음 강사와 신규 지점이 재사용할 수 있는 형태로 정리합니다.</p>
+          </div>
+        </article>
+        <article class="evidence-row">
+          <span>권한 증거</span>
+          <div>
+            <h3>역할별로 보는 범위를 다르게 설계합니다</h3>
+            <p>대표, 교육운영팀, 지점장, 강사, 보조가 필요한 정보만 보도록 권한과 책임을 분리합니다.</p>
+          </div>
+        </article>
+        <article class="evidence-row">
+          <span>확장 증거</span>
+          <div>
+            <h3>새 지점도 같은 출발선에서 시작합니다</h3>
+            <p>파일럿 지점에서 검증된 교안·녹화·복습 루틴을 신규 지점 운영 체크리스트로 옮깁니다.</p>
+          </div>
+        </article>
+          </div>
+        </div>
+      </section>
+
+      <section class="section alt">
+        <div class="section-inner">
+          <div class="section-head">
+            <p class="section-kicker">운영 장면</p>
+            <h2>교안 배포부터 지점 리포트까지 본사 기준이 이어지는 방식</h2>
+            <p>다지점 운영자가 매주 확인해야 하는 장면을 기준으로, 지점 수업 품질과 예외 상황을 어떻게 빠르게 파악하는지 설명합니다.</p>
+          </div>
+          <div class="deep-dive-grid">
+
+        <article class="deep-dive-card">
+          <span>본사 교안 배포</span>
+          <h3>표준 교안을 실제 수업 시작점으로 고정합니다</h3>
+          <p>본사에서 만든 교안이 지점별로 다시 변형되지 않도록 수업 전 준비, 판서, 녹화, 복습 안내까지 연결합니다.</p>
+        </article>
+        <article class="deep-dive-card">
+          <span>관리자 가시성</span>
+          <h3>보고서가 오기 전에 운영 상태를 확인합니다</h3>
+          <p>수업 진행, 녹화 제공, 복습 안내, 예외 상황을 지점·반·강사 단위로 나눠 보며 늦은 대응을 줄입니다.</p>
+        </article>
+        <article class="deep-dive-card">
+          <span>권한 매트릭스</span>
+          <h3>본사·지점장·강사의 책임 범위를 분리합니다</h3>
+          <p>같은 시스템을 쓰더라도 보는 정보와 실행 권한을 다르게 설계해 개인정보와 운영 리스크를 줄입니다.</p>
+        </article>
+        <article class="deep-dive-card">
+          <span>브랜드 자산화</span>
+          <h3>우수 강사의 판서와 설명이 다음 지점으로 이동합니다</h3>
+          <p>좋은 수업의 핵심 장면을 개인 역량에만 남기지 않고 신규 강사와 신규 지점의 출발 자료로 만듭니다.</p>
+        </article>
+        <article class="deep-dive-card">
+          <span>확장 리허설</span>
+          <h3>대표 지점에서 검증한 뒤 전 지점으로 넓힙니다</h3>
+          <p>90일 파일럿 동안 교안, 권한, 복습, 관리자 확인 기준을 먼저 검증해 전면 도입 리스크를 낮춥니다.</p>
+        </article>
+          </div>
+        </div>
+      </section>
+
+      <section class="section">
+        <div class="section-inner">
+          <div class="section-head">
+            <p class="section-kicker">Before / After</p>
+            <h2>같은 본사 기준도 지점에서 실행되는 방식은 달라집니다</h2>
+            <p>본사가 만든 자료와 기준이 지점 운영으로 남는지, 아니면 파일과 공지로만 끝나는지 같은 장면에서 비교합니다.</p>
+          </div>
+          <div class="comparison-stack">
+
+        <article class="comparison-row">
+          <div>
+            <span>Before</span>
+            <p>본사 기준은 있지만 실제 수업 자료는 지점과 강사마다 흩어짐</p>
+          </div>
+          <div>
+            <span>After</span>
+            <p>EDB 교안과 수업 후 복습 흐름이 본사 기준으로 연결됨</p>
+          </div>
+        </article>
+        <article class="comparison-row">
+          <div>
+            <span>Before</span>
+            <p>강사 교체 때 수업 노하우와 판서 흐름이 사라짐</p>
+          </div>
+          <div>
+            <span>After</span>
+            <p>대표 수업 기록과 교안 흐름을 신규 강사가 이어받음</p>
+          </div>
+        </article>
+        <article class="comparison-row">
+          <div>
+            <span>Before</span>
+            <p>권한이 섞여 개인정보와 운영 책임이 흐릿해짐</p>
+          </div>
+          <div>
+            <span>After</span>
+            <p>역할별 접근 범위와 확인 책임을 나눠 설계함</p>
+          </div>
+        </article>
+        <article class="comparison-row">
+          <div>
+            <span>Before</span>
+            <p>지점 리스크를 주간 보고나 학부모 문의 뒤에 알게 됨</p>
+          </div>
+          <div>
+            <span>After</span>
+            <p>녹화·복습·예외 상태를 더 빠르게 확인하는 기준을 둠</p>
+          </div>
+        </article>
+          </div>
+        </div>
+      </section>
+
+
+
+      <section class="section green" id="flow">
+        <div class="section-inner">
+          <div class="section-head">
+            <p class="section-kicker">ClassIn OS</p>
+            <h2>본사 기준이 지점 수업으로 내려가는 운영 흐름</h2>
+            <p>ClassIn은 기능을 따로 붙이는 방식이 아니라, 본사가 정한 수업 기준이 지점의 실제 수업과 복습 데이터로 이어지게 설계합니다.</p>
+          </div>
+          <ol class="flow-list">
+
+        <li class="flow-step">
+          <span>01</span>
+          <h3>수업 전 준비</h3>
+          <p>교안, 자료, 반 구성, 권한을 수업 전에 정리합니다.</p>
+        </li>
+        <li class="flow-step">
+          <span>02</span>
+          <h3>EDB·판서 수업</h3>
+          <p>판서와 이미지, 문제 풀이 흐름을 재사용 가능한 칠판 파일로 남깁니다.</p>
+        </li>
+        <li class="flow-step">
+          <span>03</span>
+          <h3>녹화·다시보기</h3>
+          <p>결석 보강과 복습 안내가 수업 직후의 운영 흐름으로 이어집니다.</p>
+        </li>
+        <li class="flow-step">
+          <span>04</span>
+          <h3>LMS·과제·시험</h3>
+          <p>과제 확인, 시험, 피드백을 수업 밖 학습 관리와 연결합니다.</p>
+        </li>
+        <li class="flow-step">
+          <span>05</span>
+          <h3>관리자 데이터</h3>
+          <p>권한 있는 관리자가 수업 진행, 복습 제공, 특이사항을 기준으로 확인합니다.</p>
+        </li>
+          </ol>
+        </div>
+      </section>
+
+      <section class="section dark">
+        <div class="section-inner">
+          <div class="section-head">
+            <p class="section-kicker">핵심 약속</p>
+            <h2>성과를 과장하지 않고, 본사 운영 기준을 약속합니다</h2>
+            <p>전 지점 성과를 단정하지 않습니다. 대신 기준 배포, 권한 분리, 운영 확인, 단계 전환 범위를 분명하게 나눕니다.</p>
+          </div>
+          <div class="card-grid">
+
+        <article class="segment-card">
+          <h3>본사 EDB 교안 자산화</h3>
+          <p>우수 강사의 판서, 이미지 배치, 문제 풀이 흐름을 기관 자산으로 남겨 신규 강사와 지점에 재사용합니다.</p>
+        </article>
+        <article class="segment-card">
+          <h3>지점 운영 가시성</h3>
+          <p>수업 진행 상태, 녹화·복습 제공, 특이사항을 권한 있는 관리자가 같은 기준으로 확인합니다.</p>
+        </article>
+        <article class="segment-card">
+          <h3>권한 기반 운영</h3>
+          <p>본사, 지점장, 강사, 보조가 같은 데이터를 보더라도 역할별 접근 범위는 다르게 설계합니다.</p>
+        </article>
+          </div>
+        </div>
+      </section>
+
+      <section class="section alt">
+        <div class="section-inner">
+          <div class="section-head">
+            <p class="section-kicker">대상별 메시지</p>
+            <h2>본사·지점장·강사가 각자 확인하는 가치</h2>
+            <p>본사에는 기준과 데이터, 지점장에게는 실행 부담 완화, 강사에게는 재사용 가능한 수업 흐름이 핵심입니다.</p>
+          </div>
+          <div class="target-copy-grid">
+
+        <article class="target-card">
+          <span>본사 대표·임원</span>
+          <h3>지점이 늘어도 브랜드 수업 품질은 본사 기준으로 남아야 합니다.</h3>
+          <p>확장 속도보다 중요한 것은 편차를 줄이는 구조입니다. ClassIn은 지점 수업을 본사의 운영 기준 안으로 다시 모읍니다.</p>
+        </article>
+        <article class="target-card">
+          <span>교육운영팀</span>
+          <h3>보고서를 기다리지 말고, 수업 흐름 자체를 기준화하세요.</h3>
+          <p>녹화 제공, EDB 배포, 복습 상태, 예외 상황을 주간 보고 이전에 확인할 수 있는 운영 언어로 정리합니다.</p>
+        </article>
+        <article class="target-card">
+          <span>지점장</span>
+          <h3>본사 기준은 유지하면서 지점 운영 부담은 줄입니다.</h3>
+          <p>강사 온보딩, 자료 전달, 보강 안내가 지점장의 기억과 메신저에만 남지 않도록 흐름을 시스템화합니다.</p>
+        </article>
+        <article class="target-card">
+          <span>강사</span>
+          <h3>수업 준비가 개인 파일 정리가 아니라 재사용 가능한 교안 흐름이 됩니다.</h3>
+          <p>좋은 판서와 활동 순서가 다음 반, 다음 강사, 다음 지점으로 이어지는 수업 자산이 됩니다.</p>
+        </article>
+          </div>
+        </div>
+      </section>
+
+      <section class="section">
+        <div class="section-inner">
+          <div class="section-head">
+            <p class="section-kicker">이해관계자 설득</p>
+            <h2>본사 도입 회의에서 막히는 질문에 답합니다</h2>
+            <p>임원, 교육운영팀, 지점장, 강사, IT 담당자가 보는 기준이 다르기 때문에 리스크와 실행 포인트를 따로 설득합니다.</p>
+          </div>
+          <div class="stakeholder-grid">
+
+        <article class="stakeholder-note">
+          <span>대표·임원</span>
+          <h3>확장 속도보다 브랜드 편차를 줄이는 구조</h3>
+          <p>지점이 늘어도 수업 기준과 학부모 경험이 본사 언어로 남아야 합니다.</p>
+        </article>
+        <article class="stakeholder-note">
+          <span>교육운영팀</span>
+          <h3>보고 전에 예외를 찾는 운영 가시성</h3>
+          <p>진도, 녹화, 복습, 권한 이슈를 늦은 보고서가 아니라 수업 흐름에서 확인합니다.</p>
+        </article>
+        <article class="stakeholder-note">
+          <span>지점장</span>
+          <h3>본사 기준을 지점 업무로 옮기는 부담 완화</h3>
+          <p>자료 전달과 신규 강사 적응을 지점장의 기억에만 맡기지 않습니다.</p>
+        </article>
+        <article class="stakeholder-note">
+          <span>강사</span>
+          <h3>개인 파일 정리가 아닌 재사용 가능한 수업 준비</h3>
+          <p>좋은 판서와 활동 순서를 다음 반에서도 바로 이어 쓸 수 있게 만듭니다.</p>
+        </article>
+        <article class="stakeholder-note">
+          <span>학부모</span>
+          <h3>지점이 달라도 같은 브랜드 수업이라는 신뢰</h3>
+          <p>아이의 수업 흐름과 복습 안내가 지점별 편차 없이 설명됩니다.</p>
+        </article>
+          </div>
+        </div>
+      </section>
+
+      <section class="section dark">
+        <div class="section-inner">
+          <div class="section-head">
+            <p class="section-kicker">캠페인 문구</p>
+            <h2>본사 제안서와 상담에 바로 들어가는 문장</h2>
+            <p>다지점 운영의 복잡함을 기능 나열이 아니라 본사 기준, 지점 실행, 운영 리스크 언어로 바꿉니다.</p>
+          </div>
+          <div class="campaign-line-grid">
+
+        <article class="campaign-line">
+          <h3>지점이 늘어도 수업 기준은 흔들리지 않게.</h3>
+          <p>본사 교안, 권한, 녹화·복습, 관리자 확인을 하나의 운영 흐름으로 묶습니다.</p>
+          <strong>다지점 운영 진단 신청</strong>
+        </article>
+        <article class="campaign-line">
+          <h3>강사의 노하우를 개인 파일이 아니라 브랜드 자산으로.</h3>
+          <p>대표 강사의 판서와 질문 흐름을 신규 지점과 신규 강사가 이어받게 만듭니다.</p>
+          <strong>EDB 자산화 상담</strong>
+        </article>
+        <article class="campaign-line">
+          <h3>본사가 늦게 아는 문제를 줄이세요.</h3>
+          <p>지점별 예외와 복습 제공 상태를 더 빠르게 확인하는 운영 기준을 설계합니다.</p>
+          <strong>관리자 데이터 점검</strong>
+        </article>
+          </div>
+        </div>
+      </section>
+
+      <section class="section" id="resources">
+        <div class="section-inner">
+          <div class="section-head">
+            <p class="section-kicker">다음 판단 자료</p>
+            <h2>상담 전, 본사 내부에서 먼저 확인할 자료</h2>
+            <p>구매를 서두르기 전에 지점별 교안 배포, 수업 기록, 권한 구조, 신규 지점 온보딩 기준을 먼저 점검합니다.</p>
+          </div>
+          <div class="resource-grid">
+
+        <a class="resource-card" href="/resources/academy-admin-dashboard-template">
+          <strong>관리자 데이터·권한 운영 점검표</strong>
+          <span>본사가 주간으로 봐야 할 수업 운영 지표와 권한 기준을 정리합니다.</span>
+        </a>
+        <a class="resource-card" href="/resources/teacher-edb-onboarding-sop-kit">
+          <strong>강사 EDB 온보딩 SOP</strong>
+          <span>강사 교체와 지점 확장 때 교안 자산을 넘기는 첫 주 운영안을 잡습니다.</span>
+        </a>
+        <a class="resource-card" href="/resources/classin-90-day-adoption-roadmap">
+          <strong>90일 도입 로드맵</strong>
+          <span>파일럿 범위, 30/60/90일 판단 기준, 정착 순서를 먼저 합의합니다.</span>
+        </a>
+          </div>
+        </div>
+      </section>
+
+      <section class="section green">
+        <div class="section-inner">
+          <div class="section-head">
+            <p class="section-kicker">FAQ</p>
+            <h2>다지점 도입 전에 가장 많이 걸리는 질문</h2>
+            <p>기존 자료 전환, 권한 설계, 지점별 단계 도입, 데이터 확인 범위처럼 본사 회의에서 막히는 질문을 먼저 답합니다.</p>
+          </div>
+          <div class="faq-grid">
+
+        <article class="faq-card">
+          <h3>본사는 지점별 수업을 어디까지 확인할 수 있나요?</h3>
+          <p>관리자 콘솔과 권한 기준 안에서 수업 진행, 녹화·복습 제공, 과제·시험 흐름, 특이사항을 확인하는 방향으로 설계합니다. 실제 권한 범위는 계정과 계약 조건을 기준으로 상담에서 확인합니다.</p>
+        </article>
+        <article class="faq-card">
+          <h3>기존 CRM, 결제, 출입 출석 시스템도 모두 대체하나요?</h3>
+          <p>대체한다고 말하지 않습니다. ClassIn은 수업 운영 데이터와 학습 흐름을 중심으로 보고, 결제·정산·오프라인 출입 출석은 외부 시스템 또는 연동 검토 범위로 분리합니다.</p>
+        </article>
+        <article class="faq-card">
+          <h3>다지점 전체 도입은 얼마나 걸리나요?</h3>
+          <p>기본 수업은 빠르게 시작할 수 있지만, 대형 조직은 대표 지점 파일럿, 권한 설계, 강사 온보딩을 거쳐 30/60/90일 기준으로 확장 판단을 권장합니다.</p>
+        </article>
+        <article class="faq-card">
+          <h3>강사 교체가 잦은 지점에도 도움이 되나요?</h3>
+          <p>도움이 되는 핵심은 우수 강사의 판서와 설명 흐름을 EDB와 수업 기록으로 남기는 것입니다. 신규 강사는 개인 파일을 다시 만드는 대신 본사 기준 수업 흐름을 이어받을 수 있습니다.</p>
+        </article>
+        <article class="faq-card">
+          <h3>본사와 지점장의 권한을 다르게 나눌 수 있나요?</h3>
+          <p>도입 상담에서는 본사, 지역 관리자, 지점장, 강사, 보조가 어떤 정보를 봐야 하는지 역할별로 분리합니다. 실제 범위는 계정 구조와 계약 조건에 맞춰 확인합니다.</p>
+        </article>
+        <article class="faq-card">
+          <h3>지점별 운영 편차를 어떻게 발견하나요?</h3>
+          <p>녹화 제공, 복습 안내, 과제·시험 흐름, 수업 특이사항처럼 반복적으로 확인할 항목을 먼저 정합니다. 이후 대표 지점 파일럿에서 어떤 예외를 볼지 기준을 잡습니다.</p>
+        </article>
+        <article class="faq-card">
+          <h3>기존 본사 교안과 자료를 그대로 활용할 수 있나요?</h3>
+          <p>기존 자료를 모두 버리는 방식이 아니라, 실제 수업에서 재사용할 교안·이미지·판서 흐름을 우선 정리합니다. 자료 형태와 수업 방식에 따라 전환 범위를 상담에서 나눕니다.</p>
+        </article>
+        <article class="faq-card">
+          <h3>보안과 개인정보는 어떻게 다루나요?</h3>
+          <p>수업 기록, 녹화, 계정 권한, 관리자 접근 범위를 먼저 확인합니다. 서버·스토리지·개인정보 처리 세부는 공개 페이지에서 단정하지 않고 계약과 운영 조건에 맞춰 검토합니다.</p>
+        </article>
+        <article class="faq-card">
+          <h3>전 지점에 한 번에 적용해야 하나요?</h3>
+          <p>권장하지 않습니다. 대표 지점과 대표 과목을 골라 수업 흐름, 권한, 강사 온보딩, 학부모 안내를 먼저 검증한 뒤 확장하는 편이 안전합니다.</p>
+        </article>
+          </div>
+        </div>
+      </section>
+
+      <section class="section alt" id="roadmap">
+        <div class="section-inner">
+          <div class="section-head">
+            <p class="section-kicker">도입 순서</p>
+            <h2>대표 지점에서 검증하고 90일 안에 본사 기준으로 확장합니다</h2>
+            <p>한 번에 전 지점을 바꾸기보다 대표 지점에서 흐름을 확인하고, 60일에는 권한·리포트, 90일에는 확장 기준을 세웁니다.</p>
+          </div>
+
+          <div class="roadmap-grid">
+
+        <article class="roadmap-card">
+          <span>30일</span>
+          <h3>대표 지점 파일럿</h3>
+          <p>과목, 강사, 반을 좁혀 EDB·녹화·복습 흐름을 먼저 검증합니다.</p>
+        </article>
+        <article class="roadmap-card">
+          <span>60일</span>
+          <h3>권한과 운영 지표 정리</h3>
+          <p>본사·지점·강사별 권한, 주간 확인 지표, 예외 처리 기준을 잡습니다.</p>
+        </article>
+        <article class="roadmap-card">
+          <span>90일</span>
+          <h3>확장 판단</h3>
+          <p>지점 확장 전 교육, 자료 이전, 설치·지원 범위를 결정합니다.</p>
+        </article>
+          </div>
+        </div>
+      </section>
+
+      <section class="section">
+        <div class="section-inner">
+          <div class="limits-box">
+            <h2>정직하게 나눠 볼 범위</h2>
+            <ul>
+              <li>결제·정산과 오프라인 출입 출석은 별도 시스템 또는 연동 범위로 확인합니다.</li><li>고급 경영 리포트와 CRM 자동화는 API, 외부 시스템, 커스텀 리포트 범위로 분리합니다.</li><li>모델별 가격, 재고, 설치 가능 여부는 상담에서 현재 조건을 확인합니다.</li>
+            </ul>
+          </div>
+        </div>
+      </section>
+    </main>
+
+    <section class="final-section" id="segment-lead-form">
+      <div class="final-grid">
+        <div class="final-copy">
+          <p class="section-kicker">상담 신청</p>
+          <h2>다지점 운영 진단을 신청하세요</h2>
+          <p>지점 수, 과목, 현재 쓰는 도구를 알려주시면 본사 기준으로 어디부터 묶을지 정리해 드립니다.</p>
+          <div class="cta-row">
+            <a class="btn secondary" href="/contact">일반 문의 페이지</a>
+            <a class="btn secondary" href="/resources">자료실 둘러보기</a>
+          </div>
+        </div>
+        <form class="contact-form" data-lead-form novalidate>
+          <div class="form-grid">
+            <div class="field">
+              <label for="org">학원명</label>
+              <input id="org" name="org" type="text" placeholder="예: 클래스인학원 목동캠퍼스" autocomplete="organization" required />
+            </div>
+            <div class="field">
+              <label for="name">이름</label>
+              <input id="name" name="name" type="text" placeholder="담당자 이름" autocomplete="name" required />
+            </div>
+            <div class="field">
+              <label for="phone">연락처</label>
+              <input id="phone" name="phone" type="tel" placeholder="010-0000-0000" autocomplete="tel" required />
+            </div>
+            <div class="field">
+              <label for="email">이메일</label>
+              <input id="email" name="email" type="email" placeholder="선택 입력" autocomplete="email" />
+            </div>
+            <div class="field">
+              <label for="role">역할</label>
+              <select id="role" name="role">
+                <option value="">선택</option>
+                <option>원장</option>
+                <option>실장·관리자</option>
+                <option>본사 운영팀</option>
+                <option>강사</option>
+              </select>
+            </div>
+            <div class="field">
+              <label for="size">현재 규모</label>
+              <select id="size" name="size">
+                <option value="">선택</option>
+                <option>50명 미만</option>
+                <option>50-200명</option>
+                <option>200-500명</option>
+                <option>500명 이상 또는 다지점</option>
+              </select>
+            </div>
+            <div class="field full">
+              <label for="priority">가장 궁금한 영역</label>
+              <select id="priority" name="priority">
+                <option>본사 EDB 교안 배포</option><option>지점·강사 권한 구조</option><option>녹화·복습 제공 상태 관리</option><option>관리자 데이터·리포트</option><option>90일 파일럿 범위</option>
+              </select>
+            </div>
+            <div class="field full">
+              <label for="message">상담 내용</label>
+              <textarea id="message" name="message" placeholder="지점 수, 대표 과목, 현재 교안 배포 방식, 가장 흔들리는 운영 기준을 적어주세요." required></textarea>
+            </div>
+            <div class="field sr-only" aria-hidden="true">
+              <label for="website">Website</label>
+              <input id="website" name="website" type="text" tabindex="-1" autocomplete="off" />
+            </div>
+          </div>
+          <label class="consent">
+            <input type="checkbox" name="marketingConsent" />
+            <span>상담 안내와 관련 자료 수신에 동의합니다. 동의하지 않아도 상담 신청은 가능합니다.</span>
+          </label>
+          <button class="btn primary" type="submit">다지점 운영 진단 신청</button>
+          <p class="form-status" data-form-status aria-live="polite"></p>
+        </form>
+      </div>
+    </section>
+
+    <footer class="footer">
+      <div class="footer-inner">
+        <span>ClassIn Korea · landing_bigs segment landing</span>
+        <span>전자칠판, EDB, 녹화, LMS, 관리자 데이터를 잇는 학원 시스템 OS</span>
+      </div>
+    </footer>
+  </div>
+  <script>
+    const form = document.querySelector('[data-lead-form]');
+    const statusEl = document.querySelector('[data-form-status]');
+    const submitButton = form?.querySelector('button[type="submit"]');
+    const kidsTopbar = document.querySelector('.kids-topbar');
+
+    function syncKidsTopbar() {
+      if (!kidsTopbar) return;
+      kidsTopbar.classList.toggle('is-scrolled', window.scrollY > 60);
+    }
+
+    syncKidsTopbar();
+    window.addEventListener('scroll', syncKidsTopbar, { passive: true });
+
+    const managedStepButtons = Array.from(document.querySelectorAll('[data-managed-step]'));
+    const managedPanels = Array.from(document.querySelectorAll('[data-managed-panel]'));
+
+    function setManagedStep(index) {
+      managedStepButtons.forEach((button, buttonIndex) => {
+        const active = buttonIndex === index;
+        button.classList.toggle('is-active', active);
+        button.setAttribute('aria-selected', active ? 'true' : 'false');
+      });
+      managedPanels.forEach((panel, panelIndex) => {
+        panel.classList.toggle('is-active', panelIndex === index);
+      });
+    }
+
+    managedStepButtons.forEach((button) => {
+      button.addEventListener('click', () => {
+        setManagedStep(Number(button.dataset.managedStep || 0));
+      });
+    });
+
+    const managedChapterLinks = Array.from(document.querySelectorAll('[data-managed-chapter]'));
+    const managedProgress = document.querySelector('[data-managed-progress]');
+    const managedProgressText = document.querySelector('[data-managed-progress-text]');
+
+    function syncManagedJourney() {
+      if (!managedChapterLinks.length) return;
+
+      const totalHeight = Math.max(1, document.documentElement.scrollHeight - window.innerHeight);
+      const progress = Math.min(100, Math.max(0, (window.scrollY / totalHeight) * 100));
+
+      if (managedProgress) managedProgress.style.height = progress + '%';
+      if (managedProgressText) managedProgressText.textContent = Math.round(progress) + '%';
+
+      let activeId = managedChapterLinks[0]?.dataset.managedChapter;
+      managedChapterLinks.forEach((link) => {
+        const id = link.dataset.managedChapter;
+        const section = id ? document.getElementById(id) : null;
+        if (section && section.getBoundingClientRect().top <= 160) {
+          activeId = id;
+        }
+      });
+
+      managedChapterLinks.forEach((link) => {
+        link.classList.toggle('is-active', link.dataset.managedChapter === activeId);
+      });
+    }
+
+    syncManagedJourney();
+    window.addEventListener('scroll', syncManagedJourney, { passive: true });
+
+    function setStatus(message, type) {
+      if (!statusEl) return;
+      statusEl.textContent = message;
+      statusEl.className = 'form-status' + (type ? ' ' + type : '');
+    }
+
+    function field(name) {
+      return (new FormData(form).get(name) || '').toString().trim();
+    }
+
+    function getUrlParam(name) {
+      return new URLSearchParams(window.location.search).get(name) || undefined;
+    }
+
+    form?.addEventListener('submit', async (event) => {
+      event.preventDefault();
+
+      const org = field('org');
+      const name = field('name');
+      const phone = field('phone');
+      const email = field('email');
+      const role = field('role');
+      const size = field('size');
+      const priority = field('priority');
+      const rawMessage = field('message');
+      const phoneDigits = phone.replace(/\D/g, '');
+
+      if (!org || !name || !phone || !rawMessage) {
+        setStatus('학원명, 이름, 연락처, 상담 내용을 입력해 주세요.', 'error');
+        return;
+      }
+
+      if (phoneDigits.length < 8) {
+        setStatus('연락처를 다시 확인해 주세요.', 'error');
+        return;
+      }
+
+      const message = [
+        '문의 유형: 다지점 운영 진단을 신청하세요',
+        '세그먼트: 프랜차이즈·다지점 학원 본사, 교육운영팀, 지역/지점 관리자',
+        role ? '역할: ' + role : undefined,
+        size ? '현재 규모: ' + size : undefined,
+        priority ? '우선 관심: ' + priority : undefined,
+        rawMessage,
+        '페이지: ' + window.location.pathname,
+      ].filter(Boolean).join('\n');
+
+      const payload = {
+        source: 'contact_page',
+        sourceDetail: 'landing_segment:enterprise',
+        org,
+        name,
+        phone,
+        email: email || undefined,
+        role: role || undefined,
+        size: size || undefined,
+        message,
+        marketingConsent: Boolean(form.querySelector('[name="marketingConsent"]')?.checked),
+        website: field('website'),
+        landingPage: window.location.origin + '/l/enterprise',
+        currentPage: window.location.href,
+        referrer: document.referrer || undefined,
+        utmSource: getUrlParam('utm_source'),
+        utmMedium: getUrlParam('utm_medium'),
+        utmCampaign: getUrlParam('utm_campaign'),
+        utmTerm: getUrlParam('utm_term'),
+        utmContent: getUrlParam('utm_content'),
+        gclid: getUrlParam('gclid'),
+        fbclid: getUrlParam('fbclid'),
+        msclkid: getUrlParam('msclkid'),
+        ttclid: getUrlParam('ttclid'),
+      };
+
+      try {
+        if (submitButton) {
+          submitButton.disabled = true;
+          submitButton.textContent = '접수 중입니다';
+        }
+        setStatus('', '');
+
+        const response = await fetch('/api/lead', {
+          method: 'POST',
+          headers: { 'Content-Type': 'application/json' },
+          body: JSON.stringify(payload),
+        });
+        const result = await response.json().catch(() => null);
+
+        if (!response.ok || !result?.ok) {
+          throw new Error(result?.error || '접수에 실패했습니다. 잠시 후 다시 시도해 주세요.');
+        }
+
+        form.reset();
+        setStatus('상담 신청이 접수되었습니다. 담당자가 순차적으로 연락드릴게요.', 'success');
+      } catch (error) {
+        setStatus(error instanceof Error ? error.message : '접수에 실패했습니다. 잠시 후 다시 시도해 주세요.', 'error');
+      } finally {
+        if (submitButton) {
+          submitButton.disabled = false;
+          submitButton.textContent = '다지점 운영 진단 신청';
+        }
+      }
+    });
+  </script>
+</body>
+</html>

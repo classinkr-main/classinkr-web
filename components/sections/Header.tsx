@@ -21,23 +21,26 @@ const productTabs = [
     { name: "Classin Board", href: "/product/hw", icon: Presentation },
 ]
 
+const HEADER_SCROLL_THRESHOLD = 10
+
 export function Header() {
     const [isScrolled, setIsScrolled] = React.useState(false)
     const [isMobileMenuOpen, setIsMobileMenuOpen] = React.useState(false)
+    const isScrolledRef = React.useRef(false)
     const pathname = usePathname()
 
     React.useEffect(() => {
-        let ticking = false
-        const handleScroll = () => {
-            if (ticking) return
-            ticking = true
-            requestAnimationFrame(() => {
-                setIsScrolled(window.scrollY > 10)
-                ticking = false
-            })
+        const updateScrolledState = () => {
+            const nextIsScrolled = window.scrollY > HEADER_SCROLL_THRESHOLD
+            if (isScrolledRef.current === nextIsScrolled) return
+
+            isScrolledRef.current = nextIsScrolled
+            setIsScrolled(nextIsScrolled)
         }
-        window.addEventListener("scroll", handleScroll, { passive: true })
-        return () => window.removeEventListener("scroll", handleScroll)
+
+        updateScrolledState()
+        window.addEventListener("scroll", updateScrolledState, { passive: true })
+        return () => window.removeEventListener("scroll", updateScrolledState)
     }, [])
 
     React.useEffect(() => {
@@ -49,8 +52,8 @@ export function Header() {
             className={cn(
                 "fixed top-0 left-0 right-0 z-50 transition-all duration-300",
                 isScrolled
-                    ? "gnb-scroll-glass bg-white/[0.2] backdrop-blur-xl backdrop-saturate-150 border-b border-white/35 shadow-[inset_0_1px_0_rgba(255,255,255,0.62),0_1px_0_rgba(0,0,0,0.04)] py-4"
-                    : "bg-white/60 backdrop-blur-sm py-6"
+                    ? "bg-white/95 border-b border-black/[0.08] shadow-[0_8px_24px_rgba(0,0,0,0.06)] py-4"
+                    : "bg-white/80 py-6"
             )}
         >
             <div className="container relative z-10 mx-auto flex items-center justify-between gap-4">

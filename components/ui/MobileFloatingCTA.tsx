@@ -1,6 +1,6 @@
 "use client"
 
-import { useState, useEffect } from "react"
+import { useState, useEffect, useRef } from "react"
 import { usePathname } from "next/navigation"
 import { motion, AnimatePresence, useReducedMotion } from "framer-motion"
 import { MessageSquare, X } from "lucide-react"
@@ -11,28 +11,44 @@ export function MobileFloatingCTA() {
     const shouldReduceMotion = useReducedMotion()
     const [visible, setVisible] = useState(false)
     const [dismissed, setDismissed] = useState(false)
+    const visibleRef = useRef(false)
 
     useEffect(() => {
         // 아래로 스크롤(콘텐츠 읽는 중)에는 숨기고, 위로 스크롤할 때만 표시 —
         // 챗봇 버블과 함께 하단을 점유해 콘텐츠를 가리는 혼잡을 줄인다
         let lastY = window.scrollY
-        const handleScroll = () => {
-            const currentY = window.scrollY
-            const scrollingUp = currentY < lastY - 4
-            const scrollingDown = currentY > lastY + 4
-            lastY = currentY
+        let frame = 0
 
-            if (currentY <= 300) {
-                setVisible(false)
-            } else if (scrollingUp && !dismissed) {
-                setVisible(true)
-            } else if (scrollingDown) {
-                setVisible(false)
-            }
+        const updateVisible = (nextVisible: boolean) => {
+            if (visibleRef.current === nextVisible) return
+            visibleRef.current = nextVisible
+            setVisible(nextVisible)
+        }
+
+        const handleScroll = () => {
+            if (frame) return
+            frame = window.requestAnimationFrame(() => {
+                frame = 0
+                const currentY = window.scrollY
+                const scrollingUp = currentY < lastY - 4
+                const scrollingDown = currentY > lastY + 4
+                lastY = currentY
+
+                if (currentY <= 300) {
+                    updateVisible(false)
+                } else if (scrollingUp && !dismissed) {
+                    updateVisible(true)
+                } else if (scrollingDown) {
+                    updateVisible(false)
+                }
+            })
         }
 
         window.addEventListener("scroll", handleScroll, { passive: true })
-        return () => window.removeEventListener("scroll", handleScroll)
+        return () => {
+            window.removeEventListener("scroll", handleScroll)
+            if (frame) window.cancelAnimationFrame(frame)
+        }
     }, [dismissed])
 
     if (
@@ -85,7 +101,11 @@ export function MobileFloatingCTA() {
                             </motion.div>
 
                             <button
-                                onClick={() => setDismissed(true)}
+                                onClick={() => {
+                                    visibleRef.current = false
+                                    setVisible(false)
+                                    setDismissed(true)
+                                }}
                                 className="absolute right-1 top-1/2 flex h-9 w-9 -translate-y-1/2 items-center justify-center rounded-full bg-white/20 transition-colors hover:bg-white/30"
                                 aria-label="닫기"
                             >

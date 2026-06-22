@@ -83,6 +83,33 @@ function splitEmails(value: string) {
   )]
 }
 
+async function copyTextToClipboard(value: string) {
+  try {
+    await navigator.clipboard.writeText(value)
+    return true
+  } catch {
+    if (typeof document === "undefined") return false
+  }
+
+  const textarea = document.createElement("textarea")
+  textarea.value = value
+  textarea.setAttribute("readonly", "")
+  textarea.style.position = "fixed"
+  textarea.style.left = "-9999px"
+  textarea.style.top = "0"
+  document.body.appendChild(textarea)
+
+  try {
+    textarea.focus()
+    textarea.select()
+    return document.execCommand("copy")
+  } catch {
+    return false
+  } finally {
+    document.body.removeChild(textarea)
+  }
+}
+
 function Toast({ msg, type }: { msg: string; type: "success" | "error" }) {
   return (
     <div
@@ -130,17 +157,29 @@ function CopyValueButton({
   value: string
   label?: string
 }) {
-  const [copied, setCopied] = useState(false)
+  const [copyState, setCopyState] = useState<"idle" | "copied" | "failed">("idle")
 
   const handleCopy = async () => {
-    try {
-      await navigator.clipboard.writeText(value)
-      setCopied(true)
-      window.setTimeout(() => setCopied(false), 1800)
-    } catch {
-      setCopied(false)
-    }
+    const copied = await copyTextToClipboard(value)
+    setCopyState(copied ? "copied" : "failed")
+    window.setTimeout(() => setCopyState("idle"), 1800)
   }
+  const copyStateClassName =
+    copyState === "copied"
+      ? "border-[#D1FAE5] bg-[#ECFDF5] text-[#084734]"
+      : copyState === "failed"
+        ? "border-[#F6D5C5] bg-[#FEF3EE] text-[#B85C33]"
+        : "border-[#e8e8e4] bg-white text-[#1a1a1a]/60 hover:border-[#c8c8c4] hover:text-[#111110]"
+  const copyStateIcon =
+    copyState === "copied" ? (
+      <Check className="h-3.5 w-3.5" />
+    ) : copyState === "failed" ? (
+      <XCircle className="h-3.5 w-3.5" />
+    ) : (
+      <Copy className="h-3.5 w-3.5" />
+    )
+  const copyStateLabel =
+    copyState === "copied" ? "복사됨" : copyState === "failed" ? "복사 실패" : label
 
   return (
     <button
@@ -148,13 +187,11 @@ function CopyValueButton({
       onClick={() => void handleCopy()}
       className={cn(
         "inline-flex items-center gap-1.5 whitespace-nowrap rounded-lg border px-3 py-2 text-[12px] font-medium transition-all",
-        copied
-          ? "border-[#D1FAE5] bg-[#ECFDF5] text-[#084734]"
-          : "border-[#e8e8e4] bg-white text-[#1a1a1a]/60 hover:border-[#c8c8c4] hover:text-[#111110]"
+        copyStateClassName
       )}
     >
-      {copied ? <Check className="h-3.5 w-3.5" /> : <Copy className="h-3.5 w-3.5" />}
-      {copied ? "복사됨" : label}
+      {copyStateIcon}
+      {copyStateLabel}
     </button>
   )
 }
@@ -425,9 +462,22 @@ function WebhookRow({
   )
 }
 
-type SettingsTab = "general" | "lead" | "cta" | "integrations" | "notifications" | "history"
+type SettingsTab = "general" | "lead" | "cta" | "links" | "integrations" | "notifications" | "history"
 
 type SettingsKey = keyof SiteSettings
+
+type SiteLinkItem = {
+  label: string
+  path: string
+  description: string
+  badge?: string
+}
+
+type SiteLinkGroup = {
+  title: string
+  description: string
+  links: SiteLinkItem[]
+}
 
 const NAV_ITEMS: Array<{
   key: SettingsTab
@@ -454,6 +504,12 @@ const NAV_ITEMS: Array<{
     icon: <Link2 className="w-4 h-4" />,
   },
   {
+    key: "links",
+    label: "주소",
+    desc: "공개 URL 복사 모음",
+    icon: <Globe className="w-4 h-4" />,
+  },
+  {
     key: "integrations",
     label: "외부 연동",
     desc: "웹훅과 테스트 상태",
@@ -473,6 +529,185 @@ const NAV_ITEMS: Array<{
   },
 ]
 
+const SITE_LINK_GROUPS: SiteLinkGroup[] = [
+  {
+    title: "핵심 랜딩",
+    description: "상담, 캠페인, 운영 채널에서 가장 자주 공유하는 진입점입니다.",
+    links: [
+      {
+        label: "메인 랜딩",
+        path: "/",
+        description: "공개 홈페이지 첫 화면",
+        badge: "홈",
+      },
+      {
+        label: "회사 소개",
+        path: "/about",
+        description: "브랜드와 회사 소개 페이지",
+      },
+      {
+        label: "OMO 랜딩",
+        path: "/l/omo1",
+        description: "별도 제작된 OMO 캠페인 랜딩",
+        badge: "캠페인",
+      },
+      {
+        label: "도입 문의",
+        path: "/contact",
+        description: "상담 문의와 리드 수집 페이지",
+      },
+    ],
+  },
+  {
+    title: "가격·도입",
+    description: "견적 안내와 결제 전환에 연결되는 주소입니다.",
+    links: [
+      {
+        label: "가격 안내",
+        path: "/pricing",
+        description: "플랜과 가격 구조 안내",
+      },
+      {
+        label: "가격 시뮬레이션",
+        path: "/pricing/simulator",
+        description: "기관 규모별 예상 비용 계산",
+        badge: "계산기",
+      },
+      {
+        label: "체크아웃",
+        path: "/checkout",
+        description: "소프트웨어 플랜 결제 페이지",
+      },
+    ],
+  },
+  {
+    title: "제품·자료",
+    description: "제품 소개와 자료 탐색에 쓰는 고정 경로입니다.",
+    links: [
+      {
+        label: "제품 소개",
+        path: "/product",
+        description: "Classin Home 제품 전체 소개",
+      },
+      {
+        label: "소프트웨어",
+        path: "/product/sw",
+        description: "SW 기능과 운영 흐름 소개",
+      },
+      {
+        label: "하드웨어",
+        path: "/product/hw",
+        description: "HW 구성과 설치 안내",
+      },
+      {
+        label: "자료실",
+        path: "/resources",
+        description: "다운로드 및 운영 자료",
+      },
+      {
+        label: "문서",
+        path: "/docs",
+        description: "카테고리형 가이드 문서",
+      },
+      {
+        label: "문서 검색",
+        path: "/docs/search",
+        description: "문서 검색 화면",
+      },
+    ],
+  },
+  {
+    title: "문서 카테고리",
+    description: "상담/지원 답변에서 바로 연결하기 좋은 문서 섹션입니다.",
+    links: [
+      {
+        label: "도입 시작",
+        path: "/docs/start",
+        description: "도입 전 FAQ와 시작 가이드",
+      },
+      {
+        label: "소프트웨어 문서",
+        path: "/docs/software",
+        description: "소프트웨어 운영 가이드",
+      },
+      {
+        label: "관리자 문서",
+        path: "/docs/admin",
+        description: "관리자 콘솔과 운영 표준",
+      },
+      {
+        label: "교사용 문서",
+        path: "/docs/teacher",
+        description: "수업 개설과 강의 운영 가이드",
+      },
+      {
+        label: "학생용 문서",
+        path: "/docs/student",
+        description: "학생 참여와 학습 흐름 안내",
+      },
+      {
+        label: "하드웨어 문서",
+        path: "/docs/hardware",
+        description: "하드웨어 설치와 운영 안내",
+      },
+      {
+        label: "스마트보드 문서",
+        path: "/docs/board",
+        description: "전자칠판 사용과 문제 해결",
+      },
+    ],
+  },
+  {
+    title: "콘텐츠·소식",
+    description: "블로그, 이벤트, 업데이트 공유용 링크입니다.",
+    links: [
+      {
+        label: "블로그",
+        path: "/blog",
+        description: "콘텐츠 목록",
+      },
+      {
+        label: "이벤트",
+        path: "/events",
+        description: "진행/종료 이벤트 목록",
+      },
+      {
+        label: "업데이트",
+        path: "/updates",
+        description: "제품과 운영 변경 사항",
+      },
+      {
+        label: "FAQ",
+        path: "/faq",
+        description: "자주 묻는 질문",
+      },
+    ],
+  },
+  {
+    title: "운영·정책",
+    description: "정책과 데이터 삭제 요청처럼 안내 문구에 자주 들어가는 주소입니다.",
+    links: [
+      {
+        label: "개인정보 처리방침",
+        path: "/privacy",
+        description: "개인정보 처리방침",
+      },
+      {
+        label: "이용약관",
+        path: "/terms",
+        description: "서비스 이용약관",
+      },
+      {
+        label: "데이터 삭제 요청",
+        path: "/data-deletion",
+        description: "사용자 데이터 삭제 요청 안내",
+      },
+    ],
+  },
+]
+
+const SITE_LINK_COUNT = SITE_LINK_GROUPS.reduce((count, group) => count + group.links.length, 0)
+
 function isIntegrationSection(value: string): value is IntegrationSection {
   return (ADMIN_INTEGRATION_SECTION_KEYS as readonly string[]).includes(value)
 }
@@ -488,6 +723,7 @@ const SECTION_FIELDS: Record<SettingsTab, SettingsKey[]> = {
   ],
   lead: ["demoFormEnabled", "blogSectionEnabled"],
   cta: [],
+  links: [],
   integrations: [
     "googleSheetWebhookUrl",
     "leadWebhookUrl",
@@ -563,6 +799,68 @@ function EmptyHint({
           <p className="text-[12px] text-[#1a1a1a]/40 mt-1 leading-relaxed">{description}</p>
           <p className="text-[12px] text-[#111110] mt-2 font-medium">{action}</p>
         </div>
+      </div>
+    </div>
+  )
+}
+
+function buildSiteUrl(origin: string, path: string) {
+  return origin ? `${origin}${path}` : path
+}
+
+function formatSiteLinkGroupForCopy(origin: string, group: SiteLinkGroup) {
+  return [
+    `[${group.title}]`,
+    ...group.links.map((link) => `${link.label}: ${buildSiteUrl(origin, link.path)}`),
+  ].join("\n")
+}
+
+function formatAllSiteLinksForCopy(origin: string) {
+  return SITE_LINK_GROUPS.map((group) => formatSiteLinkGroupForCopy(origin, group)).join("\n\n")
+}
+
+function SiteLinkRow({
+  link,
+  currentOrigin,
+}: {
+  link: SiteLinkItem
+  currentOrigin: string
+}) {
+  const siteUrl = buildSiteUrl(currentOrigin, link.path)
+
+  return (
+    <div className="grid gap-3 border-b border-[#e8e8e4] py-4 last:border-0 lg:grid-cols-[minmax(0,1fr)_minmax(240px,0.9fr)_auto] lg:items-center">
+      <div className="min-w-0">
+        <div className="flex flex-wrap items-center gap-2">
+          <p className="text-[13px] font-medium text-[#111110]">{link.label}</p>
+          {link.badge ? (
+            <span className="inline-flex rounded-full bg-[#ECFDF5] px-2 py-0.5 text-[11px] font-medium text-[#084734]">
+              {link.badge}
+            </span>
+          ) : null}
+        </div>
+        <p className="mt-0.5 text-[12px] leading-relaxed text-[#1a1a1a]/45">
+          {link.description}
+        </p>
+      </div>
+
+      <div className="min-w-0 rounded-xl border border-[#e8e8e4] bg-[#fafaf8] px-3 py-2">
+        <code className="block truncate text-[12px] text-[#111110]">{siteUrl}</code>
+        <code className="mt-1 block truncate text-[11px] text-[#1a1a1a]/35">{link.path}</code>
+      </div>
+
+      <div className="flex flex-wrap items-center gap-2 lg:justify-end">
+        <CopyValueButton value={siteUrl} label="URL 복사" />
+        <CopyValueButton value={link.path} label="경로 복사" />
+        <a
+          href={siteUrl}
+          target="_blank"
+          rel="noopener noreferrer"
+          aria-label={`${link.label} 새 창에서 열기`}
+          className="inline-flex h-9 w-9 items-center justify-center rounded-lg border border-[#e8e8e4] bg-white text-[#1a1a1a]/45 transition-colors hover:border-[#c8c8c4] hover:text-[#111110]"
+        >
+          <ExternalLink className="h-3.5 w-3.5" />
+        </a>
       </div>
     </div>
   )
@@ -789,6 +1087,10 @@ export default function SettingsPage() {
   const pageWebhookUrl = currentOrigin
     ? `${currentOrigin}${pageWebhookPath}`
     : pageWebhookPath
+  const allSiteLinksText = useMemo(
+    () => formatAllSiteLinksForCopy(currentOrigin),
+    [currentOrigin]
+  )
 
   const pageWebhookFetchExample = useMemo(
     () =>
@@ -1007,7 +1309,7 @@ export default function SettingsPage() {
         <aside className="space-y-3 xl:sticky xl:top-6">
           <div className="hidden rounded-2xl border border-[#e8e8e4] bg-white px-4 py-4 xl:block">
             <p className="text-[12px] font-semibold text-[#111110]">설정 카테고리</p>
-            <p className="text-[12px] text-[#1a1a1a]/40 mt-1">현재는 6개 핵심 영역만 열어둡니다.</p>
+            <p className="text-[12px] text-[#1a1a1a]/40 mt-1">현재는 7개 핵심 영역만 열어둡니다.</p>
           </div>
           <nav className="admin-scroll-snap-x no-scrollbar -mx-4 flex gap-2 overflow-x-auto px-4 pb-2 sm:mx-0 sm:px-0 xl:block xl:space-y-1 xl:overflow-visible xl:pb-0">
             {NAV_ITEMS.map((item) => {
@@ -1055,7 +1357,7 @@ export default function SettingsPage() {
           <div className="rounded-2xl border border-[#e8e8e4] bg-[#fafaf8] px-4 py-4">
             <p className="text-[12px] font-medium text-[#111110]">운영 메모</p>
             <p className="text-[12px] text-[#1a1a1a]/45 mt-1 leading-relaxed">
-              리드/폼과 외부 연동은 즉시 저장 가능하고, CTA와 변경 이력은 다음 단계에서 데이터 모델을 연결합니다.
+              주소 탭은 복사 전용이고, 리드/폼과 외부 연동은 즉시 저장 가능합니다. CTA와 변경 이력은 다음 단계에서 데이터 모델을 연결합니다.
             </p>
           </div>
         </aside>
@@ -1214,6 +1516,60 @@ export default function SettingsPage() {
                   action="우선은 Settings의 리드·폼과 Analytics의 CTA 성과 지표를 같이 맞춰주세요."
                 />
               </PanelCard>
+            </>
+          )}
+
+          {activeTab === "links" && (
+            <>
+              <PanelCard
+                title="주소 복사 허브"
+                description="랜딩, 가격, 제품, 자료, 정책 페이지 주소를 운영자가 바로 복사할 수 있게 모았습니다."
+                badge={`${SITE_LINK_COUNT}개 주소`}
+              >
+                <div className="grid gap-4 lg:grid-cols-[minmax(0,1fr)_auto] lg:items-center">
+                  <div className="rounded-2xl border border-[#e8e8e4] bg-[#fafaf8] px-4 py-3">
+                    <p className="text-[12px] font-medium text-[#111110]">현재 기준 도메인</p>
+                    <code className="mt-1 block truncate text-[13px] text-[#1a1a1a]/60">
+                      {currentOrigin || "브라우저 기준 도메인 확인 중"}
+                    </code>
+                  </div>
+                  <div className="flex flex-wrap items-center gap-2 lg:justify-end">
+                    <CopyValueButton value={allSiteLinksText} label="전체 복사" />
+                    <span className="rounded-full bg-[#f0f0ec] px-3 py-2 text-[12px] font-medium text-[#1a1a1a]/50">
+                      고정 공개 경로만 포함
+                    </span>
+                  </div>
+                </div>
+                <div className="mt-4 rounded-2xl border border-dashed border-[#e0e0dc] bg-white px-4 py-3 text-[12px] leading-relaxed text-[#1a1a1a]/45">
+                  블로그/자료/이벤트 상세처럼 slug가 필요한 동적 주소는 각 콘텐츠 상세 화면에서
+                  복사하는 흐름으로 남겨둡니다.
+                </div>
+              </PanelCard>
+
+              {SITE_LINK_GROUPS.map((group) => (
+                <PanelCard
+                  key={group.title}
+                  title={group.title}
+                  description={group.description}
+                  badge={`${group.links.length}개`}
+                >
+                  <div className="mb-1 flex justify-end">
+                    <CopyValueButton
+                      value={formatSiteLinkGroupForCopy(currentOrigin, group)}
+                      label="그룹 복사"
+                    />
+                  </div>
+                  <div>
+                    {group.links.map((link) => (
+                      <SiteLinkRow
+                        key={link.path}
+                        link={link}
+                        currentOrigin={currentOrigin}
+                      />
+                    ))}
+                  </div>
+                </PanelCard>
+              ))}
             </>
           )}
 

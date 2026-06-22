@@ -1,0 +1,4336 @@
+<!doctype html>
+<html lang="ko">
+<head>
+  <meta charset="utf-8" />
+  <meta name="viewport" content="width=device-width, initial-scale=1" />
+  <title>유아·초등 수업의 즐거움이 기록과 신뢰로 남습니다 | ClassIn Korea</title>
+  <meta name="description" content="유아·초등 학원을 위한 ClassIn 학원 시스템 OS 랜딩. 활동형 EDB 교안, 인터랙티브 칠판, 녹화 다시보기, 학부모 상담 흐름을 연결합니다." />
+  <meta property="og:title" content="유아·초등 수업의 즐거움이 기록과 신뢰로 남습니다 | ClassIn Korea" />
+  <meta property="og:description" content="유아·초등 학원을 위한 ClassIn 학원 시스템 OS 랜딩. 활동형 EDB 교안, 인터랙티브 칠판, 녹화 다시보기, 학부모 상담 흐름을 연결합니다." />
+  <meta property="og:type" content="website" />
+  <style>
+    @import url("https://fonts.googleapis.com/css2?family=Fraunces:opsz,wght@9..144,400;9..144,700;9..144,900&family=Noto+Serif+KR:wght@200;300;400;500;600;700;900&family=Noto+Sans+KR:wght@100;300;400;500;700;900&display=swap");
+
+    :root {
+      --kids-green: #084734;
+      --kids-green-hover: #065c41;
+      --kids-green-soft: #ECFDF5;
+      --kids-cream: #FDFBF7;
+      --kids-paper: #F8F7F4;
+      --kids-orange: #FF5A1F;
+      --kids-gold: #F2CC8F;
+      --kids-pink: #FFC0CB;
+      --kids-blue: #E1EFF4;
+      --kids-brown: #9E7453;
+      --kids-line: #E5D4C4;
+      --kids-bg: #FDFBF7;
+      --kids-bg-alt: #F8F7F4;
+      --kids-text: #2D231A;
+      --kids-muted: #6F665D;
+      --kids-border: rgba(0,0,0,0.08);
+      --kids-white: #FFFFFF;
+      --kids-dark: #2D231A;
+      --kids-shadow: rgba(78,61,38,0.07) 0px 18px 42px, rgba(78,61,38,0.045) 0px 7px 18px, rgba(78,61,38,0.03) 0px 2px 8px;
+      --kids-font: Inter, Pretendard, -apple-system, BlinkMacSystemFont, "Segoe UI", Helvetica, Arial, sans-serif;
+      --kids-serif: "Noto Serif KR", "AppleMyungjo", Georgia, "Times New Roman", serif;
+    }
+
+    * { box-sizing: border-box; }
+    html { scroll-behavior: smooth; }
+    body {
+      margin: 0;
+      background: var(--kids-bg);
+      color: var(--kids-text);
+      font-family: var(--kids-font);
+      -webkit-font-smoothing: antialiased;
+      text-rendering: optimizeLegibility;
+    }
+    a { color: inherit; text-decoration: none; }
+    img { display: block; max-width: 100%; }
+    button, input, textarea, select { font: inherit; }
+    .kids-page {
+      min-height: 100vh;
+      overflow-x: hidden;
+      background:
+        linear-gradient(180deg, rgba(253,251,247,0.28), rgba(229,212,196,0.18)),
+        url("/l/kids/assets/bg/paper-texture.png"),
+        url("/l/kids/assets/bg/kids-bg.png") center top / cover,
+        linear-gradient(180deg, var(--kids-cream) 0%, var(--kids-paper) 45%, var(--kids-cream) 100%);
+      background-repeat: no-repeat, repeat, repeat-y, no-repeat;
+    }
+    .kids-hero {
+      min-height: 100vh;
+      position: relative;
+      display: flex;
+      align-items: center;
+      justify-content: center;
+      overflow: hidden;
+      padding: 104px 24px 76px;
+      text-align: left;
+      background:
+        linear-gradient(180deg, rgba(253,251,247,0.76), rgba(253,251,247,0.9)),
+        url("/l/kids/assets/bg/hero-bg.png") center/cover,
+        radial-gradient(ellipse 140% 72% at 50% -18%, rgba(233,228,219,0.82) 0%, rgba(253,251,247,0) 58%),
+        radial-gradient(ellipse 120% 82% at 86% 18%, rgba(8,71,52,0.10) 0%, rgba(253,251,247,0) 62%),
+        linear-gradient(180deg, var(--kids-cream) 0%, var(--kids-paper) 100%);
+    }
+    .kids-hero::before {
+      content: "";
+      position: absolute;
+      inset: 24px;
+      background:
+        linear-gradient(180deg, rgba(255,255,255,0.58), rgba(255,255,255,0)),
+        linear-gradient(90deg, rgba(8,71,52,0.08), rgba(233,228,219,0.28), rgba(8,71,52,0.05));
+      border: 1px solid rgba(8,71,52,0.08);
+      border-radius: 40px;
+      mask-image: linear-gradient(to bottom, rgba(0,0,0,0.7), transparent 82%);
+      pointer-events: none;
+    }
+    .kids-hero::after {
+      content: "";
+      position: absolute;
+      inset: 0;
+      background-image: url("data:image/svg+xml,%3Csvg viewBox='0 0 200 200' xmlns='http://www.w3.org/2000/svg'%3E%3Cfilter id='noise'%3E%3CfeTurbulence type='fractalNoise' baseFrequency='0.65' numOctaves='3' stitchTiles='stitch'/%3E%3C/filter%3E%3Crect width='100%25' height='100%25' filter='url(%23noise)' opacity='0.35'/%3E%3C/svg%3E");
+      opacity: 0.035;
+      pointer-events: none;
+    }
+    .kids-topbar {
+      position: absolute;
+      top: 26px;
+      left: 50%;
+      transform: translateX(-50%);
+      z-index: 2;
+      width: min(1120px, calc(100% - 32px));
+      display: flex;
+      align-items: center;
+      justify-content: space-between;
+      gap: 20px;
+    }
+    .kids-topbar img {
+      width: 108px;
+      border-radius: 0;
+    }
+    .kids-topbar a:last-child {
+      display: inline-flex;
+      align-items: center;
+      justify-content: center;
+      min-height: 38px;
+      padding: 8px 20px;
+      border-radius: 999px;
+      background: var(--kids-green);
+      color: #fff;
+      font-size: 14px;
+      font-weight: 700;
+      transition: background 180ms ease, transform 180ms ease;
+    }
+    .kids-topbar a:last-child:hover { background: var(--kids-green-hover); }
+    .kids-topbar a:last-child:active { transform: scale(0.97); }
+    .kids-hero-inner {
+      position: relative;
+      z-index: 1;
+      width: min(1120px, 100%);
+      display: grid;
+      grid-template-columns: minmax(0, 1.02fr) minmax(320px, 0.78fr);
+      gap: 52px;
+      align-items: center;
+    }
+    .kids-hero-inner::before {
+      content: none;
+    }
+    .kids-hero-copy::before {
+      content: "";
+      display: block;
+      width: 72px;
+      height: 1px;
+      margin: 0 0 30px;
+      background: rgba(8,71,52,0.32);
+    }
+    .kids-label {
+      display: block;
+      margin-bottom: 24px;
+      color: var(--kids-green);
+      font-size: 13px;
+      font-weight: 700;
+      line-height: 1.5;
+      letter-spacing: 0.12em;
+      text-transform: uppercase;
+    }
+    .kids-hero h1,
+    .kids-section h2 {
+      margin: 0;
+      color: var(--kids-text);
+      font-family: var(--kids-serif);
+      font-weight: 500;
+      line-height: 1.08;
+      letter-spacing: 0;
+      text-wrap: balance;
+    }
+    .kids-hero h1 {
+      font-size: clamp(48px, 7.4vw, 84px);
+      line-height: 1.04;
+    }
+    .kids-hero em,
+    .kids-section em {
+      color: var(--kids-green);
+      font-style: italic;
+      font-weight: 400;
+    }
+    .kids-hero p {
+      max-width: 720px;
+      margin: 32px 0 0;
+      color: var(--kids-muted);
+      font-size: clamp(17px, 2vw, 21px);
+      font-weight: 340;
+      line-height: 1.78;
+    }
+    .kids-actions {
+      display: flex;
+      flex-wrap: wrap;
+      justify-content: flex-start;
+      gap: 14px;
+      margin-top: 42px;
+    }
+    .kids-btn {
+      display: inline-flex;
+      align-items: center;
+      justify-content: center;
+      min-height: 52px;
+      padding: 12px 26px;
+      border-radius: 999px;
+      border: 1px solid var(--kids-green);
+      font-size: 15px;
+      font-weight: 700;
+      transition: background 180ms ease, transform 180ms ease, border-color 180ms ease;
+    }
+    .kids-btn.primary {
+      background: var(--kids-green);
+      color: #fff;
+    }
+    .kids-btn.secondary {
+      background: transparent;
+      color: var(--kids-green);
+    }
+    .kids-btn:hover { transform: translateY(-1px); }
+    .kids-btn.primary:hover { background: var(--kids-green-hover); border-color: var(--kids-green-hover); }
+    .kids-btn.secondary:hover { background: var(--kids-green-soft); }
+    .kids-hero-visual {
+      position: relative;
+      min-height: 470px;
+    }
+    .kids-activity-card {
+      position: relative;
+      overflow: hidden;
+      min-height: 430px;
+      padding: 26px;
+      border: 1px solid rgba(45,35,26,0.16);
+      border-radius: 22px;
+      background:
+        linear-gradient(180deg, rgba(255,255,255,0.74), rgba(255,253,248,0.92)),
+        url("/l/kids/assets/bg/paper-texture.png");
+      box-shadow: rgba(45,35,26,0.08) 0 24px 70px;
+      transform: rotate(1.5deg);
+    }
+    .kids-activity-card::before {
+      content: "";
+      position: absolute;
+      inset: 16px;
+      border: 1px dashed rgba(8,71,52,0.16);
+      border-radius: 16px;
+      pointer-events: none;
+    }
+    .kids-activity-card img {
+      position: relative;
+      z-index: 1;
+      width: 100%;
+      aspect-ratio: 1 / 1;
+      object-fit: cover;
+      border-radius: 18px;
+      border: 1px solid rgba(45,35,26,0.12);
+      background: var(--kids-blue);
+      box-shadow: rgba(45,35,26,0.08) 0 12px 34px;
+    }
+    .kids-activity-card h2 {
+      position: relative;
+      z-index: 1;
+      margin: 20px 0 8px;
+      color: var(--kids-text);
+      font-family: var(--kids-serif);
+      font-size: clamp(28px, 3vw, 42px);
+      line-height: 1.08;
+      letter-spacing: 0;
+    }
+    .kids-activity-card p {
+      position: relative;
+      z-index: 1;
+      margin: 0;
+      color: var(--kids-muted);
+      font-size: 15px;
+      line-height: 1.65;
+    }
+    .kids-doodle {
+      position: absolute;
+      z-index: 2;
+      width: 88px;
+      filter: drop-shadow(0 12px 22px rgba(45,35,26,0.14));
+    }
+    .kids-doodle.sparkles { top: -20px; right: -18px; transform: rotate(8deg); }
+    .kids-doodle.tape { top: 38px; left: -24px; transform: rotate(-12deg); }
+    .kids-doodle.books { bottom: 22px; right: -20px; transform: rotate(-8deg); }
+    .kids-section {
+      position: relative;
+      overflow: hidden;
+      padding: clamp(104px, 12vw, 152px) 24px;
+      background:
+        linear-gradient(180deg, rgba(253,251,247,0.72), rgba(253,251,247,0.86)),
+        url("/l/kids/assets/bg/paper-texture.png"),
+        url("/l/kids/assets/bg/kids-bg.png") center / cover,
+        var(--kids-cream);
+      background-repeat: no-repeat, repeat, no-repeat, no-repeat;
+    }
+    .kids-section.alt {
+      background:
+        linear-gradient(180deg, rgba(253,251,247,0.68), rgba(253,251,247,0.9)),
+        url("/l/kids/assets/bg/paper-texture.png"),
+        url("/l/kids/assets/bg/pain-bg.png") center / cover,
+        var(--kids-bg-alt);
+      background-repeat: no-repeat, repeat, no-repeat, no-repeat;
+    }
+    .kids-section.soft {
+      background:
+        linear-gradient(180deg, rgba(236,253,245,0.70), rgba(253,251,247,0.88)),
+        url("/l/kids/assets/bg/paper-texture.png"),
+        url("/l/kids/assets/bg/safety-bg.png") center / cover,
+        var(--kids-green-soft);
+      background-repeat: no-repeat, repeat, no-repeat, no-repeat;
+    }
+    .kids-section.dark {
+      background:
+        linear-gradient(180deg, rgba(45,35,26,0.86), rgba(45,35,26,0.90)),
+        url("/l/kids/assets/bg/showcase-bg.png") center / cover,
+        radial-gradient(ellipse 110% 80% at 20% 0%, rgba(8,71,52,0.30) 0%, rgba(45,52,54,0) 58%),
+        var(--kids-dark);
+      color: #fff;
+    }
+    .kids-section.visual-scene h2,
+    .kids-section.visual-scene h3 {
+      color: #fff;
+    }
+    .kids-section.visual-scene p {
+      color: rgba(253,251,247,0.74);
+    }
+    .kids-section.visual-scene .kids-label,
+    .kids-section.visual-scene em {
+      color: #9AE6C7;
+    }
+    .kids-section.philosophy-scene {
+      background:
+        linear-gradient(90deg, rgba(229,212,196,0.78), rgba(253,251,247,0.84)),
+        url("/l/kids/assets/bg/paper-texture.png"),
+        url("/l/kids/assets/bg/philosophy-bg.png") center / cover,
+        var(--kids-cream);
+    }
+    .kids-section.story-scene-bg,
+    .kids-section.activity-scene {
+      background:
+        linear-gradient(180deg, rgba(253,251,247,0.76), rgba(253,251,247,0.91)),
+        url("/l/kids/assets/bg/paper-texture.png"),
+        url("/l/kids/assets/bg/pain-bg.png") center / cover,
+        var(--kids-cream);
+    }
+    .kids-section.journey-scene,
+    .kids-section.roadmap-scene {
+      background:
+        linear-gradient(180deg, rgba(253,251,247,0.74), rgba(236,253,245,0.78)),
+        url("/l/kids/assets/bg/paper-texture.png"),
+        url("/l/kids/assets/bg/howitworks-bg.png") center / cover,
+        var(--kids-green-soft);
+    }
+    .kids-section.report-foundation,
+    .kids-section.report-scene,
+    .kids-section.proof-scene {
+      background:
+        linear-gradient(180deg, rgba(253,251,247,0.72), rgba(253,251,247,0.88)),
+        url("/l/kids/assets/bg/paper-texture.png"),
+        url("/l/kids/assets/bg/data-bg.png") center / cover,
+        var(--kids-cream);
+    }
+    .kids-section.age-scene {
+      background:
+        linear-gradient(180deg, rgba(253,251,247,0.76), rgba(253,251,247,0.84)),
+        url("/l/kids/assets/bg/paper-texture.png"),
+        url("/l/kids/assets/bg/kids-bg.png") center / cover,
+        var(--kids-cream);
+    }
+    .kids-section.feature-scene,
+    .kids-section.premium-scene,
+    .kids-section.curriculum-scene {
+      background:
+        linear-gradient(180deg, rgba(253,251,247,0.78), rgba(248,247,244,0.9)),
+        url("/l/kids/assets/bg/paper-texture.png"),
+        url("/l/kids/assets/bg/curriculum-bg.png") center / cover,
+        var(--kids-paper);
+    }
+    .kids-section.comparison-scene,
+    .kids-section.decision-scene,
+    .kids-section.trust-scene {
+      background:
+        linear-gradient(180deg, rgba(236,253,245,0.66), rgba(253,251,247,0.9)),
+        url("/l/kids/assets/bg/paper-texture.png"),
+        url("/l/kids/assets/bg/solution-bg.png") center / cover,
+        var(--kids-green-soft);
+    }
+    .kids-section.visual-scene {
+      background:
+        linear-gradient(180deg, rgba(45,35,26,0.78), rgba(45,35,26,0.86)),
+        url("/l/kids/assets/bg/showcase-bg.png") center / cover,
+        var(--kids-dark);
+      color: #fff;
+    }
+    .kids-section.audience-scene,
+    .kids-section.campaign-scene,
+    .kids-section.stakeholder-scene {
+      background:
+        linear-gradient(180deg, rgba(253,251,247,0.78), rgba(253,251,247,0.9)),
+        url("/l/kids/assets/bg/paper-texture.png"),
+        url("/l/kids/assets/bg/testimonial-bg.png") center / cover,
+        var(--kids-cream);
+    }
+    .kids-section.resource-scene,
+    .kids-section.faq-scene {
+      background:
+        linear-gradient(180deg, rgba(253,251,247,0.76), rgba(253,251,247,0.91)),
+        url("/l/kids/assets/bg/paper-texture.png"),
+        url("/l/kids/assets/bg/faq-bg.png") center / cover,
+        var(--kids-cream);
+    }
+    .kids-section.philosophy-scene,
+    .kids-section.story-scene-bg,
+    .kids-section.activity-scene,
+    .kids-section.journey-scene,
+    .kids-section.roadmap-scene,
+    .kids-section.report-foundation,
+    .kids-section.report-scene,
+    .kids-section.proof-scene,
+    .kids-section.age-scene,
+    .kids-section.feature-scene,
+    .kids-section.premium-scene,
+    .kids-section.curriculum-scene,
+    .kids-section.comparison-scene,
+    .kids-section.decision-scene,
+    .kids-section.trust-scene,
+    .kids-section.audience-scene,
+    .kids-section.campaign-scene,
+    .kids-section.stakeholder-scene,
+    .kids-section.resource-scene,
+    .kids-section.faq-scene {
+      background-repeat: no-repeat, repeat, no-repeat, no-repeat;
+    }
+    .kids-section-doodle {
+      position: absolute;
+      z-index: 0;
+      width: clamp(88px, 10vw, 150px);
+      opacity: 0.26;
+      pointer-events: none;
+      filter: drop-shadow(0 14px 26px rgba(78,61,38,0.12));
+    }
+    .kids-section-doodle.paper { top: 48px; right: 7%; transform: rotate(8deg); }
+    .kids-section-doodle.library { left: 5%; bottom: 44px; transform: rotate(-9deg); }
+    .kids-section-doodle.backpack { right: 5%; bottom: 52px; transform: rotate(10deg); }
+    .kids-section-doodle.checkbox { left: 7%; top: 56px; transform: rotate(-8deg); }
+    .kids-section-doodle.tools { right: 6%; top: 66px; transform: rotate(8deg); }
+    .kids-inner {
+      position: relative;
+      z-index: 1;
+      width: min(1120px, 100%);
+      margin: 0 auto;
+    }
+    .kids-split {
+      display: grid;
+      grid-template-columns: minmax(0, 1fr) minmax(360px, 1fr);
+      gap: 64px;
+      align-items: center;
+    }
+    .kids-split.reverse {
+      grid-template-columns: minmax(360px, 1fr) minmax(0, 1fr);
+    }
+    .kids-section h2 {
+      margin-bottom: 28px;
+      font-size: clamp(38px, 4.6vw, 58px);
+      line-height: 1.08;
+      font-weight: 300;
+      word-break: keep-all;
+      overflow-wrap: break-word;
+    }
+    .kids-section h2 em {
+      display: inline-block;
+      font-style: normal;
+      font-weight: 400;
+    }
+    .kids-section p {
+      margin: 0;
+      color: var(--kids-muted);
+      font-size: 17px;
+      line-height: 1.8;
+    }
+    .kids-section.dark h2,
+    .kids-section.dark h3 {
+      color: #fff;
+    }
+    .kids-section.dark p {
+      color: rgba(246,245,244,0.7);
+    }
+    .kids-list {
+      display: grid;
+      gap: 16px;
+      padding: 0;
+      margin: 30px 0 0;
+      list-style: none;
+    }
+    .kids-list li {
+      display: flex;
+      align-items: center;
+      gap: 12px;
+      color: var(--kids-text);
+      font-size: 16px;
+      font-weight: 650;
+      line-height: 1.55;
+    }
+    .kids-list span {
+      width: 9px;
+      height: 9px;
+      border-radius: 50%;
+      background: var(--kids-green);
+      flex: 0 0 auto;
+    }
+    .kids-media {
+      min-height: 430px;
+      position: relative;
+      display: flex;
+      align-items: center;
+      justify-content: center;
+      overflow: hidden;
+      padding: 18px;
+      border: 1px solid var(--kids-line);
+      border-radius: 28px;
+      background:
+        linear-gradient(180deg, rgba(255,255,255,0.92), rgba(255,255,255,0.82)),
+        var(--kids-white);
+      box-shadow: 0 22px 56px rgba(78,61,38,0.11);
+    }
+    .kids-media::before,
+    .kids-dark-media::before {
+      content: "";
+      position: absolute;
+      inset: 14px;
+      border: 1px solid rgba(8,71,52,0.08);
+      border-radius: 18px;
+      pointer-events: none;
+    }
+    .kids-media img {
+      width: min(100%, 458px);
+      padding: 36px;
+      border-radius: 18px;
+      background:
+        radial-gradient(ellipse 90% 70% at 50% 42%, rgba(242,204,143,0.34), rgba(253,251,247,0.78)),
+        var(--kids-cream);
+      object-fit: contain;
+    }
+    .kids-note {
+      color: var(--kids-green);
+      font-family: var(--kids-serif);
+      font-size: 21px;
+      font-style: italic;
+      line-height: 1.58;
+      text-align: center;
+    }
+    .kids-card-grid {
+      display: grid;
+      grid-template-columns: repeat(3, minmax(0, 1fr));
+      gap: 24px;
+      margin-top: 48px;
+    }
+    .kids-card {
+      min-height: 238px;
+      padding: 30px;
+      border: 1px solid var(--kids-line);
+      border-radius: 22px;
+      background:
+        linear-gradient(180deg, rgba(255,255,255,0.92), rgba(255,255,255,0.78)),
+        var(--kids-white);
+      box-shadow: var(--kids-shadow);
+    }
+    .kids-card-index {
+      display: inline-flex;
+      align-items: center;
+      justify-content: center;
+      width: 48px;
+      height: 48px;
+      margin-bottom: 24px;
+      border-radius: 50%;
+      background: #F2F4F2;
+      color: var(--kids-green);
+      font-family: var(--kids-serif);
+      font-size: 20px;
+    }
+    .kids-card h3,
+    .kids-pillar h3 {
+      margin: 0 0 14px;
+      color: var(--kids-text);
+      font-size: 20px;
+      line-height: 1.35;
+      letter-spacing: 0;
+    }
+    .kids-card p,
+    .kids-pillar p {
+      color: var(--kids-muted);
+      font-size: 15px;
+      line-height: 1.75;
+    }
+    .kids-age-grid {
+      display: grid;
+      grid-template-columns: repeat(2, minmax(0, 1fr));
+      gap: 18px;
+      margin-top: 44px;
+    }
+    .kids-age-card {
+      position: relative;
+      overflow: hidden;
+      min-height: 320px;
+      padding: 34px;
+      border: 1px solid rgba(45,35,26,0.12);
+      border-radius: 22px;
+      background:
+        linear-gradient(180deg, rgba(255,255,255,0.9), rgba(255,255,255,0.74)),
+        var(--kids-white);
+      box-shadow: 0 18px 46px rgba(78,61,38,0.08);
+    }
+    .kids-age-card::before {
+      content: "";
+      position: absolute;
+      right: -42px;
+      top: -42px;
+      width: 150px;
+      height: 150px;
+      border-radius: 50%;
+      background: var(--kids-blue);
+      opacity: 0.58;
+    }
+    .kids-age-card:nth-child(2)::before { background: var(--kids-pink); }
+    .kids-age-card span {
+      position: relative;
+      display: inline-flex;
+      margin-bottom: 16px;
+      color: var(--kids-orange);
+      font-size: 13px;
+      font-weight: 800;
+      line-height: 1.4;
+    }
+    .kids-age-card h3 {
+      position: relative;
+      margin: 0 0 12px;
+      color: var(--kids-text);
+      font-family: var(--kids-serif);
+      font-size: 28px;
+      font-weight: 400;
+      line-height: 1.18;
+      letter-spacing: 0;
+    }
+    .kids-age-card p,
+    .kids-age-card li {
+      position: relative;
+      color: var(--kids-muted);
+      font-size: 15px;
+      line-height: 1.72;
+    }
+    .kids-age-card ul {
+      position: relative;
+      display: grid;
+      gap: 8px;
+      padding: 18px 0 0;
+      margin: 18px 0 0;
+      border-top: 1px solid rgba(45,35,26,0.09);
+      list-style: none;
+    }
+    .kids-report-strip {
+      display: grid;
+      grid-template-columns: repeat(3, minmax(0, 1fr));
+      gap: 18px;
+      margin-top: 50px;
+    }
+    .kids-report-item {
+      min-height: 165px;
+      padding: 26px;
+      border: 1px solid var(--kids-line);
+      border-radius: 16px;
+      background:
+        linear-gradient(180deg, rgba(255,255,255,0.95), rgba(255,255,255,0.82)),
+        var(--kids-white);
+      box-shadow: 0 16px 42px rgba(78,61,38,0.08);
+    }
+    .kids-report-item span {
+      display: inline-flex;
+      margin-bottom: 12px;
+      color: var(--kids-green);
+      font-size: 12px;
+      font-weight: 800;
+      letter-spacing: 0.08em;
+      text-transform: uppercase;
+    }
+    .kids-report-item h3 {
+      margin: 0 0 10px;
+      color: var(--kids-text);
+      font-size: 20px;
+      line-height: 1.35;
+      letter-spacing: 0;
+    }
+    .kids-report-item p {
+      margin: 0;
+      color: var(--kids-muted);
+      font-size: 14px;
+      line-height: 1.7;
+    }
+    .operation-scene-grid {
+      display: grid;
+      grid-template-columns: repeat(3, minmax(0, 1fr));
+      gap: 16px;
+      margin-top: 44px;
+    }
+    .operation-scene-card {
+      min-height: 242px;
+      padding: 26px;
+      border: 1px solid rgba(8,71,52,0.12);
+      border-radius: 22px;
+      background:
+        linear-gradient(180deg, rgba(255,255,255,0.9), rgba(255,255,255,0.74)),
+        var(--kids-white);
+      box-shadow: 0 24px 70px rgba(78,61,38,0.08);
+    }
+    .operation-scene-card span {
+      display: block;
+      margin-bottom: 24px;
+      color: var(--kids-green);
+      font-size: 12px;
+      font-weight: 820;
+      letter-spacing: 0.08em;
+      text-transform: uppercase;
+    }
+    .operation-scene-card h3 {
+      margin: 0 0 12px;
+      color: var(--kids-text);
+      font-size: 22px;
+      line-height: 1.32;
+      letter-spacing: 0;
+    }
+    .operation-scene-card p {
+      margin: 0;
+      color: var(--kids-muted);
+      font-size: 15px;
+      line-height: 1.76;
+    }
+    .narrative-list {
+      display: grid;
+      gap: 18px;
+      margin-top: 46px;
+    }
+    .narrative-chapter {
+      display: grid;
+      grid-template-columns: minmax(0, 1fr) minmax(210px, 0.42fr);
+      gap: 26px;
+      padding: 28px;
+      border: 1px solid rgba(8,71,52,0.12);
+      border-radius: 22px;
+      background: rgba(255,255,255,0.76);
+      box-shadow: var(--kids-shadow);
+    }
+    .narrative-chapter span,
+    .evidence-row > span,
+    .stakeholder-note span {
+      display: block;
+      margin-bottom: 14px;
+      color: var(--kids-green);
+      font-size: 12px;
+      font-weight: 820;
+      letter-spacing: 0.08em;
+      text-transform: uppercase;
+    }
+    .narrative-chapter h3 {
+      margin: 0 0 14px;
+      color: var(--kids-text);
+      font-family: var(--kids-serif);
+      font-size: clamp(28px, 3vw, 38px);
+      font-weight: 500;
+      line-height: 1.2;
+      letter-spacing: 0;
+      word-break: keep-all;
+      overflow-wrap: break-word;
+    }
+    .narrative-chapter p {
+      margin: 0;
+      color: var(--kids-muted);
+      font-size: 16px;
+      line-height: 1.84;
+    }
+    .narrative-chapter ul {
+      display: grid;
+      gap: 10px;
+      align-content: start;
+      padding: 0;
+      margin: 0;
+      list-style: none;
+    }
+    .narrative-chapter li {
+      padding: 12px 14px;
+      border: 1px solid rgba(8,71,52,0.1);
+      border-radius: 999px;
+      background: rgba(236,253,245,0.62);
+      color: var(--kids-text);
+      font-size: 13px;
+      font-weight: 760;
+      line-height: 1.4;
+    }
+    .evidence-stack {
+      display: grid;
+      gap: 12px;
+      margin-top: 46px;
+    }
+    .evidence-row {
+      display: grid;
+      grid-template-columns: 150px minmax(0, 1fr);
+      gap: 22px;
+      padding: 24px 0;
+      border-bottom: 1px solid var(--kids-line);
+    }
+    .evidence-row h3 {
+      margin: 0 0 8px;
+      color: var(--kids-text);
+      font-size: 23px;
+      line-height: 1.32;
+      letter-spacing: 0;
+    }
+    .evidence-row p {
+      margin: 0;
+      color: var(--kids-muted);
+      font-size: 15px;
+      line-height: 1.78;
+    }
+    .stakeholder-grid {
+      display: grid;
+      grid-template-columns: repeat(5, minmax(0, 1fr));
+      gap: 12px;
+      margin-top: 46px;
+    }
+    .stakeholder-note {
+      min-height: 230px;
+      padding: 22px;
+      border: 1px solid var(--kids-line);
+      border-radius: 20px;
+      background: #fff;
+      box-shadow: var(--kids-shadow);
+    }
+    .stakeholder-note h3 {
+      margin: 0 0 12px;
+      color: var(--kids-text);
+      font-size: 19px;
+      line-height: 1.34;
+      letter-spacing: 0;
+    }
+    .stakeholder-note p {
+      margin: 0;
+      color: var(--kids-muted);
+      font-size: 14px;
+      line-height: 1.74;
+    }
+    .campaign-line-grid {
+      display: grid;
+      grid-template-columns: repeat(3, minmax(0, 1fr));
+      gap: 16px;
+      margin-top: 46px;
+    }
+    .campaign-line {
+      min-height: 248px;
+      padding: 28px;
+      border: 1px solid rgba(8,71,52,0.12);
+      border-radius: 22px;
+      background:
+        linear-gradient(180deg, rgba(236,253,245,0.86), rgba(255,255,255,0.72));
+      box-shadow: var(--kids-shadow);
+    }
+    .campaign-line h3 {
+      margin: 0 0 14px;
+      color: var(--kids-text);
+      font-family: var(--kids-serif);
+      font-size: clamp(27px, 3vw, 38px);
+      font-weight: 500;
+      line-height: 1.2;
+      letter-spacing: 0;
+      word-break: keep-all;
+      overflow-wrap: break-word;
+    }
+    .campaign-line p {
+      margin: 0 0 22px;
+      color: var(--kids-muted);
+      font-size: 15px;
+      line-height: 1.78;
+    }
+    .campaign-line strong {
+      color: var(--kids-green);
+      font-size: 14px;
+      line-height: 1.4;
+    }
+    .deep-dive-grid {
+      display: grid;
+      grid-template-columns: repeat(5, minmax(0, 1fr));
+      gap: 12px;
+      margin-top: 46px;
+    }
+    .deep-dive-card {
+      min-height: 260px;
+      padding: 22px;
+      border: 1px solid var(--kids-line);
+      border-radius: 20px;
+      background: #fff;
+      box-shadow: var(--kids-shadow);
+    }
+    .deep-dive-card span,
+    .comparison-row span {
+      display: block;
+      margin-bottom: 14px;
+      color: var(--kids-green);
+      font-size: 12px;
+      font-weight: 820;
+      letter-spacing: 0.08em;
+      text-transform: uppercase;
+    }
+    .deep-dive-card h3 {
+      margin: 0 0 12px;
+      color: var(--kids-text);
+      font-size: 19px;
+      line-height: 1.34;
+      letter-spacing: 0;
+    }
+    .deep-dive-card p {
+      margin: 0;
+      color: var(--kids-muted);
+      font-size: 14px;
+      line-height: 1.72;
+    }
+    .comparison-stack {
+      display: grid;
+      gap: 12px;
+      margin-top: 46px;
+    }
+    .comparison-row {
+      display: grid;
+      grid-template-columns: repeat(2, minmax(0, 1fr));
+      gap: 14px;
+    }
+    .comparison-row > div {
+      min-height: 156px;
+      padding: 22px;
+      border: 1px solid var(--kids-line);
+      border-radius: 20px;
+      background: rgba(255,255,255,0.74);
+    }
+    .comparison-row > div:last-child {
+      border-color: rgba(8,71,52,0.18);
+      background: rgba(236,253,245,0.72);
+    }
+    .comparison-row p {
+      margin: 0;
+      color: var(--kids-muted);
+      font-size: 15px;
+      line-height: 1.76;
+    }
+    .resource-grid,
+    .roadmap-grid {
+      display: grid;
+      grid-template-columns: repeat(3, minmax(0, 1fr));
+      gap: 16px;
+      margin-top: 46px;
+    }
+    .resource-card,
+    .roadmap-card {
+      display: block;
+      min-height: 196px;
+      padding: 26px;
+      border: 1px solid var(--kids-line);
+      border-radius: 20px;
+      background: #fff;
+      box-shadow: var(--kids-shadow);
+    }
+    .resource-card strong,
+    .roadmap-card h3 {
+      display: block;
+      margin: 0 0 12px;
+      color: var(--kids-text);
+      font-size: 21px;
+      line-height: 1.32;
+      letter-spacing: 0;
+    }
+    .resource-card span,
+    .roadmap-card p {
+      display: block;
+      color: var(--kids-muted);
+      font-size: 15px;
+      line-height: 1.76;
+    }
+    .roadmap-card span {
+      display: inline-flex;
+      margin-bottom: 22px;
+      color: var(--kids-green);
+      font-size: 12px;
+      font-weight: 820;
+      letter-spacing: 0.08em;
+      text-transform: uppercase;
+    }
+    .limits-box {
+      display: grid;
+      grid-template-columns: minmax(0, 0.78fr) minmax(320px, 1fr);
+      gap: 44px;
+      align-items: start;
+      padding: 34px;
+      border: 1px solid rgba(8,71,52,0.12);
+      border-radius: 24px;
+      background: rgba(255,255,255,0.76);
+      box-shadow: var(--kids-shadow);
+    }
+    .limits-box h2 {
+      margin: 0;
+    }
+    .limits-box ul {
+      display: grid;
+      gap: 14px;
+      padding: 0;
+      margin: 0;
+      list-style: none;
+    }
+    .limits-box li {
+      position: relative;
+      padding-left: 18px;
+      color: var(--kids-muted);
+      font-size: 15px;
+      line-height: 1.76;
+    }
+    .limits-box li::before {
+      content: "";
+      position: absolute;
+      left: 0;
+      top: 0.72em;
+      width: 7px;
+      height: 7px;
+      border-radius: 50%;
+      background: var(--kids-green);
+    }
+    .decision-grid {
+      display: grid;
+      grid-template-columns: repeat(3, minmax(0, 1fr));
+      gap: 22px;
+      margin-top: 48px;
+    }
+    .decision-card {
+      min-height: 330px;
+      padding: 30px;
+      border: 1px solid rgba(8,71,52,0.13);
+      border-radius: 22px;
+      background:
+        linear-gradient(180deg, rgba(255,255,255,0.88), rgba(255,255,255,0.72)),
+        var(--kids-cream);
+      box-shadow: var(--kids-shadow);
+    }
+    .decision-card h3 {
+      margin: 0 0 22px;
+      color: var(--kids-text);
+      font-family: var(--kids-serif);
+      font-size: 25px;
+      font-weight: 400;
+      line-height: 1.26;
+      letter-spacing: 0;
+    }
+    .decision-card div + div {
+      margin-top: 18px;
+      padding-top: 18px;
+      border-top: 1px solid var(--kids-border);
+    }
+    .decision-card strong {
+      display: block;
+      margin-bottom: 7px;
+      color: var(--kids-green);
+      font-size: 12px;
+      font-weight: 820;
+      line-height: 1.35;
+    }
+    .decision-card p {
+      margin: 0;
+      color: var(--kids-muted);
+      font-size: 14px;
+      line-height: 1.75;
+    }
+    .story-panel {
+      display: grid;
+      grid-template-columns: minmax(0, 0.9fr) minmax(360px, 1.1fr);
+      gap: 64px;
+      align-items: center;
+    }
+    .story-copy h2 {
+      margin-bottom: 28px;
+      font-size: clamp(38px, 4.6vw, 58px);
+    }
+    .story-copy p {
+      color: var(--kids-muted);
+      font-size: 17px;
+      line-height: 1.86;
+    }
+    .story-copy p + p {
+      margin-top: 18px;
+    }
+    .story-scene {
+      padding: 34px;
+      border: 1px solid var(--kids-line);
+      border-radius: 26px;
+      background:
+        linear-gradient(180deg, rgba(255,255,255,0.88), rgba(253,251,247,0.76)),
+        var(--kids-cream);
+      box-shadow: var(--kids-shadow);
+    }
+    .story-scene > span {
+      display: block;
+      margin-bottom: 12px;
+      color: var(--kids-green);
+      font-size: 12px;
+      font-weight: 820;
+      line-height: 1.4;
+    }
+    .story-scene h3 {
+      margin: 0 0 14px;
+      color: var(--kids-text);
+      font-family: var(--kids-serif);
+      font-size: 30px;
+      font-weight: 400;
+      line-height: 1.24;
+      letter-spacing: 0;
+    }
+    .story-scene > p {
+      margin: 0 0 26px;
+      color: var(--kids-muted);
+      font-size: 15px;
+      line-height: 1.82;
+    }
+    .story-scene ol {
+      display: grid;
+      gap: 12px;
+      padding: 0;
+      margin: 0;
+      list-style: none;
+    }
+    .story-scene li {
+      padding: 17px 18px;
+      border: 1px solid var(--kids-line);
+      border-radius: 16px;
+      background: rgba(255,255,255,0.72);
+    }
+    .story-scene li strong {
+      display: block;
+      margin-bottom: 7px;
+      color: var(--kids-green);
+      font-size: 12px;
+      font-weight: 820;
+    }
+    .story-scene li h4 {
+      margin: 0 0 6px;
+      color: var(--kids-text);
+      font-size: 17px;
+      line-height: 1.38;
+    }
+    .story-scene li p {
+      margin: 0;
+      color: var(--kids-muted);
+      font-size: 14px;
+      line-height: 1.72;
+    }
+    .advantage-grid {
+      display: grid;
+      grid-template-columns: repeat(4, minmax(0, 1fr));
+      gap: 18px;
+      margin-top: 48px;
+    }
+    .advantage-card {
+      min-height: 252px;
+      padding: 28px;
+      border: 1px solid var(--kids-line);
+      border-radius: 22px;
+      background: var(--kids-white);
+      box-shadow: var(--kids-shadow);
+    }
+    .advantage-card span,
+    .target-card span {
+      display: block;
+      margin-bottom: 14px;
+      color: var(--kids-green);
+      font-size: 12px;
+      font-weight: 820;
+      line-height: 1.4;
+    }
+    .advantage-card h3,
+    .target-card h3 {
+      margin: 0 0 12px;
+      color: var(--kids-text);
+      font-size: 20px;
+      line-height: 1.36;
+      letter-spacing: 0;
+    }
+    .advantage-card p,
+    .target-card p {
+      margin: 0;
+      color: var(--kids-muted);
+      font-size: 14px;
+      line-height: 1.76;
+    }
+    .target-copy-grid {
+      display: grid;
+      grid-template-columns: repeat(2, minmax(0, 1fr));
+      gap: 18px;
+      margin-top: 48px;
+    }
+    .target-card {
+      min-height: 210px;
+      padding: 28px;
+      border: 1px solid rgba(8,71,52,0.13);
+      border-radius: 22px;
+      background:
+        linear-gradient(180deg, rgba(255,255,255,0.86), rgba(253,251,247,0.72)),
+        var(--kids-cream);
+    }
+    .faq-grid {
+      display: grid;
+      grid-template-columns: repeat(3, minmax(0, 1fr));
+      gap: 22px;
+      margin-top: 48px;
+    }
+    .faq-card {
+      min-height: 250px;
+      padding: 28px;
+      border: 1px solid var(--kids-line);
+      border-radius: 22px;
+      background: var(--kids-white);
+      box-shadow: rgba(0,0,0,0.02) 0 4px 14px;
+    }
+    .faq-card h3 {
+      margin: 0 0 14px;
+      color: var(--kids-text);
+      font-size: 20px;
+      line-height: 1.36;
+      letter-spacing: 0;
+    }
+    .faq-card p {
+      margin: 0;
+      color: var(--kids-muted);
+      font-size: 14px;
+      line-height: 1.76;
+    }
+    .kids-pillar-list {
+      display: grid;
+      gap: 24px;
+    }
+    .kids-pillar {
+      padding-left: 24px;
+      border-left: 2px solid rgba(8,71,52,0.18);
+      transition: border-color 180ms ease;
+    }
+    .kids-pillar:hover { border-color: var(--kids-green); }
+    .kids-pillar span {
+      color: var(--kids-green);
+      font-size: 12px;
+      font-weight: 800;
+      line-height: 1.4;
+      letter-spacing: 0.08em;
+      text-transform: uppercase;
+    }
+    .kids-dark-media {
+      position: relative;
+      aspect-ratio: 16 / 9;
+      display: flex;
+      align-items: center;
+      justify-content: center;
+      overflow: hidden;
+      padding: 28px;
+      border: 1px solid rgba(255,255,255,0.12);
+      border-radius: 20px;
+      background: #111110;
+    }
+    .kids-dark-media img {
+      height: min(82%, 360px);
+      width: auto;
+      object-fit: contain;
+      border-radius: 0;
+    }
+    .kids-form-section {
+      padding: 96px 24px;
+      background:
+        linear-gradient(180deg, rgba(17,17,16,0.82), rgba(17,17,16,0.90)),
+        url("/l/kids/assets/bg/cta-bg.png") center / cover,
+        #111110;
+      color: #F6F5F4;
+    }
+    .kids-form-grid {
+      width: min(1120px, 100%);
+      margin: 0 auto;
+      display: grid;
+      grid-template-columns: minmax(0, 0.85fr) minmax(360px, 1fr);
+      gap: 56px;
+      align-items: start;
+    }
+    .kids-form-copy h2 {
+      margin: 0 0 22px;
+      color: #fff;
+      font-family: var(--kids-serif);
+      font-size: clamp(34px, 4vw, 52px);
+      font-weight: 500;
+      line-height: 1.1;
+      letter-spacing: 0;
+    }
+    .kids-form-copy p {
+      margin: 0;
+      color: rgba(246,245,244,0.7);
+      font-size: 17px;
+      line-height: 1.8;
+    }
+    .contact-form {
+      padding: 28px;
+      border: 1px solid rgba(255,255,255,0.1);
+      border-radius: 20px;
+      background: rgba(255,255,255,0.055);
+    }
+    .form-grid {
+      display: grid;
+      grid-template-columns: 1fr 1fr;
+      gap: 14px;
+    }
+    .field {
+      display: grid;
+      gap: 7px;
+    }
+    .field.full { grid-column: 1 / -1; }
+    .field label {
+      color: rgba(246,245,244,0.78);
+      font-size: 13px;
+      font-weight: 720;
+      line-height: 1.45;
+    }
+    .field input,
+    .field select,
+    .field textarea {
+      width: 100%;
+      border: 1px solid rgba(255,255,255,0.14);
+      border-radius: 10px;
+      background: rgba(255,255,255,0.08);
+      color: #fff;
+      outline: none;
+      padding: 12px 13px;
+      font-size: 15px;
+      line-height: 1.45;
+    }
+    .field textarea {
+      min-height: 116px;
+      resize: vertical;
+    }
+    .field select option { color: #111110; }
+    .field input:focus,
+    .field select:focus,
+    .field textarea:focus {
+      border-color: #6EE7B7;
+      box-shadow: 0 0 0 2px rgba(110,231,183,0.16);
+    }
+    .field input::placeholder,
+    .field textarea::placeholder { color: rgba(246,245,244,0.38); }
+    .consent {
+      display: flex;
+      gap: 10px;
+      align-items: flex-start;
+      margin: 16px 0 20px;
+      color: rgba(246,245,244,0.58);
+      font-size: 12px;
+      line-height: 1.6;
+    }
+    .consent input {
+      width: 16px;
+      height: 16px;
+      margin-top: 2px;
+      accent-color: var(--kids-green);
+    }
+    .form-status {
+      min-height: 20px;
+      margin-top: 14px;
+      color: rgba(246,245,244,0.72);
+      font-size: 13px;
+      line-height: 1.5;
+    }
+    .form-status.success { color: #6EE7B7; }
+    .form-status.error { color: #FCA5A5; }
+    .sr-only {
+      position: absolute;
+      width: 1px;
+      height: 1px;
+      padding: 0;
+      margin: -1px;
+      overflow: hidden;
+      clip: rect(0, 0, 0, 0);
+      white-space: nowrap;
+      border: 0;
+    }
+    .kids-footer {
+      padding: 28px 24px;
+      border-top: 1px solid rgba(255,255,255,0.08);
+      background: #111110;
+      color: rgba(246,245,244,0.48);
+      font-size: 13px;
+    }
+    .kids-footer div {
+      width: min(1120px, 100%);
+      margin: 0 auto;
+      display: flex;
+      justify-content: space-between;
+      gap: 18px;
+      flex-wrap: wrap;
+    }
+    @media (max-width: 900px) {
+      .kids-hero-inner,
+      .kids-split,
+      .kids-split.reverse,
+      .kids-form-grid {
+        grid-template-columns: 1fr;
+      }
+      .kids-hero {
+        text-align: center;
+      }
+      .kids-hero-copy::before {
+        margin-left: auto;
+        margin-right: auto;
+      }
+      .kids-hero p {
+        margin-left: auto;
+        margin-right: auto;
+      }
+      .kids-actions {
+        justify-content: center;
+      }
+      .kids-hero-visual {
+        min-height: auto;
+      }
+      .kids-card-grid {
+        grid-template-columns: 1fr;
+      }
+      .story-panel,
+      .advantage-grid,
+      .operation-scene-grid,
+      .narrative-chapter,
+      .stakeholder-grid,
+      .campaign-line-grid,
+      .deep-dive-grid,
+      .comparison-row,
+      .resource-grid,
+      .roadmap-grid,
+      .limits-box,
+      .target-copy-grid {
+        grid-template-columns: 1fr;
+      }
+      .kids-age-grid,
+      .kids-report-strip {
+        grid-template-columns: 1fr;
+      }
+      .evidence-row {
+        grid-template-columns: 1fr;
+        gap: 8px;
+      }
+      .decision-grid {
+        grid-template-columns: 1fr;
+      }
+      .faq-grid {
+        grid-template-columns: 1fr;
+      }
+    }
+    @media (max-width: 640px) {
+      .kids-topbar {
+        top: 18px;
+      }
+      .kids-topbar img { width: 94px; }
+      .kids-topbar a:last-child {
+        min-height: 34px;
+        padding: 8px 12px;
+        font-size: 13px;
+      }
+      .kids-hero {
+        padding: 94px 18px 64px;
+      }
+      .kids-hero h1 {
+        font-size: clamp(38px, 12vw, 52px);
+      }
+      .kids-hero p {
+        font-size: 16px;
+        color: rgba(56,51,45,0.82);
+      }
+      .kids-actions {
+        flex-direction: column;
+        align-items: stretch;
+      }
+      .kids-btn {
+        width: 100%;
+      }
+      .kids-section,
+      .kids-form-section {
+        padding: 58px 18px;
+      }
+      .kids-media {
+        min-height: 280px;
+        padding: 22px;
+      }
+      .form-grid {
+        grid-template-columns: 1fr;
+      }
+      .contact-form {
+        padding: 22px;
+      }
+    }
+
+    /* 4011 kids reference override: super-brutalist Little Minds system */
+    :root {
+      --super-orange: #FF5A1F;
+      --super-brown: #9E7453;
+      --super-pink: #FFC0CB;
+      --super-blue: #E1EFF4;
+      --super-yellow: #FFF9C4;
+      --super-text: #2D231A;
+      --cream: #FFFDF8;
+      --warm-gray: #7A6F62;
+      --light-taupe: #E5D4C4;
+      --gold-light: #F2CC8F;
+      --super-shadow: 8px 8px 0 0 var(--super-text);
+      --super-shadow-lg: 12px 12px 0 0 var(--super-text);
+      --super-border: 4px solid var(--super-text);
+      --kids-font: "Noto Sans KR", -apple-system, BlinkMacSystemFont, sans-serif;
+      --kids-serif: "Fraunces", "Noto Serif KR", Georgia, serif;
+    }
+
+    body {
+      background: #FDFBF7;
+      color: var(--super-text);
+      font-family: var(--kids-font);
+    }
+
+    .kids-page {
+      background: #FDFBF7;
+      color: var(--super-text);
+      font-family: var(--kids-font);
+    }
+
+    .kids-page a,
+    .kids-page button {
+      -webkit-tap-highlight-color: transparent;
+    }
+
+    .kids-topbar {
+      position: fixed;
+      top: 0;
+      left: 0;
+      right: 0;
+      transform: none;
+      z-index: 20;
+      width: 100%;
+      max-width: none;
+      padding: 20px clamp(24px, 4vw, 80px);
+      display: flex;
+      align-items: center;
+      justify-content: space-between;
+      gap: 28px;
+      background: transparent;
+      transition: padding 260ms ease, background 260ms ease, box-shadow 260ms ease, backdrop-filter 260ms ease;
+    }
+
+    .kids-topbar.is-scrolled {
+      padding-top: 12px;
+      padding-bottom: 12px;
+      background: rgba(255,253,248,0.95);
+      box-shadow: 0 2px 0 0 var(--super-text);
+      backdrop-filter: blur(6px);
+    }
+
+    .kids-brand {
+      display: inline-flex;
+      align-items: center;
+      gap: 10px;
+      color: var(--super-text);
+      font-family: var(--kids-serif);
+      font-size: 21px;
+      font-weight: 900;
+      line-height: 1;
+      letter-spacing: 0;
+    }
+
+    .kids-logo-mark {
+      width: 36px;
+      height: 36px;
+      display: inline-flex;
+      align-items: center;
+      justify-content: center;
+      border: 2px solid var(--super-text);
+      border-radius: 9px;
+      background: var(--super-orange);
+      box-shadow: 2px 2px 0 0 var(--super-text);
+      color: #fff;
+      font-family: var(--kids-serif);
+      font-size: 15px;
+      font-weight: 900;
+      transition: transform 180ms ease;
+    }
+
+    .kids-brand:hover .kids-logo-mark {
+      transform: rotate(-6deg);
+    }
+
+    .kids-nav-links {
+      display: flex;
+      align-items: center;
+      gap: 28px;
+      margin-left: auto;
+    }
+
+    .kids-nav-links a {
+      color: var(--super-text);
+      font-size: 14px;
+      font-weight: 800;
+      line-height: 1.3;
+      transition: color 160ms ease;
+    }
+
+    .kids-nav-links a:hover {
+      color: var(--super-orange);
+    }
+
+    .kids-topbar .kids-nav-links a:last-child {
+      min-height: auto;
+      padding: 0;
+      border: 0;
+      border-radius: 0;
+      background: transparent;
+      box-shadow: none;
+      color: var(--super-text);
+      font-size: 14px;
+      font-weight: 800;
+      transform: none;
+    }
+
+    .kids-topbar .kids-nav-links a:last-child:hover {
+      color: var(--super-orange);
+      background: transparent;
+      box-shadow: none;
+      transform: none;
+    }
+
+    .kids-topbar a.kids-nav-cta,
+    .kids-topbar a:last-child.kids-nav-cta {
+      min-height: 42px;
+      padding: 10px 24px;
+      border: 2px solid var(--super-text);
+      border-radius: 999px;
+      background: var(--super-text);
+      box-shadow: 3px 3px 0 0 var(--super-brown);
+      color: #fff;
+      font-size: 14px;
+      font-weight: 900;
+      line-height: 1;
+      transition: transform 160ms ease, box-shadow 160ms ease, background 160ms ease;
+    }
+
+    .kids-topbar a.kids-nav-cta:hover {
+      transform: translate(3px, 3px);
+      box-shadow: none;
+      background: var(--super-orange);
+    }
+
+    .kids-hero {
+      min-height: 100vh;
+      padding: 112px clamp(24px, 4vw, 80px) 56px;
+      display: flex;
+      align-items: center;
+      justify-content: center;
+      border-bottom: var(--super-border);
+      overflow: hidden;
+      text-align: left;
+      background:
+        linear-gradient(180deg, rgba(255,253,248,0.58), rgba(255,253,248,0.50)),
+        url("/l/kids/assets/bg/hero-bg.png") center / cover,
+        #FFFDF8;
+    }
+
+    .kids-hero::before {
+      content: "";
+      position: absolute;
+      inset: 0;
+      border: 0;
+      border-radius: 0;
+      background: url("/l/kids/assets/bg/paper-texture.png") center / 420px repeat;
+      opacity: 0.16;
+      mask-image: none;
+    }
+
+    .kids-hero::after {
+      opacity: 0.03;
+    }
+
+    .kids-hero-inner {
+      width: min(1280px, 100%);
+      display: grid;
+      grid-template-columns: minmax(0, 1fr) minmax(420px, 0.92fr);
+      gap: clamp(42px, 5vw, 76px);
+      align-items: center;
+      position: relative;
+      z-index: 1;
+    }
+
+    .kids-hero-copy {
+      position: relative;
+      display: flex;
+      flex-direction: column;
+      align-items: flex-start;
+      gap: 0;
+    }
+
+    .kids-hero-copy::before {
+      content: "";
+      position: absolute;
+      left: -24px;
+      top: -38px;
+      width: 64px;
+      height: 64px;
+      margin: 0;
+      border-radius: 50%;
+      background: var(--super-orange);
+      opacity: 0.45;
+      filter: blur(16px);
+      mix-blend-mode: multiply;
+    }
+
+    .kids-label,
+    .kids-super-label {
+      display: inline-block;
+      width: fit-content;
+      margin: 0 0 30px;
+      padding: 9px 16px;
+      border: 2px solid var(--super-text);
+      background: var(--gold-light);
+      box-shadow: 4px 4px 0 0 var(--super-text);
+      color: var(--super-text);
+      font-family: var(--kids-font);
+      font-size: 13px;
+      font-weight: 900;
+      line-height: 1.2;
+      letter-spacing: 0.08em;
+      text-transform: uppercase;
+      transform: rotate(-2deg);
+    }
+
+    .kids-label.orange {
+      background: var(--super-orange);
+      color: #fff;
+      border-width: 4px;
+    }
+
+    .kids-hero h1,
+    .kids-section h2,
+    .kids-super-section h2,
+    .kids-form-copy h2 {
+      color: var(--super-text);
+      font-family: var(--kids-serif);
+      font-weight: 900;
+      letter-spacing: 0;
+      word-break: keep-all;
+      overflow-wrap: break-word;
+    }
+
+    .kids-hero h1 {
+      max-width: 760px;
+      font-size: clamp(54px, 7vw, 104px);
+      line-height: 1.05;
+      margin: 0;
+    }
+
+    .kids-hero-line {
+      display: block;
+    }
+
+    .kids-hero-line.parent {
+      white-space: nowrap;
+      font-size: clamp(44px, 5.4vw, 78px);
+    }
+
+    .kids-hero em,
+    .kids-hero .kids-highlight,
+    .kids-section em,
+    .kids-super-section em {
+      display: inline-block;
+      padding: 0 14px 6px;
+      background: var(--super-orange);
+      box-shadow: 4px 4px 0 0 var(--super-text);
+      color: #fff;
+      font-style: normal;
+      font-weight: 900;
+      line-height: 1.18;
+      transform: rotate(-1deg);
+    }
+
+    .kids-hero p {
+      max-width: 650px;
+      margin: 30px 0 0;
+      padding-left: 24px;
+      border-left: 4px solid var(--super-text);
+      color: rgba(45,35,26,0.82);
+      font-size: clamp(18px, 1.7vw, 21px);
+      font-weight: 800;
+      line-height: 1.75;
+    }
+
+    .kids-actions {
+      display: flex;
+      flex-wrap: wrap;
+      justify-content: flex-start;
+      gap: 16px;
+      margin-top: 40px;
+    }
+
+    .kids-btn {
+      width: auto;
+      min-height: 58px;
+      padding: 16px 32px;
+      border: var(--super-border);
+      border-radius: 0;
+      font-size: 17px;
+      font-weight: 900;
+      line-height: 1.1;
+      transition: transform 160ms ease, box-shadow 160ms ease, background 160ms ease, color 160ms ease;
+    }
+
+    .kids-btn.primary {
+      border-color: transparent;
+      background: var(--super-text);
+      box-shadow: 6px 6px 0 0 rgba(255,90,31,0.30);
+      color: #fff;
+    }
+
+    .kids-btn.secondary {
+      background: var(--gold-light);
+      box-shadow: 6px 6px 0 0 var(--super-text);
+      color: var(--super-text);
+      transform: rotate(-1deg);
+    }
+
+    .kids-btn:hover {
+      transform: translateY(4px);
+      box-shadow: none;
+    }
+
+    .kids-btn.primary:hover {
+      border-color: var(--super-text);
+      background: var(--super-orange);
+    }
+
+    .kids-btn.secondary:hover {
+      background: #fff;
+      color: var(--super-text);
+      transform: rotate(0deg) translateY(4px);
+    }
+
+    .kids-avatars {
+      display: flex;
+      align-items: center;
+      gap: 22px;
+      margin-top: 24px;
+      color: rgba(45,35,26,0.68);
+      font-size: 14px;
+      font-weight: 900;
+    }
+
+    .kids-avatar-stack {
+      display: flex;
+      margin-left: 2px;
+    }
+
+    .kids-avatar-stack span {
+      width: 48px;
+      height: 48px;
+      margin-left: -12px;
+      display: inline-flex;
+      align-items: center;
+      justify-content: center;
+      border: 2px solid var(--super-text);
+      border-radius: 50%;
+      color: var(--super-text);
+      font-size: 13px;
+      font-weight: 900;
+    }
+
+    .kids-avatar-stack span:first-child {
+      margin-left: 0;
+      background: var(--super-brown);
+    }
+
+    .kids-avatar-stack span:nth-child(2) {
+      background: var(--super-blue);
+    }
+
+    .kids-avatar-stack span:nth-child(3) {
+      background: var(--super-yellow);
+    }
+
+    .kids-hero-visual {
+      position: relative;
+      min-height: 560px;
+      display: flex;
+      align-items: center;
+      justify-content: center;
+    }
+
+    .kids-activity-card {
+      width: min(100%, 560px);
+      min-height: 520px;
+      padding: clamp(28px, 4vw, 48px);
+      display: flex;
+      flex-direction: column;
+      justify-content: space-between;
+      overflow: hidden;
+      border: var(--super-border);
+      border-radius: 32px;
+      background: var(--super-brown);
+      box-shadow: var(--super-shadow-lg);
+      transform: rotate(1deg);
+    }
+
+    .kids-activity-card::before {
+      content: none;
+    }
+
+    .kids-hero-card-top {
+      display: flex;
+      justify-content: space-between;
+      align-items: flex-start;
+    }
+
+    .kids-hero-dot {
+      width: 40px;
+      height: 40px;
+      border: 2px solid var(--super-text);
+      border-radius: 50%;
+      background: rgba(255,255,255,0.72);
+      mix-blend-mode: overlay;
+    }
+
+    .kids-hero-beta {
+      padding: 8px 16px;
+      border: 2px solid var(--super-text);
+      border-radius: 999px;
+      background: rgba(255,255,255,0.22);
+      color: var(--super-text);
+      font-size: 14px;
+      font-weight: 900;
+    }
+
+    .kids-activity-card img.kids-hero-main {
+      width: 160px;
+      height: 160px;
+      aspect-ratio: auto;
+      object-fit: cover;
+      align-self: center;
+      margin: 34px 0 22px;
+      border: var(--super-border);
+      border-radius: 20px;
+      background: #fff;
+      box-shadow: 4px 4px 0 0 var(--super-text);
+    }
+
+    .kids-activity-card h2 {
+      margin: 0;
+      color: #fff;
+      font-family: var(--kids-serif);
+      font-size: clamp(36px, 4.4vw, 58px);
+      font-weight: 900;
+      line-height: 1.08;
+      text-align: center;
+      text-shadow: 2px 2px 0 var(--super-text);
+    }
+
+    .kids-activity-card h2 span {
+      display: block;
+      margin-top: 4px;
+      color: var(--gold-light);
+      font-style: italic;
+      font-weight: 400;
+      text-shadow: none;
+    }
+
+    .kids-activity-card p {
+      display: none;
+    }
+
+    .kids-progress {
+      width: 100%;
+      height: 12px;
+      margin-top: 34px;
+      overflow: hidden;
+      border-radius: 999px;
+      background: rgba(0,0,0,0.12);
+    }
+
+    .kids-progress span {
+      display: block;
+      width: 68%;
+      height: 100%;
+      background: var(--super-orange);
+    }
+
+    .kids-floater {
+      position: absolute;
+      z-index: 3;
+      display: flex;
+      align-items: center;
+      justify-content: center;
+      border: var(--super-border);
+      border-radius: 50%;
+      box-shadow: 6px 6px 0 0 var(--super-text);
+      font-size: 42px;
+      animation: kidsFloat 6s ease-in-out infinite;
+    }
+
+    .kids-floater.idea {
+      right: -10px;
+      bottom: 28px;
+      width: 128px;
+      height: 128px;
+      background: var(--super-blue);
+    }
+
+    .kids-floater.target {
+      left: -8px;
+      top: 44px;
+      width: 82px;
+      height: 82px;
+      background: var(--super-pink);
+      font-size: 30px;
+      animation-delay: 1s;
+    }
+
+    @keyframes kidsFloat {
+      0%, 100% { transform: translateY(0); }
+      50% { transform: translateY(-12px); }
+    }
+
+    .kids-super-section,
+    .kids-section {
+      position: relative;
+      overflow: hidden;
+      padding: clamp(96px, 10vw, 136px) clamp(24px, 4vw, 80px);
+      border-bottom: var(--super-border);
+      background: #FDFBF7;
+    }
+
+    .kids-section::before,
+    .kids-super-section::before {
+      content: "";
+      position: absolute;
+      inset: 0;
+      background: url("/l/kids/assets/bg/paper-texture.png") center / 420px repeat;
+      opacity: 0.12;
+      pointer-events: none;
+    }
+
+    .kids-inner {
+      width: min(1280px, 100%);
+      margin: 0 auto;
+      position: relative;
+      z-index: 1;
+    }
+
+    .kids-section h2,
+    .kids-super-section h2 {
+      margin: 0 0 26px;
+      font-size: clamp(42px, 5.6vw, 76px);
+      line-height: 1.1;
+    }
+
+    .kids-section p,
+    .kids-super-section p {
+      color: rgba(45,35,26,0.78);
+      font-size: 18px;
+      font-weight: 700;
+      line-height: 1.78;
+    }
+
+    .kids-section-head {
+      max-width: 900px;
+      margin-bottom: 58px;
+    }
+
+    .kids-section-head.center {
+      margin-left: auto;
+      margin-right: auto;
+      text-align: center;
+    }
+
+    .kids-pain-section,
+    .kids-how-section {
+      background:
+        linear-gradient(rgba(255,90,31,0.92), rgba(255,90,31,0.92)),
+        url("/l/kids/assets/bg/pain-bg.png") center / cover,
+        var(--super-orange);
+    }
+
+    .kids-pain-section .kids-label {
+      text-transform: none;
+      letter-spacing: 0.01em;
+    }
+
+    .kids-pain-section .kids-highlight {
+      display: inline;
+      padding: 0;
+      background: transparent;
+      box-shadow: none;
+      color: #fff;
+      text-decoration: underline;
+      text-decoration-color: var(--super-text);
+      text-decoration-thickness: 4px;
+      text-underline-offset: 8px;
+      transform: none;
+    }
+
+    .kids-pain-grid {
+      display: grid;
+      grid-template-columns: minmax(0, 1fr) 320px;
+      gap: clamp(28px, 6vw, 72px);
+      align-items: end;
+      margin-bottom: 54px;
+    }
+
+    .kids-side-note {
+      padding: 24px;
+      border: var(--super-border);
+      border-radius: 14px;
+      background: #fff;
+      box-shadow: 6px 6px 0 0 var(--super-text);
+      transform: rotate(1deg);
+    }
+
+    .kids-side-note p {
+      margin: 0;
+      color: var(--super-text);
+      font-size: 18px;
+      font-weight: 900;
+      line-height: 1.65;
+    }
+
+    .kids-pain-cards,
+    .kids-philosophy-cards,
+    .kids-step-stack {
+      display: grid;
+      gap: 28px;
+    }
+
+    .kids-pain-cards {
+      grid-template-columns: repeat(3, minmax(0, 1fr));
+    }
+
+    .kids-pain-card,
+    .kids-super-card,
+    .kids-card,
+    .kids-age-card,
+    .kids-report-item,
+    .operation-scene-card,
+    .narrative-chapter,
+    .story-scene,
+    .advantage-card,
+    .decision-card,
+    .target-card,
+    .campaign-line,
+    .deep-dive-card,
+    .resource-card,
+    .roadmap-card,
+    .faq-card,
+    .stakeholder-note {
+      border: var(--super-border);
+      border-radius: 24px;
+      background: #fff;
+      box-shadow: var(--super-shadow);
+    }
+
+    .kids-pain-card {
+      min-height: 320px;
+      padding: 34px;
+      transition: transform 180ms ease, box-shadow 180ms ease;
+    }
+
+    .kids-pain-card:nth-child(1) {
+      background: var(--super-pink);
+    }
+
+    .kids-pain-card:nth-child(2) {
+      background: var(--super-blue);
+      transform: translateY(18px);
+    }
+
+    .kids-pain-card:nth-child(3) {
+      background: var(--super-yellow);
+    }
+
+    .kids-pain-card:hover {
+      transform: translateY(-6px);
+      box-shadow: 12px 12px 0 0 var(--super-text);
+    }
+
+    .kids-pain-card:nth-child(2):hover {
+      transform: translateY(10px);
+    }
+
+    .kids-icon-bubble {
+      width: 66px;
+      height: 66px;
+      margin-bottom: 28px;
+      display: flex;
+      align-items: center;
+      justify-content: center;
+      border: var(--super-border);
+      border-radius: 50%;
+      background: #fff;
+      box-shadow: 4px 4px 0 0 var(--super-text);
+      font-size: 31px;
+    }
+
+    .kids-pain-card h3,
+    .kids-super-card h3,
+    .kids-step-card h3 {
+      margin: 0 0 14px;
+      color: var(--super-text);
+      font-family: var(--kids-serif);
+      font-size: clamp(24px, 2.6vw, 34px);
+      font-weight: 900;
+      line-height: 1.15;
+      letter-spacing: 0;
+    }
+
+    .kids-pain-card p,
+    .kids-super-card p,
+    .kids-step-card p {
+      margin: 0;
+      color: rgba(45,35,26,0.78);
+      font-size: 17px;
+      font-weight: 800;
+      line-height: 1.72;
+    }
+
+    .kids-solution-section {
+      background:
+        linear-gradient(rgba(255,253,248,0.74), rgba(255,253,248,0.86)),
+        url("/l/kids/assets/bg/solution-bg.png") center / cover,
+        #FFFDF8;
+      text-align: center;
+    }
+
+    .kids-solution-box {
+      position: relative;
+      max-width: 920px;
+      margin: 52px auto 0;
+      padding: clamp(34px, 5vw, 54px);
+      border: var(--super-border);
+      background: #fff;
+      box-shadow: var(--super-shadow-lg);
+      transition: transform 180ms ease, box-shadow 180ms ease;
+    }
+
+    .kids-solution-box:hover {
+      transform: translateY(-6px);
+      box-shadow: 16px 16px 0 0 var(--super-text);
+    }
+
+    .kids-pin {
+      position: absolute;
+      top: -18px;
+      left: 50%;
+      width: 36px;
+      height: 36px;
+      border: var(--super-border);
+      border-radius: 50%;
+      background: var(--super-pink);
+      box-shadow: 2px 2px 0 0 var(--super-text);
+      transform: translateX(-50%);
+    }
+
+    .kids-solution-box p {
+      color: var(--super-text);
+      font-family: var(--kids-serif);
+      font-size: clamp(22px, 2.8vw, 34px);
+      font-weight: 900;
+      line-height: 1.65;
+    }
+
+    .kids-solution-box strong {
+      color: var(--super-orange);
+      text-decoration: underline;
+      text-decoration-thickness: 4px;
+      text-underline-offset: 5px;
+    }
+
+    .kids-inline-chip {
+      display: inline-block;
+      padding: 0 8px 3px;
+      border: 2px solid var(--super-text);
+      background: var(--super-yellow);
+      color: var(--super-text);
+    }
+
+    .kids-belief-section {
+      background:
+        linear-gradient(rgba(45,35,26,0.96), rgba(45,35,26,0.96)),
+        linear-gradient(white 1px, transparent 1px),
+        linear-gradient(90deg, white 1px, transparent 1px),
+        var(--super-text);
+      background-size: auto, 60px 60px, 60px 60px, auto;
+      color: #fff;
+      text-align: center;
+    }
+
+    .kids-belief-section::before {
+      opacity: 0;
+    }
+
+    .kids-belief-section h2,
+    .kids-belief-section p,
+    .kids-belief-section .kids-label {
+      color: #fff;
+    }
+
+    .kids-belief-section h2 {
+      color: #fff;
+    }
+
+    .kids-belief-lines {
+      max-width: 860px;
+      margin: 0 auto;
+      display: grid;
+      gap: 22px;
+    }
+
+    .kids-belief-lines p {
+      margin: 0;
+      color: rgba(255,255,255,0.9);
+      font-family: var(--kids-serif);
+      font-size: clamp(24px, 3vw, 36px);
+      font-weight: 900;
+    }
+
+    .kids-belief-lines .orange {
+      color: var(--super-orange);
+    }
+
+    .kids-belief-lines .gold {
+      color: var(--gold-light);
+    }
+
+    .kids-belief-lines .pink {
+      color: var(--super-pink);
+    }
+
+    .kids-belief-body {
+      max-width: 700px;
+      margin: 48px auto 0;
+      color: rgba(255,255,255,0.72);
+      font-size: 19px;
+      line-height: 1.9;
+      font-weight: 700;
+    }
+
+    .kids-signature {
+      display: inline-flex;
+      align-items: baseline;
+      gap: 12px;
+      margin-top: 44px;
+      padding: 16px 28px;
+      border: 2px solid rgba(255,255,255,0.24);
+      background: rgba(255,255,255,0.10);
+      color: #fff;
+      transform: rotate(1deg);
+    }
+
+    .kids-signature strong {
+      font-family: var(--kids-serif);
+      font-size: 20px;
+      font-weight: 900;
+    }
+
+    .kids-philosophy-section {
+      background:
+        linear-gradient(rgba(255,253,248,0.70), rgba(255,253,248,0.88)),
+        url("/l/kids/assets/bg/philosophy-bg.png") center / cover,
+        #FFFDF8;
+    }
+
+    .kids-sticky-grid {
+      display: grid;
+      grid-template-columns: minmax(300px, 0.42fr) minmax(0, 0.78fr);
+      gap: clamp(42px, 6vw, 76px);
+      align-items: start;
+    }
+
+    .kids-sticky-copy {
+      position: sticky;
+      top: 96px;
+    }
+
+    .kids-philosophy-cards {
+      gap: 32px;
+    }
+
+    .kids-super-card {
+      display: grid;
+      grid-template-columns: 96px minmax(0, 1fr);
+      gap: 24px;
+      align-items: center;
+      min-height: 210px;
+      padding: clamp(28px, 4vw, 42px);
+      border-radius: 0;
+      transition: transform 180ms ease, box-shadow 180ms ease;
+    }
+
+    .kids-super-card:nth-child(2) {
+      background: var(--super-pink);
+    }
+
+    .kids-super-card:nth-child(3) {
+      background: var(--gold-light);
+    }
+
+    .kids-super-card:hover {
+      transform: translateY(-6px);
+      box-shadow: 12px 12px 0 0 var(--super-text);
+    }
+
+    .kids-super-card .kids-icon-bubble {
+      width: 80px;
+      height: 80px;
+      margin: 0;
+      border-radius: 0;
+      transform: rotate(-6deg);
+      font-size: 38px;
+    }
+
+    .kids-super-card span:not(.kids-icon-bubble) {
+      display: inline-block;
+      margin-bottom: 10px;
+      padding: 4px 8px;
+      border: 2px solid var(--super-text);
+      background: #fff;
+      color: var(--super-text);
+      font-size: 12px;
+      font-weight: 900;
+      letter-spacing: 0.08em;
+      text-transform: uppercase;
+    }
+
+    .kids-how-section {
+      background:
+        linear-gradient(rgba(255,90,31,0.94), rgba(255,90,31,0.94)),
+        url("/l/kids/assets/bg/howitworks-bg.png") center / cover,
+        var(--super-orange);
+    }
+
+    .kids-how-grid {
+      display: grid;
+      grid-template-columns: minmax(280px, 0.46fr) minmax(0, 0.74fr);
+      gap: clamp(40px, 6vw, 76px);
+      align-items: start;
+    }
+
+    .kids-how-copy {
+      position: sticky;
+      top: 96px;
+    }
+
+    .kids-how-copy p {
+      padding-left: 22px;
+      border-left: 4px solid #fff;
+      color: var(--super-text);
+      font-weight: 900;
+    }
+
+    .kids-step-card {
+      display: grid;
+      grid-template-columns: 80px minmax(0, 1fr);
+      gap: 22px;
+      align-items: center;
+      padding: 28px;
+      border: var(--super-border);
+      border-radius: 20px;
+      background: #fff;
+      box-shadow: 8px 8px 0 0 var(--super-brown);
+      transition: transform 180ms ease;
+    }
+
+    .kids-step-card:nth-child(1) {
+      background: var(--super-blue);
+    }
+
+    .kids-step-card:nth-child(2) {
+      background: var(--super-yellow);
+    }
+
+    .kids-step-card:nth-child(3) {
+      background: var(--super-pink);
+    }
+
+    .kids-step-card:hover {
+      transform: translateX(-8px);
+    }
+
+    .kids-step-card small {
+      display: block;
+      margin-bottom: 8px;
+      color: rgba(45,35,26,0.60);
+      font-family: var(--kids-serif);
+      font-size: 14px;
+      font-weight: 900;
+      letter-spacing: 0.05em;
+    }
+
+    .kids-step-card .kids-icon-bubble {
+      width: 64px;
+      height: 64px;
+      margin: 0;
+      font-size: 30px;
+    }
+
+    .kids-media-showcase-section {
+      background:
+        linear-gradient(rgba(255,253,248,0.72), rgba(255,253,248,0.88)),
+        url("/l/kids/assets/bg/showcase-bg.png") center / cover,
+        #FFFDF8;
+    }
+
+    .kids-media-showcase-grid {
+      display: grid;
+      grid-template-columns: minmax(0, 1.08fr) minmax(340px, 0.82fr);
+      gap: clamp(24px, 4vw, 42px);
+      align-items: stretch;
+      margin-top: 46px;
+    }
+
+    .kids-featured-media-card,
+    .kids-media-mini {
+      position: relative;
+      overflow: hidden;
+      border: var(--super-border);
+      border-radius: 26px;
+      background: var(--super-blue);
+      box-shadow: var(--super-shadow-lg);
+      color: var(--super-text);
+    }
+
+    .kids-featured-media-card {
+      padding: clamp(18px, 2.6vw, 28px);
+      transform: rotate(-1deg);
+    }
+
+    .kids-featured-media-card::after,
+    .kids-media-mini::after {
+      content: "";
+      position: absolute;
+      inset: auto 22px 18px auto;
+      width: 56px;
+      height: 16px;
+      border: 2px solid var(--super-text);
+      background: rgba(255,255,255,0.46);
+      transform: rotate(-7deg);
+      pointer-events: none;
+    }
+
+    .kids-media-window {
+      position: relative;
+      overflow: hidden;
+      border: var(--super-border);
+      border-radius: 18px;
+      background: #111;
+      box-shadow: 4px 4px 0 0 var(--super-text);
+      aspect-ratio: 16 / 9;
+    }
+
+    .kids-media-window img {
+      width: 100%;
+      height: 100%;
+      display: block;
+      object-fit: cover;
+    }
+
+    .kids-media-window.portrait {
+      aspect-ratio: 4 / 5;
+    }
+
+    .kids-media-badge {
+      position: absolute;
+      top: 16px;
+      left: 16px;
+      z-index: 2;
+      display: inline-flex;
+      align-items: center;
+      min-height: 34px;
+      padding: 8px 12px;
+      border: 2px solid var(--super-text);
+      border-radius: 999px;
+      background: var(--super-orange);
+      box-shadow: 3px 3px 0 0 var(--super-text);
+      color: #fff;
+      font-size: 12px;
+      font-weight: 900;
+      line-height: 1;
+      letter-spacing: 0.08em;
+      text-transform: uppercase;
+    }
+
+    .kids-media-caption {
+      display: grid;
+      gap: 10px;
+      padding: 24px 4px 4px;
+    }
+
+    .kids-media-caption span,
+    .kids-media-mini-copy span {
+      color: var(--super-orange);
+      font-size: 12px;
+      font-weight: 900;
+      line-height: 1.4;
+      letter-spacing: 0.08em;
+      text-transform: uppercase;
+    }
+
+    .kids-media-caption h3,
+    .kids-media-mini-copy h3 {
+      margin: 0;
+      color: var(--super-text);
+      font-family: var(--kids-serif);
+      font-size: clamp(28px, 3vw, 42px);
+      font-weight: 900;
+      line-height: 1.14;
+      letter-spacing: 0;
+      word-break: keep-all;
+      overflow-wrap: break-word;
+    }
+
+    .kids-media-caption p,
+    .kids-media-mini-copy p {
+      margin: 0;
+      color: rgba(45,35,26,0.78);
+      font-size: 16px;
+      font-weight: 800;
+      line-height: 1.7;
+    }
+
+    .kids-media-stack {
+      display: grid;
+      gap: 20px;
+    }
+
+    .kids-media-mini {
+      display: grid;
+      grid-template-columns: minmax(150px, 0.52fr) minmax(0, 1fr);
+      gap: 18px;
+      align-items: center;
+      padding: 18px;
+      border-radius: 22px;
+      box-shadow: var(--super-shadow);
+    }
+
+    .kids-media-mini:nth-child(2) {
+      background: var(--super-pink);
+      transform: rotate(1deg);
+    }
+
+    .kids-media-mini:nth-child(3) {
+      background: var(--super-yellow);
+      transform: rotate(-1deg);
+    }
+
+    .kids-media-mini:nth-child(4) {
+      background: #fff;
+      transform: rotate(1deg);
+    }
+
+    .kids-media-mini .kids-media-window {
+      border-width: 3px;
+      border-radius: 14px;
+      box-shadow: 3px 3px 0 0 var(--super-text);
+    }
+
+    .kids-media-mini-copy {
+      display: grid;
+      gap: 8px;
+      position: relative;
+      z-index: 1;
+    }
+
+    .kids-media-mini-copy h3 {
+      font-size: clamp(20px, 1.85vw, 25px);
+      line-height: 1.18;
+    }
+
+    .kids-section.philosophy-scene,
+    .kids-section.story-scene-bg,
+    .kids-section.activity-scene,
+    .kids-section.journey-scene,
+    .kids-section.roadmap-scene,
+    .kids-section.report-foundation,
+    .kids-section.report-scene,
+    .kids-section.proof-scene,
+    .kids-section.age-scene,
+    .kids-section.feature-scene,
+    .kids-section.premium-scene,
+    .kids-section.curriculum-scene,
+    .kids-section.comparison-scene,
+    .kids-section.decision-scene,
+    .kids-section.trust-scene,
+    .kids-section.audience-scene,
+    .kids-section.campaign-scene,
+    .kids-section.stakeholder-scene,
+    .kids-section.resource-scene,
+    .kids-section.faq-scene {
+      background:
+        linear-gradient(rgba(255,253,248,0.76), rgba(255,253,248,0.88)),
+        url("/l/kids/assets/bg/paper-texture.png") center / 420px repeat,
+        #FDFBF7;
+    }
+
+    .kids-section.report-scene,
+    .kids-section.activity-scene {
+      background:
+        linear-gradient(rgba(225,239,244,0.76), rgba(253,251,247,0.90)),
+        url("/l/kids/assets/bg/data-bg.png") center / cover,
+        var(--super-blue);
+    }
+
+    .kids-section.journey-scene,
+    .kids-section.roadmap-scene,
+    .kids-section.decision-scene,
+    .kids-section.comparison-scene {
+      background:
+        linear-gradient(rgba(255,253,248,0.72), rgba(255,249,196,0.70)),
+        url("/l/kids/assets/bg/solution-bg.png") center / cover,
+        var(--super-yellow);
+    }
+
+    .kids-section.visual-scene,
+    .kids-form-section {
+      background:
+        linear-gradient(rgba(45,35,26,0.91), rgba(45,35,26,0.94)),
+        url("/l/kids/assets/bg/showcase-bg.png") center / cover,
+        var(--super-text);
+      color: #fff;
+    }
+
+    .kids-split {
+      grid-template-columns: minmax(0, 1fr) minmax(360px, 0.86fr);
+    }
+
+    .kids-media,
+    .kids-dark-media {
+      border: var(--super-border);
+      border-radius: 28px;
+      background: #fff;
+      box-shadow: var(--super-shadow-lg);
+    }
+
+    .kids-media::before,
+    .kids-dark-media::before {
+      border: 2px solid rgba(45,35,26,0.08);
+    }
+
+    .kids-media img {
+      width: min(100%, 460px);
+      border: 2px solid rgba(45,35,26,0.08);
+      border-radius: 18px;
+      background: radial-gradient(ellipse 90% 70% at 50% 42%, rgba(242,204,143,0.42), #FFFDF8);
+    }
+
+    .kids-card-grid,
+    .operation-scene-grid,
+    .advantage-grid,
+    .decision-grid,
+    .faq-grid,
+    .resource-grid,
+    .roadmap-grid,
+    .target-copy-grid,
+    .campaign-line-grid,
+    .stakeholder-grid,
+    .deep-dive-grid,
+    .kids-report-strip,
+    .kids-age-grid {
+      gap: 24px;
+    }
+
+    .kids-card,
+    .kids-age-card,
+    .kids-report-item,
+    .operation-scene-card,
+    .advantage-card,
+    .decision-card,
+    .target-card,
+    .campaign-line,
+    .deep-dive-card,
+    .resource-card,
+    .roadmap-card,
+    .faq-card,
+    .stakeholder-note {
+      padding: 28px;
+      border-radius: 20px;
+      color: var(--super-text);
+    }
+
+    .kids-card:nth-child(3n+1),
+    .advantage-card:nth-child(4n+1),
+    .deep-dive-card:nth-child(5n+1),
+    .resource-card:nth-child(3n+1),
+    .roadmap-card:nth-child(3n+1) {
+      background: var(--super-blue);
+    }
+
+    .kids-card:nth-child(3n+2),
+    .advantage-card:nth-child(4n+2),
+    .deep-dive-card:nth-child(5n+2),
+    .resource-card:nth-child(3n+2),
+    .roadmap-card:nth-child(3n+2) {
+      background: var(--super-pink);
+    }
+
+    .kids-card:nth-child(3n+3),
+    .advantage-card:nth-child(4n+3),
+    .deep-dive-card:nth-child(5n+3),
+    .resource-card:nth-child(3n+3),
+    .roadmap-card:nth-child(3n+3) {
+      background: var(--super-yellow);
+    }
+
+    .story-panel,
+    .narrative-chapter,
+    .limits-box {
+      border: var(--super-border);
+      border-radius: 28px;
+      background: rgba(255,255,255,0.84);
+      box-shadow: var(--super-shadow-lg);
+      padding: 34px;
+    }
+
+    .story-scene {
+      border-radius: 22px;
+      background: var(--super-yellow);
+    }
+
+    .story-copy h2 {
+      font-size: clamp(40px, 5vw, 70px);
+      font-weight: 900;
+    }
+
+    .kids-age-card::before {
+      border: var(--super-border);
+      opacity: 1;
+      background: var(--super-orange);
+      box-shadow: 6px 6px 0 0 var(--super-text);
+    }
+
+    .kids-age-card span,
+    .kids-report-item span,
+    .operation-scene-card span,
+    .narrative-chapter span,
+    .evidence-row > span,
+    .stakeholder-note span,
+    .deep-dive-card span,
+    .comparison-row span,
+    .roadmap-card span,
+    .advantage-card span,
+    .target-card span {
+      color: var(--super-orange);
+      font-weight: 900;
+    }
+
+    .evidence-row {
+      border-bottom: var(--super-border);
+    }
+
+    .comparison-row > div {
+      border: var(--super-border);
+      border-radius: 20px;
+      background: #fff;
+      box-shadow: 6px 6px 0 0 var(--super-text);
+    }
+
+    .comparison-row > div:last-child {
+      background: var(--super-blue);
+      border-color: var(--super-text);
+    }
+
+    .kids-form-section {
+      border-bottom: 0;
+      padding: 104px clamp(24px, 4vw, 80px);
+    }
+
+    .kids-form-grid {
+      width: min(1180px, 100%);
+    }
+
+    .kids-form-copy h2 {
+      color: #fff;
+    }
+
+    .kids-form-copy p {
+      color: rgba(255,255,255,0.74);
+      font-weight: 700;
+    }
+
+    .contact-form {
+      border: var(--super-border);
+      border-radius: 24px;
+      background: #FFFDF8;
+      box-shadow: var(--super-shadow-lg);
+      color: var(--super-text);
+    }
+
+    .field label,
+    .consent {
+      color: var(--super-text);
+      font-weight: 900;
+    }
+
+    .field input,
+    .field select,
+    .field textarea {
+      border: 2px solid var(--super-text);
+      border-radius: 10px;
+      background: #fff;
+      color: var(--super-text);
+      font-weight: 700;
+    }
+
+    .field input::placeholder,
+    .field textarea::placeholder {
+      color: rgba(45,35,26,0.45);
+    }
+
+    .field input:focus,
+    .field select:focus,
+    .field textarea:focus {
+      border-color: var(--super-orange);
+      box-shadow: 3px 3px 0 0 var(--super-orange);
+    }
+
+    .form-status {
+      color: var(--super-text);
+      font-weight: 800;
+    }
+
+    .kids-footer {
+      border-top: var(--super-border);
+      background:
+        linear-gradient(rgba(45,35,26,0.94), rgba(45,35,26,0.94)),
+        url("/l/kids/assets/bg/footer-bg.png") center / cover;
+      color: rgba(255,255,255,0.64);
+      font-weight: 700;
+    }
+
+    @media (max-width: 1020px) {
+      .kids-nav-links {
+        display: none;
+      }
+
+      .kids-hero-inner,
+      .kids-pain-grid,
+      .kids-sticky-grid,
+      .kids-how-grid,
+      .kids-media-showcase-grid {
+        grid-template-columns: 1fr;
+      }
+
+      .kids-sticky-copy,
+      .kids-how-copy {
+        position: relative;
+        top: auto;
+      }
+
+      .kids-pain-cards {
+        grid-template-columns: 1fr;
+      }
+
+      .kids-pain-card:nth-child(2) {
+        transform: none;
+      }
+    }
+
+    @media (max-width: 760px) {
+      .kids-topbar {
+        padding: 16px 18px;
+      }
+
+      .kids-brand {
+        font-size: 18px;
+      }
+
+      .kids-logo-mark {
+        width: 32px;
+        height: 32px;
+      }
+
+      .kids-topbar a.kids-nav-cta {
+        min-height: 36px;
+        padding: 9px 14px;
+        font-size: 12px;
+      }
+
+      .kids-hero {
+        min-height: auto;
+        padding: 94px 18px 54px;
+      }
+
+      .kids-hero h1 {
+        font-size: clamp(42px, 13vw, 62px);
+      }
+
+      .kids-hero-line.parent {
+        font-size: clamp(35px, 10.2vw, 42px);
+      }
+
+      .kids-hero p {
+        font-size: 16px;
+      }
+
+      .kids-hero-visual {
+        min-height: 390px;
+      }
+
+      .kids-activity-card {
+        min-height: 370px;
+        border-radius: 24px;
+      }
+
+      .kids-activity-card img.kids-hero-main {
+        width: 124px;
+        height: 124px;
+      }
+
+      .kids-floater.idea {
+        width: 82px;
+        height: 82px;
+        right: -4px;
+        bottom: 18px;
+        font-size: 30px;
+      }
+
+      .kids-floater.target {
+        width: 62px;
+        height: 62px;
+        left: -2px;
+        top: 28px;
+        font-size: 23px;
+      }
+
+      .kids-super-section,
+      .kids-section,
+      .kids-form-section {
+        padding: 72px 18px;
+      }
+
+      .kids-section h2,
+      .kids-super-section h2 {
+        font-size: clamp(36px, 11vw, 52px);
+      }
+
+      .kids-super-card,
+      .kids-step-card,
+      .kids-media-mini {
+        grid-template-columns: 1fr;
+      }
+
+      .kids-super-card .kids-icon-bubble,
+      .kids-step-card .kids-icon-bubble {
+        width: 66px;
+        height: 66px;
+      }
+
+      .kids-actions {
+        flex-direction: column;
+        align-items: stretch;
+      }
+
+      .kids-btn {
+        width: 100%;
+      }
+    }
+
+    @media (prefers-reduced-motion: reduce) {
+      *, *::before, *::after {
+        scroll-behavior: auto !important;
+        transition-duration: 0.001ms !important;
+        animation-duration: 0.001ms !important;
+      }
+    }
+  </style>
+</head>
+<body>
+  <div class="kids-page">
+    <header class="kids-hero">
+      <div class="kids-topbar">
+        <a class="kids-brand" href="/">
+          <span class="kids-logo-mark">L</span>
+          <span>Little Minds</span>
+        </a>
+        <nav class="kids-nav-links" aria-label="키즈 랜딩 내비게이션">
+          <a href="#philosophy">교육 철학</a>
+          <a href="#how-it-works">도입 과정</a>
+          <a href="#report">도입 성과</a>
+          <a href="#segment-lead-form">요금제</a>
+        </nav>
+        <a class="kids-nav-cta" href="#segment-lead-form">도입 상담 신청</a>
+      </div>
+      <div class="kids-hero-inner">
+        <div class="kids-hero-copy">
+          <span class="kids-label">Premium EdTech Platform</span>
+          <h1>
+            <span class="kids-hero-line">아이는 신나고</span>
+            <span class="kids-hero-line parent">부모는 안심하는</span>
+            <em>우리 학원</em>
+          </h1>
+          <p>
+            “또 하고 싶어요!” 터지는 수업, 학부모가 안심하는 기록. 즐거운 활동과 수업 운영 근거를 함께 남겨 아이가 먼저 오고 부모가 먼저 묻는 학원을 만듭니다.
+          </p>
+          <div class="kids-actions">
+            <a class="kids-btn primary" href="#segment-lead-form">무료 상담 예약</a>
+            <a class="kids-btn secondary" href="#report">체험 수업 흐름 보기</a>
+          </div>
+          <div class="kids-avatars" aria-label="함께하는 원장님들">
+            <span>이미 함께하는 원장님들</span>
+            <div class="kids-avatar-stack" aria-hidden="true">
+              <span></span>
+              <span></span>
+              <span>+150</span>
+            </div>
+          </div>
+        </div>
+        <div class="kids-hero-visual" aria-label="키즈 활동형 수업 미리보기">
+          <div class="kids-floater target" aria-hidden="true">🎯</div>
+          <div class="kids-floater idea" aria-hidden="true">💡</div>
+          <div class="kids-activity-card">
+            <div class="kids-hero-card-top">
+              <span class="kids-hero-dot" aria-hidden="true"></span>
+              <span class="kids-hero-beta">v2.0 Beta</span>
+            </div>
+            <img class="kids-hero-main" src="/l/kids/assets/hero/hero-main.png" alt="Learning illustration" loading="eager" decoding="async" />
+            <h2>
+              Little Minds<br />
+              <span>Fun &amp; Smart</span>
+            </h2>
+            <div class="kids-progress" aria-hidden="true"><span></span></div>
+          </div>
+        </div>
+      </div>
+    </header>
+
+    <main>
+      <section class="kids-super-section kids-pain-section" id="pain">
+        <div class="kids-inner">
+          <div class="kids-pain-grid">
+            <div>
+              <span class="kids-label">Issue Tracker</span>
+              <h2>
+                이런 수업,<br />
+                계속 <span class="kids-highlight">괜찮을까요?</span>
+              </h2>
+            </div>
+            <div class="kids-side-note">
+              <p>
+                즐거운 수업, 활기찬 교실, 철저한 관리.<br />
+                키즈 학원이 놓치기 쉬운 세 장면을 한 흐름으로 잡습니다.
+              </p>
+            </div>
+          </div>
+          <div class="kids-pain-cards">
+            <article class="kids-pain-card">
+              <div class="kids-icon-bubble" aria-hidden="true">😴</div>
+              <h3>수업이 지루해 보인다</h3>
+              <p>열심히 준비했는데 아이들 눈이 안 빛나는 순간. 원장님은 더 신나는 활동을 원하지만, 매번 새 자료를 만들기에는 교실 운영이 바쁩니다.</p>
+            </article>
+            <article class="kids-pain-card">
+              <div class="kids-icon-bubble" aria-hidden="true">🔋</div>
+              <h3>교실 분위기가 가라앉는다</h3>
+              <p>오후 수업으로 갈수록 선생님도 아이도 에너지가 떨어집니다. 반복되는 화면과 말 설명만으로는 키즈 수업 특유의 활기를 오래 붙잡기 어렵습니다.</p>
+            </article>
+            <article class="kids-pain-card">
+              <div class="kids-icon-bubble" aria-hidden="true">📋</div>
+              <h3>아이별 관리가 안 된다</h3>
+              <p>학부모는 “오늘 뭘 했나요?”를 묻지만, 상담은 여전히 선생님의 기억과 감각에 의존합니다. 활동, 복습, 다시보기 근거가 남아야 신뢰가 쌓입니다.</p>
+            </article>
+          </div>
+        </div>
+      </section>
+
+      <section class="kids-super-section kids-solution-section">
+        <div class="kids-inner">
+          <span class="kids-label">The Solution</span>
+          <h2>
+            만약 수업 시간에<br />
+            <em>아이들이 환호하고</em><br />
+            그 장면이 상담 근거로 남는다면?
+          </h2>
+          <div class="kids-solution-box">
+            <span class="kids-pin" aria-hidden="true"></span>
+            <p>
+              지루한 수업이 아닌 <strong>아이가 먼저 달려오는 수업</strong>으로.<br />
+              감에 의존하는 관리가 아닌 <span class="kids-inline-chip">수업 기록과 복습 근거</span>로.<br />
+              학원이 보여주는 가치가 달라집니다.
+            </p>
+          </div>
+        </div>
+      </section>
+
+      <section class="kids-super-section kids-belief-section">
+        <div class="kids-inner">
+          <span class="kids-label orange">Our Belief</span>
+          <h2>우리는 믿습니다.</h2>
+          <div class="kids-belief-lines">
+            <p>공부는 원래 <span class="orange">재밌는 거라고.</span></p>
+            <p>교실은 원래 <span class="gold">웃음이 터지는 곳이라고.</span></p>
+            <p>아이의 성장은 <span class="pink">한 순간도 놓쳐선 안 된다고.</span></p>
+          </div>
+          <p class="kids-belief-body">
+            아이들이 억지로 앉아 있는 수업을 보면서 시작했습니다. 놀이처럼 빠져들고, 미션처럼 도전하고,
+            성취감에 스스로 다시 찾아오는 수업. 동시에 아이 한 명 한 명의 변화가 수업 기록과 상담 문장으로 남는 시스템.
+            그게 Little Minds가 만들고 싶은 교실입니다.
+          </p>
+          <div class="kids-signature">
+            <strong>Little Minds</strong>
+            <span>Team</span>
+          </div>
+        </div>
+      </section>
+
+      <section class="kids-super-section kids-philosophy-section" id="philosophy">
+        <div class="kids-inner kids-sticky-grid">
+          <div class="kids-sticky-copy">
+            <span class="kids-label">Our Philosophy</span>
+            <h2>
+              즐겁고,<br />
+              활기차고,<br />
+              <em>철저하게.</em>
+            </h2>
+            <p>
+              재미있으니 아이가 몰입하고, 활기차니 교실이 살아나고, 기록으로 관리하니 학부모가 신뢰합니다.
+              키즈 수업의 감성은 유지하되 운영 기준은 더 분명하게 만듭니다.
+            </p>
+          </div>
+          <div class="kids-philosophy-cards">
+            <article class="kids-super-card">
+              <div class="kids-icon-bubble" aria-hidden="true">🎉</div>
+              <div>
+                <span>더 즐거운 수업</span>
+                <h3>아이가 “또 하고 싶다!” 외치는 콘텐츠</h3>
+                <p>그림, 소리, 판서, 활동 순서가 이어지는 수업으로 아이들이 자연스럽게 참여합니다. 활동이 끝난 뒤에는 오늘의 장면으로 학부모에게 설명할 수 있습니다.</p>
+              </div>
+            </article>
+            <article class="kids-super-card">
+              <div class="kids-icon-bubble" aria-hidden="true">⚡</div>
+              <div>
+                <span>더 활기찬 수업</span>
+                <h3>교실 에너지가 완전히 달라진다</h3>
+                <p>퀴즈, 미션, 보상형 상호작용이 반복 설명을 활동으로 바꿉니다. 선생님은 더 생동감 있게 수업하고, 아이들은 화면을 보며 직접 반응합니다.</p>
+              </div>
+            </article>
+            <article class="kids-super-card">
+              <div class="kids-icon-bubble" aria-hidden="true">📊</div>
+              <div>
+                <span>철저한 관리</span>
+                <h3>아이별 성장 장면을 기록으로 추적</h3>
+                <p>판서, 녹화, 다시보기, 복습 안내가 연결되어 “잘했어요”를 넘어 “무엇을 했고 다음에 무엇을 보면 좋은지” 말할 수 있게 합니다.</p>
+              </div>
+            </article>
+          </div>
+        </div>
+      </section>
+
+      <section class="kids-section story-scene-bg" id="story">
+        <img class="kids-section-doodle library" src="/l/kids/assets/doodles/library.png" alt="" loading="lazy" decoding="async" />
+        <div class="kids-inner">
+
+        <div class="story-panel">
+          <div class="story-copy">
+            <p class="section-kicker">Kids Learning Story</p>
+            <h2>아이의 반짝이는 순간이, 학부모에게는 설명 가능한 기록이 되어야 합니다.</h2>
+            <p>유아·초등 수업은 분위기가 중요합니다. 아이가 웃고, 화면을 따라 하고, 손을 들고, 선생님의 질문에 반응하는 장면은 학원의 가장 큰 자산입니다. 하지만 그 장면이 수업이 끝나자마자 사라지면 학부모는 가치를 충분히 이해하기 어렵습니다.</p>
+            <p>그래서 ClassIn은 아이의 즐거움, 학부모의 안심, 원장님의 교육 철학을 기록과 복습 흐름으로 연결합니다.</p>
+          </div>
+          <div class="story-scene">
+            <span>수업이 끝난 뒤의 상담</span>
+            <h3>사진 몇 장으로는 오늘의 수업을 다 설명할 수 없습니다.</h3>
+            <p>오늘 아이가 어떤 활동을 했는지, 어떤 단어를 따라 했는지, 어느 장면을 다시 보면 좋은지까지 남아야 학부모는 안심합니다. ClassIn은 키즈 수업의 감성을 해치지 않고, 그 감성을 EDB·녹화·복습·상담 문구로 이어줍니다.</p>
+            <ol>
+
+                    <li>
+                      <strong>Before</strong>
+                      <h4>좋은 분위기는 있었지만 기록은 부족</h4>
+                      <p>수업은 즐거웠지만 학부모에게 전달되는 것은 사진, 짧은 코멘트, 선생님 기억에 의존했습니다.</p>
+                    </li>
+                    <li>
+                      <strong>Turning Point</strong>
+                      <h4>활동형 수업을 EDB로 남김</h4>
+                      <p>이미지, 판서, 활동 순서, 질문 흐름이 수업 파일로 남으면 다음 반과 신규 교사에게도 이어집니다.</p>
+                    </li>
+                    <li>
+                      <strong>After</strong>
+                      <h4>학부모 상담이 구체화</h4>
+                      <p>오늘 활동, 다시 볼 구간, 가정 복습 포인트를 안내하며 프리미엄 키즈 수업의 가치를 설명합니다.</p>
+                    </li>
+            </ol>
+          </div>
+        </div>
+        </div>
+      </section>
+
+      <section class="kids-section activity-scene">
+        <img class="kids-section-doodle tools" src="/l/kids/assets/doodles/tools.png" alt="" loading="lazy" decoding="async" />
+        <div class="kids-inner">
+          <div style="text-align:center; max-width:760px; margin:0 auto;">
+            <span class="kids-label">수업 장면</span>
+            <h2>아이의 활동이 상담 문장으로 이어집니다</h2>
+            <p>유아·초등 학원에서는 화면의 화려함보다 아이가 무엇을 했고, 집에서 무엇을 이어 보면 좋은지 설명할 수 있는 흐름이 중요합니다.</p>
+          </div>
+          <div class="operation-scene-grid">
+
+        <article class="operation-scene-card">
+          <span>수업 중</span>
+          <h3>아이의 반응이 활동형 교안 안에 남습니다.</h3>
+          <p>그림, 판서, 짧은 질문, 따라 말하기 같은 장면이 다음 반에서도 다시 꺼낼 수 있는 수업 파일로 이어집니다.</p>
+        </article>
+        <article class="operation-scene-card">
+          <span>하원 후</span>
+          <h3>학부모에게 오늘의 장면을 구체적으로 안내합니다.</h3>
+          <p>사진 한 장이 아니라 다시 볼 구간, 복습 포인트, 아이가 반응한 활동을 상담 언어로 정리합니다.</p>
+        </article>
+        <article class="operation-scene-card">
+          <span>새 교사 온보딩</span>
+          <h3>학원의 프리미엄 수업 톤을 이어받습니다.</h3>
+          <p>대표 수업의 활동 순서와 자료 배치를 남겨 교사마다 다른 느낌으로 흐트러지지 않게 합니다.</p>
+        </article>
+          </div>
+        </div>
+      </section>
+
+      <section class="kids-super-section kids-how-section" id="how-it-works">
+        <div class="kids-inner kids-how-grid">
+          <div class="kids-how-copy">
+            <span class="kids-label">Easy Onboarding</span>
+            <h2>
+              4주 만에<br />
+              교실 분위기가<br />
+              <em>완전히 바뀝니다</em>
+            </h2>
+            <p>
+              즐거운 수업 세팅부터 기록·복습·학부모 안내 흐름까지.
+              키즈 학원 도입에 필요한 과정을 전담 매니저가 함께 정리합니다.
+            </p>
+            <div class="kids-actions">
+              <a class="kids-btn primary" href="#segment-lead-form">상세 도입 과정 문의</a>
+            </div>
+          </div>
+          <div class="kids-step-stack">
+            <article class="kids-step-card">
+              <div class="kids-icon-bubble" aria-hidden="true">💬</div>
+              <div>
+                <small>STEP 1</small>
+                <h3>맞춤 상담 &amp; 세팅</h3>
+                <p>원장님의 커리큘럼, 교실 장비, 학부모 안내 방식부터 확인해 키즈 수업에 맞는 운영 구성을 잡습니다.</p>
+              </div>
+            </article>
+            <article class="kids-step-card">
+              <div class="kids-icon-bubble" aria-hidden="true">🎉</div>
+              <div>
+                <small>STEP 2</small>
+                <h3>활기찬 수업 시작</h3>
+                <p>아이들이 바로 반응하는 인터랙티브 칠판, EDB 자료, 활동 순서를 실제 수업에 맞춰 적용합니다.</p>
+              </div>
+            </article>
+            <article class="kids-step-card">
+              <div class="kids-icon-bubble" aria-hidden="true">📊</div>
+              <div>
+                <small>STEP 3</small>
+                <h3>수업 기록과 복습 관리</h3>
+                <p>판서와 녹화, 다시보기 포인트를 남겨 결석 보강과 가정 복습 안내가 자연스럽게 이어지게 합니다.</p>
+              </div>
+            </article>
+            <article class="kids-step-card">
+              <div class="kids-icon-bubble" aria-hidden="true">🚀</div>
+              <div>
+                <small>STEP 4</small>
+                <h3>학부모 상담 근거 정착</h3>
+                <p>수업 장면과 선생님 코멘트가 상담 문장으로 이어져, 학부모가 체감하는 프리미엄 수업 경험을 만듭니다.</p>
+              </div>
+            </article>
+          </div>
+        </div>
+      </section>
+
+      <section class="kids-super-section kids-media-showcase-section" id="classin-scenes">
+        <div class="kids-inner">
+          <div class="kids-section-head center">
+            <span class="kids-label">ClassIn Scenes</span>
+            <h2>
+              아이들이 반응하는 장면을<br />
+              <em>실제 화면으로 보여줍니다</em>
+            </h2>
+            <p>
+              말로만 “재미있는 수업”이라고 설명하지 않습니다. 퀴즈, 보상, 개인 칠판, 양방향 판서처럼
+              학부모가 이해할 수 있는 장면을 이미지와 GIF로 바로 보여줍니다.
+            </p>
+          </div>
+
+          <div class="kids-media-showcase-grid">
+            <figure class="kids-featured-media-card">
+              <div class="kids-media-window">
+                <span class="kids-media-badge">GIF</span>
+                <img src="/images/blog/imported/gamification-in-online-learning/20230427130227150.gif" alt="ClassIn 칠판에서 아이들이 몬스터 캐릭터를 만들며 참여하는 활동형 수업 GIF" loading="lazy" decoding="async" />
+              </div>
+              <figcaption class="kids-media-caption">
+                <span>Interactive Activity</span>
+                <h3>놀이처럼 움직이는 칠판 활동</h3>
+                <p>
+                  캐릭터 선택, 드래그, 판서 활동이 한 화면 안에서 이어집니다. 유아·초등 저학년은 긴 설명보다
+                  직접 움직이고 선택하는 장면에 먼저 반응합니다.
+                </p>
+              </figcaption>
+            </figure>
+
+            <div class="kids-media-stack">
+              <figure class="kids-media-mini">
+                <div class="kids-media-window">
+                  <span class="kids-media-badge">GIF</span>
+                  <img src="/images/blog/imported/gamification-in-online-learning/20230427130341589.gif" alt="ClassIn 보상 화면에서 선생님과 학생 화면이 함께 보이는 GIF" loading="lazy" decoding="async" />
+                </div>
+                <figcaption class="kids-media-mini-copy">
+                  <span>Reward Moment</span>
+                  <h3>칭찬과 보상이 바로 보이는 수업</h3>
+                  <p>작은 성공을 화면으로 보여주면 아이의 참여감이 올라가고, 선생님은 수업 분위기를 빠르게 살릴 수 있습니다.</p>
+                </figcaption>
+              </figure>
+
+              <figure class="kids-media-mini">
+                <div class="kids-media-window">
+                  <span class="kids-media-badge">GIF</span>
+                  <img src="/images/blog/imported/gamification-in-online-learning/20230427130421860.gif" alt="ClassIn 그룹 토론 수업에서 학생들이 함께 참여하는 GIF" loading="lazy" decoding="async" />
+                </div>
+                <figcaption class="kids-media-mini-copy">
+                  <span>Group Talk</span>
+                  <h3>조용히 보는 수업보다 말하는 수업</h3>
+                  <p>발표, 토론, 함께 보기 흐름을 만들면 아이가 화면 밖 관객이 아니라 수업 안 참여자가 됩니다.</p>
+                </figcaption>
+              </figure>
+
+              <figure class="kids-media-mini">
+                <div class="kids-media-window">
+                  <img src="/docs/files/classin-607-update/edb-personal-whiteboard.png" alt="ClassIn 개인 칠판과 EDB 활동 자료 화면" loading="lazy" decoding="async" />
+                </div>
+                <figcaption class="kids-media-mini-copy">
+                  <span>Personal Board</span>
+                  <h3>아이별 풀이와 반응이 남는 개인 칠판</h3>
+                  <p>한 명씩 다른 답과 판서를 남길 수 있어, 수업 후 복습과 상담에서 설명할 근거가 생깁니다.</p>
+                </figcaption>
+              </figure>
+
+              <figure class="kids-media-mini">
+                <div class="kids-media-window">
+                  <img src="/images/product/sw/two-way-blackboard.webp" alt="ClassIn 양방향 블랙보드 수업 화면" loading="lazy" decoding="async" />
+                </div>
+                <figcaption class="kids-media-mini-copy">
+                  <span>Two-way Blackboard</span>
+                  <h3>선생님 판서와 아이 반응이 이어지는 화면</h3>
+                  <p>수업 중 상호작용을 남기고 다시 볼 수 있어, 결석 보강과 가정 복습 안내가 자연스러워집니다.</p>
+                </figcaption>
+              </figure>
+            </div>
+          </div>
+        </div>
+      </section>
+
+      <section class="kids-section journey-scene" id="journey">
+        <img class="kids-section-doodle backpack" src="/l/kids/assets/doodles/backpack.png" alt="" loading="lazy" decoding="async" />
+        <div class="kids-inner">
+          <div style="text-align:center; max-width:820px; margin:0 auto;">
+            <span class="kids-label">Long Story</span>
+            <h2>수업 경험이 운영 자산이 되는 긴 흐름</h2>
+            <p>아이의 즐거운 한 장면이 복습, 상담, 교사 온보딩으로 이어질 때 프리미엄 수업의 가치가 오래 남습니다.</p>
+          </div>
+          <div class="narrative-list">
+
+        <article class="narrative-chapter">
+          <div>
+            <span>Chapter 01</span>
+            <h3>키즈 수업의 첫 가치는 아이의 표정에서 시작됩니다</h3>
+            <p>유아·초등 수업은 정답을 맞히는 순간보다 아이가 화면을 보고, 따라 말하고, 손을 들고, 선생님의 질문에 반응하는 장면에서 신뢰가 만들어집니다. 이 장면을 잘 남겨야 학부모도 수업의 가치를 이해합니다.</p>
+          </div>
+          <ul>
+            <li>참여감</li><li>활동 장면</li><li>수업 분위기</li>
+          </ul>
+        </article>
+        <article class="narrative-chapter">
+          <div>
+            <span>Chapter 02</span>
+            <h3>좋은 분위기는 기록으로 이어질 때 프리미엄이 됩니다</h3>
+            <p>사진 몇 장과 짧은 코멘트만으로는 오늘의 수업을 설명하기 어렵습니다. EDB 교안, 판서, 녹화 다시보기, 가정 복습 포인트가 이어지면 감성적인 수업 경험이 상담 가능한 근거로 바뀝니다.</p>
+          </div>
+          <ul>
+            <li>EDB 활동</li><li>다시보기</li><li>가정 복습</li>
+          </ul>
+        </article>
+        <article class="narrative-chapter">
+          <div>
+            <span>Chapter 03</span>
+            <h3>학부모는 아이가 즐거웠는지와 무엇을 배웠는지를 함께 봅니다</h3>
+            <p>키즈 학부모는 수업이 재미있었는지만 묻지 않습니다. 오늘 어떤 표현을 따라 했는지, 어떤 장면을 다시 보면 좋은지, 다음 수업과 어떻게 연결되는지 알고 싶어합니다.</p>
+          </div>
+          <ul>
+            <li>오늘의 표현</li><li>다시 볼 구간</li><li>다음 수업 연결</li>
+          </ul>
+        </article>
+        <article class="narrative-chapter">
+          <div>
+            <span>Chapter 04</span>
+            <h3>교사 개인 감각에만 기대지 않는 수업 톤이 필요합니다</h3>
+            <p>좋은 키즈 수업은 선생님의 에너지와 세심함에 크게 의존합니다. 하지만 학원이 커질수록 대표 수업의 활동 순서, 자료 배치, 질문 흐름을 신규 교사가 이어받을 수 있어야 합니다.</p>
+          </div>
+          <ul>
+            <li>대표 1차시</li><li>활동 순서</li><li>신규 교사 온보딩</li>
+          </ul>
+        </article>
+        <article class="narrative-chapter">
+          <div>
+            <span>Chapter 05</span>
+            <h3>부드러운 브랜드 분위기와 운영 근거를 함께 가져갑니다</h3>
+            <p>키즈 학부모는 과한 기술 과시보다 프리미엄한 수업 분위기, 안전한 교실 환경, 집에서도 이해되는 기록에 더 크게 안심합니다.</p>
+          </div>
+          <ul>
+            <li>프리미엄 톤</li><li>교실 장비 점검</li><li>상담 근거</li>
+          </ul>
+        </article>
+          </div>
+        </div>
+      </section>
+
+      <section class="kids-section report-foundation">
+        <img class="kids-section-doodle checkbox" src="/l/kids/assets/doodles/checkbox.png" alt="" loading="lazy" decoding="async" />
+        <div class="kids-inner">
+          <div style="text-align:center; max-width:760px; margin:0 auto;">
+            <h2>기록으로 확인하는 수업의 변화</h2>
+            <p>학부모가 가장 먼저 신뢰하는 것은 아이가 무엇을 했는지 설명할 수 있는 근거입니다.</p>
+          </div>
+          <div class="kids-card-grid">
+            <article class="kids-card">
+              <div class="kids-card-index">1</div>
+              <h3>활동 기록</h3>
+              <p>아이들이 어떤 활동을 했고 어떤 자료로 배웠는지 수업 흐름 안에 남깁니다.</p>
+            </article>
+            <article class="kids-card">
+              <div class="kids-card-index">2</div>
+              <h3>복습·결석 보강</h3>
+              <p>수업 녹화와 다시보기로 결석 보강과 가정 복습 안내를 더 자연스럽게 만듭니다.</p>
+            </article>
+            <article class="kids-card">
+              <div class="kids-card-index">3</div>
+              <h3>상담 문구</h3>
+              <p>선생님의 감각에만 의존하지 않고, 상담에서 설명할 수 있는 자료와 문구를 준비합니다.</p>
+            </article>
+          </div>
+        </div>
+      </section>
+
+      <section class="kids-section age-scene">
+        <div class="kids-inner">
+          <div style="text-align:center; max-width:780px; margin:0 auto;">
+            <span class="kids-label">Age Scenarios</span>
+            <h2>연령대마다 즐거움의 모양이 다릅니다</h2>
+            <p>유아와 초등 저학년의 기대를 나눠, 수업 설계와 학부모 안내가 더 구체적으로 느껴지게 했습니다.</p>
+          </div>
+          <div class="kids-age-grid">
+            <article class="kids-age-card">
+              <span>유아 5-7세</span>
+              <h3>보고, 따라 말하고, 손으로 해보는 수업</h3>
+              <p>긴 설명보다 짧은 활동, 그림, 소리, 선생님의 즉각적인 반응이 중요합니다. ClassIn은 활동 순서를 남겨 다음 수업에서도 같은 톤을 이어가게 합니다.</p>
+              <ul>
+                <li>그림 카드와 짧은 따라 말하기</li>
+                <li>하원 후 “오늘 한 장면” 안내</li>
+                <li>부담 없는 가정 복습 포인트</li>
+              </ul>
+            </article>
+            <article class="kids-age-card">
+              <span>초등 저학년 8-10세</span>
+              <h3>미션을 해결하고 성장 기록을 보는 수업</h3>
+              <p>아이에게는 도전감이, 학부모에게는 성장 흐름이 보여야 합니다. 판서와 과제, 다시보기 장면이 상담 문구로 이어집니다.</p>
+              <ul>
+                <li>퀴즈·미션형 판서 활동</li>
+                <li>정답보다 과정이 보이는 기록</li>
+                <li>다음 수업과 연결되는 복습 안내</li>
+              </ul>
+            </article>
+          </div>
+        </div>
+      </section>
+
+      <section class="kids-section report-scene" id="report">
+        <div class="kids-inner">
+          <div style="text-align:center; max-width:780px; margin:0 auto;">
+            <span class="kids-label">Parent Report</span>
+            <h2>수업이 끝난 뒤, 부모가 안심하는 세 가지 장면</h2>
+            <p>사진 한 장이 아니라 오늘 활동, 선생님의 한 줄, 다시 볼 포인트가 함께 남아야 키즈 수업의 가치가 오래 갑니다.</p>
+          </div>
+          <div class="kids-report-strip">
+            <article class="kids-report-item">
+              <span>Activity</span>
+              <h3>오늘 어떤 활동을 했는지</h3>
+              <p>그림, 판서, 질문, 따라 말하기를 짧게 정리해 학부모가 수업 장면을 이해합니다.</p>
+            </article>
+            <article class="kids-report-item">
+              <span>Teacher Note</span>
+              <h3>선생님 한 줄 코멘트</h3>
+              <p>아이의 반응과 다음에 볼 포인트를 선생님 톤으로 남겨 상담 문장이 부드러워집니다.</p>
+            </article>
+            <article class="kids-report-item">
+              <span>Replay</span>
+              <h3>다시 볼 장면 안내</h3>
+              <p>전체 수업을 오래 보게 하는 것이 아니라 필요한 장면만 안내해 복습 부담을 낮춥니다.</p>
+            </article>
+          </div>
+        </div>
+      </section>
+
+      <section class="kids-section proof-scene">
+        <div class="kids-inner">
+          <div style="text-align:center; max-width:760px; margin:0 auto;">
+            <span class="kids-label">Proof Stack</span>
+            <h2>학부모와 원장님이 함께 확인하는 증거</h2>
+            <p>기술을 자랑하기보다, 키즈 수업의 감성과 운영 근거가 어떻게 이어지는지 보여줍니다.</p>
+          </div>
+          <div class="evidence-stack">
+
+        <article class="evidence-row">
+          <span>참여 증거</span>
+          <div>
+            <h3>아이의 활동 장면이 수업 파일 안에 남습니다</h3>
+            <p>그림, 판서, 따라 말하기, 짧은 질문이 다음 반에서도 이어 쓸 수 있는 흐름으로 정리됩니다.</p>
+          </div>
+        </article>
+        <article class="evidence-row">
+          <span>안심 증거</span>
+          <div>
+            <h3>학부모에게 오늘의 수업을 구체적으로 설명합니다</h3>
+            <p>무엇을 했고 무엇을 다시 보면 좋은지 안내할 수 있어 상담 문장이 더 섬세해집니다.</p>
+          </div>
+        </article>
+        <article class="evidence-row">
+          <span>교사 증거</span>
+          <div>
+            <h3>신규 교사도 대표 수업 톤을 이어받습니다</h3>
+            <p>활동 순서와 자료 배치를 남겨 교사마다 수업 분위기가 크게 흔들리지 않게 합니다.</p>
+          </div>
+        </article>
+        <article class="evidence-row">
+          <span>공간 증거</span>
+          <div>
+            <h3>전자칠판·카메라·녹화 흐름을 함께 점검합니다</h3>
+            <p>교실 장비와 수업 자료가 따로 놀지 않도록 데모 전부터 확인할 기준을 둡니다.</p>
+          </div>
+        </article>
+          </div>
+        </div>
+      </section>
+
+      <section class="kids-section feature-scene">
+        <div class="kids-inner">
+          <div style="text-align:center; max-width:760px; margin:0 auto;">
+            <span class="kids-label">Feature Deep Dive</span>
+            <h2>수업 중·수업 후·상담까지 이어지는 기능 흐름</h2>
+            <p>아이에게는 자연스러운 활동으로, 원장님에게는 운영 근거로 남는 장면을 수업 흐름 안에서 보여줍니다.</p>
+          </div>
+          <div class="deep-dive-grid">
+
+        <article class="deep-dive-card">
+          <span>활동형 EDB</span>
+          <h3>아이의 반응을 수업 흐름 안에 남깁니다</h3>
+          <p>그림, 판서, 따라 말하기, 짧은 질문이 흩어지지 않고 다음 수업과 상담에서 다시 꺼낼 수 있는 자료가 됩니다.</p>
+        </article>
+        <article class="deep-dive-card">
+          <span>복습 안내</span>
+          <h3>사진 몇 장보다 구체적인 가정 복습을 만듭니다</h3>
+          <p>오늘 활동, 다시 볼 장면, 집에서 반복할 표현을 정리해 학부모가 수업 가치를 이해하게 합니다.</p>
+        </article>
+        <article class="deep-dive-card">
+          <span>교사 온보딩</span>
+          <h3>대표 수업의 톤을 신규 교사가 이어받습니다</h3>
+          <p>활동 순서와 자료 배치를 남겨 교사마다 다른 감각으로 수업 분위기가 흔들리지 않게 합니다.</p>
+        </article>
+        <article class="deep-dive-card">
+          <span>교실 점검</span>
+          <h3>장비와 수업 자료가 따로 놀지 않게 합니다</h3>
+          <p>전자칠판, 카메라, 마이크, 녹화, 복습 안내가 실제 교실에서 자연스럽게 이어지는지 먼저 확인합니다.</p>
+        </article>
+        <article class="deep-dive-card">
+          <span>브랜드 경험</span>
+          <h3>부드러운 키즈 분위기와 운영 근거를 함께 보여줍니다</h3>
+          <p>과한 기술 과시보다 프리미엄 수업의 감성, 보호자의 안심, 원장님의 교육 철학을 같이 전달합니다.</p>
+        </article>
+          </div>
+        </div>
+      </section>
+
+      <section class="kids-section comparison-scene">
+        <div class="kids-inner">
+          <div style="text-align:center; max-width:760px; margin:0 auto;">
+            <span class="kids-label">Before / After</span>
+            <h2>도입 전후에 달라지는 장면</h2>
+            <p>같은 수업도 기록과 복습이 남으면 학부모 상담과 교사 온보딩의 설득력이 달라집니다.</p>
+          </div>
+          <div class="comparison-stack">
+
+        <article class="comparison-row">
+          <div>
+            <span>Before</span>
+            <p>즐거운 수업 장면이 사진 몇 장과 기억으로만 남음</p>
+          </div>
+          <div>
+            <span>After</span>
+            <p>활동형 교안, 녹화, 복습 안내로 상담 가능한 기록이 됨</p>
+          </div>
+        </article>
+        <article class="comparison-row">
+          <div>
+            <span>Before</span>
+            <p>학부모가 아이가 무엇을 배웠는지 구체적으로 알기 어려움</p>
+          </div>
+          <div>
+            <span>After</span>
+            <p>오늘 활동과 다시 볼 포인트를 짧고 분명하게 안내함</p>
+          </div>
+        </article>
+        <article class="comparison-row">
+          <div>
+            <span>Before</span>
+            <p>교사마다 활동 순서와 자료 준비 방식이 달라짐</p>
+          </div>
+          <div>
+            <span>After</span>
+            <p>대표 수업 흐름을 신규 교사에게 그대로 이어줌</p>
+          </div>
+        </article>
+        <article class="comparison-row">
+          <div>
+            <span>Before</span>
+            <p>전자칠판, 카메라, 녹화가 각각 따로 운영됨</p>
+          </div>
+          <div>
+            <span>After</span>
+            <p>교실 장비와 수업 자료를 같은 흐름으로 점검함</p>
+          </div>
+        </article>
+          </div>
+        </div>
+      </section>
+
+      <section class="kids-section premium-scene">
+        <div class="kids-inner">
+          <div style="text-align:center; max-width:760px; margin:0 auto;">
+            <span class="kids-label">Premium Learning Value</span>
+            <h2>아이·학부모·교사가 함께 좋아하는 장점</h2>
+            <p>키즈 수업은 기술보다 경험이 먼저입니다. 그래서 장점도 참여감, 상담 근거, 교사 온보딩, 브랜드 분위기로 나눠 보여줍니다.</p>
+          </div>
+          <div class="advantage-grid">
+
+        <article class="advantage-card">
+          <span>Joyful Class</span>
+          <h3>아이의 참여감을 유지합니다</h3>
+          <p>화면 위 활동, 판서, 이미지, 짧은 상호작용을 통해 딱딱한 디지털 수업이 아니라 교실 안 참여감을 만듭니다.</p>
+        </article>
+        <article class="advantage-card">
+          <span>Parent Proof</span>
+          <h3>학부모가 이해할 수 있는 근거가 생깁니다</h3>
+          <p>오늘 활동, 다시보기, 가정 복습 안내가 이어지면 상담 문구가 더 섬세하고 구체적으로 바뀝니다.</p>
+        </article>
+        <article class="advantage-card">
+          <span>Teacher Flow</span>
+          <h3>교사마다 다른 활동 수업 편차를 줄입니다</h3>
+          <p>대표 1차시 EDB와 활동 순서를 남겨 신규 교사도 학원의 프리미엄 수업 흐름을 이어받게 합니다.</p>
+        </article>
+        <article class="advantage-card">
+          <span>Premium Mood</span>
+          <h3>브랜드 분위기를 해치지 않습니다</h3>
+          <p>과한 기술 과시가 아니라 부드러운 키즈 테마, 안전한 교실 환경, 운영 근거를 함께 보여줍니다.</p>
+        </article>
+          </div>
+        </div>
+      </section>
+
+      <section class="kids-section decision-scene" id="decision">
+        <div class="kids-inner">
+          <div style="text-align:center; max-width:760px; margin:0 auto;">
+            <span class="kids-label">Decision Questions</span>
+            <h2>원장님과 학부모가 함께 확인하는 기준</h2>
+            <p>유아·초등 수업은 보기 좋은 화면보다, 아이의 즐거움이 복습과 상담 근거로 이어지는지가 중요합니다.</p>
+          </div>
+          <div class="decision-grid">
+
+        <article class="decision-card">
+          <h3>아이들이 좋아한 수업을 학부모가 믿을 수 있나요?</h3>
+          <div>
+            <strong>원하는 것</strong>
+            <p>즐거운 순간이 사진 몇 장으로 사라지지 않고 복습과 상담 근거로 남기를 원합니다.</p>
+          </div>
+          <div>
+            <strong>반응하는 증거</strong>
+            <p>활동형 EDB, 수업 녹화 다시보기, 학부모 안내 문구처럼 감성을 기록으로 바꾸는 증거를 좋아합니다.</p>
+          </div>
+        </article>
+        <article class="decision-card">
+          <h3>프리미엄한 수업 분위기를 해치지 않나요?</h3>
+          <div>
+            <strong>원하는 것</strong>
+            <p>어린 연령대에 맞는 부드럽고 안전한 경험을 유지하면서 운영은 더 체계화하고 싶습니다.</p>
+          </div>
+          <div>
+            <strong>반응하는 증거</strong>
+            <p>과한 기술 과시보다 차분한 키즈 테마, ClassIn 그린·웜 톤, 교실·카메라·마이크 사전 점검에 안심합니다.</p>
+          </div>
+        </article>
+        <article class="decision-card">
+          <h3>교사마다 활동 수업 품질이 흔들리지 않나요?</h3>
+          <div>
+            <strong>원하는 것</strong>
+            <p>교사 개인 감각에만 의존하지 않는 대표 수업 흐름을 원합니다.</p>
+          </div>
+          <div>
+            <strong>반응하는 증거</strong>
+            <p>대표 1차시 EDB, 신규 교사 온보딩, 활동 순서 재사용처럼 수업 경험을 이어받는 장치를 선호합니다.</p>
+          </div>
+        </article>
+          </div>
+        </div>
+      </section>
+
+      <section class="kids-section curriculum-scene" id="curriculum">
+        <div class="kids-inner kids-split">
+          <div>
+            <span class="kids-label">Pedagogical Excellence</span>
+            <h2>
+              단순한 디지털 놀이가 아닌<br />
+              <em>수업 설계와 운영의 연결</em>
+            </h2>
+            <p>
+              키즈 수업의 몰입감은 중요합니다. 다만 ClassIn Korea의 메시지는 확인되지 않은 자동 측정이 아니라,
+              EDB 교안, 실시간 판서, 다시보기, 과제와 상담 근거처럼 실제 운영자가 확인할 수 있는 흐름에 맞춥니다.
+            </p>
+          </div>
+          <div class="kids-pillar-list">
+            <article class="kids-pillar">
+              <span>Interactive EDB</span>
+              <h3>활동형 교안 자산화</h3>
+              <p>이미지, 판서, 문제 풀이, 활동 순서를 재사용 가능한 수업 파일로 남깁니다.</p>
+            </article>
+            <article class="kids-pillar">
+              <span>Parent Trust</span>
+              <h3>학부모 신뢰 강화</h3>
+              <p>수업 후 아이가 무엇을 했는지 녹화, 복습, 상담 문구로 설명할 수 있게 합니다.</p>
+            </article>
+            <article class="kids-pillar">
+              <span>Teacher Onboarding</span>
+              <h3>교사 온보딩 표준화</h3>
+              <p>새로운 선생님도 학원의 대표 수업 흐름을 빠르게 이어받을 수 있습니다.</p>
+            </article>
+          </div>
+        </div>
+      </section>
+
+      <section class="kids-section visual-scene">
+        <div class="kids-inner kids-split reverse">
+          <div class="kids-dark-media">
+            <img src="/l/kids/assets/hero/hero-main.png" alt="아이들의 참여를 돕는 인터랙티브 수업 이미지" loading="lazy" decoding="async" />
+          </div>
+          <div>
+            <span class="kids-label">Visual Storytelling</span>
+            <h2>
+              아이의 눈을 사로잡는<br />
+              <em>프리미엄 수업 경험</em>
+            </h2>
+            <p>
+              부드러운 키즈 수업 분위기는 유지하면서 ClassIn 그린과 웜 뉴트럴 톤으로 차분하게 정리했습니다.
+              아이의 몰입은 학원의 기록, 복습, 상담 신뢰로 이어질 때 더 오래 남습니다.
+            </p>
+          </div>
+        </div>
+      </section>
+
+      <section class="kids-section audience-scene">
+        <div class="kids-inner">
+          <div style="text-align:center; max-width:760px; margin:0 auto;">
+            <span class="kids-label">Audience Message</span>
+            <h2>원장·학부모·교사가 다르게 체감합니다</h2>
+            <p>같은 ClassIn이어도 원장, 학부모, 교사, 교무팀이 확인하는 가치는 다릅니다.</p>
+          </div>
+          <div class="target-copy-grid">
+
+        <article class="target-card">
+          <span>원장</span>
+          <h3>원장님의 교육 철학이 선생님 한 명에게만 묶이지 않게 합니다.</h3>
+          <p>대표 수업 흐름을 EDB와 기록으로 남겨 학원의 프리미엄 경험을 운영 자산으로 만듭니다.</p>
+        </article>
+        <article class="target-card">
+          <span>학부모</span>
+          <h3>오늘 아이가 무엇을 했는지, 집에서 무엇을 보면 되는지 알 수 있습니다.</h3>
+          <p>복습과 상담 문구가 아이의 활동을 평가가 아니라 이해의 언어로 바꿉니다.</p>
+        </article>
+        <article class="target-card">
+          <span>교사</span>
+          <h3>활동 순서와 자료 준비가 더 부드러워집니다.</h3>
+          <p>이미지, 판서, 질문 흐름을 다시 불러와 수업 준비 시간을 줄이고 활동의 완성도를 유지합니다.</p>
+        </article>
+        <article class="target-card">
+          <span>교무팀</span>
+          <h3>교실 장비와 수업 자료가 따로 놀지 않게 합니다.</h3>
+          <p>전자칠판, 카메라, 마이크, 녹화, 복습 안내를 도입 전부터 같은 흐름으로 점검합니다.</p>
+        </article>
+          </div>
+        </div>
+      </section>
+
+      <section class="kids-section stakeholder-scene">
+        <div class="kids-inner">
+          <div style="text-align:center; max-width:760px; margin:0 auto;">
+            <span class="kids-label">Buying Team</span>
+            <h2>각자 다른 걱정을 같은 흐름으로 해결합니다</h2>
+            <p>원장, 학부모, 교사, 교무팀, 아이가 보는 가치가 다르기 때문에 메시지도 역할별로 분리했습니다.</p>
+          </div>
+          <div class="stakeholder-grid">
+
+        <article class="stakeholder-note">
+          <span>원장</span>
+          <h3>교육 철학을 교사 개인에게만 묶지 않는 구조</h3>
+          <p>프리미엄 키즈 수업의 톤을 학원의 운영 자산으로 남깁니다.</p>
+        </article>
+        <article class="stakeholder-note">
+          <span>학부모</span>
+          <h3>아이의 즐거움과 배움이 함께 보이는 안심</h3>
+          <p>오늘 무엇을 했고 집에서 무엇을 보면 되는지 이해할 수 있습니다.</p>
+        </article>
+        <article class="stakeholder-note">
+          <span>교사</span>
+          <h3>활동 수업 준비 부담 완화</h3>
+          <p>이미지, 판서, 질문 흐름을 다시 불러와 수업 준비가 부드러워집니다.</p>
+        </article>
+        <article class="stakeholder-note">
+          <span>교무팀</span>
+          <h3>교실 장비와 수업 자료의 연결</h3>
+          <p>전자칠판, 카메라, 마이크, 녹화, 복습 안내를 같은 흐름으로 점검합니다.</p>
+        </article>
+        <article class="stakeholder-note">
+          <span>아이</span>
+          <h3>딱딱하지 않은 참여형 수업 경험</h3>
+          <p>보고, 말하고, 손을 들고, 다시 보는 활동이 자연스럽게 이어집니다.</p>
+        </article>
+          </div>
+        </div>
+      </section>
+
+      <section class="kids-section campaign-scene">
+        <div class="kids-inner">
+          <div style="text-align:center; max-width:760px; margin:0 auto;">
+            <span class="kids-label">Campaign Copy</span>
+            <h2>상담과 광고에 바로 들어가는 문장</h2>
+            <p>아이의 즐거움, 학부모의 안심, 원장님의 교육 철학이 한 문장 안에서 함께 보이도록 다듬었습니다.</p>
+          </div>
+          <div class="campaign-line-grid">
+
+        <article class="campaign-line">
+          <h3>아이의 즐거운 순간을 학부모가 이해하는 기록으로.</h3>
+          <p>활동형 교안, 판서, 녹화, 복습 안내가 키즈 수업의 가치를 더 오래 남깁니다.</p>
+          <strong>유아·초등 데모 상담</strong>
+        </article>
+        <article class="campaign-line">
+          <h3>프리미엄 키즈 수업의 분위기는 유지하고, 운영 근거는 더 분명하게.</h3>
+          <p>부드러운 수업 경험을 학부모 상담과 신규 교사 온보딩으로 연결합니다.</p>
+          <strong>학부모 상담 흐름 보기</strong>
+        </article>
+        <article class="campaign-line">
+          <h3>선생님마다 달라지지 않는 대표 수업 흐름.</h3>
+          <p>대표 1차시 EDB와 활동 순서를 남겨 학원의 교육 철학을 이어갑니다.</p>
+          <strong>키즈 EDB 예시 보기</strong>
+        </article>
+          </div>
+        </div>
+      </section>
+
+      <section class="kids-section resource-scene" id="resources">
+        <div class="kids-inner">
+          <div style="text-align:center; max-width:760px; margin:0 auto;">
+            <span class="kids-label">Decision Resources</span>
+            <h2>도입 전에 확인할 자료</h2>
+            <p>학부모 상담, 교사 온보딩, 교실 장비 점검처럼 키즈 학원에서 먼저 확인해야 할 자료를 모았습니다.</p>
+          </div>
+          <div class="resource-grid">
+
+        <a class="resource-card" href="/resources/parent-replay-retention-script-kit">
+          <strong>학부모 상담·복습 스크립트 키트</strong>
+          <span>복습과 결석 보강 안내를 학부모가 이해하는 문구로 정리합니다.</span>
+        </a>
+        <a class="resource-card" href="/resources/teacher-edb-onboarding-sop-kit">
+          <strong>교사 EDB 온보딩 SOP</strong>
+          <span>활동형 교안을 신규 강사에게 넘기는 첫 주 기준을 만듭니다.</span>
+        </a>
+        <a class="resource-card" href="/resources/classroom-install-av-readiness-checklist">
+          <strong>교실 설치·AV 체크리스트</strong>
+          <span>전자칠판, 카메라, 마이크, 네트워크를 도입 전 확인합니다.</span>
+        </a>
+          </div>
+        </div>
+      </section>
+
+      <section class="kids-section roadmap-scene">
+        <div class="kids-inner">
+          <div style="text-align:center; max-width:760px; margin:0 auto;">
+            <span class="kids-label">Adoption Roadmap</span>
+            <h2>30/60/90일로 정착을 확인합니다</h2>
+            <p>프리미엄 키즈 수업은 첫 데모보다 실제 교실 정착 기준이 더 중요합니다.</p>
+          </div>
+          <div class="roadmap-grid">
+
+        <article class="roadmap-card">
+          <span>30일</span>
+          <h3>대표 1차시 EDB 만들기</h3>
+          <p>학원의 대표 수업을 EDB 흐름으로 정리해 데모와 내부 교육에 씁니다.</p>
+        </article>
+        <article class="roadmap-card">
+          <span>60일</span>
+          <h3>학부모 커뮤니케이션 정리</h3>
+          <p>복습, 결석 보강, 수업 후 안내 문구를 반별로 표준화합니다.</p>
+        </article>
+        <article class="roadmap-card">
+          <span>90일</span>
+          <h3>교사 온보딩 확장</h3>
+          <p>활동 흐름과 장비 사용 기준을 신규 강사 교육으로 옮깁니다.</p>
+        </article>
+          </div>
+        </div>
+      </section>
+
+      <section class="kids-section trust-scene">
+        <div class="kids-inner">
+          <div class="limits-box">
+            <h2>정직하게 먼저 확인할 범위</h2>
+            <ul>
+              <li>아이의 정서, 집중도, 뇌파를 자동으로 측정한다는 식의 표현은 사용하지 않습니다.</li><li>학습 효과는 수업 설계와 운영에 따라 달라지므로 결과 수치를 단정하지 않습니다.</li><li>교실 설치 가능 여부는 공간, 전원, 네트워크, 카메라·마이크 조건을 보고 확인합니다.</li>
+            </ul>
+          </div>
+        </div>
+      </section>
+
+      <section class="kids-section faq-scene">
+        <div class="kids-inner">
+          <div style="text-align:center; max-width:760px; margin:0 auto;">
+            <span class="kids-label">Before Adoption</span>
+            <h2>도입 전에 자주 확인하는 질문</h2>
+            <p>키즈 수업은 감성도 중요하지만, 학부모에게 설명할 수 있는 근거와 교실 운영 조건을 함께 봐야 합니다.</p>
+          </div>
+          <div class="faq-grid">
+
+        <article class="faq-card">
+          <h3>아이들이 좋아하는 수업 경험을 유지할 수 있나요?</h3>
+          <p>화려한 앱처럼 보이게 만드는 것보다, 활동형 EDB와 인터랙티브 칠판으로 아이가 직접 보고 따라 하는 장면을 수업 흐름 안에 남기는 데 초점을 둡니다.</p>
+        </article>
+        <article class="faq-card">
+          <h3>학부모 상담에는 어떤 도움이 되나요?</h3>
+          <p>수업 녹화, 다시보기, 과제 흐름을 바탕으로 오늘 활동, 다시 볼 부분, 가정 복습 안내를 더 구체적인 문구로 정리할 수 있습니다.</p>
+        </article>
+        <article class="faq-card">
+          <h3>아이의 집중도나 정서를 자동으로 분석하나요?</h3>
+          <p>그런 표현은 사용하지 않습니다. 확인 가능한 범위인 활동형 교안, 판서, 녹화, 복습, 상담 근거 중심으로 설명합니다.</p>
+        </article>
+        <article class="faq-card">
+          <h3>화면 시간이 늘어나는 것에 대한 학부모 걱정은 어떻게 설명하나요?</h3>
+          <p>단순히 화면을 오래 보게 하는 것이 아니라 짧은 활동, 판서, 따라 말하기, 다시보기 포인트를 수업 목적에 맞춰 설계한다고 설명하는 편이 좋습니다.</p>
+        </article>
+        <article class="faq-card">
+          <h3>외부 링크나 광고 노출 걱정은 없나요?</h3>
+          <p>키즈 수업에서는 아이가 어디로 이동하는지와 어떤 자료를 보는지가 중요합니다. 상담에서는 외부 링크 사용 범위, 자료 제공 방식, 계정 권한을 먼저 확인합니다.</p>
+        </article>
+        <article class="faq-card">
+          <h3>기존 커리큘럼과 병행할 수 있나요?</h3>
+          <p>기존 교재와 수업 철학을 버리는 방식이 아닙니다. 대표 1차시를 골라 이미지, 판서, 질문, 복습 안내로 옮길 부분부터 정리합니다.</p>
+        </article>
+        <article class="faq-card">
+          <h3>연령대별 커리큘럼을 다르게 운영할 수 있나요?</h3>
+          <p>연령과 수준에 따라 활동 순서, 이미지 자료, 판서 밀도, 복습 안내를 다르게 설계할 수 있습니다. 상담에서는 대표 연령대와 1차시 흐름을 먼저 확인합니다.</p>
+        </article>
+        <article class="faq-card">
+          <h3>교사마다 수업 분위기가 달라지는 문제를 줄일 수 있나요?</h3>
+          <p>대표 수업의 활동 순서와 자료 배치를 EDB로 남기면 신규 교사가 학원의 톤을 더 빠르게 이어받을 수 있습니다. 다만 교사의 상호작용 역량은 별도 코칭이 함께 필요합니다.</p>
+        </article>
+        <article class="faq-card">
+          <h3>학부모에게 녹화나 다시보기를 어떻게 안내하나요?</h3>
+          <p>오늘 활동, 다시 볼 장면, 가정 복습 포인트를 짧게 정리하는 방식이 좋습니다. 수업 전체를 길게 소비하게 하기보다 필요한 장면을 안내하는 방향으로 설계합니다.</p>
+        </article>
+        <article class="faq-card">
+          <h3>교실 장비는 무엇을 먼저 확인해야 하나요?</h3>
+          <p>전자칠판, 카메라, 마이크, 스피커, 네트워크, 전원 위치를 먼저 확인합니다. 교실 환경에 따라 설치 방식과 수업 화면 구성이 달라질 수 있습니다.</p>
+        </article>
+        <article class="faq-card">
+          <h3>키즈 수업에도 과제나 복습이 부담스럽지 않을까요?</h3>
+          <p>부담을 주는 숙제가 아니라 오늘 활동을 다시 떠올리는 짧은 복습 안내로 설계하는 것이 좋습니다. 학부모가 아이의 수업을 이해하는 근거로 활용합니다.</p>
+        </article>
+          </div>
+        </div>
+      </section>
+    </main>
+
+    <section class="kids-form-section" id="segment-lead-form">
+      <div class="kids-form-grid">
+        <div class="kids-form-copy">
+          <span class="kids-label">Consultation</span>
+          <h2>유아·초등 수업 데모를 신청하세요</h2>
+          <p>대표 수업 유형과 교실 환경을 알려주시면 EDB·칠판·녹화·학부모 안내 흐름으로 보여드리겠습니다.</p>
+        </div>
+        <form class="contact-form" data-lead-form novalidate>
+          <div class="form-grid">
+            <div class="field">
+              <label for="org">학원명</label>
+              <input id="org" name="org" type="text" placeholder="예: 클래스인키즈 목동" autocomplete="organization" required />
+            </div>
+            <div class="field">
+              <label for="name">이름</label>
+              <input id="name" name="name" type="text" placeholder="담당자 이름" autocomplete="name" required />
+            </div>
+            <div class="field">
+              <label for="phone">연락처</label>
+              <input id="phone" name="phone" type="tel" placeholder="010-0000-0000" autocomplete="tel" required />
+            </div>
+            <div class="field">
+              <label for="email">이메일</label>
+              <input id="email" name="email" type="email" placeholder="선택 입력" autocomplete="email" />
+            </div>
+            <div class="field">
+              <label for="role">역할</label>
+              <select id="role" name="role">
+                <option value="">선택</option>
+                <option>원장</option>
+                <option>실장·관리자</option>
+                <option>교무팀</option>
+                <option>강사</option>
+              </select>
+            </div>
+            <div class="field">
+              <label for="size">현재 규모</label>
+              <select id="size" name="size">
+                <option value="">선택</option>
+                <option>50명 미만</option>
+                <option>50-200명</option>
+                <option>200-500명</option>
+                <option>500명 이상 또는 다지점</option>
+              </select>
+            </div>
+            <div class="field full">
+              <label for="priority">가장 궁금한 영역</label>
+              <select id="priority" name="priority">
+                <option>유아·초등 1차시 EDB 데모</option><option>학부모 상담·복습 안내</option><option>교사 온보딩</option><option>전자칠판·교실 설치</option>
+              </select>
+            </div>
+            <div class="field full">
+              <label for="message">상담 내용</label>
+              <textarea id="message" name="message" placeholder="대표 수업 유형, 연령대, 현재 쓰는 교실 장비를 적어주세요." required></textarea>
+            </div>
+            <div class="field sr-only" aria-hidden="true">
+              <label for="website">Website</label>
+              <input id="website" name="website" type="text" tabindex="-1" autocomplete="off" />
+            </div>
+          </div>
+          <label class="consent">
+            <input type="checkbox" name="marketingConsent" />
+            <span>상담 안내와 관련 자료 수신에 동의합니다. 동의하지 않아도 상담 신청은 가능합니다.</span>
+          </label>
+          <button class="kids-btn primary" type="submit">유아·초등 데모 상담</button>
+          <p class="form-status" data-form-status aria-live="polite"></p>
+        </form>
+      </div>
+    </section>
+
+    <footer class="kids-footer">
+      <div>
+        <span>ClassIn Korea · landing_kids segment landing</span>
+        <span>부드러운 키즈 테마 · ClassIn 컬러톤</span>
+      </div>
+    </footer>
+  </div>
+  <script>
+    const form = document.querySelector('[data-lead-form]');
+    const statusEl = document.querySelector('[data-form-status]');
+    const submitButton = form?.querySelector('button[type="submit"]');
+    const kidsTopbar = document.querySelector('.kids-topbar');
+
+    function syncKidsTopbar() {
+      if (!kidsTopbar) return;
+      kidsTopbar.classList.toggle('is-scrolled', window.scrollY > 60);
+    }
+
+    syncKidsTopbar();
+    window.addEventListener('scroll', syncKidsTopbar, { passive: true });
+
+    const managedStepButtons = Array.from(document.querySelectorAll('[data-managed-step]'));
+    const managedPanels = Array.from(document.querySelectorAll('[data-managed-panel]'));
+
+    function setManagedStep(index) {
+      managedStepButtons.forEach((button, buttonIndex) => {
+        const active = buttonIndex === index;
+        button.classList.toggle('is-active', active);
+        button.setAttribute('aria-selected', active ? 'true' : 'false');
+      });
+      managedPanels.forEach((panel, panelIndex) => {
+        panel.classList.toggle('is-active', panelIndex === index);
+      });
+    }
+
+    managedStepButtons.forEach((button) => {
+      button.addEventListener('click', () => {
+        setManagedStep(Number(button.dataset.managedStep || 0));
+      });
+    });
+
+    const managedChapterLinks = Array.from(document.querySelectorAll('[data-managed-chapter]'));
+    const managedProgress = document.querySelector('[data-managed-progress]');
+    const managedProgressText = document.querySelector('[data-managed-progress-text]');
+
+    function syncManagedJourney() {
+      if (!managedChapterLinks.length) return;
+
+      const totalHeight = Math.max(1, document.documentElement.scrollHeight - window.innerHeight);
+      const progress = Math.min(100, Math.max(0, (window.scrollY / totalHeight) * 100));
+
+      if (managedProgress) managedProgress.style.height = progress + '%';
+      if (managedProgressText) managedProgressText.textContent = Math.round(progress) + '%';
+
+      let activeId = managedChapterLinks[0]?.dataset.managedChapter;
+      managedChapterLinks.forEach((link) => {
+        const id = link.dataset.managedChapter;
+        const section = id ? document.getElementById(id) : null;
+        if (section && section.getBoundingClientRect().top <= 160) {
+          activeId = id;
+        }
+      });
+
+      managedChapterLinks.forEach((link) => {
+        link.classList.toggle('is-active', link.dataset.managedChapter === activeId);
+      });
+    }
+
+    syncManagedJourney();
+    window.addEventListener('scroll', syncManagedJourney, { passive: true });
+
+    function setStatus(message, type) {
+      if (!statusEl) return;
+      statusEl.textContent = message;
+      statusEl.className = 'form-status' + (type ? ' ' + type : '');
+    }
+
+    function field(name) {
+      return (new FormData(form).get(name) || '').toString().trim();
+    }
+
+    function getUrlParam(name) {
+      return new URLSearchParams(window.location.search).get(name) || undefined;
+    }
+
+    form?.addEventListener('submit', async (event) => {
+      event.preventDefault();
+
+      const org = field('org');
+      const name = field('name');
+      const phone = field('phone');
+      const email = field('email');
+      const role = field('role');
+      const size = field('size');
+      const priority = field('priority');
+      const rawMessage = field('message');
+      const phoneDigits = phone.replace(/\D/g, '');
+
+      if (!org || !name || !phone || !rawMessage) {
+        setStatus('학원명, 이름, 연락처, 상담 내용을 입력해 주세요.', 'error');
+        return;
+      }
+
+      if (phoneDigits.length < 8) {
+        setStatus('연락처를 다시 확인해 주세요.', 'error');
+        return;
+      }
+
+      const message = [
+        '문의 유형: 유아·초등 수업 데모를 신청하세요',
+        '세그먼트: 유아·초등 학원 원장, 교무팀, 신규 강사 온보딩 담당자',
+        role ? '역할: ' + role : undefined,
+        size ? '현재 규모: ' + size : undefined,
+        priority ? '우선 관심: ' + priority : undefined,
+        rawMessage,
+        '페이지: ' + window.location.pathname,
+      ].filter(Boolean).join('\n');
+
+      const payload = {
+        source: 'contact_page',
+        sourceDetail: 'landing_segment:kids',
+        org,
+        name,
+        phone,
+        email: email || undefined,
+        role: role || undefined,
+        size: size || undefined,
+        message,
+        marketingConsent: Boolean(form.querySelector('[name="marketingConsent"]')?.checked),
+        website: field('website'),
+        landingPage: window.location.origin + '/l/kids',
+        currentPage: window.location.href,
+        referrer: document.referrer || undefined,
+        utmSource: getUrlParam('utm_source'),
+        utmMedium: getUrlParam('utm_medium'),
+        utmCampaign: getUrlParam('utm_campaign'),
+        utmTerm: getUrlParam('utm_term'),
+        utmContent: getUrlParam('utm_content'),
+        gclid: getUrlParam('gclid'),
+        fbclid: getUrlParam('fbclid'),
+        msclkid: getUrlParam('msclkid'),
+        ttclid: getUrlParam('ttclid'),
+      };
+
+      try {
+        if (submitButton) {
+          submitButton.disabled = true;
+          submitButton.textContent = '접수 중입니다';
+        }
+        setStatus('', '');
+
+        const response = await fetch('/api/lead', {
+          method: 'POST',
+          headers: { 'Content-Type': 'application/json' },
+          body: JSON.stringify(payload),
+        });
+        const result = await response.json().catch(() => null);
+
+        if (!response.ok || !result?.ok) {
+          throw new Error(result?.error || '접수에 실패했습니다. 잠시 후 다시 시도해 주세요.');
+        }
+
+        form.reset();
+        setStatus('상담 신청이 접수되었습니다. 담당자가 순차적으로 연락드릴게요.', 'success');
+      } catch (error) {
+        setStatus(error instanceof Error ? error.message : '접수에 실패했습니다. 잠시 후 다시 시도해 주세요.', 'error');
+      } finally {
+        if (submitButton) {
+          submitButton.disabled = false;
+          submitButton.textContent = '유아·초등 데모 상담';
+        }
+      }
+    });
+  </script>
+</body>
+</html>
