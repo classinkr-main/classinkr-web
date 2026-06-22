@@ -1,11 +1,11 @@
 export const CLASSIN_POSITIONING = {
   primaryAudience: "학원 원장, 관리자, 운영 책임자, 교육기관 의사결정자",
-  categoryName: "학원 시스템 OS",
+  categoryName: "수업 시스템 OS",
   oneLine:
-    "Classin은 전자칠판, 수업 녹화, EDB 교안, LMS, 학생 관리, 관리자 데이터를 한 흐름으로 묶는 학원 시스템 OS입니다.",
+    "Classin은 전자칠판, 수업 녹화, EDB 교안, LMS, 학생 관리, 관리자 데이터를 한 흐름으로 묶는 수업 시스템 OS입니다.",
   metadataDescription:
-    "Classin은 전자칠판, 녹화, EDB 교안, LMS, 학생 관리, 관리자 데이터를 하나로 연결해 학원 수업 품질을 표준화하는 학원 시스템 OS입니다.",
-  heroEyebrow: "Classin = 학원 시스템 OS",
+    "Classin은 전자칠판, 녹화, EDB 교안, LMS, 학생 관리, 관리자 데이터를 하나로 연결해 학원 수업 품질을 표준화하는 수업 시스템 OS입니다.",
+  heroEyebrow: "Classin = 수업 시스템 OS",
   heroHeadline: "전자칠판을 넘어, 학원 수업 운영을 하나의 시스템으로",
   heroBody:
     "수업 준비, 판서, 녹화, 복습, 과제, 관리자 데이터가 흩어져 있으면 좋은 장비를 사도 운영은 다시 사람에게 의존합니다. Classin은 하드웨어와 소프트웨어를 함께 연결해 선생님의 리소스를 줄이고 수업 품질을 표준화합니다.",
@@ -57,7 +57,7 @@ export const CLASSIN_POSITIONING = {
     welcome:
       "안녕하세요! Classin 상담 가이드예요. 도입, 수업 운영, 전자칠판, 요금/견적/증빙까지 편하게 물어보시면 바로 정리해드릴게요.",
     identitySummary:
-      "Classin은 전자칠판, 수업 녹화, EDB 교안, LMS, 학생 관리, 관리자 데이터를 하나의 수업 운영 흐름으로 묶는 학원 시스템 OS입니다. 한국 학원에서는 전자칠판+녹화+수업 관리부터 시작해 파일럿 수업, 강사 온보딩, EDB 교안 전환, 관리자 데이터 확인 순서로 정착시키는 방식이 현실적입니다.",
+      "Classin은 전자칠판, 수업 녹화, EDB 교안, LMS, 학생 관리, 관리자 데이터를 하나의 수업 운영 흐름으로 묶는 수업 시스템 OS입니다. 한국 학원에서는 전자칠판+녹화+수업 관리부터 시작해 파일럿 수업, 강사 온보딩, EDB 교안 전환, 관리자 데이터 확인 순서로 정착시키는 방식이 현실적입니다.",
     starterQuestions: [
       "Classin이 Zoom이나 일반 전자칠판과 뭐가 다른가요?",
       "우리 학원 90일 도입 순서를 어떻게 잡으면 좋을까요?",
@@ -65,7 +65,7 @@ export const CLASSIN_POSITIONING = {
       "요금/견적은 어떤 항목으로 구성되나요?",
     ],
     fallbackQuestions: [
-      "학원 시스템 OS 관점으로 설명해 주세요",
+      "수업 시스템 OS 관점으로 설명해 주세요",
       "도입 전 확인 질문을 알려주세요",
       "요금과 전자칠판 패키지 견적이 궁금해요",
     ],
@@ -77,7 +77,7 @@ export const CLASSIN_POSITIONING = {
       "EDB 질문은 판서·이미지·텍스트가 살아 있는 칠판 파일, 최대 50페이지 칠판과의 시너지, 교안 재사용 관점으로 답합니다.",
     ],
     identityKeywords: [
-      "학원 시스템 OS",
+      "수업 시스템 OS",
       "수업 OS",
       "Zoom",
       "줌",

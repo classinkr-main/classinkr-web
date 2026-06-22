@@ -23,7 +23,7 @@ export function HomeEntitySummary() {
           <div>
             <p className="text-xs font-bold uppercase tracking-[0.16em] text-[#084734]">Classin Overview</p>
             <h2 id="classin-summary-title" className="mt-3 text-2xl font-black leading-tight text-[#111110] md:text-4xl">
-              Classin은 학원 시스템 OS입니다
+              Classin은 수업 시스템 OS입니다
             </h2>
           </div>
           <div>

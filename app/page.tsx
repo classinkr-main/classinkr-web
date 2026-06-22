@@ -13,12 +13,12 @@ import { CLASSIN_POSITIONING } from "@/lib/classin-positioning"
 
 export const metadata: Metadata = {
   ...createPublicMetadata({
-    title: "학원 시스템 OS",
+    title: "수업 시스템 OS",
     description: CLASSIN_POSITIONING.metadataDescription,
     path: "/",
-    keywords: ["학원 시스템 OS", "학원 수업 운영", "전자칠판", "EDB", "Classin"],
+    keywords: ["수업 시스템 OS", "학원 수업 운영", "전자칠판", "EDB", "Classin"],
   }),
-  title: { absolute: "Classin | 학원 시스템 OS" },
+  title: { absolute: "Classin | 수업 시스템 OS" },
 }
 
 const Outcomes = dynamic(() => import("@/components/sections/Outcomes").then(m => ({ default: m.Outcomes })))
@@ -39,7 +39,7 @@ export default function LandingPage() {
         data={[
           createWebPageJsonLd({
             path: "/",
-            name: "Classin 학원 시스템 OS",
+            name: "Classin 수업 시스템 OS",
             description: CLASSIN_POSITIONING.metadataDescription,
           }),
           createBreadcrumbJsonLd([{ name: "홈", path: "/" }]),

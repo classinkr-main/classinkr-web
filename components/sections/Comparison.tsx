@@ -48,7 +48,7 @@ export function Comparison() {
                         Zoom·전자칠판·LMS와 무엇이 다른가요?
                     </span>
                     <h2 className="text-3xl font-bold text-[#111110] sm:text-4xl mb-4 break-keep" style={{ letterSpacing: '-1px' }}>
-                        한 기능의 대체재가 아니라, 학원 시스템 OS
+                        한 기능의 대체재가 아니라, 수업 시스템 OS
                     </h2>
                     <p className="text-lg text-[#615D59] break-keep">
                         Classin은 화상수업이나 전자칠판 하나만 바꾸는 제품이 아니라 수업 준비, 진행, 녹화, 복습, 관리 데이터를 연결하는 구조입니다.

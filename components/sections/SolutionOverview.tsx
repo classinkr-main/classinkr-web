@@ -58,7 +58,7 @@ export function SolutionOverview() {
                 <div className="text-center max-w-3xl mx-auto mb-16 px-4">
                     <span className="inline-flex items-center gap-2 py-1.5 px-4 rounded-full bg-gradient-to-r from-[#ECFDF5] to-[#D1FAE5]/60 text-[#084734] text-[13px] font-semibold mb-4 border border-[#084734]/8 shadow-[0_2px_8px_rgba(8,71,52,0.06)] tracking-[0.02em]">
                         <span className="w-1 h-1 rounded-full bg-[#084734]/60" />
-                        학원 시스템 OS의 3단계
+                        수업 시스템 OS의 3단계
                     </span>
                     <h2 className="text-3xl md:text-5xl lg:text-[3.5rem] font-black text-[#111110] mb-4 leading-[1.1] break-keep" style={{ letterSpacing: '-1.25px' }}>
                         수업 전 · 중 · 후, 흩어진 도구를 하나의 운영 흐름으로
