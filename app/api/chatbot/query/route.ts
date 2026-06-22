@@ -73,11 +73,14 @@ export async function POST(req: NextRequest) {
     }
 
     console.error("[POST /api/chatbot/query] error:", error)
+    const isTimeout = error instanceof Error && error.message === "chatbot_timeout"
     return NextResponse.json(
       {
-        error: "답변을 준비하지 못했습니다. 잠시 후 다시 시도해 주세요.",
+        error: isTimeout
+          ? "응답이 지연되고 있습니다. 잠깐 후 다시 시도해 주세요."
+          : "답변을 준비하지 못했습니다. 잠시 후 다시 시도해 주세요.",
       },
-      { status: 500 }
+      { status: isTimeout ? 504 : 500 }
     )
   }
 }
