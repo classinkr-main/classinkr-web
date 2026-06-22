@@ -567,11 +567,11 @@
 .animate-text-gradient {
   background: linear-gradient(to right, #084734, #6EE7B7, #CEF17B, #6EE7B7, #084734);
   background-size: 200% auto;
+  background-position: center;
   color: transparent;
   -webkit-background-clip: text;
   -webkit-text-fill-color: transparent;
   background-clip: text;
-  animation: text-gradient 3s linear infinite;
 }
 
 /* ── Gauge overshoot emphasis (when ring goes past 100%) ──────────── */
@@ -605,36 +605,6 @@
 .prism-glass:hover::before {
   opacity: 1;
   animation: prism-spin 4s linear infinite;
-}
-
-.gnb-scroll-glass {
-  isolation: isolate;
-}
-
-.gnb-scroll-glass::before,
-.gnb-scroll-glass::after {
-  content: "";
-  position: absolute;
-  inset: 0;
-  z-index: 0;
-  pointer-events: none;
-}
-
-.gnb-scroll-glass::before {
-  background:
-    linear-gradient(112deg, transparent 0%, rgba(255, 255, 255, 0.36) 42%, rgba(110, 231, 183, 0.18) 47%, rgba(8, 204, 255, 0.16) 52%, rgba(255, 111, 199, 0.14) 57%, transparent 66%),
-    conic-gradient(from 210deg at 52% 45%, rgba(206, 241, 123, 0) 0deg, rgba(206, 241, 123, 0.16) 62deg, rgba(8, 204, 255, 0.14) 126deg, rgba(255, 100, 200, 0.13) 185deg, rgba(255, 180, 50, 0.12) 250deg, rgba(206, 241, 123, 0) 360deg);
-  opacity: 0.46;
-  mix-blend-mode: screen;
-  filter: blur(16px) saturate(1.35);
-}
-
-.gnb-scroll-glass::after {
-  background:
-    radial-gradient(circle at 18% 0%, rgba(255, 255, 255, 0.42), transparent 32%),
-    linear-gradient(90deg, rgba(255, 255, 255, 0.18), transparent 18%, rgba(8, 204, 255, 0.09) 46%, rgba(255, 111, 199, 0.1) 58%, transparent 82%);
-  opacity: 0.58;
-  mix-blend-mode: soft-light;
 }
 
 @keyframes prism-spin {

@@ -35,6 +35,12 @@ export interface NeoCrmCustomerList {
   error: string | null
   latestSyncedAt: string | null
   generatedAt: string
+  syncHealth: {
+    shroffAccountSyncedAt: string | null
+    shroffAccountAgeHours: number | null
+    staleAfterHours: number
+    isShroffAccountStale: boolean
+  }
   summary: {
     totalCount: number
     withEeoCount: number
@@ -101,6 +107,8 @@ interface OpportunityRecord {
 
 const SCAN_LIMIT = 5000
 const EXPIRING_SOON_DAYS = 60
+const CUSTOMER_SYNC_FRESHNESS_HOURS = 24
+const SHROFF_OBJECT_API_KEY = "ShroffAccount__c"
 
 type SupabaseAdminClient = ReturnType<typeof createSupabaseAdminClient>
 
@@ -125,6 +133,42 @@ function payloadNumber(payload: Record<string, unknown> | null, key: string): nu
   return Number.isFinite(numeric) ? numeric : null
 }
 
+function payloadIsActivePaidEeo(payload: Record<string, unknown> | null) {
+  const serviceVersion = payloadString(payload, "service_version__c")
+  if (serviceVersion === "1") return false
+
+  const serviceState = payloadString(payload, "serviceState__c")
+  if (serviceState && serviceState !== "1") return false
+
+  return true
+}
+
+function payloadExpireAt(payload: Record<string, unknown> | null): string | null {
+  return (
+    toIso(payload?.["expireTime__c"]) ??
+    toIso(payload?.["DateBack__c"]) ??
+    toIso(payload?.["ContractEndDate__c"])
+  )
+}
+
+function hoursSince(value: string | null, nowMs = Date.now()) {
+  if (!value) return null
+  const timestamp = new Date(value).getTime()
+  if (Number.isNaN(timestamp)) return null
+  return Math.max(0, (nowMs - timestamp) / (60 * 60 * 1000))
+}
+
+function buildSyncHealth(shroffAccountSyncedAt: string | null) {
+  const shroffAccountAgeHours = hoursSince(shroffAccountSyncedAt)
+  return {
+    shroffAccountSyncedAt,
+    shroffAccountAgeHours,
+    staleAfterHours: CUSTOMER_SYNC_FRESHNESS_HOURS,
+    isShroffAccountStale:
+      shroffAccountAgeHours === null || shroffAccountAgeHours > CUSTOMER_SYNC_FRESHNESS_HOURS,
+  }
+}
+
 export async function getNeoCrmCustomers(): Promise<NeoCrmCustomerList> {
   const sb = createSupabaseAdminClient()
   const generatedAt = new Date().toISOString()
@@ -134,6 +178,7 @@ export async function getNeoCrmCustomers(): Promise<NeoCrmCustomerList> {
     error: null,
     latestSyncedAt: null,
     generatedAt,
+    syncHealth: buildSyncHealth(null),
     summary: { totalCount: 0, withEeoCount: 0, expiringSoonCount: 0, totalBalance: 0, totalOrderAmount: 0 },
     owners: [],
     rows: [],
@@ -146,7 +191,7 @@ export async function getNeoCrmCustomers(): Promise<NeoCrmCustomerList> {
         "account",
         "external_id, display_name, owner_name, occurred_at, payload"
       ),
-      fetchExternalCrmRows<ShroffRecord>(sb, "ShroffAccount__c", "payload"),
+      fetchExternalCrmRows<ShroffRecord>(sb, SHROFF_OBJECT_API_KEY, "payload"),
       fetchExternalCrmRows<OpportunityRecord>(sb, "opportunity", "amount, payload"),
       getXiaoshouyiOwnerNameMap(sb),
       getExcludedXiaoshouyiOwnerIds(sb),
@@ -154,6 +199,7 @@ export async function getNeoCrmCustomers(): Promise<NeoCrmCustomerList> {
         .from("external_crm_records")
         .select("synced_at")
         .eq("source_system", "xiaoshouyi")
+        .eq("object_api_key", SHROFF_OBJECT_API_KEY)
         .order("synced_at", { ascending: false })
         .limit(1),
     ])
@@ -168,7 +214,7 @@ export async function getNeoCrmCustomers(): Promise<NeoCrmCustomerList> {
     const accountId = payloadString(row.payload, "Account__c")
     if (!accountId) continue
     const balance = payloadNumber(row.payload, "CurrencyAmount__c") ?? 0
-    const expireAt = toIso(row.payload?.["expireTime__c"])
+    const expireAt = payloadIsActivePaidEeo(row.payload) ? payloadExpireAt(row.payload) : null
     const lastClassAt = toIso(row.payload?.["LastClassDate__c"])
     const uid = payloadString(row.payload, "uid__c")
     const existing = eeoByAccount.get(accountId)
@@ -251,12 +297,14 @@ export async function getNeoCrmCustomers(): Promise<NeoCrmCustomerList> {
     .sort((a, b) => b.count - a.count)
 
   const latestRow = latestResult.error ? null : latestResult.data?.[0]
+  const shroffAccountSyncedAt = latestRow && typeof latestRow.synced_at === "string" ? latestRow.synced_at : null
 
   return {
     ok: true,
     error: null,
-    latestSyncedAt: latestRow && typeof latestRow.synced_at === "string" ? latestRow.synced_at : null,
+    latestSyncedAt: shroffAccountSyncedAt,
     generatedAt,
+    syncHealth: buildSyncHealth(shroffAccountSyncedAt),
     summary: {
       totalCount: rows.length,
       withEeoCount,
@@ -368,7 +416,7 @@ export async function getNeoCrmCustomerDetail(accountId: string): Promise<NeoCrm
     name: row.display_name ?? row.external_id,
     uid: payloadString(row.payload, "uid__c"),
     balance: payloadNumber(row.payload, "CurrencyAmount__c"),
-    expireAt: toIso(row.payload?.["expireTime__c"]),
+    expireAt: payloadIsActivePaidEeo(row.payload) ? payloadExpireAt(row.payload) : null,
     lastClassAt: toIso(row.payload?.["LastClassDate__c"]),
     serviceStatus: row.status,
   }))

@@ -1,6 +1,6 @@
 "use client"
 
-import { useEffect, useRef, useState } from "react"
+import { useEffect, useMemo, useRef, useState } from "react"
 import { motion, useInView } from "framer-motion"
 import { AlertTriangle, Clock, TrendingDown } from "lucide-react"
 
@@ -8,25 +8,33 @@ function CountUp({ target, suffix = "", prefix = "" }: { target: number; suffix?
     const ref = useRef<HTMLSpanElement>(null)
     const isInView = useInView(ref, { once: true })
     const [count, setCount] = useState(0)
-    const formattedCount = new Intl.NumberFormat("ko-KR").format(count)
+    const formatter = useMemo(() => new Intl.NumberFormat("ko-KR"), [])
+    const formattedCount = formatter.format(count)
 
     useEffect(() => {
         if (!isInView) return
-        const duration = 2000
+        const duration = 1200
         const startTime = performance.now()
         let lastValue = 0
+        let lastUpdateTime = 0
+        let frame = 0
+
         const step = (currentTime: number) => {
             const elapsed = currentTime - startTime
             const progress = Math.min(elapsed / duration, 1)
             const eased = 1 - Math.pow(1 - progress, 3)
             const newValue = Math.floor(eased * target)
-            if (newValue !== lastValue) {
+
+            if (newValue !== lastValue && (currentTime - lastUpdateTime > 40 || progress === 1)) {
                 lastValue = newValue
+                lastUpdateTime = currentTime
                 setCount(newValue)
             }
-            if (progress < 1) requestAnimationFrame(step)
+            if (progress < 1) frame = requestAnimationFrame(step)
         }
-        requestAnimationFrame(step)
+
+        frame = requestAnimationFrame(step)
+        return () => cancelAnimationFrame(frame)
     }, [isInView, target])
 
     return <span ref={ref}>{prefix}{formattedCount}{suffix}</span>
@@ -67,8 +75,8 @@ export function ProblemCost() {
                 style={{ backgroundImage: 'linear-gradient(rgba(255,255,255,0.1) 1px, transparent 1px), linear-gradient(90deg, rgba(255,255,255,0.1) 1px, transparent 1px)', backgroundSize: '60px 60px' }} />
 
             {/* Amber/terracotta ambient glow blobs */}
-            <div className="absolute top-1/4 left-1/4 w-[500px] h-[500px] bg-[#B85C33]/[0.08] rounded-full blur-[60px] animate-blob1" />
-            <div className="absolute bottom-1/4 right-1/4 w-[400px] h-[400px] bg-orange-500/[0.06] rounded-full blur-[60px] animate-blob2" />
+            <div className="absolute top-1/4 left-1/4 w-[500px] h-[500px] bg-[#B85C33]/[0.08] rounded-full blur-[60px]" />
+            <div className="absolute bottom-1/4 right-1/4 w-[400px] h-[400px] bg-orange-500/[0.06] rounded-full blur-[60px]" />
 
             {/* Noise texture */}
             <div className="absolute inset-0 bg-[url('/images/noise-texture.svg')] opacity-15 mix-blend-overlay pointer-events-none" />

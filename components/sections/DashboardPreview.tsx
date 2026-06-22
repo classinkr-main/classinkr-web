@@ -49,22 +49,51 @@ export function DashboardPreview() {
         if (shouldLoadCharts) return
 
         const target = chartRef.current
+        let idleHandle: number | undefined
+        let timeoutHandle: number | undefined
+
+        const scheduleChartLoad = () => {
+            const idleWindow = window as Window & {
+                requestIdleCallback?: (callback: () => void, options?: { timeout: number }) => number
+                cancelIdleCallback?: (handle: number) => void
+            }
+
+            if (idleWindow.requestIdleCallback) {
+                idleHandle = idleWindow.requestIdleCallback(() => setShouldLoadCharts(true), { timeout: 1200 })
+            } else {
+                timeoutHandle = window.setTimeout(() => setShouldLoadCharts(true), 300)
+            }
+        }
+
         if (!target || !("IntersectionObserver" in window)) {
-            const timeout = window.setTimeout(() => setShouldLoadCharts(true), 0)
-            return () => window.clearTimeout(timeout)
+            scheduleChartLoad()
+            return () => {
+                if (idleHandle !== undefined) {
+                    const idleWindow = window as Window & { cancelIdleCallback?: (handle: number) => void }
+                    idleWindow.cancelIdleCallback?.(idleHandle)
+                }
+                if (timeoutHandle !== undefined) window.clearTimeout(timeoutHandle)
+            }
         }
 
         const observer = new IntersectionObserver(
             ([entry]) => {
                 if (!entry?.isIntersecting) return
-                setShouldLoadCharts(true)
+                scheduleChartLoad()
                 observer.disconnect()
             },
-            { rootMargin: "360px" }
+            { rootMargin: "120px" }
         )
 
         observer.observe(target)
-        return () => observer.disconnect()
+        return () => {
+            observer.disconnect()
+            if (idleHandle !== undefined) {
+                const idleWindow = window as Window & { cancelIdleCallback?: (handle: number) => void }
+                idleWindow.cancelIdleCallback?.(idleHandle)
+            }
+            if (timeoutHandle !== undefined) window.clearTimeout(timeoutHandle)
+        }
     }, [shouldLoadCharts])
 
     return (

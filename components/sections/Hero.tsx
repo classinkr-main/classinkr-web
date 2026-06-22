@@ -3,82 +3,34 @@
 import { Button } from "@/components/ui/button"
 import Link from "next/link"
 import { DemoModal } from "./DemoModal"
-import { motion, useScroll, useTransform } from "framer-motion"
 import { trackEvent } from "@/lib/analytics"
 import Image from "next/image"
-import { useRef } from "react"
 import { HeroVideoBackdrop } from "@/components/media/HeroVideoBackdrop"
 import { CLASSIN_POSITIONING } from "@/lib/classin-positioning"
 
-const HERO_VIDEO_MEDIA_QUERY = "(min-width: 768px) and (prefers-reduced-motion: no-preference)"
+const HERO_VIDEO_MEDIA_QUERY = "(min-width: 1024px) and (prefers-reduced-motion: no-preference)"
 
 export function Hero() {
-    const heroRef = useRef<HTMLElement>(null)
-    const dashboardRef = useRef<HTMLElement>(null)
-    const { scrollYProgress } = useScroll({
-        target: heroRef,
-        offset: ["start start", "end start"],
-    })
-    const { scrollYProgress: dashboardScrollYProgress } = useScroll({
-        target: dashboardRef,
-        offset: ["start end", "end start"],
-    })
-    const videoY = useTransform(scrollYProgress, [0, 1], ["0px", "112px"])
-    const empoweringY = useTransform(dashboardScrollYProgress, [0, 1], ["48px", "-48px"])
-    const empoweringOpacity = useTransform(dashboardScrollYProgress, [0, 0.35, 0.8], [0.34, 0.64, 0.28])
-
     return (
         <div className="relative bg-[#FAFAF8] pt-[76px] md:pt-20">
             <section
-                ref={heroRef}
                 className="sticky top-[76px] z-0 isolate h-[calc(100svh-76px)] overflow-hidden bg-[#0A1511] md:top-20 md:h-[calc(100svh-5rem)]"
             >
-                <motion.div
-                    className="absolute inset-0 z-0 hidden h-[calc(100%+120px)] md:block pointer-events-none overflow-hidden"
-                    style={{ y: videoY }}
-                >
+                <div className="absolute inset-0 z-0 hidden md:block pointer-events-none overflow-hidden">
                     <HeroVideoBackdrop
                         src="/video/home-hero.mp4"
                         posterSrc="/images/hero-dashboard.webp"
                         className="h-full w-full"
-                        imageClassName="saturate-[0.98] contrast-[1.08] brightness-[0.84]"
-                        videoClassName="saturate-[0.98] contrast-[1.08] brightness-[0.84]"
                         priority
                         loadStrategy="idle"
                         mediaQuery={HERO_VIDEO_MEDIA_QUERY}
+                        preload="none"
                     />
-                </motion.div>
+                </div>
 
                 <div className="absolute inset-0 z-[1] bg-[rgba(3,13,10,0.42)] md:bg-[rgba(3,13,10,0.36)]" />
                 <div className="absolute inset-0 z-[2] bg-[radial-gradient(circle_at_50%_36%,rgba(255,255,255,0.16),transparent_34%),linear-gradient(to_bottom,rgba(3,13,10,0.18),rgba(3,13,10,0.26)_55%,rgba(3,13,10,0.58))]" />
-
-                <div className="absolute inset-x-0 top-0 z-[3] h-full overflow-hidden pointer-events-none">
-                    <svg className="absolute w-[120%] h-[120%] -top-[10%] -left-[10%] opacity-20 filter blur-[100px]" style={{ willChange: 'transform', contain: 'layout style' }} xmlns="http://www.w3.org/2000/svg">
-                        <defs>
-                            <radialGradient id="orb1" cx="50%" cy="50%" r="50%">
-                                <stop offset="0%" stopColor="rgba(8, 71, 52, 0.2)" />
-                                <stop offset="100%" stopColor="rgba(8, 71, 52, 0)" />
-                            </radialGradient>
-                            <radialGradient id="orb2" cx="50%" cy="50%" r="50%">
-                                <stop offset="0%" stopColor="rgba(6, 92, 65, 0.14)" />
-                                <stop offset="100%" stopColor="rgba(6, 92, 65, 0)" />
-                            </radialGradient>
-                            <radialGradient id="orb3" cx="50%" cy="50%" r="50%">
-                                <stop offset="0%" stopColor="rgba(236, 253, 245, 0.34)" />
-                                <stop offset="100%" stopColor="rgba(236, 253, 245, 0)" />
-                            </radialGradient>
-                        </defs>
-                        <g className="animate-blob1 origin-center">
-                            <circle cx="30%" cy="40%" r="35%" fill="url(#orb1)" />
-                        </g>
-                        <g className="animate-blob2 origin-center">
-                            <circle cx="70%" cy="50%" r="40%" fill="url(#orb2)" />
-                        </g>
-                        <g className="animate-blob3 origin-center">
-                            <circle cx="45%" cy="70%" r="45%" fill="url(#orb3)" />
-                        </g>
-                    </svg>
-                </div>
+                <div className="absolute inset-0 z-[3] bg-[radial-gradient(circle_at_22%_72%,rgba(8,71,52,0.20),transparent_38%),radial-gradient(circle_at_72%_26%,rgba(236,253,245,0.10),transparent_34%)] pointer-events-none" />
 
                 <div className="relative z-10 flex h-full items-center py-16 md:py-20">
                     <div className="container mx-auto px-4">
@@ -129,28 +81,22 @@ export function Hero() {
             </section>
 
             <section
-                ref={dashboardRef}
                 className="relative z-20 isolate overflow-hidden rounded-tl-[1.75rem] rounded-tr-[1.75rem] bg-[#FAFAF8] pt-20 pb-20 shadow-[0_-18px_50px_rgba(0,0,0,0.16),0_-1px_0_rgba(255,255,255,0.8)] md:rounded-tl-[2rem] md:rounded-tr-[2rem] md:pt-28 md:pb-32"
             >
                 <div className="pointer-events-none absolute inset-x-0 top-0 z-0 h-16 bg-gradient-to-b from-white/75 to-transparent" />
                 <div className="pointer-events-none absolute inset-x-0 top-0 z-0 h-px bg-white/90" />
-                <motion.div
-                    className="pointer-events-none relative z-0 mx-auto mb-16 hidden justify-center px-6 md:flex md:mb-24 lg:mb-28"
-                    style={{ y: empoweringY, opacity: empoweringOpacity }}
+                <div
+                    className="pointer-events-none relative z-0 mx-auto mb-16 hidden justify-center px-6 opacity-40 md:flex md:mb-24 lg:mb-28"
                     aria-hidden="true"
                 >
                     <h2 className="text-center text-[clamp(3rem,7.8vw,7.5rem)] font-black uppercase leading-[0.9] tracking-[0.12em] select-none text-[#8F8B85]">
                         <span className="block">Empower</span>
                         <span className="block">Education Online</span>
                     </h2>
-                </motion.div>
+                </div>
 
                 <div className="container relative z-10 mx-auto px-4">
-                    <motion.div
-                        initial={{ opacity: 0, y: 60, rotateX: 10 }}
-                        whileInView={{ opacity: 1, y: 0, rotateX: 0 }}
-                        viewport={{ once: true, amount: 0.25 }}
-                        transition={{ duration: 1, delay: 0.05, type: "spring", bounce: 0.15 }}
+                    <div
                         style={{ perspective: 1000, boxShadow: 'rgba(0,0,0,0.04) 0px 4px 18px, rgba(0,0,0,0.027) 0px 2px 7.8px, rgba(0,0,0,0.02) 0px 0.8px 2.9px, rgba(0,0,0,0.01) 0px 0.175px 1px' }}
                         className="relative mx-auto max-w-6xl rounded-2xl border border-[rgba(0,0,0,0.08)] bg-white p-2 lg:rounded-[2rem] lg:p-4 group"
                     >
@@ -164,7 +110,7 @@ export function Hero() {
                             />
                             <div className="absolute inset-0 bg-gradient-to-t from-[#111110] via-transparent to-transparent opacity-60 z-20 pointer-events-none" />
                         </div>
-                    </motion.div>
+                    </div>
                 </div>
 
                 <div className="absolute bottom-0 inset-x-0 h-px bg-gradient-to-r from-transparent via-[#084734]/30 to-transparent" />

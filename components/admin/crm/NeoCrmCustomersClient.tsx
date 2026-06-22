@@ -33,6 +33,7 @@ const SORT_OPTIONS: Array<{ key: SortKey; label: string }> = [
 ]
 
 const PAGE_SIZE = 50
+const DAY_MS = 24 * 60 * 60 * 1000
 
 // 매출·수금·잔액은 위안화(CNY).
 function formatCNY(value: number | null | undefined) {
@@ -59,11 +60,34 @@ function formatDay(value: string | null | undefined) {
   return new Intl.DateTimeFormat("ko-KR", { year: "2-digit", month: "2-digit", day: "2-digit" }).format(date)
 }
 
+function formatDateTime(value: string | null | undefined) {
+  if (!value) return "-"
+  const date = new Date(value)
+  if (Number.isNaN(date.getTime())) return "-"
+  return new Intl.DateTimeFormat("ko-KR", {
+    year: "2-digit",
+    month: "2-digit",
+    day: "2-digit",
+    hour: "2-digit",
+    minute: "2-digit",
+  }).format(date)
+}
+
+function formatAgeHours(value: number | null | undefined) {
+  if (value == null) return "확인 불가"
+  if (value < 1) return "1시간 이내"
+  if (value < 48) return `${Math.round(value)}시간 전`
+  return `${Math.round(value / 24)}일 전`
+}
+
 function daysUntil(value: string | null | undefined) {
   if (!value) return null
-  const ms = new Date(value).getTime()
-  if (Number.isNaN(ms)) return null
-  return Math.round((ms - Date.now()) / (24 * 60 * 60 * 1000))
+  const date = new Date(value)
+  if (Number.isNaN(date.getTime())) return null
+  const today = new Date()
+  const todayMs = new Date(today.getFullYear(), today.getMonth(), today.getDate()).getTime()
+  const targetMs = new Date(date.getFullYear(), date.getMonth(), date.getDate()).getTime()
+  return Math.round((targetMs - todayMs) / DAY_MS)
 }
 
 function ExpiryBadge({ expireAt }: { expireAt: string | null }) {
@@ -425,6 +449,7 @@ export default function NeoCrmCustomersClient() {
 
   const visibleRows = filtered.slice(0, visibleCount)
   const summary = data?.summary
+  const syncHealth = data?.syncHealth
 
   return (
     <div>
@@ -434,6 +459,10 @@ export default function NeoCrmCustomersClient() {
           <h1 className="mt-2 text-2xl font-bold tracking-[-0.02em] text-[#111110]">고객 (학원)</h1>
           <p className="mt-2 max-w-2xl text-[13px] leading-relaxed text-[#1a1a1a]/45">
             본사 Neo CRM account 기준 한국팀 고객. EEO 계정의 잔액·만료·최근 수업과 오더를 함께 봅니다.
+          </p>
+          <p className="mt-1 text-[11px] text-[#1a1a1a]/35">
+            ShroffAccount sync {formatDateTime(syncHealth?.shroffAccountSyncedAt)}
+            {syncHealth ? ` · ${formatAgeHours(syncHealth.shroffAccountAgeHours)}` : ""}
           </p>
         </div>
         <button
@@ -448,6 +477,12 @@ export default function NeoCrmCustomersClient() {
       </div>
 
       {error ? <div className="mb-6 border-l-2 border-[#F6D5C5] pl-3 text-[13px] text-[#B85C33]">{error}</div> : null}
+      {syncHealth?.isShroffAccountStale ? (
+        <div className="mb-6 rounded-lg border border-amber-200 bg-amber-50 px-3 py-2 text-[12px] leading-relaxed text-amber-800">
+          ShroffAccount snapshot이 {formatAgeHours(syncHealth.shroffAccountAgeHours)} 데이터입니다. 만료일·잔액이 원본 CRM과
+          다를 수 있으니 외부 CRM 동기화 후 확인하세요.
+        </div>
+      ) : null}
 
       <section className="mb-6 grid gap-3 sm:grid-cols-2 xl:grid-cols-4">
         <KpiTile
