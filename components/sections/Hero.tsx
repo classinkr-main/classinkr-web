@@ -67,12 +67,12 @@ export function Hero() {
                             >
                                 <DemoModal trackingButton="hero_demo">
                                     <Button size="lg" className="h-[3.5rem] px-8 text-[1.05rem] font-bold bg-[#084734] hover:bg-[#065c41] text-white rounded-2xl w-full sm:w-auto transition-all duration-300 hover:scale-[1.03] active:scale-[0.97]" style={{ boxShadow: 'rgba(8,71,52,0.2) 0px 4px 18px, rgba(8,71,52,0.1) 0px 2px 7px' }}>
-                                        <span className="relative z-10">내 수업 시스템 설계받기 →</span>
+                                        <span className="relative z-10">도입 상담 신청하기 →</span>
                                     </Button>
                                 </DemoModal>
                                 <Button asChild variant="outline" className="h-12 px-7 text-base font-semibold bg-white/82 hover:bg-white text-[#111110] hover:text-[#111110] border border-white/60 rounded-2xl w-full sm:w-auto transition-all duration-300 shadow-[0_10px_26px_rgba(0,0,0,0.18)]">
                                     <Link href="/product/sw" onClick={() => trackEvent("click_cta", { button: "hero_product_tour" })}>
-                                        <span className="relative z-10">시스템 구조 보기</span>
+                                        <span className="relative z-10">수업 흐름 살펴보기</span>
                                     </Link>
                                 </Button>
                             </div>
