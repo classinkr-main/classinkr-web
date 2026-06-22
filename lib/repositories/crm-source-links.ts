@@ -1152,6 +1152,46 @@ export async function generateLeadLinkCandidates(): Promise<GenerateLeadLinkCand
   }
 }
 
+// Read-only coverage rollup for the matching keystone metric. Pure head/count
+// queries — never loads rows — and degrades to zeros on any query error so
+// callers (e.g. the OS summary route) stay graceful.
+export async function getCrmSourceLinkCoverage(): Promise<{
+  total: number
+  linked: number
+  needsReview: number
+  coveragePct: number
+}> {
+  try {
+    const sb = createSupabaseAdminClient()
+    const [linkedRes, needsReviewRes, totalRes] = await Promise.all([
+      sb
+        .from("crm_source_links")
+        .select("id", { count: "exact", head: true })
+        .in("status", ["active", "confirmed"]),
+      sb
+        .from("crm_source_links")
+        .select("id", { count: "exact", head: true })
+        .eq("status", "candidate"),
+      sb
+        .from("crm_source_links")
+        .select("id", { count: "exact", head: true })
+        .neq("status", "rejected"),
+    ])
+
+    if (linkedRes.error || needsReviewRes.error || totalRes.error) {
+      return { total: 0, linked: 0, needsReview: 0, coveragePct: 0 }
+    }
+
+    const linked = linkedRes.count ?? 0
+    const needsReview = needsReviewRes.count ?? 0
+    const total = totalRes.count ?? 0
+    const coveragePct = total > 0 ? Math.round((linked / total) * 100) : 0
+    return { total, linked, needsReview, coveragePct }
+  } catch {
+    return { total: 0, linked: 0, needsReview: 0, coveragePct: 0 }
+  }
+}
+
 export async function generateAllCrmLinkCandidates(): Promise<GenerateAllCrmLinkCandidatesResult> {
   const [branchRev, leads, xiaoshouyi] = await Promise.all([
     generateBranchRevLinkCandidates(),

@@ -222,6 +222,28 @@ interface InstagramOverviewDashboard {
   }
 }
 
+// 운영 OS 요약 스트립 전용 (읽기 전용 합성 데이터)
+interface BranchSummaryPayload {
+  revenue: { confirmed: number; goal: number; pacing_pct: number }
+  monthly_series: {
+    goal_cum: number[]
+    revenue_cum: number[]
+    revenue_trend_cum: number[]
+  }
+}
+
+interface LeadActionKpisPayload {
+  unresponded24hCount: number
+}
+
+interface OsSummaryPayload {
+  renewal: { expiringSoonCount: number }
+  matching: { coveragePct: number; linked: number; total: number; needsReview: number }
+  hw: { boards86: number; target: number }
+  content: { blogPublished: number; target: number }
+  events: { count: number; target: number }
+}
+
 function EmptyState({
   title,
   description,
@@ -280,6 +302,9 @@ export default function OverviewPage() {
   const [bugs, setBugs] = useState<BugReport[]>([])
   const [patchNotes, setPatchNotes] = useState<PatchNote[]>([])
   const [instagramDashboard, setInstagramDashboard] = useState<InstagramOverviewDashboard | null>(null)
+  const [branchSummary, setBranchSummary] = useState<BranchSummaryPayload | null>(null)
+  const [leadActionKpis, setLeadActionKpis] = useState<LeadActionKpisPayload | null>(null)
+  const [osSummary, setOsSummary] = useState<OsSummaryPayload | null>(null)
   const [loading, setLoading] = useState(true)
   const [chartRange, setChartRange] = useState<7 | 30>(7)
 
@@ -295,6 +320,20 @@ export default function OverviewPage() {
         "/api/admin/meta/instagram?datePreset=last_30d&limit=25"
       ).then((instagramData) => {
         if (!cancelled) setInstagramDashboard(instagramData ?? null)
+      })
+
+      // 운영 OS 요약 스트립도 외부 시트/CRM 합성이라 느릴 수 있으므로
+      // 핵심 대시보드와 분리해 비차단으로 로드한다. (읽기 전용)
+      void fetchJson<BranchSummaryPayload>("/api/admin/branch/summary?team=ALL&period=Y").then(
+        (data) => {
+          if (!cancelled) setBranchSummary(data ?? null)
+        }
+      )
+      void fetchJson<{ leads: LeadActionKpisPayload }>("/api/admin/crm/action-kpis").then((data) => {
+        if (!cancelled) setLeadActionKpis(data?.leads ?? null)
+      })
+      void fetchJson<OsSummaryPayload>("/api/admin/os-summary").then((data) => {
+        if (!cancelled) setOsSummary(data ?? null)
       })
 
       // 대시보드는 앞으로 7일치 일정만 쓰므로 전체 일정 대신 해당 월만 요청한다.
@@ -823,8 +862,119 @@ export default function OverviewPage() {
     (item) => item.tone === "warning" || item.tone === "danger"
   ).length
 
+  // 운영 OS 요약 스트립 타일 — 기존에 흩어진 신호를 읽기 전용으로 합성.
+  const NORMAL_ACCENT = "bg-[#ECFDF5]"
+  const NORMAL_ICON = "text-[#084734]"
+  const WARNING_ACCENT = "bg-[#FEF3EE]"
+  const WARNING_ICON = "text-[#B85C33]"
+  const AMBER_ACCENT = "bg-amber-50"
+  const AMBER_ICON = "text-amber-700"
+  const fmt = (value: number) => COMPACT_NUMBER.format(value)
+
+  const pipelineCoverage = (() => {
+    const series = branchSummary?.monthly_series
+    if (!series) return null
+    const last = (arr: number[] | undefined) => (arr && arr.length > 0 ? arr[arr.length - 1] : 0)
+    const confirmed = last(series.revenue_cum)
+    const pipelineTotal = last(series.revenue_trend_cum) - confirmed
+    const remaining = last(series.goal_cum) - confirmed
+    return remaining > 0 ? pipelineTotal / remaining : null
+  })()
+
+  const osLeadUnresponded24h = leadActionKpis?.unresponded24hCount ?? null
+  const osMatchingCoverage = osSummary?.matching.coveragePct ?? null
+
   return (
     <div className="relative overflow-hidden px-4 pt-6 pb-16 sm:px-6 sm:pt-8 lg:px-8 lg:pb-20">
+      <section className="relative mb-8 rounded-2xl border border-[rgba(0,0,0,0.08)] bg-[#F6F5F4] p-4 sm:p-5">
+        <div className="mb-4 flex flex-col gap-1">
+          <div className="flex items-center gap-2">
+            <h2 className="text-[14px] font-semibold text-[#111110]">운영 OS · 요약</h2>
+            <span className="rounded-full border border-[#D1FAE5] bg-[#ECFDF5] px-2 py-0.5 text-[10px] font-medium text-[#084734]">
+              베타
+            </span>
+            <span className="rounded-full border border-[rgba(0,0,0,0.08)] bg-white px-2 py-0.5 text-[10px] font-medium text-[#1a1a1a]/40">
+              읽기 전용
+            </span>
+          </div>
+          <p className="text-[11px] text-[#1a1a1a]/45">흩어진 운영 신호를 한 줄로 — 클릭하면 상세로 이동</p>
+        </div>
+        <div className="grid grid-cols-2 gap-3 md:grid-cols-3 lg:grid-cols-6">
+          <StatCard
+            icon={<TrendingUp className="w-4 h-4" />}
+            label="매출 페이싱(연)"
+            value={branchSummary ? `${Math.round(branchSummary.revenue.pacing_pct)}%` : "…"}
+            sub={
+              branchSummary
+                ? `확정 ${fmt(branchSummary.revenue.confirmed)} / 목표 ${fmt(branchSummary.revenue.goal)}`
+                : "불러오는 중"
+            }
+            accent={NORMAL_ACCENT}
+            iconColor={NORMAL_ICON}
+            href="/admin/branch"
+          />
+          <StatCard
+            icon={<TrendingUp className="w-4 h-4" />}
+            label="파이프 커버리지"
+            value={
+              !branchSummary
+                ? "…"
+                : pipelineCoverage != null
+                  ? `${pipelineCoverage.toFixed(1)}x`
+                  : "—"
+            }
+            sub="예상 파이프 ÷ 잔여목표 (≥2.0x 권장)"
+            accent={pipelineCoverage != null && pipelineCoverage < 2.0 ? WARNING_ACCENT : NORMAL_ACCENT}
+            iconColor={pipelineCoverage != null && pipelineCoverage < 2.0 ? WARNING_ICON : NORMAL_ICON}
+            href="/admin/branch"
+          />
+          <StatCard
+            icon={<AlertCircle className="w-4 h-4" />}
+            label="골든타임 24h"
+            value={osLeadUnresponded24h != null ? `${osLeadUnresponded24h}건` : "…"}
+            sub="24h 미응답 인바운드"
+            accent={osLeadUnresponded24h && osLeadUnresponded24h > 0 ? WARNING_ACCENT : NORMAL_ACCENT}
+            iconColor={osLeadUnresponded24h && osLeadUnresponded24h > 0 ? WARNING_ICON : NORMAL_ICON}
+            href="/admin/crm"
+          />
+          <StatCard
+            icon={<CalendarDays className="w-4 h-4" />}
+            label="리뉴얼 D-90"
+            value={osSummary ? `${osSummary.renewal.expiringSoonCount}건` : "…"}
+            sub="만료 임박 (선제 대응)"
+            accent={NORMAL_ACCENT}
+            iconColor={NORMAL_ICON}
+            href="/admin/crm/customers/accounts"
+          />
+          <StatCard
+            icon={<Link2 className="w-4 h-4" />}
+            label="매칭 커버리지"
+            value={osMatchingCoverage != null ? `${osMatchingCoverage}%` : "…"}
+            sub={
+              osSummary
+                ? `연결 ${osSummary.matching.linked}/${osSummary.matching.total} · 검토 ${osSummary.matching.needsReview}`
+                : "불러오는 중"
+            }
+            accent={osMatchingCoverage != null && osMatchingCoverage < 80 ? AMBER_ACCENT : NORMAL_ACCENT}
+            iconColor={osMatchingCoverage != null && osMatchingCoverage < 80 ? AMBER_ICON : NORMAL_ICON}
+            href="/admin/crm/matching"
+          />
+          <StatCard
+            icon={<CheckCircle2 className="w-4 h-4" />}
+            label="진척(HW/콘텐츠/행사)"
+            value={osSummary ? `${osSummary.hw.boards86}/${osSummary.hw.target}` : "…"}
+            sub={
+              osSummary
+                ? `블로그 ${osSummary.content.blogPublished}/${osSummary.content.target} · 행사 ${osSummary.events.count}/${osSummary.events.target}`
+                : "불러오는 중"
+            }
+            accent="bg-[#F6F5F4]"
+            iconColor="text-[#615D59]"
+            href="/admin/branch"
+          />
+        </div>
+      </section>
+
       <div className="relative mb-8 flex flex-col gap-4 lg:flex-row lg:items-end lg:justify-between">
         <div>
           <p className="text-[11px] font-medium text-[#1a1a1a]/30 uppercase tracking-widest mb-1">Admin</p>

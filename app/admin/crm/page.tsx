@@ -31,6 +31,7 @@ interface LeadActionKpis {
   total: number
   byStatus: Record<"new" | "contacted" | "converted" | "closed", number>
   unrespondedCount: number
+  unresponded24hCount: number
   unresponded48hCount: number
   todayFollowUpCount: number
   overdueFollowUpCount: number

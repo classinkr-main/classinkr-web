@@ -56,6 +56,7 @@ export interface LeadActionStats {
   total: number;
   byStatus: Record<LeadRecord["status"], number>;
   unrespondedCount: number;
+  unresponded24hCount: number;
   unresponded48hCount: number;
   todayFollowUpCount: number;
   overdueFollowUpCount: number;
@@ -345,11 +346,13 @@ export async function getLeadActionStats(now = new Date()): Promise<LeadActionSt
   if (!USE_SUPABASE) {
     const leads = await getLeads();
     const today = toLocalDateKey(now);
+    const cutoff24h = now.getTime() - 24 * 3_600_000;
     const cutoff48h = now.getTime() - 48 * 3_600_000;
     const stats: LeadActionStats = {
       total: leads.length,
       byStatus: { new: 0, contacted: 0, converted: 0, closed: 0 },
       unrespondedCount: 0,
+      unresponded24hCount: 0,
       unresponded48hCount: 0,
       todayFollowUpCount: 0,
       overdueFollowUpCount: 0,
@@ -359,7 +362,11 @@ export async function getLeadActionStats(now = new Date()): Promise<LeadActionSt
       stats.byStatus[lead.status] += 1;
       if (isUnrespondedLeadRecord(lead)) {
         stats.unrespondedCount += 1;
-        if (new Date(lead.timestamp).getTime() <= cutoff48h) {
+        const leadTime = new Date(lead.timestamp).getTime();
+        if (leadTime <= cutoff24h) {
+          stats.unresponded24hCount += 1;
+        }
+        if (leadTime <= cutoff48h) {
           stats.unresponded48hCount += 1;
         }
       }
@@ -375,6 +382,7 @@ export async function getLeadActionStats(now = new Date()): Promise<LeadActionSt
 
   const supabase = createSupabaseAdminClient();
   const { start, end } = getLocalDayBounds(now);
+  const cutoff24h = new Date(now.getTime() - 24 * 3_600_000).toISOString();
   const cutoff48h = new Date(now.getTime() - 48 * 3_600_000).toISOString();
 
   const [
@@ -384,6 +392,7 @@ export async function getLeadActionStats(now = new Date()): Promise<LeadActionSt
     convertedRes,
     closedRes,
     unrespondedRes,
+    unresponded24hRes,
     unresponded48hRes,
     todayFollowUpRes,
     overdueFollowUpRes,
@@ -398,6 +407,12 @@ export async function getLeadActionStats(now = new Date()): Promise<LeadActionSt
       .select("id", { count: "exact", head: true })
       .eq("status", "new")
       .in("source", [...RESPONSE_TARGET_SOURCES]),
+    supabase
+      .from("leads")
+      .select("id", { count: "exact", head: true })
+      .eq("status", "new")
+      .in("source", [...RESPONSE_TARGET_SOURCES])
+      .lte("created_at", cutoff24h),
     supabase
       .from("leads")
       .select("id", { count: "exact", head: true })
@@ -424,6 +439,7 @@ export async function getLeadActionStats(now = new Date()): Promise<LeadActionSt
     convertedRes,
     closedRes,
     unrespondedRes,
+    unresponded24hRes,
     unresponded48hRes,
     todayFollowUpRes,
     overdueFollowUpRes,
@@ -439,6 +455,7 @@ export async function getLeadActionStats(now = new Date()): Promise<LeadActionSt
       closed: closedRes.count ?? 0,
     },
     unrespondedCount: unrespondedRes.count ?? 0,
+    unresponded24hCount: unresponded24hRes.count ?? 0,
     unresponded48hCount: unresponded48hRes.count ?? 0,
     todayFollowUpCount: todayFollowUpRes.count ?? 0,
     overdueFollowUpCount: overdueFollowUpRes.count ?? 0,

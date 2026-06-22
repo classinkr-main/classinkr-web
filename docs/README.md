@@ -29,6 +29,8 @@
   - ClassIn Board S 시리즈 설명서 기반 한국어 안전 사용·기본 조작 기준
 - [hardware-ops/README.md](./hardware-ops/README.md)
   - 하드웨어 운영 허브 문서의 상위 인덱스
+- [active/erp-blueprint-2026-06-22.md](./active/erp-blueprint-2026-06-22.md)
+  - 어드민 → 지사 운영 OS(ERP) 청사진 & 실행 로드맵(Account 360 스파인·귀속·노션 캘린더 라이브 연동·거버넌스 결정)
 
 ## 2. Product
 
