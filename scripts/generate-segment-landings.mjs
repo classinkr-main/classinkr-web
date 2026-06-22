@@ -210,16 +210,19 @@ const segments = [
         headline: "지점이 늘어도 수업 기준은 흔들리지 않게.",
         support: "본사 교안, 권한, 녹화·복습, 관리자 확인을 하나의 운영 흐름으로 묶습니다.",
         cta: "다지점 운영 진단 신청",
+        href: "#segment-lead-form",
       },
       {
         headline: "강사의 노하우를 개인 파일이 아니라 브랜드 자산으로.",
         support: "대표 강사의 판서와 질문 흐름을 신규 지점과 신규 강사가 이어받게 만듭니다.",
         cta: "EDB 자산화 상담",
+        href: "/resources/teacher-edb-onboarding-sop-kit",
       },
       {
         headline: "본사가 늦게 아는 문제를 줄이세요.",
         support: "지점별 예외와 복습 제공 상태를 더 빠르게 확인하는 운영 기준을 설계합니다.",
         cta: "관리자 데이터 점검",
+        href: "/resources/academy-admin-dashboard-template",
       },
     ],
     deepDiveCards: [
@@ -444,7 +447,7 @@ const segments = [
       "관리받은 학생은 다릅니다.",
     subcopy:
       "수업이 끝난 순간부터 차이가 벌어집니다. ClassIn은 결석 보강, 녹화·복습, 과제 확인, 상담 근거를 선생님 개인 수고가 아니라 학원의 일하는 방식으로 남깁니다.",
-    primaryCta: "우리 학원 병목 진단하기",
+    primaryCta: "3분 병목 진단 받기",
     secondaryCta: "한 반부터 설계하기",
     secondaryHref: "#roadmap",
     heroImage: "/images/smartroon.webp",
@@ -614,17 +617,20 @@ const segments = [
       {
         headline: "수업이 끝난 뒤에도, 관리는 끝나지 않습니다.",
         support: "녹화, 복습, 과제, 상담 근거를 선생님 개인 수고가 아니라 학원의 루틴으로 남깁니다.",
-        cta: "수업 후 관리 병목 진단",
+        cta: "3분 병목 진단 받기",
+        href: "#segment-lead-form",
       },
       {
         headline: "원장님의 밤을 잠식하던 보강·상담 업무를 수업 직후 흐름으로.",
         support: "반복되는 보강 안내와 상담 준비가 늦은 밤 원장실로 몰리지 않게 운영 동선을 다시 세웁니다.",
         cta: "강사 리소스 절감 계산",
+        href: "/resources/academy-resource-reduction-calculator",
       },
       {
         headline: "학부모가 느끼는 관리는 말보다 남은 장면에서 시작됩니다.",
         support: "오늘 수업, 다시보기, 과제 상태를 상담실에서 설명할 수 있는 언어로 남깁니다.",
         cta: "학부모 상담 문구 보기",
+        href: "/resources/parent-replay-retention-script-kit",
       },
     ],
     deepDiveCards: [
@@ -842,9 +848,9 @@ const segments = [
         answer: "첫 달에는 모든 기능을 쓰기보다 대표 반의 녹화·복습 제공, 과제 확인, 상담 준비 시간이 실제로 줄어드는지 확인하는 것이 좋습니다.",
       },
     ],
-    formTitle: "수업 후 관리가 어디서 새는지 먼저 보겠습니다",
+    formTitle: "3분 안에 수업 후 병목부터 표시해보겠습니다",
     formIntro:
-      "대표 반 기준으로 결석 보강, 녹화·복습, 과제 확인, 상담 준비가 어디서 막히는지 먼저 확인하고 줄일 수 있는 반복 업무부터 설계합니다.",
+      "대표 반 하나를 기준으로 결석 보강, 녹화·복습, 과제 확인, 상담 준비 중 어디서 시간이 새는지 먼저 표시하고 줄일 수 있는 반복 업무부터 설계합니다.",
     priorityOptions: [
       "무료 상담으로 병목 확인",
       "데모 체험으로 수업 후 흐름 확인",
@@ -1038,16 +1044,19 @@ const segments = [
         headline: "아이의 즐거운 순간을 학부모가 이해하는 기록으로.",
         support: "활동형 교안, 판서, 녹화, 복습 안내가 키즈 수업의 가치를 더 오래 남깁니다.",
         cta: "유아·초등 데모 상담",
+        href: "#segment-lead-form",
       },
       {
         headline: "프리미엄 키즈 수업의 분위기는 유지하고, 운영 근거는 더 분명하게.",
         support: "부드러운 수업 경험을 학부모 상담과 신규 교사 온보딩으로 연결합니다.",
         cta: "학부모 상담 흐름 보기",
+        href: "/resources/parent-replay-retention-script-kit",
       },
       {
         headline: "선생님마다 달라지지 않는 대표 수업 흐름.",
         support: "대표 1차시 EDB와 활동 순서를 남겨 학원의 교육 철학을 이어갑니다.",
         cta: "키즈 EDB 예시 보기",
+        href: "/resources/teacher-edb-onboarding-sop-kit",
       },
     ],
     deepDiveCards: [
@@ -1279,8 +1288,8 @@ const segments = [
       "온라인 체험수업, 첫 5분이 재등록을 만듭니다.",
     subcopy:
       "온라인 수업은 링크가 열리는 순간부터 이미 평가됩니다. ClassIn은 입장 안내, 첫 상호작용, 실시간 판서, 녹화, 복습, 리포트를 하나의 운영 흐름으로 묶어 체험수업을 다음 결제로 이어지게 만듭니다.",
-    primaryCta: "5축 운영 진단 신청",
-    secondaryCta: "비교 워크시트 보기",
+    primaryCta: "첫 5분 누수 진단 받기",
+    secondaryCta: "체험수업 시나리오 보기",
     secondaryHref: "/resources/academy-software-selection-worksheet",
     heroImage: "/images/blog/imported/teach-math-online/2-2.gif",
     heroImageAlt: "태블릿에서 ClassIn 온라인 수업 판서가 진행되는 모습",
@@ -1450,17 +1459,20 @@ const segments = [
       {
         headline: "온라인 수업도 학원 수업처럼 남고 이어져야 합니다.",
         support: "첫 5분의 기대감, 수업 중 몰입, 수업 후 재등록 흐름까지 한 번에 설계합니다.",
-        cta: "5축 운영 진단",
+        cta: "첫 5분 누수 진단",
+        href: "#segment-lead-form",
       },
       {
         headline: "체험수업에서 매출이 새는 3곳을 막으세요.",
         support: "수업 전 노쇼, 수업 중 몰입 이탈, 수업 후 재등록 이탈을 운영 흐름으로 연결합니다.",
         cta: "비교 워크시트 보기",
+        href: "/resources/academy-software-selection-worksheet",
       },
       {
         headline: "튜터마다 다른 경험을 하나의 브랜드 경험으로.",
         support: "입장 안내, 첫 질문, 판서, 다시보기, 리포트 흐름을 템플릿화합니다.",
         cta: "하이브리드 운영 상담",
+        href: "#segment-lead-form",
       },
     ],
     deepDiveCards: [
@@ -1862,14 +1874,18 @@ function renderStakeholderNotes(items) {
 
 function renderCampaignLines(items) {
   return items
-    .map(
-      (item) => `
+    .map((item) => {
+      const cta = item.href
+        ? `<a class="campaign-cta" href="${escapeHtml(item.href)}">${escapeHtml(item.cta)}</a>`
+        : `<strong class="campaign-cta">${escapeHtml(item.cta)}</strong>`
+
+      return `
         <article class="campaign-line">
           <h3>${escapeHtml(item.headline)}</h3>
           <p>${escapeHtml(item.support)}</p>
-          <strong>${escapeHtml(item.cta)}</strong>
+          ${cta}
         </article>`
-    )
+    })
     .join("")
 }
 
@@ -2403,6 +2419,24 @@ function renderOnlineOperatingLoop() {
       alt: "ClassIn 관리자 운영 데이터 화면",
     },
   ]
+  const diagnosticOutputs = [
+    {
+      title: "0-5분 운영표",
+      body: "입장 안내, 첫 질문, 몰입 확인, 다음 안내까지 체험수업 첫 장면을 시간표로 정리합니다.",
+    },
+    {
+      title: "누수 지도",
+      body: "노쇼, 몰입 이탈, 복습 누락, 재등록 안내 공백이 어디서 생기는지 한 장으로 표시합니다.",
+    },
+    {
+      title: "학부모 안내 예시",
+      body: "다시보기, 과제, 상담 문구를 온라인반 학부모가 이해하는 짧은 안내문으로 바꿉니다.",
+    },
+    {
+      title: "튜터 운영 체크",
+      body: "강사마다 달라지는 입장 안내, 판서, 첫 질문, 수업 후 리포트 기준을 분리합니다.",
+    },
+  ]
 
   return `
       <section class="section online-loop-section">
@@ -2427,6 +2461,21 @@ function renderOnlineOperatingLoop() {
                       <img src="${escapeHtml(leak.image)}" alt="${escapeHtml(leak.alt)}" loading="lazy" decoding="async" />
                       <figcaption>${escapeHtml(leak.caption)}</figcaption>
                     </figure>
+                  </article>`
+              )
+              .join("")}
+          </div>
+          <div class="online-diagnostic-kit" aria-label="온라인반 진단 후 받는 산출물">
+            <div>
+              <span>진단 후 받는 산출물</span>
+              <h3>“좋아 보입니다”가 아니라, 바로 고칠 운영표를 남깁니다.</h3>
+            </div>
+            ${diagnosticOutputs
+              .map(
+                (output) => `
+                  <article>
+                    <strong>${escapeHtml(output.title)}</strong>
+                    <p>${escapeHtml(output.body)}</p>
                   </article>`
               )
               .join("")}
@@ -2466,6 +2515,13 @@ function renderOnlineOperatingLoop() {
                   </article>`
               )
               .join("")}
+          </div>
+          <div class="online-mid-cta">
+            <p>우리 온라인반의 첫 5분을 기준으로, 어디서 노쇼·몰입·재등록이 새는지 먼저 표시해보세요.</p>
+            <div>
+              <a href="#segment-lead-form">온라인반 첫 5분 누수 진단 받기</a>
+              <a href="/resources/academy-software-selection-worksheet">체험수업 비교 워크시트 보기</a>
+            </div>
           </div>
         </div>
       </section>`
@@ -2574,7 +2630,7 @@ function stylesheet() {
       overflow-x: hidden;
     }
     .site-nav {
-      position: absolute;
+      position: fixed;
       top: 0;
       left: 0;
       right: 0;
@@ -2582,6 +2638,13 @@ function stylesheet() {
       border-bottom: 1px solid var(--border);
       background: rgba(250,250,248,0.9);
       backdrop-filter: blur(18px);
+      transition: transform 220ms ease, opacity 220ms ease;
+      will-change: transform;
+    }
+    .site-nav.is-hidden {
+      opacity: 0;
+      transform: translateY(-110%);
+      pointer-events: none;
     }
     .nav-inner {
       width: min(1160px, calc(100% - 40px));
@@ -3952,6 +4015,9 @@ function stylesheet() {
       gap: 16px;
     }
     .campaign-line {
+      display: flex;
+      flex-direction: column;
+      align-items: flex-start;
       min-height: 248px;
       padding: 28px;
       border: 1px solid rgba(8,71,52,0.16);
@@ -3982,13 +4048,35 @@ function stylesheet() {
     .section.dark .campaign-line p {
       color: rgba(246,245,244,0.64);
     }
-    .campaign-line strong {
+    .campaign-line .campaign-cta {
+      display: inline-flex;
+      align-items: center;
+      justify-content: center;
+      margin-top: auto;
+      min-height: 36px;
+      padding: 7px 12px;
+      border: 1px solid rgba(8,71,52,0.16);
+      border-radius: 999px;
+      background: rgba(255,255,255,0.56);
       color: var(--classin-green);
       font-size: 14px;
+      font-weight: 800;
       line-height: 1.4;
+      transition: transform 180ms ease, background 180ms ease, border-color 180ms ease;
     }
-    .section.dark .campaign-line strong {
+    .campaign-line a.campaign-cta:hover {
+      transform: translateY(-1px);
+      border-color: rgba(8,71,52,0.34);
+      background: #fff;
+    }
+    .section.dark .campaign-line .campaign-cta {
+      border-color: rgba(110,231,183,0.18);
+      background: rgba(110,231,183,0.08);
       color: var(--green-muted);
+    }
+    .section.dark .campaign-line a.campaign-cta:hover {
+      border-color: rgba(110,231,183,0.36);
+      background: rgba(110,231,183,0.12);
     }
     .deep-dive-grid {
       display: grid;
@@ -4690,6 +4778,53 @@ function stylesheet() {
       line-height: 1.35;
       backdrop-filter: blur(12px);
     }
+    .online-diagnostic-kit {
+      display: grid;
+      grid-template-columns: minmax(240px, 0.92fr) repeat(4, minmax(0, 1fr));
+      gap: 12px;
+      margin-top: 22px;
+    }
+    .online-diagnostic-kit > div,
+    .online-diagnostic-kit article {
+      min-height: 172px;
+      padding: 22px;
+      border: 1px solid rgba(8,71,52,0.12);
+      border-radius: 12px;
+      background: rgba(255,255,255,0.78);
+      box-shadow: 0 12px 30px rgba(8,71,52,0.07);
+    }
+    .online-diagnostic-kit > div {
+      background: var(--classin-green);
+      color: #fff;
+    }
+    .online-diagnostic-kit span {
+      display: block;
+      margin-bottom: 12px;
+      color: rgba(255,255,255,0.68);
+      font-size: 12px;
+      font-weight: 820;
+      line-height: 1.35;
+    }
+    .online-diagnostic-kit h3 {
+      margin: 0;
+      font-size: 22px;
+      line-height: 1.32;
+      letter-spacing: 0;
+    }
+    .online-diagnostic-kit strong {
+      display: block;
+      margin-bottom: 12px;
+      color: var(--classin-green);
+      font-size: 17px;
+      line-height: 1.35;
+      letter-spacing: 0;
+    }
+    .online-diagnostic-kit p {
+      margin: 0;
+      color: var(--muted);
+      font-size: 13px;
+      line-height: 1.68;
+    }
     .online-asset-board {
       display: grid;
       grid-template-columns: minmax(0, 1.18fr) minmax(0, 0.82fr);
@@ -4804,6 +4939,49 @@ function stylesheet() {
       color: var(--muted);
       font-size: 13px;
       line-height: 1.7;
+    }
+    .online-mid-cta {
+      display: flex;
+      justify-content: space-between;
+      gap: 22px;
+      align-items: center;
+      margin-top: 34px;
+      padding: 22px;
+      border: 1px solid rgba(8,71,52,0.14);
+      border-radius: 12px;
+      background: rgba(255,255,255,0.74);
+      box-shadow: 0 12px 30px rgba(8,71,52,0.08);
+    }
+    .online-mid-cta p {
+      max-width: 560px;
+      margin: 0;
+      color: var(--text);
+      font-size: 16px;
+      font-weight: 720;
+      line-height: 1.6;
+    }
+    .online-mid-cta div {
+      display: flex;
+      gap: 10px;
+      flex-wrap: wrap;
+      justify-content: flex-end;
+    }
+    .online-mid-cta a {
+      display: inline-flex;
+      align-items: center;
+      min-height: 42px;
+      padding: 10px 15px;
+      border-radius: 999px;
+      background: var(--classin-green);
+      color: #fff;
+      font-size: 13px;
+      font-weight: 820;
+      line-height: 1.3;
+    }
+    .online-mid-cta a + a {
+      border: 1px solid rgba(8,71,52,0.16);
+      background: #fff;
+      color: var(--classin-green);
     }
     .enterprise-risk-section {
       background:
@@ -5086,6 +5264,7 @@ function stylesheet() {
       .managed-simulation-step,
       .managed-board-main,
       .managed-board-cards,
+      .online-diagnostic-kit,
       .online-five-timeline,
       .enterprise-risk-grid,
       .loss-preview,
@@ -5099,6 +5278,13 @@ function stylesheet() {
       .online-leak-card,
       .online-asset-board {
         grid-template-columns: 1fr;
+      }
+      .online-mid-cta {
+        align-items: flex-start;
+        flex-direction: column;
+      }
+      .online-mid-cta div {
+        justify-content: flex-start;
       }
       .online-asset-card.featured {
         grid-row: auto;
@@ -5180,6 +5366,11 @@ function stylesheet() {
         font-size: clamp(38px, 10.8vw, 46px);
         line-height: 1.06;
       }
+      .variant-enterprise h1 {
+        max-width: 100%;
+        font-size: clamp(34px, 10vw, 42px);
+        line-height: 1.14;
+      }
       .variant-online h1 { font-size: clamp(36px, 10.4vw, 48px); line-height: 1.1; }
       h2 { font-size: clamp(30px, 9vw, 40px); }
       .hero-copy { font-size: 16px; line-height: 1.68; }
@@ -5210,20 +5401,25 @@ function stylesheet() {
         grid-template-columns: 1fr;
       }
       .variant-online .proof-strip {
-        grid-template-columns: repeat(3, minmax(0, 1fr));
+        grid-template-columns: 1fr;
         gap: 8px;
         margin-top: 28px;
       }
       .variant-online .proof-strip li {
-        min-height: 86px;
-        padding: 12px;
+        min-height: auto;
+        padding: 14px 16px;
+        display: grid;
+        grid-template-columns: 76px 1fr;
+        align-items: center;
+        column-gap: 12px;
       }
       .variant-online .proof-strip span,
       .variant-online .proof-strip small {
-        font-size: 10px;
+        font-size: 11px;
       }
       .variant-online .proof-strip strong {
-        font-size: 18px;
+        margin: 0 0 3px;
+        font-size: 20px;
       }
       .online-leak-grid {
         padding-left: 22px;
@@ -5237,6 +5433,22 @@ function stylesheet() {
       }
       .online-leak-card::before {
         left: -20px;
+      }
+      .online-diagnostic-kit > div,
+      .online-diagnostic-kit article {
+        min-height: auto;
+        padding: 18px;
+      }
+      .online-mid-cta {
+        padding: 18px;
+      }
+      .online-mid-cta div,
+      .online-mid-cta a {
+        width: 100%;
+      }
+      .online-mid-cta a {
+        justify-content: center;
+        text-align: center;
       }
       .online-leak-media,
       .online-leak-media img {
@@ -5352,7 +5564,7 @@ function kidsStyles() {
       padding: 104px 24px 76px;
       text-align: left;
       background:
-        linear-gradient(180deg, rgba(253,251,247,0.76), rgba(253,251,247,0.9)),
+        linear-gradient(180deg, rgba(253,251,247,0.58), rgba(253,251,247,0.78)),
         url("/l/kids/assets/bg/hero-bg.png") center/cover,
         radial-gradient(ellipse 140% 72% at 50% -18%, rgba(233,228,219,0.82) 0%, rgba(253,251,247,0) 58%),
         radial-gradient(ellipse 120% 82% at 86% 18%, rgba(8,71,52,0.10) 0%, rgba(253,251,247,0) 62%),
@@ -5375,7 +5587,7 @@ function kidsStyles() {
       position: absolute;
       inset: 0;
       background-image: url("data:image/svg+xml,%3Csvg viewBox='0 0 200 200' xmlns='http://www.w3.org/2000/svg'%3E%3Cfilter id='noise'%3E%3CfeTurbulence type='fractalNoise' baseFrequency='0.65' numOctaves='3' stitchTiles='stitch'/%3E%3C/filter%3E%3Crect width='100%25' height='100%25' filter='url(%23noise)' opacity='0.35'/%3E%3C/svg%3E");
-      opacity: 0.035;
+      opacity: 0.055;
       pointer-events: none;
     }
     .kids-topbar {
@@ -6131,6 +6343,9 @@ function kidsStyles() {
       margin-top: 46px;
     }
     .campaign-line {
+      display: flex;
+      flex-direction: column;
+      align-items: flex-start;
       min-height: 248px;
       padding: 28px;
       border: 1px solid rgba(8,71,52,0.12);
@@ -6156,10 +6371,26 @@ function kidsStyles() {
       font-size: 15px;
       line-height: 1.78;
     }
-    .campaign-line strong {
+    .campaign-line .campaign-cta {
+      display: inline-flex;
+      align-items: center;
+      justify-content: center;
+      margin-top: auto;
+      min-height: 36px;
+      padding: 7px 13px;
+      border: 1px solid rgba(8,71,52,0.14);
+      border-radius: 999px;
+      background: rgba(255,255,255,0.6);
       color: var(--kids-green);
       font-size: 14px;
+      font-weight: 900;
       line-height: 1.4;
+      transition: transform 180ms ease, background 180ms ease, border-color 180ms ease;
+    }
+    .campaign-line a.campaign-cta:hover {
+      transform: translateY(-1px);
+      border-color: rgba(8,71,52,0.3);
+      background: #fff;
     }
     .deep-dive-grid {
       display: grid;
@@ -6826,7 +7057,7 @@ function kidsStyles() {
       justify-content: space-between;
       gap: 28px;
       background: transparent;
-      transition: padding 260ms ease, background 260ms ease, box-shadow 260ms ease, backdrop-filter 260ms ease;
+      transition: padding 260ms ease, background 260ms ease, box-shadow 260ms ease, backdrop-filter 260ms ease, transform 220ms ease, opacity 220ms ease;
     }
 
     .kids-topbar.is-scrolled {
@@ -6835,6 +7066,12 @@ function kidsStyles() {
       background: rgba(255,253,248,0.95);
       box-shadow: 0 2px 0 0 var(--super-text);
       backdrop-filter: blur(6px);
+    }
+
+    .kids-topbar.is-hidden {
+      opacity: 0;
+      transform: translateY(-110%);
+      pointer-events: none;
     }
 
     .kids-brand {
@@ -8249,22 +8486,30 @@ function kidsStyles() {
 
     @media (max-width: 760px) {
       .kids-topbar {
-        padding: 16px 18px;
+        padding: 14px 14px;
+        gap: 10px;
       }
 
       .kids-brand {
-        font-size: 18px;
+        min-width: 0;
+        flex: 1 1 auto;
+        gap: 8px;
+        font-size: 17px;
       }
 
       .kids-logo-mark {
-        width: 32px;
-        height: 32px;
+        flex: 0 0 auto;
+        width: 31px;
+        height: 31px;
       }
 
       .kids-topbar a.kids-nav-cta {
-        min-height: 36px;
-        padding: 9px 14px;
-        font-size: 12px;
+        flex: 0 0 auto;
+        min-height: 34px;
+        padding: 8px 11px;
+        font-size: 11px;
+        white-space: nowrap;
+        box-shadow: 2px 2px 0 0 var(--super-brown);
       }
 
       .kids-hero {
@@ -8362,15 +8607,22 @@ function clientScript(segment) {
     const form = document.querySelector('[data-lead-form]');
     const statusEl = document.querySelector('[data-form-status]');
     const submitButton = form?.querySelector('button[type="submit"]');
+    const siteNav = document.querySelector('.site-nav');
     const kidsTopbar = document.querySelector('.kids-topbar');
 
-    function syncKidsTopbar() {
-      if (!kidsTopbar) return;
-      kidsTopbar.classList.toggle('is-scrolled', window.scrollY > 60);
+    function syncLandingBars() {
+      const isPastTop = window.scrollY > 60;
+      if (siteNav) {
+        siteNav.classList.toggle('is-hidden', isPastTop);
+      }
+      if (kidsTopbar) {
+        kidsTopbar.classList.toggle('is-scrolled', isPastTop);
+        kidsTopbar.classList.toggle('is-hidden', isPastTop);
+      }
     }
 
-    syncKidsTopbar();
-    window.addEventListener('scroll', syncKidsTopbar, { passive: true });
+    syncLandingBars();
+    window.addEventListener('scroll', syncLandingBars, { passive: true });
 
     const managedStepButtons = Array.from(document.querySelectorAll('[data-managed-step]'));
     const managedPanels = Array.from(document.querySelectorAll('[data-managed-panel]'));
@@ -8545,20 +8797,20 @@ function buildKidsHtml(segment) {
     <header class="kids-hero">
       <div class="kids-topbar">
         <a class="kids-brand" href="/">
-          <span class="kids-logo-mark">L</span>
-          <span>Little Minds</span>
+          <span class="kids-logo-mark">K</span>
+          <span>ClassIn Kids</span>
         </a>
         <nav class="kids-nav-links" aria-label="키즈 랜딩 내비게이션">
           <a href="#philosophy">교육 철학</a>
           <a href="#how-it-works">도입 과정</a>
           <a href="#report">도입 성과</a>
-          <a href="#segment-lead-form">요금제</a>
+          <a href="#segment-lead-form">상담</a>
         </nav>
-        <a class="kids-nav-cta" href="#segment-lead-form">도입 상담 신청</a>
+        <a class="kids-nav-cta" href="#segment-lead-form">상담 신청</a>
       </div>
       <div class="kids-hero-inner">
         <div class="kids-hero-copy">
-          <span class="kids-label">Premium EdTech Platform</span>
+          <span class="kids-label">유아·초등 수업 운영</span>
           <h1>
             <span class="kids-hero-line">아이는 신나고</span>
             <span class="kids-hero-line parent">부모는 안심하는</span>
@@ -8586,12 +8838,12 @@ function buildKidsHtml(segment) {
           <div class="kids-activity-card">
             <div class="kids-hero-card-top">
               <span class="kids-hero-dot" aria-hidden="true"></span>
-              <span class="kids-hero-beta">v2.0 Beta</span>
+              <span class="kids-hero-beta">CLASSIN KIDS</span>
             </div>
             <img class="kids-hero-main" src="/l/kids/assets/hero/hero-main.png" alt="Learning illustration" loading="eager" decoding="async" />
             <h2>
-              Little Minds<br />
-              <span>Fun &amp; Smart</span>
+              ClassIn Kids<br />
+              <span>Fun &amp; Safe</span>
             </h2>
             <div class="kids-progress" aria-hidden="true"><span></span></div>
           </div>
@@ -8604,7 +8856,7 @@ function buildKidsHtml(segment) {
         <div class="kids-inner">
           <div class="kids-pain-grid">
             <div>
-              <span class="kids-label">Issue Tracker</span>
+              <span class="kids-label">수업 고민</span>
               <h2>
                 이런 수업,<br />
                 계속 <span class="kids-highlight">괜찮을까요?</span>
@@ -8639,7 +8891,7 @@ function buildKidsHtml(segment) {
 
       <section class="kids-super-section kids-solution-section">
         <div class="kids-inner">
-          <span class="kids-label">The Solution</span>
+          <span class="kids-label">해결 장면</span>
           <h2>
             만약 수업 시간에<br />
             <em>아이들이 환호하고</em><br />
@@ -8658,7 +8910,7 @@ function buildKidsHtml(segment) {
 
       <section class="kids-super-section kids-belief-section">
         <div class="kids-inner">
-          <span class="kids-label orange">Our Belief</span>
+          <span class="kids-label orange">교육 믿음</span>
           <h2>우리는 믿습니다.</h2>
           <div class="kids-belief-lines">
             <p>공부는 원래 <span class="orange">재밌는 거라고.</span></p>
@@ -8668,10 +8920,10 @@ function buildKidsHtml(segment) {
           <p class="kids-belief-body">
             아이들이 억지로 앉아 있는 수업을 보면서 시작했습니다. 놀이처럼 빠져들고, 미션처럼 도전하고,
             성취감에 스스로 다시 찾아오는 수업. 동시에 아이 한 명 한 명의 변화가 수업 기록과 상담 문장으로 남는 시스템.
-            그게 Little Minds가 만들고 싶은 교실입니다.
+            그게 ClassIn Kids가 만들고 싶은 교실입니다.
           </p>
           <div class="kids-signature">
-            <strong>Little Minds</strong>
+            <strong>ClassIn Kids</strong>
             <span>Team</span>
           </div>
         </div>
@@ -8680,7 +8932,7 @@ function buildKidsHtml(segment) {
       <section class="kids-super-section kids-philosophy-section" id="philosophy">
         <div class="kids-inner kids-sticky-grid">
           <div class="kids-sticky-copy">
-            <span class="kids-label">Our Philosophy</span>
+            <span class="kids-label">수업 철학</span>
             <h2>
               즐겁고,<br />
               활기차고,<br />
@@ -8744,7 +8996,7 @@ function buildKidsHtml(segment) {
       <section class="kids-super-section kids-how-section" id="how-it-works">
         <div class="kids-inner kids-how-grid">
           <div class="kids-how-copy">
-            <span class="kids-label">Easy Onboarding</span>
+            <span class="kids-label">도입 과정</span>
             <h2>
               4주 만에<br />
               교실 분위기가<br />
@@ -8880,7 +9132,7 @@ function buildKidsHtml(segment) {
         <img class="kids-section-doodle backpack" src="/l/kids/assets/doodles/backpack.png" alt="" loading="lazy" decoding="async" />
         <div class="kids-inner">
           <div style="text-align:center; max-width:820px; margin:0 auto;">
-            <span class="kids-label">Long Story</span>
+            <span class="kids-label">키즈 성장 흐름</span>
             <h2>수업 경험이 운영 자산이 되는 긴 흐름</h2>
             <p>아이의 즐거운 한 장면이 복습, 상담, 교사 온보딩으로 이어질 때 프리미엄 수업의 가치가 오래 남습니다.</p>
           </div>
@@ -8920,7 +9172,7 @@ function buildKidsHtml(segment) {
       <section class="kids-section age-scene">
         <div class="kids-inner">
           <div style="text-align:center; max-width:780px; margin:0 auto;">
-            <span class="kids-label">Age Scenarios</span>
+            <span class="kids-label">연령별 시나리오</span>
             <h2>연령대마다 즐거움의 모양이 다릅니다</h2>
             <p>유아와 초등 저학년의 기대를 나눠, 수업 설계와 학부모 안내가 더 구체적으로 느껴지게 했습니다.</p>
           </div>
@@ -8952,7 +9204,7 @@ function buildKidsHtml(segment) {
       <section class="kids-section report-scene" id="report">
         <div class="kids-inner">
           <div style="text-align:center; max-width:780px; margin:0 auto;">
-            <span class="kids-label">Parent Report</span>
+            <span class="kids-label">학부모 리포트</span>
             <h2>수업이 끝난 뒤, 부모가 안심하는 세 가지 장면</h2>
             <p>사진 한 장이 아니라 오늘 활동, 선생님의 한 줄, 다시 볼 포인트가 함께 남아야 키즈 수업의 가치가 오래 갑니다.</p>
           </div>
@@ -8979,7 +9231,7 @@ function buildKidsHtml(segment) {
       <section class="kids-section proof-scene">
         <div class="kids-inner">
           <div style="text-align:center; max-width:760px; margin:0 auto;">
-            <span class="kids-label">Proof Stack</span>
+            <span class="kids-label">신뢰 근거</span>
             <h2>학부모와 원장님이 함께 확인하는 증거</h2>
             <p>기술을 자랑하기보다, 키즈 수업의 감성과 운영 근거가 어떻게 이어지는지 보여줍니다.</p>
           </div>
@@ -8992,7 +9244,7 @@ function buildKidsHtml(segment) {
       <section class="kids-section feature-scene">
         <div class="kids-inner">
           <div style="text-align:center; max-width:760px; margin:0 auto;">
-            <span class="kids-label">Feature Deep Dive</span>
+            <span class="kids-label">기능 깊이 보기</span>
             <h2>수업 중·수업 후·상담까지 이어지는 기능 흐름</h2>
             <p>아이에게는 자연스러운 활동으로, 원장님에게는 운영 근거로 남는 장면을 수업 흐름 안에서 보여줍니다.</p>
           </div>
@@ -9018,7 +9270,7 @@ function buildKidsHtml(segment) {
       <section class="kids-section premium-scene">
         <div class="kids-inner">
           <div style="text-align:center; max-width:760px; margin:0 auto;">
-            <span class="kids-label">Premium Learning Value</span>
+            <span class="kids-label">프리미엄 가치</span>
             <h2>아이·학부모·교사가 함께 좋아하는 장점</h2>
             <p>키즈 수업은 기술보다 경험이 먼저입니다. 그래서 장점도 참여감, 상담 근거, 교사 온보딩, 브랜드 분위기로 나눠 보여줍니다.</p>
           </div>
@@ -9031,7 +9283,7 @@ function buildKidsHtml(segment) {
       <section class="kids-section decision-scene" id="decision">
         <div class="kids-inner">
           <div style="text-align:center; max-width:760px; margin:0 auto;">
-            <span class="kids-label">Decision Questions</span>
+            <span class="kids-label">도입 질문</span>
             <h2>원장님과 학부모가 함께 확인하는 기준</h2>
             <p>유아·초등 수업은 보기 좋은 화면보다, 아이의 즐거움이 복습과 상담 근거로 이어지는지가 중요합니다.</p>
           </div>
@@ -9044,7 +9296,7 @@ function buildKidsHtml(segment) {
       <section class="kids-section curriculum-scene" id="curriculum">
         <div class="kids-inner kids-split">
           <div>
-            <span class="kids-label">Pedagogical Excellence</span>
+            <span class="kids-label">교육 설계</span>
             <h2>
               단순한 디지털 놀이가 아닌<br />
               <em>수업 설계와 운영의 연결</em>
@@ -9080,7 +9332,7 @@ function buildKidsHtml(segment) {
             <img src="/l/kids/assets/hero/hero-main.png" alt="아이들의 참여를 돕는 인터랙티브 수업 이미지" loading="lazy" decoding="async" />
           </div>
           <div>
-            <span class="kids-label">Visual Storytelling</span>
+            <span class="kids-label">수업 장면</span>
             <h2>
               아이의 눈을 사로잡는<br />
               <em>프리미엄 수업 경험</em>
@@ -9096,7 +9348,7 @@ function buildKidsHtml(segment) {
       <section class="kids-section audience-scene">
         <div class="kids-inner">
           <div style="text-align:center; max-width:760px; margin:0 auto;">
-            <span class="kids-label">Audience Message</span>
+            <span class="kids-label">대상별 메시지</span>
             <h2>원장·학부모·교사가 다르게 체감합니다</h2>
             <p>같은 ClassIn이어도 원장, 학부모, 교사, 교무팀이 확인하는 가치는 다릅니다.</p>
           </div>
@@ -9109,7 +9361,7 @@ function buildKidsHtml(segment) {
       <section class="kids-section stakeholder-scene">
         <div class="kids-inner">
           <div style="text-align:center; max-width:760px; margin:0 auto;">
-            <span class="kids-label">Buying Team</span>
+            <span class="kids-label">의사결정자</span>
             <h2>각자 다른 걱정을 같은 흐름으로 해결합니다</h2>
             <p>원장, 학부모, 교사, 교무팀, 아이가 보는 가치가 다르기 때문에 메시지도 역할별로 분리했습니다.</p>
           </div>
@@ -9122,7 +9374,7 @@ function buildKidsHtml(segment) {
       <section class="kids-section campaign-scene">
         <div class="kids-inner">
           <div style="text-align:center; max-width:760px; margin:0 auto;">
-            <span class="kids-label">Campaign Copy</span>
+            <span class="kids-label">캠페인 문구</span>
             <h2>상담과 광고에 바로 들어가는 문장</h2>
             <p>아이의 즐거움, 학부모의 안심, 원장님의 교육 철학이 한 문장 안에서 함께 보이도록 다듬었습니다.</p>
           </div>
@@ -9135,7 +9387,7 @@ function buildKidsHtml(segment) {
       <section class="kids-section resource-scene" id="resources">
         <div class="kids-inner">
           <div style="text-align:center; max-width:760px; margin:0 auto;">
-            <span class="kids-label">Decision Resources</span>
+            <span class="kids-label">판단 자료</span>
             <h2>도입 전에 확인할 자료</h2>
             <p>학부모 상담, 교사 온보딩, 교실 장비 점검처럼 키즈 학원에서 먼저 확인해야 할 자료를 모았습니다.</p>
           </div>
@@ -9148,7 +9400,7 @@ function buildKidsHtml(segment) {
       <section class="kids-section roadmap-scene">
         <div class="kids-inner">
           <div style="text-align:center; max-width:760px; margin:0 auto;">
-            <span class="kids-label">Adoption Roadmap</span>
+            <span class="kids-label">도입 로드맵</span>
             <h2>30/60/90일로 정착을 확인합니다</h2>
             <p>프리미엄 키즈 수업은 첫 데모보다 실제 교실 정착 기준이 더 중요합니다.</p>
           </div>
@@ -9172,7 +9424,7 @@ function buildKidsHtml(segment) {
       <section class="kids-section faq-scene">
         <div class="kids-inner">
           <div style="text-align:center; max-width:760px; margin:0 auto;">
-            <span class="kids-label">Before Adoption</span>
+            <span class="kids-label">도입 전 확인</span>
             <h2>도입 전에 자주 확인하는 질문</h2>
             <p>키즈 수업은 감성도 중요하지만, 학부모에게 설명할 수 있는 근거와 교실 운영 조건을 함께 봐야 합니다.</p>
           </div>
@@ -9186,7 +9438,7 @@ function buildKidsHtml(segment) {
     <section class="kids-form-section" id="segment-lead-form">
       <div class="kids-form-grid">
         <div class="kids-form-copy">
-          <span class="kids-label">Consultation</span>
+          <span class="kids-label">상담 신청</span>
           <h2>${escapeHtml(segment.formTitle)}</h2>
           <p>${escapeHtml(segment.formIntro)}</p>
         </div>

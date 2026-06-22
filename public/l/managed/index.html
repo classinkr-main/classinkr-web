@@ -47,7 +47,7 @@
       overflow-x: hidden;
     }
     .site-nav {
-      position: absolute;
+      position: fixed;
       top: 0;
       left: 0;
       right: 0;
@@ -55,6 +55,13 @@
       border-bottom: 1px solid var(--border);
       background: rgba(250,250,248,0.9);
       backdrop-filter: blur(18px);
+      transition: transform 220ms ease, opacity 220ms ease;
+      will-change: transform;
+    }
+    .site-nav.is-hidden {
+      opacity: 0;
+      transform: translateY(-110%);
+      pointer-events: none;
     }
     .nav-inner {
       width: min(1160px, calc(100% - 40px));
@@ -1425,6 +1432,9 @@
       gap: 16px;
     }
     .campaign-line {
+      display: flex;
+      flex-direction: column;
+      align-items: flex-start;
       min-height: 248px;
       padding: 28px;
       border: 1px solid rgba(8,71,52,0.16);
@@ -1455,13 +1465,35 @@
     .section.dark .campaign-line p {
       color: rgba(246,245,244,0.64);
     }
-    .campaign-line strong {
+    .campaign-line .campaign-cta {
+      display: inline-flex;
+      align-items: center;
+      justify-content: center;
+      margin-top: auto;
+      min-height: 36px;
+      padding: 7px 12px;
+      border: 1px solid rgba(8,71,52,0.16);
+      border-radius: 999px;
+      background: rgba(255,255,255,0.56);
       color: var(--classin-green);
       font-size: 14px;
+      font-weight: 800;
       line-height: 1.4;
+      transition: transform 180ms ease, background 180ms ease, border-color 180ms ease;
     }
-    .section.dark .campaign-line strong {
+    .campaign-line a.campaign-cta:hover {
+      transform: translateY(-1px);
+      border-color: rgba(8,71,52,0.34);
+      background: #fff;
+    }
+    .section.dark .campaign-line .campaign-cta {
+      border-color: rgba(110,231,183,0.18);
+      background: rgba(110,231,183,0.08);
       color: var(--green-muted);
+    }
+    .section.dark .campaign-line a.campaign-cta:hover {
+      border-color: rgba(110,231,183,0.36);
+      background: rgba(110,231,183,0.12);
     }
     .deep-dive-grid {
       display: grid;
@@ -2163,6 +2195,53 @@
       line-height: 1.35;
       backdrop-filter: blur(12px);
     }
+    .online-diagnostic-kit {
+      display: grid;
+      grid-template-columns: minmax(240px, 0.92fr) repeat(4, minmax(0, 1fr));
+      gap: 12px;
+      margin-top: 22px;
+    }
+    .online-diagnostic-kit > div,
+    .online-diagnostic-kit article {
+      min-height: 172px;
+      padding: 22px;
+      border: 1px solid rgba(8,71,52,0.12);
+      border-radius: 12px;
+      background: rgba(255,255,255,0.78);
+      box-shadow: 0 12px 30px rgba(8,71,52,0.07);
+    }
+    .online-diagnostic-kit > div {
+      background: var(--classin-green);
+      color: #fff;
+    }
+    .online-diagnostic-kit span {
+      display: block;
+      margin-bottom: 12px;
+      color: rgba(255,255,255,0.68);
+      font-size: 12px;
+      font-weight: 820;
+      line-height: 1.35;
+    }
+    .online-diagnostic-kit h3 {
+      margin: 0;
+      font-size: 22px;
+      line-height: 1.32;
+      letter-spacing: 0;
+    }
+    .online-diagnostic-kit strong {
+      display: block;
+      margin-bottom: 12px;
+      color: var(--classin-green);
+      font-size: 17px;
+      line-height: 1.35;
+      letter-spacing: 0;
+    }
+    .online-diagnostic-kit p {
+      margin: 0;
+      color: var(--muted);
+      font-size: 13px;
+      line-height: 1.68;
+    }
     .online-asset-board {
       display: grid;
       grid-template-columns: minmax(0, 1.18fr) minmax(0, 0.82fr);
@@ -2277,6 +2356,49 @@
       color: var(--muted);
       font-size: 13px;
       line-height: 1.7;
+    }
+    .online-mid-cta {
+      display: flex;
+      justify-content: space-between;
+      gap: 22px;
+      align-items: center;
+      margin-top: 34px;
+      padding: 22px;
+      border: 1px solid rgba(8,71,52,0.14);
+      border-radius: 12px;
+      background: rgba(255,255,255,0.74);
+      box-shadow: 0 12px 30px rgba(8,71,52,0.08);
+    }
+    .online-mid-cta p {
+      max-width: 560px;
+      margin: 0;
+      color: var(--text);
+      font-size: 16px;
+      font-weight: 720;
+      line-height: 1.6;
+    }
+    .online-mid-cta div {
+      display: flex;
+      gap: 10px;
+      flex-wrap: wrap;
+      justify-content: flex-end;
+    }
+    .online-mid-cta a {
+      display: inline-flex;
+      align-items: center;
+      min-height: 42px;
+      padding: 10px 15px;
+      border-radius: 999px;
+      background: var(--classin-green);
+      color: #fff;
+      font-size: 13px;
+      font-weight: 820;
+      line-height: 1.3;
+    }
+    .online-mid-cta a + a {
+      border: 1px solid rgba(8,71,52,0.16);
+      background: #fff;
+      color: var(--classin-green);
     }
     .enterprise-risk-section {
       background:
@@ -2559,6 +2681,7 @@
       .managed-simulation-step,
       .managed-board-main,
       .managed-board-cards,
+      .online-diagnostic-kit,
       .online-five-timeline,
       .enterprise-risk-grid,
       .loss-preview,
@@ -2572,6 +2695,13 @@
       .online-leak-card,
       .online-asset-board {
         grid-template-columns: 1fr;
+      }
+      .online-mid-cta {
+        align-items: flex-start;
+        flex-direction: column;
+      }
+      .online-mid-cta div {
+        justify-content: flex-start;
       }
       .online-asset-card.featured {
         grid-row: auto;
@@ -2653,6 +2783,11 @@
         font-size: clamp(38px, 10.8vw, 46px);
         line-height: 1.06;
       }
+      .variant-enterprise h1 {
+        max-width: 100%;
+        font-size: clamp(34px, 10vw, 42px);
+        line-height: 1.14;
+      }
       .variant-online h1 { font-size: clamp(36px, 10.4vw, 48px); line-height: 1.1; }
       h2 { font-size: clamp(30px, 9vw, 40px); }
       .hero-copy { font-size: 16px; line-height: 1.68; }
@@ -2683,20 +2818,25 @@
         grid-template-columns: 1fr;
       }
       .variant-online .proof-strip {
-        grid-template-columns: repeat(3, minmax(0, 1fr));
+        grid-template-columns: 1fr;
         gap: 8px;
         margin-top: 28px;
       }
       .variant-online .proof-strip li {
-        min-height: 86px;
-        padding: 12px;
+        min-height: auto;
+        padding: 14px 16px;
+        display: grid;
+        grid-template-columns: 76px 1fr;
+        align-items: center;
+        column-gap: 12px;
       }
       .variant-online .proof-strip span,
       .variant-online .proof-strip small {
-        font-size: 10px;
+        font-size: 11px;
       }
       .variant-online .proof-strip strong {
-        font-size: 18px;
+        margin: 0 0 3px;
+        font-size: 20px;
       }
       .online-leak-grid {
         padding-left: 22px;
@@ -2710,6 +2850,22 @@
       }
       .online-leak-card::before {
         left: -20px;
+      }
+      .online-diagnostic-kit > div,
+      .online-diagnostic-kit article {
+        min-height: auto;
+        padding: 18px;
+      }
+      .online-mid-cta {
+        padding: 18px;
+      }
+      .online-mid-cta div,
+      .online-mid-cta a {
+        width: 100%;
+      }
+      .online-mid-cta a {
+        justify-content: center;
+        text-align: center;
       }
       .online-leak-media,
       .online-leak-media img {
@@ -2782,10 +2938,10 @@
       </div>
     </nav>
 
-
+    
     <aside class="managed-journey-nav" aria-label="관리형 랜딩 진행 목차">
       <div class="managed-journey-line" aria-hidden="true"><span data-managed-progress></span></div>
-
+      
             <a class="is-active" href="#opening" data-managed-chapter="opening">
               <span>01 관리받은 학생</span>
               <i aria-hidden="true"></i>
@@ -2836,11 +2992,11 @@
           <h1><span class="">관리받은 학생은</span><span class="managed-accent-line">다릅니다.</span></h1>
           <p class="hero-copy">수업이 끝난 순간부터 차이가 벌어집니다. ClassIn은 결석 보강, 녹화·복습, 과제 확인, 상담 근거를 선생님 개인 수고가 아니라 학원의 일하는 방식으로 남깁니다.</p>
           <div class="hero-actions">
-            <a class="btn primary" href="#segment-lead-form">우리 학원 병목 진단하기</a>
+            <a class="btn primary" href="#segment-lead-form">3분 병목 진단 받기</a>
             <a class="btn secondary" href="#roadmap">한 반부터 설계하기</a>
           </div>
           <ul class="proof-strip" aria-label="세그먼트 핵심 판단 기준">
-
+            
         <li>
           <span>관리 01</span>
           <strong>결석 보강</strong>
@@ -2859,7 +3015,7 @@
           </ul>
         </div>
         <figure class="hero-visual">
-
+          
           <div class="product-frame managed-frame" aria-label="관리형 학원 수업 후 운영 흐름">
             <div class="managed-hero-board">
               <div class="managed-board-top">
@@ -2878,22 +3034,22 @@
                 </div>
               </div>
               <div class="managed-board-cards">
-
+                
                   <div>
                     <span>ABSENCE</span>
                     <strong>결석생 보강 안내</strong>
                   </div>
-
+                
                   <div>
                     <span>REPLAY</span>
                     <strong>다시보기 자료 정리</strong>
                   </div>
-
+                
                   <div>
                     <span>COUNSEL</span>
                     <strong>학부모 상담 근거</strong>
                   </div>
-
+                
               </div>
             </div>
             <div class="os-panel" aria-label="ClassIn 관리형 OS 구성">
@@ -2908,7 +3064,7 @@
     </header>
 
     <main>
-
+      
       <section class="section managed-three-section" id="manage-three">
         <div class="section-inner">
           <div class="managed-three-copy">
@@ -2917,7 +3073,7 @@
             <p>막연한 친절이 아닙니다. 중형 관리형 학원의 신뢰는 결석 보강, 녹화·복습, 상담 근거가 수업 직후 자연스럽게 남느냐로 갈립니다.</p>
           </div>
           <div class="managed-three-grid">
-
+            
                   <article class="managed-three-card">
                     <div class="managed-three-icon" aria-hidden="true">01</div>
                     <span>결석 보강</span>
@@ -2948,7 +3104,7 @@
             <p>학생 50-200명급 학원에서 관리가 강점이지만 그 관리가 선생님 야근, 원장님 확인, 상담 직전 자료 찾기로 유지되고 있다면 가장 먼저 맞습니다.</p>
           </div>
           <ul class="fit-list">
-
+            
         <li>
           <span aria-hidden="true"></span>
           <p>수업은 좋은데, 수업 후 관리가 선생님 야근으로 유지되는 학원</p>
@@ -2971,7 +3127,7 @@
 
       <section class="section " id="story">
         <div class="section-inner">
-
+          
         <div class="story-panel">
           <div class="story-copy">
             <p class="section-kicker">Managed Academy Story</p>
@@ -2984,7 +3140,7 @@
             <h3>불이 꺼진 교실 뒤에서, 관리 업무는 다시 켜집니다.</h3>
             <p>녹화 파일을 올릴 곳을 찾고, 숙제 미제출자를 반별로 확인하고, 결석생에게 보강 안내를 보내고, 내일 상담할 학부모를 위해 수업 내용을 다시 뒤집습니다. 관리가 경쟁력인 건 맞지만, 이 방식으로는 오래 버티기 어렵습니다.</p>
             <ol>
-
+              
                     <li>
                       <strong>Before</strong>
                       <h4>열심히 할수록 더 흩어지는 관리</h4>
@@ -3014,7 +3170,7 @@
             <p>상담 전 30분, 오후 9시 원장실, 신규 강사 첫 달. 학부모가 느끼는 관리는 이 장면들에서 만들어집니다.</p>
           </div>
           <div class="operation-scene-grid">
-
+            
         <article class="operation-scene-card">
           <span>상담 30분 전</span>
           <h3>좋은 상담은 기억력에서 나오지 않습니다.</h3>
@@ -3042,7 +3198,7 @@
             <p>오후 9시 원장실에서 상담실의 신뢰까지, 흩어지던 보강·복습·과제·상담 근거가 어떤 순서로 학원의 기준이 되는지 보여줍니다.</p>
           </div>
           <div class="narrative-list">
-
+            
         <article class="narrative-chapter">
           <div>
             <span>Chapter 01</span>
@@ -3105,7 +3261,7 @@
             <p>기능 호기심보다 중요한 것은 선생님 시간이 돌아오는지, 학부모가 관리받는다고 느끼는지, 반이 늘어도 품질이 흔들리지 않는지입니다.</p>
           </div>
           <div class="decision-grid">
-
+            
         <article class="decision-card">
           <h3>선생님 시간이 정말 수업으로 돌아오나요?</h3>
           <div>
@@ -3151,7 +3307,7 @@
             <p>좋은 수업은 이미 하고 있습니다. 이제 녹화, 보강, 과제 확인, 상담 근거가 선생님 손에서 흩어지지 않도록 운영 흐름을 다시 봅니다.</p>
           </div>
           <div class="card-grid">
-
+            
         <article class="segment-card">
           <h3>수업 후 업무가 선생님 밤 시간으로 밀립니다</h3>
           <p>녹화 업로드, 드라이브 링크 공유, 카톡 보강 안내, 숙제 확인이 쌓이면 좋은 수업을 준비할 시간이 먼저 사라집니다.</p>
@@ -3176,7 +3332,7 @@
             <p>ClassIn의 장점은 기능 수가 아니라 수업이 끝난 뒤에도 학생과 학부모가 관리받는다고 느끼게 만드는 연결성입니다.</p>
           </div>
           <div class="advantage-grid">
-
+            
         <article class="advantage-card">
           <span>Teacher Relief</span>
           <h3>선생님 시간이 다시 수업으로 돌아옵니다</h3>
@@ -3209,7 +3365,7 @@
             <p>원장, 강사, 상담 실장이 같은 기준으로 판단할 수 있도록 시간 절감, 상담 근거, 강사 편차, 정착 범위를 분리했습니다.</p>
           </div>
           <div class="evidence-stack">
-
+            
         <article class="evidence-row">
           <span>시간 증거</span>
           <div>
@@ -3250,7 +3406,7 @@
             <p>관리형 학원이 매일 겪는 장면을 기준으로, 수업 후 반복 업무가 어떻게 줄고 어떤 근거가 남는지 풀었습니다.</p>
           </div>
           <div class="deep-dive-grid">
-
+            
         <article class="deep-dive-card">
           <span>녹화·다시보기</span>
           <h3>빠진 수업이 다음 수업의 구멍으로 남지 않습니다</h3>
@@ -3288,7 +3444,7 @@
             <p>수업 내용은 같아도, 수업 후 동선이 달라지면 원장님 밤과 상담실의 설득력이 달라집니다.</p>
           </div>
           <div class="comparison-stack">
-
+            
         <article class="comparison-row">
           <div>
             <span>Before</span>
@@ -3333,7 +3489,7 @@
         </div>
       </section>
 
-
+      
       <section class="section managed-simulation-section" id="simulation">
         <div class="section-inner">
           <div class="section-head">
@@ -3343,7 +3499,7 @@
           </div>
           <div class="managed-simulation-shell" data-managed-simulation>
             <div class="managed-simulation-rail" role="tablist" aria-label="관리 흐름 단계">
-
+              
                     <button class="is-active" type="button" role="tab" aria-selected="true" data-managed-step="0">
                       <span>월 19:00</span>
                       <strong>01</strong>
@@ -3362,7 +3518,7 @@
                     </button>
             </div>
             <div class="managed-simulation-panels">
-
+            
                   <article class="managed-simulation-step is-active" role="tabpanel" data-managed-panel="0">
                     <div class="managed-simulation-copy">
                       <span>월 19:00 · STEP 1 / 4</span>
@@ -3421,7 +3577,7 @@
             <p>ClassIn은 카톡, 드라이브, 줌, 엑셀을 억지로 모두 없애는 도구가 아닙니다. 결석 보강, 녹화·복습, 과제 확인, 상담 근거처럼 관리형 학원의 핵심 동선을 한 흐름으로 세우는 운영 OS입니다.</p>
           </div>
           <ol class="flow-list">
-
+            
         <li class="flow-step">
           <span>01</span>
           <h3>월 19:00, 판서와 질문이 사라지지 않는 수업</h3>
@@ -3454,7 +3610,7 @@
             <p>성적이나 재등록을 단정하지 않습니다. 대신 관리가 남는 방식과 정착 기준을 분명하게 제시합니다.</p>
           </div>
           <div class="card-grid">
-
+            
         <article class="segment-card">
           <h3>녹화와 다시보기 제공</h3>
           <p>결석 보강, 복습 안내, 학부모 설명에 필요한 기록을 수업 직후 운영 흐름 안에 남깁니다.</p>
@@ -3479,7 +3635,7 @@
             <p>같은 시스템도 원장에게는 운영 기준, 강사에게는 시간 회복, 학부모에게는 안심의 증거로 읽힙니다.</p>
           </div>
           <div class="target-copy-grid">
-
+            
         <article class="target-card">
           <span>원장</span>
           <h3>관리형 학원의 차이는 수업 후에 남는 것으로 증명됩니다.</h3>
@@ -3512,7 +3668,7 @@
             <p>역할마다 걱정하는 지점이 다르기 때문에, 야근·수업 준비·상담 근거·학부모 체감 가치를 따로 설득합니다.</p>
           </div>
           <div class="stakeholder-grid">
-
+            
         <article class="stakeholder-note">
           <span>원장</span>
           <h3>관리 품질을 야근으로 유지하지 않는 운영 구조</h3>
@@ -3550,21 +3706,21 @@
             <p>관리형 학원의 강점을 한 줄로 끝내지 않고, 보강·복습·상담 장면으로 전환하는 문장입니다.</p>
           </div>
           <div class="campaign-line-grid">
-
+            
         <article class="campaign-line">
           <h3>수업이 끝난 뒤에도, 관리는 끝나지 않습니다.</h3>
           <p>녹화, 복습, 과제, 상담 근거를 선생님 개인 수고가 아니라 학원의 루틴으로 남깁니다.</p>
-          <strong>수업 후 관리 병목 진단</strong>
+          <a class="campaign-cta" href="#segment-lead-form">3분 병목 진단 받기</a>
         </article>
         <article class="campaign-line">
           <h3>원장님의 밤을 잠식하던 보강·상담 업무를 수업 직후 흐름으로.</h3>
           <p>반복되는 보강 안내와 상담 준비가 늦은 밤 원장실로 몰리지 않게 운영 동선을 다시 세웁니다.</p>
-          <strong>강사 리소스 절감 계산</strong>
+          <a class="campaign-cta" href="/resources/academy-resource-reduction-calculator">강사 리소스 절감 계산</a>
         </article>
         <article class="campaign-line">
           <h3>학부모가 느끼는 관리는 말보다 남은 장면에서 시작됩니다.</h3>
           <p>오늘 수업, 다시보기, 과제 상태를 상담실에서 설명할 수 있는 언어로 남깁니다.</p>
-          <strong>학부모 상담 문구 보기</strong>
+          <a class="campaign-cta" href="/resources/parent-replay-retention-script-kit">학부모 상담 문구 보기</a>
         </article>
           </div>
         </div>
@@ -3578,7 +3734,7 @@
             <p>구매를 서두르기 전에 대표 반의 반복 업무와 학부모 상담 흐름을 먼저 점검할 수 있는 자료를 연결했습니다.</p>
           </div>
           <div class="resource-grid">
-
+            
         <a class="resource-card" href="/resources/academy-resource-reduction-calculator">
           <strong>강사 리소스 절감 계산 워크시트</strong>
           <span>녹화 업로드, 보강 안내, 과제 확인에 쓰는 반복 시간이 실제로 어디서 새는지 숫자로 봅니다.</span>
@@ -3603,7 +3759,7 @@
             <p>선생님 부담, 학부모 체감, 기존 도구 유지, 첫 달 기준처럼 실제 회의에서 막히는 질문을 먼저 답합니다.</p>
           </div>
           <div class="faq-grid">
-
+            
         <article class="faq-card">
           <h3>선생님 업무가 정말 줄어드나요?</h3>
           <p>줄일 수 있는 지점은 녹화 업로드, 보강 안내, 과제 확인, 상담 근거 준비처럼 반복되는 수업 후 관리입니다. 학원마다 병목이 다르기 때문에 대표 반 기준으로 먼저 계산합니다.</p>
@@ -3651,14 +3807,14 @@
             <h2>대표 반에서 검증하고 90일 안에 기준화합니다</h2>
             <p>설치 속도보다 정착의 밀도가 중요합니다. 30일은 대표 반, 60일은 상담 언어, 90일은 강사·반 확장 기준으로 봅니다.</p>
           </div>
-
+          
           <div class="managed-roadmap" aria-label="관리형 학원 도입 로드맵">
             <svg class="managed-roadmap-wave" viewBox="0 0 1440 140" preserveAspectRatio="none" aria-hidden="true">
               <path d="M0,70 C220,120 430,20 650,72 C870,124 1060,30 1440,68" />
               <path d="M0,92 C220,42 430,126 650,82 C870,38 1060,116 1440,78" />
             </svg>
             <div class="managed-roadmap-track">
-
+              
                     <article class="managed-roadmap-node">
                       <span>30일</span>
                       <h3>대표 반에서 수업 후 관리 루틴을 고정합니다</h3>
@@ -3699,8 +3855,8 @@
       <div class="final-grid">
         <div class="final-copy">
           <p class="section-kicker">상담 신청</p>
-          <h2>수업 후 관리가 어디서 새는지 먼저 보겠습니다</h2>
-          <p>대표 반 기준으로 결석 보강, 녹화·복습, 과제 확인, 상담 준비가 어디서 막히는지 먼저 확인하고 줄일 수 있는 반복 업무부터 설계합니다.</p>
+          <h2>3분 안에 수업 후 병목부터 표시해보겠습니다</h2>
+          <p>대표 반 하나를 기준으로 결석 보강, 녹화·복습, 과제 확인, 상담 준비 중 어디서 시간이 새는지 먼저 표시하고 줄일 수 있는 반복 업무부터 설계합니다.</p>
           <div class="cta-row">
             <a class="btn secondary" href="/contact">일반 문의 페이지</a>
             <a class="btn secondary" href="/resources">자료실 둘러보기</a>
@@ -3763,7 +3919,7 @@
             <input type="checkbox" name="marketingConsent" />
             <span>상담 안내와 관련 자료 수신에 동의합니다. 동의하지 않아도 상담 신청은 가능합니다.</span>
           </label>
-          <button class="btn primary" type="submit">우리 학원 병목 진단하기</button>
+          <button class="btn primary" type="submit">3분 병목 진단 받기</button>
           <p class="form-status" data-form-status aria-live="polite"></p>
         </form>
       </div>
@@ -3780,15 +3936,22 @@
     const form = document.querySelector('[data-lead-form]');
     const statusEl = document.querySelector('[data-form-status]');
     const submitButton = form?.querySelector('button[type="submit"]');
+    const siteNav = document.querySelector('.site-nav');
     const kidsTopbar = document.querySelector('.kids-topbar');
 
-    function syncKidsTopbar() {
-      if (!kidsTopbar) return;
-      kidsTopbar.classList.toggle('is-scrolled', window.scrollY > 60);
+    function syncLandingBars() {
+      const isPastTop = window.scrollY > 60;
+      if (siteNav) {
+        siteNav.classList.toggle('is-hidden', isPastTop);
+      }
+      if (kidsTopbar) {
+        kidsTopbar.classList.toggle('is-scrolled', isPastTop);
+        kidsTopbar.classList.toggle('is-hidden', isPastTop);
+      }
     }
 
-    syncKidsTopbar();
-    window.addEventListener('scroll', syncKidsTopbar, { passive: true });
+    syncLandingBars();
+    window.addEventListener('scroll', syncLandingBars, { passive: true });
 
     const managedStepButtons = Array.from(document.querySelectorAll('[data-managed-step]'));
     const managedPanels = Array.from(document.querySelectorAll('[data-managed-panel]'));
@@ -3878,7 +4041,7 @@
       }
 
       const message = [
-        '문의 유형: 수업 후 관리가 어디서 새는지 먼저 보겠습니다',
+        '문의 유형: 3분 안에 수업 후 병목부터 표시해보겠습니다',
         '세그먼트: 학생 50-200명급 중형 단과·종합·관리형 학원 원장',
         role ? '역할: ' + role : undefined,
         size ? '현재 규모: ' + size : undefined,
@@ -3938,7 +4101,7 @@
       } finally {
         if (submitButton) {
           submitButton.disabled = false;
-          submitButton.textContent = '우리 학원 병목 진단하기';
+          submitButton.textContent = '3분 병목 진단 받기';
         }
       }
     });

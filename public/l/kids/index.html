@@ -68,7 +68,7 @@
       padding: 104px 24px 76px;
       text-align: left;
       background:
-        linear-gradient(180deg, rgba(253,251,247,0.76), rgba(253,251,247,0.9)),
+        linear-gradient(180deg, rgba(253,251,247,0.58), rgba(253,251,247,0.78)),
         url("/l/kids/assets/bg/hero-bg.png") center/cover,
         radial-gradient(ellipse 140% 72% at 50% -18%, rgba(233,228,219,0.82) 0%, rgba(253,251,247,0) 58%),
         radial-gradient(ellipse 120% 82% at 86% 18%, rgba(8,71,52,0.10) 0%, rgba(253,251,247,0) 62%),
@@ -91,7 +91,7 @@
       position: absolute;
       inset: 0;
       background-image: url("data:image/svg+xml,%3Csvg viewBox='0 0 200 200' xmlns='http://www.w3.org/2000/svg'%3E%3Cfilter id='noise'%3E%3CfeTurbulence type='fractalNoise' baseFrequency='0.65' numOctaves='3' stitchTiles='stitch'/%3E%3C/filter%3E%3Crect width='100%25' height='100%25' filter='url(%23noise)' opacity='0.35'/%3E%3C/svg%3E");
-      opacity: 0.035;
+      opacity: 0.055;
       pointer-events: none;
     }
     .kids-topbar {
@@ -847,6 +847,9 @@
       margin-top: 46px;
     }
     .campaign-line {
+      display: flex;
+      flex-direction: column;
+      align-items: flex-start;
       min-height: 248px;
       padding: 28px;
       border: 1px solid rgba(8,71,52,0.12);
@@ -872,10 +875,26 @@
       font-size: 15px;
       line-height: 1.78;
     }
-    .campaign-line strong {
+    .campaign-line .campaign-cta {
+      display: inline-flex;
+      align-items: center;
+      justify-content: center;
+      margin-top: auto;
+      min-height: 36px;
+      padding: 7px 13px;
+      border: 1px solid rgba(8,71,52,0.14);
+      border-radius: 999px;
+      background: rgba(255,255,255,0.6);
       color: var(--kids-green);
       font-size: 14px;
+      font-weight: 900;
       line-height: 1.4;
+      transition: transform 180ms ease, background 180ms ease, border-color 180ms ease;
+    }
+    .campaign-line a.campaign-cta:hover {
+      transform: translateY(-1px);
+      border-color: rgba(8,71,52,0.3);
+      background: #fff;
     }
     .deep-dive-grid {
       display: grid;
@@ -1542,7 +1561,7 @@
       justify-content: space-between;
       gap: 28px;
       background: transparent;
-      transition: padding 260ms ease, background 260ms ease, box-shadow 260ms ease, backdrop-filter 260ms ease;
+      transition: padding 260ms ease, background 260ms ease, box-shadow 260ms ease, backdrop-filter 260ms ease, transform 220ms ease, opacity 220ms ease;
     }
 
     .kids-topbar.is-scrolled {
@@ -1551,6 +1570,12 @@
       background: rgba(255,253,248,0.95);
       box-shadow: 0 2px 0 0 var(--super-text);
       backdrop-filter: blur(6px);
+    }
+
+    .kids-topbar.is-hidden {
+      opacity: 0;
+      transform: translateY(-110%);
+      pointer-events: none;
     }
 
     .kids-brand {
@@ -2965,22 +2990,30 @@
 
     @media (max-width: 760px) {
       .kids-topbar {
-        padding: 16px 18px;
+        padding: 14px 14px;
+        gap: 10px;
       }
 
       .kids-brand {
-        font-size: 18px;
+        min-width: 0;
+        flex: 1 1 auto;
+        gap: 8px;
+        font-size: 17px;
       }
 
       .kids-logo-mark {
-        width: 32px;
-        height: 32px;
+        flex: 0 0 auto;
+        width: 31px;
+        height: 31px;
       }
 
       .kids-topbar a.kids-nav-cta {
-        min-height: 36px;
-        padding: 9px 14px;
-        font-size: 12px;
+        flex: 0 0 auto;
+        min-height: 34px;
+        padding: 8px 11px;
+        font-size: 11px;
+        white-space: nowrap;
+        box-shadow: 2px 2px 0 0 var(--super-brown);
       }
 
       .kids-hero {
@@ -3077,20 +3110,20 @@
     <header class="kids-hero">
       <div class="kids-topbar">
         <a class="kids-brand" href="/">
-          <span class="kids-logo-mark">L</span>
-          <span>Little Minds</span>
+          <span class="kids-logo-mark">K</span>
+          <span>ClassIn Kids</span>
         </a>
         <nav class="kids-nav-links" aria-label="키즈 랜딩 내비게이션">
           <a href="#philosophy">교육 철학</a>
           <a href="#how-it-works">도입 과정</a>
           <a href="#report">도입 성과</a>
-          <a href="#segment-lead-form">요금제</a>
+          <a href="#segment-lead-form">상담</a>
         </nav>
-        <a class="kids-nav-cta" href="#segment-lead-form">도입 상담 신청</a>
+        <a class="kids-nav-cta" href="#segment-lead-form">상담 신청</a>
       </div>
       <div class="kids-hero-inner">
         <div class="kids-hero-copy">
-          <span class="kids-label">Premium EdTech Platform</span>
+          <span class="kids-label">유아·초등 수업 운영</span>
           <h1>
             <span class="kids-hero-line">아이는 신나고</span>
             <span class="kids-hero-line parent">부모는 안심하는</span>
@@ -3118,12 +3151,12 @@
           <div class="kids-activity-card">
             <div class="kids-hero-card-top">
               <span class="kids-hero-dot" aria-hidden="true"></span>
-              <span class="kids-hero-beta">v2.0 Beta</span>
+              <span class="kids-hero-beta">CLASSIN KIDS</span>
             </div>
             <img class="kids-hero-main" src="/l/kids/assets/hero/hero-main.png" alt="Learning illustration" loading="eager" decoding="async" />
             <h2>
-              Little Minds<br />
-              <span>Fun &amp; Smart</span>
+              ClassIn Kids<br />
+              <span>Fun &amp; Safe</span>
             </h2>
             <div class="kids-progress" aria-hidden="true"><span></span></div>
           </div>
@@ -3136,7 +3169,7 @@
         <div class="kids-inner">
           <div class="kids-pain-grid">
             <div>
-              <span class="kids-label">Issue Tracker</span>
+              <span class="kids-label">수업 고민</span>
               <h2>
                 이런 수업,<br />
                 계속 <span class="kids-highlight">괜찮을까요?</span>
@@ -3171,7 +3204,7 @@
 
       <section class="kids-super-section kids-solution-section">
         <div class="kids-inner">
-          <span class="kids-label">The Solution</span>
+          <span class="kids-label">해결 장면</span>
           <h2>
             만약 수업 시간에<br />
             <em>아이들이 환호하고</em><br />
@@ -3190,7 +3223,7 @@
 
       <section class="kids-super-section kids-belief-section">
         <div class="kids-inner">
-          <span class="kids-label orange">Our Belief</span>
+          <span class="kids-label orange">교육 믿음</span>
           <h2>우리는 믿습니다.</h2>
           <div class="kids-belief-lines">
             <p>공부는 원래 <span class="orange">재밌는 거라고.</span></p>
@@ -3200,10 +3233,10 @@
           <p class="kids-belief-body">
             아이들이 억지로 앉아 있는 수업을 보면서 시작했습니다. 놀이처럼 빠져들고, 미션처럼 도전하고,
             성취감에 스스로 다시 찾아오는 수업. 동시에 아이 한 명 한 명의 변화가 수업 기록과 상담 문장으로 남는 시스템.
-            그게 Little Minds가 만들고 싶은 교실입니다.
+            그게 ClassIn Kids가 만들고 싶은 교실입니다.
           </p>
           <div class="kids-signature">
-            <strong>Little Minds</strong>
+            <strong>ClassIn Kids</strong>
             <span>Team</span>
           </div>
         </div>
@@ -3212,7 +3245,7 @@
       <section class="kids-super-section kids-philosophy-section" id="philosophy">
         <div class="kids-inner kids-sticky-grid">
           <div class="kids-sticky-copy">
-            <span class="kids-label">Our Philosophy</span>
+            <span class="kids-label">수업 철학</span>
             <h2>
               즐겁고,<br />
               활기차고,<br />
@@ -3255,7 +3288,7 @@
       <section class="kids-section story-scene-bg" id="story">
         <img class="kids-section-doodle library" src="/l/kids/assets/doodles/library.png" alt="" loading="lazy" decoding="async" />
         <div class="kids-inner">
-
+          
         <div class="story-panel">
           <div class="story-copy">
             <p class="section-kicker">Kids Learning Story</p>
@@ -3268,7 +3301,7 @@
             <h3>사진 몇 장으로는 오늘의 수업을 다 설명할 수 없습니다.</h3>
             <p>오늘 아이가 어떤 활동을 했는지, 어떤 단어를 따라 했는지, 어느 장면을 다시 보면 좋은지까지 남아야 학부모는 안심합니다. ClassIn은 키즈 수업의 감성을 해치지 않고, 그 감성을 EDB·녹화·복습·상담 문구로 이어줍니다.</p>
             <ol>
-
+              
                     <li>
                       <strong>Before</strong>
                       <h4>좋은 분위기는 있었지만 기록은 부족</h4>
@@ -3299,7 +3332,7 @@
             <p>유아·초등 학원에서는 화면의 화려함보다 아이가 무엇을 했고, 집에서 무엇을 이어 보면 좋은지 설명할 수 있는 흐름이 중요합니다.</p>
           </div>
           <div class="operation-scene-grid">
-
+            
         <article class="operation-scene-card">
           <span>수업 중</span>
           <h3>아이의 반응이 활동형 교안 안에 남습니다.</h3>
@@ -3322,7 +3355,7 @@
       <section class="kids-super-section kids-how-section" id="how-it-works">
         <div class="kids-inner kids-how-grid">
           <div class="kids-how-copy">
-            <span class="kids-label">Easy Onboarding</span>
+            <span class="kids-label">도입 과정</span>
             <h2>
               4주 만에<br />
               교실 분위기가<br />
@@ -3458,12 +3491,12 @@
         <img class="kids-section-doodle backpack" src="/l/kids/assets/doodles/backpack.png" alt="" loading="lazy" decoding="async" />
         <div class="kids-inner">
           <div style="text-align:center; max-width:820px; margin:0 auto;">
-            <span class="kids-label">Long Story</span>
+            <span class="kids-label">키즈 성장 흐름</span>
             <h2>수업 경험이 운영 자산이 되는 긴 흐름</h2>
             <p>아이의 즐거운 한 장면이 복습, 상담, 교사 온보딩으로 이어질 때 프리미엄 수업의 가치가 오래 남습니다.</p>
           </div>
           <div class="narrative-list">
-
+            
         <article class="narrative-chapter">
           <div>
             <span>Chapter 01</span>
@@ -3548,7 +3581,7 @@
       <section class="kids-section age-scene">
         <div class="kids-inner">
           <div style="text-align:center; max-width:780px; margin:0 auto;">
-            <span class="kids-label">Age Scenarios</span>
+            <span class="kids-label">연령별 시나리오</span>
             <h2>연령대마다 즐거움의 모양이 다릅니다</h2>
             <p>유아와 초등 저학년의 기대를 나눠, 수업 설계와 학부모 안내가 더 구체적으로 느껴지게 했습니다.</p>
           </div>
@@ -3580,7 +3613,7 @@
       <section class="kids-section report-scene" id="report">
         <div class="kids-inner">
           <div style="text-align:center; max-width:780px; margin:0 auto;">
-            <span class="kids-label">Parent Report</span>
+            <span class="kids-label">학부모 리포트</span>
             <h2>수업이 끝난 뒤, 부모가 안심하는 세 가지 장면</h2>
             <p>사진 한 장이 아니라 오늘 활동, 선생님의 한 줄, 다시 볼 포인트가 함께 남아야 키즈 수업의 가치가 오래 갑니다.</p>
           </div>
@@ -3607,12 +3640,12 @@
       <section class="kids-section proof-scene">
         <div class="kids-inner">
           <div style="text-align:center; max-width:760px; margin:0 auto;">
-            <span class="kids-label">Proof Stack</span>
+            <span class="kids-label">신뢰 근거</span>
             <h2>학부모와 원장님이 함께 확인하는 증거</h2>
             <p>기술을 자랑하기보다, 키즈 수업의 감성과 운영 근거가 어떻게 이어지는지 보여줍니다.</p>
           </div>
           <div class="evidence-stack">
-
+            
         <article class="evidence-row">
           <span>참여 증거</span>
           <div>
@@ -3648,12 +3681,12 @@
       <section class="kids-section feature-scene">
         <div class="kids-inner">
           <div style="text-align:center; max-width:760px; margin:0 auto;">
-            <span class="kids-label">Feature Deep Dive</span>
+            <span class="kids-label">기능 깊이 보기</span>
             <h2>수업 중·수업 후·상담까지 이어지는 기능 흐름</h2>
             <p>아이에게는 자연스러운 활동으로, 원장님에게는 운영 근거로 남는 장면을 수업 흐름 안에서 보여줍니다.</p>
           </div>
           <div class="deep-dive-grid">
-
+            
         <article class="deep-dive-card">
           <span>활동형 EDB</span>
           <h3>아이의 반응을 수업 흐름 안에 남깁니다</h3>
@@ -3691,7 +3724,7 @@
             <p>같은 수업도 기록과 복습이 남으면 학부모 상담과 교사 온보딩의 설득력이 달라집니다.</p>
           </div>
           <div class="comparison-stack">
-
+            
         <article class="comparison-row">
           <div>
             <span>Before</span>
@@ -3739,12 +3772,12 @@
       <section class="kids-section premium-scene">
         <div class="kids-inner">
           <div style="text-align:center; max-width:760px; margin:0 auto;">
-            <span class="kids-label">Premium Learning Value</span>
+            <span class="kids-label">프리미엄 가치</span>
             <h2>아이·학부모·교사가 함께 좋아하는 장점</h2>
             <p>키즈 수업은 기술보다 경험이 먼저입니다. 그래서 장점도 참여감, 상담 근거, 교사 온보딩, 브랜드 분위기로 나눠 보여줍니다.</p>
           </div>
           <div class="advantage-grid">
-
+            
         <article class="advantage-card">
           <span>Joyful Class</span>
           <h3>아이의 참여감을 유지합니다</h3>
@@ -3772,12 +3805,12 @@
       <section class="kids-section decision-scene" id="decision">
         <div class="kids-inner">
           <div style="text-align:center; max-width:760px; margin:0 auto;">
-            <span class="kids-label">Decision Questions</span>
+            <span class="kids-label">도입 질문</span>
             <h2>원장님과 학부모가 함께 확인하는 기준</h2>
             <p>유아·초등 수업은 보기 좋은 화면보다, 아이의 즐거움이 복습과 상담 근거로 이어지는지가 중요합니다.</p>
           </div>
           <div class="decision-grid">
-
+            
         <article class="decision-card">
           <h3>아이들이 좋아한 수업을 학부모가 믿을 수 있나요?</h3>
           <div>
@@ -3818,7 +3851,7 @@
       <section class="kids-section curriculum-scene" id="curriculum">
         <div class="kids-inner kids-split">
           <div>
-            <span class="kids-label">Pedagogical Excellence</span>
+            <span class="kids-label">교육 설계</span>
             <h2>
               단순한 디지털 놀이가 아닌<br />
               <em>수업 설계와 운영의 연결</em>
@@ -3854,7 +3887,7 @@
             <img src="/l/kids/assets/hero/hero-main.png" alt="아이들의 참여를 돕는 인터랙티브 수업 이미지" loading="lazy" decoding="async" />
           </div>
           <div>
-            <span class="kids-label">Visual Storytelling</span>
+            <span class="kids-label">수업 장면</span>
             <h2>
               아이의 눈을 사로잡는<br />
               <em>프리미엄 수업 경험</em>
@@ -3870,12 +3903,12 @@
       <section class="kids-section audience-scene">
         <div class="kids-inner">
           <div style="text-align:center; max-width:760px; margin:0 auto;">
-            <span class="kids-label">Audience Message</span>
+            <span class="kids-label">대상별 메시지</span>
             <h2>원장·학부모·교사가 다르게 체감합니다</h2>
             <p>같은 ClassIn이어도 원장, 학부모, 교사, 교무팀이 확인하는 가치는 다릅니다.</p>
           </div>
           <div class="target-copy-grid">
-
+            
         <article class="target-card">
           <span>원장</span>
           <h3>원장님의 교육 철학이 선생님 한 명에게만 묶이지 않게 합니다.</h3>
@@ -3903,12 +3936,12 @@
       <section class="kids-section stakeholder-scene">
         <div class="kids-inner">
           <div style="text-align:center; max-width:760px; margin:0 auto;">
-            <span class="kids-label">Buying Team</span>
+            <span class="kids-label">의사결정자</span>
             <h2>각자 다른 걱정을 같은 흐름으로 해결합니다</h2>
             <p>원장, 학부모, 교사, 교무팀, 아이가 보는 가치가 다르기 때문에 메시지도 역할별로 분리했습니다.</p>
           </div>
           <div class="stakeholder-grid">
-
+            
         <article class="stakeholder-note">
           <span>원장</span>
           <h3>교육 철학을 교사 개인에게만 묶지 않는 구조</h3>
@@ -3941,26 +3974,26 @@
       <section class="kids-section campaign-scene">
         <div class="kids-inner">
           <div style="text-align:center; max-width:760px; margin:0 auto;">
-            <span class="kids-label">Campaign Copy</span>
+            <span class="kids-label">캠페인 문구</span>
             <h2>상담과 광고에 바로 들어가는 문장</h2>
             <p>아이의 즐거움, 학부모의 안심, 원장님의 교육 철학이 한 문장 안에서 함께 보이도록 다듬었습니다.</p>
           </div>
           <div class="campaign-line-grid">
-
+            
         <article class="campaign-line">
           <h3>아이의 즐거운 순간을 학부모가 이해하는 기록으로.</h3>
           <p>활동형 교안, 판서, 녹화, 복습 안내가 키즈 수업의 가치를 더 오래 남깁니다.</p>
-          <strong>유아·초등 데모 상담</strong>
+          <a class="campaign-cta" href="#segment-lead-form">유아·초등 데모 상담</a>
         </article>
         <article class="campaign-line">
           <h3>프리미엄 키즈 수업의 분위기는 유지하고, 운영 근거는 더 분명하게.</h3>
           <p>부드러운 수업 경험을 학부모 상담과 신규 교사 온보딩으로 연결합니다.</p>
-          <strong>학부모 상담 흐름 보기</strong>
+          <a class="campaign-cta" href="/resources/parent-replay-retention-script-kit">학부모 상담 흐름 보기</a>
         </article>
         <article class="campaign-line">
           <h3>선생님마다 달라지지 않는 대표 수업 흐름.</h3>
           <p>대표 1차시 EDB와 활동 순서를 남겨 학원의 교육 철학을 이어갑니다.</p>
-          <strong>키즈 EDB 예시 보기</strong>
+          <a class="campaign-cta" href="/resources/teacher-edb-onboarding-sop-kit">키즈 EDB 예시 보기</a>
         </article>
           </div>
         </div>
@@ -3969,12 +4002,12 @@
       <section class="kids-section resource-scene" id="resources">
         <div class="kids-inner">
           <div style="text-align:center; max-width:760px; margin:0 auto;">
-            <span class="kids-label">Decision Resources</span>
+            <span class="kids-label">판단 자료</span>
             <h2>도입 전에 확인할 자료</h2>
             <p>학부모 상담, 교사 온보딩, 교실 장비 점검처럼 키즈 학원에서 먼저 확인해야 할 자료를 모았습니다.</p>
           </div>
           <div class="resource-grid">
-
+            
         <a class="resource-card" href="/resources/parent-replay-retention-script-kit">
           <strong>학부모 상담·복습 스크립트 키트</strong>
           <span>복습과 결석 보강 안내를 학부모가 이해하는 문구로 정리합니다.</span>
@@ -3994,12 +4027,12 @@
       <section class="kids-section roadmap-scene">
         <div class="kids-inner">
           <div style="text-align:center; max-width:760px; margin:0 auto;">
-            <span class="kids-label">Adoption Roadmap</span>
+            <span class="kids-label">도입 로드맵</span>
             <h2>30/60/90일로 정착을 확인합니다</h2>
             <p>프리미엄 키즈 수업은 첫 데모보다 실제 교실 정착 기준이 더 중요합니다.</p>
           </div>
           <div class="roadmap-grid">
-
+            
         <article class="roadmap-card">
           <span>30일</span>
           <h3>대표 1차시 EDB 만들기</h3>
@@ -4033,12 +4066,12 @@
       <section class="kids-section faq-scene">
         <div class="kids-inner">
           <div style="text-align:center; max-width:760px; margin:0 auto;">
-            <span class="kids-label">Before Adoption</span>
+            <span class="kids-label">도입 전 확인</span>
             <h2>도입 전에 자주 확인하는 질문</h2>
             <p>키즈 수업은 감성도 중요하지만, 학부모에게 설명할 수 있는 근거와 교실 운영 조건을 함께 봐야 합니다.</p>
           </div>
           <div class="faq-grid">
-
+            
         <article class="faq-card">
           <h3>아이들이 좋아하는 수업 경험을 유지할 수 있나요?</h3>
           <p>화려한 앱처럼 보이게 만드는 것보다, 활동형 EDB와 인터랙티브 칠판으로 아이가 직접 보고 따라 하는 장면을 수업 흐름 안에 남기는 데 초점을 둡니다.</p>
@@ -4091,7 +4124,7 @@
     <section class="kids-form-section" id="segment-lead-form">
       <div class="kids-form-grid">
         <div class="kids-form-copy">
-          <span class="kids-label">Consultation</span>
+          <span class="kids-label">상담 신청</span>
           <h2>유아·초등 수업 데모를 신청하세요</h2>
           <p>대표 수업 유형과 교실 환경을 알려주시면 EDB·칠판·녹화·학부모 안내 흐름으로 보여드리겠습니다.</p>
         </div>
@@ -4169,15 +4202,22 @@
     const form = document.querySelector('[data-lead-form]');
     const statusEl = document.querySelector('[data-form-status]');
     const submitButton = form?.querySelector('button[type="submit"]');
+    const siteNav = document.querySelector('.site-nav');
     const kidsTopbar = document.querySelector('.kids-topbar');
 
-    function syncKidsTopbar() {
-      if (!kidsTopbar) return;
-      kidsTopbar.classList.toggle('is-scrolled', window.scrollY > 60);
+    function syncLandingBars() {
+      const isPastTop = window.scrollY > 60;
+      if (siteNav) {
+        siteNav.classList.toggle('is-hidden', isPastTop);
+      }
+      if (kidsTopbar) {
+        kidsTopbar.classList.toggle('is-scrolled', isPastTop);
+        kidsTopbar.classList.toggle('is-hidden', isPastTop);
+      }
     }
 
-    syncKidsTopbar();
-    window.addEventListener('scroll', syncKidsTopbar, { passive: true });
+    syncLandingBars();
+    window.addEventListener('scroll', syncLandingBars, { passive: true });
 
     const managedStepButtons = Array.from(document.querySelectorAll('[data-managed-step]'));
     const managedPanels = Array.from(document.querySelectorAll('[data-managed-panel]'));
