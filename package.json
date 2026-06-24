@@ -10,6 +10,8 @@
     "start": "next start",
     "lint": "eslint",
     "typecheck": "tsc --noEmit --incremental false",
+    "test": "vitest run --dir tests",
+    "test:watch": "vitest --dir tests",
     "generate:segment-landings": "node scripts/generate-segment-landings.mjs",
     "check:vercel-crons": "node scripts/check-vercel-crons.mjs",
     "check:public-content": "node scripts/check-public-content-visibility.mjs",
