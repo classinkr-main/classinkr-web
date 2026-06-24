@@ -2,6 +2,7 @@ import "server-only"
 
 import type { User } from "@supabase/supabase-js"
 
+import { associateLeadsForVerifiedEmail, shouldAutoLinkEmail } from "@/lib/identity/stitch"
 import { createSupabaseAdminClient } from "@/lib/supabase/admin"
 import { createSupabaseServerClient } from "@/lib/supabase/server"
 
@@ -40,29 +41,13 @@ function getDisplayName(user: User) {
   return typeof name === "string" && name.trim() ? name.trim() : null
 }
 
-async function findLatestLeadIdByEmail(email: string | null | undefined) {
-  if (!email) return null
-
-  const supabase = createSupabaseAdminClient()
-  const { data, error } = await supabase
-    .from("leads")
-    .select("id")
-    .eq("email", email)
-    .order("created_at", { ascending: false })
-    .limit(1)
-    .maybeSingle()
-
-  if (error || !data?.id) return null
-  return data.id as string
-}
-
 export async function upsertPublicUserProfile(user: User): Promise<PublicUserProfile> {
   const supabase = createSupabaseAdminClient()
   const email = user.email?.trim().toLowerCase() || null
   const provider = getProvider(user)
   const providerId = getProviderId(user)
   const name = getDisplayName(user)
-  const leadId = await findLatestLeadIdByEmail(email)
+  const emailVerified = Boolean(user.email_confirmed_at)
 
   const payload = {
     id: user.id,
@@ -70,7 +55,6 @@ export async function upsertPublicUserProfile(user: User): Promise<PublicUserPro
     name,
     provider,
     provider_id: providerId,
-    lead_id: leadId,
   }
 
   const { data, error } = await supabase
@@ -83,13 +67,30 @@ export async function upsertPublicUserProfile(user: User): Promise<PublicUserPro
     throw new Error(error?.message ?? "Failed to upsert public user profile.")
   }
 
+  let leadId = (data.lead_id as string | null) ?? null
+
+  // 검증된 이메일일 때만 결정적으로 lead를 연결한다(latest-1 추측 제거).
+  // 매 로그인마다 타는 경로이므로 연결 실패(예: 마이그레이션 미적용)는 조용히 묻지 않고 로깅한다.
+  if (email && shouldAutoLinkEmail(emailVerified)) {
+    const associateWarnings: string[] = []
+    const { canonicalLeadId } = await associateLeadsForVerifiedEmail(
+      user.id,
+      email,
+      associateWarnings
+    )
+    if (canonicalLeadId) leadId = canonicalLeadId
+    if (associateWarnings.length > 0) {
+      console.warn("[upsertPublicUserProfile] lead stitch warnings:", associateWarnings)
+    }
+  }
+
   return {
     id: data.id as string,
     email: (data.email as string | null) ?? null,
     name: (data.name as string | null) ?? null,
     provider: (data.provider as string | null) ?? null,
     provider_id: (data.provider_id as string | null) ?? null,
-    lead_id: (data.lead_id as string | null) ?? null,
+    lead_id: leadId,
   }
 }
 

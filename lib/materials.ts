@@ -42,22 +42,6 @@ function getFallbackResourceUrl(magnet: LeadMagnet) {
   return magnet.resourceUrl?.trim() || `/resources/${magnet.slug}`
 }
 
-async function findLatestLeadIdByEmail(email: string | null) {
-  if (!email) return null
-
-  const supabase = createSupabaseAdminClient()
-  const { data, error } = await supabase
-    .from("leads")
-    .select("id")
-    .eq("email", email)
-    .order("created_at", { ascending: false })
-    .limit(1)
-    .maybeSingle()
-
-  if (error || !data?.id) return null
-  return data.id as string
-}
-
 async function resolveDestinationUrl(magnet: LeadMagnet) {
   const storagePath = getStoragePath(magnet)
   if (!storagePath) {
@@ -142,13 +126,14 @@ export async function prepareMaterialDownload(
   if (!magnet || !magnet.published) return null
 
   const email = normalizeEmail(request.email)
-  const leadId = request.leadId ?? await findLatestLeadIdByEmail(email)
+  const leadId = request.leadId ?? null
   const { url, signed } = await resolveDestinationUrl(magnet)
   await stitchIdentity({
     anonymousId: request.anonymousId,
     userId: request.userId,
     leadId,
     email,
+    emailVerified: false,
   })
   const stored = await recordDownload({
     magnet,
