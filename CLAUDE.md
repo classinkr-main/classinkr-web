@@ -8,9 +8,23 @@
 
 ## 먼저 볼 문서
 
+- [docs/active/playbook/README.md](docs/active/playbook/README.md) — 파트별 운영 플레이북: 작업이 어느 파트인지 판별 → 담당 에이전트(`.claude/agents/`)·가이드·철칙 적용
 - [docs/README.md](docs/README.md)
 - [docs/active/repository-audit-2026-04-15.md](docs/active/repository-audit-2026-04-15.md)
 - [DESIGN.md](DESIGN.md)
+
+## 파트 분담 (작업 위임)
+
+저장소는 6개 파트로 나뉜다. 작업이 들어오면 [플레이북 §2 소유권 매트릭스](docs/active/playbook/README.md)로 파트를 판별하고 해당 전담 에이전트를 띄운다.
+
+| 파트 | 에이전트 | 가이드 |
+|------|----------|--------|
+| 홈 및 랜딩 | `home-front` | [01](docs/active/playbook/01-home-front.md) |
+| 어드민 코어 | `admin-core` | [02](docs/active/playbook/02-admin-core.md) |
+| 컨텐츠 발행 | `content-pub` | [03](docs/active/playbook/03-content-pub.md) |
+| 마케팅/그로스/CRM | `growth-crm` | [04](docs/active/playbook/04-growth-crm.md) |
+| 챗봇 | `chatbot` | [05](docs/active/playbook/05-chatbot.md) |
+| 플랫폼 & 데이터 | `platform-data` | [06](docs/active/playbook/06-platform-data.md) |
 
 ## 코드 규칙
 
