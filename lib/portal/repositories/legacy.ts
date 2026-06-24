@@ -1,6 +1,5 @@
 "server-only";
 
-import { getHwSale, listHwSales } from "@/lib/repositories/hw-sales";
 import {
   listInstallSchedules,
   type InstallScheduleWithRelations,
@@ -28,7 +27,6 @@ import type {
 } from "@/lib/portal/types";
 import type {
   Contract,
-  HwSaleItem,
   Partner,
   Quote,
   QuoteItem,
@@ -172,12 +170,11 @@ function buildLegacyActivityLogs(
 }
 
 async function buildLegacyDealDetailPayload(partner: Partner): Promise<DealDetailPayload> {
-  const [quotes, contracts, receipts, installs, hwSales] = await Promise.all([
+  const [quotes, contracts, receipts, installs] = await Promise.all([
     listQuotes(partner.id),
     listContracts(partner.id),
     listReceipts(undefined, partner.id),
     listInstallSchedules({ partnerId: partner.id }),
-    listHwSales({ partnerId: partner.id }),
   ]);
 
   const paidAmount = receipts.reduce((sum, item) => sum + (item.total_amount ?? 0), 0);
@@ -345,13 +342,6 @@ async function buildLegacyDealDetailPayload(partner: Partner): Promise<DealDetai
     }
   }
 
-  if (lineItems.length === 0 && hwSales.length > 0) {
-    const firstSale = await getHwSale(hwSales[0].id);
-    for (const [index, item] of (firstSale?.items ?? []).entries()) {
-      lineItems.push(mapHwSaleItemToLineItem(partner.id, item, index));
-    }
-  }
-
   const installations: InstallationEvent[] = installs.map((install) => ({
     id: install.id,
     partner_account_id: `legacy:${partner.id}`,
@@ -465,27 +455,6 @@ function mapQuoteItemToLineItem(
     amount: item.amount,
     sort_order: sortOrder,
     notes: item.description,
-    created_at: new Date().toISOString(),
-    updated_at: new Date().toISOString(),
-  };
-}
-
-function mapHwSaleItemToLineItem(
-  dealId: string,
-  item: HwSaleItem,
-  sortOrder: number
-): DealLineItem {
-  return {
-    id: item.id,
-    deal_id: dealId,
-    sku: item.sku,
-    category: inferCategory(item.product_name),
-    product_name: item.product_name,
-    quantity: item.quantity,
-    unit_price: item.unit_price,
-    amount: item.unit_price * item.quantity,
-    sort_order: sortOrder,
-    notes: item.serial_notes,
     created_at: new Date().toISOString(),
     updated_at: new Date().toISOString(),
   };
