@@ -16,23 +16,23 @@ export interface DocsArticleProps {
 
 function Checklist({ items }: { items: DocsChecklistItem[] }) {
     return (
-        <ul className="mt-5 space-y-3">
+        <ul className="mt-5 divide-y divide-black/[0.08]">
             {items.map((item, index) => (
-                <li key={index} className="flex gap-3 border-b border-black/[0.08] pb-3 last:border-b-0 last:pb-0">
+                <li key={index} className="flex gap-2.5 py-3 first:pt-0">
                     <span
                         className={cn(
-                            "mt-0.5 flex h-5 w-5 shrink-0 items-center justify-center rounded-full border",
+                            "mt-1 flex h-4 w-4 shrink-0 items-center justify-center rounded-full border",
                             item.checked
                                 ? "border-[#084734] bg-transparent text-[#084734]"
                                 : "border-black/[0.08] bg-transparent text-[#A39E98]"
                         )}
                     >
-                        {item.checked ? <Check aria-hidden className="h-3.5 w-3.5" /> : <Circle aria-hidden className="h-2.5 w-2.5 fill-current" />}
+                        {item.checked ? <Check aria-hidden className="h-2.5 w-2.5" /> : <Circle aria-hidden className="h-2 w-2 fill-current" />}
                     </span>
                     <span className="min-w-0">
-                        <span className="block break-words text-sm font-bold leading-6 text-[#111110]">{item.label}</span>
+                        <span className="block break-keep text-[15px] font-bold leading-6 text-[#111110] [overflow-wrap:anywhere]">{item.label}</span>
                         {item.description ? (
-                            <span className="mt-1 block break-words text-sm leading-6 text-[#615D59]">
+                            <span className="mt-1 block break-keep text-sm leading-6 text-[#615D59] [overflow-wrap:anywhere]">
                                 {item.description}
                             </span>
                         ) : null}
@@ -60,11 +60,11 @@ export function DocsArticle({
                         {eyebrow}
                     </p>
                 ) : null}
-                <h1 className="mt-4 break-words text-4xl font-black leading-[1.08] tracking-display text-[#111110] md:text-5xl">
+                <h1 className="mt-4 max-w-[980px] break-keep text-balance text-4xl font-black leading-[1.08] tracking-display text-[#111110] [overflow-wrap:anywhere] md:text-5xl">
                     {title}
                 </h1>
                 {description ? (
-                    <p className="mt-5 max-w-3xl break-words text-lg leading-8 text-[#4F4C49]">
+                    <p className="mt-5 max-w-[850px] break-keep text-lg leading-8 text-[#4F4C49] [overflow-wrap:anywhere]">
                         {description}
                     </p>
                 ) : null}
@@ -87,11 +87,11 @@ export function DocsArticle({
                                 {section.eyebrow}
                             </p>
                         ) : null}
-                        <h2 className="break-words text-2xl font-black leading-tight tracking-subhead text-[#111110] md:text-3xl">
+                        <h2 className="max-w-[900px] break-keep text-balance text-2xl font-black leading-tight tracking-subhead text-[#111110] [overflow-wrap:anywhere] md:text-3xl">
                             {section.title}
                         </h2>
                         {section.body ? (
-                            <div className="mt-4 break-words text-base leading-8 text-[#31302E]">
+                            <div className="mt-4 max-w-[850px] break-keep text-[17px] leading-8 text-[#31302E] [overflow-wrap:anywhere]">
                                 {section.body}
                             </div>
                         ) : null}

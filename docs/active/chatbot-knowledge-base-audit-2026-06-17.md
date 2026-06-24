@@ -32,7 +32,7 @@
 | 제품 템플릿 | [lib/product-templates.ts](../../lib/product-templates.ts) | 견적 구성 요소 | 아니오(코드 전용) → B3의 원천 |
 | 요금제 데이터 | [lib/billing/plans.ts](../../lib/billing/plans.ts) | 플랜 정의 | 아니오(코드 전용) → B3의 원천 |
 | 공개 FAQ | [lib/public-faq.ts](../../lib/public-faq.ts) | **18문항**(카테고리별 그룹) | 아니오(코드 전용) — 챗봇이 직접 색인하지 않음 |
-| 채널톡 헬프센터 동기화본 | `docs_articles`(slug `channel-talk-document-{id}`) | 런북 기준 ~57문서 / 이미지 347장 / 청크 309개 임베딩(재확인 권장) | **예** — `visibility=unlisted` 기본, 챗봇 검색 대상 |
+| 채널톡 헬프센터 동기화본 | `docs_articles`(slug `channel-talk-document-{id}`) | 2026-06-24 재정리 기준 54문서 / 청크 297개 임베딩 | **예** — `visibility=unlisted` 기본, 챗봇 검색 대상 |
 
 `lib/docs.ts` 카테고리 분포(현재 확인값, 56개):
 
@@ -49,7 +49,7 @@
 > ⚠️ 수치 정합 메모
 > - 설계 문서는 `lib/docs.ts`를 **58개**로 표기하나, 본 감사 시점 실제 코드는 **56개**다(카테고리 합 14+10+10+10+6+5+1=56). 설계 작성 후 통합/정리로 줄었을 가능성 → 신규 5종 추가 전 기준선은 **56**으로 본다.
 > - 공개 FAQ는 설계 표기 16문항과 달리 현재 **18문항**(카테고리 그룹 구조).
-> - 채널톡 수치(문서 ~57 / 이미지 347 / 청크 309)는 [channel-docs-sync-2026-06-17.md](./channel-docs-sync-2026-06-17.md) **런북 기준 인용**이다. (설계 본문에는 임베딩 454로 인용된 곳도 있어 불일치 → 실제 Supabase 카운트로 **재확인 권장**.)
+> - 채널톡 수치(문서 54 / 청크 297)는 [channel-docs-sync-2026-06-17.md](./channel-docs-sync-2026-06-17.md)의 2026-06-24 재정리 결과를 따른다. 채널톡 자체 메타 문서와 짧은 중복 스텁은 제외한다.
 
 ---
 
@@ -111,7 +111,7 @@
 5. **S65 스펙 미확정**: 단정 금지, 갭으로 표기.
 6. **한국 결제·정산 경계**: 포지셔닝상 약한 영역 → B3에서 "결제·리포트·오프라인 출석은 API/외부 연동"으로 솔직히 안내.
 7. **채널톡 vs 수기 문서 중복**: 회원가입/유료전환/학생초대/채팅·할일 등이 기존 doc과 채널톡판으로 중복. 슬러그가 달라 충돌은 없고, 채널톡판은 스크린샷 포함이 강점. 리랭커의 "doc당 1개·총 2개" 다양성 선택으로 완화. 정책은 미확정.
-8. **채널톡 메타글 노이즈**: 채널톡 자체 메타글(스페이스/아티클 알아보기)과 스텁은 답변 품질에 노이즈 → 설계의 `EXCLUDE_ARTICLE_IDS`(8472, 8473, 44553) 제외 검토. 미래의 새 ClassIn 글은 자동 포함 유지가 목표.
+8. **채널톡 메타글 노이즈**: 채널톡 자체 메타글(스페이스/아티클 알아보기)과 짧은 중복 스텁은 답변 품질에 노이즈 → `EXCLUDED_ARTICLE_IDS`(8472, 8473, 44553)로 제외한다. 미래의 새 ClassIn 글은 자동 포함 유지가 목표.
 9. **B3 visibility(unlisted vs public)**: 가격 민감성 때문에 `unlisted`(챗봇·상담 참고, 공개 색인 제외) 기본. 공개 원하면 `public` 승격.
 10. **가격 표현 정책**: 정확한 금액·계약 조건은 **항상 상담 연결**. 견적 구성요소·비교 관점만 정성적으로. 챗봇 답변에 하드 금액 단정 금지.
 
@@ -142,11 +142,11 @@
 
 ```bash
 # 전수 동기화 (초안 포함) + 임베딩
-npx tsx scripts/sync-channel-documents.ts --include-unpublished
+npx tsx scripts/sync-channel-documents.ts
 npx tsx scripts/embed-docs-chunks.ts
 ```
 
-- ⚠️ **반드시 `--include-unpublished`로 실행**한다. 기본 published-only로 돌리면 정합성 reconcile가 채널 초안(예: PC 설치, 교사 추가, AI 기능) 문서를 `archived`로 내려 **커버리지가 퇴행**한다.
+- 기본 실행은 채널 `state`와 무관하게 내용이 있는 문서를 전수 크롤한다. `--published-only`로 좁히면 정합성 reconcile가 채널 초안(예: PC 설치, 교사 추가, AI 기능) 문서를 `archived`로 내려 **커버리지가 퇴행**할 수 있으므로 특별한 검수 목적이 아니면 쓰지 않는다.
 - 수기 편집본 보존: `updated_by=classin-admin`인 관리자 수기 편집 문서는 sync가 건드리지 않는다(`updated_by=sync-channel-documents`와 구분).
 - 미리보기는 `--dry-run`(+ `--dump`로 추출 마크다운 확인), 공개 승격은 `--public`. 자세한 동작은 [channel-docs-sync-2026-06-17.md](./channel-docs-sync-2026-06-17.md) 참조.
 

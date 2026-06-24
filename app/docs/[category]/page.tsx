@@ -14,7 +14,8 @@ import {
   resolveDocsRedirect,
 } from "@/lib/docs-content"
 
-import { toArticleSummary, scoreDocsArticle } from "../_utils"
+import { getDocsCategoryNavItems, toArticleSummary, scoreDocsArticle } from "../_utils"
+import { DocsCategoryNav } from "@/components/docs"
 import { SearchHighlight } from "@/components/ui/SearchHighlight"
 import { DocsSearchLogger } from "@/components/docs/DocsSearchLogger"
 
@@ -100,6 +101,7 @@ export default async function DocsCategoryPage({
   const searchFallbackHref = q?.trim()
     ? `/docs/search?q=${encodeURIComponent(q.trim())}`
     : "/docs/search"
+  const categoryTabs = getDocsCategoryNavItems(docsContent, categoryParam)
 
   return (
     <div className="min-h-screen bg-[#FAFAF8] pt-28 pb-24 text-[#111110] md:pt-36">
@@ -150,6 +152,8 @@ export default async function DocsCategoryPage({
             </>
           )}
         </p>
+
+        <DocsCategoryNav items={categoryTabs} className="mt-8" />
       </section>
 
       <section className="container mt-12">
