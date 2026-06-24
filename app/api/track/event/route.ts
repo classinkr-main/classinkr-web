@@ -13,6 +13,12 @@ const ALLOWED_EVENTS = new Set([
   "view_resource",
   "view_demo_video",
   "begin_checkout",
+  "purchase",
+  "chatbot_teaser_shown",
+  "chatbot_teaser_clicked",
+  "chatbot_teaser_dismissed",
+  "chatbot_opened",
+  "chatbot_first_question",
 ])
 
 const ALLOWED_PARAM_KEYS: Record<string, Set<string>> = {
@@ -48,6 +54,12 @@ const ALLOWED_PARAM_KEYS: Record<string, Set<string>> = {
     "value",
     "currency",
   ]),
+  purchase: new Set(["value", "currency"]),
+  chatbot_teaser_shown: new Set(["path"]),
+  chatbot_teaser_clicked: new Set(["path"]),
+  chatbot_teaser_dismissed: new Set(["path"]),
+  chatbot_opened: new Set(["source"]),
+  chatbot_first_question: new Set(["path"]),
 }
 
 const PII_PATTERNS = [
