@@ -1,6 +1,6 @@
 "use client"
 
-import { useEffect, useMemo, useState } from "react"
+import { useCallback, useEffect, useMemo, useState } from "react"
 import { Loader2, LockKeyhole, Mail } from "lucide-react"
 
 import { Button } from "@/components/ui/button"
@@ -43,7 +43,23 @@ export function PublicLoginDialog({
   const [loadingProvider, setLoadingProvider] = useState<"google" | "naver" | "kakao" | null>(null)
   const [error, setError] = useState("")
   const [availability, setAvailability] = useState<ProviderAvailability>(DEFAULT_AVAILABILITY)
+  const [marketingOptIn, setMarketingOptIn] = useState(false)
   const resolvedNextPath = useMemo(() => nextPath ?? getCurrentPath(), [nextPath])
+
+  // 첫 로그인 시 마케팅 동의 의도를 localStorage에 남겨 OAuth 리다이렉트 너머로 보존한다.
+  // 복귀 후 /account의 MarketingConsentToggle이 이 키를 드레인해 한 번만 반영한다.
+  const handleMarketingChange = useCallback((checked: boolean) => {
+    setMarketingOptIn(checked)
+    try {
+      if (checked) {
+        window.localStorage.setItem("cln_pending_marketing_consent", "1")
+      } else {
+        window.localStorage.removeItem("cln_pending_marketing_consent")
+      }
+    } catch {
+      // 무시: 스토리지 접근 실패 시 동의는 /account 토글에서 직접 처리한다.
+    }
+  }, [])
 
   useEffect(() => {
     if (!open) return
@@ -150,6 +166,19 @@ export function PublicLoginDialog({
             </Button>
           ) : null}
         </div>
+
+        <label className="flex items-start gap-2 text-[12px] leading-5 text-[#6B6661]">
+          <input
+            type="checkbox"
+            checked={marketingOptIn}
+            onChange={(event) => handleMarketingChange(event.target.checked)}
+            className="mt-0.5 h-4 w-4 shrink-0 rounded border-[rgba(0,0,0,0.2)] accent-[#084734]"
+          />
+          <span>
+            (선택) 신규 자료·웨비나·제품 소식을 이메일로 받아보겠습니다. 로그인 후 계정 설정에서 언제든
+            해제할 수 있습니다.
+          </span>
+        </label>
 
         {error ? (
           <p role="alert" className="text-[13px] leading-5 text-[#B85C33]">
