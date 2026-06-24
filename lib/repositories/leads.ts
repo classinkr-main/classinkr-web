@@ -13,7 +13,15 @@ import type { Lead, LeadInsert, LeadUpdate } from "@/lib/supabase/database.types
 // 기존 타입 re-export (호환성)
 export type { LeadStatus } from "@/lib/supabase/database.types";
 
-const USE_SUPABASE = process.env.USE_SUPABASE_LEADS === "true";
+export function shouldUseSupabaseLeads(
+  env: Record<string, string | undefined> = process.env
+) {
+  // Vercel's runtime filesystem is read-only, so JSON fallback cannot safely
+  // accept public lead writes there even if USE_SUPABASE_LEADS is missing.
+  return env.USE_SUPABASE_LEADS === "true" || env.VERCEL === "1";
+}
+
+const USE_SUPABASE = shouldUseSupabaseLeads();
 const IS_PRODUCTION_RUNTIME =
   process.env.NODE_ENV === "production" || process.env.VERCEL_ENV === "production";
 const RESPONSE_TARGET_SOURCES = ["demo_modal", "contact_page", "meta_lead_ads"] as const;

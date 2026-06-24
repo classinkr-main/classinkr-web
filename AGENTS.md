@@ -35,6 +35,7 @@
 - 같은 연락처의 재제출을 성공 중복으로 처리하는 시점은 Supabase 저장 또는 외부 전달 중 하나 이상이 성공한 뒤여야 한다.
 - 저장과 전달이 모두 실패한 요청은 중복 캐시에 남기지 말고 즉시 재시도 가능해야 한다.
 - 리드 저장/전달 흐름을 바꾸면 `npx vitest run tests/api/lead-capture.test.ts`를 함께 실행한다.
+- Vercel 런타임은 read-only 파일시스템이므로 공개 리드 제출은 JSON fallback을 쓰면 안 된다. 저장소 모드를 바꾸면 `npx vitest run tests/repositories/leads-mode.test.ts`도 함께 실행한다.
 - 마케팅/채널톡 스크립트 도메인을 추가할 때는 `next.config.ts`의 CSP를 directive별로 갱신하고 `/contact` 응답 헤더를 확인한다.
 
 ## 검증 기준
