@@ -30,6 +30,7 @@ export async function POST(req: NextRequest) {
     userId: context.user.id,
     leadId: context.profile.lead_id,
     email: context.user.email ?? context.profile.email,
+    emailVerified: Boolean(context.user.email_confirmed_at),
   })
 
   return NextResponse.json(result)

@@ -193,6 +193,9 @@ export async function GET(req: NextRequest) {
       userId: user.id,
       leadId: publicProfile.lead_id,
       email: user.email ?? publicProfile.email,
+      // Naver /v1/nid/me는 이메일 검증 플래그를 제공하지 않으므로 미검증으로 취급한다(D4).
+      // 이메일 문자열로 lead를 자동연결하지 않는다. 계정 사일로/탈취 방지는 Task 7.
+      emailVerified: false,
     })
     nextUrl.searchParams.delete("auth_error")
     return response

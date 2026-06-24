@@ -68,6 +68,8 @@ export async function POST(req: NextRequest) {
         anonymousId: req.cookies.get(ANONYMOUS_ID_COOKIE)?.value ?? null,
         leadId: result.body.leadId,
         email,
+        // 비인증 경로(이메일 게이트) — 이미 아는 leadId만 쓰고 이메일로 자동연결하지 않는다(D4).
+        emailVerified: false,
       }).catch((error) => {
         console.warn("[newsletter/subscribe] identify failed:", error)
       })
