@@ -1,8 +1,9 @@
 "use client"
 
-import { useState, type FormEvent } from "react"
-import { ArrowRight, CheckCircle2, Loader2, Mail } from "lucide-react"
+import { useCallback, useEffect, useRef, useState, type FormEvent } from "react"
+import { ArrowRight, CheckCircle2, Loader2, LockKeyhole, Mail } from "lucide-react"
 
+import { PublicLoginDialog } from "@/components/auth/PublicLoginDialog"
 import { Button } from "@/components/ui/button"
 import { Input } from "@/components/ui/input"
 import { trackEvent } from "@/lib/analytics"
@@ -50,6 +51,12 @@ export function ResourceDownloadForm({ resource }: ResourceDownloadFormProps) {
   const [loading, setLoading] = useState(false)
   const [submitted, setSubmitted] = useState(false)
   const [error, setError] = useState("")
+  const [loginDialogOpen, setLoginDialogOpen] = useState(false)
+  const resumedRef = useRef(false)
+
+  const isLoginGate = resource.gate === "login"
+  // 로그인 게이트는 자료 슬러그가 경로에 있으므로 material 파라미터가 필요 없다.
+  const loginNextPath = `/resources/${resource.slug}?resume=download`
 
   const updateField = <Key extends keyof DownloadFormState>(
     key: Key,
@@ -64,6 +71,56 @@ export function ResourceDownloadForm({ resource }: ResourceDownloadFormProps) {
       block: "start",
     })
   }
+
+  // 로그인 게이트: 로그인 후 같은 페이지로 돌아오면 다운로드를 한 번 자동 실행한다.
+  const runLoginDownload = useCallback(async () => {
+    setLoading(true)
+    setError("")
+    try {
+      const result = await requestMaterialDownload({
+        slug: resource.slug,
+        source: "resource_pdf_download",
+      })
+      window.location.assign(result.url)
+    } catch (downloadError) {
+      if (
+        downloadError instanceof MaterialDownloadError &&
+        downloadError.code === "login_required"
+      ) {
+        setLoginDialogOpen(true)
+      } else {
+        setError(
+          downloadError instanceof MaterialDownloadError
+            ? downloadError.message
+            : "자료 다운로드를 준비하지 못했습니다. 잠시 후 다시 시도해 주세요."
+        )
+      }
+    } finally {
+      setLoading(false)
+    }
+  }, [resource.slug])
+
+  useEffect(() => {
+    // 자동 재개는 로그인 게이트 전용. 이메일 게이트는 폼 입력이 필요하므로 재개하지 않는다.
+    if (!isLoginGate) return
+    if (resumedRef.current) return
+    if (typeof window === "undefined") return
+
+    const params = new URLSearchParams(window.location.search)
+    if (params.get("resume") !== "download") return
+
+    resumedRef.current = true
+
+    params.delete("resume")
+    const cleanedSearch = params.toString()
+    const cleanedUrl =
+      window.location.pathname +
+      (cleanedSearch ? `?${cleanedSearch}` : "") +
+      window.location.hash
+    window.history.replaceState(window.history.state, "", cleanedUrl)
+
+    void runLoginDownload()
+  }, [isLoginGate, runLoginDownload])
 
   const handleSubmit = async (event: FormEvent<HTMLFormElement>) => {
     event.preventDefault()
@@ -129,7 +186,12 @@ export function ResourceDownloadForm({ resource }: ResourceDownloadFormProps) {
 
       setSubmitted(true)
     } catch (downloadError) {
-      if (downloadError instanceof MaterialDownloadError) {
+      if (
+        downloadError instanceof MaterialDownloadError &&
+        downloadError.code === "login_required"
+      ) {
+        setLoginDialogOpen(true)
+      } else if (downloadError instanceof MaterialDownloadError) {
         setError(downloadError.message)
       } else {
         setError("자료 다운로드를 준비하지 못했습니다. 잠시 후 다시 시도해 주세요.")
@@ -141,6 +203,12 @@ export function ResourceDownloadForm({ resource }: ResourceDownloadFormProps) {
 
   return (
     <div id="download" className="scroll-mt-28">
+      <PublicLoginDialog
+        open={loginDialogOpen}
+        onOpenChange={setLoginDialogOpen}
+        nextPath={loginNextPath}
+        title="로그인 후 자료 받기"
+      />
       <aside className="border border-black/[0.08] bg-white p-5 shadow-[0_10px_28px_rgba(17,17,16,0.04)] lg:sticky lg:top-28">
       {submitted ? (
         <div className="flex min-h-[360px] flex-col justify-center text-center">
@@ -154,6 +222,56 @@ export function ResourceDownloadForm({ resource }: ResourceDownloadFormProps) {
           <Button type="button" className="mt-6 h-11 w-full" onClick={scrollToChecklist}>
             전체 문항 보기
             <ArrowRight className="h-4 w-4" />
+          </Button>
+        </div>
+      ) : isLoginGate ? (
+        <div className="flex min-h-[360px] flex-col justify-center text-center">
+          <div className="mx-auto flex h-12 w-12 items-center justify-center rounded-lg bg-[#ECFDF5] text-[#084734]">
+            <LockKeyhole className="h-6 w-6" />
+          </div>
+          <h2 className="mt-5 text-2xl font-bold tracking-[-0.03em] text-[#111110]">
+            로그인 후 자료 받기
+          </h2>
+          <p className="mt-3 text-sm leading-6 text-[#615D59]">
+            이 자료는 다운로드 기록과 재열람을 위해 공개 사용자 로그인이 필요합니다. 로그인하면
+            자료를 바로 받을 수 있습니다.
+          </p>
+          <div className="mt-5 grid grid-cols-3 gap-2 border-y border-black/[0.08] py-4 text-center">
+            <div>
+              <p className="text-[11px] font-bold text-[#084734]/70">형식</p>
+              <p className="mt-1 text-[12px] font-semibold text-[#31302E]">PDF</p>
+            </div>
+            <div>
+              <p className="text-[11px] font-bold text-[#084734]/70">분량</p>
+              <p className="mt-1 text-[12px] font-semibold text-[#31302E]">
+                {resource.itemCount}문항
+              </p>
+            </div>
+            <div>
+              <p className="text-[11px] font-bold text-[#084734]/70">소요</p>
+              <p className="mt-1 text-[12px] font-semibold text-[#31302E]">
+                약 {resource.estimatedMinutes}분
+              </p>
+            </div>
+          </div>
+          {error ? <p className="mt-4 text-sm leading-6 text-[#B85C33]">{error}</p> : null}
+          <Button
+            type="button"
+            disabled={loading}
+            className="mt-5 h-11 w-full"
+            onClick={() => {
+              setError("")
+              setLoginDialogOpen(true)
+            }}
+          >
+            {loading ? (
+              <Loader2 className="h-4 w-4 animate-spin" />
+            ) : (
+              <>
+                <LockKeyhole className="h-4 w-4" />
+                로그인하고 자료 받기
+              </>
+            )}
           </Button>
         </div>
       ) : (

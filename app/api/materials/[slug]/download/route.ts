@@ -121,11 +121,16 @@ export async function GET(req: NextRequest, context: RouteContext) {
   }
 
   if (preview.gate === "login" && !userContext) {
-    return NextResponse.redirect(new URL(`/resources?auth=login&material=${encodeURIComponent(slug)}`, req.url))
+    return NextResponse.redirect(
+      new URL(`/resources/${encodeURIComponent(slug)}?resume=download`, req.url)
+    )
   }
 
   if (preview.gate === "email" && !userContext?.user.email) {
-    return NextResponse.redirect(new URL(`/resources?auth=email&material=${encodeURIComponent(slug)}`, req.url))
+    // 이메일 게이트는 폼 입력이 필요하므로 자동 재개(resume) 마커 없이 자료 상세로만 보낸다.
+    return NextResponse.redirect(
+      new URL(`/resources/${encodeURIComponent(slug)}`, req.url)
+    )
   }
 
   const result = await prepareMaterialDownload({
