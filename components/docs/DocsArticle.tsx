@@ -14,6 +14,20 @@ export interface DocsArticleProps {
     className?: string
 }
 
+function formatDashTitle(title: ReactNode) {
+    if (typeof title !== "string" || !title.includes(" — ")) {
+        return title
+    }
+
+    const [lead, ...rest] = title.split(" — ")
+
+    return (
+        <>
+            {lead} <span className="inline-block">— {rest.join(" — ")}</span>
+        </>
+    )
+}
+
 function Checklist({ items }: { items: DocsChecklistItem[] }) {
     return (
         <ul className="mt-5 divide-y divide-black/[0.08]">
@@ -60,8 +74,8 @@ export function DocsArticle({
                         {eyebrow}
                     </p>
                 ) : null}
-                <h1 className="mt-4 max-w-[980px] break-keep text-balance text-4xl font-black leading-[1.08] tracking-display text-[#111110] [overflow-wrap:anywhere] md:text-5xl">
-                    {title}
+                <h1 className="mt-4 max-w-[980px] break-keep text-balance text-[2rem] font-black leading-[1.14] tracking-display text-[#111110] [overflow-wrap:anywhere] md:text-[2.5rem] 2xl:text-[2.75rem]">
+                    {formatDashTitle(title)}
                 </h1>
                 {description ? (
                     <p className="mt-5 max-w-[850px] break-keep text-lg leading-8 text-[#4F4C49] [overflow-wrap:anywhere]">
@@ -87,8 +101,8 @@ export function DocsArticle({
                                 {section.eyebrow}
                             </p>
                         ) : null}
-                        <h2 className="max-w-[900px] break-keep text-balance text-2xl font-black leading-tight tracking-subhead text-[#111110] [overflow-wrap:anywhere] md:text-3xl">
-                            {section.title}
+                        <h2 className="max-w-[900px] break-keep text-balance text-2xl font-black leading-tight tracking-subhead text-[#111110] [overflow-wrap:anywhere] md:text-[1.75rem]">
+                            {formatDashTitle(section.title)}
                         </h2>
                         {section.body ? (
                             <div className="mt-4 max-w-[850px] break-keep text-[17px] leading-8 text-[#31302E] [overflow-wrap:anywhere]">
