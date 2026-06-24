@@ -93,7 +93,7 @@ describe("streamChatbotQuery", () => {
 
     expect(answer).toContain("1. 수업을 진행할 코스에 입장합니다.")
     expect(meta?.answerMode).toBe("direct_answer")
-    expect(meta?.sources[0]?.heading).toBe("Figma CS 캡처 기준 3단계 안내")
+    expect(meta?.sources[0]?.heading).toBe("사용 순서 안내")
     expect(events.some((event) => event.type === "delta")).toBe(false)
     expect(fetchMock).not.toHaveBeenCalled()
   })

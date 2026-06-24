@@ -24,7 +24,7 @@ describe("CS Figma digest parser", () => {
       platform: "전자칠판(IFP)",
       audience: "교사",
       sourceImageFiles: ["12/17 실시간 수업 생성 ~ 현장 녹화 확인(IFP).png"],
-      sourceDigestLineHint: "docs/active/cs-figma-board-digest-2026-06-21.md:22",
+      sourceDigestLineHint: "docs/active/cs-figma-board-digest-2026-06-21.md:24",
     })
     expect(entries[0]?.steps).toHaveLength(8)
     expect(entries[0]?.tips.length).toBeGreaterThan(0)

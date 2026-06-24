@@ -1,11 +1,12 @@
 import { describe, expect, it } from "vitest"
 
-import { CS_FIGMA_GUIDES } from "@/lib/cs-figma-guides"
+import { CS_FIGMA_GUIDES, sanitizeGuideStep } from "@/lib/cs-figma-guides"
+import { getCsFigmaEnrichment } from "@/lib/cs-figma-enrichments"
 import { buildCsFigmaDocArticle, getDocBySlug } from "@/lib/docs"
 
 describe("CS Figma docs", () => {
-  it("exposes generated Figma digest guides with 3-level deep-dive sections", () => {
-    const doc = getDocBySlug("cs-figma-digest-1197", "admin")
+  it("exposes generated digest guides with consumer-tone deep-dive sections", () => {
+    const doc = getDocBySlug("cs-figma-digest-1195", "admin")
 
     expect(doc).toMatchObject({
       title: "코스 내 초대 활성화(QR, Link 등)",
@@ -14,31 +15,42 @@ describe("CS Figma docs", () => {
     })
     expect(doc?.sections.map((section) => section.heading)).toEqual(
       expect.arrayContaining([
-        "Figma CS 캡처 기준",
-        "순서별 안내",
-        "1단계 — 순서 그대로 안내",
-        "2단계 — 화면 기준 확인",
-        "3단계 — CS 주의사항과 원본 캡처",
+        "순서대로 따라 하기",
+        "화면 기준 확인",
+        "CS 주의사항과 안내 화면",
       ])
     )
-    expect(doc?.sections[0]?.body).toContain("코스 내 초대 활성화(QR, Link 등)")
+    expect(doc?.sections[0]?.steps).toEqual(
+      expect.arrayContaining([
+        expect.stringContaining("코스 가입 허용"),
+      ])
+    )
   })
 
   it("resolves every CS Figma guide into an unlisted noindex document", () => {
     for (const guide of CS_FIGMA_GUIDES) {
       const doc = getDocBySlug(guide.docSlug, guide.docCategory)
-      const stepSection = doc?.sections.find((section) => section.heading === "순서별 안내")
+      const enrichment = getCsFigmaEnrichment(guide.docSlug)
 
       expect(doc, guide.docSlug).toMatchObject({
-        title: guide.title,
+        title: enrichment?.title ?? guide.title,
         visibility: "unlisted",
         noindex: true,
       })
-      expect(stepSection?.steps, guide.docSlug).toEqual(guide.steps)
+
+      // 소비자용 보강이 없는 가이드는 정리된 순서 단계를 그대로 노출한다.
+      if (!enrichment) {
+        const stepSection = doc?.sections.find(
+          (section) => section.heading === "순서대로 따라 하기"
+        )
+        expect(stepSection?.steps, guide.docSlug).toEqual(
+          guide.steps.map((step) => sanitizeGuideStep(step)).filter(Boolean)
+        )
+      }
     }
   })
 
-  it("attaches matched Figma capture images to the generated guide document", () => {
+  it("attaches matched capture images with consumer-tone alt text and no source filenames", () => {
     const guide = CS_FIGMA_GUIDES.find((item) => item.docSlug === "cs-field-recording-camera-setup")
     expect(guide).toBeTruthy()
 
@@ -51,14 +63,14 @@ describe("CS Figma docs", () => {
       {
         type: "image",
         src: "/docs/files/cs-figma/12-17-실시간-수업-생성-현장-녹화-확인-pc.png",
-        alt: "현장 녹화 카메라 설정 원본 캡처 - 12/17 실시간 수업 생성 ~ 현장 녹화 확인(PC).png",
-        caption: "Figma 원본 캡처: 12/17 실시간 수업 생성 ~ 현장 녹화 확인(PC).png",
+        alt: "현장 녹화 카메라 설정 안내 화면",
+        caption: "",
       },
       {
         type: "image",
         src: "/docs/files/cs-figma/12-17-실시간-수업-생성-현장-녹화-확인-ifp.png",
-        alt: "현장 녹화 카메라 설정 원본 캡처 - 12/17 실시간 수업 생성 ~ 현장 녹화 확인(IFP).png",
-        caption: "Figma 원본 캡처: 12/17 실시간 수업 생성 ~ 현장 녹화 확인(IFP).png",
+        alt: "현장 녹화 카메라 설정 안내 화면",
+        caption: "",
       },
     ])
   })
@@ -84,11 +96,11 @@ describe("CS Figma docs", () => {
       "/docs/files/cs-figma/문제-은행-가이드.png",
     ])
     expect(bulkExamDoc?.sections[0]?.steps).toContain(
-      "필요한 Figma 원본 캡처 1개가 이 가이드에 모두 연결되어 있습니다."
+      "코스 화면에서 새로 만들기를 누르고 시험을 선택합니다."
     )
   })
 
-  it("updates the Figma capture section copy based on linked image coverage", () => {
+  it("attaches only the linked images and never leaks source filenames into copy", () => {
     const guide = CS_FIGMA_GUIDES.find((item) => item.docSlug === "cs-field-recording-camera-setup")
     expect(guide).toBeTruthy()
 
@@ -96,16 +108,20 @@ describe("CS Figma docs", () => {
       "/docs/files/cs-figma/12-17-실시간-수업-생성-현장-녹화-확인-pc.png",
       "/docs/files/cs-figma/12-17-실시간-수업-생성-현장-녹화-확인-ifp.png",
     ])
-    expect(fullyLinkedDoc.sections[0]?.steps).toContain("필요한 Figma 원본 캡처 2개가 이 가이드에 모두 연결되어 있습니다.")
-    expect(fullyLinkedDoc.sections[0]?.steps).not.toContain(
-      "실제 이미지 파일은 아직 레포에 저장되어 있지 않으므로 현재는 원본 캡처 파일명을 함께 표시합니다."
-    )
+    expect(fullyLinkedDoc.sections[0]?.media?.map((item) => item.src)).toEqual([
+      "/docs/files/cs-figma/12-17-실시간-수업-생성-현장-녹화-확인-pc.png",
+      "/docs/files/cs-figma/12-17-실시간-수업-생성-현장-녹화-확인-ifp.png",
+    ])
+    // 단계 카피에는 원본 캡처 파일명이나 피그마 표현이 노출되지 않는다.
+    for (const step of fullyLinkedDoc.sections[0]?.steps ?? []) {
+      expect(step).not.toMatch(/Figma|원본 캡처|\.png/i)
+    }
 
     const partiallyLinkedDoc = buildCsFigmaDocArticle(guide!, [
       "/docs/files/cs-figma/12-17-실시간-수업-생성-현장-녹화-확인-pc.png",
     ])
-    expect(partiallyLinkedDoc.sections[0]?.steps).toContain(
-      "아직 연결되지 않은 원본 캡처: 12/17 실시간 수업 생성 ~ 현장 녹화 확인(IFP).png"
-    )
+    expect(partiallyLinkedDoc.sections[0]?.media?.map((item) => item.src)).toEqual([
+      "/docs/files/cs-figma/12-17-실시간-수업-생성-현장-녹화-확인-pc.png",
+    ])
   })
 })

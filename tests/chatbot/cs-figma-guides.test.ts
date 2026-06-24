@@ -6,6 +6,7 @@ import {
   formatCsFigmaGuideAnswer,
 } from "@/lib/chatbot/cs-figma-guides"
 import { evaluateChatbotQuery } from "@/lib/chatbot/service"
+import { getCsFigmaEnrichment } from "@/lib/cs-figma-enrichments"
 
 function disableExternalChatbotServices() {
   vi.stubEnv("NEXT_PUBLIC_SUPABASE_URL", "")
@@ -51,7 +52,7 @@ describe("CS Figma guide source", () => {
     expect(result.answerMode).toBe("direct_answer")
     expect(result.sources[0]).toMatchObject({
       title: "현장 녹화 카메라 설정",
-      heading: "Figma CS 캡처 기준 3단계 안내",
+      heading: "사용 순서 안내",
       urlPath: "/docs/teacher/cs-field-recording-camera-setup",
     })
     expect(result.answer).toContain("1. 수업을 진행할 코스에 입장합니다.")
@@ -101,23 +102,25 @@ describe("CS Figma guide source", () => {
   })
 
   it("routes app download questions to the Windows download guide instead of recording data", () => {
-    expect(findCsFigmaGuideForQuestion("클래스인 다운로드 어디서 해요")).toMatchObject({
-      slug: "cs-figma-digest-1599",
+    expect(findCsFigmaGuideForQuestion("Windows용 클래스인 다운로드 방법 알려줘")).toMatchObject({
+      slug: "cs-figma-digest-1602",
       title: "Windows용 클래스인",
     })
   })
 
   it("answers exact procedural digest guides even when titles include numbering or policy words", () => {
     expect(findCsFigmaGuideForQuestion("수업 삭제 방법 알려줘")).toMatchObject({
-      slug: "cs-figma-digest-687",
+      slug: "cs-figma-digest-655",
       title: "1. 수업 삭제 방법",
     })
     expect(findCsFigmaGuideForQuestion("기관 공유 드라이브 접근 권한 부여 방법 알려줘")).toMatchObject({
-      slug: "cs-figma-digest-967",
+      slug: "cs-figma-digest-940",
       title: "기관 공유 드라이브 접근 권한 부여",
     })
-    expect(findCsFigmaGuideForQuestion("코스 닉네임 변경 옵션 어디서 켜요")).toMatchObject({
-      slug: "cs-figma-digest-1133",
+    expect(
+      findCsFigmaGuideForQuestion("코스 내 닉네임 변경 옵션 활성/비활성화 방법 알려줘")
+    ).toMatchObject({
+      slug: "cs-figma-digest-1131",
       title: "코스 내 닉네임 변경 옵션 활성/비활성화",
     })
   })
@@ -133,58 +136,64 @@ describe("CS Figma guide source", () => {
 
   it("answers high-value generated CS procedures that would otherwise look like policy, hardware, or log questions", () => {
     expect(findCsFigmaGuideForQuestion("다시보기 유효 기간 설정 방법 알려줘")).toMatchObject({
-      slug: "cs-figma-digest-1009",
+      slug: "cs-figma-digest-982",
       title: "2. 다시보기 유효 기간 설정",
     })
     expect(findCsFigmaGuideForQuestion("클래스인 스토리지 삭제 방법 알려줘")).toMatchObject({
-      slug: "cs-figma-digest-1292",
+      slug: "cs-figma-digest-1294",
       title: "클래스인 스토리지 삭제 안내",
     })
-    expect(findCsFigmaGuideForQuestion("하위 계정 설정 방법 알려줘")).toMatchObject({
-      slug: "cs-figma-digest-946",
+    expect(
+      findCsFigmaGuideForQuestion("클래스인 관리자 대시보드에서 하위 계정 설정 방법 알려줘")
+    ).toMatchObject({
+      slug: "cs-figma-digest-919",
       title: "클래스인 관리자 대시보드에서 하위 계정 설정 방법",
     })
     expect(findCsFigmaGuideForQuestion("전자칠판 데이터 로그 보고 방법 알려줘")).toMatchObject({
-      slug: "cs-figma-digest-1514",
+      slug: "cs-figma-digest-1516",
       title: "전자칠판 데이터 로그 보고",
     })
     expect(findCsFigmaGuideForQuestion("클래스인X 전자칠판 삭제 재설치 방법 알려줘")).toMatchObject({
-      slug: "cs-figma-digest-1875",
+      slug: "cs-figma-digest-1863",
       title: "클래스인X 삭제/재설치 (전자칠판)",
     })
   })
 
   it("answers newly imported dashboard, replay, and account procedures from the Figma digest", () => {
     expect(findCsFigmaGuideForQuestion("웹 라이브 생성 방법 (대시보드) 알려줘")).toMatchObject({
-      slug: "cs-figma-digest-383",
-      title: "웹 라이브 생성 방법 (대시보드)",
+      slug: "web-live-create",
+      title: "웹 라이브 생성 방법",
     })
     expect(findCsFigmaGuideForQuestion("전자칠판 로컬 녹화 방법 알려줘")).toMatchObject({
-      slug: "cs-figma-digest-481",
+      slug: "cs-figma-digest-449",
       title: "클래스인 전자칠판 내 [로컬 녹화] 기능 안내",
     })
     expect(findCsFigmaGuideForQuestion("클래스인 관리자 대시보드에서 계정 세부 사용 내역 확인 방법 알려줘")).toMatchObject({
-      slug: "cs-figma-digest-665",
+      slug: "cs-figma-digest-633",
       title: "클래스인 관리자 대시보드에서 계정 세부 사용 내역 확인 방법",
     })
     expect(findCsFigmaGuideForQuestion("대시보드 내에서 수업 다시보기 확인 방법 알려줘")).toMatchObject({
-      slug: "cs-figma-digest-1555",
+      slug: "cs-figma-digest-1558",
       title: "대시보드 내에서 수업 다시보기 확인 방법 안내",
     })
     expect(findCsFigmaGuideForQuestion("수업 다시보기 시청 기록 확인 방법 알려줘")).toMatchObject({
-      slug: "cs-figma-digest-1555",
+      slug: "cs-figma-digest-1558",
       title: "대시보드 내에서 수업 다시보기 확인 방법 안내",
     })
     expect(findCsFigmaGuideForQuestion("수업 교사 설정 삭제 방법 알려줘")).toMatchObject({
-      slug: "cs-figma-digest-1031",
+      slug: "cs-figma-digest-1004",
       title: "대시보드 수업 교사 설졍 & 삭제",
     })
-    expect(findCsFigmaGuideForQuestion("코스 교사 변경 방법 알려줘")).toMatchObject({
-      slug: "cs-figma-digest-1062",
+    expect(
+      findCsFigmaGuideForQuestion("기존 교사에서 다른 교사로 변경 방법 알려줘")
+    ).toMatchObject({
+      slug: "cs-figma-digest-1035",
       title: "코스를 기존 교사에서 다른 교사로 변경해야 할 경우, 아래 내용을 따라와 주세요!",
     })
-    expect(findCsFigmaGuideForQuestion("학생 닉네임 동기화 방법 알려줘")).toMatchObject({
-      slug: "cs-figma-digest-1104",
+    expect(
+      findCsFigmaGuideForQuestion("학생 닉네임 동기화 & 추가 안내 가이드 알려줘")
+    ).toMatchObject({
+      slug: "cs-figma-digest-1102",
       title: "학생 닉네임 동기화 & 추가 안내 가이드",
     })
   })
@@ -220,11 +229,11 @@ describe("CS Figma guide source", () => {
     expect(result.answerMode).toBe("direct_answer")
     expect(result.sources[0]).toMatchObject({
       title: "코스 내 초대 활성화(QR, Link 등)",
-      heading: "Figma CS 캡처 기준 3단계 안내",
-      urlPath: "/docs/admin/cs-figma-digest-1197",
+      heading: "사용 순서 안내",
+      urlPath: "/docs/admin/cs-figma-digest-1195",
     })
     expect(result.answer).toContain("1. 화면 좌측 상단의 코스 이름을 클릭해 주세요")
-    expect(result.answer).toContain("3단계 CS 주의사항과 화면 확인")
+    expect(result.answer).toContain("3단계 CS 주의사항과 안내 화면")
     expect(result.sources[0]?.title).toBe("코스 내 초대 활성화(QR, Link 등)")
   })
 
@@ -238,7 +247,7 @@ describe("CS Figma guide source", () => {
     expect(result.answerMode).toBe("direct_answer")
     expect(result.sources[0]).toMatchObject({
       title: "코스 내 초대 활성화(QR, Link 등)",
-      urlPath: "/docs/admin/cs-figma-digest-1197",
+      urlPath: "/docs/admin/cs-figma-digest-1195",
     })
     expect(result.answer).toContain("코스 가입 허용")
     expect(result.suggestedQuestions).not.toContain("PC 순서 알려줘")
@@ -273,11 +282,21 @@ describe("CS Figma guide source", () => {
   it("formats guide answers without public URLs or raw source filenames", () => {
     for (const guide of CS_FIGMA_GUIDES) {
       const answer = formatCsFigmaGuideAnswer(guide)
+      const enrichment = getCsFigmaEnrichment(guide.docSlug)
 
-      for (const [index, step] of guide.steps.entries()) {
-        expect(step, guide.slug).toBeTruthy()
-        expect(answer, guide.slug).toContain(`${index + 1}. `)
+      // 소비자용 보강 가이드는 단계 대신 정리된 화면 단계 수만큼 번호를 매긴다.
+      if (enrichment) {
+        expect(answer, guide.slug).toContain("1. ")
+        enrichment.stages.forEach((_, index) => {
+          expect(answer, guide.slug).toContain(`${index + 1}. `)
+        })
+      } else {
+        for (const [index, step] of guide.steps.entries()) {
+          expect(step, guide.slug).toBeTruthy()
+          expect(answer, guide.slug).toContain(`${index + 1}. `)
+        }
       }
+
       expect(answer, guide.slug).not.toMatch(/https?:\/\//i)
       expect(answer, guide.slug).not.toMatch(/\[[^\]]+\]\(https?:\/\/[^)]+\)/i)
       expect(answer, guide.slug).not.toContain("원본 캡처:")

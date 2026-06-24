@@ -25,8 +25,8 @@ describe("CS Figma asset resolver", () => {
       {
         type: "image",
         src: "/docs/files/cs-figma/12-17-실시간-수업-생성-현장-녹화-확인-pc.png",
-        alt: "현장 녹화 카메라 설정 원본 캡처 - 12/17 실시간 수업 생성 ~ 현장 녹화 확인(PC).png",
-        caption: "Figma 원본 캡처: 12/17 실시간 수업 생성 ~ 현장 녹화 확인(PC).png",
+        alt: "현장 녹화 카메라 설정 안내 화면",
+        caption: "",
       },
     ])
   })
@@ -168,7 +168,7 @@ describe("CS Figma asset resolver", () => {
 
   it("can import one exported Figma image into multiple known guide aliases", () => {
     const guide = CS_FIGMA_GUIDES.find((item) => item.docSlug === "cs-microphone-camera-check")
-    const generatedGuide = CS_FIGMA_GUIDES.find((item) => item.docSlug === "cs-figma-digest-1215")
+    const generatedGuide = CS_FIGMA_GUIDES.find((item) => item.docSlug === "cs-figma-digest-1213")
     expect(guide).toBeTruthy()
     expect(generatedGuide).toBeTruthy()
 
