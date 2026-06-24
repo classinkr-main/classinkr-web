@@ -100,6 +100,7 @@ export interface Lead {
   landing_page: string | null;
   current_page: string | null;
   referrer: string | null;
+  user_id: string | null;
   created_at: string;
   updated_at: string;
 }
@@ -117,6 +118,7 @@ export interface UserProfile {
   provider_id: string | null;
   marketing_consent: boolean;
   lead_id: string | null;
+  account_ref: string | null;
   created_at: string;
   updated_at: string;
 }
@@ -148,6 +150,24 @@ export interface ClientEvent {
   session_id: string | null;
   created_at: string;
 }
+
+export interface IdentityStitchLog {
+  id: string;
+  user_id: string | null;
+  email: string | null;
+  anonymous_id: string | null;
+  lead_ids: string[] | null;
+  action: string | null;
+  email_verified: boolean | null;
+  created_at: string;
+}
+
+export type IdentityStitchLogInsert = Omit<IdentityStitchLog, "id" | "created_at"> & {
+  id?: string;
+  created_at?: string;
+};
+
+export type IdentityStitchLogUpdate = Partial<Omit<IdentityStitchLog, "id" | "created_at">>;
 
 export type ContactLogType = "call" | "sms" | "kakao" | "email";
 export type ContactLogResult = "answered" | "no_answer" | "callback" | "meeting_set";
@@ -432,10 +452,11 @@ export type BlogPostInsert = Omit<
   updated_at?: string;
 };
 
-export type LeadInsert = Omit<Lead, "id" | "created_at" | "updated_at"> & {
+export type LeadInsert = Omit<Lead, "id" | "created_at" | "updated_at" | "user_id"> & {
   id?: string;
   created_at?: string;
   updated_at?: string;
+  user_id?: string | null;
 };
 
 export type UserProfileInsert = Omit<UserProfile, "created_at" | "updated_at"> & {
@@ -538,6 +559,11 @@ export interface Database {
         Row: ClientEvent;
         Insert: ClientEventInsert;
         Update: ClientEventUpdate;
+      };
+      identity_stitch_logs: {
+        Row: IdentityStitchLog;
+        Insert: IdentityStitchLogInsert;
+        Update: IdentityStitchLogUpdate;
       };
       audit_logs: {
         Row: AuditLog;
