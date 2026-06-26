@@ -46,6 +46,7 @@ const FALLBACK_BUCKETS: Array<{ bucket: CrmPriorityBucket; label: string; count:
 ]
 
 const QUEUE_TTL_MS = 90_000
+const CURRENT_OWNER_VALUE = "__me"
 
 function queueUrl(source: SourceFilter, owner: string, bucket: BucketFilter) {
   const params = new URLSearchParams({ limit: "12" })
@@ -98,7 +99,7 @@ export default function CrmPriorityQueuePanel({ refreshKey = 0 }: { refreshKey?:
   const [error, setError] = useState<string | null>(null)
   const [actingId, setActingId] = useState<string | null>(null)
   const [actionMessage, setActionMessage] = useState<string | null>(null)
-  const { owners: crmOwners, health: ownerHealth } = useCrmOwners()
+  const { owners: crmOwners, currentOwner, health: ownerHealth } = useCrmOwners()
 
   const url = useMemo(() => queueUrl(source, owner, bucket), [source, owner, bucket])
   const bucketOptions = data?.buckets.length ? data.buckets : FALLBACK_BUCKETS
@@ -212,6 +213,9 @@ export default function CrmPriorityQueuePanel({ refreshKey = 0 }: { refreshKey?:
               aria-label="담당자 필터"
             >
               <option value="">담당 전체</option>
+              {currentOwner ? (
+                <option value={CURRENT_OWNER_VALUE}>내 담당 · {currentOwner.displayName}</option>
+              ) : null}
               {ownerOptions.map((option) => (
                 <option key={option.ownerName} value={option.ownerName}>
                   {option.label}

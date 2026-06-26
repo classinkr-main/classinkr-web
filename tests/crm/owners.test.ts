@@ -1,7 +1,7 @@
 import { describe, expect, it } from "vitest"
 
 import { buildOwnerSelectOptions, type CrmOwnerOption } from "@/components/admin/crm/useCrmOwners"
-import { crmTeamRoleLabel } from "@/lib/repositories/admin-users"
+import { crmTeamRoleLabel, findAdminCrmOwner } from "@/lib/repositories/admin-users"
 
 function owner(overrides: Partial<CrmOwnerOption> & { displayName: string; ownerKey: string }): CrmOwnerOption {
   return {
@@ -48,5 +48,31 @@ describe("CRM owner account mapping", () => {
   it("labels branch director and manager roles for CRM screens", () => {
     expect(crmTeamRoleLabel("branch_director")).toBe("지사장")
     expect(crmTeamRoleLabel("manager")).toBe("매니저")
+  })
+
+  it("resolves the current admin to CRM owner keys", () => {
+    const directory = {
+      crmOwners: [
+        {
+          ...owner({
+            displayName: "김담당",
+            ownerKey: "김담당",
+            ownerAliases: ["김담당", "Kim Manager"],
+            neoOwnerId: "neo-123",
+          }),
+          source: "supabase" as const,
+          role: "ADMIN" as const,
+          status: "ACTIVE" as const,
+          teamRole: "manager" as const,
+          assignable: true,
+          sortOrder: 10,
+        },
+      ],
+    }
+
+    const resolved = findAdminCrmOwner(directory, { name: "Kim Manager" })
+
+    expect(resolved.owner?.displayName).toBe("김담당")
+    expect(new Set(resolved.ownerKeys)).toEqual(new Set(["김담당", "Kim Manager", "neo-123"]))
   })
 })

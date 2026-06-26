@@ -24,6 +24,7 @@ export interface CrmUnifiedCustomerRow {
   name: string
   contact: string | null
   ownerName: string | null
+  ownerKeys: string[]
   lifecycle: CrmUnifiedLifecycle
   statusLabel: string
   nextActionLabel: string
@@ -40,6 +41,7 @@ export interface CrmUnifiedCustomersOptions {
   lifecycle?: CrmUnifiedLifecycle | "all"
   view?: CrmUnifiedSavedView
   owner?: string
+  ownerKeys?: string[]
   limit?: number
   offset?: number
   now?: Date
@@ -129,6 +131,10 @@ function normalize(value: string | null | undefined) {
   return value?.trim().toLowerCase() || ""
 }
 
+function uniqueOwnerKeys(values: Array<string | null | undefined>) {
+  return [...new Set(values.map(normalize).filter(Boolean))]
+}
+
 function includesQuery(row: CrmUnifiedCustomerRow, query: string) {
   if (!query) return true
   const haystack = [row.name, row.contact, row.ownerName, row.statusLabel, row.priorityReason]
@@ -162,12 +168,17 @@ function clampInteger(value: number | undefined, fallback: number, min: number, 
   return Math.max(min, Math.min(Math.floor(numeric), max))
 }
 
-function matchesSavedView(row: CrmUnifiedCustomerRow, view: CrmUnifiedSavedView, owner: string) {
+function rowMatchesOwner(row: CrmUnifiedCustomerRow, ownerKeys: Set<string>) {
+  if (ownerKeys.size === 0) return true
+  return row.ownerKeys.some((key) => ownerKeys.has(key))
+}
+
+function matchesSavedView(row: CrmUnifiedCustomerRow, view: CrmUnifiedSavedView, ownerKeys: Set<string>) {
   if (view === "all") return true
   if (view === "priority") return row.score >= 68
   if (view === "new_leads") return row.lifecycle === "new_lead"
   if (view === "needs_care") return row.source === "neo_account" && row.lifecycle === "account_risk"
-  if (view === "my_owner") return Boolean(owner) && normalize(row.ownerName) === owner
+  if (view === "my_owner") return ownerKeys.size > 0 && rowMatchesOwner(row, ownerKeys)
   return true
 }
 
@@ -192,6 +203,7 @@ export async function getCrmUnifiedCustomers(
         name: leadName(lead),
         contact: lead.phone ?? lead.email ?? lead.source,
         ownerName: lead.assigned_to ?? null,
+        ownerKeys: uniqueOwnerKeys([lead.assigned_to]),
         lifecycle: leadLifecycle(lead),
         statusLabel: leadStatusLabel(lead),
         nextActionLabel: priority?.actionLabel ?? defaultLeadAction(lead),
@@ -219,6 +231,7 @@ export async function getCrmUnifiedCustomers(
         name: account.name,
         contact: account.phone ?? account.uid ?? account.accountId,
         ownerName: account.ownerName,
+        ownerKeys: uniqueOwnerKeys([account.ownerName, account.ownerId]),
         lifecycle: accountLifecycle(priority),
         statusLabel: priority ? "관리 필요" : "활성 고객",
         nextActionLabel: priority?.actionLabel ?? "관계 유지",
@@ -246,7 +259,7 @@ export async function getCrmUnifiedCustomers(
   }
 
   const query = normalize(options.q)
-  const owner = normalize(options.owner)
+  const ownerKeys = new Set(uniqueOwnerKeys([options.owner, ...(options.ownerKeys ?? [])]))
   const source = options.source ?? "all"
   const lifecycle = options.lifecycle ?? "all"
   const view = options.view ?? "all"
@@ -254,8 +267,8 @@ export async function getCrmUnifiedCustomers(
   const filtered = rows.filter((row) => {
     if (source !== "all" && row.source !== source) return false
     if (lifecycle !== "all" && row.lifecycle !== lifecycle) return false
-    if (owner && normalize(row.ownerName) !== owner) return false
-    if (!matchesSavedView(row, view, owner)) return false
+    if (!rowMatchesOwner(row, ownerKeys)) return false
+    if (!matchesSavedView(row, view, ownerKeys)) return false
     if (!includesQuery(row, query)) return false
     return true
   })
@@ -268,6 +281,7 @@ export async function getCrmUnifiedCustomers(
       title: row.name,
       subtitle: row.contact,
       ownerName: row.ownerName,
+      ownerKeys: row.ownerKeys,
       statusLabel: row.statusLabel,
       score: row.score,
       severity: row.score >= 85 ? "critical" : row.score >= 68 ? "high" : row.score >= 42 ? "medium" : "low",

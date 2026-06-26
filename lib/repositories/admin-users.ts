@@ -1,9 +1,11 @@
 import "server-only"
 
 import { createSupabaseAdminClient } from "@/lib/supabase/admin"
+import type { VerifiedAdminContext } from "@/lib/admin-auth"
 import type { AdminCrmTeamRole, AdminProfile, AdminRole, AdminStatus } from "@/lib/supabase/database.types"
 
 export type AdminUserSource = "supabase" | "env" | "fallback"
+export const CURRENT_ADMIN_OWNER_TOKEN = "__me"
 
 export interface AdminCrmOwnerOption {
   userId: string | null
@@ -30,6 +32,11 @@ export interface AdminUserDirectory {
   }
   users: AdminCrmOwnerOption[]
   crmOwners: AdminCrmOwnerOption[]
+}
+
+export interface AdminCrmOwnerResolution {
+  owner: AdminCrmOwnerOption | null
+  ownerKeys: string[]
 }
 
 interface LegacyAdminUser {
@@ -71,6 +78,10 @@ function normalizeOwnerKey(value: string | null | undefined, fallback: string) {
 
 function uniqueStrings(values: Array<string | null | undefined>) {
   return [...new Set(values.map((value) => value?.trim()).filter((value): value is string => Boolean(value)))]
+}
+
+function normalizeLookup(value: string | null | undefined) {
+  return value?.trim().toLowerCase() ?? ""
 }
 
 function fallbackTeamRole(role: AdminRole | "legacy_admin" | "legacy_branch"): AdminCrmTeamRole {
@@ -256,4 +267,29 @@ export async function listAdminUserDirectory(): Promise<AdminUserDirectory> {
     users: fallbackUsers,
     crmOwners: fallbackUsers.filter((user) => user.assignable),
   }
+}
+
+export function ownerLookupKeys(owner: AdminCrmOwnerOption | null | undefined) {
+  if (!owner) return []
+  return uniqueStrings([owner.ownerKey, owner.displayName, ...owner.ownerAliases, owner.neoOwnerId])
+}
+
+export function findAdminCrmOwner(
+  directory: Pick<AdminUserDirectory, "crmOwners">,
+  admin: Pick<VerifiedAdminContext, "userId" | "name">
+): AdminCrmOwnerResolution {
+  if (admin.userId) {
+    const byUserId = directory.crmOwners.find((owner) => owner.userId === admin.userId)
+    if (byUserId) return { owner: byUserId, ownerKeys: ownerLookupKeys(byUserId) }
+  }
+
+  const adminName = normalizeLookup(admin.name)
+  if (adminName) {
+    const byName = directory.crmOwners.find((owner) =>
+      ownerLookupKeys(owner).some((key) => normalizeLookup(key) === adminName)
+    )
+    if (byName) return { owner: byName, ownerKeys: ownerLookupKeys(byName) }
+  }
+
+  return { owner: null, ownerKeys: [] }
 }

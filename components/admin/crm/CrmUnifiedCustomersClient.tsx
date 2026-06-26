@@ -72,15 +72,16 @@ const SAVED_VIEW_FILTERS: Array<{
   label: string
   description: string
 }> = [
+  { key: "my_owner", label: "내 리드·고객", description: "내 계정에 배정된 리드와 고객" },
   { key: "priority", label: "우선 처리", description: "점수 68점 이상" },
   { key: "new_leads", label: "신규 리드", description: "첫 응답 대상" },
   { key: "needs_care", label: "관리 필요 고객", description: "만료·휴면 위험" },
-  { key: "my_owner", label: "내 담당", description: "담당자 선택값" },
 ]
 
 const CACHE_TTL_MS = 90_000
 const PAGE_LIMIT = 100
 const OWNER_STORAGE_KEY = "classin_crm_unified_owner"
+const CURRENT_OWNER_VALUE = "__me"
 
 function listUrl(input: {
   query: string
@@ -172,14 +173,14 @@ export default function CrmUnifiedCustomersClient() {
   const [refreshing, setRefreshing] = useState(false)
   const [error, setError] = useState<string | null>(null)
   const requestSeq = useRef(0)
-  const { owners: crmOwners, health: ownerHealth } = useCrmOwners()
+  const { owners: crmOwners, currentOwner, health: ownerHealth } = useCrmOwners()
   const ownerOptions = useMemo(() => buildOwnerSelectOptions(data?.owners, crmOwners), [crmOwners, data?.owners])
 
   const currentOwnerCount = useMemo(() => {
-    const selected = normalizeText(owner)
+    const selected = normalizeText(owner === CURRENT_OWNER_VALUE ? currentOwner?.ownerKey : owner)
     if (!selected) return 0
     return ownerOptions.find((option) => normalizeText(option.ownerName) === selected)?.count ?? 0
-  }, [owner, ownerOptions])
+  }, [currentOwner?.ownerKey, owner, ownerOptions])
 
   const loadPage = useCallback(
     async (offset: number, options?: { force?: boolean; append?: boolean }) => {
@@ -241,6 +242,20 @@ export default function CrmUnifiedCustomersClient() {
   }, [owner])
 
   const selectSavedView = (view: SavedViewFilter) => {
+    if (view === "my_owner") {
+      if (!currentOwner) return
+      if (savedView === "my_owner") {
+        setOwner("")
+        setSavedView("all")
+        return
+      }
+      setOwner(CURRENT_OWNER_VALUE)
+      setSavedView(view)
+      setSource("all")
+      setLifecycle("all")
+      return
+    }
+
     setSavedView((current) => (current === view ? "all" : view))
     if (view === "new_leads") {
       setSource("lead")
@@ -250,7 +265,7 @@ export default function CrmUnifiedCustomersClient() {
       setSource("neo_account")
       setLifecycle("all")
     }
-    if (view === "priority" || view === "my_owner") {
+    if (view === "priority") {
       setSource("all")
       setLifecycle("all")
     }
@@ -335,6 +350,12 @@ export default function CrmUnifiedCustomersClient() {
                 aria-label="담당자 필터"
               >
                 <option value="">담당 전체</option>
+                {currentOwner ? (
+                  <option value={CURRENT_OWNER_VALUE}>
+                    내 담당 · {currentOwner.displayName}
+                    {currentOwnerCount > 0 ? ` (${currentOwnerCount})` : ""}
+                  </option>
+                ) : null}
                 {ownerOptions.map((option) => (
                   <option key={option.ownerName} value={option.ownerName}>
                     {option.label}
@@ -353,10 +374,10 @@ export default function CrmUnifiedCustomersClient() {
             </span>
             {SAVED_VIEW_FILTERS.map((filter) => {
               const isActive = savedView === filter.key
-              const disabled = filter.key === "my_owner" && !owner
+              const disabled = filter.key === "my_owner" && !currentOwner
               const label =
-                filter.key === "my_owner" && owner
-                  ? `${filter.label} · ${owner}${currentOwnerCount ? ` ${currentOwnerCount}` : ""}`
+                filter.key === "my_owner" && currentOwner
+                  ? `${filter.label}${currentOwnerCount ? ` ${currentOwnerCount}` : ""}`
                   : filter.label
               return (
                 <button
@@ -364,7 +385,7 @@ export default function CrmUnifiedCustomersClient() {
                   type="button"
                   onClick={() => selectSavedView(filter.key)}
                   disabled={disabled}
-                  title={disabled ? "담당자를 먼저 선택하세요." : filter.description}
+                  title={disabled ? "현재 Admin 계정에 CRM 담당자 매핑이 없습니다." : filter.description}
                   className={`h-8 rounded-full border px-3 text-[12px] font-semibold transition-colors ${
                     isActive
                       ? "border-[#084734] bg-[#084734] text-white"

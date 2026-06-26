@@ -15,6 +15,7 @@ import { getLeads } from "@/lib/repositories/leads"
 export interface CrmPriorityQueueOptions {
   limit?: number
   owner?: string
+  ownerKeys?: string[]
   source?: CrmPrioritySource | "all"
   bucket?: CrmPriorityBucket | "all"
   now?: Date
@@ -45,14 +46,18 @@ function normalizeOwner(value: string | null | undefined) {
   return value?.trim().toLowerCase() || ""
 }
 
+function buildOwnerFilter(options: CrmPriorityQueueOptions) {
+  return new Set([options.owner, ...(options.ownerKeys ?? [])].map(normalizeOwner).filter(Boolean))
+}
+
 function applyFilters(items: CrmPriorityItem[], options: CrmPriorityQueueOptions) {
-  const owner = normalizeOwner(options.owner)
+  const ownerKeys = buildOwnerFilter(options)
   const source = options.source ?? "all"
   const bucket = options.bucket ?? "all"
 
   return items.filter((item) => {
     if (source !== "all" && item.source !== source) return false
-    if (owner && normalizeOwner(item.ownerName) !== owner) return false
+    if (ownerKeys.size > 0 && !item.ownerKeys.some((key) => ownerKeys.has(key))) return false
     if (bucket !== "all" && item.bucket !== bucket) return false
     return true
   })

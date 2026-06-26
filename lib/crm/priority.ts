@@ -18,6 +18,7 @@ export interface CrmPriorityItem {
   title: string
   subtitle: string | null
   ownerName: string | null
+  ownerKeys: string[]
   statusLabel: string
   score: number
   severity: CrmPrioritySeverity
@@ -82,6 +83,10 @@ function displayLeadName(lead: LeadRecord) {
   return lead.org || lead.name || lead.email || lead.phone || "이름 없는 리드"
 }
 
+function uniqueOwnerKeys(values: Array<string | null | undefined>) {
+  return [...new Set(values.map((value) => value?.trim().toLowerCase()).filter((value): value is string => Boolean(value)))]
+}
+
 function isResponseTargetLead(lead: LeadRecord) {
   return lead.status === "new" && RESPONSE_TARGET_SOURCES.has(lead.source)
 }
@@ -142,6 +147,7 @@ export function buildLeadPriorityItem(lead: LeadRecord, now = new Date()): CrmPr
     title: displayLeadName(lead),
     subtitle: lead.name && lead.org ? lead.name : lead.email ?? lead.phone ?? lead.source,
     ownerName: lead.assigned_to ?? null,
+    ownerKeys: uniqueOwnerKeys([lead.assigned_to]),
     statusLabel: lead.status === "new" ? "신규 리드" : "접촉 중",
     score: finalScore,
     severity: severityFromScore(finalScore),
@@ -218,6 +224,7 @@ export function buildNeoAccountPriorityItem(
     title: account.name,
     subtitle: account.phone ?? account.uid ?? account.accountId,
     ownerName: account.ownerName,
+    ownerKeys: uniqueOwnerKeys([account.ownerName, account.ownerId]),
     statusLabel: "기존 고객",
     score: finalScore,
     severity: severityFromScore(finalScore),

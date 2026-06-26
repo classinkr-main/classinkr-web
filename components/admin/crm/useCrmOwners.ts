@@ -21,6 +21,8 @@ interface CrmOwnersResponse {
     message: string | null
   }
   owners: CrmOwnerOption[]
+  currentOwner: CrmOwnerOption | null
+  currentOwnerKeys: string[]
   summary: {
     total: number
     branchDirectors: number
@@ -101,6 +103,8 @@ export function useCrmOwners() {
   return useMemo(
     () => ({
       owners: data?.owners ?? [],
+      currentOwner: data?.currentOwner ?? null,
+      currentOwnerKeys: data?.currentOwnerKeys ?? [],
       health: data?.health ?? null,
       summary: data?.summary ?? null,
     }),

@@ -47,6 +47,7 @@ describe("CRM priority rules", () => {
     expect(item?.bucket).toBe("today")
     expect(item?.severity).toBe("critical")
     expect(item?.reason).toContain("48시간")
+    expect(item?.ownerKeys).toEqual([])
   })
 
   it("keeps converted and closed leads out of the queue", () => {
@@ -61,6 +62,7 @@ describe("CRM priority rules", () => {
     expect(item?.bucket).toBe("today")
     expect(item?.reason).toContain("일 내 만료")
     expect(item?.score).toBeGreaterThanOrEqual(90)
+    expect(item?.ownerKeys).toEqual(["담당자", "owner-1"])
   })
 
   it("moves very stale expired accounts into a separate recovery bucket with capped urgency", () => {

@@ -137,6 +137,27 @@ describe("getCrmUnifiedCustomers", () => {
     expect(mine.rows.every((row) => row.ownerName === "김담당")).toBe(true)
   })
 
+  it("collects my leads and customers through admin owner aliases", async () => {
+    const { getCrmUnifiedCustomers } = await loadRepository({
+      leads: [
+        lead({ id: "mine-lead", status: "new", assigned_to: "김담당" }),
+        lead({ id: "other-lead", status: "new", assigned_to: "박담당" }),
+      ],
+      accounts: [
+        neoCustomer({ accountId: "mine-account", ownerName: "neo-123", expireAt: "2026-07-01T00:00:00.000Z" }),
+        neoCustomer({ accountId: "other-account", ownerName: "박담당", expireAt: "2026-07-01T00:00:00.000Z" }),
+      ],
+    })
+
+    const result = await getCrmUnifiedCustomers({
+      view: "my_owner",
+      ownerKeys: ["김담당", "neo-123"],
+      now: NOW,
+    })
+
+    expect(new Set(result.rows.map((row) => row.key))).toEqual(new Set(["lead:mine-lead", "neo:mine-account"]))
+  })
+
   it("surfaces stale external CRM sync as a reference-source warning", async () => {
     const { getCrmUnifiedCustomers } = await loadRepository({
       accounts: [neoCustomer({ accountId: "risk" })],
