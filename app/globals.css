@@ -119,19 +119,54 @@
 @keyframes loading-soft-enter {
   from {
     opacity: 0;
-    transform: translateY(10px);
-    filter: blur(5px);
+    transform: translate3d(0, 8px, 0);
   }
 
   to {
     opacity: 1;
-    transform: translateY(0);
-    filter: blur(0);
+    transform: translate3d(0, 0, 0);
   }
 }
 
 .loading-soft-enter {
-  animation: loading-soft-enter 0.42s cubic-bezier(0.22, 1, 0.36, 1) both;
+  animation: loading-soft-enter 0.28s cubic-bezier(0.22, 1, 0.36, 1) both;
+}
+
+.admin-skeleton-block {
+  background-image: linear-gradient(90deg, #f0f0ec 0%, #fafaf8 40%, #f0f0ec 80%);
+  background-size: 200% 100%;
+  animation: shimmer 1.6s linear infinite;
+}
+
+.admin-delayed-skeleton {
+  content-visibility: auto;
+  contain-intrinsic-size: 620px;
+}
+
+@keyframes route-soft-enter {
+  from {
+    opacity: 0.001;
+    transform: translate3d(0, var(--route-enter-y, 10px), 0);
+  }
+
+  to {
+    opacity: 1;
+    transform: translate3d(0, 0, 0);
+  }
+}
+
+.route-transition {
+  animation: route-soft-enter var(--route-enter-duration, 220ms) cubic-bezier(0.22, 1, 0.36, 1) both;
+}
+
+.route-transition-admin {
+  --route-enter-y: 6px;
+  --route-enter-duration: 140ms;
+}
+
+.route-transition-public {
+  --route-enter-y: 12px;
+  --route-enter-duration: 260ms;
 }
 
 @keyframes hero-soft-enter {
@@ -177,8 +212,10 @@
 
 @media (prefers-reduced-motion: reduce) {
   .admin-loading-progress,
+  .admin-skeleton-block,
   .loading-soft-enter,
   .hero-soft-enter,
+  .route-transition,
   .animate-shimmer {
     animation: none !important;
   }
@@ -226,6 +263,13 @@
 
   /* ── Radius ── */
   --radius: 0.375rem;            /* 6px — 버튼 기본 */
+
+  /* ── CRM ROLE 토큰 (기존 값의 역할 명명, 신규 hue 없음) ── */
+  --crm-ribbon-bg: #111110;        /* near-black, 다크 액티브/리본 패널 배경 */
+  --crm-gauge-track: #f0f0ec;      /* 라디얼/막대 트랙 (리터럴 최초 토큰화) */
+  --crm-gauge-fill-ok: #084734;    /* rate>=0.7 진행 = brand green */
+  --crm-gauge-fill-risk: #B85C33;  /* rate<0.7 진행 = terracotta */
+  --crm-pinned-accent: #084734;    /* 360 카드 고정 특이사항 좌측 액센트 */
 
   /* ── Card Shadow ── */
   --shadow-card:

@@ -20,8 +20,11 @@ type ConfirmState =
       paymentMethod: string | null
       easyPayProvider: string | null
       receiptUrl: string | null
+      conversionEventId?: string
     }
   | { kind: "error"; message: string }
+
+const PURCHASE_TRACKED_KEY_PREFIX = "classinkr.purchaseTracked."
 
 export function CheckoutSuccessClient() {
   const searchParams = useSearchParams()
@@ -72,6 +75,7 @@ export function CheckoutSuccessClient() {
                 paymentMethod: string | null
                 easyPayProvider: string | null
                 receiptUrl: string | null
+                conversionEventId?: string
               }
             }
           | {
@@ -92,6 +96,7 @@ export function CheckoutSuccessClient() {
             paymentMethod: payload.order.paymentMethod,
             easyPayProvider: payload.order.easyPayProvider,
             receiptUrl: payload.order.receiptUrl,
+            conversionEventId: payload.order.conversionEventId,
           })
         }
       } catch (error) {
@@ -116,12 +121,19 @@ export function CheckoutSuccessClient() {
   useEffect(() => {
     if (state.kind !== "success") return
     if (trackedOrderRef.current === state.orderId) return
+    if (localStorage.getItem(`${PURCHASE_TRACKED_KEY_PREFIX}${state.orderId}`) === "1") {
+      trackedOrderRef.current = state.orderId
+      return
+    }
 
     trackedOrderRef.current = state.orderId
     trackEvent("purchase", {
+      transaction_id: state.orderId,
+      event_id: state.conversionEventId ?? `purchase:${state.orderId}`,
       value: state.amount,
       currency: "KRW",
     })
+    localStorage.setItem(`${PURCHASE_TRACKED_KEY_PREFIX}${state.orderId}`, "1")
   }, [state])
 
   return (

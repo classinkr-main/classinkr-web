@@ -1,4 +1,5 @@
 import { NextRequest, NextResponse } from "next/server"
+import { getMarketingRequestMeta } from "@/lib/marketing/server-conversions"
 import { checkRateLimit, getClientIp } from "@/lib/server/rate-limit"
 import { submitLeadCapture } from "@/lib/server/lead-capture"
 import { isCrossOriginRequest } from "@/lib/server/same-origin"
@@ -25,7 +26,18 @@ export async function POST(req: NextRequest) {
     }
 
     const body = await req.json().catch(() => null)
-    const result = await submitLeadCapture(body)
+    const bodyObject = body && typeof body === "object" ? (body as Record<string, unknown>) : {}
+    const result = await submitLeadCapture(body, {
+      requestMeta: getMarketingRequestMeta(req, {
+        sourceUrl:
+          typeof bodyObject.currentPage === "string"
+            ? bodyObject.currentPage
+            : typeof bodyObject.current_page === "string"
+              ? bodyObject.current_page
+              : null,
+        fbclid: typeof bodyObject.fbclid === "string" ? bodyObject.fbclid : null,
+      }),
+    })
 
     return NextResponse.json(result.body, { status: result.status })
   } catch (error) {

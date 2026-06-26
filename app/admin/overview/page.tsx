@@ -244,6 +244,25 @@ interface OsSummaryPayload {
   events: { count: number; target: number }
 }
 
+interface VisitorStatsPayload {
+  today: {
+    date: string
+    homeVisitors: number
+    homePageViews: number
+  }
+  totals: {
+    homeVisitors: number
+    homePageViews: number
+    visitors: number
+    pageViews: number
+  }
+  daily: Array<{
+    date: string
+    homeVisitors: number
+    homePageViews: number
+  }>
+}
+
 function EmptyState({
   title,
   description,
@@ -305,6 +324,7 @@ export default function OverviewPage() {
   const [branchSummary, setBranchSummary] = useState<BranchSummaryPayload | null>(null)
   const [leadActionKpis, setLeadActionKpis] = useState<LeadActionKpisPayload | null>(null)
   const [osSummary, setOsSummary] = useState<OsSummaryPayload | null>(null)
+  const [visitorStats, setVisitorStats] = useState<VisitorStatsPayload | null>(null)
   const [loading, setLoading] = useState(true)
   const [chartRange, setChartRange] = useState<7 | 30>(7)
 
@@ -334,6 +354,9 @@ export default function OverviewPage() {
       })
       void fetchJson<OsSummaryPayload>("/api/admin/os-summary").then((data) => {
         if (!cancelled) setOsSummary(data ?? null)
+      })
+      void fetchJson<VisitorStatsPayload>("/api/admin/visitor-stats?range=7").then((data) => {
+        if (!cancelled) setVisitorStats(data ?? null)
       })
 
       // 대시보드는 앞으로 7일치 일정만 쓰므로 전체 일정 대신 해당 월만 요청한다.
@@ -614,6 +637,13 @@ export default function OverviewPage() {
   const instagramViews = instagramDashboard?.summary.totalViews ?? 0
   const instagramMediaCount = instagramDashboard?.summary.mediaCount ?? 0
   const instagramAverageViews = instagramDashboard?.summary.averageViews ?? 0
+  const visitorTodayIndex =
+    visitorStats?.daily.findIndex((day) => day.date === visitorStats.today.date) ?? -1
+  const visitorYesterday =
+    visitorStats && visitorTodayIndex > 0 ? visitorStats.daily[visitorTodayIndex - 1] : null
+  const homeVisitorTrend = visitorStats
+    ? visitorStats.today.homeVisitors - (visitorYesterday?.homeVisitors ?? 0)
+    : 0
 
   const connections = [
     {
@@ -1041,13 +1071,13 @@ export default function OverviewPage() {
       </div>
 
       {loading ? (
-        <div className="grid grid-cols-1 gap-4 sm:grid-cols-2 md:grid-cols-3 lg:grid-cols-4 xl:grid-cols-7 mb-8">
-          {Array.from({ length: 7 }).map((_, i) => (
+        <div className="grid grid-cols-1 gap-4 sm:grid-cols-2 md:grid-cols-3 lg:grid-cols-4 2xl:grid-cols-8 mb-8">
+          {Array.from({ length: 8 }).map((_, i) => (
             <KpiSkeleton key={i} />
           ))}
         </div>
       ) : (
-        <div className="grid grid-cols-1 gap-4 sm:grid-cols-2 md:grid-cols-3 lg:grid-cols-4 xl:grid-cols-7 mb-8">
+        <div className="grid grid-cols-1 gap-4 sm:grid-cols-2 md:grid-cols-3 lg:grid-cols-4 2xl:grid-cols-8 mb-8">
           <StatCard
             icon={<Users className="w-4 h-4" />}
             label="전체 리드"
@@ -1083,6 +1113,20 @@ export default function OverviewPage() {
             iconColor="text-[#615D59]"
           />
           <StatCard
+            icon={<Eye className="w-4 h-4" />}
+            label="오늘 홈 방문자"
+            value={visitorStats ? visitorStats.today.homeVisitors : "…"}
+            sub={
+              visitorStats
+                ? `홈 PV ${visitorStats.today.homePageViews} · 7일 ${visitorStats.totals.homeVisitors}명`
+                : "동의 기반 집계"
+            }
+            trend={visitorStats ? { value: homeVisitorTrend, label: "전일 대비" } : undefined}
+            accent="bg-[#ECFDF5]"
+            iconColor="text-[#084734]"
+            href="/admin/analytics?tab=tracking"
+          />
+          <StatCard
             icon={<Mail className="w-4 h-4" />}
             label="구독자"
             value={subscriberCount}
@@ -1111,9 +1155,9 @@ export default function OverviewPage() {
         <div className="rounded-2xl border border-[#e8e8e4] bg-white p-4 shadow-[0_1px_0_rgba(17,17,16,0.02)] sm:p-6">
           <div className="mb-5 flex items-start justify-between gap-4">
             <div>
-              <p className="text-[14px] font-semibold text-[#111110]">홈페이지 유입 추이</p>
+              <p className="text-[14px] font-semibold text-[#111110]">문의 유입 추이</p>
               <p className="text-[11px] text-[#1a1a1a]/40 mt-0.5">
-                최근 {chartRange}일 · {chartTotal}건
+                최근 {chartRange}일 · 문의 접수 {chartTotal}건
               </p>
             </div>
             <div className="flex items-center gap-2">
@@ -1142,7 +1186,7 @@ export default function OverviewPage() {
             <Skeleton className="h-[180px]" />
           ) : chartTotal === 0 ? (
             <div className="flex h-[180px] flex-col items-center justify-center rounded-xl border border-dashed border-[#ecece8] bg-[#fafaf8]">
-              <p className="text-[13px] font-medium text-[#1a1a1a]/50">최근 {chartRange}일 유입이 없습니다</p>
+              <p className="text-[13px] font-medium text-[#1a1a1a]/50">최근 {chartRange}일 문의 유입이 없습니다</p>
               <p className="mt-1 text-[11px] text-[#1a1a1a]/35">문의가 들어오면 일별 추이가 표시됩니다.</p>
             </div>
           ) : (

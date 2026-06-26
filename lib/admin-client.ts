@@ -14,6 +14,9 @@ const DEFAULT_ADMIN_CACHE_TTL_MS = 45_000
 // TTL이 지나도 이 시간 안의 데이터면 즉시 보여주고 백그라운드에서 갱신한다.
 // (mutation 시 clearAdminRequestCache로 전체 캐시가 비워지므로 편집 직후 staleness 없음)
 const DEFAULT_ADMIN_STALE_WHILE_REVALIDATE_MS = 5 * 60_000
+const ADMIN_MEMORY_CACHE_LIMIT = 90
+const ADMIN_SESSION_CACHE_LIMIT = 70
+const MAX_SESSION_CACHE_CHARS = 350_000
 
 interface AdminCacheEntry<T> {
   data: T
@@ -37,6 +40,7 @@ interface AdminFetchCacheOptions {
 
 const memoryCache = new Map<string, AdminCacheEntry<unknown>>()
 const inflightRequests = new Map<string, Promise<unknown>>()
+let pruneScheduled = false
 
 // 변경(mutation) 직후에는 브라우저 HTTP 캐시(Cache-Control: max-age)를 우회해
 // 서버에서 최신 데이터를 다시 받아온다. 그 외에는 HTTP 캐시를 활용해 재방문을 빠르게 한다.
@@ -126,6 +130,83 @@ function getSessionCacheKey(cacheKey: string) {
   return `${ADMIN_REQUEST_CACHE_PREFIX}${cacheKey}`
 }
 
+function pruneMemoryCache(now = Date.now()) {
+  const staleRetentionCutoff = now - DEFAULT_ADMIN_STALE_WHILE_REVALIDATE_MS
+
+  for (const [key, entry] of memoryCache) {
+    if (entry.savedAt < staleRetentionCutoff) {
+      memoryCache.delete(key)
+    }
+  }
+
+  if (memoryCache.size <= ADMIN_MEMORY_CACHE_LIMIT) return
+
+  const removable = Array.from(memoryCache.entries())
+    .sort(([, a], [, b]) => a.savedAt - b.savedAt)
+    .slice(0, memoryCache.size - ADMIN_MEMORY_CACHE_LIMIT)
+
+  for (const [key] of removable) {
+    memoryCache.delete(key)
+  }
+}
+
+function pruneSessionCache(now = Date.now()) {
+  if (typeof window === "undefined") return
+
+  const staleRetentionCutoff = now - DEFAULT_ADMIN_STALE_WHILE_REVALIDATE_MS
+  const entries: Array<{ key: string; savedAt: number }> = []
+
+  for (const key of Object.keys(sessionStorage)) {
+    if (!key.startsWith(ADMIN_REQUEST_CACHE_PREFIX)) continue
+
+    try {
+      const entry = JSON.parse(sessionStorage.getItem(key) ?? "null") as AdminCacheEntry<unknown> | null
+      if (!entry || typeof entry.savedAt !== "number") {
+        sessionStorage.removeItem(key)
+        continue
+      }
+
+      if (entry.savedAt < staleRetentionCutoff) {
+        sessionStorage.removeItem(key)
+        continue
+      }
+
+      entries.push({ key, savedAt: entry.savedAt })
+    } catch {
+      sessionStorage.removeItem(key)
+    }
+  }
+
+  if (entries.length <= ADMIN_SESSION_CACHE_LIMIT) return
+
+  entries
+    .sort((a, b) => a.savedAt - b.savedAt)
+    .slice(0, entries.length - ADMIN_SESSION_CACHE_LIMIT)
+    .forEach((entry) => sessionStorage.removeItem(entry.key))
+}
+
+function scheduleAdminCachePrune() {
+  if (typeof window === "undefined" || pruneScheduled) return
+  pruneScheduled = true
+
+  const idleWindow = window as typeof window & {
+    requestIdleCallback?: (callback: () => void, options?: { timeout?: number }) => number
+  }
+
+  const run = () => {
+    pruneScheduled = false
+    pruneMemoryCache()
+    pruneSessionCache()
+  }
+
+  if (idleWindow.requestIdleCallback) {
+    idleWindow.requestIdleCallback(run, { timeout: 2_000 })
+    return
+  }
+
+  window.setTimeout(run, 500)
+}
+
 function readSessionCache<T>(cacheKey: string, allowExpired = false): AdminCacheEntry<T> | null {
   if (typeof window === "undefined") return null
 
@@ -148,13 +229,24 @@ function writeSessionCache(cacheKey: string, entry: AdminCacheEntry<unknown>) {
   if (typeof window === "undefined") return
 
   try {
-    sessionStorage.setItem(getSessionCacheKey(cacheKey), JSON.stringify(entry))
+    const serialized = JSON.stringify(entry)
+    const sessionKey = getSessionCacheKey(cacheKey)
+
+    if (serialized.length > MAX_SESSION_CACHE_CHARS) {
+      sessionStorage.removeItem(sessionKey)
+      return
+    }
+
+    sessionStorage.setItem(sessionKey, serialized)
+    scheduleAdminCachePrune()
   } catch {
     sessionStorage.removeItem(getSessionCacheKey(cacheKey))
   }
 }
 
 function readAdminCache<T>(cacheKey: string, allowExpired = false): AdminCacheEntry<T> | null {
+  pruneMemoryCache()
+
   const memoryEntry = memoryCache.get(cacheKey) as AdminCacheEntry<T> | undefined
   if (memoryEntry && (allowExpired || memoryEntry.expiresAt > Date.now())) {
     return memoryEntry
@@ -288,6 +380,7 @@ export async function adminFetchJsonCached<T>(
           savedAt: Date.now(),
         }
         memoryCache.set(cacheKey, entry)
+        pruneMemoryCache()
         if (persist) writeSessionCache(cacheKey, entry)
         return data
       })
@@ -326,7 +419,23 @@ export async function adminFetchJsonCached<T>(
 }
 
 export function warmAdminRequestCache(input: string, options: AdminFetchCacheOptions = {}) {
-  return adminFetchJsonCached<unknown>(input, undefined, options).then(
+  if (typeof document !== "undefined" && document.hidden) {
+    return Promise.resolve()
+  }
+
+  const navigatorWithConnection = typeof navigator === "undefined"
+    ? null
+    : navigator as Navigator & { connection?: { saveData?: boolean } }
+
+  if (navigatorWithConnection?.connection?.saveData) {
+    return Promise.resolve()
+  }
+
+  return adminFetchJsonCached<unknown>(input, undefined, {
+    ...options,
+    persist: options.persist ?? false,
+    staleWhileRevalidateMs: options.staleWhileRevalidateMs ?? 60_000,
+  }).then(
     () => undefined,
     () => undefined
   )

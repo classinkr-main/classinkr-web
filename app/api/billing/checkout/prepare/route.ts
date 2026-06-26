@@ -3,9 +3,72 @@ import { NextRequest, NextResponse } from "next/server"
 import {
   createBusinessRechargeOrder,
   createSubscriptionCheckoutOrder,
+  type SoftwareCheckoutOrder,
 } from "@/lib/server/software-checkout"
+import {
+  getMarketingRequestMeta,
+  sendServerConversion,
+} from "@/lib/marketing/server-conversions"
 import { checkRateLimit, getClientIp } from "@/lib/server/rate-limit"
 import { createCheckoutToken } from "@/lib/server/security-tokens"
+
+function getBeginCheckoutConversionEventId(orderId: string) {
+  return `begin_checkout:${orderId}`
+}
+
+function getRawPrepareValue(order: SoftwareCheckoutOrder, key: string) {
+  const rawPrepare = order.rawPrepare
+  if (!rawPrepare || typeof rawPrepare !== "object" || Array.isArray(rawPrepare)) {
+    return undefined
+  }
+
+  const attribution = rawPrepare.attribution
+  if (!attribution || typeof attribution !== "object" || Array.isArray(attribution)) {
+    return undefined
+  }
+
+  const value = (attribution as Record<string, unknown>)[key]
+  return typeof value === "string" && value.trim() ? value.trim() : undefined
+}
+
+function emitBeginCheckoutConversion(req: NextRequest, order: SoftwareCheckoutOrder) {
+  const conversionEventId = getBeginCheckoutConversionEventId(order.orderId)
+  const sourceUrl =
+    getRawPrepareValue(order, "currentPage") ??
+    getRawPrepareValue(order, "landingPage") ??
+    `${req.nextUrl.origin}/checkout`
+
+  void sendServerConversion({
+    eventId: conversionEventId,
+    metaEventName: "InitiateCheckout",
+    ga4EventName: "begin_checkout",
+    requestMeta: getMarketingRequestMeta(req, {
+      sourceUrl,
+      fbclid: getRawPrepareValue(order, "fbclid"),
+    }),
+    sourceUrl,
+    user: {
+      email: order.buyerEmail,
+      phone: order.buyerPhone,
+      externalId: order.orderId,
+      allowHashedUserData: true,
+    },
+    customData: {
+      transaction_id: order.orderId,
+      order_id: order.orderId,
+      value: order.amount,
+      currency: order.currency,
+      content_name: order.orderName,
+      checkout_mode: order.mode,
+      plan_id: order.planId,
+      billing_cycle: order.billingCycle,
+    },
+  }).catch((error) => {
+    console.warn("[billing/checkout/prepare] server conversion failed:", error)
+  })
+
+  return conversionEventId
+}
 
 export async function POST(req: NextRequest) {
   const ip = getClientIp(req)
@@ -29,6 +92,7 @@ export async function POST(req: NextRequest) {
           orderId: order.orderId,
           checkoutToken: createCheckoutToken(order.orderId, order.amount),
           orderName: order.orderName,
+          conversionEventId: emitBeginCheckoutConversion(req, order),
           amount: order.amount,
           amountKrw: order.amount,
           amountUsd: order.amountUsd,
@@ -49,6 +113,7 @@ export async function POST(req: NextRequest) {
           orderId: order.orderId,
           checkoutToken: createCheckoutToken(order.orderId, order.amount),
           orderName: order.orderName,
+          conversionEventId: emitBeginCheckoutConversion(req, order),
           amount: order.amount,
           amountKrw: order.amount,
           amountCny: order.amountCny,

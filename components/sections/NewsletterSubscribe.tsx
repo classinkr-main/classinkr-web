@@ -11,6 +11,7 @@ import {
 } from "@/components/ui/marketing-form"
 import { Input } from "@/components/ui/input"
 import { trackEvent } from "@/lib/analytics"
+import { collectLeadAttribution } from "@/lib/marketing-attribution"
 
 interface Props {
   variant?: "light" | "dark"
@@ -34,13 +35,16 @@ export function NewsletterSubscribe({ variant = "dark", source = "footer_newslet
       const res = await fetch("/api/newsletter/subscribe", {
         method: "POST",
         headers: { "Content-Type": "application/json" },
-        body: JSON.stringify({ email, source }),
+        body: JSON.stringify({ email, source, attribution: collectLeadAttribution() }),
       })
 
       const data = await res.json()
 
       if (res.ok && data.ok) {
-        trackEvent("submit_newsletter", { source })
+        trackEvent("submit_newsletter", {
+          source,
+          event_id: data.conversionEventId,
+        })
         setSubmitted(true)
       } else {
         setError(data.error || "구독 처리 중 문제가 발생했습니다.")

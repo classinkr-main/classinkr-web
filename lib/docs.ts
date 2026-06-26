@@ -4871,9 +4871,9 @@ const docs: DocArticle[] = [
     ],
     resources: [
       {
-        label: "ClassIn 도입 전 22가지 질문 체크리스트",
+        label: "ClassIn 도입 전 22질문 + 자체평가 키트",
         href: "/resources/classin-pre-adoption-questions-checklist",
-        description: "관리자 권한, 녹화, 스토리지, 개인정보, 오프라인 사용을 상담 전에 점검하는 자료입니다.",
+        description: "대표 수업 시나리오를 먼저 그린 뒤 관리자 권한, 녹화, 스토리지, 개인정보, 오프라인 사용을 43문항으로 점검하는 자료입니다.",
       },
       {
         label: "관리자 모니터링과 통계 활용",

@@ -2,6 +2,7 @@ import { NextRequest, NextResponse } from "next/server"
 import { ANONYMOUS_ID_COOKIE } from "@/lib/consent/consent"
 import { stitchIdentity } from "@/lib/identity/stitch"
 import { checkRateLimit, getClientIp } from "@/lib/server/rate-limit"
+import { getMarketingRequestMeta } from "@/lib/marketing/server-conversions"
 import type { NewsletterSubscribeRequest } from "@/lib/marketing-types"
 import { submitLeadCapture } from "@/lib/server/lead-capture"
 
@@ -27,6 +28,14 @@ function inferLeadMagnet(source: string) {
   return normalizeLeadMagnet(match?.[1])
 }
 
+function getAttributionValue(
+  attribution: NewsletterSubscribeRequest["attribution"],
+  key: keyof NonNullable<NewsletterSubscribeRequest["attribution"]>
+) {
+  const value = attribution?.[key]
+  return typeof value === "string" && value.trim() ? value.trim() : undefined
+}
+
 export async function POST(req: NextRequest) {
   const ip = getClientIp(req)
   const { allowed } = checkRateLimit(ip, "newsletter", { windowMs: 60_000, max: 3 })
@@ -41,6 +50,7 @@ export async function POST(req: NextRequest) {
     const body: NewsletterSubscribeRequest = await req.json()
     const source = normalizeNewsletterSource(body.source)
     const email = body.email?.trim().toLowerCase()
+    const attribution = body.attribution
 
     if (!email) {
       return NextResponse.json({ error: "이메일은 필수입니다." }, { status: 400 })
@@ -61,6 +71,23 @@ export async function POST(req: NextRequest) {
       name: body.name || email.split("@")[0],
       email,
       marketingConsent: true,
+      utmSource: getAttributionValue(attribution, "utmSource"),
+      utmMedium: getAttributionValue(attribution, "utmMedium"),
+      utmCampaign: getAttributionValue(attribution, "utmCampaign"),
+      utmTerm: getAttributionValue(attribution, "utmTerm"),
+      utmContent: getAttributionValue(attribution, "utmContent"),
+      gclid: getAttributionValue(attribution, "gclid"),
+      fbclid: getAttributionValue(attribution, "fbclid"),
+      msclkid: getAttributionValue(attribution, "msclkid"),
+      ttclid: getAttributionValue(attribution, "ttclid"),
+      landingPage: getAttributionValue(attribution, "landingPage"),
+      currentPage: getAttributionValue(attribution, "currentPage"),
+      referrer: getAttributionValue(attribution, "referrer"),
+    }, {
+      requestMeta: getMarketingRequestMeta(req, {
+        sourceUrl: getAttributionValue(attribution, "currentPage"),
+        fbclid: getAttributionValue(attribution, "fbclid"),
+      }),
     })
 
     if (result.body.ok && result.body.leadId) {

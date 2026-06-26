@@ -115,6 +115,20 @@ export interface NewsletterSubscribeRequest {
   source?: string
   leadMagnet?: string
   tags?: string[]
+  attribution?: {
+    utmSource?: string
+    utmMedium?: string
+    utmCampaign?: string
+    utmTerm?: string
+    utmContent?: string
+    gclid?: string
+    fbclid?: string
+    msclkid?: string
+    ttclid?: string
+    landingPage?: string
+    currentPage?: string
+    referrer?: string
+  }
 }
 
 /** 뉴스레터 수신거부 요청 (프론트엔드 → /api/newsletter/unsubscribe) */

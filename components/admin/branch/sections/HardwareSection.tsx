@@ -1,4 +1,5 @@
 "use client"
+import Link from "next/link"
 import { useState } from "react"
 import { useBranchJson } from "../client-api"
 
@@ -134,15 +135,20 @@ export default function HardwareSection({ refreshKey }: { refreshKey: number }) 
     <section className="rounded-xl border border-[rgba(0,0,0,0.08)] bg-white shadow-[0_1px_2px_rgba(0,0,0,0.02)]">
       <div className="flex items-center justify-between gap-3 border-b border-[rgba(0,0,0,0.08)] px-5 py-3.5">
         <h2 className="text-[14px] font-bold tracking-[-0.01em] text-[#111110]">HW 재고</h2>
-        <div className="inline-flex rounded-md border border-[rgba(0,0,0,0.08)] bg-[#F6F5F4] p-[3px]">
-          {(["table", "gauge"] as const).map((v) => (
-            <button key={v} type="button" onClick={() => setView(v)}
-              className={`rounded-[5px] px-2.5 py-1 text-[11px] font-semibold transition ${
-                view === v ? "bg-white text-[#111110] shadow-[0_1px_2px_rgba(0,0,0,0.06)]" : "text-[#615D59]"
-              }`}>
-              {v === "table" ? "테이블" : "비교 게이지"}
-            </button>
-          ))}
+        <div className="flex items-center gap-2">
+          <Link href="/admin/hardware" className="rounded-md border border-[rgba(0,0,0,0.08)] bg-white px-2.5 py-1 text-[11px] font-bold text-[#084734] transition hover:bg-[#ECFDF5]">
+            운영 열기
+          </Link>
+          <div className="inline-flex rounded-md border border-[rgba(0,0,0,0.08)] bg-[#F6F5F4] p-[3px]">
+            {(["table", "gauge"] as const).map((v) => (
+              <button key={v} type="button" onClick={() => setView(v)}
+                className={`rounded-[5px] px-2.5 py-1 text-[11px] font-semibold transition ${
+                  view === v ? "bg-white text-[#111110] shadow-[0_1px_2px_rgba(0,0,0,0.06)]" : "text-[#615D59]"
+                }`}>
+                {v === "table" ? "테이블" : "비교 게이지"}
+              </button>
+            ))}
+          </div>
         </div>
       </div>
       <div className="p-5">

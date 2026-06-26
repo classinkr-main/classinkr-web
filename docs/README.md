@@ -19,6 +19,8 @@
   - 도입 전 22가지 질문의 답변 가능 범위, 확인 필요 항목, 상담·챗봇·리드마그넷 반영 기준
 - [active/partner-portal-redistribution-plan-2026-06-26.md](./active/partner-portal-redistribution-plan-2026-06-26.md)
   - 파트너 포털/Portal V2/견적 문서 기능을 어드민·하드웨어 운영·공개 공유 링크·제한형 파트너 액션 포털로 재분배하는 최신 기획안
+- [active/quote-feature-agent-audit-2026-06-26.md](./active/quote-feature-agent-audit-2026-06-26.md)
+  - 견적 작성/저장/발송/기록/응답/열람 기능축별 에이전트 점검 결과와 P0/P1 구현 큐
 - [active/partner-portal-master-spec.md](./active/partner-portal-master-spec.md)
   - 파트너 포털 도메인 모델과 거래건 중심 UX 상세 근거. 제품 면 재배치 판단은 redistribution plan 우선
 - [active/architecture-schema-erd.md](./active/architecture-schema-erd.md)
@@ -52,6 +54,8 @@
   - 파트너 포털 구현 순서. 현재 경로명은 `repository-status-2026-06-08.md`와 실제 코드로 재확인
 - [active/quote-lifecycle-execution-plan.md](./active/quote-lifecycle-execution-plan.md)
   - 견적 문서 라이프사이클 실행 기준
+- [active/quote-feature-agent-audit-2026-06-26.md](./active/quote-feature-agent-audit-2026-06-26.md)
+  - 견적 작성/저장/발송/기록/응답/열람 기능축별 결손과 구현 우선순위
 - [active/software-checkout-revamp-plan.md](./active/software-checkout-revamp-plan.md)
   - /checkout 구독형/충전형 재정렬 실행안
 - [active/docs-center-db-design.md](./active/docs-center-db-design.md)

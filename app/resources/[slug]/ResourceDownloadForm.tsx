@@ -7,6 +7,7 @@ import { PublicLoginDialog } from "@/components/auth/PublicLoginDialog"
 import { Button } from "@/components/ui/button"
 import { Input } from "@/components/ui/input"
 import { trackEvent } from "@/lib/analytics"
+import { collectLeadAttribution } from "@/lib/marketing-attribution"
 import { MaterialDownloadError, requestMaterialDownload } from "@/lib/materials-client"
 import { cn } from "@/lib/utils"
 
@@ -136,10 +137,12 @@ export function ResourceDownloadForm({ resource }: ResourceDownloadFormProps) {
     setError("")
 
     try {
+      const attribution = collectLeadAttribution()
       const leadResponse = await fetch("/api/lead", {
         method: "POST",
         headers: { "Content-Type": "application/json" },
         body: JSON.stringify({
+          ...attribution,
           source: "newsletter",
           sourceDetail: `resource_pdf_download:${resource.slug}`,
           leadMagnet: resource.slug,
@@ -151,9 +154,9 @@ export function ResourceDownloadForm({ resource }: ResourceDownloadFormProps) {
           phone: form.phone.trim(),
           message: `PDF 자료 요청: ${resource.title}`,
           marketingConsent: true,
-          currentPage: window.location.href,
-          landingPage: window.location.origin + window.location.pathname,
-          referrer: document.referrer,
+          currentPage: attribution.currentPage ?? window.location.href,
+          landingPage: attribution.landingPage ?? window.location.origin + window.location.pathname,
+          referrer: attribution.referrer ?? document.referrer,
           website: form.website,
         }),
       })
@@ -168,6 +171,7 @@ export function ResourceDownloadForm({ resource }: ResourceDownloadFormProps) {
         source: "resource_pdf_download",
         lead_magnet: resource.slug,
         gate: resource.gate,
+        event_id: leadData.conversionEventId,
       })
 
       const result = await requestMaterialDownload({

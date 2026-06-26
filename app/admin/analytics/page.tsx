@@ -32,7 +32,14 @@ import {
   type EventMetrics,
 } from "@/lib/types/event-metrics"
 
-type AnalyticsTab = "leads" | "sources" | "content" | "campaigns" | "events" | "tracking"
+type AnalyticsTab =
+  | "leads"
+  | "sources"
+  | "content"
+  | "campaigns"
+  | "events"
+  | "flow"
+  | "tracking"
 
 const ANALYTICS_TABS: Array<{ key: AnalyticsTab; label: string }> = [
   { key: "leads", label: "리드" },
@@ -40,6 +47,7 @@ const ANALYTICS_TABS: Array<{ key: AnalyticsTab; label: string }> = [
   { key: "content", label: "콘텐츠" },
   { key: "campaigns", label: "이메일 캠페인" },
   { key: "events", label: "행사 퍼널" },
+  { key: "flow", label: "홈페이지 흐름" },
   { key: "tracking", label: "추적 현황" },
 ]
 
@@ -49,6 +57,91 @@ interface ClientEventCounts {
   byEvent: Array<{ event: string; count: number; lastSeen: string | null }>
   byButton: Array<{ button: string; event: string; count: number; lastSeen: string | null }>
   daily: Array<{ date: string; count: number }>
+}
+
+interface VisitorStatsDay {
+  date: string
+  visitors: number
+  pageViews: number
+  homeVisitors: number
+  homePageViews: number
+}
+
+interface VisitorStats {
+  rangeDays: number
+  timezone: "Asia/Seoul"
+  today: VisitorStatsDay
+  totals: {
+    visitors: number
+    pageViews: number
+    homeVisitors: number
+    homePageViews: number
+  }
+  daily: VisitorStatsDay[]
+}
+
+interface MarketingConversionStatus {
+  meta: {
+    pixelId: string | null
+    datasetId: string | null
+    capiConfigured: boolean
+    testEventCodeConfigured: boolean
+  }
+  google: {
+    adsId: string
+    demoConversionLabelConfigured: boolean
+    ga4MeasurementId: string | null
+    measurementProtocolConfigured: boolean
+  }
+  internal: {
+    trackingEnabled: boolean
+  }
+}
+
+interface HomepageFlowPageRow {
+  path: string
+  pageViews: number
+  visitors: number
+  avgDwellSeconds: number
+  exits: number
+  exitRate: number
+}
+
+interface HomepageFlow {
+  rangeDays: number
+  timezone: "Asia/Seoul"
+  generatedAt: string
+  totals: {
+    visitors: number
+    pageViews: number
+    homeVisitors: number
+    homePageViews: number
+    downloads: number
+    exits: number
+    avgDwellSeconds: number
+  }
+  daily: Array<{
+    date: string
+    visitors: number
+    pageViews: number
+    downloads: number
+    exits: number
+  }>
+  nextStepsFromHome: Array<{
+    path: string
+    label: string
+    count: number
+    share: number
+  }>
+  topPages: HomepageFlowPageRow[]
+  highDwellPages: HomepageFlowPageRow[]
+  exitPages: HomepageFlowPageRow[]
+  downloads: Array<{
+    asset: string
+    source: string | null
+    count: number
+    lastSeen: string | null
+  }>
 }
 
 async function fetchJson<T>(url: string): Promise<T | null> {
@@ -95,6 +188,19 @@ const KRW_CURRENCY = new Intl.NumberFormat("ko-KR", {
 })
 const KRW_NUMBER = new Intl.NumberFormat("ko-KR")
 const won = (value: number) => KRW_CURRENCY.format(Math.round(value))
+
+function formatDuration(seconds: number) {
+  if (!seconds || seconds <= 0) return "데이터 없음"
+  const minutes = Math.floor(seconds / 60)
+  const rest = seconds % 60
+  return minutes > 0 ? `${minutes}분 ${rest}초` : `${rest}초`
+}
+
+function formatPathLabel(path: string) {
+  if (path === "/") return "홈"
+  if (path === "__exit__") return "사이트 이탈"
+  return path
+}
 
 function getDayWindow(range: number) {
   const today = startOfDay(new Date())
@@ -221,6 +327,54 @@ function InsightCard({
   )
 }
 
+function MetricRankList({
+  rows,
+  empty,
+  getLabel,
+  getValue,
+  getMeta,
+  getMagnitude,
+}: {
+  rows: HomepageFlowPageRow[]
+  empty: string
+  getLabel: (row: HomepageFlowPageRow) => string
+  getValue: (row: HomepageFlowPageRow) => string
+  getMeta: (row: HomepageFlowPageRow) => string
+  getMagnitude: (row: HomepageFlowPageRow) => number
+}) {
+  const max = Math.max(
+    1,
+    ...rows.map((row) => getMagnitude(row))
+  )
+
+  if (rows.length === 0) {
+    return <p className="py-8 text-[12px] text-[#1a1a1a]/45">{empty}</p>
+  }
+
+  return (
+    <div className="space-y-3">
+      {rows.map((row) => {
+        const value = getMagnitude(row)
+        const width = Math.max(8, Math.round((value / max) * 100))
+        return (
+          <div key={`${row.path}-${getValue(row)}`} className="space-y-1.5">
+            <div className="flex items-start justify-between gap-3 text-[12px]">
+              <div className="min-w-0">
+                <p className="truncate font-mono text-[#111110]">{getLabel(row)}</p>
+                <p className="mt-0.5 text-[11px] text-[#1a1a1a]/40">{getMeta(row)}</p>
+              </div>
+              <span className="shrink-0 font-semibold text-[#111110]">{getValue(row)}</span>
+            </div>
+            <div className="h-1.5 overflow-hidden rounded-full bg-[#f0f0ec]">
+              <div className="h-full rounded-full bg-[#084734]" style={{ width: `${width}%` }} />
+            </div>
+          </div>
+        )
+      })}
+    </div>
+  )
+}
+
 function EmptyState({
   title,
   description,
@@ -328,6 +482,9 @@ export default function AnalyticsPage() {
   const [publicEvents, setPublicEvents] = useState<PublicEvent[]>([])
   const [eventMetricsMap, setEventMetricsMap] = useState<Record<string, EventMetrics>>({})
   const [clientEventCounts, setClientEventCounts] = useState<ClientEventCounts | null>(null)
+  const [visitorStats, setVisitorStats] = useState<VisitorStats | null>(null)
+  const [marketingStatus, setMarketingStatus] = useState<MarketingConversionStatus | null>(null)
+  const [homepageFlow, setHomepageFlow] = useState<HomepageFlow | null>(null)
   const activeTab: AnalyticsTab = ANALYTICS_TABS.some((tab) => tab.key === tabParam)
     ? (tabParam as AnalyticsTab)
     : "leads"
@@ -371,8 +528,17 @@ export default function AnalyticsPage() {
   useEffect(() => {
     let cancelled = false
 
-    void fetchJson<ClientEventCounts>(`/api/admin/event-counts?range=${range}`).then((data) => {
-      if (!cancelled) setClientEventCounts(data ?? null)
+    void Promise.all([
+      fetchJson<ClientEventCounts>(`/api/admin/event-counts?range=${range}`),
+      fetchJson<VisitorStats>(`/api/admin/visitor-stats?range=${range}`),
+      fetchJson<MarketingConversionStatus>("/api/admin/marketing/conversions/status"),
+      fetchJson<HomepageFlow>(`/api/admin/homepage-flow?range=${range}`),
+    ]).then(([eventCounts, stats, conversionStatus, flow]) => {
+      if (cancelled) return
+      setClientEventCounts(eventCounts ?? null)
+      setVisitorStats(stats ?? null)
+      setMarketingStatus(conversionStatus ?? null)
+      setHomepageFlow(flow ?? null)
     })
 
     return () => {
@@ -513,6 +679,7 @@ export default function AnalyticsPage() {
   const fmtCount = (n: number | undefined) => (n && n > 0 ? `${n.toLocaleString()}회` : "0회")
   const liveTone = "bg-green-50 text-green-700 border-green-100"
   const idleTone = "bg-[#f0f0ec] text-[#1a1a1a]/55 border-[#e8e8e4]"
+  const warningTone = "bg-amber-50 text-amber-700 border-amber-100"
   const pickTone = (count: number | undefined) => ((count ?? 0) > 0 ? liveTone : idleTone)
 
   const ctaCount = eventCountByName.get("click_cta")
@@ -522,6 +689,28 @@ export default function AnalyticsPage() {
   const checkoutCount = eventCountByName.get("begin_checkout")
   const pageViewCount = eventCountByName.get("page_view")
   const videoCount = eventCountByName.get("view_demo_video")
+  const visitorTodayIndex =
+    visitorStats?.daily.findIndex((day) => day.date === visitorStats.today.date) ?? -1
+  const visitorYesterday =
+    visitorStats && visitorTodayIndex > 0 ? visitorStats.daily[visitorTodayIndex - 1] : null
+  const homeVisitorTrend = visitorStats
+    ? visitorStats.today.homeVisitors - (visitorYesterday?.homeVisitors ?? 0)
+    : undefined
+  const homeVisitorChartData =
+    visitorStats?.daily.map((day) => ({
+      date: day.date,
+      count: day.homeVisitors,
+    })) ?? []
+  const flowDailyVisitorData =
+    homepageFlow?.daily.map((day) => ({
+      date: day.date,
+      count: day.visitors,
+    })) ?? []
+  const flowDailyDownloadData =
+    homepageFlow?.daily.map((day) => ({
+      date: day.date,
+      count: day.downloads,
+    })) ?? []
 
   const trackingCards = [
     {
@@ -561,15 +750,15 @@ export default function AnalyticsPage() {
       status: fmtCount(checkoutCount),
       tone: pickTone(checkoutCount),
       description: "/product/sw 결제 CTA는 NEXT_PUBLIC_SW_CHECKOUT_ENABLED=true일 때 begin_checkout, 아니면 click_cta로 전송합니다.",
-      next: "결제 페이지 활성화 후 begin_checkout → purchase 퍼널 완성",
+      next: "begin_checkout과 purchase 모두 서버 전환 dedup 연결",
       icon: <Send className="w-4 h-4" />,
     },
     {
       title: "페이지 조회",
       status: fmtCount(pageViewCount),
       tone: pickTone(pageViewCount),
-      description: "page_view 이벤트 타입은 정의되어 있지만 사용처 연결은 아직 없습니다.",
-      next: "공개 페이지 공통 레이아웃에서 page_view 수집 권장",
+      description: "공개 페이지 공통 트래커가 page_view를 전송하고, admin에서 방문자·조회수 집계에 사용합니다.",
+      next: `홈 방문자 최근 ${range}일 ${visitorStats?.totals.homeVisitors.toLocaleString() ?? 0}명`,
       icon: <BarChart2 className="w-4 h-4" />,
     },
     {
@@ -581,11 +770,53 @@ export default function AnalyticsPage() {
       icon: <Send className="w-4 h-4" />,
     },
     {
+      title: "Meta Pixel + CAPI",
+      status: marketingStatus?.meta.capiConfigured
+        ? "서버 연결"
+        : marketingStatus?.meta.pixelId
+          ? "브라우저만"
+          : "미설정",
+      tone: marketingStatus?.meta.capiConfigured
+        ? liveTone
+        : marketingStatus?.meta.pixelId
+          ? warningTone
+          : idleTone,
+      description: "Lead, CompleteRegistration, Purchase를 브라우저 Pixel과 서버 CAPI에 같은 event_id로 전송합니다.",
+      next: marketingStatus?.meta.testEventCodeConfigured
+        ? "테스트 이벤트 코드 활성"
+        : "META_DATASET_ID + META_CAPI_ACCESS_TOKEN 설정 권장",
+      icon: <CheckCircle2 className="w-4 h-4" />,
+    },
+    {
+      title: "GA4 서버 전환",
+      status: marketingStatus?.google.measurementProtocolConfigured
+        ? "MP 연결"
+        : marketingStatus?.google.ga4MeasurementId
+          ? "Secret 필요"
+          : "미설정",
+      tone: marketingStatus?.google.measurementProtocolConfigured
+        ? liveTone
+        : marketingStatus?.google.ga4MeasurementId
+          ? warningTone
+          : idleTone,
+      description: "generate_lead와 purchase를 GA4 권장 이벤트명으로 브라우저·서버 양쪽에 전송합니다.",
+      next: "GA4_MEASUREMENT_ID + GA4_API_SECRET 설정 시 서버 전환 활성",
+      icon: <BarChart2 className="w-4 h-4" />,
+    },
+    {
+      title: "Google Ads 전환 라벨",
+      status: marketingStatus?.google.demoConversionLabelConfigured ? "설정됨" : "라벨 필요",
+      tone: marketingStatus?.google.demoConversionLabelConfigured ? liveTone : warningTone,
+      description: "도입문의 제출은 Google Ads conversion 이벤트로도 발화됩니다.",
+      next: `${marketingStatus?.google.adsId ?? "AW-18252550128"} 전환 액션 라벨 확인`,
+      icon: <Send className="w-4 h-4" />,
+    },
+    {
       title: "페이지 체류 시간",
       status: "미연결",
       tone: "bg-[#FEF3EE] text-[#B85C33] border-[#F6D5C5]",
       description: "현재 관리자에서 직접 읽을 수 있는 체류 데이터 소스가 없습니다.",
-      next: "page_view와 time_on_page 수집 설계 필요",
+      next: "time_on_page 수집 설계 필요",
       icon: <Clock3 className="w-4 h-4" />,
     },
   ]
@@ -707,7 +938,18 @@ export default function AnalyticsPage() {
         </div>
       </div>
 
-      <div className="mb-6 grid grid-cols-1 gap-4 sm:grid-cols-2 xl:grid-cols-5">
+      <div className="mb-6 grid grid-cols-1 gap-4 sm:grid-cols-2 xl:grid-cols-6">
+        <SummaryCard
+          icon={<BarChart2 className="w-4 h-4" />}
+          label="오늘 홈 방문자"
+          value={visitorStats ? visitorStats.today.homeVisitors : "..."}
+          hint={
+            visitorStats
+              ? `${range}일 홈 ${visitorStats.totals.homeVisitors.toLocaleString()}명 · PV ${visitorStats.totals.homePageViews.toLocaleString()}`
+              : "동의 기반 집계"
+          }
+          trend={homeVisitorTrend}
+        />
         <SummaryCard
           icon={<Users className="w-4 h-4" />}
           label="최근 리드"
@@ -1383,8 +1625,245 @@ export default function AnalyticsPage() {
         </div>
       )}
 
+      {activeTab === "flow" && (
+        <div className="space-y-6">
+          <div className="grid gap-4 md:grid-cols-2 xl:grid-cols-4">
+            <SummaryCard
+              icon={<Users className="w-4 h-4" />}
+              label="홈 방문자"
+              value={homepageFlow ? homepageFlow.totals.homeVisitors.toLocaleString() : "..."}
+              hint={`최근 ${range}일 · 홈 PV ${homepageFlow?.totals.homePageViews.toLocaleString() ?? 0}`}
+            />
+            <SummaryCard
+              icon={<BarChart2 className="w-4 h-4" />}
+              label="전체 페이지뷰"
+              value={homepageFlow ? homepageFlow.totals.pageViews.toLocaleString() : "..."}
+              hint={`방문자 ${homepageFlow?.totals.visitors.toLocaleString() ?? 0}명`}
+            />
+            <SummaryCard
+              icon={<Download className="w-4 h-4" />}
+              label="자료 다운로드"
+              value={homepageFlow ? homepageFlow.totals.downloads.toLocaleString() : "..."}
+              hint="download_materials 이벤트 기준"
+            />
+            <SummaryCard
+              icon={<Clock3 className="w-4 h-4" />}
+              label="평균 체류"
+              value={homepageFlow ? formatDuration(homepageFlow.totals.avgDwellSeconds) : "..."}
+              hint="page_exit 샘플 기준"
+            />
+          </div>
+
+          <Panel
+            title="홈페이지 방문 흐름"
+            description={`최근 ${range}일 · 홈에서 다음으로 이동한 경로 또는 사이트 이탈 후보입니다.`}
+            action={
+              <span className="text-[12px] text-[#1a1a1a]/40">
+                {homepageFlow?.timezone ?? "Asia/Seoul"}
+              </span>
+            }
+          >
+            {homepageFlow ? (
+              <div className="grid gap-6 xl:grid-cols-[1.1fr_1fr]">
+                <div>
+                  <p className="mb-3 text-[11px] font-medium uppercase tracking-[0.2em] text-[#1a1a1a]/40">
+                    홈에서 다음 행동
+                  </p>
+                  <div className="space-y-3">
+                    {homepageFlow.nextStepsFromHome.map((step) => (
+                      <div key={step.path} className="rounded-2xl border border-[#e8e8e4] bg-[#fafaf8] px-4 py-3">
+                        <div className="mb-2 flex items-center justify-between gap-3">
+                          <div className="flex min-w-0 items-center gap-2">
+                            <ChevronRight className="h-4 w-4 shrink-0 text-[#084734]" />
+                            <span className="truncate font-mono text-[12px] text-[#111110]">
+                              {formatPathLabel(step.label)}
+                            </span>
+                          </div>
+                          <span className="text-[12px] font-semibold text-[#111110]">
+                            {step.count.toLocaleString()}회 · {step.share}%
+                          </span>
+                        </div>
+                        <div className="h-2 overflow-hidden rounded-full bg-white">
+                          <div className="h-full rounded-full bg-[#084734]" style={{ width: `${Math.max(6, step.share)}%` }} />
+                        </div>
+                      </div>
+                    ))}
+                    {homepageFlow.nextStepsFromHome.length === 0 && (
+                      <p className="rounded-2xl border border-dashed border-[#e8e8e4] bg-[#fafaf8] px-4 py-8 text-center text-[12px] text-[#1a1a1a]/45">
+                        아직 홈 방문 흐름을 만들 만큼 연속 page_view 데이터가 없습니다.
+                      </p>
+                    )}
+                  </div>
+                </div>
+                <div className="grid gap-3 sm:grid-cols-3 xl:grid-cols-1">
+                  <InsightCard
+                    eyebrow="Home"
+                    title={`${homepageFlow.totals.homeVisitors.toLocaleString()}명`}
+                    description={`홈 조회 ${homepageFlow.totals.homePageViews.toLocaleString()}회`}
+                    tone="info"
+                  />
+                  <InsightCard
+                    eyebrow="Exit"
+                    title={`${homepageFlow.totals.exits.toLocaleString()}회`}
+                    description="pagehide로 잡힌 사이트 이탈 후보입니다. SPA 내부 이동은 제외합니다."
+                    tone={homepageFlow.totals.exits > 0 ? "warning" : "neutral"}
+                  />
+                  <InsightCard
+                    eyebrow="Dwell"
+                    title={formatDuration(homepageFlow.totals.avgDwellSeconds)}
+                    description="분석 동의 후 route change/pagehide 시점에 기록된 체류 샘플 평균입니다."
+                    tone="neutral"
+                  />
+                </div>
+              </div>
+            ) : (
+              <p className="text-[13px] text-[#1a1a1a]/45">
+                홈페이지 흐름 데이터를 불러오지 못했습니다. `client_events` 적재와 Supabase 연결을 확인하세요.
+              </p>
+            )}
+          </Panel>
+
+          <div className="grid gap-6 xl:grid-cols-2">
+            <Panel
+              title="일별 방문자"
+              description="전체 공개 페이지 방문자 추이입니다."
+            >
+              {flowDailyVisitorData.length > 0 ? (
+                <div className="h-56 w-full">
+                  <DailyEventCountsChart data={flowDailyVisitorData} />
+                </div>
+              ) : (
+                <TableEmpty message="방문자 데이터가 없습니다." />
+              )}
+            </Panel>
+            <Panel
+              title="일별 다운로드"
+              description="브로셔와 리드마그넷 다운로드 추이입니다."
+            >
+              {flowDailyDownloadData.length > 0 ? (
+                <div className="h-56 w-full">
+                  <DailyEventCountsChart data={flowDailyDownloadData} />
+                </div>
+              ) : (
+                <TableEmpty message="다운로드 데이터가 없습니다." />
+              )}
+            </Panel>
+          </div>
+
+          <div className="grid gap-6 xl:grid-cols-2">
+            <Panel
+              title="방문 많은 페이지"
+              description="page_view 기준 상위 페이지입니다."
+            >
+              <MetricRankList
+                rows={homepageFlow?.topPages ?? []}
+                empty="페이지뷰 데이터가 없습니다."
+                getLabel={(row) => formatPathLabel(row.path)}
+                getValue={(row) => `${row.pageViews.toLocaleString()}회`}
+                getMeta={(row) => `방문자 ${row.visitors.toLocaleString()}명 · 평균 체류 ${formatDuration(row.avgDwellSeconds)}`}
+                getMagnitude={(row) => row.pageViews}
+              />
+            </Panel>
+            <Panel
+              title="체류 많은 페이지"
+              description="page_exit duration_ms 평균 기준입니다."
+            >
+              <MetricRankList
+                rows={homepageFlow?.highDwellPages ?? []}
+                empty="체류시간 샘플이 아직 없습니다."
+                getLabel={(row) => formatPathLabel(row.path)}
+                getValue={(row) => formatDuration(row.avgDwellSeconds)}
+                getMeta={(row) => `PV ${row.pageViews.toLocaleString()}회 · 이탈 후보 ${row.exits.toLocaleString()}회`}
+                getMagnitude={(row) => row.avgDwellSeconds}
+              />
+            </Panel>
+          </div>
+
+          <div className="grid gap-6 xl:grid-cols-2">
+            <Panel
+              title="나가는 곳 많은 페이지"
+              description="pagehide 기반 사이트 이탈 후보입니다. 내부 라우팅 이동은 제외합니다."
+            >
+              <MetricRankList
+                rows={homepageFlow?.exitPages ?? []}
+                empty="이탈 후보 데이터가 아직 없습니다."
+                getLabel={(row) => formatPathLabel(row.path)}
+                getValue={(row) => `${row.exits.toLocaleString()}회`}
+                getMeta={(row) => `이탈률 ${row.exitRate}% · PV ${row.pageViews.toLocaleString()}회`}
+                getMagnitude={(row) => row.exits}
+              />
+            </Panel>
+            <Panel
+              title="자료 다운로드"
+              description="asset_id 또는 lead_magnet 기준 상위 다운로드입니다."
+            >
+              <div className="space-y-3">
+                {(homepageFlow?.downloads ?? []).map((row) => (
+                  <div key={row.asset} className="flex items-center justify-between gap-4 rounded-2xl border border-[#e8e8e4] bg-white px-4 py-3">
+                    <div className="min-w-0">
+                      <p className="truncate font-mono text-[12px] font-semibold text-[#111110]">{row.asset}</p>
+                      <p className="mt-0.5 text-[11px] text-[#1a1a1a]/40">
+                        {row.source ?? "source 없음"} · 마지막 {formatDateTime(row.lastSeen ?? undefined)}
+                      </p>
+                    </div>
+                    <span className="shrink-0 rounded-full border border-green-100 bg-green-50 px-2 py-1 text-[11px] font-semibold text-green-700">
+                      {row.count.toLocaleString()}회
+                    </span>
+                  </div>
+                ))}
+                {(homepageFlow?.downloads ?? []).length === 0 && (
+                  <TableEmpty message="다운로드 데이터가 없습니다." />
+                )}
+              </div>
+            </Panel>
+          </div>
+        </div>
+      )}
+
       {activeTab === "tracking" && (
         <div className="space-y-6">
+          <Panel
+            title="홈페이지 일별 방문자"
+            description={`최근 ${range}일 · 분석 쿠키에 동의한 방문자의 자체 DB 집계입니다. 날짜 기준은 ${visitorStats?.timezone ?? "Asia/Seoul"}입니다.`}
+            action={
+              <span className="text-[12px] text-[#1a1a1a]/40">
+                오늘 {visitorStats?.today.homeVisitors.toLocaleString() ?? 0}명
+              </span>
+            }
+          >
+            {visitorStats ? (
+              <div className="grid gap-6 xl:grid-cols-[1.4fr_1fr]">
+                <div className="h-56 w-full">
+                  <DailyEventCountsChart data={homeVisitorChartData} />
+                </div>
+                <div className="grid gap-3 sm:grid-cols-3 xl:grid-cols-1">
+                  <InsightCard
+                    eyebrow="Today"
+                    title={`${visitorStats.today.homeVisitors.toLocaleString()}명`}
+                    description={`홈 페이지뷰 ${visitorStats.today.homePageViews.toLocaleString()}회`}
+                    tone={visitorStats.today.homeVisitors > 0 ? "info" : "neutral"}
+                  />
+                  <InsightCard
+                    eyebrow="Range"
+                    title={`${visitorStats.totals.homeVisitors.toLocaleString()}명`}
+                    description={`최근 ${range}일 홈 방문자 · 조회 ${visitorStats.totals.homePageViews.toLocaleString()}회`}
+                    tone="info"
+                  />
+                  <InsightCard
+                    eyebrow="All pages"
+                    title={`${visitorStats.totals.visitors.toLocaleString()}명`}
+                    description={`전체 공개 페이지 조회 ${visitorStats.totals.pageViews.toLocaleString()}회`}
+                    tone="neutral"
+                  />
+                </div>
+              </div>
+            ) : (
+              <p className="text-[13px] text-[#1a1a1a]/45">
+                방문자 집계를 불러오지 못했습니다. Supabase 연결과 `client_events` 적재 상태를 확인하세요.
+              </p>
+            )}
+          </Panel>
+
           <Panel
             title="실시간 이벤트 카운트"
             description={`최근 ${range}일 동안 자체 DB에 적재된 클라이언트 이벤트 수입니다. GA·Meta 외 별도로 어드민에서 직접 확인합니다.`}
@@ -1479,9 +1958,9 @@ export default function AnalyticsPage() {
                 </p>
               </div>
               <div className="rounded-2xl border border-[#e8e8e4] bg-[#fafaf8] p-4">
-                <p className="text-[12px] font-medium text-[#111110]">3. page_view / 체류시간</p>
+                <p className="text-[12px] font-medium text-[#111110]">3. 체류시간</p>
                 <p className="mt-1 text-[12px] leading-relaxed text-[#1a1a1a]/45">
-                  공개 페이지 공통 레이아웃에서 조회/체류를 잡아야 홈페이지 체류 분석과 이탈 페이지 리포트가 가능해집니다.
+                  조회수와 방문자 수는 연결됐으므로, 다음 단계는 체류 시간과 이탈 페이지 리포트입니다.
                 </p>
               </div>
             </div>
