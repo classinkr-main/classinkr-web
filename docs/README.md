@@ -17,8 +17,10 @@
   - 한국 학원 시장용 Classin 정체성, 메시지, 리드마그넷, 챗봇 답변, CTA 기준
 - [active/classin-pre-adoption-question-matrix-2026-06-18.md](./active/classin-pre-adoption-question-matrix-2026-06-18.md)
   - 도입 전 22가지 질문의 답변 가능 범위, 확인 필요 항목, 상담·챗봇·리드마그넷 반영 기준
+- [active/partner-portal-redistribution-plan-2026-06-26.md](./active/partner-portal-redistribution-plan-2026-06-26.md)
+  - 파트너 포털/Portal V2/견적 문서 기능을 어드민·하드웨어 운영·공개 공유 링크·제한형 파트너 액션 포털로 재분배하는 최신 기획안
 - [active/partner-portal-master-spec.md](./active/partner-portal-master-spec.md)
-  - 파트너 포털의 현재 기준 제품 스펙
+  - 파트너 포털 도메인 모델과 거래건 중심 UX 상세 근거. 제품 면 재배치 판단은 redistribution plan 우선
 - [active/architecture-schema-erd.md](./active/architecture-schema-erd.md)
   - 현재 아키텍처/스키마 입구
 - [active/chatbot-knowledgebase-faq-analytics-plan.md](./active/chatbot-knowledgebase-faq-analytics-plan.md)
@@ -38,10 +40,12 @@
 
 - [active/prd.md](./active/prd.md)
   - 홈페이지, CTA, 리드 수집, 콘텐츠 운영 기준
+- [active/partner-portal-redistribution-plan-2026-06-26.md](./active/partner-portal-redistribution-plan-2026-06-26.md)
+  - 파트너 포털 기능 재배치, 견적 문서 라이프사이클, Admin Hardware 편입 기준
 - [active/partner-portal-master-spec.md](./active/partner-portal-master-spec.md)
-  - 파트너 포털의 단일 진입 제품 문서
+  - 파트너 포털 도메인 모델과 거래건 중심 UX 상세 근거
 - [active/partner-portal-implementation-roadmap.md](./active/partner-portal-implementation-roadmap.md)
-  - 파트너 포털 구현 순서
+  - 파트너 포털 구현 순서. 현재 경로명은 `repository-status-2026-06-08.md`와 실제 코드로 재확인
 - [active/quote-lifecycle-execution-plan.md](./active/quote-lifecycle-execution-plan.md)
   - 견적 문서 라이프사이클 실행 기준
 - [active/software-checkout-revamp-plan.md](./active/software-checkout-revamp-plan.md)

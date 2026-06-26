@@ -11,13 +11,20 @@
 
 관련 파일:
 
-- [quote-documents.ts](/Users/clmagi/Desktop/Projects/classin_home/lib/partner-portal/repositories/quote-documents.ts)
-- [contract-documents.ts](/Users/clmagi/Desktop/Projects/classin_home/lib/partner-portal/repositories/contract-documents.ts)
-- [activity.ts](/Users/clmagi/Desktop/Projects/classin_home/lib/partner-portal/repositories/activity.ts)
-- [quote public API](/Users/clmagi/Desktop/Projects/classin_home/app/api/partner/quote/route.ts)
-- [public quote page](/Users/clmagi/Desktop/Projects/classin_home/app/partner/quote/[id]/page.tsx)
-- [quote share route](/Users/clmagi/Desktop/Projects/classin_home/app/api/portal/quotes/[id]/share/route.ts)
-- [quote convert route](/Users/clmagi/Desktop/Projects/classin_home/app/api/portal/quotes/[id]/convert/route.ts)
+- [partner-portal-redistribution-plan-2026-06-26.md](./partner-portal-redistribution-plan-2026-06-26.md)
+- [quote-documents.ts](../../lib/portal/repositories/quote-documents.ts)
+- [contract-documents.ts](../../lib/portal/repositories/contract-documents.ts)
+- [activity.ts](../../lib/portal/repositories/activity.ts)
+- [public quote page](../../app/share/quote/[token]/page.tsx)
+- [public quote confirm route](../../app/api/share/quote/[token]/confirm/route.ts)
+- [public quote accept route](../../app/api/share/quote/[token]/accept/route.ts)
+- [quote share route](../../app/api/portal/quotes/[id]/share/route.ts)
+- [quote convert route](../../app/api/portal/quotes/[id]/convert/route.ts)
+
+2026-06-26 운영 메모:
+
+- 현재 구현 경로는 `app/share/quote/[token]`, `app/api/share/quote/[token]/confirm`, `app/api/share/quote/[token]/accept`, `app/api/portal/quotes/*`, `lib/portal/*` 기준으로 본다.
+- 새 하드웨어 견적은 `quote_documents` 계열을 기준 모델로 삼고, legacy `quotes / quote_items`는 조회/호환/마이그레이션 대상으로 둔다.
 
 ## 1. 운영 원칙
 

@@ -22,6 +22,7 @@ import {
   Megaphone,
   MessageSquare,
   MoreHorizontal,
+  PackageCheck,
   Search,
   Settings,
   SquareChevronLeft,
@@ -65,6 +66,7 @@ const NAV: NavItem[] = [
   { href: "/admin/chatbot", label: "챗봇 운영", icon: <Bot className="h-4 w-4" />, roles: STAFF_EDITOR, section: "cs", badge: "Ops" },
   { href: "/admin/docs", label: "가이드 문서", icon: <BookOpen className="h-4 w-4" />, roles: STAFF_EDITOR, section: "cs" },
   { href: "/admin/branch", label: "KR Team", icon: <Building2 className="h-4 w-4" />, roles: [...STAFF_ADMIN, "BRANCH"], section: "performance" },
+  { href: "/admin/hardware", label: "하드웨어 재고", icon: <PackageCheck className="h-4 w-4" />, roles: STAFF_ADMIN, section: "performance", badge: "Ops" },
   { href: "/admin/analytics", label: "Analytics", icon: <BarChart2 className="h-4 w-4" />, roles: [...ALL_STAFF, "BRANCH"], section: "performance" },
   { href: "/admin/ops", label: "Ops Health", icon: <Activity className="h-4 w-4" />, roles: STAFF_ADMIN, section: "system", badge: "New" },
   { href: "/admin/settings", label: "Settings", icon: <Settings className="h-4 w-4" />, roles: STAFF_ADMIN, section: "system" },
@@ -116,6 +118,7 @@ const NAV_WARMUP_REQUESTS: Record<string, string[]> = {
     "/api/admin/branch/summary?team=ALL&period=Q",
     "/api/admin/branch/kpi?team=ALL&period=Q",
   ],
+  "/admin/hardware": ["/api/admin/hardware"],
   "/admin/analytics": [
     "/api/admin/leads",
     "/api/admin/subscribers",
@@ -147,7 +150,7 @@ const SECTION_META: Record<SidebarSection, { label: string; description: string 
 const MOBILE_PRIMARY_HREFS = [
   "/admin/overview",
   "/admin/crm",
-  "/admin/materials",
+  "/admin/quotes",
   "/admin/chatbot",
 ] as const
 
