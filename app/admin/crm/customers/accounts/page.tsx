@@ -1,3 +1,5 @@
+import { Suspense } from "react"
+
 import NeoCrmCustomersClient from "@/components/admin/crm/NeoCrmCustomersClient"
 
 export const metadata = {
@@ -5,5 +7,9 @@ export const metadata = {
 }
 
 export default function AdminCrmPartnerCustomersPage() {
-  return <NeoCrmCustomersClient />
+  return (
+    <Suspense fallback={null}>
+      <NeoCrmCustomersClient />
+    </Suspense>
+  )
 }

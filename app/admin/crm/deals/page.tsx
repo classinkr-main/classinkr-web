@@ -607,7 +607,7 @@ export default function AdminCrmRevenuePage() {
         <MetricCard
           label="딜리버리 총매출"
           value={loading && !data ? "..." : formatCurrency(data?.summary.deliveryTotalAmount ?? 0)}
-          hint="본사 기준 CRM Delivery 합산"
+          hint="본사 CRM 원천의 인식 매출 합산"
         />
         <MetricCard
           label="계약 기준"
@@ -643,9 +643,9 @@ export default function AdminCrmRevenuePage() {
           hint="V2 고객사 테이블 기준"
         />
         <MetricCard
-          label="파트너/계정"
+          label="파트너 고객"
           value={formatNumber(data?.summary.partnerCount ?? 0)}
-          hint="레거시 파트너 + 파트너 계정"
+          hint="레거시 파트너 + 파트너 고객"
         />
         <MetricCard
           label="소스 레코드"
@@ -700,7 +700,7 @@ export default function AdminCrmRevenuePage() {
           <div className="flex flex-wrap items-center justify-between gap-3">
             <div className="flex items-center gap-2">
               <ServerCog className="h-4 w-4 text-[#1a1a1a]/35" />
-              <h2 className="text-[14px] font-semibold text-[#111110]">Neo CRM Snapshot</h2>
+              <h2 className="text-[14px] font-semibold text-[#111110]">외부 CRM 원천 스냅샷</h2>
             </div>
             <span className="text-[11px] text-[#1a1a1a]/35">
               {formatNumber(data.externalSnapshot.totalRecordCount)} active records · stale{" "}
@@ -741,7 +741,7 @@ export default function AdminCrmRevenuePage() {
                 {data.externalRecords.length === 0 ? (
                   <tr>
                     <td colSpan={6} className="py-8 text-center text-[13px] text-[#1a1a1a]/35">
-                      Neo CRM snapshot records are not loaded yet.
+                      외부 CRM 원천 레코드가 아직 로드되지 않았습니다.
                     </td>
                   </tr>
                 ) : (
@@ -841,7 +841,7 @@ export default function AdminCrmRevenuePage() {
             <div>
               <p className="text-[13px] font-semibold text-[#111110]">매칭 검수는 데이터 매칭 인박스로 이동했습니다</p>
               <p className="mt-1 text-[12px] leading-relaxed text-[#1a1a1a]/45">
-                REV 시트 행, Neo CRM 후보, 리드 연결을 한 화면에서 일괄 확정/제외하고 자동 확정 내역을 검토합니다.
+                REV 시트 행, 외부 CRM 후보, 리드 연결을 한 화면에서 일괄 확정/제외하고 자동 확정 내역을 검토합니다.
               </p>
             </div>
             <Link

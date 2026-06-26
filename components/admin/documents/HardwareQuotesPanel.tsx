@@ -1,6 +1,6 @@
 "use client"
 
-import { useEffect, useMemo, useState } from "react"
+import { useEffect, useMemo, useRef, useState } from "react"
 import {
   AlertCircle,
   Check,
@@ -22,6 +22,7 @@ import QuickQuoteComposer, {
 } from "@/components/portal/quotes/QuickQuoteComposer"
 import { portalFetch } from "@/lib/portal/portal-fetch"
 import type { PartnerDocumentListItem } from "@/lib/portal/types"
+import type { StandardQuoteTemplateId } from "@/lib/standard-quote-template"
 
 type HardwareQuoteRow = {
   id: string
@@ -58,6 +59,17 @@ type SharePayload = {
 
 type QuoteFilter = "all" | "draft" | "shared" | "accepted" | "needs_action"
 type QuoteSortKey = "recent" | "amount" | "response"
+type HardwareQuoteQuickAction = "new" | StandardQuoteTemplateId
+
+type HardwareQuoteQuickActionRequest = {
+  key: string
+  action: HardwareQuoteQuickAction
+} | null
+
+type HardwareQuotesPanelProps = {
+  quickAction?: HardwareQuoteQuickActionRequest
+  onQuickActionConsumed?: () => void
+}
 
 const ACTION_LABEL: Record<QuickQuoteCreatedPayload["action"], string> = {
   save: "저장됨",
@@ -283,8 +295,16 @@ function getResponseTime(quote: HardwareQuoteRow) {
   )
 }
 
-export default function HardwareQuotesPanel() {
+function templateIdFromQuickAction(action: HardwareQuoteQuickAction): StandardQuoteTemplateId {
+  return action === "new" ? "board_86" : action
+}
+
+export default function HardwareQuotesPanel({
+  quickAction = null,
+  onQuickActionConsumed,
+}: HardwareQuotesPanelProps) {
   const [composerOpen, setComposerOpen] = useState(false)
+  const [composerTemplateId, setComposerTemplateId] = useState<StandardQuoteTemplateId>("board_86")
   const [quotes, setQuotes] = useState<HardwareQuoteRow[]>([])
   const [loading, setLoading] = useState(true)
   const [loadError, setLoadError] = useState<string | null>(null)
@@ -293,6 +313,7 @@ export default function HardwareQuotesPanel() {
   const [searchTerm, setSearchTerm] = useState("")
   const [activeFilter, setActiveFilter] = useState<QuoteFilter>("all")
   const [sortKey, setSortKey] = useState<QuoteSortKey>("recent")
+  const handledQuickActionKeyRef = useRef<string | null>(null)
 
   const summary = useMemo(() => {
     return {
@@ -375,6 +396,16 @@ export default function HardwareQuotesPanel() {
   useEffect(() => {
     void loadQuotes()
   }, [])
+
+  useEffect(() => {
+    if (!quickAction) return
+    if (handledQuickActionKeyRef.current === quickAction.key) return
+
+    handledQuickActionKeyRef.current = quickAction.key
+    setComposerTemplateId(templateIdFromQuickAction(quickAction.action))
+    setComposerOpen(true)
+    onQuickActionConsumed?.()
+  }, [onQuickActionConsumed, quickAction])
 
   async function handleCreated(payload: QuickQuoteCreatedPayload) {
     const nextQuote: HardwareQuoteRow = {
@@ -500,7 +531,10 @@ export default function HardwareQuotesPanel() {
           </Button>
           <Button
             type="button"
-            onClick={() => setComposerOpen(true)}
+            onClick={() => {
+              setComposerTemplateId("board_86")
+              setComposerOpen(true)
+            }}
             className="w-full bg-[#084734] text-white hover:bg-[#065c41] sm:w-auto"
           >
             <Plus className="mr-2 h-4 w-4" />
@@ -754,6 +788,7 @@ export default function HardwareQuotesPanel() {
         onOpenChange={setComposerOpen}
         recentQuotes={recentQuotes}
         apiBase="/api/portal"
+        initialTemplateId={composerTemplateId}
         onCreated={handleCreated}
       />
     </div>

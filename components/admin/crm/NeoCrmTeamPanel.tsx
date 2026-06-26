@@ -159,7 +159,7 @@ export default function NeoCrmTeamPanel({
         dataRef.current = next
         if (!next.ok && next.error) setError(next.error)
       } catch (err) {
-        setError(err instanceof Error ? err.message : "Neo CRM 데이터를 불러오지 못했습니다.")
+        setError(err instanceof Error ? err.message : "외부 CRM 동기화 데이터를 불러오지 못했습니다.")
       } finally {
         setLoading(false)
       }
@@ -206,10 +206,10 @@ export default function NeoCrmTeamPanel({
     <section className="mb-4 rounded-2xl border border-[#e8e8e4] bg-white p-4">
       <div className="flex flex-col gap-3 lg:flex-row lg:items-start lg:justify-between">
         <div>
-          <p className="text-[11px] font-semibold uppercase tracking-wide text-[#1a1a1a]/30">Neo CRM · Korea Team</p>
-          <h2 className="mt-1 text-[18px] font-bold text-[#111110]">한국팀 매출 · Account · Order</h2>
+          <p className="text-[11px] font-semibold uppercase tracking-wide text-[#1a1a1a]/30">External CRM Sync · Korea Team</p>
+          <h2 className="mt-1 text-[18px] font-bold text-[#111110]">고객 매출 · 오더 흐름</h2>
           <p className="mt-1 text-[12px] text-[#1a1a1a]/40">
-            주/월/분기/년 · 직전 동기간 비교 · 매출 SalesPerformance · 오더 Opportunity · sync{" "}
+            주/월/분기/년 · 직전 동기간 비교 · 본사 CRM 동기화 매출·오더 · sync{" "}
             {formatDate(data?.latestSyncedAt)}
           </p>
         </div>
@@ -260,7 +260,7 @@ export default function NeoCrmTeamPanel({
 
       {error ? (
         <p className="mt-4 rounded-xl bg-[#FEF3EE] px-3 py-2 text-[12px] leading-relaxed text-[#B85C33]">
-          Neo CRM 스냅샷을 읽지 못했습니다: {error}. 매출·정합성 탭에서 외부 CRM 동기화와 운영 준비도를 확인하세요.
+          외부 CRM 동기화 데이터를 읽지 못했습니다: {error}. 매출·연동 탭에서 동기화 상태를 확인하세요.
         </p>
       ) : null}
 
@@ -269,7 +269,7 @@ export default function NeoCrmTeamPanel({
         <div className="flex flex-col gap-4 lg:flex-row lg:items-end lg:justify-between">
           <div>
             <p className="text-[11px] font-semibold uppercase tracking-[0.14em] text-[#084734]/70">
-              한국팀 매출 실적 (SalesPerformance)
+              한국팀 매출 실적
             </p>
             <div className="mt-1 flex flex-wrap items-end gap-x-3 gap-y-1">
               <span className="text-4xl font-bold tracking-[-0.045em] text-[#084734] sm:text-[44px]">
@@ -306,7 +306,7 @@ export default function NeoCrmTeamPanel({
       {/* 오더는 거의 확정 매출 — 매출 달성과 같은 급의 co-hero로 노출 (CNY 환산 주 표기) */}
       <div className="rounded-2xl border border-[#084734]/15 bg-white p-5">
         <p className="text-[11px] font-semibold uppercase tracking-[0.14em] text-[#084734]/70">
-          오더 · 확정 임박 (Opportunity)
+          오더 · 확정 임박
         </p>
         <div className="mt-1 flex flex-wrap items-end gap-x-3 gap-y-1">
           <span className="text-4xl font-bold tracking-[-0.045em] text-[#111110] sm:text-[40px]">
@@ -342,7 +342,7 @@ export default function NeoCrmTeamPanel({
           icon={<TrendingUp className="h-4 w-4" />}
           label="성과 건수"
           value={loading && !data ? "..." : `${formatNumber(data?.revenue.orderCount)}건`}
-          hint={`담당 ${formatNumber(data?.revenue.contributorCount)}명 · SalesPerformance`}
+          hint={`담당 ${formatNumber(data?.revenue.contributorCount)}명 · 외부 CRM 원천`}
           tone="text-[#084734]"
         />
         <KpiTile
@@ -354,7 +354,7 @@ export default function NeoCrmTeamPanel({
         />
         <KpiTile
           icon={<Building2 className="h-4 w-4" />}
-          label="Account"
+          label="동기화 고객"
           value={loading && !data ? "..." : formatNumber(data?.account.totalCount)}
           hint={`기간 활동 ${formatNumber(data?.account.activeInPeriodCount)} · 직전 ${formatNumber(
             data?.comparison.account.previousActiveCount
@@ -413,7 +413,7 @@ export default function NeoCrmTeamPanel({
             </p>
           ) : filteredOwners.length === 0 ? (
             <p className="py-10 text-center text-[13px] text-[#1a1a1a]/35">
-              이 기간 한국팀 매출(SalesPerformance) 레코드가 없습니다.
+              이 기간 한국팀 매출 레코드가 없습니다.
             </p>
           ) : (
             <div className="space-y-2.5">
@@ -472,7 +472,7 @@ export default function NeoCrmTeamPanel({
                 href="/admin/crm/deals/orders"
                 className="inline-flex items-center gap-1 text-[12px] font-semibold text-[#1a1a1a]/45 transition-colors hover:text-[#111110]"
               >
-                Order·Delivery
+                오더 상세
                 <ExternalLink className="h-3 w-3" />
               </Link>
             </div>
