@@ -134,6 +134,11 @@ export function readStringArray(body: JsonObject, key: string, label: string) {
     .filter(Boolean)
 }
 
+export function readOptionalStringArray(body: JsonObject, key: string, label: string) {
+  if (!(key in body) || body[key] == null) return undefined
+  return readStringArray(body, key, label)
+}
+
 export function toErrorResponse(error: unknown, fallbackMessage: string) {
   if (error instanceof HardwareApiValidationError) {
     return NextResponse.json({ error: error.message }, { status: error.status })

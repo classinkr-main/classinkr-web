@@ -4,6 +4,7 @@ import {
   readOptionalBoolean,
   readOptionalNonNegativeInt,
   readOptionalString,
+  readOptionalStringArray,
   readRequestBody,
   toErrorResponse,
 } from "@/app/api/admin/hardware/_validation"
@@ -25,6 +26,7 @@ export async function PATCH(
       leadTimeDays: readOptionalNonNegativeInt(body, "leadTimeDays", "리드타임"),
       category: readOptionalString(body, "category", "카테고리"),
       sku: readOptionalString(body, "sku", "SKU"),
+      sourceAliases: readOptionalStringArray(body, "sourceAliases", "제품 alias"),
       active: readOptionalBoolean(body, "active", "사용 여부"),
     })
 

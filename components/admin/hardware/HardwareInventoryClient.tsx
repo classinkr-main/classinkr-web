@@ -11,6 +11,7 @@ import {
   CheckCircle2,
   Clock3,
   ExternalLink,
+  FilePenLine,
   Link2,
   Minus,
   MapPin,
@@ -33,10 +34,12 @@ type HardwareMovementType = "inbound" | "outbound" | "return" | "transfer" | "re
 interface HardwareItem {
   id: string
   name: string
+  sku: string | null
   category: string | null
   reorder_point: number
   lead_time_days: number
   active: boolean
+  source_aliases: string[]
 }
 
 interface HardwareMovement {
@@ -56,6 +59,11 @@ interface HardwareMovement {
   source: "admin_manual" | "sheet_import"
   created_by: string | null
   created_at: string
+  voided_at: string | null
+  voided_by: string | null
+  void_reason: string | null
+  converted_from_movement_id: string | null
+  converted_to_movement_id: string | null
 }
 
 interface HardwareStockRow {
@@ -89,6 +97,7 @@ interface HardwareDashboard {
   stock: HardwareStockRow[]
   movements: HardwareMovement[]
   recentOutbound: HardwareMovement[]
+  plannedMovements: HardwareMovement[]
   alerts: HardwareAlert[]
   totals: {
     warehouseStock: number
