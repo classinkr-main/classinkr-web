@@ -35,6 +35,8 @@
   - 하드웨어 운영 허브 문서의 상위 인덱스
 - [active/erp-blueprint-2026-06-22.md](./active/erp-blueprint-2026-06-22.md)
   - 어드민 → 지사 운영 OS(ERP) 청사진 & 실행 로드맵(Account 360 스파인·귀속·노션 캘린더 라이브 연동·거버넌스 결정)
+- [active/internal-crm-backend-operating-plan-2026-06-26.md](./active/internal-crm-backend-operating-plan-2026-06-26.md)
+  - 자체 CRM 백엔드/운영 기준. 시트·OCRM·HQ CRM은 참고/동기화 원천으로 두고, Admin CRM의 고객 스파인·회의록·녹음·다음 액션 구조를 정의
 
 ## 2. Product
 
@@ -44,6 +46,8 @@
   - 파트너 포털 기능 재배치, 견적 문서 라이프사이클, Admin Hardware 편입 기준
 - [active/partner-portal-master-spec.md](./active/partner-portal-master-spec.md)
   - 파트너 포털 도메인 모델과 거래건 중심 UX 상세 근거
+- [active/internal-crm-backend-operating-plan-2026-06-26.md](./active/internal-crm-backend-operating-plan-2026-06-26.md)
+  - 내부 동료가 매일 쓰는 자체 CRM의 기록 입력, 회의록/녹음 모으기, 고객 360, 다음 액션 운영 기준
 - [active/partner-portal-implementation-roadmap.md](./active/partner-portal-implementation-roadmap.md)
   - 파트너 포털 구현 순서. 현재 경로명은 `repository-status-2026-06-08.md`와 실제 코드로 재확인
 - [active/quote-lifecycle-execution-plan.md](./active/quote-lifecycle-execution-plan.md)
@@ -67,6 +71,8 @@
 
 - [active/architecture-schema-erd.md](./active/architecture-schema-erd.md)
   - 엔티티와 스키마 관점의 입구
+- [active/internal-crm-backend-operating-plan-2026-06-26.md](./active/internal-crm-backend-operating-plan-2026-06-26.md)
+  - `crm_customer_events`, private recording storage, future `crm_tasks`/attachments/transcripts, 외부 CRM write request 경계 기준
 - [active/docs-center-db-design.md](./active/docs-center-db-design.md)
   - 문서센터 DB, RLS, SEO 노출 정책, AI 청크 파이프라인
 - [active/notification-architecture-plan.md](./active/notification-architecture-plan.md)
