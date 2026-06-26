@@ -182,6 +182,46 @@ export interface LeadContactLog {
   contacted_by: string | null;
 }
 
+export type CrmCustomerEventTargetType = "lead" | "neo_account" | "customer" | "deal" | "unknown";
+export type CrmCustomerEventSourceType =
+  | "manual_note"
+  | "meeting_minutes"
+  | "recording"
+  | "calendar_event"
+  | "lead_contact_log"
+  | "external_crm"
+  | "sheet";
+export type CrmCustomerEventSentiment = "positive" | "neutral" | "risk";
+
+export interface CrmCustomerEvent {
+  id: string;
+  target_type: CrmCustomerEventTargetType;
+  target_id: string | null;
+  target_label: string | null;
+  source_type: CrmCustomerEventSourceType;
+  source_id: string | null;
+  occurred_at: string;
+  title: string;
+  summary: string | null;
+  body: string | null;
+  meeting_purpose: string | null;
+  owner_name: string | null;
+  attendees: Record<string, unknown>[];
+  decisions: Record<string, unknown>[];
+  blockers: Record<string, unknown>[];
+  next_actions: Record<string, unknown>[];
+  sentiment: CrmCustomerEventSentiment;
+  stage_signal: string | null;
+  tags: string[];
+  recording_storage_path: string | null;
+  recording_file_name: string | null;
+  recording_mime_type: string | null;
+  recording_size_bytes: number | null;
+  created_by: string | null;
+  created_at: string;
+  updated_at: string;
+}
+
 export type NewsletterStatus = "active" | "unsubscribed";
 
 export interface NewsletterSubscriber {
@@ -495,6 +535,13 @@ export type ClientEventUpdate = Partial<Omit<ClientEvent, "id" | "created_at">>;
 export type LeadContactLogInsert = Omit<LeadContactLog, "id"> & { id?: string };
 export type LeadContactLogUpdate = Partial<Omit<LeadContactLog, "id">>;
 
+export type CrmCustomerEventInsert = Omit<CrmCustomerEvent, "id" | "created_at" | "updated_at"> & {
+  id?: string;
+  created_at?: string;
+  updated_at?: string;
+};
+export type CrmCustomerEventUpdate = Partial<Omit<CrmCustomerEvent, "id" | "created_at">>;
+
 export type PartnerInsert = Omit<Partner, "id" | "created_at" | "updated_at"> & { id?: string; created_at?: string; updated_at?: string };
 export type PartnerUpdate = Partial<Omit<Partner, "id" | "created_at">>;
 
@@ -594,6 +641,11 @@ export interface Database {
         Row: LeadContactLog;
         Insert: LeadContactLogInsert;
         Update: LeadContactLogUpdate;
+      };
+      crm_customer_events: {
+        Row: CrmCustomerEvent;
+        Insert: CrmCustomerEventInsert;
+        Update: CrmCustomerEventUpdate;
       };
       partners: {
         Row: Partner;

@@ -199,7 +199,9 @@ export async function adminFetch(input: string, init?: RequestInit) {
   const token = getAdminToken()
   const method = init?.method?.toUpperCase() ?? "GET"
 
-  if (init?.body !== undefined && !headers.has("Content-Type")) {
+  const isFormDataBody = typeof FormData !== "undefined" && init?.body instanceof FormData
+
+  if (init?.body !== undefined && !headers.has("Content-Type") && !isFormDataBody) {
     headers.set("Content-Type", "application/json")
   }
 

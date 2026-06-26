@@ -3,9 +3,20 @@
 import Link from "next/link"
 import { usePathname } from "next/navigation"
 import type { ReactNode } from "react"
-import { BarChart3, Building2, CircleDollarSign, Handshake, LayoutDashboard, Link2, PhoneCall, Target, Users } from "lucide-react"
+import {
+  BarChart3,
+  Building2,
+  CircleDollarSign,
+  FileAudio,
+  Handshake,
+  LayoutDashboard,
+  Link2,
+  PhoneCall,
+  Target,
+  Users,
+} from "lucide-react"
 
-type CrmSection = "home" | "customers" | "deals" | "insights" | "sync"
+type CrmSection = "home" | "customers" | "activity" | "deals" | "insights" | "sync"
 type DealsSub = "revenue" | "orders" | "kpi"
 type CustomersSub = "unified" | "leads" | "accounts"
 
@@ -24,6 +35,13 @@ const PRIMARY_TABS = [
     label: "고객",
     description: "통합 DB",
     icon: <PhoneCall className="h-4 w-4" />,
+  },
+  {
+    key: "activity",
+    href: "/admin/crm/activity",
+    label: "기록",
+    description: "회의·녹음",
+    icon: <FileAudio className="h-4 w-4" />,
   },
   {
     key: "deals",
@@ -86,6 +104,7 @@ function resolveSection(pathname: string | null): CrmSection | null {
     pathname.startsWith("/admin/crm/partners/customers/")
   )
     return "customers"
+  if (pathname === "/admin/crm/activity" || pathname.startsWith("/admin/crm/activity/")) return "activity"
   if (
     pathname === "/admin/crm/deals" ||
     pathname.startsWith("/admin/crm/deals/") ||
@@ -135,7 +154,7 @@ export default function CrmSubnav({ active }: { active?: CrmSection } = {}) {
 
   return (
     <div className={showDealsSub || showCustomersSub ? "mb-4" : "mb-6"}>
-      <div className="admin-scroll-snap-x no-scrollbar -mx-4 flex gap-2 overflow-x-auto px-4 pb-2 sm:mx-0 sm:grid sm:grid-cols-2 sm:overflow-visible sm:px-0 sm:pb-0 lg:grid-cols-5">
+      <div className="admin-scroll-snap-x no-scrollbar -mx-4 flex gap-2 overflow-x-auto px-4 pb-2 sm:mx-0 sm:grid sm:grid-cols-2 sm:overflow-visible sm:px-0 sm:pb-0 lg:grid-cols-6">
         {PRIMARY_TABS.map((tab) => {
           const isActive = section === tab.key
 
