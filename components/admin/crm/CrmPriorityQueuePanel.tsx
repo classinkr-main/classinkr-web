@@ -6,6 +6,7 @@ import { AlertTriangle, Building2, CheckCircle2, Clock3, ExternalLink, Filter, P
 
 import { adminFetchJsonCached, getCachedAdminJson } from "@/lib/admin-client"
 import type { CrmPriorityBucket, CrmPriorityItem, CrmPrioritySource } from "@/lib/crm/priority"
+import { buildOwnerSelectOptions, useCrmOwners } from "./useCrmOwners"
 
 type SourceFilter = "all" | CrmPrioritySource
 type BucketFilter = "all" | CrmPriorityBucket
@@ -97,9 +98,11 @@ export default function CrmPriorityQueuePanel({ refreshKey = 0 }: { refreshKey?:
   const [error, setError] = useState<string | null>(null)
   const [actingId, setActingId] = useState<string | null>(null)
   const [actionMessage, setActionMessage] = useState<string | null>(null)
+  const { owners: crmOwners, health: ownerHealth } = useCrmOwners()
 
   const url = useMemo(() => queueUrl(source, owner, bucket), [source, owner, bucket])
   const bucketOptions = data?.buckets.length ? data.buckets : FALLBACK_BUCKETS
+  const ownerOptions = useMemo(() => buildOwnerSelectOptions(data?.owners, crmOwners), [crmOwners, data?.owners])
 
   const load = useCallback(
     async (options?: { force?: boolean }) => {
@@ -209,9 +212,11 @@ export default function CrmPriorityQueuePanel({ refreshKey = 0 }: { refreshKey?:
               aria-label="담당자 필터"
             >
               <option value="">담당 전체</option>
-              {data?.owners.map((option) => (
+              {ownerOptions.map((option) => (
                 <option key={option.ownerName} value={option.ownerName}>
-                  {option.ownerName} ({option.count})
+                  {option.label}
+                  {option.teamRoleLabel ? ` · ${option.teamRoleLabel}` : ""}
+                  {option.count > 0 ? ` (${option.count})` : ""}
                 </option>
               ))}
             </select>
@@ -248,6 +253,13 @@ export default function CrmPriorityQueuePanel({ refreshKey = 0 }: { refreshKey?:
               {data.summary.neoAccountCount.toLocaleString("ko-KR")}
             </p>
           </div>
+        </div>
+      ) : null}
+
+      {ownerHealth?.ok === false && ownerHealth.message ? (
+        <div className="mb-3 flex items-start gap-2 rounded-xl border border-[#F6D5C5] bg-[#FEF3EE] px-3 py-2 text-[12px] text-[#B85C33]">
+          <AlertTriangle className="mt-0.5 h-3.5 w-3.5 shrink-0" />
+          <span>{ownerHealth.message}</span>
         </div>
       ) : null}
 

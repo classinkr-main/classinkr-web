@@ -106,10 +106,31 @@ UI와 API는 이 세 종류를 섞어 보이더라도 저장 책임과 수정 �
 | 회의록/녹음 메타데이터 | ClassIn Home Admin | `crm_customer_events` |
 | 녹음 파일 | ClassIn Home Admin private storage | `crm-recordings` bucket |
 | 다음 액션 | Phase 1은 이벤트 JSON, Phase 2는 `crm_tasks` | `crm_customer_events.next_actions`, future `crm_tasks` |
+| 동료 계정/CRM 담당자 | ClassIn Home Admin | `admin_profiles` + CRM assignment fields |
 | 고객 매칭/스파인 연결 | ClassIn Home Admin | `crm_source_links` |
 | 외부 수정 요청 | ClassIn Home Admin 승인 큐 | `crm_write_requests` |
 
-### 4.2 외부 원천으로 유지하는 데이터
+### 4.2 Admin 계정과 CRM 담당자 연동
+
+지사장과 매니저 계정은 별도 CRM 사용자 테이블로 복제하지 않고 `admin_profiles`를 확장해 연결한다. 입사로 매니저가 늘어나면 Admin 계정을 만들고 CRM assignment 필드만 채우면 된다.
+
+필드 기준:
+- `crm_team_role`: `branch_director`, `manager`, `admin`, `ops`
+- `crm_assignable`: CRM 고객, 기록, task 배정 가능 여부
+- `crm_owner_key`: CRM 필터와 task owner에 쓰는 안정적인 담당자 키
+- `crm_owner_aliases`: 시트, 리드, 외부 CRM에 남아 있는 과거 담당자명
+- `neo_owner_id`: NEO/샤오셔우이 owner id
+- `branch_name`: 지사 또는 팀 라벨
+- `crm_sort_order`: 지사장과 매니저 표시 순서
+
+운영 규칙:
+- CRM 담당자 목록은 활성 `admin_profiles`에서 읽는다.
+- 지사장 1명과 매니저 8명은 초기값일 뿐, 계정 수를 코드에 하드코딩하지 않는다.
+- CRM 기록의 `created_by`는 클라이언트 입력이 아니라 인증된 Admin 컨텍스트에서 채운다.
+- 리드 `assigned_to`, NEO `ownerName`/`ownerId`, 시트 `manager`는 `crm_owner_key`와 alias로 점진 매칭한다.
+- 매니저 퇴사/휴직 시 계정을 `SUSPENDED` 또는 `crm_assignable=false`로 바꾸고 과거 기록은 보존한다.
+
+### 4.3 외부 원천으로 유지하는 데이터
 
 | 원천 | 역할 | 운영 기준 |
 |---|---|---|
@@ -255,6 +276,7 @@ Phase 3:
 | `GET` | `/api/admin/crm/home/priority-queue` | 오늘 먼저 연락할 고객 |
 | `GET` | `/api/admin/crm/tasks` | 미완료 다음 액션 |
 | `PATCH` | `/api/admin/crm/tasks/[id]` | 다음 액션 완료/수정 |
+| `GET` | `/api/admin/crm/owners` | 활성 Admin 계정 기반 CRM 담당자 목록 |
 | `POST` | `/api/admin/crm/source-links` | 원천 매칭 생성/확정 |
 | `POST` | `/api/admin/crm/write-requests` | 외부 CRM 수정 요청 생성 |
 
@@ -425,6 +447,7 @@ Phase 3:
 - 고객 상세 드로어에서 최근 CRM 기록을 읽는다.
 - 리드/고객 행에서 "기록 추가"가 바로 열린다.
 - 미완료 다음 액션을 고객별로 보여준다.
+- 지사장과 매니저 계정이 CRM 담당자 필터와 기록 입력에 표시된다.
 
 작업:
 - `GET /api/admin/crm/events?targetType=&targetId=`를 고객 상세에 연결
@@ -432,11 +455,14 @@ Phase 3:
 - 저장 후 고객 상세 캐시 무효화
 - 기록 입력의 대상 선택을 고객/리드 자동검색으로 교체
 - unknown 기록을 고객에 연결하는 action 추가
+- `admin_profiles` CRM assignment migration 적용
+- `/api/admin/crm/owners`를 현황 큐, 고객 DB, 기록 입력폼의 owner source로 사용
 
 완료 기준:
 - 리드 상세에서 회의록 저장 후 바로 타임라인에 보임
 - NEO 계정 상세에서도 자체 CRM 기록은 추가 가능
 - 동료가 raw id 없이 학원/기관명으로 기록을 연결
+- 신규 매니저 계정은 배정 데이터가 없어도 담당자 필터와 기록 입력 추천에 노출
 - 외부 CRM 읽기 실패와 자체 기록 실패가 분리 표시
 
 ### Phase 2 - 다음 액션 CRM화

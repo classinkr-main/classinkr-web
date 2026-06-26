@@ -1,6 +1,6 @@
 import { NextRequest, NextResponse } from "next/server"
 
-import { verifyAdmin } from "@/lib/admin-auth"
+import { CRM_STAFF_ADMIN_API_ROLES, verifyAdmin } from "@/lib/admin-auth"
 import { adminCachedJson } from "@/lib/admin-api-response"
 import { getCrmPriorityQueue } from "@/lib/repositories/crm-priority-queue"
 import type { CrmPriorityBucket, CrmPrioritySource } from "@/lib/crm/priority"
@@ -15,7 +15,7 @@ function parseBucket(value: string | null): CrmPriorityBucket | "all" {
 }
 
 export async function GET(req: NextRequest) {
-  const err = await verifyAdmin(req)
+  const err = await verifyAdmin(req, CRM_STAFF_ADMIN_API_ROLES)
   if (err) return err
 
   try {

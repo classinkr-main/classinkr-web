@@ -11,6 +11,7 @@ import type {
   CrmUnifiedLifecycle,
   CrmUnifiedSavedView,
 } from "@/lib/repositories/crm-unified-customers"
+import { buildOwnerSelectOptions, useCrmOwners } from "./useCrmOwners"
 
 type SourceFilter = "all" | CrmUnifiedCustomerSource
 type LifecycleFilter = "all" | CrmUnifiedLifecycle
@@ -171,12 +172,14 @@ export default function CrmUnifiedCustomersClient() {
   const [refreshing, setRefreshing] = useState(false)
   const [error, setError] = useState<string | null>(null)
   const requestSeq = useRef(0)
+  const { owners: crmOwners, health: ownerHealth } = useCrmOwners()
+  const ownerOptions = useMemo(() => buildOwnerSelectOptions(data?.owners, crmOwners), [crmOwners, data?.owners])
 
   const currentOwnerCount = useMemo(() => {
     const selected = normalizeText(owner)
     if (!selected) return 0
-    return data?.owners.find((option) => normalizeText(option.ownerName) === selected)?.count ?? 0
-  }, [data?.owners, owner])
+    return ownerOptions.find((option) => normalizeText(option.ownerName) === selected)?.count ?? 0
+  }, [owner, ownerOptions])
 
   const loadPage = useCallback(
     async (offset: number, options?: { force?: boolean; append?: boolean }) => {
@@ -332,9 +335,11 @@ export default function CrmUnifiedCustomersClient() {
                 aria-label="담당자 필터"
               >
                 <option value="">담당 전체</option>
-                {data?.owners.map((option) => (
+                {ownerOptions.map((option) => (
                   <option key={option.ownerName} value={option.ownerName}>
-                    {option.ownerName} ({option.count})
+                    {option.label}
+                    {option.teamRoleLabel ? ` · ${option.teamRoleLabel}` : ""}
+                    {option.count > 0 ? ` (${option.count})` : ""}
                   </option>
                 ))}
               </select>
@@ -444,6 +449,13 @@ export default function CrmUnifiedCustomersClient() {
           <div className="mb-4 flex items-start gap-2 rounded-xl border border-[#F6D5C5] bg-[#FEF3EE] px-3 py-2 text-[12px] text-[#B85C33]">
             <AlertTriangle className="mt-0.5 h-3.5 w-3.5 shrink-0" />
             <span>{data.sources.warnings.join(" ")}</span>
+          </div>
+        ) : null}
+
+        {ownerHealth?.ok === false && ownerHealth.message ? (
+          <div className="mb-4 flex items-start gap-2 rounded-xl border border-[#F6D5C5] bg-[#FEF3EE] px-3 py-2 text-[12px] text-[#B85C33]">
+            <AlertTriangle className="mt-0.5 h-3.5 w-3.5 shrink-0" />
+            <span>{ownerHealth.message}</span>
           </div>
         ) : null}
 

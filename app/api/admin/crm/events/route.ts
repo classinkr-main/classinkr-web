@@ -1,7 +1,7 @@
 import { NextRequest, NextResponse } from "next/server"
 
 import { adminCachedJson } from "@/lib/admin-api-response"
-import { verifyAdmin } from "@/lib/admin-auth"
+import { CRM_STAFF_ADMIN_API_ROLES, requireVerifiedAdminContext } from "@/lib/admin-auth"
 import {
   CRM_EVENT_SENTIMENTS,
   CRM_EVENT_SOURCE_TYPES,
@@ -86,9 +86,13 @@ function isCrmEventsNotReadyError(error: unknown): error is Error {
   return error instanceof Error && error.message.includes("CRM 기록 DB 마이그레이션")
 }
 
+function adminActorName(admin: { name?: string; userId?: string; role: string }) {
+  return admin.name?.trim() || admin.userId || admin.role
+}
+
 export async function GET(req: NextRequest) {
-  const err = await verifyAdmin(req)
-  if (err) return err
+  const admin = await requireVerifiedAdminContext(req, CRM_STAFF_ADMIN_API_ROLES)
+  if (admin instanceof NextResponse) return admin
 
   try {
     const url = new URL(req.url)
@@ -112,8 +116,9 @@ export async function GET(req: NextRequest) {
 }
 
 export async function POST(req: NextRequest) {
-  const err = await verifyAdmin(req)
-  if (err) return err
+  const admin = await requireVerifiedAdminContext(req, CRM_STAFF_ADMIN_API_ROLES)
+  if (admin instanceof NextResponse) return admin
+  const createdBy = adminActorName(admin)
 
   const contentType = req.headers.get("content-type") ?? ""
 
@@ -171,7 +176,7 @@ export async function POST(req: NextRequest) {
               sizeBytes: upload.sizeBytes,
             }
           : null,
-        createdBy: formText(formData, "createdBy"),
+        createdBy,
       }
 
       if (!hasUsefulContent(input)) {
@@ -213,7 +218,7 @@ export async function POST(req: NextRequest) {
       stageSignal: optionalString(raw.stageSignal),
       tags: parseLooseList(optionalString(raw.tags)),
       recording: null,
-      createdBy: optionalString(raw.createdBy),
+      createdBy,
     }
 
     if (
@@ -226,8 +231,7 @@ export async function POST(req: NextRequest) {
       input.body === null ||
       input.meetingPurpose === null ||
       input.ownerName === null ||
-      input.stageSignal === null ||
-      input.createdBy === null
+      input.stageSignal === null
     ) {
       return NextResponse.json({ error: "Invalid CRM event field" }, { status: 400 })
     }

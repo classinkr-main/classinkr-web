@@ -20,6 +20,7 @@ import {
 
 import { adminFetch, adminFetchJsonCached, getCachedAdminJson } from "@/lib/admin-client"
 import { Toast } from "@/components/admin/crm/leads/shared"
+import { useCrmOwners } from "./useCrmOwners"
 
 type TargetType = "all" | "lead" | "neo_account" | "customer" | "deal" | "unknown"
 type SourceType =
@@ -293,6 +294,7 @@ export default function CrmActivityClient() {
   const [toast, setToast] = useState<{ msg: string; type: "success" | "error" } | null>(null)
   const requestSeq = useRef(0)
   const fileInputRef = useRef<HTMLInputElement | null>(null)
+  const { owners: crmOwners, health: ownerHealth } = useCrmOwners()
 
   const loadEvents = useCallback(
     async (offset: number, options?: { force?: boolean; append?: boolean }) => {
@@ -478,6 +480,22 @@ export default function CrmActivityClient() {
           </div>
 
           <div className="mt-4 grid gap-3">
+            <datalist id="crm-owner-options">
+              {crmOwners.map((owner) => (
+                <option
+                  key={owner.ownerKey}
+                  value={owner.ownerKey}
+                  label={`${owner.displayName} · ${owner.teamRoleLabel}${owner.branchName ? ` · ${owner.branchName}` : ""}`}
+                />
+              ))}
+            </datalist>
+
+            {ownerHealth?.ok === false && ownerHealth.message ? (
+              <div className="rounded-xl border border-[#F6D5C5] bg-[#FEF3EE] px-3 py-2 text-[12px] text-[#B85C33]">
+                {ownerHealth.message}
+              </div>
+            ) : null}
+
             <div className="grid grid-cols-[130px_minmax(0,1fr)] gap-2">
               <label className="text-[11px] font-semibold text-[#1a1a1a]/45">
                 대상
@@ -527,9 +545,10 @@ export default function CrmActivityClient() {
               <label className="text-[11px] font-semibold text-[#1a1a1a]/45">
                 담당자
                 <input
+                  list="crm-owner-options"
                   value={ownerName}
                   onChange={(event) => setOwnerName(event.target.value)}
-                  placeholder="담당자 이름"
+                  placeholder="담당자 이름 또는 계정 선택"
                   className="mt-1 h-10 w-full rounded-lg border border-[#e8e8e4] bg-white px-3 text-[13px] font-medium text-[#111110] outline-none placeholder:text-[#1a1a1a]/25 focus:border-[#084734]"
                 />
               </label>
@@ -621,6 +640,7 @@ export default function CrmActivityClient() {
                 />
                 <div className="grid gap-2 sm:grid-cols-2">
                   <input
+                    list="crm-owner-options"
                     value={nextActionOwner}
                     onChange={(event) => setNextActionOwner(event.target.value)}
                     placeholder="담당자"

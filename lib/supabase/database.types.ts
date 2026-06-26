@@ -9,8 +9,9 @@
 
 /* ─── Enum Types ─── */
 
-export type AdminRole = "SUPER_ADMIN" | "ADMIN" | "EDITOR" | "VIEWER" | "PARTNER";
+export type AdminRole = "SUPER_ADMIN" | "ADMIN" | "EDITOR" | "VIEWER" | "PARTNER" | "BRANCH";
 export type AdminStatus = "INVITED" | "ACTIVE" | "SUSPENDED";
+export type AdminCrmTeamRole = "branch_director" | "manager" | "admin" | "ops";
 
 export type BlogPostStatus = "DRAFT" | "IN_REVIEW" | "PUBLISHED" | "ARCHIVED";
 
@@ -31,6 +32,13 @@ export interface AdminProfile {
   status: AdminStatus;
   invited_by: string | null;
   last_login_at: string | null;
+  branch_name: string | null;
+  crm_team_role: AdminCrmTeamRole;
+  crm_assignable: boolean;
+  crm_owner_key: string | null;
+  crm_owner_aliases: string[];
+  neo_owner_id: string | null;
+  crm_sort_order: number;
   created_at: string;
   updated_at: string;
 }
@@ -477,8 +485,23 @@ export type HwSaleItemUpdate = Partial<Omit<HwSaleItem, "id">>;
 
 export type AdminProfileInsert = Omit<
   AdminProfile,
-  "created_at" | "updated_at"
+  | "created_at"
+  | "updated_at"
+  | "branch_name"
+  | "crm_team_role"
+  | "crm_assignable"
+  | "crm_owner_key"
+  | "crm_owner_aliases"
+  | "neo_owner_id"
+  | "crm_sort_order"
 > & {
+  branch_name?: string | null;
+  crm_team_role?: AdminCrmTeamRole;
+  crm_assignable?: boolean;
+  crm_owner_key?: string | null;
+  crm_owner_aliases?: string[];
+  neo_owner_id?: string | null;
+  crm_sort_order?: number;
   created_at?: string;
   updated_at?: string;
 };
