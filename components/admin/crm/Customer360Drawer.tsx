@@ -4,16 +4,25 @@ import { useCallback, useEffect, useMemo, useState } from "react"
 import Link from "next/link"
 import {
   AlertTriangle,
+  ArrowRight,
   Briefcase,
+  Building2,
   CalendarClock,
   CheckCircle2,
+  CircleDollarSign,
   ClipboardList,
   Coins,
   ExternalLink,
+  FileAudio,
+  FileText,
   ListChecks,
   Loader2,
+  Phone,
+  PhoneCall,
   Plus,
+  Receipt,
   RefreshCw,
+  Sparkles,
   StickyNote,
   User2,
   X,
@@ -106,6 +115,79 @@ const EVENT_SOURCE_LABEL: Record<string, string> = {
   sheet: "시트",
 }
 
+// 활동 출처별 아이콘 — 타임라인을 유형으로 빠르게 스캔.
+const EVENT_SOURCE_ICON: Record<string, React.ReactNode> = {
+  manual_note: <StickyNote className="h-3.5 w-3.5" />,
+  meeting_minutes: <FileText className="h-3.5 w-3.5" />,
+  recording: <FileAudio className="h-3.5 w-3.5" />,
+  calendar_event: <CalendarClock className="h-3.5 w-3.5" />,
+  lead_contact_log: <PhoneCall className="h-3.5 w-3.5" />,
+  external_crm: <Building2 className="h-3.5 w-3.5" />,
+  sheet: <ClipboardList className="h-3.5 w-3.5" />,
+}
+
+function sumAmounts(values: Array<number | null | undefined>): number | null {
+  let total = 0
+  let seen = false
+  for (const value of values) {
+    if (value == null || !Number.isFinite(value)) continue
+    total += value
+    seen = true
+  }
+  return seen ? total : null
+}
+
+function focusSection(id: string) {
+  if (typeof document === "undefined") return
+  const el = document.getElementById(id)
+  if (!el) return
+  el.scrollIntoView({ behavior: "smooth", block: "center" })
+  if (el instanceof HTMLTextAreaElement || el instanceof HTMLInputElement) el.focus()
+}
+
+// 견적/오더/수납 진행 — 공식 원천(NEO orders/collections) + 작업 캐시(Deal Lite)에서 파생.
+function FunnelRow({
+  icon,
+  label,
+  amount,
+  meta,
+  state,
+}: {
+  icon: React.ReactNode
+  label: string
+  amount: number | null
+  meta?: string | null
+  state: "done" | "warn" | "pending"
+}) {
+  const mark =
+    state === "done" ? (
+      <CheckCircle2 className="h-4 w-4 text-[#084734]" />
+    ) : state === "warn" ? (
+      <AlertTriangle className="h-4 w-4 text-[#B85C33]" />
+    ) : (
+      <span className="h-2 w-2 rounded-full bg-[#d8d8d2]" />
+    )
+  return (
+    <div className="flex items-center gap-3">
+      <span className="flex h-7 w-7 shrink-0 items-center justify-center rounded-lg bg-[#fafaf8] text-[#1a1a1a]/45">
+        {mark}
+      </span>
+      <div className="min-w-0 flex-1">
+        <div className="flex items-center gap-1.5 text-[12px] font-semibold text-[#111110]">
+          <span className="text-[#1a1a1a]/40">{icon}</span>
+          {label}
+        </div>
+        {meta ? (
+          <p className={`text-[11px] ${state === "warn" ? "text-[#B85C33]" : "text-[#1a1a1a]/40"}`}>{meta}</p>
+        ) : null}
+      </div>
+      <span className={`shrink-0 text-[13px] font-bold ${state === "warn" ? "text-[#B85C33]" : "text-[#111110]"}`}>
+        {amount == null ? "-" : `₩${formatAmount(amount)}`}
+      </span>
+    </div>
+  )
+}
+
 function formatDate(value: string | null | undefined) {
   if (!value) return "-"
   const date = new Date(value)
@@ -146,6 +228,8 @@ export default function Customer360Drawer({ customerKey, name, onClose }: Props)
   const [dealTitle, setDealTitle] = useState("")
   const [dealStage, setDealStage] = useState<CrmDealStage>("consult")
   const [dealAmount, setDealAmount] = useState("")
+  const [activityTab, setActivityTab] = useState<"timeline" | "feed">("timeline")
+  const [noteKind, setNoteKind] = useState<"manual_note" | "meeting_minutes">("manual_note")
 
   const url = customerKey ? `/api/admin/crm/customers/${encodeURIComponent(customerKey)}/360` : null
 
@@ -182,6 +266,8 @@ export default function Customer360Drawer({ customerKey, name, onClose }: Props)
     setDealTitle("")
     setDealStage("consult")
     setDealAmount("")
+    setActivityTab("timeline")
+    setNoteKind("manual_note")
     if (customerKey) void load()
   }, [customerKey, load])
 
@@ -222,7 +308,7 @@ export default function Customer360Drawer({ customerKey, name, onClose }: Props)
     try {
       await adminFetchJson("/api/admin/crm/events", {
         method: "POST",
-        body: JSON.stringify({ targetType, targetId: entityId, targetLabel: displayName, sourceType: "manual_note", body }),
+        body: JSON.stringify({ targetType, targetId: entityId, targetLabel: displayName, sourceType: noteKind, body }),
       })
       setNote("")
       await refetch()
@@ -231,7 +317,7 @@ export default function Customer360Drawer({ customerKey, name, onClose }: Props)
     } finally {
       setActingId(null)
     }
-  }, [note, customerKey, targetType, entityId, displayName, refetch])
+  }, [note, noteKind, customerKey, targetType, entityId, displayName, refetch])
 
   const handleAddTask = useCallback(async () => {
     const title = taskTitle.trim()
@@ -358,6 +444,60 @@ export default function Customer360Drawer({ customerKey, name, onClose }: Props)
   const money = data?.money
   const moneyVisible = useMemo(() => money?.available ?? false, [money])
 
+  // 견적 → 오더 → 수납 파생. 견적=Deal Lite(작업 캐시), 오더·수납=NEO(공식 원천).
+  const quoteTotal = useMemo(() => sumAmounts((data?.deals.rows ?? []).map((d) => d.expectedAmount)), [data])
+  const orderTotal = money?.totalOrderAmount ?? null
+  const collectionTotal = useMemo(() => sumAmounts((money?.collections ?? []).map((c) => c.amount)), [money])
+  const outstanding = orderTotal != null && collectionTotal != null ? orderTotal - collectionTotal : null
+  const ltv = collectionTotal ?? orderTotal ?? quoteTotal ?? null
+
+  // 특이사항 피드 = 위험 신호가 있는 활동만.
+  const feedRows = useMemo(() => (data?.activity.rows ?? []).filter((event) => event.sentiment === "risk"), [data])
+  const timelineRows = data?.activity.rows ?? []
+  const visibleActivity = activityTab === "feed" ? feedRows : timelineRows
+
+  // 다음 액션 추천 — 규칙 기반(nextAction·우선순위 사유·서비스 위험 합성). AI 아님, 출처 표시.
+  const recommendation = useMemo(() => {
+    if (!data?.found) return null
+    const title =
+      header?.nextActionLabel ??
+      (data.serviceRisk?.level === "urgent" || data.serviceRisk?.level === "soon"
+        ? "재계약·갱신 확인"
+        : header?.priorityReason
+          ? "후속 연락"
+          : null)
+    if (!title) return null
+    const reasons: string[] = []
+    if (header?.priorityReason) reasons.push(header.priorityReason)
+    if (data.serviceRisk?.reasons.length) reasons.push(...data.serviceRisk.reasons.map((r) => r.label))
+    if (data.risk.reasons.length) reasons.push(...data.risk.reasons)
+    return { title, reason: reasons.slice(0, 3).join(" · ") || "우선순위 신호 기준 추천" }
+  }, [data, header])
+
+  const handleRunRecommendation = useCallback(async () => {
+    if (!recommendation || !customerKey) return
+    setActingId("rec")
+    setError(null)
+    try {
+      await adminFetchJson("/api/admin/crm/tasks", {
+        method: "POST",
+        body: JSON.stringify({
+          title: recommendation.title,
+          taskType: "call",
+          targetType,
+          targetId: entityId,
+          targetLabel: displayName,
+          assignToMe: true,
+        }),
+      })
+      await refetch()
+    } catch (err) {
+      setError(err instanceof Error ? err.message : "추천 실행에 실패했습니다.")
+    } finally {
+      setActingId(null)
+    }
+  }, [recommendation, customerKey, targetType, entityId, displayName, refetch])
+
   if (!customerKey) return null
 
   return (
@@ -365,7 +505,8 @@ export default function Customer360Drawer({ customerKey, name, onClose }: Props)
       <div className="absolute inset-0 bg-black/20" onClick={onClose} aria-hidden />
       <div className="relative z-10 flex h-full w-full max-w-xl flex-col overflow-hidden bg-white shadow-2xl">
         {/* header */}
-        <div className="sticky top-0 z-10 flex items-start justify-between gap-3 border-b border-[#e8e8e4] bg-white px-5 py-4">
+        <div className="sticky top-0 z-10 border-b border-[#e8e8e4] bg-white px-5 py-4">
+          <div className="flex items-start justify-between gap-3">
           <div className="min-w-0">
             <div className="mb-1 flex flex-wrap items-center gap-1.5">
               <span className="rounded-full bg-[#111110] px-2 py-0.5 text-[11px] font-semibold text-white">
@@ -385,6 +526,7 @@ export default function Customer360Drawer({ customerKey, name, onClose }: Props)
             <h2 className="truncate text-[18px] font-bold text-[#111110]">{displayName}</h2>
             <p className="mt-0.5 truncate text-[12px] text-[#1a1a1a]/45">
               <User2 className="mr-1 inline h-3 w-3" />
+              {data?.contacts?.phone ? `${data.contacts.phone} · ` : ""}
               {header?.ownerName ?? "담당 미배정"}
               {targetType === "neo_account" ? ` · ${header?.region ?? "지역 미지정"}` : ""}
               {header?.priorityReason ? ` · ${header.priorityReason}` : ""}
@@ -408,6 +550,32 @@ export default function Customer360Drawer({ customerKey, name, onClose }: Props)
               <X className="h-4 w-4" />
             </button>
           </div>
+          </div>
+
+          <div className="mt-3 flex flex-wrap items-center gap-2">
+            {data?.contacts?.phone ? (
+              <a
+                href={`tel:${data.contacts.phone}`}
+                className="inline-flex h-8 items-center gap-1.5 rounded-lg bg-[#111110] px-3 text-[12px] font-semibold text-white transition-opacity hover:opacity-90"
+              >
+                <Phone className="h-3.5 w-3.5" />콜
+              </a>
+            ) : null}
+            <button
+              type="button"
+              onClick={() => focusSection("c360-deal")}
+              className="inline-flex h-8 items-center gap-1.5 rounded-lg border border-[#e8e8e4] bg-white px-3 text-[12px] font-semibold text-[#111110] transition-colors hover:bg-[#f5f5f2]"
+            >
+              <CircleDollarSign className="h-3.5 w-3.5" />견적
+            </button>
+            <button
+              type="button"
+              onClick={() => focusSection("c360-note")}
+              className="inline-flex h-8 items-center gap-1.5 rounded-lg border border-[#e8e8e4] bg-white px-3 text-[12px] font-semibold text-[#111110] transition-colors hover:bg-[#f5f5f2]"
+            >
+              <ClipboardList className="h-3.5 w-3.5" />활동 기록
+            </button>
+          </div>
         </div>
 
         {/* body */}
@@ -424,6 +592,39 @@ export default function Customer360Drawer({ customerKey, name, onClose }: Props)
               <AlertTriangle className="mt-0.5 h-3.5 w-3.5 shrink-0" />
               <span>{data.health.warnings.join(" ")}</span>
             </div>
+          ) : null}
+
+          {/* 다음 액션 추천 — 규칙 기반 파생(Derived). 공식 데이터를 대체하지 않는다. */}
+          {recommendation ? (
+            <section className="rounded-2xl border border-[#D7EBDD] bg-[#ECFDF5] p-4">
+              <div className="mb-1 flex items-center gap-1.5">
+                <Sparkles className="h-3.5 w-3.5 text-[#084734]" />
+                <span className="text-[11px] font-bold uppercase tracking-[0.08em] text-[#084734]">
+                  다음 액션 추천 · 규칙 기반
+                </span>
+              </div>
+              <h3 className="text-[15px] font-bold text-[#111110]">{recommendation.title}</h3>
+              <p className="mt-1 text-[12px] leading-relaxed text-[#1a1a1a]/55">{recommendation.reason}</p>
+              <div className="mt-3 flex flex-wrap gap-2">
+                <button
+                  type="button"
+                  onClick={() => void handleRunRecommendation()}
+                  disabled={actingId === "rec"}
+                  className="inline-flex h-8 items-center gap-1 rounded-lg bg-[#084734] px-3 text-[12px] font-semibold text-white transition-opacity hover:opacity-90 disabled:opacity-40"
+                >
+                  <CheckCircle2 className="h-3.5 w-3.5" />
+                  실행 · 할 일 추가
+                </button>
+                <button
+                  type="button"
+                  onClick={() => focusSection("c360-note")}
+                  className="inline-flex h-8 items-center gap-1 rounded-lg border border-[#D7EBDD] bg-white px-3 text-[12px] font-semibold text-[#084734] transition-colors hover:bg-[#D7EBDD]"
+                >
+                  <StickyNote className="h-3.5 w-3.5" />
+                  메모 남기기
+                </button>
+              </div>
+            </section>
           ) : null}
 
           {loading && !data ? (
@@ -496,26 +697,53 @@ export default function Customer360Drawer({ customerKey, name, onClose }: Props)
             </section>
           ) : null}
 
-          {/* money */}
+          {/* money — 견적 → 오더 → 수납 */}
           {data ? (
             <section className="rounded-2xl border border-[#e8e8e4] bg-white p-4">
-              <SectionTitle icon={<Coins className="h-3.5 w-3.5" />}>돈흐름</SectionTitle>
+              <SectionTitle icon={<Coins className="h-3.5 w-3.5" />}>돈 흐름 · 견적 → 오더 → 수납</SectionTitle>
               {targetType === "lead" ? (
                 <p className="text-[12px] text-[#1a1a1a]/40">리드 단계 · 연결된 딜 없음</p>
-              ) : moneyVisible ? (
+              ) : moneyVisible || quoteTotal != null ? (
                 <div className="space-y-3">
-                  <div className="grid grid-cols-2 gap-2">
-                    <div className="rounded-xl bg-[#fafaf8] p-3">
-                      <p className="text-[11px] font-semibold text-[#1a1a1a]/35">잔액 합계</p>
-                      <p className="mt-1 text-[15px] font-bold text-[#111110]">{formatAmount(money?.totalBalance)}</p>
-                    </div>
-                    <div className="rounded-xl bg-[#fafaf8] p-3">
-                      <p className="text-[11px] font-semibold text-[#1a1a1a]/35">오더 합계</p>
-                      <p className="mt-1 text-[15px] font-bold text-[#111110]">{formatAmount(money?.totalOrderAmount)}</p>
-                    </div>
+                  <div className="space-y-2">
+                    <FunnelRow
+                      icon={<CircleDollarSign className="h-3.5 w-3.5" />}
+                      label="견적"
+                      amount={quoteTotal}
+                      meta={quoteTotal != null ? `Deal Lite ${data.deals.summary.total}건 · 작업 캐시` : "연결된 견적 없음"}
+                      state={quoteTotal != null && quoteTotal > 0 ? "done" : "pending"}
+                    />
+                    <ArrowRight className="ml-2.5 h-3.5 w-3.5 rotate-90 text-[#d8d8d2]" />
+                    <FunnelRow
+                      icon={<Receipt className="h-3.5 w-3.5" />}
+                      label="오더"
+                      amount={orderTotal}
+                      meta={orderTotal != null ? "NEO 오더 · 공식 원천" : "오더 없음"}
+                      state={orderTotal != null && orderTotal > 0 ? "done" : "pending"}
+                    />
+                    <ArrowRight className="ml-2.5 h-3.5 w-3.5 rotate-90 text-[#d8d8d2]" />
+                    <FunnelRow
+                      icon={<Coins className="h-3.5 w-3.5" />}
+                      label="수납"
+                      amount={collectionTotal}
+                      meta={
+                        outstanding != null && outstanding > 0
+                          ? `미수 ₩${formatAmount(outstanding)}`
+                          : collectionTotal != null
+                            ? "NEO 수납 · 공식 원천"
+                            : "수납 기록 없음"
+                      }
+                      state={
+                        outstanding != null && outstanding > 0
+                          ? "warn"
+                          : collectionTotal != null && collectionTotal > 0
+                            ? "done"
+                            : "pending"
+                      }
+                    />
                   </div>
                   {money?.eeoAccounts.length ? (
-                    <div className="space-y-1.5">
+                    <div className="space-y-1.5 border-t border-[#f0f0ec] pt-3">
                       {money.eeoAccounts.slice(0, 4).map((eeo) => (
                         <div key={eeo.id} className="flex items-center justify-between gap-2 text-[12px]">
                           <span className="truncate font-medium text-[#111110]">{eeo.name}</span>
@@ -533,9 +761,51 @@ export default function Customer360Drawer({ customerKey, name, onClose }: Props)
             </section>
           ) : null}
 
-          {/* deals (Deal Lite) */}
+          {/* 핵심 정보 */}
           {data ? (
             <section className="rounded-2xl border border-[#e8e8e4] bg-white p-4">
+              <SectionTitle icon={<Sparkles className="h-3.5 w-3.5" />}>핵심 정보</SectionTitle>
+              <div className="grid grid-cols-2 gap-x-4 gap-y-2.5 text-[12px]">
+                <div>
+                  <p className="text-[11px] font-semibold text-[#1a1a1a]/35">고객 가치 (LTV) · 추정</p>
+                  <p className="text-[15px] font-bold text-[#111110]">{ltv == null ? "-" : `₩${formatAmount(ltv)}`}</p>
+                </div>
+                <div>
+                  <p className="text-[11px] font-semibold text-[#1a1a1a]/35">잔액 합계</p>
+                  <p className="text-[15px] font-bold text-[#111110]">
+                    {money?.totalBalance == null ? "-" : `₩${formatAmount(money.totalBalance)}`}
+                  </p>
+                </div>
+                <div>
+                  <p className="text-[11px] font-semibold text-[#1a1a1a]/35">담당</p>
+                  <p className="font-medium text-[#111110]">{header?.ownerName ?? "미배정"}</p>
+                </div>
+                <div>
+                  <p className="text-[11px] font-semibold text-[#1a1a1a]/35">
+                    {targetType === "neo_account" ? "지역" : "상태"}
+                  </p>
+                  <p className="font-medium text-[#111110]">
+                    {targetType === "neo_account" ? header?.region ?? "지역 미지정" : header?.statusLabel ?? "-"}
+                  </p>
+                </div>
+                {data.risk.nearestExpireAt ? (
+                  <div>
+                    <p className="text-[11px] font-semibold text-[#1a1a1a]/35">최근접 만료</p>
+                    <p className="font-medium text-[#111110]">{formatDay(data.risk.nearestExpireAt)}</p>
+                  </div>
+                ) : null}
+                <div>
+                  <p className="text-[11px] font-semibold text-[#1a1a1a]/35">생성일</p>
+                  <p className="font-medium text-[#111110]">{header?.createdAt ? formatDay(header.createdAt) : "-"}</p>
+                </div>
+              </div>
+              <p className="mt-2 text-[10px] text-[#1a1a1a]/35">LTV는 수납·오더 기준 추정값 · 공식 잔액/만료는 NEO 원천</p>
+            </section>
+          ) : null}
+
+          {/* deals (Deal Lite) */}
+          {data ? (
+            <section id="c360-deal" className="rounded-2xl border border-[#e8e8e4] bg-white p-4">
               <SectionTitle icon={<Briefcase className="h-3.5 w-3.5" />}>
                 딜 {data.deals.summary.total > 0 ? `(${data.deals.summary.total})` : ""}
               </SectionTitle>
@@ -711,18 +981,56 @@ export default function Customer360Drawer({ customerKey, name, onClose }: Props)
             </section>
           ) : null}
 
-          {/* activity timeline + quick note */}
+          {/* activity timeline + 특이사항 피드 + quick note/회의록 */}
           {data ? (
             <section className="rounded-2xl border border-[#e8e8e4] bg-white p-4">
-              <SectionTitle icon={<ClipboardList className="h-3.5 w-3.5" />}>
-                활동 타임라인 {data.activity.summary.total > 0 ? `(${data.activity.summary.total})` : ""}
-              </SectionTitle>
+              <div className="mb-3 inline-flex rounded-lg border border-[#e8e8e4] bg-[#fafaf8] p-0.5">
+                {(
+                  [
+                    { key: "timeline", label: `타임라인${data.activity.summary.total > 0 ? ` ${data.activity.summary.total}` : ""}` },
+                    { key: "feed", label: `특이사항 피드${feedRows.length > 0 ? ` ${feedRows.length}` : ""}` },
+                  ] as const
+                ).map((tab) => (
+                  <button
+                    key={tab.key}
+                    type="button"
+                    onClick={() => setActivityTab(tab.key)}
+                    className={`h-7 rounded-md px-3 text-[12px] font-semibold transition-colors ${
+                      activityTab === tab.key ? "bg-[#111110] text-white" : "text-[#1a1a1a]/55 hover:text-[#111110]"
+                    }`}
+                  >
+                    {tab.label}
+                  </button>
+                ))}
+              </div>
+
               <div className="mb-3 flex flex-col gap-2 border-b border-[#f0f0ec] pb-3">
+                <div className="inline-flex w-fit rounded-lg border border-[#e8e8e4] bg-[#fafaf8] p-0.5">
+                  {(
+                    [
+                      { key: "manual_note", label: "메모", icon: <StickyNote className="h-3 w-3" /> },
+                      { key: "meeting_minutes", label: "회의록", icon: <FileText className="h-3 w-3" /> },
+                    ] as const
+                  ).map((kind) => (
+                    <button
+                      key={kind.key}
+                      type="button"
+                      onClick={() => setNoteKind(kind.key)}
+                      className={`inline-flex h-7 items-center gap-1 rounded-md px-2.5 text-[11px] font-semibold transition-colors ${
+                        noteKind === kind.key ? "bg-white text-[#111110] shadow-sm" : "text-[#1a1a1a]/50 hover:text-[#111110]"
+                      }`}
+                    >
+                      {kind.icon}
+                      {kind.label}
+                    </button>
+                  ))}
+                </div>
                 <textarea
+                  id="c360-note"
                   value={note}
                   onChange={(event) => setNote(event.target.value)}
-                  placeholder="빠른 메모 입력 후 저장"
-                  rows={2}
+                  placeholder={noteKind === "meeting_minutes" ? "회의록 붙여넣기/입력 후 저장" : "빠른 메모 입력 후 저장"}
+                  rows={noteKind === "meeting_minutes" ? 4 : 2}
                   className="rounded-lg border border-[#e8e8e4] bg-white px-2.5 py-2 text-[12px] text-[#111110] outline-none focus:border-[#111110]"
                 />
                 <button
@@ -731,29 +1039,41 @@ export default function Customer360Drawer({ customerKey, name, onClose }: Props)
                   disabled={!note.trim() || actingId === "note"}
                   className="inline-flex h-9 items-center justify-center gap-1 self-end rounded-lg border border-[#e8e8e4] bg-white px-3 text-[12px] font-semibold text-[#111110] transition-colors hover:bg-[#f5f5f2] disabled:opacity-40"
                 >
-                  <StickyNote className="h-3.5 w-3.5" />
-                  메모 저장
+                  {noteKind === "meeting_minutes" ? <FileText className="h-3.5 w-3.5" /> : <StickyNote className="h-3.5 w-3.5" />}
+                  {noteKind === "meeting_minutes" ? "회의록 저장" : "메모 저장"}
                 </button>
               </div>
-              {data.activity.rows.length === 0 ? (
-                <p className="text-[12px] text-[#1a1a1a]/40">기록된 활동이 없습니다.</p>
+
+              {visibleActivity.length === 0 ? (
+                <p className="text-[12px] text-[#1a1a1a]/40">
+                  {activityTab === "feed" ? "특이사항(위험) 기록이 없습니다." : "기록된 활동이 없습니다."}
+                </p>
               ) : (
                 <ul className="space-y-2.5">
-                  {data.activity.rows.map((event) => (
-                    <li key={event.id} className="border-l-2 border-[#e8e8e4] pl-3">
-                      <div className="flex items-center gap-1.5">
-                        <span className="rounded bg-[#fafaf8] px-1.5 py-0.5 text-[10px] font-semibold text-[#1a1a1a]/55">
-                          {EVENT_SOURCE_LABEL[event.sourceType] ?? event.sourceType}
-                        </span>
-                        <span className="text-[11px] text-[#1a1a1a]/35">{formatDate(event.occurredAt)}</span>
-                        {event.sentiment === "risk" ? (
-                          <span className="rounded bg-[#FEF3EE] px-1.5 py-0.5 text-[10px] font-semibold text-[#B85C33]">위험</span>
+                  {visibleActivity.map((event) => (
+                    <li key={event.id} className="flex gap-2.5">
+                      <span
+                        className={`mt-0.5 flex h-6 w-6 shrink-0 items-center justify-center rounded-lg ${
+                          event.sentiment === "risk" ? "bg-[#FEF3EE] text-[#B85C33]" : "bg-[#fafaf8] text-[#1a1a1a]/45"
+                        }`}
+                      >
+                        {EVENT_SOURCE_ICON[event.sourceType] ?? <ClipboardList className="h-3.5 w-3.5" />}
+                      </span>
+                      <div className="min-w-0 flex-1 border-b border-[#f5f5f2] pb-2.5">
+                        <div className="flex items-center gap-1.5">
+                          <span className="text-[11px] font-semibold text-[#1a1a1a]/45">
+                            {EVENT_SOURCE_LABEL[event.sourceType] ?? event.sourceType}
+                          </span>
+                          <span className="text-[11px] text-[#1a1a1a]/35">{formatDate(event.occurredAt)}</span>
+                          {event.sentiment === "risk" ? (
+                            <span className="rounded bg-[#FEF3EE] px-1.5 py-0.5 text-[10px] font-semibold text-[#B85C33]">위험</span>
+                          ) : null}
+                        </div>
+                        <p className="mt-0.5 text-[12px] font-semibold text-[#111110]">{event.title}</p>
+                        {event.summary || event.body ? (
+                          <p className="mt-0.5 line-clamp-2 text-[12px] text-[#1a1a1a]/55">{event.summary ?? event.body}</p>
                         ) : null}
                       </div>
-                      <p className="mt-0.5 text-[12px] font-semibold text-[#111110]">{event.title}</p>
-                      {event.summary || event.body ? (
-                        <p className="mt-0.5 line-clamp-2 text-[12px] text-[#1a1a1a]/55">{event.summary ?? event.body}</p>
-                      ) : null}
                     </li>
                   ))}
                 </ul>
