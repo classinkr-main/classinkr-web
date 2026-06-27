@@ -156,14 +156,17 @@ export default function Customer360Drawer({ customerKey, name, onClose }: Props)
   )
 
   useEffect(() => {
-    if (!customerKey) {
-      setData(null)
-      setNote("")
-      setTaskTitle("")
-      setError(null)
-      return
-    }
-    void load()
+    // 고객이 바뀌면 이전 고객의 데이터/폼 입력이 새 드로어에 잔존하지 않게 초기화한다.
+    setData(null)
+    setError(null)
+    setNote("")
+    setTaskTitle("")
+    setTaskType("call")
+    setTaskDue("")
+    setDealTitle("")
+    setDealStage("consult")
+    setDealAmount("")
+    if (customerKey) void load()
   }, [customerKey, load])
 
   useEffect(() => {

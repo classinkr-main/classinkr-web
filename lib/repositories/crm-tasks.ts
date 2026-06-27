@@ -1,5 +1,6 @@
 import "server-only"
 
+import { findAdminCrmOwner, listAdminUserDirectory } from "@/lib/repositories/admin-users"
 import { createSupabaseAdminClient } from "@/lib/supabase/admin"
 import type {
   CrmTask,
@@ -511,9 +512,19 @@ export async function createTasksFromEventNextActions(
 ): Promise<CrmTaskRecord[]> {
   const inputs = buildTaskInputsFromEvent(event, options)
   if (inputs.length === 0) return []
+
+  // 다음 액션의 소유자 이름을 안정적 owner_key로 해석해 "내 담당" 필터가 동작하게 한다.
+  // 디렉터리 조회 실패는 fail-soft(ownerKey만 비워지고 이름 스냅샷은 유지).
+  const directory = await listAdminUserDirectory().catch(() => null)
+  const resolveOwnerKey = (ownerName: string | null | undefined): string | null => {
+    if (!directory || !ownerName?.trim()) return null
+    return findAdminCrmOwner(directory, { name: ownerName }).owner?.ownerKey ?? null
+  }
+
   const created: CrmTaskRecord[] = []
   for (const input of inputs) {
-    created.push(await createCrmTask(input))
+    const ownerKey = input.ownerKey ?? resolveOwnerKey(input.ownerNameSnapshot)
+    created.push(await createCrmTask({ ...input, ownerKey }))
   }
   return created
 }

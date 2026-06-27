@@ -277,9 +277,10 @@ export function buildTaskPriorityItem(task: CrmTaskRecord, now = new Date()): Cr
 
   const nowMs = now.getTime()
   // 미룬 할 일은 재부상 시각이 지나야 큐에 다시 뜬다.
+  // 재부상 시각이 없거나(데이터 무결성) 미래면 숨긴다.
   if (task.status === "snoozed") {
     const until = parseTime(task.snoozedUntil)
-    if (until != null && until > nowMs) return null
+    if (until == null || until > nowMs) return null
   }
 
   const effectiveDue = task.status === "snoozed" ? task.snoozedUntil ?? task.dueAt : task.dueAt

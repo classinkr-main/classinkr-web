@@ -143,8 +143,10 @@ export async function getCrmManagerReport(
     }
   } else {
     const error = openTasksResult.status === "fulfilled" ? openTasksResult.value.error : null
-    if (!isMissingTableError(error)) tasksOk = false
-    warnings.push("할 일 집계를 일부 불러오지 못했습니다.")
+    if (!isMissingTableError(error)) {
+      tasksOk = false
+      warnings.push("할 일 집계를 일부 불러오지 못했습니다.")
+    }
   }
 
   if (doneTasksResult.status === "fulfilled" && !doneTasksResult.value.error) {
@@ -164,8 +166,10 @@ export async function getCrmManagerReport(
     }
   } else {
     const error = dealsResult.status === "fulfilled" ? dealsResult.value.error : null
-    if (!isMissingTableError(error)) dealsOk = false
-    warnings.push("딜 집계를 일부 불러오지 못했습니다.")
+    if (!isMissingTableError(error)) {
+      dealsOk = false
+      warnings.push("딜 집계를 일부 불러오지 못했습니다.")
+    }
   }
 
   let attention: ManagerAttentionItem[] = []
