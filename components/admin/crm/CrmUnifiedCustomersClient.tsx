@@ -3,7 +3,7 @@
 import { useCallback, useDeferredValue, useEffect, useMemo, useRef, useState } from "react"
 import Link from "next/link"
 import { usePathname, useRouter, useSearchParams } from "next/navigation"
-import { AlertTriangle, Building2, ChevronLeft, ChevronRight, ExternalLink, Filter, PhoneCall, RefreshCw, Search, UserRound } from "lucide-react"
+import { AlertTriangle, Building2, ChevronLeft, ChevronRight, ExternalLink, Filter, PhoneCall, RefreshCw, Search, UserPlus, UserRound } from "lucide-react"
 
 import { adminFetchJsonCached, getCachedAdminJson } from "@/lib/admin-client"
 import type {
@@ -14,6 +14,7 @@ import type {
 } from "@/lib/repositories/crm-unified-customers"
 import { buildOwnerSelectOptions, useCrmOwners } from "./useCrmOwners"
 import Customer360Drawer from "./Customer360Drawer"
+import LeadRegisterModal from "./LeadRegisterModal"
 
 type SourceFilter = "all" | CrmUnifiedCustomerSource
 type LifecycleFilter = "all" | CrmUnifiedLifecycle
@@ -180,6 +181,7 @@ export default function CrmUnifiedCustomersClient() {
   const [refreshing, setRefreshing] = useState(false)
   const [error, setError] = useState<string | null>(null)
   const [drawer, setDrawer] = useState<{ key: string; name: string } | null>(null)
+  const [leadModalOpen, setLeadModalOpen] = useState(false)
   const requestSeq = useRef(0)
 
   // 드로어를 ?account= 에 동기화 — 딥링크/뒤로가기 (C9)
@@ -335,15 +337,25 @@ export default function CrmUnifiedCustomersClient() {
               ClassIn 고객을 기준으로 운영하고, 리드·외부 CRM 데이터는 동기화 참고자료로 표시합니다.
             </p>
           </div>
-          <button
-            type="button"
-            onClick={() => void loadPage(0, { force: true })}
-            className="inline-flex h-9 items-center justify-center gap-1.5 rounded-lg border border-[#e8e8e4] bg-white px-3 text-[12px] font-semibold text-[#111110] transition-colors hover:bg-[#f5f5f2] lg:w-auto"
-            disabled={refreshing}
-          >
-            <RefreshCw className={`h-3.5 w-3.5 ${refreshing ? "animate-spin" : ""}`} />
-            새로고침
-          </button>
+          <div className="flex shrink-0 items-center gap-2">
+            <button
+              type="button"
+              onClick={() => setLeadModalOpen(true)}
+              className="inline-flex h-9 items-center justify-center gap-1.5 rounded-lg bg-[#084734] px-3 text-[12px] font-semibold text-white transition-opacity hover:opacity-90"
+            >
+              <UserPlus className="h-3.5 w-3.5" />
+              리드 등록
+            </button>
+            <button
+              type="button"
+              onClick={() => void loadPage(0, { force: true })}
+              className="inline-flex h-9 items-center justify-center gap-1.5 rounded-lg border border-[#e8e8e4] bg-white px-3 text-[12px] font-semibold text-[#111110] transition-colors hover:bg-[#f5f5f2]"
+              disabled={refreshing}
+            >
+              <RefreshCw className={`h-3.5 w-3.5 ${refreshing ? "animate-spin" : ""}`} />
+              새로고침
+            </button>
+          </div>
         </div>
 
         <section className="mb-4 rounded-2xl border border-[#e8e8e4] bg-white p-4">
@@ -669,6 +681,12 @@ export default function CrmUnifiedCustomersClient() {
         customerKey={drawer?.key ?? null}
         name={drawer?.name}
         onClose={closeDrawer}
+      />
+
+      <LeadRegisterModal
+        open={leadModalOpen}
+        onClose={() => setLeadModalOpen(false)}
+        onDone={() => void loadPage(0, { force: true })}
       />
     </div>
   )
