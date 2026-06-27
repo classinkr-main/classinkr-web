@@ -45,6 +45,7 @@ export interface Customer360Header {
   statusLabel: string
   ownerName: string | null
   ownerKeys: string[]
+  region: string | null
   score: number | null
   priorityReason: string | null
   nextActionLabel: string | null
@@ -156,6 +157,7 @@ export function buildLeadHeader(key: string, lead: LeadRecord, now = new Date())
     statusLabel: LEAD_STATUS_LABELS[lead.status] ?? "리드",
     ownerName: lead.assigned_to ?? null,
     ownerKeys: uniqueOwnerKeys([lead.assigned_to]),
+    region: null,
     score: priority?.score ?? null,
     priorityReason: priority?.reason ?? null,
     nextActionLabel: priority?.actionLabel ?? null,
@@ -232,6 +234,7 @@ export function buildNeoHeader(key: string, detail: NeoCrmCustomerDetail, now = 
     statusLabel,
     ownerName: account?.ownerName ?? null,
     ownerKeys: uniqueOwnerKeys([account?.ownerName, account?.accountId]),
+    region: account?.region ?? null,
     score: null,
     priorityReason: null,
     nextActionLabel: null,

@@ -386,6 +386,7 @@ export default function Customer360Drawer({ customerKey, name, onClose }: Props)
             <p className="mt-0.5 truncate text-[12px] text-[#1a1a1a]/45">
               <User2 className="mr-1 inline h-3 w-3" />
               {header?.ownerName ?? "담당 미배정"}
+              {targetType === "neo_account" ? ` · ${header?.region ?? "지역 미지정"}` : ""}
               {header?.priorityReason ? ` · ${header.priorityReason}` : ""}
             </p>
           </div>

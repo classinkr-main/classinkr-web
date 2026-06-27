@@ -5,6 +5,7 @@ import {
   getXiaoshouyiOwnerNameMap,
   resolveOwnerName,
 } from "@/lib/external-crm/owner-names"
+import { deriveCustomerRegion, regionCandidatesFromPayload } from "@/lib/crm/region-label"
 import { createSupabaseAdminClient } from "@/lib/supabase/admin"
 import { fetchSupabasePages } from "@/lib/supabase/pagination"
 
@@ -79,6 +80,7 @@ export interface NeoCrmCustomerDetail {
     name: string
     ownerName: string
     phone: string | null
+    region: string | null
     createdAt: string | null
     updatedAt: string | null
   } | null
@@ -429,6 +431,10 @@ export async function getNeoCrmCustomerDetail(accountId: string): Promise<NeoCrm
       name: account.display_name ?? payloadString(account.payload, "accountName") ?? account.external_id,
       ownerName: resolveOwnerName(account.owner_name, ownerNames),
       phone: payloadString(account.payload, "phone"),
+      region: (() => {
+        const derived = deriveCustomerRegion(regionCandidatesFromPayload(account.payload))
+        return derived.source === "unspecified" ? null : derived.label
+      })(),
       createdAt: toIso(account.payload?.["createdAt"]),
       updatedAt: account.occurred_at ?? toIso(account.payload?.["updatedAt"]),
     },
