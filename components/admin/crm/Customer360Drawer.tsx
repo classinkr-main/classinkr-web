@@ -30,6 +30,8 @@ import {
 
 import { adminFetchJson, adminFetchJsonCached, clearAdminRequestCache } from "@/lib/admin-client"
 import { pushRecentCustomer } from "@/lib/crm/recent-customers"
+import CrmCustomerFlags from "./CrmCustomerFlags"
+import { deriveCustomerFlags } from "@/lib/crm/customer-flags"
 import { CS_MOTIONS, type CsMotion } from "@/lib/crm/cs-motions"
 import type { Customer360, Customer360Severity } from "@/lib/repositories/crm-customer-360"
 import type { CrmDealStage } from "@/lib/repositories/crm-deals"
@@ -457,6 +459,27 @@ export default function Customer360Drawer({ customerKey, name, onClose }: Props)
   const outstanding = orderTotal != null && collectionTotal != null ? orderTotal - collectionTotal : null
   const ltv = collectionTotal ?? orderTotal ?? quoteTotal ?? null
 
+  // 헤더 스캔 플래그 — 리스트와 동일 어휘(VIP·만료·미수·핫·업셀…), 360 데이터로 파생.
+  const headerFlags = useMemo(
+    () =>
+      data?.found
+        ? deriveCustomerFlags({
+            source: targetType === "neo_account" ? "neo_account" : "lead",
+            score: header?.score ?? null,
+            expireAt: data.risk.nearestExpireAt,
+            outstanding,
+            updatedAt: header?.updatedAt ?? null,
+            balance: money?.totalBalance ?? null,
+            vip: (ltv ?? 0) >= 30_000_000,
+            lifecycle:
+              data.serviceRisk && (data.serviceRisk.level === "urgent" || data.serviceRisk.level === "soon")
+                ? "account_risk"
+                : undefined,
+          })
+        : [],
+    [data, header, targetType, outstanding, money, ltv]
+  )
+
   // 특이사항 피드 = 위험 신호가 있는 활동만.
   const feedRows = useMemo(() => (data?.activity.rows ?? []).filter((event) => event.sentiment === "risk"), [data])
   const timelineRows = data?.activity.rows ?? []
@@ -528,6 +551,7 @@ export default function Customer360Drawer({ customerKey, name, onClose }: Props)
                   리스크 {SEVERITY_LABEL[data.risk.severity]}
                 </span>
               ) : null}
+              {headerFlags.length > 0 ? <CrmCustomerFlags flags={headerFlags} max={5} /> : null}
             </div>
             <h2 className="truncate text-[18px] font-bold text-[#111110]">{displayName}</h2>
             <p className="mt-0.5 truncate text-[12px] text-[#1a1a1a]/45">

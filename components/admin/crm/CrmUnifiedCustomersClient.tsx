@@ -15,6 +15,8 @@ import type {
 import { buildOwnerSelectOptions, useCrmOwners } from "./useCrmOwners"
 import Customer360Drawer from "./Customer360Drawer"
 import LeadRegisterModal from "./LeadRegisterModal"
+import CrmCustomerFlags from "./CrmCustomerFlags"
+import { deriveCustomerFlags, type CustomerFlag } from "@/lib/crm/customer-flags"
 
 type SourceFilter = "all" | CrmUnifiedCustomerSource
 type LifecycleFilter = "all" | CrmUnifiedLifecycle
@@ -88,6 +90,17 @@ const SAVED_VIEW_FILTERS: Array<{
 
 const CACHE_TTL_MS = 90_000
 const PAGE_LIMIT = 100
+
+function rowToFlags(row: CrmUnifiedCustomerRow): CustomerFlag[] {
+  return deriveCustomerFlags({
+    source: row.source === "neo_account" ? "neo_account" : "lead",
+    lifecycle: row.lifecycle,
+    score: row.score,
+    expireAt: row.expireAt,
+    balance: row.balance,
+    updatedAt: row.updatedAt,
+  })
+}
 const OWNER_STORAGE_KEY = "classin_crm_unified_owner"
 const CURRENT_OWNER_VALUE = "__me"
 
@@ -571,6 +584,7 @@ export default function CrmUnifiedCustomersClient() {
                         >
                           <p className="truncate text-[13px] font-bold text-[#111110] group-hover:underline">{row.name}</p>
                           <p className="truncate text-[12px] text-[#1a1a1a]/42">{row.contact ?? "-"}</p>
+                          <CrmCustomerFlags flags={rowToFlags(row)} max={4} className="mt-1" />
                         </button>
                         <Link
                           href={row.href}
@@ -618,6 +632,7 @@ export default function CrmUnifiedCustomersClient() {
                     <div className="mb-1">{sourceBadge(row)}</div>
                     <p className="truncate text-[14px] font-bold text-[#111110]">{row.name}</p>
                     <p className="truncate text-[12px] text-[#1a1a1a]/42">{row.contact ?? "-"}</p>
+                    <CrmCustomerFlags flags={rowToFlags(row)} max={4} className="mt-1.5" />
                   </div>
                   <span className={`text-[20px] font-bold tabular-nums ${scoreTone(row.score)}`}>{row.score}</span>
                 </div>
