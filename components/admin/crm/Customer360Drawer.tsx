@@ -645,7 +645,9 @@ export default function Customer360Drawer({ customerKey, name, onClose }: Props)
                 </div>
                 <div>
                   <p className="text-[11px] font-semibold text-[#1a1a1a]/35">이메일</p>
-                  <p className="truncate font-medium text-[#111110]">{data.contacts?.email ?? "-"}</p>
+                  <p className={`truncate font-medium ${data.contacts?.email ? "text-[#111110]" : "text-[#1a1a1a]/35"}`}>
+                    {data.contacts?.email ?? "이메일 미확인"}
+                  </p>
                 </div>
                 {data.contacts?.extra.map((field) => (
                   <div key={`${field.label}:${field.value}`} className="col-span-2">

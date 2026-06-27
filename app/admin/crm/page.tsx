@@ -14,6 +14,8 @@ import NeoCrmTeamPanel from "@/components/admin/crm/NeoCrmTeamPanel"
 import CrmCoverageStrip from "@/components/admin/crm/CrmCoverageStrip"
 import CrmPriorityQueuePanel from "@/components/admin/crm/CrmPriorityQueuePanel"
 import CrmWeekAheadPanel from "@/components/admin/crm/CrmWeekAheadPanel"
+import CrmCustomerPicker from "@/components/admin/crm/CrmCustomerPicker"
+import Customer360Drawer from "@/components/admin/crm/Customer360Drawer"
 import { Toast } from "@/components/admin/crm/leads/shared"
 
 // 현황 = 한국팀 아침 지휘대. 액션 밴드(딥링크) + Neo CRM 팀 패널 + 돈 흐름 요약만.
@@ -544,11 +546,15 @@ function CrmOperationsDashboard({
   overview,
   loading,
   error,
+  part = "all",
 }: {
   overview: AdminCrmOverview | null
   loading: boolean
   error: string | null
+  part?: "all" | "revenue" | "risk"
 }) {
+  const showRevenue = part !== "risk"
+  const showRisk = part !== "revenue"
   const revenue = overview?.business.revenue
   const kpis = overview?.business.kpis
   const neoCrm = overview?.neoCrm ?? null
@@ -560,6 +566,7 @@ function CrmOperationsDashboard({
 
   return (
     <>
+      {showRevenue ? (
       <div className="mb-4">
         <section className="rounded-2xl border border-[#e8e8e4] bg-white p-4">
           <div className="flex flex-col gap-3 sm:flex-row sm:items-start sm:justify-between">
@@ -677,81 +684,84 @@ function CrmOperationsDashboard({
           ) : null}
         </section>
       </div>
+      ) : null}
 
-      <div className="mb-4 grid gap-3 xl:grid-cols-[0.75fr_1.25fr]">
-        {/* 미응답/오버듀 카운트는 상단 액션 밴드로 통합 — 여기엔 수납 리스크 신호만 보존 */}
-        <section className="rounded-2xl border border-[#e8e8e4] bg-white p-4">
-          <div className="mb-4 flex items-center justify-between gap-3">
-            <div>
-              <p className="text-[11px] font-semibold uppercase tracking-wide text-[#1a1a1a]/30">Payment Risk</p>
-              <h2 className="mt-1 text-[17px] font-bold text-[#111110]">수납 리스크</h2>
+      {showRisk ? (
+      <div className="mb-4 space-y-3">
+        {/* 수납 리스크 — 슬림 한 줄 */}
+        <section className="rounded-2xl border border-[#e8e8e4] bg-white px-4 py-3">
+          <div className="flex flex-wrap items-center justify-between gap-x-5 gap-y-2">
+            <div className="flex flex-wrap items-center gap-x-5 gap-y-1.5">
+              <div className="flex items-center gap-1.5">
+                <ReceiptText className="h-4 w-4 text-[#1a1a1a]/30" />
+                <span className="text-[11px] font-semibold uppercase tracking-[0.12em] text-[#1a1a1a]/30">수납 리스크</span>
+              </div>
+              <span className="text-[12px] text-[#1a1a1a]/45">
+                미수 거래{" "}
+                <b className={`text-[15px] font-bold ${(kpis?.paymentRiskCount ?? 0) > 0 ? "text-[#B85C33]" : "text-[#111110]"}`}>
+                  {loadingValue ?? formatNumber(kpis?.paymentRiskCount)}
+                </b>
+              </span>
+              <span className="text-[12px] text-[#1a1a1a]/45">
+                미수 합계{" "}
+                <b className={`text-[15px] font-bold ${(revenue?.outstandingAmount ?? 0) > 0 ? "text-[#B85C33]" : "text-[#111110]"}`}>
+                  {loadingValue ?? formatCurrency(revenue?.outstandingAmount)}
+                </b>
+              </span>
             </div>
             <Link
               href="/admin/crm/deals"
-              className="inline-flex h-9 items-center justify-center gap-1.5 rounded-lg border border-[#e8e8e4] bg-white px-3 text-[12px] font-semibold text-[#111110] transition-colors hover:bg-[#f5f5f2]"
+              className="inline-flex h-8 items-center justify-center gap-1.5 rounded-lg border border-[#e8e8e4] bg-white px-3 text-[12px] font-semibold text-[#111110] transition-colors hover:bg-[#f5f5f2]"
             >
               Deals에서 처리
               <ExternalLink className="h-3.5 w-3.5" />
             </Link>
           </div>
-          <div className="grid grid-cols-2 gap-4">
-            <CrmMetricTile
-              icon={<ReceiptText className="h-4 w-4" />}
-              label="Payment Risk"
-              value={loadingValue ?? formatNumber(kpis?.paymentRiskCount)}
-              hint="미수 또는 부분 수납 거래"
-              tone={(kpis?.paymentRiskCount ?? 0) > 0 ? "text-[#B85C33]" : "text-[#111110]"}
-            />
-            <CrmMetricTile
-              icon={<CircleDollarSign className="h-4 w-4" />}
-              label="Outstanding"
-              value={loadingValue ?? formatCurrency(revenue?.outstandingAmount)}
-              hint="미수 금액 합계"
-              tone={(revenue?.outstandingAmount ?? 0) > 0 ? "text-[#B85C33]" : "text-[#111110]"}
-            />
-          </div>
         </section>
 
+        {/* 최근 고객별 로그 — 간소화(6건, 요약줄 제거) */}
         <section className="rounded-2xl border border-[#e8e8e4] bg-white p-4">
-          <div className="mb-4 flex flex-col gap-3 sm:flex-row sm:items-center sm:justify-between">
-            <div>
-              <p className="text-[11px] font-semibold uppercase tracking-wide text-[#1a1a1a]/30">Customer Timeline</p>
-              <h2 className="mt-1 text-[17px] font-bold text-[#111110]">최근 고객별 로그</h2>
-            </div>
+          <div className="mb-2 flex items-center justify-between gap-3">
+            <h2 className="text-[14px] font-bold text-[#111110]">최근 고객별 로그</h2>
             <Link
               href="/admin/crm/customers/accounts"
-              className="inline-flex h-9 items-center justify-center gap-1.5 rounded-lg border border-[#e8e8e4] bg-white px-3 text-[12px] font-semibold text-[#111110] transition-colors hover:bg-[#f5f5f2]"
+              className="inline-flex items-center gap-1 text-[12px] font-semibold text-[#1a1a1a]/45 transition-colors hover:text-[#111110]"
             >
               고객사 보기
-              <ExternalLink className="h-3.5 w-3.5" />
+              <ExternalLink className="h-3 w-3" />
             </Link>
           </div>
           {logs.length === 0 ? (
-            <p className="rounded-xl bg-[#fafaf8] px-3 py-8 text-center text-[13px] text-[#1a1a1a]/30">
+            <p className="rounded-xl bg-[#fafaf8] px-3 py-6 text-center text-[13px] text-[#1a1a1a]/30">
               {loading && !overview ? "불러오는 중..." : "최근 고객 로그가 없습니다."}
             </p>
           ) : (
             <div className="divide-y divide-[#f0f0ec]">
-              {logs.slice(0, 8).map((log) => (
+              {logs.slice(0, 6).map((log) => (
                 <Link
                   key={log.id}
                   href={log.href}
-                  className="grid gap-3 py-3 transition-colors hover:bg-[#fafaf8] sm:grid-cols-[112px_minmax(0,1fr)_140px]"
+                  className="flex items-center gap-2.5 py-2 transition-colors hover:bg-[#fafaf8]"
                 >
-                  <div className="flex items-start gap-2">
-                    <span className={`inline-flex items-center gap-1 rounded-full border px-2 py-0.5 text-[11px] font-semibold ${getCustomerLogTone(log.kind)}`}>
-                      <CustomerLogIcon kind={log.kind} />
-                      {getCustomerLogKindLabel(log.kind)}
-                    </span>
+                  <span
+                    className={`inline-flex shrink-0 items-center gap-1 rounded-full border px-2 py-0.5 text-[10px] font-semibold ${getCustomerLogTone(
+                      log.kind
+                    )}`}
+                  >
+                    <CustomerLogIcon kind={log.kind} />
+                    {getCustomerLogKindLabel(log.kind)}
+                  </span>
+                  <div className="min-w-0 flex-1">
+                    <p className="truncate text-[12px] font-semibold text-[#111110]">
+                      {log.customerName ?? log.partnerAccountName ?? "고객 미지정"}
+                    </p>
+                    <p className="truncate text-[11px] text-[#1a1a1a]/45">{log.title}</p>
                   </div>
-                  <div className="min-w-0">
-                    <p className="truncate text-[13px] font-semibold text-[#111110]">{log.customerName ?? log.partnerAccountName ?? "고객 미지정"}</p>
-                    <p className="mt-0.5 truncate text-[12px] text-[#1a1a1a]/45">{log.title}</p>
-                    {log.summary ? <p className="mt-0.5 truncate text-[11px] text-[#1a1a1a]/30">{log.summary}</p> : null}
-                  </div>
-                  <div className="text-left sm:text-right">
-                    <p className="text-[12px] font-semibold text-[#111110]">{log.amount == null ? log.status ?? "-" : formatCurrency(log.amount)}</p>
-                    <p className="mt-0.5 text-[11px] text-[#1a1a1a]/35">{formatOverviewDate(log.occurredAt)}</p>
+                  <div className="shrink-0 text-right">
+                    <p className="text-[12px] font-semibold text-[#111110]">
+                      {log.amount == null ? log.status ?? "-" : formatCurrency(log.amount)}
+                    </p>
+                    <p className="text-[11px] text-[#1a1a1a]/35">{formatOverviewDate(log.occurredAt)}</p>
                   </div>
                 </Link>
               ))}
@@ -759,6 +769,7 @@ function CrmOperationsDashboard({
           )}
         </section>
       </div>
+      ) : null}
     </>
   )
 }
@@ -769,6 +780,8 @@ export default function CrmPage() {
   const [leadKpisLoading, setLeadKpisLoading] = useState(true)
   const [, setLeadKpisError] = useState<string | null>(null)
   const [toast, setToast] = useState<{ msg: string; type: "success" | "error" } | null>(null)
+  const [searchQuery, setSearchQuery] = useState("")
+  const [drawerTarget, setDrawerTarget] = useState<{ key: string; name: string } | null>(null)
   const [crmOverview, setCrmOverview] = useState<AdminCrmOverview | null>(null)
   const [crmOverviewLoading, setCrmOverviewLoading] = useState(true)
   const [crmOverviewError, setCrmOverviewError] = useState<string | null>(null)
@@ -915,6 +928,25 @@ export default function CrmPage() {
 
       <div className="grid items-start gap-4 xl:grid-cols-[minmax(0,1fr)_340px]">
         <div className="min-w-0">
+      {/* 고객 검색 — 떠올린 고객을 바로 카드로 (canon §4.2) */}
+      <section className="mb-4 rounded-2xl border border-[#e8e8e4] bg-white p-4">
+        <p className="text-[11px] font-semibold uppercase tracking-[0.16em] text-[#1a1a1a]/30">고객 검색</p>
+        <CrmCustomerPicker
+          label={searchQuery}
+          linkedId=""
+          onFreeText={setSearchQuery}
+          onClear={() => setSearchQuery("")}
+          onPick={(pick) => {
+            setDrawerTarget({
+              key: `${pick.targetType === "neo_account" ? "neo" : "lead"}:${pick.targetId}`,
+              name: pick.targetLabel,
+            })
+            setSearchQuery("")
+          }}
+        />
+        <p className="mt-1.5 text-[11px] text-[#1a1a1a]/35">학원명·이름·전화로 검색해 바로 고객 카드를 엽니다.</p>
+      </section>
+
       {/* 지금 처리 — 오늘 우선순위 액션 밴드 (리드 보드 딥링크) */}
       <section className="mb-4 rounded-2xl border border-[#e8e8e4] bg-white p-4">
         <div className="mb-4 flex items-center justify-between gap-3">
@@ -1024,6 +1056,7 @@ export default function CrmPage() {
       </section>
 
       <CrmOperationsDashboard
+        part="revenue"
         overview={crmOverview}
         loading={crmOverviewLoading}
         error={crmOverviewError}
@@ -1043,6 +1076,20 @@ export default function CrmPage() {
         branchKpis={branchKpis}
         loading={pageRefreshing}
         branchError={branchKpisError}
+      />
+
+      {/* 맨 하단 — 수납 리스크 + 최근 고객별 로그 (간소화) */}
+      <CrmOperationsDashboard
+        part="risk"
+        overview={crmOverview}
+        loading={crmOverviewLoading}
+        error={crmOverviewError}
+      />
+
+      <Customer360Drawer
+        customerKey={drawerTarget?.key ?? null}
+        name={drawerTarget?.name}
+        onClose={() => setDrawerTarget(null)}
       />
 
       {toast && <Toast msg={toast.msg} type={toast.type} />}

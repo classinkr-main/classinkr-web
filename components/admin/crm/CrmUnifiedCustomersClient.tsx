@@ -2,6 +2,7 @@
 
 import { useCallback, useDeferredValue, useEffect, useMemo, useRef, useState } from "react"
 import Link from "next/link"
+import { usePathname, useRouter, useSearchParams } from "next/navigation"
 import { AlertTriangle, Building2, ExternalLink, Filter, PhoneCall, RefreshCw, Search, UserRound } from "lucide-react"
 
 import { adminFetchJsonCached, getCachedAdminJson } from "@/lib/admin-client"
@@ -180,6 +181,43 @@ export default function CrmUnifiedCustomersClient() {
   const [error, setError] = useState<string | null>(null)
   const [drawer, setDrawer] = useState<{ key: string; name: string } | null>(null)
   const requestSeq = useRef(0)
+
+  // 드로어를 ?account= 에 동기화 — 딥링크/뒤로가기 (C9)
+  const router = useRouter()
+  const pathname = usePathname()
+  const searchParams = useSearchParams()
+  const restoredDrawerRef = useRef(false)
+
+  const syncDrawerUrl = useCallback(
+    (key: string | null) => {
+      const params = new URLSearchParams(Array.from(searchParams.entries()))
+      if (key) params.set("account", key)
+      else params.delete("account")
+      const qs = params.toString()
+      router.replace(qs ? `${pathname}?${qs}` : pathname, { scroll: false })
+    },
+    [router, pathname, searchParams]
+  )
+
+  const openDrawer = useCallback(
+    (key: string, name: string) => {
+      setDrawer({ key, name })
+      syncDrawerUrl(key)
+    },
+    [syncDrawerUrl]
+  )
+
+  const closeDrawer = useCallback(() => {
+    setDrawer(null)
+    syncDrawerUrl(null)
+  }, [syncDrawerUrl])
+
+  useEffect(() => {
+    if (restoredDrawerRef.current) return
+    restoredDrawerRef.current = true
+    const account = searchParams.get("account")
+    if (account) setDrawer({ key: account, name: "" })
+  }, [searchParams])
   const { owners: crmOwners, currentOwner, health: ownerHealth } = useCrmOwners()
   const ownerOptions = useMemo(() => buildOwnerSelectOptions(data?.owners, crmOwners), [crmOwners, data?.owners])
 
@@ -510,7 +548,7 @@ export default function CrmUnifiedCustomersClient() {
                       <div className="flex min-w-0 items-center gap-2">
                         <button
                           type="button"
-                          onClick={() => setDrawer({ key: row.key, name: row.name })}
+                          onClick={() => openDrawer(row.key, row.name)}
                           className="group min-w-0 text-left"
                         >
                           <p className="truncate text-[13px] font-bold text-[#111110] group-hover:underline">{row.name}</p>
@@ -554,7 +592,7 @@ export default function CrmUnifiedCustomersClient() {
               <button
                 key={row.key}
                 type="button"
-                onClick={() => setDrawer({ key: row.key, name: row.name })}
+                onClick={() => openDrawer(row.key, row.name)}
                 className="block w-full p-4 text-left transition-colors hover:bg-[#fafaf8]"
               >
                 <div className="mb-2 flex items-start justify-between gap-3">
@@ -612,7 +650,7 @@ export default function CrmUnifiedCustomersClient() {
       <Customer360Drawer
         customerKey={drawer?.key ?? null}
         name={drawer?.name}
-        onClose={() => setDrawer(null)}
+        onClose={closeDrawer}
       />
     </div>
   )

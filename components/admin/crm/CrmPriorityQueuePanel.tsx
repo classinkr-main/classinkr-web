@@ -51,8 +51,8 @@ const FALLBACK_BUCKETS: Array<{ bucket: CrmPriorityBucket; label: string; count:
 const QUEUE_TTL_MS = 90_000
 const CURRENT_OWNER_VALUE = "__me"
 
-function queueUrl(source: SourceFilter, owner: string, bucket: BucketFilter) {
-  const params = new URLSearchParams({ limit: "12" })
+function queueUrl(source: SourceFilter, owner: string, bucket: BucketFilter, limit: number) {
+  const params = new URLSearchParams({ limit: String(limit) })
   if (source !== "all") params.set("source", source)
   if (owner) params.set("owner", owner)
   if (bucket !== "all") params.set("bucket", bucket)
@@ -109,7 +109,7 @@ export default function CrmPriorityQueuePanel({ refreshKey = 0, compact = false 
   const [actionMessage, setActionMessage] = useState<string | null>(null)
   const { owners: crmOwners, currentOwner, health: ownerHealth } = useCrmOwners()
 
-  const url = useMemo(() => queueUrl(source, owner, bucket), [source, owner, bucket])
+  const url = useMemo(() => queueUrl(source, owner, bucket, compact ? 4 : 12), [source, owner, bucket, compact])
   const bucketOptions = data?.buckets.length ? data.buckets : FALLBACK_BUCKETS
   const ownerOptions = useMemo(() => buildOwnerSelectOptions(data?.owners, crmOwners), [crmOwners, data?.owners])
 
