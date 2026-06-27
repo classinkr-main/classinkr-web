@@ -16,6 +16,7 @@ import CrmPriorityQueuePanel from "@/components/admin/crm/CrmPriorityQueuePanel"
 import CrmWeekAheadPanel from "@/components/admin/crm/CrmWeekAheadPanel"
 import CrmCustomerPicker from "@/components/admin/crm/CrmCustomerPicker"
 import Customer360Drawer from "@/components/admin/crm/Customer360Drawer"
+import { getRecentCustomers, type RecentCustomer } from "@/lib/crm/recent-customers"
 import { Toast } from "@/components/admin/crm/leads/shared"
 
 // 현황 = 한국팀 아침 지휘대. 액션 밴드(딥링크) + Neo CRM 팀 패널 + 돈 흐름 요약만.
@@ -783,6 +784,12 @@ export default function CrmPage() {
   const [searchQuery, setSearchQuery] = useState("")
   const [drawerTarget, setDrawerTarget] = useState<{ key: string; name: string } | null>(null)
   const [sidebarTab, setSidebarTab] = useState<"priority" | "week">("priority")
+  const [recentCustomers, setRecentCustomers] = useState<RecentCustomer[]>([])
+
+  // 고객 바로 가기 — 최근 본 고객(로컬). 드로어 열고 닫을 때마다 갱신.
+  useEffect(() => {
+    setRecentCustomers(getRecentCustomers())
+  }, [drawerTarget])
   const [crmOverview, setCrmOverview] = useState<AdminCrmOverview | null>(null)
   const [crmOverviewLoading, setCrmOverviewLoading] = useState(true)
   const [crmOverviewError, setCrmOverviewError] = useState<string | null>(null)
@@ -946,6 +953,22 @@ export default function CrmPage() {
           }}
         />
         <p className="mt-1.5 text-[11px] text-[#1a1a1a]/35">학원명·이름·전화로 검색해 바로 고객 카드를 엽니다.</p>
+        {recentCustomers.length > 0 ? (
+          <div className="mt-2.5 flex flex-wrap items-center gap-1.5 border-t border-[#f0f0ec] pt-2.5">
+            <span className="text-[10px] font-semibold uppercase tracking-[0.1em] text-[#1a1a1a]/30">바로 가기</span>
+            {recentCustomers.slice(0, 6).map((rc) => (
+              <button
+                key={rc.key}
+                type="button"
+                onClick={() => setDrawerTarget({ key: rc.key, name: rc.name })}
+                className="inline-flex items-center gap-1 rounded-full border border-[#e8e8e4] bg-white px-2.5 py-1 text-[11px] font-medium text-[#111110] transition-colors hover:border-[#c8c8c4] hover:bg-[#fafaf8]"
+              >
+                <span className="max-w-[120px] truncate">{rc.name}</span>
+                <span className="text-[10px] text-[#1a1a1a]/35">{rc.sourceLabel}</span>
+              </button>
+            ))}
+          </div>
+        ) : null}
       </section>
 
       {/* 지금 처리 — 오늘 우선순위 액션 밴드 (리드 보드 딥링크) */}
