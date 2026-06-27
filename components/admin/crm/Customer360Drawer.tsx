@@ -21,6 +21,7 @@ import {
 
 import { adminFetchJson, adminFetchJsonCached, clearAdminRequestCache } from "@/lib/admin-client"
 import { pushRecentCustomer } from "@/lib/crm/recent-customers"
+import { CS_MOTIONS, type CsMotion } from "@/lib/crm/cs-motions"
 import type { Customer360, Customer360Severity } from "@/lib/repositories/crm-customer-360"
 import type { CrmDealStage } from "@/lib/repositories/crm-deals"
 import type { CrmTaskType } from "@/lib/repositories/crm-tasks"
@@ -240,6 +241,33 @@ export default function Customer360Drawer({ customerKey, name, onClose }: Props)
       setActingId(null)
     }
   }, [taskTitle, taskType, customerKey, targetType, entityId, displayName, taskDue, refetch])
+
+  const handleCsMotion = useCallback(
+    async (motion: CsMotion) => {
+      if (!customerKey) return
+      setActingId(`cs:${motion.key}`)
+      setError(null)
+      try {
+        await adminFetchJson("/api/admin/crm/tasks", {
+          method: "POST",
+          body: JSON.stringify({
+            title: motion.title,
+            taskType: motion.taskType,
+            targetType,
+            targetId: entityId,
+            targetLabel: displayName,
+            assignToMe: true,
+          }),
+        })
+        await refetch()
+      } catch (err) {
+        setError(err instanceof Error ? err.message : "CS 할 일 생성에 실패했습니다.")
+      } finally {
+        setActingId(null)
+      }
+    },
+    [customerKey, targetType, entityId, displayName, refetch]
+  )
 
   const handleCompleteTask = useCallback(
     async (taskId: string) => {
@@ -612,6 +640,23 @@ export default function Customer360Drawer({ customerKey, name, onClose }: Props)
                     <Plus className="h-3.5 w-3.5" />
                     내 할 일로 추가
                   </button>
+                </div>
+              </div>
+              <div className="mt-3 border-t border-[#f0f0ec] pt-3">
+                <p className="mb-1.5 text-[11px] font-semibold text-[#1a1a1a]/45">고객 성공(CS) 동선 · 원클릭</p>
+                <div className="flex flex-wrap gap-1.5">
+                  {CS_MOTIONS.map((motion) => (
+                    <button
+                      key={motion.key}
+                      type="button"
+                      onClick={() => void handleCsMotion(motion)}
+                      disabled={actingId === `cs:${motion.key}`}
+                      className="inline-flex h-7 items-center gap-1 rounded-full border border-[#e8e8e4] bg-white px-2.5 text-[11px] font-semibold text-[#1a1a1a]/65 transition-colors hover:border-[#084734] hover:text-[#084734] disabled:opacity-50"
+                    >
+                      <Plus className="h-3 w-3" />
+                      {motion.label}
+                    </button>
+                  ))}
                 </div>
               </div>
             </section>
