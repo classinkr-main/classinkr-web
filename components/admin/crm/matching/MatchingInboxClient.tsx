@@ -408,7 +408,7 @@ export default function MatchingInboxClient() {
           <p className="text-[11px] font-medium uppercase tracking-widest text-[#1a1a1a]/30">CRM Matching</p>
           <h1 className="mt-2 text-2xl font-bold tracking-[-0.02em] text-[#111110]">데이터 매칭 인박스</h1>
           <p className="mt-2 max-w-2xl text-[13px] leading-relaxed text-[#1a1a1a]/45">
-            Neo CRM 스냅샷, REV 시트, 리드를 앱 고객·거래에 연결합니다. 고확신 매칭은 자동 확정되고, 여기서는
+            외부 CRM 스냅샷, REV 시트, 리드를 ClassIn 고객 DB에 연결합니다. 고확신 매칭은 자동 확정되고, 여기서는
             검토가 필요한 항목만 처리하면 됩니다.
           </p>
         </div>

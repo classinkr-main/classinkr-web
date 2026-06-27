@@ -791,6 +791,7 @@ export default function LeadsBoardClient() {
     return raw && (LEAD_FILTER_KEYS as string[]).includes(raw) ? (raw as LeadFilter) : "all"
   })()
   const focusRisk = searchParams.get("focus") === "risk"
+  const deepLinkedLeadId = searchParams.get("lead")?.trim() ?? ""
 
   const [leads, setLeads] = useState<LeadRecord[]>([])
   const [loading, setLoading] = useState(false)
@@ -808,6 +809,7 @@ export default function LeadsBoardClient() {
   const [activitySummary, setActivitySummary] = useState<Record<string, LeadActivityBadge>>({})
   const [selectedLeadIds, setSelectedLeadIds] = useState<Set<string>>(() => new Set())
   const [deletingIds, setDeletingIds] = useState<Set<string>>(() => new Set())
+  const [dismissedDeepLinkedLeadId, setDismissedDeepLinkedLeadId] = useState<string | null>(null)
 
   useEffect(() => {
     let cancelled = false
@@ -901,6 +903,28 @@ export default function LeadsBoardClient() {
       if (updated) setSelected(updated)
     }
   }, [leads]) // eslint-disable-line react-hooks/exhaustive-deps
+
+  useEffect(() => {
+    if (
+      !deepLinkedLeadId ||
+      loading ||
+      leads.length === 0 ||
+      selected?.id === deepLinkedLeadId ||
+      dismissedDeepLinkedLeadId === deepLinkedLeadId
+    )
+      return
+    const match = leads.find((lead) => lead.id === deepLinkedLeadId)
+    if (match) setSelected(match)
+  }, [deepLinkedLeadId, dismissedDeepLinkedLeadId, leads, loading, selected?.id])
+
+  const closeSelectedLead = useCallback(() => {
+    setSelected(null)
+    if (deepLinkedLeadId) setDismissedDeepLinkedLeadId(deepLinkedLeadId)
+    const url = new URL(window.location.href)
+    if (!url.searchParams.has("lead")) return
+    url.searchParams.delete("lead")
+    window.history.replaceState(null, "", `${url.pathname}${url.search}${url.hash}`)
+  }, [deepLinkedLeadId])
 
   // 드로어 열릴 때 로그 + 활동 인텔리전스 로드
   useEffect(() => {
@@ -1766,7 +1790,7 @@ export default function LeadsBoardClient() {
           events={events}
           activity={activity}
           activityLoading={activityLoading}
-          onClose={() => setSelected(null)}
+          onClose={closeSelectedLead}
           onStatusChange={handleStatus}
           onNotesChange={handleNotes}
           onFollowUpChange={handleFollowUp}

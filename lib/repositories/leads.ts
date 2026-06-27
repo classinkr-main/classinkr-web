@@ -13,11 +13,52 @@ import type { Lead, LeadInsert, LeadUpdate } from "@/lib/supabase/database.types
 // 기존 타입 re-export (호환성)
 export type { LeadStatus } from "@/lib/supabase/database.types";
 
-const USE_SUPABASE = process.env.USE_SUPABASE_LEADS === "true";
+export function shouldUseSupabaseLeads(
+  env: Record<string, string | undefined> = process.env
+) {
+  // Vercel's runtime filesystem is read-only, so JSON fallback cannot safely
+  // accept public lead writes there even if USE_SUPABASE_LEADS is missing.
+  const isVercelRuntime =
+    env.VERCEL === "1" ||
+    Boolean(env.VERCEL_ENV) ||
+    Boolean(env.VERCEL_URL) ||
+    Boolean(env.NEXT_PUBLIC_VERCEL_URL);
+
+  return env.USE_SUPABASE_LEADS === "true" || isVercelRuntime;
+}
+
+const USE_SUPABASE = shouldUseSupabaseLeads();
 const IS_PRODUCTION_RUNTIME =
   process.env.NODE_ENV === "production" || process.env.VERCEL_ENV === "production";
 const RESPONSE_TARGET_SOURCES = ["demo_modal", "contact_page", "meta_lead_ads"] as const;
 const ACTIVE_LEAD_STATUSES = ["new", "contacted"] as const;
+const OPTIONAL_LEAD_INSERT_COLUMNS = [
+  "branch",
+  "notes",
+  "source_detail",
+  "lead_magnet",
+  "follow_up_at",
+  "assigned_to",
+  "utm_source",
+  "utm_medium",
+  "utm_campaign",
+  "utm_term",
+  "utm_content",
+  "gclid",
+  "fbclid",
+  "msclkid",
+  "ttclid",
+  "landing_page",
+  "current_page",
+  "referrer",
+] as const satisfies readonly (keyof LeadInsert)[];
+
+interface SupabaseColumnError {
+  code?: string;
+  message?: string;
+  details?: string;
+  hint?: string;
+}
 
 /* ─── 기존 LeadRecord ↔ Supabase Lead 변환 ─── */
 
@@ -100,6 +141,29 @@ function assertDurableLeadStorage() {
   if (!USE_SUPABASE && IS_PRODUCTION_RUNTIME) {
     throw new Error("[leads] production lead capture requires USE_SUPABASE_LEADS=true");
   }
+}
+
+function isMissingOptionalLeadColumn(error: SupabaseColumnError) {
+  const haystack = [error.code, error.message, error.details, error.hint]
+    .filter(Boolean)
+    .join(" ")
+    .toLowerCase();
+
+  if (!haystack) return false;
+
+  return OPTIONAL_LEAD_INSERT_COLUMNS.some((column) =>
+    haystack.includes(column.toLowerCase())
+  );
+}
+
+function stripOptionalLeadColumns(insert: LeadInsert) {
+  const fallbackInsert: Partial<LeadInsert> = { ...insert };
+
+  for (const column of OPTIONAL_LEAD_INSERT_COLUMNS) {
+    delete fallbackInsert[column];
+  }
+
+  return fallbackInsert;
 }
 
 function supabaseToLegacy(row: Lead): LeadRecord {
@@ -243,7 +307,29 @@ export async function saveLead(
     .select()
     .single();
 
-  if (error) throw new Error(`[leads] 저장 실패: ${error.message}`);
+  if (error) {
+    if (isMissingOptionalLeadColumn(error)) {
+      console.warn(
+        "[leads] optional lead columns are missing; retrying with core lead fields only:",
+        error.message
+      );
+
+      const fallback = await supabase
+        .from("leads")
+        .insert(stripOptionalLeadColumns(insert))
+        .select()
+        .single();
+
+      if (fallback.error) {
+        throw new Error(`[leads] 저장 실패: ${fallback.error.message}`);
+      }
+
+      return supabaseToLegacy(fallback.data as Lead);
+    }
+
+    throw new Error(`[leads] 저장 실패: ${error.message}`);
+  }
+
   return supabaseToLegacy(data as Lead);
 }
 

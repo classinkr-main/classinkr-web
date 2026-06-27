@@ -25,6 +25,7 @@
 
 - 채널 `state`(published/draft/unpublished) **전수 크롤이 기본** — 내용이 있는 초안(예: PC 설치, 교사 추가, AI 기능)은 유용하므로 포함한다.
 - 빈 "작성중" 스텁(본문 < 24자)과 정확히 `테스트`/`test`/`샘플`/`sample` 제목은 제외(챗봇 답변 품질).
+- 채널톡 Documents 자체 메타 문서(`8472`, `8473`)와 짧은 중복 스텁(`44553`)은 제외한다. 챗봇은 ClassIn Korea 운영 자료만 검색하도록 유지한다.
 - 자동생성 제목 보정: `260407_코스 탈퇴 규정` → `코스 탈퇴 규정`, `한국어20260323_1109` → 본문 첫 제목에서 추출.
 - `--published-only`로 채널 published 상태만 좁힐 수 있다.
 
@@ -34,6 +35,7 @@
 - `docs_articles`: slug `channel-talk-document-{articleId}`, `status=published`
   - visibility: 기본 `unlisted`(공개 색인 제외, 챗봇·관리자 가이드에서 사용). 채널 published 글은 `--public`으로 공개 승격 가능. draft는 항상 `unlisted`.
   - `updated_by=sync-channel-documents` — 관리자 수기 편집본(`classin-admin` 등)과 구분된다.
+  - 본문에는 원문 URL을 넣지 않는다. 외부 원문 추적값은 `content_json.sourceUrl`/chunk metadata에만 보관해 챗봇 답변은 자체 운영 자료처럼 읽히게 한다.
 - `docs_ai_chunks`: 1800자 단위 청크 + 메타(sourceUrl, imageCount, fileCount, channelDocumentState)
 - 정합성 reconcile: 전수 크롤 시, 이번 세트에 없는 **자동 동기화 문서**는 `archived`로 내리고 청크를 정리한다. 수기 편집본은 건드리지 않는다.
 
@@ -69,11 +71,11 @@ npx tsx scripts/embed-docs-chunks.ts
 # 4) 확인: 챗봇에 "수업 참여 어떻게 해요?" → docs 출처로 답하는지
 ```
 
-## 7. 현재 상태 (2026-06-17 동기화 결과)
+## 7. 현재 상태 (2026-06-24 재정리 결과)
 
-- 동기화 문서: **57개** (내용 보유, 초안 포함 / 빈 스텁·테스트 제외)
-- 이미지 보존: 51개 문서, **347장** / 첨부파일 포함
-- 청크: **309개** → 임베딩 백필 적용
+- 동기화 문서: **54개** (내용 보유, 초안 포함 / 빈 스텁·테스트·채널톡 메타 문서·중복 스텁 제외)
+- 청크: **297개** → 임베딩 백필 적용(`gemini-embedding-001`)
+- 제외 및 reconcile: 채널톡 메타/중복 스텁 **3개 archived**
 - 관리자 수기 편집본 6건(`classin-admin`) 보존 확인
 
 ## 8. 후속 (follow-up)

@@ -12,7 +12,7 @@ export interface DocsSidebarProps {
 
 export function DocsSidebar({ groups, title = "가이드", className }: DocsSidebarProps) {
     return (
-        <aside className={cn("border-b border-black/[0.08] pb-4", className)}>
+        <aside className={cn("relative z-10 border-b border-black/[0.08] bg-[#FAFAF8] pb-4", className)}>
             <p className="text-xs font-bold uppercase tracking-[0.14em] text-[#084734]">
                 {title}
             </p>
@@ -37,10 +37,10 @@ export function DocsSidebar({ groups, title = "가이드", className }: DocsSide
                                     key={link.href}
                                     href={link.href}
                                     className={cn(
-                                        "block origin-left break-words border-l border-transparent py-1.5 pl-3 text-sm leading-5 transition-all duration-150 active:scale-[0.98] focus-visible:outline-none focus-visible:ring-2 focus-visible:ring-[#084734]",
+                                        "block origin-left break-words rounded-lg px-3 py-2 text-sm leading-6 transition-all duration-150 active:scale-[0.98] focus-visible:outline-none focus-visible:ring-2 focus-visible:ring-[#084734]",
                                         link.isActive
-                                            ? "border-[#084734] font-semibold text-[#084734]"
-                                            : "text-[#615D59] hover:border-[#084734]/25 hover:text-[#111110]"
+                                            ? "bg-[#F6F5F4] font-semibold text-[#111110]"
+                                            : "text-[#615D59] hover:bg-[#F6F5F4] hover:text-[#111110]"
                                     )}
                                 >
                                     {link.title}
@@ -70,7 +70,7 @@ export function DocsTableOfContents({
     }
 
     return (
-        <aside className={cn("border-b border-black/[0.08] pb-4", className)}>
+        <aside className={cn("relative z-10 border-b border-black/[0.08] bg-[#FAFAF8] pb-4", className)}>
             <p className="text-xs font-bold uppercase tracking-[0.14em] text-[#084734]">
                 {title}
             </p>
@@ -104,20 +104,25 @@ export function DocsSidebarLayout({
 }: DocsSidebarLayoutProps) {
     const gridClassName = sidebar
         ? toc
-            ? "lg:grid-cols-[240px_minmax(0,1fr)] xl:grid-cols-[260px_minmax(0,1fr)_220px]"
-            : "lg:grid-cols-[240px_minmax(0,1fr)]"
+            ? "lg:grid-cols-[250px_minmax(0,1fr)] xl:grid-cols-[280px_minmax(680px,1fr)_210px] 2xl:grid-cols-[300px_minmax(760px,1fr)_220px]"
+            : "lg:grid-cols-[250px_minmax(0,1fr)] xl:grid-cols-[280px_minmax(0,1fr)]"
         : toc
             ? "xl:grid-cols-[minmax(0,1fr)_220px]"
             : ""
 
     return (
         <section className={cn("pb-10 pt-28 md:pb-16 md:pt-32", className)}>
-            <div className={cn("container grid gap-8", gridClassName)}>
+            <div
+                className={cn(
+                    "mx-auto grid w-full max-w-[1560px] gap-8 px-4 sm:px-6 md:px-10 lg:px-8 xl:px-10 2xl:px-8",
+                    gridClassName
+                )}
+            >
                 {sidebar ? (
                     <>
                         {/* 모바일: 본문이 먼저 보이도록 기본 접힘 상태의 목차 (no-JS details) */}
-                        <details className="group rounded-2xl border border-black/[0.08] bg-white px-4 py-3 lg:hidden">
-                            <summary className="flex cursor-pointer list-none items-center justify-between text-sm font-bold text-[#111110] [&::-webkit-details-marker]:hidden">
+                        <details className="group hidden rounded-2xl border border-black/[0.08] bg-white px-4 py-3 max-lg:block lg:!hidden lg:[content-visibility:hidden]">
+                            <summary className="flex cursor-pointer list-none items-center justify-between text-sm font-bold text-[#111110] lg:hidden [&::-webkit-details-marker]:hidden">
                                 가이드 목차 보기
                                 <svg
                                     className="h-4 w-4 text-[#084734] transition-transform duration-200 group-open:rotate-180"
@@ -128,16 +133,16 @@ export function DocsSidebarLayout({
                                     <path d="M4 6l4 4 4-4" stroke="currentColor" strokeWidth="1.6" strokeLinecap="round" strokeLinejoin="round" />
                                 </svg>
                             </summary>
-                            <div className="pt-4">{sidebar}</div>
+                            <div className="pt-4 lg:hidden">{sidebar}</div>
                         </details>
-                        <div className="hidden lg:sticky lg:top-24 lg:block lg:self-start">
+                        <div className="hidden lg:sticky lg:top-24 lg:z-10 lg:-ml-8 lg:block lg:max-h-[calc(100dvh-7rem)] lg:w-[calc(100%+2rem)] lg:self-start lg:overflow-y-auto lg:pr-2 xl:-ml-10 xl:w-[calc(100%+2.5rem)] 2xl:-ml-8 2xl:w-[calc(100%+2rem)]">
                             {sidebar}
                         </div>
                     </>
                 ) : null}
                 <main className="min-w-0">{children}</main>
                 {toc ? (
-                    <div className="hidden xl:block xl:sticky xl:top-24 xl:self-start">
+                    <div className="hidden xl:sticky xl:top-24 xl:z-10 xl:block xl:self-start">
                         {toc}
                     </div>
                 ) : null}

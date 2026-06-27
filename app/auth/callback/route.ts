@@ -40,6 +40,7 @@ export async function GET(req: NextRequest) {
       userId: data.user.id,
       leadId: profile.lead_id,
       email: data.user.email ?? profile.email,
+      emailVerified: Boolean(data.user.email_confirmed_at),
     })
   } catch (profileError) {
     console.error("[auth/callback] profile upsert failed:", profileError)

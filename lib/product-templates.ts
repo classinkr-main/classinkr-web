@@ -35,6 +35,24 @@ export const PRODUCT_TEMPLATES = [
     description: '86" + T1 카메라 + 벽걸이 설치',
     unit_price: 7500000, // 580+120+50 = 750
   },
+  {
+    key: "ai-recording-1y",
+    label: "자동 녹화 1년 이용권",
+    description: "약 1,200시간 녹화/아카이브",
+    unit_price: 300000,
+  },
+  {
+    key: "ai-studio-recording-set",
+    label: "올인원 녹화수업 세트",
+    description: '86" 전자칠판 + T1 + 벽걸이 + 자동 녹화 1년',
+    unit_price: 7800000,
+  },
+  {
+    key: "online-suite-monthly",
+    label: "구독형 AI Suite",
+    description: "무제한 녹화/수업 + 랜딩페이지 + 인가 대행",
+    unit_price: 400000,
+  },
 ] as const
 
 export type ProductKey = typeof PRODUCT_TEMPLATES[number]['key']

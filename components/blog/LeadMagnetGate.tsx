@@ -8,12 +8,13 @@
 
 "use client"
 
-import { useState } from "react"
+import { useCallback, useEffect, useRef, useState } from "react"
 import { ArrowRight, CheckCircle2, Download, FileText, Loader2, Mail } from "lucide-react"
 import { PublicLoginDialog } from "@/components/auth/PublicLoginDialog"
 import { Input } from "@/components/ui/input"
 import { Button } from "@/components/ui/button"
 import { trackEvent } from "@/lib/analytics"
+import { collectLeadAttribution } from "@/lib/marketing-attribution"
 import {
   getLeadMagnetItemCount,
   getLeadMagnetPublicGateLabel,
@@ -28,6 +29,18 @@ interface Props {
   postSlug: string
 }
 
+/**
+ * 로그인 후 자료 다운로드 의도를 same-origin 상대 경로(next)에 실어 복원한다.
+ * 현재 경로에 resume=download & material=<slug> 마커를 붙이되 기존 쿼리/해시는 보존한다.
+ */
+function buildResumeNextPath(slug: string): string {
+  if (typeof window === "undefined") return `/resources/${slug}`
+  const url = new URL(window.location.href)
+  url.searchParams.set("resume", "download")
+  url.searchParams.set("material", slug)
+  return `${url.pathname}${url.search}${url.hash}`
+}
+
 export function LeadMagnetGate({ leadMagnet, postSlug }: Props) {
   const [email, setEmail] = useState("")
   const [loading, setLoading] = useState(false)
@@ -35,6 +48,8 @@ export function LeadMagnetGate({ leadMagnet, postSlug }: Props) {
   const [loginDialogOpen, setLoginDialogOpen] = useState(false)
   const [submitted, setSubmitted] = useState(false)
   const [error, setError] = useState("")
+  const [resumeNextPath, setResumeNextPath] = useState<string | undefined>(undefined)
+  const resumedRef = useRef(false)
 
   const source = leadMagnet.sourceDetail
   const itemCount = getLeadMagnetItemCount(leadMagnet)
@@ -55,6 +70,7 @@ export function LeadMagnetGate({ leadMagnet, postSlug }: Props) {
           email,
           source,
           leadMagnet: leadMagnet.slug,
+          attribution: collectLeadAttribution(),
         }),
       })
       const data = await res.json()
@@ -65,6 +81,7 @@ export function LeadMagnetGate({ leadMagnet, postSlug }: Props) {
           lead_magnet: leadMagnet.slug,
           post_slug: postSlug,
           gate: leadMagnet.gate,
+          event_id: data.conversionEventId,
         })
         setSubmitted(true)
       } else {
@@ -77,7 +94,7 @@ export function LeadMagnetGate({ leadMagnet, postSlug }: Props) {
     }
   }
 
-  const handleDownload = async () => {
+  const handleDownload = useCallback(async () => {
     if (downloading || !leadMagnet.published) return
 
     setDownloading(true)
@@ -95,6 +112,7 @@ export function LeadMagnetGate({ leadMagnet, postSlug }: Props) {
         downloadError instanceof MaterialDownloadError &&
         downloadError.code === "login_required"
       ) {
+        setResumeNextPath(buildResumeNextPath(leadMagnet.slug))
         setLoginDialogOpen(true)
       } else {
         setError(
@@ -106,13 +124,36 @@ export function LeadMagnetGate({ leadMagnet, postSlug }: Props) {
     } finally {
       setDownloading(false)
     }
-  }
+  }, [downloading, leadMagnet.published, leadMagnet.slug, submitted, email, postSlug])
+
+  useEffect(() => {
+    if (resumedRef.current) return
+    if (typeof window === "undefined") return
+
+    const params = new URLSearchParams(window.location.search)
+    if (params.get("resume") !== "download") return
+    if (params.get("material") !== leadMagnet.slug) return
+
+    resumedRef.current = true
+
+    params.delete("resume")
+    params.delete("material")
+    const cleanedSearch = params.toString()
+    const cleanedUrl =
+      window.location.pathname +
+      (cleanedSearch ? `?${cleanedSearch}` : "") +
+      window.location.hash
+    window.history.replaceState(window.history.state, "", cleanedUrl)
+
+    void handleDownload()
+  }, [handleDownload, leadMagnet.slug])
 
   return (
     <section className="mt-10 border border-black/[0.08] bg-white md:mt-12">
       <PublicLoginDialog
         open={loginDialogOpen}
         onOpenChange={setLoginDialogOpen}
+        nextPath={resumeNextPath}
         title="로그인 후 자료 받기"
       />
       <div className="h-1 w-full bg-[#084734]" />

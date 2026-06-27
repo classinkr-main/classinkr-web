@@ -5,6 +5,7 @@ import Image from "next/image"
 import Link from "next/link"
 import { usePathname } from "next/navigation"
 import { TrackedLink } from "@/components/TrackedLink"
+import { SessionNavEntry } from "@/components/auth/SessionNavEntry"
 import { cn } from "@/lib/utils"
 import { Menu, X, Pencil, Presentation } from "lucide-react"
 
@@ -202,6 +203,7 @@ export function Header() {
                 </nav>
 
                 <div className="hidden md:flex items-center gap-4">
+                    <SessionNavEntry />
                     <TrackedLink
                         href="/resources"
                         prefetch={false}

@@ -61,4 +61,88 @@ describe("track event route", () => {
       })
     )
   })
+
+  it("accepts chatbot events emitted by the floating assistant", async () => {
+    const response = await POST(
+      trackRequest({
+        event: "chatbot_teaser_shown",
+        page: "/contact",
+        params: {
+          path: "/contact",
+          ignored: "drop-me",
+        },
+      })
+    )
+
+    expect(response.status).toBe(200)
+    expect(await response.json()).toEqual({ ok: true, stored: true })
+    expect(insert).toHaveBeenCalledWith(
+      expect.objectContaining({
+        event_name: "chatbot_teaser_shown",
+        params: {
+          path: "/contact",
+        },
+      })
+    )
+  })
+
+  it("accepts purchase events emitted by checkout success", async () => {
+    const response = await POST(
+      trackRequest({
+        event: "purchase",
+        page: "/checkout/success",
+        params: {
+          transaction_id: "sw_sub_123",
+          event_id: "purchase:sw_sub_123",
+          value: 550000,
+          currency: "KRW",
+          ignored: "drop-me",
+        },
+      })
+    )
+
+    expect(response.status).toBe(200)
+    expect(await response.json()).toEqual({ ok: true, stored: true })
+    expect(insert).toHaveBeenCalledWith(
+      expect.objectContaining({
+        event_name: "purchase",
+        params: {
+          transaction_id: "sw_sub_123",
+          event_id: "purchase:sw_sub_123",
+          value: 550000,
+          currency: "KRW",
+        },
+      })
+    )
+  })
+
+  it("accepts internal page exit engagement events", async () => {
+    const response = await POST(
+      trackRequest({
+        event: "page_exit",
+        page: "/product/sw",
+        params: {
+          path: "/product/sw?utm_source=meta",
+          title: "Classin SW",
+          duration_ms: 12345,
+          exit_type: "pagehide",
+          ignored: "drop-me",
+        },
+      })
+    )
+
+    expect(response.status).toBe(200)
+    expect(await response.json()).toEqual({ ok: true, stored: true })
+    expect(insert).toHaveBeenCalledWith(
+      expect.objectContaining({
+        event_name: "page_exit",
+        params: {
+          path: "/product/sw?utm_source=meta",
+          title: "Classin SW",
+          duration_ms: 12345,
+          exit_type: "pagehide",
+        },
+      })
+    )
+  })
 })

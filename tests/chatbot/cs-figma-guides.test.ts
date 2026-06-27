@@ -284,6 +284,7 @@ describe("CS Figma guide source", () => {
       for (let index = 0; index < expectedNumberedSteps; index += 1) {
         expect(answer, guide.slug).toContain(`${index + 1}. `)
       }
+
       expect(answer, guide.slug).not.toMatch(/https?:\/\//i)
       expect(answer, guide.slug).not.toMatch(/\[[^\]]+\]\(https?:\/\/[^)]+\)/i)
       expect(answer, guide.slug).not.toContain("원본 캡처:")

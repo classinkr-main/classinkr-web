@@ -1,7 +1,7 @@
 "use client"
 
 import type { KeyboardEvent, ReactNode } from "react"
-import { useId, useMemo, useRef } from "react"
+import { useEffect, useId, useMemo, useRef, useState, useTransition } from "react"
 
 import { cn } from "@/lib/utils"
 
@@ -32,14 +32,32 @@ export default function AdminTabs<T extends string>({
 }: AdminTabsProps<T>) {
   const id = useId()
   const buttonRefs = useRef<Array<HTMLButtonElement | null>>([])
-  const activeIndex = Math.max(0, items.findIndex((item) => item.value === value))
+  const [optimisticValue, setOptimisticValue] = useState(value)
+  const [isPending, startTransition] = useTransition()
   const buttonIds = useMemo(() => items.map((item) => `${id}-${item.value}`), [id, items])
+  const activeValue = items.some((item) => item.value === optimisticValue)
+    ? optimisticValue
+    : value
+  const activeIndex = Math.max(0, items.findIndex((item) => item.value === activeValue))
+
+  useEffect(() => {
+    setOptimisticValue(value)
+  }, [value])
+
+  function selectTab(nextValue: T) {
+    if (nextValue === activeValue) return
+
+    setOptimisticValue(nextValue)
+    startTransition(() => {
+      onValueChange(nextValue)
+    })
+  }
 
   function focusTab(index: number) {
     const nextIndex = (index + items.length) % items.length
     const next = items[nextIndex]
     if (!next) return
-    onValueChange(next.value)
+    selectTab(next.value)
     buttonRefs.current[nextIndex]?.focus()
   }
 
@@ -64,6 +82,7 @@ export default function AdminTabs<T extends string>({
       <div
         role="tablist"
         aria-label={label}
+        aria-busy={isPending || undefined}
         onKeyDown={handleKeyDown}
         className={cn(
           "inline-flex min-w-full gap-1 rounded-xl border border-black/[0.08] bg-white p-1 sm:min-w-0",
@@ -71,7 +90,7 @@ export default function AdminTabs<T extends string>({
         )}
       >
         {items.map((item, index) => {
-          const active = item.value === value
+          const active = item.value === activeValue
           return (
             <button
               key={item.value}
@@ -83,7 +102,7 @@ export default function AdminTabs<T extends string>({
               role="tab"
               aria-selected={active}
               tabIndex={active ? 0 : -1}
-              onClick={() => onValueChange(item.value)}
+              onClick={() => selectTab(item.value)}
               className={cn(
                 "inline-flex min-h-11 flex-1 items-center justify-center gap-2 rounded-lg px-3 py-2 text-[13px] font-semibold transition-colors focus:outline-none focus-visible:ring-2 focus-visible:ring-[#084734] focus-visible:ring-offset-2 sm:flex-none",
                 active

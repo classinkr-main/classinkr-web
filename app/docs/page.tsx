@@ -1,15 +1,15 @@
 import type { Metadata } from "next"
 import Link from "next/link"
-import { ArrowRight, Search } from "lucide-react"
+import { Search } from "lucide-react"
 
-import { getDocCategoryPath, type DocCategoryId } from "@/lib/docs"
 import { getDocsContent } from "@/lib/docs-content"
+import { DocsCategoryNav } from "@/components/docs"
 import { SearchHighlight } from "@/components/ui/SearchHighlight"
 import { DocsSearchLogger } from "@/components/docs/DocsSearchLogger"
 
 import {
-  getCategoryIcon,
   getAllDocsSummaries,
+  getDocsCategoryNavItems,
   toArticleSummary,
   scoreDocsArticle,
 } from "./_utils"
@@ -30,37 +30,6 @@ interface DocsHomePageProps {
   searchParams?: Promise<{ q?: string }>
 }
 
-const categoryLauncherCopy: Partial<Record<DocCategoryId, { scope: string; summary: string }>> = {
-  start: {
-    scope: "처음 시작",
-    summary: "설치, 회원 가입, 비밀번호 변경을 빠르게 확인합니다.",
-  },
-  software: {
-    scope: "소프트웨어",
-    summary: "수업 도구, 학습 활동, LMS, AI 기능을 제품 기능 기준으로 봅니다.",
-  },
-  admin: {
-    scope: "관리자",
-    summary: "유료 전환, 인증, 코스·교사·학생·스토리지 관리를 봅니다.",
-  },
-  teacher: {
-    scope: "교사",
-    summary: "프로필, 코스 생성, 학습 활동, 교실 설정을 정리합니다.",
-  },
-  student: {
-    scope: "학생",
-    summary: "코스 참여, 수업 듣기, 과제 제출, AI 기능을 찾습니다.",
-  },
-  board: {
-    scope: "전자칠판",
-    summary: "T1·Panorama 카메라 설치와 CMS 세팅을 단계별로 봅니다.",
-  },
-  hardware: {
-    scope: "하드웨어",
-    summary: "보드 라인업, 판서, 디스플레이, AI 카메라 기능을 확인합니다.",
-  },
-}
-
 function normalizeQuery(value?: string) {
   return value?.trim().toLowerCase() ?? ""
 }
@@ -70,21 +39,7 @@ function normalizeQuery(value?: string) {
 export default async function DocsHomePage({ searchParams }: DocsHomePageProps) {
   const { q } = await (searchParams ?? Promise.resolve<{ q?: string }>({}))
   const docsContent = await getDocsContent()
-  const categoryCards = docsContent.categories.map((category) => {
-    const articleCount = docsContent.docs.filter((doc) => doc.category === category.id && (doc.visibility ?? "public") === "public" && !doc.noindex).length
-    const launcherCopy = categoryLauncherCopy[category.id] ?? {
-      scope: "가이드",
-      summary: category.description,
-    }
-
-    return {
-      ...category,
-      href: getDocCategoryPath(category.id),
-      articleCount,
-      Icon: getCategoryIcon(category.id),
-      launcherCopy,
-    }
-  })
+  const categoryTabs = getDocsCategoryNavItems(docsContent)
   const featuredArticles = docsContent.docs
     .filter((doc) => doc.featured && (doc.visibility ?? "public") === "public" && !doc.noindex)
     .map((doc) => toArticleSummary(doc, docsContent.categories))
@@ -142,40 +97,7 @@ export default async function DocsHomePage({ searchParams }: DocsHomePageProps) 
           )}
         </p>
 
-        <div className="mt-9">
-          <div className="grid auto-cols-[minmax(230px,78vw)] grid-flow-col gap-3 overflow-x-auto pb-2 md:auto-cols-auto md:grid-flow-row md:grid-cols-3 md:gap-4 md:overflow-visible md:pb-0">
-            {categoryCards.map(({ id, title, href, articleCount, Icon, launcherCopy }) => (
-              <Link
-                key={id}
-                href={href}
-                className="group flex min-h-[154px] origin-center flex-col justify-between rounded-lg border border-black/[0.08] bg-white p-4 text-left shadow-[0_6px_18px_rgba(17,17,16,0.035)] transition-all duration-150 hover:border-[#084734]/25 hover:shadow-[0_10px_26px_rgba(17,17,16,0.06)] active:scale-[0.98] active:opacity-90 focus-visible:outline-none focus-visible:ring-2 focus-visible:ring-[#084734] focus-visible:ring-offset-2 focus-visible:ring-offset-[#FAFAF8] md:min-h-[168px] md:p-5"
-              >
-                <span>
-                  <span className="flex items-start justify-between gap-4">
-                    <span className="flex h-9 w-9 shrink-0 items-center justify-center rounded-lg bg-[#ECFDF5] text-[#084734] md:h-10 md:w-10">
-                      <Icon aria-hidden className="h-4.5 w-4.5 md:h-5 md:w-5" />
-                    </span>
-                    <ArrowRight
-                      aria-hidden
-                      className="mt-1 h-4 w-4 shrink-0 text-[#A39E98] transition-transform duration-150 group-hover:translate-x-1 group-hover:text-[#084734]"
-                    />
-                  </span>
-                  <span className="mt-6 block">
-                    <span className="block text-[11px] font-semibold text-[#084734]">
-                      {launcherCopy.scope} · {articleCount}개
-                    </span>
-                    <span className="mt-2 block break-words text-[22px] font-black leading-tight text-[#111110] md:text-[24px]">
-                      {title}
-                    </span>
-                    <span className="mt-2.5 block break-words text-sm leading-6 text-[#4F4C49] md:text-[15px] md:leading-7">
-                      {launcherCopy.summary}
-                    </span>
-                  </span>
-                </span>
-              </Link>
-            ))}
-          </div>
-        </div>
+        <DocsCategoryNav items={categoryTabs} className="mt-9" />
       </section>
 
       <section className="container mt-16">

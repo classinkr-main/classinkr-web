@@ -58,6 +58,7 @@ export default async function ResourcePage({ params }: ResourcePageProps) {
 
   const itemCount = getLeadMagnetItemCount(magnet)
   const pdfGuide = magnet.pdfGuide
+  const storyGuide = magnet.storyGuide
   const relatedMagnets = pdfGuide?.relatedMagnets?.length
     ? (await getPublishedLeadMagnets()).filter((item) =>
         pdfGuide.relatedMagnets.includes(item.slug)
@@ -140,6 +141,41 @@ export default async function ResourcePage({ params }: ResourcePageProps) {
             <ResourceDownloadForm resource={downloadResource} />
           </div>
 
+          {storyGuide ? (
+            <section className="mt-8 border border-black/[0.08] bg-white p-6 md:p-8">
+              <p className="text-[12px] font-bold uppercase tracking-[0.18em] text-[#084734]/60">
+                {storyGuide.eyebrow}
+              </p>
+              <div className="mt-3 grid gap-7 lg:grid-cols-[minmax(0,0.92fr)_minmax(0,1fr)]">
+                <div>
+                  <h2 className="text-2xl font-bold leading-tight text-[#111110]">
+                    {storyGuide.title}
+                  </h2>
+                  <p className="mt-4 text-[15px] leading-7 text-[#615D59]">
+                    {storyGuide.body}
+                  </p>
+                  {storyGuide.takeaway ? (
+                    <p className="mt-5 border-l-2 border-[#084734] bg-[#F6F5F4] px-4 py-3 text-[14px] font-semibold leading-7 text-[#31302E]">
+                      {storyGuide.takeaway}
+                    </p>
+                  ) : null}
+                </div>
+                <ol className="divide-y divide-black/[0.08] border-y border-black/[0.08]">
+                  {storyGuide.beats.map((beat, index) => (
+                    <li key={beat} className="grid grid-cols-[34px_minmax(0,1fr)] gap-3 py-4">
+                      <span className="text-[13px] font-bold text-[#084734]">
+                        {String(index + 1).padStart(2, "0")}
+                      </span>
+                      <span className="text-[14px] leading-6 text-[#31302E]">
+                        {beat}
+                      </span>
+                    </li>
+                  ))}
+                </ol>
+              </div>
+            </section>
+          ) : null}
+
           {pdfGuide ? (
             <section className="mt-8 border border-black/[0.08] bg-white p-6 md:p-8">
               <h2 className="text-2xl font-bold tracking-[-0.03em] text-[#111110]">
@@ -176,7 +212,7 @@ export default async function ResourcePage({ params }: ResourcePageProps) {
                 </div>
                 <div>
                   <p className="text-[12px] font-bold uppercase tracking-[0.16em] text-[#084734]">
-                    상담 질문
+                    상담에서 확인할 질문
                   </p>
                   <ul className="mt-3 space-y-3">
                     {pdfGuide.discussionPrompts.map((item) => (
@@ -234,13 +270,13 @@ export default async function ResourcePage({ params }: ResourcePageProps) {
             </h2>
             <div className="mt-3 max-w-3xl space-y-2 text-[14px] leading-7 text-[#615D59]">
               <p>
-                각 문항은 현재 상태가 안정적이면 1점, 불안정하거나 확인이 필요하면 0점으로
-                표시하세요. 1점/0점 기준으로 단순하게 표시하고, 애매한 항목은 억지로 긍정
-                처리하지 않는 편이 좋습니다.
+                각 문항은 지금 기준이 분명하면 1점, 아직 확인이 필요하면 0점으로 표시하세요.
+                0점은 부족하다는 뜻이 아니라 상담과 데모에서 확인해야 할 질문이 남아 있다는
+                뜻입니다.
               </p>
               <p>
-                총점 자체보다 낮게 나온 영역을 보세요. 그 영역이 먼저 손볼 운영 병목이고,
-                ClassIn 상담에서 가장 먼저 검증해야 할 장면입니다.
+                총점 자체보다 낮게 나온 영역을 보세요. 그 영역이 우리 학원이 먼저 확인해야 할
+                운영 리스크이고, ClassIn 상담에서 가장 먼저 검증해야 할 장면입니다.
               </p>
             </div>
 
@@ -413,7 +449,7 @@ export default async function ResourcePage({ params }: ResourcePageProps) {
               실행 플랜
             </p>
             <h2 className="mt-3 text-2xl font-bold tracking-[-0.03em] text-[#111110]">
-              7일 실행 플랜
+              실행 플랜
             </h2>
             <div className="mt-6 grid gap-4 md:grid-cols-2">
               {magnet.actionPlan.map((step) => (

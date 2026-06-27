@@ -83,10 +83,25 @@ async function fetchNaverProfile(accessToken: string) {
   return data
 }
 
+// SECURITY: Naver's /v1/nid/me exposes no email-verification flag, so the
+// Naver-provided email is UNVERIFIED. We key the Supabase auth identity on a
+// synthetic provider-siloed address (naver_<providerId>@naver.invalid) instead
+// of the real email. This prevents an email-collision account takeover: a
+// magiclink minted against the real email could otherwise resolve to a
+// pre-existing account that already owns it. The real email is retained only
+// as a non-identity profile attribute (user_metadata.real_email). email_confirm
+// is true ONLY because the synthetic .invalid address is non-routable and
+// uniquely derived from the Naver account id — it asserts Naver-account
+// ownership, not real-mailbox ownership.
+function getNaverAuthEmail(providerId: string) {
+  return `naver_${providerId}@naver.invalid`
+}
+
 async function ensureNaverUser(profile: NonNullable<NaverProfileResponse["response"]>) {
   const admin = createSupabaseAdminClient()
-  const providerId = profile.id
-  const email = profile.email?.trim().toLowerCase() || `naver_${providerId}@naver.invalid`
+  const providerId = profile.id as string
+  const authEmail = getNaverAuthEmail(providerId)
+  const realEmail = profile.email?.trim().toLowerCase() || null
   const name = profile.name?.trim() || profile.nickname?.trim() || "Naver User"
 
   const { data: existingProfile } = await admin
@@ -97,17 +112,18 @@ async function ensureNaverUser(profile: NonNullable<NaverProfileResponse["respon
     .maybeSingle()
 
   if (existingProfile?.id) {
-    return { email, userId: existingProfile.id as string }
+    return { authEmail, realEmail, userId: existingProfile.id as string }
   }
 
   const { data: created, error: createError } = await admin.auth.admin.createUser({
-    email,
+    email: authEmail,
     email_confirm: true,
     user_metadata: {
       provider: "naver",
       provider_id: providerId,
       sub: providerId,
       name,
+      real_email: realEmail,
       phone: profile.mobile ?? null,
     },
   })
@@ -116,26 +132,34 @@ async function ensureNaverUser(profile: NonNullable<NaverProfileResponse["respon
     throw createError
   }
 
-  return { email, userId: created.user?.id ?? null }
+  return { authEmail, realEmail, userId: created.user?.id ?? null }
 }
 
-async function issueSupabaseSession(req: NextRequest, email: string, response: NextResponse) {
+// SECURITY: `authEmail` is always the synthetic provider-siloed address
+// (naver_<providerId>@naver.invalid). The magiclink + verifyOtp round trip is
+// bound to that address, so the issued session can never land on a pre-existing
+// user that owns the real Naver email. Never pass the real email here.
+async function issueSupabaseSession(
+  req: NextRequest,
+  authEmail: string,
+  response: NextResponse,
+) {
   const admin = createSupabaseAdminClient()
   let { data: linkData, error: linkError } = await admin.auth.admin.generateLink({
     type: "magiclink",
-    email,
+    email: authEmail,
   })
 
   if (linkError) {
     const { error: createError } = await admin.auth.admin.createUser({
-      email,
+      email: authEmail,
       email_confirm: true,
       user_metadata: { provider: "naver" },
     })
     if (createError && !createError.message.toLowerCase().includes("already")) {
       throw createError
     }
-    const retry = await admin.auth.admin.generateLink({ type: "magiclink", email })
+    const retry = await admin.auth.admin.generateLink({ type: "magiclink", email: authEmail })
     linkData = retry.data
     linkError = retry.error
   }
@@ -185,14 +209,19 @@ export async function GET(req: NextRequest) {
   try {
     const accessToken = await exchangeNaverCode(req, code, state)
     const profile = await fetchNaverProfile(accessToken)
-    const { email } = await ensureNaverUser(profile)
-    const user = (await issueSupabaseSession(req, email, response)) as User
+    const { authEmail, realEmail } = await ensureNaverUser(profile)
+    // SECURITY: mint the session against the synthetic auth email only.
+    const user = (await issueSupabaseSession(req, authEmail, response)) as User
     const publicProfile = await upsertPublicUserProfile(user)
     await stitchIdentity({
       anonymousId: req.cookies.get(ANONYMOUS_ID_COOKIE)?.value ?? null,
       userId: user.id,
       leadId: publicProfile.lead_id,
-      email: user.email ?? publicProfile.email,
+      // SECURITY: Naver email is UNVERIFIED (no flag in /v1/nid/me). Pass the real
+      // email for diagnostics but mark emailVerified:false so the stitch never
+      // auto-links leads by this email string (D4).
+      email: realEmail ?? publicProfile.email,
+      emailVerified: false,
     })
     nextUrl.searchParams.delete("auth_error")
     return response

@@ -13,6 +13,7 @@ import type {
   LeadMagnetSection,
   LeadMagnetSourceLink,
   LeadMagnetStatus,
+  LeadMagnetStoryGuide,
   LeadMagnetTier,
 } from "@/lib/lead-magnets"
 
@@ -129,6 +130,23 @@ function normalizePdfGuide(value: unknown): LeadMagnetPdfGuide | undefined {
   }
 }
 
+function normalizeStoryGuide(value: unknown): LeadMagnetStoryGuide | undefined {
+  const raw = asRecord(value)
+  if (Object.keys(raw).length === 0) return undefined
+
+  const beats = stringArray(raw.beats)
+  const story = {
+    eyebrow: stringValue(raw.eyebrow),
+    title: stringValue(raw.title),
+    body: stringValue(raw.body),
+    beats,
+    takeaway: stringValue(raw.takeaway),
+  }
+
+  if (!story.title && !story.body && beats.length === 0) return undefined
+  return story
+}
+
 export function normalizeLeadMagnet(input: unknown): LeadMagnet {
   const raw = asRecord(input)
   const title = stringValue(raw.title, "새 자료")
@@ -161,6 +179,7 @@ export function normalizeLeadMagnet(input: unknown): LeadMagnet {
     deliverables: stringArray(raw.deliverables),
     consultationPrep: stringArray(raw.consultationPrep),
     sourceLinks: normalizeSourceLinks(raw.sourceLinks),
+    storyGuide: normalizeStoryGuide(raw.storyGuide),
     pdfGuide: normalizePdfGuide(raw.pdfGuide),
     salesPlaybook: {
       intentScore: Math.max(0, Math.min(40, numberValue(salesPlaybook.intentScore, 15))),

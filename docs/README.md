@@ -5,6 +5,8 @@
 
 ## 1. Start Here
 
+- [active/playbook/README.md](./active/playbook/README.md)
+  - **파트별 운영 플레이북.** 작업이 어느 파트(홈/어드민/콘텐츠/그로스/챗봇/플랫폼)인지 판별 → 담당 에이전트(`.claude/agents/`)·가이드·공통 철칙 적용. 업무 분담의 진입점.
 - [active/repository-status-2026-06-08.md](./active/repository-status-2026-06-08.md)
   - 현재 검증 상태, 활성 개발 요소, 문서 신뢰도, 다음 우선순위
 - [active/repository-audit-2026-04-15.md](./active/repository-audit-2026-04-15.md)
@@ -15,8 +17,12 @@
   - 한국 학원 시장용 Classin 정체성, 메시지, 리드마그넷, 챗봇 답변, CTA 기준
 - [active/classin-pre-adoption-question-matrix-2026-06-18.md](./active/classin-pre-adoption-question-matrix-2026-06-18.md)
   - 도입 전 22가지 질문의 답변 가능 범위, 확인 필요 항목, 상담·챗봇·리드마그넷 반영 기준
+- [active/partner-portal-redistribution-plan-2026-06-26.md](./active/partner-portal-redistribution-plan-2026-06-26.md)
+  - 파트너 포털/Portal V2/견적 문서 기능을 어드민·하드웨어 운영·공개 공유 링크·제한형 파트너 액션 포털로 재분배하는 최신 기획안
+- [active/quote-feature-agent-audit-2026-06-26.md](./active/quote-feature-agent-audit-2026-06-26.md)
+  - 견적 작성/저장/발송/기록/응답/열람 기능축별 에이전트 점검 결과와 P0/P1 구현 큐
 - [active/partner-portal-master-spec.md](./active/partner-portal-master-spec.md)
-  - 파트너 포털의 현재 기준 제품 스펙
+  - 파트너 포털 도메인 모델과 거래건 중심 UX 상세 근거. 제품 면 재배치 판단은 redistribution plan 우선
 - [active/architecture-schema-erd.md](./active/architecture-schema-erd.md)
   - 현재 아키텍처/스키마 입구
 - [active/chatbot-knowledgebase-faq-analytics-plan.md](./active/chatbot-knowledgebase-faq-analytics-plan.md)
@@ -31,17 +37,25 @@
   - 하드웨어 운영 허브 문서의 상위 인덱스
 - [active/erp-blueprint-2026-06-22.md](./active/erp-blueprint-2026-06-22.md)
   - 어드민 → 지사 운영 OS(ERP) 청사진 & 실행 로드맵(Account 360 스파인·귀속·노션 캘린더 라이브 연동·거버넌스 결정)
+- [active/internal-crm-backend-operating-plan-2026-06-26.md](./active/internal-crm-backend-operating-plan-2026-06-26.md)
+  - 자체 CRM 백엔드/운영 기준. 시트·OCRM·HQ CRM은 참고/동기화 원천으로 두고, Admin CRM의 고객 스파인·회의록·녹음·다음 액션 구조를 정의
 
 ## 2. Product
 
 - [active/prd.md](./active/prd.md)
   - 홈페이지, CTA, 리드 수집, 콘텐츠 운영 기준
+- [active/partner-portal-redistribution-plan-2026-06-26.md](./active/partner-portal-redistribution-plan-2026-06-26.md)
+  - 파트너 포털 기능 재배치, 견적 문서 라이프사이클, Admin Hardware 편입 기준
 - [active/partner-portal-master-spec.md](./active/partner-portal-master-spec.md)
-  - 파트너 포털의 단일 진입 제품 문서
+  - 파트너 포털 도메인 모델과 거래건 중심 UX 상세 근거
+- [active/internal-crm-backend-operating-plan-2026-06-26.md](./active/internal-crm-backend-operating-plan-2026-06-26.md)
+  - 내부 동료가 매일 쓰는 자체 CRM의 기록 입력, 회의록/녹음 모으기, 고객 360, 다음 액션 운영 기준
 - [active/partner-portal-implementation-roadmap.md](./active/partner-portal-implementation-roadmap.md)
-  - 파트너 포털 구현 순서
+  - 파트너 포털 구현 순서. 현재 경로명은 `repository-status-2026-06-08.md`와 실제 코드로 재확인
 - [active/quote-lifecycle-execution-plan.md](./active/quote-lifecycle-execution-plan.md)
   - 견적 문서 라이프사이클 실행 기준
+- [active/quote-feature-agent-audit-2026-06-26.md](./active/quote-feature-agent-audit-2026-06-26.md)
+  - 견적 작성/저장/발송/기록/응답/열람 기능축별 결손과 구현 우선순위
 - [active/software-checkout-revamp-plan.md](./active/software-checkout-revamp-plan.md)
   - /checkout 구독형/충전형 재정렬 실행안
 - [active/docs-center-db-design.md](./active/docs-center-db-design.md)
@@ -61,6 +75,8 @@
 
 - [active/architecture-schema-erd.md](./active/architecture-schema-erd.md)
   - 엔티티와 스키마 관점의 입구
+- [active/internal-crm-backend-operating-plan-2026-06-26.md](./active/internal-crm-backend-operating-plan-2026-06-26.md)
+  - `crm_customer_events`, private recording storage, future `crm_tasks`/attachments/transcripts, 외부 CRM write request 경계 기준
 - [active/docs-center-db-design.md](./active/docs-center-db-design.md)
   - 문서센터 DB, RLS, SEO 노출 정책, AI 청크 파이프라인
 - [active/notification-architecture-plan.md](./active/notification-architecture-plan.md)

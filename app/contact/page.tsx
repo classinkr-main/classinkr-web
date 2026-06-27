@@ -263,10 +263,12 @@ export default function ContactPage() {
                 lead_id: data.leadId,
                 stored: data.stored,
                 event_slug: selectedEvent?.slug,
+                event_id: data.conversionEventId,
             })
             // Google Ads 전환: 도입문의 제출 (전환 라벨이 설정된 경우에만 발화)
             trackAdsConversion(GOOGLE_ADS_DEMO_CONVERSION_LABEL, {
                 transaction_id: data.leadId,
+                event_id: data.conversionEventId,
             })
             toast.success("상담 요청이 접수되었어요")
             setSubmitted(true)

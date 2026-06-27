@@ -5,6 +5,8 @@
  *
  * 기본 동작(전수 크롤):
  *   - 내용이 있는 모든 문서를 받는다(채널 draft 포함). 빈 "작성중" 스텁과 테스트/샘플 페이지는 제외.
+ *   - 채널톡 Documents 자체 메타글과 짧은 중복 스텁은 제외한다.
+ *   - 원문 URL은 metadata에만 보존하고 본문 청크에는 넣지 않아 자체 운영 자료처럼 검색되게 한다.
  *   - 채널에서 published 인 글만 visibility 를 --public 으로 공개 승격할 수 있고, draft 는 항상 unlisted.
  *   - 전수 크롤 시, 이번 세트에 없는 과거 자동 동기화 문서는 archived 로 reconcile(수기 편집본 제외).
  *
@@ -41,11 +43,17 @@ const CATEGORY_ID = "admin"
 const CATEGORY_TITLE = "[관리자] 사용 가이드"
 const CATEGORY_DESCRIPTION = "기관(학원) 관리자를 위한 대시보드 전반의 사용 방법을 안내합니다."
 const UPDATED_BY = "sync-channel-documents"
+const CURATED_SOURCE = "classin-korea-curated-channel-docs"
 const MAX_CHUNK_CHARS = 1800
 const FETCH_SPACING_MS = 150
 const FETCH_RETRY_DELAYS_MS = [500, 1000, 2000]
 // 본문이 이보다 짧으면 "작성중" 빈 스텁으로 보고 동기화에서 제외한다.
 const MIN_BODY_CHARS = 24
+const EXCLUDED_ARTICLE_IDS = new Map([
+  ["8472", "채널톡 Documents 스페이스 메타 문서"],
+  ["8473", "채널톡 Documents 아티클 메타 문서"],
+  ["44553", "짧은 중복 스텁 문서"],
+])
 
 type DocsStatus = "draft" | "review" | "published" | "archived"
 type DocsVisibility = "public" | "unlisted" | "internal"
@@ -644,12 +652,15 @@ function normalizeChannelArticle(articleId: string, article: ChannelArticle): No
     ...titleTokens,
     title,
     "ClassIn",
+    "ClassIn Korea",
     "클래스인",
+    "클래스인코리아",
+    "운영 가이드",
     "사용 가이드",
     "사용법",
-    "헬프센터",
+    "고객지원 자료",
   ])
-  const tags = ["ClassIn 가이드", "사용법", "헬프센터"]
+  const tags = ["ClassIn Korea 운영 자료", "사용 가이드", "고객지원"]
   const coverImage =
     typeof article.coverImageUrl === "string" && article.coverImageUrl.trim()
       ? article.coverImageUrl.trim()
@@ -661,7 +672,6 @@ function normalizeChannelArticle(articleId: string, article: ChannelArticle): No
     `# ${title}`,
     coverImage ? `![${title}](${coverImage})` : "",
     description,
-    `원문: ${sourceUrl}`,
     bodyMarkdown,
   ].filter(Boolean).join("\n\n")
 
@@ -673,7 +683,8 @@ function normalizeChannelArticle(articleId: string, article: ChannelArticle): No
     slug,
     contentMarkdown,
     contentJson: {
-      source: "channel-documents-api",
+      source: CURATED_SOURCE,
+      originalSource: "channel-documents-api",
       channelDocumentId: articleId,
       channelDocumentSlug: article.slug ?? null,
       channelDocumentState: article.state ?? null,
@@ -703,7 +714,7 @@ function buildArticleRow(doc: NormalizedChannelDocument, index: number): Article
     description: doc.description,
     audience: ["관리자", "교사", "운영팀"],
     product_area: "admin",
-    doc_type: "reference",
+    doc_type: "guide",
     difficulty: "intermediate",
     status: "published",
     // 채널에서 published 인 글만 --public 으로 공개 승격 가능. draft/unpublished 는 항상 unlisted.
@@ -717,7 +728,7 @@ function buildArticleRow(doc: NormalizedChannelDocument, index: number): Article
     chatbot_summary: doc.description,
     content_markdown: doc.contentMarkdown,
     content_json: doc.contentJson,
-    seo_title: `${doc.title} | ClassIn 운영 지식`,
+    seo_title: `${doc.title} | ClassIn Korea 운영 가이드`,
     seo_description: doc.description,
     canonical_path: `/docs/${CATEGORY_ID}/${doc.slug}`,
     published_at: doc.publishedAt ?? doc.updatedAt,
@@ -772,7 +783,8 @@ function buildChunkRows(
     content_hash: hashContent(chunk.content),
     token_count: null,
     metadata: {
-      source: "channel-documents-api",
+      source: CURATED_SOURCE,
+      originalSource: "channel-documents-api",
       sourceUrl: doc.sourceUrl,
       channelDocumentId: doc.articleId,
       path: `/docs/${CATEGORY_ID}/${doc.slug}`,
@@ -803,6 +815,12 @@ async function fetchTargetDocuments(articleIds: string[], language: string) {
   // 일시적 API 오류로 일부가 빠진 채 reconcile 하면 멀쩡한 문서가 archive 될 수 있어 별도로 센다.
   let fetchFailures = 0
   for (const articleId of articleIds) {
+    const excludedReason = EXCLUDED_ARTICLE_IDS.get(articleId)
+    if (excludedReason) {
+      console.warn(`[channel-docs] skipped ${articleId} (${excludedReason})`)
+      continue
+    }
+
     try {
       const article = await fetchChannelArticle(articleId, language)
       const title = article.title?.trim() || article.name?.trim() || articleId

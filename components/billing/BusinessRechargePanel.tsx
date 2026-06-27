@@ -494,6 +494,7 @@ export function BusinessRechargePanel({ initialQuoteCode }: Props = {}) {
             orderId: string
             checkoutToken: string
             orderName: string
+            conversionEventId?: string
             amount: number
             amountKrw: number
             amountCny: number
@@ -513,6 +514,7 @@ export function BusinessRechargePanel({ initialQuoteCode }: Props = {}) {
         amount_cny: payload.amountCny,
         quote_code: quoteCode?.code,
         promo_code: promo?.code,
+        event_id: payload.conversionEventId,
         value: payload.amountKrw,
         currency: "KRW",
       })

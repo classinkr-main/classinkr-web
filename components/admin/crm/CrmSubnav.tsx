@@ -3,11 +3,22 @@
 import Link from "next/link"
 import { usePathname } from "next/navigation"
 import type { ReactNode } from "react"
-import { Building2, CircleDollarSign, Handshake, LayoutDashboard, Link2, PhoneCall, Target } from "lucide-react"
+import {
+  BarChart3,
+  Building2,
+  CircleDollarSign,
+  FileAudio,
+  Handshake,
+  LayoutDashboard,
+  Link2,
+  PhoneCall,
+  Target,
+  Users,
+} from "lucide-react"
 
-type CrmSection = "home" | "customers" | "deals" | "sync"
+type CrmSection = "home" | "customers" | "activity" | "deals" | "insights" | "sync"
 type DealsSub = "revenue" | "orders" | "kpi"
-type CustomersSub = "leads" | "accounts"
+type CustomersSub = "unified" | "leads" | "accounts"
 
 // 한국팀 일상 동선: 현황(아침 점검) → 고객(콜·비짓) → Deals(견적→수납). 연동은 유지보수.
 const PRIMARY_TABS = [
@@ -20,17 +31,31 @@ const PRIMARY_TABS = [
   },
   {
     key: "customers",
-    href: "/admin/crm/customers/accounts",
+    href: "/admin/crm/customers/unified",
     label: "고객",
-    description: "콜·비짓·팔로업",
+    description: "통합 DB",
     icon: <PhoneCall className="h-4 w-4" />,
+  },
+  {
+    key: "activity",
+    href: "/admin/crm/activity",
+    label: "기록",
+    description: "회의·녹음",
+    icon: <FileAudio className="h-4 w-4" />,
   },
   {
     key: "deals",
     href: "/admin/crm/deals",
-    label: "Deals",
+    label: "돈흐름",
     description: "견적 → 수납",
     icon: <CircleDollarSign className="h-4 w-4" />,
+  },
+  {
+    key: "insights",
+    href: "/admin/crm/insights",
+    label: "인사이트",
+    description: "리스크·기회",
+    icon: <BarChart3 className="h-4 w-4" />,
   },
 ] satisfies Array<{
   key: Exclude<CrmSection, "sync">
@@ -45,7 +70,7 @@ const MAINTENANCE_TAB = {
   key: "sync",
   href: "/admin/crm/matching",
   label: "연동",
-  description: "데이터 정합성",
+  description: "시트·CRM 동기화",
   icon: <Link2 className="h-4 w-4" />,
 } satisfies {
   key: "sync"
@@ -62,10 +87,11 @@ const DEALS_SUBTABS = [
   { key: "kpi", href: "/admin/crm/deals/kpi", label: "KPI", icon: <Target className="h-3.5 w-3.5" /> },
 ] satisfies Array<{ key: DealsSub; href: string; label: string; icon: ReactNode }>
 
-// 고객 섹션 보조 탭: 리드(잠재) ↔ 계정(Neo CRM 기존 고객).
+// 고객 섹션 보조 탭: 통합 운영 목록 + 원천별 상세 화면.
 const CUSTOMERS_SUBTABS = [
+  { key: "unified", href: "/admin/crm/customers/unified", label: "통합", icon: <Users className="h-3.5 w-3.5" /> },
   { key: "leads", href: "/admin/crm/customers/leads", label: "리드", icon: <PhoneCall className="h-3.5 w-3.5" /> },
-  { key: "accounts", href: "/admin/crm/customers/accounts", label: "계정", icon: <Building2 className="h-3.5 w-3.5" /> },
+  { key: "accounts", href: "/admin/crm/customers/accounts", label: "원천 고객", icon: <Building2 className="h-3.5 w-3.5" /> },
 ] satisfies Array<{ key: CustomersSub; href: string; label: string; icon: ReactNode }>
 
 function resolveSection(pathname: string | null): CrmSection | null {
@@ -78,6 +104,7 @@ function resolveSection(pathname: string | null): CrmSection | null {
     pathname.startsWith("/admin/crm/partners/customers/")
   )
     return "customers"
+  if (pathname === "/admin/crm/activity" || pathname.startsWith("/admin/crm/activity/")) return "activity"
   if (
     pathname === "/admin/crm/deals" ||
     pathname.startsWith("/admin/crm/deals/") ||
@@ -86,12 +113,14 @@ function resolveSection(pathname: string | null): CrmSection | null {
     pathname.startsWith("/admin/crm/partners")
   )
     return "deals"
+  if (pathname === "/admin/crm/insights" || pathname.startsWith("/admin/crm/insights/")) return "insights"
   if (pathname === "/admin/crm") return "home"
   return null
 }
 
 function resolveCustomersSub(pathname: string | null): CustomersSub | null {
   if (!pathname) return null
+  if (pathname === "/admin/crm/customers" || pathname.startsWith("/admin/crm/customers/unified")) return "unified"
   if (pathname.startsWith("/admin/crm/customers/leads")) return "leads"
   if (
     pathname.startsWith("/admin/crm/customers/accounts") ||
@@ -125,7 +154,7 @@ export default function CrmSubnav({ active }: { active?: CrmSection } = {}) {
 
   return (
     <div className={showDealsSub || showCustomersSub ? "mb-4" : "mb-6"}>
-      <div className="admin-scroll-snap-x no-scrollbar -mx-4 flex gap-2 overflow-x-auto px-4 pb-2 sm:mx-0 sm:grid sm:grid-cols-2 sm:overflow-visible sm:px-0 sm:pb-0 lg:grid-cols-4">
+      <div className="admin-scroll-snap-x no-scrollbar -mx-4 flex gap-2 overflow-x-auto px-4 pb-2 sm:mx-0 sm:grid sm:grid-cols-2 sm:overflow-visible sm:px-0 sm:pb-0 lg:grid-cols-6">
         {PRIMARY_TABS.map((tab) => {
           const isActive = section === tab.key
 
@@ -213,7 +242,7 @@ export default function CrmSubnav({ active }: { active?: CrmSection } = {}) {
 
       {showDealsSub ? (
         <div className="no-scrollbar -mx-4 mt-3 flex items-center gap-1.5 overflow-x-auto px-4 sm:mx-0 sm:flex-wrap sm:overflow-visible sm:px-0">
-          <span className="mr-1 hidden shrink-0 text-[11px] font-medium text-[#1a1a1a]/40 sm:inline">Deals</span>
+          <span className="mr-1 hidden shrink-0 text-[11px] font-medium text-[#1a1a1a]/40 sm:inline">돈흐름</span>
           {DEALS_SUBTABS.map((sub) => {
             const isActive = dealsSub === sub.key
 

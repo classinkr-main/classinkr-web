@@ -18,6 +18,7 @@ import type {
   DocsArticleSection,
   DocsArticleSummary,
   DocsCategory,
+  DocsCategoryNavItem,
   DocsNavGroup,
   DocsTocItem,
 } from "@/components/docs"
@@ -70,8 +71,88 @@ const categoryEyebrows: Partial<Record<DocCategoryId, string>> = {
   board: "Smart Board",
 }
 
+const categoryNavCopy: Partial<
+  Record<DocCategoryId, { label: string; scope: string; summary: string }>
+> = {
+  "quick-start": {
+    label: "빠른 시작",
+    scope: "Quick Start",
+    summary: "처음 확인할 설치와 가입 흐름을 봅니다.",
+  },
+  guides: {
+    label: "가이드",
+    scope: "Guide",
+    summary: "역할과 상황별 안내를 이어서 확인합니다.",
+  },
+  manual: {
+    label: "매뉴얼",
+    scope: "Manual",
+    summary: "제품 사용 기준과 세부 절차를 확인합니다.",
+  },
+  help: {
+    label: "도움말",
+    scope: "Help",
+    summary: "자주 묻는 질문과 기본 해결 방법을 봅니다.",
+  },
+  troubleshooting: {
+    label: "문제 해결",
+    scope: "Troubleshooting",
+    summary: "접속, 장비, 수업 중 문제를 빠르게 좁힙니다.",
+  },
+  updates: {
+    label: "업데이트",
+    scope: "변경",
+    summary: "새 기능과 변경 사항을 확인합니다.",
+  },
+  start: {
+    label: "시작하기",
+    scope: "처음 시작",
+    summary: "설치, 회원 가입, 비밀번호 변경을 빠르게 확인합니다.",
+  },
+  software: {
+    label: "소프트웨어",
+    scope: "기능",
+    summary: "수업 도구, 학습 활동, LMS, AI 기능을 봅니다.",
+  },
+  admin: {
+    label: "관리자",
+    scope: "운영",
+    summary: "코스, 교사, 학생, 스토리지 관리를 점검합니다.",
+  },
+  teacher: {
+    label: "교사",
+    scope: "수업",
+    summary: "코스 생성, 학습 활동, 교실 설정을 확인합니다.",
+  },
+  student: {
+    label: "학생",
+    scope: "학습",
+    summary: "코스 참여, 수업 듣기, 과제 제출을 찾습니다.",
+  },
+  hardware: {
+    label: "하드웨어",
+    scope: "장비",
+    summary: "보드 라인업, 판서, 디스플레이, AI 카메라를 봅니다.",
+  },
+  board: {
+    label: "전자칠판",
+    scope: "설치",
+    summary: "전자칠판 배송과 설치 흐름을 확인합니다.",
+  },
+}
+
 function isListedDoc(doc: DocArticle) {
   return (doc.visibility ?? "public") === "public" && !doc.noindex
+}
+
+function getFallbackCategoryLabel(category: DocCategory) {
+  const bracketLabel = category.title.match(/^\[(.+?)\]/)?.[1]
+  if (bracketLabel) return bracketLabel
+
+  return category.title
+    .replace(/^클래스인\s*/, "")
+    .replace(/\s*(기능|사용)?\s*가이드$/, "")
+    .trim()
 }
 
 function getDocSearchText(doc: DocArticle) {
@@ -276,6 +357,37 @@ export function getAllDocsSummaries(content = staticDocsContent) {
   return content.docs
     .filter(isListedDoc)
     .map((doc) => toArticleSummary(doc, content.categories))
+}
+
+export function getDocsCategoryNavItems(
+  content = staticDocsContent,
+  activeCategoryId?: DocCategoryId
+): DocsCategoryNavItem[] {
+  return content.categories
+    .map((category) => {
+      const articleCount = content.docs.filter(
+        (doc) => doc.category === category.id && isListedDoc(doc)
+      ).length
+      const copy = categoryNavCopy[category.id]
+
+      return {
+        articleCount,
+        categoryId: category.id,
+        href: getDocCategoryPath(category.id),
+        label: copy?.label ?? getFallbackCategoryLabel(category),
+        meta: `${copy?.scope ?? "가이드"} · ${articleCount}개`,
+        description: copy?.summary ?? category.description,
+        isActive: category.id === activeCategoryId,
+      }
+    })
+    .filter((item) => item.articleCount > 0 || item.categoryId === activeCategoryId)
+    .map((item) => ({
+      href: item.href,
+      label: item.label,
+      meta: item.meta,
+      description: item.description,
+      isActive: item.isActive,
+    }))
 }
 
 export function getDocsCategoryCards(content = staticDocsContent) {

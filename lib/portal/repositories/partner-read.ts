@@ -3,7 +3,6 @@
 import { getLegacyCustomerDetail, getLegacyDealDetail, listLegacyCustomerListItems } from "@/lib/portal/repositories/legacy";
 import { getCustomerDetailForPartnerAccount, listCustomerListItems } from "@/lib/portal/repositories/customers";
 import { getDealDetailForPartnerAccount, listDealListItems } from "@/lib/portal/repositories/deals";
-import { createSupabaseAdminClient } from "@/lib/supabase/admin";
 import type { PartnerAccountContext } from "@/lib/portal/context";
 import type {
   ActivityLog,
@@ -343,55 +342,6 @@ export async function loadPartnerDealDetail(
   return { mode: context.partnerAccountId ? "v2" : "legacy", deal: null };
 }
 
-async function loadInventorySummary(partnerId: string): Promise<InventorySkuSummary[]> {
-  try {
-    const supabase = createSupabaseAdminClient();
-    const { data: sales } = await supabase
-      .from("hw_sales")
-      .select("id, status")
-      .eq("partner_id", partnerId)
-      .neq("status", "cancelled");
-
-    if (!sales?.length) return [];
-
-    const saleIds = sales.map((s) => s.id);
-    const statusMap: Record<string, string> = Object.fromEntries(
-      sales.map((s) => [s.id, s.status])
-    );
-
-    const { data: items } = await supabase
-      .from("hw_sale_items")
-      .select("sku, product_name, quantity, sale_id")
-      .in("sale_id", saleIds);
-
-    if (!items?.length) return [];
-
-    const grouped: Record<string, InventorySkuSummary> = {};
-    for (const item of items) {
-      const status = statusMap[item.sale_id] ?? "pending";
-      if (!grouped[item.sku]) {
-        grouped[item.sku] = {
-          sku: item.sku,
-          product_name: item.product_name,
-          pending_qty: 0,
-          shipped_qty: 0,
-          delivered_qty: 0,
-          total_qty: 0,
-        };
-      }
-      const g = grouped[item.sku];
-      g.total_qty += item.quantity;
-      if (status === "pending") g.pending_qty += item.quantity;
-      else if (status === "shipped") g.shipped_qty += item.quantity;
-      else if (status === "delivered") g.delivered_qty += item.quantity;
-    }
-
-    return Object.values(grouped).sort((a, b) => b.total_qty - a.total_qty);
-  } catch {
-    return [];
-  }
-}
-
 async function loadDetailsForOverview(
   mode: PortalReadMode,
   items: CustomerListItem[] | DealListItem[],
@@ -455,10 +405,9 @@ export async function loadPortalOverview(
   const details = await loadDetailsForOverview(mode, detailItems, context);
   const flattened = flattenDetails(details);
 
-  const partnerId = context.legacyPartnerId ?? context.partnerAccountId ?? "";
-  const inventory_summary = partnerId
-    ? await loadInventorySummary(partnerId)
-    : [];
+  // HW 재고 요약은 레거시 hw_sales 테이블 제거로 더 이상 채우지 않는다.
+  // 실제 하드웨어 재고는 branch_hw_* 경로(branch sync)에서 별도로 관리된다.
+  const inventory_summary: InventorySkuSummary[] = [];
 
   return {
     mode,

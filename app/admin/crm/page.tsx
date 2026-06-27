@@ -11,6 +11,8 @@ import {
 import { adminFetchJsonCached, getCachedAdminJson } from "@/lib/admin-client"
 import { Button } from "@/components/ui/button"
 import NeoCrmTeamPanel from "@/components/admin/crm/NeoCrmTeamPanel"
+import CrmCoverageStrip from "@/components/admin/crm/CrmCoverageStrip"
+import CrmPriorityQueuePanel from "@/components/admin/crm/CrmPriorityQueuePanel"
 import { Toast } from "@/components/admin/crm/leads/shared"
 
 // 현황 = 한국팀 아침 지휘대. 액션 밴드(딥링크) + Neo CRM 팀 패널 + 돈 흐름 요약만.
@@ -325,11 +327,11 @@ const BRANCH_KPI_DEFS: Array<{
   hintLabel: string
   icon: ReactNode
 }> = [
-  { key: "LD", label: "Lead", hintLabel: "잠재고객", icon: <PhoneCall className="h-4 w-4" /> },
-  { key: "ACC", label: "Account", hintLabel: "고객", icon: <Building2 className="h-4 w-4" /> },
-  { key: "OPP", label: "Opportunity", hintLabel: "상기", icon: <BarChart3 className="h-4 w-4" /> },
-  { key: "SOL", label: "Solution", hintLabel: "솔루션", icon: <Activity className="h-4 w-4" /> },
-  { key: "VST", label: "Visit", hintLabel: "방문", icon: <MapPin className="h-4 w-4" /> },
+  { key: "LD", label: "리드", hintLabel: "잠재고객", icon: <PhoneCall className="h-4 w-4" /> },
+  { key: "ACC", label: "고객", hintLabel: "고객", icon: <Building2 className="h-4 w-4" /> },
+  { key: "OPP", label: "확정 임박", hintLabel: "상기", icon: <BarChart3 className="h-4 w-4" /> },
+  { key: "SOL", label: "솔루션", hintLabel: "솔루션", icon: <Activity className="h-4 w-4" /> },
+  { key: "VST", label: "방문", hintLabel: "방문", icon: <MapPin className="h-4 w-4" /> },
 ]
 
 function CrmNeoKpis({
@@ -353,10 +355,10 @@ function CrmNeoKpis({
     <>
       <div className="mb-3 flex flex-col gap-3 sm:flex-row sm:items-start sm:justify-between">
         <div>
-          <p className="text-[11px] font-semibold uppercase tracking-wide text-[#1a1a1a]/30">Neo CRM KPI</p>
+          <p className="text-[11px] font-semibold uppercase tracking-wide text-[#1a1a1a]/30">Sync KPI</p>
           <h2 className="mt-1 text-[17px] font-bold text-[#111110]">지사관리식 KPI</h2>
           <p className="mt-1 text-[12px] text-[#1a1a1a]/40">
-            {CRM_BRANCH_KPI_MONTH} · Neo CRM에 찍힌 완료량 기준 · 기준/완료/달성률
+            {CRM_BRANCH_KPI_MONTH} · 외부 CRM 동기화 완료량 기준 · 기준/완료/달성률
           </p>
         </div>
         <span className="inline-flex h-8 items-center rounded-full bg-[#ECFDF5] px-3 text-[12px] font-semibold text-[#084734]">
@@ -367,28 +369,28 @@ function CrmNeoKpis({
       <div className="grid gap-3 sm:grid-cols-2 xl:grid-cols-4">
         <CrmMeasurementTile
           icon={<CircleDollarSign className="h-4 w-4" />}
-          label="SalesPerformance"
+          label="동기화 매출"
           value={loadingValue ?? formatCurrency(neoKpis?.salesAmountMonth)}
-          hint={`완료 ${formatNumber(neoKpis?.salesCountMonth)}건 · Neo CRM 실제 매출`}
+          hint={`완료 ${formatNumber(neoKpis?.salesCountMonth)}건 · 본사 CRM 원천`}
           tone="text-[#084734]"
         />
         <CrmMeasurementTile
           icon={<BarChart3 className="h-4 w-4" />}
-          label="Opportunity"
+          label="확정 임박"
           value={loadingValue ?? formatUSD(neoKpis?.opportunityAmount)}
-          hint={`상기 완료량 ${formatNumber(neoKpis?.opportunityCountMonth)}건 · Neo CRM 원표기`}
+          hint={`상기 완료량 ${formatNumber(neoKpis?.opportunityCountMonth)}건 · USD 원천`}
           tone="text-[#084734]"
         />
         <CrmMeasurementTile
           icon={<Building2 className="h-4 w-4" />}
-          label="Account"
+          label="동기화 고객"
           value={loadingValue ?? formatNumber(neoKpis?.activeAccountCountMonth)}
           hint={`고객 완료량 · 전체 ${formatNumber(neoKpis?.accountCount)}개`}
           tone="text-[#111110]"
         />
         <CrmMeasurementTile
           icon={<ReceiptText className="h-4 w-4" />}
-          label="Collection"
+          label="동기화 수금"
           value={loadingValue ?? formatCurrency(neoKpis?.collectionAmountMonth)}
           hint={`수금 완료량 ${formatNumber(neoKpis?.collectionCountMonth)}건 · 30일 ${formatCurrency(
             neoKpis?.collectionAmount30d
@@ -454,8 +456,8 @@ function CrmOperationsDashboard({
         <section className="rounded-2xl border border-[#e8e8e4] bg-white p-4">
           <div className="flex flex-col gap-3 sm:flex-row sm:items-start sm:justify-between">
             <div>
-              <p className="text-[11px] font-semibold uppercase tracking-wide text-[#1a1a1a]/30">Neo CRM Korea Scope</p>
-              <h2 className="mt-1 text-[18px] font-bold text-[#111110]">한국팀 돈 흐름 우선순위</h2>
+              <p className="text-[11px] font-semibold uppercase tracking-wide text-[#1a1a1a]/30">Customer Revenue Scope</p>
+              <h2 className="mt-1 text-[18px] font-bold text-[#111110]">고객 돈흐름 우선순위</h2>
             </div>
             <span className="inline-flex h-9 items-center rounded-lg bg-[#fafaf8] px-3 text-[12px] font-semibold text-[#1a1a1a]/50">
               Sync {formatOverviewDate(neoCrm?.latestSyncedAt ?? overview?.externalSnapshots.latestSyncedAt)}
@@ -473,7 +475,7 @@ function CrmOperationsDashboard({
             <div className="border-t border-[#084734]/18 pt-4">
               <div className="flex items-center gap-2 text-[#084734]/70">
                 <CircleDollarSign className="h-5 w-5" />
-                <p className="text-[11px] font-semibold uppercase tracking-[0.16em]">Delivery Revenue</p>
+                <p className="text-[11px] font-semibold uppercase tracking-[0.16em]">인식 매출</p>
               </div>
               <p className="mt-2 text-4xl font-bold tracking-[-0.045em] text-[#084734] sm:text-[42px]">
                 {loadingValue ?? formatCurrency(revenue?.deliveryTotalAmount)}
@@ -495,11 +497,11 @@ function CrmOperationsDashboard({
               </div>
               <div className="mt-3 grid gap-2 text-[12px] text-[#1a1a1a]/45 sm:grid-cols-2">
                 <span>견적 {loadingValue ?? formatCurrency(revenue?.acceptedQuoteAmount)}</span>
-                <span>Neo Sales {loadingValue ?? formatCurrency(neoKpis?.salesAmountMonth)}</span>
-                <span>Opportunity {loadingValue ?? formatUSD(neoKpis?.opportunityAmount)}</span>
-                <span>Order {loadingValue ?? formatCurrency(revenue?.contractedAmount)}</span>
-                <span>Delivery {loadingValue ?? formatCurrency(revenue?.deliveryTotalAmount)}</span>
-                <span>Collection {loadingValue ?? formatCurrency(neoKpis?.collectionAmountMonth)}</span>
+                <span>동기화 매출 {loadingValue ?? formatCurrency(neoKpis?.salesAmountMonth)}</span>
+                <span>확정 임박 {loadingValue ?? formatUSD(neoKpis?.opportunityAmount)}</span>
+                <span>계약 {loadingValue ?? formatCurrency(revenue?.contractedAmount)}</span>
+                <span>인식 매출 {loadingValue ?? formatCurrency(revenue?.deliveryTotalAmount)}</span>
+                <span>동기화 수금 {loadingValue ?? formatCurrency(neoKpis?.collectionAmountMonth)}</span>
                 <span className={(revenue?.outstandingAmount ?? 0) > 0 ? "font-semibold text-[#B85C33]" : ""}>
                   미수 {loadingValue ?? formatCurrency(revenue?.outstandingAmount)}
                 </span>
@@ -510,7 +512,7 @@ function CrmOperationsDashboard({
             <div className="grid gap-4 sm:grid-cols-2">
               <CrmMetricTile
                 icon={<FileText className="h-4 w-4" />}
-                label="Quotes"
+                label="견적"
                 value={loadingValue ?? formatCurrency(revenue?.acceptedQuoteAmount)}
                 hint={`견적서 ${loadingValue ?? formatNumber(kpis?.quoteDocumentCount)}건`}
               />
@@ -518,39 +520,39 @@ function CrmOperationsDashboard({
                 icon={<BarChart3 className="h-4 w-4" />}
                 label="오더 (확정 임박)"
                 value={loadingValue ?? formatUSD(neoKpis?.opportunityAmount)}
-                hint={`Opportunity ${loadingValue ?? formatNumber(neoKpis?.opportunityCountMonth)}건 · USD`}
+                hint={`외부 CRM ${loadingValue ?? formatNumber(neoKpis?.opportunityCountMonth)}건 · USD`}
                 tone="text-[#084734]"
               />
               <CrmMetricTile
                 icon={<TrendingUp className="h-4 w-4" />}
-                label="Neo Sales"
+                label="동기화 매출"
                 value={loadingValue ?? formatCurrency(neoKpis?.salesAmountMonth)}
-                hint={`SalesPerformance ${loadingValue ?? formatNumber(neoKpis?.salesCountMonth)} records · actual`}
+                hint={`본사 CRM ${loadingValue ?? formatNumber(neoKpis?.salesCountMonth)}건 · actual`}
                 tone="text-[#084734]"
               />
               <CrmMetricTile
                 icon={<ReceiptText className="h-4 w-4" />}
-                label="Collection"
+                label="동기화 수금"
                 value={loadingValue ?? formatCurrency(neoKpis?.collectionAmountMonth)}
-                hint={`Collection__c ${loadingValue ?? formatNumber(neoKpis?.collectionCountMonth)} records · current month`}
+                hint={`외부 CRM ${loadingValue ?? formatNumber(neoKpis?.collectionCountMonth)}건 · current month`}
               />
               <CrmMetricTile
                 icon={<Building2 className="h-4 w-4" />}
-                label="Neo Account"
+                label="동기화 고객"
                 value={loadingValue ?? formatNumber(neoKpis?.accountCount)}
-                hint={`active this month ${loadingValue ?? formatNumber(neoKpis?.activeAccountCountMonth)} · snapshot account`}
+                hint={`이번 달 활성 ${loadingValue ?? formatNumber(neoKpis?.activeAccountCountMonth)} · 외부 CRM 원천`}
               />
               <CrmMetricTile
                 icon={<Handshake className="h-4 w-4" />}
-                label="Order"
+                label="계약"
                 value={loadingValue ?? formatCurrency(revenue?.contractedAmount)}
                 hint={`활성 거래 ${loadingValue ?? formatNumber(kpis?.activeDealCount)}건`}
               />
               <CrmMetricTile
                 icon={<Building2 className="h-4 w-4" />}
-                label="Customers"
+                label="고객"
                 value={loadingValue ?? formatNumber(kpis?.customerCount)}
-                hint={`파트너 계정 ${formatNumber(kpis?.partnerAccountCount)}개`}
+                hint={`파트너 고객 ${formatNumber(kpis?.partnerAccountCount)}개`}
               />
             </div>
           </div>
@@ -562,7 +564,7 @@ function CrmOperationsDashboard({
           ) : null}
           {neoSyncWarning ? (
             <p className="mt-3 rounded-xl bg-[#FEF3EE] px-3 py-2 text-[12px] leading-relaxed text-[#B85C33]">
-              Neo CRM sync check: {neoSyncWarning}
+              외부 CRM sync check: {neoSyncWarning}
             </p>
           ) : null}
         </section>
@@ -760,7 +762,9 @@ export default function CrmPage() {
         <div>
           <p className="mb-1 text-[11px] font-medium uppercase tracking-widest text-[#1a1a1a]/30">Admin · CRM</p>
           <h1 className="text-2xl font-bold text-[#111110] tracking-[-0.02em]">CRM 홈</h1>
-          <p className="mt-1 text-[13px] text-[#1a1a1a]/42">한국팀 Neo CRM · 견적 → Opportunity → Order → Delivery</p>
+          <p className="mt-1 text-[13px] text-[#1a1a1a]/42">
+            ClassIn 고객 DB 기준 · 시트와 외부 CRM은 동기화 참고자료
+          </p>
         </div>
         <div className="grid gap-2 sm:grid-cols-4 xl:flex xl:justify-end">
           <Link
@@ -778,7 +782,7 @@ export default function CrmPage() {
             견적·매출
           </Link>
           <Link
-            href="/admin/crm/customers/accounts"
+            href="/admin/crm/customers/unified"
             className="inline-flex h-9 items-center justify-center gap-1.5 rounded-lg border border-[#e8e8e4] bg-white px-3 text-[12px] font-semibold text-[#111110] transition-colors hover:bg-[#f5f5f2]"
           >
             <Building2 className="h-3.5 w-3.5" />
@@ -800,6 +804,9 @@ export default function CrmPage() {
           </Button>
         </div>
       </div>
+
+      <CrmCoverageStrip />
+      <CrmPriorityQueuePanel refreshKey={neoCrmRefreshKey} />
 
       <NeoCrmTeamPanel
         refreshKey={neoCrmRefreshKey}

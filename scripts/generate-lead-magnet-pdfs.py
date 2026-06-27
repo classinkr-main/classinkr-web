@@ -3,6 +3,7 @@ from __future__ import annotations
 import json
 import os
 import re
+import sys
 from pathlib import Path
 from urllib.parse import parse_qsl, urlencode, urlsplit, urlunsplit
 
@@ -424,7 +425,7 @@ def draw_cover(doc: PdfDocument, magnet: dict) -> None:
         ),
         fill=WHITE,
     )
-    doc.text("PDF 안의 링크는 관련 자료와 상담 페이지로 연결됩니다.", size=9.4, leading=14, fill=WARM_GRAY_LIGHT, after=4)
+    doc.text("PDF 안의 링크는 필요한 자료와 상담 페이지로 바로 연결됩니다.", size=9.4, leading=14, fill=WARM_GRAY_LIGHT, after=4)
     doc.link_row(
         "ClassIn 도입 상담 신청",
         "/contact#contact-form",
@@ -434,9 +435,31 @@ def draw_cover(doc: PdfDocument, magnet: dict) -> None:
     doc.new_page()
 
 
+def draw_story(doc: PdfDocument, magnet: dict) -> bool:
+    story = magnet.get("storyGuide") or {}
+    if not story:
+        return False
+
+    doc.label("01 / 판단 흐름")
+    doc.heading(clean_text(story.get("title")) or "도입 전 판단 흐름")
+    if story.get("body"):
+        doc.text(clean_text(story.get("body")), size=10.8, leading=17, fill=WARM_GRAY, after=12)
+    beats = [clean_text(item) for item in story.get("beats") or [] if clean_text(item)]
+    if beats:
+        doc.text("수업 한 편을 기준으로 확인할 장면", size=12.5, leading=16, fill=NEAR_BLACK, after=5)
+        doc.bullet_list(beats, numbered=True)
+    if story.get("takeaway"):
+        doc.note_box(
+            clean_text(story.get("eyebrow")) or "판단 기준",
+            clean_text(story.get("takeaway")),
+            fill=WARM_WHITE,
+        )
+    return True
+
+
 def draw_usage(doc: PdfDocument, magnet: dict) -> None:
     guide = magnet.get("pdfGuide") or {}
-    doc.label("01 / 사용법")
+    doc.label("02 / 사용법")
     doc.heading("PDF를 이렇게 사용하세요")
     if guide.get("bestUsedWhen"):
         doc.text("언제 유용한가", size=12.5, leading=16, fill=NEAR_BLACK, after=5)
@@ -453,7 +476,8 @@ def draw_usage(doc: PdfDocument, magnet: dict) -> None:
 
 
 def draw_deliverables(doc: PdfDocument, magnet: dict) -> None:
-    doc.label("02 / 구성")
+    doc.ensure_space(260)
+    doc.label("03 / 구성")
     doc.heading("이 자료에 포함된 것")
     doc.bullet_list(list(magnet.get("deliverables") or []))
     doc.text("상담 전에 준비하면 좋은 자료", size=12.5, leading=16, fill=NEAR_BLACK, after=5)
@@ -461,7 +485,7 @@ def draw_deliverables(doc: PdfDocument, magnet: dict) -> None:
 
 
 def draw_checklist(doc: PdfDocument, magnet: dict) -> None:
-    doc.label("03 / 체크리스트")
+    doc.label("04 / 체크리스트")
     doc.heading("전체 점검 문항")
     doc.text(
         "각 문항은 현재 상태가 안정적이면 1점, 불안정하거나 확인이 필요하면 0점으로 표시하세요. 애매한 항목은 0점으로 두는 편이 실제 도입 검토에 더 도움이 됩니다.",
@@ -483,7 +507,7 @@ def draw_checklist(doc: PdfDocument, magnet: dict) -> None:
 
 
 def draw_scoring(doc: PdfDocument, magnet: dict) -> None:
-    doc.label("04 / 점수 해석")
+    doc.label("05 / 점수 해석")
     doc.heading("총점보다 낮게 나온 영역을 먼저 보세요")
     for band in magnet.get("scoreBands") or []:
         doc.score_band(band)
@@ -498,8 +522,8 @@ def draw_scoring(doc: PdfDocument, magnet: dict) -> None:
 
 
 def draw_action_plan(doc: PdfDocument, magnet: dict) -> None:
-    doc.label("05 / 실행 플랜")
-    doc.heading("7일 실행 플랜")
+    doc.label("06 / 실행 플랜")
+    doc.heading("실행 플랜")
     for step in magnet.get("actionPlan") or []:
         doc.ensure_space(72)
         doc.text(clean_text(step.get("day")), size=8.8, leading=11, fill=GREEN, after=2)
@@ -510,10 +534,10 @@ def draw_action_plan(doc: PdfDocument, magnet: dict) -> None:
 def draw_links(doc: PdfDocument, magnet: dict, magnets_by_slug: dict[str, dict]) -> None:
     guide = magnet.get("pdfGuide") or {}
     source_slug = clean_text(magnet.get("slug"))
-    doc.label("06 / 다음 단계")
+    doc.label("07 / 다음 단계")
     doc.heading("관련 자료와 상담 링크")
     doc.text(
-        "이 PDF의 링크는 자료 상세 페이지나 상담 페이지로 연결됩니다. 다른 자료를 받을 때도 사이트의 다운로드 흐름을 거치므로 관리자 지표에서 자료별 관심도를 확인할 수 있습니다.",
+        "이 PDF의 링크는 다음 판단에 필요한 자료와 상담 페이지로 연결됩니다. 체크 결과에 맞춰 추가 자료를 이어서 확인하세요.",
         after=12,
     )
 
@@ -562,6 +586,8 @@ def build_pdf(magnet: dict, magnets_by_slug: dict[str, dict]) -> Path:
 
     doc = PdfDocument(output_path, clean_text(magnet.get("title")))
     draw_cover(doc, magnet)
+    if draw_story(doc, magnet):
+        doc.line()
     draw_usage(doc, magnet)
     doc.line()
     draw_deliverables(doc, magnet)
@@ -580,10 +606,13 @@ def build_pdf(magnet: dict, magnets_by_slug: dict[str, dict]) -> Path:
 def main() -> None:
     magnets = json.loads(DATA_PATH.read_text(encoding="utf-8"))
     magnets_by_slug = {magnet["slug"]: magnet for magnet in magnets}
+    selected_slugs = set(sys.argv[1:])
 
     paths: list[Path] = []
     for magnet in magnets:
         if not magnet.get("published"):
+            continue
+        if selected_slugs and magnet.get("slug") not in selected_slugs:
             continue
         paths.append(build_pdf(magnet, magnets_by_slug))
 

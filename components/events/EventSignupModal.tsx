@@ -90,6 +90,7 @@ export function EventSignupModal({
                 lead_id: data.leadId,
                 stored: data.stored,
                 event_slug: eventSlug,
+                event_id: data.conversionEventId,
             })
             toast.success("행사 신청이 접수되었어요")
             setSubmitted(true)

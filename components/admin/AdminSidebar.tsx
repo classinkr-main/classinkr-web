@@ -22,6 +22,7 @@ import {
   Megaphone,
   MessageSquare,
   MoreHorizontal,
+  PackageCheck,
   Search,
   Settings,
   SquareChevronLeft,
@@ -66,6 +67,7 @@ const NAV: NavItem[] = [
   { href: "/admin/chatbot", label: "챗봇 운영", icon: <Bot className="h-4 w-4" />, roles: STAFF_EDITOR, section: "cs", badge: "Ops" },
   { href: "/admin/docs", label: "가이드 문서", icon: <BookOpen className="h-4 w-4" />, roles: STAFF_EDITOR, section: "cs" },
   { href: "/admin/branch", label: "KR Team", icon: <Building2 className="h-4 w-4" />, roles: [...STAFF_ADMIN, "BRANCH"], section: "performance" },
+  { href: "/admin/hardware", label: "하드웨어 재고", icon: <PackageCheck className="h-4 w-4" />, roles: STAFF_ADMIN, section: "performance", badge: "Ops" },
   { href: "/admin/analytics", label: "Analytics", icon: <BarChart2 className="h-4 w-4" />, roles: [...ALL_STAFF, "BRANCH"], section: "performance" },
   { href: "/admin/ops", label: "Ops Health", icon: <Activity className="h-4 w-4" />, roles: STAFF_ADMIN, section: "system", badge: "New" },
   { href: "/admin/settings", label: "Settings", icon: <Settings className="h-4 w-4" />, roles: STAFF_ADMIN, section: "system" },
@@ -117,6 +119,7 @@ const NAV_WARMUP_REQUESTS: Record<string, string[]> = {
     "/api/admin/branch/summary?team=ALL&period=Q",
     "/api/admin/branch/kpi?team=ALL&period=Q",
   ],
+  "/admin/hardware": ["/api/admin/hardware"],
   "/admin/analytics": [
     "/api/admin/leads",
     "/api/admin/subscribers",
@@ -148,7 +151,7 @@ const SECTION_META: Record<SidebarSection, { label: string; description: string 
 const MOBILE_PRIMARY_HREFS = [
   "/admin/overview",
   "/admin/crm",
-  "/admin/materials",
+  "/admin/quotes",
   "/admin/chatbot",
 ] as const
 
@@ -190,7 +193,7 @@ export default function AdminSidebar({ role, name, email }: Props) {
     if (typeof window === "undefined") return false
     return localStorage.getItem("admin_sidebar_collapsed") === "true"
   })
-  const [isDesktop, setIsDesktop] = useState(false)
+  const [isDesktop, setIsDesktop] = useState<boolean | null>(null)
   const [mobileMenuOpen, setMobileMenuOpen] = useState(false)
 
   useEffect(() => {
@@ -203,7 +206,7 @@ export default function AdminSidebar({ role, name, email }: Props) {
     return () => media.removeEventListener("change", update)
   }, [])
 
-  const effectiveCollapsed = isDesktop && collapsed
+  const effectiveCollapsed = isDesktop === true && collapsed
 
   const toggle = () => {
     setCollapsed((prev) => {
@@ -322,7 +325,7 @@ export default function AdminSidebar({ role, name, email }: Props) {
           {currentNavItem?.label ?? "Admin"}
         </h1>
       </div>
-      {!isDesktop ? <AdminNotificationsBell placement="inline" /> : null}
+      {isDesktop === false ? <AdminNotificationsBell placement="inline" /> : null}
     </header>
 
     {mobileMenuOpen ? (
@@ -375,6 +378,7 @@ export default function AdminSidebar({ role, name, email }: Props) {
                         onFocus={() => warmAdminTab(item.href)}
                         onMouseEnter={() => scheduleWarmAdminTab(item.href)}
                         onMouseLeave={cancelWarmAdminTab}
+                        onPointerDown={() => warmAdminTab(item.href)}
                         onTouchStart={() => warmAdminTab(item.href)}
                         onClick={() => {
                           warmAdminTab(item.href)
@@ -433,7 +437,9 @@ export default function AdminSidebar({ role, name, email }: Props) {
               onFocus={() => warmAdminTab(item.href)}
               onMouseEnter={() => scheduleWarmAdminTab(item.href)}
               onMouseLeave={cancelWarmAdminTab}
+              onPointerDown={() => warmAdminTab(item.href)}
               onTouchStart={() => warmAdminTab(item.href)}
+              onClick={() => warmAdminTab(item.href)}
               className={`flex min-h-[52px] flex-col items-center justify-center gap-1 rounded-md px-1 text-[10px] font-medium leading-none transition-colors ${
                 isActive
                   ? "bg-[#111110] text-white"
@@ -470,7 +476,7 @@ export default function AdminSidebar({ role, name, email }: Props) {
             <p className="text-[15px] font-semibold text-[#111110]">Admin</p>
           </div>
         )}
-        {isDesktop ? <AdminNotificationsBell placement="inline" /> : null}
+        {isDesktop === true ? <AdminNotificationsBell placement="inline" /> : null}
         <button
           onClick={toggle}
           className={`rounded-md p-1 text-[#1a1a1a]/30 transition-colors hover:bg-[#f5f5f2] hover:text-[#111110] ${
@@ -536,7 +542,9 @@ export default function AdminSidebar({ role, name, email }: Props) {
                     onFocus={() => warmAdminTab(item.href)}
                     onMouseEnter={() => scheduleWarmAdminTab(item.href)}
                     onMouseLeave={cancelWarmAdminTab}
+                    onPointerDown={() => warmAdminTab(item.href)}
                     onTouchStart={() => warmAdminTab(item.href)}
+                    onClick={() => warmAdminTab(item.href)}
                     className={`group flex items-center gap-2.5 rounded-lg text-[13px] font-medium transition-colors ${
                       effectiveCollapsed ? "justify-center px-2 py-2.5" : "px-3 py-2"
                     } ${
@@ -581,7 +589,9 @@ export default function AdminSidebar({ role, name, email }: Props) {
                   onFocus={() => warmAdminTab(item.href)}
                   onMouseEnter={() => scheduleWarmAdminTab(item.href)}
                   onMouseLeave={cancelWarmAdminTab}
+                  onPointerDown={() => warmAdminTab(item.href)}
                   onTouchStart={() => warmAdminTab(item.href)}
+                  onClick={() => warmAdminTab(item.href)}
                   className="inline-flex shrink-0 items-center rounded-md border border-[#e8e8e4] bg-white px-2 py-1 text-[11px] text-[#1a1a1a]/55 transition-colors hover:border-[#c8c8c4] hover:text-[#111110]"
                 >
                   {item.label}

@@ -42,6 +42,14 @@ export interface LeadMagnetPdfGuide {
   expertNote: string
 }
 
+export interface LeadMagnetStoryGuide {
+  eyebrow: string
+  title: string
+  body: string
+  beats: readonly string[]
+  takeaway: string
+}
+
 export interface LeadMagnetSalesPlaybook {
   intentScore: number
   intentLabel: string
@@ -75,6 +83,7 @@ export interface LeadMagnet {
   deliverables: readonly string[]
   consultationPrep: readonly string[]
   sourceLinks?: readonly LeadMagnetSourceLink[]
+  storyGuide?: LeadMagnetStoryGuide
   pdfGuide?: LeadMagnetPdfGuide
   salesPlaybook?: LeadMagnetSalesPlaybook
   ctaCopy: {
