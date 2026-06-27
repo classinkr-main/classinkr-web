@@ -4,6 +4,7 @@ import { useCallback, useEffect, useMemo, useState } from "react"
 import Link from "next/link"
 import {
   AlertTriangle,
+  Briefcase,
   CalendarClock,
   CheckCircle2,
   ClipboardList,
@@ -21,7 +22,28 @@ import {
 import { adminFetchJson, adminFetchJsonCached, clearAdminRequestCache } from "@/lib/admin-client"
 import { pushRecentCustomer } from "@/lib/crm/recent-customers"
 import type { Customer360, Customer360Severity } from "@/lib/repositories/crm-customer-360"
+import type { CrmDealStage } from "@/lib/repositories/crm-deals"
 import type { CrmTaskType } from "@/lib/repositories/crm-tasks"
+
+const DEAL_STAGE_OPTIONS: Array<{ value: CrmDealStage; label: string }> = [
+  { value: "consult", label: "상담" },
+  { value: "demo", label: "데모" },
+  { value: "quote", label: "견적" },
+  { value: "decision", label: "의사결정" },
+  { value: "order", label: "오더/설치" },
+  { value: "won", label: "완료" },
+  { value: "lost", label: "실패" },
+]
+
+const DEAL_STAGE_LABEL: Record<CrmDealStage, string> = {
+  consult: "상담",
+  demo: "데모",
+  quote: "견적",
+  decision: "의사결정",
+  order: "오더/설치",
+  won: "완료",
+  lost: "실패",
+}
 
 interface Props {
   customerKey: string | null
@@ -104,6 +126,9 @@ export default function Customer360Drawer({ customerKey, name, onClose }: Props)
   const [taskTitle, setTaskTitle] = useState("")
   const [taskType, setTaskType] = useState<CrmTaskType>("call")
   const [taskDue, setTaskDue] = useState("")
+  const [dealTitle, setDealTitle] = useState("")
+  const [dealStage, setDealStage] = useState<CrmDealStage>("consult")
+  const [dealAmount, setDealAmount] = useState("")
 
   const url = customerKey ? `/api/admin/crm/customers/${encodeURIComponent(customerKey)}/360` : null
 
@@ -228,6 +253,54 @@ export default function Customer360Drawer({ customerKey, name, onClose }: Props)
         await refetch()
       } catch (err) {
         setError(err instanceof Error ? err.message : "할 일 완료에 실패했습니다.")
+      } finally {
+        setActingId(null)
+      }
+    },
+    [refetch]
+  )
+
+  const handleAddDeal = useCallback(async () => {
+    const title = dealTitle.trim()
+    if (!title || !customerKey) return
+    setActingId("deal")
+    setError(null)
+    try {
+      await adminFetchJson("/api/admin/crm/deals-lite", {
+        method: "POST",
+        body: JSON.stringify({
+          title,
+          stage: dealStage,
+          targetType,
+          targetId: entityId,
+          targetLabel: displayName,
+          expectedAmount: dealAmount ? Number(dealAmount.replace(/[^\d.-]/g, "")) : undefined,
+          assignToMe: true,
+        }),
+      })
+      setDealTitle("")
+      setDealAmount("")
+      setDealStage("consult")
+      await refetch()
+    } catch (err) {
+      setError(err instanceof Error ? err.message : "딜 저장에 실패했습니다.")
+    } finally {
+      setActingId(null)
+    }
+  }, [dealTitle, dealStage, dealAmount, customerKey, targetType, entityId, displayName, refetch])
+
+  const handleDealStage = useCallback(
+    async (dealId: string, stage: CrmDealStage) => {
+      setActingId(`deal:${dealId}`)
+      setError(null)
+      try {
+        await adminFetchJson(`/api/admin/crm/deals-lite/${encodeURIComponent(dealId)}`, {
+          method: "PATCH",
+          body: JSON.stringify({ action: "stage", stage }),
+        })
+        await refetch()
+      } catch (err) {
+        setError(err instanceof Error ? err.message : "딜 단계 변경에 실패했습니다.")
       } finally {
         setActingId(null)
       }
@@ -380,6 +453,95 @@ export default function Customer360Drawer({ customerKey, name, onClose }: Props)
               ) : (
                 <p className="text-[12px] text-[#1a1a1a]/40">표시할 돈흐름 데이터가 없습니다.</p>
               )}
+            </section>
+          ) : null}
+
+          {/* deals (Deal Lite) */}
+          {data ? (
+            <section className="rounded-2xl border border-[#e8e8e4] bg-white p-4">
+              <SectionTitle icon={<Briefcase className="h-3.5 w-3.5" />}>
+                딜 {data.deals.summary.total > 0 ? `(${data.deals.summary.total})` : ""}
+              </SectionTitle>
+              <div className="mb-3 space-y-1.5">
+                {data.deals.rows.length === 0 ? (
+                  <p className="text-[12px] text-[#1a1a1a]/40">진행 중인 딜이 없습니다.</p>
+                ) : (
+                  data.deals.rows.map((deal) => (
+                    <div key={deal.id} className="rounded-xl bg-[#fafaf8] px-3 py-2">
+                      <div className="flex items-center justify-between gap-2">
+                        <p className="min-w-0 truncate text-[12px] font-semibold text-[#111110]">{deal.title}</p>
+                        <span
+                          className={`shrink-0 rounded-full px-2 py-0.5 text-[10px] font-semibold ${
+                            deal.status === "won"
+                              ? "bg-[#ECFDF5] text-[#084734]"
+                              : deal.status === "lost"
+                                ? "bg-[#FEF3EE] text-[#B85C33]"
+                                : "bg-white text-[#1a1a1a]/55"
+                          }`}
+                        >
+                          {DEAL_STAGE_LABEL[deal.stage]}
+                        </span>
+                      </div>
+                      <div className="mt-1 flex items-center justify-between gap-2">
+                        <p className="text-[11px] text-[#1a1a1a]/45">
+                          {deal.expectedAmount != null ? `${formatAmount(deal.expectedAmount)} · ` : ""}
+                          {deal.expectedCloseAt ? `예상 ${formatDay(deal.expectedCloseAt)}` : "종료일 미정"}
+                        </p>
+                        {deal.status === "open" ? (
+                          <select
+                            value={deal.stage}
+                            onChange={(event) => void handleDealStage(deal.id, event.target.value as CrmDealStage)}
+                            disabled={actingId === `deal:${deal.id}`}
+                            className="h-7 rounded-lg border border-[#e8e8e4] bg-white px-1.5 text-[11px] font-semibold text-[#111110] outline-none disabled:opacity-50"
+                            aria-label="딜 단계"
+                          >
+                            {DEAL_STAGE_OPTIONS.map((option) => (
+                              <option key={option.value} value={option.value}>
+                                {option.label}
+                              </option>
+                            ))}
+                          </select>
+                        ) : null}
+                      </div>
+                    </div>
+                  ))
+                )}
+              </div>
+              <div className="flex flex-wrap gap-2 border-t border-[#f0f0ec] pt-3">
+                <input
+                  value={dealTitle}
+                  onChange={(event) => setDealTitle(event.target.value)}
+                  placeholder="새 딜 제목"
+                  className="h-9 min-w-[140px] flex-1 rounded-lg border border-[#e8e8e4] bg-white px-2.5 text-[12px] text-[#111110] outline-none focus:border-[#111110]"
+                />
+                <input
+                  value={dealAmount}
+                  onChange={(event) => setDealAmount(event.target.value)}
+                  inputMode="numeric"
+                  placeholder="예상금액"
+                  className="h-9 w-24 rounded-lg border border-[#e8e8e4] bg-white px-2 text-[12px] text-[#111110] outline-none focus:border-[#111110]"
+                />
+                <select
+                  value={dealStage}
+                  onChange={(event) => setDealStage(event.target.value as CrmDealStage)}
+                  className="h-9 rounded-lg border border-[#e8e8e4] bg-white px-2 text-[12px] font-semibold text-[#111110] outline-none"
+                >
+                  {DEAL_STAGE_OPTIONS.map((option) => (
+                    <option key={option.value} value={option.value}>
+                      {option.label}
+                    </option>
+                  ))}
+                </select>
+                <button
+                  type="button"
+                  onClick={() => void handleAddDeal()}
+                  disabled={!dealTitle.trim() || actingId === "deal"}
+                  className="inline-flex h-9 items-center justify-center gap-1 rounded-lg bg-[#111110] px-3 text-[12px] font-semibold text-white transition-opacity hover:opacity-90 disabled:opacity-40"
+                >
+                  <Plus className="h-3.5 w-3.5" />
+                  딜 추가
+                </button>
+              </div>
             </section>
           ) : null}
 

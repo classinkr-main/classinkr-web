@@ -277,6 +277,39 @@ export type CrmTaskInsert = Omit<CrmTask, "id" | "created_at" | "updated_at"> & 
 };
 export type CrmTaskUpdate = Partial<Omit<CrmTask, "id" | "created_at">>;
 
+export type CrmDealStage = "consult" | "demo" | "quote" | "decision" | "order" | "won" | "lost";
+export type CrmDealStatus = "open" | "won" | "lost";
+
+export interface CrmDeal {
+  id: string;
+  target_type: CrmTaskTargetType;
+  target_id: string | null;
+  target_label: string | null;
+  owner_key: string | null;
+  owner_name_snapshot: string | null;
+  title: string;
+  stage: CrmDealStage;
+  status: CrmDealStatus;
+  expected_amount: number | null;
+  expected_close_at: string | null;
+  next_task_id: string | null;
+  quote_ref: string | null;
+  order_ref: string | null;
+  risk_note: string | null;
+  created_by: string | null;
+  closed_at: string | null;
+  closed_by: string | null;
+  created_at: string;
+  updated_at: string;
+}
+
+export type CrmDealInsert = Omit<CrmDeal, "id" | "created_at" | "updated_at"> & {
+  id?: string;
+  created_at?: string;
+  updated_at?: string;
+};
+export type CrmDealUpdate = Partial<Omit<CrmDeal, "id" | "created_at">>;
+
 export type NewsletterStatus = "active" | "unsubscribed";
 
 export interface NewsletterSubscriber {
@@ -721,6 +754,11 @@ export interface Database {
         Row: CrmTask;
         Insert: CrmTaskInsert;
         Update: CrmTaskUpdate;
+      };
+      crm_deals: {
+        Row: CrmDeal;
+        Insert: CrmDealInsert;
+        Update: CrmDealUpdate;
       };
       partners: {
         Row: Partner;

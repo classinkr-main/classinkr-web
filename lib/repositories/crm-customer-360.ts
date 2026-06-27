@@ -8,6 +8,7 @@ import {
 } from "@/lib/admin-crm-customers-neo"
 import { buildLeadPriorityItem } from "@/lib/crm/priority"
 import { listCrmCustomerEvents, type ListCrmCustomerEventsResult } from "@/lib/repositories/crm-events"
+import { listCrmDeals, type ListCrmDealsResult } from "@/lib/repositories/crm-deals"
 import { listCrmTasks, type ListCrmTasksResult } from "@/lib/repositories/crm-tasks"
 import { getLeadById, type LeadRecord } from "@/lib/repositories/leads"
 
@@ -94,6 +95,7 @@ export interface Customer360 {
   risk: Customer360Risk
   activity: ListCrmCustomerEventsResult
   tasks: ListCrmTasksResult
+  deals: ListCrmDealsResult
 }
 
 export interface GetCrmCustomer360Options {
@@ -304,6 +306,16 @@ function emptyTasksResult(): ListCrmTasksResult {
   }
 }
 
+function emptyDealsResult(): ListCrmDealsResult {
+  return {
+    generatedAt: new Date().toISOString(),
+    health: { ok: false, message: "딜을 불러오지 못했습니다." },
+    summary: { total: 0, returned: 0, open: 0, won: 0, lost: 0, openAmount: 0, noNextActionCount: 0 },
+    pagination: { limit: 0, offset: 0, returned: 0, total: 0, hasMore: false, nextOffset: null },
+    rows: [],
+  }
+}
+
 export async function getCrmCustomer360(
   parsed: ParsedCustomerKey,
   options: GetCrmCustomer360Options = {}
@@ -314,12 +326,13 @@ export async function getCrmCustomer360(
   const key = `${parsed.source}:${parsed.entityId}`
   const warnings: string[] = []
 
-  const [headerResult, eventsResult, tasksResult] = await Promise.allSettled([
+  const [headerResult, eventsResult, tasksResult, dealsResult] = await Promise.allSettled([
     parsed.source === "lead"
       ? getLeadById(parsed.entityId)
       : getNeoCrmCustomerDetail(parsed.entityId),
     listCrmCustomerEvents({ targetType: parsed.targetType, targetId: parsed.entityId, limit: eventsLimit }),
     listCrmTasks({ targetType: parsed.targetType, targetId: parsed.entityId, status: "active", limit: tasksLimit, now }),
+    listCrmDeals({ targetType: parsed.targetType, targetId: parsed.entityId, limit: 20 }),
   ])
 
   let header: Customer360Header | null = null
@@ -360,6 +373,9 @@ export async function getCrmCustomer360(
   const tasks = tasksResult.status === "fulfilled" ? tasksResult.value : emptyTasksResult()
   if (tasksResult.status === "rejected") warnings.push("할 일을 불러오지 못했습니다.")
 
+  const deals = dealsResult.status === "fulfilled" ? dealsResult.value : emptyDealsResult()
+  if (dealsResult.status === "rejected") warnings.push("딜을 불러오지 못했습니다.")
+
   const risk = computeCustomer360Risk({
     overdueTaskCount: tasks.summary.overdue,
     riskEventCount: activity.summary.risks,
@@ -381,5 +397,6 @@ export async function getCrmCustomer360(
     risk,
     activity,
     tasks,
+    deals,
   }
 }
