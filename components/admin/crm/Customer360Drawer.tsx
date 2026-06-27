@@ -19,6 +19,7 @@ import {
 } from "lucide-react"
 
 import { adminFetchJson, adminFetchJsonCached, clearAdminRequestCache } from "@/lib/admin-client"
+import { pushRecentCustomer } from "@/lib/crm/recent-customers"
 import type { Customer360, Customer360Severity } from "@/lib/repositories/crm-customer-360"
 import type { CrmTaskType } from "@/lib/repositories/crm-tasks"
 
@@ -146,6 +147,17 @@ export default function Customer360Drawer({ customerKey, name, onClose }: Props)
     window.addEventListener("keydown", onKey)
     return () => window.removeEventListener("keydown", onKey)
   }, [onClose])
+
+  useEffect(() => {
+    if (data?.found && data.header && customerKey) {
+      pushRecentCustomer({
+        key: customerKey,
+        name: data.header.name,
+        sourceLabel: data.header.sourceLabel,
+        source: data.source,
+      })
+    }
+  }, [data, customerKey])
 
   const header = data?.header
   const displayName = header?.name ?? name ?? "고객"

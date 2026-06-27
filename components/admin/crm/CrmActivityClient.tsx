@@ -21,6 +21,7 @@ import {
 import { adminFetch, adminFetchJsonCached, getCachedAdminJson } from "@/lib/admin-client"
 import { Toast } from "@/components/admin/crm/leads/shared"
 import { useCrmOwners } from "./useCrmOwners"
+import CrmCustomerPicker from "./CrmCustomerPicker"
 
 type TargetType = "all" | "lead" | "neo_account" | "customer" | "deal" | "unknown"
 type SourceType =
@@ -512,25 +513,36 @@ export default function CrmActivityClient() {
                 </select>
               </label>
               <label className="text-[11px] font-semibold text-[#1a1a1a]/45">
-                고객/학원명
-                <input
-                  value={targetLabel}
-                  onChange={(event) => setTargetLabel(event.target.value)}
-                  placeholder="예: 강남 A학원"
-                  className="mt-1 h-10 w-full rounded-lg border border-[#e8e8e4] bg-white px-3 text-[13px] font-medium text-[#111110] outline-none placeholder:text-[#1a1a1a]/25 focus:border-[#084734]"
+                고객/리드
+                <CrmCustomerPicker
+                  label={targetLabel}
+                  linkedId={targetId}
+                  onPick={(pick) => {
+                    setTargetType(pick.targetType)
+                    setTargetId(pick.targetId)
+                    setTargetLabel(pick.targetLabel)
+                  }}
+                  onFreeText={(text) => {
+                    setTargetLabel(text)
+                    setTargetId("")
+                  }}
+                  onClear={() => {
+                    setTargetLabel("")
+                    setTargetId("")
+                  }}
                 />
               </label>
             </div>
 
-            <label className="text-[11px] font-semibold text-[#1a1a1a]/45">
-              대상 ID 또는 외부 링크 키
-              <input
-                value={targetId}
-                onChange={(event) => setTargetId(event.target.value)}
-                placeholder="선택 입력"
-                className="mt-1 h-10 w-full rounded-lg border border-[#e8e8e4] bg-white px-3 text-[13px] font-medium text-[#111110] outline-none placeholder:text-[#1a1a1a]/25 focus:border-[#084734]"
-              />
-            </label>
+            {targetId ? (
+              <p className="text-[11px] text-[#1a1a1a]/40">
+                연결된 대상에 기록이 저장되어 고객 360 타임라인에 바로 표시됩니다.
+              </p>
+            ) : (
+              <p className="text-[11px] text-[#1a1a1a]/40">
+                고객을 선택하면 360 타임라인에 연결됩니다. 직접 입력하면 미연결 기록으로 저장됩니다.
+              </p>
+            )}
 
             <div className="grid gap-2 sm:grid-cols-2">
               <label className="text-[11px] font-semibold text-[#1a1a1a]/45">
