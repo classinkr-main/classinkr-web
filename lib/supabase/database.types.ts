@@ -230,6 +230,53 @@ export interface CrmCustomerEvent {
   updated_at: string;
 }
 
+export type CrmTaskTargetType = "lead" | "neo_account" | "customer" | "deal" | "unknown";
+export type CrmTaskType =
+  | "call"
+  | "kakao"
+  | "email"
+  | "meeting"
+  | "quote"
+  | "demo"
+  | "install"
+  | "renewal"
+  | "cs_checkin"
+  | "data_fix"
+  | "other";
+export type CrmTaskPriority = "low" | "normal" | "high" | "urgent";
+export type CrmTaskStatus = "open" | "done" | "snoozed" | "canceled";
+
+export interface CrmTask {
+  id: string;
+  target_type: CrmTaskTargetType;
+  target_id: string | null;
+  target_label: string | null;
+  owner_key: string | null;
+  owner_name_snapshot: string | null;
+  task_type: CrmTaskType;
+  title: string;
+  detail: string | null;
+  due_at: string | null;
+  snoozed_until: string | null;
+  priority: CrmTaskPriority;
+  status: CrmTaskStatus;
+  source_event_id: string | null;
+  created_by: string | null;
+  assigned_by: string | null;
+  completed_at: string | null;
+  completed_by: string | null;
+  outcome: string | null;
+  created_at: string;
+  updated_at: string;
+}
+
+export type CrmTaskInsert = Omit<CrmTask, "id" | "created_at" | "updated_at"> & {
+  id?: string;
+  created_at?: string;
+  updated_at?: string;
+};
+export type CrmTaskUpdate = Partial<Omit<CrmTask, "id" | "created_at">>;
+
 export type NewsletterStatus = "active" | "unsubscribed";
 
 export interface NewsletterSubscriber {
@@ -669,6 +716,11 @@ export interface Database {
         Row: CrmCustomerEvent;
         Insert: CrmCustomerEventInsert;
         Update: CrmCustomerEventUpdate;
+      };
+      crm_tasks: {
+        Row: CrmTask;
+        Insert: CrmTaskInsert;
+        Update: CrmTaskUpdate;
       };
       partners: {
         Row: Partner;
