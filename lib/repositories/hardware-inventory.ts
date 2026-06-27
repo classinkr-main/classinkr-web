@@ -46,6 +46,7 @@ export interface HardwareMovement {
   reference_no: string | null
   memo: string | null
   serials: string[]
+  lot_no: string | null
   source: "admin_manual" | "sheet_import"
   source_table: string | null
   source_key: string | null
@@ -73,6 +74,7 @@ export interface CreateHardwareMovementInput {
   referenceNo?: string | null
   memo?: string | null
   serials?: string[]
+  lotNo?: string | null
   createdBy?: string | null
   raw?: Record<string, unknown>
 }
@@ -102,6 +104,7 @@ export interface HardwareStockRow {
   low: boolean
   orderRecommended: boolean
   locationBalances: Array<{ location: string; quantity: number }>
+  lotBalances: Array<{ lot: string; quantity: number }>
 }
 
 export interface HardwareAlert {
@@ -206,6 +209,17 @@ function getErrorMessage(error: unknown) {
 function isPlannedStatus(status: string | null | undefined) {
   const text = status ?? ""
   return /예정|예약|대기|planned/i.test(text)
+}
+
+function movementLotKey(movement: HardwareMovement): string | null {
+  const direct = cleanString(movement.lot_no)
+  if (direct) return direct
+  // Sheet-imported inbound/outbound rows carry the logistics number (물류No) in reference_no.
+  if (movement.source === "sheet_import") {
+    const ref = cleanString(movement.reference_no)
+    if (ref) return ref
+  }
+  return null
 }
 
 function isCrmReference(value: string | null | undefined) {
@@ -400,6 +414,7 @@ export async function createHardwareMovement(input: CreateHardwareMovementInput)
       reference_no: cleanString(input.referenceNo),
       memo: cleanString(input.memo),
       serials: input.serials ?? [],
+      lot_no: cleanString(input.lotNo),
       source: "admin_manual",
       raw: input.raw ?? {},
       created_by: cleanString(input.createdBy),
@@ -869,6 +884,7 @@ export async function getHardwareDashboard(): Promise<HardwareDashboard> {
     .map((item): HardwareStockRow => {
       const itemMovements = activeMovements.filter((movement) => movement.item_id === item.id)
       const locationBalances = new Map<string, number>()
+      const lotBalances = new Map<string, number>()
       let plannedOut = 0
       let outbound30d = 0
 
@@ -876,6 +892,20 @@ export async function getHardwareDashboard(): Promise<HardwareDashboard> {
         const qty = movement.quantity
         const occurredTime = movementDate(movement)
         const destinationKind = classifyDestination(movement.to_location)
+
+        const lotKey = movementLotKey(movement)
+        if (lotKey) {
+          // lot 잔량 = 입고/반납(+) − 출고(예정 포함, −). 이동/수리는 lot 보존(0).
+          let lotDelta = 0
+          if (movement.movement_type === "inbound" || movement.movement_type === "return") {
+            lotDelta = qty
+          } else if (movement.movement_type === "outbound") {
+            lotDelta = -qty
+          } else if (movement.movement_type === "adjust") {
+            lotDelta = movement.from_location && !movement.to_location ? -qty : qty
+          }
+          if (lotDelta !== 0) lotBalances.set(lotKey, (lotBalances.get(lotKey) ?? 0) + lotDelta)
+        }
 
         if (movement.movement_type === "inbound") {
           applyLocationDelta(locationBalances, movement.to_location ?? DEFAULT_STOCK_LOCATION, qty)
@@ -921,6 +951,10 @@ export async function getHardwareDashboard(): Promise<HardwareDashboard> {
           if (b.location === DEFAULT_STOCK_LOCATION) return 1
           return Math.abs(b.quantity) - Math.abs(a.quantity)
         })
+      const lotRows = Array.from(lotBalances.entries())
+        .filter(([, quantity]) => quantity > 0)
+        .map(([lot, quantity]) => ({ lot, quantity }))
+        .sort((a, b) => b.quantity - a.quantity)
 
       return {
         itemId: item.id,
@@ -938,6 +972,7 @@ export async function getHardwareDashboard(): Promise<HardwareDashboard> {
         low: availableStock <= item.reorder_point,
         orderRecommended: availableStock <= trendOrderPoint,
         locationBalances: locationRows,
+        lotBalances: lotRows,
       }
     })
     .sort((a, b) => {

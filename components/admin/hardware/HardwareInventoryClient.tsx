@@ -62,6 +62,7 @@ interface HardwareMovement {
   reference_no: string | null
   memo: string | null
   serials: string[]
+  lot_no: string | null
   source: "admin_manual" | "sheet_import"
   created_by: string | null
   created_at: string
@@ -88,6 +89,7 @@ interface HardwareStockRow {
   low: boolean
   orderRecommended: boolean
   locationBalances: Array<{ location: string; quantity: number }>
+  lotBalances: Array<{ lot: string; quantity: number }>
 }
 
 interface HardwareAlert {
@@ -160,6 +162,7 @@ interface HardwareMovementDraft {
   status: string
   referenceNo: string
   memo: string
+  lotNo: string
   serials: string[]
 }
 
@@ -252,6 +255,14 @@ function todayKey() {
 function formatDate(value: string | null) {
   if (!value) return "-"
   return value.slice(0, 10)
+}
+
+function movementLot(movement: HardwareMovement): string | null {
+  if (movement.lot_no && movement.lot_no.trim()) return movement.lot_no.trim()
+  if (movement.source === "sheet_import" && movement.reference_no && movement.reference_no.trim()) {
+    return movement.reference_no.trim()
+  }
+  return null
 }
 
 function formatNumber(value: number) {
@@ -439,6 +450,7 @@ export default function HardwareInventoryClient() {
   const [status, setStatus] = useState("출고")
   const [referenceNo, setReferenceNo] = useState("")
   const [memo, setMemo] = useState("")
+  const [lotNo, setLotNo] = useState("")
   const [openSections, setOpenSections] = useState<Record<HardwareSectionKey, boolean>>(() => ({ ...DEFAULT_OPEN_SECTIONS }))
   const [locationPage, setLocationPage] = useState(1)
   const [stockPage, setStockPage] = useState(1)
@@ -449,6 +461,8 @@ export default function HardwareInventoryClient() {
   const [productFilter, setProductFilter] = useState<string>("")
   const [historyType, setHistoryType] = useState<HardwareMovementType | "all">("all")
   const [confirmingId, setConfirmingId] = useState<string | null>(null)
+  const [confirmDates, setConfirmDates] = useState<Record<string, string>>({})
+  const [voidingId, setVoidingId] = useState<string | null>(null)
 
   const load = useCallback(async () => {
     setLoading(true)
@@ -523,6 +537,14 @@ export default function HardwareInventoryClient() {
     () => (data?.plannedMovements ?? []).reduce((total, movement) => total + movement.quantity, 0),
     [data?.plannedMovements]
   )
+
+  const lotOptions = useMemo(() => {
+    const lots = new Set<string>()
+    for (const row of data?.stock ?? []) {
+      for (const lot of row.lotBalances) lots.add(lot.lot)
+    }
+    return Array.from(lots).sort()
+  }, [data?.stock])
 
   const alertsPagination = useMemo(
     () => paginateAdminList(data?.alerts ?? [], { currentPage: alertsPage, pageSize: ALERT_PAGE_SIZE }),
@@ -605,7 +627,7 @@ export default function HardwareInventoryClient() {
     try {
       await adminFetchJson(`/api/admin/hardware/movements/${movement.id}`, {
         method: "PATCH",
-        body: JSON.stringify({ action: "confirm-planned", occurredAt: todayKey() }),
+        body: JSON.stringify({ action: "confirm-planned", occurredAt: confirmDates[movement.id] ?? todayKey() }),
       })
       setNotice(`${movement.product_name} 배송 예정 ${formatNumber(movement.quantity)}대를 실제 출고로 확정했습니다.`)
       await refresh()
@@ -613,6 +635,30 @@ export default function HardwareInventoryClient() {
       setError(err instanceof Error ? err.message : String(err))
     } finally {
       setConfirmingId(null)
+    }
+  }
+
+  const voidMovement = async (movement: HardwareMovement) => {
+    if (movement.voided_at) return
+    const reason = window.prompt(
+      `'${movement.product_name}' ${MOVEMENT_LABEL[movement.movement_type]} ${formatNumber(movement.quantity)}대 기록을 취소합니다. 사유를 입력하세요.`,
+      ""
+    )
+    if (reason === null) return
+    setVoidingId(movement.id)
+    setNotice(null)
+    setError(null)
+    try {
+      await adminFetchJson(`/api/admin/hardware/movements/${movement.id}`, {
+        method: "PATCH",
+        body: JSON.stringify({ action: "void", reason: reason.trim() || undefined }),
+      })
+      setNotice(`${movement.product_name} ${MOVEMENT_LABEL[movement.movement_type]} 기록을 취소했습니다.`)
+      await refresh()
+    } catch (err) {
+      setError(err instanceof Error ? err.message : String(err))
+    } finally {
+      setVoidingId(null)
     }
   }
 
@@ -684,6 +730,7 @@ export default function HardwareInventoryClient() {
       status,
       referenceNo,
       memo,
+      lotNo: lotNo.trim(),
       serials: [],
     }
   }
@@ -963,7 +1010,15 @@ export default function HardwareInventoryClient() {
                       <p className="text-[12px] font-bold text-[#A8741A]">
                         {formatNumber(movement.quantity)}대{movement.status ? ` · ${movement.status}` : ""}
                       </p>
-                      <div className="flex justify-end gap-1.5">
+                      <div className="flex flex-wrap items-center justify-end gap-1.5">
+                        <input
+                          type="date"
+                          value={confirmDates[movement.id] ?? todayKey()}
+                          onChange={(event) => setConfirmDates((current) => ({ ...current, [movement.id]: event.target.value }))}
+                          aria-label="출고 확정일"
+                          title="출고 확정일"
+                          className="h-8 rounded-md border border-[rgba(0,0,0,0.08)] bg-white px-2 text-[11px] font-semibold text-[#111110] outline-none focus:border-[#084734]"
+                        />
                         <button
                           type="button"
                           onClick={() => loadPlannedMovement(movement)}
@@ -1157,6 +1212,20 @@ export default function HardwareInventoryClient() {
                                     <p className="mt-1 text-[11px] text-[#615D59]">
                                       {row.category ?? "미분류"} · 최소 {row.reorderPoint}대 · 리드타임 {row.leadTimeDays}일
                                     </p>
+                                    {row.lotBalances.length > 0 && (
+                                      <div className="mt-1.5 flex flex-wrap gap-1">
+                                        {row.lotBalances.slice(0, 5).map((lot) => (
+                                          <span key={lot.lot} className="rounded bg-[#F6F5F4] px-1.5 py-0.5 text-[10px] font-semibold text-[#31302E]">
+                                            {lot.lot} {formatNumber(lot.quantity)}
+                                          </span>
+                                        ))}
+                                        {row.lotBalances.length > 5 && (
+                                          <span className="rounded bg-[#ECFDF5] px-1.5 py-0.5 text-[10px] font-semibold text-[#084734]">
+                                            +{row.lotBalances.length - 5}
+                                          </span>
+                                        )}
+                                      </div>
+                                    )}
                                   </td>
                                   <td className="px-4 py-4 text-right text-[14px] font-bold text-[#111110]">
                                     {formatNumber(row.warehouseStock)}
@@ -1455,11 +1524,22 @@ export default function HardwareInventoryClient() {
                     </div>
 
                     <label className="block">
+                      <span className="text-[11px] font-bold text-[#615D59]">물류 번호 (lot)</span>
+                      <input
+                        value={lotNo}
+                        onChange={(event) => setLotNo(event.target.value)}
+                        placeholder="입고: 신규 lot · 출고: 기존 lot 선택"
+                        list="hardware-lot-options"
+                        className="mt-1 h-10 w-full rounded-md border border-[rgba(0,0,0,0.08)] bg-white px-3 text-[13px] text-[#111110] outline-none placeholder:text-[#A39E98] focus:border-[#084734]"
+                      />
+                    </label>
+
+                    <label className="block">
                       <span className="text-[11px] font-bold text-[#615D59]">참조 번호</span>
                       <input
                         value={referenceNo}
                         onChange={(event) => setReferenceNo(event.target.value)}
-                        placeholder="물류No. 또는 내부 번호"
+                        placeholder="내부 번호 또는 CRM 참조"
                         className="mt-1 h-10 w-full rounded-md border border-[rgba(0,0,0,0.08)] bg-white px-3 text-[13px] text-[#111110] outline-none placeholder:text-[#A39E98] focus:border-[#084734]"
                       />
                     </label>
@@ -1467,6 +1547,12 @@ export default function HardwareInventoryClient() {
                     <datalist id="hardware-location-options">
                       {LOCATION_OPTIONS.map((location) => (
                         <option key={location} value={location} />
+                      ))}
+                    </datalist>
+
+                    <datalist id="hardware-lot-options">
+                      {lotOptions.map((lot) => (
+                        <option key={lot} value={lot} />
                       ))}
                     </datalist>
 
@@ -1617,17 +1703,33 @@ export default function HardwareInventoryClient() {
                     <>
                       <div className="divide-y divide-[rgba(0,0,0,0.06)]">
                         {movementsPagination.pageItems.map((movement) => (
-                          <div key={movement.id} className="px-5 py-3">
+                          <div key={movement.id} className={`px-5 py-3 ${movement.voided_at ? "opacity-55" : ""}`}>
                             <div className="flex items-start justify-between gap-3">
                               <div className="min-w-0">
-                                <p className="truncate text-[12.5px] font-bold text-[#111110]">{movement.product_name}</p>
+                                <p className={`truncate text-[12.5px] font-bold text-[#111110] ${movement.voided_at ? "line-through" : ""}`}>{movement.product_name}</p>
                                 <p className="mt-1 text-[11px] text-[#615D59]">
                                   {formatDate(movement.occurred_at)} · {movement.to_location ?? movement.from_location ?? "위치 미정"}
+                                  {movementLot(movement) ? ` · lot ${movementLot(movement)}` : ""}
+                                  {movement.source === "sheet_import" ? " · 시트" : ""}
                                 </p>
                               </div>
-                              <span className={`shrink-0 rounded-full px-2 py-0.5 text-[10.5px] font-bold ${MOVEMENT_TONE[movement.movement_type]}`}>
-                                {MOVEMENT_LABEL[movement.movement_type]} {formatNumber(movement.quantity)}
-                              </span>
+                              <div className="flex shrink-0 items-center gap-2">
+                                <span className={`rounded-full px-2 py-0.5 text-[10.5px] font-bold ${MOVEMENT_TONE[movement.movement_type]}`}>
+                                  {MOVEMENT_LABEL[movement.movement_type]} {formatNumber(movement.quantity)}
+                                </span>
+                                {movement.voided_at ? (
+                                  <span className="rounded-full bg-[#F6F5F4] px-2 py-0.5 text-[10.5px] font-bold text-[#615D59]">취소됨</span>
+                                ) : movement.source === "admin_manual" ? (
+                                  <button
+                                    type="button"
+                                    onClick={() => void voidMovement(movement)}
+                                    disabled={voidingId === movement.id}
+                                    className="rounded-md border border-[rgba(0,0,0,0.08)] bg-white px-2 py-1 text-[10.5px] font-bold text-[#B43E3E] transition hover:bg-[#FCE9E9] disabled:opacity-60"
+                                  >
+                                    {voidingId === movement.id ? "취소 중" : "취소"}
+                                  </button>
+                                ) : null}
+                              </div>
                             </div>
                           </div>
                         ))}

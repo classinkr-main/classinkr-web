@@ -45,6 +45,7 @@ export async function POST(req: NextRequest) {
       status: readOptionalString(body, "status", "상태"),
       referenceNo: readOptionalString(body, "referenceNo", "참조 번호"),
       memo: readOptionalString(body, "memo", "메모"),
+      lotNo: readOptionalString(body, "lotNo", "물류 번호"),
       serials: readStringArray(body, "serials", "시리얼 번호"),
       createdBy: admin.name ?? admin.userId ?? admin.role,
       raw: crmLink ? { crmLink } : {},
