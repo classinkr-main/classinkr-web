@@ -171,7 +171,21 @@ function buildSyncHealth(shroffAccountSyncedAt: string | null) {
   }
 }
 
+let neoCustomersCache: { at: number; value: NeoCrmCustomerList } | null = null
+const NEO_CUSTOMERS_CACHE_TTL_MS = 60_000
+
+// 60초 인메모리 캐시 — NEO 동기화 데이터는 1일 1회 갱신이라 짧은 staleness가 무해하고,
+// 우선순위 큐·통합 고객·os-summary가 매 요청마다 external_crm_records 5000×3 스캔하던 비용을 완화한다.
+// (Fluid Compute 인스턴스 재사용 시 요청 간 유지. 성공 결과만 캐시.)
 export async function getNeoCrmCustomers(): Promise<NeoCrmCustomerList> {
+  const cached = neoCustomersCache
+  if (cached && Date.now() - cached.at < NEO_CUSTOMERS_CACHE_TTL_MS) return cached.value
+  const value = await computeNeoCrmCustomers()
+  if (value.ok) neoCustomersCache = { at: Date.now(), value }
+  return value
+}
+
+async function computeNeoCrmCustomers(): Promise<NeoCrmCustomerList> {
   const sb = createSupabaseAdminClient()
   const generatedAt = new Date().toISOString()
 
