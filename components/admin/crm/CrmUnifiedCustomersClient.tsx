@@ -12,6 +12,7 @@ import type {
   CrmUnifiedSavedView,
 } from "@/lib/repositories/crm-unified-customers"
 import { buildOwnerSelectOptions, useCrmOwners } from "./useCrmOwners"
+import Customer360Drawer from "./Customer360Drawer"
 
 type SourceFilter = "all" | CrmUnifiedCustomerSource
 type LifecycleFilter = "all" | CrmUnifiedLifecycle
@@ -172,6 +173,7 @@ export default function CrmUnifiedCustomersClient() {
   const [loadingMore, setLoadingMore] = useState(false)
   const [refreshing, setRefreshing] = useState(false)
   const [error, setError] = useState<string | null>(null)
+  const [drawer, setDrawer] = useState<{ key: string; name: string } | null>(null)
   const requestSeq = useRef(0)
   const { owners: crmOwners, currentOwner, health: ownerHealth } = useCrmOwners()
   const ownerOptions = useMemo(() => buildOwnerSelectOptions(data?.owners, crmOwners), [crmOwners, data?.owners])
@@ -497,13 +499,23 @@ export default function CrmUnifiedCustomersClient() {
                 {data?.rows.map((row) => (
                   <tr key={row.key} className="transition-colors hover:bg-[#fafaf8]">
                     <td className="px-4 py-3">
-                      <Link href={row.href} className="group flex min-w-0 items-center gap-2">
-                        <div className="min-w-0">
-                          <p className="truncate text-[13px] font-bold text-[#111110]">{row.name}</p>
+                      <div className="flex min-w-0 items-center gap-2">
+                        <button
+                          type="button"
+                          onClick={() => setDrawer({ key: row.key, name: row.name })}
+                          className="group min-w-0 text-left"
+                        >
+                          <p className="truncate text-[13px] font-bold text-[#111110] group-hover:underline">{row.name}</p>
                           <p className="truncate text-[12px] text-[#1a1a1a]/42">{row.contact ?? "-"}</p>
-                        </div>
-                        <ExternalLink className="h-3.5 w-3.5 shrink-0 text-[#1a1a1a]/25 group-hover:text-[#111110]" />
-                      </Link>
+                        </button>
+                        <Link
+                          href={row.href}
+                          className="shrink-0 text-[#1a1a1a]/25 transition-colors hover:text-[#111110]"
+                          aria-label="원본 화면 열기"
+                        >
+                          <ExternalLink className="h-3.5 w-3.5" />
+                        </Link>
+                      </div>
                     </td>
                     <td className="px-4 py-3">
                       <div className="flex flex-col gap-1">
@@ -531,7 +543,12 @@ export default function CrmUnifiedCustomersClient() {
 
           <div className="divide-y divide-[#f0f0ec] lg:hidden">
             {data?.rows.map((row) => (
-              <Link key={row.key} href={row.href} className="block p-4 transition-colors hover:bg-[#fafaf8]">
+              <button
+                key={row.key}
+                type="button"
+                onClick={() => setDrawer({ key: row.key, name: row.name })}
+                className="block w-full p-4 text-left transition-colors hover:bg-[#fafaf8]"
+              >
                 <div className="mb-2 flex items-start justify-between gap-3">
                   <div className="min-w-0">
                     <div className="mb-1">{sourceBadge(row)}</div>
@@ -551,7 +568,7 @@ export default function CrmUnifiedCustomersClient() {
                   </div>
                 </div>
                 <p className="mt-2 text-[12px] text-[#1a1a1a]/45">{row.priorityReason}</p>
-              </Link>
+              </button>
             ))}
           </div>
 
@@ -583,6 +600,12 @@ export default function CrmUnifiedCustomersClient() {
           ) : null}
         </section>
       </div>
+
+      <Customer360Drawer
+        customerKey={drawer?.key ?? null}
+        name={drawer?.name}
+        onClose={() => setDrawer(null)}
+      />
     </div>
   )
 }
