@@ -4,9 +4,27 @@ import {
   getContactLogs,
   addContactLog,
   deleteContactLog,
+  type ContactLogRecord,
   type ContactLogResult,
   type ContactLogType,
 } from "@/lib/repositories/contact-logs"
+import { buildLeadContactEventInput } from "@/lib/crm/lead-contact-event"
+import { createCrmCustomerEvent } from "@/lib/repositories/crm-events"
+import { createTasksFromEventNextActions } from "@/lib/repositories/crm-tasks"
+import { getLeadById } from "@/lib/repositories/leads"
+
+// 연락 로그를 CRM 활동 타임라인 + 다음 액션 task로 미러링한다.
+// CRM 측 실패가 연락 로그 저장을 깨뜨리면 안 되므로 fail-soft.
+async function mirrorContactLogToCrm(leadId: string, log: ContactLogRecord) {
+  try {
+    const lead = await getLeadById(leadId).catch(() => null)
+    const label = lead?.org || lead?.name || null
+    const event = await createCrmCustomerEvent(buildLeadContactEventInput(log, label))
+    await createTasksFromEventNextActions(event, { createdBy: log.contacted_by })
+  } catch (error) {
+    console.error("[POST /api/admin/leads/:id/logs] mirror to CRM event", error)
+  }
+}
 
 type Params = { params: Promise<{ id: string }> }
 
@@ -71,6 +89,7 @@ export async function POST(req: NextRequest, { params }: Params) {
       contacted_by: contactedBy,
       contacted_at: contactedAt,
     })
+    await mirrorContactLogToCrm(id, log)
     return NextResponse.json({ log })
   } catch (e) {
     console.error(e)
