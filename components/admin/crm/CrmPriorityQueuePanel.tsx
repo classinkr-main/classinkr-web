@@ -97,7 +97,15 @@ function tomorrowMorningIso() {
   return next.toISOString()
 }
 
-export default function CrmPriorityQueuePanel({ refreshKey = 0, compact = false }: { refreshKey?: number; compact?: boolean }) {
+export default function CrmPriorityQueuePanel({
+  refreshKey = 0,
+  compact = false,
+  embedded = false,
+}: {
+  refreshKey?: number
+  compact?: boolean
+  embedded?: boolean
+}) {
   const [source, setSource] = useState<SourceFilter>("all")
   const [bucket, setBucket] = useState<BucketFilter>("today")
   const [owner, setOwner] = useState("")
@@ -215,15 +223,17 @@ export default function CrmPriorityQueuePanel({ refreshKey = 0, compact = false 
   )
 
   return (
-    <section className={`rounded-2xl border border-[#e8e8e4] bg-white p-4 ${compact ? "" : "mb-4"}`}>
-      <div className={`mb-4 flex flex-col gap-3 ${compact ? "" : "lg:flex-row lg:items-center lg:justify-between"}`}>
-        <div>
-          <p className="text-[11px] font-semibold uppercase tracking-[0.16em] text-[#1a1a1a]/30">
-            ClassIn Operation
-          </p>
-          <h2 className="mt-1 text-[18px] font-bold text-[#111110]">고객 운영 우선순위</h2>
-        </div>
-        <div className={`flex flex-col gap-2 ${compact ? "" : "sm:flex-row sm:items-center"}`}>
+    <section className={embedded ? "" : `rounded-2xl border border-[#e8e8e4] bg-white p-4 ${compact ? "" : "mb-4"}`}>
+      <div className={`mb-3 flex flex-col gap-3 ${compact || embedded ? "" : "lg:flex-row lg:items-center lg:justify-between"}`}>
+        {embedded ? null : (
+          <div>
+            <p className="text-[11px] font-semibold uppercase tracking-[0.16em] text-[#1a1a1a]/30">
+              ClassIn Operation
+            </p>
+            <h2 className="mt-1 text-[18px] font-bold text-[#111110]">고객 운영 우선순위</h2>
+          </div>
+        )}
+        <div className={`flex flex-col gap-2 ${compact || embedded ? "" : "sm:flex-row sm:items-center"}`}>
           <div className="inline-flex rounded-lg border border-[#e8e8e4] bg-[#fafaf8] p-1">
             {SOURCE_FILTERS.map((filter) => (
               <button

@@ -39,7 +39,13 @@ function formatDay(value: string | null) {
   return new Intl.DateTimeFormat("ko-KR", { month: "2-digit", day: "2-digit", weekday: "short" }).format(date)
 }
 
-export default function CrmWeekAheadPanel({ compact = false }: { compact?: boolean }) {
+export default function CrmWeekAheadPanel({
+  compact = false,
+  embedded = false,
+}: {
+  compact?: boolean
+  embedded?: boolean
+}) {
   const { currentOwner } = useCrmOwners()
   const [owner, setOwner] = useState<string>("")
   const [data, setData] = useState<ListCrmTasksResult | null>(null)
@@ -113,19 +119,21 @@ export default function CrmWeekAheadPanel({ compact = false }: { compact?: boole
   )
 
   return (
-    <section className={`rounded-2xl border border-[#e8e8e4] bg-white p-4 ${compact ? "" : "mb-4"}`}>
-      <div className={`mb-3 flex flex-col gap-2 ${compact ? "" : "sm:flex-row sm:items-center sm:justify-between"}`}>
-        <div className="flex items-center gap-2">
-          <span className="flex h-8 w-8 items-center justify-center rounded-lg bg-[#fafaf8] text-[#1a1a1a]/45">
-            <ListTodo className="h-4 w-4" />
-          </span>
-          <div>
-            <h2 className="text-[15px] font-bold text-[#111110]">이번 주 해야 할 일</h2>
-            {compact ? null : (
-              <p className="text-[11px] text-[#1a1a1a]/40">지연 · 오늘 · 이번 주 · 미룬 일을 한 번에.</p>
-            )}
+    <section className={embedded ? "" : `rounded-2xl border border-[#e8e8e4] bg-white p-4 ${compact ? "" : "mb-4"}`}>
+      <div className={`mb-3 flex flex-col gap-2 ${compact || embedded ? "" : "sm:flex-row sm:items-center sm:justify-between"}`}>
+        {embedded ? null : (
+          <div className="flex items-center gap-2">
+            <span className="flex h-8 w-8 items-center justify-center rounded-lg bg-[#fafaf8] text-[#1a1a1a]/45">
+              <ListTodo className="h-4 w-4" />
+            </span>
+            <div>
+              <h2 className="text-[15px] font-bold text-[#111110]">이번 주 해야 할 일</h2>
+              {compact ? null : (
+                <p className="text-[11px] text-[#1a1a1a]/40">지연 · 오늘 · 이번 주 · 미룬 일을 한 번에.</p>
+              )}
+            </div>
           </div>
-        </div>
+        )}
         <div className="flex items-center gap-2">
           <label className="flex h-9 items-center gap-1.5 rounded-lg border border-[#e8e8e4] bg-white px-2 text-[12px] text-[#1a1a1a]/50">
             <Filter className="h-3.5 w-3.5" />

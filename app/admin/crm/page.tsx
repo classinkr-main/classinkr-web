@@ -782,6 +782,7 @@ export default function CrmPage() {
   const [toast, setToast] = useState<{ msg: string; type: "success" | "error" } | null>(null)
   const [searchQuery, setSearchQuery] = useState("")
   const [drawerTarget, setDrawerTarget] = useState<{ key: string; name: string } | null>(null)
+  const [sidebarTab, setSidebarTab] = useState<"priority" | "week">("priority")
   const [crmOverview, setCrmOverview] = useState<AdminCrmOverview | null>(null)
   const [crmOverviewLoading, setCrmOverviewLoading] = useState(true)
   const [crmOverviewError, setCrmOverviewError] = useState<string | null>(null)
@@ -1065,8 +1066,32 @@ export default function CrmPage() {
         </div>
 
         <aside className="flex flex-col gap-4">
-          <CrmPriorityQueuePanel refreshKey={neoCrmRefreshKey} compact />
-          <CrmWeekAheadPanel compact />
+          <section className="rounded-2xl border border-[#e8e8e4] bg-white p-4">
+            <div className="mb-3 flex rounded-lg border border-[#e8e8e4] bg-[#fafaf8] p-0.5">
+              {(
+                [
+                  { key: "priority", label: "오늘 연락" },
+                  { key: "week", label: "이번 주 할 일" },
+                ] as const
+              ).map((t) => (
+                <button
+                  key={t.key}
+                  type="button"
+                  onClick={() => setSidebarTab(t.key)}
+                  className={`h-8 flex-1 rounded-md px-3 text-[12px] font-semibold transition-colors ${
+                    sidebarTab === t.key ? "bg-[#111110] text-white" : "text-[#1a1a1a]/55 hover:text-[#111110]"
+                  }`}
+                >
+                  {t.label}
+                </button>
+              ))}
+            </div>
+            {sidebarTab === "priority" ? (
+              <CrmPriorityQueuePanel refreshKey={neoCrmRefreshKey} compact embedded />
+            ) : (
+              <CrmWeekAheadPanel compact embedded />
+            )}
+          </section>
         </aside>
       </div>
 
