@@ -47,7 +47,7 @@
       overflow-x: hidden;
     }
     .site-nav {
-      position: fixed;
+      position: absolute;
       top: 0;
       left: 0;
       right: 0;
@@ -55,13 +55,6 @@
       border-bottom: 1px solid var(--border);
       background: rgba(250,250,248,0.9);
       backdrop-filter: blur(18px);
-      transition: transform 220ms ease, opacity 220ms ease;
-      will-change: transform;
-    }
-    .site-nav.is-hidden {
-      opacity: 0;
-      transform: translateY(-110%);
-      pointer-events: none;
     }
     .nav-inner {
       width: min(1160px, calc(100% - 40px));
@@ -426,6 +419,80 @@
       object-position: center;
       border-radius: 12px;
       filter: saturate(1.04) brightness(1.02);
+    }
+    /* ---------- MINIMAL HERO (online) — omo1 restraint ---------- */
+    .variant-online .hero-min .hero-grid {
+      display: block;
+      width: min(880px, calc(100% - 40px));
+      text-align: left;
+    }
+    .variant-online .hero-min h1 {
+      max-width: 760px;
+      margin-bottom: 28px;
+    }
+    .hero-lede {
+      max-width: 600px;
+      margin: 0 0 38px;
+      color: rgba(17,17,16,0.66);
+      font-size: clamp(18px, 2.1vw, 22px);
+      line-height: 1.6;
+      font-weight: 500;
+    }
+    .hero-min .hero-actions {
+      gap: 20px;
+    }
+    .hero-textlink {
+      display: inline-flex;
+      align-items: center;
+      gap: 5px;
+      color: var(--muted);
+      font-size: 14px;
+      font-weight: 600;
+      border-bottom: 1px solid transparent;
+      transition: color 160ms ease, border-color 160ms ease;
+    }
+    .hero-textlink:hover {
+      color: var(--classin-green);
+      border-bottom-color: var(--classin-green);
+    }
+    .hero-min .hero-visual {
+      margin-top: 56px;
+    }
+    .variant-online .hero-min .product-frame {
+      padding: 0;
+      border-color: rgba(8,71,52,0.12);
+      background: #fff;
+      box-shadow: 0 24px 70px rgba(8,71,52,0.14);
+    }
+    .variant-online .hero-min .online-gif-stage {
+      border-radius: 16px;
+    }
+    .variant-online .hero-min .online-hero-gif {
+      min-height: 0;
+      aspect-ratio: 21 / 9;
+      border-radius: 16px;
+    }
+    .hero-quiet-badge {
+      position: absolute;
+      top: 16px;
+      left: 16px;
+      display: inline-flex;
+      align-items: center;
+      gap: 7px;
+      padding: 7px 13px;
+      border-radius: 999px;
+      background: rgba(255,255,255,0.86);
+      color: rgba(17,17,16,0.7);
+      font-size: 11px;
+      font-weight: 760;
+      letter-spacing: 0.06em;
+      backdrop-filter: blur(12px);
+    }
+    .hero-quiet-badge i {
+      width: 7px;
+      height: 7px;
+      border-radius: 50%;
+      background: var(--classin-green);
     }
     .variant-kids .product-frame img {
       object-fit: contain;
@@ -959,6 +1026,304 @@
       background: #111110;
       color: #F6F5F4;
     }
+    .section.green { padding: 112px 0; }
+    .section.dark { padding: 108px 0; }
+    /* ---------- SCROLL REVEAL (omo1 signature) ---------- */
+    .reveal {
+      opacity: 0;
+      transform: translateY(18px);
+      transition: opacity .8s ease, transform .8s ease;
+      will-change: opacity, transform;
+    }
+    .reveal.in {
+      opacity: 1;
+      transform: translateY(0);
+    }
+    .reveal-stagger > * {
+      opacity: 0;
+      transform: translateY(16px);
+      transition: opacity .7s ease, transform .7s ease;
+    }
+    .reveal-stagger.in > * { opacity: 1; transform: translateY(0); }
+    .reveal-stagger.in > *:nth-child(2) { transition-delay: .06s; }
+    .reveal-stagger.in > *:nth-child(3) { transition-delay: .12s; }
+    .reveal-stagger.in > *:nth-child(4) { transition-delay: .18s; }
+    .reveal-stagger.in > *:nth-child(5) { transition-delay: .24s; }
+    /* ---------- BREATHING STRIP (omo1 manifesto) ---------- */
+    .breath-strip {
+      padding: 84px 0;
+      text-align: center;
+      background: var(--warm-bg);
+      border-top: 1px solid var(--border);
+      border-bottom: 1px solid var(--border);
+    }
+    .breath-strip p {
+      margin: 0 auto; max-width: 860px; padding: 0 20px;
+      font-size: clamp(24px, 4.4vw, 40px);
+      line-height: 1.35; font-weight: 700;
+      letter-spacing: -0.02em;
+      color: var(--classin-green);
+    }
+    .breath-strip .em-key { background: linear-gradient(transparent 62%, var(--green-surface) 62%); }
+    /* ---------- MID-PAGE CTA BAR ---------- */
+    .mid-cta {
+      background: var(--classin-green);
+      color: #fff;
+    }
+    .mid-cta .mid-cta-inner {
+      width: min(1160px, calc(100% - 40px));
+      margin: 0 auto;
+      display: flex;
+      flex-wrap: wrap;
+      align-items: center;
+      justify-content: space-between;
+      gap: 18px;
+    }
+    .mid-cta p {
+      margin: 0;
+      color: #fff;
+      font-size: clamp(18px, 2.4vw, 24px);
+      font-weight: 600;
+      letter-spacing: -0.01em;
+      line-height: 1.4;
+    }
+    .mid-cta .mid-cta-btn {
+      display: inline-flex;
+      align-items: center;
+      gap: 8px;
+      flex: 0 0 auto;
+      padding: 14px 24px;
+      border-radius: 12px;
+      background: #fff;
+      color: var(--classin-green);
+      font-size: 15px;
+      font-weight: 700;
+      text-decoration: none;
+      transition: transform .15s ease, gap .15s ease;
+    }
+    .mid-cta .mid-cta-btn:hover { transform: translateY(-2px); gap: 12px; }
+    /* ---------- CAMPAIGN GHOST CTA ---------- */
+    .campaign-line .campaign-cta {
+      display: inline-flex; align-items: center; gap: 6px;
+      margin-top: 4px;
+      font-size: 15px; font-weight: 600;
+      color: var(--classin-green);
+      text-decoration: none;
+      border-bottom: 1px solid transparent;
+      transition: border-color .15s ease, gap .15s ease;
+    }
+    .campaign-line .campaign-cta:hover { border-bottom-color: var(--classin-green); gap: 10px; }
+    .section.dark .campaign-line .campaign-cta { color: var(--green-muted); }
+    /* ---------- DIAGRAM / FIGURE HOSTING ---------- */
+    .figure-frame {
+      background: #fff;
+      border: 1px solid var(--border);
+      border-radius: 16px;
+      box-shadow: var(--shadow);
+      padding: clamp(20px, 4vw, 40px);
+      margin-top: 8px;
+    }
+    .figure-frame.is-flush { padding: 0; overflow: hidden; }
+    .figure-frame.on-dark {
+      background: #17211c;
+      border-color: rgba(255,255,255,0.10);
+      box-shadow: none;
+    }
+    .figure-frame.on-green { background: #fff; }
+    .figure-frame svg, .figure-frame img { display: block; width: 100%; height: auto; }
+    .figure-caption {
+      margin-top: 14px;
+      font-size: 13px; line-height: 1.5;
+      color: var(--muted);
+      text-align: center;
+    }
+    .figure-frame.is-flush + .figure-caption { margin-top: 16px; }
+    .figure-split { display: grid; gap: 28px; align-items: center; }
+    .split-ba { display: grid; gap: 16px; }
+    .split-ba .ba-side { border:1px solid var(--border); border-radius:12px; padding:20px; background:#fff; }
+    .split-ba .ba-side.is-before { background:#FBF7F4; }
+    .split-ba .ba-side.is-after  { border-color: rgba(8,71,52,0.22); box-shadow: var(--shadow); }
+    .split-ba .ba-arrow { color: var(--muted-soft); display:flex; justify-content:center; }
+    @media (min-width: 860px) { .figure-split { grid-template-columns: minmax(0,1fr) minmax(0,1.1fr); gap: 48px; } }
+    @media (min-width: 720px) { .split-ba { grid-template-columns: 1fr auto 1fr; align-items: center; } }
+    /* ---------- VS COMPARISON TABLE (online vs-zoom) ---------- */
+    .vs-em {
+      background: linear-gradient(transparent 60%, var(--green-surface) 60%);
+      padding: 0 2px;
+    }
+    .vs-table {
+      border: 1px solid var(--border);
+      border-radius: 16px;
+      overflow: hidden;
+      background: #fff;
+      box-shadow: var(--shadow);
+    }
+    .vs-row {
+      display: grid;
+      grid-template-columns: minmax(120px, 0.7fr) minmax(0, 1fr) minmax(0, 1fr);
+      align-items: stretch;
+    }
+    .vs-row + .vs-row { border-top: 1px solid var(--border); }
+    .vs-row > span {
+      padding: 18px 20px;
+      font-size: 14px;
+      line-height: 1.65;
+      color: var(--text);
+    }
+    .vs-row > span + span { border-left: 1px solid var(--border); }
+    .vs-head {
+      background: var(--warm-bg);
+    }
+    .vs-head > span {
+      font-size: 12px;
+      font-weight: 700;
+      letter-spacing: 0.14em;
+      text-transform: uppercase;
+      color: var(--muted);
+    }
+    .vs-head .vs-classin { color: var(--classin-green); }
+    .vs-axis { background: #FBFBF9; }
+    .vs-axis b {
+      display: block;
+      color: var(--text);
+      font-size: 15px;
+      font-weight: 700;
+    }
+    .vs-axis small {
+      display: block;
+      margin-top: 3px;
+      color: var(--muted-soft);
+      font-size: 12px;
+    }
+    .vs-zoom { color: var(--muted); }
+    .vs-has {
+      background: rgba(236,253,245,0.5);
+      position: relative;
+    }
+    .vs-has::before {
+      content: "✓";
+      margin-right: 8px;
+      color: var(--classin-green);
+      font-weight: 800;
+    }
+    .vs-foot {
+      display: grid;
+      grid-template-columns: repeat(3, minmax(0, 1fr));
+      gap: 14px;
+      margin-top: 18px;
+    }
+    .vs-foot-item {
+      padding: 20px;
+      border: 1px solid var(--border);
+      border-radius: 12px;
+      background: #fff;
+      box-shadow: var(--shadow);
+    }
+    .vs-foot-item span {
+      display: block;
+      margin-bottom: 10px;
+      color: var(--classin-green);
+      font-size: 13px;
+      font-weight: 700;
+    }
+    .vs-foot-item p {
+      margin: 0;
+      color: var(--muted);
+      font-size: 14px;
+      line-height: 1.7;
+    }
+    @media (max-width: 820px) {
+      .vs-row { grid-template-columns: 1fr; }
+      .vs-row > span + span { border-left: none; border-top: 1px solid var(--border); }
+      .vs-head { display: none; }
+      .vs-axis { background: var(--green-surface); }
+      .vs-axis b { font-size: 16px; }
+      .vs-zoom::before { content: "화상회의 도구 · "; color: var(--muted-soft); font-weight: 700; font-size: 12px; }
+      .vs-has::before { content: "ClassIn ✓ "; }
+      .vs-foot { grid-template-columns: 1fr; }
+    }
+    /* ---------- AUDIENCE + PARENT-VIEW MOCK (O2) ---------- */
+    .audience-roles { display: grid; gap: 14px; }
+    @media (min-width: 600px) { .audience-roles { grid-template-columns: 1fr 1fr; } }
+    .parent-view { align-self: start; max-width: 360px; margin: 0 auto; width: 100%; }
+    .pv-screen { background: #fff; }
+    .pv-top {
+      display: flex; align-items: center; gap: 10px;
+      padding: 16px 18px;
+      background: var(--green-surface);
+      border-bottom: 1px solid var(--border);
+    }
+    .pv-top strong { font-size: 14px; color: var(--text); }
+    .pv-dot { width: 9px; height: 9px; border-radius: 50%; background: var(--classin-green); flex: 0 0 auto; }
+    .pv-body { padding: 16px 18px 20px; display: grid; gap: 12px; }
+    .pv-row {
+      display: flex; align-items: center; gap: 14px;
+      padding: 14px; border: 1px solid var(--border); border-radius: 12px; background: #fff;
+    }
+    .pv-row-tasks { justify-content: space-between; }
+    .pv-thumb {
+      width: 52px; height: 40px; flex: 0 0 auto;
+      display: flex; align-items: center; justify-content: center;
+      border-radius: 8px; background: #17211c; color: var(--green-muted); font-size: 14px;
+    }
+    .pv-row-text small { display: block; color: var(--muted-soft); font-size: 11px; letter-spacing: 0.04em; }
+    .pv-row-text b { display: block; margin-top: 3px; color: var(--text); font-size: 14px; }
+    .pv-pills { display: flex; gap: 6px; flex: 0 0 auto; }
+    .pv-pill { padding: 4px 10px; border-radius: 999px; font-size: 12px; font-weight: 700; }
+    .pv-pill.is-done { background: var(--green-surface); color: var(--classin-green); }
+    .pv-pill.is-warn { background: rgba(245,158,11,0.14); color: #B26A00; }
+    .pv-stats { display: grid; grid-template-columns: repeat(3, 1fr); gap: 8px; }
+    .pv-stat {
+      padding: 12px 8px; text-align: center;
+      border: 1px solid var(--border); border-radius: 10px; background: #FBFBF9;
+    }
+    .pv-stat b { display: block; color: var(--classin-green); font-size: 18px; }
+    .pv-stat small { display: block; margin-top: 2px; color: var(--muted); font-size: 11px; }
+    /* ---------- FAQ ACCORDION ---------- */
+    .faq-accordion {
+      display: grid;
+      gap: 12px;
+      max-width: 820px;
+    }
+    .faq-item {
+      border: 1px solid var(--border);
+      border-radius: 12px;
+      background: #fff;
+      box-shadow: var(--shadow);
+      overflow: hidden;
+    }
+    .faq-item > summary {
+      list-style: none;
+      cursor: pointer;
+      padding: 20px 52px 20px 22px;
+      position: relative;
+      font-size: 17px;
+      font-weight: 600;
+      color: var(--text);
+      line-height: 1.5;
+    }
+    .faq-item > summary::-webkit-details-marker { display: none; }
+    .faq-item > summary::after {
+      content: "+";
+      position: absolute;
+      right: 22px;
+      top: 50%;
+      transform: translateY(-50%);
+      color: var(--classin-green);
+      font-size: 22px;
+      font-weight: 400;
+      line-height: 1;
+      transition: transform .2s ease;
+    }
+    .faq-item[open] > summary::after { content: "−"; }
+    .faq-item > summary:hover { color: var(--classin-green); }
+    .faq-item > p {
+      margin: 0;
+      padding: 0 22px 22px;
+      color: var(--muted);
+      font-size: 15px;
+      line-height: 1.78;
+    }
     .section-inner {
       width: min(1160px, calc(100% - 40px));
       margin: 0 auto;
@@ -1432,9 +1797,6 @@
       gap: 16px;
     }
     .campaign-line {
-      display: flex;
-      flex-direction: column;
-      align-items: flex-start;
       min-height: 248px;
       padding: 28px;
       border: 1px solid rgba(8,71,52,0.16);
@@ -1465,35 +1827,13 @@
     .section.dark .campaign-line p {
       color: rgba(246,245,244,0.64);
     }
-    .campaign-line .campaign-cta {
-      display: inline-flex;
-      align-items: center;
-      justify-content: center;
-      margin-top: auto;
-      min-height: 36px;
-      padding: 7px 12px;
-      border: 1px solid rgba(8,71,52,0.16);
-      border-radius: 999px;
-      background: rgba(255,255,255,0.56);
+    .campaign-line strong {
       color: var(--classin-green);
       font-size: 14px;
-      font-weight: 800;
       line-height: 1.4;
-      transition: transform 180ms ease, background 180ms ease, border-color 180ms ease;
     }
-    .campaign-line a.campaign-cta:hover {
-      transform: translateY(-1px);
-      border-color: rgba(8,71,52,0.34);
-      background: #fff;
-    }
-    .section.dark .campaign-line .campaign-cta {
-      border-color: rgba(110,231,183,0.18);
-      background: rgba(110,231,183,0.08);
+    .section.dark .campaign-line strong {
       color: var(--green-muted);
-    }
-    .section.dark .campaign-line a.campaign-cta:hover {
-      border-color: rgba(110,231,183,0.36);
-      background: rgba(110,231,183,0.12);
     }
     .deep-dive-grid {
       display: grid;
@@ -1679,6 +2019,25 @@
       color: var(--muted);
       font-size: 14px;
       line-height: 1.7;
+    }
+    .flow-scenario {
+      max-width: 760px;
+      margin: 22px 0 0;
+      padding: 18px 20px;
+      border-left: 3px solid var(--classin-green);
+      border-radius: 8px;
+      background: rgba(255,255,255,0.6);
+      color: var(--muted);
+      font-size: 15px;
+      line-height: 1.78;
+    }
+    .flow-step strong {
+      display: inline-flex;
+      margin-top: 12px;
+      color: var(--classin-green);
+      font-size: 12px;
+      font-weight: 760;
+      letter-spacing: 0.06em;
     }
     .resource-grid {
       display: grid;
@@ -2195,58 +2554,23 @@
       line-height: 1.35;
       backdrop-filter: blur(12px);
     }
-    .online-diagnostic-kit {
-      display: grid;
-      grid-template-columns: minmax(240px, 0.92fr) repeat(4, minmax(0, 1fr));
-      gap: 12px;
-      margin-top: 22px;
-    }
-    .online-diagnostic-kit > div,
-    .online-diagnostic-kit article {
-      min-height: 172px;
-      padding: 22px;
-      border: 1px solid rgba(8,71,52,0.12);
-      border-radius: 12px;
-      background: rgba(255,255,255,0.78);
-      box-shadow: 0 12px 30px rgba(8,71,52,0.07);
-    }
-    .online-diagnostic-kit > div {
-      background: var(--classin-green);
-      color: #fff;
-    }
-    .online-diagnostic-kit span {
-      display: block;
-      margin-bottom: 12px;
-      color: rgba(255,255,255,0.68);
-      font-size: 12px;
-      font-weight: 820;
-      line-height: 1.35;
-    }
-    .online-diagnostic-kit h3 {
-      margin: 0;
-      font-size: 22px;
-      line-height: 1.32;
-      letter-spacing: 0;
-    }
-    .online-diagnostic-kit strong {
-      display: block;
-      margin-bottom: 12px;
-      color: var(--classin-green);
-      font-size: 17px;
-      line-height: 1.35;
-      letter-spacing: 0;
-    }
-    .online-diagnostic-kit p {
-      margin: 0;
-      color: var(--muted);
-      font-size: 13px;
-      line-height: 1.68;
-    }
     .online-asset-board {
       display: grid;
       grid-template-columns: minmax(0, 1.18fr) minmax(0, 0.82fr);
       gap: 14px;
       margin-top: 22px;
+    }
+    .online-leak-evidence {
+      margin-top: 40px;
+      padding-top: 36px;
+      border-top: 1px solid rgba(8,71,52,0.12);
+    }
+    .online-leak-evidence-lead {
+      max-width: 760px;
+      margin: 0 0 24px;
+      color: var(--muted);
+      font-size: 17px;
+      line-height: 1.8;
     }
     .online-asset-card {
       position: relative;
@@ -2357,48 +2681,49 @@
       font-size: 13px;
       line-height: 1.7;
     }
-    .online-mid-cta {
-      display: flex;
-      justify-content: space-between;
-      gap: 22px;
-      align-items: center;
-      margin-top: 34px;
-      padding: 22px;
-      border: 1px solid rgba(8,71,52,0.14);
+    .online-five-after {
+      margin-top: 44px;
+      padding-top: 36px;
+      border-top: 1px solid rgba(8,71,52,0.12);
+    }
+    .online-five-after-lead {
+      max-width: 760px;
+      margin: 0 0 24px;
+      color: var(--muted);
+      font-size: 17px;
+      line-height: 1.8;
+    }
+    .online-after-grid {
+      display: grid;
+      grid-template-columns: repeat(4, minmax(0, 1fr));
+      gap: 14px;
+    }
+    .online-after-item {
+      padding: 20px;
+      border: 1px solid rgba(8,71,52,0.12);
       border-radius: 12px;
-      background: rgba(255,255,255,0.74);
-      box-shadow: 0 12px 30px rgba(8,71,52,0.08);
-    }
-    .online-mid-cta p {
-      max-width: 560px;
-      margin: 0;
-      color: var(--text);
-      font-size: 16px;
-      font-weight: 720;
-      line-height: 1.6;
-    }
-    .online-mid-cta div {
-      display: flex;
-      gap: 10px;
-      flex-wrap: wrap;
-      justify-content: flex-end;
-    }
-    .online-mid-cta a {
-      display: inline-flex;
-      align-items: center;
-      min-height: 42px;
-      padding: 10px 15px;
-      border-radius: 999px;
-      background: var(--classin-green);
-      color: #fff;
-      font-size: 13px;
-      font-weight: 820;
-      line-height: 1.3;
-    }
-    .online-mid-cta a + a {
-      border: 1px solid rgba(8,71,52,0.16);
       background: #fff;
+      box-shadow: var(--shadow);
+    }
+    .online-after-item span {
+      display: block;
+      margin-bottom: 10px;
       color: var(--classin-green);
+      font-size: 13px;
+      font-weight: 700;
+      letter-spacing: 0.02em;
+    }
+    .online-after-item p {
+      margin: 0;
+      color: var(--muted);
+      font-size: 14px;
+      line-height: 1.7;
+    }
+    @media (max-width: 900px) {
+      .online-after-grid { grid-template-columns: repeat(2, minmax(0, 1fr)); }
+    }
+    @media (max-width: 560px) {
+      .online-after-grid { grid-template-columns: 1fr; }
     }
     .enterprise-risk-section {
       background:
@@ -2681,7 +3006,6 @@
       .managed-simulation-step,
       .managed-board-main,
       .managed-board-cards,
-      .online-diagnostic-kit,
       .online-five-timeline,
       .enterprise-risk-grid,
       .loss-preview,
@@ -2695,13 +3019,6 @@
       .online-leak-card,
       .online-asset-board {
         grid-template-columns: 1fr;
-      }
-      .online-mid-cta {
-        align-items: flex-start;
-        flex-direction: column;
-      }
-      .online-mid-cta div {
-        justify-content: flex-start;
       }
       .online-asset-card.featured {
         grid-row: auto;
@@ -2783,11 +3100,6 @@
         font-size: clamp(38px, 10.8vw, 46px);
         line-height: 1.06;
       }
-      .variant-enterprise h1 {
-        max-width: 100%;
-        font-size: clamp(34px, 10vw, 42px);
-        line-height: 1.14;
-      }
       .variant-online h1 { font-size: clamp(36px, 10.4vw, 48px); line-height: 1.1; }
       h2 { font-size: clamp(30px, 9vw, 40px); }
       .hero-copy { font-size: 16px; line-height: 1.68; }
@@ -2818,25 +3130,20 @@
         grid-template-columns: 1fr;
       }
       .variant-online .proof-strip {
-        grid-template-columns: 1fr;
+        grid-template-columns: repeat(3, minmax(0, 1fr));
         gap: 8px;
         margin-top: 28px;
       }
       .variant-online .proof-strip li {
-        min-height: auto;
-        padding: 14px 16px;
-        display: grid;
-        grid-template-columns: 76px 1fr;
-        align-items: center;
-        column-gap: 12px;
+        min-height: 86px;
+        padding: 12px;
       }
       .variant-online .proof-strip span,
       .variant-online .proof-strip small {
-        font-size: 11px;
+        font-size: 10px;
       }
       .variant-online .proof-strip strong {
-        margin: 0 0 3px;
-        font-size: 20px;
+        font-size: 18px;
       }
       .online-leak-grid {
         padding-left: 22px;
@@ -2850,22 +3157,6 @@
       }
       .online-leak-card::before {
         left: -20px;
-      }
-      .online-diagnostic-kit > div,
-      .online-diagnostic-kit article {
-        min-height: auto;
-        padding: 18px;
-      }
-      .online-mid-cta {
-        padding: 18px;
-      }
-      .online-mid-cta div,
-      .online-mid-cta a {
-        width: 100%;
-      }
-      .online-mid-cta a {
-        justify-content: center;
-        text-align: center;
       }
       .online-leak-media,
       .online-leak-media img {
@@ -2884,8 +3175,11 @@
       }
       .section,
       .final-section {
-        padding: 70px 0;
+        padding: 60px 0;
       }
+      .section.green, .section.dark { padding: 68px 0; }
+      .breath-strip { padding: 52px 0; }
+      .mid-cta .mid-cta-inner { flex-direction: column; align-items: flex-start; }
       .product-frame img { min-height: 220px; }
       .managed-board-main figure,
       .managed-board-main img,
@@ -2897,6 +3191,10 @@
         min-height: 220px;
         aspect-ratio: 4 / 3;
       }
+      .variant-online .hero-min .online-hero-gif {
+        aspect-ratio: 16 / 10;
+      }
+      .hero-min .hero-visual { margin-top: 40px; }
       .online-live-badge {
         top: 12px;
         left: 12px;
@@ -2916,6 +3214,7 @@
         transition-duration: 0.001ms !important;
         animation-duration: 0.001ms !important;
       }
+      .reveal, .reveal-stagger > * { opacity: 1 !important; transform: none !important; }
     }
   </style>
 </head>
@@ -2938,61 +3237,31 @@
       </div>
     </nav>
 
-    
 
-    <header class="hero">
+
+    <header class="hero hero-min">
       <div class="hero-grid">
-        <div>
-          <p class="segment-label">온라인 학원, 원격 과외 그룹, 하이브리드 수업 운영 학원</p>
-          <h1><span>온라인 체험수업,</span><span>첫 5분이</span><span>재등록을 만듭니다.</span></h1>
-          <p class="hero-copy">온라인 수업은 링크가 열리는 순간부터 이미 평가됩니다. ClassIn은 입장 안내, 첫 상호작용, 실시간 판서, 녹화, 복습, 리포트를 하나의 운영 흐름으로 묶어 체험수업을 다음 결제로 이어지게 만듭니다.</p>
-          <div class="hero-actions">
-            <a class="btn primary" href="#segment-lead-form">첫 5분 누수 진단 받기</a>
-            <a class="btn secondary" href="/resources/academy-software-selection-worksheet">체험수업 시나리오 보기</a>
-          </div>
-          <ul class="proof-strip" aria-label="세그먼트 핵심 판단 기준">
-            
-        <li>
-          <span>핵심 장면</span>
-          <strong>첫 5분</strong>
-          <small>입장·기대감·첫 반응</small>
-        </li>
-        <li>
-          <span>누수 지점</span>
-          <strong>前·中·後</strong>
-          <small>체험·몰입·재등록</small>
-        </li>
-        <li>
-          <span>진단 방식</span>
-          <strong>5축 30분</strong>
-          <small>퍼널·경험·편차 점검</small>
-        </li>
-          </ul>
+        <p class="segment-label reveal">온라인·하이브리드 학원</p>
+        <h1 class="reveal"><span>온라인 체험수업,</span><span>첫 5분이</span><span>재등록을 만듭니다.</span></h1>
+        <p class="hero-lede reveal">링크가 열리는 순간부터 수업은 평가됩니다. 그 첫 5분을 재등록으로 잇는 운영을 설계합니다.</p>
+        <div class="hero-actions reveal">
+          <a class="btn primary" href="#segment-lead-form">5축 운영 진단 신청</a>
+          <a class="hero-textlink" href="/resources/academy-software-selection-worksheet">비교 워크시트 보기 →</a>
         </div>
-        <figure class="hero-visual">
-          
-          <div class="product-frame online-frame" aria-label="ClassIn 온라인 수업 판서 GIF">
+        <figure class="hero-visual reveal">
+          <div class="product-frame online-frame" aria-label="ClassIn 온라인 수업 판서 화면">
             <div class="online-gif-stage">
               <img
                 class="online-hero-gif"
-                src="/images/blog/imported/teach-math-online/2-2.gif"
-                alt="태블릿에서 ClassIn 온라인 수업 판서가 진행되는 모습"
+                src="/images/l/online/online-hero.png"
+                alt="ClassIn 전자칠판으로 온라인·오프라인을 함께 진행하는 학원 수업 교실"
                 loading="eager"
                 decoding="async"
               />
-              <div class="online-live-badge" aria-hidden="true">
+              <div class="hero-quiet-badge" aria-hidden="true">
                 <i></i>
-                <span>LIVE EDB CLASS</span>
+                <span>LIVE</span>
               </div>
-              <div class="online-gif-note" aria-hidden="true">
-                판서·질문·녹화가 한 흐름으로 남는 온라인 수업
-              </div>
-            </div>
-            <div class="os-panel" aria-label="온라인 수업 이후 운영">
-              <div class="os-cell"><span>LINK</span><strong>입장 링크 이후</strong></div>
-              <div class="os-cell"><span>BOARD</span><strong>EDB·판서 기록</strong></div>
-              <div class="os-cell"><span>REPLAY</span><strong>녹화·복습 안내</strong></div>
-              <div class="os-cell"><span>LMS</span><strong>과제·상담 근거</strong></div>
             </div>
           </div>
         </figure>
@@ -3000,16 +3269,16 @@
     </header>
 
     <main>
-      
+
       <section class="section online-loop-section">
         <div class="section-inner">
-          <div class="section-head">
+          <div class="section-head reveal">
             <p class="section-kicker">Where The Revenue Leaks</p>
             <h2>온라인 수업에서 매출이 새는 3곳을 먼저 막습니다</h2>
-            <p>온라인 수업을 “열었다”에서 끝내지 않고, 체험·몰입·재등록이 연결되는 운영 흐름으로 설명합니다.</p>
+            <p>온라인 수업을 “열었다”에서 끝내지 않고, 체험·몰입·재등록이 연결되는 운영 흐름으로 설명합니다. 문제는 링크가 아니라 링크 밖의 운영입니다.</p>
           </div>
-          <div class="online-leak-grid">
-            
+          <div class="online-leak-grid reveal-stagger">
+
                   <article class="online-leak-card">
                     <div class="online-leak-copy">
                       <span>01 · 수업 전</span>
@@ -3047,33 +3316,10 @@
                     </figure>
                   </article>
           </div>
-          <div class="online-diagnostic-kit" aria-label="온라인반 진단 후 받는 산출물">
-            <div>
-              <span>진단 후 받는 산출물</span>
-              <h3>“좋아 보입니다”가 아니라, 바로 고칠 운영표를 남깁니다.</h3>
-            </div>
-            
-                  <article>
-                    <strong>0-5분 운영표</strong>
-                    <p>입장 안내, 첫 질문, 몰입 확인, 다음 안내까지 체험수업 첫 장면을 시간표로 정리합니다.</p>
-                  </article>
-                  <article>
-                    <strong>누수 지도</strong>
-                    <p>노쇼, 몰입 이탈, 복습 누락, 재등록 안내 공백이 어디서 생기는지 한 장으로 표시합니다.</p>
-                  </article>
-                  <article>
-                    <strong>학부모 안내 예시</strong>
-                    <p>다시보기, 과제, 상담 문구를 온라인반 학부모가 이해하는 짧은 안내문으로 바꿉니다.</p>
-                  </article>
-                  <article>
-                    <strong>튜터 운영 체크</strong>
-                    <p>강사마다 달라지는 입장 안내, 판서, 첫 질문, 수업 후 리포트 기준을 분리합니다.</p>
-                  </article>
-          </div>
-          <div class="online-asset-board" aria-label="ClassIn 온라인 수업 자료 이미지 모음">
-            
+          <div class="online-asset-board reveal" aria-label="ClassIn 온라인 수업 자료 이미지 모음">
+
                   <figure class="online-asset-card featured">
-                    <img src="/images/blog/imported/teach-math-online/2-2.gif" alt="태블릿에서 ClassIn 온라인 수업 판서가 진행되는 모습" loading="lazy" decoding="async" />
+                    <img src="/images/blog/imported/teach-math-online/1-4.webp" alt="태블릿에서 ClassIn 온라인 수업 판서가 진행되는 모습" loading="lazy" decoding="async" />
                     <figcaption>
                       <span>Tablet class</span>
                       <strong>태블릿 판서 수업 장면</strong>
@@ -3101,19 +3347,40 @@
                     </figcaption>
                   </figure>
           </div>
+
+          <div class="online-leak-evidence">
+            <p class="online-leak-evidence-lead reveal">한 장면으로 좁혀봅니다. 체험수업 3일 차, 한 번 결석했던 학생의 학부모가 “지난 시간 다시 볼 수 있나요”라고 묻습니다. 이 한 질문에 바로 답이 나오느냐 마느냐가 재등록을 가릅니다 — 회의 도구만 쓰면 강사 노트북을 뒤져 파일을 찾아 보내야 하고, 그 사이 신뢰는 식습니다. 새는 곳은 정해져 있습니다. 수업 전 입장, 수업 중 몰입, 수업 후 재등록, 세 지점에서 실제로 무슨 일이 벌어지는지 짚습니다.</p>
+            <div class="operation-scene-grid reveal-stagger">
+              <article class="operation-scene-card">
+                <span>0:00 · 수업 전</span>
+                <h3>빈 대기 화면 대신 기대감을 먼저 설계합니다.</h3>
+                <p>회의 링크만 보내면 학생은 검은 대기 화면 앞에서 “들어가도 되나” 망설이다 이탈합니다. 입장 안내와 사전 자료, 오늘 풀 문제 한 장을 미리 띄우면 체험 신청자가 시작 전에 빠질 가능성이 줄고, 첫 5분이 “수업이 시작됐다”는 신호로 바뀝니다.</p>
+              </article>
+              <article class="operation-scene-card">
+                <span>2:30 · 수업 중</span>
+                <h3>학생을 시청자가 아니라 참여자로 바꿉니다.</h3>
+                <p>카메라를 끄고 화면 뒤로 사라진 학생을 수업이 끝날 때 알아차리면 이미 늦습니다. 첫 질문을 던지고, 채팅 반응을 받고, EDB 판서에 학생을 직접 끌어들이는 순간 온라인 수업은 흘려보는 영상이 아니라 관리받는 라이브가 되고, 만족도와 재등록 신호가 살아납니다.</p>
+              </article>
+              <article class="operation-scene-card">
+                <span>T+24h · 수업 후</span>
+                <h3>수업 후 복습과 재등록 흐름을 놓치지 않습니다.</h3>
+                <p>앞의 “지난 시간 다시 볼 수 있나요”에 ClassIn은 이미 발송된 다시보기 링크 한 줄로 답합니다. 녹화, 과제 후속, 학부모 안내가 한 흐름에 남아 다음 수업과 다음 결제의 근거가 되고, 흩어지면 그날로 끝나던 경험이 재등록 상담까지 이어집니다.</p>
+              </article>
+            </div>
+          </div>
         </div>
       </section>
       <section class="section online-five-section">
         <div class="section-inner">
-          <div class="section-head">
+          <div class="section-head reveal">
             <p class="section-kicker">The First Five Minutes</p>
             <h2>체험수업의 첫 5분이 재등록 경험을 결정합니다</h2>
             <p>상담자는 기능을 설명하기보다 첫 입장, 첫 상호작용, 첫 복습 안내가 어떻게 다음 결제로 이어지는지 보여줘야 합니다.</p>
           </div>
-          <div class="online-five-timeline">
-            
+          <div class="online-five-timeline reveal-stagger">
+
                   <article class="online-five-step">
-                    <img src="/images/blog/imported/teach-math-online/2-2.gif" alt="태블릿에서 온라인 수업 판서가 진행되는 모습" loading="lazy" decoding="async" />
+                    <img src="/images/blog/imported/teach-math-online/1-4.webp" alt="태블릿에서 온라인 수업 판서가 진행되는 모습" loading="lazy" decoding="async" />
                     <span>0:00</span>
                     <h3>입장 안내</h3>
                     <p>빈 대기 화면이 아니라 이름을 부르는 안내와 준비된 자료로 첫 인상을 만듭니다.</p>
@@ -3143,11 +3410,26 @@
                     <p>첫 5분의 경험이 좋으면 수업 후 상담과 재등록 안내가 훨씬 자연스러워집니다.</p>
                   </article>
           </div>
-          <div class="online-mid-cta">
-            <p>우리 온라인반의 첫 5분을 기준으로, 어디서 노쇼·몰입·재등록이 새는지 먼저 표시해보세요.</p>
-            <div>
-              <a href="#segment-lead-form">온라인반 첫 5분 누수 진단 받기</a>
-              <a href="/resources/academy-software-selection-worksheet">체험수업 비교 워크시트 보기</a>
+
+          <div class="online-five-after">
+            <p class="online-five-after-lead reveal">첫 5분이 인상을 만들고, 그다음 운영이 등록을 지킵니다. 5분 이후에도 끊기지 않아야 할 네 가지를 짚습니다.</p>
+            <div class="online-after-grid reveal-stagger">
+              <article class="online-after-item">
+                <span>판서·녹화</span>
+                <p>선생님의 판서, 질문, 오답 설명이 사라지지 않고 EDB와 녹화로 남아 다음 수업과 복습으로 이어집니다.</p>
+              </article>
+              <article class="online-after-item">
+                <span>수업 후 안내</span>
+                <p>다시보기 안내, 과제 상태, 결석 보강, 상담 근거가 분명하면 온라인이어도 관리받는 느낌이 남습니다.</p>
+              </article>
+              <article class="online-after-item">
+                <span>하이브리드 기준</span>
+                <p>오프라인반과 온라인반의 출석, 보강, 과제, 상담 기준을 같은 운영 언어로 맞춰 경험이 흔들리지 않게 합니다.</p>
+              </article>
+              <article class="online-after-item">
+                <span>5축 진단</span>
+                <p>유입·체험·등록, 수업 경험, 재등록, 강사 편차, 프리미엄 체감을 따로 보면 무엇을 먼저 적용할지 선명해집니다.</p>
+              </article>
             </div>
           </div>
         </div>
@@ -3155,13 +3437,13 @@
 
       <section class="section alt" id="fit">
         <div class="section-inner fit-grid">
-          <div class="section-head">
+          <div class="section-head reveal">
             <p class="section-kicker">적합한 학원</p>
             <h2>체험수업은 열리지만, 재등록 동선이 끊기는 학원</h2>
             <p>온라인·하이브리드 수업에서 입장 안내, 첫 상호작용, 녹화·복습, 과제 후속, 학부모 리포트가 따로 움직인다면 먼저 맞습니다.</p>
           </div>
-          <ul class="fit-list">
-            
+          <ul class="fit-list reveal-stagger">
+
         <li>
           <span aria-hidden="true"></span>
           <p>체험 신청은 있는데 입장, 첫 반응, 등록 전환에서 노쇼와 이탈이 생기는 온라인 학원</p>
@@ -3188,34 +3470,34 @@
 
       <section class="section dark" id="story">
         <div class="section-inner">
-          
+
         <div class="story-panel">
-          <div class="story-copy">
+          <div class="story-copy reveal">
             <p class="section-kicker">Online Class Story</p>
             <h2>온라인 수업은 열렸지만, 학원 운영은 링크 밖에 남아 있습니다.</h2>
             <p>Zoom이나 Meet은 수업을 시작하게 해줍니다. 하지만 학원은 수업을 여는 것만으로 운영되지 않습니다. 교안 준비, 판서, 녹화, 결석 보강, 과제 후속, 학부모 상담까지 이어져야 온라인반도 학원처럼 느껴집니다.</p>
             <p>그래서 ClassIn은 영상 링크가 닫힌 뒤에도 녹화, 복습, 과제, 상담 근거가 남는 온라인 학원 운영 흐름을 만듭니다.</p>
           </div>
-          <div class="story-scene">
+          <div class="story-scene reveal">
             <span>수업 직후의 온라인반</span>
             <h3>링크는 닫혔고, 관리 업무는 흩어지기 시작합니다.</h3>
             <p>녹화는 따로 저장되고, 과제는 다른 앱으로 공지되고, 결석생에게 보강 안내를 보내야 하고, 학부모는 오늘 수업의 근거를 묻습니다. 온라인 수업이 느슨해지는 순간은 수업 중이 아니라 수업 직후입니다.</p>
             <ol>
-              
+
                     <li>
                       <strong>Before</strong>
                       <h4>영상 수업은 열리지만 흔적이 흩어짐</h4>
-                      <p>회의 링크, 녹화 파일, 과제 안내, 상담 근거가 다른 곳에 남아 운영자가 매번 다시 연결해야 합니다.</p>
+                      <p>녹화는 강사 노트북에, 과제는 단체 채팅방에, 출결은 강사 메모장에. 운영자는 학부모가 물을 때마다 네 곳을 뒤져 다시 이어 붙입니다.</p>
                     </li>
                     <li>
                       <strong>Turning Point</strong>
                       <h4>수업 전후 흐름을 ClassIn 안으로 연결</h4>
-                      <p>EDB·판서, 녹화, LMS, 과제·시험, 관리자 확인이 이어지면 온라인 수업도 학원 운영의 일부가 됩니다.</p>
+                      <p>입장 안내 → 판서 저장 → 자동 녹화 링크 발송 → 과제 회수 → 주간 리포트가 한 줄로 이어지면, 흩어 붙이던 일이 사라지고 온라인 수업도 학원 운영의 일부가 됩니다.</p>
                     </li>
                     <li>
                       <strong>After</strong>
                       <h4>온라인반과 오프라인반 기준 통일</h4>
-                      <p>수업 방식이 달라도 복습, 과제, 상담, 권한 기준은 같은 언어로 관리할 수 있습니다.</p>
+                      <p>오전 현장반과 저녁 온라인반이 같은 복습·과제·상담·권한 기준 위에서 돌아가, 수업 방식이 달라도 학부모가 받는 경험은 한 학원으로 모입니다.</p>
                     </li>
             </ol>
           </div>
@@ -3223,492 +3505,285 @@
         </div>
       </section>
 
-      <section class="section dark">
+      <section class="breath-strip reveal">
+        <p>도구는 수업을 <span class="em-key">열고</span>,<br>운영 체제는 학원을 <span class="em-key">남깁니다</span>.</p>
+      </section>
+
+      <section class="section alt" id="decision">
         <div class="section-inner">
-          <div class="section-head">
-            <p class="section-kicker">링크 이후 운영</p>
-            <h2>온라인 수업이 학원처럼 느껴지는 순간</h2>
-            <p>온라인반은 입장 링크보다 수업 후 경험에서 신뢰가 갈립니다. ClassIn은 수업 전 준비부터 복습과 상담 근거까지 이어지는 장면을 만듭니다.</p>
+          <div class="section-head reveal">
+            <p class="section-kicker">Zoom과 무엇이 다른가</p>
+            <h2>Zoom은 수업을 <span class="vs-em">열고</span>, ClassIn은 수업을 <span class="vs-em">남깁니다</span>.</h2>
+            <p>회의 도구는 링크를 여는 데 강합니다. 차이는 링크가 닫힌 뒤에 생깁니다 — 녹화, 복습, 과제, 상담 근거, 재등록이 어디에 남는지가 온라인 학원의 신뢰를 만듭니다.</p>
           </div>
-          <div class="operation-scene-grid">
-            
-        <article class="operation-scene-card">
-          <span>0:00 입장</span>
-          <h3>빈 대기 화면 대신 기대감을 먼저 설계합니다.</h3>
-          <p>입장 안내, 사전 자료, 오늘 얻어갈 장면을 먼저 보여주면 체험 신청자가 수업 시작 전에 이탈할 가능성을 줄입니다.</p>
-        </article>
-        <article class="operation-scene-card">
-          <span>2:30 첫 반응</span>
-          <h3>학생을 시청자가 아니라 참여자로 바꿉니다.</h3>
-          <p>첫 질문, 채팅 반응, 판서 참여가 생기는 순간 온라인 수업은 단순 영상이 아니라 관리받는 라이브 경험이 됩니다.</p>
-        </article>
-        <article class="operation-scene-card">
-          <span>T+24h 후속</span>
-          <h3>수업 후 복습과 재등록 흐름을 놓치지 않습니다.</h3>
-          <p>다시보기, 과제 후속, 학부모 안내가 흩어지지 않아 다음 수업과 다음 결제로 이어질 근거가 남습니다.</p>
-        </article>
+
+          <div class="vs-table reveal" role="table" aria-label="Zoom과 ClassIn 운영 비교">
+            <div class="vs-row vs-head" role="row">
+              <span role="columnheader">운영 장면</span>
+              <span role="columnheader">화상회의 도구</span>
+              <span role="columnheader" class="vs-classin">ClassIn 학원 OS</span>
+            </div>
+            <div class="vs-row" role="row">
+              <span class="vs-axis" role="cell"><b>수업 전</b><small>입장·기대감</small></span>
+              <span class="vs-zoom" role="cell">링크를 보내면 끝. 입장 안내·사전 자료는 따로 챙겨야 합니다.</span>
+              <span class="vs-has" role="cell">입장 안내, 사전 자료, 첫 5분 시나리오가 수업 준비 안에 들어옵니다.</span>
+            </div>
+            <div class="vs-row" role="row">
+              <span class="vs-axis" role="cell"><b>수업 중</b><small>몰입·판서</small></span>
+              <span class="vs-zoom" role="cell">화면 공유는 되지만 판서·질문·참여가 자산으로 남지 않습니다.</span>
+              <span class="vs-has" role="cell">EDB 판서와 활동이 재사용 가능한 칠판 파일로 남아 복습으로 이어집니다.</span>
+            </div>
+            <div class="vs-row" role="row">
+              <span class="vs-axis" role="cell"><b>수업 후</b><small>녹화·복습</small></span>
+              <span class="vs-zoom" role="cell">녹화는 따로 저장하고, 결석 보강·과제 안내는 다른 앱으로 흩어집니다.</span>
+              <span class="vs-has" role="cell">녹화·다시보기, 과제 후속, 학부모 리포트가 같은 흐름에서 이어집니다.</span>
+            </div>
+            <div class="vs-row" role="row">
+              <span class="vs-axis" role="cell"><b>운영·관리</b><small>가시성</small></span>
+              <span class="vs-zoom" role="cell">관리자는 강사 보고에 의존하고, 튜터별 경험 편차가 그대로 남습니다.</span>
+              <span class="vs-has" role="cell">권한 있는 관리자가 수업 진행·복습 제공·특이사항을 기준으로 확인합니다.</span>
+            </div>
+            <div class="vs-row" role="row">
+              <span class="vs-axis" role="cell"><b>재등록</b><small>전환 근거</small></span>
+              <span class="vs-zoom" role="cell">수업이 끝나면 경험도 끝나, 재등록 안내가 운영자 감각에 의존합니다.</span>
+              <span class="vs-has" role="cell">다시보기·리포트·재등록 트리거가 다음 기수로 이어지는 근거가 됩니다.</span>
+            </div>
+          </div>
+
+          <div class="vs-foot reveal-stagger">
+            <article class="vs-foot-item">
+              <span>학부모 신뢰</span>
+              <p>회의 도구만 쓰면 학부모는 “오늘 뭐 했어?”를 아이에게 묻고 끝납니다. ClassIn에서는 다시보기 3개, 과제 제출 상태, 강사 코멘트가 주간 리포트로 도착해, 묻기 전에 “관리받고 있다”가 화면으로 증명됩니다.</p>
+            </article>
+            <article class="vs-foot-item">
+              <span>하이브리드 기준</span>
+              <p>오전 현장반은 칠판 앞에서, 저녁 온라인반은 링크로 수업해도 출석·보강·과제·상담 기준이 따로 놀면 학부모는 차이를 먼저 느낍니다. 두 반을 같은 운영 언어로 맞춰 어느 쪽이든 같은 학원 경험이 되게 합니다.</p>
+            </article>
+            <article class="vs-foot-item">
+              <span>5축 진단</span>
+              <p>“이탈이 많다”를 막연히 두지 않고 유입·체험·등록, 수업 경험, 재등록, 강사 편차, 프리미엄 체감 다섯 축으로 나눕니다. 입장에서 새는지 복습에서 새는지가 분리되면, 먼저 손댈 한 곳이 선명해집니다.</p>
+            </article>
           </div>
         </div>
       </section>
 
-      <section class="section alt" id="journey">
-        <div class="section-inner">
-          <div class="section-head">
-            <p class="section-kicker">첫 5분 이후</p>
-            <h2>링크를 여는 순간부터 재등록까지 이어지는 흐름</h2>
-            <p>온라인 수업의 전환은 수업 중 설명력만으로 결정되지 않습니다. 입장 전 기대감, 첫 5분 몰입, 수업 후 복습과 리포트가 하나의 경험으로 이어져야 합니다.</p>
-          </div>
-          <div class="narrative-list">
-            
-        <article class="narrative-chapter">
-          <div>
-            <span>Chapter 01</span>
-            <h3>온라인 수업의 문제는 첫 5분 안에서 이미 드러납니다</h3>
-            <p>회의 도구는 수업을 열어주지만 체험수업의 첫 인상을 설계해주지는 않습니다. 입장 안내, 사전 자료, 첫 질문, 몰입 확인이 비어 있으면 학생은 수업이 시작되기도 전에 마음속으로 이탈합니다.</p>
-          </div>
-          <ul>
-            <li>입장 안내</li><li>사전 자료</li><li>첫 상호작용</li>
-          </ul>
-        </article>
-        <article class="narrative-chapter">
-          <div>
-            <span>Chapter 02</span>
-            <h3>온라인에서도 판서와 활동은 수업 자산이어야 합니다</h3>
-            <p>원격 수업에서 선생님의 판서, 질문, 오답 설명이 사라지면 다음 수업과 복습으로 이어지기 어렵습니다. EDB와 녹화가 함께 남으면 온라인 수업도 학원 수업처럼 축적됩니다.</p>
-          </div>
-          <ul>
-            <li>EDB 판서</li><li>질문 흐름</li><li>녹화 다시보기</li>
-          </ul>
-        </article>
-        <article class="narrative-chapter">
-          <div>
-            <span>Chapter 03</span>
-            <h3>학부모가 느끼는 차이는 수업 후 안내에서 생깁니다</h3>
-            <p>온라인 수업은 화면으로 만났다는 이유만으로 관리가 약해 보이기 쉽습니다. 다시보기 안내, 과제 상태, 결석 보강, 상담 근거가 분명하면 온라인이어도 관리받는 느낌이 남습니다.</p>
-          </div>
-          <ul>
-            <li>복습 안내</li><li>과제 상태</li><li>상담 근거</li>
-          </ul>
-        </article>
-        <article class="narrative-chapter">
-          <div>
-            <span>Chapter 04</span>
-            <h3>하이브리드 운영은 기준 통일이 핵심입니다</h3>
-            <p>오프라인반과 온라인반을 함께 운영하면 출석, 보강, 과제, 상담 기준이 따로 움직이기 쉽습니다. 수업 방식이 달라도 운영 언어가 같아야 학생과 학부모 경험이 흔들리지 않습니다.</p>
-          </div>
-          <ul>
-            <li>온·오프라인 기준</li><li>권한 관리</li><li>관리자 확인</li>
-          </ul>
-        </article>
-        <article class="narrative-chapter">
-          <div>
-            <span>Chapter 05</span>
-            <h3>도입 전에는 5축으로 누수 지점을 먼저 봐야 합니다</h3>
-            <p>유입·체험·등록의 연결, 수업 경험의 일관성, 수업 후 유지와 재등록, 강사·튜터 간 편차, 브랜드 프리미엄 체감 수준을 따로 보면 어떤 기능을 먼저 적용해야 하는지 선명해집니다.</p>
-          </div>
-          <ul>
-            <li>퍼널 진단</li><li>수업 경험</li><li>재등록 트리거</li>
-          </ul>
-        </article>
-          </div>
+      <section class="section mid-cta reveal">
+        <div class="mid-cta-inner">
+          <p>우리 온라인반은 링크가 닫힌 뒤 무엇을 남기나요?</p>
+          <a class="mid-cta-btn" href="#segment-lead-form">5축 운영 진단 신청 →</a>
         </div>
       </section>
 
-      <section class="section" id="decision">
-        <div class="section-inner">
-          <div class="section-head">
-            <p class="section-kicker">도입 전 질문</p>
-            <h2>온라인반 운영자가 먼저 묻는 질문에 답합니다</h2>
-            <p>Zoom보다 무엇이 다른지, 체험수업 전환에 어떤 장면이 필요한지, 튜터별 편차를 어떻게 줄일지부터 판단합니다.</p>
-          </div>
-          <div class="decision-grid">
-            
-        <article class="decision-card">
-          <h3>Zoom 이후 운영은 어디에 남나요?</h3>
-          <div>
-            <strong>원하는 것</strong>
-            <p>회의 링크가 아니라 수업 전·중·후의 체험, 몰입, 재등록 흐름을 원합니다.</p>
-          </div>
-          <div>
-            <strong>반응하는 증거</strong>
-            <p>입장 안내, 첫 5분 시나리오, 실시간 판서, 녹화, LMS, 과제·시험, 관리자 확인이 연결되는 그림에 가장 잘 반응합니다.</p>
-          </div>
-        </article>
-        <article class="decision-card">
-          <h3>온라인에서도 학원 같은 신뢰를 만들 수 있나요?</h3>
-          <div>
-            <strong>원하는 것</strong>
-            <p>학생과 학부모가 그냥 영상 수업이 아니라, 첫 장면부터 후속 관리까지 설계된 수업으로 느끼길 원합니다.</p>
-          </div>
-          <div>
-            <strong>반응하는 증거</strong>
-            <p>첫 상호작용, 다시보기, 과제 상태, 상담 근거, 온라인·오프라인 기준 통일처럼 수업 후 경험을 증명하는 자료가 중요합니다.</p>
-          </div>
-        </article>
-        <article class="decision-card">
-          <h3>우리 온라인반의 누수 지점을 정확히 짚어주나요?</h3>
-          <div>
-            <strong>원하는 것</strong>
-            <p>유입·체험·등록, 수업 경험 일관성, 수업 후 재등록, 강사 편차, 프리미엄 체감 수준을 따로 보고 싶습니다.</p>
-          </div>
-          <div>
-            <strong>반응하는 증거</strong>
-            <p>5축 운영 진단, 권한·스토리지·개인정보 확인, 우선 적용 시나리오를 나눠주는 상담 흐름이 신뢰를 만듭니다.</p>
-          </div>
-        </article>
-          </div>
-        </div>
-      </section>
 
-      <section class="section">
-        <div class="section-inner">
-          <div class="section-head">
-            <p class="section-kicker">누수 진단</p>
-            <h2>문제는 링크가 아니라 링크 밖의 운영입니다</h2>
-            <p>수업은 열렸지만 입장 전 안내, 몰입 유지, 다시보기, 과제 후속이 끊기면 체험수업은 다음 결제로 이어지기 어렵습니다.</p>
-          </div>
-          <div class="card-grid">
-            
-        <article class="segment-card">
-          <h3>체험 신청은 등록이 아닙니다</h3>
-          <p>입장 안내, 첫 5분, 첫 상호작용이 약하면 학생은 수업을 듣기 전부터 마음속으로 이탈합니다.</p>
-        </article>
-        <article class="segment-card">
-          <h3>수업 중 몰입 이탈이 늦게 보입니다</h3>
-          <p>카메라를 끄고 화면 뒤로 사라지는 학생을 늦게 발견하면 만족도와 재등록 신호가 약해집니다.</p>
-        </article>
-        <article class="segment-card">
-          <h3>수업 후 재등록 흐름이 끊깁니다</h3>
-          <p>다시보기, 과제, 학부모 리포트, 재등록 안내가 흩어지면 수업 경험은 그날로 끝납니다.</p>
-        </article>
-          </div>
-        </div>
-      </section>
-
-      <section class="section alt">
-        <div class="section-inner">
-          <div class="section-head">
-            <p class="section-kicker">선택 이유</p>
-            <h2>체험수업을 다음 결제로 이어가는 구조</h2>
-            <p>ClassIn은 단순 화상회의가 아니라 온라인 학원이 수업 전·중·후에 보여줘야 할 신뢰 장면을 하나의 운영 루프로 묶습니다.</p>
-          </div>
-          <div class="advantage-grid">
-            
-        <article class="advantage-card">
-          <span>Beyond Link</span>
-          <h3>체험 첫 5분을 수업 운영으로 설계</h3>
-          <p>입장 안내부터 첫 질문, 몰입 확인, 판서, 녹화, 복습까지 이어지는 흐름으로 온라인반을 관리합니다.</p>
-        </article>
-        <article class="advantage-card">
-          <span>Replay Value</span>
-          <h3>수업 후 경험이 재등록 근거가 됩니다</h3>
-          <p>다시보기, 과제 후속, 리포트, 상담 근거가 연결되면 학부모는 온라인 수업을 관리받는 경험으로 이해합니다.</p>
-        </article>
-        <article class="advantage-card">
-          <span>Hybrid Standard</span>
-          <h3>온·오프라인 기준을 맞춥니다</h3>
-          <p>오프라인반과 온라인반의 보강, 과제, 상담 기준이 달라지지 않도록 공통 운영 기준을 잡습니다.</p>
-        </article>
-        <article class="advantage-card">
-          <span>Risk Check</span>
-          <h3>5축으로 먼저 진단합니다</h3>
-          <p>유입·체험·등록, 수업 경험 일관성, 수업 후 재등록, 강사 편차, 프리미엄 체감을 분리해 우선순위를 잡습니다.</p>
-        </article>
-          </div>
-        </div>
-      </section>
-
-      <section class="section">
-        <div class="section-inner">
-          <div class="section-head">
-            <p class="section-kicker">전환 근거</p>
-            <h2>상담과 내부 회의에서 바로 확인할 증거</h2>
-            <p>첫 입장, 상호작용, 녹화·복습, 과제 후속, 학부모 리포트가 실제 전환 흐름 안에서 어떻게 쓰이는지 분리했습니다.</p>
-          </div>
-          <div class="evidence-stack">
-            
-        <article class="evidence-row">
-          <span>수업 증거</span>
-          <div>
-            <h3>온라인 판서와 활동이 다시보기 자산으로 남습니다</h3>
-            <p>수업 중 흐름이 사라지지 않고 복습과 다음 수업 준비로 이어지게 합니다.</p>
-          </div>
-        </article>
-        <article class="evidence-row">
-          <span>운영 증거</span>
-          <div>
-            <h3>녹화, 과제, 상담 근거가 흩어지지 않습니다</h3>
-            <p>수업 직후 운영자가 다시 손으로 연결해야 하는 지점을 줄입니다.</p>
-          </div>
-        </article>
-        <article class="evidence-row">
-          <span>신뢰 증거</span>
-          <div>
-            <h3>학부모에게 온라인 수업의 관리 가치를 설명합니다</h3>
-            <p>다시보기, 보강, 과제 상태를 통해 온라인이어도 관리받고 있다는 느낌을 만듭니다.</p>
-          </div>
-        </article>
-        <article class="evidence-row">
-          <span>도입 증거</span>
-          <div>
-            <h3>권한·스토리지·개인정보를 상담에서 분리해 확인합니다</h3>
-            <p>도입 전 리스크를 숨기지 않고 학원 운영 조건에 맞게 점검합니다.</p>
-          </div>
-        </article>
-          </div>
-        </div>
-      </section>
-
-      <section class="section alt">
-        <div class="section-inner">
-          <div class="section-head">
-            <p class="section-kicker">운영 장면</p>
-            <h2>입장 안내부터 리포트까지 온라인반이 이어지는 방식</h2>
-            <p>온라인 학원이 매일 겪는 이탈 장면을 기준으로, 수업 전 기대감과 수업 후 재등록 신호가 어떻게 연결되는지 설명합니다.</p>
-          </div>
-          <div class="deep-dive-grid">
-            
-        <article class="deep-dive-card">
-          <span>수업 전 준비</span>
-          <h3>입장 전부터 체험의 기대감을 설계합니다</h3>
-          <p>입장 안내, 사전 자료, 오늘 얻어갈 장면이 먼저 준비되어야 학생이 첫 5분 안에 참여자로 들어옵니다.</p>
-        </article>
-        <article class="deep-dive-card">
-          <span>수업 중 판서</span>
-          <h3>설명과 질문이 수업 후 복습으로 남습니다</h3>
-          <p>원격 수업 중 판서와 활동 장면이 사라지지 않고 다시보기와 과제 피드백으로 연결됩니다.</p>
-        </article>
-        <article class="deep-dive-card">
-          <span>수업 직후 운영</span>
-          <h3>복습과 재등록 트리거가 따로 흩어지지 않게 합니다</h3>
-          <p>결석생 보강, 다시보기, 과제 후속, 학부모 리포트를 운영자가 매번 수작업으로 이어 붙이는 부담을 줄입니다.</p>
-        </article>
-        <article class="deep-dive-card">
-          <span>관리자 확인</span>
-          <h3>온라인반 상태를 강사 보고에만 의존하지 않습니다</h3>
-          <p>권한 있는 관리자가 수업 진행, 녹화 제공, 과제 후속, 특이사항을 기준으로 확인합니다.</p>
-        </article>
-        <article class="deep-dive-card">
-          <span>구성 상담</span>
-          <h3>가격보다 먼저 5축 운영 범위를 나눕니다</h3>
-          <p>유입·체험·등록, 수업 경험, 수업 후 재등록, 강사 편차, 프리미엄 체감 수준을 학원 상황에 맞춰 확인합니다.</p>
-        </article>
-          </div>
-        </div>
-      </section>
-
-      <section class="section">
-        <div class="section-inner">
-          <div class="section-head">
-            <p class="section-kicker">Before / After</p>
-            <h2>같은 온라인 수업도 전환 흐름은 달라질 수 있습니다</h2>
-            <p>회의 링크는 같아 보여도, 첫 5분과 수업 후 후속이 달라지면 학부모가 느끼는 학원 경험이 달라집니다.</p>
-          </div>
-          <div class="comparison-stack">
-            
-        <article class="comparison-row">
-          <div>
-            <span>Before</span>
-            <p>체험 신청 후 입장 안내와 첫 장면이 약해 노쇼가 생김</p>
-          </div>
-          <div>
-            <span>After</span>
-            <p>사전 자료와 첫 5분 시나리오로 기대감과 참여를 먼저 만듦</p>
-          </div>
-        </article>
-        <article class="comparison-row">
-          <div>
-            <span>Before</span>
-            <p>결석생 보강과 과제 안내를 운영자가 다시 연결함</p>
-          </div>
-          <div>
-            <span>After</span>
-            <p>수업 직후 다시보기와 과제 후속을 같은 기준으로 안내함</p>
-          </div>
-        </article>
-        <article class="comparison-row">
-          <div>
-            <span>Before</span>
-            <p>온라인반과 오프라인반의 상담 기준이 달라짐</p>
-          </div>
-          <div>
-            <span>After</span>
-            <p>복습 제공, 과제 상태, 상담 근거를 같은 언어로 맞춤</p>
-          </div>
-        </article>
-        <article class="comparison-row">
-          <div>
-            <span>Before</span>
-            <p>수업 후 복습과 재등록 안내가 운영자 감각에 의존함</p>
-          </div>
-          <div>
-            <span>After</span>
-            <p>다시보기, 리포트, 재등록 트리거를 같은 흐름으로 설계함</p>
-          </div>
-        </article>
-          </div>
-        </div>
-      </section>
-
-      
 
       <section class="section green" id="flow">
         <div class="section-inner">
-          <div class="section-head">
-            <p class="section-kicker">ClassIn OS</p>
-            <h2>수업 前·中·後를 하나의 온라인 운영 루프로 연결합니다</h2>
+          <div class="section-head reveal">
+            <p class="section-kicker">운영 루프</p>
+            <h2>전·중·후를 하나의 온라인 운영 루프로 연결합니다</h2>
             <p>ClassIn은 Zoom보다 기능이 많다는 말로 온라인 학원을 설득하지 않습니다. 수업 전에는 기대감을 설계하고, 수업 중에는 몰입을 운영하고, 수업 후에는 복습과 재등록 흐름을 이어가는 학원 시스템 OS라는 점이 다릅니다.</p>
+            <p class="flow-scenario reveal">예를 들어 목요일 저녁 8시 영어 체험반. 회의 도구만 쓰면 수업이 끝나는 순간 녹화 파일은 강사 노트북에, 과제는 카카오톡 단체방에, 출결은 강사 머릿속에 흩어집니다. ClassIn에서는 같은 수업이 입장 안내 → 판서 저장 → 자동 녹화 링크 발송 → 과제 회수 → 주간 리포트라는 다섯 단계로 끊김 없이 이어지고, 마지막 리포트가 다음 기수 재등록 상담의 근거가 됩니다.</p>
           </div>
-          <ol class="flow-list">
-            
+
+          <figure class="figure-frame on-green reveal">
+            <svg viewBox="0 0 880 320" role="img" xmlns="http://www.w3.org/2000/svg" aria-labelledby="loopTitle loopDesc">
+              <title id="loopTitle">링크 이후 운영 루프</title>
+              <desc id="loopDesc">입장·판서·녹화·복습·과제·리포트가 수업 전·중·후 하나의 루프로 이어지고, 리포트에서 재등록을 거쳐 다음 기수 입장으로 돌아옵니다. 녹화·복습·과제·리포트는 화상회의 도구에는 남지 않고 ClassIn에만 남는 구간입니다.</desc>
+              <defs>
+                <marker id="loopArrow" viewBox="0 0 10 10" refX="8" refY="5" markerWidth="7" markerHeight="7" orient="auto-start-reverse">
+                  <path d="M0,0 L10,5 L0,10 z" fill="#084734"></path>
+                </marker>
+                <marker id="loopArrowDash" viewBox="0 0 10 10" refX="8" refY="5" markerWidth="7" markerHeight="7" orient="auto-start-reverse">
+                  <path d="M0,0 L10,5 L0,10 z" fill="#615D59"></path>
+                </marker>
+              </defs>
+
+              <!-- 전/중/후 zone bands -->
+              <rect x="24" y="92" width="180" height="120" rx="14" fill="#ECFDF5"></rect>
+              <rect x="220" y="92" width="312" height="120" rx="14" fill="#ECFDF5"></rect>
+              <rect x="548" y="92" width="308" height="120" rx="14" fill="#ECFDF5"></rect>
+              <text x="114" y="84" text-anchor="middle" fill="#615D59" font-size="13" font-weight="700" font-family="Inter, sans-serif" letter-spacing="2">수업 전</text>
+              <text x="376" y="84" text-anchor="middle" fill="#615D59" font-size="13" font-weight="700" font-family="Inter, sans-serif" letter-spacing="2">수업 중</text>
+              <text x="702" y="84" text-anchor="middle" fill="#615D59" font-size="13" font-weight="700" font-family="Inter, sans-serif" letter-spacing="2">수업 후</text>
+
+              <!-- connector track -->
+              <line x1="114" y1="152" x2="768" y2="152" stroke="#084734" stroke-width="2" marker-end="url(#loopArrow)"></line>
+
+              <!-- nodes -->
+              <g font-family="Inter, sans-serif">
+                <!-- 1 입장 -->
+                <circle cx="114" cy="152" r="11" fill="#084734"></circle>
+                <circle cx="114" cy="152" r="16" fill="none" stroke="#084734" stroke-opacity="0.18" stroke-width="6"></circle>
+                <text x="114" y="190" text-anchor="middle" fill="#111110" font-size="14" font-weight="700">입장</text>
+                <text x="114" y="208" text-anchor="middle" fill="#615D59" font-size="11">안내·기대감</text>
+                <!-- 2 판서 -->
+                <circle cx="288" cy="152" r="11" fill="#084734"></circle>
+                <circle cx="288" cy="152" r="16" fill="none" stroke="#084734" stroke-opacity="0.18" stroke-width="6"></circle>
+                <text x="288" y="190" text-anchor="middle" fill="#111110" font-size="14" font-weight="700">판서</text>
+                <text x="288" y="208" text-anchor="middle" fill="#615D59" font-size="11">EDB·상호작용</text>
+                <!-- 3 녹화 (ClassIn only) -->
+                <circle cx="462" cy="152" r="11" fill="#084734"></circle>
+                <circle cx="462" cy="152" r="16" fill="none" stroke="#6EE7B7" stroke-width="3"></circle>
+                <text x="462" y="190" text-anchor="middle" fill="#111110" font-size="14" font-weight="700">녹화</text>
+                <text x="462" y="208" text-anchor="middle" fill="#084734" font-size="10" font-weight="700">ClassIn에만 남음</text>
+                <!-- 4 복습 (ClassIn only) -->
+                <circle cx="592" cy="152" r="11" fill="#084734"></circle>
+                <circle cx="592" cy="152" r="16" fill="none" stroke="#6EE7B7" stroke-width="3"></circle>
+                <text x="592" y="190" text-anchor="middle" fill="#111110" font-size="14" font-weight="700">복습</text>
+                <text x="592" y="208" text-anchor="middle" fill="#084734" font-size="10" font-weight="700">ClassIn에만 남음</text>
+                <!-- 5 과제 (ClassIn only) -->
+                <circle cx="700" cy="152" r="11" fill="#084734"></circle>
+                <circle cx="700" cy="152" r="16" fill="none" stroke="#6EE7B7" stroke-width="3"></circle>
+                <text x="700" y="190" text-anchor="middle" fill="#111110" font-size="14" font-weight="700">과제</text>
+                <text x="700" y="208" text-anchor="middle" fill="#084734" font-size="10" font-weight="700">ClassIn에만 남음</text>
+                <!-- 6 리포트 (ClassIn only) -->
+                <circle cx="768" cy="152" r="11" fill="#084734"></circle>
+                <circle cx="768" cy="152" r="16" fill="none" stroke="#6EE7B7" stroke-width="3"></circle>
+                <text x="768" y="190" text-anchor="middle" fill="#111110" font-size="14" font-weight="700">리포트</text>
+                <text x="768" y="208" text-anchor="middle" fill="#084734" font-size="10" font-weight="700">ClassIn에만 남음</text>
+              </g>
+
+              <!-- return arc: 리포트 → 다음 기수 입장 -->
+              <path d="M768,136 C768,46 114,46 114,132" fill="none" stroke="#615D59" stroke-width="1.6" stroke-dasharray="6 5" marker-end="url(#loopArrowDash)"></path>
+              <text x="441" y="36" text-anchor="middle" fill="#615D59" font-size="13" font-weight="700" font-family="Inter, sans-serif">재등록 → 다음 기수</text>
+
+              <!-- legend -->
+              <g font-family="Inter, sans-serif" transform="translate(24,262)">
+                <circle cx="8" cy="8" r="7" fill="none" stroke="#6EE7B7" stroke-width="3"></circle>
+                <text x="24" y="12" fill="#615D59" font-size="12">민트 테두리 = 화상회의 도구에는 남지 않는 구간</text>
+              </g>
+            </svg>
+            <figcaption class="figure-caption">화상회의 도구는 입장·판서까지만 다룹니다. 녹화·복습·과제·리포트, 그리고 재등록으로 이어지는 루프가 ClassIn이 남기는 “수업 후”입니다.</figcaption>
+          </figure>
+
+          <ol class="flow-list reveal-stagger">
+
         <li class="flow-step">
           <span>01</span>
-          <h3>수업 전 준비</h3>
-          <p>교안, 자료, 반 구성, 권한을 수업 전에 정리합니다.</p>
+          <h3>입장 안내</h3>
+          <p>예약된 체험반에 입장 링크와 사전 자료를 미리 보낸 뒤, 빈 대기 화면 대신 학생 이름을 부르는 안내와 오늘 풀 문제 한 장을 띄워 시작합니다. 첫 5분 안에 시청자가 아니라 참여자로 들어오게 만드는 단계입니다.</p>
+          <strong>LINK · 입장 링크 이후</strong>
         </li>
         <li class="flow-step">
           <span>02</span>
-          <h3>EDB·판서 수업</h3>
-          <p>판서와 이미지, 문제 풀이 흐름을 재사용 가능한 칠판 파일로 남깁니다.</p>
+          <h3>판서 저장</h3>
+          <p>EDB 위에 그린 판서, 띄운 이미지, 풀어준 오답 설명, 채팅으로 받은 질문이 그날의 칠판 파일 한 장으로 저장됩니다. 강사가 따로 갈무리하지 않아도 다음 수업 복습과 과제 피드백에 그대로 재사용됩니다.</p>
+          <strong>BOARD · EDB·판서 기록</strong>
         </li>
         <li class="flow-step">
           <span>03</span>
-          <h3>녹화·다시보기</h3>
-          <p>결석 보강과 복습 안내가 수업 직후의 운영 흐름으로 이어집니다.</p>
+          <h3>자동 녹화 링크 발송</h3>
+          <p>수업이 끝나면 녹화가 자동으로 저장되고, 다시보기 링크가 결석생과 복습이 필요한 학생에게 발송됩니다. 강사가 파일을 옮기거나 보강 영상을 따로 찍는 수작업이 사라집니다.</p>
+          <strong>REPLAY · 녹화·복습 안내</strong>
         </li>
         <li class="flow-step">
           <span>04</span>
-          <h3>LMS·과제·시험</h3>
-          <p>과제 확인, 시험, 피드백을 수업 밖 학습 관리와 연결합니다.</p>
+          <h3>과제 회수</h3>
+          <p>수업에서 낸 단어시험과 독해 과제가 LMS로 배포되고, 제출·미제출 상태가 한 화면에 모입니다. 단체 채팅방으로 흩어지던 과제 안내와 채점이 학습 관리 안으로 들어옵니다.</p>
+          <strong>LMS · 과제·상담 근거</strong>
         </li>
         <li class="flow-step">
           <span>05</span>
-          <h3>관리자 데이터</h3>
-          <p>권한 있는 관리자가 수업 진행, 복습 제공, 특이사항을 기준으로 확인합니다.</p>
+          <h3>주간 리포트</h3>
+          <p>출석, 발표 횟수, 과제 상태, 강사 코멘트, 다시보기가 주간 리포트로 묶여 학부모에게 전달되고, 권한 있는 관리자는 같은 데이터로 튜터별 진행과 복습 제공 상태를 확인합니다. 이 리포트가 재등록 상담의 근거가 됩니다.</p>
+          <strong>REPORT · 재등록 트리거</strong>
         </li>
           </ol>
         </div>
       </section>
 
-      <section class="section dark">
+      <section class="section" id="audience">
         <div class="section-inner">
-          <div class="section-head">
-            <p class="section-kicker">핵심 약속</p>
-            <h2>성과를 과장하지 않고, 전환 흐름을 약속합니다</h2>
-            <p>재등록률을 단정하지 않습니다. 대신 체험수업이 다음 결제로 이어질 수 있는 운영 장면을 분명하게 설계합니다.</p>
+          <div class="section-head reveal">
+            <p class="section-kicker">각자의 관점</p>
+            <h2>원장·튜터·학부모, 링크 밖에서 각자 다른 걸 받습니다.</h2>
+            <p>같은 온라인 수업도 원장은 전환 흐름을, 튜터는 수업 몰입을, 학부모는 복습과 리포트를 봅니다. 학부모가 실제로 받는 화면이 “관리받는 느낌”을 만듭니다.</p>
           </div>
-          <div class="card-grid">
-            
-        <article class="segment-card">
-          <h3>실시간 판서와 활동</h3>
-          <p>첫 질문, 판서, 참여 활동이 수업 흐름 안에 남아 몰입 신호와 복습 자료로 이어집니다.</p>
-        </article>
-        <article class="segment-card">
-          <h3>수업 직후 복습 흐름</h3>
-          <p>녹화와 LMS를 연결해 결석 보강, 다시보기, 과제 안내, 학부모 리포트가 끊기지 않게 합니다.</p>
-        </article>
-        <article class="segment-card">
-          <h3>5축 운영 진단</h3>
-          <p>유입·체험·등록, 수업 경험, 수업 후 유지, 튜터 편차, 프리미엄 체감을 기준으로 우선순위를 정합니다.</p>
-        </article>
+
+          <div class="figure-split audience-split">
+            <figure class="figure-frame is-flush reveal parent-view" aria-label="학부모가 받는 주간 리포트 화면 예시">
+              <div class="pv-screen">
+                <div class="pv-top">
+                  <span class="pv-dot" aria-hidden="true"></span>
+                  <strong>○○어학원 · 주간 리포트</strong>
+                </div>
+                <div class="pv-body">
+                  <div class="pv-row">
+                    <div class="pv-thumb" aria-hidden="true">▶</div>
+                    <div class="pv-row-text">
+                      <small>다시보기</small>
+                      <b>이번 주 수업 3개 · 12:40</b>
+                    </div>
+                  </div>
+                  <div class="pv-row pv-row-tasks">
+                    <div class="pv-row-text">
+                      <small>과제</small>
+                      <b>단어시험 · 독해</b>
+                    </div>
+                    <div class="pv-pills">
+                      <span class="pv-pill is-done">완료</span>
+                      <span class="pv-pill is-warn">미제출</span>
+                    </div>
+                  </div>
+                  <div class="pv-stats">
+                    <div class="pv-stat"><b>100%</b><small>출석</small></div>
+                    <div class="pv-stat"><b>4회</b><small>발표</small></div>
+                    <div class="pv-stat"><b>1건</b><small>강사 코멘트</small></div>
+                  </div>
+                </div>
+              </div>
+              <figcaption class="figure-caption">학부모가 매주 받는 화면 예시 — 다시보기, 과제 상태, 주간 리포트가 한 곳에 남습니다.</figcaption>
+            </figure>
+
+            <div class="audience-roles reveal-stagger">
+              <article class="target-card">
+                <span>온라인 학원 원장</span>
+                <h3>체험에서 등록까지 새는 지점을 먼저 봅니다.</h3>
+                <p>“이번 달 체험 신청 12건 중 등록 4건”에서 멈추지 않고, 어디서 끊겼는지를 봅니다. 입장 노쇼인지, 수업 중 이탈인지, 복습 미발송인지가 첫 5분·몰입·복습·리포트·재등록 트리거 단위로 보여 손댈 곳이 분명해집니다.</p>
+              </article>
+              <article class="target-card">
+                <span>원격 강사</span>
+                <h3>판서와 활동이 수업 후 복습 자산으로 이어집니다.</h3>
+                <p>매주 같은 단원을 처음부터 다시 준비하던 강사가, 지난 기수의 칠판 파일과 오답 설명을 그대로 불러와 시작합니다. 사전 자료·판서·질문·다시보기가 한 흐름에 쌓여 준비 시간이 가르치는 시간으로 돌아옵니다.</p>
+              </article>
+              <article class="target-card">
+                <span>학부모</span>
+                <h3>온라인이어도 관리받고 있다는 느낌이 남습니다.</h3>
+                <p>옆 화면의 주간 리포트가 학부모가 매주 실제로 받는 것입니다. 다시보기 3개, 과제 제출·미제출, 출석 100%, 강사 코멘트 한 건이 한 곳에 모여, 화면을 보지 못한 학부모도 수업을 신뢰할 근거를 갖습니다.</p>
+              </article>
+              <article class="target-card">
+                <span>운영팀</span>
+                <h3>튜터별 편차를 감각이 아니라 기준으로 줄입니다.</h3>
+                <p>A강사 반은 입장 안내가 꼼꼼한데 B강사 반은 다시보기가 늦게 나가는 차이를, 운영팀이 보고가 아니라 데이터로 봅니다. 입장 안내·첫 질문·수업 후 리포트를 운영 템플릿으로 맞춰 어느 반에 들어가도 같은 브랜드 경험이 되게 합니다.</p>
+              </article>
+            </div>
           </div>
         </div>
       </section>
 
       <section class="section alt">
         <div class="section-inner">
-          <div class="section-head">
-            <p class="section-kicker">대상별 메시지</p>
-            <h2>원장·튜터·학부모가 각자 확인하는 가치</h2>
-            <p>원장에게는 전환 흐름, 튜터에게는 수업 몰입, 학부모에게는 복습과 리포트가 핵심 가치가 됩니다.</p>
-          </div>
-          <div class="target-copy-grid">
-            
-        <article class="target-card">
-          <span>온라인 학원 원장</span>
-          <h3>체험에서 등록까지 새는 지점을 먼저 보세요.</h3>
-          <p>ClassIn은 온라인반을 첫 5분, 몰입, 복습, 리포트, 재등록 트리거까지 이어지는 운영 흐름으로 바꿉니다.</p>
-        </article>
-        <article class="target-card">
-          <span>원격 강사</span>
-          <h3>수업 중 판서와 활동이 수업 후 복습 자산으로 이어집니다.</h3>
-          <p>학생이 놓친 장면을 다시 보고, 과제와 피드백이 다음 수업으로 연결되도록 돕습니다.</p>
-        </article>
-        <article class="target-card">
-          <span>학부모</span>
-          <h3>온라인이어도 관리받고 있다는 느낌이 남아야 합니다.</h3>
-          <p>다시보기, 과제 상태, 보강 안내, 상담 근거가 온라인 수업의 신뢰를 만듭니다.</p>
-        </article>
-        <article class="target-card">
-          <span>운영팀</span>
-          <h3>튜터별 편차를 감각이 아니라 운영 기준으로 줄입니다.</h3>
-          <p>입장 안내, 첫 질문, 수업 후 리포트가 튜터마다 다르게 흩어지지 않도록 설계합니다.</p>
-        </article>
-          </div>
-        </div>
-      </section>
-
-      <section class="section">
-        <div class="section-inner">
-          <div class="section-head">
-            <p class="section-kicker">이해관계자 설득</p>
-            <h2>온라인 도입 회의에서 막히는 질문에 답합니다</h2>
-            <p>원장, 튜터, 운영팀, 학부모가 같은 온라인 수업을 다른 기준으로 보기 때문에 역할별 설득 포인트를 나눴습니다.</p>
-          </div>
-          <div class="stakeholder-grid">
-            
-        <article class="stakeholder-note">
-          <span>온라인 학원 원장</span>
-          <h3>체험에서 등록까지 새는 지점을 보는 운영 가시성</h3>
-          <p>첫 5분, 몰입, 수업 후 후속 관리에서 누수가 어디서 생기는지 먼저 찾습니다.</p>
-        </article>
-        <article class="stakeholder-note">
-          <span>운영팀</span>
-          <h3>튜터별 경험 편차를 줄이는 기준</h3>
-          <p>강사마다 다른 입장 안내, 첫 질문, 복습 안내를 운영 템플릿으로 맞춥니다.</p>
-        </article>
-        <article class="stakeholder-note">
-          <span>원격 강사</span>
-          <h3>준비가 반복되지 않는 수업 전·중·후 템플릿</h3>
-          <p>사전 자료, 판서, 질문, 다시보기 안내가 같은 흐름으로 이어집니다.</p>
-        </article>
-        <article class="stakeholder-note">
-          <span>학생</span>
-          <h3>수업이 끝나도 이어지는 복습과 피드백</h3>
-          <p>놓친 장면을 다시 보고 과제와 다음 수업으로 자연스럽게 이어집니다.</p>
-        </article>
-        <article class="stakeholder-note">
-          <span>학부모</span>
-          <h3>온라인이어도 관리받는다는 주간 신뢰</h3>
-          <p>다시보기, 과제 상태, 학습 리포트가 온라인 수업의 가치를 보여줍니다.</p>
-        </article>
-          </div>
-        </div>
-      </section>
-
-      <section class="section dark">
-        <div class="section-inner">
-          <div class="section-head">
-            <p class="section-kicker">캠페인 문구</p>
+          <div class="section-head reveal">
+            <p class="section-kicker">광고·상담 문장</p>
             <h2>광고와 상담에 바로 들어가는 전환 문장</h2>
             <p>첫 5분, 실시간 판서, 녹화·복습, 리포트를 전환 문장으로 바꿔 상담자가 바로 설명할 수 있게 합니다.</p>
           </div>
-          <div class="campaign-line-grid">
-            
+          <div class="campaign-line-grid reveal-stagger">
+
         <article class="campaign-line">
           <h3>온라인 수업도 학원 수업처럼 남고 이어져야 합니다.</h3>
           <p>첫 5분의 기대감, 수업 중 몰입, 수업 후 재등록 흐름까지 한 번에 설계합니다.</p>
-          <a class="campaign-cta" href="#segment-lead-form">첫 5분 누수 진단</a>
+          <a class="campaign-cta" href="#segment-lead-form">5축 운영 진단 신청 →</a>
         </article>
         <article class="campaign-line">
           <h3>체험수업에서 매출이 새는 3곳을 막으세요.</h3>
           <p>수업 전 노쇼, 수업 중 몰입 이탈, 수업 후 재등록 이탈을 운영 흐름으로 연결합니다.</p>
-          <a class="campaign-cta" href="/resources/academy-software-selection-worksheet">비교 워크시트 보기</a>
+          <a class="campaign-cta" href="#segment-lead-form">매출 누수 진단 신청 →</a>
         </article>
         <article class="campaign-line">
           <h3>튜터마다 다른 경험을 하나의 브랜드 경험으로.</h3>
           <p>입장 안내, 첫 질문, 판서, 다시보기, 리포트 흐름을 템플릿화합니다.</p>
-          <a class="campaign-cta" href="#segment-lead-form">하이브리드 운영 상담</a>
+          <a class="campaign-cta" href="#segment-lead-form">하이브리드 운영 상담 →</a>
         </article>
           </div>
         </div>
@@ -3716,13 +3791,13 @@
 
       <section class="section" id="resources">
         <div class="section-inner">
-          <div class="section-head">
+          <div class="section-head reveal">
             <p class="section-kicker">다음 판단 자료</p>
             <h2>상담 전, 온라인반 누수부터 확인할 자료</h2>
             <p>구매를 서두르기 전에 현재 온라인반이 어디서 이탈하고 어디서 후속이 끊기는지 먼저 확인합니다.</p>
           </div>
-          <div class="resource-grid">
-            
+          <div class="resource-grid reveal-stagger">
+
         <a class="resource-card" href="/resources/academy-software-selection-worksheet">
           <strong>Zoom·전자칠판·LMS 비교 워크시트</strong>
           <span>기능명이 아니라 수업 운영 흐름으로 현재 도구를 비교합니다.</span>
@@ -3735,17 +3810,9 @@
           <strong>도입 전 22가지 질문</strong>
           <span>권한, 녹화, 스토리지, 개인정보, 오프라인 사용 범위를 미리 확인합니다.</span>
         </a>
-        <a class="resource-card" href="/resources/academy-resource-reduction-calculator">
-          <strong>강사 리소스 절감 계산 워크시트</strong>
-          <span>녹화 업로드, 보강 안내, 과제 후속, 상담 준비에 쓰는 반복 시간을 계산합니다.</span>
-        </a>
         <a class="resource-card" href="/resources/parent-replay-retention-script-kit">
           <strong>학부모 복습·보강 스크립트 키트</strong>
           <span>녹화 링크를 학부모가 이해하는 복습 안내와 상담 문구로 바꿉니다.</span>
-        </a>
-        <a class="resource-card" href="/resources/showroom-demo-readiness-kit">
-          <strong>쇼룸·온라인 데모 준비 키트</strong>
-          <span>대표 수업 자료와 확인할 장면을 준비해 데모 시간을 더 구체적으로 씁니다.</span>
         </a>
           </div>
         </div>
@@ -3753,67 +3820,51 @@
 
       <section class="section green">
         <div class="section-inner">
-          <div class="section-head">
+          <div class="section-head reveal">
             <p class="section-kicker">FAQ</p>
             <h2>온라인 도입 전에 가장 많이 걸리는 질문</h2>
-            <p>Zoom 대체 여부, 자동 판단 표현, 체험수업 준비물, 튜터 온보딩처럼 실제 상담에서 막히는 질문부터 답합니다.</p>
+            <p>Zoom 대체 여부, 녹화 권한, 자동 판단 표현, 도입 준비처럼 실제 상담에서 막히는 질문부터 답합니다.</p>
           </div>
-          <div class="faq-grid">
-            
-        <article class="faq-card">
-          <h3>Zoom과 무엇이 다른가요?</h3>
-          <p>Zoom은 회의에 강하고, ClassIn은 수업 전 준비, 판서, 녹화, LMS, 과제·시험, 관리자 데이터를 이어 학원 운영 흐름으로 남기는 데 초점이 있습니다.</p>
-        </article>
-        <article class="faq-card">
-          <h3>하이브리드 수업은 정확히 무엇인가요?</h3>
+          <div class="faq-accordion reveal">
+
+        <details class="faq-item">
+          <summary>Zoom·Meet과 무엇이 다른가요?</summary>
+          <p>회의 도구는 회의에 강하고, ClassIn은 수업 전 준비, 판서, 녹화, LMS, 과제·시험, 관리자 데이터를 이어 학원 운영 흐름으로 남기는 데 초점이 있습니다. 기존 도구를 당장 끊기보다, 수업 후 관리가 어디서 끊기는지 먼저 봅니다.</p>
+        </details>
+        <details class="faq-item">
+          <summary>하이브리드 수업은 정확히 무엇인가요?</summary>
           <p>운영 모델로는 온·오프라인 병행 수업을 뜻합니다. 기능 옵션으로는 학생이 칠판 화면과 현장 카메라 화면을 선택해 볼 수 있는 설정을 함께 검토합니다.</p>
-        </article>
-        <article class="faq-card">
-          <h3>가격과 개인정보는 어떻게 확인하나요?</h3>
-          <p>수업 방식, 장비, 소프트웨어, 설치, 온보딩 범위를 함께 보고 가격과 개인정보 확인 항목을 상담에서 구성별로 안내합니다.</p>
-        </article>
-        <article class="faq-card">
-          <h3>Google Meet이나 Zoom을 계속 써도 되나요?</h3>
-          <p>기존 도구를 당장 끊는 방식보다 온라인 수업 후 관리가 어디서 끊기는지 먼저 봅니다. 회의 도구는 회의에 강하고, ClassIn은 수업 전후 운영 흐름을 남기는 데 초점을 둡니다.</p>
-        </article>
-        <article class="faq-card">
-          <h3>녹화 저장과 다시보기 권한은 어떻게 관리하나요?</h3>
+        </details>
+        <details class="faq-item">
+          <summary>녹화 저장과 다시보기 권한은 어떻게 관리하나요?</summary>
           <p>누가 녹화를 보고, 언제까지 제공하고, 어떤 반에만 공개할지 운영 기준을 먼저 정합니다. 실제 저장 기간과 권한 범위는 상담에서 확인합니다.</p>
-        </article>
-        <article class="faq-card">
-          <h3>기존 LMS나 과제 시스템과 함께 쓸 수 있나요?</h3>
+        </details>
+        <details class="faq-item">
+          <summary>기존 LMS나 과제 시스템과 함께 쓸 수 있나요?</summary>
           <p>학원마다 쓰는 도구가 다르기 때문에 대체와 연동을 단정하지 않습니다. 현재 LMS, 과제, CRM, 알림 도구를 확인한 뒤 ClassIn으로 묶을 흐름을 나눕니다.</p>
-        </article>
-        <article class="faq-card">
-          <h3>온라인반과 오프라인반을 같이 운영할 때 무엇이 가장 어렵나요?</h3>
-          <p>수업 방식보다 복습 제공, 과제 기준, 상담 근거, 관리자 확인 방식이 달라지는 것이 더 큰 문제입니다. 하이브리드 운영은 기준 통일이 핵심입니다.</p>
-        </article>
-        <article class="faq-card">
-          <h3>장비가 꼭 필요한가요?</h3>
-          <p>온라인 전용 수업인지, 교실 기반 하이브리드 수업인지에 따라 다릅니다. 카메라, 마이크, 보드, 네트워크 조건은 상담에서 현재 환경을 기준으로 점검합니다.</p>
-        </article>
-        <article class="faq-card">
-          <h3>집중도나 얼굴 인식을 자동으로 판단하나요?</h3>
+        </details>
+        <details class="faq-item">
+          <summary>집중도나 얼굴 인식을 자동으로 판단하나요?</summary>
           <p>확인되지 않은 자동 판단 표현은 사용하지 않습니다. 판서, 녹화, 복습, 과제, 관리자 확인처럼 검증 가능한 운영 흐름을 중심으로 안내합니다.</p>
-        </article>
-        <article class="faq-card">
-          <h3>도입 전에 무엇을 준비하면 상담이 빨라지나요?</h3>
+        </details>
+        <details class="faq-item">
+          <summary>도입 전에 무엇을 준비하면 상담이 빨라지나요?</summary>
           <p>현재 쓰는 화상수업 도구, 온라인반 규모, 녹화 보관 방식, 과제 안내 방식, 학부모 상담에서 자주 받는 질문을 정리해 오시면 더 구체적으로 상담할 수 있습니다.</p>
-        </article>
+        </details>
           </div>
         </div>
       </section>
 
       <section class="section alt" id="roadmap">
         <div class="section-inner">
-          <div class="section-head">
+          <div class="section-head reveal">
             <p class="section-kicker">도입 순서</p>
             <h2>대표 온라인반에서 검증하고 90일 안에 운영 루프로 만듭니다</h2>
             <p>설치 속도보다 전환 흐름의 정착이 중요합니다. 30일은 체험반, 60일은 복습·리포트, 90일은 튜터 온보딩 기준으로 봅니다.</p>
           </div>
-          
-          <div class="roadmap-grid">
-            
+
+          <div class="roadmap-grid reveal-stagger">
+
         <article class="roadmap-card">
           <span>30일</span>
           <h3>대표 온라인반 검증</h3>
@@ -3835,10 +3886,10 @@
 
       <section class="section">
         <div class="section-inner">
-          <div class="limits-box">
+          <div class="limits-box reveal">
             <h2>정직하게 나눠 볼 범위</h2>
             <ul>
-              <li>확인 가능한 범위의 판서, 녹화, 복습, 과제, 관리자 확인 흐름을 기준으로 안내합니다.</li><li>가격과 체험 구성은 수업 방식, 장비, 설치, 온보딩 범위를 확인한 뒤 상담에서 안내합니다.</li><li>자동화와 API 연동은 학원 시스템, 데이터 범위, 보안 기준을 확인한 뒤 설계합니다.</li>
+              <li>재등록률이나 성과는 단정하지 않습니다. 대신 체험수업이 다음 결제로 이어질 수 있는 운영 장면을 분명하게 설계합니다.</li><li>확인 가능한 범위의 판서, 녹화, 복습, 과제, 관리자 확인 흐름을 기준으로 안내합니다.</li><li>가격과 체험 구성은 수업 방식, 장비, 설치, 온보딩 범위를 확인한 뒤 상담에서 안내합니다.</li><li>자동화와 API 연동은 학원 시스템, 데이터 범위, 보안 기준을 확인한 뒤 설계합니다.</li>
             </ul>
           </div>
         </div>
@@ -3913,7 +3964,7 @@
             <input type="checkbox" name="marketingConsent" />
             <span>상담 안내와 관련 자료 수신에 동의합니다. 동의하지 않아도 상담 신청은 가능합니다.</span>
           </label>
-          <button class="btn primary" type="submit">첫 5분 누수 진단 받기</button>
+          <button class="btn primary" type="submit">5축 운영 진단 신청</button>
           <p class="form-status" data-form-status aria-live="polite"></p>
         </form>
       </div>
@@ -3921,7 +3972,7 @@
 
     <footer class="footer">
       <div class="footer-inner">
-        <span>ClassIn Korea · landing_online segment landing</span>
+        <span>ClassIn Korea</span>
         <span>전자칠판, EDB, 녹화, LMS, 관리자 데이터를 잇는 학원 시스템 OS</span>
       </div>
     </footer>
@@ -3930,72 +3981,6 @@
     const form = document.querySelector('[data-lead-form]');
     const statusEl = document.querySelector('[data-form-status]');
     const submitButton = form?.querySelector('button[type="submit"]');
-    const siteNav = document.querySelector('.site-nav');
-    const kidsTopbar = document.querySelector('.kids-topbar');
-
-    function syncLandingBars() {
-      const isPastTop = window.scrollY > 60;
-      if (siteNav) {
-        siteNav.classList.toggle('is-hidden', isPastTop);
-      }
-      if (kidsTopbar) {
-        kidsTopbar.classList.toggle('is-scrolled', isPastTop);
-        kidsTopbar.classList.toggle('is-hidden', isPastTop);
-      }
-    }
-
-    syncLandingBars();
-    window.addEventListener('scroll', syncLandingBars, { passive: true });
-
-    const managedStepButtons = Array.from(document.querySelectorAll('[data-managed-step]'));
-    const managedPanels = Array.from(document.querySelectorAll('[data-managed-panel]'));
-
-    function setManagedStep(index) {
-      managedStepButtons.forEach((button, buttonIndex) => {
-        const active = buttonIndex === index;
-        button.classList.toggle('is-active', active);
-        button.setAttribute('aria-selected', active ? 'true' : 'false');
-      });
-      managedPanels.forEach((panel, panelIndex) => {
-        panel.classList.toggle('is-active', panelIndex === index);
-      });
-    }
-
-    managedStepButtons.forEach((button) => {
-      button.addEventListener('click', () => {
-        setManagedStep(Number(button.dataset.managedStep || 0));
-      });
-    });
-
-    const managedChapterLinks = Array.from(document.querySelectorAll('[data-managed-chapter]'));
-    const managedProgress = document.querySelector('[data-managed-progress]');
-    const managedProgressText = document.querySelector('[data-managed-progress-text]');
-
-    function syncManagedJourney() {
-      if (!managedChapterLinks.length) return;
-
-      const totalHeight = Math.max(1, document.documentElement.scrollHeight - window.innerHeight);
-      const progress = Math.min(100, Math.max(0, (window.scrollY / totalHeight) * 100));
-
-      if (managedProgress) managedProgress.style.height = progress + '%';
-      if (managedProgressText) managedProgressText.textContent = Math.round(progress) + '%';
-
-      let activeId = managedChapterLinks[0]?.dataset.managedChapter;
-      managedChapterLinks.forEach((link) => {
-        const id = link.dataset.managedChapter;
-        const section = id ? document.getElementById(id) : null;
-        if (section && section.getBoundingClientRect().top <= 160) {
-          activeId = id;
-        }
-      });
-
-      managedChapterLinks.forEach((link) => {
-        link.classList.toggle('is-active', link.dataset.managedChapter === activeId);
-      });
-    }
-
-    syncManagedJourney();
-    window.addEventListener('scroll', syncManagedJourney, { passive: true });
 
     function setStatus(message, type) {
       if (!statusEl) return;
@@ -4095,10 +4080,28 @@
       } finally {
         if (submitButton) {
           submitButton.disabled = false;
-          submitButton.textContent = '첫 5분 누수 진단 받기';
+          submitButton.textContent = '5축 운영 진단 신청';
         }
       }
     });
+
+    // ---- Scroll reveal (omo1 signature) ----
+    (function () {
+      var revealEls = document.querySelectorAll('.reveal, .reveal-stagger');
+      if (!revealEls.length) return;
+      var prefersReduced = window.matchMedia &&
+        window.matchMedia('(prefers-reduced-motion: reduce)').matches;
+      if (prefersReduced || !('IntersectionObserver' in window)) {
+        revealEls.forEach(function (el) { el.classList.add('in'); });
+        return;
+      }
+      var io = new IntersectionObserver(function (entries) {
+        entries.forEach(function (e) {
+          if (e.isIntersecting) { e.target.classList.add('in'); io.unobserve(e.target); }
+        });
+      }, { threshold: 0.12, rootMargin: '0px 0px -40px 0px' });
+      revealEls.forEach(function (el) { io.observe(el); });
+    })();
   </script>
 </body>
 </html>

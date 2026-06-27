@@ -24,11 +24,11 @@ const page: SegmentLandingPageData = {
     body:
       "화면 크기와 판서감만 비교하면 Classin Board의 가치는 작게 보입니다. Classin은 학원 시스템 OS 관점으로 OPS 기반 보드, 수업 소프트웨어, EDB, 녹화, 복습, LMS, 관리자 데이터를 교실 한 흐름으로 연결합니다.",
     image: {
-      src: "/images/product/hw/hero/hero-board-stand.webp",
-      alt: "Classin Board 전자칠판 스탠드형 제품 이미지",
-      width: 1400,
-      height: 1050,
-      objectPosition: "50% 48%",
+      src: "/images/l/test1/test1-hero.png",
+      alt: "딥그린 스튜디오에 놓인 ClassIn 전자칠판 — 화이트 라운드 프레임과 이동식 스탠드",
+      width: 1200,
+      height: 900,
+      objectPosition: "50% 50%",
     },
     primaryCta: {
       label: "목동 쇼룸에서 대표 수업 시연하기",

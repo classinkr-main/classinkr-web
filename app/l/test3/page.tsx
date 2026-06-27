@@ -24,10 +24,10 @@ const page: SegmentLandingPageData = {
     body:
       "관리자 권한, 녹화 저장, 스토리지, 개인정보, 서버, OPS, 오프라인 칠판까지. 학원 시스템 OS인 Classin의 도입 전 질문은 기능 호기심이 아니라 리스크 점검입니다. 바로 답할 수 있는 것과 최신 정책 확인이 필요한 것을 나눠 상담을 빠르게 만듭니다.",
     image: {
-      src: "/images/use-cases/generated/admin-dashboard-source-1.png",
-      alt: "Classin 관리자 대시보드 화면",
+      src: "/images/l/test3/test3-hero.png",
+      alt: "도입 점검 화면이 켜진 ClassIn 전자칠판",
       width: 1200,
-      height: 750,
+      height: 900,
       objectPosition: "48% 42%",
     },
     primaryCta: {

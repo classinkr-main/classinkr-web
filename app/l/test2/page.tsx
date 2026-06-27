@@ -24,10 +24,10 @@ const page: SegmentLandingPageData = {
     body:
       "수업 자료는 강사 PC에, 녹화와 과제는 다른 도구에, 상담 기록은 메신저에 흩어져 있나요? Classin은 학원 시스템 OS로 EDB 교안, 수업 녹화, LMS, 관리자 데이터를 한 흐름으로 묶어 학원식 수업 운영 기준을 남깁니다.",
     image: {
-      src: "/images/product/sw/two-way-blackboard.webp",
-      alt: "Classin 양방향 칠판 수업 화면",
+      src: "/images/l/test2/test2-hero.png",
+      alt: "ClassIn 전자칠판에 표준 수업 템플릿을 띄우고 수업을 준비하는 강사가 있는 학원 교실",
       width: 1200,
-      height: 750,
+      height: 900,
       objectPosition: "50% 50%",
     },
     primaryCta: {

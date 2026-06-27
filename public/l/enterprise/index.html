@@ -47,7 +47,7 @@
       overflow-x: hidden;
     }
     .site-nav {
-      position: fixed;
+      position: absolute;
       top: 0;
       left: 0;
       right: 0;
@@ -55,13 +55,6 @@
       border-bottom: 1px solid var(--border);
       background: rgba(250,250,248,0.9);
       backdrop-filter: blur(18px);
-      transition: transform 220ms ease, opacity 220ms ease;
-      will-change: transform;
-    }
-    .site-nav.is-hidden {
-      opacity: 0;
-      transform: translateY(-110%);
-      pointer-events: none;
     }
     .nav-inner {
       width: min(1160px, calc(100% - 40px));
@@ -122,6 +115,14 @@
         linear-gradient(180deg, rgba(8,71,52,0.08) 0%, rgba(17,17,16,0) 44%),
         #111110;
       color: #F6F5F4;
+    }
+    .variant-enterprise .hero {
+      min-height: 78vh;
+      padding: 96px 0 92px;
+      background:
+        radial-gradient(ellipse 70% 60% at 50% 0%, rgba(8,71,52,0.18) 0%, rgba(17,17,16,0) 58%),
+        linear-gradient(180deg, rgba(8,71,52,0.06) 0%, rgba(17,17,16,0) 40%),
+        #111110;
     }
     .variant-online .hero {
       min-height: 82vh;
@@ -185,6 +186,30 @@
       width: min(1180px, calc(100% - 40px));
       grid-template-columns: minmax(0, 0.9fr) minmax(430px, 1.1fr);
       gap: 58px;
+    }
+    .variant-enterprise .hero-grid {
+      grid-template-columns: minmax(0, 1fr);
+      gap: 0;
+    }
+    .variant-enterprise .hero-lede {
+      max-width: 820px;
+    }
+    .variant-enterprise .hero-lede h1 {
+      max-width: 820px;
+    }
+    .hero-textlink {
+      display: inline-flex;
+      align-items: center;
+      color: var(--green-muted);
+      font-size: 15px;
+      font-weight: 680;
+      letter-spacing: 0;
+      border-bottom: 1px solid transparent;
+      transition: border-color 180ms ease, opacity 180ms ease;
+    }
+    .hero-textlink:hover {
+      border-bottom-color: rgba(110,231,183,0.5);
+      opacity: 0.86;
     }
     .segment-label {
       margin: 0 0 22px;
@@ -959,6 +984,299 @@
       background: #111110;
       color: #F6F5F4;
     }
+    .section.green { padding: 112px 0; }
+    .section.dark { padding: 108px 0; }
+    /* ---------- SCROLL REVEAL (omo1 signature) ---------- */
+    .reveal {
+      opacity: 0;
+      transform: translateY(18px);
+      transition: opacity .8s ease, transform .8s ease;
+      will-change: opacity, transform;
+    }
+    .reveal.in {
+      opacity: 1;
+      transform: translateY(0);
+    }
+    .reveal-stagger > * {
+      opacity: 0;
+      transform: translateY(16px);
+      transition: opacity .7s ease, transform .7s ease;
+    }
+    .reveal-stagger.in > * { opacity: 1; transform: translateY(0); }
+    .reveal-stagger.in > *:nth-child(2) { transition-delay: .06s; }
+    .reveal-stagger.in > *:nth-child(3) { transition-delay: .12s; }
+    .reveal-stagger.in > *:nth-child(4) { transition-delay: .18s; }
+    .reveal-stagger.in > *:nth-child(5) { transition-delay: .24s; }
+    /* ---------- BREATHING STRIP (omo1 manifesto) ---------- */
+    .breath-strip {
+      padding: 84px 0;
+      text-align: center;
+      background: var(--warm-bg);
+      border-top: 1px solid var(--border);
+      border-bottom: 1px solid var(--border);
+    }
+    .breath-strip p {
+      margin: 0 auto; max-width: 860px; padding: 0 20px;
+      font-size: clamp(24px, 4.4vw, 40px);
+      line-height: 1.35; font-weight: 700;
+      letter-spacing: -0.02em;
+      color: var(--classin-green);
+    }
+    .breath-strip .em-key { background: linear-gradient(transparent 62%, var(--green-surface) 62%); }
+    /* ---------- MID-PAGE CTA BAR ---------- */
+    .mid-cta {
+      background: var(--classin-green);
+      color: #fff;
+    }
+    .mid-cta .mid-cta-inner {
+      width: min(1160px, calc(100% - 40px));
+      margin: 0 auto;
+      display: flex;
+      flex-wrap: wrap;
+      align-items: center;
+      justify-content: space-between;
+      gap: 18px;
+    }
+    .mid-cta p {
+      margin: 0;
+      color: #fff;
+      font-size: clamp(18px, 2.4vw, 24px);
+      font-weight: 600;
+      letter-spacing: -0.01em;
+      line-height: 1.4;
+    }
+    .mid-cta .mid-cta-btn {
+      display: inline-flex;
+      align-items: center;
+      gap: 8px;
+      flex: 0 0 auto;
+      padding: 14px 24px;
+      border-radius: 12px;
+      background: #fff;
+      color: var(--classin-green);
+      font-size: 15px;
+      font-weight: 700;
+      text-decoration: none;
+      transition: transform .15s ease, gap .15s ease;
+    }
+    .mid-cta .mid-cta-btn:hover { transform: translateY(-2px); gap: 12px; }
+    /* ---------- CAMPAIGN GHOST CTA ---------- */
+    .campaign-line .campaign-cta {
+      display: inline-flex; align-items: center; gap: 6px;
+      margin-top: 4px;
+      font-size: 15px; font-weight: 600;
+      color: var(--classin-green);
+      text-decoration: none;
+      border-bottom: 1px solid transparent;
+      transition: border-color .15s ease, gap .15s ease;
+    }
+    .campaign-line .campaign-cta:hover { border-bottom-color: var(--classin-green); gap: 10px; }
+    .section.dark .campaign-line .campaign-cta { color: var(--green-muted); }
+    /* ---------- DIAGRAM / FIGURE HOSTING ---------- */
+    .figure-frame {
+      background: #fff;
+      border: 1px solid var(--border);
+      border-radius: 16px;
+      box-shadow: var(--shadow);
+      padding: clamp(20px, 4vw, 40px);
+      margin-top: 8px;
+    }
+    .figure-frame.is-flush { padding: 0; overflow: hidden; }
+    .figure-frame.on-dark {
+      background: #17211c;
+      border-color: rgba(255,255,255,0.10);
+      box-shadow: none;
+    }
+    .figure-frame.on-green { background: #fff; }
+    .figure-frame svg, .figure-frame img { display: block; width: 100%; height: auto; }
+    .figure-caption {
+      margin-top: 14px;
+      font-size: 13px; line-height: 1.5;
+      color: var(--muted);
+      text-align: center;
+    }
+    .figure-frame.is-flush + .figure-caption { margin-top: 16px; }
+    .figure-split { display: grid; gap: 28px; align-items: center; }
+    .split-ba { display: grid; gap: 16px; }
+    .split-ba .ba-side { border:1px solid var(--border); border-radius:12px; padding:20px; background:#fff; }
+    .split-ba .ba-side.is-before { background:#FBF7F4; }
+    .split-ba .ba-side.is-after  { border-color: rgba(8,71,52,0.22); box-shadow: var(--shadow); }
+    .split-ba .ba-arrow { color: var(--muted-soft); display:flex; justify-content:center; }
+    @media (min-width: 860px) { .figure-split { grid-template-columns: minmax(0,1fr) minmax(0,1.1fr); gap: 48px; } }
+    @media (min-width: 720px) { .split-ba { grid-template-columns: 1fr auto 1fr; align-items: center; } }
+    /* ---------- BEFORE/AFTER LIST (enterprise evidence) ---------- */
+    .ba-side h4 { margin: 0 0 14px; font-size: 13px; font-weight: 700; letter-spacing: 0.12em; text-transform: uppercase; }
+    .ba-side.is-before h4 { color: var(--muted-soft); }
+    .ba-side.is-after h4 { color: var(--classin-green); }
+    .ba-side ul { margin: 0; padding: 0; list-style: none; display: grid; gap: 12px; }
+    .ba-side li { font-size: 14px; line-height: 1.6; color: var(--text); }
+    .ba-side.is-before li { color: var(--muted); }
+    .ba-side.is-after li { position: relative; padding-left: 22px; }
+    .ba-side.is-after li::before { content: "✓"; position: absolute; left: 0; top: 0; color: var(--classin-green); font-weight: 800; }
+    .ba-arrow svg { width: 28px; height: 28px; }
+    @media (max-width: 719px) { .split-ba .ba-arrow { transform: rotate(90deg); } }
+    /* ---------- AUDIENCE ROLES ---------- */
+    .audience-roles { display: grid; gap: 14px; }
+    @media (min-width: 600px) { .audience-roles { grid-template-columns: 1fr 1fr; } }
+    .audience-beforeafter { margin-top: 36px; }
+    .audience-beforeafter > .section-kicker { margin-bottom: 18px; }
+    .audience-ba-grid { display: grid; gap: 14px; }
+    @media (min-width: 760px) { .audience-ba-grid { grid-template-columns: 1fr 1fr; } }
+    .audience-ba-col {
+      padding: 26px;
+      border: 1px solid var(--border);
+      border-radius: 14px;
+      background: #fff;
+    }
+    .audience-ba-col.is-before { background: #FBF7F4; }
+    .audience-ba-col.is-after {
+      border-color: rgba(8,71,52,0.22);
+      box-shadow: var(--shadow);
+    }
+    .audience-ba-col h4 {
+      margin: 0 0 16px;
+      font-size: 13px;
+      font-weight: 800;
+      letter-spacing: 0.12em;
+      text-transform: uppercase;
+    }
+    .audience-ba-col.is-before h4 { color: var(--muted-soft); }
+    .audience-ba-col.is-after h4 { color: var(--classin-green); }
+    .audience-ba-col ul {
+      display: grid;
+      gap: 12px;
+      margin: 0;
+      padding: 0;
+      list-style: none;
+    }
+    .audience-ba-col li {
+      color: var(--muted);
+      font-size: 14px;
+      line-height: 1.7;
+    }
+    .audience-ba-col.is-after li { position: relative; padding-left: 22px; }
+    .audience-ba-col.is-after li::before {
+      content: "✓";
+      position: absolute;
+      left: 0;
+      top: 0;
+      color: var(--classin-green);
+      font-weight: 800;
+    }
+    .audience-ba-col li strong {
+      color: var(--text);
+      font-weight: 760;
+    }
+    /* ---------- STORY AFTERMATH (merged 운영 장면) ---------- */
+    .story-aftermath {
+      margin-top: 40px;
+      padding-top: 36px;
+      border-top: 1px solid rgba(255,255,255,0.10);
+    }
+    .story-aftermath > .section-kicker { color: var(--green-muted); margin-bottom: 22px; }
+    /* ---------- ENTERPRISE STATUS / EXCEPTION ---------- */
+    .status-dot.is-warn { background: #E8A13A; box-shadow: 0 0 0 3px rgba(232,161,58,0.18); }
+    .branch-row.is-exception { border-left: 2px solid rgba(232,161,58,0.5); padding-left: 10px; }
+    .dashboard-top .dashboard-counter {
+      font-size: 11px; font-weight: 800; letter-spacing: 0.08em;
+      color: #E8A13A;
+    }
+    /* ---------- PERMISSION MATRIX (E1) ---------- */
+    .perm-legend {
+      display: flex; flex-wrap: wrap; gap: 18px;
+      margin-top: 16px; justify-content: center;
+      font-size: 12px; color: var(--muted);
+    }
+    .perm-legend span { display: inline-flex; align-items: center; gap: 7px; }
+    .perm-legend i { width: 14px; height: 14px; border-radius: 50%; flex: 0 0 auto; }
+    .perm-legend i.lg-allow { background: var(--classin-green); }
+    .perm-legend i.lg-limit { background: #fff; border: 2px solid var(--classin-green); }
+    .perm-legend i.lg-none { background: var(--muted-soft); opacity: 0.5; }
+    /* ---------- PROCESS RAIL (E2) ---------- */
+    .process-rail {
+      display: grid;
+      grid-template-columns: repeat(5, minmax(0, 1fr));
+      gap: 12px;
+      position: relative;
+    }
+    .rail-step {
+      position: relative;
+      padding: 18px 16px;
+      border: 1px solid var(--border);
+      border-radius: 12px;
+      background: #fff;
+      box-shadow: var(--shadow);
+    }
+    .rail-step > .rail-tag {
+      display: inline-block;
+      margin-bottom: 10px;
+      font-size: 11px; font-weight: 800; letter-spacing: 0.1em;
+      color: var(--classin-green);
+    }
+    .rail-step h4 { margin: 0 0 6px; font-size: 15px; font-weight: 700; color: var(--text); line-height: 1.35; }
+    .rail-step p { margin: 0; font-size: 13px; line-height: 1.6; color: var(--muted); }
+    .rail-step:not(:last-child)::after {
+      content: "→";
+      position: absolute;
+      right: -11px; top: 50%;
+      transform: translateY(-50%);
+      z-index: 2;
+      color: var(--classin-green);
+      font-size: 15px; font-weight: 700;
+    }
+    @media (max-width: 860px) {
+      .process-rail { grid-template-columns: 1fr; gap: 10px; }
+      .rail-step:not(:last-child)::after {
+        content: "↓";
+        right: 50%; top: auto; bottom: -16px;
+        transform: translateX(50%);
+      }
+    }
+    /* ---------- FAQ ACCORDION ---------- */
+    .faq-accordion {
+      display: grid;
+      gap: 12px;
+      max-width: 820px;
+    }
+    .faq-item {
+      border: 1px solid var(--border);
+      border-radius: 12px;
+      background: #fff;
+      box-shadow: var(--shadow);
+      overflow: hidden;
+    }
+    .faq-item > summary {
+      list-style: none;
+      cursor: pointer;
+      padding: 20px 52px 20px 22px;
+      position: relative;
+      font-size: 17px;
+      font-weight: 600;
+      color: var(--text);
+      line-height: 1.5;
+    }
+    .faq-item > summary::-webkit-details-marker { display: none; }
+    .faq-item > summary::after {
+      content: "+";
+      position: absolute;
+      right: 22px;
+      top: 50%;
+      transform: translateY(-50%);
+      color: var(--classin-green);
+      font-size: 22px;
+      font-weight: 400;
+      line-height: 1;
+      transition: transform .2s ease;
+    }
+    .faq-item[open] > summary::after { content: "−"; }
+    .faq-item > summary:hover { color: var(--classin-green); }
+    .faq-item > p {
+      margin: 0;
+      padding: 0 22px 22px;
+      color: var(--muted);
+      font-size: 15px;
+      line-height: 1.78;
+    }
     .section-inner {
       width: min(1160px, calc(100% - 40px));
       margin: 0 auto;
@@ -1193,6 +1511,30 @@
     .variant-online .story-scene li p {
       color: rgba(246,245,244,0.62);
     }
+    .standard-scenario {
+      margin-top: 24px;
+      padding: 28px 30px;
+      border: 1px solid rgba(8,71,52,0.16);
+      border-left: 3px solid var(--classin-green);
+      border-radius: 14px;
+      background: rgba(255,255,255,0.78);
+      box-shadow: var(--shadow);
+    }
+    .standard-scenario span {
+      display: block;
+      margin-bottom: 12px;
+      color: var(--classin-green);
+      font-size: 12px;
+      font-weight: 820;
+      letter-spacing: 0.04em;
+      line-height: 1.4;
+    }
+    .standard-scenario p {
+      margin: 0;
+      color: var(--text);
+      font-size: 16px;
+      line-height: 1.86;
+    }
     .advantage-grid {
       display: grid;
       grid-template-columns: repeat(4, minmax(0, 1fr));
@@ -1361,6 +1703,41 @@
       color: #fff;
       background: rgba(110,231,183,0.08);
     }
+    .evidence-screen {
+      display: grid;
+      grid-template-columns: minmax(0, 0.92fr) minmax(0, 1.08fr);
+      gap: 44px;
+      align-items: center;
+      margin-bottom: 48px;
+    }
+    .evidence-screen-copy > .section-kicker {
+      margin-bottom: 14px;
+    }
+    .evidence-screen-copy h3 {
+      margin: 0 0 16px;
+      color: var(--text);
+      font-size: clamp(24px, 2.6vw, 32px);
+      line-height: 1.26;
+      letter-spacing: 0;
+    }
+    .evidence-screen-copy p {
+      margin: 0;
+      color: var(--muted);
+      font-size: 15px;
+      line-height: 1.84;
+    }
+    .evidence-screen-copy p + p {
+      margin-top: 14px;
+    }
+    .evidence-dashboard-figure {
+      margin-top: 0;
+    }
+    @media (max-width: 980px) {
+      .evidence-screen {
+        grid-template-columns: 1fr;
+        gap: 28px;
+      }
+    }
     .evidence-stack {
       display: grid;
       gap: 14px;
@@ -1432,9 +1809,6 @@
       gap: 16px;
     }
     .campaign-line {
-      display: flex;
-      flex-direction: column;
-      align-items: flex-start;
       min-height: 248px;
       padding: 28px;
       border: 1px solid rgba(8,71,52,0.16);
@@ -1465,35 +1839,45 @@
     .section.dark .campaign-line p {
       color: rgba(246,245,244,0.64);
     }
-    .campaign-line .campaign-cta {
-      display: inline-flex;
-      align-items: center;
-      justify-content: center;
-      margin-top: auto;
-      min-height: 36px;
-      padding: 7px 12px;
-      border: 1px solid rgba(8,71,52,0.16);
-      border-radius: 999px;
-      background: rgba(255,255,255,0.56);
+    .campaign-line strong {
       color: var(--classin-green);
       font-size: 14px;
-      font-weight: 800;
       line-height: 1.4;
-      transition: transform 180ms ease, background 180ms ease, border-color 180ms ease;
     }
-    .campaign-line a.campaign-cta:hover {
-      transform: translateY(-1px);
-      border-color: rgba(8,71,52,0.34);
-      background: #fff;
-    }
-    .section.dark .campaign-line .campaign-cta {
-      border-color: rgba(110,231,183,0.18);
-      background: rgba(110,231,183,0.08);
+    .section.dark .campaign-line strong {
       color: var(--green-muted);
     }
-    .section.dark .campaign-line a.campaign-cta:hover {
-      border-color: rgba(110,231,183,0.36);
-      background: rgba(110,231,183,0.12);
+    .governance-detail {
+      display: grid;
+      grid-template-columns: repeat(3, minmax(0, 1fr));
+      gap: 16px;
+      margin-top: 28px;
+    }
+    .governance-detail-card {
+      padding: 24px;
+      border: 1px solid var(--border);
+      border-radius: 14px;
+      background: #fff;
+      box-shadow: var(--shadow);
+    }
+    .governance-detail-card span {
+      display: block;
+      margin-bottom: 12px;
+      color: var(--classin-green);
+      font-size: 12px;
+      font-weight: 820;
+      line-height: 1.4;
+    }
+    .governance-detail-card p {
+      margin: 0;
+      color: var(--muted);
+      font-size: 14px;
+      line-height: 1.78;
+    }
+    @media (max-width: 980px) {
+      .governance-detail {
+        grid-template-columns: 1fr;
+      }
     }
     .deep-dive-grid {
       display: grid;
@@ -2195,53 +2579,6 @@
       line-height: 1.35;
       backdrop-filter: blur(12px);
     }
-    .online-diagnostic-kit {
-      display: grid;
-      grid-template-columns: minmax(240px, 0.92fr) repeat(4, minmax(0, 1fr));
-      gap: 12px;
-      margin-top: 22px;
-    }
-    .online-diagnostic-kit > div,
-    .online-diagnostic-kit article {
-      min-height: 172px;
-      padding: 22px;
-      border: 1px solid rgba(8,71,52,0.12);
-      border-radius: 12px;
-      background: rgba(255,255,255,0.78);
-      box-shadow: 0 12px 30px rgba(8,71,52,0.07);
-    }
-    .online-diagnostic-kit > div {
-      background: var(--classin-green);
-      color: #fff;
-    }
-    .online-diagnostic-kit span {
-      display: block;
-      margin-bottom: 12px;
-      color: rgba(255,255,255,0.68);
-      font-size: 12px;
-      font-weight: 820;
-      line-height: 1.35;
-    }
-    .online-diagnostic-kit h3 {
-      margin: 0;
-      font-size: 22px;
-      line-height: 1.32;
-      letter-spacing: 0;
-    }
-    .online-diagnostic-kit strong {
-      display: block;
-      margin-bottom: 12px;
-      color: var(--classin-green);
-      font-size: 17px;
-      line-height: 1.35;
-      letter-spacing: 0;
-    }
-    .online-diagnostic-kit p {
-      margin: 0;
-      color: var(--muted);
-      font-size: 13px;
-      line-height: 1.68;
-    }
     .online-asset-board {
       display: grid;
       grid-template-columns: minmax(0, 1.18fr) minmax(0, 0.82fr);
@@ -2356,49 +2693,6 @@
       color: var(--muted);
       font-size: 13px;
       line-height: 1.7;
-    }
-    .online-mid-cta {
-      display: flex;
-      justify-content: space-between;
-      gap: 22px;
-      align-items: center;
-      margin-top: 34px;
-      padding: 22px;
-      border: 1px solid rgba(8,71,52,0.14);
-      border-radius: 12px;
-      background: rgba(255,255,255,0.74);
-      box-shadow: 0 12px 30px rgba(8,71,52,0.08);
-    }
-    .online-mid-cta p {
-      max-width: 560px;
-      margin: 0;
-      color: var(--text);
-      font-size: 16px;
-      font-weight: 720;
-      line-height: 1.6;
-    }
-    .online-mid-cta div {
-      display: flex;
-      gap: 10px;
-      flex-wrap: wrap;
-      justify-content: flex-end;
-    }
-    .online-mid-cta a {
-      display: inline-flex;
-      align-items: center;
-      min-height: 42px;
-      padding: 10px 15px;
-      border-radius: 999px;
-      background: var(--classin-green);
-      color: #fff;
-      font-size: 13px;
-      font-weight: 820;
-      line-height: 1.3;
-    }
-    .online-mid-cta a + a {
-      border: 1px solid rgba(8,71,52,0.16);
-      background: #fff;
-      color: var(--classin-green);
     }
     .enterprise-risk-section {
       background:
@@ -2681,7 +2975,6 @@
       .managed-simulation-step,
       .managed-board-main,
       .managed-board-cards,
-      .online-diagnostic-kit,
       .online-five-timeline,
       .enterprise-risk-grid,
       .loss-preview,
@@ -2695,13 +2988,6 @@
       .online-leak-card,
       .online-asset-board {
         grid-template-columns: 1fr;
-      }
-      .online-mid-cta {
-        align-items: flex-start;
-        flex-direction: column;
-      }
-      .online-mid-cta div {
-        justify-content: flex-start;
       }
       .online-asset-card.featured {
         grid-row: auto;
@@ -2783,11 +3069,6 @@
         font-size: clamp(38px, 10.8vw, 46px);
         line-height: 1.06;
       }
-      .variant-enterprise h1 {
-        max-width: 100%;
-        font-size: clamp(34px, 10vw, 42px);
-        line-height: 1.14;
-      }
       .variant-online h1 { font-size: clamp(36px, 10.4vw, 48px); line-height: 1.1; }
       h2 { font-size: clamp(30px, 9vw, 40px); }
       .hero-copy { font-size: 16px; line-height: 1.68; }
@@ -2817,26 +3098,37 @@
       .form-grid {
         grid-template-columns: 1fr;
       }
+      .section,
+      .final-section {
+        padding: 60px 0;
+      }
+      .section.green, .section.dark { padding: 68px 0; }
+      .breath-strip { padding: 52px 0; }
+      .mid-cta .mid-cta-inner { flex-direction: column; align-items: flex-start; }
+      .variant-enterprise .proof-strip {
+        grid-template-columns: repeat(3, minmax(0, 1fr));
+        gap: 8px;
+        margin-top: 28px;
+      }
+      .variant-enterprise .proof-strip li { min-height: 86px; padding: 12px; }
+      .variant-enterprise .proof-strip span,
+      .variant-enterprise .proof-strip small { font-size: 10px; }
+      .variant-enterprise .proof-strip strong { font-size: 17px; }
       .variant-online .proof-strip {
-        grid-template-columns: 1fr;
+        grid-template-columns: repeat(3, minmax(0, 1fr));
         gap: 8px;
         margin-top: 28px;
       }
       .variant-online .proof-strip li {
-        min-height: auto;
-        padding: 14px 16px;
-        display: grid;
-        grid-template-columns: 76px 1fr;
-        align-items: center;
-        column-gap: 12px;
+        min-height: 86px;
+        padding: 12px;
       }
       .variant-online .proof-strip span,
       .variant-online .proof-strip small {
-        font-size: 11px;
+        font-size: 10px;
       }
       .variant-online .proof-strip strong {
-        margin: 0 0 3px;
-        font-size: 20px;
+        font-size: 18px;
       }
       .online-leak-grid {
         padding-left: 22px;
@@ -2850,22 +3142,6 @@
       }
       .online-leak-card::before {
         left: -20px;
-      }
-      .online-diagnostic-kit > div,
-      .online-diagnostic-kit article {
-        min-height: auto;
-        padding: 18px;
-      }
-      .online-mid-cta {
-        padding: 18px;
-      }
-      .online-mid-cta div,
-      .online-mid-cta a {
-        width: 100%;
-      }
-      .online-mid-cta a {
-        justify-content: center;
-        text-align: center;
       }
       .online-leak-media,
       .online-leak-media img {
@@ -2916,6 +3192,22 @@
         transition-duration: 0.001ms !important;
         animation-duration: 0.001ms !important;
       }
+      .reveal, .reveal-stagger > * { opacity: 1 !important; transform: none !important; }
+    }
+    .variant-enterprise .hero-figure {
+      margin: 44px 0 0;
+      width: 100%;
+      max-width: 820px;
+    }
+    .variant-enterprise .hero-figure img {
+      width: 100%;
+      height: auto;
+      aspect-ratio: 16 / 9;
+      object-fit: cover;
+      display: block;
+      border-radius: 16px;
+      border: 1px solid rgba(0, 0, 0, 0.08);
+      box-shadow: 0 24px 70px rgba(0, 0, 0, 0.18);
     }
   </style>
 </head>
@@ -2929,8 +3221,8 @@
         <div class="nav-links">
           <a href="#fit">대상</a>
           <a href="#story">스토리</a>
-          <a href="#decision">도입 질문</a>
-          <a href="#flow">운영 흐름</a>
+          <a href="#standard">운영 기준</a>
+          <a href="#governance">권한</a>
           <a href="#resources">자료</a>
           <a href="#roadmap">도입 순서</a>
         </div>
@@ -2938,125 +3230,36 @@
       </div>
     </nav>
 
-    
+
 
     <header class="hero">
       <div class="hero-grid">
-        <div>
-          <p class="segment-label">프랜차이즈·다지점 학원 본사, 교육운영팀, 지역/지점 관리자</p>
-          <h1>지점이 늘어도 수업 기준은 하나로 유지되어야 합니다.</h1>
-          <p class="hero-copy">ClassIn은 EDB 교안, 전자칠판 수업, 녹화·복습, LMS, 관리자 데이터를 한 흐름으로 묶어 본사가 지점별 수업 품질과 운영 리스크를 권한 기준으로 확인하도록 돕는 학원 시스템 OS입니다.</p>
-          <div class="hero-actions">
+        <div class="hero-lede">
+          <p class="segment-label reveal">다지점·프랜차이즈 본사</p>
+          <h1 class="reveal">지점이 늘어도 수업 기준은 하나로 유지되어야 합니다.</h1>
+          <p class="hero-copy reveal">본사 기준을 권한으로 확인하는 학원 운영 OS입니다.</p>
+          <div class="hero-actions reveal">
             <a class="btn primary" href="#segment-lead-form">다지점 운영 진단 신청</a>
-            <a class="btn secondary" href="/resources/academy-admin-dashboard-template">관리자 데이터 점검표 보기</a>
+            <a class="hero-textlink" href="#standard">운영 흐름 먼저 보기 →</a>
           </div>
-          <ul class="proof-strip" aria-label="세그먼트 핵심 판단 기준">
-            
-        <li>
-          <span>운영 초점</span>
-          <strong>본사 기준</strong>
-          <small>교안·권한·수업 흐름</small>
-        </li>
-        <li>
-          <span>관리 단위</span>
-          <strong>지점·반·강사</strong>
-          <small>권한 기준으로 분리</small>
-        </li>
-        <li>
-          <span>도입 판단</span>
-          <strong>90일 파일럿</strong>
-          <small>범위와 일정부터 설계</small>
-        </li>
-          </ul>
         </div>
-        <figure class="hero-visual">
-          
-          <div class="product-frame dashboard-frame" aria-label="ClassIn 본사 운영 대시보드 예시">
-            <div class="dashboard-shell">
-              <div class="dashboard-top">
-                <strong>ClassIn HQ Operations</strong>
-                <span>LIVE CLASS FLOW</span>
-              </div>
-              <div class="dashboard-grid">
-                <div class="branch-list">
-                  
-                    <div class="branch-row">
-                      <div>
-                        <strong>목동 본원</strong>
-                        <span>EDB 교안 · 녹화 제공 정상</span>
-                      </div>
-                      <i class="status-dot" aria-hidden="true"></i>
-                    </div>
-                  
-                    <div class="branch-row">
-                      <div>
-                        <strong>대치 캠퍼스</strong>
-                        <span>EDB 교안 · 녹화 제공 정상</span>
-                      </div>
-                      <i class="status-dot" aria-hidden="true"></i>
-                    </div>
-                  
-                    <div class="branch-row">
-                      <div>
-                        <strong>분당 캠퍼스</strong>
-                        <span>EDB 교안 · 녹화 제공 정상</span>
-                      </div>
-                      <i class="status-dot" aria-hidden="true"></i>
-                    </div>
-                  
-                </div>
-                <div class="chart-panel">
-                  <div>
-                    <strong>수업 운영 흐름</strong>
-                    <span>준비 → 판서 → 녹화 → 복습 → 관리자 확인</span>
-                  </div>
-                  <div class="chart-bars" aria-hidden="true">
-                    <i style="height:46%"></i>
-                    <i style="height:68%"></i>
-                    <i style="height:58%"></i>
-                    <i style="height:82%"></i>
-                    <i style="height:74%"></i>
-                    <i style="height:92%"></i>
-                  </div>
-                </div>
-              </div>
-              <div class="timeline-panel">
-                <div class="timeline-item">
-                  <strong>EDB 배포</strong>
-                  <span>본사 기준 교안</span>
-                </div>
-                <div class="timeline-item">
-                  <strong>수업 기록</strong>
-                  <span>녹화·복습 제공</span>
-                </div>
-                <div class="timeline-item">
-                  <strong>권한 점검</strong>
-                  <span>지점·강사 분리</span>
-                </div>
-              </div>
-            </div>
-            <div class="os-panel" aria-label="ClassIn OS 구성">
-              <div class="os-cell"><span>PREP</span><strong>수업 준비와 EDB 교안</strong></div>
-              <div class="os-cell"><span>LIVE</span><strong>판서·활동·녹화</strong></div>
-              <div class="os-cell"><span>AFTER</span><strong>복습·과제·시험</strong></div>
-              <div class="os-cell"><span>ADMIN</span><strong>관리자 데이터와 권한</strong></div>
-            </div>
-          </div>
+        <figure class="hero-figure reveal">
+          <img src="/images/l/enterprise/enterprise-hero.png" alt="브랜드 그린 스튜디오에 놓인 ClassIn 전자칠판" loading="eager" decoding="async" />
         </figure>
       </div>
     </header>
 
     <main>
-      
-      <section class="section enterprise-risk-section dark">
+
+      <section class="section enterprise-risk-section dark" id="risk">
         <div class="section-inner">
-          <div class="section-head">
+          <div class="section-head reveal">
             <p class="section-kicker">Hidden Cost & Transition Risk</p>
             <h2>지점이 늘수록 새는 비용과 전환 리스크를 먼저 계산합니다</h2>
             <p>기능 소개 전에 본사 의사결정자가 두려워하는 비용과 전환 실패 가능성을 먼저 다룹니다.</p>
           </div>
-          <div class="enterprise-risk-grid">
-            
+          <div class="enterprise-risk-grid reveal-stagger">
+
                   <article class="enterprise-risk-card">
                     <span>01</span>
                     <h3>월간 운영 손실을 먼저 추정</h3>
@@ -3073,7 +3276,7 @@
                     <p>대표 지점에서 교안, 권한, 녹화·복습, 관리자 지표를 검증한 뒤 본사 기준으로 확대합니다.</p>
                   </article>
           </div>
-          <div class="loss-preview">
+          <div class="loss-preview reveal">
             <div>
               <span>월간 추정 손실</span>
               <strong>지점×취합 4h + 강사×관리 0.8h + 반×대조 0.3h</strong>
@@ -3085,13 +3288,13 @@
 
       <section class="section alt" id="fit">
         <div class="section-inner fit-grid">
-          <div class="section-head">
+          <div class="section-head reveal">
             <p class="section-kicker">적합한 학원</p>
             <h2>지점이 늘며 수업 기준이 흔들리기 시작한 본사</h2>
             <p>프랜차이즈·다지점 학원에서 교안 배포, 수업 품질, 녹화·복습 제공, 권한 관리, 신규 지점 온보딩이 지점마다 달라진다면 먼저 맞습니다.</p>
           </div>
-          <ul class="fit-list">
-            
+          <ul class="fit-list reveal-stagger">
+
         <li>
           <span aria-hidden="true"></span>
           <p>지점마다 수업 자료와 진도 기준이 달라지는 본사</p>
@@ -3114,8 +3317,8 @@
 
       <section class="section dark" id="story">
         <div class="section-inner">
-          
-        <div class="story-panel">
+
+        <div class="story-panel reveal">
           <div class="story-copy">
             <p class="section-kicker">Enterprise Story</p>
             <h2>작을 때는 넘어가던 문제가, 지점이 늘면 본사 리스크가 됩니다.</h2>
@@ -3127,7 +3330,7 @@
             <h3>본사 운영팀은 오늘도 세 가지 질문을 동시에 받습니다.</h3>
             <p>A지점은 녹화 링크가 늦었고, B지점은 신규 강사가 다른 교안으로 수업했고, C지점은 학부모가 지난 진도 기준을 묻습니다. 문제는 각각 달라 보이지만 뿌리는 같습니다. 본사 기준이 지점 수업 안으로 내려가지 못한 것입니다.</p>
             <ol>
-              
+
                     <li>
                       <strong>Before</strong>
                       <h4>지점마다 다른 방식</h4>
@@ -3146,18 +3349,11 @@
             </ol>
           </div>
         </div>
-        </div>
-      </section>
 
-      <section class="section dark">
-        <div class="section-inner">
-          <div class="section-head">
-            <p class="section-kicker">운영 장면</p>
-            <h2>본사가 매주 확인해야 하는 장면들</h2>
-            <p>대형·다지점 운영자는 기능보다 지점 편차, 권한, 신규 지점 확장 리스크를 먼저 봅니다. ClassIn은 이 장면들을 본사 운영 언어로 정리합니다.</p>
-          </div>
-          <div class="operation-scene-grid">
-            
+        <div class="story-aftermath">
+          <p class="section-kicker">매주 반복되는 장면</p>
+          <div class="operation-scene-grid reveal-stagger">
+
         <article class="operation-scene-card">
           <span>본사 운영회의</span>
           <h3>지점별 진도와 복습 제공 상태를 같은 기준으로 봅니다.</h3>
@@ -3175,151 +3371,121 @@
         </article>
           </div>
         </div>
-      </section>
-
-      <section class="section alt" id="journey">
-        <div class="section-inner">
-          <div class="section-head">
-            <p class="section-kicker">본사 운영 흐름</p>
-            <h2>본사 기준이 지점 수업으로 내려갈 때 리스크가 줄어듭니다</h2>
-            <p>작을 때는 현장 감각으로 해결되던 문제가 지점이 늘면 본사 리스크가 됩니다. ClassIn은 기준 배포, 권한, 데이터, 온보딩을 한 흐름으로 묶습니다.</p>
-          </div>
-          <div class="narrative-list">
-            
-        <article class="narrative-chapter">
-          <div>
-            <span>Chapter 01</span>
-            <h3>본사 기준은 문서가 아니라 수업 장면 안에 있어야 합니다</h3>
-            <p>프랜차이즈와 다지점 학원은 이미 커리큘럼 문서, 강사 매뉴얼, 지점 운영 규정을 갖고 있습니다. 그런데 실제 수업에서는 강사의 개인 자료, 지점별 메신저, 별도 드라이브가 다시 기준이 됩니다. 본사 기준이 파일함에만 남으면 지점 수업은 결국 현장 판단으로 흩어집니다.</p>
-          </div>
-          <ul>
-            <li>EDB 교안 배포 기준</li><li>수업 전 준비 체크</li><li>녹화·복습 제공 루틴</li>
-          </ul>
-        </article>
-        <article class="narrative-chapter">
-          <div>
-            <span>Chapter 02</span>
-            <h3>우수 강사의 수업은 브랜드 자산으로 복제되어야 합니다</h3>
-            <p>대형 학원의 가장 큰 손실은 좋은 강사의 노하우가 개인의 감각으로만 남는 것입니다. 판서 순서, 질문 타이밍, 예시 이미지, 오답 설명 방식이 EDB와 녹화로 남으면 강사 교체와 신규 지점 오픈 때 같은 품질의 출발선을 만들 수 있습니다.</p>
-          </div>
-          <ul>
-            <li>대표 강의 흐름 저장</li><li>신규 강사 온보딩</li><li>지점 확장 전 샘플 수업</li>
-          </ul>
-        </article>
-        <article class="narrative-chapter">
-          <div>
-            <span>Chapter 03</span>
-            <h3>권한이 흐릿하면 데이터도 리스크가 됩니다</h3>
-            <p>본사, 지점장, 강사, 보조가 같은 정보를 보는 구조는 편해 보이지만 오래가면 리스크가 됩니다. 대형 운영자는 누가 어떤 수업 기록을 보고, 어떤 복습 자료를 제공하며, 어떤 예외를 처리하는지 권한 단위로 나눠야 합니다.</p>
-          </div>
-          <ul>
-            <li>본사 전체 가시성</li><li>지점별 실행 권한</li><li>강사별 수업 범위</li>
-          </ul>
-        </article>
-        <article class="narrative-chapter">
-          <div>
-            <span>Chapter 04</span>
-            <h3>데이터는 감시가 아니라 예외를 빨리 찾는 언어입니다</h3>
-            <p>운영 데이터의 목적은 현장을 몰아세우는 것이 아니라 늦게 알면 커지는 문제를 조기에 발견하는 것입니다. 녹화가 누락된 반, 복습 안내가 늦은 지점, 신규 강사가 기준과 다르게 진행한 수업을 빠르게 찾을수록 학부모 대응과 내부 코칭이 쉬워집니다.</p>
-          </div>
-          <ul>
-            <li>수업 상태 확인</li><li>예외 대응</li><li>지점별 코칭 포인트</li>
-          </ul>
-        </article>
-        <article class="narrative-chapter">
-          <div>
-            <span>Chapter 05</span>
-            <h3>90일 파일럿은 확장 전 리허설입니다</h3>
-            <p>대형 조직은 한 번에 전 지점을 바꾸기 어렵습니다. 대표 지점, 대표 과목, 대표 강사군을 정해 30일은 수업 흐름, 60일은 권한과 복습, 90일은 본사 리포트 기준을 확인하면 전면 도입의 리스크를 줄일 수 있습니다.</p>
-          </div>
-          <ul>
-            <li>대표 지점 파일럿</li><li>권한 설계 검증</li><li>전 지점 확장 기준</li>
-          </ul>
-        </article>
-          </div>
         </div>
       </section>
 
-      <section class="section" id="decision">
-        <div class="section-inner">
-          <div class="section-head">
-            <p class="section-kicker">도입 전 질문</p>
-            <h2>본사 운영팀이 먼저 확인하는 질문에 답합니다</h2>
-            <p>지점별 편차가 보이는지, 권한을 나눌 수 있는지, 기존 자료와 신규 지점을 어떻게 옮길지부터 판단합니다.</p>
-          </div>
-          <div class="decision-grid">
-            
-        <article class="decision-card">
-          <h3>본사 기준이 지점 수업까지 내려가나요?</h3>
-          <div>
-            <strong>원하는 것</strong>
-            <p>지점마다 달라지는 교안, 진도, 녹화·복습 제공 상태를 같은 운영 기준으로 보고 싶습니다.</p>
-          </div>
-          <div>
-            <strong>반응하는 증거</strong>
-            <p>본사 EDB 배포, 지점·반·강사 단위 권한, 녹화·복습 제공 상태를 한 흐름으로 확인하는 구조에 반응합니다.</p>
-          </div>
-        </article>
-        <article class="decision-card">
-          <h3>강사 교체가 생겨도 수업 품질이 유지되나요?</h3>
-          <div>
-            <strong>원하는 것</strong>
-            <p>우수 강사의 판서와 질문 흐름이 개인 자료가 아니라 기관 자산으로 남기를 원합니다.</p>
-          </div>
-          <div>
-            <strong>반응하는 증거</strong>
-            <p>EDB 교안 자산화, 강사 온보딩 SOP, 대표 지점 90일 파일럿처럼 확장 전에 검증하는 증거를 좋아합니다.</p>
-          </div>
-        </article>
-        <article class="decision-card">
-          <h3>권한·데이터·정책 리스크를 어떻게 분리하나요?</h3>
-          <div>
-            <strong>원하는 것</strong>
-            <p>본사, 지점장, 강사, 보조가 보는 정보를 다르게 통제하고 싶습니다.</p>
-          </div>
-          <div>
-            <strong>반응하는 증거</strong>
-            <p>권한 받은 관리자 기준의 대시보드와 스토리지·녹화·개인정보 확인 항목을 단정하지 않고 분리하는 설명이 신뢰를 만듭니다.</p>
-          </div>
-        </article>
-          </div>
-        </div>
+      <section class="breath-strip reveal">
+        <p>문제는 지점 <span class="em-key">수</span>가 아니라,<br>기준이 <span class="em-key">전달되는 방식</span>입니다.</p>
       </section>
 
-      <section class="section">
+      <section class="section green" id="standard">
         <div class="section-inner">
-          <div class="section-head">
-            <p class="section-kicker">운영 리스크</p>
-            <h2>문제는 규모가 아니라 기준이 전달되는 방식입니다</h2>
-            <p>본사의 좋은 교안과 수업 기준도 지점에서 다르게 실행되면 품질 편차, 학부모 대응, 신규 지점 온보딩 리스크로 돌아옵니다.</p>
+          <div class="section-head reveal">
+            <p class="section-kicker">The Standard</p>
+            <h2>본사가 정한 기준은, 지점 교실에서 그대로 실행될 때만 기준입니다.</h2>
+            <p>프랜차이즈와 다지점 학원은 이미 커리큘럼 문서와 강사 매뉴얼을 갖고 있습니다. 차이는 본사 기준이 파일함에 남느냐, 실제 수업 장면으로 내려가느냐입니다. ClassIn은 EDB 교안·판서·녹화·복습·LMS·관리자 데이터를 하나의 흐름으로 묶어, 기준이 지점 교실까지 같은 모양으로 도착하게 만듭니다.</p>
           </div>
-          <div class="card-grid">
-            
-        <article class="segment-card">
-          <h3>지점별 수업 기준이 흩어집니다</h3>
-          <p>본사 교안이 있어도 현장에서는 파일, 메신저, 개인 저장소로 다시 갈라집니다.</p>
-        </article>
-        <article class="segment-card">
-          <h3>강사 변경이 곧 품질 리스크가 됩니다</h3>
-          <p>우수 강사의 판서 흐름과 수업 기록이 개인 역량에 남으면 지점 확장 속도가 느려집니다.</p>
-        </article>
-        <article class="segment-card">
-          <h3>본사는 늦게 알게 됩니다</h3>
-          <p>녹화 제공, 보강, 수업 특이사항, 네트워크 이슈를 늦게 알수록 학부모 대응도 늦어집니다.</p>
-        </article>
-          </div>
-        </div>
-      </section>
 
-      <section class="section alt">
-        <div class="section-inner">
-          <div class="section-head">
-            <p class="section-kicker">선택 이유</p>
-            <h2>본사 기준을 지점 수업으로 남기는 구조</h2>
-            <p>ClassIn은 기능 수보다 지점별 수업 흐름, 복습 제공, 예외 상황, 권한 기준을 본사가 확인할 수 있게 만드는 운영 구조에 초점을 둡니다.</p>
+          <figure class="figure-frame on-green reveal" aria-label="본사 기준이 지점 수업으로 내려가는 운영 흐름">
+            <svg viewBox="0 0 760 440" role="img" xmlns="http://www.w3.org/2000/svg" aria-labelledby="cascadeTitle cascadeDesc">
+              <title id="cascadeTitle">본사 → 지점 기준 배포와 운영 데이터 회수</title>
+              <desc id="cascadeDesc">본사 기준 카드(EDB 교안·권한 정책·수업 기준)가 목동·대치·분당 등 지점으로 내려가고, 각 지점의 운영 데이터와 예외가 본사 대시보드로 다시 올라옵니다. 분당 지점의 회수 경로는 예외 상태를 나타내는 노란색입니다.</desc>
+              <defs>
+                <marker id="rsArrow" viewBox="0 0 10 10" refX="8" refY="5" markerWidth="7" markerHeight="7" orient="auto-start-reverse">
+                  <path d="M0,0 L10,5 L0,10 z" fill="#084734"></path>
+                </marker>
+                <marker id="rsArrowUp" viewBox="0 0 10 10" refX="8" refY="5" markerWidth="7" markerHeight="7" orient="auto-start-reverse">
+                  <path d="M0,0 L10,5 L0,10 z" fill="#615D59"></path>
+                </marker>
+                <marker id="rsArrowWarn" viewBox="0 0 10 10" refX="8" refY="5" markerWidth="7" markerHeight="7" orient="auto-start-reverse">
+                  <path d="M0,0 L10,5 L0,10 z" fill="#E8A13A"></path>
+                </marker>
+              </defs>
+
+              <!-- 본사 기준 node -->
+              <rect x="250" y="24" width="260" height="92" rx="16" fill="#084734"></rect>
+              <text x="380" y="52" text-anchor="middle" fill="#6EE7B7" font-size="12" font-weight="800" font-family="Inter, sans-serif" letter-spacing="1.5">본사 기준</text>
+              <g font-family="Inter, sans-serif" font-size="12" font-weight="700" fill="#ffffff">
+                <rect x="270" y="66" width="78" height="32" rx="8" fill="rgba(255,255,255,0.12)"></rect>
+                <text x="309" y="86" text-anchor="middle">EDB 교안</text>
+                <rect x="356" y="66" width="78" height="32" rx="8" fill="rgba(255,255,255,0.12)"></rect>
+                <text x="395" y="86" text-anchor="middle">권한 정책</text>
+                <rect x="442" y="66" width="50" height="32" rx="8" fill="rgba(255,255,255,0.12)"></rect>
+                <text x="467" y="86" text-anchor="middle">수업 기준</text>
+              </g>
+              <text x="380" y="150" text-anchor="middle" fill="#084734" font-size="12" font-weight="700" font-family="Inter, sans-serif">기준 배포 ↓</text>
+
+              <!-- cascade arrows to branches -->
+              <line x1="380" y1="116" x2="140" y2="214" stroke="#084734" stroke-width="2" marker-end="url(#rsArrow)"></line>
+              <line x1="380" y1="116" x2="380" y2="214" stroke="#084734" stroke-width="2" marker-end="url(#rsArrow)"></line>
+              <line x1="380" y1="116" x2="620" y2="214" stroke="#084734" stroke-width="2" marker-end="url(#rsArrow)"></line>
+
+              <!-- branch nodes -->
+              <g font-family="Inter, sans-serif">
+                <rect x="56" y="222" width="168" height="74" rx="12" fill="#fff" stroke="rgba(0,0,0,0.10)"></rect>
+                <circle cx="80" cy="246" r="6" fill="#084734"></circle>
+                <text x="96" y="250" fill="#111110" font-size="14" font-weight="700">목동 본원</text>
+                <text x="72" y="276" fill="#615D59" font-size="11">교안·녹화 정상</text>
+
+                <rect x="296" y="222" width="168" height="74" rx="12" fill="#fff" stroke="rgba(0,0,0,0.10)"></rect>
+                <circle cx="320" cy="246" r="6" fill="#084734"></circle>
+                <text x="336" y="250" fill="#111110" font-size="14" font-weight="700">대치 캠퍼스</text>
+                <text x="312" y="276" fill="#615D59" font-size="11">교안·녹화 정상</text>
+
+                <rect x="536" y="222" width="168" height="74" rx="12" fill="#FFFBF2" stroke="rgba(232,161,58,0.55)"></rect>
+                <circle cx="560" cy="246" r="6" fill="#E8A13A"></circle>
+                <text x="576" y="250" fill="#111110" font-size="14" font-weight="700">분당 캠퍼스</text>
+                <text x="552" y="276" fill="#B26A00" font-size="11">복습 제공 지연 1건</text>
+              </g>
+
+              <!-- return paths to HQ dashboard -->
+              <path d="M140,296 C140,352 320,352 360,372" fill="none" stroke="#615D59" stroke-width="1.6" stroke-dasharray="6 5" marker-end="url(#rsArrowUp)"></path>
+              <path d="M380,296 C380,344 380,348 380,372" fill="none" stroke="#615D59" stroke-width="1.6" stroke-dasharray="6 5" marker-end="url(#rsArrowUp)"></path>
+              <path d="M620,296 C620,352 440,352 400,372" fill="none" stroke="#E8A13A" stroke-width="2" stroke-dasharray="6 5" marker-end="url(#rsArrowWarn)"></path>
+
+              <!-- HQ dashboard node -->
+              <rect x="250" y="380" width="260" height="48" rx="12" fill="#17211c"></rect>
+              <text x="380" y="402" text-anchor="middle" fill="#ffffff" font-size="13" font-weight="700" font-family="Inter, sans-serif">본사 대시보드</text>
+              <text x="380" y="419" text-anchor="middle" fill="#6EE7B7" font-size="11" font-family="Inter, sans-serif">운영 데이터 · 예외 ↑</text>
+            </svg>
+            <figcaption class="figure-caption">기준은 같은 모양으로 지점 교실에 내려가고, 운영 데이터와 예외는 본사로 다시 올라옵니다. 분당 지점의 노란 경로처럼, 본사는 예외를 가장 먼저 봅니다.</figcaption>
+          </figure>
+
+          <div class="process-rail reveal-stagger" aria-label="ClassIn OS 운영 레일">
+            <div class="rail-step">
+              <span class="rail-tag">PREP</span>
+              <h4>수업 전 준비</h4>
+              <p>본사가 이번 주 단원의 EDB 교안과 반 구성, 권한을 배포하면 모든 지점 강사가 같은 자료로 시작합니다.</p>
+            </div>
+            <div class="rail-step">
+              <span class="rail-tag">LIVE</span>
+              <h4>EDB·판서 수업</h4>
+              <p>강사는 배포된 교안 위에 판서·이미지·풀이를 더하고, 그 흐름이 재사용 가능한 칠판 파일로 남습니다.</p>
+            </div>
+            <div class="rail-step">
+              <span class="rail-tag">AFTER</span>
+              <h4>녹화·복습</h4>
+              <p>수업이 끝나면 녹화본이 결석 학생 보강과 복습 링크로 자동 이어져, 강사가 따로 편집하지 않습니다.</p>
+            </div>
+            <div class="rail-step">
+              <span class="rail-tag">LMS</span>
+              <h4>과제·시험</h4>
+              <p>과제 제출, 시험, 피드백이 같은 반 단위로 묶여 수업 밖 학습 관리까지 한 줄로 연결됩니다.</p>
+            </div>
+            <div class="rail-step">
+              <span class="rail-tag">ADMIN</span>
+              <h4>관리자 데이터</h4>
+              <p>권한 있는 관리자는 어느 지점이 교안을 썼고 복습을 제공했는지 같은 기준으로 확인합니다.</p>
+            </div>
           </div>
-          <div class="advantage-grid">
-            
+
+          <div class="standard-scenario reveal">
+            <span>신규 지점 오픈 2주 차</span>
+            <p>강사 한 명이 본사 EDB 교안 대신 예전 학원에서 쓰던 자기 PDF로 수업을 시작합니다. 본사 기준이 파일함에만 있었다면 이 이탈은 한 달 뒤 학부모가 “옆 지점이랑 진도가 다르다”고 물을 때 드러납니다. ClassIn에서는 배포된 교안이 그 반에서 열렸는지, 녹화·복습이 제공됐는지가 관리자 화면에 비어 있는 칸으로 먼저 보이고, 운영팀은 2주 차에 강사를 따로 코칭합니다. 기준이 ‘공지’가 아니라 ‘수업 흐름’으로 내려가면, 이탈은 사고가 되기 전에 운영 항목이 됩니다.</p>
+          </div>
+
+          <div class="advantage-grid reveal-stagger">
+
         <article class="advantage-card">
           <span>HQ Control</span>
           <h3>본사 기준을 수업 현장까지 전달</h3>
@@ -3333,26 +3499,241 @@
         <article class="advantage-card">
           <span>Visibility</span>
           <h3>늦은 보고가 아니라 운영 가시성</h3>
-          <p>수업 진행, 녹화·복습 제공, 특이사항을 권한 있는 관리자가 같은 기준으로 확인하게 만듭니다.</p>
+          <p>수업 진행, 녹화·복습 제공, 특이사항을 권한 있는 관리자가 같은 기준으로 확인하게 만듭니다. 늦게 알면 커지는 문제를 먼저 발견합니다.</p>
         </article>
         <article class="advantage-card">
-          <span>Governance</span>
-          <h3>권한과 리스크를 분리</h3>
-          <p>본사, 지점장, 강사, 보조가 같은 시스템을 쓰더라도 접근 범위를 다르게 설계해 운영 리스크를 줄입니다.</p>
+          <span>Pilot</span>
+          <h3>90일 파일럿은 확장 전 리허설</h3>
+          <p>대표 지점·과목·강사군으로 30일 수업 흐름, 60일 권한·복습, 90일 본사 리포트 기준을 검증해 전면 도입 리스크를 줄입니다.</p>
         </article>
           </div>
         </div>
       </section>
 
-      <section class="section">
+      <section class="section mid-cta reveal">
+        <div class="mid-cta-inner">
+          <p>지금 우리 지점들은 같은 수업을 하고 있나요?</p>
+          <a class="mid-cta-btn" href="#segment-lead-form">다지점 운영 진단 신청 →</a>
+        </div>
+      </section>
+
+      <section class="section" id="governance">
         <div class="section-inner">
-          <div class="section-head">
-            <p class="section-kicker">본사 판단 근거</p>
-            <h2>임원 회의와 운영 회의에서 바로 확인할 증거</h2>
-            <p>전환 비용, 지점 편차, 우수 강사 자산화, 권한 구조, 신규 지점 확장을 본사 의사결정 언어로 분리했습니다.</p>
+          <div class="section-head reveal">
+            <p class="section-kicker">Visibility & Control</p>
+            <h2>본사는 전체를 보고, 지점장은 자기 지점을, 강사는 자기 수업을 봅니다.</h2>
+            <p>같은 시스템을 쓰더라도 보는 정보와 실행 권한은 역할마다 달라야 합니다. 권한이 흐릿하면 데이터도 리스크가 됩니다. ClassIn은 본사·운영팀·지점장·강사·보조의 가시 범위와 권한을 한 장의 매트릭스로 분리합니다.</p>
           </div>
-          <div class="evidence-stack">
-            
+
+          <figure class="figure-frame reveal" aria-label="역할별 권한·가시 범위 매트릭스">
+            <svg viewBox="0 0 760 360" role="img" xmlns="http://www.w3.org/2000/svg" aria-labelledby="permTitle permDesc">
+              <title id="permTitle">역할별 권한 매트릭스</title>
+              <desc id="permDesc">본사는 모든 권한을 갖고, 운영팀은 데이터 가시성 중심, 지점장은 자기 지점 범위, 강사는 자기 수업 실행, 보조는 제한된 범위만 가집니다. 행은 EDB 교안 편집·교안 배포·녹화·복습 열람·권한 부여·데이터 가시 범위입니다.</desc>
+              <g font-family="Inter, sans-serif">
+                <!-- header row -->
+                <text x="206" y="36" text-anchor="end" fill="#615D59" font-size="12" font-weight="700">권한 / 역할</text>
+                <text x="300" y="36" text-anchor="middle" fill="#111110" font-size="13" font-weight="800">본사</text>
+                <text x="392" y="36" text-anchor="middle" fill="#111110" font-size="13" font-weight="800">운영팀</text>
+                <text x="484" y="36" text-anchor="middle" fill="#111110" font-size="13" font-weight="800">지점장</text>
+                <text x="576" y="36" text-anchor="middle" fill="#111110" font-size="13" font-weight="800">강사</text>
+                <text x="668" y="36" text-anchor="middle" fill="#111110" font-size="13" font-weight="800">보조</text>
+
+                <!-- zebra row backgrounds -->
+                <rect x="24" y="50" width="712" height="46" fill="#F6F5F4"></rect>
+                <rect x="24" y="142" width="712" height="46" fill="#F6F5F4"></rect>
+                <rect x="24" y="234" width="712" height="46" fill="#F6F5F4"></rect>
+
+                <!-- row labels -->
+                <g font-size="13" font-weight="700" fill="#111110">
+                  <text x="206" y="78" text-anchor="end">EDB 교안 편집</text>
+                  <text x="206" y="124" text-anchor="end">교안 배포</text>
+                  <text x="206" y="170" text-anchor="end">녹화·복습 열람</text>
+                  <text x="206" y="216" text-anchor="end">권한 부여</text>
+                  <text x="206" y="262" text-anchor="end">데이터 가시 범위</text>
+                </g>
+              </g>
+
+              <!-- cells: allow=filled disc+check, limit=ring, none=dash -->
+              <g font-family="Inter, sans-serif">
+                <!-- Row1 EDB 교안 편집 -->
+                <circle cx="300" cy="73" r="12" fill="#084734"></circle><path d="M294,73 l4,4 l8,-9" stroke="#fff" stroke-width="2.4" fill="none" stroke-linecap="round" stroke-linejoin="round"></path>
+                <circle cx="392" cy="73" r="12" fill="none" stroke="#084734" stroke-width="2.4"></circle>
+                <circle cx="484" cy="73" r="12" fill="none" stroke="#084734" stroke-width="2.4"></circle>
+                <line x1="570" y1="73" x2="582" y2="73" stroke="#A39E98" stroke-width="2.4" stroke-linecap="round"></line>
+                <line x1="662" y1="73" x2="674" y2="73" stroke="#A39E98" stroke-width="2.4" stroke-linecap="round"></line>
+                <!-- Row2 교안 배포 -->
+                <circle cx="300" cy="119" r="12" fill="#084734"></circle><path d="M294,119 l4,4 l8,-9" stroke="#fff" stroke-width="2.4" fill="none" stroke-linecap="round" stroke-linejoin="round"></path>
+                <circle cx="392" cy="119" r="12" fill="#084734"></circle><path d="M386,119 l4,4 l8,-9" stroke="#fff" stroke-width="2.4" fill="none" stroke-linecap="round" stroke-linejoin="round"></path>
+                <circle cx="484" cy="119" r="12" fill="none" stroke="#084734" stroke-width="2.4"></circle>
+                <line x1="570" y1="119" x2="582" y2="119" stroke="#A39E98" stroke-width="2.4" stroke-linecap="round"></line>
+                <line x1="662" y1="119" x2="674" y2="119" stroke="#A39E98" stroke-width="2.4" stroke-linecap="round"></line>
+                <!-- Row3 녹화·복습 열람 -->
+                <circle cx="300" cy="165" r="12" fill="#084734"></circle><path d="M294,165 l4,4 l8,-9" stroke="#fff" stroke-width="2.4" fill="none" stroke-linecap="round" stroke-linejoin="round"></path>
+                <circle cx="392" cy="165" r="12" fill="#084734"></circle><path d="M386,165 l4,4 l8,-9" stroke="#fff" stroke-width="2.4" fill="none" stroke-linecap="round" stroke-linejoin="round"></path>
+                <circle cx="484" cy="165" r="12" fill="none" stroke="#084734" stroke-width="2.4"></circle>
+                <circle cx="576" cy="165" r="12" fill="none" stroke="#084734" stroke-width="2.4"></circle>
+                <line x1="662" y1="165" x2="674" y2="165" stroke="#A39E98" stroke-width="2.4" stroke-linecap="round"></line>
+                <!-- Row4 권한 부여 -->
+                <circle cx="300" cy="211" r="12" fill="#084734"></circle><path d="M294,211 l4,4 l8,-9" stroke="#fff" stroke-width="2.4" fill="none" stroke-linecap="round" stroke-linejoin="round"></path>
+                <circle cx="392" cy="211" r="12" fill="none" stroke="#084734" stroke-width="2.4"></circle>
+                <circle cx="484" cy="211" r="12" fill="none" stroke="#084734" stroke-width="2.4"></circle>
+                <line x1="570" y1="211" x2="582" y2="211" stroke="#A39E98" stroke-width="2.4" stroke-linecap="round"></line>
+                <line x1="662" y1="211" x2="674" y2="211" stroke="#A39E98" stroke-width="2.4" stroke-linecap="round"></line>
+                <!-- Row5 데이터 가시 범위 -->
+                <text x="300" y="261" text-anchor="middle" fill="#084734" font-size="11" font-weight="700">전체</text>
+                <text x="392" y="261" text-anchor="middle" fill="#084734" font-size="11" font-weight="700">전체</text>
+                <text x="484" y="261" text-anchor="middle" fill="#615D59" font-size="11" font-weight="700">자기 지점</text>
+                <text x="576" y="261" text-anchor="middle" fill="#615D59" font-size="11" font-weight="700">자기 수업</text>
+                <text x="668" y="261" text-anchor="middle" fill="#615D59" font-size="11" font-weight="700">자기 수업</text>
+              </g>
+
+              <line x1="24" y1="296" x2="736" y2="296" stroke="rgba(0,0,0,0.08)"></line>
+              <text x="380" y="324" text-anchor="middle" fill="#615D59" font-size="12" font-family="Inter, sans-serif">본사는 전권, 지점장은 자기 지점, 강사는 자기 수업 — 같은 시스템 안에서 범위가 다릅니다.</text>
+            </svg>
+            <div class="perm-legend">
+              <span><i class="lg-allow"></i> 허용</span>
+              <span><i class="lg-limit"></i> 범위 한정</span>
+              <span><i class="lg-none"></i> 불가</span>
+            </div>
+            <figcaption class="figure-caption">권한 분리를 말로 반복하는 대신 한 장으로 봅니다. 실제 권한 범위는 계정 구조와 계약 조건을 기준으로 상담에서 확인합니다.</figcaption>
+          </figure>
+
+          <div class="governance-detail reveal-stagger">
+            <article class="governance-detail-card">
+              <span>지점장이 보는 것</span>
+              <p>분당 지점장은 분당 캠퍼스의 반·강사·복습 제공 상태까지 봅니다. 옆 지점의 매출이나 다른 지점 강사의 수업 기록은 화면에 아예 나타나지 않습니다. 자기 지점을 책임지는 데 필요한 범위만 열려 있어, 권한을 ‘믿고 맡기는’ 대신 ‘구조로 닫습니다’.</p>
+            </article>
+            <article class="governance-detail-card">
+              <span>강사가 못 보는 것</span>
+              <p>강사는 자기 반 수업과 자기 녹화·복습만 다루고, 다른 강사의 학생 명단이나 본사 교안 ‘편집’ 권한은 갖지 못합니다. 좋은 판서를 남길 수는 있어도 본사 기준을 바꿀 수는 없습니다. 그래서 강사가 바뀌어도 학부모가 보던 개인정보와 운영 책임은 흐릿해지지 않습니다.</p>
+            </article>
+            <article class="governance-detail-card">
+              <span>본사만 할 수 있는 것</span>
+              <p>EDB 교안 편집과 권한 부여는 본사·운영팀에만 열립니다. 신규 지점 계정을 만들고, 어느 역할이 무엇을 보는지 정하는 일은 위에서 한 번 설계하면 모든 지점에 같은 모양으로 적용됩니다. 권한이 곧 운영 기준이 되는 지점입니다.</p>
+            </article>
+          </div>
+        </div>
+      </section>
+
+      <section class="section alt" id="evidence">
+        <div class="section-inner">
+          <div class="section-head reveal">
+            <p class="section-kicker">Boardroom Evidence</p>
+            <h2>늦게 아는 대신, 회의에서 바로 확인합니다.</h2>
+            <p>같은 본사 기준도 지점에서 실행되는 방식은 달라집니다. 임원 회의와 운영 회의에서 바로 꺼낼 수 있도록, 자료가 지점 운영으로 남는지 아니면 파일과 공지로 끝나는지 같은 장면에서 대비합니다.</p>
+          </div>
+
+          <div class="evidence-screen reveal">
+            <div class="evidence-screen-copy">
+              <p class="section-kicker">본사가 실제로 보는 화면</p>
+              <h3>월간 운영회의 하루 전, 본사는 이 한 화면에서 지점을 봅니다.</h3>
+              <p>본사 대시보드는 지점별로 EDB 교안 배포와 녹화·복습 제공이 정상인지 한 줄씩 보여줍니다. 목동 본원과 대치 캠퍼스는 정상 상태로 표시되고, 분당 캠퍼스만 복습 영상 제공이 지연돼 노란 예외로 올라옵니다.</p>
+              <p>예전 같으면 학부모 문의가 들어오고 나서야 알았을 한 건이, 월간 회의 자료를 만들기 전에 먼저 눈에 띕니다. 운영팀은 회의에서 “분당, 지난주 복습 왜 늦었나요”를 따로 묻지 않고, 같은 화면을 보며 바로 처리 상태를 확인합니다.</p>
+            </div>
+
+            <figure class="figure-frame evidence-dashboard-figure" aria-label="ClassIn 본사 운영 대시보드 예시">
+
+              <div class="product-frame dashboard-frame" aria-label="ClassIn 본사 운영 대시보드 예시">
+                <div class="dashboard-shell">
+                  <div class="dashboard-top">
+                    <strong>ClassIn HQ Operations</strong>
+                    <span class="dashboard-counter">예외 1 · 정상 2</span>
+                  </div>
+                  <div class="dashboard-grid">
+                    <div class="branch-list">
+
+                        <div class="branch-row">
+                          <div>
+                            <strong>목동 본원</strong>
+                            <span>EDB 교안 · 녹화 제공 정상</span>
+                          </div>
+                          <i class="status-dot" aria-hidden="true"></i>
+                        </div>
+
+                        <div class="branch-row">
+                          <div>
+                            <strong>대치 캠퍼스</strong>
+                            <span>EDB 교안 · 녹화 제공 정상</span>
+                          </div>
+                          <i class="status-dot" aria-hidden="true"></i>
+                        </div>
+
+                        <div class="branch-row is-exception">
+                          <div>
+                            <strong>분당 캠퍼스</strong>
+                            <span>복습 영상 제공 지연 · 확인 필요</span>
+                          </div>
+                          <i class="status-dot is-warn" aria-hidden="true"></i>
+                        </div>
+
+                    </div>
+                    <div class="chart-panel">
+                      <div>
+                        <strong>수업 운영 흐름</strong>
+                        <span>준비 → 판서 → 녹화 → 복습 → 관리자 확인</span>
+                      </div>
+                      <div class="chart-bars" aria-hidden="true">
+                        <i style="height:46%"></i>
+                        <i style="height:68%"></i>
+                        <i style="height:58%"></i>
+                        <i style="height:82%"></i>
+                        <i style="height:74%"></i>
+                        <i style="height:92%"></i>
+                      </div>
+                    </div>
+                  </div>
+                  <div class="timeline-panel">
+                    <div class="timeline-item">
+                      <strong>EDB 배포</strong>
+                      <span>본사 기준 교안</span>
+                    </div>
+                    <div class="timeline-item">
+                      <strong>수업 기록</strong>
+                      <span>녹화·복습 제공</span>
+                    </div>
+                    <div class="timeline-item">
+                      <strong>권한 점검</strong>
+                      <span>지점·강사 분리</span>
+                    </div>
+                  </div>
+                </div>
+                <div class="os-panel" aria-label="ClassIn OS 구성">
+                  <div class="os-cell"><span>PREP</span><strong>수업 준비와 EDB 교안</strong></div>
+                  <div class="os-cell"><span>LIVE</span><strong>판서·활동·녹화</strong></div>
+                  <div class="os-cell"><span>AFTER</span><strong>복습·과제·시험</strong></div>
+                  <div class="os-cell"><span>ADMIN</span><strong>관리자 데이터와 권한</strong></div>
+                </div>
+              </div>
+              <figcaption class="figure-caption">상단 카운터가 예외 1·정상 2를 먼저 보여주고, 분당 캠퍼스만 노란 줄로 분리됩니다. 실제 지표 구성과 표시 항목은 학원 운영 기준에 맞춰 상담에서 정의합니다.</figcaption>
+            </figure>
+          </div>
+
+          <div class="split-ba reveal">
+            <div class="ba-side is-before">
+              <h4>지금 — 흩어짐</h4>
+              <ul>
+                <li>본사 기준은 있지만 실제 수업 자료는 지점·강사마다 흩어짐</li>
+                <li>강사 교체 때 수업 노하우와 판서 흐름이 사라짐</li>
+                <li>권한이 섞여 개인정보와 운영 책임이 흐릿해짐</li>
+                <li>지점 리스크를 주간 보고나 학부모 문의 뒤에 알게 됨</li>
+              </ul>
+            </div>
+            <div class="ba-arrow" aria-hidden="true">
+              <svg viewBox="0 0 24 24" fill="none" xmlns="http://www.w3.org/2000/svg"><path d="M4 12h16M14 6l6 6-6 6" stroke="currentColor" stroke-width="2" stroke-linecap="round" stroke-linejoin="round"></path></svg>
+            </div>
+            <div class="ba-side is-after">
+              <h4>ClassIn — 한 화면</h4>
+              <ul>
+                <li>EDB 교안과 수업 후 복습 흐름이 본사 기준으로 연결됨</li>
+                <li>대표 수업 기록과 교안 흐름을 신규 강사가 이어받음</li>
+                <li>역할별 접근 범위와 확인 책임을 나눠 설계함</li>
+                <li>녹화·복습·예외 상태를 더 빠르게 확인하는 기준을 둠</li>
+              </ul>
+            </div>
+          </div>
+
+          <div class="evidence-stack reveal-stagger">
+
         <article class="evidence-row">
           <span>운영 증거</span>
           <div>
@@ -3368,13 +3749,6 @@
           </div>
         </article>
         <article class="evidence-row">
-          <span>권한 증거</span>
-          <div>
-            <h3>역할별로 보는 범위를 다르게 설계합니다</h3>
-            <p>대표, 교육운영팀, 지점장, 강사, 보조가 필요한 정보만 보도록 권한과 책임을 분리합니다.</p>
-          </div>
-        </article>
-        <article class="evidence-row">
           <span>확장 증거</span>
           <div>
             <h3>새 지점도 같은 출발선에서 시작합니다</h3>
@@ -3385,256 +3759,90 @@
         </div>
       </section>
 
-      <section class="section alt">
-        <div class="section-inner">
-          <div class="section-head">
-            <p class="section-kicker">운영 장면</p>
-            <h2>교안 배포부터 지점 리포트까지 본사 기준이 이어지는 방식</h2>
-            <p>다지점 운영자가 매주 확인해야 하는 장면을 기준으로, 지점 수업 품질과 예외 상황을 어떻게 빠르게 파악하는지 설명합니다.</p>
-          </div>
-          <div class="deep-dive-grid">
-            
-        <article class="deep-dive-card">
-          <span>본사 교안 배포</span>
-          <h3>표준 교안을 실제 수업 시작점으로 고정합니다</h3>
-          <p>본사에서 만든 교안이 지점별로 다시 변형되지 않도록 수업 전 준비, 판서, 녹화, 복습 안내까지 연결합니다.</p>
-        </article>
-        <article class="deep-dive-card">
-          <span>관리자 가시성</span>
-          <h3>보고서가 오기 전에 운영 상태를 확인합니다</h3>
-          <p>수업 진행, 녹화 제공, 복습 안내, 예외 상황을 지점·반·강사 단위로 나눠 보며 늦은 대응을 줄입니다.</p>
-        </article>
-        <article class="deep-dive-card">
-          <span>권한 매트릭스</span>
-          <h3>본사·지점장·강사의 책임 범위를 분리합니다</h3>
-          <p>같은 시스템을 쓰더라도 보는 정보와 실행 권한을 다르게 설계해 개인정보와 운영 리스크를 줄입니다.</p>
-        </article>
-        <article class="deep-dive-card">
-          <span>브랜드 자산화</span>
-          <h3>우수 강사의 판서와 설명이 다음 지점으로 이동합니다</h3>
-          <p>좋은 수업의 핵심 장면을 개인 역량에만 남기지 않고 신규 강사와 신규 지점의 출발 자료로 만듭니다.</p>
-        </article>
-        <article class="deep-dive-card">
-          <span>확장 리허설</span>
-          <h3>대표 지점에서 검증한 뒤 전 지점으로 넓힙니다</h3>
-          <p>90일 파일럿 동안 교안, 권한, 복습, 관리자 확인 기준을 먼저 검증해 전면 도입 리스크를 낮춥니다.</p>
-        </article>
-          </div>
-        </div>
+      <section class="breath-strip reveal">
+        <p>본사가 <span class="em-key">예외</span>를 먼저 보면,<br>지점은 <span class="em-key">기준</span> 안에서 움직입니다.</p>
       </section>
 
-      <section class="section">
+      <section class="section" id="audience">
         <div class="section-inner">
-          <div class="section-head">
-            <p class="section-kicker">Before / After</p>
-            <h2>같은 본사 기준도 지점에서 실행되는 방식은 달라집니다</h2>
-            <p>본사가 만든 자료와 기준이 지점 운영으로 남는지, 아니면 파일과 공지로만 끝나는지 같은 장면에서 비교합니다.</p>
+          <div class="section-head reveal">
+            <p class="section-kicker">각자의 관점</p>
+            <h2>본사·운영팀·지점장·강사, 각자 다른 화면을 봅니다.</h2>
+            <p>같은 시스템이어도 본사는 기준과 데이터를, 운영팀은 예외를, 지점장은 실행 부담 완화를, 강사는 재사용 가능한 수업 흐름을 봅니다.</p>
           </div>
-          <div class="comparison-stack">
-            
-        <article class="comparison-row">
-          <div>
-            <span>Before</span>
-            <p>본사 기준은 있지만 실제 수업 자료는 지점과 강사마다 흩어짐</p>
-          </div>
-          <div>
-            <span>After</span>
-            <p>EDB 교안과 수업 후 복습 흐름이 본사 기준으로 연결됨</p>
-          </div>
-        </article>
-        <article class="comparison-row">
-          <div>
-            <span>Before</span>
-            <p>강사 교체 때 수업 노하우와 판서 흐름이 사라짐</p>
-          </div>
-          <div>
-            <span>After</span>
-            <p>대표 수업 기록과 교안 흐름을 신규 강사가 이어받음</p>
-          </div>
-        </article>
-        <article class="comparison-row">
-          <div>
-            <span>Before</span>
-            <p>권한이 섞여 개인정보와 운영 책임이 흐릿해짐</p>
-          </div>
-          <div>
-            <span>After</span>
-            <p>역할별 접근 범위와 확인 책임을 나눠 설계함</p>
-          </div>
-        </article>
-        <article class="comparison-row">
-          <div>
-            <span>Before</span>
-            <p>지점 리스크를 주간 보고나 학부모 문의 뒤에 알게 됨</p>
-          </div>
-          <div>
-            <span>After</span>
-            <p>녹화·복습·예외 상태를 더 빠르게 확인하는 기준을 둠</p>
-          </div>
-        </article>
-          </div>
-        </div>
-      </section>
+          <div class="audience-roles reveal-stagger">
 
-      
-
-      <section class="section green" id="flow">
-        <div class="section-inner">
-          <div class="section-head">
-            <p class="section-kicker">ClassIn OS</p>
-            <h2>본사 기준이 지점 수업으로 내려가는 운영 흐름</h2>
-            <p>ClassIn은 기능을 따로 붙이는 방식이 아니라, 본사가 정한 수업 기준이 지점의 실제 수업과 복습 데이터로 이어지게 설계합니다.</p>
-          </div>
-          <ol class="flow-list">
-            
-        <li class="flow-step">
-          <span>01</span>
-          <h3>수업 전 준비</h3>
-          <p>교안, 자료, 반 구성, 권한을 수업 전에 정리합니다.</p>
-        </li>
-        <li class="flow-step">
-          <span>02</span>
-          <h3>EDB·판서 수업</h3>
-          <p>판서와 이미지, 문제 풀이 흐름을 재사용 가능한 칠판 파일로 남깁니다.</p>
-        </li>
-        <li class="flow-step">
-          <span>03</span>
-          <h3>녹화·다시보기</h3>
-          <p>결석 보강과 복습 안내가 수업 직후의 운영 흐름으로 이어집니다.</p>
-        </li>
-        <li class="flow-step">
-          <span>04</span>
-          <h3>LMS·과제·시험</h3>
-          <p>과제 확인, 시험, 피드백을 수업 밖 학습 관리와 연결합니다.</p>
-        </li>
-        <li class="flow-step">
-          <span>05</span>
-          <h3>관리자 데이터</h3>
-          <p>권한 있는 관리자가 수업 진행, 복습 제공, 특이사항을 기준으로 확인합니다.</p>
-        </li>
-          </ol>
-        </div>
-      </section>
-
-      <section class="section dark">
-        <div class="section-inner">
-          <div class="section-head">
-            <p class="section-kicker">핵심 약속</p>
-            <h2>성과를 과장하지 않고, 본사 운영 기준을 약속합니다</h2>
-            <p>전 지점 성과를 단정하지 않습니다. 대신 기준 배포, 권한 분리, 운영 확인, 단계 전환 범위를 분명하게 나눕니다.</p>
-          </div>
-          <div class="card-grid">
-            
-        <article class="segment-card">
-          <h3>본사 EDB 교안 자산화</h3>
-          <p>우수 강사의 판서, 이미지 배치, 문제 풀이 흐름을 기관 자산으로 남겨 신규 강사와 지점에 재사용합니다.</p>
-        </article>
-        <article class="segment-card">
-          <h3>지점 운영 가시성</h3>
-          <p>수업 진행 상태, 녹화·복습 제공, 특이사항을 권한 있는 관리자가 같은 기준으로 확인합니다.</p>
-        </article>
-        <article class="segment-card">
-          <h3>권한 기반 운영</h3>
-          <p>본사, 지점장, 강사, 보조가 같은 데이터를 보더라도 역할별 접근 범위는 다르게 설계합니다.</p>
-        </article>
-          </div>
-        </div>
-      </section>
-
-      <section class="section alt">
-        <div class="section-inner">
-          <div class="section-head">
-            <p class="section-kicker">대상별 메시지</p>
-            <h2>본사·지점장·강사가 각자 확인하는 가치</h2>
-            <p>본사에는 기준과 데이터, 지점장에게는 실행 부담 완화, 강사에게는 재사용 가능한 수업 흐름이 핵심입니다.</p>
-          </div>
-          <div class="target-copy-grid">
-            
         <article class="target-card">
           <span>본사 대표·임원</span>
-          <h3>지점이 늘어도 브랜드 수업 품질은 본사 기준으로 남아야 합니다.</h3>
-          <p>확장 속도보다 중요한 것은 편차를 줄이는 구조입니다. ClassIn은 지점 수업을 본사의 운영 기준 안으로 다시 모읍니다.</p>
+          <h3>확장 속도보다 브랜드 편차를 줄이는 구조</h3>
+          <p>지점이 늘어도 수업 기준과 학부모 경험이 본사 언어로 남도록, 지점 수업을 본사 운영 기준 안으로 다시 모읍니다.</p>
         </article>
         <article class="target-card">
           <span>교육운영팀</span>
-          <h3>보고서를 기다리지 말고, 수업 흐름 자체를 기준화하세요.</h3>
-          <p>녹화 제공, EDB 배포, 복습 상태, 예외 상황을 주간 보고 이전에 확인할 수 있는 운영 언어로 정리합니다.</p>
+          <h3>보고 전에 예외를 찾는 운영 가시성</h3>
+          <p>녹화 제공, EDB 배포, 복습 상태, 권한 이슈를 늦은 보고서가 아니라 수업 흐름에서 확인합니다.</p>
         </article>
         <article class="target-card">
           <span>지점장</span>
-          <h3>본사 기준은 유지하면서 지점 운영 부담은 줄입니다.</h3>
+          <h3>본사 기준은 유지하면서 지점 운영 부담은 줄입니다</h3>
           <p>강사 온보딩, 자료 전달, 보강 안내가 지점장의 기억과 메신저에만 남지 않도록 흐름을 시스템화합니다.</p>
         </article>
         <article class="target-card">
           <span>강사</span>
-          <h3>수업 준비가 개인 파일 정리가 아니라 재사용 가능한 교안 흐름이 됩니다.</h3>
+          <h3>개인 파일 정리가 아니라 재사용 가능한 수업 준비</h3>
           <p>좋은 판서와 활동 순서가 다음 반, 다음 강사, 다음 지점으로 이어지는 수업 자산이 됩니다.</p>
         </article>
           </div>
-        </div>
-      </section>
 
-      <section class="section">
-        <div class="section-inner">
-          <div class="section-head">
-            <p class="section-kicker">이해관계자 설득</p>
-            <h2>본사 도입 회의에서 막히는 질문에 답합니다</h2>
-            <p>임원, 교육운영팀, 지점장, 강사, IT 담당자가 보는 기준이 다르기 때문에 리스크와 실행 포인트를 따로 설득합니다.</p>
-          </div>
-          <div class="stakeholder-grid">
-            
-        <article class="stakeholder-note">
-          <span>대표·임원</span>
-          <h3>확장 속도보다 브랜드 편차를 줄이는 구조</h3>
-          <p>지점이 늘어도 수업 기준과 학부모 경험이 본사 언어로 남아야 합니다.</p>
-        </article>
-        <article class="stakeholder-note">
-          <span>교육운영팀</span>
-          <h3>보고 전에 예외를 찾는 운영 가시성</h3>
-          <p>진도, 녹화, 복습, 권한 이슈를 늦은 보고서가 아니라 수업 흐름에서 확인합니다.</p>
-        </article>
-        <article class="stakeholder-note">
-          <span>지점장</span>
-          <h3>본사 기준을 지점 업무로 옮기는 부담 완화</h3>
-          <p>자료 전달과 신규 강사 적응을 지점장의 기억에만 맡기지 않습니다.</p>
-        </article>
-        <article class="stakeholder-note">
-          <span>강사</span>
-          <h3>개인 파일 정리가 아닌 재사용 가능한 수업 준비</h3>
-          <p>좋은 판서와 활동 순서를 다음 반에서도 바로 이어 쓸 수 있게 만듭니다.</p>
-        </article>
-        <article class="stakeholder-note">
-          <span>학부모</span>
-          <h3>지점이 달라도 같은 브랜드 수업이라는 신뢰</h3>
-          <p>아이의 수업 흐름과 복습 안내가 지점별 편차 없이 설명됩니다.</p>
-        </article>
+          <div class="audience-beforeafter reveal">
+            <p class="section-kicker">같은 월요일, 도입 전과 후</p>
+            <div class="audience-ba-grid">
+              <div class="audience-ba-col is-before">
+                <h4>도입 전</h4>
+                <ul>
+                  <li><strong>본사 운영팀</strong> — 5개 지점에 “지난주 복습 다 나갔나요” 메신저를 돌리고, 오후까지 답을 모읍니다.</li>
+                  <li><strong>지점장</strong> — 신규 강사에게 교안 위치와 녹화 방법을 구두로 다시 설명합니다.</li>
+                  <li><strong>강사</strong> — 결석 학생용 보강 영상을 직접 잘라 카톡으로 보냅니다.</li>
+                  <li><strong>대표</strong> — 지점 간 편차를 학부모 항의가 올라온 뒤 보고서로 받습니다.</li>
+                </ul>
+              </div>
+              <div class="audience-ba-col is-after">
+                <h4>도입 후</h4>
+                <ul>
+                  <li><strong>본사 운영팀</strong> — 대시보드에서 예외 1·정상 4를 보고, 분당 한 곳만 확인합니다.</li>
+                  <li><strong>지점장</strong> — 신규 강사가 배포된 EDB 교안으로 첫날부터 같은 수업을 엽니다.</li>
+                  <li><strong>강사</strong> — 수업 녹화가 복습 링크로 자동 연결돼 따로 편집하지 않습니다.</li>
+                  <li><strong>대표</strong> — 편차가 항의가 되기 전에, 운영 화면에서 빈 칸으로 먼저 보입니다.</li>
+                </ul>
+              </div>
+            </div>
           </div>
         </div>
       </section>
 
-      <section class="section dark">
+      <section class="section alt">
         <div class="section-inner">
-          <div class="section-head">
-            <p class="section-kicker">캠페인 문구</p>
+          <div class="section-head reveal">
+            <p class="section-kicker">상담·제안 문장</p>
             <h2>본사 제안서와 상담에 바로 들어가는 문장</h2>
             <p>다지점 운영의 복잡함을 기능 나열이 아니라 본사 기준, 지점 실행, 운영 리스크 언어로 바꿉니다.</p>
           </div>
-          <div class="campaign-line-grid">
-            
+          <div class="campaign-line-grid reveal-stagger">
+
         <article class="campaign-line">
           <h3>지점이 늘어도 수업 기준은 흔들리지 않게.</h3>
           <p>본사 교안, 권한, 녹화·복습, 관리자 확인을 하나의 운영 흐름으로 묶습니다.</p>
-          <a class="campaign-cta" href="#segment-lead-form">다지점 운영 진단 신청</a>
+          <a class="campaign-cta" href="#segment-lead-form">다지점 운영 진단 신청 →</a>
         </article>
         <article class="campaign-line">
           <h3>강사의 노하우를 개인 파일이 아니라 브랜드 자산으로.</h3>
           <p>대표 강사의 판서와 질문 흐름을 신규 지점과 신규 강사가 이어받게 만듭니다.</p>
-          <a class="campaign-cta" href="/resources/teacher-edb-onboarding-sop-kit">EDB 자산화 상담</a>
+          <a class="campaign-cta" href="#segment-lead-form">EDB 자산화 상담 →</a>
         </article>
         <article class="campaign-line">
           <h3>본사가 늦게 아는 문제를 줄이세요.</h3>
           <p>지점별 예외와 복습 제공 상태를 더 빠르게 확인하는 운영 기준을 설계합니다.</p>
-          <a class="campaign-cta" href="/resources/academy-admin-dashboard-template">관리자 데이터 점검</a>
+          <a class="campaign-cta" href="#segment-lead-form">관리자 데이터 점검 →</a>
         </article>
           </div>
         </div>
@@ -3642,13 +3850,13 @@
 
       <section class="section" id="resources">
         <div class="section-inner">
-          <div class="section-head">
+          <div class="section-head reveal">
             <p class="section-kicker">다음 판단 자료</p>
             <h2>상담 전, 본사 내부에서 먼저 확인할 자료</h2>
             <p>구매를 서두르기 전에 지점별 교안 배포, 수업 기록, 권한 구조, 신규 지점 온보딩 기준을 먼저 점검합니다.</p>
           </div>
-          <div class="resource-grid">
-            
+          <div class="resource-grid reveal-stagger">
+
         <a class="resource-card" href="/resources/academy-admin-dashboard-template">
           <strong>관리자 데이터·권한 운영 점검표</strong>
           <span>본사가 주간으로 봐야 할 수업 운영 지표와 권한 기준을 정리합니다.</span>
@@ -3672,58 +3880,82 @@
             <h2>다지점 도입 전에 가장 많이 걸리는 질문</h2>
             <p>기존 자료 전환, 권한 설계, 지점별 단계 도입, 데이터 확인 범위처럼 본사 회의에서 막히는 질문을 먼저 답합니다.</p>
           </div>
-          <div class="faq-grid">
-            
-        <article class="faq-card">
-          <h3>본사는 지점별 수업을 어디까지 확인할 수 있나요?</h3>
+          <div class="faq-accordion reveal">
+
+        <details class="faq-item">
+          <summary>본사는 지점별 수업을 어디까지 확인할 수 있나요?</summary>
           <p>관리자 콘솔과 권한 기준 안에서 수업 진행, 녹화·복습 제공, 과제·시험 흐름, 특이사항을 확인하는 방향으로 설계합니다. 실제 권한 범위는 계정과 계약 조건을 기준으로 상담에서 확인합니다.</p>
-        </article>
-        <article class="faq-card">
-          <h3>기존 CRM, 결제, 출입 출석 시스템도 모두 대체하나요?</h3>
+        </details>
+        <details class="faq-item">
+          <summary>기존 CRM, 결제, 출입 출석 시스템도 모두 대체하나요?</summary>
           <p>대체한다고 말하지 않습니다. ClassIn은 수업 운영 데이터와 학습 흐름을 중심으로 보고, 결제·정산·오프라인 출입 출석은 외부 시스템 또는 연동 검토 범위로 분리합니다.</p>
-        </article>
-        <article class="faq-card">
-          <h3>다지점 전체 도입은 얼마나 걸리나요?</h3>
+        </details>
+        <details class="faq-item">
+          <summary>다지점 전체 도입은 얼마나 걸리나요?</summary>
           <p>기본 수업은 빠르게 시작할 수 있지만, 대형 조직은 대표 지점 파일럿, 권한 설계, 강사 온보딩을 거쳐 30/60/90일 기준으로 확장 판단을 권장합니다.</p>
-        </article>
-        <article class="faq-card">
-          <h3>강사 교체가 잦은 지점에도 도움이 되나요?</h3>
-          <p>도움이 되는 핵심은 우수 강사의 판서와 설명 흐름을 EDB와 수업 기록으로 남기는 것입니다. 신규 강사는 개인 파일을 다시 만드는 대신 본사 기준 수업 흐름을 이어받을 수 있습니다.</p>
-        </article>
-        <article class="faq-card">
-          <h3>본사와 지점장의 권한을 다르게 나눌 수 있나요?</h3>
+        </details>
+        <details class="faq-item">
+          <summary>본사와 지점장의 권한을 다르게 나눌 수 있나요?</summary>
           <p>도입 상담에서는 본사, 지역 관리자, 지점장, 강사, 보조가 어떤 정보를 봐야 하는지 역할별로 분리합니다. 실제 범위는 계정 구조와 계약 조건에 맞춰 확인합니다.</p>
-        </article>
-        <article class="faq-card">
-          <h3>지점별 운영 편차를 어떻게 발견하나요?</h3>
+        </details>
+        <details class="faq-item">
+          <summary>지점별 운영 편차를 어떻게 발견하나요?</summary>
           <p>녹화 제공, 복습 안내, 과제·시험 흐름, 수업 특이사항처럼 반복적으로 확인할 항목을 먼저 정합니다. 이후 대표 지점 파일럿에서 어떤 예외를 볼지 기준을 잡습니다.</p>
-        </article>
-        <article class="faq-card">
-          <h3>기존 본사 교안과 자료를 그대로 활용할 수 있나요?</h3>
-          <p>기존 자료를 모두 버리는 방식이 아니라, 실제 수업에서 재사용할 교안·이미지·판서 흐름을 우선 정리합니다. 자료 형태와 수업 방식에 따라 전환 범위를 상담에서 나눕니다.</p>
-        </article>
-        <article class="faq-card">
-          <h3>보안과 개인정보는 어떻게 다루나요?</h3>
+        </details>
+        <details class="faq-item">
+          <summary>보안과 개인정보는 어떻게 다루나요?</summary>
           <p>수업 기록, 녹화, 계정 권한, 관리자 접근 범위를 먼저 확인합니다. 서버·스토리지·개인정보 처리 세부는 공개 페이지에서 단정하지 않고 계약과 운영 조건에 맞춰 검토합니다.</p>
-        </article>
-        <article class="faq-card">
-          <h3>전 지점에 한 번에 적용해야 하나요?</h3>
-          <p>권장하지 않습니다. 대표 지점과 대표 과목을 골라 수업 흐름, 권한, 강사 온보딩, 학부모 안내를 먼저 검증한 뒤 확장하는 편이 안전합니다.</p>
-        </article>
+        </details>
           </div>
         </div>
       </section>
 
       <section class="section alt" id="roadmap">
         <div class="section-inner">
-          <div class="section-head">
-            <p class="section-kicker">도입 순서</p>
+          <div class="section-head reveal">
+            <p class="section-kicker">90일 도입</p>
             <h2>대표 지점에서 검증하고 90일 안에 본사 기준으로 확장합니다</h2>
             <p>한 번에 전 지점을 바꾸기보다 대표 지점에서 흐름을 확인하고, 60일에는 권한·리포트, 90일에는 확장 기준을 세웁니다.</p>
           </div>
-          
-          <div class="roadmap-grid">
-            
+
+          <figure class="figure-frame reveal" aria-label="90일 파일럿 타임라인">
+            <svg viewBox="0 0 760 210" role="img" xmlns="http://www.w3.org/2000/svg" aria-labelledby="tlTitle tlDesc">
+              <title id="tlTitle">90일 파일럿 타임라인</title>
+              <desc id="tlDesc">0일부터 90일까지 세 구간으로 나뉩니다. 0–30일 진단·범위 설계, 30–60일 대표 반 적용, 60–90일 운영 검증·확장 판단입니다.</desc>
+              <g font-family="Inter, sans-serif">
+                <!-- phase bands -->
+                <rect x="40" y="60" width="216" height="40" rx="20" fill="#ECFDF5"></rect>
+                <rect x="272" y="60" width="216" height="40" rx="20" fill="#6EE7B7"></rect>
+                <rect x="504" y="60" width="216" height="40" rx="20" fill="#084734"></rect>
+                <text x="148" y="85" text-anchor="middle" fill="#084734" font-size="13" font-weight="700">진단·범위 설계</text>
+                <text x="380" y="85" text-anchor="middle" fill="#084734" font-size="13" font-weight="700">대표 반 적용</text>
+                <text x="612" y="85" text-anchor="middle" fill="#ffffff" font-size="13" font-weight="700">운영 검증·확장 판단</text>
+
+                <!-- axis -->
+                <line x1="40" y1="130" x2="720" y2="130" stroke="rgba(0,0,0,0.12)" stroke-width="2"></line>
+                <!-- milestone nodes -->
+                <circle cx="40" cy="130" r="8" fill="#084734"></circle>
+                <circle cx="40" cy="130" r="13" fill="none" stroke="#ECFDF5" stroke-width="4"></circle>
+                <circle cx="272" cy="130" r="8" fill="#084734"></circle>
+                <circle cx="272" cy="130" r="13" fill="none" stroke="#ECFDF5" stroke-width="4"></circle>
+                <circle cx="504" cy="130" r="8" fill="#084734"></circle>
+                <circle cx="504" cy="130" r="13" fill="none" stroke="#ECFDF5" stroke-width="4"></circle>
+                <circle cx="720" cy="130" r="8" fill="#084734"></circle>
+                <circle cx="720" cy="130" r="13" fill="none" stroke="#ECFDF5" stroke-width="4"></circle>
+                <!-- day labels -->
+                <g font-size="13" font-weight="800" fill="#111110">
+                  <text x="40" y="166" text-anchor="middle">0</text>
+                  <text x="272" y="166" text-anchor="middle">30</text>
+                  <text x="504" y="166" text-anchor="middle">60</text>
+                  <text x="720" y="166" text-anchor="middle">90</text>
+                </g>
+                <text x="380" y="192" text-anchor="middle" fill="#615D59" font-size="12">대표 지점 → 본사 기준 확장까지 90일</text>
+              </g>
+            </svg>
+          </figure>
+
+          <div class="roadmap-grid reveal-stagger">
+
         <article class="roadmap-card">
           <span>30일</span>
           <h3>대표 지점 파일럿</h3>
@@ -3745,10 +3977,10 @@
 
       <section class="section">
         <div class="section-inner">
-          <div class="limits-box">
+          <div class="limits-box reveal">
             <h2>정직하게 나눠 볼 범위</h2>
             <ul>
-              <li>결제·정산과 오프라인 출입 출석은 별도 시스템 또는 연동 범위로 확인합니다.</li><li>고급 경영 리포트와 CRM 자동화는 API, 외부 시스템, 커스텀 리포트 범위로 분리합니다.</li><li>모델별 가격, 재고, 설치 가능 여부는 상담에서 현재 조건을 확인합니다.</li>
+              <li>결제·정산과 오프라인 출입 출석은 별도 시스템 또는 연동 범위로 확인합니다.</li><li>고급 경영 리포트와 CRM 자동화는 API, 외부 시스템, 커스텀 리포트 범위로 분리합니다.</li><li>모델별 가격, 재고, 설치 가능 여부는 상담에서 현재 조건을 확인합니다.</li><li>전 지점 성과를 단정하지 않습니다. 대신 기준 배포, 권한 분리, 운영 확인, 단계 전환 범위를 분명하게 나눕니다.</li>
             </ul>
           </div>
         </div>
@@ -3757,7 +3989,7 @@
 
     <section class="final-section" id="segment-lead-form">
       <div class="final-grid">
-        <div class="final-copy">
+        <div class="final-copy reveal">
           <p class="section-kicker">상담 신청</p>
           <h2>다지점 운영 진단을 신청하세요</h2>
           <p>지점 수, 과목, 현재 쓰는 도구를 알려주시면 본사 기준으로 어디부터 묶을지 정리해 드립니다.</p>
@@ -3766,7 +3998,7 @@
             <a class="btn secondary" href="/resources">자료실 둘러보기</a>
           </div>
         </div>
-        <form class="contact-form" data-lead-form novalidate>
+        <form class="contact-form reveal" data-lead-form novalidate>
           <div class="form-grid">
             <div class="field">
               <label for="org">학원명</label>
@@ -3831,7 +4063,7 @@
 
     <footer class="footer">
       <div class="footer-inner">
-        <span>ClassIn Korea · landing_bigs segment landing</span>
+        <span>ClassIn Korea · 다지점 학원 본사 운영</span>
         <span>전자칠판, EDB, 녹화, LMS, 관리자 데이터를 잇는 학원 시스템 OS</span>
       </div>
     </footer>
@@ -3840,72 +4072,6 @@
     const form = document.querySelector('[data-lead-form]');
     const statusEl = document.querySelector('[data-form-status]');
     const submitButton = form?.querySelector('button[type="submit"]');
-    const siteNav = document.querySelector('.site-nav');
-    const kidsTopbar = document.querySelector('.kids-topbar');
-
-    function syncLandingBars() {
-      const isPastTop = window.scrollY > 60;
-      if (siteNav) {
-        siteNav.classList.toggle('is-hidden', isPastTop);
-      }
-      if (kidsTopbar) {
-        kidsTopbar.classList.toggle('is-scrolled', isPastTop);
-        kidsTopbar.classList.toggle('is-hidden', isPastTop);
-      }
-    }
-
-    syncLandingBars();
-    window.addEventListener('scroll', syncLandingBars, { passive: true });
-
-    const managedStepButtons = Array.from(document.querySelectorAll('[data-managed-step]'));
-    const managedPanels = Array.from(document.querySelectorAll('[data-managed-panel]'));
-
-    function setManagedStep(index) {
-      managedStepButtons.forEach((button, buttonIndex) => {
-        const active = buttonIndex === index;
-        button.classList.toggle('is-active', active);
-        button.setAttribute('aria-selected', active ? 'true' : 'false');
-      });
-      managedPanels.forEach((panel, panelIndex) => {
-        panel.classList.toggle('is-active', panelIndex === index);
-      });
-    }
-
-    managedStepButtons.forEach((button) => {
-      button.addEventListener('click', () => {
-        setManagedStep(Number(button.dataset.managedStep || 0));
-      });
-    });
-
-    const managedChapterLinks = Array.from(document.querySelectorAll('[data-managed-chapter]'));
-    const managedProgress = document.querySelector('[data-managed-progress]');
-    const managedProgressText = document.querySelector('[data-managed-progress-text]');
-
-    function syncManagedJourney() {
-      if (!managedChapterLinks.length) return;
-
-      const totalHeight = Math.max(1, document.documentElement.scrollHeight - window.innerHeight);
-      const progress = Math.min(100, Math.max(0, (window.scrollY / totalHeight) * 100));
-
-      if (managedProgress) managedProgress.style.height = progress + '%';
-      if (managedProgressText) managedProgressText.textContent = Math.round(progress) + '%';
-
-      let activeId = managedChapterLinks[0]?.dataset.managedChapter;
-      managedChapterLinks.forEach((link) => {
-        const id = link.dataset.managedChapter;
-        const section = id ? document.getElementById(id) : null;
-        if (section && section.getBoundingClientRect().top <= 160) {
-          activeId = id;
-        }
-      });
-
-      managedChapterLinks.forEach((link) => {
-        link.classList.toggle('is-active', link.dataset.managedChapter === activeId);
-      });
-    }
-
-    syncManagedJourney();
-    window.addEventListener('scroll', syncManagedJourney, { passive: true });
 
     function setStatus(message, type) {
       if (!statusEl) return;
@@ -4009,6 +4175,24 @@
         }
       }
     });
+
+    // ---- Scroll reveal (omo1 signature) ----
+    (function () {
+      var revealEls = document.querySelectorAll('.reveal, .reveal-stagger');
+      if (!revealEls.length) return;
+      var prefersReduced = window.matchMedia &&
+        window.matchMedia('(prefers-reduced-motion: reduce)').matches;
+      if (prefersReduced || !('IntersectionObserver' in window)) {
+        revealEls.forEach(function (el) { el.classList.add('in'); });
+        return;
+      }
+      var io = new IntersectionObserver(function (entries) {
+        entries.forEach(function (e) {
+          if (e.isIntersecting) { e.target.classList.add('in'); io.unobserve(e.target); }
+        });
+      }, { threshold: 0.12, rootMargin: '0px 0px -40px 0px' });
+      revealEls.forEach(function (el) { io.observe(el); });
+    })();
   </script>
 </body>
 </html>
