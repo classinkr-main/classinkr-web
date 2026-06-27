@@ -5,12 +5,13 @@ import { useCallback, useEffect, useMemo, useState } from "react"
 import { createSupabaseBrowserClient } from "@/lib/supabase/browser"
 import type { ProviderAvailability } from "@/lib/auth/providers"
 
-export type PublicLoginProvider = "google" | "naver" | "kakao"
+export type PublicLoginProvider = "google" | "naver" | "kakao" | "apple"
 
 const DEFAULT_AVAILABILITY: ProviderAvailability = {
   google: true,
   naver: false,
   kakao: false,
+  apple: false,
 }
 
 function getCurrentPath() {
@@ -59,6 +60,7 @@ export function usePublicLogin(nextPath?: string, active = true) {
           google: true,
           naver: Boolean(data.naver),
           kakao: Boolean(data.kakao),
+          apple: Boolean(data.apple),
         })
       })
       .catch(() => {
@@ -70,26 +72,33 @@ export function usePublicLogin(nextPath?: string, active = true) {
     }
   }, [active])
 
-  const startGoogle = useCallback(async () => {
-    setError("")
-    setLoadingProvider("google")
-    try {
-      const origin = window.location.origin
-      const redirectTo = `${origin}/auth/callback?next=${encodeURIComponent(resolvedNextPath)}`
-      const supabase = createSupabaseBrowserClient()
-      const { error: signInError } = await supabase.auth.signInWithOAuth({
-        provider: "google",
-        options: { redirectTo },
-      })
-      if (signInError) {
-        setError("Google 로그인을 시작하지 못했습니다. 잠시 후 다시 시도해 주세요.")
+  // Supabase 네이티브 OAuth(Google·Apple) 공통 시작 로직.
+  const startSupabaseOAuth = useCallback(
+    async (provider: "google" | "apple", label: string) => {
+      setError("")
+      setLoadingProvider(provider)
+      try {
+        const origin = window.location.origin
+        const redirectTo = `${origin}/auth/callback?next=${encodeURIComponent(resolvedNextPath)}`
+        const supabase = createSupabaseBrowserClient()
+        const { error: signInError } = await supabase.auth.signInWithOAuth({
+          provider,
+          options: { redirectTo },
+        })
+        if (signInError) {
+          setError(`${label} 로그인을 시작하지 못했습니다. 잠시 후 다시 시도해 주세요.`)
+          setLoadingProvider(null)
+        }
+      } catch {
+        setError("로그인 설정을 확인하지 못했습니다.")
         setLoadingProvider(null)
       }
-    } catch {
-      setError("로그인 설정을 확인하지 못했습니다.")
-      setLoadingProvider(null)
-    }
-  }, [resolvedNextPath])
+    },
+    [resolvedNextPath]
+  )
+
+  const startGoogle = useCallback(() => startSupabaseOAuth("google", "Google"), [startSupabaseOAuth])
+  const startApple = useCallback(() => startSupabaseOAuth("apple", "Apple"), [startSupabaseOAuth])
 
   const startNaver = useCallback(() => {
     setError("")
@@ -112,5 +121,6 @@ export function usePublicLogin(nextPath?: string, active = true) {
     startGoogle,
     startNaver,
     startKakao,
+    startApple,
   }
 }

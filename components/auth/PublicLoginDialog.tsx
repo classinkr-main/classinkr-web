@@ -36,6 +36,7 @@ export function PublicLoginDialog({
     startGoogle,
     startNaver,
     startKakao,
+    startApple,
   } = usePublicLogin(nextPath, open)
 
   return (
@@ -85,6 +86,18 @@ export function PublicLoginDialog({
             >
               {loadingProvider === "kakao" ? <Loader2 className="h-4 w-4 animate-spin" /> : null}
               Kakao로 계속하기
+            </Button>
+          ) : null}
+          {availability.apple ? (
+            <Button
+              type="button"
+              variant="outline"
+              onClick={startApple}
+              disabled={loadingProvider !== null}
+              className="h-11 w-full"
+            >
+              {loadingProvider === "apple" ? <Loader2 className="h-4 w-4 animate-spin" /> : null}
+              Apple로 계속하기
             </Button>
           ) : null}
         </div>
