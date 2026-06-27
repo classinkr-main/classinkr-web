@@ -1,5 +1,7 @@
 # CRM Capture Layer Design
 
+> 정합화: 백엔드(파싱·매칭·적용)는 빌드 완료, 모달 UI는 미빌드(C1). 스키마는 빌드본이 캐논. 통합 캐논은 [CRM 통합 마스터 설계](docs/superpowers/specs/2026-06-27-crm-unified-master-design.md) §6 참조.
+
 기준 시점: 2026-06-27
 
 상태: 설계 승인 초안

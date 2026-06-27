@@ -1,5 +1,7 @@
 # CRM Next Action Culture Fit Design
 
+> 정합화: 이 문서의 원칙·화면 우선순위·Phase 번호는 [CRM 통합 마스터 설계](docs/superpowers/specs/2026-06-27-crm-unified-master-design.md)에 통합 반영됨(캐논 유지). 설계 충돌 시 마스터 설계의 결정이 우선한다.
+
 기준 시점: 2026-06-27
 
 상태: 설계 승인 초안
