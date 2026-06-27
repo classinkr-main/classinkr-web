@@ -17,6 +17,8 @@ export interface SeminarVideo {
   description: string
   /** YouTube 전체 URL 또는 영상 ID. 회원에게만 임베드된다. */
   youtube: string
+  /** (선택) 커스텀 포스터 이미지 URL — YouTube 썸네일이 아닌 직접 업로드 이미지. 없으면 브랜드 그라디언트 포스터 사용. */
+  posterUrl?: string
   /** 비회원에게도 보이는 핵심 포인트 (미리보기 가치) */
   highlights?: string[]
   /** 발표자/연사 (선택) */
@@ -42,6 +44,26 @@ export const SEMINARS: SeminarVideo[] = [
     isPublished: true,
   },
 ]
+
+/**
+ * 클라이언트(비회원 노출)로 넘겨도 안전한 공개 projection.
+ * `youtube`(영상 ID/URL)를 의도적으로 제외해 게이팅 누출을 막는다.
+ */
+export type PublicSeminarCard = Pick<
+  SeminarVideo,
+  "slug" | "title" | "description" | "presenter" | "durationLabel" | "posterUrl"
+>
+
+export function toPublicSeminarCard(seminar: SeminarVideo): PublicSeminarCard {
+  return {
+    slug: seminar.slug,
+    title: seminar.title,
+    description: seminar.description,
+    presenter: seminar.presenter,
+    durationLabel: seminar.durationLabel,
+    posterUrl: seminar.posterUrl,
+  }
+}
 
 /** "전체 URL 또는 ID" 입력에서 11자리 YouTube 영상 ID 를 추출한다. 추출 실패 시 입력값을 그대로 반환. */
 export function extractYoutubeId(input: string): string {

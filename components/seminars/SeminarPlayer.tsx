@@ -1,7 +1,7 @@
 "use client"
 
 import { useCallback, useState } from "react"
-import { PlayCircle } from "lucide-react"
+import { Play } from "lucide-react"
 
 import { trackEvent } from "@/lib/analytics"
 
@@ -28,7 +28,7 @@ export function SeminarPlayer({ slug, youtubeId, title, isPlaceholder }: Seminar
 
   if (isPlaceholder) {
     return (
-      <div className="flex aspect-video w-full items-center justify-center rounded-[12px] border border-black/[0.08] bg-[#F6F5F4] p-6 text-center">
+      <div className="flex aspect-video w-full items-center justify-center rounded-[16px] border border-black/[0.08] bg-[#F6F5F4] p-6 text-center">
         <p className="text-[14px] leading-6 text-[#615D59]">
           영상 링크가 아직 등록되지 않았습니다.
           <br />
@@ -43,25 +43,28 @@ export function SeminarPlayer({ slug, youtubeId, title, isPlaceholder }: Seminar
       <button
         type="button"
         onClick={handlePlay}
-        className="group relative flex aspect-video w-full items-center justify-center overflow-hidden rounded-[12px] border border-black/[0.08] bg-[#111110]"
+        className="group relative flex aspect-video w-full items-center justify-center overflow-hidden rounded-[16px] border border-black/[0.08] bg-[#111110] shadow-[rgba(0,0,0,0.06)_0px_6px_22px]"
         aria-label={`${title} 재생`}
       >
         <span
-          className="absolute inset-0 bg-cover bg-center opacity-60 transition-opacity group-hover:opacity-70"
+          className="absolute inset-0 bg-cover bg-center opacity-65 transition-all duration-500 group-hover:scale-105 group-hover:opacity-75"
           style={{
             backgroundImage: `url(https://i.ytimg.com/vi/${youtubeId}/maxresdefault.jpg)`,
           }}
         />
-        <span className="relative flex flex-col items-center gap-3 text-white">
-          <PlayCircle className="h-16 w-16 drop-shadow-lg transition-transform group-hover:scale-105" />
-          <span className="text-[14px] font-semibold">영상 재생</span>
+        <span className="absolute inset-0 bg-gradient-to-t from-black/60 via-black/10 to-transparent" />
+        <span className="relative flex h-[72px] w-[72px] items-center justify-center rounded-full bg-white/90 text-[#084734] shadow-[0_10px_30px_rgba(0,0,0,0.35)] backdrop-blur-sm transition-transform duration-300 group-hover:scale-110">
+          <Play className="h-7 w-7 translate-x-0.5 fill-current" />
+        </span>
+        <span className="absolute bottom-4 left-5 right-5 text-left text-[13px] font-semibold text-white/90">
+          클릭하여 영상 재생
         </span>
       </button>
     )
   }
 
   return (
-    <div className="aspect-video w-full overflow-hidden rounded-[12px] border border-black/[0.08] bg-black">
+    <div className="aspect-video w-full overflow-hidden rounded-[16px] border border-black/[0.08] bg-black shadow-[rgba(0,0,0,0.06)_0px_6px_22px]">
       <iframe
         src={`https://www.youtube-nocookie.com/embed/${youtubeId}?autoplay=1&rel=0&modestbranding=1`}
         title={title}

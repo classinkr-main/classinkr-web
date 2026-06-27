@@ -1,6 +1,6 @@
 import type { PublicEvent } from "@/lib/types/public-events"
 import { listCachedPublicEvents } from "@/lib/repositories/public-events"
-import { getPublishedSeminars } from "@/lib/seminars/catalog"
+import { getPublishedSeminars, toPublicSeminarCard } from "@/lib/seminars/catalog"
 import EventsClient from "./EventsClient"
 
 export const revalidate = 3600
@@ -12,6 +12,6 @@ export default async function EventsPage() {
   } catch {
     events = []
   }
-  const videos = getPublishedSeminars()
+  const videos = getPublishedSeminars().map(toPublicSeminarCard)
   return <EventsClient events={events} videos={videos} />
 }

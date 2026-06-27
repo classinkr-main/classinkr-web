@@ -6,7 +6,7 @@ import { Calendar, MapPin, Tag, ArrowRight, Search, X, LockKeyhole } from "lucid
 import Image from "next/image"
 import Link from "next/link"
 import type { PublicEvent, EventStatus } from "@/lib/types/public-events"
-import type { SeminarVideo } from "@/lib/seminars/catalog"
+import type { PublicSeminarCard } from "@/lib/seminars/catalog"
 import { SeminarCard } from "@/components/seminars/SeminarCard"
 import { formatPublicEventDate } from "@/lib/public-event-dates"
 
@@ -57,7 +57,7 @@ export default function EventsClient({
   videos = [],
 }: {
   events: PublicEvent[]
-  videos?: SeminarVideo[]
+  videos?: PublicSeminarCard[]
 }) {
   const [activeCategory, setActiveCategory] = useState("전체")
   const [searchQuery, setSearchQuery] = useState("")
@@ -417,21 +417,36 @@ export default function EventsClient({
 
       {/* 행사 영상 다시보기 (회원 전용) */}
       {videos.length > 0 && (
-        <section className="border-t border-[#e8e8e4] bg-[#F6F5F4]">
+        <section className="border-t border-[#e8e8e4] bg-gradient-to-b from-[#F6F5F4] to-[#FFFFFF]">
           <div className="mx-auto max-w-[1100px] px-4 py-16 sm:px-6 md:py-20">
-            <span className="inline-flex items-center gap-1.5 rounded-full bg-[#ECFDF5] px-3 py-1 text-[12px] font-semibold text-[#084734]">
-              <LockKeyhole className="h-3.5 w-3.5" />
-              회원 전용
-            </span>
-            <h2 className="mt-4 text-[1.6rem] font-bold tracking-[-0.03em] text-[#111110] md:text-[2rem]">
-              행사 영상 다시보기
-            </h2>
-            <p className="mt-3 max-w-2xl text-[14px] leading-7 text-[#615D59] md:text-[15px]">
-              지난 행사 영상을 구글 · 네이버 로그인 회원에게 다시보기로 제공합니다.
-            </p>
+            <div className="flex flex-col gap-4 sm:flex-row sm:items-end sm:justify-between">
+              <div>
+                <span className="inline-flex items-center gap-1.5 rounded-full bg-[#ECFDF5] px-3 py-1 text-[12px] font-semibold text-[#084734]">
+                  <LockKeyhole className="h-3.5 w-3.5" />
+                  회원 전용 · 다시보기
+                </span>
+                <h2 className="mt-4 text-[1.6rem] font-bold tracking-[-0.03em] text-[#111110] md:text-[2rem]">
+                  행사 영상 다시보기
+                </h2>
+                <p className="mt-3 max-w-2xl text-[14px] leading-7 text-[#615D59] md:text-[15px]">
+                  지난 행사 현장 영상을 구글 · 네이버 로그인 회원에게 다시보기로 제공합니다.
+                </p>
+              </div>
+              <span className="hidden shrink-0 text-[13px] font-semibold text-[#615D59] sm:block">
+                {videos.length}편
+              </span>
+            </div>
             <div className="mt-8 grid gap-5 sm:grid-cols-2 lg:grid-cols-3">
-              {videos.map((video) => (
-                <SeminarCard key={video.slug} seminar={video} />
+              {videos.map((video, index) => (
+                <motion.div
+                  key={video.slug}
+                  initial={{ opacity: 0, y: 14 }}
+                  whileInView={{ opacity: 1, y: 0 }}
+                  viewport={{ once: true, margin: "-60px" }}
+                  transition={{ duration: 0.4, delay: index * 0.06, ease: [0.25, 0.46, 0.45, 0.94] }}
+                >
+                  <SeminarCard seminar={video} />
+                </motion.div>
               ))}
             </div>
           </div>
