@@ -1,6 +1,7 @@
 "use client"
 
 import { useEffect, useMemo, useRef, useState, type ReactNode } from "react"
+import { createPortal } from "react-dom"
 import {
   AlertCircle,
   Check,
@@ -577,6 +578,7 @@ export default function QuickQuoteComposer({
 }: QuickQuoteComposerProps) {
   const today = getTodayDateValue()
   const isPortalApi = apiBase === "/api/portal"
+  const [portalMounted, setPortalMounted] = useState(false)
   const [customers, setCustomers] = useState<CustomerListItem[]>([])
   const [deals, setDeals] = useState<DealListItem[]>([])
   const [loadingOptions, setLoadingOptions] = useState(false)
@@ -612,6 +614,25 @@ export default function QuickQuoteComposer({
   const [errorToast, setErrorToast] = useState<ErrorToastState | null>(null)
   const [mobilePreviewOpen, setMobilePreviewOpen] = useState(false)
   const errorToastTimerRef = useRef<ReturnType<typeof setTimeout> | null>(null)
+
+  useEffect(() => {
+    setPortalMounted(true)
+  }, [])
+
+  useEffect(() => {
+    if (!open) return
+
+    const previousBodyOverflow = document.body.style.overflow
+    const previousHtmlOverflow = document.documentElement.style.overflow
+
+    document.body.style.overflow = "hidden"
+    document.documentElement.style.overflow = "hidden"
+
+    return () => {
+      document.body.style.overflow = previousBodyOverflow
+      document.documentElement.style.overflow = previousHtmlOverflow
+    }
+  }, [open])
 
   const sortedCustomers = useMemo(
     () => [...customers].sort((left, right) => left.customer.name.localeCompare(right.customer.name, "ko")),
@@ -1374,14 +1395,22 @@ export default function QuickQuoteComposer({
     }
   }
 
-  if (!open) return null
+  if (!open || !portalMounted) return null
 
-  return (
-    <div className="fixed inset-0 z-50 flex items-stretch justify-stretch bg-black/35 p-0 backdrop-blur-sm sm:items-center sm:justify-center sm:px-3 sm:py-3 lg:px-4 lg:py-5">
-      <div className="relative flex h-[100dvh] max-h-[100dvh] w-full flex-col overflow-hidden rounded-none border border-[rgba(255,255,255,0.25)] bg-white shadow-[0_24px_80px_rgba(17,17,16,0.28)] sm:max-h-[calc(100dvh-24px)] sm:max-w-[1480px] sm:rounded-[24px] xl:rounded-[32px]">
+  return createPortal(
+    <div
+      data-testid="quick-quote-composer-overlay"
+      className="fixed inset-0 z-[120] flex items-start justify-center overflow-y-auto bg-[#111110]/42 p-0 backdrop-blur-[3px] sm:p-4 lg:p-6"
+    >
+      <div
+        role="dialog"
+        aria-modal="true"
+        aria-labelledby="quick-quote-composer-title"
+        className="relative flex h-[100dvh] max-h-[100dvh] w-full flex-col overflow-hidden rounded-none border border-[rgba(255,255,255,0.25)] bg-white shadow-[0_24px_80px_rgba(17,17,16,0.28)] sm:h-[min(860px,calc(100dvh-48px))] sm:max-h-[calc(100dvh-32px)] sm:max-w-[1480px] sm:rounded-2xl xl:rounded-[24px]"
+      >
         <div className="flex items-center justify-between gap-3 border-b border-[#ecebe6] px-4 py-3 sm:px-5 lg:px-6">
           <div className="min-w-0">
-            <h2 className="flex items-center gap-2 text-lg font-semibold text-[#111110]">
+            <h2 id="quick-quote-composer-title" className="flex items-center gap-2 text-lg font-semibold text-[#111110]">
               <Sparkles className="h-4 w-4 text-[#084734]" />
               빠른 견적 작성
             </h2>
@@ -2219,7 +2248,7 @@ export default function QuickQuoteComposer({
             )}
           </div>
           {shareSheet ? (
-            <div className="flex w-full flex-col gap-2 sm:w-auto sm:flex-row sm:flex-wrap">
+            <div className="grid w-full grid-cols-2 gap-2 sm:w-auto sm:flex sm:flex-wrap">
               <Button
                 type="button"
                 variant="outline"
@@ -2241,12 +2270,12 @@ export default function QuickQuoteComposer({
               </Button>
             </div>
           ) : (
-            <div className="flex w-full flex-col gap-2 sm:w-auto sm:flex-row sm:flex-wrap">
+            <div className="grid w-full grid-cols-2 gap-2 sm:w-auto sm:flex sm:flex-wrap">
               <Button
                 type="button"
                 variant="outline"
                 onClick={() => setMobilePreviewOpen(true)}
-                className="xl:hidden"
+                className="hidden xl:hidden"
               >
                 <Eye className="mr-2 h-4 w-4" />
                 화면 미리보기
@@ -2341,6 +2370,7 @@ export default function QuickQuoteComposer({
           </div>
         )}
       </div>
-    </div>
+    </div>,
+    document.body
   )
 }
