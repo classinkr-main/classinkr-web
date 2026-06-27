@@ -310,6 +310,90 @@ export type CrmDealInsert = Omit<CrmDeal, "id" | "created_at" | "updated_at"> & 
 };
 export type CrmDealUpdate = Partial<Omit<CrmDeal, "id" | "created_at">>;
 
+export type CrmCaptureSourceType = "pasted_table" | "pasted_text" | "public_event" | "single";
+export type CrmCaptureBatchStatus = "draft" | "parsed" | "reviewed" | "applied" | "partial_failed" | "canceled";
+export type CrmCaptureActivityType =
+  | "event_attended"
+  | "visit"
+  | "demo_call"
+  | "check_in_call"
+  | "installation"
+  | "consultation"
+  | "quote_sent"
+  | "onboarding"
+  | "cs_issue"
+  | "memo";
+export type CrmCaptureMatchStatus =
+  | "confirmed_customer"
+  | "confirmed_lead"
+  | "multiple_candidates"
+  | "new_lead_candidate"
+  | "needs_review"
+  | "duplicate_in_batch";
+export type CrmCaptureApplyStatus = "pending" | "applied" | "skipped" | "failed";
+
+export interface CrmCaptureBatch {
+  id: string;
+  source_type: CrmCaptureSourceType;
+  source_id: string | null;
+  source_label: string | null;
+  default_activity_type: CrmCaptureActivityType;
+  default_task_enabled: boolean;
+  default_task_offset_days: number;
+  raw_input_storage_path: string | null;
+  status: CrmCaptureBatchStatus;
+  row_count: number;
+  event_created_count: number;
+  task_created_count: number;
+  lead_created_count: number;
+  created_by: string | null;
+  created_at: string;
+  updated_at: string;
+}
+
+export type CrmCaptureBatchInsert = Omit<CrmCaptureBatch, "id" | "created_at" | "updated_at"> & {
+  id?: string;
+  created_at?: string;
+  updated_at?: string;
+};
+export type CrmCaptureBatchUpdate = Partial<Omit<CrmCaptureBatch, "id" | "created_at">>;
+
+export interface CrmCaptureRow {
+  id: string;
+  batch_id: string;
+  row_index: number;
+  raw_text: string;
+  organization_name: string | null;
+  contact_name: string | null;
+  phone: string | null;
+  email: string | null;
+  region_label: string | null;
+  activity_type: CrmCaptureActivityType;
+  memo: string | null;
+  match_status: CrmCaptureMatchStatus;
+  matched_target_type: "lead" | "neo_account" | "customer" | "deal" | null;
+  matched_target_id: string | null;
+  matched_target_label: string | null;
+  match_candidates: Record<string, unknown>[];
+  selected: boolean;
+  create_task: boolean;
+  task_due_at: string | null;
+  apply_status: CrmCaptureApplyStatus;
+  created_event_id: string | null;
+  created_task_id: string | null;
+  created_lead_id: string | null;
+  error_message: string | null;
+  created_at: string;
+  updated_at: string;
+}
+
+export type CrmCaptureRowInsert = Omit<CrmCaptureRow, "id" | "created_at" | "updated_at"> & {
+  id?: string;
+  created_at?: string;
+  updated_at?: string;
+};
+export type CrmCaptureRowUpdate = Partial<Omit<CrmCaptureRow, "id" | "created_at">>;
+
 export type NewsletterStatus = "active" | "unsubscribed";
 
 export interface NewsletterSubscriber {
@@ -759,6 +843,16 @@ export interface Database {
         Row: CrmDeal;
         Insert: CrmDealInsert;
         Update: CrmDealUpdate;
+      };
+      crm_capture_batches: {
+        Row: CrmCaptureBatch;
+        Insert: CrmCaptureBatchInsert;
+        Update: CrmCaptureBatchUpdate;
+      };
+      crm_capture_rows: {
+        Row: CrmCaptureRow;
+        Insert: CrmCaptureRowInsert;
+        Update: CrmCaptureRowUpdate;
       };
       partners: {
         Row: Partner;

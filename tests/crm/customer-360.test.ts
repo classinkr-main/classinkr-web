@@ -37,6 +37,7 @@ function makeNeoDetail(overrides: Partial<NeoCrmCustomerDetail> = {}): NeoCrmCus
       name: "큰학원",
       ownerName: "이매니저",
       phone: "02-123-4567",
+      region: null,
       createdAt: "2025-01-01T00:00:00.000Z",
       updatedAt: "2026-06-01T00:00:00.000Z",
     },
