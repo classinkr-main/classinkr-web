@@ -13,6 +13,7 @@ import { Button } from "@/components/ui/button"
 import NeoCrmTeamPanel from "@/components/admin/crm/NeoCrmTeamPanel"
 import CrmCoverageStrip from "@/components/admin/crm/CrmCoverageStrip"
 import CrmPriorityQueuePanel from "@/components/admin/crm/CrmPriorityQueuePanel"
+import CrmWeekAheadPanel from "@/components/admin/crm/CrmWeekAheadPanel"
 import { Toast } from "@/components/admin/crm/leads/shared"
 
 // 현황 = 한국팀 아침 지휘대. 액션 밴드(딥링크) + Neo CRM 팀 패널 + 돈 흐름 요약만.
@@ -807,6 +808,7 @@ export default function CrmPage() {
 
       <CrmCoverageStrip />
       <CrmPriorityQueuePanel refreshKey={neoCrmRefreshKey} />
+      <CrmWeekAheadPanel />
 
       <NeoCrmTeamPanel
         refreshKey={neoCrmRefreshKey}
