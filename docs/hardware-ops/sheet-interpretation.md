@@ -139,6 +139,8 @@ H8 / 86" IFP = 입고 35 - 출고 23 = 재고 12
 - `branch_hw_outbound.progress`는 K열 진행 상태를 읽는다.
 - K열 진행 상태 셀이 분홍/빨강 계열이면 raw payload에 `planned_by_color`로 남긴다.
 - `T1(promoted)`, `STD1(promoted)`는 물리 재고 관점에서는 기본 SKU와 같이 묶어 볼 수 있다. 단, 매출/정산 관점에서는 별도 유형으로 남겨야 한다.
+- `/admin/hardware`의 시트 가져오기는 Google Sheet를 강제 동기화한 뒤 `hardware_sheet_import_snapshots`에 이전 `sheet_import` 원장, 새 후보 원장, branch HW payload, checksum을 남기고 `hardware_movements`의 시트 이관분을 교체한다.
+- 스냅샷 생성이 실패하면 시트 이관 원장 교체를 실행하지 않는다. 수기 원장(`source = admin_manual`)은 시트 가져오기 교체 대상이 아니다.
 
 ## 5. 남은 리스크
 
@@ -147,3 +149,4 @@ H8 / 86" IFP = 입고 35 - 출고 23 = 재고 12
 - 시리얼 번호가 비어 있는 행이 많아 unit-level FIFO는 아직 불가능하다. 현재는 quantity-level FIFO만 가능하다.
 - `재고현황`을 수동 수정하면 `2.입고 현황`/`3.출고 현황` 원장과 어긋날 수 있다. 장기적으로는 원장을 기준으로 요약표를 생성하는 편이 안전하다.
 - `배송 예정` 행은 설치 완료와 같은 출고 원장에 섞여 있으므로, 어드민 UI에서는 `설치 완료`, `배송 예정`, `기타/미정`을 분리해서 보여줘야 한다.
+- Google Sheet 동기화는 `/admin/hardware` import에서 강제 실행된다. 운영 감사 기준은 import snapshot에 남은 branch payload와 이전/후보 원장 checksum이며, Google Drive 파일 자체의 버전 백업은 별도 Drive 권한/정책으로 다룬다.

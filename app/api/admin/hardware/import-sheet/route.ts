@@ -1,7 +1,6 @@
 import { NextRequest, NextResponse } from "next/server"
 
 import {
-  readOptionalBoolean,
   readRequestBody,
   toErrorResponse,
 } from "@/app/api/admin/hardware/_validation"
@@ -14,10 +13,10 @@ export async function POST(req: NextRequest) {
   if (admin instanceof NextResponse) return admin
 
   try {
-    const body = await readRequestBody(req)
-    const sync = readOptionalBoolean(body, "sync", "시트 동기화") ?? false
-    const syncResult = sync ? await syncHw() : null
-    const importResult = await importHardwareFromBranchSheets()
+    await readRequestBody(req)
+    const syncResult = await syncHw()
+    const actor = admin.name ?? admin.userId ?? admin.role
+    const importResult = await importHardwareFromBranchSheets({ actor })
 
     return NextResponse.json({
       ok: true,

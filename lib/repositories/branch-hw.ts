@@ -43,6 +43,11 @@ export const listHwOutbound = () => listCachedHwOutbound()
 export const listHwStock = () => listCachedHwStock()
 export const listHwSalesMonthly = () => listCachedHwSalesMonthly()
 
+export const listFreshHwInbound = () => listAllUncached<HwInbound>("branch_hw_inbound")
+export const listFreshHwOutbound = () => listAllUncached<HwOutbound>("branch_hw_outbound")
+export const listFreshHwStock = () => listAllUncached<HwStock>("branch_hw_stock")
+export const listFreshHwSalesMonthly = () => listAllUncached<HwSalesMonthly>("branch_hw_sales_monthly")
+
 async function replaceVia(fn: string, rows: unknown[]): Promise<number> {
   const sb = createSupabaseAdminClient()
   const { error } = await sb.rpc(fn, { rows })

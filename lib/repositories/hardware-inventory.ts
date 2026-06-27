@@ -3,7 +3,7 @@ import "server-only"
 import { createHash } from "crypto"
 import { revalidateTag } from "next/cache"
 
-import { listHwInbound, listHwOutbound, listHwStock } from "@/lib/repositories/branch-hw"
+import { listFreshHwInbound, listFreshHwOutbound, listFreshHwStock } from "@/lib/repositories/branch-hw"
 import { createSupabaseAdminClient } from "@/lib/supabase/admin"
 
 export const HARDWARE_INVENTORY_CACHE_TAG = "hardware-inventory"
@@ -142,6 +142,9 @@ export interface HardwareSheetImportResult {
   imported: number
   skipped: number
   runId: string
+  snapshotId: string
+  snapshotChecksum: string
+  snapshotCreatedAt: string
 }
 
 const DEFAULT_STOCK_LOCATION = "창고"
@@ -163,11 +166,11 @@ function normalizeProductName(value: string) {
 function normalizeLocationName(value: unknown): string | null {
   const text = cleanString(value)
   if (!text) return null
-  if (/^(?:본사\s*)?창고$|^warehouse$/i.test(text)) return DEFAULT_STOCK_LOCATION
-  if (/^(?:본사\s*)?사무실$|^office$/i.test(text)) return "사무실"
   if (/샘플|대여|데모|demo|sample/i.test(text)) return DEFAULT_SAMPLE_LOCATION
   if (/수리|a\/?s|as센터|repair/i.test(text)) return DEFAULT_REPAIR_LOCATION
-  if (/^외부\/?고객$|^고객$/i.test(text)) return DEFAULT_CUSTOMER_LOCATION
+  if (/사무실|office/i.test(text)) return "사무실"
+  if (/창고|warehouse/i.test(text)) return DEFAULT_STOCK_LOCATION
+  if (/^외부\/?고객$|^고객$|고객사/i.test(text)) return DEFAULT_CUSTOMER_LOCATION
   return text
 }
 
@@ -192,6 +195,12 @@ function hashSourceKey(parts: unknown[]) {
 
 function isRecord(value: unknown): value is Record<string, unknown> {
   return Boolean(value) && typeof value === "object" && !Array.isArray(value)
+}
+
+function getErrorMessage(error: unknown) {
+  if (error instanceof Error) return error.message
+  if (isRecord(error) && typeof error.message === "string") return error.message
+  return String(error)
 }
 
 function isPlannedStatus(status: string | null | undefined) {
@@ -498,18 +507,26 @@ async function startImportRun() {
 
 async function finishImportRun(
   id: string,
-  patch: { status: "success" | "failed"; rowsImported?: number; rowsSkipped?: number; error?: string }
+  patch: {
+    status: "success" | "failed"
+    rowsImported?: number
+    rowsSkipped?: number
+    error?: string
+    raw?: Record<string, unknown>
+  }
 ) {
   const sb = createSupabaseAdminClient()
+  const update: Record<string, unknown> = {
+    status: patch.status,
+    rows_imported: patch.rowsImported,
+    rows_skipped: patch.rowsSkipped,
+    error: patch.error,
+    finished_at: new Date().toISOString(),
+  }
+  if (patch.raw) update.raw = patch.raw
   const { error } = await sb
     .from("hardware_import_runs")
-    .update({
-      status: patch.status,
-      rows_imported: patch.rowsImported,
-      rows_skipped: patch.rowsSkipped,
-      error: patch.error,
-      finished_at: new Date().toISOString(),
-    })
+    .update(update)
     .eq("id", id)
   if (error) throw error
 }
@@ -532,14 +549,122 @@ interface ImportMovementRow {
   raw: unknown
 }
 
-export async function importHardwareFromBranchSheets(): Promise<HardwareSheetImportResult> {
+interface HardwareSheetImportSnapshot {
+  id: string
+  checksum: string
+  created_at: string
+}
+
+function checksumImportSnapshot(value: unknown) {
+  return createHash("sha256").update(JSON.stringify(value)).digest("hex")
+}
+
+function getImportWarehouseBalances(rows: ImportMovementRow[]) {
+  const balances = new Map<string, number>()
+  const apply = (product: string, delta: number) => {
+    balances.set(product, (balances.get(product) ?? 0) + delta)
+  }
+
+  for (const row of rows) {
+    const product = normalizeProductName(row.product_name)
+    if (!product) continue
+
+    if (row.movement_type === "inbound") {
+      if ((normalizeLocationName(row.to_location) ?? DEFAULT_STOCK_LOCATION) === DEFAULT_STOCK_LOCATION) {
+        apply(product, row.quantity)
+      }
+    } else if (row.movement_type === "outbound") {
+      if (isPlannedStatus(row.status)) continue
+      if ((normalizeLocationName(row.from_location) ?? DEFAULT_STOCK_LOCATION) === DEFAULT_STOCK_LOCATION) {
+        apply(product, -row.quantity)
+      }
+    } else if (row.movement_type === "return") {
+      if (normalizeLocationName(row.from_location) === DEFAULT_STOCK_LOCATION) apply(product, -row.quantity)
+      if ((normalizeLocationName(row.to_location) ?? DEFAULT_STOCK_LOCATION) === DEFAULT_STOCK_LOCATION) {
+        apply(product, row.quantity)
+      }
+    } else if (row.movement_type === "transfer" || row.movement_type === "repair") {
+      if ((normalizeLocationName(row.from_location) ?? DEFAULT_STOCK_LOCATION) === DEFAULT_STOCK_LOCATION) {
+        apply(product, -row.quantity)
+      }
+      if (normalizeLocationName(row.to_location) === DEFAULT_STOCK_LOCATION) apply(product, row.quantity)
+    } else if (row.movement_type === "adjust") {
+      if (row.from_location && !row.to_location) {
+        if (normalizeLocationName(row.from_location) === DEFAULT_STOCK_LOCATION) apply(product, -row.quantity)
+      } else if ((normalizeLocationName(row.to_location) ?? DEFAULT_STOCK_LOCATION) === DEFAULT_STOCK_LOCATION) {
+        apply(product, row.quantity)
+      }
+    }
+  }
+
+  return balances
+}
+
+async function listCurrentSheetImportMovements() {
+  const sb = createSupabaseAdminClient()
+  const { data, error } = await sb
+    .from("hardware_movements")
+    .select("*")
+    .eq("source", "sheet_import")
+  if (error) throw error
+  return data ?? []
+}
+
+async function createHardwareSheetImportSnapshot(input: {
+  runId: string
+  actor?: string | null
+  sourcePayload: Record<string, unknown>
+  candidateMovements: ImportMovementRow[]
+  previousSheetMovements: unknown[]
+}): Promise<HardwareSheetImportSnapshot> {
+  const rowCounts = {
+    previous_sheet_movements: input.previousSheetMovements.length,
+    candidate_movements: input.candidateMovements.length,
+    branch_hw_inbound: Array.isArray(input.sourcePayload.branch_hw_inbound)
+      ? input.sourcePayload.branch_hw_inbound.length
+      : 0,
+    branch_hw_outbound: Array.isArray(input.sourcePayload.branch_hw_outbound)
+      ? input.sourcePayload.branch_hw_outbound.length
+      : 0,
+    branch_hw_stock: Array.isArray(input.sourcePayload.branch_hw_stock)
+      ? input.sourcePayload.branch_hw_stock.length
+      : 0,
+  }
+  const checksumInput = {
+    sourcePayload: input.sourcePayload,
+    candidateMovements: input.candidateMovements,
+    previousSheetMovements: input.previousSheetMovements,
+    rowCounts,
+  }
+
+  const sb = createSupabaseAdminClient()
+  const { data, error } = await sb
+    .from("hardware_sheet_import_snapshots")
+    .insert({
+      import_run_id: input.runId,
+      created_by: cleanString(input.actor),
+      source_payload: input.sourcePayload,
+      candidate_movements: input.candidateMovements,
+      previous_sheet_movements: input.previousSheetMovements,
+      row_counts: rowCounts,
+      checksum: checksumImportSnapshot(checksumInput),
+    })
+    .select("id,checksum,created_at")
+    .single()
+  if (error) throw new Error(getErrorMessage(error))
+  return data as HardwareSheetImportSnapshot
+}
+
+export async function importHardwareFromBranchSheets(
+  options: { actor?: string | null } = {}
+): Promise<HardwareSheetImportResult> {
   const runId = await startImportRun()
 
   try {
     const [inbound, outbound, stock] = await Promise.all([
-      listHwInbound(),
-      listHwOutbound(),
-      listHwStock(),
+      listFreshHwInbound(),
+      listFreshHwOutbound(),
+      listFreshHwStock(),
     ])
     const outboundOrInboundProducts = new Set<string>()
     const productInputs: Array<{ name: string; category?: string | null }> = []
@@ -553,10 +678,7 @@ export async function importHardwareFromBranchSheets(): Promise<HardwareSheetImp
       outboundOrInboundProducts.add(normalizeProductName(row.product))
     }
     for (const row of stock) {
-      if (isRecord(row.raw) && row.raw.source === "재고현황") continue
-      const name = normalizeProductName(row.product)
-      if (outboundOrInboundProducts.has(name)) continue
-      productInputs.push({ name, category: row.category })
+      productInputs.push({ name: row.product, category: row.category })
     }
 
     const itemsByName = await ensureHardwareItems(productInputs)
@@ -620,50 +742,102 @@ export async function importHardwareFromBranchSheets(): Promise<HardwareSheetImp
       })
     })
 
-    stock.forEach((row, index) => {
-      if (isRecord(row.raw) && row.raw.source === "재고현황") return
+    const warehouseBalances = getImportWarehouseBalances(rows)
+    for (const [index, row] of stock.entries()) {
       const product = normalizeProductName(row.product)
-      if (outboundOrInboundProducts.has(product)) return
-      const item = itemsByName.get(product)
-      if (!item || row.quantity <= 0) {
-        skipped += 1
-        return
+      let item = itemsByName.get(product)
+      if (!item) {
+        const stockItem = await ensureHardwareItems([{ name: product, category: row.category }])
+        item = stockItem.get(product)
+        if (item) itemsByName.set(product, item)
       }
+      if (!item || !Number.isFinite(row.quantity)) {
+        skipped += 1
+        continue
+      }
+      const currentWarehouseStock = warehouseBalances.get(product) ?? 0
+      const adjustmentDelta = row.quantity - currentWarehouseStock
+      if (adjustmentDelta === 0) continue
+      const adjustmentQuantity = Math.abs(adjustmentDelta)
 
       rows.push({
         item_id: item.id,
         product_name: product,
         movement_type: "adjust",
-        quantity: row.quantity,
+        quantity: adjustmentQuantity,
         occurred_at: null,
-        from_location: null,
-        to_location: DEFAULT_STOCK_LOCATION,
+        from_location: adjustmentDelta < 0 ? DEFAULT_STOCK_LOCATION : null,
+        to_location: adjustmentDelta > 0 ? DEFAULT_STOCK_LOCATION : null,
         owner: null,
-        status: "현재고 이관",
+        status: "현재고 보정",
         reference_no: null,
-        memo: "재고현황 직접 재고 이관",
+        memo: `재고현황 현재고 ${row.quantity}대 기준 보정`,
         serials: [],
         source_table: "branch_hw_stock",
-        source_key: hashSourceKey(["stock", index, row.product, row.category, row.quantity, row.raw]),
-        raw: row.raw ?? {},
+        source_key: hashSourceKey([
+          "stock-reconciliation",
+          index,
+          row.product,
+          row.category,
+          row.quantity,
+          currentWarehouseStock,
+          row.raw,
+        ]),
+        raw: {
+          source: "branch_hw_stock_reconciliation",
+          stock_row: row.raw ?? {},
+          official_quantity: row.quantity,
+          calculated_warehouse_quantity: currentWarehouseStock,
+          adjustment_delta: adjustmentDelta,
+        },
       })
-    })
+      warehouseBalances.set(product, row.quantity)
+    }
 
+    const previousSheetMovements = await listCurrentSheetImportMovements()
+    const snapshot = await createHardwareSheetImportSnapshot({
+      runId,
+      actor: options.actor,
+      sourcePayload: {
+        branch_hw_inbound: inbound,
+        branch_hw_outbound: outbound,
+        branch_hw_stock: stock,
+      },
+      candidateMovements: rows,
+      previousSheetMovements,
+    })
     const sb = createSupabaseAdminClient()
     const { data, error } = await sb.rpc("replace_hardware_sheet_import", {
       rows,
       run_id: runId,
+      snapshot_id: snapshot.id,
     })
     if (error) throw error
 
     const imported = typeof data === "number" ? data : rows.length
-    await finishImportRun(runId, { status: "success", rowsImported: imported, rowsSkipped: skipped })
+    await finishImportRun(runId, {
+      status: "success",
+      rowsImported: imported,
+      rowsSkipped: skipped,
+      raw: {
+        snapshot_id: snapshot.id,
+        snapshot_checksum: snapshot.checksum,
+        snapshot_created_at: snapshot.created_at,
+      },
+    })
     revalidateTag(HARDWARE_INVENTORY_CACHE_TAG, "max")
-    return { imported, skipped, runId }
+    return {
+      imported,
+      skipped,
+      runId,
+      snapshotId: snapshot.id,
+      snapshotChecksum: snapshot.checksum,
+      snapshotCreatedAt: snapshot.created_at,
+    }
   } catch (error) {
     await finishImportRun(runId, {
       status: "failed",
-      error: error instanceof Error ? error.message : String(error),
+      error: getErrorMessage(error),
     }).catch(() => undefined)
     throw error
   }

@@ -245,11 +245,11 @@ quote_documents / quote_document_versions / quote_document_shares
 
 ## 10. 추천 우선순위
 
-1. `/admin/hardware` 허브 생성
-2. 견적/문서 탭에 `QuickQuoteComposer` 통합
-3. 공개 견적 링크 생성과 공유 시트 유지
-4. 하드웨어 영업 파이프라인 연결
-5. 견적 품목과 재고 SKU 연결
-6. 설치 일정/예약 재고 연결
-7. 기존 탭 정리
-
+1. 하드웨어 시트 백업 후 import 안정화
+2. `/admin/hardware` 허브 생성
+3. 견적/문서 탭에 `QuickQuoteComposer` 통합
+4. 공개 견적 링크 생성과 공유 시트 유지
+5. 하드웨어 영업 파이프라인 연결
+6. 견적 품목과 재고 SKU 연결
+7. 설치 일정/예약 재고 연결
+8. 기존 탭 정리
