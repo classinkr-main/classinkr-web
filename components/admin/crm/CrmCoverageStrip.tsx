@@ -78,56 +78,33 @@ export default function CrmCoverageStrip() {
   const state = getCoverageState(data, loading, failed)
   const copy = statusCopy(state)
   const pctLabel = valueLabel(data?.coveragePct, state, fmt, "%")
+  const showMetrics = state === "ready" || state === "partial"
 
+  // 보조 진단 밴드 — 작업대(우선순위 큐) 아래에 한 줄로 최소화한다.
   return (
-    <section className="mb-4 rounded-2xl border border-[#e8e8e4] bg-white p-4">
-      <div className="mb-4 flex items-center justify-between gap-3">
-        <div className="flex items-center gap-2">
-          <ShieldCheck className="h-4 w-4 text-[#1a1a1a]/35" />
-          <div>
-            <p className="text-[11px] font-semibold uppercase tracking-[0.16em] text-[#1a1a1a]/30">
-              Sync Health
-            </p>
-            <h2 className="mt-0.5 text-[15px] font-bold text-[#111110]">동기화 정합성</h2>
-          </div>
-        </div>
-        <span className="rounded-full bg-[#f0f0ec] px-3 py-1 text-[12px] font-medium text-[#1a1a1a]/55">
+    <section className="mb-4 rounded-2xl border border-[#e8e8e4] bg-white px-4 py-2.5">
+      <div className="flex flex-wrap items-center gap-x-2.5 gap-y-1">
+        <ShieldCheck className="h-3.5 w-3.5 shrink-0 text-[#1a1a1a]/30" />
+        <span className="text-[10px] font-semibold uppercase tracking-[0.16em] text-[#1a1a1a]/30">
+          Sync
+        </span>
+        <span className="text-[13px] font-semibold text-[#111110]">동기화 정합성</span>
+        <span className="rounded-full bg-[#f0f0ec] px-2 py-0.5 text-[11px] font-medium text-[#1a1a1a]/55">
           {data?.health?.label ?? copy.label}
         </span>
-      </div>
 
-      <div className="grid gap-8 border-t border-[#f0f0ec] pt-4 sm:grid-cols-3">
-        <div>
-          <p className="text-[11px] font-semibold uppercase tracking-[0.16em] text-[#1a1a1a]/35">커버리지</p>
-          <p
-            className={`mt-2 font-bold tracking-[-0.04em] ${
-              state === "failed"
-                ? "text-xl text-[#B85C33]"
-                : state === "no_data"
-                  ? "text-xl text-[#8D6C1F]"
-                  : `text-2xl ${COVERAGE_TONE_CLASS[tone]}`
-            }`}
-          >
-            {pctLabel}
-          </p>
-          <p className="mt-1 text-[12px] leading-relaxed text-[#1a1a1a]/42">
-            {copy.detail}
-          </p>
-        </div>
-        <div>
-          <p className="text-[11px] font-semibold uppercase tracking-[0.16em] text-[#1a1a1a]/35">확정 연결</p>
-          <p className="mt-2 text-2xl font-bold tracking-[-0.04em] text-[#111110]">
-            {valueLabel(data?.linked, state, fmt)}
-          </p>
-          <p className="mt-1 text-[12px] leading-relaxed text-[#1a1a1a]/42">운영 DB에 확정 연결됨</p>
-        </div>
-        <div>
-          <p className="text-[11px] font-semibold uppercase tracking-[0.16em] text-[#1a1a1a]/35">검토 대기</p>
-          <p className="mt-2 text-2xl font-bold tracking-[-0.04em] text-[#111110]">
-            {valueLabel(data?.needsReview, state, fmt)}
-          </p>
-          <p className="mt-1 text-[12px] leading-relaxed text-[#1a1a1a]/42">연동 탭에서 확인 필요</p>
-        </div>
+        {showMetrics ? (
+          <span className="flex items-center gap-1.5 text-[12px] text-[#1a1a1a]/45">
+            <span className="text-[#1a1a1a]/20">·</span>
+            커버리지 <b className={`font-semibold ${COVERAGE_TONE_CLASS[tone]}`}>{pctLabel}</b>
+            <span className="text-[#1a1a1a]/20">·</span>
+            확정 <b className="font-semibold text-[#1a1a1a]/70">{valueLabel(data?.linked, state, fmt)}</b>
+            <span className="text-[#1a1a1a]/20">·</span>
+            검토 <b className="font-semibold text-[#1a1a1a]/70">{valueLabel(data?.needsReview, state, fmt)}</b>
+          </span>
+        ) : (
+          <span className="text-[12px] text-[#1a1a1a]/42">{copy.detail}</span>
+        )}
       </div>
     </section>
   )

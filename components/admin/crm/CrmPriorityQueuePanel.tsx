@@ -97,7 +97,7 @@ function tomorrowMorningIso() {
   return next.toISOString()
 }
 
-export default function CrmPriorityQueuePanel({ refreshKey = 0 }: { refreshKey?: number }) {
+export default function CrmPriorityQueuePanel({ refreshKey = 0, compact = false }: { refreshKey?: number; compact?: boolean }) {
   const [source, setSource] = useState<SourceFilter>("all")
   const [bucket, setBucket] = useState<BucketFilter>("today")
   const [owner, setOwner] = useState("")
@@ -215,15 +215,15 @@ export default function CrmPriorityQueuePanel({ refreshKey = 0 }: { refreshKey?:
   )
 
   return (
-    <section className="mb-4 rounded-2xl border border-[#e8e8e4] bg-white p-4">
-      <div className="mb-4 flex flex-col gap-3 lg:flex-row lg:items-center lg:justify-between">
+    <section className={`rounded-2xl border border-[#e8e8e4] bg-white p-4 ${compact ? "" : "mb-4"}`}>
+      <div className={`mb-4 flex flex-col gap-3 ${compact ? "" : "lg:flex-row lg:items-center lg:justify-between"}`}>
         <div>
           <p className="text-[11px] font-semibold uppercase tracking-[0.16em] text-[#1a1a1a]/30">
             ClassIn Operation
           </p>
           <h2 className="mt-1 text-[18px] font-bold text-[#111110]">고객 운영 우선순위</h2>
         </div>
-        <div className="flex flex-col gap-2 sm:flex-row sm:items-center">
+        <div className={`flex flex-col gap-2 ${compact ? "" : "sm:flex-row sm:items-center"}`}>
           <div className="inline-flex rounded-lg border border-[#e8e8e4] bg-[#fafaf8] p-1">
             {SOURCE_FILTERS.map((filter) => (
               <button
@@ -273,7 +273,7 @@ export default function CrmPriorityQueuePanel({ refreshKey = 0 }: { refreshKey?:
         </div>
       </div>
 
-      {data ? (
+      {data && !compact ? (
         <div className="mb-3 grid gap-2 grid-cols-2 lg:grid-cols-5">
           <div className="rounded-xl bg-[#fafaf8] p-3">
             <p className="text-[11px] font-semibold text-[#1a1a1a]/35">선택 후보</p>
@@ -362,98 +362,163 @@ export default function CrmPriorityQueuePanel({ refreshKey = 0 }: { refreshKey?:
           <div className="p-6 text-center text-[13px] text-[#1a1a1a]/40">우선순위를 계산 중입니다...</div>
         ) : data && data.items.length > 0 ? (
           <div className="divide-y divide-[#f0f0ec]">
-            {data.items.map((item) => (
-              <div
-                key={item.id}
-                className="grid gap-3 p-3 transition-colors hover:bg-[#fafaf8] lg:grid-cols-[minmax(0,1fr)_120px_112px_160px]"
-              >
-                <div className="min-w-0">
-                  <div className="mb-1 flex flex-wrap items-center gap-1.5">
+            {data.items.map((item) =>
+              compact ? (
+                // 사이드바 컴팩트: 3줄(배지+점수 / 이름 / 사유·담당·날짜) + 한 줄 액션
+                <div key={item.id} className="p-2.5 transition-colors hover:bg-[#fafaf8]">
+                  <div className="flex items-center justify-between gap-2">
                     <span
-                      className={`inline-flex items-center gap-1 rounded-full border px-2 py-0.5 text-[11px] font-semibold ${severityClass(
+                      className={`inline-flex items-center gap-1 rounded-full border px-1.5 py-0.5 text-[10px] font-semibold ${severityClass(
                         item
                       )}`}
                     >
                       {sourceIcon(item.source)}
                       {item.actionLabel}
                     </span>
-                    <span className="rounded-full bg-[#ECFDF5] px-2 py-0.5 text-[11px] font-semibold text-[#084734]">
-                      {item.bucketLabel}
-                    </span>
-                    <span className="text-[11px] font-medium text-[#1a1a1a]/35">{item.statusLabel}</span>
+                    <span className="shrink-0 text-[14px] font-bold tabular-nums text-[#111110]">{item.score}</span>
                   </div>
-                  <Link href={item.href} className="group inline-flex max-w-full items-center gap-1.5">
-                    <span className="truncate text-[14px] font-bold text-[#111110]">{item.title}</span>
-                    <ExternalLink className="h-3.5 w-3.5 shrink-0 text-[#1a1a1a]/25 group-hover:text-[#111110]" />
+                  <Link href={item.href} className="group mt-1 flex items-center gap-1">
+                    <span className="truncate text-[13px] font-bold text-[#111110]">{item.title}</span>
+                    <ExternalLink className="h-3 w-3 shrink-0 text-[#1a1a1a]/25 group-hover:text-[#111110]" />
                   </Link>
-                  <p className="mt-0.5 truncate text-[12px] text-[#1a1a1a]/45">{item.subtitle ?? item.reason}</p>
-                </div>
-                <div>
-                  <p className="text-[11px] font-semibold text-[#1a1a1a]/35">근거</p>
-                  <p className="mt-1 text-[12px] font-medium text-[#111110]">{item.reason}</p>
-                </div>
-                <div>
-                  <p className="text-[11px] font-semibold text-[#1a1a1a]/35">담당·기준일</p>
-                  <p className="mt-1 truncate text-[12px] font-medium text-[#111110]">{item.ownerName ?? "미배정"}</p>
-                  <p className="text-[11px] text-[#1a1a1a]/35">{formatDate(item.dueAt ?? item.updatedAt)}</p>
-                </div>
-                <div className="flex flex-col gap-2 lg:items-end">
-                  <div className="flex items-center justify-between gap-2 lg:justify-end">
-                    <span className="text-[18px] font-bold tabular-nums text-[#111110]">{item.score}</span>
+                  <p className="mt-0.5 truncate text-[11px] text-[#1a1a1a]/45">
+                    {item.reason}
+                    {item.ownerName ? ` · ${item.ownerName}` : ""}
+                    {` · ${formatDate(item.dueAt ?? item.updatedAt)}`}
+                  </p>
+                  <div className="mt-2 flex items-center gap-1.5">
+                    {item.source === "lead" || item.source === "task" ? (
+                      <>
+                        <button
+                          type="button"
+                          onClick={() =>
+                            void (item.source === "lead"
+                              ? handleLeadAction(item, "done")
+                              : handleTaskAction(item, "done"))
+                          }
+                          disabled={actingId === `${item.id}:done` || actingId === `${item.id}:tomorrow`}
+                          className="inline-flex h-6 items-center gap-1 rounded-md border border-[#D7EBDD] bg-[#ECFDF5] px-2 text-[10px] font-semibold text-[#084734] transition-colors hover:bg-[#D7EBDD] disabled:opacity-50"
+                        >
+                          <CheckCircle2 className="h-3 w-3" />
+                          완료
+                        </button>
+                        <button
+                          type="button"
+                          onClick={() =>
+                            void (item.source === "lead"
+                              ? handleLeadAction(item, "tomorrow")
+                              : handleTaskAction(item, "tomorrow"))
+                          }
+                          disabled={actingId === `${item.id}:done` || actingId === `${item.id}:tomorrow`}
+                          className="inline-flex h-6 items-center gap-1 rounded-md border border-[#e8e8e4] bg-white px-2 text-[10px] font-semibold text-[#1a1a1a]/60 transition-colors hover:bg-[#f5f5f2] disabled:opacity-50"
+                        >
+                          <Clock3 className="h-3 w-3" />
+                          내일
+                        </button>
+                      </>
+                    ) : null}
                     <Link
                       href={item.href}
-                      className="inline-flex h-7 items-center gap-1 rounded-lg border border-[#e8e8e4] bg-white px-2 text-[11px] font-semibold text-[#1a1a1a]/55 transition-colors hover:bg-[#f5f5f2] hover:text-[#111110]"
+                      className="ml-auto inline-flex h-6 items-center gap-1 rounded-md border border-[#e8e8e4] bg-white px-2 text-[10px] font-semibold text-[#1a1a1a]/55 transition-colors hover:bg-[#f5f5f2] hover:text-[#111110]"
                     >
                       열기
                       <ExternalLink className="h-3 w-3" />
                     </Link>
                   </div>
-                  {item.source === "lead" ? (
-                    <div className="flex flex-wrap gap-1.5 lg:justify-end">
-                      <button
-                        type="button"
-                        onClick={() => void handleLeadAction(item, "done")}
-                        disabled={actingId === `${item.id}:done` || actingId === `${item.id}:tomorrow`}
-                        className="inline-flex h-7 items-center gap-1 rounded-lg border border-[#D7EBDD] bg-[#ECFDF5] px-2 text-[11px] font-semibold text-[#084734] transition-colors hover:bg-[#D7EBDD] disabled:opacity-50"
-                      >
-                        <CheckCircle2 className="h-3 w-3" />
-                        연락 완료
-                      </button>
-                      <button
-                        type="button"
-                        onClick={() => void handleLeadAction(item, "tomorrow")}
-                        disabled={actingId === `${item.id}:done` || actingId === `${item.id}:tomorrow`}
-                        className="inline-flex h-7 items-center gap-1 rounded-lg border border-[#e8e8e4] bg-white px-2 text-[11px] font-semibold text-[#1a1a1a]/60 transition-colors hover:bg-[#f5f5f2] hover:text-[#111110] disabled:opacity-50"
-                      >
-                        <Clock3 className="h-3 w-3" />
-                        내일 팔로업
-                      </button>
-                    </div>
-                  ) : item.source === "task" ? (
-                    <div className="flex flex-wrap gap-1.5 lg:justify-end">
-                      <button
-                        type="button"
-                        onClick={() => void handleTaskAction(item, "done")}
-                        disabled={actingId === `${item.id}:done` || actingId === `${item.id}:tomorrow`}
-                        className="inline-flex h-7 items-center gap-1 rounded-lg border border-[#D7EBDD] bg-[#ECFDF5] px-2 text-[11px] font-semibold text-[#084734] transition-colors hover:bg-[#D7EBDD] disabled:opacity-50"
-                      >
-                        <CheckCircle2 className="h-3 w-3" />
-                        완료
-                      </button>
-                      <button
-                        type="button"
-                        onClick={() => void handleTaskAction(item, "tomorrow")}
-                        disabled={actingId === `${item.id}:done` || actingId === `${item.id}:tomorrow`}
-                        className="inline-flex h-7 items-center gap-1 rounded-lg border border-[#e8e8e4] bg-white px-2 text-[11px] font-semibold text-[#1a1a1a]/60 transition-colors hover:bg-[#f5f5f2] hover:text-[#111110] disabled:opacity-50"
-                      >
-                        <Clock3 className="h-3 w-3" />
-                        내일로
-                      </button>
-                    </div>
-                  ) : null}
                 </div>
-              </div>
-            ))}
+              ) : (
+                <div
+                  key={item.id}
+                  className="grid gap-3 p-3 transition-colors hover:bg-[#fafaf8] lg:grid-cols-[minmax(0,1fr)_120px_112px_160px]"
+                >
+                  <div className="min-w-0">
+                    <div className="mb-1 flex flex-wrap items-center gap-1.5">
+                      <span
+                        className={`inline-flex items-center gap-1 rounded-full border px-2 py-0.5 text-[11px] font-semibold ${severityClass(
+                          item
+                        )}`}
+                      >
+                        {sourceIcon(item.source)}
+                        {item.actionLabel}
+                      </span>
+                      <span className="rounded-full bg-[#ECFDF5] px-2 py-0.5 text-[11px] font-semibold text-[#084734]">
+                        {item.bucketLabel}
+                      </span>
+                      <span className="text-[11px] font-medium text-[#1a1a1a]/35">{item.statusLabel}</span>
+                    </div>
+                    <Link href={item.href} className="group inline-flex max-w-full items-center gap-1.5">
+                      <span className="truncate text-[14px] font-bold text-[#111110]">{item.title}</span>
+                      <ExternalLink className="h-3.5 w-3.5 shrink-0 text-[#1a1a1a]/25 group-hover:text-[#111110]" />
+                    </Link>
+                    <p className="mt-0.5 truncate text-[12px] text-[#1a1a1a]/45">{item.subtitle ?? item.reason}</p>
+                  </div>
+                  <div>
+                    <p className="text-[11px] font-semibold text-[#1a1a1a]/35">근거</p>
+                    <p className="mt-1 text-[12px] font-medium text-[#111110]">{item.reason}</p>
+                  </div>
+                  <div>
+                    <p className="text-[11px] font-semibold text-[#1a1a1a]/35">담당·기준일</p>
+                    <p className="mt-1 truncate text-[12px] font-medium text-[#111110]">{item.ownerName ?? "미배정"}</p>
+                    <p className="text-[11px] text-[#1a1a1a]/35">{formatDate(item.dueAt ?? item.updatedAt)}</p>
+                  </div>
+                  <div className="flex flex-col gap-2 lg:items-end">
+                    <div className="flex items-center justify-between gap-2 lg:justify-end">
+                      <span className="text-[18px] font-bold tabular-nums text-[#111110]">{item.score}</span>
+                      <Link
+                        href={item.href}
+                        className="inline-flex h-7 items-center gap-1 rounded-lg border border-[#e8e8e4] bg-white px-2 text-[11px] font-semibold text-[#1a1a1a]/55 transition-colors hover:bg-[#f5f5f2] hover:text-[#111110]"
+                      >
+                        열기
+                        <ExternalLink className="h-3 w-3" />
+                      </Link>
+                    </div>
+                    {item.source === "lead" ? (
+                      <div className="flex flex-wrap gap-1.5 lg:justify-end">
+                        <button
+                          type="button"
+                          onClick={() => void handleLeadAction(item, "done")}
+                          disabled={actingId === `${item.id}:done` || actingId === `${item.id}:tomorrow`}
+                          className="inline-flex h-7 items-center gap-1 rounded-lg border border-[#D7EBDD] bg-[#ECFDF5] px-2 text-[11px] font-semibold text-[#084734] transition-colors hover:bg-[#D7EBDD] disabled:opacity-50"
+                        >
+                          <CheckCircle2 className="h-3 w-3" />
+                          연락 완료
+                        </button>
+                        <button
+                          type="button"
+                          onClick={() => void handleLeadAction(item, "tomorrow")}
+                          disabled={actingId === `${item.id}:done` || actingId === `${item.id}:tomorrow`}
+                          className="inline-flex h-7 items-center gap-1 rounded-lg border border-[#e8e8e4] bg-white px-2 text-[11px] font-semibold text-[#1a1a1a]/60 transition-colors hover:bg-[#f5f5f2] hover:text-[#111110] disabled:opacity-50"
+                        >
+                          <Clock3 className="h-3 w-3" />
+                          내일 팔로업
+                        </button>
+                      </div>
+                    ) : item.source === "task" ? (
+                      <div className="flex flex-wrap gap-1.5 lg:justify-end">
+                        <button
+                          type="button"
+                          onClick={() => void handleTaskAction(item, "done")}
+                          disabled={actingId === `${item.id}:done` || actingId === `${item.id}:tomorrow`}
+                          className="inline-flex h-7 items-center gap-1 rounded-lg border border-[#D7EBDD] bg-[#ECFDF5] px-2 text-[11px] font-semibold text-[#084734] transition-colors hover:bg-[#D7EBDD] disabled:opacity-50"
+                        >
+                          <CheckCircle2 className="h-3 w-3" />
+                          완료
+                        </button>
+                        <button
+                          type="button"
+                          onClick={() => void handleTaskAction(item, "tomorrow")}
+                          disabled={actingId === `${item.id}:done` || actingId === `${item.id}:tomorrow`}
+                          className="inline-flex h-7 items-center gap-1 rounded-lg border border-[#e8e8e4] bg-white px-2 text-[11px] font-semibold text-[#1a1a1a]/60 transition-colors hover:bg-[#f5f5f2] hover:text-[#111110] disabled:opacity-50"
+                        >
+                          <Clock3 className="h-3 w-3" />
+                          내일로
+                        </button>
+                      </div>
+                    ) : null}
+                  </div>
+                </div>
+              )
+            )}
           </div>
         ) : (
           <div className="p-6 text-center text-[13px] text-[#1a1a1a]/40">오늘 표시할 우선순위가 없습니다.</div>

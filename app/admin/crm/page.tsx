@@ -1,6 +1,6 @@
 "use client"
 
-import { useState, useEffect, useCallback, type ReactNode } from "react"
+import { useState, useEffect, useCallback, useMemo, type ReactNode } from "react"
 import Link from "next/link"
 import {
   RefreshCw, Building2, Calendar, PhoneCall,
@@ -335,29 +335,130 @@ const BRANCH_KPI_DEFS: Array<{
   { key: "VST", label: "방문", hintLabel: "방문", icon: <MapPin className="h-4 w-4" /> },
 ]
 
-function CrmNeoKpis({
+function sumBranchKpi(rows: BranchKpiMemberRow[], metric: BranchKpiMetricKey) {
+  return rows.reduce(
+    (total, row) => {
+      const value = row.kpi?.[metric]
+      total.actual += Number(value?.actual ?? 0)
+      total.goal += Number(value?.goal ?? 0)
+      return total
+    },
+    { actual: 0, goal: 0 }
+  )
+}
+
+// 총/팀별/개인별 공용 매트릭스 — 행(팀 또는 개인)별로 5개 지표 actual·기준·달성률을 표로.
+function BranchKpiMatrix({
+  rows,
+  emptyLabel,
+}: {
+  rows: Array<{ key: string; label: string; sub?: string; members: BranchKpiMemberRow[] }>
+  emptyLabel: string
+}) {
+  if (rows.length === 0) {
+    return (
+      <p className="rounded-xl bg-[#fafaf8] px-3 py-4 text-center text-[12px] text-[#1a1a1a]/35">{emptyLabel}</p>
+    )
+  }
+  return (
+    <div className="-mx-1 overflow-x-auto px-1">
+      <table className="w-full min-w-[560px] border-collapse text-left">
+        <thead>
+          <tr className="text-[11px] font-semibold uppercase tracking-[0.08em] text-[#1a1a1a]/35">
+            <th className="px-2 pb-2 font-semibold">이름</th>
+            {BRANCH_KPI_DEFS.map((d) => (
+              <th key={d.key} className="px-2 pb-2 text-right font-semibold">
+                {d.label}
+              </th>
+            ))}
+          </tr>
+        </thead>
+        <tbody>
+          {rows.map((row) => (
+            <tr key={row.key} className="border-t border-[#f0f0ec]">
+              <td className="px-2 py-2 align-top">
+                <p className="text-[13px] font-semibold text-[#111110]">{row.label}</p>
+                {row.sub ? <p className="text-[11px] text-[#1a1a1a]/40">{row.sub}</p> : null}
+              </td>
+              {BRANCH_KPI_DEFS.map((d) => {
+                const totals = sumBranchKpi(row.members, d.key)
+                const rate = totals.goal > 0 ? totals.actual / totals.goal : null
+                return (
+                  <td key={d.key} className="px-2 py-2 text-right align-top tabular-nums">
+                    <p
+                      className={`text-[13px] font-bold ${
+                        rate == null || rate >= 0.7 ? "text-[#111110]" : "text-[#B85C33]"
+                      }`}
+                    >
+                      {formatKpiActual(totals.actual)}
+                    </p>
+                    <p className="text-[10px] text-[#1a1a1a]/35">
+                      /{formatKpiActual(totals.goal)} · {formatPercent(rate)}
+                    </p>
+                  </td>
+                )
+              })}
+            </tr>
+          ))}
+        </tbody>
+      </table>
+    </div>
+  )
+}
+
+// 하단 성과 KPI 보드 — 총·팀별·개인별을 한곳에 정리한다.
+function CrmTeamKpiBoard({
   overview,
   branchKpis,
   loading,
   branchError,
-  compact = false,
 }: {
   overview: AdminCrmOverview | null
   branchKpis: BranchKpiResponse | null
   loading: boolean
   branchError: string | null
-  compact?: boolean
 }) {
   const loadingValue = loading && !overview ? "..." : null
   const neoCrm = overview?.neoCrm ?? null
   const neoKpis = neoCrm?.kpis
+  const members = useMemo(() => branchKpis?.members ?? [], [branchKpis])
 
-  const content = (
-    <>
-      <div className="mb-3 flex flex-col gap-3 sm:flex-row sm:items-start sm:justify-between">
+  const teamRows = useMemo(() => {
+    const map = new Map<string, BranchKpiMemberRow[]>()
+    for (const member of members) {
+      const key = member.team?.trim() || "미지정"
+      const list = map.get(key)
+      if (list) list.push(member)
+      else map.set(key, [member])
+    }
+    return Array.from(map.entries()).map(([team, rows]) => ({
+      key: team,
+      label: team,
+      sub: `${rows.length}명`,
+      members: rows,
+    }))
+  }, [members])
+
+  const memberRows = useMemo(
+    () =>
+      members.map((member, index) => ({
+        key: `${member.member}-${index}`,
+        label: member.member,
+        sub: member.team ?? undefined,
+        members: [member],
+      })),
+    [members]
+  )
+
+  const sectionLabel = "text-[11px] font-bold uppercase tracking-[0.1em] text-[#1a1a1a]/40"
+  const branchEmpty = branchError ?? "이번 달 KPI 레코드가 없습니다."
+
+  return (
+    <section className="mb-4 rounded-2xl border border-[#e8e8e4] bg-white p-4">
+      <div className="mb-4 flex flex-col gap-3 sm:flex-row sm:items-start sm:justify-between">
         <div>
-          <p className="text-[11px] font-semibold uppercase tracking-wide text-[#1a1a1a]/30">Sync KPI</p>
-          <h2 className="mt-1 text-[17px] font-bold text-[#111110]">지사관리식 KPI</h2>
+          <p className="text-[11px] font-semibold uppercase tracking-wide text-[#1a1a1a]/30">Performance KPI</p>
+          <h2 className="mt-1 text-[17px] font-bold text-[#111110]">KPI · 총 · 팀별 · 개인별</h2>
           <p className="mt-1 text-[12px] text-[#1a1a1a]/40">
             {CRM_BRANCH_KPI_MONTH} · 외부 CRM 동기화 완료량 기준 · 기준/완료/달성률
           </p>
@@ -367,68 +468,74 @@ function CrmNeoKpis({
         </span>
       </div>
 
-      <div className="grid gap-3 sm:grid-cols-2 xl:grid-cols-4">
-        <CrmMeasurementTile
-          icon={<CircleDollarSign className="h-4 w-4" />}
-          label="동기화 매출"
-          value={loadingValue ?? formatCurrency(neoKpis?.salesAmountMonth)}
-          hint={`완료 ${formatNumber(neoKpis?.salesCountMonth)}건 · 본사 CRM 원천`}
-          tone="text-[#084734]"
-        />
-        <CrmMeasurementTile
-          icon={<BarChart3 className="h-4 w-4" />}
-          label="확정 임박"
-          value={loadingValue ?? formatUSD(neoKpis?.opportunityAmount)}
-          hint={`상기 완료량 ${formatNumber(neoKpis?.opportunityCountMonth)}건 · USD 원천`}
-          tone="text-[#084734]"
-        />
-        <CrmMeasurementTile
-          icon={<Building2 className="h-4 w-4" />}
-          label="동기화 고객"
-          value={loadingValue ?? formatNumber(neoKpis?.activeAccountCountMonth)}
-          hint={`고객 완료량 · 전체 ${formatNumber(neoKpis?.accountCount)}개`}
-          tone="text-[#111110]"
-        />
-        <CrmMeasurementTile
-          icon={<ReceiptText className="h-4 w-4" />}
-          label="동기화 수금"
-          value={loadingValue ?? formatCurrency(neoKpis?.collectionAmountMonth)}
-          hint={`수금 완료량 ${formatNumber(neoKpis?.collectionCountMonth)}건 · 30일 ${formatCurrency(
-            neoKpis?.collectionAmount30d
-          )}`}
-          tone="text-[#111110]"
-        />
+      <div>
+        <p className={sectionLabel}>총 · 한국팀 전체</p>
+        <div className="mt-2 grid gap-3 sm:grid-cols-2 xl:grid-cols-4">
+          <CrmMeasurementTile
+            icon={<CircleDollarSign className="h-4 w-4" />}
+            label="동기화 매출"
+            value={loadingValue ?? formatCurrency(neoKpis?.salesAmountMonth)}
+            hint={`완료 ${formatNumber(neoKpis?.salesCountMonth)}건 · 본사 CRM 원천`}
+            tone="text-[#084734]"
+          />
+          <CrmMeasurementTile
+            icon={<BarChart3 className="h-4 w-4" />}
+            label="확정 임박"
+            value={loadingValue ?? formatUSD(neoKpis?.opportunityAmount)}
+            hint={`상기 완료량 ${formatNumber(neoKpis?.opportunityCountMonth)}건 · USD 원천`}
+            tone="text-[#084734]"
+          />
+          <CrmMeasurementTile
+            icon={<Building2 className="h-4 w-4" />}
+            label="동기화 고객"
+            value={loadingValue ?? formatNumber(neoKpis?.activeAccountCountMonth)}
+            hint={`고객 완료량 · 전체 ${formatNumber(neoKpis?.accountCount)}개`}
+            tone="text-[#111110]"
+          />
+          <CrmMeasurementTile
+            icon={<ReceiptText className="h-4 w-4" />}
+            label="동기화 수금"
+            value={loadingValue ?? formatCurrency(neoKpis?.collectionAmountMonth)}
+            hint={`수금 완료량 ${formatNumber(neoKpis?.collectionCountMonth)}건 · 30일 ${formatCurrency(
+              neoKpis?.collectionAmount30d
+            )}`}
+            tone="text-[#111110]"
+          />
+        </div>
+        <div className="mt-3 grid gap-3 sm:grid-cols-2 xl:grid-cols-5">
+          {BRANCH_KPI_DEFS.map((item) => {
+            const totals = aggregateBranchKpi(branchKpis, item.key)
+            const rate = totals.goal > 0 ? totals.actual / totals.goal : null
+            return (
+              <CrmMeasurementTile
+                key={item.key}
+                icon={item.icon}
+                label={item.label}
+                value={branchError ? "-" : loading && !branchKpis ? "..." : formatKpiActual(totals.actual)}
+                hint={
+                  branchError ??
+                  `${item.hintLabel} · 기준 ${formatKpiActual(totals.goal)} · 달성률 ${formatPercent(rate)}`
+                }
+                tone={rate == null || rate >= 0.7 ? "text-[#084734]" : "text-[#B85C33]"}
+              />
+            )
+          })}
+        </div>
       </div>
 
-      <div className="mt-3 grid gap-3 sm:grid-cols-2 xl:grid-cols-5">
-        {BRANCH_KPI_DEFS.map((item) => {
-          const totals = aggregateBranchKpi(branchKpis, item.key)
-          const rate = totals.goal > 0 ? totals.actual / totals.goal : null
-          return (
-            <CrmMeasurementTile
-              key={item.key}
-              icon={item.icon}
-              label={item.label}
-              value={branchError ? "-" : loading && !branchKpis ? "..." : formatKpiActual(totals.actual)}
-              hint={
-                branchError ??
-                `${item.hintLabel} 완료량 · KPI 기준 ${formatKpiActual(totals.goal)} · 달성률 ${formatPercent(rate)}`
-              }
-              tone={rate == null || rate >= 0.7 ? "text-[#084734]" : "text-[#B85C33]"}
-            />
-          )
-        })}
+      <div className="mt-5 border-t border-[#f0f0ec] pt-4">
+        <p className={sectionLabel}>팀별</p>
+        <div className="mt-2">
+          <BranchKpiMatrix rows={teamRows} emptyLabel={branchEmpty} />
+        </div>
       </div>
-    </>
-  )
 
-  if (compact) {
-    return <div className="mt-4 border-t border-[#f0f0ec] pt-4">{content}</div>
-  }
-
-  return (
-    <section className="mb-4 rounded-2xl border border-[#e8e8e4] bg-white p-4">
-      {content}
+      <div className="mt-5 border-t border-[#f0f0ec] pt-4">
+        <p className={sectionLabel}>개인별</p>
+        <div className="mt-2">
+          <BranchKpiMatrix rows={memberRows} emptyLabel={branchEmpty} />
+        </div>
+      </div>
     </section>
   )
 }
@@ -806,23 +913,8 @@ export default function CrmPage() {
         </div>
       </div>
 
-      <CrmCoverageStrip />
-      <CrmPriorityQueuePanel refreshKey={neoCrmRefreshKey} />
-      <CrmWeekAheadPanel />
-
-      <NeoCrmTeamPanel
-        refreshKey={neoCrmRefreshKey}
-        topKpiSlot={
-          <CrmNeoKpis
-            overview={crmOverview}
-            branchKpis={branchKpis}
-            loading={pageRefreshing}
-            branchError={branchKpisError}
-            compact
-          />
-        }
-      />
-
+      <div className="grid items-start gap-4 xl:grid-cols-[minmax(0,1fr)_340px]">
+        <div className="min-w-0">
       {/* 지금 처리 — 오늘 우선순위 액션 밴드 (리드 보드 딥링크) */}
       <section className="mb-4 rounded-2xl border border-[#e8e8e4] bg-white p-4">
         <div className="mb-4 flex items-center justify-between gap-3">
@@ -935,6 +1027,22 @@ export default function CrmPage() {
         overview={crmOverview}
         loading={crmOverviewLoading}
         error={crmOverviewError}
+      />
+          <CrmCoverageStrip />
+        </div>
+
+        <aside className="flex flex-col gap-4">
+          <CrmPriorityQueuePanel refreshKey={neoCrmRefreshKey} compact />
+          <CrmWeekAheadPanel compact />
+        </aside>
+      </div>
+
+      <NeoCrmTeamPanel refreshKey={neoCrmRefreshKey} />
+      <CrmTeamKpiBoard
+        overview={crmOverview}
+        branchKpis={branchKpis}
+        loading={pageRefreshing}
+        branchError={branchKpisError}
       />
 
       {toast && <Toast msg={toast.msg} type={toast.type} />}
