@@ -11,6 +11,7 @@ import {
   Bot,
   Building2,
   CalendarDays,
+  ChevronDown,
   ChevronRight,
   Code2,
   FileText,
@@ -236,6 +237,9 @@ export default function AdminSidebar({ role, name, email }: Props) {
   const effectiveCollapsed = isDesktop === true && collapsed
   const inCrm = pathname?.startsWith("/admin/crm") ?? false
   const [crmSegCounts, setCrmSegCounts] = useState<Record<string, number> | null>(null)
+  // CRM 하위탭 접기 — admin layout이 유지 마운트라 네비게이션 동안 상태 보존(하드 리로드만 리셋).
+  const [crmNavOpen, setCrmNavOpen] = useState(true)
+  const toggleCrmNav = useCallback(() => setCrmNavOpen((prev) => !prev), [])
 
   // CRM 진입 시에만 세그먼트 카운트 1회 lazy 로드(캐시, 논블로킹). 미로드 시 라벨만 표시.
   useEffect(() => {
@@ -624,7 +628,35 @@ export default function AdminSidebar({ role, name, email }: Props) {
 
                 return (
                   <div key={item.href}>
-                    {linkEl}
+                    <div
+                      className={`group flex items-center rounded-lg ${
+                        isActive ? "bg-[#111110] text-white" : "text-[#1a1a1a]/60 hover:bg-[#f5f5f2] hover:text-[#111110]"
+                      }`}
+                    >
+                      <Link
+                        href={item.href}
+                        onMouseEnter={() => scheduleWarmAdminTab(item.href)}
+                        onClick={() => warmAdminTab(item.href)}
+                        className="flex flex-1 items-center gap-2.5 px-3 py-2 text-[13px] font-medium"
+                      >
+                        <span className={isActive ? "text-white" : "text-[#1a1a1a]/40 group-hover:text-[#111110]"}>
+                          {item.icon}
+                        </span>
+                        <span className="flex-1">{item.label}</span>
+                      </Link>
+                      <button
+                        type="button"
+                        onClick={toggleCrmNav}
+                        aria-label="CRM 하위 메뉴 접기/펼치기"
+                        aria-expanded={crmNavOpen}
+                        className={`shrink-0 px-2 py-2 transition-colors ${
+                          isActive ? "text-white/70 hover:text-white" : "text-[#1a1a1a]/35 hover:text-[#111110]"
+                        }`}
+                      >
+                        {crmNavOpen ? <ChevronDown className="h-3.5 w-3.5" /> : <ChevronRight className="h-3.5 w-3.5" />}
+                      </button>
+                    </div>
+                    {crmNavOpen ? (
                     <div className="mb-1 ml-[18px] mt-0.5 space-y-0.5 border-l border-[#e8e8e4] pl-2.5">
                       {CRM_CHILD_NAV.map((child) => {
                         const childActive = child.match(pathname ?? "")
@@ -667,6 +699,7 @@ export default function AdminSidebar({ role, name, email }: Props) {
                         )
                       })}
                     </div>
+                    ) : null}
                   </div>
                 )
               })}
