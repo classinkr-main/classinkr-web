@@ -70,7 +70,7 @@ export default async function AccountPage() {
                       <p className="truncate text-[15px] font-semibold leading-6 text-[#111110]">
                         {item.title}
                       </p>
-                      <p className="mt-0.5 text-[12px] text-[#A39E98]">
+                      <p className="mt-0.5 text-[12px] text-[#615D59]">
                         최근 다운로드 {new Date(item.lastDownloadedAt).toLocaleDateString("ko-KR")}
                       </p>
                     </div>

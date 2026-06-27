@@ -429,7 +429,7 @@ export default function EventsClient({
                   행사 영상 다시보기
                 </h2>
                 <p className="mt-3 max-w-2xl text-[14px] leading-7 text-[#615D59] md:text-[15px]">
-                  지난 행사 현장 영상을 구글 · 네이버 로그인 회원에게 다시보기로 제공합니다.
+                  지난 행사 현장 영상을 로그인 회원에게 다시보기로 제공합니다.
                 </p>
               </div>
               <span className="hidden shrink-0 text-[13px] font-semibold text-[#615D59] sm:block">

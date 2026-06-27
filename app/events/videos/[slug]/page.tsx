@@ -26,10 +26,6 @@ function formatPublishedAt(value: string): string {
   return /^\d{4}-\d{2}-\d{2}$/.test(value) ? value.replace(/-/g, ".") : value
 }
 
-export function generateStaticParams() {
-  return getPublishedSeminars().map((seminar) => ({ slug: seminar.slug }))
-}
-
 export async function generateMetadata({ params }: EventVideoPageProps): Promise<Metadata> {
   const { slug } = await params
   const seminar = getSeminarBySlug(slug)

@@ -41,7 +41,7 @@ const ALLOWED_PARAM_KEYS: Record<string, Set<string>> = {
   download_materials: new Set(["event_id", "asset_id", "page", "source", "lead_magnet", "post_slug", "gate"]),
   view_resource_card: new Set(["event_id", "source", "lead_magnet", "gate", "tier", "category"]),
   view_resource: new Set(["event_id", "source", "lead_magnet", "gate", "tier", "category"]),
-  view_demo_video: new Set(["event_id", "button", "page"]),
+  view_demo_video: new Set(["event_id", "button", "page", "source", "seminar"]),
   begin_checkout: new Set([
     "event_id",
     "button",
