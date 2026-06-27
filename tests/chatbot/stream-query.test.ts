@@ -79,6 +79,23 @@ describe("streamChatbotQuery", () => {
     expect(answer).toBe(nonStream.answer)
   })
 
+  it("exposes self-knowledge intent metadata on deterministic self answers", async () => {
+    disableExternalChatbotServices()
+
+    const events = await collectStream("너는 어떤 데이터를 참고해서 답해?")
+    const answer = lastReplace(events)
+    const meta = metaOf(events)
+
+    expect(answer).toContain("공개 문서")
+    expect(meta).toMatchObject({
+      answerMode: "direct_answer",
+      detectedCategory: "general",
+      detectedIntent: "self_knowledge",
+      needsHandoff: false,
+    })
+    expect(events.some((event) => event.type === "delta")).toBe(false)
+  })
+
   it("streams CS Figma guide answers without external AI rewriting", async () => {
     vi.stubEnv("NEXT_PUBLIC_SUPABASE_URL", "")
     vi.stubEnv("NEXT_PUBLIC_SUPABASE_PUBLISHABLE_KEY", "")
@@ -93,7 +110,7 @@ describe("streamChatbotQuery", () => {
 
     expect(answer).toContain("1. 수업을 진행할 코스에 입장합니다.")
     expect(meta?.answerMode).toBe("direct_answer")
-    expect(meta?.sources[0]?.heading).toBe("Figma CS 캡처 기준 3단계 안내")
+    expect(meta?.sources[0]?.heading).toBe("사용 순서 안내")
     expect(events.some((event) => event.type === "delta")).toBe(false)
     expect(fetchMock).not.toHaveBeenCalled()
   })

@@ -15,6 +15,7 @@ import {
 
 import { Button } from "@/components/ui/button"
 import {
+  type AdminIntegrationCategory,
   type AdminIntegrationHealth,
   type AdminIntegrationSection,
   type AdminIntegrationSource,
@@ -163,6 +164,58 @@ const CONNECTOR_FEATURE_ROWS: Array<{
   },
 ]
 
+const INTEGRATION_CATEGORY_ORDER: AdminIntegrationCategory[] = [
+  "core",
+  "lead",
+  "notification",
+  "marketing",
+  "crm",
+  "billing",
+  "portal",
+  "ops",
+]
+
+const INTEGRATION_CATEGORY_META: Record<
+  AdminIntegrationCategory,
+  {
+    label: string
+    description: string
+  }
+> = {
+  core: {
+    label: "핵심 기반",
+    description: "관리자, 공개 사이트, 포털이 공통으로 기대는 기본 연결입니다.",
+  },
+  lead: {
+    label: "리드·상담",
+    description: "문의, 데모 신청, 상담 수집과 전달 흐름입니다.",
+  },
+  notification: {
+    label: "알림",
+    description: "운영 알림, digest 수신자, 외부 알림 채널입니다.",
+  },
+  marketing: {
+    label: "마케팅",
+    description: "캠페인, 픽셀, 광고 성과 조회 계열 연결입니다.",
+  },
+  crm: {
+    label: "CRM",
+    description: "외부 CRM 동기화와 writeback queue 준비 상태입니다.",
+  },
+  billing: {
+    label: "결제·정산",
+    description: "결제 승인, 견적 코드, 환율 fallback 운영 연결입니다.",
+  },
+  portal: {
+    label: "파트너 포털",
+    description: "파트너 API, 공유 링크, 계약·견적 문서 흐름입니다.",
+  },
+  ops: {
+    label: "운영 자동화",
+    description: "스케줄러, Google 계정, 지점 운영 데이터 연결입니다.",
+  },
+}
+
 function PanelCard({
   title,
   description,
@@ -266,6 +319,27 @@ function summarizeConnectorHealth(items: AdminIntegrationStatusItem[]): AdminInt
   return "unknown"
 }
 
+function buildIntegrationGroups(items: AdminIntegrationStatusItem[]) {
+  return INTEGRATION_CATEGORY_ORDER.map((category) => {
+    const categoryItems = items.filter((item) => item.category === category)
+    const configuredCount = categoryItems.filter((item) => item.configured).length
+    const issueCount = categoryItems.filter((item) => item.health === "warning" || item.health === "error").length
+    const unknownCount = categoryItems.filter((item) => item.health === "unknown").length
+
+    return {
+      category,
+      meta: INTEGRATION_CATEGORY_META[category],
+      items: categoryItems,
+      totalCount: categoryItems.length,
+      configuredCount,
+      issueCount,
+      unknownCount,
+      missingCount: categoryItems.length - configuredCount,
+      health: summarizeConnectorHealth(categoryItems),
+    }
+  }).filter((group) => group.totalCount > 0)
+}
+
 function IntegrationStatusCard({ item }: { item: AdminIntegrationStatusItem }) {
   return (
     <div className="rounded-2xl border border-[#e8e8e4] bg-white p-4">
@@ -320,6 +394,92 @@ function IntegrationStatusCard({ item }: { item: AdminIntegrationStatusItem }) {
         </a>
       ) : null}
     </div>
+  )
+}
+
+function IntegrationConnectionSummary({
+  items,
+  loading,
+}: {
+  items: AdminIntegrationStatusItem[]
+  loading: boolean
+}) {
+  const groups = buildIntegrationGroups(items)
+  const configuredCount = items.filter((item) => item.configured).length
+  const totalCount = items.length
+
+  return (
+    <PanelCard
+      title="연결 현황 요약"
+      description="어드민 세팅 탭에서 연결된 서비스와 점검할 연결을 운영 영역별로 정리합니다."
+      badge={totalCount > 0 ? `${configuredCount}/${totalCount} 연결` : "연결 지도"}
+    >
+      {loading && groups.length === 0 ? (
+        <p className="text-[13px] text-[#1a1a1a]/35">연결 항목을 정리하는 중...</p>
+      ) : groups.length === 0 ? (
+        <EmptyHint
+          title="아직 정리할 연결 항목이 없습니다."
+          description="연동 상태 API가 응답하면 연결된 서비스와 미설정 항목이 영역별로 표시됩니다."
+          action="먼저 연동 상태를 새로고침해 주세요."
+        />
+      ) : (
+        <div className="grid gap-3 lg:grid-cols-2">
+          {groups.map((group) => (
+            <div key={group.category} className="rounded-2xl border border-[#e8e8e4] bg-white p-4">
+              <div className="flex flex-col gap-3 sm:flex-row sm:items-start sm:justify-between">
+                <div className="min-w-0">
+                  <p className="text-[13px] font-semibold text-[#111110]">{group.meta.label}</p>
+                  <p className="mt-1 text-[12px] leading-relaxed text-[#1a1a1a]/45">
+                    {group.meta.description}
+                  </p>
+                </div>
+                <HealthBadge health={group.health} />
+              </div>
+
+              <div className="mt-4 grid grid-cols-3 gap-2 text-center">
+                <div className="rounded-xl bg-[#fafaf8] px-2 py-2">
+                  <p className="text-[13px] font-bold text-[#111110]">
+                    {group.configuredCount}/{group.totalCount} 연결
+                  </p>
+                  <p className="mt-0.5 text-[10px] font-medium text-[#1a1a1a]/35">설정됨</p>
+                </div>
+                <div className="rounded-xl bg-[#fafaf8] px-2 py-2">
+                  <p className="text-[13px] font-bold text-amber-700">확인 {group.issueCount}</p>
+                  <p className="mt-0.5 text-[10px] font-medium text-[#1a1a1a]/35">주의</p>
+                </div>
+                <div className="rounded-xl bg-[#fafaf8] px-2 py-2">
+                  <p className="text-[13px] font-bold text-[#1a1a1a]/45">미설정 {group.missingCount}</p>
+                  <p className="mt-0.5 text-[10px] font-medium text-[#1a1a1a]/35">연결 전</p>
+                </div>
+              </div>
+
+              <div className="mt-3 flex flex-wrap gap-1.5">
+                {group.items.map((item) => (
+                  <span
+                    key={item.key}
+                    className={cn(
+                      "inline-flex items-center gap-1 rounded-full px-2 py-1 text-[10px] font-semibold",
+                      item.configured
+                        ? "bg-[#ECFDF5] text-[#084734]"
+                        : "bg-[#f0f0ec] text-[#1a1a1a]/45"
+                    )}
+                  >
+                    {item.label}
+                    <span className="font-medium opacity-70">{getHealthLabel(item.health)}</span>
+                  </span>
+                ))}
+              </div>
+
+              {group.unknownCount > 0 ? (
+                <p className="mt-3 text-[11px] leading-relaxed text-[#1a1a1a]/40">
+                  미검증 항목 {group.unknownCount}개는 키가 없거나 아직 헬스체크 기록이 없습니다.
+                </p>
+              ) : null}
+            </div>
+          ))}
+        </div>
+      )}
+    </PanelCard>
   )
 }
 
@@ -600,6 +760,8 @@ export function IntegrationControlPanel({
       >
         <IntegrationSectionNav active={active} onChange={onChange} />
       </PanelCard>
+
+      <IntegrationConnectionSummary items={items} loading={loading} />
 
       {active === "status" ? (
         <>

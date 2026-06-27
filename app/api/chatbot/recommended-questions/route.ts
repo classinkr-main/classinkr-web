@@ -6,6 +6,7 @@ import { CLASSIN_POSITIONING } from "@/lib/classin-positioning"
 export const dynamic = "force-dynamic"
 
 const STARTER_QUESTION_LIMIT = 4
+const MAX_STARTER_QUESTION_LENGTH = 120
 
 const fallbackQuestions = [
     ...CLASSIN_POSITIONING.chatbot.starterQuestions,
@@ -19,7 +20,7 @@ const legacyStarterQuestionMap = new Map([
 ])
 
 interface RecommendedQuestionRow {
-    prompt: string | null
+    prompt: unknown
 }
 
 function hasSupabaseServerEnv() {
@@ -38,13 +39,15 @@ function fallbackResponse(warning: string) {
     })
 }
 
-function normalizeQuestions(questions: Array<string | null | undefined>) {
+function normalizeQuestions(questions: unknown[]) {
     return Array.from(
         new Set(
             questions
-                .map((question) => question?.trim())
+                .map((question) => (typeof question === "string" ? question.trim() : null))
                 .map((question) => question ? legacyStarterQuestionMap.get(question) ?? question : question)
-                .filter((question): question is string => Boolean(question))
+                .filter((question): question is string =>
+                    Boolean(question && question.length <= MAX_STARTER_QUESTION_LENGTH)
+                )
         )
     ).slice(0, STARTER_QUESTION_LIMIT)
 }

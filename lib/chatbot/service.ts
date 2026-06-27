@@ -8,6 +8,7 @@ import {
   classifyChatbotQuestion,
   type ChatbotIntent,
 } from "@/lib/chatbot/classification"
+import { findChatbotSelfKnowledgeEntry } from "@/lib/chatbot/self-knowledge"
 import {
   generateGeminiFinalAnswer,
   streamGeminiFinalAnswer,
@@ -381,6 +382,10 @@ function normalizeQuestion(raw: unknown): NormalizedQuestion {
   }
 }
 
+export function validateChatbotQueryInput(input: ChatbotQueryRequest): void {
+  normalizeQuestion(input.message)
+}
+
 function isGreetingOnly(question: NormalizedQuestion) {
   return /^(안녕|안녕하세요|하이|hello|hi)[.!?\s]*$/i.test(question.normalized)
 }
@@ -392,7 +397,7 @@ const CAPABILITY_REQUEST_RE =
   /되나요|돼요|가능|지원|제공|처리|관리|기능|자동|연동|만들|추가|하려고|하고\s*싶|쓸\s*수|사용할\s*수/i
 
 const PROMPT_OR_SECURITY_ABUSE_RE =
-  /sql\s*injection|sqli|union\s+select|drop\s+table|or\s+1\s*=\s*1|information_schema|xp_cmdshell|xss|csrf|ssrf|rce|프롬프트\s*인젝션|system\s*prompt|developer\s*(?:message|instruction)|시스템\s*프롬프트|개발자\s*메시지|내부\s*(?:프롬프트|규칙|지시)|(?:프롬프트|prompt|지시문).{0,16}(?:보여|출력|공개|알려|노출|그대로)|(?:보여|출력|공개|알려|노출).{0,16}(?:프롬프트|prompt|지시문)|(?:이전|위|앞선).{0,12}(?:지시|규칙|프롬프트).{0,12}(?:무시|잊어|삭제)|보안.{0,12}(?:뚫|우회|공격)|취약점.{0,12}(?:공격|악용|우회)|해킹.{0,12}(?:방법|공격|뚫|탈취|우회)|(?:비밀번호|토큰|api\s*key|관리자).{0,12}(?:탈취|훔|우회|크랙)/i
+  /sql\s*injection|sqli|union\s+select|drop\s+table|or\s+1\s*=\s*1|information_schema|xp_cmdshell|xss|csrf|ssrf|rce|프롬프트\s*인젝션|system\s*prompt|developer\s*(?:message|instruction)|시스템\s*프롬프트|개발자\s*메시지|(?:개발자|시스템|숨겨진|비공개).{0,12}(?:지침|규칙|지시|명령어?|명령문).{0,16}(?:원문|보여|출력|공개|알려|노출|그대로)|(?:개발자|시스템).{0,10}(?:준|받은).{0,10}(?:지침|규칙|지시|명령어?|명령문).{0,16}(?:원문|보여|출력|공개|알려|노출|그대로)|내부\s*(?:프롬프트|규칙|지시|명령어?|명령문)|(?:프롬프트|prompt|지시문).{0,16}(?:보여|출력|공개|알려|노출|그대로)|(?:보여|출력|공개|알려|노출).{0,16}(?:프롬프트|prompt|지시문)|(?:이전|위|앞선).{0,12}(?:지시|규칙|프롬프트).{0,12}(?:무시|잊어|삭제)|보안.{0,12}(?:뚫|우회|공격)|취약점.{0,12}(?:공격|악용|우회)|해킹.{0,12}(?:방법|공격|뚫|탈취|우회)|(?:비밀번호|토큰|api\s*key|관리자).{0,12}(?:탈취|훔|우회|크랙)/i
 const CRIMINAL_ABUSE_RE =
   /(?:범죄|불법|사기|피싱|스미싱|절도|도둑|마약|폭탄|무기|살인|폭행).{0,18}(?:방법|하는\s*법|계획|도와|만들|제조|우회|탈취|공격|훔|숨기|피하)|(?:방법|하는\s*법|계획).{0,18}(?:범죄|불법|사기|피싱|스미싱|절도|마약|폭탄|무기|살인|폭행)/i
 const TOKEN_WASTE_RE =
@@ -503,6 +508,24 @@ function buildPolicyGuardResponse(question: NormalizedQuestion): {
       category: "general",
       intent: "docs_lookup",
       handoffIntent: "support",
+    }
+  }
+
+  const selfKnowledgeEntry = findChatbotSelfKnowledgeEntry(question.redacted)
+  if (selfKnowledgeEntry) {
+    return {
+      response: {
+        answer: selfKnowledgeEntry.answer.join("\n\n"),
+        answerMode: "direct_answer",
+        confidence: 0.92,
+        needsHandoff: false,
+        sources: [],
+        suggestedQuestions: selfKnowledgeEntry.suggestedQuestions,
+        unresolved: false,
+      },
+      category: "general",
+      intent: "self_knowledge",
+      handoffIntent: "demo",
     }
   }
 
@@ -3249,13 +3272,14 @@ export async function handleChatbotQuery(
 export async function evaluateChatbotQuery(
   message: string,
   options: { generateAnswer?: boolean } = {}
-): Promise<ChatbotQueryResponse & { detectedCategory: string }> {
+): Promise<ChatbotQueryResponse & { detectedCategory: string; detectedIntent: ChatbotIntent }> {
   const core = await buildChatbotCore(message, { generateAnswer: options.generateAnswer })
   return {
     ...core.response,
     handoffIntent: core.handoffIntent,
     warning: core.warning,
     detectedCategory: core.category,
+    detectedIntent: core.intent,
   }
 }
 
@@ -3265,6 +3289,8 @@ export interface ChatbotStreamMeta {
   needsHandoff: boolean
   unresolved: boolean
   handoffIntent: HandoffIntent
+  detectedCategory: string
+  detectedIntent: ChatbotIntent
   sources: ChatbotSource[]
   suggestedQuestions: string[]
   sessionId?: string
@@ -3361,6 +3387,8 @@ export async function streamChatbotQuery(
 
   const emitMeta = (
     response: Omit<ChatbotQueryResponse, "answerEventId" | "sessionId" | "warning" | "handoffIntent">,
+    category: string,
+    intent: ChatbotIntent,
     handoffIntent: HandoffIntent,
     warning?: string
   ) => {
@@ -3372,6 +3400,8 @@ export async function streamChatbotQuery(
         needsHandoff: response.needsHandoff,
         unresolved: response.unresolved,
         handoffIntent,
+        detectedCategory: category,
+        detectedIntent: intent,
         sources: shouldExposeSources(input) ? response.sources : [],
         suggestedQuestions: response.suggestedQuestions,
         sessionId,
@@ -3387,7 +3417,7 @@ export async function streamChatbotQuery(
     const cached = getCachedAnswer(cachedQuestion)
     if (cached) {
       emit({ type: "replace", answer: cached.response.answer })
-      emitMeta(cached.response, cached.handoffIntent, cached.warning)
+      emitMeta(cached.response, cached.category, cached.intent, cached.handoffIntent, cached.warning)
       void persistExchange(
         input,
         cachedQuestion,
@@ -3428,7 +3458,7 @@ export async function streamChatbotQuery(
     setCachedAnswer(question, { response, category, intent, handoffIntent, warning })
   }
 
-  emitMeta(response, handoffIntent, warning)
+  emitMeta(response, category, intent, handoffIntent, warning)
 
   void persistExchange(
     input,
@@ -3494,10 +3524,22 @@ export async function saveChatbotFeedback(raw: unknown) {
 
   if (error) throw new Error(error.message)
 
-  await maybeCreateChannelTalkFeedbackHandoff(answerEventId, {
-    rating,
-    comment: comment ? redactPii(comment.replace(/\s+/g, " ").trim()) : null,
-  })
+  try {
+    await maybeCreateChannelTalkFeedbackHandoff(answerEventId, {
+      rating,
+      comment: comment ? redactPii(comment.replace(/\s+/g, " ").trim()) : null,
+    })
+  } catch (error) {
+    console.warn(
+      "[chatbot] feedback handoff failed:",
+      error instanceof Error ? error.message : error
+    )
+    return {
+      ok: true,
+      stored: true,
+      warning: "피드백은 저장했지만 후속 전달은 처리하지 못했습니다.",
+    }
+  }
 
   return { ok: true, stored: true }
 }

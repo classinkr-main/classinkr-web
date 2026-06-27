@@ -8,6 +8,7 @@ interface GoldenCase {
   question: string
   expectCategory: string
   expectHeadingIncludes?: string
+  expectSources?: boolean
 }
 
 describe("chatbot golden set coverage", () => {
@@ -61,5 +62,22 @@ describe("chatbot golden set coverage", () => {
     expect(ids).toContain("channel-board-only-sale")
     expect(ids).toContain("channel-platform-in-board")
     expect(ids).toContain("channel-camera-one-user")
+  })
+
+  it("covers public self-knowledge and conversation-data questions", () => {
+    const selfKnowledgeCases = cases.filter((testCase) => testCase.expectCategory === "general")
+
+    expect(selfKnowledgeCases.some((testCase) => testCase.id === "self-identity-role")).toBe(true)
+    expect(selfKnowledgeCases.some((testCase) => testCase.id === "self-conversation-data-use")).toBe(true)
+  })
+
+  it("marks self-knowledge direct answers as source-optional", () => {
+    const ids = ["self-identity-role", "self-conversation-data-use"]
+
+    for (const id of ids) {
+      const testCase = cases.find((candidate) => candidate.id === id)
+
+      expect(testCase?.expectSources).toBe(false)
+    }
   })
 })

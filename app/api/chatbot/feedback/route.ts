@@ -14,8 +14,15 @@ export async function POST(req: NextRequest) {
     return NextResponse.json({ error: "Too many requests." }, { status: 429 })
   }
 
+  let body: unknown
   try {
-    const result = await saveChatbotFeedback(await req.json())
+    body = await req.json()
+  } catch {
+    return NextResponse.json({ error: "요청 JSON을 읽지 못했습니다." }, { status: 400 })
+  }
+
+  try {
+    const result = await saveChatbotFeedback(body)
     return NextResponse.json(result)
   } catch (error) {
     if (error instanceof ChatbotInputError) {
