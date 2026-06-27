@@ -14,7 +14,23 @@ import {
   type CrmCustomerEventTargetType,
   type CrmEventNextAction,
 } from "@/lib/repositories/crm-events"
+import { createTasksFromEventNextActions } from "@/lib/repositories/crm-tasks"
 import { uploadCrmRecording } from "@/lib/storage/crm-recordings"
+
+type CreatedCrmEvent = Awaited<ReturnType<typeof createCrmCustomerEvent>>
+
+// 기록 저장 후 열린 다음 액션을 crm_tasks로 자동 승격한다(§7.2).
+// task 생성 실패가 기록 저장 자체를 깨뜨리면 안 되므로 fail-soft.
+async function respondWithCreatedEvent(event: CreatedCrmEvent, createdBy: string) {
+  let tasksCreated = 0
+  try {
+    const tasks = await createTasksFromEventNextActions(event, { createdBy })
+    tasksCreated = tasks.length
+  } catch (error) {
+    console.error("[POST /api/admin/crm/events] auto-task creation", error)
+  }
+  return NextResponse.json({ event, tasksCreated }, { status: 201 })
+}
 
 const SOURCE_TYPES = new Set<string>(CRM_EVENT_SOURCE_TYPES)
 const TARGET_TYPES = new Set<string>(CRM_EVENT_TARGET_TYPES)
@@ -184,7 +200,7 @@ export async function POST(req: NextRequest) {
       }
 
       const event = await createCrmCustomerEvent(input)
-      return NextResponse.json({ event }, { status: 201 })
+      return await respondWithCreatedEvent(event, createdBy)
     }
 
     const body = await req.json().catch(() => null)
@@ -241,7 +257,7 @@ export async function POST(req: NextRequest) {
     }
 
     const event = await createCrmCustomerEvent(input)
-    return NextResponse.json({ event }, { status: 201 })
+    return await respondWithCreatedEvent(event, createdBy)
   } catch (error) {
     console.error("[POST /api/admin/crm/events]", error)
     if (isCrmEventsNotReadyError(error)) {

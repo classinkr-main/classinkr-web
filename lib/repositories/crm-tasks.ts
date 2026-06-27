@@ -444,3 +444,76 @@ export async function deleteCrmTask(id: string): Promise<boolean> {
   }
   return Boolean(data)
 }
+
+// 다음 액션 자유 입력 텍스트에서 task 유형을 추정한다(가장 구체적인 것부터).
+const TASK_TYPE_KEYWORDS: Array<[CrmTaskType, RegExp]> = [
+  ["quote", /견적/],
+  ["demo", /데모|시연/],
+  ["install", /설치/],
+  ["renewal", /갱신|연장|재계약/],
+  ["meeting", /미팅|회의|방문|상담/],
+  ["kakao", /카톡|카카오/],
+  ["email", /메일|이메일/],
+  ["call", /전화|통화|콜백|콜/],
+  ["cs_checkin", /온보딩|점검|활성화|cs/i],
+  ["data_fix", /데이터|정합성|보정/],
+]
+
+export function inferTaskTypeFromTitle(title: string | null | undefined): CrmTaskType {
+  const text = title?.trim() ?? ""
+  if (!text) return "other"
+  for (const [type, pattern] of TASK_TYPE_KEYWORDS) {
+    if (pattern.test(text)) return type
+  }
+  return "other"
+}
+
+export interface EventNextActionLike {
+  title: string
+  ownerName?: string | null
+  dueAt?: string | null
+  done?: boolean
+}
+
+export interface EventForTaskLike {
+  id: string
+  targetType: CrmTaskTargetType
+  targetId: string | null
+  targetLabel: string | null
+  ownerName?: string | null
+  nextActions: EventNextActionLike[]
+}
+
+// 기록(crm_customer_events)의 열린 다음 액션을 1급 task 입력으로 승격한다(§7.2).
+export function buildTaskInputsFromEvent(
+  event: EventForTaskLike,
+  options: { createdBy?: string | null } = {}
+): CrmTaskCreateInput[] {
+  return (event.nextActions ?? [])
+    .filter((action) => action && action.done !== true && Boolean(action.title?.trim()))
+    .map((action) => ({
+      targetType: event.targetType,
+      targetId: event.targetId,
+      targetLabel: event.targetLabel,
+      ownerNameSnapshot: trimOrNull(action.ownerName) ?? trimOrNull(event.ownerName),
+      taskType: inferTaskTypeFromTitle(action.title),
+      title: action.title,
+      dueAt: action.dueAt ?? null,
+      sourceEventId: event.id,
+      createdBy: options.createdBy,
+      assignedBy: options.createdBy,
+    }))
+}
+
+export async function createTasksFromEventNextActions(
+  event: EventForTaskLike,
+  options: { createdBy?: string | null } = {}
+): Promise<CrmTaskRecord[]> {
+  const inputs = buildTaskInputsFromEvent(event, options)
+  if (inputs.length === 0) return []
+  const created: CrmTaskRecord[] = []
+  for (const input of inputs) {
+    created.push(await createCrmTask(input))
+  }
+  return created
+}

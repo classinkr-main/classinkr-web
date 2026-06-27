@@ -404,7 +404,11 @@ export default function CrmActivityClient() {
       const response = await adminFetch(EVENTS_URL, { method: "POST", body: formData })
       const payload = await response.json().catch(() => null)
       if (!response.ok) throw new Error(payload?.error ?? "CRM 기록 저장에 실패했습니다.")
-      setToast({ msg: "CRM 기록을 저장했습니다.", type: "success" })
+      const tasksCreated = typeof payload?.tasksCreated === "number" ? payload.tasksCreated : 0
+      setToast({
+        msg: tasksCreated > 0 ? `CRM 기록 저장 · 할 일 ${tasksCreated}건 생성` : "CRM 기록을 저장했습니다.",
+        type: "success",
+      })
       resetForm()
       void loadEvents(0, { force: true })
     } catch (err) {

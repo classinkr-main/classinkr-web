@@ -3,7 +3,9 @@ import { describe, expect, it } from "vitest"
 import {
   buildCrmTaskEditPatch,
   buildCrmTaskInsert,
+  buildTaskInputsFromEvent,
   defaultSnoozeUntil,
+  inferTaskTypeFromTitle,
   toCrmTaskRecord,
   type CrmTaskRecord,
 } from "@/lib/repositories/crm-tasks"
@@ -131,6 +133,65 @@ describe("CRM tasks", () => {
       priority: "urgent",
       sourceEventId: "evt-3",
     })
+  })
+})
+
+describe("inferTaskTypeFromTitle", () => {
+  it("maps Korean next-action phrasing to task types", () => {
+    expect(inferTaskTypeFromTitle("견적서 발송")).toBe("quote")
+    expect(inferTaskTypeFromTitle("데모 일정 확정")).toBe("demo")
+    expect(inferTaskTypeFromTitle("설치 일정 잡기")).toBe("install")
+    expect(inferTaskTypeFromTitle("갱신 상담 진행")).toBe("renewal")
+    expect(inferTaskTypeFromTitle("원장님과 미팅")).toBe("meeting")
+    expect(inferTaskTypeFromTitle("카톡으로 안내")).toBe("kakao")
+    expect(inferTaskTypeFromTitle("전화 콜백")).toBe("call")
+    expect(inferTaskTypeFromTitle("뭔가 막연한 일")).toBe("other")
+    expect(inferTaskTypeFromTitle("")).toBe("other")
+  })
+})
+
+describe("buildTaskInputsFromEvent", () => {
+  const event = {
+    id: "evt-1",
+    targetType: "lead" as const,
+    targetId: "lead-7",
+    targetLabel: "테스트 학원",
+    ownerName: "김지사",
+    nextActions: [
+      { title: "견적서 발송", ownerName: "이매니저", dueAt: "2026-06-30T00:00:00.000Z", done: false },
+      { title: "이미 끝난 일", done: true },
+      { title: "   ", done: false },
+    ],
+  }
+
+  it("promotes only open, non-empty next actions and threads the source event + target", () => {
+    const inputs = buildTaskInputsFromEvent(event, { createdBy: "김지사" })
+    expect(inputs).toHaveLength(1)
+    expect(inputs[0]).toMatchObject({
+      targetType: "lead",
+      targetId: "lead-7",
+      targetLabel: "테스트 학원",
+      title: "견적서 발송",
+      taskType: "quote",
+      ownerNameSnapshot: "이매니저",
+      dueAt: "2026-06-30T00:00:00.000Z",
+      sourceEventId: "evt-1",
+      createdBy: "김지사",
+      assignedBy: "김지사",
+    })
+  })
+
+  it("falls back to the event owner when a next action has no owner", () => {
+    const inputs = buildTaskInputsFromEvent(
+      { ...event, nextActions: [{ title: "후속 통화", done: false }] },
+      { createdBy: "김지사" }
+    )
+    expect(inputs[0]?.ownerNameSnapshot).toBe("김지사")
+    expect(inputs[0]?.taskType).toBe("call")
+  })
+
+  it("returns nothing when there are no actionable next actions", () => {
+    expect(buildTaskInputsFromEvent({ ...event, nextActions: [] })).toEqual([])
   })
 })
 
