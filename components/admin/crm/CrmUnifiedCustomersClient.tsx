@@ -218,6 +218,12 @@ export default function CrmUnifiedCustomersClient() {
     const account = searchParams.get("account")
     if (account) setDrawer({ key: account, name: "" })
   }, [searchParams])
+
+  // 사이드바 저장된 세그먼트 링크(?view=) → 저장 뷰 동기화 (네비게이션마다).
+  useEffect(() => {
+    const view = searchParams.get("view")
+    if (view) setSavedView(view as SavedViewFilter)
+  }, [searchParams])
   const { owners: crmOwners, currentOwner, health: ownerHealth } = useCrmOwners()
   const ownerOptions = useMemo(() => buildOwnerSelectOptions(data?.owners, crmOwners), [crmOwners, data?.owners])
 

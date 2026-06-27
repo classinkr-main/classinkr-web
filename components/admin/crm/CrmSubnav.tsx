@@ -4,13 +4,9 @@ import Link from "next/link"
 import { usePathname } from "next/navigation"
 import type { ReactNode } from "react"
 import {
-  BarChart3,
   Building2,
   CircleDollarSign,
-  FileAudio,
   Handshake,
-  LayoutDashboard,
-  Link2,
   PhoneCall,
   Target,
   Users,
@@ -20,65 +16,8 @@ type CrmSection = "home" | "customers" | "activity" | "deals" | "insights" | "sy
 type DealsSub = "revenue" | "orders" | "kpi"
 type CustomersSub = "unified" | "leads" | "accounts"
 
-// 한국팀 일상 동선: 현황(아침 점검) → 고객(콜·비짓) → Deals(견적→수납). 연동은 유지보수.
-const PRIMARY_TABS = [
-  {
-    key: "home",
-    href: "/admin/crm",
-    label: "현황",
-    description: "오늘 할 일",
-    icon: <LayoutDashboard className="h-4 w-4" />,
-  },
-  {
-    key: "customers",
-    href: "/admin/crm/customers/unified",
-    label: "고객",
-    description: "통합 DB",
-    icon: <PhoneCall className="h-4 w-4" />,
-  },
-  {
-    key: "activity",
-    href: "/admin/crm/activity",
-    label: "기록",
-    description: "회의·녹음",
-    icon: <FileAudio className="h-4 w-4" />,
-  },
-  {
-    key: "deals",
-    href: "/admin/crm/deals",
-    label: "돈흐름",
-    description: "견적 → 수납",
-    icon: <CircleDollarSign className="h-4 w-4" />,
-  },
-  {
-    key: "insights",
-    href: "/admin/crm/insights",
-    label: "인사이트",
-    description: "리스크·기회",
-    icon: <BarChart3 className="h-4 w-4" />,
-  },
-] satisfies Array<{
-  key: Exclude<CrmSection, "sync">
-  href: string
-  label: string
-  description: string
-  icon: ReactNode
-}>
-
-// 유지보수 전용 — 일상 동선에서 분리해 흐리게 노출.
-const MAINTENANCE_TAB = {
-  key: "sync",
-  href: "/admin/crm/matching",
-  label: "연동",
-  description: "시트·CRM 동기화",
-  icon: <Link2 className="h-4 w-4" />,
-} satisfies {
-  key: "sync"
-  href: string
-  label: string
-  description: string
-  icon: ReactNode
-}
+// 상단 primary 탭은 글로벌 사이드바(AdminSidebar)의 CRM 확장으로 이전됨.
+// CrmSubnav는 컨텍스트 sub-tab(고객·돈흐름 내부)만 본문 상단에 렌더한다.
 
 // Deals 섹션 안에서만 보이는 단계별 보조 탭 (견적→오더·설치→KPI).
 const DEALS_SUBTABS = [
@@ -152,70 +91,10 @@ export default function CrmSubnav({ active }: { active?: CrmSection } = {}) {
   const showDealsSub = section === "deals"
   const showCustomersSub = section === "customers"
 
+  if (!showCustomersSub && !showDealsSub) return null
+
   return (
-    <div className={showDealsSub || showCustomersSub ? "mb-4" : "mb-6"}>
-      <div className="admin-scroll-snap-x no-scrollbar -mx-4 flex gap-2 overflow-x-auto px-4 pb-2 sm:mx-0 sm:grid sm:grid-cols-2 sm:overflow-visible sm:px-0 sm:pb-0 lg:grid-cols-6">
-        {PRIMARY_TABS.map((tab) => {
-          const isActive = section === tab.key
-
-          return (
-            <Link
-              key={tab.key}
-              href={tab.href}
-              className={`flex min-w-[144px] shrink-0 items-center gap-2 rounded-xl border px-3 py-2.5 transition-colors sm:min-w-0 sm:gap-3 sm:rounded-2xl sm:px-4 sm:py-3 ${
-                isActive
-                  ? "border-[#111110] bg-[#111110] text-white"
-                  : "border-[#e8e8e4] bg-white text-[#111110] hover:border-[#c8c8c4]"
-              }`}
-            >
-              <span
-                className={`flex h-9 w-9 items-center justify-center rounded-xl ${
-                  isActive ? "bg-white/12 text-white" : "bg-[#fafaf8] text-[#1a1a1a]/45"
-                }`}
-              >
-                {tab.icon}
-              </span>
-              <span className="min-w-0 flex-1">
-                <span className="block text-[13px] font-semibold">{tab.label}</span>
-                <span
-                  className={`mt-0.5 hidden text-[11px] sm:block ${isActive ? "text-white/60" : "text-[#1a1a1a]/42"}`}
-                >
-                  {tab.description}
-                </span>
-              </span>
-            </Link>
-          )
-        })}
-
-        {/* 유지보수 탭: dashed ghost 스타일로 일상 운영 탭과 시각적으로 분리 */}
-        <Link
-          href={MAINTENANCE_TAB.href}
-          className={`flex min-w-[144px] shrink-0 items-center gap-2 rounded-xl border px-3 py-2.5 transition-colors sm:min-w-0 sm:gap-3 sm:rounded-2xl sm:px-4 sm:py-3 ${
-            section === "sync"
-              ? "border-[#111110] bg-[#111110] text-white"
-              : "border-dashed border-[#dcdcd6] bg-transparent text-[#1a1a1a]/55 hover:border-[#c8c8c4]"
-          }`}
-        >
-          <span
-            className={`flex h-9 w-9 items-center justify-center rounded-xl ${
-              section === "sync" ? "bg-white/12 text-white" : "bg-[#fafaf8] text-[#1a1a1a]/40"
-            }`}
-          >
-            {MAINTENANCE_TAB.icon}
-          </span>
-          <span className="min-w-0 flex-1">
-            <span className="block text-[13px] font-semibold">{MAINTENANCE_TAB.label}</span>
-            <span
-              className={`mt-0.5 hidden text-[11px] sm:block ${
-                section === "sync" ? "text-white/60" : "text-[#1a1a1a]/38"
-              }`}
-            >
-              {MAINTENANCE_TAB.description}
-            </span>
-          </span>
-        </Link>
-      </div>
-
+    <div className="mb-4">
       {showCustomersSub ? (
         <div className="no-scrollbar -mx-4 mt-3 flex items-center gap-1.5 overflow-x-auto px-4 sm:mx-0 sm:flex-wrap sm:overflow-visible sm:px-0">
           <span className="mr-1 hidden shrink-0 text-[11px] font-medium text-[#1a1a1a]/40 sm:inline">고객</span>

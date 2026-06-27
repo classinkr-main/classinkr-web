@@ -31,7 +31,7 @@ import {
   Users,
   X,
 } from "lucide-react"
-import { clearAdminSessionStorage, warmAdminRequestCache } from "@/lib/admin-client"
+import { adminFetchJsonCached, clearAdminSessionStorage, warmAdminRequestCache } from "@/lib/admin-client"
 import { createSupabaseBrowserClient } from "@/lib/supabase/browser"
 import { hasSupabaseBrowserEnv } from "@/lib/supabase/public-env"
 import AdminNotificationsBell from "./AdminNotificationsBell"
@@ -148,6 +148,33 @@ const SECTION_META: Record<SidebarSection, { label: string; description: string 
   system: { label: "시스템", description: "권한, 설정, 감사, 개발 도구" },
 }
 
+// CRM 진입 시 사이드바에서 펼치는 하위 섹션(= 기존 상단 탭의 이전). 활성 판별은 경로 prefix.
+const CRM_CHILD_NAV: Array<{ href: string; label: string; match: (p: string) => boolean }> = [
+  { href: "/admin/crm", label: "현황", match: (p) => p === "/admin/crm" },
+  {
+    href: "/admin/crm/customers/unified",
+    label: "고객",
+    match: (p) => p.startsWith("/admin/crm/customers") || p.startsWith("/admin/crm/partners/customers"),
+  },
+  { href: "/admin/crm/activity", label: "기록", match: (p) => p.startsWith("/admin/crm/activity") },
+  {
+    href: "/admin/crm/deals",
+    label: "돈흐름",
+    match: (p) =>
+      p.startsWith("/admin/crm/deals") || p.startsWith("/admin/crm/revenue") || p.startsWith("/admin/crm/partners"),
+  },
+  { href: "/admin/crm/insights", label: "인사이트", match: (p) => p.startsWith("/admin/crm/insights") },
+  { href: "/admin/crm/matching", label: "연동", match: (p) => p.startsWith("/admin/crm/matching") },
+]
+
+// 저장된 세그먼트 — 고객 하위 퀵필터(?view=). 카운트는 통합 API summary.viewCounts.
+const CRM_SEGMENTS: Array<{ view: string; label: string }> = [
+  { view: "expiring", label: "만료 임박" },
+  { view: "dormant", label: "30일+ 미접촉" },
+  { view: "hot_lead", label: "고전환 리드" },
+  { view: "upsell", label: "업셀 후보" },
+]
+
 const MOBILE_PRIMARY_HREFS = [
   "/admin/overview",
   "/admin/crm",
@@ -207,6 +234,26 @@ export default function AdminSidebar({ role, name, email }: Props) {
   }, [])
 
   const effectiveCollapsed = isDesktop === true && collapsed
+  const inCrm = pathname?.startsWith("/admin/crm") ?? false
+  const [crmSegCounts, setCrmSegCounts] = useState<Record<string, number> | null>(null)
+
+  // CRM 진입 시에만 세그먼트 카운트 1회 lazy 로드(캐시, 논블로킹). 미로드 시 라벨만 표시.
+  useEffect(() => {
+    if (!inCrm || crmSegCounts) return
+    let alive = true
+    adminFetchJsonCached<{ summary?: { viewCounts?: Record<string, number> } }>(
+      "/api/admin/crm/customers/unified?limit=1",
+      undefined,
+      { cacheKey: "sidebar:crm-seg-counts", ttlMs: 120_000, staleWhileRevalidateMs: 300_000 }
+    )
+      .then((d) => {
+        if (alive) setCrmSegCounts(d?.summary?.viewCounts ?? null)
+      })
+      .catch(() => {})
+    return () => {
+      alive = false
+    }
+  }, [inCrm, crmSegCounts])
 
   const toggle = () => {
     setCollapsed((prev) => {
@@ -534,7 +581,7 @@ export default function AdminSidebar({ role, name, email }: Props) {
               {items.map((item) => {
                 const isActive = isNavActive(item.href)
 
-                return (
+                const linkEl = (
                   <Link
                     key={item.href}
                     href={item.href}
@@ -570,6 +617,57 @@ export default function AdminSidebar({ role, name, email }: Props) {
                       </>
                     )}
                   </Link>
+                )
+
+                // CRM 섹션 진입 시 하위 6섹션 + 저장된 세그먼트를 펼친다.
+                if (item.href !== "/admin/crm" || !inCrm || effectiveCollapsed) return linkEl
+
+                return (
+                  <div key={item.href}>
+                    {linkEl}
+                    <div className="mb-1 ml-[18px] mt-0.5 space-y-0.5 border-l border-[#e8e8e4] pl-2.5">
+                      {CRM_CHILD_NAV.map((child) => {
+                        const childActive = child.match(pathname ?? "")
+                        return (
+                          <div key={child.href}>
+                            <Link
+                              href={child.href}
+                              onMouseEnter={() => scheduleWarmAdminTab(child.href)}
+                              onClick={() => warmAdminTab(child.href)}
+                              className={`flex items-center rounded-md px-2.5 py-1.5 text-[12px] font-medium transition-colors ${
+                                childActive
+                                  ? "bg-[#f0f0ec] font-semibold text-[#111110]"
+                                  : "text-[#1a1a1a]/55 hover:bg-[#f5f5f2] hover:text-[#111110]"
+                              }`}
+                            >
+                              {child.label}
+                            </Link>
+                            {child.href === "/admin/crm/customers/unified" ? (
+                              <div className="mt-0.5 space-y-px pl-3">
+                                {CRM_SEGMENTS.map((seg) => {
+                                  const count = crmSegCounts?.[seg.view]
+                                  return (
+                                    <Link
+                                      key={seg.view}
+                                      href={`/admin/crm/customers/unified?view=${seg.view}`}
+                                      className="flex items-center gap-2 rounded px-2.5 py-1 text-[11px] text-[#1a1a1a]/45 transition-colors hover:bg-[#f5f5f2] hover:text-[#111110]"
+                                    >
+                                      <span className="flex-1 truncate">{seg.label}</span>
+                                      {count != null ? (
+                                        <span className="rounded-full bg-[#f0f0ec] px-1.5 text-[10px] font-semibold tabular-nums text-[#1a1a1a]/55">
+                                          {count}
+                                        </span>
+                                      ) : null}
+                                    </Link>
+                                  )
+                                })}
+                              </div>
+                            ) : null}
+                          </div>
+                        )
+                      })}
+                    </div>
+                  </div>
                 )
               })}
             </div>
