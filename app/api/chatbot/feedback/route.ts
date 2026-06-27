@@ -1,11 +1,11 @@
 import { NextRequest, NextResponse } from "next/server"
 
 import { ChatbotInputError, saveChatbotFeedback } from "@/lib/chatbot/service"
-import { checkRateLimit, getClientIp } from "@/lib/server/rate-limit"
+import { checkRateLimitDistributed, getClientIp } from "@/lib/server/rate-limit"
 
 export async function POST(req: NextRequest) {
   const ip = getClientIp(req)
-  const { allowed } = checkRateLimit(ip, "chatbot-feedback", {
+  const { allowed } = await checkRateLimitDistributed(ip, "chatbot-feedback", {
     windowMs: 60_000,
     max: 20,
   })

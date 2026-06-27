@@ -1,7 +1,7 @@
 import { NextRequest, NextResponse } from "next/server"
 
 import type { LeadSource } from "@/lib/lead-types"
-import { checkRateLimit, getClientIp } from "@/lib/server/rate-limit"
+import { checkRateLimitDistributed, getClientIp } from "@/lib/server/rate-limit"
 import { resolveLeadSource, submitLeadCapture } from "@/lib/server/lead-capture"
 
 const PAGE_FORM_SOURCE_MAP = {
@@ -138,7 +138,7 @@ export async function POST(req: NextRequest) {
   }
 
   const ip = getClientIp(req)
-  const { allowed } = checkRateLimit(ip, "page-webhook", {
+  const { allowed } = await checkRateLimitDistributed(ip, "page-webhook", {
     windowMs: 60_000,
     max: 10,
   })

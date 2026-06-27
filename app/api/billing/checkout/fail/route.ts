@@ -1,6 +1,6 @@
 import { NextRequest, NextResponse } from "next/server"
 
-import { checkRateLimit, getClientIp } from "@/lib/server/rate-limit"
+import { checkRateLimitDistributed, getClientIp } from "@/lib/server/rate-limit"
 import {
   getSoftwareCheckoutOrder,
   markSoftwareCheckoutOrderFailed,
@@ -9,7 +9,7 @@ import { verifyCheckoutToken } from "@/lib/server/security-tokens"
 
 export async function POST(req: NextRequest) {
   const ip = getClientIp(req)
-  const { allowed } = checkRateLimit(ip, "billing-checkout-fail", {
+  const { allowed } = await checkRateLimitDistributed(ip, "billing-checkout-fail", {
     windowMs: 60_000,
     max: 20,
   })

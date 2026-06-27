@@ -1,7 +1,7 @@
 import { NextRequest, NextResponse } from "next/server"
 
 import { confirmTossPayment } from "@/lib/billing/toss"
-import { checkRateLimit, getClientIp } from "@/lib/server/rate-limit"
+import { checkRateLimitDistributed, getClientIp } from "@/lib/server/rate-limit"
 import {
   getSoftwareCheckoutOrder,
   markSoftwareCheckoutOrderPaid,
@@ -84,7 +84,7 @@ function emitPurchaseConversion(req: NextRequest, order: SoftwareCheckoutOrder) 
 
 export async function POST(req: NextRequest) {
   const ip = getClientIp(req)
-  const { allowed } = checkRateLimit(ip, "billing-checkout-confirm", {
+  const { allowed } = await checkRateLimitDistributed(ip, "billing-checkout-confirm", {
     windowMs: 60_000,
     max: 20,
   })

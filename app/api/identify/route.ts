@@ -3,7 +3,7 @@ import { type NextRequest, NextResponse } from "next/server"
 import { getPublicUserContext } from "@/lib/auth/public-user"
 import { ANONYMOUS_ID_COOKIE } from "@/lib/consent/consent"
 import { stitchIdentity } from "@/lib/identity/stitch"
-import { checkRateLimit, getClientIp } from "@/lib/server/rate-limit"
+import { checkRateLimitDistributed, getClientIp } from "@/lib/server/rate-limit"
 import { isCrossOriginRequest } from "@/lib/server/same-origin"
 
 export async function POST(req: NextRequest) {
@@ -12,7 +12,7 @@ export async function POST(req: NextRequest) {
   }
 
   const ip = getClientIp(req)
-  const { allowed } = checkRateLimit(ip, "identify", { windowMs: 60_000, max: 20 })
+  const { allowed } = await checkRateLimitDistributed(ip, "identify", { windowMs: 60_000, max: 20 })
   if (!allowed) {
     return NextResponse.json({ error: "Too many requests." }, { status: 429 })
   }

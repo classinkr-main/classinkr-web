@@ -1,6 +1,6 @@
 import { type NextRequest, NextResponse } from "next/server"
 import { createSupabaseAdminClient } from "@/lib/supabase/admin"
-import { checkRateLimit, getClientIp } from "@/lib/server/rate-limit"
+import { checkRateLimitDistributed, getClientIp } from "@/lib/server/rate-limit"
 
 const TRANSPARENT_GIF = Buffer.from(
   "R0lGODlhAQABAIAAAAAAAP///yH5BAEAAAAALAAAAAABAAEAAAIBRAA7",
@@ -11,7 +11,7 @@ const UUID_RE = /^[0-9a-f]{8}-[0-9a-f]{4}-[1-5][0-9a-f]{3}-[89ab][0-9a-f]{3}-[0-
 
 export async function GET(req: NextRequest) {
   const ip = getClientIp(req)
-  const { allowed } = checkRateLimit(ip, "track-open", {
+  const { allowed } = await checkRateLimitDistributed(ip, "track-open", {
     windowMs: 60_000,
     max: 120,
   })

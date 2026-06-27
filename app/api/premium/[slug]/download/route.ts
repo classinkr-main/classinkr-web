@@ -3,7 +3,7 @@ import { type NextRequest, NextResponse } from "next/server"
 import { ANONYMOUS_ID_COOKIE } from "@/lib/consent/consent"
 import { recordPremiumAccessEvent } from "@/lib/premium/access-log"
 import { authorizePremiumContentAccess } from "@/lib/premium/authorize"
-import { checkRateLimit, getClientIp } from "@/lib/server/rate-limit"
+import { checkRateLimitDistributed, getClientIp } from "@/lib/server/rate-limit"
 import { isCrossOriginRequest } from "@/lib/server/same-origin"
 import { createSupabaseAdminClient } from "@/lib/supabase/admin"
 
@@ -27,7 +27,7 @@ export async function POST(req: NextRequest, { params }: RouteContext) {
   }
 
   const ip = getClientIp(req)
-  const { allowed } = checkRateLimit(ip, "premium-download", {
+  const { allowed } = await checkRateLimitDistributed(ip, "premium-download", {
     windowMs: 60_000,
     max: 20,
   })

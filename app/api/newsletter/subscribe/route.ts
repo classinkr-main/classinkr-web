@@ -1,7 +1,7 @@
 import { NextRequest, NextResponse } from "next/server"
 import { ANONYMOUS_ID_COOKIE } from "@/lib/consent/consent"
 import { stitchIdentity } from "@/lib/identity/stitch"
-import { checkRateLimit, getClientIp } from "@/lib/server/rate-limit"
+import { checkRateLimitDistributed, getClientIp } from "@/lib/server/rate-limit"
 import { getMarketingRequestMeta } from "@/lib/marketing/server-conversions"
 import type { NewsletterSubscribeRequest } from "@/lib/marketing-types"
 import { submitLeadCapture } from "@/lib/server/lead-capture"
@@ -38,7 +38,7 @@ function getAttributionValue(
 
 export async function POST(req: NextRequest) {
   const ip = getClientIp(req)
-  const { allowed } = checkRateLimit(ip, "newsletter", { windowMs: 60_000, max: 3 })
+  const { allowed } = await checkRateLimitDistributed(ip, "newsletter", { windowMs: 60_000, max: 3 })
   if (!allowed) {
     return NextResponse.json(
       { error: "요청이 너무 많습니다. 잠시 후 다시 시도해주세요." },

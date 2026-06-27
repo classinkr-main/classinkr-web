@@ -1,6 +1,6 @@
 import { NextRequest, NextResponse } from "next/server"
 import { getMarketingRequestMeta } from "@/lib/marketing/server-conversions"
-import { checkRateLimit, getClientIp } from "@/lib/server/rate-limit"
+import { checkRateLimitDistributed, getClientIp } from "@/lib/server/rate-limit"
 import { submitLeadCapture } from "@/lib/server/lead-capture"
 import { isCrossOriginRequest } from "@/lib/server/same-origin"
 
@@ -16,7 +16,7 @@ export async function POST(req: NextRequest) {
     }
 
     const ip = getClientIp(req)
-    const { allowed, resetAt } = checkRateLimit(ip, "lead", { windowMs: 60_000, max: 5 })
+    const { allowed, resetAt } = await checkRateLimitDistributed(ip, "lead", { windowMs: 60_000, max: 5 })
     if (!allowed) {
       const retryAfterSeconds = Math.max(1, Math.ceil((resetAt - Date.now()) / 1000))
       return NextResponse.json(

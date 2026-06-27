@@ -1,6 +1,6 @@
 import { type NextRequest, NextResponse } from "next/server"
 import { createSupabaseAdminClient } from "@/lib/supabase/admin"
-import { checkRateLimit, getClientIp } from "@/lib/server/rate-limit"
+import { checkRateLimitDistributed, getClientIp } from "@/lib/server/rate-limit"
 import { isCrossOriginRequest } from "@/lib/server/same-origin"
 
 const ALLOWED_EVENTS = new Set([
@@ -91,7 +91,7 @@ export async function POST(req: NextRequest) {
   }
 
   const ip = getClientIp(req)
-  const { allowed } = checkRateLimit(ip, "track-event", {
+  const { allowed } = await checkRateLimitDistributed(ip, "track-event", {
     windowMs: 60_000,
     max: 120,
   })

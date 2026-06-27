@@ -2,7 +2,7 @@ import { NextRequest, NextResponse } from "next/server"
 
 import { verifyAdmin } from "@/lib/admin-auth"
 import { sanitizePublicUrl } from "@/lib/safe-public-url"
-import { checkRateLimit, getClientIp } from "@/lib/server/rate-limit"
+import { checkRateLimitDistributed, getClientIp } from "@/lib/server/rate-limit"
 import { uploadBlogImage } from "@/lib/storage/blog-images"
 
 const UPLOAD_RATE_LIMIT = { windowMs: 60_000, max: 20 }
@@ -12,7 +12,7 @@ export async function POST(req: NextRequest) {
   if (authError) return authError
 
   const ip = getClientIp(req)
-  const { allowed } = checkRateLimit(ip, "admin-blog-image-upload", UPLOAD_RATE_LIMIT)
+  const { allowed } = await checkRateLimitDistributed(ip, "admin-blog-image-upload", UPLOAD_RATE_LIMIT)
   if (!allowed) {
     return NextResponse.json({ error: "Too many requests." }, { status: 429 })
   }

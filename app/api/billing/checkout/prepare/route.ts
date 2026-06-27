@@ -9,7 +9,7 @@ import {
   getMarketingRequestMeta,
   sendServerConversion,
 } from "@/lib/marketing/server-conversions"
-import { checkRateLimit, getClientIp } from "@/lib/server/rate-limit"
+import { checkRateLimitDistributed, getClientIp } from "@/lib/server/rate-limit"
 import { createCheckoutToken } from "@/lib/server/security-tokens"
 
 function getBeginCheckoutConversionEventId(orderId: string) {
@@ -72,7 +72,7 @@ function emitBeginCheckoutConversion(req: NextRequest, order: SoftwareCheckoutOr
 
 export async function POST(req: NextRequest) {
   const ip = getClientIp(req)
-  const { allowed } = checkRateLimit(ip, "billing-checkout-prepare", {
+  const { allowed } = await checkRateLimitDistributed(ip, "billing-checkout-prepare", {
     windowMs: 60_000,
     max: 12,
   })

@@ -8,7 +8,7 @@ import {
   type ChatbotStreamEvent,
 } from "@/lib/chatbot/service"
 import { buildChatbotRouteFallback } from "@/lib/chatbot/route-fallback"
-import { checkRateLimit, getClientIp } from "@/lib/server/rate-limit"
+import { checkRateLimitDistributed, getClientIp } from "@/lib/server/rate-limit"
 
 const DEFAULT_CHATBOT_ROUTE_TIMEOUT_MS = 13_000
 
@@ -48,7 +48,7 @@ function emitRouteFallback(emit: (event: ChatbotStreamEvent) => void) {
 
 export async function POST(req: NextRequest) {
   const ip = getClientIp(req)
-  const { allowed } = checkRateLimit(ip, "chatbot-query", {
+  const { allowed } = await checkRateLimitDistributed(ip, "chatbot-query", {
     windowMs: 60_000,
     max: 12,
   })

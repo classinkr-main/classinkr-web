@@ -2,7 +2,7 @@ import { GoogleGenerativeAI } from "@google/generative-ai"
 import { NextRequest } from "next/server"
 
 import { verifyAdmin } from "@/lib/admin-auth"
-import { checkRateLimit, getClientIp } from "@/lib/server/rate-limit"
+import { checkRateLimitDistributed, getClientIp } from "@/lib/server/rate-limit"
 
 export const runtime = "nodejs"
 export const maxDuration = 60 // 1분으로 타임아웃 연장
@@ -170,7 +170,7 @@ export async function POST(req: NextRequest) {
   if (authError) return authError
 
   const ip = getClientIp(req)
-  const { allowed } = checkRateLimit(ip, "admin-blog-ai", AI_RATE_LIMIT)
+  const { allowed } = await checkRateLimitDistributed(ip, "admin-blog-ai", AI_RATE_LIMIT)
   if (!allowed) {
     return new Response(JSON.stringify({ error: "Too many requests." }), {
       status: 429,
