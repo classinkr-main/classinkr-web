@@ -1,7 +1,8 @@
 import type { LeadRecord } from "@/lib/repositories/leads"
 import type { NeoCrmCustomerRow } from "@/lib/admin-crm-customers-neo"
+import type { CrmTaskPriority, CrmTaskRecord, CrmTaskType } from "@/lib/repositories/crm-tasks"
 
-export type CrmPrioritySource = "lead" | "neo_account"
+export type CrmPrioritySource = "lead" | "neo_account" | "task"
 export type CrmPrioritySeverity = "critical" | "high" | "medium" | "low"
 export type CrmPriorityBucket = "today" | "renewal" | "stale_recovery" | "watch"
 export type CrmPriorityAction =
@@ -11,6 +12,7 @@ export type CrmPriorityAction =
   | "renew_account"
   | "reengage_account"
   | "watch_account"
+  | "do_task"
 
 export interface CrmPriorityItem {
   id: string
@@ -236,6 +238,96 @@ export function buildNeoAccountPriorityItem(
     href: `/admin/crm/customers/accounts?account=${encodeURIComponent(account.accountId)}`,
     dueAt,
     updatedAt: account.updatedAt ?? account.lastClassAt ?? account.expireAt,
+  }
+}
+
+const TASK_TYPE_ACTION_LABELS: Record<CrmTaskType, string> = {
+  call: "전화",
+  kakao: "카카오",
+  email: "이메일",
+  meeting: "미팅",
+  quote: "견적",
+  demo: "데모",
+  install: "설치",
+  renewal: "갱신",
+  cs_checkin: "CS 점검",
+  data_fix: "데이터 정리",
+  other: "할 일",
+}
+
+const TASK_PRIORITY_BASE_SCORE: Record<CrmTaskPriority, number> = {
+  urgent: 86,
+  high: 74,
+  normal: 58,
+  low: 44,
+}
+
+function taskHref(task: CrmTaskRecord) {
+  if (task.targetType === "lead" && task.targetId) {
+    return `/admin/crm/customers/leads?lead=${encodeURIComponent(task.targetId)}`
+  }
+  if (task.targetType === "neo_account" && task.targetId) {
+    return `/admin/crm/customers/accounts?account=${encodeURIComponent(task.targetId)}`
+  }
+  return "/admin/crm/activity"
+}
+
+export function buildTaskPriorityItem(task: CrmTaskRecord, now = new Date()): CrmPriorityItem | null {
+  if (task.status === "done" || task.status === "canceled") return null
+
+  const nowMs = now.getTime()
+  // 미룬 할 일은 재부상 시각이 지나야 큐에 다시 뜬다.
+  if (task.status === "snoozed") {
+    const until = parseTime(task.snoozedUntil)
+    if (until != null && until > nowMs) return null
+  }
+
+  const effectiveDue = task.status === "snoozed" ? task.snoozedUntil ?? task.dueAt : task.dueAt
+  let score = TASK_PRIORITY_BASE_SCORE[task.priority]
+  let bucket: CrmPriorityBucket = "watch"
+  let reason = "예정된 할 일"
+
+  const dueDays = daysFromNow(effectiveDue, nowMs)
+  if (dueDays != null) {
+    if (dueDays < 0) {
+      bucket = "today"
+      score += Math.min(14, Math.abs(dueDays) * 2 + 6)
+      reason = `${Math.abs(dueDays)}일 지연된 할 일`
+    } else if (dueDays === 0) {
+      bucket = "today"
+      score += 8
+      reason = "오늘 마감"
+    } else if (dueDays <= 2) {
+      score += 3
+      reason = `${dueDays}일 뒤 예정`
+    } else {
+      reason = `${dueDays}일 뒤 예정`
+    }
+  } else if (task.priority === "urgent" || task.priority === "high") {
+    bucket = "today"
+    reason = "마감일 없는 중요 할 일"
+  }
+
+  const taskLabel = TASK_TYPE_ACTION_LABELS[task.taskType]
+  const finalScore = clampScore(score)
+  return {
+    id: `task:${task.id}`,
+    source: "task",
+    title: task.targetLabel ?? task.title,
+    subtitle: task.targetLabel ? task.title : taskLabel,
+    ownerName: task.ownerNameSnapshot,
+    ownerKeys: uniqueOwnerKeys([task.ownerKey, task.ownerNameSnapshot]),
+    statusLabel: task.status === "snoozed" ? "미룬 할 일" : "할 일",
+    score: finalScore,
+    severity: severityFromScore(finalScore),
+    bucket,
+    bucketLabel: CRM_PRIORITY_BUCKET_LABELS[bucket],
+    action: "do_task",
+    actionLabel: taskLabel,
+    reason,
+    href: taskHref(task),
+    dueAt: effectiveDue,
+    updatedAt: task.updatedAt,
   }
 }
 

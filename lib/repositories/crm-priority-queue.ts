@@ -4,6 +4,7 @@ import { getNeoCrmCustomers } from "@/lib/admin-crm-customers-neo"
 import {
   buildLeadPriorityItem,
   buildNeoAccountPriorityItem,
+  buildTaskPriorityItem,
   CRM_PRIORITY_BUCKET_LABELS,
   sortPriorityItems,
   type CrmPriorityBucket,
@@ -11,6 +12,7 @@ import {
   type CrmPrioritySource,
 } from "@/lib/crm/priority"
 import { getLeads } from "@/lib/repositories/leads"
+import { listCrmTasks } from "@/lib/repositories/crm-tasks"
 
 export interface CrmPriorityQueueOptions {
   limit?: number
@@ -26,6 +28,7 @@ export interface CrmPriorityQueue {
   sources: {
     leadsOk: boolean
     neoAccountsOk: boolean
+    tasksOk: boolean
     warnings: string[]
   }
   summary: {
@@ -34,6 +37,7 @@ export interface CrmPriorityQueue {
     high: number
     leadCount: number
     neoAccountCount: number
+    taskCount: number
     ownerCount: number
     bucketCounts: Record<CrmPriorityBucket, number>
   }
@@ -104,8 +108,13 @@ export async function getCrmPriorityQueue(
   const warnings: string[] = []
   let leadsOk = true
   let neoAccountsOk = true
+  let tasksOk = true
 
-  const [leadResult, neoResult] = await Promise.allSettled([getLeads(), getNeoCrmCustomers()])
+  const [leadResult, neoResult, taskResult] = await Promise.allSettled([
+    getLeads(),
+    getNeoCrmCustomers(),
+    listCrmTasks({ status: "active", limit: 200, now }),
+  ])
 
   const items: CrmPriorityItem[] = []
 
@@ -129,6 +138,16 @@ export async function getCrmPriorityQueue(
     warnings.push("동기화 고객 참고 데이터를 불러오지 못했습니다.")
   }
 
+  if (taskResult.status === "fulfilled" && taskResult.value.health.ok) {
+    for (const task of taskResult.value.rows) {
+      const item = buildTaskPriorityItem(task, now)
+      if (item) items.push(item)
+    }
+  } else {
+    tasksOk = false
+    warnings.push("CRM 할 일을 불러오지 못했습니다.")
+  }
+
   const sorted = sortPriorityItems(items)
   const baseFiltered = applyBaseFilters(sorted, options)
   const filtered = applyFilters(sorted, options)
@@ -139,13 +158,14 @@ export async function getCrmPriorityQueue(
 
   return {
     generatedAt: now.toISOString(),
-    sources: { leadsOk, neoAccountsOk, warnings },
+    sources: { leadsOk, neoAccountsOk, tasksOk, warnings },
     summary: {
       total: filtered.length,
       critical: filtered.filter((item) => item.severity === "critical").length,
       high: filtered.filter((item) => item.severity === "high").length,
       leadCount: filtered.filter((item) => item.source === "lead").length,
       neoAccountCount: filtered.filter((item) => item.source === "neo_account").length,
+      taskCount: filtered.filter((item) => item.source === "task").length,
       ownerCount: owners.length,
       bucketCounts,
     },

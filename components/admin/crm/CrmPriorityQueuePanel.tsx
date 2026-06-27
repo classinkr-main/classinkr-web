@@ -2,7 +2,7 @@
 
 import { useCallback, useEffect, useMemo, useState } from "react"
 import Link from "next/link"
-import { AlertTriangle, Building2, CheckCircle2, Clock3, ExternalLink, Filter, PhoneCall, RefreshCw } from "lucide-react"
+import { AlertTriangle, Building2, CheckCircle2, Clock3, ExternalLink, Filter, ListChecks, PhoneCall, RefreshCw } from "lucide-react"
 
 import { adminFetchJsonCached, getCachedAdminJson } from "@/lib/admin-client"
 import type { CrmPriorityBucket, CrmPriorityItem, CrmPrioritySource } from "@/lib/crm/priority"
@@ -16,6 +16,7 @@ interface CrmPriorityQueue {
   sources: {
     leadsOk: boolean
     neoAccountsOk: boolean
+    tasksOk: boolean
     warnings: string[]
   }
   summary: {
@@ -24,6 +25,7 @@ interface CrmPriorityQueue {
     high: number
     leadCount: number
     neoAccountCount: number
+    taskCount: number
     ownerCount: number
     bucketCounts: Record<CrmPriorityBucket, number>
   }
@@ -36,6 +38,7 @@ const SOURCE_FILTERS: Array<{ key: SourceFilter; label: string }> = [
   { key: "all", label: "전체" },
   { key: "lead", label: "리드" },
   { key: "neo_account", label: "고객" },
+  { key: "task", label: "할 일" },
 ]
 
 const FALLBACK_BUCKETS: Array<{ bucket: CrmPriorityBucket; label: string; count: number }> = [
@@ -75,11 +78,16 @@ function severityClass(item: CrmPriorityItem) {
 }
 
 function sourceIcon(source: CrmPrioritySource) {
+  if (source === "task") return <ListChecks className="h-3.5 w-3.5" />
   return source === "lead" ? <PhoneCall className="h-3.5 w-3.5" /> : <Building2 className="h-3.5 w-3.5" />
 }
 
 function leadIdFromPriorityItem(item: CrmPriorityItem) {
   return item.source === "lead" && item.id.startsWith("lead:") ? item.id.slice("lead:".length) : null
+}
+
+function taskIdFromPriorityItem(item: CrmPriorityItem) {
+  return item.source === "task" && item.id.startsWith("task:") ? item.id.slice("task:".length) : null
 }
 
 function tomorrowMorningIso() {
@@ -178,6 +186,34 @@ export default function CrmPriorityQueuePanel({ refreshKey = 0 }: { refreshKey?:
     [load]
   )
 
+  const handleTaskAction = useCallback(
+    async (item: CrmPriorityItem, action: "done" | "tomorrow") => {
+      const taskId = taskIdFromPriorityItem(item)
+      if (!taskId) return
+
+      setActingId(`${item.id}:${action}`)
+      setActionMessage(null)
+      setError(null)
+      try {
+        await adminFetchJsonCached<{ task: unknown }>(`/api/admin/crm/tasks/${encodeURIComponent(taskId)}`, {
+          method: "PATCH",
+          body: JSON.stringify(
+            action === "done"
+              ? { action: "complete", outcome: "우선순위 큐에서 완료 처리" }
+              : { action: "snooze" }
+          ),
+        })
+        setActionMessage(action === "done" ? "할 일을 완료 처리했습니다." : "할 일을 내일 오전으로 미뤘습니다.")
+        await load({ force: true })
+      } catch (err) {
+        setError(err instanceof Error ? err.message : "할 일 처리에 실패했습니다.")
+      } finally {
+        setActingId(null)
+      }
+    },
+    [load]
+  )
+
   return (
     <section className="mb-4 rounded-2xl border border-[#e8e8e4] bg-white p-4">
       <div className="mb-4 flex flex-col gap-3 lg:flex-row lg:items-center lg:justify-between">
@@ -238,7 +274,7 @@ export default function CrmPriorityQueuePanel({ refreshKey = 0 }: { refreshKey?:
       </div>
 
       {data ? (
-        <div className="mb-3 grid gap-2 sm:grid-cols-4">
+        <div className="mb-3 grid gap-2 grid-cols-2 lg:grid-cols-5">
           <div className="rounded-xl bg-[#fafaf8] p-3">
             <p className="text-[11px] font-semibold text-[#1a1a1a]/35">선택 후보</p>
             <p className="mt-1 text-xl font-bold text-[#111110]">{data.summary.total.toLocaleString("ko-KR")}</p>
@@ -246,6 +282,10 @@ export default function CrmPriorityQueuePanel({ refreshKey = 0 }: { refreshKey?:
           <div className="rounded-xl bg-[#fafaf8] p-3">
             <p className="text-[11px] font-semibold text-[#1a1a1a]/35">긴급</p>
             <p className="mt-1 text-xl font-bold text-[#B85C33]">{data.summary.critical.toLocaleString("ko-KR")}</p>
+          </div>
+          <div className="rounded-xl bg-[#fafaf8] p-3">
+            <p className="text-[11px] font-semibold text-[#1a1a1a]/35">할 일</p>
+            <p className="mt-1 text-xl font-bold text-[#084734]">{data.summary.taskCount.toLocaleString("ko-KR")}</p>
           </div>
           <div className="rounded-xl bg-[#fafaf8] p-3">
             <p className="text-[11px] font-semibold text-[#1a1a1a]/35">리드</p>
@@ -387,6 +427,27 @@ export default function CrmPriorityQueuePanel({ refreshKey = 0 }: { refreshKey?:
                       >
                         <Clock3 className="h-3 w-3" />
                         내일 팔로업
+                      </button>
+                    </div>
+                  ) : item.source === "task" ? (
+                    <div className="flex flex-wrap gap-1.5 lg:justify-end">
+                      <button
+                        type="button"
+                        onClick={() => void handleTaskAction(item, "done")}
+                        disabled={actingId === `${item.id}:done` || actingId === `${item.id}:tomorrow`}
+                        className="inline-flex h-7 items-center gap-1 rounded-lg border border-[#D7EBDD] bg-[#ECFDF5] px-2 text-[11px] font-semibold text-[#084734] transition-colors hover:bg-[#D7EBDD] disabled:opacity-50"
+                      >
+                        <CheckCircle2 className="h-3 w-3" />
+                        완료
+                      </button>
+                      <button
+                        type="button"
+                        onClick={() => void handleTaskAction(item, "tomorrow")}
+                        disabled={actingId === `${item.id}:done` || actingId === `${item.id}:tomorrow`}
+                        className="inline-flex h-7 items-center gap-1 rounded-lg border border-[#e8e8e4] bg-white px-2 text-[11px] font-semibold text-[#1a1a1a]/60 transition-colors hover:bg-[#f5f5f2] hover:text-[#111110] disabled:opacity-50"
+                      >
+                        <Clock3 className="h-3 w-3" />
+                        내일로
                       </button>
                     </div>
                   ) : null}
