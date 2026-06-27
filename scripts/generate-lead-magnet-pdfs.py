@@ -18,10 +18,19 @@ PUBLIC_DIR = ROOT / "public"
 OUTPUT_DIR = PUBLIC_DIR / "materials" / "lead-magnets"
 
 SITE_URL = os.environ.get("NEXT_PUBLIC_SITE_URL", "https://classin.ai.kr").rstrip("/")
+# 폰트 탐색 경로 — macOS·Windows·Linux 순으로 폴백한다.
+# 환경변수 LEAD_MAGNET_FONT 로 명시 경로를 지정할 수도 있다.
 FONT_PATHS = [
+    Path(os.environ["LEAD_MAGNET_FONT"]) if os.environ.get("LEAD_MAGNET_FONT") else None,
     Path("/Users/clmagi/Library/Fonts/PretendardVariable.ttf"),
     Path.home() / "Library/Fonts/PretendardVariable.ttf",
+    Path("C:/Windows/Fonts/PretendardVariable.ttf"),
+    Path("C:/Windows/Fonts/Pretendard-Regular.ttf"),
+    Path("C:/Windows/Fonts/malgun.ttf"),
+    Path("/usr/share/fonts/truetype/pretendard/PretendardVariable.ttf"),
+    Path("/usr/share/fonts/truetype/nanum/NanumGothic.ttf"),
 ]
+FONT_PATHS = [path for path in FONT_PATHS if path is not None]
 
 PAGE_WIDTH, PAGE_HEIGHT = A4
 MARGIN_X = 48
@@ -450,6 +459,153 @@ def draw_usage(doc: PdfDocument, magnet: dict) -> None:
             " / ".join(clean_text(item) for item in guide.get("discussionPrompts") or []),
             fill=WARM_WHITE,
         )
+    voice = magnet.get("expertVoice")
+    if voice:
+        speaker = clean_text(voice.get("speaker"))
+        role = clean_text(voice.get("role"))
+        byline = f"{speaker} · {role}" if role else speaker
+        doc.note_box(
+            f"현장 한마디 — {byline}",
+            clean_text(voice.get("comment")),
+            fill=WHITE,
+        )
+
+
+def draw_worksheet(doc: PdfDocument, magnet: dict) -> None:
+    worksheet = magnet.get("worksheet")
+    if not worksheet:
+        return
+    columns = [clean_text(col) for col in worksheet.get("columns") or []]
+    rows = list(worksheet.get("rows") or [])
+    if not columns or not rows:
+        return
+
+    doc.label("02-1 / 계산표")
+    doc.heading(clean_text(worksheet.get("title")))
+    intro = clean_text(worksheet.get("intro"))
+    if intro:
+        doc.text(intro, after=10)
+
+    label_width = CONTENT_WIDTH * 0.40
+    col_width = (CONTENT_WIDTH - label_width) / len(columns)
+    row_height = 23
+    c = doc.canvas
+
+    doc.ensure_space(row_height * (len(rows) + 1) + 16)
+    header_top = doc.y
+    c.setFont(FONT, 8.6)
+    c.setFillColorRGB(*color(GREEN))
+    c.drawString(MARGIN_X + 2, header_top - 12, "항목")
+    for index, col in enumerate(columns):
+        x = MARGIN_X + label_width + col_width * index
+        c.drawString(x + 4, header_top - 12, col)
+    doc.y -= row_height
+    c.setStrokeColorRGB(*color(BORDER))
+    c.setLineWidth(0.7)
+    c.line(MARGIN_X, doc.y + 7, PAGE_WIDTH - MARGIN_X, doc.y + 7)
+
+    for row in rows:
+        label = clean_text(row.get("label"))
+        highlight = bool(row.get("highlight"))
+        doc.ensure_space(row_height + 4)
+        row_top = doc.y
+        if highlight:
+            c.setFillColorRGB(*color(WARM_WHITE))
+            c.rect(MARGIN_X, row_top - row_height + 8, CONTENT_WIDTH, row_height, fill=1, stroke=0)
+        c.setFont(FONT, 9.4)
+        c.setFillColorRGB(*color(NEAR_BLACK if highlight else WARM_DARK))
+        c.drawString(MARGIN_X + 2, row_top - 13, label)
+        c.setStrokeColorRGB(*color(WARM_GRAY_LIGHT))
+        c.setLineWidth(0.5)
+        for index in range(len(columns)):
+            x = MARGIN_X + label_width + col_width * index
+            c.line(x + 4, row_top - 17, x + col_width - 6, row_top - 17)
+        c.setStrokeColorRGB(*color(BORDER))
+        c.setLineWidth(0.5)
+        c.line(MARGIN_X, row_top - row_height + 6, PAGE_WIDTH - MARGIN_X, row_top - row_height + 6)
+        doc.y -= row_height
+    doc.y -= 8
+
+    formula = clean_text(worksheet.get("formula"))
+    if formula:
+        doc.note_box("계산식", formula, fill=WHITE)
+    note = clean_text(worksheet.get("note"))
+    if note:
+        doc.text(note, size=9.2, leading=14, fill=WARM_GRAY_LIGHT, after=6)
+
+
+def draw_case_cards(doc: PdfDocument, magnet: dict) -> None:
+    cards = magnet.get("caseCards")
+    if not cards:
+        return
+    doc.label("02-2 / 도입 사례")
+    doc.heading("우리와 비슷한 학원은 이렇게 바뀌었습니다")
+    c = doc.canvas
+    for card in cards:
+        label = clean_text(card.get("label"))
+        profile = clean_text(card.get("profile"))
+        challenge_lines = wrap_text(f"고민  {clean_text(card.get('challenge'))}", FONT, 9.6, CONTENT_WIDTH - 28)
+        change_lines = wrap_text(f"변화  {clean_text(card.get('change'))}", FONT, 9.6, CONTENT_WIDTH - 28)
+        quote = clean_text(card.get("quote"))
+        quote_lines = wrap_text(quote, FONT, 9.2, CONTENT_WIDTH - 36) if quote else []
+        height = 42 + (len(challenge_lines) + len(change_lines)) * 14
+        if quote_lines:
+            height += len(quote_lines) * 13 + 8
+        doc.ensure_space(height + 10)
+        top = doc.y
+        c.setFillColorRGB(*color(PAGE_WHITE))
+        c.setStrokeColorRGB(*color(BORDER))
+        c.rect(MARGIN_X, top - height + 10, CONTENT_WIDTH, height, fill=1, stroke=1)
+        c.setFont(FONT, 10.5)
+        c.setFillColorRGB(*color(NEAR_BLACK))
+        c.drawString(MARGIN_X + 14, top - 16, label)
+        c.setFont(FONT, 8.4)
+        c.setFillColorRGB(*color(WARM_GRAY_LIGHT))
+        c.drawString(MARGIN_X + 14, top - 29, profile)
+        line_y = top - 45
+        c.setFont(FONT, 9.6)
+        c.setFillColorRGB(*color(WARM_GRAY))
+        for line in challenge_lines:
+            c.drawString(MARGIN_X + 14, line_y, line)
+            line_y -= 14
+        c.setFillColorRGB(*color(WARM_DARK))
+        for line in change_lines:
+            c.drawString(MARGIN_X + 14, line_y, line)
+            line_y -= 14
+        if quote_lines:
+            line_y -= 2
+            c.setFillColorRGB(*color(GREEN))
+            c.rect(MARGIN_X + 14, line_y - len(quote_lines) * 13 + 10, 2, len(quote_lines) * 13, fill=1, stroke=0)
+            c.setFont(FONT, 9.2)
+            c.setFillColorRGB(*color(WARM_DARK))
+            for line in quote_lines:
+                c.drawString(MARGIN_X + 22, line_y, line)
+                line_y -= 13
+        doc.y -= height + 10
+    doc.text(
+        "운영 변화 중심의 익명 사례입니다. 우리 학원과 조건이 가장 가까운 사례는 상담에서 안내해 드립니다.",
+        size=8.8,
+        leading=13,
+        fill=WARM_GRAY_LIGHT,
+        after=6,
+    )
+
+
+def draw_script_samples(doc: PdfDocument, magnet: dict) -> None:
+    samples = magnet.get("scriptSamples")
+    if not samples:
+        return
+    doc.label("02-3 / 복사해서 쓰는 멘트")
+    doc.heading("상황별 메시지 예시")
+    for sample in samples:
+        doc.text(clean_text(sample.get("scenario")), size=11.5, leading=15, fill=NEAR_BLACK, after=4)
+        doc.note_box("권장", clean_text(sample.get("good")), fill=WARM_WHITE, accent=GREEN)
+        avoid = clean_text(sample.get("avoid"))
+        if avoid:
+            doc.note_box("피하기", avoid, fill=WARM_WHITE, accent=WARNING)
+        why = clean_text(sample.get("why"))
+        if why:
+            doc.text(why, size=8.8, leading=13, fill=WARM_GRAY_LIGHT, after=10)
 
 
 def draw_deliverables(doc: PdfDocument, magnet: dict) -> None:
@@ -565,6 +721,9 @@ def build_pdf(magnet: dict, magnets_by_slug: dict[str, dict]) -> Path:
     draw_usage(doc, magnet)
     doc.line()
     draw_deliverables(doc, magnet)
+    draw_worksheet(doc, magnet)
+    draw_case_cards(doc, magnet)
+    draw_script_samples(doc, magnet)
     doc.new_page()
     draw_checklist(doc, magnet)
     doc.new_page()

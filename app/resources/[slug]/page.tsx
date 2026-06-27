@@ -58,6 +58,10 @@ export default async function ResourcePage({ params }: ResourcePageProps) {
 
   const itemCount = getLeadMagnetItemCount(magnet)
   const pdfGuide = magnet.pdfGuide
+  const expertVoice = magnet.expertVoice
+  const worksheet = magnet.worksheet
+  const caseCards = magnet.caseCards
+  const scriptSamples = magnet.scriptSamples
   const relatedMagnets = pdfGuide?.relatedMagnets?.length
     ? (await getPublishedLeadMagnets()).filter((item) =>
         pdfGuide.relatedMagnets.includes(item.slug)
@@ -140,6 +144,23 @@ export default async function ResourcePage({ params }: ResourcePageProps) {
             <ResourceDownloadForm resource={downloadResource} />
           </div>
 
+          {expertVoice ? (
+            <section className="mt-8 border border-black/[0.08] bg-[#ECFDF5]/40 p-6 md:p-8">
+              <p className="text-[12px] font-bold uppercase tracking-[0.18em] text-[#084734]/60">
+                현장 한마디
+              </p>
+              <blockquote className="mt-3 max-w-3xl border-l-2 border-[#084734]/30 pl-4 text-[16px] leading-8 text-[#31302E] md:text-[18px]">
+                {expertVoice.comment}
+              </blockquote>
+              <p className="mt-4 text-[13px] font-semibold text-[#615D59]">
+                — {expertVoice.speaker}
+                {expertVoice.role ? (
+                  <span className="font-normal text-[#A39E98]">, {expertVoice.role}</span>
+                ) : null}
+              </p>
+            </section>
+          ) : null}
+
           {pdfGuide ? (
             <section className="mt-8 border border-black/[0.08] bg-white p-6 md:p-8">
               <h2 className="text-2xl font-bold tracking-[-0.03em] text-[#111110]">
@@ -190,6 +211,77 @@ export default async function ResourcePage({ params }: ResourcePageProps) {
             </section>
           ) : null}
 
+          {caseCards && caseCards.length > 0 ? (
+            <section className="mt-8 border border-black/[0.08] bg-white p-6 md:p-8">
+              <p className="text-[12px] font-bold uppercase tracking-[0.18em] text-[#084734]/60">
+                도입 사례
+              </p>
+              <h2 className="mt-3 text-2xl font-bold tracking-[-0.03em] text-[#111110]">
+                우리와 비슷한 학원은 이렇게 바뀌었습니다
+              </h2>
+              <div className="mt-6 grid gap-4 md:grid-cols-2">
+                {caseCards.map((card) => (
+                  <div key={card.label} className="border border-black/[0.08] bg-[#FAFAF8] p-5">
+                    <p className="text-sm font-bold text-[#111110]">{card.label}</p>
+                    <p className="mt-0.5 text-[12px] text-[#A39E98]">{card.profile}</p>
+                    <p className="mt-3 text-[13px] leading-6 text-[#615D59]">
+                      <span className="font-semibold text-[#31302E]">고민 </span>
+                      {card.challenge}
+                    </p>
+                    <p className="mt-2 text-[13px] leading-6 text-[#615D59]">
+                      <span className="font-semibold text-[#084734]">변화 </span>
+                      {card.change}
+                    </p>
+                    {card.quote ? (
+                      <p className="mt-3 border-l-2 border-[#084734]/25 pl-3 text-[13px] italic leading-6 text-[#31302E]">
+                        {card.quote}
+                      </p>
+                    ) : null}
+                  </div>
+                ))}
+              </div>
+              <p className="mt-4 text-[12px] leading-6 text-[#A39E98]">
+                운영 변화 중심의 익명 사례입니다. 우리 학원과 조건이 가장 가까운 사례는 상담에서 더
+                구체적으로 안내해 드립니다.
+              </p>
+            </section>
+          ) : null}
+
+          {scriptSamples && scriptSamples.length > 0 ? (
+            <section className="mt-8 border border-black/[0.08] bg-white p-6 md:p-8">
+              <p className="text-[12px] font-bold uppercase tracking-[0.18em] text-[#084734]/60">
+                복사해서 쓰는 멘트
+              </p>
+              <h2 className="mt-3 text-2xl font-bold tracking-[-0.03em] text-[#111110]">
+                상황별 메시지 예시
+              </h2>
+              <div className="mt-6 space-y-4">
+                {scriptSamples.map((sample) => (
+                  <div key={sample.scenario} className="border border-black/[0.08] p-5">
+                    <p className="text-sm font-bold text-[#111110]">{sample.scenario}</p>
+                    <div className="mt-3 border-l-2 border-[#084734] bg-[#ECFDF5]/40 p-3">
+                      <p className="text-[11px] font-bold uppercase tracking-[0.12em] text-[#084734]">
+                        권장
+                      </p>
+                      <p className="mt-1 text-[13px] leading-6 text-[#31302E]">{sample.good}</p>
+                    </div>
+                    {sample.avoid ? (
+                      <div className="mt-2 border-l-2 border-[#B85C33] bg-[#F6F5F4] p-3">
+                        <p className="text-[11px] font-bold uppercase tracking-[0.12em] text-[#B85C33]">
+                          피하기
+                        </p>
+                        <p className="mt-1 text-[13px] leading-6 text-[#615D59]">{sample.avoid}</p>
+                      </div>
+                    ) : null}
+                    {sample.why ? (
+                      <p className="mt-2 text-[12px] leading-6 text-[#A39E98]">{sample.why}</p>
+                    ) : null}
+                  </div>
+                ))}
+              </div>
+            </section>
+          ) : null}
+
           <div className="mt-8 grid gap-4 md:grid-cols-2">
             <section className="border border-black/[0.08] bg-white p-6">
               <div className="mb-4 flex items-center gap-2 text-sm font-bold text-[#111110]">
@@ -221,6 +313,66 @@ export default async function ResourcePage({ params }: ResourcePageProps) {
               </ul>
             </section>
           </div>
+
+          {worksheet ? (
+            <section className="mt-8 border border-black/[0.08] bg-white p-6 md:p-8">
+              <p className="text-[12px] font-bold uppercase tracking-[0.18em] text-[#084734]/60">
+                직접 채우는 표
+              </p>
+              <h2 className="mt-3 text-2xl font-bold tracking-[-0.03em] text-[#111110]">
+                {worksheet.title}
+              </h2>
+              {worksheet.intro ? (
+                <p className="mt-3 max-w-3xl text-[14px] leading-7 text-[#615D59]">
+                  {worksheet.intro}
+                </p>
+              ) : null}
+              <div className="mt-6 overflow-x-auto">
+                <table className="w-full min-w-[520px] border-collapse text-[13px]">
+                  <thead>
+                    <tr className="border-b border-black/[0.12]">
+                      <th className="py-2 pr-3 text-left font-bold text-[#111110]">항목</th>
+                      {worksheet.columns.map((col) => (
+                        <th key={col} className="px-3 py-2 text-left font-bold text-[#084734]">
+                          {col}
+                        </th>
+                      ))}
+                    </tr>
+                  </thead>
+                  <tbody>
+                    {worksheet.rows.map((row) => (
+                      <tr
+                        key={row.label}
+                        className={`border-b border-black/[0.08] ${
+                          row.highlight ? "bg-[#F6F5F4] font-bold" : ""
+                        }`}
+                      >
+                        <td className="py-3 pr-3 align-top text-[#31302E]">
+                          {row.label}
+                          {row.hint ? (
+                            <span className="ml-1 text-[12px] text-[#A39E98]">({row.hint})</span>
+                          ) : null}
+                        </td>
+                        {worksheet.columns.map((col) => (
+                          <td key={col} className="px-3 py-3">
+                            <span className="block h-6 border-b border-dashed border-black/20" />
+                          </td>
+                        ))}
+                      </tr>
+                    ))}
+                  </tbody>
+                </table>
+              </div>
+              {worksheet.formula ? (
+                <p className="mt-5 border-l-2 border-[#084734] pl-3 text-[13px] leading-7 text-[#31302E]">
+                  {worksheet.formula}
+                </p>
+              ) : null}
+              {worksheet.note ? (
+                <p className="mt-3 text-[13px] leading-6 text-[#615D59]">{worksheet.note}</p>
+              ) : null}
+            </section>
+          ) : null}
 
           <section
             id="resource-checklist"

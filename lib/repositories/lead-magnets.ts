@@ -6,14 +6,19 @@ import path from "path"
 import type {
   LeadMagnet,
   LeadMagnetActionStep,
+  LeadMagnetCaseCard,
   LeadMagnetCategory,
+  LeadMagnetExpertVoice,
   LeadMagnetGate,
   LeadMagnetPdfGuide,
   LeadMagnetScoreBand,
+  LeadMagnetScriptSample,
   LeadMagnetSection,
   LeadMagnetSourceLink,
   LeadMagnetStatus,
   LeadMagnetTier,
+  LeadMagnetWorksheet,
+  LeadMagnetWorksheetRow,
 } from "@/lib/lead-magnets"
 
 const DATA_PATH = path.join(process.cwd(), "data", "lead-magnets.json")
@@ -129,6 +134,87 @@ function normalizePdfGuide(value: unknown): LeadMagnetPdfGuide | undefined {
   }
 }
 
+function normalizeExpertVoice(value: unknown): LeadMagnetExpertVoice | undefined {
+  const raw = asRecord(value)
+  const speaker = stringValue(raw.speaker)
+  const comment = stringValue(raw.comment)
+  if (!speaker || !comment) return undefined
+  const role = stringValue(raw.role)
+  return role ? { speaker, role, comment } : { speaker, comment }
+}
+
+function normalizeWorksheetRows(value: unknown): LeadMagnetWorksheetRow[] {
+  if (!Array.isArray(value)) return []
+  return value
+    .map((raw) => {
+      const item = asRecord(raw)
+      const label = stringValue(item.label)
+      if (!label) return null
+      const row: LeadMagnetWorksheetRow = { label }
+      const hint = stringValue(item.hint)
+      if (hint) row.hint = hint
+      if (booleanValue(item.highlight)) row.highlight = true
+      return row
+    })
+    .filter((row): row is LeadMagnetWorksheetRow => row !== null)
+}
+
+function normalizeWorksheet(value: unknown): LeadMagnetWorksheet | undefined {
+  const raw = asRecord(value)
+  if (Object.keys(raw).length === 0) return undefined
+  const columns = stringArray(raw.columns)
+  const rows = normalizeWorksheetRows(raw.rows)
+  if (columns.length === 0 || rows.length === 0) return undefined
+  const worksheet: LeadMagnetWorksheet = {
+    title: stringValue(raw.title, "계산표"),
+    columns,
+    rows,
+  }
+  const intro = stringValue(raw.intro)
+  if (intro) worksheet.intro = intro
+  const formula = stringValue(raw.formula)
+  if (formula) worksheet.formula = formula
+  const note = stringValue(raw.note)
+  if (note) worksheet.note = note
+  return worksheet
+}
+
+function normalizeCaseCards(value: unknown): LeadMagnetCaseCard[] {
+  if (!Array.isArray(value)) return []
+  return value
+    .map((raw) => {
+      const item = asRecord(raw)
+      const label = stringValue(item.label)
+      const profile = stringValue(item.profile)
+      const challenge = stringValue(item.challenge)
+      const change = stringValue(item.change)
+      if (!label || !change) return null
+      const card: LeadMagnetCaseCard = { label, profile, challenge, change }
+      const quote = stringValue(item.quote)
+      if (quote) card.quote = quote
+      return card
+    })
+    .filter((card): card is LeadMagnetCaseCard => card !== null)
+}
+
+function normalizeScriptSamples(value: unknown): LeadMagnetScriptSample[] {
+  if (!Array.isArray(value)) return []
+  return value
+    .map((raw) => {
+      const item = asRecord(raw)
+      const scenario = stringValue(item.scenario)
+      const good = stringValue(item.good)
+      if (!scenario || !good) return null
+      const sample: LeadMagnetScriptSample = { scenario, good }
+      const avoid = stringValue(item.avoid)
+      if (avoid) sample.avoid = avoid
+      const why = stringValue(item.why)
+      if (why) sample.why = why
+      return sample
+    })
+    .filter((sample): sample is LeadMagnetScriptSample => sample !== null)
+}
+
 export function normalizeLeadMagnet(input: unknown): LeadMagnet {
   const raw = asRecord(input)
   const title = stringValue(raw.title, "새 자료")
@@ -162,6 +248,10 @@ export function normalizeLeadMagnet(input: unknown): LeadMagnet {
     consultationPrep: stringArray(raw.consultationPrep),
     sourceLinks: normalizeSourceLinks(raw.sourceLinks),
     pdfGuide: normalizePdfGuide(raw.pdfGuide),
+    expertVoice: normalizeExpertVoice(raw.expertVoice),
+    worksheet: normalizeWorksheet(raw.worksheet),
+    caseCards: normalizeCaseCards(raw.caseCards),
+    scriptSamples: normalizeScriptSamples(raw.scriptSamples),
     salesPlaybook: {
       intentScore: Math.max(0, Math.min(40, numberValue(salesPlaybook.intentScore, 15))),
       intentLabel: stringValue(salesPlaybook.intentLabel, "자료 관심 리드"),

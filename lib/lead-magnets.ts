@@ -42,6 +42,61 @@ export interface LeadMagnetPdfGuide {
   expertNote: string
 }
 
+/** 자료에 사람 목소리를 입히는 바이라인 코멘트(파일럿: showroom/calculator). */
+export interface LeadMagnetExpertVoice {
+  /** 화자. 예: "목동 쇼룸 상담팀". */
+  speaker: string
+  /** 화자 맥락/소속. 예: "ClassIn Korea". */
+  role?: string
+  /** 1인칭 코멘트. */
+  comment: string
+}
+
+export interface LeadMagnetWorksheetRow {
+  label: string
+  hint?: string
+  /** 합계/결과 행 강조. */
+  highlight?: boolean
+}
+
+/** 원장이 직접 채우는 계산 표(파일럿: calculator). 금액은 비워 상담에서 환산한다. */
+export interface LeadMagnetWorksheet {
+  title: string
+  intro?: string
+  /** 입력 칸 헤더(항목 라벨 열 제외). */
+  columns: readonly string[]
+  rows: readonly LeadMagnetWorksheetRow[]
+  /** 계산식 안내 문장. */
+  formula?: string
+  note?: string
+}
+
+/** 익명 실사례 미니카드(파일럿: case-match-brief). 정량 성과수치는 넣지 않는다. */
+export interface LeadMagnetCaseCard {
+  /** 익명 식별자. 예: "청주 이**국어". */
+  label: string
+  /** 과목·유형. */
+  profile: string
+  /** 도입 전 병목. */
+  challenge: string
+  /** 도입 후 운영 변화(정성). */
+  change: string
+  /** 현장 인용(선택). */
+  quote?: string
+}
+
+/** 복붙용 메시지 예시 — 권장/피해야 할 멘트 쌍(파일럿: parent-replay). */
+export interface LeadMagnetScriptSample {
+  /** 상황. 예: "결석 학생 안내". */
+  scenario: string
+  /** 권장 멘트(복사해서 사용). */
+  good: string
+  /** 피해야 할 멘트(선택). */
+  avoid?: string
+  /** 왜 이렇게 쓰는지(선택). */
+  why?: string
+}
+
 export interface LeadMagnetSalesPlaybook {
   intentScore: number
   intentLabel: string
@@ -77,6 +132,14 @@ export interface LeadMagnet {
   sourceLinks?: readonly LeadMagnetSourceLink[]
   pdfGuide?: LeadMagnetPdfGuide
   salesPlaybook?: LeadMagnetSalesPlaybook
+  /** 바이라인 코멘트(사람 목소리). 파일럿 자료에만 존재. */
+  expertVoice?: LeadMagnetExpertVoice
+  /** 직접 채우는 계산 워크시트. 파일럿 자료에만 존재. */
+  worksheet?: LeadMagnetWorksheet
+  /** 익명 실사례 카드. 파일럿 자료에만 존재. */
+  caseCards?: readonly LeadMagnetCaseCard[]
+  /** 복붙용 메시지 예시. 파일럿 자료에만 존재. */
+  scriptSamples?: readonly LeadMagnetScriptSample[]
   ctaCopy: {
     eyebrow: string
     title: string
