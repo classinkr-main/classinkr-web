@@ -14,7 +14,19 @@ import { getLeads, type LeadRecord } from "@/lib/repositories/leads"
 
 export type CrmUnifiedCustomerSource = CrmPrioritySource
 export type CrmUnifiedLifecycle = "new_lead" | "active_lead" | "account_risk" | "active_account" | "closed"
-export type CrmUnifiedSavedView = "all" | "priority" | "new_leads" | "needs_care" | "my_owner"
+export type CrmUnifiedSavedView =
+  | "all"
+  | "priority"
+  | "new_leads"
+  | "needs_care"
+  | "my_owner"
+  | "expiring"
+  | "dormant"
+  | "hot_lead"
+  | "upsell"
+
+// 칩 카운트를 보여줄 세그먼트(저장 뷰).
+export const CRM_SEGMENT_VIEWS = ["expiring", "dormant", "hot_lead", "upsell"] as const
 export type CrmUnifiedSourceStatusKey = "classin_leads" | "external_crm" | "sheets"
 
 export interface CrmUnifiedCustomerRow {
@@ -33,6 +45,8 @@ export interface CrmUnifiedCustomerRow {
   moneyLabel: string | null
   href: string
   updatedAt: string | null
+  expireAt: string | null
+  balance: number | null
 }
 
 export interface CrmUnifiedCustomersOptions {
@@ -69,6 +83,7 @@ export interface CrmUnifiedCustomers {
     accountCount: number
     highPriorityCount: number
     ownerCount: number
+    viewCounts: Record<string, number>
   }
   pagination: {
     limit: number
@@ -173,12 +188,40 @@ function rowMatchesOwner(row: CrmUnifiedCustomerRow, ownerKeys: Set<string>) {
   return row.ownerKeys.some((key) => ownerKeys.has(key))
 }
 
-function matchesSavedView(row: CrmUnifiedCustomerRow, view: CrmUnifiedSavedView, ownerKeys: Set<string>) {
+function daysUntil(iso: string | null, nowMs: number): number | null {
+  if (!iso) return null
+  const time = new Date(iso).getTime()
+  if (Number.isNaN(time)) return null
+  return (time - nowMs) / 86_400_000
+}
+
+function matchesSavedView(
+  row: CrmUnifiedCustomerRow,
+  view: CrmUnifiedSavedView,
+  ownerKeys: Set<string>,
+  nowMs: number
+) {
   if (view === "all") return true
   if (view === "priority") return row.score >= 68
   if (view === "new_leads") return row.lifecycle === "new_lead"
   if (view === "needs_care") return row.source === "neo_account" && row.lifecycle === "account_risk"
   if (view === "my_owner") return ownerKeys.size > 0 && rowMatchesOwner(row, ownerKeys)
+  // 만료 임박: NEO 만료일이 14일 이내(지난 것 포함).
+  if (view === "expiring") {
+    const d = daysUntil(row.expireAt, nowMs)
+    return d != null && d <= 14
+  }
+  // 30일+ 미접촉: 마지막 활동(updatedAt)이 30일보다 오래됨.
+  if (view === "dormant") {
+    const d = daysUntil(row.updatedAt, nowMs)
+    return d != null && d <= -30
+  }
+  // 고전환 리드: 우선순위 점수 상위 리드.
+  if (view === "hot_lead") return row.source === "lead" && row.score >= 68
+  // 업셀 후보: 위험 아닌 활성 고객 + 잔액 보유.
+  if (view === "upsell") {
+    return row.source === "neo_account" && row.lifecycle !== "account_risk" && (row.balance ?? 0) > 0
+  }
   return true
 }
 
@@ -212,6 +255,8 @@ export async function getCrmUnifiedCustomers(
         moneyLabel: null,
         href: `/admin/crm/customers/leads?lead=${encodeURIComponent(lead.id)}`,
         updatedAt: lead.follow_up_at ?? lead.timestamp,
+        expireAt: null,
+        balance: null,
       })
     }
   } else {
@@ -247,6 +292,8 @@ export async function getCrmUnifiedCustomers(
                 : null,
         href: `/admin/crm/customers/accounts?account=${encodeURIComponent(account.accountId)}`,
         updatedAt: account.updatedAt ?? account.lastClassAt ?? account.expireAt,
+        expireAt: account.expireAt ?? null,
+        balance: account.balance ?? null,
       })
     }
 
@@ -264,14 +311,22 @@ export async function getCrmUnifiedCustomers(
   const lifecycle = options.lifecycle ?? "all"
   const view = options.view ?? "all"
 
-  const filtered = rows.filter((row) => {
+  const nowMs = now.getTime()
+  const baseRows = rows.filter((row) => {
     if (source !== "all" && row.source !== source) return false
     if (lifecycle !== "all" && row.lifecycle !== lifecycle) return false
     if (!rowMatchesOwner(row, ownerKeys)) return false
-    if (!matchesSavedView(row, view, ownerKeys)) return false
     if (!includesQuery(row, query)) return false
     return true
   })
+  const filtered = baseRows.filter((row) => matchesSavedView(row, view, ownerKeys, nowMs))
+  // 세그먼트 칩 카운트 — 현재 검색/담당 범위 안에서 각 세그먼트에 몇 건이 들어오는지.
+  const viewCounts = Object.fromEntries(
+    CRM_SEGMENT_VIEWS.map((segment) => [
+      segment,
+      baseRows.filter((row) => matchesSavedView(row, segment, ownerKeys, nowMs)).length,
+    ])
+  )
 
   const sortedKeys = new Map(sortPriorityItems(filtered.map((row) => {
     const bucket = sortBucketForRow(row)
@@ -357,6 +412,7 @@ export async function getCrmUnifiedCustomers(
       accountCount: filtered.filter((row) => row.source === "neo_account").length,
       highPriorityCount: filtered.filter((row) => row.score >= 68).length,
       ownerCount: owners.length,
+      viewCounts,
     },
     pagination: {
       limit,

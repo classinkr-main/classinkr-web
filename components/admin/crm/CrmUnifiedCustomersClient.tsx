@@ -40,6 +40,7 @@ interface CrmUnifiedCustomers {
     accountCount: number
     highPriorityCount: number
     ownerCount: number
+    viewCounts?: Record<string, number>
   }
   pagination: {
     limit: number
@@ -77,6 +78,10 @@ const SAVED_VIEW_FILTERS: Array<{
   { key: "priority", label: "우선 처리", description: "점수 68점 이상" },
   { key: "new_leads", label: "신규 리드", description: "첫 응답 대상" },
   { key: "needs_care", label: "관리 필요 고객", description: "만료·휴면 위험" },
+  { key: "expiring", label: "만료 임박", description: "만료 14일 이내(지난 것 포함)" },
+  { key: "dormant", label: "30일+ 미접촉", description: "마지막 활동 30일 초과" },
+  { key: "hot_lead", label: "고전환 리드", description: "점수 상위 리드" },
+  { key: "upsell", label: "업셀 후보", description: "활성 고객 · 잔액 보유" },
 ]
 
 const CACHE_TTL_MS = 90_000
@@ -377,10 +382,13 @@ export default function CrmUnifiedCustomersClient() {
             {SAVED_VIEW_FILTERS.map((filter) => {
               const isActive = savedView === filter.key
               const disabled = filter.key === "my_owner" && !currentOwner
+              const segmentCount = data?.summary.viewCounts?.[filter.key]
               const label =
                 filter.key === "my_owner" && currentOwner
                   ? `${filter.label}${currentOwnerCount ? ` ${currentOwnerCount}` : ""}`
-                  : filter.label
+                  : segmentCount != null
+                    ? `${filter.label} ${segmentCount}`
+                    : filter.label
               return (
                 <button
                   key={filter.key}
