@@ -230,6 +230,8 @@ export default function Customer360Drawer({ customerKey, name, onClose }: Props)
   const [dealAmount, setDealAmount] = useState("")
   const [activityTab, setActivityTab] = useState<"timeline" | "feed">("timeline")
   const [noteKind, setNoteKind] = useState<"manual_note" | "meeting_minutes">("manual_note")
+  const [dealFormOpen, setDealFormOpen] = useState(false)
+  const [taskFormOpen, setTaskFormOpen] = useState(false)
 
   const url = customerKey ? `/api/admin/crm/customers/${encodeURIComponent(customerKey)}/360` : null
 
@@ -268,6 +270,8 @@ export default function Customer360Drawer({ customerKey, name, onClose }: Props)
     setDealAmount("")
     setActivityTab("timeline")
     setNoteKind("manual_note")
+    setDealFormOpen(false)
+    setTaskFormOpen(false)
     if (customerKey) void load()
   }, [customerKey, load])
 
@@ -339,6 +343,7 @@ export default function Customer360Drawer({ customerKey, name, onClose }: Props)
       })
       setTaskTitle("")
       setTaskDue("")
+      setTaskFormOpen(false)
       await refetch()
     } catch (err) {
       setError(err instanceof Error ? err.message : "할 일 저장에 실패했습니다.")
@@ -414,6 +419,7 @@ export default function Customer360Drawer({ customerKey, name, onClose }: Props)
       setDealTitle("")
       setDealAmount("")
       setDealStage("consult")
+      setDealFormOpen(false)
       await refetch()
     } catch (err) {
       setError(err instanceof Error ? err.message : "딜 저장에 실패했습니다.")
@@ -856,40 +862,61 @@ export default function Customer360Drawer({ customerKey, name, onClose }: Props)
                   ))
                 )}
               </div>
-              <div className="flex flex-wrap gap-2 border-t border-[#f0f0ec] pt-3">
-                <input
-                  value={dealTitle}
-                  onChange={(event) => setDealTitle(event.target.value)}
-                  placeholder="새 딜 제목"
-                  className="h-9 min-w-[140px] flex-1 rounded-lg border border-[#e8e8e4] bg-white px-2.5 text-[12px] text-[#111110] outline-none focus:border-[#111110]"
-                />
-                <input
-                  value={dealAmount}
-                  onChange={(event) => setDealAmount(event.target.value)}
-                  inputMode="numeric"
-                  placeholder="예상금액"
-                  className="h-9 w-24 rounded-lg border border-[#e8e8e4] bg-white px-2 text-[12px] text-[#111110] outline-none focus:border-[#111110]"
-                />
-                <select
-                  value={dealStage}
-                  onChange={(event) => setDealStage(event.target.value as CrmDealStage)}
-                  className="h-9 rounded-lg border border-[#e8e8e4] bg-white px-2 text-[12px] font-semibold text-[#111110] outline-none"
-                >
-                  {DEAL_STAGE_OPTIONS.map((option) => (
-                    <option key={option.value} value={option.value}>
-                      {option.label}
-                    </option>
-                  ))}
-                </select>
-                <button
-                  type="button"
-                  onClick={() => void handleAddDeal()}
-                  disabled={!dealTitle.trim() || actingId === "deal"}
-                  className="inline-flex h-9 items-center justify-center gap-1 rounded-lg bg-[#111110] px-3 text-[12px] font-semibold text-white transition-opacity hover:opacity-90 disabled:opacity-40"
-                >
-                  <Plus className="h-3.5 w-3.5" />
-                  딜 추가
-                </button>
+              <div className="border-t border-[#f0f0ec] pt-3">
+                {dealFormOpen ? (
+                  <div className="flex flex-wrap gap-2">
+                    <input
+                      value={dealTitle}
+                      onChange={(event) => setDealTitle(event.target.value)}
+                      placeholder="새 딜 제목"
+                      autoFocus
+                      className="h-9 min-w-[140px] flex-1 rounded-lg border border-[#e8e8e4] bg-white px-2.5 text-[12px] text-[#111110] outline-none focus:border-[#111110]"
+                    />
+                    <input
+                      value={dealAmount}
+                      onChange={(event) => setDealAmount(event.target.value)}
+                      inputMode="numeric"
+                      placeholder="예상금액"
+                      className="h-9 w-24 rounded-lg border border-[#e8e8e4] bg-white px-2 text-[12px] text-[#111110] outline-none focus:border-[#111110]"
+                    />
+                    <select
+                      value={dealStage}
+                      onChange={(event) => setDealStage(event.target.value as CrmDealStage)}
+                      className="h-9 rounded-lg border border-[#e8e8e4] bg-white px-2 text-[12px] font-semibold text-[#111110] outline-none"
+                    >
+                      {DEAL_STAGE_OPTIONS.map((option) => (
+                        <option key={option.value} value={option.value}>
+                          {option.label}
+                        </option>
+                      ))}
+                    </select>
+                    <button
+                      type="button"
+                      onClick={() => void handleAddDeal()}
+                      disabled={!dealTitle.trim() || actingId === "deal"}
+                      className="inline-flex h-9 items-center justify-center gap-1 rounded-lg bg-[#111110] px-3 text-[12px] font-semibold text-white transition-opacity hover:opacity-90 disabled:opacity-40"
+                    >
+                      <Plus className="h-3.5 w-3.5" />
+                      딜 추가
+                    </button>
+                    <button
+                      type="button"
+                      onClick={() => setDealFormOpen(false)}
+                      className="inline-flex h-9 items-center rounded-lg border border-[#e8e8e4] bg-white px-3 text-[12px] font-semibold text-[#1a1a1a]/55 transition-colors hover:bg-[#f5f5f2]"
+                    >
+                      취소
+                    </button>
+                  </div>
+                ) : (
+                  <button
+                    type="button"
+                    onClick={() => setDealFormOpen(true)}
+                    className="inline-flex h-8 items-center gap-1 rounded-lg border border-dashed border-[#dcdcd6] px-3 text-[12px] font-semibold text-[#1a1a1a]/55 transition-colors hover:border-[#111110] hover:text-[#111110]"
+                  >
+                    <Plus className="h-3.5 w-3.5" />
+                    딜 추가
+                  </button>
+                )}
               </div>
             </section>
           ) : null}
@@ -927,41 +954,62 @@ export default function Customer360Drawer({ customerKey, name, onClose }: Props)
                   ))
                 )}
               </div>
-              <div className="flex flex-col gap-2 border-t border-[#f0f0ec] pt-3">
-                <input
-                  value={taskTitle}
-                  onChange={(event) => setTaskTitle(event.target.value)}
-                  placeholder="새 할 일 제목"
-                  className="h-9 rounded-lg border border-[#e8e8e4] bg-white px-2.5 text-[12px] text-[#111110] outline-none focus:border-[#111110]"
-                />
-                <div className="flex flex-wrap gap-2">
-                  <select
-                    value={taskType}
-                    onChange={(event) => setTaskType(event.target.value as CrmTaskType)}
-                    className="h-9 rounded-lg border border-[#e8e8e4] bg-white px-2 text-[12px] font-semibold text-[#111110] outline-none"
-                  >
-                    {TASK_TYPE_OPTIONS.map((option) => (
-                      <option key={option.value} value={option.value}>
-                        {option.label}
-                      </option>
-                    ))}
-                  </select>
-                  <input
-                    type="date"
-                    value={taskDue}
-                    onChange={(event) => setTaskDue(event.target.value)}
-                    className="h-9 rounded-lg border border-[#e8e8e4] bg-white px-2 text-[12px] text-[#111110] outline-none"
-                  />
+              <div className="border-t border-[#f0f0ec] pt-3">
+                {taskFormOpen ? (
+                  <div className="flex flex-col gap-2">
+                    <input
+                      value={taskTitle}
+                      onChange={(event) => setTaskTitle(event.target.value)}
+                      placeholder="새 할 일 제목"
+                      autoFocus
+                      className="h-9 rounded-lg border border-[#e8e8e4] bg-white px-2.5 text-[12px] text-[#111110] outline-none focus:border-[#111110]"
+                    />
+                    <div className="flex flex-wrap gap-2">
+                      <select
+                        value={taskType}
+                        onChange={(event) => setTaskType(event.target.value as CrmTaskType)}
+                        className="h-9 rounded-lg border border-[#e8e8e4] bg-white px-2 text-[12px] font-semibold text-[#111110] outline-none"
+                      >
+                        {TASK_TYPE_OPTIONS.map((option) => (
+                          <option key={option.value} value={option.value}>
+                            {option.label}
+                          </option>
+                        ))}
+                      </select>
+                      <input
+                        type="date"
+                        value={taskDue}
+                        onChange={(event) => setTaskDue(event.target.value)}
+                        className="h-9 rounded-lg border border-[#e8e8e4] bg-white px-2 text-[12px] text-[#111110] outline-none"
+                      />
+                      <button
+                        type="button"
+                        onClick={() => void handleAddTask()}
+                        disabled={!taskTitle.trim() || actingId === "task"}
+                        className="inline-flex h-9 flex-1 items-center justify-center gap-1 rounded-lg bg-[#111110] px-3 text-[12px] font-semibold text-white transition-opacity hover:opacity-90 disabled:opacity-40"
+                      >
+                        <Plus className="h-3.5 w-3.5" />
+                        내 할 일로 추가
+                      </button>
+                      <button
+                        type="button"
+                        onClick={() => setTaskFormOpen(false)}
+                        className="inline-flex h-9 items-center rounded-lg border border-[#e8e8e4] bg-white px-3 text-[12px] font-semibold text-[#1a1a1a]/55 transition-colors hover:bg-[#f5f5f2]"
+                      >
+                        취소
+                      </button>
+                    </div>
+                  </div>
+                ) : (
                   <button
                     type="button"
-                    onClick={() => void handleAddTask()}
-                    disabled={!taskTitle.trim() || actingId === "task"}
-                    className="inline-flex h-9 flex-1 items-center justify-center gap-1 rounded-lg bg-[#111110] px-3 text-[12px] font-semibold text-white transition-opacity hover:opacity-90 disabled:opacity-40"
+                    onClick={() => setTaskFormOpen(true)}
+                    className="inline-flex h-8 items-center gap-1 rounded-lg border border-dashed border-[#dcdcd6] px-3 text-[12px] font-semibold text-[#1a1a1a]/55 transition-colors hover:border-[#111110] hover:text-[#111110]"
                   >
                     <Plus className="h-3.5 w-3.5" />
-                    내 할 일로 추가
+                    할 일 추가
                   </button>
-                </div>
+                )}
               </div>
               <div className="mt-3 border-t border-[#f0f0ec] pt-3">
                 <p className="mb-1.5 text-[11px] font-semibold text-[#1a1a1a]/45">고객 성공(CS) 동선 · 원클릭</p>
