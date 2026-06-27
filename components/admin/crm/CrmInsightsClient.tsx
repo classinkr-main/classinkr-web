@@ -11,6 +11,7 @@ import type {
   CrmInsightSourceKey,
   CrmInsightTone,
 } from "@/lib/repositories/crm-insights"
+import CrmManagerReportPanel from "./CrmManagerReportPanel"
 
 const INSIGHTS_URL = "/api/admin/crm/insights"
 const CACHE_TTL_MS = 90_000
@@ -162,6 +163,8 @@ export default function CrmInsightsClient() {
             새로고침
           </button>
         </div>
+
+        <CrmManagerReportPanel />
 
         {error ? (
           <div className="mb-4 rounded-xl border border-[#F6D5C5] bg-[#FEF3EE] px-3 py-2 text-[12px] font-medium text-[#B85C33]">
