@@ -2,6 +2,7 @@
 
 import { Bell, CheckCheck, Loader2, X } from "lucide-react"
 import { useCallback, useEffect, useRef, useState } from "react"
+import { createPortal } from "react-dom"
 import { useRouter } from "next/navigation"
 
 import { adminFetchJson } from "@/lib/admin-client"
@@ -31,8 +32,11 @@ interface BellProps {
 
 export default function AdminNotificationsBell({ placement = "floating" }: BellProps = {}) {
   const router = useRouter()
-  const panelRef = useRef<HTMLDivElement | null>(null)
+  const containerRef = useRef<HTMLDivElement | null>(null)
+  const buttonRef = useRef<HTMLButtonElement | null>(null)
+  const floatingRef = useRef<HTMLDivElement | null>(null)
   const [open, setOpen] = useState(false)
+  const [panelStyle, setPanelStyle] = useState<React.CSSProperties | null>(null)
   const [loading, setLoading] = useState(false)
   const [busy, setBusy] = useState(false)
   const [items, setItems] = useState<NotificationInboxItem[]>([])
@@ -96,10 +100,48 @@ export default function AdminNotificationsBell({ placement = "floating" }: BellP
     return () => document.removeEventListener("visibilitychange", handleVisibilityChange)
   }, [loadUnreadCount])
 
+  // Anchor the portaled panel to the bell button. The panel is rendered into
+  // document.body so it escapes the sticky sidebar / fixed header stacking
+  // contexts that would otherwise clip it behind page content.
+  useEffect(() => {
+    if (!open) return
+
+    const computePosition = () => {
+      const button = buttonRef.current
+      if (!button) return
+
+      const rect = button.getBoundingClientRect()
+      const margin = 12
+      const isDesktop =
+        typeof window !== "undefined" &&
+        window.matchMedia("(min-width: 1024px)").matches
+
+      if (isDesktop) {
+        const width = 360
+        let left = rect.right + margin
+        if (left + width + margin > window.innerWidth) {
+          left = Math.max(margin, window.innerWidth - width - margin)
+        }
+        setPanelStyle({ position: "fixed", top: rect.top, left, width })
+      } else {
+        setPanelStyle({ position: "fixed", top: 64, left: margin, right: margin })
+      }
+    }
+
+    computePosition()
+    window.addEventListener("resize", computePosition)
+    window.addEventListener("scroll", computePosition, true)
+    return () => {
+      window.removeEventListener("resize", computePosition)
+      window.removeEventListener("scroll", computePosition, true)
+    }
+  }, [open])
+
   useEffect(() => {
     function handlePointerDown(event: MouseEvent) {
-      if (!panelRef.current) return
-      if (panelRef.current.contains(event.target as Node)) return
+      const target = event.target as Node
+      if (containerRef.current?.contains(target)) return
+      if (floatingRef.current?.contains(target)) return
       setOpen(false)
     }
 
@@ -191,13 +233,13 @@ export default function AdminNotificationsBell({ placement = "floating" }: BellP
   const buttonClass = placement === "inline"
     ? "relative flex h-8 w-8 items-center justify-center rounded-md text-[#111110] transition-colors hover:bg-[#f5f5f2]"
     : "relative flex h-11 w-11 items-center justify-center rounded-md border border-[#e8e8e4] bg-white text-[#111110] shadow-sm transition-colors hover:bg-[#f7f7f4]"
-  const panelClass = placement === "inline"
-    ? "fixed left-3 top-16 max-h-[calc(100dvh-5rem)] overflow-hidden rounded-[16px] border border-[#e8e8e4] bg-white shadow-2xl lg:absolute lg:left-auto lg:right-[-380px] lg:top-0 lg:mt-0 lg:w-[360px] lg:rounded-[16px] z-50"
-    : "fixed inset-x-3 top-16 max-h-[calc(100dvh-5rem)] overflow-hidden rounded-[16px] border border-[#e8e8e4] bg-white shadow-2xl"
+  const panelClass =
+    "max-h-[calc(100dvh-5rem)] overflow-hidden rounded-[16px] border border-[#e8e8e4] bg-white shadow-2xl z-[80]"
 
   return (
-    <div className={wrapperClass} ref={panelRef}>
+    <div className={wrapperClass} ref={containerRef}>
       <button
+        ref={buttonRef}
         type="button"
         onClick={() => setOpen((current) => !current)}
         className={buttonClass}
@@ -211,8 +253,9 @@ export default function AdminNotificationsBell({ placement = "floating" }: BellP
         ) : null}
       </button>
 
-      {open ? (
-        <div className={panelClass}>
+      {open && typeof document !== "undefined"
+        ? createPortal(
+        <div ref={floatingRef} className={panelClass} style={panelStyle ?? { position: "fixed", top: 64, left: 12, right: 12 }}>
           <div className="flex items-center justify-between border-b border-[#efefea] px-5 py-4">
             <div>
               <p className="text-[11px] font-medium uppercase tracking-[0.18em] text-[#1a1a1a]/35">
@@ -318,8 +361,10 @@ export default function AdminNotificationsBell({ placement = "floating" }: BellP
               </div>
             )}
           </div>
-        </div>
-      ) : null}
+        </div>,
+        document.body
+          )
+        : null}
     </div>
   )
 }

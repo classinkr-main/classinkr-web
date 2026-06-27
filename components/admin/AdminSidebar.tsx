@@ -517,7 +517,7 @@ export default function AdminSidebar({ role, name, email }: Props) {
         </button>
       </div>
 
-      <nav className={`min-h-0 flex-1 px-3 py-4 lg:overflow-y-auto ${effectiveCollapsed ? "lg:px-2" : ""}`}>
+      <nav className={`flex-1 px-3 py-4 ${effectiveCollapsed ? "lg:px-2" : ""}`}>
         {groupedNav.map(({ section, items }, groupIndex) => (
           <div key={section} className={groupIndex === 0 ? "" : "mt-5 border-t border-[#f0f0ec] pt-4"}>
             {!effectiveCollapsed && (
@@ -577,32 +577,7 @@ export default function AdminSidebar({ role, name, email }: Props) {
         ))}
       </nav>
 
-      {!effectiveCollapsed && (
-        <div className="shrink-0 px-3 pb-3">
-          <div className="mb-3 rounded-xl border border-[#e8e8e4] bg-[#fafaf8] px-3 py-3">
-            <p className="text-[11px] font-medium text-[#111110]">오늘 빠른 이동</p>
-            <div className="mt-2 flex flex-nowrap gap-1.5 overflow-x-auto pb-1">
-              {visibleNav.slice(0, 3).map((item) => (
-                <Link
-                  key={`quick-${item.href}`}
-                  href={item.href}
-                  onFocus={() => warmAdminTab(item.href)}
-                  onMouseEnter={() => scheduleWarmAdminTab(item.href)}
-                  onMouseLeave={cancelWarmAdminTab}
-                  onPointerDown={() => warmAdminTab(item.href)}
-                  onTouchStart={() => warmAdminTab(item.href)}
-                  onClick={() => warmAdminTab(item.href)}
-                  className="inline-flex shrink-0 items-center rounded-md border border-[#e8e8e4] bg-white px-2 py-1 text-[11px] text-[#1a1a1a]/55 transition-colors hover:border-[#c8c8c4] hover:text-[#111110]"
-                >
-                  {item.label}
-                </Link>
-              ))}
-            </div>
-          </div>
-        </div>
-      )}
-
-      <div className={`shrink-0 pb-5 ${effectiveCollapsed ? "px-2 lg:px-2" : "px-3"}`}>
+      <div className={`shrink-0 border-t border-[#f0f0ec] pt-3 pb-5 ${effectiveCollapsed ? "px-2 lg:px-2" : "px-3"}`}>
         <button
           onClick={handleLogout}
           title={effectiveCollapsed ? "로그아웃" : undefined}
