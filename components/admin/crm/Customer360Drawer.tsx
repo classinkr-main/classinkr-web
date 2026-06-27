@@ -66,6 +66,22 @@ const SEVERITY_LABEL: Record<Customer360Severity, string> = {
   low: "안정",
 }
 
+const SERVICE_RISK_LABEL: Record<string, string> = {
+  urgent: "긴급",
+  soon: "임박",
+  watch: "주시",
+  normal: "정상",
+}
+
+const SERVICE_RISK_CLASS: Record<string, string> = {
+  urgent: "border-[#F6D5C5] bg-[#FEF3EE] text-[#B85C33]",
+  soon: "border-[#ECD29C] bg-[#FBF1E0] text-[#7A520F]",
+  watch: "border-[#D7EBDD] bg-[#ECFDF5] text-[#084734]",
+  normal: "border-[#e8e8e4] bg-[#fafaf8] text-[#1a1a1a]/55",
+}
+
+const CONFIDENCE_LABEL: Record<string, string> = { high: "신뢰 높음", medium: "신뢰 보통", low: "신뢰 낮음" }
+
 const TASK_TYPE_OPTIONS: Array<{ value: CrmTaskType; label: string }> = [
   { value: "call", label: "전화" },
   { value: "kakao", label: "카카오" },
@@ -436,6 +452,35 @@ export default function Customer360Drawer({ customerKey, name, onClose }: Props)
                   </div>
                 ))}
               </div>
+              {data.serviceRisk ? (
+                <div className="mt-3 rounded-xl border border-[#f0f0ec] bg-[#fafaf8] px-3 py-2">
+                  <div className="flex items-center justify-between gap-2">
+                    <div className="flex items-center gap-1.5">
+                      <span className="text-[11px] font-semibold text-[#1a1a1a]/45">서비스(NEO)</span>
+                      <span
+                        className={`rounded-full border px-2 py-0.5 text-[10px] font-semibold ${
+                          SERVICE_RISK_CLASS[data.serviceRisk.level] ?? SERVICE_RISK_CLASS.normal
+                        }`}
+                      >
+                        {SERVICE_RISK_LABEL[data.serviceRisk.level] ?? data.serviceRisk.level}
+                      </span>
+                    </div>
+                    <span className="text-[10px] text-[#1a1a1a]/35">
+                      {data.serviceRisk.freshnessLabel ?? "NEO 정보 없음"} · {CONFIDENCE_LABEL[data.serviceRisk.confidence]}
+                    </span>
+                  </div>
+                  {data.serviceRisk.reasons.length ? (
+                    <ul className="mt-1.5 flex flex-wrap gap-1.5">
+                      {data.serviceRisk.reasons.map((reason) => (
+                        <li key={reason.code} className="rounded-full bg-white px-2 py-0.5 text-[11px] font-medium text-[#7A520F]">
+                          {reason.label}
+                        </li>
+                      ))}
+                    </ul>
+                  ) : null}
+                </div>
+              ) : null}
+
               {data.risk.reasons.length ? (
                 <ul className="mt-3 flex flex-wrap gap-1.5">
                   {data.risk.reasons.map((reason) => (
@@ -444,7 +489,7 @@ export default function Customer360Drawer({ customerKey, name, onClose }: Props)
                     </li>
                   ))}
                 </ul>
-              ) : (
+              ) : data.serviceRisk ? null : (
                 <p className="mt-3 text-[12px] text-[#1a1a1a]/40">특이 리스크 신호 없음</p>
               )}
             </section>

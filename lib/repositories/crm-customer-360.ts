@@ -7,6 +7,7 @@ import {
   type NeoCrmCustomerMoneyItem,
 } from "@/lib/admin-crm-customers-neo"
 import { buildLeadPriorityItem } from "@/lib/crm/priority"
+import { deriveServiceRisk, type ServiceRisk } from "@/lib/crm/service-risk"
 import { listCrmCustomerEvents, type ListCrmCustomerEventsResult } from "@/lib/repositories/crm-events"
 import { listCrmDeals, type ListCrmDealsResult } from "@/lib/repositories/crm-deals"
 import { listCrmTasks, type ListCrmTasksResult } from "@/lib/repositories/crm-tasks"
@@ -93,9 +94,25 @@ export interface Customer360 {
   contacts: Customer360Contacts | null
   money: Customer360Money
   risk: Customer360Risk
+  serviceRisk: ServiceRisk | null
   activity: ListCrmCustomerEventsResult
   tasks: ListCrmTasksResult
   deals: ListCrmDealsResult
+}
+
+function latestLastClassAt(eeoAccounts: NeoCrmCustomerEeoAccount[]): string | null {
+  let best: number | null = null
+  let bestIso: string | null = null
+  for (const account of eeoAccounts) {
+    if (!account.lastClassAt) continue
+    const time = new Date(account.lastClassAt).getTime()
+    if (Number.isNaN(time)) continue
+    if (best == null || time > best) {
+      best = time
+      bestIso = account.lastClassAt
+    }
+  }
+  return bestIso
 }
 
 export interface GetCrmCustomer360Options {
@@ -338,6 +355,7 @@ export async function getCrmCustomer360(
   let header: Customer360Header | null = null
   let contacts: Customer360Contacts | null = null
   let money: Customer360Money = EMPTY_MONEY
+  let serviceRisk: ServiceRisk | null = null
   let found = false
 
   if (headerResult.status === "fulfilled") {
@@ -358,6 +376,14 @@ export async function getCrmCustomer360(
           extra: [{ label: "고객 ID", value: detail.account.accountId }],
         }
         money = summarizeNeoMoney(detail)
+        serviceRisk = deriveServiceRisk({
+          hasNeoData: true,
+          expireAt: nearestExpireAt(detail.eeoAccounts),
+          balance: money.totalBalance,
+          lastClassAt: latestLastClassAt(detail.eeoAccounts),
+          syncedAt: detail.account.updatedAt,
+          now,
+        })
         found = true
       } else if (detail.error) {
         warnings.push(detail.error)
@@ -395,6 +421,7 @@ export async function getCrmCustomer360(
     contacts,
     money,
     risk,
+    serviceRisk,
     activity,
     tasks,
     deals,

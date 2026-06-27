@@ -1,0 +1,144 @@
+// 서비스 위험 derivation (culture-fit §6 만료/충전, §10 출처·freshness·confidence).
+// 공식 원천은 NEO/HQ. 분모가 불명확한 잔액 비율은 억지로 만들지 않고, 만료일·절대 잔액·
+// freshness 중심으로만 위험을 판단한다. 데이터가 없으면 추정값을 확정값처럼 보이지 않는다.
+
+const DAY_MS = 24 * 60 * 60 * 1000
+const HOUR_MS = 60 * 60 * 1000
+const STALE_AFTER_HOURS = 24
+const VERY_STALE_AFTER_HOURS = 72
+const EXPIRING_SOON_DAYS = 30
+const WATCH_DAYS = 60
+const INACTIVE_DAYS = 30
+
+export type ServiceRiskLevel = "urgent" | "soon" | "watch" | "normal"
+export type ServiceRiskReasonCode =
+  | "subscription_expired"
+  | "subscription_expiring"
+  | "depleted_balance"
+  | "inactive"
+  | "neo_missing"
+  | "stale_snapshot"
+export type ServiceRiskConfidence = "high" | "medium" | "low"
+
+export interface ServiceRiskReason {
+  code: ServiceRiskReasonCode
+  label: string
+}
+
+export interface ServiceRiskInput {
+  hasNeoData: boolean
+  expireAt: string | null
+  balance: number | null
+  lastClassAt: string | null
+  syncedAt: string | null
+  now?: Date
+}
+
+export interface ServiceRisk {
+  level: ServiceRiskLevel
+  reasons: ServiceRiskReason[]
+  expireInDays: number | null
+  balance: number | null
+  confidence: ServiceRiskConfidence
+  freshnessLabel: string | null
+  source: "neo"
+}
+
+const LEVEL_RANK: Record<ServiceRiskLevel, number> = { normal: 0, watch: 1, soon: 2, urgent: 3 }
+
+function parseTime(value: string | null) {
+  if (!value) return null
+  const time = new Date(value).getTime()
+  return Number.isNaN(time) ? null : time
+}
+
+function freshness(syncedAt: string | null, nowMs: number): { label: string | null; hours: number | null } {
+  const time = parseTime(syncedAt)
+  if (time == null) return { label: null, hours: null }
+  const hours = Math.max(0, (nowMs - time) / HOUR_MS)
+  if (hours < 1) return { label: "NEO 방금", hours }
+  if (hours < 24) return { label: `NEO ${Math.round(hours)}시간 전`, hours }
+  return { label: `NEO ${Math.round(hours / 24)}일 전`, hours }
+}
+
+export function deriveServiceRisk(input: ServiceRiskInput): ServiceRisk {
+  const now = input.now ?? new Date()
+  const nowMs = now.getTime()
+  const reasons: ServiceRiskReason[] = []
+  let level: ServiceRiskLevel = "normal"
+
+  const escalate = (next: ServiceRiskLevel) => {
+    if (LEVEL_RANK[next] > LEVEL_RANK[level]) level = next
+  }
+
+  const fresh = freshness(input.syncedAt, nowMs)
+
+  if (!input.hasNeoData) {
+    return {
+      level: "normal",
+      reasons: [{ code: "neo_missing", label: "NEO 정보 없음" }],
+      expireInDays: null,
+      balance: input.balance,
+      confidence: "low",
+      freshnessLabel: null,
+      source: "neo",
+    }
+  }
+
+  // 구독 만료
+  const expireTime = parseTime(input.expireAt)
+  let expireInDays: number | null = null
+  if (expireTime != null) {
+    expireInDays = Math.floor((expireTime - nowMs) / DAY_MS)
+    if (expireInDays < 0) {
+      escalate("urgent")
+      reasons.push({ code: "subscription_expired", label: `${Math.abs(expireInDays)}일 전 만료` })
+    } else if (expireInDays <= 7) {
+      escalate("urgent")
+      reasons.push({ code: "subscription_expiring", label: `구독 만료 D-${expireInDays}` })
+    } else if (expireInDays <= EXPIRING_SOON_DAYS) {
+      escalate("soon")
+      reasons.push({ code: "subscription_expiring", label: `구독 만료 D-${expireInDays}` })
+    } else if (expireInDays <= WATCH_DAYS) {
+      escalate("watch")
+      reasons.push({ code: "subscription_expiring", label: `구독 만료 D-${expireInDays}` })
+    }
+  }
+
+  // 충전 잔액: 분모(원충전액)가 불명확하므로 비율을 만들지 않는다. 소진(<=0)만 위험으로 본다.
+  if (input.balance != null && input.balance <= 0) {
+    escalate("soon")
+    reasons.push({ code: "depleted_balance", label: "충전 잔액 소진" })
+  }
+
+  // 휴면: 잔액이 남아있는데 오래 수업이 없음
+  const lastClassTime = parseTime(input.lastClassAt)
+  if (lastClassTime != null && (input.balance == null || input.balance > 0)) {
+    const inactiveDays = Math.floor((nowMs - lastClassTime) / DAY_MS)
+    if (inactiveDays >= INACTIVE_DAYS) {
+      escalate("watch")
+      reasons.push({ code: "inactive", label: `${inactiveDays}일 수업 없음` })
+    }
+  }
+
+  // freshness: 오래된 스냅샷은 confidence를 낮추고 별도 신호로 표시
+  let confidence: ServiceRiskConfidence = "high"
+  if (fresh.hours == null) {
+    confidence = "low"
+  } else if (fresh.hours >= VERY_STALE_AFTER_HOURS) {
+    confidence = "low"
+    reasons.push({ code: "stale_snapshot", label: "NEO 최신 확인 필요" })
+  } else if (fresh.hours >= STALE_AFTER_HOURS) {
+    confidence = "medium"
+  }
+
+  return {
+    level,
+    reasons,
+    expireInDays,
+    balance: input.balance,
+    confidence,
+    freshnessLabel: fresh.label,
+    source: "neo",
+  }
+}
