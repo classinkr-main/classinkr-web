@@ -18,7 +18,7 @@ export const metadata: Metadata = {
 export default async function AccountPage() {
   const context = await getPublicUserContext()
   if (!context) {
-    redirect("/")
+    redirect("/login?next=/account")
   }
 
   const downloads = await getMaterialDownloadsByUser(context.user.id)
