@@ -2,10 +2,12 @@
 
 import { useState, useMemo } from "react"
 import { motion, AnimatePresence } from "framer-motion"
-import { Calendar, MapPin, Tag, ArrowRight, Search, X } from "lucide-react"
+import { Calendar, MapPin, Tag, ArrowRight, Search, X, LockKeyhole } from "lucide-react"
 import Image from "next/image"
 import Link from "next/link"
 import type { PublicEvent, EventStatus } from "@/lib/types/public-events"
+import type { SeminarVideo } from "@/lib/seminars/catalog"
+import { SeminarCard } from "@/components/seminars/SeminarCard"
 import { formatPublicEventDate } from "@/lib/public-event-dates"
 
 const CATEGORIES = ["전체", "웨비나", "오프라인 행사", "프로모션", "얼리버드", "파트너십"] as const
@@ -50,7 +52,13 @@ function getEventSearchText(event: PublicEvent) {
   return [baseText, ...aliases].join(" ").toLowerCase()
 }
 
-export default function EventsClient({ events }: { events: PublicEvent[] }) {
+export default function EventsClient({
+  events,
+  videos = [],
+}: {
+  events: PublicEvent[]
+  videos?: SeminarVideo[]
+}) {
   const [activeCategory, setActiveCategory] = useState("전체")
   const [searchQuery, setSearchQuery] = useState("")
   const [hoveredId, setHoveredId] = useState<string | null>(null)
@@ -406,6 +414,29 @@ export default function EventsClient({ events }: { events: PublicEvent[] }) {
           </motion.div>
         )}
       </section>
+
+      {/* 행사 영상 다시보기 (회원 전용) */}
+      {videos.length > 0 && (
+        <section className="border-t border-[#e8e8e4] bg-[#F6F5F4]">
+          <div className="mx-auto max-w-[1100px] px-4 py-16 sm:px-6 md:py-20">
+            <span className="inline-flex items-center gap-1.5 rounded-full bg-[#ECFDF5] px-3 py-1 text-[12px] font-semibold text-[#084734]">
+              <LockKeyhole className="h-3.5 w-3.5" />
+              회원 전용
+            </span>
+            <h2 className="mt-4 text-[1.6rem] font-bold tracking-[-0.03em] text-[#111110] md:text-[2rem]">
+              행사 영상 다시보기
+            </h2>
+            <p className="mt-3 max-w-2xl text-[14px] leading-7 text-[#615D59] md:text-[15px]">
+              지난 행사 영상을 구글 · 네이버 로그인 회원에게 다시보기로 제공합니다.
+            </p>
+            <div className="mt-8 grid gap-5 sm:grid-cols-2 lg:grid-cols-3">
+              {videos.map((video) => (
+                <SeminarCard key={video.slug} seminar={video} />
+              ))}
+            </div>
+          </div>
+        </section>
+      )}
     </div>
   )
 }
