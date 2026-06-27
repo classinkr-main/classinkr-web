@@ -2624,28 +2624,55 @@ async function ensureSession(
 
   const supabase = createSupabaseAdminClient()
   const requestedSessionId = sessionId ?? normalizeOptionalUuid(input.sessionId)
+  const callerAnonymousId = normalizeString(input.anonymousId) ?? null
+
+  // 보안: 세션은 anonymous_id(브라우저별 익명 식별자)에 소유권이 묶인다.
+  // 호출자가 기존 sessionId를 제시하면 그 세션의 저장된 owner와 현재 호출자의
+  // anonymous_id가 일치할 때만 이어 쓴다. 불일치(또는 null-owner 규칙 위반)면
+  // 남의 세션에 절대 붙지 못하도록 새 세션을 발급한다.
+  //
+  // null-owner 규칙(보수적/fail-safe): owner와 caller가 둘 다 동일한 non-null 값일
+  // 때만 소유로 인정한다. 즉
+  //  - owner=null  세션은 누구도(non-null caller 포함) 이어 쓸 수 없다.
+  //  - caller=null 호출자는 어떤(이전에 owner가 있던) 세션도 claim할 수 없다.
+  //  - owner=null & caller=null 도 일치로 보지 않는다(공유 익명 풀이 서로 섞이는 것 방지).
+  const isOwner = (sessionOwner: string | null) =>
+    callerAnonymousId !== null && sessionOwner !== null && sessionOwner === callerAnonymousId
+
+  let resumableSessionId: string | undefined
 
   if (requestedSessionId) {
     const { data } = await supabase
       .from("chat_sessions")
-      .select("id")
+      .select("id, anonymous_id")
       .eq("id", requestedSessionId)
       .maybeSingle()
 
-    if (data?.id) return data.id as string
+    if (data?.id) {
+      // 기존 세션이 존재할 때만 소유권을 확인한다. 일치하면 이어 쓰고,
+      // 불일치면 절대 붙지 않고(아래에서 새 세션 발급) 제시된 id도 버린다.
+      if (isOwner((data.anonymous_id as string | null) ?? null)) {
+        return data.id as string
+      }
+    } else {
+      // 아직 존재하지 않는 id면 호출자가 처음 만드는 세션이므로 그대로 그 id로 생성한다.
+      resumableSessionId = requestedSessionId
+    }
   }
 
   const context = getContextObject(input.context)
   const utm = getContextObject(context.utm)
   const sessionInsert: Record<string, unknown> = {
     channel: normalizeChatSessionChannel(context.channel),
-    anonymous_id: normalizeString(input.anonymousId) ?? null,
+    anonymous_id: callerAnonymousId,
     user_agent: meta.userAgent ?? null,
     referrer: meta.referrer ?? null,
     utm,
   }
 
-  if (requestedSessionId) sessionInsert.id = requestedSessionId
+  // 소유권이 확인된 신규 세션(아직 row 없음)만 제시된 id를 재사용한다.
+  // 남의 세션 id였던 경우 resumableSessionId 가 undefined 이므로 새 id가 발급된다.
+  if (resumableSessionId) sessionInsert.id = resumableSessionId
 
   const { data, error } = await supabase
     .from("chat_sessions")
@@ -2654,7 +2681,9 @@ async function ensureSession(
     .single()
 
   if (error) {
-    if (requestedSessionId && error.code === "23505") return requestedSessionId
+    // 같은 id로 동시 생성 경쟁(23505)이 난 경우에만 그 id를 신뢰한다.
+    // 이 분기는 우리가 직접 id를 지정해 insert한 신규 세션에서만 발생한다.
+    if (resumableSessionId && error.code === "23505") return resumableSessionId
     console.warn("[chatbot] failed to create session:", error.message)
     return undefined
   }
@@ -2902,6 +2931,8 @@ interface ChatbotCore {
 
 interface BuildChatbotCoreOptions {
   sessionId?: string
+  // 세션 소유권 검증용 — 이력 로드 시 세션 owner 와 대조한다.
+  anonymousId?: string | null
   generateAnswer?: boolean
 }
 
@@ -3039,12 +3070,33 @@ export function normalizeSessionHistoryForGemini(
 }
 
 // 세션 대화 이력 로드 — 검색과 병렬로 돌릴 수 있게 분리. 실패해도 빈 배열로 안전 폴백.
+//
+// 보안(심층 방어): ensureSession 의 소유권 검사와 별개로, 이력 로드 자체도
+// 호출자의 anonymous_id 가 세션 owner 와 일치할 때만 수행한다. 일치하지 않으면
+// 빈 이력을 돌려 남의 대화가 Gemini 프롬프트로 새어 들어가지 못하게 막는다.
+// null-owner 규칙은 ensureSession 과 동일(둘 다 동일한 non-null 값일 때만 소유 인정).
 async function loadSessionHistory(
-  sessionId: string
+  sessionId: string,
+  callerAnonymousId?: string | null
 ): Promise<{ role: "user" | "model"; parts: { text: string }[] }[]> {
   if (!hasSupabaseServerEnv()) return []
   try {
     const supabase = createSupabaseAdminClient()
+
+    const owner = normalizeString(callerAnonymousId) ?? null
+    // owner 가 없는(null) 호출자는 어떤 세션의 이력도 로드할 수 없다 — fail-safe.
+    if (owner === null) return []
+
+    const { data: session } = await supabase
+      .from("chat_sessions")
+      .select("anonymous_id")
+      .eq("id", sessionId)
+      .maybeSingle()
+
+    // 세션이 없거나(owner 미확인) owner 가 불일치하면 이력을 노출하지 않는다.
+    const sessionOwner = (session?.anonymous_id as string | null) ?? null
+    if (sessionOwner === null || sessionOwner !== owner) return []
+
     const { data, error } = await supabase
       .from("chat_messages")
       .select("role, content")
@@ -3178,7 +3230,7 @@ async function buildChatbotCore(
   // history는 검색·분류와 무관하므로 검색과 병렬로 시작해 두고 Gemini 직전에만 await한다.
   const historyPromise: Promise<{ role: "user" | "model"; parts: { text: string }[] }[]> =
     shouldGenerateAnswer && options.sessionId
-      ? loadSessionHistory(options.sessionId)
+      ? loadSessionHistory(options.sessionId, options.anonymousId)
       : Promise.resolve([])
 
   const { sources, warning, cacheHit } = await searchKnowledgeSourcesWithinBudget(question)
@@ -3240,7 +3292,10 @@ export async function handleChatbotQuery(
   const requestedSessionId = normalizeOptionalUuid(input.sessionId)
   const sessionId = requestedSessionId ?? (hasSupabaseServerEnv() ? crypto.randomUUID() : undefined)
   const answerEventId = hasSupabaseServerEnv() ? crypto.randomUUID() : undefined
-  const core = await buildChatbotCore(input.message, { sessionId: requestedSessionId })
+  const core = await buildChatbotCore(input.message, {
+    sessionId: requestedSessionId,
+    anonymousId: normalizeString(input.anonymousId) ?? null,
+  })
 
   void persistExchange(
     input,
@@ -3435,7 +3490,9 @@ export async function streamChatbotQuery(
   }
 
   // 이력은 검색·분류와 무관하므로 검색과 병렬로 시작해 두고 스트리밍 직전에만 await 한다.
-  const historyPromise = requestedSessionId ? loadSessionHistory(requestedSessionId) : Promise.resolve([])
+  const historyPromise = requestedSessionId
+    ? loadSessionHistory(requestedSessionId, normalizeString(input.anonymousId) ?? null)
+    : Promise.resolve([])
 
   // 검색·분류·결정형 초안까지는 기존 코어를 그대로 재사용(중복 방지). Gemini 호출만 스트리밍으로 대체.
   const core = await buildChatbotCore(input.message, { generateAnswer: false })

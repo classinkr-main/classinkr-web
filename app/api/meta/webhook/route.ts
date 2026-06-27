@@ -65,10 +65,15 @@ function appSecretProof(accessToken: string) {
 
 function verifyMetaSignature(payload: string, signature: string | null) {
   const appSecret = process.env.META_APP_SECRET?.trim()
-  if (!appSecret) return process.env.NODE_ENV !== "production"
+  // 시크릿이 미설정일 때만 로컬 개발 우회를 허용한다(FAIL CLOSED).
+  // Vercel(프리뷰 포함)에서는 VERCEL이 항상 설정되므로 절대 우회 불가.
+  if (!appSecret) {
+    return process.env.NODE_ENV === "development" && !process.env.VERCEL
+  }
 
+  // 시크릿이 설정돼 있으면 서명 헤더 부재를 허용으로 처리하지 않는다.
   if (!signature?.startsWith("sha256=")) {
-    return process.env.NODE_ENV !== "production"
+    return false
   }
 
   try {

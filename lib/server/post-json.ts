@@ -1,11 +1,26 @@
 import "server-only"
 
 import * as dns from "dns/promises"
+import * as https from "https"
 import * as net from "net"
 
 interface PostJsonOptions {
   timeoutMs?: number
   headers?: HeadersInit
+}
+
+interface ValidatedTarget {
+  parsed: URL
+  /** 사전 검증을 통과한(공인 IP만 포함) 주소 목록. */
+  addresses: Array<{ address: string; family: 4 | 6 }>
+}
+
+/** postJson이 반환하는 최소 응답 형태. 호출부는 ok/status만 사용한다. */
+export interface PostJsonResponse {
+  ok: boolean
+  status: number
+  text: () => Promise<string>
+  json: () => Promise<unknown>
 }
 
 function isPrivateIpv4(address: string) {
@@ -75,7 +90,13 @@ function isPrivateAddress(address: string) {
   return true
 }
 
-export async function validateWebhookTarget(rawUrl: string): Promise<string | null> {
+/**
+ * URL을 검증하고, 통과 시 검증된(공인) IP 주소 목록을 함께 반환한다.
+ * 에러 문자열을 반환하면 검증 실패다.
+ */
+async function resolveValidatedTarget(
+  rawUrl: string
+): Promise<string | ValidatedTarget> {
   let parsed: URL
   try {
     parsed = new URL(rawUrl)
@@ -104,37 +125,111 @@ export async function validateWebhookTarget(rawUrl: string): Promise<string | nu
     return "Private IP webhook targets are not allowed."
   }
 
-  let lookups: Array<{ address: string }>
+  let lookups: Array<{ address: string; family: number }>
   try {
     lookups = await dns.lookup(hostname, { all: true })
   } catch {
+    return "Webhook target could not be resolved."
+  }
+  if (lookups.length === 0) {
     return "Webhook target could not be resolved."
   }
   if (lookups.some((entry) => isPrivateAddress(entry.address))) {
     return "Webhook targets that resolve to private networks are not allowed."
   }
 
-  return null
+  return {
+    parsed,
+    addresses: lookups.map((entry) => ({
+      address: entry.address,
+      family: entry.family === 6 ? 6 : 4,
+    })),
+  }
+}
+
+export async function validateWebhookTarget(rawUrl: string): Promise<string | null> {
+  const result = await resolveValidatedTarget(rawUrl)
+  return typeof result === "string" ? result : null
+}
+
+function normalizeHeaders(headers?: HeadersInit): Record<string, string> {
+  const result: Record<string, string> = {}
+  if (!headers) return result
+
+  if (headers instanceof Headers) {
+    headers.forEach((value, key) => {
+      result[key] = value
+    })
+  } else if (Array.isArray(headers)) {
+    for (const [key, value] of headers) {
+      result[key] = value
+    }
+  } else {
+    for (const [key, value] of Object.entries(headers)) {
+      result[key] = String(value)
+    }
+  }
+
+  return result
 }
 
 export async function postJson(
   url: string,
   body: unknown,
   { timeoutMs = 8000, headers }: PostJsonOptions = {}
-) {
-  const validationError = await validateWebhookTarget(url)
-  if (validationError) throw new Error(validationError)
+): Promise<PostJsonResponse> {
+  const result = await resolveValidatedTarget(url)
+  if (typeof result === "string") throw new Error(result)
 
-  return fetch(url, {
-    method: "POST",
-    headers: {
-      "Content-Type": "application/json",
-      ...headers,
-    },
-    body: JSON.stringify(body),
-    signal: AbortSignal.timeout(timeoutMs),
-    cache: "no-store",
-    credentials: "omit",
-    redirect: "manual",
+  const { parsed, addresses } = result
+  // DNS 리바인딩(TOCTOU) 방어: 위에서 공인 IP임을 검증한 주소만 고정해 연결한다.
+  // node:https의 lookup 콜백으로 검증된 IP만 돌려줘 연결 직전 재조회를 막는다.
+  // 이렇게 하면 검증 시점에는 공인 IP를, 연결 시점에는 169.254.169.254 같은
+  // 사설 IP를 돌려주는 저TTL 리바인딩 공격이 무력화된다.
+  // SNI/인증서 검증은 원래 호스트명(servername)으로 그대로 수행한다.
+  const pinned = addresses[0]
+  const serialized = JSON.stringify(body)
+
+  return new Promise<PostJsonResponse>((resolve, reject) => {
+    const req = https.request(
+      {
+        protocol: parsed.protocol,
+        hostname: parsed.hostname,
+        port: parsed.port || 443,
+        path: `${parsed.pathname}${parsed.search}`,
+        method: "POST",
+        servername: parsed.hostname, // TLS SNI/인증서는 원래 호스트명 기준
+        // 검증된 단일 IP만 반환한다. 추가 DNS 조회는 일어나지 않는다.
+        lookup: (_hostname, _options, callback) => {
+          callback(null, pinned.address, pinned.family)
+        },
+        headers: {
+          "Content-Type": "application/json",
+          "Content-Length": Buffer.byteLength(serialized),
+          ...normalizeHeaders(headers),
+        },
+      },
+      (res) => {
+        const chunks: Buffer[] = []
+        res.on("data", (chunk: Buffer) => chunks.push(chunk))
+        res.on("end", () => {
+          const status = res.statusCode ?? 0
+          const text = Buffer.concat(chunks).toString("utf8")
+          resolve({
+            ok: status >= 200 && status < 300,
+            status,
+            // redirect: "manual"과 동치 — 3xx를 자동 추적하지 않는다.
+            text: async () => text,
+            json: async () => JSON.parse(text),
+          })
+        })
+      }
+    )
+
+    req.setTimeout(timeoutMs, () => {
+      req.destroy(new Error("Webhook request timed out."))
+    })
+    req.on("error", reject)
+    req.end(serialized)
   })
 }
