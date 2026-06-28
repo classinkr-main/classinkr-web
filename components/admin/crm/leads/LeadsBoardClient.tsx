@@ -11,6 +11,7 @@ import {
   Clock, Search, Check,
   Activity, Download, LogIn, MousePointerClick, ShieldCheck,
 } from "lucide-react"
+import LeadRegisterModal from "@/components/admin/crm/LeadRegisterModal"
 
 import { adminFetch, adminFetchJsonCached } from "@/lib/admin-client"
 import { Button } from "@/components/ui/button"
@@ -794,6 +795,7 @@ export default function LeadsBoardClient() {
   const deepLinkedLeadId = searchParams.get("lead")?.trim() ?? ""
 
   const [leads, setLeads] = useState<LeadRecord[]>([])
+  const [leadModalOpen, setLeadModalOpen] = useState(false)
   const [loading, setLoading] = useState(false)
   const [filter, setFilter] = useState<LeadFilter>(initialFilter)
   const [searchQuery, setSearchQuery] = useState("")
@@ -1235,15 +1237,25 @@ export default function LeadsBoardClient() {
           <h1 className="text-2xl font-bold text-[#111110] tracking-[-0.02em]">리드</h1>
           <p className="mt-1 text-[13px] text-[#1a1a1a]/42">신규 유입 → 응대 → 전환 파이프라인</p>
         </div>
-        <Button
-          variant="outline"
-          size="sm"
-          onClick={() => void fetchLeads({ force: true })}
-          disabled={loading}
-          className="w-full gap-1.5 sm:w-auto"
-        >
-          <RefreshCw className={`w-4 h-4 ${loading ? "animate-spin" : ""}`} />새로고침
-        </Button>
+        <div className="flex w-full gap-2 sm:w-auto">
+          <button
+            type="button"
+            onClick={() => setLeadModalOpen(true)}
+            className="inline-flex h-9 flex-1 items-center justify-center gap-1.5 rounded-lg bg-[#084734] px-3 text-[12px] font-semibold text-white transition-opacity hover:opacity-90 sm:flex-none"
+          >
+            <UserPlus className="h-3.5 w-3.5" />
+            리드 등록
+          </button>
+          <Button
+            variant="outline"
+            size="sm"
+            onClick={() => void fetchLeads({ force: true })}
+            disabled={loading}
+            className="flex-1 gap-1.5 sm:flex-none"
+          >
+            <RefreshCw className={`w-4 h-4 ${loading ? "animate-spin" : ""}`} />새로고침
+          </Button>
+        </div>
       </div>
 
       {/* 리드 응대 큐 */}
@@ -1801,6 +1813,12 @@ export default function LeadsBoardClient() {
           onConvert={handleConvert}
         />
       )}
+
+      <LeadRegisterModal
+        open={leadModalOpen}
+        onClose={() => setLeadModalOpen(false)}
+        onDone={() => void fetchLeads({ force: true })}
+      />
 
       {toast && <Toast msg={toast.msg} type={toast.type} />}
     </div>
