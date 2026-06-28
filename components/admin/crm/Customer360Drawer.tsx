@@ -773,6 +773,20 @@ export default function Customer360Drawer({ customerKey, name, onClose }: Props)
                             : "pending"
                       }
                     />
+                    {(data.serviceRisk?.level === "urgent" || data.serviceRisk?.level === "soon") &&
+                    orderTotal != null &&
+                    orderTotal > 0 ? (
+                      <>
+                        <ArrowRight className="ml-2.5 h-3.5 w-3.5 rotate-90 text-[#d8d8d2]" />
+                        <FunnelRow
+                          icon={<Sparkles className="h-3.5 w-3.5" />}
+                          label="갱신 예상"
+                          amount={orderTotal}
+                          meta="직전 계약 기준 추정 · 만료 임박(파생)"
+                          state="pending"
+                        />
+                      </>
+                    ) : null}
                   </div>
                   {money?.eeoAccounts.length ? (
                     <div className="space-y-1.5 border-t border-[#f0f0ec] pt-3">
