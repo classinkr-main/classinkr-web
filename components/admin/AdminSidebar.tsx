@@ -149,6 +149,10 @@ const SECTION_META: Record<SidebarSection, { label: string; description: string 
   system: { label: "시스템", description: "권한, 설정, 감사, 개발 도구" },
 }
 
+// 사이드바 nav 전용 초미니멀 스크롤바: 4px 폭 + 투명 트랙 + hover 시에만 또렷한 thumb.
+const MINIMAL_SCROLLBAR =
+  "[scrollbar-width:thin] [&::-webkit-scrollbar]:w-1 [&::-webkit-scrollbar-track]:bg-transparent [&::-webkit-scrollbar-thumb]:rounded-full [&::-webkit-scrollbar-thumb]:bg-black/10 hover:[&::-webkit-scrollbar-thumb]:bg-black/20"
+
 // CRM 진입 시 사이드바에서 펼치는 하위 섹션(= 기존 상단 탭의 이전). 활성 판별은 경로 prefix.
 const CRM_CHILD_NAV: Array<{ href: string; label: string; match: (p: string) => boolean }> = [
   { href: "/admin/crm", label: "현황", match: (p) => p === "/admin/crm" },
@@ -568,7 +572,7 @@ export default function AdminSidebar({ role, name, email }: Props) {
         </button>
       </div>
 
-      <nav className={`flex-1 px-3 py-4 ${effectiveCollapsed ? "lg:px-2" : ""}`}>
+      <nav className={`min-h-0 flex-1 overflow-y-auto px-3 py-4 ${MINIMAL_SCROLLBAR} ${effectiveCollapsed ? "lg:px-2" : ""}`}>
         {groupedNav.map(({ section, items }, groupIndex) => (
           <div key={section} className={groupIndex === 0 ? "" : "mt-5 border-t border-[#f0f0ec] pt-4"}>
             {!effectiveCollapsed && (
@@ -708,7 +712,11 @@ export default function AdminSidebar({ role, name, email }: Props) {
         ))}
       </nav>
 
-      <div className={`shrink-0 border-t border-[#f0f0ec] pt-3 pb-5 ${effectiveCollapsed ? "px-2 lg:px-2" : "px-3"}`}>
+      <div className={`relative shrink-0 pt-3 pb-5 ${effectiveCollapsed ? "px-2 lg:px-2" : "px-3"}`}>
+        <div
+          aria-hidden
+          className="pointer-events-none absolute inset-x-0 -top-8 h-8 bg-gradient-to-t from-white to-transparent"
+        />
         <button
           onClick={handleLogout}
           title={effectiveCollapsed ? "로그아웃" : undefined}
