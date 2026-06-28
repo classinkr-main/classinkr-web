@@ -11,9 +11,10 @@ import {
   Bot,
   Building2,
   CalendarDays,
-  ChevronDown,
+  ChevronLeft,
   ChevronRight,
   Code2,
+  Eye,
   FileText,
   Globe,
   LayoutDashboard,
@@ -69,6 +70,7 @@ const NAV: NavItem[] = [
   { href: "/admin/docs", label: "가이드 문서", icon: <BookOpen className="h-4 w-4" />, roles: STAFF_EDITOR, section: "cs" },
   { href: "/admin/branch", label: "KR Team", icon: <Building2 className="h-4 w-4" />, roles: [...STAFF_ADMIN, "BRANCH"], section: "performance" },
   { href: "/admin/hardware", label: "하드웨어 재고", icon: <PackageCheck className="h-4 w-4" />, roles: STAFF_ADMIN, section: "performance", badge: "Ops" },
+  { href: "/admin/traffic", label: "방문자/트래픽", icon: <Eye className="h-4 w-4" />, roles: [...ALL_STAFF, "BRANCH"], section: "performance" },
   { href: "/admin/analytics", label: "Analytics", icon: <BarChart2 className="h-4 w-4" />, roles: [...ALL_STAFF, "BRANCH"], section: "performance" },
   { href: "/admin/ops", label: "Ops Health", icon: <Activity className="h-4 w-4" />, roles: STAFF_ADMIN, section: "system", badge: "New" },
   { href: "/admin/settings", label: "Settings", icon: <Settings className="h-4 w-4" />, roles: STAFF_ADMIN, section: "system" },
@@ -121,6 +123,12 @@ const NAV_WARMUP_REQUESTS: Record<string, string[]> = {
     "/api/admin/branch/kpi?team=ALL&period=Q",
   ],
   "/admin/hardware": ["/api/admin/hardware"],
+  "/admin/traffic": [
+    "/api/admin/visitor-stats?range=30",
+    "/api/admin/homepage-flow?range=30",
+    "/api/admin/event-counts?range=30",
+    "/api/admin/marketing/conversions/status",
+  ],
   "/admin/analytics": [
     "/api/admin/leads",
     "/api/admin/subscribers",
@@ -242,8 +250,9 @@ export default function AdminSidebar({ role, name, email }: Props) {
   const inCrm = pathname?.startsWith("/admin/crm") ?? false
   const [crmSegCounts, setCrmSegCounts] = useState<Record<string, number> | null>(null)
   // CRM 하위탭 접기 — admin layout이 유지 마운트라 네비게이션 동안 상태 보존(하드 리로드만 리셋).
-  const [crmNavOpen, setCrmNavOpen] = useState(true)
-  const toggleCrmNav = useCallback(() => setCrmNavOpen((prev) => !prev), [])
+  // CRM 드릴인 nav — 진입 시 기본 글로벌 탭이 접히고 CRM 하위 패널이 열린다. '← 전체 메뉴'로 복귀.
+  const [navView, setNavView] = useState<"auto" | "global">("auto")
+  const crmDrill = inCrm && navView !== "global" && !effectiveCollapsed
 
   // CRM 진입 시에만 세그먼트 카운트 1회 lazy 로드(캐시, 논블로킹). 미로드 시 라벨만 표시.
   useEffect(() => {
@@ -573,7 +582,63 @@ export default function AdminSidebar({ role, name, email }: Props) {
       </div>
 
       <nav className={`min-h-0 flex-1 overflow-y-auto px-3 py-4 ${MINIMAL_SCROLLBAR} ${effectiveCollapsed ? "lg:px-2" : ""}`}>
-        {groupedNav.map(({ section, items }, groupIndex) => (
+        {crmDrill ? (
+          <div className="space-y-0.5">
+            <button
+              type="button"
+              onClick={() => setNavView("global")}
+              className="mb-2 flex w-full items-center gap-1.5 rounded-lg px-3 py-1.5 text-[12px] font-semibold text-[#1a1a1a]/55 transition-colors hover:bg-[#f5f5f2] hover:text-[#111110]"
+            >
+              <ChevronLeft className="h-3.5 w-3.5" />
+              전체 메뉴
+            </button>
+            <div className="mb-1 flex items-center gap-2 px-3">
+              <Users className="h-4 w-4 text-[#1a1a1a]/45" />
+              <p className="text-[13px] font-bold text-[#111110]">CRM</p>
+            </div>
+            {CRM_CHILD_NAV.map((child) => {
+              const childActive = child.match(pathname ?? "")
+              return (
+                <div key={child.href}>
+                  <Link
+                    href={child.href}
+                    onMouseEnter={() => scheduleWarmAdminTab(child.href)}
+                    onClick={() => warmAdminTab(child.href)}
+                    className={`flex items-center rounded-lg px-3 py-2 text-[13px] font-medium transition-colors ${
+                      childActive
+                        ? "bg-[#111110] text-white"
+                        : "text-[#1a1a1a]/60 hover:bg-[#f5f5f2] hover:text-[#111110]"
+                    }`}
+                  >
+                    {child.label}
+                  </Link>
+                  {child.href === "/admin/crm/customers/unified" ? (
+                    <div className="mb-1 ml-3 mt-0.5 space-y-px border-l border-[#e8e8e4] pl-2.5">
+                      {CRM_SEGMENTS.map((seg) => {
+                        const count = crmSegCounts?.[seg.view]
+                        return (
+                          <Link
+                            key={seg.view}
+                            href={`/admin/crm/customers/unified?view=${seg.view}`}
+                            className="flex items-center gap-2 rounded px-2.5 py-1 text-[11px] text-[#1a1a1a]/45 transition-colors hover:bg-[#f5f5f2] hover:text-[#111110]"
+                          >
+                            <span className="flex-1 truncate">{seg.label}</span>
+                            {count != null ? (
+                              <span className="rounded-full bg-[#f0f0ec] px-1.5 text-[10px] font-semibold tabular-nums text-[#1a1a1a]/55">
+                                {count}
+                              </span>
+                            ) : null}
+                          </Link>
+                        )
+                      })}
+                    </div>
+                  ) : null}
+                </div>
+              )
+            })}
+          </div>
+        ) : (
+          groupedNav.map(({ section, items }, groupIndex) => (
           <div key={section} className={groupIndex === 0 ? "" : "mt-5 border-t border-[#f0f0ec] pt-4"}>
             {!effectiveCollapsed && (
               <div className="px-3 pb-2">
@@ -599,7 +664,10 @@ export default function AdminSidebar({ role, name, email }: Props) {
                     onMouseLeave={cancelWarmAdminTab}
                     onPointerDown={() => warmAdminTab(item.href)}
                     onTouchStart={() => warmAdminTab(item.href)}
-                    onClick={() => warmAdminTab(item.href)}
+                    onClick={() => {
+                      warmAdminTab(item.href)
+                      if (item.href === "/admin/crm") setNavView("auto")
+                    }}
                     className={`group flex items-center gap-2.5 rounded-lg text-[13px] font-medium transition-colors ${
                       effectiveCollapsed ? "justify-center px-2 py-2.5" : "px-3 py-2"
                     } ${
@@ -627,89 +695,12 @@ export default function AdminSidebar({ role, name, email }: Props) {
                   </Link>
                 )
 
-                // CRM 섹션 진입 시 하위 6섹션 + 저장된 세그먼트를 펼친다.
-                if (item.href !== "/admin/crm" || !inCrm || effectiveCollapsed) return linkEl
-
-                return (
-                  <div key={item.href}>
-                    <div
-                      className={`group flex items-center rounded-lg ${
-                        isActive ? "bg-[#111110] text-white" : "text-[#1a1a1a]/60 hover:bg-[#f5f5f2] hover:text-[#111110]"
-                      }`}
-                    >
-                      <Link
-                        href={item.href}
-                        onMouseEnter={() => scheduleWarmAdminTab(item.href)}
-                        onClick={() => warmAdminTab(item.href)}
-                        className="flex flex-1 items-center gap-2.5 px-3 py-2 text-[13px] font-medium"
-                      >
-                        <span className={isActive ? "text-white" : "text-[#1a1a1a]/40 group-hover:text-[#111110]"}>
-                          {item.icon}
-                        </span>
-                        <span className="flex-1">{item.label}</span>
-                      </Link>
-                      <button
-                        type="button"
-                        onClick={toggleCrmNav}
-                        aria-label="CRM 하위 메뉴 접기/펼치기"
-                        aria-expanded={crmNavOpen}
-                        className={`shrink-0 px-2 py-2 transition-colors ${
-                          isActive ? "text-white/70 hover:text-white" : "text-[#1a1a1a]/35 hover:text-[#111110]"
-                        }`}
-                      >
-                        {crmNavOpen ? <ChevronDown className="h-3.5 w-3.5" /> : <ChevronRight className="h-3.5 w-3.5" />}
-                      </button>
-                    </div>
-                    {crmNavOpen ? (
-                    <div className="mb-1 ml-[18px] mt-0.5 space-y-0.5 border-l border-[#e8e8e4] pl-2.5">
-                      {CRM_CHILD_NAV.map((child) => {
-                        const childActive = child.match(pathname ?? "")
-                        return (
-                          <div key={child.href}>
-                            <Link
-                              href={child.href}
-                              onMouseEnter={() => scheduleWarmAdminTab(child.href)}
-                              onClick={() => warmAdminTab(child.href)}
-                              className={`flex items-center rounded-md px-2.5 py-1.5 text-[12px] font-medium transition-colors ${
-                                childActive
-                                  ? "bg-[#f0f0ec] font-semibold text-[#111110]"
-                                  : "text-[#1a1a1a]/55 hover:bg-[#f5f5f2] hover:text-[#111110]"
-                              }`}
-                            >
-                              {child.label}
-                            </Link>
-                            {child.href === "/admin/crm/customers/unified" ? (
-                              <div className="mt-0.5 space-y-px pl-3">
-                                {CRM_SEGMENTS.map((seg) => {
-                                  const count = crmSegCounts?.[seg.view]
-                                  return (
-                                    <Link
-                                      key={seg.view}
-                                      href={`/admin/crm/customers/unified?view=${seg.view}`}
-                                      className="flex items-center gap-2 rounded px-2.5 py-1 text-[11px] text-[#1a1a1a]/45 transition-colors hover:bg-[#f5f5f2] hover:text-[#111110]"
-                                    >
-                                      <span className="flex-1 truncate">{seg.label}</span>
-                                      {count != null ? (
-                                        <span className="rounded-full bg-[#f0f0ec] px-1.5 text-[10px] font-semibold tabular-nums text-[#1a1a1a]/55">
-                                          {count}
-                                        </span>
-                                      ) : null}
-                                    </Link>
-                                  )
-                                })}
-                              </div>
-                            ) : null}
-                          </div>
-                        )
-                      })}
-                    </div>
-                    ) : null}
-                  </div>
-                )
+                return linkEl
               })}
             </div>
           </div>
-        ))}
+          ))
+        )}
       </nav>
 
       <div className={`relative shrink-0 pt-3 pb-5 ${effectiveCollapsed ? "px-2 lg:px-2" : "px-3"}`}>
