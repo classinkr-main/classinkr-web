@@ -97,11 +97,17 @@ function kpiValue({
   return `${formatCount(value)}${suffix}`
 }
 
+interface LeadFunnelKpis {
+  total: number
+  byStatus: Record<"new" | "contacted" | "converted" | "closed", number>
+}
+
 export default function CrmInsightsClient() {
   const [data, setData] = useState<CrmInsights | null>(null)
   const [loading, setLoading] = useState(true)
   const [refreshing, setRefreshing] = useState(false)
   const [error, setError] = useState<string | null>(null)
+  const [leadKpis, setLeadKpis] = useState<LeadFunnelKpis | null>(null)
 
   const load = useCallback(async (options?: { force?: boolean }) => {
     const cached = getCachedAdminJson<CrmInsights>(INSIGHTS_URL, { cacheKey: INSIGHTS_URL })
@@ -134,6 +140,31 @@ export default function CrmInsightsClient() {
     void load()
   }, [load])
 
+  // 전환 퍼널 — 리드 status 집계(action-kpis). 별도 백엔드 불필요.
+  useEffect(() => {
+    let alive = true
+    adminFetchJsonCached<LeadFunnelKpis>("/api/admin/crm/action-kpis", undefined, {
+      cacheKey: "/api/admin/crm/action-kpis",
+      ttlMs: 120_000,
+      staleWhileRevalidateMs: 300_000,
+    })
+      .then((d) => {
+        if (alive) setLeadKpis(d)
+      })
+      .catch(() => {})
+    return () => {
+      alive = false
+    }
+  }, [])
+
+  const funnelStages = leadKpis
+    ? [
+        { label: "신규 유입", count: leadKpis.total, color: "#1a1a1a" },
+        { label: "응대", count: Math.max(0, leadKpis.total - (leadKpis.byStatus?.new ?? 0)), color: "#7A520F" },
+        { label: "전환", count: leadKpis.byStatus?.converted ?? 0, color: "#084734" },
+      ]
+    : []
+
   const initialLoading = loading && !data
   const partialWarnings = data?.health.status === "partial" ? data.health.warnings : []
   const coverageState = data?.health.coverage.state
@@ -165,6 +196,41 @@ export default function CrmInsightsClient() {
         </div>
 
         <CrmManagerReportPanel />
+
+        {funnelStages.length > 0 && funnelStages[0].count > 0 ? (
+          <section className="mb-4 rounded-2xl border border-[#e8e8e4] bg-white p-4">
+            <div className="mb-3 flex items-center justify-between gap-2">
+              <h2 className="text-[15px] font-bold text-[#111110]">전환 퍼널 · 리드 파이프라인</h2>
+              <span className="text-[11px] text-[#1a1a1a]/35">신규 → 응대 → 전환</span>
+            </div>
+            <div className="space-y-2">
+              {funnelStages.map((stage, i) => {
+                const top = funnelStages[0].count || 1
+                const pctOfTotal = stage.count / top
+                const stepRate =
+                  i === 0 ? null : funnelStages[i - 1].count > 0 ? stage.count / funnelStages[i - 1].count : 0
+                return (
+                  <div key={stage.label} className="flex items-center gap-3">
+                    <span className="w-14 shrink-0 text-[12px] font-semibold text-[#1a1a1a]/55">{stage.label}</span>
+                    <div className="h-7 flex-1 overflow-hidden rounded-lg bg-[#fafaf8]">
+                      <div
+                        className="flex h-full items-center rounded-lg px-2 text-[12px] font-bold text-white"
+                        style={{ width: `${Math.max(8, pctOfTotal * 100)}%`, backgroundColor: stage.color }}
+                      >
+                        {stage.count.toLocaleString("ko-KR")}
+                      </div>
+                    </div>
+                    <span className="w-24 shrink-0 text-right text-[11px] tabular-nums text-[#1a1a1a]/45">
+                      {Math.round(pctOfTotal * 100)}%
+                      {stepRate != null ? ` · 전환 ${Math.round(stepRate * 100)}%` : ""}
+                    </span>
+                  </div>
+                )
+              })}
+            </div>
+            <p className="mt-2 text-[10px] text-[#1a1a1a]/35">리드 status 기준 · 신규 응대율과 전환율을 한눈에</p>
+          </section>
+        ) : null}
 
         {error ? (
           <div className="mb-4 rounded-xl border border-[#F6D5C5] bg-[#FEF3EE] px-3 py-2 text-[12px] font-medium text-[#B85C33]">
