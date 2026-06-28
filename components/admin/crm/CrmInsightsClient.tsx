@@ -102,12 +102,20 @@ interface LeadFunnelKpis {
   byStatus: Record<"new" | "contacted" | "converted" | "closed", number>
 }
 
+interface LeadChannelStat {
+  source: string
+  total: number
+  converted: number
+  rate: number
+}
+
 export default function CrmInsightsClient() {
   const [data, setData] = useState<CrmInsights | null>(null)
   const [loading, setLoading] = useState(true)
   const [refreshing, setRefreshing] = useState(false)
   const [error, setError] = useState<string | null>(null)
   const [leadKpis, setLeadKpis] = useState<LeadFunnelKpis | null>(null)
+  const [channels, setChannels] = useState<LeadChannelStat[]>([])
 
   const load = useCallback(async (options?: { force?: boolean }) => {
     const cached = getCachedAdminJson<CrmInsights>(INSIGHTS_URL, { cacheKey: INSIGHTS_URL })
@@ -150,6 +158,23 @@ export default function CrmInsightsClient() {
     })
       .then((d) => {
         if (alive) setLeadKpis(d)
+      })
+      .catch(() => {})
+    return () => {
+      alive = false
+    }
+  }, [])
+
+  // 채널별 전환율 — lead-channels 집계.
+  useEffect(() => {
+    let alive = true
+    adminFetchJsonCached<{ channels: LeadChannelStat[] }>("/api/admin/crm/lead-channels", undefined, {
+      cacheKey: "/api/admin/crm/lead-channels",
+      ttlMs: 120_000,
+      staleWhileRevalidateMs: 300_000,
+    })
+      .then((d) => {
+        if (alive) setChannels(d?.channels ?? [])
       })
       .catch(() => {})
     return () => {
@@ -229,6 +254,35 @@ export default function CrmInsightsClient() {
               })}
             </div>
             <p className="mt-2 text-[10px] text-[#1a1a1a]/35">리드 status 기준 · 신규 응대율과 전환율을 한눈에</p>
+          </section>
+        ) : null}
+
+        {channels.length > 0 ? (
+          <section className="mb-4 rounded-2xl border border-[#e8e8e4] bg-white p-4">
+            <div className="mb-3 flex items-center justify-between gap-2">
+              <h2 className="text-[15px] font-bold text-[#111110]">채널별 전환율</h2>
+              <span className="text-[11px] text-[#1a1a1a]/35">유입 경로 · 전환 / 전체</span>
+            </div>
+            <div className="space-y-2">
+              {channels.map((ch) => (
+                <div key={ch.source} className="flex items-center gap-3">
+                  <span className="w-28 shrink-0 truncate text-[12px] font-semibold text-[#111110]" title={ch.source}>
+                    {ch.source}
+                  </span>
+                  <div className="h-6 flex-1 overflow-hidden rounded-md bg-[#fafaf8]">
+                    <div
+                      className="h-full rounded-md bg-[#084734]"
+                      style={{ width: `${Math.max(2, ch.rate * 100)}%` }}
+                    />
+                  </div>
+                  <span className="w-28 shrink-0 text-right text-[11px] tabular-nums text-[#1a1a1a]/55">
+                    <b className="text-[#084734]">{Math.round(ch.rate * 100)}%</b> ·{" "}
+                    {ch.converted.toLocaleString("ko-KR")}/{ch.total.toLocaleString("ko-KR")}
+                  </span>
+                </div>
+              ))}
+            </div>
+            <p className="mt-2 text-[10px] text-[#1a1a1a]/35">전환율 = 전환 리드 / 전체 리드(채널별) · 건수 상위 8개</p>
           </section>
         ) : null}
 
