@@ -91,6 +91,22 @@ export function readOptionalNonNegativeInt(body: JsonObject, key: string, label:
   return parsed
 }
 
+export function readOptionalNonNegativeNumber(body: JsonObject, key: string, label: string) {
+  const value = body[key]
+  if (value == null || value === "") return undefined
+  const parsed =
+    typeof value === "number"
+      ? value
+      : typeof value === "string"
+        ? Number(value.trim())
+        : Number.NaN
+
+  if (!Number.isFinite(parsed) || parsed < 0) {
+    throw new HardwareApiValidationError(`${label}은(는) 0 이상 숫자여야 합니다.`)
+  }
+  return parsed
+}
+
 export function readRequiredEnum<T extends string>(
   body: JsonObject,
   key: string,

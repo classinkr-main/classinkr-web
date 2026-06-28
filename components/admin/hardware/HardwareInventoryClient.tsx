@@ -63,6 +63,11 @@ interface HardwareMovement {
   memo: string | null
   serials: string[]
   lot_no: string | null
+  unit_price: number | null
+  amount_usd: number | null
+  amount_cny: number | null
+  storage_location: string | null
+  importer: string | null
   source: "admin_manual" | "sheet_import"
   created_by: string | null
   created_at: string
@@ -163,6 +168,11 @@ interface HardwareMovementDraft {
   referenceNo: string
   memo: string
   lotNo: string
+  unitPrice: number | null
+  amountUsd: number | null
+  amountCny: number | null
+  storageLocation: string
+  importer: string
   serials: string[]
 }
 
@@ -263,6 +273,13 @@ function movementLot(movement: HardwareMovement): string | null {
     return movement.reference_no.trim()
   }
   return null
+}
+
+function parseOptionalNumber(value: string): number | null {
+  const trimmed = value.trim()
+  if (!trimmed) return null
+  const parsed = Number(trimmed)
+  return Number.isFinite(parsed) && parsed >= 0 ? parsed : null
 }
 
 function formatNumber(value: number) {
@@ -451,6 +468,12 @@ export default function HardwareInventoryClient() {
   const [referenceNo, setReferenceNo] = useState("")
   const [memo, setMemo] = useState("")
   const [lotNo, setLotNo] = useState("")
+  const [unitPrice, setUnitPrice] = useState("")
+  const [amountUsd, setAmountUsd] = useState("")
+  const [amountCny, setAmountCny] = useState("")
+  const [storageLocation, setStorageLocation] = useState("")
+  const [importer, setImporter] = useState("")
+  const [serialsText, setSerialsText] = useState("")
   const [openSections, setOpenSections] = useState<Record<HardwareSectionKey, boolean>>(() => ({ ...DEFAULT_OPEN_SECTIONS }))
   const [locationPage, setLocationPage] = useState(1)
   const [stockPage, setStockPage] = useState(1)
@@ -731,7 +754,12 @@ export default function HardwareInventoryClient() {
       referenceNo,
       memo,
       lotNo: lotNo.trim(),
-      serials: [],
+      unitPrice: parseOptionalNumber(unitPrice),
+      amountUsd: parseOptionalNumber(amountUsd),
+      amountCny: parseOptionalNumber(amountCny),
+      storageLocation: storageLocation.trim(),
+      importer: importer.trim(),
+      serials: serialsText.split(/[\s,]+/).map((value) => value.trim()).filter(Boolean),
     }
   }
 
@@ -812,6 +840,10 @@ export default function HardwareInventoryClient() {
       )
       setQuantity("1")
       setMemo("")
+      setUnitPrice("")
+      setAmountUsd("")
+      setAmountCny("")
+      setSerialsText("")
       setPendingMovement(null)
       await refresh()
     } catch (err) {
@@ -1534,6 +1566,77 @@ export default function HardwareInventoryClient() {
                       />
                     </label>
 
+                    {movementType === "inbound" && (
+                      <div className="space-y-3 rounded-lg border border-[rgba(0,0,0,0.08)] bg-[#FAFAF8] p-3">
+                        <p className="text-[11px] font-bold text-[#615D59]">입고 상세 (시트 필드)</p>
+                        <div className="grid grid-cols-2 gap-3">
+                          <label className="block">
+                            <span className="text-[11px] font-bold text-[#615D59]">단가 (USD)</span>
+                            <input
+                              type="number"
+                              min={0}
+                              step="0.01"
+                              value={unitPrice}
+                              onChange={(event) => setUnitPrice(event.target.value)}
+                              className="mt-1 h-10 w-full rounded-md border border-[rgba(0,0,0,0.08)] bg-white px-3 text-[13px] text-[#111110] outline-none focus:border-[#084734]"
+                            />
+                          </label>
+                          <label className="block">
+                            <span className="text-[11px] font-bold text-[#615D59]">금액 (USD)</span>
+                            <input
+                              type="number"
+                              min={0}
+                              step="0.01"
+                              value={amountUsd}
+                              onChange={(event) => setAmountUsd(event.target.value)}
+                              className="mt-1 h-10 w-full rounded-md border border-[rgba(0,0,0,0.08)] bg-white px-3 text-[13px] text-[#111110] outline-none focus:border-[#084734]"
+                            />
+                          </label>
+                        </div>
+                        <div className="grid grid-cols-2 gap-3">
+                          <label className="block">
+                            <span className="text-[11px] font-bold text-[#615D59]">금액 (CNY)</span>
+                            <input
+                              type="number"
+                              min={0}
+                              step="0.01"
+                              value={amountCny}
+                              onChange={(event) => setAmountCny(event.target.value)}
+                              className="mt-1 h-10 w-full rounded-md border border-[rgba(0,0,0,0.08)] bg-white px-3 text-[13px] text-[#111110] outline-none focus:border-[#084734]"
+                            />
+                          </label>
+                          <label className="block">
+                            <span className="text-[11px] font-bold text-[#615D59]">보관 장소</span>
+                            <input
+                              value={storageLocation}
+                              onChange={(event) => setStorageLocation(event.target.value)}
+                              list="hardware-location-options"
+                              placeholder="창고"
+                              className="mt-1 h-10 w-full rounded-md border border-[rgba(0,0,0,0.08)] bg-white px-3 text-[13px] text-[#111110] outline-none placeholder:text-[#A39E98] focus:border-[#084734]"
+                            />
+                          </label>
+                        </div>
+                        <label className="block">
+                          <span className="text-[11px] font-bold text-[#615D59]">수입자</span>
+                          <input
+                            value={importer}
+                            onChange={(event) => setImporter(event.target.value)}
+                            placeholder="예: Classin"
+                            className="mt-1 h-10 w-full rounded-md border border-[rgba(0,0,0,0.08)] bg-white px-3 text-[13px] text-[#111110] outline-none placeholder:text-[#A39E98] focus:border-[#084734]"
+                          />
+                        </label>
+                        <label className="block">
+                          <span className="text-[11px] font-bold text-[#615D59]">시리얼 번호 (쉼표·공백 구분)</span>
+                          <input
+                            value={serialsText}
+                            onChange={(event) => setSerialsText(event.target.value)}
+                            placeholder="예: SN001, SN002"
+                            className="mt-1 h-10 w-full rounded-md border border-[rgba(0,0,0,0.08)] bg-white px-3 text-[13px] text-[#111110] outline-none placeholder:text-[#A39E98] focus:border-[#084734]"
+                          />
+                        </label>
+                      </div>
+                    )}
+
                     <label className="block">
                       <span className="text-[11px] font-bold text-[#615D59]">참조 번호</span>
                       <input
@@ -1710,6 +1813,7 @@ export default function HardwareInventoryClient() {
                                 <p className="mt-1 text-[11px] text-[#615D59]">
                                   {formatDate(movement.occurred_at)} · {movement.to_location ?? movement.from_location ?? "위치 미정"}
                                   {movementLot(movement) ? ` · lot ${movementLot(movement)}` : ""}
+                                  {movement.amount_usd != null ? ` · $${formatNumber(movement.amount_usd)}` : ""}
                                   {movement.source === "sheet_import" ? " · 시트" : ""}
                                 </p>
                               </div>

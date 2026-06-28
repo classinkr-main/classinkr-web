@@ -47,6 +47,11 @@ export interface HardwareMovement {
   memo: string | null
   serials: string[]
   lot_no: string | null
+  unit_price: number | null
+  amount_usd: number | null
+  amount_cny: number | null
+  storage_location: string | null
+  importer: string | null
   source: "admin_manual" | "sheet_import"
   source_table: string | null
   source_key: string | null
@@ -75,6 +80,11 @@ export interface CreateHardwareMovementInput {
   memo?: string | null
   serials?: string[]
   lotNo?: string | null
+  unitPrice?: number | null
+  amountUsd?: number | null
+  amountCny?: number | null
+  storageLocation?: string | null
+  importer?: string | null
   createdBy?: string | null
   raw?: Record<string, unknown>
 }
@@ -415,6 +425,11 @@ export async function createHardwareMovement(input: CreateHardwareMovementInput)
       memo: cleanString(input.memo),
       serials: input.serials ?? [],
       lot_no: cleanString(input.lotNo),
+      unit_price: input.unitPrice ?? null,
+      amount_usd: input.amountUsd ?? null,
+      amount_cny: input.amountCny ?? null,
+      storage_location: cleanString(input.storageLocation),
+      importer: cleanString(input.importer),
       source: "admin_manual",
       raw: input.raw ?? {},
       created_by: cleanString(input.createdBy),
