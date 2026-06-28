@@ -380,6 +380,24 @@
     box-shadow: var(--shadow-deep);
   }
 
+  /* ── Scroll reveal (SSR-safe, components/landing/Reveal.tsx) ──
+     Default = visible. Hidden state only applies once JS arms the element
+     (data-reveal="out"); reduced-motion handled by the global block below. */
+  .reveal-anim {
+    transition:
+      opacity 0.7s cubic-bezier(0.22, 1, 0.36, 1),
+      transform 0.7s cubic-bezier(0.22, 1, 0.36, 1);
+    will-change: opacity, transform;
+  }
+  .reveal-anim[data-reveal="out"] {
+    opacity: 0;
+    transform: translateY(18px);
+  }
+  .reveal-anim[data-reveal="in"] {
+    opacity: 1;
+    transform: none;
+  }
+
   /* ── 섹션 배경 교차 ── */
   .section-white   { background-color: #FFFFFF; }
   .section-warm    { background-color: #F6F5F4; }
@@ -770,6 +788,13 @@
 
   video[autoplay] {
     animation: none !important;
+  }
+
+  /* Reveal elements must never stay hidden when motion is reduced. */
+  .reveal-anim,
+  .reveal-anim[data-reveal="out"] {
+    opacity: 1 !important;
+    transform: none !important;
   }
 }
 

@@ -18,11 +18,12 @@ const contactHref = `/contact?topic=${encodeURIComponent("도입 상담")}&prefi
 
 const page: SegmentLandingPageData = {
   segmentId: "pre-adoption-risk-check",
-  themeLabel: "도입 전 고의도 검토 리드",
+  themeLabel: "도입 전 리스크 검토 리드",
   hero: {
-    title: "계약 전에 확인할 질문부터 정리하세요",
+    title: "계약 전에,",
+    titleAccent: "확인할 질문부터 정리하세요",
     body:
-      "관리자 권한, 녹화 저장, 스토리지, 개인정보, 서버, OPS, 오프라인 칠판까지. 학원 시스템 OS인 Classin의 도입 전 질문은 기능 호기심이 아니라 리스크 점검입니다. 바로 답할 수 있는 것과 최신 정책 확인이 필요한 것을 나눠 상담을 빠르게 만듭니다.",
+      "권한·녹화·스토리지·개인정보·서버까지. 도입 전 질문은 기능 호기심이 아니라 리스크 점검입니다.",
     image: {
       src: "/images/l/test3/test3-hero.png",
       alt: "도입 점검 화면이 켜진 ClassIn 전자칠판",
@@ -52,9 +53,9 @@ const page: SegmentLandingPageData = {
     ],
   },
   problem: {
-    heading: "도입 직전 리드는 더 많은 기능 설명을 원하지 않습니다",
+    heading: "이 단계에 필요한 건 기능 설명이 아닙니다",
     body:
-      "이 단계의 원장과 관리자는 과장된 확신보다 정확한 분리가 필요합니다. 가능한 것, 조건이 붙는 것, 상담에서 확인할 것을 나누는 순간 신뢰가 생깁니다.",
+      "원장과 관리자는 과장된 확신보다 정확한 분리를 원합니다. 가능한 것·조건부·확인할 것을 나누는 순간 신뢰가 생깁니다.",
     items: [
       {
         title: "권한과 데이터가 불명확함",
@@ -74,9 +75,9 @@ const page: SegmentLandingPageData = {
     ],
   },
   flow: {
-    heading: "상담 전에 질문을 네 묶음으로 나눕니다",
+    heading: "질문을 네 묶음으로 나눕니다",
     body:
-      "22개 질문은 FAQ 목록이 아니라 의사결정 플로우입니다. 답변 속도보다 정확한 분류가 전환 장벽을 낮춥니다.",
+      "22개 질문은 FAQ가 아니라 의사결정 플로우입니다. 답변 속도보다 정확한 분류가 장벽을 낮춥니다.",
     steps: [
       {
         title: "불안 3개 선정",
@@ -97,9 +98,9 @@ const page: SegmentLandingPageData = {
     ],
   },
   proof: {
-    heading: "바로 답할 것과 확인할 것을 숨기지 않습니다",
+    heading: "답할 것과 확인할 것을 숨기지 않습니다",
     body:
-      "Classin의 신뢰는 만능처럼 보이는 답변이 아니라, 지금 답할 수 있는 범위와 최신 확인이 필요한 범위를 정직하게 나누는 데서 나옵니다.",
+      "신뢰는 만능처럼 보이는 답변이 아니라, 지금 답할 범위와 확인이 필요한 범위를 정직하게 나누는 데서 나옵니다.",
     items: [
       {
         title: "관리자 콘솔",
@@ -124,9 +125,9 @@ const page: SegmentLandingPageData = {
     ],
   },
   decision: {
-    heading: "상담 결론은 네 가지 중 하나로 끝냅니다",
+    heading: "상담은 네 가지 결론 중 하나로 끝냅니다",
     body:
-      "답변을 많이 주는 것보다 다음 행동을 정확히 정하는 것이 중요합니다. 내부 공유, 정책 회신, 쇼룸 검증, 견적 범위를 분리합니다.",
+      "답을 많이 주는 것보다 다음 행동을 정하는 게 중요합니다. 내부 공유·정책 회신·쇼룸 검증·견적으로 나눕니다.",
     rows: [
       {
         title: "내부 공유",
@@ -147,9 +148,9 @@ const page: SegmentLandingPageData = {
     ],
   },
   finalCta: {
-    heading: "확인 필요 항목을 숨기지 않는 상담이 더 빠릅니다",
+    heading: "숨기지 않는 상담이 더 빠릅니다",
     body:
-      "도입 전 가장 불안한 질문 3개를 먼저 고르면, 답변 가능한 것과 정책 확인이 필요한 것을 나눠 쇼룸·견적·파일럿으로 이어갈 수 있습니다.",
+      "가장 불안한 질문 3개부터 고르면, 답할 것과 확인할 것을 나눠 쇼룸·견적·파일럿으로 바로 이어집니다.",
     primaryCta: {
       label: "22가지 질문표 받기",
       href: "/resources/classin-pre-adoption-questions-checklist#download",

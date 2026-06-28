@@ -20,9 +20,10 @@ const page: SegmentLandingPageData = {
   segmentId: "hardware-classroom-buildout",
   themeLabel: "전자칠판 비교 리드",
   hero: {
-    title: "전자칠판을 바꾸는 게 아니라, 교실 수업 흐름을 바꿉니다",
+    title: "전자칠판을 바꾸지 말고,",
+    titleAccent: "교실 수업 흐름을 바꾸세요",
     body:
-      "화면 크기와 판서감만 비교하면 Classin Board의 가치는 작게 보입니다. Classin은 학원 시스템 OS 관점으로 OPS 기반 보드, 수업 소프트웨어, EDB, 녹화, 복습, LMS, 관리자 데이터를 교실 한 흐름으로 연결합니다.",
+      "패널 크기와 판서감만 비교하면 절반만 보는 겁니다. 보드·수업·EDB·녹화·복습·LMS를 한 흐름으로 잇는 교실 시스템을 비교하세요.",
     image: {
       src: "/images/l/test1/test1-hero.png",
       alt: "딥그린 스튜디오에 놓인 ClassIn 전자칠판 — 화이트 라운드 프레임과 이동식 스탠드",
@@ -52,9 +53,9 @@ const page: SegmentLandingPageData = {
     ],
   },
   problem: {
-    heading: "기존 전자칠판의 숨은 비용",
+    heading: "패널 단가에 가려진 진짜 비용",
     body:
-      "교실 장비는 설치 후 매일 쓰입니다. 화면이 커도 수업 자료, 녹화, 복습 배포가 따로 움직이면 운영팀의 손은 그대로 남습니다.",
+      "장비는 설치 후 매일 쓰입니다. 화면만 커지고 자료·녹화·복습이 따로 돌면 운영팀 손은 그대로 남습니다.",
     items: [
       {
         title: "외장 장비 의존",
@@ -74,9 +75,9 @@ const page: SegmentLandingPageData = {
     ],
   },
   flow: {
-    heading: "교실 시스템 기준으로 보는 도입 흐름",
+    heading: "교실 시스템 기준으로 검토하는 4단계",
     body:
-      "Classin Board는 큰 화면 하나가 아니라 수업 전 준비, 판서, 녹화, 복습, 관리자 확인까지 연결되는 교실 운영 구성으로 검토해야 합니다.",
+      "큰 화면 하나가 아니라 준비·판서·녹화·복습·관리자 확인까지 이어지는 운영 구성으로 봅니다.",
     steps: [
       {
         title: "교실 조건 정리",
@@ -97,9 +98,9 @@ const page: SegmentLandingPageData = {
     ],
   },
   proof: {
-    heading: "하드웨어 스펙보다 중요한 운영 근거",
+    heading: "스펙보다 먼저 봐야 할 운영 근거",
     body:
-      "구매 전에는 화면 크기보다 수업을 시작하고 끝낸 뒤 어떤 자료와 데이터가 남는지를 먼저 확인해야 합니다.",
+      "화면 크기보다, 수업이 끝난 뒤 어떤 자료와 데이터가 남는지를 먼저 확인하세요.",
     items: [
       {
         title: "OPS 기반 수업 환경",
@@ -124,9 +125,9 @@ const page: SegmentLandingPageData = {
     ],
   },
   decision: {
-    heading: "상담 전에 이렇게 묻습니다",
+    heading: "상담 전에 이 네 가지를 정리하세요",
     body:
-      "하드웨어 상담은 모델 추천보다 현장 조건과 수업 루틴 확인이 먼저입니다. 이 질문들이 견적 범위를 빠르게 좁힙니다.",
+      "모델 추천보다 현장 조건과 수업 루틴이 먼저입니다. 이 항목이 견적 범위를 빠르게 좁힙니다.",
     rows: [
       {
         title: "교실",
@@ -149,7 +150,7 @@ const page: SegmentLandingPageData = {
   finalCta: {
     heading: "대표 교실 하나로 먼저 검증하세요",
     body:
-      "전 교실 도입을 한 번에 결정하기보다, 실제 수업 자료로 EDB·판서·녹화·복습 흐름을 확인하면 가격 비교가 운영 판단으로 바뀝니다.",
+      "전 교실을 한 번에 정하기 전에, 실제 수업 자료로 EDB·판서·녹화·복습을 확인하면 가격 비교가 운영 판단으로 바뀝니다.",
     primaryCta: {
       label: "쇼룸 상담 요청하기",
       href: contactHref,

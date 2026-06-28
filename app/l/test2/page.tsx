@@ -20,9 +20,10 @@ const page: SegmentLandingPageData = {
   segmentId: "teacher-resource-standardization",
   themeLabel: "강사 리소스·수업 표준화 리드",
   hero: {
-    title: "강사가 바뀌어도, 수업 품질은 흔들리지 않게",
+    title: "강사가 바뀌어도,",
+    titleAccent: "수업 품질은 그대로",
     body:
-      "수업 자료는 강사 PC에, 녹화와 과제는 다른 도구에, 상담 기록은 메신저에 흩어져 있나요? Classin은 학원 시스템 OS로 EDB 교안, 수업 녹화, LMS, 관리자 데이터를 한 흐름으로 묶어 학원식 수업 운영 기준을 남깁니다.",
+      "에이스 강사의 노하우가 개인 PC에만 남으면 자산이 아닙니다. EDB 교안·녹화·LMS로 학원의 수업 기준으로 남기세요.",
     image: {
       src: "/images/l/test2/test2-hero.png",
       alt: "ClassIn 전자칠판에 표준 수업 템플릿을 띄우고 수업을 준비하는 강사가 있는 학원 교실",
@@ -52,9 +53,9 @@ const page: SegmentLandingPageData = {
     ],
   },
   problem: {
-    heading: "좋은 수업이 개인기와 개인 파일에만 남을 때",
+    heading: "좋은 수업이 개인기로만 남을 때",
     body:
-      "수업 품질 표준화는 기능 교육만으로 해결되지 않습니다. 강사가 실제로 따라 할 수 있는 교안, 녹화, 과제, 권한 기준이 함께 있어야 합니다.",
+      "표준화는 기능 교육으로 끝나지 않습니다. 강사가 따라 할 수 있는 교안·녹화·과제·권한 기준이 함께 있어야 합니다.",
     items: [
       {
         title: "자료가 개인 저장소에 남음",
@@ -74,9 +75,9 @@ const page: SegmentLandingPageData = {
     ],
   },
   flow: {
-    heading: "수업 전·중·후를 하나의 운영 기준으로",
+    heading: "수업 전·중·후를 하나의 기준으로",
     body:
-      "Classin을 기능 목록으로 도입하지 않고, 대표 수업 1개가 준비부터 복습까지 어떻게 남는지 기준을 세웁니다.",
+      "기능 목록이 아니라, 대표 수업 1개가 준비부터 복습까지 어떻게 남는지로 기준을 세웁니다.",
     steps: [
       {
         title: "표준 수업 선정",
@@ -99,7 +100,7 @@ const page: SegmentLandingPageData = {
   proof: {
     heading: "기관 자산으로 남는 수업 운영",
     body:
-      "Classin의 강점은 에이스 강사의 노하우를 기능 설명이 아니라 반복 가능한 수업 운영 흐름으로 바꾸는 데 있습니다.",
+      "핵심은 에이스 강사의 노하우를 반복 가능한 운영 흐름으로 바꾸는 것입니다.",
     items: [
       {
         title: "EDB 교안",
@@ -124,9 +125,9 @@ const page: SegmentLandingPageData = {
     ],
   },
   decision: {
-    heading: "90일 파일럿은 작게 시작합니다",
+    heading: "90일 파일럿, 작게 시작합니다",
     body:
-      "전 교실 표준화를 바로 약속하지 않습니다. 대표 수업 하나를 기준으로 줄어드는 업무와 남는 자료를 먼저 검증합니다.",
+      "전 교실 표준화를 먼저 약속하지 않습니다. 대표 수업 하나로 줄어드는 업무와 남는 자료부터 검증합니다.",
     rows: [
       {
         title: "30일",
@@ -147,9 +148,9 @@ const page: SegmentLandingPageData = {
     ],
   },
   finalCta: {
-    heading: "수업 표준화는 첫 교안 하나에서 시작됩니다",
+    heading: "표준화는 첫 교안 하나에서 시작됩니다",
     body:
-      "대표 수업 자료를 기준으로 EDB 전환, 녹화, LMS, 관리자 점검까지 연결해 보면 강사 리소스 절감이 숫자로 보입니다.",
+      "대표 수업 자료로 EDB 전환·녹화·LMS·관리자 점검까지 이어 보면, 강사 리소스 절감이 눈에 보입니다.",
     primaryCta: {
       label: "수업 표준화 상담 요청",
       href: contactHref,
