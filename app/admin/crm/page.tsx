@@ -6,7 +6,7 @@ import {
   RefreshCw, Building2, Calendar, PhoneCall,
   ExternalLink, AlertCircle, Activity, BarChart3,
   CircleDollarSign, FileText, Handshake,
-  MapPin, ReceiptText, Target, TrendingUp,
+  MapPin, ReceiptText, Target, TrendingUp, UserPlus,
 } from "lucide-react"
 import { adminFetchJsonCached, getCachedAdminJson } from "@/lib/admin-client"
 import { Button } from "@/components/ui/button"
@@ -16,6 +16,7 @@ import CrmPriorityQueuePanel from "@/components/admin/crm/CrmPriorityQueuePanel"
 import CrmWeekAheadPanel from "@/components/admin/crm/CrmWeekAheadPanel"
 import CrmCustomerPicker from "@/components/admin/crm/CrmCustomerPicker"
 import Customer360Drawer from "@/components/admin/crm/Customer360Drawer"
+import LeadRegisterModal from "@/components/admin/crm/LeadRegisterModal"
 import { getRecentCustomers, type RecentCustomer } from "@/lib/crm/recent-customers"
 import { Toast } from "@/components/admin/crm/leads/shared"
 
@@ -785,6 +786,7 @@ export default function CrmPage() {
   const [drawerTarget, setDrawerTarget] = useState<{ key: string; name: string } | null>(null)
   const [sidebarTab, setSidebarTab] = useState<"priority" | "week">("priority")
   const [recentCustomers, setRecentCustomers] = useState<RecentCustomer[]>([])
+  const [leadModalOpen, setLeadModalOpen] = useState(false)
 
   // 고객 바로 가기 — 최근 본 고객(로컬). 드로어 열고 닫을 때마다 갱신.
   useEffect(() => {
@@ -895,7 +897,7 @@ export default function CrmPage() {
             ClassIn 고객 DB 기준 · 시트와 외부 CRM은 동기화 참고자료
           </p>
         </div>
-        <div className="grid gap-2 sm:grid-cols-4 xl:flex xl:justify-end">
+        <div className="grid gap-2 sm:grid-cols-5 xl:flex xl:justify-end">
           <Link
             href="/admin/crm/customers/leads"
             className="inline-flex h-9 items-center justify-center gap-1.5 rounded-lg border border-[#e8e8e4] bg-white px-3 text-[12px] font-semibold text-[#111110] transition-colors hover:bg-[#f5f5f2]"
@@ -917,6 +919,14 @@ export default function CrmPage() {
             <Building2 className="h-3.5 w-3.5" />
             고객·후속
           </Link>
+          <button
+            type="button"
+            onClick={() => setLeadModalOpen(true)}
+            className="inline-flex h-9 items-center justify-center gap-1.5 rounded-lg bg-[#084734] px-3 text-[12px] font-semibold text-white transition-opacity hover:opacity-90"
+          >
+            <UserPlus className="h-3.5 w-3.5" />
+            리드 등록
+          </button>
           <Button
             variant="outline"
             size="sm"
@@ -1138,6 +1148,12 @@ export default function CrmPage() {
         customerKey={drawerTarget?.key ?? null}
         name={drawerTarget?.name}
         onClose={() => setDrawerTarget(null)}
+      />
+
+      <LeadRegisterModal
+        open={leadModalOpen}
+        onClose={() => setLeadModalOpen(false)}
+        onDone={() => void fetchLeadKpis({ force: true })}
       />
 
       {toast && <Toast msg={toast.msg} type={toast.type} />}
