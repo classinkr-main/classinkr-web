@@ -22,7 +22,7 @@ const page: SegmentLandingPageData = {
   hero: {
     title: "계약 전에 확인할 질문부터 정리하세요",
     body:
-      "관리자 권한, 녹화 저장, 스토리지, 개인정보, 서버, OPS, 오프라인 칠판까지. 학원 시스템 OS인 Classin의 도입 전 질문은 기능 호기심이 아니라 리스크 점검입니다. 바로 답할 수 있는 것과 최신 정책 확인이 필요한 것을 나눠 상담을 빠르게 만듭니다.",
+      "관리자 권한, 녹화 저장, 스토리지, 개인정보, 서버, OPS, 오프라인 칠판까지. 수업 시스템 OS인 Classin의 도입 전 질문은 기능 호기심이 아니라 리스크 점검입니다. 바로 답할 수 있는 것과 최신 정책 확인이 필요한 것을 나눠 상담을 빠르게 만듭니다.",
     image: {
       src: "/images/use-cases/generated/admin-dashboard-source-1.png",
       alt: "Classin 관리자 대시보드 화면",

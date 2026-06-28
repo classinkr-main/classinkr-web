@@ -63,7 +63,7 @@ type Props = {
 
 const STATS = [
   { value: "3,000만+", label: "월간 수업", icon: GraduationCap },
-  { value: "5,000만+", label: "교사 · 학습자", icon: Users },
+  { value: "2,000만+", label: "교사 · 학습자", icon: Users },
   { value: "6만+", label: "교육기관", icon: Award },
   { value: "160+", label: "서비스 국가", icon: Globe2 },
 ] as const
@@ -90,9 +90,9 @@ const TIMELINE = [
     desc: "600명 이상의 개발자·엔지니어를 확보하며 플랫폼의 기술적 기반을 깊게 다졌습니다.",
   },
   {
-    year: "2021",
+    year: "2020",
     title: "글로벌 유니콘",
-    desc: "Tencent·Hillhouse·SIG 등의 투자로 누적 5억 달러 이상을 유치하며 시리즈 D 에듀테크 유니콘으로 도약, 공교육 시장까지 영역을 확장했습니다.",
+    desc: "Hillhouse·Tencent·SIG 등이 참여한 시리즈 C로 2억 6천만 달러를 유치(누적 3억 달러+)하며 글로벌 에듀테크 유니콘으로 도약, 공교육 시장까지 영역을 확장했습니다.",
   },
   {
     year: "2022",
@@ -107,7 +107,7 @@ const TIMELINE = [
   {
     year: "현재",
     title: "세계와 연결된 교실",
-    desc: "160개국, 6만 개 기관, 5,000만 명이 넘는 교사와 학습자가 클래스인으로 수업합니다.",
+    desc: "160개국, 6만 개 기관에서 2,000만 명이 넘는 교사와 학습자가 클래스인으로 수업합니다.",
   },
 ]
 

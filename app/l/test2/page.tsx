@@ -22,7 +22,7 @@ const page: SegmentLandingPageData = {
   hero: {
     title: "강사가 바뀌어도, 수업 품질은 흔들리지 않게",
     body:
-      "수업 자료는 강사 PC에, 녹화와 과제는 다른 도구에, 상담 기록은 메신저에 흩어져 있나요? Classin은 학원 시스템 OS로 EDB 교안, 수업 녹화, LMS, 관리자 데이터를 한 흐름으로 묶어 학원식 수업 운영 기준을 남깁니다.",
+      "수업 자료는 강사 PC에, 녹화와 과제는 다른 도구에, 상담 기록은 메신저에 흩어져 있나요? Classin은 수업 시스템 OS로 EDB 교안, 수업 녹화, LMS, 관리자 데이터를 한 흐름으로 묶어 학원식 수업 운영 기준을 남깁니다.",
     image: {
       src: "/images/product/sw/two-way-blackboard.webp",
       alt: "Classin 양방향 칠판 수업 화면",

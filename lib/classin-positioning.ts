@@ -1,3 +1,8 @@
+// 카테고리명·oneLine·hero 등 렌더되는 literal 카피의 SSOT.
+// 메시지 규칙·비교 프레임 → docs/active/classin-korea-positioning-guidelines.md
+// 보이스·표면별 톤 → docs/active/brand-canon/voice-charter.md
+// 회사 수치(EEO) → docs/active/brand-canon/company-facts.md
+// 기준일 2026-06-29 — 카테고리명 "수업 시스템 OS"로 통일.
 export const CLASSIN_POSITIONING = {
   primaryAudience: "학원 원장, 관리자, 운영 책임자, 교육기관 의사결정자",
   categoryName: "수업 시스템 OS",

@@ -13,8 +13,10 @@
   - 2026-04-15 기준 감사 기록. 현재 상태 판단용이 아니라 히스토리로 읽는다.
 - [active/prd.md](./active/prd.md)
   - Classin Home 공개 사이트의 현재 기준 PRD
+- [active/brand-canon/README.md](./active/brand-canon/README.md)
+  - **브랜드·콘텐츠 단일 기준 인덱스.** 정체성·카피·보이스·세그먼트·회사 팩트의 SSOT 계층(카테고리명 "수업 시스템 OS", 보이스 헌장, EEO 회사 팩트). 브랜드/마케팅 카피 작업의 진입점.
 - [active/classin-korea-positioning-guidelines.md](./active/classin-korea-positioning-guidelines.md)
-  - 한국 학원 시장용 Classin 정체성, 메시지, 리드마그넷, 챗봇 답변, CTA 기준
+  - 한국 학원 시장용 Classin 메시지·CTA·비교 프레임 **규칙**(literal 카피 값은 lib/classin-positioning.ts)
 - [active/classin-pre-adoption-question-matrix-2026-06-18.md](./active/classin-pre-adoption-question-matrix-2026-06-18.md)
   - 도입 전 22가지 질문의 답변 가능 범위, 확인 필요 항목, 상담·챗봇·리드마그넷 반영 기준
 - [active/partner-portal-redistribution-plan-2026-06-26.md](./active/partner-portal-redistribution-plan-2026-06-26.md)

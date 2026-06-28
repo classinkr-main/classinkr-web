@@ -22,7 +22,7 @@ const page: SegmentLandingPageData = {
   hero: {
     title: "전자칠판을 바꾸는 게 아니라, 교실 수업 흐름을 바꿉니다",
     body:
-      "화면 크기와 판서감만 비교하면 Classin Board의 가치는 작게 보입니다. Classin은 학원 시스템 OS 관점으로 OPS 기반 보드, 수업 소프트웨어, EDB, 녹화, 복습, LMS, 관리자 데이터를 교실 한 흐름으로 연결합니다.",
+      "화면 크기와 판서감만 비교하면 Classin Board의 가치는 작게 보입니다. Classin은 수업 시스템 OS 관점으로 OPS 기반 보드, 수업 소프트웨어, EDB, 녹화, 복습, LMS, 관리자 데이터를 교실 한 흐름으로 연결합니다.",
     image: {
       src: "/images/product/hw/hero/hero-board-stand.webp",
       alt: "Classin Board 전자칠판 스탠드형 제품 이미지",

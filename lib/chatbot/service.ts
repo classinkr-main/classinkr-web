@@ -425,7 +425,7 @@ function buildPolicyGuardResponse(question: NormalizedQuestion): {
       response: {
         answer: [
           "학원 결제 기능은 제공하지 않습니다.",
-          "Classin은 수업, 전자칠판, 녹화, EDB, LMS, 관리자 데이터를 중심으로 쓰는 학원 시스템 OS이고, 학원비 결제·수납·정산은 기존 학원 관리 시스템이나 별도 결제/정산 연동 범위로 분리해 설계하는 편이 맞습니다.",
+          "Classin은 수업, 전자칠판, 녹화, EDB, LMS, 관리자 데이터를 중심으로 쓰는 수업 시스템 OS이고, 학원비 결제·수납·정산은 기존 학원 관리 시스템이나 별도 결제/정산 연동 범위로 분리해 설계하는 편이 맞습니다.",
           "요금/견적은 전자칠판, OPS, 카메라, 스탠드/벽걸이, 소프트웨어, 설치·온보딩 구성 기준으로 안내할 수 있어요.",
         ].join("\n\n"),
         answerMode: "direct_answer",
@@ -867,7 +867,7 @@ function buildPositioningSource(question: NormalizedQuestion): ChatbotSource | n
         : CLASSIN_POSITIONING.chatbot.identitySummary
 
   return {
-    title: "Classin을 학원 시스템 OS로 이해하기",
+    title: "Classin을 수업 시스템 OS로 이해하기",
     heading,
     urlPath: "/docs/start/academy-system-os-positioning",
     category: "onboarding",
