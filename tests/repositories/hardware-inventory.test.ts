@@ -379,4 +379,52 @@ describe("importHardwareFromBranchSheets", () => {
       error: "snapshot insert denied",
     })
   })
+
+  it("assigns distinct, non-empty fingerprint keys to identical bulk-PO inbound lines", async () => {
+    const dup = {
+      id: "x",
+      logistics_no: "",
+      inbound_date: "2026-06-01",
+      product: "86 IFP",
+      quantity: 3,
+      unit_price: null,
+      amount: null,
+      serials: [],
+      storage: "창고",
+      importer: "Classin",
+      remarks: null,
+      raw: { values: ["", "2026-06-01", "86 IFP"] },
+    }
+    listFreshHwInbound.mockResolvedValue([{ ...dup }, { ...dup }])
+    listFreshHwOutbound.mockResolvedValue([])
+    listFreshHwStock.mockResolvedValue([])
+    const { importHardwareFromBranchSheets } = await loadRepository()
+
+    await importHardwareFromBranchSheets({ actor: "admin@example.com" })
+
+    const rows = operations.find(
+      (op) => op.method === "rpc" && op.fn === "replace_hardware_sheet_import"
+    )?.args?.rows as Array<Record<string, unknown>>
+    expect(rows).toHaveLength(2)
+    expect(rows[0].source_key).toBeTruthy()
+    expect(rows[1].source_key).toBeTruthy()
+    expect(rows[0].source_key).not.toBe(rows[1].source_key)
+    expect(rows.every((r) => typeof r.source_digest === "string" && r.source_digest)).toBe(true)
+    const keys = rows.map((r) => r.source_key)
+    expect(new Set(keys).size).toBe(keys.length)
+  })
+
+  it("routes to the additive merge RPC only when the flag is enabled", async () => {
+    const prev = process.env.HARDWARE_SHEET_ADDITIVE_MERGE
+    process.env.HARDWARE_SHEET_ADDITIVE_MERGE = "1"
+    try {
+      const { importHardwareFromBranchSheets } = await loadRepository()
+      await importHardwareFromBranchSheets({ actor: "admin@example.com" })
+      expect(operations.some((op) => op.method === "rpc" && op.fn === "merge_hardware_sheet_import")).toBe(true)
+      expect(operations.some((op) => op.method === "rpc" && op.fn === "replace_hardware_sheet_import")).toBe(false)
+    } finally {
+      if (prev === undefined) delete process.env.HARDWARE_SHEET_ADDITIVE_MERGE
+      else process.env.HARDWARE_SHEET_ADDITIVE_MERGE = prev
+    }
+  })
 })

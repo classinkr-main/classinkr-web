@@ -652,7 +652,47 @@ interface ImportMovementRow {
   serials: string[]
   source_table: string
   source_key: string
+  source_digest: string
   raw: unknown
+}
+
+// Position-independent natural identity for sheet rows. source_key = fingerprint
+// (product + date + 물류No + a stable intra-group ordinal) so two identical bulk-PO
+// lines get distinct keys that survive reorder; source_digest = content hash so the
+// additive merge can tell an edited row from an unchanged one. Stock-reconciliation
+// (adjust) rows are keyed product-only (one official figure per product).
+function sheetIdentityTiebreak(row: ImportMovementRow): string {
+  return JSON.stringify([(row.serials ?? []).join("|"), row.memo ?? "", row.quantity, JSON.stringify(row.raw ?? {})])
+}
+
+function assignSheetImportIdentity(rows: ImportMovementRow[]) {
+  const groups = new Map<string, ImportMovementRow[]>()
+  for (const row of rows) {
+    if (row.source_table === "branch_hw_stock") continue
+    const groupKey = JSON.stringify([row.source_table, row.product_name, row.occurred_at ?? "", row.reference_no ?? ""])
+    const bucket = groups.get(groupKey)
+    if (bucket) bucket.push(row)
+    else groups.set(groupKey, [row])
+  }
+  for (const bucket of groups.values()) {
+    bucket.sort((a, b) => {
+      const ta = sheetIdentityTiebreak(a)
+      const tb = sheetIdentityTiebreak(b)
+      return ta < tb ? -1 : ta > tb ? 1 : 0
+    })
+    bucket.forEach((row, ordinal) => {
+      row.source_key = hashSourceKey([row.source_table, row.product_name, row.occurred_at ?? "", row.reference_no ?? "", ordinal])
+      row.source_digest = hashSourceKey([
+        row.quantity, row.status ?? "", row.from_location ?? "", row.to_location ?? "",
+        row.owner ?? "", (row.serials ?? []).join("|"), row.memo ?? "", row.reference_no ?? "",
+      ])
+    })
+  }
+  for (const row of rows) {
+    if (row.source_table !== "branch_hw_stock") continue
+    row.source_key = hashSourceKey(["stock-reconciliation", row.product_name])
+    row.source_digest = hashSourceKey([row.quantity, row.from_location ?? "", row.to_location ?? ""])
+  }
 }
 
 interface HardwareSheetImportSnapshot {
@@ -791,7 +831,7 @@ export async function importHardwareFromBranchSheets(
     const rows: ImportMovementRow[] = []
     let skipped = 0
 
-    inbound.forEach((row, index) => {
+    inbound.forEach((row) => {
       const product = normalizeProductName(row.product)
       const item = itemsByName.get(product)
       if (!item || row.quantity <= 0) {
@@ -813,12 +853,13 @@ export async function importHardwareFromBranchSheets(
         memo: cleanString(row.remarks),
         serials: row.serials ?? [],
         source_table: "branch_hw_inbound",
-        source_key: hashSourceKey(["inbound", index, row.logistics_no, row.inbound_date, row.product, row.quantity, row.serials, row.storage, row.remarks]),
+        source_key: "",
+        source_digest: "",
         raw: row.raw ?? {},
       })
     })
 
-    outbound.forEach((row, index) => {
+    outbound.forEach((row) => {
       const product = normalizeProductName(row.product)
       const item = itemsByName.get(product)
       if (!item || row.quantity <= 0) {
@@ -843,13 +884,17 @@ export async function importHardwareFromBranchSheets(
         memo: [row.type, row.remarks].map(cleanString).filter(Boolean).join(" · ") || null,
         serials: row.serials ?? [],
         source_table: "branch_hw_outbound",
-        source_key: hashSourceKey(["outbound", index, row.logistics_no, row.outbound_date, row.owner, row.product, row.quantity, row.destination, row.progress, row.type, row.remarks]),
+        source_key: "",
+        source_digest: "",
         raw: row.raw ?? {},
       })
     })
 
     const warehouseBalances = getImportWarehouseBalances(rows)
-    for (const [index, row] of stock.entries()) {
+    // 재고현황은 제품별 총량표다. 같은 정규화 제품이 여러 행이면 마지막 공식 수치를 사용해
+    // 제품당 하나의 보정 행만 만든다(product-only source_key 충돌 방지).
+    const officialByProduct = new Map<string, { item: { id: string }; quantity: number; raw: unknown }>()
+    for (const row of stock) {
       const product = normalizeProductName(row.product)
       let item = itemsByName.get(product)
       if (!item) {
@@ -861,13 +906,16 @@ export async function importHardwareFromBranchSheets(
         skipped += 1
         continue
       }
+      officialByProduct.set(product, { item, quantity: row.quantity, raw: row.raw })
+    }
+    for (const [product, info] of officialByProduct) {
       const currentWarehouseStock = warehouseBalances.get(product) ?? 0
-      const adjustmentDelta = row.quantity - currentWarehouseStock
+      const adjustmentDelta = info.quantity - currentWarehouseStock
       if (adjustmentDelta === 0) continue
       const adjustmentQuantity = Math.abs(adjustmentDelta)
 
       rows.push({
-        item_id: item.id,
+        item_id: info.item.id,
         product_name: product,
         movement_type: "adjust",
         quantity: adjustmentQuantity,
@@ -877,28 +925,23 @@ export async function importHardwareFromBranchSheets(
         owner: null,
         status: "현재고 보정",
         reference_no: null,
-        memo: `재고현황 현재고 ${row.quantity}대 기준 보정`,
+        memo: `재고현황 현재고 ${info.quantity}대 기준 보정`,
         serials: [],
         source_table: "branch_hw_stock",
-        source_key: hashSourceKey([
-          "stock-reconciliation",
-          index,
-          row.product,
-          row.category,
-          row.quantity,
-          currentWarehouseStock,
-          row.raw,
-        ]),
+        source_key: "",
+        source_digest: "",
         raw: {
           source: "branch_hw_stock_reconciliation",
-          stock_row: row.raw ?? {},
-          official_quantity: row.quantity,
+          stock_row: info.raw ?? {},
+          official_quantity: info.quantity,
           calculated_warehouse_quantity: currentWarehouseStock,
           adjustment_delta: adjustmentDelta,
         },
       })
-      warehouseBalances.set(product, row.quantity)
+      warehouseBalances.set(product, info.quantity)
     }
+
+    assignSheetImportIdentity(rows)
 
     const previousSheetMovements = await listCurrentSheetImportMovements()
     const snapshot = await createHardwareSheetImportSnapshot({
@@ -912,20 +955,32 @@ export async function importHardwareFromBranchSheets(
       candidateMovements: rows,
       previousSheetMovements,
     })
+    const additiveMerge =
+      process.env.HARDWARE_SHEET_ADDITIVE_MERGE === "1" ||
+      process.env.HARDWARE_SHEET_ADDITIVE_MERGE === "true"
     const sb = createSupabaseAdminClient()
-    const { data, error } = await sb.rpc("replace_hardware_sheet_import", {
-      rows,
-      run_id: runId,
-      snapshot_id: snapshot.id,
-    })
+    const { data, error } = await sb.rpc(
+      additiveMerge ? "merge_hardware_sheet_import" : "replace_hardware_sheet_import",
+      { rows, run_id: runId, snapshot_id: snapshot.id }
+    )
     if (error) throw error
 
-    const imported = typeof data === "number" ? data : rows.length
+    const mergeCounts =
+      additiveMerge && data && typeof data === "object"
+        ? (data as { inserted?: number; updated?: number; tombstoned?: number; revived?: number })
+        : null
+    const imported = mergeCounts
+      ? (Number(mergeCounts.inserted) || 0) + (Number(mergeCounts.updated) || 0)
+      : typeof data === "number"
+        ? data
+        : rows.length
     await finishImportRun(runId, {
       status: "success",
       rowsImported: imported,
       rowsSkipped: skipped,
       raw: {
+        mode: additiveMerge ? "additive_merge" : "replace",
+        merge: mergeCounts,
         snapshot_id: snapshot.id,
         snapshot_checksum: snapshot.checksum,
         snapshot_created_at: snapshot.created_at,
