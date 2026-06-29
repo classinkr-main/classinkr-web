@@ -9,6 +9,7 @@ import {
   Building2,
   CalendarClock,
   CheckCircle2,
+  ChevronDown,
   CircleDollarSign,
   ClipboardList,
   Coins,
@@ -216,6 +217,40 @@ function formatMoney(value: number | null | undefined, currency: "KRW" | "USD" =
   if (value == null || !Number.isFinite(value)) return "-"
   if (currency === "USD") return `$${value.toLocaleString("en-US", { maximumFractionDigits: 0 })}`
   return `₩${value.toLocaleString("ko-KR")}`
+}
+
+// 비핵심 섹션 — 기본 접힘. 첫 화면은 핵심만, 필요할 때 펼쳐 보는 컴팩트 패턴.
+function CollapsibleSection({
+  icon,
+  title,
+  defaultOpen = false,
+  children,
+}: {
+  icon: React.ReactNode
+  title: React.ReactNode
+  defaultOpen?: boolean
+  children: React.ReactNode
+}) {
+  const [open, setOpen] = useState(defaultOpen)
+  return (
+    <section className="rounded-2xl border border-[#e8e8e4] bg-white p-4">
+      <button
+        type="button"
+        onClick={() => setOpen((value) => !value)}
+        className="flex w-full items-center justify-between gap-2"
+        aria-expanded={open}
+      >
+        <span className="flex items-center gap-1.5 text-[12px] font-bold uppercase tracking-[0.08em] text-[#1a1a1a]/45">
+          {icon}
+          {title}
+        </span>
+        <ChevronDown
+          className={`h-4 w-4 shrink-0 text-[#1a1a1a]/35 transition-transform ${open ? "" : "-rotate-90"}`}
+        />
+      </button>
+      {open ? <div className="mt-3">{children}</div> : null}
+    </section>
+  )
 }
 
 function SectionTitle({ icon, children }: { icon: React.ReactNode; children: React.ReactNode }) {
@@ -664,7 +699,7 @@ export default function Customer360Drawer({ customerKey, name, onClose }: Props)
         ) : null}
 
         {/* body */}
-        <div className="flex-1 space-y-5 overflow-y-auto bg-[#f5f5f2] p-5">
+        <div className="flex-1 space-y-3 overflow-y-auto bg-[#f5f5f2] p-4">
           {error ? (
             <div className="flex items-start gap-2 rounded-xl border border-[#F6D5C5] bg-[#FEF3EE] px-3 py-2 text-[12px] font-medium text-[#B85C33]">
               <AlertTriangle className="mt-0.5 h-3.5 w-3.5 shrink-0" />
@@ -865,10 +900,9 @@ export default function Customer360Drawer({ customerKey, name, onClose }: Props)
             </section>
           ) : null}
 
-          {/* 핵심 정보 */}
+          {/* 핵심 정보 — 참고 데이터, 기본 접힘 */}
           {data ? (
-            <section className="rounded-2xl border border-[#e8e8e4] bg-white p-4">
-              <SectionTitle icon={<Sparkles className="h-3.5 w-3.5" />}>핵심 정보</SectionTitle>
+            <CollapsibleSection icon={<Sparkles className="h-3.5 w-3.5" />} title="핵심 정보">
               <div className="grid grid-cols-2 gap-x-4 gap-y-2.5 text-[12px]">
                 <div>
                   <p className="text-[11px] font-semibold text-[#1a1a1a]/35">고객 가치 (LTV) · 추정</p>
@@ -904,7 +938,7 @@ export default function Customer360Drawer({ customerKey, name, onClose }: Props)
                 </div>
               </div>
               <p className="mt-2 text-[10px] text-[#1a1a1a]/35">LTV는 수납·오더 기준 추정값 · 공식 잔액/만료는 NEO 원천</p>
-            </section>
+            </CollapsibleSection>
           ) : null}
 
           {/* deals (Deal Lite) */}
