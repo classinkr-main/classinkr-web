@@ -5,7 +5,7 @@ import Link from "next/link"
 import {
   RefreshCw, Building2, Calendar, PhoneCall,
   ExternalLink, AlertCircle, Activity, BarChart3,
-  CircleDollarSign, FileText, Handshake,
+  CircleDollarSign, FileText, Handshake, ChevronDown,
   MapPin, ReceiptText, Target, TrendingUp, UserPlus,
 } from "lucide-react"
 import { adminFetchJsonCached, getCachedAdminJson } from "@/lib/admin-client"
@@ -787,6 +787,8 @@ export default function CrmPage() {
   const [sidebarTab, setSidebarTab] = useState<"priority" | "week">("priority")
   const [recentCustomers, setRecentCustomers] = useState<RecentCustomer[]>([])
   const [leadModalOpen, setLeadModalOpen] = useState(false)
+  // 팀 성과·KPI 보고는 보고성 블록 — 기본 접힘으로 첫 화면을 작업대에 집중시킨다.
+  const [teamReportOpen, setTeamReportOpen] = useState(false)
 
   // 고객 바로 가기 — 최근 본 고객(로컬). 드로어 열고 닫을 때마다 갱신.
   useEffect(() => {
@@ -1128,13 +1130,35 @@ export default function CrmPage() {
         </aside>
       </div>
 
-      <NeoCrmTeamPanel refreshKey={neoCrmRefreshKey} />
-      <CrmTeamKpiBoard
-        overview={crmOverview}
-        branchKpis={branchKpis}
-        loading={pageRefreshing}
-        branchError={branchKpisError}
-      />
+      {/* 팀 성과 · KPI 보고 — 보고성 블록, 기본 접힘(작업대 집중) */}
+      <section className="mb-4 overflow-hidden rounded-2xl border border-[#e8e8e4] bg-white">
+        <button
+          type="button"
+          onClick={() => setTeamReportOpen((value) => !value)}
+          className="flex w-full items-center justify-between gap-2 px-4 py-3 transition-colors hover:bg-[#fafaf8]"
+          aria-expanded={teamReportOpen}
+        >
+          <span className="flex items-center gap-2">
+            <BarChart3 className="h-4 w-4 text-[#1a1a1a]/40" />
+            <span className="text-[14px] font-bold text-[#111110]">팀 성과 · KPI 보고</span>
+            <span className="hidden text-[11px] text-[#1a1a1a]/35 sm:inline">총 · 팀별 · 개인별 · NEO 팀 현황</span>
+          </span>
+          <ChevronDown
+            className={`h-4 w-4 shrink-0 text-[#1a1a1a]/35 transition-transform ${teamReportOpen ? "" : "-rotate-90"}`}
+          />
+        </button>
+        {teamReportOpen ? (
+          <div className="border-t border-[#f0f0ec] p-4">
+            <NeoCrmTeamPanel refreshKey={neoCrmRefreshKey} />
+            <CrmTeamKpiBoard
+              overview={crmOverview}
+              branchKpis={branchKpis}
+              loading={pageRefreshing}
+              branchError={branchKpisError}
+            />
+          </div>
+        ) : null}
+      </section>
 
       {/* 맨 하단 — 수납 리스크 + 최근 고객별 로그 (간소화) */}
       <CrmOperationsDashboard
