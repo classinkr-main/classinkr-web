@@ -521,12 +521,8 @@ const NAV_ITEMS: Array<{
     desc: "알림 외관 및 수신자 설정",
     icon: <Sparkles className="w-4 h-4" />,
   },
-  {
-    key: "history",
-    label: "변경 이력",
-    desc: "준비중인 리비전 로그",
-    icon: <History className="w-4 h-4" />,
-  },
+  // "변경 이력"(history) 탭은 리비전 모델 미연결 placeholder라 노출에서 제외.
+  // 타입/SECTION_FIELDS/렌더 블록은 ?tab=history 직접 진입 및 추후 연결을 위해 유지.
 ]
 
 const SITE_LINK_GROUPS: SiteLinkGroup[] = [
