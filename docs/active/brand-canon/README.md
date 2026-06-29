@@ -1,46 +1,77 @@
-# Brand Canon — 브랜드·콘텐츠 단일 기준 인덱스
+# Brand Canon — 브랜드·회사·컨텐츠·참고 단일 기준 인덱스
 
 기준일: 2026-06-29
-문서 목적: 정체성·카피·보이스·세그먼트·회사 팩트가 **표면(홈/가이드/문서/블로그/리드마그넷/챗봇)마다 따로 노는 것**을 막는다. 각 관심사의 SSOT를 한 장에 고정하고, 나머지 표면은 전부 *참조만* 한다.
+문서 목적: 정체성·카피·보이스·세그먼트·회사 팩트가 **표면(홈/가이드/문서/블로그/리드마그넷/챗봇)마다 따로 노는 것**을 막는다. 이 캐논은 페이지 카피가 아니라 **브랜드·회사·컨텐츠·기타 참고**의 *결정*을 고정하는 곳이다. 각 항목은 SSOT 1개, 표면은 전부 *참조만* 한다.
 
-> 상위 인덱스: [../../README.md](../../README.md)(Docs Index §6 "한 영역=기준문서 하나") · [../playbook/README.md](../playbook/README.md)(§3.6 포지셔닝 SSOT)
+> 상위 인덱스: [../../README.md](../../README.md) · [../playbook/README.md](../playbook/README.md)(§3.6)
 
-## 1. SSOT 계층 (관심사 → 단일 기준 → 소비처)
-| 관심사 | SSOT (단일 기준) | 런타임/소비처 | 비고 |
-| --- | --- | --- | --- |
-| 메시지 규칙·CTA·비교 프레임 | [classin-korea-positioning-guidelines.md](../classin-korea-positioning-guidelines.md) | — | "규칙"의 SSOT |
-| 카테고리명·히어로 등 **literal 카피** | [lib/classin-positioning.ts](../../../lib/classin-positioning.ts) | 홈/제품/챗봇 | "값"의 SSOT |
-| 보이스·표면별 톤 | [voice-charter.md](./voice-charter.md) | 전 표면 | 신규 |
-| 회사 팩트(EEO 투자/스케일) | [company-facts.md](./company-facts.md) | `app/about`, `GlobalScale` | 신규·웹검증 |
-| 제품·기능명·하드웨어 | [classin-software-feature-inventory.md](../classin-software-feature-inventory.md) | `lib/docs.ts`, 챗봇 | 자기선언 SSOT |
-| 비주얼 | [DESIGN.md](../../../DESIGN.md) | `globals.css`, 전 컴포넌트 | |
-| 퍼널·리드마그넷 데이터 | [data/lead-magnets.json](../../../data/lead-magnets.json) | `/resources`, 챗봇 CTA | 라우팅표 = positioning §9 |
-| 챗봇 지식 원천 | [lib/docs.ts](../../../lib/docs.ts) `DocArticle[]` | RAG 파이프라인 | kb-audit가 선언 |
+## 1. 캐논 4영역 × SSOT
+
+### ① 브랜드 — 정체성·카피·보이스·비주얼
+| 항목 | SSOT | 상태 |
+| --- | --- | --- |
+| 카테고리명·메시지 규칙 | [classin-korea-positioning-guidelines.md](../classin-korea-positioning-guidelines.md) (규칙) + [lib/classin-positioning.ts](../../../lib/classin-positioning.ts) (literal 값) | ✅ "수업 시스템 OS" |
+| 보이스·표면별 톤 | [voice-charter.md](./voice-charter.md) | ✅ |
+| 비주얼 | [DESIGN.md](../../../DESIGN.md) | ✅ |
+
+### ② 회사 — EEO 팩트·연혁·제품군
+| 항목 | SSOT | 상태 |
+| --- | --- | --- |
+| EEO 투자·스케일·연혁·파트너 | [company-facts.md](./company-facts.md) | ✅ 공식 미러 + 출처표기 |
+| 제품군 / 한국 판매 SKU | company-facts §1 + `app/product` | 🟡 노출 vs 판매범위 미확정 |
+
+### ③ 컨텐츠 — 블로그·문서·이벤트·이메일·리드마그넷·챗봇
+| 항목 | SSOT | 상태 |
+| --- | --- | --- |
+| 문서센터 톤 | [docs-center-content-guidelines.md](../docs-center-content-guidelines.md) | ✅ |
+| 블로그·이벤트·이메일 보이스 | [voice-charter.md](./voice-charter.md) | 🟡 소속만 지정, 실카피 감사 전 |
+| 리드마그넷 데이터 | [data/lead-magnets.json](../../../data/lead-magnets.json) | ✅ 13종(PDF 실존) |
+| 콘텐츠 로드맵 | [content-roadmap-blog-events-docs-2026-06-10.md](../content-roadmap-blog-events-docs-2026-06-10.md) | (기존) |
+| 챗봇 지식 원천 | [lib/docs.ts](../../../lib/docs.ts) `DocArticle[]` (+ kb-audit) | ✅ |
+
+### ④ 기타 참고 — 제품·세그먼트·도입
+| 항목 | SSOT | 상태 |
+| --- | --- | --- |
+| 제품·기능명·하드웨어 | [classin-software-feature-inventory.md](../classin-software-feature-inventory.md) | ✅ 자기선언 SSOT |
+| HW 안전·매뉴얼 | [classin-board-s-series-safe-manual-guidelines.md](../classin-board-s-series-safe-manual-guidelines.md) | ✅ |
+| 도입 전 22질문 | [classin-pre-adoption-question-matrix-2026-06-18.md](../classin-pre-adoption-question-matrix-2026-06-18.md) | ✅ |
+| ICP·세그먼트 | 이 문서 §5 | 🟡 학원유형축 미정 |
 
 ## 2. 운영 규칙 (드리프트 방지)
 1. **관심사 1개 = SSOT 1개.** 같은 사실/값을 두 곳에 캐논으로 중복 기재하지 않는다.
-2. **규칙 vs 값 분리** — 메시지 *규칙*은 `positioning-guidelines.md`, 렌더되는 *literal 값*(카테고리명·oneLine·hero)은 `lib/classin-positioning.ts`. 문서는 값을 재기재하지 말고 코드 상수를 참조한다. 충돌 시 값=코드 / 규칙=문서가 각자 정점.
+2. **규칙 vs 값 분리** — 메시지 *규칙*은 `positioning-guidelines.md`, 렌더되는 *literal 값*은 `lib/classin-positioning.ts`. 문서는 값을 재기재하지 말고 코드 상수를 참조한다.
 3. **표면은 참조만.** 홈/블로그/문서/이벤트/이메일/챗봇은 위 SSOT를 따르고 자체 캐논을 만들지 않는다.
 4. **수치 단정 금지** — 가격·기관 수·밸류·모델 스펙은 [company-facts.md](./company-facts.md) 등급 또는 "상담 확인"으로만.
-5. **리드마그넷** — 데이터(gate/tier/intentScore)는 `lead-magnets.json`이 SSOT. positioning §8/§10은 *역할·라우팅*만 기술하고 숫자 스코어를 재정의하지 않는다.
+5. **회사 수치 임의 하향 금지** — 회사 자체 소개는 EEO 공식 자기소개를 따른다(외부 DB로 낮추지 말 것).
 
-## 3. 확정 결정 (2026-06-29)
-- **카테고리명 = "수업 시스템 OS"** (학원 시스템 OS 폐기). 라이브 코드·문서 동기화 완료. 잔존은 날짜박힌 역사 스펙 2건뿐(보존).
-  - oneLine: "Classin은 전자칠판, 수업 녹화, EDB 교안, LMS, 학생 관리, 관리자 데이터를 한 흐름으로 묶는 **수업 시스템 OS**입니다."
-  - 근거: 라이브/코드/최신 플레이북이 이미 사용 중 + "정직한 한계"(결제·출석·리포트 미대체)상 '학원 전체 OS'보다 방어 가능.
+## 3. 확정 결정
+- **카테고리명 = "수업 시스템 OS"** (학원 시스템 OS 폐기). 라이브 코드·문서 동기화 완료, 역사 스펙 2건만 보존.
 - **보이스 = 표면별 톤 레인지** ([voice-charter.md](./voice-charter.md)). 홈=긴장 허용 / 지원·문서=안심.
-- **회사 팩트 = SSOT** ([company-facts.md](./company-facts.md)). 회사 자체 소개는 **EEO 공식 자기소개(classin.com) 미러** — 시리즈 D 유니콘·누적 $500M+·5,000만+ 교육자·학습자·160+개국. 외부 DB의 시리즈 C $265M은 내부 맥락으로만(임의 하향 금지). $30B/30조원은 거짓.
+- **회사 팩트 = EEO 공식 미러** ([company-facts.md](./company-facts.md)) — 시리즈 D 유니콘·$500M+·5,000만+·160+개국. 외부 DB의 시리즈 C $265M은 맥락으로만. $30B 거짓.
+- **표시광고법 안전장치** — 회사 수치에 "전 세계 누적·EEO 공식 기준" 출처 표기 적용(2026-06-29).
 
-## 4. 세그먼트 (3레이어 — 통합 보기)
+## 4. 열린 결정 (OPEN — 확정 대기)
+> 아래는 페이지 카피가 아니라 *캐논 결정*이다. 확정되면 해당 SSOT + 표면에 반영한다.
+
+| # | 영역 | 결정할 것 | 현 상태 / 권고 |
+| --- | --- | --- | --- |
+| O1 | 브랜드 | **글로벌(올인원 하이브리드 학습 플랫폼) vs 한국(수업 시스템 OS)** 카테고리 정합 | classin.com=플랫폼, 우리=OS. 한국형 유지할지 글로벌 정렬할지 |
+| O2 | 기타참고 | **1차 ICP를 "중·고등 입시/교과 보습"으로 좁힐지** | 사례 6/6이 이미 그쪽 → 좁히기 권고(+규모축 2단) |
+| O3 | 회사 | **제품 노출 vs 실판매 범위** | 5제품군 노출 / 실판매=전자칠판+SW. 노출 SKU 확정 필요 |
+| O4 | 회사 | **"유니콘" 유지 vs 완화 + EEO 실증자료 확보** | 출처표기로 1차 방어함. 밸류 실증 어려우면 완화 옵션 |
+| O5 | 컨텐츠 | **블로그·이벤트·이메일 실카피 보이스 감사** | 헌장 소속만 지정, 실제 정합 미착수 |
+| O6 | 브랜드 | **홈 공포·손실 소구가 검증된 전략인지** | canon에 의도된 분기로 박음 — A/B/의도 확인 필요 |
+
+## 5. 세그먼트 (3레이어 + ICP)
 | 레이어 | 정의 | 원천 |
 | --- | --- | --- |
 | 구매자(1순위) | 학원 원장·관리자·실장·운영책임자 | positioning §2 |
 | 사용 역할 | 관리자·강사·학생·학부모 | `components/sections/Outcomes.tsx` |
 | 인텐트(퍼널) | 가격방어·운영관리·API·일정·쇼룸·설치·사례·리스크제거 | `lead-magnets.json` salesPlaybook |
 
-> 공백: 학원 유형(과목/규모/지역)축 세그먼트는 `academy-case-match-brief` 외 미정 → 후속 과제.
+> **학원유형축(과목/규모/지역) = OPEN O2.** 현 사례·마그넷은 전부 중·고등 입시/교과 보습에 수렴. 확정 시 이 표에 1차 ICP 행 추가.
 
-## 5. 변경 시 체크리스트
+## 6. 변경 시 체크리스트
 - [ ] 포지셔닝 *규칙* 변경 → `positioning-guidelines.md`
 - [ ] 카테고리명/히어로 *값* 변경 → `lib/classin-positioning.ts` (문서는 참조만)
 - [ ] 보이스/톤 변경 → `voice-charter.md` + 해당 표면
