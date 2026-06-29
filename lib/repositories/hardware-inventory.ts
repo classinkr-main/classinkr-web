@@ -444,13 +444,14 @@ export async function createHardwareMovement(input: CreateHardwareMovementInput)
 
 export async function confirmPlannedHardwareMovement(
   id: string,
-  input: { occurredAt?: string | null; actor?: string | null }
+  input: { occurredAt?: string | null; actor?: string | null; confirmQty?: number | null }
 ): Promise<HardwareMovement> {
   const sb = createSupabaseAdminClient()
   const { data, error } = await sb.rpc("confirm_hardware_planned_movement", {
     planned_id: id,
     actor: cleanString(input.actor) ?? "admin",
     occurred_on: input.occurredAt || null,
+    confirm_qty: input.confirmQty ?? null,
   })
   if (error) throw error
 
@@ -485,6 +486,81 @@ export async function voidHardwareMovement(
       voided_at: new Date().toISOString(),
       voided_by: cleanString(input.actor),
       void_reason: reason,
+    })
+    .eq("id", id)
+    .select("*")
+    .single()
+  if (error) throw error
+
+  revalidateTag(HARDWARE_INVENTORY_CACHE_TAG, "max")
+  return data as HardwareMovement
+}
+
+export async function updateHardwareMovement(
+  id: string,
+  input: CreateHardwareMovementInput
+): Promise<HardwareMovement> {
+  const productName = normalizeProductName(input.productName)
+  if (!productName) throw new Error("제품명은 필수입니다.")
+  if (!HARDWARE_MOVEMENT_TYPES.includes(input.movementType)) {
+    throw new Error("입출고 유형이 올바르지 않습니다.")
+  }
+  if (!Number.isInteger(input.quantity) || input.quantity <= 0) {
+    throw new Error("수량은 1 이상 정수여야 합니다.")
+  }
+
+  const sb = createSupabaseAdminClient()
+  const { data: existing, error: existingError } = await sb
+    .from("hardware_movements")
+    .select("id,source,voided_at,converted_from_movement_id,converted_to_movement_id")
+    .eq("id", id)
+    .maybeSingle()
+  if (existingError) throw existingError
+  if (!existing) throw new Error("원장 기록을 찾을 수 없습니다.")
+  const row = existing as {
+    source: string
+    voided_at: string | null
+    converted_from_movement_id: string | null
+    converted_to_movement_id: string | null
+  }
+  if (row.source !== "admin_manual") {
+    throw new Error("시트 이관 기록은 수정할 수 없습니다. 수기 조정으로 보정하세요.")
+  }
+  if (row.voided_at) {
+    throw new Error("취소된 기록은 수정할 수 없습니다.")
+  }
+  if (row.converted_from_movement_id || row.converted_to_movement_id) {
+    throw new Error("전환된 기록은 수정할 수 없습니다.")
+  }
+
+  let itemId = input.itemId
+  if (!itemId) {
+    const items = await ensureHardwareItems([{ name: productName }])
+    itemId = items.get(productName)?.id
+  }
+  if (!itemId) throw new Error("하드웨어 품목을 만들 수 없습니다.")
+
+  const { data, error } = await sb
+    .from("hardware_movements")
+    .update({
+      item_id: itemId,
+      product_name: productName,
+      movement_type: input.movementType,
+      quantity: input.quantity,
+      occurred_at: input.occurredAt || null,
+      from_location: normalizeLocationName(input.fromLocation),
+      to_location: normalizeLocationName(input.toLocation),
+      owner: cleanString(input.owner),
+      status: cleanString(input.status),
+      reference_no: cleanString(input.referenceNo),
+      memo: cleanString(input.memo),
+      serials: input.serials ?? [],
+      lot_no: cleanString(input.lotNo),
+      unit_price: input.unitPrice ?? null,
+      amount_usd: input.amountUsd ?? null,
+      amount_cny: input.amountCny ?? null,
+      storage_location: cleanString(input.storageLocation),
+      importer: cleanString(input.importer),
     })
     .eq("id", id)
     .select("*")

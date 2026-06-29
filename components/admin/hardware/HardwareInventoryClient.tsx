@@ -1,6 +1,6 @@
 "use client"
 
-import type { FormEvent, ReactNode } from "react"
+import type { FormEvent, KeyboardEvent as ReactKeyboardEvent, ReactNode } from "react"
 import { useCallback, useEffect, useMemo, useRef, useState } from "react"
 import {
   ArrowDownToLine,
@@ -486,6 +486,42 @@ export default function HardwareInventoryClient() {
   const [confirmingId, setConfirmingId] = useState<string | null>(null)
   const [confirmDates, setConfirmDates] = useState<Record<string, string>>({})
   const [voidingId, setVoidingId] = useState<string | null>(null)
+  const [sheetOpen, setSheetOpen] = useState(false)
+  const [voidTarget, setVoidTarget] = useState<HardwareMovement | null>(null)
+  const [voidReason, setVoidReason] = useState("")
+  const [editingId, setEditingId] = useState<string | null>(null)
+  const [confirmQtys, setConfirmQtys] = useState<Record<string, string>>({})
+  const sheetPanelRef = useRef<HTMLElement>(null)
+
+  useEffect(() => {
+    if (!sheetOpen && pendingMovement == null && voidTarget == null) return
+    const onKey = (event: KeyboardEvent) => {
+      if (event.key !== "Escape") return
+      if (pendingMovement) {
+        if (busy !== "movement") setPendingMovement(null)
+      } else if (voidTarget) {
+        if (voidingId == null) setVoidTarget(null)
+      } else if (sheetOpen) {
+        setSheetOpen(false)
+      }
+    }
+    document.addEventListener("keydown", onKey)
+    const previousOverflow = document.body.style.overflow
+    document.body.style.overflow = "hidden"
+    return () => {
+      document.removeEventListener("keydown", onKey)
+      document.body.style.overflow = previousOverflow
+    }
+  }, [sheetOpen, pendingMovement, voidTarget, busy, voidingId])
+
+  useEffect(() => {
+    if (!sheetOpen) return
+    const previousFocus = document.activeElement as HTMLElement | null
+    sheetPanelRef.current
+      ?.querySelector<HTMLElement>('button, [href], input, select, textarea, [tabindex]:not([tabindex="-1"])')
+      ?.focus()
+    return () => previousFocus?.focus?.()
+  }, [sheetOpen])
 
   const load = useCallback(async () => {
     setLoading(true)
@@ -604,6 +640,7 @@ export default function HardwareInventoryClient() {
   const applyPreset = (presetKey: string) => {
     const preset = ENTRY_PRESETS.find((item) => item.key === presetKey)
     if (!preset) return
+    setEditingId(null)
     setActivePresetKey(preset.key)
     setMovementType(preset.movementType)
     setFromLocation(preset.from)
@@ -616,43 +653,75 @@ export default function HardwareInventoryClient() {
     setCustomProduct("")
     setQuantity("1")
     setOpenSections((current) => ({ ...current, quick: true }))
-    setActiveTab("entry")
+    setSheetOpen(true)
     applyPreset(presetKey)
     window.requestAnimationFrame(() => {
       formRef.current?.scrollIntoView({ behavior: "smooth", block: "start" })
     })
   }
 
-  const loadPlannedMovement = (movement: HardwareMovement) => {
+  const presetKeyForMovement = (movement: HardwareMovement): string => {
+    switch (movement.movement_type) {
+      case "inbound":
+        return "inbound"
+      case "return":
+        return "return"
+      case "transfer":
+        return "office"
+      case "repair":
+        return "repair"
+      case "adjust":
+        return "adjust"
+      default:
+        if (/예정|예약|대기/.test(movement.status ?? "")) return "planned"
+        if (/샘플|sample|대여/i.test(`${movement.status ?? ""} ${movement.to_location ?? ""}`)) return "sample"
+        return "sale"
+    }
+  }
+
+  const editMovement = (movement: HardwareMovement) => {
     const hasKnownItem = Boolean(data?.items.some((item) => item.id === movement.item_id))
-    applyPreset("planned")
+    applyPreset(presetKeyForMovement(movement))
     setSelectedItemId(hasKnownItem ? movement.item_id : data?.items[0]?.id ?? "")
     setCustomProduct(hasKnownItem ? "" : movement.product_name)
     setQuantity(String(Math.max(1, movement.quantity)))
     setOccurredAt(movement.occurred_at?.slice(0, 10) || todayKey())
-    setFromLocation(movement.from_location ?? "창고")
-    setToLocation(movement.to_location ?? "고객")
+    setFromLocation(movement.from_location ?? "")
+    setToLocation(movement.to_location ?? "")
     setOwner(movement.owner ?? "")
-    setStatus(movement.status ?? "배송 예정")
+    setStatus(movement.status ?? "")
     setReferenceNo(movement.reference_no ?? "")
     setMemo(movement.memo ?? "")
+    setLotNo(movement.lot_no ?? "")
+    setUnitPrice(movement.unit_price != null ? String(movement.unit_price) : "")
+    setAmountUsd(movement.amount_usd != null ? String(movement.amount_usd) : "")
+    setAmountCny(movement.amount_cny != null ? String(movement.amount_cny) : "")
+    setStorageLocation(movement.storage_location ?? "")
+    setImporter(movement.importer ?? "")
+    setSerialsText((movement.serials ?? []).join(", "))
+    setEditingId(movement.id)
     setOpenSections((current) => ({ ...current, quick: true }))
-    setActiveTab("entry")
-    window.requestAnimationFrame(() => {
-      formRef.current?.scrollIntoView({ behavior: "smooth", block: "start" })
-    })
+    setSheetOpen(true)
   }
 
   const confirmPlannedMovement = async (movement: HardwareMovement) => {
+    const rawQty = confirmQtys[movement.id]
+    const qty = rawQty
+      ? Math.max(1, Math.min(movement.quantity, Math.floor(Number(rawQty) || movement.quantity)))
+      : movement.quantity
     setConfirmingId(movement.id)
     setNotice(null)
     setError(null)
     try {
       await adminFetchJson(`/api/admin/hardware/movements/${movement.id}`, {
         method: "PATCH",
-        body: JSON.stringify({ action: "confirm-planned", occurredAt: confirmDates[movement.id] ?? todayKey() }),
+        body: JSON.stringify({ action: "confirm-planned", occurredAt: confirmDates[movement.id] ?? todayKey(), confirmQty: qty }),
       })
-      setNotice(`${movement.product_name} 배송 예정 ${formatNumber(movement.quantity)}대를 실제 출고로 확정했습니다.`)
+      setNotice(
+        `${movement.product_name} ${formatNumber(qty)}대를 실제 출고로 확정했습니다.${
+          qty < movement.quantity ? ` 잔여 ${formatNumber(movement.quantity - qty)}대는 예정으로 유지됩니다.` : ""
+        }`
+      )
       await refresh()
     } catch (err) {
       setError(err instanceof Error ? err.message : String(err))
@@ -661,22 +730,25 @@ export default function HardwareInventoryClient() {
     }
   }
 
-  const voidMovement = async (movement: HardwareMovement) => {
+  const voidMovement = (movement: HardwareMovement) => {
     if (movement.voided_at) return
-    const reason = window.prompt(
-      `'${movement.product_name}' ${MOVEMENT_LABEL[movement.movement_type]} ${formatNumber(movement.quantity)}대 기록을 취소합니다. 사유를 입력하세요.`,
-      ""
-    )
-    if (reason === null) return
+    setVoidReason("")
+    setVoidTarget(movement)
+  }
+
+  const confirmVoid = async () => {
+    const movement = voidTarget
+    if (!movement) return
     setVoidingId(movement.id)
     setNotice(null)
     setError(null)
     try {
       await adminFetchJson(`/api/admin/hardware/movements/${movement.id}`, {
         method: "PATCH",
-        body: JSON.stringify({ action: "void", reason: reason.trim() || undefined }),
+        body: JSON.stringify({ action: "void", reason: voidReason.trim() || undefined }),
       })
       setNotice(`${movement.product_name} ${MOVEMENT_LABEL[movement.movement_type]} 기록을 취소했습니다.`)
+      setVoidTarget(null)
       await refresh()
     } catch (err) {
       setError(err instanceof Error ? err.message : String(err))
@@ -685,15 +757,51 @@ export default function HardwareInventoryClient() {
     }
   }
 
+  const trapTab = (event: ReactKeyboardEvent<HTMLElement>) => {
+    if (event.key !== "Tab") return
+    const panel = sheetPanelRef.current
+    if (!panel) return
+    const items = panel.querySelectorAll<HTMLElement>(
+      'button, [href], input, select, textarea, [tabindex]:not([tabindex="-1"])'
+    )
+    if (items.length === 0) return
+    const first = items[0]
+    const last = items[items.length - 1]
+    if (event.shiftKey && document.activeElement === first) {
+      event.preventDefault()
+      last.focus()
+    } else if (!event.shiftKey && document.activeElement === last) {
+      event.preventDefault()
+      first.focus()
+    }
+  }
+
   const startPlannedEntry = () => {
     applyPreset("planned")
     setCustomProduct("")
     setQuantity("1")
     setOpenSections((current) => ({ ...current, quick: true }))
-    setActiveTab("entry")
+    setSheetOpen(true)
     window.requestAnimationFrame(() => {
       formRef.current?.scrollIntoView({ behavior: "smooth", block: "start" })
     })
+  }
+
+  const openFreshSheet = () => {
+    applyPreset("sale")
+    setSelectedItemId(data?.items[0]?.id ?? "")
+    setCustomProduct("")
+    setQuantity("1")
+    setMemo("")
+    setReferenceNo("")
+    setLotNo("")
+    setUnitPrice("")
+    setAmountUsd("")
+    setAmountCny("")
+    setStorageLocation("")
+    setImporter("")
+    setSerialsText("")
+    setSheetOpen(true)
   }
 
   const adjustQuantity = (delta: number) => {
@@ -844,12 +952,40 @@ export default function HardwareInventoryClient() {
       setAmountUsd("")
       setAmountCny("")
       setSerialsText("")
+      setSheetOpen(false)
       setPendingMovement(null)
       await refresh()
     } catch (err) {
       const message = err instanceof Error ? err.message : String(err)
       setError(message)
       setCrmError(message)
+    } finally {
+      setBusy(null)
+    }
+  }
+
+  const submitEdit = async (draft: HardwareMovementDraft) => {
+    if (!editingId) return
+    setBusy("movement")
+    setNotice(null)
+    setError(null)
+    try {
+      await adminFetchJson(`/api/admin/hardware/movements/${editingId}`, {
+        method: "PATCH",
+        body: JSON.stringify({ action: "update", ...draft }),
+      })
+      setNotice(`${draft.productName} 기록을 수정했습니다.`)
+      setEditingId(null)
+      setSheetOpen(false)
+      setQuantity("1")
+      setMemo("")
+      setUnitPrice("")
+      setAmountUsd("")
+      setAmountCny("")
+      setSerialsText("")
+      await refresh()
+    } catch (err) {
+      setError(err instanceof Error ? err.message : String(err))
     } finally {
       setBusy(null)
     }
@@ -866,7 +1002,12 @@ export default function HardwareInventoryClient() {
       setError("수량은 1 이상 정수여야 합니다.")
       return
     }
-    if (draft.movementType === "outbound") {
+    if (editingId) {
+      await submitEdit(draft)
+      return
+    }
+    const planned = /예정|예약|대기/.test(draft.status)
+    if (draft.movementType === "outbound" && !planned) {
       await openCrmConfirmation(draft)
       return
     }
@@ -933,7 +1074,7 @@ export default function HardwareInventoryClient() {
                 <TabIcon className="h-4 w-4" />
                 {tab.label}
                 {tab.id === "home" && plannedCount > 0 ? (
-                  <span className="rounded-full bg-[#FBF1E0] px-1.5 py-0.5 text-[10px] font-bold text-[#A8741A]">
+                  <span className="rounded-full bg-[#FBF1E0] px-1.5 py-0.5 text-[11px] font-bold text-[#A8741A]">
                     {formatNumber(plannedCount)}
                   </span>
                 ) : null}
@@ -958,7 +1099,7 @@ export default function HardwareInventoryClient() {
         {loading && !data ? (
           <div className="grid gap-4 lg:grid-cols-4">
             {Array.from({ length: 4 }).map((_, index) => (
-              <div key={index} className="h-32 animate-pulse rounded-xl bg-[#F0EFEC]" />
+              <div key={index} className="h-32 animate-pulse rounded-xl bg-[#F6F5F4]" />
             ))}
           </div>
         ) : (
@@ -1044,6 +1185,16 @@ export default function HardwareInventoryClient() {
                       </p>
                       <div className="flex flex-wrap items-center justify-end gap-1.5">
                         <input
+                          type="number"
+                          min={1}
+                          max={movement.quantity}
+                          value={confirmQtys[movement.id] ?? String(movement.quantity)}
+                          onChange={(event) => setConfirmQtys((current) => ({ ...current, [movement.id]: event.target.value }))}
+                          aria-label="확정 수량"
+                          title="확정 수량 (부분 확정 가능)"
+                          className="h-8 w-14 rounded-md border border-[rgba(0,0,0,0.08)] bg-white px-2 text-center text-[11px] font-bold text-[#111110] outline-none focus:border-[#084734]"
+                        />
+                        <input
                           type="date"
                           value={confirmDates[movement.id] ?? todayKey()}
                           onChange={(event) => setConfirmDates((current) => ({ ...current, [movement.id]: event.target.value }))}
@@ -1053,7 +1204,7 @@ export default function HardwareInventoryClient() {
                         />
                         <button
                           type="button"
-                          onClick={() => loadPlannedMovement(movement)}
+                          onClick={() => editMovement(movement)}
                           className="rounded-md border border-[rgba(0,0,0,0.08)] bg-white px-2.5 py-1.5 text-[11px] font-bold text-[#31302E] transition hover:bg-[#F6F5F4]"
                         >
                           수정
@@ -1090,12 +1241,11 @@ export default function HardwareInventoryClient() {
                           <button
                             key={preset.key}
                             type="button"
-                            onClick={() => applyPreset(preset.key)}
-                            className={`inline-flex items-center gap-1 rounded-md px-2.5 py-1.5 text-[11px] font-bold transition ${
-                              activePresetKey === preset.key
-                                ? "bg-[#084734] text-white"
-                                : "bg-[#F6F5F4] text-[#31302E] hover:bg-[#ECFDF5] hover:text-[#084734]"
-                            }`}
+                            onClick={() => {
+                              applyPreset(preset.key)
+                              setSheetOpen(true)
+                            }}
+                            className="inline-flex items-center gap-1 rounded-md bg-[#F6F5F4] px-2.5 py-1.5 text-[11px] font-bold text-[#31302E] transition hover:bg-[#ECFDF5] hover:text-[#084734]"
                           >
                             <PresetIcon className="h-3.5 w-3.5" />
                             {preset.label}
@@ -1118,7 +1268,7 @@ export default function HardwareInventoryClient() {
                               <span className="font-semibold text-[#31302E]">{location.location}</span>
                               <span className="font-bold text-[#111110]">{formatNumber(location.quantity)}대</span>
                             </div>
-                            <div className="mt-1.5 h-2 overflow-hidden rounded-full bg-[#F0EFEC]">
+                            <div className="mt-1.5 h-2 overflow-hidden rounded-full bg-[#F6F5F4]">
                               <div
                                 className="h-full rounded-full bg-[#084734]"
                                 style={{ width: location.quantity > 0 ? `${Math.max(4, Math.round((location.quantity / maxLocationTotal) * 100))}%` : "0%" }}
@@ -1150,11 +1300,11 @@ export default function HardwareInventoryClient() {
                                     const width = qty > 0 ? Math.max(12, Math.round((qty / rowMax) * 100)) : 0
                                     return (
                                       <div key={location.key} className="min-w-0">
-                                        <div className="flex items-center justify-between gap-1 text-[10.5px]">
+                                        <div className="flex items-center justify-between gap-1 text-[11px]">
                                           <span className="truncate font-semibold text-[#615D59]">{location.label}</span>
                                           <span className="font-bold text-[#111110]">{formatNumber(qty)}</span>
                                         </div>
-                                        <div className="mt-1.5 h-2 overflow-hidden rounded-full bg-[#F0EFEC]">
+                                        <div className="mt-1.5 h-2 overflow-hidden rounded-full bg-[#F6F5F4]">
                                           <div className={`h-full rounded-full ${location.tone}`} style={{ width: `${width}%` }} />
                                         </div>
                                       </div>
@@ -1247,12 +1397,12 @@ export default function HardwareInventoryClient() {
                                     {row.lotBalances.length > 0 && (
                                       <div className="mt-1.5 flex flex-wrap gap-1">
                                         {row.lotBalances.slice(0, 5).map((lot) => (
-                                          <span key={lot.lot} className="rounded bg-[#F6F5F4] px-1.5 py-0.5 text-[10px] font-semibold text-[#31302E]">
+                                          <span key={lot.lot} className="rounded bg-[#F6F5F4] px-1.5 py-0.5 text-[11px] font-semibold text-[#31302E]">
                                             {lot.lot} {formatNumber(lot.quantity)}
                                           </span>
                                         ))}
                                         {row.lotBalances.length > 5 && (
-                                          <span className="rounded bg-[#ECFDF5] px-1.5 py-0.5 text-[10px] font-semibold text-[#084734]">
+                                          <span className="rounded bg-[#ECFDF5] px-1.5 py-0.5 text-[11px] font-semibold text-[#084734]">
                                             +{row.lotBalances.length - 5}
                                           </span>
                                         )}
@@ -1270,18 +1420,18 @@ export default function HardwareInventoryClient() {
                                   </td>
                                   <td className="px-4 py-4 text-right">
                                     <p className="text-[13px] font-semibold text-[#111110]">{formatNumber(row.outbound30d)}</p>
-                                    <p className="mt-1 text-[10.5px] text-[#615D59]">주 {formatAvg(row.weeklyOutboundAvg)}대</p>
+                                    <p className="mt-1 text-[11px] text-[#615D59]">주 {formatAvg(row.weeklyOutboundAvg)}대</p>
                                   </td>
                                   <td className="px-4 py-4">
                                     <div className="flex max-w-[260px] flex-wrap gap-1.5">
                                       {row.locationBalances.slice(0, 3).map((loc) => (
-                                        <span key={loc.location} className="inline-flex items-center gap-1 rounded-full bg-[#F6F5F4] px-2 py-1 text-[10.5px] font-semibold text-[#31302E]">
+                                        <span key={loc.location} className="inline-flex items-center gap-1 rounded-full bg-[#F6F5F4] px-2 py-1 text-[11px] font-semibold text-[#31302E]">
                                           <MapPin className="h-3 w-3 text-[#615D59]" />
                                           {loc.location} {formatNumber(loc.quantity)}
                                         </span>
                                       ))}
                                       {row.locationBalances.length > 3 && (
-                                        <span className="rounded-full bg-[#ECFDF5] px-2 py-1 text-[10.5px] font-semibold text-[#084734]">
+                                        <span className="rounded-full bg-[#ECFDF5] px-2 py-1 text-[11px] font-semibold text-[#084734]">
                                           +{row.locationBalances.length - 3}
                                         </span>
                                       )}
@@ -1292,21 +1442,21 @@ export default function HardwareInventoryClient() {
                                       <button
                                         type="button"
                                         onClick={() => prepareQuickEntry(row.itemId, "sale")}
-                                        className="rounded px-2 py-1 text-[10.5px] font-bold text-[#B43E3E] transition hover:bg-white"
+                                        className="rounded-md px-2 py-1 text-[11px] font-bold text-[#31302E] transition hover:bg-white hover:text-[#B43E3E]"
                                       >
                                         출고
                                       </button>
                                       <button
                                         type="button"
                                         onClick={() => prepareQuickEntry(row.itemId, "planned")}
-                                        className="rounded px-2 py-1 text-[10.5px] font-bold text-[#A8741A] transition hover:bg-white"
+                                        className="rounded-md px-2 py-1 text-[11px] font-bold text-[#31302E] transition hover:bg-white hover:text-[#A8741A]"
                                       >
                                         예정
                                       </button>
                                       <button
                                         type="button"
                                         onClick={() => prepareQuickEntry(row.itemId, "inbound")}
-                                        className="rounded px-2 py-1 text-[10.5px] font-bold text-[#084734] transition hover:bg-white"
+                                        className="rounded-md px-2 py-1 text-[11px] font-bold text-[#31302E] transition hover:bg-white hover:text-[#084734]"
                                       >
                                         입고
                                       </button>
@@ -1317,7 +1467,7 @@ export default function HardwareInventoryClient() {
                                       {statusCopy(row)}
                                     </span>
                                     {row.daysUntilStockout != null && (
-                                      <p className="mt-1.5 text-[10.5px] text-[#615D59]">예상 {row.daysUntilStockout}일</p>
+                                      <p className="mt-1.5 text-[11px] text-[#615D59]">예상 {row.daysUntilStockout}일</p>
                                     )}
                                   </td>
                                 </tr>
@@ -1370,17 +1520,103 @@ export default function HardwareInventoryClient() {
             )}
 
             {activeTab === "entry" && (
-            <div className="mt-6 max-w-3xl">
-                <form ref={formRef} onSubmit={(event) => void submitMovement(event)} className="rounded-xl border border-[rgba(0,0,0,0.08)] bg-white shadow-[0_1px_2px_rgba(0,0,0,0.02)]">
-                  <SectionHeader
-                    title="빠른 입출고"
-                    description="판매 출고, 배송 예정, 입고, 샘플 대여를 한 화면에서 기록합니다."
-                    open={openSections.quick}
-                    onToggle={() => toggleSection("quick")}
-                    meta={<span className="text-[11px] font-semibold text-[#084734]">{activePreset.label}</span>}
-                  />
-                  {openSections.quick && (
+            <div className="mt-6 space-y-6">
+              <section className="rounded-xl border border-[rgba(0,0,0,0.08)] bg-white shadow-[0_1px_2px_rgba(0,0,0,0.02)]">
+                <div className="border-b border-[rgba(0,0,0,0.08)] px-5 py-4">
+                  <p className="text-[15px] font-bold tracking-[-0.01em] text-[#111110]">빠른 기록</p>
+                  <p className="mt-1 text-[12px] text-[#615D59]">유형을 고르면 입력 시트가 열립니다. 재고·예상 출고 목록에서 바로 열 수도 있습니다.</p>
+                </div>
+                <div className="grid grid-cols-2 gap-2 p-5 sm:grid-cols-4">
+                  {ENTRY_PRESETS.map((option) => {
+                    const Icon = option.icon
+                    return (
+                      <button
+                        key={option.key}
+                        type="button"
+                        onClick={() => {
+                          applyPreset(option.key)
+                          setSheetOpen(true)
+                        }}
+                        className="rounded-lg border border-[rgba(0,0,0,0.08)] bg-white px-3 py-3 text-left transition hover:bg-[#F6F5F4]"
+                      >
+                        <span className="flex items-center gap-2 text-[12px] font-bold text-[#31302E]">
+                          <Icon className="h-3.5 w-3.5" />
+                          {option.label}
+                        </span>
+                        <span className="mt-1 block text-[11px] text-[#615D59]">{option.description}</span>
+                      </button>
+                    )
+                  })}
+                </div>
+              </section>
+
+              <section className="rounded-xl border border-[rgba(0,0,0,0.08)] bg-white shadow-[0_1px_2px_rgba(0,0,0,0.02)]">
+                <div className="flex items-center justify-between border-b border-[rgba(0,0,0,0.08)] px-5 py-4">
+                  <p className="text-[15px] font-bold tracking-[-0.01em] text-[#111110]">최근 기록</p>
+                  <button type="button" onClick={() => setActiveTab("history")} className="text-[11px] font-bold text-[#084734] transition hover:underline">
+                    전체 내역 →
+                  </button>
+                </div>
+                <div className="divide-y divide-[rgba(0,0,0,0.06)]">
+                  {(data?.movements ?? []).slice(0, 6).map((movement) => (
+                    <div key={movement.id} className={`px-5 py-3 ${movement.voided_at ? "opacity-55" : ""}`}>
+                      <div className="flex items-start justify-between gap-3">
+                        <div className="min-w-0">
+                          <p className={`truncate text-[12.5px] font-bold text-[#111110] ${movement.voided_at ? "line-through" : ""}`}>{movement.product_name}</p>
+                          <p className="mt-1 text-[11px] text-[#615D59]">
+                            {formatDate(movement.occurred_at)} · {movement.to_location ?? movement.from_location ?? "위치 미정"}
+                            {movementLot(movement) ? ` · lot ${movementLot(movement)}` : ""}
+                          </p>
+                        </div>
+                        <span className={`shrink-0 rounded-full px-2 py-0.5 text-[11px] font-bold ${MOVEMENT_TONE[movement.movement_type]}`}>
+                          {MOVEMENT_LABEL[movement.movement_type]} {formatNumber(movement.quantity)}
+                        </span>
+                      </div>
+                    </div>
+                  ))}
+                  {(data?.movements ?? []).length === 0 && (
+                    <p className="px-5 py-8 text-center text-[13px] text-[#615D59]">아직 기록이 없습니다. 위에서 유형을 선택해 기록하세요.</p>
+                  )}
+                </div>
+              </section>
+            </div>
+            )}
+
+            {sheetOpen && (
+              <div
+                className="fixed inset-0 z-40 flex justify-end bg-black/35 backdrop-blur-[2px]"
+                onClick={() => setSheetOpen(false)}
+              >
+                <aside
+                  ref={sheetPanelRef}
+                  role="dialog"
+                  aria-modal="true"
+                  aria-label="빠른 기록"
+                  onKeyDown={trapTab}
+                  onClick={(event) => event.stopPropagation()}
+                  className="flex h-full w-full flex-col overflow-y-auto border-l border-[rgba(0,0,0,0.08)] bg-white shadow-[-8px_0_24px_rgba(0,0,0,0.05)] sm:max-w-md"
+                >
+                  <div className="sticky top-0 z-10 flex items-center justify-between gap-3 border-b border-[rgba(0,0,0,0.08)] bg-white px-5 py-4">
+                    <div>
+                      <p className="text-[15px] font-bold tracking-[-0.01em] text-[#111110]">{editingId ? "기록 수정" : "빠른 기록"}</p>
+                      <p className="mt-0.5 text-[11px] font-semibold text-[#084734]">{activePreset.label} · {activePreset.from || "-"} → {activePreset.to || "-"}</p>
+                    </div>
+                    <button
+                      type="button"
+                      onClick={() => setSheetOpen(false)}
+                      aria-label="닫기"
+                      className="flex h-8 w-8 items-center justify-center rounded-md text-[#615D59] transition hover:bg-[#F6F5F4] hover:text-[#111110]"
+                    >
+                      <X className="h-4 w-4" />
+                    </button>
+                  </div>
+                  <form ref={formRef} onSubmit={(event) => void submitMovement(event)} className="flex-1">
                     <div className="space-y-4 p-5">
+                    {error && (
+                      <div role="alert" className="rounded-lg border border-[#F2B8B8] bg-[#FCE9E9] px-3 py-2 text-[12px] font-semibold text-[#8F2C2C]">
+                        {error}
+                      </div>
+                    )}
                     <div className="grid grid-cols-2 gap-2">
                       {ENTRY_PRESETS.map((option) => {
                         const Icon = option.icon
@@ -1400,7 +1636,7 @@ export default function HardwareInventoryClient() {
                               <Icon className="h-3.5 w-3.5" />
                               {option.label}
                             </span>
-                            <span className="mt-1 block text-[10.5px] text-[#615D59]">{option.description}</span>
+                            <span className="mt-1 block text-[11px] text-[#615D59]">{option.description}</span>
                           </button>
                         )
                       })}
@@ -1444,7 +1680,7 @@ export default function HardwareInventoryClient() {
                                 setSelectedItemId(row.itemId)
                                 setCustomProduct("")
                               }}
-                              className={`rounded-full border px-2.5 py-1 text-[10.5px] font-bold transition ${
+                              className={`rounded-full border px-2.5 py-1 text-[11px] font-bold transition ${
                                 selectedItemId === row.itemId && !customProduct.trim()
                                   ? "border-[#084734] bg-[#ECFDF5] text-[#084734]"
                                   : "border-[rgba(0,0,0,0.08)] bg-[#FAFAF8] text-[#31302E] hover:bg-white"
@@ -1491,7 +1727,7 @@ export default function HardwareInventoryClient() {
                               key={nextQuantity}
                               type="button"
                               onClick={() => setQuantity(String(nextQuantity))}
-                              className={`rounded border px-1.5 py-1 text-[10.5px] font-bold transition ${
+                              className={`rounded border px-1.5 py-1 text-[11px] font-bold transition ${
                                 Number(quantity) === nextQuantity
                                   ? "border-[#084734] bg-[#ECFDF5] text-[#084734]"
                                   : "border-[rgba(0,0,0,0.08)] bg-[#FAFAF8] text-[#615D59] hover:bg-white"
@@ -1670,7 +1906,7 @@ export default function HardwareInventoryClient() {
                     </label>
 
                     <div className="rounded-lg border border-[rgba(0,0,0,0.08)] bg-[#F6F5F4] px-3 py-2.5">
-                      <p className="text-[10.5px] font-bold uppercase tracking-[0.06em] text-[#615D59]">입력 미리보기</p>
+                      <p className="text-[11px] font-bold uppercase tracking-[0.06em] text-[#615D59]">입력 미리보기</p>
                       <p className="mt-1 text-[13px] font-bold text-[#111110]">
                         {customProduct.trim() || selectedItem?.name || "품목 선택"} · {activePreset.label} · {formatNumber(Number(quantity) || 0)}대
                       </p>
@@ -1685,12 +1921,12 @@ export default function HardwareInventoryClient() {
                       className="inline-flex h-10 w-full items-center justify-center gap-2 rounded-md bg-[#084734] px-4 text-[13px] font-bold text-white transition hover:bg-[#065c41] disabled:opacity-60"
                     >
                       <Save className="h-4 w-4" />
-                      기록 저장
+                      {editingId ? "수정 저장" : "기록 저장"}
                     </button>
                     </div>
-                  )}
-                </form>
-            </div>
+                  </form>
+                </aside>
+              </div>
             )}
 
             {activeTab === "home" && (
@@ -1818,20 +2054,31 @@ export default function HardwareInventoryClient() {
                                 </p>
                               </div>
                               <div className="flex shrink-0 items-center gap-2">
-                                <span className={`rounded-full px-2 py-0.5 text-[10.5px] font-bold ${MOVEMENT_TONE[movement.movement_type]}`}>
+                                <span className={`rounded-full px-2 py-0.5 text-[11px] font-bold ${MOVEMENT_TONE[movement.movement_type]}`}>
                                   {MOVEMENT_LABEL[movement.movement_type]} {formatNumber(movement.quantity)}
                                 </span>
                                 {movement.voided_at ? (
-                                  <span className="rounded-full bg-[#F6F5F4] px-2 py-0.5 text-[10.5px] font-bold text-[#615D59]">취소됨</span>
+                                  <span className="rounded-full bg-[#F6F5F4] px-2 py-0.5 text-[11px] font-bold text-[#615D59]">취소됨</span>
                                 ) : movement.source === "admin_manual" ? (
-                                  <button
-                                    type="button"
-                                    onClick={() => void voidMovement(movement)}
-                                    disabled={voidingId === movement.id}
-                                    className="rounded-md border border-[rgba(0,0,0,0.08)] bg-white px-2 py-1 text-[10.5px] font-bold text-[#B43E3E] transition hover:bg-[#FCE9E9] disabled:opacity-60"
-                                  >
-                                    {voidingId === movement.id ? "취소 중" : "취소"}
-                                  </button>
+                                  <>
+                                    {!movement.converted_from_movement_id && !movement.converted_to_movement_id && (
+                                      <button
+                                        type="button"
+                                        onClick={() => editMovement(movement)}
+                                        className="rounded-md border border-[rgba(0,0,0,0.08)] bg-white px-2 py-1 text-[11px] font-bold text-[#31302E] transition hover:bg-[#F6F5F4]"
+                                      >
+                                        수정
+                                      </button>
+                                    )}
+                                    <button
+                                      type="button"
+                                      onClick={() => void voidMovement(movement)}
+                                      disabled={voidingId === movement.id}
+                                      className="rounded-md border border-[rgba(0,0,0,0.08)] bg-white px-2 py-1 text-[11px] font-bold text-[#B43E3E] transition hover:bg-[#FCE9E9] disabled:opacity-60"
+                                    >
+                                      {voidingId === movement.id ? "취소 중" : "취소"}
+                                    </button>
+                                  </>
                                 ) : null}
                               </div>
                             </div>
@@ -1851,9 +2098,82 @@ export default function HardwareInventoryClient() {
         )}
       </main>
 
+      {!sheetOpen && !pendingMovement && !voidTarget && (
+        <button
+          type="button"
+          onClick={openFreshSheet}
+          className="fixed bottom-6 right-6 z-30 inline-flex items-center gap-1.5 rounded-full bg-[#084734] px-4 py-3 text-[13px] font-bold text-white shadow-[0_2px_8px_rgba(0,0,0,0.12)] transition hover:bg-[#065c41]"
+          aria-label="빠른 기록 열기"
+        >
+          <Plus className="h-4 w-4" />
+          기록
+        </button>
+      )}
+
+      {voidTarget && (
+        <div
+          className="fixed inset-0 z-50 flex items-end justify-center bg-black/35 px-3 py-4 backdrop-blur-[2px] sm:items-center"
+          onClick={() => voidingId == null && setVoidTarget(null)}
+        >
+          <section
+            role="dialog"
+            aria-modal="true"
+            aria-label="기록 취소"
+            onClick={(event) => event.stopPropagation()}
+            className="w-full max-w-md overflow-hidden rounded-xl border border-[rgba(0,0,0,0.08)] bg-white shadow-[0_12px_32px_rgba(0,0,0,0.12)]"
+          >
+            <div className="border-b border-[rgba(0,0,0,0.08)] px-5 py-4">
+              <h2 className="text-[15px] font-bold tracking-[-0.01em] text-[#111110]">기록 취소</h2>
+              <p className="mt-1 text-[12px] leading-relaxed text-[#615D59]">
+                {voidTarget.product_name} · {MOVEMENT_LABEL[voidTarget.movement_type]} {formatNumber(voidTarget.quantity)}대를 취소합니다. 되돌릴 수 없습니다.
+              </p>
+            </div>
+            <div className="px-5 py-4">
+              <label className="block">
+                <span className="text-[11px] font-bold text-[#615D59]">취소 사유 (선택)</span>
+                <input
+                  value={voidReason}
+                  onChange={(event) => setVoidReason(event.target.value)}
+                  autoFocus
+                  placeholder="예: 중복 입력"
+                  className="mt-1 h-10 w-full rounded-md border border-[rgba(0,0,0,0.08)] bg-white px-3 text-[13px] text-[#111110] outline-none focus:border-[#084734] focus:ring-2 focus:ring-[#084734]/30"
+                />
+              </label>
+            </div>
+            <div className="flex flex-col-reverse gap-2 border-t border-[rgba(0,0,0,0.08)] bg-[#FAFAF8] px-5 py-4 sm:flex-row sm:justify-end">
+              <button
+                type="button"
+                onClick={() => setVoidTarget(null)}
+                disabled={voidingId != null}
+                className="inline-flex h-10 items-center justify-center rounded-md border border-[rgba(0,0,0,0.08)] bg-white px-4 text-[13px] font-bold text-[#31302E] transition hover:bg-[#F6F5F4] disabled:opacity-60"
+              >
+                닫기
+              </button>
+              <button
+                type="button"
+                onClick={() => void confirmVoid()}
+                disabled={voidingId != null}
+                className="inline-flex h-10 items-center justify-center gap-2 rounded-md bg-[#B43E3E] px-4 text-[13px] font-bold text-white transition hover:bg-[#9A3434] disabled:opacity-60"
+              >
+                {voidingId != null ? "취소 중" : "기록 취소"}
+              </button>
+            </div>
+          </section>
+        </div>
+      )}
+
       {pendingMovement && (
-        <div className="fixed inset-0 z-50 flex items-end justify-center bg-black/35 px-3 py-4 backdrop-blur-[2px] sm:items-center">
-          <section className="max-h-[92vh] w-full max-w-3xl overflow-hidden rounded-xl border border-[rgba(0,0,0,0.08)] bg-white shadow-[0_24px_80px_rgba(0,0,0,0.18)]">
+        <div
+          className="fixed inset-0 z-50 flex items-end justify-center bg-black/35 px-3 py-4 backdrop-blur-[2px] sm:items-center"
+          onClick={closeCrmConfirmation}
+        >
+          <section
+            role="dialog"
+            aria-modal="true"
+            aria-label="CRM 실제 오더 확인"
+            onClick={(event) => event.stopPropagation()}
+            className="max-h-[92vh] w-full max-w-3xl overflow-hidden rounded-xl border border-[rgba(0,0,0,0.08)] bg-white shadow-[0_12px_32px_rgba(0,0,0,0.12)]"
+          >
             <div className="flex items-start justify-between gap-4 border-b border-[rgba(0,0,0,0.08)] px-5 py-4">
               <div>
                 <h2 className="text-[16px] font-bold tracking-[-0.01em] text-[#111110]">CRM 실제 오더 확인</h2>
@@ -1874,17 +2194,17 @@ export default function HardwareInventoryClient() {
             <div className="max-h-[calc(92vh-150px)] overflow-y-auto px-5 py-4">
               <div className="grid gap-3 rounded-lg border border-[rgba(0,0,0,0.08)] bg-[#F6F5F4] p-3 sm:grid-cols-3">
                 <div>
-                  <p className="text-[10.5px] font-bold uppercase tracking-[0.06em] text-[#615D59]">기록 예정</p>
+                  <p className="text-[11px] font-bold uppercase tracking-[0.06em] text-[#615D59]">기록 예정</p>
                   <p className="mt-1 text-[13px] font-bold text-[#111110]">{pendingMovement.productName}</p>
                 </div>
                 <div>
-                  <p className="text-[10.5px] font-bold uppercase tracking-[0.06em] text-[#615D59]">수량/상태</p>
+                  <p className="text-[11px] font-bold uppercase tracking-[0.06em] text-[#615D59]">수량/상태</p>
                   <p className="mt-1 text-[13px] font-bold text-[#111110]">
                     {formatNumber(pendingMovement.quantity)}대 · {pendingMovement.status || MOVEMENT_LABEL[pendingMovement.movementType]}
                   </p>
                 </div>
                 <div>
-                  <p className="text-[10.5px] font-bold uppercase tracking-[0.06em] text-[#615D59]">위치</p>
+                  <p className="text-[11px] font-bold uppercase tracking-[0.06em] text-[#615D59]">위치</p>
                   <p className="mt-1 text-[13px] font-bold text-[#111110]">
                     {pendingMovement.fromLocation || "-"} → {pendingMovement.toLocation || "-"}
                   </p>
@@ -1928,7 +2248,7 @@ export default function HardwareInventoryClient() {
                 <div className="mt-2 space-y-2">
                   {crmLoading ? (
                     Array.from({ length: 3 }).map((_, index) => (
-                      <div key={index} className="h-20 animate-pulse rounded-lg bg-[#F0EFEC]" />
+                      <div key={index} className="h-20 animate-pulse rounded-lg bg-[#F6F5F4]" />
                     ))
                   ) : crmCandidates.length === 0 ? (
                     <div className="rounded-lg border border-dashed border-[rgba(0,0,0,0.12)] bg-[#FAFAF8] px-4 py-8 text-center">
@@ -1956,7 +2276,7 @@ export default function HardwareInventoryClient() {
                             <span className="min-w-0">
                               <span className="flex flex-wrap items-center gap-1.5">
                                 <span className="text-[13px] font-bold text-[#111110]">{candidate.title}</span>
-                                <span className={`rounded-full px-2 py-0.5 text-[10.5px] font-bold ${confidenceClass(candidate.confidence)}`}>
+                                <span className={`rounded-full px-2 py-0.5 text-[11px] font-bold ${confidenceClass(candidate.confidence)}`}>
                                   매칭 {confidenceCopy(candidate.confidence)}
                                 </span>
                               </span>
@@ -1969,7 +2289,7 @@ export default function HardwareInventoryClient() {
                             </span>
                             <span className="shrink-0 text-left sm:text-right">
                               <span className="block text-[12px] font-bold text-[#111110]">{formatCurrency(candidate.amount)}</span>
-                              <span className="mt-1 block text-[10.5px] text-[#615D59]">{formatDate(candidate.occurredAt)}</span>
+                              <span className="mt-1 block text-[11px] text-[#615D59]">{formatDate(candidate.occurredAt)}</span>
                             </span>
                           </span>
                           <span className="mt-2 flex flex-wrap items-center gap-2 text-[11px] font-semibold text-[#084734]">
