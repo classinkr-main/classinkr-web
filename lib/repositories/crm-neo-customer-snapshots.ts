@@ -1,12 +1,14 @@
 import "server-only"
 
 import { deriveCustomerRegion, regionCandidatesFromPayload } from "@/lib/crm/region-label"
+import { getBranchRevSourceRecordKey, normalizeCrmName } from "@/lib/crm-source-linking"
 import { deriveServiceRisk, type ServiceRiskConfidence, type ServiceRiskLevel } from "@/lib/crm/service-risk"
 import {
   getExcludedXiaoshouyiOwnerIds,
   getXiaoshouyiOwnerNameMap,
   resolveOwnerName,
 } from "@/lib/external-crm/owner-names"
+import { normalizeRegionLabel } from "@/lib/regions/korea-regions"
 import { createSupabaseAdminClient } from "@/lib/supabase/admin"
 import type {
   CrmNeoCustomerSnapshot,
@@ -51,6 +53,32 @@ interface OpportunitySnapshotRow {
   synced_at: string | null
   last_seen_run_id: string | null
   payload: Record<string, unknown> | null
+}
+
+interface BranchRevRegionRow {
+  sheet_row: number
+  customer_name: string
+  region: string | null
+  first_payment: string | null
+  contract_target: number | string | null
+}
+
+interface SourceLinkRow {
+  source_record_key: string
+  target_type: string
+  target_id: string
+}
+
+export interface CrmNeoCustomerRegionHint {
+  label: string
+  source: "branch_rev_confirmed_link" | "branch_rev_exact_name"
+  sourceRecordKey: string | null
+  customerName: string | null
+}
+
+export interface CrmNeoCustomerRegionHints {
+  byAccountId: Map<string, CrmNeoCustomerRegionHint>
+  byNormalizedName: Map<string, CrmNeoCustomerRegionHint>
 }
 
 interface EeoAggregate {
@@ -328,12 +356,120 @@ function partialReasonFor(parts: string[]) {
   return parts.length > 0 ? `${parts.join(", ")} 스냅샷 일부가 누락되어 읽기 모델이 부분 갱신되었습니다.` : null
 }
 
+function emptyRegionHints(): CrmNeoCustomerRegionHints {
+  return { byAccountId: new Map(), byNormalizedName: new Map() }
+}
+
+function targetKey(row: Pick<SourceLinkRow, "target_type" | "target_id">) {
+  return `${row.target_type}:${row.target_id}`
+}
+
+function resolveSingleRegionHint(hints: CrmNeoCustomerRegionHint[]) {
+  if (hints.length === 0) return null
+  const labels = new Set(hints.map((hint) => hint.label))
+  if (labels.size !== 1) return null
+  return (
+    hints.find((hint) => hint.source === "branch_rev_confirmed_link") ??
+    hints[0]
+  )
+}
+
+function buildResolvedRegionHintMap(entries: Array<[string, CrmNeoCustomerRegionHint]>) {
+  const grouped = new Map<string, CrmNeoCustomerRegionHint[]>()
+  for (const [key, hint] of entries) {
+    const list = grouped.get(key) ?? []
+    list.push(hint)
+    grouped.set(key, list)
+  }
+
+  const resolved = new Map<string, CrmNeoCustomerRegionHint>()
+  for (const [key, hints] of grouped) {
+    const hint = resolveSingleRegionHint(hints)
+    if (hint) resolved.set(key, hint)
+  }
+  return resolved
+}
+
+export async function loadBranchRevRegionHints(sb: SupabaseAdminClient): Promise<CrmNeoCustomerRegionHints> {
+  const [revResult, branchLinksResult, neoLinksResult] = await Promise.all([
+    sb
+      .from("branch_rev_deals")
+      .select("sheet_row, customer_name, region, first_payment, contract_target")
+      .limit(5000),
+    sb
+      .from("crm_source_links")
+      .select("source_record_key, target_type, target_id")
+      .eq("source_system", "branch_rev_sheet")
+      .eq("source_object", "branch_rev_deals")
+      .eq("status", "confirmed")
+      .limit(5000),
+    sb
+      .from("crm_source_links")
+      .select("source_record_key, target_type, target_id")
+      .eq("source_system", SOURCE_SYSTEM)
+      .eq("source_object", ACCOUNT_OBJECT_API_KEY)
+      .eq("status", "confirmed")
+      .limit(5000),
+  ])
+
+  if (revResult.error || branchLinksResult.error || neoLinksResult.error) {
+    return emptyRegionHints()
+  }
+
+  const revHintsBySourceKey = new Map<string, CrmNeoCustomerRegionHint>()
+  const exactNameEntries: Array<[string, CrmNeoCustomerRegionHint]> = []
+
+  for (const row of (revResult.data ?? []) as BranchRevRegionRow[]) {
+    const label = normalizeRegionLabel(row.region)
+    if (!label) continue
+
+    const sourceRecordKey = getBranchRevSourceRecordKey({
+      sheet_row: row.sheet_row,
+      customer_name: row.customer_name,
+      first_payment: row.first_payment,
+      contract_target: rowNumber(row.contract_target),
+    })
+    const baseHint: Omit<CrmNeoCustomerRegionHint, "source"> = {
+      label,
+      sourceRecordKey,
+      customerName: row.customer_name,
+    }
+    revHintsBySourceKey.set(sourceRecordKey, { ...baseHint, source: "branch_rev_confirmed_link" })
+
+    const normalizedName = normalizeCrmName(row.customer_name)
+    if (normalizedName) {
+      exactNameEntries.push([normalizedName, { ...baseHint, source: "branch_rev_exact_name" }])
+    }
+  }
+
+  const branchHintsByTarget: Array<[string, CrmNeoCustomerRegionHint]> = []
+  for (const link of (branchLinksResult.data ?? []) as SourceLinkRow[]) {
+    const hint = revHintsBySourceKey.get(link.source_record_key)
+    if (!hint) continue
+    branchHintsByTarget.push([targetKey(link), hint])
+  }
+
+  const resolvedBranchHintsByTarget = buildResolvedRegionHintMap(branchHintsByTarget)
+  const accountEntries: Array<[string, CrmNeoCustomerRegionHint]> = []
+  for (const link of (neoLinksResult.data ?? []) as SourceLinkRow[]) {
+    const hint = resolvedBranchHintsByTarget.get(targetKey(link))
+    if (!hint) continue
+    accountEntries.push([link.source_record_key, hint])
+  }
+
+  return {
+    byAccountId: buildResolvedRegionHintMap(accountEntries),
+    byNormalizedName: buildResolvedRegionHintMap(exactNameEntries),
+  }
+}
+
 export function buildCrmNeoCustomerSnapshotInserts(input: {
   accounts: AccountSnapshotRow[]
   shroffAccounts: ShroffSnapshotRow[]
   opportunities: OpportunitySnapshotRow[]
   ownerNames: Map<string, string>
   excludedOwnerIds: Set<string>
+  regionHints?: CrmNeoCustomerRegionHints
   now?: Date
   sourceSystem?: string
   partialReason?: string | null
@@ -343,6 +479,7 @@ export function buildCrmNeoCustomerSnapshotInserts(input: {
   const sourceSystem = input.sourceSystem ?? SOURCE_SYSTEM
   const eeoByAccount = aggregateEeo(input.shroffAccounts)
   const orderByAccount = aggregateOrders(input.opportunities)
+  const regionHints = input.regionHints ?? emptyRegionHints()
   const inserts: CrmNeoCustomerSnapshotInsert[] = []
 
   for (const account of input.accounts) {
@@ -353,7 +490,13 @@ export function buildCrmNeoCustomerSnapshotInserts(input: {
     const eeo = eeoByAccount.get(accountId)
     const order = orderByAccount.get(accountId)
     const ownerName = resolveOwnerName(ownerId, input.ownerNames)
-    const region = deriveCustomerRegion(regionCandidatesFromPayload(account.payload))
+    const accountName = account.display_name ?? payloadString(account.payload, "accountName") ?? accountId
+    const payloadRegion = deriveCustomerRegion(regionCandidatesFromPayload(account.payload))
+    const revRegionHint =
+      regionHints.byAccountId.get(accountId) ??
+      regionHints.byNormalizedName.get(normalizeCrmName(accountName))
+    const regionLabel = revRegionHint?.label ?? (payloadRegion.source === "unspecified" ? null : payloadRegion.label)
+    const regionSource = revRegionHint?.source ?? (payloadRegion.source === "unspecified" ? null : `neo_payload_${payloadRegion.source}`)
     const accountSyncedAt = account.synced_at ?? account.occurred_at ?? null
     const sourceSyncedAt = latestIso(accountSyncedAt, eeo?.syncedAt, order?.syncedAt)
     const risk = deriveServiceRisk({
@@ -368,12 +511,12 @@ export function buildCrmNeoCustomerSnapshotInserts(input: {
     inserts.push({
       source_system: sourceSystem,
       account_id: accountId,
-      account_name: account.display_name ?? payloadString(account.payload, "accountName") ?? accountId,
+      account_name: accountName,
       owner_id: ownerId,
       owner_name: ownerName,
       phone: payloadString(account.payload, "phone"),
       uid: eeo?.uid ?? null,
-      region_label: region.source === "unspecified" ? null : region.label,
+      region_label: regionLabel,
       balance: eeo ? eeo.balance : null,
       expire_at: eeo?.expireAt ?? null,
       last_class_at: eeo?.lastClassAt ?? null,
@@ -398,6 +541,9 @@ export function buildCrmNeoCustomerSnapshotInserts(input: {
         accountExternalId: account.external_id,
         shroffAccountExternalIds: eeo?.externalIds.slice(0, 20) ?? [],
         opportunityExternalIds: order?.externalIds.slice(0, 20) ?? [],
+        regionSource,
+        regionSourceRecordKey: revRegionHint?.sourceRecordKey ?? null,
+        regionSourceCustomerName: revRegionHint?.customerName ?? null,
       },
       is_partial: Boolean(input.partialReason),
       partial_reason: input.partialReason ?? null,
@@ -435,7 +581,7 @@ export async function refreshCrmNeoCustomerSnapshotsFromExternalRecords(options:
   const generatedAt = now.toISOString()
   const sourceSystem = options.sourceSystem ?? SOURCE_SYSTEM
 
-  const [accountResult, shroffResult, opportunityResult, ownerNames, excludedOwnerIds] = await Promise.all([
+  const [accountResult, shroffResult, opportunityResult, ownerNames, excludedOwnerIds, regionHints] = await Promise.all([
     fetchExternalRows<AccountSnapshotRow>(
       sb,
       ACCOUNT_OBJECT_API_KEY,
@@ -456,6 +602,7 @@ export async function refreshCrmNeoCustomerSnapshotsFromExternalRecords(options:
     ),
     getXiaoshouyiOwnerNameMap(sb),
     getExcludedXiaoshouyiOwnerIds(sb),
+    loadBranchRevRegionHints(sb),
   ])
 
   if (accountResult.error) {
@@ -474,6 +621,7 @@ export async function refreshCrmNeoCustomerSnapshotsFromExternalRecords(options:
     opportunities: opportunityResult.error ? [] : opportunityResult.data,
     ownerNames,
     excludedOwnerIds,
+    regionHints,
     now,
     sourceSystem,
     partialReason,

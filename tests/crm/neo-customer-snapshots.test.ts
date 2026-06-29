@@ -1,5 +1,6 @@
 import { describe, expect, it } from "vitest"
 
+import { normalizeCrmName } from "@/lib/crm-source-linking"
 import { buildCrmNeoCustomerSnapshotInserts } from "@/lib/repositories/crm-neo-customer-snapshots"
 
 const NOW = new Date("2026-06-26T09:00:00.000Z")
@@ -100,5 +101,86 @@ describe("CRM NEO customer snapshot read model", () => {
     })
 
     expect(rows).toEqual([])
+  })
+
+  it("stores region from a confirmed REV sheet mapping on the CRM-owned snapshot", () => {
+    const rows = buildCrmNeoCustomerSnapshotInserts({
+      now: NOW,
+      accounts: [
+        {
+          external_id: "acc-1",
+          display_name: "대치스파르타",
+          owner_name: "owner-1",
+          occurred_at: "2026-06-25T00:00:00.000Z",
+          synced_at: "2026-06-26T08:00:00.000Z",
+          last_seen_run_id: "run-account",
+          payload: {},
+        },
+      ],
+      shroffAccounts: [],
+      opportunities: [],
+      ownerNames: new Map([["owner-1", "김담당"]]),
+      excludedOwnerIds: new Set(),
+      regionHints: {
+        byAccountId: new Map([
+          [
+            "acc-1",
+            {
+              label: "부산",
+              source: "branch_rev_confirmed_link",
+              sourceRecordKey: "rev:12:대치스파르타:2026-06-01:1000",
+              customerName: "대치스파르타",
+            },
+          ],
+        ]),
+        byNormalizedName: new Map(),
+      },
+    })
+
+    expect(rows[0]?.region_label).toBe("부산")
+    expect(rows[0]?.source_refs).toMatchObject({
+      regionSource: "branch_rev_confirmed_link",
+      regionSourceCustomerName: "대치스파르타",
+    })
+  })
+
+  it("falls back to a unique exact REV customer-name region when no confirmed link exists", () => {
+    const rows = buildCrmNeoCustomerSnapshotInserts({
+      now: NOW,
+      accounts: [
+        {
+          external_id: "acc-1",
+          display_name: "일산수학학원",
+          owner_name: "owner-1",
+          occurred_at: "2026-06-25T00:00:00.000Z",
+          synced_at: "2026-06-26T08:00:00.000Z",
+          last_seen_run_id: "run-account",
+          payload: {},
+        },
+      ],
+      shroffAccounts: [],
+      opportunities: [],
+      ownerNames: new Map([["owner-1", "김담당"]]),
+      excludedOwnerIds: new Set(),
+      regionHints: {
+        byAccountId: new Map(),
+        byNormalizedName: new Map([
+          [
+            normalizeCrmName("일산수학학원"),
+            {
+              label: "경기",
+              source: "branch_rev_exact_name",
+              sourceRecordKey: "rev:20:일산수학:2026-06-01:1000",
+              customerName: "일산수학학원",
+            },
+          ],
+        ]),
+      },
+    })
+
+    expect(rows[0]?.region_label).toBe("경기")
+    expect(rows[0]?.source_refs).toMatchObject({
+      regionSource: "branch_rev_exact_name",
+    })
   })
 })
