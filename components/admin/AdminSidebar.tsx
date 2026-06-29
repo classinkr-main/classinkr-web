@@ -162,22 +162,27 @@ const MINIMAL_SCROLLBAR =
   "[scrollbar-width:thin] [&::-webkit-scrollbar]:w-1 [&::-webkit-scrollbar-track]:bg-transparent [&::-webkit-scrollbar-thumb]:rounded-full [&::-webkit-scrollbar-thumb]:bg-black/10 hover:[&::-webkit-scrollbar-thumb]:bg-black/20"
 
 // CRM 진입 시 사이드바에서 펼치는 하위 섹션(= 기존 상단 탭의 이전). 활성 판별은 경로 prefix.
+// CRM 핵심 3탭 — 현황(후속조치+분석+시각화) · 고객(DB·360·연락입력·라벨링) · 기록(전체 로그).
+// 돈흐름/인사이트/연동은 어드민(딜보드·견적·Analytics)과 겹치거나 백오피스라 최상위에서 내림.
+// 라우트(deals/insights/matching/revenue/partners)는 보존 — 딥링크·북마크는 현황 탭 active로 귀속.
 const CRM_CHILD_NAV: Array<{ href: string; label: string; match: (p: string) => boolean }> = [
-  { href: "/admin/crm", label: "현황", match: (p) => p === "/admin/crm" },
+  {
+    href: "/admin/crm",
+    label: "현황",
+    match: (p) =>
+      p === "/admin/crm" ||
+      p.startsWith("/admin/crm/insights") ||
+      p.startsWith("/admin/crm/deals") ||
+      p.startsWith("/admin/crm/revenue") ||
+      p.startsWith("/admin/crm/matching") ||
+      (p.startsWith("/admin/crm/partners") && !p.startsWith("/admin/crm/partners/customers")),
+  },
   {
     href: "/admin/crm/customers/unified",
     label: "고객",
     match: (p) => p.startsWith("/admin/crm/customers") || p.startsWith("/admin/crm/partners/customers"),
   },
   { href: "/admin/crm/activity", label: "기록", match: (p) => p.startsWith("/admin/crm/activity") },
-  {
-    href: "/admin/crm/deals",
-    label: "돈흐름",
-    match: (p) =>
-      p.startsWith("/admin/crm/deals") || p.startsWith("/admin/crm/revenue") || p.startsWith("/admin/crm/partners"),
-  },
-  { href: "/admin/crm/insights", label: "인사이트", match: (p) => p.startsWith("/admin/crm/insights") },
-  { href: "/admin/crm/matching", label: "연동", match: (p) => p.startsWith("/admin/crm/matching") },
 ]
 
 // 저장된 세그먼트 — 고객 하위 퀵필터(?view=). 카운트는 통합 API summary.viewCounts.

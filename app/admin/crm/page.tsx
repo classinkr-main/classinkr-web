@@ -1168,6 +1168,24 @@ export default function CrmPage() {
         error={crmOverviewError}
       />
 
+      {/* 심화 — 최상위 탭에서 내린 분석/백오피스 화면으로의 경량 진입(딥링크 보존) */}
+      <div className="mb-4 flex flex-wrap items-center gap-2 text-[12px]">
+        <span className="text-[#1a1a1a]/35">심화 보기</span>
+        {[
+          { href: "/admin/crm/insights", label: "인사이트 분석" },
+          { href: "/admin/crm/deals", label: "돈흐름 상세" },
+          { href: "/admin/crm/matching", label: "데이터 점검" },
+        ].map((link) => (
+          <Link
+            key={link.href}
+            href={link.href}
+            className="inline-flex h-7 items-center rounded-lg border border-[#e8e8e4] bg-white px-2.5 font-medium text-[#1a1a1a]/60 transition-colors hover:border-[#c8c8c4] hover:text-[#111110]"
+          >
+            {link.label}
+          </Link>
+        ))}
+      </div>
+
       <Customer360Drawer
         customerKey={drawerTarget?.key ?? null}
         name={drawerTarget?.name}
