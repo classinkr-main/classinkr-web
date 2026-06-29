@@ -51,7 +51,7 @@ const DEFAULT_FINAL_ANSWER_TIMEOUT_MS = 6_000
 const DEFAULT_FINAL_ANSWER_STREAM_TIMEOUT_MS = 8_000
 const RETRIEVAL_CACHE_TTL_MS = 5 * 60 * 1000
 const RETRIEVAL_CACHE_MAX = 200
-const RETRIEVAL_CACHE_VERSION = "rag-rerank-20260618-v4"
+const RETRIEVAL_CACHE_VERSION = "rag-rerank-20260629-v5"
 const UUID_RE = /^[0-9a-f]{8}-[0-9a-f]{4}-[1-5][0-9a-f]{3}-[89ab][0-9a-f]{3}-[0-9a-f]{12}$/i
 const CHAT_SESSION_CHANNELS = new Set(["web", "admin_preview", "partner_portal", "manual_import"])
 const PROGRESSIVE_MODEL_TIERS: ChatbotModelTier[] = ["basic", "reasoning", "advanced"]
@@ -269,7 +269,7 @@ interface CachedAnswerEntry {
   warning?: string
 }
 
-const ANSWER_CACHE_VERSION = "answer-20260622-v5"
+const ANSWER_CACHE_VERSION = "answer-20260629-v6"
 const ANSWER_CACHE_TTL_MS = 5 * 60 * 1000
 const ANSWER_CACHE_MAX = 200
 const answerCache = new Map<string, { expiresAt: number; value: CachedAnswerEntry }>()
@@ -588,6 +588,12 @@ const CAMERA_CONFLICT_RE =
 const COMPARISON_RE =
   /zoom|줌|화상회의|뭐가\s*(달라|다른)|무엇이\s*다르|어떻게\s*다른|다른\s*(점|가요|건가요|거|것|부분|서비스)|차이|비교|차별|차별점|장점|왜\s*(써|쓰|필요|도입)|일반\s*전자칠판|기존\s*전자칠판/
 
+// 시중 경쟁 전자칠판 브랜드를 콕 집어 묻는 비교 질문 인식용.
+// 정책: 트리거로 비교 의도만 인식하고, 답변에서는 브랜드명을 노출하거나 타사 사양·우열을 단정하지 않는다.
+// 대신 '일반 전자칠판 대비' Classin Board 차별점(내장 OPS·EDB·녹화/복습/LMS·관리자 데이터)으로 전환한다.
+const COMPETITOR_BOARD_RE =
+  /넥소|nexo|삼성\s*플립|samsung\s*flip|뷰소닉|viewsonic|프로메테안|promethean|맥스허브|maxhub|아하\s*(보드|칠판)|시중\s*(전자\s*)?칠판|타사\s*(전자\s*)?칠판|다른\s*(회사|브랜드|업체)\s*(의\s*)?(전자\s*)?칠판|(삼성|lg|엘지)\s*(전자칠판|칠판|보드|플립|패널)/i
+
 const IDENTITY_RE =
   /(classin|클래스인).*(뭐야|뭐예요|뭐에요|무엇|뭔가요|뭔데|뭐임|뭐\s*하는|어떤\s*(서비스|제품|솔루션|도구|플랫폼)|소개|설명)|(뭐야|뭐예요|뭐에요|무엇|뭔가요|뭔데|뭐임|뭐\s*하는|어떤\s*(서비스|제품|솔루션|도구|플랫폼)|소개|설명).*(classin|클래스인)/
 
@@ -618,7 +624,7 @@ const SOFTWARE_BOARD_FEATURE_RE =
 
 // 상세 사양을 콕 집어 묻는 신호. 모델·라인업·추천 같은 '넓은 라인업' 단어는 여기서 제외한다.
 const HARDWARE_SPECS_RE =
-  /스펙|사양|규격|크기|사이즈|인치|해상도|화면|ops|터치|주사율|밝기|시야각|마이크|스피커|무선|nfc|무게|중량|소비\s*전력|전력|유리|인증|부속|비교/i
+  /스펙|사양|규격|크기|사이즈|인치|두께|가로|세로|치수|외형|\d\s*mm|해상도|화면|ops|터치|주사율|밝기|시야각|마이크|스피커|무선|nfc|무게|중량|소비\s*전력|전력|유리|인증|부속|비교/i
 
 // 대형 공간·특정 대형 모델을 명시적으로 물을 때만 98/110을 공개한다.
 const HARDWARE_BIG_MODEL_RE =
@@ -631,7 +637,7 @@ const HARDWARE_UNCONFIRMED_DETAIL_RE =
   /색상|색깔|컬러|마감|화이트|블랙|검정|흰색|보증\s*기간|보증기간|무상\s*(as|a\/s|수리)|유상\s*(as|a\/s|수리)|원산지|제조사/i
 
 const HARDWARE_SPECS_EXCERPT =
-  "Classin Board는 모델별로 S75, S86, S98 Pro, S110 사양을 우선 확인합니다. 공통으로 4K 해상도, 16:9 화면, 178도 시야각, 밝기 350cd/m² 이상, 50점 적외선 터치, Android 11과 탈착식 OPS, Wi-Fi ax/BT5.0, 2×15W 스피커를 기준으로 봅니다. 주요 차이는 화면 크기, 주사율, OPS 구성, 마이크 기재 여부, 무게와 소비전력입니다. S65는 라인업에는 있으나 현재 상세 규격서 확인이 필요합니다."
+  "Classin Board는 모델별로 S75, S86, S98 Pro, S110 사양을 우선 확인합니다. 공통으로 4K 해상도, 16:9 화면, 178도 시야각, 밝기 350cd/m² 이상, 50점 적외선 터치, 내장 OPS(Windows OS), Wi-Fi ax/BT5.0, 2×15W 스피커를 기준으로 봅니다. 주요 차이는 화면 크기, 주사율, OPS 구성, 마이크 기재 여부, 무게와 소비전력입니다. S65는 라인업에는 있으나 현재 상세 규격서 확인이 필요합니다."
 
 const HARDWARE_BOARD_LINEUP_EXCERPT =
   "Classin 칠판은 보통 Classin Board 전자칠판 라인업을 뜻합니다. 현재 안내 가능한 주요 모델은 S75, S86, S98 Pro, S110이며, 교실 크기와 맨 뒷자리 시야, 이동형 스탠드/벽걸이, 카메라·마이크 필요 여부로 고릅니다. 75·86인치는 일반 강의실, 98·110인치는 대형 강의실이나 설명회 공간에 더 잘 맞습니다. S65는 라인업에는 있으나 상세 규격 확인이 필요합니다."
@@ -639,7 +645,7 @@ const HARDWARE_BOARD_LINEUP_EXCERPT =
 const HARDWARE_BOARD_LINEUP_STANDARD_EXCERPT =
   "Classin Board 전자칠판은 보통 75인치(S75)와 86인치(S86)를 표준으로 가장 많이 선택합니다. 일반 강의실 대부분은 이 두 모델로 시작하며, 학생 수와 맨 뒷자리 시야, 이동형 스탠드/벽걸이, 카메라·마이크 필요 여부로 고릅니다. 대형 강의실·강당·설명회처럼 더 큰 공간이라면 추가 라인업도 있으니 상담에서 공간에 맞춰 안내해 드립니다."
 const HARDWARE_SPECS_STANDARD_EXCERPT =
-  "Classin Board는 75인치(S75)와 86인치(S86)가 표준 모델입니다. 두 모델 모두 4K(3840×2160) 해상도, 16:9 화면, 178도 시야각, 밝기 350cd/m² 이상, 50점 적외선 터치, 탈착식 OPS, Wi-Fi ax/BT5.0, 2×15W 스피커를 기준으로 봅니다. 더 큰 공간을 위한 추가 라인업은 상담에서 공간·예산에 맞춰 안내해 드립니다."
+  "Classin Board는 75인치(S75)와 86인치(S86)가 표준 모델입니다. 두 모델 모두 4K(3840×2160) 해상도, 16:9 화면, 178도 시야각, 밝기 350cd/m² 이상, 50점 적외선 터치, 내장 OPS(Windows OS), Wi-Fi ax/BT5.0, 2×15W 스피커를 기준으로 봅니다. 외형 치수(가로×세로×두께)는 S75가 1,730.63×1,015.22×95.5mm, S86이 1,976.63×1,153.31×95.5mm이고 베젤은 22mm 슬림입니다. 더 큰 공간을 위한 추가 라인업은 상담에서 공간·예산에 맞춰 안내해 드립니다."
 
 const HARDWARE_TROUBLE_EXCERPT =
   "전자칠판 화면이 안 나오면 전원 플러그와 멀티탭, 오른쪽 측면 하단 전원 버튼, 대기 모드, 입력 소스(OPS/HDMI), HDMI 케이블과 외부 기기 화면 출력을 순서대로 확인합니다. 연기, 냄새, 액체 유입, 파손이 있으면 전원을 분리하고 A/S로 연결합니다."
@@ -657,7 +663,7 @@ const PARENT_REPORT_OR_NOTIFICATION_RE =
 
 function isPositioningQuestion(question: NormalizedQuestion) {
   const text = question.redacted.toLowerCase()
-  return POSITIONING_RE.test(text) || isIdentityQuestion(question)
+  return POSITIONING_RE.test(text) || COMPETITOR_BOARD_RE.test(text) || isIdentityQuestion(question)
 }
 
 function isPreAdoptionCheckQuestion(question: NormalizedQuestion) {
@@ -723,7 +729,7 @@ function isApiIntegrationQuestion(question: NormalizedQuestion) {
 
 function isComparisonQuestion(question: NormalizedQuestion) {
   const text = question.redacted.toLowerCase()
-  return COMPARISON_RE.test(text)
+  return COMPARISON_RE.test(text) || COMPETITOR_BOARD_RE.test(text)
 }
 
 function isIdentityQuestion(question: NormalizedQuestion) {
@@ -2014,7 +2020,22 @@ function getConciseNextStep(category: string) {
   }
 }
 
-function getComparisonAnswer(top: ChatbotSource) {
+function getComparisonAnswer(question: NormalizedQuestion, top: ChatbotSource) {
+  const text = question.redacted.toLowerCase()
+  const zoomFocused = /zoom|줌|화상회의/.test(text)
+  // 시중 전자칠판(넥소 등) 또는 전자칠판/보드 비교는 하드웨어 차별점을 더 강하게 짚는다.
+  // 정책: 경쟁사 브랜드명은 노출하지 않고 타사 사양·우열은 단정하지 않는다.
+  const boardFocused =
+    !zoomFocused && (COMPETITOR_BOARD_RE.test(text) || /전자칠판|칠판|보드|board/.test(text))
+
+  if (boardFocused) {
+    return [
+      "네, 좋은 질문이에요. 같은 '전자칠판'처럼 보여도 Classin Board는 화면·판서에서 끝나지 않고 수업 운영 흐름 전체로 이어지는 게 가장 큰 차이예요.",
+      "일반 전자칠판이 화면 출력과 판서 중심이라면, Classin Board는 이렇게 달라요.\n- 윈도우 OPS 내장이라 외부 PC·노트북 없이 보드 하나로 수업을 구동해요\n- EDB 칠판 파일로 판서·이미지·자료를 최대 50페이지까지 저장하고 다음 수업에 그대로 재사용해요\n- 녹화·복습·LMS·관리자 데이터까지 한 흐름으로 이어져요",
+      "카메라·마이크도 내장이라 따로 장비를 붙일 필요가 줄어요. 어떤 점이 제일 궁금하신지 알려주시면 그 기준으로 더 좁혀 비교해드릴게요.",
+    ].join("\n\n")
+  }
+
   return [
     "네, 좋은 질문이에요. Classin은 Zoom이나 일반 전자칠판과 달리 '수업 운영 흐름' 전체에 초점이 있어요.",
     "Zoom이 회의 중심이라면 Classin은 판서·녹화·복습·LMS를 하나로 연결하고,\n일반 전자칠판이 화면·판서에 머무는 것과 달리 EDB 교안과 관리자 데이터까지 이어줘요.",
@@ -2044,14 +2065,14 @@ function getHardwareSpecsAnswer(revealBig: boolean) {
   if (!revealBig) {
     return [
       "네, Classin Board 사양 정리해드릴게요.",
-      "표준 모델은 75인치(S75)와 86인치(S86)예요. 공통 기준은 4K · 16:9 · 178도 시야각 · 밝기 350cd/m² 이상 · 50점 적외선 터치 · Android 11 · 탈착식 OPS입니다.",
-      "- S75 — 75인치 · 54kg · 315W\n- S86 — 86인치 · 69.5kg · 390W",
-      "더 큰 공간을 위한 추가 라인업은 교실 크기랑 설치 방식만 알려주시면 상담에서 맞춰 안내해 드릴게요.",
+      "표준 모델은 75인치(S75)와 86인치(S86)예요. 공통 기준은 4K · 16:9 · 178도 시야각 · 밝기 350cd/m² 이상 · 50점 적외선 터치 · 내장 OPS(Windows OS)입니다.",
+      "외형 치수(가로×세로×두께)는 이렇게 봐요.\n- S75 — 1,730.63 × 1,015.22mm · 두께 95.5mm · 54kg\n- S86 — 1,976.63 × 1,153.31mm · 두께 95.5mm · 69.5kg",
+      "두께 95.5mm에 베젤 22mm 슬림이라 벽걸이든 이동형 스탠드든 공간 부담이 적어요. 더 큰 공간을 위한 추가 라인업은 교실 크기랑 설치 방식만 알려주시면 상담에서 맞춰 안내해 드릴게요.",
     ].join("\n\n")
   }
   return [
     "네, Classin Board 사양 정리해드릴게요.",
-    "공통 기준은 4K · 16:9 · 178도 시야각 · 밝기 350cd/m² 이상 · 50점 적외선 터치 · Android 11 · 탈착식 OPS예요.",
+    "공통 기준은 4K · 16:9 · 178도 시야각 · 밝기 350cd/m² 이상 · 50점 적외선 터치 · 내장 OPS(Windows OS)예요.",
     "모델별 핵심 차이예요.",
     "- S75 — 75인치 · 54kg · 315W\n- S86 — 86인치 · 69.5kg · 390W\n- S98 Pro — 98인치 · 89kg · 740W · NFC\n- S110 — 110인치 · 137kg · 850W · 120Hz",
     "교실 크기랑 설치 방식만 알려주시면 어느 모델이 맞을지 같이 좁혀드릴게요. S65는 상세 규격 확인이 필요해요.",
@@ -2403,7 +2424,7 @@ function formatConsumerAnswer({
     return getHardwareSpecsAnswer(HARDWARE_BIG_MODEL_RE.test(question.redacted.toLowerCase()))
   }
   if (isComparisonQuestion(question) && top.urlPath.includes("/docs/start/academy-system-os-positioning")) {
-    return getComparisonAnswer(top)
+    return getComparisonAnswer(question, top)
   }
   if (top.heading === "EDB와 교안 표준화") {
     return getEdbAnswer()

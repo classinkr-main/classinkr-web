@@ -118,6 +118,25 @@ describe("chatbot FAQ curation (gap fills)", () => {
     expect(result.answer).not.toContain("무료 체험 가능합니다")
   })
 
+  it("answers competitor-board comparisons with differentiation and no brand name", async () => {
+    disableExternalChatbotServices()
+
+    for (const q of [
+      "넥소 전자칠판이랑 뭐가 달라요?",
+      "시중 전자칠판이랑 클래스인 보드 차이가 뭐예요?",
+    ]) {
+      const result = await evaluateChatbotQuery(q, { generateAnswer: false })
+
+      expect(result.answerMode).toBe("direct_answer")
+      // 차별점은 운영 흐름(내장 OPS·EDB)으로 어필한다.
+      expect(result.answer).toContain("OPS")
+      expect(result.answer).toContain("EDB")
+      // 경쟁사 브랜드명·타사 사양은 답변에 노출하지 않는다.
+      expect(result.answer).not.toContain("넥소")
+      expect(result.answer).not.toMatch(/뷰소닉|삼성|프로메테안|맥스허브/)
+    }
+  })
+
   it("answers parent report and notification questions without overclaiming auto-send", async () => {
     disableExternalChatbotServices()
 
