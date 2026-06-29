@@ -233,6 +233,28 @@ function formatMoney(value: number | null | undefined, currency: "KRW" | "USD" =
   return `₩${value.toLocaleString("ko-KR")}`
 }
 
+// 다가오는 일정 — 예정 콜/미팅 날짜 상대 표기.
+function dueRelativeLabel(value: string | null | undefined): string {
+  if (!value) return "기한 미정"
+  const due = new Date(value)
+  if (Number.isNaN(due.getTime())) return "기한 미정"
+  const now = new Date()
+  const dayMs = 86_400_000
+  const dueDay = new Date(due.getFullYear(), due.getMonth(), due.getDate()).getTime()
+  const todayDay = new Date(now.getFullYear(), now.getMonth(), now.getDate()).getTime()
+  const diff = Math.round((dueDay - todayDay) / dayMs)
+  if (diff === 0) return "오늘"
+  if (diff === 1) return "내일"
+  return `D-${diff}`
+}
+
+function monthDayParts(value: string | null | undefined): { month: string; day: string } {
+  if (!value) return { month: "", day: "-" }
+  const date = new Date(value)
+  if (Number.isNaN(date.getTime())) return { month: "", day: "-" }
+  return { month: `${date.getMonth() + 1}월`, day: String(date.getDate()) }
+}
+
 // 비핵심 섹션 — 기본 접힘. 첫 화면은 핵심만, 필요할 때 펼쳐 보는 컴팩트 패턴.
 function CollapsibleSection({
   icon,
@@ -678,6 +700,18 @@ export default function Customer360Drawer({ customerKey, name, onClose }: Props)
 
   const noteMeta = NOTE_KIND_OPTIONS.find((option) => option.key === noteKind) ?? NOTE_KIND_OPTIONS[0]
 
+  // 다가오는 일정 — 기한 있는 열린 할 일 중 오늘 이후만, 가까운 순. (전체 할 일은 아래 목록.)
+  const upcomingTasks = useMemo(() => {
+    const rows = data?.tasks?.rows ?? []
+    const now = new Date()
+    const todayStart = new Date(now.getFullYear(), now.getMonth(), now.getDate()).getTime()
+    return rows
+      .filter((task) => task.dueAt && new Date(task.dueAt).getTime() >= todayStart)
+      .slice()
+      .sort((a, b) => new Date(a.dueAt as string).getTime() - new Date(b.dueAt as string).getTime())
+      .slice(0, 4)
+  }, [data])
+
   if (!customerKey) return null
 
   return (
@@ -872,6 +906,33 @@ export default function Customer360Drawer({ customerKey, name, onClose }: Props)
               <Loader2 className="h-4 w-4 animate-spin" />
               고객 정보를 불러오는 중입니다...
             </div>
+          ) : null}
+
+          {/* 다가오는 일정 — 기한 있는 열린 할 일 */}
+          {data && upcomingTasks.length > 0 ? (
+            <section className="rounded-2xl border border-[#e8e8e4] bg-white p-4">
+              <SectionTitle icon={<CalendarClock className="h-3.5 w-3.5" />}>다가오는 일정</SectionTitle>
+                <ul className="space-y-1.5">
+                  {upcomingTasks.map((task) => {
+                    const parts = monthDayParts(task.dueAt)
+                    return (
+                      <li key={task.id} className="flex items-center gap-2.5">
+                        <span className="flex h-9 w-11 shrink-0 flex-col items-center justify-center rounded-lg bg-[#ECFDF5] text-[#084734]">
+                          <span className="text-[9px] font-semibold leading-none">{parts.month}</span>
+                          <span className="text-[13px] font-bold leading-tight">{parts.day}</span>
+                        </span>
+                        <div className="min-w-0 flex-1">
+                          <p className="truncate text-[12px] font-semibold text-[#111110]">{task.title}</p>
+                          <p className="text-[11px] text-[#1a1a1a]/45">
+                            {dueRelativeLabel(task.dueAt)}
+                            {task.ownerNameSnapshot ? ` · ${task.ownerNameSnapshot}` : ""}
+                          </p>
+                        </div>
+                      </li>
+                    )
+                  })}
+                </ul>
+            </section>
           ) : null}
 
           {/* contacts + risk */}
