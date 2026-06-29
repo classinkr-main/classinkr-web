@@ -25,6 +25,8 @@ export const CRM_EVENT_SOURCE_TYPES = [
   "lead_contact_log",
   "external_crm",
   "sheet",
+  "call",
+  "sms",
 ] as const
 export const CRM_EVENT_SENTIMENTS = ["positive", "neutral", "risk"] as const
 

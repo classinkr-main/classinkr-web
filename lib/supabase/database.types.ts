@@ -198,8 +198,12 @@ export type CrmCustomerEventSourceType =
   | "calendar_event"
   | "lead_contact_log"
   | "external_crm"
-  | "sheet";
+  | "sheet"
+  | "call"
+  | "sms";
 export type CrmCustomerEventSentiment = "positive" | "neutral" | "risk";
+export type CrmNeoServiceRiskLevel = "urgent" | "soon" | "watch" | "normal";
+export type CrmNeoServiceRiskConfidence = "high" | "medium" | "low";
 
 export interface CrmCustomerEvent {
   id: string;
@@ -276,6 +280,52 @@ export type CrmTaskInsert = Omit<CrmTask, "id" | "created_at" | "updated_at"> & 
   updated_at?: string;
 };
 export type CrmTaskUpdate = Partial<Omit<CrmTask, "id" | "created_at">>;
+
+export interface CrmNeoCustomerSnapshot {
+  source_system: string;
+  account_id: string;
+  account_name: string;
+  owner_id: string | null;
+  owner_name: string;
+  phone: string | null;
+  uid: string | null;
+  region_label: string | null;
+  balance: number | null;
+  expire_at: string | null;
+  last_class_at: string | null;
+  order_amount: number;
+  order_count: number;
+  has_eeo: boolean;
+  risk_level: CrmNeoServiceRiskLevel;
+  risk_reasons: Record<string, unknown>[];
+  expire_in_days: number | null;
+  risk_confidence: CrmNeoServiceRiskConfidence;
+  freshness_label: string | null;
+  account_synced_at: string | null;
+  shroff_synced_at: string | null;
+  opportunity_synced_at: string | null;
+  source_synced_at: string | null;
+  source_run_ids: Record<string, unknown>;
+  source_refs: Record<string, unknown>;
+  is_partial: boolean;
+  partial_reason: string | null;
+  is_stale: boolean;
+  stale_at: string | null;
+  calculated_at: string;
+  created_at: string;
+  updated_at: string;
+}
+
+export type CrmNeoCustomerSnapshotInsert = Omit<
+  CrmNeoCustomerSnapshot,
+  "created_at" | "updated_at"
+> & {
+  created_at?: string;
+  updated_at?: string;
+};
+export type CrmNeoCustomerSnapshotUpdate = Partial<
+  Omit<CrmNeoCustomerSnapshot, "source_system" | "account_id" | "created_at">
+>;
 
 export type CrmDealStage = "consult" | "demo" | "quote" | "decision" | "order" | "won" | "lost";
 export type CrmDealStatus = "open" | "won" | "lost";
@@ -838,6 +888,11 @@ export interface Database {
         Row: CrmTask;
         Insert: CrmTaskInsert;
         Update: CrmTaskUpdate;
+      };
+      crm_neo_customer_snapshots: {
+        Row: CrmNeoCustomerSnapshot;
+        Insert: CrmNeoCustomerSnapshotInsert;
+        Update: CrmNeoCustomerSnapshotUpdate;
       };
       crm_deals: {
         Row: CrmDeal;

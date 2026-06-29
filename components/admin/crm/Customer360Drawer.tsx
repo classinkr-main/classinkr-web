@@ -18,6 +18,7 @@ import {
   FileText,
   ListChecks,
   Loader2,
+  MessageSquare,
   Phone,
   PhoneCall,
   Plus,
@@ -112,6 +113,8 @@ const TASK_TYPE_OPTIONS: Array<{ value: CrmTaskType; label: string }> = [
 const EVENT_SOURCE_LABEL: Record<string, string> = {
   manual_note: "메모",
   meeting_minutes: "회의록",
+  call: "콜",
+  sms: "문자",
   recording: "녹음",
   calendar_event: "캘린더",
   lead_contact_log: "리드 연락",
@@ -123,12 +126,22 @@ const EVENT_SOURCE_LABEL: Record<string, string> = {
 const EVENT_SOURCE_ICON: Record<string, React.ReactNode> = {
   manual_note: <StickyNote className="h-3.5 w-3.5" />,
   meeting_minutes: <FileText className="h-3.5 w-3.5" />,
+  call: <PhoneCall className="h-3.5 w-3.5" />,
+  sms: <MessageSquare className="h-3.5 w-3.5" />,
   recording: <FileAudio className="h-3.5 w-3.5" />,
   calendar_event: <CalendarClock className="h-3.5 w-3.5" />,
   lead_contact_log: <PhoneCall className="h-3.5 w-3.5" />,
   external_crm: <Building2 className="h-3.5 w-3.5" />,
   sheet: <ClipboardList className="h-3.5 w-3.5" />,
 }
+
+// 연락 입력 — 콜/문자/메모/회의록을 한 컴포저에서. sourceType로 그대로 저장돼 타임라인에 유형 표시.
+const NOTE_KIND_OPTIONS = [
+  { key: "manual_note", label: "메모", icon: <StickyNote className="h-3 w-3" />, placeholder: "빠른 메모 입력 후 저장", rows: 2 },
+  { key: "call", label: "콜", icon: <PhoneCall className="h-3 w-3" />, placeholder: "통화 내용·결과 입력 후 저장", rows: 2 },
+  { key: "sms", label: "문자", icon: <MessageSquare className="h-3 w-3" />, placeholder: "문자 내용 입력 후 저장", rows: 2 },
+  { key: "meeting_minutes", label: "회의록", icon: <FileText className="h-3 w-3" />, placeholder: "회의록 붙여넣기/입력 후 저장", rows: 4 },
+] as const
 
 function sumAmounts(values: Array<number | null | undefined>): number | null {
   let total = 0
@@ -281,7 +294,7 @@ export default function Customer360Drawer({ customerKey, name, onClose }: Props)
   const [tags, setTags] = useState<string[]>([])
   const [tagInput, setTagInput] = useState("")
   const [tagBusy, setTagBusy] = useState(false)
-  const [noteKind, setNoteKind] = useState<"manual_note" | "meeting_minutes">("manual_note")
+  const [noteKind, setNoteKind] = useState<"manual_note" | "meeting_minutes" | "call" | "sms">("manual_note")
   const [dealFormOpen, setDealFormOpen] = useState(false)
   const [taskFormOpen, setTaskFormOpen] = useState(false)
 
@@ -662,6 +675,8 @@ export default function Customer360Drawer({ customerKey, name, onClose }: Props)
     },
     [customerKey]
   )
+
+  const noteMeta = NOTE_KIND_OPTIONS.find((option) => option.key === noteKind) ?? NOTE_KIND_OPTIONS[0]
 
   if (!customerKey) return null
 
@@ -1291,12 +1306,7 @@ export default function Customer360Drawer({ customerKey, name, onClose }: Props)
 
               <div className="mb-3 flex flex-col gap-2 border-b border-[#f0f0ec] pb-3">
                 <div className="inline-flex w-fit rounded-lg border border-[#e8e8e4] bg-[#fafaf8] p-0.5">
-                  {(
-                    [
-                      { key: "manual_note", label: "메모", icon: <StickyNote className="h-3 w-3" /> },
-                      { key: "meeting_minutes", label: "회의록", icon: <FileText className="h-3 w-3" /> },
-                    ] as const
-                  ).map((kind) => (
+                  {NOTE_KIND_OPTIONS.map((kind) => (
                     <button
                       key={kind.key}
                       type="button"
@@ -1314,8 +1324,8 @@ export default function Customer360Drawer({ customerKey, name, onClose }: Props)
                   id="c360-note"
                   value={note}
                   onChange={(event) => setNote(event.target.value)}
-                  placeholder={noteKind === "meeting_minutes" ? "회의록 붙여넣기/입력 후 저장" : "빠른 메모 입력 후 저장"}
-                  rows={noteKind === "meeting_minutes" ? 4 : 2}
+                  placeholder={noteMeta.placeholder}
+                  rows={noteMeta.rows}
                   className="rounded-lg border border-[#e8e8e4] bg-white px-2.5 py-2 text-[12px] text-[#111110] outline-none focus:border-[#111110]"
                 />
                 <button
@@ -1324,8 +1334,8 @@ export default function Customer360Drawer({ customerKey, name, onClose }: Props)
                   disabled={!note.trim() || actingId === "note"}
                   className="inline-flex h-9 items-center justify-center gap-1 self-end rounded-lg border border-[#e8e8e4] bg-white px-3 text-[12px] font-semibold text-[#111110] transition-colors hover:bg-[#f5f5f2] disabled:opacity-40"
                 >
-                  {noteKind === "meeting_minutes" ? <FileText className="h-3.5 w-3.5" /> : <StickyNote className="h-3.5 w-3.5" />}
-                  {noteKind === "meeting_minutes" ? "회의록 저장" : "메모 저장"}
+                  {noteMeta.icon}
+                  {noteMeta.label} 저장
                 </button>
               </div>
 
