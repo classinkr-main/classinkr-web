@@ -1,6 +1,7 @@
 "use client"
 
 import { useMemo, useState } from "react"
+import Link from "next/link"
 import { CheckCircle2, ClipboardList, Loader2, Plus, UserPlus, X } from "lucide-react"
 
 import { adminFetchJson } from "@/lib/admin-client"
@@ -74,15 +75,23 @@ export default function LeadRegisterModal({
   const [bulkText, setBulkText] = useState("")
   const [submitting, setSubmitting] = useState(false)
   const [error, setError] = useState<string | null>(null)
-  const [result, setResult] = useState<{ created: number; failed: number } | null>(null)
+  const [result, setResult] = useState<{ created: number; failed: number; firstId?: string | null } | null>(null)
 
   const bulkRows = useMemo(() => parseBulk(bulkText), [bulkText])
 
   if (!open) return null
 
+  // 작성 중(단건 입력 or 벌크 붙여넣기) 닫기 시 실수로 내용이 날아가지 않게 확인한다.
+  const isDirty =
+    Boolean(single.org || single.name || single.phone || single.email || single.source || single.notes) ||
+    Boolean(bulkText.trim())
+
   const close = () => {
+    if (isDirty && !result && !window.confirm("작성 중인 내용이 있습니다. 닫으면 사라집니다. 닫을까요?")) return
     setError(null)
     setResult(null)
+    setSingle(EMPTY_SINGLE)
+    setBulkText("")
     onClose()
   }
 
@@ -94,11 +103,11 @@ export default function LeadRegisterModal({
     setSubmitting(true)
     setError(null)
     try {
-      const res = await adminFetchJson<{ created: number; failed: number }>("/api/admin/leads", {
+      const res = await adminFetchJson<{ created: number; failed: number; firstId?: string | null }>("/api/admin/leads", {
         method: "POST",
         body: JSON.stringify({ ...single, source: single.source || undefined }),
       })
-      setResult({ created: res.created, failed: res.failed })
+      setResult({ created: res.created, failed: res.failed, firstId: res.firstId })
       setSingle(EMPTY_SINGLE)
       onDone?.(res.created)
     } catch (err) {
@@ -116,11 +125,11 @@ export default function LeadRegisterModal({
     setSubmitting(true)
     setError(null)
     try {
-      const res = await adminFetchJson<{ created: number; failed: number; total: number }>("/api/admin/leads", {
+      const res = await adminFetchJson<{ created: number; failed: number; total: number; firstId?: string | null }>("/api/admin/leads", {
         method: "POST",
         body: JSON.stringify({ leads: bulkRows }),
       })
-      setResult({ created: res.created, failed: res.failed })
+      setResult({ created: res.created, failed: res.failed, firstId: res.firstId })
       setBulkText("")
       onDone?.(res.created)
     } catch (err) {
@@ -198,13 +207,24 @@ export default function LeadRegisterModal({
               {result.failed > 0 ? (
                 <p className="mt-0.5 text-[12px] text-[#B85C33]">{result.failed}건 실패 (식별자 누락 등)</p>
               ) : null}
-              <button
-                type="button"
-                onClick={() => setResult(null)}
-                className="mt-3 inline-flex h-8 items-center rounded-lg border border-[#e8e8e4] bg-white px-3 text-[12px] font-semibold text-[#111110] transition-colors hover:bg-[#f5f5f2]"
-              >
-                계속 등록
-              </button>
+              <div className="mt-3 flex items-center justify-center gap-2">
+                <button
+                  type="button"
+                  onClick={() => setResult(null)}
+                  className="inline-flex h-8 items-center rounded-lg border border-[#e8e8e4] bg-white px-3 text-[12px] font-semibold text-[#111110] transition-colors hover:bg-[#f5f5f2]"
+                >
+                  계속 등록
+                </button>
+                {result.created === 1 && result.firstId ? (
+                  <Link
+                    href={`/admin/crm/customers/leads?lead=${encodeURIComponent(result.firstId)}`}
+                    onClick={() => onClose()}
+                    className="inline-flex h-8 items-center rounded-lg bg-[#084734] px-3 text-[12px] font-semibold text-white transition-opacity hover:opacity-90"
+                  >
+                    방금 등록한 리드 열기
+                  </Link>
+                ) : null}
+              </div>
             </div>
           ) : tab === "single" ? (
             <div className="grid grid-cols-2 gap-3">

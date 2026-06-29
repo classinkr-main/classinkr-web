@@ -67,8 +67,17 @@ export async function POST(req: NextRequest) {
       )
     }
     const results = await Promise.allSettled(inputs.map((lead) => saveLead(lead)))
-    const created = results.filter((result) => result.status === "fulfilled").length
-    return NextResponse.json({ created, failed: results.length - created, total: inputs.length })
+    const createdLeads = results
+      .filter((result): result is PromiseFulfilledResult<LeadRecord> => result.status === "fulfilled")
+      .map((result) => result.value)
+    const created = createdLeads.length
+    return NextResponse.json({
+      created,
+      failed: results.length - created,
+      total: inputs.length,
+      ids: createdLeads.map((lead) => lead.id),
+      firstId: createdLeads[0]?.id ?? null,
+    })
   } catch (error) {
     console.error("[POST /api/admin/leads] error:", error)
     return NextResponse.json({ error: "리드 등록에 실패했습니다." }, { status: 500 })
